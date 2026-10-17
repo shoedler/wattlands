@@ -4,6 +4,8 @@ Wattlands is a multiplayer fitness party game for the Wahoo KICKR CORE smart tra
 
 This repo holds the planning material and has no game code yet. We are in the concept phase: make and review concept art, cut the concept list with Simon, and finalize the build brief.
 
+Simon works on Windows in the Claude desktop app. That matches the brief's Windows-first target.
+
 ## What Simon asked for
 
 - A KICKR CORE game built in Godot, using ERG mode wherever it makes the game better.
@@ -23,6 +25,8 @@ This repo holds the planning material and has no game code yet. We are in the co
   - decisions, the "Before you paste" setup checklist, open questions and sources.
 - `docs/concept/` holds the concept art. `manifest.json` records each image's prompt, model and cost, and `index.html` is the contact sheet.
 - `tools/concept_art/wattlands_concept_art.py` generates the art on fal.ai.
+- `.claude/settings.json` sets Opus 5.5, xhigh effort and the large workflow size guideline for every session in this repo.
+- `.gitattributes` keeps LF line endings, so bash scripts keep working in Git Bash.
 
 ## Where things stand (17 Oct 2026)
 
@@ -38,8 +42,8 @@ This repo holds the planning material and has no game code yet. We are in the co
 ## Next steps
 
 1. Run round 1:
-   - Run `python3 tools/concept_art/wattlands_concept_art.py --dry-run`, then run it again without the flag.
-   - It needs `FAL_KEY` in the environment. Never print, log or commit the key.
+   - Run `python tools/concept_art/wattlands_concept_art.py --dry-run` (or `py` instead of `python`), then run it again without the flag.
+   - It needs `FAL_KEY` in the environment, which Simon sets in the desktop app's Local environment settings. Never print, log or commit the key.
 2. Review round 1:
    - Look at every image yourself.
    - Note what works and what doesn't in `docs/concept/NOTES.md`: readability at a glance, how the riders read, and which style suits procedural low-poly Godot.
@@ -50,17 +54,20 @@ This repo holds the planning material and has no game code yet. We are in the co
 4. Decide the packaging with Simon. There are two options:
    - one brief that builds every chosen mode, which is today's `docs/BRIEF.md`;
    - a platform brief plus one add-on brief per mode.
-5. Settle the open questions in `docs/research.md`, plus one more: confirm the target OS. Simon's PC runs Linux, while the brief targets Windows 10/11 first. Godot and GDBLE both run on Linux.
+5. Settle the open questions in `docs/research.md`.
 6. Update `docs/BRIEF.md`:
    - Make the changes: the 3.6 selection, the chosen style in 3.12 Presentation, and any spec changes.
    - Then have a fresh subagent review it for consistency: section references, governor limits against each mode's effort plan, the section 7 gates and the section 8 agent list.
-7. Build:
-   - Follow "Before you paste" in `docs/research.md`.
-   - Start `claude --effort ultracode` in this repo and paste `docs/BRIEF.md`.
-   - W0 of that run replaces this file, `README.md` and `.gitignore`. It keeps `docs/research.md`, `docs/concept/` and `tools/concept_art/`.
+7. Build, with Simon starting it in a fresh session:
+   - Follow "Before you paste" in `docs/research.md`. The desktop app covers its CLI steps this way:
+     - `.claude/settings.json` already sets the workflow size, and `/effort ultracode` replaces the `--effort` flag.
+     - The Background tasks pane replaces `/workflows`.
+   - Paste `docs/BRIEF.md`.
+   - W0 of that run replaces this file, `README.md` and `.gitignore`. It keeps `.gitattributes`, `.claude/settings.json`, `docs/research.md`, `docs/concept/` and `tools/concept_art/`.
 
 ## Rules for this phase
 
+- Don't turn on ultracode in this phase; it turns every task into a workflow. It's for the build session only.
 - Art prompts describe original designs only. No brand names or logos (no Wahoo, Zwift or Strava), and no existing characters or game franchises.
 - Commit images as JPEG, the script's default, to keep the repo small. `docs/concept/` is reference material for the build, not shipped content.
 - Section 4.6 of the brief (the safety governor) outranks gameplay. Change a design to fit it, never the other way round.

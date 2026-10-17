@@ -26,7 +26,7 @@ You are the lead engineer and orchestrator for a one-shot build of Wattlands (wo
 - Priorities: P0 must ship. P1 ships once P0 is green. P2 is design notes only, in `docs/BACKLOG.md`. No "TODO: implement" may remain on a P0 path.
 - The safety rules in section 4.6 outrank every gameplay idea in this brief. Never weaken a 4.6 threshold or a section 7 assertion to reach green; report what still fails instead.
 
-Existing files: this repo may already hold the concept phase's material: `README.md`, `CLAUDE.md`, `.gitignore`, `docs/research.md`, `docs/BRIEF.md` (this brief), `docs/concept/` (concept art with `manifest.json` and `index.html`) and `tools/concept_art/`. Keep `docs/research.md`, `docs/concept/` and `tools/concept_art/` unchanged. W0 replaces the planning `README.md`, `CLAUDE.md` and `.gitignore` with the game's versions and moves any decisions they record into `docs/DECISIONS.md`.
+Existing files: this repo may already hold the concept phase's material: `README.md`, `CLAUDE.md`, `.gitignore`, `.gitattributes`, `.claude/settings.json`, `docs/research.md`, `docs/BRIEF.md` (this brief), `docs/concept/` (concept art with `manifest.json` and `index.html`) and `tools/concept_art/`. Keep `.gitattributes` (it keeps LF line endings so bash scripts work under Git Bash on Windows), `.claude/settings.json`, `docs/research.md`, `docs/concept/` and `tools/concept_art/` unchanged. W0 replaces the planning `README.md`, `CLAUDE.md` and `.gitignore` with the game's versions and moves any decisions they record into `docs/DECISIONS.md`.
 
 ## 2. Environment bootstrap (part of W0)
 
