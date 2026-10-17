@@ -4,15 +4,14 @@ Wattlands is a multiplayer fitness party game for the Wahoo KICKR CORE smart tra
 
 - `docs/BRIEF.md` is the build prompt for the one-shot ultracode run.
 - `docs/research.md` holds the research, concepts and decisions behind the brief. It also has the "Before you paste" setup checklist.
-- `docs/concept/` holds the concept art. Open `index.html` there to compare the images side by side.
-- `tools/concept_art/` has the art generator, which needs `FAL_KEY`. Start with `python tools/concept_art/wattlands_concept_art.py --dry-run`, which shows the plan and cost without spending anything.
+- `docs/concept/` holds the concept art. Open `index.html` there to compare the images side by side, and read `NOTES.md` for the review. `manifest.json` records every fal request, so each image can be regenerated with `FAL_KEY`.
 - `.claude/settings.json` sets Opus 5.5, xhigh effort and the large workflow size for every session in this repo.
 
 ## Start on Windows with the Claude desktop app
 
 1. Install the tools:
    - Git for Windows. Claude Code uses its Git Bash as the shell.
-   - Python 3.12 or newer, for the art script.
+   - Python 3.12 or newer, for calling fal when making concept art.
    - For the build later: Node.js 22.12 or newer and Godot 4.7.2.
 2. Unzip the repo to a folder outside OneDrive, such as `C:\dev\wattlands`. In that folder, run `git init`, `git add -A` and `git commit -m "Planning material"`.
 3. Optionally, add these lines to `%USERPROFILE%\.claude\settings.json`. They apply to every project:

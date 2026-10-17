@@ -1,0 +1,179 @@
+{
+  "round": 2,
+  "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+  "model": "GPT Image 2.5 Sunburst",
+  "est_total_usd": 0.49,
+  "cost_note": "Estimate from fal's historical average for this endpoint ($0.07 per call); this FAL_KEY can't read actual usage. Round 1 (since removed) cost about $1.68.",
+  "reproduce": "POST each image's input to https://queue.fal.run/<endpoint> with 'Authorization: Key $FAL_KEY', then poll the returned status_url and fetch response_url.",
+  "images": [
+    {
+      "file": "siege_roman_treadwheel.jpg",
+      "concept": "siege",
+      "label": "One giant treadwheel",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "Low-poly 3D miniature diorama of a tabletop war game, seen from a high three-quarter angle with a strong tilt-shift effect, so everything looks like a tiny handmade model. Built from simple primitives only: flat-shaded faceted terrain, boxes, cylinders, cones and wedges, with no fine detail and no textures. Palette: terracotta roofs, marble white, weathered bronze, dark olive trees, dusty ochre ground and a hazy blue sky. Setting: an alternate-history Roman frontier fort on a hilltop, where Roman engineers have learned to turn spinning motion into power. In the middle of the fort stands one giant wooden treadwheel, like a Roman treadwheel crane but many times larger, turned by a long line of tiny workers walking inside it. Its axle drives a big spinning bronze flywheel generator that glows faintly at its core. Mounted on the generator housing is a large, clearly readable mechanical drum-counter display showing \"1250 W\". Spinning bronze drive shafts and chains run from the generator along the walls to the defenses: two ballistae on the corner towers, a rotating bolt thrower and an onager catapult. Enemies climb three dusty roads that wind up the hill toward the gates: a war band of barbarian warriors with round shields, a battering ram under a wooden roof, and a wooden siege tower. Keep the enemies simple, small, blocky and readable, with no gore. All people are tiny, just a few pixels tall; there are no close-up characters and no bicycles. Wide 16:9 game concept art without any user interface. The only text anywhere is the \"1250 W\" readout; no other letters, numbers, logos or watermarks."
+      },
+      "request_id": "01a14c16-3fee-7982-8fb8-135cc21a36f1",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:58:43+0200",
+      "bytes": 266220,
+      "est_usd": 0.07
+    },
+    {
+      "file": "siege_roman_four_wheels.jpg",
+      "concept": "siege",
+      "label": "Four treadwheels, one per player",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "Low-poly 3D miniature diorama of a tabletop war game, seen from a high three-quarter angle with a strong tilt-shift effect, so everything looks like a tiny handmade model. Built from simple primitives only: flat-shaded faceted terrain, boxes, cylinders, cones and wedges, with no fine detail and no textures. Palette: terracotta roofs, marble white, weathered bronze, dark olive trees, dusty ochre ground and a hazy blue sky. Setting: an alternate-history Roman frontier fort on a hilltop, where Roman engineers have learned to turn spinning motion into power. In the middle of the fort, four medium-sized wooden treadwheels stand in a ring around one big central bronze flywheel generator. Each wheel is turned by a few tiny workers and flies a pennant in its own color: red, blue, yellow and green. Each treadwheel drives the generator through a spinning bronze shaft and gears. On top of the generator a large, clearly readable mechanical drum-counter display shows \"1250 W\". From the generator, spinning shafts and taut chains run out to the defenses on the walls: a ballista, a bolt thrower and an onager catapult. Enemies climb three dusty roads that wind up the hill toward the gates: a war band of barbarian warriors with round shields, a battering ram under a wooden roof, and a wooden siege tower. Keep the enemies simple, small, blocky and readable, with no gore. All people are tiny, just a few pixels tall; there are no close-up characters and no bicycles. Wide 16:9 game concept art without any user interface. The only text anywhere is the \"1250 W\" readout; no other letters, numbers, logos or watermarks."
+      },
+      "request_id": "01a14c16-3fe8-7b93-98dc-f49e57ce1dae",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:58:46+0200",
+      "bytes": 278915,
+      "est_usd": 0.07
+    },
+    {
+      "file": "tank_crew1_diesel.jpg",
+      "concept": "tank",
+      "label": "1 crew: one diesel engine drives everything",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "2D side-view pixel art game scene in a detailed 16-bit style: crisp square pixels and a limited, dark and oily palette of gunmetal grey, soot black, rust brown, olive drab and sickly yellow lamplight, with orange fire glow. An alternate-history 1940s war. A colossal, brutalist super-heavy tank as big as a building, with slab-sided riveted armor and a huge long-barreled gun, grinds across a muddy battlefield of craters, barbed wire and burning wreckage under a smoky sky. Part of its hull is drawn as an x-ray cutaway window that reveals the machine rooms inside, packed with moving parts: crankshafts, flywheels, chains, gears, drive belts, pistons, pressure gauges, glowing valves, leaking oil and puffs of steam and exhaust, all visibly linked to the treads and the turret. This is the one-crew version: inside the cutaway there is a single engine room holding one crude, massive diesel engine with exposed pistons and a heavy flywheel. One long chain and gear train carries its power to everything at once: the drive sprockets of the treads, the turret ring and the shell hoist. Nobody is aboard and no people appear anywhere: the machinery runs on its own. Enemy super-heavy tanks, also huge and menacing, advance from the right, firing. No flags, insignia, national markings, letters or numbers. Wide 16:9 game screen without any user interface."
+      },
+      "request_id": "01a14c16-3fec-7cc2-abbf-75978264cbfe",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:58:46+0200",
+      "bytes": 348948,
+      "est_usd": 0.07
+    },
+    {
+      "file": "tank_crew2_diesel_electric.jpg",
+      "concept": "tank",
+      "label": "2 crew: diesel drive, electric turret",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "2D side-view pixel art game scene in a detailed 16-bit style: crisp square pixels and a limited, dark and oily palette of gunmetal grey, soot black, rust brown, olive drab and sickly yellow lamplight, with orange fire glow. An alternate-history 1940s war. A colossal, brutalist super-heavy tank as big as a building, with slab-sided riveted armor and a huge long-barreled gun, grinds across a muddy battlefield of craters, barbed wire and burning wreckage under a smoky sky. Part of its hull is drawn as an x-ray cutaway window that reveals the machine rooms inside, packed with moving parts: crankshafts, flywheels, chains, gears, drive belts, pistons, pressure gauges, glowing valves, leaking oil and puffs of steam and exhaust, all visibly linked to the treads and the turret. This is the two-crew version: the cutaway shows two separate engine rooms, each with its own crude power source. At the rear, a roaring diesel engine with pistons and a flywheel drives the treads through a gearbox and chains. Under the turret, a crackling electric dynamo with copper coils and arcing sparks powers the turret traverse motor, the gun elevation pistons and the shell hoist. Nobody is aboard and no people appear anywhere: the machinery runs on its own. Enemy super-heavy tanks, also huge and menacing, advance from the right, firing. No flags, insignia, national markings, letters or numbers. Wide 16:9 game screen without any user interface."
+      },
+      "request_id": "01a14c16-3ff1-7b63-ae03-9ca672a584f6",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:58:47+0200",
+      "bytes": 368995,
+      "est_usd": 0.07
+    },
+    {
+      "file": "tank_crew3_diesel_electric_steam.jpg",
+      "concept": "tank",
+      "label": "3 crew: diesel drive, electric turret, steam loader",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "2D side-view pixel art game scene in a detailed 16-bit style: crisp square pixels and a limited, dark and oily palette of gunmetal grey, soot black, rust brown, olive drab and sickly yellow lamplight, with orange fire glow. An alternate-history 1940s war. A colossal, brutalist super-heavy tank as big as a building, with slab-sided riveted armor and a huge long-barreled gun, grinds across a muddy battlefield of craters, barbed wire and burning wreckage under a smoky sky. Part of its hull is drawn as an x-ray cutaway window that reveals the machine rooms inside, packed with moving parts: crankshafts, flywheels, chains, gears, drive belts, pistons, pressure gauges, glowing valves, leaking oil and puffs of steam and exhaust, all visibly linked to the treads and the turret. This is the three-crew version, the largest tank, like a land battleship with a main turret and two small secondary turrets. The cutaway shows three separate engine rooms, each with a different crude power source for its job: at the rear, a huge diesel engine with pistons and a flywheel drives the treads; in the middle, an electric dynamo with copper coils and arcing sparks turns the turret and raises the gun; at the front, a coal-fired steam engine with a glowing firebox, a boiler and a spinning governor drives the autoloader conveyor that lifts giant shells up to the breech. Nobody is aboard and no people appear anywhere: the machinery runs on its own. Enemy super-heavy tanks, also huge and menacing, advance from the right, firing. No flags, insignia, national markings, letters or numbers. Wide 16:9 game screen without any user interface."
+      },
+      "request_id": "01a14c16-cb83-74c3-a8db-7f82365636ba",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:59:19+0200",
+      "bytes": 364233,
+      "est_usd": 0.07
+    },
+    {
+      "file": "fishing_split_2p.jpg",
+      "concept": "fishing",
+      "label": "2 players, 2 lanes",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "2D pixel art game screenshot in a detailed 16-bit style with crisp square pixels and a bright, cheerful tropical palette. The screen is split horizontally into stacked lanes, one lane per player, separated by thin borders in each player's color. Each lane is its own side-view slice of ocean: a strip of sky and sea surface along the top with a small fishing boat on the left, and below it a cross-section of clear blue water that gets darker with depth, with coral and sand at the bottom. On each boat a tiny angler pedals a stationary bike whose crank drives a big reel, and the fishing line runs from the rod down through the water to a hooked fish. There are two lanes. In the top lane, with a red border, a yellowfin tuna pulls hard deep in the water, the line taut and angled, and gulls circle over a bait ball at the surface. In the bottom lane, with a blue border, a blue marlin leaps out of the water in a burst of spray and the rod bends hard. No user interface, no text, letters or numbers, no logos or watermarks."
+      },
+      "request_id": "01a14c16-d889-7090-9472-7d7c9e1ad3bb",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:59:19+0200",
+      "bytes": 409976,
+      "est_usd": 0.07
+    },
+    {
+      "file": "fishing_split_4p.jpg",
+      "concept": "fishing",
+      "label": "4 players, 4 lanes",
+      "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+      "model": "GPT Image 2.5 Sunburst",
+      "input": {
+        "image_size": {
+          "width": 1536,
+          "height": 864
+        },
+        "quality": "high",
+        "num_images": 1,
+        "output_format": "jpeg",
+        "output_compression": 92,
+        "prompt": "2D pixel art game screenshot in a detailed 16-bit style with crisp square pixels and a bright, cheerful tropical palette. The screen is split horizontally into stacked lanes, one lane per player, separated by thin borders in each player's color. Each lane is its own side-view slice of ocean: a strip of sky and sea surface along the top with a small fishing boat on the left, and below it a cross-section of clear blue water that gets darker with depth, with coral and sand at the bottom. On each boat a tiny angler pedals a stationary bike whose crank drives a big reel, and the fishing line runs from the rod down through the water to a hooked fish. There are four lanes, each showing a different fight: in lane one (red border) a mackerel darts near the surface; in lane two (blue border) a mahi-mahi makes a run; in lane three (yellow border) a yellowfin tuna dives deep; in lane four (green border) a blue marlin leaps out of the water in a burst of spray. No user interface, no text, letters or numbers, no logos or watermarks."
+      },
+      "request_id": "01a14c16-d89f-7221-98ec-9ee6b6e2be68",
+      "width": 1536,
+      "height": 864,
+      "created": "2026-10-18T00:59:19+0200",
+      "bytes": 387556,
+      "est_usd": 0.07
+    }
+  ],
+  "failed": []
+}
