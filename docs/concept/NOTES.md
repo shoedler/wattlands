@@ -50,7 +50,7 @@ All seven images come from OpenAI's GPT Image 2.5 Sunburst on fal, at 1536 × 86
 
 ## What changes in the brief
 
-BRIEF.md is unchanged. These are notes for when we update it.
+These changes went into the briefs on 18 Oct 2026: `docs/BRIEF.md` is now the platform brief, and each game has its own brief in `docs/games/`. The notes below are kept as the reasoning behind them.
 
 - **3.12 Presentation** assumes procedural low-poly 3D for every mode. Siege stays 3D. Tank Crew and Fishing are now 2D pixel art, so the brief needs a pixel-art approach that an autonomous agent can build without licensing risk. Options include:
   - sprites drawn in code;
