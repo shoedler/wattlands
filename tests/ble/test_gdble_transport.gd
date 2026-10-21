@@ -354,6 +354,35 @@ func test_adapter_lost_at_runtime() -> void:
 	assert_eq(_named("adapter_ready").back(), ["adapter_ready", true, ""], "initialize() again recovers")
 
 
+func test_adapter_lost_under_a_live_link_drops_the_link_first() -> void:
+	var d := _connected()
+	_mgr.ble_event.emit(_event("initialize", "failed", "ADAPTER_UNAVAILABLE"))
+	assert_eq(_events, [
+		["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
+		["adapter_ready", false, "ADAPTER_UNAVAILABLE"],
+	], "link down first, then the adapter")
+	assert_push_warning("adapter unavailable")
+	assert_false(_t.is_link_up())
+	assert_eq(_t.services(), [])
+	d.disconnected.emit()
+	_mgr.device_disconnected.emit(ADDR)
+	assert_eq(_named("device_disconnected").size(), 1, "GDBLE's own late report is not doubled")
+	assert_eq(_named("operation_failed").size(), 0)
+	_t.initialize()
+	_t.connect_device(ADDR)
+	assert_eq(d.count("connect_async"), 2, "a real reconnect, not the already-linked shortcut")
+
+
+func test_no_adapter_answer_while_linked_drops_the_link() -> void:
+	_connected()
+	_mgr.adapter_initialized.emit(false, "ADAPTER_NOT_FOUND")
+	assert_eq(_events, [
+		["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
+		["adapter_ready", false, "ADAPTER_NOT_FOUND"],
+	])
+	assert_push_warning("no adapter")
+
+
 func test_terminal_initialize_failure_is_not_doubled() -> void:
 	_mgr.answer_initialize = false
 	_t.initialize()

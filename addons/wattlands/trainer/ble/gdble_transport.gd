@@ -24,7 +24,9 @@ extends BleTransport
 ##     characteristic_notified(chr, data), operation_failed(op, err).
 ##   Unsolicited ble_event dictionaries (operation id 0) are watched for two cases: a
 ##     non-terminal initialize failure (ADAPTER_UNAVAILABLE: the adapter went away) becomes
-##     adapter_ready(false, code); EVENT_OVERFLOW on the device's notifications or
+##     device_disconnected(address, REASON_ADAPTER_LOST) for a link that was up (GDBLE
+##     need not report it) followed by adapter_ready(false, code); EVENT_OVERFLOW on the
+##     device's notifications or
 ##     SERVICES_CHANGED becomes operation_failed(OP_GATT_RESET, code), so the manager runs
 ##     discovery and subscriptions again.
 ##
@@ -35,7 +37,8 @@ extends BleTransport
 ##
 ## Mapping onto BleTransport:
 ##   adapter_initialized(ok, err) -> adapter_ready(ok, err). ok == false means no adapter
-##     (without D-Bus it fails in about 10 ms): push_warning, never an error.
+##     (without D-Bus it fails in about 10 ms): push_warning, never an error; a link that
+##     was up is first reported down (REASON_ADAPTER_LOST).
 ##   device_discovered / device_updated -> device_found({address, name, rssi, services})
 ##     with every service UUID expanded to lower-case 128-bit form.
 ##   connected (device) or device_connected (manager) -> device_connected(address)
@@ -65,6 +68,8 @@ const DEVICE_CLASS := "BleDevice"
 const OP_GATT_RESET := "gatt_reset"
 ## RSSI reported when GDBLE has none (its DeviceInfo allows null).
 const RSSI_UNKNOWN := -127
+## device_disconnected reason when the adapter went away under a live link.
+const REASON_ADAPTER_LOST := "adapter lost"
 
 ## Test seam: a Callable returning a Node that mimics BluetoothManager. When empty, the
 ## real class is created with ClassDB.instantiate(MANAGER_CLASS).
@@ -373,8 +378,21 @@ static func _connect_signal(obj: Object, signal_name: StringName, cb: Callable) 
 func _on_adapter_initialized(ok: bool, error: String) -> void:
 	_initialized = ok
 	if not ok:
+		_adapter_gone()
 		push_warning("Bluetooth: no adapter (%s)" % error)
 	adapter_ready.emit(ok, error)
+
+
+## No adapter means no link: report a link that was up as down, so a later connect_device()
+## really connects again instead of taking the "already linked" shortcut.
+func _adapter_gone() -> void:
+	_connecting = false
+	if not _link_up:
+		return
+	_link_up = false
+	_services = []
+	_disconnect_requested = false
+	device_disconnected.emit(_address, REASON_ADAPTER_LOST)
 
 
 func _on_device_info(info: Dictionary) -> void:
@@ -411,6 +429,7 @@ func _on_manager_event(event: Dictionary) -> void:
 		if phase == "failed" and not bool(event.get("terminal", true)) and _initialized:
 			_initialized = false
 			var reason := code if not code.is_empty() else "ADAPTER_UNAVAILABLE"
+			_adapter_gone()
 			push_warning("Bluetooth: adapter unavailable (%s)" % reason)
 			adapter_ready.emit(false, reason)
 		return
