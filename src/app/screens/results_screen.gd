@@ -1,8 +1,12 @@
 class_name AppResultsScreen
 extends AppScreen
 ## Results (BRIEF 3.6, 3.8): the GameResults grade, per-rider rows (kJ, average W and %FTP, NP,
-## time in band, custom stats), team stats, XP and the local rider's new unlocks; where the ride
-## was saved; Upload to Strava (pedal-scan selectable) and the auto-upload status from
+## time in band), each rider's custom stats as a wrapped line under the grid (so a long stats
+## line never widens the grid past the content column, W3 ZIH-1), team stats, XP and the local
+## rider's new unlocks (named by <GAME_ID>_UNLOCK_<ID> when the game has that string, else the
+## id; W3 ZIH-8); the local rider's average W/kg when they opted in (profile show_wkg, computed
+## here from the local weight and never sent; BRIEF 3.3, W3 PROF-5); where the ride was saved;
+## Upload to Strava (pedal-scan selectable) and the auto-upload status from
 ## EventBus.upload_state_changed; Continue. With auto-upload on and Strava connected, the ride
 ## uploads without a prompt (once).
 ## params: results (GameResults), fit_path, summary (ride JSON summary), unlocks (Array),
@@ -26,6 +30,10 @@ var ride_label: Label = null
 var upload_label: Label = null
 var unlocks_label: Label = null
 var rows_grid: GridContainer = null
+## The riders' custom stats lines (one wrapped paragraph per rider with stats).
+var stats_box: VBoxContainer = null
+## The local rider's average W/kg (only when opted in).
+var wkg_label: Label = null
 
 
 func _build() -> void:
@@ -52,22 +60,33 @@ func _build() -> void:
 	grade_label.name = "Grade"
 	top.add_child(grade_label)
 	var side := AppStyle.vbox(8)
+	# The side column takes the rest of the row, so its wrapped lines never push the page wider.
+	side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(side)
 	var me := results.row(int(params.get("local_peer", Wl.HOST_PEER)))
 	xp_label = AppStyle.label(t("APP_RESULTS_XP").format([int(me.get("xp", 0))]), AppStyle.FONT_NUMBER, AppStyle.ACCENT)
 	xp_label.name = "Xp"
 	side.add_child(xp_label)
 	if not me.is_empty():
-		side.add_child(AppStyle.label(t("APP_RESULTS_ME").format([
+		var me_label := AppStyle.paragraph(t("APP_RESULTS_ME").format([
 			"%.0f" % float(me.get("kj", 0.0)), "%.0f" % float(me.get("avg_power_w", 0.0)),
-			"%.0f" % float(me.get("time_in_band_pct", 0.0))]), AppStyle.FONT_NUMBER))
+			"%.0f" % float(me.get("time_in_band_pct", 0.0))]), AppStyle.FONT_NUMBER, AppStyle.TEXT)
+		me_label.name = "MeLine"
+		side.add_child(me_label)
+		var wkg := wkg_text(me, services.profile())
+		if wkg != "":
+			wkg_label = AppStyle.label(wkg, AppStyle.FONT_HEADING, AppStyle.ACCENT)
+			wkg_label.name = "Wkg"
+			side.add_child(wkg_label)
 	unlocks_label = AppStyle.paragraph("", AppStyle.FONT_HEADING, AppStyle.GOOD)
 	unlocks_label.name = "Unlocks"
 	left.add_child(unlocks_label)
 	if not unlocks.is_empty():
-		unlocks_label.text = t("APP_RESULTS_UNLOCKS").format([", ".join(_strings(unlocks))])
+		unlocks_label.text = t("APP_RESULTS_UNLOCKS").format([", ".join(unlock_names(gid, unlocks))])
 	rows_grid = _build_rows()
 	left.add_child(rows_grid)
+	stats_box = _build_stats()
+	left.add_child(stats_box)
 	if not results.team.is_empty():
 		left.add_child(AppStyle.paragraph(t("APP_RESULTS_TEAM").format([stats_text(results.team)]), AppStyle.FONT_BODY, AppStyle.TEXT))
 	ride_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT_DIM)
@@ -126,13 +145,40 @@ func _build_rows() -> GridContainer:
 		g.add_child(AppStyle.label("%.0f" % float(row.get("np_w", 0.0)), AppStyle.FONT_BODY))
 		g.add_child(AppStyle.label("%.0f%%" % float(row.get("time_in_band_pct", 0.0)), AppStyle.FONT_BODY))
 		g.add_child(AppStyle.label(str(int(row.get("xp", 0))), AppStyle.FONT_BODY, AppStyle.ACCENT))
+	return g
+
+
+## One wrapped line per rider with custom stats: "Ada · Grade: S · In band (%): 99 · ...".
+func _build_stats() -> VBoxContainer:
+	var box := AppStyle.vbox(6)
+	box.name = "RowStats"
+	for row: Dictionary in results.rows:
 		var st: Variant = row.get("stats", {})
 		if st is Dictionary and not (st as Dictionary).is_empty():
-			var l := AppStyle.label(stats_text(st as Dictionary), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
-			g.add_child(l)
-			for _i in g.columns - 1:
-				g.add_child(Control.new())
-	return g
+			var l := AppStyle.paragraph("%s · %s" % [str(row.get("name", "")), stats_text(st as Dictionary)], AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+			l.name = "Stats%d" % int(row.get("peer_id", 0))
+			box.add_child(l)
+	return box
+
+
+## "2.8 W/kg" for the local row when the rider opted in (show_wkg) and has a weight; "" otherwise.
+static func wkg_text(row: Dictionary, profile: RiderProfile) -> String:
+	if row.is_empty() or profile == null or not profile.show_wkg or profile.weight_kg <= 0.0:
+		return ""
+	var w := float(row.get("avg_power_w", 0.0))
+	return AppScreen.t("APP_RESULTS_WKG").format(["%.1f" % (w / profile.weight_kg)])
+
+
+## The display names of unlock ids: <GAME_ID>_UNLOCK_<ID> when that string exists (as content
+## labels use <GAME_ID>_CONTENT_<CID>), else the id itself (or its own string key).
+static func unlock_names(game_id: String, ids: Array) -> PackedStringArray:
+	var out: PackedStringArray = []
+	for v: Variant in ids:
+		var id := str(v)
+		var key := "%s_UNLOCK_%s" % [game_id.to_upper(), id.to_upper()]
+		var named := String(TranslationServer.translate(key)) if game_id != "" else key
+		out.append(named if named != key else AppScreen.t(id))
+	return out
 
 
 ## Custom stats as "key: value · key: value" (keys are string-table keys or plain names).
