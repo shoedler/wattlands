@@ -2,47 +2,34 @@
 // Environment: PORT, HOST, RELAY_WS_IMPL, RELAY_TRUST_PROXY=1, RELAY_LOG=quiet.
 // Prints "WATTLANDS_RELAY <ws url>" once it listens (harnesses read the port from it).
 
-import type { ImplChoice } from './server.ts';
-import { DEFAULT_PORT, parseImpl, startRelay } from './server.ts';
-
-const USAGE = `Wattlands relay (BRIEF 5.3)
-usage: node src/main.ts [--port=<n>] [--host=<addr>] [--impl=auto|ws|builtin]
-env:   PORT, HOST, RELAY_WS_IMPL, RELAY_TRUST_PROXY=1 (behind Fly/Render), RELAY_LOG=quiet`;
-
-function arg(name: string): string | undefined {
-  const prefix = `--${name}=`;
-  for (const a of process.argv.slice(2)) if (a.startsWith(prefix)) return a.slice(prefix.length);
-  return undefined;
-}
+import type { MainOptions } from './options.ts';
+import { parseMainOptions, USAGE } from './options.ts';
+import { startRelay } from './server.ts';
 
 function fail(message: string): never {
-  process.stderr.write(`relay: ${message}\n`);
+  process.stderr.write(`relay: ${message}\n${USAGE}\n`);
   process.exit(1);
 }
 
-if (process.argv.includes('--help') || process.argv.includes('-h')) {
+let opts: MainOptions;
+try {
+  opts = parseMainOptions(process.argv.slice(2), process.env);
+} catch (err) {
+  fail((err as Error).message);
+}
+
+if (opts.help) {
   process.stdout.write(`${USAGE}\n`);
   process.exit(0);
 }
 
-const portText = arg('port') ?? process.env.PORT ?? String(DEFAULT_PORT);
-const port = Number(portText);
-if (!Number.isInteger(port) || port < 0 || port > 65535) fail(`invalid port "${portText}"`);
-const host = (arg('host') ?? process.env.HOST ?? '').trim() || undefined;
-let impl: ImplChoice = 'auto';
-try {
-  impl = parseImpl(arg('impl') ?? process.env.RELAY_WS_IMPL);
-} catch (err) {
-  fail((err as Error).message);
-}
-const trustProxy = ['1', 'true', 'yes'].includes((process.env.RELAY_TRUST_PROXY ?? '').toLowerCase());
-const quiet = (process.env.RELAY_LOG ?? '').toLowerCase() === 'quiet';
 const log = (line: string): void => {
-  if (!quiet) process.stdout.write(`${new Date().toISOString()} ${line}\n`);
+  // The wall clock only stamps log lines; no relay rule reads it.
+  if (!opts.quiet) process.stdout.write(`${new Date().toISOString()} ${line}\n`);
 };
 
 try {
-  const running = await startRelay({ port, host, impl, trustProxy, log });
+  const running = await startRelay({ port: opts.port, host: opts.host, impl: opts.impl, trustProxy: opts.trustProxy, log });
   process.stdout.write(`WATTLANDS_RELAY ${running.url}\n`);
   let stopping = false;
   const stop = (signal: string): void => {
