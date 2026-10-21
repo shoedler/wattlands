@@ -8,11 +8,13 @@ extends RefCounted
 ##   ERG phases: power within +-5% of the applied target (telemetry applied_target_w;
 ##     before the governor reports one, the planned target x the unverified factor);
 ##   SIM WORK phases (Rolling road): power within the session band (76-105% FTP);
-##   FREE sprints (SIM flat, virtual gears): cadence >= 60 rpm.
+##   FREE phases (SIM flat, virtual gears; sprints and longer free riding): cadence >= 60 rpm.
 ## A rider in rescue, AFK or disconnected is out of band (a stagger: no other penalty), by
 ## telemetry's flags or by the platform's on_rescue / on_afk callbacks.
 ## Time in band counts per interval and for the session; the cool-down is not counted.
-## Sprints are scored with WorkoutSprintTracker (the platform's SprintRule, 1.2 x FTP).
+## Sprints (FREE phases of at most 30 s, WorkoutSession.is_sprint) are scored with
+## WorkoutSprintTracker (the platform's SprintRule, 1.2 x FTP); a longer FREE phase (an imported
+## FreeRide) is free riding and scores no sprint.
 ## Each rider's speed and distance come from SpeedModel with P_eff (BRIEF 3.11), flat
 ## outside course phases; in a course phase on the trainer's applied SIM grade (the grade
 ## the rider's own speed model follows the course by, so the drawn position matches what
@@ -88,7 +90,7 @@ static func _step_rider(state: WorkoutState, r: WorkoutRiderState, tel: Telemetr
 		r.in_band = false
 		return
 	r.in_band = in_band(p, ps, tel, r, state.band_pct)
-	if p.kind == Wl.FREE:
+	if WorkoutSession.is_sprint(p):
 		# A rider a tick behind the lead whose sprint was already scored starts no second one.
 		if (r.sprint == null or r.sprint.phase_index != index) and sprint_result(r, index).is_empty():
 			r.sprint = WorkoutSprintTracker.create(r.ftp, index)
@@ -173,7 +175,7 @@ static func _interval_end(state: WorkoutState, index: int) -> Dictionary:
 ## still inside that phase (lagging by a tick) are finished here too.
 static func _sprint_event(state: WorkoutState, index: int) -> Dictionary:
 	var p := state.phase(index)
-	if p == null or p.kind != Wl.FREE:
+	if not WorkoutSession.is_sprint(p):
 		return {}
 	var rows: Array = []
 	for peer: int in state.order:

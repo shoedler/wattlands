@@ -209,7 +209,7 @@ func _hud_tick() -> void:
 	if ctx == null or ctx.hud == null:
 		return
 	var next := state.phase(state.phase_index + 1)
-	if next != null and next.kind == Wl.FREE and not state.sprint_warned.has(state.phase_index + 1):
+	if WorkoutSession.is_sprint(next) and not state.sprint_warned.has(state.phase_index + 1):
 		var left := state.phase_start_s(state.phase_index + 1) - state.plan_t
 		if left <= WorkoutHud.SPRINT_WARN_S:
 			state.sprint_warned[state.phase_index + 1] = true

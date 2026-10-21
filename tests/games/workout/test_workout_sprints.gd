@@ -125,3 +125,37 @@ func test_a_lagging_rider_is_scored_once_per_sprint() -> void:
 		assert_eq(int(r.sprints[0]["i"]), 2)
 		assert_null(r.sprint, "no tracker left running")
 	assert_eq((g.results().row(2)["sprints"] as Array).size(), 1)
+
+
+## W3 WO-6 (BRIEF 3.7 separates "free sprints" from "FREE phases"): a FREE phase longer than
+## 30 s (an imported 10-minute FreeRide) is free riding: no 120-160 % band, a free-ride banner
+## instead of the sprint banner, no "Sprint in" countdown and no sprint result. A 30 s FREE
+## phase after the warm-up is still a sprint.
+func test_a_long_free_ride_is_no_sprint() -> void:
+	var g := U.game("e2e", U.players(1, 0, 200.0))
+	var warm := PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "WORKOUT_LBL_WARMUP").with_ramp(65.0).with_lap()
+	var free := PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 600.0, "Free ride").with_lap()
+	var work := PlanPhase.erg(Wl.WORK, 75.0, 120.0, "WORKOUT_LBL_ENDURANCE").with_lap()
+	var timeline: Array[PlanPhase] = [warm, free, work]
+	g.state.set_timeline(timeline)
+	var r := g.state.rider(1)
+	assert_false(WorkoutSession.is_sprint(free))
+	assert_eq(WorkoutHud.band_for(g.state, 1, r), [], "no sprint band for a 10-minute free ride")
+	assert_eq(WorkoutHud.interval_banner(g.state, 1, g.ctx.strings)["key"], "WORKOUT_BANNER_FREE")
+	var events := U.ride(g)
+	assert_eq(U.of_type(events, WorkoutRules.EV_SPRINT).size(), 0, "a free ride scores no sprint")
+	assert_eq(r.sprints.size(), 0)
+	var hud: U.FakeHud = g.ctx.hud
+	for c in hud.of("toast"):
+		assert_ne(c["key"], "WORKOUT_TOAST_SPRINT_SOON", "no sprint countdown")
+	assert_eq(hud.of("power_band").size(), 0, "no band during the free ride")
+	g.free()
+	var g2 := U.game("e2e", U.players(1, 0, 200.0))
+	var sprint := PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30.0, "WORKOUT_LBL_SPRINT").with_lap()
+	var timeline2: Array[PlanPhase] = [warm, sprint, work]
+	g2.state.set_timeline(timeline2)
+	assert_true(WorkoutSession.is_sprint(sprint))
+	assert_eq(WorkoutHud.band_for(g2.state, 1, g2.state.rider(1)), [240.0, 320.0], "a 30 s sprint keeps its band")
+	assert_eq(WorkoutHud.interval_banner(g2.state, 1, g2.ctx.strings)["key"], "WORKOUT_BANNER_SPRINT")
+	assert_eq(U.of_type(U.ride(g2), WorkoutRules.EV_SPRINT).size(), 1, "and its score")
+	g2.free()

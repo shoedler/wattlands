@@ -53,6 +53,8 @@ WORKOUT_HUD_IN_BAND,In band
 WORKOUT_BANNER_RAMP,{label}: {from} -> {to}% FTP for {time}
 WORKOUT_BANNER_ERG,{label}: {pct}% FTP for {time}
 WORKOUT_BANNER_SPRINT,{label}! Shift up and go for {time}
+WORKOUT_BANNER_FREE,{label}: ride free for {time}
+WORKOUT_CLAMP_FLOOR,"{label}: {from} -> {to} FTP (the trainer's {floor}% FTP floor)"
 WORKOUT_BANNER_ROLLING,{label}: hold {lo}-{hi}% FTP for {time}
 WORKOUT_TOAST_INTERVAL_DONE,{label} done: {pct}% in band
 WORKOUT_TOAST_SPRINT_HIT,Sprint! Peak {w} W

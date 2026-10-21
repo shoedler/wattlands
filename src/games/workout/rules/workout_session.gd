@@ -30,6 +30,13 @@ const MAX_PCT := 150.0
 const DEFAULT_BAND_PCT := [76.0, 105.0]
 ## The platform's appended cool-down (PlanValidator.COOLDOWN_S).
 const COOLDOWN_S := 180.0
+## BRIEF 4.6.1's ERG floor in % FTP (the governor also keeps 50 W). An imported block below it
+## (Power="0" rests) is raised to it and listed as a clamp, never rejected (W3 WO-5).
+const FLOOR_PCT := 30.0
+## A FREE phase this long or shorter is a sprint (BRIEF 3.7's 30 s sprints): sprint band,
+## banner, countdown and SprintRule scoring. A longer one (an imported FreeRide) is free
+## riding: no band, no sprint (W3 WO-6).
+const SPRINT_MAX_S := 30.0
 
 ## Optional zwo parser for tests: Callable(path: String) -> Dictionary shaped like
 ## WorkoutImport.parse_zwo_file(). Unset: WorkoutImport is used.
@@ -280,6 +287,7 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		if p.label.strip_edges() == "":
 			p.label = block_label(strings, n)
 		p.open_ended = false
+		_raise_to_floor(p, s, strings)
 		s.phases.append(p)
 	var errs: Array[String] = []
 	if s.phases.is_empty():
@@ -291,6 +299,31 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		push_error("WorkoutSession: .zwo %s rejected: %s" % [path, "; ".join(errs)])
 		return null
 	return s
+
+
+## True for a sprint: a FREE phase of at most SPRINT_MAX_S (see SPRINT_MAX_S).
+static func is_sprint(p: PlanPhase) -> bool:
+	return p != null and p.kind == Wl.FREE and p.duration_s <= SPRINT_MAX_S + 1e-6
+
+
+## An imported ERG block below the 30 % FTP floor (a Power="0" rest) rides at the floor, as
+## the governor would make it anyway; the change is listed with the importer's clamps.
+static func _raise_to_floor(p: PlanPhase, s: WorkoutSession, strings: GameStrings) -> void:
+	if p.mode != Wl.ERG:
+		return
+	var low_ramp := p.has_ramp() and p.ramp_to_pct < FLOOR_PCT
+	if p.target_pct >= FLOOR_PCT and not low_ramp:
+		return
+	var was := "%s%%" % _pct(p.target_pct) if not p.has_ramp() else "%s -> %s%%" % [_pct(p.target_pct), _pct(p.ramp_to_pct)]
+	p.target_pct = maxf(p.target_pct, FLOOR_PCT)
+	if p.has_ramp():
+		p.ramp_to_pct = maxf(p.ramp_to_pct, FLOOR_PCT)
+	var now := "%s%%" % _pct(p.target_pct) if not p.has_ramp() else "%s -> %s%%" % [_pct(p.target_pct), _pct(p.ramp_to_pct)]
+	var args := {"label": p.label, "from": was, "to": now, "floor": _pct(FLOOR_PCT)}
+	if strings != null and strings.has("WORKOUT_CLAMP_FLOOR"):
+		s.clamps.append(strings.t("WORKOUT_CLAMP_FLOOR", args))
+	else:
+		s.clamps.append("{label}: {from} -> {to} FTP (the trainer's {floor}% FTP floor)".format(args))
 
 
 ## The label of imported block `n` ("Block 3"), which is also its FIT lap name. Plain text
