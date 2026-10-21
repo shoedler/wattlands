@@ -41,9 +41,9 @@ extends TrainerDevice
 ## EXHAUSTED_CP_FRACTION x CP until RECOVERED_WPRIME_FRACTION of W' has come back, so targets
 ## far above CP eventually fail (150% FTP within about 3 minutes at the defaults) while targets
 ## below CP hold. Scripted profiles ignore fatigue. The rider pedals while its goal power is
-## above 0 and stops at once (0 W, 0 rpm) at 0. Outside ERG at >= 120% FTP the follower's
-## cadence rises 10% (a sprint) and the reported cadence lags its fall for 5 s afterwards
-## (tau 1.5 s), like a trainer's cadence estimate. Speed: in ERG, RESISTANCE and OFF the
+## above 0 and stops at once (0 W, 0 rpm) at 0. Outside ERG at >= 120% FTP the follower
+## sprints: its cadence rises 10% (unless `band` steers it) and the reported cadence lags its
+## fall for 5 s afterwards (tau 1.5 s), like a trainer's cadence estimate. Speed: in ERG, RESISTANCE and OFF the
 ## flywheel speed is cadence x KMH_PER_RPM (a fixed virtual gear); in SIM a SpeedModel
 ## integrates the rider's power at the commanded grade and wind with weight_kg + 8 kg.
 ## Notifications every 0.9-1.1 s (seeded jitter), rounded like FTMS data (1 W, 0.5 rpm,
@@ -694,7 +694,7 @@ func _cadence_now(pedaling: bool, drop_rpm: float, h: float) -> float:
 	else:
 		c = _base_cadence_rpm()
 	c += _kb_cadence_offset_rpm
-	if _sprinting:
+	if _sprinting and not _has_band:
 		c *= 1.0 + SPRINT_CADENCE_LIFT
 	var lift := _surge_lift()
 	if lift > 0.0:

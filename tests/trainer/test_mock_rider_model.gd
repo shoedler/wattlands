@@ -123,6 +123,15 @@ func test_cadence_lags_after_a_sprint() -> void:
 	assert_eq(m.reported_cadence_rpm(), 90.0, "the lag ends 5 s after the sprint")
 
 
+func test_band_riders_keep_the_band_in_a_sprint() -> void:
+	var m := _mock("erg+band", 200.0, {"seed": 2})
+	m.set_cadence_band(84.0, 96.0)
+	m.set_simulation(0.0, 0.0, 0.004, 0.51)
+	m.set_power_band(250.0, 270.0)
+	_run(m, 20.0)
+	assert_almost_eq(m.cadence_rpm(), 90.0, 1.6, "band cadence, no sprint lift")
+
+
 func test_no_sprint_lift_in_erg_or_for_scripts() -> void:
 	var e := _mock("erg", 200.0)
 	e.set_target_power(300)
