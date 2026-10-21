@@ -28,7 +28,9 @@ static func create(p_services: AppServices) -> AppSessionLauncher:
 
 
 ## The config for GameHost.setup(), or {} with `error` set. params: game_id, content_id, seed,
-## session_start (CLIENT), sim_speed, record_rides.
+## session_start (CLIENT), sim_speed, record_rides, realtime (default true: the GameHost
+## advances its SimClock from _process, also in headless app runs such as scripted peers;
+## tests pass false and step it themselves).
 func build_config(role: String, params: Dictionary, view_parent: Node, hud_parent: Node, headless: bool) -> Dictionary:
 	error = ""
 	var net := services.net
@@ -127,12 +129,40 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 		"players": players, "local_riders": riders, "local_peer": local_peer,
 		"net": net if role != Wl.SOLO else null, "bus": services.bus, "options": options,
 		"scaling_mode": scaling, "sim_speed": maxf(sim_speed, 0.01), "headless": headless,
+		"realtime": bool(params.get("realtime", true)),
 		"view_parent": view_parent, "hud_parent": hud_parent,
 		"record_rides": bool(params.get("record_rides", true)), "report": false,
 	}
+	if services.sfx != null:
+		# The GameHost runs the metronome on rendering peers (band centre, else the preferred
+		# cadence); the session screen uses the same node.
+		config["sfx"] = services.sfx
 	if not ss.is_empty():
 		config["session_start"] = ss.duplicate(true)
 	return config
+
+
+## The messages to re-emit on NetSession.game_message right after GameHost.start(), so the
+## new GameHost sees what opened the session: a client's GameHost connects to game_message in
+## setup(), after the session_start (or, on a rejoin, the plan/phase/snapshot) that made the
+## shell create it was already delivered. params.replay as given, else session_start from the
+## host. Each entry: {"from": int, "data": Dictionary}.
+static func replay_messages(params: Dictionary, net: WlNetSession) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if net == null:
+		return out
+	var host_peer := net.host_peer if net.host_peer > 0 else Wl.HOST_PEER
+	for r: Variant in params.get("replay", []):
+		if r is Dictionary:
+			var d: Variant = (r as Dictionary).get("data", {})
+			out.append({"from": int((r as Dictionary).get("from", host_peer)), "data": d if d is Dictionary else {}})
+	var ss: Variant = params.get("session_start", {})
+	if out.is_empty() and ss is Dictionary and not (ss as Dictionary).is_empty():
+		var msg := (ss as Dictionary).duplicate(true)
+		if not msg.has("type"):
+			msg["type"] = "session_start"
+		out.append({"from": host_peer, "data": msg})
+	return out
 
 
 ## A bot's LocalRider: MockTrainer erg at compliance 1.0 with the bot FTP, no recorder.

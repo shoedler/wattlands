@@ -194,12 +194,21 @@ func _connect_signals() -> void:
 		bus.ride_saved.connect(_on_ride_saved)
 		bus.upload_state_changed.connect(_on_upload_state)
 		bus.strava_state_changed.connect(_on_strava_state)
+	var app := services.app
+	if app != null:
+		# WlApp counts --run-seconds too and quits on its own (platform); its quit must end
+		# like ours (exit 2, report, DONE line), whichever clock runs out first.
+		app.run_seconds_exit_code = EXIT_TIMEOUT
+		app.quitting.connect(_on_app_quitting)
 
 
 func _disconnect_signals() -> void:
 	if not _connected:
 		return
 	_connected = false
+	var app := services.app
+	if app != null and app.quitting.is_connected(_on_app_quitting):
+		app.quitting.disconnect(_on_app_quitting)
 	var net := services.net
 	if net != null:
 		for pair: Array in [[net.state_changed, _on_net_state], [net.lobby_changed, _on_lobby_changed],
@@ -214,6 +223,15 @@ func _disconnect_signals() -> void:
 				[bus.strava_state_changed, _on_strava_state]]:
 			if (pair[0] as Signal).is_connected(pair[1]):
 				(pair[0] as Signal).disconnect(pair[1])
+
+
+## App.quit() started outside this driver (--run-seconds on the App's clock, a window close):
+## finish now, so the report and the DONE line are written before the tree quits.
+func _on_app_quitting(code: int) -> void:
+	if phase == "done":
+		return
+	var why := services.app.exit_reason if services.app != null and services.app.exit_reason != "" else "quit"
+	finish(why, EXIT_TIMEOUT if why == "run_seconds" else code)
 
 
 func _on_net_state(state: String, detail: String) -> void:
@@ -345,6 +363,7 @@ func launch(role: String, params: Dictionary) -> void:
 	phase = "session"
 	var p := params.duplicate(true)
 	p["sim_speed"] = config.sim_speed
+	p["realtime"] = auto_process
 	if config.has_seed:
 		p["seed"] = config.seed
 	launcher = AppSessionLauncher.create(services)
@@ -379,9 +398,8 @@ func launch(role: String, params: Dictionary) -> void:
 	_next_trace_t = clock
 	services.set_menu_ticking(false)
 	host.start()
-	for r: Variant in p.get("replay", []):
-		if r is Dictionary:
-			services.net.game_message.emit(int((r as Dictionary).get("from", Wl.HOST_PEER)), (r as Dictionary).get("data", {}))
+	for r in AppSessionLauncher.replay_messages(p, services.net):
+		services.net.game_message.emit(int(r["from"]), r["data"])
 
 
 func local_rider() -> LocalRider:

@@ -97,11 +97,13 @@ func utc_now() -> int:
 
 
 ## Ask TrainerService to stop (false) or resume (true) ticking the device and the menu-time
-## rider, while a GameHost or the FTP test ticks the rider itself. Requested as an additive
-## WlTrainerService.set_menu_ticking(on); without it this does nothing.
+## rider, while a GameHost or the FTP test ticks the rider itself:
+## WlTrainerService.set_external_tick(not on). Handing ticking back sets the rider up afresh as
+## the menu rider once its ride is saved (platform). Without it both the service and the
+## GameHost would tick one rider on two clocks.
 func set_menu_ticking(on: bool) -> void:
-	if trainer != null and trainer.has_method("set_menu_ticking"):
-		trainer.call("set_menu_ticking", on)
+	if trainer != null:
+		trainer.set_external_tick(not on)
 
 
 func play_sound(sound: String) -> void:

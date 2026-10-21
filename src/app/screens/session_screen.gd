@@ -36,6 +36,7 @@ var headless: bool = false
 ## True while this screen runs the Sfx cadence metronome.
 var metronome_on: bool = false
 var _overlay_menu_open: bool = false
+var _left: bool = false
 
 
 func _build() -> void:
@@ -55,10 +56,28 @@ func _build() -> void:
 	_build_overlay()
 	_build_panic_button()
 	_connect_bus()
+	if role != Wl.CLIENT and auto_process:
+		# A SOLO or HOST start usually comes from inside the local rider's own tick (a surge that
+		# picked Start, the zero-touch sample): setting that rider up for the session there would
+		# let the rest of the tick record menu time into the new ride (stale time base). Start
+		# right after the tick. A CLIENT starts at once: its GameHost must be listening before the
+		# plan that follows session_start in the same NetSession poll.
+		_start_session.call_deferred()
+	else:
+		_start_session()
+
+
+## Create and start the GameHost (see the class doc).
+func _start_session() -> void:
+	if _left or host != null:
+		return
 	if role == Wl.SOLO and bool(params.get("quick", false)):
 		_prepare_offline_lobby()
 	launcher = AppSessionLauncher.create(services)
-	config = launcher.build_config(role, params, view_layer, hud_layer, headless)
+	var lp := params.duplicate()
+	# The GameHost runs on wall time like the screen (tests drive both by hand).
+	lp["realtime"] = auto_process
+	config = launcher.build_config(role, lp, view_layer, hud_layer, headless)
 	if config.is_empty():
 		_fail(launcher.error)
 		return
@@ -75,16 +94,21 @@ func _build() -> void:
 	host.state_changed.connect(_on_host_state)
 	host.session_finished.connect(_on_session_finished)
 	services.set_menu_ticking(false)
+	if services.input != null:
+		# stop_5s maps to pause only in a solo session (WlInputRouter.solo).
+		services.input.solo = role == Wl.SOLO
 	host.start()
 	_start_metronome()
-	for r: Variant in params.get("replay", []):
-		if r is Dictionary and services.net != null:
-			services.net.game_message.emit(int((r as Dictionary).get("from", Wl.HOST_PEER)), (r as Dictionary).get("data", {}))
+	for r in AppSessionLauncher.replay_messages(params, services.net):
+		services.net.game_message.emit(int(r["from"]), r["data"])
 
 
 func _on_leave() -> void:
+	_left = true
 	_disconnect_bus()
 	services.set_menu_ticking(true)
+	if services.input != null:
+		services.input.solo = true
 	if metronome_on and services.sfx != null:
 		services.sfx.set_metronome(0.0, false)
 		metronome_on = false

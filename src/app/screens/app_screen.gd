@@ -135,6 +135,9 @@ func push_menu(items: Array, pick: Callable, back: Callable = Callable(), highli
 	var list := services.make_scan_list() if services != null else PedalScanList.new()
 	list.listen_to_input = false
 	list.set_process(false)
+	# The screen plays the ui_move/ui_confirm/ui_back cues through services (one cue per event);
+	# the list's own Sfx cues would double them.
+	list.sounds = false
 	list.name = "Menu%d" % menus.size()
 	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var prev := active_menu()
