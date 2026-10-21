@@ -59,24 +59,24 @@ const ENDED_START := "start"
 
 # `clamped_by` rule names reported by the SafetyGovernor (BRIEF 4.6). A report lists
 # every rule that changed the requested value, in the order they applied.
-const CLAMP_UNVERIFIED := "unverified"        ## 4.6.1 x0.85 while FTP is unverified
-const CLAMP_CEILING := "ceiling"              ## 4.6.1 min(150% FTP, 1000 W, trainer max)
-const CLAMP_LONG_PHASE := "long_phase"        ## 4.6.1 105% cap in phases longer than 300 s
-const CLAMP_LIMIT_105 := "limit_105"          ## 4.6.1 duration limit latched at 105%
-const CLAMP_LIMIT_120 := "limit_120"          ## 4.6.1 duration limit latched at 120%
-const CLAMP_WARMUP := "warmup"                ## 4.6.8 warm-up caps (ERG 65%, grade -2..+3, no haptics)
-const CLAMP_FLOOR := "floor"                  ## 4.6.1 floor max(30% FTP, 50 W)
-const CLAMP_RESCUE := "rescue"                ## 4.6.3 50% FTP during rescue
-const CLAMP_COASTING := "coasting"            ## 4.6.4 floor while coasting
-const CLAMP_SLEW := "slew"                    ## 4.6.2 increases at most 30 W/s
-const CLAMP_SWITCH := "switch_ramp"           ## 4.5 ramped ERG<->SIM entry target
-const CLAMP_PANIC := "panic"                  ## 4.6.5 emergency safe
-const CLAMP_GRADE_RANGE := "grade_range"      ## 4.6.6 user grade range (default -5..+10)
-const CLAMP_GRADE_LIMIT := "grade_limit"      ## 4.6.6 total -10..+16
-const CLAMP_HAPTIC := "haptic_limit"          ## 4.6.6 haptic <= +3% (or equal wind force), <= 8 s (only when that bound bites)
-const CLAMP_HAPTIC_INTENSITY := "haptic_intensity" ## 4.6.6 haptic scaled by the rider's intensity setting
-const CLAMP_FACTOR := "factor_bounds"         ## 4.6.6 crr/cw factors in [0.5, 1.0]
-const CLAMP_PAUSE := "paused"                 ## 4.1 paused: ERG floor or SIM flat
+const CLAMP_UNVERIFIED := "unverified"  ## 4.6.1 x0.85 while FTP is unverified
+const CLAMP_CEILING := "ceiling"  ## 4.6.1 min(150% FTP, 1000 W, trainer max)
+const CLAMP_LONG_PHASE := "long_phase"  ## 4.6.1 105% cap in phases longer than 300 s
+const CLAMP_LIMIT_105 := "limit_105"  ## 4.6.1 duration limit latched at 105%
+const CLAMP_LIMIT_120 := "limit_120"  ## 4.6.1 duration limit latched at 120%
+const CLAMP_WARMUP := "warmup"  ## 4.6.8 warm-up caps (ERG 65%, grade -2..+3, no haptics)
+const CLAMP_FLOOR := "floor"  ## 4.6.1 floor max(30% FTP, 50 W)
+const CLAMP_RESCUE := "rescue"  ## 4.6.3 50% FTP during rescue
+const CLAMP_COASTING := "coasting"  ## 4.6.4 floor while coasting
+const CLAMP_SLEW := "slew"  ## 4.6.2 increases at most 30 W/s
+const CLAMP_SWITCH := "switch_ramp"  ## 4.5 ramped ERG<->SIM entry target
+const CLAMP_PANIC := "panic"  ## 4.6.5 emergency safe
+const CLAMP_GRADE_RANGE := "grade_range"  ## 4.6.6 user grade range (default -5..+10)
+const CLAMP_GRADE_LIMIT := "grade_limit"  ## 4.6.6 total -10..+16
+const CLAMP_HAPTIC := "haptic_limit"  ## 4.6.6 haptic <= +3% (or equal wind force), <= 8 s (only when that bound bites)
+const CLAMP_HAPTIC_INTENSITY := "haptic_intensity"  ## 4.6.6 haptic scaled by the rider's intensity setting
+const CLAMP_FACTOR := "factor_bounds"  ## 4.6.6 crr/cw factors in [0.5, 1.0]
+const CLAMP_PAUSE := "paused"  ## 4.1 paused: ERG floor or SIM flat
 
 # Directive refusal reasons (DirectiveResult.reason, applied records)
 const REFUSE_NO_PHASE := "no_phase"
@@ -104,8 +104,20 @@ const REFUSE_SIM_BLOCK_UNSAFE := "sim_block_unsafe"
 
 # Input actions (BRIEF 3.5). The input map in project.godot defines each.
 const ACTIONS: Array[StringName] = [
-	&"confirm", &"back", &"up", &"down", &"left", &"right", &"ability_1", &"ability_2",
-	&"item", &"swap", &"shift_up", &"shift_down", &"pause", &"panic",
+	&"confirm",
+	&"back",
+	&"up",
+	&"down",
+	&"left",
+	&"right",
+	&"ability_1",
+	&"ability_2",
+	&"item",
+	&"swap",
+	&"shift_up",
+	&"shift_down",
+	&"pause",
+	&"panic",
 ]
 
 # Pedal gestures (BRIEF 3.5). `surge` doubles as confirm, `coast` as back, `stop_5s` as pause.
@@ -120,10 +132,10 @@ const G_NOT_PEDALING := &"not_pedaling"
 # Session slot looks (BRIEF 3.9): colorblind-safe colors (Okabe-Ito), always with a shape
 # and a pattern. Slots 4-7 repeat 0-3 with hollow shapes.
 const SLOT_COLORS: Array[Color] = [
-	Color("#D55E00"), # red (vermillion)
-	Color("#0072B2"), # blue
-	Color("#F0E442"), # yellow
-	Color("#009E73"), # green (bluish green)
+	Color("#D55E00"),  # red (vermillion)
+	Color("#0072B2"),  # blue
+	Color("#F0E442"),  # yellow
+	Color("#009E73"),  # green (bluish green)
 ]
 const SLOT_COLOR_NAMES: Array[String] = ["red", "blue", "yellow", "green"]
 const SLOT_SHAPES: Array[String] = ["circle", "triangle", "square", "diamond"]

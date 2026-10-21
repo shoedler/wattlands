@@ -182,7 +182,9 @@ func read_characteristic(service_uuid: String, char_uuid: String) -> void:
 
 
 ## Only FtmsClient calls this (BRIEF 4.6.11). Refused while the hardware lock is set.
-func write_characteristic(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> void:
+func write_characteristic(
+	service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+) -> void:
 	if Locks.hw_locked():
 		push_warning("%s: write to %s refused" % [Locks.HW_MESSAGE, expand_uuid(char_uuid)])
 		operation_failed.emit("write", Locks.HW_MESSAGE)
@@ -199,6 +201,7 @@ func subscribe_characteristic(service_uuid: String, char_uuid: String) -> void:
 
 
 # --- Additive helpers ------------------------------------------------------------------
+
 
 ## The address passed to the last connect_device() ("" before).
 func device_address() -> String:
@@ -261,10 +264,15 @@ static func normalize_services(list: Array) -> Array:
 				if not (chr_v is Dictionary):
 					continue
 				var chr: Dictionary = chr_v
-				chars.append({
-					"uuid": expand_uuid(String(chr.get("uuid", ""))),
-					"properties": _property_list(chr.get("properties", {})),
-				})
+				(
+					chars
+					. append(
+						{
+							"uuid": expand_uuid(String(chr.get("uuid", ""))),
+							"properties": _property_list(chr.get("properties", {})),
+						}
+					)
+				)
 		out.append({"uuid": expand_uuid(String(svc.get("uuid", ""))), "characteristics": chars})
 	return out
 
@@ -289,6 +297,7 @@ static func same_address(a: String, b: String) -> bool:
 
 
 # --- Internals -----------------------------------------------------------------------------
+
 
 func _create_manager() -> Node:
 	if manager_factory.is_valid():
@@ -320,7 +329,9 @@ func _require_device(op: String) -> bool:
 
 ## The one place that hands bytes to GDBLE (reached only through write_characteristic,
 ## behind the hardware lock).
-func _device_write(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> void:
+func _device_write(
+	service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+) -> void:
 	var method := &"write_characteristic"
 	_device.call(method, expand_uuid(service_uuid), expand_uuid(char_uuid), data, with_response)
 

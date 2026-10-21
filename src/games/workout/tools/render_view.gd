@@ -62,7 +62,9 @@ func _initialize() -> void:
 	_viewport = SubViewport.new()
 	_viewport.size = Vector2i(640, 360)
 	_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	_viewport.canvas_item_default_texture_filter = Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	_viewport.canvas_item_default_texture_filter = (
+		Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	)
 	root.add_child(_viewport)
 	_viewport.add_child(game)
 	_viewport.add_child(game.make_view())

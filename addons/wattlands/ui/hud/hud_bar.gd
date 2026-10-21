@@ -24,7 +24,14 @@ func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 
-func set_state(p_value: float, p_max: float, p_band_lo: float = 0.0, p_band_hi: float = 0.0, p_marker: float = -1.0, p_glow: bool = false) -> void:
+func set_state(
+	p_value: float,
+	p_max: float,
+	p_band_lo: float = 0.0,
+	p_band_hi: float = 0.0,
+	p_marker: float = -1.0,
+	p_glow: bool = false
+) -> void:
 	value = p_value
 	max_value = maxf(p_max, 1e-6)
 	band_lo = p_band_lo
@@ -52,7 +59,9 @@ func _draw() -> void:
 		var seg_w := r.size.x / float(segments)
 		var lit := roundi(frac(value) * segments)
 		for i in segments:
-			var sr := Rect2(r.position.x + i * seg_w + 1.0, r.position.y, maxf(1.0, seg_w - 2.0), r.size.y)
+			var sr := Rect2(
+				r.position.x + i * seg_w + 1.0, r.position.y, maxf(1.0, seg_w - 2.0), r.size.y
+			)
 			var c := WlTheme.ACCENT if i < lit else Color(1, 1, 1, 0.18)
 			draw_rect(sr, Color(c, c.a * a))
 		return

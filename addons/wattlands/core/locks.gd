@@ -70,7 +70,17 @@ static func authority_ambiguous(url: String) -> bool:
 		u = u.substr(0, slash)
 	for i in u.length():
 		var c := u.unicode_at(i)
-		if c <= 32 or c == 127 or c == 64 or c == 63 or c == 35 or c == 92 or c == 37 or c == 91 or c == 93:
+		if (
+			c <= 32
+			or c == 127
+			or c == 64
+			or c == 63
+			or c == 35
+			or c == 92
+			or c == 37
+			or c == 91
+			or c == 93
+		):
 			return true
 	return false
 
@@ -94,7 +104,9 @@ static func has_known_scheme(url: String) -> bool:
 ## could read differently (authority_ambiguous). The network lock and the trainer bridge's
 ## loopback rule use it (W4, RS-1).
 static func is_loopback_url(url: String) -> bool:
-	return has_known_scheme(url) and not authority_ambiguous(url) and is_loopback_host(url_host(url))
+	return (
+		has_known_scheme(url) and not authority_ambiguous(url) and is_loopback_host(url_host(url))
+	)
 
 
 ## True if the network lock allows contacting `url` (always true when unlocked). While locked

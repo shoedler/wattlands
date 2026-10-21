@@ -135,6 +135,7 @@ func goto(state: String, p: Dictionary = {}) -> void:
 
 # --- menus ---------------------------------------------------------------------------------
 
+
 ## The container menus are placed in (created on first use if the screen set none).
 func menu_holder() -> Control:
 	if _menu_holder == null:
@@ -154,7 +155,9 @@ func active_menu() -> PedalScanList:
 
 ## Push a pedal-scan menu. items: [{"id", "text", "disabled"?, "detail"?}]. pick(index, id,
 ## auto) runs on a pick; back() on coast/back (default: pop this menu, or nothing on the root).
-func push_menu(items: Array, pick: Callable, back: Callable = Callable(), highlight: int = -1) -> PedalScanList:
+func push_menu(
+	items: Array, pick: Callable, back: Callable = Callable(), highlight: int = -1
+) -> PedalScanList:
 	var list := services.make_scan_list() if services != null else PedalScanList.new()
 	list.listen_to_input = false
 	list.set_process(false)
@@ -196,7 +199,11 @@ func refresh_menu(items: Array, list: PedalScanList = null) -> void:
 	var keep := m.highlighted()
 	_menu_info[i]["items"] = items.duplicate(true)
 	m.set_items(items)
-	if keep >= 0 and keep < items.size() and not bool((items[keep] as Dictionary).get("disabled", false)):
+	if (
+		keep >= 0
+		and keep < items.size()
+		and not bool((items[keep] as Dictionary).get("disabled", false))
+	):
 		m.set_highlight(keep)
 
 
@@ -249,7 +256,10 @@ static func same_id(a: Variant, b: Variant) -> bool:
 	if num_a and num_b:
 		return a == b
 	if ta != tb:
-		if (ta == TYPE_STRING or ta == TYPE_STRING_NAME) and (tb == TYPE_STRING or tb == TYPE_STRING_NAME):
+		if (
+			(ta == TYPE_STRING or ta == TYPE_STRING_NAME)
+			and (tb == TYPE_STRING or tb == TYPE_STRING_NAME)
+		):
 			return str(a) == str(b)
 		return false
 	return a == b
@@ -336,6 +346,7 @@ func _on_highlight_changed(_index: int, list: PedalScanList) -> void:
 
 # --- input ---------------------------------------------------------------------------------
 
+
 func _connect_input() -> void:
 	if _connected or services == null or services.input == null:
 		return
@@ -364,6 +375,7 @@ func _on_router_gesture(gesture: StringName) -> void:
 
 
 # --- helpers ---------------------------------------------------------------------------------
+
 
 ## Translated text.
 static func t(key: String, args: Variant = []) -> String:

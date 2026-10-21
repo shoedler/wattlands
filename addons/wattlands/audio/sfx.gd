@@ -16,8 +16,21 @@ extends Node
 ## profile's metronome setting is on.
 
 const BUILTIN_NAMES: Array[String] = [
-	"ui_move", "ui_confirm", "ui_back", "toast", "warning", "rescue", "phase", "countdown",
-	"lap", "results", "coin", "hit", "boom", "whoosh", "click",
+	"ui_move",
+	"ui_confirm",
+	"ui_back",
+	"toast",
+	"warning",
+	"rescue",
+	"phase",
+	"countdown",
+	"lap",
+	"results",
+	"coin",
+	"hit",
+	"boom",
+	"whoosh",
+	"click",
 ]
 const POOL_SIZE := 8
 const METRONOME_SOUND := "click"
@@ -133,7 +146,14 @@ func tick(dt: float) -> void:
 
 ## A short synthesized tone/noise clip (games can use it for their own effects).
 ## kind: "sine", "square", "saw", "noise"; envelope seconds.
-func synth(kind: String, freq_hz: float, duration_s: float, attack_s: float = 0.005, release_s: float = 0.05, loop: bool = false) -> AudioStream:
+func synth(
+	kind: String,
+	freq_hz: float,
+	duration_s: float,
+	attack_s: float = 0.005,
+	release_s: float = 0.05,
+	loop: bool = false
+) -> AudioStream:
 	if not SfxSynth.KINDS.has(kind):
 		push_error("Sfx: unknown synth kind '%s' (use %s)" % [kind, ", ".join(SfxSynth.KINDS)])
 		return null

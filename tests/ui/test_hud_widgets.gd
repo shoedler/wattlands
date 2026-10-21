@@ -22,17 +22,25 @@ func _add(w: Control) -> Control:
 
 # --- every widget builds headless ---------------------------------------------------------
 
+
 func test_every_kit_widget_builds_headless() -> void:
 	var made: Array[HudWidget] = [
-		HudPowerGauge.new(), HudCadence.new(), HudWbal.new(), HudTimeline.new(),
-		HudTeammates.new(), HudReadout.new(), HudGear.new(),
+		HudPowerGauge.new(),
+		HudCadence.new(),
+		HudWbal.new(),
+		HudTimeline.new(),
+		HudTeammates.new(),
+		HudReadout.new(),
+		HudGear.new(),
 	]
 	var ids: Array[String] = []
 	for w in made:
 		_add(w)
 		ids.append(w.widget_id)
 		assert_gt(w.base_size().x, 0.0)
-		assert_true(w.min_rect().x <= w.base_size().x and w.min_rect().y <= w.base_size().y, w.widget_id)
+		assert_true(
+			w.min_rect().x <= w.base_size().x and w.min_rect().y <= w.base_size().y, w.widget_id
+		)
 		w.set_telemetry(_tele(Wl.SIM, 180.0))
 		w.set_phase(PhaseState.new(), null)
 	ids.sort()
@@ -42,6 +50,7 @@ func test_every_kit_widget_builds_headless() -> void:
 
 
 # --- power gauge --------------------------------------------------------------------------
+
 
 func test_power_gauge_erg_band_is_target_plus_minus_5_pct() -> void:
 	var g: HudPowerGauge = _add(HudPowerGauge.new())
@@ -88,7 +97,9 @@ func test_power_gauge_shows_raw_w_pct_and_wkg_only_opted_in() -> void:
 	var t := _tele(Wl.SIM, 250.0)
 	t.ftp_pct = 0.0
 	g.set_telemetry(t)
-	assert_string_contains(g.pct_label().text, "100", "%FTP computed from the FTP when telemetry has none")
+	assert_string_contains(
+		g.pct_label().text, "100", "%FTP computed from the FTP when telemetry has none"
+	)
 	assert_false(g.wkg_label().visible, "no W/kg without the opt-in")
 	g.weight_kg = 80.0
 	g.set_telemetry(t)
@@ -97,6 +108,7 @@ func test_power_gauge_shows_raw_w_pct_and_wkg_only_opted_in() -> void:
 
 
 # --- cadence ------------------------------------------------------------------------------
+
 
 func test_cadence_band_glow_and_clear() -> void:
 	var c: HudCadence = _add(HudCadence.new())
@@ -129,6 +141,7 @@ func test_cadence_stale_dims_and_never_glows() -> void:
 
 # --- W' ---------------------------------------------------------------------------------------
 
+
 func test_wbal_fraction_and_low_state() -> void:
 	var w: HudWbal = _add(HudWbal.new())
 	w.wprime_j = 20000.0
@@ -154,13 +167,19 @@ func test_wbal_option() -> void:
 
 # --- timeline ---------------------------------------------------------------------------------
 
+
 func _plan() -> EffortPlan:
-	return EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65),
-		PlanPhase.erg(Wl.WORK, 90, 180, "Wave 1"),
-		PlanPhase.erg(Wl.WORK, 60, 0, "Reel 1").with_open(120, 540),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Landing"),
-	])
+	return (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65),
+				PlanPhase.erg(Wl.WORK, 90, 180, "Wave 1"),
+				PlanPhase.erg(Wl.WORK, 60, 0, "Reel 1").with_open(120, 540),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Landing"),
+			]
+		)
+	)
 
 
 func _phase(plan: EffortPlan, index: int, elapsed: float) -> PhaseState:
@@ -197,7 +216,12 @@ func test_timeline_fixed_phase_and_next_preview() -> void:
 
 func test_timeline_ramp_preview() -> void:
 	var tl: HudTimeline = _add(HudTimeline.new())
-	var plan := EffortPlan.of([PlanPhase.erg(Wl.FREE, 50, 10, "Intro"), PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65)])
+	var plan := EffortPlan.of(
+		[
+			PlanPhase.erg(Wl.FREE, 50, 10, "Intro"),
+			PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65)
+		]
+	)
 	tl.set_phase(_phase(plan, 0, 1.0), plan)
 	assert_string_contains(tl.next_text(), "50")
 	assert_string_contains(tl.next_text(), "65")
@@ -211,7 +235,9 @@ func test_timeline_open_ended_phase() -> void:
 	assert_eq(tl.time_text(), "1:15", "elapsed")
 	assert_string_contains(tl.range_text(), "2:00")
 	assert_string_contains(tl.range_text(), "9:00")
-	assert_eq(float(tl.strip().blocks[2]["len"]), 330.0, "no nominal length: the middle of min_s-max_s")
+	assert_eq(
+		float(tl.strip().blocks[2]["len"]), 330.0, "no nominal length: the middle of min_s-max_s"
+	)
 	assert_string_contains(tl.next_text(), "Landing")
 
 
@@ -240,11 +266,19 @@ func test_clock_text() -> void:
 
 # --- teammates --------------------------------------------------------------------------------
 
+
 func _roster() -> Dictionary:
 	return {
 		1: {"name": "Ada", "slot_index": 0, "raw_w": 212.4, "ftp_pct": 85.0, "connected": true},
 		3: {"name": "Bo", "slot_index": 5, "raw_w": 150.0, "ftp_pct": 75.0, "rescue": true},
-		-1: {"name": "Bot 1", "slot_index": 1, "raw_w": 180.0, "ftp_pct": 90.0, "status": {"in_band": true, "icon": "", "text": ""}},
+		-1:
+		{
+			"name": "Bot 1",
+			"slot_index": 1,
+			"raw_w": 180.0,
+			"ftp_pct": 90.0,
+			"status": {"in_band": true, "icon": "", "text": ""}
+		},
 	}
 
 
@@ -286,7 +320,16 @@ func test_teammate_status_lines() -> void:
 
 func test_teammate_icon_from_res_path() -> void:
 	var tm: HudTeammates = _add(HudTeammates.new())
-	tm.set_roster({2: {"name": "Cy", "slot_index": 2, "status": {"icon": "res://src/app/icon.svg", "text": ""}}})
+	tm.set_roster(
+		{
+			2:
+			{
+				"name": "Cy",
+				"slot_index": 2,
+				"status": {"icon": "res://src/app/icon.svg", "text": ""}
+			}
+		}
+	)
 	if ResourceLoader.exists("res://src/app/icon.svg"):
 		assert_true(tm.card(2).icon().visible)
 	else:
@@ -358,12 +401,21 @@ func test_slot_chip_takes_the_slot_look() -> void:
 	for i in 8:
 		chip.set_slot(i)
 		var look := Wl.slot_look(i)
-		assert_eq(chip.look(), {"color": look["color"], "shape": look["shape"], "pattern": look["pattern"], "hollow": look["hollow"]})
+		assert_eq(
+			chip.look(),
+			{
+				"color": look["color"],
+				"shape": look["shape"],
+				"pattern": look["pattern"],
+				"hollow": look["hollow"]
+			}
+		)
 	for s: String in Wl.SLOT_SHAPES:
 		assert_gt(SlotChip.shape_points(s, Rect2(0, 0, 40, 40)).size(), 2, s)
 
 
 # --- readout and gear -------------------------------------------------------------------------
+
 
 func test_readout_sources() -> void:
 	var t := _tele(Wl.ERG, 251.6, 250)
@@ -415,6 +467,7 @@ func test_gear_only_in_sim() -> void:
 
 # --- readability --------------------------------------------------------------------------------
 
+
 func test_key_numbers_are_at_least_48_px_at_any_scale() -> void:
 	var g: HudPowerGauge = _add(HudPowerGauge.new())
 	var c: HudCadence = _add(HudCadence.new())
@@ -442,9 +495,21 @@ func test_documented_sizes_hold() -> void:
 	t.ftp_pct = 150.0
 	t.cadence_rpm = 120.0
 	t.gear = 24
-	var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out to the reef").with_ramp(65), PlanPhase.erg(Wl.WORK, 90, 180, "Wave 12 of the long siege")])
+	var plan := EffortPlan.of(
+		[
+			PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out to the reef").with_ramp(65),
+			PlanPhase.erg(Wl.WORK, 90, 180, "Wave 12 of the long siege")
+		]
+	)
 	var ph := _phase(plan, 0, 1.0)
-	var ws: Array[HudWidget] = [HudPowerGauge.new(), HudCadence.new(), HudWbal.new(), HudTimeline.new(), HudReadout.new(), HudGear.new()]
+	var ws: Array[HudWidget] = [
+		HudPowerGauge.new(),
+		HudCadence.new(),
+		HudWbal.new(),
+		HudTimeline.new(),
+		HudReadout.new(),
+		HudGear.new()
+	]
 	for w in ws:
 		w.weight_kg = 75.0
 		_add(w)
@@ -459,20 +524,38 @@ func test_documented_sizes_hold() -> void:
 	await wait_process_frames(2)
 	for w in ws:
 		var got := w.get_combined_minimum_size()
-		assert_true(got.x <= w.base_size().x + 1.0 and got.y <= w.base_size().y + 1.0, "%s at scale 1: %s fits %s" % [w.widget_id, got, w.base_size()])
+		assert_true(
+			got.x <= w.base_size().x + 1.0 and got.y <= w.base_size().y + 1.0,
+			"%s at scale 1: %s fits %s" % [w.widget_id, got, w.base_size()]
+		)
 	for w in ws:
 		w.fit_to(w.min_rect())
 		w.custom_minimum_size = Vector2.ZERO
 	await wait_process_frames(2)
 	for w in ws:
 		var got := w.get_combined_minimum_size()
-		assert_true(got.x <= w.min_rect().x + 1.0 and got.y <= w.min_rect().y + 1.0, "%s in min_rect: %s fits %s" % [w.widget_id, got, w.min_rect()])
+		assert_true(
+			got.x <= w.min_rect().x + 1.0 and got.y <= w.min_rect().y + 1.0,
+			"%s in min_rect: %s fits %s" % [w.widget_id, got, w.min_rect()]
+		)
 	var card: HudTeammateCard = _add(HudTeammateCard.new())
-	card.set_entry(2, {"name": "Long Name Rider", "slot_index": 1, "raw_w": 1000, "ftp_pct": 150, "status": {"text": "Diesel"}})
+	card.set_entry(
+		2,
+		{
+			"name": "Long Name Rider",
+			"slot_index": 1,
+			"raw_w": 1000,
+			"ftp_pct": 150,
+			"status": {"text": "Diesel"}
+		}
+	)
 	await wait_process_frames(2)
 	var tm := HudTeammates.new()
 	var got_card := card.get_combined_minimum_size()
-	assert_true(got_card.x <= tm.base_size().x + 1.0 and got_card.y <= tm.base_size().y + 1.0, "a card fits %s: %s" % [tm.base_size(), got_card])
+	assert_true(
+		got_card.x <= tm.base_size().x + 1.0 and got_card.y <= tm.base_size().y + 1.0,
+		"a card fits %s: %s" % [tm.base_size(), got_card]
+	)
 	tm.free()
 
 
@@ -493,6 +576,7 @@ func test_panel_option() -> void:
 
 
 # --- toasts and banners -------------------------------------------------------------------------
+
 
 func test_toasts_stack_expire_and_cap() -> void:
 	var t: HudToasts = _add(HudToasts.new())

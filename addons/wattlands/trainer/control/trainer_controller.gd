@@ -171,7 +171,9 @@ func command_erg(governed_w: int, floor_w: int, power_3s_w: float) -> void:
 
 
 ## SIM with the stacked state; floor and 3 s power shape the ERG -> SIM step-down.
-func command_sim(wind_mps: float, grade_pct: float, crr: float, cw: float, floor_w: int, power_3s_w: float) -> void:
+func command_sim(
+	wind_mps: float, grade_pct: float, crr: float, cw: float, floor_w: int, power_3s_w: float
+) -> void:
 	_want_mode = Wl.SIM
 	_want_sim = {"wind_mps": wind_mps, "grade_pct": grade_pct, "crr": crr, "cw": cw}
 	_want_floor_w = floor_w
@@ -340,7 +342,14 @@ func _next_erg_write() -> void:
 		return
 	if _mode == Wl.SIM and not _is_flat(_written_sim):
 		# SIM -> ERG, step 1: grade 0 and wind 0 first.
-		_write_sim({"wind_mps": 0.0, "grade_pct": 0.0, "crr": _written_sim["crr"], "cw": _written_sim["cw"]})
+		_write_sim(
+			{
+				"wind_mps": 0.0,
+				"grade_pct": 0.0,
+				"crr": _written_sim["crr"],
+				"cw": _written_sim["cw"]
+			}
+		)
 		return
 	# SIM -> ERG, step 2 (or a first ERG command): the entry target.
 	var entry := _want_floor_w
@@ -365,7 +374,9 @@ func _next_sim_write() -> void:
 				return
 		# ERG -> SIM, step 2: enter SIM at grade 0 and wind 0.
 		_stepped_down = false
-		_write_sim({"wind_mps": 0.0, "grade_pct": 0.0, "crr": _want_sim["crr"], "cw": _want_sim["cw"]})
+		_write_sim(
+			{"wind_mps": 0.0, "grade_pct": 0.0, "crr": _want_sim["crr"], "cw": _want_sim["cw"]}
+		)
 		return
 	_resume_floor = false
 	if _mode != Wl.SIM or _force_sim_write or not _sim_equal(_written_sim, _want_sim):
@@ -381,7 +392,9 @@ func _write_erg(w: int) -> void:
 
 func _write_sim(state: Dictionary) -> void:
 	var q := _quantize(state)
-	_device.set_simulation(float(q["wind_mps"]), float(q["grade_pct"]), float(q["crr"]), float(q["cw"]))
+	_device.set_simulation(
+		float(q["wind_mps"]), float(q["grade_pct"]), float(q["crr"]), float(q["cw"])
+	)
 	_mode = Wl.SIM
 	_written_sim = q
 	_entry_active = false

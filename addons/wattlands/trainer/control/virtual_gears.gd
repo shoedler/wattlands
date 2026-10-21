@@ -63,16 +63,26 @@ static func offset_for(g: int, base_grade_pct: float = 0.0) -> float:
 
 
 ## Resistance force in newtons at `grade_pct` and `speed_kmh` (FTMS simulation model).
-static func resistance_n(grade_pct: float, speed_kmh: float = REF_SPEED_KMH, mass_kg: float = REF_MASS_KG,
-		crr: float = REF_CRR, cw: float = REF_CW) -> float:
+static func resistance_n(
+	grade_pct: float,
+	speed_kmh: float = REF_SPEED_KMH,
+	mass_kg: float = REF_MASS_KG,
+	crr: float = REF_CRR,
+	cw: float = REF_CW
+) -> float:
 	var th := atan(grade_pct / 100.0)
 	var v := speed_kmh / 3.6
 	return mass_kg * G * (crr * cos(th) + sin(th)) + cw * v * v
 
 
 ## The grade in % whose resistance at `speed_kmh` is `force_n` (inverse of resistance_n).
-static func grade_for_resistance(force_n: float, speed_kmh: float = REF_SPEED_KMH, mass_kg: float = REF_MASS_KG,
-		crr: float = REF_CRR, cw: float = REF_CW) -> float:
+static func grade_for_resistance(
+	force_n: float,
+	speed_kmh: float = REF_SPEED_KMH,
+	mass_kg: float = REF_MASS_KG,
+	crr: float = REF_CRR,
+	cw: float = REF_CW
+) -> float:
 	var v := speed_kmh / 3.6
 	# crr cos th + sin th = r sin(th + phi), r = sqrt(1 + crr^2), phi = atan(crr).
 	var c := (force_n - cw * v * v) / (mass_kg * G)

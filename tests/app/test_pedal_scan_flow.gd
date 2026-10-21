@@ -108,7 +108,9 @@ func test_without_a_router_the_profile_decides() -> void:
 func test_lobby_add_and_remove_bots_by_pedal() -> void:
 	fx.give_profile()
 	fx.fake_net().add_human(1, "Ada")
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_true(scan_to(s, "add_bot"))
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(fx.fake_net().calls_named("add_bot").size(), 1)
@@ -121,8 +123,18 @@ func test_lobby_add_and_remove_bots_by_pedal() -> void:
 func test_results_upload_is_pedal_selectable() -> void:
 	fx.give_profile()
 	fx.fake_rides().connected = true
-	var s := open_screen(AppResultsScreen.new(), {"results": GameResults.new(), "fit_path": "C:/x/ride.fit",
-		"summary": {"ride_id": "r1"}, "local_peer": 1}) as AppResultsScreen
+	var s := (
+		open_screen(
+			AppResultsScreen.new(),
+			{
+				"results": GameResults.new(),
+				"fit_path": "C:/x/ride.fit",
+				"summary": {"ride_id": "r1"},
+				"local_peer": 1
+			}
+		)
+		as AppResultsScreen
+	)
 	assert_true(scan_to(s, "upload"))
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(fx.fake_rides().uploads.size(), 1)
@@ -154,7 +166,12 @@ func test_every_screen_runs_on_pedal_scan() -> void:
 	var p := fx.give_profile()
 	p.scan_interval_s = 2.0
 	fx.fake_rides().connected = true
-	fx.fake_rides().ride_list = [{"fit_path": "C:/r/a.fit", "summary": {"ride_id": "a", "game_id": "workout", "duration_s": 600.0}}]
+	fx.fake_rides().ride_list = [
+		{
+			"fit_path": "C:/r/a.fit",
+			"summary": {"ride_id": "a", "game_id": "workout", "duration_s": 600.0}
+		}
+	]
 	fx.fake_net().add_human(1, "Ada")
 	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	title.feed_sample(sample(0.0, 150.0, 85.0))
@@ -164,9 +181,21 @@ func test_every_screen_runs_on_pedal_scan() -> void:
 	_assert_scans(open_screen(AppProfileScreen.new()), "profile")
 	_assert_scans(open_screen(AppSettingsScreen.new()), "settings")
 	_assert_scans(open_screen(AppPickerScreen.new(), {"mode": "host"}), "picker")
-	_assert_scans(open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}), "solo lobby")
+	_assert_scans(
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}), "solo lobby"
+	)
 	_assert_scans(open_screen(AppLobbyScreen.new(), {"mode": "join"}), "code entry")
-	_assert_scans(open_screen(AppResultsScreen.new(), {"results": GameResults.new(), "fit_path": "C:/r/a.fit",
-		"summary": {"ride_id": "a"}, "local_peer": 1}), "results")
+	_assert_scans(
+		open_screen(
+			AppResultsScreen.new(),
+			{
+				"results": GameResults.new(),
+				"fit_path": "C:/r/a.fit",
+				"summary": {"ride_id": "a"},
+				"local_peer": 1
+			}
+		),
+		"results"
+	)
 	_assert_scans(open_screen(AppRidesScreen.new()), "rides")
 	_assert_scans(open_screen(AppFtpTestScreen.new()), "FTP test")

@@ -59,7 +59,9 @@ func test_frozen_cadence_is_stale() -> void:
 	est.process(_s(6.0, 400.0, 60.0, 44.0))
 	var fresh := est.process(_s(7.0, 400.0, 60.0, 48.0))
 	assert_eq(fresh.flags & TrainerSample.CADENCE_ESTIMATED, 0, "2 s unchanged is not stale yet")
-	assert_almost_eq(est.ratio(), r, 1e-12, "a repeated value while the speed moves teaches nothing")
+	assert_almost_eq(
+		est.ratio(), r, 1e-12, "a repeated value while the speed moves teaches nothing"
+	)
 	var stale := est.process(_s(8.5, 400.0, 60.0, 48.0))
 	assert_ne(stale.flags & TrainerSample.CADENCE_ESTIMATED, 0, "3.5 s unchanged with speed +33%")
 	assert_almost_eq(stale.cadence_rpm, 48.0 / r, 1e-9)
@@ -77,7 +79,11 @@ func test_a_resting_crank_on_a_spinning_down_flywheel_is_not_stale() -> void:
 	for i in 20:
 		var speed := 36.0 * pow(0.9, float(i + 1))
 		var out := est.process(_s(4.0 + float(i), 0.0, 0.0, speed))
-		assert_eq(out.flags & TrainerSample.CADENCE_ESTIMATED, 0, "coasting %d s: kept as reported" % (i + 1))
+		assert_eq(
+			out.flags & TrainerSample.CADENCE_ESTIMATED,
+			0,
+			"coasting %d s: kept as reported" % (i + 1)
+		)
 		assert_eq(out.cadence_rpm, 0.0)
 	assert_almost_eq(est.ratio(), 0.4, 1e-9, "nothing learned from it")
 	assert_almost_eq(est.cadence_age_s(23.0), 0.0, 1e-9, "a fresh reading")
@@ -90,7 +96,9 @@ func test_no_cadence_is_estimated_while_coasting() -> void:
 	var coast := est.process(_s(5.0, 10.0, -1.0, 30.0))
 	assert_false(coast.has_cadence(), "under 15 W an absent cadence stays absent")
 	var pedal := est.process(_s(6.0, 150.0, -1.0, 30.0))
-	assert_ne(pedal.flags & TrainerSample.CADENCE_ESTIMATED, 0, "pedaling again: estimated as before")
+	assert_ne(
+		pedal.flags & TrainerSample.CADENCE_ESTIMATED, 0, "pedaling again: estimated as before"
+	)
 	assert_almost_eq(pedal.cadence_rpm, 75.0, 1e-9)
 
 
@@ -102,7 +110,11 @@ func test_a_frozen_zero_while_pedaling_is_still_stale() -> void:
 	est.process(_s(5.0, 200.0, 0.0, 36.0))
 	est.process(_s(7.0, 200.0, 0.0, 40.0))
 	var stale := est.process(_s(8.5, 200.0, 0.0, 44.0))
-	assert_ne(stale.flags & TrainerSample.CADENCE_ESTIMATED, 0, "200 W at a 0 rpm reading: the reading is frozen")
+	assert_ne(
+		stale.flags & TrainerSample.CADENCE_ESTIMATED,
+		0,
+		"200 W at a 0 rpm reading: the reading is frozen"
+	)
 	assert_almost_eq(stale.cadence_rpm, 44.0 / r, 1e-9)
 
 

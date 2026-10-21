@@ -44,7 +44,7 @@ How to read it:
 | `tools/godot.sh`, `tools/godot.ps1`, `tools/env.sh`, `tools/env.ps1`, `tools/run_tests`, `tools/run_tests.ps1`, `tools/check_scripts.gd`, `tools/lib/` | lead | Wrappers, Godot lock (`godot_lock.mjs`), locks, test runner, script check |
 | `tools/tests/` | lead, per file | Node tests of the wrappers, lock and env scripts (lead); `new_game.test.mjs`, `run_game_sim.test.mjs` (sdk-tools); `screenshot.test.mjs` (qa) |
 | `addons/gut/`, `addons/gdble/` | lead | Vendored, pinned (`docs/deps.d/`) |
-| `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `.gitignore`, every `.gdignore` | lead | |
+| `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `.gitignore`, `gdlintrc`, every `.gdignore` | lead | |
 | `docs/PROTOCOL.md` | net-client | The relay and game-message protocol (net-client wrote it in W1; the lead reviews changes) |
 | `docs/BRIEF.md`, `docs/DESIGN.md`, `ARCHITECTURE.md`, `TRAINER.md`, `HARDWARE_TEST_PLAN.md`, `DECISIONS.md`, `BACKLOG.md`, `DEPENDENCIES.md`, `OWNERSHIP.md` | lead | Merged from owner fragments. `HARDWARE_TEST_PLAN.md` carries one section per game (workout, siege, tank, fishing) that only links to `src/games/<id>/HARDWARE_TEST.md`, so game sessions never edit it (B 4.7) |
 | `docs/games/`, `docs/concept/`, `docs/research.md`, `.gitattributes`, `.claude/settings.json` | nobody | Read only |

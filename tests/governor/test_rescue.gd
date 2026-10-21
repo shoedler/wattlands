@@ -167,7 +167,9 @@ func test_expired_directive_lands_on_the_plan_after_the_ramp() -> void:
 	var rig := make_rig({}, follower())
 	rig.start([erg(Wl.WORK, 80.0, 120.0).with_range(80.0, 120.0)])
 	rig.run(20.0)
-	var rec := rig.directive({"mode": "ERG", "target_pct": 110.0, "duration_s": 10.0, "reason": "run"})
+	var rec := rig.directive(
+		{"mode": "ERG", "target_pct": 110.0, "duration_s": 10.0, "reason": "run"}
+	)
 	assert_false(rec["refused"])
 	rig.run(3.0)
 	_cadence(rig, 40.0)

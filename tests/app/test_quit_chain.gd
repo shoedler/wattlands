@@ -107,13 +107,22 @@ func test_a_window_close_while_hosting_leaves_the_room_and_quits_only_after_the_
 	assert_eq(h.state, WlNetSession.STATE_OFFLINE, "App.quit left the room")
 	pump()
 	for label: String in ["c1", "c2"]:
-		assert_true(U.same(events(label, "refused"), [["refused", "host_left"]]), "%s gets host_left" % label)
-		assert_false(_peer_left_reasons(label).has("dropped"), "%s never sees the host dropped" % label)
+		assert_true(
+			U.same(events(label, "refused"), [["refused", "host_left"]]),
+			"%s gets host_left" % label
+		)
+		assert_false(
+			_peer_left_reasons(label).has("dropped"), "%s never sees the host dropped" % label
+		)
 	await wait_seconds(WlApp.QUIT_GRACE_S + 0.3)
 	assert_eq(app.quit_codes, [0] as Array[int], "App.quit ended the tree itself")
 	assert_eq(tree_quits, [], "and only App did")
 	if app.quit_ms.size() == 1:
-		assert_gte(app.quit_ms[0] - t0, int(WlApp.QUIT_GRACE_S * 1000.0) - 50, "after QUIT_GRACE_S of real time")
+		assert_gte(
+			app.quit_ms[0] - t0,
+			int(WlApp.QUIT_GRACE_S * 1000.0) - 50,
+			"after QUIT_GRACE_S of real time"
+		)
 
 
 func test_the_title_quit_while_hosting_takes_the_same_path() -> void:
@@ -166,9 +175,13 @@ func test_quitting_freezes_the_current_screen() -> void:
 	assert_true(child.is_processing())
 	app.notification(Node.NOTIFICATION_WM_CLOSE_REQUEST)
 	assert_false(s.is_processing(), "the screen stops ticking")
-	assert_false(child.is_processing(), "and so does everything under it (a GameHost stops stepping riders)")
+	assert_false(
+		child.is_processing(), "and so does everything under it (a GameHost stops stepping riders)"
+	)
 	assert_false(s.auto_process)
-	assert_false(fx.input.action.is_connected(Callable(s, "_on_router_action")), "no more menu input")
+	assert_false(
+		fx.input.action.is_connected(Callable(s, "_on_router_action")), "no more menu input"
+	)
 
 
 func test_services_end_the_tree_when_the_app_is_not_in_the_tree() -> void:
@@ -187,4 +200,6 @@ func test_services_end_the_tree_when_the_app_is_not_in_the_tree() -> void:
 	assert_true(lone.is_quitting())
 	assert_false(s.app_ends_tree())
 	assert_true(last_ran[0], "last runs")
-	assert_eq(seen, [3] as Array[int], "a private App outside the tree can't quit it; AppServices does")
+	assert_eq(
+		seen, [3] as Array[int], "a private App outside the tree can't quit it; AppServices does"
+	)

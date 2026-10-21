@@ -44,12 +44,31 @@ const TIMEOUT_MARGIN_S := 600.0
 ## Steps given to clients after the host ended, to receive the results.
 const CLIENT_DRAIN_TICKS := 200
 const FLAGS: Array[String] = [
-	"game", "content", "players", "bots", "rider", "sim-speed", "seed", "report", "autopilot",
-	"ftp", "unverified", "haptics-off", "options", "player-options", "override",
-	"max-sim-seconds", "headless", "windowed", "at", "screenshot-dir",
+	"game",
+	"content",
+	"players",
+	"bots",
+	"rider",
+	"sim-speed",
+	"seed",
+	"report",
+	"autopilot",
+	"ftp",
+	"unverified",
+	"haptics-off",
+	"options",
+	"player-options",
+	"override",
+	"max-sim-seconds",
+	"headless",
+	"windowed",
+	"at",
+	"screenshot-dir",
 ]
 ## args keys kept out of the deterministic hash (paths and tool-only settings).
-const UNHASHED_ARGS: Array[String] = ["report", "override_path", "screenshot_dir", "at", "headless", "sim_speed"]
+const UNHASHED_ARGS: Array[String] = [
+	"report", "override_path", "screenshot_dir", "at", "headless", "sim_speed"
+]
 
 var host: GameHost = null
 
@@ -158,7 +177,7 @@ static func parse_args(p_args: PackedStringArray) -> Dictionary:
 				for part in v.split(","):
 					var s := part.strip_edges()
 					if not s.is_valid_float() or float(s) <= 0.0:
-						err = "\"%s\" is not a positive number of watts" % s
+						err = '"%s" is not a positive number of watts' % s
 						break
 					ftps.append(float(s))
 				out["ftp"] = ftps
@@ -178,7 +197,7 @@ static func parse_args(p_args: PackedStringArray) -> Dictionary:
 				for part in v.split(","):
 					var s := part.strip_edges()
 					if not s.is_valid_float() or float(s) < 0.0:
-						err = "\"%s\" is not a time in seconds" % s
+						err = '"%s" is not a time in seconds' % s
 						break
 					at.append(float(s))
 				out["at"] = at
@@ -204,7 +223,10 @@ static func parse_args(p_args: PackedStringArray) -> Dictionary:
 				else:
 					var ov: Variant = WlGameRegistry.parse_json(FileAccess.get_file_as_string(path))
 					if not (ov is Dictionary):
-						err = "%s must hold a JSON object {\"<file under content/<id>/>\": <merge patch>}" % v
+						err = (
+							'%s must hold a JSON object {"<file under content/<id>/>": <merge patch>}'
+							% v
+						)
 					else:
 						out["override"] = ov
 						out["override_path"] = v
@@ -216,11 +238,26 @@ static func parse_args(p_args: PackedStringArray) -> Dictionary:
 ## The args with every default filled in.
 static func default_args() -> Dictionary:
 	return {
-		"game": "", "content": "", "players": 1, "bots": 0, "riders": [] as Array[String],
-		"sim_speed": 1.0, "seed": 1, "report": "", "autopilot": "all", "ftp": [] as Array[float],
-		"unverified": false, "haptics_off": [] as Array[int], "options": {}, "player_options": [],
-		"override": {}, "override_path": "", "max_sim_seconds": 0.0, "headless": true,
-		"at": [] as Array[float], "screenshot_dir": "",
+		"game": "",
+		"content": "",
+		"players": 1,
+		"bots": 0,
+		"riders": [] as Array[String],
+		"sim_speed": 1.0,
+		"seed": 1,
+		"report": "",
+		"autopilot": "all",
+		"ftp": [] as Array[float],
+		"unverified": false,
+		"haptics_off": [] as Array[int],
+		"options": {},
+		"player_options": [],
+		"override": {},
+		"override_path": "",
+		"max_sim_seconds": 0.0,
+		"headless": true,
+		"at": [] as Array[float],
+		"screenshot_dir": "",
 	}
 
 
@@ -247,7 +284,10 @@ func setup(p_args: Dictionary) -> String:
 	if game_id == "":
 		return "--game: required"
 	if not registry.has_game(game_id):
-		return "--game: unknown game \"%s\" (registered: %s)" % [game_id, ", ".join(PackedStringArray(registry.ids()))]
+		return (
+			'--game: unknown game "%s" (registered: %s)'
+			% [game_id, ", ".join(PackedStringArray(registry.ids()))]
+		)
 	manifest = registry.manifest(game_id)
 	var content := str(args["content"])
 	if content == "":
@@ -255,8 +295,18 @@ func setup(p_args: Dictionary) -> String:
 		args["content"] = content
 	if not WlGameRegistry.content_allowed(manifest, content):
 		var schemes: Array = manifest.get("content_schemes", [])
-		return "--content: \"%s\" is not one of %s%s" % [content, ", ".join(PackedStringArray(manifest["contents"])),
-			" (or <scheme>:<value> for %s)" % ", ".join(PackedStringArray(schemes)) if not schemes.is_empty() else ""]
+		return (
+			'--content: "%s" is not one of %s%s'
+			% [
+				content,
+				", ".join(PackedStringArray(manifest["contents"])),
+				(
+					" (or <scheme>:<value> for %s)" % ", ".join(PackedStringArray(schemes))
+					if not schemes.is_empty()
+					else ""
+				)
+			]
+		)
 	var players := int(args["players"])
 	var bots := int(args["bots"])
 	if players < 1:
@@ -267,7 +317,10 @@ func setup(p_args: Dictionary) -> String:
 		return "--bots: %s does not allow bots" % game_id
 	var total := players + bots
 	if total < int(manifest["min_players"]) or total > int(manifest["max_players"]):
-		return "--players: %d riders (players + bots) is outside %s's %d..%d" % [total, game_id, int(manifest["min_players"]), int(manifest["max_players"])]
+		return (
+			"--players: %d riders (players + bots) is outside %s's %d..%d"
+			% [total, game_id, int(manifest["min_players"]), int(manifest["max_players"])]
+		)
 	var specs_err := _resolve_specs(players)
 	if specs_err != "":
 		return specs_err
@@ -289,30 +342,12 @@ func setup(p_args: Dictionary) -> String:
 		if int(s) < 0 or int(s) >= total:
 			return "--haptics-off: slot %d does not exist (0..%d)" % [int(s), total - 1]
 		hoff.append(int(s))
+	var options_err := _check_option_args(game_id, players)
+	if options_err != "":
+		return options_err
 	var opts: Variant = args["options"]
-	if not (opts is Dictionary):
-		return "--options: must be a JSON object"
-	var oerr := registry.check_option_values(game_id, opts)
-	if oerr != "":
-		return "--" + oerr
 	var pops: Variant = args["player_options"]
-	if not (pops is Array):
-		return "--player-options: must be a JSON array"
-	if (pops as Array).size() > players:
-		return "--player-options: %d entries for %d human slots" % [(pops as Array).size(), players]
-	for i in (pops as Array).size():
-		if not (pops[i] is Dictionary):
-			return "--player-options[%d]: must be a JSON object" % i
-		var perr := registry.check_option_values(game_id, pops[i], true)
-		if perr != "":
-			return "--player-options[%d].%s" % [i, perr.trim_prefix("player_options.")]
 	var ov: Variant = args["override"]
-	if not (ov is Dictionary):
-		return "--override: must be a JSON object"
-	for rel: Variant in (ov as Dictionary).keys():
-		var p := registry.content_dir(game_id).path_join(str(rel))
-		if not FileAccess.file_exists(p):
-			return "--override: %s does not exist" % p
 	role = Wl.SOLO if players == 1 else Wl.HOST
 	var p_seed := int(args["seed"])
 	# Isolation: every persisted file of this run lives under a temp root.
@@ -324,7 +359,11 @@ func setup(p_args: Dictionary) -> String:
 	var report_path := _abs_path(str(args["report"]))
 	for i in players:
 		if report_path != "":
-			_fit_targets.append(report_path.get_base_dir().path_join("fit").path_join("%s_slot%d.fit" % [report_path.get_file().get_basename(), i]))
+			_fit_targets.append(
+				report_path.get_base_dir().path_join("fit").path_join(
+					"%s_slot%d.fit" % [report_path.get_file().get_basename(), i]
+				)
+			)
 		else:
 			_fit_targets.append(_temp_root.path_join("fit").path_join("sim_slot%d.fit" % i))
 	# Network peers.
@@ -381,15 +420,29 @@ func setup(p_args: Dictionary) -> String:
 	add_child(host)
 	var headless := bool(args["headless"])
 	var cfg := {
-		"game_id": game_id, "content_id": content, "seed": p_seed, "role": role,
-		"players": slots.duplicate(), "local_riders": host_riders, "local_peer": peer_ids[0],
-		"net": nets[0] if not nets.is_empty() else null, "bus": _new_bus("HostBus"),
-		"options": (opts as Dictionary).duplicate(true), "scaling_mode": Wl.FAIR_FTP,
-		"sim_speed": float(args["sim_speed"]), "headless": headless, "realtime": false,
-		"view_parent": self, "hud_parent": self, "record_rides": true, "report": true,
-		"registry": registry, "progress_path": _progress_path(0, game_id),
+		"game_id": game_id,
+		"content_id": content,
+		"seed": p_seed,
+		"role": role,
+		"players": slots.duplicate(),
+		"local_riders": host_riders,
+		"local_peer": peer_ids[0],
+		"net": nets[0] if not nets.is_empty() else null,
+		"bus": _new_bus("HostBus"),
+		"options": (opts as Dictionary).duplicate(true),
+		"scaling_mode": Wl.FAIR_FTP,
+		"sim_speed": float(args["sim_speed"]),
+		"headless": headless,
+		"realtime": false,
+		"view_parent": self,
+		"hud_parent": self,
+		"record_rides": true,
+		"report": true,
+		"registry": registry,
+		"progress_path": _progress_path(0, game_id),
 		"content_overrides": (ov as Dictionary).duplicate(true),
-		"fit_paths": {peer_ids[0]: _fit_targets[0]}, "input_router": null,
+		"fit_paths": {peer_ids[0]: _fit_targets[0]},
+		"input_router": null,
 		# No per-session nonce: a simulation's results.session_id stays game/content/seed, so two
 		# runs with the same arguments keep the same deterministic_hash (each run has its own
 		# temp profile, so the id never meets an earlier session's progress).
@@ -403,10 +456,18 @@ func setup(p_args: Dictionary) -> String:
 		c.name = "Client%d" % i
 		add_child(c)
 		var ccfg := {
-			"role": Wl.CLIENT, "local_peer": peer_ids[i], "local_riders": {peer_ids[i]: riders[peer_ids[i]]},
-			"net": nets[i], "bus": _new_bus("ClientBus%d" % i), "registry": registry,
-			"headless": true, "realtime": false, "record_rides": true, "report": true,
-			"progress_path": _progress_path(i, game_id), "fit_paths": {peer_ids[i]: _fit_targets[i]},
+			"role": Wl.CLIENT,
+			"local_peer": peer_ids[i],
+			"local_riders": {peer_ids[i]: riders[peer_ids[i]]},
+			"net": nets[i],
+			"bus": _new_bus("ClientBus%d" % i),
+			"registry": registry,
+			"headless": true,
+			"realtime": false,
+			"record_rides": true,
+			"report": true,
+			"progress_path": _progress_path(i, game_id),
+			"fit_paths": {peer_ids[i]: _fit_targets[i]},
 			"input_router": null,
 		}
 		var cerr := c.setup(ccfg)
@@ -494,12 +555,23 @@ func build_report() -> Dictionary:
 	var slot_rows: Array = []
 	for i in slots.size():
 		var s := slots[i]
-		slot_rows.append({
-			"slot": s.slot_index, "peer": s.peer_id, "name": s.name, "is_bot": s.is_bot,
-			"ftp": s.ftp, "ftp_verified": s.ftp_verified,
-			"rider": slot_specs[i] if i < slot_specs.size() else Bots.RIDER_SPEC,
-			"autopilot": s.autopilot, "haptics_on": s.haptics_on, "options": s.options.duplicate(true),
-		})
+		(
+			slot_rows
+			. append(
+				{
+					"slot": s.slot_index,
+					"peer": s.peer_id,
+					"name": s.name,
+					"is_bot": s.is_bot,
+					"ftp": s.ftp,
+					"ftp_verified": s.ftp_verified,
+					"rider": slot_specs[i] if i < slot_specs.size() else Bots.RIDER_SPEC,
+					"autopilot": s.autopilot,
+					"haptics_on": s.haptics_on,
+					"options": s.options.duplicate(true),
+				}
+			)
+		)
 	r["slots"] = slot_rows
 	r["plans"] = hd.get("plans", {})
 	r["plan_warnings"] = hd.get("plan_warnings", {})
@@ -524,11 +596,19 @@ func build_report() -> Dictionary:
 	for c in clients:
 		unl[str(c.local_peer())] = c.unlocks.duplicate(true)
 		var cd := c.report_data()
-		peers_out.append({
-			"peer": c.local_peer(), "state": c.state, "events": cd.get("events", []),
-			"directives": cd.get("directives", []), "trace": cd.get("trace", {}),
-			"results_grade": c.final_results().grade if c.final_results() != null else "",
-		})
+		(
+			peers_out
+			. append(
+				{
+					"peer": c.local_peer(),
+					"state": c.state,
+					"events": cd.get("events", []),
+					"directives": cd.get("directives", []),
+					"trace": cd.get("trace", {}),
+					"results_grade": c.final_results().grade if c.final_results() != null else "",
+				}
+			)
+		)
 	r["unlocks"] = unl
 	r["clients"] = peers_out
 	var fits: Array = []
@@ -541,9 +621,11 @@ func build_report() -> Dictionary:
 			fits.append(str(gh.fit_paths()[s.peer_id]))
 	r["fit_paths"] = fits
 	r["meta"] = {
-		"wall_s": _wall_s, "utc_start_unix": _utc_start,
+		"wall_s": _wall_s,
+		"utc_start_unix": _utc_start,
 		"godot": str(Engine.get_version_info().get("string", "")),
-		"report": str(args.get("report", "")), "temp_root": _temp_root,
+		"report": str(args.get("report", "")),
+		"temp_root": _temp_root,
 	}
 	r["deterministic_hash"] = deterministic_hash(r)
 	return r
@@ -610,6 +692,35 @@ func temp_root() -> String:
 # --- internals --------------------------------------------------------------------------
 
 
+## setup's checks of --options, --player-options and --override: "" or the error.
+func _check_option_args(game_id: String, players: int) -> String:
+	var opts: Variant = args["options"]
+	if not (opts is Dictionary):
+		return "--options: must be a JSON object"
+	var oerr := registry.check_option_values(game_id, opts)
+	if oerr != "":
+		return "--" + oerr
+	var pops: Variant = args["player_options"]
+	if not (pops is Array):
+		return "--player-options: must be a JSON array"
+	if (pops as Array).size() > players:
+		return "--player-options: %d entries for %d human slots" % [(pops as Array).size(), players]
+	for i in (pops as Array).size():
+		if not (pops[i] is Dictionary):
+			return "--player-options[%d]: must be a JSON object" % i
+		var perr := registry.check_option_values(game_id, pops[i], true)
+		if perr != "":
+			return "--player-options[%d].%s" % [i, perr.trim_prefix("player_options.")]
+	var ov: Variant = args["override"]
+	if not (ov is Dictionary):
+		return "--override: must be a JSON object"
+	for rel: Variant in (ov as Dictionary).keys():
+		var p := registry.content_dir(game_id).path_join(str(rel))
+		if not FileAccess.file_exists(p):
+			return "--override: %s does not exist" % p
+	return ""
+
+
 func _resolve_specs(players: int) -> String:
 	slot_specs.clear()
 	var given: Array = args["riders"]
@@ -623,10 +734,13 @@ func _resolve_specs(players: int) -> String:
 		for s: Variant in given:
 			slot_specs.append(str(s))
 	else:
-		return "--rider: give one profile, or one per human slot (%d), not %d" % [players, given.size()]
+		return (
+			"--rider: give one profile, or one per human slot (%d), not %d"
+			% [players, given.size()]
+		)
 	for s in slot_specs:
 		if MockTrainer.parse_spec(s).is_empty():
-			return "--rider: \"%s\" is not a valid mock rider profile" % s
+			return '--rider: "%s" is not a valid mock rider profile' % s
 	return ""
 
 
@@ -645,7 +759,10 @@ func _resolve_ftps(players: int, total: int, out: Array[float]) -> String:
 		for v: Variant in given:
 			out.append(float(v))
 	else:
-		return "--ftp: give one value, one per human slot (%d) or one per slot (%d), not %d" % [players, total, given.size()]
+		return (
+			"--ftp: give one value, one per human slot (%d) or one per slot (%d), not %d"
+			% [players, total, given.size()]
+		)
 	for v in out:
 		if v <= 0.0:
 			return "--ftp: every FTP must be positive"
@@ -708,9 +825,12 @@ static func _pump(sessions: Array, done: Callable, max_iter: int = 400) -> bool:
 
 func _make_rider(slot: PlayerSlot, profile: RiderProfile, spec: String) -> LocalRider:
 	var opts := {
-		"multiplayer": role != Wl.SOLO or slot.is_bot, "scaling_mode": slot.scaling_mode,
-		"record": not slot.is_bot, "game_id": str(manifest.get("id", "")),
-		"content_id": str(args.get("content", "")), "utc_start_unix": _utc_start,
+		"multiplayer": role != Wl.SOLO or slot.is_bot,
+		"scaling_mode": slot.scaling_mode,
+		"record": not slot.is_bot,
+		"game_id": str(manifest.get("id", "")),
+		"content_id": str(args.get("content", "")),
+		"utc_start_unix": _utc_start,
 		"seed": SeededRng.derive(int(args.get("seed", 0)), "rider:slot%d" % slot.slot_index),
 		"skip_warmup": false,
 	}
@@ -719,10 +839,18 @@ func _make_rider(slot: PlayerSlot, profile: RiderProfile, spec: String) -> Local
 	if factory is Callable and (factory as Callable).is_valid():
 		rider = (factory as Callable).call(slot, profile, spec, opts) as LocalRider
 	else:
-		var device := MockTrainer.from_spec(spec, slot.ftp, {
-			"seed": SeededRng.derive(int(args.get("seed", 0)), "mock:slot%d" % slot.slot_index),
-			"preferred_cadence_rpm": slot.preferred_cadence_rpm,
-		})
+		var device := (
+			MockTrainer
+			. from_spec(
+				spec,
+				slot.ftp,
+				{
+					"seed":
+					SeededRng.derive(int(args.get("seed", 0)), "mock:slot%d" % slot.slot_index),
+					"preferred_cadence_rpm": slot.preferred_cadence_rpm,
+				}
+			)
+		)
 		rider = LocalRider.new()
 		rider.setup(slot.peer_id, profile, slot, device, opts)
 		if device.get_parent() == null:
@@ -750,7 +878,13 @@ func _new_bus(bus_name: String) -> WlEventBus:
 
 
 func _progress_path(slot_index: int, game_id: String) -> String:
-	return _temp_root.path_join("slot%d" % slot_index).path_join("games").path_join(game_id).path_join("progress.json")
+	return (
+		_temp_root
+		. path_join("slot%d" % slot_index)
+		. path_join("games")
+		. path_join(game_id)
+		. path_join("progress.json")
+	)
 
 
 func _clients_done() -> bool:
@@ -801,7 +935,9 @@ static func _int_flag(out: Dictionary, key: String, v: String, lo: int, hi: int)
 	return ""
 
 
-static func _float_flag(out: Dictionary, key: String, v: String, lo: float, inclusive: bool) -> String:
+static func _float_flag(
+	out: Dictionary, key: String, v: String, lo: float, inclusive: bool
+) -> String:
 	if not v.is_valid_float() or float(v) < lo or (not inclusive and float(v) <= lo):
 		return "must be a number above %s" % str(lo)
 	out[key] = float(v)

@@ -288,7 +288,12 @@ func setup(p_config: Dictionary) -> String:
 		for peer: int in _local_riders.keys():
 			var dev := (_local_riders[peer] as LocalRider).device
 			if dev != null and not (dev is MockTrainer):
-				push_warning("GameHost: sim_speed %.2f ignored: rider %d rides a real trainer" % [clock.sim_speed, peer])
+				push_warning(
+					(
+						"GameHost: sim_speed %.2f ignored: rider %d rides a real trainer"
+						% [clock.sim_speed, peer]
+					)
+				)
 				clock.sim_speed = 1.0
 				break
 	var default_peer := Wl.HOST_PEER
@@ -491,7 +496,9 @@ func last_snapshot() -> Dictionary:
 ## The local rider's current PhaseState (any role).
 func local_phase_state() -> PhaseState:
 	if role == Wl.CLIENT:
-		return PhaseTracker.make_state(_client_plan, _client_phase, _client_phase_ticks, 0, _client_prev_ended_by)
+		return PhaseTracker.make_state(
+			_client_plan, _client_phase, _client_phase_ticks, 0, _client_prev_ended_by
+		)
 	return tracker.state(_local_peer)
 
 
@@ -548,11 +555,15 @@ func _make_routers() -> void:
 func _setup_authority() -> String:
 	var game_id := str(config.get("game_id", ""))
 	var m: Variant = config.get("manifest", {})
-	manifest = (m as Dictionary).duplicate(true) if m is Dictionary and not (m as Dictionary).is_empty() else {}
+	manifest = (
+		(m as Dictionary).duplicate(true)
+		if m is Dictionary and not (m as Dictionary).is_empty()
+		else {}
+	)
 	if manifest.is_empty() and registry != null:
 		manifest = registry.manifest(game_id)
 	if manifest.is_empty():
-		return "game_id: unknown game \"%s\"" % game_id
+		return 'game_id: unknown game "%s"' % game_id
 	if not manifest.has("options"):
 		manifest = WlGameRegistry.normalized(manifest)
 	game_id = str(manifest.get("id", game_id))
@@ -573,8 +584,21 @@ func _setup_authority() -> String:
 	if content_id == "":
 		content_id = str(manifest.get("default_content", ""))
 	if not WlGameRegistry.content_allowed(manifest, content_id):
-		return "content_id: \"%s\" is not one of %s%s" % [content_id, JSON.stringify(manifest.get("contents", [])),
-			" or <scheme>:<value> for a scheme in %s" % JSON.stringify(manifest["content_schemes"]) if not (manifest.get("content_schemes", []) as Array).is_empty() else ""]
+		return (
+			'content_id: "%s" is not one of %s%s'
+			% [
+				content_id,
+				JSON.stringify(manifest.get("contents", [])),
+				(
+					(
+						" or <scheme>:<value> for a scheme in %s"
+						% JSON.stringify(manifest["content_schemes"])
+					)
+					if not (manifest.get("content_schemes", []) as Array).is_empty()
+					else ""
+				)
+			]
+		)
 	game = config.get("game") as GameModule
 	if game == null:
 		game = WlGameRegistry.instantiate_manifest(manifest)
@@ -583,12 +607,22 @@ func _setup_authority() -> String:
 	if game.get_parent() == null:
 		add_child(game)
 	var opts_in: Variant = config.get("options", {})
-	var options := WlGameRegistry.resolve_option_values(manifest.get("options", []), opts_in if opts_in is Dictionary else {}, game_id)
+	var options := WlGameRegistry.resolve_option_values(
+		manifest.get("options", []), opts_in if opts_in is Dictionary else {}, game_id
+	)
 	for p in players:
-		p.options = WlGameRegistry.resolve_option_values(manifest.get("player_options", []), p.options, "%s player %d" % [game_id, p.peer_id])
+		p.options = WlGameRegistry.resolve_option_values(
+			manifest.get("player_options", []), p.options, "%s player %d" % [game_id, p.peer_id]
+		)
 	var overrides: Variant = config.get("content_overrides", {})
-	_init_session(players, content_id, int(config.get("seed", 0)), options,
-		str(config.get("scaling_mode", Wl.FAIR_FTP)), overrides if overrides is Dictionary else {})
+	_init_session(
+		players,
+		content_id,
+		int(config.get("seed", 0)),
+		options,
+		str(config.get("scaling_mode", Wl.FAIR_FTP)),
+		overrides if overrides is Dictionary else {}
+	)
 	game.configure(ctx)
 	_connect_game()
 	var raw: Variant = game.build_effort_plans()
@@ -600,7 +634,10 @@ func _setup_authority() -> String:
 			return "plan: build_effort_plans() returned no EffortPlan for peer %d" % peer
 		var res := PlanValidator.validate(plan)
 		if not bool(res["ok"]):
-			return "plan for peer %d (%s): %s" % [peer, (_slots[peer] as PlayerSlot).name, "; ".join(res["errors"])]
+			return (
+				"plan for peer %d (%s): %s"
+				% [peer, (_slots[peer] as PlayerSlot).name, "; ".join(res["errors"])]
+			)
 		var fin := PlanValidator.finalize(plan)
 		plans[peer] = fin
 		plan_warnings[peer] = (res["warnings"] as Array).duplicate()
@@ -609,7 +646,14 @@ func _setup_authority() -> String:
 	return ""
 
 
-func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, options: Dictionary, scaling: String, overrides: Dictionary) -> void:
+func _init_session(
+	players: Array[PlayerSlot],
+	content_id: String,
+	p_seed: int,
+	options: Dictionary,
+	scaling: String,
+	overrides: Dictionary
+) -> void:
 	_players = players
 	_order.clear()
 	_slots.clear()
@@ -648,12 +692,20 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 	ctx.stats = stats
 	ctx.scaling_mode = scaling
 	var has_reg := registry != null and registry.has_game(game_id)
-	ctx.game_dir = registry.game_dir(game_id) if has_reg else str(manifest.get("entry", "")).get_base_dir()
+	ctx.game_dir = (
+		registry.game_dir(game_id) if has_reg else str(manifest.get("entry", "")).get_base_dir()
+	)
 	var cdir := str(config.get("content_dir", ""))
 	if cdir == "":
-		cdir = registry.content_dir(game_id) if has_reg else WlGameRegistry.CONTENT_ROOT.path_join(game_id)
+		cdir = (
+			registry.content_dir(game_id)
+			if has_reg
+			else WlGameRegistry.CONTENT_ROOT.path_join(game_id)
+		)
 	ctx.content_dir = cdir
-	ctx.assets_dir = registry.assets_dir(game_id) if has_reg else WlGameRegistry.ASSETS_ROOT.path_join(game_id)
+	ctx.assets_dir = (
+		registry.assets_dir(game_id) if has_reg else WlGameRegistry.ASSETS_ROOT.path_join(game_id)
+	)
 	ctx.content_overrides = overrides.duplicate(true)
 	directive_router.slots = _slots
 	hud_router.slots = _slots
@@ -661,8 +713,13 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 		stats.add_rider(p.peer_id, p.ftp)
 		if not _local_riders.has(p.peer_id) and role != Wl.CLIENT:
 			_remote[p.peer_id] = {
-				"tm": null, "rx_t": 0.0, "gestures": [], "intents": [], "dropped": false,
-				"await_pedal": false, "seen": false,
+				"tm": null,
+				"rx_t": 0.0,
+				"gestures": [],
+				"intents": [],
+				"dropped": false,
+				"await_pedal": false,
+				"seen": false,
 			}
 	_int_fields = game.int_fields() if game != null else {}
 
@@ -682,11 +739,19 @@ func _session_start_payload(for_peer: int = 0) -> Dictionary:
 	# "game", "content" and "session" repeat the string ids under names without the "_id"
 	# suffix, which Protocol.decode may convert to int (net_messages.gd); clients read them first.
 	return {
-		"game_id": game_id, "game_version": str(manifest.get("version", "")),
-		"content_id": ctx.content_id, "seed": ctx.seed, "players": ps, "options": ctx.options.duplicate(true),
-		"scaling": ctx.scaling_mode, "start_tick": clock.game_tick, "session_id": session_id,
+		"game_id": game_id,
+		"game_version": str(manifest.get("version", "")),
+		"content_id": ctx.content_id,
+		"seed": ctx.seed,
+		"players": ps,
+		"options": ctx.options.duplicate(true),
+		"scaling": ctx.scaling_mode,
+		"start_tick": clock.game_tick,
+		"session_id": session_id,
 		"content_overrides": ctx.content_overrides.duplicate(true),
-		"game": game_id, "content": ctx.content_id, "session": session_id,
+		"game": game_id,
+		"content": ctx.content_id,
+		"session": session_id,
 	}
 
 
@@ -703,7 +768,9 @@ func _send_session_start() -> void:
 
 ## A string id from a host message: the suffix-free copy ("game") when present, else the
 ## "_id" field, unless that came back as a number.
-static func _string_field(data: Dictionary, plain: String, with_id: String, fallback: String = "") -> String:
+static func _string_field(
+	data: Dictionary, plain: String, with_id: String, fallback: String = ""
+) -> String:
 	var v: Variant = data.get(plain, null)
 	if v is String:
 		return v
@@ -856,7 +923,9 @@ func _build_frame(tick: int, gestures: Dictionary) -> InputFrame:
 
 func _remote_frame_telemetry(peer: int, pt: float) -> Telemetry:
 	var r: Dictionary = _remote[peer]
-	var tm: Telemetry = (r["tm"] as Telemetry).duplicate_telemetry() if r["tm"] != null else Telemetry.new()
+	var tm: Telemetry = (
+		(r["tm"] as Telemetry).duplicate_telemetry() if r["tm"] != null else Telemetry.new()
+	)
 	tm.peer_id = peer
 	tm.gestures.assign(r["gestures"])
 	tm.intents = (r["intents"] as Array).duplicate(true)
@@ -902,10 +971,20 @@ func _feed_stats(frame: InputFrame) -> void:
 	for peer in _order:
 		var tm: Telemetry = frame.players[peer]
 		var band: Array = hud_router.band_of(peer)
-		stats.add_sample(peer, DT, tm.power_w, tm.mode, float(tm.applied_target_w), float(band[0]), float(band[1]))
+		stats.add_sample(
+			peer,
+			DT,
+			tm.power_w,
+			tm.mode,
+			float(tm.applied_target_w),
+			float(band[0]),
+			float(band[1])
+		)
 
 
-func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName]) -> Array[StringName]:
+func _platform_actions(
+	actions: Array[StringName], my_gestures: Array[StringName]
+) -> Array[StringName]:
 	var out: Array[StringName] = []
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	var resume_now := false
@@ -972,10 +1051,19 @@ func _on_phase_change(c: Dictionary, starting: bool) -> void:
 	else:
 		if plan_changed:
 			_send_plan(peer, plan)
-		_send_to(peer, Protocol.game_msg("phase", {"peer": peer, "index": index, "start_tick": start_tick, "ended_by": ended_by}))
+		_send_to(
+			peer,
+			Protocol.game_msg(
+				"phase",
+				{"peer": peer, "index": index, "start_tick": start_tick, "ended_by": ended_by}
+			)
+		)
 	bus.phase_started.emit(peer, index)
 	_queue_event({"type": "wl.phase_started", "peer": peer, "index": index, "ended_by": ended_by})
-	_event("phase_started", {"peer": peer, "index": index, "ended_by": ended_by, "kind": plan.phase(index).kind})
+	_event(
+		"phase_started",
+		{"peer": peer, "index": index, "ended_by": ended_by, "kind": plan.phase(index).kind}
+	)
 	if plan.phase(index).kind == Wl.COOLDOWN:
 		directive_router.clear_bands(peer)
 		hud_router.clear_power_band(peer)
@@ -987,15 +1075,25 @@ func _send_snapshot(tick: int) -> void:
 	var raw: Variant = game.snapshot()
 	var st: Dictionary = (raw as Dictionary).duplicate(true) if raw is Dictionary else {}
 	_snapshot_seq += 1
-	var msg := Protocol.game_msg("snapshot", {"game_id": str(manifest.get("id", "")), "seq": _snapshot_seq, "tick": tick, "state": st})
+	var msg := Protocol.game_msg(
+		"snapshot",
+		{"game_id": str(manifest.get("id", "")), "seq": _snapshot_seq, "tick": tick, "state": st}
+	)
 	_last_snapshot_msg = msg
 	_last_snapshot_state = st
 	if report != null:
 		var m := report.snapshot(_snapshot_seq, tick, st)
-		if int(m["bytes"]) + 256 > NetMessages.MAX_MESSAGE_BYTES \
-				and JSON.stringify(msg).to_utf8_buffer().size() > NetMessages.MAX_MESSAGE_BYTES:
+		if (
+			int(m["bytes"]) + 256 > NetMessages.MAX_MESSAGE_BYTES
+			and JSON.stringify(msg).to_utf8_buffer().size() > NetMessages.MAX_MESSAGE_BYTES
+		):
 			report.count_oversize()
-			push_warning("GameHost: snapshot %d is over %d bytes" % [_snapshot_seq, NetMessages.MAX_MESSAGE_BYTES])
+			push_warning(
+				(
+					"GameHost: snapshot %d is over %d bytes"
+					% [_snapshot_seq, NetMessages.MAX_MESSAGE_BYTES]
+				)
+			)
 	if net != null:
 		_broadcast(msg)
 
@@ -1021,17 +1119,26 @@ func _send_roster() -> void:
 	for peer in _order:
 		var tm: Telemetry = _frame_tm.get(peer)
 		if tm == null:
-			tm = (_local_riders[peer] as LocalRider).telemetry() if _local_riders.has(peer) else Telemetry.new()
+			tm = (
+				(_local_riders[peer] as LocalRider).telemetry()
+				if _local_riders.has(peer)
+				else Telemetry.new()
+			)
 		var slot: PlayerSlot = _slots[peer]
 		var connected := tm.connected
 		if _remote.has(peer):
 			connected = not bool((_remote[peer] as Dictionary)["dropped"])
 		riders[peer] = {
-			"raw_w": tm.power_w, "cadence_rpm": tm.cadence_rpm,
+			"raw_w": tm.power_w,
+			"cadence_rpm": tm.cadence_rpm,
 			"ftp_pct": tm.power_w / maxf(slot.ftp, 1.0) * 100.0,
-			"rescue": tm.rescue, "afk": bool(_afk.get(peer, tm.afk)), "connected": connected,
+			"rescue": tm.rescue,
+			"afk": bool(_afk.get(peer, tm.afk)),
+			"connected": connected,
 			"status": (hud_router.statuses.get(peer, {}) as Dictionary).duplicate(),
-			"name": slot.name, "slot_index": slot.slot_index, "phase": tracker.index_of(peer),
+			"name": slot.name,
+			"slot_index": slot.slot_index,
+			"phase": tracker.index_of(peer),
 		}
 	ctx.roster = riders
 	bus.roster_changed.emit(riders)
@@ -1045,7 +1152,11 @@ func _trace_authority() -> void:
 	for peer in _order:
 		var tm: Telemetry = _frame_tm.get(peer)
 		if tm == null:
-			tm = (_local_riders[peer] as LocalRider).telemetry() if _local_riders.has(peer) else Telemetry.new()
+			tm = (
+				(_local_riders[peer] as LocalRider).telemetry()
+				if _local_riders.has(peer)
+				else Telemetry.new()
+			)
 		var slot: PlayerSlot = _slots[peer]
 		var st := tracker.state(peer)
 		report.trace(peer, _trace_row(pt, gt, st, tm, slot.ftp))
@@ -1056,12 +1167,22 @@ func _trace_row(pt: float, gt: float, st: PhaseState, tm: Telemetry, ftp: float)
 	for c in tm.clamped_by:
 		cb.append(str(c))
 	return {
-		"t": pt, "game_t": gt, "phase": st.index, "kind": st.kind, "mode": tm.mode,
+		"t": pt,
+		"game_t": gt,
+		"phase": st.index,
+		"kind": st.kind,
+		"mode": tm.mode,
 		"applied_target_w": tm.applied_target_w,
 		"applied_pct": float(tm.applied_target_w) / maxf(ftp, 1.0) * 100.0,
-		"applied_grade_pct": tm.applied_grade_pct, "clamped_by": cb, "rescue": tm.rescue,
-		"afk": tm.afk, "paused": tm.paused or state == "paused", "haptic": tm.haptic_pct,
-		"power_w": tm.power_w, "cadence_rpm": tm.cadence_rpm, "connected": tm.connected,
+		"applied_grade_pct": tm.applied_grade_pct,
+		"clamped_by": cb,
+		"rescue": tm.rescue,
+		"afk": tm.afk,
+		"paused": tm.paused or state == "paused",
+		"haptic": tm.haptic_pct,
+		"power_w": tm.power_w,
+		"cadence_rpm": tm.cadence_rpm,
+		"connected": tm.connected,
 	}
 
 
@@ -1199,7 +1320,16 @@ func _client_step() -> void:
 		_send_telemetry()
 	if report != null and rider != null and clock.platform_tick % TRACE_EVERY == 0:
 		var ftp := (_slots[_local_peer] as PlayerSlot).ftp if _slots.has(_local_peer) else 200.0
-		report.trace(_local_peer, _trace_row(clock.platform_time(), clock.game_tick * DT, local_phase_state(), rider.telemetry(), ftp))
+		report.trace(
+			_local_peer,
+			_trace_row(
+				clock.platform_time(),
+				clock.game_tick * DT,
+				local_phase_state(),
+				rider.telemetry(),
+				ftp
+			)
+		)
 	_update_hud()
 
 
@@ -1214,7 +1344,16 @@ func _send_telemetry() -> void:
 	var ints: Array = rider.take_intents()
 	ints.append_array(intent_router.take())
 	if ints.size() > IntentRouter.MAX_PER_TELEMETRY:
-		push_warning("GameHost: %d intents in one telemetry message; %d dropped (max %d)" % [ints.size(), ints.size() - IntentRouter.MAX_PER_TELEMETRY, IntentRouter.MAX_PER_TELEMETRY])
+		push_warning(
+			(
+				"GameHost: %d intents in one telemetry message; %d dropped (max %d)"
+				% [
+					ints.size(),
+					ints.size() - IntentRouter.MAX_PER_TELEMETRY,
+					IntentRouter.MAX_PER_TELEMETRY
+				]
+			)
+		)
 		ints = ints.slice(0, IntentRouter.MAX_PER_TELEMETRY)
 	tm.intents = ints
 	tm.acks = rider.take_acks()
@@ -1327,7 +1466,11 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	if bool(r["dropped"]):
 		r["dropped"] = false
 		r["await_pedal"] = true
-	if bool(r["await_pedal"]) and not tm.afk and (tm.power_w >= PEDAL_POWER_W or tm.cadence_rpm >= PEDAL_CADENCE_RPM):
+	if (
+		bool(r["await_pedal"])
+		and not tm.afk
+		and (tm.power_w >= PEDAL_POWER_W or tm.cadence_rpm >= PEDAL_CADENCE_RPM)
+	):
 		r["await_pedal"] = false
 
 
@@ -1377,21 +1520,49 @@ func _resync_peer(peer: int, reason: String) -> void:
 		var hist := tracker.history(peer)
 		var last: Dictionary = hist[hist.size() - 1] if not hist.is_empty() else {}
 		var prev := tracker.state(peer).prev_ended_by
-		_send_to(peer, Protocol.game_msg("phase", {
-			"peer": peer, "index": tracker.index_of(peer),
-			"start_tick": int(roundf(float(last.get("start", 0.0)) / DT)),
-			"ended_by": prev if prev != "" else Wl.ENDED_START,
-			"elapsed_s": tracker.state(peer).elapsed_s}))
+		_send_to(
+			peer,
+			Protocol.game_msg(
+				"phase",
+				{
+					"peer": peer,
+					"index": tracker.index_of(peer),
+					"start_tick": int(roundf(float(last.get("start", 0.0)) / DT)),
+					"ended_by": prev if prev != "" else Wl.ENDED_START,
+					"elapsed_s": tracker.state(peer).elapsed_s
+				}
+			)
+		)
 	if not _last_snapshot_msg.is_empty():
 		_send_to(peer, _last_snapshot_msg)
 	var pb: Array = hud_router.band_of(peer)
 	if float(pb[0]) != 0.0 or float(pb[1]) != 0.0:
-		_send_to(peer, Protocol.game_msg("directive", {
-			"kind": NetMessages.DIRECTIVE_POWER_BAND, "peer": peer, "lo_w": float(pb[0]), "hi_w": float(pb[1])}))
+		_send_to(
+			peer,
+			Protocol.game_msg(
+				"directive",
+				{
+					"kind": NetMessages.DIRECTIVE_POWER_BAND,
+					"peer": peer,
+					"lo_w": float(pb[0]),
+					"hi_w": float(pb[1])
+				}
+			)
+		)
 	var cb: Array = directive_router.cadence_band_of(peer)
 	if not cb.is_empty() and (float(cb[0]) != 0.0 or float(cb[1]) != 0.0):
-		_send_to(peer, Protocol.game_msg("directive", {
-			"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "peer": peer, "lo_rpm": float(cb[0]), "hi_rpm": float(cb[1])}))
+		_send_to(
+			peer,
+			Protocol.game_msg(
+				"directive",
+				{
+					"kind": NetMessages.DIRECTIVE_CADENCE_BAND,
+					"peer": peer,
+					"lo_rpm": float(cb[0]),
+					"hi_rpm": float(cb[1])
+				}
+			)
+		)
 	if results != null:
 		_send_to(peer, Protocol.game_msg("results", {"results": results.to_dict()}))
 
@@ -1407,8 +1578,23 @@ func _send_plan(peer: int, plan: EffortPlan) -> void:
 	_plan_seq += 1
 	var base := pd.duplicate()
 	base["phases"] = []
-	var room := NetMessages.MAX_MESSAGE_BYTES - _wire_bytes(peer, Protocol.game_msg("plan", {
-		"peer": peer, "plan": base, "part": MAX_PLAN_PARTS, "parts": MAX_PLAN_PARTS, "plan_id": _plan_seq})) - 64
+	var room := (
+		NetMessages.MAX_MESSAGE_BYTES
+		- _wire_bytes(
+			peer,
+			Protocol.game_msg(
+				"plan",
+				{
+					"peer": peer,
+					"plan": base,
+					"part": MAX_PLAN_PARTS,
+					"parts": MAX_PLAN_PARTS,
+					"plan_id": _plan_seq
+				}
+			)
+		)
+		- 64
+	)
 	var parts: Array = []
 	var cur: Array = []
 	var used := 0
@@ -1425,12 +1611,18 @@ func _send_plan(peer: int, plan: EffortPlan) -> void:
 	for i in parts.size():
 		var d := base.duplicate()
 		d["phases"] = parts[i]
-		_send_to(peer, Protocol.game_msg("plan", {"peer": peer, "plan": d, "part": i, "parts": parts.size(), "plan_id": _plan_seq}))
+		_send_to(
+			peer,
+			Protocol.game_msg(
+				"plan",
+				{"peer": peer, "plan": d, "part": i, "parts": parts.size(), "plan_id": _plan_seq}
+			)
+		)
 
 
 ## Bytes the relay counts for `msg` to `peer` (the encoded `d` plus the msg envelope).
 static func _wire_bytes(peer: int, msg: Dictionary) -> int:
-	return Protocol.encoded_size(msg) + ("{\"t\":\"msg\",\"to\":%d,\"d\":}" % peer).length()
+	return Protocol.encoded_size(msg) + ('{"t":"msg","to":%d,"d":}' % peer).length()
 
 
 func _client_message(from: int, data: Dictionary) -> void:
@@ -1450,7 +1642,12 @@ func _client_message(from: int, data: Dictionary) -> void:
 		"roster":
 			_on_roster(data)
 		"hud":
-			hud_router.draw_remote(str(data.get("kind", "toast")), str(data.get("key", "")), data.get("args", []), float(data.get("seconds", 3.0)))
+			hud_router.draw_remote(
+				str(data.get("kind", "toast")),
+				str(data.get("key", "")),
+				data.get("args", []),
+				float(data.get("seconds", 3.0))
+			)
 		"results":
 			_on_results(data)
 		"session_end":
@@ -1459,7 +1656,11 @@ func _client_message(from: int, data: Dictionary) -> void:
 			if state != "ended" and results == null:
 				_lose_net(str(data.get("reason", "")))
 		"_peer_left":
-			if from == (net.host_peer if net != null else Wl.HOST_PEER) and state != "ended" and results == null:
+			if (
+				from == (net.host_peer if net != null else Wl.HOST_PEER)
+				and state != "ended"
+				and results == null
+			):
 				_event("host_dropped", {"peer": from})
 		"_peer_joined":
 			if from == (net.host_peer if net != null else Wl.HOST_PEER) and state != "ended":
@@ -1474,11 +1675,15 @@ func _on_session_start(data: Dictionary) -> void:
 		return
 	var game_id := _string_field(data, "game", "game_id")
 	var m: Variant = config.get("manifest", {})
-	manifest = (m as Dictionary).duplicate(true) if m is Dictionary and not (m as Dictionary).is_empty() else {}
+	manifest = (
+		(m as Dictionary).duplicate(true)
+		if m is Dictionary and not (m as Dictionary).is_empty()
+		else {}
+	)
 	if manifest.is_empty() and registry != null:
 		manifest = registry.manifest(game_id)
 	if manifest.is_empty():
-		push_warning("GameHost: the host started unknown game \"%s\"" % game_id)
+		push_warning('GameHost: the host started unknown game "%s"' % game_id)
 		end_session("unknown_game")
 		return
 	if not manifest.has("options"):
@@ -1491,7 +1696,9 @@ func _on_session_start(data: Dictionary) -> void:
 				players.append(PlayerSlot.from_dict(pd))
 	players = _sorted_players(players)
 	for p in players:
-		p.options = WlGameRegistry.resolve_option_values(manifest.get("player_options", []), p.options, "%s player %d" % [game_id, p.peer_id])
+		p.options = WlGameRegistry.resolve_option_values(
+			manifest.get("player_options", []), p.options, "%s player %d" % [game_id, p.peer_id]
+		)
 	game = config.get("game") as GameModule
 	if game == null:
 		game = WlGameRegistry.instantiate_manifest(manifest)
@@ -1503,9 +1710,17 @@ func _on_session_start(data: Dictionary) -> void:
 		add_child(game)
 	var opts: Variant = data.get("options", {})
 	var overrides: Variant = data.get("content_overrides", {})
-	var options := WlGameRegistry.resolve_option_values(manifest.get("options", []), opts if opts is Dictionary else {}, game_id)
-	_init_session(players, _string_field(data, "content", "content_id"), int(data.get("seed", 0)), options,
-		str(data.get("scaling", Wl.FAIR_FTP)), overrides if overrides is Dictionary else {})
+	var options := WlGameRegistry.resolve_option_values(
+		manifest.get("options", []), opts if opts is Dictionary else {}, game_id
+	)
+	_init_session(
+		players,
+		_string_field(data, "content", "content_id"),
+		int(data.get("seed", 0)),
+		options,
+		str(data.get("scaling", Wl.FAIR_FTP)),
+		overrides if overrides is Dictionary else {}
+	)
 	session_id = _string_field(data, "session", "session_id", session_id)
 	game.configure(ctx)
 	_int_fields = game.int_fields()
@@ -1559,7 +1774,13 @@ func _join_plan_part(data: Dictionary) -> Variant:
 	var part := int(data.get("part", -1))
 	var pid := int(data.get("plan_id", 0))
 	var pd: Dictionary = data["plan"]
-	if parts < 1 or parts > MAX_PLAN_PARTS or part < 0 or part >= parts or not (pd.get("phases") is Array):
+	if (
+		parts < 1
+		or parts > MAX_PLAN_PARTS
+		or part < 0
+		or part >= parts
+		or not (pd.get("phases") is Array)
+	):
 		push_warning("GameHost: plan part %d of %d dropped (bad part)" % [part, parts])
 		return null
 	if not _plan_parts.has(pid):
@@ -1567,7 +1788,9 @@ func _join_plan_part(data: Dictionary) -> Variant:
 		_plan_parts[pid] = {"parts": parts, "got": {}}
 	var entry: Dictionary = _plan_parts[pid]
 	if int(entry["parts"]) != parts:
-		push_warning("GameHost: plan %d parts disagree (%d, %d); dropped" % [pid, int(entry["parts"]), parts])
+		push_warning(
+			"GameHost: plan %d parts disagree (%d, %d); dropped" % [pid, int(entry["parts"]), parts]
+		)
 		_plan_parts.clear()
 		return null
 	(entry["got"] as Dictionary)[part] = pd
@@ -1643,7 +1866,15 @@ func _on_directive(data: Dictionary) -> void:
 			var rec := _normalized_ack(rider.apply_directive(d), d.id, d.to_dict())
 			bus.directive_applied.emit(_local_peer, rec)
 			if report != null:
-				report.directive_requested(_local_peer, d.id, NetMessages.DIRECTIVE_REQUEST, d.to_dict(), clock.game_tick * DT, true, "")
+				report.directive_requested(
+					_local_peer,
+					d.id,
+					NetMessages.DIRECTIVE_REQUEST,
+					d.to_dict(),
+					clock.game_tick * DT,
+					true,
+					""
+				)
 				report.directive_applied(_local_peer, rec)
 		NetMessages.DIRECTIVE_COURSE_GRADE:
 			if rider != null:
@@ -1700,7 +1931,12 @@ func _on_event(data: Dictionary) -> void:
 		if _expect_gap:
 			_event("event_gap_expected", {"after": _event_seq_applied, "seq": seq})
 		else:
-			_desync("event batch %d after %d: %d batch(es) lost" % [seq, _event_seq_applied, seq - _event_seq_applied - 1])
+			_desync(
+				(
+					"event batch %d after %d: %d batch(es) lost"
+					% [seq, _event_seq_applied, seq - _event_seq_applied - 1]
+				)
+			)
 			_ask_resync("event_gap")
 	_expect_gap = false
 	_event_seq_applied = seq
@@ -1730,7 +1966,14 @@ func _platform_event(e: Dictionary) -> void:
 			if peer != _local_peer:
 				# The client's own rider is recorded from its `phase` message.
 				bus.phase_started.emit(peer, int(e.get("index", 0)))
-				_event("phase_started", {"peer": peer, "index": int(e.get("index", 0)), "ended_by": str(e.get("ended_by", ""))})
+				_event(
+					"phase_started",
+					{
+						"peer": peer,
+						"index": int(e.get("index", 0)),
+						"ended_by": str(e.get("ended_by", ""))
+					}
+				)
 		"wl.lap_marker":
 			var rider: LocalRider = _local_riders.get(_local_peer)
 			var label := str(e.get("label", ""))
@@ -1755,7 +1998,9 @@ func _on_roster(data: Dictionary) -> void:
 			roster[int(str(k))] = copy
 	for peer: int in hud_router.statuses.keys():
 		if roster.has(peer):
-			(roster[peer] as Dictionary)["status"] = (hud_router.statuses[peer] as Dictionary).duplicate()
+			(roster[peer] as Dictionary)["status"] = (
+				(hud_router.statuses[peer] as Dictionary).duplicate()
+			)
 	if ctx != null:
 		ctx.roster = roster
 	bus.roster_changed.emit(roster)
@@ -1777,7 +2022,12 @@ func _check_roster_phase(row: Variant) -> void:
 	if _phase_mismatch < PHASE_MISMATCH_ROSTERS:
 		return
 	_phase_mismatch = 0
-	_desync("rider %d rides phase %d here but phase %d on the host" % [_local_peer, _client_phase, host_index])
+	_desync(
+		(
+			"rider %d rides phase %d here but phase %d on the host"
+			% [_local_peer, _client_phase, host_index]
+		)
+	)
 	_ask_resync("phase")
 
 
@@ -1809,7 +2059,9 @@ func _lose_net(reason: String) -> void:
 		push_warning("GameHost: the session's network ended (%s)" % _net_lost)
 		_end_after_net_loss()
 		return
-	push_warning("GameHost: the session's network ended (%s): riding the cool-down here" % _net_lost)
+	push_warning(
+		"GameHost: the session's network ended (%s): riding the cool-down here" % _net_lost
+	)
 	if _client_phase != cd:
 		_enter_client_phase(cd, clock.game_tick, Wl.ENDED_FINISHED, 0.0)
 
@@ -1869,10 +2121,10 @@ func _on_game_finished(reason: String) -> void:
 func _on_game_event(event: Dictionary) -> void:
 	var type := str(event.get("type", ""))
 	if type == "":
-		push_warning("GameHost: game event without a \"type\" dropped")
+		push_warning('GameHost: game event without a "type" dropped')
 		return
 	if type.begins_with(PLATFORM_EVENT_PREFIX) or type == "snapshot":
-		push_warning("GameHost: game event type \"%s\" is reserved; dropped" % type)
+		push_warning('GameHost: game event type "%s" is reserved; dropped' % type)
 		return
 	var e := event.duplicate(true)
 	_queue_event(e)
@@ -1908,7 +2160,11 @@ func _update_metronome(lo: float, hi: float) -> void:
 	if sfx == null or not sfx.has_method("set_metronome") or rider == null:
 		return
 	var on := rider.profile != null and rider.profile.metronome
-	var rpm := 0.5 * (lo + hi) if hi > 0.0 else (rider.slot.preferred_cadence_rpm if rider.slot != null else 90.0)
+	var rpm := (
+		0.5 * (lo + hi)
+		if hi > 0.0
+		else (rider.slot.preferred_cadence_rpm if rider.slot != null else 90.0)
+	)
 	sfx.call("set_metronome", rpm, on)
 
 
@@ -1959,7 +2215,12 @@ func _set_state(s: String) -> void:
 
 func _event(type: String, fields: Dictionary = {}) -> void:
 	if report != null:
-		report.event(clock.game_tick * DT if clock != null else 0.0, clock.platform_time() if clock != null else 0.0, type, fields)
+		report.event(
+			clock.game_tick * DT if clock != null else 0.0,
+			clock.platform_time() if clock != null else 0.0,
+			type,
+			fields
+		)
 
 
 func _now() -> Array:
@@ -2087,7 +2348,9 @@ func _normalized_ack(rec: Dictionary, id: int = 0, requested: Dictionary = {}) -
 	elif not (out["refused"] is bool):
 		# Telemetry.acks documents refused as a String ("" or the reason); records carry a bool.
 		var rv: Variant = out["refused"]
-		out["refused"] = (rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
+		out["refused"] = (
+			(rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
+		)
 	if not out.has("reason"):
 		out["reason"] = ""
 	if not out.has("t"):

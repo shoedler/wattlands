@@ -68,7 +68,10 @@ func test_slew_is_last_and_only_limits_increases() -> void:
 	assert_eq(rig.applied_w(), 800)
 	var worst := 0
 	for i in range(20, rig.trace.size()):
-		worst = maxi(worst, int(rig.trace[i]["applied_target_w"]) - int(rig.trace[i - 20]["applied_target_w"]))
+		worst = maxi(
+			worst,
+			int(rig.trace[i]["applied_target_w"]) - int(rig.trace[i - 20]["applied_target_w"])
+		)
 	assert_lte(worst, 30)
 
 

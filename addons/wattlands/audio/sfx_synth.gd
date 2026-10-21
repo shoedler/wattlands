@@ -11,13 +11,39 @@ const KINDS: Array[String] = ["sine", "square", "saw", "triangle", "noise"]
 
 ## One oscillator clip. freq_end_hz >= 0 sweeps the pitch linearly to it. A looped clip gets
 ## no envelope (so the loop has no gap), loop_mode LOOP_FORWARD over the whole clip.
-static func tone(kind: String, freq_hz: float, duration_s: float, attack_s: float = 0.005, release_s: float = 0.05, loop: bool = false, gain: float = 0.6, freq_end_hz: float = -1.0) -> AudioStreamWAV:
-	var samples := render(kind, freq_hz, duration_s, 0.0 if loop else attack_s, 0.0 if loop else release_s, gain, freq_end_hz)
+static func tone(
+	kind: String,
+	freq_hz: float,
+	duration_s: float,
+	attack_s: float = 0.005,
+	release_s: float = 0.05,
+	loop: bool = false,
+	gain: float = 0.6,
+	freq_end_hz: float = -1.0
+) -> AudioStreamWAV:
+	var samples := render(
+		kind,
+		freq_hz,
+		duration_s,
+		0.0 if loop else attack_s,
+		0.0 if loop else release_s,
+		gain,
+		freq_end_hz
+	)
 	return to_wav(samples, loop)
 
 
 ## Raw samples in [-1, 1] for one oscillator segment.
-static func render(kind: String, freq_hz: float, duration_s: float, attack_s: float = 0.005, release_s: float = 0.05, gain: float = 0.6, freq_end_hz: float = -1.0, seed: int = 0x2545F491) -> PackedFloat32Array:
+static func render(
+	kind: String,
+	freq_hz: float,
+	duration_s: float,
+	attack_s: float = 0.005,
+	release_s: float = 0.05,
+	gain: float = 0.6,
+	freq_end_hz: float = -1.0,
+	seed: int = 0x2545F491
+) -> PackedFloat32Array:
 	var n := maxi(1, roundi(duration_s * MIX_RATE))
 	var out := PackedFloat32Array()
 	out.resize(n)
@@ -144,32 +170,80 @@ static func builtin(sound: String) -> AudioStreamWAV:
 		"ui_move":
 			return to_wav(render("sine", 880.0, 0.04, 0.002, 0.02, 0.35))
 		"ui_confirm":
-			return to_wav(concat([render("sine", 660.0, 0.06, 0.003, 0.02, 0.5), render("sine", 990.0, 0.1, 0.003, 0.06, 0.5)]))
+			return to_wav(
+				concat(
+					[
+						render("sine", 660.0, 0.06, 0.003, 0.02, 0.5),
+						render("sine", 990.0, 0.1, 0.003, 0.06, 0.5)
+					]
+				)
+			)
 		"ui_back":
 			return to_wav(render("sine", 660.0, 0.14, 0.003, 0.08, 0.5, 400.0))
 		"toast":
 			return to_wav(render("triangle", 1046.5, 0.14, 0.004, 0.1, 0.5))
 		"warning":
-			return to_wav(concat([render("square", 440.0, 0.12, 0.004, 0.03, 0.3), silence(0.06), render("square", 440.0, 0.12, 0.004, 0.03, 0.3)]))
+			return to_wav(
+				concat(
+					[
+						render("square", 440.0, 0.12, 0.004, 0.03, 0.3),
+						silence(0.06),
+						render("square", 440.0, 0.12, 0.004, 0.03, 0.3)
+					]
+				)
+			)
 		"rescue":
 			return to_wav(render("square", 620.0, 0.5, 0.01, 0.15, 0.3, 300.0))
 		"phase":
-			return to_wav(mix(render("sine", 523.25, 0.35, 0.01, 0.25, 0.35), render("sine", 659.25, 0.35, 0.01, 0.25, 0.35)))
+			return to_wav(
+				mix(
+					render("sine", 523.25, 0.35, 0.01, 0.25, 0.35),
+					render("sine", 659.25, 0.35, 0.01, 0.25, 0.35)
+				)
+			)
 		"countdown":
 			return to_wav(render("sine", 880.0, 0.1, 0.003, 0.05, 0.5))
 		"lap":
-			return to_wav(concat([render("sine", 784.0, 0.08, 0.003, 0.02, 0.45), render("sine", 1046.5, 0.16, 0.003, 0.1, 0.45)]))
+			return to_wav(
+				concat(
+					[
+						render("sine", 784.0, 0.08, 0.003, 0.02, 0.45),
+						render("sine", 1046.5, 0.16, 0.003, 0.1, 0.45)
+					]
+				)
+			)
 		"results":
-			return to_wav(concat([
-				render("triangle", 523.25, 0.1, 0.004, 0.02, 0.5), render("triangle", 659.25, 0.1, 0.004, 0.02, 0.5),
-				render("triangle", 784.0, 0.1, 0.004, 0.02, 0.5), render("triangle", 1046.5, 0.3, 0.004, 0.2, 0.5),
-			]))
+			return to_wav(
+				concat(
+					[
+						render("triangle", 523.25, 0.1, 0.004, 0.02, 0.5),
+						render("triangle", 659.25, 0.1, 0.004, 0.02, 0.5),
+						render("triangle", 784.0, 0.1, 0.004, 0.02, 0.5),
+						render("triangle", 1046.5, 0.3, 0.004, 0.2, 0.5),
+					]
+				)
+			)
 		"coin":
-			return to_wav(concat([render("square", 988.0, 0.05, 0.002, 0.01, 0.25), render("square", 1318.5, 0.2, 0.002, 0.15, 0.25)]))
+			return to_wav(
+				concat(
+					[
+						render("square", 988.0, 0.05, 0.002, 0.01, 0.25),
+						render("square", 1318.5, 0.2, 0.002, 0.15, 0.25)
+					]
+				)
+			)
 		"hit":
 			return to_wav(decay(lowpass(render("noise", 0.0, 0.12, 0.001, 0.03, 0.8), 0.5), 30.0))
 		"boom":
-			return to_wav(mix(decay(lowpass(render("noise", 0.0, 0.7, 0.002, 0.2, 0.9, -1.0, 0x1234567), 0.08), 6.0), decay(render("sine", 60.0, 0.7, 0.002, 0.2, 0.6, 40.0), 5.0)))
+			return to_wav(
+				mix(
+					decay(
+						lowpass(render("noise", 0.0, 0.7, 0.002, 0.2, 0.9, -1.0, 0x1234567), 0.08),
+						6.0
+					),
+					decay(render("sine", 60.0, 0.7, 0.002, 0.2, 0.6, 40.0), 5.0)
+				)
+			)
 		"whoosh":
 			var n := lowpass(render("noise", 0.0, 0.45, 0.15, 0.25, 0.7, -1.0, 0x0BADC0DE), 0.15)
 			return to_wav(n)

@@ -104,7 +104,9 @@ func test_menu_surge_on_the_quick_ride_while_armed() -> void:
 func test_solo_lobby_starts_with_pedal_start_only() -> void:
 	fx.give_profile()
 	fx.fake_net().add_human(1, "Ada")
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	s.feed_gesture(Wl.G_PEDAL_START)
 	assert_eq(fx.app.state, "session", "solo: pedal_start readies and starts")
 	assert_eq(fx.app.params.get("content_id"), "easy_30")
@@ -113,7 +115,9 @@ func test_solo_lobby_starts_with_pedal_start_only() -> void:
 func test_host_and_client_ready_by_pedal_start_only() -> void:
 	fx.give_profile()
 	fx.fake_net().add_human(1, "Ada")
-	var host := open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	var host := (
+		open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	)
 	fx.fake_net().simulate_hosting("K7QX2M")
 	host.feed_gesture(Wl.G_PEDAL_START)
 	assert_true(host.local_ready)
@@ -127,7 +131,12 @@ func test_back_on_the_title_a_running_stretch_does_not_count() -> void:
 	fx.services.title_visits = 1
 	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	assert_true(title.zero.need_fresh, "not the launch visit")
-	assert_eq(title.hint_label.text, AppScreen.t("APP_ZERO_HINT_FRESH").format([str(fx.registry.manifest(title.quick_game).get("title", "")), 5]))
+	assert_eq(
+		title.hint_label.text,
+		AppScreen.t("APP_ZERO_HINT_FRESH").format(
+			[str(fx.registry.manifest(title.quick_game).get("title", "")), 5]
+		)
+	)
 	for t in 12:
 		title.feed_sample(sample(200.0 + t, 180.0, 85.0))
 	assert_eq(fx.app.state, "boot", "12 s of spinning on from the ride: no new ride")
@@ -165,7 +174,9 @@ func test_tracker_fresh_start() -> void:
 	var z := AppZeroTouch.new()
 	z.configure(200.0, false, true)
 	for t in 10:
-		assert_false(z.feed_values(float(t), 150.0, 85.0), "a running stretch never counts (%d s)" % t)
+		assert_false(
+			z.feed_values(float(t), 150.0, 85.0), "a running stretch never counts (%d s)" % t
+		)
 	assert_false(z.pedaled)
 	assert_eq(z.held_s, 0.0)
 	z.feed_values(10.0, 0.0, 0.0)

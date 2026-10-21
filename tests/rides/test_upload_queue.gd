@@ -26,9 +26,25 @@ func test_put_get_remove_and_persist() -> void:
 	var q := UploadQueue.new()
 	q.load_file()
 	assert_eq(q.size(), 0)
-	q.put({"ride_id": "a", "fit_path": "/x/a.fit", "name": "A", "attempts": 1, "last_state": "offline"})
+	q.put(
+		{
+			"ride_id": "a",
+			"fit_path": "/x/a.fit",
+			"name": "A",
+			"attempts": 1,
+			"last_state": "offline"
+		}
+	)
 	q.put({"ride_id": "b", "fit_path": "/x/b.fit", "upload_id": 77})
-	q.put({"ride_id": "a", "fit_path": "/x/a.fit", "attempts": 2, "last_state": "failed", "last_error": "server_error_500"})
+	q.put(
+		{
+			"ride_id": "a",
+			"fit_path": "/x/a.fit",
+			"attempts": 2,
+			"last_state": "failed",
+			"last_error": "server_error_500"
+		}
+	)
 	assert_eq(q.size(), 2, "put replaces by ride_id")
 	assert_true(FileAccess.file_exists(Paths.upload_queue_path()))
 	var q2 := UploadQueue.new()

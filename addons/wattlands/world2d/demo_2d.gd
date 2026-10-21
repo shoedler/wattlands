@@ -124,7 +124,9 @@ func _process(delta: float) -> void:
 	# A splash every 3 s that ends in a dither dissolve.
 	var life := fmod(_t, 3.0)
 	splash.visible = life < 1.6
-	DitherDissolve.set_amount(splash.material as ShaderMaterial, clampf((life - 0.6) / 1.0, 0.0, 1.0))
+	DitherDissolve.set_amount(
+		splash.material as ShaderMaterial, clampf((life - 0.6) / 1.0, 0.0, 1.0)
+	)
 	for i in fish.size():
 		var f := fish[i]
 		var v := 14.0 if i == 0 else 9.0
@@ -136,7 +138,9 @@ func _process(delta: float) -> void:
 func _build_landscape() -> void:
 	var sky := Sprite2D.new()
 	sky.centered = false
-	sky.texture = PixelPainter.texture(PixelPainter.vertical_gradient(BASE.x, WATER_Y, Color("#3f7fcf"), Color("#f4cf98"), 9))
+	sky.texture = PixelPainter.texture(
+		PixelPainter.vertical_gradient(BASE.x, WATER_Y, Color("#3f7fcf"), Color("#f4cf98"), 9)
+	)
 	view.add_child(sky)
 
 	var sun := Sprite2D.new()
@@ -147,10 +151,28 @@ func _build_landscape() -> void:
 	strips.append(_strip(_cloud_image(), 0.06, true, 28.0, false))
 	strips[0].drift_px_s = 3.0
 	var far := PixelPainter.hill_heights(160, 70, 3, 0.45, 0.32)
-	strips.append(_strip(PixelPainter.silhouette(160, 70, far, Color("#8297b0"), Color("#a8bad0")), 0.2, true, 236.0, true))
+	strips.append(
+		_strip(
+			PixelPainter.silhouette(160, 70, far, Color("#8297b0"), Color("#a8bad0")),
+			0.2,
+			true,
+			236.0,
+			true
+		)
+	)
 	var near := PixelPainter.hill_heights(208, 60, 11, 0.55, 0.38)
-	strips.append(_strip(PixelPainter.silhouette(208, 60, near, Color("#56704a"), Color("#7a9a5c")), 0.5, true, 244.0, true))
-	var shore := PixelPainter.bands(48, 14, PackedColorArray([Color("#c7a15a"), Color("#b38d4c"), Color("#dcc79c")]), 3)
+	strips.append(
+		_strip(
+			PixelPainter.silhouette(208, 60, near, Color("#56704a"), Color("#7a9a5c")),
+			0.5,
+			true,
+			244.0,
+			true
+		)
+	)
+	var shore := PixelPainter.bands(
+		48, 14, PackedColorArray([Color("#c7a15a"), Color("#b38d4c"), Color("#dcc79c")]), 3
+	)
 	strips.append(_strip(shore, 1.0, false, float(WATER_Y), true))
 
 
@@ -158,7 +180,11 @@ func _build_water() -> void:
 	var water := Sprite2D.new()
 	water.centered = false
 	water.position = Vector2(0, WATER_Y)
-	water.texture = PixelPainter.texture(PixelPainter.vertical_gradient(BASE.x, BASE.y - WATER_Y, Color("#2a93c4"), Color("#0b2f5c"), 7))
+	water.texture = PixelPainter.texture(
+		PixelPainter.vertical_gradient(
+			BASE.x, BASE.y - WATER_Y, Color("#2a93c4"), Color("#0b2f5c"), 7
+		)
+	)
 	view.add_child(water)
 
 	var rays := Sprite2D.new()
@@ -168,33 +194,71 @@ func _build_water() -> void:
 	SpriteWobble.water(rays, 2.0, 0.4)
 	view.add_child(rays)
 
-	var crest := PixelPainter.from_rows(PackedStringArray([
-		"..WW......WWW...",
-		"WWccWWWWWWcccWWW",
-		"cccccccccccccccc",
-	]), {"W": Color("#e8f6ff"), "c": Color("#5fb6dc")})
+	var crest := (
+		PixelPainter
+		. from_rows(
+			PackedStringArray(
+				[
+					"..WW......WWW...",
+					"WWccWWWWWWcccWWW",
+					"cccccccccccccccc",
+				]
+			),
+			{"W": Color("#e8f6ff"), "c": Color("#5fb6dc")}
+		)
+	)
 	strips.append(_strip(crest, 1.0, true, float(WATER_Y) - 1.0, false))
 
-	var mackerel := PixelPainter.from_rows(PackedStringArray([
-		"......nnnnnnnn..........",
-		"....nnbbBbbBbbnnn....nn.",
-		"..nnbbbbbbbbbbbbbnnnnbn.",
-		".nWkbbbbBbbBbbBbbbbbbbn.",
-		".nnssssssssssssssssnnbbn",
-		"..nnssssssssssssnnn..nnn",
-		"....nnnnnnnnnnnn........",
-	]), {"n": Color("#1c2340"), "b": Color("#2f6fa8"), "B": Color("#1d4a7a"), "s": Color("#cfe3ea"), "W": Color("#ffffff"), "k": Color("#000000")})
-	var tuna := PixelPainter.from_rows(PackedStringArray([
-		"..........nnnnnnnnn...............",
-		".......nnnbbbbbbbbbnnn.........nn.",
-		".....nnbbbbbbbbbbbbbbbnnn....nnbn.",
-		"...nnbbbbbbbbbbbbbbbbbbbbnnnnbbn..",
-		"..nWkbbbbbbbbbbbbbbbbbbbbbbbbbbn..",
-		".nnsssssssssssssssyysyysyysnnbbbn.",
-		"..nnsssssssssssssssssssssnn..nnbbn",
-		"....nnnsssssssssssssssnnn......nnn",
-		".......nnnnnnnnnnnnnnn............",
-	]), {"n": Color("#141a33"), "b": Color("#24406e"), "s": Color("#c3cdd6"), "y": Color("#f2c230"), "W": Color("#ffffff"), "k": Color("#000000")})
+	var mackerel := (
+		PixelPainter
+		. from_rows(
+			PackedStringArray(
+				[
+					"......nnnnnnnn..........",
+					"....nnbbBbbBbbnnn....nn.",
+					"..nnbbbbbbbbbbbbbnnnnbn.",
+					".nWkbbbbBbbBbbBbbbbbbbn.",
+					".nnssssssssssssssssnnbbn",
+					"..nnssssssssssssnnn..nnn",
+					"....nnnnnnnnnnnn........",
+				]
+			),
+			{
+				"n": Color("#1c2340"),
+				"b": Color("#2f6fa8"),
+				"B": Color("#1d4a7a"),
+				"s": Color("#cfe3ea"),
+				"W": Color("#ffffff"),
+				"k": Color("#000000")
+			}
+		)
+	)
+	var tuna := (
+		PixelPainter
+		. from_rows(
+			PackedStringArray(
+				[
+					"..........nnnnnnnnn...............",
+					".......nnnbbbbbbbbbnnn.........nn.",
+					".....nnbbbbbbbbbbbbbbbnnn....nnbn.",
+					"...nnbbbbbbbbbbbbbbbbbbbbnnnnbbn..",
+					"..nWkbbbbbbbbbbbbbbbbbbbbbbbbbbn..",
+					".nnsssssssssssssssyysyysyysnnbbbn.",
+					"..nnsssssssssssssssssssssnn..nnbbn",
+					"....nnnsssssssssssssssnnn......nnn",
+					".......nnnnnnnnnnnnnnn............",
+				]
+			),
+			{
+				"n": Color("#141a33"),
+				"b": Color("#24406e"),
+				"s": Color("#c3cdd6"),
+				"y": Color("#f2c230"),
+				"W": Color("#ffffff"),
+				"k": Color("#000000")
+			}
+		)
+	)
 	for i in 2:
 		var f := Sprite2D.new()
 		f.centered = false
@@ -206,33 +270,61 @@ func _build_water() -> void:
 	splash = Sprite2D.new()
 	splash.centered = false
 	splash.position = Vector2(560, WATER_Y - 14)
-	splash.texture = PixelPainter.texture(PixelPainter.from_rows(PackedStringArray([
-		"......w.....w.......",
-		"..w....w...w....w...",
-		"...w..wWw.wWw..w....",
-		"....wWWWWwWWWWw.....",
-		"..wWWWccWWWccWWWw...",
-		".wWWccccWWccccWWWw..",
-		"wWccccccccccccccWWw.",
-	]), {"W": Color("#ffffff"), "w": Color("#cfefff"), "c": Color("#7cc8e8")}))
+	splash.texture = (
+		PixelPainter
+		. texture(
+			(
+				PixelPainter
+				. from_rows(
+					PackedStringArray(
+						[
+							"......w.....w.......",
+							"..w....w...w....w...",
+							"...w..wWw.wWw..w....",
+							"....wWWWWwWWWWw.....",
+							"..wWWWccWWWccWWWw...",
+							".wWWccccWWccccWWWw..",
+							"wWccccccccccccccWWw.",
+						]
+					),
+					{"W": Color("#ffffff"), "w": Color("#cfefff"), "c": Color("#7cc8e8")}
+				)
+			)
+		)
+	)
 	DitherDissolve.apply(splash)
 	view.add_child(splash)
 
 
 func _build_boats() -> void:
-	var boat := PixelPainter.from_rows(PackedStringArray([
-		"........RRRRRRRRRRRR........",
-		"........rrrrrrrrrrrr........",
-		"........k..........k........",
-		"........k..........k...k....",
-		"..nWWWWWWWWWWWWWWWWWWWWWWn..",
-		"..nWWWWWWWWWWWWWWWWWWWWWWWn.",
-		"...RRRRRRRRRRRRRRRRRRRRRRRn.",
-		"...nWWWWWWWWWWWWWWWWWWWWWn..",
-		"....nwwwwwwwwwwwwwwwwwwwn...",
-		".....nrrrrrrrrrrrrrrrrrn....",
-		"......nnnnnnnnnnnnnnnnn.....",
-	]), {"R": BOAT_KEYS[0], "r": BOAT_KEYS[1], "W": Color("#f4f4ee"), "w": Color("#c9cfd4"), "k": Color("#3a3a40"), "n": Color("#1c2340")})
+	var boat := (
+		PixelPainter
+		. from_rows(
+			PackedStringArray(
+				[
+					"........RRRRRRRRRRRR........",
+					"........rrrrrrrrrrrr........",
+					"........k..........k........",
+					"........k..........k...k....",
+					"..nWWWWWWWWWWWWWWWWWWWWWWn..",
+					"..nWWWWWWWWWWWWWWWWWWWWWWWn.",
+					"...RRRRRRRRRRRRRRRRRRRRRRRn.",
+					"...nWWWWWWWWWWWWWWWWWWWWWn..",
+					"....nwwwwwwwwwwwwwwwwwwwn...",
+					".....nrrrrrrrrrrrrrrrrrn....",
+					"......nnnnnnnnnnnnnnnnn.....",
+				]
+			),
+			{
+				"R": BOAT_KEYS[0],
+				"r": BOAT_KEYS[1],
+				"W": Color("#f4f4ee"),
+				"w": Color("#c9cfd4"),
+				"k": Color("#3a3a40"),
+				"n": Color("#1c2340")
+			}
+		)
+	)
 	var tex := PixelPainter.texture(boat)
 	var keys := PackedColorArray(BOAT_KEYS)
 	for slot in 4:
@@ -273,7 +365,9 @@ func _build_machine() -> void:
 	gears.append(small)
 
 	flywheel = SpinningPart.new()
-	flywheel.texture = PixelPainter.texture(PixelPainter.gear(28, 28, Color("#6f6a64"), Color("#3a3a40"), Color("#b98c46"), 1))
+	flywheel.texture = PixelPainter.texture(
+		PixelPainter.gear(28, 28, Color("#6f6a64"), Color("#3a3a40"), Color("#b98c46"), 1)
+	)
 	flywheel.position = Vector2(236, 176)
 	flywheel.max_rpm = 40.0
 	flywheel.inertia_s = 0.6
@@ -289,10 +383,29 @@ func _build_machine() -> void:
 	var head := Sprite2D.new()
 	head.centered = false
 	head.position = Vector2(-6, 0)
-	head.texture = PixelPainter.texture(PixelPainter.from_rows(PackedStringArray([
-		"kkkkkkkkkkkk", "kssssssssssk", "kSSSSSSSSSSk", "kssssssssssk",
-		"kSSSSSSSSSSk", "kssssssssssk", "kkkkkkkkkkkk", "....kkkk....",
-	]), {"k": Color("#3a3a40"), "s": Color("#c9c3b8"), "S": Color("#8e8983")}))
+	head.texture = (
+		PixelPainter
+		. texture(
+			(
+				PixelPainter
+				. from_rows(
+					PackedStringArray(
+						[
+							"kkkkkkkkkkkk",
+							"kssssssssssk",
+							"kSSSSSSSSSSk",
+							"kssssssssssk",
+							"kSSSSSSSSSSk",
+							"kssssssssssk",
+							"kkkkkkkkkkkk",
+							"....kkkk....",
+						]
+					),
+					{"k": Color("#3a3a40"), "s": Color("#c9c3b8"), "S": Color("#8e8983")}
+				)
+			)
+		)
+	)
 	piston.add_child(head)
 	piston.position = Vector2(236, 176 + 10 - 40)
 	view.add_child(piston)
@@ -307,7 +420,12 @@ func _build_machine() -> void:
 	var sprocket_r := 9.0
 	var sprocket_rpm := chain_px_s / (TAU * sprocket_r) * 60.0
 	for c: Vector2 in [Vector2(122, 208), Vector2(196, 208)]:
-		var sp := _gear(PixelPainter.gear(10, 10, Color("#8e8983"), Color("#3a3a40"), Color("#c9c3b8"), 2), c, sprocket_rpm, 1.0)
+		var sp := _gear(
+			PixelPainter.gear(10, 10, Color("#8e8983"), Color("#3a3a40"), Color("#c9c3b8"), 2),
+			c,
+			sprocket_rpm,
+			1.0
+		)
 		gears.append(sp)
 	chain = ScrollingChain.new()
 	chain.set_loop(Vector2(122, 208), sprocket_r, Vector2(196, 208), sprocket_r)
@@ -341,9 +459,16 @@ func _place_caption() -> void:
 	var r := pixel_viewport.art_rect_to_screen(Rect2i(392, 6, 240, 18))
 	caption.position = r.position
 	caption.size = r.size
-	caption.text = tr("WORLD_DEMO_2D_CAPTION").format({
-		"w": BASE.x, "h": BASE.y, "scale": pixel_viewport.integer_scale(),
-	})
+	caption.text = (
+		tr("WORLD_DEMO_2D_CAPTION")
+		. format(
+			{
+				"w": BASE.x,
+				"h": BASE.y,
+				"scale": pixel_viewport.integer_scale(),
+			}
+		)
+	)
 
 
 func _strip(img: Image, factor: float, mirror: bool, y: float, bottom: bool) -> ParallaxStrip:
@@ -372,8 +497,13 @@ func _cloud_image() -> Image:
 	var img := Image.create_empty(160, 30, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var puffs: Array[Vector3] = [
-		Vector3(18, 20, 8), Vector3(30, 16, 11), Vector3(44, 20, 8),
-		Vector3(96, 14, 7), Vector3(108, 10, 10), Vector3(122, 14, 8), Vector3(134, 18, 6),
+		Vector3(18, 20, 8),
+		Vector3(30, 16, 11),
+		Vector3(44, 20, 8),
+		Vector3(96, 14, 7),
+		Vector3(108, 10, 10),
+		Vector3(122, 14, 8),
+		Vector3(134, 18, 6),
 	]
 	for y in img.get_height():
 		for x in img.get_width():

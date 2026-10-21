@@ -66,8 +66,12 @@ func update(ready: bool, trainer: String, options_text: String, is_bot: bool) ->
 		ready_label.add_theme_color_override("font_color", AppStyle.GOOD)
 		trainer_label.text = AppScreen.t("APP_LOBBY_BOT_TRAINER")
 	else:
-		ready_label.text = AppScreen.t("APP_LOBBY_READY") if ready else AppScreen.t("APP_LOBBY_NOT_READY")
-		ready_label.add_theme_color_override("font_color", AppStyle.GOOD if ready else AppStyle.WARN)
+		ready_label.text = (
+			AppScreen.t("APP_LOBBY_READY") if ready else AppScreen.t("APP_LOBBY_NOT_READY")
+		)
+		ready_label.add_theme_color_override(
+			"font_color", AppStyle.GOOD if ready else AppStyle.WARN
+		)
 		trainer_label.text = AppScreen.t("APP_TITLE_TRAINER").format([trainer_text(trainer)])
 	options_label.text = options_text
 	options_label.visible = options_text != ""

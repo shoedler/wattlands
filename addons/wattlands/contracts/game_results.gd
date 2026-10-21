@@ -71,8 +71,11 @@ static func grade_from_fraction(f: float) -> String:
 
 func to_dict() -> Dictionary:
 	return {
-		"grade": grade, "score": score, "summary_key": summary_key,
-		"rows": rows.duplicate(true), "team": team.duplicate(true),
+		"grade": grade,
+		"score": score,
+		"summary_key": summary_key,
+		"rows": rows.duplicate(true),
+		"team": team.duplicate(true),
 		"session_id": session_id,
 	}
 

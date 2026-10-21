@@ -22,24 +22,47 @@ func test_session_defaults() -> void:
 
 
 func test_session_flags() -> void:
-	var o := _parse(["--app-screen=session", "--app-role=host", "--app-overlay=panic", "--at=100,20", "--content=e2e", "--sim-speed=8"])
+	var o := _parse(
+		[
+			"--app-screen=session",
+			"--app-role=host",
+			"--app-overlay=panic",
+			"--at=100,20",
+			"--content=e2e",
+			"--sim-speed=8"
+		]
+	)
 	assert_eq(o["error"], "")
 	assert_eq(o["app_role"], "host")
 	assert_eq(o["app_overlay"], "panic")
 	assert_eq(o["at"], [20.0, 100.0])
 	assert_eq(o["content"], "e2e")
-	assert_true((o["sim_args"] as PackedStringArray).has("--sim-speed=8"), "the app reads --sim-speed itself")
-	assert_false((o["sim_args"] as PackedStringArray).has("--app-role=host"), "own flags stay out of the sim flags")
+	assert_true(
+		(o["sim_args"] as PackedStringArray).has("--sim-speed=8"),
+		"the app reads --sim-speed itself"
+	)
+	assert_false(
+		(o["sim_args"] as PackedStringArray).has("--app-role=host"),
+		"own flags stay out of the sim flags"
+	)
 
 
 func test_bad_role_and_overlay_are_refused() -> void:
-	assert_string_contains(_parse(["--app-screen=session", "--app-role=bot"])["error"], "--app-role")
-	assert_string_contains(_parse(["--app-screen=session", "--app-overlay=shop"])["error"], "--app-overlay")
-	assert_string_contains(_parse(["--app-screen=settings"])["error"], "--app-screen", "other screens stay refused")
+	assert_string_contains(
+		_parse(["--app-screen=session", "--app-role=bot"])["error"], "--app-role"
+	)
+	assert_string_contains(
+		_parse(["--app-screen=session", "--app-overlay=shop"])["error"], "--app-overlay"
+	)
+	assert_string_contains(
+		_parse(["--app-screen=settings"])["error"], "--app-screen", "other screens stay refused"
+	)
 
 
 func test_other_app_screens_keep_no_at() -> void:
-	assert_eq(_parse(["--app-screen=title"])["at"], [], "title, picker and lobby shots take no --at")
+	assert_eq(
+		_parse(["--app-screen=title"])["at"], [], "title, picker and lobby shots take no --at"
+	)
 
 
 func test_session_file_names() -> void:
@@ -61,7 +84,9 @@ func test_results_shots_take_a_rider_count() -> void:
 	assert_eq(o["app_riders"], 8)
 	assert_false((o["sim_args"] as PackedStringArray).has("--app-riders=8"), "an own flag")
 	for bad: String in ["0", "9", "two", ""]:
-		assert_string_contains(_parse(["--app-screen=results", "--app-riders=" + bad])["error"], "--app-riders", bad)
+		assert_string_contains(
+			_parse(["--app-screen=results", "--app-riders=" + bad])["error"], "--app-riders", bad
+		)
 	assert_eq(Options.results_file_name(2), "app_results_2p.png")
 
 
@@ -75,4 +100,8 @@ func test_results_params_are_a_full_workout_page() -> void:
 		assert_eq(str(p["role"]), Wl.SOLO if n == 1 else Wl.HOST)
 		assert_true(str(p["fit_path"]).ends_with("_workout.fit"))
 		assert_false((r.rows[0]["stats"] as Dictionary).is_empty())
-	assert_eq((QaScreenshotResults.params(20)["results"] as GameResults).rows.size(), Options.MAX_RESULTS_RIDERS, "clamped")
+	assert_eq(
+		(QaScreenshotResults.params(20)["results"] as GameResults).rows.size(),
+		Options.MAX_RESULTS_RIDERS,
+		"clamped"
+	)

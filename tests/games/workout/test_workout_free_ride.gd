@@ -24,13 +24,20 @@ func _free(seconds: float, label: String) -> PlanPhase:
 
 func test_the_preview_line_calls_a_long_free_phase_a_free_ride() -> void:
 	var strings := GameStrings.new()
-	assert_ne(strings.t("WORKOUT_PREVIEW_FREE_RIDE"), "WORKOUT_PREVIEW_FREE_RIDE", "the string exists")
+	assert_ne(
+		strings.t("WORKOUT_PREVIEW_FREE_RIDE"), "WORKOUT_PREVIEW_FREE_RIDE", "the string exists"
+	)
 	var long_line := WorkoutSession.describe_phase(_free(600.0, "Free ride"), strings)
 	assert_eq(long_line, "10:00  Free ride  " + strings.t("WORKOUT_PREVIEW_FREE_RIDE"))
 	assert_false(long_line.to_lower().contains("sprint"), "not a sprint: %s" % long_line)
 	var sprint_line := WorkoutSession.describe_phase(_free(30.0, "WORKOUT_LBL_SPRINT"), strings)
-	assert_eq(sprint_line, "0:30  %s  %s" % [strings.t("WORKOUT_LBL_SPRINT"), strings.t("WORKOUT_PREVIEW_FREE")])
-	assert_true(sprint_line.to_lower().contains("sprint"), "a 30 s FREE phase is a sprint: %s" % sprint_line)
+	assert_eq(
+		sprint_line,
+		"0:30  %s  %s" % [strings.t("WORKOUT_LBL_SPRINT"), strings.t("WORKOUT_PREVIEW_FREE")]
+	)
+	assert_true(
+		sprint_line.to_lower().contains("sprint"), "a 30 s FREE phase is a sprint: %s" % sprint_line
+	)
 
 
 func test_the_strip_draws_a_long_free_phase_low_and_hatched() -> void:
@@ -39,8 +46,12 @@ func test_the_strip_draws_a_long_free_phase_low_and_hatched() -> void:
 	assert_ne(WorkoutArt.ZONE_FREE, WorkoutArt.ZONE_SPRINT)
 	var g := U.game("e2e", U.players(1, 0, 200.0))
 	autofree(g)
-	var warm := PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "WORKOUT_LBL_WARMUP").with_ramp(65.0).with_lap()
-	var timeline: Array[PlanPhase] = [warm, _free(600.0, "Free ride"), _free(30.0, "WORKOUT_LBL_SPRINT")]
+	var warm := (
+		PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "WORKOUT_LBL_WARMUP").with_ramp(65.0).with_lap()
+	)
+	var timeline: Array[PlanPhase] = [
+		warm, _free(600.0, "Free ride"), _free(30.0, "WORKOUT_LBL_SPRINT")
+	]
 	g.state.set_timeline(timeline)
 	g.state.plan_t = 300.0
 	var view := g.make_view() as WorkoutRideView
@@ -57,8 +68,16 @@ func test_the_strip_draws_a_long_free_phase_low_and_hatched() -> void:
 	assert_false(bool(sprint_b["hatched"]))
 	var free_top := (free_b["points"] as PackedVector2Array)[0].y
 	var sprint_top := (sprint_b["points"] as PackedVector2Array)[0].y
-	assert_almost_eq(free_top, WorkoutRideView.STRIP_BASE - WorkoutRideView._strip_h(WorkoutRideView.FREE_STRIP_PCT), 0.001)
-	assert_almost_eq(sprint_top, WorkoutRideView.STRIP_BASE - WorkoutRideView._strip_h(WorkoutRideView.SPRINT_STRIP_PCT), 0.001)
+	assert_almost_eq(
+		free_top,
+		WorkoutRideView.STRIP_BASE - WorkoutRideView._strip_h(WorkoutRideView.FREE_STRIP_PCT),
+		0.001
+	)
+	assert_almost_eq(
+		sprint_top,
+		WorkoutRideView.STRIP_BASE - WorkoutRideView._strip_h(WorkoutRideView.SPRINT_STRIP_PCT),
+		0.001
+	)
 	assert_gt(free_top, sprint_top, "the free ride sits lower than a sprint")
 
 

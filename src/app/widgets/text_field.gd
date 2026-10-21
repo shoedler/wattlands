@@ -38,7 +38,9 @@ static func make_code(caption_text: String) -> AppTextField:
 	return f
 
 
-static func make_text(caption_text: String, p_rows: Array[String], p_max_length: int = 64, p_secret: bool = false) -> AppTextField:
+static func make_text(
+	caption_text: String, p_rows: Array[String], p_max_length: int = 64, p_secret: bool = false
+) -> AppTextField:
 	var f := AppTextField.new()
 	f.mode = MODE_TEXT
 	f.rows = p_rows

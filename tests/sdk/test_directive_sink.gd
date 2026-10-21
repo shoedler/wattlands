@@ -21,12 +21,22 @@ var _unsafe_tm: Telemetry = null
 ## range [55, 65]; 2 SIM game 60 s; 3 ERG 60% open-ended 10..100 s range [50, 65];
 ## 4 the cool-down.
 func _plan() -> EffortPlan:
-	return PlanValidator.finalize(EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 60, "Warm").with_range(45, 60),
-		PlanPhase.erg(Wl.WORK, 60, 120, "Push").with_range(55, 65),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 60, "Climb"),
-		PlanPhase.erg(Wl.WORK, 60, 0, "Hold").with_range(50, 65).with_open(10, 100),
-	]))
+	return (
+		PlanValidator
+		. finalize(
+			(
+				EffortPlan
+				. of(
+					[
+						PlanPhase.erg(Wl.WARMUP, 50, 60, "Warm").with_range(45, 60),
+						PlanPhase.erg(Wl.WORK, 60, 120, "Push").with_range(55, 65),
+						PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 60, "Climb"),
+						PlanPhase.erg(Wl.WORK, 60, 0, "Hold").with_range(50, 65).with_open(10, 100),
+					]
+				)
+			)
+		)
+	)
 
 
 func before_each() -> void:
@@ -53,10 +63,15 @@ func before_each() -> void:
 	_router.slots = {1: s1, 2: s2, 3: s3}
 	_router.bind_riders({1: _rider})
 	_router.bus = _bus
-	_router.remote_send = func(peer: int, payload: Dictionary) -> void: _sent.append([peer, payload])
+	_router.remote_send = func(peer: int, payload: Dictionary) -> void:
+		_sent.append([peer, payload])
 	_router.telemetry_of = func(_peer: int) -> Variant: return _unsafe_tm
-	_bus.directive_applied.connect(func(peer: int, rec: Dictionary) -> void: _applied.append([peer, rec]))
-	_bus.cadence_band_changed.connect(func(peer: int, lo: float, hi: float) -> void: _bands.append([peer, lo, hi]))
+	_bus.directive_applied.connect(
+		func(peer: int, rec: Dictionary) -> void: _applied.append([peer, rec])
+	)
+	_bus.cadence_band_changed.connect(
+		func(peer: int, lo: float, hi: float) -> void: _bands.append([peer, lo, hi])
+	)
 
 
 func _start() -> void:
@@ -145,7 +160,9 @@ func test_remote_rider_gets_a_directive_message() -> void:
 	var payload: Dictionary = _sent[0][1]
 	assert_eq(payload["kind"], NetMessages.DIRECTIVE_REQUEST)
 	assert_eq(payload["id"], r.id)
-	assert_eq(payload["directive"], {"target_pct": 50.0, "duration_s": 0.0, "reason": "bank", "id": r.id})
+	assert_eq(
+		payload["directive"], {"target_pct": 50.0, "duration_s": 0.0, "reason": "bank", "id": r.id}
+	)
 	assert_eq(_applied.size(), 0, "a remote rider's record arrives later as an ack")
 
 
@@ -168,19 +185,28 @@ func test_a_block_the_governor_refuses_is_taken_back() -> void:
 	assert_false(_tracker.block_active(1, _clock.game_tick), "no block runs")
 	assert_eq(_tracker.last_switch_tick(1), PhaseTracker.NO_SWITCH, "and no switch happened")
 	assert_eq(_tracker.mode_now(1), Wl.ERG)
-	assert_eq(_req({"mode_grade": 2.0}).reason, Wl.REFUSE_MODE_GRADE, "no SIM block to hold a grade")
+	assert_eq(
+		_req({"mode_grade": 2.0}).reason, Wl.REFUSE_MODE_GRADE, "no SIM block to hold a grade"
+	)
 	_fake().set("refuse_reason", "")
-	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "spacing is not spent on a block that never ran")
+	assert_true(
+		_req({"mode": "SIM", "duration_s": 10}).accepted,
+		"spacing is not spent on a block that never ran"
+	)
 	assert_true(_tracker.block_active(1, _clock.game_tick))
 
 
 func test_a_remote_block_refused_in_its_ack_is_taken_back() -> void:
 	_start()
 	assert_true(_req({"mode": "SIM", "duration_s": 10}, 2).accepted)
-	assert_true(_tracker.block_active(2, _clock.game_tick), "the host assumes it runs until the ack")
+	assert_true(
+		_tracker.block_active(2, _clock.game_tick), "the host assumes it runs until the ack"
+	)
 	var id := int(_sent[0][1]["id"])
 	_router.on_ack(2, {"id": id + 99, "refused": true})
-	assert_true(_tracker.block_active(2, _clock.game_tick), "another directive's ack changes nothing")
+	assert_true(
+		_tracker.block_active(2, _clock.game_tick), "another directive's ack changes nothing"
+	)
 	_router.on_ack(2, {"id": id, "refused": true})
 	assert_false(_tracker.block_active(2, _clock.game_tick))
 	assert_eq(_tracker.last_switch_tick(2), PhaseTracker.NO_SWITCH)
@@ -193,7 +219,9 @@ func test_sim_block_length() -> void:
 	_start()
 	assert_eq(_req({"mode": "SIM", "duration_s": 9.9}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH)
 	assert_eq(_req({"mode": "SIM", "duration_s": 30.1}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH)
-	assert_eq(_req({"mode": "SIM"}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH, "duration 0 is not a block length")
+	assert_eq(
+		_req({"mode": "SIM"}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH, "duration 0 is not a block length"
+	)
 	assert_true(_req({"mode": "SIM", "duration_s": 10, "reason": "overdrive"}).accepted)
 	assert_true(_tracker.block_active(1, _clock.game_tick))
 
@@ -203,16 +231,28 @@ func test_sim_block_spacing_and_the_bracketing_exemption() -> void:
 	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted)
 	# W2 round 2: a second mode SIM while the block runs only confirms it (DirectiveSink
 	# contract, as the governor does), so it neither switches nor counts against spacing.
-	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "0 s after the entry: a confirmation")
+	assert_true(
+		_req({"mode": "SIM", "duration_s": 10}).accepted, "0 s after the entry: a confirmation"
+	)
 	assert_eq(_tracker.last_switch_tick(1), 0, "the confirmation is no switch")
 	_advance(10)
-	assert_false(_tracker.block_active(1, _clock.game_tick), "the block expired (its exit is exempt)")
+	assert_false(
+		_tracker.block_active(1, _clock.game_tick), "the block expired (its exit is exempt)"
+	)
 	_advance(29.95)
-	assert_eq(_req({"mode": "SIM", "duration_s": 10}).reason, Wl.REFUSE_SWITCH_SPACING, "29.95 s after the exit")
+	assert_eq(
+		_req({"mode": "SIM", "duration_s": 10}).reason,
+		Wl.REFUSE_SWITCH_SPACING,
+		"29.95 s after the exit"
+	)
 	_advance(0.05)
 	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "30 s after the exit")
 	assert_true(_req({"mode": "ERG"}).accepted, "an early exit right after the entry is exempt")
-	assert_eq(_req({"mode": "SIM", "duration_s": 10}).reason, Wl.REFUSE_SWITCH_SPACING, "the exit was 0 s ago")
+	assert_eq(
+		_req({"mode": "SIM", "duration_s": 10}).reason,
+		Wl.REFUSE_SWITCH_SPACING,
+		"the exit was 0 s ago"
+	)
 
 
 ## W2 round 2 (docs/TRAINER.md known difference 7): mode SIM in an ERG phase while a SIM block
@@ -221,8 +261,11 @@ func test_sim_block_spacing_and_the_bracketing_exemption() -> void:
 ## haptic rules still apply: never in ERG, never for an opted-out rider).
 func test_mode_sim_during_a_running_block_confirms_it_and_carries_its_haptic() -> void:
 	_start()
-	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH,
-		"with no block running a mode SIM haptic would open a 1.5 s block")
+	assert_eq(
+		_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason,
+		Wl.REFUSE_SIM_BLOCK_LENGTH,
+		"with no block running a mode SIM haptic would open a 1.5 s block"
+	)
 	assert_true(_req({"mode": "SIM", "duration_s": 20, "reason": "overdrive"}).accepted)
 	_advance(5)
 	_unsafe_tm = Telemetry.new()
@@ -231,34 +274,58 @@ func test_mode_sim_during_a_running_block_confirms_it_and_carries_its_haptic() -
 	assert_true(r.accepted, "a confirmation plus its haptic, not a too-short block")
 	assert_eq(r.reason, "")
 	var dirs: Array = _fake().get("directives")
-	assert_eq((dirs[dirs.size() - 1] as EffortDirective).to_dict(),
+	assert_eq(
+		(dirs[dirs.size() - 1] as EffortDirective).to_dict(),
 		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "id": r.id},
-		"the governor gets the request as sent and confirms it")
-	assert_true(_req({"mode": "SIM", "duration_s": 40, "mode_grade": 3.0}).accepted, "no length or safety re-check")
+		"the governor gets the request as sent and confirms it"
+	)
+	assert_true(
+		_req({"mode": "SIM", "duration_s": 40, "mode_grade": 3.0}).accepted,
+		"no length or safety re-check"
+	)
 	_unsafe_tm = null
 	assert_eq(_tracker.last_switch_tick(1), 0, "no switch")
 	_advance(14.95)
 	assert_true(_tracker.block_active(1, _clock.game_tick), "the block still runs at 19.95 s")
 	_advance(0.05)
-	assert_false(_tracker.block_active(1, _clock.game_tick), "and ends at its own 20 s: never extended")
-	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH,
-		"after the block a mode SIM haptic is a block request again")
-	assert_eq(_req({"haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_HAPTIC_ERG, "and a bare haptic is in ERG")
+	assert_false(
+		_tracker.block_active(1, _clock.game_tick), "and ends at its own 20 s: never extended"
+	)
+	assert_eq(
+		_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason,
+		Wl.REFUSE_SIM_BLOCK_LENGTH,
+		"after the block a mode SIM haptic is a block request again"
+	)
+	assert_eq(
+		_req({"haptic": 2.0, "duration_s": 1.5}).reason,
+		Wl.REFUSE_HAPTIC_ERG,
+		"and a bare haptic is in ERG"
+	)
 	assert_push_warning("haptic_in_erg")
 
 
 func test_a_confirmation_keeps_the_haptic_rules_and_a_remote_block() -> void:
 	_start()
 	assert_true(_req({"mode": "SIM", "duration_s": 20}, 3).accepted)
-	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}, 3).reason, Wl.REFUSE_HAPTIC_OFF,
-		"peer 3 opted out of haptics")
+	assert_eq(
+		_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}, 3).reason,
+		Wl.REFUSE_HAPTIC_OFF,
+		"peer 3 opted out of haptics"
+	)
 	assert_true(_req({"mode": "SIM", "duration_s": 20}, 2).accepted)
 	var open_id := int(_sent[_sent.size() - 1][1]["id"])
 	var r := _req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}, 2)
 	assert_true(r.accepted)
-	assert_eq(_sent[_sent.size() - 1][1]["directive"]["mode"], "SIM", "the remote governor gets it as sent")
+	assert_eq(
+		_sent[_sent.size() - 1][1]["directive"]["mode"],
+		"SIM",
+		"the remote governor gets it as sent"
+	)
 	_router.on_ack(2, {"id": r.id, "refused": true, "reason": Wl.REFUSE_HAPTIC_COOLDOWN})
-	assert_true(_tracker.block_active(2, _clock.game_tick), "a refused confirmation never takes the block back")
+	assert_true(
+		_tracker.block_active(2, _clock.game_tick),
+		"a refused confirmation never takes the block back"
+	)
 	_router.on_ack(2, {"id": open_id, "refused": false})
 	assert_true(_tracker.block_active(2, _clock.game_tick))
 
@@ -299,7 +366,10 @@ func test_mode_sim_in_a_sim_phase_is_a_no_op_confirmation_c4() -> void:
 	var r := _req({"mode": "SIM", "mode_grade": 4.0, "reason": "boiler"})
 	assert_true(r.accepted, "no block length rule in a SIM phase")
 	assert_false(_tracker.block_active(1, _clock.game_tick), "no block is opened")
-	assert_true(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit"}).accepted, "Tank's 1.5 s hit haptic")
+	assert_true(
+		_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit"}).accepted,
+		"Tank's 1.5 s hit haptic"
+	)
 	assert_eq(_req({"mode": "ERG"}).reason, Wl.REFUSE_ERG_IN_SIM)
 	assert_eq(_req({"target_pct": 50}).reason, Wl.REFUSE_RANGE, "no ERG range in a SIM phase")
 
@@ -307,7 +377,10 @@ func test_mode_sim_in_a_sim_phase_is_a_no_op_confirmation_c4() -> void:
 func test_mode_grade_only_in_sim() -> void:
 	_start()
 	assert_eq(_req({"mode_grade": 2.0}).reason, Wl.REFUSE_MODE_GRADE)
-	assert_true(_req({"mode": "SIM", "duration_s": 15, "mode_grade": 2.0}).accepted, "inside the block it opens")
+	assert_true(
+		_req({"mode": "SIM", "duration_s": 15, "mode_grade": 2.0}).accepted,
+		"inside the block it opens"
+	)
 	assert_true(_req({"mode_grade": 3.0}).accepted, "while the block runs")
 
 
@@ -316,14 +389,21 @@ func test_a_short_haptic_over_a_held_mode_grade_touches_only_its_channel_ds3() -
 	# part: the haptic request carries only its own channel to the governor and never ends or
 	# re-opens the SIM block that holds the grade.
 	_start()
-	assert_true(_req({"mode": "SIM", "duration_s": 20, "mode_grade": 2.0, "reason": "overdrive"}).accepted)
+	assert_true(
+		_req({"mode": "SIM", "duration_s": 20, "mode_grade": 2.0, "reason": "overdrive"}).accepted
+	)
 	_advance(2)
 	assert_true(_req({"haptic": 2.0, "duration_s": 1.5, "reason": "hit"}).accepted)
 	var dirs: Array = _fake().get("directives")
-	assert_eq((dirs[1] as EffortDirective).to_dict(), {"haptic": 2.0, "duration_s": 1.5, "reason": "hit", "id": 2},
-		"no mode, no mode_grade: the governor changes only the haptic term")
+	assert_eq(
+		(dirs[1] as EffortDirective).to_dict(),
+		{"haptic": 2.0, "duration_s": 1.5, "reason": "hit", "id": 2},
+		"no mode, no mode_grade: the governor changes only the haptic term"
+	)
 	_advance(1.5)
-	assert_true(_tracker.block_active(1, _clock.game_tick), "the block and its grade hold after the haptic")
+	assert_true(
+		_tracker.block_active(1, _clock.game_tick), "the block and its grade hold after the haptic"
+	)
 	assert_eq(_tracker.last_switch_tick(1), 0, "no switch from the haptic")
 	assert_true(_req({"mode_grade": 3.0}).accepted, "the grade channel is still open")
 	_advance(16.5)
@@ -425,7 +505,16 @@ func test_cadence_band_reaches_rider_mock_trainer_and_hud_and_clears() -> void:
 	assert_eq(mock.call("last_cadence_band"), [80.0, 96.0], "MockTrainer's band policy gets it")
 	assert_eq(_bands, [[1, 80.0, 96.0]], "the HUD's cadence widget gets it")
 	_router.cadence_band(2, 60, 120)
-	assert_eq(_sent[0][1], {"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "id": _sent[0][1]["id"], "peer": 2, "lo_rpm": 60.0, "hi_rpm": 120.0})
+	assert_eq(
+		_sent[0][1],
+		{
+			"kind": NetMessages.DIRECTIVE_CADENCE_BAND,
+			"id": _sent[0][1]["id"],
+			"peer": 2,
+			"lo_rpm": 60.0,
+			"hi_rpm": 120.0
+		}
+	)
 	_advance(60)
 	assert_eq(_router.cadence_band_of(1), [80.0, 96.0], "holds across phases")
 	_router.cadence_band(1, 0, 0)
@@ -490,4 +579,8 @@ func test_report_keeps_requested_and_applied() -> void:
 	assert_false(bool(rep.directives[1]["accepted"]))
 	assert_eq(rep.directives[1]["reason"], Wl.REFUSE_RANGE)
 	assert_true(bool((rep.directives[1]["applied"] as Dictionary)["refused"]))
-	assert_eq(rep.directives[0]["requested"], {"target_pct": 55.0, "duration_s": 0.0, "id": 1}, "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1)")
+	assert_eq(
+		rep.directives[0]["requested"],
+		{"target_pct": 55.0, "duration_s": 0.0, "id": 1},
+		"the game's keys plus duration_s and the sink's id (GAME_SDK 8.1)"
+	)

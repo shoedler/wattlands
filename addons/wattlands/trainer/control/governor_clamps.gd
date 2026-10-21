@@ -67,7 +67,9 @@ static func whole_w(w: float) -> int:
 ## Absolute clamp only (no duration, warm-up, rescue or slew rules):
 ## {"w": int, "clamped_by": Array[String]} with Wl.CLAMP_CEILING and/or Wl.CLAMP_FLOOR.
 ## The floor wins over the ceiling (it can only exceed it at absurd FTPs).
-static func clamp_absolute(target_w: float, ftp_w: float, trainer_max_w: float = KICKR_MAX_W) -> Dictionary:
+static func clamp_absolute(
+	target_w: float, ftp_w: float, trainer_max_w: float = KICKR_MAX_W
+) -> Dictionary:
 	var clamped_by: Array[String] = []
 	var w := whole_w(target_w)
 	var ceil_w := ceiling_w(ftp_w, trainer_max_w)

@@ -25,7 +25,10 @@ func games() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for id: String in ids():
 		out.append(manifests[id])
-	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.get("title", "")) < str(b.get("title", "")))
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			return str(a.get("title", "")) < str(b.get("title", ""))
+	)
 	return out
 
 
@@ -83,17 +86,38 @@ func resolve_options(id: String, values: Dictionary, per_player: bool = false) -
 ## int option), tank (-1, a toggle) and, when asked, fishing (10, the first-run game).
 static func workout() -> Dictionary:
 	return {
-		"id": "workout", "title": "Workout", "summary": "Group intervals", "version": "1.0.0",
-		"min_players": 1, "max_players": 8, "bots": true, "presentation": "2d", "pixel_base": [640, 360],
-		"entry": "res://src/games/workout/workout_game.gd", "contents": ["easy_30", "sweet_spot", "e2e"],
-		"default_content": "easy_30", "e2e_content": "e2e", "zero_input_content": "easy_30",
+		"id": "workout",
+		"title": "Workout",
+		"summary": "Group intervals",
+		"version": "1.0.0",
+		"min_players": 1,
+		"max_players": 8,
+		"bots": true,
+		"presentation": "2d",
+		"pixel_base": [640, 360],
+		"entry": "res://src/games/workout/workout_game.gd",
+		"contents": ["easy_30", "sweet_spot", "e2e"],
+		"default_content": "easy_30",
+		"e2e_content": "e2e",
+		"zero_input_content": "easy_30",
 		"first_run_priority": 0,
-		"options": [
+		"options":
+		[
 			{"id": "music", "type": "toggle", "default": true},
 			{"id": "laps", "type": "int", "default": 2, "min": 1, "max": 4},
-			{"id": "theme", "type": "choice", "default": "day", "choices": [{"value": "day", "label": "WORKOUT_THEME_DAY"}, {"value": "night", "label": "WORKOUT_THEME_NIGHT"}]},
+			{
+				"id": "theme",
+				"type": "choice",
+				"default": "day",
+				"choices":
+				[
+					{"value": "day", "label": "WORKOUT_THEME_DAY"},
+					{"value": "night", "label": "WORKOUT_THEME_NIGHT"}
+				]
+			},
 		],
-		"player_options": [
+		"player_options":
+		[
 			{"id": "offset", "type": "int", "default": 0, "min": -10, "max": 5, "step": 1},
 		],
 	}
@@ -101,22 +125,44 @@ static func workout() -> Dictionary:
 
 static func siege() -> Dictionary:
 	return {
-		"id": "siege", "title": "Generator Siege", "summary": "Hold the fort", "version": "0.3.0",
-		"min_players": 1, "max_players": 4, "bots": true, "presentation": "3d",
-		"entry": "res://src/games/siege/siege_game.gd", "contents": ["short", "drill"],
-		"default_content": "short", "e2e_content": "drill", "zero_input_content": "short",
-		"first_run_priority": -1, "options": [],
-		"player_options": [{"id": "wave_offset", "type": "int", "default": 0, "min": -10, "max": 5, "step": 1}],
+		"id": "siege",
+		"title": "Generator Siege",
+		"summary": "Hold the fort",
+		"version": "0.3.0",
+		"min_players": 1,
+		"max_players": 4,
+		"bots": true,
+		"presentation": "3d",
+		"entry": "res://src/games/siege/siege_game.gd",
+		"contents": ["short", "drill"],
+		"default_content": "short",
+		"e2e_content": "drill",
+		"zero_input_content": "short",
+		"first_run_priority": -1,
+		"options": [],
+		"player_options":
+		[{"id": "wave_offset", "type": "int", "default": 0, "min": -10, "max": 5, "step": 1}],
 	}
 
 
 static func tank() -> Dictionary:
 	return {
-		"id": "tank", "title": "Tank Crew", "summary": "Crew the beast", "version": "0.2.0",
-		"min_players": 1, "max_players": 3, "bots": false, "presentation": "2d", "pixel_base": [640, 360],
-		"entry": "res://src/games/tank/tank_game.gd", "contents": ["ashfall_road", "drill"],
-		"default_content": "ashfall_road", "e2e_content": "drill", "zero_input_content": "ashfall_road",
-		"first_run_priority": -1, "options": [{"id": "rotation", "type": "toggle", "default": true}],
+		"id": "tank",
+		"title": "Tank Crew",
+		"summary": "Crew the beast",
+		"version": "0.2.0",
+		"min_players": 1,
+		"max_players": 3,
+		"bots": false,
+		"presentation": "2d",
+		"pixel_base": [640, 360],
+		"entry": "res://src/games/tank/tank_game.gd",
+		"contents": ["ashfall_road", "drill"],
+		"default_content": "ashfall_road",
+		"e2e_content": "drill",
+		"zero_input_content": "ashfall_road",
+		"first_run_priority": -1,
+		"options": [{"id": "rotation", "type": "toggle", "default": true}],
 		"player_options": [],
 		"picker_image": "res://assets/tank/sprites/picker_card.png",
 	}
@@ -124,12 +170,24 @@ static func tank() -> Dictionary:
 
 static func fishing() -> Dictionary:
 	return {
-		"id": "fishing", "title": "Big Game Fishing", "summary": "Reel them in", "version": "0.1.0",
-		"min_players": 1, "max_players": 4, "bots": false, "presentation": "2d", "pixel_base": [640, 360],
-		"entry": "res://src/games/fishing/fishing_game.gd", "contents": ["free_30", "e2e_2min"],
-		"default_content": "free_30", "e2e_content": "e2e_2min", "zero_input_content": "free_30",
-		"first_run_priority": 10, "options": [],
-		"player_options": [
+		"id": "fishing",
+		"title": "Big Game Fishing",
+		"summary": "Reel them in",
+		"version": "0.1.0",
+		"min_players": 1,
+		"max_players": 4,
+		"bots": false,
+		"presentation": "2d",
+		"pixel_base": [640, 360],
+		"entry": "res://src/games/fishing/fishing_game.gd",
+		"contents": ["free_30", "e2e_2min"],
+		"default_content": "free_30",
+		"e2e_content": "e2e_2min",
+		"zero_input_content": "free_30",
+		"first_run_priority": 10,
+		"options": [],
+		"player_options":
+		[
 			{"id": "reel_pct", "type": "int", "default": 60, "min": 50, "max": 70, "step": 5},
 			{"id": "relaxed_band", "type": "toggle", "default": false},
 		],

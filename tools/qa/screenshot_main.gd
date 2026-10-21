@@ -45,7 +45,9 @@ func _initialize() -> void:
 func _run() -> void:
 	await process_frame
 	if DisplayServer.get_name() == "headless":
-		print("screenshot: skipped (headless display server: nothing to capture; run windowed or under xvfb-run)")
+		print(
+			"screenshot: skipped (headless display server: nothing to capture; run windowed or under xvfb-run)"
+		)
 		_finish(0)
 		return
 	_opts = Options.parse(OS.get_cmdline_user_args())
@@ -104,7 +106,12 @@ func _run_game(out_dir: String) -> void:
 	var players := int(sim_args.get("players", _opts["players"]))
 	for at: float in _opts["at"]:
 		if not await _advance_to(runner, at):
-			_fail("the session ended at %.1f s of sim time, before --at=%s" % [runner.sim_seconds(), Options.format_seconds(at)])
+			_fail(
+				(
+					"the session ended at %.1f s of sim time, before --at=%s"
+					% [runner.sim_seconds(), Options.format_seconds(at)]
+				)
+			)
 			continue
 		await _capture(out_dir.path_join(Options.file_name(game, content, players, at)))
 	runner.queue_free()
@@ -119,7 +126,10 @@ func _advance_to(runner: GameSimRunner, at: float) -> bool:
 		if _finished(runner):
 			return false
 		var slice_end := Time.get_ticks_msec() + FAST_SLICE_MSEC
-		while runner.sim_seconds() + Wl.SIM_DT <= fast_until + 1e-6 and Time.get_ticks_msec() < slice_end:
+		while (
+			runner.sim_seconds() + Wl.SIM_DT <= fast_until + 1e-6
+			and Time.get_ticks_msec() < slice_end
+		):
 			runner.step()
 		await process_frame
 	var acc := 0.0

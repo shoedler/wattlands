@@ -24,11 +24,17 @@ func _draw() -> void:
 	var pts := PackedVector2Array()
 	match str(look.get("shape", "circle")):
 		"triangle":
-			pts = PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, r * 0.85), c + Vector2(-r, r * 0.85)])
+			pts = PackedVector2Array(
+				[c + Vector2(0, -r), c + Vector2(r, r * 0.85), c + Vector2(-r, r * 0.85)]
+			)
 		"square":
-			pts = PackedVector2Array([c + Vector2(-r, -r), c + Vector2(r, -r), c + Vector2(r, r), c + Vector2(-r, r)])
+			pts = PackedVector2Array(
+				[c + Vector2(-r, -r), c + Vector2(r, -r), c + Vector2(r, r), c + Vector2(-r, r)]
+			)
 		"diamond":
-			pts = PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)])
+			pts = PackedVector2Array(
+				[c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]
+			)
 		_:
 			for i in 24:
 				var a := TAU * float(i) / 24.0

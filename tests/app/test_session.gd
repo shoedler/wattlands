@@ -13,13 +13,25 @@ func _lobby_with_bots() -> void:
 	net.settings_sent["bot_ftp"] = 230.0
 	net.add_bot()
 	net.add_bot()
-	net.lobby = {"game_id": "workout", "game_version": "1.0.0", "content_id": "sweet_spot", "scaling": Wl.WKG,
-		"settings": {"options": {"laps": 3}, "bot_ftp": 230.0}, "player_options": {1: {"offset": 2}}}
+	net.lobby = {
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "sweet_spot",
+		"scaling": Wl.WKG,
+		"settings": {"options": {"laps": 3}, "bot_ftp": 230.0},
+		"player_options": {1: {"offset": 2}}
+	}
 
 
 func test_solo_config_from_the_lobby() -> void:
 	_lobby_with_bots()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "sweet_spot"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "sweet_spot"}
+		)
+		as AppSessionScreen
+	)
 	var h := s.host as FakeHost
 	assert_not_null(h)
 	assert_true(h.started)
@@ -34,17 +46,29 @@ func test_solo_config_from_the_lobby() -> void:
 	assert_true(c["headless"], "headless test run")
 	assert_eq(c["view_parent"], s.view_layer)
 	assert_eq(c["hud_parent"], s.hud_layer)
-	assert_eq(c["options"], {"music": true, "laps": 3, "theme": "day"}, "lobby values with defaults filled")
+	assert_eq(
+		c["options"],
+		{"music": true, "laps": 3, "theme": "day"},
+		"lobby values with defaults filled"
+	)
 	var players: Array[PlayerSlot] = c["players"]
 	assert_eq(players.size(), 3)
 	assert_eq(players[0].options, {"offset": 2}, "the rider's player_options from the lobby")
 	assert_eq(players[1].options, {"offset": 0}, "bots get the defaults")
-	assert_eq(c["seed"], SeededRng.derive(1800000000, "workout|sweet_spot") & AppSessionLauncher.SEED_MASK)
+	assert_eq(
+		c["seed"], SeededRng.derive(1800000000, "workout|sweet_spot") & AppSessionLauncher.SEED_MASK
+	)
 
 
 func test_local_riders_are_the_trainer_rider_and_bot_mocks() -> void:
 	_lobby_with_bots()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "sweet_spot"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "sweet_spot"}
+		)
+		as AppSessionScreen
+	)
 	var riders: Dictionary = s.config["local_riders"]
 	assert_eq(riders.keys().size(), 3)
 	var me := riders[1] as FakeRider
@@ -71,7 +95,13 @@ func test_local_riders_are_the_trainer_rider_and_bot_mocks() -> void:
 
 func test_host_config_has_the_net_and_marks_started() -> void:
 	_lobby_with_bots()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.HOST, "game_id": "workout", "content_id": "sweet_spot"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.HOST, "game_id": "workout", "content_id": "sweet_spot"}
+		)
+		as AppSessionScreen
+	)
 	var c := (s.host as FakeHost).config_seen
 	assert_eq(c["net"], fx.net)
 	assert_eq(fx.fake_net().calls_named("mark_started").size(), 1)
@@ -91,10 +121,22 @@ func test_client_config_from_session_start() -> void:
 	b.peer_id = 2
 	b.name = "Bea"
 	b.apply_look(1)
-	var start := {"type": "session_start", "v": 1, "game_id": "workout", "game_version": "1.0.0", "content_id": "e2e",
-		"seed": 77, "players": [a.to_dict(), b.to_dict(), Bots.make_slot(1, 2, 200.0).to_dict()],
-		"options": {"music": false}, "scaling": Wl.FAIR_FTP, "start_tick": 0}
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start}) as AppSessionScreen
+	var start := {
+		"type": "session_start",
+		"v": 1,
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "e2e",
+		"seed": 77,
+		"players": [a.to_dict(), b.to_dict(), Bots.make_slot(1, 2, 200.0).to_dict()],
+		"options": {"music": false},
+		"scaling": Wl.FAIR_FTP,
+		"start_tick": 0
+	}
+	var s := (
+		open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start})
+		as AppSessionScreen
+	)
 	var c := (s.host as FakeHost).config_seen
 	assert_eq(c["role"], Wl.CLIENT)
 	assert_eq(c["seed"], 77)
@@ -117,10 +159,22 @@ func test_players_are_sorted_by_slot_index() -> void:
 	var b := PlayerSlot.new()
 	b.peer_id = 2
 	b.apply_look(1)
-	var start := {"type": "session_start", "v": 1, "game_id": "workout", "game_version": "1.0.0", "content_id": "e2e",
-		"seed": 1, "players": [Bots.make_slot(1, 2, 200.0).to_dict(), b.to_dict(), a.to_dict()],
-		"options": {}, "scaling": Wl.FAIR_FTP, "start_tick": 0}
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start}) as AppSessionScreen
+	var start := {
+		"type": "session_start",
+		"v": 1,
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "e2e",
+		"seed": 1,
+		"players": [Bots.make_slot(1, 2, 200.0).to_dict(), b.to_dict(), a.to_dict()],
+		"options": {},
+		"scaling": Wl.FAIR_FTP,
+		"start_tick": 0
+	}
+	var s := (
+		open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start})
+		as AppSessionScreen
+	)
 	var players: Array[PlayerSlot] = (s.host as FakeHost).config_seen["players"]
 	var order: Array[int] = []
 	for p in players:
@@ -139,14 +193,27 @@ func test_rejoin_replays_the_message_to_the_game_host() -> void:
 	var seen: Array = []
 	net.game_message.connect(func(from: int, data: Dictionary) -> void: seen.append([from, data]))
 	var msg := {"type": "phase", "v": 1, "index": 2, "start_tick": 100, "ended_by": "duration"}
-	open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "rejoin": true, "replay": [{"from": 1, "data": msg}]})
-	assert_eq(seen, [[1, msg]], "the GameHost (connected in setup) gets the message that opened the session")
+	open_screen(
+		AppSessionScreen.new(),
+		{"role": Wl.CLIENT, "rejoin": true, "replay": [{"from": 1, "data": msg}]}
+	)
+	assert_eq(
+		seen,
+		[[1, msg]],
+		"the GameHost (connected in setup) gets the message that opened the session"
+	)
 
 
 func test_no_trainer_shows_an_error() -> void:
 	fx.give_profile()
 	fx.fake_trainer().dev = null
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	assert_null(s.host)
 	assert_eq(s.error, "APP_ERR_NO_TRAINER")
 	assert_true(s.overlay.visible)
@@ -161,21 +228,37 @@ func test_setup_error_is_reported() -> void:
 		var h := FakeHost.new()
 		h.setup_error = "plan rejected: warmup"
 		return h
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	assert_eq(s.error, "plan rejected: warmup")
 	assert_true(s.error_label.text.contains("plan rejected"))
 
 
 func test_pause_overlay_and_resume() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	var h := s.host as FakeHost
 	assert_false(s.overlay.visible)
 	s.feed_action(&"pause")
 	assert_eq(h.pause_reasons, ["user"] as Array[String])
 	assert_true(s.overlay.visible)
 	assert_eq(s.overlay_title.text, AppScreen.t("APP_SESSION_PAUSED"))
-	assert_eq(s.overlay_detail.text, AppScreen.t("APP_SESSION_PAUSED_USER"), "a rider's pause resumes from the menu")
+	assert_eq(
+		s.overlay_detail.text,
+		AppScreen.t("APP_SESSION_PAUSED_USER"),
+		"a rider's pause resumes from the menu"
+	)
 	s.feed_action(&"pause")
 	assert_eq(h.pause_reasons.size(), 1, "pause never toggles")
 	confirm_pick(s, "resume")
@@ -185,7 +268,13 @@ func test_pause_overlay_and_resume() -> void:
 
 func test_coasting_pause_resumes_on_pedal_start() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	var h := s.host as FakeHost
 	fx.bus.paused_changed.emit(true, "coasting")
 	h.paused_flag = true
@@ -197,12 +286,20 @@ func test_coasting_pause_resumes_on_pedal_start() -> void:
 func test_coasting_pause_holds_resume_so_a_surge_resumes() -> void:
 	# From rest a surge fires before pedal_start: it must resume, never pick End ride or Panic.
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	var h := s.host as FakeHost
 	h.pause("coasting")
 	fx.bus.paused_changed.emit(true, "coasting")
 	assert_true(s.auto_paused())
-	assert_eq(s.overlay_detail.text, AppScreen.t("APP_SESSION_PAUSED_DETAIL"), "pedal again to ride on")
+	assert_eq(
+		s.overlay_detail.text, AppScreen.t("APP_SESSION_PAUSED_DETAIL"), "pedal again to ride on"
+	)
 	assert_false(menu(s).scanning, "the auto-pause overlay does not scan")
 	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"))
 	for _i in 10:
@@ -216,7 +313,13 @@ func test_coasting_pause_holds_resume_so_a_surge_resumes() -> void:
 
 func test_a_user_pause_menu_scans() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	s.feed_action(&"pause")
 	assert_false(s.auto_paused())
 	assert_true(menu(s).scanning, "a pause the rider asked for scans like any menu")
@@ -226,22 +329,44 @@ func test_metronome_runs_during_the_session_when_on() -> void:
 	var p := fx.give_profile()
 	p.metronome = true
 	p.preferred_cadence_rpm = 85.0
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	assert_eq(fx.fake_sfx().metronome_calls, [[85.0, true]])
 	s.leave()
-	assert_eq(fx.fake_sfx().metronome_calls, [[85.0, true], [0.0, false]], "stopped when the session screen goes")
+	assert_eq(
+		fx.fake_sfx().metronome_calls,
+		[[85.0, true], [0.0, false]],
+		"stopped when the session screen goes"
+	)
 
 
 func test_no_metronome_when_off() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	s.leave()
 	assert_eq(fx.fake_sfx().metronome_calls, [])
 
 
 func test_on_screen_panic() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	watch_signals(fx.bus)
 	s.panic_button.pressed.emit()
 	assert_signal_emitted(fx.bus, "panic_requested")
@@ -255,7 +380,13 @@ func test_on_screen_panic() -> void:
 
 func test_panic_action_goes_safe_at_once() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	fx.input.inject_action(&"panic")
 	assert_eq((fx.trainer.local_rider() as FakeRider).panics, 1)
 	assert_true(s.panicked)
@@ -263,7 +394,13 @@ func test_panic_action_goes_safe_at_once() -> void:
 
 func test_finish_opens_results_with_fit_and_summary() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	var h := s.host as FakeHost
 	fx.bus.unlocks_ready.emit(["WORKOUT_BADGE"])
 	fx.bus.ride_saved.emit("C:/rides/a.fit", {"ride_id": "r-1"})
@@ -282,7 +419,13 @@ func test_finish_opens_results_with_fit_and_summary() -> void:
 
 func test_end_ride_from_the_menu() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	s.feed_action(&"back")
 	assert_true(s.overlay.visible)
 	confirm_pick(s, "end")
@@ -294,8 +437,15 @@ func test_client_host_left_ends_with_results() -> void:
 	fx.give_profile()
 	var net := fx.fake_net()
 	net.local_peer = 2
-	var start := {"type": "session_start", "game_id": "workout", "content_id": "e2e", "seed": 1,
-		"players": [Bots.make_slot(1, 0, 200.0).to_dict()], "options": {}, "scaling": Wl.FAIR_FTP}
+	var start := {
+		"type": "session_start",
+		"game_id": "workout",
+		"content_id": "e2e",
+		"seed": 1,
+		"players": [Bots.make_slot(1, 0, 200.0).to_dict()],
+		"options": {},
+		"scaling": Wl.FAIR_FTP
+	}
 	var b := PlayerSlot.new()
 	b.peer_id = 2
 	(start["players"] as Array).append(b.to_dict())
@@ -313,5 +463,8 @@ func test_read_summary_falls_back_to_the_json_next_to_the_fit() -> void:
 	f.store_string(JSON.stringify({"ride_id": "x1"}))
 	f.close()
 	assert_eq(AppSessionScreen.read_summary(null, fit), {"ride_id": "x1"})
-	assert_eq(AppSessionScreen.read_summary(null, dir.path_join("none.fit")), {"fit_path": dir.path_join("none.fit")})
+	assert_eq(
+		AppSessionScreen.read_summary(null, dir.path_join("none.fit")),
+		{"fit_path": dir.path_join("none.fit")}
+	)
 	assert_eq(AppSessionScreen.read_summary(null, ""), {})

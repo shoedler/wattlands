@@ -86,7 +86,9 @@ const KEY_ANOTHER_APP := "TRAINER_ANOTHER_APP_CONTROL"
 const KEY_HW_LOCKED := "TRAINER_HW_LOCKED"
 ## Op codes whose queued (unsent) write is replaced by a newer one.
 const COALESCED_OPS: Array[int] = [
-	FtmsCodec.OP_SET_TARGET_RESISTANCE, FtmsCodec.OP_SET_TARGET_POWER, FtmsCodec.OP_SET_SIMULATION,
+	FtmsCodec.OP_SET_TARGET_RESISTANCE,
+	FtmsCodec.OP_SET_TARGET_POWER,
+	FtmsCodec.OP_SET_SIMULATION,
 ]
 
 ## When true and inside the tree, _process ticks the client.
@@ -112,7 +114,9 @@ var _in_flight: Dictionary = {}
 var _assembler: FtmsCodec.BikeDataAssembler = FtmsCodec.BikeDataAssembler.new()
 ## True while the transport's write call runs (a failure it reports then is synchronous).
 var _sending: bool = false
-var _stats: Dictionary = {"cp_writes": 0, "cp_retries": 0, "cp_timeouts": 0, "refused_locked": 0, "records": 0}
+var _stats: Dictionary = {
+	"cp_writes": 0, "cp_retries": 0, "cp_timeouts": 0, "refused_locked": 0, "records": 0
+}
 
 
 func _init() -> void:
@@ -160,7 +164,9 @@ func write_control(payload: PackedByteArray) -> void:
 		push_error("FtmsClient.write_control: empty payload")
 		return
 	if _state != STATE_READY:
-		push_warning("FtmsClient: not in control (%s); dropped %s" % [_state, FtmsCodec.opcode_name(opcode)])
+		push_warning(
+			"FtmsClient: not in control (%s); dropped %s" % [_state, FtmsCodec.opcode_name(opcode)]
+		)
 		return
 	_enqueue(payload)
 
@@ -190,6 +196,7 @@ func resistance_range() -> Dictionary:
 
 
 # --- Added in W1 ----------------------------------------------------------------------
+
 
 ## Advance timeouts and the settle delay by dt seconds (see the class doc for who calls it).
 func tick(dt: float) -> void:
@@ -278,6 +285,7 @@ func in_flight_opcode() -> int:
 
 # --- Internals ------------------------------------------------------------------------
 
+
 ## The hardware lock as this instance sees it. Production code always reads the environment;
 ## only a test-only subclass talking to a fake transport overrides it.
 func _is_hw_locked() -> bool:
@@ -353,6 +361,7 @@ func _has_char(service: String, chr: String) -> bool:
 
 # --- Flow -----------------------------------------------------------------------------
 
+
 func _on_services_discovered(services: Array) -> void:
 	if _state != STATE_DISCOVERING:
 		return
@@ -371,17 +380,35 @@ func _on_services_discovered(services: Array) -> void:
 		_fail("no Fitness Machine service (0x1826)")
 		return
 	var ftms := FtmsCodec.SERVICE_FTMS
-	_read_queue = [{"service": ftms, "char": FtmsCodec.CHAR_FEATURE, "key": "feature", "required": true}]
+	_read_queue = [
+		{"service": ftms, "char": FtmsCodec.CHAR_FEATURE, "key": "feature", "required": true}
+	]
 	if _has_char(ftms, FtmsCodec.CHAR_POWER_RANGE):
-		_read_queue.append({"service": ftms, "char": FtmsCodec.CHAR_POWER_RANGE, "key": "power_range", "required": false})
+		_read_queue.append(
+			{
+				"service": ftms,
+				"char": FtmsCodec.CHAR_POWER_RANGE,
+				"key": "power_range",
+				"required": false
+			}
+		)
 	if _has_char(ftms, FtmsCodec.CHAR_RESISTANCE_RANGE):
-		_read_queue.append({"service": ftms, "char": FtmsCodec.CHAR_RESISTANCE_RANGE, "key": "resistance_range", "required": false})
+		_read_queue.append(
+			{
+				"service": ftms,
+				"char": FtmsCodec.CHAR_RESISTANCE_RANGE,
+				"key": "resistance_range",
+				"required": false
+			}
+		)
 	var dis := FtmsCodec.SERVICE_DEVICE_INFO
 	var dis_chars: Dictionary = FtmsCodec.DEVICE_INFO_CHARS
 	for key: String in dis_chars.keys():
 		var chr: String = dis_chars[key]
 		if _has_char(dis, chr):
-			_read_queue.append({"service": dis, "char": chr, "key": "dis:" + key, "required": false})
+			_read_queue.append(
+				{"service": dis, "char": chr, "key": "dis:" + key, "required": false}
+			)
 	_set_state(STATE_READING, "reading features and ranges")
 	_next_read()
 
@@ -394,7 +421,10 @@ func _next_read() -> void:
 	_read = _read_queue.pop_front()
 	_read["attempts"] = 1
 	_read["elapsed"] = 0.0
-	_transport.read_characteristic(BleTransport.expand_uuid(str(_read["service"])), BleTransport.expand_uuid(str(_read["char"])))
+	_transport.read_characteristic(
+		BleTransport.expand_uuid(str(_read["service"])),
+		BleTransport.expand_uuid(str(_read["char"]))
+	)
 
 
 func _on_characteristic_read(char_uuid: String, data: PackedByteArray) -> void:
@@ -433,7 +463,10 @@ func _retry_read(why: String) -> void:
 	if int(_read["attempts"]) <= READ_RETRIES:
 		_read["attempts"] = int(_read["attempts"]) + 1
 		_read["elapsed"] = 0.0
-		_transport.read_characteristic(BleTransport.expand_uuid(str(_read["service"])), BleTransport.expand_uuid(str(_read["char"])))
+		_transport.read_characteristic(
+			BleTransport.expand_uuid(str(_read["service"])),
+			BleTransport.expand_uuid(str(_read["char"]))
+		)
 		return
 	var entry := _read
 	_read = {}
@@ -446,16 +479,26 @@ func _retry_read(why: String) -> void:
 
 func _after_reads() -> void:
 	var has_power := (int(_features.get("machine", 0)) & FtmsCodec.MACHINE_POWER_MEASUREMENT) != 0
-	_cps_fallback = not has_power and _has_char(FtmsCodec.SERVICE_CYCLING_POWER, FtmsCodec.CHAR_CP_MEASUREMENT)
+	_cps_fallback = (
+		not has_power and _has_char(FtmsCodec.SERVICE_CYCLING_POWER, FtmsCodec.CHAR_CP_MEASUREMENT)
+	)
 	_set_state(STATE_SUBSCRIBING, "subscribing")
 	var ftms := BleTransport.expand_uuid(FtmsCodec.SERVICE_FTMS)
-	_transport.subscribe_characteristic(ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_INDOOR_BIKE_DATA))
-	_transport.subscribe_characteristic(ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_MACHINE_STATUS))
+	_transport.subscribe_characteristic(
+		ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_INDOOR_BIKE_DATA)
+	)
+	_transport.subscribe_characteristic(
+		ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_MACHINE_STATUS)
+	)
 	if _cps_fallback:
-		_transport.subscribe_characteristic(BleTransport.expand_uuid(FtmsCodec.SERVICE_CYCLING_POWER),
-			BleTransport.expand_uuid(FtmsCodec.CHAR_CP_MEASUREMENT))
+		_transport.subscribe_characteristic(
+			BleTransport.expand_uuid(FtmsCodec.SERVICE_CYCLING_POWER),
+			BleTransport.expand_uuid(FtmsCodec.CHAR_CP_MEASUREMENT)
+		)
 	# Indications on the control point before the first control-point write (BRIEF 4.3).
-	_transport.subscribe_characteristic(ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_CONTROL_POINT))
+	_transport.subscribe_characteristic(
+		ftms, BleTransport.expand_uuid(FtmsCodec.CHAR_CONTROL_POINT)
+	)
 	_settle_left_s = SUBSCRIBE_SETTLE_S
 
 
@@ -472,6 +515,7 @@ func _after_subscribe() -> void:
 
 
 # --- Control point queue ------------------------------------------------------------
+
 
 ## Queues a write (coalescing rule in the class doc) and sends it when nothing is in flight.
 func _enqueue(payload: PackedByteArray) -> void:
@@ -515,12 +559,18 @@ func _send_in_flight() -> void:
 		# The transport is gone (the app is tearing the stack down): nothing can go out.
 		_in_flight = {}
 		_queue = []
-		push_warning("FtmsClient: no transport; dropped %s" % FtmsCodec.opcode_name(int(payload[0])))
+		push_warning(
+			"FtmsClient: no transport; dropped %s" % FtmsCodec.opcode_name(int(payload[0]))
+		)
 		return
 	_stats["cp_writes"] = int(_stats["cp_writes"]) + 1
 	_sending = true
-	_transport.write_characteristic(BleTransport.expand_uuid(FtmsCodec.SERVICE_FTMS),
-		BleTransport.expand_uuid(FtmsCodec.CHAR_CONTROL_POINT), payload, true)
+	_transport.write_characteristic(
+		BleTransport.expand_uuid(FtmsCodec.SERVICE_FTMS),
+		BleTransport.expand_uuid(FtmsCodec.CHAR_CONTROL_POINT),
+		payload,
+		true
+	)
 	_sending = false
 
 
@@ -533,7 +583,12 @@ func _retry_write(why: String) -> void:
 		return
 	var opcode := int(_in_flight["opcode"])
 	_stats["cp_timeouts"] = int(_stats["cp_timeouts"]) + 1
-	_fail("control point %s unanswered after %d attempts (%s)" % [FtmsCodec.opcode_name(opcode), CP_RETRIES + 1, why])
+	_fail(
+		(
+			"control point %s unanswered after %d attempts (%s)"
+			% [FtmsCodec.opcode_name(opcode), CP_RETRIES + 1, why]
+		)
+	)
 
 
 func _on_control_point_indication(data: PackedByteArray) -> void:
@@ -543,7 +598,12 @@ func _on_control_point_indication(data: PackedByteArray) -> void:
 	var opcode := int(resp["request_opcode"])
 	var result := int(resp["result"])
 	if _in_flight.is_empty() or int(_in_flight["opcode"]) != opcode:
-		push_warning("FtmsClient: unexpected response to %s (%s)" % [FtmsCodec.opcode_name(opcode), FtmsCodec.result_name(result)])
+		push_warning(
+			(
+				"FtmsClient: unexpected response to %s (%s)"
+				% [FtmsCodec.opcode_name(opcode), FtmsCodec.result_name(result)]
+			)
+		)
 		return
 	_in_flight = {}
 	control_response.emit(opcode, result)
@@ -559,17 +619,22 @@ func _on_control_point_indication(data: PackedByteArray) -> void:
 		return
 	if _state == STATE_SETTING_SIM and opcode == FtmsCodec.OP_SET_SIMULATION:
 		if result != FtmsCodec.RESULT_SUCCESS:
-			push_warning("FtmsClient: SIM flat refused (%s); continuing" % FtmsCodec.result_name(result))
+			push_warning(
+				"FtmsClient: SIM flat refused (%s); continuing" % FtmsCodec.result_name(result)
+			)
 		_set_state(STATE_READY, "ready")
 		client_ready.emit()
 		_pump_queue()
 		return
 	if result != FtmsCodec.RESULT_SUCCESS:
-		push_warning("FtmsClient: %s: %s" % [FtmsCodec.opcode_name(opcode), FtmsCodec.result_name(result)])
+		push_warning(
+			"FtmsClient: %s: %s" % [FtmsCodec.opcode_name(opcode), FtmsCodec.result_name(result)]
+		)
 	_pump_queue()
 
 
 # --- Notifications and errors ----------------------------------------------------------
+
 
 func _on_characteristic_notified(char_uuid: String, data: PackedByteArray) -> void:
 	if BleTransport.same_uuid(char_uuid, FtmsCodec.CHAR_INDOOR_BIKE_DATA):
@@ -587,7 +652,11 @@ func _on_characteristic_notified(char_uuid: String, data: PackedByteArray) -> vo
 			return
 		var code := int(st["code"])
 		machine_status.emit(code, st["params"])
-		var in_control := _state == STATE_READY or _state == STATE_SETTING_SIM or _state == STATE_REQUESTING_CONTROL
+		var in_control := (
+			_state == STATE_READY
+			or _state == STATE_SETTING_SIM
+			or _state == STATE_REQUESTING_CONTROL
+		)
 		if code == FtmsCodec.STATUS_CONTROL_PERMISSION_LOST and in_control:
 			_lose_control(DETAIL_ANOTHER_APP)
 	elif BleTransport.same_uuid(char_uuid, FtmsCodec.CHAR_CP_MEASUREMENT):

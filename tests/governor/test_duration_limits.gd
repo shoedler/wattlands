@@ -17,8 +17,15 @@ func _count(rig: Rig, pred: Callable) -> int:
 func _latched_rig() -> Rig:
 	var rig := make_rig({}, follower())
 	rig.keep_trace = true
-	rig.start([erg(Wl.WORK, 110.0, 290.0), erg(Wl.WORK, 110.0, 290.0), erg(Wl.RECOVERY, 90.0, 200.0),
-		sim(Wl.GRADE_FLAT, 30.0, Wl.FREE), erg(Wl.RECOVERY, 90.0, 200.0)])
+	rig.start(
+		[
+			erg(Wl.WORK, 110.0, 290.0),
+			erg(Wl.WORK, 110.0, 290.0),
+			erg(Wl.RECOVERY, 90.0, 200.0),
+			sim(Wl.GRADE_FLAT, 30.0, Wl.FREE),
+			erg(Wl.RECOVERY, 90.0, 200.0)
+		]
+	)
 	rig.run(290.0)
 	rig.gov.start_phase(1)
 	rig.run(30.0)
@@ -80,14 +87,19 @@ func test_120_limit_latches_after_60_s_and_105_after_300_s() -> void:
 	assert_true(rig.s()["latched_120"])
 	assert_eq(rig.applied_w(), 240, "ceiling 120%")
 	assert_has(rig.s()["clamped_by"], Wl.CLAMP_LIMIT_120)
-	assert_eq(_count(rig, func(s: Dictionary) -> bool: return int(s["applied_target_w"]) > 240), 1200,
-		"exactly 60 s above 120% (240 W)")
+	assert_eq(
+		_count(rig, func(s: Dictionary) -> bool: return int(s["applied_target_w"]) > 240),
+		1200,
+		"exactly 60 s above 120% (240 W)"
+	)
 	rig.run(210.0)
 	rig.gov.start_phase(1)
 	rig.run(60.0)
 	assert_true(rig.s()["latched_105"])
 	assert_eq(rig.applied_w(), 210)
-	assert_eq(_count(rig, func(s: Dictionary) -> bool: return int(s["applied_target_w"]) > 210), 6000)
+	assert_eq(
+		_count(rig, func(s: Dictionary) -> bool: return int(s["applied_target_w"]) > 210), 6000
+	)
 
 
 func test_reset_after_120_s_at_or_below_90_pct_inclusive() -> void:
@@ -118,8 +130,14 @@ func test_reset_clears_both_limits() -> void:
 	# 125% latches the 120% limit at 60 s and the 105% limit at 300 s; 120 s at 90% resets both
 	# counters and both latches, so the next 125% interval runs unclamped.
 	var rig := make_rig({}, follower())
-	rig.start([erg(Wl.WORK, 125.0, 290.0), erg(Wl.WORK, 125.0, 290.0), erg(Wl.RECOVERY, 90.0, 200.0),
-		erg(Wl.WORK, 125.0, 100.0)])
+	rig.start(
+		[
+			erg(Wl.WORK, 125.0, 290.0),
+			erg(Wl.WORK, 125.0, 290.0),
+			erg(Wl.RECOVERY, 90.0, 200.0),
+			erg(Wl.WORK, 125.0, 100.0)
+		]
+	)
 	rig.run(290.0)
 	rig.gov.start_phase(1)
 	rig.run(20.0)
@@ -154,7 +172,9 @@ func test_paused_floor_counts_toward_the_reset() -> void:
 
 func test_91_pct_never_resets() -> void:
 	var rig := make_rig({}, follower())
-	rig.start([erg(Wl.WORK, 110.0, 290.0), erg(Wl.WORK, 110.0, 290.0), erg(Wl.RECOVERY, 90.5, 290.0)])
+	rig.start(
+		[erg(Wl.WORK, 110.0, 290.0), erg(Wl.WORK, 110.0, 290.0), erg(Wl.RECOVERY, 90.5, 290.0)]
+	)
 	rig.run(290.0)
 	rig.gov.start_phase(1)
 	rig.run(30.0)

@@ -13,7 +13,9 @@ var _scroll: ScrollContainer = null
 
 func _build() -> void:
 	mode = str(params.get("mode", "solo"))
-	var page := make_page(t("APP_PICKER_TITLE_HOST") if mode == "host" else t("APP_PICKER_TITLE_SOLO"))
+	var page := make_page(
+		t("APP_PICKER_TITLE_HOST") if mode == "host" else t("APP_PICKER_TITLE_SOLO")
+	)
 	var left: VBoxContainer = page["left"]
 	_scroll = ScrollContainer.new()
 	_scroll.name = "CardScroll"
@@ -28,7 +30,9 @@ func _build() -> void:
 	_scroll.add_child(_grid)
 	var items: Array = []
 	var highlight := 0
-	var last := str(services.settings.get_value("last_game", "")) if services.settings != null else ""
+	var last := (
+		str(services.settings.get_value("last_game", "")) if services.settings != null else ""
+	)
 	var games: Array[Dictionary] = services.registry.games() if services.registry != null else []
 	for m: Dictionary in games:
 		var id := str(m.get("id", ""))
@@ -40,7 +44,13 @@ func _build() -> void:
 		if id == last:
 			highlight = game_ids.size()
 		game_ids.append(id)
-		items.append({"id": id, "text": str(m.get("title", id)), "detail": AppLobbyModel.player_count_text(m)})
+		items.append(
+			{
+				"id": id,
+				"text": str(m.get("title", id)),
+				"detail": AppLobbyModel.player_count_text(m)
+			}
+		)
 	if games.is_empty():
 		left.add_child(AppStyle.paragraph(t("APP_NO_GAMES"), AppStyle.FONT_HEADING, AppStyle.WARN))
 	items.append({"id": "back", "text": t("APP_BACK")})

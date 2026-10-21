@@ -55,7 +55,9 @@ func bind_riders(p_riders: Dictionary) -> void:
 
 func power_band(peer: int, lo_w: float, hi_w: float) -> void:
 	if is_nan(lo_w) or is_nan(hi_w) or is_inf(lo_w) or is_inf(hi_w) or lo_w < 0.0 or hi_w < lo_w:
-		push_warning("HudRouter: power_band(%d, %s, %s) ignored: needs 0 <= lo <= hi" % [peer, lo_w, hi_w])
+		push_warning(
+			"HudRouter: power_band(%d, %s, %s) ignored: needs 0 <= lo <= hi" % [peer, lo_w, hi_w]
+		)
 		return
 	if lo_w == 0.0 and hi_w == 0.0:
 		power_bands.erase(peer)
@@ -65,8 +67,18 @@ func power_band(peer: int, lo_w: float, hi_w: float) -> void:
 		if _riders.has(peer):
 			(_riders[peer] as LocalRider).set_power_band(lo_w, hi_w)
 		elif slots.has(peer):
-			_send(peer, Protocol.game_msg("directive", {
-				"kind": NetMessages.DIRECTIVE_POWER_BAND, "peer": peer, "lo_w": lo_w, "hi_w": hi_w}))
+			_send(
+				peer,
+				Protocol.game_msg(
+					"directive",
+					{
+						"kind": NetMessages.DIRECTIVE_POWER_BAND,
+						"peer": peer,
+						"lo_w": lo_w,
+						"hi_w": hi_w
+					}
+				)
+			)
 		else:
 			push_warning("HudRouter: power_band for unknown peer %d" % peer)
 			return

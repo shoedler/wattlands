@@ -25,7 +25,9 @@ func test_known_vectors() -> void:
 	assert_eq(FitCrc.compute(PackedByteArray()), 0x0000, "empty")
 	assert_eq(FitCrc.compute(PackedByteArray([0x00])), 0x0000, "one zero byte")
 	assert_eq(FitCrc.compute("A".to_ascii_buffer()), 0x30C0, "A")
-	assert_eq(FitCrc.compute(PackedByteArray([0xFF, 0xFF])), _reference(PackedByteArray([0xFF, 0xFF])))
+	assert_eq(
+		FitCrc.compute(PackedByteArray([0xFF, 0xFF])), _reference(PackedByteArray([0xFF, 0xFF]))
+	)
 
 
 func test_matches_bitwise_reference_on_seeded_data() -> void:

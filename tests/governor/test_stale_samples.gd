@@ -8,7 +8,8 @@ extends "res://tests/governor/gov_test_base.gd"
 
 
 ## A ScriptedDevice that can go silent (no notifications) and report its link state.
-class QuietDevice extends "res://tests/governor/scripted_device.gd":
+class QuietDevice:
+	extends "res://tests/governor/scripted_device.gd"
 	var silent: bool = false
 	var link: String = TrainerDevice.STATUS_READY
 
@@ -52,7 +53,9 @@ func test_a_silent_stream_reaches_the_coasting_floor() -> void:
 	assert_gt(stale_at - last, 3.0, "stale only after more than 3 s without a sample")
 	assert_lte(stale_at - last, 3.0 + DT + 1e-6)
 	var coast_at := rig.run_until(func() -> bool: return rig.gov.is_coasting(), 5.0)
-	assert_time(coast_at, last + 6.0, "the not_pedaling sample at last + 3 s, then the 3 s coasting rule")
+	assert_time(
+		coast_at, last + 6.0, "the not_pedaling sample at last + 3 s, then the 3 s coasting rule"
+	)
 	rig.run(1.0)
 	assert_eq(rig.applied_w(), GovernorClamps.floor_w(200.0), "the ERG floor (60 W)")
 	assert_has(rig.s()["clamped_by"], Wl.CLAMP_COASTING)
@@ -82,7 +85,11 @@ func test_the_w3_repro_with_a_local_rider() -> void:
 	var st := r.governor.status()
 	assert_eq(tel.power_w, 0.0, "telemetry: the sample is stale")
 	assert_true(bool(st["coasting"]), "the governor coasts too")
-	assert_lte(int(st["applied_target_w"]), 60, "15 s with no sample: the ERG floor (60 W); applied %d W" % int(st["applied_target_w"]))
+	assert_lte(
+		int(st["applied_target_w"]),
+		60,
+		"15 s with no sample: the ERG floor (60 W); applied %d W" % int(st["applied_target_w"])
+	)
 
 
 func test_pause_after_ten_more_seconds_solo_and_afk_in_multiplayer() -> void:
@@ -93,8 +100,11 @@ func test_pause_after_ten_more_seconds_solo_and_afk_in_multiplayer() -> void:
 		rig.run(10.0)
 		dev.silent = true
 		var last := _last_sample_t(dev)
-		var at := rig.run_until(func() -> bool:
-			return not rig.events_named("afk_changed" if mp else "pause_requested").is_empty(), 20.0)
+		var at := rig.run_until(
+			func() -> bool:
+				return not rig.events_named("afk_changed" if mp else "pause_requested").is_empty(),
+			20.0
+		)
 		assert_time(at, last + 13.0, "10 s after coasting began (mp %s)" % str(mp))
 
 
@@ -116,7 +126,11 @@ func test_samples_coming_back_end_it() -> void:
 
 
 func test_no_watchdog_while_the_link_is_down() -> void:
-	for st: String in [TrainerDevice.STATUS_DISCONNECTED, TrainerDevice.STATUS_SCANNING, TrainerDevice.STATUS_CONNECTING]:
+	for st: String in [
+		TrainerDevice.STATUS_DISCONNECTED,
+		TrainerDevice.STATUS_SCANNING,
+		TrainerDevice.STATUS_CONNECTING
+	]:
 		var dev := _quiet()
 		var rig := make_rig({}, dev)
 		rig.start([erg(Wl.WORK, 75.0, 600.0)])
@@ -124,7 +138,9 @@ func test_no_watchdog_while_the_link_is_down() -> void:
 		dev.silent = true
 		dev.link = st
 		rig.run(10.0)
-		assert_false(bool(rig.s()["samples_stale"]), st + ": a dropped link is the reconnect flow's job")
+		assert_false(
+			bool(rig.s()["samples_stale"]), st + ": a dropped link is the reconnect flow's job"
+		)
 		assert_false(rig.gov.is_coasting(), st)
 
 
@@ -149,7 +165,9 @@ func test_the_watchdog_restarts_at_a_reconnect() -> void:
 	var t_back := rig.t
 	rig.gov.on_trainer_reconnected()
 	rig.run(2.9)
-	assert_false(bool(rig.s()["samples_stale"]), "counted from the reconnect, not from the last sample")
+	assert_false(
+		bool(rig.s()["samples_stale"]), "counted from the reconnect, not from the last sample"
+	)
 	var coast_at := rig.run_until(func() -> bool: return rig.gov.is_coasting(), 5.0)
 	assert_time(coast_at, t_back + 6.0)
 
@@ -161,5 +179,11 @@ func test_the_rescue_power_trigger_sees_it_but_coasting_wins() -> void:
 	rig.run(20.0)
 	dev.silent = true
 	rig.run(15.0)
-	assert_true(rig.gov.is_rescue(), "power below 75% of the target for 5 s (from the stale sample)")
-	assert_eq(rig.applied_w(), GovernorClamps.floor_w(200.0), "the coasting floor wins over rescue's 50% (4.6.12)")
+	assert_true(
+		rig.gov.is_rescue(), "power below 75% of the target for 5 s (from the stale sample)"
+	)
+	assert_eq(
+		rig.applied_w(),
+		GovernorClamps.floor_w(200.0),
+		"the coasting floor wins over rescue's 50% (4.6.12)"
+	)

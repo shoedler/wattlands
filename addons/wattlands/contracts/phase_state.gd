@@ -34,10 +34,20 @@ func is_cooldown() -> bool:
 
 func to_dict() -> Dictionary:
 	return {
-		"index": index, "kind": kind, "mode": mode, "elapsed_s": elapsed_s,
-		"duration_s": duration_s, "open_ended": open_ended, "min_s": min_s, "max_s": max_s,
-		"label": label, "planned_pct": planned_pct, "remaining_s": remaining_s, "count": count,
-		"plan_elapsed_s": plan_elapsed_s, "prev_ended_by": prev_ended_by,
+		"index": index,
+		"kind": kind,
+		"mode": mode,
+		"elapsed_s": elapsed_s,
+		"duration_s": duration_s,
+		"open_ended": open_ended,
+		"min_s": min_s,
+		"max_s": max_s,
+		"label": label,
+		"planned_pct": planned_pct,
+		"remaining_s": remaining_s,
+		"count": count,
+		"plan_elapsed_s": plan_elapsed_s,
+		"prev_ended_by": prev_ended_by,
 	}
 
 

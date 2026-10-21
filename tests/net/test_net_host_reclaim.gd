@@ -42,7 +42,10 @@ func test_a_reclaiming_host_resyncs_who_stayed_and_drops_who_left() -> void:
 	h.rejoin()
 	pump()
 	assert_eq(h.state, "hosting")
-	assert_true(U.same(events("host", "peer_left"), [["peer_left", 4, "dropped"]]), str(events("host", "peer_left")))
+	assert_true(
+		U.same(events("host", "peer_left"), [["peer_left", 4, "dropped"]]),
+		str(events("host", "peer_left"))
+	)
 	resynced.sort()
 	assert_eq(resynced, [2, 3], "every session peer still connected is resynced")
 	assert_eq(events("host", "rejoin_requested").size(), 0, "nobody new came back")
@@ -59,14 +62,21 @@ func test_a_client_that_joined_while_the_host_was_away_reaches_the_lobby() -> vo
 	late.join_room(h.room_code)
 	pump()
 	assert_eq(late.state, "joined", "the relay let it in while the host was away")
-	assert_false(h.lobby_slots().any(func(s: PlayerSlot) -> bool: return s.name == "Lou"), "precondition")
+	assert_false(
+		h.lobby_slots().any(func(s: PlayerSlot) -> bool: return s.name == "Lou"), "precondition"
+	)
 	h.rejoin()
 	pump(8)
 	var names: Array = []
 	for s in h.lobby_slots():
 		names.append(s.name)
-	assert_true(names.has("Lou"), "its player_info is re-sent when the host comes back: %s" % str(names))
-	assert_true(late.lobby_slots().any(func(s: PlayerSlot) -> bool: return s.name == "Lou"), "and it sees itself in lobby_state")
+	assert_true(
+		names.has("Lou"), "its player_info is re-sent when the host comes back: %s" % str(names)
+	)
+	assert_true(
+		late.lobby_slots().any(func(s: PlayerSlot) -> bool: return s.name == "Lou"),
+		"and it sees itself in lobby_state"
+	)
 
 
 ## PROF-2: in WKG, p_eff_per_w is 75 / weight. Another client never learns a rider's
@@ -92,9 +102,16 @@ func test_wkg_lobby_state_hides_every_riders_weight_from_the_others() -> void:
 	pump(8)
 	var cy_on_d := player(d, c.local_peer)
 	assert_false(cy_on_d.is_empty())
-	assert_eq(float(cy_on_d["p_eff_per_w"]), 1.0, "another client sees the 75 kg reference, not 75 / 82.5")
+	assert_eq(
+		float(cy_on_d["p_eff_per_w"]), 1.0, "another client sees the 75 kg reference, not 75 / 82.5"
+	)
 	assert_eq(float(player(d, h.local_peer)["p_eff_per_w"]), 1.0, "the host's own entry too")
-	assert_almost_eq(float(player(h, c.local_peer)["p_eff_per_w"]), 75.0 / 82.5, 1e-9, "the host keeps the real value")
+	assert_almost_eq(
+		float(player(h, c.local_peer)["p_eff_per_w"]),
+		75.0 / 82.5,
+		1e-9,
+		"the host keeps the real value"
+	)
 	var own: PlayerSlot = null
 	for s in c.lobby_slots():
 		if s.peer_id == c.local_peer:
@@ -102,4 +119,9 @@ func test_wkg_lobby_state_hides_every_riders_weight_from_the_others() -> void:
 	assert_almost_eq(own.p_eff_per_w, 75.0 / 82.5, 1e-9, "the rider sees its own value")
 	h.set_scaling(Wl.FAIR_FTP)
 	pump(8)
-	assert_almost_eq(float(player(d, c.local_peer)["p_eff_per_w"]), 1.0, 1e-9, "FAIR_FTP: 250 / FTP, which reveals nothing")
+	assert_almost_eq(
+		float(player(d, c.local_peer)["p_eff_per_w"]),
+		1.0,
+		1e-9,
+		"FAIR_FTP: 250 / FTP, which reveals nothing"
+	)

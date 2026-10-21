@@ -21,21 +21,60 @@ func test_eight_riders_stay_under_the_relay_rate_limit_without_losing_requests()
 		hub.advance(Wl.SIM_DT)
 		if step % 2 == 0:
 			seq += 1
-			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
-			h.broadcast(Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "tick": seq * 2, "state": state}))
+			h.broadcast(
+				Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]})
+			)
+			h.broadcast(
+				Protocol.game_msg(
+					"snapshot", {"game_id": "workout", "seq": seq, "tick": seq * 2, "state": state}
+				)
+			)
 		if step % 10 == 0:
 			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}}}))
 			for peer in range(2, 9):
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "request", "id": step * 10 + peer, "directive": {"target_pct": 70.0, "duration_s": 1.0}}))
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive",
+						{
+							"kind": "request",
+							"id": step * 10 + peer,
+							"directive": {"target_pct": 70.0, "duration_s": 1.0}
+						}
+					)
+				)
 				requests_sent += 1
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "course_grade", "grade_pct": 2.0}))
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "cadence_band", "lo_rpm": 80.0, "hi_rpm": 95.0}))
+				h.send_to(
+					peer, Protocol.game_msg("directive", {"kind": "course_grade", "grade_pct": 2.0})
+				)
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive", {"kind": "cadence_band", "lo_rpm": 80.0, "hi_rpm": 95.0}
+					)
+				)
 		if step % 20 == 0:
 			for peer in range(2, 9):
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "power_band", "lo_w": 150.0, "hi_w": 210.0}))
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive", {"kind": "power_band", "lo_w": 150.0, "hi_w": 210.0}
+					)
+				)
 		if step % 40 == 0:
 			for peer in range(2, 9):
-				h.send_to(peer, Protocol.game_msg("phase", {"peer": peer, "index": phases_sent, "start_tick": step, "ended_by": "duration"}))
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"phase",
+						{
+							"peer": peer,
+							"index": phases_sent,
+							"start_tick": step,
+							"ended_by": "duration"
+						}
+					)
+				)
 			phases_sent += 1
 		for s in r:
 			s.tick(Wl.SIM_DT)
@@ -45,7 +84,9 @@ func test_eight_riders_stay_under_the_relay_rate_limit_without_losing_requests()
 		for s in r:
 			s.tick(Wl.SIM_DT)
 	pump()
-	assert_eq(int(hub.error_counts.get("rate_limited", 0)), 0, "8 riders never hit the relay's rate limit")
+	assert_eq(
+		int(hub.error_counts.get("rate_limited", 0)), 0, "8 riders never hit the relay's rate limit"
+	)
 	assert_eq(h.queued_frames(), 0, "the queue drained")
 	var got_requests := 0
 	for i in range(1, 8):
@@ -89,7 +130,9 @@ func test_a_light_load_sends_at_once() -> void:
 	var r := room(["1"])
 	var h := r[0]
 	clear_logs()
-	h.send_to(2, Protocol.game_msg("phase", {"peer": 2, "index": 0, "start_tick": 0, "ended_by": "start"}))
+	h.send_to(
+		2, Protocol.game_msg("phase", {"peer": 2, "index": 0, "start_tick": 0, "ended_by": "start"})
+	)
 	assert_eq(h.queued_frames(), 0)
 	pump()
 	assert_eq(messages("c1", "phase").size(), 1)
@@ -140,17 +183,48 @@ func test_snapshots_keep_arriving_while_the_load_lasts() -> void:
 		hub.advance(Wl.SIM_DT)
 		if step % 2 == 0:
 			seq += 1
-			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
-			h.broadcast(Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "tick": seq * 2, "state": state}))
+			h.broadcast(
+				Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]})
+			)
+			h.broadcast(
+				Protocol.game_msg(
+					"snapshot", {"game_id": "workout", "seq": seq, "tick": seq * 2, "state": state}
+				)
+			)
 		if step % 10 == 0:
 			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}}}))
 			for peer in range(2, 9):
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "request", "id": step * 10 + peer, "directive": {"target_pct": 70.0, "duration_s": 1.0}}))
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "course_grade", "grade_pct": 2.0 + step}))
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "cadence_band", "lo_rpm": 80.0, "hi_rpm": 95.0}))
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive",
+						{
+							"kind": "request",
+							"id": step * 10 + peer,
+							"directive": {"target_pct": 70.0, "duration_s": 1.0}
+						}
+					)
+				)
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive", {"kind": "course_grade", "grade_pct": 2.0 + step}
+					)
+				)
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive", {"kind": "cadence_band", "lo_rpm": 80.0, "hi_rpm": 95.0}
+					)
+				)
 		if step % 20 == 0:
 			for peer in range(2, 9):
-				h.send_to(peer, Protocol.game_msg("directive", {"kind": "power_band", "lo_w": 150.0, "hi_w": 210.0}))
+				h.send_to(
+					peer,
+					Protocol.game_msg(
+						"directive", {"kind": "power_band", "lo_w": 150.0, "hi_w": 210.0}
+					)
+				)
 			qlen.append(h.queued_frames())
 		for s in r:
 			s.tick(Wl.SIM_DT)
@@ -165,11 +239,18 @@ func test_snapshots_keep_arriving_while_the_load_lasts() -> void:
 	for what: String in last.keys():
 		var e: Array = last[what]
 		e[2] = maxf(float(e[2]), end_t - float(e[1]))
-		gut.p("%s: %d arrived at c1 during the load, longest gap %.2f s" % [what, int(e[0]), float(e[2])])
+		gut.p(
+			(
+				"%s: %d arrived at c1 during the load, longest gap %.2f s"
+				% [what, int(e[0]), float(e[2])]
+			)
+		)
 		assert_lt(float(e[2]), 1.5, "%s: c1 gets one at least every 1.5 s during the load" % what)
 	gut.p("host queue every 1 s: %s; stats %s" % [str(qlen), str(h.stats)])
 	assert_gt(int(h.stats["superseded"]), 0, "replaceable frames still give way")
-	assert_lt(qlen.max(), 100, "the backlog stays bounded (at most two frames of each replaceable key)")
+	assert_lt(
+		qlen.max(), 100, "the backlog stays bounded (at most two frames of each replaceable key)"
+	)
 	assert_lte(qlen.slice(-10).max(), qlen.slice(10, 20).max() + 10, "and stops growing")
 	assert_eq(int(hub.error_counts.get("rate_limited", 0)), 0, "and the relay rate-limits nothing")
 	# Order holds: snapshots arrive with rising seq, and each after the event batch of its tick.
@@ -184,7 +265,9 @@ func test_snapshots_keep_arriving_while_the_load_lasts() -> void:
 		if o[0] == "event":
 			last_event = int(o[1])
 		else:
-			assert_lte(int(o[1]), last_event, "snapshot %d never overtakes its event batch" % int(o[1]))
+			assert_lte(
+				int(o[1]), last_event, "snapshot %d never overtakes its event batch" % int(o[1])
+			)
 			assert_gt(int(o[1]), last_snap, "snapshots arrive newest-last")
 			last_snap = int(o[1])
 
@@ -213,7 +296,9 @@ func test_a_queued_snapshot_stops_being_replaced_once_its_chain_is_old() -> void
 	h.set("_tokens_t", 10.0)
 	clear_logs()
 	for n in range(1, 41):  # 2 s of snapshots at 20 Hz, no token to send any
-		h.broadcast(Protocol.game_msg("snapshot", {"game_id": "x", "seq": n, "tick": n, "state": {}}))
+		h.broadcast(
+			Protocol.game_msg("snapshot", {"game_id": "x", "seq": n, "tick": n, "state": {}})
+		)
 		h.tick(Wl.SIM_DT)
 	var seqs: Array[int] = []
 	for e: Array in h.get("_outq"):

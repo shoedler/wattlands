@@ -38,8 +38,19 @@ const DEFAULT_MOCK := "erg:compliance=1.0"
 const SCREENSHOT_ROOT := "build/screenshots"
 ## Flags this tool consumes; they never reach GameSimRunner.parse_args.
 const OWN_FLAGS: Array[String] = [
-	"at", "out", "screenshot-dir", "scene", "frames", "app-screen", "app-game", "settle",
-	"mock-trainer", "profile-dir", "app-role", "app-overlay", "app-riders",
+	"at",
+	"out",
+	"screenshot-dir",
+	"scene",
+	"frames",
+	"app-screen",
+	"app-game",
+	"settle",
+	"mock-trainer",
+	"profile-dir",
+	"app-role",
+	"app-overlay",
+	"app-riders",
 ]
 
 
@@ -50,10 +61,22 @@ const OWN_FLAGS: Array[String] = [
 ## sim_args: PackedStringArray}.
 static func parse(args: PackedStringArray) -> Dictionary:
 	var o := {
-		"error": "", "mode": "", "at": [], "out": "", "frames": DEFAULT_FRAMES,
-		"settle_s": DEFAULT_SETTLE_S, "scene": "", "app_screen": "", "app_game": "workout",
-		"app_role": "client", "app_overlay": "menu", "app_riders": 1,
-		"mock_trainer": DEFAULT_MOCK, "game": "", "content": "", "players": 1,
+		"error": "",
+		"mode": "",
+		"at": [],
+		"out": "",
+		"frames": DEFAULT_FRAMES,
+		"settle_s": DEFAULT_SETTLE_S,
+		"scene": "",
+		"app_screen": "",
+		"app_game": "workout",
+		"app_role": "client",
+		"app_overlay": "menu",
+		"app_riders": 1,
+		"mock_trainer": DEFAULT_MOCK,
+		"game": "",
+		"content": "",
+		"players": 1,
 		"sim_args": PackedStringArray(),
 	}
 	var sim_args := PackedStringArray()
@@ -62,7 +85,7 @@ static func parse(args: PackedStringArray) -> Dictionary:
 		if a == "" or a == "--":
 			continue
 		if not a.begins_with("--"):
-			return _fail(o, "unexpected argument \"%s\" (flags look like --name=value)" % a)
+			return _fail(o, 'unexpected argument "%s" (flags look like --name=value)' % a)
 		var body := a.substr(2)
 		var eq := body.find("=")
 		var key := body if eq < 0 else body.substr(0, eq)
@@ -76,7 +99,7 @@ static func parse(args: PackedStringArray) -> Dictionary:
 					o["content"] = val
 				"players":
 					if not val.is_valid_int() or int(val) < 1:
-						return _fail(o, "--players needs a whole number >= 1, got \"%s\"" % val)
+						return _fail(o, '--players needs a whole number >= 1, got "%s"' % val)
 					o["players"] = int(val)
 			continue
 		match key:
@@ -84,7 +107,9 @@ static func parse(args: PackedStringArray) -> Dictionary:
 				for part in val.split(",", false):
 					var p := part.strip_edges()
 					if not p.is_valid_float() or float(p) < 0.0:
-						return _fail(o, "--at needs sim seconds >= 0 separated by commas, got \"%s\"" % val)
+						return _fail(
+							o, '--at needs sim seconds >= 0 separated by commas, got "%s"' % val
+						)
 					if not at.has(float(p)):
 						at.append(float(p))
 			"out", "screenshot-dir":
@@ -92,34 +117,52 @@ static func parse(args: PackedStringArray) -> Dictionary:
 					return _fail(o, "--%s needs a directory" % key)
 				o["out"] = val
 			"scene":
-				if not (val.begins_with("res://") and (val.ends_with(".tscn") or val.ends_with(".scn"))):
-					return _fail(o, "--scene needs a res:// path to a .tscn or .scn file, got \"%s\"" % val)
+				if not (
+					val.begins_with("res://") and (val.ends_with(".tscn") or val.ends_with(".scn"))
+				):
+					return _fail(
+						o, '--scene needs a res:// path to a .tscn or .scn file, got "%s"' % val
+					)
 				o["scene"] = val
 			"frames":
 				if not val.is_valid_int() or int(val) < 1:
-					return _fail(o, "--frames needs a whole number >= 1, got \"%s\"" % val)
+					return _fail(o, '--frames needs a whole number >= 1, got "%s"' % val)
 				o["frames"] = int(val)
 			"settle":
 				if not val.is_valid_float() or float(val) < 0.0:
-					return _fail(o, "--settle needs seconds >= 0, got \"%s\"" % val)
+					return _fail(o, '--settle needs seconds >= 0, got "%s"' % val)
 				o["settle_s"] = float(val)
 			"app-screen":
 				if not APP_SCREENS.has(val):
-					return _fail(o, "--app-screen must be one of %s, got \"%s\"" % [", ".join(APP_SCREENS), val])
+					return _fail(
+						o,
+						'--app-screen must be one of %s, got "%s"' % [", ".join(APP_SCREENS), val]
+					)
 				o["app_screen"] = val
 			"app-game":
 				o["app_game"] = val
 			"app-role":
 				if not APP_ROLES.has(val):
-					return _fail(o, "--app-role must be one of %s, got \"%s\"" % [", ".join(APP_ROLES), val])
+					return _fail(
+						o, '--app-role must be one of %s, got "%s"' % [", ".join(APP_ROLES), val]
+					)
 				o["app_role"] = val
 			"app-overlay":
 				if not APP_OVERLAYS.has(val):
-					return _fail(o, "--app-overlay must be one of %s, got \"%s\"" % [", ".join(APP_OVERLAYS), val])
+					return _fail(
+						o,
+						'--app-overlay must be one of %s, got "%s"' % [", ".join(APP_OVERLAYS), val]
+					)
 				o["app_overlay"] = val
 			"app-riders":
 				if not val.is_valid_int() or int(val) < 1 or int(val) > MAX_RESULTS_RIDERS:
-					return _fail(o, "--app-riders needs a whole number from 1 to %d, got \"%s\"" % [MAX_RESULTS_RIDERS, val])
+					return _fail(
+						o,
+						(
+							'--app-riders needs a whole number from 1 to %d, got "%s"'
+							% [MAX_RESULTS_RIDERS, val]
+						)
+					)
 				o["app_riders"] = int(val)
 			"mock-trainer":
 				o["mock_trainer"] = val
@@ -133,7 +176,13 @@ static func parse(args: PackedStringArray) -> Dictionary:
 		if str(o[m]) != "":
 			modes += 1
 	if modes != 1:
-		return _fail(o, "give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=%s" % "|".join(APP_SCREENS))
+		return _fail(
+			o,
+			(
+				"give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=%s"
+				% "|".join(APP_SCREENS)
+			)
+		)
 	if str(o["game"]) != "":
 		o["mode"] = "game"
 		if at.is_empty():

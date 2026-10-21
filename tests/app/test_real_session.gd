@@ -39,18 +39,29 @@ func _go_real(f: AppFixture) -> LocalRider:
 func test_a_solo_session_on_the_real_game_host_reaches_the_results() -> void:
 	fx.give_profile(200.0)
 	var rider := _go_real(fx)
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}
+		)
+		as AppSessionScreen
+	)
 	assert_eq(s.error, "", "the session set up")
 	assert_true(s.host is GameHost and not (s.host is FakeHost), "the real GameHost")
 	if s.host == null:
 		return
 	assert_eq(s.host.state, "running")
-	assert_true(fx.trainer.is_external_tick(), "the GameHost ticks the rider, TrainerService does not")
+	assert_true(
+		fx.trainer.is_external_tick(), "the GameHost ticks the rider, TrainerService does not"
+	)
 	assert_same(s.local_rider(), rider)
-	assert_gt(s.top_layer.layer, HudLayer.LAYER, "the overlay and the panic button draw above the HUD")
+	assert_gt(
+		s.top_layer.layer, HudLayer.LAYER, "the overlay and the panic button draw above the HUD"
+	)
 	assert_same(s.panic_button.get_parent(), s.top_root)
 	assert_same(s.overlay.get_parent(), s.top_root)
-	assert_true(rider.recorder != null and rider.recorder.is_recording(), "the ride records from the start")
+	assert_true(
+		rider.recorder != null and rider.recorder.is_recording(), "the ride records from the start"
+	)
 	var states: Array[String] = []
 	s.host.state_changed.connect(func(st: String) -> void: states.append(st))
 	var n := 0
@@ -58,7 +69,10 @@ func test_a_solo_session_on_the_real_game_host_reaches_the_results() -> void:
 		s.host.step()
 		n += 1
 	assert_true(s.finished, "results after %d steps" % n)
-	assert_true(states.has("cooldown") and states.has("results"), "cool-down, then results: %s" % str(states))
+	assert_true(
+		states.has("cooldown") and states.has("results"),
+		"cool-down, then results: %s" % str(states)
+	)
 	assert_eq(fx.app.state, "results")
 	var p: Dictionary = fx.app.params
 	assert_not_null(p.get("results"), "GameResults reach the results screen")
@@ -66,8 +80,12 @@ func test_a_solo_session_on_the_real_game_host_reaches_the_results() -> void:
 	assert_true(fit != "" and FileAccess.file_exists(fit), "the FIT was saved: %s" % fit)
 	var laps: Array = (p.get("summary", {}) as Dictionary).get("laps", [])
 	assert_eq(laps.size(), 4, "three e2e phases and the cool-down")
-	assert_almost_eq(float((p["summary"] as Dictionary).get("duration_s", 0.0)), 300.0, 1.0,
-		"the whole session recorded, nothing from menu time")
+	assert_almost_eq(
+		float((p["summary"] as Dictionary).get("duration_s", 0.0)),
+		300.0,
+		1.0,
+		"the whole session recorded, nothing from menu time"
+	)
 
 
 ## The scripted-peer flow of docs/ARCHITECTURE.md in one process: a host and a client hosting and
@@ -136,16 +154,28 @@ func test_scripted_host_and_client_play_a_session_over_loopback() -> void:
 	for i in 2:
 		var p := peers[i]
 		var who := "host" if i == 0 else "client"
-		assert_eq(p.exit_reason, "complete", "%s: %s after %d steps; out %s" % [who, p.exit_reason, n, str(lines[who])])
+		assert_eq(
+			p.exit_reason,
+			"complete",
+			"%s: %s after %d steps; out %s" % [who, p.exit_reason, n, str(lines[who])]
+		)
 		assert_eq(p.exit_code, AppScriptedPeer.EXIT_OK, who)
-		assert_true((lines[who] as Array).has("WATTLANDS_STATE running"), "%s ran the session" % who)
-		assert_true((lines[who] as Array).has("WATTLANDS_STATE cooldown"), "%s saw the cool-down" % who)
+		assert_true(
+			(lines[who] as Array).has("WATTLANDS_STATE running"), "%s ran the session" % who
+		)
+		assert_true(
+			(lines[who] as Array).has("WATTLANDS_STATE cooldown"), "%s saw the cool-down" % who
+		)
 		assert_true((lines[who] as Array).has("WATTLANDS_DONE complete"), who)
 		assert_not_null(p.results, "%s got the results" % who)
-		assert_true(p.fit_path != "" and FileAccess.file_exists(p.fit_path), "%s saved its FIT" % who)
+		assert_true(
+			p.fit_path != "" and FileAccess.file_exists(p.fit_path), "%s saved its FIT" % who
+		)
 	assert_true((lines["host"] as Array).has("WATTLANDS_ROOM %s" % code))
 	assert_ne(peers[0].fit_path, peers[1].fit_path, "each peer its own ride")
-	var client_states: Array = (peers[1].host.players() if peers[1].host != null else []).map(func(s: PlayerSlot) -> int: return s.peer_id)
+	var client_states: Array = (peers[1].host.players() if peers[1].host != null else []).map(
+		func(s: PlayerSlot) -> int: return s.peer_id
+	)
 	assert_eq(client_states.size(), 2, "the client's GameHost got both players from session_start")
 	assert_eq(host_fx.quits, [0])
 	assert_eq(client_fx.quits, [0])
@@ -186,20 +216,37 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 	host_prof.cp_w = 220.0
 	host_prof.ftp_verified = true
 	host_prof.created = true
-	host_net.set_local_player_info(AppLobbyModel.player_info(host_prof, Wl.FAIR_FTP, {}, games, "ready"))
+	host_net.set_local_player_info(
+		AppLobbyModel.player_info(host_prof, Wl.FAIR_FTP, {}, games, "ready")
+	)
 	host_net.host_room(8)
-	assert_true(_pump([host_net], func() -> bool: return host_net.room_code != "" and host_net.local_peer != 0), "the host has a room")
+	assert_true(
+		_pump(
+			[host_net], func() -> bool: return host_net.room_code != "" and host_net.local_peer != 0
+		),
+		"the host has a room"
+	)
 	host_net.set_game("workout", str(registry.manifest("workout").get("version", "")), "e2e")
 	host_net.set_ready(true)
 	fx.give_profile(200.0, "Guest")
 	_go_real(fx)
 	var cnet := _loop_net(hub, "ClientNet")
 	fx.services.net = cnet
-	cnet.set_local_player_info(AppLobbyModel.player_info(fx.settings.profile, Wl.FAIR_FTP, {}, games, "ready"))
+	cnet.set_local_player_info(
+		AppLobbyModel.player_info(fx.settings.profile, Wl.FAIR_FTP, {}, games, "ready")
+	)
 	cnet.join_room(host_net.room_code)
-	assert_true(_pump([host_net, cnet], func() -> bool: return cnet.local_peer != 0 and host_net.peers().size() == 2), "the client joined")
+	assert_true(
+		_pump(
+			[host_net, cnet],
+			func() -> bool: return cnet.local_peer != 0 and host_net.peers().size() == 2
+		),
+		"the client joined"
+	)
 	cnet.set_ready(true)
-	assert_true(_pump([host_net, cnet], func() -> bool: return host_net.all_ready()), "everyone ready")
+	assert_true(
+		_pump([host_net, cnet], func() -> bool: return host_net.all_ready()), "everyone ready"
+	)
 	host_net.mark_started()
 	var players := host_net.lobby_slots()
 	var mine: PlayerSlot = null
@@ -214,24 +261,51 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 	var hr := LocalRider.new()
 	add_child_autofree(hr)
 	hr.add_child(hdev)
-	hr.setup(mine.peer_id, host_prof, mine, hdev, {"multiplayer": true, "record": false, "bus": hbus})
+	hr.setup(
+		mine.peer_id, host_prof, mine, hdev, {"multiplayer": true, "record": false, "bus": hbus}
+	)
 	var gh := GameHost.new()
 	add_child_autofree(gh)
-	assert_eq(gh.setup({"game_id": "workout", "content_id": "e2e", "seed": 3, "role": Wl.HOST, "players": players,
-		"local_riders": {mine.peer_id: hr}, "local_peer": mine.peer_id, "net": host_net, "bus": hbus,
-		"registry": registry, "options": {}, "scaling_mode": Wl.FAIR_FTP, "headless": true, "realtime": false,
-		"record_rides": false, "report": false, "input_router": null}), "")
+	assert_eq(
+		gh.setup(
+			{
+				"game_id": "workout",
+				"content_id": "e2e",
+				"seed": 3,
+				"role": Wl.HOST,
+				"players": players,
+				"local_riders": {mine.peer_id: hr},
+				"local_peer": mine.peer_id,
+				"net": host_net,
+				"bus": hbus,
+				"registry": registry,
+				"options": {},
+				"scaling_mode": Wl.FAIR_FTP,
+				"headless": true,
+				"realtime": false,
+				"record_rides": false,
+				"report": false,
+				"input_router": null
+			}
+		),
+		""
+	)
 	# Like the lobby screen: the session screen opens in the signal chain of session_start, so
 	# its GameHost listens before the plan that follows in the same poll.
 	var s := AppSessionScreen.new()
 	s.render_headless = true
 	var opened := [false]
-	cnet.game_message.connect(func(_from: int, d: Dictionary) -> void:
-		if str(d.get("type", "")) == "session_start" and not opened[0]:
-			opened[0] = true
-			open_screen(s, {"role": Wl.CLIENT, "session_start": d.duplicate(true)}))
+	cnet.game_message.connect(
+		func(_from: int, d: Dictionary) -> void:
+			if str(d.get("type", "")) == "session_start" and not opened[0]:
+				opened[0] = true
+				open_screen(s, {"role": Wl.CLIENT, "session_start": d.duplicate(true)})
+	)
 	gh.start()
-	assert_true(_pump([host_net, cnet], func() -> bool: return opened[0]), "session_start reached the client")
+	assert_true(
+		_pump([host_net, cnet], func() -> bool: return opened[0]),
+		"session_start reached the client"
+	)
 	if not opened[0]:
 		s.free()
 		return
@@ -245,9 +319,17 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 	assert_not_null(hud, "the client's HUD was built from session_start")
 	if hud == null:
 		return
-	assert_eq(hud.reserved_corner(HudSpec.BOTTOM_RIGHT), s.panic_button_size(), "the panic corner is kept clear")
+	assert_eq(
+		hud.reserved_corner(HudSpec.BOTTOM_RIGHT),
+		s.panic_button_size(),
+		"the panic corner is kept clear"
+	)
 	assert_eq(s.panic_button.text, AppScreen.t("APP_PANIC_BUTTON"))
-	assert_eq((s.panic_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color, AppSessionScreen.PANIC_BG, "the panic button is red")
+	assert_eq(
+		(s.panic_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color,
+		AppSessionScreen.PANIC_BG,
+		"the panic button is red"
+	)
 	var n := 0
 	while s.host.clock.platform_time() < 100.0 and n < 3000:
 		gh.step()
@@ -260,13 +342,22 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 	assert_true(gear != null and gear.visible, "the gear shows in SIM")
 	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
 	var bottom := box.position.y + box.size.y
-	assert_lte(bottom, 1080.0 - WlTheme.MARGIN_PX - s.panic_button_size().y - WlTheme.GAP_PX + 0.5, "the gear sits above the panic button")
+	assert_lte(
+		bottom,
+		1080.0 - WlTheme.MARGIN_PX - s.panic_button_size().y - WlTheme.GAP_PX + 0.5,
+		"the gear sits above the panic button"
+	)
 	s.open_menu()
 	assert_true(s.overlay.visible and s.overlay_scrim.visible, "the overlay and its scrim show")
 	assert_gt(s.top_layer.layer, hud.layer, "the overlay and the panic button draw above the HUD")
 	var kids := s.top_root.get_children()
-	assert_true(kids.find(s.overlay_scrim) < kids.find(s.overlay) and kids.find(s.overlay) < kids.find(s.panic_button),
-		"scrim, then the overlay, then the panic button")
+	assert_true(
+		(
+			kids.find(s.overlay_scrim) < kids.find(s.overlay)
+			and kids.find(s.overlay) < kids.find(s.panic_button)
+		),
+		"scrim, then the overlay, then the panic button"
+	)
 	assert_false(s.overlay_detail.visible, "no empty detail line in the ride menu")
 
 
@@ -289,7 +380,12 @@ func test_the_screen_owns_pause_and_the_overlay_menu() -> void:
 	_go_real(fx)
 	var router := _real_router()
 	fx.services.input = router
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}
+		)
+		as AppSessionScreen
+	)
 	assert_not_null(s.session_input, "the GameHost reads input through the screen")
 	if s.host == null:
 		return
@@ -314,21 +410,31 @@ func test_session_input_filters_for_the_game_host() -> void:
 	var router := _real_router()
 	var owned := [false]
 	var menu_rider: LocalRider = autofree(FakeRider.new())
-	var si := AppSessionInput.create(router, func() -> bool: return owned[0], func() -> LocalRider: return menu_rider)
+	var si := AppSessionInput.create(
+		router, func() -> bool: return owned[0], func() -> LocalRider: return menu_rider
+	)
 	add_child_autofree(si)
 	router.inject_action(&"pause")
 	router.inject_action(&"ability_1")
 	router.inject_action(&"confirm")
-	assert_eq(si.take_actions(), [&"ability_1", &"confirm"] as Array[StringName], "pause is the screen's")
+	assert_eq(
+		si.take_actions(), [&"ability_1", &"confirm"] as Array[StringName], "pause is the screen's"
+	)
 	owned[0] = true
 	router.inject_action(&"confirm")
 	router.inject_action(&"panic")
 	router.inject_action(&"down")
-	assert_eq(si.take_actions(), [&"panic"] as Array[StringName], "the overlay owns input; panic always passes")
+	assert_eq(
+		si.take_actions(),
+		[&"panic"] as Array[StringName],
+		"the overlay owns input; panic always passes"
+	)
 	router.inject_gesture(Wl.G_SURGE)
 	assert_eq(si.take_gestures(), [Wl.G_SURGE] as Array[StringName])
 	var session_rider: LocalRider = autofree(FakeRider.new())
 	si.attach_rider(session_rider)
 	assert_same(router.attached_rider(), session_rider)
 	si.detach_rider()
-	assert_same(router.attached_rider(), menu_rider, "menus after the session get pedal gestures again")
+	assert_same(
+		router.attached_rider(), menu_rider, "menus after the session get pedal gestures again"
+	)

@@ -44,7 +44,12 @@ func test_builds_from_a_fixture_snapshot() -> void:
 	assert_eq(int(markers.back()["peer"]), 2, "the local rider is drawn last")
 	var me := view.marker(2)
 	assert_almost_eq(float(me["x"]), WorkoutRideView.RIDER_X, 0.001)
-	assert_almost_eq(float(view.marker(1)["x"]), WorkoutRideView.RIDER_X + 10.0, 0.001, "20 m ahead at 2 m per px")
+	assert_almost_eq(
+		float(view.marker(1)["x"]),
+		WorkoutRideView.RIDER_X + 10.0,
+		0.001,
+		"20 m ahead at 2 m per px"
+	)
 	assert_almost_eq(float(view.marker(-1)["x"]), WorkoutRideView.RIDER_X + 110.0, 0.001)
 	var far := view.marker(-2)
 	assert_eq(int(far["edge"]), 1, "off screen to the right")
@@ -99,19 +104,25 @@ func test_the_road_follows_the_course_in_rolling_road() -> void:
 	U.ride(g, Callable(), 100)
 	var flat := g.make_view() as WorkoutRideView
 	add_child_autofree(flat)
-	for y in (flat.model["road"] as PackedFloat64Array):
+	for y in flat.model["road"] as PackedFloat64Array:
 		assert_eq(y, WorkoutRideView.ROAD_Y, "flat outside course phases")
 
 
 func test_interval_blocks_on_the_ground() -> void:
 	var view := _client_view()
 	var blocks: Array = view.model["blocks"]
-	assert_eq(blocks.size(), 2, "the warm-up and the rolling road are on screen; the cool-down is 14 min ahead")
+	assert_eq(
+		blocks.size(),
+		2,
+		"the warm-up and the rolling road are on screen; the cool-down is 14 min ahead"
+	)
 	assert_eq(blocks[1]["color"], WorkoutArt.ZONE_COURSE)
 	assert_true(bool(blocks[1]["hatched"]))
 	# Now (400 s) sits under the local rider: the rolling road started 100 s ago.
 	var road_pts: PackedVector2Array = blocks[1]["points"]
-	assert_almost_eq(road_pts[0].x, WorkoutRideView.RIDER_X - 100.0 * WorkoutRideView.STRIP_PX_PER_S + 1.0, 0.001)
+	assert_almost_eq(
+		road_pts[0].x, WorkoutRideView.RIDER_X - 100.0 * WorkoutRideView.STRIP_PX_PER_S + 1.0, 0.001
+	)
 	var warm: PackedVector2Array = blocks[0]["points"]
 	assert_lt(warm[1].y, warm[0].y, "the warm-up ramp rises")
 
@@ -121,13 +132,20 @@ func test_parallax_scrolls_with_the_local_rider() -> void:
 	var d := 5180.0
 	assert_true(view.near_trees is ParallaxStrip, "world2d's ParallaxStrip (BRIEF 3.9)")
 	assert_almost_eq(view.near_trees.world_x, d * WorkoutRideView.VISUAL_PX_PER_M, 0.01)
-	assert_eq(view.near_trees.scroll(), roundf(d * WorkoutRideView.VISUAL_PX_PER_M * 0.5), "factor 0.5, whole art pixels")
+	assert_eq(
+		view.near_trees.scroll(),
+		roundf(d * WorkoutRideView.VISUAL_PX_PER_M * 0.5),
+		"factor 0.5, whole art pixels"
+	)
 	assert_eq(view.sky.scroll(), 0.0, "the sky never moves")
 	assert_eq(float(view.sky.visible_tiles()[0]["x"]), 0.0)
 	var tiles: Array[Dictionary] = view.near_trees.visible_tiles()
 	assert_true(float(tiles[0]["x"]) <= 0.0)
 	var last: Dictionary = tiles[tiles.size() - 1]
-	assert_true(float(last["x"]) + view.near_trees.tile_width() >= float(WorkoutArt.W), "the strip covers the 640 px view")
+	assert_true(
+		float(last["x"]) + view.near_trees.tile_width() >= float(WorkoutArt.W),
+		"the strip covers the 640 px view"
+	)
 
 
 func test_the_view_never_changes_the_state() -> void:

@@ -19,7 +19,9 @@ func before_each() -> void:
 func _mock(spec: String, ftp: float = FTP, options: Dictionary = {}) -> MockTrainer:
 	var m: MockTrainer = autofree(MockTrainer.from_spec(spec, ftp, options))
 	m.sample_received.connect(func(s: TrainerSample) -> void: _samples.append(s))
-	m.control_response.connect(func(op: int, res: int) -> void: _responses.append(Vector2i(op, res)))
+	m.control_response.connect(
+		func(op: int, res: int) -> void: _responses.append(Vector2i(op, res))
+	)
 	return m
 
 
@@ -35,6 +37,7 @@ func _run_to(m: MockTrainer, t: float) -> void:
 
 # --- fatigue --------------------------------------------------------------------------
 
+
 func test_fatigue_fails_150_pct_within_a_few_minutes() -> void:
 	var m := _mock("erg")
 	m.set_target_power(roundi(1.5 * FTP))
@@ -49,7 +52,9 @@ func test_fatigue_fails_150_pct_within_a_few_minutes() -> void:
 	assert_almost_eq(m.instantaneous_power_w(), MockTrainer.EXHAUSTED_CP_FRACTION * FTP, 2.0)
 	for s in _samples:
 		if s.t > 10.0 and s.t < exhausted_at - 1.0:
-			assert_almost_eq(s.power_w, 375.0, 2.0, "holds the target until W' is gone (t %.1f)" % s.t)
+			assert_almost_eq(
+				s.power_w, 375.0, 2.0, "holds the target until W' is gone (t %.1f)" % s.t
+			)
 
 
 func test_sub_cp_targets_hold_for_twenty_minutes() -> void:
@@ -77,7 +82,9 @@ func test_exhaustion_recovers_after_easier_riding() -> void:
 	assert_gt(m.wbal_j(), 0.1 * MockTrainer.DEFAULT_WPRIME_J)
 	m.set_target_power(375)
 	_run(m, 10.0)
-	assert_almost_eq(m.instantaneous_power_w(), 375.0, 4.0, "can hold a hard target again for a while")
+	assert_almost_eq(
+		m.instantaneous_power_w(), 375.0, 4.0, "can hold a hard target again for a while"
+	)
 
 
 func test_cp_and_wprime_options() -> void:
@@ -106,6 +113,7 @@ func test_vo2_intervals_never_exhaust_a_compliant_rider() -> void:
 
 
 # --- sprints, cadence lag and speed ---------------------------------------------------
+
 
 func test_cadence_lags_after_a_sprint() -> void:
 	var m := _mock("erg", 200.0)
@@ -164,7 +172,12 @@ func test_sim_speed_comes_from_the_speed_model() -> void:
 	assert_almost_eq(m.speed_kmh(), climb, 0.02 * climb, "slower on 5%")
 	m.set_simulation(3.0, 5.0, 0.004, 0.51)
 	_run(m, 120.0)
-	var windy := SpeedModel.steady_state_speed(225.0, 5.0, 83.0, SpeedModel.DEFAULT_CDA, SpeedModel.DEFAULT_CRR, 3.0) * 3.6
+	var windy := (
+		SpeedModel.steady_state_speed(
+			225.0, 5.0, 83.0, SpeedModel.DEFAULT_CDA, SpeedModel.DEFAULT_CRR, 3.0
+		)
+		* 3.6
+	)
 	assert_almost_eq(m.speed_kmh(), windy, 0.02 * windy, "a headwind slows the rider")
 	assert_lt(windy, climb)
 
@@ -191,6 +204,7 @@ func test_switching_to_sim_starts_from_the_flywheel_speed() -> void:
 
 # --- notifications --------------------------------------------------------------------
 
+
 func test_dropouts_skip_notifications_on_the_same_schedule() -> void:
 	var plain := _times("erg", {"seed": 13})
 	var gappy := _times("erg", {"seed": 13, "dropouts": true})
@@ -201,7 +215,11 @@ func test_dropouts_skip_notifications_on_the_same_schedule() -> void:
 	for i in range(1, gappy.size()):
 		biggest = maxf(biggest, gappy[i] - gappy[i - 1])
 	assert_gt(biggest, MockTrainer.DROPOUT_MIN_S)
-	assert_lt(biggest, MockTrainer.DROPOUT_MAX_S + 2.0 * MockTrainer.SAMPLE_MAX_S + 2.0 * DT, "gaps never chain")
+	assert_lt(
+		biggest,
+		MockTrainer.DROPOUT_MAX_S + 2.0 * MockTrainer.SAMPLE_MAX_S + 2.0 * DT,
+		"gaps never chain"
+	)
 	var m := _mock("erg", FTP, {"seed": 13, "dropouts": true})
 	_run(m, 600.0)
 	assert_gt(m.dropout_count(), 3)
@@ -233,6 +251,7 @@ func _times(spec: String, options: Dictionary) -> Array[float]:
 
 # --- keyboard, determinism, control ---------------------------------------------------
 
+
 func test_keyboard_offsets() -> void:
 	var m := _mock("erg")
 	assert_eq(m.keyboard_offsets(), {"power_w": 0.0, "cadence_rpm": 0.0}, "keyboard off by default")
@@ -260,7 +279,9 @@ func test_seeded_determinism_with_every_component() -> void:
 	assert_eq(coarse.size(), a.size(), "tick size does not matter (fixed internal steps)")
 	for i in mini(coarse.size(), a.size()):
 		for key: String in ["t", "power_w", "cadence_rpm", "speed_kmh"]:
-			assert_almost_eq(float(coarse[i][key]), float(a[i][key]), 1e-6, "sample %d %s" % [i, key])
+			assert_almost_eq(
+				float(coarse[i][key]), float(a[i][key]), 1e-6, "sample %d %s" % [i, key]
+			)
 	opts["seed"] = 43
 	assert_ne(_dicts(spec, opts, 1.0), a, "another seed, another run")
 
@@ -288,15 +309,22 @@ func test_simulated_control_loss_and_refusals() -> void:
 	assert_eq(_responses, [Vector2i(MockTrainer.OP_SET_TARGET_POWER, 0x04)] as Array[Vector2i])
 	m.response_result = MockTrainer.RESULT_SUCCESS
 	m.simulate_control_lost()
-	assert_signal_emitted_with_parameters(m, "status_changed", [TrainerDevice.STATUS_CONTROL_LOST, FtmsClient.DETAIL_ANOTHER_APP])
+	assert_signal_emitted_with_parameters(
+		m, "status_changed", [TrainerDevice.STATUS_CONTROL_LOST, FtmsClient.DETAIL_ANOTHER_APP]
+	)
 	assert_signal_emitted_with_parameters(m, "machine_status", [0xFF, PackedByteArray()])
 	assert_false(m.is_ready())
 	assert_eq(m.status(), TrainerDevice.STATUS_CONTROL_LOST)
 	m.set_target_power(160)
 	m.tick(DT)
-	assert_eq(_responses.back(), Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_CONTROL_NOT_PERMITTED))
+	assert_eq(
+		_responses.back(),
+		Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_CONTROL_NOT_PERMITTED)
+	)
 	m.restore_control()
 	assert_true(m.is_ready())
 	m.set_target_power(170)
 	m.tick(DT)
-	assert_eq(_responses.back(), Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS))
+	assert_eq(
+		_responses.back(), Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS)
+	)

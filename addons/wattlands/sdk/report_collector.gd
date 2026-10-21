@@ -35,10 +35,24 @@ func event(t: float, pt: float, type: String, fields: Dictionary = {}) -> void:
 
 
 ## A directive call as the game made it, with the host's verdict.
-func directive_requested(peer: int, id: int, kind: String, requested: Dictionary, t: float, accepted: bool, reason: String) -> void:
+func directive_requested(
+	peer: int,
+	id: int,
+	kind: String,
+	requested: Dictionary,
+	t: float,
+	accepted: bool,
+	reason: String
+) -> void:
 	var d := {
-		"id": id, "peer": peer, "t": t, "kind": kind, "requested": requested.duplicate(true),
-		"accepted": accepted, "reason": reason, "applied": null,
+		"id": id,
+		"peer": peer,
+		"t": t,
+		"kind": kind,
+		"requested": requested.duplicate(true),
+		"accepted": accepted,
+		"reason": reason,
+		"applied": null,
 	}
 	directives.append(d)
 	if id != 0:

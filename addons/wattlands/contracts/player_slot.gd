@@ -46,12 +46,23 @@ func apply_look(p_slot_index: int) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"peer_id": peer_id, "name": name, "slot_index": slot_index,
-		"color": color.to_html(false), "shape": shape, "pattern": pattern, "hollow": hollow,
-		"ftp": ftp, "ftp_verified": ftp_verified, "scaling_mode": scaling_mode,
-		"p_eff_per_w": p_eff_per_w, "rider_mass_kg": rider_mass_kg,
-		"preferred_cadence_rpm": preferred_cadence_rpm, "haptics_on": haptics_on,
-		"haptic_intensity": haptic_intensity, "autopilot": autopilot, "is_bot": is_bot,
+		"peer_id": peer_id,
+		"name": name,
+		"slot_index": slot_index,
+		"color": color.to_html(false),
+		"shape": shape,
+		"pattern": pattern,
+		"hollow": hollow,
+		"ftp": ftp,
+		"ftp_verified": ftp_verified,
+		"scaling_mode": scaling_mode,
+		"p_eff_per_w": p_eff_per_w,
+		"rider_mass_kg": rider_mass_kg,
+		"preferred_cadence_rpm": preferred_cadence_rpm,
+		"haptics_on": haptics_on,
+		"haptic_intensity": haptic_intensity,
+		"autopilot": autopilot,
+		"is_bot": is_bot,
 		"options": options.duplicate(true),
 	}
 

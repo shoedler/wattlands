@@ -4,7 +4,7 @@
 // the bash shim runs Godot through tools/godot.sh, the PowerShell shim through tools/godot.ps1.
 //
 //   tools/run_tests [--only=<step,...>] [--skip=<step,...>] [--min-count=<n>] [--gdir=<res path>]
-//                   [--gut-arg=<arg>]... [--strict-lint] [--no-lint] [--project=<dir>]
+//                   [--gut-arg=<arg>]... [--no-lint] [--project=<dir>]
 //
 // Steps run in STEPS order. To add a step (BRIEF 7.3 scaffold check, simulation, FIT, e2e), fill in
 // its function below; it returns {status: 'PASS'|'FAIL'|'SKIP'|'WARN', note}. Only FAIL fails the run.
@@ -44,8 +44,9 @@ const USAGE = `usage: tools/run_tests [options]      (tools/run_tests.ps1 in Pow
   --min-count=<n>      required GUT test count instead of the previous green count
   --gdir=<res path>    narrower GUT run (default res://tests); does not compare or update the green count
   --gut-arg=<arg>      extra GUT argument (repeatable); also makes the run narrow
-  --strict-lint        gdlint / gdformat findings fail the static step (default: reported only)
-  --no-lint            skip gdlint / gdformat
+  --no-lint            skip gdlint / gdformat --check (otherwise any finding fails the static step
+                       whenever gdtoolkit is available; gdlint reads ./gdlintrc)
+  --strict-lint        no-op, kept for compatibility (lint is always fatal)
   --project=<dir>      project root (default: this checkout)`;
 
 // ---------------------------------------------------------------- options
@@ -62,7 +63,6 @@ export function parseArgs(argv) {
     minCount: null,
     gdir: null,
     gutArgs: [],
-    strictLint: false,
     noLint: false,
     project: REPO,
     shell: process.platform === 'win32' ? 'ps' : 'bash',
@@ -83,7 +83,9 @@ export function parseArgs(argv) {
       o.minCount = n;
     } else if (key === '--gdir' && val) o.gdir = val;
     else if (key === '--gut-arg' && val) o.gutArgs.push(val);
-    else if (key === '--strict-lint' && val === null) o.strictLint = true;
+    else if (key === '--strict-lint' && val === null) {
+      // No-op since lint became part of the gate (docs/decisions/lead.md, 2026-10-21).
+    }
     else if (key === '--no-lint' && val === null) o.noLint = true;
     else if (key === '--project' && val) o.project = path.resolve(val);
     else if (key === '--shell' && (val === 'bash' || val === 'ps')) o.shell = val;
@@ -316,17 +318,35 @@ async function stepStatic(o) {
   return { status: failed ? 'FAIL' : 'PASS', note: notes.join('; ') };
 }
 
+// gdformat's output differs between gdtoolkit releases, so the fatal format check uses the pinned
+// release: gdlint and gdformat on PATH count only when both report it; otherwise uvx fetches it.
+export const GDTOOLKIT_VERSION = '4.5.0';
+
 function findGdtoolkit() {
   const probe = (exe, args) => {
     const r = spawnSync(exe, args, { encoding: 'utf8', timeout: 90_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-    return r.status === 0;
+    return r.status === 0 && `${r.stdout ?? ''}`.includes(GDTOOLKIT_VERSION);
   };
-  if (probe('gdlint', ['--version'])) return { lint: ['gdlint'], format: ['gdformat'] };
-  const from = ['--from', 'gdtoolkit==4.5.0'];
+  if (probe('gdlint', ['--version']) && probe('gdformat', ['--version'])) return { lint: ['gdlint'], format: ['gdformat'] };
+  const from = ['--from', `gdtoolkit==${GDTOOLKIT_VERSION}`];
   if (probe('uvx', [...from, 'gdlint', '--version'])) {
     return { lint: ['uvx', ...from, 'gdlint'], format: ['uvx', ...from, 'gdformat'] };
   }
   return null;
+}
+
+/**
+ * The lint verdict from the gdlint and gdformat --check runs ({code, text} each). Any gdlint
+ * problem or file gdformat would change fails the static step. Returns {fail, note}.
+ */
+export function evaluateLint(lint, fmt) {
+  const lintProblems = /(\d+) problems? found/.exec(lint.text);
+  const lintNote = lint.code === 0 ? 'gdlint clean' : `gdlint ${lintProblems ? `${lintProblems[1]} problems` : `exit ${lint.code}`}`;
+  const fmtCount = /(\d+) files? would be reformatted/.exec(fmt.text);
+  const fmtNote = fmt.code === 0 ? 'gdformat clean' : `gdformat ${fmtCount ? `${fmtCount[1]} files to reformat` : `exit ${fmt.code}`}`;
+  const dirty = lint.code !== 0 || fmt.code !== 0;
+  const tail = dirty ? ' (see build/gdlint.log, build/gdformat.log)' : '';
+  return { fail: dirty, note: `${lintNote}, ${fmtNote}${tail}` };
 }
 
 async function lintStep(o) {
@@ -341,14 +361,9 @@ async function lintStep(o) {
   const fmtLog = path.join(o.project, 'build', 'gdformat.log');
   const lint = await run(tk.lint[0], [...tk.lint.slice(1), ...dirs], { cwd: o.project, log: lintLog, quiet: true });
   const fmt = await run(tk.format[0], [...tk.format.slice(1), '--check', ...dirs], { cwd: o.project, log: fmtLog, quiet: true });
-  const lintProblems = /(\d+) problems? found/.exec(lint.text);
-  const lintNote = lint.code === 0 ? 'gdlint clean' : `gdlint ${lintProblems ? `${lintProblems[1]} problems` : `exit ${lint.code}`}`;
-  const fmtCount = /(\d+) files? would be reformatted/.exec(fmt.text);
-  const fmtNote = fmt.code === 0 ? 'gdformat clean' : `gdformat ${fmtCount ? `${fmtCount[1]} files to reformat` : `exit ${fmt.code}`}`;
-  const dirty = lint.code !== 0 || fmt.code !== 0;
-  const tail = dirty ? (o.strictLint ? ' (--strict-lint: fatal)' : ' (non-fatal; see build/gdlint.log, build/gdformat.log)') : '';
-  process.stdout.write(`run_tests: ${lintNote}, ${fmtNote}${tail}\n`);
-  return { fail: dirty && o.strictLint, note: `${lintNote}, ${fmtNote}${tail}` };
+  const v = evaluateLint(lint, fmt);
+  process.stdout.write(`run_tests: ${v.note}\n`);
+  return v;
 }
 
 /** sim: BRIEF 7.4 simulation gates. Extension point for the lead (tools/run_game_sim). */

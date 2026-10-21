@@ -47,18 +47,25 @@ static func encode(state: WorkoutState, with_timeline: bool, timeline_part: int 
 			flags |= F_AFK
 		if not r.connected:
 			flags |= F_DISCONNECTED
-		rows.append([
-			peer,
-			int(round(r.speed.distance_m * 10.0)),
-			int(round(r.course_d * 10.0)),
-			int(round(r.speed.v_mps * 100.0)),
-			flags,
-			int(round(r.tib_fraction() * 1000.0)),
-			int(round(r.power_w)),
-			int(round(r.cadence_rpm)),
-			int(round(r.interval_fraction(r.phase_index) * 1000.0)),
-		])
-	var snap := {"t": state.tick, "p": state.phase_index, "pt": int(round(state.plan_t * 10.0)), "r": rows}
+		(
+			rows
+			. append(
+				[
+					peer,
+					int(round(r.speed.distance_m * 10.0)),
+					int(round(r.course_d * 10.0)),
+					int(round(r.speed.v_mps * 100.0)),
+					flags,
+					int(round(r.tib_fraction() * 1000.0)),
+					int(round(r.power_w)),
+					int(round(r.cadence_rpm)),
+					int(round(r.interval_fraction(r.phase_index) * 1000.0)),
+				]
+			)
+		)
+	var snap := {
+		"t": state.tick, "p": state.phase_index, "pt": int(round(state.plan_t * 10.0)), "r": rows
+	}
 	if with_timeline and timeline_part >= 0:
 		var parts := timeline_parts(state.phases)
 		if parts == 1:
@@ -80,14 +87,19 @@ static func encode_timeline(phases: Array[PlanPhase]) -> Dictionary:
 	var tl: Array = []
 	var labels: Array = []
 	for p in phases:
-		tl.append([
-			maxi(Wl.PHASE_KINDS.find(p.kind), 0),
-			maxi(MODES.find(p.mode), 0),
-			int(round(p.target_pct * 10.0)),
-			int(round(p.ramp_to_pct * 10.0)) if p.has_ramp() else -1,
-			int(round(p.duration_s * 10.0)),
-			maxi(SOURCES.find(p.grade_source), 0),
-		])
+		(
+			tl
+			. append(
+				[
+					maxi(Wl.PHASE_KINDS.find(p.kind), 0),
+					maxi(MODES.find(p.mode), 0),
+					int(round(p.target_pct * 10.0)),
+					int(round(p.ramp_to_pct * 10.0)) if p.has_ramp() else -1,
+					int(round(p.duration_s * 10.0)),
+					maxi(SOURCES.find(p.grade_source), 0),
+				]
+			)
+		)
 		labels.append(p.label)
 	return {"tl": tl, "tll": labels}
 
@@ -108,7 +120,9 @@ static func decode_timeline(tl: Array, labels: Array, course: WorkoutCourse) -> 
 			if int(e[3]) >= 0:
 				p.with_ramp(float(e[3]) / 10.0)
 		else:
-			p = PlanPhase.sim(kind, SOURCES[clampi(int(e[5]), 0, SOURCES.size() - 1)], float(e[4]) / 10.0, label)
+			p = PlanPhase.sim(
+				kind, SOURCES[clampi(int(e[5]), 0, SOURCES.size() - 1)], float(e[4]) / 10.0, label
+			)
 			if p.grade_source == Wl.GRADE_COURSE and course != null:
 				p.course_profile = course.to_course_profile()
 		p.with_lap(true)
@@ -118,7 +132,9 @@ static func decode_timeline(tl: Array, labels: Array, course: WorkoutCourse) -> 
 
 ## One part of a long timeline: kept in state.timeline_parts until every phase is in, then the
 ## whole timeline is set. A part of another length starts over.
-static func _apply_timeline_part(state: WorkoutState, tl: Array, labels: Array, offset: int, total: int) -> void:
+static func _apply_timeline_part(
+	state: WorkoutState, tl: Array, labels: Array, offset: int, total: int
+) -> void:
 	if total <= 0 or offset < 0 or offset >= total:
 		return
 	if int(state.timeline_parts.get("n", -1)) != total:
@@ -132,7 +148,9 @@ static func _apply_timeline_part(state: WorkoutState, tl: Array, labels: Array, 
 			return
 		all_tl.append_array((part as Array)[0])
 		all_labels.append_array((part as Array)[1])
-	state.set_timeline(decode_timeline(all_tl.slice(0, total), all_labels.slice(0, total), state.course))
+	state.set_timeline(
+		decode_timeline(all_tl.slice(0, total), all_labels.slice(0, total), state.course)
+	)
 	state.timeline_parts = {}
 
 
@@ -144,7 +162,9 @@ static func apply(state: WorkoutState, snap: Dictionary) -> void:
 	if snap.has("tl") and snap["tl"] is Array:
 		var labels: Array = snap.get("tll", []) if snap.get("tll", []) is Array else []
 		if snap.has("tln"):
-			_apply_timeline_part(state, snap["tl"], labels, int(snap.get("tlo", 0)), int(snap["tln"]))
+			_apply_timeline_part(
+				state, snap["tl"], labels, int(snap.get("tlo", 0)), int(snap["tln"])
+			)
 		else:
 			state.set_timeline(decode_timeline(snap["tl"], labels, state.course))
 	var rows: Variant = snap.get("r", [])

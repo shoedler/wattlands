@@ -12,8 +12,9 @@ func _directive(kind: String, fields: Dictionary) -> Dictionary:
 
 
 func _snapshot(seq: int, t: float, state: Dictionary) -> Dictionary:
-	return Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "t": t, "tick": seq * 2,
-		"state": state})
+	return Protocol.game_msg(
+		"snapshot", {"game_id": "workout", "seq": seq, "t": t, "tick": seq * 2, "state": state}
+	)
 
 
 func test_routing_rules() -> void:
@@ -53,12 +54,12 @@ func test_direction_rules_on_arrival() -> void:
 	r[1].send_to_host(_snapshot(1, 0.0, {}))
 	pump()
 	assert_eq(messages("host", "snapshot").size(), 0)
-	assert_push_warning("host ignored \"snapshot\"")
+	assert_push_warning('host ignored "snapshot"')
 	# ...and clients ignore client -> host types.
 	r[0].send_to(2, Protocol.game_msg("telemetry", {"tm": {}}))
 	pump()
 	assert_eq(messages("c1", "telemetry").size(), 0)
-	assert_push_warning("client ignored \"telemetry\"")
+	assert_push_warning('client ignored "telemetry"')
 	assert_gt(int(r[0].stats["ignored"]), 0)
 
 
@@ -66,25 +67,28 @@ func test_messages_to_self_are_delivered_on_the_next_poll() -> void:
 	var r := room()
 	clear_logs()
 	r[0].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": 1}}))
-	r[0].send_to(1, Protocol.game_msg("phase", {"index": 2, "start_tick": 0, "ended_by": "duration"}))
+	r[0].send_to(
+		1, Protocol.game_msg("phase", {"index": 2, "start_tick": 0, "ended_by": "duration"})
+	)
 	assert_eq(messages("host").size(), 0)
 	r[0].poll()
 	assert_eq(messages("host", "telemetry").size(), 1)
 	assert_eq(messages("host", "phase").size(), 1)
-	assert_typeof((messages("host", "phase")[0][2] as Dictionary)["index"], TYPE_INT, "through JSON")
+	assert_typeof(
+		(messages("host", "phase")[0][2] as Dictionary)["index"], TYPE_INT, "through JSON"
+	)
 
 
 func test_invalid_messages_are_not_sent() -> void:
 	var r := room()
 	r[0].broadcast({"type": "snapshot", "seq": 1})
-	assert_push_error("refusing to send an invalid \"snapshot\" message")
+	assert_push_error('refusing to send an invalid "snapshot" message')
 	r[0].send_to(2, {"type": "warp"})
-	assert_push_error("refusing to send an invalid \"warp\" message")
+	assert_push_error('refusing to send an invalid "warp" message')
 	r[1].send_to_host({"type": "ready", "ready": true})
 	pump()
 	assert_eq(messages("host", "ready").size(), 1, "a missing v is filled in")
 	assert_eq(int(r[0].stats["invalid_sends"]), 2)
-
 
 
 func test_telemetry_intents_are_capped() -> void:
@@ -94,8 +98,12 @@ func test_telemetry_intents_are_capped() -> void:
 	for i in 40:
 		many.append({"k": "tap", "i": i})
 	r[1].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": 2, "intents": many}}))
-	r[1].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": 2, "intents": [
-		{"k": "big", "s": "y".repeat(2000)}, {"k": "ok"}]}}))
+	r[1].send_to_host(
+		Protocol.game_msg(
+			"telemetry",
+			{"tm": {"peer": 2, "intents": [{"k": "big", "s": "y".repeat(2000)}, {"k": "ok"}]}}
+		)
+	)
 	pump()
 	var tm := messages("host", "telemetry")
 	assert_eq(tm.size(), 2)
@@ -118,9 +126,13 @@ func test_band_and_grade_directives_are_coalesced_never_requests_or_phases() -> 
 	h.send_to(2, _directive("course_grade", {"id": 2, "grade_pct": 2.0}))
 	h.send_to(2, _directive("course_grade", {"id": 3, "grade_pct": 3.0}))
 	h.send_to(2, _directive("power_band", {"lo_w": 150.0, "hi_w": 200.0}))
-	h.send_to(2, Protocol.game_msg("phase", {"index": 1, "start_tick": 40, "ended_by": "end_phase"}))
+	h.send_to(
+		2, Protocol.game_msg("phase", {"index": 1, "start_tick": 40, "ended_by": "end_phase"})
+	)
 	for i in 5:
-		h.send_to(2, _directive("request", {"id": 10 + i, "target_pct": 80.0 + i, "duration_s": 0.0}))
+		h.send_to(
+			2, _directive("request", {"id": 10 + i, "target_pct": 80.0 + i, "duration_s": 0.0})
+		)
 	h.send_to(3, _directive("cadence_band", {"lo_rpm": 80.0, "hi_rpm": 90.0}))
 	h.send_to(3, _directive("cadence_band", {"lo_rpm": 82.0, "hi_rpm": 92.0}))
 	h.send_to(3, _directive("cadence_band", {"lo_rpm": 85.0, "hi_rpm": 95.0}))
@@ -132,9 +144,21 @@ func test_band_and_grade_directives_are_coalesced_never_requests_or_phases() -> 
 			seen.append("%s:%s" % [d["kind"], str(d.get("id", d.get("lo_w", "")))])
 		elif d["type"] == "phase":
 			seen.append("phase")
-	assert_eq(seen, ["course_grade:1", "power_band:150.0", "course_grade:3", "phase", "request:10",
-		"request:11", "request:12", "request:13", "request:14"],
-		"the latest grade wins, flushed before the phase; requests all arrive in order")
+	assert_eq(
+		seen,
+		[
+			"course_grade:1",
+			"power_band:150.0",
+			"course_grade:3",
+			"phase",
+			"request:10",
+			"request:11",
+			"request:12",
+			"request:13",
+			"request:14"
+		],
+		"the latest grade wins, flushed before the phase; requests all arrive in order"
+	)
 	var bands: Array = []
 	for m: Array in messages("c2", "directive"):
 		bands.append(float((m[2] as Dictionary)["lo_rpm"]))
@@ -181,14 +205,38 @@ func test_snapshot_buffer_int_fields_and_interpolation() -> void:
 	assert_eq(c1.snapshot_buffer().size(), 3)
 	assert_eq((c1.snapshot_buffer()[0] as Dictionary)["seq"], 7)
 	# A new session clears the buffer (seq restarts).
-	h.broadcast(Protocol.game_msg("session_start", {"game_id": "workout", "game_version": "1", "content_id": "a", "seed": 1,
-		"players": [], "options": {}, "scaling": Wl.FAIR_FTP, "start_tick": 0}))
+	h.broadcast(
+		Protocol.game_msg(
+			"session_start",
+			{
+				"game_id": "workout",
+				"game_version": "1",
+				"content_id": "a",
+				"seed": 1,
+				"players": [],
+				"options": {},
+				"scaling": Wl.FAIR_FTP,
+				"start_tick": 0
+			}
+		)
+	)
 	h.broadcast(_snapshot(1, 0.1, {"r": []}))
 	pump()
 	assert_true(c1.session_started)
 	assert_eq(c1.latest_snapshot()["seq"], 1)
-	h.broadcast(Protocol.game_msg("event", {"seq": 1, "events": [{"type": "kill", "slot": 2, "x": 0.5},
-		{"type": "phase_started", "peer_id": 2, "index": 1}]}))
+	h.broadcast(
+		Protocol.game_msg(
+			"event",
+			{
+				"seq": 1,
+				"events":
+				[
+					{"type": "kill", "slot": 2, "x": 0.5},
+					{"type": "phase_started", "peer_id": 2, "index": 1}
+				]
+			}
+		)
+	)
 	pump()
 	var ev: Array = (messages("c1", "event")[0][2] as Dictionary)["events"]
 	assert_typeof((ev[0] as Dictionary)["slot"], TYPE_INT)

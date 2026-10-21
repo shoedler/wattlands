@@ -34,6 +34,7 @@ func _run(seconds: float) -> void:
 
 # --- scanning ---------------------------------------------------------------------------------
 
+
 func test_defaults() -> void:
 	assert_eq(_list.scan_interval_s, 1.6, "the profile default")
 	assert_true(_list.scanning)
@@ -78,9 +79,16 @@ func test_scanning_off_holds_focus() -> void:
 
 
 func test_disabled_items_are_skipped() -> void:
-	_list.set_items([
-		{"id": 0, "text": "zero"}, {"id": 1, "text": "one", "disabled": true}, {"id": 2, "text": "two"},
-	])
+	(
+		_list
+		. set_items(
+			[
+				{"id": 0, "text": "zero"},
+				{"id": 1, "text": "one", "disabled": true},
+				{"id": 2, "text": "two"},
+			]
+		)
+	)
 	_run(1.6)
 	assert_eq(_list.highlighted(), 2)
 	_run(1.6)
@@ -109,6 +117,7 @@ func test_set_item_disabled_out_of_range_is_rejected() -> void:
 
 
 # --- picks ------------------------------------------------------------------------------------
+
 
 func test_surge_picks_the_highlighted_item() -> void:
 	_list.set_items(_items(3))
@@ -154,6 +163,7 @@ func test_other_gestures_and_actions_are_ignored() -> void:
 
 # --- focus moves ------------------------------------------------------------------------------
 
+
 func test_up_down_move_focus_and_pause_scanning_for_10_s() -> void:
 	_list.set_items(_items(4))
 	_list.feed_action(&"down")
@@ -190,6 +200,7 @@ func test_set_highlight() -> void:
 
 # --- ERG auto-confirm ---------------------------------------------------------------------------
 
+
 func test_auto_confirm_after_two_full_cycles() -> void:
 	_list.erg_auto_confirm = true
 	_list.set_items(_items(3))
@@ -198,7 +209,11 @@ func test_auto_confirm_after_two_full_cycles() -> void:
 	assert_signal_not_emitted(_list, "item_chosen")
 	_run(0.05)
 	assert_signal_emit_count(_list, "item_chosen", 1)
-	assert_eq(get_signal_parameters(_list, "item_chosen"), [0, "item0", true], "two cycles end on the first item")
+	assert_eq(
+		get_signal_parameters(_list, "item_chosen"),
+		[0, "item0", true],
+		"two cycles end on the first item"
+	)
 	assert_eq(get_signal_parameters(_list, "item_picked"), [0, "item0", "auto"])
 
 
@@ -215,7 +230,9 @@ func test_auto_confirm_without_scanning() -> void:
 
 func test_auto_confirm_counts_enabled_items_only() -> void:
 	_list.erg_auto_confirm = true
-	_list.set_items([{"id": 0, "text": "a"}, {"id": 1, "text": "b", "disabled": true}, {"id": 2, "text": "c"}])
+	_list.set_items(
+		[{"id": 0, "text": "a"}, {"id": 1, "text": "b", "disabled": true}, {"id": 2, "text": "c"}]
+	)
 	assert_almost_eq(_list.auto_confirm_after_s(), 6.4, 1e-6)
 
 
@@ -236,7 +253,11 @@ func test_input_restarts_the_auto_confirm_count() -> void:
 	_run(6.35)
 	assert_signal_not_emitted(_list, "item_chosen")
 	_run(0.05)
-	assert_eq(get_signal_parameters(_list, "item_chosen"), [moved, "item%d" % moved, true], "still on the moved focus (scan paused 10 s)")
+	assert_eq(
+		get_signal_parameters(_list, "item_chosen"),
+		[moved, "item%d" % moved, true],
+		"still on the moved focus (scan paused 10 s)"
+	)
 
 
 func test_no_auto_confirm_outside_erg() -> void:
@@ -336,6 +357,7 @@ func test_auto_confirm_left_counts_down() -> void:
 
 # --- router -------------------------------------------------------------------------------------
 
+
 func test_listens_to_the_router_menu_input() -> void:
 	var bus: WlEventBus = autofree(WlEventBus.new())
 	var router := WlInputRouter.new()
@@ -383,8 +405,12 @@ func test_a_list_driven_by_hand() -> void:
 	add_child_autofree(list)
 	list.set_process(false)
 	var seen: Array = []
-	list.item_chosen.connect(func(i: int, id: Variant, auto: bool) -> void: seen.append(["chosen", i, id, auto]))
-	list.item_picked.connect(func(i: int, id: Variant, via: String) -> void: seen.append(["picked", i, id, via]))
+	list.item_chosen.connect(
+		func(i: int, id: Variant, auto: bool) -> void: seen.append(["chosen", i, id, auto])
+	)
+	list.item_picked.connect(
+		func(i: int, id: Variant, via: String) -> void: seen.append(["picked", i, id, via])
+	)
 	list.set_items(_items(3))
 	router.inject_action(&"down")
 	router.inject_gesture(Wl.G_SURGE)
@@ -393,7 +419,11 @@ func test_a_list_driven_by_hand() -> void:
 	list.feed_action(&"down")
 	assert_eq(list.highlighted(), 1)
 	list.feed_gesture(Wl.G_SURGE)
-	assert_eq(seen, [["chosen", 1, "item1", false], ["picked", 1, "item1", "surge"]], "both, in order, at once")
+	assert_eq(
+		seen,
+		[["chosen", 1, "item1", false], ["picked", 1, "item1", "surge"]],
+		"both, in order, at once"
+	)
 	list.set_items(_items(3))
 	assert_eq(list.highlighted(), 0, "set_items starts at the first enabled item")
 	list.set_highlight(1)
@@ -420,7 +450,11 @@ func test_relistens_after_leaving_and_reentering_the_tree() -> void:
 	add_child(list)
 	router.inject_action(&"down")
 	router.inject_action(&"confirm")
-	assert_eq(get_signal_parameters(list, "item_picked"), [1, "item1", "action"], "back in the tree: listening")
+	assert_eq(
+		get_signal_parameters(list, "item_picked"),
+		[1, "item1", "action"],
+		"back in the tree: listening"
+	)
 
 
 func test_router_coast_in_erg_never_backs_out() -> void:
@@ -445,8 +479,11 @@ func test_router_coast_in_erg_never_backs_out() -> void:
 
 # --- view ----------------------------------------------------------------------------------------
 
+
 func test_rows_are_big_and_readable() -> void:
-	_list.set_items([{"id": 0, "text": "Ballista", "detail": "40 denarii"}, {"id": 1, "text": "Save"}])
+	_list.set_items(
+		[{"id": 0, "text": "Ballista", "detail": "40 denarii"}, {"id": 1, "text": "Save"}]
+	)
 	assert_eq(_list.row(0).name, "Item0")
 	var text := _list.row(0).find_child("Text", true, false) as Label
 	assert_not_null(text)

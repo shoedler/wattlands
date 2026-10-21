@@ -117,7 +117,9 @@ static func scaled_px(base_px: int, scale: float) -> int:
 
 
 ## LabelSettings for HUD text: the kit font, a size, a color and a dark outline.
-static func label_settings(px: int, color: Color = TEXT, bold: bool = false, outline: bool = true) -> LabelSettings:
+static func label_settings(
+	px: int, color: Color = TEXT, bold: bool = false, outline: bool = true
+) -> LabelSettings:
 	var ls := LabelSettings.new()
 	ls.font = bold_font() if bold else font()
 	ls.font_size = px
@@ -129,7 +131,9 @@ static func label_settings(px: int, color: Color = TEXT, bold: bool = false, out
 
 
 ## A rounded dark panel style (HUD cards, toasts, menu rows).
-static func panel_style(bg: Color = PANEL, border: Color = PANEL_BORDER, border_px: int = 2) -> StyleBoxFlat:
+static func panel_style(
+	bg: Color = PANEL, border: Color = PANEL_BORDER, border_px: int = 2
+) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = bg
 	sb.border_color = border

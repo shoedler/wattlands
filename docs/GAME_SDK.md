@@ -16,13 +16,14 @@ Every command runs from the repository root with the locks on (`. tools/env.sh` 
 | Refresh Godot's caches | `tools/godot.sh --headless --path . --import` | `tools\godot.ps1 --headless --path . --import` |
 | The game's tests | `tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/games/siege -ginclude_subdirs -gexit -gjunit_xml_file=build/junit_siege.xml` | the same with `tools\godot.ps1` |
 | Script check | `tools/godot.sh --headless --path . -s tools/check_scripts.gd` | `tools\godot.ps1 --headless --path . -s tools/check_scripts.gd` |
+| Format, then lint | `uvx --from gdtoolkit==4.5.0 gdformat addons/wattlands src tests tools`, then the same with `gdlint` | same |
 | Conformance | `tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gtest=res://tests/sdk/test_conformance.gd -gexit` | the same with `tools\godot.ps1` |
 | A headless session | `tools/run_game_sim --game=siege --content=short --players=1 --bots=3 --rider=erg --sim-speed=200 --seed=1 --report=build/siege/sims/s.json` | `tools\run_game_sim.ps1 ...` (same flags) |
 | Check its FIT files | `node tools/fit_check/check.mjs build/siege/sims/fit --expect-laps=12` | same |
 | End to end | `node tools/e2e/run.mjs --games=siege` | same |
 | Everything | `tools/run_tests` | `tools\run_tests.ps1` |
 
-The loop: `tools/new_game <id>` copies the template into your paths, renamed. Edit `game.json`, replace the template's rules, view and HUD with your own, keep the tests green, then run the simulation matrix with `tools/run_game_sim` and check the reports.
+The loop: `tools/new_game <id>` copies the template into your paths, renamed; run gdformat on `src/games/<id>` and `tests/games/<id>` once (the shorter names re-wrap a few lines). Edit `game.json`, replace the template's rules, view and HUD with your own, keep the tests green, then run the simulation matrix with `tools/run_game_sim` and check the reports.
 
 ## 2. Files and owned paths
 
@@ -692,6 +693,7 @@ Details: `tools/fit_check/README.md`. Expected laps: section 13 (a plan whose fi
 - The game's GUT tests: `tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/games/<id>/<dir> -ginclude_subdirs -gexit -gjunit_xml_file=build/junit_<id>_<agent>.xml`. GUT collects only `test_*.gd` files; helpers elsewhere in the folder still load in the script check.
 - Strict rules (BRIEF 7): exit 0, "Run Summary" in the log, a test count above 0, none of "SCRIPT ERROR", "Parse Error", "Debugger Break", "Ignoring script" or "Nothing was run" (pass `-gdisable_colors` when you grep a log), and no pending or risky test: a test that calls `pending()`, or one that ends without a single assert (GUT's "Risky/Pending" count, or `skipped` in the JUnit file), fails the run even though GUT exits 0. Every test asserts something; a test with nothing to check on this machine says so with `pass_test("<reason>")`. `tools/run_tests --only=gut --gdir=res://tests/games/<id>` applies all of them for you, and a narrow run like that uses the same rule as the full suite (it only skips the green-count comparison). A test fails on any unhandled `push_error`: code that rejects bad input uses `push_error` and its test `assert_push_error()`; expected non-fatal conditions use `push_warning`.
 - `tools/godot.sh --headless --path . -s tools/check_scripts.gd` loads every script under `addons/wattlands/`, `src/`, `tests/` and `tools/`.
+- gdlint (configured by `./gdlintrc`) and `gdformat --check`, gdtoolkit 4.5.0, run after the script check in the static step of `tools/run_tests`, and any finding fails it. Format your files with gdformat before committing and fix lint findings in code. CLAUDE.md lists gdformat's pitfalls (long lambdas inside calls or collections, comments in expanded dictionaries).
 - `tools/run_tests` (`tools/run_tests.ps1`) runs every gate, with `FAL_KEY` and `WATTLANDS_ALLOW_ART` removed from its processes.
 - `tools/godot.sh` / `tools/godot.ps1` pass everything after `--` to Godot untouched; `--lease=<n>`, `--lock-timeout=<s>` and `--timeout=<s>` are wrapper flags. `tools/env.sh` / `tools/env.ps1` set the two locks and leave `FAL_KEY` and `WATTLANDS_ALLOW_ART` alone.
 

@@ -262,6 +262,7 @@ func row(index: int) -> Control:
 
 # --- internals ---------------------------------------------------------------------------
 
+
 func _pick(via: String) -> void:
 	if not is_item_enabled(_highlight):
 		return
@@ -340,6 +341,7 @@ func _play(sound: String, volume_db: float = -6.0) -> void:
 
 # --- input -----------------------------------------------------------------------------------
 
+
 func _router() -> WlInputRouter:
 	if router != null:
 		return router
@@ -380,6 +382,7 @@ func _on_menu_input(action_name: StringName, via: String) -> void:
 
 
 # --- view ------------------------------------------------------------------------------------
+
 
 func _ensure_hint() -> void:
 	if _hint != null:

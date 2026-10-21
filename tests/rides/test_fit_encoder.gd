@@ -3,7 +3,7 @@ extends GutTest
 ## timestamps. The output is decoded with tests/rides/fit_reader.gd.
 
 const Reader := preload("res://tests/rides/fit_reader.gd")
-const START := 1_800_000_000 # 2027-01-15T08:00:00Z
+const START := 1_800_000_000  # 2027-01-15T08:00:00Z
 
 
 func _decode(bytes: PackedByteArray) -> Dictionary:
@@ -30,7 +30,11 @@ func test_header_layout() -> void:
 	assert_eq(b.decode_u32(4), b.size() - 16, "data size excludes the header and file CRC")
 	assert_eq(b.slice(8, 12).get_string_from_ascii(), ".FIT")
 	assert_eq(b.decode_u16(12), FitCrc.compute(b, 0, 12), "header CRC over bytes 0..11")
-	assert_eq(b.decode_u16(b.size() - 2), FitCrc.compute(b, 0, b.size() - 2), "file CRC over header and data")
+	assert_eq(
+		b.decode_u16(b.size() - 2),
+		FitCrc.compute(b, 0, b.size() - 2),
+		"file CRC over header and data"
+	)
 
 
 func test_file_id_fields() -> void:
@@ -79,7 +83,12 @@ func test_record_fields_and_scales() -> void:
 	var h: Dictionary = recs[2]["fields"]
 	assert_eq(h[7], 0xFFFE, "power clamped below the invalid marker")
 	assert_eq(h[4], 0xFE, "cadence clamped below the invalid marker")
-	assert_false(d["messages"].any(func(m: Dictionary) -> bool: return m["fields"].has(0) and int(m["global"]) == 20), "no GPS or other fields")
+	assert_false(
+		d["messages"].any(
+			func(m: Dictionary) -> bool: return m["fields"].has(0) and int(m["global"]) == 20
+		),
+		"no GPS or other fields"
+	)
 
 
 func test_record_definition_has_no_gps() -> void:
@@ -107,14 +116,31 @@ func test_timer_events() -> void:
 
 func test_lap_fields_and_name() -> void:
 	var enc := FitEncoder.new()
-	enc.lap({
-		"index": 2, "start_unix": START + 300, "end_unix": START + 480, "elapsed_s": 180.05,
-		"timer_s": 170.0, "distance_m": 1500.25, "avg_speed_mps": 8.33, "max_speed_mps": 10.0,
-		"avg_power_w": 249.6, "max_power_w": 300.0, "avg_cadence_rpm": 88.4,
-		"max_cadence_rpm": 101.0, "work_j": 44928.0, "trigger": 0, "name": "Wave 2",
-	})
+	(
+		enc
+		. lap(
+			{
+				"index": 2,
+				"start_unix": START + 300,
+				"end_unix": START + 480,
+				"elapsed_s": 180.05,
+				"timer_s": 170.0,
+				"distance_m": 1500.25,
+				"avg_speed_mps": 8.33,
+				"max_speed_mps": 10.0,
+				"avg_power_w": 249.6,
+				"max_power_w": 300.0,
+				"avg_cadence_rpm": 88.4,
+				"max_cadence_rpm": 101.0,
+				"work_j": 44928.0,
+				"trigger": 0,
+				"name": "Wave 2",
+			}
+		)
+	)
 	var d := _decode(enc.finish())
-	var lap_def: Dictionary = (d["definitions"] as Array).filter(func(x: Dictionary) -> bool: return int(x["global"]) == 19)[0]
+	var is_lap := func(x: Dictionary) -> bool: return int(x["global"]) == 19
+	var lap_def: Dictionary = (d["definitions"] as Array).filter(is_lap)[0]
 	assert_eq(lap_def["dev_fields"], [[0, 32, 0]], "one developer field: lap_name")
 	var f: Dictionary = Reader.of(d, 19)[0]["fields"]
 	assert_eq(f[254], 2, "message_index")
@@ -161,12 +187,27 @@ func test_long_utf8_lap_name_is_cut_on_a_character_boundary() -> void:
 
 func test_session_and_activity() -> void:
 	var enc := FitEncoder.new()
-	enc.session({
-		"start_unix": START, "end_unix": START + 600, "elapsed_s": 600.0, "timer_s": 590.0,
-		"distance_m": 5000.0, "avg_speed_mps": 8.33, "max_speed_mps": 12.0, "avg_power_w": 201.0,
-		"max_power_w": 410.0, "avg_cadence_rpm": 90.0, "max_cadence_rpm": 110.0, "work_j": 120600.0,
-		"first_lap_index": 0, "num_laps": 5,
-	})
+	(
+		enc
+		. session(
+			{
+				"start_unix": START,
+				"end_unix": START + 600,
+				"elapsed_s": 600.0,
+				"timer_s": 590.0,
+				"distance_m": 5000.0,
+				"avg_speed_mps": 8.33,
+				"max_speed_mps": 12.0,
+				"avg_power_w": 201.0,
+				"max_power_w": 410.0,
+				"avg_cadence_rpm": 90.0,
+				"max_cadence_rpm": 110.0,
+				"work_j": 120600.0,
+				"first_lap_index": 0,
+				"num_laps": 5,
+			}
+		)
+	)
 	enc.activity(START + 600, 590.0, 3600)
 	var d := _decode(enc.finish())
 	var s: Dictionary = Reader.of(d, 18)[0]["fields"]
@@ -196,7 +237,11 @@ func test_session_and_activity() -> void:
 	assert_eq(a[5], START + 600 - 631065600 + 3600, "local_timestamp")
 	var enc2 := FitEncoder.new()
 	enc2.activity(START, 1.0)
-	assert_eq(Reader.of(_decode(enc2.finish()), 34)[0]["fields"][5], 0xFFFFFFFF, "no offset: local_timestamp invalid")
+	assert_eq(
+		Reader.of(_decode(enc2.finish()), 34)[0]["fields"][5],
+		0xFFFFFFFF,
+		"no offset: local_timestamp invalid"
+	)
 
 
 func test_each_definition_is_written_once() -> void:
@@ -222,19 +267,43 @@ func test_device_info() -> void:
 
 func test_encode_ride_message_order() -> void:
 	var ride := {
-		"utc_start_unix": START, "serial": 3, "software_version_x100": 10, "local_offset_s": null,
-		"records": [
-			{"t": START, "power_w": 100.0, "cadence_rpm": 80.0, "speed_mps": 5.0, "distance_m": 0.0},
-			{"t": START + 1, "power_w": 110.0, "cadence_rpm": 81.0, "speed_mps": 5.0, "distance_m": 5.0},
-			{"t": START + 2, "power_w": 120.0, "cadence_rpm": 82.0, "speed_mps": 5.0, "distance_m": 10.0},
+		"utc_start_unix": START,
+		"serial": 3,
+		"software_version_x100": 10,
+		"local_offset_s": null,
+		"records":
+		[
+			{
+				"t": START,
+				"power_w": 100.0,
+				"cadence_rpm": 80.0,
+				"speed_mps": 5.0,
+				"distance_m": 0.0
+			},
+			{
+				"t": START + 1,
+				"power_w": 110.0,
+				"cadence_rpm": 81.0,
+				"speed_mps": 5.0,
+				"distance_m": 5.0
+			},
+			{
+				"t": START + 2,
+				"power_w": 120.0,
+				"cadence_rpm": 82.0,
+				"speed_mps": 5.0,
+				"distance_m": 10.0
+			},
 		],
 		"events": [{"t": START, "running": true}, {"t": START + 2, "running": false}],
-		"laps": [
+		"laps":
+		[
 			{"index": 0, "start_unix": START, "end_unix": START + 1, "name": "A"},
 			{"index": 1, "start_unix": START + 1, "end_unix": START + 2, "name": "B"},
 		],
 		"session": {"start_unix": START, "end_unix": START + 2, "num_laps": 2},
-		"end_unix": START + 2, "timer_s": 2.0,
+		"end_unix": START + 2,
+		"timer_s": 2.0,
 	}
 	var d := _decode(FitEncoder.encode_ride(ride))
 	var order: Array = []

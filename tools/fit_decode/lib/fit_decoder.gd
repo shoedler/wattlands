@@ -44,8 +44,16 @@ const MESG_FIELD_DESCRIPTION := 206
 const LAP_NAME_FIELD := "lap_name"
 
 const MESG_NAMES: Dictionary = {
-	0: "file_id", 18: "session", 19: "lap", 20: "record", 21: "event", 23: "device_info",
-	34: "activity", 49: "file_creator", 206: "field_description", 207: "developer_data_id",
+	0: "file_id",
+	18: "session",
+	19: "lap",
+	20: "record",
+	21: "event",
+	23: "device_info",
+	34: "activity",
+	49: "file_creator",
+	206: "field_description",
+	207: "developer_data_id",
 }
 
 const FILE_TYPE_ACTIVITY := 4
@@ -80,8 +88,22 @@ const BASE_TYPES: Array = [
 ]
 
 const CRC_TABLE: Array[int] = [
-	0x0000, 0xCC01, 0xD801, 0x1400, 0xF001, 0x3C00, 0x2800, 0xE401,
-	0xA001, 0x6C00, 0x7800, 0xB401, 0x5000, 0x9C01, 0x8801, 0x4400,
+	0x0000,
+	0xCC01,
+	0xD801,
+	0x1400,
+	0xF001,
+	0x3C00,
+	0x2800,
+	0xE401,
+	0xA001,
+	0x6C00,
+	0x7800,
+	0xB401,
+	0x5000,
+	0x9C01,
+	0x8801,
+	0x4400,
 ]
 
 ## Stop collecting errors after this many per file (a corrupt file can produce thousands).
@@ -125,7 +147,9 @@ static func decode_file(path: String, opts: Dictionary = {}) -> Dictionary:
 
 
 ## Decode FIT bytes and summarize them. Never push_errors: problems go into "errors".
-static func decode_bytes(bytes: PackedByteArray, path: String = "", opts: Dictionary = {}) -> Dictionary:
+static func decode_bytes(
+	bytes: PackedByteArray, path: String = "", opts: Dictionary = {}
+) -> Dictionary:
 	var s := _empty_summary(path)
 	var messages: Array[Dictionary] = []
 	var offset := 0
@@ -133,7 +157,13 @@ static func decode_bytes(bytes: PackedByteArray, path: String = "", opts: Dictio
 	var crc_ok := true
 	while offset < bytes.size():
 		if segment > 0 and not _looks_like_header(bytes, offset):
-			_derr(s, "%d trailing byte(s) after the file CRC at offset %d" % [bytes.size() - offset, offset])
+			_derr(
+				s,
+				(
+					"%d trailing byte(s) after the file CRC at offset %d"
+					% [bytes.size() - offset, offset]
+				)
+			)
 			break
 		var seg := _decode_segment(bytes, offset, s, messages)
 		if seg["header"] is Dictionary and segment == 0:
@@ -181,7 +211,7 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 		elif a.begins_with("--expect-laps="):
 			var v := a.substr("--expect-laps=".length())
 			if not v.is_valid_int() or int(v) < 0:
-				err.append("fit_decode: --expect-laps needs a whole number >= 0, got \"%s\"" % v)
+				err.append('fit_decode: --expect-laps needs a whole number >= 0, got "%s"' % v)
 				err.append(usage())
 				return {"code": 2, "out": out, "err": err, "result": {}}
 			expect_laps = int(v)
@@ -201,7 +231,7 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 				return {"code": 2, "out": out, "err": err, "result": {}}
 			inputs.append(f)
 		elif a.begins_with("--"):
-			err.append("fit_decode: unknown option \"%s\"" % a)
+			err.append('fit_decode: unknown option "%s"' % a)
 			err.append(usage())
 			return {"code": 2, "out": out, "err": err, "result": {}}
 		elif a != "":
@@ -260,7 +290,12 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 			out.append_array(format_text(f))
 		out.append("fit_decode: %d file(s), %d with errors" % [files.size(), failed])
 	else:
-		out.append("fit_decode: %d file(s), %d with errors, JSON in %s" % [files.size(), failed, resolve_path(json_out)])
+		out.append(
+			(
+				"fit_decode: %d file(s), %d with errors, JSON in %s"
+				% [files.size(), failed, resolve_path(json_out)]
+			)
+		)
 	var code := 0 if failed == 0 or (json_out != "" and out_file == "" and not as_json) else 1
 	return {"code": code, "out": out, "err": err, "result": result}
 
@@ -271,14 +306,16 @@ static func _write_json(path: String, value: Dictionary) -> String:
 	var fa := FileAccess.open(target, FileAccess.WRITE)
 	if fa == null:
 		return "cannot write %s (%s)" % [target, error_string(FileAccess.get_open_error())]
-	fa.store_string(JSON.stringify(value, "  ", true) + "
-")
+	fa.store_string(JSON.stringify(value, "  ", true) + "\n")
 	fa.close()
 	return ""
 
 
 static func usage() -> String:
-	return "usage: tools/godot.sh --headless --path . -s tools/fit_decode/decode.gd -- <file|dir>... [--file=<path>]... [--expect-laps=<n>] [--json] [--out=<file>] [--json-out=<file>]"
+	return (
+		"usage: tools/godot.sh --headless --path . -s tools/fit_decode/decode.gd -- <file|dir>... "
+		+ "[--file=<path>]... [--expect-laps=<n>] [--json] [--out=<file>] [--json-out=<file>]"
+	)
 
 
 ## Absolute OS path for a CLI argument: res:// and user:// are globalized, relative paths are
@@ -303,23 +340,54 @@ static func format_text(f: Dictionary) -> PackedStringArray:
 		lines.append("    - %s" % str(e))
 	for w: Variant in f.get("warnings", []):
 		lines.append("  warning: %s" % str(w))
-	lines.append("  records: %d (span %s s)" % [int(f.get("records", 0)), _num(float(f.get("record_span_s", 0.0)))])
+	lines.append(
+		(
+			"  records: %d (span %s s)"
+			% [int(f.get("records", 0)), _num(float(f.get("record_span_s", 0.0)))]
+		)
+	)
 	var laps: Array = f.get("laps", [])
 	lines.append("  laps: %d" % laps.size())
 	for lap: Variant in laps:
 		var l: Dictionary = lap
-		lines.append("    %d: start %s s, duration %s s" % [int(l.get("index", 0)) + 1, _num(float(l.get("start_s", 0.0))), _num(float(l.get("duration_s", 0.0)))])
+		lines.append(
+			(
+				"    %d: start %s s, duration %s s"
+				% [
+					int(l.get("index", 0)) + 1,
+					_num(float(l.get("start_s", 0.0))),
+					_num(float(l.get("duration_s", 0.0)))
+				]
+			)
+		)
 	var ses: Dictionary = f.get("session", {})
 	if ses.is_empty():
 		lines.append("  session: none")
 	else:
-		lines.append("  session: sport %s, sub_sport %s, elapsed %s s, timer %s s, distance %s m, work %s kJ, avg %s W, max %s W, avg cadence %s rpm, max cadence %s rpm" % [
-			str(ses.get("sport", "?")), str(ses.get("sub_sport", "?")),
-			_num(float(ses.get("elapsed_s", 0.0))), _num(float(ses.get("timer_s", 0.0))),
-			_num(float(ses.get("distance_m", 0.0))), _num(float(ses.get("work_kj", 0.0))),
-			_num(float(ses.get("avg_power_w", 0.0))), _num(float(ses.get("max_power_w", 0.0))),
-			_num(float(ses.get("avg_cadence_rpm", 0.0))), _num(float(ses.get("max_cadence_rpm", 0.0))),
-		])
+		var line := (
+			"  session: sport %s, sub_sport %s, elapsed %s s, timer %s s, distance %s m, "
+			+ "work %s kJ, avg %s W, max %s W, avg cadence %s rpm, max cadence %s rpm"
+		)
+		(
+			lines
+			. append(
+				(
+					line
+					% [
+						str(ses.get("sport", "?")),
+						str(ses.get("sub_sport", "?")),
+						_num(float(ses.get("elapsed_s", 0.0))),
+						_num(float(ses.get("timer_s", 0.0))),
+						_num(float(ses.get("distance_m", 0.0))),
+						_num(float(ses.get("work_kj", 0.0))),
+						_num(float(ses.get("avg_power_w", 0.0))),
+						_num(float(ses.get("max_power_w", 0.0))),
+						_num(float(ses.get("avg_cadence_rpm", 0.0))),
+						_num(float(ses.get("max_cadence_rpm", 0.0))),
+					]
+				)
+			)
+		)
 	return lines
 
 
@@ -337,8 +405,12 @@ static func _looks_like_header(bytes: PackedByteArray, at: int) -> bool:
 
 
 ## One FIT file starting at `start`. Appends its messages. Returns {ok, next, crc_ok, header}.
-static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, messages: Array[Dictionary]) -> Dictionary:
-	var res := {"ok": false, "next": bytes.size(), "crc_ok": false, "header": null, "header_ok": false}
+static func _decode_segment(
+	bytes: PackedByteArray, start: int, s: Dictionary, messages: Array[Dictionary]
+) -> Dictionary:
+	var res := {
+		"ok": false, "next": bytes.size(), "crc_ok": false, "header": null, "header_ok": false
+	}
 	if start + 12 > bytes.size():
 		_derr(s, "file too short for a FIT header (%d bytes)" % (bytes.size() - start))
 		return res
@@ -361,11 +433,17 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 	}
 	res["header"] = header
 	if sig != ".FIT":
-		_derr(s, "missing \".FIT\" signature in the header")
+		_derr(s, 'missing ".FIT" signature in the header')
 		return res
 	res["header_ok"] = true
 	if (int(header["protocol_version"]) >> 4) > 2:
-		_derr(s, "unsupported protocol version %d.%d" % [int(header["protocol_version"]) >> 4, int(header["protocol_version"]) & 0xF])
+		_derr(
+			s,
+			(
+				"unsupported protocol version %d.%d"
+				% [int(header["protocol_version"]) >> 4, int(header["protocol_version"]) & 0xF]
+			)
+		)
 	if hs == 14:
 		var hcrc := bytes.decode_u16(start + 12)
 		header["header_crc"] = hcrc
@@ -378,7 +456,13 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 	var data_size := int(header["data_size"])
 	var data_end := data_start + data_size
 	if data_end + 2 > bytes.size():
-		_derr(s, "data size %d plus the 2-byte CRC runs past the end of the file (%d bytes after the header)" % [data_size, bytes.size() - data_start])
+		_derr(
+			s,
+			(
+				"data size %d plus the 2-byte CRC runs past the end of the file (%d bytes after the header)"
+				% [data_size, bytes.size() - data_start]
+			)
+		)
 		data_end = mini(data_end, bytes.size())
 		_decode_records(bytes, data_start, data_end, s, messages)
 		return res
@@ -394,7 +478,9 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 
 
 ## Decode the definition and data messages in bytes[from, to).
-static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dictionary, messages: Array[Dictionary]) -> void:
+static func _decode_records(
+	bytes: PackedByteArray, from: int, to: int, s: Dictionary, messages: Array[Dictionary]
+) -> void:
 	var defs: Dictionary = {}
 	var last_ts := -1
 	var p := from
@@ -406,7 +492,13 @@ static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dicti
 			var local_c := (h >> 5) & 0x3
 			var offset := h & 0x1F
 			if not defs.has(local_c):
-				_derr(s, "compressed-timestamp data message for undefined local type %d at offset %d" % [local_c, p - 1])
+				_derr(
+					s,
+					(
+						"compressed-timestamp data message for undefined local type %d at offset %d"
+						% [local_c, p - 1]
+					)
+				)
 				return
 			if last_ts < 0:
 				_derr(s, "compressed timestamp at offset %d before any full timestamp" % (p - 1))
@@ -445,7 +537,9 @@ static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dicti
 
 
 ## {num, big, fields: [[num, size, base]], dev_size, next} or {} on a truncated definition.
-static func _read_definition(bytes: PackedByteArray, p: int, to: int, has_dev: bool, s: Dictionary) -> Dictionary:
+static func _read_definition(
+	bytes: PackedByteArray, p: int, to: int, has_dev: bool, s: Dictionary
+) -> Dictionary:
 	if p + 5 > to:
 		_derr(s, "truncated definition message at offset %d" % (p - 1))
 		return {}
@@ -465,11 +559,23 @@ static func _read_definition(bytes: PackedByteArray, p: int, to: int, has_dev: b
 		var fsize := bytes[q + 1]
 		var base := bytes[q + 2] & 0x1F
 		if base >= BASE_TYPES.size():
-			_warn(s, "unknown base type 0x%02X for field %d of message %d (read as bytes)" % [bytes[q + 2], fnum, num])
+			_warn(
+				s,
+				(
+					"unknown base type 0x%02X for field %d of message %d (read as bytes)"
+					% [bytes[q + 2], fnum, num]
+				)
+			)
 			base = 13
 		var bsize := int((BASE_TYPES[base] as Array)[1])
 		if fsize == 0 or fsize % bsize != 0:
-			_warn(s, "field %d of message %d has size %d, not a multiple of its base type size %d (read as bytes)" % [fnum, num, fsize, bsize])
+			_warn(
+				s,
+				(
+					"field %d of message %d has size %d, not a multiple of its base type size %d (read as bytes)"
+					% [fnum, num, fsize, bsize]
+				)
+			)
 			base = 13
 		fields.append([fnum, fsize, base])
 		q += 3
@@ -488,11 +594,20 @@ static func _read_definition(bytes: PackedByteArray, p: int, to: int, has_dev: b
 			dev_fields.append([bytes[q], bytes[q + 1], bytes[q + 2]])
 			dev_size += bytes[q + 1]
 			q += 3
-	return {"num": num, "big": big, "fields": fields, "dev_fields": dev_fields, "dev_size": dev_size, "next": q}
+	return {
+		"num": num,
+		"big": big,
+		"fields": fields,
+		"dev_fields": dev_fields,
+		"dev_size": dev_size,
+		"next": q
+	}
 
 
 ## {num, fields: {field num: value}, next} or {} when the message runs past `to`.
-static func _read_data(bytes: PackedByteArray, p: int, to: int, def: Dictionary, s: Dictionary) -> Dictionary:
+static func _read_data(
+	bytes: PackedByteArray, p: int, to: int, def: Dictionary, s: Dictionary
+) -> Dictionary:
 	var q := p
 	var big: bool = def["big"]
 	var values: Dictionary = {}
@@ -520,7 +635,9 @@ static func _read_data(bytes: PackedByteArray, p: int, to: int, def: Dictionary,
 
 ## One field value: a scalar, an Array for multi-value fields, a String for strings; null when
 ## every element holds the base type's invalid value.
-static func _read_value(bytes: PackedByteArray, at: int, size: int, base: int, big: bool) -> Variant:
+static func _read_value(
+	bytes: PackedByteArray, at: int, size: int, base: int, big: bool
+) -> Variant:
 	var bt: Array = BASE_TYPES[base]
 	var bsize := int(bt[1])
 	if str(bt[0]) == "string":
@@ -684,11 +801,20 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		if int(m["num"]) == MESG_FILE_ID:
 			var fid: Dictionary = m["fields"]
 			s["file_id"] = {
-				"type": fid.get(0, null), "manufacturer": fid.get(1, null), "product": fid.get(2, null),
-				"serial_number": fid.get(3, null), "time_created": fid.get(4, null),
+				"type": fid.get(0, null),
+				"manufacturer": fid.get(1, null),
+				"product": fid.get(2, null),
+				"serial_number": fid.get(3, null),
+				"time_created": fid.get(4, null),
 			}
 			if int(fid.get(0, -1)) != FILE_TYPE_ACTIVITY:
-				_err(s, "file_id.type is %s, expected %d (activity)" % [str(fid.get(0, "missing")), FILE_TYPE_ACTIVITY])
+				_err(
+					s,
+					(
+						"file_id.type is %s, expected %d (activity)"
+						% [str(fid.get(0, "missing")), FILE_TYPE_ACTIVITY]
+					)
+				)
 			break
 
 	# Records: count, span, monotonic timestamps, gaps.
@@ -759,13 +885,28 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		}
 		s["session"] = ses
 		if int(sf.get(5, -1)) != SPORT_CYCLING:
-			_err(s, "session.sport is %s, expected %d (cycling)" % [str(sf.get(5, "missing")), SPORT_CYCLING])
+			_err(
+				s,
+				(
+					"session.sport is %s, expected %d (cycling)"
+					% [str(sf.get(5, "missing")), SPORT_CYCLING]
+				)
+			)
 		if int(sf.get(6, -1)) != SUB_SPORT_VIRTUAL_ACTIVITY:
-			_err(s, "session.sub_sport is %s, expected %d (virtual_activity)" % [str(sf.get(6, "missing")), SUB_SPORT_VIRTUAL_ACTIVITY])
+			_err(
+				s,
+				(
+					"session.sub_sport is %s, expected %d (virtual_activity)"
+					% [str(sf.get(6, "missing")), SUB_SPORT_VIRTUAL_ACTIVITY]
+				)
+			)
 		if not sf.has(7):
 			_err(s, "session has no total_elapsed_time")
 		if sf.has(26) and int(sf[26]) != laps.size():
-			_err(s, "session.num_laps is %d but the file holds %d lap(s)" % [int(sf[26]), laps.size()])
+			_err(
+				s,
+				"session.num_laps is %d but the file holds %d lap(s)" % [int(sf[26]), laps.size()]
+			)
 
 	# Laps.
 	var origin := ses_start
@@ -777,20 +918,25 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 	var i := 0
 	for lf in laps:
 		var lst := int(lf.get(2, -1))
-		lap_out.append({
-			"index": i,
-			"name": _dev_string(lf, lap_name_key) if lap_name_key != "" else "",
-			"start_time": lf.get(2, null),
-			"start_s": float(lst - origin) if lst >= 0 and origin >= 0 else 0.0,
-			"duration_s": _scaled(lf, 7, 1000.0),
-			"timer_s": _scaled(lf, 8, 1000.0),
-			"distance_m": _scaled(lf, 9, 100.0),
-			"work_kj": _scaled(lf, 41, 1000.0),
-			"avg_power_w": _scaled(lf, 19, 1.0),
-			"max_power_w": _scaled(lf, 20, 1.0),
-			"avg_cadence_rpm": _scaled(lf, 17, 1.0),
-			"max_cadence_rpm": _scaled(lf, 18, 1.0),
-		})
+		(
+			lap_out
+			. append(
+				{
+					"index": i,
+					"name": _dev_string(lf, lap_name_key) if lap_name_key != "" else "",
+					"start_time": lf.get(2, null),
+					"start_s": float(lst - origin) if lst >= 0 and origin >= 0 else 0.0,
+					"duration_s": _scaled(lf, 7, 1000.0),
+					"timer_s": _scaled(lf, 8, 1000.0),
+					"distance_m": _scaled(lf, 9, 100.0),
+					"work_kj": _scaled(lf, 41, 1000.0),
+					"avg_power_w": _scaled(lf, 19, 1.0),
+					"max_power_w": _scaled(lf, 20, 1.0),
+					"avg_cadence_rpm": _scaled(lf, 17, 1.0),
+					"max_cadence_rpm": _scaled(lf, 18, 1.0),
+				}
+			)
+		)
 		if not lf.has(2):
 			_err(s, "lap %d has no start_time" % (i + 1))
 		if not lf.has(7):
@@ -818,7 +964,13 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 			"event_type": af.get(4, null),
 		}
 		if af.has(1) and int(af[1]) != sessions.size():
-			_err(s, "activity.num_sessions is %d but the file holds %d session(s)" % [int(af[1]), sessions.size()])
+			_err(
+				s,
+				(
+					"activity.num_sessions is %d but the file holds %d session(s)"
+					% [int(af[1]), sessions.size()]
+				)
+			)
 
 	# Messages the rides encoder writes that only rate a warning when missing.
 	if int(s["device_infos"]) == 0:
@@ -834,15 +986,20 @@ static func rides_contract(s: Dictionary) -> Dictionary:
 	var laps: Array = []
 	for lap: Variant in s["laps"]:
 		var l: Dictionary = lap
-		laps.append({
-			"start_time": _unix_or_null(l.get("start_time", null)),
-			"total_elapsed_time": l["duration_s"],
-			"total_timer_time": l["timer_s"],
-			"total_distance": l["distance_m"],
-			"total_work": float(l["work_kj"]) * 1000.0,
-			"avg_power": l["avg_power_w"],
-			"name": l.get("name", ""),
-		})
+		(
+			laps
+			. append(
+				{
+					"start_time": _unix_or_null(l.get("start_time", null)),
+					"total_elapsed_time": l["duration_s"],
+					"total_timer_time": l["timer_s"],
+					"total_distance": l["distance_m"],
+					"total_work": float(l["work_kj"]) * 1000.0,
+					"avg_power": l["avg_power_w"],
+					"name": l.get("name", ""),
+				}
+			)
+		)
 	var fid: Dictionary = s["file_id"]
 	var out := {
 		"path": s.get("input", s["path"]),
@@ -862,12 +1019,17 @@ static func rides_contract(s: Dictionary) -> Dictionary:
 	var ses: Dictionary = s["session"]
 	if not ses.is_empty():
 		out["session"] = {
-			"sport": ses["sport"], "sub_sport": ses["sub_sport"],
+			"sport": ses["sport"],
+			"sub_sport": ses["sub_sport"],
 			"start_time": _unix_or_null(ses.get("start_time", null)),
-			"total_elapsed_time": ses["elapsed_s"], "total_timer_time": ses["timer_s"],
-			"total_distance": ses["distance_m"], "total_work": float(ses["work_kj"]) * 1000.0,
-			"avg_power": ses["avg_power_w"], "max_power": ses["max_power_w"],
-			"avg_cadence": ses["avg_cadence_rpm"], "max_cadence": ses["max_cadence_rpm"],
+			"total_elapsed_time": ses["elapsed_s"],
+			"total_timer_time": ses["timer_s"],
+			"total_distance": ses["distance_m"],
+			"total_work": float(ses["work_kj"]) * 1000.0,
+			"avg_power": ses["avg_power_w"],
+			"max_power": ses["max_power_w"],
+			"avg_cadence": ses["avg_cadence_rpm"],
+			"max_cadence": ses["max_cadence_rpm"],
 			"num_laps": ses["num_laps"],
 		}
 	return out

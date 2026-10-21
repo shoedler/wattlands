@@ -5,7 +5,9 @@ extends "res://tests/governor/gov_test_base.gd"
 ## profiles), DS7 (mode_grade), DS9 (course_grade at 2 Hz).
 
 
-func _sim_rig(params: Dictionary = {}, source: String = Wl.GRADE_GAME, phase: PlanPhase = null) -> Rig:
+func _sim_rig(
+	params: Dictionary = {}, source: String = Wl.GRADE_GAME, phase: PlanPhase = null
+) -> Rig:
 	var rig := make_rig(params, follower())
 	rig.start([phase if phase != null else sim(source, 600.0)])
 	rig.run(1.0)
@@ -45,11 +47,15 @@ func test_user_range_clamp() -> void:
 	var rig := _sim_rig()
 	rig.gov.set_course_grade(30.0)
 	rig.run(1.0)
-	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 10.0, 1e-9, "15% capped at the default +10%")
+	assert_almost_eq(
+		float(rig.s()["applied_grade_pct"]), 10.0, 1e-9, "15% capped at the default +10%"
+	)
 	assert_has(rig.s()["clamped_by"], Wl.CLAMP_GRADE_RANGE)
 	rig.gov.set_course_grade(-20.0)
 	rig.run(1.0)
-	assert_almost_eq(float(rig.s()["applied_grade_pct"]), -5.0, 1e-9, "-10% capped at the default -5%")
+	assert_almost_eq(
+		float(rig.s()["applied_grade_pct"]), -5.0, 1e-9, "-10% capped at the default -5%"
+	)
 	var rig2 := _sim_rig({"grade_min_pct": -2.0, "grade_max_pct": 4.0})
 	rig2.gov.set_course_grade(12.0)
 	rig2.run(1.0)
@@ -60,7 +66,9 @@ func test_total_limits() -> void:
 	var rig := _sim_rig({"grade_min_pct": -20.0, "grade_max_pct": 30.0, "difficulty_pct": 100.0})
 	rig.gov.set_course_grade(25.0)
 	rig.run(1.0)
-	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 16.0, 1e-9, "the user range itself is bounded by +16%")
+	assert_almost_eq(
+		float(rig.s()["applied_grade_pct"]), 16.0, 1e-9, "the user range itself is bounded by +16%"
+	)
 	rig.gov.set_course_grade(-25.0)
 	rig.run(1.0)
 	assert_almost_eq(float(rig.s()["applied_grade_pct"]), -10.0, 1e-9)
@@ -93,7 +101,9 @@ func test_crr_and_cw_factor_bounds() -> void:
 	assert_does_not_have(rec2["clamped_by"], Wl.CLAMP_FACTOR)
 	rig.run(1.0)
 	assert_almost_eq(float(rig.s()["cw"]), 0.357, 1e-9, "0.51 x 0.7")
-	assert_almost_eq(float(rig.s()["crr"]), 0.004, 1e-12, "a request replaces the whole factors channel")
+	assert_almost_eq(
+		float(rig.s()["crr"]), 0.004, 1e-12, "a request replaces the whole factors channel"
+	)
 
 
 func test_flat_source_ignores_course_grade() -> void:
@@ -153,12 +163,16 @@ func test_course_grade_holds_until_the_phase_ends() -> void:
 
 
 func test_course_profile_followed_by_distance() -> void:
-	var phase := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course([[0.0, 0.0], [100.0, 4.0], [200.0, -2.0]])
+	var phase := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course(
+		[[0.0, 0.0], [100.0, 4.0], [200.0, -2.0]]
+	)
 	var rig := make_rig({"difficulty_pct": 100.0}, follower())
 	rig.gov.set_course_distance(1000.0)
 	rig.start([phase])
 	rig.run(1.0)
-	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 0.0, 1e-9, "distance counts from the phase start")
+	assert_almost_eq(
+		float(rig.s()["applied_grade_pct"]), 0.0, 1e-9, "distance counts from the phase start"
+	)
 	rig.gov.set_course_distance(1050.0)
 	rig.run(1.0)
 	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 2.0, 1e-9, "halfway to the 4% point")

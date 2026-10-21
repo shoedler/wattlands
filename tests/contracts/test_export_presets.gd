@@ -34,8 +34,14 @@ func test_preset_does_not_filter_out_gdble() -> void:
 	var exclude := str(cfg.get_value(sec, "exclude_filter", ""))
 	for pattern in exclude.split(",", false):
 		var p := pattern.strip_edges()
-		assert_false(("addons/gdble/gdble.gdextension").match(p), "exclude_filter %s drops the GDBLE extension" % p)
-		assert_false(("addons/gdble/libgdble.windows.x86_64.dll").match(p), "exclude_filter %s drops the GDBLE DLL" % p)
+		assert_false(
+			("addons/gdble/gdble.gdextension").match(p),
+			"exclude_filter %s drops the GDBLE extension" % p
+		)
+		assert_false(
+			("addons/gdble/libgdble.windows.x86_64.dll").match(p),
+			"exclude_filter %s drops the GDBLE DLL" % p
+		)
 
 
 func test_gdextension_names_an_existing_windows_dll() -> void:
@@ -45,4 +51,6 @@ func test_gdextension_names_an_existing_windows_dll() -> void:
 		var lib := str(ext.get_value("libraries", key, ""))
 		assert_true(lib.ends_with(".dll"), "%s points at a DLL" % key)
 		assert_true(FileAccess.file_exists(lib), "%s exists: %s" % [key, lib])
-	assert_eq(ext.get_value("configuration", "reloadable", true), false, "reloadable = false (BRIEF 4.2)")
+	assert_eq(
+		ext.get_value("configuration", "reloadable", true), false, "reloadable = false (BRIEF 4.2)"
+	)

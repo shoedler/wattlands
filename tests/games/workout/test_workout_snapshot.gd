@@ -21,7 +21,9 @@ func _snapshots(content: String, ticks: int) -> Array[String]:
 			var ps := U.phase_state(timeline, starts, tick)
 			var v := U.compliant(slot, timeline[ps.index], ps)
 			# Some per-rider variety.
-			v["power_w"] = float(v["power_w"]) * (1.0 + 0.03 * float(slot.slot_index)) + float(tick % 7)
+			v["power_w"] = (
+				float(v["power_w"]) * (1.0 + 0.03 * float(slot.slot_index)) + float(tick % 7)
+			)
 			frame.players[slot.peer_id] = U.telemetry(slot, v, tick)
 			frame.phase[slot.peer_id] = ps
 		g.sim_step(U.DT, frame)
@@ -60,7 +62,9 @@ func test_every_number_is_an_int_and_declared() -> void:
 	var parsed: Variant = JSON.parse_string(JSON.stringify(snap))
 	var fixed: Variant = U.apply_int_fields(parsed, g.int_fields()["snapshot"])
 	_assert_all_ints(fixed, "decoded snapshot")
-	assert_eq(JSON.stringify(fixed), JSON.stringify(snap), "exact round trip through the declared paths")
+	assert_eq(
+		JSON.stringify(fixed), JSON.stringify(snap), "exact round trip through the declared paths"
+	)
 	g.free()
 
 
@@ -68,11 +72,15 @@ func test_events_round_trip_with_int_fields() -> void:
 	var g := U.game("easy_30", U.players(2, 1))
 	var events := U.ride(g)
 	var fields := g.int_fields()
-	for type: String in [WorkoutRules.EV_INTERVAL_START, WorkoutRules.EV_INTERVAL_END, WorkoutRules.EV_SPRINT]:
+	for type: String in [
+		WorkoutRules.EV_INTERVAL_START, WorkoutRules.EV_INTERVAL_END, WorkoutRules.EV_SPRINT
+	]:
 		var some := U.of_type(events, type)
 		assert_false(some.is_empty(), type)
 		for e in some:
-			var back: Variant = U.apply_int_fields(JSON.parse_string(JSON.stringify(e)), fields[type])
+			var back: Variant = U.apply_int_fields(
+				JSON.parse_string(JSON.stringify(e)), fields[type]
+			)
 			assert_eq(JSON.stringify(back), JSON.stringify(e), "%s round trip" % type)
 	g.free()
 
@@ -113,7 +121,9 @@ func test_client_applies_snapshots_and_events() -> void:
 	assert_eq(client.state.phase_index, host.state.phase_index)
 	assert_almost_eq(client.state.plan_t, host.state.plan_t, 0.051)
 	var hud: U.FakeHud = client.ctx.hud
-	assert_eq(hud.of("readout").back()["id"], WorkoutHud.READOUT_TIB, "the client's own in-band readout")
+	assert_eq(
+		hud.of("readout").back()["id"], WorkoutHud.READOUT_TIB, "the client's own in-band readout"
+	)
 	# Prediction moves only the local marker.
 	var before := client.state.rider(2).distance_m()
 	var other := client.state.rider(1).distance_m()
@@ -170,27 +180,54 @@ func _assert_all_ints(v: Variant, where: String) -> void:
 func test_a_long_timeline_goes_in_parts_under_16_kb() -> void:
 	var players := U.players(2)
 	var host := U.game("threshold", players)
-	var long: Array[PlanPhase] = [PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_lap()]
+	var long: Array[PlanPhase] = [
+		PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_lap()
+	]
 	for i in 200:
 		# Labels like the importer's ("Intervals 7/200: on, 30 s at 100%").
-		long.append(PlanPhase.erg(Wl.WORK, 100.0, 30.0, "Intervals %d/200: on, 30 s at 100%%" % (i + 1)).with_lap())
-		long.append(PlanPhase.erg(Wl.RECOVERY, 50.0, 30.0, "Intervals %d/200: off, 30 s at 50%%" % (i + 1)).with_lap())
+		long.append(
+			(
+				PlanPhase
+				. erg(Wl.WORK, 100.0, 30.0, "Intervals %d/200: on, 30 s at 100%%" % (i + 1))
+				. with_lap()
+			)
+		)
+		long.append(
+			(
+				PlanPhase
+				. erg(Wl.RECOVERY, 50.0, 30.0, "Intervals %d/200: off, 30 s at 50%%" % (i + 1))
+				. with_lap()
+			)
+		)
 	long.append(PlanValidator.cooldown_phase())
 	host.state.set_timeline(long)
 	var parts := WorkoutSnapshot.timeline_parts(long)
 	assert_eq(parts, 4, "403 phases in parts of %d" % WorkoutSnapshot.TIMELINE_PART_PHASES)
-	assert_gt(JSON.stringify(WorkoutSnapshot.encode_timeline(long)).to_utf8_buffer().size(), NetMessages.MAX_MESSAGE_BYTES,
-		"precondition: the whole timeline alone is over 16 KB")
+	assert_gt(
+		JSON.stringify(WorkoutSnapshot.encode_timeline(long)).to_utf8_buffer().size(),
+		NetMessages.MAX_MESSAGE_BYTES,
+		"precondition: the whole timeline alone is over 16 KB"
+	)
 	var client := U.game("threshold", players, Wl.CLIENT, 2)
 	var empty: Array[PlanPhase] = []
 	client.state.set_timeline(empty)
 	var paths: Array = host.int_fields()["snapshot"]
 	for k in WorkoutGame.TIMELINE_EVERY:
 		var snap := host.snapshot()
-		var wire := Protocol.encode(Protocol.game_msg("snapshot", {"game_id": "workout", "seq": k + 1, "tick": k, "state": snap}))
-		assert_lt(wire.to_utf8_buffer().size() + 32, NetMessages.MAX_MESSAGE_BYTES, "snapshot %d fits one relay frame" % k)
+		var wire := Protocol.encode(
+			Protocol.game_msg(
+				"snapshot", {"game_id": "workout", "seq": k + 1, "tick": k, "state": snap}
+			)
+		)
+		assert_lt(
+			wire.to_utf8_buffer().size() + 32,
+			NetMessages.MAX_MESSAGE_BYTES,
+			"snapshot %d fits one relay frame" % k
+		)
 		assert_eq(snap.has("tl"), k < parts, "snapshot %d carries a timeline part" % k)
-		var back: Variant = Protocol.apply_int_fields(JSON.parse_string(JSON.stringify(snap)), paths)
+		var back: Variant = Protocol.apply_int_fields(
+			JSON.parse_string(JSON.stringify(snap)), paths
+		)
 		if k < parts - 1:
 			client.apply_snapshot(back)
 			assert_eq(client.state.phases.size(), 0, "no timeline before every part is in")

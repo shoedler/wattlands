@@ -26,8 +26,12 @@ func _t(label: String) -> LoopbackTransport:
 	t.connected.connect(func() -> void: log.append(["connected"]))
 	t.disconnected.connect(func(reason: String) -> void: log.append(["disconnected", reason]))
 	t.peer_joined.connect(func(id: int) -> void: log.append(["peer_joined", id]))
-	t.peer_left.connect(func(id: int) -> void: log.append(["peer_left", id, t.last_peer_left_reason]))
-	t.message.connect(func(from: int, data: Dictionary) -> void: log.append(["message", from, data]))
+	t.peer_left.connect(
+		func(id: int) -> void: log.append(["peer_left", id, t.last_peer_left_reason])
+	)
+	t.message.connect(
+		func(from: int, data: Dictionary) -> void: log.append(["message", from, data])
+	)
 	t.relay_error.connect(func(code: String) -> void: log.append(["relay_error", code]))
 	t.protocol_mismatch.connect(func(from: int) -> void: log.append(["protocol_mismatch", from]))
 	return t
@@ -95,13 +99,19 @@ func test_join_assigns_ids_and_announces() -> void:
 	assert_eq(r[1].host_peer, 1)
 	assert_false(r[1].is_host())
 	assert_eq(r[1].room_code, r[0].room_code)
-	assert_true(U.same(events["h"], [["connected"], ["peer_joined", 2], ["peer_joined", 3]]), str(events["h"]))
+	assert_true(
+		U.same(events["h"], [["connected"], ["peer_joined", 2], ["peer_joined", 3]]),
+		str(events["h"])
+	)
 	assert_true(U.same(events["a"], [["connected"], ["peer_joined", 3]]), str(events["a"]))
 
 
 func test_broadcast_excludes_the_sender_and_converts_ints() -> void:
 	var r := _room()
-	r[0].send(Wl.ALL_PEERS, Protocol.game_msg("phase", {"index": 2, "start_tick": 40, "ended_by": "duration", "x": 3}))
+	r[0].send(
+		Wl.ALL_PEERS,
+		Protocol.game_msg("phase", {"index": 2, "start_tick": 40, "ended_by": "duration", "x": 3})
+	)
 	_pump()
 	assert_eq(_messages("h").size(), 0)
 	for label in ["a", "b"]:
@@ -110,7 +120,9 @@ func test_broadcast_excludes_the_sender_and_converts_ints() -> void:
 		assert_eq(m[0][1], 1)
 		var d: Dictionary = m[0][2]
 		assert_typeof(d["index"], TYPE_INT, "decoded on arrival")
-		assert_typeof(d["x"], TYPE_FLOAT, "undeclared numbers come back as floats, like the network")
+		assert_typeof(
+			d["x"], TYPE_FLOAT, "undeclared numbers come back as floats, like the network"
+		)
 
 
 func test_non_hosts_send_only_to_the_host() -> void:

@@ -14,7 +14,11 @@ extends RefCounted
 ## 50 km, Rolling road's first -2 % point lay at 36 km, beyond every rider's 30 minutes).
 
 const DEFAULT_SPEC := {
-	"seed": 1, "length_m": 50000.0, "step_m": 250.0, "min_grade_pct": -2.0, "max_grade_pct": 6.0,
+	"seed": 1,
+	"length_m": 50000.0,
+	"step_m": 250.0,
+	"min_grade_pct": -2.0,
+	"max_grade_pct": 6.0,
 }
 const SPEC_KEYS: Array[String] = ["seed", "length_m", "step_m", "min_grade_pct", "max_grade_pct"]
 ## Optional spec keys.
@@ -62,8 +66,17 @@ static func spec_errors(spec: Variant) -> Array[String]:
 	if d.has("window_m") and errs.is_empty():
 		var w := float(d["window_m"])
 		var steps := w / float(d["step_m"])
-		if w < 4.0 * float(d["step_m"]) or w > float(d["length_m"]) or absf(steps - roundf(steps)) > 1e-6:
-			errs.append("course.window_m: must be a multiple of step_m, at least 4 steps and at most length_m")
+		if (
+			w < 4.0 * float(d["step_m"])
+			or w > float(d["length_m"])
+			or absf(steps - roundf(steps)) > 1e-6
+		):
+			(
+				errs
+				. append(
+					"course.window_m: must be a multiple of step_m, at least 4 steps and at most length_m"
+				)
+			)
 	return errs
 
 

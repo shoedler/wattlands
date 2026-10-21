@@ -7,27 +7,64 @@ extends "res://tests/governor/gov_test_base.gd"
 
 ## name -> argument count, from the W0 stub.
 const GOVERNOR_METHODS := {
-	"setup": 1, "configure": 1, "set_plan": 1, "start_phase": 1, "set_game_paused": 1,
-	"apply_directive": 1, "set_course_grade": 1, "set_course_distance": 1, "shift": 1,
-	"on_sample": 1, "tick": 1, "emergency_safe": 0, "resume": 0, "shutdown": 0, "status": 0,
-	"is_rescue": 0, "is_coasting": 0, "is_warmup_active": 0,
+	"setup": 1,
+	"configure": 1,
+	"set_plan": 1,
+	"start_phase": 1,
+	"set_game_paused": 1,
+	"apply_directive": 1,
+	"set_course_grade": 1,
+	"set_course_distance": 1,
+	"shift": 1,
+	"on_sample": 1,
+	"tick": 1,
+	"emergency_safe": 0,
+	"resume": 0,
+	"shutdown": 0,
+	"status": 0,
+	"is_rescue": 0,
+	"is_coasting": 0,
+	"is_warmup_active": 0,
 }
 ## name -> argument names, from the W0 stub.
 const GOVERNOR_SIGNALS := {
-	"status_changed": ["status"], "rescue_changed": ["active"], "coasting_changed": ["active"],
-	"pause_requested": ["reason"], "afk_changed": ["afk"], "directive_applied": ["record"],
-	"warmup_changed": ["active"], "panic_changed": ["active"],
+	"status_changed": ["status"],
+	"rescue_changed": ["active"],
+	"coasting_changed": ["active"],
+	"pause_requested": ["reason"],
+	"afk_changed": ["afk"],
+	"directive_applied": ["record"],
+	"warmup_changed": ["active"],
+	"panic_changed": ["active"],
 }
 ## The W0 stub's documented status keys and their types.
 const STATUS_KEYS := {
-	"mode": TYPE_STRING, "applied_target_w": TYPE_INT, "applied_pct": TYPE_FLOAT,
-	"applied_grade_pct": TYPE_FLOAT, "wind_mps": TYPE_FLOAT, "crr": TYPE_FLOAT, "cw": TYPE_FLOAT,
-	"haptic_active": TYPE_BOOL, "clamped_by": TYPE_ARRAY, "rescue": TYPE_BOOL, "coasting": TYPE_BOOL,
-	"afk": TYPE_BOOL, "paused": TYPE_BOOL, "panic": TYPE_BOOL, "warmup_active": TYPE_BOOL,
-	"warmup_remaining_s": TYPE_FLOAT, "gear": TYPE_INT, "s_left_105": TYPE_FLOAT,
-	"s_left_120": TYPE_FLOAT, "latched_105": TYPE_BOOL, "latched_120": TYPE_BOOL,
-	"phase_index": TYPE_INT, "phase_elapsed_s": TYPE_FLOAT, "sim_block_active": TYPE_BOOL,
-	"last_switch_t": TYPE_FLOAT, "profile": TYPE_STRING,
+	"mode": TYPE_STRING,
+	"applied_target_w": TYPE_INT,
+	"applied_pct": TYPE_FLOAT,
+	"applied_grade_pct": TYPE_FLOAT,
+	"wind_mps": TYPE_FLOAT,
+	"crr": TYPE_FLOAT,
+	"cw": TYPE_FLOAT,
+	"haptic_active": TYPE_BOOL,
+	"clamped_by": TYPE_ARRAY,
+	"rescue": TYPE_BOOL,
+	"coasting": TYPE_BOOL,
+	"afk": TYPE_BOOL,
+	"paused": TYPE_BOOL,
+	"panic": TYPE_BOOL,
+	"warmup_active": TYPE_BOOL,
+	"warmup_remaining_s": TYPE_FLOAT,
+	"gear": TYPE_INT,
+	"s_left_105": TYPE_FLOAT,
+	"s_left_120": TYPE_FLOAT,
+	"latched_105": TYPE_BOOL,
+	"latched_120": TYPE_BOOL,
+	"phase_index": TYPE_INT,
+	"phase_elapsed_s": TYPE_FLOAT,
+	"sim_block_active": TYPE_BOOL,
+	"last_switch_t": TYPE_FLOAT,
+	"profile": TYPE_STRING,
 }
 const RECORD_KEYS := ["id", "kind", "requested", "applied", "clamped_by", "refused", "reason", "t"]
 
@@ -53,7 +90,9 @@ func test_governor_methods_keep_their_w0_signatures() -> void:
 		assert_true(methods.has(name), "SafetyGovernor.%s exists" % name)
 		if methods.has(name):
 			var args: Array = methods[name]["args"]
-			assert_eq(args.size(), int(GOVERNOR_METHODS[name]), "SafetyGovernor.%s argument count" % name)
+			assert_eq(
+				args.size(), int(GOVERNOR_METHODS[name]), "SafetyGovernor.%s argument count" % name
+			)
 
 
 func test_governor_signals_keep_their_w0_arguments() -> void:
@@ -86,7 +125,9 @@ func _check_status(s: Dictionary, where: String) -> void:
 		assert_true(s.has(key), "status has %s (%s)" % [key, where])
 		if s.has(key):
 			assert_eq(typeof(s[key]), int(STATUS_KEYS[key]), "status.%s type (%s)" % [key, where])
-	assert_true([Wl.ERG, Wl.SIM, Wl.OFF].has(str(s["mode"])), "mode is ERG, SIM or OFF (%s)" % where)
+	assert_true(
+		[Wl.ERG, Wl.SIM, Wl.OFF].has(str(s["mode"])), "mode is ERG, SIM or OFF (%s)" % where
+	)
 	assert_true(["normal", "ramp_test"].has(str(s["profile"])))
 	assert_between(int(s["gear"]), 1, 24)
 
@@ -121,7 +162,9 @@ func test_records_have_every_documented_key() -> void:
 		assert_eq(typeof(r["reason"]), TYPE_STRING)
 		assert_eq(typeof(r["clamped_by"]), TYPE_ARRAY)
 		assert_true(["request", "course_grade"].has(str(r["kind"])))
-	assert_eq(rig.records.size(), 4, "every apply_directive and set_course_grade emits directive_applied")
+	assert_eq(
+		rig.records.size(), 4, "every apply_directive and set_course_grade emits directive_applied"
+	)
 
 
 func test_status_changed_at_most_once_per_tick() -> void:

@@ -46,8 +46,12 @@ func root_items() -> Array:
 	var items: Array = []
 	for i in field.rows.size():
 		items.append({"id": "kb:row:%d" % i, "text": spaced(field.rows[i])})
-	items.append({"id": ID_DELETE, "text": AppScreen.t("APP_KEY_DELETE"), "disabled": field.value() == ""})
-	items.append({"id": ID_DONE, "text": AppScreen.t(done_text_key), "disabled": not field.is_complete()})
+	items.append(
+		{"id": ID_DELETE, "text": AppScreen.t("APP_KEY_DELETE"), "disabled": field.value() == ""}
+	)
+	items.append(
+		{"id": ID_DONE, "text": AppScreen.t(done_text_key), "disabled": not field.is_complete()}
+	)
 	for e: Variant in extra_items:
 		items.append(e)
 	items.append({"id": ID_CANCEL, "text": AppScreen.t("APP_BACK")})

@@ -27,8 +27,12 @@ func _encode(op: String, args: Dictionary) -> PackedByteArray:
 		"target_resistance":
 			return FtmsCodec.encode_target_resistance(float(args["level"]), str(args["encoding"]))
 		"indoor_bike_simulation":
-			return FtmsCodec.encode_indoor_bike_simulation(float(args["wind_mps"]), float(args["grade_pct"]),
-				float(args["crr"]), float(args["cw"]))
+			return FtmsCodec.encode_indoor_bike_simulation(
+				float(args["wind_mps"]),
+				float(args["grade_pct"]),
+				float(args["crr"]),
+				float(args["cw"])
+			)
 		"indoor_bike_data":
 			return FtmsCodec.encode_indoor_bike_data(args)
 	fail_test("unknown encode op %s" % op)
@@ -78,6 +82,7 @@ func _assert_record(got: Dictionary, expect: Dictionary, label: String) -> void:
 
 # --- the vectors file -----------------------------------------------------------------
 
+
 func test_vectors_file_is_documented_and_complete() -> void:
 	assert_true(_doc.has("_doc"), "the format is documented in _doc")
 	assert_eq(int(_doc["version"]), 1)
@@ -90,8 +95,16 @@ func test_vectors_file_is_documented_and_complete() -> void:
 	var ops := {}
 	for c: Dictionary in _doc["encode"]:
 		ops[c["op"]] = true
-	for op: String in ["request_control", "reset", "start_resume", "stop_pause", "target_power",
-			"target_resistance", "indoor_bike_simulation", "indoor_bike_data"]:
+	for op: String in [
+		"request_control",
+		"reset",
+		"start_resume",
+		"stop_pause",
+		"target_power",
+		"target_resistance",
+		"indoor_bike_simulation",
+		"indoor_bike_data"
+	]:
 		assert_true(ops.has(op), "an encode vector for %s" % op)
 	var kinds := {}
 	var invalid := {}
@@ -99,8 +112,15 @@ func test_vectors_file_is_documented_and_complete() -> void:
 		kinds[c["kind"]] = true
 		if not bool(c["valid"]):
 			invalid[c["kind"]] = true
-	for kind: String in ["indoor_bike_data", "feature", "power_range", "resistance_range", "machine_status",
-			"control_response", "cycling_power_measurement"]:
+	for kind: String in [
+		"indoor_bike_data",
+		"feature",
+		"power_range",
+		"resistance_range",
+		"machine_status",
+		"control_response",
+		"cycling_power_measurement"
+	]:
 		assert_true(kinds.has(kind), "a parse vector for %s" % kind)
 		assert_true(invalid.has(kind), "a malformed vector for %s" % kind)
 
@@ -146,6 +166,7 @@ func test_bike_data_encoder_round_trips() -> void:
 
 # --- encoders beyond the vectors ------------------------------------------------------
 
+
 func test_encoder_rejects_bad_arguments() -> void:
 	assert_eq(FtmsCodec.encode_stop_pause(3), PackedByteArray())
 	assert_push_error("stop/pause parameter")
@@ -156,8 +177,14 @@ func test_encoder_rejects_bad_arguments() -> void:
 
 
 func test_simulation_nan_and_infinite_values_are_safe() -> void:
-	assert_eq(FtmsCodec.to_hex(FtmsCodec.encode_indoor_bike_simulation(NAN, NAN, 0.004, 0.51)), "11000000002833")
-	assert_eq(FtmsCodec.to_hex(FtmsCodec.encode_indoor_bike_simulation(INF, -INF, INF, -INF)), "11ff7f00" + "80ff00")
+	assert_eq(
+		FtmsCodec.to_hex(FtmsCodec.encode_indoor_bike_simulation(NAN, NAN, 0.004, 0.51)),
+		"11000000002833"
+	)
+	assert_eq(
+		FtmsCodec.to_hex(FtmsCodec.encode_indoor_bike_simulation(INF, -INF, INF, -INF)),
+		"11ff7f00" + "80ff00"
+	)
 
 
 func test_simulation_defaults_match_brief_4_5() -> void:
@@ -174,6 +201,7 @@ func test_target_power_never_negative() -> void:
 
 
 # --- assembler ------------------------------------------------------------------------
+
 
 func test_assembler_streams_parts() -> void:
 	var a := FtmsCodec.BikeDataAssembler.new()
@@ -193,8 +221,14 @@ func test_assembler_streams_parts() -> void:
 func test_assembler_flushes_after_max_parts() -> void:
 	var a := FtmsCodec.BikeDataAssembler.new()
 	var parts: Array[Dictionary] = [
-		{"avg_speed_kmh": 20.0}, {"avg_cadence_rpm": 80.0}, {"resistance_level": 3}, {"avg_power_w": 150},
-		{"heart_rate_bpm": 120}, {"met": 4.5}, {"elapsed_s": 60}, {"remaining_s": 30},
+		{"avg_speed_kmh": 20.0},
+		{"avg_cadence_rpm": 80.0},
+		{"resistance_level": 3},
+		{"avg_power_w": 150},
+		{"heart_rate_bpm": 120},
+		{"met": 4.5},
+		{"elapsed_s": 60},
+		{"remaining_s": 30},
 	]
 	var out: Array[Dictionary] = []
 	for p in parts:
@@ -214,6 +248,7 @@ func test_assemble_accepts_bytes_or_hex() -> void:
 
 
 # --- helpers and constants ------------------------------------------------------------
+
 
 func test_hex_helpers() -> void:
 	assert_eq(FtmsCodec.from_hex("05 C8:00"), PackedByteArray([5, 200, 0]))
@@ -246,8 +281,18 @@ func test_feature_bits_match_brief_4_3() -> void:
 	assert_eq(FtmsCodec.TARGET_SPIN_DOWN, 32768)
 	assert_eq(FtmsCodec.TARGET_CADENCE, 65536)
 	var mock := MockTrainer.FEATURES_MACHINE
-	assert_eq(mock, FtmsCodec.MACHINE_CADENCE | FtmsCodec.MACHINE_RESISTANCE_LEVEL | FtmsCodec.MACHINE_POWER_MEASUREMENT)
-	assert_eq(MockTrainer.FEATURES_TARGET, FtmsCodec.TARGET_RESISTANCE | FtmsCodec.TARGET_POWER | FtmsCodec.TARGET_SIMULATION)
+	assert_eq(
+		mock,
+		(
+			FtmsCodec.MACHINE_CADENCE
+			| FtmsCodec.MACHINE_RESISTANCE_LEVEL
+			| FtmsCodec.MACHINE_POWER_MEASUREMENT
+		)
+	)
+	assert_eq(
+		MockTrainer.FEATURES_TARGET,
+		FtmsCodec.TARGET_RESISTANCE | FtmsCodec.TARGET_POWER | FtmsCodec.TARGET_SIMULATION
+	)
 	assert_eq(MockTrainer.OP_SET_TARGET_POWER, FtmsCodec.OP_SET_TARGET_POWER)
 	assert_eq(MockTrainer.OP_SET_SIMULATION, FtmsCodec.OP_SET_SIMULATION)
 	assert_eq(MockTrainer.OP_SET_RESISTANCE, FtmsCodec.OP_SET_TARGET_RESISTANCE)

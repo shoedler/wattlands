@@ -84,7 +84,9 @@ func test_import_ftp_and_weight_from_strava() -> void:
 	assert_true(p.ftp_verified, "an imported FTP is verified (BRIEF 3.2)")
 	assert_eq(p.cp_w, 250.0, "CP follows FTP")
 	assert_eq(p.weight_kg, 72.5)
-	assert_gt((fx.settings as Object).get("profile_saves") as int, saves_before, "the profile was saved")
+	assert_gt(
+		(fx.settings as Object).get("profile_saves") as int, saves_before, "the profile was saved"
+	)
 	assert_true(s.status_label.text.contains("250"), s.status_label.text)
 
 
@@ -112,7 +114,9 @@ func test_leaving_the_page_mid_import_still_saves_it() -> void:
 	assert_eq(p.ftp_w, 250.0, "Strava's FTP")
 	assert_true(p.ftp_verified)
 	assert_eq(p.weight_kg, 72.5)
-	assert_gt((fx.settings as Object).get("profile_saves") as int, saves_before, "the import was saved")
+	assert_gt(
+		(fx.settings as Object).get("profile_saves") as int, saves_before, "the import was saved"
+	)
 	assert_eq(changed[0], 1, "profile_changed once")
 
 
@@ -156,15 +160,20 @@ func test_rides_history_reuploads_a_ride_already_on_strava() -> void:
 	await r.upload(path, rec.summary())
 	assert_true(bool(r.rides()[0]["uploaded"]), "precondition: the ride is on Strava")
 	var states: Array[String] = []
-	fx.bus.upload_state_changed.connect(func(id: String, st: String, _d: String) -> void:
-		if id == rec.ride_id:
-			states.append(st))
+	fx.bus.upload_state_changed.connect(
+		func(id: String, st: String, _d: String) -> void:
+			if id == rec.ride_id:
+				states.append(st)
+	)
 	var uploads_before := int(await _mock_upload_count())
 	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
 	assert_true(s.is_on_strava(0))
 	s.upload(0)
 	await r.wait_uploads_idle()
-	assert_true(states.has("duplicate"), "Strava saw the ride again and calls it a duplicate: %s" % str(states))
+	assert_true(
+		states.has("duplicate"),
+		"Strava saw the ride again and calls it a duplicate: %s" % str(states)
+	)
 	assert_gt(int(await _mock_upload_count()), uploads_before, "a new upload reached Strava")
 
 

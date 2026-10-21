@@ -17,8 +17,12 @@ func _img(w: int, h: int, c: Color = Color(0, 0, 0, 0)) -> Image:
 
 func _spec(w: int, h: int, extra: Dictionary = {}) -> Dictionary:
 	var spec: Dictionary = {
-		"size": Vector2i(w, h), "background": "transparent", "align": "bottom_center",
-		"tile": false, "mirror": false, "dither": "none",
+		"size": Vector2i(w, h),
+		"background": "transparent",
+		"align": "bottom_center",
+		"tile": false,
+		"mirror": false,
+		"dither": "none",
 	}
 	spec.merge(extra, true)
 	return spec
@@ -129,7 +133,9 @@ func test_fit_keeps_the_aspect_and_pads_toward_align() -> void:
 		"center_left": Rect2i(0, 15, 40, 10),
 	}
 	for align: String in expect.keys():
-		var out: Image = ArtPixelate.process_sprite(wide, _spec(40, 40, {"align": align}), _palette())
+		var out: Image = ArtPixelate.process_sprite(
+			wide, _spec(40, 40, {"align": align}), _palette()
+		)
 		assert_eq(_opaque_rect(out), expect[align], align)
 	# A 1:4 block: 10x40 of content, placed by the horizontal part of align.
 	var tall: Image = _img(300, 600)
@@ -140,7 +146,9 @@ func test_fit_keeps_the_aspect_and_pads_toward_align() -> void:
 		"top_right": Rect2i(30, 0, 10, 40),
 	}
 	for align: String in expect_h.keys():
-		var out: Image = ArtPixelate.process_sprite(tall, _spec(40, 40, {"align": align}), _palette())
+		var out: Image = ArtPixelate.process_sprite(
+			tall, _spec(40, 40, {"align": align}), _palette()
+		)
 		assert_eq(_opaque_rect(out), expect_h[align], align)
 
 
@@ -156,11 +164,16 @@ func test_fit_never_stretches() -> void:
 	# A sprite already at the right aspect fills the whole size.
 	var exact: Image = _img(320, 160)
 	exact.fill_rect(Rect2i(10, 10, 300, 150), Color.GREEN)
-	assert_eq(_opaque_rect(ArtPixelate.process_sprite(exact, _spec(32, 16), _palette())), Rect2i(0, 0, 32, 16))
+	assert_eq(
+		_opaque_rect(ArtPixelate.process_sprite(exact, _spec(32, 16), _palette())),
+		Rect2i(0, 0, 32, 16)
+	)
 
 
 func test_fit_mapping_numbers() -> void:
-	var m: Dictionary = ArtPixelate.fit_mapping(Rect2i(100, 50, 400, 100), Vector2i(40, 40), "bottom_center")
+	var m: Dictionary = ArtPixelate.fit_mapping(
+		Rect2i(100, 50, 400, 100), Vector2i(40, 40), "bottom_center"
+	)
 	assert_almost_eq(float(m["scale"]), 0.1, 1e-9)
 	assert_eq(m["content"], Rect2(0, 30, 40, 10))
 	assert_eq(m["origin"], Vector2(100, 50 - 30 / 0.1))
@@ -171,7 +184,9 @@ func test_cover_scales_to_cover_and_crops_the_centre() -> void:
 	var img: Image = _img(300, 100, Color.RED)
 	img.fill_rect(Rect2i(100, 0, 100, 100), Color.GREEN)
 	img.fill_rect(Rect2i(200, 0, 100, 100), Color.BLUE)
-	var out: Image = ArtPixelate.process_sprite(img, _spec(10, 10, {"background": "opaque"}), _palette())
+	var out: Image = ArtPixelate.process_sprite(
+		img, _spec(10, 10, {"background": "opaque"}), _palette()
+	)
 	assert_eq(out.get_size(), Vector2i(10, 10))
 	for y: int in 10:
 		for x: int in 10:
@@ -179,7 +194,9 @@ func test_cover_scales_to_cover_and_crops_the_centre() -> void:
 	# Bands stacked vertically, 1:3, into a square: the middle band.
 	var tall: Image = _img(100, 300, Color.RED)
 	tall.fill_rect(Rect2i(0, 100, 100, 100), Color.WHITE)
-	var out2: Image = ArtPixelate.process_sprite(tall, _spec(8, 8, {"background": "opaque"}), _palette())
+	var out2: Image = ArtPixelate.process_sprite(
+		tall, _spec(8, 8, {"background": "opaque"}), _palette()
+	)
 	assert_eq(out2.get_pixel(4, 0), Color.WHITE)
 	assert_eq(out2.get_pixel(4, 7), Color.WHITE)
 
@@ -187,19 +204,27 @@ func test_cover_scales_to_cover_and_crops_the_centre() -> void:
 func test_cover_keeps_the_aspect() -> void:
 	var img: Image = _img(200, 100, Color.WHITE)
 	img.fill_rect(Rect2i(50, 25, 100, 50), Color.BLACK)
-	var out: Image = ArtPixelate.process_sprite(img, _spec(40, 20, {"background": "opaque"}), _palette())
+	var out: Image = ArtPixelate.process_sprite(
+		img, _spec(40, 20, {"background": "opaque"}), _palette()
+	)
 	var black: Rect2i = Rect2i()
 	for y: int in 20:
 		for x: int in 40:
 			if out.get_pixel(x, y) == Color.BLACK:
-				black = Rect2i(x, y, 1, 1) if black.size == Vector2i.ZERO else black.merge(Rect2i(x, y, 1, 1))
+				black = (
+					Rect2i(x, y, 1, 1)
+					if black.size == Vector2i.ZERO
+					else black.merge(Rect2i(x, y, 1, 1))
+				)
 	assert_eq(black, Rect2i(10, 5, 20, 10))
 
 
 func test_tile_repeats_across_the_width() -> void:
 	var seg: Image = _img(30, 10, Color.RED)
 	seg.fill_rect(Rect2i(15, 0, 15, 10), Color.GREEN)
-	var out: Image = ArtPixelate.process_sprite(seg, _spec(30, 5, {"background": "opaque", "tile": true}), _palette())
+	var out: Image = ArtPixelate.process_sprite(
+		seg, _spec(30, 5, {"background": "opaque", "tile": true}), _palette()
+	)
 	assert_eq(out.get_size(), Vector2i(30, 5))
 	# Scaled to height 5 the segment is 15 px wide: red 0-7, green 8-14, red 15-22, green 23-29.
 	assert_eq(out.get_pixel(2, 2), Color.RED)
@@ -211,7 +236,9 @@ func test_tile_repeats_across_the_width() -> void:
 func test_tile_mirror_alternates_flipped_copies() -> void:
 	var seg: Image = _img(30, 10, Color.RED)
 	seg.fill_rect(Rect2i(15, 0, 15, 10), Color.GREEN)
-	var out: Image = ArtPixelate.process_sprite(seg, _spec(45, 5, {"background": "opaque", "tile": true, "mirror": true}), _palette())
+	var out: Image = ArtPixelate.process_sprite(
+		seg, _spec(45, 5, {"background": "opaque", "tile": true, "mirror": true}), _palette()
+	)
 	# Copies: normal (red, green), flipped (green, red), normal (red, green): edges match.
 	assert_eq(out.get_pixel(2, 2), Color.RED)
 	assert_eq(out.get_pixel(11, 2), Color.GREEN)
@@ -226,12 +253,16 @@ func test_tile_trims_then_scales_to_the_sprite_height() -> void:
 	var img: Image = _img(40, 40)
 	img.fill_rect(Rect2i(10, 15, 20, 10), Color.BLUE)
 	var out: Image = ArtPixelate.process_sprite(img, _spec(50, 5, {"tile": true}), _palette())
-	assert_eq(_opaque_rect(out), Rect2i(0, 0, 50, 5), "trimmed segments butt together across the width")
+	assert_eq(
+		_opaque_rect(out), Rect2i(0, 0, 50, 5), "trimmed segments butt together across the width"
+	)
 
 
 func test_tile_strip_width() -> void:
 	var img: Image = _img(30, 10, Color.RED)
-	var strip: Image = ArtPixelate.build_tile_strip(img, Rect2i(0, 0, 30, 10), Vector2i(100, 5), false)
+	var strip: Image = ArtPixelate.build_tile_strip(
+		img, Rect2i(0, 0, 30, 10), Vector2i(100, 5), false
+	)
 	assert_eq(strip.get_size(), Vector2i(200, 10))
 
 
@@ -242,17 +273,23 @@ func test_area_averaging_by_exact_coverage() -> void:
 	var checker: Image = _img(2, 2, Color.BLACK)
 	checker.set_pixel(1, 0, Color.WHITE)
 	checker.set_pixel(0, 1, Color.WHITE)
-	var out: PackedFloat32Array = ArtPixelate.area_resample(checker, Vector2.ZERO, 0.5, Rect2(0, 0, 2, 2), Vector2i(1, 1))
+	var out: PackedFloat32Array = ArtPixelate.area_resample(
+		checker, Vector2.ZERO, 0.5, Rect2(0, 0, 2, 2), Vector2i(1, 1)
+	)
 	assert_almost_eq(out[0], 127.5, 0.001)
 	assert_almost_eq(out[3], 1.0, 0.0001)
 	# Clipping: a 1-row source scaled by 2/3 covers only 2/3 of the output row's height.
 	var thin: Image = _img(3, 1, Color.WHITE)
-	var o3: PackedFloat32Array = ArtPixelate.area_resample(thin, Vector2.ZERO, 2.0 / 3.0, Rect2(0, 0, 3, 1), Vector2i(2, 1))
+	var o3: PackedFloat32Array = ArtPixelate.area_resample(
+		thin, Vector2.ZERO, 2.0 / 3.0, Rect2(0, 0, 3, 1), Vector2i(2, 1)
+	)
 	assert_almost_eq(o3[3], 2.0 / 3.0, 0.0001)
 	# Three source columns into two: [0, 1.5) and [1.5, 3) (three rows into two likewise).
 	var row: Image = _img(3, 3, Color(1, 0, 0))
 	row.fill_rect(Rect2i(1, 0, 2, 3), Color(0, 0, 1))
-	var o2: PackedFloat32Array = ArtPixelate.area_resample(row, Vector2.ZERO, 2.0 / 3.0, Rect2(0, 0, 3, 3), Vector2i(2, 2))
+	var o2: PackedFloat32Array = ArtPixelate.area_resample(
+		row, Vector2.ZERO, 2.0 / 3.0, Rect2(0, 0, 3, 3), Vector2i(2, 2)
+	)
 	assert_almost_eq(o2[0], 255.0 * 2.0 / 3.0, 0.01, "red: 1 of 1.5")
 	assert_almost_eq(o2[2], 255.0 / 3.0, 0.01, "blue: 0.5 of 1.5")
 	assert_almost_eq(o2[4], 0.0, 0.01)
@@ -263,7 +300,9 @@ func test_area_averaging_is_premultiplied() -> void:
 	# White next to fully transparent black averages to half-transparent white, not grey.
 	var img: Image = _img(2, 2)
 	img.fill_rect(Rect2i(0, 0, 1, 2), Color.WHITE)
-	var out: PackedFloat32Array = ArtPixelate.area_resample(img, Vector2.ZERO, 0.5, Rect2(0, 0, 2, 2), Vector2i(1, 1))
+	var out: PackedFloat32Array = ArtPixelate.area_resample(
+		img, Vector2.ZERO, 0.5, Rect2(0, 0, 2, 2), Vector2i(1, 1)
+	)
 	assert_almost_eq(out[3], 0.5, 0.0001)
 	assert_almost_eq(out[0] / out[3], 255.0, 0.01)
 	var q: Image = ArtPixelate.quantize(out, Vector2i(1, 1), _palette())
@@ -271,7 +310,9 @@ func test_area_averaging_is_premultiplied() -> void:
 
 
 func test_alpha_is_thresholded_to_opaque_or_transparent() -> void:
-	var pm: PackedFloat32Array = PackedFloat32Array([0, 0, 0, 0.0, 120.0 * 0.49, 0, 0, 0.49, 255.0 * 0.5, 0, 0, 0.5, 200.0, 200.0, 200.0, 1.0])
+	var pm: PackedFloat32Array = PackedFloat32Array(
+		[0, 0, 0, 0.0, 120.0 * 0.49, 0, 0, 0.49, 255.0 * 0.5, 0, 0, 0.5, 200.0, 200.0, 200.0, 1.0]
+	)
 	var q: Image = ArtPixelate.quantize(pm, Vector2i(4, 1), _palette())
 	assert_eq(q.get_pixel(0, 0).a8, 0)
 	assert_eq(q.get_pixel(1, 0).a8, 0)
@@ -285,8 +326,22 @@ func test_every_output_pixel_is_a_palette_color_or_transparent() -> void:
 	var img: Image = _img(300, 200)
 	for y: int in 200:
 		for x: int in 300:
-			img.set_pixel(x, y, Color8(rng.randi_range(0, 255), rng.randi_range(0, 255), rng.randi_range(0, 255), rng.randi_range(0, 255)))
-	for spec: Dictionary in [_spec(37, 23), _spec(37, 23, {"background": "opaque"}), _spec(90, 7, {"tile": true, "mirror": true}), _spec(37, 23, {"dither": "ordered"})]:
+			img.set_pixel(
+				x,
+				y,
+				Color8(
+					rng.randi_range(0, 255),
+					rng.randi_range(0, 255),
+					rng.randi_range(0, 255),
+					rng.randi_range(0, 255)
+				)
+			)
+	for spec: Dictionary in [
+		_spec(37, 23),
+		_spec(37, 23, {"background": "opaque"}),
+		_spec(90, 7, {"tile": true, "mirror": true}),
+		_spec(37, 23, {"dither": "ordered"})
+	]:
 		_assert_palette_only(ArtPixelate.process_sprite(img, spec, _palette()), PALETTE)
 
 
@@ -295,7 +350,9 @@ func test_ordered_dither_mixes_palette_colors_and_none_does_not() -> void:
 	var grey: Image = _img(64, 64, Color8(99, 99, 99))
 	var bw: ArtPixelate.Palette = ArtPixelate.make_palette(["#000000", "#ffffff"])
 	var flat: Image = ArtPixelate.process_sprite(grey, _spec(8, 8, {"background": "opaque"}), bw)
-	var dithered: Image = ArtPixelate.process_sprite(grey, _spec(8, 8, {"background": "opaque", "dither": "ordered"}), bw)
+	var dithered: Image = ArtPixelate.process_sprite(
+		grey, _spec(8, 8, {"background": "opaque", "dither": "ordered"}), bw
+	)
 	var flat_colors: Dictionary = {}
 	var dith_colors: Dictionary = {}
 	for y: int in 8:
@@ -332,17 +389,35 @@ func test_processing_is_deterministic() -> void:
 	var img: Image = _img(257, 131)
 	for y: int in 131:
 		for x: int in 257:
-			img.set_pixel(x, y, Color8(rng.randi_range(0, 255), (x * 3) % 256, (y * 7) % 256, 255 if (x + y) % 5 else 0))
-	for spec: Dictionary in [_spec(33, 17), _spec(33, 17, {"background": "opaque"}), _spec(70, 9, {"tile": true, "mirror": true})]:
-		var a: PackedByteArray = ArtPixelate.process_sprite(img, spec, _palette()).save_png_to_buffer()
-		var b: PackedByteArray = ArtPixelate.process_sprite(img.duplicate() as Image, spec, _palette()).save_png_to_buffer()
+			img.set_pixel(
+				x,
+				y,
+				Color8(
+					rng.randi_range(0, 255), (x * 3) % 256, (y * 7) % 256, 255 if (x + y) % 5 else 0
+				)
+			)
+	for spec: Dictionary in [
+		_spec(33, 17),
+		_spec(33, 17, {"background": "opaque"}),
+		_spec(70, 9, {"tile": true, "mirror": true})
+	]:
+		var a: PackedByteArray = (
+			ArtPixelate.process_sprite(img, spec, _palette()).save_png_to_buffer()
+		)
+		var b: PackedByteArray = (
+			ArtPixelate
+			. process_sprite(img.duplicate() as Image, spec, _palette())
+			. save_png_to_buffer()
+		)
 		assert_eq(a, b)
 
 
 func test_non_rgba_input_is_converted() -> void:
 	var rgb: Image = Image.create_empty(20, 10, false, Image.FORMAT_RGB8)
 	rgb.fill(Color.RED)
-	var out: Image = ArtPixelate.process_sprite(rgb, _spec(4, 2, {"background": "opaque"}), _palette())
+	var out: Image = ArtPixelate.process_sprite(
+		rgb, _spec(4, 2, {"background": "opaque"}), _palette()
+	)
 	assert_eq(out.get_format(), Image.FORMAT_RGBA8)
 	assert_eq(out.get_pixel(1, 1), Color.RED)
 
@@ -354,9 +429,22 @@ func _valid_art() -> Dictionary:
 	return {
 		"palette": PALETTE.duplicate(),
 		"style": "pixel art",
-		"sprites": [
-			{"id": "fish_tuna", "prompt": "a tuna", "size": [44.0, 16.0], "parts": {"body": [0.0, 0.0, 33.0, 16.0], "tail": [33.0, 0.0, 11.0, 16.0]}},
-			{"id": "reef", "prompt": "reef", "size": [416.0, 18.0], "tile": true, "mirror": true, "anchor": [0.0, 18.0]},
+		"sprites":
+		[
+			{
+				"id": "fish_tuna",
+				"prompt": "a tuna",
+				"size": [44.0, 16.0],
+				"parts": {"body": [0.0, 0.0, 33.0, 16.0], "tail": [33.0, 0.0, 11.0, 16.0]}
+			},
+			{
+				"id": "reef",
+				"prompt": "reef",
+				"size": [416.0, 18.0],
+				"tile": true,
+				"mirror": true,
+				"anchor": [0.0, 18.0]
+			},
 		],
 	}
 
@@ -368,7 +456,7 @@ func test_validate_art_accepts_a_valid_file() -> void:
 func test_validate_art_reports_problems() -> void:
 	var cases: Array = [
 		["palette", Array(range(33)).map(func(i: int) -> String: return "#%06x" % i), "at most 32"],
-		["palette", ["#12345g"], "not a \"#rrggbb\""],
+		["palette", ["#12345g"], 'not a "#rrggbb"'],
 		["style", "", "style"],
 		["dither", "floyd", "dither"],
 	]
@@ -407,12 +495,15 @@ func test_normalize_sprite_fills_defaults() -> void:
 
 
 func test_selected_entries_take_only_selected_ok_results() -> void:
-	var m: Dictionary = {"requests": [
-		{"sprite": "a", "request_id": "1", "status": "ok", "selected": false},
-		{"sprite": "a", "request_id": "2", "status": "ok", "selected": true},
-		{"sprite": "b", "request_id": "3", "status": "download_failed", "selected": true},
-		{"sprite": "c", "request_id": "4", "status": "ok"},
-	]}
+	var m: Dictionary = {
+		"requests":
+		[
+			{"sprite": "a", "request_id": "1", "status": "ok", "selected": false},
+			{"sprite": "a", "request_id": "2", "status": "ok", "selected": true},
+			{"sprite": "b", "request_id": "3", "status": "download_failed", "selected": true},
+			{"sprite": "c", "request_id": "4", "status": "ok"},
+		]
+	}
 	var sel: Dictionary = ArtPixelate.selected_entries(m)
 	assert_eq(sel.keys(), ["a"])
 	assert_eq((sel["a"] as Dictionary)["request_id"], "2")
@@ -442,7 +533,10 @@ func test_the_imported_sprite_keeps_the_preset_in_its_import_file() -> void:
 	assert_eq(cfg.get_value("remap", "importer"), "texture")
 	assert_eq(cfg.get_value("params", "mipmaps/generate"), false)
 	assert_eq(cfg.get_value("params", "compress/mode"), 0)
-	assert_true(str(cfg.get_value("remap", "uid", "")).begins_with("uid://"), "Godot completed the minimal file on import")
+	assert_true(
+		str(cfg.get_value("remap", "uid", "")).begins_with("uid://"),
+		"Godot completed the minimal file on import"
+	)
 
 
 func test_imported_sprite_pixels_are_exact() -> void:

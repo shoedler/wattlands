@@ -166,19 +166,26 @@ func rides() -> Array:
 			state = "uploading"
 		elif queue.has(str(s["ride_id"])):
 			state = "queued"
-		out.append({
-			"fit_path": p.get_basename() + ".fit",
-			"summary": s,
-			"uploaded": state == "uploaded" or state == "duplicate",
-			"activity_id": int(up.get("activity_id", 0)),
-			"state": state,
-		})
-	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		var ta := int((a["summary"] as Dictionary).get("utc_start_unix", 0))
-		var tb := int((b["summary"] as Dictionary).get("utc_start_unix", 0))
-		if ta != tb:
-			return ta > tb
-		return str(a["fit_path"]) > str(b["fit_path"]))
+		(
+			out
+			. append(
+				{
+					"fit_path": p.get_basename() + ".fit",
+					"summary": s,
+					"uploaded": state == "uploaded" or state == "duplicate",
+					"activity_id": int(up.get("activity_id", 0)),
+					"state": state,
+				}
+			)
+		)
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool:
+			var ta := int((a["summary"] as Dictionary).get("utc_start_unix", 0))
+			var tb := int((b["summary"] as Dictionary).get("utc_start_unix", 0))
+			if ta != tb:
+				return ta > tb
+			return str(a["fit_path"]) > str(b["fit_path"])
+	)
 	return out
 
 
@@ -246,7 +253,9 @@ func strava_connect_with_profile(client_id: String, client_secret: String) -> vo
 ## IMPORT_WEIGHT_MIN_KG..MAX_KG) is refused with push_warning: it is not applied (an FTP typo on
 ## Strava must not become a verified FTP) and is listed in the additive `refused`:
 ## [{field ("ftp" or "weight"), value, min, max}].
-func strava_import_athlete(profile: RiderProfile, import_ftp: bool, import_weight: bool) -> Dictionary:
+func strava_import_athlete(
+	profile: RiderProfile, import_ftp: bool, import_weight: bool
+) -> Dictionary:
 	if not strava_connected():
 		return {}
 	_resolve_bases()
@@ -274,7 +283,9 @@ func strava_import_athlete(profile: RiderProfile, import_ftp: bool, import_weigh
 func _import_ok(refused: Array, field: String, value: float, lo: float, hi: float) -> bool:
 	if is_finite(value) and value >= lo and value <= hi:
 		return true
-	push_warning("Rides: Strava %s %s is outside %s-%s; not imported" % [field, str(value), str(lo), str(hi)])
+	push_warning(
+		"Rides: Strava %s %s is outside %s-%s; not imported" % [field, str(value), str(lo), str(hi)]
+	)
 	refused.append({"field": field, "value": value, "min": lo, "max": hi})
 	return false
 
@@ -310,11 +321,19 @@ static func activity_name(summary: Dictionary) -> String:
 ## The activity description for a ride summary.
 static func activity_description(summary: Dictionary) -> String:
 	var content := str(summary.get("content_title", summary.get("content_id", "")))
-	return _tr_or("RIDES_ACTIVITY_DESCRIPTION", "{content}: {kj} kJ, {avg_w} W average. Recorded with Wattlands on a smart trainer.").format({
-		"content": content,
-		"kj": "%d" % roundi(float(summary.get("kj", 0.0))),
-		"avg_w": "%d" % roundi(float(summary.get("avg_power_w", 0.0))),
-	})
+	return (
+		_tr_or(
+			"RIDES_ACTIVITY_DESCRIPTION",
+			"{content}: {kj} kJ, {avg_w} W average. Recorded with Wattlands on a smart trainer."
+		)
+		. format(
+			{
+				"content": content,
+				"kj": "%d" % roundi(float(summary.get("kj", 0.0))),
+				"avg_w": "%d" % roundi(float(summary.get("avg_power_w", 0.0))),
+			}
+		)
+	)
 
 
 # --- Internals -------------------------------------------------------------------------
@@ -353,7 +372,10 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 		return
 	if not force:
 		var up: Variant = _read_summary(fit_path).get("upload", {})
-		if up is Dictionary and str((up as Dictionary).get("state", "")) in ["uploaded", "duplicate"]:
+		if (
+			up is Dictionary
+			and str((up as Dictionary).get("state", "")) in ["uploaded", "duplicate"]
+		):
 			# Already on Strava: report its state again (no new attempt), so a results screen that
 			# asks after an auto-upload still shows it.
 			var act := int((up as Dictionary).get("activity_id", 0))
@@ -371,16 +393,29 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 	var res: Dictionary
 	if strava_connected():
 		# RS-2: in the queue before the first request, so a quit mid-upload leaves it there.
-		queue.put({
-			"ride_id": ride_id, "fit_path": fit_path, "name": name, "description": desc,
-			"attempts": int(entry.get("attempts", 0)), "last_state": "uploading",
-			"last_error": str(entry.get("last_error", "")), "upload_id": int(entry.get("upload_id", 0)),
-		})
+		(
+			queue
+			. put(
+				{
+					"ride_id": ride_id,
+					"fit_path": fit_path,
+					"name": name,
+					"description": desc,
+					"attempts": int(entry.get("attempts", 0)),
+					"last_state": "uploading",
+					"last_error": str(entry.get("last_error", "")),
+					"upload_id": int(entry.get("upload_id", 0)),
+				}
+			)
+		)
 	if not strava_connected():
 		res = {"state": "queued", "detail": "not_connected", "upload_id": 0, "permanent": false}
 	elif int(entry.get("upload_id", 0)) > 0:
 		res = await client.poll_upload(ride_id, int(entry["upload_id"]))
-		if str(res.get("state", "")) == "failed" and str(res.get("detail", "")) == "upload_not_found":
+		if (
+			str(res.get("state", "")) == "failed"
+			and str(res.get("detail", "")) == "upload_not_found"
+		):
 			res = await client.upload_fit(ride_id, fit_path, name, desc)
 	else:
 		res = await client.upload_fit(ride_id, fit_path, name, desc)
@@ -388,14 +423,19 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 	_in_flight.erase(ride_id)
 
 
-func _apply_result(ride_id: String, fit_path: String, name: String, desc: String, res: Dictionary) -> void:
+func _apply_result(
+	ride_id: String, fit_path: String, name: String, desc: String, res: Dictionary
+) -> void:
 	var state := str(res.get("state", "failed"))
 	var detail := str(res.get("detail", ""))
 	match state:
 		"uploaded", "duplicate":
 			queue.remove(ride_id)
 			var act := int(res.get("activity_id", 0))
-			_mark_summary(fit_path, {"state": state, "activity_id": act, "upload_id": int(res.get("upload_id", 0))})
+			_mark_summary(
+				fit_path,
+				{"state": state, "activity_id": act, "upload_id": int(res.get("upload_id", 0))}
+			)
 			if act > 0:
 				detail = str(act)
 		_:
@@ -405,11 +445,21 @@ func _apply_result(ride_id: String, fit_path: String, name: String, desc: String
 				queue.remove(ride_id)
 				_mark_summary(fit_path, {"state": "failed", "error": detail})
 			else:
-				queue.put({
-					"ride_id": ride_id, "fit_path": fit_path, "name": name, "description": desc,
-					"attempts": attempts, "last_state": state, "last_error": detail,
-					"upload_id": int(res.get("upload_id", 0)),
-				})
+				(
+					queue
+					. put(
+						{
+							"ride_id": ride_id,
+							"fit_path": fit_path,
+							"name": name,
+							"description": desc,
+							"attempts": attempts,
+							"last_state": state,
+							"last_error": detail,
+							"upload_id": int(res.get("upload_id", 0)),
+						}
+					)
+				)
 	_emit_upload(ride_id, state, detail)
 	upload_finished.emit(ride_id, state, detail)
 

@@ -2,7 +2,7 @@
 # tools/run_tests: every gate in BRIEF 7, in one command. Godot steps run through tools/godot.sh.
 #
 #   tools/run_tests [--only=<step,...>] [--skip=<step,...>] [--min-count=<n>] [--gdir=<res path>]
-#                   [--gut-arg=<arg>]... [--strict-lint] [--no-lint] [--project=<dir>]
+#                   [--gut-arg=<arg>]... [--no-lint] [--project=<dir>]
 #
 # Steps: import (never a gate), gut, scaffold, static, sim, fit, node, e2e. Exits non-zero if any
 # gate failed and prints a summary table. tools/run_tests.ps1 is the PowerShell twin; both call

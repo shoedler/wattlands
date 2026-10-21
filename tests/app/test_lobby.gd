@@ -35,9 +35,17 @@ func _client_lobby(lobby: Dictionary) -> AppLobbyScreen:
 
 
 static func workout_lobby() -> Dictionary:
-	return {"players": [], "game_id": "workout", "game_version": "1.0.0", "content_id": "sweet_spot",
-		"scaling": Wl.FAIR_FTP, "settings": {"options": {"music": false, "laps": 3, "theme": "night"}, "bot_ftp": 230.0},
-		"ready_flags": {1: true, 2: false}, "trainers": {1: "ready"}, "player_options": {1: {"offset": -2}}}
+	return {
+		"players": [],
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "sweet_spot",
+		"scaling": Wl.FAIR_FTP,
+		"settings": {"options": {"music": false, "laps": 3, "theme": "night"}, "bot_ftp": 230.0},
+		"ready_flags": {1: true, 2: false},
+		"trainers": {1: "ready"},
+		"player_options": {1: {"offset": -2}}
+	}
 
 
 func test_option_entries_for_every_type() -> void:
@@ -107,20 +115,32 @@ func test_long_int_player_option_uses_a_stepper() -> void:
 	confirm_pick(s, "done")
 	var info: Dictionary = fx.fake_net().info
 	assert_eq(info["player_options"]["wave_offset"], -9, "player_options travel in player_info")
-	assert_eq(menu(s).text_of("popt:wave_offset"), AppScreen.t("APP_LOBBY_MY_OPTION").format(["wave_offset", "-9"]))
+	assert_eq(
+		menu(s).text_of("popt:wave_offset"),
+		AppScreen.t("APP_LOBBY_MY_OPTION").format(["wave_offset", "-9"])
+	)
 
 
 func test_autopilot_is_toggled_in_the_lobby() -> void:
 	# BRIEF 3.5: Autopilot is per player, toggled in the profile or the lobby.
 	var s := _host_lobby()
 	assert_false(fx.fake_net().info["autopilot"], "the profile default (off)")
-	assert_eq(menu(s).text_of("autopilot"), AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_OFF")]))
+	assert_eq(
+		menu(s).text_of("autopilot"),
+		AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_OFF")])
+	)
 	surge_pick(s, "autopilot")
 	assert_true(s.my_autopilot)
 	assert_true(fx.fake_net().info["autopilot"], "sent in player_info")
-	assert_eq(menu(s).text_of("autopilot"), AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_ON")]))
+	assert_eq(
+		menu(s).text_of("autopilot"),
+		AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_ON")])
+	)
 	var card := s.cards_box.get_child(0) as AppLobbyCard
-	assert_true(card.options_label.text.begins_with(AppScreen.t("APP_LOBBY_AUTOPILOT_TAG")), "shown on the rider's card")
+	assert_true(
+		card.options_label.text.begins_with(AppScreen.t("APP_LOBBY_AUTOPILOT_TAG")),
+		"shown on the rider's card"
+	)
 	assert_false(fx.settings.profile.autopilot_default, "the profile default is unchanged")
 
 
@@ -211,10 +231,17 @@ func test_trainer_status_per_rider() -> void:
 	var s := _client_lobby(workout_lobby())
 	var host_card := s.cards_box.get_child(0) as AppLobbyCard
 	var my_card := s.cards_box.get_child(1) as AppLobbyCard
-	assert_eq(host_card.trainer_label.text, AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")]))
+	assert_eq(
+		host_card.trainer_label.text,
+		AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")])
+	)
 	assert_eq(host_card.ready_label.text, AppScreen.t("APP_LOBBY_READY"))
 	assert_true(my_card.is_local)
-	assert_eq(my_card.trainer_label.text, AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")]), "own trainer from TrainerService")
+	assert_eq(
+		my_card.trainer_label.text,
+		AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")]),
+		"own trainer from TrainerService"
+	)
 	assert_eq(my_card.ready_label.text, AppScreen.t("APP_LOBBY_NOT_READY"))
 	assert_eq(fx.fake_net().info.get("trainer"), TrainerDevice.STATUS_READY)
 
@@ -255,13 +282,17 @@ func test_version_mismatch_blocks_ready_with_a_message() -> void:
 	lobby["game_version"] = "2.0.0"
 	var s := _client_lobby(lobby)
 	assert_true(menu(s).is_disabled_id("ready"))
-	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_VERSION_MISMATCH").format(["2.0.0", "1.0.0"]))
+	assert_eq(
+		s.message_label.text, AppScreen.t("APP_LOBBY_VERSION_MISMATCH").format(["2.0.0", "1.0.0"])
+	)
 
 
 func test_host_left_message() -> void:
 	var s := _client_lobby(workout_lobby())
 	fx.fake_net().refuse("host_left")
-	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_HOST_LEFT"), "no ride to save in the lobby")
+	assert_eq(
+		s.message_label.text, AppScreen.t("APP_LOBBY_HOST_LEFT"), "no ride to save in the lobby"
+	)
 	assert_eq(menu(s).ids(), ["leave"])
 	confirm_pick(s, "leave")
 	assert_eq(fx.fake_net().calls_named("leave").size(), 1)
@@ -282,7 +313,9 @@ func test_client_answers_no_lobby_echo_with_player_info() -> void:
 	assert_lt(sends, 4, "a bounded number of sends while joining (got %d)" % sends)
 	for _i in 5:
 		net.lobby_changed.emit(net.lobby)
-	assert_eq(net.calls_named("set_local_player_info").size(), sends, "lobby_state echoes send nothing")
+	assert_eq(
+		net.calls_named("set_local_player_info").size(), sends, "lobby_state echoes send nothing"
+	)
 	assert_eq(s.my_player_options, {}, "tank has no player options")
 
 
@@ -305,7 +338,11 @@ func test_client_resends_player_info_when_the_host_changes_scaling() -> void:
 	assert_almost_eq(float(net.info["p_eff_per_w"]), 250.0 / 220.0, 1e-6)
 	net.lobby["scaling"] = Wl.WKG
 	net.lobby_changed.emit(net.lobby)
-	assert_eq(net.calls_named("set_local_player_info").size(), before + 1, "one resend for the new scaling")
+	assert_eq(
+		net.calls_named("set_local_player_info").size(),
+		before + 1,
+		"one resend for the new scaling"
+	)
 	assert_almost_eq(float(net.info["p_eff_per_w"]), 75.0 / 75.0, 1e-6, "WKG: 75 / weight")
 	net.lobby_changed.emit(net.lobby)
 	assert_eq(net.calls_named("set_local_player_info").size(), before + 1)
@@ -313,7 +350,14 @@ func test_client_resends_player_info_when_the_host_changes_scaling() -> void:
 
 
 func test_refusal_texts() -> void:
-	for reason: String in ["session_in_progress", "version_mismatch", "room_not_found", "room_full", "rate_limited", "host_left"]:
+	for reason: String in [
+		"session_in_progress",
+		"version_mismatch",
+		"room_not_found",
+		"room_full",
+		"rate_limited",
+		"host_left"
+	]:
 		var text := AppLobbyScreen.refusal_text(reason)
 		assert_ne(text, "", reason)
 		assert_false(text.begins_with("APP_"), "%s has a string" % reason)
@@ -322,14 +366,18 @@ func test_refusal_texts() -> void:
 func test_host_never_starts_before_the_room_exists() -> void:
 	fx.give_profile(250.0)
 	fx.fake_net().add_human(1, "Ada", 250.0)
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	)
 	confirm_pick(s, "start")
 	s.tick(0.1)
 	assert_ne(fx.app.state, "session", "no room code yet")
 	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_CREATING"))
 	fx.fake_net().simulate_hosting("K7QX2M")
 	s.tick(0.1)
-	assert_eq(fx.app.state, "session", "the room exists and the host is ready: the start goes ahead")
+	assert_eq(
+		fx.app.state, "session", "the room exists and the host is ready: the start goes ahead"
+	)
 
 
 func test_host_starts_once_everyone_is_ready() -> void:
@@ -351,7 +399,9 @@ func test_min_players_needs_bots() -> void:
 	m["min_players"] = 2
 	fx.fake_registry().add_fixture(m)
 	fx.fake_net().add_human(1, "Ada")
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "siege"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "siege"}) as AppLobbyScreen
+	)
 	confirm_pick(s, "start")
 	assert_ne(fx.app.state, "session")
 	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_NEED_PLAYERS").format([2]))
@@ -369,7 +419,13 @@ func test_no_trainer_blocks_the_start() -> void:
 
 func test_client_follows_session_start() -> void:
 	var s := _client_lobby(workout_lobby())
-	var start := {"type": "session_start", "v": 1, "game_id": "workout", "content_id": "sweet_spot", "seed": 42}
+	var start := {
+		"type": "session_start",
+		"v": 1,
+		"game_id": "workout",
+		"content_id": "sweet_spot",
+		"seed": 42
+	}
 	fx.fake_net().receive(1, start)
 	assert_eq(fx.app.state, "session")
 	assert_eq(fx.app.params.get("role"), Wl.CLIENT)

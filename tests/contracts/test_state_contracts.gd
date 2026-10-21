@@ -15,6 +15,7 @@ func _same_json(a: Dictionary, b: Dictionary, msg: String = "") -> void:
 
 # --- Telemetry ------------------------------------------------------------------------
 
+
 func _telemetry() -> Telemetry:
 	var m := Telemetry.new()
 	m.peer_id = 3
@@ -43,7 +44,16 @@ func _telemetry() -> Telemetry:
 	m.intents = [{"type": "route", "lane": 2.0}]
 	m.distance_m = 1234.5
 	m.phase_index = 4
-	m.acks = [{"id": 9.0, "kind": "request", "applied": {"target_pct": 80.0}, "clamped_by": [], "refused": "", "reason": ""}]
+	m.acks = [
+		{
+			"id": 9.0,
+			"kind": "request",
+			"applied": {"target_pct": 80.0},
+			"clamped_by": [],
+			"refused": "",
+			"reason": ""
+		}
+	]
 	m.connected = false
 	m.age_s = 3.5
 	m.cadence_age_s = 1.25
@@ -103,6 +113,7 @@ func test_telemetry_duplicate_is_deep() -> void:
 
 
 # --- PlayerSlot -----------------------------------------------------------------------
+
 
 func test_player_slot_defaults() -> void:
 	var s := PlayerSlot.new()
@@ -168,6 +179,7 @@ func test_player_slot_from_empty_dict() -> void:
 
 # --- PhaseState -----------------------------------------------------------------------
 
+
 func test_phase_state_round_trip() -> void:
 	var s := PhaseState.new()
 	s.index = 2
@@ -205,6 +217,7 @@ func test_phase_state_defaults() -> void:
 
 # --- TrainerSample and InputFrame -----------------------------------------------------
 
+
 func test_trainer_sample_make() -> void:
 	var s := TrainerSample.make(1.5, 200.0)
 	assert_eq(s.flags, TrainerSample.HAS_POWER)
@@ -212,11 +225,22 @@ func test_trainer_sample_make() -> void:
 	assert_false(s.has_speed())
 	assert_eq(s.cadence_rpm, -1.0)
 	var full := TrainerSample.make(2.0, 210.0, 90.0, 36.0)
-	assert_eq(full.flags, TrainerSample.HAS_POWER | TrainerSample.HAS_CADENCE | TrainerSample.HAS_SPEED)
+	assert_eq(
+		full.flags, TrainerSample.HAS_POWER | TrainerSample.HAS_CADENCE | TrainerSample.HAS_SPEED
+	)
 	assert_true(full.has_cadence())
 	assert_true(full.has_speed())
-	assert_eq(full.to_dict(), {"t": 2.0, "power_w": 210.0, "cadence_rpm": 90.0, "speed_kmh": 36.0,
-		"distance_m": -1.0, "flags": 7})
+	assert_eq(
+		full.to_dict(),
+		{
+			"t": 2.0,
+			"power_w": 210.0,
+			"cadence_rpm": 90.0,
+			"speed_kmh": 36.0,
+			"distance_m": -1.0,
+			"flags": 7
+		}
+	)
 
 
 func test_input_frame_lookups() -> void:

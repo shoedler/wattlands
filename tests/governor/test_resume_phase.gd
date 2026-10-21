@@ -18,7 +18,9 @@ func test_the_phase_clock_starts_at_elapsed_and_the_ramp_continues() -> void:
 	rig.gov.resume_phase(0, 120.0)
 	assert_eq(int(rig.s()["phase_index"]), 0)
 	assert_almost_eq(float(rig.s()["phase_elapsed_s"]), 120.0, 1e-9)
-	assert_almost_eq(float(rig.s()["planned_pct"]), 56.0, 1e-9, "50 -> 65 % over 300 s is at 56 % after 120 s")
+	assert_almost_eq(
+		float(rig.s()["planned_pct"]), 56.0, 1e-9, "50 -> 65 % over 300 s is at 56 % after 120 s"
+	)
 	rig.run(30.0)
 	assert_almost_eq(float(rig.s()["phase_elapsed_s"]), 150.0, 1e-6)
 	assert_almost_eq(float(rig.s()["planned_pct"]), 57.5, 1e-6)
@@ -98,7 +100,12 @@ func test_duration_limits_keep_counting_across_a_resume() -> void:
 
 func test_directive_channels_revert_to_the_plan() -> void:
 	var rig := make_rig({}, follower())
-	rig.start([erg(Wl.WORK, 60.0, 600.0).with_range(60.0, 90.0), erg(Wl.WORK, 70.0, 600.0).with_range(60.0, 90.0)])
+	rig.start(
+		[
+			erg(Wl.WORK, 60.0, 600.0).with_range(60.0, 90.0),
+			erg(Wl.WORK, 70.0, 600.0).with_range(60.0, 90.0)
+		]
+	)
 	rig.run(60.0)
 	var rec := rig.directive({"target_pct": 85.0})
 	assert_false(rec["refused"])
@@ -112,7 +119,9 @@ func test_directive_channels_revert_to_the_plan() -> void:
 func test_course_phase_follows_from_the_given_distance() -> void:
 	var profile := [[0.0, 0.0], [1000.0, 0.0], [1100.0, 4.0], [5000.0, 4.0]]
 	var rig := make_rig({"difficulty_pct": 100.0}, follower())
-	rig.gov.set_plan(EffortPlan.of([PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800.0).with_course(profile)]))
+	rig.gov.set_plan(
+		EffortPlan.of([PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800.0).with_course(profile)])
+	)
 	rig.gov.set_course_distance(20.0)
 	rig.gov.resume_phase(0, 300.0, 1050.0)
 	rig.run(1.0)
@@ -129,17 +138,26 @@ func test_course_phase_follows_from_the_governors_own_record() -> void:
 	# client still rode phase 0, 10 m per second; resume_phase finds the 400 m in its record.
 	var profile := [[0.0, 0.0], [300.0, 0.0], [500.0, 6.0], [5000.0, 6.0]]
 	var rig := make_rig({"difficulty_pct": 100.0}, follower())
-	rig.start([erg(Wl.WORK, 60.0, 600.0), PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800.0).with_course(profile)])
+	rig.start(
+		[
+			erg(Wl.WORK, 60.0, 600.0),
+			PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800.0).with_course(profile)
+		]
+	)
 	var d := 0.0
 	for i in roundi(100.0 / DT):
 		d += 10.0 * DT
 		rig.gov.set_course_distance(d)
 		rig.step()
-	assert_almost_eq(rig.gov.distance_ridden_since(rig.gov.game_time_s() - 40.0), 400.0, 10.0 * DT + 1e-3)
+	assert_almost_eq(
+		rig.gov.distance_ridden_since(rig.gov.game_time_s() - 40.0), 400.0, 10.0 * DT + 1e-3
+	)
 	rig.gov.resume_phase(1, 40.0)
 	assert_almost_eq(rig.gov.phase_distance_m(), 400.0, 10.0 * DT + 1e-3)
 	rig.run(1.0)
-	assert_almost_eq(float(rig.s()["course_grade_pct"]), 3.0, 0.2, "400 m into the course: halfway up to 6 %")
+	assert_almost_eq(
+		float(rig.s()["course_grade_pct"]), 3.0, 0.2, "400 m into the course: halfway up to 6 %"
+	)
 
 
 func test_distance_record_reaches_back_only_as_far_as_this_governor() -> void:
@@ -149,20 +167,37 @@ func test_distance_record_reaches_back_only_as_far_as_this_governor() -> void:
 	for i in roundi(10.0 / DT):
 		rig.gov.set_course_distance(5.0 * float(i) * DT)
 		rig.step()
-	assert_eq(rig.gov.distance_ridden_since(-120.0), -1.0, "a new governor knows nothing from before it")
+	assert_eq(
+		rig.gov.distance_ridden_since(-120.0), -1.0, "a new governor knows nothing from before it"
+	)
 	assert_almost_eq(rig.gov.distance_ridden_since(0.0), 50.0 - 5.0 * DT, 1e-3)
-	assert_almost_eq(rig.gov.distance_ridden_since(rig.gov.game_time_s()), 0.0, 1e-3, "now: nothing ridden since")
-	assert_almost_eq(rig.gov.distance_ridden_since(9.5), 2.3, 0.15, "between the last entry and now (47.5 m at 9.5 s)")
+	assert_almost_eq(
+		rig.gov.distance_ridden_since(rig.gov.game_time_s()), 0.0, 1e-3, "now: nothing ridden since"
+	)
+	assert_almost_eq(
+		rig.gov.distance_ridden_since(9.5),
+		2.3,
+		0.15,
+		"between the last entry and now (47.5 m at 9.5 s)"
+	)
 	# Without a figure a new governor's course starts at 0 (LocalRider estimates one first).
 	var fresh := make_rig({}, follower())
-	fresh.gov.set_plan(EffortPlan.of([PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course([[0.0, 1.0], [100.0, 1.0]])]))
+	fresh.gov.set_plan(
+		EffortPlan.of(
+			[PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course([[0.0, 1.0], [100.0, 1.0]])]
+		)
+	)
 	fresh.gov.resume_phase(0, 120.0)
 	assert_eq(fresh.gov.phase_distance_m(), 0.0)
 
 
 func test_start_phase_and_clear_plan_drop_the_offset() -> void:
 	var rig := make_rig({}, follower())
-	rig.gov.set_plan(EffortPlan.of([PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course([[0.0, 1.0], [100.0, 1.0]])]))
+	rig.gov.set_plan(
+		EffortPlan.of(
+			[PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 600.0).with_course([[0.0, 1.0], [100.0, 1.0]])]
+		)
+	)
 	rig.gov.resume_phase(0, 120.0, 800.0)
 	assert_almost_eq(rig.gov.phase_distance_m(), 800.0, 1e-9)
 	rig.gov.start_phase(0)

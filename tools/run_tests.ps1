@@ -2,7 +2,7 @@
 # The twin of tools/run_tests: same options, same steps; Godot steps run through tools/godot.ps1.
 #
 #   tools\run_tests.ps1 [--only=<step,...>] [--skip=<step,...>] [--min-count=<n>] [--gdir=<res path>]
-#                       [--gut-arg=<arg>]... [--strict-lint] [--no-lint] [--project=<dir>]
+#                       [--gut-arg=<arg>]... [--no-lint] [--project=<dir>]
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_tests.ps1 ...
 #
 # Steps: import (never a gate), gut, scaffold, static, sim, fit, node, e2e. Exits non-zero if any

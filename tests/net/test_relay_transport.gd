@@ -85,8 +85,12 @@ func _log(t: Transport) -> Array:
 	t.connected.connect(func() -> void: log.append(["connected"]))
 	t.disconnected.connect(func(reason: String) -> void: log.append(["disconnected", reason]))
 	t.peer_joined.connect(func(id: int) -> void: log.append(["peer_joined", id]))
-	t.peer_left.connect(func(id: int) -> void: log.append(["peer_left", id, t.last_peer_left_reason]))
-	t.message.connect(func(from: int, data: Dictionary) -> void: log.append(["message", from, data]))
+	t.peer_left.connect(
+		func(id: int) -> void: log.append(["peer_left", id, t.last_peer_left_reason])
+	)
+	t.message.connect(
+		func(from: int, data: Dictionary) -> void: log.append(["message", from, data])
+	)
 	return log
 
 
@@ -113,12 +117,16 @@ func test_create_join_and_route_over_websocket() -> void:
 	assert_eq(c.local_peer, 2)
 	assert_eq(c.host_peer, 1)
 	c.send(1, Protocol.game_msg("phase", {"index": 3, "start_tick": 60, "ended_by": "duration"}))
-	assert_true(_until(func() -> bool: return hl.any(func(e: Array) -> bool: return e[0] == "message")))
+	assert_true(
+		_until(func() -> bool: return hl.any(func(e: Array) -> bool: return e[0] == "message"))
+	)
 	var got: Array = hl.filter(func(e: Array) -> bool: return e[0] == "message")[0]
 	assert_eq(got[1], 2)
 	assert_typeof((got[2] as Dictionary)["index"], TYPE_INT)
 	h.send(Wl.ALL_PEERS, Protocol.game_msg("roster", {"riders": {2: {"raw_w": 180.5}}}))
-	assert_true(_until(func() -> bool: return cl.any(func(e: Array) -> bool: return e[0] == "message")))
+	assert_true(
+		_until(func() -> bool: return cl.any(func(e: Array) -> bool: return e[0] == "message"))
+	)
 	var rm: Array = cl.filter(func(e: Array) -> bool: return e[0] == "message")[0]
 	assert_true(((rm[2] as Dictionary)["riders"] as Dictionary).has(2))
 	c.send(3, Protocol.game_msg("ready", {"ready": true}))
@@ -231,7 +239,9 @@ func test_connect_timeout() -> void:
 	t.poll()
 	clock[0] += RelayTransport.CONNECT_TIMEOUT_S + 0.5
 	assert_true(_until(func() -> bool: return log.size() > 0))
-	assert_true(_has(log, ["disconnected", "timeout"]) or _has(log, ["disconnected", "error"]), str(log))
+	assert_true(
+		_has(log, ["disconnected", "timeout"]) or _has(log, ["disconnected", "error"]), str(log)
+	)
 
 
 func test_urls() -> void:
@@ -269,7 +279,9 @@ class FutureTransport:
 
 	func _on_socket_open() -> void:
 		_socket_state = SocketState.OPEN
-		_send_envelope({"t": "hello", "proto": Wl.PROTO + 1, "game": Wl.RELAY_GAME, "build": "9.9.9"})
+		_send_envelope(
+			{"t": "hello", "proto": Wl.PROTO + 1, "game": Wl.RELAY_GAME, "build": "9.9.9"}
+		)
 		_send_pending()
 
 

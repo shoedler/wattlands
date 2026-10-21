@@ -16,7 +16,9 @@ func _sim_rig(params: Dictionary = {}) -> Rig:
 
 func test_intensity_scales_the_haptic() -> void:
 	var rig := _sim_rig({"haptic_intensity": 0.7})
-	var rec := rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"})
+	var rec := rig.directive(
+		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"}
+	)
 	assert_false(rec["refused"])
 	assert_almost_eq(float(rec["applied"]["haptic_pct"]), 1.4, 1e-9)
 	assert_has(rec["clamped_by"], Wl.CLAMP_HAPTIC_INTENSITY)
@@ -31,10 +33,14 @@ func test_plus_3_pct_bound() -> void:
 	var rec := rig.directive({"mode": "SIM", "haptic": 5.0, "duration_s": 2.0})
 	assert_almost_eq(float(rec["applied"]["haptic_pct"]), 3.0, 1e-9)
 	assert_has(rec["clamped_by"], Wl.CLAMP_HAPTIC)
-	assert_does_not_have(rec["clamped_by"], Wl.CLAMP_HAPTIC_INTENSITY, "full intensity changes nothing")
+	assert_does_not_have(
+		rec["clamped_by"], Wl.CLAMP_HAPTIC_INTENSITY, "full intensity changes nothing"
+	)
 	var rig2 := _sim_rig({"haptic_intensity": 0.7})
 	var rec2 := rig2.directive({"mode": "SIM", "haptic": 5.0, "duration_s": 2.0})
-	assert_almost_eq(float(rec2["applied"]["haptic_pct"]), 3.0, 1e-9, "3.5% after intensity, bounded")
+	assert_almost_eq(
+		float(rec2["applied"]["haptic_pct"]), 3.0, 1e-9, "3.5% after intensity, bounded"
+	)
 	assert_eq(rec2["clamped_by"], [Wl.CLAMP_HAPTIC_INTENSITY, Wl.CLAMP_HAPTIC])
 
 
@@ -48,7 +54,9 @@ func test_8_s_bound() -> void:
 	assert_time(ended, t0 + 8.0, "ends at 8 s")
 	var rig2 := _sim_rig({"haptic_intensity": 1.0})
 	var rec2 := rig2.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 0.0})
-	assert_almost_eq(float(rec2["applied"]["haptic_s"]), 8.0, 1e-9, "duration 0 still lasts at most 8 s")
+	assert_almost_eq(
+		float(rec2["applied"]["haptic_s"]), 8.0, 1e-9, "duration 0 still lasts at most 8 s"
+	)
 
 
 func test_8_s_bound_holds_in_platform_time_while_paused() -> void:
@@ -86,7 +94,9 @@ func test_dropped_for_an_erg_rider_never_a_mode_switch() -> void:
 	rig.run(40.0)
 	var dev: ScriptedDevice = rig.device
 	var n := dev.writes.size()
-	var rec := rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"})
+	var rec := rig.directive(
+		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"}
+	)
 	assert_true(rec["refused"])
 	assert_eq(rec["reason"], Wl.REFUSE_HAPTIC_ERG)
 	rig.run(5.0)
@@ -125,7 +135,9 @@ func test_haptic_for_an_erg_rider_with_other_channels_is_refused_whole() -> void
 
 func test_dropped_for_an_opted_out_rider() -> void:
 	var rig := _sim_rig({"haptics_on": false})
-	var rec := rig.directive({"mode": "SIM", "haptic": 3.0, "duration_s": 5.0, "reason": "last_run", "source": "fishing"})
+	var rec := rig.directive(
+		{"mode": "SIM", "haptic": 3.0, "duration_s": 5.0, "reason": "last_run", "source": "fishing"}
+	)
 	assert_true(rec["refused"])
 	assert_eq(rec["reason"], Wl.REFUSE_HAPTIC_OFF)
 	rig.step()
@@ -143,11 +155,18 @@ func test_dropped_haptic_keeps_the_rest_of_the_request() -> void:
 
 func test_haptic_over_a_held_mode_grade_leaves_the_grade() -> void:
 	var rig := _sim_rig({"haptic_intensity": 0.7})
-	assert_false(rig.directive({"mode": "SIM", "mode_grade": 4.0, "duration_s": 0.0, "reason": "boiler"})["refused"])
+	assert_false(
+		(
+			rig
+			. directive({"mode": "SIM", "mode_grade": 4.0, "duration_s": 0.0, "reason": "boiler"})["refused"]
+		)
+	)
 	rig.run(1.0)
 	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 2.0, 1e-9)
 	var t0 := rig.t
-	assert_false(rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit"})["refused"])
+	assert_false(
+		rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit"})["refused"]
+	)
 	rig.step()
 	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 3.4, 1e-9, "2% + 1.4% haptic")
 	rig.run_until(func() -> bool: return rig.t >= t0 + 1.5 - 1e-6, 3.0)
@@ -173,7 +192,9 @@ func test_grade_and_wind_share_one_budget() -> void:
 	var rig := _sim_rig({"haptic_intensity": 1.0})
 	var rec := rig.directive({"mode": "SIM", "haptic": 3.0, "haptic_wind": 5.0, "duration_s": 3.0})
 	assert_almost_eq(float(rec["applied"]["haptic_pct"]), 3.0, 1e-9)
-	assert_almost_eq(float(rec["applied"]["haptic_wind_mps"]), 0.0, 1e-9, "+3% grade used the whole budget")
+	assert_almost_eq(
+		float(rec["applied"]["haptic_wind_mps"]), 0.0, 1e-9, "+3% grade used the whole budget"
+	)
 
 
 func test_small_wind_passes_unbounded() -> void:

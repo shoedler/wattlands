@@ -73,12 +73,18 @@ func test_solo_erg_rider_completes_with_applied_targets_and_a_fit() -> void:
 func test_zero_rider_pauses_in_solo() -> void:
 	var r := _run({"riders": ["zero"], "content": "short"})
 	assert_eq(r.run_to_end(), "paused")
-	assert_lte(r.sim_seconds(), 10.0 + 0.05 + 120.0 + 2.0, "paused 10 s after the first not_pedaling sample")
+	assert_lte(
+		r.sim_seconds(),
+		10.0 + 0.05 + 120.0 + 2.0,
+		"paused 10 s after the first not_pedaling sample"
+	)
 
 
 ## SIM2, GM7: a 0 W rider goes AFK in HOST (two human slots) instead of pausing.
 func test_zero_rider_goes_afk_in_host() -> void:
-	var r := _run({"players": 2, "riders": ["erg", "zero"], "content": "short", "max_sim_seconds": 30.0})
+	var r := _run(
+		{"players": 2, "riders": ["erg", "zero"], "content": "short", "max_sim_seconds": 30.0}
+	)
 	assert_eq(r.run_to_end(), "timeout")
 	var afk := false
 	for e: Dictionary in r.build_report()["events"]:
@@ -99,11 +105,19 @@ func test_every_loopback_client_rides_and_reaches_the_host_roster() -> void:
 	var roster: Dictionary = r.host.ctx.roster
 	for peer: int in [2, 3]:
 		assert_true(roster.has(peer))
-		assert_gt(float((roster[peer] as Dictionary)["raw_w"]), 50.0, "peer %d rides in the host's roster" % peer)
+		assert_gt(
+			float((roster[peer] as Dictionary)["raw_w"]),
+			50.0,
+			"peer %d rides in the host's roster" % peer
+		)
 		assert_true(bool((roster[peer] as Dictionary)["connected"]))
 	for c in r.clients:
 		assert_eq(c.state, "ended")
-		assert_gt(int(c.local_phase_state().index), -1, "client %d got its plan and phase" % c.local_peer())
+		assert_gt(
+			int(c.local_phase_state().index),
+			-1,
+			"client %d got its plan and phase" % c.local_peer()
+		)
 		assert_true(c.ctx.roster.has(1), "the roster reached client %d" % c.local_peer())
 
 
@@ -119,7 +133,9 @@ func test_host_with_two_loopback_clients() -> void:
 			assert_not_null(c.final_results())
 			assert_eq(c.game.get("progress_calls"), 1)
 			var rider: LocalRider = c.local_rider(c.local_peer())
-			assert_eq(int(rider.telemetry().phase_index), 4, "the client's governor reached the cool-down")
+			assert_eq(
+				int(rider.telemetry().phase_index), 4, "the client's governor reached the cool-down"
+			)
 		var rep := r.build_report()
 		assert_eq((rep["fit_paths"] as Array).size(), 3)
 		hashes.append(str(rep["deterministic_hash"]))
@@ -137,20 +153,25 @@ func test_directive_kinds_and_bands_reach_loopback_clients() -> void:
 	assert_eq(c2.local_peer(), 2)
 	assert_eq(c3.local_peer(), 3)
 	var bands: Array = []
-	c2.bus.cadence_band_changed.connect(func(p: int, lo: float, hi: float) -> void: bands.append([p, lo, hi]))
+	c2.bus.cadence_band_changed.connect(
+		func(p: int, lo: float, hi: float) -> void: bands.append([p, lo, hi])
+	)
 	var ended := [false]
-	r.host.game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		var ps: PhaseState = frame.phase[2]
-		if frame.tick == 10:
-			g.ctx.directives.cadence_band(2, 60, 70)
-		if ps.index == 2 and frame.tick % 10 == 0:
-			g.ctx.directives.course_grade(2, 2.0)
-		if ps.index == 2 and ps.elapsed_s >= 1.0 and ps.elapsed_s < 1.04:
-			g.ctx.hud.power_band(3, 150, 170)
-		if ps.index == 3 and ps.elapsed_s >= 2.0 and not ended[0]:
-			for peer: int in frame.phase.keys():
-				g.ctx.directives.end_phase(peer)
-			ended[0] = true)
+	r.host.game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			var ps: PhaseState = frame.phase[2]
+			if frame.tick == 10:
+				g.ctx.directives.cadence_band(2, 60, 70)
+			if ps.index == 2 and frame.tick % 10 == 0:
+				g.ctx.directives.course_grade(2, 2.0)
+			if ps.index == 2 and ps.elapsed_s >= 1.0 and ps.elapsed_s < 1.04:
+				g.ctx.hud.power_band(3, 150, 170)
+			if ps.index == 3 and ps.elapsed_s >= 2.0 and not ended[0]:
+				for peer: int in frame.phase.keys():
+					g.ctx.directives.end_phase(peer)
+				ended[0] = true
+	)
 	assert_eq(r.run_to_end(), "timeout")
 	assert_true(ended[0])
 	assert_eq(bands[0], [2, 60.0, 70.0], "the client's HUD gets the band")
@@ -160,21 +181,34 @@ func test_directive_kinds_and_bands_reach_loopback_clients() -> void:
 	for e: Dictionary in c2.report_data()["events"]:
 		if str(e["type"]) == "phase_started" and int(e["peer"]) == 2:
 			phases2.append([int(e["index"]), str(e["ended_by"])])
-	assert_has(phases2, [4, Wl.ENDED_END_PHASE], "end_phase reached the client as its phase message")
+	assert_has(
+		phases2, [4, Wl.ENDED_END_PHASE], "end_phase reached the client as its phase message"
+	)
 	var graded := false
 	var in_band := 0
 	for row: Dictionary in c2.report_data()["trace"]["2"]:
 		if int(row["phase"]) == 2 and absf(float(row["applied_grade_pct"])) > 0.01:
 			graded = true
-		if float(row["t"]) >= 8.0 and int(row["phase"]) < 4 and float(row["cadence_rpm"]) >= 58.0 and float(row["cadence_rpm"]) <= 72.0:
+		if (
+			float(row["t"]) >= 8.0
+			and int(row["phase"]) < 4
+			and float(row["cadence_rpm"]) >= 58.0
+			and float(row["cadence_rpm"]) <= 72.0
+		):
 			in_band += 1
 	assert_true(graded, "course_grade moved the client's applied SIM grade")
 	assert_gt(in_band, 5, "MockTrainer's band policy rides the published cadence band")
 	var near_centre := 0
 	for row: Dictionary in c3.report_data()["trace"]["3"]:
-		if int(row["phase"]) == 2 and float(row["t"]) >= 15.0 and absf(float(row["power_w"]) - 160.0) <= 12.0:
+		if (
+			int(row["phase"]) == 2
+			and float(row["t"]) >= 15.0
+			and absf(float(row["power_w"]) - 160.0) <= 12.0
+		):
 			near_centre += 1
-	assert_gt(near_centre, 5, "peer 3's MockTrainer rides the power band's centre in SIM, not 90% FTP")
+	assert_gt(
+		near_centre, 5, "peer 3's MockTrainer rides the power band's centre in SIM, not 90% FTP"
+	)
 
 
 ## B7.3 conformance in HOST mode (bots false: Autopilot human slots over loopback).
@@ -190,7 +224,10 @@ func test_conformance_with_autopilot_human_slots() -> void:
 ## GM13, PR1, C10: declared int fields survive the JSON round trip through the real Protocol.
 func test_snapshot_int_fields_round_trip() -> void:
 	var state := {"tick": 5, "r": [[1, 2], [3, 4]], "f": [[1, [7, 8]]], "name": "x"}
-	assert_eq(SdkConformance.snapshot_errors(state, ["tick", "r[][]", "f[][]", "f[][][]"]), [] as Array[String])
+	assert_eq(
+		SdkConformance.snapshot_errors(state, ["tick", "r[][]", "f[][]", "f[][][]"]),
+		[] as Array[String]
+	)
 
 
 static func _remove_tree(dir: String) -> void:

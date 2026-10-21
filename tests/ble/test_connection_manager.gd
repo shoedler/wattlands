@@ -110,6 +110,7 @@ func _last_status() -> Array:
 
 # --- pure rules ------------------------------------------------------------------------
 
+
 func test_backoff_delays() -> void:
 	var got: Array[float] = []
 	for n in 7:
@@ -119,7 +120,11 @@ func test_backoff_delays() -> void:
 
 func test_scan_filter() -> void:
 	assert_true(FtmsConnectionManager.is_trainer({"name": "", "services": [FTMS]}))
-	assert_true(FtmsConnectionManager.is_trainer({"name": "", "services": ["00001826-0000-1000-8000-00805F9B34FB"]}))
+	assert_true(
+		FtmsConnectionManager.is_trainer(
+			{"name": "", "services": ["00001826-0000-1000-8000-00805F9B34FB"]}
+		)
+	)
 	assert_true(FtmsConnectionManager.is_trainer({"name": "", "services": ["1826"]}))
 	assert_true(FtmsConnectionManager.is_trainer({"name": "KICKR CORE 1A2B", "services": []}))
 	assert_true(FtmsConnectionManager.is_trainer({"name": "my kickr", "services": []}))
@@ -127,10 +132,15 @@ func test_scan_filter() -> void:
 	assert_false(FtmsConnectionManager.is_trainer({"name": "HRM-Pro", "services": ["180d"]}))
 	assert_false(FtmsConnectionManager.is_trainer({"name": null, "services": []}))
 	assert_false(FtmsConnectionManager.is_trainer({}))
-	assert_false(FtmsConnectionManager.is_trainer({"name": "Speed", "services": ["00001826-0000-1000-8000-00805f9b34fc"]}))
+	assert_false(
+		FtmsConnectionManager.is_trainer(
+			{"name": "Speed", "services": ["00001826-0000-1000-8000-00805f9b34fc"]}
+		)
+	)
 
 
 # --- backend choice ----------------------------------------------------------------------
+
 
 func test_gdble_first() -> void:
 	_m.start(false)
@@ -240,7 +250,11 @@ func test_connect_during_start_up_with_no_backend_stops() -> void:
 	_run(60.0)
 	assert_false(_m.is_reconnecting())
 	assert_eq(_m.retry_in(), 0.0)
-	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")], "the status stays clear")
+	assert_eq(
+		_last_status(),
+		[TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")],
+		"the status stays clear"
+	)
 
 
 func test_adapter_lost_while_idle_then_scan_initializes_again() -> void:
@@ -249,7 +263,11 @@ func test_adapter_lost_while_idle_then_scan_initializes_again() -> void:
 	assert_push_warning("adapter lost")
 	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")])
 	_run(FtmsConnectionManager.DEFAULT_SCAN_S)
-	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")], "no scan end over it")
+	assert_eq(
+		_last_status(),
+		[TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")],
+		"no scan end over it"
+	)
 	_m.scan(5.0)
 	assert_eq(_gdble.count("initialize"), 2, "initialize() again first")
 	assert_eq(_gdble.last("start_scan"), ["start_scan", 5.0])
@@ -283,6 +301,7 @@ func test_scan_requested_while_the_backend_starts_is_queued() -> void:
 
 # --- scanning ----------------------------------------------------------------------------
 
+
 func test_scan_reports_trainers_only_once_each() -> void:
 	_m.start(false)
 	_gdble.advertise(ADDR, NAME)
@@ -315,6 +334,7 @@ func test_stop_scan() -> void:
 
 # --- connecting --------------------------------------------------------------------------
 
+
 func test_connect_flow() -> void:
 	_m.start(false)
 	_gdble.advertise(ADDR, NAME)
@@ -329,12 +349,22 @@ func test_connect_flow() -> void:
 	assert_eq(_made, [[_client, NAME]], "FtmsTrainer created with the client and the name")
 	assert_eq(_reconnected.size(), 0)
 	assert_true(_m.is_ready())
-	assert_eq(_last_status(), [TrainerDevice.STATUS_READY, tr("BLE_STATUS_READY").format({"name": NAME})])
+	assert_eq(
+		_last_status(), [TrainerDevice.STATUS_READY, tr("BLE_STATUS_READY").format({"name": NAME})]
+	)
 	var states: Array = []
 	for s: Array in _statuses:
 		states.append(s[0])
-	assert_eq(states, [TrainerDevice.STATUS_DISCONNECTED, TrainerDevice.STATUS_SCANNING,
-		TrainerDevice.STATUS_CONNECTING, TrainerDevice.STATUS_CONNECTED, TrainerDevice.STATUS_READY])
+	assert_eq(
+		states,
+		[
+			TrainerDevice.STATUS_DISCONNECTED,
+			TrainerDevice.STATUS_SCANNING,
+			TrainerDevice.STATUS_CONNECTING,
+			TrainerDevice.STATUS_CONNECTED,
+			TrainerDevice.STATUS_READY
+		]
+	)
 	assert_eq(_client.get_parent(), _m)
 	assert_eq(_client.process_mode, Node.PROCESS_MODE_ALWAYS)
 	assert_eq(_m.device().get_parent(), _m)
@@ -386,7 +416,9 @@ func test_setup_timeout() -> void:
 	assert_eq(_m.status(), TrainerDevice.STATUS_CONNECTED)
 	_run(FtmsConnectionManager.SETUP_TIMEOUT_S)
 	if Locks.hw_locked():
-		assert_eq(_m.status(), TrainerDevice.STATUS_ERROR, "read-only under the lock: no retry loop")
+		assert_eq(
+			_m.status(), TrainerDevice.STATUS_ERROR, "read-only under the lock: no retry loop"
+		)
 		_run(60.0)
 		assert_eq(_gdble.count("connect_device"), 1)
 	else:
@@ -425,6 +457,7 @@ func test_switching_to_another_trainer() -> void:
 
 # --- last device -------------------------------------------------------------------------
 
+
 func test_last_device_is_saved_when_ready() -> void:
 	assert_eq(_m.last_device(), {})
 	_ready_on(_gdble)
@@ -441,7 +474,7 @@ func test_last_device_file_errors_are_warnings() -> void:
 	assert_eq(FtmsConnectionManager.read_last_device(), {})
 	assert_push_warning("unreadable last device")
 	f = FileAccess.open(Paths.last_device_path(), FileAccess.WRITE)
-	f.store_string("{\"name\": \"KICKR\"}")
+	f.store_string('{"name": "KICKR"}')
 	f.close()
 	assert_eq(FtmsConnectionManager.read_last_device(), {})
 	assert_push_warning("without an address")
@@ -450,6 +483,7 @@ func test_last_device_file_errors_are_warnings() -> void:
 
 
 # --- auto-connect ------------------------------------------------------------------------
+
 
 func test_auto_connect_to_the_last_device() -> void:
 	FtmsConnectionManager.write_last_device(ADDR, NAME)
@@ -511,11 +545,15 @@ func test_auto_connect_with_no_last_device_only_scans() -> void:
 
 # --- reconnect ---------------------------------------------------------------------------
 
+
 func test_backoff_sequence_on_tick() -> void:
 	_ready_on(_gdble)
 	_gdble.connect_result = "fail"
 	_gdble.drop(ADDR)
-	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_LOST").format({"s": 1, "error": ""})])
+	assert_eq(
+		_last_status(),
+		[TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_LOST").format({"s": 1, "error": ""})]
+	)
 	assert_true(_m.is_reconnecting())
 	var attempts_at: Array[float] = []
 	var seen := _gdble.count("connect_device")
@@ -610,9 +648,20 @@ func test_adapter_lost_under_a_gdble_link_reconnects_for_real() -> void:
 	var d: FakeDevice = fake_mgr.devices[ADDR.to_lower()]
 	d.connected.emit()
 	assert_true(_m.is_ready())
-	fake_mgr.ble_event.emit({"operation": &"initialize", "phase": &"failed", "operation_id": 0,
-		"terminal": false, "device_address": "", "service_uuid": "", "characteristic_uuid": "",
-		"data": null, "error": {"code": "ADAPTER_UNAVAILABLE", "message": "", "retryable": true, "details": {}}})
+	fake_mgr.ble_event.emit(
+		{
+			"operation": &"initialize",
+			"phase": &"failed",
+			"operation_id": 0,
+			"terminal": false,
+			"device_address": "",
+			"service_uuid": "",
+			"characteristic_uuid": "",
+			"data": null,
+			"error":
+			{"code": "ADAPTER_UNAVAILABLE", "message": "", "retryable": true, "details": {}}
+		}
+	)
 	assert_push_warning("adapter unavailable")
 	assert_false(gt.is_link_up())
 	assert_true(_m.is_reconnecting())
@@ -647,6 +696,7 @@ func test_process_drives_the_clock() -> void:
 
 
 # --- control -----------------------------------------------------------------------------
+
 
 func test_control_lost_during_setup() -> void:
 	_client.begin_result = "control_lost"
@@ -709,19 +759,38 @@ func test_runs_while_the_tree_is_paused() -> void:
 	_ready_on(_gdble)
 	var tree := get_tree()
 	tree.paused = true
-	var running := [_m.can_process(), _m.transport().can_process(), _m.client().can_process(),
-		_m.device().can_process()]
+	var running := [
+		_m.can_process(),
+		_m.transport().can_process(),
+		_m.client().can_process(),
+		_m.device().can_process()
+	]
 	tree.paused = false
-	assert_eq(running, [true, true, true, true], "manager, transport, client and device keep running")
+	assert_eq(
+		running, [true, true, true, true], "manager, transport, client and device keep running"
+	)
 
 
 # --- strings and defaults ----------------------------------------------------------------
 
+
 func test_status_strings_are_translated() -> void:
-	for key: String in ["BLE_STATUS_STARTING", "BLE_STATUS_NO_ADAPTER", "BLE_STATUS_NO_BACKEND",
-			"BLE_STATUS_SCANNING", "BLE_STATUS_NONE_FOUND", "BLE_STATUS_CONNECTING", "BLE_STATUS_SETUP",
-			"BLE_STATUS_READY", "BLE_STATUS_LOST", "BLE_STATUS_RETRY", "BLE_STATUS_SETUP_FAILED",
-			"BLE_STATUS_HW_LOCKED", "BLE_STATUS_CONTROL_HELD", "BLE_STATUS_DISCONNECTED"]:
+	for key: String in [
+		"BLE_STATUS_STARTING",
+		"BLE_STATUS_NO_ADAPTER",
+		"BLE_STATUS_NO_BACKEND",
+		"BLE_STATUS_SCANNING",
+		"BLE_STATUS_NONE_FOUND",
+		"BLE_STATUS_CONNECTING",
+		"BLE_STATUS_SETUP",
+		"BLE_STATUS_READY",
+		"BLE_STATUS_LOST",
+		"BLE_STATUS_RETRY",
+		"BLE_STATUS_SETUP_FAILED",
+		"BLE_STATUS_HW_LOCKED",
+		"BLE_STATUS_CONTROL_HELD",
+		"BLE_STATUS_DISCONNECTED"
+	]:
 		assert_ne(tr(key), key, key)
 	assert_string_contains(tr("BLE_STATUS_CONTROL_HELD").to_lower(), "another app may hold control")
 

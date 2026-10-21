@@ -38,16 +38,26 @@ func make_session(label: String, info: Dictionary = {}) -> WlNetSession:
 	s.use_transport(LoopbackTransport.hub_transport(hub))
 	var log: Array = []
 	logs[label] = log
-	s.state_changed.connect(func(st: String, detail: String) -> void: log.append(["state", st, detail]))
-	s.game_message.connect(func(from: int, data: Dictionary) -> void: log.append(["msg", from, data]))
+	s.state_changed.connect(
+		func(st: String, detail: String) -> void: log.append(["state", st, detail])
+	)
+	s.game_message.connect(
+		func(from: int, data: Dictionary) -> void: log.append(["msg", from, data])
+	)
 	s.peer_joined.connect(func(id: int) -> void: log.append(["peer_joined", id]))
-	s.peer_left.connect(func(id: int, reason: String) -> void: log.append(["peer_left", id, reason]))
+	s.peer_left.connect(
+		func(id: int, reason: String) -> void: log.append(["peer_left", id, reason])
+	)
 	s.refused.connect(func(reason: String) -> void: log.append(["refused", reason]))
 	s.rejoin_requested.connect(func(id: int) -> void: log.append(["rejoin_requested", id]))
-	s.ready_refused.connect(func(reason: String, text: String) -> void: log.append(["ready_refused", reason, text]))
+	s.ready_refused.connect(
+		func(reason: String, text: String) -> void: log.append(["ready_refused", reason, text])
+	)
 	b.session_refused.connect(func(reason: String) -> void: log.append(["bus_refused", reason]))
 	b.peer_joined.connect(func(id: int) -> void: log.append(["bus_peer_joined", id]))
-	b.peer_left.connect(func(id: int, reason: String) -> void: log.append(["bus_peer_left", id, reason]))
+	b.peer_left.connect(
+		func(id: int, reason: String) -> void: log.append(["bus_peer_left", id, reason])
+	)
 	if not info.is_empty():
 		s.set_local_player_info(info)
 	sessions.append(s)
@@ -58,10 +68,20 @@ func pump(n: int = 4) -> void:
 	U.pump(sessions, n)
 
 
-static func rider(name: String, version: String = "1", ftp: int = 200, extra: Dictionary = {}) -> Dictionary:
-	var d := {"name": name, "ftp": ftp, "ftp_verified": false, "p_eff_per_w": 250.0 / ftp,
-		"preferred_cadence_rpm": 90.0, "haptics_on": true, "autopilot": false,
-		"player_options": {}, "games": {"workout": version}}
+static func rider(
+	name: String, version: String = "1", ftp: int = 200, extra: Dictionary = {}
+) -> Dictionary:
+	var d := {
+		"name": name,
+		"ftp": ftp,
+		"ftp_verified": false,
+		"p_eff_per_w": 250.0 / ftp,
+		"preferred_cadence_rpm": 90.0,
+		"haptics_on": true,
+		"autopilot": false,
+		"player_options": {},
+		"games": {"workout": version}
+	}
 	for k: Variant in extra.keys():
 		d[k] = extra[k]
 	return d

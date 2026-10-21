@@ -79,7 +79,13 @@ static func players(humans: int, bots: int = 0, ftp: float = 200.0) -> Array[Pla
 	return out
 
 
-static func ctx(content_id: String, p_players: Array[PlayerSlot], role: String = Wl.SOLO, local_peer: int = 1, seed_value: int = 7) -> GameContext:
+static func ctx(
+	content_id: String,
+	p_players: Array[PlayerSlot],
+	role: String = Wl.SOLO,
+	local_peer: int = 1,
+	seed_value: int = 7
+) -> GameContext:
 	var c := GameContext.new()
 	c.game_id = "workout"
 	c.content_id = content_id
@@ -99,7 +105,9 @@ static func ctx(content_id: String, p_players: Array[PlayerSlot], role: String =
 	return c
 
 
-static func game(content_id: String, p_players: Array[PlayerSlot], role: String = Wl.SOLO, local_peer: int = 1) -> WorkoutGame:
+static func game(
+	content_id: String, p_players: Array[PlayerSlot], role: String = Wl.SOLO, local_peer: int = 1
+) -> WorkoutGame:
 	var g := WorkoutGame.new()
 	g.configure(ctx(content_id, p_players, role, local_peer))
 	return g
@@ -141,7 +149,12 @@ static func compliant(slot: PlayerSlot, p: PlanPhase, ps: PhaseState) -> Diction
 	var factor := 1.0 if slot.ftp_verified else 0.85
 	if p.mode == Wl.ERG:
 		var target := int(floor(ps.planned_pct / 100.0 * slot.ftp * factor))
-		return {"power_w": float(target), "cadence_rpm": 90.0, "mode": Wl.ERG, "applied_target_w": target}
+		return {
+			"power_w": float(target),
+			"cadence_rpm": 90.0,
+			"mode": Wl.ERG,
+			"applied_target_w": target
+		}
 	if p.kind == Wl.FREE:
 		var pw := 1.4 * slot.ftp if ps.elapsed_s < 10.0 else 0.8 * slot.ftp
 		return {"power_w": pw, "cadence_rpm": 95.0, "mode": Wl.SIM, "applied_target_w": 0}
@@ -168,7 +181,9 @@ static func telemetry(slot: PlayerSlot, values: Dictionary, tick: int) -> Teleme
 ## Rides `g` through its whole timeline (cool-down included unless stop_tick >= 0).
 ## `rider_fn(slot, phase, phase_state, tick) -> Dictionary` overrides the compliant rider.
 ## Returns every event the game emitted, in order.
-static func ride(g: WorkoutGame, rider_fn: Callable = Callable(), stop_tick: int = -1) -> Array[Dictionary]:
+static func ride(
+	g: WorkoutGame, rider_fn: Callable = Callable(), stop_tick: int = -1
+) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var collect := func(e: Dictionary) -> void: events.append(e)
 	g.game_event.connect(collect)
@@ -182,7 +197,9 @@ static func ride(g: WorkoutGame, rider_fn: Callable = Callable(), stop_tick: int
 		for slot in g.ctx.players:
 			var ps := phase_state(timeline, starts, tick)
 			var p := timeline[ps.index]
-			var values: Dictionary = rider_fn.call(slot, p, ps, tick) if rider_fn.is_valid() else compliant(slot, p, ps)
+			var values: Dictionary = (
+				rider_fn.call(slot, p, ps, tick) if rider_fn.is_valid() else compliant(slot, p, ps)
+			)
 			frame.players[slot.peer_id] = telemetry(slot, values, tick)
 			frame.phase[slot.peer_id] = ps
 		g.sim_step(DT, frame)

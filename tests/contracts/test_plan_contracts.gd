@@ -16,8 +16,15 @@ func _same_json(a: Dictionary, b: Dictionary, msg: String = "") -> void:
 
 # --- round trips ----------------------------------------------------------------------
 
+
 func test_erg_phase_with_ramp_and_range_round_trip() -> void:
-	var p := PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_range(45.0, 70.0).with_lap()
+	var p := (
+		PlanPhase
+		. erg(Wl.WARMUP, 50.0, 300.0, "Warm-up")
+		. with_ramp(65.0)
+		. with_range(45.0, 70.0)
+		. with_lap()
+	)
 	var d := p.to_dict()
 	assert_eq(d["mode"], Wl.ERG)
 	assert_eq(d["target_pct"], 50.0)
@@ -69,7 +76,9 @@ func test_sim_game_phase_round_trip() -> void:
 
 
 func test_open_ended_phase_round_trip() -> void:
-	var p := PlanPhase.erg(Wl.WORK, 55.0, 180.0, "Advance").with_range(55.0, 100.0).with_open(90.0, 300.0)
+	var p := PlanPhase.erg(Wl.WORK, 55.0, 180.0, "Advance").with_range(55.0, 100.0).with_open(
+		90.0, 300.0
+	)
 	p.with_meta({"wave": 3.0, "name": "north gate"})
 	var d := p.to_dict()
 	assert_true(d["open_ended"])
@@ -113,6 +122,7 @@ func test_meta_is_copied_on_to_dict() -> void:
 
 # --- helpers --------------------------------------------------------------------------
 
+
 func test_planned_pct_at_with_ramp() -> void:
 	var p := PlanPhase.erg(Wl.WARMUP, 50.0, 300.0).with_ramp(65.0)
 	assert_eq(p.planned_pct_at(0.0), 50.0)
@@ -142,13 +152,28 @@ func test_planned_pct_at_open_ended_ramps_over_duration_then_holds() -> void:
 func test_effective_range() -> void:
 	assert_eq(PlanPhase.erg(Wl.WORK, 80.0, 60.0).effective_range(), [80.0, 80.0])
 	assert_eq(PlanPhase.erg(Wl.WARMUP, 50.0, 300.0).with_ramp(65.0).effective_range(), [50.0, 65.0])
-	assert_eq(PlanPhase.erg(Wl.WORK, 70.0, 300.0).with_ramp(55.0).effective_range(), [55.0, 70.0], "a ramp down")
-	assert_eq(PlanPhase.erg(Wl.WORK, 55.0, 180.0).with_range(55.0, 100.0).effective_range(), [55.0, 100.0])
-	assert_eq(PlanPhase.erg(Wl.WORK, 80.0, 60.0).with_range(60.0, 70.0).effective_range(), [60.0, 80.0],
-		"the target always stays inside its range")
-	assert_eq(PlanPhase.erg(Wl.WORK, 50.0, 60.0).with_ramp(65.0).with_range(45.0, 70.0).effective_range(), [45.0, 70.0])
-	assert_eq(PlanPhase.erg(Wl.WORK, 50.0, 60.0).with_ramp(75.0).with_range(45.0, 70.0).effective_range(), [45.0, 75.0],
-		"ramp end above the range top")
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 70.0, 300.0).with_ramp(55.0).effective_range(),
+		[55.0, 70.0],
+		"a ramp down"
+	)
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 55.0, 180.0).with_range(55.0, 100.0).effective_range(), [55.0, 100.0]
+	)
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 80.0, 60.0).with_range(60.0, 70.0).effective_range(),
+		[60.0, 80.0],
+		"the target always stays inside its range"
+	)
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 50.0, 60.0).with_ramp(65.0).with_range(45.0, 70.0).effective_range(),
+		[45.0, 70.0]
+	)
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 50.0, 60.0).with_ramp(75.0).with_range(45.0, 70.0).effective_range(),
+		[45.0, 75.0],
+		"ramp end above the range top"
+	)
 
 
 func test_worst_and_best_case_length() -> void:
@@ -165,18 +190,28 @@ func test_peak_pct() -> void:
 	assert_eq(PlanPhase.erg(Wl.WORK, 80.0, 60.0).peak_pct(), 80.0)
 	assert_eq(PlanPhase.erg(Wl.WORK, 80.0, 60.0).with_ramp(95.0).peak_pct(), 95.0)
 	assert_eq(PlanPhase.erg(Wl.WORK, 55.0, 60.0).with_range(55.0, 104.0).peak_pct(), 104.0)
-	assert_eq(PlanPhase.erg(Wl.WORK, 90.0, 60.0).with_ramp(70.0).with_range(60.0, 85.0).peak_pct(), 90.0)
+	assert_eq(
+		PlanPhase.erg(Wl.WORK, 90.0, 60.0).with_ramp(70.0).with_range(60.0, 85.0).peak_pct(), 90.0
+	)
 
 
 # --- EffortPlan -----------------------------------------------------------------------
 
+
 func _plan() -> EffortPlan:
-	return EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_lap(),
-		PlanPhase.erg(Wl.WORK, 55.0, 180.0, "Advance").with_range(55.0, 100.0).with_open(90.0, 300.0),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30.0, "Sprint"),
-		"not a phase",
-	])
+	return (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_lap(),
+				PlanPhase.erg(Wl.WORK, 55.0, 180.0, "Advance").with_range(55.0, 100.0).with_open(
+					90.0, 300.0
+				),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30.0, "Sprint"),
+				"not a phase",
+			]
+		)
+	)
 
 
 func test_plan_basics() -> void:

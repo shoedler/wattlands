@@ -44,17 +44,39 @@ const RELAY_TYPES: Dictionary = {
 	"pong": {"ts": NUMBER},
 }
 const GAME_TYPES: Dictionary = {
-	"player_info": {"name": TYPE_STRING, "ftp": NUMBER, "ftp_verified": TYPE_BOOL,
-		"p_eff_per_w": NUMBER, "preferred_cadence_rpm": NUMBER, "haptics_on": TYPE_BOOL,
-		"autopilot": TYPE_BOOL, "player_options": TYPE_DICTIONARY, "games": TYPE_DICTIONARY},
+	"player_info":
+	{
+		"name": TYPE_STRING,
+		"ftp": NUMBER,
+		"ftp_verified": TYPE_BOOL,
+		"p_eff_per_w": NUMBER,
+		"preferred_cadence_rpm": NUMBER,
+		"haptics_on": TYPE_BOOL,
+		"autopilot": TYPE_BOOL,
+		"player_options": TYPE_DICTIONARY,
+		"games": TYPE_DICTIONARY
+	},
 	"ready": {"ready": TYPE_BOOL},
 	"telemetry": {"tm": TYPE_DICTIONARY},
 	"clock_ping": {"t0": NUMBER},
-	"lobby_state": {"players": TYPE_ARRAY, "game_id": TYPE_STRING, "content_id": TYPE_STRING,
-		"scaling": TYPE_STRING, "settings": TYPE_DICTIONARY},
-	"session_start": {"game_id": TYPE_STRING, "content_id": TYPE_STRING, "seed": NUMBER,
-		"players": TYPE_ARRAY, "options": TYPE_DICTIONARY, "scaling": TYPE_STRING,
-		"start_tick": NUMBER},
+	"lobby_state":
+	{
+		"players": TYPE_ARRAY,
+		"game_id": TYPE_STRING,
+		"content_id": TYPE_STRING,
+		"scaling": TYPE_STRING,
+		"settings": TYPE_DICTIONARY
+	},
+	"session_start":
+	{
+		"game_id": TYPE_STRING,
+		"content_id": TYPE_STRING,
+		"seed": NUMBER,
+		"players": TYPE_ARRAY,
+		"options": TYPE_DICTIONARY,
+		"scaling": TYPE_STRING,
+		"start_tick": NUMBER
+	},
 	"snapshot": {"game_id": TYPE_STRING, "seq": NUMBER, "state": TYPE_DICTIONARY},
 	"event": {"seq": NUMBER, "events": TYPE_ARRAY},
 	"roster": {"riders": TYPE_DICTIONARY},
@@ -118,7 +140,7 @@ static func decode(text: String) -> Dictionary:
 		return {}
 	if msg.has("t"):
 		return _decode_envelope(msg, hints)
-	return _reject("unknown_type", "Protocol: message has neither \"t\" nor \"type\"")
+	return _reject("unknown_type", 'Protocol: message has neither "t" nor "type"')
 
 
 ## A game message ("type" + "v" + payload) ready for Transport.send.
@@ -151,6 +173,7 @@ static func apply_int_fields(data: Variant, paths: Array) -> Variant:
 
 
 # --- additions (public) ------------------------------------------------------------------
+
 
 ## JSON text -> Variant without logging engine errors (JSON.parse_string logs one on bad
 ## input, which fails GUT tests); null when the text is not valid JSON.
@@ -226,10 +249,13 @@ static func apply_game_int_fields(msg: Dictionary, fields: Dictionary) -> Dictio
 
 # --- internals ---------------------------------------------------------------------------
 
+
 static func _decode_envelope(msg: Dictionary, hints: int) -> Dictionary:
 	var err := check_envelope(msg)
 	if err != "":
-		return _reject(err, "Protocol: relay message \"%s\" rejected (%s)" % [str(msg.get("t", "")), err])
+		return _reject(
+			err, 'Protocol: relay message "%s" rejected (%s)' % [str(msg.get("t", "")), err]
+		)
 	_convert_top(msg)
 	if msg["t"] == "msg":
 		var d: Dictionary = msg["d"]
@@ -242,7 +268,7 @@ static func _decode_envelope(msg: Dictionary, hints: int) -> Dictionary:
 static func _decode_game_in_place(d: Dictionary, hints: int) -> bool:
 	var err := check_game(d)
 	if err != "":
-		_reject(err, "Protocol: game message \"%s\" rejected (%s)" % [str(d.get("type", "")), err])
+		_reject(err, 'Protocol: game message "%s" rejected (%s)' % [str(d.get("type", "")), err])
 		return false
 	var type: String = d["type"]
 	_convert_top(d)
@@ -299,8 +325,12 @@ static func _walk(node: Variant, key_name: String, hints: int, allow_peer: bool)
 		return arr
 	if node is Dictionary:
 		var dict: Dictionary = node
-		var rekey := allow_peer and (hints & _HINT_PEER_KEYED) != 0 \
-			and NetMessages.PEER_KEYED.has(key_name) and _has_int_like_key(dict)
+		var rekey := (
+			allow_peer
+			and (hints & _HINT_PEER_KEYED) != 0
+			and NetMessages.PEER_KEYED.has(key_name)
+			and _has_int_like_key(dict)
+		)
 		var out: Dictionary = {} if rekey else dict
 		for k: Variant in dict.keys():
 			var v: Variant = dict[k]
@@ -444,7 +474,7 @@ static func _hints_for(text: String) -> int:
 	if _has_numeric_id(text):
 		h |= _HINT_ID
 	for k in NetMessages.PEER_KEYED:
-		if text.contains("\"" + k + "\""):
+		if text.contains('"' + k + '"'):
 			h |= _HINT_PEER_KEYED
 			break
 	return h
@@ -457,7 +487,7 @@ static func _has_numeric_id(text: String) -> bool:
 	var n := text.length()
 	var from := 0
 	while true:
-		var at := text.find("_id\"", from)
+		var at := text.find('_id"', from)
 		if at < 0:
 			return false
 		from = at + 4

@@ -14,7 +14,13 @@ var fit_to_return: String = ""
 var _fake_t: float = 0.0
 
 
-func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
+func setup(
+	p_peer_id: int,
+	p_profile: RiderProfile,
+	p_slot: PlayerSlot,
+	p_device: TrainerDevice,
+	p_options: Dictionary = {}
+) -> void:
 	peer_id = p_peer_id
 	profile = p_profile
 	slot = p_slot
@@ -22,7 +28,14 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 	_gov_params = {}
 	if p_device != null:
 		_gov_params["trainer_max_w"] = int(p_device.power_range().get("max_w", 1800))
-	setup_calls.append({"peer": p_peer_id, "slot": p_slot, "device": p_device, "options": p_options.duplicate(true)})
+	setup_calls.append(
+		{
+			"peer": p_peer_id,
+			"slot": p_slot,
+			"device": p_device,
+			"options": p_options.duplicate(true)
+		}
+	)
 
 
 func set_plan(p_plan: EffortPlan) -> void:

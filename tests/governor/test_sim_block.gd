@@ -35,9 +35,14 @@ func test_overdrive_accepted_and_returns_through_the_ramped_entry() -> void:
 	dev.power_w = 400.0
 	rig.run(40.0)
 	# SIM span on the trace: 30 +- 2 s (S10).
-	var first_sim := first_where(rig, func(s: Dictionary) -> bool: return float(s["rig_t"]) > t0 and s["mode"] == Wl.SIM)
-	var back := first_where(rig, func(s: Dictionary) -> bool:
-		return float(s["rig_t"]) > float(first_sim["rig_t"]) and s["mode"] == Wl.ERG)
+	var first_sim := first_where(
+		rig, func(s: Dictionary) -> bool: return float(s["rig_t"]) > t0 and s["mode"] == Wl.SIM
+	)
+	var back := first_where(
+		rig,
+		func(s: Dictionary) -> bool:
+			return float(s["rig_t"]) > float(first_sim["rig_t"]) and s["mode"] == Wl.ERG
+	)
 	var span := float(back["rig_t"]) - float(first_sim["rig_t"])
 	assert_almost_eq(span, 30.0, 2.0, "SIM span %.2f s" % span)
 	for w in dev.writes_of("erg", t0 + 1.0):
@@ -52,7 +57,9 @@ func test_overdrive_grade_is_the_gear_offset_clamped_to_the_user_range() -> void
 		rig.gov.shift(1)
 	assert_eq(rig.gov.gear(), 24)
 	rig.run(3.0)
-	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 4.0, 1e-9, "gear 24 (~+6%) clamped to +4%")
+	assert_almost_eq(
+		float(rig.s()["applied_grade_pct"]), 4.0, 1e-9, "gear 24 (~+6%) clamped to +4%"
+	)
 	assert_has(rig.s()["clamped_by"], Wl.CLAMP_GRADE_RANGE)
 	rig.gov.shift(-12)
 	rig.run(1.0)

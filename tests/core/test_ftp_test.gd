@@ -97,8 +97,14 @@ func test_step_count_respects_the_ceiling() -> void:
 
 
 func test_end_reason_keys_exist() -> void:
-	for r: String in [FtpTest.END_POWER, FtpTest.END_CADENCE, FtpTest.END_COASTING, FtpTest.END_RESCUE,
-			FtpTest.END_BACK, FtpTest.END_COMPLETE]:
+	for r: String in [
+		FtpTest.END_POWER,
+		FtpTest.END_CADENCE,
+		FtpTest.END_COASTING,
+		FtpTest.END_RESCUE,
+		FtpTest.END_BACK,
+		FtpTest.END_COMPLETE
+	]:
 		var key := FtpTest.end_reason_key(r)
 		assert_ne(TranslationServer.translate(key), key, key)
 
@@ -378,7 +384,13 @@ func _rider(gov: Fakes.FakeGovernor) -> LocalRider:
 	add_child_autofree(r)
 	var bus := WlEventBus.new()
 	autofree(bus)
-	r.setup(1, RiderProfile.new(), null, m, {"governor": gov, "gestures": Fakes.FakeGestures.new(), "bus": bus})
+	r.setup(
+		1,
+		RiderProfile.new(),
+		null,
+		m,
+		{"governor": gov, "gestures": Fakes.FakeGestures.new(), "bus": bus}
+	)
 	return r
 
 
@@ -462,7 +474,11 @@ func test_dropping_a_running_test_releases_the_rider() -> void:
 		r.tick(DT)
 	assert_eq(service.holds, [true] as Array[bool])
 	t = null
-	assert_eq(service.holds, [true, false] as Array[bool], "the screen let go without stop(): the hold ends")
+	assert_eq(
+		service.holds,
+		[true, false] as Array[bool],
+		"the screen let go without stop(): the hold ends"
+	)
 	assert_eq(gov.configured.get("profile"), "normal")
 	var calls := gov.called("start_phase").size()
 	for _i in 20:
@@ -496,7 +512,9 @@ func test_estimate_matches_an_analytic_w_prime_rider() -> void:
 		var expected := 0.0
 		var s := failed_at - 60.0
 		while s < failed_at - 1e-9:
-			expected += floorf(t.plan.phase(_phase_at(s)).planned_pct_at(_elapsed_at(s)) * ftp / 100.0) * DT
+			expected += (
+				floorf(t.plan.phase(_phase_at(s)).planned_pct_at(_elapsed_at(s)) * ftp / 100.0) * DT
+			)
 			s += DT
 		expected /= 60.0
 		assert_almost_eq(float(r["best_1min_w"]), expected, 0.5, str(case))

@@ -25,16 +25,32 @@ func _own_profile() -> RiderProfile:
 
 ## What a modified or buggy host's session_start says about this rider.
 func _hostile_slot(peer: int) -> PlayerSlot:
-	return PlayerSlot.from_dict({
-		"peer_id": peer, "name": "Guest", "slot_index": 1, "ftp": 5000, "ftp_verified": true,
-		"haptics_on": true, "haptic_intensity": 1.0,
-	})
+	return (
+		PlayerSlot
+		. from_dict(
+			{
+				"peer_id": peer,
+				"name": "Guest",
+				"slot_index": 1,
+				"ftp": 5000,
+				"ftp_verified": true,
+				"haptics_on": true,
+				"haptic_intensity": 1.0,
+			}
+		)
+	)
 
 
 func _rider(profile: RiderProfile, slot: PlayerSlot, device: TrainerDevice) -> LocalRider:
 	var r := LocalRider.new()
 	add_child_autofree(r)
-	r.setup(slot.peer_id if slot != null else 2, profile, slot, device, {"multiplayer": true, "record": false})
+	r.setup(
+		slot.peer_id if slot != null else 2,
+		profile,
+		slot,
+		device,
+		{"multiplayer": true, "record": false}
+	)
 	return r
 
 
@@ -65,7 +81,9 @@ func test_a_hosts_slot_cannot_set_the_clients_safety_values() -> void:
 ## The W3 repro's effect: a PlanValidator-finalized 50% warm-up phase wrote 1500 W ERG.
 func test_the_trainer_gets_the_riders_own_watts() -> void:
 	var r := _rider(_own_profile(), _hostile_slot(2), _mock())
-	var plan := PlanValidator.finalize(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up")]))
+	var plan := PlanValidator.finalize(
+		EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up")])
+	)
 	assert_not_null(plan)
 	r.set_plan(plan)
 	r.start_phase(0)
@@ -73,7 +91,9 @@ func test_the_trainer_gets_the_riders_own_watts() -> void:
 		r.tick(DT)
 	var st := r.governor.status()
 	var w := int(st["applied_target_w"])
-	assert_lte(w, 300, "150%% of the rider's 200 W FTP is the most any ERG target may be; applied %d W" % w)
+	assert_lte(
+		w, 300, "150%% of the rider's 200 W FTP is the most any ERG target may be; applied %d W" % w
+	)
 	assert_eq(int(st["governed_target_w"]), 85, "50% x 200 W x 0.85 (unverified)")
 
 
@@ -82,7 +102,10 @@ func test_an_honest_slot_changes_nothing_and_logs_nothing() -> void:
 	var slot := p.to_slot(2, Wl.FAIR_FTP)
 	var r := _rider(p, slot, _mock())
 	for e: Variant in get_errors():
-		assert_false((e as Object).call("contains_text", "using the rider's own profile"), "no warning for an honest slot")
+		assert_false(
+			(e as Object).call("contains_text", "using the rider's own profile"),
+			"no warning for an honest slot"
+		)
 	assert_eq(float(r.governor_params()["ftp_w"]), 200.0)
 
 
@@ -96,8 +119,12 @@ func test_bots_keep_their_slot() -> void:
 func test_without_a_profile_the_slot_is_used_but_the_governor_rejects_an_absurd_ftp() -> void:
 	var r := _rider(null, _hostile_slot(2), _mock())
 	assert_push_error("ftp_w must be within 30-2000 W")
-	assert_eq(float(r.governor.status()["ftp_w"]), 200.0, "the governor keeps its previous (default) FTP")
-	var plan := PlanValidator.finalize(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up")]))
+	assert_eq(
+		float(r.governor.status()["ftp_w"]), 200.0, "the governor keeps its previous (default) FTP"
+	)
+	var plan := PlanValidator.finalize(
+		EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up")])
+	)
 	r.set_plan(plan)
 	r.start_phase(0)
 	for i in 40:
@@ -112,7 +139,9 @@ func test_configure_rejects_an_ftp_outside_30_to_2000() -> void:
 	for bad: float in [5000.0, 2000.5, INF, NAN]:
 		g.configure({"ftp_w": bad})
 		assert_push_error("ftp_w must be within 30-2000 W")
-		assert_eq(float(g.status()["ftp_w"]), 250.0, "rejected %s; the previous value stays" % str(bad))
+		assert_eq(
+			float(g.status()["ftp_w"]), 250.0, "rejected %s; the previous value stays" % str(bad)
+		)
 	# W4r2 (SAF-1 range): below the range the governor never keeps a higher basis (the previous
 	# or the default 200 W): it uses 30 W, the lowest FTP a rider can have.
 	for low: float in [29.9, 0.0, -10.0, -INF]:

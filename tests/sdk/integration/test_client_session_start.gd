@@ -84,14 +84,22 @@ func _lobby() -> void:
 		assert_true(_pump(func() -> bool: return cn.local_peer != 0))
 		cn.game_message.connect(_on_client_message.bind(i))
 	assert_true(_pump(func() -> bool: return host_net.peers().size() == 3))
-	assert_true(_pump(func() -> bool: return (_nets[2].lobby.get("players", []) as Array).size() == 4))
+	assert_true(
+		_pump(func() -> bool: return (_nets[2].lobby.get("players", []) as Array).size() == 4)
+	)
 
 
 static func _rider(parent: Node, slot: PlayerSlot, multiplayer: bool) -> LocalRider:
 	var dev := MockTrainer.from_spec("erg", slot.ftp, {"seed": 11 + slot.slot_index})
 	var r := LocalRider.new()
 	r.name = "Rider%d" % slot.peer_id
-	r.setup(slot.peer_id, null, slot, dev, {"multiplayer": multiplayer, "scaling_mode": slot.scaling_mode, "record": false})
+	r.setup(
+		slot.peer_id,
+		null,
+		slot,
+		dev,
+		{"multiplayer": multiplayer, "scaling_mode": slot.scaling_mode, "record": false}
+	)
 	r.add_child(dev)
 	parent.add_child(r)
 	return r
@@ -109,13 +117,32 @@ func _start_host() -> void:
 	_host = GameHost.new()
 	_host.name = "Host"
 	_root.add_child(_host)
-	assert_eq(_host.setup({
-		"game_id": GAME, "content_id": "tiny", "seed": 9, "role": Wl.HOST, "players": players,
-		"local_riders": riders, "local_peer": net.local_peer, "net": net, "bus": _buses[0],
-		"registry": _reg, "options": {"speed": 4}, "headless": true, "realtime": false,
-		"report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
-	}), "")
+	assert_eq(
+		(
+			_host
+			. setup(
+				{
+					"game_id": GAME,
+					"content_id": "tiny",
+					"seed": 9,
+					"role": Wl.HOST,
+					"players": players,
+					"local_riders": riders,
+					"local_peer": net.local_peer,
+					"net": net,
+					"bus": _buses[0],
+					"registry": _reg,
+					"options": {"speed": 4},
+					"headless": true,
+					"realtime": false,
+					"report": true,
+					"record_rides": false,
+					"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
+				}
+			)
+		),
+		""
+	)
 	_host.start()
 
 
@@ -133,13 +160,26 @@ func _on_client_message(_from: int, data: Dictionary, i: int) -> void:
 	var gh := GameHost.new()
 	gh.name = "Client%d" % net.local_peer
 	_root.add_child(gh)
-	var err := gh.setup({
-		"role": Wl.CLIENT, "local_peer": net.local_peer,
-		"local_riders": {net.local_peer: _rider(_root, slot, true)}, "net": net, "bus": _buses[i],
-		"registry": _reg, "headless": true, "realtime": false, "report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
-		"session_start": data.duplicate(true),
-	})
+	var err := (
+		gh
+		. setup(
+			{
+				"role": Wl.CLIENT,
+				"local_peer": net.local_peer,
+				"local_riders": {net.local_peer: _rider(_root, slot, true)},
+				"net": net,
+				"bus": _buses[i],
+				"registry": _reg,
+				"headless": true,
+				"realtime": false,
+				"report": true,
+				"record_rides": false,
+				"progress_path":
+				_tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
+				"session_start": data.duplicate(true),
+			}
+		)
+	)
 	assert_eq(err, "")
 	gh.start()
 	_created_state[i] = gh.state
@@ -174,8 +214,14 @@ func test_clients_started_like_the_app_shell_run_the_session() -> void:
 		assert_eq(gh.ctx.options["speed"], 4)
 		assert_typeof(gh.ctx.options["speed"], TYPE_INT, "int options stay ints after JSON")
 		for p in gh.ctx.players:
-			assert_typeof(p.options["offset"], TYPE_INT, "player option of peer %d on client %d" % [p.peer_id, peer])
-			assert_eq(p.peer_id, _host.ctx.players[p.slot_index].peer_id, "same slot order as the host")
+			assert_typeof(
+				p.options["offset"],
+				TYPE_INT,
+				"player option of peer %d on client %d" % [p.peer_id, peer]
+			)
+			assert_eq(
+				p.peer_id, _host.ctx.players[p.slot_index].peer_id, "same slot order as the host"
+			)
 	# Run the session out; the clients get the results.
 	var guard := 0
 	while guard < 6000 and not (_clients[1] as GameHost).is_finished():
@@ -195,7 +241,10 @@ func test_clients_started_like_the_app_shell_run_the_session() -> void:
 			if str(e["type"]) == "phase_started":
 				seen[int(e["peer"])] = true
 		for peer in riders:
-			assert_true(seen.has(peer), "client %d recorded phase_started for rider %d" % [gh.local_peer(), peer])
+			assert_true(
+				seen.has(peer),
+				"client %d recorded phase_started for rider %d" % [gh.local_peer(), peer]
+			)
 
 
 func test_a_session_start_that_also_arrives_on_the_net_configures_once() -> void:

@@ -117,13 +117,21 @@ static func clouds_image() -> Image:
 
 
 ## A seamless hill strip: integer wave counts across the width make both edges match.
-static func hills_image(size: Vector2i, seed_value: int, body: Color, top: Color, min_h: float, max_h: float) -> Image:
+static func hills_image(
+	size: Vector2i, seed_value: int, body: Color, top: Color, min_h: float, max_h: float
+) -> Image:
 	var img := Image.create(size.x, size.y, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var rng := SeededRng.make(seed_value)
 	var waves: Array = []
 	for k in 3:
-		waves.append([SeededRng.range_i(rng, 1 + k * 2, 2 + k * 3), SeededRng.range_f(rng, 0.0, TAU), 1.0 / float(k + 1)])
+		waves.append(
+			[
+				SeededRng.range_i(rng, 1 + k * 2, 2 + k * 3),
+				SeededRng.range_f(rng, 0.0, TAU),
+				1.0 / float(k + 1)
+			]
+		)
 	var heights := PackedFloat64Array()
 	heights.resize(size.x)
 	var lo := INF
@@ -159,12 +167,26 @@ static func trees_image() -> Image:
 		var base_y := float(NEAR_SIZE.y - bank)
 		if conifer:
 			var half := hgt * 0.32
-			var pts := PackedVector2Array([Vector2(x, base_y - hgt), Vector2(x + half, base_y), Vector2(x - half, base_y)])
+			var pts := PackedVector2Array(
+				[Vector2(x, base_y - hgt), Vector2(x + half, base_y), Vector2(x - half, base_y)]
+			)
 			_fill_polygon_wrapped(img, pts, NEAR_TREES)
-			_fill_polygon_wrapped(img, PackedVector2Array([Vector2(x, base_y - hgt), Vector2(x + 2.0, base_y - hgt + 5.0), Vector2(x - 1.0, base_y - hgt + 5.0)]), NEAR_TOP)
+			_fill_polygon_wrapped(
+				img,
+				PackedVector2Array(
+					[
+						Vector2(x, base_y - hgt),
+						Vector2(x + 2.0, base_y - hgt + 5.0),
+						Vector2(x - 1.0, base_y - hgt + 5.0)
+					]
+				),
+				NEAR_TOP
+			)
 		else:
 			var r := hgt * 0.3
-			_fill_rect_wrapped(img, Rect2i(int(x), int(base_y - hgt * 0.45), 2, int(hgt * 0.45)), TRUNK)
+			_fill_rect_wrapped(
+				img, Rect2i(int(x), int(base_y - hgt * 0.45), 2, int(hgt * 0.45)), TRUNK
+			)
 			_ellipse_wrapped(img, Vector2(x + 1.0, base_y - hgt * 0.55), r, r * 0.9, NEAR_TREES)
 			_ellipse_wrapped(img, Vector2(x, base_y - hgt * 0.62), r * 0.5, r * 0.4, NEAR_TOP)
 		x += SeededRng.range_f(rng, 14.0, 34.0)
@@ -190,7 +212,9 @@ static func pole_height(slot_index: int) -> float:
 ## The pennant marker as filled polygons in paint order, relative to the pole foot (y up
 ## is negative). `look`: Wl.slot_look() keys (color, shape, pattern, hollow). `opts`:
 ## {style: "" or a WorkoutProgress pennant id, bot, local, in_band, rescue, afk}.
-static func pennant_shapes(look: Dictionary, slot_index: int, opts: Dictionary = {}) -> Array[Dictionary]:
+static func pennant_shapes(
+	look: Dictionary, slot_index: int, opts: Dictionary = {}
+) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var h := pole_height(slot_index)
 	var color: Color = look.get("color", WHITE)
@@ -205,14 +229,36 @@ static func pennant_shapes(look: Dictionary, slot_index: int, opts: Dictionary =
 		# Drooping flag hanging along the pole.
 		flag = PackedVector2Array([Vector2(1, top), Vector2(5, top), Vector2(2, top + 12)])
 	elif bool(opts.get("bot", false)):
-		flag = PackedVector2Array([Vector2(1, top), Vector2(11, top), Vector2(11, top + 7), Vector2(1, top + 7)])
+		flag = PackedVector2Array(
+			[Vector2(1, top), Vector2(11, top), Vector2(11, top + 7), Vector2(1, top + 7)]
+		)
 	elif style == "pennant_swallowtail":
-		flag = PackedVector2Array([Vector2(1, top), Vector2(14, top), Vector2(10, top + 4), Vector2(14, top + 8), Vector2(1, top + 8)])
+		flag = PackedVector2Array(
+			[
+				Vector2(1, top),
+				Vector2(14, top),
+				Vector2(10, top + 4),
+				Vector2(14, top + 8),
+				Vector2(1, top + 8)
+			]
+		)
 	else:
 		flag = PackedVector2Array([Vector2(1, top), Vector2(14, top + 4), Vector2(1, top + 8)])
-	if bool(opts.get("in_band", false)) and not bool(opts.get("rescue", false)) and not bool(opts.get("afk", false)):
+	if (
+		bool(opts.get("in_band", false))
+		and not bool(opts.get("rescue", false))
+		and not bool(opts.get("afk", false))
+	):
 		out.append({"points": _grow(flag, 1.5), "color": GLOW})
-	out.append({"points": PackedVector2Array([Vector2(0, top - 1), Vector2(1, top - 1), Vector2(1, 0), Vector2(0, 0)]), "color": POLE})
+	out.append(
+		{
+			"points":
+			PackedVector2Array(
+				[Vector2(0, top - 1), Vector2(1, top - 1), Vector2(1, 0), Vector2(0, 0)]
+			),
+			"color": POLE
+		}
+	)
 	out.append({"points": _grow(flag, 0.8), "color": GOLD if style == "pennant_gold" else OUTLINE})
 	out.append({"points": flag, "color": color})
 	var dark := color.darkened(0.45)
@@ -224,22 +270,67 @@ static func pennant_shapes(look: Dictionary, slot_index: int, opts: Dictionary =
 			out.append({"points": _rect(3, top + 3, 2, 2), "color": dark})
 			out.append({"points": _rect(7, top + 3, 2, 2), "color": dark})
 		"double":
-			var second := PackedVector2Array([Vector2(1, top + 10), Vector2(10, top + 13), Vector2(1, top + 16)])
+			var second := PackedVector2Array(
+				[Vector2(1, top + 10), Vector2(10, top + 13), Vector2(1, top + 16)]
+			)
 			out.append({"points": _grow(second, 0.8), "color": OUTLINE})
 			out.append({"points": second, "color": color})
 	if style == "pennant_chevron":
-		out.append({"points": PackedVector2Array([Vector2(3, top + 2), Vector2(6, top + 4), Vector2(3, top + 6), Vector2(4, top + 4)]), "color": WHITE})
+		out.append(
+			{
+				"points":
+				PackedVector2Array(
+					[
+						Vector2(3, top + 2),
+						Vector2(6, top + 4),
+						Vector2(3, top + 6),
+						Vector2(4, top + 4)
+					]
+				),
+				"color": WHITE
+			}
+		)
 	elif style == "pennant_star":
 		out.append({"points": _star(Vector2(5, top + 4), 2.6, 1.1), "color": WHITE})
 	elif style == "pennant_bolt":
-		out.append({"points": PackedVector2Array([Vector2(6, top + 1), Vector2(4, top + 4), Vector2(6, top + 4), Vector2(4, top + 7), Vector2(8, top + 3), Vector2(6, top + 3)]), "color": GOLD})
+		out.append(
+			{
+				"points":
+				PackedVector2Array(
+					[
+						Vector2(6, top + 1),
+						Vector2(4, top + 4),
+						Vector2(6, top + 4),
+						Vector2(4, top + 7),
+						Vector2(8, top + 3),
+						Vector2(6, top + 3)
+					]
+				),
+				"color": GOLD
+			}
+		)
 	# Shape badge at the pole top.
 	var c := Vector2(0.5, top - 4.0)
 	var badge := shape_points(str(look.get("shape", "circle")), c, 3.0)
-	out.append({"points": shape_points(str(look.get("shape", "circle")), c, 4.2), "color": OUTLINE if not bool(look.get("hollow", false)) else color})
-	out.append({"points": badge, "color": HOLLOW_FILL if bool(look.get("hollow", false)) else color})
+	out.append(
+		{
+			"points": shape_points(str(look.get("shape", "circle")), c, 4.2),
+			"color": OUTLINE if not bool(look.get("hollow", false)) else color
+		}
+	)
+	out.append(
+		{"points": badge, "color": HOLLOW_FILL if bool(look.get("hollow", false)) else color}
+	)
 	if bool(opts.get("local", false)):
-		out.append({"points": PackedVector2Array([Vector2(-2.5, top - 12), Vector2(3.5, top - 12), Vector2(0.5, top - 9)]), "color": WHITE})
+		out.append(
+			{
+				"points":
+				PackedVector2Array(
+					[Vector2(-2.5, top - 12), Vector2(3.5, top - 12), Vector2(0.5, top - 9)]
+				),
+				"color": WHITE
+			}
+		)
 	return out
 
 
@@ -247,12 +338,18 @@ static func pennant_shapes(look: Dictionary, slot_index: int, opts: Dictionary =
 static func shape_points(shape: String, c: Vector2, r: float) -> PackedVector2Array:
 	match shape:
 		"triangle":
-			return PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, r * 0.8), c + Vector2(-r, r * 0.8)])
+			return PackedVector2Array(
+				[c + Vector2(0, -r), c + Vector2(r, r * 0.8), c + Vector2(-r, r * 0.8)]
+			)
 		"square":
 			var s := r * 0.85
-			return PackedVector2Array([c + Vector2(-s, -s), c + Vector2(s, -s), c + Vector2(s, s), c + Vector2(-s, s)])
+			return PackedVector2Array(
+				[c + Vector2(-s, -s), c + Vector2(s, -s), c + Vector2(s, s), c + Vector2(-s, s)]
+			)
 		"diamond":
-			return PackedVector2Array([c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)])
+			return PackedVector2Array(
+				[c + Vector2(0, -r), c + Vector2(r, 0), c + Vector2(0, r), c + Vector2(-r, 0)]
+			)
 	var pts := PackedVector2Array()
 	for i in 8:
 		var a := TAU * (float(i) + 0.5) / 8.0
@@ -271,7 +368,15 @@ static func picker_card() -> Image:
 	_blit_tiled(img, far_hills_image(), 230 - FAR_SIZE.y, 90)
 	_blit_tiled(img, mid_hills_image(), 238 - MID_SIZE.y, 140)
 	_blit_tiled(img, trees_image(), 246 - NEAR_SIZE.y, 60)
-	var course := WorkoutCourse.from_spec({"seed": 7342, "length_m": 4000.0, "step_m": 250.0, "min_grade_pct": -2.0, "max_grade_pct": 6.0})
+	var course := WorkoutCourse.from_spec(
+		{
+			"seed": 7342,
+			"length_m": 4000.0,
+			"step_m": 250.0,
+			"min_grade_pct": -2.0,
+			"max_grade_pct": 6.0
+		}
+	)
 	var road := PackedFloat64Array()
 	road.resize(W)
 	for x in W:
@@ -285,7 +390,19 @@ static func picker_card() -> Image:
 		if posmod(x, 16) < 6:
 			img.set_pixel(x, y, ROAD_DASH)
 	img.fill_rect(Rect2i(0, 262, W, 38), DIRT)
-	var blocks := [[0, 50, 60, 65], [60, 150, 90, 90], [150, 190, 55, 55], [190, 280, 90, 90], [280, 300, 130, 130], [300, 380, 98, 98], [380, 420, 55, 55], [420, 470, 110, 110], [470, 510, 50, 50], [510, 560, 110, 110], [560, 640, 50, 50]]
+	var blocks := [
+		[0, 50, 60, 65],
+		[60, 150, 90, 90],
+		[150, 190, 55, 55],
+		[190, 280, 90, 90],
+		[280, 300, 130, 130],
+		[300, 380, 98, 98],
+		[380, 420, 55, 55],
+		[420, 470, 110, 110],
+		[470, 510, 50, 50],
+		[510, 560, 110, 110],
+		[560, 640, 50, 50]
+	]
 	for b: Array in blocks:
 		var x0 := int(b[0])
 		var x1 := int(b[1])
@@ -300,10 +417,14 @@ static func picker_card() -> Image:
 	for i in 4:
 		var x := int(xs[i])
 		var foot := Vector2(float(x), road[x] - 2.0)
-		var shapes := pennant_shapes(Wl.slot_look(i), i, {"in_band": i != 3, "local": i == 0, "style": "pennant_swallowtail" if i == 0 else ""})
+		var shapes := pennant_shapes(
+			Wl.slot_look(i),
+			i,
+			{"in_band": i != 3, "local": i == 0, "style": "pennant_swallowtail" if i == 0 else ""}
+		)
 		for s: Dictionary in shapes:
 			var big := PackedVector2Array()
-			for p in (s["points"] as PackedVector2Array):
+			for p in s["points"] as PackedVector2Array:
 				big.append(p * 2.0)
 			fill_polygon(img, big, s["color"], foot)
 	return img
@@ -313,7 +434,9 @@ static func picker_card() -> Image:
 
 
 ## Fills a polygon (pixel centres inside, even-odd) into `img`, shifted by `offset`.
-static func fill_polygon(img: Image, pts: PackedVector2Array, color: Color, offset: Vector2 = Vector2.ZERO) -> void:
+static func fill_polygon(
+	img: Image, pts: PackedVector2Array, color: Color, offset: Vector2 = Vector2.ZERO
+) -> void:
 	if pts.size() < 3:
 		return
 	var moved := PackedVector2Array()
@@ -339,7 +462,9 @@ static func _fill_polygon_wrapped(img: Image, pts: PackedVector2Array, color: Co
 static func _fill_rect_wrapped(img: Image, r: Rect2i, color: Color) -> void:
 	var w := img.get_width()
 	for shift: int in [-w, 0, w]:
-		var rr := Rect2i(r.position + Vector2i(shift, 0), r.size).intersection(Rect2i(0, 0, w, img.get_height()))
+		var rr := Rect2i(r.position + Vector2i(shift, 0), r.size).intersection(
+			Rect2i(0, 0, w, img.get_height())
+		)
 		if rr.has_area():
 			img.fill_rect(rr, color)
 
@@ -382,7 +507,9 @@ static func _grow(pts: PackedVector2Array, by: float) -> PackedVector2Array:
 
 
 static func _rect(x: float, y: float, w: float, h: float) -> PackedVector2Array:
-	return PackedVector2Array([Vector2(x, y), Vector2(x + w, y), Vector2(x + w, y + h), Vector2(x, y + h)])
+	return PackedVector2Array(
+		[Vector2(x, y), Vector2(x + w, y), Vector2(x + w, y + h), Vector2(x, y + h)]
+	)
 
 
 static func _star(c: Vector2, r_out: float, r_in: float) -> PackedVector2Array:

@@ -74,7 +74,22 @@ const DEV_FIELD_LAP_NAME := 0
 const LAP_NAME_SIZE := 32
 ## A fixed application id for Wattlands' developer data (16 bytes).
 const APPLICATION_ID: Array[int] = [
-	0x57, 0x61, 0x74, 0x74, 0x6C, 0x61, 0x6E, 0x64, 0x73, 0x2D, 0x72, 0x69, 0x64, 0x65, 0x73, 0x01,
+	0x57,
+	0x61,
+	0x74,
+	0x74,
+	0x6C,
+	0x61,
+	0x6E,
+	0x64,
+	0x73,
+	0x2D,
+	0x72,
+	0x69,
+	0x64,
+	0x65,
+	0x73,
+	0x01,
 ]
 
 # Local message types, one per global message (all fit in the 4-bit field).
@@ -90,44 +105,100 @@ const LOCAL_ACTIVITY := 8
 
 # Field definitions: [field number, size in bytes, base type].
 const DEF_FILE_ID: Array = [
-	[0, 1, BT_ENUM], [1, 2, BT_UINT16], [2, 2, BT_UINT16], [3, 4, BT_UINT32Z],
-	[4, 4, BT_UINT32], [8, NAME_FIELD_SIZE, BT_STRING],
+	[0, 1, BT_ENUM],
+	[1, 2, BT_UINT16],
+	[2, 2, BT_UINT16],
+	[3, 4, BT_UINT32Z],
+	[4, 4, BT_UINT32],
+	[8, NAME_FIELD_SIZE, BT_STRING],
 ]
 const DEF_DEVELOPER_DATA_ID: Array = [
-	[1, 16, BT_BYTE], [3, 1, BT_UINT8], [4, 4, BT_UINT32],
+	[1, 16, BT_BYTE],
+	[3, 1, BT_UINT8],
+	[4, 4, BT_UINT32],
 ]
 const DEF_FIELD_DESCRIPTION: Array = [
-	[0, 1, BT_UINT8], [1, 1, BT_UINT8], [2, 1, BT_UINT8], [3, NAME_FIELD_SIZE, BT_STRING],
+	[0, 1, BT_UINT8],
+	[1, 1, BT_UINT8],
+	[2, 1, BT_UINT8],
+	[3, NAME_FIELD_SIZE, BT_STRING],
 ]
 const DEF_DEVICE_INFO: Array = [
-	[253, 4, BT_UINT32], [0, 1, BT_UINT8], [2, 2, BT_UINT16], [3, 4, BT_UINT32Z],
-	[4, 2, BT_UINT16], [5, 2, BT_UINT16], [25, 1, BT_ENUM], [27, NAME_FIELD_SIZE, BT_STRING],
+	[253, 4, BT_UINT32],
+	[0, 1, BT_UINT8],
+	[2, 2, BT_UINT16],
+	[3, 4, BT_UINT32Z],
+	[4, 2, BT_UINT16],
+	[5, 2, BT_UINT16],
+	[25, 1, BT_ENUM],
+	[27, NAME_FIELD_SIZE, BT_STRING],
 ]
 const DEF_EVENT: Array = [
-	[253, 4, BT_UINT32], [0, 1, BT_ENUM], [1, 1, BT_ENUM], [3, 4, BT_UINT32], [4, 1, BT_UINT8],
+	[253, 4, BT_UINT32],
+	[0, 1, BT_ENUM],
+	[1, 1, BT_ENUM],
+	[3, 4, BT_UINT32],
+	[4, 1, BT_UINT8],
 ]
 const DEF_RECORD: Array = [
-	[253, 4, BT_UINT32], [7, 2, BT_UINT16], [4, 1, BT_UINT8], [6, 2, BT_UINT16], [5, 4, BT_UINT32],
+	[253, 4, BT_UINT32],
+	[7, 2, BT_UINT16],
+	[4, 1, BT_UINT8],
+	[6, 2, BT_UINT16],
+	[5, 4, BT_UINT32],
 ]
 const DEF_LAP: Array = [
-	[254, 2, BT_UINT16], [253, 4, BT_UINT32], [0, 1, BT_ENUM], [1, 1, BT_ENUM],
-	[2, 4, BT_UINT32], [7, 4, BT_UINT32], [8, 4, BT_UINT32], [9, 4, BT_UINT32],
-	[13, 2, BT_UINT16], [14, 2, BT_UINT16], [19, 2, BT_UINT16], [20, 2, BT_UINT16],
-	[17, 1, BT_UINT8], [18, 1, BT_UINT8], [41, 4, BT_UINT32], [24, 1, BT_ENUM],
-	[25, 1, BT_ENUM], [39, 1, BT_ENUM],
+	[254, 2, BT_UINT16],
+	[253, 4, BT_UINT32],
+	[0, 1, BT_ENUM],
+	[1, 1, BT_ENUM],
+	[2, 4, BT_UINT32],
+	[7, 4, BT_UINT32],
+	[8, 4, BT_UINT32],
+	[9, 4, BT_UINT32],
+	[13, 2, BT_UINT16],
+	[14, 2, BT_UINT16],
+	[19, 2, BT_UINT16],
+	[20, 2, BT_UINT16],
+	[17, 1, BT_UINT8],
+	[18, 1, BT_UINT8],
+	[41, 4, BT_UINT32],
+	[24, 1, BT_ENUM],
+	[25, 1, BT_ENUM],
+	[39, 1, BT_ENUM],
 ]
 ## Developer fields of the lap message: [field number, size, developer data index].
 const DEV_DEF_LAP: Array = [[DEV_FIELD_LAP_NAME, LAP_NAME_SIZE, DEV_INDEX]]
 const DEF_SESSION: Array = [
-	[254, 2, BT_UINT16], [253, 4, BT_UINT32], [0, 1, BT_ENUM], [1, 1, BT_ENUM],
-	[2, 4, BT_UINT32], [5, 1, BT_ENUM], [6, 1, BT_ENUM], [7, 4, BT_UINT32],
-	[8, 4, BT_UINT32], [9, 4, BT_UINT32], [14, 2, BT_UINT16], [15, 2, BT_UINT16],
-	[20, 2, BT_UINT16], [21, 2, BT_UINT16], [18, 1, BT_UINT8], [19, 1, BT_UINT8],
-	[48, 4, BT_UINT32], [25, 2, BT_UINT16], [26, 2, BT_UINT16], [28, 1, BT_ENUM],
+	[254, 2, BT_UINT16],
+	[253, 4, BT_UINT32],
+	[0, 1, BT_ENUM],
+	[1, 1, BT_ENUM],
+	[2, 4, BT_UINT32],
+	[5, 1, BT_ENUM],
+	[6, 1, BT_ENUM],
+	[7, 4, BT_UINT32],
+	[8, 4, BT_UINT32],
+	[9, 4, BT_UINT32],
+	[14, 2, BT_UINT16],
+	[15, 2, BT_UINT16],
+	[20, 2, BT_UINT16],
+	[21, 2, BT_UINT16],
+	[18, 1, BT_UINT8],
+	[19, 1, BT_UINT8],
+	[48, 4, BT_UINT32],
+	[25, 2, BT_UINT16],
+	[26, 2, BT_UINT16],
+	[28, 1, BT_ENUM],
 ]
 const DEF_ACTIVITY: Array = [
-	[253, 4, BT_UINT32], [0, 4, BT_UINT32], [1, 2, BT_UINT16], [2, 1, BT_ENUM],
-	[3, 1, BT_ENUM], [4, 1, BT_ENUM], [5, 4, BT_UINT32],
+	[253, 4, BT_UINT32],
+	[0, 4, BT_UINT32],
+	[1, 2, BT_UINT16],
+	[2, 1, BT_ENUM],
+	[3, 1, BT_ENUM],
+	[4, 1, BT_ENUM],
+	[5, 4, BT_UINT32],
 ]
 
 var _data: StreamPeerBuffer = StreamPeerBuffer.new()
@@ -155,10 +226,18 @@ static func unix_time(fit_s: int) -> int:
 
 func file_id(time_created_unix: int, serial: int) -> void:
 	_ensure_def(LOCAL_FILE_ID, MESG_FILE_ID, DEF_FILE_ID)
-	_data_mesg(LOCAL_FILE_ID, DEF_FILE_ID, [
-		FILE_ACTIVITY, MANUFACTURER_DEVELOPMENT, PRODUCT_ID, _serial(serial),
-		fit_time(time_created_unix), PRODUCT_NAME,
-	])
+	_data_mesg(
+		LOCAL_FILE_ID,
+		DEF_FILE_ID,
+		[
+			FILE_ACTIVITY,
+			MANUFACTURER_DEVELOPMENT,
+			PRODUCT_ID,
+			_serial(serial),
+			fit_time(time_created_unix),
+			PRODUCT_NAME,
+		]
+	)
 
 
 ## Declares the developer field that carries lap names (written once, before any lap).
@@ -172,36 +251,69 @@ func declare_lap_name_field() -> void:
 		app_id.append(b)
 	_data_mesg(LOCAL_DEVELOPER_DATA_ID, DEF_DEVELOPER_DATA_ID, [app_id, DEV_INDEX, 1])
 	_ensure_def(LOCAL_FIELD_DESCRIPTION, MESG_FIELD_DESCRIPTION, DEF_FIELD_DESCRIPTION)
-	_data_mesg(LOCAL_FIELD_DESCRIPTION, DEF_FIELD_DESCRIPTION, [
-		DEV_INDEX, DEV_FIELD_LAP_NAME, BT_STRING, "lap_name",
-	])
+	_data_mesg(
+		LOCAL_FIELD_DESCRIPTION,
+		DEF_FIELD_DESCRIPTION,
+		[
+			DEV_INDEX,
+			DEV_FIELD_LAP_NAME,
+			BT_STRING,
+			"lap_name",
+		]
+	)
 
 
 ## `software_version_x100`: the version times 100 (0.1.0 -> 10).
 func device_info(ts_unix: int, serial: int, software_version_x100: int) -> void:
 	_ensure_def(LOCAL_DEVICE_INFO, MESG_DEVICE_INFO, DEF_DEVICE_INFO)
-	_data_mesg(LOCAL_DEVICE_INFO, DEF_DEVICE_INFO, [
-		fit_time(ts_unix), DEVICE_INDEX_CREATOR, MANUFACTURER_DEVELOPMENT, _serial(serial),
-		PRODUCT_ID, software_version_x100, SOURCE_TYPE_LOCAL, PRODUCT_NAME,
-	])
+	_data_mesg(
+		LOCAL_DEVICE_INFO,
+		DEF_DEVICE_INFO,
+		[
+			fit_time(ts_unix),
+			DEVICE_INDEX_CREATOR,
+			MANUFACTURER_DEVELOPMENT,
+			_serial(serial),
+			PRODUCT_ID,
+			software_version_x100,
+			SOURCE_TYPE_LOCAL,
+			PRODUCT_NAME,
+		]
+	)
 
 
 ## Timer start (running) or stop (stop_all) event.
 func timer_event(ts_unix: int, running: bool) -> void:
 	_ensure_def(LOCAL_EVENT, MESG_EVENT, DEF_EVENT)
-	_data_mesg(LOCAL_EVENT, DEF_EVENT, [
-		fit_time(ts_unix), EVENT_TIMER, EVENT_TYPE_START if running else EVENT_TYPE_STOP_ALL,
-		TIMER_TRIGGER_MANUAL, 0,
-	])
+	_data_mesg(
+		LOCAL_EVENT,
+		DEF_EVENT,
+		[
+			fit_time(ts_unix),
+			EVENT_TIMER,
+			EVENT_TYPE_START if running else EVENT_TYPE_STOP_ALL,
+			TIMER_TRIGGER_MANUAL,
+			0,
+		]
+	)
 
 
 ## One record. Negative cadence or speed are written as invalid (absent).
-func record(ts_unix: int, power_w: float, cadence_rpm: float, speed_mps: float, distance_m: float) -> void:
+func record(
+	ts_unix: int, power_w: float, cadence_rpm: float, speed_mps: float, distance_m: float
+) -> void:
 	_ensure_def(LOCAL_RECORD, MESG_RECORD, DEF_RECORD)
-	_data_mesg(LOCAL_RECORD, DEF_RECORD, [
-		fit_time(ts_unix), _u16(power_w), _opt_u8(cadence_rpm), _opt_scaled_u16(speed_mps, 1000.0),
-		_u32(distance_m * 100.0),
-	])
+	_data_mesg(
+		LOCAL_RECORD,
+		DEF_RECORD,
+		[
+			fit_time(ts_unix),
+			_u16(power_w),
+			_opt_u8(cadence_rpm),
+			_opt_scaled_u16(speed_mps, 1000.0),
+			_u32(distance_m * 100.0),
+		]
+	)
 
 
 ## A lap. Keys: index, end_unix, start_unix, elapsed_s, timer_s, distance_m, avg_speed_mps,
@@ -210,34 +322,62 @@ func record(ts_unix: int, power_w: float, cadence_rpm: float, speed_mps: float, 
 func lap(d: Dictionary) -> void:
 	declare_lap_name_field()
 	_ensure_def(LOCAL_LAP, MESG_LAP, DEF_LAP, DEV_DEF_LAP)
-	_data_mesg(LOCAL_LAP, DEF_LAP, [
-		int(d.get("index", 0)), fit_time(int(d.get("end_unix", 0))), EVENT_LAP, EVENT_TYPE_STOP,
-		fit_time(int(d.get("start_unix", 0))), _u32(float(d.get("elapsed_s", 0.0)) * 1000.0),
-		_u32(float(d.get("timer_s", 0.0)) * 1000.0), _u32(float(d.get("distance_m", 0.0)) * 100.0),
-		_opt_scaled_u16(float(d.get("avg_speed_mps", -1.0)), 1000.0),
-		_opt_scaled_u16(float(d.get("max_speed_mps", -1.0)), 1000.0),
-		_u16(float(d.get("avg_power_w", 0.0))), _u16(float(d.get("max_power_w", 0.0))),
-		_opt_u8(float(d.get("avg_cadence_rpm", -1.0))), _opt_u8(float(d.get("max_cadence_rpm", -1.0))),
-		_u32(float(d.get("work_j", 0.0))), int(d.get("trigger", LAP_TRIGGER_MANUAL)),
-		SPORT_CYCLING, SUB_SPORT_VIRTUAL_ACTIVITY,
-	], [_fixed_string(str(d.get("name", "")), LAP_NAME_SIZE)])
+	_data_mesg(
+		LOCAL_LAP,
+		DEF_LAP,
+		[
+			int(d.get("index", 0)),
+			fit_time(int(d.get("end_unix", 0))),
+			EVENT_LAP,
+			EVENT_TYPE_STOP,
+			fit_time(int(d.get("start_unix", 0))),
+			_u32(float(d.get("elapsed_s", 0.0)) * 1000.0),
+			_u32(float(d.get("timer_s", 0.0)) * 1000.0),
+			_u32(float(d.get("distance_m", 0.0)) * 100.0),
+			_opt_scaled_u16(float(d.get("avg_speed_mps", -1.0)), 1000.0),
+			_opt_scaled_u16(float(d.get("max_speed_mps", -1.0)), 1000.0),
+			_u16(float(d.get("avg_power_w", 0.0))),
+			_u16(float(d.get("max_power_w", 0.0))),
+			_opt_u8(float(d.get("avg_cadence_rpm", -1.0))),
+			_opt_u8(float(d.get("max_cadence_rpm", -1.0))),
+			_u32(float(d.get("work_j", 0.0))),
+			int(d.get("trigger", LAP_TRIGGER_MANUAL)),
+			SPORT_CYCLING,
+			SUB_SPORT_VIRTUAL_ACTIVITY,
+		],
+		[_fixed_string(str(d.get("name", "")), LAP_NAME_SIZE)]
+	)
 
 
 ## The session. Keys as lap() plus first_lap_index and num_laps.
 func session(d: Dictionary) -> void:
 	_ensure_def(LOCAL_SESSION, MESG_SESSION, DEF_SESSION)
-	_data_mesg(LOCAL_SESSION, DEF_SESSION, [
-		0, fit_time(int(d.get("end_unix", 0))), EVENT_SESSION, EVENT_TYPE_STOP,
-		fit_time(int(d.get("start_unix", 0))), SPORT_CYCLING, SUB_SPORT_VIRTUAL_ACTIVITY,
-		_u32(float(d.get("elapsed_s", 0.0)) * 1000.0), _u32(float(d.get("timer_s", 0.0)) * 1000.0),
-		_u32(float(d.get("distance_m", 0.0)) * 100.0),
-		_opt_scaled_u16(float(d.get("avg_speed_mps", -1.0)), 1000.0),
-		_opt_scaled_u16(float(d.get("max_speed_mps", -1.0)), 1000.0),
-		_u16(float(d.get("avg_power_w", 0.0))), _u16(float(d.get("max_power_w", 0.0))),
-		_opt_u8(float(d.get("avg_cadence_rpm", -1.0))), _opt_u8(float(d.get("max_cadence_rpm", -1.0))),
-		_u32(float(d.get("work_j", 0.0))), int(d.get("first_lap_index", 0)),
-		int(d.get("num_laps", 0)), SESSION_TRIGGER_ACTIVITY_END,
-	])
+	_data_mesg(
+		LOCAL_SESSION,
+		DEF_SESSION,
+		[
+			0,
+			fit_time(int(d.get("end_unix", 0))),
+			EVENT_SESSION,
+			EVENT_TYPE_STOP,
+			fit_time(int(d.get("start_unix", 0))),
+			SPORT_CYCLING,
+			SUB_SPORT_VIRTUAL_ACTIVITY,
+			_u32(float(d.get("elapsed_s", 0.0)) * 1000.0),
+			_u32(float(d.get("timer_s", 0.0)) * 1000.0),
+			_u32(float(d.get("distance_m", 0.0)) * 100.0),
+			_opt_scaled_u16(float(d.get("avg_speed_mps", -1.0)), 1000.0),
+			_opt_scaled_u16(float(d.get("max_speed_mps", -1.0)), 1000.0),
+			_u16(float(d.get("avg_power_w", 0.0))),
+			_u16(float(d.get("max_power_w", 0.0))),
+			_opt_u8(float(d.get("avg_cadence_rpm", -1.0))),
+			_opt_u8(float(d.get("max_cadence_rpm", -1.0))),
+			_u32(float(d.get("work_j", 0.0))),
+			int(d.get("first_lap_index", 0)),
+			int(d.get("num_laps", 0)),
+			SESSION_TRIGGER_ACTIVITY_END,
+		]
+	)
 
 
 ## The activity (one session). `local_offset_s`: the local time zone's offset from UTC in
@@ -247,10 +387,19 @@ func activity(ts_unix: int, timer_s: float, local_offset_s: Variant = null) -> v
 	var local_ts: Variant = null
 	if local_offset_s != null:
 		local_ts = fit_time(ts_unix) + int(local_offset_s)
-	_data_mesg(LOCAL_ACTIVITY, DEF_ACTIVITY, [
-		fit_time(ts_unix), _u32(timer_s * 1000.0), 1, ACTIVITY_TYPE_MANUAL, EVENT_ACTIVITY,
-		EVENT_TYPE_STOP, local_ts,
-	])
+	_data_mesg(
+		LOCAL_ACTIVITY,
+		DEF_ACTIVITY,
+		[
+			fit_time(ts_unix),
+			_u32(timer_s * 1000.0),
+			1,
+			ACTIVITY_TYPE_MANUAL,
+			EVENT_ACTIVITY,
+			EVENT_TYPE_STOP,
+			local_ts,
+		]
+	)
 
 
 ## The complete file: header (with its CRC), the messages and the file CRC.
@@ -310,12 +459,14 @@ static func encode_ride(ride: Dictionary) -> PackedByteArray:
 	for rec: Dictionary in ride.get("records", []):
 		items.append([int(rec.get("t", 0)), 2, order, "record", rec])
 		order += 1
-	items.sort_custom(func(a: Array, b: Array) -> bool:
-		if int(a[0]) != int(b[0]):
-			return int(a[0]) < int(b[0])
-		if int(a[1]) != int(b[1]):
-			return int(a[1]) < int(b[1])
-		return int(a[2]) < int(b[2]))
+	items.sort_custom(
+		func(a: Array, b: Array) -> bool:
+			if int(a[0]) != int(b[0]):
+				return int(a[0]) < int(b[0])
+			if int(a[1]) != int(b[1]):
+				return int(a[1]) < int(b[1])
+			return int(a[2]) < int(b[2])
+	)
 	for it: Array in items:
 		var d: Dictionary = it[4]
 		match str(it[3]):
@@ -324,16 +475,23 @@ static func encode_ride(ride: Dictionary) -> PackedByteArray:
 			"event":
 				enc.timer_event(int(d.get("t", 0)), bool(d.get("running", true)))
 			"record":
-				enc.record(int(d.get("t", 0)), float(d.get("power_w", 0.0)),
-					float(d.get("cadence_rpm", -1.0)), float(d.get("speed_mps", -1.0)),
-					float(d.get("distance_m", 0.0)))
+				enc.record(
+					int(d.get("t", 0)),
+					float(d.get("power_w", 0.0)),
+					float(d.get("cadence_rpm", -1.0)),
+					float(d.get("speed_mps", -1.0)),
+					float(d.get("distance_m", 0.0))
+				)
 	if last_stop != null:
 		enc.timer_event(int((last_stop as Dictionary).get("t", 0)), false)
 	if not laps.is_empty():
 		enc.lap(laps[laps.size() - 1])
 	enc.session(ride.get("session", {}))
-	enc.activity(int(ride.get("end_unix", start_unix)), float(ride.get("timer_s", 0.0)),
-		ride.get("local_offset_s", null))
+	enc.activity(
+		int(ride.get("end_unix", start_unix)),
+		float(ride.get("timer_s", 0.0)),
+		ride.get("local_offset_s", null)
+	)
 	return enc.finish()
 
 
@@ -348,8 +506,8 @@ func _ensure_def(local: int, global: int, fields: Array, dev_fields: Array = [])
 	if not dev_fields.is_empty():
 		header |= 0x20
 	_data.put_u8(header)
-	_data.put_u8(0) # reserved
-	_data.put_u8(0) # architecture: little endian
+	_data.put_u8(0)  # reserved
+	_data.put_u8(0)  # architecture: little endian
 	_data.put_u16(global)
 	_data.put_u8(fields.size())
 	for f: Array in fields:

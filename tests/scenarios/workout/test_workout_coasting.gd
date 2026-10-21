@@ -16,11 +16,18 @@ const STOP_AFTER_PEDALING := "ramp:from_w=130,to_w=0,over_s=60,rpm=85"
 ## Steps the run until both moments were seen (or 30 s after not_pedaling). Returns
 ## {first_np, t_floor, t_pause, t_afk, floor_w, ok}.
 func _watch(runner: GameSimRunner, rider: LocalRider) -> Dictionary:
-	var obs := {"first_np": -1.0, "t_floor": -1.0, "t_pause": -1.0, "t_afk": -1.0, "floor_w": S.floor_w(rider.slot.ftp if rider.slot != null else S.FTP)}
+	var obs := {
+		"first_np": -1.0,
+		"t_floor": -1.0,
+		"t_pause": -1.0,
+		"t_afk": -1.0,
+		"floor_w": S.floor_w(rider.slot.ftp if rider.slot != null else S.FTP)
+	}
 	var mock := S.mock_of(rider)
-	mock.sample_received.connect(func(s: TrainerSample) -> void:
-		if float(obs["first_np"]) < 0.0 and S.is_not_pedaling(s):
-			obs["first_np"] = s.t
+	mock.sample_received.connect(
+		func(s: TrainerSample) -> void:
+			if float(obs["first_np"]) < 0.0 and S.is_not_pedaling(s):
+				obs["first_np"] = s.t
 	)
 	var ticks := 0
 	while ticks < int(400.0 / TICK):
@@ -31,9 +38,17 @@ func _watch(runner: GameSimRunner, rider: LocalRider) -> Dictionary:
 		if first_np < 0.0:
 			continue
 		var st := rider.governor.status()
-		if float(obs["t_floor"]) < 0.0 and str(st.get("mode", "")) == Wl.ERG and int(st.get("applied_target_w", -1)) == int(obs["floor_w"]) and (bool(st.get("coasting", false)) or S.clamped(st, Wl.CLAMP_COASTING)):
+		if (
+			float(obs["t_floor"]) < 0.0
+			and str(st.get("mode", "")) == Wl.ERG
+			and int(st.get("applied_target_w", -1)) == int(obs["floor_w"])
+			and (bool(st.get("coasting", false)) or S.clamped(st, Wl.CLAMP_COASTING))
+		):
 			obs["t_floor"] = t
-		if float(obs["t_pause"]) < 0.0 and (runner.host.is_paused() or bool(st.get("paused", false))):
+		if (
+			float(obs["t_pause"]) < 0.0
+			and (runner.host.is_paused() or bool(st.get("paused", false)))
+		):
 			obs["t_pause"] = t
 		if float(obs["t_afk"]) < 0.0 and (bool(st.get("afk", false)) or rider.telemetry().afk):
 			obs["t_afk"] = t
@@ -47,8 +62,19 @@ func _assert_timing(label: String, first_np: float, t: float, after_s: float) ->
 	if t < 0.0:
 		return
 	var lag := t - first_np
-	assert_lte(lag, after_s + TICK + S.EPS, "%s %.3f s after the first not_pedaling sample (limit %.2f s + one tick)" % [label, lag, after_s])
-	assert_gte(lag, after_s - TICK - S.EPS, "%s not before %.2f s of not_pedaling (it came after %.3f s)" % [label, after_s, lag])
+	assert_lte(
+		lag,
+		after_s + TICK + S.EPS,
+		(
+			"%s %.3f s after the first not_pedaling sample (limit %.2f s + one tick)"
+			% [label, lag, after_s]
+		)
+	)
+	assert_gte(
+		lag,
+		after_s - TICK - S.EPS,
+		"%s not before %.2f s of not_pedaling (it came after %.3f s)" % [label, after_s, lag]
+	)
 
 
 func _coast(players: int, riders: Array[String]) -> Dictionary:
@@ -94,7 +120,9 @@ func test_zero_rider_with_others_floors_then_goes_afk() -> void:
 	_assert_timing("the coasting floor", float(obs["first_np"]), float(obs["t_floor"]), FLOOR_S)
 	_assert_timing("AFK", float(obs["first_np"]), float(obs["t_afk"]), PAUSE_S)
 	var runner: GameSimRunner = obs["runner"]
-	assert_false(runner.host.is_paused(), "a multiplayer session never pauses for one coasting rider")
+	assert_false(
+		runner.host.is_paused(), "a multiplayer session never pauses for one coasting rider"
+	)
 
 
 func test_rider_who_stops_pedaling_with_others() -> void:

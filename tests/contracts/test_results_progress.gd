@@ -41,10 +41,21 @@ func _players() -> Array[PlayerSlot]:
 
 # --- GameResults ----------------------------------------------------------------------
 
+
 func test_session_stats_base_row() -> void:
 	var row := SessionStats.new().base_row(1)
-	for k: String in ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w",
-			"best_20m_w", "ride_s", "time_in_band_s", "time_in_band_pct"]:
+	for k: String in [
+		"kj",
+		"avg_power_w",
+		"avg_ftp_pct",
+		"np_w",
+		"best_1m_w",
+		"best_5m_w",
+		"best_20m_w",
+		"ride_s",
+		"time_in_band_s",
+		"time_in_band_pct"
+	]:
 		assert_true(row.has(k), k)
 		assert_eq(row[k], 0.0)
 	assert_eq(SessionStats.new().best_power(1, 60.0), 0.0)
@@ -130,6 +141,7 @@ func test_results_from_empty_dict() -> void:
 
 
 # --- ProgressStore --------------------------------------------------------------------
+
 
 func test_progress_store_open_set_add_save_reopen() -> void:
 	var tmp := Paths.make_temp_dir("wattlands_progress_test")

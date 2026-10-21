@@ -69,7 +69,15 @@ static func validate(plan: EffortPlan, opts: Dictionary = {}) -> Dictionary:
 	if plan.cooldown_appended:
 		var last: PlanPhase = phases[phases.size() - 1]
 		if not is_standard_cooldown(last):
-			errors.append("phase %d: cooldown_appended is set but the last phase is not the standard cool-down (COOLDOWN, ERG %d%%, %d s)" % [phases.size() - 1, int(COOLDOWN_PCT), int(COOLDOWN_S)])
+			(
+				errors
+				. append(
+					(
+						"phase %d: cooldown_appended is set but the last phase is not the standard cool-down (COOLDOWN, ERG %d%%, %d s)"
+						% [phases.size() - 1, int(COOLDOWN_PCT), int(COOLDOWN_S)]
+					)
+				)
+			)
 			return _result(errors, warnings)
 		phases.pop_back()
 		if phases.is_empty():
@@ -108,9 +116,16 @@ static func cooldown_phase() -> PlanPhase:
 
 ## True for exactly the phase cooldown_phase() builds (label aside).
 static func is_standard_cooldown(p: PlanPhase) -> bool:
-	return p != null and p.kind == Wl.COOLDOWN and p.mode == Wl.ERG \
-		and absf(p.target_pct - COOLDOWN_PCT) < EPS and absf(p.duration_s - COOLDOWN_S) < EPS \
-		and not p.open_ended and not p.has_ramp() and p.range_pct.is_empty()
+	return (
+		p != null
+		and p.kind == Wl.COOLDOWN
+		and p.mode == Wl.ERG
+		and absf(p.target_pct - COOLDOWN_PCT) < EPS
+		and absf(p.duration_s - COOLDOWN_S) < EPS
+		and not p.open_ended
+		and not p.has_ramp()
+		and p.range_pct.is_empty()
+	)
 
 
 ## The plan's length with every open-ended phase at max_s (cool-down included if appended).
@@ -164,9 +179,9 @@ static func _check_structure(i: int, p: PlanPhase, errors: Array[String]) -> voi
 		errors.append("%s: kind COOLDOWN is appended by the platform; a game never writes one" % n)
 		return
 	if not Wl.is_phase_kind(p.kind):
-		errors.append("%s: unknown kind \"%s\"" % [n, p.kind])
+		errors.append('%s: unknown kind "%s"' % [n, p.kind])
 	if p.mode != Wl.ERG and p.mode != Wl.SIM:
-		errors.append("%s: unknown mode \"%s\" (ERG or SIM)" % [n, p.mode])
+		errors.append('%s: unknown mode "%s" (ERG or SIM)' % [n, p.mode])
 		return
 	if not _finite(p.duration_s) or p.duration_s < 0.0:
 		errors.append("%s: duration_s must be a finite number >= 0" % n)
@@ -174,7 +189,12 @@ static func _check_structure(i: int, p: PlanPhase, errors: Array[String]) -> voi
 		errors.append("%s: duration_s must be > 0 for a fixed phase" % n)
 	if p.open_ended:
 		if not _finite(p.min_s) or not _finite(p.max_s) or p.min_s <= 0.0 or p.max_s < p.min_s:
-			errors.append("%s: open_ended needs 0 < min_s <= max_s (min_s %s, max_s %s)" % [n, _fmt(p.min_s), _fmt(p.max_s)])
+			errors.append(
+				(
+					"%s: open_ended needs 0 < min_s <= max_s (min_s %s, max_s %s)"
+					% [n, _fmt(p.min_s), _fmt(p.max_s)]
+				)
+			)
 	if p.mode == Wl.ERG:
 		if not _finite(p.target_pct) or p.target_pct < 0.0:
 			errors.append("%s: target_pct must be a finite number >= 0" % n)
@@ -192,7 +212,12 @@ static func _check_structure(i: int, p: PlanPhase, errors: Array[String]) -> voi
 				var lo := float(p.range_pct[0])
 				var hi := float(p.range_pct[1])
 				if not _finite(lo) or not _finite(hi) or lo < 0.0 or hi < lo:
-					errors.append("%s: range_pct must be [lo, hi] with 0 <= lo <= hi (got [%s, %s])" % [n, _fmt(lo), _fmt(hi)])
+					errors.append(
+						(
+							"%s: range_pct must be [lo, hi] with 0 <= lo <= hi (got [%s, %s])"
+							% [n, _fmt(lo), _fmt(hi)]
+						)
+					)
 	else:
 		match p.grade_source:
 			Wl.GRADE_FLAT, Wl.GRADE_GAME:
@@ -200,7 +225,9 @@ static func _check_structure(i: int, p: PlanPhase, errors: Array[String]) -> voi
 			Wl.GRADE_COURSE:
 				_check_course(n, p.course_profile, errors)
 			_:
-				errors.append("%s: unknown grade_source \"%s\" (flat, course or game)" % [n, p.grade_source])
+				errors.append(
+					'%s: unknown grade_source "%s" (flat, course or game)' % [n, p.grade_source]
+				)
 
 
 static func _check_course(n: String, profile: Array, errors: Array[String]) -> void:
@@ -216,7 +243,15 @@ static func _check_course(n: String, profile: Array, errors: Array[String]) -> v
 		var d := float(pt[0])
 		var g := float(pt[1])
 		if not _finite(d) or not _finite(g) or d < 0.0 or d <= prev:
-			errors.append("%s: course_profile[%d] needs a finite distance ascending from 0 and a finite grade" % [n, k])
+			(
+				errors
+				. append(
+					(
+						"%s: course_profile[%d] needs a finite distance ascending from 0 and a finite grade"
+						% [n, k]
+					)
+				)
+			)
 			return
 		prev = d
 
@@ -250,7 +285,12 @@ static func _check_warmup(phases: Array[PlanPhase], errors: Array[String]) -> vo
 			checks.append(["range_pct[1]", float(p.range_pct[1])])
 		for c: Array in checks:
 			if float(c[1]) > WARMUP_MAX_PCT + EPS:
-				errors.append("%s: %s %s%% > %s%% inside the first %d s (warm-up, BRIEF 4.6.8)" % [n, c[0], _fmt(float(c[1])), _fmt(WARMUP_MAX_PCT), int(WARMUP_S)])
+				errors.append(
+					(
+						"%s: %s %s%% > %s%% inside the first %d s (warm-up, BRIEF 4.6.8)"
+						% [n, c[0], _fmt(float(c[1])), _fmt(WARMUP_MAX_PCT), int(WARMUP_S)]
+					)
+				)
 
 
 static func _check_caps(phases: Array[PlanPhase], errors: Array[String]) -> void:
@@ -261,9 +301,25 @@ static func _check_caps(phases: Array[PlanPhase], errors: Array[String]) -> void
 		var n := _name(i, p)
 		var peak := p.peak_pct()
 		if peak > ABS_MAX_PCT + EPS:
-			errors.append("%s: peak %s%% > %s%% (BRIEF 4.6.1 ceiling)" % [n, _fmt(peak), _fmt(ABS_MAX_PCT)])
+			errors.append(
+				"%s: peak %s%% > %s%% (BRIEF 4.6.1 ceiling)" % [n, _fmt(peak), _fmt(ABS_MAX_PCT)]
+			)
 		if p.worst_case_length_s() > LONG_PHASE_S + EPS and peak > LONG_PHASE_CAP_PCT + EPS:
-			errors.append("%s: peak %s%% > %s%% in a phase longer than %d s (worst case %s s, BRIEF 4.6.1)" % [n, _fmt(peak), _fmt(LONG_PHASE_CAP_PCT), int(LONG_PHASE_S), _fmt(p.worst_case_length_s())])
+			(
+				errors
+				. append(
+					(
+						"%s: peak %s%% > %s%% in a phase longer than %d s (worst case %s s, BRIEF 4.6.1)"
+						% [
+							n,
+							_fmt(peak),
+							_fmt(LONG_PHASE_CAP_PCT),
+							int(LONG_PHASE_S),
+							_fmt(p.worst_case_length_s())
+						]
+					)
+				)
+			)
 
 
 static func _check_accrual(phases: Array[PlanPhase], errors: Array[String]) -> void:
@@ -290,12 +346,22 @@ static func _check_accrual(phases: Array[PlanPhase], errors: Array[String]) -> v
 			acc105 += length
 			if acc105 > LIMIT_105_S + EPS and not reported105:
 				reported105 = true
-				errors.append("%s: %s s accrued above 105%% without a reset (limit %d s, BRIEF 4.6.1)" % [_name(i, p), _fmt(acc105), int(LIMIT_105_S)])
+				errors.append(
+					(
+						"%s: %s s accrued above 105%% without a reset (limit %d s, BRIEF 4.6.1)"
+						% [_name(i, p), _fmt(acc105), int(LIMIT_105_S)]
+					)
+				)
 		if peak > LIMIT_120_PCT + EPS:
 			acc120 += length
 			if acc120 > LIMIT_120_S + EPS and not reported120:
 				reported120 = true
-				errors.append("%s: %s s accrued above 120%% without a reset (limit %d s, BRIEF 4.6.1)" % [_name(i, p), _fmt(acc120), int(LIMIT_120_S)])
+				errors.append(
+					(
+						"%s: %s s accrued above 120%% without a reset (limit %d s, BRIEF 4.6.1)"
+						% [_name(i, p), _fmt(acc120), int(LIMIT_120_S)]
+					)
+				)
 
 
 static func _check_switch_spacing(phases: Array[PlanPhase], warnings: Array[String]) -> void:
@@ -309,6 +375,11 @@ static func _check_switch_spacing(phases: Array[PlanPhase], warnings: Array[Stri
 			continue
 		var t := starts[i]
 		if prev_switch_i >= 0 and t - prev_switch_t < SWITCH_SPACING_S - EPS:
-			warnings.append("phases %d and %d: ERG<->SIM switches %s s apart (< %d s, BRIEF 4.5)" % [prev_switch_i, i, _fmt(t - prev_switch_t), int(SWITCH_SPACING_S)])
+			warnings.append(
+				(
+					"phases %d and %d: ERG<->SIM switches %s s apart (< %d s, BRIEF 4.5)"
+					% [prev_switch_i, i, _fmt(t - prev_switch_t), int(SWITCH_SPACING_S)]
+				)
+			)
 		prev_switch_t = t
 		prev_switch_i = i

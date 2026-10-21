@@ -136,20 +136,48 @@ func _service(i: int) -> bool:
 	params = parse_query(query)
 	done = true
 	if params.has("error"):
-		var denied := tr_or("RIDES_CALLBACK_DENIED", "Strava did not connect ({error}). You can close this window and return to Wattlands.")
+		var denied := tr_or(
+			"RIDES_CALLBACK_DENIED",
+			"Strava did not connect ({error}). You can close this window and return to Wattlands."
+		)
 		_respond(c, 200, denied.xml_escape().format({"error": str(params["error"]).xml_escape()}))
 	else:
-		_respond(c, 200, tr_or("RIDES_CALLBACK_CONNECTING", "Wattlands is connecting to Strava. You can close this window and return to the game.").xml_escape())
+		_respond(
+			c,
+			200,
+			(
+				tr_or(
+					"RIDES_CALLBACK_CONNECTING",
+					"Wattlands is connecting to Strava. You can close this window and return to the game."
+				)
+				. xml_escape()
+			)
+		)
 	received.emit(params)
 	return true
 
 
 func _respond(c: StreamPeerTCP, code: int, message: String) -> void:
-	var reason := {200: "OK", 404: "Not Found", 405: "Method Not Allowed", 431: "Request Header Fields Too Large"}
-	var body := ("<!doctype html><html><head><meta charset=\"utf-8\"><title>Wattlands</title></head>"
-		+ "<body style=\"font-family:sans-serif\"><p>%s</p></body></html>" % message).to_utf8_buffer()
-	var head := "HTTP/1.1 %d %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n" % [
-		code, str(reason.get(code, "OK")), body.size()]
+	var reason := {
+		200: "OK",
+		404: "Not Found",
+		405: "Method Not Allowed",
+		431: "Request Header Fields Too Large"
+	}
+	var body := (
+		(
+			'<!doctype html><html><head><meta charset="utf-8"><title>Wattlands</title></head>'
+			+ '<body style="font-family:sans-serif"><p>%s</p></body></html>' % message
+		)
+		. to_utf8_buffer()
+	)
+	var head := (
+		(
+			"HTTP/1.1 %d %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\n"
+			+ "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
+		)
+		% [code, str(reason.get(code, "OK")), body.size()]
+	)
 	c.put_data(head.to_ascii_buffer())
 	c.put_data(body)
 

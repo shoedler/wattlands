@@ -30,7 +30,18 @@ func _graded(fraction: float) -> GameResults:
 
 
 func test_grade_band_edges() -> void:
-	var cases := [[1.0, "S"], [0.95, "S"], [0.9499, "A"], [0.90, "A"], [0.8999, "B"], [0.80, "B"], [0.7999, "C"], [0.65, "C"], [0.6499, "D"], [0.0, "D"]]
+	var cases := [
+		[1.0, "S"],
+		[0.95, "S"],
+		[0.9499, "A"],
+		[0.90, "A"],
+		[0.8999, "B"],
+		[0.80, "B"],
+		[0.7999, "C"],
+		[0.65, "C"],
+		[0.6499, "D"],
+		[0.0, "D"]
+	]
 	for c: Array in cases:
 		assert_eq(_graded(float(c[0])).grade, str(c[1]), "%s in band" % c[0])
 
@@ -79,12 +90,20 @@ func test_rows_from_a_synthetic_ride() -> void:
 	# Ride statistics come from Workout's own tracker when ctx.stats has none.
 	# 300 s ramp at 100-130 W, 1110 s at 130 W, 3 sprints (10 s at 280 W, 20 s at 160 W),
 	# 180 s cool-down at the ERG 50% the compliant rider follows.
-	var expected_kj := (300.0 * 115.0 + 1110.0 * 130.0 + 3.0 * (10.0 * 280.0 + 20.0 * 160.0) + 180.0 * 100.0) / 1000.0
+	var expected_kj := (
+		(300.0 * 115.0 + 1110.0 * 130.0 + 3.0 * (10.0 * 280.0 + 20.0 * 160.0) + 180.0 * 100.0)
+		/ 1000.0
+	)
 	assert_almost_eq(float(me["kj"]), expected_kj, 0.5)
 	assert_almost_eq(float(me["ride_s"]), 1680.0, 0.01, "28 minutes including the cool-down")
 	assert_gt(float(me["np_w"]), float(me["avg_power_w"]) - 0.001)
 	assert_gt(float(me["best_1m_w"]), 130.0, "the sprints lift the best minute")
-	assert_true(float(me["best_1m_w"]) >= float(me["best_5m_w"]) and float(me["best_5m_w"]) >= float(me["best_20m_w"]))
+	assert_true(
+		(
+			float(me["best_1m_w"]) >= float(me["best_5m_w"])
+			and float(me["best_5m_w"]) >= float(me["best_20m_w"])
+		)
+	)
 	assert_gt(float(me["best_20m_w"]), 0.0)
 	assert_almost_eq(float(me["avg_ftp_pct"]), float(me["avg_power_w"]) / 2.0, 0.001)
 	# Sprints and display stats.
@@ -92,7 +111,9 @@ func test_rows_from_a_synthetic_ride() -> void:
 	assert_eq(me["sprints"][0]["label"], "WORKOUT_LBL_SPRINT_1")
 	assert_eq(me["stats"][WorkoutResults.STAT_SPRINT_PEAK], 280)
 	# W3 WO-2: the results screen draws row stats, so best powers and each sprint's peak go there.
-	assert_eq(me["stats"][WorkoutResults.STAT_SPRINT_PEAKS], "280 / 280 / 280", "every sprint's peak")
+	assert_eq(
+		me["stats"][WorkoutResults.STAT_SPRINT_PEAKS], "280 / 280 / 280", "every sprint's peak"
+	)
 	for key: String in WorkoutResults.BEST_STATS:
 		assert_eq(me["stats"][WorkoutResults.BEST_STATS[key]], roundi(float(me[key])), key)
 	assert_eq(me["stats"][WorkoutResults.STAT_SPRINTS_HIT], "3/3")
@@ -145,7 +166,9 @@ func test_apply_progress_totals_and_unlocks() -> void:
 	assert_eq(float(store.get_value("xp_total")), float(res.row(1)["xp"]))
 	assert_true(store.save())
 	var again := ProgressStore.open("workout", Paths.progress_path("workout"))
-	assert_eq(again.get_value("unlocks"), ["pennant_swallowtail", "pennant_star"], "saved under Paths")
+	assert_eq(
+		again.get_value("unlocks"), ["pennant_swallowtail", "pennant_star"], "saved under Paths"
+	)
 	for i in 3:
 		g.apply_progress(res, again)
 	var fifth := g.apply_progress(res, again)

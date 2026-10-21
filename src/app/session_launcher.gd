@@ -31,7 +31,9 @@ static func create(p_services: AppServices) -> AppSessionLauncher:
 ## session_start (CLIENT), sim_speed, record_rides, realtime (default true: the GameHost
 ## advances its SimClock from _process, also in headless app runs such as scripted peers;
 ## tests pass false and step it themselves).
-func build_config(role: String, params: Dictionary, view_parent: Node, hud_parent: Node, headless: bool) -> Dictionary:
+func build_config(
+	role: String, params: Dictionary, view_parent: Node, hud_parent: Node, headless: bool
+) -> Dictionary:
 	error = ""
 	var net := services.net
 	var lobby: Dictionary = net.lobby if net != null else {}
@@ -58,7 +60,9 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 		game_id = str(params.get("game_id", lobby.get("game_id", "")))
 		content_id = str(params.get("content_id", lobby.get("content_id", "")))
 		scaling = str(lobby.get("scaling", _setting("scaling_mode", Wl.FAIR_FTP)))
-		options = AppLobbyModel.resolve_game_options(registry, game_id, AppLobbyModel.game_options(lobby))
+		options = AppLobbyModel.resolve_game_options(
+			registry, game_id, AppLobbyModel.game_options(lobby)
+		)
 		if net != null:
 			players = net.lobby_slots()
 		if role == Wl.CLIENT:
@@ -89,7 +93,9 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 		return {}
 	# ctx.players is sorted by slot_index on every peer (OWNERSHIP CTX1); indices are unique, so
 	# the order is the same whatever order the lobby or session_start listed them in.
-	players.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index)
+	players.sort_custom(
+		func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index
+	)
 	for slot in players:
 		var lobby_opts := AppLobbyModel.player_options_of(lobby, slot.peer_id)
 		var merged := lobby_opts
@@ -118,26 +124,55 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 	if rider == null:
 		rider = services.make_rider()
 		own_rider = rider
-	rider.setup(local_peer, profile, local_slot, device, {
-		"multiplayer": role != Wl.SOLO, "scaling_mode": scaling, "record": bool(params.get("record_rides", true)),
-		"game_id": game_id, "content_id": content_id, "utc_start_unix": utc, "seed": seed,
-		"skip_warmup": profile.skip_warmup,
-	})
+	(
+		rider
+		. setup(
+			local_peer,
+			profile,
+			local_slot,
+			device,
+			{
+				"multiplayer": role != Wl.SOLO,
+				"scaling_mode": scaling,
+				"record": bool(params.get("record_rides", true)),
+				"game_id": game_id,
+				"content_id": content_id,
+				"utc_start_unix": utc,
+				"seed": seed,
+				"skip_warmup": profile.skip_warmup,
+			}
+		)
+	)
 	var riders: Dictionary = {local_peer: rider}
 	if role != Wl.CLIENT:
 		for slot in players:
 			if slot.is_bot:
-				riders[slot.peer_id] = make_bot_rider(slot, role, scaling, game_id, content_id, seed)
+				riders[slot.peer_id] = make_bot_rider(
+					slot, role, scaling, game_id, content_id, seed
+				)
 	_remember_last(game_id, content_id)
-	var sim_speed := effective_sim_speed(device, float(params.get("sim_speed", CmdLine.get_float("sim-speed", 1.0))))
+	var sim_speed := effective_sim_speed(
+		device, float(params.get("sim_speed", CmdLine.get_float("sim-speed", 1.0)))
+	)
 	var config := {
-		"game_id": game_id, "content_id": content_id, "seed": seed, "role": role,
-		"players": players, "local_riders": riders, "local_peer": local_peer,
-		"net": net if role != Wl.SOLO else null, "bus": services.bus, "options": options,
-		"scaling_mode": scaling, "sim_speed": sim_speed, "headless": headless,
+		"game_id": game_id,
+		"content_id": content_id,
+		"seed": seed,
+		"role": role,
+		"players": players,
+		"local_riders": riders,
+		"local_peer": local_peer,
+		"net": net if role != Wl.SOLO else null,
+		"bus": services.bus,
+		"options": options,
+		"scaling_mode": scaling,
+		"sim_speed": sim_speed,
+		"headless": headless,
 		"realtime": bool(params.get("realtime", true)),
-		"view_parent": view_parent, "hud_parent": hud_parent,
-		"record_rides": bool(params.get("record_rides", true)), "report": false,
+		"view_parent": view_parent,
+		"hud_parent": hud_parent,
+		"record_rides": bool(params.get("record_rides", true)),
+		"report": false,
 	}
 	if services.sfx != null:
 		# The GameHost runs the metronome on rendering peers (band centre, else the preferred
@@ -169,7 +204,12 @@ static func effective_sim_speed(device: TrainerDevice, requested: float) -> floa
 	var spd := maxf(requested, 0.01)
 	if device is MockTrainer or is_equal_approx(spd, 1.0):
 		return spd
-	push_warning("AppSessionLauncher: --sim-speed=%s ignored: the trainer is not a MockTrainer, so the session runs at 1" % str(requested))
+	push_warning(
+		(
+			"AppSessionLauncher: --sim-speed=%s ignored: the trainer is not a MockTrainer, so the session runs at 1"
+			% str(requested)
+		)
+	)
 	return 1.0
 
 
@@ -186,7 +226,12 @@ static func replay_messages(params: Dictionary, net: WlNetSession) -> Array[Dict
 	for r: Variant in params.get("replay", []):
 		if r is Dictionary:
 			var d: Variant = (r as Dictionary).get("data", {})
-			out.append({"from": int((r as Dictionary).get("from", host_peer)), "data": d if d is Dictionary else {}})
+			out.append(
+				{
+					"from": int((r as Dictionary).get("from", host_peer)),
+					"data": d if d is Dictionary else {}
+				}
+			)
 	var ss: Variant = params.get("session_start", {})
 	if out.is_empty() and ss is Dictionary and not (ss as Dictionary).is_empty():
 		var msg := (ss as Dictionary).duplicate(true)
@@ -197,17 +242,33 @@ static func replay_messages(params: Dictionary, net: WlNetSession) -> Array[Dict
 
 
 ## A bot's LocalRider: MockTrainer erg at compliance 1.0 with the bot FTP, no recorder.
-func make_bot_rider(slot: PlayerSlot, role: String, scaling: String, game_id: String, content_id: String, seed: int) -> LocalRider:
+func make_bot_rider(
+	slot: PlayerSlot, role: String, scaling: String, game_id: String, content_id: String, seed: int
+) -> LocalRider:
 	var n := absi(slot.peer_id)
 	var bot_seed := SeededRng.derive(seed, "bot%d" % n) & SEED_MASK
 	var device := MockTrainer.from_spec(Bots.RIDER_SPEC, slot.ftp, {"seed": bot_seed})
 	var r := services.make_rider()
 	r.is_bot = true
-	r.setup(slot.peer_id, Bots.make_profile(n, slot.ftp), slot, device, {
-		"multiplayer": role != Wl.SOLO, "scaling_mode": scaling, "record": false,
-		"game_id": game_id, "content_id": content_id, "utc_start_unix": 0, "seed": bot_seed,
-		"skip_warmup": false,
-	})
+	(
+		r
+		. setup(
+			slot.peer_id,
+			Bots.make_profile(n, slot.ftp),
+			slot,
+			device,
+			{
+				"multiplayer": role != Wl.SOLO,
+				"scaling_mode": scaling,
+				"record": false,
+				"game_id": game_id,
+				"content_id": content_id,
+				"utc_start_unix": 0,
+				"seed": bot_seed,
+				"skip_warmup": false,
+			}
+		)
+	)
 	bot_riders.append(r)
 	bot_devices.append(device)
 	return r

@@ -147,7 +147,9 @@ func read_characteristic(service_uuid: String, char_uuid: String) -> void:
 
 
 ## Only FtmsClient calls this (BRIEF 4.6.11). Refused while the hardware lock is set.
-func write_characteristic(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> void:
+func write_characteristic(
+	service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+) -> void:
 	if Locks.hw_locked():
 		push_warning("%s: write to %s refused" % [Locks.HW_MESSAGE, expand_uuid(char_uuid)])
 		operation_failed.emit("write", Locks.HW_MESSAGE)
@@ -160,10 +162,13 @@ func write_characteristic(service_uuid: String, char_uuid: String, data: PackedB
 
 func subscribe_characteristic(service_uuid: String, char_uuid: String) -> void:
 	if _require_link("subscribe"):
-		_request("subscribe", {"service": expand_uuid(service_uuid), "char": expand_uuid(char_uuid)})
+		_request(
+			"subscribe", {"service": expand_uuid(service_uuid), "char": expand_uuid(char_uuid)}
+		)
 
 
 # --- Additive API ----------------------------------------------------------------------
+
 
 ## Reads the socket and handles every complete message (call each frame, or let _process).
 func poll() -> void:
@@ -260,7 +265,9 @@ func handle_message(text: String) -> void:
 
 ## The fields of a write request: {"op": "write", "service", "char", "data" (hex),
 ## "with_response"}. Pure; the transport sends it only when the hardware lock is off.
-static func write_fields(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> Dictionary:
+static func write_fields(
+	service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+) -> Dictionary:
 	return {
 		"op": "write",
 		"service": expand_uuid(service_uuid),
@@ -282,6 +289,7 @@ static func decode_hex(text: String) -> Variant:
 
 
 # --- Internals -------------------------------------------------------------------------
+
 
 func _require_ready(op: String) -> bool:
 	if not is_available() or not _initialized:

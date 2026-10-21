@@ -140,10 +140,12 @@ func ids() -> Array[String]:
 	for id: String in _games.keys():
 		if id != TEMPLATE_ID:
 			list.append(id)
-	list.sort_custom(func(a: String, b: String) -> bool:
-		var ta := str(_games[a].get("title", a))
-		var tb := str(_games[b].get("title", b))
-		return ta < tb if ta != tb else a < b)
+	list.sort_custom(
+		func(a: String, b: String) -> bool:
+			var ta := str(_games[a].get("title", a))
+			var tb := str(_games[b].get("title", b))
+			return ta < tb if ta != tb else a < b
+	)
 	return list
 
 
@@ -170,7 +172,7 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 	if path != "":
 		var folder := path.get_base_dir().get_file()
 		if folder != id:
-			return "id: \"%s\" does not match its folder \"%s\"" % [id, folder]
+			return 'id: "%s" does not match its folder "%s"' % [id, folder]
 	for f: String in ["title", "version"]:
 		var v: Variant = m.get(f, null)
 		if not (v is String) or str(v).strip_edges() == "":
@@ -187,11 +189,17 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 		return "bots: must be true or false"
 	var pres: Variant = m.get("presentation", null)
 	if not (pres is String) or not PRESENTATIONS.has(str(pres)):
-		return "presentation: must be \"2d\" or \"3d\""
+		return 'presentation: must be "2d" or "3d"'
 	if str(pres) == "2d":
 		var pb: Variant = m.get("pixel_base", null)
-		if not (pb is Array) or (pb as Array).size() != 2 or not is_whole(pb[0]) or not is_whole(pb[1]) \
-				or int(pb[0]) < 1 or int(pb[1]) < 1:
+		if (
+			not (pb is Array)
+			or (pb as Array).size() != 2
+			or not is_whole(pb[0])
+			or not is_whole(pb[1])
+			or int(pb[0]) < 1
+			or int(pb[1]) < 1
+		):
 			return "pixel_base: a 2d game needs [width, height] in whole pixels"
 	var entry_err := _check_entry(m.get("entry", null))
 	if entry_err != "":
@@ -202,9 +210,9 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 	var seen := {}
 	for c: Variant in contents:
 		if not (c is String) or not _valid_content_id(str(c)):
-			return "contents: \"%s\" is not a valid content id" % str(c)
+			return 'contents: "%s" is not a valid content id' % str(c)
 		if seen.has(str(c)):
-			return "contents: \"%s\" is listed twice" % str(c)
+			return 'contents: "%s" is listed twice' % str(c)
 		seen[str(c)] = true
 	for f: String in ["default_content", "e2e_content", "zero_input_content"]:
 		var v: Variant = m.get(f, null)
@@ -219,9 +227,12 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 		var seen_schemes := {}
 		for sv: Variant in schemes:
 			if not (sv is String) or not _valid_id(str(sv)) or str(sv) == TEMPLATE_ID:
-				return "content_schemes: \"%s\" is not a scheme name matching ^[a-z][a-z0-9_]*$" % str(sv)
+				return (
+					'content_schemes: "%s" is not a scheme name matching ^[a-z][a-z0-9_]*$'
+					% str(sv)
+				)
 			if seen_schemes.has(str(sv)):
-				return "content_schemes: \"%s\" is listed twice" % str(sv)
+				return 'content_schemes: "%s" is listed twice' % str(sv)
 			seen_schemes[str(sv)] = true
 	if m.has("picker_image") and not (m["picker_image"] is String):
 		return "picker_image: must be a res:// path string"
@@ -296,7 +307,9 @@ func resolve_options(id: String, values: Dictionary, per_player: bool = false) -
 
 ## resolve_options on an explicit list of option entries (no registry needed). Invalid
 ## values fall back to the default with a warning; unknown keys are dropped with a warning.
-static func resolve_option_values(entries: Array, values: Dictionary, context: String = "") -> Dictionary:
+static func resolve_option_values(
+	entries: Array, values: Dictionary, context: String = ""
+) -> Dictionary:
 	var out := {}
 	var known := {}
 	for ev: Variant in entries:
@@ -312,11 +325,16 @@ static func resolve_option_values(entries: Array, values: Dictionary, context: S
 			if bool(got[0]):
 				value = got[1]
 			else:
-				push_warning("GameRegistry: %s option %s: %s; using the default" % [context, oid, str(got[1])])
+				push_warning(
+					(
+						"GameRegistry: %s option %s: %s; using the default"
+						% [context, oid, str(got[1])]
+					)
+				)
 		out[oid] = value
 	for k: Variant in values.keys():
 		if not known.has(str(k)):
-			push_warning("GameRegistry: %s: unknown option \"%s\" dropped" % [context, str(k)])
+			push_warning('GameRegistry: %s: unknown option "%s" dropped' % [context, str(k)])
 	return out
 
 
@@ -369,7 +387,7 @@ static func coerce_option_value(e: Dictionary, v: Variant) -> Array:
 					if cv is Dictionary and json_equal((cv as Dictionary).get("value", null), v):
 						return [true, (cv as Dictionary)["value"]]
 			return [false, "%s is not one of the choices" % JSON.stringify(v)]
-	return [false, "unknown option type \"%s\"" % str(e.get("type", ""))]
+	return [false, 'unknown option type "%s"' % str(e.get("type", ""))]
 
 
 ## "" or "<field>[i].<key>: <reason>" for a list of option entries.
@@ -388,7 +406,7 @@ static func validate_option_entries(list: Variant, field: String) -> String:
 		if not (oid is String) or str(oid) == "":
 			return "%s.id: must be a non-empty string" % at
 		if ids.has(str(oid)):
-			return "%s.id: \"%s\" is declared twice" % [at, str(oid)]
+			return '%s.id: "%s" is declared twice' % [at, str(oid)]
 		ids[str(oid)] = true
 		if e.has("label") and not (e["label"] is String):
 			return "%s.label: must be a string key" % at
@@ -414,11 +432,17 @@ static func validate_option_entries(list: Variant, field: String) -> String:
 				for c: Variant in ch:
 					if not (c is Dictionary) or not (c as Dictionary).has("value"):
 						return "%s.choices: every choice needs a value" % at
-					if (c as Dictionary).has("label") and not ((c as Dictionary)["label"] is String):
+					if (
+						(c as Dictionary).has("label")
+						and not ((c as Dictionary)["label"] is String)
+					):
 						return "%s.choices: labels must be string keys" % at
 					for prev: Variant in values:
 						if json_equal(prev, (c as Dictionary)["value"]):
-							return "%s.choices: value %s is listed twice" % [at, JSON.stringify((c as Dictionary)["value"])]
+							return (
+								"%s.choices: value %s is listed twice"
+								% [at, JSON.stringify((c as Dictionary)["value"])]
+							)
 					values.append((c as Dictionary)["value"])
 		var got: Array = coerce_option_value(e, e["default"])
 		if not bool(got[0]):
@@ -464,7 +488,9 @@ func add_game(m: Dictionary, folder: String, allow_template: bool = false) -> St
 
 ## The `_template` manifest from GAMES_ROOT/_template/game.json ({} if absent or invalid JSON).
 func template_manifest() -> Dictionary:
-	var parsed: Variant = load_manifest_file(GAMES_ROOT.path_join(TEMPLATE_ID).path_join("game.json"))
+	var parsed: Variant = load_manifest_file(
+		GAMES_ROOT.path_join(TEMPLATE_ID).path_join("game.json")
+	)
 	return parsed if parsed is Dictionary else {}
 
 
@@ -578,7 +604,11 @@ static func json_equal(a: Variant, b: Variant) -> bool:
 	if na or nb:
 		return na and nb and float(a) == float(b)
 	if a is String or a is StringName or b is String or b is StringName:
-		return (a is String or a is StringName) and (b is String or b is StringName) and str(a) == str(b)
+		return (
+			(a is String or a is StringName)
+			and (b is String or b is StringName)
+			and str(a) == str(b)
+		)
 	if a is Array and b is Array:
 		if (a as Array).size() != (b as Array).size():
 			return false

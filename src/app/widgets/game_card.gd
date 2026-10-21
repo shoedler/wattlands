@@ -50,7 +50,9 @@ func _build(manifest: Dictionary) -> void:
 	summary_label = AppStyle.paragraph(str(manifest.get("summary", "")), AppStyle.FONT_SMALL)
 	summary_label.custom_minimum_size = Vector2(IMAGE_SIZE.x, 0)
 	box.add_child(summary_label)
-	players_label = AppStyle.label(AppLobbyModel.player_count_text(manifest), AppStyle.FONT_BODY, AppStyle.ACCENT)
+	players_label = AppStyle.label(
+		AppLobbyModel.player_count_text(manifest), AppStyle.FONT_BODY, AppStyle.ACCENT
+	)
 	box.add_child(players_label)
 
 

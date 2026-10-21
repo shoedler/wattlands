@@ -52,12 +52,23 @@ func _draw() -> void:
 			var hi := pts[1].x
 			var hx := ceilf(lo / 3.0) * 3.0
 			while hx < hi:
-				draw_rect(Rect2(hx, pts[1].y + 1.0, 1.0, pts[2].y - pts[1].y - 1.0), color.lightened(0.25))
+				draw_rect(
+					Rect2(hx, pts[1].y + 1.0, 1.0, pts[2].y - pts[1].y - 1.0), color.lightened(0.25)
+				)
 				hx += 3.0
 		draw_line(pts[0], pts[1], color.lightened(0.35), 1.0)
 	var now_x := float(model.get("now_x", 200.0))
 	draw_rect(Rect2(now_x, STRIP_TOP - 4.0, 1.0, STRIP_BOTTOM - STRIP_TOP + 4.0), WorkoutArt.WHITE)
-	draw_colored_polygon(PackedVector2Array([Vector2(now_x - 3.0, STRIP_TOP - 6.0), Vector2(now_x + 4.0, STRIP_TOP - 6.0), Vector2(now_x + 0.5, STRIP_TOP - 2.0)]), WorkoutArt.WHITE)
+	draw_colored_polygon(
+		PackedVector2Array(
+			[
+				Vector2(now_x - 3.0, STRIP_TOP - 6.0),
+				Vector2(now_x + 4.0, STRIP_TOP - 6.0),
+				Vector2(now_x + 0.5, STRIP_TOP - 2.0)
+			]
+		),
+		WorkoutArt.WHITE
+	)
 	for m: Dictionary in model.get("markers", []):
 		var foot := Vector2(float(m["x"]), float(m["y"]) - 2.0)
 		for s: Dictionary in m["shapes"]:
@@ -71,4 +82,13 @@ func _draw() -> void:
 			# An arrow on the road, past the flag, pointing at the rider off screen.
 			var ax := foot.x + (24.0 if edge > 0 else -5.0)
 			var ay := foot.y - 5.0
-			draw_colored_polygon(PackedVector2Array([Vector2(ax, ay - 3.0), Vector2(ax + 4.0 * float(edge), ay), Vector2(ax, ay + 3.0)]), WorkoutArt.WHITE)
+			draw_colored_polygon(
+				PackedVector2Array(
+					[
+						Vector2(ax, ay - 3.0),
+						Vector2(ax + 4.0 * float(edge), ay),
+						Vector2(ax, ay + 3.0)
+					]
+				),
+				WorkoutArt.WHITE
+			)

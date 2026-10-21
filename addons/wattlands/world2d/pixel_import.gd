@@ -57,7 +57,9 @@ static func validate_import_file(image_path: String) -> PackedStringArray:
 	var problems := PackedStringArray()
 	var path := import_path(image_path)
 	if not FileAccess.file_exists(path):
-		problems.append("%s: no .import file (run tools/godot.sh --headless --path . --import)" % path)
+		problems.append(
+			"%s: no .import file (run tools/godot.sh --headless --path . --import)" % path
+		)
 		return problems
 	var cf := ConfigFile.new()
 	var err := cf.load(path)
@@ -71,10 +73,23 @@ static func validate_import_file(image_path: String) -> PackedStringArray:
 		if not cf.has_section_key("params", key):
 			problems.append("%s: missing %s (want %s)" % [path, key, REQUIRED_PARAMS[key]])
 		elif not _same(cf.get_value("params", key), REQUIRED_PARAMS[key]):
-			problems.append("%s: %s is %s (want %s)" % [path, key, cf.get_value("params", key), REQUIRED_PARAMS[key]])
+			problems.append(
+				(
+					"%s: %s is %s (want %s)"
+					% [path, key, cf.get_value("params", key), REQUIRED_PARAMS[key]]
+				)
+			)
 	for key: String in RECOMMENDED_PARAMS:
-		if cf.has_section_key("params", key) and not _same(cf.get_value("params", key), RECOMMENDED_PARAMS[key]):
-			problems.append("recommended: %s: %s is %s (want %s)" % [path, key, cf.get_value("params", key), RECOMMENDED_PARAMS[key]])
+		if (
+			cf.has_section_key("params", key)
+			and not _same(cf.get_value("params", key), RECOMMENDED_PARAMS[key])
+		):
+			problems.append(
+				(
+					"recommended: %s: %s is %s (want %s)"
+					% [path, key, cf.get_value("params", key), RECOMMENDED_PARAMS[key]]
+				)
+			)
 	return problems
 
 
@@ -150,7 +165,12 @@ static func check_project_defaults() -> PackedStringArray:
 		if not defaults.has(k):
 			problems.append("importer_defaults/texture lacks %s" % k)
 		elif not _same(defaults[k], REQUIRED_PARAMS[k]):
-			problems.append("importer_defaults/texture %s is %s (want %s)" % [k, defaults[k], REQUIRED_PARAMS[k]])
+			problems.append(
+				(
+					"importer_defaults/texture %s is %s (want %s)"
+					% [k, defaults[k], REQUIRED_PARAMS[k]]
+				)
+			)
 	return problems
 
 

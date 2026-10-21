@@ -35,7 +35,9 @@ func test_cap_covers_directives() -> void:
 	var rig := make_rig({}, follower())
 	rig.start([erg(Wl.WORK, 80.0, 0.0).with_open(120.0, 540.0).with_range(80.0, 120.0)])
 	rig.run(10.0)
-	var rec := rig.directive({"mode": "ERG", "target_pct": 115.0, "duration_s": 20.0, "reason": "run"})
+	var rec := rig.directive(
+		{"mode": "ERG", "target_pct": 115.0, "duration_s": 20.0, "reason": "run"}
+	)
 	assert_false(rec["refused"])
 	assert_eq(int(rec["applied"]["target_w"]), 210)
 	assert_has(rec["clamped_by"], Wl.CLAMP_LONG_PHASE)
@@ -50,12 +52,24 @@ func test_fishing_marlin_104_pct_is_not_clamped() -> void:
 		var rig := make_rig({"ftp_w": ftp}, follower())
 		rig.start([erg(Wl.WORK, 80.0, 0.0).with_open(300.0, 1320.0).with_range(72.0, 104.0)])
 		rig.run(5.0)
-		var rec := rig.directive({"mode": "ERG", "target_pct": 104.0, "duration_s": 12.0, "reason": "jump", "source": "fishing"})
+		var rec := rig.directive(
+			{
+				"mode": "ERG",
+				"target_pct": 104.0,
+				"duration_s": 12.0,
+				"reason": "jump",
+				"source": "fishing"
+			}
+		)
 		assert_false(rec["refused"], "FTP %s" % ftp)
 		var cb: Array = rec["clamped_by"]
-		for name: String in [Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_LIMIT_105, Wl.CLAMP_LIMIT_120]:
+		for name: String in [
+			Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_LIMIT_105, Wl.CLAMP_LIMIT_120
+		]:
 			assert_does_not_have(cb, name, "FTP %s" % ftp)
-		assert_eq(int(rec["applied"]["target_w"]), GovernorClamps.whole_w(1.04 * ftp), "FTP %s" % ftp)
+		assert_eq(
+			int(rec["applied"]["target_w"]), GovernorClamps.whole_w(1.04 * ftp), "FTP %s" % ftp
+		)
 
 
 func test_tuna_104_8_pct_at_cap_boundary() -> void:

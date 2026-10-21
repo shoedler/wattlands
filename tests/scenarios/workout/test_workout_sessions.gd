@@ -29,7 +29,9 @@ func test_every_built_in_session_is_registered() -> void:
 	assert_not_null(reg, "the GameRegistry autoload")
 	if reg == null:
 		return
-	assert_true(reg.has_game(S.WORKOUT), "workout is a valid registered game: %s" % str(reg.invalid_games()))
+	assert_true(
+		reg.has_game(S.WORKOUT), "workout is a valid registered game: %s" % str(reg.invalid_games())
+	)
 	var m := reg.manifest(S.WORKOUT)
 	var contents: Array = m.get("contents", [])
 	for id in S.WORKOUT_SESSIONS:
@@ -39,7 +41,9 @@ func test_every_built_in_session_is_registered() -> void:
 	assert_eq(m.get("zero_input_content", ""), "easy_30")
 
 
-func test_compliant_rider_finishes_every_session(p: Variant = use_parameters(S.WORKOUT_SESSIONS)) -> void:
+func test_compliant_rider_finishes_every_session(
+	p: Variant = use_parameters(S.WORKOUT_SESSIONS)
+) -> void:
 	var content := str(p)
 	var runner := start_runner(S.flags(content, report_path(content)))
 	if runner == null:
@@ -61,9 +65,10 @@ func test_compliant_rider_finishes_every_session(p: Variant = use_parameters(S.W
 	# The warm-up counted independently of the governor's flag: the first 300 s after the first
 	# pedaling sample (BRIEF 4.6.8), less a 2 s margin for the governor's own start.
 	var first_pedal := {"t": -1.0}
-	S.mock_of(rider).sample_received.connect(func(s: TrainerSample) -> void:
-		if float(first_pedal["t"]) < 0.0 and not S.is_not_pedaling(s):
-			first_pedal["t"] = s.t
+	S.mock_of(rider).sample_received.connect(
+		func(s: TrainerSample) -> void:
+			if float(first_pedal["t"]) < 0.0 and not S.is_not_pedaling(s):
+				first_pedal["t"] = s.t
 	)
 	var plan: Array = []
 	var ticks := 0
@@ -79,11 +84,25 @@ func test_compliant_rider_finishes_every_session(p: Variant = use_parameters(S.W
 			warmup.append_array(S.warmup_problems(st, t))
 			var fp := float(first_pedal["t"])
 			if fp >= 0.0 and t - fp < S.WARMUP_S - 2.0 and not bool(st.get("warmup_active", false)):
-				warmup.append("t=%.2f: %.1f s into the ride but the governor's warm-up is off" % [t, t - fp])
+				warmup.append(
+					"t=%.2f: %.1f s into the ride but the governor's warm-up is off" % [t, t - fp]
+				)
 		if caps.size() < 20:
 			var i := int(st.get("phase_index", -1))
-			caps.append_array(S.cap_problems(st, S.phase_length_s(plan[i]) if i >= 0 and i < plan.size() else 0.0, t))
-		if latched.size() < 5 and (bool(st.get("latched_105", false)) or bool(st.get("latched_120", false)) or S.clamped(st, Wl.CLAMP_LIMIT_105) or S.clamped(st, Wl.CLAMP_LIMIT_120)):
+			caps.append_array(
+				S.cap_problems(
+					st, S.phase_length_s(plan[i]) if i >= 0 and i < plan.size() else 0.0, t
+				)
+			)
+		if (
+			latched.size() < 5
+			and (
+				bool(st.get("latched_105", false))
+				or bool(st.get("latched_120", false))
+				or S.clamped(st, Wl.CLAMP_LIMIT_105)
+				or S.clamped(st, Wl.CLAMP_LIMIT_120)
+			)
+		):
 			latched.append("t=%.2f: %s" % [t, str(st.get("clamped_by", []))])
 		# The 4.6.1 duration counters, independently: ERG time above 105 % and 120 % FTP, reset by
 		# 120 consecutive seconds of ERG at <= 90 %; SIM restarts the reset count.
@@ -106,11 +125,17 @@ func test_compliant_rider_finishes_every_session(p: Variant = use_parameters(S.W
 	assert_eq(warmup, [] as Array[String], "%s: warm-up limits\n%s" % [content, first(warmup)])
 	assert_false(plan.is_empty(), "%s: the rider's validated plan is in the report" % content)
 	assert_eq(caps, [] as Array[String], "%s: BRIEF 4.6.1 caps\n%s" % [content, first(caps)])
-	assert_eq(latched, [] as Array[String], "%s: a 4.6.1 duration limit latched\n%s" % [content, first(latched)])
+	assert_eq(
+		latched,
+		[] as Array[String],
+		"%s: a 4.6.1 duration limit latched\n%s" % [content, first(latched)]
+	)
 	assert_lt(max_105, LIMIT_105_S, "%s: time above 105 %% FTP stays under 300 s" % content)
 	assert_lt(max_120, LIMIT_120_S, "%s: time above 120 %% FTP stays under 60 s" % content)
 	if content == "vo2":
-		assert_gt(max_105, 150.0, "vo2 really rides its 110 % intervals (a 180 s block above 105 %)")
+		assert_gt(
+			max_105, 150.0, "vo2 really rides its 110 % intervals (a 180 s block above 105 %)"
+		)
 
 	var end_reason := runner.run_to_end()
 	assert_eq(end_reason, "complete", "%s ends after its cool-down" % content)

@@ -27,9 +27,10 @@ extends Node
 ##   local_intents. The `action` signal (and EventBus.action_pressed, take_actions()) never
 ##   carries an action made from a gesture: a surge never also arrives as `confirm`, a coast
 ##   never as `back`, a stop_5s never as `pause`. Screens that feed both the `action` and the
-##   `gesture` signal to one PedalScanList (the app shell) therefore get each pick once. Menus (PedalScanList, app screens) listen to `menu_input`, which maps
-##   surge -> confirm (via "surge"), coast -> back (via "coast", never in ERG) and
-##   stop_5s -> pause (via "stop_5s", solo and outside ERG only).
+##   `gesture` signal to one PedalScanList (the app shell) therefore get each pick once.
+##   Menus (PedalScanList, app screens) listen to `menu_input`, which maps surge -> confirm
+##   (via "surge"), coast -> back (via "coast", never in ERG) and stop_5s -> pause
+##   (via "stop_5s", solo and outside ERG only).
 ## - The GameHost drains take_actions() and take_gestures() each tick and must filter `pause`
 ##   and `panic` out before calling GameModule.local_intents (they are platform actions,
 ##   PLATFORM_ACTIONS).
@@ -307,6 +308,7 @@ func load_bindings() -> void:
 
 
 # --- internals ---------------------------------------------------------------------------
+
 
 func _on_press(a: StringName, src: String) -> void:
 	if a == &"panic":

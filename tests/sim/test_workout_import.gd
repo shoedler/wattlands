@@ -1,4 +1,3 @@
-# gdlint: disable=max-public-methods
 extends GutTest
 ## ZwoImport.parse_zwo (BRIEF 3.7, 4.6.1, 4.6.8): every supported tag, IntervalsT
 ## expansion, FreeRide as SIM, unsupported tags skipped with warnings, the warm-up prefix,
@@ -262,8 +261,7 @@ func test_warmup_clamps_inside_the_first_300_s() -> void:
 	_assert_erg(ph[2], Wl.WORK, 95.0, 95.0, 420.0, false, "SteadyState part after 300 s")
 	_assert_erg(ph[3], Wl.RECOVERY, 50.0, 50.0, 240.0, true, "recovery")
 	assert_eq(
-		_rules(r),
-		[ZwoImport.RULE_WARMUP, ZwoImport.RULE_WARMUP_SPLIT, ZwoImport.RULE_WARMUP]
+		_rules(r), [ZwoImport.RULE_WARMUP, ZwoImport.RULE_WARMUP_SPLIT, ZwoImport.RULE_WARMUP]
 	)
 	var recs: Array = r["clamp_records"]
 	assert_eq(recs[0]["phase"], 0)
@@ -733,8 +731,7 @@ func test_split_block_keeps_the_long_phase_cap() -> void:
 	_assert_erg(ph[0], Wl.WARMUP, 30.0, 65.0, 300.0, true, "inside the warm-up")
 	_assert_erg(ph[1], Wl.WARMUP, 75.0, 105.0, 300.0, false, "the block's second half")
 	assert_eq(
-		_rules(r),
-		[ZwoImport.RULE_WARMUP_SPLIT, ZwoImport.RULE_WARMUP, ZwoImport.RULE_LONG_PHASE]
+		_rules(r), [ZwoImport.RULE_WARMUP_SPLIT, ZwoImport.RULE_WARMUP, ZwoImport.RULE_LONG_PHASE]
 	)
 	var rec: Dictionary = (r["clamp_records"] as Array)[2]
 	assert_eq(rec["phase"], 1)

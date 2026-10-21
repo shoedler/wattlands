@@ -43,7 +43,7 @@ func test_no_arguments_is_a_usage_error() -> void:
 func test_unknown_option_is_a_usage_error() -> void:
 	var r := QaFitDecoder.run_cli(PackedStringArray(["--frobnicate", "x.fit"]))
 	assert_eq(r["code"], 2)
-	assert_string_contains("\n".join(r["err"]), "unknown option \"--frobnicate\"")
+	assert_string_contains("\n".join(r["err"]), 'unknown option "--frobnicate"')
 
 
 func test_bad_expect_laps_is_a_usage_error() -> void:
@@ -59,7 +59,9 @@ func test_help() -> void:
 
 func test_one_good_file_text_output() -> void:
 	var dir := _temp()
-	var p := _write(dir.path_join("ride.fit"), QaFitWriter.activity({"records": 90, "laps": [30, 60]}))
+	var p := _write(
+		dir.path_join("ride.fit"), QaFitWriter.activity({"records": 90, "laps": [30, 60]})
+	)
 	var r := QaFitDecoder.run_cli(PackedStringArray([p]))
 	assert_eq(r["code"], 0)
 	var text := "\n".join(r["out"])
@@ -90,7 +92,19 @@ func test_json_output_schema() -> void:
 	assert_eq((f["laps"] as Array).size(), 2)
 	for key: String in ["start_s", "duration_s", "work_kj", "avg_power_w"]:
 		assert_true(((f["laps"] as Array)[0] as Dictionary).has(key), "lap key %s" % key)
-	for key: String in ["sport", "sub_sport", "elapsed_s", "timer_s", "distance_m", "work_kj", "avg_power_w", "max_power_w", "avg_cadence_rpm", "max_cadence_rpm", "num_laps"]:
+	for key: String in [
+		"sport",
+		"sub_sport",
+		"elapsed_s",
+		"timer_s",
+		"distance_m",
+		"work_kj",
+		"avg_power_w",
+		"max_power_w",
+		"avg_cadence_rpm",
+		"max_cadence_rpm",
+		"num_laps"
+	]:
 		assert_true((f["session"] as Dictionary).has(key), "session key %s" % key)
 
 
@@ -168,7 +182,12 @@ func _contract(args: Array, json_out: String) -> Dictionary:
 func test_fit_check_fallback_contract() -> void:
 	# The shape tools/fit_check/check.mjs reads when @garmin/fitsdk is unavailable.
 	var dir := _temp()
-	var p := _write(dir.path_join("ride.fit"), QaFitWriter.activity({"records": 120, "laps": [60, 60], "power": 150, "start": 1_100_000_000}))
+	var p := _write(
+		dir.path_join("ride.fit"),
+		QaFitWriter.activity(
+			{"records": 120, "laps": [60, 60], "power": 150, "start": 1_100_000_000}
+		)
+	)
 	var j := _contract(["--file=%s" % p], dir.path_join("out/decode.json"))
 	var files: Array = j.get("files", [])
 	assert_eq(files.size(), 1)
@@ -189,7 +208,9 @@ func test_fit_check_fallback_contract() -> void:
 	var laps: Array = f["laps"]
 	assert_eq(laps.size(), 2)
 	var lap1: Dictionary = laps[1]
-	assert_eq(int(lap1["start_time"]), 1_100_000_000 + 60 + QaFitDecoder.FIT_EPOCH_UNIX, "Unix seconds")
+	assert_eq(
+		int(lap1["start_time"]), 1_100_000_000 + 60 + QaFitDecoder.FIT_EPOCH_UNIX, "Unix seconds"
+	)
 	assert_eq(float(lap1["total_elapsed_time"]), 60.0)
 	assert_eq(float(lap1["total_work"]), 9000.0, "joules")
 	assert_eq(float(lap1["avg_power"]), 150.0)
@@ -201,16 +222,25 @@ func test_fit_check_fallback_contract() -> void:
 	assert_eq(float(ses["total_elapsed_time"]), 120.0)
 	assert_eq(float(ses["total_work"]), 18000.0)
 	assert_eq(int(ses["num_laps"]), 2)
-	for key: String in ["total_timer_time", "total_distance", "avg_power", "max_power", "avg_cadence", "max_cadence"]:
+	for key: String in [
+		"total_timer_time", "total_distance", "avg_power", "max_power", "avg_cadence", "max_cadence"
+	]:
 		assert_true(ses.has(key), "session.%s" % key)
 
 
 func test_fit_check_fallback_reports_decode_errors_only() -> void:
 	var dir := _temp()
 	var wrong_sport := _write(dir.path_join("rowing.fit"), QaFitWriter.activity({"sport": 15}))
-	var bad_crc := _write(dir.path_join("bad.fit"), QaFitWriter.activity_writer().to_bytes({"bad_file_crc": true}))
-	var not_fit := _write(dir.path_join("text.fit"), "hello, this is not a FIT file at all".to_utf8_buffer())
-	var j := _contract(["--file=%s" % wrong_sport, "--file=%s" % bad_crc, "--file=%s" % not_fit], dir.path_join("decode.json"))
+	var bad_crc := _write(
+		dir.path_join("bad.fit"), QaFitWriter.activity_writer().to_bytes({"bad_file_crc": true})
+	)
+	var not_fit := _write(
+		dir.path_join("text.fit"), "hello, this is not a FIT file at all".to_utf8_buffer()
+	)
+	var j := _contract(
+		["--file=%s" % wrong_sport, "--file=%s" % bad_crc, "--file=%s" % not_fit],
+		dir.path_join("decode.json")
+	)
 	var files: Array = j.get("files", [])
 	assert_eq(files.size(), 3)
 	assert_eq((files[0] as Dictionary)["errors"], [], "check.mjs judges the sport itself")
@@ -229,15 +259,43 @@ func _named_lap_file(described_as: String) -> PackedByteArray:
 	w.data(0, [4])
 	if described_as != "":
 		# field_description: developer_data_index, field_definition_number, fit_base_type_id, field_name.
-		w.define(5, QaFitDecoder.MESG_FIELD_DESCRIPTION, [[0, 1, QaFitWriter.UINT8], [1, 1, QaFitWriter.UINT8], [2, 1, QaFitWriter.UINT8], [3, 16, QaFitWriter.STRING]])
+		w.define(
+			5,
+			QaFitDecoder.MESG_FIELD_DESCRIPTION,
+			[
+				[0, 1, QaFitWriter.UINT8],
+				[1, 1, QaFitWriter.UINT8],
+				[2, 1, QaFitWriter.UINT8],
+				[3, 16, QaFitWriter.STRING]
+			]
+		)
 		w.data(5, [1, 3, QaFitWriter.STRING, described_as])
-	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [0, 4, QaFitWriter.SINT32], [7, 2, QaFitWriter.UINT16]])
+	w.define(
+		1,
+		QaFitDecoder.MESG_RECORD,
+		[[253, 4, QaFitWriter.UINT32], [0, 4, QaFitWriter.SINT32], [7, 2, QaFitWriter.UINT16]]
+	)
 	w.data(1, [1_100_000_000, 123456, 100])
-	w.define(2, QaFitDecoder.MESG_LAP, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]], false, [[3, 16, 1]])
+	w.define(
+		2,
+		QaFitDecoder.MESG_LAP,
+		[[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]],
+		false,
+		[[3, 16, 1]]
+	)
 	var name := "Warm-up".to_utf8_buffer()
 	name.resize(16)
 	w.data(2, [1_100_000_001, 1_100_000_000, 1000], name)
-	w.define(3, QaFitDecoder.MESG_SESSION, [[2, 4, QaFitWriter.UINT32], [5, 1, QaFitWriter.ENUM], [6, 1, QaFitWriter.ENUM], [7, 4, QaFitWriter.UINT32]])
+	w.define(
+		3,
+		QaFitDecoder.MESG_SESSION,
+		[
+			[2, 4, QaFitWriter.UINT32],
+			[5, 1, QaFitWriter.ENUM],
+			[6, 1, QaFitWriter.ENUM],
+			[7, 4, QaFitWriter.UINT32]
+		]
+	)
 	w.data(3, [1_100_000_000, 2, 58, 1000])
 	w.define(4, QaFitDecoder.MESG_ACTIVITY, [[1, 2, QaFitWriter.UINT16]])
 	w.data(4, [1])
@@ -247,8 +305,14 @@ func _named_lap_file(described_as: String) -> PackedByteArray:
 func test_lap_names_come_from_the_lap_name_developer_field() -> void:
 	var s := QaFitDecoder.decode_bytes(_named_lap_file("lap_name"))
 	assert_eq(s["errors"], [])
-	assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "Warm-up", "found through its field_description")
-	assert_eq(((QaFitDecoder.rides_contract(s)["laps"] as Array)[0] as Dictionary)["name"], "Warm-up")
+	assert_eq(
+		((s["laps"] as Array)[0] as Dictionary)["name"],
+		"Warm-up",
+		"found through its field_description"
+	)
+	assert_eq(
+		((QaFitDecoder.rides_contract(s)["laps"] as Array)[0] as Dictionary)["name"], "Warm-up"
+	)
 	assert_eq(s["has_gps"], true, "a record with position_lat")
 	assert_eq(QaFitDecoder.rides_contract(s)["has_gps"], true)
 
@@ -258,13 +322,20 @@ func test_an_undescribed_or_other_developer_field_is_no_lap_name() -> void:
 	for described: String in ["", "power_zone"]:
 		var s := QaFitDecoder.decode_bytes(_named_lap_file(described))
 		assert_eq(s["errors"], [], described)
-		assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "", "described as \"%s\"" % described)
+		assert_eq(
+			((s["laps"] as Array)[0] as Dictionary)["name"], "", 'described as "%s"' % described
+		)
 
 
 func test_relative_paths_resolve_against_the_project_root() -> void:
 	var root := ProjectSettings.globalize_path("res://").replace("\\", "/")
-	assert_eq(QaFitDecoder.resolve_path("build/x.fit"), root.path_join("build/x.fit").simplify_path())
-	assert_eq(QaFitDecoder.resolve_path("res://build/x.fit"), root.path_join("build/x.fit").simplify_path())
+	assert_eq(
+		QaFitDecoder.resolve_path("build/x.fit"), root.path_join("build/x.fit").simplify_path()
+	)
+	assert_eq(
+		QaFitDecoder.resolve_path("res://build/x.fit"),
+		root.path_join("build/x.fit").simplify_path()
+	)
 	assert_eq(QaFitDecoder.resolve_path("C:\\rides\\a.fit"), "C:/rides/a.fit")
 
 

@@ -86,7 +86,9 @@ func test_the_write_slot_carries() -> void:
 	_run(c, 1.0)
 	var later := _dev.writes.slice(1)
 	assert_eq(later.size(), 1)
-	assert_almost_eq(float(later[0]["t"]) - t_write, 0.5, DT * 0.5, "the first write waits for the old slot")
+	assert_almost_eq(
+		float(later[0]["t"]) - t_write, 0.5, DT * 0.5, "the first write waits for the old slot"
+	)
 
 
 func test_a_panic_hold_or_a_stop_carries_safely() -> void:
@@ -99,7 +101,11 @@ func test_a_panic_hold_or_a_stop_carries_safely() -> void:
 	assert_false(c.is_safe(), "the hold itself belongs to the old governor")
 	c.command_erg(200, 60, 200.0)
 	_run(c, 1.0)
-	assert_eq(int(_dev.writes_of("erg", _dev.t - 1.0)[0]["w"]), 60, "the next ERG entry is the floor, as after a resume")
+	assert_eq(
+		int(_dev.writes_of("erg", _dev.t - 1.0)[0]["w"]),
+		60,
+		"the next ERG entry is the floor, as after a resume"
+	)
 	var d := _new()
 	_old.shutdown(0.004, 0.51)
 	d.adopt(_old)

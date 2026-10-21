@@ -72,9 +72,18 @@ func set_phase(phase: PhaseState, plan: EffortPlan) -> void:
 	var progress := 0.0
 	if plan != null and plan.size() > 0:
 		for pp in plan.phases:
-			blocks.append({"len": block_length(pp), "kind": pp.kind, "mode": pp.mode, "pct": pp.peak_pct()})
+			blocks.append(
+				{"len": block_length(pp), "kind": pp.kind, "mode": pp.mode, "pct": pp.peak_pct()}
+			)
 	else:
-		blocks.append({"len": maxf(1.0, phase.duration_s), "kind": phase.kind, "mode": phase.mode, "pct": phase.planned_pct})
+		blocks.append(
+			{
+				"len": maxf(1.0, phase.duration_s),
+				"kind": phase.kind,
+				"mode": phase.mode,
+				"pct": phase.planned_pct
+			}
+		)
 	var cur := clampi(phase.index, 0, blocks.size() - 1) if plan != null else 0
 	var cur_len := float(blocks[cur]["len"])
 	if cur_len > 0.0:

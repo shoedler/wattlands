@@ -95,7 +95,10 @@ const PROFILE_KEYS: Dictionary = {
 	"surge": ["every_s", "for_s", "lift", "sim_pct"],
 }
 const REQUIRED_KEYS: Dictionary = {
-	"const": ["w"], "ramp": ["from_w", "to_w", "over_s"], "intervals": ["on_w", "off_w"], "cadence_drop": ["rpm"],
+	"const": ["w"],
+	"ramp": ["from_w", "to_w", "over_s"],
+	"intervals": ["on_w", "off_w"],
+	"cadence_drop": ["rpm"],
 }
 ## Profiles that script power directly; the first one in the spec wins over `erg`.
 const SCRIPTED_POWER: Array[String] = ["zero", "const", "ramp", "intervals"]
@@ -276,7 +279,9 @@ func _init() -> void:
 ## options: {cp_w, wprime_j, preferred_cadence_rpm, weight_kg, max_power_w, seed,
 ## dropouts (bool, or a per-notification chance 0..1), keyboard (bool)}. An invalid spec
 ## push_errors and falls back to "erg".
-static func from_spec(p_spec: String, p_ftp_w: float = 200.0, p_options: Dictionary = {}) -> MockTrainer:
+static func from_spec(
+	p_spec: String, p_ftp_w: float = 200.0, p_options: Dictionary = {}
+) -> MockTrainer:
 	var m := MockTrainer.new()
 	var used := p_spec
 	var comps := parse_spec(p_spec)
@@ -304,23 +309,23 @@ static func parse_spec(p_spec: String) -> Array:
 			for pair: String in comp.substr(colon + 1).split(","):
 				var eq := pair.find("=")
 				if eq < 0:
-					return _spec_error(p_spec, "\"%s\" is not key=value" % pair.strip_edges())
+					return _spec_error(p_spec, '"%s" is not key=value' % pair.strip_edges())
 				var key := pair.substr(0, eq).strip_edges().to_lower()
 				var raw := pair.substr(eq + 1).strip_edges()
 				if key == "" or not raw.is_valid_float():
-					return _spec_error(p_spec, "bad value in \"%s\"" % pair.strip_edges())
+					return _spec_error(p_spec, 'bad value in "%s"' % pair.strip_edges())
 				if params.has(key):
-					return _spec_error(p_spec, "key \"%s\" given twice" % key)
+					return _spec_error(p_spec, 'key "%s" given twice' % key)
 				params[key] = float(raw)
 		pname = pname.to_lower()
 		if pname == "":
 			return _spec_error(p_spec, "empty profile name")
 		if not PROFILE_KEYS.has(pname):
-			return _spec_error(p_spec, "unknown profile \"%s\"" % pname)
+			return _spec_error(p_spec, 'unknown profile "%s"' % pname)
 		var allowed: Array = PROFILE_KEYS[pname]
 		for key: String in params.keys():
 			if not allowed.has(key):
-				return _spec_error(p_spec, "unknown key \"%s\" for %s" % [key, pname])
+				return _spec_error(p_spec, 'unknown key "%s" for %s' % [key, pname])
 			var why := _check_param(key, float(params[key]))
 			if why != "":
 				return _spec_error(p_spec, why)
@@ -444,19 +449,34 @@ func tick(dt: float) -> void:
 
 # --- Added in W1 ----------------------------------------------------------------------
 
+
 ## Every profile for docs and tool help: {name: {"keys": [...], "required": [...],
 ## "defaults": {key: value}, "summary": String}}, in PROFILE_KEYS order.
 static func describe_profiles() -> Dictionary:
 	var summaries := {
-		"erg": "ERG follower: compliance x the applied target (tau ~2 s); in SIM compliance x the power band's centre, else 90% FTP",
+		"erg":
+		"ERG follower: compliance x the applied target (tau ~2 s); in SIM compliance x the power band's centre, else 90% FTP",
 		"zero": "0 W and 0 rpm from t = 0",
 		"const": "constant power w at rpm (default: the preferred cadence)",
 		"ramp": "power from from_w to to_w over over_s, then to_w",
 		"intervals": "on_w for on_s, then off_w for off_s, repeating from t = 0",
 		"noise": "seeded Gaussian noise (sd_w, sd_rpm) on each sample while pedaling",
-		"band": "cadence follows the published cadence band's centre + offset_rpm (2 s lag, noise within +-1.5 rpm); no band: the preferred cadence",
-		"cadence_drop": "cadence held at rpm from at_s, or after_s into phase at_phase, or once the applied ERG target reaches at_target_pct % FTP; for for_s (default: the rest of the run); rpm 0 stops the rider",
-		"surge": "every every_s, cadence and speed x (1 + lift) for for_s and at least two notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM",
+		"band":
+		(
+			"cadence follows the published cadence band's centre + offset_rpm (2 s lag, noise "
+			+ "within +-1.5 rpm); no band: the preferred cadence"
+		),
+		"cadence_drop":
+		(
+			"cadence held at rpm from at_s, or after_s into phase at_phase, or once the applied "
+			+ "ERG target reaches at_target_pct % FTP; for for_s (default: the rest of the run); "
+			+ "rpm 0 stops the rider"
+		),
+		"surge":
+		(
+			"every every_s, cadence and speed x (1 + lift) for for_s and at least two "
+			+ "notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM"
+		),
 	}
 	var defaults := {
 		"erg": {"compliance": 1.0},
@@ -581,6 +601,7 @@ func restart_profile() -> void:
 
 # --- Configuration --------------------------------------------------------------------
 
+
 func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionary) -> void:
 	spec = p_spec
 	_components = comps
@@ -637,7 +658,9 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 				if _sim_pct < 0.0 and p.has("sim_pct"):
 					_sim_pct = float(p["sim_pct"])
 	var cp := float(options.get("cp_w", _ftp_w))
-	_wbal = WBalance.create(maxf(cp, 1.0), maxf(float(options.get("wprime_j", DEFAULT_WPRIME_J)), 1.0))
+	_wbal = WBalance.create(
+		maxf(cp, 1.0), maxf(float(options.get("wprime_j", DEFAULT_WPRIME_J)), 1.0)
+	)
 	_exhausted = false
 	_speed_model = SpeedModel.create(float(options.get("weight_kg", DEFAULT_WEIGHT_KG)))
 	var dropouts: Variant = options.get("dropouts", false)
@@ -658,6 +681,7 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 
 # --- Rider model ----------------------------------------------------------------------
 
+
 ## One fixed step of the rider model (h <= Wl.SIM_DT platform seconds).
 func _step(h: float) -> void:
 	_t += h
@@ -665,7 +689,9 @@ func _step(h: float) -> void:
 	_update_surges()
 	var drop_rpm := _active_drop_rpm()
 	var follower := _scripted_power.is_empty()
-	var goal := _follower_goal_w() if follower else _scripted_power_w(_scripted_power, profile_time_s())
+	var goal := (
+		_follower_goal_w() if follower else _scripted_power_w(_scripted_power, profile_time_s())
+	)
 	if _kb_power_offset_w != 0.0:
 		goal = maxf(goal + _kb_power_offset_w, 0.0)
 	if drop_rpm >= 0.0 and drop_rpm < 1.0:
@@ -676,7 +702,9 @@ func _step(h: float) -> void:
 		_power_rate = 0.0
 	elif follower:
 		var g := minf(goal, _fatigue_cap_w())
-		var accel := ERG_OMEGA * ERG_OMEGA * (g - _power_w) - 2.0 * ERG_DAMPING * ERG_OMEGA * _power_rate
+		var accel := (
+			ERG_OMEGA * ERG_OMEGA * (g - _power_w) - 2.0 * ERG_DAMPING * ERG_OMEGA * _power_rate
+		)
 		_power_rate += h * accel
 		_power_w = maxf(_power_w + h * _power_rate, 0.0)
 	else:
@@ -772,7 +800,9 @@ func _cadence_now(pedaling: bool, drop_rpm: float, h: float) -> float:
 		else:
 			_band_cadence += (target - _band_cadence) * (1.0 - exp(-h / BAND_LAG_S))
 		var decay := exp(-h / BAND_NOISE_TAU_S)
-		var kick := BAND_NOISE_SD_RPM * sqrt(1.0 - decay * decay) * SeededRng.normal(_band_rng, 0.0, 1.0)
+		var kick := (
+			BAND_NOISE_SD_RPM * sqrt(1.0 - decay * decay) * SeededRng.normal(_band_rng, 0.0, 1.0)
+		)
 		_band_noise = clampf(_band_noise * decay + kick, -BAND_NOISE_MAX_RPM, BAND_NOISE_MAX_RPM)
 		c = _band_cadence + _band_noise
 	else:
@@ -791,8 +821,14 @@ func _cadence_now(pedaling: bool, drop_rpm: float, h: float) -> float:
 func _update_reported_cadence(pedaling: bool, h: float) -> void:
 	if not pedaling:
 		_reported_cadence_rpm = 0.0
-	elif not _sprinting and _since_sprint_s < SPRINT_LAG_WINDOW_S and _cadence_rpm < _reported_cadence_rpm:
-		_reported_cadence_rpm += (_cadence_rpm - _reported_cadence_rpm) * (1.0 - exp(-h / CADENCE_LAG_TAU_S))
+	elif (
+		not _sprinting
+		and _since_sprint_s < SPRINT_LAG_WINDOW_S
+		and _cadence_rpm < _reported_cadence_rpm
+	):
+		_reported_cadence_rpm += (
+			(_cadence_rpm - _reported_cadence_rpm) * (1.0 - exp(-h / CADENCE_LAG_TAU_S))
+		)
 	else:
 		_reported_cadence_rpm = _cadence_rpm
 
@@ -817,7 +853,9 @@ func _update_drops() -> void:
 					d.start_t = _t
 			elif d.at_phase < 0 or _phase_index == d.at_phase:
 				if d.at_target_pct > 0.0:
-					var reached := float(commanded_target_w) + 1e-6 >= d.at_target_pct * _ftp_w / 100.0
+					var reached := (
+						float(commanded_target_w) + 1e-6 >= d.at_target_pct * _ftp_w / 100.0
+					)
 					if commanded_mode == Wl.ERG and reached:
 						d.state = _DROP_COUNTING
 						d.trigger_t = _t
@@ -895,7 +933,9 @@ func _emit_sample() -> void:
 	if _has_noise and _power_w > 0.0:
 		p = maxf(p + SeededRng.normal(_noise_rng, 0.0, _noise_sd_w), 0.0)
 		c = maxf(c + SeededRng.normal(_noise_rng, 0.0, _noise_sd_rpm), 0.0)
-	var s := TrainerSample.make(_t, roundf(p), roundf(c * 2.0) / 2.0, roundf(_speed_kmh * 100.0) / 100.0)
+	var s := TrainerSample.make(
+		_t, roundf(p), roundf(c * 2.0) / 2.0, roundf(_speed_kmh * 100.0) / 100.0
+	)
 	_last_sample = s
 	_samples_emitted += 1
 	for sg in _surges:
@@ -920,7 +960,9 @@ func _poll_keyboard() -> void:
 	var baseline := _kb_baseline
 	_kb_baseline = false
 	for k: Key in KEYBOARD_KEYS:
-		var down: bool = bool(key_reader.call(k)) if key_reader.is_valid() else Input.is_physical_key_pressed(k)
+		var down: bool = (
+			bool(key_reader.call(k)) if key_reader.is_valid() else Input.is_physical_key_pressed(k)
+		)
 		if down and not baseline and not bool(_kb_down.get(k, false)):
 			match k:
 				KEY_W:
@@ -982,7 +1024,10 @@ static func _check_component(pname: String, params: Dictionary) -> String:
 		var by_time := params.has("at_s")
 		if not by_time and not params.has("at_phase") and not params.has("at_target_pct"):
 			return "cadence_drop needs at_s, at_phase or at_target_pct"
-		if by_time and (params.has("at_phase") or params.has("at_target_pct") or params.has("after_s")):
+		if (
+			by_time
+			and (params.has("at_phase") or params.has("at_target_pct") or params.has("after_s"))
+		):
 			return "cadence_drop: at_s excludes at_phase, at_target_pct and after_s"
 	if pname == "surge":
 		if float(params.get("for_s", SURGE_FOR_S)) >= float(params.get("every_s", SURGE_EVERY_S)):
@@ -991,5 +1036,5 @@ static func _check_component(pname: String, params: Dictionary) -> String:
 
 
 static func _spec_error(p_spec: String, why: String) -> Array:
-	push_error("MockTrainer: invalid profile spec \"%s\": %s" % [p_spec, why])
+	push_error('MockTrainer: invalid profile spec "%s": %s' % [p_spec, why])
 	return []

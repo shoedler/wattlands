@@ -43,7 +43,9 @@ func poll() -> void:
 		peers.append(ws)
 	for ws: WebSocketPeer in peers:
 		ws.poll()
-		while ws.get_ready_state() == WebSocketPeer.STATE_OPEN and ws.get_available_packet_count() > 0:
+		while (
+			ws.get_ready_state() == WebSocketPeer.STATE_OPEN and ws.get_available_packet_count() > 0
+		):
 			var parsed: Variant = JSON.parse_string(ws.get_packet().get_string_from_utf8())
 			if not (parsed is Dictionary):
 				continue

@@ -9,8 +9,11 @@ func test_rules_in_precedence_order() -> void:
 	rig.start([erg(Wl.WORK, 200.0, 400.0)])
 	rig.run(20.0)
 	assert_eq(rig.applied_w(), 130)
-	assert_eq(rig.s()["clamped_by"], [Wl.CLAMP_UNVERIFIED, Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_WARMUP],
-		"200% x 0.85 = 340 -> ceiling 300 -> long phase 210 -> warm-up 130")
+	assert_eq(
+		rig.s()["clamped_by"],
+		[Wl.CLAMP_UNVERIFIED, Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_WARMUP],
+		"200% x 0.85 = 340 -> ceiling 300 -> long phase 210 -> warm-up 130"
+	)
 
 
 func test_target_exactly_at_the_ceiling_is_not_clamped() -> void:
@@ -21,7 +24,9 @@ func test_target_exactly_at_the_ceiling_is_not_clamped() -> void:
 		rig.run(20.0)
 		assert_eq(rig.applied_w(), int(c[1]), "%s%%" % c[0])
 		var cb: Array = rig.s()["clamped_by"]
-		assert_eq(cb.has(Wl.CLAMP_CEILING), bool(c[2]), "%s%% clamped by the ceiling: %s" % [c[0], c[2]])
+		assert_eq(
+			cb.has(Wl.CLAMP_CEILING), bool(c[2]), "%s%% clamped by the ceiling: %s" % [c[0], c[2]]
+		)
 
 
 func test_floor_rounds_up() -> void:
@@ -43,14 +48,22 @@ func test_record_lists_the_rules_of_its_channel() -> void:
 	var rig := make_rig({"ftp_verified": false, "skip_warmup": false}, follower())
 	rig.start([erg(Wl.WORK, 50.0, 280.0).with_range(50.0, 100.0)])
 	rig.run(10.0)
-	var rec := rig.directive({"mode": "ERG", "target_pct": 100.0, "duration_s": 5.0, "reason": "bank", "source": "tank"})
+	var rec := rig.directive(
+		{"mode": "ERG", "target_pct": 100.0, "duration_s": 5.0, "reason": "bank", "source": "tank"}
+	)
 	assert_false(rec["refused"])
 	assert_eq(rec["reason"], "")
 	assert_eq(int(rec["applied"]["target_w"]), 130)
-	assert_eq(rec["clamped_by"], [Wl.CLAMP_UNVERIFIED, Wl.CLAMP_WARMUP, Wl.CLAMP_SLEW],
-		"x0.85 = 170, warm-up 130, then slewing up from 85 W")
-	assert_eq(rec["requested"], {"mode": "ERG", "target_pct": 100.0, "duration_s": 5.0, "reason": "bank", "source": "tank"},
-		"requested holds exactly the game's keys")
+	assert_eq(
+		rec["clamped_by"],
+		[Wl.CLAMP_UNVERIFIED, Wl.CLAMP_WARMUP, Wl.CLAMP_SLEW],
+		"x0.85 = 170, warm-up 130, then slewing up from 85 W"
+	)
+	assert_eq(
+		rec["requested"],
+		{"mode": "ERG", "target_pct": 100.0, "duration_s": 5.0, "reason": "bank", "source": "tank"},
+		"requested holds exactly the game's keys"
+	)
 	assert_eq(rec["kind"], "request")
 	assert_eq(rig.records.size(), 1, "emitted as directive_applied")
 
@@ -63,16 +76,42 @@ func test_refused_record_shape() -> void:
 	assert_eq(rec["reason"], Wl.REFUSE_RANGE)
 	assert_eq((rec["clamped_by"] as Array).size(), 0)
 	assert_eq(rec["applied"], {})
-	for key: String in ["id", "kind", "requested", "applied", "clamped_by", "refused", "reason", "t", "dropped", "game_t", "phase_index"]:
+	for key: String in [
+		"id",
+		"kind",
+		"requested",
+		"applied",
+		"clamped_by",
+		"refused",
+		"reason",
+		"t",
+		"dropped",
+		"game_t",
+		"phase_index"
+	]:
 		assert_true(rec.has(key), "record has %s" % key)
 
 
 func test_distinct_names() -> void:
 	var names: Array[String] = [
-		Wl.CLAMP_UNVERIFIED, Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_LIMIT_105, Wl.CLAMP_LIMIT_120,
-		Wl.CLAMP_WARMUP, Wl.CLAMP_FLOOR, Wl.CLAMP_RESCUE, Wl.CLAMP_COASTING, Wl.CLAMP_SLEW, Wl.CLAMP_SWITCH,
-		Wl.CLAMP_PANIC, Wl.CLAMP_GRADE_RANGE, Wl.CLAMP_GRADE_LIMIT, Wl.CLAMP_HAPTIC, Wl.CLAMP_HAPTIC_INTENSITY,
-		Wl.CLAMP_FACTOR, Wl.CLAMP_PAUSE,
+		Wl.CLAMP_UNVERIFIED,
+		Wl.CLAMP_CEILING,
+		Wl.CLAMP_LONG_PHASE,
+		Wl.CLAMP_LIMIT_105,
+		Wl.CLAMP_LIMIT_120,
+		Wl.CLAMP_WARMUP,
+		Wl.CLAMP_FLOOR,
+		Wl.CLAMP_RESCUE,
+		Wl.CLAMP_COASTING,
+		Wl.CLAMP_SLEW,
+		Wl.CLAMP_SWITCH,
+		Wl.CLAMP_PANIC,
+		Wl.CLAMP_GRADE_RANGE,
+		Wl.CLAMP_GRADE_LIMIT,
+		Wl.CLAMP_HAPTIC,
+		Wl.CLAMP_HAPTIC_INTENSITY,
+		Wl.CLAMP_FACTOR,
+		Wl.CLAMP_PAUSE,
 	]
 	var seen := {}
 	for n in names:

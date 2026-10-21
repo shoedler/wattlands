@@ -32,7 +32,11 @@ func _on_leave() -> void:
 
 func reload() -> void:
 	rides = services.rides.rides() if services.rides != null else []
-	status_label.text = t("APP_RIDES_NONE") if rides.is_empty() else (t("APP_RIDES_HINT") if strava_connected() else t("APP_RESULTS_STRAVA_OFF"))
+	status_label.text = (
+		t("APP_RIDES_NONE")
+		if rides.is_empty()
+		else (t("APP_RIDES_HINT") if strava_connected() else t("APP_RESULTS_STRAVA_OFF"))
+	)
 
 
 func strava_connected() -> bool:

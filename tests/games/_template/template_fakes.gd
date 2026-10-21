@@ -98,8 +98,14 @@ static func option_defaults(entries: Variant) -> Dictionary:
 
 
 ## A context like the GameHost builds: humans 1..n (1 is the host), then bots -1..-m.
-static func make_ctx(humans: int = 1, bots: int = 0, content_id: String = "default",
-		role: String = Wl.SOLO, local_peer: int = 1, rng_seed: int = 7) -> GameContext:
+static func make_ctx(
+	humans: int = 1,
+	bots: int = 0,
+	content_id: String = "default",
+	role: String = Wl.SOLO,
+	local_peer: int = 1,
+	rng_seed: int = 7
+) -> GameContext:
 	var m := manifest()
 	var ctx := GameContext.new()
 	ctx.game_id = GAME_ID
@@ -170,8 +176,13 @@ static func phase_at(plan: EffortPlan, t: float) -> PhaseState:
 
 ## One InputFrame: every rider rides `power_pct` of its applied target in ERG at 90 rpm.
 ## `intents` maps peer -> Array of intents for this frame.
-static func frame(ctx: GameContext, plans: Dictionary, tick: int, power_pct: float = 100.0,
-		intents: Dictionary = {}) -> InputFrame:
+static func frame(
+	ctx: GameContext,
+	plans: Dictionary,
+	tick: int,
+	power_pct: float = 100.0,
+	intents: Dictionary = {}
+) -> InputFrame:
 	var f := InputFrame.new()
 	f.tick = tick
 	f.t = tick * Wl.SIM_DT
@@ -203,8 +214,9 @@ static func plans_of(game: GameModule) -> Dictionary:
 
 
 ## Steps `game` from tick `from_tick` for `seconds` of game time; returns the next tick.
-static func run(game: GameModule, plans: Dictionary, from_tick: int, seconds: float,
-		power_pct: float = 100.0) -> int:
+static func run(
+	game: GameModule, plans: Dictionary, from_tick: int, seconds: float, power_pct: float = 100.0
+) -> int:
 	var tick := from_tick
 	for _i in roundi(seconds / Wl.SIM_DT):
 		game.sim_step(Wl.SIM_DT, frame(game.ctx, plans, tick, power_pct))

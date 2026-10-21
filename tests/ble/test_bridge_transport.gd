@@ -26,9 +26,17 @@ func before_each() -> void:
 	_t.manual_poll = true
 	_t.url = _server.url()
 	add_child_autofree(_t)
-	for sig: String in ["adapter_ready", "device_found", "device_connected", "device_disconnected",
-			"services_discovered", "characteristic_read", "characteristic_written",
-			"characteristic_notified", "operation_failed"]:
+	for sig: String in [
+		"adapter_ready",
+		"device_found",
+		"device_connected",
+		"device_disconnected",
+		"services_discovered",
+		"characteristic_read",
+		"characteristic_written",
+		"characteristic_notified",
+		"operation_failed"
+	]:
 		_t.connect(sig, _recorder(sig))
 
 
@@ -75,7 +83,9 @@ func _pump(rounds: int = 25) -> void:
 
 func _ready_bridge() -> void:
 	_t.initialize()
-	assert_true(_pump_until(func() -> bool: return _named("adapter_ready").size() > 0), "bridge answered")
+	assert_true(
+		_pump_until(func() -> bool: return _named("adapter_ready").size() > 0), "bridge answered"
+	)
 
 
 func _connected() -> void:
@@ -86,6 +96,7 @@ func _connected() -> void:
 
 
 # --- startup -----------------------------------------------------------------------------
+
 
 func test_initialize_says_hello_then_init() -> void:
 	assert_false(_t.is_available())
@@ -177,23 +188,32 @@ func test_bad_messages_are_ignored_with_a_warning() -> void:
 	_ready_bridge()
 	_t.handle_message("not json")
 	_t.handle_message("[1, 2]")
-	_t.handle_message("{\"x\": 1}")
+	_t.handle_message('{"x": 1}')
 	assert_push_warning_count(3)
 	assert_true(_t.is_available())
 
 
 # --- scanning and connecting ---------------------------------------------------------------
 
+
 func test_scan_events_become_device_found() -> void:
 	_server.devices = [
-		{"address": ADDR, "name": "KICKR CORE 2B7E", "rssi": -58, "services": ["00001826-0000-1000-8000-00805F9B34FB"]},
+		{
+			"address": ADDR,
+			"name": "KICKR CORE 2B7E",
+			"rssi": -58,
+			"services": ["00001826-0000-1000-8000-00805F9B34FB"]
+		},
 		{"address": "11:22:33:44:55:66", "name": null, "rssi": null, "services": []},
 	]
 	_ready_bridge()
 	_t.start_scan(5.0)
 	assert_true(_pump_until(func() -> bool: return _named("device_found").size() == 2))
 	assert_eq(float(_server.last("scan")["seconds"]), 5.0)
-	assert_eq(_named("device_found")[0][1], {"address": ADDR, "name": "KICKR CORE 2B7E", "rssi": -58, "services": [FTMS]})
+	assert_eq(
+		_named("device_found")[0][1],
+		{"address": ADDR, "name": "KICKR CORE 2B7E", "rssi": -58, "services": [FTMS]}
+	)
 	assert_eq(_named("device_found")[1][1]["name"], "")
 	_t.stop_scan()
 	assert_true(_pump_until(func() -> bool: return _server.ops().has("stop_scan")))
@@ -249,7 +269,9 @@ func test_connect_timeout_asks_the_bridge_to_release_a_late_link() -> void:
 	assert_true(_pump_until(func() -> bool: return _server.ops().has("connect")))
 	_t.tick(BridgeTransport.CONNECT_REQUEST_TIMEOUT_S + 0.1)
 	assert_eq(_named("operation_failed"), [["operation_failed", "connect", "timeout"]])
-	assert_true(_pump_until(func() -> bool: return _server.ops().has("disconnect")), "release requested")
+	assert_true(
+		_pump_until(func() -> bool: return _server.ops().has("disconnect")), "release requested"
+	)
 	_server.reply(int(_server.last("connect")["id"]), true, {"address": ADDR, "name": "KICKR CORE"})
 	_pump(15)
 	assert_eq(_named("device_connected").size(), 0, "the late answer is ignored")
@@ -276,12 +298,19 @@ func test_remote_disconnect_event() -> void:
 
 # --- GATT ----------------------------------------------------------------------------------
 
+
 func test_discover_read_subscribe_notify() -> void:
-	_server.services = [{"uuid": "00001826-0000-1000-8000-00805F9B34FB", "characteristics": [
-		{"uuid": "2ACC", "properties": ["read"]},
-		{"uuid": "2AD2", "properties": ["notify"]},
-		{"uuid": "2AD9", "properties": ["write", "indicate"]},
-	]}]
+	_server.services = [
+		{
+			"uuid": "00001826-0000-1000-8000-00805F9B34FB",
+			"characteristics":
+			[
+				{"uuid": "2ACC", "properties": ["read"]},
+				{"uuid": "2AD2", "properties": ["notify"]},
+				{"uuid": "2AD9", "properties": ["write", "indicate"]},
+			]
+		}
+	]
 	_server.read_values = {FEATURE: "0b40000006e00000"}
 	_connected()
 	_t.discover_services()
@@ -293,15 +322,33 @@ func test_discover_read_subscribe_notify() -> void:
 	assert_true(_pump_until(func() -> bool: return _named("characteristic_read").size() == 1))
 	assert_eq(_server.last("read")["service"], FTMS)
 	assert_eq(_server.last("read")["char"], FEATURE)
-	assert_eq(_named("characteristic_read")[0], ["characteristic_read", FEATURE,
-		PackedByteArray([0x0b, 0x40, 0x00, 0x00, 0x06, 0xe0, 0x00, 0x00])])
+	assert_eq(
+		_named("characteristic_read")[0],
+		[
+			"characteristic_read",
+			FEATURE,
+			PackedByteArray([0x0b, 0x40, 0x00, 0x00, 0x06, 0xe0, 0x00, 0x00])
+		]
+	)
 	_t.subscribe_characteristic("0x1826", "0X2AD2")
 	assert_true(_pump_until(func() -> bool: return _server.ops().has("subscribe")))
 	assert_eq(_server.last("subscribe")["char"], IBD)
-	_server.send({"event": "notify", "char": "00002AD2-0000-1000-8000-00805F9B34FB", "data": "4402c409b4006400"})
+	_server.send(
+		{
+			"event": "notify",
+			"char": "00002AD2-0000-1000-8000-00805F9B34FB",
+			"data": "4402c409b4006400"
+		}
+	)
 	assert_true(_pump_until(func() -> bool: return _named("characteristic_notified").size() == 1))
-	assert_eq(_named("characteristic_notified")[0], ["characteristic_notified", IBD,
-		PackedByteArray([0x44, 0x02, 0xc4, 0x09, 0xb4, 0x00, 0x64, 0x00])])
+	assert_eq(
+		_named("characteristic_notified")[0],
+		[
+			"characteristic_notified",
+			IBD,
+			PackedByteArray([0x44, 0x02, 0xc4, 0x09, 0xb4, 0x00, 0x64, 0x00])
+		]
+	)
 
 
 func test_bad_notification_data_is_dropped() -> void:
@@ -341,13 +388,17 @@ func test_writes_honour_the_hardware_lock() -> void:
 		assert_eq(_named("operation_failed"), [["operation_failed", "write", Locks.HW_MESSAGE]])
 		assert_push_warning(Locks.HW_MESSAGE)
 	else:
-		assert_true(_pump_until(func() -> bool: return _named("characteristic_written").size() == 1))
+		assert_true(
+			_pump_until(func() -> bool: return _named("characteristic_written").size() == 1)
+		)
 		assert_eq(_server.last("write")["data"], "00")
 
 
 func test_write_fields() -> void:
-	assert_eq(BridgeTransport.write_fields("1826", "0x2AD9", PackedByteArray([0x05, 0xc8, 0x00]), true), {
-		"op": "write", "service": FTMS, "char": CP, "data": "05c800", "with_response": true})
+	assert_eq(
+		BridgeTransport.write_fields("1826", "0x2AD9", PackedByteArray([0x05, 0xc8, 0x00]), true),
+		{"op": "write", "service": FTMS, "char": CP, "data": "05c800", "with_response": true}
+	)
 
 
 func test_decode_hex() -> void:
@@ -358,6 +409,7 @@ func test_decode_hex() -> void:
 
 
 # --- the bridge going away -----------------------------------------------------------------
+
 
 func test_bridge_closing_drops_the_link_and_initialize_reopens() -> void:
 	_connected()

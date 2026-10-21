@@ -22,9 +22,15 @@ const ALPHA_THRESHOLD: float = 0.5
 ## Ordered dithering moves each channel by up to half of this (sRGB 0-255 units) before quantizing.
 const DITHER_SPREAD: float = 32.0
 const POINTS: Array[String] = [
-	"top_left", "top_center", "top_right",
-	"center_left", "center", "center_right",
-	"bottom_left", "bottom_center", "bottom_right",
+	"top_left",
+	"top_center",
+	"top_right",
+	"center_left",
+	"center",
+	"center_right",
+	"bottom_left",
+	"bottom_center",
+	"bottom_right",
 ]
 const BACKGROUNDS: Array[String] = ["transparent", "opaque"]
 const DITHERS: Array[String] = ["none", "ordered"]
@@ -71,7 +77,9 @@ class Palette:
 	func nearest(rgb24: int) -> int:
 		if _cache.has(rgb24):
 			return int(_cache[rgb24])
-		var p: Vector3 = ArtPixelate.rgb8_to_oklab((rgb24 >> 16) & 0xff, (rgb24 >> 8) & 0xff, rgb24 & 0xff)
+		var p: Vector3 = ArtPixelate.rgb8_to_oklab(
+			(rgb24 >> 16) & 0xff, (rgb24 >> 8) & 0xff, rgb24 & 0xff
+		)
 		var best: int = 0
 		var best_d: float = INF
 		for i: int in lab.size():
@@ -103,13 +111,13 @@ static func rgb8_to_oklab(r: int, g: int, b: int) -> Vector3:
 	var l: float = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb
 	var m: float = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb
 	var s: float = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb
-	var l_: float = pow(maxf(l, 0.0), 1.0 / 3.0)
-	var m_: float = pow(maxf(m, 0.0), 1.0 / 3.0)
-	var s_: float = pow(maxf(s, 0.0), 1.0 / 3.0)
+	var l_cbrt: float = pow(maxf(l, 0.0), 1.0 / 3.0)
+	var m_cbrt: float = pow(maxf(m, 0.0), 1.0 / 3.0)
+	var s_cbrt: float = pow(maxf(s, 0.0), 1.0 / 3.0)
 	return Vector3(
-		0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-		1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-		0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+		0.2104542553 * l_cbrt + 0.7936177850 * m_cbrt - 0.0040720468 * s_cbrt,
+		1.9779984951 * l_cbrt - 2.4285922050 * m_cbrt + 0.4505937099 * s_cbrt,
+		0.0259040371 * l_cbrt + 0.7827717662 * m_cbrt - 0.8086757660 * s_cbrt
 	)
 
 
@@ -173,7 +181,9 @@ static func trim_rect(img: Image, alpha_min: int = TRIM_ALPHA_MIN) -> Rect2i:
 	return Rect2i(left, top, right - left + 1, bottom - top + 1)
 
 
-static func _row_has(data: PackedByteArray, w: int, y: int, x0: int, x1: int, alpha_min: int) -> bool:
+static func _row_has(
+	data: PackedByteArray, w: int, y: int, x0: int, x1: int, alpha_min: int
+) -> bool:
 	var base: int = y * w * 4 + 3
 	for x: int in range(x0, x1):
 		if data[base + x * 4] >= alpha_min:
@@ -181,7 +191,9 @@ static func _row_has(data: PackedByteArray, w: int, y: int, x0: int, x1: int, al
 	return false
 
 
-static func _col_has(data: PackedByteArray, w: int, x: int, y0: int, y1: int, alpha_min: int) -> bool:
+static func _col_has(
+	data: PackedByteArray, w: int, x: int, y0: int, y1: int, alpha_min: int
+) -> bool:
 	for y: int in range(y0, y1):
 		if data[(y * w + x) * 4 + 3] >= alpha_min:
 			return true
@@ -233,7 +245,10 @@ static func cover_mapping(src: Rect2i, dst: Vector2i) -> Dictionary:
 	var vis: Vector2 = Vector2(dst.x / scale, dst.y / scale)
 	return {
 		"scale": scale,
-		"origin": Vector2(src.position.x + (src.size.x - vis.x) * 0.5, src.position.y + (src.size.y - vis.y) * 0.5),
+		"origin":
+		Vector2(
+			src.position.x + (src.size.x - vis.x) * 0.5, src.position.y + (src.size.y - vis.y) * 0.5
+		),
 		"clip": Rect2(src),
 		"content": Rect2(0, 0, dst.x, dst.y),
 	}
@@ -252,7 +267,9 @@ static func build_tile_strip(img: Image, src: Rect2i, dst: Vector2i, mirror: boo
 	var k: int = 0
 	while x < strip_w:
 		var piece: Image = flipped if (mirror and k % 2 == 1) else seg
-		strip.blit_rect(piece, Rect2i(0, 0, mini(src.size.x, strip_w - x), src.size.y), Vector2i(x, 0))
+		strip.blit_rect(
+			piece, Rect2i(0, 0, mini(src.size.x, strip_w - x), src.size.y), Vector2i(x, 0)
+		)
 		x += src.size.x
 		k += 1
 	return strip
@@ -287,7 +304,9 @@ static func axis_weights(n_out: int, origin: float, step: float, lo: float, hi: 
 ## [origin + (x, y) / scale, origin + (x+1, y+1) / scale) clipped to `clip` (outside counts as
 ## transparent). Returns premultiplied RGBA per pixel: r, g, b in 0-255 sRGB units times alpha, and
 ## alpha in 0-1.
-static func area_resample(img: Image, origin: Vector2, scale: float, clip: Rect2, dst: Vector2i) -> PackedFloat32Array:
+static func area_resample(
+	img: Image, origin: Vector2, scale: float, clip: Rect2, dst: Vector2i
+) -> PackedFloat32Array:
 	var src: Image = _rgba8(img)
 	var sw: int = src.get_width()
 	var sh: int = src.get_height()
@@ -358,7 +377,13 @@ static func area_resample(img: Image, origin: Vector2, scale: float, clip: Rect2
 
 ## Thresholds alpha and quantizes premultiplied pixels to the palette: every output pixel is a
 ## palette color at alpha 255, or (0, 0, 0, 0).
-static func quantize(premult: PackedFloat32Array, size: Vector2i, palette: Palette, dither: String = "none", alpha_threshold: float = ALPHA_THRESHOLD) -> Image:
+static func quantize(
+	premult: PackedFloat32Array,
+	size: Vector2i,
+	palette: Palette,
+	dither: String = "none",
+	alpha_threshold: float = ALPHA_THRESHOLD
+) -> Image:
 	var bytes: PackedByteArray = PackedByteArray()
 	bytes.resize(size.x * size.y * 4)
 	var ordered: bool = dither == "ordered"
@@ -395,7 +420,9 @@ static func process_sprite(raw: Image, spec: Dictionary, palette: Palette) -> Im
 	if bool(spec.get("tile", false)):
 		var strip: Image = build_tile_strip(img, trim, size, bool(spec.get("mirror", false)))
 		var scale: float = float(size.y) / trim.size.y
-		premult = area_resample(strip, Vector2.ZERO, scale, Rect2(0, 0, size.x / scale, trim.size.y), size)
+		premult = area_resample(
+			strip, Vector2.ZERO, scale, Rect2(0, 0, size.x / scale, trim.size.y), size
+		)
 	elif str(spec.get("background", "transparent")) == "opaque":
 		var m: Dictionary = cover_mapping(trim, size)
 		premult = area_resample(img, m["origin"], m["scale"], m["clip"], size)
@@ -423,7 +450,10 @@ static func anchor_point(anchor: Variant, size: Vector2i) -> Vector2:
 
 
 static func _is_int(v: Variant) -> bool:
-	return (typeof(v) == TYPE_INT) or (typeof(v) == TYPE_FLOAT and is_finite(float(v)) and float(v) == floorf(float(v)))
+	return (
+		(typeof(v) == TYPE_INT)
+		or (typeof(v) == TYPE_FLOAT and is_finite(float(v)) and float(v) == floorf(float(v)))
+	)
 
 
 static func _is_id(v: Variant) -> bool:
@@ -448,7 +478,12 @@ static func _is_point(v: Variant, size: Vector2i, allow_coords: bool) -> bool:
 		for n: Variant in a:
 			if typeof(n) != TYPE_INT and typeof(n) != TYPE_FLOAT:
 				return false
-		return float(a[0]) >= 0.0 and float(a[1]) >= 0.0 and float(a[0]) <= size.x and float(a[1]) <= size.y
+		return (
+			float(a[0]) >= 0.0
+			and float(a[1]) >= 0.0
+			and float(a[0]) <= size.x
+			and float(a[1]) <= size.y
+		)
 	return false
 
 
@@ -462,14 +497,16 @@ static func validate_art(data: Variant) -> PackedStringArray:
 	var art: Dictionary = data
 	var palette: Variant = art.get("palette")
 	if typeof(palette) != TYPE_ARRAY or (palette as Array).is_empty():
-		errors.append("palette: expected a non-empty array of \"#rrggbb\" colors")
+		errors.append('palette: expected a non-empty array of "#rrggbb" colors')
 	else:
 		var pal: Array = palette
 		if pal.size() > MAX_PALETTE:
 			errors.append("palette: %d colors, at most %d allowed" % [pal.size(), MAX_PALETTE])
 		for i: int in pal.size():
 			if not is_hex_color(pal[i]):
-				errors.append("palette[%d]: %s is not a \"#rrggbb\" hex color" % [i, JSON.stringify(pal[i])])
+				errors.append(
+					'palette[%d]: %s is not a "#rrggbb" hex color' % [i, JSON.stringify(pal[i])]
+				)
 	if typeof(art.get("style")) != TYPE_STRING or str(art.get("style")).strip_edges().is_empty():
 		errors.append("style: expected a non-empty string")
 	var dither: Variant = art.get("dither", "none")
@@ -488,15 +525,30 @@ static func validate_art(data: Variant) -> PackedStringArray:
 			continue
 		var s: Dictionary = list[i]
 		if not _is_id(s.get("id")):
-			errors.append(where + ".id: expected lower-case letters and digits in words joined by single underscores")
+			(
+				errors
+				. append(
+					(
+						where
+						+ ".id: expected lower-case letters and digits in words joined by single underscores"
+					)
+				)
+			)
 		elif ids.has(s["id"]):
-			errors.append(where + ".id: \"%s\" is used twice" % s["id"])
+			errors.append(where + '.id: "%s" is used twice' % s["id"])
 		else:
 			ids[s["id"]] = true
 			where += " (%s)" % s["id"]
 		var size: Vector2i = Vector2i.ZERO
 		var sz: Variant = s.get("size")
-		if typeof(sz) == TYPE_ARRAY and (sz as Array).size() == 2 and _is_int(sz[0]) and _is_int(sz[1]) and int(sz[0]) >= 1 and int(sz[1]) >= 1:
+		if (
+			typeof(sz) == TYPE_ARRAY
+			and (sz as Array).size() == 2
+			and _is_int(sz[0])
+			and _is_int(sz[1])
+			and int(sz[0]) >= 1
+			and int(sz[1]) >= 1
+		):
 			size = Vector2i(int(sz[0]), int(sz[1]))
 		else:
 			errors.append(where + ".size: expected [width, height] in art pixels, integers >= 1")
@@ -508,7 +560,9 @@ static func validate_art(data: Variant) -> PackedStringArray:
 		if not _is_point(align, size, false):
 			errors.append(where + ".align: expected one of " + ", ".join(POINTS))
 		if not _is_point(s.get("anchor", align), size, true):
-			errors.append(where + ".anchor: expected [x, y] inside the sprite or one of " + ", ".join(POINTS))
+			errors.append(
+				where + ".anchor: expected [x, y] inside the sprite or one of " + ", ".join(POINTS)
+			)
 		var tile: Variant = s.get("tile", false)
 		var mirror: Variant = s.get("mirror", false)
 		if typeof(tile) != TYPE_BOOL:
@@ -526,7 +580,18 @@ static func validate_art(data: Variant) -> PackedStringArray:
 		for name: Variant in (parts as Dictionary).keys():
 			var r: Variant = (parts as Dictionary)[name]
 			if not _is_id(name):
-				errors.append(where + ".parts.%s: part names use lower-case letters, digits and single underscores" % name)
+				(
+					errors
+					. append(
+						(
+							where
+							+ (
+								".parts.%s: part names use lower-case letters, digits and single underscores"
+								% name
+							)
+						)
+					)
+				)
 			if typeof(r) != TYPE_ARRAY or (r as Array).size() != 4:
 				errors.append(where + ".parts.%s: expected [x, y, w, h] integers" % name)
 				continue
@@ -538,8 +603,23 @@ static func validate_art(data: Variant) -> PackedStringArray:
 				errors.append(where + ".parts.%s: expected [x, y, w, h] integers" % name)
 				continue
 			var rect: Rect2i = Rect2i(int(rr[0]), int(rr[1]), int(rr[2]), int(rr[3]))
-			if rect.size.x < 1 or rect.size.y < 1 or rect.position.x < 0 or rect.position.y < 0 or rect.end.x > size.x or rect.end.y > size.y:
-				errors.append(where + ".parts.%s: %s lies outside the %dx%d sprite" % [name, JSON.stringify(r), size.x, size.y])
+			if (
+				rect.size.x < 1
+				or rect.size.y < 1
+				or rect.position.x < 0
+				or rect.position.y < 0
+				or rect.end.x > size.x
+				or rect.end.y > size.y
+			):
+				errors.append(
+					(
+						where
+						+ (
+							".parts.%s: %s lies outside the %dx%d sprite"
+							% [name, JSON.stringify(r), size.x, size.y]
+						)
+					)
+				)
 	return errors
 
 
@@ -589,12 +669,17 @@ static func part_file_name(sprite_id: String, part: String) -> String:
 
 ## The prompt generate.mjs sends for a sprite: the shared style prefix, a space, the sprite prompt.
 static func compose_prompt(art: Dictionary, sprite: Dictionary) -> String:
-	return "%s %s" % [str(art.get("style", "")).strip_edges(), str(sprite.get("prompt", "")).strip_edges()]
+	return (
+		"%s %s"
+		% [str(art.get("style", "")).strip_edges(), str(sprite.get("prompt", "")).strip_edges()]
+	)
 
 
 ## Why the selected manifest entry no longer matches the sprite in art.json (another endpoint,
 ## prompt or background), or an empty array. Pixelate still uses the entry; the caller warns.
-static func selection_mismatches(entry: Dictionary, art: Dictionary, sprite: Dictionary) -> PackedStringArray:
+static func selection_mismatches(
+	entry: Dictionary, art: Dictionary, sprite: Dictionary
+) -> PackedStringArray:
 	var out: PackedStringArray = PackedStringArray()
 	var endpoint: String = str(art.get("endpoint", DEFAULT_ENDPOINT))
 	if entry.has("endpoint") and str(entry["endpoint"]) != endpoint:
@@ -607,13 +692,20 @@ static func selection_mismatches(entry: Dictionary, art: Dictionary, sprite: Dic
 		out.append("it was generated from another prompt than art.json's")
 	var background: String = str(sprite.get("background", "transparent"))
 	if inp.has("background") and str(inp["background"]) != background:
-		out.append("it was generated with background %s, art.json now says %s" % [inp["background"], background])
+		out.append(
+			(
+				"it was generated with background %s, art.json now says %s"
+				% [inp["background"], background]
+			)
+		)
 	return out
 
 
 ## Removes `<sprite id>__<part>.png` files (and their .import) of parts art.json no longer lists, so a
 ## renamed or dropped part leaves no stale, possibly off-palette PNG behind. Returns the removed names.
-static func remove_stale_parts(out_dir: String, sprite_id: String, keep: Array) -> PackedStringArray:
+static func remove_stale_parts(
+	out_dir: String, sprite_id: String, keep: Array
+) -> PackedStringArray:
 	var wanted: Dictionary = {}
 	for name: Variant in keep:
 		wanted[part_file_name(sprite_id, str(name))] = true
@@ -651,7 +743,9 @@ static func apply_import_preset(png_path: String) -> void:
 
 ## The preset as a minimal .import file; Godot fills in uid and dest_files on its next import.
 static func import_file_text() -> String:
-	var lines: PackedStringArray = PackedStringArray(["[remap]", "", "importer=\"texture\"", "type=\"CompressedTexture2D\"", "", "[params]", ""])
+	var lines: PackedStringArray = PackedStringArray(
+		["[remap]", "", 'importer="texture"', 'type="CompressedTexture2D"', "", "[params]", ""]
+	)
 	for k: String in IMPORT_PARAMS.keys():
 		lines.append("%s=%s" % [k, var_to_str(IMPORT_PARAMS[k])])
 	return "\n".join(lines) + "\n"
@@ -721,12 +815,22 @@ static func _num(v: float) -> Variant:
 ## manifest result. Returns {"ok": bool, "written", "skipped", "removed", "errors", "warnings": Array
 ## of String}; paths in "written" and "removed" (stale part files) are relative to root. Fatal problems
 ## push_error; skipped sprites and selected results that no longer match art.json push_warning.
-static func run_game(root: String, game: String, only: PackedStringArray = PackedStringArray()) -> Dictionary:
-	var report: Dictionary = {"ok": true, "written": [], "skipped": [], "removed": [], "errors": [], "warnings": []}
+static func run_game(
+	root: String, game: String, only: PackedStringArray = PackedStringArray()
+) -> Dictionary:
+	var report: Dictionary = {
+		"ok": true, "written": [], "skipped": [], "removed": [], "errors": [], "warnings": []
+	}
 	if import_preset_mode == IMPORT_PROJECT_DEFAULTS:
 		var preset_problems: PackedStringArray = PixelImportPreset.check_project_defaults()
 		if not preset_problems.is_empty():
-			_fail(report, "the pixel import preset relies on project.godot's [importer_defaults] texture: %s" % "; ".join(preset_problems))
+			_fail(
+				report,
+				(
+					"the pixel import preset relies on project.godot's [importer_defaults] texture: %s"
+					% "; ".join(preset_problems)
+				)
+			)
 			return report
 	var base: String = root.replace("\\", "/").trim_suffix("/")
 	var game_dir: String = base.path_join("assets").path_join(game)
@@ -743,7 +847,13 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 	var manifest_path: String = game_dir.path_join("art_manifest.json")
 	var manifest_v: Variant = _read_json(manifest_path)
 	if typeof(manifest_v) != TYPE_DICTIONARY:
-		_fail(report, "%s is missing or not valid JSON: run node tools/art/generate.mjs --game=%s first" % [manifest_path, game])
+		_fail(
+			report,
+			(
+				"%s is missing or not valid JSON: run node tools/art/generate.mjs --game=%s first"
+				% [manifest_path, game]
+			)
+		)
 		return report
 	var selected: Dictionary = selected_entries(manifest_v)
 	var ids: Dictionary = {}
@@ -751,7 +861,7 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 		ids[str((s as Dictionary)["id"])] = true
 	for id: String in only:
 		if not ids.has(id):
-			_fail(report, "--only: art.json has no sprite \"%s\"" % id)
+			_fail(report, '--only: art.json has no sprite "%s"' % id)
 	if not report["ok"]:
 		return report
 	var palette: Palette = make_palette(art["palette"])
@@ -763,14 +873,22 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 		if not only.is_empty() and not only.has(id):
 			continue
 		if not selected.has(id):
-			_warn(report, "%s: no selected result in the manifest; generate it first (skipped)" % id)
+			_warn(
+				report, "%s: no selected result in the manifest; generate it first (skipped)" % id
+			)
 			(report["skipped"] as Array).append(id)
 			continue
 		var entry: Dictionary = selected[id]
 		var raw_rel: String = str(entry.get("cache", ""))
 		var raw_path: String = base.path_join(raw_rel)
 		if raw_rel.is_empty() or not FileAccess.file_exists(raw_path):
-			_fail(report, "%s: the selected result %s has no raw image at %s; run generate.mjs to fetch it again" % [id, entry.get("request_id", "?"), raw_path])
+			_fail(
+				report,
+				(
+					"%s: the selected result %s has no raw image at %s; run generate.mjs to fetch it again"
+					% [id, entry.get("request_id", "?"), raw_path]
+				)
+			)
 			continue
 		var raw: Image = Image.new()
 		if raw.load_png_from_buffer(FileAccess.get_file_as_bytes(raw_path)) != OK:
@@ -778,7 +896,13 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 			continue
 		var mismatches: PackedStringArray = selection_mismatches(entry, art, s)
 		if not mismatches.is_empty():
-			_warn(report, "%s: uses the selected result %s, but %s (run generate.mjs for a matching result, or --select another)" % [id, entry.get("request_id", "?"), "; ".join(mismatches)])
+			_warn(
+				report,
+				(
+					"%s: uses the selected result %s, but %s (run generate.mjs for a matching result, or --select another)"
+					% [id, entry.get("request_id", "?"), "; ".join(mismatches)]
+				)
+			)
 		var sprite: Image = process_sprite(raw, spec, palette)
 		var out_path: String = out_dir.path_join(id + ".png")
 		if write_if_changed(out_path, sprite.save_png_to_buffer()) != OK:
@@ -791,11 +915,16 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 		names.sort()
 		for name: Variant in names:
 			var part_path: String = out_dir.path_join(part_file_name(id, str(name)))
-			if write_if_changed(part_path, cut_part(sprite, parts[name]).save_png_to_buffer()) != OK:
+			if (
+				write_if_changed(part_path, cut_part(sprite, parts[name]).save_png_to_buffer())
+				!= OK
+			):
 				_fail(report, "%s: cannot write %s" % [id, part_path])
 				continue
 			apply_import_preset(part_path)
-			(report["written"] as Array).append("assets/%s/sprites/%s" % [game, part_file_name(id, str(name))])
+			(report["written"] as Array).append(
+				"assets/%s/sprites/%s" % [game, part_file_name(id, str(name))]
+			)
 		for f: String in remove_stale_parts(out_dir, id, names):
 			(report["removed"] as Array).append("assets/%s/sprites/%s" % [game, f])
 	_write_index(report, art, selected, out_dir, game)
@@ -803,7 +932,9 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 
 
 ## sprites.json: every sprite with a PNG on disk, its size, anchor (art pixels), parts and source.
-static func _write_index(report: Dictionary, art: Dictionary, selected: Dictionary, out_dir: String, game: String) -> void:
+static func _write_index(
+	report: Dictionary, art: Dictionary, selected: Dictionary, out_dir: String, game: String
+) -> void:
 	var sprites: Dictionary = {}
 	for s: Variant in art["sprites"]:
 		var spec: Dictionary = normalize_sprite(s, art)
@@ -815,7 +946,10 @@ static func _write_index(report: Dictionary, art: Dictionary, selected: Dictiona
 		var parts: Dictionary = {}
 		for name: Variant in (spec["parts"] as Dictionary).keys():
 			var r: Rect2i = spec["parts"][name]
-			parts[str(name)] = {"file": part_file_name(id, str(name)), "rect": [r.position.x, r.position.y, r.size.x, r.size.y]}
+			parts[str(name)] = {
+				"file": part_file_name(id, str(name)),
+				"rect": [r.position.x, r.position.y, r.size.x, r.size.y]
+			}
 		var item: Dictionary = {
 			"file": id + ".png",
 			"size": [size.x, size.y],
@@ -828,8 +962,13 @@ static func _write_index(report: Dictionary, art: Dictionary, selected: Dictiona
 		}
 		if selected.has(id):
 			var e: Dictionary = selected[id]
-			item["source"] = {"request_id": str(e.get("request_id", "")), "endpoint": str(e.get("endpoint", ""))}
+			item["source"] = {
+				"request_id": str(e.get("request_id", "")), "endpoint": str(e.get("endpoint", ""))
+			}
 		sprites[id] = item
-	var text: String = JSON.stringify({"game": game, "palette": art["palette"], "sprites": sprites}, "  ", true) + "\n"
+	var text: String = (
+		JSON.stringify({"game": game, "palette": art["palette"], "sprites": sprites}, "  ", true)
+		+ "\n"
+	)
 	if write_if_changed(out_dir.path_join(INDEX_FILE), text.to_utf8_buffer()) != OK:
 		_fail(report, "cannot write %s" % out_dir.path_join(INDEX_FILE))

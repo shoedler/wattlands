@@ -45,7 +45,9 @@ func _lan_host(game_id: String = "workout") -> WlNetSession:
 	if game_id != "":
 		hs.set_game(game_id, "1", "e2e")
 	hs.host_room(4)
-	assert_true(_until(func() -> bool: return hs.state == WlNetSession.STATE_HOSTING), "the LAN host is up")
+	assert_true(
+		_until(func() -> bool: return hs.state == WlNetSession.STATE_HOSTING), "the LAN host is up"
+	)
 	return hs
 
 
@@ -81,9 +83,19 @@ func _poll_for(ms: int) -> void:
 func test_beacons_carry_the_game_id() -> void:
 	var b := LanDiscovery.parse_beacon(LanDiscovery.beacon("k7q-x2m", 8790, "Hana", "workout"))
 	assert_eq(b["game_id"], "workout")
-	assert_eq(LanDiscovery.parse_beacon(LanDiscovery.beacon("K7QX2M", 8790, "Hana"))["game_id"], "", "older beacons parse")
-	assert_false(LanDiscovery.beacon("K7QX2M", 8790).contains("\"game\""), "no game key without a game")
-	var odd := LanDiscovery.parse_beacon(JSON.stringify({"wattlands": "lan", "proto": Wl.PROTO, "code": "K7QX2M", "port": 1, "game": 5}))
+	assert_eq(
+		LanDiscovery.parse_beacon(LanDiscovery.beacon("K7QX2M", 8790, "Hana"))["game_id"],
+		"",
+		"older beacons parse"
+	)
+	assert_false(
+		LanDiscovery.beacon("K7QX2M", 8790).contains('"game"'), "no game key without a game"
+	)
+	var odd := LanDiscovery.parse_beacon(
+		JSON.stringify(
+			{"wattlands": "lan", "proto": Wl.PROTO, "code": "K7QX2M", "port": 1, "game": 5}
+		)
+	)
 	assert_eq(odd["game_id"], "", "a non-string game is ignored")
 
 
@@ -100,8 +112,17 @@ func test_the_join_page_hears_a_lan_room_and_joins_it() -> void:
 	assert_eq(rooms.size(), 1)
 	var room: Dictionary = rooms[0]
 	var server_port := (host.transport as LanTransport).server.port
-	assert_eq(room, {"code": host.room_code, "name": "Hana", "game_id": "workout", "address": "127.0.0.1",
-		"port": server_port, "build": Wl.BUILD})
+	assert_eq(
+		room,
+		{
+			"code": host.room_code,
+			"name": "Hana",
+			"game_id": "workout",
+			"address": "127.0.0.1",
+			"port": server_port,
+			"build": Wl.BUILD
+		}
+	)
 	assert_eq(changes[0], rooms, "the signal carries the list")
 	var n := changes.size()
 	_poll_for(2500)
@@ -117,7 +138,9 @@ func test_the_join_page_hears_a_lan_room_and_joins_it() -> void:
 	# Back to the relay for the next room.
 	cs.host_room(4)
 	assert_eq(cs.transport, relay, "host_room() restores the transport join_lan() replaced")
-	assert_true(_until(func() -> bool: return cs.state == WlNetSession.STATE_HOSTING), "and hosts on it")
+	assert_true(
+		_until(func() -> bool: return cs.state == WlNetSession.STATE_HOSTING), "and hosts on it"
+	)
 
 
 func test_rooms_go_stale_and_stop_clears_the_list() -> void:

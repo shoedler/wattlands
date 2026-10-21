@@ -36,7 +36,9 @@ static func create(session: WorkoutSession, players: Array[PlayerSlot]) -> Worko
 		s.band_pct = session.band_pct.duplicate()
 	var sorted: Array[PlayerSlot] = []
 	sorted.assign(players)
-	sorted.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index)
+	sorted.sort_custom(
+		func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index
+	)
 	for slot in sorted:
 		s.riders[slot.peer_id] = WorkoutRiderState.from_slot(slot)
 		s.order.append(slot.peer_id)

@@ -18,7 +18,9 @@ func test_crc16_matches_the_fit_sdk_check_value() -> void:
 
 func test_crc16_of_a_file_with_its_crc_is_zero() -> void:
 	var bytes := QaFitWriter.activity()
-	assert_eq(QaFitDecoder.crc16(bytes), 0, "a CRC-16/ARC over data plus its little-endian CRC is 0")
+	assert_eq(
+		QaFitDecoder.crc16(bytes), 0, "a CRC-16/ARC over data plus its little-endian CRC is 0"
+	)
 
 
 func test_fit_epoch() -> void:
@@ -70,7 +72,9 @@ func test_laps_have_start_and_duration() -> void:
 
 
 func test_session_totals() -> void:
-	var s := _activity({"records": 300, "laps": [300], "power": 200, "cadence": 85, "speed_mps": 9.0})
+	var s := _activity(
+		{"records": 300, "laps": [300], "power": 200, "cadence": 85, "speed_mps": 9.0}
+	)
 	var ses: Dictionary = s["session"]
 	assert_eq(ses["sport"], 2)
 	assert_eq(ses["sub_sport"], 58)
@@ -87,7 +91,9 @@ func test_session_totals() -> void:
 
 
 func test_header_crc_zero_means_not_computed() -> void:
-	var s := QaFitDecoder.decode_bytes(QaFitWriter.activity_writer().to_bytes({"header_crc": false}))
+	var s := QaFitDecoder.decode_bytes(
+		QaFitWriter.activity_writer().to_bytes({"header_crc": false})
+	)
 	assert_eq(s["errors"], [])
 	assert_eq((s["header"] as Dictionary)["header_crc"], 0)
 
@@ -99,14 +105,18 @@ func test_twelve_byte_header() -> void:
 
 
 func test_bad_header_crc_is_an_error() -> void:
-	var s := QaFitDecoder.decode_bytes(QaFitWriter.activity_writer().to_bytes({"bad_header_crc": true}))
+	var s := QaFitDecoder.decode_bytes(
+		QaFitWriter.activity_writer().to_bytes({"bad_header_crc": true})
+	)
 	assert_false(s["ok"])
 	assert_false(s["crc_ok"])
 	assert_string_contains(str(s["errors"]), "header CRC mismatch")
 
 
 func test_bad_file_crc_is_an_error() -> void:
-	var s := QaFitDecoder.decode_bytes(QaFitWriter.activity_writer().to_bytes({"bad_file_crc": true}))
+	var s := QaFitDecoder.decode_bytes(
+		QaFitWriter.activity_writer().to_bytes({"bad_file_crc": true})
+	)
 	assert_false(s["ok"])
 	assert_false(s["crc_ok"])
 	assert_string_contains(str(s["errors"]), "file CRC mismatch")
@@ -123,7 +133,9 @@ func test_flipped_data_byte_breaks_the_crc() -> void:
 
 
 func test_missing_signature_is_an_error() -> void:
-	var s := QaFitDecoder.decode_bytes(QaFitWriter.activity_writer().to_bytes({"signature": ".FOO"}))
+	var s := QaFitDecoder.decode_bytes(
+		QaFitWriter.activity_writer().to_bytes({"signature": ".FOO"})
+	)
 	assert_false(s["ok"])
 	assert_string_contains(str(s["errors"]), ".FIT")
 
@@ -165,7 +177,9 @@ func test_data_message_for_an_undefined_local_type() -> void:
 
 func test_truncated_data_message() -> void:
 	var w := QaFitWriter.new()
-	w.define(0, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]])
+	w.define(
+		0, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]]
+	)
 	w.raw(PackedByteArray([0x00, 1, 2, 3]))
 	var s := QaFitDecoder.decode_bytes(w.to_bytes())
 	assert_false(s["ok"])
@@ -174,9 +188,16 @@ func test_truncated_data_message() -> void:
 
 func test_big_endian_definitions() -> void:
 	var w := QaFitWriter.new()
-	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM], [1, 2, QaFitWriter.UINT16]], true)
+	w.define(
+		0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM], [1, 2, QaFitWriter.UINT16]], true
+	)
 	w.data(0, [4, 255])
-	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16], [4, 1, QaFitWriter.UINT8]], true)
+	w.define(
+		1,
+		QaFitDecoder.MESG_RECORD,
+		[[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16], [4, 1, QaFitWriter.UINT8]],
+		true
+	)
 	for i in 3:
 		w.data(1, [START + i, 0x0102 + i, 90])
 	_append_tail(w, 3, true)
@@ -192,8 +213,10 @@ func test_compressed_timestamps() -> void:
 	var w := QaFitWriter.new()
 	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM]])
 	w.data(0, [4])
-	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]])
-	var base := START + 30 # START is a multiple of 32, so the low 5 bits are 30
+	w.define(
+		1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]]
+	)
+	var base := START + 30  # START is a multiple of 32, so the low 5 bits are 30
 	w.data(1, [base, 100])
 	w.define(2, QaFitDecoder.MESG_RECORD, [[7, 2, QaFitWriter.UINT16]])
 	# Offsets wrap around the 32-second window: +1, +2, then a rollover.
@@ -240,7 +263,13 @@ func test_developer_fields_are_skipped() -> void:
 	var w := QaFitWriter.new()
 	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM]])
 	w.data(0, [4])
-	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]], false, [[0, 3, 0], [1, 2, 0]])
+	w.define(
+		1,
+		QaFitDecoder.MESG_RECORD,
+		[[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]],
+		false,
+		[[0, 3, 0], [1, 2, 0]]
+	)
 	for i in 5:
 		w.data(1, [START + i, 150], PackedByteArray([1, 2, 3, 4, 5]))
 	_append_tail(w, 5, false)
@@ -253,7 +282,9 @@ func test_invalid_values_are_left_out() -> void:
 	var w := QaFitWriter.new()
 	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM], [1, 2, QaFitWriter.UINT16]])
 	w.data(0, [4, null])
-	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]])
+	w.define(
+		1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [7, 2, QaFitWriter.UINT16]]
+	)
 	w.data(1, [START, null])
 	_append_tail(w, 1, false)
 	var s := QaFitDecoder.decode_bytes(w.to_bytes())
@@ -266,7 +297,16 @@ func test_strings_arrays_signed_and_float_fields() -> void:
 	var w := QaFitWriter.new()
 	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM], [8, 12, QaFitWriter.STRING]])
 	w.data(0, [4, "Wattlands"])
-	w.define(1, 300, [[0, 3, QaFitWriter.UINT8], [1, 2, QaFitWriter.SINT16], [2, 4, QaFitWriter.FLOAT32], [3, 4, QaFitWriter.SINT32]])
+	w.define(
+		1,
+		300,
+		[
+			[0, 3, QaFitWriter.UINT8],
+			[1, 2, QaFitWriter.SINT16],
+			[2, 4, QaFitWriter.FLOAT32],
+			[3, 4, QaFitWriter.SINT32]
+		]
+	)
 	w.data(1, [[1, 2, 3], -5, 1.5, -100000])
 	_append_tail(w, 0, false)
 	var bytes := w.to_bytes()
@@ -275,7 +315,9 @@ func test_strings_arrays_signed_and_float_fields() -> void:
 	# Read the raw message values through the internal reader as well.
 	var v_sint16: Variant = QaFitDecoder._read_scalar(PackedByteArray([0xFB, 0xFF]), 0, 3, false)
 	assert_eq(v_sint16, -5)
-	var v_sint32: Variant = QaFitDecoder._read_scalar(PackedByteArray([0x60, 0x79, 0xFE, 0xFF]), 0, 5, false)
+	var v_sint32: Variant = QaFitDecoder._read_scalar(
+		PackedByteArray([0x60, 0x79, 0xFE, 0xFF]), 0, 5, false
+	)
 	assert_eq(v_sint32, -100000)
 	var f := PackedByteArray()
 	f.resize(4)
@@ -297,7 +339,9 @@ func test_chained_files() -> void:
 	assert_eq(s["segments"], 2)
 	assert_eq(int(s["records"]), 30)
 	assert_true(s["crc_ok"])
-	assert_string_contains(str(s["errors"]), "2 session messages", "a Wattlands ride holds one session")
+	assert_string_contains(
+		str(s["errors"]), "2 session messages", "a Wattlands ride holds one session"
+	)
 
 
 func test_trailing_garbage_is_an_error() -> void:
@@ -387,9 +431,31 @@ func test_errors_are_capped() -> void:
 ## A lap, a cycling session and an activity after hand-built records, so only the part under
 ## test can fail.
 func _append_tail(w: QaFitWriter, records: int, big: bool, start: int = START) -> void:
-	w.define(10, QaFitDecoder.MESG_LAP, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]], big)
+	w.define(
+		10,
+		QaFitDecoder.MESG_LAP,
+		[[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]],
+		big
+	)
 	w.data(10, [start + records, start, records * 1000])
-	w.define(11, QaFitDecoder.MESG_SESSION, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [5, 1, QaFitWriter.ENUM], [6, 1, QaFitWriter.ENUM], [7, 4, QaFitWriter.UINT32], [26, 2, QaFitWriter.UINT16]], big)
+	w.define(
+		11,
+		QaFitDecoder.MESG_SESSION,
+		[
+			[253, 4, QaFitWriter.UINT32],
+			[2, 4, QaFitWriter.UINT32],
+			[5, 1, QaFitWriter.ENUM],
+			[6, 1, QaFitWriter.ENUM],
+			[7, 4, QaFitWriter.UINT32],
+			[26, 2, QaFitWriter.UINT16]
+		],
+		big
+	)
 	w.data(11, [start + records, start, 2, 58, records * 1000, 1])
-	w.define(12, QaFitDecoder.MESG_ACTIVITY, [[253, 4, QaFitWriter.UINT32], [1, 2, QaFitWriter.UINT16]], big)
+	w.define(
+		12,
+		QaFitDecoder.MESG_ACTIVITY,
+		[[253, 4, QaFitWriter.UINT32], [1, 2, QaFitWriter.UINT16]],
+		big
+	)
 	w.data(12, [start + records, 1])

@@ -39,7 +39,9 @@ func configure(p_ctx: GameContext) -> void:
 func build_effort_plans() -> Dictionary:
 	var plans := {}
 	if session == null:
-		push_error("WorkoutGame: no valid session for content %s" % (ctx.content_id if ctx != null else ""))
+		push_error(
+			"WorkoutGame: no valid session for content %s" % (ctx.content_id if ctx != null else "")
+		)
 		return plans
 	for slot in ctx.players:
 		plans[slot.peer_id] = session.build_plan()
@@ -93,7 +95,9 @@ func apply_snapshot(snap: Dictionary) -> void:
 	WorkoutSnapshot.apply(state, snap)
 	var r := state.rider(ctx.local_peer) if ctx != null else null
 	if r != null and ctx.hud != null:
-		ctx.hud.readout(WorkoutHud.READOUT_TIB, WorkoutHud.pct_text(float(r.snap_tib_permille) / 1000.0))
+		ctx.hud.readout(
+			WorkoutHud.READOUT_TIB, WorkoutHud.pct_text(float(r.snap_tib_permille) / 1000.0)
+		)
 
 
 func apply_event(event: Dictionary) -> void:
@@ -171,7 +175,9 @@ func _announce(e: Dictionary) -> void:
 	match str(e.get("type", "")):
 		WorkoutRules.EV_INTERVAL_START:
 			_publish_bands(index)
-			var b := WorkoutHud.interval_banner(state, index, ctx.strings if ctx.strings != null else GameStrings.new())
+			var b := WorkoutHud.interval_banner(
+				state, index, ctx.strings if ctx.strings != null else GameStrings.new()
+			)
 			if not b.is_empty():
 				ctx.hud.banner(str(b["key"]), b["args"], WorkoutHud.BANNER_S)
 		WorkoutRules.EV_INTERVAL_END:
@@ -181,13 +187,19 @@ func _announce(e: Dictionary) -> void:
 			for row: Array in e.get("r", []):
 				var peer := int(row[0])
 				if _is_human(peer):
-					ctx.hud.toast("WORKOUT_TOAST_INTERVAL_DONE", {"label": _t(p.label), "pct": int(round(float(row[1]) / 10.0))}, peer)
+					ctx.hud.toast(
+						"WORKOUT_TOAST_INTERVAL_DONE",
+						{"label": _t(p.label), "pct": int(round(float(row[1]) / 10.0))},
+						peer
+					)
 		WorkoutRules.EV_SPRINT:
 			for row: Array in e.get("r", []):
 				var peer := int(row[0])
 				if not _is_human(peer):
 					continue
-				var key := "WORKOUT_TOAST_SPRINT_HIT" if int(row[3]) == 1 else "WORKOUT_TOAST_SPRINT_PEAK"
+				var key := (
+					"WORKOUT_TOAST_SPRINT_HIT" if int(row[3]) == 1 else "WORKOUT_TOAST_SPRINT_PEAK"
+				)
 				ctx.hud.toast(key, {"w": int(row[1])}, peer)
 
 
@@ -222,7 +234,10 @@ func _hud_tick() -> void:
 		var r := state.rider(peer)
 		if periodic or not _status_sent.has(peer) or bool(_status_sent[peer]) != r.in_band:
 			_status_sent[peer] = r.in_band
-			ctx.hud.teammate_status(peer, {"in_band": r.in_band, "icon": "", "text": WorkoutHud.pct_text(r.tib_fraction())})
+			ctx.hud.teammate_status(
+				peer,
+				{"in_band": r.in_band, "icon": "", "text": WorkoutHud.pct_text(r.tib_fraction())}
+			)
 	if state.tick % WorkoutHud.READOUT_EVERY_TICKS == 0:
 		var me := state.rider(ctx.local_peer)
 		if me != null:

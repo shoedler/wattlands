@@ -8,8 +8,19 @@ extends RefCounted
 ## net-client; pure functions.
 
 ## Entry keys, in order.
-const FIELDS: Array[String] = ["peer_id", "name", "slot_index", "is_bot", "raw_w", "cadence_rpm",
-	"ftp_pct", "rescue", "afk", "connected", "status"]
+const FIELDS: Array[String] = [
+	"peer_id",
+	"name",
+	"slot_index",
+	"is_bot",
+	"raw_w",
+	"cadence_rpm",
+	"ftp_pct",
+	"rescue",
+	"afk",
+	"connected",
+	"status"
+]
 
 
 ## One rider's roster entry. `tm` may be null (no telemetry yet: zeros, connected).
@@ -30,7 +41,9 @@ static func entry(slot: PlayerSlot, tm: Telemetry, status: Dictionary = {}) -> D
 	if tm != null:
 		e["raw_w"] = tm.power_w
 		e["cadence_rpm"] = tm.cadence_rpm
-		e["ftp_pct"] = tm.ftp_pct if tm.ftp_pct > 0.0 else EffortScaling.ftp_pct(tm.power_w, slot.ftp)
+		e["ftp_pct"] = (
+			tm.ftp_pct if tm.ftp_pct > 0.0 else EffortScaling.ftp_pct(tm.power_w, slot.ftp)
+		)
 		e["rescue"] = tm.rescue
 		e["afk"] = tm.afk
 		e["connected"] = tm.connected
@@ -39,13 +52,20 @@ static func entry(slot: PlayerSlot, tm: Telemetry, status: Dictionary = {}) -> D
 
 ## {peer_id: entry} for every slot in slot order. `telemetry` maps peer -> Telemetry,
 ## `statuses` peer -> {in_band, icon, text} (both may miss peers).
-static func build(slots: Array[PlayerSlot], telemetry: Dictionary, statuses: Dictionary = {}) -> Dictionary:
+static func build(
+	slots: Array[PlayerSlot], telemetry: Dictionary, statuses: Dictionary = {}
+) -> Dictionary:
 	var ordered := slots.duplicate()
-	ordered.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index)
+	ordered.sort_custom(
+		func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index
+	)
 	var out: Dictionary = {}
 	for s: PlayerSlot in ordered:
 		var tm: Variant = telemetry.get(s.peer_id)
 		var st: Variant = statuses.get(s.peer_id, {})
-		out[s.peer_id] = entry(s, tm as Telemetry if tm is Telemetry else null,
-			st as Dictionary if st is Dictionary else {})
+		out[s.peer_id] = entry(
+			s,
+			tm as Telemetry if tm is Telemetry else null,
+			st as Dictionary if st is Dictionary else {}
+		)
 	return out

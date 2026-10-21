@@ -106,14 +106,21 @@ func test_connect_through_the_locked_loopback_flow() -> void:
 	assert_eq(_opened, [], "no browser while the network lock is set")
 	var store := _store()
 	assert_eq(store["client_id"], MockRunner.CLIENT_ID)
-	assert_eq(store["client_secret"], MockRunner.CLIENT_SECRET, "the secret stays on this PC, in strava.json")
+	assert_eq(
+		store["client_secret"],
+		MockRunner.CLIENT_SECRET,
+		"the secret stays on this PC, in strava.json"
+	)
 	assert_eq(int(store["expires_at"]), NOW + 21600, "6 h access token")
 	assert_ne(str(store["refresh_token"]), "")
 	assert_eq(int(store["athlete_id"]), 4242)
 	assert_true(str(store["scope"]).split(",").has("activity:write"))
 	assert_eq(await _routes(), ["authorize:302", "token:200"])
 	var info := c.info()
-	assert_false(info.has("access_token") or info.has("client_secret") or info.has("refresh_token"), "info() has no secrets")
+	assert_false(
+		info.has("access_token") or info.has("client_secret") or info.has("refresh_token"),
+		"info() has no secrets"
+	)
 
 
 func test_defaults_follow_the_brief() -> void:
@@ -142,14 +149,26 @@ func test_authorize_url_parameters() -> void:
 	var c := _client()
 	var url := c.authorize_url("12345", "http://127.0.0.1:5000/strava/callback", "abc", false)
 	assert_true(url.begins_with(_mock.oauth_base() + "/authorize?"))
-	for part in ["client_id=12345", "response_type=code", "approval_prompt=auto", "scope=activity%3Awrite", "state=abc",
-			"redirect_uri=http%3A%2F%2F127.0.0.1%3A5000%2Fstrava%2Fcallback"]:
+	for part in [
+		"client_id=12345",
+		"response_type=code",
+		"approval_prompt=auto",
+		"scope=activity%3Awrite",
+		"state=abc",
+		"redirect_uri=http%3A%2F%2F127.0.0.1%3A5000%2Fstrava%2Fcallback"
+	]:
 		assert_string_contains(url, part)
-	assert_string_contains(c.authorize_url("1", "x", "s", true), "scope=activity%3Awrite%2Cprofile%3Aread_all")
+	assert_string_contains(
+		c.authorize_url("1", "x", "s", true), "scope=activity%3Awrite%2Cprofile%3Aread_all"
+	)
 
 
 func test_connect_rejects_a_forged_state() -> void:
-	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault", {"route": "authorize", "status": 302, "tamper_state": true})
+	await _mock.admin(
+		HTTPClient.METHOD_POST,
+		"/admin/fault",
+		{"route": "authorize", "status": 302, "tamper_state": true}
+	)
 	var c := _client()
 	var ok: bool = await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
 	assert_false(ok)
@@ -161,7 +180,11 @@ func test_connect_rejects_a_forged_state() -> void:
 
 func test_connect_without_the_upload_permission_fails() -> void:
 	# The rider unticked "Upload your activities" on Strava's consent page.
-	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault", {"route": "authorize", "status": 302, "scope": "read"})
+	await _mock.admin(
+		HTTPClient.METHOD_POST,
+		"/admin/fault",
+		{"route": "authorize", "status": 302, "scope": "read"}
+	)
 	var c := _client()
 	var details: Array = []
 	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
@@ -173,14 +196,20 @@ func test_connect_without_the_upload_permission_fails() -> void:
 
 func test_a_redirect_loop_stops_at_max_redirects() -> void:
 	var loop_url: String = _mock.oauth_base() + "/authorize?client_id=12345&response_type=code"
-	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault", {"route": "authorize", "status": 302, "count": 20, "location": loop_url})
+	await _mock.admin(
+		HTTPClient.METHOD_POST,
+		"/admin/fault",
+		{"route": "authorize", "status": 302, "count": 20, "location": loop_url}
+	)
 	var c := _client()
 	c.max_redirects = 3
 	var details: Array = []
 	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
 	assert_false(await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET))
 	assert_eq(details.back(), "authorize_failed")
-	assert_eq((await _routes()).size(), 4, "the first request plus three redirects, then it gives up")
+	assert_eq(
+		(await _routes()).size(), 4, "the first request plus three redirects, then it gives up"
+	)
 
 
 func test_connect_denied_by_the_rider() -> void:
@@ -215,7 +244,9 @@ func test_upload_and_polling() -> void:
 	var ride := _ride()
 	var progress: Array = []
 	c.upload_progress.connect(func(_id: String, s: String, _d: String) -> void: progress.append(s))
-	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "Wattlands: Workout", "desc")
+	var res: Dictionary = await c.upload_fit(
+		str(ride[1]["ride_id"]), str(ride[0]), "Wattlands: Workout", "desc"
+	)
 	assert_eq(res["state"], "uploaded")
 	assert_gt(int(res["activity_id"]), 0)
 	assert_gt(int(res["upload_id"]), 0)
@@ -231,7 +262,10 @@ func test_upload_and_polling() -> void:
 	assert_eq(u["external_id"], ride[1]["ride_id"], "external_id is the ride UUID")
 	assert_eq(u["filename"], str(ride[0]).get_file())
 	assert_eq(int(u["bytes"]), FileAccess.get_file_as_bytes(str(ride[0])).size())
-	assert_eq(await _routes(), ["authorize:302", "token:200", "upload:201", "upload_status:200", "upload_status:200"])
+	assert_eq(
+		await _routes(),
+		["authorize:302", "token:200", "upload:201", "upload_status:200", "upload_status:200"]
+	)
 
 
 func test_duplicate_counts_as_uploaded() -> void:
@@ -242,7 +276,9 @@ func test_duplicate_counts_as_uploaded() -> void:
 	assert_eq(first["state"], "uploaded")
 	assert_eq(second["state"], "duplicate")
 	assert_eq(int(second["activity_id"]), int(first["activity_id"]), "the existing activity's id")
-	assert_eq(StravaClient.duplicate_activity_id("x.fit duplicate of activity 123456789"), 123456789)
+	assert_eq(
+		StravaClient.duplicate_activity_id("x.fit duplicate of activity 123456789"), 123456789
+	)
 	assert_eq(StravaClient.duplicate_activity_id("no number"), 0)
 
 
@@ -323,7 +359,9 @@ func test_refresh_rotates_and_keeps_the_newest_refresh_token() -> void:
 	var first := _store()
 	assert_true(await c.refresh_tokens())
 	var second := _store()
-	assert_ne(second["refresh_token"], first["refresh_token"], "Strava rotated it; we keep the new one")
+	assert_ne(
+		second["refresh_token"], first["refresh_token"], "Strava rotated it; we keep the new one"
+	)
 	assert_ne(second["access_token"], first["access_token"])
 	assert_true(await c.refresh_tokens(), "the newest refresh token works")
 	var third := _store()
@@ -382,17 +420,25 @@ func test_a_second_401_gives_up() -> void:
 func test_a_revoked_grant_needs_a_reconnect() -> void:
 	var c: StravaClient = await _connected_client()
 	var store := _store()
-	var basic := Marshalls.utf8_to_base64("%s:%s" % [MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET])
+	var basic := Marshalls.utf8_to_base64(
+		"%s:%s" % [MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET]
+	)
 	var req := HTTPRequest.new()
 	add_child_autofree(req)
-	req.request(_mock.oauth_base() + "/revoke", ["Authorization: Basic " + basic, "Content-Type: application/x-www-form-urlencoded"],
-		HTTPClient.METHOD_POST, "token=" + str(store["refresh_token"]))
+	req.request(
+		_mock.oauth_base() + "/revoke",
+		["Authorization: Basic " + basic, "Content-Type: application/x-www-form-urlencoded"],
+		HTTPClient.METHOD_POST,
+		"token=" + str(store["refresh_token"])
+	)
 	await req.request_completed
 	assert_false(await c.refresh_tokens())
 	assert_push_warning("no longer valid")
 	assert_eq(c.state(), "error")
 	assert_false(c.has_tokens())
-	assert_eq(_store()["client_secret"], MockRunner.CLIENT_SECRET, "credentials kept for the reconnect")
+	assert_eq(
+		_store()["client_secret"], MockRunner.CLIENT_SECRET, "credentials kept for the reconnect"
+	)
 
 
 func test_429_backs_off_and_retries() -> void:
@@ -444,10 +490,14 @@ func test_disconnect_revokes_and_deletes() -> void:
 	assert_false(c.has_tokens())
 	assert_eq(states, [["disconnected", ""]])
 	var store := _store()
-	assert_eq(store.get("client_id", ""), MockRunner.CLIENT_ID, "the client id stays for a reconnect")
+	assert_eq(
+		store.get("client_id", ""), MockRunner.CLIENT_ID, "the client id stays for a reconnect"
+	)
 	assert_false(store.has("client_secret"), "the secret is deleted")
 	assert_false(store.has("access_token") or store.has("refresh_token"), "the tokens are deleted")
-	var revoke: Array = (await _mock.requests()).filter(func(r: Dictionary) -> bool: return r["route"] == "revoke")
+	var revoke: Array = (await _mock.requests()).filter(
+		func(r: Dictionary) -> bool: return r["route"] == "revoke"
+	)
 	assert_eq(revoke.size(), 1)
 	assert_eq(revoke[0]["auth"], "basic", "HTTP Basic client id/secret")
 	assert_eq(int(revoke[0]["status"]), 200)
@@ -486,8 +536,13 @@ func test_secrets_never_reach_a_log() -> void:
 	var text := cap.text()
 	assert_string_contains(text, "Strava: connected", "the capture works")
 	assert_string_contains(text, Locks.NET_MESSAGE)
-	for secret: String in [MockRunner.CLIENT_SECRET, str(store["access_token"]), str(store["refresh_token"]),
-			str(latest["access_token"]), str(latest["refresh_token"])]:
+	for secret: String in [
+		MockRunner.CLIENT_SECRET,
+		str(store["access_token"]),
+		str(store["refresh_token"]),
+		str(latest["access_token"]),
+		str(latest["refresh_token"])
+	]:
 		assert_false(text.contains(secret), "a secret or token appeared in the log")
 
 
@@ -521,7 +576,9 @@ func test_disconnect_falls_back_to_deauthorize() -> void:
 	assert_true(await c.disconnect_account(), "revoked through /oauth/deauthorize")
 	var routes: Array = await _routes()
 	assert_eq(routes.slice(2), ["revoke:404", "deauthorize:200"])
-	var deauth: Array = (await _mock.requests()).filter(func(r: Dictionary) -> bool: return r["route"] == "deauthorize")
+	var deauth: Array = (await _mock.requests()).filter(
+		func(r: Dictionary) -> bool: return r["route"] == "deauthorize"
+	)
 	assert_eq(deauth[0]["auth"], "bearer", "the access token goes in the Authorization header")
 	assert_false(bool(deauth[0]["token_in_query"]))
 	var st: Dictionary = await _mock.admin(HTTPClient.METHOD_GET, "/admin/state")

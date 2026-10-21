@@ -39,7 +39,12 @@ func _serve_once(state: Dictionary) -> void:
 			conn.poll()
 			if conn.get_available_bytes() > 0:
 				conn.get_partial_data(conn.get_available_bytes())
-				conn.put_data("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok".to_ascii_buffer())
+				conn.put_data(
+					(
+						"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok"
+						. to_ascii_buffer()
+					)
+				)
 				conn = null
 		await get_tree().process_frame
 		t += get_process_delta_time()
@@ -51,7 +56,9 @@ func _try(url: String) -> Dictionary:
 	add_child_autofree(c)
 	var state := {"done": false}
 	_serve_once(state)
-	var r: Dictionary = await c._request(HTTPClient.METHOD_GET, url, PackedStringArray(), PackedByteArray())
+	var r: Dictionary = await c._request(
+		HTTPClient.METHOD_GET, url, PackedStringArray(), PackedByteArray()
+	)
 	state["done"] = true
 	await get_tree().process_frame
 	return r
@@ -93,5 +100,10 @@ func test_a_plain_loopback_url_still_goes_out() -> void:
 	var c := StravaClient.new()
 	c.request_timeout_s = 2.0
 	add_child_autofree(c)
-	var r: Dictionary = await c._request(HTTPClient.METHOD_GET, "http://127.0.0.1:%d/api/v3/athlete" % free_port, PackedStringArray(), PackedByteArray())
+	var r: Dictionary = await c._request(
+		HTTPClient.METHOD_GET,
+		"http://127.0.0.1:%d/api/v3/athlete" % free_port,
+		PackedStringArray(),
+		PackedByteArray()
+	)
 	assert_false(bool(r["refused"]), "loopback is allowed")

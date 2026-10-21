@@ -13,9 +13,16 @@ extends RefCounted
 ##  time_in_band_s, time_in_band_pct} for `peer` (zeros if unknown).
 func base_row(_peer: int) -> Dictionary:
 	return {
-		"kj": 0.0, "avg_power_w": 0.0, "avg_ftp_pct": 0.0, "np_w": 0.0,
-		"best_1m_w": 0.0, "best_5m_w": 0.0, "best_20m_w": 0.0, "ride_s": 0.0,
-		"time_in_band_s": 0.0, "time_in_band_pct": 0.0,
+		"kj": 0.0,
+		"avg_power_w": 0.0,
+		"avg_ftp_pct": 0.0,
+		"np_w": 0.0,
+		"best_1m_w": 0.0,
+		"best_5m_w": 0.0,
+		"best_20m_w": 0.0,
+		"ride_s": 0.0,
+		"time_in_band_s": 0.0,
+		"time_in_band_pct": 0.0,
 	}
 
 

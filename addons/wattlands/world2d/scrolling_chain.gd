@@ -122,8 +122,12 @@ func effective_pitch() -> float:
 
 ## A belt around two pulleys: the convex hull of both circles (sprocket centres and radii in
 ## art pixels). `segments` points per circle.
-func set_loop(center_a: Vector2, radius_a: float, center_b: Vector2, radius_b: float, segments: int = 16) -> void:
-	set_belt(PackedVector2Array([center_a, center_b]), PackedFloat32Array([radius_a, radius_b]), segments)
+func set_loop(
+	center_a: Vector2, radius_a: float, center_b: Vector2, radius_b: float, segments: int = 16
+) -> void:
+	set_belt(
+		PackedVector2Array([center_a, center_b]), PackedFloat32Array([radius_a, radius_b]), segments
+	)
 
 
 ## A belt around any number of pulleys, such as a tank track round its drive sprocket, idler
@@ -131,7 +135,12 @@ func set_loop(center_a: Vector2, radius_a: float, center_b: Vector2, radius_b: f
 ## per centre), clockwise on screen. `segments` points per circle.
 func set_belt(centers: PackedVector2Array, radii: PackedFloat32Array, segments: int = 16) -> void:
 	if centers.is_empty() or centers.size() != radii.size():
-		push_error("ScrollingChain: set_belt needs one radius per centre (%d centres, %d radii)" % [centers.size(), radii.size()])
+		push_error(
+			(
+				"ScrollingChain: set_belt needs one radius per centre (%d centres, %d radii)"
+				% [centers.size(), radii.size()]
+			)
+		)
 		return
 	var pts := PackedVector2Array()
 	var n := maxi(segments, 4)
@@ -219,7 +228,12 @@ func _draw() -> void:
 			continue
 		var pts := _sub_path(d0, d0 + link_px - 1.0)
 		for j in pts.size() - 1:
-			draw_line(_snap(pts[j]) + Vector2(0.5, 0.5), _snap(pts[j + 1]) + Vector2(0.5, 0.5), col, width_px)
+			draw_line(
+				_snap(pts[j]) + Vector2(0.5, 0.5),
+				_snap(pts[j + 1]) + Vector2(0.5, 0.5),
+				col,
+				width_px
+			)
 
 
 func _snap(p: Vector2) -> Vector2:
@@ -232,7 +246,7 @@ func _sub_path(d0: float, d1: float) -> PackedVector2Array:
 	var length := path_length()
 	# Corner points strictly between d0 and d1 (unwrapped on closed paths).
 	var last := _cum.size() - 1 if closed else _cum.size() - 2
-	for lap: float in ([0.0, length] if closed else [0.0]):
+	for lap: float in [0.0, length] if closed else [0.0]:
 		for i in range(1, last + 1):
 			var c: float = _cum[i] + lap
 			if c > d0 and c < d1:

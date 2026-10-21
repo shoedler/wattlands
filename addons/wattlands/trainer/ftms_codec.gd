@@ -111,8 +111,8 @@ const RESISTANCE_SINT16 := "sint16_0.1"
 ## Keys of an Indoor Bike Data record that are fields (not flags/more_data/parts).
 const IBD_META_KEYS: Array[String] = ["flags", "more_data", "parts"]
 
-
 # --- Parsers -------------------------------------------------------------------------
+
 
 ## Parse one Indoor Bike Data notification. {} (after push_error) when malformed.
 static func parse_indoor_bike_data(data: PackedByteArray) -> Dictionary:
@@ -194,7 +194,12 @@ static func parse_machine_status(data: PackedByteArray) -> Dictionary:
 		STATUS_TARGET_POWER_CHANGED:
 			fields = [["target_power_w", "s16", 1]]
 		STATUS_SIMULATION_CHANGED:
-			fields = [["wind_mps", "s16", 1000], ["grade_pct", "s16", 100], ["crr", "u8", 10000], ["cw", "u8", 100]]
+			fields = [
+				["wind_mps", "s16", 1000],
+				["grade_pct", "s16", 100],
+				["crr", "u8", 10000],
+				["cw", "u8", 100]
+			]
 		STATUS_SPIN_DOWN:
 			fields = [["spin_down_status", "u8", 1]]
 		STATUS_TARGET_CADENCE_CHANGED:
@@ -314,6 +319,7 @@ static func assemble_indoor_bike_data(notifications: Array) -> Array[Dictionary]
 
 # --- Encoders ------------------------------------------------------------------------
 
+
 static func encode_request_control() -> PackedByteArray:
 	return PackedByteArray([OP_REQUEST_CONTROL])
 
@@ -343,7 +349,9 @@ static func encode_target_power(watts: int) -> PackedByteArray:
 
 ## Set Target Resistance Level in 0.1 units: RESISTANCE_UINT8 (0..25.5) or RESISTANCE_SINT16
 ## (-3276.8..3276.7). An unknown encoding push_errors and returns empty.
-static func encode_target_resistance(level: float, encoding: String = RESISTANCE_UINT8) -> PackedByteArray:
+static func encode_target_resistance(
+	level: float, encoding: String = RESISTANCE_UINT8
+) -> PackedByteArray:
 	var out := PackedByteArray([OP_SET_TARGET_RESISTANCE])
 	match encoding:
 		RESISTANCE_UINT8:
@@ -351,7 +359,7 @@ static func encode_target_resistance(level: float, encoding: String = RESISTANCE
 		RESISTANCE_SINT16:
 			_put_int(out, _scaled(level, 10.0, -32768, 32767), 2)
 		_:
-			push_error("FtmsCodec: unknown resistance encoding \"%s\"" % encoding)
+			push_error('FtmsCodec: unknown resistance encoding "%s"' % encoding)
 			return PackedByteArray()
 	return out
 
@@ -359,7 +367,9 @@ static func encode_target_resistance(level: float, encoding: String = RESISTANCE
 ## Set Indoor Bike Simulation (SIM): sint16 wind 0.001 m/s, sint16 grade 0.01 %, uint8 crr
 ## 0.0001, uint8 cw 0.01 kg/m, each rounded and clamped to its field range. Safety limits
 ## (grade -10..+16 % and the rest of BRIEF 4.6.6) are the governor's, not the codec's.
-static func encode_indoor_bike_simulation(wind_mps: float, grade_pct: float, crr: float, cw: float) -> PackedByteArray:
+static func encode_indoor_bike_simulation(
+	wind_mps: float, grade_pct: float, crr: float, cw: float
+) -> PackedByteArray:
 	var out := PackedByteArray([OP_SET_SIMULATION])
 	_put_int(out, _scaled(wind_mps, 1000.0, -32768, 32767), 2)
 	_put_int(out, _scaled(grade_pct, 100.0, -32768, 32767), 2)
@@ -387,8 +397,14 @@ static func encode_indoor_bike_data(fields: Dictionary) -> PackedByteArray:
 	for f: Array in layout:
 		if fields.has(f[1]):
 			flags |= int(f[0])
-			_put_int(body, _scaled(float(fields[f[1]]), float(f[3]), int(f[4]), int(f[5])), int(f[2]))
-	if fields.has("total_energy_kcal") or fields.has("energy_per_hour_kcal") or fields.has("energy_per_minute_kcal"):
+			_put_int(
+				body, _scaled(float(fields[f[1]]), float(f[3]), int(f[4]), int(f[5])), int(f[2])
+			)
+	if (
+		fields.has("total_energy_kcal")
+		or fields.has("energy_per_hour_kcal")
+		or fields.has("energy_per_minute_kcal")
+	):
 		flags |= IBD_ENERGY
 		_put_int(body, _scaled(float(fields.get("total_energy_kcal", 0)), 1.0, 0, 65535), 2)
 		_put_int(body, _scaled(float(fields.get("energy_per_hour_kcal", 0)), 1.0, 0, 65535), 2)
@@ -402,7 +418,9 @@ static func encode_indoor_bike_data(fields: Dictionary) -> PackedByteArray:
 	for f: Array in tail:
 		if fields.has(f[1]):
 			flags |= int(f[0])
-			_put_int(body, _scaled(float(fields[f[1]]), float(f[3]), int(f[4]), int(f[5])), int(f[2]))
+			_put_int(
+				body, _scaled(float(fields[f[1]]), float(f[3]), int(f[4]), int(f[5])), int(f[2])
+			)
 	var out := PackedByteArray()
 	_put_int(out, flags, 2)
 	out.append_array(body)
@@ -410,6 +428,7 @@ static func encode_indoor_bike_data(fields: Dictionary) -> PackedByteArray:
 
 
 # --- Names and hex -------------------------------------------------------------------
+
 
 static func opcode_name(opcode: int) -> String:
 	match opcode:
@@ -460,7 +479,7 @@ static func from_hex(text: String) -> PackedByteArray:
 		if not bad and digits.find(clean[i]) < 0:
 			bad = true
 	if bad:
-		push_error("FtmsCodec: bad hex \"%s\"" % text)
+		push_error('FtmsCodec: bad hex "%s"' % text)
 		return out
 	for i in range(0, clean.length(), 2):
 		out.append(digits.find(clean[i]) * 16 + digits.find(clean[i + 1]))
@@ -468,6 +487,7 @@ static func from_hex(text: String) -> PackedByteArray:
 
 
 # --- Helpers -------------------------------------------------------------------------
+
 
 ## Bounds-checked little-endian reader; a read past the end returns 0 and clears ok.
 class ByteReader:
@@ -514,7 +534,9 @@ class ByteReader:
 		return v - 0x10000 if v >= 0x8000 else v
 
 
-static func _read_into(r: ByteReader, rec: Dictionary, key: String, kind: String, divisor: int) -> bool:
+static func _read_into(
+	r: ByteReader, rec: Dictionary, key: String, kind: String, divisor: int
+) -> bool:
 	var v := 0
 	match kind:
 		"u8":
@@ -537,7 +559,10 @@ static func _read_into(r: ByteReader, rec: Dictionary, key: String, kind: String
 
 
 static func _truncated(key: String, r: ByteReader) -> String:
-	return "truncated %s (needs %d bytes at offset %d, %d left)" % [key, r.wanted, r.pos, r.remaining()]
+	return (
+		"truncated %s (needs %d bytes at offset %d, %d left)"
+		% [key, r.wanted, r.pos, r.remaining()]
+	)
 
 
 ## value x scale, rounded half away from zero, clamped to [lo, hi] (NaN -> 0).

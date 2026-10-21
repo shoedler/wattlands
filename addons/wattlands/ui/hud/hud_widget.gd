@@ -42,7 +42,9 @@ func _ensure_base() -> void:
 		return
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var sb := WlTheme.panel_style(Color(0.055, 0.067, 0.086, 0.74), Color(0.227, 0.271, 0.322, 0.9), 2)
+	var sb := WlTheme.panel_style(
+		Color(0.055, 0.067, 0.086, 0.74), Color(0.227, 0.271, 0.322, 0.9), 2
+	)
 	sb.content_margin_left = 12.0
 	sb.content_margin_right = 12.0
 	sb.content_margin_top = 4.0
@@ -92,8 +94,14 @@ func set_ui_scale(s: float) -> void:
 		var lbl: Label = e["label"]
 		var px: int = e["px"]
 		if lbl.label_settings != null:
-			lbl.label_settings.font_size = WlTheme.key_px(ui_scale * px / float(WlTheme.KEY_NUMBER_PX)) if e["key"] else WlTheme.scaled_px(px, ui_scale)
-			lbl.label_settings.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0))
+			lbl.label_settings.font_size = (
+				WlTheme.key_px(ui_scale * px / float(WlTheme.KEY_NUMBER_PX))
+				if e["key"]
+				else WlTheme.scaled_px(px, ui_scale)
+			)
+			lbl.label_settings.outline_size = maxi(
+				2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0)
+			)
 	for e in _scaled_boxes:
 		var n: Control = e["node"]
 		n.custom_minimum_size = Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
@@ -123,7 +131,10 @@ static func wrap_label(label: Label, max_w: float) -> void:
 		return
 	var ls := label.label_settings
 	var font: Font = ls.font if ls.font != null else ThemeDB.fallback_font
-	var natural := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, ls.font_size).x + 2.0 * ls.outline_size
+	var natural := (
+		font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, ls.font_size).x
+		+ 2.0 * ls.outline_size
+	)
 	if max_w < INF and natural > max_w:
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.custom_minimum_size.x = maxf(40.0, max_w)
@@ -143,8 +154,11 @@ static func font_px(label: Label) -> int:
 
 # --- helpers for subclasses ------------------------------------------------------------------
 
+
 ## A Label using the kit font. key = a key number (>= 48 px at any scale).
-func _make_label(label_name: String, px: int, color: Color = WlTheme.TEXT, key: bool = false, bold: bool = false) -> Label:
+func _make_label(
+	label_name: String, px: int, color: Color = WlTheme.TEXT, key: bool = false, bold: bool = false
+) -> Label:
 	var l := Label.new()
 	l.name = label_name
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE

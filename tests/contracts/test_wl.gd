@@ -30,7 +30,9 @@ func test_slot_looks_are_distinct() -> void:
 	var seen := {}
 	for i in Wl.MAX_SLOTS:
 		var look := Wl.slot_look(i)
-		var key := "%s/%s/%s/%s" % [look["color_name"], look["shape"], look["pattern"], look["hollow"]]
+		var key := (
+			"%s/%s/%s/%s" % [look["color_name"], look["shape"], look["pattern"], look["hollow"]]
+		)
 		assert_false(seen.has(key), "slot %d duplicates %s" % [i, key])
 		seen[key] = true
 	assert_eq(seen.size(), 8)
@@ -78,16 +80,47 @@ func test_rule_names() -> void:
 	assert_eq(Wl.REFUSE_ERG_IN_SIM, "erg_in_sim_phase")
 	assert_eq(Wl.REFUSE_NOT_GAME_GRADE, "grade_source_not_game")
 	assert_eq(Wl.REFUSE_SIM_BLOCK_UNSAFE, "sim_block_unsafe")
-	var clamps := [Wl.CLAMP_UNVERIFIED, Wl.CLAMP_CEILING, Wl.CLAMP_LONG_PHASE, Wl.CLAMP_LIMIT_105,
-		Wl.CLAMP_LIMIT_120, Wl.CLAMP_WARMUP, Wl.CLAMP_FLOOR, Wl.CLAMP_RESCUE, Wl.CLAMP_COASTING,
-		Wl.CLAMP_SLEW, Wl.CLAMP_SWITCH, Wl.CLAMP_PANIC, Wl.CLAMP_GRADE_RANGE, Wl.CLAMP_GRADE_LIMIT,
-		Wl.CLAMP_HAPTIC, Wl.CLAMP_HAPTIC_INTENSITY, Wl.CLAMP_FACTOR, Wl.CLAMP_PAUSE]
-	var refusals := [Wl.REFUSE_NO_PHASE, Wl.REFUSE_COOLDOWN, Wl.REFUSE_RANGE,
-		Wl.REFUSE_SIM_BLOCK_LENGTH, Wl.REFUSE_SWITCH_SPACING, Wl.REFUSE_MODE_GRADE,
-		Wl.REFUSE_HAPTIC_ERG, Wl.REFUSE_HAPTIC_OFF, Wl.REFUSE_HAPTIC_WARMUP,
-		Wl.REFUSE_HAPTIC_COOLDOWN, Wl.REFUSE_BAD_FIELDS, Wl.REFUSE_UNKNOWN_PEER,
-		Wl.REFUSE_NOT_OPEN_ENDED, Wl.REFUSE_MIN_S, Wl.REFUSE_PLAN_INVALID, Wl.REFUSE_NOT_AUTHORITY,
-		Wl.REFUSE_ERG_IN_SIM, Wl.REFUSE_NOT_GAME_GRADE, Wl.REFUSE_SIM_BLOCK_UNSAFE]
+	var clamps := [
+		Wl.CLAMP_UNVERIFIED,
+		Wl.CLAMP_CEILING,
+		Wl.CLAMP_LONG_PHASE,
+		Wl.CLAMP_LIMIT_105,
+		Wl.CLAMP_LIMIT_120,
+		Wl.CLAMP_WARMUP,
+		Wl.CLAMP_FLOOR,
+		Wl.CLAMP_RESCUE,
+		Wl.CLAMP_COASTING,
+		Wl.CLAMP_SLEW,
+		Wl.CLAMP_SWITCH,
+		Wl.CLAMP_PANIC,
+		Wl.CLAMP_GRADE_RANGE,
+		Wl.CLAMP_GRADE_LIMIT,
+		Wl.CLAMP_HAPTIC,
+		Wl.CLAMP_HAPTIC_INTENSITY,
+		Wl.CLAMP_FACTOR,
+		Wl.CLAMP_PAUSE
+	]
+	var refusals := [
+		Wl.REFUSE_NO_PHASE,
+		Wl.REFUSE_COOLDOWN,
+		Wl.REFUSE_RANGE,
+		Wl.REFUSE_SIM_BLOCK_LENGTH,
+		Wl.REFUSE_SWITCH_SPACING,
+		Wl.REFUSE_MODE_GRADE,
+		Wl.REFUSE_HAPTIC_ERG,
+		Wl.REFUSE_HAPTIC_OFF,
+		Wl.REFUSE_HAPTIC_WARMUP,
+		Wl.REFUSE_HAPTIC_COOLDOWN,
+		Wl.REFUSE_BAD_FIELDS,
+		Wl.REFUSE_UNKNOWN_PEER,
+		Wl.REFUSE_NOT_OPEN_ENDED,
+		Wl.REFUSE_MIN_S,
+		Wl.REFUSE_PLAN_INVALID,
+		Wl.REFUSE_NOT_AUTHORITY,
+		Wl.REFUSE_ERG_IN_SIM,
+		Wl.REFUSE_NOT_GAME_GRADE,
+		Wl.REFUSE_SIM_BLOCK_UNSAFE
+	]
 	_assert_unique(clamps, "clamp rule names")
 	_assert_unique(refusals, "refusal reasons")
 

@@ -21,7 +21,9 @@ func before_all() -> void:
 	var tm := _reg.template_manifest()
 	_has_template = not tm.is_empty()
 	if _has_template:
-		_template_err = _reg.add_game(tm, WlGameRegistry.GAMES_ROOT.path_join(WlGameRegistry.TEMPLATE_ID), true)
+		_template_err = _reg.add_game(
+			tm, WlGameRegistry.GAMES_ROOT.path_join(WlGameRegistry.TEMPLATE_ID), true
+		)
 
 
 func after_all() -> void:
@@ -85,7 +87,11 @@ func test_game_strings_keep_their_prefix() -> void:
 	if _has_template and _template_err == "":
 		ids.append(WlGameRegistry.TEMPLATE_ID)
 	for id in ids:
-		assert_eq(SdkConformance.strings_errors(id, _reg.content_dir(id).path_join("strings.csv")), [] as Array[String], id)
+		assert_eq(
+			SdkConformance.strings_errors(id, _reg.content_dir(id).path_join("strings.csv")),
+			[] as Array[String],
+			id
+		)
 	if ids.is_empty():
 		pass_test("no game strings yet")
 
@@ -113,35 +119,55 @@ func test_harness_catches_a_plan_that_breaks_the_rules() -> void:
 	var errors: Array[String] = []
 	for content: Variant in m["contents"]:
 		var r := GameSimRunner.new()
-		var err := r.setup({"game": "fx_solo", "content": str(content), "registry": reg, "max_sim_seconds": 1.0})
+		var err := r.setup(
+			{"game": "fx_solo", "content": str(content), "registry": reg, "max_sim_seconds": 1.0}
+		)
 		if err != "":
 			errors.append(err)
 		r.cleanup()
 		r.free()
-	assert_eq(errors.size(), 1, "only the \"bad\" content is rejected")
+	assert_eq(errors.size(), 1, 'only the "bad" content is rejected')
 	assert_string_contains(errors[0], "warm-up")
 	reg.clear()
 	reg.free()
 
 
 func test_harness_catches_unprefixed_strings() -> void:
-	var errs := SdkConformance.strings_errors("fx_crew", FIXTURES.path_join("_content/fx_crew/strings.csv"))
+	var errs := SdkConformance.strings_errors(
+		"fx_crew", FIXTURES.path_join("_content/fx_crew/strings.csv")
+	)
 	assert_eq(errs.size(), 1)
 	assert_string_contains(errs[0], "CREW_WRONG_PREFIX")
-	assert_eq(SdkConformance.strings_errors("fx_solo", FIXTURES.path_join("_content/fx_solo/strings.csv")), [] as Array[String])
-	assert_eq(SdkConformance.strings_errors("fx_solo", "res://nope/strings.csv"), [] as Array[String], "no strings file is fine")
+	assert_eq(
+		SdkConformance.strings_errors(
+			"fx_solo", FIXTURES.path_join("_content/fx_solo/strings.csv")
+		),
+		[] as Array[String]
+	)
+	assert_eq(
+		SdkConformance.strings_errors("fx_solo", "res://nope/strings.csv"),
+		[] as Array[String],
+		"no strings file is fine"
+	)
 
 
 func test_harness_catches_snapshots_that_do_not_survive_json() -> void:
-	assert_eq(SdkConformance.snapshot_errors({"a": 1.5, "b": "x", "c": [true, null, {"d": 2.0}]}, []), [] as Array[String])
+	assert_eq(
+		SdkConformance.snapshot_errors({"a": 1.5, "b": "x", "c": [true, null, {"d": 2.0}]}, []),
+		[] as Array[String]
+	)
 	var errs := SdkConformance.snapshot_errors({"v": Vector2(1, 2), 3: "x", "n": 5}, [])
 	var joined := " | ".join(errs)
 	assert_string_contains(joined, "snapshot.v: Vector2 is not a JSON type")
 	assert_string_contains(joined, "key 3 is a int")
 	assert_string_contains(joined, "snapshot.n: int 5 comes back as a float")
-	assert_eq(SdkConformance.snapshot_errors([], []).size(), 1, "snapshot() must return a Dictionary")
+	assert_eq(
+		SdkConformance.snapshot_errors([], []).size(), 1, "snapshot() must return a Dictionary"
+	)
 
 
 func test_player_counts() -> void:
-	assert_eq(SdkConformance.player_counts({"min_players": 1, "max_players": 4}), [1, 4] as Array[int])
+	assert_eq(
+		SdkConformance.player_counts({"min_players": 1, "max_players": 4}), [1, 4] as Array[int]
+	)
 	assert_eq(SdkConformance.player_counts({"min_players": 2, "max_players": 2}), [2] as Array[int])

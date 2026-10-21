@@ -33,14 +33,17 @@ func before_each() -> void:
 
 
 func _spec() -> HudSpec:
-	return HudSpec.new() \
-		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": "gate_hp"}) \
-		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
-		.add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
+	return (
+		HudSpec
+		. new()
+		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": "gate_hp"})
+		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
+		. add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
+	)
 
 
 func _tele(mode: String, power: float, target: int = 0) -> Telemetry:
@@ -57,6 +60,7 @@ func _tele(mode: String, power: float, target: int = 0) -> Telemetry:
 
 # --- basics -----------------------------------------------------------------------------------
 
+
 func test_layer_and_process_mode() -> void:
 	assert_eq(_hud.layer, HudLayer.LAYER)
 	assert_eq(HudLayer.LAYER, 10)
@@ -72,22 +76,33 @@ func test_build_places_each_widget_at_its_anchor() -> void:
 	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.READOUT)), HudSpec.TOP_RIGHT)
 	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.TEAMMATES)), HudSpec.BOTTOM)
 	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.GEAR)), HudSpec.BOTTOM_RIGHT)
-	assert_eq(_hud.widgets_of(HudSpec.POWER_GAUGE).size(), 1, "no extra gauge when the spec has one")
+	assert_eq(
+		_hud.widgets_of(HudSpec.POWER_GAUGE).size(), 1, "no extra gauge when the spec has one"
+	)
 
 
 func test_bottom_anchors_stack_upward_top_anchors_downward() -> void:
-	var spec := HudSpec.new() \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
-		.add(HudSpec.WBAL, HudSpec.TOP_LEFT)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
+		. add(HudSpec.WBAL, HudSpec.TOP_LEFT)
+	)
 	_hud.build(spec, _ctx)
 	var bl := _hud.anchor_box(HudSpec.BOTTOM_LEFT)
 	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
 	var cad := _hud.widget(HudSpec.CADENCE)
-	assert_gt(gauge.get_index(), cad.get_index(), "the first bottom entry sits nearest the bottom edge")
+	assert_gt(
+		gauge.get_index(), cad.get_index(), "the first bottom entry sits nearest the bottom edge"
+	)
 	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
-	assert_lt(_hud.widget(HudSpec.TIMELINE).get_index(), _hud.widget(HudSpec.WBAL).get_index(), "top entries stack downward")
+	assert_lt(
+		_hud.widget(HudSpec.TIMELINE).get_index(),
+		_hud.widget(HudSpec.WBAL).get_index(),
+		"top entries stack downward"
+	)
 	assert_not_null(bl)
 	assert_not_null(tl)
 
@@ -127,10 +142,9 @@ func test_relayout_on_screen_size_change() -> void:
 
 
 func test_invalid_positions_and_unknown_widgets_are_rejected() -> void:
-	var spec := HudSpec.new() \
-		.add(HudSpec.POWER_GAUGE, "middle") \
-		.add("radar", HudSpec.TOP) \
-		.add(HudSpec.CADENCE, HudSpec.TOP)
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, "middle").add("radar", HudSpec.TOP).add(
+		HudSpec.CADENCE, HudSpec.TOP
+	)
 	_hud.build(spec, _ctx)
 	assert_push_error("invalid position")
 	assert_push_error("unknown kit widget")
@@ -142,9 +156,12 @@ func test_power_is_always_visible() -> void:
 	var g := _hud.widget(HudSpec.POWER_GAUGE)
 	assert_not_null(g, "a gauge is added when the game shows no raw W and %FTP")
 	assert_eq(_hud.anchor_of(g), HudSpec.BOTTOM_LEFT)
-	_hud.build(HudSpec.new() \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "ftp_pct"}), _ctx)
+	_hud.build(
+		HudSpec.new().add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}).add(
+			HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "ftp_pct"}
+		),
+		_ctx
+	)
 	assert_null(_hud.widget(HudSpec.POWER_GAUGE), "power_w and ftp_pct readouts are enough")
 	_hud.ensure_power_visible = false
 	_hud.build(HudSpec.new(), _ctx)
@@ -163,17 +180,30 @@ func test_rebuild_replaces_widgets_and_frees_unused_controls() -> void:
 
 # --- game controls, toasts and banner areas ---------------------------------------------------
 
+
 func test_game_controls_at_anchors_after_kit_widgets() -> void:
 	var card := PanelContainer.new()
 	card.name = "RoutingCard"
-	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_RIGHT).add_control(card, HudSpec.BOTTOM_RIGHT)
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_RIGHT).add_control(
+		card, HudSpec.BOTTOM_RIGHT
+	)
 	_hud.build(spec, _ctx)
 	assert_eq(_hud.anchor_of(card), HudSpec.BOTTOM_RIGHT)
-	assert_lt(card.get_index(), _hud.widget(HudSpec.POWER_GAUGE).get_index(), "stacks above the gauge (bottom anchors go up)")
+	assert_lt(
+		card.get_index(),
+		_hud.widget(HudSpec.POWER_GAUGE).get_index(),
+		"stacks above the gauge (bottom anchors go up)"
+	)
 
 
 func test_toast_and_banner_areas_at_anchors() -> void:
-	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT).toasts_at(HudSpec.BOTTOM).banners_at(HudSpec.TOP)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. toasts_at(HudSpec.BOTTOM)
+		. banners_at(HudSpec.TOP)
+	)
 	_hud.build(spec, _ctx)
 	assert_eq(_hud.anchor_of(_hud.toasts()), HudSpec.BOTTOM)
 	assert_eq(_hud.anchor_of(_hud.banner()), HudSpec.TOP)
@@ -181,13 +211,17 @@ func test_toast_and_banner_areas_at_anchors() -> void:
 
 # --- Rect2i placement --------------------------------------------------------------------------
 
+
 func _fishing_spec(card: Control) -> HudSpec:
-	return HudSpec.new() \
-		.add(HudSpec.POWER_GAUGE, Rect2i(427, 0, 213, 42)) \
-		.add(HudSpec.CADENCE, Rect2i(427, 42, 213, 42)) \
-		.add_control(card, Rect2i(0, 10, 100, 20)) \
-		.toasts_at(Rect2i(0, 40, 640, 30)) \
-		.banners_at(Rect2i(0, 90, 427, 60))
+	return (
+		HudSpec
+		. new()
+		. add(HudSpec.POWER_GAUGE, Rect2i(427, 0, 213, 42))
+		. add(HudSpec.CADENCE, Rect2i(427, 42, 213, 42))
+		. add_control(card, Rect2i(0, 10, 100, 20))
+		. toasts_at(Rect2i(0, 40, 640, 30))
+		. banners_at(Rect2i(0, 90, 427, 60))
+	)
 
 
 func test_rect_positions_map_through_the_pixel_viewport_at_scale_2() -> void:
@@ -224,7 +258,9 @@ func test_rect_positions_at_scale_3_and_on_resize() -> void:
 ## The app shell keeps its on-screen panic button clear of the HUD: a reserved corner moves
 ## that corner's stack inward and narrows the centre stack of that edge.
 func test_reserve_corner_keeps_the_corner_clear() -> void:
-	var spec := HudSpec.new() 		.add(HudSpec.READOUT, HudSpec.BOTTOM_RIGHT, {"source": "power_w"}) 		.add(HudSpec.READOUT, HudSpec.TOP_LEFT, {"source": "cadence_rpm"})
+	var spec := HudSpec.new().add(HudSpec.READOUT, HudSpec.BOTTOM_RIGHT, {"source": "power_w"}).add(
+		HudSpec.READOUT, HudSpec.TOP_LEFT, {"source": "cadence_rpm"}
+	)
 	_hud.build(spec, _ctx)
 	_hud.relayout()
 	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
@@ -236,10 +272,20 @@ func test_reserve_corner_keeps_the_corner_clear() -> void:
 	_hud.reserve_corner(HudSpec.TOP_LEFT, Vector2(200, 50))
 	_hud.relayout()
 	assert_eq(_hud.reserved_corner(HudSpec.BOTTOM_RIGHT), Vector2(380, 100))
-	assert_eq(br.position, before - Vector2(0, 100 + WlTheme.GAP_PX), "the bottom-right stack sits above it")
+	assert_eq(
+		br.position,
+		before - Vector2(0, 100 + WlTheme.GAP_PX),
+		"the bottom-right stack sits above it"
+	)
 	assert_eq(tl.position, tl_before + Vector2(0, 50 + WlTheme.GAP_PX), "a top corner moves down")
-	assert_true(br.get_global_rect().end.y <= 1080 - WlTheme.MARGIN_PX - 100, "nothing under the reserved area")
-	assert_true(_hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080)) <= wide, "the bottom centre keeps clear")
+	assert_true(
+		br.get_global_rect().end.y <= 1080 - WlTheme.MARGIN_PX - 100,
+		"nothing under the reserved area"
+	)
+	assert_true(
+		_hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080)) <= wide,
+		"the bottom centre keeps clear"
+	)
 	_hud.reserve_corner(HudSpec.BOTTOM_RIGHT, Vector2.ZERO)
 	_hud.relayout()
 	assert_eq(br.position, before, "released")
@@ -262,15 +308,20 @@ func test_rect_positions_follow_the_real_pixel_viewport() -> void:
 	assert_eq(pv.size, Vector2(1920, 1080))
 	assert_eq(pv.integer_scale(), 3)
 	_hud.build(_fishing_spec(Control.new()), _ctx, pv)
-	assert_true(pv.layout_changed.is_connected(_hud._queue_relayout), "HudLayer follows layout_changed")
+	assert_true(
+		pv.layout_changed.is_connected(_hud._queue_relayout), "HudLayer follows layout_changed"
+	)
 	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
 	assert_eq(_hud.slot_screen_rect(gauge), pv.art_rect_to_screen(Rect2i(427, 0, 213, 42)))
 	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1281, 0, 639, 126))
 	pv.pixel_base = Vector2i(480, 270)
 	assert_eq(pv.integer_scale(), 4)
 	await wait_process_frames(2)
-	assert_eq(_hud.slot_screen_rect(gauge), pv.art_rect_to_screen(Rect2i(427, 0, 213, 42)),
-		"re-laid out on the real layout_changed")
+	assert_eq(
+		_hud.slot_screen_rect(gauge),
+		pv.art_rect_to_screen(Rect2i(427, 0, 213, 42)),
+		"re-laid out on the real layout_changed"
+	)
 	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1708, 0, 852, 168))
 
 
@@ -286,11 +337,15 @@ func test_rect_positions_follow_layout_changed() -> void:
 	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1281, 0, 639, 126))
 	pv.set_fake_layout(2, Vector2(0, 90))
 	await wait_process_frames(2)
-	assert_eq(_hud.slot_screen_rect(gauge), Rect2(854, 90, 426, 84), "re-laid out on layout_changed")
+	assert_eq(
+		_hud.slot_screen_rect(gauge), Rect2(854, 90, 426, 84), "re-laid out on layout_changed"
+	)
 	var pv2: FakePV = add_child_autofree(FakePV.new())
 	pv2.fake_scale = 1
 	_hud.build(_fishing_spec(Control.new()), _ctx, pv2)
-	assert_false(pv.is_connected("layout_changed", _hud._queue_relayout), "the old PixelViewport is let go")
+	assert_false(
+		pv.is_connected("layout_changed", _hud._queue_relayout), "the old PixelViewport is let go"
+	)
 	assert_false(pv.resized.is_connected(_hud._queue_relayout))
 	assert_true(pv2.is_connected("layout_changed", _hud._queue_relayout))
 	assert_eq(_hud.slot_screen_rect(_hud.widget(HudSpec.POWER_GAUGE)), Rect2(427, 0, 213, 42))
@@ -342,9 +397,20 @@ func test_fishing_zone_layout_fits_with_48_px_numbers() -> void:
 		var wd := _hud.widget(id)
 		var screen := _hud.slot_screen_rect(wd)
 		var got := wd.get_combined_minimum_size()
-		assert_true(got.x <= screen.size.x + 1.0 and got.y <= screen.size.y + 1.0, "%s %s fits %s" % [id, got, screen.size])
-	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()), 48, "W >= 48 px")
-	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label()), 48, "rpm >= 48 px")
+		assert_true(
+			got.x <= screen.size.x + 1.0 and got.y <= screen.size.y + 1.0,
+			"%s %s fits %s" % [id, got, screen.size]
+		)
+	assert_gte(
+		HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()),
+		48,
+		"W >= 48 px"
+	)
+	assert_gte(
+		HudWidget.font_px((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label()),
+		48,
+		"rpm >= 48 px"
+	)
 
 
 func test_rect_without_pixel_viewport_is_1080p_pixels() -> void:
@@ -354,6 +420,7 @@ func test_rect_without_pixel_viewport_is_1080p_pixels() -> void:
 
 
 # --- the session bus ----------------------------------------------------------------------------
+
 
 func test_bus_power_band_reaches_the_local_gauge_only() -> void:
 	_hud.build(_spec(), _ctx)
@@ -394,10 +461,16 @@ func test_bus_cadence_band() -> void:
 func test_bus_roster_fills_the_teammate_strip() -> void:
 	_hud.build(_spec(), _ctx)
 	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
-	_bus.roster_changed.emit({
-		LOCAL: {"name": "Ada", "slot_index": 0, "raw_w": 200.0, "ftp_pct": 80.0},
-		2: {"name": "Bo", "slot_index": 4, "raw_w": 150.0, "ftp_pct": 60.0, "afk": true},
-	})
+	(
+		_bus
+		. roster_changed
+		. emit(
+			{
+				LOCAL: {"name": "Ada", "slot_index": 0, "raw_w": 200.0, "ftp_pct": 80.0},
+				2: {"name": "Bo", "slot_index": 4, "raw_w": 150.0, "ftp_pct": 60.0, "afk": true},
+			}
+		)
+	)
 	assert_eq(tm.peers(), [LOCAL, 2])
 	assert_true(tm.card(2).chip().hollow, "slot 4: hollow circle")
 	assert_eq(tm.card(2).chip().shape, "circle")
@@ -472,15 +545,27 @@ func test_frames_drive_messages_without_session_time() -> void:
 
 
 func test_corner_toasts_and_banners_line_up_with_their_side() -> void:
-	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT).toasts_at(HudSpec.TOP_LEFT).banners_at(HudSpec.TOP_RIGHT)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. toasts_at(HudSpec.TOP_LEFT)
+		. banners_at(HudSpec.TOP_RIGHT)
+	)
 	_hud.build(spec, _ctx)
 	_bus.toast_requested.emit("Sprint in 10 s", [])
 	_bus.toast_requested.emit("Endurance 1 done: 100% in band", [])
 	_bus.banner_requested.emit("Wave 3", [], 3.0)
 	assert_eq(_hud.toasts().side, -1)
 	for p: Node in _hud.toasts().get_children():
-		assert_eq((p as Control).size_flags_horizontal, Control.SIZE_SHRINK_BEGIN, "left corner: toasts line up left")
-		assert_eq(((p as Control).get_child(0) as Label).horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
+		assert_eq(
+			(p as Control).size_flags_horizontal,
+			Control.SIZE_SHRINK_BEGIN,
+			"left corner: toasts line up left"
+		)
+		assert_eq(
+			((p as Control).get_child(0) as Label).horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT
+		)
 	assert_eq(_hud.banner().side, 1)
 	assert_eq(_hud.banner().game_label().horizontal_alignment, HORIZONTAL_ALIGNMENT_RIGHT)
 	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT), _ctx)
@@ -502,8 +587,16 @@ func test_bands_and_statuses_before_build_and_across_rebuilds() -> void:
 		_hud.update(_tele(Wl.SIM, 200.0), null, null)
 		var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
 		assert_eq(g.band(), Vector2(190, 262), "power band (build %d)" % round_i)
-		assert_eq((_hud.widget(HudSpec.CADENCE) as HudCadence).band(), Vector2(80, 95), "cadence band (build %d)" % round_i)
-		assert_eq((_hud.widget(HudSpec.TEAMMATES) as HudTeammates).card(2).status_text(), "Diesel", "status (build %d)" % round_i)
+		assert_eq(
+			(_hud.widget(HudSpec.CADENCE) as HudCadence).band(),
+			Vector2(80, 95),
+			"cadence band (build %d)" % round_i
+		)
+		assert_eq(
+			(_hud.widget(HudSpec.TEAMMATES) as HudTeammates).card(2).status_text(),
+			"Diesel",
+			"status (build %d)" % round_i
+		)
 		_hud.build(_spec(), _ctx)
 	assert_eq(_hud.power_band_of(LOCAL), Vector2(190, 262))
 	_bus.power_band_changed.emit(LOCAL, 0.0, 0.0)
@@ -512,7 +605,11 @@ func test_bands_and_statuses_before_build_and_across_rebuilds() -> void:
 	assert_eq(_hud.cadence_band_of(LOCAL), Vector2.ZERO)
 	_hud.build(_spec(), _ctx)
 	_hud.update(_tele(Wl.SIM, 200.0), null, null)
-	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2.ZERO, "cleared stays cleared")
+	assert_eq(
+		(_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(),
+		Vector2.ZERO,
+		"cleared stays cleared"
+	)
 	assert_eq((_hud.widget(HudSpec.CADENCE) as HudCadence).band(), Vector2.ZERO)
 
 
@@ -523,7 +620,9 @@ func test_rebuild_drops_statuses_the_roster_replaced() -> void:
 	_hud.local_feed().teammate_status(2, {"text": "Diesel"})
 	_bus.roster_changed.emit({2: {"name": "Bo", "slot_index": 1, "status": {}}})
 	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
-	assert_eq(tm.card(2).status_text(), "Diesel", "a client's local status outlives the 2 Hz roster")
+	assert_eq(
+		tm.card(2).status_text(), "Diesel", "a client's local status outlives the 2 Hz roster"
+	)
 	_bus.roster_changed.emit({2: {"name": "Bo", "slot_index": 1, "status": {"text": "Steam"}}})
 	assert_eq(tm.card(2).status_text(), "Steam")
 	_ctx.roster = {2: {"name": "Bo", "slot_index": 1, "status": {"text": "Steam"}}}
@@ -545,7 +644,12 @@ func test_toast_args_fill_named_placeholders() -> void:
 ## passes through.
 func test_timeline_label_goes_through_the_string_table() -> void:
 	_hud.build(_spec(), _ctx)
-	var plan := EffortPlan.of([PlanPhase.erg(Wl.RECOVERY, 55, 120, "UI_KIND_RECOVERY"), PlanPhase.erg(Wl.WORK, 90, 60, "Wave 2")])
+	var plan := EffortPlan.of(
+		[
+			PlanPhase.erg(Wl.RECOVERY, 55, 120, "UI_KIND_RECOVERY"),
+			PlanPhase.erg(Wl.WORK, 90, 60, "Wave 2")
+		]
+	)
 	var ph := PhaseState.new()
 	ph.index = 0
 	ph.kind = Wl.RECOVERY
@@ -595,7 +699,9 @@ func test_bus_readout_and_late_readouts() -> void:
 	_bus.readout_changed.emit("other", "9")
 	assert_eq(r.value_text(), "1250")
 	_hud.build(_spec(), _ctx)
-	assert_eq((_hud.widget(HudSpec.READOUT) as HudReadout).value_text(), "1250", "kept across rebuilds")
+	assert_eq(
+		(_hud.widget(HudSpec.READOUT) as HudReadout).value_text(), "1250", "kept across rebuilds"
+	)
 
 
 func test_bus_rescue_pause_and_warmup_banners() -> void:
@@ -659,6 +765,7 @@ func test_rebuild_disconnects_the_old_bus() -> void:
 
 # --- local feed and update --------------------------------------------------------------------
 
+
 func test_local_feed_draws_on_this_layer() -> void:
 	_hud.build(_spec(), _ctx)
 	var feed := _hud.local_feed()
@@ -669,7 +776,11 @@ func test_local_feed_draws_on_this_layer() -> void:
 	feed.banner("Boss!", [], 4.0, 0)
 	assert_eq(_hud.banner().game_text(), "Boss!")
 	feed.power_band(LOCAL, 190.0, 260.0)
-	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2.ZERO, "ERG/OFF shows no SIM band")
+	assert_eq(
+		(_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(),
+		Vector2.ZERO,
+		"ERG/OFF shows no SIM band"
+	)
 	_hud.update(_tele(Wl.SIM, 200.0), null, null)
 	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2(190, 260))
 	feed.teammate_status(2, {"in_band": true, "icon": "", "text": "Diesel"})
@@ -691,7 +802,12 @@ func test_local_feed_outlives_the_layer_safely() -> void:
 
 func test_update_feeds_every_widget() -> void:
 	_hud.build(_spec(), _ctx)
-	var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up"), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Sprint")])
+	var plan := EffortPlan.of(
+		[
+			PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up"),
+			PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Sprint")
+		]
+	)
 	var ph := PhaseState.new()
 	ph.index = 1
 	ph.kind = Wl.FREE
@@ -730,7 +846,9 @@ func test_ftp_and_wkg_from_the_rider() -> void:
 
 func test_key_numbers_on_the_layer_are_at_least_48_px() -> void:
 	_hud.build(_spec().add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}), _ctx)
-	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()), 48)
+	assert_gte(
+		HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()), 48
+	)
 	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label()), 48)
 	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.GEAR) as HudGear).gear_label()), 48)
 	for r in _hud.widgets_of(HudSpec.READOUT):
@@ -751,6 +869,7 @@ func test_hud_runs_in_a_paused_tree_settings() -> void:
 
 # --- centre stacks keep clear of the corners ----------------------------------------------------
 
+
 func _eight_riders() -> Dictionary:
 	var r := {}
 	for i in 8:
@@ -762,10 +881,13 @@ func _eight_riders() -> Dictionary:
 func test_bottom_strip_wraps_and_never_runs_under_the_corners() -> void:
 	var shop := PanelContainer.new()
 	shop.custom_minimum_size = Vector2(470, 300)
-	var spec := HudSpec.new() \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
-		.add_control(shop, HudSpec.BOTTOM_RIGHT)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
+		. add_control(shop, HudSpec.BOTTOM_RIGHT)
+	)
 	_hud.build(spec, _ctx)
 	_bus.roster_changed.emit(_eight_riders())
 	_hud.relayout()
@@ -776,19 +898,36 @@ func test_bottom_strip_wraps_and_never_runs_under_the_corners() -> void:
 	var bl := _hud.anchor_box(HudSpec.BOTTOM_LEFT)
 	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
 	var center := Rect2(b.position, b.size)
-	assert_false(center.intersects(Rect2(bl.position, bl.size)), "clear of bottom_left: %s vs %s" % [center, Rect2(bl.position, bl.size)])
-	assert_false(center.intersects(Rect2(br.position, br.size)), "clear of bottom_right: %s vs %s" % [center, Rect2(br.position, br.size)])
+	assert_false(
+		center.intersects(Rect2(bl.position, bl.size)),
+		"clear of bottom_left: %s vs %s" % [center, Rect2(bl.position, bl.size)]
+	)
+	assert_false(
+		center.intersects(Rect2(br.position, br.size)),
+		"clear of bottom_right: %s vs %s" % [center, Rect2(br.position, br.size)]
+	)
 	assert_lte(center.size.x, _hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080)) + 1.0)
 
 
 func test_long_toasts_and_banners_wrap_between_the_corners() -> void:
-	var spec := HudSpec.new() \
-		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
+		. add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"})
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+	)
 	_hud.build(spec, _ctx)
-	_hud.show_toast("A very long toast that would otherwise run all the way across the top of the screen and under the timeline", [])
-	_hud.show_banner("An equally long banner text that has to wrap onto a second line to stay readable", [], 5.0)
+	(
+		_hud
+		. show_toast(
+			"A very long toast that would otherwise run all the way across the top of the screen and under the timeline",
+			[]
+		)
+	)
+	_hud.show_banner(
+		"An equally long banner text that has to wrap onto a second line to stay readable", [], 5.0
+	)
 	_hud.relayout()
 	await wait_process_frames(3)
 	var top := _hud.anchor_box(HudSpec.TOP)
@@ -803,15 +942,22 @@ func test_long_toasts_and_banners_wrap_between_the_corners() -> void:
 ## Workout's layout: the timeline in the top centre, toasts at top_left. A long toast wraps
 ## within a third of the screen, so it never runs under the timeline and never squeezes it.
 func test_corner_toasts_wrap_and_leave_the_centre_its_room() -> void:
-	var spec := HudSpec.new() \
-		.add(HudSpec.TIMELINE, HudSpec.TOP) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.toasts_at(HudSpec.TOP_LEFT) \
-		.banners_at(HudSpec.BOTTOM_RIGHT)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.TIMELINE, HudSpec.TOP)
+		. add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"})
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. toasts_at(HudSpec.TOP_LEFT)
+		. banners_at(HudSpec.BOTTOM_RIGHT)
+	)
 	_hud.build(spec, _ctx)
-	_hud.show_toast("Interval 3 done: 96% in band, the best of the session so far, keep it going", [])
-	_hud.show_banner("A very long banner in a corner that must wrap instead of crossing the screen", [], 5.0)
+	_hud.show_toast(
+		"Interval 3 done: 96% in band, the best of the session so far, keep it going", []
+	)
+	_hud.show_banner(
+		"A very long banner in a corner that must wrap instead of crossing the screen", [], 5.0
+	)
 	_hud.relayout()
 	await wait_process_frames(3)
 	_hud.relayout()
@@ -822,8 +968,13 @@ func test_corner_toasts_wrap_and_leave_the_centre_its_room() -> void:
 	var third := HudLayer.corner_text_width(Vector2(1920, 1080))
 	assert_lte(tl.size.x, third + 1.0, "the toast wraps within a third: %s" % tl.size)
 	assert_lte(br.size.x, third + 1.0, "so does a corner banner: %s" % br.size)
-	assert_false(Rect2(tl.position, tl.size).intersects(Rect2(top.position, top.size)), "clear of the timeline")
-	assert_gt(_hud.widget(HudSpec.TIMELINE).ui_scale, 0.9, "the timeline keeps (nearly) its full size")
+	assert_false(
+		Rect2(tl.position, tl.size).intersects(Rect2(top.position, top.size)),
+		"clear of the timeline"
+	)
+	assert_gt(
+		_hud.widget(HudSpec.TIMELINE).ui_scale, 0.9, "the timeline keeps (nearly) its full size"
+	)
 
 
 func test_demo_scene_builds_headless() -> void:

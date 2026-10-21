@@ -39,15 +39,29 @@ func _read_report() -> Dictionary:
 
 # --- flags -------------------------------------------------------------------------------------
 
+
 func test_not_scripted_without_host_or_join() -> void:
 	var c := _config(["--mock-trainer=erg", "--autopilot"])
 	assert_false(c.enabled)
 
 
 func test_host_flags() -> void:
-	var c := _config(["--host", "--game=workout", "--e2e", "--wait-peers=3", "--relay=ws://127.0.0.1:8787/v1",
-		"--mock-trainer=erg:compliance=0.9", "--autopilot", "--profile-dir=C:/tmp/p1", "--seed=42",
-		"--sim-speed=1", "--report=C:/tmp/r.json", "--run-seconds=600"])
+	var c := _config(
+		[
+			"--host",
+			"--game=workout",
+			"--e2e",
+			"--wait-peers=3",
+			"--relay=ws://127.0.0.1:8787/v1",
+			"--mock-trainer=erg:compliance=0.9",
+			"--autopilot",
+			"--profile-dir=C:/tmp/p1",
+			"--seed=42",
+			"--sim-speed=1",
+			"--report=C:/tmp/r.json",
+			"--run-seconds=600"
+		]
+	)
 	assert_true(c.is_valid(), str(c.errors))
 	assert_eq(c.role, Wl.HOST)
 	assert_eq(c.game_id, "workout")
@@ -65,14 +79,23 @@ func test_host_flags() -> void:
 
 
 func test_join_flags_normalise_the_code() -> void:
-	var c := _config(["--join=k7q-x2m", "--strava-base=http://127.0.0.1:9100", "--strava-client-id=123",
-		"--strava-client-secret=s3cret", "--strava-auto-upload"])
+	var c := _config(
+		[
+			"--join=k7q-x2m",
+			"--strava-base=http://127.0.0.1:9100",
+			"--strava-client-id=123",
+			"--strava-client-secret=s3cret",
+			"--strava-auto-upload"
+		]
+	)
 	assert_true(c.is_valid(), str(c.errors))
 	assert_eq(c.role, Wl.CLIENT)
 	assert_eq(c.join_code, "K7QX2M")
 	assert_true(c.wants_strava_connect())
 	assert_true(c.strava_auto_upload)
-	assert_false(JSON.stringify(c.describe()).contains("s3cret"), "describe() never holds the secret")
+	assert_false(
+		JSON.stringify(c.describe()).contains("s3cret"), "describe() never holds the secret"
+	)
 
 
 func test_bad_flags() -> void:
@@ -100,13 +123,20 @@ func test_ambiguous_loopback_strava_base_is_refused_while_locked() -> void:
 	if not Locks.network_locked():
 		pending("network lock not set in this run")
 		return
-	for base: String in ["http://127.0.0.1?@evil.example:8899", "http://127.0.0.1#@evil.example/",
-			"http://localhost\\@evil.example/", "http://127.0.0.1%40evil.example/"]:
+	for base: String in [
+		"http://127.0.0.1?@evil.example:8899",
+		"http://127.0.0.1#@evil.example/",
+		"http://localhost\\@evil.example/",
+		"http://127.0.0.1%40evil.example/"
+	]:
 		var c := _config(["--host", "--game=workout", "--strava-base=" + base])
 		assert_false(c.is_valid(), base)
 		assert_true(not c.errors.is_empty() and c.errors[0].contains(Locks.NET_MESSAGE), base)
 	for base: String in ["http://127.0.0.1:9100", "http://localhost:9100/api"]:
-		assert_true(_config(["--host", "--game=workout", "--strava-base=" + base]).is_valid(), "%s stays allowed" % base)
+		assert_true(
+			_config(["--host", "--game=workout", "--strava-base=" + base]).is_valid(),
+			"%s stays allowed" % base
+		)
 
 
 func test_content_resolution() -> void:
@@ -126,9 +156,16 @@ func test_invalid_flags_quit_non_zero() -> void:
 
 # --- host --------------------------------------------------------------------------------------
 
+
 func _host(extra: Array[String] = []) -> AppScriptedPeer:
-	var args: Array[String] = ["--host", "--game=workout", "--e2e", "--autopilot", "--mock-trainer=erg",
-		"--report=" + _report_path()]
+	var args: Array[String] = [
+		"--host",
+		"--game=workout",
+		"--e2e",
+		"--autopilot",
+		"--mock-trainer=erg",
+		"--report=" + _report_path()
+	]
 	args.append_array(extra)
 	var p := _peer(args)
 	fx.fake_net().add_human(1, "Rider")
@@ -142,7 +179,9 @@ func test_host_flow_to_a_complete_report() -> void:
 	assert_true(fx.settings.profile.created, "a profile is created when the dir has none")
 	assert_true(fx.settings.profile.autopilot_default, "--autopilot")
 	fx.fake_net().simulate_hosting("K7QX2M")
-	assert_eq(lines.slice(0, 3), ["WATTLANDS_ROOM K7QX2M", "WATTLANDS_PEER 1", "WATTLANDS_STATE lobby"])
+	assert_eq(
+		lines.slice(0, 3), ["WATTLANDS_ROOM K7QX2M", "WATTLANDS_PEER 1", "WATTLANDS_STATE lobby"]
+	)
 	assert_eq(fx.fake_net().last_call("set_game"), ["set_game", "workout", "1.0.0", "e2e"])
 	assert_eq(fx.fake_net().last_call("set_ready"), ["set_ready", true], "ready automatically")
 	assert_true(fx.fake_net().info["autopilot"])
@@ -155,8 +194,12 @@ func test_host_flow_to_a_complete_report() -> void:
 	assert_true(lines.has("WATTLANDS_STATE running"))
 	fx.bus.phase_started.emit(1, 0)
 	h.game.send_event({"type": "wave", "n": 1})
-	fx.bus.directive_applied.emit(1, {"id": 3, "kind": "request", "t": 1.0, "applied": {"target_pct": 60}})
-	(fx.trainer.local_rider() as FakeRider).directive_applied.emit({"id": 3, "kind": "request", "t": 1.0, "applied": {"target_pct": 60}})
+	fx.bus.directive_applied.emit(
+		1, {"id": 3, "kind": "request", "t": 1.0, "applied": {"target_pct": 60}}
+	)
+	(fx.trainer.local_rider() as FakeRider).directive_applied.emit(
+		{"id": 3, "kind": "request", "t": 1.0, "applied": {"target_pct": 60}}
+	)
 	(fx.trainer.local_rider() as FakeRider).tm.mode = Wl.ERG
 	(fx.trainer.local_rider() as FakeRider).tm.applied_target_w = 130
 	p.step(0.5)
@@ -186,7 +229,17 @@ func test_host_flow_to_a_complete_report() -> void:
 	assert_eq((rep["directives"] as Array).size(), 1, "bus and rider records deduplicated")
 	assert_gte((rep["trace"] as Array).size(), 2, "1 Hz trace")
 	var tr: Dictionary = rep["trace"][0]
-	for k: String in ["t", "mode", "applied_target_w", "applied_pct", "applied_grade_pct", "warmup_active", "clamped_by", "rescue", "afk"]:
+	for k: String in [
+		"t",
+		"mode",
+		"applied_target_w",
+		"applied_pct",
+		"applied_grade_pct",
+		"warmup_active",
+		"clamped_by",
+		"rescue",
+		"afk"
+	]:
 		assert_true(tr.has(k), "trace has %s" % k)
 	assert_eq(tr["mode"], Wl.ERG)
 	var types: Array = []
@@ -255,8 +308,11 @@ func test_run_seconds_mid_session_ends_it_and_keeps_the_fit() -> void:
 
 # --- client ------------------------------------------------------------------------------------
 
+
 func _client(extra: Array[String] = []) -> AppScriptedPeer:
-	var args: Array[String] = ["--join=K7Q-X2M", "--autopilot", "--mock-trainer=erg", "--report=" + _report_path()]
+	var args: Array[String] = [
+		"--join=K7Q-X2M", "--autopilot", "--mock-trainer=erg", "--report=" + _report_path()
+	]
 	args.append_array(extra)
 	var p := _peer(args)
 	var net := fx.fake_net()
@@ -267,7 +323,13 @@ func _client(extra: Array[String] = []) -> AppScriptedPeer:
 
 
 static func _lobby() -> Dictionary:
-	return {"game_id": "workout", "game_version": "1.0.0", "content_id": "e2e", "scaling": Wl.FAIR_FTP, "settings": {}}
+	return {
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "e2e",
+		"scaling": Wl.FAIR_FTP,
+		"settings": {}
+	}
 
 
 static func _start_msg() -> Dictionary:
@@ -276,8 +338,18 @@ static func _start_msg() -> Dictionary:
 	var b := PlayerSlot.new()
 	b.peer_id = 2
 	b.apply_look(1)
-	return {"type": "session_start", "v": 1, "game_id": "workout", "game_version": "1.0.0", "content_id": "e2e",
-		"seed": 5, "players": [a.to_dict(), b.to_dict()], "options": {}, "scaling": Wl.FAIR_FTP, "start_tick": 0}
+	return {
+		"type": "session_start",
+		"v": 1,
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "e2e",
+		"seed": 5,
+		"players": [a.to_dict(), b.to_dict()],
+		"options": {},
+		"scaling": Wl.FAIR_FTP,
+		"start_tick": 0
+	}
 
 
 func test_client_flow() -> void:
@@ -294,12 +366,25 @@ func test_client_flow() -> void:
 	assert_eq(h.config_seen["role"], Wl.CLIENT)
 	assert_eq(h.config_seen["seed"], 5)
 	fx.bus.phase_started.emit(2, 0)
-	net.receive(1, {"type": "event", "v": 1, "seq": 1, "events": [
-		{"type": "wl.phase_started", "peer": 1, "index": 0, "ended_by": "start"},
-		{"type": "wl.phase_started", "peer": 2, "index": 0, "ended_by": "start"},
-		{"type": "wave", "n": 2}, {"type": "wl.lap_marker", "label": "x"}]})
+	net.receive(
+		1,
+		{
+			"type": "event",
+			"v": 1,
+			"seq": 1,
+			"events":
+			[
+				{"type": "wl.phase_started", "peer": 1, "index": 0, "ended_by": "start"},
+				{"type": "wl.phase_started", "peer": 2, "index": 0, "ended_by": "start"},
+				{"type": "wave", "n": 2},
+				{"type": "wl.lap_marker", "label": "x"}
+			]
+		}
+	)
 	net.receive(1, {"type": "event", "v": 1, "seq": 1, "events": [{"type": "wave", "n": 2}]})
-	net.receive(1, {"type": "snapshot", "v": 1, "game_id": "workout", "seq": 3, "state": {"tick": 40}})
+	net.receive(
+		1, {"type": "snapshot", "v": 1, "game_id": "workout", "seq": 3, "state": {"tick": 40}}
+	)
 	h.fits = {2: "C:/rides/client.fit"}
 	h.finish_with(GameResults.new())
 	assert_eq(p.exit_code, 0, "a client finishes right after its results")
@@ -310,7 +395,11 @@ func test_client_flow() -> void:
 	for e: Variant in rep["events"]:
 		if (e as Dictionary)["type"] == "game_event":
 			game_events.append(e)
-	assert_eq(game_events.size(), 1, "platform events in the batch are not game events; a batch counts once")
+	assert_eq(
+		game_events.size(),
+		1,
+		"platform events in the batch are not game events; a batch counts once"
+	)
 	assert_eq(game_events[0]["event_type"], "wave")
 	var shared: Array = []
 	for e: Variant in rep["events"]:
@@ -319,8 +408,11 @@ func test_client_flow() -> void:
 			shared.append(["phase_started", int(d["peer"]), int(d["index"])])
 		elif d["type"] == "game_event":
 			shared.append(["game_event", d["event_type"]])
-	assert_eq(shared, [["phase_started", 1, 0], ["phase_started", 2, 0], ["game_event", "wave"]],
-		"phase_started for every rider, in the host's batch order (not from the client's own bus)")
+	assert_eq(
+		shared,
+		[["phase_started", 1, 0], ["phase_started", 2, 0], ["game_event", "wave"]],
+		"phase_started for every rider, in the host's batch order (not from the client's own bus)"
+	)
 	assert_eq(rep["final_state"]["snapshot"], {"tick": 40.0})
 
 
@@ -403,8 +495,16 @@ func test_host_left_after_results_is_ignored() -> void:
 
 # --- Strava ----------------------------------------------------------------------------------
 
+
 func test_strava_connect_at_start_and_auto_upload() -> void:
-	var p := _client(["--strava-base=http://127.0.0.1:9100", "--strava-client-id=777", "--strava-client-secret=zz-secret-zz", "--strava-auto-upload"])
+	var p := _client(
+		[
+			"--strava-base=http://127.0.0.1:9100",
+			"--strava-client-id=777",
+			"--strava-client-secret=zz-secret-zz",
+			"--strava-auto-upload"
+		]
+	)
 	assert_eq(fx.fake_rides().connects, ["777"] as Array[String])
 	assert_true(fx.settings.profile.strava_auto_upload)
 	fx.fake_rides().connected = true
@@ -427,8 +527,13 @@ func test_strava_connect_at_start_and_auto_upload() -> void:
 	assert_eq((rep["uploads"] as Array).size(), 1)
 	assert_eq(rep["uploads"][0]["state"], "uploaded")
 	assert_eq(int(rep["uploads"][0]["activity_id"]), 987654)
-	assert_false(FileAccess.get_file_as_string(_report_path()).contains("zz-secret-zz"), "no secret in the report")
-	assert_false(lines.any(func(l: String) -> bool: return l.contains("zz-secret-zz")), "no secret on stdout")
+	assert_false(
+		FileAccess.get_file_as_string(_report_path()).contains("zz-secret-zz"),
+		"no secret in the report"
+	)
+	assert_false(
+		lines.any(func(l: String) -> bool: return l.contains("zz-secret-zz")), "no secret on stdout"
+	)
 
 
 func test_upload_failure_quits_non_zero() -> void:
@@ -464,7 +569,9 @@ func test_auto_upload_without_strava_fails_at_once() -> void:
 	net.receive(1, _start_msg())
 	fx.last_host().fits = {2: "C:/rides/c.fit"}
 	fx.last_host().finish_with(GameResults.new())
-	assert_eq(p.exit_reason, "error:strava_not_connected", "no 150 s wait for an upload that can't happen")
+	assert_eq(
+		p.exit_reason, "error:strava_not_connected", "no 150 s wait for an upload that can't happen"
+	)
 	assert_eq(fx.fake_rides().uploads.size(), 0)
 
 

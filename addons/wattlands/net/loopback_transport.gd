@@ -118,6 +118,7 @@ func poll() -> void:
 
 # --- RelayClientTransport socket layer ------------------------------------------------------
 
+
 func _socket_open() -> void:
 	if _hub == null:
 		push_error("LoopbackTransport: no hub (create it with hub_transport(hub))")
@@ -147,6 +148,7 @@ func _socket_close() -> void:
 
 
 # --- called by the hub ------------------------------------------------------------------------
+
 
 func _enqueue_text(text: String) -> void:
 	_inbox.append([_polls + 1 + latency_ticks, "text", text])

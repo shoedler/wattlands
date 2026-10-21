@@ -50,7 +50,12 @@ static func diff(sdk: Variant, ours: Variant, path: String, out: Array[String]) 
 		return
 	if sdk is Array and ours is Array:
 		if (sdk as Array).size() != (ours as Array).size():
-			out.append("%s: %d entries in the SDK's, %d in ours" % [path, (sdk as Array).size(), (ours as Array).size()])
+			out.append(
+				(
+					"%s: %d entries in the SDK's, %d in ours"
+					% [path, (sdk as Array).size(), (ours as Array).size()]
+				)
+			)
 			return
 		for i in (sdk as Array).size():
 			diff((sdk as Array)[i], (ours as Array)[i], "%s[%d]" % [path, i], out)
@@ -61,14 +66,26 @@ static func diff(sdk: Variant, ours: Variant, path: String, out: Array[String]) 
 
 func test_the_comparison_reports_every_kind_of_difference() -> void:
 	var out: Array[String] = []
-	diff({"a": 1, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "path": "ignored"}, {"a": 1.0000000001, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "path": "other"}, "f", out)
+	diff(
+		{"a": 1, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "path": "ignored"},
+		{"a": 1.0000000001, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "path": "other"},
+		"f",
+		out
+	)
 	assert_eq(out, [] as Array[String], "equal within tolerance; path is not compared")
-	diff({"a": 1, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "n": null, "m": 1}, {"a": 1.01, "b": [1], "c": "y", "d": {"e": 2.0}, "n": 0}, "f", out)
+	diff(
+		{"a": 1, "b": [1, 2], "c": "x", "d": {"e": 1.0}, "n": null, "m": 1},
+		{"a": 1.01, "b": [1], "c": "y", "d": {"e": 2.0}, "n": 0},
+		"f",
+		out
+	)
 	assert_eq(out.size(), 6, "\n".join(PackedStringArray(out)))
 
 
 func test_both_fixtures_are_listed() -> void:
-	var names: Array = _sdk_files().map(func(f: Variant) -> String: return str((f as Dictionary).get("path", "")))
+	var names: Array = _sdk_files().map(
+		func(f: Variant) -> String: return str((f as Dictionary).get("path", ""))
+	)
 	assert_eq(names, ["rides_ten_minute.fit", "rides_paused_dropout.fit"])
 
 
@@ -79,7 +96,11 @@ func test_the_fallback_contract_equals_the_fit_sdk() -> void:
 		var ours := QaFitDecoder.rides_contract(_decode(name))
 		var problems: Array[String] = []
 		diff(sdk, ours, name, problems)
-		assert_eq(problems, [] as Array[String], "%s:\n%s" % [name, "\n".join(PackedStringArray(problems))])
+		assert_eq(
+			problems,
+			[] as Array[String],
+			"%s:\n%s" % [name, "\n".join(PackedStringArray(problems))]
+		)
 
 
 func test_real_rides_pass_every_wattlands_check() -> void:
@@ -90,7 +111,11 @@ func test_real_rides_pass_every_wattlands_check() -> void:
 		assert_true(bool(s["crc_ok"]), "%s: header and file CRCs" % name)
 		assert_eq((s["laps"] as Array).size(), 5, "%s: five laps" % name)
 		assert_eq(int((s["session"] as Dictionary)["num_laps"]), 5)
-		assert_eq(int((s["messages"] as Dictionary).get("field_description", 0)), 1, "%s: the lap_name description" % name)
+		assert_eq(
+			int((s["messages"] as Dictionary).get("field_description", 0)),
+			1,
+			"%s: the lap_name description" % name
+		)
 
 
 func test_lap_names_and_starts_of_the_ten_minute_ride() -> void:
@@ -98,7 +123,9 @@ func test_lap_names_and_starts_of_the_ten_minute_ride() -> void:
 	var laps: Array = s["laps"]
 	var names: Array = laps.map(func(l: Variant) -> String: return str((l as Dictionary)["name"]))
 	assert_eq(names, ["Warm-up", "Work 1", "Recovery", "Work 2", "Cool-down"])
-	var starts: Array = laps.map(func(l: Variant) -> float: return float((l as Dictionary)["start_s"]))
+	var starts: Array = laps.map(
+		func(l: Variant) -> float: return float((l as Dictionary)["start_s"])
+	)
 	assert_eq(starts, [0.0, 120.0, 240.0, 300.0, 420.0])
 	assert_eq(int(s["records"]), 601)
 	assert_eq(int(s["record_gaps"]), 0)

@@ -39,7 +39,7 @@ func configure(p_options: Dictionary) -> void:
 	source = s
 	readout_id = str(p_options.get("id", ""))
 	if source == "custom" and readout_id.is_empty():
-		push_warning("HudReadout: a custom readout needs an \"id\"")
+		push_warning('HudReadout: a custom readout needs an "id"')
 	_value.text = "" if source == "custom" else "0"
 	_set_caption()
 

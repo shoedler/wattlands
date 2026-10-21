@@ -27,7 +27,9 @@ static func shader() -> Shader:
 
 ## A new material mapping keys[i] -> swaps[i]. Extra colors beyond MAX_KEYS, or beyond the
 ## shorter of the two ramps, are dropped with an error.
-static func make_material(keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE) -> ShaderMaterial:
+static func make_material(
+	keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE
+) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = shader()
 	set_ramps(mat, keys, swaps, tolerance)
@@ -35,7 +37,12 @@ static func make_material(keys: PackedColorArray, swaps: PackedColorArray, toler
 
 
 ## Give `item` a new PaletteSwap material and return it.
-static func apply(item: CanvasItem, keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE) -> ShaderMaterial:
+static func apply(
+	item: CanvasItem,
+	keys: PackedColorArray,
+	swaps: PackedColorArray,
+	tolerance: float = DEFAULT_TOLERANCE
+) -> ShaderMaterial:
 	var mat := make_material(keys, swaps, tolerance)
 	if item != null:
 		item.material = mat
@@ -44,17 +51,31 @@ static func apply(item: CanvasItem, keys: PackedColorArray, swaps: PackedColorAr
 
 ## Swap `keys` to the session look color of `slot_index` (Wl.slot_look), as a ramp of the
 ## same length as `keys`.
-static func apply_slot(item: CanvasItem, keys: PackedColorArray, slot_index: int, tolerance: float = DEFAULT_TOLERANCE) -> ShaderMaterial:
+static func apply_slot(
+	item: CanvasItem, keys: PackedColorArray, slot_index: int, tolerance: float = DEFAULT_TOLERANCE
+) -> ShaderMaterial:
 	return apply(item, keys, slot_ramp(slot_index, keys.size()), tolerance)
 
 
 ## Set both ramps (and the tolerance) on an existing PaletteSwap material.
-static func set_ramps(mat: ShaderMaterial, keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE) -> void:
+static func set_ramps(
+	mat: ShaderMaterial,
+	keys: PackedColorArray,
+	swaps: PackedColorArray,
+	tolerance: float = DEFAULT_TOLERANCE
+) -> void:
 	var n := mini(keys.size(), swaps.size())
 	if keys.size() != swaps.size():
-		push_error("PaletteSwap: %d key colors but %d swap colors; using %d" % [keys.size(), swaps.size(), mini(n, MAX_KEYS)])
+		push_error(
+			(
+				"PaletteSwap: %d key colors but %d swap colors; using %d"
+				% [keys.size(), swaps.size(), mini(n, MAX_KEYS)]
+			)
+		)
 	if n > MAX_KEYS:
-		push_error("PaletteSwap: %d colors exceed MAX_KEYS (%d); extra colors dropped" % [n, MAX_KEYS])
+		push_error(
+			"PaletteSwap: %d colors exceed MAX_KEYS (%d); extra colors dropped" % [n, MAX_KEYS]
+		)
 		n = MAX_KEYS
 	for i in MAX_KEYS:
 		mat.set_shader_parameter("key_%d" % i, keys[i] if i < n else Color(0, 0, 0, 0))
@@ -84,7 +105,9 @@ static func swaps_of(mat: ShaderMaterial) -> PackedColorArray:
 
 ## A ramp of `steps` colors from `color` (first, lightest) to color darkened by `shade`
 ## (last). steps 1 returns [color].
-static func ramp_from(color: Color, steps: int = 2, shade: float = DEFAULT_SHADE) -> PackedColorArray:
+static func ramp_from(
+	color: Color, steps: int = 2, shade: float = DEFAULT_SHADE
+) -> PackedColorArray:
 	var out := PackedColorArray()
 	var n := clampi(steps, 1, MAX_KEYS)
 	for i in n:
@@ -96,23 +119,36 @@ static func ramp_from(color: Color, steps: int = 2, shade: float = DEFAULT_SHADE
 
 
 ## The ramp for a session slot's color (Wl.slot_look(slot_index).color).
-static func slot_ramp(slot_index: int, steps: int = 2, shade: float = DEFAULT_SHADE) -> PackedColorArray:
+static func slot_ramp(
+	slot_index: int, steps: int = 2, shade: float = DEFAULT_SHADE
+) -> PackedColorArray:
 	var look: Dictionary = Wl.slot_look(slot_index)
 	return ramp_from(look["color"], steps, shade)
 
 
 ## CPU reference of the shader for one color (tests; recoloring menu icons).
-static func swap_color(c: Color, keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE) -> Color:
+static func swap_color(
+	c: Color, keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE
+) -> Color:
 	var n := mini(mini(keys.size(), swaps.size()), MAX_KEYS)
 	for i in n:
 		var k := keys[i]
-		if absf(c.r - k.r) <= tolerance and absf(c.g - k.g) <= tolerance and absf(c.b - k.b) <= tolerance:
+		if (
+			absf(c.r - k.r) <= tolerance
+			and absf(c.g - k.g) <= tolerance
+			and absf(c.b - k.b) <= tolerance
+		):
 			return Color(swaps[i].r, swaps[i].g, swaps[i].b, c.a)
 	return c
 
 
 ## A recolored copy of `img` (CPU), for places that need a baked texture instead of a shader.
-static func swap_image(img: Image, keys: PackedColorArray, swaps: PackedColorArray, tolerance: float = DEFAULT_TOLERANCE) -> Image:
+static func swap_image(
+	img: Image,
+	keys: PackedColorArray,
+	swaps: PackedColorArray,
+	tolerance: float = DEFAULT_TOLERANCE
+) -> Image:
 	var out := img.duplicate() as Image
 	if out.is_compressed():
 		out.decompress()

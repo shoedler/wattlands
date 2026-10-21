@@ -50,7 +50,13 @@ static func new_bus(parent: Node, bus_name: String) -> WlEventBus:
 
 ## A SOLO session of fx_solo: one human (peer 1) and `bots` bots. Returns {host, err, game,
 ## riders, bus, registry, tmp}. `extra` keys override the GameHost config.
-static func solo(parent: Node, content: String = "tiny", extra: Dictionary = {}, bots: int = 0, game_id: String = "fx_solo") -> Dictionary:
+static func solo(
+	parent: Node,
+	content: String = "tiny",
+	extra: Dictionary = {},
+	bots: int = 0,
+	game_id: String = "fx_solo"
+) -> Dictionary:
 	var reg := registry(parent)
 	var tmp := Paths.make_temp_dir("wattlands_sdk_test")
 	var players: Array[PlayerSlot] = [human(1, 0)]
@@ -65,20 +71,45 @@ static func solo(parent: Node, content: String = "tiny", extra: Dictionary = {},
 	host.name = "SoloHost"
 	parent.add_child(host)
 	var cfg := {
-		"game_id": game_id, "content_id": content, "seed": 7, "role": Wl.SOLO, "players": players,
-		"local_riders": riders, "local_peer": 1, "bus": bus, "registry": reg, "headless": true,
-		"realtime": false, "report": true, "progress_path": tmp.path_join("p1/games/%s/progress.json" % game_id),
+		"game_id": game_id,
+		"content_id": content,
+		"seed": 7,
+		"role": Wl.SOLO,
+		"players": players,
+		"local_riders": riders,
+		"local_peer": 1,
+		"bus": bus,
+		"registry": reg,
+		"headless": true,
+		"realtime": false,
+		"report": true,
+		"progress_path": tmp.path_join("p1/games/%s/progress.json" % game_id),
 	}
 	for k: Variant in extra.keys():
 		cfg[k] = extra[k]
 	var err := host.setup(cfg)
-	return {"host": host, "err": err, "game": host.game, "riders": riders, "bus": bus, "registry": reg, "tmp": tmp}
+	return {
+		"host": host,
+		"err": err,
+		"game": host.game,
+		"riders": riders,
+		"bus": bus,
+		"registry": reg,
+		"tmp": tmp
+	}
 
 
 ## A HOST session of fx_solo with `humans` human peers (1 = the host, 2.. clients over
 ## FakeNet) and `bots` bots. Returns {host, clients, hub, nets, riders, buses, game,
 ## registry, tmp, err}. Client GameHosts are set up (they wait for session_start).
-static func multi(parent: Node, humans: int, content: String = "tiny", extra: Dictionary = {}, bots: int = 0, game_id: String = "fx_solo") -> Dictionary:
+static func multi(
+	parent: Node,
+	humans: int,
+	content: String = "tiny",
+	extra: Dictionary = {},
+	bots: int = 0,
+	game_id: String = "fx_solo"
+) -> Dictionary:
 	var reg := registry(parent)
 	var tmp := Paths.make_temp_dir("wattlands_sdk_test")
 	var hub: RefCounted = FakeNetHub.new()
@@ -107,9 +138,19 @@ static func multi(parent: Node, humans: int, content: String = "tiny", extra: Di
 		if p.is_bot:
 			host_riders[p.peer_id] = riders[p.peer_id]
 	var cfg := {
-		"game_id": game_id, "content_id": content, "seed": 7, "role": Wl.HOST, "players": players,
-		"local_riders": host_riders, "local_peer": 1, "net": nets[0], "bus": buses[0], "registry": reg,
-		"headless": true, "realtime": false, "report": true,
+		"game_id": game_id,
+		"content_id": content,
+		"seed": 7,
+		"role": Wl.HOST,
+		"players": players,
+		"local_riders": host_riders,
+		"local_peer": 1,
+		"net": nets[0],
+		"bus": buses[0],
+		"registry": reg,
+		"headless": true,
+		"realtime": false,
+		"report": true,
 		"progress_path": tmp.path_join("p1/games/%s/progress.json" % game_id),
 	}
 	for k: Variant in extra.keys():
@@ -123,17 +164,37 @@ static func multi(parent: Node, humans: int, content: String = "tiny", extra: Di
 		var c := GameHost.new()
 		c.name = "Client%d" % peer
 		parent.add_child(c)
-		var cerr := c.setup({
-			"role": Wl.CLIENT, "local_peer": peer, "local_riders": {peer: riders[peer]}, "net": nets[i],
-			"bus": b, "registry": reg, "headless": true, "realtime": false, "report": true,
-			"progress_path": tmp.path_join("p%d/games/%s/progress.json" % [peer, game_id]),
-		})
+		var cerr := (
+			c
+			. setup(
+				{
+					"role": Wl.CLIENT,
+					"local_peer": peer,
+					"local_riders": {peer: riders[peer]},
+					"net": nets[i],
+					"bus": b,
+					"registry": reg,
+					"headless": true,
+					"realtime": false,
+					"report": true,
+					"progress_path": tmp.path_join("p%d/games/%s/progress.json" % [peer, game_id]),
+				}
+			)
+		)
 		if cerr != "" and err == "":
 			err = "client %d: %s" % [peer, cerr]
 		clients.append(c)
 	return {
-		"host": host, "clients": clients, "hub": hub, "nets": nets, "riders": riders, "buses": buses,
-		"game": host.game, "registry": reg, "tmp": tmp, "err": err,
+		"host": host,
+		"clients": clients,
+		"hub": hub,
+		"nets": nets,
+		"riders": riders,
+		"buses": buses,
+		"game": host.game,
+		"registry": reg,
+		"tmp": tmp,
+		"err": err,
 	}
 
 

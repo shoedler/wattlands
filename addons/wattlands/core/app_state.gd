@@ -55,8 +55,16 @@ signal quitting(exit_code: int)
 signal run_seconds_reached
 
 const STATES: Array[String] = [
-	"boot", "title", "first_run", "profile", "settings", "picker", "lobby", "session",
-	"results", "quitting",
+	"boot",
+	"title",
+	"first_run",
+	"profile",
+	"settings",
+	"picker",
+	"lobby",
+	"session",
+	"results",
+	"quitting",
 ]
 ## Real seconds quit() waits with a real trainer connected (governor shutdown writes).
 const QUIT_GRACE_S := 0.5
@@ -155,10 +163,10 @@ func is_booted() -> bool:
 
 func goto(new_state: String, p_params: Dictionary = {}) -> void:
 	if not STATES.has(new_state):
-		push_error("App: unknown state \"%s\"" % new_state)
+		push_error('App: unknown state "%s"' % new_state)
 		return
 	if state == "quitting" and new_state != "quitting":
-		push_warning("App: quitting; ignoring goto(\"%s\")" % new_state)
+		push_warning('App: quitting; ignoring goto("%s")' % new_state)
 		return
 	state = new_state
 	params = p_params.duplicate(true)
@@ -229,7 +237,9 @@ func quit(p_exit_code: int = 0) -> void:
 		ts.set_external_tick(false)
 	_write_fallback_report()
 	if (real_trainer or left_room) and is_inside_tree():
-		get_tree().create_timer(QUIT_GRACE_S, true, false, true).timeout.connect(_quit_tree.bind(p_exit_code))
+		get_tree().create_timer(QUIT_GRACE_S, true, false, true).timeout.connect(
+			_quit_tree.bind(p_exit_code)
+		)
 	else:
 		_quit_tree(p_exit_code)
 
@@ -283,10 +293,20 @@ func _write_fallback_report() -> void:
 		return
 	var opts := launch_options()
 	var report := {
-		"role": opts["role"], "peer_id": 0, "room": opts["code"], "game_id": opts["game_id"],
-		"content_id": opts["content_id"], "exit_reason": exit_reason if exit_reason != "" else "quit",
-		"exit_code": exit_code, "events": [], "directives": [], "trace": [], "fit_paths": [],
-		"uploads": [], "desync_warnings": 0, "script_errors": 0,
+		"role": opts["role"],
+		"peer_id": 0,
+		"room": opts["code"],
+		"game_id": opts["game_id"],
+		"content_id": opts["content_id"],
+		"exit_reason": exit_reason if exit_reason != "" else "quit",
+		"exit_code": exit_code,
+		"events": [],
+		"directives": [],
+		"trace": [],
+		"fit_paths": [],
+		"uploads": [],
+		"desync_warnings": 0,
+		"script_errors": 0,
 		"final_state": {"app_state": state, "platform_time": platform_time()},
 	}
 	var dir := path.get_base_dir()

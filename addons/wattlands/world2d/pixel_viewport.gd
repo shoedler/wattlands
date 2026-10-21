@@ -219,6 +219,7 @@ func capture() -> Image:
 
 # --- Additions to the W0 API (world-kits) ----------------------------------------------
 
+
 ## Canvas units per art pixel: integer_scale() divided by the device scale. Use it to size
 ## HUD Controls in art pixels (art_rect_to_screen already applies it).
 func art_scale() -> float:
@@ -330,7 +331,9 @@ static func fit_scale(available: Vector2, base: Vector2i) -> int:
 ## "size": Vector2 (canvas units), "device_scale": float}. The image is centred and its
 ## offset snapped to whole device pixels; an image larger than the control (scale 1 in a
 ## tiny window) gets a negative offset and is clipped.
-static func fit_layout(control_size: Vector2, base: Vector2i, screen_scale: float = 1.0) -> Dictionary:
+static func fit_layout(
+	control_size: Vector2, base: Vector2i, screen_scale: float = 1.0
+) -> Dictionary:
 	var s: float = screen_scale
 	if is_nan(s) or is_inf(s) or s < 0.0001:
 		s = 1.0

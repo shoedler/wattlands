@@ -111,8 +111,15 @@ func test_refresh_and_revoke_to_a_real_host_are_refused() -> void:
 
 
 func test_a_redirect_off_loopback_is_not_followed() -> void:
-	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault",
-		{"route": "authorize", "status": 302, "location": "https://www.strava.com/oauth/authorize?client_id=1"})
+	await _mock.admin(
+		HTTPClient.METHOD_POST,
+		"/admin/fault",
+		{
+			"route": "authorize",
+			"status": 302,
+			"location": "https://www.strava.com/oauth/authorize?client_id=1"
+		}
+	)
 	var c := _client(_mock.api_base(), _mock.oauth_base())
 	assert_false(await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET))
 	assert_push_warning("refused www.strava.com")
@@ -123,10 +130,20 @@ func test_a_redirect_off_loopback_is_not_followed() -> void:
 func test_every_request_passes_the_lock_check() -> void:
 	# A non-loopback host is refused before any socket opens, for every request kind.
 	var c := _client("http://192.0.2.1/api/v3", "http://192.0.2.1/oauth")
-	var r: Dictionary = await c._request(HTTPClient.METHOD_GET, "http://192.0.2.1/api/v3/athlete", PackedStringArray(), PackedByteArray())
+	var r: Dictionary = await c._request(
+		HTTPClient.METHOD_GET,
+		"http://192.0.2.1/api/v3/athlete",
+		PackedStringArray(),
+		PackedByteArray()
+	)
 	assert_true(bool(r["refused"]))
 	assert_push_warning(Locks.NET_MESSAGE)
-	var r2: Dictionary = await c._request(HTTPClient.METHOD_GET, "http://example.com#@127.0.0.1/", PackedStringArray(), PackedByteArray())
+	var r2: Dictionary = await c._request(
+		HTTPClient.METHOD_GET,
+		"http://example.com#@127.0.0.1/",
+		PackedStringArray(),
+		PackedByteArray()
+	)
 	assert_true(bool(r2["refused"]), "userinfo tricks don't pass")
 	assert_push_warning(Locks.NET_MESSAGE)
 
@@ -170,7 +187,10 @@ func test_callback_server_binds_loopback_and_times_out() -> void:
 	add_child_autofree(cb)
 	assert_true(cb.start())
 	assert_string_contains(cb.redirect_uri(), "http://127.0.0.1:")
-	assert_eq(StravaCallbackServer.parse_query("code=a%2Bb&state=x+y&e"), {"code": "a+b", "state": "x y", "e": ""})
+	assert_eq(
+		StravaCallbackServer.parse_query("code=a%2Bb&state=x+y&e"),
+		{"code": "a+b", "state": "x y", "e": ""}
+	)
 	cb.stop()
 
 
@@ -188,8 +208,16 @@ func _http_get(url: String, timeout_s: float = 5.0) -> Array:
 
 
 func test_callback_page_texts_come_from_the_strings_csv() -> void:
-	assert_ne(TranslationServer.translate("RIDES_CALLBACK_CONNECTING"), &"RIDES_CALLBACK_CONNECTING", "the key is in rides.csv")
-	assert_ne(TranslationServer.translate("RIDES_CALLBACK_DENIED"), &"RIDES_CALLBACK_DENIED", "the key is in rides.csv")
+	assert_ne(
+		TranslationServer.translate("RIDES_CALLBACK_CONNECTING"),
+		&"RIDES_CALLBACK_CONNECTING",
+		"the key is in rides.csv"
+	)
+	assert_ne(
+		TranslationServer.translate("RIDES_CALLBACK_DENIED"),
+		&"RIDES_CALLBACK_DENIED",
+		"the key is in rides.csv"
+	)
 	var cb := StravaCallbackServer.new()
 	add_child_autofree(cb)
 	assert_true(cb.start())
@@ -198,12 +226,19 @@ func test_callback_page_texts_come_from_the_strings_csv() -> void:
 	assert_false(cb.done)
 	var denied: Array = await _http_get(cb.redirect_uri() + "?state=s&error=access_denied")
 	assert_eq(denied[1], 200)
-	assert_string_contains(str(denied[2]), String(TranslationServer.translate("RIDES_CALLBACK_DENIED")).format({"error": "access_denied"}))
+	assert_string_contains(
+		str(denied[2]),
+		String(TranslationServer.translate("RIDES_CALLBACK_DENIED")).format(
+			{"error": "access_denied"}
+		)
+	)
 	assert_true(cb.done)
 	assert_eq(cb.params, {"state": "s", "error": "access_denied"})
 	cb.start()
 	var ok: Array = await _http_get(cb.redirect_uri() + "?state=s&code=c&scope=read,activity:write")
-	assert_string_contains(str(ok[2]), String(TranslationServer.translate("RIDES_CALLBACK_CONNECTING")))
+	assert_string_contains(
+		str(ok[2]), String(TranslationServer.translate("RIDES_CALLBACK_CONNECTING"))
+	)
 	assert_eq(cb.params["code"], "c")
 	cb.stop()
 
@@ -220,11 +255,17 @@ func test_idle_connections_never_block_the_callback() -> void:
 		var p := StreamPeerTCP.new()
 		assert_eq(p.connect_to_host("127.0.0.1", cb.port), OK)
 		idle.append(p)
-	await wait_until(func() -> bool: return cb.open_connections() == StravaCallbackServer.MAX_CONNECTIONS, 5.0)
+	await wait_until(
+		func() -> bool: return cb.open_connections() == StravaCallbackServer.MAX_CONNECTIONS, 5.0
+	)
 	assert_eq(cb.open_connections(), StravaCallbackServer.MAX_CONNECTIONS, "every slot is taken")
 	cb.idle_timeout_s = 0.3
 	var res: Array = await _http_get(cb.redirect_uri() + "?state=s&code=c", 5.0)
-	assert_eq(res[0], HTTPRequest.RESULT_SUCCESS, "the real callback got through once the idle ones were dropped")
+	assert_eq(
+		res[0],
+		HTTPRequest.RESULT_SUCCESS,
+		"the real callback got through once the idle ones were dropped"
+	)
 	assert_eq(res[1], 200)
 	assert_true(cb.done)
 	for p in idle:

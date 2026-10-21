@@ -83,7 +83,9 @@ func _build() -> void:
 	unlocks = (uv as Array).duplicate(true) if uv is Array else []
 	local_peer = int(params.get("local_peer", Wl.HOST_PEER))
 	var gid := str(params.get("game_id", ""))
-	var m: Dictionary = services.registry.manifest(gid) if services.registry != null and gid != "" else {}
+	var m: Dictionary = (
+		services.registry.manifest(gid) if services.registry != null and gid != "" else {}
+	)
 	var title := t("APP_RESULTS_TITLE").format([str(m.get("title", gid))])
 	if results.summary_key != "":
 		title = t(results.summary_key)
@@ -100,7 +102,11 @@ func _build() -> void:
 	left.add_child(_top)
 	# A session that ended without results (the host left first) shows no grade, never a "D".
 	var grade_text := results.grade if has_results else "—"
-	grade_label = AppStyle.label(grade_text, AppStyle.FONT_GRADE, grade_color(results.grade) if has_results else AppStyle.TEXT_DIM)
+	grade_label = AppStyle.label(
+		grade_text,
+		AppStyle.FONT_GRADE,
+		grade_color(results.grade) if has_results else AppStyle.TEXT_DIM
+	)
 	grade_label.name = "Grade"
 	_top.add_child(grade_label)
 	_side = AppStyle.vbox(8)
@@ -109,13 +115,23 @@ func _build() -> void:
 	_side.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_top.add_child(_side)
 	var me := results.row(local_peer)
-	xp_label = AppStyle.label(t("APP_RESULTS_XP").format([int(me.get("xp", 0))]), AppStyle.FONT_NUMBER, AppStyle.ACCENT)
+	xp_label = AppStyle.label(
+		t("APP_RESULTS_XP").format([int(me.get("xp", 0))]), AppStyle.FONT_NUMBER, AppStyle.ACCENT
+	)
 	xp_label.name = "Xp"
 	_side.add_child(xp_label)
 	if not me.is_empty():
-		_me_label = AppStyle.paragraph(t("APP_RESULTS_ME").format([
-			"%.0f" % float(me.get("kj", 0.0)), "%.0f" % float(me.get("avg_power_w", 0.0)),
-			"%.0f" % float(me.get("time_in_band_pct", 0.0))]), AppStyle.FONT_NUMBER, AppStyle.TEXT)
+		_me_label = AppStyle.paragraph(
+			t("APP_RESULTS_ME").format(
+				[
+					"%.0f" % float(me.get("kj", 0.0)),
+					"%.0f" % float(me.get("avg_power_w", 0.0)),
+					"%.0f" % float(me.get("time_in_band_pct", 0.0))
+				]
+			),
+			AppStyle.FONT_NUMBER,
+			AppStyle.TEXT
+		)
 		_me_label.name = "MeLine"
 		_side.add_child(_me_label)
 		var wkg := wkg_text(me, services.profile())
@@ -127,7 +143,9 @@ func _build() -> void:
 	unlocks_label.name = "Unlocks"
 	_side.add_child(unlocks_label)
 	if not unlocks.is_empty():
-		unlocks_label.text = t("APP_RESULTS_UNLOCKS").format([", ".join(unlock_names(gid, unlocks))])
+		unlocks_label.text = t("APP_RESULTS_UNLOCKS").format(
+			[", ".join(unlock_names(gid, unlocks))]
+		)
 	unlocks_label.visible = unlocks_label.text != ""
 	rows_grid = _build_rows()
 	left.add_child(rows_grid)
@@ -143,7 +161,9 @@ func _build() -> void:
 	upload_label.name = "UploadStatus"
 	status.add_child(upload_label)
 	if bool(params.get("host_left", false)):
-		_host_left_label = AppStyle.paragraph(t("APP_REFUSED_HOST_LEFT"), AppStyle.FONT_BODY, AppStyle.WARN)
+		_host_left_label = AppStyle.paragraph(
+			t("APP_REFUSED_HOST_LEFT"), AppStyle.FONT_BODY, AppStyle.WARN
+		)
 		_host_left_label.name = "HostLeft"
 		status.add_child(_host_left_label)
 	# The details: the full page width under both columns.
@@ -154,7 +174,11 @@ func _build() -> void:
 	stats_box = _build_stats()
 	details.add_child(stats_box)
 	if not results.team.is_empty():
-		_team_label = AppStyle.paragraph(t("APP_RESULTS_TEAM").format([stats_text(results.team)]), AppStyle.FONT_BODY, AppStyle.TEXT)
+		_team_label = AppStyle.paragraph(
+			t("APP_RESULTS_TEAM").format([stats_text(results.team)]),
+			AppStyle.FONT_BODY,
+			AppStyle.TEXT
+		)
 		_team_label.name = "Team"
 		details.add_child(_team_label)
 	ride_label = AppStyle.paragraph("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
@@ -195,7 +219,15 @@ func _build_rows() -> GridContainer:
 	g.columns = 7
 	g.add_theme_constant_override("h_separation", 28)
 	g.add_theme_constant_override("v_separation", 6)
-	for key: String in ["APP_COL_RIDER", "APP_COL_KJ", "APP_COL_AVG_W", "APP_COL_FTP", "APP_COL_NP", "APP_COL_BAND", "APP_COL_XP"]:
+	for key: String in [
+		"APP_COL_RIDER",
+		"APP_COL_KJ",
+		"APP_COL_AVG_W",
+		"APP_COL_FTP",
+		"APP_COL_NP",
+		"APP_COL_BAND",
+		"APP_COL_XP"
+	]:
 		g.add_child(AppStyle.label(t(key), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM))
 	for row: Dictionary in results.rows:
 		var name_text := str(row.get("name", ""))
@@ -205,9 +237,13 @@ func _build_rows() -> GridContainer:
 		g.add_child(AppStyle.label(name_text, AppStyle.FONT_BODY))
 		g.add_child(AppStyle.label("%.0f" % float(row.get("kj", 0.0)), AppStyle.FONT_BODY))
 		g.add_child(AppStyle.label("%.0f" % float(row.get("avg_power_w", 0.0)), AppStyle.FONT_BODY))
-		g.add_child(AppStyle.label("%.0f%%" % float(row.get("avg_ftp_pct", 0.0)), AppStyle.FONT_BODY))
+		g.add_child(
+			AppStyle.label("%.0f%%" % float(row.get("avg_ftp_pct", 0.0)), AppStyle.FONT_BODY)
+		)
 		g.add_child(AppStyle.label("%.0f" % float(row.get("np_w", 0.0)), AppStyle.FONT_BODY))
-		g.add_child(AppStyle.label("%.0f%%" % float(row.get("time_in_band_pct", 0.0)), AppStyle.FONT_BODY))
+		g.add_child(
+			AppStyle.label("%.0f%%" % float(row.get("time_in_band_pct", 0.0)), AppStyle.FONT_BODY)
+		)
 		g.add_child(AppStyle.label(str(int(row.get("xp", 0))), AppStyle.FONT_BODY, AppStyle.ACCENT))
 	return g
 
@@ -220,7 +256,11 @@ func _build_stats() -> VBoxContainer:
 	for row: Dictionary in results.rows:
 		var st: Variant = row.get("stats", {})
 		if st is Dictionary and not (st as Dictionary).is_empty():
-			var l := AppStyle.paragraph("%s · %s" % [str(row.get("name", "")), stats_text(st as Dictionary)], AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+			var l := AppStyle.paragraph(
+				"%s · %s" % [str(row.get("name", "")), stats_text(st as Dictionary)],
+				AppStyle.FONT_SMALL,
+				AppStyle.TEXT_DIM
+			)
 			l.name = "Stats%d" % int(row.get("peer_id", 0))
 			box.add_child(l)
 	return box
@@ -254,7 +294,9 @@ func set_fit_level(level: int) -> void:
 		_font(cells[i] as Label, AppStyle.FONT_SMALL if small_grid else AppStyle.FONT_BODY)
 	var caps := {}
 	if fit_level >= FIT_CAP_MORE:
-		caps = {"stats": 1, "team": 1, "upload": 2, "unlocks": 1, "host_left": 1, "ride": 1, "me": 1}
+		caps = {
+			"stats": 1, "team": 1, "upload": 2, "unlocks": 1, "host_left": 1, "ride": 1, "me": 1
+		}
 	elif fit_level >= FIT_CAP_TEXT:
 		caps = {"stats": 3, "team": 1}
 	for l: Node in stats_box.get_children():
@@ -282,7 +324,9 @@ func fits_screen() -> bool:
 ## The visible labels that wrap and may be cut by a cap (a cut line ends in an ellipsis).
 func _wrapped_labels() -> Array[Label]:
 	var out: Array[Label] = []
-	for l: Label in [_me_label, upload_label, unlocks_label, _host_left_label, _team_label, ride_label]:
+	for l: Label in [
+		_me_label, upload_label, unlocks_label, _host_left_label, _team_label, ride_label
+	]:
 		if l != null:
 			out.append(l)
 	for l: Node in stats_box.get_children():
@@ -294,7 +338,11 @@ func _wrapped_labels() -> Array[Label]:
 func cut_labels() -> Array[Label]:
 	var out: Array[Label] = []
 	for l in _wrapped_labels():
-		if l.is_visible_in_tree() and l.max_lines_visible >= 0 and l.get_line_count() > l.max_lines_visible:
+		if (
+			l.is_visible_in_tree()
+			and l.max_lines_visible >= 0
+			and l.get_line_count() > l.max_lines_visible
+		):
 			out.append(l)
 	return out
 
@@ -325,7 +373,9 @@ static func _font(l: Label, size: int) -> void:
 static func _cap(l: Label, lines: int) -> void:
 	if l != null:
 		l.max_lines_visible = lines
-		l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS if lines >= 0 else TextServer.OVERRUN_NO_TRIMMING
+		l.text_overrun_behavior = (
+			TextServer.OVERRUN_TRIM_ELLIPSIS if lines >= 0 else TextServer.OVERRUN_NO_TRIMMING
+		)
 
 
 ## "2.8 W/kg" for the local row when the rider opted in (show_wkg) and has a weight; "" otherwise.
@@ -355,7 +405,11 @@ static func stats_text(stats: Dictionary) -> String:
 	var parts: PackedStringArray = []
 	for k: Variant in stats.keys():
 		var v: Variant = stats[k]
-		var vt := ("%.0f" % float(v)) if (v is float and is_equal_approx(float(v), round(float(v)))) else str(v)
+		var vt := (
+			("%.0f" % float(v))
+			if (v is float and is_equal_approx(float(v), round(float(v))))
+			else str(v)
+		)
 		parts.append("%s: %s" % [AppScreen.t(str(k)), vt])
 	return " · ".join(parts)
 
@@ -371,7 +425,10 @@ func strava_connected() -> bool:
 func auto_upload_enabled() -> bool:
 	if services.rides == null or fit_path == "":
 		return false
-	return strava_connected() and (services.rides.auto_upload_enabled() or services.profile().strava_auto_upload)
+	return (
+		strava_connected()
+		and (services.rides.auto_upload_enabled() or services.profile().strava_auto_upload)
+	)
 
 
 func menu_items() -> Array:
@@ -379,7 +436,13 @@ func menu_items() -> Array:
 	if fit_path != "" and strava_connected():
 		var busy := BUSY_STATES.has(upload_state)
 		var done := DONE_STATES.has(upload_state)
-		items.append({"id": "upload", "text": t("APP_RESULTS_UPLOAD"), "disabled": busy or done or upload_requested and upload_state == ""})
+		items.append(
+			{
+				"id": "upload",
+				"text": t("APP_RESULTS_UPLOAD"),
+				"disabled": busy or done or upload_requested and upload_state == ""
+			}
+		)
 	items.append({"id": "continue", "text": t("APP_RESULTS_CONTINUE")})
 	return items
 
@@ -431,7 +494,11 @@ func _on_ride_saved(path: String, s: Dictionary) -> void:
 
 func _refresh() -> void:
 	if ride_label != null:
-		ride_label.text = t("APP_RESULTS_SAVED").format([fit_path]) if fit_path != "" else t("APP_RESULTS_NOT_SAVED")
+		ride_label.text = (
+			t("APP_RESULTS_SAVED").format([fit_path])
+			if fit_path != ""
+			else t("APP_RESULTS_NOT_SAVED")
+		)
 	if upload_label != null:
 		if not strava_connected():
 			upload_label.text = t("APP_RESULTS_STRAVA_OFF")

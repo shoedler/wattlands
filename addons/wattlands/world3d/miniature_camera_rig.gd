@@ -179,7 +179,10 @@ func shake_offset() -> Vector3:
 	if amp <= 0.0:
 		return Vector3.ZERO
 	var t := _shake_t
-	var v := Vector2(sin(t * 47.0 + 0.7) + 0.5 * sin(t * 83.0 + 2.1), sin(t * 53.0 + 1.9) + 0.5 * sin(t * 71.0 + 0.3))
+	var v := Vector2(
+		sin(t * 47.0 + 0.7) + 0.5 * sin(t * 83.0 + 2.1),
+		sin(t * 53.0 + 1.9) + 0.5 * sin(t * 71.0 + 0.3)
+	)
 	v = v / 1.5 * amp
 	if v.length() > amp:
 		v = v.normalized() * amp

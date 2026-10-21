@@ -90,5 +90,7 @@ func test_device_writes_climb_15_w_per_half_second() -> void:
 	for i in range(1, ergs.size()):
 		var up := int(ergs[i]["w"]) - int(ergs[i - 1]["w"])
 		assert_lte(up, 15, "at most 15 W per write slot")
-		assert_gte(float(ergs[i]["t"]) - float(ergs[i - 1]["t"]), 0.5 - 1e-6, "writes >= 0.5 s apart")
+		assert_gte(
+			float(ergs[i]["t"]) - float(ergs[i - 1]["t"]), 0.5 - 1e-6, "writes >= 0.5 s apart"
+		)
 	assert_eq(int(ergs[ergs.size() - 1]["w"]), 300)

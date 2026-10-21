@@ -17,7 +17,9 @@ const MAX_TEST_S := 300.0 + 40.0 * 60.0 + 30.0
 ## The protocol's ERG target (W) at `t` seconds into the test.
 static func _target_w(ftp: float, t: float) -> float:
 	if t < FtpTest.RAMP_IN_S:
-		return ftp / 100.0 * lerpf(FtpTest.RAMP_FROM_PCT, FtpTest.RAMP_TO_PCT, t / FtpTest.RAMP_IN_S)
+		return (
+			ftp / 100.0 * lerpf(FtpTest.RAMP_FROM_PCT, FtpTest.RAMP_TO_PCT, t / FtpTest.RAMP_IN_S)
+		)
 	var n := int(floor((t - FtpTest.RAMP_IN_S) / FtpTest.STEP_S)) + 1
 	return ftp / 100.0 * FtpTest.step_pct(n)
 
@@ -40,8 +42,9 @@ static func _analytic_best_1min(ftp: float, cp: float, wprime: float) -> float:
 
 
 func _run(ftp: float, cp: float, wprime: float) -> Dictionary:
-	var m := MockTrainer.from_spec("erg", ftp, {"cp_w": cp, "wprime_j": wprime, "seed": 11,
-		"preferred_cadence_rpm": 90.0})
+	var m := MockTrainer.from_spec(
+		"erg", ftp, {"cp_w": cp, "wprime_j": wprime, "seed": 11, "preferred_cadence_rpm": 90.0}
+	)
 	autofree(m)
 	var p := RiderProfile.new()
 	p.ftp_w = ftp
@@ -82,11 +85,22 @@ func test_estimate_within_3_percent_of_the_analytic_best_minute() -> void:
 		var wp: float = case[2]
 		var res := _run(ftp, cp, wp)
 		var expected := FtpTest.FTP_FACTOR * _analytic_best_1min(ftp, cp, wp)
-		assert_ne(res.get("end_reason"), FtpTest.END_COMPLETE, "the mock rider must fail eventually (W' fatigue)")
+		assert_ne(
+			res.get("end_reason"),
+			FtpTest.END_COMPLETE,
+			"the mock rider must fail eventually (W' fatigue)"
+		)
 		assert_true(bool(res.get("valid", false)), str(res))
 		var got := float(res.get("ftp_w", 0.0))
-		assert_almost_eq(got, expected, 0.03 * expected,
-			"FTP %d, CP %d, W' %d: estimate %.1f vs 0.75 x analytic best %.1f (%s)" % [ftp, cp, wp, got, expected, res.get("end_reason")])
+		assert_almost_eq(
+			got,
+			expected,
+			0.03 * expected,
+			(
+				"FTP %d, CP %d, W' %d: estimate %.1f vs 0.75 x analytic best %.1f (%s)"
+				% [ftp, cp, wp, got, expected, res.get("end_reason")]
+			)
+		)
 
 
 func test_estimate_within_10_percent_of_cp() -> void:
@@ -96,7 +110,12 @@ func test_estimate_within_10_percent_of_cp() -> void:
 				continue
 			var res := _run(cp, cp, wp)
 			var got := float(res.get("ftp_w", 0.0))
-			assert_almost_eq(got, cp, 0.10 * cp, "CP %d, W' %d: estimate %.1f (%s)" % [cp, wp, got, res.get("end_reason")])
+			assert_almost_eq(
+				got,
+				cp,
+				0.10 * cp,
+				"CP %d, W' %d: estimate %.1f (%s)" % [cp, wp, got, res.get("end_reason")]
+			)
 
 
 func test_analytic_reference_matches_hand_numbers() -> void:
@@ -104,4 +123,6 @@ func test_analytic_reference_matches_hand_numbers() -> void:
 	# step 13 at 137% (342.5 W) and the estimate 0.75 x 342.5 = 256.9 W (BRIEF's 10% band).
 	assert_almost_eq(_analytic_best_1min(250.0, 250.0, 20000.0), 342.5, 1.0)
 	# CP 150, W' 15 kJ: fails 47 s into step 14 (214.5 W) after step 13 (205.5 W).
-	assert_almost_eq(_analytic_best_1min(150.0, 150.0, 15000.0), (13.0 * 205.5 + 47.0 * 214.5) / 60.0, 1.0)
+	assert_almost_eq(
+		_analytic_best_1min(150.0, 150.0, 15000.0), (13.0 * 205.5 + 47.0 * 214.5) / 60.0, 1.0
+	)

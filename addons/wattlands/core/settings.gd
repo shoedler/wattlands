@@ -186,11 +186,11 @@ func recent_rooms() -> Array:
 func add_recent_room(code: String, role: String, at_unix: int = -1) -> void:
 	var c := RoomCode.normalize(code)
 	if c == "":
-		push_error("Settings: not a room code: \"%s\"" % code)
+		push_error('Settings: not a room code: "%s"' % code)
 		return
 	var r := role.to_upper()
 	if r != Wl.HOST and r != Wl.CLIENT:
-		push_error("Settings: room role must be HOST or CLIENT, got \"%s\"" % role)
+		push_error('Settings: room role must be HOST or CLIENT, got "%s"' % role)
 		return
 	var at := at_unix if at_unix >= 0 else int(Time.get_unix_time_from_system())
 	var rooms: Array = [{"code": c, "at": at, "role": r}]
@@ -228,7 +228,12 @@ func _load_profile() -> RiderProfile:
 	if r["missing"]:
 		return RiderProfile.new()
 	if not (r["data"] is Dictionary):
-		push_warning("Settings: %s is corrupt (%s); using the default profile" % [Paths.profile_path(), r["why"]])
+		push_warning(
+			(
+				"Settings: %s is corrupt (%s); using the default profile"
+				% [Paths.profile_path(), r["why"]]
+			)
+		)
 		return RiderProfile.new()
 	return RiderProfile.from_dict(_clean_profile(r["data"] as Dictionary))
 
@@ -239,7 +244,9 @@ func _load_settings() -> Dictionary:
 	if r["missing"]:
 		return out
 	if not (r["data"] is Dictionary):
-		push_warning("Settings: %s is corrupt (%s); using the defaults" % [Paths.settings_path(), r["why"]])
+		push_warning(
+			"Settings: %s is corrupt (%s); using the defaults" % [Paths.settings_path(), r["why"]]
+		)
 		return out
 	var d: Dictionary = r["data"]
 	for key: Variant in d.keys():
@@ -252,7 +259,7 @@ func _load_settings() -> Dictionary:
 			if k == "recent_rooms":
 				v = _clean_rooms(v as Array)
 			elif k == "scaling_mode" and not Wl.SCALING_MODES.has(str(v)):
-				push_warning("Settings: unknown scaling_mode \"%s\" in settings.json" % str(v))
+				push_warning('Settings: unknown scaling_mode "%s" in settings.json' % str(v))
 				continue
 			elif DEFAULTS[k] is float:
 				v = float(v)
@@ -269,8 +276,11 @@ static func _read_json(path: String) -> Dictionary:
 		return {"missing": false, "data": null, "why": "unreadable"}
 	var json := JSON.new()
 	if json.parse(text) != OK:
-		return {"missing": false, "data": null,
-			"why": "line %d: %s" % [json.get_error_line(), json.get_error_message()]}
+		return {
+			"missing": false,
+			"data": null,
+			"why": "line %d: %s" % [json.get_error_line(), json.get_error_message()]
+		}
 	return {"missing": false, "data": json.data, "why": "not a JSON object"}
 
 
@@ -320,7 +330,7 @@ static func _clean_profile(d: Dictionary) -> Dictionary:
 				push_warning("Settings: profile %s %s out of range, using %s" % [k, str(v), str(c)])
 			v = c
 		if PROFILE_CHOICES.has(k) and not (PROFILE_CHOICES[k] as Array).has(str(v)):
-			push_warning("Settings: unknown profile %s \"%s\"" % [k, str(v)])
+			push_warning('Settings: unknown profile %s "%s"' % [k, str(v)])
 			continue
 		out[k] = v
 	var gmin := float(out.get("grade_min_pct", template["grade_min_pct"]))
@@ -357,17 +367,27 @@ static func _clean_rooms(rooms: Array) -> Array:
 ## {ok: bool, value: the checked (normalized) value}; push_error when refused.
 static func _check_value(key: String, value: Variant) -> Dictionary:
 	if not _is_json_value(value):
-		push_error("Settings: %s must be a JSON value (null, bool, number, string, array or dictionary of those)" % key)
+		push_error(
+			(
+				"Settings: %s must be a JSON value (null, bool, number, string, array or dictionary of those)"
+				% key
+			)
+		)
 		return {"ok": false, "value": null}
 	if not DEFAULTS.has(key):
 		return {"ok": true, "value": _copy(value)}
 	if not _same_kind(value, DEFAULTS[key]):
-		push_error("Settings: %s must be a %s, got %s" % [key, type_string(typeof(DEFAULTS[key])), type_string(typeof(value))])
+		push_error(
+			(
+				"Settings: %s must be a %s, got %s"
+				% [key, type_string(typeof(DEFAULTS[key])), type_string(typeof(value))]
+			)
+		)
 		return {"ok": false, "value": null}
 	match key:
 		"scaling_mode":
 			if not Wl.SCALING_MODES.has(str(value)):
-				push_error("Settings: unknown scaling_mode \"%s\"" % str(value))
+				push_error('Settings: unknown scaling_mode "%s"' % str(value))
 				return {"ok": false, "value": null}
 		"recent_rooms":
 			return {"ok": true, "value": _clean_rooms(value as Array)}
@@ -391,7 +411,7 @@ static func _is_json_value(v: Variant, depth: int = 0) -> bool:
 			var f: float = v
 			return not is_nan(f) and not is_inf(f)
 		TYPE_ARRAY:
-			for e: Variant in (v as Array):
+			for e: Variant in v as Array:
 				if not _is_json_value(e, depth + 1):
 					return false
 			return true
@@ -429,7 +449,9 @@ static func _override(key: String) -> String:
 			var base := _flag("strava-base")
 			if base == "":
 				return ""
-			base = base.trim_suffix("/").trim_suffix(STRAVA_API_SUFFIX).trim_suffix(STRAVA_OAUTH_SUFFIX)
+			base = base.trim_suffix("/").trim_suffix(STRAVA_API_SUFFIX).trim_suffix(
+				STRAVA_OAUTH_SUFFIX
+			)
 			return base + (STRAVA_API_SUFFIX if key == "strava_api_base" else STRAVA_OAUTH_SUFFIX)
 	return ""
 
@@ -443,7 +465,9 @@ static func _write_json(path: String, data: Variant) -> bool:
 	var tmp := path + ".tmp"
 	var f := FileAccess.open(tmp, FileAccess.WRITE)
 	if f == null:
-		push_warning("Settings: can't write %s (%s)" % [path, error_string(FileAccess.get_open_error())])
+		push_warning(
+			"Settings: can't write %s (%s)" % [path, error_string(FileAccess.get_open_error())]
+		)
 		return false
 	f.store_string(JSON.stringify(data, "\t"))
 	f.close()

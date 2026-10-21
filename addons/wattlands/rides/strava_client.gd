@@ -116,7 +116,9 @@ func save_store() -> bool:
 	f.close()
 	# Owner-only on POSIX; Windows keeps the user profile's ACLs.
 	if OS.get_name() != "Windows":
-		FileAccess.set_unix_permissions(tmp, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
+		FileAccess.set_unix_permissions(
+			tmp, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER
+		)
 	if FileAccess.file_exists(p):
 		DirAccess.remove_absolute(p)
 	return DirAccess.rename_absolute(tmp, p) == OK
@@ -171,15 +173,27 @@ func now_unix() -> int:
 
 
 ## The authorize URL for `redirect_uri` and `oauth_state`.
-func authorize_url(p_client_id: String, redirect_uri: String, oauth_state: String, with_profile: bool = false) -> String:
+func authorize_url(
+	p_client_id: String, redirect_uri: String, oauth_state: String, with_profile: bool = false
+) -> String:
 	var scope := SCOPE_WRITE + ("," + SCOPE_PROFILE if with_profile else "")
-	return "%s/authorize?client_id=%s&response_type=code&redirect_uri=%s&approval_prompt=auto&scope=%s&state=%s" % [
-		oauth_base, p_client_id.uri_encode(), redirect_uri.uri_encode(), scope.uri_encode(), oauth_state.uri_encode()]
+	return (
+		"%s/authorize?client_id=%s&response_type=code&redirect_uri=%s&approval_prompt=auto&scope=%s&state=%s"
+		% [
+			oauth_base,
+			p_client_id.uri_encode(),
+			redirect_uri.uri_encode(),
+			scope.uri_encode(),
+			oauth_state.uri_encode()
+		]
+	)
 
 
 ## Runs the OAuth flow; true once tokens are stored. `with_profile` adds profile:read_all
 ## (needed for the FTP and weight import, P1).
-func connect_account(p_client_id: String, p_client_secret: String, with_profile: bool = false) -> bool:
+func connect_account(
+	p_client_id: String, p_client_secret: String, with_profile: bool = false
+) -> bool:
 	var cid := p_client_id.strip_edges()
 	var secret := p_client_secret.strip_edges()
 	if cid == "" or secret == "":
@@ -218,12 +232,20 @@ func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
 	var oauth_state := Crypto.new().generate_random_bytes(16).hex_encode()
 	var url := authorize_url(cid, cb.redirect_uri(), oauth_state, with_profile)
 	if Locks.network_locked():
-		print("Strava: %s: no browser; fetching the authorize URL in-app (loopback only)" % Locks.NET_MESSAGE)
+		print(
+			(
+				"Strava: %s: no browser; fetching the authorize URL in-app (loopback only)"
+				% Locks.NET_MESSAGE
+			)
+		)
 		var r := await _fetch_following(url)
 		if not cb.done:
 			cb.stop()
 			cb.queue_free()
-			_set_state(STATE_ERROR, "network_locked" if bool(r.get("refused", false)) else "authorize_failed")
+			_set_state(
+				STATE_ERROR,
+				"network_locked" if bool(r.get("refused", false)) else "authorize_failed"
+			)
 			return false
 	else:
 		if browser_opener.is_valid():
@@ -245,7 +267,10 @@ func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
 		_set_state(STATE_ERROR, "state_mismatch")
 		return false
 	if params.has("error"):
-		_set_state(STATE_ERROR, "access_denied" if str(params["error"]) == "access_denied" else "authorize_error")
+		_set_state(
+			STATE_ERROR,
+			"access_denied" if str(params["error"]) == "access_denied" else "authorize_error"
+		)
 		return false
 	var code := str(params.get("code", ""))
 	var granted := str(params.get("scope", ""))
@@ -255,17 +280,29 @@ func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
 	if granted != "" and not granted.split(",").has(SCOPE_WRITE):
 		_set_state(STATE_ERROR, "scope_missing")
 		return false
-	var body := form_encode({
-		"client_id": cid, "client_secret": secret, "code": code,
-		"grant_type": "authorization_code",
-	})
-	var tr := await _request(HTTPClient.METHOD_POST, oauth_base + "/token",
-		["Content-Type: application/x-www-form-urlencoded", "Accept: application/json"], body.to_utf8_buffer())
+	var body := form_encode(
+		{
+			"client_id": cid,
+			"client_secret": secret,
+			"code": code,
+			"grant_type": "authorization_code",
+		}
+	)
+	var tr := await _request(
+		HTTPClient.METHOD_POST,
+		oauth_base + "/token",
+		["Content-Type: application/x-www-form-urlencoded", "Accept: application/json"],
+		body.to_utf8_buffer()
+	)
 	if int(tr["code"]) != 200:
 		_set_state(STATE_ERROR, _failure_detail(tr, "token_exchange_failed"))
 		return false
 	var j: Variant = parse_json((tr["body"] as PackedByteArray).get_string_from_utf8())
-	if not (j is Dictionary) or str((j as Dictionary).get("access_token", "")) == "" or str((j as Dictionary).get("refresh_token", "")) == "":
+	if (
+		not (j is Dictionary)
+		or str((j as Dictionary).get("access_token", "")) == ""
+		or str((j as Dictionary).get("refresh_token", "")) == ""
+	):
 		_set_state(STATE_ERROR, "token_exchange_failed")
 		return false
 	var tok: Dictionary = j
@@ -280,7 +317,16 @@ func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
 	var athlete: Variant = tok.get("athlete", null)
 	if athlete is Dictionary:
 		_creds["athlete_id"] = int((athlete as Dictionary).get("id", 0))
-		_creds["athlete_name"] = ("%s %s" % [str((athlete as Dictionary).get("firstname", "")), str((athlete as Dictionary).get("lastname", ""))]).strip_edges()
+		_creds["athlete_name"] = (
+			(
+				"%s %s"
+				% [
+					str((athlete as Dictionary).get("firstname", "")),
+					str((athlete as Dictionary).get("lastname", ""))
+				]
+			)
+			. strip_edges()
+		)
 	save_store()
 	print("Strava: connected")
 	_set_state(STATE_CONNECTED, "")
@@ -293,15 +339,24 @@ func disconnect_account() -> bool:
 	var revoked := false
 	var refresh := str(_creds.get("refresh_token", ""))
 	if refresh != "":
-		var basic := Marshalls.utf8_to_base64("%s:%s" % [client_id(), str(_creds.get("client_secret", ""))])
-		var r := await _request(HTTPClient.METHOD_POST, oauth_base + "/revoke",
+		var basic := Marshalls.utf8_to_base64(
+			"%s:%s" % [client_id(), str(_creds.get("client_secret", ""))]
+		)
+		var r := await _request(
+			HTTPClient.METHOD_POST,
+			oauth_base + "/revoke",
 			["Authorization: Basic " + basic, "Content-Type: application/x-www-form-urlencoded"],
-			form_encode({"token": refresh, "token_type_hint": "refresh_token"}).to_utf8_buffer())
+			form_encode({"token": refresh, "token_type_hint": "refresh_token"}).to_utf8_buffer()
+		)
 		revoked = int(r["code"]) == 200
 		if int(r["code"]) == 404 or int(r["code"]) == 405:
 			# No revoke endpoint at this base: use Strava's deauthorize, token in the header.
-			var d := await _request(HTTPClient.METHOD_POST, oauth_base + "/deauthorize",
-				["Authorization: Bearer " + str(_creds.get("access_token", ""))], PackedByteArray())
+			var d := await _request(
+				HTTPClient.METHOD_POST,
+				oauth_base + "/deauthorize",
+				["Authorization: Bearer " + str(_creds.get("access_token", ""))],
+				PackedByteArray()
+			)
 			revoked = int(d["code"]) == 200
 	var keep_id := client_id()
 	_creds = {}
@@ -339,12 +394,22 @@ func refresh_tokens() -> bool:
 			await get_tree().process_frame
 		return _last_refresh_ok
 	_refreshing = true
-	var r := await _request(HTTPClient.METHOD_POST, oauth_base + "/token",
+	var r := await _request(
+		HTTPClient.METHOD_POST,
+		oauth_base + "/token",
 		["Content-Type: application/x-www-form-urlencoded", "Accept: application/json"],
-		form_encode({
-			"client_id": client_id(), "client_secret": str(_creds.get("client_secret", "")),
-			"grant_type": "refresh_token", "refresh_token": str(_creds.get("refresh_token", "")),
-		}).to_utf8_buffer())
+		(
+			form_encode(
+				{
+					"client_id": client_id(),
+					"client_secret": str(_creds.get("client_secret", "")),
+					"grant_type": "refresh_token",
+					"refresh_token": str(_creds.get("refresh_token", "")),
+				}
+			)
+			. to_utf8_buffer()
+		)
+	)
 	var ok := false
 	var code := int(r["code"])
 	if code == 200:
@@ -381,12 +446,25 @@ func refresh_tokens() -> bool:
 
 ## An authorized API call: <api base><api_path>. Refreshes once on 401 and backs off on
 ## 429. Returns _request()'s result ({code, result, headers, body, refused, offline}).
-func api(method: int, api_path: String, headers: PackedStringArray = PackedStringArray(), body: PackedByteArray = PackedByteArray()) -> Dictionary:
+func api(
+	method: int,
+	api_path: String,
+	headers: PackedStringArray = PackedStringArray(),
+	body: PackedByteArray = PackedByteArray()
+) -> Dictionary:
 	if not await ensure_token():
 		if has_tokens() and not _last_refresh_result.is_empty():
 			# The refresh failed for now (offline, refused, a server error): report that.
 			return _last_refresh_result
-		return _result(0, HTTPRequest.RESULT_SUCCESS, PackedStringArray(), PackedByteArray(), false, false, "not_connected")
+		return _result(
+			0,
+			HTTPRequest.RESULT_SUCCESS,
+			PackedStringArray(),
+			PackedByteArray(),
+			false,
+			false,
+			"not_connected"
+		)
 	var refreshed := false
 	var attempt := 0
 	while true:
@@ -415,7 +493,9 @@ func api(method: int, api_path: String, headers: PackedStringArray = PackedStrin
 ## Uploads a FIT file and polls until Strava reports the activity. Returns {state, detail,
 ## activity_id, upload_id, permanent}: state "uploaded", "duplicate", "failed" or
 ## "offline"; permanent = true when retrying can't help.
-func upload_fit(ride_id: String, fit_path: String, activity_name: String, description: String) -> Dictionary:
+func upload_fit(
+	ride_id: String, fit_path: String, activity_name: String, description: String
+) -> Dictionary:
 	if not has_tokens():
 		return {"state": "queued", "detail": "not_connected", "upload_id": 0, "permanent": false}
 	var bytes := FileAccess.get_file_as_bytes(fit_path)
@@ -423,12 +503,25 @@ func upload_fit(ride_id: String, fit_path: String, activity_name: String, descri
 		return {"state": "failed", "detail": "missing_file", "upload_id": 0, "permanent": true}
 	upload_progress.emit(ride_id, "uploading", "")
 	var boundary := "WattlandsBoundary" + Crypto.new().generate_random_bytes(12).hex_encode()
-	var body := build_multipart(boundary, [
-		["data_type", "fit"], ["trainer", "1"], ["name", activity_name],
-		["description", description], ["external_id", ride_id],
-	], "file", fit_path.get_file(), bytes)
-	var r := await api(HTTPClient.METHOD_POST, "/uploads",
-		["Content-Type: multipart/form-data; boundary=" + boundary], body)
+	var body := build_multipart(
+		boundary,
+		[
+			["data_type", "fit"],
+			["trainer", "1"],
+			["name", activity_name],
+			["description", description],
+			["external_id", ride_id],
+		],
+		"file",
+		fit_path.get_file(),
+		bytes
+	)
+	var r := await api(
+		HTTPClient.METHOD_POST,
+		"/uploads",
+		["Content-Type: multipart/form-data; boundary=" + boundary],
+		body
+	)
 	var code := int(r["code"])
 	if code != 201 and code != 200:
 		return _upload_failure(r, 0)
@@ -460,11 +553,18 @@ func poll_upload(ride_id: String, upload_id: int) -> Dictionary:
 				if not done.is_empty():
 					return done
 		elif code == 404:
-			return {"state": "failed", "detail": "upload_not_found", "upload_id": 0, "permanent": false}
+			return {
+				"state": "failed", "detail": "upload_not_found", "upload_id": 0, "permanent": false
+			}
 		else:
 			return _upload_failure(r, upload_id)
 		if waited >= poll_timeout_s:
-			return {"state": "failed", "detail": "processing_timeout", "upload_id": upload_id, "permanent": false}
+			return {
+				"state": "failed",
+				"detail": "processing_timeout",
+				"upload_id": upload_id,
+				"permanent": false
+			}
 	return {}
 
 
@@ -482,15 +582,28 @@ func fetch_athlete() -> Dictionary:
 
 ## multipart/form-data for HTTPRequest.request_raw(): `fields` is [[name, value], ...], then
 ## one file part.
-static func build_multipart(boundary: String, fields: Array, file_field: String, filename: String, data: PackedByteArray) -> PackedByteArray:
+static func build_multipart(
+	boundary: String, fields: Array, file_field: String, filename: String, data: PackedByteArray
+) -> PackedByteArray:
 	var out := PackedByteArray()
 	for f: Array in fields:
-		out.append_array(("--%s\r\nContent-Disposition: form-data; name=\"%s\"\r\n\r\n" % [boundary, str(f[0])]).to_utf8_buffer())
+		out.append_array(
+			(
+				(
+					'--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n'
+					% [boundary, str(f[0])]
+				)
+				. to_utf8_buffer()
+			)
+		)
 		out.append_array(str(f[1]).to_utf8_buffer())
 		out.append_array("\r\n".to_utf8_buffer())
-	var safe_name := filename.replace("\"", "").replace("\r", "").replace("\n", "")
-	out.append_array(("--%s\r\nContent-Disposition: form-data; name=\"%s\"; filename=\"%s\"\r\nContent-Type: application/octet-stream\r\n\r\n" % [
-		boundary, file_field, safe_name]).to_utf8_buffer())
+	var safe_name := filename.replace('"', "").replace("\r", "").replace("\n", "")
+	var part_head := (
+		'--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\n'
+		+ "Content-Type: application/octet-stream\r\n\r\n"
+	)
+	out.append_array((part_head % [boundary, file_field, safe_name]).to_utf8_buffer())
 	out.append_array(data)
 	out.append_array(("\r\n--%s--\r\n" % boundary).to_utf8_buffer())
 	return out
@@ -529,12 +642,30 @@ static func resolve_url(from: String, location: String) -> String:
 
 ## One HTTP request through the network lock. Returns {code, result, headers, body,
 ## refused, offline, detail}.
-func _request(method: int, url: String, headers: PackedStringArray, body: PackedByteArray) -> Dictionary:
+func _request(
+	method: int, url: String, headers: PackedStringArray, body: PackedByteArray
+) -> Dictionary:
 	if not Locks.network_allows(url):
-		return _result(0, HTTPRequest.RESULT_CANT_CONNECT, PackedStringArray(), PackedByteArray(), true, false, "network_locked")
+		return _result(
+			0,
+			HTTPRequest.RESULT_CANT_CONNECT,
+			PackedStringArray(),
+			PackedByteArray(),
+			true,
+			false,
+			"network_locked"
+		)
 	if not is_inside_tree():
 		push_warning("Strava: client not in the scene tree; request skipped")
-		return _result(0, HTTPRequest.RESULT_CANT_CONNECT, PackedStringArray(), PackedByteArray(), false, true, "not_in_tree")
+		return _result(
+			0,
+			HTTPRequest.RESULT_CANT_CONNECT,
+			PackedStringArray(),
+			PackedByteArray(),
+			false,
+			true,
+			"not_in_tree"
+		)
 	var req := HTTPRequest.new()
 	req.max_redirects = 0
 	req.timeout = request_timeout_s
@@ -543,7 +674,15 @@ func _request(method: int, url: String, headers: PackedStringArray, body: Packed
 	var err := req.request_raw(url, headers, method as HTTPClient.Method, body)
 	if err != OK:
 		req.queue_free()
-		return _result(0, HTTPRequest.RESULT_CANT_CONNECT, PackedStringArray(), PackedByteArray(), false, true, "request_failed")
+		return _result(
+			0,
+			HTTPRequest.RESULT_CANT_CONNECT,
+			PackedStringArray(),
+			PackedByteArray(),
+			false,
+			true,
+			"request_failed"
+		)
 	var res: Array = await req.request_completed
 	req.queue_free()
 	# Continue on the next frame, outside the HTTPRequest's signal emission, so callers may
@@ -552,17 +691,26 @@ func _request(method: int, url: String, headers: PackedStringArray, body: Packed
 		await get_tree().process_frame
 	var result := int(res[0])
 	var code := int(res[1])
-	var ok_result := result == HTTPRequest.RESULT_SUCCESS or (result == HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED and code >= 300 and code < 400)
+	var ok_result := (
+		result == HTTPRequest.RESULT_SUCCESS
+		or (result == HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED and code >= 300 and code < 400)
+	)
 	if not ok_result or code == 0:
-		return _result(0, result, res[2] as PackedStringArray, PackedByteArray(), false, true, "offline")
-	return _result(code, result, res[2] as PackedStringArray, res[3] as PackedByteArray, false, false, "")
+		return _result(
+			0, result, res[2] as PackedStringArray, PackedByteArray(), false, true, "offline"
+		)
+	return _result(
+		code, result, res[2] as PackedStringArray, res[3] as PackedByteArray, false, false, ""
+	)
 
 
 ## GET `url`, following up to max_redirects redirects; every hop passes the network lock.
 func _fetch_following(url: String) -> Dictionary:
 	var current := url
 	for i in max_redirects + 1:
-		var r := await _request(HTTPClient.METHOD_GET, current, PackedStringArray(), PackedByteArray())
+		var r := await _request(
+			HTTPClient.METHOD_GET, current, PackedStringArray(), PackedByteArray()
+		)
 		var code := int(r["code"])
 		if code in [301, 302, 303, 307, 308]:
 			var loc := header_value(r["headers"] as PackedStringArray, "Location")
@@ -571,23 +719,58 @@ func _fetch_following(url: String) -> Dictionary:
 			current = resolve_url(current, loc)
 			continue
 		return r
-	return _result(0, HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED, PackedStringArray(), PackedByteArray(), false, false, "too_many_redirects")
+	return _result(
+		0,
+		HTTPRequest.RESULT_REDIRECT_LIMIT_REACHED,
+		PackedStringArray(),
+		PackedByteArray(),
+		false,
+		false,
+		"too_many_redirects"
+	)
 
 
-static func _result(code: int, result: int, headers: PackedStringArray, body: PackedByteArray, refused: bool, offline: bool, detail: String) -> Dictionary:
-	return {"code": code, "result": result, "headers": headers, "body": body,
-		"refused": refused, "offline": offline, "detail": detail}
+static func _result(
+	code: int,
+	result: int,
+	headers: PackedStringArray,
+	body: PackedByteArray,
+	refused: bool,
+	offline: bool,
+	detail: String
+) -> Dictionary:
+	return {
+		"code": code,
+		"result": result,
+		"headers": headers,
+		"body": body,
+		"refused": refused,
+		"offline": offline,
+		"detail": detail
+	}
 
 
 func _upload_outcome(j: Dictionary) -> Dictionary:
 	var activity: Variant = j.get("activity_id", null)
 	if activity != null and int(activity) > 0:
-		return {"state": "uploaded", "detail": "", "activity_id": int(activity), "upload_id": _upload_id(j), "permanent": false}
+		return {
+			"state": "uploaded",
+			"detail": "",
+			"activity_id": int(activity),
+			"upload_id": _upload_id(j),
+			"permanent": false
+		}
 	var error: Variant = j.get("error", null)
 	if error != null and str(error) != "":
 		var msg := str(error)
 		if msg.to_lower().contains("duplicate"):
-			return {"state": "duplicate", "detail": msg, "activity_id": duplicate_activity_id(msg), "upload_id": _upload_id(j), "permanent": false}
+			return {
+				"state": "duplicate",
+				"detail": msg,
+				"activity_id": duplicate_activity_id(msg),
+				"upload_id": _upload_id(j),
+				"permanent": false
+			}
 		return {"state": "failed", "detail": msg, "upload_id": _upload_id(j), "permanent": true}
 	return {}
 
@@ -595,17 +778,41 @@ func _upload_outcome(j: Dictionary) -> Dictionary:
 func _upload_failure(r: Dictionary, upload_id: int) -> Dictionary:
 	var code := int(r["code"])
 	if bool(r.get("refused", false)):
-		return {"state": "failed", "detail": "network_locked", "upload_id": upload_id, "permanent": false}
+		return {
+			"state": "failed",
+			"detail": "network_locked",
+			"upload_id": upload_id,
+			"permanent": false
+		}
 	if bool(r.get("offline", false)) or code == 0:
 		var detail := str(r.get("detail", "offline"))
-		return {"state": "queued" if detail == "not_connected" else "offline", "detail": detail, "upload_id": upload_id, "permanent": false}
+		return {
+			"state": "queued" if detail == "not_connected" else "offline",
+			"detail": detail,
+			"upload_id": upload_id,
+			"permanent": false
+		}
 	if code == 401:
-		return {"state": "failed", "detail": "unauthorized", "upload_id": upload_id, "permanent": false}
+		return {
+			"state": "failed", "detail": "unauthorized", "upload_id": upload_id, "permanent": false
+		}
 	if code == 429:
-		return {"state": "failed", "detail": "rate_limited", "upload_id": upload_id, "permanent": false}
+		return {
+			"state": "failed", "detail": "rate_limited", "upload_id": upload_id, "permanent": false
+		}
 	if code >= 500:
-		return {"state": "failed", "detail": "server_error_%d" % code, "upload_id": upload_id, "permanent": false}
-	return {"state": "failed", "detail": _failure_detail(r, "rejected_%d" % code), "upload_id": upload_id, "permanent": true}
+		return {
+			"state": "failed",
+			"detail": "server_error_%d" % code,
+			"upload_id": upload_id,
+			"permanent": false
+		}
+	return {
+		"state": "failed",
+		"detail": _failure_detail(r, "rejected_%d" % code),
+		"upload_id": upload_id,
+		"permanent": true
+	}
 
 
 ## The activity id in a duplicate message ("... duplicate of activity 123"), or 0.
@@ -628,7 +835,9 @@ static func _failure_detail(r: Dictionary, fallback: String) -> String:
 		return "network_locked"
 	if bool(r.get("offline", false)):
 		return "offline"
-	var j: Variant = parse_json((r.get("body", PackedByteArray()) as PackedByteArray).get_string_from_utf8())
+	var j: Variant = parse_json(
+		(r.get("body", PackedByteArray()) as PackedByteArray).get_string_from_utf8()
+	)
 	if j is Dictionary and (j as Dictionary).has("message"):
 		return "%s (%d)" % [str((j as Dictionary)["message"]), int(r["code"])]
 	return fallback

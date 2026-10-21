@@ -72,9 +72,17 @@ func find(code: String) -> Dictionary:
 
 
 ## A beacon's JSON text ("game" only when game_id is set).
-static func beacon(code: String, relay_port: int, name: String = "", game_id: String = "") -> String:
-	var b := {"wattlands": MAGIC, "proto": Wl.PROTO, "code": RoomCode.normalize(code),
-		"port": relay_port, "name": name, "build": Wl.BUILD}
+static func beacon(
+	code: String, relay_port: int, name: String = "", game_id: String = ""
+) -> String:
+	var b := {
+		"wattlands": MAGIC,
+		"proto": Wl.PROTO,
+		"code": RoomCode.normalize(code),
+		"port": relay_port,
+		"name": name,
+		"build": Wl.BUILD
+	}
 	if game_id != "":
 		b["game"] = game_id
 	return JSON.stringify(b)
@@ -99,5 +107,10 @@ static func parse_beacon(text: String) -> Dictionary:
 	if code == "" or not (p is float or p is int) or int(p) <= 0 or int(p) > 65535:
 		return {}
 	var game: Variant = b.get("game", "")
-	return {"code": code, "port": int(p), "name": str(b.get("name", "")), "build": str(b.get("build", "")),
-		"game_id": str(game) if game is String else ""}
+	return {
+		"code": code,
+		"port": int(p),
+		"name": str(b.get("name", "")),
+		"build": str(b.get("build", "")),
+		"game_id": str(game) if game is String else ""
+	}

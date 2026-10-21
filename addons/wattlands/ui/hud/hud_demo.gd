@@ -36,49 +36,102 @@ func _ready() -> void:
 	me.ftp = 250.0
 	me.apply_look(0)
 	ctx.players = [me]
-	_plan = EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65),
-		PlanPhase.erg(Wl.WORK, 90, 240, "Wave 1"),
-		PlanPhase.erg(Wl.RECOVERY, 55, 180, "Break"),
-		PlanPhase.sim(Wl.WORK, Wl.GRADE_GAME, 120, "Overdrive"),
-		PlanPhase.erg(Wl.WORK, 60, 0, "Reel 1").with_open(120, 540),
-		PlanPhase.erg(Wl.COOLDOWN, 50, 180, "Cool-down"),
-	])
+	_plan = (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 300, "Ride out").with_ramp(65),
+				PlanPhase.erg(Wl.WORK, 90, 240, "Wave 1"),
+				PlanPhase.erg(Wl.RECOVERY, 55, 180, "Break"),
+				PlanPhase.sim(Wl.WORK, Wl.GRADE_GAME, 120, "Overdrive"),
+				PlanPhase.erg(Wl.WORK, 60, 0, "Reel 1").with_open(120, 540),
+				PlanPhase.erg(Wl.COOLDOWN, 50, 180, "Cool-down"),
+			]
+		)
+	)
 	var shop := PanelContainer.new()
 	shop.name = "ShopPanel"
 	var list := PedalScanList.new()
 	list.custom_minimum_size = Vector2(420, 0)
 	list.erg_auto_confirm = true
-	list.set_items([
-		{"id": "ballista", "text": "Ballista", "detail": "40 denarii"},
-		{"id": "wall", "text": "Shield wall", "detail": "25 denarii"},
-		{"id": "save", "text": "Save denarii"},
-		{"id": "oil", "text": "Hot oil", "detail": "Needs 60", "disabled": true},
-	])
+	(
+		list
+		. set_items(
+			[
+				{"id": "ballista", "text": "Ballista", "detail": "40 denarii"},
+				{"id": "wall", "text": "Shield wall", "detail": "25 denarii"},
+				{"id": "save", "text": "Save denarii"},
+				{"id": "oil", "text": "Hot oil", "detail": "Needs 60", "disabled": true},
+			]
+		)
+	)
 	shop.add_child(list)
-	var spec := HudSpec.new() \
-		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": "gate", "label": "Gate HP"}) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "wkg"}) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
-		.add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT) \
-		.add_control(shop, HudSpec.BOTTOM_RIGHT) \
-		.toasts_at(HudSpec.TOP).banners_at(HudSpec.TOP)
+	var spec := (
+		HudSpec
+		. new()
+		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
+		. add(
+			HudSpec.READOUT,
+			HudSpec.TOP_RIGHT,
+			{"source": "custom", "id": "gate", "label": "Gate HP"}
+		)
+		. add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "wkg"})
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
+		. add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
+		. add_control(shop, HudSpec.BOTTOM_RIGHT)
+		. toasts_at(HudSpec.TOP)
+		. banners_at(HudSpec.TOP)
+	)
 	_hud = HudLayer.new()
 	_hud.sounds = false
 	_hud.wkg_weight_kg = 75.0
 	add_child(_hud)
 	_hud.build(spec, ctx)
-	_bus.roster_changed.emit({
-		LOCAL: {"name": "Ada", "slot_index": 0, "raw_w": 262.0, "ftp_pct": 105.0, "status": {"in_band": true, "text": ""}},
-		2: {"name": "Bo", "slot_index": 1, "raw_w": 198.0, "ftp_pct": 88.0, "status": {"in_band": false, "text": "Diesel"}},
-		3: {"name": "Cy", "slot_index": 2, "raw_w": 120.0, "ftp_pct": 60.0, "rescue": true},
-		-1: {"name": "Bot 1", "slot_index": 3, "raw_w": 230.0, "ftp_pct": 92.0, "status": {"in_band": true}},
-		4: {"name": "Dee", "slot_index": 4, "raw_w": 0.0, "ftp_pct": 0.0, "afk": true, "connected": false},
-	})
+	(
+		_bus
+		. roster_changed
+		. emit(
+			{
+				LOCAL:
+				{
+					"name": "Ada",
+					"slot_index": 0,
+					"raw_w": 262.0,
+					"ftp_pct": 105.0,
+					"status": {"in_band": true, "text": ""}
+				},
+				2:
+				{
+					"name": "Bo",
+					"slot_index": 1,
+					"raw_w": 198.0,
+					"ftp_pct": 88.0,
+					"status": {"in_band": false, "text": "Diesel"}
+				},
+				3: {"name": "Cy", "slot_index": 2, "raw_w": 120.0, "ftp_pct": 60.0, "rescue": true},
+				-1:
+				{
+					"name": "Bot 1",
+					"slot_index": 3,
+					"raw_w": 230.0,
+					"ftp_pct": 92.0,
+					"status": {"in_band": true}
+				},
+				4:
+				{
+					"name": "Dee",
+					"slot_index": 4,
+					"raw_w": 0.0,
+					"ftp_pct": 0.0,
+					"afk": true,
+					"connected": false
+				},
+			}
+		)
+	)
 	_bus.power_band_changed.emit(LOCAL, 0.76 * 250.0, 1.05 * 250.0)
 	_bus.cadence_band_changed.emit(LOCAL, 85.0, 100.0)
 	_bus.readout_changed.emit("gate", "1250")

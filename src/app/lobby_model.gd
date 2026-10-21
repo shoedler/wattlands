@@ -14,7 +14,14 @@ const VERSION_MISMATCH := "version_mismatch"
 ## only if opted in, preferred cadence, haptics, Autopilot, player_options, installed games.
 ## Extra keys: "trainer" (local trainer status for the lobby cards) and "haptic_intensity".
 ## autopilot: the lobby's per-session Autopilot toggle (BRIEF 3.5); null uses the profile default.
-static func player_info(profile: RiderProfile, scaling: String, player_options: Dictionary, games: Dictionary, trainer_status: String = "", autopilot: Variant = null) -> Dictionary:
+static func player_info(
+	profile: RiderProfile,
+	scaling: String,
+	player_options: Dictionary,
+	games: Dictionary,
+	trainer_status: String = "",
+	autopilot: Variant = null
+) -> Dictionary:
 	var info := {
 		"name": profile.display_name,
 		"color": profile.color.to_html(false),
@@ -45,7 +52,9 @@ static func installed_games(registry: WlGameRegistry) -> Dictionary:
 
 
 ## Value of a peer-keyed dictionary field (int or string keys).
-static func peer_value(lobby: Dictionary, field: String, peer: int, default: Variant = null) -> Variant:
+static func peer_value(
+	lobby: Dictionary, field: String, peer: int, default: Variant = null
+) -> Variant:
 	var d: Variant = lobby.get(field, {})
 	if not (d is Dictionary):
 		return default
@@ -148,7 +157,9 @@ static func user_zwo_contents(manifest: Dictionary) -> Array[String]:
 		return out
 	var dir := workouts_dir()
 	var files := Array(DirAccess.get_files_at(dir))
-	files.sort_custom(func(a: Variant, b: Variant) -> bool: return str(a).naturalnocasecmp_to(str(b)) < 0)
+	files.sort_custom(
+		func(a: Variant, b: Variant) -> bool: return str(a).naturalnocasecmp_to(str(b)) < 0
+	)
 	for f: Variant in files:
 		if str(f).get_extension().to_lower() == ZWO_SCHEME:
 			out.append(ZWO_SCHEME + ":" + dir.path_join(str(f)))
@@ -171,7 +182,9 @@ static func content_available(manifest: Dictionary, content_id: String) -> bool:
 ## rider's own .zwo shows its file name (APP_CONTENT_ZWO).
 static func content_label(game_id: String, content_id: String) -> String:
 	if content_id.begins_with(ZWO_SCHEME + ":"):
-		var file := content_id.substr(ZWO_SCHEME.length() + 1).replace("\\", "/").get_file().get_basename()
+		var file := (
+			content_id.substr(ZWO_SCHEME.length() + 1).replace("\\", "/").get_file().get_basename()
+		)
 		return String(TranslationServer.translate("APP_CONTENT_ZWO")).format([file])
 	var key := "%s_CONTENT_%s" % [game_id.to_upper(), content_id.to_upper()]
 	var t := String(TranslationServer.translate(key))
@@ -216,9 +229,13 @@ static func scripted_content(manifest: Dictionary, requested: String, e2e: bool)
 
 
 ## Player options with defaults filled in for `game_id`, through the registry when it can.
-static func resolve_player_options(registry: WlGameRegistry, game_id: String, values: Dictionary) -> Dictionary:
+static func resolve_player_options(
+	registry: WlGameRegistry, game_id: String, values: Dictionary
+) -> Dictionary:
 	var manifest: Dictionary = registry.manifest(game_id) if registry != null else {}
-	var resolved: Dictionary = registry.resolve_options(game_id, values, true) if registry != null else {}
+	var resolved: Dictionary = (
+		registry.resolve_options(game_id, values, true) if registry != null else {}
+	)
 	var out := AppOptionModel.defaults(game_id, manifest.get("player_options", []))
 	for k: Variant in values.keys():
 		if out.has(k):
@@ -229,9 +246,13 @@ static func resolve_player_options(registry: WlGameRegistry, game_id: String, va
 
 
 ## Session options with defaults filled in for `game_id`.
-static func resolve_game_options(registry: WlGameRegistry, game_id: String, values: Dictionary) -> Dictionary:
+static func resolve_game_options(
+	registry: WlGameRegistry, game_id: String, values: Dictionary
+) -> Dictionary:
 	var manifest: Dictionary = registry.manifest(game_id) if registry != null else {}
-	var resolved: Dictionary = registry.resolve_options(game_id, values, false) if registry != null else {}
+	var resolved: Dictionary = (
+		registry.resolve_options(game_id, values, false) if registry != null else {}
+	)
 	var out := AppOptionModel.defaults(game_id, manifest.get("options", []))
 	for k: Variant in values.keys():
 		if out.has(k):

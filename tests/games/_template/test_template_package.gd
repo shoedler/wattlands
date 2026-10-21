@@ -4,11 +4,32 @@ extends GutTest
 ## in rules, no trainer path but ctx.directives, BRIEF 4.6.11).
 
 const F := preload("res://tests/games/_template/template_fakes.gd")
-const REQUIRED := ["id", "title", "summary", "version", "min_players", "max_players", "bots",
-	"presentation", "entry", "contents", "default_content", "e2e_content", "zero_input_content"]
+const REQUIRED := [
+	"id",
+	"title",
+	"summary",
+	"version",
+	"min_players",
+	"max_players",
+	"bots",
+	"presentation",
+	"entry",
+	"contents",
+	"default_content",
+	"e2e_content",
+	"zero_input_content"
+]
 ## Names only the platform's trainer stack may use (BRIEF 4.6.11, tests/arch/test_no_bypass.gd).
-const TRAINER_NAMES := ["TrainerController", "SafetyGovernor", "FtmsClient", "write_control",
-	"set_target_power", "set_simulation", "set_resistance", "write_characteristic"]
+const TRAINER_NAMES := [
+	"TrainerController",
+	"SafetyGovernor",
+	"FtmsClient",
+	"write_control",
+	"set_target_power",
+	"set_simulation",
+	"set_resistance",
+	"write_characteristic"
+]
 
 
 func _files(dir: String, exts: Array) -> Array[String]:
@@ -64,7 +85,11 @@ func test_every_content_file_loads_and_validates() -> void:
 	for content_id: String in F.manifest()["contents"]:
 		var path := F.CONTENT_DIR.path_join(content_id + ".json")
 		assert_true(FileAccess.file_exists(path), path)
-		assert_eq(TemplateRules.content_error(JSON.parse_string(FileAccess.get_file_as_string(path))), "", path)
+		assert_eq(
+			TemplateRules.content_error(JSON.parse_string(FileAccess.get_file_as_string(path))),
+			"",
+			path
+		)
 
 
 func test_option_entries_use_the_sdk_entry_format() -> void:
@@ -79,9 +104,15 @@ func test_option_entries_use_the_sdk_entry_format() -> void:
 			"int":
 				var step := float(e.get("step", 1))
 				assert_between(float(e["default"]), float(e["min"]), float(e["max"]), str(e))
-				assert_eq(fmod(float(e["default"]) - float(e["min"]), step), 0.0, "default on the step grid: %s" % e)
+				assert_eq(
+					fmod(float(e["default"]) - float(e["min"]), step),
+					0.0,
+					"default on the step grid: %s" % e
+				)
 			"choice":
-				var values: Array = (e["choices"] as Array).map(func(c: Dictionary) -> Variant: return c["value"])
+				var values: Array = (e["choices"] as Array).map(
+					func(c: Dictionary) -> Variant: return c["value"]
+				)
 				assert_has(values, e["default"], str(e))
 
 
@@ -117,13 +148,18 @@ func test_every_unlock_id_has_its_results_screen_name() -> void:
 	var unlocks: Array = g.results().row(1)["unlocks"]
 	assert_gt(unlocks.size(), 0, "3 laps unlock something")
 	for id: Variant in unlocks:
-		assert_has(keys, "%sUNLOCK_%s" % [_prefix(), str(id).to_upper()], "unlock %s has its name string" % id)
+		assert_has(
+			keys,
+			"%sUNLOCK_%s" % [_prefix(), str(id).to_upper()],
+			"unlock %s has its name string" % id
+		)
 
 
 ## Views are exempt: they only read state and may seed their own cosmetic RNG from ctx.seed.
 func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
-	var re := RegEx.create_from_string(
-		"\\bTime\\.|OS\\.get_ticks|OS\\.get_unix_time|RandomNumberGenerator\\.new\\(|(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize)\\(")
+	var clocks := "\\bTime\\.|OS\\.get_ticks|OS\\.get_unix_time|RandomNumberGenerator\\.new\\("
+	var globals := "(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize)\\("
+	var re := RegEx.create_from_string(clocks + "|" + globals)
 	var scanned := 0
 	for path in _files(F.GAME_DIR, ["gd"]):
 		if path.trim_prefix(F.GAME_DIR).contains("view"):

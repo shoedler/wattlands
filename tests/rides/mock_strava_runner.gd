@@ -19,10 +19,15 @@ func _init() -> void:
 ## Starts the mock; true once it listens. `now` fixes its clock (0 = real time).
 func start(now: int = 0) -> bool:
 	_port_file = Paths.make_temp_dir("wattlands_mock_strava").path_join("port.txt")
-	var args := PackedStringArray([
-		ProjectSettings.globalize_path(SERVER), "--port=0", "--port-file=" + _port_file, "--quiet",
-		"--parent-pid=%d" % OS.get_process_id(),
-	])
+	var args := PackedStringArray(
+		[
+			ProjectSettings.globalize_path(SERVER),
+			"--port=0",
+			"--port-file=" + _port_file,
+			"--quiet",
+			"--parent-pid=%d" % OS.get_process_id(),
+		]
+	)
 	if now > 0:
 		args.append("--now=%d" % now)
 	pid = OS.create_process("node", args)
@@ -70,8 +75,14 @@ func _exit_tree() -> void:
 func admin(method: int, path: String, body: Dictionary = {}) -> Variant:
 	var req := HTTPRequest.new()
 	add_child(req)
-	var payload := JSON.stringify(body).to_utf8_buffer() if method == HTTPClient.METHOD_POST else PackedByteArray()
-	req.request_raw(base() + path, ["Content-Type: application/json"], method as HTTPClient.Method, payload)
+	var payload := (
+		JSON.stringify(body).to_utf8_buffer()
+		if method == HTTPClient.METHOD_POST
+		else PackedByteArray()
+	)
+	req.request_raw(
+		base() + path, ["Content-Type: application/json"], method as HTTPClient.Method, payload
+	)
 	var res: Array = await req.request_completed
 	req.queue_free()
 	if int(res[0]) != HTTPRequest.RESULT_SUCCESS:

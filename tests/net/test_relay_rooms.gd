@@ -246,7 +246,10 @@ func test_rate_limit_60_per_second_burst_120() -> void:
 	assert_eq(delivered, 120 - 2, "burst 120 minus hello and join")
 	var errs := 0
 	for pair: Array in r.take_output():
-		if (pair[1] as Dictionary)["t"] == "error" and (pair[1] as Dictionary)["code"] == "rate_limited":
+		if (
+			(pair[1] as Dictionary)["t"] == "error"
+			and (pair[1] as Dictionary)["code"] == "rate_limited"
+		):
 			errs += 1
 	assert_eq(errs, 12)
 	r.advance(1.0)

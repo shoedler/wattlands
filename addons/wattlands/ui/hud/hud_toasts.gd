@@ -43,7 +43,9 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.size_flags_horizontal = side_flags(side)
-	panel.add_theme_stylebox_override("panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.92), WlTheme.ACCENT, 2))
+	panel.add_theme_stylebox_override(
+		"panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.92), WlTheme.ACCENT, 2)
+	)
 	var l := Label.new()
 	l.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE

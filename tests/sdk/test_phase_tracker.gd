@@ -40,7 +40,9 @@ func test_start_enters_phase_zero_for_every_rider() -> void:
 
 
 func test_fixed_phase_ends_by_duration_on_its_tick() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 1, "A"), PlanPhase.erg(Wl.WORK, 60, 2, "B")]))
+	_tr.add_rider(
+		1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 1, "A"), PlanPhase.erg(Wl.WORK, 60, 2, "B")])
+	)
 	_tr.start()
 	assert_eq(_run(19), [], "1 s = 20 frames")
 	var s := _tr.state(1)
@@ -61,7 +63,15 @@ func test_fixed_phase_ends_by_duration_on_its_tick() -> void:
 
 
 func test_state_fields() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 10, "Ramp").with_ramp(60), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Free")]))
+	_tr.add_rider(
+		1,
+		_fin(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 10, "Ramp").with_ramp(60),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Free")
+			]
+		)
+	)
 	_tr.start()
 	_run(100)
 	var s := _tr.state(1)
@@ -78,7 +88,9 @@ func test_state_fields() -> void:
 
 
 func test_open_ended_phase_ends_at_max_s() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 0).with_open(1, 2), PlanPhase.erg(Wl.WORK, 60, 5)]))
+	_tr.add_rider(
+		1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 0).with_open(1, 2), PlanPhase.erg(Wl.WORK, 60, 5)])
+	)
 	_tr.start()
 	assert_eq(_run(39), [])
 	assert_almost_eq(_tr.state(1).remaining_s, 0.05, 1e-9)
@@ -87,7 +99,16 @@ func test_open_ended_phase_ends_at_max_s() -> void:
 
 
 func test_end_phase_rules_and_timing() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 5), PlanPhase.erg(Wl.WORK, 60, 0).with_open(1, 9), PlanPhase.erg(Wl.WORK, 60, 5)]))
+	_tr.add_rider(
+		1,
+		_fin(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 5),
+				PlanPhase.erg(Wl.WORK, 60, 0).with_open(1, 9),
+				PlanPhase.erg(Wl.WORK, 60, 5)
+			]
+		)
+	)
 	assert_eq(_tr.request_end(1), Wl.REFUSE_NO_PHASE)
 	assert_eq(_tr.request_end(9), Wl.REFUSE_UNKNOWN_PEER)
 	_tr.start()
@@ -105,7 +126,16 @@ func test_end_phase_rules_and_timing() -> void:
 
 
 func test_finish_all_skips_to_the_cooldown() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 5), PlanPhase.erg(Wl.WORK, 60, 5), PlanPhase.erg(Wl.WORK, 60, 5)]))
+	_tr.add_rider(
+		1,
+		_fin(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 5),
+				PlanPhase.erg(Wl.WORK, 60, 5),
+				PlanPhase.erg(Wl.WORK, 60, 5)
+			]
+		)
+	)
 	_tr.add_rider(2, _fin([PlanPhase.erg(Wl.WARMUP, 50, 1)]))
 	_tr.start()
 	_run(20)
@@ -146,7 +176,13 @@ func test_cooldown_completion_marks_done() -> void:
 
 func test_pending_plan_swaps_at_the_next_change() -> void:
 	var a := _fin([PlanPhase.erg(Wl.WARMUP, 50, 1, "A"), PlanPhase.erg(Wl.WORK, 60, 1, "B")])
-	var b := _fin([PlanPhase.erg(Wl.WARMUP, 50, 1, "A"), PlanPhase.erg(Wl.WORK, 55, 1, "C"), PlanPhase.erg(Wl.WORK, 55, 1, "D")])
+	var b := _fin(
+		[
+			PlanPhase.erg(Wl.WARMUP, 50, 1, "A"),
+			PlanPhase.erg(Wl.WORK, 55, 1, "C"),
+			PlanPhase.erg(Wl.WORK, 55, 1, "D")
+		]
+	)
 	_tr.add_rider(1, a)
 	_tr.start()
 	_tr.set_pending_plan(1, b)
@@ -159,7 +195,16 @@ func test_pending_plan_swaps_at_the_next_change() -> void:
 
 
 func test_sim_block_and_switch_bookkeeping() -> void:
-	_tr.add_rider(1, _fin([PlanPhase.erg(Wl.WARMUP, 50, 100), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40), PlanPhase.erg(Wl.WORK, 60, 60)]))
+	_tr.add_rider(
+		1,
+		_fin(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 100),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40),
+				PlanPhase.erg(Wl.WORK, 60, 60)
+			]
+		)
+	)
 	_tr.start()
 	assert_eq(_tr.last_switch_tick(1), PhaseTracker.NO_SWITCH)
 	assert_true(_tr.seconds_since_switch(1, 0) > 1e6)

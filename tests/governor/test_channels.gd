@@ -17,7 +17,9 @@ func _erg_rig(phase: PlanPhase, params: Dictionary = {}) -> Rig:
 func test_erg_target_expires_back_to_the_plan() -> void:
 	var rig := _erg_rig(erg(Wl.WORK, 60.0, 600.0).with_range(50.0, 100.0))
 	var t0 := rig.t
-	var rec := rig.directive({"mode": "ERG", "target_pct": 80.0, "duration_s": 10.0, "reason": "bank"})
+	var rec := rig.directive(
+		{"mode": "ERG", "target_pct": 80.0, "duration_s": 10.0, "reason": "bank"}
+	)
 	assert_false(rec["refused"])
 	assert_eq(int(rec["applied"]["target_w"]), 160)
 	rig.run_until(func() -> bool: return rig.t >= t0 + 9.95 - 1e-6, 12.0)
@@ -45,7 +47,15 @@ func test_fishing_run_steps_share_one_expiry() -> void:
 	var run_end := rig.t + 20.0
 	for i in 6:
 		var left := run_end - rig.t
-		var rec := rig.directive({"mode": "ERG", "target_pct": 75.0 + 6.0 * i, "duration_s": left, "reason": "run", "source": "fishing"})
+		var rec := rig.directive(
+			{
+				"mode": "ERG",
+				"target_pct": 75.0 + 6.0 * i,
+				"duration_s": left,
+				"reason": "run",
+				"source": "fishing"
+			}
+		)
 		assert_false(rec["refused"])
 		rig.run(0.5)
 	assert_eq(int(rig.s()["governed_target_w"]), 210)
@@ -62,8 +72,11 @@ func test_erg_target_reverts_onto_the_ramp() -> void:
 	rig.run(10.0)
 	rig.directive({"target_pct": 85.0, "duration_s": 20.0})
 	rig.run(20.0)
-	assert_eq(int(rig.s()["governed_target_w"]), GovernorClamps.whole_w(2.0 * (50.0 + 20.0 * 30.0 / 100.0)),
-		"planned 56% at 30 s")
+	assert_eq(
+		int(rig.s()["governed_target_w"]),
+		GovernorClamps.whole_w(2.0 * (50.0 + 20.0 * 30.0 / 100.0)),
+		"planned 56% at 30 s"
+	)
 
 
 func test_ramp_follows_game_time() -> void:
@@ -75,7 +88,9 @@ func test_ramp_follows_game_time() -> void:
 	rig.run(30.0)
 	rig.gov.set_game_paused(false)
 	rig.step()
-	assert_almost_eq(float(rig.s()["planned_pct"]), 55.01, 0.011, "the ramp did not move while paused")
+	assert_almost_eq(
+		float(rig.s()["planned_pct"]), 55.01, 0.011, "the ramp did not move while paused"
+	)
 
 
 func test_range_pct_refusals() -> void:
@@ -126,7 +141,9 @@ func test_sim_block_spacing_and_the_bracketing_exemption() -> void:
 	var rec := rig.directive({"mode": "SIM", "duration_s": 10.0})
 	assert_false(rec["refused"], "the first block")
 	var back := rig.run_until(func() -> bool: return not bool(rig.s()["sim_block_active"]), 12.0)
-	assert_time(back - t_start, 10.0, "the block's own return to ERG is exempt from the 30 s spacing")
+	assert_time(
+		back - t_start, 10.0, "the block's own return to ERG is exempt from the 30 s spacing"
+	)
 	rig.run_until(func() -> bool: return rig.t >= back + 29.95 - 1e-6, 31.0)
 	var early := rig.directive({"mode": "SIM", "duration_s": 10.0})
 	assert_true(early["refused"])
@@ -141,7 +158,9 @@ func test_plan_switches_count_for_spacing() -> void:
 	rig.run(10.0)
 	rig.gov.start_phase(1)
 	rig.run(20.0)
-	assert_eq(rig.directive({"mode": "SIM", "duration_s": 15.0})["reason"], Wl.REFUSE_SWITCH_SPACING)
+	assert_eq(
+		rig.directive({"mode": "SIM", "duration_s": 15.0})["reason"], Wl.REFUSE_SWITCH_SPACING
+	)
 	rig.run(10.0)
 	assert_false(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"])
 
@@ -161,7 +180,15 @@ func test_mode_erg_ends_a_running_block() -> void:
 func test_mode_erg_with_a_target_in_an_erg_phase_is_no_switch() -> void:
 	var rig := _erg_rig(erg(Wl.WORK, 70.0, 600.0).with_range(60.0, 110.0))
 	var before := float(rig.s()["last_switch_t"])
-	var rec := rig.directive({"mode": "ERG", "target_pct": 80.0, "duration_s": 0.0, "reason": "pull", "source": "fishing"})
+	var rec := rig.directive(
+		{
+			"mode": "ERG",
+			"target_pct": 80.0,
+			"duration_s": 0.0,
+			"reason": "pull",
+			"source": "fishing"
+		}
+	)
 	assert_false(rec["refused"])
 	assert_eq(float(rig.s()["last_switch_t"]), before)
 
@@ -176,8 +203,13 @@ func test_mode_grade_only_in_sim() -> void:
 	assert_false(with_block["refused"], "allowed in the block the same request opens")
 	assert_false(rig.directive({"mode_grade": 2.0})["refused"], "and inside a running block")
 	rig.gov.start_phase(2)
-	assert_false(rig.directive({"mode": "SIM", "mode_grade": 8.0, "duration_s": 0.0, "reason": "boiler"})["refused"],
-		"and in a SIM phase")
+	assert_false(
+		(
+			rig
+			. directive({"mode": "SIM", "mode_grade": 8.0, "duration_s": 0.0, "reason": "boiler"})["refused"]
+		),
+		"and in a SIM phase"
+	)
 
 
 func test_mode_grade_goes_with_its_block() -> void:
@@ -201,11 +233,15 @@ func test_sim_phase_refuses_erg() -> void:
 func test_sim_in_a_sim_phase_is_a_no_op_confirmation() -> void:
 	# OWNERSHIP C4: Tank's 1.5 s haptic and its boiler grade (duration 0) arrive with mode SIM.
 	var rig := _erg_rig(sim(Wl.GRADE_GAME, 600.0), {"haptic_intensity": 1.0})
-	var hap := rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"})
+	var hap := rig.directive(
+		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"}
+	)
 	assert_false(hap["refused"])
 	assert_eq(hap["applied"]["mode"], "SIM")
 	assert_false(hap["applied"].has("sim_block"), "no SIM block in a SIM phase")
-	var boil := rig.directive({"mode": "SIM", "mode_grade": 8.0, "duration_s": 0.0, "reason": "boiler", "source": "tank"})
+	var boil := rig.directive(
+		{"mode": "SIM", "mode_grade": 8.0, "duration_s": 0.0, "reason": "boiler", "source": "tank"}
+	)
 	assert_false(boil["refused"])
 	var bare := rig.directive({"mode": "SIM", "duration_s": 2.0})
 	assert_false(bare["refused"], "no length or spacing rule")
@@ -216,7 +252,12 @@ func test_cooldown_ignores_every_directive() -> void:
 	var rig := make_rig({}, follower())
 	rig.gov.set_plan(plan_with_cooldown([erg(Wl.WORK, 65.0, 60.0)]))
 	rig.gov.start_phase(1)
-	for d: Dictionary in [{"target_pct": 50.0}, {"mode": "SIM", "duration_s": 20.0}, {"mode": "SIM", "haptic": 2.0, "duration_s": 1.0}, {"crr": 0.8}]:
+	for d: Dictionary in [
+		{"target_pct": 50.0},
+		{"mode": "SIM", "duration_s": 20.0},
+		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.0},
+		{"crr": 0.8}
+	]:
 		var rec := rig.directive(d)
 		assert_true(rec["refused"])
 		assert_eq(rec["reason"], Wl.REFUSE_COOLDOWN)
@@ -226,15 +267,23 @@ func test_no_phase() -> void:
 	var rig := make_rig({}, follower())
 	assert_eq(rig.directive({"target_pct": 50.0})["reason"], Wl.REFUSE_NO_PHASE)
 	rig.gov.set_plan(EffortPlan.of([erg(Wl.WORK, 50.0, 60.0)]))
-	assert_eq(rig.directive({"target_pct": 50.0})["reason"], Wl.REFUSE_NO_PHASE, "plan set, no phase started")
+	assert_eq(
+		rig.directive({"target_pct": 50.0})["reason"],
+		Wl.REFUSE_NO_PHASE,
+		"plan set, no phase started"
+	)
 
 
 func test_bad_fields() -> void:
 	var rig := _erg_rig(erg(Wl.WORK, 60.0, 600.0).with_range(50.0, 100.0))
-	assert_eq(rig.directive({"target_pct": 60.0, "target_w": 120.0})["reason"], Wl.REFUSE_BAD_FIELDS)
+	assert_eq(
+		rig.directive({"target_pct": 60.0, "target_w": 120.0})["reason"], Wl.REFUSE_BAD_FIELDS
+	)
 	assert_eq(rig.directive({"mode": "TURBO", "target_pct": 60.0})["reason"], Wl.REFUSE_BAD_FIELDS)
 	assert_eq(rig.directive({"duration_s": 5.0})["reason"], Wl.REFUSE_BAD_FIELDS, "nothing set")
-	assert_eq(rig.directive({"target_pct": 60.0, "duration_s": -1.0})["reason"], Wl.REFUSE_BAD_FIELDS)
+	assert_eq(
+		rig.directive({"target_pct": 60.0, "duration_s": -1.0})["reason"], Wl.REFUSE_BAD_FIELDS
+	)
 	assert_eq(rig.directive({"target_pct": INF})["reason"], Wl.REFUSE_BAD_FIELDS)
 	assert_eq(rig.gov.apply_directive(null)["reason"], Wl.REFUSE_BAD_FIELDS)
 

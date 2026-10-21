@@ -51,8 +51,16 @@ func _fake_parser(path: String) -> Dictionary:
 	phases.append(PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, 60.0, ""))
 	phases.append(PlanPhase.erg(Wl.WORK, 150.0, 30.0, "").to_dict())
 	phases.append(PlanPhase.erg(Wl.COOLDOWN, 60.0, 120.0, "").with_ramp(45.0))
-	return {"ok": true, "name": "Sample builds", "description": "", "phases": phases, "blocks": [],
-		"clamps": CLAMPS.duplicate(), "warnings": WARNINGS.duplicate(), "error": ""}
+	return {
+		"ok": true,
+		"name": "Sample builds",
+		"description": "",
+		"phases": phases,
+		"blocks": [],
+		"clamps": CLAMPS.duplicate(),
+		"warnings": WARNINGS.duplicate(),
+		"error": ""
+	}
 
 
 func test_zwo_sample_imports_through_the_parser() -> void:
@@ -124,14 +132,20 @@ func test_a_client_without_the_file_only_warns() -> void:
 
 
 func test_parser_failure_is_an_error() -> void:
-	WorkoutSession.zwo_parser = func(_p: String) -> Dictionary: return {"ok": false, "error": "bad xml"}
+	WorkoutSession.zwo_parser = func(_p: String) -> Dictionary:
+		return {"ok": false, "error": "bad xml"}
 	assert_null(WorkoutSession.load_id("zwo_sample"))
 	assert_push_error("bad xml")
 
 
 func test_unsafe_imported_blocks_are_rejected() -> void:
 	WorkoutSession.zwo_parser = func(_p: String) -> Dictionary:
-		return {"ok": true, "phases": [PlanPhase.erg(Wl.WORK, 180.0, 30.0, "x")], "clamps": [], "warnings": []}
+		return {
+			"ok": true,
+			"phases": [PlanPhase.erg(Wl.WORK, 180.0, 30.0, "x")],
+			"clamps": [],
+			"warnings": []
+		}
 	assert_null(WorkoutSession.load_id("zwo_sample"))
 	assert_push_error("target_pct")
 
@@ -141,18 +155,30 @@ func test_unsafe_imported_blocks_are_rejected() -> void:
 ## and listed with the clamps; the session still loads.
 func test_a_zero_power_block_is_raised_to_the_floor_and_listed() -> void:
 	WorkoutSession.zwo_parser = func(_p: String) -> Dictionary:
-		return {"ok": true, "name": "Zero", "phases": [
-			PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "").with_ramp(65.0),
-			PlanPhase.erg(Wl.WORK, 90.0, 120.0, ""),
-			PlanPhase.erg(Wl.RECOVERY, 0.0, 60.0, ""),
-			PlanPhase.erg(Wl.RECOVERY, 40.0, 60.0, "").with_ramp(0.0),
-			PlanPhase.erg(Wl.WORK, 90.0, 120.0, "")], "clamps": [], "warnings": []}
+		return {
+			"ok": true,
+			"name": "Zero",
+			"phases":
+			[
+				PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "").with_ramp(65.0),
+				PlanPhase.erg(Wl.WORK, 90.0, 120.0, ""),
+				PlanPhase.erg(Wl.RECOVERY, 0.0, 60.0, ""),
+				PlanPhase.erg(Wl.RECOVERY, 40.0, 60.0, "").with_ramp(0.0),
+				PlanPhase.erg(Wl.WORK, 90.0, 120.0, "")
+			],
+			"clamps": [],
+			"warnings": []
+		}
 	var s := WorkoutSession.load_id("zwo_sample")
 	assert_not_null(s, "the .zwo with a 0-power block loads")
 	if s == null:
 		return
 	assert_eq(s.phases[2].target_pct, WorkoutSession.FLOOR_PCT, "Power=0 rides at the 30 % floor")
-	assert_eq([s.phases[3].target_pct, s.phases[3].ramp_to_pct], [40.0, WorkoutSession.FLOOR_PCT], "a ramp to 0 ends at the floor")
+	assert_eq(
+		[s.phases[3].target_pct, s.phases[3].ramp_to_pct],
+		[40.0, WorkoutSession.FLOOR_PCT],
+		"a ramp to 0 ends at the floor"
+	)
 	assert_eq(s.phases[1].target_pct, 90.0, "other blocks keep their targets")
 	assert_eq(s.clamps.size(), 2, "both raises are listed: %s" % str(s.clamps))
 	assert_string_contains(s.clamps[0], "0%")
@@ -166,17 +192,27 @@ func test_a_real_zwo_with_a_zero_power_block_loads() -> void:
 	WorkoutSession.zwo_parser = Callable()
 	var path := Paths.make_temp_dir("wo5").path_join("zero.zwo")
 	var f := FileAccess.open(path, FileAccess.WRITE)
-	f.store_string("<workout_file><name>Z</name><sportType>bike</sportType><workout>" +
-		"<Warmup Duration=\"300\" PowerLow=\"0.5\" PowerHigh=\"0.65\"/>" +
-		"<SteadyState Duration=\"120\" Power=\"0.9\"/><SteadyState Duration=\"60\" Power=\"0\"/>" +
-		"<SteadyState Duration=\"120\" Power=\"0.9\"/></workout></workout_file>")
+	f.store_string(
+		(
+			"<workout_file><name>Z</name><sportType>bike</sportType><workout>"
+			+ '<Warmup Duration="300" PowerLow="0.5" PowerHigh="0.65"/>'
+			+ '<SteadyState Duration="120" Power="0.9"/><SteadyState Duration="60" Power="0"/>'
+			+ '<SteadyState Duration="120" Power="0.9"/></workout></workout_file>'
+		)
+	)
 	f.close()
 	var s := WorkoutSession.from_zwo("zwo:" + path, path)
 	assert_not_null(s, "imported, not rejected")
 	if s != null:
-		var floored := s.phases.filter(func(p: PlanPhase) -> bool: return p.mode == Wl.ERG and is_equal_approx(p.target_pct, WorkoutSession.FLOOR_PCT))
+		var floored := s.phases.filter(
+			func(p: PlanPhase) -> bool:
+				return p.mode == Wl.ERG and is_equal_approx(p.target_pct, WorkoutSession.FLOOR_PCT)
+		)
 		assert_eq(floored.size(), 1, "the 0 W block rides at the floor")
-		assert_true(s.clamps.any(func(c: String) -> bool: return c.contains("30%")), "and the preview lists it: %s" % str(s.clamps))
+		assert_true(
+			s.clamps.any(func(c: String) -> bool: return c.contains("30%")),
+			"and the preview lists it: %s" % str(s.clamps)
+		)
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path.get_base_dir())
 
@@ -189,12 +225,16 @@ func test_a_floor_raised_block_is_relabelled_and_listed_like_the_importers_clamp
 	WorkoutSession.zwo_parser = Callable()
 	var path := Paths.make_temp_dir("wo5r2").path_join("floor.zwo")
 	var f := FileAccess.open(path, FileAccess.WRITE)
-	f.store_string("<workout_file><name>Z</name><sportType>bike</sportType><workout>" +
-		"<Warmup Duration=\"300\" PowerLow=\"0.5\" PowerHigh=\"0.65\"/>" +
-		"<SteadyState Duration=\"60\" Power=\"0\"/>" +
-		"<Ramp Duration=\"120\" PowerLow=\"0.0\" PowerHigh=\"0.2\"/>" +
-		"<Cooldown Duration=\"120\" PowerLow=\"0.4\" PowerHigh=\"0.0\"/>" +
-		"<SteadyState Duration=\"30\" Power=\"1.6\"/></workout></workout_file>")
+	f.store_string(
+		(
+			"<workout_file><name>Z</name><sportType>bike</sportType><workout>"
+			+ '<Warmup Duration="300" PowerLow="0.5" PowerHigh="0.65"/>'
+			+ '<SteadyState Duration="60" Power="0"/>'
+			+ '<Ramp Duration="120" PowerLow="0.0" PowerHigh="0.2"/>'
+			+ '<Cooldown Duration="120" PowerLow="0.4" PowerHigh="0.0"/>'
+			+ '<SteadyState Duration="30" Power="1.6"/></workout></workout_file>'
+		)
+	)
 	f.close()
 	var s := WorkoutSession.from_zwo("zwo:" + path, path)
 	DirAccess.remove_absolute(path)
@@ -214,9 +254,11 @@ func test_a_floor_raised_block_is_relabelled_and_listed_like_the_importers_clamp
 	assert_has(lines, "1:00  Steady 30%  30% FTP")
 	assert_has(lines, "2:00  Ramp 30%  30% FTP")
 	assert_has(lines, "2:00  Cool-down ramp 40-30%  40 -> 30% FTP")
-	for c: String in ["Block 2 (Steady 0%): 0% to 30%, the trainer's 30% FTP floor",
-			"Block 3 (Ramp 0-20%): 0-20% to 30%, the trainer's 30% FTP floor",
-			"Block 4 (Cool-down ramp 40-0%): 40-0% to 40-30%, the trainer's 30% FTP floor"]:
+	for c: String in [
+		"Block 2 (Steady 0%): 0% to 30%, the trainer's 30% FTP floor",
+		"Block 3 (Ramp 0-20%): 0-20% to 30%, the trainer's 30% FTP floor",
+		"Block 4 (Cool-down ramp 40-0%): 40-0% to 40-30%, the trainer's 30% FTP floor"
+	]:
 		assert_has(s.clamps, c)
 		assert_has(lines, strings.t("WORKOUT_PREVIEW_CLAMP", {"text": c}))
 	for c: String in s.clamps:
@@ -224,7 +266,13 @@ func test_a_floor_raised_block_is_relabelled_and_listed_like_the_importers_clamp
 		assert_false(c.contains("->"), "no garbled arrows: %s" % c)
 	var st := WorkoutState.create(s, U.players(1))
 	var banner := WorkoutHud.interval_banner(st, 1, strings)
-	assert_eq(strings.t(str(banner["key"]), banner["args"]), "Steady 30%: 30% FTP for 1:00", "the in-ride banner")
+	assert_eq(
+		strings.t(str(banner["key"]), banner["args"]),
+		"Steady 30%: 30% FTP for 1:00",
+		"the in-ride banner"
+	)
 	var plan := s.build_plan()
-	assert_eq(plan.phase(1).label, "Steady 30%", "the plan (and so the FIT lap) carries the new label")
+	assert_eq(
+		plan.phase(1).label, "Steady 30%", "the plan (and so the FIT lap) carries the new label"
+	)
 	assert_true(PlanValidator.validate(plan)["ok"])

@@ -39,20 +39,48 @@ func test_rolling_road_band_reaches_a_restarted_client() -> void:
 		riders[p.peer_id] = Kit.rider(_root, p)
 	var host := GameHost.new()
 	_root.add_child(host)
-	var err := host.setup({
-		"game_id": "workout", "content_id": "rolling_road", "seed": 7, "role": Wl.HOST, "players": players,
-		"local_riders": {1: riders[1]}, "local_peer": 1, "net": nets[0], "bus": Kit.new_bus(_root, "HB"),
-		"registry": reg, "headless": true, "realtime": false,
-		"progress_path": _tmp.path_join("p1/progress.json"),
-	})
+	var err := (
+		host
+		. setup(
+			{
+				"game_id": "workout",
+				"content_id": "rolling_road",
+				"seed": 7,
+				"role": Wl.HOST,
+				"players": players,
+				"local_riders": {1: riders[1]},
+				"local_peer": 1,
+				"net": nets[0],
+				"bus": Kit.new_bus(_root, "HB"),
+				"registry": reg,
+				"headless": true,
+				"realtime": false,
+				"progress_path": _tmp.path_join("p1/progress.json"),
+			}
+		)
+	)
 	assert_eq(err, "")
 	var client := GameHost.new()
 	_root.add_child(client)
-	assert_eq(client.setup({
-		"role": Wl.CLIENT, "local_peer": 2, "local_riders": {2: riders[2]}, "net": nets[1],
-		"bus": Kit.new_bus(_root, "CB"), "registry": reg, "headless": true, "realtime": false,
-		"progress_path": _tmp.path_join("p2/progress.json"),
-	}), "")
+	assert_eq(
+		(
+			client
+			. setup(
+				{
+					"role": Wl.CLIENT,
+					"local_peer": 2,
+					"local_riders": {2: riders[2]},
+					"net": nets[1],
+					"bus": Kit.new_bus(_root, "CB"),
+					"registry": reg,
+					"headless": true,
+					"realtime": false,
+					"progress_path": _tmp.path_join("p2/progress.json"),
+				}
+			)
+		),
+		""
+	)
 	var b := {"host": host, "clients": [client]}
 	Kit.start(b)
 	var steps := Kit.step_until(b, func() -> bool: return host.tracker.index_of(2) == 1, 7000)
@@ -68,16 +96,32 @@ func test_rolling_road_band_reaches_a_restarted_client() -> void:
 	var fresh := Kit.rider(_root, players[1])
 	var c2 := GameHost.new()
 	_root.add_child(c2)
-	assert_eq(c2.setup({
-		"role": Wl.CLIENT, "local_peer": 2, "local_riders": {2: fresh}, "net": nets[1],
-		"bus": Kit.new_bus(_root, "CB2"), "registry": reg, "headless": true, "realtime": false,
-		"progress_path": _tmp.path_join("p2r/progress.json"),
-	}), "")
+	assert_eq(
+		(
+			c2
+			. setup(
+				{
+					"role": Wl.CLIENT,
+					"local_peer": 2,
+					"local_riders": {2: fresh},
+					"net": nets[1],
+					"bus": Kit.new_bus(_root, "CB2"),
+					"registry": reg,
+					"headless": true,
+					"realtime": false,
+					"progress_path": _tmp.path_join("p2r/progress.json"),
+				}
+			)
+		),
+		""
+	)
 	hub.call("rejoin", 2)
 	b["clients"] = [c2]
 	Kit.step(b, 200)
 	assert_eq(c2.local_phase_state().index, 1, "the restarted client is back in Rolling road")
 	var after: Array = fresh.get("band_power")
-	assert_almost_eq(float(after[0]), 152.0, 0.5, "the restarted client's gauge shows the 76-105% band again")
+	assert_almost_eq(
+		float(after[0]), 152.0, 0.5, "the restarted client's gauge shows the 76-105% band again"
+	)
 	assert_almost_eq(float(after[1]), 210.0, 0.5)
 	assert_eq(c2.hud_router.band_of(2), [152.0, 210.0], "and its HUD")

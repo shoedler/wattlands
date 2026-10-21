@@ -16,15 +16,19 @@ func after_each() -> void:
 
 # --- HudSpec --------------------------------------------------------------------------
 
+
 func test_fluent_add() -> void:
 	var card: Control = autofree(Control.new())
 	var spec := HudSpec.new()
-	var same := spec \
-		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
-		.add_control(card, Rect2i(427, 24, 212, 80)) \
-		.toasts_at(HudSpec.BOTTOM).banners_at(Rect2i(0, 0, 100, 20))
+	var same := (
+		spec
+		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"})
+		. add_control(card, Rect2i(427, 24, 212, 80))
+		. toasts_at(HudSpec.BOTTOM)
+		. banners_at(Rect2i(0, 0, 100, 20))
+	)
 	assert_same(same, spec)
 	assert_eq(spec.widgets.size(), 3)
 	assert_eq(spec.widgets[0], {"widget": HudSpec.TIMELINE, "at": HudSpec.TOP_LEFT, "options": {}})
@@ -68,6 +72,7 @@ func test_is_valid_position() -> void:
 
 # --- GameStrings ----------------------------------------------------------------------
 
+
 func _add_translation() -> void:
 	_translation = Translation.new()
 	_translation.locale = TranslationServer.get_locale()
@@ -95,6 +100,7 @@ func test_t_with_args() -> void:
 
 # --- BleTransport UUIDs ---------------------------------------------------------------
 
+
 func test_expand_uuid() -> void:
 	var full := "00002ad2-0000-1000-8000-00805f9b34fb"
 	assert_eq(BleTransport.expand_uuid("2AD2"), full)
@@ -103,7 +109,9 @@ func test_expand_uuid() -> void:
 	assert_eq(BleTransport.expand_uuid("0X2AD2"), full)
 	assert_eq(BleTransport.expand_uuid(" 2AD2 "), full)
 	assert_eq(BleTransport.expand_uuid("00002AD2-0000-1000-8000-00805F9B34FB"), full)
-	assert_eq(BleTransport.expand_uuid("00001826"), "00001826-0000-1000-8000-00805f9b34fb", "32-bit form")
+	assert_eq(
+		BleTransport.expand_uuid("00001826"), "00001826-0000-1000-8000-00805f9b34fb", "32-bit form"
+	)
 
 
 func test_same_uuid() -> void:

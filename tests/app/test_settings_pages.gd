@@ -20,7 +20,8 @@ const STOP := "write 2ad9 0801"
 
 ## The emulated KICKR plus what FtmsConnectionManager needs from a backend (as in
 ## tests/core/integration/test_safe_unlink.gd).
-class KickrLink extends "res://tests/trainer/fake_kickr_transport.gd":
+class KickrLink:
+	extends "res://tests/trainer/fake_kickr_transport.gd"
 	var linked: String = ""
 
 	func initialize() -> void:
@@ -82,7 +83,9 @@ func _real_trainer() -> WlTrainerService:
 	_svc.connect_trainer(ADDR)
 	_pump(3.0)
 	assert_true(_client.is_ready(), "precondition: in control of the emulated trainer")
-	assert_true(_svc.device() is FtmsTrainer, "precondition: the FTMS trainer is the service's device")
+	assert_true(
+		_svc.device() is FtmsTrainer, "precondition: the FTMS trainer is the service's device"
+	)
 	assert_true(_link.ops.has(FLAT), "precondition: the menus ride SIM flat")
 	fx.services.trainer = _svc
 	return _svc
@@ -90,7 +93,9 @@ func _real_trainer() -> WlTrainerService:
 
 ## Wall and platform time: the link's answers (unless `answer` is false: a control point that
 ## answers late), the manager, the client, the service and the screen.
-func _pump(seconds: float, s: AppScreen = null, answer: bool = true, manager: FtmsConnectionManager = null) -> void:
+func _pump(
+	seconds: float, s: AppScreen = null, answer: bool = true, manager: FtmsConnectionManager = null
+) -> void:
 	var m := manager if manager != null else _manager
 	for i in roundi(seconds / DT):
 		if answer:
@@ -110,7 +115,11 @@ func _since(from: int) -> Array[String]:
 	var out: Array[String] = []
 	for i in range(from, _link.ops.size()):
 		var op := _link.ops[i]
-		if op.begins_with("write 2ad9") or op.begins_with("disconnect") or op.begins_with("connect"):
+		if (
+			op.begins_with("write 2ad9")
+			or op.begins_with("disconnect")
+			or op.begins_with("connect")
+		):
 			out.append(op)
 	return out
 
@@ -123,18 +132,28 @@ func test_disconnect_sends_sim_flat_then_stop_before_the_link_drops() -> void:
 	confirm_pick(s, "trainer")
 	confirm_pick(s, "disconnect")
 	assert_true(rider.is_shut_down(), "the governor went safe first")
-	assert_false(_since(n).has("disconnect " + ADDR), "the link stays up while SIM flat and Stop go out")
+	assert_false(
+		_since(n).has("disconnect " + ADDR), "the link stays up while SIM flat and Stop go out"
+	)
 	assert_true(s.is_making_trainer_safe())
-	assert_true(s.status_label.text.contains(AppScreen.t("APP_SET_TRAINER_SAFE")), "the page says so")
+	assert_true(
+		s.status_label.text.contains(AppScreen.t("APP_SET_TRAINER_SAFE")), "the page says so"
+	)
 	_pump(1.0, s)
-	assert_eq(_since(n), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop, then the link drops")
+	assert_eq(
+		_since(n), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop, then the link drops"
+	)
 	assert_false(s.is_making_trainer_safe())
-	assert_false(s.status_label.text.contains(AppScreen.t("APP_SET_TRAINER_SAFE")), "and the note goes")
+	assert_false(
+		s.status_label.text.contains(AppScreen.t("APP_SET_TRAINER_SAFE")), "and the note goes"
+	)
 	# The next connect has a live governor on the trainer again, which App.quit shuts down.
 	s.connect_trainer(ADDR)
 	_pump(3.0, s)
 	var again := _svc.local_rider()
-	assert_true(again != null and not again.is_shut_down(), "a live menu rider on the trainer again")
+	assert_true(
+		again != null and not again.is_shut_down(), "a live menu rider on the trainer again"
+	)
 	assert_true(LocalRider.live_riders().has(again), "so App.quit shuts it down again")
 
 
@@ -146,10 +165,14 @@ func test_disconnect_waits_for_a_slow_control_point() -> void:
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	s.disconnect_trainer()
 	_pump(0.8, s, false)
-	assert_false(_since(n).has("disconnect " + ADDR), "no answer yet: the link waits (%s)" % str(_since(n)))
+	assert_false(
+		_since(n).has("disconnect " + ADDR), "no answer yet: the link waits (%s)" % str(_since(n))
+	)
 	assert_true(s.is_making_trainer_safe())
 	_pump(1.0, s)
-	assert_eq(_since(n), [FLAT, STOP, "disconnect " + ADDR], "Stop reached the trainer before the drop")
+	assert_eq(
+		_since(n), [FLAT, STOP, "disconnect " + ADDR], "Stop reached the trainer before the drop"
+	)
 
 
 ## W4r2 R7: the trainer that is already linked (a KICKR keeps advertising) connects at once:
@@ -180,7 +203,9 @@ func test_switching_trainers_makes_the_old_one_safe_first() -> void:
 	var ops := _since(n)
 	var at_connect := ops.find("connect " + OTHER)
 	assert_gt(at_connect, -1, "connected to the other trainer: %s" % str(ops))
-	assert_eq(ops.slice(0, 3), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop before the switch")
+	assert_eq(
+		ops.slice(0, 3), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop before the switch"
+	)
 	assert_false(ops.slice(at_connect).has(STOP), "no Stop reaches the new trainer")
 
 
@@ -193,7 +218,11 @@ func test_use_mock_makes_the_real_trainer_safe_first() -> void:
 	assert_true(_svc.is_mock(), "the mock takes over")
 	assert_true(s.is_making_trainer_safe(), "while the real trainer's link waits")
 	_pump(1.0, s, true, m)
-	assert_eq(_since(n), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop before the real trainer's link dropped")
+	assert_eq(
+		_since(n),
+		[FLAT, STOP, "disconnect " + ADDR],
+		"SIM flat, then Stop before the real trainer's link dropped"
+	)
 
 
 ## W4r2 R6: leaving the page mid-wait no longer drops the link at once; the service's wait goes on.
@@ -219,9 +248,15 @@ func test_a_mock_trainer_disconnects_at_once() -> void:
 	assert_eq(conn.get("disconnects"), 1, "no real control point to drain")
 	assert_false(s.is_making_trainer_safe())
 	s.connect_trainer("AA:BB")
-	assert_eq(fx.fake_trainer().connect_calls, ["AA:BB"] as Array[String], "through TrainerService.connect_trainer()")
+	assert_eq(
+		fx.fake_trainer().connect_calls,
+		["AA:BB"] as Array[String],
+		"through TrainerService.connect_trainer()"
+	)
 	s.use_mock()
-	assert_eq(fx.fake_trainer().mock_specs, ["erg"] as Array[String], "through TrainerService.use_mock()")
+	assert_eq(
+		fx.fake_trainer().mock_specs, ["erg"] as Array[String], "through TrainerService.use_mock()"
+	)
 
 
 # --- controls ----------------------------------------------------------------------------------
@@ -258,11 +293,18 @@ func test_controls_content_column_follows_a_rebind() -> void:
 	s.start_capture(&"item")
 	assert_true(s.capture_event(ls), "LS is captured for item")
 	assert_true(menu(s).text_of("bind:item").contains("LS"), "the row shows the new binding")
-	assert_eq(s.status_label.text, s.all_bindings_text(), "the content column lists the new binding too")
+	assert_eq(
+		s.status_label.text, s.all_bindings_text(), "the content column lists the new binding too"
+	)
 	assert_ne(s.status_label.text, before, "and it changed")
 	if holder != &"" and holder != &"item":
-		assert_false(s.status_label.text.contains("%s: LS" % AppScreen.t("APP_ACTION_" + String(holder).to_upper())),
-			"%s no longer lists LS" % holder)
+		assert_false(
+			s.status_label.text.contains(
+				"%s: LS" % AppScreen.t("APP_ACTION_" + String(holder).to_upper())
+			),
+			"%s no longer lists LS" % holder
+		)
+
 
 func test_controls_page_rows_fit_the_menu_column() -> void:
 	fx.give_profile()
@@ -274,7 +316,13 @@ func test_controls_page_rows_fit_the_menu_column() -> void:
 	var col := s.find_child("MenuColumn", true, false) as Control
 	var vp_w := s.get_viewport_rect().size.x
 	assert_true(w <= 640.0, "Controls rows need %.0f px (menu column 640 px)" % w)
-	assert_true(col.get_global_rect().end.x <= vp_w + 0.5, "menu column x=%.0f..%.0f on a %.0f px screen" % [col.get_global_rect().position.x, col.get_global_rect().end.x, vp_w])
+	assert_true(
+		col.get_global_rect().end.x <= vp_w + 0.5,
+		(
+			"menu column x=%.0f..%.0f on a %.0f px screen"
+			% [col.get_global_rect().position.x, col.get_global_rect().end.x, vp_w]
+		)
+	)
 	# Every binding is still on the page: the content column lists them all.
 	var all := s.all_bindings_text()
 	for a: StringName in Wl.ACTIONS:

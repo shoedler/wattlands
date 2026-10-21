@@ -43,11 +43,16 @@ func test_duration_latch_survives_local_rider_setup_on_the_same_trainer() -> voi
 	r.start_phase(0)
 	_tick(r, 70.0)
 	var before := r.governor.status()
-	assert_true(bool(before["latched_120"]), "precondition: the 120%% limit latched (s_left_120 %s)" % str(before["s_left_120"]))
+	assert_true(
+		bool(before["latched_120"]),
+		"precondition: the 120%% limit latched (s_left_120 %s)" % str(before["s_left_120"])
+	)
 	# End ride: the next session (or the menu reset) on the same trainer.
 	_setup(r, dev)
 	var after := r.governor.status()
-	assert_true(bool(after["latched_120"]), "the 120% latch survives a new governor on the same trainer")
+	assert_true(
+		bool(after["latched_120"]), "the 120% latch survives a new governor on the same trainer"
+	)
 	assert_almost_eq(float(after["s_left_120"]), 0.0, 1e-9)
 	# A plan the PlanValidator accepts: 300 s of SIM warm-up, then 60 s at 125%.
 	var plan2 := EffortPlan.of([sim(Wl.GRADE_FLAT, 300.0, Wl.WARMUP), erg(Wl.WORK, 125.0, 60.0)])
@@ -88,7 +93,11 @@ func test_the_reset_run_releases_the_latch_in_the_next_session() -> void:
 	r.start_phase(0)
 	_tick(r, 70.0)
 	_setup(r, dev)
-	r.set_plan(PlanValidator.finalize(EffortPlan.of([erg(Wl.WARMUP, 60.0, 300.0), erg(Wl.WORK, 125.0, 60.0)])))
+	r.set_plan(
+		PlanValidator.finalize(
+			EffortPlan.of([erg(Wl.WARMUP, 60.0, 300.0), erg(Wl.WORK, 125.0, 60.0)])
+		)
+	)
 	r.start_phase(0)
 	_tick(r, 125.0)
 	assert_false(bool(r.governor.status()["latched_120"]), "released by 120 s of ERG at 60%")
@@ -113,7 +122,10 @@ func test_a_sim_block_right_after_the_menu_to_erg_switch_is_refused() -> void:
 	assert_eq(dev.mode, Wl.ERG, "precondition: the session switched the trainer to ERG")
 	var d := EffortDirective.from_dict({"mode": Wl.SIM, "duration_s": 15.0})
 	var rec := r.apply_directive(d)
-	assert_true(bool(rec["refused"]), "a SIM block 1 s after the SIM -> ERG switch is refused; got %s" % str(rec))
+	assert_true(
+		bool(rec["refused"]),
+		"a SIM block 1 s after the SIM -> ERG switch is refused; got %s" % str(rec)
+	)
 	assert_eq(str(rec["reason"]), Wl.REFUSE_SWITCH_SPACING)
 	assert_push_warning("switch_spacing")
 	_tick(r, 2.0)
@@ -122,7 +134,9 @@ func test_a_sim_block_right_after_the_menu_to_erg_switch_is_refused() -> void:
 		ops.append(str(w["op"]))
 	assert_eq(ops.back(), "erg", "the trainer stays in ERG: %s" % str(ops))
 	_tick(r, 27.0)
-	assert_false(bool(r.apply_directive(d)["refused"]), "30 s after the switch the block is accepted")
+	assert_false(
+		bool(r.apply_directive(d)["refused"]), "30 s after the switch the block is accepted"
+	)
 
 
 func after_each() -> void:

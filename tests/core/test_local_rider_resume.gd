@@ -55,11 +55,21 @@ func _run(r: LocalRider, seconds: float) -> void:
 
 ## A 300 s ERG ramp 50 -> 65 % (lap), a lap work phase, a course phase and the cool-down.
 func _plan() -> EffortPlan:
-	var plan := EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65).with_lap(),
-		PlanPhase.erg(Wl.WORK, 80, 120, "Wave 1").with_lap(),
-		PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800, "Road").with_course([[0.0, 0.0], [100000.0, 0.0]]).with_lap(),
-	])
+	var plan := (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65).with_lap(),
+				PlanPhase.erg(Wl.WORK, 80, 120, "Wave 1").with_lap(),
+				(
+					PlanPhase
+					. sim(Wl.WORK, Wl.GRADE_COURSE, 1800, "Road")
+					. with_course([[0.0, 0.0], [100000.0, 0.0]])
+					. with_lap()
+				),
+			]
+		)
+	)
 	plan.add(PlanPhase.erg(Wl.COOLDOWN, 50, 180, ""))
 	plan.cooldown_appended = true
 	return plan
@@ -78,7 +88,9 @@ func test_a_new_rider_resumes_the_ramp_without_a_lap() -> void:
 	assert_eq(rec.laps, [], "a restarted client's new FIT starts here: no extra lap")
 	_run(r, 20.0)
 	assert_almost_eq(float(r.governor.status()["phase_elapsed_s"]), 140.0, 1e-6)
-	assert_eq(int(r.governor.status()["governed_target_w"]), 114, "57 % of 200 W, not the ramp's start")
+	assert_eq(
+		int(r.governor.status()["governed_target_w"]), 114, "57 % of 200 W, not the ramp's start"
+	)
 
 
 func test_the_same_phase_again_writes_no_lap_and_a_real_change_does() -> void:
@@ -146,7 +158,11 @@ func test_forwards_to_the_governor() -> void:
 	r.set_plan(_plan())
 	r.resume_phase(1, 30.0)
 	var g := r.governor as Fakes.FakeGovernor
-	assert_eq(g.called("resume_phase"), [["resume_phase", 1, 30.0, -1.0]], "an ERG phase needs no distance")
+	assert_eq(
+		g.called("resume_phase"),
+		[["resume_phase", 1, 30.0, -1.0]],
+		"an ERG phase needs no distance"
+	)
 	assert_eq(g.called("start_phase"), [])
 
 
@@ -157,23 +173,37 @@ func test_a_new_riders_course_phase_continues_from_an_estimate() -> void:
 	r.resume_phase(2, 600.0)
 	# Flat course: the speed model at 75 % FTP as P_eff (FAIR_FTP: 0.75 x 250 W) holds its steady
 	# speed, so 600 s cover 600 x that speed.
-	var v := SpeedModel.steady_state_speed(187.5, 0.0, r.slot.rider_mass_kg + SpeedModel.DEFAULT_MASS_OFFSET_KG)
+	var v := SpeedModel.steady_state_speed(
+		187.5, 0.0, r.slot.rider_mass_kg + SpeedModel.DEFAULT_MASS_OFFSET_KG
+	)
 	var est := r.estimate_course_distance(r.plan().phase(2), 600.0)
 	assert_almost_eq(est, 600.0 * v, 600.0 * v * 0.01)
-	assert_almost_eq(r.governor.phase_distance_m(), est, 1.0, "the governor follows the course from there")
+	assert_almost_eq(
+		r.governor.phase_distance_m(), est, 1.0, "the governor follows the course from there"
+	)
 	assert_gt(est, 3000.0, "minutes of riding, not the course start")
 
 
 func test_the_estimate_follows_the_course_grades() -> void:
 	var r := _rider(_mock())
-	var flat := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800).with_course([[0.0, 0.0], [50000.0, 0.0]])
-	var hill := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800).with_course([[0.0, 6.0], [50000.0, 6.0]])
+	var flat := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800).with_course(
+		[[0.0, 0.0], [50000.0, 0.0]]
+	)
+	var hill := PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 1800).with_course(
+		[[0.0, 6.0], [50000.0, 6.0]]
+	)
 	var d_flat := r.estimate_course_distance(flat, 900.0)
 	var d_hill := r.estimate_course_distance(hill, 900.0)
 	assert_lt(d_hill, d_flat * 0.7, "a 6 % climb is slower")
-	assert_eq(r.estimate_course_distance(PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, 60), 60.0), 0.0, "no course, no distance")
+	assert_eq(
+		r.estimate_course_distance(PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, 60), 60.0),
+		0.0,
+		"no course, no distance"
+	)
 	var t0 := Time.get_ticks_msec()
-	r.estimate_course_distance(PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 21600).with_course(_long_course()), 21600.0)
+	r.estimate_course_distance(
+		PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 21600).with_course(_long_course()), 21600.0
+	)
 	assert_lt(Time.get_ticks_msec() - t0, 5000, "six hours of a 200-point course estimate quickly")
 
 

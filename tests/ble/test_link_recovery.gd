@@ -21,7 +21,8 @@ const OTHER := "11:22:33:44:55:66"
 
 
 ## The fake KICKR plus what FtmsConnectionManager needs from a backend (adapter, connect).
-class KickrLink extends "res://tests/trainer/fake_kickr_transport.gd":
+class KickrLink:
+	extends "res://tests/trainer/fake_kickr_transport.gd"
 	var connects: int = 0
 	var disconnects: int = 0
 	var scans: Array = []
@@ -54,12 +55,15 @@ class KickrLink extends "res://tests/trainer/fake_kickr_transport.gd":
 
 ## A KICKR link whose control-point writes the backend rejects inside the write call itself
 ## (GDBLE's synchronous BUSY / QUEUE_FULL) while `reject_sync` > 0.
-class BusyLink extends KickrLink:
+class BusyLink:
+	extends KickrLink
 	var reject_sync: int = 0
 	var depth: int = 0
 	var max_depth: int = 0
 
-	func write_characteristic(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> void:
+	func write_characteristic(
+		service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+	) -> void:
 		if reject_sync > 0 and short(char_uuid) == FtmsCodec.CHAR_CONTROL_POINT:
 			reject_sync -= 1
 			ops.append("rejected %s" % FtmsCodec.to_hex(data))
@@ -198,7 +202,9 @@ func test_panic_write_after_an_unanswered_write_reaches_the_trainer() -> void:
 	assert_push_warning("reconnecting")
 	assert_eq(link.disconnects, 1, "the dead link was dropped")
 	_pump(m, link, client, 5.0)
-	assert_true(client.is_ready(), "back in control after the reconnect (state %s)" % client.state())
+	assert_true(
+		client.is_ready(), "back in control after the reconnect (state %s)" % client.state()
+	)
 	assert_eq(link.connects, 2)
 	assert_eq((st["reconnected"] as Array).size(), 1)
 	assert_same(m.device(), dev, "the same trainer object")
@@ -222,7 +228,8 @@ func test_a_synchronous_write_rejection_is_retried_on_the_next_tick() -> void:
 	m.device().set_target_power(200)
 	assert_eq(link.max_depth, 1, "no re-entrant write inside the rejection")
 	assert_eq(client.state(), FtmsClient.STATE_READY, "one rejection is no failure")
-	var rejected := func() -> int: return link.ops.filter(func(o: String) -> bool: return o.begins_with("rejected")).size()
+	var rejected := func() -> int:
+		return link.ops.filter(func(o: String) -> bool: return o.begins_with("rejected")).size()
 	assert_eq(rejected.call(), 1)
 	client.tick(DT)
 	assert_eq(rejected.call(), 2, "the first retry on the next tick")
@@ -264,7 +271,11 @@ func test_auto_rescan_stops_the_previous_scan_first() -> void:
 	m.start(true)
 	for i in roundi(61.0 / DT):
 		m.tick(DT)
-	assert_eq(link.scans.size(), 5, "three windows: start, stop + start, stop + start: %s" % str(link.scans))
+	assert_eq(
+		link.scans.size(),
+		5,
+		"three windows: start, stop + start, stop + start: %s" % str(link.scans)
+	)
 	assert_eq(link.scans[0], ["start", FtmsConnectionManager.AUTO_SCAN_S])
 	# GDBLE: "A duplicate start fails with BUSY without replacing the active scan."
 	for i in range(1, link.scans.size()):
@@ -278,7 +289,9 @@ func test_a_manual_scan_during_a_scan_stops_it_first() -> void:
 	var m := _manager(link, client)
 	m.start(false)
 	m.scan(10.0)
-	assert_eq(link.scans, [["start", FtmsConnectionManager.DEFAULT_SCAN_S], ["stop"], ["start", 10.0]])
+	assert_eq(
+		link.scans, [["start", FtmsConnectionManager.DEFAULT_SCAN_S], ["stop"], ["start", 10.0]]
+	)
 	m.stop_scan()
 	m.scan(5.0)
 	assert_eq(link.scans.slice(3), [["stop"], ["start", 5.0]], "after a stop: no second stop")
@@ -308,7 +321,9 @@ func test_a_switch_releases_the_old_trainer_from_the_shared_client() -> void:
 	old.request_stop()
 	assert_push_warning("no client")
 	_pump(m, link, client, 1.0)
-	assert_eq(link.cp_writes.size(), n, "nothing the old trainer's rider writes reaches the other trainer")
+	assert_eq(
+		link.cp_writes.size(), n, "nothing the old trainer's rider writes reaches the other trainer"
+	)
 
 
 func test_back_to_a_released_trainer_gets_a_fresh_object() -> void:

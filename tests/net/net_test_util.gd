@@ -41,7 +41,10 @@ static func same(a: Variant, b: Variant) -> bool:
 ## Where two values first differ (for failure messages).
 static func diff(a: Variant, b: Variant, path: String = "") -> String:
 	if typeof(a) != typeof(b):
-		return "%s: type %s vs %s (%s vs %s)" % [path, type_string(typeof(a)), type_string(typeof(b)), str(a), str(b)]
+		return (
+			"%s: type %s vs %s (%s vs %s)"
+			% [path, type_string(typeof(a)), type_string(typeof(b)), str(a), str(b)]
+		)
 	match typeof(a):
 		TYPE_DICTIONARY:
 			for k: Variant in (a as Dictionary).keys():
@@ -54,11 +57,15 @@ static func diff(a: Variant, b: Variant, path: String = "") -> String:
 						break
 				if not ok:
 					return "%s.%s (%s): missing in second" % [path, str(k), type_string(typeof(k))]
-				var d := diff((a as Dictionary)[k], (b as Dictionary)[match_key], "%s.%s" % [path, str(k)])
+				var d := diff(
+					(a as Dictionary)[k], (b as Dictionary)[match_key], "%s.%s" % [path, str(k)]
+				)
 				if d != "":
 					return d
 			if (a as Dictionary).size() != (b as Dictionary).size():
-				return "%s: %d vs %d keys" % [path, (a as Dictionary).size(), (b as Dictionary).size()]
+				return (
+					"%s: %d vs %d keys" % [path, (a as Dictionary).size(), (b as Dictionary).size()]
+				)
 			return ""
 		TYPE_ARRAY:
 			if (a as Array).size() != (b as Array).size():

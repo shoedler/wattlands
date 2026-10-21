@@ -26,7 +26,9 @@ const GRADES: Array[String] = ["S", "A", "B", "C", "D"]
 
 ## Errors for game `id` (empty when it conforms). `opts` is merged into every
 ## GameSimRunner args (tests may pass factories); `log` collects progress lines.
-static func check_game(registry: WlGameRegistry, id: String, opts: Dictionary = {}, log: Array = []) -> Array[String]:
+static func check_game(
+	registry: WlGameRegistry, id: String, opts: Dictionary = {}, log: Array = []
+) -> Array[String]:
 	var errors: Array[String] = []
 	var m := registry.manifest(id)
 	if m.is_empty():
@@ -55,20 +57,40 @@ static func check_game(registry: WlGameRegistry, id: String, opts: Dictionary = 
 		if int(a["rows"]) != n:
 			errors.append("%s: results() has %d rows for %d riders" % [at, int(a["rows"]), n])
 		if not GRADES.has(str(a["grade"])):
-			errors.append("%s: results().grade \"%s\" is not one of S, A, B, C, D" % [at, str(a["grade"])])
+			errors.append(
+				'%s: results().grade "%s" is not one of S, A, B, C, D' % [at, str(a["grade"])]
+			)
 		if (a["hashes"] as Array).is_empty():
 			errors.append("%s: no snapshot in %d s" % [at, int(SIM_SECONDS)])
 		if JSON.stringify(a["hashes"]) != JSON.stringify(b["hashes"]):
-			errors.append("%s: two runs with seed %d gave different snapshot hashes (determinism)" % [at, SEED])
-		if int(a["max_bytes"]) + ENVELOPE_BYTES > NetMessages.MAX_MESSAGE_BYTES or int(a["oversize"]) > 0:
-			errors.append("%s: a snapshot of %d bytes does not fit one %d-byte message" % [at, int(a["max_bytes"]), NetMessages.MAX_MESSAGE_BYTES])
+			errors.append(
+				(
+					"%s: two runs with seed %d gave different snapshot hashes (determinism)"
+					% [at, SEED]
+				)
+			)
+		if (
+			int(a["max_bytes"]) + ENVELOPE_BYTES > NetMessages.MAX_MESSAGE_BYTES
+			or int(a["oversize"]) > 0
+		):
+			errors.append(
+				(
+					"%s: a snapshot of %d bytes does not fit one %d-byte message"
+					% [at, int(a["max_bytes"]), NetMessages.MAX_MESSAGE_BYTES]
+				)
+			)
 		var paths: Variant = (a["int_fields"] as Dictionary).get("snapshot", [])
 		for e in snapshot_errors(a["snapshot"], paths if paths is Array else []):
 			errors.append("%s: %s" % [at, e])
 		var apply_err := client_apply_error(registry, id, a)
 		if apply_err != "":
 			errors.append("%s: %s" % [at, apply_err])
-		log.append("conformance: %s %d riders (%s), %d snapshots, end %s" % [id, n, str(a["role"]), (a["hashes"] as Array).size(), str(a["end_reason"])])
+		log.append(
+			(
+				"conformance: %s %d riders (%s), %d snapshots, end %s"
+				% [id, n, str(a["role"]), (a["hashes"] as Array).size(), str(a["end_reason"])]
+			)
+		)
 	return errors
 
 
@@ -108,7 +130,7 @@ static func strings_errors(id: String, csv_path: String) -> Array[String]:
 			continue
 		var key := str(row[0]).strip_edges()
 		if not key.begins_with(prefix):
-			errors.append("%s: strings.csv key \"%s\" lacks the \"%s\" prefix" % [id, key, prefix])
+			errors.append('%s: strings.csv key "%s" lacks the "%s" prefix' % [id, key, prefix])
 	return errors
 
 
@@ -184,10 +206,23 @@ static func client_apply_error(registry: WlGameRegistry, id: String, run: Dictio
 	return ""
 
 
-static func _runner(registry: WlGameRegistry, id: String, content: String, n: int, m: Dictionary, opts: Dictionary, seconds: float) -> Dictionary:
+static func _runner(
+	registry: WlGameRegistry,
+	id: String,
+	content: String,
+	n: int,
+	m: Dictionary,
+	opts: Dictionary,
+	seconds: float
+) -> Dictionary:
 	var args := {
-		"game": id, "content": content, "seed": SEED, "max_sim_seconds": seconds,
-		"registry": registry, "headless": true, "autopilot": "all",
+		"game": id,
+		"content": content,
+		"seed": SEED,
+		"max_sim_seconds": seconds,
+		"registry": registry,
+		"headless": true,
+		"autopilot": "all",
 	}
 	if bool(m["bots"]):
 		args["players"] = 1
@@ -202,11 +237,25 @@ static func _runner(registry: WlGameRegistry, id: String, content: String, n: in
 	return {"runner": runner, "err": err}
 
 
-static func _run(registry: WlGameRegistry, id: String, content: String, n: int, m: Dictionary, opts: Dictionary) -> Dictionary:
+static func _run(
+	registry: WlGameRegistry, id: String, content: String, n: int, m: Dictionary, opts: Dictionary
+) -> Dictionary:
 	var r := _runner(registry, id, content, n, m, opts, SIM_SECONDS)
-	var out := {"err": str(r["err"]), "rows": 0, "grade": "", "hashes": [], "snapshot": {}, "int_fields": {},
-		"max_bytes": 0, "oversize": 0, "role": "", "end_reason": "", "players": [], "options": {},
-		"content_id": content}
+	var out := {
+		"err": str(r["err"]),
+		"rows": 0,
+		"grade": "",
+		"hashes": [],
+		"snapshot": {},
+		"int_fields": {},
+		"max_bytes": 0,
+		"oversize": 0,
+		"role": "",
+		"end_reason": "",
+		"players": [],
+		"options": {},
+		"content_id": content
+	}
 	var runner: GameSimRunner = r["runner"]
 	if out["err"] == "":
 		out["end_reason"] = runner.run_to_end()
@@ -247,7 +296,12 @@ static func _compare(a: Variant, b: Variant, at: String, errors: Array[String]) 
 				errors.append("%s: bool %s comes back as %s" % [at, str(a), JSON.stringify(b)])
 		TYPE_INT:
 			if not (b is int):
-				errors.append("%s: int %d comes back as a float; declare it in int_fields()[\"snapshot\"]" % [at, a])
+				errors.append(
+					(
+						'%s: int %d comes back as a float; declare it in int_fields()["snapshot"]'
+						% [at, a]
+					)
+				)
 			elif b != a:
 				errors.append("%s: int %d comes back as %d" % [at, a, b])
 		TYPE_FLOAT:
@@ -268,7 +322,12 @@ static func _compare(a: Variant, b: Variant, at: String, errors: Array[String]) 
 				return
 			for k: Variant in (a as Dictionary).keys():
 				if not (k is String or k is StringName):
-					errors.append("%s: key %s is a %s; JSON keys are strings" % [at, str(k), type_string(typeof(k))])
+					errors.append(
+						(
+							"%s: key %s is a %s; JSON keys are strings"
+							% [at, str(k), type_string(typeof(k))]
+						)
+					)
 					continue
 				if not (b as Dictionary).has(str(k)):
 					errors.append("%s.%s: missing after the round trip" % [at, str(k)])

@@ -62,9 +62,16 @@ func _on_leave() -> void:
 	_end_capture()
 	if services.bus != null and services.bus.strava_state_changed.is_connected(_on_strava_state):
 		services.bus.strava_state_changed.disconnect(_on_strava_state)
-	if services.trainer != null and services.trainer.status_changed.is_connected(_on_trainer_status):
+	if (
+		services.trainer != null
+		and services.trainer.status_changed.is_connected(_on_trainer_status)
+	):
 		services.trainer.status_changed.disconnect(_on_trainer_status)
-	if _connection != null and is_instance_valid(_connection) and _connection.device_found.is_connected(_on_device_found):
+	if (
+		_connection != null
+		and is_instance_valid(_connection)
+		and _connection.device_found.is_connected(_on_device_found)
+	):
 		_connection.device_found.disconnect(_on_device_found)
 	strava_client_secret = ""
 
@@ -94,15 +101,60 @@ func set_setting(key: String, value: Variant) -> void:
 
 func root_fields() -> Array:
 	return [
-		{"id": "trainer", "label": t("APP_SET_TRAINER"), "type": "action", "run": open_section.bind("trainer")},
-		{"id": "strava", "label": t("APP_SET_STRAVA"), "type": "action", "run": open_section.bind("strava")},
-		{"id": "haptics", "label": t("APP_SET_HAPTICS"), "type": "action", "run": open_section.bind("haptics")},
-		{"id": "controls", "label": t("APP_SET_CONTROLS"), "type": "action", "run": open_section.bind("controls")},
-		{"id": "audio", "label": t("APP_SET_AUDIO"), "type": "action", "run": open_section.bind("audio")},
-		{"id": "network", "label": t("APP_SET_NETWORK"), "type": "action", "run": open_section.bind("network")},
-		{"id": "pedal_ui", "label": t("APP_SET_PEDAL_UI"), "type": "action", "run": open_section.bind("pedal_ui")},
-		{"id": "ftp_test", "label": t("APP_SET_FTP_TEST"), "type": "action", "run": func() -> void: goto("settings", {"page": "ftp_test"})},
-		{"id": "rides", "label": t("APP_SET_RIDES"), "type": "action", "run": func() -> void: goto("settings", {"page": "rides"})},
+		{
+			"id": "trainer",
+			"label": t("APP_SET_TRAINER"),
+			"type": "action",
+			"run": open_section.bind("trainer")
+		},
+		{
+			"id": "strava",
+			"label": t("APP_SET_STRAVA"),
+			"type": "action",
+			"run": open_section.bind("strava")
+		},
+		{
+			"id": "haptics",
+			"label": t("APP_SET_HAPTICS"),
+			"type": "action",
+			"run": open_section.bind("haptics")
+		},
+		{
+			"id": "controls",
+			"label": t("APP_SET_CONTROLS"),
+			"type": "action",
+			"run": open_section.bind("controls")
+		},
+		{
+			"id": "audio",
+			"label": t("APP_SET_AUDIO"),
+			"type": "action",
+			"run": open_section.bind("audio")
+		},
+		{
+			"id": "network",
+			"label": t("APP_SET_NETWORK"),
+			"type": "action",
+			"run": open_section.bind("network")
+		},
+		{
+			"id": "pedal_ui",
+			"label": t("APP_SET_PEDAL_UI"),
+			"type": "action",
+			"run": open_section.bind("pedal_ui")
+		},
+		{
+			"id": "ftp_test",
+			"label": t("APP_SET_FTP_TEST"),
+			"type": "action",
+			"run": func() -> void: goto("settings", {"page": "ftp_test"})
+		},
+		{
+			"id": "rides",
+			"label": t("APP_SET_RIDES"),
+			"type": "action",
+			"run": func() -> void: goto("settings", {"page": "rides"})
+		},
 		{"id": "back", "label": t("APP_BACK"), "type": "action", "run": _back},
 	]
 
@@ -146,21 +198,53 @@ func _pop_section() -> void:
 
 # --- trainer ---------------------------------------------------------------------------------
 
+
 func trainer_fields() -> Array:
 	var fields: Array = [
-		{"id": "status", "label": t("APP_SET_TRAINER_STATUS"), "type": "info",
-			"get": func() -> Variant: return AppLobbyCard.trainer_text(services.trainer.status() if services.trainer != null else "")},
-		{"id": "scan", "label": t("APP_SET_TRAINER_SCAN"), "type": "action", "run": scan_trainers,
-			"enabled": func() -> bool: return _connection != null},
+		{
+			"id": "status",
+			"label": t("APP_SET_TRAINER_STATUS"),
+			"type": "info",
+			"get": trainer_status_text
+		},
+		{
+			"id": "scan",
+			"label": t("APP_SET_TRAINER_SCAN"),
+			"type": "action",
+			"run": scan_trainers,
+			"enabled": func() -> bool: return _connection != null
+		},
 	]
 	for d: Dictionary in found_devices:
 		var addr := str(d.get("address", ""))
-		fields.append({"id": "dev:" + addr, "label": t("APP_SET_TRAINER_CONNECT").format([str(d.get("name", addr)), int(d.get("rssi", 0))]),
-			"type": "action", "run": connect_trainer.bind(addr)})
-	fields.append({"id": "mock", "label": t("APP_SET_TRAINER_MOCK"), "type": "action", "run": use_mock})
-	fields.append({"id": "disconnect", "label": t("APP_SET_TRAINER_DISCONNECT"), "type": "action", "run": disconnect_trainer,
-		"enabled": func() -> bool: return _connection != null})
+		fields.append(
+			{
+				"id": "dev:" + addr,
+				"label":
+				t("APP_SET_TRAINER_CONNECT").format(
+					[str(d.get("name", addr)), int(d.get("rssi", 0))]
+				),
+				"type": "action",
+				"run": connect_trainer.bind(addr)
+			}
+		)
+	fields.append(
+		{"id": "mock", "label": t("APP_SET_TRAINER_MOCK"), "type": "action", "run": use_mock}
+	)
+	fields.append(
+		{
+			"id": "disconnect",
+			"label": t("APP_SET_TRAINER_DISCONNECT"),
+			"type": "action",
+			"run": disconnect_trainer,
+			"enabled": func() -> bool: return _connection != null
+		}
+	)
 	return fields
+
+
+func trainer_status_text() -> String:
+	return AppLobbyCard.trainer_text(services.trainer.status() if services.trainer != null else "")
 
 
 func scan_trainers() -> void:
@@ -222,7 +306,11 @@ func _on_device_found(info: Dictionary) -> void:
 
 
 func _rebuild_trainer_page() -> void:
-	if _trainer_menu == null or not is_instance_valid(_trainer_menu) or not menus.has(_trainer_menu):
+	if (
+		_trainer_menu == null
+		or not is_instance_valid(_trainer_menu)
+		or not menus.has(_trainer_menu)
+	):
 		return
 	var fields := trainer_fields()
 	fields.append({"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section})
@@ -239,7 +327,9 @@ func _on_trainer_status(_status: String, _detail: String) -> void:
 ## Follow TrainerService's connection manager (the mock has none; the old one is freed once its
 ## safe unlink ran), so Scan and Disconnect never reach a retired manager.
 func _sync_connection() -> void:
-	var now: FtmsConnectionManager = services.trainer.connection() if services.trainer != null else null
+	var now: FtmsConnectionManager = (
+		services.trainer.connection() if services.trainer != null else null
+	)
 	if _connection != null and not is_instance_valid(_connection):
 		_connection = null
 	if now == _connection:
@@ -253,42 +343,109 @@ func _sync_connection() -> void:
 
 # --- strava ----------------------------------------------------------------------------------
 
+
 func strava_connected() -> bool:
 	return services.rides != null and services.rides.strava_connected()
 
 
 func strava_fields() -> Array:
 	var fields: Array = [
-		{"id": "strava_status", "label": t("APP_SET_STRAVA_STATUS"), "type": "info", "get": strava_status_text},
-		{"id": "client_id", "label": t("APP_SET_STRAVA_ID"), "type": "text", "rows": AppTextField.ROWS_DIGITS, "max_length": 12,
-			"get": func() -> Variant: return strava_client_id, "set": func(v: Variant) -> void: strava_client_id = str(v).strip_edges()},
-		{"id": "client_secret", "label": t("APP_SET_STRAVA_SECRET"), "type": "text", "rows": AppTextField.ROWS_HEX, "max_length": 64, "secret": true,
-			"get": func() -> Variant: return strava_client_secret, "set": func(v: Variant) -> void: strava_client_secret = str(v).strip_edges()},
-		{"id": "connect", "label": t("APP_SET_STRAVA_CONNECT"), "type": "action", "run": strava_connect,
-			"enabled": func() -> bool: return strava_client_id != "" and strava_client_secret != "" and not strava_connected()},
-		{"id": "disconnect", "label": t("APP_SET_STRAVA_DISCONNECT"), "type": "action", "run": strava_disconnect,
-			"enabled": strava_connected},
-		{"id": "auto_upload", "label": t("APP_SET_STRAVA_AUTO"), "type": "toggle",
+		{
+			"id": "strava_status",
+			"label": t("APP_SET_STRAVA_STATUS"),
+			"type": "info",
+			"get": strava_status_text
+		},
+		{
+			"id": "client_id",
+			"label": t("APP_SET_STRAVA_ID"),
+			"type": "text",
+			"rows": AppTextField.ROWS_DIGITS,
+			"max_length": 12,
+			"get": func() -> Variant: return strava_client_id,
+			"set": func(v: Variant) -> void: strava_client_id = str(v).strip_edges()
+		},
+		{
+			"id": "client_secret",
+			"label": t("APP_SET_STRAVA_SECRET"),
+			"type": "text",
+			"rows": AppTextField.ROWS_HEX,
+			"max_length": 64,
+			"secret": true,
+			"get": func() -> Variant: return strava_client_secret,
+			"set": func(v: Variant) -> void: strava_client_secret = str(v).strip_edges()
+		},
+		{
+			"id": "connect",
+			"label": t("APP_SET_STRAVA_CONNECT"),
+			"type": "action",
+			"run": strava_connect,
+			"enabled": can_connect_strava
+		},
+		{
+			"id": "disconnect",
+			"label": t("APP_SET_STRAVA_DISCONNECT"),
+			"type": "action",
+			"run": strava_disconnect,
+			"enabled": strava_connected
+		},
+		{
+			"id": "auto_upload",
+			"label": t("APP_SET_STRAVA_AUTO"),
+			"type": "toggle",
 			"get": func() -> Variant: return p().strava_auto_upload,
-			"set": func(v: Variant) -> void: _set_profile("strava_auto_upload", bool(v))},
+			"set": func(v: Variant) -> void: _set_profile("strava_auto_upload", bool(v))
+		},
 	]
 	fields.append_array(strava_import_fields())
 	return fields
+
+
+func can_connect_strava() -> bool:
+	return strava_client_id != "" and strava_client_secret != "" and not strava_connected()
 
 
 ## The opt-in FTP and weight import (BRIEF 3.2, 3.8 P1): connect with profile:read_all, choose
 ## FTP and/or weight, import (an imported FTP is verified and CP follows it).
 func strava_import_fields() -> Array:
 	return [
-		{"id": "connect_profile", "label": t("APP_SET_STRAVA_CONNECT_PROFILE"), "type": "action", "run": strava_connect_profile,
-			"enabled": func() -> bool: return strava_client_id != "" and strava_client_secret != "" and not strava_has_profile_scope()},
-		{"id": "import_ftp", "label": t("APP_SET_STRAVA_IMPORT_FTP"), "type": "toggle",
-			"get": func() -> Variant: return import_ftp, "set": func(v: Variant) -> void: import_ftp = bool(v)},
-		{"id": "import_weight", "label": t("APP_SET_STRAVA_IMPORT_WEIGHT"), "type": "toggle",
-			"get": func() -> Variant: return import_weight, "set": func(v: Variant) -> void: import_weight = bool(v)},
-		{"id": "import", "label": t("APP_SET_STRAVA_IMPORT"), "type": "action", "run": strava_import,
-			"enabled": func() -> bool: return strava_connected() and not importing and (import_ftp or import_weight)},
+		{
+			"id": "connect_profile",
+			"label": t("APP_SET_STRAVA_CONNECT_PROFILE"),
+			"type": "action",
+			"run": strava_connect_profile,
+			"enabled": can_connect_profile
+		},
+		{
+			"id": "import_ftp",
+			"label": t("APP_SET_STRAVA_IMPORT_FTP"),
+			"type": "toggle",
+			"get": func() -> Variant: return import_ftp,
+			"set": func(v: Variant) -> void: import_ftp = bool(v)
+		},
+		{
+			"id": "import_weight",
+			"label": t("APP_SET_STRAVA_IMPORT_WEIGHT"),
+			"type": "toggle",
+			"get": func() -> Variant: return import_weight,
+			"set": func(v: Variant) -> void: import_weight = bool(v)
+		},
+		{
+			"id": "import",
+			"label": t("APP_SET_STRAVA_IMPORT"),
+			"type": "action",
+			"run": strava_import,
+			"enabled": can_import
+		},
 	]
+
+
+func can_connect_profile() -> bool:
+	return strava_client_id != "" and strava_client_secret != "" and not strava_has_profile_scope()
+
+
+func can_import() -> bool:
+	return strava_connected() and not importing and (import_ftp or import_weight)
 
 
 ## True when the Strava connection includes profile:read_all (GET /athlete's FTP and weight).
@@ -316,7 +473,12 @@ func strava_connect_profile() -> void:
 ## Import the chosen values into the profile and save it. Returns Rides' result ({} when Strava
 ## gave nothing, for example without profile:read_all).
 func strava_import() -> Dictionary:
-	if services.rides == null or not strava_connected() or importing or not (import_ftp or import_weight):
+	if (
+		services.rides == null
+		or not strava_connected()
+		or importing
+		or not (import_ftp or import_weight)
+	):
 		return {}
 	importing = true
 	refresh_fields()
@@ -330,7 +492,11 @@ func strava_import() -> Dictionary:
 		if applied.has("ftp"):
 			parts.append(t("APP_STRAVA_IMPORT_FTP_DONE").format([int(round(p().ftp_w))]))
 		if applied.has("weight"):
-			parts.append(t("APP_STRAVA_IMPORT_WEIGHT_DONE").format([AppStyle.weight_text(p().weight_kg, p().units)]))
+			parts.append(
+				t("APP_STRAVA_IMPORT_WEIGHT_DONE").format(
+					[AppStyle.weight_text(p().weight_kg, p().units)]
+				)
+			)
 		import_result = ", ".join(parts)
 	if is_inside_tree():
 		refresh_fields()
@@ -342,7 +508,9 @@ func strava_import() -> Dictionary:
 ## Rides writes the imported values into the live profile while GET /athlete runs, so the save
 ## must not depend on the page: a static coroutine has no page instance to lose, so leaving the
 ## page mid-request still saves the import (W4r2 R20). Returns Rides' result.
-static func import_from_strava(s: AppServices, profile: RiderProfile, ftp: bool, weight: bool) -> Dictionary:
+static func import_from_strava(
+	s: AppServices, profile: RiderProfile, ftp: bool, weight: bool
+) -> Dictionary:
 	if s == null or s.rides == null or profile == null:
 		return {}
 	var res: Dictionary = await s.rides.strava_import_athlete(profile, ftp, weight)
@@ -390,6 +558,7 @@ func _on_strava_state(state: String, _detail: String) -> void:
 
 # --- haptics, audio, network, pedal UI -------------------------------------------------------------
 
+
 func _set_profile(prop: String, v: Variant) -> void:
 	p().set(prop, v)
 	save_profile()
@@ -397,23 +566,57 @@ func _set_profile(prop: String, v: Variant) -> void:
 
 func haptics_fields() -> Array:
 	return [
-		{"id": "haptics_on", "label": t("APP_SET_HAPTICS_ON"), "type": "toggle",
-			"get": func() -> Variant: return p().haptics_on, "set": func(v: Variant) -> void: _set_profile("haptics_on", bool(v))},
-		{"id": "haptic_intensity", "label": t("APP_SET_HAPTICS_INTENSITY"), "type": "stepper", "min": 0.0, "max": 100.0, "step": 10.0, "unit": "%",
+		{
+			"id": "haptics_on",
+			"label": t("APP_SET_HAPTICS_ON"),
+			"type": "toggle",
+			"get": func() -> Variant: return p().haptics_on,
+			"set": func(v: Variant) -> void: _set_profile("haptics_on", bool(v))
+		},
+		{
+			"id": "haptic_intensity",
+			"label": t("APP_SET_HAPTICS_INTENSITY"),
+			"type": "stepper",
+			"min": 0.0,
+			"max": 100.0,
+			"step": 10.0,
+			"unit": "%",
 			"get": func() -> Variant: return p().haptic_intensity_pct,
 			"set": func(v: Variant) -> void: _set_profile("haptic_intensity_pct", float(v)),
-			"enabled": func() -> bool: return p().haptics_on},
+			"enabled": func() -> bool: return p().haptics_on
+		},
 	]
 
 
 func audio_fields() -> Array:
 	return [
-		{"id": "volume", "label": t("APP_SET_VOLUME"), "type": "stepper", "min": -30.0, "max": 0.0, "step": 3.0, "unit": "dB",
-			"get": func() -> Variant: return float(services.settings.get_value("master_volume_db", 0.0)) if services.settings != null else 0.0,
-			"set": set_volume},
-		{"id": "metronome", "label": t("APP_SET_METRONOME"), "type": "toggle",
-			"get": func() -> Variant: return p().metronome, "set": func(v: Variant) -> void: _set_profile("metronome", bool(v))},
+		{
+			"id": "volume",
+			"label": t("APP_SET_VOLUME"),
+			"type": "stepper",
+			"min": -30.0,
+			"max": 0.0,
+			"step": 3.0,
+			"unit": "dB",
+			"get": current_volume_db,
+			"set": set_volume
+		},
+		{
+			"id": "metronome",
+			"label": t("APP_SET_METRONOME"),
+			"type": "toggle",
+			"get": func() -> Variant: return p().metronome,
+			"set": func(v: Variant) -> void: _set_profile("metronome", bool(v))
+		},
 	]
+
+
+func current_volume_db() -> float:
+	return (
+		float(services.settings.get_value("master_volume_db", 0.0))
+		if services.settings != null
+		else 0.0
+	)
 
 
 func set_volume(v: Variant) -> void:
@@ -430,18 +633,43 @@ static func apply_volume(db: float) -> void:
 
 func network_fields() -> Array:
 	return [
-		{"id": "relay", "label": t("APP_SET_RELAY"), "type": "text", "rows": AppTextField.ROWS_URL, "max_length": 120,
-			"get": func() -> Variant: return services.settings.relay_url() if services.settings != null else "",
-			"set": func(v: Variant) -> void: set_setting("relay_url", str(v).strip_edges())},
+		{
+			"id": "relay",
+			"label": t("APP_SET_RELAY"),
+			"type": "text",
+			"rows": AppTextField.ROWS_URL,
+			"max_length": 120,
+			"get": current_relay_url,
+			"set": func(v: Variant) -> void: set_setting("relay_url", str(v).strip_edges())
+		},
 	]
+
+
+func current_relay_url() -> String:
+	return services.settings.relay_url() if services.settings != null else ""
 
 
 func pedal_fields() -> Array:
 	return [
-		{"id": "pedal_ui", "label": t("APP_SET_PEDAL_UI_ON"), "type": "toggle",
-			"get": func() -> Variant: return p().pedal_ui, "set": set_pedal_ui},
-		{"id": "scan_interval", "label": t("APP_SET_SCAN_INTERVAL"), "type": "stepper", "min": 0.8, "max": 4.0, "step": 0.2, "unit": "s", "decimals": 1,
-			"get": func() -> Variant: return p().scan_interval_s, "set": set_scan_interval},
+		{
+			"id": "pedal_ui",
+			"label": t("APP_SET_PEDAL_UI_ON"),
+			"type": "toggle",
+			"get": func() -> Variant: return p().pedal_ui,
+			"set": set_pedal_ui
+		},
+		{
+			"id": "scan_interval",
+			"label": t("APP_SET_SCAN_INTERVAL"),
+			"type": "stepper",
+			"min": 0.8,
+			"max": 4.0,
+			"step": 0.2,
+			"unit": "s",
+			"decimals": 1,
+			"get": func() -> Variant: return p().scan_interval_s,
+			"set": set_scan_interval
+		},
 	]
 
 
@@ -458,11 +686,19 @@ func set_scan_interval(v: Variant) -> void:
 
 # --- controls ----------------------------------------------------------------------------------
 
+
 func controls_fields() -> Array:
 	var fields: Array = []
 	for a: StringName in Wl.ACTIONS:
 		var label := "%s: %s" % [t("APP_ACTION_" + String(a).to_upper()), compact_binding_text(a)]
-		fields.append({"id": "bind:" + String(a), "label": label, "type": "action", "run": start_capture.bind(a)})
+		fields.append(
+			{
+				"id": "bind:" + String(a),
+				"label": label,
+				"type": "action",
+				"run": start_capture.bind(a)
+			}
+		)
 	return fields
 
 
@@ -508,7 +744,15 @@ func all_bindings_text() -> String:
 	var lines: PackedStringArray = []
 	for a: StringName in Wl.ACTIONS:
 		var labels := binding_labels(a)
-		lines.append("%s: %s" % [t("APP_ACTION_" + String(a).to_upper()), ", ".join(labels) if not labels.is_empty() else "—"])
+		lines.append(
+			(
+				"%s: %s"
+				% [
+					t("APP_ACTION_" + String(a).to_upper()),
+					", ".join(labels) if not labels.is_empty() else "—"
+				]
+			)
+		)
 	return "\n".join(lines)
 
 
@@ -516,7 +760,9 @@ func all_bindings_text() -> String:
 func start_capture(action: StringName) -> void:
 	capturing = action
 	if value_label != null:
-		value_label.text = t("APP_SET_CAPTURE").format([t("APP_ACTION_" + String(action).to_upper())])
+		value_label.text = t("APP_SET_CAPTURE").format(
+			[t("APP_ACTION_" + String(action).to_upper())]
+		)
 
 
 func capture_event(event: InputEvent) -> bool:
@@ -559,9 +805,14 @@ func _end_capture() -> void:
 	var on_controls := false
 	for m in menus:
 		var fields := fields_of(m)
-		if not fields.is_empty() and str((fields[0] as Dictionary).get("id", "")).begins_with("bind:"):
+		if (
+			not fields.is_empty()
+			and str((fields[0] as Dictionary).get("id", "")).begins_with("bind:")
+		):
 			var fresh := controls_fields()
-			fresh.append({"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section})
+			fresh.append(
+				{"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section}
+			)
 			_fields_by_menu[m.get_instance_id()] = fresh
 			refresh_menu(items_for(fresh), m)
 			on_controls = on_controls or m == active_menu()
@@ -598,7 +849,9 @@ func _refresh_status(section: String) -> void:
 				status_label.text += "\n" + import_result
 		"trainer":
 			var d := services.trainer.device() if services.trainer != null else null
-			status_label.text = t("APP_SET_TRAINER_HELP").format([d.device_name() if d != null else "—"])
+			status_label.text = t("APP_SET_TRAINER_HELP").format(
+				[d.device_name() if d != null else "—"]
+			)
 			if is_making_trainer_safe():
 				status_label.text += "\n" + t("APP_SET_TRAINER_SAFE")
 		"controls":

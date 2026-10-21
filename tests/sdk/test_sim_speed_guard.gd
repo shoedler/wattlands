@@ -9,11 +9,23 @@ func _setup_host(device: TrainerDevice, speed: float) -> GameHost:
 	var rider := LocalRider.new()
 	add_child_autofree(rider)
 	rider.device = device
-	host.setup({
-		"game_id": "workout", "content_id": "e2e", "seed": 1, "role": Wl.SOLO,
-		"players": [], "local_riders": {1: rider}, "local_peer": 1,
-		"sim_speed": speed, "headless": true, "record_rides": false,
-	})
+	(
+		host
+		. setup(
+			{
+				"game_id": "workout",
+				"content_id": "e2e",
+				"seed": 1,
+				"role": Wl.SOLO,
+				"players": [],
+				"local_riders": {1: rider},
+				"local_peer": 1,
+				"sim_speed": speed,
+				"headless": true,
+				"record_rides": false,
+			}
+		)
+	)
 	return host
 
 

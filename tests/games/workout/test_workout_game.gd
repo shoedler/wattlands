@@ -66,7 +66,10 @@ func test_hud_spec() -> void:
 	assert_eq(at[HudSpec.GEAR], [HudSpec.BOTTOM_RIGHT])
 	assert_eq(at[HudSpec.READOUT], [HudSpec.TOP_RIGHT, HudSpec.TOP_RIGHT])
 	assert_eq(spec.widgets[1]["options"]["source"], "power_w", "the big watts readout")
-	assert_eq(spec.widgets[2]["options"], {"source": "custom", "id": WorkoutHud.READOUT_TIB, "label": "WORKOUT_HUD_IN_BAND"})
+	assert_eq(
+		spec.widgets[2]["options"],
+		{"source": "custom", "id": WorkoutHud.READOUT_TIB, "label": "WORKOUT_HUD_IN_BAND"}
+	)
 	assert_eq(spec.toast_area, HudSpec.TOP_LEFT)
 	assert_eq(spec.banner_area, HudSpec.TOP)
 	assert_true(spec.show_safety_banners)
@@ -143,7 +146,9 @@ func test_rolling_road_band_for_every_rider() -> void:
 	var hud: U.FakeHud = g.ctx.hud
 	var bands := hud.of("power_band")
 	assert_eq(bands.size(), 2)
-	assert_eq([bands[0]["peer"], bands[0]["lo"], bands[0]["hi"]], [1, 190.0, 262.5], "76-105% of 250 W")
+	assert_eq(
+		[bands[0]["peer"], bands[0]["lo"], bands[0]["hi"]], [1, 190.0, 262.5], "76-105% of 250 W"
+	)
 	assert_eq(bands[1]["peer"], -1)
 	var banner: Dictionary = hud.of("banner")[1]
 	assert_eq(banner["key"], "WORKOUT_BANNER_ROLLING")
@@ -186,8 +191,12 @@ func test_course_position_follows_the_applied_sim_grade() -> void:
 	var flat := g.state.rider(1)
 	var steep := g.state.rider(2)
 	assert_almost_eq(flat.distance_m(), ref.distance_m, 0.001, "same model, same P_eff, same grade")
-	assert_almost_eq(flat.course_d, ref_course, 0.001, "course distance counts from the phase start")
-	assert_lt(steep.course_d, flat.course_d - 50.0, "a steeper applied grade is slower along the course")
+	assert_almost_eq(
+		flat.course_d, ref_course, 0.001, "course distance counts from the phase start"
+	)
+	assert_lt(
+		steep.course_d, flat.course_d - 50.0, "a steeper applied grade is slower along the course"
+	)
 	# The grade source: SIM telemetry's applied grade, else the course under the rider.
 	var tel_sim := Telemetry.new()
 	tel_sim.mode = Wl.SIM
@@ -195,7 +204,10 @@ func test_course_position_follows_the_applied_sim_grade() -> void:
 	assert_eq(WorkoutRules.course_speed_grade(g.state, steep, tel_sim), 3.5)
 	var tel_erg := Telemetry.new()
 	tel_erg.mode = Wl.ERG
-	assert_eq(WorkoutRules.course_speed_grade(g.state, steep, tel_erg), g.state.course.grade_at(steep.course_d))
+	assert_eq(
+		WorkoutRules.course_speed_grade(g.state, steep, tel_erg),
+		g.state.course.grade_at(steep.course_d)
+	)
 	var no_course := WorkoutState.new()
 	assert_eq(WorkoutRules.course_speed_grade(no_course, steep, tel_erg), 0.0)
 
@@ -237,7 +249,10 @@ func test_rescue_and_afk_are_staggers() -> void:
 	assert_true(g.state.rider(2).afk)
 	g.on_afk(2, false)
 	assert_false(g.state.rider(2).afk)
-	assert_eq(g.results().row(2)["xp"], WorkoutResults.xp_for(float(g.results().row(2)["kj"]), r.tib_fraction(), 0))
+	assert_eq(
+		g.results().row(2)["xp"],
+		WorkoutResults.xp_for(float(g.results().row(2)["kj"]), r.tib_fraction(), 0)
+	)
 
 
 ## The platform may mark a rider AFK (a dropped peer, a rejoin before fresh pedaling) or
@@ -259,7 +274,12 @@ func test_callbacks_hold_until_cleared() -> void:
 		return U.compliant(slot, p, ps)
 	var events := U.ride(g, marked)
 	var r := g.state.rider(2)
-	assert_almost_eq(r.interval_fraction(1), (720.0 - 50.0) / 720.0, 0.001, "40 s AFK + 10 s rescue, by callback only")
+	assert_almost_eq(
+		r.interval_fraction(1),
+		(720.0 - 50.0) / 720.0,
+		0.001,
+		"40 s AFK + 10 s rescue, by callback only"
+	)
 	assert_almost_eq(g.state.rider(1).interval_fraction(1), 1.0, 0.0001)
 	assert_false(r.afk_cb or r.rescue_cb)
 	assert_false(r.afk or r.rescue)
@@ -278,9 +298,13 @@ func test_every_built_in_session_grades_s_for_compliant_riders() -> void:
 		var res := g.results()
 		assert_eq(res.grade, "S", "%s grade" % id)
 		for row in res.rows:
-			assert_almost_eq(float(row["time_in_band_pct"]), 100.0, 0.01, "%s rider %s" % [id, row["peer_id"]])
+			assert_almost_eq(
+				float(row["time_in_band_pct"]), 100.0, 0.01, "%s rider %s" % [id, row["peer_id"]]
+			)
 		var starts := U.of_type(events, WorkoutRules.EV_INTERVAL_START)
-		assert_eq(starts.size(), g.state.phases.size(), "%s: a start per phase, cool-down included" % id)
+		assert_eq(
+			starts.size(), g.state.phases.size(), "%s: a start per phase, cool-down included" % id
+		)
 		g.free()
 
 
@@ -303,12 +327,21 @@ func test_session_preview_for_every_content() -> void:
 	for id: String in ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"]:
 		var pv := g.session_preview(id)
 		assert_false(pv.is_empty(), id)
-		assert_ne(str(pv["title"]), "WORKOUT_CONTENT_" + id.to_upper(), "%s title is translated" % id)
+		assert_ne(
+			str(pv["title"]), "WORKOUT_CONTENT_" + id.to_upper(), "%s title is translated" % id
+		)
 	assert_string_contains(str(g.session_preview("easy_30")["lines"][2]), "Sprint 1")
 	var road_line := str(g.session_preview("rolling_road")["lines"][1])
 	assert_string_contains(road_line, "30:00")
 	assert_string_contains(road_line, "76-105% FTP", "the session's own band")
-	assert_eq(WorkoutSession.block_label(g.ctx.strings if g.ctx != null else GameStrings.new(), 3), "Block 3")
+	assert_eq(
+		WorkoutSession.block_label(g.ctx.strings if g.ctx != null else GameStrings.new(), 3),
+		"Block 3"
+	)
 	U.unregister_strings(tr)
-	assert_eq(WorkoutSession.block_label(GameStrings.new(), 4), "Block 4", "plain text without the strings table, never the key")
+	assert_eq(
+		WorkoutSession.block_label(GameStrings.new(), 4),
+		"Block 4",
+		"plain text without the strings table, never the key"
+	)
 	assert_eq(WorkoutSession.block_label(null, 5), "Block 5")
