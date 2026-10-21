@@ -112,7 +112,7 @@ Life cycle on every peer: `configure(ctx)` → (host/SOLO: `build_effort_plans()
 | `make_view() -> Node` | rendering peers (never headless runs) | after `configure` | 2D: a `Node2D` the GameHost puts in a `PixelViewport` at `pixel_base`; 3D: a `Node3D` with its own camera. The view only reads state |
 | `hud_spec() -> HudSpec` | rendering peers | after `configure` (so it may use `ctx.players` and `ctx.local_peer`) | Which kit widgets show and where, plus your own Controls (section 10) |
 | `results() -> GameResults` | host, SOLO | once: after the cool-down, or when a `run_game_sim` run ends by `timeout` or `paused` (`ctx.stats` is final then) | Grade, rows, XP, unlocks (section 15). The GameHost sends it to every client |
-| `apply_progress(results: GameResults, progress: ProgressStore) -> Array` | every peer | once per session, after `results` arrives and before the results screen | Update the local rider's progress (`progress` is `ctx.progress`) and return the local rider's new unlock ids. The platform saves the store afterwards |
+| `apply_progress(results: GameResults, progress: ProgressStore) -> Array` | every peer | once per session, after `results` arrives and before the results screen | Update the local rider's progress (`progress` is `ctx.progress`) and return the local rider's new unlock ids (the results screen names each by `<ID>_UNLOCK_<UNLOCK ID>`, section 17). The platform saves the store afterwards |
 | `session_preview(content_id) -> Dictionary` | any peer, before `configure` | in the lobby | Optional `{"title", "total_s", "lines"}` for the session preview (for example a .zwo importer's clamp list); `{}` shows nothing extra |
 
 | Signal | Emitted by | Effect |
