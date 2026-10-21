@@ -257,3 +257,48 @@ func test_saved_values_from_earlier_builds() -> void:
 	s.set_value("locale", "it")
 	assert_false(_saved().has("relay_url"), "a saved default follows the default")
 	assert_push_warning_count(0)
+
+
+func test_a_marker_of_the_wrong_type_is_dropped_with_a_warning() -> void:
+	# A hand-edited settings.json: relay_url_custom that is not a bool is dropped like any
+	# wrong-typed value (push_warning), and loading neither stops nor loses the other keys.
+	_set_build_url(BUILD_URL)
+	var s := _make()
+	for bad: Variant in ["yes", 1.0]:
+		var marked := {"relay_url": CHOSEN_URL, "relay_url_custom": bad, "locale": "de"}
+		Util.write_text(Paths.settings_path(), JSON.stringify(marked))
+		s.load_all()
+		assert_eq(s.relay_url(), CHOSEN_URL, "%s: a URL the rider typed is kept" % str(bad))
+		assert_eq(s.get_value("locale"), "de", "%s: the keys after it still load" % str(bad))
+		assert_eq(
+			s.get_value("relay_url_custom"), null, "%s: the marker is not a setting" % str(bad)
+		)
+		var legacy := {"relay_url": BUILT_IN, "relay_url_custom": bad, "locale": "fr"}
+		Util.write_text(Paths.settings_path(), JSON.stringify(legacy))
+		s.load_all()
+		assert_eq(
+			s.relay_url(), BUILD_URL, "%s: an unmarked localhost follows the default" % str(bad)
+		)
+		assert_eq(s.get_value("locale"), "fr", str(bad))
+	assert_push_warning("Settings: ignoring relay_url_custom of the wrong type in settings.json")
+	assert_push_warning_count(4, "one per load")
+	s.set_value("locale", "it")
+	assert_eq(_saved().get("relay_url_custom"), null, "a dropped marker is not written back")
+	assert_false(_saved().has("relay_url"))
+
+
+func test_a_marker_false_or_null_is_unmarked() -> void:
+	_set_build_url(BUILD_URL)
+	var s := _make()
+	Util.write_text(
+		Paths.settings_path(), JSON.stringify({"relay_url": BUILT_IN, "relay_url_custom": false})
+	)
+	s.load_all()
+	assert_eq(s.relay_url(), BUILD_URL, "false: an unmarked localhost follows the default")
+	assert_push_warning_count(0, "false is a bool")
+	Util.write_text(
+		Paths.settings_path(), JSON.stringify({"relay_url": BUILT_IN, "relay_url_custom": null})
+	)
+	s.load_all()
+	assert_eq(s.relay_url(), BUILD_URL, "null: an unmarked localhost follows the default")
+	assert_push_warning_count(1, "null is the wrong type")

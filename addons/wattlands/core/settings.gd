@@ -20,8 +20,9 @@ extends Node
 ## relay_url (with relay_url_custom true) only while the rider's choice differs from the
 ## default; set_value("relay_url", "") or the default's own value follows the default again,
 ## and so does a saved "ws://localhost:8787/v1" without relay_url_custom (earlier builds wrote
-## the default on every save). relay_url_custom itself can't be set. load_all prints
-## "Settings: build default relay URL <url>" once per process when the default isn't built in.
+## the default on every save). relay_url_custom itself can't be set; a loaded one that isn't a
+## bool is dropped with push_warning. load_all prints "Settings: build default relay URL <url>"
+## once per process when the default isn't built in.
 ##
 ## Loading: a missing file leaves the defaults (a normal first run). A corrupt file (bad
 ## JSON, not an object) gives the defaults with push_warning; a value of the wrong type or
@@ -301,6 +302,9 @@ func _load_settings() -> Dictionary:
 		var k := str(key)
 		var v: Variant = d[key]
 		if k == RELAY_CUSTOM_KEY:
+			# Read with relay_url below; one that is not a bool counts as missing.
+			if typeof(v) != TYPE_BOOL:
+				push_warning("Settings: ignoring %s of the wrong type in settings.json" % k)
 			continue
 		if DEFAULTS.has(k):
 			if not _same_kind(v, DEFAULTS[k]):
@@ -308,7 +312,9 @@ func _load_settings() -> Dictionary:
 				continue
 			if k == "relay_url":
 				var u := str(v).strip_edges()
-				var marked: bool = d.get(RELAY_CUSTOM_KEY) == true
+				# typeof first: == between a String or number and a bool is a runtime error.
+				var marker: Variant = d.get(RELAY_CUSTOM_KEY)
+				var marked: bool = typeof(marker) == TYPE_BOOL and bool(marker)
 				var legacy: bool = u == str(DEFAULTS["relay_url"]) and not marked
 				if u == "" or u == relay_default or legacy:
 					continue
