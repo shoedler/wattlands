@@ -6,6 +6,9 @@ extends GutTest
 const S := preload("res://tests/scenarios/lib/scenario_lib.gd")
 
 var tmp: String = ""
+## Runners start_runner() made: after_each calls cleanup() on each, which deletes the runner's
+## temp root (wattlands_sim_* under OS temp; W3 QT-4).
+var runners: Array[GameSimRunner] = []
 
 
 func before_each() -> void:
@@ -14,6 +17,10 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	for r in runners:
+		if is_instance_valid(r):
+			r.cleanup()
+	runners.clear()
 	Paths.set_override("")
 	S.remove_tree(tmp)
 	tmp = ""
@@ -32,6 +39,7 @@ func start_runner(f: PackedStringArray) -> GameSimRunner:
 		return null
 	var runner: GameSimRunner = made["runner"]
 	add_child_autofree(runner)
+	runners.append(runner)
 	var err := runner.setup(made["args"])
 	assert_eq(err, "", "GameSimRunner.setup(%s)" % " ".join(f))
 	if err != "":

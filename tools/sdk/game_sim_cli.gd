@@ -181,6 +181,9 @@ func _run_session(parent: Node) -> int:
 			code = EXIT_REPORT
 		else:
 			_say("run_game_sim: end_reason=%s sim_seconds=%.1f report=%s" % [reason, runner.sim_seconds(), path])
+	# cleanup() shuts the riders down and deletes the runner's temp root (wattlands_sim_*), which
+	# lives under OS temp, not under this run's own user dir (W3 QT-4).
+	runner.cleanup()
 	parent.remove_child(runner)
 	runner.free()
 	if template_registry != null:

@@ -89,9 +89,15 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
+## Freeing the runner restores Paths' override and deletes the run's temp root too (W3 QT-4),
+## so a runner freed without cleanup() (autofree in tests, a tool that forgot it) never leaves a
+## wattlands_sim_* dir behind.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		_restore_paths()
+		if _temp_root != "":
+			_remove_tree(_temp_root)
+			_temp_root = ""
 
 
 ## The one flag parser shared by tools/run_game_sim and tools/screenshot: turns
