@@ -26,7 +26,7 @@
 
 ## 2026-10-21: NetSession owns reconnect; transports report drops
 
-- Decision: transports emit `disconnected("dropped")` and keep `room_code` and `reconnect_token`; `WlNetSession` re-joins at once, then after 1, 2, 4, 8 and every 15 s, and gives up after the token's 120 s with `refused("dropped")`. The token is saved to `Paths.reconnect_token_path()` on every `created`/`joined` (per-session `token_path` and `persist_token` for in-process peers, OWNERSHIP C28).
+- Decision: transports emit `disconnected("dropped")` and keep `room_code` and `reconnect_token`; `WlNetSession` re-joins at once, then after 1, 2, 4, 8 and every 15 s, and gives up after the token's 120 s with `refused("dropped")`. The autoload saves the token to `Paths.reconnect_token_path()` on every `created`/`joined`; private instances keep it in memory unless `persist_token` is on (with their own `token_path`), so in-process peers sharing one profile never pick up each other's token (OWNERSHIP C28).
 - Alternatives: automatic reconnect inside RelayTransport.
 - Reason: one policy for every transport, testable over loopback; hosts reclaim peer 1 the same way.
 

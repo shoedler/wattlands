@@ -31,6 +31,7 @@ func make_session(label: String, info: Dictionary = {}) -> WlNetSession:
 	var b := WlEventBus.new()
 	s.add_child(b)
 	s.bus = b
+	s.persist_token = true
 	s.token_path = tmp.path_join(label + "_token.json")
 	s.recent_rooms_file = tmp.path_join(label + "_recent.json")
 	add_child_autofree(s)

@@ -217,6 +217,27 @@ func test_leave_forgets_the_token() -> void:
 	assert_eq(r[0].lobby_slots().size(), 2)
 
 
+func test_private_sessions_do_not_persist_by_default() -> void:
+	var s := WlNetSession.new()
+	assert_false(s.persist_token, "only the NetSession autoload persists by default")
+	assert_false(s.auto_poll)
+	s.free()
+	var autoload := get_node_or_null("/root/NetSession")
+	if autoload != null:
+		assert_true((autoload as WlNetSession).persist_token)
+		assert_true((autoload as WlNetSession).auto_poll)
+
+
+func test_tick_only_polls_when_auto_polling() -> void:
+	var s := make_session("auto", rider("A"))
+	s.set_time(10.0)
+	s.tick(1.0)
+	assert_eq(s.local_time(), 11.0)
+	s.auto_poll = true
+	s.tick(1.0)
+	assert_eq(s.local_time(), 11.0, "the autoload's time follows _process only")
+
+
 func test_in_memory_tokens_when_not_persisted() -> void:
 	var h := make_session("host", rider("Hana"))
 	h.persist_token = false

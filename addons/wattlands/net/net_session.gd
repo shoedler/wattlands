@@ -87,15 +87,19 @@ var offline: bool = false
 ## The EventBus this session reports to (the autoload by default; in-process peers set
 ## their own).
 var bus: WlEventBus = null
-## Tick from _process (true for the autoload instance only, by default).
+## Tick from _process with the wall-clock delta (true for the autoload instance only, by
+## default). While it is on, tick(dt) from elsewhere only polls, so time never advances
+## twice.
 var auto_poll: bool = false
 ## Re-join with the reconnect token after a drop (attempts at once, then 1, 2, 4, 8 and
 ## every 15 s). When false the session waits in "reconnecting" for rejoin(). Either way it
 ## gives up 120 s after the drop (the token's life) with refused("dropped").
 var auto_reconnect: bool = true
-## Save the reconnect token and recent rooms under Paths.user_dir() (in-process simulations
-## with several sessions turn this off or give each session its own token_path).
-var persist_token: bool = true
+## Save the reconnect token and recent rooms under Paths.user_dir(). On by default for the
+## NetSession autoload only: private instances (tests, in-process simulations with several
+## sessions in one profile) keep the token in memory unless they turn this on with their
+## own token_path, so two sessions never share one token file.
+var persist_token: bool = false
 ## Reconnect token file; "" means Paths.reconnect_token_path().
 var token_path: String = ""
 ## Recent rooms file; "" means Paths.recent_rooms_path().
@@ -189,12 +193,14 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	if get_parent() == get_tree().root and name == "NetSession":
 		auto_poll = true
+		persist_token = true
 	_bus()
 
 
 func _process(delta: float) -> void:
 	if auto_poll:
-		tick(delta)
+		_advance(delta)
+		poll()
 
 
 ## Use this transport (RelayTransport by default; LoopbackTransport in tests).
@@ -586,11 +592,17 @@ func poll() -> void:
 # --- additions: time ---------------------------------------------------------------------
 
 ## Advance this session's platform time by dt and poll (the GameHost calls it once per
-## platform step with Wl.SIM_DT; the autoload calls it from _process).
+## platform step with Wl.SIM_DT). With auto_poll on (the autoload, which ticks itself from
+## _process) it only polls.
 func tick(dt: float) -> void:
+	if not auto_poll:
+		_advance(dt)
+	poll()
+
+
+func _advance(dt: float) -> void:
 	_now_s += maxf(dt, 0.0)
 	_ticked = true
-	poll()
 
 
 ## Set this session's platform time (seconds), e.g. from SimClock.platform_time().
