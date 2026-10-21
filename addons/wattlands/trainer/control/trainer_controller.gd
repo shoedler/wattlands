@@ -79,6 +79,9 @@ var _resume_floor: bool = false
 var _safe: bool = false
 ## shutdown() ran: nothing more is written until setup().
 var _stopped: bool = false
+## After resync() the trainer's SIM parameters are only assumed, so the next SIM command is
+## written even when it equals the assumed state.
+var _force_sim_write: bool = false
 
 
 func _init() -> void:
@@ -97,7 +100,33 @@ func setup(device: TrainerDevice) -> void:
 	_stepped_down = false
 	_safe = false
 	_stopped = false
+	_force_sim_write = false
 	_last_write_t = -1e9
+
+
+## The same device reconnected (BRIEF 4.4): the connection flow ran again (resubscribe,
+## Request Control, SIM flat), so the trainer no longer holds what this controller last wrote.
+## Added in W2. The written state becomes SIM flat (grade 0, wind 0, with `crr` and `cw` as
+## the best guess), so the newest command re-enters its mode through the normal ramped path:
+## ERG through the SIM -> ERG entry (max(floor, min(3 s power, command)), then slew up); SIM
+## by writing the stacked state, which is always sent once even if it equals the guess. The
+## flow's own SIM flat write counts for coalescing: the first restoring write waits one
+## MIN_WRITE_INTERVAL_S slot. A panic hold re-sends SIM flat at once (safety outranks
+## coalescing, as in emergency_safe()). After shutdown() or without a device nothing changes.
+func resync(crr: float, cw: float) -> void:
+	if _device == null or _stopped:
+		return
+	_mode = Wl.SIM
+	_written_sim = _quantize({"wind_mps": 0.0, "grade_pct": 0.0, "crr": crr, "cw": cw})
+	_written_erg_w = 0
+	_written_level = 0.0
+	_erg_w = 0.0
+	_entry_active = false
+	_stepped_down = false
+	_force_sim_write = true
+	_last_write_t = _t
+	if _safe:
+		_write_sim({"wind_mps": 0.0, "grade_pct": 0.0, "crr": crr, "cw": cw})
 
 
 func device() -> TrainerDevice:
@@ -313,7 +342,7 @@ func _next_sim_write() -> void:
 		_write_sim({"wind_mps": 0.0, "grade_pct": 0.0, "crr": _want_sim["crr"], "cw": _want_sim["cw"]})
 		return
 	_resume_floor = false
-	if _mode != Wl.SIM or not _sim_equal(_written_sim, _want_sim):
+	if _mode != Wl.SIM or _force_sim_write or not _sim_equal(_written_sim, _want_sim):
 		_write_sim(_want_sim)
 
 
@@ -330,6 +359,7 @@ func _write_sim(state: Dictionary) -> void:
 	_mode = Wl.SIM
 	_written_sim = q
 	_entry_active = false
+	_force_sim_write = false
 	_note(OP_SIM, q)
 
 

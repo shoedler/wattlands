@@ -235,8 +235,11 @@ func _init() -> void:
 # =============================================================================================
 
 ## Bind the device (the governor creates and owns its TrainerController around it).
-## Calling it again (a reconnect) rebinds the controller; rider state (warm-up, limits,
-## channels) is kept, and the next command re-enters its mode through the ramped entry.
+## Calling it again (a reconnect with a new device object, LocalRider.rebind_device) rebinds
+## the controller to that device; plan, phase, configuration and rider state (warm-up,
+## limits, rescue, coasting, gears, channels) are kept, and the next command re-enters its
+## mode through the ramped entry. A shut-down governor comes back to life here. The same
+## device reconnecting uses on_trainer_reconnected() instead.
 func setup(device: TrainerDevice) -> void:
 	_device = device
 	_controller.setup(device)
@@ -263,6 +266,9 @@ func setup(device: TrainerDevice) -> void:
 ## W1 adds: weight_kg (75, for target_wkg), system_mass_kg (83, rider + bike for the haptic
 ## wind bound). Out-of-range values are clamped with push_warning; an unknown profile or a
 ## non-positive FTP is rejected with push_error and the previous value stays.
+## Calling it again (LocalRider.configure_governor, the FTP test) replaces only the given
+## parameters: the plan, the phase and its elapsed time, warm-up, duration limits, rescue,
+## coasting and the directive channels are kept, and the next tick applies the new values.
 func configure(params: Dictionary) -> void:
 	for key: Variant in params.keys():
 		if not CONFIG_KEYS.has(str(key)):
@@ -675,6 +681,28 @@ func shutdown() -> void:
 
 func status() -> Dictionary:
 	return _status.duplicate(true)
+
+
+## The trainer reconnected on the same device object (FtmsConnectionManager.reconnected; a
+## new object goes through setup(device) instead). Added in W2 (BRIEF 4.4 "restore the last
+## safe mode"). The connection flow left the trainer at SIM flat, so the controller forgets
+## what it last wrote (TrainerController.resync) and the current mode and target come back
+## through the normal ramped path on the next ticks: ERG through the SIM -> ERG entry and
+## 30 W/s slew (4.5, 4.6.2), SIM by writing the stacked state, within the 2 writes per
+## second. The 3 s power from before the outage is dropped (the rider's power is unknown), so
+## an ERG re-entry starts at the floor until fresh samples arrive. Plan, phase, warm-up,
+## duration limits, rescue, coasting, gears and directive channels are kept; the reconnect is
+## no ERG/SIM switch for the 30 s spacing. Panic re-sends SIM flat at once; after shutdown()
+## nothing is sent (setup() is the way back).
+func on_trainer_reconnected() -> void:
+	if _shut_down or _device == null:
+		return
+	_power_hist.clear()
+	_speed_mps = -1.0
+	_controller.resync(_crr, _cw)
+	_recompute_outputs()
+	_update_clamped_by()
+	_update_status()
 
 
 func is_rescue() -> bool:
