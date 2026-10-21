@@ -134,3 +134,33 @@ func test_recent_rooms_are_listed_and_joinable() -> void:
 	assert_true(menu(s).ids().has("recent:ABC123"))
 	surge_pick(s, "recent:ABC123")
 	assert_eq(fx.fake_net().last_call("join_room"), ["join_room", "ABC123"])
+
+
+func test_a_coast_on_the_keyboard_keeps_the_half_typed_code() -> void:
+	# A pedal-only rider who stops for a moment must not lose the code: the first back (or coast)
+	# only highlights Back; a second back, or picking Back, leaves.
+	fx.give_profile()
+	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
+	confirm_pick(s, "kb:row:0")
+	confirm_pick(s, "kb:ch:7")
+	s.feed_gesture(Wl.G_COAST)
+	assert_eq(s.page, AppLobbyScreen.PAGE_JOIN)
+	assert_eq(s.code_field.value(), "7", "the code is kept")
+	assert_eq(menu(s).highlighted(), menu(s).index_of_id(AppKeyboard.ID_CANCEL), "Back is highlighted")
+	assert_ne(fx.app.state, "title")
+	s.feed_action(&"back")
+	assert_eq(fx.app.state, "title", "a second back leaves")
+	assert_eq(fx.fake_net().calls_named("leave").size(), 1)
+
+
+func test_text_entry_back_keeps_the_text_until_confirmed() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "network")
+	confirm_pick(s, "relay")
+	s.text_field.set_value("ws://10.0.0.9:8787/v1")
+	s.feed_gesture(Wl.G_COAST)
+	assert_not_null(s.text_field, "a coast keeps the editor open")
+	surge_pick(s, AppKeyboard.ID_CANCEL)
+	assert_null(s.text_field, "picking Back closes it")
+	assert_ne(fx.settings.get_value("relay_url", ""), "ws://10.0.0.9:8787/v1", "cancelled: nothing saved")

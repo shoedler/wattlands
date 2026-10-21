@@ -13,7 +13,8 @@ const VERSION_MISMATCH := "version_mismatch"
 ## This rider's player_info (BRIEF 5.5): name, color, FTP, ftp_verified, p_eff_per_w, weight
 ## only if opted in, preferred cadence, haptics, Autopilot, player_options, installed games.
 ## Extra keys: "trainer" (local trainer status for the lobby cards) and "haptic_intensity".
-static func player_info(profile: RiderProfile, scaling: String, player_options: Dictionary, games: Dictionary, trainer_status: String = "") -> Dictionary:
+## autopilot: the lobby's per-session Autopilot toggle (BRIEF 3.5); null uses the profile default.
+static func player_info(profile: RiderProfile, scaling: String, player_options: Dictionary, games: Dictionary, trainer_status: String = "", autopilot: Variant = null) -> Dictionary:
 	var info := {
 		"name": profile.display_name,
 		"color": profile.color.to_html(false),
@@ -23,7 +24,7 @@ static func player_info(profile: RiderProfile, scaling: String, player_options: 
 		"preferred_cadence_rpm": profile.preferred_cadence_rpm,
 		"haptics_on": profile.haptics_on,
 		"haptic_intensity": profile.haptic_intensity_pct / 100.0,
-		"autopilot": profile.autopilot_default,
+		"autopilot": profile.autopilot_default if autopilot == null else bool(autopilot),
 		"player_options": player_options.duplicate(true),
 		"games": games.duplicate(true),
 		"trainer": trainer_status,

@@ -66,6 +66,8 @@ APP_LOBBY_NEED_PLAYERS,This game needs at least {0} riders: add bots or wait for
 APP_LOBBY_WAITING_READY,Waiting for every rider to ready up (pedal or press confirm).
 APP_LOBBY_MISSING_GAME,You don't have the game {0}. Install it to ride in this room.
 APP_LOBBY_HOST_LEFT,The host left the room.
+APP_LOBBY_AUTOPILOT,My Autopilot: {0}
+APP_LOBBY_AUTOPILOT_TAG,Autopilot
 APP_LOBBY_VERSION_MISMATCH,The host has version {0} of this game and you have {1}: update so both match.
 APP_SCALING_FAIR_FTP,Fair (by FTP)
 APP_SCALING_WKG,Watts per kilo

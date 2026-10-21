@@ -4,7 +4,8 @@ extends RefCounted
 ## "offer a controller on-screen keyboard"). Row-column scanning keeps it quick with one switch:
 ## the first menu lists the rows plus Delete, Done and Cancel (and any extra items, such as
 ## recent rooms); picking a row opens that row's characters; picking a character types it and
-## returns to the rows. Controller and keyboard users move with up/down and confirm.
+## returns to the rows. Controller and keyboard users move with up/down and confirm. Back (or a
+## coast) on the rows first highlights Back and cancels only on a second back or a pick.
 
 const ID_DELETE := "kb:delete"
 const ID_DONE := "kb:done"
@@ -82,12 +83,25 @@ func _on_root_pick(_index: int, id: Variant, _auto: bool) -> void:
 		if field.is_complete() and on_done.is_valid():
 			on_done.call(field.value())
 	elif sid == ID_CANCEL:
-		_on_root_back()
+		cancel()
 	elif on_extra.is_valid():
 		on_extra.call(id)
 
 
+## Back (or a coast) on the rows: the first one only highlights Back, so a pedal-only rider who
+## stops for a moment never loses a half-typed code; a second back, or picking Back, cancels.
 func _on_root_back() -> void:
+	if not is_open():
+		cancel()
+		return
+	var i := screen.item_index(ID_CANCEL, root_menu)
+	if i >= 0 and root_menu.highlighted() != i:
+		root_menu.set_highlight(i)
+		return
+	cancel()
+
+
+func cancel() -> void:
 	if on_cancel.is_valid():
 		on_cancel.call()
 

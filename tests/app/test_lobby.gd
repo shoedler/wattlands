@@ -108,6 +108,34 @@ func test_long_int_player_option_uses_a_stepper() -> void:
 	assert_eq(menu(s).text_of("popt:wave_offset"), AppScreen.t("APP_LOBBY_MY_OPTION").format(["wave_offset", "-9"]))
 
 
+func test_autopilot_is_toggled_in_the_lobby() -> void:
+	# BRIEF 3.5: Autopilot is per player, toggled in the profile or the lobby.
+	var s := _host_lobby()
+	assert_false(fx.fake_net().info["autopilot"], "the profile default (off)")
+	assert_eq(menu(s).text_of("autopilot"), AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_OFF")]))
+	surge_pick(s, "autopilot")
+	assert_true(s.my_autopilot)
+	assert_true(fx.fake_net().info["autopilot"], "sent in player_info")
+	assert_eq(menu(s).text_of("autopilot"), AppScreen.t("APP_LOBBY_AUTOPILOT").format([AppScreen.t("APP_ON")]))
+	var card := s.cards_box.get_child(0) as AppLobbyCard
+	assert_true(card.options_label.text.begins_with(AppScreen.t("APP_LOBBY_AUTOPILOT_TAG")), "shown on the rider's card")
+	assert_false(fx.settings.profile.autopilot_default, "the profile default is unchanged")
+
+
+func test_autopilot_starts_from_the_profile_and_clients_toggle_it_too() -> void:
+	fx.give_profile(220.0, "Bea")
+	fx.settings.profile.autopilot_default = true
+	var net := fx.fake_net()
+	net.add_human(1, "Ada", 250.0)
+	net.add_human(2, "Bea", 220.0)
+	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
+	s.join_code("K7QX2M")
+	net.simulate_joined(2, "K7QX2M", workout_lobby())
+	assert_true(net.info["autopilot"])
+	confirm_pick(s, "autopilot")
+	assert_false(net.info["autopilot"])
+
+
 func test_own_card_shows_player_options() -> void:
 	var s := _host_lobby()
 	confirm_pick(s, "popt:offset")

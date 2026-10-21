@@ -40,6 +40,9 @@ var my_player_options: Dictionary = {}
 var _options_game: String = ""
 ## The last player_info sent (a client resends only when it changed, e.g. the host's scaling).
 var _last_info: Dictionary = {}
+## This rider's Autopilot for this session (BRIEF 3.5: toggled in the profile or the lobby);
+## starts at the profile's default and is sent in player_info.
+var my_autopilot: bool = false
 var message: String = ""
 var code_field: AppTextField = null
 var keyboard: AppKeyboard = null
@@ -58,6 +61,7 @@ func _build() -> void:
 	mode = str(params.get("mode", "solo"))
 	game_id = str(params.get("game_id", ""))
 	role = Wl.SOLO if mode == "solo" else (Wl.HOST if mode == "host" else Wl.CLIENT)
+	my_autopilot = services.profile().autopilot_default
 	var ui := make_page("")
 	title_label = ui["title"]
 	_left = ui["left"]
@@ -234,7 +238,16 @@ func build_player_info() -> Dictionary:
 		sc = Wl.FAIR_FTP
 	var st := services.trainer.status() if services.trainer != null else ""
 	return AppLobbyModel.player_info(services.profile(), sc, my_player_options,
-		AppLobbyModel.installed_games(services.registry), st)
+		AppLobbyModel.installed_games(services.registry), st, my_autopilot)
+
+
+## Toggle this rider's Autopilot for the session (sent in player_info; the profile keeps its
+## own default).
+func set_autopilot(on: bool) -> void:
+	my_autopilot = on
+	_send_player_info()
+	_refresh_root_menu()
+	_refresh_all()
 
 
 ## Send player_info only when it differs from the last one sent: the host's lobby_state echo of
@@ -413,6 +426,7 @@ func lobby_items() -> Array:
 				var pm := AppOptionModel.make(gid, e as Dictionary)
 				var v: Variant = my_player_options.get(pm.id(), pm.default_value())
 				items.append({"id": "popt:" + pm.id(), "text": t("APP_LOBBY_MY_OPTION").format([pm.label_text(), pm.value_text(v)])})
+		items.append({"id": "autopilot", "text": t("APP_LOBBY_AUTOPILOT").format([t("APP_ON") if my_autopilot else t("APP_OFF")])})
 	if role != Wl.CLIENT and bool(m.get("bots", false)):
 		var all := slots()
 		items.append({"id": "add_bot", "text": t("APP_LOBBY_ADD_BOT"), "disabled": not AppLobbyModel.can_add_bot(m, all.size())})
@@ -446,6 +460,8 @@ func _on_lobby_pick(_index: int, id: Variant, _auto: bool) -> void:
 			_refresh_root_menu()
 		"ready":
 			_set_ready(not local_ready)
+		"autopilot":
+			set_autopilot(not my_autopilot)
 		"content":
 			_open_content()
 		"scaling":
@@ -882,7 +898,11 @@ func _refresh_cards() -> void:
 		var opts := my_player_options if is_me else slot.options
 		if opts.is_empty():
 			opts = AppLobbyModel.player_options_of(lb, slot.peer_id)
-		card.update(ready, trainer, options_text(gid, m, opts), slot.is_bot)
+		var text := options_text(gid, m, opts)
+		var autopilot := my_autopilot if is_me else slot.autopilot
+		if autopilot and not slot.is_bot:
+			text = t("APP_LOBBY_AUTOPILOT_TAG") if text == "" else t("APP_LOBBY_AUTOPILOT_TAG") + " · " + text
+		card.update(ready, trainer, text, slot.is_bot)
 
 
 ## "Wave offset: 0 · Relaxed band: Off" for a rider's player_options.
