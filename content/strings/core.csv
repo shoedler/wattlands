@@ -1,2 +1,20 @@
 keys,en
 CORE_MODULE_NAME,Core
+CORE_TRAINER_MOCK,Mock trainer ({spec})
+CORE_FTP_TITLE,FTP test
+CORE_FTP_RAMP_IN,FTP test ramp-in
+CORE_FTP_STEP,Step {n}
+CORE_FTP_INTRO,"Five minutes of easy ramp-in, then one-minute steps that get harder until you can't hold them. Ride until the trainer wins."
+CORE_FTP_END_POWER,Test over: power fell below the target.
+CORE_FTP_END_CADENCE,Test over: cadence dropped below 50 rpm.
+CORE_FTP_END_COASTING,Test over: you stopped pedaling.
+CORE_FTP_END_RESCUE,Test over: rescue took the load off.
+CORE_FTP_END_BACK,Test stopped.
+CORE_FTP_END_COMPLETE,Test over: you finished every step.
+CORE_FTP_RESULT,New FTP: {ftp} W (best minute {best} W)
+CORE_FTP_SAVING,Saving in {s} s. Back keeps your old FTP.
+CORE_FTP_SAVED,FTP saved.
+CORE_FTP_NOT_SAVED,FTP not changed.
+CORE_FTP_COOLDOWN,Cool-down: three easy minutes.
+CORE_LAP_PHASE,Phase {n}
+CORE_LAP_COOLDOWN,Cool-down
