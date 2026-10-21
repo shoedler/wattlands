@@ -337,6 +337,70 @@ func test_quit_with_a_real_trainer_waits_for_the_safe_commands() -> void:
 	assert_eq(app.quit_codes, [0] as Array[int])
 
 
+# --- W4 (NET-6): a host quitting the app leaves its room -----------------------------------------
+# BRIEF 5.3: host_left goes out "only on an explicit leave or when the host's token expires";
+# 5.5 "If the host leaves, end the session gracefully". Closing the window used to look like a
+# drop to the relay, so clients sat 120 s in the dropped-host hold.
+
+
+func _net(role: String, state: String) -> WlNetSession:
+	var n := WlNetSession.new()
+	autofree(n)
+	n.role = role
+	n.state = state
+	n.room_code = "K7QX2M"
+	n.state_changed.connect(func(s: String, d: String) -> void: _log.append("net:%s:%s" % [s, d]))
+	return n
+
+
+func test_quit_while_hosting_leaves_the_room_and_waits_for_the_leave_to_go_out() -> void:
+	var app := _make()
+	var n := _net(Wl.HOST, WlNetSession.STATE_HOSTING)
+	app.net_session = n
+	app.quit(0)
+	assert_has(_log, "net:offline:left", "NetSession.leave(): the relay sends host_left at once")
+	assert_eq(n.state, WlNetSession.STATE_OFFLINE)
+	assert_eq(n.role, "", "the room is left")
+	assert_lt(_log.find("state:quitting"), _log.find("net:offline:left"), "after the quitting signal (rides and reports first)")
+	assert_eq(app.quit_codes.size(), 0, "the tree waits a moment so the transport sends it")
+	await wait_seconds(WlApp.QUIT_GRACE_S + 0.3)
+	assert_eq(app.quit_codes, [0] as Array[int])
+
+
+func test_quit_while_hosting_a_session_or_reconnecting_leaves_too() -> void:
+	for st: String in [WlNetSession.STATE_RECONNECTING, WlNetSession.STATE_CONNECTING]:
+		_log.clear()
+		var app := _make()
+		var n := _net(Wl.HOST, st)
+		app.net_session = n
+		app.quit(0)
+		assert_has(_log, "net:offline:left", st)
+
+
+func test_a_client_or_an_offline_lobby_does_not_leave_on_quit() -> void:
+	# A client keeps its reconnect token, so a restarted client can rejoin (ARCHITECTURE.md).
+	var cases := [
+		[Wl.CLIENT, WlNetSession.STATE_JOINED, false],
+		[Wl.HOST, WlNetSession.STATE_OFFLINE, false],
+		["", WlNetSession.STATE_OFFLINE, false],
+	]
+	for c: Array in cases:
+		_log.clear()
+		var app := _make()
+		var n := _net(str(c[0]), str(c[1]))
+		app.net_session = n
+		app.quit(0)
+		assert_false(_log.has("net:offline:left"), "%s / %s" % [c[0], c[1]])
+		assert_eq(app.quit_codes, [0] as Array[int], "no extra wait without a room to leave")
+	var app2 := _make()
+	var off := _net(Wl.HOST, WlNetSession.STATE_HOSTING)
+	off.offline = true
+	app2.net_session = off
+	_log.clear()
+	app2.quit(0)
+	assert_false(_log.has("net:offline:left"), "the offline SOLO lobby has no room")
+
+
 func test_window_close_quits_cleanly() -> void:
 	var r := _rider()
 	var app := _make()

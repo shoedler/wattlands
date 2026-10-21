@@ -42,3 +42,8 @@ static func input_router() -> WlInputRouter:
 
 static func app() -> WlApp:
 	return find("App") as WlApp
+
+
+## The NetSession autoload (W4, additive: WlApp.quit leaves a hosted room).
+static func net() -> WlNetSession:
+	return find("NetSession") as WlNetSession
