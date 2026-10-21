@@ -508,3 +508,42 @@ func test_theme_resource_loads() -> void:
 	assert_gte(th.get_font_size("font_size", "Button"), 32)
 	assert_not_null(WlTheme.font())
 	assert_true(ResourceLoader.exists(WlTheme.THEME_PATH))
+
+
+func test_teammates_max_width_wraps_then_scales() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	var r := {}
+	for i in 8:
+		r[i + 1] = {"name": "R%d" % i, "slot_index": i}
+	tm.set_roster(r)
+	tm.set_max_width(3000.0)
+	assert_eq(tm.columns(), 8)
+	assert_eq(tm.ui_scale, 1.0)
+	tm.set_max_width(1200.0)
+	assert_eq(tm.columns(), 4, "two rows")
+	assert_eq(tm.ui_scale, 1.0)
+	tm.set_max_width(800.0)
+	assert_eq(tm.columns(), 4)
+	assert_almost_eq(tm.ui_scale, 800.0 / (4.0 * 260.0 + 30.0), 1e-4)
+	tm.set_max_width(100.0)
+	assert_eq(tm.ui_scale, HudTeammates.MIN_SCALE, "never below MIN_SCALE")
+	var v := HudTeammates.new()
+	v.configure({"vertical": true})
+	_add(v)
+	v.set_roster(r)
+	assert_eq(v.columns(), 1)
+
+
+func test_wrap_label() -> void:
+	var l := Label.new()
+	l.label_settings = WlTheme.label_settings(32)
+	l.text = "Short"
+	HudWidget.wrap_label(l, 400.0)
+	assert_eq(l.autowrap_mode, TextServer.AUTOWRAP_OFF)
+	l.text = "A much longer line of text that cannot fit in four hundred pixels at all"
+	HudWidget.wrap_label(l, 400.0)
+	assert_eq(l.autowrap_mode, TextServer.AUTOWRAP_WORD_SMART)
+	assert_eq(l.custom_minimum_size.x, 400.0)
+	HudWidget.wrap_label(l, INF)
+	assert_eq(l.autowrap_mode, TextServer.AUTOWRAP_OFF)
+	l.free()

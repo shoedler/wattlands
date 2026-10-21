@@ -11,7 +11,10 @@ extends CanvasLayer
 ## - Anchors: one stack per anchor, WlTheme.MARGIN_PX (32 px) from the screen edges. Entries
 ##   at one anchor stack in the order added: top anchors downward, bottom anchors upward
 ##   (the first entry sits nearest the edge). Kit widgets come first, then the game's
-##   Controls, then the banner area and the toast area if they share that anchor.
+##   Controls, then the banner area and the toast area if they share that anchor. The top and
+##   bottom centre stacks keep clear of the corner stacks on their edge (center_width()):
+##   a teammate strip wraps into two rows and then shrinks, other kit widgets shrink, and
+##   toast and banner text wraps.
 ## - Rect2i positions are art pixels mapped through PixelViewport.art_rect_to_screen()
 ##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
 ##   resizes. Kit widgets in a rect shrink to fit it (several in one rect stack and share
@@ -280,6 +283,7 @@ func relayout() -> void:
 	var ss := screen_size()
 	_root.position = Vector2.ZERO
 	_root.size = ss
+	_fit_centers(ss)
 	for anchor: String in _boxes.keys():
 		var box: VBoxContainer = _boxes[anchor]
 		var sz := box.get_combined_minimum_size()
@@ -304,6 +308,19 @@ func screen_size() -> Vector2:
 		if vp != null:
 			return vp.get_visible_rect().size
 	return BASE_SIZE
+
+
+## Width the top (or bottom) centre stack may use without running under the corner stacks
+## of the same edge.
+func center_width(center: String, ss: Vector2) -> float:
+	var corners: Array[String] = [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT]
+	if center == HudSpec.BOTTOM:
+		corners = [HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT]
+	var side := 0.0
+	for corner in corners:
+		if _boxes.has(corner):
+			side = maxf(side, (_boxes[corner] as Control).get_combined_minimum_size().x + WlTheme.GAP_PX)
+	return maxf(120.0, ss.x - 2.0 * (WlTheme.MARGIN_PX + side))
 
 
 ## Top-left of an anchor stack of size `sz` on a screen of size `ss`.
@@ -479,6 +496,24 @@ func _slot_for(rect: Rect2i) -> VBoxContainer:
 	return stack
 
 
+## Keep the top and bottom centre stacks between the corner stacks: teammate strips wrap and
+## shrink, other kit widgets shrink, toast and banner text wraps.
+func _fit_centers(ss: Vector2) -> void:
+	for center: String in [HudSpec.TOP, HudSpec.BOTTOM]:
+		if not _boxes.has(center):
+			continue
+		var avail := center_width(center, ss)
+		for c in (_boxes[center] as Control).get_children():
+			if c is HudTeammates:
+				(c as HudTeammates).set_max_width(avail)
+			elif c is HudWidget:
+				(c as HudWidget).fit_to(Vector2(avail, 100000.0))
+			elif c is HudToasts:
+				(c as HudToasts).set_max_width(avail)
+			elif c is HudBanner:
+				(c as HudBanner).set_max_width(avail)
+
+
 func _fit_slot(node: VBoxContainer, avail: Vector2) -> void:
 	var kit: Array[HudWidget] = []
 	var others: Array[Control] = []
@@ -498,7 +533,10 @@ func _fit_slot(node: VBoxContainer, avail: Vector2) -> void:
 		if total_h > 0.0 and max_w > 0.0:
 			s = minf(1.0, minf(avail.x / max_w, maxf(avail.y - sep, 1.0) / total_h))
 		for w in kit:
-			w.set_ui_scale(maxf(s, 0.25))
+			if w is HudTeammates:
+				(w as HudTeammates).set_max_width(avail.x)
+			else:
+				w.set_ui_scale(maxf(s, 0.25))
 			w.size_flags_horizontal = Control.SIZE_FILL
 	for c in others:
 		if c is HudToasts:

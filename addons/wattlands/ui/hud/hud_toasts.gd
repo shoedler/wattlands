@@ -8,8 +8,13 @@ extends VBoxContainer
 const MAX_VISIBLE := 3
 const DEFAULT_S := 3.0
 const FADE_S := 0.3
+## Panel margins and border around a toast label.
+const PANEL_PAD := 40.0
 
 var font_px: int = WlTheme.TOAST_PX
+## Widest a toast may get (HudLayer keeps centre stacks clear of the corners); text wraps
+## past it.
+var max_width: float = INF
 
 ## [{"panel": PanelContainer, "label": Label, "left": float, "text": String}]
 var _items: Array[Dictionary] = []
@@ -35,6 +40,7 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 	l.label_settings = WlTheme.label_settings(font_px)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.text = text
+	HudWidget.wrap_label(l, max_width - PANEL_PAD)
 	panel.add_child(l)
 	add_child(panel)
 	_items.append({"panel": panel, "label": l, "left": maxf(seconds, 0.1), "text": text})
@@ -63,6 +69,12 @@ func texts() -> Array[String]:
 	return out
 
 
+func set_max_width(w: float) -> void:
+	max_width = maxf(w, 1.0)
+	for it in _items:
+		HudWidget.wrap_label(it["label"] as Label, max_width - PANEL_PAD)
+
+
 func clear() -> void:
 	while not _items.is_empty():
 		_drop(0)
@@ -76,6 +88,7 @@ func fit_to(avail: Vector2) -> void:
 	font_px = px
 	for it in _items:
 		(it["label"] as Label).label_settings.font_size = px
+	set_max_width(avail.x if avail.x > 0.0 else INF)
 
 
 func _drop(i: int) -> void:

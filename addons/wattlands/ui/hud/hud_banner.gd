@@ -10,10 +10,15 @@ const SAFETY_NONE := ""
 const SAFETY_WARMUP := "warmup"
 const SAFETY_RESCUE := "rescue"
 const SAFETY_PAUSED := "paused"
+## Panel margins and border around a banner label.
+const PANEL_PAD := 44.0
 
 ## Show the kit's safety banners (HudSpec.show_safety_banners).
 var show_safety: bool = true
 var font_px: int = WlTheme.BANNER_PX
+## Widest a banner may get (HudLayer keeps centre stacks clear of the corners); text wraps
+## past it.
+var max_width: float = INF
 
 var _warmup: bool = false
 var _rescue: bool = false
@@ -75,6 +80,11 @@ func tick(dt: float) -> void:
 			_refresh()
 
 
+func set_max_width(w: float) -> void:
+	max_width = maxf(w, 1.0)
+	_refresh()
+
+
 func game_text() -> String:
 	return _game_text
 
@@ -97,6 +107,7 @@ func fit_to(avail: Vector2) -> void:
 	if avail.y > 0.0:
 		px = clampi(roundi(avail.y / 4.0), WlTheme.MIN_TEXT_PX, WlTheme.BANNER_PX)
 	font_px = px
+	max_width = avail.x if avail.x > 0.0 else INF
 	_refresh()
 
 
@@ -143,3 +154,5 @@ func _refresh() -> void:
 	_game_panel.visible = not _game_text.is_empty()
 	_game_label.text = _game_text
 	_game_label.label_settings.font_size = font_px
+	HudWidget.wrap_label(_safety_label, max_width - PANEL_PAD)
+	HudWidget.wrap_label(_game_label, max_width - PANEL_PAD)

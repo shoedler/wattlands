@@ -26,6 +26,8 @@ var _content: VBoxContainer = null
 var _scaled: Array[Dictionary] = []
 ## Controls whose minimum height follows ui_scale: {"node": Control, "h": float, "w": float}.
 var _scaled_boxes: Array[Dictionary] = []
+## The scale last applied (set_ui_scale is a no-op for the same value, so relayouts settle).
+var _applied_scale: float = -1.0
 
 
 func _init() -> void:
@@ -78,7 +80,11 @@ func fit_to(avail: Vector2) -> void:
 
 
 func set_ui_scale(s: float) -> void:
-	ui_scale = clampf(s, 0.25, 4.0)
+	var clamped := clampf(s, 0.25, 4.0)
+	if is_equal_approx(clamped, _applied_scale):
+		return
+	_applied_scale = clamped
+	ui_scale = clamped
 	custom_minimum_size = base_size() * ui_scale
 	for e in _scaled:
 		var lbl: Label = e["label"]
@@ -106,6 +112,22 @@ func set_telemetry(_t: Telemetry) -> void:
 ## The current phase and the local plan (timeline).
 func set_phase(_phase: PhaseState, _plan: EffortPlan) -> void:
 	pass
+
+
+## Keep a one-line label within `max_w` pixels: past that it wraps at words (centered text
+## panels: toasts, banners). INF or a wide limit restores a single line.
+static func wrap_label(label: Label, max_w: float) -> void:
+	if label == null or label.label_settings == null:
+		return
+	var ls := label.label_settings
+	var font: Font = ls.font if ls.font != null else ThemeDB.fallback_font
+	var natural := font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, ls.font_size).x + 2.0 * ls.outline_size
+	if max_w < INF and natural > max_w:
+		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		label.custom_minimum_size.x = maxf(40.0, max_w)
+	else:
+		label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		label.custom_minimum_size.x = 0.0
 
 
 ## Font size of `label` right now (tests, layout checks).

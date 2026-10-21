@@ -510,3 +510,69 @@ func test_hud_runs_in_a_paused_tree_settings() -> void:
 	_hud.build(_spec(), _ctx)
 	for w in _hud.widgets_of(HudSpec.POWER_GAUGE):
 		assert_eq(w.process_mode, Node.PROCESS_MODE_ALWAYS)
+
+
+# --- centre stacks keep clear of the corners ----------------------------------------------------
+
+func _eight_riders() -> Dictionary:
+	var r := {}
+	for i in 8:
+		var peer := i + 1 if i < 6 else -(i - 5)
+		r[peer] = {"name": "Rider %d" % i, "slot_index": i, "raw_w": 1000.0, "ftp_pct": 150.0}
+	return r
+
+
+func test_bottom_strip_wraps_and_never_runs_under_the_corners() -> void:
+	var shop := PanelContainer.new()
+	shop.custom_minimum_size = Vector2(470, 300)
+	var spec := HudSpec.new() \
+		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
+		.add_control(shop, HudSpec.BOTTOM_RIGHT)
+	_hud.build(spec, _ctx)
+	_bus.roster_changed.emit(_eight_riders())
+	_hud.relayout()
+	await wait_process_frames(3)
+	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
+	assert_eq(tm.columns(), 4, "8 riders wrap into 2 rows of 4")
+	var b := _hud.anchor_box(HudSpec.BOTTOM)
+	var bl := _hud.anchor_box(HudSpec.BOTTOM_LEFT)
+	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
+	var center := Rect2(b.position, b.size)
+	assert_false(center.intersects(Rect2(bl.position, bl.size)), "clear of bottom_left: %s vs %s" % [center, Rect2(bl.position, bl.size)])
+	assert_false(center.intersects(Rect2(br.position, br.size)), "clear of bottom_right: %s vs %s" % [center, Rect2(br.position, br.size)])
+	assert_lte(center.size.x, _hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080)) + 1.0)
+
+
+func test_long_toasts_and_banners_wrap_between_the_corners() -> void:
+	var spec := HudSpec.new() \
+		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
+		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
+		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+	_hud.build(spec, _ctx)
+	_hud.show_toast("A very long toast that would otherwise run all the way across the top of the screen and under the timeline", [])
+	_hud.show_banner("An equally long banner text that has to wrap onto a second line to stay readable", [], 5.0)
+	_hud.relayout()
+	await wait_process_frames(3)
+	var top := _hud.anchor_box(HudSpec.TOP)
+	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
+	var tr_box := _hud.anchor_box(HudSpec.TOP_RIGHT)
+	var center := Rect2(top.position, top.size)
+	assert_false(center.intersects(Rect2(tl.position, tl.size)), "clear of the timeline")
+	assert_false(center.intersects(Rect2(tr_box.position, tr_box.size)), "clear of the readout")
+	assert_gt(center.size.y, 150.0, "wrapped onto more lines")
+
+
+func test_demo_scene_builds_headless() -> void:
+	var scene := load("res://addons/wattlands/ui/hud/hud_demo.tscn") as PackedScene
+	assert_not_null(scene)
+	var demo: Node = add_child_autofree(scene.instantiate())
+	await wait_process_frames(3)
+	var hud: HudLayer = null
+	for c in demo.get_children():
+		if c is HudLayer:
+			hud = c
+	assert_not_null(hud)
+	for id: String in HudSpec.KIT_WIDGETS:
+		assert_not_null(hud.widget(id), id)
+	assert_true(hud.widget(HudSpec.GEAR).visible, "the demo rides in SIM")
