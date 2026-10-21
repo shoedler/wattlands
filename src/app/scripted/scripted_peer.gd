@@ -165,6 +165,8 @@ func step(dt: float) -> void:
 		"closing":
 			if clock >= close_at:
 				finish("complete", EXIT_OK)
+	if strava_state == "connecting" and services.rides != null and services.rides.strava_connected():
+		strava_state = "connected"
 	if strava_state == "connecting" and strava_deadline >= 0.0 and clock >= strava_deadline:
 		finish("error:strava_connect_timeout", EXIT_ERROR)
 
@@ -282,7 +284,8 @@ func _on_lobby_changed(lobby: Dictionary) -> void:
 		if gid != "" and gid != game_id:
 			game_id = gid
 			_send_player_info(gid)
-		services.net.set_ready(true)
+		if not AppLobbyModel.is_ready(lobby, local_peer):
+			services.net.set_ready(true)
 	elif config.role == Wl.HOST and phase == "lobby":
 		try_start()
 

@@ -836,7 +836,7 @@ func _refresh_cards() -> void:
 		return
 	for c in cards_box.get_children():
 		cards_box.remove_child(c)
-		c.queue_free()
+		c.free()
 	if page != PAGE_LOBBY:
 		return
 	var lb := lobby()
@@ -915,7 +915,7 @@ func _refresh_preview() -> void:
 		return
 	for c in preview_box.get_children():
 		preview_box.remove_child(c)
-		c.queue_free()
+		c.free()
 	if page != PAGE_LOBBY:
 		return
 	var p := preview()

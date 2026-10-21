@@ -141,6 +141,9 @@ func push_menu(items: Array, pick: Callable, back: Callable = Callable(), highli
 	if prev != null:
 		prev.visible = false
 	menu_holder().add_child(list)
+	# After _ready: the screen drives the scan timer (tick) and feeds input, never the list itself.
+	list.set_process(false)
+	list.listen_to_input = false
 	menus.append(list)
 	_menu_info.append({"pick": pick, "back": back, "items": items.duplicate(true)})
 	_configure_list(list)
