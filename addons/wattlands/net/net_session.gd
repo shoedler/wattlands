@@ -50,7 +50,9 @@ extends Node
 ## would give the weight away); the host keeps the real values, and a client's lobby_slots()
 ## takes its own from its own player_info. A client's player_info carries weight_kg only in a
 ## RAW lobby (the only mode that uses it) and p_eff_by_mode's WKG entry only in a WKG lobby,
-## and it is re-sent whenever a scaling change changes what it carries.
+## and it is re-sent whenever a scaling change changes what it carries. A client's ready waits
+## for its first lobby_state after a join (and for the end of each lobby_state's handlers), then
+## follows the player_info for that scaling, so a RAW host never sees it before the weight.
 
 ## "offline", "connecting", "hosting", "joined", "reconnecting", "error".
 signal state_changed(state: String, detail: String)
@@ -194,6 +196,10 @@ var _local_profile: RiderProfile = null
 var _local_profile_games: Dictionary = {}
 var _local_profile_trainer: String = ""
 var _ready_wanted: bool = false
+# Client: a wanted ready that waits for the end of _on_lobby_state (_holds_ready()).
+var _ready_held: bool = false
+# Client: true while _on_lobby_state runs the lobby_changed handlers.
+var _applying_lobby: bool = false
 # Client: the player_info last sent to the host, as it went out (wire_player_info()).
 var _sent_info: Dictionary = {}
 
@@ -411,8 +417,11 @@ func set_local_player_info(info: Dictionary) -> void:
 		_send_player_info()
 
 
+## A client holds a ready until it has sent the player_info for the lobby's scaling: before the
+## first lobby_state after join_room() and while a lobby_state's handlers run (_holds_ready()).
 func set_ready(ready_flag: bool) -> void:
 	_ready_wanted = ready_flag
+	_ready_held = false
 	if is_authority():
 		if local_peer == 0 or session_started:
 			return
@@ -434,6 +443,9 @@ func set_ready(ready_flag: bool) -> void:
 					_version_str(lobby.get("game_version", ""))
 				)
 			)
+			return
+		if _holds_ready():
+			_ready_held = true
 			return
 	if _in_room():
 		_send(host_peer, Protocol.game_msg("ready", {"ready": ready_flag}))
@@ -773,9 +785,10 @@ func set_local_profile(
 	set_local_player_info(info)
 
 
-## player_info fields from a profile for scaling `mode`: weight_kg only if shared and `mode` is
-## RAW, the WKG entry of p_eff_by_mode (75 / weight) only when `mode` is WKG (BRIEF 3.2: the
-## host receives only what the selected scaling needs).
+## player_info fields from a profile for scaling `mode`, the full local copy: weight_kg and the
+## WKG entry of p_eff_by_mode (75 / weight) only if the weight is shared. A client keeps it so a
+## later scaling change (which rebuilds no fallback copy) still has them; what goes to the host
+## is wire_player_info() of it for the lobby's scaling (BRIEF 3.2).
 static func player_info_from_profile(
 	profile: RiderProfile,
 	mode: String = Wl.FAIR_FTP,
@@ -801,9 +814,8 @@ static func player_info_from_profile(
 		"player_options": player_options.duplicate(true),
 		"games": games.duplicate(true),
 	}
-	if profile.share_weight and mode == Wl.RAW:
+	if profile.share_weight:
 		info["weight_kg"] = profile.weight_kg
-	if mode == Wl.WKG:
 		by_mode[Wl.WKG] = profile.p_eff_per_w(Wl.WKG)
 	info["p_eff_by_mode"] = by_mode
 	if trainer != "":
@@ -1211,8 +1223,7 @@ func _on_connected() -> void:
 		clear_snapshots()
 		_set_state(STATE_JOINED, room_code)
 		_send_player_info()
-		if _ready_wanted and not session_started:
-			_send(host_peer, Protocol.game_msg("ready", {"ready": true}))
+		_send_wanted_ready()
 		_clock_next_at = _clock_now()
 		_send_clock_ping()
 
@@ -1261,8 +1272,7 @@ func _on_peer_joined(id: int) -> void:
 		if role == Wl.CLIENT and id == host_peer and _in_room():
 			# The host came back to the room: what we sent while it was away is lost.
 			_send_player_info()
-			if _ready_wanted and not session_started:
-				_send(host_peer, Protocol.game_msg("ready", {"ready": true}))
+			_send_wanted_ready()
 		peer_joined.emit(id)
 		_emit_bus("peer_joined", [id])
 		return
@@ -1520,8 +1530,10 @@ func _on_lobby_state(data: Dictionary) -> void:
 		_local_info = _normalize_info(_info_from_local_profile())
 		_local_info["player_options"] = po
 		_send_player_info()
+	_applying_lobby = true
 	lobby_changed.emit(lobby)
 	_emit_bus("lobby_changed", [lobby])
+	_applying_lobby = false
 	# A scaling change can change what player_info carries (weight_kg only in RAW) even when
 	# the info itself is unchanged; the lobby_changed handlers above may already have re-sent.
 	if (
@@ -1530,6 +1542,11 @@ func _on_lobby_state(data: Dictionary) -> void:
 		and wire_player_info(_local_info, _lobby_scaling()) != _sent_info
 	):
 		_send_player_info()
+	# Only now, after the player_info for this lobby's scaling (one peer's messages arrive in
+	# order), so the host never counts the rider ready while it lacks the shared RAW weight.
+	if _ready_held:
+		_ready_held = false
+		_send_wanted_ready()
 
 
 func _on_refused_msg(data: Dictionary) -> void:
@@ -1601,6 +1618,25 @@ func _send_player_info() -> void:
 ## The lobby's scaling mode as this peer knows it (a client: the last lobby_state's).
 func _lobby_scaling() -> String:
 	return _scaling if is_authority() else str(lobby.get("scaling", Wl.FAIR_FTP))
+
+
+## Client: a ready waits while the player_info that went out may not fit the lobby's scaling:
+## before the first lobby_state after join_room() (`lobby` is empty, so the first player_info
+## went out without a RAW lobby's shared weight) and while a lobby_state's handlers run (the
+## re-send for a new scaling follows them). _on_lobby_state sends it after that player_info.
+func _holds_ready() -> bool:
+	return lobby.is_empty() or _applying_lobby
+
+
+## Client: send the ready this rider wants (on a join, a rejoin or the host's return), or hold
+## it (_holds_ready()).
+func _send_wanted_ready() -> void:
+	if not _ready_wanted or session_started or role != Wl.CLIENT or not _in_room():
+		return
+	if _holds_ready():
+		_ready_held = true
+		return
+	_send(host_peer, Protocol.game_msg("ready", {"ready": true}))
 
 
 # --- lobby model ---------------------------------------------------------------------------
@@ -2285,6 +2321,8 @@ func _reset_room_state() -> void:
 	clock_rtt = -1.0
 	latest_roster = {}
 	_ready_wanted = false
+	_ready_held = false
+	_applying_lobby = false
 
 
 func _set_state(s: String, detail: String) -> void:
