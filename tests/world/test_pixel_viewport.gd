@@ -222,6 +222,28 @@ func test_capture_headless_returns_base_sized_frame() -> void:
 	assert_eq(big.get_size(), BASE * 3)
 
 
+func test_layout_outside_the_tree() -> void:
+	# Outside the tree a Control gets no RESIZED notification; the getters re-lay out.
+	var pv: PixelViewport = autofree(PixelViewport.new())
+	pv.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	pv.size = Vector2(1920, 1200)
+	assert_eq(pv.integer_scale(), 3)
+	assert_eq(pv.letterbox_offset(), Vector2(0, 60))
+	assert_eq(pv.art_rect_to_screen(Rect2i(0, 0, 10, 10)), Rect2(0, 60, 30, 30))
+
+
+func test_full_rect_child_follows_its_parent() -> void:
+	var parent := Control.new()
+	parent.size = Vector2(1366, 768)
+	add_child_autofree(parent)
+	var pv := PixelViewport.new()
+	parent.add_child(pv)
+	await wait_process_frames(2)
+	assert_eq(pv.size, Vector2(1366, 768))
+	assert_eq(pv.integer_scale(), 2)
+	assert_eq(pv.letterbox_offset(), Vector2(43, 24))
+
+
 func test_capture_outside_tree() -> void:
 	var pv: PixelViewport = autofree(PixelViewport.new())
 	var img := pv.capture()

@@ -51,6 +51,10 @@ SkyAmbient adds a WorldEnvironment and one DirectionalLight3D:
 
 The light energies are calibrated for Compatibility, so lit flat ground shows the palette color: sun 0.3, ambient 0.35 (see `docs/decisions/world-kits.md`). Haze is Environment depth fog from 120 m, which Godot 4.7.2's Compatibility renderer draws. `haze_mode()` reports `"fog"`, `"vertex"` or `"off"`. Call `haze_mesh(lp, camera_origin)` on every LowPolyMesh, and it does the right thing in each mode. Change properties, then call `apply()`.
 
+## ScreenVignette
+
+`ScreenVignette` is a CanvasLayer at -1, so it sits above the 3D view and below the HUD. It darkens the screen corners by `strength`, 0.12 by default, which is Siege's 12% cap.
+
 ## Performance (target: 60 fps at 1080p on integrated graphics)
 
 - **Merge static geometry.** Use LowPolyMesh with one surface per material. The demo's terrain, roads, fort and machine frames are about 7,800 triangles in one draw call.

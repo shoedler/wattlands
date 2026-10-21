@@ -75,6 +75,9 @@ var _art_scale: float = 1.0
 var _offset: Vector2 = Vector2.ZERO
 var _image_size: Vector2 = Vector2(640, 360)
 var _device_scale: float = 1.0
+## [size, pixel_base, device scale] of the last layout; getters re-lay out when it is stale
+## (a size set outside the tree gets no RESIZED notification).
+var _layout_key: Array = []
 
 
 func _init() -> void:
@@ -172,6 +175,7 @@ func game_view() -> Node2D:
 
 ## The current integer scale (>= 1): device pixels per art pixel.
 func integer_scale() -> int:
+	_ensure_layout()
 	return _scale
 
 
@@ -179,6 +183,7 @@ func integer_scale() -> int:
 ## Measured in this control's local units (canvas units; equal to screen pixels at 1080p and
 ## in headless runs), snapped so the image starts on a whole device pixel.
 func letterbox_offset() -> Vector2:
+	_ensure_layout()
 	return _offset
 
 
@@ -186,6 +191,7 @@ func letterbox_offset() -> Vector2:
 ## These are the canvas coordinates a HUD Control in the same viewport (or in a CanvasLayer
 ## with an identity transform, such as HudLayer) uses for its position and size.
 func art_rect_to_screen(r: Rect2i) -> Rect2:
+	_ensure_layout()
 	var local := Rect2(_offset + Vector2(r.position) * _art_scale, Vector2(r.size) * _art_scale)
 	if is_inside_tree():
 		return get_global_transform_with_canvas() * local
@@ -212,11 +218,13 @@ func capture() -> Image:
 ## Canvas units per art pixel: integer_scale() divided by the device scale. Use it to size
 ## HUD Controls in art pixels (art_rect_to_screen already applies it).
 func art_scale() -> float:
+	_ensure_layout()
 	return _art_scale
 
 
 ## The scaled image's rect inside this control, local canvas units.
 func image_rect() -> Rect2:
+	_ensure_layout()
 	return Rect2(_offset, _image_size)
 
 
@@ -238,6 +246,7 @@ func device_scale() -> float:
 
 ## An art-pixel point -> the viewport's canvas coordinates (as art_rect_to_screen).
 func art_to_screen(p: Vector2) -> Vector2:
+	_ensure_layout()
 	var local := _offset + p * _art_scale
 	if is_inside_tree():
 		return get_global_transform_with_canvas() * local
@@ -247,6 +256,7 @@ func art_to_screen(p: Vector2) -> Vector2:
 ## The viewport's canvas coordinates -> art pixels (fractional; outside 0..pixel_base when
 ## the point lies in the bars). For mouse picking in a game view.
 func screen_to_art(p: Vector2) -> Vector2:
+	_ensure_layout()
 	var local := p - position
 	if is_inside_tree():
 		local = get_global_transform_with_canvas().affine_inverse() * p
@@ -260,6 +270,7 @@ func subviewport() -> SubViewport:
 
 ## The frame scaled by integer_scale() with nearest filtering, as it appears on screen.
 func capture_scaled() -> Image:
+	_ensure_layout()
 	var img := capture()
 	if _scale > 1:
 		img.resize(img.get_width() * _scale, img.get_height() * _scale, Image.INTERPOLATE_NEAREST)
@@ -270,7 +281,9 @@ func capture_scaled() -> Image:
 func refresh_layout() -> void:
 	if _screen == null:
 		return
-	var l: Dictionary = fit_layout(size, pixel_base, device_scale())
+	var ds := device_scale()
+	_layout_key = [size, pixel_base, ds]
+	var l: Dictionary = fit_layout(size, pixel_base, ds)
 	var new_scale: int = l["scale"]
 	var new_offset: Vector2 = l["offset"]
 	var new_size: Vector2 = l["size"]
@@ -322,6 +335,11 @@ static func fit_layout(control_size: Vector2, base: Vector2i, screen_scale: floa
 		"size": img_dev / s,
 		"device_scale": s,
 	}
+
+
+func _ensure_layout() -> void:
+	if _layout_key != [size, pixel_base, device_scale()]:
+		refresh_layout()
 
 
 func _blank_frame() -> Image:

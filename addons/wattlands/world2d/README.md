@@ -31,7 +31,9 @@ All parts take `speed` from -1 to 1, clamped. A negative speed runs the part bac
   - `set_time(mat, t)` drives the wave from sim time instead of `TIME`.
   - `displacement()` is the CPU reference, for attaching things to a wobbling part.
 
-Both shaders keep `modulate`, so white sprites can still be tinted at runtime.
+- **DitherDissolve** (`dither_dissolve.gdshader`): fades an effect in or out through a 4 x 4 ordered-dither pattern, so the sprite keeps hard pixel edges instead of turning translucent. Use `DitherDissolve.apply(sprite)` to add it, then `set_amount(mat, 0..1)` to fade.
+
+All three shaders keep `modulate`, so white sprites can still be tinted at runtime.
 
 ## Pixel import preset
 

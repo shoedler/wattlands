@@ -7,3 +7,4 @@
 - `PixelImportPreset`: checks and writes the lossless, mipmap-free import preset for pixel sprites; `PixelPainter`: procedural pixel sprites (text rows, gears, discs, dithered gradients, tileable hills).
 - world3d: `LowPolyMesh` (flat-shaded vertex-colored primitives, merging per material, ground darkening, vertex haze), `MultiMeshScatter` (seeded scatter with exclusions, per-frame instance updates, path placement, walk-bob shader), `MiniatureCameraRig` (high three-quarter view, limited orbit, push-in, decaying shake) and `SkyAmbient` (Compatibility sky, ambient, shadowed sun and depth-fog haze).
 - Demo scenes `addons/wattlands/world2d/demo.tscn` and `addons/wattlands/world3d/demo.tscn`, built entirely from procedural art.
+- P1: `DitherDissolve` (ordered-dither fade for pixel-art effects) and `ScreenVignette` (corner darkening under the HUD, 12% by default).
