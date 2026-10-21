@@ -313,6 +313,19 @@ func test_one_completed_step_is_a_result() -> void:
 	assert_eq(t.countdown_left(), 10.0)
 
 
+## W4r2 (SAF-1 range): a valid result below the profile's 30 W minimum is saved as 30 W, so the
+## FTP test never puts an FTP into the profile that the governor refuses.
+func test_a_result_below_the_profile_range_is_limited_to_30_w() -> void:
+	var t := _new_test()
+	t.start(30.0)
+	_ride(t, 300.0 + 60.0 + 5.0)
+	t.step(DT, _tel(t, 1.0, {"coasting": true}))
+	var r := t.result()
+	assert_true(r["valid"])
+	assert_lt(0.75 * float(r["best_1min_w"]), 30.0, "0.75 x the best minute is below 30 W")
+	assert_eq(r["ftp_w"], 30.0)
+
+
 func test_save_now_saves_during_the_countdown_only() -> void:
 	var t := _new_test()
 	var saved: Array[float] = []

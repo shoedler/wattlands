@@ -308,7 +308,9 @@ func setup(device: TrainerDevice) -> void:
 ## W1 adds: weight_kg (75, for target_wkg), system_mass_kg (83, rider + bike for the haptic
 ## wind bound). Out-of-range values are clamped with push_warning; an unknown profile or an
 ## FTP outside 30-2000 W (GovernorClamps.FTP_MIN_W..FTP_MAX_W, the range Settings allows;
-## W4) is rejected with push_error and the previous value stays.
+## W4) is a push_error. An FTP above the range (or NaN) is rejected and the previous value
+## stays; one below it (zero, negative) gives 30 W (W4r2), so an invalid FTP never sets a
+## higher watt basis than the rider's lowest possible one.
 ## Calling it again (LocalRider.configure_governor, the FTP test) replaces only the given
 ## parameters: the plan, the phase and its elapsed time, warm-up, duration limits, rescue,
 ## coasting and the directive channels are kept, and the next tick applies the new values.
@@ -320,6 +322,12 @@ func configure(params: Dictionary) -> void:
 		var f := float(params["ftp_w"])
 		if GovernorClamps.ftp_in_range(f):
 			_ftp_w = f
+		elif f < GovernorClamps.FTP_MIN_W:
+			# W4r2 (SAF-1 range): below the range (zero, negative, -inf) the rider gets the lowest
+			# basis there is, never the previous or default one (200 W for a 25 W rider).
+			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); using %d W" % [
+				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), int(GovernorClamps.FTP_MIN_W)])
+			_ftp_w = GovernorClamps.FTP_MIN_W
 		else:
 			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); keeping %s W" % [
 				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), str(_ftp_w)])

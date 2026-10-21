@@ -12,7 +12,8 @@ extends RefCounted
 ## flywheel speed by the rider's CadenceEstimator; while the trainer reports none and nothing
 ## can be estimated, Telemetry.cadence_age_s grows and the rule waits), on back(), or after the
 ## last step ("complete"). A 3-minute cool-down at 50% FTP follows at once (rescue's 50%
-## stands; nothing ramps back into a step). FTP = 0.75 x the best 1-minute power so far.
+## stands; nothing ramps back into a step). FTP = 0.75 x the best 1-minute power so far, for a
+## valid result limited to the profile's FTP range (W4r2: WlSettings.PROFILE_RANGES, 30-2000 W).
 ## A result counts only if at least one one-minute step was completed (so never from the
 ## ramp-in) and the test wasn't ended with back(); it is saved after a 10 s countdown (shown at
 ## the start of the cool-down) unless back() cancels it, or at once with save_now().
@@ -324,9 +325,13 @@ func _end_test(reason: String) -> void:
 	# A best minute that isn't one completed step at least is mostly ramp-in (50-65% FTP).
 	var valid := steps_completed >= 1 and reason != END_BACK and best_1min_w > 0.0
 	var last_pct := step_pct(phase_index) if phase_index > 0 else plan.phase(0).planned_pct_at(phase_elapsed_s)
+	var ftp := roundf(FTP_FACTOR * best_1min_w)
+	if valid:
+		# W4r2 (SAF-1 range): the FTP saved is one the profile can hold (WlSettings.PROFILE_RANGES).
+		ftp = _profile_ftp(ftp)
 	_result = {
 		"end_reason": reason,
-		"ftp_w": roundf(FTP_FACTOR * best_1min_w),
+		"ftp_w": ftp,
 		"best_1min_w": best_1min_w,
 		"steps_completed": steps_completed,
 		"last_step_pct": last_pct,
@@ -382,11 +387,18 @@ func _on_telemetry(tel: Telemetry) -> void:
 	step(dt, tel)
 
 
+## `ftp_w` limited to the profile's FTP range (WlSettings.PROFILE_RANGES).
+static func _profile_ftp(ftp_w: float) -> float:
+	var lim: Array = WlSettings.PROFILE_RANGES["ftp_w"]
+	return clampf(ftp_w, float(lim[0]), float(lim[1]))
+
+
 func _on_saved(p_ftp_w: float) -> void:
 	if _settings == null or p_ftp_w <= 0.0:
 		return
-	_settings.profile.ftp_w = p_ftp_w
-	_settings.profile.cp_w = p_ftp_w
+	var ftp := _profile_ftp(p_ftp_w)
+	_settings.profile.ftp_w = ftp
+	_settings.profile.cp_w = ftp
 	_settings.profile.ftp_verified = true
 	_settings.save_profile()
 

@@ -109,10 +109,17 @@ func test_configure_rejects_an_ftp_outside_30_to_2000() -> void:
 	var g := SafetyGovernor.new()
 	autofree(g)
 	g.configure({"ftp_w": 250.0})
-	for bad: float in [5000.0, 29.9, 2000.5, 0.0, -10.0, INF, NAN]:
+	for bad: float in [5000.0, 2000.5, INF, NAN]:
 		g.configure({"ftp_w": bad})
 		assert_push_error("ftp_w must be within 30-2000 W")
 		assert_eq(float(g.status()["ftp_w"]), 250.0, "rejected %s; the previous value stays" % str(bad))
+	# W4r2 (SAF-1 range): below the range the governor never keeps a higher basis (the previous
+	# or the default 200 W): it uses 30 W, the lowest FTP a rider can have.
+	for low: float in [29.9, 0.0, -10.0, -INF]:
+		g.configure({"ftp_w": 250.0})
+		g.configure({"ftp_w": low})
+		assert_push_error("ftp_w must be within 30-2000 W")
+		assert_eq(float(g.status()["ftp_w"]), 30.0, "%s is below the range: 30 W" % str(low))
 	for ok: float in [30.0, 2000.0, 77.0]:
 		g.configure({"ftp_w": ok})
 		assert_eq(float(g.status()["ftp_w"]), ok)

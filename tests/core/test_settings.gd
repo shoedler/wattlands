@@ -146,6 +146,32 @@ func test_bad_profile_values_are_dropped_or_clamped() -> void:
 	assert_true(s.has_profile())
 
 
+## W4r2 (SAF-1 range): every write keeps the profile in PROFILE_RANGES, as loading does, so an
+## FTP the Strava import or the FTP test put in memory never reaches the rider stack out of range.
+func test_save_profile_clamps_into_the_profile_ranges() -> void:
+	var s := _make()
+	s.load_all()
+	s.profile.ftp_w = 25.0
+	s.profile.cp_w = 5000.0
+	s.profile.weight_kg = 9.0
+	s.profile.difficulty_pct = NAN
+	s.profile.grade_max_pct = 12.0
+	assert_true(s.save_profile())
+	assert_push_warning("profile ftp_w 25")
+	assert_eq(s.profile.ftp_w, 30.0)
+	assert_eq(s.profile.cp_w, 2000.0)
+	assert_eq(s.profile.weight_kg, 20.0)
+	assert_eq(s.profile.difficulty_pct, RiderProfile.new().difficulty_pct, "NaN takes the default")
+	assert_eq(s.profile.grade_max_pct, 12.0, "an in-range value is kept")
+	var stored: Dictionary = Util.read_json(Paths.profile_path())
+	assert_eq(stored.get("ftp_w"), 30.0, "and the file has the clamped value")
+	assert_eq(stored.get("weight_kg"), 20.0)
+	var p := RiderProfile.new()
+	p.ftp_w = 250.0
+	assert_eq(WlSettings.clamp_profile(p), PackedStringArray(), "nothing to change")
+	assert_eq(WlSettings.clamp_profile(null), PackedStringArray())
+
+
 func test_grade_range_edges_load_cleanly() -> void:
 	Util.write_text(Paths.profile_path(), JSON.stringify({"grade_min_pct": -1, "grade_max_pct": 0, "created": true}))
 	var s := _make()
