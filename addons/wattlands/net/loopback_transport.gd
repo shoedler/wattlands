@@ -32,6 +32,7 @@ static func create_hub() -> RefCounted:
 
 static func hub_transport(hub: RefCounted) -> LoopbackTransport:
 	var t := LoopbackTransport.new()
+	t.process_mode = Node.PROCESS_MODE_ALWAYS
 	t._hub = hub as LoopbackHub
 	if t._hub == null:
 		push_error("LoopbackTransport.hub_transport: not a LoopbackHub (use create_hub())")

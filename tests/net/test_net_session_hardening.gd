@@ -332,6 +332,27 @@ func test_telemetry_peer_is_the_sender() -> void:
 	assert_eq(((tm[0][2] as Dictionary)["tm"] as Dictionary)["peer"], 2, "a client can't speak for another rider")
 
 
+# --- system nodes ----------------------------------------------------------------------------
+
+func test_session_and_transports_run_while_paused() -> void:
+	var nodes: Array[Node] = [WlNetSession.new(), LoopbackTransport.hub_transport(hub), RelayTransport.new(),
+		LanTransport.new(), LocalRelayServer.new()]
+	for n in nodes:
+		assert_eq(n.process_mode, Node.PROCESS_MODE_ALWAYS, n.get_class())
+		n.free()
+	# A paused tree does not stop the session: poll() runs from tick() and _process.
+	var r := room()
+	get_tree().paused = true
+	var processing: Array = []
+	for s in r:
+		processing.append(s.can_process() and s.transport.can_process())
+	r[0].broadcast(_snap(1))
+	pump()
+	get_tree().paused = false
+	assert_eq(processing, [true, true, true], "sessions and transports keep processing while paused")
+	assert_eq(messages("c1", "snapshot").size(), 1)
+
+
 # --- strings -------------------------------------------------------------------------------
 
 func test_every_end_reason_has_a_readable_text() -> void:
