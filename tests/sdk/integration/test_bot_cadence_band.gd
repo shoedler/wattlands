@@ -13,16 +13,28 @@ const PUBLISH_TICK := 10
 const CLEAR_TICK := 500
 const BAND_LO := 100.0
 const BAND_HI := 120.0
+## The sim run's length in ticks (60 sim seconds).
+const END_TICK := 1200
 ## Bots.make_slot's preferred cadence and MockTrainer's band noise bound.
 const PREFERRED_RPM := 90.0
 const NOISE_RPM := 1.5
-## Lag left 6.5 s after a 20 rpm step at MockTrainer.BAND_LAG_S 2 s: 20 * e^-3.25 < 0.8 rpm.
-const LAG_LEFT_RPM := 0.8
+## A measurement window starts this many ticks (12 s) after the band changes.
+const SETTLE_TICKS := 240
+## The worst case in a window, from the code and not from one seed's noise. The telemetry
+## carries the last notification, at most 1.1 s (MockTrainer.SAMPLE_MAX_S) old, and the band
+## and the sample each take up to one sim step to arrive, so the oldest sample a window reads
+## was taken at least 12 - 1.1 - 0.1 = 10.8 s after the band changed. Of a 20 rpm step
+## (90 <-> 110 rpm) that leaves 20 * e^(-10.8 / 2) = 0.09 rpm at MockTrainer.BAND_LAG_S 2 s.
+const LAG_LEFT_RPM := 0.1
+## MockTrainer rounds a notified cadence to 0.5 rpm.
+const ROUND_RPM := 0.25
+## A settled bot's reported cadence is within this of the band's centre (or 90 rpm).
+const SETTLED_RPM := NOISE_RPM + LAG_LEFT_RPM + ROUND_RPM
 
 var _regs: Array[WlGameRegistry] = []
 var _runners: Array[GameSimRunner] = []
 var _tmp: String = ""
-## Per bot peer: [t, cadence_rpm] for every sim step of the current run.
+## Per bot peer: [tick, cadence_rpm] for every sim step of the current run.
 var _cad: Dictionary = {}
 
 
@@ -53,7 +65,7 @@ func _on_step(g: GameModule, frame: InputFrame) -> void:
 		g.ctx.directives.cadence_band(Bots.peer_id(1), 0.0, 0.0)
 	for peer: int in _cad.keys():
 		var tm: Telemetry = frame.players[peer]
-		(_cad[peer] as Array).append([frame.tick * Wl.SIM_DT, tm.cadence_rpm])
+		(_cad[peer] as Array).append([frame.tick, tm.cadence_rpm])
 
 
 ## One SOLO run of fx_conform "tiny" with one human and two bots, 60 sim seconds.
@@ -82,10 +94,11 @@ func _run_bots(rng_seed: int) -> GameSimRunner:
 	return r
 
 
-func _cadences(peer: int, t0: float, t1: float) -> Array[float]:
+## The bot's cadence in every frame from tick0 up to (not including) tick1.
+func _cadences(peer: int, tick0: int, tick1: int) -> Array[float]:
 	var out: Array[float] = []
 	for row: Array in _cad[peer]:
-		if float(row[0]) >= t0 and float(row[0]) < t1:
+		if int(row[0]) >= tick0 and int(row[0]) < tick1:
 			out.append(float(row[1]))
 	return out
 
@@ -102,27 +115,32 @@ func test_bots_ride_the_band_tracking_spec() -> void:
 
 
 func test_a_bot_follows_a_published_band_and_falls_back_when_cleared() -> void:
+	# SETTLED_RPM's derivation still matches MockTrainer's constants.
+	assert_eq(MockTrainer.BAND_NOISE_MAX_RPM, NOISE_RPM)
+	var oldest_s := SETTLE_TICKS * Wl.SIM_DT - MockTrainer.SAMPLE_MAX_S - 2.0 * Wl.SIM_DT
+	assert_almost_eq(oldest_s, 10.8, 1e-9)
+	assert_lt(20.0 * exp(-oldest_s / MockTrainer.BAND_LAG_S), LAG_LEFT_RPM)
 	_run_bots(5)
 	var bot1 := Bots.peer_id(1)
-	var publish_s := PUBLISH_TICK * Wl.SIM_DT
-	var clear_s := CLEAR_TICK * Wl.SIM_DT
-	# The telemetry carries the last ~1 Hz sample, so wait 2 s lag x 3 plus one sample.
-	var inside := _cadences(bot1, publish_s + 7.5, clear_s)
-	assert_gt(inside.size(), 300)
+	# Windows from 12 s after the band is published (and after it is cleared): see SETTLED_RPM.
+	var inside := _cadences(bot1, PUBLISH_TICK + SETTLE_TICKS, CLEAR_TICK)
+	assert_eq(inside.size(), CLEAR_TICK - PUBLISH_TICK - SETTLE_TICKS)
 	for c in inside:
 		assert_between(c, BAND_LO, BAND_HI, "bot 1 rides inside the published band")
-		assert_almost_eq(c, 110.0, NOISE_RPM + LAG_LEFT_RPM, "the band's centre")
-	var back := _cadences(bot1, clear_s + 8.0, 60.0)
-	assert_gt(back.size(), 300)
+		assert_almost_eq(c, 0.5 * (BAND_LO + BAND_HI), SETTLED_RPM, "the band's centre")
+	var back := _cadences(bot1, CLEAR_TICK + SETTLE_TICKS, END_TICK)
+	assert_eq(back.size(), END_TICK - CLEAR_TICK - SETTLE_TICKS)
 	for c in back:
-		assert_almost_eq(c, PREFERRED_RPM, NOISE_RPM, "a cleared band: the preferred cadence")
+		assert_almost_eq(c, PREFERRED_RPM, SETTLED_RPM, "a cleared band: the preferred cadence")
 
 
 func test_a_bot_without_a_band_pedals_its_preferred_cadence() -> void:
 	_run_bots(5)
 	var bot2 := Bots.peer_id(2)
-	var rows := _cadences(bot2, 2.0, 60.0)
-	assert_gt(rows.size(), 1000)
+	var rows := _cadences(bot2, 40, END_TICK)
+	assert_eq(rows.size(), END_TICK - 40)
+	# No lag to shed: the band policy starts at its 90 rpm target and stays there, and 88.5
+	# and 91.5 rpm lie on the 0.5 rpm grid, so rounding never leaves the noise bound.
 	for c in rows:
 		assert_almost_eq(c, PREFERRED_RPM, NOISE_RPM, "no band: 90 rpm within the noise bound")
 	var distinct := {}
