@@ -8,18 +8,24 @@ var mode: String = "solo"
 var cards: Dictionary = {}
 var game_ids: Array[String] = []
 var _grid: GridContainer = null
+var _scroll: ScrollContainer = null
 
 
 func _build() -> void:
 	mode = str(params.get("mode", "solo"))
 	var page := make_page(t("APP_PICKER_TITLE_HOST") if mode == "host" else t("APP_PICKER_TITLE_SOLO"))
 	var left: VBoxContainer = page["left"]
+	_scroll = ScrollContainer.new()
+	_scroll.name = "CardScroll"
+	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	left.add_child(_scroll)
 	_grid = GridContainer.new()
 	_grid.name = "Cards"
 	_grid.columns = 2
 	_grid.add_theme_constant_override("h_separation", 24)
 	_grid.add_theme_constant_override("v_separation", 24)
-	left.add_child(_grid)
+	_scroll.add_child(_grid)
 	var items: Array = []
 	var highlight := 0
 	var last := str(services.settings.get_value("last_game", "")) if services.settings != null else ""
@@ -46,6 +52,8 @@ func _build() -> void:
 func _on_highlight(index: int) -> void:
 	for i in game_ids.size():
 		(cards[game_ids[i]] as AppGameCard).set_selected(i == index)
+	if index >= 0 and index < game_ids.size() and _scroll != null and _scroll.is_inside_tree():
+		_scroll.ensure_control_visible(cards[game_ids[index]] as Control)
 
 
 func _on_pick(_index: int, id: Variant, _auto: bool) -> void:

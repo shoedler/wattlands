@@ -31,6 +31,8 @@ func _build(slot: PlayerSlot, local: bool) -> void:
 	var row := AppStyle.hbox(20)
 	add_child(row)
 	row.add_child(AppSlotChip.for_slot(slot.slot_index, 64.0))
+	size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	custom_minimum_size = Vector2(520, 0)
 	var col := AppStyle.vbox(4)
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	row.add_child(col)
@@ -66,7 +68,7 @@ func update(ready: bool, trainer: String, options_text: String, is_bot: bool) ->
 	else:
 		ready_label.text = AppScreen.t("APP_LOBBY_READY") if ready else AppScreen.t("APP_LOBBY_NOT_READY")
 		ready_label.add_theme_color_override("font_color", AppStyle.GOOD if ready else AppStyle.WARN)
-		trainer_label.text = trainer_text(trainer)
+		trainer_label.text = AppScreen.t("APP_TITLE_TRAINER").format([trainer_text(trainer)])
 	options_label.text = options_text
 	options_label.visible = options_text != ""
 

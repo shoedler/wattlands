@@ -4,7 +4,7 @@ extends PanelContainer
 ## none or the file is missing or unreadable, a generated title card; plus title, summary and
 ## player counts. A missing image never hides the game (the registry logs the warning).
 
-const IMAGE_SIZE := Vector2(480, 270)
+const IMAGE_SIZE := Vector2(400, 225)
 
 var game_id: String = ""
 var image: TextureRect = null

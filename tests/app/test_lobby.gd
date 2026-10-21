@@ -181,10 +181,10 @@ func test_trainer_status_per_rider() -> void:
 	var s := _client_lobby(workout_lobby())
 	var host_card := s.cards_box.get_child(0) as AppLobbyCard
 	var my_card := s.cards_box.get_child(1) as AppLobbyCard
-	assert_eq(host_card.trainer_label.text, AppScreen.t("APP_TRAINER_OK"))
+	assert_eq(host_card.trainer_label.text, AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")]))
 	assert_eq(host_card.ready_label.text, AppScreen.t("APP_LOBBY_READY"))
 	assert_true(my_card.is_local)
-	assert_eq(my_card.trainer_label.text, AppScreen.t("APP_TRAINER_OK"), "own trainer from TrainerService")
+	assert_eq(my_card.trainer_label.text, AppScreen.t("APP_TITLE_TRAINER").format([AppScreen.t("APP_TRAINER_OK")]), "own trainer from TrainerService")
 	assert_eq(my_card.ready_label.text, AppScreen.t("APP_LOBBY_NOT_READY"))
 	assert_eq(fx.fake_net().info.get("trainer"), TrainerDevice.STATUS_READY)
 

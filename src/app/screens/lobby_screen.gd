@@ -41,7 +41,8 @@ var keyboard: AppKeyboard = null
 var code_label: Label = null
 var message_label: Label = null
 var info_label: Label = null
-var cards_box: VBoxContainer = null
+## Rider cards, two per row (8 riders fit at 1080p).
+var cards_box: GridContainer = null
 var preview_box: VBoxContainer = null
 var title_label: Label = null
 var _left: VBoxContainer = null
@@ -64,7 +65,10 @@ func _build() -> void:
 	info_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT_DIM)
 	info_label.name = "Info"
 	_left.add_child(info_label)
-	cards_box = AppStyle.vbox(10)
+	cards_box = GridContainer.new()
+	cards_box.columns = 2
+	cards_box.add_theme_constant_override("h_separation", 12)
+	cards_box.add_theme_constant_override("v_separation", 10)
 	cards_box.name = "Cards"
 	_left.add_child(cards_box)
 	preview_box = AppStyle.vbox(6)
