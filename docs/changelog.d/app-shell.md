@@ -27,3 +27,4 @@
 - A per-session Autopilot toggle on the lobby, shown on the rider's card.
 - The cadence metronome plays during sessions when it is on in Settings.
 - The saved master volume is applied at launch.
+- Back on the title after a ride, spinning on no longer starts another ride. Stopping, then pedaling 5 s, does.

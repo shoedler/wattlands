@@ -33,6 +33,8 @@ var utc_override: int = -1
 var quit_hook: Callable
 ## Last exit code passed to quit().
 var quit_code: int = -1
+## Title screen visits in this app run (1 = the launch visit; the zero-touch rules use it).
+var title_visits: int = 0
 
 
 func _init() -> void:

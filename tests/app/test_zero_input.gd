@@ -118,3 +118,58 @@ func test_host_and_client_ready_by_pedal_start_only() -> void:
 	host.feed_gesture(Wl.G_PEDAL_START)
 	assert_true(host.local_ready)
 	assert_ne(fx.app.state, "session", "a host starts only on Start ride (friends may still join)")
+
+
+func test_back_on_the_title_a_running_stretch_does_not_count() -> void:
+	# After Continue on the results the rider is usually still spinning: that must never start
+	# another ride. The 5 s hold starts after a stop.
+	fx.give_profile()
+	fx.services.title_visits = 1
+	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
+	assert_true(title.zero.need_fresh, "not the launch visit")
+	assert_eq(title.hint_label.text, AppScreen.t("APP_ZERO_HINT_FRESH").format([str(fx.registry.manifest(title.quick_game).get("title", "")), 5]))
+	for t in 12:
+		title.feed_sample(sample(200.0 + t, 180.0, 85.0))
+	assert_eq(fx.app.state, "boot", "12 s of spinning on from the ride: no new ride")
+	title.feed_sample(sample(212.0, 0.0, 0.0))
+	title.feed_gesture(Wl.G_COAST)
+	assert_true(title.zero.armed, "the coast after the old stretch does not disarm the countdown")
+	for t in 5:
+		title.feed_sample(sample(213.0 + t, 180.0, 85.0))
+	assert_eq(fx.app.state, "boot", "4 s of the fresh hold")
+	title.feed_sample(sample(218.0, 180.0, 85.0))
+	assert_eq(fx.app.state, "session", "5 s from a stop starts the last-played game")
+
+
+func test_the_launch_visit_counts_a_running_stretch() -> void:
+	fx.give_profile()
+	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
+	assert_eq(fx.services.title_visits, 1)
+	assert_false(title.zero.need_fresh, "launch: a rider already pedaling gets the ride")
+
+
+func test_continue_from_results_lands_on_a_fresh_start_title() -> void:
+	fx.give_profile()
+	var m := open_main()
+	fx.app.goto("results", {"results": GameResults.new(), "local_peer": 1})
+	surge_pick(current_screen(m), "continue")
+	var title := current_screen(m) as AppTitleScreen
+	assert_not_null(title)
+	assert_true(title.zero.need_fresh)
+	for t in 8:
+		title.feed_sample(sample(float(t), 180.0, 85.0))
+	assert_true(current_screen(m) is AppTitleScreen, "still spinning: no new ride")
+
+
+func test_tracker_fresh_start() -> void:
+	var z := AppZeroTouch.new()
+	z.configure(200.0, false, true)
+	for t in 10:
+		assert_false(z.feed_values(float(t), 150.0, 85.0), "a running stretch never counts (%d s)" % t)
+	assert_false(z.pedaled)
+	assert_eq(z.held_s, 0.0)
+	z.feed_values(10.0, 0.0, 0.0)
+	assert_false(z.need_fresh, "a stop clears it")
+	for t in range(11, 16):
+		assert_false(z.feed_values(float(t), 150.0, 85.0))
+	assert_true(z.feed_values(16.0, 150.0, 85.0), "5 s from the restart")

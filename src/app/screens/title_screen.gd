@@ -5,6 +5,8 @@ extends AppScreen
 ##     its zero_input_content (the first-run game when nothing was played yet).
 ##   - First run with no input: 20 s of pedaling creates the profile "Rider" (FTP 200,
 ##     unverified) and starts GameRegistry.first_run_game() solo with its zero_input_content.
+##   - Back on the title after a ride or a menu (not the launch visit), the 5 s hold starts only
+##     after a stop, so a rider still spinning after the results never starts another ride.
 ## While that countdown is armed the menu holds its first item, the same quick ride, so a surge
 ## also starts it. A keyboard or controller action disarms the countdown for this visit; with a
 ## saved profile a coast after pedaling does too, and the menu then scans so a pedal-only rider
@@ -49,7 +51,10 @@ func _build() -> void:
 	progress_bar.custom_minimum_size = Vector2(600, 28)
 	left.add_child(progress_bar)
 	_pick_quick_target()
-	zero.configure(services.profile().ftp_w, not has_profile)
+	services.title_visits += 1
+	# The launch visit counts a stretch already running; later visits (back from a ride or a
+	# menu) wait for a fresh start, so spinning on after Continue never starts another ride.
+	zero.configure(services.profile().ftp_w, not has_profile, has_profile and services.title_visits > 1)
 	if quick_game == "":
 		zero.cancel()
 	push_menu(_menu_items(), _on_pick, Callable(), 0)
@@ -226,6 +231,8 @@ func _refresh_labels() -> void:
 	progress_bar.value = zero.progress()
 	if zero.held_s > 0.0:
 		hint_label.text = t("APP_ZERO_COUNTDOWN").format([game_title, zero.seconds_left()])
+	elif zero.need_fresh:
+		hint_label.text = t("APP_ZERO_HINT_FRESH").format([game_title, int(zero.hold_s)])
 	elif has_profile:
 		hint_label.text = t("APP_ZERO_HINT").format([game_title, int(zero.hold_s)])
 	else:

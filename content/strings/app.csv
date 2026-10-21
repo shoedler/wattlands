@@ -6,6 +6,7 @@ APP_TITLE_PROFILE,Riding as {0} · FTP {1} W
 APP_TITLE_NO_PROFILE,"No profile yet: just pedal, or set one up"
 APP_TITLE_TRAINER,Trainer: {0}
 APP_ZERO_HINT,Keep pedaling {1} s to ride {0} solo
+APP_ZERO_HINT_FRESH,"Stop pedaling, then pedal {1} s to ride {0} solo"
 APP_ZERO_FIRST_RUN,New here? Just pedal: after {1} s you ride {0}
 APP_ZERO_COUNTDOWN,Riding {0} solo in {1} s
 APP_MENU_QUICK,Ride {0}: {1} solo

@@ -90,3 +90,9 @@
 - Decision: the lobby has a per-session "My Autopilot" item for the local rider. It starts at the profile's default, goes out in player_info and shows on the rider's card; the profile default is not changed. The session screen starts the Sfx cadence metronome at the preferred cadence when the profile's metronome is on, and stops it when the screen goes. The main scene applies the saved master volume at boot.
 - Alternatives: Autopilot only in the profile; leave the metronome to the HUD.
 - Reason: BRIEF 3.5 says Autopilot is toggled "in the profile or lobby". Nothing else turned on the metronome or the saved volume, so those settings would have done nothing. Both calls are idempotent if ui-hud also makes them.
+
+## 2026-10-21: Zero-touch hold after the launch visit needs a fresh start
+
+- Decision: the launch visit to the title counts a pedaling stretch that is already running when the title opens. Later visits (back from a ride, the results or a menu) count the 5 s hold only after one sample without pedaling. A coast after that old stretch does not disarm the countdown. `AppServices.title_visits` counts the visits in one app run.
+- Alternatives: arm the countdown only on the launch visit; arm it the same way on every visit.
+- Reason: riders keep spinning after the cool-down, so a rider who picks Continue would otherwise be put into a new ride 5 s later. Arming only at launch would break "hold pedal_start 5 s on the title" for later visits.
