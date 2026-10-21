@@ -27,8 +27,7 @@ extends CanvasLayer
 ##   layer draws under the HUD (vignettes), a higher one above it.
 ## - Raw W and %FTP always show: if the spec has no power gauge (and not both a power_w and
 ##   an ftp_pct readout), a power gauge is added at bottom_left (ensure_power_visible).
-##   W/kg shows only if the rider opted in (profile `show_wkg` if present, else
-##   `share_weight`; or wkg_weight_kg).
+##   W/kg shows only if the rider opted in (profile `show_wkg`; or wkg_weight_kg).
 ## - Safety banners: rescue (4.6.3), warm-up (4.6.8) and pause, from set_safety_state(),
 ##   update()'s telemetry (rescue, paused) and the bus (rescue_changed, paused_changed,
 ##   governor_status {warmup, rescue, paused}) for the local rider, unless
@@ -698,9 +697,7 @@ func _read_rider_data() -> void:
 	if wkg_weight_kg >= 0.0:
 		_weight = wkg_weight_kg
 	elif prof != null:
-		var opt_in: Variant = prof.get("show_wkg")
-		var on := bool(opt_in) if opt_in != null else prof.share_weight
-		if on:
+		if prof.show_wkg:
 			_weight = prof.weight_kg
 
 

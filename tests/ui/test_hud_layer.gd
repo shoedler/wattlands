@@ -495,31 +495,30 @@ func test_timeline_label_goes_through_the_string_table() -> void:
 	assert_string_contains(tl.next_text(), "Wave 2", "plain text passes through")
 
 
-## BRIEF 3.3: W/kg shows only when the rider opted in (the profile's share_weight until a
-## show_wkg field exists).
+## BRIEF 3.3: W/kg shows only when the rider opted in (RiderProfile.show_wkg).
 func test_wkg_follows_the_profile_opt_in() -> void:
 	var settings := get_tree().root.get_node_or_null("Settings") as WlSettings
 	assert_not_null(settings, "the Settings autoload")
 	if settings == null:
 		return
 	var prof := settings.profile
-	var old_share := prof.share_weight
+	var old_show := prof.show_wkg
 	var old_weight := prof.weight_kg
 	_hud.wkg_weight_kg = -1.0
-	prof.share_weight = false
+	prof.show_wkg = false
 	prof.weight_kg = 80.0
 	_hud.build(_spec(), _ctx)
 	var t := _tele(Wl.SIM, 240.0)
 	var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
 	g.set_telemetry(t)
 	assert_false(g.wkg_label().visible, "no W/kg without the opt-in")
-	prof.share_weight = true
+	prof.show_wkg = true
 	_hud.build(_spec(), _ctx)
 	g = _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
 	g.set_telemetry(t)
 	assert_true(g.wkg_label().visible, "opted in")
 	assert_string_contains(g.wkg_label().text, "3.0")
-	prof.share_weight = old_share
+	prof.show_wkg = old_show
 	prof.weight_kg = old_weight
 
 
