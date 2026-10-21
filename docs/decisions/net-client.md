@@ -50,7 +50,7 @@
 
 ## 2026-10-21: Coalesced directives are rate-limited per kind, flushed before other messages
 
-- Decision: host `directive` messages of kind `course_grade`, `cadence_band`, `power_band` to one peer are sent at once unless one of the same kind went to that peer in the last 100 ms; then the latest waits and is sent when the window ends or before any other message to that peer. The window is measured on the session's clock, whatever the poll rate; only a clock that stands still (polled without `tick()` after `set_time()`) releases a waiting directive two polls after it started waiting.
+- Decision: host `directive` messages of kind `course_grade`, `cadence_band`, `power_band` to one peer are sent at once unless one of the same kind went to that peer in the last 100 ms; then the latest waits and is sent when the window ends or before any other message to that peer. The window is measured on the session's clock, whatever the poll rate; only a private session whose clock stands still (polled without `tick()` after `set_time()`) releases a waiting directive three polls after it started waiting; the autoload, whose clock moves in `_process`, never does.
 - Alternatives: batch everything per tick; no coalescing; a fixed two-poll window (the first W1 version: at 60-144 fps it let 20 or more a second through per kind, against C11).
 - Reason: OWNERSHIP C11 keeps the host under 60 frames a second without delaying the common 2 Hz case and without reordering `request` or `phase`.
 

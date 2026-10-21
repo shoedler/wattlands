@@ -59,6 +59,8 @@ const REFUSALS: Array[String] = ["room_not_found", "room_full", "version_mismatc
 const COALESCED_KINDS: Array[String] = [NetMessages.DIRECTIVE_COURSE_GRADE,
 	NetMessages.DIRECTIVE_CADENCE_BAND, NetMessages.DIRECTIVE_POWER_BAND]
 const COALESCE_S := 0.1
+## A coalesced directive waiting on a clock that stands still goes out after this many polls.
+const FROZEN_CLOCK_POLLS := 3
 ## OWNERSHIP 3.1 C11: at most 32 intents per telemetry message, each <= 1 KB.
 const MAX_INTENTS := 32
 const MAX_INTENT_BYTES := 1024
@@ -1573,8 +1575,10 @@ func _coalesce_send(to: int, kind: String, d: Dictionary) -> bool:
 
 ## Flush pending coalesced directives: for one peer (before another message to it), or
 ## all due ones (peer -1, due_only) from poll(). A pending one is due once 100 ms passed
-## since the last send of its kind, or, if this session's clock stands still (only polled
-## after a set_time()), two polls after it started waiting.
+## since the last send of its kind, or, if this private session's clock stands still (only
+## polled after a set_time()), FROZEN_CLOCK_POLLS polls after it started waiting. The
+## autoload's clock always moves with _process, so it never takes the fallback (several
+## polls inside one frame share one time).
 func _flush_coalesced(peer: int, due_only: bool) -> void:
 	if _co_pending.is_empty():
 		return
@@ -1586,7 +1590,8 @@ func _flush_coalesced(peer: int, due_only: bool) -> void:
 			continue
 		if due_only:
 			var last := float(_co_last.get(key, -INF))
-			var frozen := now <= float(e[3]) and _polls - int(e[2]) >= 2
+			var frozen := not auto_poll and now <= float(e[3]) \
+				and _polls - int(e[2]) >= FROZEN_CLOCK_POLLS
 			if now - last < COALESCE_S - 1e-9 and not frozen:
 				continue
 		_co_pending.erase(key)

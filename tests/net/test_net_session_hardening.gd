@@ -106,6 +106,31 @@ func test_coalesced_directive_flushes_with_a_frozen_clock() -> void:
 	assert_eq(got, [1, 2], "a pending grade is not stuck when time stands still")
 
 
+func test_autoload_polling_several_times_a_frame_never_releases_early() -> void:
+	# The autoload's time moves only in _process; the GameHost's tick() then just polls,
+	# so several polls share one time. That is not a frozen clock.
+	var r := room()
+	var h := r[0]
+	h.auto_poll = true
+	h.set_time(0.0)
+	clear_logs()
+	h.send_to(2, _grade(1, 1.0))
+	h.send_to(2, _grade(2, 2.0))
+	for _i in 6:
+		h.tick(Wl.SIM_DT)
+	pump(3)
+	var got: Array = []
+	for m: Array in messages("c1", "directive"):
+		got.append(int((m[2] as Dictionary)["id"]))
+	assert_eq(got, [1], "the second grade waits for its 100 ms")
+	h._process(0.1)
+	pump(3)
+	got.clear()
+	for m: Array in messages("c1", "directive"):
+		got.append(int((m[2] as Dictionary)["id"]))
+	assert_eq(got, [1, 2])
+
+
 # --- lobby limits --------------------------------------------------------------------------
 
 func test_player_limit_holds_when_peers_join_together() -> void:
