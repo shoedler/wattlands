@@ -58,23 +58,47 @@ extends GutTest
 ## dynamic call needs a reference to the rider, which the rules above guard.
 
 const GUARDED: Array[String] = [
-	"write_characteristic", "write_control", "set_target_power", "set_simulation", "set_resistance",
+	"write_characteristic",
+	"write_control",
+	"set_target_power",
+	"set_simulation",
+	"set_resistance",
 	"request_stop",
 ]
 const ROOTS: Array[String] = ["res://addons/wattlands", "res://src"]
 ## W4 (SAF-4): what a file under src/games/ may not name (see the header).
 const GAME_CLASS_NAMES: Array[String] = [
-	"TrainerService", "WlTrainerService", "LocalRider", "SafetyGovernor", "TrainerController",
-	"TrainerDevice", "MockTrainer", "FtmsTrainer", "FtmsClient", "FtmsConnectionManager",
-	"GdbleTransport", "BridgeTransport", "BleTransport", "DirectiveRouter", "HudRouter",
+	"TrainerService",
+	"WlTrainerService",
+	"LocalRider",
+	"SafetyGovernor",
+	"TrainerController",
+	"TrainerDevice",
+	"MockTrainer",
+	"FtmsTrainer",
+	"FtmsClient",
+	"FtmsConnectionManager",
+	"GdbleTransport",
+	"BridgeTransport",
+	"BleTransport",
+	"DirectiveRouter",
+	"HudRouter",
 	"GameHost",
 ]
 const GAME_MEMBER_NAMES: Array[String] = [
-	"governor", "configure_governor", "emergency_safe", "resume", "local_rider", "trainer_service",
-	"_riders", "bind_riders",
+	"governor",
+	"configure_governor",
+	"emergency_safe",
+	"resume",
+	"local_rider",
+	"trainer_service",
+	"_riders",
+	"bind_riders",
 ]
 ## Calls of these by bare name are flagged in games too (definitions excepted).
-const GAME_CALL_NAMES: Array[String] = ["configure_governor", "emergency_safe", "resume", "bind_riders"]
+const GAME_CALL_NAMES: Array[String] = [
+	"configure_governor", "emergency_safe", "resume", "bind_riders"
+]
 ## W4r2: flagged anywhere in a game's code (identifier or dict key) and as an exact string.
 const GAME_IDENT_NAMES: Array[String] = ["governor_profile"]
 ## W4r2: a member access whose name contains this is flagged in games (.local_riders, ...).
@@ -87,19 +111,29 @@ const RECEIVER_CALL_NAMES: Array[String] = ["setup", "set_plan", "start_phase", 
 const HOLDER_TYPES: Array[String] = ["Variant", "Object", "Node"]
 ## W4r2: a game string holding one of these names a stack script (preload, load by path).
 const GAME_STRING_FRAGMENTS: Array[String] = [
-	"local_rider", "safety_governor", "trainer_controller", "trainer_service", "game_host",
-	"directive_router", "hud_router", "addons/wattlands/trainer/",
+	"local_rider",
+	"safety_governor",
+	"trainer_controller",
+	"trainer_service",
+	"game_host",
+	"directive_router",
+	"hud_router",
+	"addons/wattlands/trainer/",
 ]
 ## Script paths a game scene may not reference.
 const GAME_SCRIPT_PATHS: Array[String] = [
-	"addons/wattlands/trainer/", "addons/wattlands/core/local_rider.gd",
-	"addons/wattlands/core/trainer_service.gd", "addons/wattlands/sdk/directive_router.gd",
-	"addons/wattlands/sdk/hud_router.gd", "addons/wattlands/sdk/game_host.gd",
+	"addons/wattlands/trainer/",
+	"addons/wattlands/core/local_rider.gd",
+	"addons/wattlands/core/trainer_service.gd",
+	"addons/wattlands/sdk/directive_router.gd",
+	"addons/wattlands/sdk/hud_router.gd",
+	"addons/wattlands/sdk/game_host.gd",
 ]
 const GAMES_DIR := "/src/games/"
 ## Path -> the guarded names that file may call.
 const ALLOW := {
-	"res://addons/wattlands/trainer/control/trainer_controller.gd": ["set_target_power", "set_simulation", "set_resistance", "request_stop"],
+	"res://addons/wattlands/trainer/control/trainer_controller.gd":
+	["set_target_power", "set_simulation", "set_resistance", "request_stop"],
 	"res://addons/wattlands/trainer/ftms_trainer.gd": ["write_control"],
 	"res://addons/wattlands/trainer/ftms_client.gd": ["write_characteristic"],
 }
@@ -126,6 +160,7 @@ func after_each() -> void:
 
 # --- the scanner -----------------------------------------------------------------------
 
+
 ## Split GDScript source into code (comments removed, every string literal replaced by "",
 ## line breaks kept) and its string literals [{line, text}].
 static func lex(src: String) -> Dictionary:
@@ -147,7 +182,11 @@ static func lex(src: String) -> Dictionary:
 			seg = i
 		elif c == _QUOTE or c == _APOS:
 			parts.append(src.substr(seg, i - seg))
-			var raw := i > 0 and src.unicode_at(i - 1) == 114 and (i < 2 or not _is_ident(src.unicode_at(i - 2)))
+			var raw := (
+				i > 0
+				and src.unicode_at(i - 1) == 114
+				and (i < 2 or not _is_ident(src.unicode_at(i - 2)))
+			)
 			var triple := i + 2 < n and src.unicode_at(i + 1) == c and src.unicode_at(i + 2) == c
 			var open_len := 3 if triple else 1
 			var start_line := line
@@ -162,7 +201,13 @@ static func lex(src: String) -> Dictionary:
 						newlines += 1
 					j += 2
 					continue
-				if d == c and (not triple or (j + 2 < n and src.unicode_at(j + 1) == c and src.unicode_at(j + 2) == c)):
+				if (
+					d == c
+					and (
+						not triple
+						or (j + 2 < n and src.unicode_at(j + 1) == c and src.unicode_at(j + 2) == c)
+					)
+				):
 					break
 				if d == _NEWLINE:
 					if not triple:
@@ -171,7 +216,7 @@ static func lex(src: String) -> Dictionary:
 				text += String.chr(d)
 				j += 1
 			strings.append({"line": start_line, "text": text})
-			parts.append("\"\"" + "\n".repeat(newlines))
+			parts.append('""' + "\n".repeat(newlines))
 			line += newlines
 			i = mini(n, j + (open_len if j < n and src.unicode_at(j) == c else 0))
 			seg = i
@@ -188,7 +233,9 @@ static func _is_ident(c: int) -> bool:
 ## Violations in one file's source: [{path, line, name, how}] with how "reference" or "dynamic".
 ## `sites` (ALLOW_SITES by default) admits the first n call sites of a name in that file, in
 ## source order; any further one is a violation.
-static func scan_source(src: String, path: String, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES) -> Array[Dictionary]:
+static func scan_source(
+	src: String, path: String, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES
+) -> Array[Dictionary]:
 	var found := _call_sites(src, path, allow)
 	var budget: Dictionary = (sites.get(path, {}) as Dictionary).duplicate()
 	var out: Array[Dictionary] = []
@@ -207,7 +254,9 @@ static func _call_sites(src: String, path: String, allow: Dictionary) -> Array[D
 	var lexed := lex(src)
 	var code: String = lexed["code"]
 	var allowed: Array = allow.get(path, [])
-	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(GUARDED) + ")(?![A-Za-z0-9_])")
+	var re := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(" + "|".join(GUARDED) + ")(?![A-Za-z0-9_])"
+	)
 	var defn := RegEx.create_from_string("(^|[^A-Za-z0-9_])func\\s+$")
 	for m in re.search_all(code):
 		var name := m.get_string(1)
@@ -218,12 +267,21 @@ static func _call_sites(src: String, path: String, allow: Dictionary) -> Array[D
 		var prefix := code.substr(line_start, start - line_start)
 		if defn.search(prefix) != null:
 			continue
-		out.append({"path": path, "line": code.substr(0, start).count("\n") + 1, "name": name, "how": "reference"})
+		out.append(
+			{
+				"path": path,
+				"line": code.substr(0, start).count("\n") + 1,
+				"name": name,
+				"how": "reference"
+			}
+		)
 	for s: Dictionary in lexed["strings"]:
 		var text := str(s["text"])
 		if GUARDED.has(text) and not allowed.has(text):
 			out.append({"path": path, "line": int(s["line"]), "name": text, "how": "dynamic"})
-	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"]))
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"])
+	)
 	return out
 
 
@@ -233,10 +291,18 @@ static func scan_game_source(src: String, path: String) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var lexed := lex(src)
 	var code: String = lexed["code"]
-	var classes := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(GAME_CLASS_NAMES) + ")(?![A-Za-z0-9_])")
-	var members := RegEx.create_from_string("\\.\\s*(" + "|".join(GAME_MEMBER_NAMES) + ")(?![A-Za-z0-9_])")
-	var calls := RegEx.create_from_string("(?<![A-Za-z0-9_.])(" + "|".join(GAME_CALL_NAMES) + ")\\s*\\(")
-	var routers := RegEx.create_from_string("(?<![A-Za-z0-9_])(directives|hud)\\s*\\)?\\s*\\.\\s*(riders)(?![A-Za-z0-9_])")
+	var classes := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(" + "|".join(GAME_CLASS_NAMES) + ")(?![A-Za-z0-9_])"
+	)
+	var members := RegEx.create_from_string(
+		"\\.\\s*(" + "|".join(GAME_MEMBER_NAMES) + ")(?![A-Za-z0-9_])"
+	)
+	var calls := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_.])(" + "|".join(GAME_CALL_NAMES) + ")\\s*\\("
+	)
+	var routers := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(directives|hud)\\s*\\)?\\s*\\.\\s*(riders)(?![A-Za-z0-9_])"
+	)
 	var defn := RegEx.create_from_string("(^|[^A-Za-z0-9_])func\\s+$")
 	for m in classes.search_all(code):
 		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "class"))
@@ -251,28 +317,40 @@ static func scan_game_source(src: String, path: String) -> Array[Dictionary]:
 	for m in routers.search_all(code):
 		out.append(_hit(code, m.get_start(2), path, m.get_string(1) + ".riders", "router"))
 	# W4r2: the GameHost's rider map and any accessor named after it.
-	var fragment := RegEx.create_from_string("\\.\\s*([A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*)")
+	var fragment := RegEx.create_from_string(
+		"\\.\\s*([A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*)"
+	)
 	for m in fragment.search_all(code):
 		if not GAME_MEMBER_NAMES.has(m.get_string(1)):
 			out.append(_hit(code, m.get_start(1), path, m.get_string(1), "member"))
-	var idents := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(GAME_IDENT_NAMES) + ")(?![A-Za-z0-9_])")
+	var idents := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(" + "|".join(GAME_IDENT_NAMES) + ")(?![A-Za-z0-9_])"
+	)
 	for m in idents.search_all(code):
 		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "ident"))
 	out.append_array(_receiver_calls(code, path))
 	for st: Dictionary in lexed["strings"]:
 		var text := str(st["text"])
-		if GAME_MEMBER_NAMES.has(text) or GAME_IDENT_NAMES.has(text) or (RECEIVER_CALL_NAMES.has(text) and text != "setup"):
+		if (
+			GAME_MEMBER_NAMES.has(text)
+			or GAME_IDENT_NAMES.has(text)
+			or (RECEIVER_CALL_NAMES.has(text) and text != "setup")
+		):
 			out.append({"path": path, "line": int(st["line"]), "name": text, "how": "dynamic"})
 			continue
 		var cm := classes.search(text)
 		if cm != null:
-			out.append({"path": path, "line": int(st["line"]), "name": cm.get_string(1), "how": "dynamic"})
+			out.append(
+				{"path": path, "line": int(st["line"]), "name": cm.get_string(1), "how": "dynamic"}
+			)
 			continue
 		for frag: String in GAME_STRING_FRAGMENTS:
 			if text.contains(frag):
 				out.append({"path": path, "line": int(st["line"]), "name": frag, "how": "dynamic"})
 				break
-	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"]))
+	out.sort_custom(
+		func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"])
+	)
 	return out
 
 
@@ -371,9 +449,19 @@ static func receiver_is_safe(recv: String, code: String, decls: Dictionary) -> b
 static func declared_types(code: String, name: String) -> Array:
 	var out: Array = []
 	var n := name
-	var typed := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)")
-	var made := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "\\s*:?=\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*\\.\\s*new\\s*\\(")
-	var any := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "(?![A-Za-z0-9_])")
+	var typed := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)"
+	)
+	var made := RegEx.create_from_string(
+		(
+			"(?<![A-Za-z0-9_])(?:var|const)\\s+"
+			+ n
+			+ "\\s*:?=\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*\\.\\s*new\\s*\\("
+		)
+	)
+	var any := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "(?![A-Za-z0-9_])"
+	)
 	var typed_n := typed.search_all(code).size()
 	var made_n := made.search_all(code).size()
 	for m in typed.search_all(code):
@@ -382,21 +470,31 @@ static func declared_types(code: String, name: String) -> Array:
 		out.append(m.get_string(1))
 	for i in any.search_all(code).size() - typed_n - made_n:
 		out.append("")
-	var loop_typed := RegEx.create_from_string("(?<![A-Za-z0-9_])for\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s+in(?![A-Za-z0-9_])")
+	var loop_typed := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])for\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s+in(?![A-Za-z0-9_])"
+	)
 	var loop_any := RegEx.create_from_string("(?<![A-Za-z0-9_])for\\s+" + n + "(?![A-Za-z0-9_])")
 	var lt := loop_typed.search_all(code)
 	for m in lt:
 		out.append(m.get_string(1))
 	for i in loop_any.search_all(code).size() - lt.size():
 		out.append("")
-	var sig := RegEx.create_from_string("(?<![A-Za-z0-9_])func(?:\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*\\(")
+	var sig := RegEx.create_from_string(
+		"(?<![A-Za-z0-9_])func(?:\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*\\("
+	)
 	for m in sig.search_all(code):
 		var open := m.get_end(0) - 1
 		var close := _match_close(code, open)
 		if close < 0:
 			continue
 		for p: String in _split_params(code.substr(open + 1, close - open - 1)):
-			var pm := RegEx.create_from_string("^\\s*" + n + "\\s*(:\\s*([A-Za-z_][A-Za-z0-9_.]*))?(?![A-Za-z0-9_])").search(p)
+			var pm := (
+				RegEx
+				. create_from_string(
+					"^\\s*" + n + "\\s*(:\\s*([A-Za-z_][A-Za-z0-9_.]*))?(?![A-Za-z0-9_])"
+				)
+				. search(p)
+			)
 			if pm == null:
 				continue
 			out.append(pm.get_string(2))
@@ -452,7 +550,14 @@ static func scan_scene_text(text: String, path: String) -> Array[Dictionary]:
 		names.append_array(GAME_MEMBER_NAMES)
 		# W4r2: a signal connection or method track into the GameHost (to="..") or a rider.
 		names.append_array(GAME_IDENT_NAMES)
-		names.append_array(["set_plan", "start_phase", "resume_phase", "[A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*"])
+		names.append_array(
+			[
+				"set_plan",
+				"start_phase",
+				"resume_phase",
+				"[A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*"
+			]
+		)
 	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(names) + ")(?![A-Za-z0-9_])")
 	for m in re.search_all(text):
 		out.append(_hit(text, m.get_start(1), path, m.get_string(1), "scene"))
@@ -496,7 +601,9 @@ static func gd_files(root: String) -> Array[String]:
 	return out
 
 
-static func scan_roots(roots: Array, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES) -> Dictionary:
+static func scan_roots(
+	roots: Array, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES
+) -> Dictionary:
 	var files: Array[String] = []
 	var violations: Array[Dictionary] = []
 	for root: String in roots:
@@ -521,6 +628,7 @@ static func describe(violations: Array) -> String:
 
 # --- the gate ----------------------------------------------------------------------------
 
+
 func test_no_call_site_outside_the_allowlist() -> void:
 	var result := scan_roots(ROOTS)
 	var files: Array[String] = result["files"]
@@ -542,15 +650,21 @@ func test_the_scan_sees_the_controllers_real_calls() -> void:
 	assert_true(names.has("set_simulation"))
 	assert_true(names.has("set_resistance"))
 	assert_true(names.has("request_stop"))
-	assert_eq(scan_source(FileAccess.get_file_as_string(path), path).size(), 0, "and the allowlist admits them")
+	assert_eq(
+		scan_source(FileAccess.get_file_as_string(path), path).size(),
+		0,
+		"and the allowlist admits them"
+	)
 
 
 ## Code references to the TrainerController class outside its own file and the governor.
 static func controller_holders(roots: Array) -> Array[String]:
 	var out: Array[String] = []
 	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])TrainerController(?![A-Za-z0-9_])")
-	var own := ["res://addons/wattlands/trainer/control/trainer_controller.gd",
-		"res://addons/wattlands/trainer/control/safety_governor.gd"]
+	var own := [
+		"res://addons/wattlands/trainer/control/trainer_controller.gd",
+		"res://addons/wattlands/trainer/control/safety_governor.gd"
+	]
 	for root: String in roots:
 		for path in gd_files(root):
 			if own.has(path):
@@ -563,13 +677,20 @@ static func controller_holders(roots: Array) -> Array[String]:
 
 func test_only_the_governor_holds_a_trainer_controller() -> void:
 	var holders := controller_holders(ROOTS)
-	assert_eq(holders.size(), 0, "TrainerController referenced outside SafetyGovernor:\n" + "\n".join(holders))
+	assert_eq(
+		holders.size(),
+		0,
+		"TrainerController referenced outside SafetyGovernor:\n" + "\n".join(holders)
+	)
 
 
 func test_the_governor_has_no_call_sites() -> void:
 	var path := "res://addons/wattlands/trainer/control/safety_governor.gd"
-	assert_eq(scan_source(FileAccess.get_file_as_string(path), path, {}).size(), 0,
-		"the governor only talks to its controller")
+	assert_eq(
+		scan_source(FileAccess.get_file_as_string(path), path, {}).size(),
+		0,
+		"the governor only talks to its controller"
+	)
 
 
 ## ble (W2): the BleTransport implementations define write_characteristic; the definitions are
@@ -579,39 +700,45 @@ func test_ble_transports_define_and_hand_off_once() -> void:
 	var gdble := "res://addons/wattlands/trainer/ble/gdble_transport.gd"
 	var bridge := "res://addons/wattlands/trainer/ble/bridge_transport.gd"
 	var contract := "res://addons/wattlands/contracts/ble_transport.gd"
-	assert_eq(scan_source(FileAccess.get_file_as_string(bridge), bridge, {}, {}).size(), 0,
-		"BridgeTransport only defines write_characteristic")
-	assert_eq(scan_source(FileAccess.get_file_as_string(contract), contract, {}, {}).size(), 0,
-		"the BleTransport contract only defines it")
+	assert_eq(
+		scan_source(FileAccess.get_file_as_string(bridge), bridge, {}, {}).size(),
+		0,
+		"BridgeTransport only defines write_characteristic"
+	)
+	assert_eq(
+		scan_source(FileAccess.get_file_as_string(contract), contract, {}, {}).size(),
+		0,
+		"the BleTransport contract only defines it"
+	)
 	var raw := scan_source(FileAccess.get_file_as_string(gdble), gdble, {}, {})
-	assert_eq(raw.size(), 1, "GdbleTransport has exactly one call site, its hand-off:
-" + describe(raw))
+	assert_eq(
+		raw.size(), 1, "GdbleTransport has exactly one call site, its hand-off:\n" + describe(raw)
+	)
 	if raw.size() == 1:
 		assert_eq(raw[0]["name"], "write_characteristic")
 		assert_eq(raw[0]["how"], "dynamic")
-	assert_eq(scan_source(FileAccess.get_file_as_string(gdble), gdble).size(), 0, "and ALLOW_SITES admits it")
+	assert_eq(
+		scan_source(FileAccess.get_file_as_string(gdble), gdble).size(),
+		0,
+		"and ALLOW_SITES admits it"
+	)
 
 
 func test_a_second_hand_off_in_gdble_transport_is_flagged() -> void:
 	var gdble := "res://addons/wattlands/trainer/ble/gdble_transport.gd"
 	var src := FileAccess.get_file_as_string(gdble)
-	src += "
-
-func _sneaky(dev: Object) -> void:
-	dev.write_characteristic(\"a\", \"b\", PackedByteArray(), true)
-"
+	src += '\n\nfunc _sneaky(dev: Object) -> void:\n\tdev.write_characteristic("a", "b", PackedByteArray(), true)\n'
 	var v := scan_source(src, gdble)
-	assert_eq(v.size(), 1, "the extra call site shows:
-" + describe(v))
+	assert_eq(v.size(), 1, "the extra call site shows:\n" + describe(v))
 	if v.size() == 1:
 		assert_eq(v[0]["how"], "reference")
-	var twice := "func _w(d: Object) -> void:
-	d.call(&\"write_characteristic\")
-	d.call(&\"write_characteristic\")
-"
+	var twice := 'func _w(d: Object) -> void:\n\td.call(&"write_characteristic")\n\td.call(&"write_characteristic")\n'
 	assert_eq(scan_source(twice, gdble).size(), 1, "only one hand-off is admitted")
-	assert_eq(scan_source(twice, "res://addons/wattlands/trainer/ble/bridge_transport.gd").size(), 2,
-		"BridgeTransport has no hand-off allowance")
+	assert_eq(
+		scan_source(twice, "res://addons/wattlands/trainer/ble/bridge_transport.gd").size(),
+		2,
+		"BridgeTransport has no hand-off allowance"
+	)
 
 
 # --- fixtures: the scanner flags a bypass ------------------------------------------------------
@@ -681,7 +808,11 @@ func test_fixture_file_is_flagged() -> void:
 	]
 	for e: String in expected:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
-	assert_eq(v.size(), expected.size(), "nothing else (comments, the definition, messages):\n" + describe(v))
+	assert_eq(
+		v.size(),
+		expected.size(),
+		"nothing else (comments, the definition, messages):\n" + describe(v)
+	)
 
 
 func test_allowlist_is_per_file_and_per_name() -> void:
@@ -696,12 +827,19 @@ func test_allowlist_is_per_file_and_per_name() -> void:
 	assert_eq(scan_source(stop, ctl).size(), 0, "the controller sends Stop")
 	var rider_stop := scan_source(stop, "res://addons/wattlands/core/local_rider.gd")
 	assert_eq(rider_stop.size(), 1, "anyone else must go through SafetyGovernor.shutdown()")
-	assert_eq(scan_source(stop, "res://addons/wattlands/trainer/ftms_trainer.gd").size(), 1,
-		"FtmsTrainer implements request_stop, it never calls it")
+	assert_eq(
+		scan_source(stop, "res://addons/wattlands/trainer/ftms_trainer.gd").size(),
+		1,
+		"FtmsTrainer implements request_stop, it never calls it"
+	)
 
 
 func test_lexer_strings_comments_and_lines() -> void:
-	var src := "var a := \"x # not a comment\" # set_simulation\nvar b := 'it\\'s'\nvar c := \"\"\"\n\n\"\"\"\nset_resistance(1)\n"
+	var src := (
+		'var a := "x # not a comment" # set_simulation\n'
+		+ "var b := 'it\\'s'\n"
+		+ 'var c := """\n\n"""\nset_resistance(1)\n'
+	)
 	var lexed := lex(src)
 	var code: String = lexed["code"]
 	assert_eq(code.count("\n"), src.count("\n"), "line breaks kept")
@@ -723,7 +861,6 @@ func _remove_tree(path: String) -> void:
 
 
 # --- W4 (SAF-4): games reach the trainer only through ctx.directives ------------------------------
-
 
 ## The W3 fixture (build/w3/safety_fixture/src/games/rogue/rogue_game.gd): a game that changes
 ## trainer load without ctx.directives, naming none of the guarded setters. W3: 0 violations.
@@ -790,8 +927,12 @@ func test_the_w3_rogue_game_is_flagged() -> void:
 	for x in v:
 		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
 	for e: String in [
-		"7:LocalRider:class", "7:TrainerService:class", "7:local_rider:member",
-		"8:governor:member", "10:DirectiveRouter:class", "11:LocalRider:class",
+		"7:LocalRider:class",
+		"7:TrainerService:class",
+		"7:local_rider:member",
+		"8:governor:member",
+		"10:DirectiveRouter:class",
+		"11:LocalRider:class",
 		"15:resume:member",
 	]:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
@@ -806,8 +947,13 @@ func test_more_ways_into_the_stack_are_flagged() -> void:
 	for x in v:
 		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
 	for e: String in [
-		"9:TrainerService:dynamic", "10:emergency_safe:dynamic", "11:directives.riders:router",
-		"12:_riders:member", "13:governor:dynamic", "14:resume:call", "15:configure_governor:member",
+		"9:TrainerService:dynamic",
+		"10:emergency_safe:dynamic",
+		"11:directives.riders:router",
+		"12:_riders:member",
+		"13:governor:dynamic",
+		"14:resume:call",
+		"15:configure_governor:member",
 		"16:trainer_service:member",
 	]:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
@@ -823,34 +969,61 @@ func test_the_same_code_outside_src_games_is_the_platforms_business() -> void:
 
 func test_scene_files_are_scanned() -> void:
 	var root := _fixture_dir()
-	_write(root, "src/app/panel.tscn", """[gd_scene format=3]
+	_write(
+		root,
+		"src/app/panel.tscn",
+		"""[gd_scene format=3]
 
 [node name="Panel" type="Control"]
 
 [connection signal="pressed" from="Button" to="." method="set_target_power"]
-""")
-	_write(root, "src/games/rogue/rogue.tscn", """[gd_scene load_steps=2 format=3]
+"""
+	)
+	_write(
+		root,
+		"src/games/rogue/rogue.tscn",
+		"""[gd_scene load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://addons/wattlands/core/local_rider.gd" id="1"]
 
 [node name="Rogue" type="Node"]
 script = ExtResource("1")
-""")
-	_write(root, "src/games/rogue/anim.tres", """[gd_resource type="Animation" format=3]
+"""
+	)
+	_write(
+		root,
+		"src/games/rogue/anim.tres",
+		"""[gd_resource type="Animation" format=3]
 
 [resource]
 tracks/0/type = "method"
 tracks/0/keys = {"values": [{"args": [], "method": &"emergency_safe"}]}
-""")
+"""
+	)
 	var result := scan_roots([root])
 	var v: Array[Dictionary] = result["violations"]
 	var got := {}
 	for x in v:
 		got["%s:%s" % [str(x["path"]).get_file(), x["name"]]] = true
-	assert_true(got.has("panel.tscn:set_target_power"), "a signal connection naming a setter\n" + describe(v))
-	assert_true(got.has("rogue.tscn:addons/wattlands/core/local_rider.gd"), "a game scene scripting a LocalRider\n" + describe(v))
-	assert_true(got.has("anim.tres:emergency_safe"), "a method track in a game resource\n" + describe(v))
-	assert_eq((result["files"] as Array).filter(func(f: String) -> bool: return not f.ends_with(".gd")).size(), 3)
+	assert_true(
+		got.has("panel.tscn:set_target_power"),
+		"a signal connection naming a setter\n" + describe(v)
+	)
+	assert_true(
+		got.has("rogue.tscn:addons/wattlands/core/local_rider.gd"),
+		"a game scene scripting a LocalRider\n" + describe(v)
+	)
+	assert_true(
+		got.has("anim.tres:emergency_safe"), "a method track in a game resource\n" + describe(v)
+	)
+	assert_eq(
+		(
+			(result["files"] as Array)
+			. filter(func(f: String) -> bool: return not f.ends_with(".gd"))
+			. size()
+		),
+		3
+	)
 
 
 # --- W4r2 (SAF-4 recheck): the GameHost's rider map, setup / set_plan / start_phase -------------
@@ -931,8 +1104,11 @@ func test_the_w4r2_rogue_game_is_flagged() -> void:
 	for x in v:
 		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
 	for e: String in [
-		"6:local_riders:member", "8:setup:receiver", "8:governor_profile:dynamic",
-		"10:set_plan:receiver", "11:start_phase:receiver",
+		"6:local_riders:member",
+		"8:setup:receiver",
+		"8:governor_profile:dynamic",
+		"10:set_plan:receiver",
+		"11:start_phase:receiver",
 	]:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
 	assert_gt(v.size(), 0, "W4r2: a game reaching get_parent().local_riders gave 0 violations")
@@ -946,10 +1122,18 @@ func test_more_shapes_of_the_game_host_route_are_flagged() -> void:
 	for x in v:
 		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
 	for e: String in [
-		"2:local_rider:dynamic", "7:GameHost:class", "8:_local_riders:member",
-		"9:local_rider_for:member", "10:local_rider:dynamic", "11:governor_profile:ident",
-		"12:setup:receiver", "13:start_phase:receiver", "14:resume_phase:receiver",
-		"15:set_plan:dynamic", "16:local_rider:dynamic", "17:setup:receiver",
+		"2:local_rider:dynamic",
+		"7:GameHost:class",
+		"8:_local_riders:member",
+		"9:local_rider_for:member",
+		"10:local_rider:dynamic",
+		"11:governor_profile:ident",
+		"12:setup:receiver",
+		"13:start_phase:receiver",
+		"14:resume_phase:receiver",
+		"15:set_plan:dynamic",
+		"16:local_rider:dynamic",
+		"17:setup:receiver",
 	]:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
 
@@ -962,23 +1146,33 @@ func test_a_games_own_typed_setup_calls_pass() -> void:
 
 
 func test_receiver_rules() -> void:
-	var code: String = lex("var a: MultiMeshScatter\nvar b\nvar c: Node\nvar d: LocalRider\nvar e: Foo\nvar e = 1\n")["code"]
+	var code: String = lex(
+		"var a: MultiMeshScatter\nvar b\nvar c: Node\nvar d: LocalRider\nvar e: Foo\nvar e = 1\n"
+	)["code"]
 	var decls := {}
 	assert_true(receiver_is_safe("a", code, decls), "typed with a kit class")
 	assert_false(receiver_is_safe("b", code, decls), "untyped")
 	assert_false(receiver_is_safe("c", code, decls), "Node can hold a LocalRider")
 	assert_false(receiver_is_safe("d", code, decls), "a stack class")
 	assert_false(receiver_is_safe("e", code, decls), "one untyped declaration is enough")
-	assert_false(receiver_is_safe("undeclared", code, decls), "not declared in the file (an autoload)")
+	assert_false(
+		receiver_is_safe("undeclared", code, decls), "not declared in the file (an autoload)"
+	)
 	assert_true(receiver_is_safe("ctx.hud", code, decls))
 	assert_false(receiver_is_safe("context.hud", code, decls), "ctx only as the whole root")
 	assert_false(receiver_is_safe("$Scatter", code, decls))
 	var direct := "x := get_parent().local_riders[ctx.local_peer].setup("
-	assert_eq(receiver_of(direct, direct.rfind(".setup")), "get_parent().local_riders[ctx.local_peer]")
+	assert_eq(
+		receiver_of(direct, direct.rfind(".setup")), "get_parent().local_riders[ctx.local_peer]"
+	)
 	# A chain over a line continuation, with spaces before a dot.
 	var chained := "\tfoo(a)\\\n\t\t.bar[1] .setup("
 	assert_eq(receiver_of(chained, chained.rfind(".")), "foo(a)\\\n\t\t.bar[1]")
 	var node_path := "\t$Node/Path.setup("
-	assert_eq(receiver_of(node_path, node_path.rfind(".")), "Path", "a node path ends the receiver: not declared, so flagged")
+	assert_eq(
+		receiver_of(node_path, node_path.rfind(".")),
+		"Path",
+		"a node path ends the receiver: not declared, so flagged"
+	)
 	var shorthand := "\t$Scatter.setup("
 	assert_eq(receiver_of(shorthand, shorthand.rfind(".")), "$Scatter")

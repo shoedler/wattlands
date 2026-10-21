@@ -116,7 +116,7 @@ func _off_screen(s: Control) -> Array[String]:
 
 
 ## Wait until the page settled on its fit steps (one per frame at most).
-func _settle(s: AppResultsScreen) -> void:
+func _settle(_s: AppResultsScreen) -> void:
 	await wait_process_frames(AppResultsScreen.FIT_CAP_MORE + 3)
 
 

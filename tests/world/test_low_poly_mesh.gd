@@ -4,6 +4,7 @@ extends GutTest
 ## ground darkening, the vertex haze fallback, and the world3d demo scene.
 
 const RED := Color(0.8, 0.2, 0.2)
+const DEMO_SCENE := "res://addons/wattlands/world3d/demo.tscn"
 
 
 ## [normals, positions, colors] of every surface of the built mesh.
@@ -278,7 +279,7 @@ func test_make_instance_casts_shadows() -> void:
 
 
 func test_demo_scene_runs_headless() -> void:
-	var scene: PackedScene = load("res://addons/wattlands/world3d/demo.tscn")
+	var scene: PackedScene = load(DEMO_SCENE)
 	assert_not_null(scene)
 	var demo: Node3D = scene.instantiate()
 	add_child_autofree(demo)
@@ -302,7 +303,7 @@ func test_demo_scene_runs_headless() -> void:
 
 
 func test_demo_scene_animates_and_logs_its_budget() -> void:
-	var scene: PackedScene = load("res://addons/wattlands/world3d/demo.tscn")
+	var scene: PackedScene = load(DEMO_SCENE)
 	var demo: Node3D = scene.instantiate()
 	add_child_autofree(demo)
 	await wait_process_frames(2)

@@ -342,30 +342,12 @@ func setup(p_args: Dictionary) -> String:
 		if int(s) < 0 or int(s) >= total:
 			return "--haptics-off: slot %d does not exist (0..%d)" % [int(s), total - 1]
 		hoff.append(int(s))
+	var options_err := _check_option_args(game_id, players)
+	if options_err != "":
+		return options_err
 	var opts: Variant = args["options"]
-	if not (opts is Dictionary):
-		return "--options: must be a JSON object"
-	var oerr := registry.check_option_values(game_id, opts)
-	if oerr != "":
-		return "--" + oerr
 	var pops: Variant = args["player_options"]
-	if not (pops is Array):
-		return "--player-options: must be a JSON array"
-	if (pops as Array).size() > players:
-		return "--player-options: %d entries for %d human slots" % [(pops as Array).size(), players]
-	for i in (pops as Array).size():
-		if not (pops[i] is Dictionary):
-			return "--player-options[%d]: must be a JSON object" % i
-		var perr := registry.check_option_values(game_id, pops[i], true)
-		if perr != "":
-			return "--player-options[%d].%s" % [i, perr.trim_prefix("player_options.")]
 	var ov: Variant = args["override"]
-	if not (ov is Dictionary):
-		return "--override: must be a JSON object"
-	for rel: Variant in (ov as Dictionary).keys():
-		var p := registry.content_dir(game_id).path_join(str(rel))
-		if not FileAccess.file_exists(p):
-			return "--override: %s does not exist" % p
 	role = Wl.SOLO if players == 1 else Wl.HOST
 	var p_seed := int(args["seed"])
 	# Isolation: every persisted file of this run lives under a temp root.
@@ -708,6 +690,35 @@ func temp_root() -> String:
 
 
 # --- internals --------------------------------------------------------------------------
+
+
+## setup's checks of --options, --player-options and --override: "" or the error.
+func _check_option_args(game_id: String, players: int) -> String:
+	var opts: Variant = args["options"]
+	if not (opts is Dictionary):
+		return "--options: must be a JSON object"
+	var oerr := registry.check_option_values(game_id, opts)
+	if oerr != "":
+		return "--" + oerr
+	var pops: Variant = args["player_options"]
+	if not (pops is Array):
+		return "--player-options: must be a JSON array"
+	if (pops as Array).size() > players:
+		return "--player-options: %d entries for %d human slots" % [(pops as Array).size(), players]
+	for i in (pops as Array).size():
+		if not (pops[i] is Dictionary):
+			return "--player-options[%d]: must be a JSON object" % i
+		var perr := registry.check_option_values(game_id, pops[i], true)
+		if perr != "":
+			return "--player-options[%d].%s" % [i, perr.trim_prefix("player_options.")]
+	var ov: Variant = args["override"]
+	if not (ov is Dictionary):
+		return "--override: must be a JSON object"
+	for rel: Variant in (ov as Dictionary).keys():
+		var p := registry.content_dir(game_id).path_join(str(rel))
+		if not FileAccess.file_exists(p):
+			return "--override: %s does not exist" % p
+	return ""
 
 
 func _resolve_specs(players: int) -> String:

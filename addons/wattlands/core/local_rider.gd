@@ -716,7 +716,10 @@ func _take_safety_values_from_profile() -> void:
 	if differs:
 		push_warning(
 			(
-				"LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; using the rider's own profile: FTP %s W (verified %s), haptics %s at %s"
+				(
+					"LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; "
+					+ "using the rider's own profile: FTP %s W (verified %s), haptics %s at %s"
+				)
 				% [
 					peer_id,
 					str(slot.ftp),

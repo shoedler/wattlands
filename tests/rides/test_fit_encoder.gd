@@ -139,7 +139,8 @@ func test_lap_fields_and_name() -> void:
 		)
 	)
 	var d := _decode(enc.finish())
-	var lap_def: Dictionary = (d["definitions"] as Array).filter(func(x: Dictionary) -> bool: return int(x["global"]) == 19)[0]
+	var is_lap := func(x: Dictionary) -> bool: return int(x["global"]) == 19
+	var lap_def: Dictionary = (d["definitions"] as Array).filter(is_lap)[0]
 	assert_eq(lap_def["dev_fields"], [[0, 32, 0]], "one developer field: lap_name")
 	var f: Dictionary = Reader.of(d, 19)[0]["fields"]
 	assert_eq(f[254], 2, "message_index")

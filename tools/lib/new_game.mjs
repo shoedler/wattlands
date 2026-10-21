@@ -263,7 +263,9 @@ export function scaffold(root, id, { dryRun = false } = {}) {
   const summary = [
     `new_game: scaffolded "${id}" (class prefix ${classPrefix(id)}, string keys ${id.toUpperCase()}_*): ${written.length} files.`,
     ...kept.map((k) => `new_game: kept existing ${k}`),
-    `next: tools/godot.sh --headless --path . --import, then read docs/GAME_SDK.md and edit src/games/${id}/game.json`,
+    // The renamed identifiers are shorter than the template's, so gdformat re-wraps a few lines.
+    `next: uvx --from gdtoolkit==4.5.0 gdformat src/games/${id} tests/games/${id}, ` +
+      `tools/godot.sh --headless --path . --import, then read docs/GAME_SDK.md and edit src/games/${id}/game.json`,
   ];
   return { code: 0, message: summary.join('\n'), written, kept };
 }

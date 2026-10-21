@@ -1,4 +1,3 @@
-# gdlint: disable=max-public-methods
 extends GutTest
 ## GestureRecognizer (BRIEF 3.5) on synthetic ~1 Hz streams: pedal_start (3 s), surge outside
 ## ERG (1.3 x and +40 W branches, two samples) and inside ERG (flywheel speed 1.12 x),

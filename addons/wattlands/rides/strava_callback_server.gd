@@ -172,7 +172,10 @@ func _respond(c: StreamPeerTCP, code: int, message: String) -> void:
 		. to_utf8_buffer()
 	)
 	var head := (
-		"HTTP/1.1 %d %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n"
+		(
+			"HTTP/1.1 %d %s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %d\r\n"
+			+ "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
+		)
 		% [code, str(reason.get(code, "OK")), body.size()]
 	)
 	c.put_data(head.to_ascii_buffer())

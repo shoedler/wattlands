@@ -132,7 +132,10 @@ func describe(screen: AppSessionScreen) -> String:
 	var box_rect := box.get_global_rect() if box != null and box.visible else Rect2()
 	var overlap := box_rect.has_area() and box_rect.intersects(pb)
 	return (
-		"screenshot: session %s at %.1f s: panic button %s, reserved bottom-right %s, bottom-right stack %s, overlap %s, top layer %d above HUD layer %d"
+		(
+			"screenshot: session %s at %.1f s: panic button %s, reserved bottom-right %s, "
+			+ "bottom-right stack %s, overlap %s, top layer %d above HUD layer %d"
+		)
 		% [
 			role,
 			session_seconds(),

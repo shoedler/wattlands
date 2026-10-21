@@ -599,18 +599,11 @@ static func build_multipart(
 		out.append_array(str(f[1]).to_utf8_buffer())
 		out.append_array("\r\n".to_utf8_buffer())
 	var safe_name := filename.replace('"', "").replace("\r", "").replace("\n", "")
-	(
-		out
-		. append_array(
-			(
-				(
-					'--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\nContent-Type: application/octet-stream\r\n\r\n'
-					% [boundary, file_field, safe_name]
-				)
-				. to_utf8_buffer()
-			)
-		)
+	var part_head := (
+		'--%s\r\nContent-Disposition: form-data; name="%s"; filename="%s"\r\n'
+		+ "Content-Type: application/octet-stream\r\n\r\n"
 	)
+	out.append_array((part_head % [boundary, file_field, safe_name]).to_utf8_buffer())
 	out.append_array(data)
 	out.append_array(("\r\n--%s--\r\n" % boundary).to_utf8_buffer())
 	return out

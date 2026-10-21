@@ -21,8 +21,8 @@ extends CanvasLayer
 ##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
 ##   resizes, or the PixelViewport emits `layout_changed`. Kit widgets in a rect shrink to
 ##   fit it (several in one rect stack and share it); key numbers stay >= 48 px, so a rect
-##   below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without a PixelViewport (3D games) a Rect2i is
-##   taken as 1080p pixels.
+##   below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without
+##   a PixelViewport (3D games) a Rect2i is taken as 1080p pixels.
 ## - The CanvasLayer `layer` is LAYER (10): a game view's own CanvasLayer with a lower
 ##   layer draws under the HUD (vignettes), a higher one above it.
 ## - Raw W and %FTP always show: if the spec has no power gauge (and not both a power_w and

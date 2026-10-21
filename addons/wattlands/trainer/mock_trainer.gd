@@ -462,11 +462,21 @@ static func describe_profiles() -> Dictionary:
 		"intervals": "on_w for on_s, then off_w for off_s, repeating from t = 0",
 		"noise": "seeded Gaussian noise (sd_w, sd_rpm) on each sample while pedaling",
 		"band":
-		"cadence follows the published cadence band's centre + offset_rpm (2 s lag, noise within +-1.5 rpm); no band: the preferred cadence",
+		(
+			"cadence follows the published cadence band's centre + offset_rpm (2 s lag, noise "
+			+ "within +-1.5 rpm); no band: the preferred cadence"
+		),
 		"cadence_drop":
-		"cadence held at rpm from at_s, or after_s into phase at_phase, or once the applied ERG target reaches at_target_pct % FTP; for for_s (default: the rest of the run); rpm 0 stops the rider",
+		(
+			"cadence held at rpm from at_s, or after_s into phase at_phase, or once the applied "
+			+ "ERG target reaches at_target_pct % FTP; for for_s (default: the rest of the run); "
+			+ "rpm 0 stops the rider"
+		),
 		"surge":
-		"every every_s, cadence and speed x (1 + lift) for for_s and at least two notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM",
+		(
+			"every every_s, cadence and speed x (1 + lift) for for_s and at least two "
+			+ "notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM"
+		),
 	}
 	var defaults := {
 		"erg": {"compliance": 1.0},

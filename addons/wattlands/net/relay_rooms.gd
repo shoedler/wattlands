@@ -2,9 +2,10 @@ class_name RelayRooms
 extends RefCounted
 ## The relay's room semantics (BRIEF 5.3) without sockets: hello and version check, room
 ## codes, peer ids from 1, create/join/leave, reconnect tokens (one per peer, kept while the
-## peer is in the room, valid 120 s after a drop, same peer id), host drops held for 120 s, `to: 0` broadcast excluding the sender, non-hosts only to the host,
-## 16 KB messages, 60 msgs/s per connection (burst 120), 60 s idle timeout and the 4 h room
-## lifetime. It never looks inside `d`.
+## peer is in the room, valid 120 s after a drop, same peer id), host drops held for 120 s,
+## `to: 0` broadcast excluding the sender, non-hosts only to the host, 16 KB messages,
+## 60 msgs/s per connection (burst 120), 60 s idle timeout and the 4 h room lifetime. It never
+## looks inside `d`.
 ##
 ## Shared by LoopbackHub (tests and in-process simulations) and LocalRelayServer (LAN play
 ## and the RelayTransport tests). Connections are ints chosen by the owner. Feed it with
@@ -302,7 +303,7 @@ func _on_join(conn: int, c: Dictionary, msg: Dictionary) -> void:
 	_to_room(room, {"t": "peer_joined", "peer": peer}, peer)
 
 
-func _on_leave(conn: int, c: Dictionary) -> void:
+func _on_leave(_conn: int, c: Dictionary) -> void:
 	var code: String = c["code"]
 	if code == "" or not _rooms.has(code):
 		return

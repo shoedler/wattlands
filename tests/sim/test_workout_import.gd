@@ -1,4 +1,3 @@
-# gdlint: disable=max-public-methods
 extends GutTest
 ## ZwoImport.parse_zwo (BRIEF 3.7, 4.6.1, 4.6.8): every supported tag, IntervalsT
 ## expansion, FreeRide as SIM, unsupported tags skipped with warnings, the warm-up prefix,

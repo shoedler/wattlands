@@ -111,13 +111,13 @@ static func rgb8_to_oklab(r: int, g: int, b: int) -> Vector3:
 	var l: float = 0.4122214708 * lr + 0.5363325363 * lg + 0.0514459929 * lb
 	var m: float = 0.2119034982 * lr + 0.6806995451 * lg + 0.1073969566 * lb
 	var s: float = 0.0883024619 * lr + 0.2817188376 * lg + 0.6299787005 * lb
-	var l_: float = pow(maxf(l, 0.0), 1.0 / 3.0)
-	var m_: float = pow(maxf(m, 0.0), 1.0 / 3.0)
-	var s_: float = pow(maxf(s, 0.0), 1.0 / 3.0)
+	var l_cbrt: float = pow(maxf(l, 0.0), 1.0 / 3.0)
+	var m_cbrt: float = pow(maxf(m, 0.0), 1.0 / 3.0)
+	var s_cbrt: float = pow(maxf(s, 0.0), 1.0 / 3.0)
 	return Vector3(
-		0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
-		1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_,
-		0.0259040371 * l_ + 0.7827717662 * m_ - 0.8086757660 * s_
+		0.2104542553 * l_cbrt + 0.7936177850 * m_cbrt - 0.0040720468 * s_cbrt,
+		1.9779984951 * l_cbrt - 2.4285922050 * m_cbrt + 0.4505937099 * s_cbrt,
+		0.0259040371 * l_cbrt + 0.7827717662 * m_cbrt - 0.8086757660 * s_cbrt
 	)
 
 

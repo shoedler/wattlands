@@ -206,23 +206,24 @@ func test_restarted_client_resumes_the_ramp() -> void:
 	var after_w := rider.telemetry().applied_target_w
 	var gov_after := float(rider.governor.status()["phase_elapsed_s"])
 	var host_el := _host.tracker.state(peer).elapsed_s
-	(
-		gut
-		. p(
-			(
-				"restarted peer %d: applied %d W -> %d W; governor phase elapsed %.1f s -> %.1f s; GameHost local phase elapsed %.1f s; host phase elapsed %.1f s; phase %d vs host %d"
-				% [
-					peer,
-					before_w,
-					after_w,
-					gov_before,
-					gov_after,
-					c.local_phase_state().elapsed_s,
-					host_el,
-					c.local_phase_state().index,
-					_host.tracker.index_of(peer)
-				]
-			)
+	var report := (
+		"restarted peer %d: applied %d W -> %d W; governor phase elapsed %.1f s -> %.1f s; "
+		+ "GameHost local phase elapsed %.1f s; host phase elapsed %.1f s; phase %d vs host %d"
+	)
+	gut.p(
+		(
+			report
+			% [
+				peer,
+				before_w,
+				after_w,
+				gov_before,
+				gov_after,
+				c.local_phase_state().elapsed_s,
+				host_el,
+				c.local_phase_state().index,
+				_host.tracker.index_of(peer)
+			]
 		)
 	)
 	assert_eq(

@@ -157,12 +157,9 @@ func test_every_unlock_id_has_its_results_screen_name() -> void:
 
 ## Views are exempt: they only read state and may seed their own cosmetic RNG from ctx.seed.
 func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
-	var re := (
-		RegEx
-		. create_from_string(
-			"\\bTime\\.|OS\\.get_ticks|OS\\.get_unix_time|RandomNumberGenerator\\.new\\(|(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize)\\("
-		)
-	)
+	var clocks := "\\bTime\\.|OS\\.get_ticks|OS\\.get_unix_time|RandomNumberGenerator\\.new\\("
+	var globals := "(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize)\\("
+	var re := RegEx.create_from_string(clocks + "|" + globals)
 	var scanned := 0
 	for path in _files(F.GAME_DIR, ["gd"]):
 		if path.trim_prefix(F.GAME_DIR).contains("view"):

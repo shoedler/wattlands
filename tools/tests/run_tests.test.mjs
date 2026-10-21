@@ -1,14 +1,48 @@
 // End-to-end tests for tools/run_tests and tools/run_tests.ps1 against a scratch project under build/
-// with a fake GUT, so the gate logic, the green count, check_scripts and the step selection run
-// through the real wrappers and real Godot without touching the main checkout.
+// with a fake GUT, so the gate logic, the green count, check_scripts, the lint gate and the step
+// selection run through the real wrappers and real Godot without touching the main checkout.
 import { test, describe, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { TOOLS, IS_WIN, BASH, godotBin, makeScratchProject, runProc, powershellExe, rmQuiet } from './helpers.mjs';
+import { spawnSync } from 'node:child_process';
+import { TOOLS, REPO, IS_WIN, BASH, godotBin, makeScratchProject, runProc, powershellExe, rmQuiet, minimalEnv } from './helpers.mjs';
+import { evaluateLint, parseArgs, GDTOOLKIT_VERSION } from '../lib/run_tests.mjs';
 
 const GODOT = godotBin();
 const skipNoGodot = (!GODOT && 'no Godot binary') || (!BASH && 'bash not found');
+
+// The runner's own detection order: gdlint on PATH at the pinned version, else uvx.
+function hasGdtoolkit() {
+  const ok = (exe, args) => {
+    const r = spawnSync(exe, args, { encoding: 'utf8', timeout: 90_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    return r.status === 0 && `${r.stdout ?? ''}`.includes(GDTOOLKIT_VERSION);
+  };
+  return ok('gdlint', ['--version']) || ok('uvx', ['--from', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'gdlint', '--version']);
+}
+const skipNoGdtoolkit = skipNoGodot || (!hasGdtoolkit() && `gdtoolkit ${GDTOOLKIT_VERSION} unavailable`);
+
+describe('evaluateLint and the lint options', () => {
+  test('any gdlint problem or file to reformat fails the static step', () => {
+    const clean = { code: 0, text: 'Success: no problems found\n' };
+    const tidy = { code: 0, text: '3 files would be left unchanged\n' };
+    assert.deepEqual(evaluateLint(clean, tidy), { fail: false, note: 'gdlint clean, gdformat clean' });
+    const lint = evaluateLint({ code: 1, text: 'src/a.gd:3: Error: ...\nFailure: 2 problems found\n' }, tidy);
+    assert.equal(lint.fail, true);
+    assert.match(lint.note, /^gdlint 2 problems, gdformat clean \(see build\/gdlint\.log, build\/gdformat\.log\)$/);
+    const fmt = evaluateLint(clean, { code: 1, text: 'would reformat src/a.gd\n1 file would be reformatted, 2 files would be left unchanged.\n' });
+    assert.equal(fmt.fail, true);
+    assert.match(fmt.note, /gdformat 1 files to reformat/);
+    assert.equal(evaluateLint({ code: 2, text: 'boom' }, tidy).note.startsWith('gdlint exit 2'), true);
+  });
+
+  test('--no-lint skips lint; --strict-lint is an accepted no-op', () => {
+    assert.equal(parseArgs(['--no-lint']).noLint, true);
+    const o = parseArgs(['--strict-lint']);
+    assert.equal(o.noLint, false);
+    assert.equal('strictLint' in o, false);
+  });
+});
 
 // Reads res://fake_gut.json and behaves like GUT: writes the JUnit file, prints a summary, exits.
 const FAKE_GUT = `extends SceneTree
@@ -50,6 +84,7 @@ before(() => {
     'tools/check_scripts.gd': fs.readFileSync(path.join(TOOLS, 'check_scripts.gd'), 'utf8'),
     'src/good.gd': 'extends RefCounted\n\n\nfunc answer() -> int:\n\treturn 42\n',
     'tests/unit/.keep': '',
+    gdlintrc: fs.readFileSync(path.join(REPO, 'gdlintrc'), 'utf8'),
   });
   cleanup.push(project);
 });
@@ -70,10 +105,14 @@ const green = () => {
   }
 };
 
-function runTests(args, { shell = 'bash', env = {} } = {}) {
-  const all = [`--project=${project}`, '--no-lint', ...args];
+function runTests(args, { shell = 'bash', env = {}, lint = false } = {}) {
+  const all = [`--project=${project}`, ...(lint ? [] : ['--no-lint']), ...args];
   const childEnv = { ...process.env };
   delete childEnv.WATTLANDS_RUN_TESTS_NESTED;
+  // Windows names variables case-insensitively ("Path"): drop the old spelling of an overridden one.
+  for (const key of Object.keys(env)) {
+    for (const old of Object.keys(childEnv)) if (old !== key && old.toUpperCase() === key.toUpperCase()) delete childEnv[old];
+  }
   Object.assign(childEnv, env);
   if (shell === 'ps') {
     return runProc(powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_tests.ps1'), ...all], {
@@ -146,6 +185,38 @@ describe('tools/run_tests (bash)', { skip: skipNoGodot }, () => {
     } finally {
       fs.rmSync(broken);
     }
+  });
+
+  test('static: gdlint and gdformat findings fail the step', { skip: skipNoGdtoolkit }, async () => {
+    const ok = await runTests(['--only=static'], { lint: true });
+    assert.equal(ok.code, 0, ok.stdout);
+    assert.match(row(ok.stdout, 'static').rest, /check_scripts \d+ scripts ok; gdlint clean, gdformat clean/);
+    const cases = [
+      // gdformat wants two blank lines before a function; gdlint has nothing to say.
+      ['unformatted.gd', 'extends RefCounted\nfunc f() -> int:\n\treturn 1\n', /gdlint clean, gdformat 1 files to reformat/],
+      // gdformat leaves it alone; gdlint's function-name rule (kept by ./gdlintrc) rejects it.
+      ['bad_name.gd', 'extends RefCounted\n\n\nfunc BadName() -> int:\n\treturn 1\n', /gdlint 1 problems, gdformat clean/],
+    ];
+    for (const [name, source, note] of cases) {
+      const file = path.join(project, 'src', name);
+      fs.writeFileSync(file, source);
+      try {
+        const bad = await runTests(['--only=static'], { lint: true });
+        assert.equal(bad.code, 1, `${name}: ${bad.stdout}`);
+        assert.equal(row(bad.stdout, 'static').status, 'FAIL', name);
+        assert.match(row(bad.stdout, 'static').rest, note, name);
+        assert.match(row(bad.stdout, 'static').rest, /check_scripts \d+ scripts ok/, name);
+      } finally {
+        fs.rmSync(file);
+      }
+    }
+  });
+
+  test('static: without gdtoolkit the lint part is skipped, not failed', async () => {
+    const r = await runTests(['--only=static'], { lint: true, env: { PATH: minimalEnv().PATH } });
+    assert.equal(r.code, 0, r.stdout + r.stderr);
+    assert.equal(row(r.stdout, 'static').status, 'PASS');
+    assert.match(row(r.stdout, 'static').rest, /gdtoolkit unavailable, skipped/);
   });
 
   test('every gate runs without the art variables (OWNERSHIP TL5) and with both locks', async () => {

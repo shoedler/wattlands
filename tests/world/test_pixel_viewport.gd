@@ -4,6 +4,7 @@ extends GutTest
 ## game view placement, headless capture, and the world2d demo scene.
 
 const BASE := Vector2i(640, 360)
+const DEMO_SCENE := "res://addons/wattlands/world2d/demo.tscn"
 
 
 func _make(size: Vector2, base: Vector2i = BASE, screen_scale: float = 0.0) -> PixelViewport:
@@ -340,7 +341,7 @@ func test_defaults_full_rect_and_mouse_ignore() -> void:
 
 
 func test_demo_scene_runs_headless() -> void:
-	var scene: PackedScene = load("res://addons/wattlands/world2d/demo.tscn")
+	var scene: PackedScene = load(DEMO_SCENE)
 	assert_not_null(scene)
 	var demo: Control = scene.instantiate()
 	add_child_autofree(demo)
@@ -378,7 +379,7 @@ func test_demo_scene_runs_headless() -> void:
 
 
 func test_demo_scene_animates_over_time() -> void:
-	var scene: PackedScene = load("res://addons/wattlands/world2d/demo.tscn")
+	var scene: PackedScene = load(DEMO_SCENE)
 	var demo: Control = scene.instantiate()
 	add_child_autofree(demo)
 	await wait_process_frames(4)

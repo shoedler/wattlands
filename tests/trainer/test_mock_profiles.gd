@@ -58,7 +58,10 @@ func test_brief_and_game_brief_specs_parse() -> void:
 		"erg+band:offset_rpm=18",
 		"erg+band+cadence_drop:rpm=40,at_s=600,for_s=20",
 		"erg:compliance=0.7",
-		"erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=20+cadence_drop:rpm=30,at_phase=5,at_target_pct=60,for_s=20",
+		(
+			"erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=20"
+			+ "+cadence_drop:rpm=30,at_phase=5,at_target_pct=60,for_s=20"
+		),
 		"erg+cadence_drop:rpm=30,at_target_pct=60",
 		"surge",
 		"erg+noise+band+surge+cadence_drop:rpm=0,at_s=0",

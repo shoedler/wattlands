@@ -20,7 +20,7 @@ Fonts and audio: Atkinson Hyperlegible was not downloaded in this run; the theme
 | ws | 8.22.0 | MIT | `server/relay/package.json` + lockfile, `npm ci` | The relay's preferred WebSocket layer (a zero-dependency RFC 6455 server is the fallback) | `docs/deps.d/ws.md` |
 | @garmin/fitsdk | 21.218.0 | Garmin FIT Protocol License (not open source; internal use, no redistribution) | `tools/fit_check/package.json` + lockfile, `npm ci` | Decoding FIT files in tests (`tools/fit_check`); the app's encoder shares no code with it | `docs/deps.d/garmin-fitsdk.md` |
 | GUT (Godot Unit Test) | 9.7.1 (`aeb5d4f`) | MIT | `addons/gut/` (excluded from exports) | Unit tests | `docs/deps.d/gut.md` |
-| gdtoolkit (gdlint, gdformat) | 4.5.0, pinned in `tools/lib/run_tests.mjs` | MIT | `uvx`, not vendored | Optional lint step | `docs/deps.d/gdtoolkit.md` |
+| gdtoolkit (gdlint, gdformat) | 4.5.0, pinned in `tools/lib/run_tests.mjs` | MIT | `uvx`, not vendored | Lint in the static gate (skipped when unavailable) | `docs/deps.d/gdtoolkit.md` |
 | bleak, websockets, PyInstaller | bleak not installable on Python 3.15 here; websockets 17.3; PyInstaller 6.22.3 | MIT; BSD-3-Clause; GPL-2.0+ with the bootloader exception | `tools/trainer_bridge`, installed at use time | The optional Python trainer bridge and probe (P1) | `docs/deps.d/trainer_bridge.md` |
 
 Optional tools: Python 3.12+ with uv (the trainer bridge and linting), Docker (the relay image).

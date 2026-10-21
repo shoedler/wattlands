@@ -181,12 +181,8 @@ func test_no_static_gdble_types_in_the_transport() -> void:
 	var src := _code_only(FileAccess.get_file_as_string(TRANSPORT))
 	assert_false(src.is_empty(), "transport source readable")
 	var re := RegEx.new()
-	(
-		re
-		. compile(
-			"(:\\s*|->\\s*|\\bas\\s+|\\bis\\s+|\\bextends\\s+)(BluetoothManager|BleDevice)\\b|\\b(BluetoothManager|BleDevice)\\s*\\."
-		)
-	)
+	var as_type := "(:\\s*|->\\s*|\\bas\\s+|\\bis\\s+|\\bextends\\s+)(BluetoothManager|BleDevice)\\b"
+	re.compile(as_type + "|\\b(BluetoothManager|BleDevice)\\s*\\.")
 	var hit := re.search(src)
 	assert_null(
 		hit, "GDBLE class used as a static type: %s" % (hit.get_string() if hit != null else "")

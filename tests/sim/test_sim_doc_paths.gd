@@ -6,7 +6,11 @@ extends GutTest
 
 const SIM_DIR := "res://addons/wattlands/sim"
 const DECISIONS := "res://docs/decisions/sim.md"
-const PATH_RE := "(?:(?<=res://)|(?<![A-Za-z0-9_./-]))((?:addons|src|tests|tools|content|server|docs)/[A-Za-z0-9_/.-]+\\.(?:gd|json|csv|md|tscn|tres|mjs))"
+const PATH_RE := (
+	"(?:(?<=res://)|(?<![A-Za-z0-9_./-]))"
+	+ "((?:addons|src|tests|tools|content|server|docs)/"
+	+ "[A-Za-z0-9_/.-]+\\.(?:gd|json|csv|md|tscn|tres|mjs))"
+)
 
 
 ## Repo-relative paths named in `text`.

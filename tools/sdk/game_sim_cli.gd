@@ -122,7 +122,10 @@ func main(raw: PackedStringArray, parent: Node) -> int:
 	if script_errors > 0 and code == EXIT_OK:
 		_fail(
 			(
-				"run_game_sim: %d script error(s) during the run, the first: %s. Fix them (BRIEF 7); the report, if written, is kept"
+				(
+					"run_game_sim: %d script error(s) during the run, the first: %s. "
+					+ "Fix them (BRIEF 7); the report, if written, is kept"
+				)
 				% [script_errors, first_script_error]
 			)
 		)
@@ -145,7 +148,10 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 		if env_fn.call(v) != "1":
 			return _usage(
 				(
-					"refusing to run: %s is not 1. Start simulations with tools/run_game_sim, which sets the hardware and network locks"
+					(
+						"refusing to run: %s is not 1. Start simulations with tools/run_game_sim, "
+						+ "which sets the hardware and network locks"
+					)
 					% v
 				)
 			)
