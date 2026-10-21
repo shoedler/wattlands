@@ -47,7 +47,9 @@ extends Node
 ##   it rebuilds every component around the given device. The device is never freed here;
 ##   its creator owns it. A ride still recording is finished (stopped and saved) first, with
 ##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
-##   cleared and its phase reset to -1, so nothing from an earlier session steers the mock.
+##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
+##   nothing from an earlier session steers the mock and a profile's at_s, surges, ramps
+##   and intervals count from this setup, like the rider's platform time.
 ## - rebind_device(d): a reconnect that hands over a new device object for the same trainer
 ##   keeps the session (plan, phase, time, queues, recorder) and rebinds the governor and the
 ##   sample feed to the new object.
@@ -170,6 +172,7 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 		mock.set_cadence_band(0.0, 0.0)
 		mock.set_power_band(0.0, 0.0)
 		mock.set_phase(-1)
+		mock.restart_profile()
 	cadence = _options.get("cadence") as CadenceEstimator
 	if cadence == null:
 		cadence = CadenceEstimator.new()

@@ -256,6 +256,22 @@ func test_acks_have_a_bool_refused_and_the_dropped_channels() -> void:
 	assert_eq(acks[0]["dropped"], [], "no dropped list: empty")
 
 
+## W2 (trainer-core's note): a mock that rode through the menus restarts its profile at the
+## session's setup, so `cadence_drop:at_s`, surges, ramps and intervals count from the
+## session start, like the rider's platform time.
+func test_setup_restarts_a_mock_profile() -> void:
+	var m := _mock("erg+cadence_drop:rpm=30,at_s=20,for_s=5")
+	var r := _rider(m)
+	_run(r, 15.0)
+	assert_almost_eq(m.profile_time_s(), 15.0, 1e-6)
+	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	assert_almost_eq(m.profile_time_s(), 0.0, 1e-9, "profile time starts again with the session")
+	_run(r, 7.0)
+	assert_false(m.cadence_drop_active(), "at_s=20 counts from the new setup (22 s since the mock started)")
+	_run(r, 14.0)
+	assert_true(m.cadence_drop_active(), "21 s after the setup")
+
+
 func test_rebind_device_needs_a_set_up_rider() -> void:
 	var r := LocalRider.new()
 	add_child_autofree(r)
