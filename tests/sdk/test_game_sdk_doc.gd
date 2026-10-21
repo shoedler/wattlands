@@ -71,7 +71,8 @@ func test_the_zwo_importer_result_is_documented() -> void:
 	assert_string_contains(
 		text,
 		(
-			"`parse_zwo(xml_text)` and `parse_zwo_file(path)` return `{ok, name, description, "
+			"`ZwoImport.parse_zwo(xml_text)` and `ZwoImport.parse_zwo_file(path)` return "
+			+ "`{ok, name, description, "
 			+ "phases, blocks, clamps, clamp_records, warnings, prefix_inserted, total_s, error}`"
 		)
 	)
