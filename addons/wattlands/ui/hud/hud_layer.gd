@@ -5,7 +5,8 @@ extends CanvasLayer
 ## after W0. Readable from 3 m: key numbers >= 48 px at 1080p.
 ## It reads from the session's WlEventBus (power_band_changed, cadence_band_changed,
 ## roster_changed, toast_requested, banner_requested, readout_changed, rescue_changed,
-## phase_started) and from update() calls the GameHost makes every tick for the local rider.
+## phase_started, paused_changed, governor_status) and from update() calls the GameHost makes
+## every tick for the local rider. local_feed() draws here directly.
 ##
 ## Layout (sizes in 1080p pixels, the window's base size):
 ## - Anchors: one stack per anchor, WlTheme.MARGIN_PX (32 px) from the screen edges. Entries
@@ -50,7 +51,7 @@ var _pv: PixelViewport = null
 var _bus: WlEventBus = null
 var _root: Control = null
 var _boxes: Dictionary = {}
-## [{"rect": Rect2i, "node": VBoxContainer}]
+## [{"rect": Rect2i, "node": Control (holder, exactly the mapped rect), "stack": VBoxContainer}]
 var _slots: Array[Dictionary] = []
 var _widgets: Array[HudWidget] = []
 var _game_controls: Array[Control] = []
