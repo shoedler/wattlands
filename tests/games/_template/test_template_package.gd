@@ -106,6 +106,20 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 		assert_has(keys, k, "%s (used in %s) is in strings.csv" % [k, used[k]])
 
 
+## W4r2 R31 (GAME_SDK 15): the results screen names an unlock by the key <ID>_UNLOCK_<UNLOCK ID>
+## (upper case) and shows the raw id without it; every unlock the game hands out has that string.
+func test_every_unlock_id_has_its_results_screen_name() -> void:
+	var keys := _csv_keys()
+	var ctx := F.make_ctx(1)
+	var g: TemplateGame = autofree(F.make_game(ctx))
+	(ctx.stats as F.Stats).rows = {1: {"kj": 100.0, "time_in_band_pct": 90.0}}
+	TemplateRules.rider(g.state, 1)["laps"] = 3
+	var unlocks: Array = g.results().row(1)["unlocks"]
+	assert_gt(unlocks.size(), 0, "3 laps unlock something")
+	for id: Variant in unlocks:
+		assert_has(keys, "%sUNLOCK_%s" % [_prefix(), str(id).to_upper()], "unlock %s has its name string" % id)
+
+
 ## Views are exempt: they only read state and may seed their own cosmetic RNG from ctx.seed.
 func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 	var re := RegEx.create_from_string(
