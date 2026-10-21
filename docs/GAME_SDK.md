@@ -669,10 +669,10 @@ The template is the smallest complete game: `game.json`, `TemplateGame` (the Gam
 | `ctx.rng` | `configure`: the seeded start spread |
 | Plans with builders, a ramp, per-rider `int` option, `range_pct` | `build_effort_plans`: `PlanPhase.erg(...).with_lap()`, `.with_ramp(65)`, `work_offset` on WORK only, `.with_range(t, t + 5)` |
 | Pure rules | `TemplateRules.step(state, inputs, dt)` returns the events it raised |
-| A directive inside `range_pct` that expires back to the plan | `_phase_rules`: the "hill" `request`, once per rider at WORK elapsed 60 s |
+| A directive inside `range_pct` that expires back to the plan | `_phase_rules`: the "hill" `request`, once per rider and WORK phase, at elapsed 60 s |
 | `cadence_band`, `power_band` | `_phase_rules`, at the WORK start of each rider |
 | `teammate_status`, `readout`, toasts with a `peer` | `_phase_rules` (1 Hz), `sim_step` and `apply_snapshot` (laps readout), `sim_step` (host lap toast with `ctx.local_peer`), `on_rescue` (toast to the rescued rider only), `apply_event` (client lap toast) |
-| `phase_changed`, `lap_marker`, `finished` | `_phase_rules`: on slot 0's index change; once at WORK elapsed 90 s; once at the first COOLDOWN frame |
+| `phase_changed`, `lap_marker`, `finished` | `_phase_rules`: on slot 0's index change; once per WORK phase at elapsed 90 s; once at the first COOLDOWN frame |
 | Autopilot | `autopilot_intents`: a boost every 30 s, tagged `"auto": 1`, never effort |
 | Rescue and AFK as staggers | `on_rescue`, `on_afk`: the marker waits |
 | Input | `local_intents`: surge and confirm tagged by `via`; the HUD button sends `{"k": "boost", "via": "button"}` with `ctx.intents.send` |

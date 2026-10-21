@@ -25,7 +25,8 @@ func _runtime_ready() -> bool:
 	if PlanValidator.finalize(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 60)])) == null:
 		pending("needs sdk-runtime's PlanValidator (W2)")
 		return false
-	if str(GameSimRunner.parse_args(PackedStringArray()).get("error", "")) == "not implemented":
+	var probe := PackedStringArray(["--game=" + F.GAME_ID, "--report=" + _dirs[0].path_join("probe.json")])
+	if str(GameSimRunner.parse_args(probe).get("error", "")) == "not implemented":  # valid flags: no push_error
 		pending("needs sdk-runtime's GameSimRunner (W2)")
 		return false
 	return true
