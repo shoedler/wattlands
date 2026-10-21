@@ -9,8 +9,10 @@ var plans_set: Array[EffortPlan] = []
 var phases_started: Array[int] = []
 var directives: Array[EffortDirective] = []
 var grades: Array[float] = []
-var cadence_band: Array = [0.0, 0.0]
-var power_band: Array = [0.0, 0.0]
+## The bands set on this rider ([lo, hi]); named apart from LocalRider.cadence_band() and
+## power_band(), which the double overrides to report the same values.
+var band_cadence: Array = [0.0, 0.0]
+var band_power: Array = [0.0, 0.0]
 var game_paused: bool = false
 var paused_calls: Array[bool] = []
 var shifts: Array[int] = []
@@ -38,7 +40,7 @@ var gesture_queue: Array[StringName] = []
 var intent_queue: Array = []
 var ack_queue: Array = []
 var t: float = 0.0
-var _phase_index: int = -1
+var _fake_phase: int = -1
 
 
 func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
@@ -56,7 +58,7 @@ func set_plan(plan: EffortPlan) -> void:
 
 func start_phase(index: int) -> void:
 	phases_started.append(index)
-	_phase_index = index
+	_fake_phase = index
 	if device is MockTrainer:
 		(device as MockTrainer).set_phase(index)
 
@@ -77,15 +79,23 @@ func apply_course_grade(grade_pct: float) -> void:
 
 
 func set_cadence_band(lo_rpm: float, hi_rpm: float) -> void:
-	cadence_band = [lo_rpm, hi_rpm]
+	band_cadence = [lo_rpm, hi_rpm]
 	if device is MockTrainer:
 		(device as MockTrainer).set_cadence_band(lo_rpm, hi_rpm)
 
 
 func set_power_band(lo_w: float, hi_w: float) -> void:
-	power_band = [lo_w, hi_w]
+	band_power = [lo_w, hi_w]
 	if device is MockTrainer:
 		(device as MockTrainer).set_power_band(lo_w, hi_w)
+
+
+func cadence_band() -> Vector2:
+	return Vector2(float(band_cadence[0]), float(band_cadence[1]))
+
+
+func power_band() -> Vector2:
+	return Vector2(float(band_power[0]), float(band_power[1]))
 
 
 func set_game_paused(p: bool) -> void:
@@ -133,7 +143,7 @@ func telemetry() -> Telemetry:
 	tm.afk = afk
 	tm.coasting = coasting
 	tm.paused = game_paused
-	tm.phase_index = _phase_index
+	tm.phase_index = _fake_phase
 	tm.haptic_pct = haptic_pct
 	return tm
 
@@ -184,6 +194,6 @@ func shutdown() -> void:
 
 
 func _current_phase() -> PlanPhase:
-	if plans_set.is_empty() or _phase_index < 0:
+	if plans_set.is_empty() or _fake_phase < 0:
 		return null
-	return plans_set[plans_set.size() - 1].phase(_phase_index)
+	return plans_set[plans_set.size() - 1].phase(_fake_phase)

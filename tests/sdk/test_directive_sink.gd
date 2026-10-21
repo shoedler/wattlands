@@ -367,7 +367,7 @@ func test_end_phase() -> void:
 func test_cadence_band_reaches_rider_mock_trainer_and_hud_and_clears() -> void:
 	_start()
 	_router.cadence_band(1, 80, 96)
-	assert_eq(_fake().get("cadence_band"), [80.0, 96.0])
+	assert_eq(_fake().get("band_cadence"), [80.0, 96.0])
 	var mock: Object = _rider.device
 	assert_eq(mock.call("last_cadence_band"), [80.0, 96.0], "MockTrainer's band policy gets it")
 	assert_eq(_bands, [[1, 80.0, 96.0]], "the HUD's cadence widget gets it")
@@ -376,7 +376,7 @@ func test_cadence_band_reaches_rider_mock_trainer_and_hud_and_clears() -> void:
 	_advance(60)
 	assert_eq(_router.cadence_band_of(1), [80.0, 96.0], "holds across phases")
 	_router.cadence_band(1, 0, 0)
-	assert_eq(_fake().get("cadence_band"), [0.0, 0.0], "(0, 0) clears")
+	assert_eq(_fake().get("band_cadence"), [0.0, 0.0], "(0, 0) clears")
 	assert_eq(mock.call("last_cadence_band"), [0.0, 0.0])
 	_router.cadence_band(1, 90, 80)
 	assert_eq(_applied[_applied.size() - 1][1]["reason"], Wl.REFUSE_BAD_FIELDS)
@@ -387,7 +387,7 @@ func test_cooldown_clears_the_band() -> void:
 	_router.cadence_band(1, 80, 96)
 	_bands.clear()
 	_router.clear_bands(1)
-	assert_eq(_fake().get("cadence_band"), [0.0, 0.0])
+	assert_eq(_fake().get("band_cadence"), [0.0, 0.0])
 	assert_eq(_bands, [[1, 0.0, 0.0]])
 	_router.clear_bands(1)
 	assert_eq(_bands.size(), 1, "nothing to clear twice")
