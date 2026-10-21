@@ -20,6 +20,11 @@ extends Node
 ## loopback flow (scripted peers, e2e); once connected it retries the queue.
 ## Auto-upload (profile strava_auto_upload or --strava-auto-upload): every
 ## EventBus.ride_saved is uploaded without a prompt (queued until connected).
+## (W4, RS-2) An upload is in rides/upload_queue.json from before its first request until it
+## settles (last_state "uploading", the upload id stored as soon as Strava names it), so one cut
+## short by the app quitting (a slow POST, a 429 backoff, processing polls) is retried, or
+## polled, at the next launch. Strava's external_id (the ride id) makes a re-send a duplicate,
+## which counts as uploaded.
 ## Every public Strava method is a coroutine; callers may await it.
 
 ## Emitted when an upload attempt reached its final state for now (tests, e2e report).
@@ -53,6 +58,8 @@ func _ready() -> void:
 		client.state_changed.connect(_on_strava_state)
 	if not client.upload_progress.is_connected(_on_upload_progress):
 		client.upload_progress.connect(_on_upload_progress)
+	if not client.upload_created.is_connected(_on_upload_created):
+		client.upload_created.connect(_on_upload_created)
 	if events != null and not events.ride_saved.is_connected(on_ride_saved):
 		events.ride_saved.connect(on_ride_saved)
 	reload()
@@ -147,7 +154,9 @@ func rides() -> Array:
 		var s: Dictionary = parsed
 		var up: Dictionary = s["upload"] if s.get("upload", null) is Dictionary else {}
 		var state := str(up.get("state", ""))
-		if queue.has(str(s["ride_id"])):
+		if _in_flight.has(str(s["ride_id"])):
+			state = "uploading"
+		elif queue.has(str(s["ride_id"])):
 			state = "queued"
 		out.append({
 			"fit_path": p.get_basename() + ".fit",
@@ -194,8 +203,9 @@ func reupload(ride_id: String) -> void:
 	push_warning("Rides: no saved ride %s" % ride_id)
 
 
-## Cancels a running connect (Settings' Cancel button); it ends with strava state
-## "error"/"cancelled".
+## Cancels a running Strava connect (its loopback callback waits up to 5 minutes, BRIEF 3.8);
+## it ends with strava state "error"/"cancelled". For a Cancel control while the strava state
+## is "connecting" (the Settings page has none yet).
 func strava_cancel_connect() -> void:
 	if client != null:
 		client.cancel_connect()
@@ -335,6 +345,13 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 	if desc == "":
 		desc = activity_description(sum)
 	var res: Dictionary
+	if strava_connected():
+		# RS-2: in the queue before the first request, so a quit mid-upload leaves it there.
+		queue.put({
+			"ride_id": ride_id, "fit_path": fit_path, "name": name, "description": desc,
+			"attempts": int(entry.get("attempts", 0)), "last_state": "uploading",
+			"last_error": str(entry.get("last_error", "")), "upload_id": int(entry.get("upload_id", 0)),
+		})
 	if not strava_connected():
 		res = {"state": "queued", "detail": "not_connected", "upload_id": 0, "permanent": false}
 	elif int(entry.get("upload_id", 0)) > 0:
@@ -417,6 +434,16 @@ func _on_strava_state(state: String, detail: String) -> void:
 
 func _on_upload_progress(ride_id: String, state: String, detail: String) -> void:
 	_emit_upload(ride_id, state, detail)
+
+
+## RS-2: keep the upload id with the queued ride as soon as Strava names it.
+func _on_upload_created(ride_id: String, upload_id: int) -> void:
+	var e := queue.get_entry(ride_id)
+	if e.is_empty() or upload_id <= 0:
+		return
+	e["upload_id"] = upload_id
+	e["last_state"] = "processing"
+	queue.put(e)
 
 
 func _emit_upload(ride_id: String, state: String, detail: String) -> void:
