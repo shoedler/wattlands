@@ -475,7 +475,8 @@ export async function runFitCheck(o, role, files, lease, outDir) {
   }
   const r = await runToEnd(`fit_check_${role}`, cmd, args, {
     cwd: o.repo,
-    env: childEnv(process.env, leaseEnv(lease)),
+    // check.mjs falls back to tools/godot.sh through $WATTLANDS_BASH: hand it Git Bash (never WSL's).
+    env: childEnv(process.env, { ...leaseEnv(lease), ...(findBash() ? { WATTLANDS_BASH: findBash() } : {}) }),
     timeoutMs: 300_000,
     logFile: path.join(dir, 'fit_check.log'),
   });
