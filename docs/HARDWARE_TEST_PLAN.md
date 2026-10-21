@@ -28,7 +28,7 @@ Notes (power numbers, timings, screenshots):
 
 ## 1. Probe (read-only)
 
-How to start the app for these tests: the exported build (`node tools/export_windows.mjs`, then `build/windows/Wattlands.exe`) never sets the locks. From source, use `tools/godot.ps1 --allow-hw --allow-network --path .` (PowerShell) or `tools/godot.sh --allow-hw --allow-network --path .` (Git Bash); without those two flags the wrappers keep the hardware and network locks on.
+How to start the app for these tests: the exported build (`node tools/export_windows.mjs`, then `build/windows/Wattlands.exe`) never sets the locks. From source, use `tools/godot.ps1 --allow-hw --allow-network --timeout=14400 --path .` (PowerShell) or `tools/godot.sh --allow-hw --allow-network --timeout=14400 --path .` (Git Bash; without `--timeout` the wrappers stop a run after 20 minutes); without those two flags the wrappers keep the hardware and network locks on.
 
 - [ ] Run the read-only probe: `cd tools/trainer_bridge`, then `uv run --with bleak --with websockets python -m trainer_bridge probe --seconds 30` (bleak needs Python 3.12-3.14 on Windows; it has no wheels for 3.15 yet). Exit codes: 0 done, 2 no adapter or no trainer, 4 connect failed. Expected: the trainer is found by service 0x1826 or a name containing KICKR; device information, Fitness Machine Feature, Supported Power Range (max about 1800 W) and Supported Resistance Level Range print; Indoor Bike Data prints for 30 s with power, cadence and speed that match your pedaling.
 
@@ -111,7 +111,7 @@ The builders listed these while working against MockTrainer and fake transports.
 
 ## Safety findings that need hardware
 
-From the W3 review (`docs/DECISIONS.md` has the details):
+From the W3 review (the findings and their fixes are recorded in the W4 ADRs in `docs/decisions/*.md`, merged into `docs/DECISIONS.md`):
 
 - [ ] Silent notifications (W3 SAF-7): with the link up but no Indoor Bike Data notifications for more than 3 s (hard to provoke; a trainer that stops notifying while connected), the stack treats the rider as not pedaling, so the coasting floor and pause/AFK still apply. Confirm the KICKR never stops notifying while the flywheel turns, and log what happens when it does.
 - [ ] An unanswered control-point write while ready (W3 ftms-ble-1, fixed): if the KICKR stops answering control-point writes, the app reconnects and restores the last safe mode instead of staying "ready" while dropping writes. Expected after a forced disconnect: the reconnect sequence of section 11 and the safe-mode restore above.

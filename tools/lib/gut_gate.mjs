@@ -43,6 +43,41 @@ function skippedCases(xml) {
 }
 
 /** Pending/risky count from the GUT summary line ("Risky/Pending  N"), 0 when absent. */
+/**
+ * Pending or risky testcases in a GUT JUnit file: [{file, name}]. GUT marks them with a
+ * <skipped> child or a status other than pass/fail.
+ */
+export function pendingCases(xml) {
+  const out = [];
+  if (typeof xml !== 'string') return out;
+  const re = /<testcase\b([^>]*)>([\s\S]*?)<\/testcase>/g;
+  for (const m of xml.matchAll(re)) {
+    const head = m[1];
+    const name = (/\bname="([^"]*)"/.exec(head) || [])[1] || '';
+    const file = (/\bclassname="([^"]*)"/.exec(head) || [])[1] || '';
+    const status = (/\bstatus="([^"]*)"/.exec(head) || [])[1] || '';
+    const skipped = /<skipped\b/.test(m[2]);
+    if (skipped || (status !== '' && status !== 'pass' && status !== 'fail')) out.push({ file, name });
+  }
+  return out;
+}
+
+/**
+ * Reads tests/pending_allowlist.txt: environment guards that may stay pending (one entry per
+ * line: a test file such as tests/ble/test_gdble_surface.gd, or file::test_name; # comments).
+ */
+export function readPendingAllowlist(file) {
+  try {
+    return fs.readFileSync(file, 'utf8').split(/\r?\n/).map((l) => l.replace(/#.*/, '').trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function allowed(c, list) {
+  return list.includes(c.file) || list.includes(`${c.file}::${c.name}`);
+}
+
 export function pendingFromLog(log) {
   const clean = typeof log === 'string' ? log.replace(/\x1b\[[0-9;]*m/g, '') : '';
   let n = 0;
@@ -55,7 +90,7 @@ export function pendingFromLog(log) {
  * replaces it as the required count; a `narrow` run (a subset of tests) only needs a count above 0.
  * Returns {pass, tests, failures, required, reasons}.
  */
-export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, minCount = null, narrow = false, allowPending = false }) {
+export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, minCount = null, narrow = false, allowPending = false, pendingAllowlist = [] }) {
   const reasons = [];
   const counts = junitCounts(junitXml);
   const tests = counts ? counts.tests : 0;
@@ -73,8 +108,14 @@ export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, min
     if (text.includes(bad)) reasons.push(`log contains "${bad}"`);
   }
   const pending = Math.max(counts ? counts.skipped ?? 0 : 0, pendingFromLog(text));
-  if (pending > 0 && !allowPending) reasons.push(`${pending} pending or risky test(s) (GUT "Risky/Pending")`);
-  return { pass: reasons.length === 0, tests, failures: counts ? counts.failures : null, pending, required, reasons };
+  const cases = pendingCases(junitXml);
+  const excused = cases.filter((c) => allowed(c, pendingAllowlist)).length;
+  const unexcused = pending - excused;
+  if (unexcused > 0 && !allowPending) {
+    const names = cases.filter((c) => !allowed(c, pendingAllowlist)).map((c) => `${c.file}::${c.name}`);
+    reasons.push(`${unexcused} pending or risky test(s) (GUT "Risky/Pending")${names.length ? `: ${names.slice(0, 5).join(', ')}` : ''}`);
+  }
+  return { pass: reasons.length === 0, tests, failures: counts ? counts.failures : null, pending, excused, required, reasons };
 }
 
 export function readGreenCount(file) {

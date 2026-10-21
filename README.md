@@ -33,11 +33,11 @@ Every menu, game, shop and results screen works with no input: focus moves throu
 
 Multiplayer goes through a small relay server that every PC can reach. The app's default relay is `ws://localhost:8787/v1`, which only works on the PC that runs the relay.
 
-1. One PC (or a hosted server) runs the relay. With Node.js: `node server/relay/src/main.ts` (it listens on port 8787 and prints its URL). With Docker: `docker build -t wattlands-relay server/relay`, then `docker run -p 8787:8787 wattlands-relay`. Allow port 8787 through the firewall.
+1. One PC (or a hosted server) runs the relay. With Node.js: `node server/relay/src/main.ts` (it listens on port 8787 and prints its URL; on Node 22.12 to 22.17 add `--experimental-strip-types` after `node`). With Docker: `docker build -t wattlands-relay server/relay`, then `docker run -p 8787:8787 wattlands-relay`. Allow port 8787 through the firewall.
 2. Every rider sets Settings, Network, Relay URL to `ws://<that PC's address>:8787/v1` (the relay PC itself can keep `ws://localhost:8787/v1`).
 3. The host picks a game, chooses Host, and reads the room code (like `K7Q-X2M`) to the friends. They choose Join and type the code; dashes, spaces and case don't matter. Joining needs only the code.
 
-A rider who drops can restart the app and join again with the same code within two minutes: they get their place back. Rooms on the same LAN also show up in the join list.
+A rider who drops can restart the app and join again with the same code within two minutes: they get their place back.
 
 ## Controls
 
@@ -90,10 +90,10 @@ Run the app from source with a mock trainer (no Bluetooth, no real Strava):
 tools/godot.sh --path . -- --mock-trainer=erg
 ```
 
-Run it from source with a real trainer and the real Strava API (hardware test plan only):
+Run it from source with a real trainer and the real Strava API (hardware test plan only; the wrappers stop a run after 20 minutes unless `--timeout` says otherwise):
 
 ```bash
-tools/godot.sh --allow-hw --allow-network --path .
+tools/godot.sh --allow-hw --allow-network --timeout=14400 --path .
 ```
 
 Run every gate (GUT unit, contract, integration and scenario tests, the scaffold check, the script check, Workout simulations with FIT checks, the Node suites and the 3-peer end-to-end test):
@@ -102,7 +102,7 @@ Run every gate (GUT unit, contract, integration and scenario tests, the scaffold
 tools/run_tests
 ```
 
-Start the relay locally:
+Start the relay locally (on Node 22.12 to 22.17: `node --experimental-strip-types server/relay/src/main.ts`):
 
 ```bash
 node server/relay/src/main.ts

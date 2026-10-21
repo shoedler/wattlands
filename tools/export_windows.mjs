@@ -54,7 +54,9 @@ function lockRun(args, opts = {}) {
 const out = path.resolve(REPO, arg('out', 'build/windows'));
 const src = path.join(REPO, 'build', 'export_src');
 const bin = godotBin();
-const version = spawnSync(bin, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).stdout.trim();
+const probe = spawnSync(bin, ['--version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+if (probe.error || typeof probe.stdout !== 'string') die(`cannot run Godot at "${bin}" (set GODOT or tools/godot_bin.local)`, 127);
+const version = probe.stdout.trim();
 if (!version.startsWith('4.7')) die(`Godot 4.7 needed, got "${version}" from ${bin}`);
 const mono = version.includes('mono');
 const base = version.split('.').slice(0, 3).join('.'); // 4.7.2
@@ -82,7 +84,12 @@ if (template) {
   fs.writeFileSync(presets, text);
 }
 process.stdout.write(`export_windows: Godot ${version}${template ? `, template ${template}` : ''}\n`);
-const imp = lockRun([bin, '--headless', '--path', src, '--import']);
+// Per-checkout user dir for the copy's import, like tools/godot.sh (BRIEF 2); the export itself
+// uses an explicit template path, so it needs no installed-template lookup under APPDATA.
+const userdata = path.join(src, '.userdata');
+fs.mkdirSync(userdata, { recursive: true });
+const userEnv = process.platform === 'win32' ? { APPDATA: userdata } : { XDG_DATA_HOME: userdata };
+const imp = lockRun([bin, '--headless', '--path', src, '--import'], { env: userEnv });
 if (imp.code !== 0) die(`import of the copy failed (exit ${imp.code})\n${imp.out.slice(-2000)}`);
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
@@ -108,8 +115,10 @@ if (arg('smoke')) {
   const consoleExe = path.join(out, 'Wattlands.console.exe');
   const runExe = fs.existsSync(consoleExe) ? consoleExe : exe;
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands_smoke_'));
+  const smokeData = path.join(profile, 'appdata');
+  fs.mkdirSync(smokeData, { recursive: true });
   const r = lockRun([runExe, '--headless', '--', '--mock-trainer=erg', '--run-seconds=8', `--profile-dir=${profile}`], {
-    env: { WATTLANDS_NO_HW_CONTROL: '1', WATTLANDS_NO_NETWORK_INTEGRATIONS: '1' },
+    env: { WATTLANDS_NO_HW_CONTROL: '1', WATTLANDS_NO_NETWORK_INTEGRATIONS: '1', ...(process.platform === 'win32' ? { APPDATA: smokeData } : { XDG_DATA_HOME: smokeData }) },
   });
   fs.rmSync(profile, { recursive: true, force: true });
   const errors = (r.out.match(/SCRIPT ERROR|Parse Error/g) || []).length;

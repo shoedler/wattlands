@@ -57,6 +57,23 @@ describe('evaluateGut', () => {
     assert.equal(evaluateGut({ ...green, log, allowPending: true }).pass, true);
   });
 
+  test('allowlisted environment guards may stay pending; others still fail', () => {
+    const xml = '<testsuites tests="3" failures="0" skipped="2">'
+      + '<testsuite name="tests/ble/test_gdble_surface.gd" tests="2" skipped="1">'
+      + '<testcase name="test_methods" status="pending" classname="tests/ble/test_gdble_surface.gd"><skipped/></testcase>'
+      + '<testcase name="test_ok" status="pass" classname="tests/ble/test_gdble_surface.gd"></testcase></testsuite>'
+      + '<testsuite name="tests/x/test_y.gd" tests="1" skipped="1">'
+      + '<testcase name="test_guarded" status="pending" classname="tests/x/test_y.gd"><skipped/></testcase></testsuite></testsuites>';
+    const log = `${GREEN_LOG}\nRisky/Pending        2\n`;
+    const onlyFile = evaluateGut({ ...green, log, junitXml: xml, pendingAllowlist: ['tests/ble/test_gdble_surface.gd'] });
+    assert.equal(onlyFile.pass, false, 'the second pending test is not excused');
+    assert.match(onlyFile.reasons.join('; '), /tests\/x\/test_y\.gd::test_guarded/);
+    const both = evaluateGut({ ...green, log, junitXml: xml,
+      pendingAllowlist: ['tests/ble/test_gdble_surface.gd', 'tests/x/test_y.gd::test_guarded'] });
+    assert.equal(both.pass, true, both.reasons.join('; '));
+    assert.equal(both.excused, 2);
+  });
+
   test('fails without "Run Summary"', () => {
     const v = evaluateGut({ ...green, log: 'crashed early' });
     assert.equal(v.pass, false);

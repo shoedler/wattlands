@@ -14,7 +14,7 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { killTree } from './godot_lock.mjs';
-import { evaluateGut, readGreenCount, writeGreenCount, FORBIDDEN } from './gut_gate.mjs';
+import { evaluateGut, readGreenCount, writeGreenCount, readPendingAllowlist, FORBIDDEN } from './gut_gate.mjs';
 
 const LIB = path.dirname(fileURLToPath(import.meta.url));
 const TOOLS = path.dirname(LIB);
@@ -204,7 +204,8 @@ async function stepGut(o) {
   const r = await godot(o, args, { log });
   const junitXml = fs.existsSync(junit) ? fs.readFileSync(junit, 'utf8') : '';
   const previousGreen = readGreenCount(greenFile);
-  const v = evaluateGut({ exitCode: r.code, log: r.text, junitXml, previousGreen, minCount: o.minCount, narrow });
+  const pendingAllowlist = readPendingAllowlist(path.join(o.project, 'tests', 'pending_allowlist.txt'));
+  const v = evaluateGut({ exitCode: r.code, log: r.text, junitXml, previousGreen, minCount: o.minCount, narrow, pendingAllowlist });
   const counts =
     `tests ${v.tests}` +
     (v.failures !== null ? `, failures ${v.failures}` : '') +

@@ -1,0 +1,6 @@
+# Environment guards that may stay pending (tools/lib/gut_gate.mjs): GUT tests that call
+# pending() because something outside the code base is missing on this machine. One entry per
+# line: a test file, or file::test_name. Everything else pending or risky fails tools/run_tests.
+# GDBLE's library is not loaded (no Bluetooth stack, or a platform without the library):
+tests/ble/test_gdble_surface.gd
+tests/ble/test_gdble_transport.gd::test_real_manager_signals_connect_by_name
