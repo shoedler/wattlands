@@ -96,6 +96,21 @@ describe('choosing the WebSocket layer', () => {
   });
 });
 
+describe('the periodic sweep (real clock)', () => {
+  it('startRelay sweeps on its own: an idle socket is closed with 4000', async () => {
+    const r = await startRelay({ port: 0, host: '127.0.0.1', impl: 'builtin', sweepMs: 20, limits: { idleTimeoutMs: 150 } });
+    try {
+      const c = await TestClient.connect(r.url);
+      const started = performance.now();
+      const { code } = await c.closed;
+      assert.equal(code, 4000);
+      assert.ok(performance.now() - started < 2000);
+    } finally {
+      await r.close();
+    }
+  });
+});
+
 describe('client IP for the join limit', () => {
   const req = (headers, remoteAddress = '::ffff:10.1.2.3') => ({ headers, socket: { remoteAddress } });
 

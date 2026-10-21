@@ -5,5 +5,5 @@
 - `GET /health` reports JSON status and counts. The WebSocket is at `/v1`, by default `ws://localhost:8787/v1`, and `PORT`, `HOST` and `RELAY_TRUST_PROXY` configure the server. On start the relay prints `WATTLANDS_RELAY <url>`.
 - Additive protocol fields: `created.max`; `joined.rejoin` and `joined.peers`; `peer_joined.rejoin`; `host_left.reason` (`left`, `timeout` or `expired`); and `error.detail`, `error.re` and `error.proto` (on `version_mismatch`).
 - The relay ships with a Dockerfile (`node:24-alpine`, non-root, `HEALTHCHECK` on `/health`), a README, and example `fly.toml` and `render.yaml` files.
-- Tests: 163 `node:test` cases run in about a second with an injected clock. The same protocol and frame suites run against both WebSocket layers.
+- Tests: 166 `node:test` cases run in about a second with an injected clock. The same protocol and frame suites run against both WebSocket layers.
 - CI: `.github/workflows/relay.yml` runs the suite with zero dependencies and again with `ws`, then builds the image and checks `/health`.
