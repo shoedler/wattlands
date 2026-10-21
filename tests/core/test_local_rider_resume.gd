@@ -122,6 +122,25 @@ func test_zero_elapsed_is_start_phase_and_bad_input_is_refused() -> void:
 	assert_eq(r.telemetry().phase_index, 0, "nothing changed")
 
 
+## A rider without a governor has nothing to resume: it enters the phase as start_phase() does,
+## through the (overridable) start_phase, so a test double that records start_phase sees it.
+func test_without_a_governor_it_is_start_phase() -> void:
+	var r := StartLog.new()
+	add_child_autofree(r)
+	r.resume_phase(2, 45.0)
+	assert_eq(r.started, [2])
+	assert_eq(r.telemetry().phase_index, 2)
+
+
+class StartLog:
+	extends LocalRider
+	var started: Array[int] = []
+
+	func start_phase(index: int) -> void:
+		started.append(index)
+		super.start_phase(index)
+
+
 func test_forwards_to_the_governor() -> void:
 	var r := _rider(_mock(), {"governor": Fakes.FakeGovernor.new()})
 	r.set_plan(_plan())

@@ -304,23 +304,25 @@ func start_phase(index: int) -> void:
 ## restarted client's new FIT starts at the rejoin, BRIEF 3.6); a real phase change (the phase
 ## changed while the socket was down) laps as start_phase() does, so every interval keeps its
 ## lap (BRIEF 7.5). The cool-down clears the bands. elapsed_s must be finite and >= 0
-## (push_error otherwise; nothing changes); 0 is start_phase(index).
+## (push_error otherwise; nothing changes); 0, or a rider without a governor (not set up, a
+## test double that overrides start_phase), is start_phase(index).
 func resume_phase(index: int, elapsed_s: float) -> void:
 	if not is_finite(elapsed_s) or elapsed_s < 0.0:
 		push_error("LocalRider: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)" % [index, str(elapsed_s)])
 		return
-	if elapsed_s <= 0.0:
+	if elapsed_s <= 0.0 or governor == null:
+		# Nothing to resume without a governor (a rider not set up, a test double): the phase is
+		# entered as start_phase() enters it.
 		start_phase(index)
 		return
 	var previous := _phase_index
 	_phase_index = index
 	var ph: PlanPhase = _plan.phase(index) if _plan != null else null
-	if governor != null:
-		var ridden := -1.0
-		if ph != null and ph.mode == Wl.SIM and ph.grade_source == Wl.GRADE_COURSE \
-				and governor.distance_ridden_since(governor.game_time_s() - elapsed_s) < 0.0:
-			ridden = estimate_course_distance(ph, elapsed_s)
-		governor.resume_phase(index, elapsed_s, ridden)
+	var ridden := -1.0
+	if ph != null and ph.mode == Wl.SIM and ph.grade_source == Wl.GRADE_COURSE \
+			and governor.distance_ridden_since(governor.game_time_s() - elapsed_s) < 0.0:
+		ridden = estimate_course_distance(ph, elapsed_s)
+	governor.resume_phase(index, elapsed_s, ridden)
 	if device is MockTrainer:
 		(device as MockTrainer).set_phase(index)
 	if ph == null:
