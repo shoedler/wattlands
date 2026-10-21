@@ -97,6 +97,37 @@ func test_mock_samples_and_control_responses_arrive_while_paused() -> void:
 	get_tree().paused = false
 
 
+## A reconnect while paused (BRIEF 4.1: telemetry, indications and reconnect keep working):
+## the client runs the whole 4.4 flow from its own _process, including the subscribe settle it
+## times itself, and its first control-point responses arrive with the tree paused.
+func test_connection_flow_completes_while_paused() -> void:
+	var fake: FakeKickr = FakeKickr.new()
+	fake.deliver_in_process = true
+	var client: FtmsClient = UnlockedClient.new()
+	client.attach(fake)
+	client.control_response.connect(func(op: int, res: int) -> void: _client_responses.append(Vector2i(op, res)))
+	add_child_autofree(fake)
+	add_child_autofree(client)
+	var pausable := Pausable.new()
+	add_child_autofree(pausable)
+	await get_tree().process_frame
+	get_tree().paused = true
+	var frames_before := pausable.frames
+	client.begin()
+	for i in 30:
+		if client.is_ready():
+			break
+		await get_tree().create_timer(0.1, true).timeout
+	assert_true(get_tree().paused)
+	assert_eq(pausable.frames, frames_before, "the tree really is paused")
+	assert_true(client.is_ready(), "the flow finished while paused (state %s)" % client.state())
+	assert_eq(_client_responses, [
+		Vector2i(FtmsCodec.OP_REQUEST_CONTROL, FtmsCodec.RESULT_SUCCESS),
+		Vector2i(FtmsCodec.OP_SET_SIMULATION, FtmsCodec.RESULT_SUCCESS),
+	] as Array[Vector2i])
+	get_tree().paused = false
+
+
 func test_trainer_nodes_run_with_process_mode_always() -> void:
 	var mock: MockTrainer = autofree(MockTrainer.from_spec("erg"))
 	var client: FtmsClient = autofree(FtmsClient.new())

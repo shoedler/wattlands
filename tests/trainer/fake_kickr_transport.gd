@@ -33,6 +33,8 @@ var unreadable: Array[String] = []
 ## Short uuid -> bytes returned by reads.
 var read_values: Dictionary = {}
 var services: Array = []
+## False: discover_services() is never answered (the client's discovery timeout runs).
+var answer_discover: bool = true
 var deliver_in_process: bool = false
 
 var _events: Array = []
@@ -80,7 +82,8 @@ func is_available() -> bool:
 
 func discover_services() -> void:
 	ops.append("discover")
-	_queue("services_discovered", [services.duplicate(true)])
+	if answer_discover:
+		_queue("services_discovered", [services.duplicate(true)])
 
 
 func read_characteristic(_service_uuid: String, char_uuid: String) -> void:

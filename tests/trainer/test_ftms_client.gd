@@ -172,6 +172,27 @@ func test_no_ftms_service_fails() -> void:
 	assert_push_warning("no Fitness Machine service")
 
 
+func test_unanswered_discovery_fails_after_the_timeout() -> void:
+	_make()
+	_fake.answer_discover = false
+	_client.begin()
+	_pump(FtmsClient.DISCOVER_TIMEOUT_S - 0.1)
+	assert_eq(_client.state(), FtmsClient.STATE_DISCOVERING, "still waiting")
+	assert_eq(_failed.size(), 0)
+	_pump(0.2)
+	assert_eq(_client.state(), FtmsClient.STATE_FAILED)
+	assert_eq(_failed.size(), 1)
+	assert_string_contains(_failed[0], "service discovery timed out")
+	assert_push_warning("service discovery timed out")
+	_fake.answer_discover = true
+	_client.begin()
+	_pump(1.0)
+	assert_true(_client.is_ready(), "begin() after a failure runs the flow again")
+	_pump(FtmsClient.DISCOVER_TIMEOUT_S + 1.0)
+	assert_true(_client.is_ready(), "the old discovery timer is gone")
+	assert_eq(_failed.size(), 1)
+
+
 func test_services_without_characteristic_lists_read_everything_standard() -> void:
 	_make()
 	_fake.services = [{"uuid": "1826"}]
@@ -233,25 +254,70 @@ func test_one_write_in_flight_and_coalescing() -> void:
 	_fake.auto_respond = false
 	var before := _writes().size()
 	_client.write_control(FtmsCodec.encode_target_power(150))
-	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 2.0, 0.004, 0.51))
 	_client.write_control(FtmsCodec.encode_target_power(200))
 	_client.write_control(FtmsCodec.encode_target_power(250))
+	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 2.0, 0.004, 0.51))
 	assert_eq(_writes().size(), before + 1, "one write in flight")
 	assert_eq(_client.in_flight_opcode(), 0x05)
 	assert_eq(_client.queued_count(), 2, "the queued 200 W was replaced by 250 W")
 	_fake.notify("2ad9", PackedByteArray([0x80, 0x05, 0x01]))
 	_fake.flush()
 	assert_eq(_writes().size(), before + 2)
+	assert_eq(_client.in_flight_opcode(), 0x05)
+	_fake.notify("2ad9", PackedByteArray([0x80, 0x05, 0x01]))
+	_fake.flush()
 	assert_eq(_client.in_flight_opcode(), 0x11)
 	_fake.notify("2ad9", PackedByteArray([0x80, 0x11, 0x01]))
 	_fake.flush()
-	_fake.notify("2ad9", PackedByteArray([0x80, 0x05, 0x01]))
-	_fake.flush()
 	var w := _writes()
-	assert_eq(w.slice(before), ["write 2ad9 059600", "write 2ad9 110000c8002833", "write 2ad9 05fa00"])
-	assert_eq(_responses.slice(2), [Vector2i(0x05, 1), Vector2i(0x11, 1), Vector2i(0x05, 1)])
+	assert_eq(w.slice(before), ["write 2ad9 059600", "write 2ad9 05fa00", "write 2ad9 110000c8002833"])
+	assert_eq(_responses.slice(2), [Vector2i(0x05, 1), Vector2i(0x05, 1), Vector2i(0x11, 1)])
 	assert_eq(_client.in_flight_opcode(), -1)
 	assert_eq(_client.queued_count(), 0)
+
+
+func test_coalescing_never_reorders_commands() -> void:
+	_connect_ready()
+	_fake.auto_respond = false
+	_client.write_control(FtmsCodec.encode_stop_pause(2))
+	_client.write_control(FtmsCodec.encode_target_power(200))
+	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 0.0, 0.004, 0.51))
+	_client.write_control(FtmsCodec.encode_target_power(180))
+	_answer_until_idle()
+	var w := _writes()
+	assert_eq(w.back(), "write 2ad9 05b400", "the newest command (ERG 180 W) is applied last")
+	assert_eq(_fake.writes_with_op(0x11), 2, "the flow's SIM flat and the SIM entry before ERG 180 W")
+
+
+func test_coalescing_keeps_the_first_command_of_a_mode() -> void:
+	_connect_ready()
+	_fake.auto_respond = false
+	var before := _writes().size()
+	_client.write_control(FtmsCodec.encode_target_power(150))
+	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 0.0, 0.004, 0.51))
+	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 2.0, 0.004, 0.51))
+	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 3.0, 0.004, 0.51))
+	assert_eq(_client.queued_count(), 2, "SIM grade 0 (the mode switch's entry) stays; 2 % gave way to 3 %")
+	_client.write_control(FtmsCodec.encode_target_power(120))
+	_client.write_control(FtmsCodec.encode_target_power(140))
+	assert_eq(_client.queued_count(), 4, "ERG 120 W (the switch back) is an entry, so 140 W queues behind it")
+	_client.write_control(FtmsCodec.encode_target_power(160))
+	assert_eq(_client.queued_count(), 4, "ERG 160 W replaced 140 W, not the entry at 120 W")
+	_answer_until_idle()
+	assert_eq(_writes().slice(before), [
+		"write 2ad9 059600", "write 2ad9 11000000002833", "write 2ad9 1100002c012833",
+		"write 2ad9 057800", "write 2ad9 05a000",
+	] as Array[String], "every mode switch keeps its entry command and the newest command goes last (BRIEF 4.5)")
+
+
+## Answers the write in flight until nothing is left (auto_respond off).
+func _answer_until_idle() -> void:
+	for i in 20:
+		var op := _client.in_flight_opcode()
+		if op < 0:
+			return
+		_fake.notify("2ad9", PackedByteArray([0x80, op, 0x01]))
+		_fake.flush()
 
 
 func test_non_setting_commands_are_never_coalesced() -> void:

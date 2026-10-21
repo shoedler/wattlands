@@ -16,6 +16,7 @@ extends Node
 ## W1 details:
 ## - States (state(), state_changed): idle, discovering, reading, subscribing,
 ##   requesting_control, setting_sim, ready, read_only, control_lost, failed, disconnected.
+## - Service discovery that has not answered after DISCOVER_TIMEOUT_S fails the flow.
 ## - Reads go one at a time (Feature is required; the ranges and Device Information 0x180A are
 ##   optional and keep their defaults when missing); each has the control point's 2 s timeout
 ##   and two retries.
@@ -24,8 +25,12 @@ extends Node
 ## - Under the hardware lock the flow stops after subscribing: state read_only, a
 ##   "hardware control locked" warning, and client_ready, so telemetry still flows; is_ready()
 ##   stays false and every write is refused.
-## - Queued Set Target Resistance/Power/Simulation writes that are not yet sent are replaced
-##   by a newer write with the same op code (the newest always goes out).
+## - Coalescing (BRIEF 4.5, drop superseded commands): a new Set Target Resistance/Power/
+##   Simulation write replaces the last queued (unsent) write when that has the same op code
+##   and the write going out just before it (queued or in flight) has that op code too.
+##   Otherwise it is appended. So writes never change order (the newest command always goes
+##   out last), and the first write of each mode, such as the SIM grade 0 or the low ERG entry
+##   of a ramped mode switch, is never dropped.
 ## - A response with result 0x05 (control not permitted) or Machine Status 0xFF emits
 ##   control_lost("another app may hold control") and clears the queue. A write that is still
 ##   unanswered after its two retries emits failed() (the link is presumed dead).
@@ -64,6 +69,8 @@ const CP_RETRIES := 2
 const READ_TIMEOUT_S := 2.0
 const READ_RETRIES := 2
 const SUBSCRIBE_SETTLE_S := 0.25
+## Service discovery that takes longer fails the flow (the connection manager reconnects).
+const DISCOVER_TIMEOUT_S := 10.0
 ## Timers compare with this slack, so summed 0.05 s steps hit 2 s exactly.
 const TIME_EPSILON := 1e-6
 ## SIM flat after Request Control (BRIEF 4.4, 4.5 defaults).
@@ -95,6 +102,7 @@ var _cps_power_w: int = -1
 var _read_queue: Array[Dictionary] = []
 var _read: Dictionary = {}
 var _settle_left_s: float = -1.0
+var _discover_left_s: float = -1.0
 var _queue: Array[Dictionary] = []
 var _in_flight: Dictionary = {}
 var _assembler: FtmsCodec.BikeDataAssembler = FtmsCodec.BikeDataAssembler.new()
@@ -132,6 +140,7 @@ func begin() -> void:
 		return
 	_reset_link_state()
 	_set_state(STATE_DISCOVERING, "discovering services")
+	_discover_left_s = DISCOVER_TIMEOUT_S
 	_transport.discover_services()
 
 
@@ -180,6 +189,12 @@ func resistance_range() -> Dictionary:
 func tick(dt: float) -> void:
 	if dt <= 0.0:
 		return
+	if _discover_left_s >= 0.0:
+		_discover_left_s -= dt
+		if _discover_left_s <= TIME_EPSILON:
+			_discover_left_s = -1.0
+			if _state == STATE_DISCOVERING:
+				_fail("service discovery timed out after %d s" % roundi(DISCOVER_TIMEOUT_S))
 	if _settle_left_s >= 0.0:
 		_settle_left_s -= dt
 		if _settle_left_s <= TIME_EPSILON:
@@ -282,6 +297,7 @@ func _reset_link_state() -> void:
 	_read_queue = []
 	_read = {}
 	_settle_left_s = -1.0
+	_discover_left_s = -1.0
 	_queue = []
 	_in_flight = {}
 	_cps_fallback = false
@@ -301,6 +317,7 @@ func _fail(reason: String) -> void:
 	_read = {}
 	_read_queue = []
 	_settle_left_s = -1.0
+	_discover_left_s = -1.0
 	push_warning("FtmsClient: %s" % reason)
 	_set_state(STATE_FAILED, reason)
 	failed.emit(reason)
@@ -327,6 +344,7 @@ func _has_char(service: String, chr: String) -> bool:
 func _on_services_discovered(services: Array) -> void:
 	if _state != STATE_DISCOVERING:
 		return
+	_discover_left_s = -1.0
 	_services = {}
 	for svc: Variant in services:
 		if not svc is Dictionary:
@@ -443,16 +461,25 @@ func _after_subscribe() -> void:
 
 # --- Control point queue ------------------------------------------------------------
 
+## Queues a write (coalescing rule in the class doc) and sends it when nothing is in flight.
 func _enqueue(payload: PackedByteArray) -> void:
 	var opcode := int(payload[0])
-	if COALESCED_OPS.has(opcode):
-		for e: Dictionary in _queue:
-			if int(e["opcode"]) == opcode:
-				e["payload"] = payload
-				_pump_queue()
-				return
+	if COALESCED_OPS.has(opcode) and not _queue.is_empty():
+		var tail: Dictionary = _queue.back()
+		if int(tail["opcode"]) == opcode and _opcode_before_tail() == opcode:
+			tail["payload"] = payload
+			_pump_queue()
+			return
 	_queue.append({"opcode": opcode, "payload": payload})
 	_pump_queue()
+
+
+## Op code of the write that goes out just before the queue's last entry: the entry before it,
+## else the write in flight (-1 when there is none).
+func _opcode_before_tail() -> int:
+	if _queue.size() >= 2:
+		return int(_queue[_queue.size() - 2]["opcode"])
+	return in_flight_opcode()
 
 
 func _pump_queue() -> void:
