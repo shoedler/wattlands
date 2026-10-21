@@ -142,6 +142,22 @@ func test_metronome_rate_change_and_off() -> void:
 	assert_eq(_sfx.metronome_clicks(), 4)
 
 
+## The session screen and the GameHost both call it (OWNERSHIP AU2): a repeated call is a no-op.
+func test_set_metronome_is_idempotent() -> void:
+	_sfx.set_metronome(60.0, true)
+	_sfx.tick(0.6)
+	for _i in 5:
+		_sfx.set_metronome(60.0, true)
+	assert_eq(_sfx.metronome_clicks(), 0, "no click from repeated calls")
+	_sfx.tick(0.4)
+	assert_eq(_sfx.metronome_clicks(), 1, "the stroke phase kept running: a click 1 s after the start")
+	_sfx.set_metronome(0.0, false)
+	_sfx.set_metronome(0.0, false)
+	assert_false(_sfx.metronome_on())
+	_sfx.tick(3.0)
+	assert_eq(_sfx.metronome_clicks(), 1)
+
+
 func test_muted_counts_without_players() -> void:
 	_sfx.muted = true
 	_sfx.play("toast")

@@ -1,19 +1,14 @@
 extends PixelViewport
-## Test double for ui tests: a PixelViewport with a settable integer scale and letterbox
-## offset (the world-kits implementation is a stub in this worktree). art_rect_to_screen
-## follows the documented contract: offset + rect * scale. Like world-kits' PixelViewport it
-## has a `layout_changed` signal for layout changes without a resize (added at runtime when
-## the parent class lacks it, so this double works before and after world-kits merges).
+## Test double for ui tests: a PixelViewport with a settable scale and letterbox offset, so a
+## test can put the HUD at any scale without a window. art_rect_to_screen follows the
+## documented contract: offset + rect * scale (the real class also divides by the device scale,
+## 1 headless; test_hud_layer.gd covers the real PixelViewport too). It emits the real class's
+## `layout_changed` for layout changes without a resize.
 
 const LAYOUT_SIGNAL := &"layout_changed"
 
 var fake_scale: int = 2
 var fake_offset: Vector2 = Vector2.ZERO
-
-
-func _init() -> void:
-	if not has_signal(LAYOUT_SIGNAL):
-		add_user_signal(LAYOUT_SIGNAL)
 
 
 func integer_scale() -> int:
@@ -40,4 +35,4 @@ func set_fake(p_scale: int, p_offset: Vector2) -> void:
 func set_fake_layout(p_scale: int, p_offset: Vector2) -> void:
 	fake_scale = p_scale
 	fake_offset = p_offset
-	emit_signal(LAYOUT_SIGNAL)
+	layout_changed.emit()

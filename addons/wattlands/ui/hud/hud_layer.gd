@@ -39,7 +39,8 @@ extends CanvasLayer
 
 const LAYER := 10
 const BASE_SIZE := Vector2(1920, 1080)
-## The PixelViewport signal (world-kits addition) for layout changes without a resize.
+## The PixelViewport signal for layout changes without a resize (connected by name before
+## world-kits merged; now PixelViewport.layout_changed directly).
 const PV_LAYOUT_SIGNAL := &"layout_changed"
 
 ## Screen size for layout (tests); ZERO uses the viewport's visible rect.
@@ -620,21 +621,22 @@ func _queue_relayout() -> void:
 	relayout.call_deferred()
 
 
-## Follow the PixelViewport's `resized` and, when it has one, its `layout_changed` signal
-## (world-kits emits it when the integer scale or letterbox change without a resize, e.g. a
-## window whose stretch factor changes while the 1080p canvas keeps its size).
+## Follow the PixelViewport's `layout_changed` (world-kits emits it whenever the integer
+## scale, the letterbox or the image rect change, also without a resize: a window whose
+## stretch factor changes while the 1080p canvas keeps its size, a pixel_base change) and its
+## `resized`. A relayout is queued once per frame, so both firing costs nothing.
 func _set_pixel_viewport(pv: PixelViewport) -> void:
 	if _pv != null and is_instance_valid(_pv):
 		if _pv.resized.is_connected(_queue_relayout):
 			_pv.resized.disconnect(_queue_relayout)
-		if _pv.has_signal(PV_LAYOUT_SIGNAL) and _pv.is_connected(PV_LAYOUT_SIGNAL, _queue_relayout):
-			_pv.disconnect(PV_LAYOUT_SIGNAL, _queue_relayout)
+		if _pv.layout_changed.is_connected(_queue_relayout):
+			_pv.layout_changed.disconnect(_queue_relayout)
 	_pv = pv
 	if _pv != null:
 		if not _pv.resized.is_connected(_queue_relayout):
 			_pv.resized.connect(_queue_relayout)
-		if _pv.has_signal(PV_LAYOUT_SIGNAL) and not _pv.is_connected(PV_LAYOUT_SIGNAL, _queue_relayout):
-			_pv.connect(PV_LAYOUT_SIGNAL, _queue_relayout)
+		if not _pv.layout_changed.is_connected(_queue_relayout):
+			_pv.layout_changed.connect(_queue_relayout)
 
 
 func _shows_power() -> bool:

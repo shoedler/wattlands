@@ -366,6 +366,40 @@ func test_listens_to_the_router_menu_input() -> void:
 	assert_signal_emit_count(list, "item_picked", 2, "listen_to_input off")
 
 
+## The app shell's contract (AppScreen): a list with listen_to_input off and processing off moves
+## only through feed_action, feed_gesture and tick(dt); picks emit item_chosen and then
+## item_picked synchronously inside that call; set_items() highlights the first enabled item, so
+## a refresh in place restores the index with set_highlight() afterwards.
+func test_a_list_driven_by_hand() -> void:
+	var bus: WlEventBus = autofree(WlEventBus.new())
+	var router := WlInputRouter.new()
+	router.bus = bus
+	router.load_on_ready = false
+	add_child_autofree(router)
+	var list := PedalScanList.new()
+	list.router = router
+	list.listen_to_input = false
+	list.sounds = false
+	add_child_autofree(list)
+	list.set_process(false)
+	var seen: Array = []
+	list.item_chosen.connect(func(i: int, id: Variant, auto: bool) -> void: seen.append(["chosen", i, id, auto]))
+	list.item_picked.connect(func(i: int, id: Variant, via: String) -> void: seen.append(["picked", i, id, via]))
+	list.set_items(_items(3))
+	router.inject_action(&"down")
+	router.inject_gesture(Wl.G_SURGE)
+	assert_eq(list.highlighted(), 0, "router input does not reach it")
+	assert_eq(seen, [])
+	list.feed_action(&"down")
+	assert_eq(list.highlighted(), 1)
+	list.feed_gesture(Wl.G_SURGE)
+	assert_eq(seen, [["chosen", 1, "item1", false], ["picked", 1, "item1", "surge"]], "both, in order, at once")
+	list.set_items(_items(3))
+	assert_eq(list.highlighted(), 0, "set_items starts at the first enabled item")
+	list.set_highlight(1)
+	assert_eq(list.highlighted(), 1, "the caller restores the index")
+
+
 ## A list taken out of the tree and put back (a menu stack popping back to it) listens again.
 func test_relistens_after_leaving_and_reentering_the_tree() -> void:
 	var bus: WlEventBus = autofree(WlEventBus.new())

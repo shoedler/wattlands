@@ -92,6 +92,10 @@ func get_stream(sound: String) -> AudioStream:
 
 
 ## Cadence metronome at `rpm` (one click per pedal stroke); rpm <= 0 stops it.
+## Idempotent: repeating the current call changes nothing (no extra click, the stroke phase
+## keeps running), and a new rpm while on keeps the phase too, so several callers (the session
+## screen at start, the GameHost on cadence band changes) may set it without clashing; only
+## turning it on from off restarts the stroke count. set_metronome(0, false) stops it.
 func set_metronome(rpm: float, on: bool) -> void:
 	_metro_rpm = maxf(rpm, 0.0)
 	var was_on := _metro_on

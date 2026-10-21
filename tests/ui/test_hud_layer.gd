@@ -221,6 +221,33 @@ func test_rect_positions_at_scale_3_and_on_resize() -> void:
 	assert_eq(_hud.slot_screen_rect(card), Rect2(320, 200, 200, 40))
 
 
+## The real world-kits PixelViewport (not the double): rects map through its
+## art_rect_to_screen(), and a pixel_base change, which moves the scale without a resize,
+## re-lays the HUD out through `layout_changed`.
+func test_rect_positions_follow_the_real_pixel_viewport() -> void:
+	var holder := Control.new()
+	holder.size = Vector2(1920, 1080)
+	add_child_autofree(holder)
+	var pv := PixelViewport.new()
+	pv.pixel_base = Vector2i(640, 360)
+	holder.add_child(pv)
+	pv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pv.refresh_layout()
+	assert_eq(pv.size, Vector2(1920, 1080))
+	assert_eq(pv.integer_scale(), 3)
+	_hud.build(_fishing_spec(Control.new()), _ctx, pv)
+	assert_true(pv.layout_changed.is_connected(_hud._queue_relayout), "HudLayer follows layout_changed")
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_eq(_hud.slot_screen_rect(gauge), pv.art_rect_to_screen(Rect2i(427, 0, 213, 42)))
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1281, 0, 639, 126))
+	pv.pixel_base = Vector2i(480, 270)
+	assert_eq(pv.integer_scale(), 4)
+	await wait_process_frames(2)
+	assert_eq(_hud.slot_screen_rect(gauge), pv.art_rect_to_screen(Rect2i(427, 0, 213, 42)),
+		"re-laid out on the real layout_changed")
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1708, 0, 852, 168))
+
+
 ## world-kits' PixelViewport re-lays out on a stretch-factor change without resizing and
 ## emits only `layout_changed`; the HUD follows it, and a rebuild with another PixelViewport
 ## stops following the old one.
