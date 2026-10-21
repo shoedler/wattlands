@@ -118,7 +118,8 @@ export interface RelayStats {
 
 interface Seat {
   readonly peer: number;
-  token: string;
+  /** The seat's reconnect token: issued once, valid until the seat is freed. */
+  readonly token: string;
   client: Client | null;
   droppedAt: number;
 }
@@ -197,7 +198,11 @@ export class Relay {
       onText: (text: string) => this.#guard(c, () => this.#onText(c, text)),
       onBinary: () => this.#guard(c, () => this.#onBinary(c)),
       onActivity: () => {
-        if (!c.closed) c.lastSeen = this.#clock.now();
+        if (c.closed) return;
+        c.lastSeen = this.#clock.now();
+        // Both layers answer WebSocket pings themselves, outside the rate limit: a client
+        // that floods pings and never reads must not grow this socket's backlog forever.
+        if (c.conn.bufferedAmount > this.limits.maxBufferedBytes) this.#close(c, CLOSE_CODES.SLOW_CONSUMER, 'slow consumer');
       },
       onClose: () => this.#onSocketClosed(c),
     };
@@ -431,7 +436,11 @@ export class Relay {
     this.#broadcast(room, { t: 'peer_joined', peer: s.peer }, s.peer);
   }
 
-  /** A valid reconnect token: the client takes its old peer id (and a fresh token). */
+  /**
+   * A valid reconnect token: the client takes its old peer id back. The token stays the
+   * seat's for the room's life, so a reconnect whose `joined` reply is lost (the network
+   * drops again, or the app dies before saving) can simply be retried with the same token.
+   */
   #reclaim(c: Client, room: Room, seat: Seat): void {
     const old = seat.client;
     if (old) {
@@ -442,9 +451,6 @@ export class Relay {
       this.#close(old, CLOSE_CODES.REPLACED, 'replaced by a reconnect');
       this.#broadcast(room, { t: 'peer_left', peer: seat.peer, reason: 'dropped' }, seat.peer);
     }
-    room.tokens.delete(seat.token);
-    seat.token = this.#generateToken();
-    room.tokens.set(seat.token, seat);
     seat.client = c;
     seat.droppedAt = 0;
     c.room = room;

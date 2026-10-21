@@ -260,7 +260,7 @@ for (const { impl, skip } of await implementations()) {
     });
 
     describe('reconnect and host drop', () => {
-      it('a client back within 120 s keeps its peer id and gets a fresh token', async () => {
+      it('a client back within 120 s keeps its peer id and its token', async () => {
         const { h, b, c } = await room();
         b.c.close();
         assert.deepEqual(await h.c.take('peer_left'), { t: 'peer_left', peer: 2, reason: 'dropped' });
@@ -269,15 +269,72 @@ for (const { impl, skip } of await implementations()) {
         const back = await tr.guest(h.code, b.reply.token);
         assert.equal(back.reply.t, 'joined');
         assert.equal(back.reply.peer, 2);
+        assert.equal(back.reply.host, 1);
         assert.equal(back.reply.rejoin, true);
         assert.deepEqual(back.reply.peers, [1, 3]);
-        assert.notEqual(back.reply.token, b.reply.token);
+        assert.equal(back.reply.token, b.reply.token, 'the seat keeps its token');
         assert.deepEqual(await h.c.take('peer_joined'), { t: 'peer_joined', peer: 2, rejoin: true });
+        assert.deepEqual(await c.c.take('peer_joined'), { t: 'peer_joined', peer: 2, rejoin: true });
         h.c.send({ t: 'msg', to: 2, d: { type: 'phase' } });
         assert.deepEqual(await back.c.take('msg'), { t: 'msg', from: 1, d: { type: 'phase' } });
-        // The old token was replaced: it now joins as a new peer.
-        const old = await tr.guest(h.code, b.reply.token);
-        assert.deepEqual([old.reply.peer, old.reply.rejoin], [4, false]);
+        back.c.send({ t: 'msg', to: 1, d: { type: 'telemetry' } });
+        assert.deepEqual(await h.c.take('msg'), { t: 'msg', from: 2, d: { type: 'telemetry' } });
+        assert.equal(tr.relay.stats().peers, 3);
+      });
+
+      it('a reconnect retried with the same token (its joined reply lost) gets the same peer id again', async () => {
+        const { h, b, c } = await room();
+        b.c.close();
+        await h.c.take('peer_left');
+        // The first reconnect succeeds on the relay, but the socket dies before the client reads joined.
+        const first = await tr.guest(h.code, b.reply.token);
+        assert.deepEqual([first.reply.peer, first.reply.rejoin], [2, true]);
+        first.c.close();
+        await h.c.take((m) => m.t === 'peer_left' && m.peer === 2);
+        // The client still only knows the token it saved first.
+        await tr.advance(100_000, [h.c, c.c]);
+        const second = await tr.guest(h.code, b.reply.token);
+        assert.deepEqual([second.reply.t, second.reply.peer, second.reply.rejoin], ['joined', 2, true]);
+        // The 120 s hold restarts at every drop: 130 s after the first drop but 30 s after the latest, still held.
+        second.c.close();
+        await h.c.take((m) => m.t === 'peer_left' && m.peer === 2);
+        await tr.advance(30_000, [h.c, c.c]);
+        const third = await tr.guest(h.code, b.reply.token);
+        assert.deepEqual([third.reply.peer, third.reply.rejoin], [2, true]);
+        assert.equal(tr.relay.stats().held, 0);
+      });
+
+      it('an expired token is refused even before the periodic sweep runs', async () => {
+        const { h, b, c } = await room();
+        b.c.close();
+        await h.c.take('peer_left');
+        // Keep h and c alive, then step past the 120 s without sweeping.
+        for (let i = 0; i < 4; i++) {
+          await h.c.sync();
+          await c.c.sync();
+          tr.clock.advance(30_000);
+        }
+        tr.clock.advance(1_000);
+        const late = await tr.guest(h.code, b.reply.token);
+        assert.deepEqual([late.reply.t, late.reply.peer, late.reply.rejoin], ['joined', 4, false]);
+        assert.notEqual(late.reply.token, b.reply.token);
+      });
+
+      it('a peer may join while the host is away; the returning host sees it in joined.peers', async () => {
+        const { h, b, c } = await room();
+        h.c.close();
+        await b.c.take('peer_left');
+        await c.c.take('peer_left');
+        const d = await tr.guest(h.code);
+        assert.deepEqual([d.reply.peer, d.reply.host, d.reply.peers], [4, 1, [2, 3]]);
+        assert.deepEqual(await b.c.take('peer_joined'), { t: 'peer_joined', peer: 4 });
+        d.c.send({ t: 'msg', to: 1, d: 'nobody home' });
+        await d.c.sync();
+        const back = await tr.guest(h.code, h.token);
+        assert.deepEqual([back.reply.peer, back.reply.rejoin, back.reply.peers], [1, true, [2, 3, 4]]);
+        assert.deepEqual(await d.c.take('peer_joined'), { t: 'peer_joined', peer: 1, rejoin: true });
+        await back.c.sync();
+        assert.ok(!back.c.pending().some((m) => m.t === 'msg'), 'nothing sent while away is replayed');
       });
 
       it('a reconnect token expires 120 s after the drop', async () => {

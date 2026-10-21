@@ -182,6 +182,47 @@ describe('Relay core', () => {
     assert.equal(relay.stats().held, 1);
   });
 
+  it('a client whose backlog is over 1 MiB is closed (4003) on its next frame, e.g. a WebSocket ping flood', () => {
+    const { connect, relay } = fakeRelay();
+    const h = connect();
+    h.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    h.send({ t: 'create', max: 8 });
+    const g = connect();
+    g.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    g.send({ t: 'join', code: h.last().code });
+    g.conn.bufferedAmount = DEFAULT_LIMITS.maxBufferedBytes;
+    g.h.onActivity();
+    assert.equal(g.conn.closedWith, null, 'a backlog at the limit is fine');
+    g.conn.bufferedAmount += 1;
+    g.h.onActivity();
+    assert.deepEqual(g.conn.closedWith, { code: CLOSE_CODES.SLOW_CONSUMER, reason: 'slow consumer' });
+    assert.deepEqual(h.last(), { t: 'peer_left', peer: 2, reason: 'dropped' });
+    assert.equal(relay.stats().held, 1);
+    assert.equal(relay.stats().connections, 1);
+  });
+
+  it('a reconnect keeps the seat token, and a takeover keeps it too', () => {
+    const { connect } = fakeRelay();
+    const h = connect();
+    h.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    h.send({ t: 'create', max: 8 });
+    const code = h.last().code;
+    const g = connect();
+    g.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    g.send({ t: 'join', code });
+    const token = g.last().token;
+    g.h.onClose();
+    const back = connect();
+    back.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    back.send({ t: 'join', code, token });
+    assert.deepEqual([back.last().peer, back.last().rejoin, back.last().token], [2, true, token]);
+    const takeover = connect();
+    takeover.send({ t: 'hello', proto: 1, game: 'wattlands', build: 't' });
+    takeover.send({ t: 'join', code, token });
+    assert.deepEqual([takeover.last().peer, takeover.last().rejoin, takeover.last().token], [2, true, token]);
+    assert.equal(back.conn.closedWith.code, CLOSE_CODES.REPLACED);
+  });
+
   it('a socket whose send throws counts as dropped', () => {
     const { connect, relay } = fakeRelay();
     const h = connect();
