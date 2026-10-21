@@ -11,6 +11,19 @@ const LOCAL := 1
 var _bus: WlEventBus = null
 var _ctx: GameContext = null
 var _hud: HudLayer = null
+## The real TrainerService autoload and its stand-in while a test swaps them
+## (_swap_trainer_service); after_each puts the real one back.
+var _real_ts: Node = null
+var _stand_in: Node = null
+
+
+## A TrainerService autoload stand-in with only status(), all HudLayer reads of it.
+class FakeTrainerService:
+	extends Node
+	var st: String = TrainerDevice.STATUS_DISCONNECTED
+
+	func status() -> String:
+		return st
 
 
 func before_each() -> void:
@@ -30,6 +43,10 @@ func before_each() -> void:
 	_hud.wkg_weight_kg = 0.0
 	add_child_autofree(_hud)
 	_hud.set_process(false)
+
+
+func after_each() -> void:
+	_restore_trainer_service()
 
 
 func _spec() -> HudSpec:
@@ -721,12 +738,58 @@ func test_bus_rescue_pause_and_warmup_banners() -> void:
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
 
 
-func test_safety_banners_can_be_turned_off() -> void:
+## BRIEF 4.6.3 says show "rescue": show_safety_banners = false hides only the warm-up and
+## pause banners; the local rider's rescue banner still shows, from every source.
+func test_show_safety_banners_off_hides_only_warmup_and_pause() -> void:
+	assert_true(HudSpec.new().show_safety_banners, "on by default")
 	var spec := _spec()
 	spec.show_safety_banners = false
 	_hud.build(spec, _ctx)
+	var b := _hud.banner()
+	assert_false(b.show_safety)
+	_hud.set_safety_state(true, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up hidden")
+	assert_eq(b.safety_text(), "")
+	_hud.set_safety_state(false, false, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "pause hidden")
 	_hud.set_safety_state(true, true, false)
-	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_NONE)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue still shows")
+	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"))
+	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "full size")
+	_hud.set_safety_state(true, true, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue while the pause is hidden")
+	_hud.set_safety_state(false, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
+	var t := _tele(Wl.ERG, 100.0, 125)
+	t.rescue = true
+	_hud.update(t, null, null)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "telemetry rescue")
+	t.rescue = false
+	_hud.update(t, null, null)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
+	_bus.rescue_changed.emit(LOCAL, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "bus rescue_changed")
+	_bus.governor_status.emit(LOCAL, {"rescue": false, "warmup": true})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up stays hidden")
+	_bus.governor_status.emit(LOCAL, {"rescue": true})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "bus governor_status rescue")
+	_bus.rescue_changed.emit(2, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "another rider's rescue changes nothing")
+
+
+## The default spec still shows warm-up and pause, with pause over rescue over warm-up.
+func test_default_spec_shows_warmup_pause_and_rescue() -> void:
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	assert_true(b.show_safety)
+	_hud.set_safety_state(true, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_WARMUP)
+	assert_eq(b.safety_text(), tr("UI_BANNER_WARMUP"))
+	_hud.set_safety_state(true, true, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
+	_hud.set_safety_state(true, true, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
+	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"))
 
 
 func test_set_safety_state_and_telemetry_rescue() -> void:
@@ -740,6 +803,219 @@ func test_set_safety_state_and_telemetry_rescue() -> void:
 	t.rescue = false
 	_hud.update(t, null, null)
 	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_WARMUP)
+
+
+# --- trainer control lost (BRIEF 4.4) ------------------------------------------------------------
+
+
+func _sfx() -> WlSfx:
+	return get_tree().root.get_node_or_null("Sfx") as WlSfx
+
+
+## Request Control 0x05 or Machine Status 0xFF mid-ride (TrainerService emits
+## trainer_status_changed("control_lost") then trainer_control_lost): the HUD tells the
+## player another app (Zwift, the Wahoo app) may hold control, once per loss, until the
+## trainer is ready again.
+func test_trainer_control_lost_shows_the_notice_once_until_ready() -> void:
+	var sfx := _sfx()
+	assert_not_null(sfx, "the Sfx autoload")
+	if sfx == null:
+		return
+	var was_muted := sfx.muted
+	sfx.muted = true
+	_hud.sounds = true
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	var panel := b.trainer_label().get_parent() as Control
+	assert_eq(b.trainer_text(), "")
+	assert_false(panel.visible)
+	var plays := sfx.play_count
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONTROL_LOST, "held")
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_string_contains(b.trainer_text(), "Zwift")
+	assert_string_contains(b.trainer_text(), "Wahoo")
+	assert_true(panel.visible)
+	assert_eq(b.trainer_label().text, tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_eq(_hud.anchor_of(b), HudSpec.TOP, "in the banner area")
+	assert_eq(sfx.play_count, plays + 1, "one sound")
+	assert_eq(sfx.last_played, "warning")
+	_bus.trainer_control_lost.emit("held again")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONNECTED, "retrying")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONTROL_LOST, "held")
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(sfx.play_count, plays + 1, "once per loss: a failed retry adds nothing")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "still up while retrying")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "Trainer ready")
+	assert_eq(b.trainer_text(), "", "cleared when control comes back")
+	assert_false(panel.visible)
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "a new loss shows it again")
+	assert_eq(sfx.play_count, plays + 2)
+	sfx.muted = was_muted
+
+
+## The notice is not a safety banner: it shows with show_safety_banners off, next to the
+## rescue banner, and stays up across a rebuild.
+func test_trainer_notice_ignores_show_safety_banners_and_survives_a_rebuild() -> void:
+	var spec := _spec()
+	spec.show_safety_banners = false
+	spec.banners_at(HudSpec.TOP_RIGHT)
+	_hud.build(spec, _ctx)
+	_hud.set_safety_state(false, true, false)
+	_bus.trainer_control_lost.emit("held")
+	var b := _hud.banner()
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "both show")
+	assert_eq(_hud.anchor_of(b), HudSpec.TOP_RIGHT)
+	_hud.build(_spec(), _ctx)
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "kept across a rebuild")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "")
+	assert_eq(b.trainer_text(), "", "the rebuilt layer still clears it")
+
+
+## Only this layer's bus drives the notice (a rebuild onto another bus drops the old one).
+func test_trainer_control_lost_on_an_old_bus_is_ignored() -> void:
+	_hud.build(_spec(), _ctx)
+	var other := GameContext.new()
+	var other_bus: WlEventBus = autofree(WlEventBus.new())
+	other.events = other_bus
+	other.local_peer = LOCAL
+	_hud.build(_spec(), other)
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(_hud.banner().trainer_text(), "")
+	other_bus.trainer_control_lost.emit("held")
+	assert_eq(_hud.banner().trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+
+
+func _app_bus() -> WlEventBus:
+	return get_tree().root.get_node_or_null("EventBus") as WlEventBus
+
+
+## Puts `stand_in` (null: no node at all) at /root/TrainerService, the real autoload renamed
+## out of the way; _restore_trainer_service (after_each) undoes it.
+func _swap_trainer_service(stand_in: Node) -> void:
+	_restore_trainer_service()
+	var root := get_tree().root
+	_real_ts = root.get_node_or_null("TrainerService")
+	if _real_ts != null:
+		_real_ts.name = "TrainerServiceSwappedOut"
+	_stand_in = stand_in
+	if stand_in != null:
+		stand_in.name = "TrainerService"
+		root.add_child(stand_in)
+
+
+func _restore_trainer_service() -> void:
+	if _stand_in != null and is_instance_valid(_stand_in):
+		if _stand_in.get_parent() != null:
+			_stand_in.get_parent().remove_child(_stand_in)
+		_stand_in.free()
+	_stand_in = null
+	if _real_ts != null and is_instance_valid(_real_ts):
+		_real_ts.name = "TrainerService"
+	_real_ts = null
+
+
+## Control lost before the session (a connect-time 0x05 in the lobby, or a loss in an earlier
+## session never regained): no trainer_control_lost reaches this layer, so build() on the app's
+## bus (the autoload EventBus) reads TrainerService.status() and shows the notice with one
+## sound, as the signal would have; a later ready clears it.
+func test_control_lost_before_build_shows_the_notice_on_the_app_bus() -> void:
+	var sfx := _sfx()
+	var app_bus := _app_bus()
+	assert_not_null(sfx, "the Sfx autoload")
+	assert_not_null(app_bus, "the EventBus autoload")
+	if sfx == null or app_bus == null:
+		return
+	var ts := FakeTrainerService.new()
+	ts.st = TrainerDevice.STATUS_CONTROL_LOST
+	_swap_trainer_service(ts)
+	var was_muted := sfx.muted
+	sfx.muted = true
+	_hud.sounds = true
+	_ctx.events = app_bus
+	var plays := sfx.play_count
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	var panel := b.trainer_label().get_parent() as Control
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "shown at build")
+	assert_true(panel.visible)
+	assert_eq(_hud.anchor_of(b), HudSpec.TOP, "in the banner area")
+	assert_eq(sfx.play_count, plays + 1, "one sound")
+	assert_eq(sfx.last_played, "warning")
+	_hud.build(_spec(), _ctx)
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "kept across a rebuild")
+	assert_eq(sfx.play_count, plays + 1, "once: a rebuild while still lost adds nothing")
+	app_bus.trainer_control_lost.emit("held")
+	assert_eq(sfx.play_count, plays + 1, "nor does a signal for the same loss")
+	ts.st = TrainerDevice.STATUS_READY
+	app_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "Trainer ready")
+	assert_eq(b.trainer_text(), "", "a later ready clears it")
+	assert_false(panel.visible)
+	_hud.build(_spec(), _ctx)
+	assert_eq(b.trainer_text(), "", "a rebuild with the trainer ready keeps it clear")
+	assert_eq(sfx.play_count, plays + 1)
+	sfx.muted = was_muted
+
+
+## Without a ctx the layer falls back to the autoload EventBus, so it seeds there too.
+func test_control_lost_before_build_without_ctx_events() -> void:
+	var ts := FakeTrainerService.new()
+	ts.st = TrainerDevice.STATUS_CONTROL_LOST
+	_swap_trainer_service(ts)
+	_hud.build(_spec(), null)
+	assert_eq(_hud.banner().trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+
+
+## A private bus (a test, an in-process sim) is not this machine's trainer: no seed from it.
+func test_a_private_bus_is_not_seeded_from_the_trainer_service() -> void:
+	var ts := FakeTrainerService.new()
+	ts.st = TrainerDevice.STATUS_CONTROL_LOST
+	_swap_trainer_service(ts)
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.banner().trainer_text(), "")
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(
+		_hud.banner().trainer_text(),
+		tr("TRAINER_ANOTHER_APP_CONTROL"),
+		"its own signal still works"
+	)
+
+
+## Any other status seeds nothing, and neither does a missing TrainerService node or a node
+## without status(); the signal path still works then.
+func test_no_seed_without_a_control_lost_trainer_service() -> void:
+	var app_bus := _app_bus()
+	assert_not_null(app_bus, "the EventBus autoload")
+	if app_bus == null:
+		return
+	var real := get_tree().root.get_node_or_null("TrainerService")
+	assert_true(real is WlTrainerService, "the real autoload")
+	assert_true(real != null and real.has_method("status"), "has the status() the HUD reads")
+	_ctx.events = app_bus
+	for st: String in [
+		TrainerDevice.STATUS_DISCONNECTED,
+		TrainerDevice.STATUS_CONNECTED,
+		TrainerDevice.STATUS_READY,
+		TrainerDevice.STATUS_ERROR,
+	]:
+		var ts := FakeTrainerService.new()
+		ts.st = st
+		_swap_trainer_service(ts)
+		_hud.build(_spec(), _ctx)
+		assert_eq(_hud.banner().trainer_text(), "", st)
+	_swap_trainer_service(null)
+	assert_null(get_tree().root.get_node_or_null("TrainerService"), "no TrainerService node")
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.banner().trainer_text(), "", "no node")
+	_swap_trainer_service(Node.new())
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.banner().trainer_text(), "", "a node without status()")
+	app_bus.trainer_control_lost.emit("held")
+	assert_eq(_hud.banner().trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "signal still works")
+	app_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "")
+	assert_eq(_hud.banner().trainer_text(), "")
 
 
 func test_phase_started_is_harmless() -> void:

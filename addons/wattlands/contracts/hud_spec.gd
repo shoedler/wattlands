@@ -57,7 +57,9 @@ var controls: Array[Dictionary] = []
 ## Where toasts and the warm-up/rescue banners appear (anchor or Rect2i).
 var toast_area: Variant = TOP
 var banner_area: Variant = TOP
-## Show the kit's rescue and warm-up banners (on by default).
+## Show the kit's warm-up and pause banners (on by default). The rescue banner (BRIEF 4.6.3)
+## and the trainer notice (4.4, another app may hold control) always show: false hides only
+## the warm-up and pause banners.
 var show_safety_banners: bool = true
 
 

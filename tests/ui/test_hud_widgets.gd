@@ -631,13 +631,50 @@ func test_banner_safety_priority() -> void:
 	b.set_safety(true, true, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
 	b.show_safety = false
-	assert_eq(b.safety_text(), "", "hidden at once when turned off")
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue always shows (4.6.3)")
+	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"), "the pause banner hidden at once")
+	b.set_safety(true, false, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up and pause hidden when off")
+	assert_eq(b.safety_text(), "")
+	b.set_safety(true, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up hidden when off")
+	b.set_safety(false, false, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "pause hidden when off")
+	b.set_safety(false, true, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
+	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "rescue at full size")
 	b.set_safety(true, true, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "show_safety_banners off")
 	b.show_safety = true
 	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"), "and back when turned on")
 	b.set_safety(false, false, false)
 	assert_eq(b.safety_text(), "")
+
+
+## The trainer notice (BRIEF 4.4) sits between the safety and the game banner, in the
+## smaller size, until cleared; show_safety does not hide it.
+func test_banner_trainer_notice() -> void:
+	var b: HudBanner = _add(HudBanner.new())
+	var panel := b.trainer_label().get_parent() as Control
+	assert_eq(b.trainer_text(), "")
+	assert_false(panel.visible)
+	b.set_trainer_notice("Another app may hold control")
+	assert_eq(b.trainer_text(), "Another app may hold control")
+	assert_eq(b.trainer_label().text, "Another app may hold control")
+	assert_true(panel.visible)
+	assert_eq(panel.get_index(), 1, "after the safety banner")
+	assert_eq(b.game_label().get_parent().get_index(), 2, "before the game banner")
+	assert_eq(HudWidget.font_px(b.trainer_label()), 34, "0.6 x the 56 px banner size")
+	assert_eq(WlTheme.BANNER_PX, 56)
+	b.show_safety = false
+	assert_true(panel.visible, "not a warm-up or pause banner")
+	b.tick(60.0)
+	assert_eq(b.trainer_text(), "Another app may hold control", "no timeout")
+	b.fit_to(Vector2(640, 60))
+	assert_eq(HudWidget.font_px(b.trainer_label()), HudBanner.MIN_WARMUP_PX, "the floor")
+	assert_eq(HudBanner.MIN_WARMUP_PX, 28)
+	b.set_trainer_notice("")
+	assert_eq(b.trainer_text(), "")
+	assert_false(panel.visible)
 
 
 ## In a small art-pixel rect the safety banners stay readable from 3 m (they wrap or

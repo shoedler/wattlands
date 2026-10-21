@@ -1,12 +1,16 @@
 class_name HudBanner
 extends VBoxContainer
-## The banner area (BRIEF 3.9, 4.6.3, 4.6.8): the kit's safety banner and the latest game
-## banner. The safety banner shows the most urgent of paused, rescue (4.6.3) and warm-up
-## (4.6.8), each with its own text and color (paused grey, rescue orange, warm-up purple, all
-## with text so color is never the only cue); the warm-up banner is smaller. Game banners
-## (ctx.hud.banner) show for their `seconds` of the session's platform time (HudLayer ticks
-## them); a new one replaces the old. Banners line up on `side` (HudLayer sets it from the
-## anchor). Owned by ui-hud.
+## The banner area (BRIEF 3.9, 4.4, 4.6.3, 4.6.8): the kit's safety banner, the trainer
+## notice and the latest game banner. The safety banner shows the most urgent of paused,
+## rescue (4.6.3) and warm-up (4.6.8), each with its own text and color (paused grey, rescue
+## orange, warm-up purple, all with text so color is never the only cue); the warm-up banner
+## is smaller. `show_safety` off (HudSpec.show_safety_banners false) hides only the warm-up
+## and pause banners: the rescue banner always shows (W4: 4.6.3 says show "rescue", and no
+## game may hide it). The trainer notice (set_trainer_notice, 4.4: another app may hold
+## control) stays up until cleared, in the smaller size, dark with an orange border. Game
+## banners (ctx.hud.banner) show for their `seconds` of the session's platform time (HudLayer
+## ticks them); a new one replaces the old. Banners line up on `side` (HudLayer sets it from
+## the anchor). Owned by ui-hud.
 
 const SAFETY_NONE := ""
 const SAFETY_WARMUP := "warmup"
@@ -20,7 +24,8 @@ const MIN_FONT_PX := 32
 ## The smaller warm-up banner's floor.
 const MIN_WARMUP_PX := 28
 
-## Show the kit's safety banners (HudSpec.show_safety_banners).
+## Show the kit's warm-up and pause banners (HudSpec.show_safety_banners). The rescue banner
+## shows either way.
 var show_safety: bool = true:
 	set(value):
 		show_safety = value
@@ -38,9 +43,12 @@ var _rescue: bool = false
 var _paused: bool = false
 var _game_left: float = 0.0
 var _game_text: String = ""
+var _trainer_text: String = ""
 
 var _safety_panel: PanelContainer = null
 var _safety_label: Label = null
+var _trainer_panel: PanelContainer = null
+var _trainer_label: Label = null
 var _game_panel: PanelContainer = null
 var _game_label: Label = null
 
@@ -52,6 +60,11 @@ func _init() -> void:
 	add_theme_constant_override("separation", 10)
 	_safety_panel = _panel("Safety")
 	_safety_label = _safety_panel.get_child(0) as Label
+	_trainer_panel = _panel("Trainer")
+	_trainer_label = _trainer_panel.get_child(0) as Label
+	_trainer_panel.add_theme_stylebox_override(
+		"panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.94), WlTheme.WARN, 3)
+	)
 	_game_panel = _panel("Game")
 	_game_label = _game_panel.get_child(0) as Label
 	_game_panel.add_theme_stylebox_override(
@@ -69,17 +82,29 @@ func set_safety(warmup_active: bool, rescue: bool, paused: bool) -> void:
 	_refresh()
 
 
-## The banner state shown: "", "warmup", "rescue" or "paused".
+## The banner state shown: "", "warmup", "rescue" or "paused". Rescue shows even with
+## show_safety off.
 func safety_state() -> String:
-	if not show_safety:
-		return SAFETY_NONE
-	if _paused:
+	if _paused and show_safety:
 		return SAFETY_PAUSED
 	if _rescue:
 		return SAFETY_RESCUE
-	if _warmup:
+	if _warmup and show_safety:
 		return SAFETY_WARMUP
 	return SAFETY_NONE
+
+
+## Show `text` as the trainer notice until it is cleared ("" clears it). Additive (W4).
+func set_trainer_notice(text: String) -> void:
+	if text == _trainer_text:
+		return
+	_trainer_text = text
+	_refresh()
+
+
+## The trainer notice shown ("" if none).
+func trainer_text() -> String:
+	return _trainer_text
 
 
 func show_game_banner(text: String, seconds: float = 3.0) -> void:
@@ -100,7 +125,7 @@ func tick(dt: float) -> void:
 ## Line the banners up on `s` (-1 left, 0 centre, 1 right). Additive (W2).
 func set_side(s: int) -> void:
 	side = clampi(s, -1, 1)
-	for p: PanelContainer in [_safety_panel, _game_panel]:
+	for p: PanelContainer in [_safety_panel, _trainer_panel, _game_panel]:
 		p.size_flags_horizontal = HudToasts.side_flags(side)
 		(p.get_child(0) as Label).horizontal_alignment = HudToasts.side_alignment(side)
 
@@ -124,6 +149,10 @@ func safety_label() -> Label:
 
 func game_label() -> Label:
 	return _game_label
+
+
+func trainer_label() -> Label:
+	return _trainer_label
 
 
 ## Text size for the rect the banners sit in (HudLayer, Rect2i areas).
@@ -169,7 +198,7 @@ func _refresh() -> void:
 		SAFETY_WARMUP:
 			bg = WlTheme.WARMUP
 			key = "UI_BANNER_WARMUP"
-			px = maxi(MIN_WARMUP_PX, roundi(font_px * 0.6))
+			px = _small_px()
 	if state != SAFETY_NONE:
 		_safety_label.text = HudWidget._t(key)
 		_safety_label.label_settings.font_size = px
@@ -178,8 +207,17 @@ func _refresh() -> void:
 		_safety_panel.add_theme_stylebox_override(
 			"panel", WlTheme.panel_style(Color(bg, 0.95), Color.BLACK, 3)
 		)
+	_trainer_panel.visible = not _trainer_text.is_empty()
+	_trainer_label.text = _trainer_text
+	_trainer_label.label_settings.font_size = _small_px()
 	_game_panel.visible = not _game_text.is_empty()
 	_game_label.text = _game_text
 	_game_label.label_settings.font_size = font_px
 	HudWidget.wrap_label(_safety_label, max_width - PANEL_PAD)
+	HudWidget.wrap_label(_trainer_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_game_label, max_width - PANEL_PAD)
+
+
+## The smaller banners' text size (warm-up, trainer notice).
+func _small_px() -> int:
+	return maxi(MIN_WARMUP_PX, roundi(font_px * 0.6))

@@ -5,8 +5,9 @@ extends CanvasLayer
 ## after W0. Readable from 3 m: key numbers >= 48 px at 1080p.
 ## It reads from the session's WlEventBus (power_band_changed, cadence_band_changed,
 ## roster_changed, toast_requested, banner_requested, readout_changed, rescue_changed,
-## phase_started, paused_changed, governor_status) and from update() calls the GameHost makes
-## every tick for the local rider. local_feed() draws here directly.
+## phase_started, paused_changed, governor_status, trainer_control_lost,
+## trainer_status_changed) and from update() calls the GameHost makes every tick for the local
+## rider. local_feed() draws here directly.
 ##
 ## Layout (sizes in 1080p pixels, the window's base size):
 ## - Anchors: one stack per anchor, WlTheme.MARGIN_PX (32 px) from the screen edges. Entries
@@ -30,8 +31,17 @@ extends CanvasLayer
 ##   W/kg shows only if the rider opted in (profile `show_wkg`; or wkg_weight_kg).
 ## - Safety banners: rescue (4.6.3), warm-up (4.6.8) and pause, from set_safety_state(),
 ##   update()'s telemetry (rescue, paused) and the bus (rescue_changed, paused_changed,
-##   governor_status {warmup, rescue, paused}) for the local rider, unless
-##   spec.show_safety_banners is false.
+##   governor_status {warmup, rescue, paused}) for the local rider. The rescue banner always
+##   shows; spec.show_safety_banners = false hides only the warm-up and pause banners (W4).
+## - Trainer control lost (BRIEF 4.4, W4): EventBus.trainer_control_lost (Request Control
+##   0x05 or Machine Status 0xFF on this machine's trainer) puts up the trainer notice
+##   TRAINER_ANOTHER_APP_CONTROL in the banner area, with the "warning" sound, once per loss;
+##   it stays up (also across a rebuild) until trainer_status_changed reports the trainer
+##   ready again. build() on the autoload EventBus (the app's session bus) also seeds it from
+##   the TrainerService autoload's status(), looked up like Settings: a session that starts
+##   while control is already lost (in the lobby, or in an earlier session and never
+##   regained) shows the notice and plays the sound as the signal would have, once.
+##   Only a rendering GameHost builds a HudLayer, so headless peers show nothing.
 ## - The latest power and cadence bands per peer, local teammate statuses and custom readout
 ##   texts are kept, so a band published before build() (in configure()) or across a rebuild
 ##   still shows.
@@ -96,6 +106,8 @@ var _ext_paused: bool = false
 var _tele_rescue: bool = false
 var _tele_paused: bool = false
 var _rescue_shown: bool = false
+## True from trainer_control_lost until the trainer reports ready again.
+var _control_lost: bool = false
 ## The telemetry time update() last saw (-1 before the first), whether it ever moved, and
 ## frame time since it last moved.
 var _tel_t: float = -1.0
@@ -195,6 +207,7 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	for id: String in _readouts.keys():
 		set_readout(id, _readouts[id])
 	_connect_bus()
+	_seed_trainer_notice()
 	_refresh_safety()
 	relayout()
 
@@ -780,6 +793,18 @@ func _autoload_bus() -> WlEventBus:
 	return tree.root.get_node_or_null("EventBus") as WlEventBus
 
 
+## The TrainerService autoload's status() ("" when there is no such node or it has no
+## status()). Read only for the app's own bus (_seed_trainer_notice).
+func _trainer_status() -> String:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return ""
+	var ts := tree.root.get_node_or_null("TrainerService")
+	if ts == null or not ts.has_method("status"):
+		return ""
+	return str(ts.call("status"))
+
+
 func _text(key: String, args: Variant) -> String:
 	var a: Variant = args
 	if a == null:
@@ -823,6 +848,8 @@ func _connect_bus() -> void:
 	_link(_bus.phase_started, _on_phase_started)
 	_link(_bus.paused_changed, _on_paused_changed)
 	_link(_bus.governor_status, _on_governor_status)
+	_link(_bus.trainer_control_lost, _on_trainer_control_lost)
+	_link(_bus.trainer_status_changed, _on_trainer_status_changed)
 
 
 func _link(sig: Signal, c: Callable) -> void:
@@ -876,3 +903,31 @@ func _on_governor_status(peer: int, status: Dictionary) -> void:
 	if status.has("paused"):
 		_ext_paused = bool(status["paused"])
 	_refresh_safety()
+
+
+## Another app (Zwift, the Wahoo app) may hold control (BRIEF 4.4): one notice and one sound
+## per loss; a repeat while control is still lost changes nothing.
+func _on_trainer_control_lost(_detail: String) -> void:
+	if _control_lost:
+		return
+	_control_lost = true
+	_banner.set_trainer_notice(_text("TRAINER_ANOTHER_APP_CONTROL", []))
+	_play("warning")
+
+
+## A loss before this layer linked the bus (lobby, an earlier session) emitted no signal here:
+## on the autoload EventBus, which TrainerService emits on, its current status stands in for
+## it. A private bus (a test, an in-process sim) is not this machine's trainer.
+func _seed_trainer_notice() -> void:
+	if _bus == null or _bus != _autoload_bus():
+		return
+	if _trainer_status() == TrainerDevice.STATUS_CONTROL_LOST:
+		_on_trainer_control_lost("")
+
+
+## Control is back once the trainer is ready again (a retry, a reconnect, another trainer).
+func _on_trainer_status_changed(status: String, _detail: String) -> void:
+	if not _control_lost or status != TrainerDevice.STATUS_READY:
+		return
+	_control_lost = false
+	_banner.set_trainer_notice("")
