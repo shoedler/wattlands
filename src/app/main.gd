@@ -69,9 +69,15 @@ func _on_app_state(new_state: String, p: Dictionary) -> void:
 	show_state(new_state, p)
 
 
-## Replace the current screen with the one for `new_state`.
+## Replace the current screen with the one for `new_state`. "quitting" has no screen: the
+## current one is frozen (no more ticks, input or GameHost steps, so App.quit's TrainerService
+## alone ticks the shut-down riders while their safe commands go out), then AppServices.quit
+## starts App.quit, or does nothing more when App.quit is already running (a window close):
+## App.quit ends the tree itself, after its leave and QUIT_GRACE_S (W4r2 R9/R10).
 func show_state(new_state: String, p: Dictionary = {}) -> void:
 	if new_state == "quitting":
+		if screen != null and is_instance_valid(screen):
+			screen.freeze()
 		services.quit(0)
 		return
 	var next := make_screen(new_state, p)

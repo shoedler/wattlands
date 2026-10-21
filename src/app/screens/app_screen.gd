@@ -50,6 +50,17 @@ func _exit_tree() -> void:
 	_disconnect_input()
 
 
+## The app is quitting: stop for good without leaving (leave() would hand ticking back and
+## re-set the menu rider up before App.quit shuts it down). No more input, ticks or _process
+## in this screen or any node under it (a GameHost or the FTP test's rider clock), whatever
+## their process_mode. The screen stays on show until the tree quits.
+func freeze() -> void:
+	_disconnect_input()
+	auto_process = false
+	propagate_call("set_process", [false])
+	propagate_call("set_physics_process", [false])
+
+
 ## Override: build the screen's Controls and its first menu.
 func _build() -> void:
 	pass

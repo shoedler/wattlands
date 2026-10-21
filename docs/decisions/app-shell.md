@@ -252,3 +252,9 @@
 
 - Decision: picking a ride whose upload state is uploaded or duplicate calls `Rides.reupload(ride_id)`; any other ride goes through `Rides.upload()`.
 - Reason: BRIEF 3.8 P1 "Rides history with re-upload"; `upload()` only reports the stored state of an uploaded ride, so a ride deleted on Strava could not go up again.
+
+## 2026-10-21 (W4r2): App.quit ends the tree, not the app shell (W4r2 R9/R10, W3 NET-6)
+
+- Decision: `AppServices.quit` calls `App.quit`, then `last`, and calls `SceneTree.quit` only when the App is not quitting inside the tree (`app_ends_tree()`: a test double or a private App). A window close re-enters it through the main scene's "quitting" branch before App.quit has left the room; it now does nothing more, so App.quit leaves the hosted room, shuts the riders down and ends the tree itself after `QUIT_GRACE_S`. The "quitting" branch also freezes the current screen (`AppScreen.freeze()`: input disconnected, `_process` off on the screen and every node under it, a GameHost included), so during the grace only the TrainerService ticks the shut-down riders. `quit_hook` now stands in for `SceneTree.quit` alone.
+- Alternatives: main.gd ignores "quitting" while App quits (leaves the scripted path, where AppServices.quit followed App.quit with an immediate `SceneTree.quit`, unfixed); `leave()` the screen on quitting (hands ticking back and re-sets the menu rider up before App.quit shuts it down).
+- Reason: `SceneTree.quit` ends the process at the end of the frame, so the grace timer App.quit started afterwards never fired: no `host_left` reached the relay's linger and the governor's SIM flat and Stop (BRIEF 4.6.9) had no time to go out with a real trainer. `tests/app/test_quit_chain.gd` drives the real main.gd, AppServices and WlApp on a hosting loopback session.
