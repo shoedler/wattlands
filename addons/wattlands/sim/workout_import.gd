@@ -70,7 +70,9 @@ const TAG_COOLDOWN := "Cooldown"
 const TAG_RAMP := "Ramp"
 const TAG_INTERVALS := "IntervalsT"
 const TAG_FREE := "FreeRide"
-const SUPPORTED_TAGS: Array[String] = [TAG_STEADY, TAG_WARMUP, TAG_COOLDOWN, TAG_RAMP, TAG_INTERVALS, TAG_FREE]
+const SUPPORTED_TAGS: Array[String] = [
+	TAG_STEADY, TAG_WARMUP, TAG_COOLDOWN, TAG_RAMP, TAG_INTERVALS, TAG_FREE,
+]
 
 
 ## Parse .zwo XML text. Returns:
@@ -227,7 +229,8 @@ static func _read_xml(text: String) -> Dictionary:
 				stack.append(lower)
 		elif node_type == XMLParser.NODE_ELEMENT_END:
 			if stack.is_empty() or stack[-1] != parser.get_node_name().to_lower():
-				out["error"] = _t("SIM_ZWO_E_XML", {"why": _t("SIM_ZWO_WHY_NESTING", {"tag": parser.get_node_name()})})
+				var why := _t("SIM_ZWO_WHY_NESTING", {"tag": parser.get_node_name()})
+				out["error"] = _t("SIM_ZWO_E_XML", {"why": why})
 				return out
 			stack.pop_back()
 		elif node_type == XMLParser.NODE_TEXT or node_type == XMLParser.NODE_CDATA:
@@ -321,8 +324,10 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 			var rep_f := _num(attrs, "repeat")
 			var on_s := _num(attrs, "onduration")
 			var off_s := _num_or(attrs, "offduration", 0.0)
-			var on_p := _interval_power(attrs, "onpower", "poweronlow", "poweronhigh", index, tag, warnings)
-			var off_p := _interval_power(attrs, "offpower", "powerofflow", "poweroffhigh", index, tag, warnings)
+			var on_p := _interval_power(attrs, "onpower", "poweronlow", "poweronhigh",
+				index, tag, warnings)
+			var off_p := _interval_power(attrs, "offpower", "powerofflow", "poweroffhigh",
+				index, tag, warnings)
 			if is_nan(rep_f) or rep_f < 1.0:
 				why = "SIM_ZWO_WHY_REPEAT"
 			elif is_nan(on_s) or on_s <= 0.0 or is_nan(off_s) or off_s < 0.0:
@@ -528,7 +533,8 @@ static func _apply_warmup_limits(segs: Array[Dictionary], ctx: Dictionary) -> vo
 				s["to"] = mid
 				s["dur"] = cut
 				segs.insert(i + 1, tail)
-				_record_pct(ctx, s, RULE_WARMUP_SPLIT, [a, b], [a, mid], "SIM_ZWO_REASON_WARMUP", "SIM_ZWO_SPLIT")
+				_record_pct(ctx, s, RULE_WARMUP_SPLIT, [a, b], [a, mid],
+					"SIM_ZWO_REASON_WARMUP", "SIM_ZWO_SPLIT")
 			_clamp_to(ctx, s, WARMUP_MAX_PCT, RULE_WARMUP, "SIM_ZWO_REASON_WARMUP")
 		start += float(s["dur"])
 		i += 1
@@ -574,7 +580,8 @@ static func _apply_duration_limits(segs: Array[Dictionary], ctx: Dictionary) -> 
 
 
 ## Clamps both ends of an ERG phase to <= cap_pct and records it when that changed anything.
-static func _clamp_to(ctx: Dictionary, s: Dictionary, cap_pct: float, rule: String, reason_key: String) -> void:
+static func _clamp_to(ctx: Dictionary, s: Dictionary, cap_pct: float, rule: String,
+		reason_key: String) -> void:
 	var a := float(s["from"])
 	var b := float(s["to"])
 	if maxf(a, b) <= cap_pct + EPS:
@@ -584,8 +591,8 @@ static func _clamp_to(ctx: Dictionary, s: Dictionary, cap_pct: float, rule: Stri
 	_record_pct(ctx, s, rule, [a, b], [float(s["from"]), float(s["to"])], reason_key, "SIM_ZWO_CLAMP")
 
 
-static func _record_pct(ctx: Dictionary, s: Dictionary, rule: String, from_pct: Array, to_pct: Array,
-		reason_key: String, text_key: String) -> void:
+static func _record_pct(ctx: Dictionary, s: Dictionary, rule: String, from_pct: Array,
+		to_pct: Array, reason_key: String, text_key: String) -> void:
 	var text := _t(text_key, {"block": int(s["block"]), "label": str(s["orig"]),
 		"from": _range_text(float(from_pct[0]), float(from_pct[1])),
 		"to": _range_text(float(to_pct[0]), float(to_pct[1])), "reason": _t(reason_key)})
@@ -593,7 +600,8 @@ static func _record_pct(ctx: Dictionary, s: Dictionary, rule: String, from_pct: 
 		"from_pct": from_pct, "to_pct": to_pct, "from_s": -1.0, "to_s": -1.0, "text": text})
 
 
-static func _record_len(ctx: Dictionary, s: Dictionary, rule: String, from_s: float, to_s: float, reason_key: String) -> void:
+static func _record_len(ctx: Dictionary, s: Dictionary, rule: String, from_s: float,
+		to_s: float, reason_key: String) -> void:
 	var text := _t("SIM_ZWO_EXTEND", {"block": int(s["block"]), "label": str(s["orig"]),
 		"from": _seconds_text(from_s), "to": _seconds_text(to_s), "reason": _t(reason_key)})
 	(ctx["records"] as Array).append({"seg_id": int(s["id"]), "block": int(s["block"]), "rule": rule,

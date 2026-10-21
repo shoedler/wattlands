@@ -134,7 +134,8 @@ func on_sample(sample: TrainerSample) -> Array[StringName]:
 		not_pedaling_changed.emit(false)
 
 	# pedal_start condition (timed in _fire_timed).
-	var cond := cadence >= PEDAL_START_RPM or (power > 0.0 and power >= PEDAL_START_FTP_FRACTION * ftp_w)
+	var by_power := power > 0.0 and power >= PEDAL_START_FTP_FRACTION * ftp_w
+	var cond := cadence >= PEDAL_START_RPM or by_power
 	var was_cond := _last_pedal_cond
 	_last_pedal_cond = cond and not np
 	if not _last_pedal_cond:
