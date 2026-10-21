@@ -7,6 +7,9 @@ extends Control
 ## timer with tick(dt), so several lists never react to one surge.
 ## Pedal-scan: focus cycles every scan interval (profile setting, 1.6 s); surge or confirm picks;
 ## coast or back backs out; up and down move focus. Keyboard and controller work the same way.
+## Each tick the active menu learns the local rider's trainer mode (local_trainer_mode()): in
+## ERG coast never means back (BRIEF 3.5), so its hint says "keep pedaling" (UI_SCAN_HINT_ERG)
+## and a coast doesn't back out. Only the mode is passed: menus never ERG-auto-pick here.
 
 ## Emitted when the screen asks to leave (tests watch it; screens call services.goto).
 signal leaving(state: String)
@@ -80,8 +83,17 @@ func _process(delta: float) -> void:
 func tick(dt: float) -> void:
 	var m := active_menu()
 	if m != null:
+		m.set_local_mode(local_trainer_mode())
 		m.tick(dt)
 	_tick(dt)
+
+
+## The trainer mode of the rider the menus follow ("ERG", "SIM", "OFF"; "" when unknown): the
+## InputRouter's attached rider. The session screen answers with its own local rider.
+func local_trainer_mode() -> String:
+	if services != null and services.input != null:
+		return services.input.local_mode()
+	return ""
 
 
 ## Route an action (keyboard, controller, on-screen) to the screen, then to the active menu.
@@ -150,6 +162,7 @@ func push_menu(items: Array, pick: Callable, back: Callable = Callable(), highli
 	menus.append(list)
 	_menu_info.append({"pick": pick, "back": back, "items": items.duplicate(true)})
 	_configure_list(list)
+	list.set_local_mode(local_trainer_mode())
 	list.set_items(items)
 	if highlight >= 0:
 		list.set_highlight(highlight)
