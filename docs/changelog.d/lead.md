@@ -1,0 +1,7 @@
+# lead
+
+- Added `tools/run_tests` and `tools/run_tests.ps1` (one Node runner, `tools/lib/run_tests.mjs`): import, the full GUT suite with the strict gate (exit code, "Run Summary", JUnit count at or above the last green count, no forbidden log line, no pending or risky test outside `tests/pending_allowlist.txt`), the 7.3 scaffold check in a throwaway copy, `check_scripts` plus gdlint and `gdformat --check` (gdtoolkit 4.5.0, `./gdlintrc`) plus a PyYAML parse of every CI workflow (through `uv`, skipped without it), `tools/run_game_sim` over every registered game's contents, `tools/fit_check` on every FIT the sims and tests wrote, every Node suite (game folders under `tests/games/` included) and the 3-peer end-to-end test.
+- Added the machine-wide Godot lock behind `tools/godot.sh` and `tools/godot.ps1` (FIFO tickets, leases, a 4-slot cap on this machine, exit 75 on a lock-wait timeout) and the per-checkout `.userdata/` user dir.
+- Added `tools/export_windows.mjs`: the Windows Desktop export (the GDBLE DLL, LICENSE, CREDITS and third-party notices next to the exe), `--with-vcruntime` and `--smoke`.
+- Added `export_presets.cfg` with a test that the Windows preset ships the GDBLE DLL, and `.github/workflows/lead.yml`, which runs every gate on Linux.
+- Wired the app end to end: autoloads, the input map, the main scene, menus to lobby to session to results, and the merged docs (README, DESIGN, ARCHITECTURE, GAME_SDK, TRAINER, PROTOCOL, HARDWARE_TEST_PLAN, DECISIONS, OWNERSHIP, DEPENDENCIES, CREDITS).

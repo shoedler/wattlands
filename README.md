@@ -74,7 +74,7 @@ New Strava API applications serve a single athlete at first (up to 10 without re
 ## Troubleshooting
 
 - "Another app may hold control": close Zwift, the Wahoo app and any other trainer app, then reconnect.
-- The trainer is not found or won't connect: remove any Windows-level Bluetooth pairing of the trainer (Settings, Bluetooth & devices), keep it within a few metres, and make sure no other app is connected.
+- The trainer is not found or won't connect: remove any Windows-level Bluetooth pairing of the trainer (Settings, Bluetooth & devices), keep it within a few metres, and make sure no other app is connected. If it still doesn't show up, update the trainer firmware with the Wahoo app: Wattlands talks to the trainer over the Bluetooth fitness machine service (FTMS), which older firmware doesn't offer.
 - No Bluetooth trainers at all on a fresh PC: the Bluetooth library needs the Microsoft Visual C++ 2015-2022 x64 runtime. Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe, or build with `node tools/export_windows.mjs --with-vcruntime`.
 - Host fails or friends can't join: check that the relay runs and that everyone's Settings, Network, Relay URL points at it (see Playing together).
 - Mode switches feel abrupt or power spikes: update the trainer firmware. Wattlands ramps every switch between ERG and simulation, but firmware before 1.5.5 could spike on switches.
