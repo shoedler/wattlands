@@ -1,0 +1,96 @@
+extends GutTest
+## Sprint scoring (BRIEF 3.5, 3.7): FREE sprints score under the sprint rule, power >= 1.2 x
+## FTP; a sprint is a hit once the rule held for 3 s in a row; peaks are reported per rider.
+
+const U := preload("res://tests/games/workout/workout_test_util.gd")
+const DT := 0.05
+
+
+func test_threshold_comes_from_the_sprint_rule() -> void:
+	var t := WorkoutSprintTracker.create(250.0, 4)
+	assert_almost_eq(t.threshold_w, 300.0, 0.001)
+	assert_almost_eq(t.threshold_w, SprintRule.create(250.0).threshold_w(), 0.001)
+	assert_eq(t.phase_index, 4)
+
+
+func test_streaks_peaks_and_hits() -> void:
+	var t := WorkoutSprintTracker.create(200.0)
+	for i in 40:
+		t.update(250.0, DT)
+	assert_almost_eq(t.best_s, 2.0, 0.001)
+	assert_false(t.hit(), "2 s is not enough")
+	t.update(100.0, DT)
+	assert_eq(t.streak_s, 0.0, "a dip ends the streak")
+	for i in 60:
+		t.update(240.0, DT)
+	assert_true(t.hit(), "exactly 1.2 x FTP for 3 s counts")
+	t.update(900.0, DT)
+	var res := t.result()
+	assert_eq(res["peak_w"], 900)
+	assert_almost_eq(t.held_s, 5.05, 0.001)
+	assert_almost_eq(float(res["held_s"]), snappedf(t.held_s, 0.1), 0.0001, "results round to 0.1 s")
+	assert_true(bool(res["hit"]))
+
+
+func test_sprint_events_and_toasts_in_a_session() -> void:
+	var players := U.players(1, 1, 200.0)
+	var g := U.game("easy_30", players)
+	var weak := func(slot: PlayerSlot, p: PlanPhase, ps: PhaseState, tick: int) -> Dictionary:
+		var v := U.compliant(slot, p, ps)
+		if p.kind == Wl.FREE and slot.is_bot:
+			v["power_w"] = 230.0
+		return v
+	var events := U.ride(g, weak)
+	var sprints := U.of_type(events, WorkoutRules.EV_SPRINT)
+	assert_eq(sprints.size(), 3, "one result per sprint")
+	var free_indices: Array[int] = []
+	for i in g.state.phases.size():
+		if g.state.phases[i].kind == Wl.FREE:
+			free_indices.append(i)
+	for k in 3:
+		var e := sprints[k]
+		assert_eq(int(e["i"]), free_indices[k])
+		assert_eq(e["r"][0][0], 1)
+		assert_eq(e["r"][0][1], 280, "human peak 1.4 x FTP")
+		assert_eq(e["r"][0][2], 100, "held 10.0 s in a row")
+		assert_eq(e["r"][0][3], 1, "hit")
+		assert_eq(e["r"][1][0], -1)
+		assert_eq(e["r"][1][3], 0, "230 W stays under 240 W")
+	var r := g.state.rider(1)
+	assert_eq(r.sprints.size(), 3)
+	var hud: U.FakeHud = g.ctx.hud
+	var hits := 0
+	for c in hud.of("toast"):
+		if c["key"] == "WORKOUT_TOAST_SPRINT_HIT":
+			hits += 1
+			assert_eq(c["peer"], 1, "sprint toasts go to that rider only")
+		assert_ne(c["peer"], -1, "no toasts for bots")
+	assert_eq(hits, 3)
+	var warned := 0
+	for c in hud.of("toast"):
+		if c["key"] == "WORKOUT_TOAST_SPRINT_SOON":
+			warned += 1
+			assert_eq(c["peer"], Wl.ALL_PEERS)
+	assert_eq(warned, 3, "a countdown before each sprint")
+	g.free()
+
+
+func test_sprint_bands_on_the_gauge() -> void:
+	var g := U.game("easy_30", U.players(1, 1, 200.0))
+	U.ride(g)
+	var hud: U.FakeHud = g.ctx.hud
+	var bands := hud.of("power_band")
+	# 3 sprints x 2 riders set a band, 3 x 2 clear it on the ERG phase after.
+	assert_eq(bands.size(), 12, str(bands))
+	assert_eq([bands[0]["lo"], bands[0]["hi"]], [240.0, 320.0], "120-160% FTP")
+	assert_eq([bands[2]["lo"], bands[2]["hi"]], [0.0, 0.0], "cleared in ERG")
+	g.free()
+
+
+func test_no_sprint_band_inside_the_warmup() -> void:
+	var g := U.game("e2e", U.players(1))
+	var events := U.ride(g)
+	var hud: U.FakeHud = g.ctx.hud
+	assert_eq(hud.of("power_band").size(), 0, "the e2e sprint starts at 90 s: no band")
+	assert_eq(U.of_type(events, WorkoutRules.EV_SPRINT).size(), 1, "it is still scored")
+	g.free()
