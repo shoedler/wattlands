@@ -227,6 +227,47 @@ static func dict_to_event(d: Dictionary) -> InputEvent:
 	return null
 
 
+## A short label for an event, for the controls screen: "Enter", "W", "A", "LB", "Menu",
+## "Left stick up", "RT".
+static func describe(event: InputEvent) -> String:
+	if event is InputEventKey:
+		var k := event as InputEventKey
+		var code: Key = k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
+		var text := OS.get_keycode_string(code)
+		return text if not text.is_empty() else "Key %d" % int(code)
+	if event is InputEventJoypadButton:
+		var names := {
+			JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
+			JOY_BUTTON_BACK: "View", JOY_BUTTON_GUIDE: "Guide", JOY_BUTTON_START: "Menu",
+			JOY_BUTTON_LEFT_STICK: "LS", JOY_BUTTON_RIGHT_STICK: "RS",
+			JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB",
+			JOY_BUTTON_DPAD_UP: "D-pad up", JOY_BUTTON_DPAD_DOWN: "D-pad down",
+			JOY_BUTTON_DPAD_LEFT: "D-pad left", JOY_BUTTON_DPAD_RIGHT: "D-pad right",
+		}
+		var b := int((event as InputEventJoypadButton).button_index)
+		return str(names.get(b, "Button %d" % b))
+	if event is InputEventJoypadMotion:
+		var m := event as InputEventJoypadMotion
+		var neg := m.axis_value < 0.0
+		match int(m.axis):
+			JOY_AXIS_LEFT_X:
+				return "Left stick left" if neg else "Left stick right"
+			JOY_AXIS_LEFT_Y:
+				return "Left stick up" if neg else "Left stick down"
+			JOY_AXIS_RIGHT_X:
+				return "Right stick left" if neg else "Right stick right"
+			JOY_AXIS_RIGHT_Y:
+				return "Right stick up" if neg else "Right stick down"
+			JOY_AXIS_TRIGGER_LEFT:
+				return "LT"
+			JOY_AXIS_TRIGGER_RIGHT:
+				return "RT"
+		return "Axis %d%s" % [int(m.axis), "-" if neg else "+"]
+	if event is InputEventMouseButton:
+		return "Mouse %d" % int((event as InputEventMouseButton).button_index)
+	return ""
+
+
 static func _key_code(d: Dictionary) -> int:
 	var p := int(d.get("physical_keycode", 0))
 	return p if p != 0 else int(d.get("keycode", 0))

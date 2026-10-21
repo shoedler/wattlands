@@ -36,6 +36,8 @@ signal gesture(gesture_name: StringName)
 ## Menu-level input: device actions and the pedal-UI mappings. via: "action" (keyboard,
 ## controller or inject_action), "surge", "coast" or "stop_5s".
 signal menu_input(action_name: StringName, via: String)
+## start_capture() bound the next press to an action (not saved until save_bindings()).
+signal binding_captured(action_name: StringName, event: InputEvent)
 
 ## Seconds a keyboard panic binding must be held.
 const PANIC_HOLD_S := 1.0
@@ -63,6 +65,7 @@ var _panic_holds: Dictionary = {}
 ## Sources whose panic hold already fired (until released).
 var _panic_fired: Dictionary = {}
 var _device_used: bool = false
+var _capture_action: StringName = &""
 
 
 func _ready() -> void:
@@ -85,6 +88,12 @@ func handle_event(event: InputEvent) -> void:
 	if event == null:
 		return
 	if event is InputEventKey and (event as InputEventKey).echo:
+		return
+	if _capture_action != &"" and _is_capture_press(event):
+		var a := _capture_action
+		_capture_action = &""
+		rebind(a, event)
+		binding_captured.emit(a, InputBindings.dict_to_event(InputBindings.event_to_dict(event)))
 		return
 	if event is InputEventKey and (event as InputEventKey).pressed and text_input_focused():
 		return
@@ -251,6 +260,35 @@ func bindings(action_name: StringName) -> Array[InputEvent]:
 	return InputBindings.events_of(action_name)
 
 
+## Short labels of the bindings of `action_name` ("Enter", "Space", "A").
+func binding_labels(action_name: StringName) -> Array[String]:
+	var out: Array[String] = []
+	for e in InputBindings.events_of(action_name):
+		var s := InputBindings.describe(e)
+		if not s.is_empty():
+			out.append(s)
+	return out
+
+
+## Bind the next key, button, trigger or stick press to `action_name` (the controls screen).
+## That press fires no action; binding_captured follows. Not saved until save_bindings().
+func start_capture(action_name: StringName) -> void:
+	if not Wl.ACTIONS.has(action_name):
+		push_error("InputRouter: unknown action %s" % action_name)
+		return
+	_capture_action = action_name
+	_reset_held()
+
+
+func cancel_capture() -> void:
+	_capture_action = &""
+
+
+## The action waiting for a press (&"" when not capturing).
+func capturing() -> StringName:
+	return _capture_action
+
+
 func save_bindings() -> bool:
 	return InputBindings.save(Paths.input_cfg_path())
 
@@ -329,6 +367,18 @@ func _has_joy_binding(a: StringName) -> bool:
 	for e in InputBindings.events_of(a):
 		if InputBindings.family(e) == "joypad":
 			return true
+	return false
+
+
+static func _is_capture_press(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return (event as InputEventKey).pressed
+	if event is InputEventJoypadButton:
+		return (event as InputEventJoypadButton).pressed
+	if event is InputEventJoypadMotion:
+		return absf((event as InputEventJoypadMotion).axis_value) >= 0.6
+	if event is InputEventMouseButton:
+		return (event as InputEventMouseButton).pressed
 	return false
 
 

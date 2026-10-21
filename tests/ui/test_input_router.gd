@@ -463,3 +463,54 @@ func test_typing_in_a_text_field_fires_no_actions_or_panic() -> void:
 	assert_false(_router.text_input_focused())
 	_tap(KEY_R)
 	assert_eq(_router.take_actions(), [&"panic", &"swap"])
+
+
+# --- controls screen helpers ------------------------------------------------------------------
+
+func test_binding_labels() -> void:
+	var labels := _router.binding_labels(&"confirm")
+	assert_has(labels, "Enter")
+	assert_has(labels, "Space")
+	assert_has(labels, "A")
+	assert_has(_router.binding_labels(&"panic"), "View")
+	assert_has(_router.binding_labels(&"pause"), "Menu")
+	assert_has(_router.binding_labels(&"up"), "Left stick up")
+	assert_has(_router.binding_labels(&"shift_up"), "RT")
+	assert_has(_router.binding_labels(&"swap"), "LB")
+
+
+func test_capture_binds_the_next_press() -> void:
+	watch_signals(_router)
+	_router.start_capture(&"item")
+	assert_eq(_router.capturing(), &"item")
+	_router.handle_event(_key(KEY_K, true))
+	assert_eq(_router.capturing(), &"")
+	assert_signal_emit_count(_router, "binding_captured", 1)
+	var params: Array = get_signal_parameters(_router, "binding_captured")
+	assert_eq(params[0], &"item")
+	assert_true(InputBindings.same_input(params[1], _key(KEY_K, true)))
+	assert_eq(_router.take_actions(), [], "the captured press fires nothing")
+	_router.handle_event(_key(KEY_K, false))
+	_tap(KEY_K)
+	assert_eq(_router.take_actions(), [&"item"])
+	_tap(KEY_F)
+	assert_eq(_router.take_actions(), [], "F was replaced")
+
+
+func test_capture_a_trigger_moves_it() -> void:
+	_router.start_capture(&"swap")
+	_router.handle_event(_axis(JOY_AXIS_TRIGGER_RIGHT, 0.3))
+	assert_eq(_router.capturing(), &"swap", "a light touch is not a press")
+	_router.handle_event(_axis(JOY_AXIS_TRIGGER_RIGHT, 1.0))
+	assert_has(_router.binding_labels(&"swap"), "RT")
+	assert_does_not_have(_router.binding_labels(&"shift_up"), "RT", "removed from shift_up")
+
+
+func test_capture_unknown_and_cancel() -> void:
+	_router.start_capture(&"jump")
+	assert_push_error("unknown action")
+	assert_eq(_router.capturing(), &"")
+	_router.start_capture(&"item")
+	_router.cancel_capture()
+	_tap(KEY_F)
+	assert_eq(_router.take_actions(), [&"item"])
