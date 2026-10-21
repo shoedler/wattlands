@@ -10,7 +10,7 @@ class FakeRunner:
 	var calls: Array[String] = []
 	var seen: Dictionary = {}
 	var setup_error: String = ""
-	var end_reason: String = "complete"
+	# end_reason is GameSimRunner's own member; _cli() sets it before the run.
 	var report_path: String = "C:/reports/r.json"
 	## Feed these error types to the CLI's script error counter during run_to_end (stands in for
 	## Godot logging errors, without a real SCRIPT ERROR in the test log).
