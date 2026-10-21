@@ -1,6 +1,7 @@
 # lead: every BRIEF 7 gate in one job, exactly as tools/run_tests runs them locally (the
 # command that ran green before v0.1.0): import, the full GUT suite (unit, contracts,
-# integration, the Workout scenarios, conformance), the 7.3 scaffold check, check_scripts,
+# integration, the Workout scenarios, conformance), the 7.3 scaffold check, check_scripts
+# with gdlint and gdformat --check (gdtoolkit 4.5.0, ./gdlintrc),
 # tools/run_game_sim over every registered game's contents plus tools/fit_check on the FIT
 # files, every Node suite (wrappers and lock, relay, mock Strava, art pipeline and its pixelate
 # end-to-end, fit_check, the e2e harness's own tests) and the 3-peer end-to-end test
@@ -31,8 +32,10 @@ jobs:
           curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
           unzip -q godot.zip -d "$HOME/godot"
           echo "GODOT=$HOME/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Install gdtoolkit (gdlint, gdformat) for the static gate
+        run: pipx install gdtoolkit==4.5.0
       - name: All gates (tools/run_tests)
-        run: tools/run_tests --no-lint
+        run: tools/run_tests
       - name: Keep the logs
         if: always()
         uses: actions/upload-artifact@v4
