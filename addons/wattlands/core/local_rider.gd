@@ -81,6 +81,9 @@ extends Node
 ##   CORE_LAP_COOLDOWN.
 ## - Every set-up rider is listed by LocalRider.live_riders() until shutdown() or freed,
 ##   so the app can make every trainer safe on exit (BRIEF 4.6.9).
+## - (W4r2, NET-2) resume_phase(index, elapsed_s) enters a phase that already runs on the host
+##   (a rejoin, a restarted client): the governor's phase clock starts at elapsed_s
+##   (SafetyGovernor.resume_phase) and no FIT lap is written unless the phase really changed.
 
 signal telemetry_updated(telemetry: Telemetry)
 signal gesture_detected(gesture_name: StringName)
@@ -94,6 +97,11 @@ signal directive_applied(record: Dictionary)
 const STALE_S := 3.0
 ## Queue bounds for gestures, intents and acks nobody takes (oldest dropped first).
 const MAX_QUEUE := 256
+## resume_phase's estimate of a "course" phase's distance a new rider can't know (W4r2): the
+## distance the speed model covers at this % FTP (as P_eff), in steps of RESUME_ESTIMATE_DT s.
+const RESUME_ESTIMATE_PCT := 75.0
+const RESUME_ESTIMATE_DT := 1.0
+const RESUME_ESTIMATE_MAX_STEPS := 21600
 
 var peer_id: int = 0
 var profile: RiderProfile = null
@@ -284,6 +292,70 @@ func start_phase(index: int) -> void:
 	if is_cooldown:
 		set_cadence_band(0.0, 0.0)
 		set_power_band(0.0, 0.0)
+
+
+## Enter plan phase `index` `elapsed_s` game seconds after it began (W4r2, NET-2, additive): a
+## client that rejoins a running phase (GameHost on a `phase` message with elapsed_s; a client
+## that restarted has a new rider). The governor resumes the phase there
+## (SafetyGovernor.resume_phase: a ramp continues, course following continues, the 4.6 warm-up
+## and duration accounting stay as they are). For a "course" phase the governor has no record
+## of (a new rider), the distance already ridden is estimated (estimate_course_distance). FIT
+## laps: none when the rider already rides this phase or rode no phase of the plan yet (a
+## restarted client's new FIT starts at the rejoin, BRIEF 3.6); a real phase change (the phase
+## changed while the socket was down) laps as start_phase() does, so every interval keeps its
+## lap (BRIEF 7.5). The cool-down clears the bands. elapsed_s must be finite and >= 0
+## (push_error otherwise; nothing changes); 0 is start_phase(index).
+func resume_phase(index: int, elapsed_s: float) -> void:
+	if not is_finite(elapsed_s) or elapsed_s < 0.0:
+		push_error("LocalRider: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)" % [index, str(elapsed_s)])
+		return
+	if elapsed_s <= 0.0:
+		start_phase(index)
+		return
+	var previous := _phase_index
+	_phase_index = index
+	var ph: PlanPhase = _plan.phase(index) if _plan != null else null
+	if governor != null:
+		var ridden := -1.0
+		if ph != null and ph.mode == Wl.SIM and ph.grade_source == Wl.GRADE_COURSE \
+				and governor.distance_ridden_since(governor.game_time_s() - elapsed_s) < 0.0:
+			ridden = estimate_course_distance(ph, elapsed_s)
+		governor.resume_phase(index, elapsed_s, ridden)
+	if device is MockTrainer:
+		(device as MockTrainer).set_phase(index)
+	if ph == null:
+		return
+	var is_cooldown := ph.kind == Wl.COOLDOWN or index == _plan.cooldown_index()
+	if (ph.lap or is_cooldown) and _recording() and previous >= 0 and previous != index:
+		recorder.lap(_lap_label(ph, index, is_cooldown), platform_time())
+	if is_cooldown:
+		set_cadence_band(0.0, 0.0)
+		set_power_band(0.0, 0.0)
+
+
+## Metres of `phase`'s course a rider covers in `elapsed_s` at RESUME_ESTIMATE_PCT % FTP (as
+## P_eff), starting at that power's steady speed on the flat, with this rider's speed model
+## mass and the course grade scaled by the profile's difficulty and limited to its grade range
+## (W4r2, for resume_phase). 0 for a phase without a course or a rider not set up.
+func estimate_course_distance(phase: PlanPhase, elapsed_s: float) -> float:
+	if phase == null or phase.course_profile.is_empty() or slot == null or profile == null \
+			or not is_finite(elapsed_s) or elapsed_s <= 0.0:
+		return 0.0
+	var p_eff := ftp_w() * RESUME_ESTIMATE_PCT / 100.0 * slot.p_eff_per_w
+	var m := SpeedModel.create(slot.rider_mass_kg)
+	m.v_mps = SpeedModel.steady_state_speed(p_eff, 0.0, m.mass_kg())
+	var steps := clampi(ceili(elapsed_s / RESUME_ESTIMATE_DT), 1, RESUME_ESTIMATE_MAX_STEPS)
+	var dt := elapsed_s / float(steps)
+	var points := phase.course_profile
+	var k := 0
+	var lo := minf(profile.grade_min_pct, profile.grade_max_pct)
+	var hi := maxf(profile.grade_min_pct, profile.grade_max_pct)
+	for i in steps:
+		while k + 1 < points.size() and m.distance_m > float((points[k + 1] as Array)[0]):
+			k += 1
+		var g := SafetyGovernor.profile_grade(points.slice(k, k + 2), m.distance_m)
+		m.step(dt, p_eff, clampf(g * profile.difficulty_pct / 100.0, lo, hi))
+	return m.distance_m
 
 
 ## A directive for this rider (from the host's DirectiveSink or a `directive` message).
