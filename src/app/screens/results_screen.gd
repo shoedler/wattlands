@@ -29,7 +29,8 @@ extends AppScreen
 ## Custom and team stats keep the game's order (the Dictionary's insertion order, which the
 ## protocol keeps too; W4r2 R18).
 ## params: results (GameResults), fit_path, summary (ride JSON summary), unlocks (Array),
-## game_id, content_id, role, local_peer, host_left.
+## game_id, content_id, role, local_peer, host_left, autopilot (the rider rode the session on
+## Autopilot: the menu scans, BRIEF 3.5).
 
 const DONE_STATES: Array[String] = ["uploaded", "duplicate"]
 const BUSY_STATES: Array[String] = ["queued", "uploading", "processing"]
@@ -200,6 +201,12 @@ func _on_leave() -> void:
 			services.bus.upload_state_changed.disconnect(_on_upload_state)
 		if services.bus.ride_saved.is_connected(_on_ride_saved):
 			services.bus.ride_saved.disconnect(_on_ride_saved)
+
+
+## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): the session's Autopilot
+## (params.autopilot, from the session screen) counts as well as InputRouter.pedal_ui_active().
+func scanning_enabled() -> bool:
+	return bool(params.get("autopilot", false)) or super.scanning_enabled()
 
 
 static func grade_color(grade: String) -> Color:

@@ -23,6 +23,9 @@ var menus: Array[PedalScanList] = []
 ## Per menu: {"pick": Callable(index, id, auto), "back": Callable(), "items": Array}.
 var _menu_info: Array[Dictionary] = []
 var _menu_holder: Control = null
+## The ScrollContainer around the menu holder when the page's menu column scrolls
+## (scroll_menu_column); null on the screens whose menus always fit.
+var menu_scroll: ScrollContainer = null
 var _connected: bool = false
 ## Set while a text field owns the keyboard (routed actions then go only to back/confirm).
 var text_focus: bool = false
@@ -149,6 +152,61 @@ func set_menu_holder(holder: Control) -> void:
 	_menu_holder = holder
 
 
+## Make `column` (a page's menu column, before the first push_menu) hold the menus in a vertical
+## ScrollContainer (BRIEF 3.9, every screen works with pedal-scan): a menu taller than the column
+## scrolls inside it, and the active menu's highlighted row (with the scan hint under the last
+## row) is kept fully in view on every highlight change, by scan, keyboard or controller, and
+## again whenever the menus' layout changes. A menu that fits never scrolls and sits at the top
+## of the column as before. Returns the ScrollContainer (also menu_scroll).
+func scroll_menu_column(column: Control) -> ScrollContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = "MenuScroll"
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	column.add_child(scroll)
+	var holder := AppStyle.vbox(8)
+	holder.name = "Menus"
+	holder.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(holder)
+	set_menu_holder(holder)
+	menu_scroll = scroll
+	# Deferred: a Container ignores queue_sort() while it emits sort_children, so a scroll set from
+	# inside that signal would never move the menus.
+	scroll.sort_children.connect(follow_highlight, CONNECT_DEFERRED)
+	holder.sort_children.connect(follow_highlight, CONNECT_DEFERRED)
+	return scroll
+
+
+## Scroll menu_scroll so the active menu's highlighted row is fully in view; on the last row the
+## scan hint under it too. Positions are the menus' own layout (the active menu is the holder's
+## only visible child), so it holds for any scroll. Does nothing without scroll_menu_column.
+func follow_highlight() -> void:
+	if menu_scroll == null or not is_instance_valid(menu_scroll):
+		return
+	var m := active_menu()
+	if m == null or not is_instance_valid(m):
+		return
+	var row := m.row(m.highlighted())
+	if row == null:
+		return
+	var top := m.position.y + row.position.y
+	var bottom := top + row.size.y
+	if m.highlighted() == m.item_count() - 1:
+		bottom = m.position.y + m.size.y
+	var panel := menu_scroll.get_theme_stylebox("panel")
+	var view_h := menu_scroll.size.y - (panel.get_minimum_size().y if panel != null else 0.0)
+	if view_h <= 0.0:
+		return  # Not laid out yet: its sort_children calls this again.
+	var at := menu_scroll.scroll_vertical
+	if bottom - float(at) > view_h:
+		at = ceili(bottom - view_h)
+	if top < float(at):
+		at = floori(top)
+	if at != menu_scroll.scroll_vertical:
+		menu_scroll.scroll_vertical = at
+
+
 func active_menu() -> PedalScanList:
 	return menus[menus.size() - 1] if not menus.is_empty() else null
 
@@ -183,6 +241,10 @@ func push_menu(
 	list.item_chosen.connect(_on_item_chosen.bind(list))
 	list.backed_out.connect(_on_backed_out.bind(list))
 	list.highlight_changed.connect(_on_highlight_changed.bind(list))
+	if menu_scroll != null:
+		# Rows built or refreshed get their positions when the list sorts them.
+		list.sort_children.connect(follow_highlight, CONNECT_DEFERRED)
+	_scroll_to_new_menu()
 	return list
 
 
@@ -218,6 +280,16 @@ func pop_menu() -> void:
 	var top := active_menu()
 	if top != null:
 		top.visible = true
+	_scroll_to_new_menu()
+
+
+## A menu was pushed or uncovered: with scroll_menu_column, the column starts at the top of that
+## menu and then scrolls only as far as its highlighted row needs (follow_highlight).
+func _scroll_to_new_menu() -> void:
+	if menu_scroll == null or not is_instance_valid(menu_scroll):
+		return
+	menu_scroll.scroll_vertical = 0
+	follow_highlight()
 
 
 ## Pop every menu above the root.
@@ -340,8 +412,11 @@ func _on_backed_out(list: PedalScanList) -> void:
 
 
 func _on_highlight_changed(_index: int, list: PedalScanList) -> void:
-	if list == active_menu() and services != null:
+	if list != active_menu():
+		return
+	if services != null:
 		services.play_sound("ui_move")
+	follow_highlight()
 
 
 # --- input ---------------------------------------------------------------------------------

@@ -158,6 +158,38 @@ func test_autopilot_starts_from_the_profile_and_clients_toggle_it_too() -> void:
 	assert_false(net.info["autopilot"])
 
 
+## BRIEF 3.5 "with Autopilot or pedal UI on": switching Autopilot on in the lobby turns pedal-scan
+## on, also for a rider the InputRouter would not scan for (pedal UI off and a device used, which
+## the fake router's pedal_ui = false stands for); switching it off hands back to the router.
+func test_lobby_autopilot_turns_pedal_scan_on() -> void:
+	fx.input.set("pedal_ui", false)
+	var s := _host_lobby()
+	assert_false(menu(s).scanning, "precondition: the router says no")
+	assert_false(s.scanning_enabled())
+	confirm_pick(s, "autopilot")
+	assert_true(s.my_autopilot)
+	assert_true(s.scanning_enabled())
+	assert_true(menu(s).scanning, "Autopilot on: the lobby menu scans at once")
+	confirm_pick(s, "scaling")
+	assert_true(menu(s).scanning, "a sub-menu opened now scans too")
+	s.feed_action(&"back")
+	assert_eq(menu(s).ids()[0], "start", "back on the lobby menu")
+	confirm_pick(s, "autopilot")
+	assert_false(s.my_autopilot)
+	assert_false(menu(s).scanning, "Autopilot off: the router decides again")
+
+
+func test_lobby_starts_scanning_with_the_profile_autopilot() -> void:
+	fx.input.set("pedal_ui", false)
+	fx.give_profile(250.0).autopilot_default = true
+	fx.fake_net().add_human(1, "Ada", 250.0)
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
+	assert_true(s.my_autopilot, "the profile's Autopilot default")
+	assert_true(menu(s).scanning, "the lobby opens scanning")
+
+
 func test_own_card_shows_player_options() -> void:
 	var s := _host_lobby()
 	confirm_pick(s, "popt:offset")
