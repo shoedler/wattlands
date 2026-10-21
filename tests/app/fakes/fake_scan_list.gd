@@ -66,14 +66,14 @@ func tick(dt: float) -> void:
 ## The text of the item with `id` ("" when missing).
 func text_of(id: Variant) -> String:
 	for it: Variant in items:
-		if (it as Dictionary).get("id") == id:
+		if AppScreen.same_id((it as Dictionary).get("id"), id):
 			return str((it as Dictionary).get("text", ""))
 	return ""
 
 
 func index_of_id(id: Variant) -> int:
 	for i in items.size():
-		if (items[i] as Dictionary).get("id") == id:
+		if AppScreen.same_id((items[i] as Dictionary).get("id"), id):
 			return i
 	return -1
 

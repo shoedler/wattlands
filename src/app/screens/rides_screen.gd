@@ -47,7 +47,7 @@ func ride_text(i: int) -> String:
 	if state == "":
 		state = t("APP_RIDES_UPLOADED") if bool(r.get("uploaded", false)) else ""
 	else:
-		state = t("APP_UPLOAD_" + state.to_upper()).format([""])
+		state = t("APP_UPLOAD_" + state.to_upper()).format([""]).strip_edges()
 	return ("%s  %s  %s  %s" % [when, game, dur, state]).strip_edges()
 
 

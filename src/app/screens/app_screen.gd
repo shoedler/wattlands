@@ -164,6 +164,8 @@ func refresh_menu(items: Array, list: PedalScanList = null) -> void:
 	var i := menus.find(m)
 	if i < 0:
 		return
+	if items == _menu_info[i]["items"]:
+		return
 	var keep := m.highlighted()
 	_menu_info[i]["items"] = items.duplicate(true)
 	m.set_items(items)
@@ -206,9 +208,24 @@ func menu_items_of(list: PedalScanList = null) -> Array:
 func item_index(id: Variant, list: PedalScanList = null) -> int:
 	var items := menu_items_of(list)
 	for i in items.size():
-		if (items[i] as Dictionary).get("id") == id:
+		if same_id((items[i] as Dictionary).get("id"), id):
 			return i
 	return -1
+
+
+## Item ids may mix ints and Strings (rides by index plus "back"); never compare across types.
+static func same_id(a: Variant, b: Variant) -> bool:
+	var ta := typeof(a)
+	var tb := typeof(b)
+	var num_a := ta == TYPE_INT or ta == TYPE_FLOAT
+	var num_b := tb == TYPE_INT or tb == TYPE_FLOAT
+	if num_a and num_b:
+		return a == b
+	if ta != tb:
+		if (ta == TYPE_STRING or ta == TYPE_STRING_NAME) and (tb == TYPE_STRING or tb == TYPE_STRING_NAME):
+			return str(a) == str(b)
+		return false
+	return a == b
 
 
 ## Pick the item with `id` in the active menu as if confirmed (on-screen buttons, tests).
@@ -230,8 +247,12 @@ func _configure_list(list: PedalScanList) -> void:
 	list.erg_auto_confirm = false
 
 
-## Pedal-scan on: the rider uses pedal UI or Autopilot (BRIEF 3.5). Screens may override.
+## Pedal-scan on (BRIEF 3.5): InputRouter.pedal_ui_active() decides (Autopilot or pedal UI on,
+## or no input device used yet); without a router, the profile's pedal UI or Autopilot flag.
+## Screens may override.
 func scanning_enabled() -> bool:
+	if services != null and services.input != null:
+		return services.input.pedal_ui_active()
 	var p := services.profile() if services != null else RiderProfile.new()
 	return p.pedal_ui or p.autopilot_default
 

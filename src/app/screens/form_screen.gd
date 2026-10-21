@@ -114,7 +114,7 @@ func refresh_fields() -> void:
 
 func field_by_id(id: Variant, list: PedalScanList = null) -> Dictionary:
 	for f: Dictionary in fields_of(list if list != null else active_menu()):
-		if f.get("id") == id:
+		if AppScreen.same_id(f.get("id"), id):
 			return f
 	return {}
 

@@ -22,6 +22,8 @@ var _acc: float = 0.0
 var _own_rider: bool = false
 var big_label: Label = null
 var detail_label: Label = null
+## (plan, opts) -> EffortPlan or null: PlanValidator.finalize (tests inject one).
+var plan_finalizer: Callable = func(p: EffortPlan, o: Dictionary) -> EffortPlan: return PlanValidator.finalize(p, o)
 
 
 func _build() -> void:
@@ -75,7 +77,7 @@ func start_test() -> void:
 		return
 	var p := services.profile()
 	test = AppFtpTest.create(p.ftp_w, float(device.power_range().get("max_w", 1800)))
-	var finalized := PlanValidator.finalize(test.build_plan(), {"ramp_test": true})
+	var finalized := plan_finalizer.call(test.build_plan(), {"ramp_test": true}) as EffortPlan
 	if finalized == null:
 		_error(t("APP_FTP_PLAN_REJECTED"))
 		return
@@ -180,6 +182,8 @@ func _tick(dt: float) -> void:
 
 ## One fixed 0.05 s step of the test (headless tests call it directly).
 func step_fixed() -> void:
+	if stage != "running" and stage != "cooldown":
+		return
 	platform_t += DT
 	phase_elapsed += DT
 	if rider != null:

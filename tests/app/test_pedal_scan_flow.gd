@@ -83,8 +83,19 @@ func test_scan_interval_follows_the_profile() -> void:
 	assert_ne(menu(s).highlighted(), before, "focus moved after one interval")
 
 
-func test_pedal_ui_off_stops_scanning() -> void:
+func test_menus_follow_the_input_router_pedal_ui() -> void:
+	fx.give_profile()
+	fx.input.set("pedal_ui", false)
+	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
+	assert_false(menu(s).scanning, "a controller rider with pedal UI off")
+	fx.input.set("pedal_ui", true)
+	var s2 := open_screen(AppPickerScreen.new(), {"mode": "solo"})
+	assert_true(menu(s2).scanning)
+
+
+func test_without_a_router_the_profile_decides() -> void:
 	var p := fx.give_profile()
+	fx.services.input = null
 	p.pedal_ui = false
 	p.autopilot_default = false
 	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
