@@ -186,7 +186,7 @@ func test_host_drop_and_reclaim_resyncs_client_phases() -> void:
 	for i in [1, 2]:
 		var gh: GameHost = _clients[i]
 		var peer := gh.local_peer()
-		var rider: LocalRider = gh.local_riders[peer]
+		var rider: LocalRider = gh.local_rider(peer)
 		assert_eq(gh.local_phase_state().index, _host.tracker.index_of(peer), "peer %d follows the host's phase again" % peer)
 		assert_eq(int(rider.governor.status()["phase_index"]), _host.tracker.index_of(peer), "and so does its governor")
 		assert_almost_eq(gh.local_phase_state().elapsed_s, _host.tracker.state(peer).elapsed_s, 0.3, "with the host's phase clock")
@@ -233,7 +233,7 @@ func test_socket_rejoin_mid_ramp_keeps_the_ramp_and_laps() -> void:
 	_step(2400)  # 120 s into the ramp
 	var c: GameHost = _clients[1]
 	var peer := c.local_peer()
-	var rider: LocalRider = c.local_riders[peer]
+	var rider: LocalRider = c.local_rider(peer)
 	var before_w := rider.telemetry().applied_target_w
 	var rec: RideRecorder = _recorders[peer]
 	var laps_before := rec.lap_count()
@@ -258,7 +258,7 @@ func _net_gives_up(reason: String) -> void:
 	_step(6400)  # 320 s: the WORK phase at 75 %
 	var c: GameHost = _clients[1]
 	var peer := c.local_peer()
-	var rider: LocalRider = c.local_riders[peer]
+	var rider: LocalRider = c.local_rider(peer)
 	assert_eq(int(rider.governor.status()["phase_index"]), 1, "precondition: the client rides WORK")
 	# The net session ends for good with `reason`.
 	_nets[1].refused.emit(reason)

@@ -102,8 +102,11 @@ const MAX_PLAN_PARTS := 64
 var ctx: GameContext = null
 var game: GameModule = null
 var clock: SimClock = null
-## peer_id -> LocalRider for riders simulated on this machine.
-var local_riders: Dictionary = {}
+## peer_id -> LocalRider for riders simulated on this machine. Private (W4 SAF-4): the
+## GameModule is this node's child, so a public map would hand any game a LocalRider (and its
+## set_plan/start_phase/setup) past ctx.directives. The platform reads one rider through
+## local_rider(peer), which tests/arch/test_no_bypass.gd forbids under src/games/.
+var _local_riders: Dictionary = {}
 var state: String = "setup"
 
 # --- additive public state (sdk-runtime) ------------------------------------------------
@@ -271,13 +274,16 @@ func setup(p_config: Dictionary) -> String:
 		for k: Variant in (lr as Dictionary).keys():
 			var rider := (lr as Dictionary)[k] as LocalRider
 			if rider != null:
-				local_riders[int(k)] = rider
+				_local_riders[int(k)] = rider
+	# W4 SAF-4: the public config keeps no rider map either (local_rider(peer) is the accessor).
+	config = config.duplicate()
+	config.erase("local_riders")
 	# W3 SAF-3: every governor rule runs on platform time, so a sim speed other than 1 would
 	# speed up (or slow down) slew, the write rate, rescue, coasting and warm-up on a real
 	# trainer. Only sessions whose local riders all ride MockTrainers may change it.
 	if not is_equal_approx(clock.sim_speed, 1.0):
-		for peer: int in local_riders.keys():
-			var dev := (local_riders[peer] as LocalRider).device
+		for peer: int in _local_riders.keys():
+			var dev := (_local_riders[peer] as LocalRider).device
 			if dev != null and not (dev is MockTrainer):
 				push_warning("GameHost: sim_speed %.2f ignored: rider %d rides a real trainer" % [clock.sim_speed, peer])
 				clock.sim_speed = 1.0
@@ -298,7 +304,7 @@ func setup(p_config: Dictionary) -> String:
 		bus.panic_requested.connect(_on_panic)
 	if not bus.cadence_band_changed.is_connected(_on_cadence_band_changed):
 		bus.cadence_band_changed.connect(_on_cadence_band_changed)
-	var own: LocalRider = local_riders.get(_local_peer)
+	var own: LocalRider = _local_riders.get(_local_peer)
 	if _input_router != null and own != null and _input_router.has_method("attach_rider"):
 		_input_router.call("attach_rider", own)
 	if role == Wl.CLIENT:
@@ -322,7 +328,7 @@ func start() -> void:
 		net.mark_started()
 		_send_session_start()
 		for peer in _order:
-			if not local_riders.has(peer):
+			if not _local_riders.has(peer):
 				_send_plan(peer, plans[peer] as EffortPlan)
 	_set_state("running")
 	_event("session_start", {"role": role, "players": _order.size()})
@@ -354,7 +360,7 @@ func pause(reason: String = "user") -> void:
 	_pause_reason = reason
 	clock.set_game_paused(true)
 	for peer in _local_order():
-		(local_riders[peer] as LocalRider).set_game_paused(true)
+		(_local_riders[peer] as LocalRider).set_game_paused(true)
 	_set_state("paused")
 	bus.paused_changed.emit(true, reason)
 	_event("paused", {"paused": true, "reason": reason})
@@ -366,7 +372,7 @@ func resume() -> void:
 	_pause_reason = ""
 	clock.set_game_paused(false)
 	for peer in _local_order():
-		(local_riders[peer] as LocalRider).set_game_paused(false)
+		(_local_riders[peer] as LocalRider).set_game_paused(false)
 	_set_state(_state_before_pause)
 	bus.paused_changed.emit(false, "resume")
 	_event("paused", {"paused": false, "reason": "resume"})
@@ -462,6 +468,13 @@ func local_peer() -> int:
 	return _local_peer
 
 
+## The LocalRider simulated on this machine for `peer` (the player's own, or a bot's on the
+## host), or null. For the platform and tests only: games reach riders through ctx.directives,
+## and the no-bypass gate fails any file under src/games/ that names local_rider.
+func local_rider(peer: int) -> LocalRider:
+	return _local_riders.get(peer) as LocalRider
+
+
 ## The players in slot order (authority: from setup; client: from session_start).
 func players() -> Array[PlayerSlot]:
 	return _players.duplicate()
@@ -511,7 +524,7 @@ func _make_routers() -> void:
 	directive_router.role = role
 	directive_router.tracker = tracker
 	directive_router.clock = clock
-	directive_router.bind_riders(local_riders)
+	directive_router.bind_riders(_local_riders)
 	directive_router.bus = bus
 	directive_router.report = report
 	directive_router.remote_send = _send_directive
@@ -520,7 +533,7 @@ func _make_routers() -> void:
 	hud_router = HudRouter.new()
 	hud_router.role = role
 	hud_router.local_peer = _local_peer
-	hud_router.bind_riders(local_riders)
+	hud_router.bind_riders(_local_riders)
 	hud_router.bus = bus
 	hud_router.report = report
 	hud_router.clock_now = _now
@@ -550,7 +563,7 @@ func _setup_authority() -> String:
 		seen[p.peer_id] = true
 	if not seen.has(_local_peer):
 		return "local_peer: %d is not one of the players" % _local_peer
-	for peer: int in local_riders.keys():
+	for peer: int in _local_riders.keys():
 		if not seen.has(peer):
 			return "local_riders: peer %d is not one of the players" % peer
 	var content_id := str(config.get("content_id", ""))
@@ -643,7 +656,7 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 	hud_router.slots = _slots
 	for p in players:
 		stats.add_rider(p.peer_id, p.ftp)
-		if not local_riders.has(p.peer_id) and role != Wl.CLIENT:
+		if not _local_riders.has(p.peer_id) and role != Wl.CLIENT:
 			_remote[p.peer_id] = {
 				"tm": null, "rx_t": 0.0, "gestures": [], "intents": [], "dropped": false,
 				"await_pedal": false, "seen": false,
@@ -681,7 +694,7 @@ func _send_session_start() -> void:
 		_broadcast(Protocol.game_msg("session_start", _session_start_payload()))
 		return
 	for peer in _order:
-		if not local_riders.has(peer) and not (_slots[peer] as PlayerSlot).is_bot:
+		if not _local_riders.has(peer) and not (_slots[peer] as PlayerSlot).is_bot:
 			_send_to(peer, Protocol.game_msg("session_start", _session_start_payload(peer)))
 
 
@@ -719,7 +732,7 @@ func _connect_net() -> void:
 
 
 func _connect_riders() -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null and not rider.pause_requested.is_connected(_on_pause_requested):
 		rider.pause_requested.connect(_on_pause_requested)
 
@@ -762,7 +775,7 @@ func _authority_step() -> void:
 		return
 	var gestures := {}
 	for peer in _local_order():
-		var r: LocalRider = local_riders[peer]
+		var r: LocalRider = _local_riders[peer]
 		r.tick(DT)
 		gestures[peer] = _local_gestures(r) if peer == _local_peer else _take_gestures(r)
 		# Riders simulated here already reported through apply_directive's return value;
@@ -775,7 +788,7 @@ func _authority_step() -> void:
 	var my_gestures: Array[StringName] = []
 	my_gestures.assign(gestures.get(_local_peer, []))
 	actions = _platform_actions(actions, my_gestures)
-	if local_riders.has(_local_peer):
+	if _local_riders.has(_local_peer):
 		_call_local_intents(actions, my_gestures)
 	var tick := clock.game_tick
 	var flush_now := clock.platform_tick % SNAPSHOT_EVERY == 0
@@ -797,7 +810,7 @@ func _authority_step() -> void:
 			_finish_session("complete")
 	else:
 		for peer in _local_order():
-			_frame_tm[peer] = (local_riders[peer] as LocalRider).telemetry()
+			_frame_tm[peer] = (_local_riders[peer] as LocalRider).telemetry()
 		if flush_now:
 			_flush_events()
 	if clock.platform_tick % ROSTER_EVERY == 0:
@@ -814,8 +827,8 @@ func _build_frame(tick: int, gestures: Dictionary) -> InputFrame:
 	var pt := clock.platform_time()
 	for peer in _order:
 		var tm: Telemetry
-		if local_riders.has(peer):
-			var r: LocalRider = local_riders[peer]
+		if _local_riders.has(peer):
+			var r: LocalRider = _local_riders[peer]
 			tm = r.telemetry()
 			tm.peer_id = peer
 			tm.connected = true
@@ -891,7 +904,7 @@ func _feed_stats(frame: InputFrame) -> void:
 
 func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName]) -> Array[StringName]:
 	var out: Array[StringName] = []
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	var resume_now := false
 	for a in actions:
 		match a:
@@ -948,8 +961,8 @@ func _on_phase_change(c: Dictionary, starting: bool) -> void:
 	var start_tick := clock.game_tick if starting else clock.game_tick + 1
 	if plan_changed:
 		plans[peer] = plan
-	if local_riders.has(peer):
-		var r: LocalRider = local_riders[peer]
+	if _local_riders.has(peer):
+		var r: LocalRider = _local_riders[peer]
 		if starting or plan_changed:
 			r.set_plan(plan)
 		r.start_phase(index)
@@ -1005,7 +1018,7 @@ func _send_roster() -> void:
 	for peer in _order:
 		var tm: Telemetry = _frame_tm.get(peer)
 		if tm == null:
-			tm = (local_riders[peer] as LocalRider).telemetry() if local_riders.has(peer) else Telemetry.new()
+			tm = (_local_riders[peer] as LocalRider).telemetry() if _local_riders.has(peer) else Telemetry.new()
 		var slot: PlayerSlot = _slots[peer]
 		var connected := tm.connected
 		if _remote.has(peer):
@@ -1029,7 +1042,7 @@ func _trace_authority() -> void:
 	for peer in _order:
 		var tm: Telemetry = _frame_tm.get(peer)
 		if tm == null:
-			tm = (local_riders[peer] as LocalRider).telemetry() if local_riders.has(peer) else Telemetry.new()
+			tm = (_local_riders[peer] as LocalRider).telemetry() if _local_riders.has(peer) else Telemetry.new()
 		var slot: PlayerSlot = _slots[peer]
 		var st := tracker.state(peer)
 		report.trace(peer, _trace_row(pt, gt, st, tm, slot.ftp))
@@ -1108,7 +1121,7 @@ func _save_fits() -> void:
 	for peer in _local_order():
 		if _fit_paths.has(peer):
 			continue
-		var r: LocalRider = local_riders[peer]
+		var r: LocalRider = _local_riders[peer]
 		var slot: PlayerSlot = _slots.get(peer)
 		if r.is_bot or (slot != null and slot.is_bot):
 			continue
@@ -1149,7 +1162,7 @@ static func _move_file(from: String, to: String) -> bool:
 
 
 func _client_step() -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	var gestures: Array[StringName] = []
 	if rider != null:
 		rider.tick(DT)
@@ -1188,7 +1201,7 @@ func _client_step() -> void:
 
 
 func _send_telemetry() -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider == null or net == null:
 		return
 	var tm := rider.telemetry()
@@ -1531,7 +1544,7 @@ func _on_plan(data: Dictionary) -> void:
 	_client_plan = plan
 	# A new plan starts no phase by itself: the next `phase` message enters one.
 	_client_phase = -1
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
 		rider.set_plan(plan)
 
@@ -1592,7 +1605,7 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 	_client_phase_start_tick = start_tick
 	_phase_mismatch = 0
 	_client_prev_ended_by = "" if ended_by == Wl.ENDED_START else ended_by
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
 		if elapsed_s > 0.0 and rider.has_method("resume_phase"):
 			rider.call("resume_phase", index, elapsed_s)
@@ -1612,7 +1625,7 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 
 
 func _on_directive(data: Dictionary) -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	match str(data.get("kind", "")):
 		NetMessages.DIRECTIVE_REQUEST:
 			var dd: Variant = data.get("directive", {})
@@ -1712,7 +1725,7 @@ func _platform_event(e: Dictionary) -> void:
 				bus.phase_started.emit(peer, int(e.get("index", 0)))
 				_event("phase_started", {"peer": peer, "index": int(e.get("index", 0)), "ended_by": str(e.get("ended_by", ""))})
 		"wl.lap_marker":
-			var rider: LocalRider = local_riders.get(_local_peer)
+			var rider: LocalRider = _local_riders.get(_local_peer)
 			var label := str(e.get("label", ""))
 			if rider != null:
 				rider.lap(label)
@@ -1864,7 +1877,7 @@ func _on_game_phase_changed(index: int) -> void:
 
 
 func _on_lap_marker(label: String) -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
 		rider.lap(label)
 	bus.lap_marked.emit(label)
@@ -1884,7 +1897,7 @@ func _update_metronome(lo: float, hi: float) -> void:
 	if _headless:
 		return
 	var sfx := _sfx()
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if sfx == null or not sfx.has_method("set_metronome") or rider == null:
 		return
 	var on := rider.profile != null and rider.profile.metronome
@@ -1912,7 +1925,7 @@ func _on_pause_requested(reason: String) -> void:
 
 
 func _on_panic() -> void:
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
 		rider.panic()
 
@@ -1951,18 +1964,18 @@ func _now() -> Array:
 func _latest_telemetry(peer: int) -> Variant:
 	if _frame_tm.has(peer):
 		return _frame_tm[peer]
-	if local_riders.has(peer):
-		return (local_riders[peer] as LocalRider).telemetry()
+	if _local_riders.has(peer):
+		return (_local_riders[peer] as LocalRider).telemetry()
 	return null
 
 
 func _local_order() -> Array[int]:
 	var out: Array[int] = []
 	for peer in _order:
-		if local_riders.has(peer):
+		if _local_riders.has(peer):
 			out.append(peer)
 	var extra: Array[int] = []
-	for k: int in local_riders.keys():
+	for k: int in _local_riders.keys():
 		if not out.has(k):
 			extra.append(k)
 	extra.sort()
@@ -2041,7 +2054,7 @@ func _broadcast(msg: Dictionary) -> void:
 func _update_hud() -> void:
 	if _hud_layer == null:
 		return
-	var rider: LocalRider = local_riders.get(_local_peer)
+	var rider: LocalRider = _local_riders.get(_local_peer)
 	var tm := rider.telemetry() if rider != null else Telemetry.new()
 	var plan: EffortPlan = _client_plan if role == Wl.CLIENT else tracker.plan_of(_local_peer)
 	_hud_layer.update(tm, local_phase_state(), plan)

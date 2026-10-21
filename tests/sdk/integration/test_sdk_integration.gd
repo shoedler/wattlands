@@ -118,7 +118,7 @@ func test_host_with_two_loopback_clients() -> void:
 		for c in r.clients:
 			assert_not_null(c.final_results())
 			assert_eq(c.game.get("progress_calls"), 1)
-			var rider: LocalRider = c.local_riders[c.local_peer()]
+			var rider: LocalRider = c.local_rider(c.local_peer())
 			assert_eq(int(rider.telemetry().phase_index), 4, "the client's governor reached the cool-down")
 		var rep := r.build_report()
 		assert_eq((rep["fit_paths"] as Array).size(), 3)

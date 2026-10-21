@@ -50,7 +50,7 @@ func start_runner(f: PackedStringArray) -> GameSimRunner:
 ## The host's own rider after setup (asserts it exists and rides a MockTrainer).
 func human_rider(runner: GameSimRunner) -> LocalRider:
 	var rider := S.rider_of(runner, S.human_peer(runner))
-	assert_not_null(rider, "the host's own rider is in GameHost.local_riders")
+	assert_not_null(rider, "the host's own rider is GameHost.local_rider(peer)")
 	if rider != null:
 		assert_not_null(S.mock_of(rider), "the rider rides a MockTrainer")
 	return rider

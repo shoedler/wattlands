@@ -73,7 +73,7 @@ static func human_peer(runner: GameSimRunner) -> int:
 static func rider_of(runner: GameSimRunner, peer: int) -> LocalRider:
 	if runner.host == null:
 		return null
-	return runner.host.local_riders.get(peer, null) as LocalRider
+	return runner.host.local_rider(peer)
 
 
 static func mock_of(rider: LocalRider) -> MockTrainer:
