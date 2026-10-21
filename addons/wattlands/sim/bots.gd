@@ -13,7 +13,9 @@ static func peer_id(n: int) -> int:
 
 
 ## A PlayerSlot for bot number n (1-based) in `slot_index`, at `bot_ftp_w`.
-static func make_slot(n: int, slot_index: int, bot_ftp_w: float, scaling_mode: String = Wl.FAIR_FTP) -> PlayerSlot:
+static func make_slot(
+	n: int, slot_index: int, bot_ftp_w: float, scaling_mode: String = Wl.FAIR_FTP
+) -> PlayerSlot:
 	var s := PlayerSlot.new()
 	s.peer_id = peer_id(n)
 	s.name = "Bot %d" % n

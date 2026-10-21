@@ -52,7 +52,12 @@ func test_const_rider_starts_once_on_time() -> void:
 		assert_gt(run.samples, 20, "seed %d: about 1 Hz notifications" % seed)
 		assert_eq(_names(run.events), [Wl.G_PEDAL_START], "seed %d" % seed)
 		var after: float = float(run.events[0][0]) - run.first_t
-		assert_between(after, 3.0 - 1e-6, 3.0 + DT + 1e-6, "seed %d: within one tick of 3 s after the first notification" % seed)
+		assert_between(
+			after,
+			3.0 - 1e-6,
+			3.0 + DT + 1e-6,
+			"seed %d: within one tick of 3 s after the first notification" % seed
+		)
 
 
 func test_zero_rider_coasts_and_stops_on_time() -> void:
@@ -61,8 +66,18 @@ func test_zero_rider_coasts_and_stops_on_time() -> void:
 		assert_eq(_names(run.events), [Wl.G_COAST, Wl.G_STOP_5S], "seed %d" % seed)
 		var since := run.first_np_t
 		assert_eq(since, run.first_t, "the first notification already meets not_pedaling")
-		assert_between(float(run.events[0][0]) - since, 3.0 - 1e-6, 3.0 + DT + 1e-6, "coast within one tick of 3 s")
-		assert_between(float(run.events[1][0]) - since, 5.0 - 1e-6, 5.0 + DT + 1e-6, "stop_5s within one tick of 5 s")
+		assert_between(
+			float(run.events[0][0]) - since,
+			3.0 - 1e-6,
+			3.0 + DT + 1e-6,
+			"coast within one tick of 3 s"
+		)
+		assert_between(
+			float(run.events[1][0]) - since,
+			5.0 - 1e-6,
+			5.0 + DT + 1e-6,
+			"stop_5s within one tick of 5 s"
+		)
 
 
 func test_zero_rider_in_multiplayer_only_coasts() -> void:

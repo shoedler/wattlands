@@ -107,7 +107,9 @@ func on_sample(sample: TrainerSample) -> Array[StringName]:
 		return fired
 	var t := sample.t
 	if _have_sample and t < _last_t:
-		push_warning("GestureRecognizer: sample at t=%.3f is older than t=%.3f; ignored" % [t, _last_t])
+		push_warning(
+			"GestureRecognizer: sample at t=%.3f is older than t=%.3f; ignored" % [t, _last_t]
+		)
 		return fired
 	var cadence := sample.cadence_rpm if sample.has_cadence() else -1.0
 	var power := sample.power_w

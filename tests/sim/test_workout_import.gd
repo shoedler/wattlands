@@ -1,3 +1,4 @@
+# gdlint: disable=max-public-methods
 extends GutTest
 ## WorkoutImport.parse_zwo (BRIEF 3.7, 4.6.1, 4.6.8): every supported tag, IntervalsT
 ## expansion, FreeRide as SIM, unsupported tags skipped with warnings, the warm-up prefix,
@@ -22,7 +23,9 @@ func _rules(r: Dictionary) -> Array:
 	return out
 
 
-func _assert_erg(p: PlanPhase, kind: String, from_pct: float, to_pct: float, dur: float, lap: bool, what: String) -> void:
+func _assert_erg(
+	p: PlanPhase, kind: String, from_pct: float, to_pct: float, dur: float, lap: bool, what: String
+) -> void:
 	assert_eq(p.mode, Wl.ERG, what + " mode")
 	assert_eq(p.kind, kind, what + " kind")
 	assert_almost_eq(p.target_pct, from_pct, EPS, what + " target_pct")
@@ -79,10 +82,12 @@ func _assert_plan_safe(phases: Array, what: String) -> void:
 			reset_run = 0.0
 		t += p.duration_s
 	if prev_mode == Wl.SIM:
-		switches.append(t) # the appended ERG cool-down
+		switches.append(t)  # the appended ERG cool-down
 	for k in range(1, switches.size()):
-		assert_true(switches[k] - switches[k - 1] >= 30.0 - EPS,
-			"%s: switches at %.1f and %.1f are >= 30 s apart" % [what, switches[k - 1], switches[k]])
+		assert_true(
+			switches[k] - switches[k - 1] >= 30.0 - EPS,
+			"%s: switches at %.1f and %.1f are >= 30 s apart" % [what, switches[k - 1], switches[k]]
+		)
 
 
 func test_all_tags_fixture() -> void:
@@ -99,7 +104,9 @@ func test_all_tags_fixture() -> void:
 	_assert_erg(ph[1], Wl.WORK, 88.0, 88.0, 240.0, true, "SteadyState 0.88")
 	for k in 3:
 		_assert_erg(ph[2 + 2 * k], Wl.WORK, 110.0, 110.0, 60.0, true, "IntervalsT on %d" % (k + 1))
-		_assert_erg(ph[3 + 2 * k], Wl.RECOVERY, 50.0, 50.0, 120.0, true, "IntervalsT off %d" % (k + 1))
+		_assert_erg(
+			ph[3 + 2 * k], Wl.RECOVERY, 50.0, 50.0, 120.0, true, "IntervalsT off %d" % (k + 1)
+		)
 	_assert_erg(ph[8], Wl.WORK, 60.0, 90.0, 180.0, true, "Ramp by its upper end")
 	var free: PlanPhase = ph[9]
 	assert_eq(free.mode, Wl.SIM, "FreeRide is SIM")
@@ -108,7 +115,9 @@ func test_all_tags_fixture() -> void:
 	assert_eq(free.duration_s, 60.0)
 	assert_true(free.lap)
 	_assert_erg(ph[10], Wl.RECOVERY, 70.0, 70.0, 120.0, true, "SteadyState 0.70")
-	_assert_erg(ph[11], Wl.RECOVERY, 70.0, 40.0, 300.0, true, "Cooldown ramps PowerLow -> PowerHigh")
+	_assert_erg(
+		ph[11], Wl.RECOVERY, 70.0, 40.0, 300.0, true, "Cooldown ramps PowerLow -> PowerHigh"
+	)
 	assert_almost_eq(float(r["total_s"]), 1740.0, EPS)
 	assert_eq(ph[0].meta.get("cadence_rpm"), 85.0, "Cadence kept in meta")
 	assert_eq(ph[2].meta.get("cadence_rpm"), 100.0, "IntervalsT on cadence")
@@ -143,7 +152,9 @@ func test_unsupported_tags_are_skipped_with_warnings() -> void:
 	var tags: Array = []
 	for b: Dictionary in r["blocks"]:
 		tags.append(b["tag"])
-	assert_eq(tags, ["Warmup", "SteadyState", "IntervalsT", "Ramp", "FreeRide", "SteadyState", "Cooldown"])
+	assert_eq(
+		tags, ["Warmup", "SteadyState", "IntervalsT", "Ramp", "FreeRide", "SteadyState", "Cooldown"]
+	)
 
 
 func test_raw_blocks() -> void:
@@ -151,7 +162,19 @@ func test_raw_blocks() -> void:
 	var blocks: Array = r["blocks"]
 	assert_eq(blocks.size(), 7)
 	for b: Dictionary in blocks:
-		for key in ["tag", "duration_s", "power_lo", "power_hi", "repeat", "on_s", "off_s", "on_power", "off_power", "cadence", "index"]:
+		for key in [
+			"tag",
+			"duration_s",
+			"power_lo",
+			"power_hi",
+			"repeat",
+			"on_s",
+			"off_s",
+			"on_power",
+			"off_power",
+			"cadence",
+			"index"
+		]:
 			assert_true(b.has(key), "%s has %s" % [b["tag"], key])
 	var warm: Dictionary = blocks[0]
 	assert_eq(warm["index"], 1)
@@ -238,7 +261,10 @@ func test_warmup_clamps_inside_the_first_300_s() -> void:
 	_assert_erg(ph[1], Wl.WORK, 65.0, 65.0, 180.0, true, "SteadyState part inside the warm-up")
 	_assert_erg(ph[2], Wl.WORK, 95.0, 95.0, 420.0, false, "SteadyState part after 300 s")
 	_assert_erg(ph[3], Wl.RECOVERY, 50.0, 50.0, 240.0, true, "recovery")
-	assert_eq(_rules(r), [WorkoutImport.RULE_WARMUP, WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_WARMUP])
+	assert_eq(
+		_rules(r),
+		[WorkoutImport.RULE_WARMUP, WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_WARMUP]
+	)
 	var recs: Array = r["clamp_records"]
 	assert_eq(recs[0]["phase"], 0)
 	assert_eq(recs[0]["from_pct"], [50.0, 80.0])
@@ -324,9 +350,22 @@ func test_short_sim_and_erg_runs_are_extended_to_30_s() -> void:
 		modes.append(p.mode)
 		lens.append(p.duration_s)
 	assert_eq(modes, [Wl.ERG, Wl.SIM, Wl.ERG, Wl.SIM, Wl.ERG, Wl.SIM, Wl.ERG, Wl.SIM])
-	assert_eq(lens, [300.0, 30.0, 120.0, 60.0, 30.0, 45.0, 60.0, 30.0],
-		"20 s free ride, 10 s ERG gap and the final 15 s free ride (before the ERG cool-down) grow to 30 s")
-	assert_eq(_rules(r), [WorkoutImport.RULE_SWITCH_SPACING, WorkoutImport.RULE_SWITCH_SPACING, WorkoutImport.RULE_SWITCH_SPACING])
+	assert_eq(
+		lens,
+		[300.0, 30.0, 120.0, 60.0, 30.0, 45.0, 60.0, 30.0],
+		(
+			"20 s free ride, 10 s ERG gap and the final 15 s free ride"
+			+ " (before the ERG cool-down) grow to 30 s"
+		)
+	)
+	assert_eq(
+		_rules(r),
+		[
+			WorkoutImport.RULE_SWITCH_SPACING,
+			WorkoutImport.RULE_SWITCH_SPACING,
+			WorkoutImport.RULE_SWITCH_SPACING
+		]
+	)
 	var recs: Array = r["clamp_records"]
 	assert_eq([recs[0]["phase"], recs[1]["phase"], recs[2]["phase"]], [1, 4, 7])
 	assert_eq([recs[0]["from_s"], recs[1]["from_s"], recs[2]["from_s"]], [20.0, 10.0, 15.0])
@@ -339,10 +378,15 @@ func test_short_sim_and_erg_runs_are_extended_to_30_s() -> void:
 
 
 func test_free_ride_first_then_prefix() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<FreeRide Duration="20"/>
 		<SteadyState Duration="300" Power="0.9"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"])
 	assert_true(r["prefix_inserted"], "the 90% block starts inside the first 300 s")
 	var ph := _phases(r)
@@ -355,12 +399,19 @@ func test_free_ride_first_then_prefix() -> void:
 
 
 func test_sim_first_is_a_warmup_within_limits() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<FreeRide Duration="300"/>
 		<SteadyState Duration="300" Power="0.9"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"])
-	assert_false(r["prefix_inserted"], "SIM is allowed in the first 300 s (the governor clamps its grade)")
+	assert_false(
+		r["prefix_inserted"], "SIM is allowed in the first 300 s (the governor clamps its grade)"
+	)
 	assert_eq(_phases(r).size(), 2)
 	assert_eq((r["clamps"] as Array).size(), 0)
 	_assert_plan_safe(_phases(r), "sim_first")
@@ -377,10 +428,19 @@ func test_every_clamp_kind_is_reported() -> void:
 			seen[recs[i]["rule"]] = true
 			assert_eq(texts[i], recs[i]["text"], "%s: clamps[] mirrors clamp_records[].text" % f)
 			assert_false(str(texts[i]).contains("SIM_ZWO_"), "%s: text translated" % f)
-			assert_true(int(recs[i]["phase"]) >= 0 and int(recs[i]["phase"]) < _phases(r).size(), "%s: phase index" % f)
-	for rule in [WorkoutImport.RULE_WARMUP, WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_CEILING,
-			WorkoutImport.RULE_LONG_PHASE, WorkoutImport.RULE_LIMIT_105, WorkoutImport.RULE_LIMIT_120,
-			WorkoutImport.RULE_SWITCH_SPACING]:
+			assert_true(
+				int(recs[i]["phase"]) >= 0 and int(recs[i]["phase"]) < _phases(r).size(),
+				"%s: phase index" % f
+			)
+	for rule in [
+		WorkoutImport.RULE_WARMUP,
+		WorkoutImport.RULE_WARMUP_SPLIT,
+		WorkoutImport.RULE_CEILING,
+		WorkoutImport.RULE_LONG_PHASE,
+		WorkoutImport.RULE_LIMIT_105,
+		WorkoutImport.RULE_LIMIT_120,
+		WorkoutImport.RULE_SWITCH_SPACING
+	]:
 		assert_true(seen.has(rule), "clamp rule %s reported by some fixture" % rule)
 	assert_eq(WorkoutImport.RULE_WARMUP, Wl.CLAMP_WARMUP)
 	assert_eq(WorkoutImport.RULE_CEILING, Wl.CLAMP_CEILING)
@@ -419,17 +479,25 @@ func test_real_world_quirks() -> void:
 
 
 func test_entities_are_decoded_once() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file>
 		<name>&amp;lt;tag&amp;gt; &amp; co &#65;&#x42;</name>
 		<workout><SteadyState Duration="&#54;0" Power="0.5"/></workout>
-		</workout_file>""")
+		</workout_file>"""
+		)
+	)
 	assert_true(r["ok"], str(r["error"]))
 	assert_eq(r["name"], "&lt;tag&gt; & co AB", "one level of entities, numeric ones too")
 	assert_eq(float(r["blocks"][0]["duration_s"]), 60.0, "entities in attribute values")
 
 
 func test_kind_thresholds() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<SteadyState Duration="300" Power="0.5"/>
 		<SteadyState Duration="60" Power="0.76"/>
 		<SteadyState Duration="60" Power="0.75"/>
@@ -437,19 +505,28 @@ func test_kind_thresholds() -> void:
 		<Ramp Duration="60" PowerLow="0.5" PowerHigh="0.75"/>
 		<Warmup Duration="60" PowerLow="0.9" PowerHigh="1.0"/>
 		<Cooldown Duration="60" PowerLow="0.9" PowerHigh="0.8"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"])
 	var kinds: Array = []
 	for p: PlanPhase in _phases(r):
 		kinds.append(p.kind)
-	assert_eq(kinds, [Wl.RECOVERY, Wl.WORK, Wl.RECOVERY, Wl.WORK, Wl.RECOVERY, Wl.WARMUP, Wl.RECOVERY])
+	assert_eq(
+		kinds, [Wl.RECOVERY, Wl.WORK, Wl.RECOVERY, Wl.WORK, Wl.RECOVERY, Wl.WARMUP, Wl.RECOVERY]
+	)
 
 
 func test_intervals_without_off_phases() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<SteadyState Duration="300" Power="0.5"/>
 		<IntervalsT Repeat="3" OnDuration="20" OffDuration="0" OnPower="0.6"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"])
 	var ph := _phases(r)
 	assert_eq(ph.size(), 4, "OffDuration 0 gives on phases only")
@@ -483,16 +560,36 @@ func test_empty_and_missing() -> void:
 	assert_false(missing["ok"])
 	assert_string_contains(str(missing["error"]), "missing")
 	assert_string_contains(str(missing["error"]), "does_not_exist.zwo", "names the path")
-	for key in ["phases", "blocks", "clamps", "warnings", "name", "description", "clamp_records",
-			"prefix_inserted", "total_s"]:
+	for key in [
+		"phases",
+		"blocks",
+		"clamps",
+		"warnings",
+		"name",
+		"description",
+		"clamp_records",
+		"prefix_inserted",
+		"total_s"
+	]:
 		assert_true(missing.has(key), "missing-file result has %s" % key)
 	assert_true(missing["phases"] is Array and (missing["phases"] as Array).is_empty())
 
 
 func test_result_shape() -> void:
 	var r := _load("all_tags.zwo")
-	for key in ["ok", "name", "description", "phases", "blocks", "clamps", "warnings", "error",
-			"clamp_records", "prefix_inserted", "total_s"]:
+	for key in [
+		"ok",
+		"name",
+		"description",
+		"phases",
+		"blocks",
+		"clamps",
+		"warnings",
+		"error",
+		"clamp_records",
+		"prefix_inserted",
+		"total_s"
+	]:
 		assert_true(r.has(key), "result has %s" % key)
 	assert_true(r["phases"] is Array)
 	for p: Variant in r["phases"]:
@@ -543,32 +640,52 @@ func test_byte_order_mark_is_ignored() -> void:
 
 
 func test_repeat_is_limited() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<SteadyState Duration="300" Power="0.5"/>
 		<IntervalsT Repeat="100000" OnDuration="10" OffDuration="10" OnPower="0.6" OffPower="0.5"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"], str(r["error"]))
 	assert_eq(int(r["blocks"][1]["repeat"]), WorkoutImport.MAX_REPEAT)
 	assert_eq(_phases(r).size(), 1 + 2 * WorkoutImport.MAX_REPEAT)
 	var w: Array = r["warnings"]
 	assert_eq(w.size(), 1, "%s" % [w])
 	assert_string_contains(str(w[0]), "Block 2: Repeat 100000 was limited to 200")
-	var exact := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var exact := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<IntervalsT Repeat="200.9" OnDuration="10" OffDuration="10" OnPower="0.6" OffPower="0.5"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_eq(int(exact["blocks"][0]["repeat"]), 200)
 	assert_eq((exact["warnings"] as Array).size(), 0, "200 itself is allowed")
 
 
 func test_workouts_longer_than_a_day_are_rejected() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
-		<SteadyState Duration="86401" Power="0.5"/></workout></workout_file>""")
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
+		<SteadyState Duration="86401" Power="0.5"/></workout></workout_file>"""
+		)
+	)
 	assert_false(r["ok"])
 	assert_string_contains(str(r["error"]), "longer than 24 hours")
 	assert_eq(_phases(r).size(), 0)
-	var day := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var day := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<IntervalsT Repeat="144" OnDuration="300" OffDuration="300" OnPower="0.6" OffPower="0.5"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(day["ok"], "exactly 24 h is accepted")
 	assert_almost_eq(float(day["total_s"]), WorkoutImport.MAX_TOTAL_S, EPS)
 
@@ -576,18 +693,25 @@ func test_workouts_longer_than_a_day_are_rejected() -> void:
 func test_split_block_keeps_the_long_phase_cap() -> void:
 	# A 600 s Warmup ramp 30 -> 120%: split at 300 s (75%), the first part clamped to 65%; the
 	# second part is only 300 s long, but its block is 600 s, so it caps at 105%.
-	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
 		<Warmup Duration="600" PowerLow="0.30" PowerHigh="1.20"/>
 		<SteadyState Duration="120" Power="0.5"/>
-		</workout></workout_file>""")
+		</workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"], str(r["error"]))
 	assert_false(r["prefix_inserted"])
 	var ph := _phases(r)
 	assert_eq(ph.size(), 3)
 	_assert_erg(ph[0], Wl.WARMUP, 30.0, 65.0, 300.0, true, "inside the warm-up")
 	_assert_erg(ph[1], Wl.WARMUP, 75.0, 105.0, 300.0, false, "the block's second half")
-	assert_eq(_rules(r), [WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_WARMUP,
-		WorkoutImport.RULE_LONG_PHASE])
+	assert_eq(
+		_rules(r),
+		[WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_WARMUP, WorkoutImport.RULE_LONG_PHASE]
+	)
 	var rec: Dictionary = (r["clamp_records"] as Array)[2]
 	assert_eq(rec["phase"], 1)
 	assert_eq(rec["from_pct"], [75.0, 120.0])
@@ -620,8 +744,10 @@ func test_random_workouts_always_import_safely() -> void:
 			assert_false(p.label.is_empty() or p.label.begins_with("SIM_ZWO_"), what + ": label")
 			if not p.lap:
 				var prev: PlanPhase = ph[i - 1] if i > 0 else null
-				assert_true(prev != null and prev.meta.get("zwo_block") == p.meta.get("zwo_block"),
-					what + ": only a split part continues its block's lap")
+				assert_true(
+					prev != null and prev.meta.get("zwo_block") == p.meta.get("zwo_block"),
+					what + ": only a split part continues its block's lap"
+				)
 		var again := WorkoutImport.parse_zwo(xml)
 		assert_eq(_dicts(_phases(again)), _dicts(ph), what + ": deterministic")
 		assert_eq(again["clamps"], r["clamps"], what + ": same clamps")
@@ -639,8 +765,18 @@ func test_imported_plans_pass_the_plan_validator() -> void:
 		pending("PlanValidator is still the W0 stub in this worktree")
 		return
 	var results: Array = []
-	for f in ["all_tags.zwo", "caps.zwo", "easy_start.zwo", "limits_105.zwo", "limits_120.zwo",
-			"no_warmup.zwo", "real_world.zwo", "spacing.zwo", "warmup_clamp.zwo", "warmup_split.zwo"]:
+	for f in [
+		"all_tags.zwo",
+		"caps.zwo",
+		"easy_start.zwo",
+		"limits_105.zwo",
+		"limits_120.zwo",
+		"no_warmup.zwo",
+		"real_world.zwo",
+		"spacing.zwo",
+		"warmup_clamp.zwo",
+		"warmup_split.zwo"
+	]:
 		results.append([f, _load(f)])
 	var rng := SeededRng.make(7)
 	for n in 100:
@@ -678,20 +814,45 @@ func _random_zwo(rng: RandomNumberGenerator) -> String:
 			0:
 				lines.append('<SteadyState Duration="%d" Power="%.2f"/>' % [d, a])
 			1:
-				lines.append('<Warmup Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, minf(a, b), maxf(a, b)])
+				lines.append(
+					(
+						'<Warmup Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>'
+						% [d, minf(a, b), maxf(a, b)]
+					)
+				)
 			2:
 				lines.append('<Ramp Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, a, b])
 			3:
-				lines.append('<Cooldown Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, maxf(a, b), minf(a, b)])
+				lines.append(
+					(
+						'<Cooldown Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>'
+						% [d, maxf(a, b), minf(a, b)]
+					)
+				)
 			4:
-				lines.append('<IntervalsT Repeat="%d" OnDuration="%d" OffDuration="%d" OnPower="%.2f" OffPower="%.2f"/>'
-					% [SeededRng.range_i(rng, 1, 8), SeededRng.range_i(rng, 5, 300),
-					SeededRng.range_i(rng, 0, 300), a, b])
+				(
+					lines
+					. append(
+						(
+							'<IntervalsT Repeat="%d" OnDuration="%d" OffDuration="%d" OnPower="%.2f" OffPower="%.2f"/>'
+							% [
+								SeededRng.range_i(rng, 1, 8),
+								SeededRng.range_i(rng, 5, 300),
+								SeededRng.range_i(rng, 0, 300),
+								a,
+								b
+							]
+						)
+					)
+				)
 			5:
 				lines.append('<FreeRide Duration="%d"/>' % SeededRng.range_i(rng, 5, 400))
 			_:
 				lines.append('<MaxEffort Duration="%d"/>' % d)
-	return "<workout_file><name>Random</name><workout>\n%s\n</workout></workout_file>" % "\n".join(lines)
+	return (
+		"<workout_file><name>Random</name><workout>\n%s\n</workout></workout_file>"
+		% "\n".join(lines)
+	)
 
 
 ## No ERG phase is above its block's own highest value (the importer only lowers targets).
@@ -710,13 +871,23 @@ func _assert_never_harder(r: Dictionary, what: String) -> void:
 			assert_true(p.peak_pct() <= WorkoutImport.PREFIX_TO_PCT + EPS, what + ": prefix")
 			continue
 		assert_true(raw_peak.has(block), "%s: phase points at block %d" % [what, block])
-		assert_true(p.peak_pct() <= float(raw_peak.get(block, 0.0)) + EPS,
-			"%s: block %d %.2f <= %.2f" % [what, block, p.peak_pct(), float(raw_peak.get(block, 0.0))])
+		assert_true(
+			p.peak_pct() <= float(raw_peak.get(block, 0.0)) + EPS,
+			(
+				"%s: block %d %.2f <= %.2f"
+				% [what, block, p.peak_pct(), float(raw_peak.get(block, 0.0))]
+			)
+		)
 
 
 func test_non_bike_sport_type_warns() -> void:
-	var r := WorkoutImport.parse_zwo("""<workout_file><sportType>run</sportType><workout>
-		<SteadyState Duration="300" Power="0.6"/></workout></workout_file>""")
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><sportType>run</sportType><workout>
+		<SteadyState Duration="300" Power="0.6"/></workout></workout_file>"""
+		)
+	)
 	assert_true(r["ok"])
 	assert_eq((r["warnings"] as Array).size(), 1)
-	assert_string_contains(str(r["warnings"][0]), "\"run\"")
+	assert_string_contains(str(r["warnings"][0]), '"run"')

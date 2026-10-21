@@ -11,11 +11,15 @@ const CDAS: Array[float] = [0.25, 0.32, 0.5]
 
 
 ## Residual of the steady-state equation, relative to P*eta.
-func _oracle_residual(p_w: float, grade_pct: float, mass_total: float, cda: float, wind: float, v: float) -> float:
+func _oracle_residual(
+	p_w: float, grade_pct: float, mass_total: float, cda: float, wind: float, v: float
+) -> float:
 	var th := atan(grade_pct / 100.0)
 	var rel := v + wind
-	var force := mass_total * SpeedModel.G * (SpeedModel.DEFAULT_CRR * cos(th) + sin(th)) \
+	var force := (
+		mass_total * SpeedModel.G * (SpeedModel.DEFAULT_CRR * cos(th) + sin(th))
 		+ 0.5 * SpeedModel.DEFAULT_RHO * cda * rel * rel
+	)
 	var target := p_w * SpeedModel.DEFAULT_ETA
 	return absf(v * force - target) / target
 
@@ -47,10 +51,21 @@ func test_bisection_oracle_self_check() -> void:
 			for mass in MASSES:
 				for cda in CDAS:
 					var total := mass + SpeedModel.DEFAULT_MASS_OFFSET_KG
-					var v := SpeedModel.steady_state_speed(POWER_W, grade, total, cda, SpeedModel.DEFAULT_CRR, wind)
-					assert_true(v > 0.0 and v < 30.0, "v in (0, 30) for grade %s wind %s mass %s cda %s" % [grade, wind, mass, cda])
-					assert_lt(_oracle_residual(POWER_W, grade, total, cda, wind, v), 1e-6,
-						"P*eta = v*F for grade %s wind %s mass %s cda %s" % [grade, wind, mass, cda])
+					var v := SpeedModel.steady_state_speed(
+						POWER_W, grade, total, cda, SpeedModel.DEFAULT_CRR, wind
+					)
+					assert_true(
+						v > 0.0 and v < 30.0,
+						(
+							"v in (0, 30) for grade %s wind %s mass %s cda %s"
+							% [grade, wind, mass, cda]
+						)
+					)
+					assert_lt(
+						_oracle_residual(POWER_W, grade, total, cda, wind, v),
+						1e-6,
+						"P*eta = v*F for grade %s wind %s mass %s cda %s" % [grade, wind, mass, cda]
+					)
 
 
 func test_oracle_known_value() -> void:
@@ -59,7 +74,9 @@ func test_oracle_known_value() -> void:
 	assert_between(v * 3.6, 36.0, 38.0)
 	assert_lt(SpeedModel.steady_state_speed(250.0, 8.0, 83.0), v, "climbing is slower")
 	assert_gt(SpeedModel.steady_state_speed(250.0, -5.0, 83.0), v, "descending is faster")
-	assert_lt(SpeedModel.steady_state_speed(250.0, 0.0, 83.0, 0.32, 0.004, 4.0), v, "headwind is slower")
+	assert_lt(
+		SpeedModel.steady_state_speed(250.0, 0.0, 83.0, 0.32, 0.004, 4.0), v, "headwind is slower"
+	)
 
 
 func test_integrator_converges_to_the_oracle() -> void:
@@ -68,11 +85,20 @@ func test_integrator_converges_to_the_oracle() -> void:
 			for mass in MASSES:
 				for cda in CDAS:
 					var m := SpeedModel.create(mass, cda)
-					for i in 6000: # 300 s
+					for i in 6000:  # 300 s
 						m.step(DT, POWER_W, grade, wind)
-					var oracle := SpeedModel.steady_state_speed(POWER_W, grade, m.mass_kg(), cda, m.crr, wind)
+					var oracle := SpeedModel.steady_state_speed(
+						POWER_W, grade, m.mass_kg(), cda, m.crr, wind
+					)
 					var err := absf(m.v_mps - oracle) / oracle
-					assert_lt(err, 0.005, "grade %s wind %s mass %s cda %s: v %.4f oracle %.4f" % [grade, wind, mass, cda, m.v_mps, oracle])
+					assert_lt(
+						err,
+						0.005,
+						(
+							"grade %s wind %s mass %s cda %s: v %.4f oracle %.4f"
+							% [grade, wind, mass, cda, m.v_mps, oracle]
+						)
+					)
 
 
 func test_speed_never_negative() -> void:
@@ -98,7 +124,7 @@ func test_distance_accumulates() -> void:
 	var v := m.v_mps
 	var d0 := m.distance_m
 	assert_gt(d0, 0.0)
-	for i in 2000: # 100 s at steady state
+	for i in 2000:  # 100 s at steady state
 		m.step(DT, 200.0)
 	assert_almost_eq(m.distance_m - d0, v * 100.0, v * 100.0 * 0.001)
 

@@ -71,7 +71,7 @@ const RULE_LIMIT_105 := Wl.CLAMP_LIMIT_105
 const RULE_LIMIT_120 := Wl.CLAMP_LIMIT_120
 const RULE_SWITCH_SPACING := Wl.REFUSE_SWITCH_SPACING
 
-const BOM := "﻿"
+const BOM := "\uFEFF"
 
 const TAG_STEADY := "SteadyState"
 const TAG_WARMUP := "Warmup"
@@ -80,7 +80,12 @@ const TAG_RAMP := "Ramp"
 const TAG_INTERVALS := "IntervalsT"
 const TAG_FREE := "FreeRide"
 const SUPPORTED_TAGS: Array[String] = [
-	TAG_STEADY, TAG_WARMUP, TAG_COOLDOWN, TAG_RAMP, TAG_INTERVALS, TAG_FREE,
+	TAG_STEADY,
+	TAG_WARMUP,
+	TAG_COOLDOWN,
+	TAG_RAMP,
+	TAG_INTERVALS,
+	TAG_FREE,
 ]
 
 
@@ -198,8 +203,15 @@ static func to_plan(result: Dictionary) -> EffortPlan:
 ## {ok, error, name, description, sport, elements: [{tag, attrs (lower-case names)}],
 ##  child_counts: {tag: n}} for the elements directly inside <workout>.
 static func _read_xml(text: String) -> Dictionary:
-	var out := {"ok": false, "error": "", "name": "", "description": "", "sport": "",
-		"elements": [], "child_counts": {}}
+	var out := {
+		"ok": false,
+		"error": "",
+		"name": "",
+		"description": "",
+		"sport": "",
+		"elements": [],
+		"child_counts": {}
+	}
 	if text.strip_edges().is_empty():
 		out["error"] = _t("SIM_ZWO_E_XML", {"why": _t("SIM_ZWO_WHY_EMPTY")})
 		return out
@@ -229,7 +241,9 @@ static func _read_xml(text: String) -> Dictionary:
 			var lower := tag.to_lower()
 			if stack.is_empty():
 				if root_seen or lower != "workout_file":
-					out["error"] = _t("SIM_ZWO_E_XML", {"why": _t("SIM_ZWO_WHY_ROOT", {"tag": tag})})
+					out["error"] = _t(
+						"SIM_ZWO_E_XML", {"why": _t("SIM_ZWO_WHY_ROOT", {"tag": tag})}
+					)
 					return out
 				root_seen = true
 			elif stack.size() == 2 and stack[1] == "workout":
@@ -293,9 +307,20 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 	if tag.is_empty():
 		warnings.append(_t("SIM_ZWO_W_UNSUPPORTED", {"block": index, "tag": raw_tag}))
 		return {}
-	var b := {"index": index, "tag": tag, "duration_s": 0.0, "power_lo": -1.0, "power_hi": -1.0,
-		"repeat": 1, "on_s": 0.0, "off_s": 0.0, "on_power": -1.0, "off_power": -1.0,
-		"cadence": _num_or(attrs, "cadence", -1.0), "cadence_resting": -1.0}
+	var b := {
+		"index": index,
+		"tag": tag,
+		"duration_s": 0.0,
+		"power_lo": -1.0,
+		"power_hi": -1.0,
+		"repeat": 1,
+		"on_s": 0.0,
+		"off_s": 0.0,
+		"on_power": -1.0,
+		"off_power": -1.0,
+		"cadence": _num_or(attrs, "cadence", -1.0),
+		"cadence_resting": -1.0
+	}
 	var why := ""
 	match tag:
 		TAG_STEADY:
@@ -340,10 +365,12 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 			var rep_f := _num(attrs, "repeat")
 			var on_s := _num(attrs, "onduration")
 			var off_s := _num_or(attrs, "offduration", 0.0)
-			var on_p := _interval_power(attrs, "onpower", "poweronlow", "poweronhigh",
-				index, tag, warnings)
-			var off_p := _interval_power(attrs, "offpower", "powerofflow", "poweroffhigh",
-				index, tag, warnings)
+			var on_p := _interval_power(
+				attrs, "onpower", "poweronlow", "poweronhigh", index, tag, warnings
+			)
+			var off_p := _interval_power(
+				attrs, "offpower", "powerofflow", "poweroffhigh", index, tag, warnings
+			)
 			if is_nan(rep_f) or rep_f < 1.0:
 				why = "SIM_ZWO_WHY_REPEAT"
 			elif is_nan(on_s) or on_s <= 0.0 or is_nan(off_s) or off_s < 0.0:
@@ -355,8 +382,12 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 			else:
 				var rep := int(floor(minf(rep_f, float(MAX_REPEAT))))
 				if rep_f >= MAX_REPEAT + 1.0:
-					warnings.append(_t("SIM_ZWO_W_REPEAT", {"block": index, "repeat": str(attrs["repeat"]),
-						"max": MAX_REPEAT}))
+					warnings.append(
+						_t(
+							"SIM_ZWO_W_REPEAT",
+							{"block": index, "repeat": str(attrs["repeat"]), "max": MAX_REPEAT}
+						)
+					)
 				b["repeat"] = rep
 				b["on_s"] = on_s
 				b["off_s"] = off_s
@@ -410,8 +441,15 @@ static func _power(attrs: Dictionary, key: String, index: int, warnings: Array[S
 
 
 ## IntervalsT on/off power: the plain attribute, else the mean of the Low/High pair.
-static func _interval_power(attrs: Dictionary, key: String, low_key: String, high_key: String,
-		index: int, tag: String, warnings: Array[String]) -> float:
+static func _interval_power(
+	attrs: Dictionary,
+	key: String,
+	low_key: String,
+	high_key: String,
+	index: int,
+	tag: String,
+	warnings: Array[String]
+) -> float:
 	var v := _power(attrs, key, index, warnings)
 	if not is_nan(v):
 		return v
@@ -429,13 +467,35 @@ static func _interval_power(attrs: Dictionary, key: String, low_key: String, hig
 ## A working phase: {id, block, part, kind, mode, from, to, dur, span, lap, rep, reps,
 ## cadence, label_key, orig}. from/to are % FTP (ERG; equal when steady); span is the
 ## phase's length before the warm-up split (the long-phase cap uses it).
-static func _seg(ctx: Dictionary, block: int, part: String, kind: String, mode: String,
-		from_pct: float, to_pct: float, dur: float) -> Dictionary:
+static func _seg(
+	ctx: Dictionary,
+	block: int,
+	part: String,
+	kind: String,
+	mode: String,
+	from_pct: float,
+	to_pct: float,
+	dur: float
+) -> Dictionary:
 	var id := int(ctx["next_id"])
 	ctx["next_id"] = id + 1
-	return {"id": id, "block": block, "part": part, "kind": kind, "mode": mode,
-		"from": _round_pct(from_pct), "to": _round_pct(to_pct), "dur": dur, "span": dur,
-		"lap": true, "rep": 0, "reps": 0, "cadence": -1.0, "label_key": "", "orig": ""}
+	return {
+		"id": id,
+		"block": block,
+		"part": part,
+		"kind": kind,
+		"mode": mode,
+		"from": _round_pct(from_pct),
+		"to": _round_pct(to_pct),
+		"dur": dur,
+		"span": dur,
+		"lap": true,
+		"rep": 0,
+		"reps": 0,
+		"cadence": -1.0,
+		"label_key": "",
+		"orig": ""
+	}
 
 
 static func _expand(blocks: Array[Dictionary], ctx: Dictionary) -> Array[Dictionary]:
@@ -459,7 +519,9 @@ static func _expand(blocks: Array[Dictionary], ctx: Dictionary) -> Array[Diction
 				on["cadence"] = cadence
 				segs.append(on)
 				if float(b["off_s"]) > 0.0:
-					var off := _seg(ctx, index, "off", Wl.RECOVERY, Wl.ERG, off_pct, off_pct, float(b["off_s"]))
+					var off := _seg(
+						ctx, index, "off", Wl.RECOVERY, Wl.ERG, off_pct, off_pct, float(b["off_s"])
+					)
 					off["label_key"] = "SIM_ZWO_OFF"
 					off["rep"] = r + 1
 					off["reps"] = reps
@@ -479,7 +541,9 @@ static func _expand(blocks: Array[Dictionary], ctx: Dictionary) -> Array[Diction
 				s = _seg(ctx, index, "", Wl.RECOVERY, Wl.ERG, lo, hi, d)
 				s["label_key"] = "SIM_ZWO_COOLDOWN"
 			TAG_RAMP:
-				var kind := Wl.WORK if _round_pct(maxf(lo, hi)) >= WORK_MIN_PCT - EPS else Wl.RECOVERY
+				var kind := (
+					Wl.WORK if _round_pct(maxf(lo, hi)) >= WORK_MIN_PCT - EPS else Wl.RECOVERY
+				)
 				s = _seg(ctx, index, "", kind, Wl.ERG, lo, hi, d)
 				s["label_key"] = "SIM_ZWO_RAMP"
 			_:
@@ -553,8 +617,15 @@ static func _apply_warmup_limits(segs: Array[Dictionary], ctx: Dictionary) -> vo
 				s["to"] = mid
 				s["dur"] = cut
 				segs.insert(i + 1, tail)
-				_record_pct(ctx, s, RULE_WARMUP_SPLIT, [a, b], [a, mid],
-					"SIM_ZWO_REASON_WARMUP", "SIM_ZWO_SPLIT")
+				_record_pct(
+					ctx,
+					s,
+					RULE_WARMUP_SPLIT,
+					[a, b],
+					[a, mid],
+					"SIM_ZWO_REASON_WARMUP",
+					"SIM_ZWO_SPLIT"
+				)
 			_clamp_to(ctx, s, WARMUP_MAX_PCT, RULE_WARMUP, "SIM_ZWO_REASON_WARMUP")
 		start += float(s["dur"])
 		i += 1
@@ -601,32 +672,78 @@ static func _apply_duration_limits(segs: Array[Dictionary], ctx: Dictionary) -> 
 
 
 ## Clamps both ends of an ERG phase to <= cap_pct and records it when that changed anything.
-static func _clamp_to(ctx: Dictionary, s: Dictionary, cap_pct: float, rule: String,
-		reason_key: String) -> void:
+static func _clamp_to(
+	ctx: Dictionary, s: Dictionary, cap_pct: float, rule: String, reason_key: String
+) -> void:
 	var a := float(s["from"])
 	var b := float(s["to"])
 	if maxf(a, b) <= cap_pct + EPS:
 		return
 	s["from"] = minf(a, cap_pct)
 	s["to"] = minf(b, cap_pct)
-	_record_pct(ctx, s, rule, [a, b], [float(s["from"]), float(s["to"])], reason_key, "SIM_ZWO_CLAMP")
+	_record_pct(
+		ctx, s, rule, [a, b], [float(s["from"]), float(s["to"])], reason_key, "SIM_ZWO_CLAMP"
+	)
 
 
-static func _record_pct(ctx: Dictionary, s: Dictionary, rule: String, from_pct: Array,
-		to_pct: Array, reason_key: String, text_key: String) -> void:
-	var text := _t(text_key, {"block": int(s["block"]), "label": str(s["orig"]),
-		"from": _range_text(float(from_pct[0]), float(from_pct[1])),
-		"to": _range_text(float(to_pct[0]), float(to_pct[1])), "reason": _t(reason_key)})
-	(ctx["records"] as Array).append({"seg_id": int(s["id"]), "block": int(s["block"]), "rule": rule,
-		"from_pct": from_pct, "to_pct": to_pct, "from_s": -1.0, "to_s": -1.0, "text": text})
+static func _record_pct(
+	ctx: Dictionary,
+	s: Dictionary,
+	rule: String,
+	from_pct: Array,
+	to_pct: Array,
+	reason_key: String,
+	text_key: String
+) -> void:
+	var text := _t(
+		text_key,
+		{
+			"block": int(s["block"]),
+			"label": str(s["orig"]),
+			"from": _range_text(float(from_pct[0]), float(from_pct[1])),
+			"to": _range_text(float(to_pct[0]), float(to_pct[1])),
+			"reason": _t(reason_key)
+		}
+	)
+	(ctx["records"] as Array).append(
+		{
+			"seg_id": int(s["id"]),
+			"block": int(s["block"]),
+			"rule": rule,
+			"from_pct": from_pct,
+			"to_pct": to_pct,
+			"from_s": -1.0,
+			"to_s": -1.0,
+			"text": text
+		}
+	)
 
 
-static func _record_len(ctx: Dictionary, s: Dictionary, rule: String, from_s: float,
-		to_s: float, reason_key: String) -> void:
-	var text := _t("SIM_ZWO_EXTEND", {"block": int(s["block"]), "label": str(s["orig"]),
-		"from": _seconds_text(from_s), "to": _seconds_text(to_s), "reason": _t(reason_key)})
-	(ctx["records"] as Array).append({"seg_id": int(s["id"]), "block": int(s["block"]), "rule": rule,
-		"from_pct": [], "to_pct": [], "from_s": from_s, "to_s": to_s, "text": text})
+static func _record_len(
+	ctx: Dictionary, s: Dictionary, rule: String, from_s: float, to_s: float, reason_key: String
+) -> void:
+	var text := _t(
+		"SIM_ZWO_EXTEND",
+		{
+			"block": int(s["block"]),
+			"label": str(s["orig"]),
+			"from": _seconds_text(from_s),
+			"to": _seconds_text(to_s),
+			"reason": _t(reason_key)
+		}
+	)
+	(ctx["records"] as Array).append(
+		{
+			"seg_id": int(s["id"]),
+			"block": int(s["block"]),
+			"rule": rule,
+			"from_pct": [],
+			"to_pct": [],
+			"from_s": from_s,
+			"to_s": to_s,
+			"text": text
+		}
+	)
 
 
 static func _peak(s: Dictionary) -> float:
@@ -652,8 +769,14 @@ static func _to_phase(s: Dictionary) -> PlanPhase:
 
 static func _label(s: Dictionary) -> String:
 	var key := str(s["label_key"])
-	return _t(key, {"range": _range_text(float(s["from"]), float(s["to"])),
-		"n": int(s["rep"]), "count": int(s["reps"])})
+	return _t(
+		key,
+		{
+			"range": _range_text(float(s["from"]), float(s["to"])),
+			"n": int(s["rep"]),
+			"count": int(s["reps"])
+		}
+	)
 
 
 # ---------------------------------------------------------------------------- text
@@ -696,9 +819,19 @@ static func _empty_result() -> Dictionary:
 	var clamps: Array[String] = []
 	var warnings: Array[String] = []
 	var records: Array[Dictionary] = []
-	return {"ok": false, "name": "", "description": "", "phases": phases, "blocks": blocks,
-		"clamps": clamps, "warnings": warnings, "error": "", "clamp_records": records,
-		"prefix_inserted": false, "total_s": 0.0}
+	return {
+		"ok": false,
+		"name": "",
+		"description": "",
+		"phases": phases,
+		"blocks": blocks,
+		"clamps": clamps,
+		"warnings": warnings,
+		"error": "",
+		"clamp_records": records,
+		"prefix_inserted": false,
+		"total_s": 0.0
+	}
 
 
 static func _fail(result: Dictionary, error: String) -> Dictionary:

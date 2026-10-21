@@ -35,7 +35,9 @@ func test_held_and_best_with_sim_steps() -> void:
 		r.update(t, p)
 		if is_equal_approx(t, 6.0):
 			assert_true(r.holds())
-			assert_almost_eq(r.held_s(), 5.05, 1e-6, "since the start of the first holding step (0.95)")
+			assert_almost_eq(
+				r.held_s(), 5.05, 1e-6, "since the start of the first holding step (0.95)"
+			)
 		if is_equal_approx(t, 11.0):
 			assert_almost_eq(r.held_s(), 10.05, 1e-6, "Siege's >= 10 s")
 	assert_false(r.holds())
@@ -158,5 +160,7 @@ func test_long_run_keeps_memory_bounded() -> void:
 	for k in 20000:
 		r.update(k * DT, 300.0)
 	assert_true(r.holds())
-	assert_almost_eq(r.held_s(), 19999 * DT - 3.0 + DT, 1e-6, "from the step that completed the window")
+	assert_almost_eq(
+		r.held_s(), 19999 * DT - 3.0 + DT, 1e-6, "from the step that completed the window"
+	)
 	assert_almost_eq(r.current_w(), 300.0, 1e-9)

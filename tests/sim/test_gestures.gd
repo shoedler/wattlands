@@ -1,3 +1,4 @@
+# gdlint: disable=max-public-methods
 extends GutTest
 ## GestureRecognizer (BRIEF 3.5) on synthetic ~1 Hz streams: pedal_start (3 s), surge outside
 ## ERG (1.3 x and +40 W branches, two samples) and inside ERG (flywheel speed 1.12 x),
@@ -19,7 +20,14 @@ func _s(t: float, power: float, cadence: float = 90.0, speed: float = -1.0) -> T
 
 
 ## Feeds one sample per second from t0 (t0, t0 + 1, ...) and returns every gesture with its t.
-func _feed(g: GestureRecognizer, t0: float, seconds: int, power: float, cadence: float = 90.0, speed: float = -1.0) -> Array:
+func _feed(
+	g: GestureRecognizer,
+	t0: float,
+	seconds: int,
+	power: float,
+	cadence: float = 90.0,
+	speed: float = -1.0
+) -> Array:
 	var out: Array = []
 	for i in seconds:
 		var t := t0 + i
@@ -123,11 +131,11 @@ func test_pedal_start_with_jittered_samples() -> void:
 func test_pedal_start_rearms_only_after_not_pedaling() -> void:
 	var ev: Array = []
 	ev.append_array(_feed(_g, 0.0, 6, 150.0))
-	ev.append_array(_feed(_g, 6.0, 2, 30.0, 30.0)) # soft-pedal dip: no re-arm
+	ev.append_array(_feed(_g, 6.0, 2, 30.0, 30.0))  # soft-pedal dip: no re-arm
 	ev.append_array(_feed(_g, 8.0, 6, 150.0))
 	assert_eq(_names(ev), [Wl.G_PEDAL_START], "one start")
 	ev.clear()
-	ev.append_array(_feed(_g, 14.0, 1, 0.0, 0.0)) # one stopped sample re-arms
+	ev.append_array(_feed(_g, 14.0, 1, 0.0, 0.0))  # one stopped sample re-arms
 	ev.append_array(_feed(_g, 15.0, 5, 150.0))
 	assert_eq(ev, [[18.0, Wl.G_PEDAL_START]], "a new start after a stop")
 
@@ -314,7 +322,11 @@ func test_coast_never_in_erg() -> void:
 func test_stop_5s_solo_only() -> void:
 	_feed(_g, 0.0, 5, 150.0)
 	var ev := _feed(_g, 5.0, 10, 0.0, 0.0)
-	assert_eq(ev, [[8.0, Wl.G_COAST], [10.0, Wl.G_STOP_5S]], "solo: coast at 3 s, stop_5s at 5 s, once each")
+	assert_eq(
+		ev,
+		[[8.0, Wl.G_COAST], [10.0, Wl.G_STOP_5S]],
+		"solo: coast at 3 s, stop_5s at 5 s, once each"
+	)
 	var multi := GestureRecognizer.new()
 	multi.configure(FTP, false)
 	_feed(multi, 0.0, 5, 150.0)
@@ -328,7 +340,9 @@ func test_coast_and_stop_rearm_per_stop() -> void:
 	ev.append_array(_feed(_g, 5.0, 6, 0.0, 0.0))
 	ev.append_array(_feed(_g, 11.0, 2, 150.0))
 	ev.append_array(_feed(_g, 13.0, 4, 0.0, 0.0))
-	assert_eq(ev, [[3.0, Wl.G_PEDAL_START], [8.0, Wl.G_COAST], [10.0, Wl.G_STOP_5S], [16.0, Wl.G_COAST]])
+	assert_eq(
+		ev, [[3.0, Wl.G_PEDAL_START], [8.0, Wl.G_COAST], [10.0, Wl.G_STOP_5S], [16.0, Wl.G_COAST]]
+	)
 
 
 func test_short_stop_is_no_coast() -> void:
@@ -340,14 +354,23 @@ func test_short_stop_is_no_coast() -> void:
 
 func test_arbitration_over_a_whole_ride() -> void:
 	var ev: Array = []
-	ev.append_array(_feed(_g, 0.0, 15, 200.0))          # pedal_start at 3
-	ev.append_array(_feed(_g, 15.0, 2, 300.0))          # surge at 16
+	ev.append_array(_feed(_g, 0.0, 15, 200.0))  # pedal_start at 3
+	ev.append_array(_feed(_g, 15.0, 2, 300.0))  # surge at 16
 	ev.append_array(_feed(_g, 17.0, 3, 200.0))
-	ev.append_array(_feed(_g, 20.0, 7, 0.0, 0.0))       # coast at 23, stop_5s at 25
-	ev.append_array(_feed(_g, 27.0, 6, 200.0))          # pedal_start at 30
-	ev.append_array(_feed(_g, 33.0, 2, 300.0))          # 6 s since the stop: surge at 34
-	assert_eq(ev, [[3.0, Wl.G_PEDAL_START], [16.0, Wl.G_SURGE], [23.0, Wl.G_COAST],
-		[25.0, Wl.G_STOP_5S], [30.0, Wl.G_PEDAL_START], [34.0, Wl.G_SURGE]])
+	ev.append_array(_feed(_g, 20.0, 7, 0.0, 0.0))  # coast at 23, stop_5s at 25
+	ev.append_array(_feed(_g, 27.0, 6, 200.0))  # pedal_start at 30
+	ev.append_array(_feed(_g, 33.0, 2, 300.0))  # 6 s since the stop: surge at 34
+	assert_eq(
+		ev,
+		[
+			[3.0, Wl.G_PEDAL_START],
+			[16.0, Wl.G_SURGE],
+			[23.0, Wl.G_COAST],
+			[25.0, Wl.G_STOP_5S],
+			[30.0, Wl.G_PEDAL_START],
+			[34.0, Wl.G_SURGE]
+		]
+	)
 
 
 func test_advance_fires_between_samples() -> void:
@@ -468,7 +491,9 @@ func test_random_streams_keep_the_rules() -> void:
 					match name:
 						Wl.G_PEDAL_START:
 							assert_true(armed, tag + ": once per start")
-							assert_true(cond and t - cond_since >= 3.0 - 1e-6, tag + ": 3 s of pedaling")
+							assert_true(
+								cond and t - cond_since >= 3.0 - 1e-6, tag + ": 3 s of pedaling"
+							)
 							armed = false
 							surge_ok_since = t
 						Wl.G_SURGE:
@@ -485,14 +510,20 @@ func test_random_streams_keep_the_rules() -> void:
 
 
 ## What one stop (first and last stopped sample) must have fired.
-func _check_stop(first: float, last: float, fired: Array, in_erg: bool, solo: bool, what: String) -> void:
+func _check_stop(
+	first: float, last: float, fired: Array, in_erg: bool, solo: bool, what: String
+) -> void:
 	var held := last - first
 	var want: Array = []
 	if not in_erg and held >= 3.0 - 1e-6:
 		want.append(Wl.G_COAST)
 	if not in_erg and solo and held >= 5.0 - 1e-6:
 		want.append(Wl.G_STOP_5S)
-	assert_eq(fired, want, "%s: stop from %.2f to %.2f (erg %s, solo %s)" % [what, first, last, in_erg, solo])
+	assert_eq(
+		fired,
+		want,
+		"%s: stop from %.2f to %.2f (erg %s, solo %s)" % [what, first, last, in_erg, solo]
+	)
 
 
 func test_returned_and_emitted_gestures_are_wl_names() -> void:

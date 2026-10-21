@@ -30,8 +30,13 @@ func _signed_oracle(p_w: float, grade: float, mass_total: float, cda: float, win
 	for i in 200:
 		var mid := 0.5 * (lo + hi)
 		var rel := mid + wind
-		var need := mid * (mass_total * SpeedModel.G * (SpeedModel.DEFAULT_CRR * cos(th) + sin(th))
-			+ 0.5 * SpeedModel.DEFAULT_RHO * cda * rel * absf(rel))
+		var need := (
+			mid
+			* (
+				mass_total * SpeedModel.G * (SpeedModel.DEFAULT_CRR * cos(th) + sin(th))
+				+ 0.5 * SpeedModel.DEFAULT_RHO * cda * rel * absf(rel)
+			)
+		)
 		if need < target:
 			lo = mid
 		else:
@@ -49,7 +54,9 @@ func test_integrator_matches_the_oracle_everywhere() -> void:
 				for cda in CDAS:
 					var m := SpeedModel.create(75.0, cda)
 					var v := _settle(m, p, grade, wind)
-					var oracle := SpeedModel.steady_state_speed(p, grade, m.mass_kg(), cda, m.crr, wind)
+					var oracle := SpeedModel.steady_state_speed(
+						p, grade, m.mass_kg(), cda, m.crr, wind
+					)
 					if oracle + wind < 0.0:
 						oracle = _signed_oracle(p, grade, m.mass_kg(), cda, wind)
 						assert_lt(oracle + wind, 0.0, "the tailwind really outruns the rider")
@@ -58,9 +65,21 @@ func test_integrator_matches_the_oracle_everywhere() -> void:
 						brief_cases += 1
 					var err := absf(v - oracle) / oracle
 					worst = maxf(worst, err)
-					assert_lt(err, 0.005, "P %s grade %s wind %s cda %s: v %.4f oracle %.4f" % [p, grade, wind, cda, v, oracle])
+					assert_lt(
+						err,
+						0.005,
+						(
+							"P %s grade %s wind %s cda %s: v %.4f oracle %.4f"
+							% [p, grade, wind, cda, v, oracle]
+						)
+					)
 	assert_gt(brief_cases, 100, "most cases use the BRIEF oracle as written")
-	gut.p("worst relative error %.6f (%d BRIEF-oracle cases, %d signed-oracle cases)" % [worst, brief_cases, signed_cases])
+	gut.p(
+		(
+			"worst relative error %.6f (%d BRIEF-oracle cases, %d signed-oracle cases)"
+			% [worst, brief_cases, signed_cases]
+		)
+	)
 
 
 func test_integrator_matches_the_oracle_across_masses_and_offsets() -> void:
@@ -71,7 +90,11 @@ func test_integrator_matches_the_oracle_across_masses_and_offsets() -> void:
 				assert_eq(m.mass_kg(), mass + offset)
 				var v := _settle(m, 250.0, grade, 0.0)
 				var oracle := SpeedModel.steady_state_speed(250.0, grade, mass + offset)
-				assert_lt(absf(v - oracle) / oracle, 0.005, "mass %s offset %s grade %s" % [mass, offset, grade])
+				assert_lt(
+					absf(v - oracle) / oracle,
+					0.005,
+					"mass %s offset %s grade %s" % [mass, offset, grade]
+				)
 
 
 func test_first_steps_by_hand() -> void:
@@ -98,7 +121,11 @@ func test_own_cda_for_game_feel() -> void:
 func test_mass_offset_for_game_feel() -> void:
 	var light := SpeedModel.create(75.0, SpeedModel.DEFAULT_CDA, 0.0)
 	var heavy := SpeedModel.create(75.0, SpeedModel.DEFAULT_CDA, 40.0)
-	assert_lt(_settle(heavy, 250.0, 6.0, 0.0), _settle(light, 250.0, 6.0, 0.0), "a heavier vehicle climbs slower")
+	assert_lt(
+		_settle(heavy, 250.0, 6.0, 0.0),
+		_settle(light, 250.0, 6.0, 0.0),
+		"a heavier vehicle climbs slower"
+	)
 	# On the flat the steady state barely depends on mass, but acceleration does.
 	var a := SpeedModel.create(75.0, SpeedModel.DEFAULT_CDA, 0.0)
 	var b := SpeedModel.create(75.0, SpeedModel.DEFAULT_CDA, 40.0)
@@ -170,4 +197,8 @@ func test_raw_scaling_uses_real_watts_and_shared_weight() -> void:
 	assert_eq(hidden.mass_kg(), 83.0, "75 kg unless the weight is shared")
 	var p := EffortScaling.p_eff_w(Wl.RAW, 250.0, 200.0, 95.0)
 	assert_eq(p, 250.0)
-	assert_gt(_settle(light, p, 6.0, 0.0), _settle(heavy, p, 6.0, 0.0), "same watts, lighter climbs faster")
+	assert_gt(
+		_settle(light, p, 6.0, 0.0),
+		_settle(heavy, p, 6.0, 0.0),
+		"same watts, lighter climbs faster"
+	)

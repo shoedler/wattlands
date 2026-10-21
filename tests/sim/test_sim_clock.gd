@@ -40,7 +40,7 @@ func test_accumulator_has_no_long_run_drift() -> void:
 	for speed: float in [1.0, 10.0, 0.5]:
 		var c := SimClock.create(speed)
 		var total := 0
-		for i in 600: # 10 s of 60 fps frames
+		for i in 600:  # 10 s of 60 fps frames
 			total += c.advance(1.0 / 60.0)
 		var expected := roundi(10.0 * speed / SimClock.DT)
 		assert_between(total, expected - 1, expected, "speed %s" % speed)
