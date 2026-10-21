@@ -374,3 +374,50 @@ func test_stop_mid_test_leaves_the_rider_in_the_cooldown() -> void:
 	for _i in 100:
 		r.tick(DT)
 	assert_eq(gov.called("start_phase").size(), calls, "no longer driven")
+
+
+func test_estimate_matches_an_analytic_w_prime_rider() -> void:
+	# A synthetic rider holds every target until Skiba's W' balance runs out, then rides at
+	# CP: the test ends on the power rule and the estimate is 0.75 x the minute before.
+	for case: Array in [[250.0, 250.0, 20000.0], [150.0, 150.0, 15000.0], [200.0, 250.0, 20000.0]]:
+		var ftp: float = case[0]
+		var cp: float = case[1]
+		var wb := WBalance.create(cp, case[2])
+		var t := _new_test()
+		t.start(ftp)
+		var failed_at := -1.0
+		var guard := 0
+		while t.state != FtpTest.COOLDOWN and guard < 40000:
+			guard += 1
+			var tel := _tel(t)
+			if failed_at >= 0.0:
+				tel.power_w = cp
+			wb.step(tel.power_w, DT)
+			if failed_at < 0.0 and wb.wbal_j <= 0.0:
+				failed_at = t.elapsed_s
+			t.step(DT, tel)
+		var r := t.result()
+		assert_eq(r["end_reason"], FtpTest.END_POWER, str(case))
+		assert_almost_eq(float(r["test_s"]), failed_at + 10.0, 0.11, str(case))
+		var expected := 0.0
+		var s := failed_at - 60.0
+		while s < failed_at - 1e-9:
+			expected += floorf(t.plan.phase(_phase_at(s)).planned_pct_at(_elapsed_at(s)) * ftp / 100.0) * DT
+			s += DT
+		expected /= 60.0
+		assert_almost_eq(float(r["best_1min_w"]), expected, 0.5, str(case))
+		assert_almost_eq(float(r["ftp_w"]), 0.75 * expected, 1.0, str(case))
+		if ftp == cp:
+			assert_almost_eq(float(r["ftp_w"]), cp, 0.1 * cp, "within 10% of CP: " + str(case))
+
+
+static func _phase_at(s: float) -> int:
+	if s < FtpTest.RAMP_IN_S:
+		return 0
+	return int(floor((s - FtpTest.RAMP_IN_S) / FtpTest.STEP_S + 1e-9)) + 1
+
+
+static func _elapsed_at(s: float) -> float:
+	if s < FtpTest.RAMP_IN_S:
+		return s
+	return fmod(s - FtpTest.RAMP_IN_S, FtpTest.STEP_S)
