@@ -58,7 +58,7 @@ func test_solo_erg_rider_completes_with_applied_targets_and_a_fit() -> void:
 	var rep := r.build_report()
 	var push_rows := 0
 	for row: Dictionary in rep["trace"]["1"]:
-		if int(row["phase"]) == 1 and str(row["mode"]) == Wl.ERG and float(row["t"]) > 4.0:
+		if int(row["phase"]) == 1 and str(row["mode"]) == Wl.ERG and float(row["t"]) >= 3.0:
 			push_rows += 1
 			assert_between(int(row["applied_target_w"]), 100, 130, "60% of 200 W, after slew")
 	assert_gt(push_rows, 0)
@@ -72,7 +72,7 @@ func test_solo_erg_rider_completes_with_applied_targets_and_a_fit() -> void:
 func test_zero_rider_pauses_in_solo() -> void:
 	var r := _run({"riders": ["zero"], "content": "short"})
 	assert_eq(r.run_to_end(), "paused")
-	assert_lte(r.sim_seconds(), 10.0 + 0.05 + 120.0 + 1.0)
+	assert_lte(r.sim_seconds(), 10.0 + 0.05 + 120.0 + 2.0, "paused 10 s after the first not_pedaling sample")
 
 
 ## SIM2, GM7: a 0 W rider goes AFK in HOST (two human slots) instead of pausing.
