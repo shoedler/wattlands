@@ -253,3 +253,28 @@ func test_room_code_is_readable_from_3_m() -> void:
 	var f := AppTextField.make_code("Code")
 	autofree(f)
 	assert_gte(font_size(f.display), AppStyle.KEY_NUMBER_MIN)
+
+
+func test_settings_trainer_scan_connect_and_mock() -> void:
+	fx.give_profile()
+	var conn: FtmsConnectionManager = preload("res://tests/app/fakes/fake_connection.gd").new()
+	fx.trainer.add_child(conn)
+	fx.fake_trainer().conn = conn
+	fx.fake_trainer().dev = null
+	fx.fake_trainer().st = TrainerDevice.STATUS_DISCONNECTED
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "trainer")
+	assert_eq(menu(s).text_of("status"), AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_NONE"))
+	confirm_pick(s, "scan")
+	assert_eq(conn.get("scans"), [10.0] as Array[float])
+	conn.device_found.emit({"address": "AA:BB", "name": "KICKR CORE 1234", "rssi": -60})
+	conn.device_found.emit({"address": "AA:BB", "name": "KICKR CORE 1234", "rssi": -58})
+	assert_true(menu(s).ids().has("dev:AA:BB"), "found trainers are listed once")
+	assert_eq(menu(s).ids().count("dev:AA:BB"), 1)
+	confirm_pick(s, "dev:AA:BB")
+	assert_eq(conn.get("connects"), ["AA:BB"] as Array[String])
+	confirm_pick(s, "mock")
+	assert_eq(fx.fake_trainer().mock_specs, ["erg"] as Array[String])
+	assert_eq(menu(s).text_of("status"), AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_OK"))
+	confirm_pick(s, "disconnect")
+	assert_eq(conn.get("disconnects"), 1)
