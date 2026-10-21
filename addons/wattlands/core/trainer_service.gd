@@ -26,7 +26,8 @@ extends Node
 ##   the rider (which ticks the device) once per due 0.05 s step. set_external_tick(true)
 ##   hands ticking to a GameHost; set_external_tick(false) takes it back and turns the
 ##   session rider into the menu rider again (set up afresh: peer 1, the profile's slot,
-##   solo, no plan, not recorded, applying any profile change made meanwhile). While that
+##   solo, no plan, not recorded, applying any profile change made meanwhile, and attached
+##   to the InputRouter again, since GameHost.end_session detaches it). While that
 ##   rider's ride is still recording, the menu reset waits until the ride is finished
 ##   (LocalRider.finish_ride), so the results screen can still save it.
 ## - A profile or scaling change outside a session re-sets the rider up (and rebuilds a
@@ -319,8 +320,14 @@ func _build_rider() -> void:
 		_rider.name = "LocalRider"
 		add_child(_rider)
 	_setup_rider()
+	_attach_rider()
+
+
+## Menus follow the app's rider: (re)attach it to the InputRouter. GameHost.end_session
+## detaches the session's rider, so every menu reset attaches it again.
+func _attach_rider() -> void:
 	var router := _router()
-	if router != null:
+	if router != null and _rider != null and is_instance_valid(_rider):
 		router.attach_rider(_rider)
 
 
@@ -382,11 +389,13 @@ func _apply_menu_reset() -> void:
 
 ## The menu rider for the current profile: a mock whose rider parameters changed is rebuilt
 ## (which builds a new rider), otherwise the rider is set up again around the same device.
+## Either way the rider ends up attached to the InputRouter, like _build_rider leaves it.
 func _rebuild_menu_rider() -> void:
 	if is_mock() and _mock_params(_profile()) != _mock_key:
 		use_mock(_mock_spec)
 	elif _rider != null and is_instance_valid(_rider):
 		_setup_rider()
+		_attach_rider()
 
 
 func _on_panic() -> void:
