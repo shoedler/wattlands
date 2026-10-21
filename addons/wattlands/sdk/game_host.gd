@@ -1614,8 +1614,8 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 	_client_prev_ended_by = "" if ended_by == Wl.ENDED_START else ended_by
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null:
-		if elapsed_s > 0.0 and rider.has_method("resume_phase"):
-			rider.call("resume_phase", index, elapsed_s)
+		if elapsed_s > 0.0:
+			rider.resume_phase(index, elapsed_s)
 		else:
 			rider.start_phase(index)
 	bus.phase_started.emit(_local_peer, index)

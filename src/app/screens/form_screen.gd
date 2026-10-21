@@ -18,7 +18,6 @@ var text_field: AppTextField = null
 var keyboard: AppKeyboard = null
 var _fields_by_menu: Dictionary = {}
 var _editing: Dictionary = {}
-var _editing_menu: PedalScanList = null
 
 
 ## A page with the title, a content column and the menu column; returns the page dict.
@@ -142,7 +141,6 @@ func _on_field_pick(index: int, _id: Variant, _auto: bool) -> void:
 ## Start editing a field (as if it was picked).
 func edit_field(f: Dictionary) -> void:
 	_editing = f
-	_editing_menu = active_menu()
 	match str(f.get("type", "action")):
 		"toggle":
 			set_field(f, not bool(field_value(f)))
