@@ -13,12 +13,15 @@ import { implementations, TestClient } from '../testkit/harness.ts';
 
 const RELAY_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const wsMissing = (await implementations()).find((x) => x.impl === 'ws').skip;
+// Node 22.12-22.17 strip types only with this flag; `npm test` passes it, and the relay
+// processes these tests start need it too.
+const NODE_FLAGS = process.execArgv.includes('--experimental-strip-types') ? ['--experimental-strip-types'] : [];
 
 /** Start `node src/main.ts` in `cwd`; resolves with the URL from its WATTLANDS_RELAY line. */
 function startMain(cwd, args = [], env = {}) {
   const childEnv = { ...process.env, RELAY_LOG: 'quiet', ...env };
   for (const [k, v] of Object.entries(env)) if (v === undefined) delete childEnv[k];
-  const child = spawn(process.execPath, ['src/main.ts', ...args], { cwd, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, [...NODE_FLAGS, 'src/main.ts', ...args], { cwd, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   let err = '';
   child.stderr.on('data', (d) => (err += d));
@@ -171,6 +174,11 @@ describe('node src/main.ts', () => {
     const badPort = startMain(RELAY_DIR, ['--port=99999']);
     badPort.url.catch(() => {});
     assert.equal((await badPort.exited).code, 1);
+    const typo = startMain(RELAY_DIR, ['--prot=0']);
+    typo.url.catch(() => {});
+    const t = await typo.exited;
+    assert.equal(t.code, 1);
+    assert.match(t.err(), /unknown option "--prot=0"[\s\S]*usage:/);
     const help = startMain(RELAY_DIR, ['--help']);
     help.url.catch(() => {});
     const h = await help.exited;
