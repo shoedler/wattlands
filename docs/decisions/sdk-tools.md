@@ -43,6 +43,6 @@ Short ADRs for `src/games/_template/`, `content/_template/`, `assets/_template/`
 
 ## 2026-10-21 (W4 round 2): The template banners each rider's own phase and reports the group's phase
 
-- Decision: the template sends its phase banner to each human rider's own peer when that rider's phase changes (`banner(key, args, 3.0, peer)`, none to bots), and emits `phase_changed(n)` from `_group_phase` once every rider reached phase n (the lowest index any rider is in). The template stays under 300 lines (297).
+- Decision: the template sends its phase banner to each human rider's own peer when that rider's phase changes (`banner(key, args, 3.0, peer)`, none to bots), and emits `phase_changed(n)` once every rider reached phase n (the lowest index any rider is in, from the per-rider indexes `_phase_rules` already keeps). The template stays under 300 lines (299 with game.json, `tests/tools/test_template_size.gd`).
 - Alternatives: keep slot 0 speaking for everyone and drop the open-ended Finish from `short` (loses the end_phase example); broadcast the banner of the leading rider (still wrong for the others); drop `phase_changed` from the template (Siege and Tank copy the template and do emit it).
 - Reason: W4r2 R12: after `short`'s open-ended Finish the riders' phases differ (end_phase vs max_s), so slot 0's "Cool-down" banner reached riders still in Finish for 18 s and nobody got a banner when their own Finish ended. GAME_SDK 10.2 already warns against broadcasting one rider's prompt with the default peer.

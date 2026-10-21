@@ -7,7 +7,6 @@ extends GameModule
 var state: Dictionary = {}
 var content: Dictionary = {}
 var _last_index: Dictionary = {}
-var _group_index: int = -1
 var _done: Dictionary = {}
 
 
@@ -54,7 +53,6 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 		var boost := tm != null and bool(ctx.options.get("boosts", true)) and tm.intents.any(func(it: Variant) -> bool: return it is Dictionary and str(it.get("k", "")) == "boost")
 		inputs[p.peer_id] = {"p_eff_w": tm.p_eff_w if tm != null else 0.0, "boost": boost}
 		_phase_rules(p, frame.phase_of(p.peer_id), tm)
-	_group_phase(frame)
 	for e: Dictionary in TemplateRules.step(state, inputs, dt):
 		send_event(e)  # clients raise their own toasts in apply_event; the host does it here
 		if e["type"] == "lap" and TemplateRules.rider(state, null, int(e["slot"])).get("peer") == ctx.local_peer:
@@ -68,12 +66,13 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 	var peer := p.peer_id
 	var in_band := tm != null and absf(tm.power_w - tm.applied_target_w) <= 0.05 * tm.applied_target_w
 	if ph.index != int(_last_index.get(peer, -1)):
-		_last_index[peer] = ph.index
+		_last_index[peer] = ph.index  # the group's phase is the lowest: phase_changed once every rider reached it
+		if _last_index.size() == ctx.players.size() and _first("group%d" % _last_index.values().min()):
+			phase_changed.emit(_last_index.values().min())
 		if ph.kind == Wl.WORK:  # the gauge's band (drawn while in SIM) and a cadence band
 			ctx.hud.power_band(peer, 0.70 * p.ftp, 0.80 * p.ftp)
 			ctx.directives.cadence_band(peer, 80.0, 100.0)
-		if not p.is_bot:  # to that rider only: phases drift apart after an open-ended one ("short")
-			ctx.hud.banner("_TEMPLATE_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0, peer)
+		if not p.is_bot: ctx.hud.banner("_TEMPLATE_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0, peer)  # its own phase only
 		if ph.index == int(content.get("replan_at", -1)):  # the rest of the plan, validated like the first
 			ctx.directives.replan(peer, EffortPlan.of([PlanPhase.erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH").with_range(55, 60).with_open(30, 50).with_lap()]))
 	if ph.mode == Wl.SIM and int(state["tick"]) % 10 == 0:  # grade_source "game": gentle rollers at 2 Hz
@@ -90,14 +89,6 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 	if int(state["tick"]) % Wl.SIM_HZ == 0 and tm != null:
 		var laps: int = TemplateRules.rider(state, peer).get("laps", 0)
 		ctx.hud.teammate_status(peer, {"in_band": in_band, "icon": "", "text": ctx.strings.t("_TEMPLATE_STATUS_LAPS", [laps])})
-
-
-## phase_changed(n) once every rider reached phase n: the group's phase is the lowest index any rider is in.
-func _group_phase(frame: InputFrame) -> void:
-	var lowest: int = ctx.players.map(func(p: PlayerSlot) -> int: return frame.phase_of(p.peer_id).index if frame.phase_of(p.peer_id) else -1).min()
-	if lowest > _group_index:
-		_group_index = lowest
-		phase_changed.emit(lowest)
 
 
 func _first(key: String) -> bool:
