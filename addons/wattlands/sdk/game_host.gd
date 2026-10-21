@@ -24,9 +24,10 @@ extends Node
 ## snapshot, roster, hud, results on a client) -> tick every local rider on platform time ->
 ## drain gestures (the local rider's from the InputRouter when rendering, else from its
 ## LocalRider; bots' from their LocalRiders) and actions (InputRouter or inject_action;
-## `pause` and `panic` are consumed here, as is a `confirm` that resumes a paused session; the
-## InputRouter's `pause` (and its `confirm` while paused) is dropped, because the app's
-## session screen owns pausing; shift_up/shift_down also shift the gears) ->
+## `pause` and `panic` are consumed here, as is a `confirm` that resumes a paused session
+## while config.platform_pause is on; the InputRouter's `pause` (and its `confirm` while
+## paused) is always dropped, because the app's session screen owns pausing;
+## shift_up/shift_down also shift the gears) ->
 ## local_intents(actions, gestures) on every peer -> authority: unless paused, build the
 ## InputFrame (frame.tick/t = game ticks/seconds completed before this tick), call
 ## on_rescue/on_afk on edges, sim_step(0.05, frame), feed ctx.stats, advance phases (a
@@ -108,6 +109,7 @@ var unlocks: Array = []
 var _setup_ok: bool = false
 var _headless: bool = true
 var _realtime: bool = false
+var _platform_pause: bool = true
 var _record_rides: bool = true
 var _local_peer: int = 0
 var _input_router: Node = null
@@ -174,11 +176,18 @@ func _process(delta: float) -> void:
 ##   progress.json; default Paths.progress_path(game_id)), content_overrides
 ##   ({rel path: merge patch} for ctx.content_overrides), fit_paths ({peer: path}: move each
 ##   local rider's FIT there after finish_ride), input_router (Node with take_actions() and
-##   take_gestures(); default the InputRouter autoload unless headless; when rendering, the
-##   local rider's gestures come from it), sfx (Node with set_metronome(); default the Sfx
-##   autoload), realtime (bool: _process drives the clock with the wall-clock delta;
-##   default true, headless or not: GameSimRunner and tests pass false and call step()), poll_net
-##   (bool, default true: step() polls the net session). A CLIENT's game, players, options
+##   take_gestures(), optionally attach_rider(rider) and detach_rider(); default the
+##   InputRouter autoload unless headless; when rendering, the local rider's gestures come
+##   from it; its `pause`, and its `confirm` while paused, are always dropped: the app's
+##   session screen owns them), sfx (Node with set_metronome(); default the Sfx autoload),
+##   realtime (bool: _process drives the clock with the wall-clock delta; default true,
+##   headless or not: GameSimRunner and tests pass false and call step()), poll_net
+##   (bool, default true: step() polls the net session), platform_pause (bool, default
+##   true: an injected `pause` toggles the pause, and a `confirm`, or `pedal_start` after a
+##   pause that was not the rider's own, resumes it; false: the GameHost never pauses or
+##   resumes on actions or gestures and the app calls pause()/resume() itself; either way
+##   the SOLO coasting and stop_5s pause, LocalRider.pause_requested, still pauses, BRIEF
+##   4.6.4). A CLIENT's game, players, options
 ##   and seed come from the host's session_start: config.session_start (the message that
 ##   opened the session, which the app shell received before this GameHost existed) is
 ##   applied on the first step(), else the first session_start from the net.
@@ -194,6 +203,7 @@ func setup(p_config: Dictionary) -> String:
 	# The app (windowed or a headless scripted peer) is driven by _process; GameSimRunner and
 	# tests step it themselves and pass realtime = false.
 	_realtime = bool(config.get("realtime", true))
+	_platform_pause = bool(config.get("platform_pause", true))
 	_record_rides = bool(config.get("record_rides", true))
 	bus = config.get("bus") as WlEventBus
 	if bus == null:
@@ -802,7 +812,10 @@ func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName
 				if rider != null:
 					rider.panic()
 			&"pause":
-				if state == "paused":
+				# platform_pause false: the app owns pausing; the action is consumed unused.
+				if not _platform_pause:
+					pass
+				elif state == "paused":
 					resume_now = true
 				else:
 					pause("user")
@@ -813,7 +826,10 @@ func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName
 			_:
 				out.append(a)
 	# A user pause ends by resume(), an injected pause or confirm; a coasting or stop_5s pause
-	# also ends when the rider pedals again (the session screen follows the same rule).
+	# also ends when the rider pedals again (the session screen follows the same rule). With
+	# platform_pause false only resume() ends a pause, and confirm stays an ordinary action.
+	if not _platform_pause:
+		return out
 	var pedal_resume := my_gestures.has(Wl.G_PEDAL_START) and _pause_reason != "user"
 	if state == "paused" and (resume_now or out.has(&"confirm") or pedal_resume):
 		if not resume_now and out.has(&"confirm"):
@@ -1664,7 +1680,8 @@ func _local_gestures(rider: LocalRider) -> Array[StringName]:
 ## The InputRouter's actions, then the injected ones. The router's `pause` is dropped, and so
 ## is its `confirm` while paused: the app's session screen owns pausing and its pause menu
 ## (it calls pause() and resume() itself), so the GameHost never toggles pause on them. An
-## injected `pause` (on-screen buttons, tools, tests) still toggles.
+## injected `pause` (on-screen buttons, tools, tests) still toggles while config.platform_pause
+## is on (the default).
 func _take_actions() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if _input_router != null and _input_router.has_method("take_actions"):
