@@ -85,6 +85,9 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 	if players.is_empty():
 		error = "APP_ERR_NO_PLAYERS"
 		return {}
+	# ctx.players is sorted by slot_index on every peer (OWNERSHIP CTX1); indices are unique, so
+	# the order is the same whatever order the lobby or session_start listed them in.
+	players.sort_custom(func(a: PlayerSlot, b: PlayerSlot) -> bool: return a.slot_index < b.slot_index)
 	for slot in players:
 		var lobby_opts := AppLobbyModel.player_options_of(lobby, slot.peer_id)
 		var merged := lobby_opts

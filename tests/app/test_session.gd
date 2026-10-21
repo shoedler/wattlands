@@ -107,6 +107,28 @@ func test_client_config_from_session_start() -> void:
 	assert_eq(c["session_start"], start)
 
 
+func test_players_are_sorted_by_slot_index() -> void:
+	# OWNERSHIP CTX1: ctx.players is sorted by slot_index, identical on every peer.
+	fx.give_profile(220.0, "Bea")
+	fx.fake_net().local_peer = 2
+	var a := PlayerSlot.new()
+	a.peer_id = 1
+	a.apply_look(0)
+	var b := PlayerSlot.new()
+	b.peer_id = 2
+	b.apply_look(1)
+	var start := {"type": "session_start", "v": 1, "game_id": "workout", "game_version": "1.0.0", "content_id": "e2e",
+		"seed": 1, "players": [Bots.make_slot(1, 2, 200.0).to_dict(), b.to_dict(), a.to_dict()],
+		"options": {}, "scaling": Wl.FAIR_FTP, "start_tick": 0}
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start}) as AppSessionScreen
+	var players: Array[PlayerSlot] = (s.host as FakeHost).config_seen["players"]
+	var order: Array[int] = []
+	for p in players:
+		order.append(p.slot_index)
+	assert_eq(order, [0, 1, 2] as Array[int])
+	assert_eq(players[2].peer_id, -1, "the bot after the humans")
+
+
 func test_rejoin_replays_the_message_to_the_game_host() -> void:
 	fx.give_profile()
 	var net := fx.fake_net()
@@ -153,6 +175,7 @@ func test_pause_overlay_and_resume() -> void:
 	assert_eq(h.pause_reasons, ["user"] as Array[String])
 	assert_true(s.overlay.visible)
 	assert_eq(s.overlay_title.text, AppScreen.t("APP_SESSION_PAUSED"))
+	assert_eq(s.overlay_detail.text, AppScreen.t("APP_SESSION_PAUSED_USER"), "a rider's pause resumes from the menu")
 	s.feed_action(&"pause")
 	assert_eq(h.pause_reasons.size(), 1, "pause never toggles")
 	confirm_pick(s, "resume")
@@ -179,6 +202,7 @@ func test_coasting_pause_holds_resume_so_a_surge_resumes() -> void:
 	h.pause("coasting")
 	fx.bus.paused_changed.emit(true, "coasting")
 	assert_true(s.auto_paused())
+	assert_eq(s.overlay_detail.text, AppScreen.t("APP_SESSION_PAUSED_DETAIL"), "pedal again to ride on")
 	assert_false(menu(s).scanning, "the auto-pause overlay does not scan")
 	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"))
 	for _i in 10:

@@ -220,7 +220,7 @@ func _show_overlay(force_menu: bool = false) -> void:
 		overlay_detail.text = t("APP_SESSION_PANIC_DETAIL")
 	elif paused:
 		overlay_title.text = t("APP_SESSION_PAUSED")
-		overlay_detail.text = t("APP_SESSION_PAUSED_DETAIL").format([pause_reason])
+		overlay_detail.text = pause_text(pause_reason)
 	else:
 		overlay_title.text = t("APP_SESSION_MENU")
 		overlay_detail.text = ""
@@ -231,6 +231,14 @@ func _show_overlay(force_menu: bool = false) -> void:
 	else:
 		refresh_menu(items, menus[0])
 	_hold_resume_on_auto_pause()
+
+
+## What the pause overlay says: a pause the rider asked for resumes from the menu; a platform
+## pause (coasting 4.6.4, stop_5s) resumes as soon as the rider pedals again.
+static func pause_text(reason: String) -> String:
+	if reason == "" or reason == "user":
+		return AppScreen.t("APP_SESSION_PAUSED_USER")
+	return AppScreen.t("APP_SESSION_PAUSED_DETAIL")
 
 
 ## True while the session is paused by the platform (coasting 4.6.4, stop_5s), not by the rider.

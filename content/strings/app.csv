@@ -88,7 +88,8 @@ APP_ERR_NO_TRAINER,"No trainer connected: connect one in Settings, or use the mo
 APP_PANIC,PANIC: trainer safe
 APP_SESSION_MENU,Ride menu
 APP_SESSION_PAUSED,Paused
-APP_SESSION_PAUSED_DETAIL,Start pedaling or pick Resume to ride on ({0}).
+APP_SESSION_PAUSED_DETAIL,You stopped pedaling. Start pedaling again to ride on.
+APP_SESSION_PAUSED_USER,You paused the ride. Pick Resume to ride on.
 APP_SESSION_PANIC_TITLE,Trainer safe
 APP_SESSION_PANIC_DETAIL,Resistance is off. Resume the trainer when you're ready.
 APP_SESSION_RESUME,Resume
