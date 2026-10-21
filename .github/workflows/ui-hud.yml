@@ -1,0 +1,86 @@
+# ui-hud module (addons/wattlands/ui, addons/wattlands/audio, tests/ui, tests/audio): input router
+# and bindings, PedalScanList, the HUD kit and HudLayer, the theme, Sfx and the metronome
+# (BRIEF 3.5, 3.9, 7.1). Owned by ui-hud. Never executed during the autonomous build (nothing is
+# pushed), so it is unverified on GitHub; every run step below ran green locally through
+# tools/godot.sh. The Godot download is setup only.
+name: ui-hud
+
+on:
+  push:
+    paths:
+      - "addons/wattlands/ui/**"
+      - "addons/wattlands/audio/**"
+      - "addons/wattlands/contracts/**"
+      - "tests/ui/**"
+      - "tests/audio/**"
+      - "content/strings/ui.csv"
+      - ".github/workflows/ui-hud.yml"
+  pull_request:
+    paths:
+      - "addons/wattlands/ui/**"
+      - "addons/wattlands/audio/**"
+      - "addons/wattlands/contracts/**"
+      - "tests/ui/**"
+      - "tests/audio/**"
+      - "content/strings/ui.csv"
+      - ".github/workflows/ui-hud.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WATTLANDS_NO_HW_CONTROL: "1"
+  WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  ui-hud:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Godot (standard build)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot"
+          cd "$RUNNER_TEMP/godot"
+          curl -fsSL --retry 3 -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || true
+
+      - name: GUT (tests/ui, tests/audio) with the strict gate
+        run: |
+          set -uo pipefail
+          mkdir -p build
+          tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/ui,res://tests/audio -ginclude_subdirs -gexit -gdisable_colors -gjunit_xml_file=build/junit_ui-hud.xml 2>&1 | tee build/gut_ui-hud.log
+          code=${PIPESTATUS[0]}
+          test "$code" -eq 0
+          grep -q "Run Summary" build/gut_ui-hud.log
+          if grep -E -q "SCRIPT ERROR|Parse Error|Debugger Break|Ignoring script|Nothing was run" build/gut_ui-hud.log; then
+            echo "forbidden string in the GUT log"
+            exit 1
+          fi
+          tests=$(grep -o 'tests="[0-9]*"' build/junit_ui-hud.xml | head -1 | grep -o '[0-9]*')
+          test "${tests:-0}" -gt 0
+
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-hud-logs
+          path: |
+            build/*.log
+            build/junit_ui-hud.xml
+          if-no-files-found: ignore
