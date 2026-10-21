@@ -39,6 +39,8 @@ export function createWsPackageLayer(mod: unknown, maxPayload: number): WsLayer 
     maxPayload,
     perMessageDeflate: false,
     skipUTF8Validation: false,
+    // No subprotocol is ever selected, like the built-in server.
+    handleProtocols: () => false,
   });
   return {
     name: 'ws',
