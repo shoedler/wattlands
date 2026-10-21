@@ -23,9 +23,12 @@ const RESET_S := 120.0
 
 
 func test_every_built_in_session_is_registered() -> void:
-	var reg := WlGameRegistry.new()
-	add_child_autofree(reg)
-	reg.scan()
+	# The GameRegistry autoload, not a private instance: a freed instance would also remove the
+	# game translations the autoload registered (see S.ensure_game_strings).
+	var reg := S.registry(self)
+	assert_not_null(reg, "the GameRegistry autoload")
+	if reg == null:
+		return
 	assert_true(reg.has_game(S.WORKOUT), "workout is a valid registered game: %s" % str(reg.invalid_games()))
 	var m := reg.manifest(S.WORKOUT)
 	var contents: Array = m.get("contents", [])

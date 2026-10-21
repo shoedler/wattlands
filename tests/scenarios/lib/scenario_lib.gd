@@ -257,6 +257,28 @@ static func read_json(path: String) -> Dictionary:
 	return v if v is Dictionary else {}
 
 
+## The GameRegistry autoload (null when missing).
+static func registry(from: Node) -> WlGameRegistry:
+	if from == null or not from.is_inside_tree():
+		return null
+	return from.get_tree().root.get_node_or_null(^"GameRegistry") as WlGameRegistry
+
+
+## Makes sure Workout's strings are registered with the TranslationServer, rescanning the
+## GameRegistry autoload when `probe_key` is untranslated. Returns true when it translates.
+## Why: WlGameRegistry adds each game's cached Translation resources and removes them when an
+## instance is freed, and the TranslationServer keeps one entry per resource, so a private
+## registry freed by an earlier test also unregisters the autoload's game strings for the rest of
+## the run (reported to sdk-runtime).
+static func ensure_game_strings(from: Node, probe_key: String) -> bool:
+	if String(TranslationServer.translate(probe_key)) != probe_key:
+		return true
+	var reg := registry(from)
+	if reg != null:
+		reg.scan()
+	return String(TranslationServer.translate(probe_key)) != probe_key
+
+
 ## Workout's .zwo sessions (BRIEF 3.7 Workout Director): every content id in its game.json whose
 ## content/workout/sessions/<id>.json names a .zwo, as [{content, zwo (res path)}]. `root` is the
 ## project root (tests pass a fixture folder).

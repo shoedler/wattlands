@@ -5,7 +5,8 @@ extends "res://tests/scenarios/lib/scenario_test.gd"
 ## must insert a warm-up prefix, clamp to BRIEF 4.6 and the warm-up limits, list every clamp with
 ## its reason (what the session preview shows) and skip the unknown tag with a warning; the
 ## PlanValidator then accepts the plan, and the rider's stack plays it with every applied ERG
-## target inside the clamped plan. Owned by qa; a W2 gate.
+## target inside the clamped plan. Workout's own .zwo session is also played end to end through
+## GameSimRunner, with its clamps in the session preview. Owned by qa; a W2 gate.
 
 const FIXTURE := "res://tests/scenarios/workout/fixtures/qa_sample.zwo"
 
@@ -127,6 +128,7 @@ func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 		return
 	var game: GameModule = runner.host.game
 	if game != null and game.has_method("session_preview"):
+		assert_true(S.ensure_game_strings(self, "WORKOUT_PREVIEW_CLAMP"), "Workout's strings are registered")
 		var preview: Variant = game.call("session_preview", content)
 		assert_true(preview is Dictionary and not (preview as Dictionary).is_empty(), "Workout's session preview of %s" % content)
 		var text := JSON.stringify(preview)
