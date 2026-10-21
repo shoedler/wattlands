@@ -31,7 +31,8 @@ func after_each() -> void:
 
 ## A runner added to the tree (autofree) whose temp root after_each deletes.
 func _new_runner() -> GameSimRunner:
-	var runner := _new_runner()
+	var runner := GameSimRunner.new()
+	add_child_autofree(runner)
 	_runners.append(runner)
 	return runner
 
