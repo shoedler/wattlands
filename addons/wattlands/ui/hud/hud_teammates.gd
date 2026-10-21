@@ -23,7 +23,15 @@ var vertical: bool = false
 
 var _grid: GridContainer = null
 var _cards: Dictionary = {}
+## What the cards show: the roster with local statuses merged in.
 var _roster: Dictionary = {}
+## The latest roster as given to set_roster (int keys).
+var _raw: Dictionary = {}
+## Local teammate_status calls (a client's ctx.hud draws locally, HUD8): peer ->
+## {"status": Dictionary, "base": Variant (the roster's own status for that peer when the
+## local one was set), "base_known": bool}. A local status wins until the roster's own status
+## for that peer changes, so the latest call or roster update shows.
+var _local_status: Dictionary = {}
 var _max_width: float = INF
 
 
@@ -46,7 +54,8 @@ func configure(p_options: Dictionary) -> void:
 	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	include_local = bool(p_options.get("include_local", true))
 	vertical = bool(p_options.get("vertical", false))
-	set_roster(_roster)
+	_merge()
+	_sync()
 
 
 func base_size() -> Vector2:
@@ -71,22 +80,46 @@ func columns() -> int:
 	return _grid.columns
 
 
-## The whole roster ({peer: entry}); cards are added, updated and removed to match.
+## The whole roster ({peer: entry}); cards are added, updated and removed to match. A local
+## teammate_status (set_status) stays on its card until the roster's own status for that
+## rider changes.
 func set_roster(roster: Dictionary) -> void:
-	_roster = {}
+	_raw = {}
 	for k: Variant in roster.keys():
 		var e: Variant = roster[k]
 		if e is Dictionary:
-			_roster[int(k)] = (e as Dictionary).duplicate(true)
+			_raw[int(k)] = (e as Dictionary).duplicate(true)
+	_merge()
 	_sync()
 
 
-## Merge a teammate_status into one rider's entry (local feed).
+## Merge a teammate_status into one rider's entry (local feed: on a client it draws only
+## here, HUD8). It survives later roster updates until the roster's own status for `peer`
+## changes.
 func set_status(peer: int, status: Dictionary) -> void:
-	var e: Dictionary = _roster.get(peer, {"name": "", "slot_index": 0})
-	e["status"] = status.duplicate(true)
-	_roster[peer] = e
+	var known := _raw.has(peer)
+	_local_status[peer] = {
+		"status": status.duplicate(true),
+		"base": _raw_status(peer) if known else null,
+		"base_known": known,
+	}
+	_merge()
 	_sync()
+
+
+## The local teammate_status shown over the roster for `peer` ({} if none).
+func local_status(peer: int) -> Dictionary:
+	if not _local_status.has(peer):
+		return {}
+	return ((_local_status[peer] as Dictionary)["status"] as Dictionary).duplicate(true)
+
+
+## Every local teammate_status still shown over the roster: {peer: status}.
+func local_statuses() -> Dictionary:
+	var out: Dictionary = {}
+	for p: int in _local_status.keys():
+		out[p] = local_status(p)
+	return out
 
 
 func roster() -> Dictionary:
@@ -135,6 +168,35 @@ func _relayout_cards() -> void:
 	if row_w > _max_width:
 		s = maxf(MIN_SCALE, _max_width / row_w)
 	set_ui_scale(s)
+
+
+static func _same(a: Variant, b: Variant) -> bool:
+	return typeof(a) == typeof(b) and a == b
+
+
+func _raw_status(peer: int) -> Variant:
+	var e: Variant = _raw.get(peer, null)
+	if e is Dictionary:
+		return (e as Dictionary).get("status", null)
+	return null
+
+
+## _roster = the latest roster with the local statuses that still apply merged in.
+func _merge() -> void:
+	_roster = _raw.duplicate(true)
+	for p: int in _local_status.keys():
+		var o: Dictionary = _local_status[p]
+		if _raw.has(p):
+			var now: Variant = _raw_status(p)
+			if not bool(o["base_known"]):
+				o["base"] = now
+				o["base_known"] = true
+			elif not _same(now, o["base"]):
+				_local_status.erase(p)
+				continue
+		var e: Dictionary = _roster.get(p, {"name": "", "slot_index": 0})
+		e["status"] = (o["status"] as Dictionary).duplicate(true)
+		_roster[p] = e
 
 
 func _sync() -> void:

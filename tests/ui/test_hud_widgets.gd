@@ -306,6 +306,44 @@ func test_teammates_add_update_remove() -> void:
 	assert_string_contains(tm.card(1).watts_label().text, "300")
 
 
+## HUD8: a client's teammate_status draws only on that client, so the next 2 Hz roster
+## (which carries the host's statuses) must not wipe it; a newer status in the roster wins.
+func test_local_teammate_status_survives_roster_updates() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	tm.set_roster(_roster())
+	tm.set_status(1, {"in_band": true, "icon": "", "text": "Diesel"})
+	assert_eq(tm.card(1).status_text(), "Diesel")
+	tm.set_roster(_roster())
+	tm.set_roster(_roster())
+	assert_eq(tm.card(1).status_text(), "Diesel", "kept across roster updates")
+	assert_true(tm.card(1).in_band())
+	assert_eq(tm.local_status(1)["text"], "Diesel")
+	var r := _roster()
+	r[1]["status"] = {"in_band": false, "icon": "", "text": "Steam"}
+	tm.set_roster(r)
+	assert_eq(tm.card(1).status_text(), "Steam", "the roster's newer status wins")
+	assert_eq(tm.local_status(1), {}, "the local one is dropped")
+	tm.set_roster(r)
+	assert_eq(tm.card(1).status_text(), "Steam")
+	tm.set_status(1, {"text": "Dynamo"})
+	tm.configure({"include_local": true})
+	assert_eq(tm.card(1).status_text(), "Dynamo", "configure keeps local statuses")
+	assert_eq(tm.local_statuses().keys(), [1])
+
+
+func test_local_teammate_status_before_the_rider_is_in_the_roster() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	tm.set_status(5, {"text": "Bank"})
+	assert_eq(tm.card(5).status_text(), "Bank")
+	tm.set_roster({5: {"name": "Eve", "slot_index": 1, "status": {}}})
+	assert_eq(tm.card(5).status_text(), "Bank", "the first roster with the rider adopts it")
+	assert_eq(tm.card(5).entry()["name"], "Eve")
+	tm.set_roster({5: {"name": "Eve", "slot_index": 1, "status": {}}})
+	assert_eq(tm.card(5).status_text(), "Bank")
+	tm.set_roster({5: {"name": "Eve", "slot_index": 1, "status": {"text": "Host says"}}})
+	assert_eq(tm.card(5).status_text(), "Host says")
+
+
 func test_teammates_can_hide_the_local_rider() -> void:
 	var tm := HudTeammates.new()
 	tm.local_peer = 1
@@ -485,8 +523,13 @@ func test_banner_safety_priority() -> void:
 	b.set_safety(true, true, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
 	b.show_safety = false
+	assert_eq(b.safety_text(), "", "hidden at once when turned off")
 	b.set_safety(true, true, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "show_safety_banners off")
+	b.show_safety = true
+	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"), "and back when turned on")
+	b.set_safety(false, false, false)
+	assert_eq(b.safety_text(), "")
 
 
 func test_banner_game_text_expires() -> void:

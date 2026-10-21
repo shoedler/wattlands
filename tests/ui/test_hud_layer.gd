@@ -350,6 +350,104 @@ func test_bus_toasts_and_banners() -> void:
 	assert_eq(_hud.toasts().texts().size(), 0)
 
 
+## A band or status published before build() (a game's configure() runs first) or before a
+## rebuild still shows on the widgets built afterwards; a cleared band stays cleared.
+func test_bands_and_statuses_before_build_and_across_rebuilds() -> void:
+	var feed := _hud.local_feed()
+	feed.power_band(LOCAL, 190.0, 262.0)
+	_hud.apply_cadence_band(LOCAL, 80.0, 95.0)
+	feed.teammate_status(2, {"in_band": true, "icon": "", "text": "Diesel"})
+	_hud.build(_spec(), _ctx)
+	for round_i in 2:
+		_hud.update(_tele(Wl.SIM, 200.0), null, null)
+		var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+		assert_eq(g.band(), Vector2(190, 262), "power band (build %d)" % round_i)
+		assert_eq((_hud.widget(HudSpec.CADENCE) as HudCadence).band(), Vector2(80, 95), "cadence band (build %d)" % round_i)
+		assert_eq((_hud.widget(HudSpec.TEAMMATES) as HudTeammates).card(2).status_text(), "Diesel", "status (build %d)" % round_i)
+		_hud.build(_spec(), _ctx)
+	assert_eq(_hud.power_band_of(LOCAL), Vector2(190, 262))
+	_bus.power_band_changed.emit(LOCAL, 0.0, 0.0)
+	_bus.cadence_band_changed.emit(LOCAL, 0.0, 0.0)
+	assert_eq(_hud.power_band_of(LOCAL), Vector2.ZERO)
+	assert_eq(_hud.cadence_band_of(LOCAL), Vector2.ZERO)
+	_hud.build(_spec(), _ctx)
+	_hud.update(_tele(Wl.SIM, 200.0), null, null)
+	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2.ZERO, "cleared stays cleared")
+	assert_eq((_hud.widget(HudSpec.CADENCE) as HudCadence).band(), Vector2.ZERO)
+
+
+## A status the roster has replaced since is not brought back by a rebuild.
+func test_rebuild_drops_statuses_the_roster_replaced() -> void:
+	_hud.build(_spec(), _ctx)
+	_bus.roster_changed.emit({2: {"name": "Bo", "slot_index": 1, "status": {}}})
+	_hud.local_feed().teammate_status(2, {"text": "Diesel"})
+	_bus.roster_changed.emit({2: {"name": "Bo", "slot_index": 1, "status": {}}})
+	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
+	assert_eq(tm.card(2).status_text(), "Diesel", "a client's local status outlives the 2 Hz roster")
+	_bus.roster_changed.emit({2: {"name": "Bo", "slot_index": 1, "status": {"text": "Steam"}}})
+	assert_eq(tm.card(2).status_text(), "Steam")
+	_ctx.roster = {2: {"name": "Bo", "slot_index": 1, "status": {"text": "Steam"}}}
+	_hud.build(_spec(), _ctx)
+	assert_eq((_hud.widget(HudSpec.TEAMMATES) as HudTeammates).card(2).status_text(), "Steam")
+
+
+func test_toast_args_fill_named_placeholders() -> void:
+	_hud.build(_spec(), _ctx)
+	_bus.toast_requested.emit("{name} joined", {"name": "Bo"})
+	assert_eq(_hud.toasts().texts(), ["Bo joined"])
+	_hud.local_feed().banner("{0} of {1}", [2, 5], 3.0)
+	assert_eq(_hud.banner().game_text(), "2 of 5")
+	_hud.show_toast("Score {0}", 7)
+	assert_eq(_hud.toasts().texts()[1], "Score 7", "a single non-array arg is wrapped")
+
+
+## PL11: the timeline shows ctx.strings.t(label): a strings key is translated, plain text
+## passes through.
+func test_timeline_label_goes_through_the_string_table() -> void:
+	_hud.build(_spec(), _ctx)
+	var plan := EffortPlan.of([PlanPhase.erg(Wl.RECOVERY, 55, 120, "UI_KIND_RECOVERY"), PlanPhase.erg(Wl.WORK, 90, 60, "Wave 2")])
+	var ph := PhaseState.new()
+	ph.index = 0
+	ph.kind = Wl.RECOVERY
+	ph.mode = Wl.ERG
+	ph.label = "UI_KIND_RECOVERY"
+	ph.duration_s = 120.0
+	ph.remaining_s = 100.0
+	_hud.update(_tele(Wl.ERG, 140.0, 137), ph, plan)
+	var tl := _hud.widget(HudSpec.TIMELINE) as HudTimeline
+	assert_eq(tl.phase_text(), _ctx.strings.t("UI_KIND_RECOVERY"))
+	assert_ne(tl.phase_text(), "UI_KIND_RECOVERY", "translated")
+	assert_string_contains(tl.next_text(), "Wave 2", "plain text passes through")
+
+
+## BRIEF 3.3: W/kg shows only when the rider opted in (the profile's share_weight until a
+## show_wkg field exists).
+func test_wkg_follows_the_profile_opt_in() -> void:
+	var settings := get_tree().root.get_node_or_null("Settings") as WlSettings
+	assert_not_null(settings, "the Settings autoload")
+	if settings == null:
+		return
+	var prof := settings.profile
+	var old_share := prof.share_weight
+	var old_weight := prof.weight_kg
+	_hud.wkg_weight_kg = -1.0
+	prof.share_weight = false
+	prof.weight_kg = 80.0
+	_hud.build(_spec(), _ctx)
+	var t := _tele(Wl.SIM, 240.0)
+	var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+	g.set_telemetry(t)
+	assert_false(g.wkg_label().visible, "no W/kg without the opt-in")
+	prof.share_weight = true
+	_hud.build(_spec(), _ctx)
+	g = _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+	g.set_telemetry(t)
+	assert_true(g.wkg_label().visible, "opted in")
+	assert_string_contains(g.wkg_label().text, "3.0")
+	prof.share_weight = old_share
+	prof.weight_kg = old_weight
+
+
 func test_bus_readout_and_late_readouts() -> void:
 	_hud.build(_spec(), _ctx)
 	_bus.readout_changed.emit("gate_hp", "1250")

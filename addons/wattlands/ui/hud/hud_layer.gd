@@ -32,6 +32,9 @@ extends CanvasLayer
 ##   update()'s telemetry (rescue, paused) and the bus (rescue_changed, paused_changed,
 ##   governor_status {warmup, rescue, paused}) for the local rider, unless
 ##   spec.show_safety_banners is false.
+## - The latest power and cadence bands per peer, local teammate statuses and custom readout
+##   texts are kept, so a band published before build() (in configure()) or across a rebuild
+##   still shows.
 
 const LAYER := 10
 const BASE_SIZE := Vector2(1920, 1080)
@@ -60,6 +63,12 @@ var _banner: HudBanner = null
 var _feed: HudLocalFeed = null
 var _local_peer: int = 0
 var _readouts: Dictionary = {}
+## The latest power and cadence bands per peer (Vector2(lo, hi)) and the local teammate
+## statuses, kept so widgets built later (a band published in configure(), before build) or
+## rebuilt show them.
+var _power_bands: Dictionary = {}
+var _cadence_bands: Dictionary = {}
+var _statuses: Dictionary = {}
 var _bus_links: Array[Dictionary] = []
 var _relayout_queued: bool = false
 var _warned_no_pv: bool = false
@@ -153,6 +162,10 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 			c.free()
 	if ctx != null and not ctx.roster.is_empty():
 		set_roster(ctx.roster)
+	for peer: int in _statuses.keys():
+		for w in _widgets:
+			if w is HudTeammates:
+				(w as HudTeammates).set_status(peer, _statuses[peer])
 	for id: String in _readouts.keys():
 		set_readout(id, _readouts[id])
 	_connect_bus()
@@ -200,25 +213,46 @@ func show_banner(key: String, args: Variant = [], seconds: float = 3.0) -> void:
 	_play("warning")
 
 
-## The power band of `peer`'s gauges (SIM band; 0, 0 clears).
+## The power band of `peer`'s gauges (SIM band; 0, 0 clears). Kept for gauges built later.
 func apply_power_band(peer: int, lo_w: float, hi_w: float) -> void:
+	if hi_w <= 0.0 or hi_w < lo_w:
+		_power_bands.erase(peer)
+	else:
+		_power_bands[peer] = Vector2(lo_w, hi_w)
 	for w in _widgets:
 		if w is HudPowerGauge and (w as HudPowerGauge).peer == peer:
 			(w as HudPowerGauge).set_power_band(lo_w, hi_w)
 
 
-## The cadence band of `peer`'s cadence widgets (0, 0 clears).
+## The cadence band of `peer`'s cadence widgets (0, 0 clears). Kept for widgets built later.
 func apply_cadence_band(peer: int, lo_rpm: float, hi_rpm: float) -> void:
+	if hi_rpm <= 0.0 or hi_rpm < lo_rpm:
+		_cadence_bands.erase(peer)
+	else:
+		_cadence_bands[peer] = Vector2(lo_rpm, hi_rpm)
 	for w in _widgets:
 		if w is HudCadence and (w as HudCadence).peer == peer:
 			(w as HudCadence).set_cadence_band(lo_rpm, hi_rpm)
 
 
-## One rider's teammate_status (local only; the host's statuses arrive in the roster).
+## One rider's teammate_status (local only; the host's statuses arrive in the roster). It
+## stays on the strip until the roster's own status for that rider changes, and is kept for a
+## strip built later.
 func apply_teammate_status(peer: int, status: Dictionary) -> void:
+	_statuses[peer] = status.duplicate(true)
 	for w in _widgets:
 		if w is HudTeammates:
 			(w as HudTeammates).set_status(peer, status)
+
+
+## The latest power band of `peer` (Vector2(lo, hi); ZERO when none).
+func power_band_of(peer: int) -> Vector2:
+	return _power_bands.get(peer, Vector2.ZERO)
+
+
+## The latest cadence band of `peer` (Vector2(lo, hi); ZERO when none).
+func cadence_band_of(peer: int) -> Vector2:
+	return _cadence_bands.get(peer, Vector2.ZERO)
 
 
 func set_roster(roster: Dictionary) -> void:
@@ -274,6 +308,12 @@ func make_widget(id: String, options: Dictionary = {}) -> HudWidget:
 	w.ftp_w = _ftp
 	w.weight_kg = _weight
 	w.configure(options)
+	if w is HudPowerGauge and _power_bands.has((w as HudPowerGauge).peer):
+		var pb: Vector2 = _power_bands[(w as HudPowerGauge).peer]
+		(w as HudPowerGauge).set_power_band(pb.x, pb.y)
+	elif w is HudCadence and _cadence_bands.has((w as HudCadence).peer):
+		var cb: Vector2 = _cadence_bands[(w as HudCadence).peer]
+		(w as HudCadence).set_cadence_band(cb.x, cb.y)
 	return w
 
 
@@ -424,6 +464,11 @@ func slot_screen_rect(node: Node) -> Rect2:
 
 func _clear() -> void:
 	_disconnect_bus()
+	for w in _widgets:
+		if w is HudTeammates and is_instance_valid(w):
+			# Statuses the roster has replaced since are dropped (HudTeammates.set_status).
+			_statuses = (w as HudTeammates).local_statuses()
+			break
 	for n: Node in [_toasts, _banner]:
 		if n.get_parent() != null:
 			n.get_parent().remove_child(n)

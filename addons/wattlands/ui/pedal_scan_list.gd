@@ -19,7 +19,8 @@ extends VBoxContainer
 ##   auto-pick lands on the item highlighted when the count began (put the recommended item
 ##   first).
 ## - `coast` never backs out while the local rider is in ERG (set_local_mode or, with
-##   follow_local_mode, the InputRouter's attached rider).
+##   follow_local_mode, the InputRouter's attached rider, read on every tick). With no mode
+##   known, erg_auto_confirm on counts as ERG (a game that sets it from Telemetry.mode).
 ## - With listen_to_input on, the list follows InputRouter.menu_input while it is visible.
 
 ## index, the item's id, and whether the pick was an ERG auto-confirm.
@@ -95,10 +96,6 @@ func _exit_tree() -> void:
 func _process(delta: float) -> void:
 	if not real_time or not is_visible_in_tree():
 		return
-	if follow_local_mode:
-		var r := _router()
-		if r != null and r.attached_rider() != null:
-			set_local_mode(r.local_mode())
 	tick(delta)
 
 
@@ -186,8 +183,13 @@ func feed_action(action_name: StringName) -> void:
 			_manual_move(1)
 
 
-## Advance the scan timer (headless tests; _process calls it in real time).
+## Advance the scan timer (headless tests; _process calls it in real time). With
+## follow_local_mode on, it first reads the InputRouter's attached rider's trainer mode.
 func tick(dt: float) -> void:
+	if follow_local_mode:
+		var r := _router()
+		if r != null and r.attached_rider() != null:
+			set_local_mode(r.local_mode())
 	if dt <= 0.0 or _items.is_empty():
 		return
 	var n := _enabled_count()
@@ -219,6 +221,7 @@ func set_local_mode(mode: String) -> void:
 	_local_mode = mode
 	if follow_local_mode:
 		erg_auto_confirm = mode == Wl.ERG
+	_update_hint()
 
 
 ## Seconds without input after which the highlighted item is auto-picked (ERG).
@@ -307,7 +310,11 @@ func _enabled_count() -> int:
 	return c
 
 
+## The local rider is in ERG: its mode says so, or (mode unknown) the list is set up for an
+## ERG pick (erg_auto_confirm on), so `coast` never backs out of a pick shown during ERG.
 func _in_erg() -> bool:
+	if _local_mode.is_empty():
+		return erg_auto_confirm
 	return _local_mode == Wl.ERG
 
 
@@ -445,5 +452,7 @@ func _update_hint() -> void:
 		return
 	if erg_auto_confirm and _enabled_count() > 0:
 		_hint.text = tr("UI_SCAN_AUTO_IN").format([ceili(auto_confirm_left_s())])
+	elif _in_erg():
+		_hint.text = tr("UI_SCAN_HINT_ERG")
 	else:
 		_hint.text = tr("UI_SCAN_HINT")

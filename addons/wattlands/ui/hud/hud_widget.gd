@@ -6,8 +6,9 @@ extends PanelContainer
 ##
 ## Sizes are 1080p pixels. base_size() is the natural size at ui_scale 1.0; fit_to(rect size)
 ## shrinks a widget to fit a rect (never grows it above 1.0). Key numbers (own watts, rpm,
-## gear, big readouts) never go below WlTheme.KEY_NUMBER_MIN_PX (48 px), so a widget asked
-## to fit a rect smaller than min_rect() overflows it instead of shrinking those numbers.
+## big readouts) never go below WlTheme.KEY_NUMBER_MIN_PX (48 px), so a widget asked to fit
+## a rect smaller than min_rect() overflows it instead of shrinking those numbers. The gear
+## (48 px at full size) and the timeline's clock are secondary and shrink with their rect.
 ## Options (HudSpec.add(..., options)): "panel": false drops the dark background panel.
 
 ## The kit widget id (HudSpec.POWER_GAUGE, ...).

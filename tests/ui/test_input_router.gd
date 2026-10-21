@@ -365,6 +365,33 @@ func test_rebind_removes_the_input_from_other_actions() -> void:
 	assert_eq(_router.take_actions(), [&"item"])
 
 
+## A captured key carries both codes; the binding keeps the physical key (like the defaults),
+## so it fires for that key under any layout and same_input() agrees with matching.
+func test_rebind_binds_the_physical_key() -> void:
+	var captured := InputEventKey.new()
+	captured.physical_keycode = KEY_Y
+	captured.keycode = KEY_Z
+	captured.pressed = true
+	_router.rebind(&"item", captured)
+	var bound := _router.bindings(&"item")
+	var key_events := bound.filter(func(e: InputEvent) -> bool: return e is InputEventKey)
+	assert_eq(key_events.size(), 1)
+	assert_eq((key_events[0] as InputEventKey).physical_keycode, KEY_Y)
+	assert_eq((key_events[0] as InputEventKey).keycode, KEY_NONE, "matched by physical key")
+	var other_layout := InputEventKey.new()
+	other_layout.physical_keycode = KEY_Y
+	other_layout.keycode = KEY_A
+	other_layout.pressed = true
+	_router.handle_event(other_layout)
+	assert_eq(_router.take_actions(), [&"item"], "same physical key, other layout")
+	var only_logical := InputEventKey.new()
+	only_logical.keycode = KEY_J
+	only_logical.pressed = true
+	_router.rebind(&"swap", only_logical)
+	_router.handle_event(only_logical)
+	assert_eq(_router.take_actions(), [&"swap"], "an event without a physical code binds by keycode")
+
+
 func test_rebind_unknown_action_is_rejected() -> void:
 	_router.rebind(&"jump", _key(KEY_J, true))
 	assert_push_error("unknown action")

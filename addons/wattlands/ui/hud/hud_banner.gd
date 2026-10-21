@@ -14,7 +14,11 @@ const SAFETY_PAUSED := "paused"
 const PANEL_PAD := 44.0
 
 ## Show the kit's safety banners (HudSpec.show_safety_banners).
-var show_safety: bool = true
+var show_safety: bool = true:
+	set(value):
+		show_safety = value
+		if _safety_panel != null:
+			_refresh()
 var font_px: int = WlTheme.BANNER_PX
 ## Widest a banner may get (HudLayer keeps centre stacks clear of the corners); text wraps
 ## past it.
@@ -46,6 +50,8 @@ func _init() -> void:
 
 
 func set_safety(warmup_active: bool, rescue: bool, paused: bool) -> void:
+	if warmup_active == _warmup and rescue == _rescue and paused == _paused:
+		return
 	_warmup = warmup_active
 	_rescue = rescue
 	_paused = paused

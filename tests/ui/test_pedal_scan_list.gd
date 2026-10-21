@@ -258,6 +258,75 @@ func test_follow_local_mode() -> void:
 	assert_false(_list.erg_auto_confirm, "without follow_local_mode the flag is left alone")
 
 
+## Sessions: with follow_local_mode the list reads the InputRouter's attached rider on every
+## tick (headless too), so an ERG pick auto-confirms and a SIM one doesn't.
+func test_follow_local_mode_reads_the_router_rider_each_tick() -> void:
+	var bus: WlEventBus = autofree(WlEventBus.new())
+	var router := WlInputRouter.new()
+	router.bus = bus
+	router.load_on_ready = false
+	add_child_autofree(router)
+	var rider: FakeRider = autofree(FakeRider.new())
+	rider.fake_mode = Wl.ERG
+	router.attach_rider(rider)
+	_list.router = router
+	_list.follow_local_mode = true
+	_list.set_items(_items(2))
+	_list.tick(DT)
+	assert_true(_list.erg_auto_confirm, "ERG rider: auto-confirm on")
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_not_emitted(_list, "backed_out", "coast never backs out in ERG")
+	_run(6.4)
+	assert_signal_emit_count(_list, "item_chosen", 1)
+	assert_eq(get_signal_parameters(_list, "item_picked")[2], "auto")
+	rider.fake_mode = Wl.SIM
+	_list.tick(DT)
+	assert_false(_list.erg_auto_confirm, "SIM rider: off")
+	_run(20.0)
+	assert_signal_emit_count(_list, "item_chosen", 1, "no auto pick outside ERG")
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_emit_count(_list, "backed_out", 1, "coast backs out outside ERG")
+
+
+## A game that sets erg_auto_confirm itself from Telemetry.mode (no set_local_mode) still
+## gets "coast never backs out in ERG".
+func test_coast_never_backs_out_of_an_erg_pick_without_a_mode() -> void:
+	_list.erg_auto_confirm = true
+	_list.set_items(_items(2))
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_not_emitted(_list, "backed_out")
+	_list.feed_action(&"back")
+	assert_signal_emit_count(_list, "backed_out", 1, "the back action still works")
+	_list.set_local_mode(Wl.SIM)
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_emit_count(_list, "backed_out", 2, "a known SIM mode wins")
+
+
+func test_scan_interval_comes_from_the_profile() -> void:
+	var settings := get_tree().root.get_node_or_null("Settings") as WlSettings
+	assert_not_null(settings, "the Settings autoload")
+	if settings == null:
+		return
+	var old := settings.profile.scan_interval_s
+	settings.profile.scan_interval_s = 2.4
+	var list := PedalScanList.new()
+	assert_eq(list.scan_interval_s, 2.4, "the profile's scan interval")
+	list.free()
+	settings.profile.scan_interval_s = old
+
+
+func test_hint_never_offers_coast_in_erg() -> void:
+	_list.set_items(_items(2))
+	var hint := _list.find_child("Hint", false, false) as Label
+	assert_not_null(hint)
+	assert_eq(hint.text, tr("UI_SCAN_HINT"))
+	_list.set_local_mode(Wl.ERG)
+	assert_eq(hint.text, tr("UI_SCAN_HINT_ERG"))
+	_list.erg_auto_confirm = true
+	_list.tick(DT)
+	assert_string_contains(hint.text, "7", "the auto-pick countdown (6.4 s)")
+
+
 func test_auto_confirm_left_counts_down() -> void:
 	_list.erg_auto_confirm = true
 	_list.set_items(_items(2))

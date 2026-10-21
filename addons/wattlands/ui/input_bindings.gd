@@ -10,6 +10,8 @@ extends RefCounted
 ## Event dictionaries: {"type": "key", "physical_keycode": int, "keycode": int},
 ## {"type": "joy_button", "button": int}, {"type": "joy_motion", "axis": int, "value": float},
 ## {"type": "mouse_button", "button": int}. Only actions in Wl.ACTIONS are saved and loaded.
+## Keys bind by physical_keycode (layout independent, like the defaults); keycode is used only
+## for an event without a physical code.
 
 const VERSION := 1
 const SECTION_META := "input"
@@ -206,8 +208,12 @@ static func dict_to_event(d: Dictionary) -> InputEvent:
 	match str(d.get("type", "")):
 		"key":
 			var k := InputEventKey.new()
-			k.physical_keycode = int(d.get("physical_keycode", 0)) as Key
-			k.keycode = int(d.get("keycode", 0)) as Key
+			var phys := int(d.get("physical_keycode", 0))
+			k.physical_keycode = phys as Key
+			# Match by physical key, like project.godot's defaults: a binding stays on the same
+			# key whatever the keyboard layout, and same_input() agrees with action matching.
+			# The logical keycode is used only when no physical code is known.
+			k.keycode = (0 if phys != 0 else int(d.get("keycode", 0))) as Key
 			return k
 		"joy_button":
 			var b := InputEventJoypadButton.new()
