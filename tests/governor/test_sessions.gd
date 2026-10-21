@@ -80,3 +80,46 @@ func test_sim_phase_with_a_mock_rider_returns_to_erg_at_or_below_the_target() ->
 		assert_lte(int(s["applied_target_w"]), 130)
 	assert_eq(mock.commanded_mode, Wl.ERG)
 	assert_eq(mock.commanded_target_w, 130)
+
+
+## One busy, seeded ride: warm-up ramp, ERG directives, a SIM block, a game-grade SIM phase
+## with haptics and gears. Returns everything the governor reported, as JSON.
+func _busy_ride() -> String:
+	var mock := MockTrainer.from_spec("erg:compliance=1.0", 250.0, {"seed": 11})
+	var rig := make_rig({"ftp_w": 250.0, "ftp_verified": false, "skip_warmup": false, "haptic_intensity": 0.7}, mock)
+	rig.keep_trace = true
+	rig.gov.set_plan(plan_with_cooldown([
+		PlanPhase.erg(Wl.WARMUP, 50.0, 300.0).with_ramp(65.0),
+		PlanPhase.erg(Wl.WORK, 80.0, 120.0).with_range(70.0, 110.0),
+		PlanPhase.sim(Wl.WORK, Wl.GRADE_GAME, 90.0),
+	]))
+	rig.gov.start_phase(0)
+	rig.run(300.0)
+	rig.gov.start_phase(1)
+	for i in 2400:
+		if i % 10 == 0:
+			rig.directive({"mode": "ERG", "target_pct": 70.0 + float(i % 400) / 10.0, "duration_s": 3.0})
+		if i == 1200:
+			rig.directive({"mode": "SIM", "duration_s": 20.0, "reason": "overdrive"})
+		rig.step()
+	rig.gov.start_phase(2)
+	for i in 1800:
+		rig.gov.set_course_grade(sin(float(i) * 0.02) * 5.0)
+		if i % 300 == 0:
+			rig.directive({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5})
+		if i % 100 == 0:
+			rig.gov.shift(1 if (i / 100) % 2 == 0 else -1)
+		rig.step()
+	rig.gov.start_phase(3)
+	rig.run(30.0)
+	return JSON.stringify({"trace": rig.trace, "records": rig.records, "events": rig.events,
+		"commands": mock.command_count})
+
+
+func test_same_inputs_give_the_same_ride() -> void:
+	# OWNERSHIP C29: every governor rule runs on the sim clock, so two runs with the same
+	# inputs and seed report exactly the same thing.
+	var a := _busy_ride()
+	var b := _busy_ride()
+	assert_gt(a.length(), 100000, "a long report")
+	assert_eq(a.sha256_text(), b.sha256_text(), "identical reports")

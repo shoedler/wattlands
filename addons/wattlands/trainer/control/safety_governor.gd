@@ -288,6 +288,9 @@ func configure(params: Dictionary) -> void:
 		_grade_max_pct = tmp
 	if params.has("haptics_on"):
 		_haptics_on = bool(params["haptics_on"])
+		if not _haptics_on:
+			# Opting out ends a running haptic at once (4.6.6: haptics are off for opted-out riders).
+			_end_haptic()
 	if params.has("haptic_intensity"):
 		_haptic_intensity = _clamped_param("haptic_intensity", float(params["haptic_intensity"]), 0.0, 1.0)
 	if params.has("skip_warmup"):

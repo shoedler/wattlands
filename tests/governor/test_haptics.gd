@@ -99,6 +99,30 @@ func test_dropped_for_an_erg_rider_never_a_mode_switch() -> void:
 	assert_eq(rec2["reason"], Wl.REFUSE_HAPTIC_ERG)
 
 
+func test_opting_out_ends_a_running_haptic() -> void:
+	var rig := _sim_rig({"haptic_intensity": 1.0})
+	assert_false(rig.directive({"mode": "SIM", "haptic": 3.0, "duration_s": 5.0})["refused"])
+	rig.run(1.0)
+	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 3.0, 1e-9)
+	rig.gov.configure({"haptics_on": false})
+	rig.step()
+	assert_false(rig.s()["haptic_active"])
+	assert_almost_eq(float(rig.s()["applied_grade_pct"]), 0.0, 1e-9, "the haptic is gone at once")
+
+
+func test_haptic_for_an_erg_rider_with_other_channels_is_refused_whole() -> void:
+	# Never a mode switch: even a valid ERG target in the same request is refused, so a
+	# game's haptic can never open a SIM block or move an ERG rider's target by accident.
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 70.0, 600.0).with_range(60.0, 90.0)])
+	rig.run(10.0)
+	var rec := rig.directive({"target_pct": 80.0, "haptic": 2.0, "duration_s": 3.0})
+	assert_true(rec["refused"])
+	assert_eq(rec["reason"], Wl.REFUSE_HAPTIC_ERG)
+	rig.run(2.0)
+	assert_eq(int(rig.s()["governed_target_w"]), 140, "the plan's 70% stands")
+
+
 func test_dropped_for_an_opted_out_rider() -> void:
 	var rig := _sim_rig({"haptics_on": false})
 	var rec := rig.directive({"mode": "SIM", "haptic": 3.0, "duration_s": 5.0, "reason": "last_run", "source": "fishing"})
