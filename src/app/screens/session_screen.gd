@@ -11,6 +11,9 @@ extends AppScreen
 ## params: role (Wl.SOLO/HOST/CLIENT), game_id, content_id, quick (solo zero-touch start: set
 ## up the offline lobby here), session_start (CLIENT), rejoin + replay (a restarted client:
 ## messages that arrived before the GameHost existed are re-emitted to it).
+## Network notice (BRIEF 5.5, W3 NET-6), a banner at the top of the screen: on a client,
+## NET_HOST_DROPPED from the host's peer_left until it is back (peer_joined) or gone
+## (host_left), and NET_STATE_RECONNECTING while this peer's own NetSession reconnects.
 
 var role: String = Wl.SOLO
 var host: GameHost = null
@@ -49,6 +52,10 @@ var top_root: Control = null
 ## mixes with the HUD's banners and widgets.
 var overlay_scrim: ColorRect = null
 var _panic_reserved: bool = false
+## The network notice banner (top centre, above the HUD) and what it says.
+var net_notice: Label = null
+var host_dropped: bool = false
+var net_reconnecting: bool = false
 
 const PANIC_SIZE := Vector2(380, 100)
 const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
@@ -85,6 +92,7 @@ func _build() -> void:
 	top_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_overlay()
 	_build_panic_button()
+	_build_net_notice()
 	_connect_bus()
 	if role != Wl.CLIENT and auto_process:
 		# A SOLO or HOST start usually comes from inside the local rider's own tick (a surge that
@@ -201,6 +209,69 @@ func local_peer() -> int:
 func local_rider() -> LocalRider:
 	var riders: Dictionary = config.get("local_riders", {})
 	return riders.get(local_peer(), null)
+
+
+## The session's own rider's trainer mode (the overlay menu's hint and coast follow it).
+func local_trainer_mode() -> String:
+	var r := local_rider()
+	if r != null and is_instance_valid(r):
+		var tm := r.telemetry()
+		return tm.mode if tm != null else ""
+	return super.local_trainer_mode()
+
+
+# --- network notice (NET-6) ----------------------------------------------------------------------
+
+func _build_net_notice() -> void:
+	net_notice = AppStyle.paragraph("", AppStyle.FONT_HEADING, AppStyle.WARN)
+	net_notice.name = "NetNotice"
+	net_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	net_notice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	net_notice.visible = false
+	top_root.add_child(net_notice)
+	net_notice.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	net_notice.offset_top = WlTheme.MARGIN_PX + 120.0
+	net_notice.offset_left = 240.0
+	net_notice.offset_right = -240.0
+
+
+## The notice text now ("" when there is nothing to say).
+func net_notice_text() -> String:
+	if net_reconnecting:
+		return t("NET_STATE_RECONNECTING")
+	if host_dropped:
+		return t("NET_HOST_DROPPED")
+	return ""
+
+
+func _refresh_net_notice() -> void:
+	if net_notice == null:
+		return
+	var text := net_notice_text()
+	net_notice.text = text
+	net_notice.visible = text != "" and not finished
+
+
+func _host_peer() -> int:
+	var net := services.net
+	return net.host_peer if net != null and net.host_peer > 0 else Wl.HOST_PEER
+
+
+func _on_net_peer_left(peer_id: int, _reason: String) -> void:
+	if role == Wl.CLIENT and peer_id == _host_peer():
+		host_dropped = true
+		_refresh_net_notice()
+
+
+func _on_net_peer_joined(peer_id: int) -> void:
+	if role == Wl.CLIENT and peer_id == _host_peer() and host_dropped:
+		host_dropped = false
+		_refresh_net_notice()
+
+
+func _on_net_state(state: String, _detail: String) -> void:
+	net_reconnecting = role != Wl.SOLO and state == WlNetSession.STATE_RECONNECTING
+	_refresh_net_notice()
 
 
 # --- overlay and panic -------------------------------------------------------------------------
@@ -491,6 +562,9 @@ func _connect_bus() -> void:
 	bus.panic_requested.connect(_on_panic_requested)
 	if services.net != null:
 		services.net.refused.connect(_on_refused)
+		services.net.peer_left.connect(_on_net_peer_left)
+		services.net.peer_joined.connect(_on_net_peer_joined)
+		services.net.state_changed.connect(_on_net_state)
 
 
 func _disconnect_bus() -> void:
@@ -502,8 +576,13 @@ func _disconnect_bus() -> void:
 			var sig: Signal = pair[0]
 			if sig.is_connected(pair[1]):
 				sig.disconnect(pair[1])
-	if services.net != null and services.net.refused.is_connected(_on_refused):
-		services.net.refused.disconnect(_on_refused)
+	var net := services.net
+	if net != null:
+		for pair: Array in [[net.refused, _on_refused], [net.peer_left, _on_net_peer_left],
+				[net.peer_joined, _on_net_peer_joined], [net.state_changed, _on_net_state]]:
+			var sig: Signal = pair[0]
+			if sig.is_connected(pair[1]):
+				sig.disconnect(pair[1])
 
 
 func _on_host_state(state: String) -> void:
@@ -549,6 +628,9 @@ func _on_ride_saved(path: String, summary: Dictionary) -> void:
 
 
 func _on_refused(reason: String) -> void:
+	if reason == "host_left" and role == Wl.CLIENT:
+		host_dropped = false
+		_refresh_net_notice()
 	if reason == "host_left" and role == Wl.CLIENT and not finished:
 		host_left = true
 		if host != null:

@@ -78,3 +78,69 @@ test('with several requests in flight the stop still holds the estimate line', a
   assert.equal(mock.state.counts.submit, 5);
   assert.ok(readManifest(root, GAME).spend.total_usd <= 0.35);
 });
+
+/** Lets the mock queue the first submit, then cuts the connection instead of answering. */
+function dropFirstSubmitAnswer(mock) {
+  let dropped = false;
+  mock.server.prependListener('request', (req, res) => {
+    if (dropped || req.method !== 'POST' || req.url.startsWith('/_admin')) return;
+    dropped = true;
+    res.writeHead = () => res;
+    res.end = () => req.socket.destroy();
+  });
+}
+
+/** fal finishes (and bills) every queued request whether or not the client saw the submit answer. */
+async function finishQueued(mock) {
+  for (const r of mock.state.requests.values()) {
+    for (let i = 0; i < 5 && r.status !== 'COMPLETED'; i++) {
+      await fetch(`${mock.url}/${r.app}/requests/${r.id}/status`, { headers: { Authorization: 'Key mock' } }).then((x) => x.text());
+    }
+  }
+}
+
+// W3 ART-W3-3: a submit fal accepted but whose answer was lost keeps its share of the budget.
+test('a submit whose answer was lost still counts against --budget', async (t) => {
+  const { mock, root } = await setup(t, 2);
+  dropFirstSubmitAnswer(mock);
+  const r = await runGenerate(mockArgs(GAME, root, mock, ['--budget=0.07', '--concurrency=1']), { env: childEnv() });
+  assert.equal(r.code, 1, r.stderr + r.stdout);
+  assert.match(r.stderr, /s0: submit's answer was lost/);
+  assert.match(r.stderr, /budget stop: s1/);
+  await finishQueued(mock);
+  assert.equal(mock.state.requests.size, 1, 's1 was never submitted');
+  assert.ok(mock.state.billed_total_usd <= 0.07, `fal billed $${mock.state.billed_total_usd} against a --budget of $0.07`);
+  const m = readManifest(root, GAME);
+  const s0 = m.requests.find((e) => e.sprite === 's0');
+  assert.equal(s0.status, 'submit_unconfirmed');
+  assert.equal(s0.paid, true, 'counted as paid until the history shows otherwise');
+  assert.equal(s0.request_id, null);
+  assert.equal(m.spend.total_usd, 0.07, 'the manifest spend counts it');
+});
+
+test('the next run adopts a lost submit from the request history and counts it once', async (t) => {
+  const { mock, root } = await setup(t, 2);
+  dropFirstSubmitAnswer(mock);
+  await runGenerate(mockArgs(GAME, root, mock, ['--budget=0.07', '--concurrency=1']), { env: childEnv() });
+  await finishQueued(mock);
+  const r = await runGenerate(mockArgs(GAME, root, mock, ['--budget=0.07', '--concurrency=1']), { env: childEnv() });
+  assert.equal(r.code, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /s0: recovered paid result/);
+  assert.equal(mock.state.counts.submit, 2, 's0 was not paid again; s1 was paid once');
+  const m = readManifest(root, GAME);
+  const s0 = m.requests.filter((e) => e.sprite === 's0');
+  assert.equal(s0.length, 1, 'the lost submit and the history result are one entry');
+  assert.equal(s0[0].status, 'ok');
+  assert.ok(s0[0].request_id);
+  assert.equal(m.spend.total_usd, 0.14, 's0 and s1, each once');
+});
+
+test('an HTTP error on submit still releases the budget (fal took nothing)', async (t) => {
+  const { mock, root } = await setup(t, 2, { fail_500: { submit: 1 } });
+  const r = await runGenerate(mockArgs(GAME, root, mock, ['--budget=0.07', '--concurrency=1']), { env: childEnv() });
+  assert.equal(r.code, 1, r.stderr + r.stdout);
+  const m = readManifest(root, GAME);
+  assert.equal(m.requests.find((e) => e.sprite === 's0').status, 'submit_failed');
+  assert.equal(m.requests.find((e) => e.sprite === 's1').status, 'ok', 'the released share paid for s1');
+  assert.equal(m.spend.total_usd, 0.07);
+});

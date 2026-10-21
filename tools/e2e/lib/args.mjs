@@ -17,7 +17,8 @@ options:
                             or client2 (default client1)
   --out=<dir>               output root (default <repo>/build/e2e)
   --relay-cmd=<cmd>         relay command; {port} is replaced and PORT is set
-                            (default "node server/relay/src/main.ts")
+                            (default "node server/relay/src/main.ts", with --experimental-strip-types
+                            on a Node without default type stripping: 22.12-22.17, 23.0-23.5)
   --strava-cmd=<cmd>        mock Strava command; with {port} the harness picks the port, otherwise
                             it reads it from the output; {pid} is the harness's pid
                             (default "node server/mock_strava/server.mjs --port=0 --parent-pid={pid}")
@@ -40,6 +41,26 @@ options:
 
 exit codes: 0 every game passed, 1 a game failed, 2 usage error, 75 Godot lock wait timeout.`;
 
+/**
+ * True when this Node runs the relay's TypeScript only with --experimental-strip-types: the flag
+ * exists from 22.6, and type stripping is on by default from 22.18 and 23.6 (BRIEF 5.3;
+ * server/relay/README.md; W3 PKG-8).
+ */
+export function needsStripTypesFlag(version = process.versions.node) {
+  const [major, minor] = String(version).replace(/^v/, '').split('.').map((n) => Number(n));
+  if (!Number.isFinite(major) || !Number.isFinite(minor)) return false;
+  if (major === 22) return minor >= 6 && minor < 18;
+  if (major === 23) return minor < 6;
+  return false;
+}
+
+/** The relay command for this Node (see needsStripTypesFlag). */
+export function defaultRelayCmd(version = process.versions.node) {
+  return needsStripTypesFlag(version)
+    ? 'node --experimental-strip-types server/relay/src/main.ts'
+    : 'node server/relay/src/main.ts';
+}
+
 export const PEER_ROLES = ['host', 'client1', 'client2'];
 /** The client that is killed and restarted. */
 export const VICTIM = 'client2';
@@ -50,7 +71,7 @@ export const DEFAULTS = Object.freeze({
   mockTrainer: 'erg:compliance=1.0',
   autoUpload: 'client1',
   out: null,
-  relayCmd: 'node server/relay/src/main.ts',
+  relayCmd: defaultRelayCmd(),
   stravaCmd: 'node server/mock_strava/server.mjs --port=0 --parent-pid={pid}',
   stravaAdmin: null,
   fitCheckCmd: null,

@@ -40,7 +40,12 @@ func test_grade_rows_xp_and_unlocks() -> void:
 	assert_true(texts.has("Bot 1"))
 	assert_true(texts.has("412"), "kJ")
 	assert_true(texts.has("96%"), "time in band")
-	assert_true(texts.has("walls_held: 3"), "custom stats")
+	# Custom stats sit in a wrapped line per rider under the grid (W3 ZIH-1), not in the grid.
+	var stats := s.find_child("Stats1", true, false) as Label
+	assert_not_null(stats, "custom stats")
+	if stats != null:
+		assert_true(stats.text.contains("walls_held: 3"), "custom stats: %s" % stats.text)
+		assert_true(stats.text.begins_with("Ada"), "named for its rider")
 	assert_true(s.ride_label.text.contains("2026-10-21_workout.fit"))
 
 

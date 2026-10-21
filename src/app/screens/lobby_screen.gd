@@ -4,8 +4,13 @@ extends AppScreen
 ##   "solo"  an offline lobby (NetSession.start_offline): content, options, bots, then ride;
 ##   "host"  a relay room: the code is shown as K7Q-X2M at >= 48 px for friends to type;
 ##   "join"  code entry first (on-screen keyboard for controller and pedal-scan, typing works
-##           too; dashes and spaces are ignored), plus Recent rooms and the LAN list (P1).
-## The host sets the content (<ID>_CONTENT_<CID> labels, bare id when missing), the scaling
+##           too, with no click first: the first code character typed puts the keyboard focus
+##           in the field, W3 ZIH-7; dashes and spaces are ignored), plus Recent rooms and the
+##           LAN list (P1).
+## The host sets the content (<ID>_CONTENT_<CID> labels, bare id when missing; for a game with
+## the "zwo" content scheme also the rider's own .zwo files from Paths.user_dir()/workouts/,
+## as "zwo:<absolute path>", with the folder named on the page; the interactive app also takes
+## --content=<id> for the game it opens; W3 WO-1), the scaling
 ## mode, the game's options (toggle, int, choice; sent in lobby_state.settings.options), bots
 ## (Add bot / Remove bot up to max_players, the bot FTP in lobby_state.settings.bot_ftp).
 ## Every rider edits their own player_options on their card (sent in player_info). Riders ready
@@ -49,6 +54,8 @@ var keyboard: AppKeyboard = null
 var code_label: Label = null
 var message_label: Label = null
 var info_label: Label = null
+## Where the rider's own .zwo files go (host and solo of a game with the zwo scheme).
+var zwo_hint_label: Label = null
 ## Rider cards, two per row (8 riders fit at 1080p).
 var cards_box: GridContainer = null
 var preview_box: VBoxContainer = null
@@ -75,6 +82,10 @@ func _build() -> void:
 	info_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT_DIM)
 	info_label.name = "Info"
 	_left.add_child(info_label)
+	zwo_hint_label = AppStyle.paragraph("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+	zwo_hint_label.name = "ZwoHint"
+	zwo_hint_label.visible = false
+	_left.add_child(zwo_hint_label)
 	cards_box = GridContainer.new()
 	cards_box.columns = 2
 	cards_box.add_theme_constant_override("h_separation", 12)
@@ -196,13 +207,15 @@ func _init_local_lobby() -> void:
 	if m.is_empty():
 		_set_message(t("APP_ERR_NO_GAME"))
 		return
-	var contents: Array = m.get("contents", [])
 	var wanted := str(params.get("content_id", ""))
+	if wanted == "" and CmdLine.has("content") and (not CmdLine.has("game") or CmdLine.get_str("game", "") == game_id):
+		# --content=<id> (for example zwo:<absolute path>) picks the content in the app too.
+		wanted = CmdLine.get_str("content", "")
 	var last_game := str(services.settings.get_value("last_game", "")) if services.settings != null else ""
 	var last_content := str(services.settings.get_value("last_content", "")) if services.settings != null else ""
-	if wanted == "" and last_game == game_id and contents.has(last_content):
+	if wanted == "" and last_game == game_id and AppLobbyModel.content_available(m, last_content):
 		wanted = last_content
-	content_id = wanted if contents.has(wanted) else str(m.get("default_content", ""))
+	content_id = wanted if AppLobbyModel.content_available(m, wanted) else str(m.get("default_content", ""))
 	var sc := str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP)) if services.settings != null else Wl.FAIR_FTP
 	scaling = sc if Wl.SCALING_MODES.has(sc) else Wl.FAIR_FTP
 	game_options = AppLobbyModel.resolve_game_options(services.registry, game_id, {})
@@ -261,6 +274,34 @@ func _send_player_info_if_changed() -> bool:
 
 
 # --- join page -------------------------------------------------------------------------------
+
+## A key typed on the join page while nothing has the keyboard focus goes into the code field,
+## which keeps the focus from then on, so typing a code needs no click first (W3 ZIH-7). Only a
+## character a code can hold starts it; arrows, Enter, Esc and Space keep their actions, and the
+## controller and pedal-scan keep the on-screen keyboard.
+func _input(event: InputEvent) -> void:
+	if take_typed_key(event):
+		get_viewport().set_input_as_handled()
+
+
+func take_typed_key(event: InputEvent) -> bool:
+	if page != PAGE_JOIN or code_field == null or not code_field.visible or code_field.line_edit == null:
+		return false
+	if not (event is InputEventKey):
+		return false
+	var k := event as InputEventKey
+	if not k.pressed or k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed or k.unicode <= 0:
+		return false
+	if not is_inside_tree() or get_viewport().gui_get_focus_owner() != null:
+		return false
+	var ch := String.chr(k.unicode)
+	if AppCodeInput.map_char(ch) == "":
+		return false
+	code_field.append_char(ch)
+	code_field.line_edit.grab_focus()
+	code_field.line_edit.caret_column = code_field.line_edit.text.length()
+	return true
+
 
 func _show_join_page() -> void:
 	page = PAGE_JOIN
@@ -413,7 +454,7 @@ func lobby_items() -> Array:
 		var start_text := t("APP_LOBBY_CANCEL_START") if start_requested else t("APP_LOBBY_START")
 		items.append({"id": "start", "text": start_text, "disabled": m.is_empty()})
 		var contents: Array = m.get("contents", [])
-		if contents.size() > 1:
+		if contents.size() > 1 or AppLobbyModel.accepts_zwo(m):
 			items.append({"id": "content", "text": t("APP_LOBBY_CONTENT").format([AppLobbyModel.content_label(game_id, content_id)])})
 		items.append({"id": "scaling", "text": t("APP_LOBBY_SCALING").format([scaling_text(scaling)])})
 		for e: Variant in m.get("options", []):
@@ -512,17 +553,28 @@ func _refresh_root_menu() -> void:
 
 # --- sub-menus -------------------------------------------------------------------------------
 
-func _open_content() -> void:
+## The content picker: the game's contents, then the rider's own .zwo files (pedal-scan
+## selectable like the rest). The session preview below follows the highlighted pick once chosen.
+func content_choices() -> Array[String]:
 	var m := manifest()
+	var out: Array[String] = []
+	for c: Variant in m.get("contents", []):
+		out.append(str(c))
+	out.append_array(AppLobbyModel.user_zwo_contents(m))
+	return out
+
+
+func _open_content() -> void:
 	var items: Array = []
 	var hl := 0
-	var contents: Array = m.get("contents", [])
-	for i in contents.size():
-		var c := str(contents[i])
+	var choices := content_choices()
+	for i in choices.size():
+		var c := choices[i]
 		if c == content_id:
 			hl = i
 		items.append({"id": c, "text": AppLobbyModel.content_label(game_id, c)})
 	push_menu(items, _on_content_pick, Callable(), hl)
+	_refresh_zwo_hint()
 
 
 func _on_content_pick(_index: int, id: Variant, _auto: bool) -> void:
@@ -856,6 +908,7 @@ func _refresh_all() -> void:
 	_refresh_title()
 	_refresh_cards()
 	_refresh_info()
+	_refresh_zwo_hint()
 	_refresh_preview()
 	if role == Wl.CLIENT and page == PAGE_LOBBY:
 		var problem := AppLobbyModel.game_problem(services.registry, lobby())
@@ -947,6 +1000,16 @@ func _refresh_info() -> void:
 	if role != Wl.CLIENT and bool(m.get("bots", false)):
 		parts.append(t("APP_LOBBY_BOT_FTP").format([int(round(bot_ftp))]))
 	info_label.text = " · ".join(parts)
+
+
+## Names the rider's .zwo folder on the lobby page of a game that takes .zwo files (host and solo).
+func _refresh_zwo_hint() -> void:
+	if zwo_hint_label == null:
+		return
+	var show := page == PAGE_LOBBY and role != Wl.CLIENT and AppLobbyModel.accepts_zwo(manifest())
+	zwo_hint_label.visible = show
+	if show:
+		zwo_hint_label.text = t("APP_LOBBY_ZWO_HINT").format([AppLobbyModel.workouts_dir()])
 
 
 ## The game's session_preview() for the chosen content: title, total time and its lines (for

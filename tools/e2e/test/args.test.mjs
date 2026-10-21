@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { DEFAULTS, parseArgs } from '../lib/args.mjs';
+import { DEFAULTS, defaultRelayCmd, needsStripTypesFlag, parseArgs } from '../lib/args.mjs';
 import { DEFAULT_REPO } from '../lib/util.mjs';
 
 test('--games is required', () => {
@@ -32,7 +32,8 @@ test('defaults', () => {
   assert.equal(o.seed, DEFAULTS.seed);
   assert.equal(o.mockTrainer, 'erg:compliance=1.0');
   assert.equal(o.autoUpload, 'client1');
-  assert.equal(o.relayCmd, 'node server/relay/src/main.ts');
+  assert.equal(o.relayCmd, defaultRelayCmd(process.versions.node));
+  if (!needsStripTypesFlag()) assert.equal(o.relayCmd, 'node server/relay/src/main.ts');
   assert.equal(o.stravaCmd, 'node server/mock_strava/server.mjs --port=0 --parent-pid={pid}');
   assert.equal(o.repo, path.resolve(DEFAULT_REPO));
   assert.equal(o.out, path.join(path.resolve(DEFAULT_REPO), 'build', 'e2e'));
@@ -94,4 +95,18 @@ test('flags and paths', () => {
 
 test('--help', () => {
   assert.deepEqual(parseArgs(['--games=w', '--help']), { ok: true, help: true });
+});
+
+// W3 PKG-8: the relay is TypeScript; Node 22.12-22.17 (and 23.0-23.5) strip types only with the flag.
+test('the default relay command adds --experimental-strip-types where Node needs it', () => {
+  for (const v of ['22.12.0', '22.17.1', 'v22.14.0', '23.0.0', '23.5.0']) {
+    assert.equal(needsStripTypesFlag(v), true, v);
+    assert.equal(defaultRelayCmd(v), 'node --experimental-strip-types server/relay/src/main.ts', v);
+  }
+  for (const v of ['22.18.0', '22.20.1', '23.6.0', '24.0.0', '26.12.0']) {
+    assert.equal(needsStripTypesFlag(v), false, v);
+    assert.equal(defaultRelayCmd(v), 'node server/relay/src/main.ts', v);
+  }
+  assert.equal(needsStripTypesFlag('nonsense'), false);
+  assert.equal(parseArgs(['--games=workout', '--relay-cmd=node x.mjs']).opts.relayCmd, 'node x.mjs', '--relay-cmd still wins');
 });

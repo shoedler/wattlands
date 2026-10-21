@@ -33,8 +33,12 @@ var utc_override: int = -1
 var quit_hook: Callable
 ## Last exit code passed to quit().
 var quit_code: int = -1
-## Title screen visits in this app run (1 = the launch visit; the zero-touch rules use it).
+## Title screen visits in this app run (1 = the launch visit; the zero-touch rules use it). A
+## title rebuilt over a title (the App's deferred boot shows it a second time at launch) is the
+## same visit.
 var title_visits: int = 0
+## The state the main scene showed before the screen being built now ("" at launch).
+var previous_state: String = ""
 
 
 func _init() -> void:

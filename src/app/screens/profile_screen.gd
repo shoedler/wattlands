@@ -1,7 +1,8 @@
 class_name AppProfileScreen
 extends AppFormScreen
 ## The rider profile (BRIEF 3.2), saved to profile.json through Settings on every change: name,
-## menu color, units, weight (shared with the host only if opted in), the W/kg opt-in
+## menu color, units (imperial shows and edits the weight in lb; it is stored in kg), weight
+## (shared with the host only if opted in), the W/kg opt-in
 ## (RiderProfile.show_wkg: W/kg on the HUD and results, BRIEF 3.3; off by default and apart from
 ## sharing the weight), FTP (typing it marks it verified; CP follows FTP), W', preferred cadence,
 ## drivetrain, trainer difficulty, the SIM grade range, skip warm-up, Autopilot default.
@@ -68,6 +69,16 @@ func color_value() -> Variant:
 	return "#" + p().color.to_html(false).to_upper()
 
 
+## Change the units and rebuild the field list, so the weight field edits in the new unit.
+func set_units(v: Variant) -> void:
+	set_prop("units", v)
+	var root := menus[0] if not menus.is_empty() else null
+	if root != null:
+		var fresh := profile_fields()
+		_fields_by_menu[root.get_instance_id()] = fresh
+		refresh_menu(items_for(fresh), root)
+
+
 ## Set a profile property (typed like its current value) and save.
 func set_prop(prop: String, v: Variant) -> void:
 	var cur: Variant = p().get(prop)
@@ -110,14 +121,17 @@ func profile_fields() -> Array:
 		color_choices.append([COLORS[i], t("APP_COLOR_%d" % i)])
 	var ftp := num_field("ftp", "APP_FIELD_FTP", "ftp_w", 50.0, 600.0, 5.0, "W")
 	ftp["set"] = func(v: Variant) -> void: set_ftp(float(v))
+	var units := choice_field("units", "APP_FIELD_UNITS", "units", [["metric", t("APP_UNITS_METRIC")], ["imperial", t("APP_UNITS_IMPERIAL")]])
+	units["set"] = set_units
 	var fields: Array = [
 		{"id": "name", "label": t("APP_FIELD_NAME"), "type": "text", "rows": AppTextField.ROWS_NAME, "max_length": 16,
 			"get": get_prop.bind("display_name"), "set": set_name_value},
 		{"id": "color", "label": t("APP_FIELD_COLOR"), "type": "choice", "choices": color_choices,
 			"get": color_value, "set": set_color_value},
-		choice_field("units", "APP_FIELD_UNITS", "units", [["metric", t("APP_UNITS_METRIC")], ["imperial", t("APP_UNITS_IMPERIAL")]]),
+		units,
 		ftp,
-		num_field("weight", "APP_FIELD_WEIGHT", "weight_kg", 30.0, 200.0, 1.0, "kg"),
+		AppFormScreen.weight_field("weight", t("APP_FIELD_WEIGHT"), p().units,
+			func() -> float: return p().weight_kg, func(kg: float) -> void: set_prop("weight_kg", kg)),
 		toggle_field("share_weight", "APP_FIELD_SHARE_WEIGHT", "share_weight"),
 		toggle_field("show_wkg", "APP_FIELD_SHOW_WKG", "show_wkg"),
 		num_field("wprime", "APP_FIELD_WPRIME", "wprime_j", 5000.0, 40000.0, 1000.0, "J"),

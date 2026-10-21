@@ -62,6 +62,20 @@ static func label(text: String, size: int = FONT_BODY, color: Color = TEXT) -> L
 	return l
 
 
+## Pounds per kilogram (imperial weight display; the profile always stores kg).
+const LB_PER_KG := 2.20462262
+## The weight field's range in kg (Settings accepts 20-300; the fields offer 30-200).
+const WEIGHT_MIN_KG := 30.0
+const WEIGHT_MAX_KG := 200.0
+
+
+## A weight in the rider's units: "70 kg" (metric) or "154 lb" (imperial).
+static func weight_text(kg: float, units: String) -> String:
+	if units == "imperial":
+		return "%d lb" % roundi(kg * LB_PER_KG)
+	return "%d kg" % roundi(kg)
+
+
 ## A wrapping paragraph label.
 static func paragraph(text: String, size: int = FONT_BODY, color: Color = TEXT_DIM) -> Label:
 	var l := label(text, size, color)

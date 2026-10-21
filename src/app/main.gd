@@ -82,6 +82,7 @@ func show_state(new_state: String, p: Dictionary = {}) -> void:
 		remove_child(screen)
 		screen.queue_free()
 	screen = next
+	services.previous_state = state
 	state = new_state
 	screen.name = "Screen_" + new_state
 	screen.services = services

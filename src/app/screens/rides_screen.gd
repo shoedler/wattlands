@@ -1,7 +1,9 @@
 class_name AppRidesScreen
 extends AppScreen
 ## Rides history (BRIEF 3.8, P1; Settings -> Rides): every saved ride, newest first, with its
-## upload state; picking one uploads (or re-uploads) it to Strava. Pedal-scan selectable.
+## upload state; picking one uploads it to Strava, or re-uploads one already on Strava
+## (Rides.reupload, even when it was marked uploaded: a ride deleted on Strava goes up again;
+## W3 RS-3). Pedal-scan selectable.
 
 var rides: Array = []
 var states: Dictionary = {}
@@ -76,8 +78,22 @@ func upload(i: int) -> void:
 	if path == "":
 		return
 	states[i] = "queued"
-	services.rides.upload(path, s)
+	var rid := str(s.get("ride_id", ""))
+	if is_on_strava(i) and rid != "":
+		services.rides.reupload(rid)
+	else:
+		services.rides.upload(path, s)
 	refresh_menu(menu_items())
+
+
+## True when ride `i` is already on Strava (uploaded, or a duplicate Strava already had).
+func is_on_strava(i: int) -> bool:
+	if i < 0 or i >= rides.size():
+		return false
+	var r: Dictionary = rides[i]
+	var up: Variant = (r.get("summary", {}) as Dictionary).get("upload", {})
+	var st := str(r.get("state", (up as Dictionary).get("state", "") if up is Dictionary else ""))
+	return bool(r.get("uploaded", false)) or st == "uploaded" or st == "duplicate"
 
 
 func _on_upload_state(ride_id: String, state: String, _detail: String) -> void:
