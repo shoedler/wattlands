@@ -26,6 +26,8 @@ The reference game (BRIEF 3.7): a group interval ride for 1–8 riders, bots opt
 - `view/`: the 640 × 360 ride view (`WorkoutRideView`) with procedural art (`WorkoutArt`).
 - `tools/make_picker_card.gd`: writes `assets/workout/picker_card.png`:
   `tools/godot.sh --headless --path . -s src/games/workout/tools/make_picker_card.gd`
+- `tools/render_view.gd`: renders the ride view from a snapshot fixture to a PNG (windowed, it needs a renderer):
+  `tools/godot.sh --path . -s src/games/workout/tools/render_view.gd -- --out=build/workout_view.png`
 
 ## Tests
 

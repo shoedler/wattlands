@@ -48,7 +48,7 @@ func test_builds_from_a_fixture_snapshot() -> void:
 	assert_almost_eq(float(view.marker(-1)["x"]), WorkoutRideView.RIDER_X + 110.0, 0.001)
 	var far := view.marker(-2)
 	assert_eq(int(far["edge"]), 1, "off screen to the right")
-	assert_almost_eq(float(far["x"]), 640.0 - WorkoutRideView.EDGE_MARGIN, 0.001)
+	assert_almost_eq(float(far["x"]), 640.0 - WorkoutRideView.EDGE_MARGIN_RIGHT, 0.001)
 
 
 func test_pennants_carry_the_slot_look() -> void:
@@ -86,7 +86,7 @@ func test_every_slot_look_is_distinct() -> void:
 func test_the_road_follows_the_course_in_rolling_road() -> void:
 	var view := _client_view()
 	var road: PackedFloat64Array = view.model["road"]
-	assert_eq(road.size(), 160)
+	assert_eq(road.size(), 640 / WorkoutTrackLayer.COLUMN_W)
 	var lo := INF
 	var hi := -INF
 	for y in road:

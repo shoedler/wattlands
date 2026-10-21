@@ -9,7 +9,9 @@ extends Node2D
 ##  markers: [{x, y, shapes: Array[Dictionary], edge: -1|0|1}]}
 var model: Dictionary = {}
 
-const COLUMN_W := 4
+const COLUMN_W := 2
+## Bottom of the near tree strip (WorkoutRideView places it at 244).
+const BANK_Y := 243.0
 const STRIP_TOP := 262.0
 const STRIP_BOTTOM := 300.0
 
@@ -23,6 +25,8 @@ func _draw() -> void:
 	if model.is_empty():
 		return
 	var road: PackedFloat64Array = model.get("road", PackedFloat64Array())
+	# The tree bank continues down to the road wherever the road dips below it.
+	draw_rect(Rect2(0, BANK_Y, WorkoutArt.W, WorkoutArt.H - BANK_Y), WorkoutArt.NEAR_TREES)
 	for i in road.size():
 		var x := float(i * COLUMN_W)
 		var y := road[i]
@@ -64,6 +68,7 @@ func _draw() -> void:
 			draw_colored_polygon(moved, s["color"])
 		var edge := int(m.get("edge", 0))
 		if edge != 0:
-			var ax := foot.x + 7.0 * float(edge)
-			var ay := foot.y - 6.0
-			draw_colored_polygon(PackedVector2Array([Vector2(ax, ay - 3.0), Vector2(ax + 3.0 * float(edge), ay), Vector2(ax, ay + 3.0)]), WorkoutArt.WHITE)
+			# An arrow on the road, past the flag, pointing at the rider off screen.
+			var ax := foot.x + (24.0 if edge > 0 else -5.0)
+			var ay := foot.y - 5.0
+			draw_colored_polygon(PackedVector2Array([Vector2(ax, ay - 3.0), Vector2(ax + 4.0 * float(edge), ay), Vector2(ax, ay + 3.0)]), WorkoutArt.WHITE)

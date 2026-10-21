@@ -15,14 +15,18 @@ const ROAD_MIN_Y := 186.0
 const ROAD_MAX_Y := 256.0
 ## Course and markers: metres per art pixel, vertical exaggeration (px per metre).
 const MAP_M_PER_PX := 2.0
-const ELEV_PX_PER_M := 1.5
+const ELEV_PX_PER_M := 2.5
 ## Parallax: art pixels per metre at factor 1 (gives a sense of speed).
 const VISUAL_PX_PER_M := 3.0
 ## Interval strip: art pixels per plan second (640 px is about 21 minutes).
 const STRIP_PX_PER_S := 0.5
 const STRIP_BASE := 298.0
 const STRIP_MAX_H := 32.0
-const EDGE_MARGIN := 8.0
+## Pennants are drawn at this scale of WorkoutArt's base geometry.
+const PENNANT_SCALE := 1.5
+## Off-screen riders sit this far inside the left and right edges (the flag points right).
+const EDGE_MARGIN_LEFT := 10.0
+const EDGE_MARGIN_RIGHT := 30.0
 
 var game: WorkoutGame = null
 var sky: WorkoutParallaxLayer = null
@@ -162,11 +166,11 @@ func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Ar
 			look = {"color": slot.color, "shape": slot.shape, "pattern": slot.pattern, "hollow": slot.hollow}
 		var x := RIDER_X + (r.distance_m() - cam_d) / MAP_M_PER_PX
 		var edge := 0
-		if x < EDGE_MARGIN:
-			x = EDGE_MARGIN
+		if x < EDGE_MARGIN_LEFT:
+			x = EDGE_MARGIN_LEFT
 			edge = -1
-		elif x > float(WorkoutArt.W) - EDGE_MARGIN:
-			x = float(WorkoutArt.W) - EDGE_MARGIN
+		elif x > float(WorkoutArt.W) - EDGE_MARGIN_RIGHT:
+			x = float(WorkoutArt.W) - EDGE_MARGIN_RIGHT
 			edge = 1
 		var col := clampi(int(x / float(WorkoutTrackLayer.COLUMN_W)), 0, road.size() - 1)
 		var opts := {
@@ -176,9 +180,18 @@ func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Ar
 		}
 		out.append({
 			"peer": peer, "x": x, "y": road[col], "edge": edge,
-			"shapes": WorkoutArt.pennant_shapes(look, r.slot_index, opts),
+			"shapes": _scaled(WorkoutArt.pennant_shapes(look, r.slot_index, opts), PENNANT_SCALE),
 		})
 	return out
+
+
+static func _scaled(shapes: Array[Dictionary], k: float) -> Array[Dictionary]:
+	for s in shapes:
+		var pts := PackedVector2Array()
+		for p in (s["points"] as PackedVector2Array):
+			pts.append(p * k)
+		s["points"] = pts
+	return shapes
 
 
 ## The marker for `peer` in the latest model ({} if none).
