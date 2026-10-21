@@ -93,3 +93,5 @@ Values are physical (scale and offset applied), enums are numbers, times are Uni
 ## Tests
 
 `node --test` in `tools/fit_check` (needs `npm ci` first). `testdata/gdscript_ten_minute_ride.fit` and its `.json` were written by the GDScript `FitEncoder` and `RideRecorder` (`tests/rides/test_ride_recorder.gd`, `test_ten_minute_synthetic_ride`, which writes `build/rides_test/ten_minute_ride.fit` on every GUT run).
+
+Every rides GUT run also writes `build/rides_test/paused_dropout_ride.fit` (`test_paused_ride_with_a_dropout_for_fit_check`: a jittered ~1 Hz feed, a timer pause, a trainer dropout and a cool-down without cadence). Both files have five laps, so `node tools/fit_check/check.mjs build/rides_test --expect-laps=5` checks them together (the rides CI workflow runs exactly that).

@@ -358,6 +358,52 @@ func test_ten_minute_synthetic_ride() -> void:
 	assert_eq(Reader.of(d, 34)[0]["fields"][5], START + 600 - 631065600 + 7200, "local timestamp")
 
 
+func test_paused_ride_with_a_dropout_for_fit_check() -> void:
+	# Five laps fed at a jittered ~1 Hz like real FTMS notifications, with a 10 s timer pause
+	# in Work 1, a 12 s trainer dropout in Recovery and a cool-down without cadence. Written to
+	# build/rides_test/ next to the ten-minute ride, so `fit_check build/rides_test
+	# --expect-laps=5` decodes both with Garmin's SDK.
+	var rec := RideRecorder.new()
+	rec.start("workout", "paused", START + 3600, 0.0)
+	var rng := SeededRng.make(11)
+	var plan := [["Warm-up", 0.0, 60.0, 150.0], ["Work 1", 60.0, 120.0, 240.0],
+		["Recovery", 120.0, 150.0, 120.0], ["Work 2", 150.0, 210.0, 250.0], ["Cool-down", 210.0, 300.0, 100.0]]
+	for ph: Array in plan:
+		var from := float(ph[1])
+		var to := float(ph[2])
+		rec.lap(str(ph[0]), from)
+		var k := from
+		while k < to:
+			var t := k + (SeededRng.range_f(rng, 0.0, 0.4) if k > from else 0.0)
+			if k == 90.0:
+				rec.set_timer_running(false, 90.0)
+			if k == 100.0:
+				rec.set_timer_running(true, 100.0)
+			if k < 125.0 or k >= 137.0:
+				var cad := -1.0 if str(ph[0]) == "Cool-down" else 88.0 + SeededRng.range_f(rng, -5.0, 5.0)
+				rec.record(t, float(ph[3]) + SeededRng.range_f(rng, -10.0, 10.0), cad, 30.0)
+			k += 1.0
+	rec.record(300.0, 100.0, -1.0, 30.0)
+	rec.stop(300.0)
+	assert_eq(rec.record_count(), 301, "one record per second, pause and dropout included")
+	assert_eq(rec.lap_count(), 5)
+	var s := rec.summary()
+	assert_almost_eq(float(s["duration_s"]), 300.0, 0.001)
+	assert_almost_eq(float(s["timer_s"]), 290.0, 0.001, "10 s paused")
+	var path := rec.save_as(ProjectSettings.globalize_path("res://build/rides_test").path_join("paused_dropout_ride.fit"))
+	assert_ne(path, "")
+	var d := Reader.read(FileAccess.get_file_as_bytes(path))
+	assert_eq(d["errors"], [])
+	var types: Array = []
+	for e: Dictionary in Reader.of(d, 21):
+		types.append(int(e["fields"][1]))
+	assert_eq(types, [0, 4, 0, 4], "start, stop at the pause, start, stop at the end")
+	var recs := Reader.of(d, 20)
+	assert_eq(recs[131]["fields"][7], 0, "the dropout records 0 W once the held values expire")
+	assert_eq(recs[131]["fields"][4], 0xFF, "and no cadence")
+	assert_eq(recs[250]["fields"][4], 0xFF, "the cool-down has no cadence")
+
+
 func test_summary_before_start_is_empty_not_an_error() -> void:
 	var rec := RideRecorder.new()
 	var s := rec.summary()
