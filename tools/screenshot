@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# tools/screenshot: capture PNGs of a game session, a scene or an app screen (BRIEF 3.6, 7.8).
+# The twin of tools/screenshot.ps1; both are thin shims over tools/qa/screenshot.mjs, which runs
+# Godot windowed through tools/godot.sh with tools/qa/screenshot_main.gd.
+#
+#   tools/screenshot --game=<id> --content=<id> --at=<s>[,<s>...] [--players=<n>] [--bots=<n>]
+#                    [--rider=<profile>] [--autopilot=all|none] [--seed=<n>] [--out=<dir>]
+#   tools/screenshot --scene=res://addons/wattlands/world2d/demo.tscn [--frames=<n>]
+#   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>]
+#   tools/screenshot --help
+#
+# Without a display (Linux with no DISPLAY and no xvfb-run) it prints "screenshot: skipped" and
+# exits 0. It always passes --mock-trainer and refuses to run without one (BRIEF 1).
+set -u
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+command -v node >/dev/null 2>&1 || {
+  printf 'screenshot: node not found on PATH (Node 22.12+ is required)\n' >&2
+  exit 127
+}
+export WATTLANDS_NO_HW_CONTROL=1
+export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
+exec node "$script_dir/qa/screenshot.mjs" --shell=bash "$@" </dev/null

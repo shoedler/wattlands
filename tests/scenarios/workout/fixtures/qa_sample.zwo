@@ -1,0 +1,16 @@
+<workout_file>
+    <author>Wattlands qa</author>
+    <name>QA sample</name>
+    <description>Imported by tests/scenarios/workout/test_zwo_import.gd: no warm-up of its own, a 10-minute block above the 105 % cap, intervals, a ramp, a free ride and an unsupported tag.</description>
+    <sportType>bike</sportType>
+    <tags/>
+    <workout>
+        <SteadyState Duration="240" Power="0.80"/>
+        <SteadyState Duration="600" Power="1.10"/>
+        <IntervalsT Repeat="3" OnDuration="45" OffDuration="120" OnPower="1.30" OffPower="0.50"/>
+        <Ramp Duration="120" PowerLow="0.60" PowerHigh="0.90"/>
+        <MaxEffort Duration="20"/>
+        <FreeRide Duration="60" FlatRoad="1"/>
+        <Cooldown Duration="180" PowerLow="0.60" PowerHigh="0.40"/>
+    </workout>
+</workout_file>

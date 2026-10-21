@@ -1,0 +1,98 @@
+# qa (tools/e2e, tools/screenshot, tools/qa, tools/fit_decode, tests/scenarios): the end-to-end
+# harness's node:test suite, the screenshot wrapper's tests, the FIT decoder and scenario-helper GUT
+# tests and the script check. Owned by qa. Never executed during the autonomous build (nothing is
+# pushed), so it is unverified on GitHub; every run step below ran green locally (BRIEF 7.9). The
+# Godot download is setup only. The Workout scenarios in tests/scenarios/workout/ and the e2e run
+# itself (node tools/e2e/run.mjs --games=workout) need the integrated platform and run from the
+# lead's tools/run_tests after W2.
+name: qa
+
+on:
+  push:
+    paths:
+      - "tools/e2e/**"
+      - "tools/qa/**"
+      - "tools/fit_decode/**"
+      - "tools/screenshot"
+      - "tools/screenshot.ps1"
+      - "tools/tests/screenshot.test.mjs"
+      - "tests/scenarios/**"
+      - "tools/lib/godot_lock.mjs"
+      - ".github/workflows/qa.yml"
+  pull_request:
+    paths:
+      - "tools/e2e/**"
+      - "tools/qa/**"
+      - "tools/fit_decode/**"
+      - "tools/screenshot"
+      - "tools/screenshot.ps1"
+      - "tools/tests/screenshot.test.mjs"
+      - "tests/scenarios/**"
+      - "tools/lib/godot_lock.mjs"
+      - ".github/workflows/qa.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WATTLANDS_NO_HW_CONTROL: "1"
+  WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+  GODOT_VERSION: "4.7.2"
+
+jobs:
+  node:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: e2e harness (node:test, stand-in peers, private lock dir)
+        run: node --test tools/e2e/test
+
+      - name: screenshot wrapper (node:test)
+        run: node --test tools/tests/screenshot.test.mjs
+
+  godot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: Install Godot (standard build)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot"
+          cd "$RUNNER_TEMP/godot"
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || true
+
+      - name: GUT (tests/scenarios/unit)
+        run: |
+          set -uo pipefail
+          mkdir -p build
+          tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/scenarios/unit -ginclude_subdirs -gexit -gdisable_colors -gjunit_xml_file=build/junit_qa.xml 2>&1 | tee build/gut_qa.log
+          code=${PIPESTATUS[0]}
+          test "$code" -eq 0
+          grep -q "Run Summary" build/gut_qa.log
+          if grep -E -q "SCRIPT ERROR|Parse Error|Debugger Break|Ignoring script|Nothing was run" build/gut_qa.log; then
+            echo "forbidden string in the GUT log"
+            exit 1
+          fi
+          tests=$(grep -o 'tests="[0-9]*"' build/junit_qa.xml | head -1 | grep -o '[0-9]*')
+          test "${tests:-0}" -gt 0
+
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
