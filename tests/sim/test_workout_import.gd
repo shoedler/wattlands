@@ -781,13 +781,9 @@ func test_random_workouts_always_import_safely() -> void:
 
 
 func test_imported_plans_pass_the_plan_validator() -> void:
-	# Becomes active once sdk-runtime's PlanValidator replaces the W0 stub (BRIEF 3.7: the
-	# importer clamps, the validator only accepts or rejects): every fixture and random
-	# workout must validate with no error and no warning.
-	var probe := PlanValidator.validate(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "w")]))
-	if (probe["errors"] as Array).has("not implemented"):
-		pending("PlanValidator is still the W0 stub in this worktree")
-		return
+	# BRIEF 3.7: the importer clamps, the validator only accepts or rejects: every fixture and
+	# random workout must validate with no error and no warning. (The W0-stub pending() guard
+	# is gone since W4, QT-3: a regression now fails here instead of turning pending.)
 	var results: Array = []
 	for f in [
 		"all_tags.zwo",

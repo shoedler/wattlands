@@ -6,25 +6,12 @@ extends GutTest
 ##     wherever W' <= 100 s x CP.
 ## The analytic rider follows the protocol's targets exactly and fails when Skiba's W'
 ## balance (BRIEF 3.4) reaches 0; its best minute is the 60 s ending there.
-## Needs the W1 SafetyGovernor (trainer-control) and MockTrainer's W' fatigue (trainer-core):
-## against the W0 stubs every test is marked pending. Not part of platform's W1 command.
+## Runs on the real SafetyGovernor and MockTrainer's W' fatigue; the W0-stub pending() guards
+## are gone since W4 (QT-3), so a regression fails instead of turning pending.
 
 const DT := Wl.SIM_DT
 ## Upper bound on a run: the ramp-in, 40 steps and the end rules.
 const MAX_TEST_S := 300.0 + 40.0 * 60.0 + 30.0
-
-
-## True once the governor in a set-up rider reports a status (the W0 stub returns {}).
-func _governor_is_real() -> bool:
-	var m := MockTrainer.from_spec("erg", 200.0)
-	autofree(m)
-	var r := LocalRider.new()
-	add_child_autofree(r)
-	var bus := WlEventBus.new()
-	autofree(bus)
-	r.setup(1, RiderProfile.new(), null, m, {"bus": bus})
-	r.tick(DT)
-	return not r.governor.status().is_empty()
 
 
 ## The protocol's ERG target (W) at `t` seconds into the test.
@@ -84,17 +71,11 @@ func _run(ftp: float, cp: float, wprime: float) -> Dictionary:
 
 func test_the_plan_passes_the_validator_as_ramp_test() -> void:
 	var v := PlanValidator.validate(FtpTest.build_plan(250.0), {"ramp_test": true})
-	if v.get("errors", []) == ["not implemented"]:
-		pending("needs the W1 PlanValidator (sdk-runtime)")
-		return
 	assert_true(v["ok"], str(v["errors"]))
 	assert_eq(v["warnings"], [])
 
 
 func test_estimate_within_3_percent_of_the_analytic_best_minute() -> void:
-	if not _governor_is_real():
-		pending("needs the W1 SafetyGovernor (trainer-control) and MockTrainer fatigue (trainer-core)")
-		return
 	for case: Array in [[250.0, 250.0, 20000.0], [200.0, 250.0, 20000.0], [300.0, 280.0, 18000.0]]:
 		var ftp: float = case[0]
 		var cp: float = case[1]
@@ -109,9 +90,6 @@ func test_estimate_within_3_percent_of_the_analytic_best_minute() -> void:
 
 
 func test_estimate_within_10_percent_of_cp() -> void:
-	if not _governor_is_real():
-		pending("needs the W1 SafetyGovernor (trainer-control) and MockTrainer fatigue (trainer-core)")
-		return
 	for cp: float in [150.0, 250.0, 350.0]:
 		for wp: float in [15000.0, 20000.0, 25000.0]:
 			if wp > 100.0 * cp:
