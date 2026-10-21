@@ -282,6 +282,20 @@ func test_rejoined_client_takes_the_hosts_latest_snapshot_whatever_its_seq() -> 
 	assert_eq(int(c1.stats["stale_snapshots"]), 0)
 
 
+func test_snapshots_of_another_game_start_a_new_buffer() -> void:
+	var r := room()
+	var h := r[0]
+	var c1 := r[1]
+	for i in range(1, 4):
+		h.broadcast(_snap(i))
+	h.broadcast(Protocol.game_msg("snapshot", {"game_id": "siege", "seq": 1, "t": 0.5, "state": {}}))
+	pump()
+	assert_eq(c1.snapshot_buffer().size(), 1, "never interpolate across games")
+	assert_eq(c1.latest_snapshot()["game_id"], "siege")
+	var pair := c1.snapshot_pair_at(0.4)
+	assert_eq((pair["from"] as Dictionary)["game_id"], "siege")
+
+
 func test_session_start_and_end_in_lobby_state_reset_snapshot_seqs() -> void:
 	var r := room()
 	var h := r[0]

@@ -1188,10 +1188,13 @@ func _send_clock_ping() -> void:
 
 func _buffer_snapshot(data: Dictionary) -> bool:
 	var seq := int(data["seq"])
-	if not _latest_snapshot.is_empty() and str(_latest_snapshot.get("game_id", "")) == str(data["game_id"]) \
-			and seq <= int(_latest_snapshot.get("seq", -1)):
-		_count("stale_snapshots")
-		return false
+	if not _latest_snapshot.is_empty():
+		if str(_latest_snapshot.get("game_id", "")) != str(data["game_id"]):
+			# Another game's snapshots never mix with these in the interpolation buffer.
+			clear_snapshots()
+		elif seq <= int(_latest_snapshot.get("seq", -1)):
+			_count("stale_snapshots")
+			return false
 	Protocol.apply_game_int_fields(data, game_int_fields)
 	var t := float(data["t"]) if (data.get("t") is float or data.get("t") is int) else host_time()
 	_snapshots.append({"seq": seq, "t": t, "msg": data})
