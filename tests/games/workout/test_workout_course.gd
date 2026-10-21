@@ -78,4 +78,59 @@ func test_rolling_road_uses_the_content_course() -> void:
 	var s := WorkoutSession.load_id("rolling_road")
 	assert_not_null(s)
 	assert_eq(s.course.seed, 7342)
-	assert_eq(s.phases[1].course_profile, WorkoutCourse.from_spec(SPEC).profile)
+	var spec := SPEC.duplicate()
+	spec["window_m"] = 8000.0  # content/workout/sessions/rolling_road.json (W3 WO-3)
+	assert_eq(s.phases[1].course_profile, WorkoutCourse.from_spec(spec).profile)
+
+
+## W3 WO-3 (BRIEF 3.7 "grade -2% to +6%"): the road a rider actually rides in the 30-minute phase
+## spans the full range. Rolling road's window_m (8 km) holds both extremes, and even a slow rider
+## (120 W of P_eff, 50 % difficulty, the course grade halved) covers the window in 30 minutes.
+func test_rolling_road_puts_both_extremes_within_every_riders_reach() -> void:
+	var s := WorkoutSession.load_id("rolling_road")
+	var c := s.course
+	assert_eq(c.window_m, 8000.0)
+	var lo := INF
+	var hi := -INF
+	for pt: Array in c.profile:
+		if float(pt[0]) <= c.window_m:
+			lo = minf(lo, float(pt[1]))
+			hi = maxf(hi, float(pt[1]))
+	assert_almost_eq(lo, -2.0, 0.001, "-2 %% within the first %.0f m" % c.window_m)
+	assert_almost_eq(hi, 6.0, 0.001, "+6 %% within the first %.0f m" % c.window_m)
+	var sm := SpeedModel.create(75.0)
+	for i in roundi(1800.0 / Wl.SIM_DT):
+		sm.step(Wl.SIM_DT, 120.0, 0.5 * c.grade_at(sm.distance_m))
+	gutils_note("a 120 W rider covers %.0f m in 30 min" % sm.distance_m)
+	assert_gt(sm.distance_m, c.window_m, "the slow rider rides past the whole window")
+	# The rest of the 50 km repeats the window back and forth: same range, no jump at a seam.
+	assert_almost_eq(c.min_grade(), -2.0, 0.001)
+	assert_almost_eq(c.max_grade(), 6.0, 0.001)
+	var w := roundi(c.window_m / c.step_m)
+	var max_step := 0.0
+	var window_step := 0.0
+	for i in range(1, c.profile.size()):
+		var step := absf(float(c.profile[i][1]) - float(c.profile[i - 1][1]))
+		max_step = maxf(max_step, step)
+		if i <= w:
+			window_step = maxf(window_step, step)
+	for seam in [w, 2 * w, 3 * w]:
+		assert_eq(float(c.profile[seam + 1][1]), float(c.profile[seam - 1][1]), "mirrored at the seam %d" % seam)
+	assert_almost_eq(max_step, window_step, 0.0001, "no seam adds a grade jump the window does not have")
+	assert_lte(window_step, 2.0, "250 m steps change the grade by at most 2 %% (1 %% applied at 50 %% difficulty)")
+
+
+func test_window_m_spec_errors() -> void:
+	var ok := SPEC.duplicate()
+	ok["window_m"] = 8000.0
+	assert_true(WorkoutCourse.spec_errors(ok).is_empty())
+	for bad_w: float in [8100.0, 60000.0, 500.0]:
+		var bad := SPEC.duplicate()
+		bad["window_m"] = bad_w
+		assert_false(WorkoutCourse.spec_errors(bad).is_empty(), "window_m %.0f" % bad_w)
+	var no_window := WorkoutCourse.from_spec(SPEC)
+	assert_eq(no_window.window_m, 50000.0, "without window_m the whole length is the window")
+
+
+func gutils_note(s: String) -> void:
+	gut.p(s)

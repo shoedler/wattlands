@@ -2,7 +2,7 @@
 	"id": "rolling_road",
 	"label": "WORKOUT_CONTENT_ROLLING_ROAD",
 	"summary": "WORKOUT_SUMMARY_ROLLING_ROAD",
-	"course": {"seed": 7342, "length_m": 50000, "step_m": 250, "min_grade_pct": -2, "max_grade_pct": 6},
+	"course": {"seed": 7342, "length_m": 50000, "step_m": 250, "window_m": 8000, "min_grade_pct": -2, "max_grade_pct": 6},
 	"band_pct": [76, 105],
 	"phases": [
 		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
