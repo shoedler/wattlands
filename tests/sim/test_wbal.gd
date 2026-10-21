@@ -88,3 +88,31 @@ func test_reset_and_fraction() -> void:
 	w.reset()
 	assert_eq(w.wbal_j, 24000.0)
 	assert_eq(w.fraction(), 1.0)
+
+
+func test_hand_computed_sequence() -> void:
+	# CP 250 W, W' 20 kJ, stepped every 0.05 s. Values worked out by hand (and checked in
+	# Python) from BRIEF 3.4; the exponential steps compose exactly, so 0.05 s steps give
+	# the closed form for each constant-power stretch.
+	var w := WBalance.create(250.0, 20000.0)
+	assert_almost_eq(_run(w, 400.0, 30.0), 15500.0, 1e-6, "30 s at 150 W over CP")
+	# 20000 - 4500 * exp(-60 * 100 / 20000)
+	assert_almost_eq(_run(w, 150.0, 60.0), 16666.31800693227, 1e-6, "60 s at 150 W")
+	# 20000 - 3333.682 * exp(-10 * 250 / 20000)
+	assert_almost_eq(_run(w, 0.0, 10.0), 17058.035966915686, 1e-6, "10 s at 0 W")
+	assert_eq(_run(w, 1250.0, 20.0), 0.0, "1 kW over CP for 20 s empties it and it stays at 0")
+	# 20000 * (1 - exp(-120 * 50 / 20000))
+	assert_almost_eq(_run(w, 200.0, 120.0), 5183.635586365643, 1e-6, "120 s at 200 W from empty")
+	assert_almost_eq(_run(w, 260.0, 45.0), 4733.635586365643, 1e-6, "45 s at 10 W over CP")
+	assert_almost_eq(w.fraction(), 4733.635586365643 / 20000.0, 1e-9)
+
+
+func test_step_size_does_not_change_the_result() -> void:
+	var fine := WBalance.create(280.0, 22000.0)
+	var coarse := WBalance.create(280.0, 22000.0)
+	var plan: Array = [[380.0, 60.0], [120.0, 90.0], [500.0, 20.0], [0.0, 30.0]]
+	for seg: Array in plan:
+		for i in roundi(float(seg[1]) / DT):
+			fine.step(float(seg[0]), DT)
+		coarse.step(float(seg[0]), float(seg[1]))
+	assert_almost_eq(fine.wbal_j, coarse.wbal_j, 1e-6, "no clamp involved: steps compose exactly")
