@@ -54,7 +54,7 @@ event     {"event": str, ...fields}
 | `init` | | `{adapter: bool, error: str}` |
 | `scan` | `seconds` (0 = until `stop_scan`) | `{}`, then `device` events and one `scan_stopped` |
 | `stop_scan` | | `{}` |
-| `connect` | `address` | `{address, name}` |
+| `connect` | `address` | `{address, name}`; for the trainer already linked it answers again without a second link, and a different address releases the old link first |
 | `disconnect` | | `{}`, then a `disconnected` event with reason `local` |
 | `discover` | | `{services: [{uuid, characteristics: [{uuid, properties: [str]}]}]}` |
 | `read` | `service`, `char` | `{char, data}` |
