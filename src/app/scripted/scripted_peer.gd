@@ -26,9 +26,13 @@ const UPLOAD_TIMEOUT_S := 150.0
 const STRAVA_CONNECT_TIMEOUT_S := 90.0
 const HOST_GRACE_S := 2.0
 const TRACE_PERIOD_S := 1.0
-## Event types in `event` batches that the platform itself sends (not game events).
+## Event types in `event` batches that the platform itself sends (not game events). The
+## GameHost prefixes its own with PLATFORM_EVENT_PREFIX ("wl.phase_started", "wl.lap_marker",
+## "wl.finished"); the bare names are kept for older hosts.
 const PLATFORM_EVENT_TYPES: Array[String] = ["phase_started", "phase", "phase_changed",
 	"game_phase_changed", "results", "session_end", "session_state"]
+const PLATFORM_EVENT_PREFIX := "wl."
+const WL_PHASE_STARTED := "wl.phase_started"
 
 var services: AppServices = null
 var config: AppScriptedConfig = null
@@ -69,6 +73,8 @@ var strava_deadline: float = -1.0
 var close_at: float = -1.0
 var last_state: String = ""
 var last_snapshot: Variant = null
+## The newest `event` batch seq recorded (a batch is never recorded twice).
+var _event_seq_seen: int = 0
 var exit_code: int = -1
 var exit_reason: String = ""
 var _next_trace_t: float = 0.0
@@ -349,9 +355,31 @@ func _on_game_message(from: int, data: Dictionary) -> void:
 			if type == "snapshot":
 				last_snapshot = data.get("state", null)
 		"event":
-			for e: Variant in data.get("events", []):
-				if e is Dictionary and not PLATFORM_EVENT_TYPES.has(str((e as Dictionary).get("type", ""))):
-					_record_game_event(e as Dictionary)
+			_record_event_batch(data)
+
+
+## A client records the shared sequence (docs/ARCHITECTURE.md: phase_started per rider and game
+## events, in the host's emission order) straight from the host's `event` batches: each
+## "wl.phase_started" becomes a phase_started for that rider, other platform events ("wl.*")
+## are skipped, everything else is a game event. The host's own bus.phase_started and its game's
+## game_event signal produce the same sequence on the host (see _on_phase_started).
+func _record_event_batch(data: Dictionary) -> void:
+	var seq := int(data.get("seq", 0))
+	if seq > 0:
+		if seq <= _event_seq_seen:
+			return
+		_event_seq_seen = seq
+	for ev: Variant in data.get("events", []):
+		if not (ev is Dictionary):
+			continue
+		var e: Dictionary = ev
+		var t := str(e.get("type", ""))
+		if t == WL_PHASE_STARTED:
+			report.add_event(clock, "phase_started", int(e.get("peer", 0)), {"index": int(e.get("index", 0))})
+		elif t.begins_with(PLATFORM_EVENT_PREFIX) or PLATFORM_EVENT_TYPES.has(t):
+			continue
+		else:
+			_record_game_event(e)
 
 
 # --- session -----------------------------------------------------------------------------------
@@ -428,6 +456,10 @@ func sample_trace() -> void:
 func set_state(state: String) -> void:
 	if state == "" or state == last_state:
 		return
+	if last_state == "results" and state == "ended":
+		# The GameHost tears down after the results (a client getting session_end while it still
+		# uploads): the session reached its results, which is what final_state reports.
+		return
 	last_state = state
 	out.call("WATTLANDS_STATE %s" % state)
 	report.add_event(clock, "session_state", local_peer, {"state": state})
@@ -441,7 +473,12 @@ func _on_session_state(state: String) -> void:
 	set_state(state)
 
 
+## The host records phase_started from its bus, in the order its event batches carry them; a
+## client records them from those batches (_record_event_batch), so its own phase message, which
+## arrives earlier, does not reorder the shared sequence.
 func _on_phase_started(peer: int, index: int) -> void:
+	if config != null and config.role == Wl.CLIENT:
+		return
 	report.add_event(clock, "phase_started", peer, {"index": index})
 
 
@@ -640,7 +677,10 @@ func final_state() -> Dictionary:
 		st["phase_index"] = tm.phase_index
 		st["distance_m"] = tm.distance_m
 	if config != null and config.role == Wl.HOST and host != null and is_instance_valid(host) and host.game != null:
-		st["snapshot"] = host.game.snapshot()
+		# The last snapshot the clients got; calling game.snapshot() again would build a newer
+		# one (Workout adds its timeline to every 20th) and advance the game's own count.
+		var sent := host.last_snapshot()
+		st["snapshot"] = sent.duplicate(true) if not sent.is_empty() else host.game.snapshot()
 	elif last_snapshot != null:
 		st["snapshot"] = last_snapshot
 	return st
