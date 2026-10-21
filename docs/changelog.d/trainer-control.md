@@ -16,4 +16,4 @@
 - Opting out of haptics ends a running haptic at once.
 - The no-bypass scan also guards `TrainerDevice.request_stop` (Stop): only `TrainerController` may call it.
 - New tests: the frozen W0 API surface (methods, signals, status and record keys), both duration limits resetting together, factor and mode-grade expiry, the ramp span in the default range, the paused floor counting toward the reset, and a determinism check over a busy seeded ride.
-- One shared not_pedaling detector (BRIEF 3.5): the governor calls `GestureRecognizer.is_not_pedaling`, so 15 W and 20 rpm are written once; new tests pin the exact edges of not_pedaling (15 W, 20 rpm) and rescue (45 rpm, 70 rpm, 75 % of the target).
+- One shared not_pedaling detector (BRIEF 3.5): the governor calls `GestureRecognizer.is_not_pedaling`, so the governor, `CadenceEstimator` and the GestureRecognizer share one copy of 15 W and 20 rpm (`GameHost`'s rejoin check still has its own, pinned equal by a test); new tests pin the exact edges of not_pedaling (15 W, 20 rpm) and rescue (45 rpm, 70 rpm, 75 % of the target).

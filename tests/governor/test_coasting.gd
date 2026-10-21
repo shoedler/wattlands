@@ -142,6 +142,21 @@ func test_the_shared_detector_thresholds_are_15_w_and_20_rpm() -> void:
 	assert_eq(CadenceEstimator.COAST_POWER_W, 15.0, "the shared power threshold")
 
 
+func test_game_host_rejoin_check_matches_the_shared_thresholds() -> void:
+	# GameHost (sdk-runtime) still writes 15 W and 20 rpm for its rejoin "shows pedaling"
+	# check. Until it calls GestureRecognizer.is_not_pedaling, its numbers must match; read
+	# by name, so this keeps passing once the lead removes them.
+	var script := load("res://addons/wattlands/sdk/game_host.gd") as Script
+	assert_not_null(script, "GameHost script loads")
+	if script == null:
+		return
+	var consts := script.get_script_constant_map()
+	if consts.has("PEDAL_POWER_W"):
+		assert_eq(float(consts["PEDAL_POWER_W"]), GestureRecognizer.NOT_PEDALING_W)
+	if consts.has("PEDAL_CADENCE_RPM"):
+		assert_eq(float(consts["PEDAL_CADENCE_RPM"]), GestureRecognizer.NOT_PEDALING_RPM)
+
+
 func test_the_governor_calls_the_shared_detector() -> void:
 	# BRIEF 3.5: one detector drives coast, stop_5s and 4.6.4. The governor keeps no copy.
 	var path := "res://addons/wattlands/trainer/control/safety_governor.gd"
