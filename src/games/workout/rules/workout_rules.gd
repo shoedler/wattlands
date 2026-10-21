@@ -12,7 +12,7 @@ extends RefCounted
 ## A rider in rescue, AFK or disconnected is out of band (a stagger: no other penalty), by
 ## telemetry's flags or by the platform's on_rescue / on_afk callbacks.
 ## Time in band counts per interval and for the session; the cool-down is not counted.
-## Sprints are scored with WorkoutSprintTracker (SprintRule's 1.2 x FTP threshold).
+## Sprints are scored with WorkoutSprintTracker (the platform's SprintRule, 1.2 x FTP).
 ## Each rider's speed and distance come from SpeedModel with P_eff (BRIEF 3.11), flat
 ## outside course phases; in a course phase on the trainer's applied SIM grade (the grade
 ## the rider's own speed model follows the course by, so the drawn position matches what

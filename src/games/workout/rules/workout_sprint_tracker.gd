@@ -1,39 +1,43 @@
 class_name WorkoutSprintTracker
 extends RefCounted
 ## Scores one rider's FREE sprint under the platform's sprint rule (BRIEF 3.5, 3.7):
-## power >= SprintRule's threshold (1.2 x FTP). Tracks the peak, the longest streak at or
-## above the threshold and the total time above it. A sprint is a hit once the rule held
-## for HIT_S seconds in a row.
-##
-## The threshold comes from SprintRule; the streak counting is Workout's own, so scoring
-## doesn't depend on SprintRule's window bookkeeping (window 0 is instantaneous, which is
-## exactly this per-step check).
+## SprintRule (window 0: power >= 1.2 x FTP each step) on the game clock. Tracks the peak,
+## the longest streak the rule held (SprintRule.best_s) and the total time it held. A sprint
+## is a hit once the rule held for HIT_S seconds in a row.
 
 const HIT_S := 3.0
 
 var phase_index: int = -1
 var threshold_w: float = 240.0
 var peak_w: float = 0.0
+## The current streak (SprintRule.held_s), the longest one and the total time held.
 var streak_s: float = 0.0
 var best_s: float = 0.0
 var held_s: float = 0.0
+## The platform's rule; its clock is this sprint's own time, starting at 0.
+var rule: SprintRule = null
+var _t: float = 0.0
 
 
 static func create(ftp_w: float, p_phase_index: int = -1) -> WorkoutSprintTracker:
 	var t := WorkoutSprintTracker.new()
-	t.threshold_w = SprintRule.create(ftp_w, 0.0).threshold_w()
+	t.rule = SprintRule.create(ftp_w, 0.0)
+	t.threshold_w = t.rule.threshold_w()
 	t.phase_index = p_phase_index
+	# The first update only marks the start, so the sprint's first step counts as time held.
+	t.rule.update(0.0, 0.0)
 	return t
 
 
+## One step of `dt` seconds at `power_w`.
 func update(power_w: float, dt: float) -> void:
 	peak_w = maxf(peak_w, power_w)
-	if power_w >= threshold_w:
-		streak_s += dt
+	_t += dt
+	rule.update(_t, power_w)
+	if rule.holds():
 		held_s += dt
-		best_s = maxf(best_s, streak_s)
-	else:
-		streak_s = 0.0
+	streak_s = rule.held_s()
+	best_s = rule.best_s()
 
 
 func hit() -> bool:

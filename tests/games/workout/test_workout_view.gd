@@ -119,9 +119,15 @@ func test_interval_blocks_on_the_ground() -> void:
 func test_parallax_scrolls_with_the_local_rider() -> void:
 	var view := _client_view()
 	var d := 5180.0
-	assert_almost_eq(view.near_trees.scroll_x, d * WorkoutRideView.VISUAL_PX_PER_M, 0.01)
-	assert_eq(view.sky.first_tile_x(), 0.0, "the sky never moves")
-	assert_true(view.near_trees.first_tile_x() <= 0.0)
+	assert_true(view.near_trees is ParallaxStrip, "world2d's ParallaxStrip (BRIEF 3.9)")
+	assert_almost_eq(view.near_trees.world_x, d * WorkoutRideView.VISUAL_PX_PER_M, 0.01)
+	assert_eq(view.near_trees.scroll(), roundf(d * WorkoutRideView.VISUAL_PX_PER_M * 0.5), "factor 0.5, whole art pixels")
+	assert_eq(view.sky.scroll(), 0.0, "the sky never moves")
+	assert_eq(float(view.sky.visible_tiles()[0]["x"]), 0.0)
+	var tiles: Array[Dictionary] = view.near_trees.visible_tiles()
+	assert_true(float(tiles[0]["x"]) <= 0.0)
+	var last: Dictionary = tiles[tiles.size() - 1]
+	assert_true(float(last["x"]) + view.near_trees.tile_width() >= float(WorkoutArt.W), "the strip covers the 640 px view")
 
 
 func test_the_view_never_changes_the_state() -> void:
