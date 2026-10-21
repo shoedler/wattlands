@@ -166,10 +166,14 @@ func _style() -> void:
 		width = 5
 	if is_local:
 		width = maxi(width, 3)
-	var sb := WlTheme.panel_style(Color(0.055, 0.067, 0.086, 0.8), border, roundi(width * maxf(_scale, 0.5)))
+	var sb := WlTheme.panel_style(
+		Color(0.055, 0.067, 0.086, 0.8), border, roundi(width * maxf(_scale, 0.5))
+	)
 	sb.content_margin_left = 10.0 * _scale
 	sb.content_margin_right = 10.0 * _scale
 	sb.content_margin_top = 6.0 * _scale
 	sb.content_margin_bottom = 6.0 * _scale
 	add_theme_stylebox_override("panel", sb)
-	_status.label_settings.font_color = WlTheme.WARN if is_rescue() else (WlTheme.GLOW if in_band() else WlTheme.TEXT)
+	_status.label_settings.font_color = (
+		WlTheme.WARN if is_rescue() else (WlTheme.GLOW if in_band() else WlTheme.TEXT)
+	)

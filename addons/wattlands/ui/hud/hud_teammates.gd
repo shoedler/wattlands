@@ -205,10 +205,12 @@ func _sync() -> void:
 		if p == local_peer and not include_local:
 			continue
 		order.append(p)
-	order.sort_custom(func(a: int, b: int) -> bool:
-		var sa := int((_roster[a] as Dictionary).get("slot_index", 0))
-		var sb := int((_roster[b] as Dictionary).get("slot_index", 0))
-		return sa < sb if sa != sb else a < b)
+	order.sort_custom(
+		func(a: int, b: int) -> bool:
+			var sa := int((_roster[a] as Dictionary).get("slot_index", 0))
+			var sb := int((_roster[b] as Dictionary).get("slot_index", 0))
+			return sa < sb if sa != sb else a < b
+	)
 	for p: int in _cards.keys():
 		if not order.has(p):
 			var old: HudTeammateCard = _cards[p]

@@ -39,11 +39,16 @@ func test_manifest_fields() -> void:
 	assert_eq(m["presentation"], "2d")
 	assert_eq([int(m["pixel_base"][0]), int(m["pixel_base"][1])], [640, 360])
 	assert_eq(m["entry"], "res://src/games/workout/workout_game.gd")
-	assert_eq(m["contents"], ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e", "zwo_sample"])
+	assert_eq(
+		m["contents"],
+		["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e", "zwo_sample"]
+	)
 	assert_eq(m["default_content"], "easy_30")
 	assert_eq(m["e2e_content"], "e2e")
 	assert_eq(m["zero_input_content"], "easy_30")
-	assert_eq(m["content_schemes"], ["zwo"], "content zwo:<absolute path> imports any .zwo (BRIEF 3.7)")
+	assert_eq(
+		m["content_schemes"], ["zwo"], "content zwo:<absolute path> imports any .zwo (BRIEF 3.7)"
+	)
 	assert_true(WlGameRegistry.content_allowed(m, "zwo:C:/rides/my.zwo"))
 	assert_eq(int(m["first_run_priority"]), 0)
 	assert_eq(m["picker_image"], CARD)
@@ -77,7 +82,9 @@ func test_strings_have_the_workout_prefix_and_cover_every_key() -> void:
 	for id: Variant in _manifest()["contents"]:
 		assert_true(s.has("WORKOUT_CONTENT_%s" % str(id).to_upper()), "content label for %s" % id)
 	for id: Variant in _manifest()["contents"]:
-		var data: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://content/workout/sessions/%s.json" % id))
+		var data: Dictionary = JSON.parse_string(
+			FileAccess.get_file_as_string("res://content/workout/sessions/%s.json" % id)
+		)
 		assert_true(s.has(data["label"]), "%s label key" % id)
 		assert_true(s.has(data["summary"]), "%s summary key" % id)
 		for p: Variant in data.get("phases", []):
@@ -87,14 +94,36 @@ func test_strings_have_the_workout_prefix_and_cover_every_key() -> void:
 func test_code_keys_exist() -> void:
 	var s := _strings()
 	var keys: Array[String] = [
-		"WORKOUT_CONTENT_ZWO", "WORKOUT_SUMMARY_ZWO", "WORKOUT_LBL_BLOCK",
-		"WORKOUT_PREVIEW_RAMP", "WORKOUT_PREVIEW_ERG", "WORKOUT_PREVIEW_FREE", "WORKOUT_PREVIEW_FREE_RIDE", "WORKOUT_PREVIEW_COURSE",
-		"WORKOUT_PREVIEW_CLAMP", "WORKOUT_PREVIEW_WARNING", "WORKOUT_HUD_WATTS", "WORKOUT_HUD_IN_BAND",
-		"WORKOUT_BANNER_RAMP", "WORKOUT_BANNER_ERG", "WORKOUT_BANNER_SPRINT", "WORKOUT_BANNER_ROLLING",
-		"WORKOUT_BANNER_FREE", "WORKOUT_CLAMP_FLOOR",
-		"WORKOUT_TOAST_INTERVAL_DONE", "WORKOUT_TOAST_SPRINT_HIT", "WORKOUT_TOAST_SPRINT_PEAK", "WORKOUT_TOAST_SPRINT_SOON",
-		WorkoutResults.STAT_GRADE, WorkoutResults.STAT_TIB, WorkoutResults.STAT_INTERVALS, WorkoutResults.STAT_SPRINT_PEAK,
-		WorkoutResults.STAT_SPRINTS_HIT, WorkoutResults.TEAM_TIB, WorkoutResults.TEAM_RIDERS, WorkoutResults.TEAM_SPRINTS,
+		"WORKOUT_CONTENT_ZWO",
+		"WORKOUT_SUMMARY_ZWO",
+		"WORKOUT_LBL_BLOCK",
+		"WORKOUT_PREVIEW_RAMP",
+		"WORKOUT_PREVIEW_ERG",
+		"WORKOUT_PREVIEW_FREE",
+		"WORKOUT_PREVIEW_FREE_RIDE",
+		"WORKOUT_PREVIEW_COURSE",
+		"WORKOUT_PREVIEW_CLAMP",
+		"WORKOUT_PREVIEW_WARNING",
+		"WORKOUT_HUD_WATTS",
+		"WORKOUT_HUD_IN_BAND",
+		"WORKOUT_BANNER_RAMP",
+		"WORKOUT_BANNER_ERG",
+		"WORKOUT_BANNER_SPRINT",
+		"WORKOUT_BANNER_ROLLING",
+		"WORKOUT_BANNER_FREE",
+		"WORKOUT_CLAMP_FLOOR",
+		"WORKOUT_TOAST_INTERVAL_DONE",
+		"WORKOUT_TOAST_SPRINT_HIT",
+		"WORKOUT_TOAST_SPRINT_PEAK",
+		"WORKOUT_TOAST_SPRINT_SOON",
+		WorkoutResults.STAT_GRADE,
+		WorkoutResults.STAT_TIB,
+		WorkoutResults.STAT_INTERVALS,
+		WorkoutResults.STAT_SPRINT_PEAK,
+		WorkoutResults.STAT_SPRINTS_HIT,
+		WorkoutResults.TEAM_TIB,
+		WorkoutResults.TEAM_RIDERS,
+		WorkoutResults.TEAM_SPRINTS,
 		WorkoutResults.STAT_SPRINT_PEAKS,
 	]
 	for k: String in WorkoutResults.BEST_STATS.values():
@@ -134,4 +163,8 @@ func test_picker_card_is_16_9_and_matches_the_generator() -> void:
 		for x in img.get_width():
 			if not img.get_pixel(x, y).is_equal_approx(fresh.get_pixel(x, y)):
 				differ += 1
-	assert_lte(differ, int(float(img.get_width() * img.get_height()) * 0.001), "regenerate with src/games/workout/tools/make_picker_card.gd (%d pixels differ)" % differ)
+	assert_lte(
+		differ,
+		int(float(img.get_width() * img.get_height()) * 0.001),
+		"regenerate with src/games/workout/tools/make_picker_card.gd (%d pixels differ)" % differ
+	)

@@ -8,7 +8,9 @@ extends AppFormScreen
 ## drivetrain, trainer difficulty, the SIM grade range, skip warm-up, Autopilot default.
 ## Haptics, Strava and pedal UI live in Settings.
 
-const COLORS: Array[String] = ["#D55E00", "#0072B2", "#F0E442", "#009E73", "#CC79A7", "#56B4E9", "#E69F00", "#FFFFFF"]
+const COLORS: Array[String] = [
+	"#D55E00", "#0072B2", "#F0E442", "#009E73", "#CC79A7", "#56B4E9", "#E69F00", "#FFFFFF"
+]
 
 var ftp_label: Label = null
 
@@ -97,17 +99,41 @@ func get_prop(prop: String) -> Variant:
 	return p().get(prop)
 
 
-func num_field(id: String, label_key: String, prop: String, lo: float, hi: float, step: float, unit: String) -> Dictionary:
-	return {"id": id, "label": t(label_key), "type": "stepper", "min": lo, "max": hi, "step": step, "unit": unit,
-		"get": get_prop.bind(prop), "set": _setter(prop)}
+func num_field(
+	id: String, label_key: String, prop: String, lo: float, hi: float, step: float, unit: String
+) -> Dictionary:
+	return {
+		"id": id,
+		"label": t(label_key),
+		"type": "stepper",
+		"min": lo,
+		"max": hi,
+		"step": step,
+		"unit": unit,
+		"get": get_prop.bind(prop),
+		"set": _setter(prop)
+	}
 
 
 func toggle_field(id: String, label_key: String, prop: String) -> Dictionary:
-	return {"id": id, "label": t(label_key), "type": "toggle", "get": get_prop.bind(prop), "set": _setter(prop)}
+	return {
+		"id": id,
+		"label": t(label_key),
+		"type": "toggle",
+		"get": get_prop.bind(prop),
+		"set": _setter(prop)
+	}
 
 
 func choice_field(id: String, label_key: String, prop: String, choices: Array) -> Dictionary:
-	return {"id": id, "label": t(label_key), "type": "choice", "choices": choices, "get": get_prop.bind(prop), "set": _setter(prop)}
+	return {
+		"id": id,
+		"label": t(label_key),
+		"type": "choice",
+		"choices": choices,
+		"get": get_prop.bind(prop),
+		"set": _setter(prop)
+	}
 
 
 ## Callable(value) that sets `prop`.
@@ -121,22 +147,53 @@ func profile_fields() -> Array:
 		color_choices.append([COLORS[i], t("APP_COLOR_%d" % i)])
 	var ftp := num_field("ftp", "APP_FIELD_FTP", "ftp_w", 50.0, 600.0, 5.0, "W")
 	ftp["set"] = func(v: Variant) -> void: set_ftp(float(v))
-	var units := choice_field("units", "APP_FIELD_UNITS", "units", [["metric", t("APP_UNITS_METRIC")], ["imperial", t("APP_UNITS_IMPERIAL")]])
+	var units := choice_field(
+		"units",
+		"APP_FIELD_UNITS",
+		"units",
+		[["metric", t("APP_UNITS_METRIC")], ["imperial", t("APP_UNITS_IMPERIAL")]]
+	)
 	units["set"] = set_units
 	var fields: Array = [
-		{"id": "name", "label": t("APP_FIELD_NAME"), "type": "text", "rows": AppTextField.ROWS_NAME, "max_length": 16,
-			"get": get_prop.bind("display_name"), "set": set_name_value},
-		{"id": "color", "label": t("APP_FIELD_COLOR"), "type": "choice", "choices": color_choices,
-			"get": color_value, "set": set_color_value},
+		{
+			"id": "name",
+			"label": t("APP_FIELD_NAME"),
+			"type": "text",
+			"rows": AppTextField.ROWS_NAME,
+			"max_length": 16,
+			"get": get_prop.bind("display_name"),
+			"set": set_name_value
+		},
+		{
+			"id": "color",
+			"label": t("APP_FIELD_COLOR"),
+			"type": "choice",
+			"choices": color_choices,
+			"get": color_value,
+			"set": set_color_value
+		},
 		units,
 		ftp,
-		AppFormScreen.weight_field("weight", t("APP_FIELD_WEIGHT"), p().units,
-			func() -> float: return p().weight_kg, func(kg: float) -> void: set_prop("weight_kg", kg)),
+		AppFormScreen.weight_field(
+			"weight",
+			t("APP_FIELD_WEIGHT"),
+			p().units,
+			func() -> float: return p().weight_kg,
+			func(kg: float) -> void: set_prop("weight_kg", kg)
+		),
 		toggle_field("share_weight", "APP_FIELD_SHARE_WEIGHT", "share_weight"),
 		toggle_field("show_wkg", "APP_FIELD_SHOW_WKG", "show_wkg"),
 		num_field("wprime", "APP_FIELD_WPRIME", "wprime_j", 5000.0, 40000.0, 1000.0, "J"),
 		num_field("cadence", "APP_FIELD_CADENCE", "preferred_cadence_rpm", 50.0, 120.0, 5.0, "rpm"),
-		choice_field("drivetrain", "APP_FIELD_DRIVETRAIN", "drivetrain", [["cassette", t("APP_DRIVETRAIN_CASSETTE")], ["single_speed", t("APP_DRIVETRAIN_SINGLE")]]),
+		choice_field(
+			"drivetrain",
+			"APP_FIELD_DRIVETRAIN",
+			"drivetrain",
+			[
+				["cassette", t("APP_DRIVETRAIN_CASSETTE")],
+				["single_speed", t("APP_DRIVETRAIN_SINGLE")]
+			]
+		),
 		num_field("difficulty", "APP_FIELD_DIFFICULTY", "difficulty_pct", 0.0, 100.0, 10.0, "%"),
 		num_field("grade_min", "APP_FIELD_GRADE_MIN", "grade_min_pct", -10.0, 0.0, 1.0, "%"),
 		num_field("grade_max", "APP_FIELD_GRADE_MAX", "grade_max_pct", 0.0, 16.0, 1.0, "%"),

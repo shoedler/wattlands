@@ -29,7 +29,9 @@ func test_each_step_changes_resistance_by_6_to_8_pct() -> void:
 			var f1 := VirtualGears.resistance_n(base + VirtualGears.offset_for(gear, base))
 			var f2 := VirtualGears.resistance_n(base + VirtualGears.offset_for(gear + 1, base))
 			var ratio := f2 / f1
-			assert_between(ratio, 1.06, 1.08, "gear %d -> %d on %s%%: %.4f" % [gear, gear + 1, base, ratio])
+			assert_between(
+				ratio, 1.06, 1.08, "gear %d -> %d on %s%%: %.4f" % [gear, gear + 1, base, ratio]
+			)
 
 
 func test_offsets_are_monotonic_and_span_about_minus_2_5_to_plus_6_on_the_flat() -> void:
@@ -71,7 +73,13 @@ func test_shift_works_in_sim_phases() -> void:
 
 func test_gear_survives_phase_changes() -> void:
 	var rig := make_rig({}, follower())
-	rig.start([sim(Wl.GRADE_FLAT, 60.0, Wl.FREE), erg(Wl.WORK, 60.0, 60.0), sim(Wl.GRADE_FLAT, 60.0, Wl.FREE)])
+	rig.start(
+		[
+			sim(Wl.GRADE_FLAT, 60.0, Wl.FREE),
+			erg(Wl.WORK, 60.0, 60.0),
+			sim(Wl.GRADE_FLAT, 60.0, Wl.FREE)
+		]
+	)
 	rig.gov.shift(3)
 	rig.gov.start_phase(1)
 	assert_eq(rig.gov.shift(1), 15, "ignored in ERG")

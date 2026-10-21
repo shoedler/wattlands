@@ -8,11 +8,34 @@ func _results() -> GameResults:
 	var r := GameResults.new()
 	r.grade = "S"
 	r.rows = [
-		{"peer_id": 1, "slot_index": 0, "name": "Ada", "is_bot": false, "kj": 412.4, "avg_power_w": 205.0,
-			"avg_ftp_pct": 82.0, "np_w": 214.0, "time_in_band_pct": 96.0, "xp": 41, "unlocks": ["SIEGE_BANNER_RED"],
-			"stats": {"walls_held": 3}},
-		{"peer_id": -1, "slot_index": 1, "name": "Bot 1", "is_bot": true, "kj": 380.0, "avg_power_w": 190.0,
-			"avg_ftp_pct": 95.0, "np_w": 191.0, "time_in_band_pct": 100.0, "xp": 0, "unlocks": [], "stats": {}},
+		{
+			"peer_id": 1,
+			"slot_index": 0,
+			"name": "Ada",
+			"is_bot": false,
+			"kj": 412.4,
+			"avg_power_w": 205.0,
+			"avg_ftp_pct": 82.0,
+			"np_w": 214.0,
+			"time_in_band_pct": 96.0,
+			"xp": 41,
+			"unlocks": ["SIEGE_BANNER_RED"],
+			"stats": {"walls_held": 3}
+		},
+		{
+			"peer_id": -1,
+			"slot_index": 1,
+			"name": "Bot 1",
+			"is_bot": true,
+			"kj": 380.0,
+			"avg_power_w": 190.0,
+			"avg_ftp_pct": 95.0,
+			"np_w": 191.0,
+			"time_in_band_pct": 100.0,
+			"xp": 0,
+			"unlocks": [],
+			"stats": {}
+		},
 	]
 	r.team = {"gate_hp": 75}
 	return r
@@ -20,8 +43,14 @@ func _results() -> GameResults:
 
 func _open(extra: Dictionary = {}) -> AppResultsScreen:
 	fx.give_profile()
-	var p := {"results": _results(), "fit_path": "C:/rides/2026-10-21_workout.fit", "summary": {"ride_id": "abc"},
-		"unlocks": ["SIEGE_BANNER_RED"], "game_id": "workout", "local_peer": 1}
+	var p := {
+		"results": _results(),
+		"fit_path": "C:/rides/2026-10-21_workout.fit",
+		"summary": {"ride_id": "abc"},
+		"unlocks": ["SIEGE_BANNER_RED"],
+		"game_id": "workout",
+		"local_peer": 1
+	}
 	for k: Variant in extra.keys():
 		p[k] = extra[k]
 	return open_screen(AppResultsScreen.new(), p) as AppResultsScreen
@@ -134,5 +163,8 @@ func test_a_session_without_results_shows_no_grade() -> void:
 	assert_false(s.has_results)
 	assert_eq(s.grade_label.text, "—", "never a D for a session that had no results")
 	assert_eq(s.rows_grid.get_child_count(), 7, "only the column headers")
-	assert_eq(s.ride_label.text, AppScreen.t("APP_RESULTS_SAVED").format(["C:/rides/2026-10-21_workout.fit"]))
+	assert_eq(
+		s.ride_label.text,
+		AppScreen.t("APP_RESULTS_SAVED").format(["C:/rides/2026-10-21_workout.fit"])
+	)
 	assert_true(menu(s).ids().has("continue"))

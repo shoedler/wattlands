@@ -32,6 +32,7 @@ func after_each() -> void:
 
 # --- helpers -------------------------------------------------------------------------------
 
+
 func _key(code: Key, pressed: bool, echo: bool = false) -> InputEventKey:
 	var e := InputEventKey.new()
 	e.physical_keycode = code
@@ -89,6 +90,7 @@ func _has_button(events: Array[InputEvent], button: JoyButton) -> bool:
 
 # --- defaults -------------------------------------------------------------------------------
 
+
 func test_runs_always() -> void:
 	assert_eq(_router.process_mode, Node.PROCESS_MODE_ALWAYS)
 
@@ -121,6 +123,7 @@ func test_default_keys_and_buttons() -> void:
 
 # --- actions --------------------------------------------------------------------------------
 
+
 func test_key_press_fires_action_once() -> void:
 	_router.handle_event(_key(KEY_ENTER, true))
 	_router.handle_event(_key(KEY_ENTER, true, true))
@@ -137,9 +140,19 @@ func test_key_press_fires_action_once() -> void:
 
 func test_each_default_key_maps_to_its_action() -> void:
 	var cases := {
-		KEY_SPACE: &"confirm", KEY_ESCAPE: &"back", KEY_W: &"up", KEY_DOWN: &"down",
-		KEY_A: &"left", KEY_RIGHT: &"right", KEY_1: &"ability_1", KEY_2: &"ability_2",
-		KEY_F: &"item", KEY_R: &"swap", KEY_E: &"shift_up", KEY_Q: &"shift_down", KEY_P: &"pause",
+		KEY_SPACE: &"confirm",
+		KEY_ESCAPE: &"back",
+		KEY_W: &"up",
+		KEY_DOWN: &"down",
+		KEY_A: &"left",
+		KEY_RIGHT: &"right",
+		KEY_1: &"ability_1",
+		KEY_2: &"ability_2",
+		KEY_F: &"item",
+		KEY_R: &"swap",
+		KEY_E: &"shift_up",
+		KEY_Q: &"shift_down",
+		KEY_P: &"pause",
 	}
 	for code: int in cases.keys():
 		_tap(code as Key)
@@ -148,9 +161,14 @@ func test_each_default_key_maps_to_its_action() -> void:
 
 func test_controller_buttons() -> void:
 	var cases := {
-		JOY_BUTTON_A: &"confirm", JOY_BUTTON_B: &"back", JOY_BUTTON_X: &"ability_1",
-		JOY_BUTTON_Y: &"ability_2", JOY_BUTTON_RIGHT_SHOULDER: &"item",
-		JOY_BUTTON_LEFT_SHOULDER: &"swap", JOY_BUTTON_DPAD_UP: &"up", JOY_BUTTON_START: &"pause",
+		JOY_BUTTON_A: &"confirm",
+		JOY_BUTTON_B: &"back",
+		JOY_BUTTON_X: &"ability_1",
+		JOY_BUTTON_Y: &"ability_2",
+		JOY_BUTTON_RIGHT_SHOULDER: &"item",
+		JOY_BUTTON_LEFT_SHOULDER: &"swap",
+		JOY_BUTTON_DPAD_UP: &"up",
+		JOY_BUTTON_START: &"pause",
 	}
 	for b: int in cases.keys():
 		_router.handle_event(_joy(b as JoyButton, true))
@@ -201,6 +219,7 @@ func test_clear_queues() -> void:
 
 # --- panic ----------------------------------------------------------------------------------
 
+
 func test_backspace_held_one_second_panics() -> void:
 	_router.handle_event(_key(KEY_BACKSPACE, true))
 	assert_eq(_router.take_actions(), [], "no panic on press")
@@ -223,7 +242,9 @@ func test_backspace_tap_or_short_hold_never_panics() -> void:
 	_router.tick(0.5)
 	assert_signal_not_emitted(_bus, "panic_requested")
 	_router.tick(0.5)
-	assert_signal_emit_count(_bus, "panic_requested", 1, "a fresh 1 s hold counts from its own press")
+	assert_signal_emit_count(
+		_bus, "panic_requested", 1, "a fresh 1 s hold counts from its own press"
+	)
 
 
 func test_key_repeat_does_not_restart_the_hold() -> void:
@@ -265,6 +286,7 @@ func test_inject_panic_is_immediate() -> void:
 
 # --- gestures -------------------------------------------------------------------------------
 
+
 func test_gestures_queue_apart_from_actions() -> void:
 	_router.inject_gesture(Wl.G_SURGE)
 	_router.inject_gesture(Wl.G_PEDAL_START)
@@ -284,11 +306,15 @@ func test_the_action_signal_never_carries_a_gesture() -> void:
 	for g: StringName in [Wl.G_SURGE, Wl.G_COAST, Wl.G_STOP_5S, Wl.G_PEDAL_START]:
 		rider.gesture_detected.emit(g)
 	_router.inject_gesture(Wl.G_SURGE)
-	assert_signal_not_emitted(_router, "action", "surge is never confirm, coast never back, stop_5s never pause")
+	assert_signal_not_emitted(
+		_router, "action", "surge is never confirm, coast never back, stop_5s never pause"
+	)
 	assert_signal_not_emitted(_bus, "action_pressed")
 	assert_eq(_router.take_actions(), [], "nor in the action queue")
 	assert_signal_emit_count(_router, "gesture", 5)
-	assert_signal_emit_count(_router, "menu_input", 4, "the pedal-UI mapping goes only to menu_input")
+	assert_signal_emit_count(
+		_router, "menu_input", 4, "the pedal-UI mapping goes only to menu_input"
+	)
 	_tap(KEY_ENTER)
 	assert_signal_emit_count(_router, "action", 1, "a device confirm is an action")
 	assert_eq(get_signal_parameters(_router, "action"), [&"confirm"])
@@ -346,7 +372,9 @@ func test_menu_mapping_in_erg() -> void:
 	_router.inject_gesture(Wl.G_STOP_5S)
 	assert_signal_not_emitted(_router, "menu_input", "coast is never back in ERG; no pause in ERG")
 	_router.inject_gesture(Wl.G_SURGE)
-	assert_eq(get_signal_parameters(_router, "menu_input"), [&"confirm", "surge"], "surge confirms in ERG")
+	assert_eq(
+		get_signal_parameters(_router, "menu_input"), [&"confirm", "surge"], "surge confirms in ERG"
+	)
 	assert_eq(_router.take_gestures().size(), 3, "every gesture still reaches sessions")
 
 
@@ -366,6 +394,7 @@ func test_device_actions_reach_menu_input() -> void:
 
 # --- pedal UI ---------------------------------------------------------------------------------
 
+
 func test_pedal_ui_active_follows_profile_and_device_use() -> void:
 	_router.profile.pedal_ui = true
 	assert_true(_router.pedal_ui_active())
@@ -380,6 +409,7 @@ func test_pedal_ui_active_follows_profile_and_device_use() -> void:
 
 
 # --- rebinding ------------------------------------------------------------------------------
+
 
 func test_rebind_replaces_same_family_only() -> void:
 	_router.rebind(&"confirm", _key(KEY_K, true))
@@ -424,7 +454,9 @@ func test_rebind_binds_the_physical_key() -> void:
 	only_logical.pressed = true
 	_router.rebind(&"swap", only_logical)
 	_router.handle_event(only_logical)
-	assert_eq(_router.take_actions(), [&"swap"], "an event without a physical code binds by keycode")
+	assert_eq(
+		_router.take_actions(), [&"swap"], "an event without a physical code binds by keycode"
+	)
 
 
 func test_rebind_unknown_action_is_rejected() -> void:
@@ -473,7 +505,9 @@ func test_load_without_file_gives_defaults() -> void:
 func test_load_bad_version_keeps_defaults() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("input", "version", 99)
-	cfg.set_value("bindings", "confirm", [{"type": "key", "physical_keycode": int(KEY_K), "keycode": 0}])
+	cfg.set_value(
+		"bindings", "confirm", [{"type": "key", "physical_keycode": int(KEY_K), "keycode": 0}]
+	)
 	cfg.save(Paths.input_cfg_path())
 	_router.load_bindings()
 	assert_push_warning("version")
@@ -484,8 +518,12 @@ func test_load_bad_version_keeps_defaults() -> void:
 func test_load_ignores_unknown_actions() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("input", "version", 1)
-	cfg.set_value("bindings", "jump", [{"type": "key", "physical_keycode": int(KEY_J), "keycode": 0}])
-	cfg.set_value("bindings", "back", [{"type": "key", "physical_keycode": int(KEY_B), "keycode": 0}])
+	cfg.set_value(
+		"bindings", "jump", [{"type": "key", "physical_keycode": int(KEY_J), "keycode": 0}]
+	)
+	cfg.set_value(
+		"bindings", "back", [{"type": "key", "physical_keycode": int(KEY_B), "keycode": 0}]
+	)
 	cfg.save(Paths.input_cfg_path())
 	_router.load_bindings()
 	assert_push_warning("unknown action")
@@ -495,7 +533,9 @@ func test_load_ignores_unknown_actions() -> void:
 
 func test_event_dict_round_trip() -> void:
 	var events: Array[InputEvent] = [
-		_key(KEY_ENTER, true), _joy(JOY_BUTTON_A, true), _axis(JOY_AXIS_LEFT_X, -0.6),
+		_key(KEY_ENTER, true),
+		_joy(JOY_BUTTON_A, true),
+		_axis(JOY_AXIS_LEFT_X, -0.6),
 	]
 	for e in events:
 		var d := InputBindings.event_to_dict(e)
@@ -528,6 +568,7 @@ func test_typing_in_a_text_field_fires_no_actions_or_panic() -> void:
 
 
 # --- controls screen helpers ------------------------------------------------------------------
+
 
 func test_binding_labels() -> void:
 	var labels := _router.binding_labels(&"confirm")

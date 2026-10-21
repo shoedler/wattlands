@@ -43,7 +43,10 @@ func test_the_page_runs_the_platform_ftp_test() -> void:
 	var ramp := s.plan.phase(0)
 	assert_eq(ramp.kind, Wl.WARMUP)
 	assert_eq([ramp.target_pct, ramp.ramp_to_pct, ramp.duration_s], [50.0, 65.0, 300.0])
-	assert_eq([s.plan.phase(1).target_pct, s.plan.phase(2).target_pct, s.plan.phase(1).duration_s], [65.0, 71.0, 60.0])
+	assert_eq(
+		[s.plan.phase(1).target_pct, s.plan.phase(2).target_pct, s.plan.phase(1).duration_s],
+		[65.0, 71.0, 60.0]
+	)
 	assert_eq(s.plan.phase(s.plan.size() - 1).kind, Wl.COOLDOWN)
 	assert_true(r.setup_calls[0]["options"]["record"], "the test is a recorded ride")
 	assert_eq(r.setup_calls[0]["options"]["game_id"], "ftp_test")
@@ -118,7 +121,11 @@ func test_rescue_ends_the_test_at_once_and_the_cooldown_follows() -> void:
 	s.step_fixed()
 	assert_eq(s.stage, "cooldown", "rescue ends the test in the same tick")
 	assert_eq(s.result["end_reason"], FtpTest.END_RESCUE)
-	assert_eq(r.phases_started[r.phases_started.size() - 1], s.plan.cooldown_index(), "straight to the cool-down")
+	assert_eq(
+		r.phases_started[r.phases_started.size() - 1],
+		s.plan.cooldown_index(),
+		"straight to the cool-down"
+	)
 	assert_true(s.result["valid"], "two completed steps: the best minute so far counts")
 	var before := r.phases_started.size()
 	_ride(s, 60.0)
@@ -227,7 +234,9 @@ func test_leaving_mid_test_saves_the_ride_and_hands_the_rider_back() -> void:
 	assert_eq(r.finished_rides, 1)
 	assert_false(fx.trainer.is_external_tick())
 	assert_false(fx.trainer.is_rider_held())
-	assert_eq(r.governor_params().get("profile"), "normal", "the governor is back on its normal profile")
+	assert_eq(
+		r.governor_params().get("profile"), "normal", "the governor is back on its normal profile"
+	)
 	s.leave()
 	assert_eq(r.finished_rides, 1, "saved once")
 

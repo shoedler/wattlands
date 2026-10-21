@@ -54,7 +54,7 @@ func send_text(conn: int, text: String) -> void:
 
 ## A game message from a connection, `d_text` being its encoded `d`.
 func send_msg(conn: int, to: int, d_text: String) -> void:
-	var size := d_text.to_utf8_buffer().size() + ("{\"t\":\"msg\",\"to\":%d,\"d\":}" % to).length()
+	var size := d_text.to_utf8_buffer().size() + ('{"t":"msg","to":%d,"d":}' % to).length()
 	var recipients := rooms.route(conn, to, size)
 	var from := rooms.from_peer(conn)
 	for rc in recipients:

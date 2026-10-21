@@ -70,7 +70,9 @@ func test_every_plan_passes_the_plan_validator_without_warnings() -> void:
 
 func _run(flags: Array[String]) -> Dictionary:
 	var report := _dirs[0].path_join("report.json")
-	var args := PackedStringArray(["--game=" + F.GAME_ID, "--report=" + report, "--sim-speed=1000"] + flags)
+	var args := PackedStringArray(
+		["--game=" + F.GAME_ID, "--report=" + report, "--sim-speed=1000"] + flags
+	)
 	var parsed := GameSimRunner.parse_args(args)
 	assert_false(parsed.has("error"), str(parsed.get("error", "")))
 	parsed["headless"] = true
@@ -98,7 +100,11 @@ func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:
 		if req.get("reason") == "hill":
 			var keys: Array = req.keys().filter(func(k: Variant) -> bool: return k != "id")
 			keys.sort()
-			assert_eq(keys, ["duration_s", "reason", "source", "target_pct"], "the game's fields (id aside): %s" % req)
+			assert_eq(
+				keys,
+				["duration_s", "reason", "source", "target_pct"],
+				"the game's fields (id aside): %s" % req
+			)
 
 
 func test_a_host_run_with_two_humans_completes() -> void:
@@ -109,7 +115,9 @@ func test_a_host_run_with_two_humans_completes() -> void:
 	# end_phase ends, and its SIM phase takes the game's course grades; nothing is refused.
 	for peer: String in ["1", "2"]:
 		var hist: Array = r["phases"][peer]
-		assert_eq(hist[2]["label"], "_TEMPLATE_PHASE_FINISH", "peer %s rode the replanned phase" % peer)
+		assert_eq(
+			hist[2]["label"], "_TEMPLATE_PHASE_FINISH", "peer %s rode the replanned phase" % peer
+		)
 		assert_eq(hist[2]["ended_by"], Wl.ENDED_END_PHASE, "peer %s: end_phase ended it" % peer)
 	var kinds := {}
 	for d: Dictionary in r.get("directives", []):
@@ -124,8 +132,17 @@ func test_a_host_run_with_two_humans_completes() -> void:
 ## when its own phase starts, nothing goes to every peer, and the game's phase_changed for the
 ## cool-down comes once the last rider got there.
 func test_short_with_three_riders_banners_each_riders_own_phases() -> void:
-	var r := _run(["--content=short", "--players=3", "--bots=1", "--rider=erg", "--rider=erg:compliance=0.85",
-		"--rider=zero", "--seed=9"])
+	var r := _run(
+		[
+			"--content=short",
+			"--players=3",
+			"--bots=1",
+			"--rider=erg",
+			"--rider=erg:compliance=0.85",
+			"--rider=zero",
+			"--seed=9"
+		]
+	)
 	assert_eq(r["_end"], "complete")
 	var starts := {}
 	var banners: Array = []
@@ -139,19 +156,33 @@ func test_short_with_three_riders_banners_each_riders_own_phases() -> void:
 						starts[peer] = []
 					(starts[peer] as Array).append([int(e["index"]), float(e["t"])])
 			"hud":
-				if str(e.get("kind", "")) == "banner" and str(e.get("key", "")) == "_TEMPLATE_BANNER_PHASE":
+				if (
+					str(e.get("kind", "")) == "banner"
+					and str(e.get("key", "")) == "_TEMPLATE_BANNER_PHASE"
+				):
 					banners.append([int(e["peer"]), float(e["t"])])
 			"game_phase_changed":
 				group.append([int(e["index"]), float(e["t"])])
 	assert_eq(starts.keys().size(), 3, "three human riders")
-	assert_eq(banners.filter(func(b: Array) -> bool: return b[0] == 0), [], "no banner to every peer")
+	assert_eq(
+		banners.filter(func(b: Array) -> bool: return b[0] == 0), [], "no banner to every peer"
+	)
 	var last_cool := 0.0
 	for peer: int in starts.keys():
 		var mine := banners.filter(func(b: Array) -> bool: return b[0] == peer)
-		assert_eq(mine.size(), (starts[peer] as Array).size(), "peer %d: one banner per phase it started" % peer)
+		assert_eq(
+			mine.size(),
+			(starts[peer] as Array).size(),
+			"peer %d: one banner per phase it started" % peer
+		)
 		for i in mine.size():
 			var st: Array = starts[peer][i]
-			assert_between(float(mine[i][1]), float(st[1]), float(st[1]) + 0.11, "peer %d: phase %d's banner when it starts" % [peer, int(st[0])])
+			assert_between(
+				float(mine[i][1]),
+				float(st[1]),
+				float(st[1]) + 0.11,
+				"peer %d: phase %d's banner when it starts" % [peer, int(st[0])]
+			)
 		last_cool = maxf(last_cool, float((starts[peer] as Array).back()[1]))
 	var cool := group.filter(func(g: Array) -> bool: return g[0] == 3)
 	assert_eq(cool.size(), 1, "one phase_changed for the cool-down")
@@ -160,4 +191,6 @@ func test_short_with_three_riders_banners_each_riders_own_phases() -> void:
 	var ends := []
 	for peer: int in starts.keys():
 		ends.append(snappedf(float((starts[peer] as Array).back()[1]), 0.05))
-	assert_ne(ends.min(), ends.max(), "precondition: the riders reached the cool-down at different times")
+	assert_ne(
+		ends.min(), ends.max(), "precondition: the riders reached the cool-down at different times"
+	)

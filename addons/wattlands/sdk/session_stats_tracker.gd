@@ -49,7 +49,15 @@ func has_rider(peer: int) -> bool:
 
 ## One sample of `dt` game seconds. `band_lo`/`band_hi` is the rider's published power band
 ## (0, 0 = none).
-func add_sample(peer: int, dt: float, power_w: float, mode: String, applied_target_w: float, band_lo: float = 0.0, band_hi: float = 0.0) -> void:
+func add_sample(
+	peer: int,
+	dt: float,
+	power_w: float,
+	mode: String,
+	applied_target_w: float,
+	band_lo: float = 0.0,
+	band_hi: float = 0.0
+) -> void:
 	var r: RiderStats = _riders.get(peer)
 	if r == null or dt <= 0.0:
 		return

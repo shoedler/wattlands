@@ -38,7 +38,8 @@ var fit_path: String = ""
 var big_label: Label = null
 var detail_label: Label = null
 ## (plan, opts) -> EffortPlan or null: the plan check before the test starts (tests inject one).
-var plan_finalizer: Callable = func(p: EffortPlan, o: Dictionary) -> EffortPlan: return PlanValidator.finalize(p, o)
+var plan_finalizer: Callable = func(p: EffortPlan, o: Dictionary) -> EffortPlan:
+	return PlanValidator.finalize(p, o)
 var _acc: float = 0.0
 var _own_rider: bool = false
 ## True while this page ticks the rider (menu ticking handed over).
@@ -58,7 +59,11 @@ func _build() -> void:
 	detail_label = AppStyle.paragraph(t("APP_FTP_INTRO"), AppStyle.FONT_BODY, AppStyle.TEXT)
 	detail_label.name = "Detail"
 	left.add_child(detail_label)
-	push_menu([{"id": "start", "text": t("APP_FTP_START")}, {"id": "back", "text": t("APP_BACK")}], _on_pick, _on_back)
+	push_menu(
+		[{"id": "start", "text": t("APP_FTP_START")}, {"id": "back", "text": t("APP_BACK")}],
+		_on_pick,
+		_on_back
+	)
 
 
 func _on_leave() -> void:
@@ -109,7 +114,10 @@ func start_test() -> void:
 		return
 	var p := services.profile()
 	var max_w := float(device.power_range().get("max_w", 1800))
-	var checked := plan_finalizer.call(FtpTest.build_plan(maxf(p.ftp_w, 1.0), max_w), {"ramp_test": true}) as EffortPlan
+	var checked := (
+		plan_finalizer.call(FtpTest.build_plan(maxf(p.ftp_w, 1.0), max_w), {"ramp_test": true})
+		as EffortPlan
+	)
 	if checked == null:
 		_error(t("APP_FTP_PLAN_REJECTED"))
 		return
@@ -119,9 +127,22 @@ func start_test() -> void:
 		_own_rider = true
 	var slot := p.to_slot(Wl.HOST_PEER, Wl.FAIR_FTP)
 	slot.apply_look(0)
-	rider.setup(Wl.HOST_PEER, p, slot, device, {"multiplayer": false, "scaling_mode": Wl.FAIR_FTP, "record": true,
-		"game_id": GAME_ID, "content_id": CONTENT_ID, "utc_start_unix": services.utc_now(), "seed": 0,
-		"skip_warmup": false})
+	rider.setup(
+		Wl.HOST_PEER,
+		p,
+		slot,
+		device,
+		{
+			"multiplayer": false,
+			"scaling_mode": Wl.FAIR_FTP,
+			"record": true,
+			"game_id": GAME_ID,
+			"content_id": CONTENT_ID,
+			"utc_start_unix": services.utc_now(),
+			"seed": 0,
+			"skip_warmup": false
+		}
+	)
 	services.set_menu_ticking(false)
 	_ticking = true
 	_acc = 0.0
@@ -134,7 +155,11 @@ func start_test() -> void:
 	plan = test.run_on(rider, services.settings, services.trainer)
 	stage = "running"
 	clear_menus()
-	var m := push_menu([{"id": "stop", "text": t("APP_FTP_STOP")}, {"id": "panic", "text": t("APP_PANIC")}], _on_pick, _on_back)
+	var m := push_menu(
+		[{"id": "stop", "text": t("APP_FTP_STOP")}, {"id": "panic", "text": t("APP_PANIC")}],
+		_on_pick,
+		_on_back
+	)
 	m.scanning = false
 	_refresh()
 
@@ -194,7 +219,9 @@ func _cooldown_menus() -> void:
 	clear_menus()
 	var items: Array = []
 	if shape == "countdown":
-		items = [{"id": "save", "text": t("APP_FTP_SAVE")}, {"id": "keep", "text": t("APP_FTP_KEEP")}]
+		items = [
+			{"id": "save", "text": t("APP_FTP_SAVE")}, {"id": "keep", "text": t("APP_FTP_KEEP")}
+		]
 	else:
 		items = [{"id": "end_cooldown", "text": t("APP_FTP_END_COOLDOWN")}]
 	items.append({"id": "panic", "text": t("APP_PANIC")})
@@ -276,14 +303,22 @@ func _refresh() -> void:
 	match stage:
 		"running":
 			var ph := plan.phase(test.phase_index) if plan != null and test != null else null
-			var target := floorf(ph.planned_pct_at(test.phase_elapsed_s) * test.ftp_w / 100.0) if ph != null else 0.0
+			var target := (
+				floorf(ph.planned_pct_at(test.phase_elapsed_s) * test.ftp_w / 100.0)
+				if ph != null
+				else 0.0
+			)
 			big_label.text = "%d W" % int(target)
-			detail_label.text = t("APP_FTP_RUNNING").format([t(ph.label) if ph != null else "", int(round(test.best_1min_w))])
+			detail_label.text = t("APP_FTP_RUNNING").format(
+				[t(ph.label) if ph != null else "", int(round(test.best_1min_w))]
+			)
 		"cooldown":
 			big_label.text = _result_title()
 			var lines: Array[String] = [_end_text(), _save_text()]
 			var left := PlanValidator.COOLDOWN_S - test.phase_elapsed_s if test != null else 0.0
-			lines.append(t("APP_FTP_COOLDOWN_LEFT").format([AppStyle.duration_text(maxf(left, 0.0))]))
+			lines.append(
+				t("APP_FTP_COOLDOWN_LEFT").format([AppStyle.duration_text(maxf(left, 0.0))])
+			)
 			detail_label.text = "\n".join(lines)
 		"done":
 			big_label.text = "FTP %d W" % int(round(services.profile().ftp_w))
@@ -306,9 +341,17 @@ func _save_text() -> String:
 		if str(result.get("end_reason", "")) == FtpTest.END_BACK:
 			return t("CORE_FTP_NOT_SAVED")
 		return t("APP_FTP_NO_RESULT")
-	var lead := t("CORE_FTP_RESULT").format({"ftp": int(result.get("ftp_w", 0.0)), "best": int(round(float(result.get("best_1min_w", 0.0))))})
+	var lead := t("CORE_FTP_RESULT").format(
+		{
+			"ftp": int(result.get("ftp_w", 0.0)),
+			"best": int(round(float(result.get("best_1min_w", 0.0))))
+		}
+	)
 	if test != null and test.countdown_left() > 0.0:
-		return "%s\n%s" % [lead, t("CORE_FTP_SAVING").format({"s": ceili(test.countdown_left() - 1e-9)})]
+		return (
+			"%s\n%s"
+			% [lead, t("CORE_FTP_SAVING").format({"s": ceili(test.countdown_left() - 1e-9)})]
+		)
 	if bool(result.get("saved", false)):
 		return "%s\n%s" % [lead, t("CORE_FTP_SAVED")]
 	return "%s\n%s" % [lead, t("CORE_FTP_NOT_SAVED")]

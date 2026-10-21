@@ -41,12 +41,16 @@ func test_own_zwo_is_listed_picked_by_pedal_and_previewed_with_its_clamps() -> v
 	fx.give_profile(200.0)
 	_real_registry()
 	var cid := _install_zwo()
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_true(s.zwo_hint_label.visible, "the page says where .zwo files go")
 	assert_true(s.zwo_hint_label.text.contains(AppLobbyModel.workouts_dir()), s.zwo_hint_label.text)
 	assert_true(menu(s).ids().has("content"))
 	surge_pick(s, "content")
-	assert_true(menu(s).ids().has(cid), "the rider's .zwo is in the picker: %s" % str(menu(s).ids()))
+	assert_true(
+		menu(s).ids().has(cid), "the rider's .zwo is in the picker: %s" % str(menu(s).ids())
+	)
 	assert_eq(menu(s).text_of(cid), AppScreen.t("APP_CONTENT_ZWO").format(["My caps"]))
 	assert_true(scan_to(s, cid), "pedal-scan reaches it")
 	s.feed_gesture(Wl.G_SURGE)
@@ -56,20 +60,30 @@ func test_own_zwo_is_listed_picked_by_pedal_and_previewed_with_its_clamps() -> v
 	var want: Dictionary = WorkoutSession.load_id(cid, true).preview()
 	var clamp_lines: Array = []
 	for line: Variant in want.get("lines", []):
-		if str(line).contains(GameStrings.new().t("WORKOUT_PREVIEW_CLAMP", {"text": ""}).strip_edges()):
+		if str(line).contains(
+			GameStrings.new().t("WORKOUT_PREVIEW_CLAMP", {"text": ""}).strip_edges()
+		):
 			clamp_lines.append(line)
 	assert_false(clamp_lines.is_empty(), "caps.zwo is clamped (160% FTP for 30 s, 110% for 10 min)")
 	var shown := _labels(s.preview_box)
 	for line: Variant in clamp_lines:
-		assert_true(shown.has(str(line)), "the preview shows the clamp \"%s\" (shown: %s)" % [str(line), str(shown)])
-	assert_true(shown.has(str(want.get("title", ""))) or shown[0].begins_with(str(want.get("title", ""))), "the .zwo's own name heads the preview")
+		assert_true(
+			shown.has(str(line)),
+			'the preview shows the clamp "%s" (shown: %s)' % [str(line), str(shown)]
+		)
+	assert_true(
+		shown.has(str(want.get("title", ""))) or shown[0].begins_with(str(want.get("title", ""))),
+		"the .zwo's own name heads the preview"
+	)
 
 
 func test_built_in_contents_still_come_first() -> void:
 	fx.give_profile()
 	_real_registry()
 	var cid := _install_zwo()
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	var choices := s.content_choices()
 	var m := fx.services.registry.manifest("workout")
 	assert_eq(choices.slice(0, (m["contents"] as Array).size()), Array(m["contents"]))
@@ -81,7 +95,9 @@ func test_content_flag_picks_a_zwo_in_the_app() -> void:
 	_real_registry()
 	var cid := _install_zwo()
 	CmdLine.set_args(PackedStringArray(["--content=" + cid]), true)
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_eq(s.content_id, cid, "--content=zwo:<path> (HARDWARE_TEST.md 6) preselects it")
 
 
@@ -89,15 +105,21 @@ func test_a_missing_zwo_falls_back_to_the_default() -> void:
 	fx.give_profile()
 	_real_registry()
 	fx.settings.set_value("last_game", "workout")
-	fx.settings.set_value("last_content", "zwo:" + AppLobbyModel.workouts_dir().path_join("gone.zwo"))
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	fx.settings.set_value(
+		"last_content", "zwo:" + AppLobbyModel.workouts_dir().path_join("gone.zwo")
+	)
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_eq(s.content_id, str(fx.services.registry.manifest("workout")["default_content"]))
 
 
 func test_games_without_the_zwo_scheme_list_no_files() -> void:
 	fx.give_profile()
 	_install_zwo()
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "siege"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "siege"}) as AppLobbyScreen
+	)
 	assert_false(s.zwo_hint_label.visible)
 	for c in s.content_choices():
 		assert_false(c.begins_with("zwo:"))
@@ -109,11 +131,14 @@ func test_content_available_rule() -> void:
 	assert_true(AppLobbyModel.content_available(m, "a"))
 	assert_true(AppLobbyModel.content_available(m, cid))
 	assert_false(AppLobbyModel.content_available(m, "zwo:C:/nowhere/none.zwo"))
-	assert_false(AppLobbyModel.content_available({"contents": ["a"]}, cid), "no scheme, no file content")
+	assert_false(
+		AppLobbyModel.content_available({"contents": ["a"]}, cid), "no scheme, no file content"
+	)
 	assert_false(AppLobbyModel.content_available(m, ""))
 
 
 # --- typing a room code (ZIH-7) -------------------------------------------------------------------
+
 
 func _key(ch: String) -> InputEventKey:
 	var ev := InputEventKey.new()
@@ -135,7 +160,11 @@ func test_typing_a_code_on_the_join_page_reaches_the_field() -> void:
 		up.pressed = false
 		get_viewport().push_input(up)
 	await wait_process_frames(1)
-	assert_eq(s.code_field.value(), "K7QX2M", "focus owner: %s" % str(get_viewport().gui_get_focus_owner()))
+	assert_eq(
+		s.code_field.value(),
+		"K7QX2M",
+		"focus owner: %s" % str(get_viewport().gui_get_focus_owner())
+	)
 	assert_true(s.text_focus, "the field owns the keyboard from the first character on")
 
 
@@ -207,7 +236,10 @@ func test_esc_backs_out_of_the_join_page_after_typing() -> void:
 	assert_false(s.code_field.line_edit.has_focus(), "Esc takes the focus off the field")
 	_push(_nav_key(KEY_ESCAPE))
 	await wait_process_frames(1)
-	assert_true(fx.app.history.has("title"), "two Esc presses back out, as without typing (history %s)" % str(fx.app.history))
+	assert_true(
+		fx.app.history.has("title"),
+		"two Esc presses back out, as without typing (history %s)" % str(fx.app.history)
+	)
 
 
 func test_arrows_move_the_on_screen_keyboard_after_typing() -> void:
@@ -221,7 +253,9 @@ func test_arrows_move_the_on_screen_keyboard_after_typing() -> void:
 	assert_eq(s.code_field.value(), "K", "the typed character stays")
 	_push(_key("7"))
 	await wait_process_frames(1)
-	assert_eq(s.code_field.value(), "K7", "the next code character takes the focus back and types on")
+	assert_eq(
+		s.code_field.value(), "K7", "the next code character takes the focus back and types on"
+	)
 	assert_true(s.code_field.line_edit.has_focus())
 
 

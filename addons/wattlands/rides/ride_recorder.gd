@@ -118,7 +118,9 @@ func record(t: float, power_w: float, cadence_rpm: float, speed_kmh: float) -> v
 	if not _recording:
 		return
 	if t < _last_t - EPS:
-		push_warning("RideRecorder: time went backwards (%.3f < %.3f); sample ignored" % [t, _last_t])
+		push_warning(
+			"RideRecorder: time went backwards (%.3f < %.3f); sample ignored" % [t, _last_t]
+		)
 		return
 	_advance_to(t)
 	_p = maxf(power_w, 0.0) if is_finite(power_w) else 0.0
@@ -202,7 +204,9 @@ func save_as(fit_path: String) -> String:
 		DirAccess.make_dir_recursive_absolute(base_dir)
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	if f == null:
-		push_warning("RideRecorder: can't write %s (%s)" % [path, error_string(FileAccess.get_open_error())])
+		push_warning(
+			"RideRecorder: can't write %s (%s)" % [path, error_string(FileAccess.get_open_error())]
+		)
 		return ""
 	f.store_buffer(fit_bytes())
 	f.close()
@@ -266,8 +270,15 @@ func fit_bytes() -> PackedByteArray:
 func records() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for i in _rk.size():
-		out.append({"t_rel": _rk[i], "power_w": _rp[i], "cadence_rpm": _rc[i],
-			"speed_kmh": _rs[i], "distance_m": _rd[i]})
+		out.append(
+			{
+				"t_rel": _rk[i],
+				"power_w": _rp[i],
+				"cadence_rpm": _rc[i],
+				"speed_kmh": _rs[i],
+				"distance_m": _rd[i]
+			}
+		)
 	return out
 
 
@@ -292,10 +303,18 @@ func fit_data() -> Dictionary:
 	var end_rel := _end_rel if not _recording else _last_t - _t0
 	var recs: Array = []
 	for i in _rk.size():
-		recs.append({
-			"t": _utc_start + _rk[i], "power_w": _rp[i], "cadence_rpm": _rc[i],
-			"speed_mps": _rs[i] / 3.6 if _rs[i] >= 0.0 else -1.0, "distance_m": _rd[i],
-		})
+		(
+			recs
+			. append(
+				{
+					"t": _utc_start + _rk[i],
+					"power_w": _rp[i],
+					"cadence_rpm": _rc[i],
+					"speed_mps": _rs[i] / 3.6 if _rs[i] >= 0.0 else -1.0,
+					"distance_m": _rd[i],
+				}
+			)
+		)
 	var evs: Array = []
 	for e in _events:
 		evs.append({"t": _utc_start + roundi(float(e["rel"])), "running": bool(e["running"])})
@@ -325,13 +344,19 @@ static func new_uuid() -> String:
 	b[6] = (b[6] & 0x0F) | 0x40
 	b[8] = (b[8] & 0x3F) | 0x80
 	var h := b.hex_encode()
-	return "%s-%s-%s-%s-%s" % [h.substr(0, 8), h.substr(8, 4), h.substr(12, 4), h.substr(16, 4), h.substr(20, 12)]
+	return (
+		"%s-%s-%s-%s-%s"
+		% [h.substr(0, 8), h.substr(8, 4), h.substr(12, 4), h.substr(16, 4), h.substr(20, 12)]
+	)
 
 
 ## "yyyymmddThhmmssZ" for a Unix time.
 static func utc_stamp(unix_s: int) -> String:
 	var d := Time.get_datetime_dict_from_unix_time(unix_s)
-	return "%04d%02d%02dT%02d%02d%02dZ" % [d["year"], d["month"], d["day"], d["hour"], d["minute"], d["second"]]
+	return (
+		"%04d%02d%02dT%02d%02d%02dZ"
+		% [d["year"], d["month"], d["day"], d["hour"], d["minute"], d["second"]]
+	)
 
 
 ## ISO 8601 UTC ("2026-10-21T13:26:00Z").
@@ -353,9 +378,21 @@ func _ready_to_save() -> bool:
 
 func _new_lap(label: String, start_rel: float) -> Dictionary:
 	return {
-		"label": label, "start_rel": start_rel, "end_rel": -1.0, "elapsed": 0.0, "timer": 0.0,
-		"work": 0.0, "dist": 0.0, "cad_sum": 0.0, "cad_time": 0.0, "spd_sum": 0.0,
-		"spd_time": 0.0, "max_p": 0.0, "max_c": -1.0, "max_s": -1.0, "records": 0,
+		"label": label,
+		"start_rel": start_rel,
+		"end_rel": -1.0,
+		"elapsed": 0.0,
+		"timer": 0.0,
+		"work": 0.0,
+		"dist": 0.0,
+		"cad_sum": 0.0,
+		"cad_time": 0.0,
+		"spd_sum": 0.0,
+		"spd_time": 0.0,
+		"max_p": 0.0,
+		"max_c": -1.0,
+		"max_s": -1.0,
+		"records": 0,
 		"trigger": FitEncoder.LAP_TRIGGER_MANUAL,
 	}
 
@@ -445,9 +482,19 @@ func _lap_summary(acc: Dictionary, index: int) -> Dictionary:
 		"kj": float(roundi(float(acc["work"]))) / 1000.0,
 		"avg_power_w": _r1(float(acc["work"]) / elapsed) if elapsed > 0.0 else 0.0,
 		"max_power_w": _r1(float(acc["max_p"])),
-		"avg_cadence_rpm": _r1(float(acc["cad_sum"]) / float(acc["cad_time"])) if float(acc["cad_time"]) > 0.0 else -1.0,
+		"avg_cadence_rpm":
+		(
+			_r1(float(acc["cad_sum"]) / float(acc["cad_time"]))
+			if float(acc["cad_time"]) > 0.0
+			else -1.0
+		),
 		"max_cadence_rpm": _r1(float(acc["max_c"])),
-		"avg_speed_kmh": _r2(float(acc["spd_sum"]) / float(acc["spd_time"])) if float(acc["spd_time"]) > 0.0 else -1.0,
+		"avg_speed_kmh":
+		(
+			_r2(float(acc["spd_sum"]) / float(acc["spd_time"]))
+			if float(acc["spd_time"]) > 0.0
+			else -1.0
+		),
 		"max_speed_kmh": _r2(float(acc["max_s"])),
 		"records": int(acc["records"]),
 	}
@@ -469,8 +516,10 @@ func _lap_fit(acc: Dictionary, index: int, end_rel: float) -> Dictionary:
 		"elapsed_s": float(s["duration_s"]),
 		"timer_s": float(s["timer_s"]),
 		"distance_m": float(s["distance_m"]),
-		"avg_speed_mps": float(s["avg_speed_kmh"]) / 3.6 if float(s["avg_speed_kmh"]) >= 0.0 else -1.0,
-		"max_speed_mps": float(s["max_speed_kmh"]) / 3.6 if float(s["max_speed_kmh"]) >= 0.0 else -1.0,
+		"avg_speed_mps":
+		float(s["avg_speed_kmh"]) / 3.6 if float(s["avg_speed_kmh"]) >= 0.0 else -1.0,
+		"max_speed_mps":
+		float(s["max_speed_kmh"]) / 3.6 if float(s["max_speed_kmh"]) >= 0.0 else -1.0,
 		"avg_power_w": float(s["avg_power_w"]),
 		"max_power_w": float(s["max_power_w"]),
 		"avg_cadence_rpm": float(s["avg_cadence_rpm"]),

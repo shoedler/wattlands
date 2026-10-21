@@ -148,9 +148,21 @@ const _RESCUE_RAMP := 2
 
 ## Keys configure() accepts.
 const CONFIG_KEYS: Array[String] = [
-	"ftp_w", "ftp_verified", "difficulty_pct", "grade_min_pct", "grade_max_pct", "haptics_on",
-	"haptic_intensity", "skip_warmup", "multiplayer", "crr", "cw", "trainer_max_w", "profile",
-	"weight_kg", "system_mass_kg",
+	"ftp_w",
+	"ftp_verified",
+	"difficulty_pct",
+	"grade_min_pct",
+	"grade_max_pct",
+	"haptics_on",
+	"haptic_intensity",
+	"skip_warmup",
+	"multiplayer",
+	"crr",
+	"cw",
+	"trainer_max_w",
+	"profile",
+	"weight_kg",
+	"system_mass_kg",
 ]
 
 # --- configuration -------------------------------------------------------------------
@@ -272,6 +284,7 @@ func _init() -> void:
 # Public API (frozen W0 signatures)
 # =============================================================================================
 
+
 ## Bind the device (the governor creates and owns its TrainerController around it).
 ## Calling it again (a reconnect with a new device object, LocalRider.rebind_device) rebinds
 ## the controller to that device; plan, phase, configuration and rider state (warm-up,
@@ -317,7 +330,7 @@ func setup(device: TrainerDevice) -> void:
 func configure(params: Dictionary) -> void:
 	for key: Variant in params.keys():
 		if not CONFIG_KEYS.has(str(key)):
-			push_warning("SafetyGovernor: unknown configure key \"%s\" ignored" % str(key))
+			push_warning('SafetyGovernor: unknown configure key "%s" ignored' % str(key))
 	if params.has("ftp_w"):
 		var f := float(params["ftp_w"])
 		if GovernorClamps.ftp_in_range(f):
@@ -325,20 +338,44 @@ func configure(params: Dictionary) -> void:
 		elif f < GovernorClamps.FTP_MIN_W:
 			# W4r2 (SAF-1 range): below the range (zero, negative, -inf) the rider gets the lowest
 			# basis there is, never the previous or default one (200 W for a 25 W rider).
-			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); using %d W" % [
-				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), int(GovernorClamps.FTP_MIN_W)])
+			push_error(
+				(
+					"SafetyGovernor: ftp_w must be within %d-%d W (got %s); using %d W"
+					% [
+						int(GovernorClamps.FTP_MIN_W),
+						int(GovernorClamps.FTP_MAX_W),
+						str(params["ftp_w"]),
+						int(GovernorClamps.FTP_MIN_W)
+					]
+				)
+			)
 			_ftp_w = GovernorClamps.FTP_MIN_W
 		else:
-			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); keeping %s W" % [
-				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), str(_ftp_w)])
+			push_error(
+				(
+					"SafetyGovernor: ftp_w must be within %d-%d W (got %s); keeping %s W"
+					% [
+						int(GovernorClamps.FTP_MIN_W),
+						int(GovernorClamps.FTP_MAX_W),
+						str(params["ftp_w"]),
+						str(_ftp_w)
+					]
+				)
+			)
 	if params.has("ftp_verified"):
 		_ftp_verified = bool(params["ftp_verified"])
 	if params.has("difficulty_pct"):
-		_difficulty_pct = _clamped_param("difficulty_pct", float(params["difficulty_pct"]), 0.0, 100.0)
+		_difficulty_pct = _clamped_param(
+			"difficulty_pct", float(params["difficulty_pct"]), 0.0, 100.0
+		)
 	if params.has("grade_min_pct"):
-		_grade_min_pct = _clamped_param("grade_min_pct", float(params["grade_min_pct"]), GRADE_TOTAL_MIN, GRADE_TOTAL_MAX)
+		_grade_min_pct = _clamped_param(
+			"grade_min_pct", float(params["grade_min_pct"]), GRADE_TOTAL_MIN, GRADE_TOTAL_MAX
+		)
 	if params.has("grade_max_pct"):
-		_grade_max_pct = _clamped_param("grade_max_pct", float(params["grade_max_pct"]), GRADE_TOTAL_MIN, GRADE_TOTAL_MAX)
+		_grade_max_pct = _clamped_param(
+			"grade_max_pct", float(params["grade_max_pct"]), GRADE_TOTAL_MIN, GRADE_TOTAL_MAX
+		)
 	if _grade_min_pct > _grade_max_pct:
 		push_warning("SafetyGovernor: grade_min_pct > grade_max_pct, swapped")
 		var tmp := _grade_min_pct
@@ -350,7 +387,9 @@ func configure(params: Dictionary) -> void:
 			# Opting out ends a running haptic at once (4.6.6: haptics are off for opted-out riders).
 			_end_haptic()
 	if params.has("haptic_intensity"):
-		_haptic_intensity = _clamped_param("haptic_intensity", float(params["haptic_intensity"]), 0.0, 1.0)
+		_haptic_intensity = _clamped_param(
+			"haptic_intensity", float(params["haptic_intensity"]), 0.0, 1.0
+		)
 	if params.has("skip_warmup"):
 		_skip_warmup = bool(params["skip_warmup"])
 	if params.has("multiplayer"):
@@ -374,11 +413,13 @@ func configure(params: Dictionary) -> void:
 				_test_ended = false
 			_profile = p
 		else:
-			push_error("SafetyGovernor: unknown profile \"%s\" (normal or ramp_test)" % p)
+			push_error('SafetyGovernor: unknown profile "%s" (normal or ramp_test)' % p)
 	if params.has("weight_kg"):
 		_weight_kg = _clamped_param("weight_kg", float(params["weight_kg"]), 20.0, 250.0)
 	if params.has("system_mass_kg"):
-		_system_mass_kg = _clamped_param("system_mass_kg", float(params["system_mass_kg"]), 20.0, 300.0)
+		_system_mass_kg = _clamped_param(
+			"system_mass_kg", float(params["system_mass_kg"]), 20.0, 300.0
+		)
 	if _skip_warmup and _warmup_active:
 		_warmup_active = false
 		warmup_changed.emit(false)
@@ -433,7 +474,12 @@ func start_phase(index: int) -> void:
 ## start_phase(index).
 func resume_phase(index: int, elapsed_s: float, phase_distance_m: float = -1.0) -> void:
 	if not is_finite(elapsed_s) or elapsed_s < 0.0:
-		push_error("SafetyGovernor: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)" % [index, str(elapsed_s)])
+		push_error(
+			(
+				"SafetyGovernor: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)"
+				% [index, str(elapsed_s)]
+			)
+		)
 		return
 	if not _phase_index_ok(index, "resume_phase(%d)" % index):
 		return
@@ -463,7 +509,9 @@ func distance_ridden_since(game_t: float) -> float:
 			hi = mid - 1
 	var a := _distance_hist[lo]
 	# After the last entry, interpolate toward now (the latest distance at the current game time).
-	var b := _distance_hist[lo + 1] if lo + 1 < _distance_hist.size() else Vector2(_game_t, _distance_m)
+	var b := (
+		_distance_hist[lo + 1] if lo + 1 < _distance_hist.size() else Vector2(_game_t, _distance_m)
+	)
 	var at := float(a.y)
 	var span := float(b.x) - float(a.x)
 	if span > _EPS:
@@ -531,27 +579,38 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		confirm_sim = directive.mode == Wl.SIM
 	else:
 		if sets_haptic and not block_active:
-			return _refuse(rec, Wl.REFUSE_HAPTIC_ERG, "haptic for a rider in ERG (never a mode switch)")
+			return _refuse(
+				rec, Wl.REFUSE_HAPTIC_ERG, "haptic for a rider in ERG (never a mode switch)"
+			)
 		if sets_target:
 			target_pct = _target_pct_of(directive)
 			var rng := _phase.effective_range()
 			var lo := float(rng[0])
 			var hi := float(rng[1])
 			if target_pct < lo - _EPS or target_pct > hi + _EPS:
-				return _refuse(rec, Wl.REFUSE_RANGE, "%.3f%% FTP outside [%.3f, %.3f]" % [target_pct, lo, hi])
+				return _refuse(
+					rec, Wl.REFUSE_RANGE, "%.3f%% FTP outside [%.3f, %.3f]" % [target_pct, lo, hi]
+				)
 		if directive.mode == Wl.SIM:
 			if block_active:
 				confirm_sim = true
 			else:
 				var d := directive.duration_s
 				if d < SIM_BLOCK_MIN_S - _EPS or d > SIM_BLOCK_MAX_S + _EPS:
-					return _refuse(rec, Wl.REFUSE_SIM_BLOCK_LENGTH, "SIM block duration_s %.2f outside [10, 30]" % d)
+					return _refuse(
+						rec,
+						Wl.REFUSE_SIM_BLOCK_LENGTH,
+						"SIM block duration_s %.2f outside [10, 30]" % d
+					)
 				var unsafe := _unsafe_reason()
 				if unsafe != "":
 					return _refuse(rec, Wl.REFUSE_SIM_BLOCK_UNSAFE, "SIM block during %s" % unsafe)
 				if _t - _last_switch_t < SWITCH_SPACING_S - _EPS:
-					return _refuse(rec, Wl.REFUSE_SWITCH_SPACING,
-						"%.2f s since the last ERG/SIM switch (< 30 s)" % (_t - _last_switch_t))
+					return _refuse(
+						rec,
+						Wl.REFUSE_SWITCH_SPACING,
+						"%.2f s since the last ERG/SIM switch (< 30 s)" % (_t - _last_switch_t)
+					)
 				opens_block = true
 		elif directive.mode == Wl.ERG:
 			ends_block = block_active
@@ -579,7 +638,9 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		_ch_erg = {"pct": target_pct, "id": directive.id, "expires": expiry}
 	if opens_block:
 		var block_s := snappedf(directive.duration_s, Wl.SIM_DT)
-		_ch_block = {"id": directive.id, "expires": _game_t + block_s, "start_t": _t, "duration_s": block_s}
+		_ch_block = {
+			"id": directive.id, "expires": _game_t + block_s, "start_t": _t, "duration_s": block_s
+		}
 		applied["sim_block"] = true
 		applied["duration_s"] = block_s
 	if ends_block:
@@ -596,7 +657,9 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 	if sets_haptic:
 		if haptic_drop != "":
 			(rec["dropped"] as Array).append({"channel": "haptic", "reason": haptic_drop})
-			push_warning("SafetyGovernor: haptic of directive %d dropped: %s" % [directive.id, haptic_drop])
+			push_warning(
+				"SafetyGovernor: haptic of directive %d dropped: %s" % [directive.id, haptic_drop]
+			)
 		else:
 			haptic_applied = true
 			var hap_s := directive.duration_s
@@ -620,7 +683,9 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		var fc := clampf(crr_f, FACTOR_MIN, FACTOR_MAX)
 		var fw := clampf(cw_f, FACTOR_MIN, FACTOR_MAX)
 		var factor_clamped := not is_equal_approx(fc, crr_f) or not is_equal_approx(fw, cw_f)
-		_ch_factors = {"crr": fc, "cw": fw, "id": directive.id, "expires": expiry, "clamped": factor_clamped}
+		_ch_factors = {
+			"crr": fc, "cw": fw, "id": directive.id, "expires": expiry, "clamped": factor_clamped
+		}
 		applied["crr_factor"] = fc
 		applied["cw_factor"] = fw
 		if factor_clamped:
@@ -635,13 +700,19 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		applied["target_w"] = int(e["w"])
 		for c: String in e["clamped_by"]:
 			_append_unique(clamped, c)
-		if _desired == Wl.ERG and _controller.mode() == Wl.ERG and _controller.applied_target_w() < int(e["w"]):
+		if (
+			_desired == Wl.ERG
+			and _controller.mode() == Wl.ERG
+			and _controller.applied_target_w() < int(e["w"])
+		):
 			if _controller.entry_active():
 				_append_unique(clamped, Wl.CLAMP_SWITCH)
 			_append_unique(clamped, Wl.CLAMP_SLEW)
 		if _panic:
 			_append_unique(clamped, Wl.CLAMP_PANIC)
-	var sim_channels := opens_block or confirm_sim or sets_mode_grade or haptic_applied or sets_factors
+	var sim_channels := (
+		opens_block or confirm_sim or sets_mode_grade or haptic_applied or sets_factors
+	)
 	if sim_channels and (_desired == Wl.SIM or _desired == MODE_SAFE):
 		var s := _compute_sim()
 		applied["grade_pct"] = float(s["grade_pct"])
@@ -678,7 +749,7 @@ func set_course_grade(grade_pct: float) -> void:
 		_refuse(rec, Wl.REFUSE_COOLDOWN, "the cool-down ignores directives")
 		return
 	if _phase.mode != Wl.SIM or _phase.grade_source != Wl.GRADE_GAME:
-		_refuse(rec, Wl.REFUSE_NOT_GAME_GRADE, "course_grade outside a grade_source \"game\" phase")
+		_refuse(rec, Wl.REFUSE_NOT_GAME_GRADE, 'course_grade outside a grade_source "game" phase')
 		return
 	_course_source = grade_pct
 	_course_source_set = true
@@ -912,6 +983,7 @@ func is_warmup_active() -> bool:
 
 # --- additive helpers (W1) ---------------------------------------------------------------
 
+
 ## True after the 10 s coasting rule marked a multiplayer rider AFK (until pedaling resumes).
 func is_afk() -> bool:
 	return _afk
@@ -964,6 +1036,7 @@ static func profile_grade(profile: Array, distance_m: float) -> float:
 # =============================================================================================
 # Rules
 # =============================================================================================
+
 
 func _process_samples() -> void:
 	if _pending.is_empty():
@@ -1038,8 +1111,11 @@ func _link_up() -> bool:
 	if _device == null or not is_instance_valid(_device):
 		return false
 	var st := _device.status()
-	return st != TrainerDevice.STATUS_DISCONNECTED and st != TrainerDevice.STATUS_SCANNING \
+	return (
+		st != TrainerDevice.STATUS_DISCONNECTED
+		and st != TrainerDevice.STATUS_SCANNING
 		and st != TrainerDevice.STATUS_CONNECTING
+	)
 
 
 func _power_mean(window_s: float) -> float:
@@ -1093,8 +1169,11 @@ func _update_warmup() -> void:
 	else:
 		if _wu.started_t >= 0.0 and not _wu.done and _wu.t - _wu.started_t >= WARMUP_S - _EPS:
 			_wu.done = true
-		if (_wu.done or _wu.started_t >= 0.0) and _wu.last_pedal_t >= 0.0 \
-				and _wu.t - _wu.last_pedal_t >= WARMUP_RESET_S - _EPS:
+		if (
+			(_wu.done or _wu.started_t >= 0.0)
+			and _wu.last_pedal_t >= 0.0
+			and _wu.t - _wu.last_pedal_t >= WARMUP_RESET_S - _EPS
+		):
 			_wu.done = false
 			_wu.started_t = -1.0
 		active = not _wu.done
@@ -1126,8 +1205,16 @@ func _update_rescue() -> void:
 	# the later of the first sample that met it and the moment rescue armed.
 	var triggered := false
 	if armed:
-		triggered = (_cad_low_since >= 0.0 and _t - maxf(_cad_low_since, _rescue_armed_t) >= RESCUE_CADENCE_LOW_S - _EPS) \
-			or (_pow_low_since >= 0.0 and _t - maxf(_pow_low_since, _rescue_armed_t) >= RESCUE_POWER_LOW_S - _EPS)
+		triggered = (
+			(
+				_cad_low_since >= 0.0
+				and _t - maxf(_cad_low_since, _rescue_armed_t) >= RESCUE_CADENCE_LOW_S - _EPS
+			)
+			or (
+				_pow_low_since >= 0.0
+				and _t - maxf(_pow_low_since, _rescue_armed_t) >= RESCUE_POWER_LOW_S - _EPS
+			)
+		)
 	match _rescue_state:
 		_RESCUE_NONE, _RESCUE_RAMP:
 			if armed and triggered:
@@ -1234,8 +1321,11 @@ func _compute_erg() -> Dictionary:
 		w *= GovernorClamps.UNVERIFIED_FACTOR
 		clamped.append(Wl.CLAMP_UNVERIFIED)
 	var whole := GovernorClamps.whole_w(w)
-	var ceiling := GovernorClamps.ramp_test_ceiling_w(_trainer_max_w) if ramp_test \
+	var ceiling := (
+		GovernorClamps.ramp_test_ceiling_w(_trainer_max_w)
+		if ramp_test
 		else GovernorClamps.ceiling_w(_ftp_w, _trainer_max_w)
+	)
 	if whole > ceiling:
 		whole = ceiling
 		clamped.append(Wl.CLAMP_CEILING)
@@ -1338,9 +1428,15 @@ func _compute_sim() -> Dictionary:
 	if bool(_ch_factors.get("clamped", false)):
 		clamped.append(Wl.CLAMP_FACTOR)
 	return {
-		"grade_pct": total, "wind_mps": wind, "crr": _crr * crr_f, "cw": _cw * cw_f,
-		"haptic_pct": hap, "base_grade_pct": base, "course_grade_pct": course,
-		"mode_grade_pct": mode_grade, "clamped_by": clamped,
+		"grade_pct": total,
+		"wind_mps": wind,
+		"crr": _crr * crr_f,
+		"cw": _cw * cw_f,
+		"haptic_pct": hap,
+		"base_grade_pct": base,
+		"course_grade_pct": course,
+		"mode_grade_pct": mode_grade,
+		"clamped_by": clamped,
 	}
 
 
@@ -1363,8 +1459,14 @@ func _empty_erg() -> Dictionary:
 
 func _empty_sim() -> Dictionary:
 	return {
-		"grade_pct": 0.0, "wind_mps": 0.0, "crr": _crr, "cw": _cw, "haptic_pct": 0.0,
-		"base_grade_pct": 0.0, "course_grade_pct": 0.0, "mode_grade_pct": 0.0,
+		"grade_pct": 0.0,
+		"wind_mps": 0.0,
+		"crr": _crr,
+		"cw": _cw,
+		"haptic_pct": 0.0,
+		"base_grade_pct": 0.0,
+		"course_grade_pct": 0.0,
+		"mode_grade_pct": 0.0,
 		"clamped_by": [] as Array[String],
 	}
 
@@ -1386,8 +1488,14 @@ func _command_controller() -> void:
 		Wl.ERG:
 			_controller.command_erg(int(_erg_out["w"]), _floor_w(), p3s)
 		Wl.SIM:
-			_controller.command_sim(float(_sim_out["wind_mps"]), float(_sim_out["grade_pct"]),
-				float(_sim_out["crr"]), float(_sim_out["cw"]), _floor_w(), p3s)
+			_controller.command_sim(
+				float(_sim_out["wind_mps"]),
+				float(_sim_out["grade_pct"]),
+				float(_sim_out["crr"]),
+				float(_sim_out["cw"]),
+				_floor_w(),
+				p3s
+			)
 		MODE_SAFE:
 			pass
 		_:
@@ -1422,6 +1530,7 @@ func _update_clamped_by() -> void:
 # =============================================================================================
 # Channels, phases and mode
 # =============================================================================================
+
 
 ## True when `index` is a phase of the current plan; push_error (naming `what`) otherwise.
 func _phase_index_ok(index: int, what: String) -> bool:
@@ -1469,8 +1578,11 @@ func _update_desired() -> void:
 	# SIM (W4, SAF-6): ERG -> OFF is a switch, and OFF -> ERG is one when the controller has the
 	# trainer at SIM (the menus, a cool-down that already stepped down). A fresh controller that
 	# has written nothing knows no previous mode, so a first ERG is no switch.
-	var was_sim := _desired == Wl.SIM or _desired == MODE_SAFE \
+	var was_sim := (
+		_desired == Wl.SIM
+		or _desired == MODE_SAFE
 		or (_desired == Wl.OFF and _controller.mode() == Wl.SIM)
+	)
 	var now_sim := next == Wl.SIM or next == MODE_SAFE or (next == Wl.OFF and not _shut_down)
 	if (was_erg and now_sim) or (was_sim and now_erg):
 		_last_switch_t = _t
@@ -1499,7 +1611,10 @@ func _expire_channels() -> void:
 		_ch_mode_grade = {}
 	if not _ch_factors.is_empty() and _expired(_ch_factors):
 		_ch_factors = {}
-	if not _ch_haptic.is_empty() and (_expired(_ch_haptic) or _t >= float(_ch_haptic["end_t"]) - _EPS):
+	if (
+		not _ch_haptic.is_empty()
+		and (_expired(_ch_haptic) or _t >= float(_ch_haptic["end_t"]) - _EPS)
+	):
 		_end_haptic()
 
 
@@ -1536,7 +1651,10 @@ func _update_course_grade() -> void:
 		src = profile_grade(_phase.course_profile, phase_distance_m())
 	if is_nan(src):
 		return
-	if absf(src - _course_applied) > 1e-9 and _t - _course_applied_t >= COURSE_GRADE_INTERVAL_S - _EPS:
+	if (
+		absf(src - _course_applied) > 1e-9
+		and _t - _course_applied_t >= COURSE_GRADE_INTERVAL_S - _EPS
+	):
 		_course_applied = src
 		_course_applied_t = _t
 
@@ -1565,7 +1683,7 @@ func _target_pct_of(d: EffortDirective) -> float:
 
 func _bad_fields(d: EffortDirective) -> String:
 	if d.mode != "" and d.mode != Wl.ERG and d.mode != Wl.SIM:
-		return "mode \"%s\" is not ERG or SIM" % d.mode
+		return 'mode "%s" is not ERG or SIM' % d.mode
 	for f: String in EffortDirective.FLOAT_FIELDS:
 		var v: float = d.get(f)
 		if not is_nan(v) and not is_finite(v):
@@ -1578,23 +1696,41 @@ func _bad_fields(d: EffortDirective) -> String:
 			targets += 1
 	if targets > 1:
 		return "more than one of target_pct, target_wkg, target_w"
-	if d.mode == "" and not (d.sets_erg_target() or d.sets_haptic() or d.is_set("mode_grade") or d.sets_factors()):
+	if (
+		d.mode == ""
+		and not (
+			d.sets_erg_target() or d.sets_haptic() or d.is_set("mode_grade") or d.sets_factors()
+		)
+	):
 		return "no channel set"
 	return ""
 
 
 func _new_record(kind: String, requested: Dictionary, id: int) -> Dictionary:
 	return {
-		"id": id, "kind": kind, "requested": requested, "applied": {},
-		"clamped_by": [] as Array[String], "refused": false, "reason": "", "dropped": [],
-		"t": _t, "game_t": _game_t, "phase_index": _phase_index,
+		"id": id,
+		"kind": kind,
+		"requested": requested,
+		"applied": {},
+		"clamped_by": [] as Array[String],
+		"refused": false,
+		"reason": "",
+		"dropped": [],
+		"t": _t,
+		"game_t": _game_t,
+		"phase_index": _phase_index,
 	}
 
 
 func _refuse(rec: Dictionary, reason: String, detail: String) -> Dictionary:
 	rec["refused"] = true
 	rec["reason"] = reason
-	push_warning("SafetyGovernor: %s %d refused: %s (%s)" % [str(rec["kind"]), int(rec["id"]), reason, detail])
+	push_warning(
+		(
+			"SafetyGovernor: %s %d refused: %s (%s)"
+			% [str(rec["kind"]), int(rec["id"]), reason, detail]
+		)
+	)
 	directive_applied.emit(rec)
 	return rec
 
@@ -1602,6 +1738,7 @@ func _refuse(rec: Dictionary, reason: String, detail: String) -> Dictionary:
 # =============================================================================================
 # Status
 # =============================================================================================
+
 
 func _update_status() -> void:
 	var mode := Wl.OFF if _shut_down else _controller.mode()
@@ -1695,6 +1832,7 @@ static func _status_equal(a: Dictionary, b: Dictionary) -> bool:
 # Helpers
 # =============================================================================================
 
+
 static func _append_unique(arr: Array[String], value: String) -> void:
 	if not arr.has(value):
 		arr.append(value)
@@ -1713,5 +1851,7 @@ func _clamped_param(key: String, value: float, lo: float, hi: float) -> float:
 		push_warning("SafetyGovernor: %s is not finite; using %s" % [key, str(lo)])
 		return lo
 	if value < lo or value > hi:
-		push_warning("SafetyGovernor: %s = %s clamped to [%s, %s]" % [key, str(value), str(lo), str(hi)])
+		push_warning(
+			"SafetyGovernor: %s = %s clamped to [%s, %s]" % [key, str(value), str(lo), str(hi)]
+		)
 	return clampf(value, lo, hi)

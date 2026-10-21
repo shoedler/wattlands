@@ -29,8 +29,15 @@ const TRACE_PERIOD_S := 1.0
 ## Event types in `event` batches that the platform itself sends (not game events). The
 ## GameHost prefixes its own with PLATFORM_EVENT_PREFIX ("wl.phase_started", "wl.lap_marker",
 ## "wl.finished"); the bare names are kept for older hosts.
-const PLATFORM_EVENT_TYPES: Array[String] = ["phase_started", "phase", "phase_changed",
-	"game_phase_changed", "results", "session_end", "session_state"]
+const PLATFORM_EVENT_TYPES: Array[String] = [
+	"phase_started",
+	"phase",
+	"phase_changed",
+	"game_phase_changed",
+	"results",
+	"session_end",
+	"session_state"
+]
 const PLATFORM_EVENT_PREFIX := "wl."
 const WL_PHASE_STARTED := "wl.phase_started"
 
@@ -174,13 +181,18 @@ func step(dt: float) -> void:
 		"closing":
 			if clock >= close_at:
 				finish("complete", EXIT_OK)
-	if strava_state == "connecting" and services.rides != null and services.rides.strava_connected():
+	if (
+		strava_state == "connecting"
+		and services.rides != null
+		and services.rides.strava_connected()
+	):
 		strava_state = "connected"
 	if strava_state == "connecting" and strava_deadline >= 0.0 and clock >= strava_deadline:
 		finish("error:strava_connect_timeout", EXIT_ERROR)
 
 
 # --- signals -----------------------------------------------------------------------------------
+
 
 func _connect_signals() -> void:
 	if _connected:
@@ -218,16 +230,25 @@ func _disconnect_signals() -> void:
 		app.quitting.disconnect(_on_app_quitting)
 	var net := services.net
 	if net != null:
-		for pair: Array in [[net.state_changed, _on_net_state], [net.lobby_changed, _on_lobby_changed],
-				[net.refused, _on_refused], [net.game_message, _on_game_message]]:
+		for pair: Array in [
+			[net.state_changed, _on_net_state],
+			[net.lobby_changed, _on_lobby_changed],
+			[net.refused, _on_refused],
+			[net.game_message, _on_game_message]
+		]:
 			if (pair[0] as Signal).is_connected(pair[1]):
 				(pair[0] as Signal).disconnect(pair[1])
 	var bus := services.bus
 	if bus != null:
-		for pair: Array in [[bus.session_state_changed, _on_session_state], [bus.phase_started, _on_phase_started],
-				[bus.directive_applied, _on_directive_applied], [bus.results_ready, _on_results_ready],
-				[bus.ride_saved, _on_ride_saved], [bus.upload_state_changed, _on_upload_state],
-				[bus.strava_state_changed, _on_strava_state]]:
+		for pair: Array in [
+			[bus.session_state_changed, _on_session_state],
+			[bus.phase_started, _on_phase_started],
+			[bus.directive_applied, _on_directive_applied],
+			[bus.results_ready, _on_results_ready],
+			[bus.ride_saved, _on_ride_saved],
+			[bus.upload_state_changed, _on_upload_state],
+			[bus.strava_state_changed, _on_strava_state]
+		]:
 			if (pair[0] as Signal).is_connected(pair[1]):
 				(pair[0] as Signal).disconnect(pair[1])
 
@@ -237,7 +258,11 @@ func _disconnect_signals() -> void:
 func _on_app_quitting(code: int) -> void:
 	if phase == "done":
 		return
-	var why := services.app.exit_reason if services.app != null and services.app.exit_reason != "" else "quit"
+	var why := (
+		services.app.exit_reason
+		if services.app != null and services.app.exit_reason != ""
+		else "quit"
+	)
 	finish(why, EXIT_TIMEOUT if why == "run_seconds" else code)
 
 
@@ -282,7 +307,11 @@ func _setup_host_lobby() -> void:
 	var net := services.net
 	var m := services.registry.manifest(game_id)
 	net.set_game(game_id, str(m.get("version", "")), content_id)
-	var sc := str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP)) if services.settings != null else Wl.FAIR_FTP
+	var sc := (
+		str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP))
+		if services.settings != null
+		else Wl.FAIR_FTP
+	)
 	net.set_scaling(sc if Wl.SCALING_MODES.has(sc) else Wl.FAIR_FTP)
 	net.set_setting("options", AppLobbyModel.resolve_game_options(services.registry, game_id, {}))
 	if bool(m.get("bots", false)):
@@ -297,8 +326,11 @@ func _send_player_info(gid: String) -> void:
 		popts = AppLobbyModel.resolve_player_options(services.registry, gid, {})
 	var sc := str(services.net.lobby.get("scaling", Wl.FAIR_FTP))
 	var st := services.trainer.status() if services.trainer != null else ""
-	services.net.set_local_player_info(AppLobbyModel.player_info(services.profile(), sc, popts,
-		AppLobbyModel.installed_games(services.registry), st))
+	services.net.set_local_player_info(
+		AppLobbyModel.player_info(
+			services.profile(), sc, popts, AppLobbyModel.installed_games(services.registry), st
+		)
+	)
 
 
 func _on_lobby_changed(lobby: Dictionary) -> void:
@@ -352,7 +384,10 @@ func _on_game_message(from: int, data: Dictionary) -> void:
 				launch(Wl.CLIENT, {"session_start": data.duplicate(true)})
 		"plan", "phase", "snapshot":
 			if phase == "lobby":
-				launch(Wl.CLIENT, {"rejoin": true, "replay": [{"from": from, "data": data.duplicate(true)}]})
+				launch(
+					Wl.CLIENT,
+					{"rejoin": true, "replay": [{"from": from, "data": data.duplicate(true)}]}
+				)
 			if type == "snapshot":
 				last_snapshot = data.get("state", null)
 		"event":
@@ -376,7 +411,9 @@ func _record_event_batch(data: Dictionary) -> void:
 		var e: Dictionary = ev
 		var t := str(e.get("type", ""))
 		if t == WL_PHASE_STARTED:
-			report.add_event(clock, "phase_started", int(e.get("peer", 0)), {"index": int(e.get("index", 0))})
+			report.add_event(
+				clock, "phase_started", int(e.get("peer", 0)), {"index": int(e.get("index", 0))}
+			)
 		elif t.begins_with(PLATFORM_EVENT_PREFIX) or PLATFORM_EVENT_TYPES.has(t):
 			continue
 		else:
@@ -384,6 +421,7 @@ func _record_event_batch(data: Dictionary) -> void:
 
 
 # --- session -----------------------------------------------------------------------------------
+
 
 ## Create and start the GameHost (HOST or CLIENT) through AppSessionLauncher.
 func launch(role: String, params: Dictionary) -> void:
@@ -446,9 +484,16 @@ func sample_trace() -> void:
 		st = rider.governor.status()
 	if st.is_empty():
 		var tm := rider.telemetry()
-		st = {"mode": tm.mode, "applied_target_w": tm.applied_target_w, "applied_grade_pct": tm.applied_grade_pct,
-			"clamped_by": tm.clamped_by, "rescue": tm.rescue, "afk": tm.afk,
-			"applied_pct": 0.0, "warmup_active": false}
+		st = {
+			"mode": tm.mode,
+			"applied_target_w": tm.applied_target_w,
+			"applied_grade_pct": tm.applied_grade_pct,
+			"clamped_by": tm.clamped_by,
+			"rescue": tm.rescue,
+			"afk": tm.afk,
+			"applied_pct": 0.0,
+			"warmup_active": false
+		}
 		if rider.slot != null and rider.slot.ftp > 0.0:
 			st["applied_pct"] = 100.0 * float(tm.applied_target_w) / rider.slot.ftp
 	report.add_trace(clock, st)
@@ -484,7 +529,12 @@ func _on_phase_started(peer: int, index: int) -> void:
 
 
 func _record_game_event(event: Dictionary) -> void:
-	report.add_event(clock, "game_event", Wl.HOST_PEER, {"event_type": str(event.get("type", "")), "event": event.duplicate(true)})
+	report.add_event(
+		clock,
+		"game_event",
+		Wl.HOST_PEER,
+		{"event_type": str(event.get("type", "")), "event": event.duplicate(true)}
+	)
 
 
 func _on_directive_applied(peer: int, record: Dictionary) -> void:
@@ -515,9 +565,15 @@ func _on_session_finished(r: GameResults) -> void:
 		# The session ended without GameResults (aborted, host gone): the run failed.
 		finish("error:no_results", EXIT_ERROR)
 		return
-	report.add_event(clock, "results", local_peer, {
-		"grade": results.grade if results != null else "",
-		"session_id": results.session_id if results != null else ""})
+	report.add_event(
+		clock,
+		"results",
+		local_peer,
+		{
+			"grade": results.grade if results != null else "",
+			"session_id": results.session_id if results != null else ""
+		}
+	)
 	set_state("results")
 	phase = "results"
 	_collect_fit()
@@ -606,7 +662,9 @@ static func activity_id_from(detail: String) -> Variant:
 			digits += ch
 		elif digits != "":
 			break
-	return int(digits) if digits != "" and digits.length() < 19 else (digits if digits != "" else null)
+	return (
+		int(digits) if digits != "" and digits.length() < 19 else (digits if digits != "" else null)
+	)
 
 
 func _on_strava_state(state: String, _detail: String) -> void:
@@ -627,6 +685,7 @@ func _complete() -> void:
 
 
 # --- finish ------------------------------------------------------------------------------------
+
 
 ## Write the report, print WATTLANDS_DONE and quit with `code` (once).
 func finish(reason: String, code: int) -> void:
@@ -667,8 +726,14 @@ func _write_and_announce() -> void:
 
 
 func final_state() -> Dictionary:
-	var st := {"phase_reached": last_state, "game_id": game_id, "content_id": content_id,
-		"local_peer": local_peer, "room": room, "fit_path": fit_path}
+	var st := {
+		"phase_reached": last_state,
+		"game_id": game_id,
+		"content_id": content_id,
+		"local_peer": local_peer,
+		"room": room,
+		"fit_path": fit_path
+	}
 	if results != null:
 		st["grade"] = results.grade
 		st["results"] = results.to_dict()
@@ -677,7 +742,13 @@ func final_state() -> Dictionary:
 		var tm := rider.telemetry()
 		st["phase_index"] = tm.phase_index
 		st["distance_m"] = tm.distance_m
-	if config != null and config.role == Wl.HOST and host != null and is_instance_valid(host) and host.game != null:
+	if (
+		config != null
+		and config.role == Wl.HOST
+		and host != null
+		and is_instance_valid(host)
+		and host.game != null
+	):
 		# The last snapshot the clients got; calling game.snapshot() again would build a newer
 		# one (Workout adds its timeline to every 20th) and advance the game's own count.
 		var sent := host.last_snapshot()

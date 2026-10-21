@@ -62,7 +62,7 @@ func host(max_peers: int = 8) -> void:
 func join(code: String, token: String = "") -> void:
 	var c := RoomCode.normalize(code)
 	if c == "":
-		push_warning("Transport: \"%s\" is not a room code" % code)
+		push_warning('Transport: "%s" is not a room code' % code)
 		last_error = "room_not_found"
 		disconnected.emit("room_not_found")
 		return
@@ -120,6 +120,7 @@ func in_room() -> bool:
 
 # --- for subclasses ------------------------------------------------------------------------
 
+
 ## Open the socket; call _on_socket_open() once it is ready (or _on_socket_closed()).
 func _socket_open() -> void:
 	pass
@@ -135,7 +136,7 @@ func _socket_close() -> void:
 
 ## A `msg` envelope with an encoded `d`; LoopbackTransport overrides it (fast path).
 func _send_msg_text(to: int, d_text: String) -> void:
-	_socket_send_text("{\"t\":\"msg\",\"to\":%d,\"d\":%s}" % [to, d_text])
+	_socket_send_text('{"t":"msg","to":%d,"d":%s}' % [to, d_text])
 
 
 func _on_socket_open() -> void:
@@ -238,6 +239,7 @@ func _send_envelope(env: Dictionary) -> void:
 
 # --- internals ---------------------------------------------------------------------------
 
+
 func _begin() -> void:
 	_leaving = false
 	if _in_room:
@@ -274,7 +276,7 @@ func _can_send(to: int) -> bool:
 func _on_relay_error(code: String) -> void:
 	last_error = code
 	if _in_room and code != "version_mismatch":
-		push_warning("Transport: relay error \"%s\"" % code)
+		push_warning('Transport: relay error "%s"' % code)
 		relay_error.emit(code)
 		return
 	_pending = {}

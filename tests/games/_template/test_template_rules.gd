@@ -33,15 +33,24 @@ func test_speed_is_proportional_to_p_eff_and_boost_multiplies_it() -> void:
 	var mps := float(_content()["mps_per_w"])
 	assert_almost_eq(TemplateRules.speed(s, 250.0, false), 250.0 * mps, 1e-9)
 	assert_almost_eq(TemplateRules.speed(s, 125.0, false), 125.0 * mps, 1e-9)
-	assert_almost_eq(TemplateRules.speed(s, 250.0, true), 250.0 * mps * float(_content()["boost_mult"]), 1e-9)
-	assert_eq(TemplateRules.speed(s, -50.0, false), 0.0, "negative P_eff never moves a marker backwards")
+	assert_almost_eq(
+		TemplateRules.speed(s, 250.0, true), 250.0 * mps * float(_content()["boost_mult"]), 1e-9
+	)
+	assert_eq(
+		TemplateRules.speed(s, -50.0, false), 0.0, "negative P_eff never moves a marker backwards"
+	)
 
 
 func test_step_integrates_distance_and_counts_ticks() -> void:
 	var s := _state()
 	_steps(s, {1: {"p_eff_w": 250.0}, 2: {"p_eff_w": 0.0}}, 20)
 	assert_eq(s["tick"], 20)
-	assert_almost_eq(float(s["riders"][0]["dist_m"]), 250.0 * float(_content()["mps_per_w"]), 1e-6, "1 s at 250 W")
+	assert_almost_eq(
+		float(s["riders"][0]["dist_m"]),
+		250.0 * float(_content()["mps_per_w"]),
+		1e-6,
+		"1 s at 250 W"
+	)
 	assert_eq(float(s["riders"][1]["dist_m"]), 0.0)
 
 
@@ -93,7 +102,9 @@ func test_a_lap_event_each_time_the_marker_passes_the_track_length() -> void:
 func test_same_inputs_give_the_same_state() -> void:
 	var a := _state([1, 2, -1])
 	var b := _state([1, 2, -1])
-	var inputs := {1: {"p_eff_w": 210.0, "boost": true}, 2: {"p_eff_w": 180.0}, -1: {"p_eff_w": 250.0}}
+	var inputs := {
+		1: {"p_eff_w": 210.0, "boost": true}, 2: {"p_eff_w": 180.0}, -1: {"p_eff_w": 250.0}
+	}
 	var ea := _steps(a, inputs, 600)
 	var eb := _steps(b, inputs, 600)
 	assert_eq(JSON.stringify(a), JSON.stringify(b))
@@ -103,7 +114,7 @@ func test_same_inputs_give_the_same_state() -> void:
 func test_content_error_names_the_problem() -> void:
 	assert_eq(TemplateRules.content_error(_content()), "")
 	for bad: Variant in [[], null, "text", {}, {"phases": {}}]:
-		assert_string_contains(TemplateRules.content_error(bad), "\"phases\"")
+		assert_string_contains(TemplateRules.content_error(bad), '"phases"')
 	var c := _content()
 	c.erase("boost_s")
 	assert_string_contains(TemplateRules.content_error(c), "boost_s")
@@ -114,17 +125,22 @@ func test_content_error_names_the_problem() -> void:
 		for v: Variant in ["fast", -1.0, [5], true]:
 			c = _content()
 			c[k] = v
-			assert_string_contains(TemplateRules.content_error(c), "\"%s\" must be a number" % k)
+			assert_string_contains(TemplateRules.content_error(c), '"%s" must be a number' % k)
 	c = _content()
 	c["boost_s"] = 5  # an int, as a GDScript-built dictionary has it
 	assert_eq(TemplateRules.content_error(c), "")
 
 
 func test_content_error_checks_every_phase() -> void:
-	var good := {"kind": "WORK", "target_pct": 75.0, "duration_s": 180.0, "label": "_TEMPLATE_PHASE_WORK"}
+	var good := {
+		"kind": "WORK", "target_pct": 75.0, "duration_s": 180.0, "label": "_TEMPLATE_PHASE_WORK"
+	}
 	var breaks := {
-		"kind": ["COOLDOWN", "SPRINT", null], "target_pct": [null, "high", [75]], "duration_s": [0.0, -5.0, null, "x"],
-		"label": [null, 5], "ramp_to_pct": ["up", [65]],
+		"kind": ["COOLDOWN", "SPRINT", null],
+		"target_pct": [null, "high", [75]],
+		"duration_s": [0.0, -5.0, null, "x"],
+		"label": [null, 5],
+		"ramp_to_pct": ["up", [65]],
 	}
 	for field: String in breaks:
 		for v: Variant in breaks[field]:
@@ -140,7 +156,7 @@ func test_content_error_checks_every_phase() -> void:
 	var c := _content()
 	(c["phases"] as Array).append(good)
 	(c["phases"] as Array).append("not a phase")
-	assert_string_contains(TemplateRules.content_error(c), "bad phase \"not a phase\"")
+	assert_string_contains(TemplateRules.content_error(c), 'bad phase "not a phase"')
 	c = _content()
 	(c["phases"] as Array).append(good.merged({"ramp_to_pct": 80.0}))
 	assert_eq(TemplateRules.content_error(c), "", "a ramp is optional")

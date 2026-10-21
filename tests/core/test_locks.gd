@@ -27,7 +27,7 @@ func test_hw_lock_follows_the_environment() -> void:
 	OS.set_environment(Locks.HW_ENV, "0")
 	assert_false(Locks.hw_locked())
 	OS.set_environment(Locks.HW_ENV, "yes")
-	assert_false(Locks.hw_locked(), "only \"1\" locks")
+	assert_false(Locks.hw_locked(), 'only "1" locks')
 	OS.unset_environment(Locks.HW_ENV)
 	assert_false(Locks.hw_locked())
 
@@ -170,7 +170,9 @@ func test_loopback_needs_a_known_scheme_and_no_brackets() -> void:
 		assert_false(Locks.is_loopback_url(url), url)
 		assert_false(Locks.network_allows(url), url)
 		assert_push_warning("network integrations locked", url)
-	assert_eq(Locks.url_host("127.0.0.2:8765/x://127.0.0.1"), "127.0.0.1", "url_host() alone is fooled")
+	assert_eq(
+		Locks.url_host("127.0.0.2:8765/x://127.0.0.1"), "127.0.0.1", "url_host() alone is fooled"
+	)
 	assert_false(Locks.has_known_scheme("127.0.0.2:8765/x://127.0.0.1"))
 	var allowed := [
 		"http://127.0.0.1:8899/oauth/token",

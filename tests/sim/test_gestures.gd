@@ -569,7 +569,23 @@ func _first_order(steady_w: float, tau_s: float, n: int) -> Array:
 
 
 func test_spinning_up_from_rest_is_not_a_surge() -> void:
-	var watts := [60.0, 110.0, 145.0, 165.0, 175.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0]
+	var watts := [
+		60.0,
+		110.0,
+		145.0,
+		165.0,
+		175.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0,
+		180.0
+	]
 	assert_eq(_fired(watts), ["pedal_start@3"], "only pedal_start (W3: [pedal_start@3, surge@6])")
 
 
@@ -579,9 +595,22 @@ func test_spinning_up_from_rest_is_not_a_surge() -> void:
 func test_the_apps_first_run_stream_is_not_a_surge() -> void:
 	var g := GestureRecognizer.new()
 	g.configure(FTP, true)
-	var stream := [[1.10, 56.0], [2.05, 119.0], [3.00, 160.0], [4.05, 180.0], [5.10, 184.0],
-		[6.20, 183.0], [7.20, 182.0], [8.2, 181.0], [9.2, 180.0], [10.2, 181.0], [11.2, 182.0],
-		[12.2, 181.0], [13.2, 180.0], [14.2, 182.0]]
+	var stream := [
+		[1.10, 56.0],
+		[2.05, 119.0],
+		[3.00, 160.0],
+		[4.05, 180.0],
+		[5.10, 184.0],
+		[6.20, 183.0],
+		[7.20, 182.0],
+		[8.2, 181.0],
+		[9.2, 180.0],
+		[10.2, 181.0],
+		[11.2, 182.0],
+		[12.2, 181.0],
+		[13.2, 180.0],
+		[14.2, 182.0]
+	]
 	var fired: Array = []
 	for smp: Array in stream:
 		for name in g.on_sample(_s(float(smp[0]), float(smp[1]), 90.0)):
@@ -593,16 +622,24 @@ func test_first_order_spin_ups_are_never_a_surge() -> void:
 	for steady: float in [120.0, 150.0, 170.0, 180.0, 200.0, 250.0, 400.0]:
 		for tau: float in [1.0, 1.5, 2.0, 3.0, 5.0]:
 			var fired := _fired(_first_order(steady, tau, 30))
-			assert_eq(fired.filter(func(x: String) -> bool: return x.begins_with("surge")), [],
-				"spin-up to %.0f W, tau %.1f s: %s" % [steady, tau, str(fired)])
+			assert_eq(
+				fired.filter(func(x: String) -> bool: return x.begins_with("surge")),
+				[],
+				"spin-up to %.0f W, tau %.1f s: %s" % [steady, tau, str(fired)]
+			)
 			# Also by power alone (no cadence reported).
 			var by_power := _fired(_first_order(steady, tau, 30), -1.0)
-			assert_eq(by_power.filter(func(x: String) -> bool: return x.begins_with("surge")), [],
-				"spin-up to %.0f W, tau %.1f s, no cadence: %s" % [steady, tau, str(by_power)])
+			assert_eq(
+				by_power.filter(func(x: String) -> bool: return x.begins_with("surge")),
+				[],
+				"spin-up to %.0f W, tau %.1f s, no cadence: %s" % [steady, tau, str(by_power)]
+			)
 
 
 func test_spike_then_settle_is_not_a_surge() -> void:
-	var fired := _fired([250.0, 230.0, 200.0, 185.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0])
+	var fired := _fired(
+		[250.0, 230.0, 200.0, 185.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0]
+	)
 	assert_eq(fired, ["pedal_start@3"])
 
 
@@ -640,9 +677,11 @@ func test_mock_erg_riders_starting_from_rest_never_surge() -> void:
 		var g := GestureRecognizer.new()
 		g.configure(FTP, true)
 		var fired: Array = []
-		mock.sample_received.connect(func(smp: TrainerSample) -> void:
-			for name in g.on_sample(smp):
-				fired.append("%s@%.1f" % [name, smp.t]))
+		mock.sample_received.connect(
+			func(smp: TrainerSample) -> void:
+				for name in g.on_sample(smp):
+					fired.append("%s@%.1f" % [name, smp.t])
+		)
 		for _i in int(30.0 / Wl.SIM_DT):
 			mock.tick(Wl.SIM_DT)
 		remove_child(mock)

@@ -58,7 +58,10 @@ func test_host_announces_and_client_joins_by_code() -> void:
 	assert_true(c.url.begins_with("ws://127.0.0.1:%d" % h.server.port), c.url)
 	var room: Dictionary = c.discovery.rooms.get(h.room_code, {})
 	assert_eq(room.get("name"), "Hana")
-	h.send(Wl.ALL_PEERS, Protocol.game_msg("phase", {"index": 1, "start_tick": 0, "ended_by": "duration"}))
+	h.send(
+		Wl.ALL_PEERS,
+		Protocol.game_msg("phase", {"index": 1, "start_tick": 0, "ended_by": "duration"})
+	)
 	assert_true(_until(func() -> bool: return log.size() == 1))
 	assert_eq(log[0][0], 1)
 
@@ -129,9 +132,33 @@ func test_beacons() -> void:
 	assert_eq(b["port"], 8790)
 	assert_eq(b["name"], "Hana")
 	assert_true(LanDiscovery.parse_beacon("{nope").is_empty())
-	assert_true(LanDiscovery.parse_beacon(JSON.stringify({"wattlands": "lan", "proto": 99, "code": "K7QX2M", "port": 1})).is_empty())
-	assert_true(LanDiscovery.parse_beacon(JSON.stringify({"wattlands": "lan", "proto": 1, "code": "UUUUUU", "port": 1})).is_empty())
-	assert_true(LanDiscovery.parse_beacon(JSON.stringify({"wattlands": "lan", "proto": 1, "code": "K7QX2M", "port": 70000})).is_empty())
+	assert_true(
+		(
+			LanDiscovery
+			. parse_beacon(
+				JSON.stringify({"wattlands": "lan", "proto": 99, "code": "K7QX2M", "port": 1})
+			)
+			. is_empty()
+		)
+	)
+	assert_true(
+		(
+			LanDiscovery
+			. parse_beacon(
+				JSON.stringify({"wattlands": "lan", "proto": 1, "code": "UUUUUU", "port": 1})
+			)
+			. is_empty()
+		)
+	)
+	assert_true(
+		(
+			LanDiscovery
+			. parse_beacon(
+				JSON.stringify({"wattlands": "lan", "proto": 1, "code": "K7QX2M", "port": 70000})
+			)
+			. is_empty()
+		)
+	)
 	assert_true(LanDiscovery.parse_beacon(JSON.stringify({"other": "game"})).is_empty())
 
 

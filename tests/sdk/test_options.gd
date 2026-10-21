@@ -26,7 +26,9 @@ func test_options_and_player_options_on_host_and_clients() -> void:
 	slots[0].options = {"offset": -10}
 	slots[1].options = {"reel_pct": 70, "relaxed": true}
 	slots.append(Bots.make_slot(1, 3, 200.0))
-	var b := Kit.multi(_root, 3, "tiny", {"players": slots, "options": {"speed": 5, "mode": "b"}}, 1)
+	var b := Kit.multi(
+		_root, 3, "tiny", {"players": slots, "options": {"speed": 5, "mode": "b"}}, 1
+	)
 	_tmp.append(str(b["tmp"]))
 	assert_eq(b["err"], "")
 	Kit.start(b)
@@ -44,7 +46,11 @@ func test_options_and_player_options_on_host_and_clients() -> void:
 	for gh in peers:
 		assert_eq(gh.ctx.options, expected_opts, "ctx.options on peer %d" % gh.local_peer())
 		for i in 4:
-			assert_eq(gh.ctx.players[i].options, expected_players[i], "slot %d options on peer %d" % [i, gh.local_peer()])
+			assert_eq(
+				gh.ctx.players[i].options,
+				expected_players[i],
+				"slot %d options on peer %d" % [i, gh.local_peer()]
+			)
 			assert_typeof(gh.ctx.players[i].options["offset"], TYPE_INT)
 
 

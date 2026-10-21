@@ -11,7 +11,9 @@ func _rider(ftp: float = 200.0, verified: bool = true) -> WorkoutRiderState:
 	return WorkoutRiderState.from_slot(slot)
 
 
-func _tel(power: float, cadence: float = 90.0, mode: String = Wl.ERG, applied: int = 0) -> Telemetry:
+func _tel(
+	power: float, cadence: float = 90.0, mode: String = Wl.ERG, applied: int = 0
+) -> Telemetry:
 	var t := Telemetry.new()
 	t.power_w = power
 	t.cadence_rpm = cadence
@@ -79,8 +81,13 @@ func test_sim_work_and_free_phases() -> void:
 	var r := _rider()
 	assert_true(WorkoutRules.in_band(road, _ps(road), _tel(180.0, 90.0, Wl.SIM), r, [76.0, 105.0]))
 	assert_false(WorkoutRules.in_band(road, _ps(road), _tel(250.0, 90.0, Wl.SIM), r, [76.0, 105.0]))
-	assert_true(WorkoutRules.in_band(sprint, _ps(sprint), _tel(50.0, 65.0, Wl.SIM), r, [76.0, 105.0]), "sprint: cadence only")
-	assert_false(WorkoutRules.in_band(sprint, _ps(sprint), _tel(400.0, 55.0, Wl.SIM), r, [76.0, 105.0]))
+	assert_true(
+		WorkoutRules.in_band(sprint, _ps(sprint), _tel(50.0, 65.0, Wl.SIM), r, [76.0, 105.0]),
+		"sprint: cadence only"
+	)
+	assert_false(
+		WorkoutRules.in_band(sprint, _ps(sprint), _tel(400.0, 55.0, Wl.SIM), r, [76.0, 105.0])
+	)
 
 
 func test_rescue_afk_and_disconnects_are_out_of_band() -> void:

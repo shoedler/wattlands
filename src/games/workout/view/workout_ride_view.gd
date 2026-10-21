@@ -123,7 +123,9 @@ func _road(state: WorkoutState, cam: WorkoutRiderState) -> PackedFloat64Array:
 		if course_on:
 			var x := float(i * WorkoutTrackLayer.COLUMN_W)
 			var d := maxf(cam_cd + (x - RIDER_X) * MAP_M_PER_PX, 0.0)
-			y = clampf(ROAD_Y - (state.course.elevation_at(d) - e0) * ELEV_PX_PER_M, ROAD_MIN_Y, ROAD_MAX_Y)
+			y = clampf(
+				ROAD_Y - (state.course.elevation_at(d) - e0) * ELEV_PX_PER_M, ROAD_MIN_Y, ROAD_MAX_Y
+			)
 		road[i] = y
 	return road
 
@@ -156,11 +158,24 @@ func _blocks(state: WorkoutState) -> Array:
 			h1 = h0
 			hatched = true
 		var a := x0 + 1.0
-		out.append({
-			"points": PackedVector2Array([Vector2(a, STRIP_BASE - h0), Vector2(x1, STRIP_BASE - h1), Vector2(x1, STRIP_BASE), Vector2(a, STRIP_BASE)]),
-			"color": WorkoutArt.phase_color(p),
-			"hatched": hatched,
-		})
+		(
+			out
+			. append(
+				{
+					"points":
+					PackedVector2Array(
+						[
+							Vector2(a, STRIP_BASE - h0),
+							Vector2(x1, STRIP_BASE - h1),
+							Vector2(x1, STRIP_BASE),
+							Vector2(a, STRIP_BASE)
+						]
+					),
+					"color": WorkoutArt.phase_color(p),
+					"hatched": hatched,
+				}
+			)
+		)
 	return out
 
 
@@ -185,7 +200,12 @@ func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Ar
 		var slot := game.ctx.player(peer) if game.ctx != null else null
 		var look := Wl.slot_look(r.slot_index)
 		if slot != null:
-			look = {"color": slot.color, "shape": slot.shape, "pattern": slot.pattern, "hollow": slot.hollow}
+			look = {
+				"color": slot.color,
+				"shape": slot.shape,
+				"pattern": slot.pattern,
+				"hollow": slot.hollow
+			}
 		var x := RIDER_X + (r.distance_m() - cam_d) / MAP_M_PER_PX
 		var edge := 0
 		if x < EDGE_MARGIN_LEFT:
@@ -196,21 +216,33 @@ func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Ar
 			edge = 1
 		var col := clampi(int(x / float(WorkoutTrackLayer.COLUMN_W)), 0, road.size() - 1)
 		var opts := {
-			"bot": r.is_bot, "local": peer == local_peer, "in_band": r.in_band,
-			"rescue": r.rescue, "afk": r.afk or not r.connected,
+			"bot": r.is_bot,
+			"local": peer == local_peer,
+			"in_band": r.in_band,
+			"rescue": r.rescue,
+			"afk": r.afk or not r.connected,
 			"style": game.view_pennant() if peer == local_peer else "",
 		}
-		out.append({
-			"peer": peer, "x": x, "y": road[col], "edge": edge,
-			"shapes": _scaled(WorkoutArt.pennant_shapes(look, r.slot_index, opts), PENNANT_SCALE),
-		})
+		(
+			out
+			. append(
+				{
+					"peer": peer,
+					"x": x,
+					"y": road[col],
+					"edge": edge,
+					"shapes":
+					_scaled(WorkoutArt.pennant_shapes(look, r.slot_index, opts), PENNANT_SCALE),
+				}
+			)
+		)
 	return out
 
 
 static func _scaled(shapes: Array[Dictionary], k: float) -> Array[Dictionary]:
 	for s in shapes:
 		var pts := PackedVector2Array()
-		for p in (s["points"] as PackedVector2Array):
+		for p in s["points"] as PackedVector2Array:
 			pts.append(p * k)
 		s["points"] = pts
 	return shapes

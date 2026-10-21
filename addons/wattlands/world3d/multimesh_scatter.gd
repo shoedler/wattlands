@@ -26,8 +26,22 @@ extends MultiMeshInstance3D
 
 ## Config keys scatter() and generate() accept.
 const CONFIG_KEYS: Array[String] = [
-	"seed", "count", "area", "polygon", "exclude", "min_spacing", "scale", "height_jitter",
-	"yaw", "tilt_deg", "colors", "color_jitter", "height", "y_offset", "max_attempts", "custom",
+	"seed",
+	"count",
+	"area",
+	"polygon",
+	"exclude",
+	"min_spacing",
+	"scale",
+	"height_jitter",
+	"yaw",
+	"tilt_deg",
+	"colors",
+	"color_jitter",
+	"height",
+	"y_offset",
+	"max_attempts",
+	"custom",
 ]
 
 var _transforms: Array[Transform3D] = []
@@ -70,33 +84,54 @@ func scatter(config: Dictionary) -> int:
 	if not cfg.has("count"):
 		cfg["count"] = capacity()
 	if int(cfg["count"]) > capacity():
-		push_warning("MultiMeshScatter: count %d exceeds capacity %d; clamped" % [int(cfg["count"]), capacity()])
+		push_warning(
+			(
+				"MultiMeshScatter: count %d exceeds capacity %d; clamped"
+				% [int(cfg["count"]), capacity()]
+			)
+		)
 		cfg["count"] = capacity()
 	var result := generate(cfg)
 	var xforms: Array[Transform3D] = result["transforms"]
 	set_instances(xforms, result["colors"], result["customs"])
 	if xforms.size() < int(cfg["count"]):
-		push_warning("MultiMeshScatter: placed %d of %d (area too crowded)" % [xforms.size(), int(cfg["count"])])
+		push_warning(
+			(
+				"MultiMeshScatter: placed %d of %d (area too crowded)"
+				% [xforms.size(), int(cfg["count"])]
+			)
+		)
 	return xforms.size()
 
 
 ## Show `transforms` (at most capacity()), with optional per-instance colors and custom data
 ## (each either empty or one per transform). One buffer upload; call it every frame for
 ## moving instances.
-func set_instances(transforms: Array[Transform3D], colors: PackedColorArray = PackedColorArray(), customs: PackedColorArray = PackedColorArray()) -> void:
+func set_instances(
+	transforms: Array[Transform3D],
+	colors: PackedColorArray = PackedColorArray(),
+	customs: PackedColorArray = PackedColorArray()
+) -> void:
 	if multimesh == null:
 		push_error("MultiMeshScatter: set_instances() before setup()")
 		return
 	var n := mini(transforms.size(), capacity())
 	if transforms.size() > capacity():
-		push_warning("MultiMeshScatter: %d transforms for capacity %d; extra dropped" % [transforms.size(), capacity()])
+		push_warning(
+			(
+				"MultiMeshScatter: %d transforms for capacity %d; extra dropped"
+				% [transforms.size(), capacity()]
+			)
+		)
 	_transforms = transforms.slice(0, n)
 	_colors = PackedColorArray()
 	_customs = PackedColorArray()
 	for i in n:
 		_colors.append(colors[i] if i < colors.size() else Color.WHITE)
 		_customs.append(customs[i] if i < customs.size() else Color(0, 0, 0, 0))
-	multimesh.buffer = pack_buffer(_transforms, _colors, _customs, capacity(), multimesh.use_colors, multimesh.use_custom_data)
+	multimesh.buffer = pack_buffer(
+		_transforms, _colors, _customs, capacity(), multimesh.use_colors, multimesh.use_custom_data
+	)
 	multimesh.visible_instance_count = n
 
 
@@ -180,8 +215,7 @@ static func generate(config: Dictionary) -> Dictionary:
 	while xforms.size() < count and attempts < max_attempts:
 		attempts += 1
 		var p := Vector2(
-			area.position.x + rng.randf() * area.size.x,
-			area.position.y + rng.randf() * area.size.y
+			area.position.x + rng.randf() * area.size.x, area.position.y + rng.randf() * area.size.y
 		)
 		if polygon.size() >= 3 and not Geometry2D.is_point_in_polygon(p, polygon):
 			continue
@@ -242,7 +276,13 @@ static func is_excluded(p: Vector2, excludes: Array) -> bool:
 ## Transforms along a polyline every `spacing` meters, starting `offset` meters in (wrapped,
 ## so increasing it scrolls the instances along the path: Siege's route chains). Each
 ## instance faces along the path (-Z forward). Open path; `closed` joins the ends.
-static func along_path(points: PackedVector3Array, spacing: float, offset: float = 0.0, closed: bool = false, scale: float = 1.0) -> Array[Transform3D]:
+static func along_path(
+	points: PackedVector3Array,
+	spacing: float,
+	offset: float = 0.0,
+	closed: bool = false,
+	scale: float = 1.0
+) -> Array[Transform3D]:
 	var out: Array[Transform3D] = []
 	var pts := points.duplicate()
 	if closed and pts.size() > 2:
@@ -266,7 +306,9 @@ static func along_path(points: PackedVector3Array, spacing: float, offset: float
 		var t := (d - cum[seg]) / seg_len if seg_len > 0.0 else 0.0
 		var pos := a.lerp(b, t)
 		var fwd := (b - a).normalized()
-		var basis := Basis.looking_at(fwd, Vector3.UP) if absf(fwd.dot(Vector3.UP)) < 0.999 else Basis()
+		var basis := (
+			Basis.looking_at(fwd, Vector3.UP) if absf(fwd.dot(Vector3.UP)) < 0.999 else Basis()
+		)
 		out.append(Transform3D(basis.scaled(Vector3.ONE * scale), pos))
 		d += spacing
 	return out
@@ -275,7 +317,14 @@ static func along_path(points: PackedVector3Array, spacing: float, offset: float
 ## The MultiMesh buffer for `transforms` (Godot's per-instance layout: 12 floats of the
 ## 3 x 4 transform row by row, then 4 color floats if use_colors, then 4 custom floats if
 ## use_custom), padded with zero instances up to `capacity`.
-static func pack_buffer(transforms: Array[Transform3D], colors: PackedColorArray, customs: PackedColorArray, capacity: int, use_colors: bool, use_custom: bool) -> PackedFloat32Array:
+static func pack_buffer(
+	transforms: Array[Transform3D],
+	colors: PackedColorArray,
+	customs: PackedColorArray,
+	capacity: int,
+	use_colors: bool,
+	use_custom: bool
+) -> PackedFloat32Array:
 	var stride := 12 + (4 if use_colors else 0) + (4 if use_custom else 0)
 	var buf := PackedFloat32Array()
 	buf.resize(stride * maxi(capacity, 0))
@@ -317,7 +366,9 @@ static func pack_buffer(transforms: Array[Transform3D], colors: PackedColorArray
 ## (0..1), so one MultiMesh of marching figures doesn't move in lockstep. Feet stay planted
 ## below `plant_below_m` (local y). Call set_walk_time() to drive it from sim time instead
 ## of TIME.
-static func walk_bob_material(bob_height_m: float = 0.08, steps_hz: float = 2.0, plant_below_m: float = 0.0) -> ShaderMaterial:
+static func walk_bob_material(
+	bob_height_m: float = 0.08, steps_hz: float = 2.0, plant_below_m: float = 0.0
+) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load("res://addons/wattlands/world3d/walk_bob.gdshader") as Shader
 	mat.set_shader_parameter("bob_height", bob_height_m)
@@ -350,7 +401,7 @@ static func _too_close(p: Vector2, spacing: float, grid: Dictionary) -> bool:
 			var key := c + Vector2i(dx, dz)
 			if not grid.has(key):
 				continue
-			for q: Vector2 in (grid[key] as PackedVector2Array):
+			for q: Vector2 in grid[key] as PackedVector2Array:
 				if p.distance_squared_to(q) < spacing * spacing:
 					return true
 	return false

@@ -178,8 +178,20 @@ func test_is_scripted_and_launch_options() -> void:
 	var app := _make()
 	assert_false(app.is_scripted())
 	assert_eq(app.launch_options()["role"], "")
-	_args(["--host", "--game=workout", "--content=e2e", "--seed=42", "--autopilot", "--wait-peers=3",
-		"--mock-trainer=erg", "--relay=ws://127.0.0.1:8787/v1", "--run-seconds=400", "--sim-speed=1"])
+	_args(
+		[
+			"--host",
+			"--game=workout",
+			"--content=e2e",
+			"--seed=42",
+			"--autopilot",
+			"--wait-peers=3",
+			"--mock-trainer=erg",
+			"--relay=ws://127.0.0.1:8787/v1",
+			"--run-seconds=400",
+			"--sim-speed=1"
+		]
+	)
 	assert_true(app.is_scripted())
 	var o := app.launch_options()
 	assert_eq(o["role"], Wl.HOST)
@@ -256,7 +268,9 @@ func test_quit_shuts_the_riders_down_after_the_quitting_signal() -> void:
 	var g := r.governor as Fakes.FakeGovernor
 	var app := _make()
 	var seen_at_quitting: Array = []
-	app.quitting.connect(func(code: int) -> void: seen_at_quitting.append([code, g.shutdown_count, app.state]))
+	app.quitting.connect(
+		func(code: int) -> void: seen_at_quitting.append([code, g.shutdown_count, app.state])
+	)
 	watch_signals(_bus)
 	app.quit(3)
 	assert_eq(seen_at_quitting, [[3, 0, "quitting"]], "the stack is still up for the app shell")
@@ -286,7 +300,9 @@ func test_quit_mid_session_shuts_the_session_rider_down_and_ticks_it_on() -> voi
 	var r := ts.local_rider()
 	ts.set_external_tick(true)
 	var g := Fakes.FakeGovernor.new()
-	r.setup(2, _settings.profile, null, ts.device(), {"multiplayer": true, "governor": g, "bus": _bus})
+	r.setup(
+		2, _settings.profile, null, ts.device(), {"multiplayer": true, "governor": g, "bus": _bus}
+	)
 	var app := QuitRecordingApp.new()
 	app.settings = _settings
 	app.trainer_service = ts
@@ -361,7 +377,11 @@ func test_quit_while_hosting_leaves_the_room_and_waits_for_the_leave_to_go_out()
 	assert_has(_log, "net:offline:left", "NetSession.leave(): the relay sends host_left at once")
 	assert_eq(n.state, WlNetSession.STATE_OFFLINE)
 	assert_eq(n.role, "", "the room is left")
-	assert_lt(_log.find("state:quitting"), _log.find("net:offline:left"), "after the quitting signal (rides and reports first)")
+	assert_lt(
+		_log.find("state:quitting"),
+		_log.find("net:offline:left"),
+		"after the quitting signal (rides and reports first)"
+	)
 	assert_eq(app.quit_codes.size(), 0, "the tree waits a moment so the transport sends it")
 	await wait_seconds(WlApp.QUIT_GRACE_S + 0.3)
 	assert_eq(app.quit_codes, [0] as Array[int])
@@ -484,7 +504,16 @@ func test_fallback_report_is_written_for_a_non_scripted_run() -> void:
 	assert_eq(d.get("exit_reason"), "relay_unreachable")
 	assert_eq(d.get("role"), "")
 	assert_eq(d.get("game_id"), "workout")
-	for key: String in ["events", "directives", "trace", "fit_paths", "uploads", "desync_warnings", "script_errors", "final_state"]:
+	for key: String in [
+		"events",
+		"directives",
+		"trace",
+		"fit_paths",
+		"uploads",
+		"desync_warnings",
+		"script_errors",
+		"final_state"
+	]:
 		assert_true(d.has(key), key)
 
 
@@ -507,6 +536,8 @@ func test_report_from_the_app_shell_is_kept() -> void:
 	var path := _dir.path_join("report.json")
 	_args(["--host", "--report=" + path])
 	var app := _make()
-	app.quitting.connect(func(_c: int) -> void: Util.write_text(path, "{\"role\": \"HOST\", \"mine\": true}"))
+	app.quitting.connect(
+		func(_c: int) -> void: Util.write_text(path, '{"role": "HOST", "mine": true}')
+	)
 	app.quit(0)
 	assert_eq((Util.read_json(path) as Dictionary).get("mine"), true)

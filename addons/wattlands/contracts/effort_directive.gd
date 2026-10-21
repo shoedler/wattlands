@@ -25,7 +25,14 @@ extends RefCounted
 ## [/codeblock]
 
 const FLOAT_FIELDS: Array[String] = [
-	"target_pct", "target_wkg", "target_w", "mode_grade", "haptic", "haptic_wind", "crr", "cw",
+	"target_pct",
+	"target_wkg",
+	"target_w",
+	"mode_grade",
+	"haptic",
+	"haptic_wind",
+	"crr",
+	"cw",
 ]
 
 ## "" (unset), "ERG" or "SIM".

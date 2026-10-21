@@ -24,7 +24,9 @@ func after_each() -> void:
 	_tmp.clear()
 
 
-func _solo(content: String = "tiny", extra: Dictionary = {}, bots: int = 0, game_id: String = "fx_solo") -> Dictionary:
+func _solo(
+	content: String = "tiny", extra: Dictionary = {}, bots: int = 0, game_id: String = "fx_solo"
+) -> Dictionary:
 	var b := Kit.solo(_root, content, extra, bots, game_id)
 	_tmp.append(str(b["tmp"]))
 	return b
@@ -51,7 +53,9 @@ func test_a_listed_content_scheme_passes_the_content_id_through() -> void:
 	assert_eq(b["err"], "")
 	assert_eq(_host(b).ctx.content_id, "zwo:C:/rides/my.zwo")
 	assert_string_starts_with(str(_solo("url:x", {"manifest": m})["err"]), "content_id:")
-	assert_string_starts_with(str(_solo("zwo:C:/rides/my.zwo")["err"]), "content_id:", "fx_solo lists no scheme")
+	assert_string_starts_with(
+		str(_solo("zwo:C:/rides/my.zwo")["err"]), "content_id:", "fx_solo lists no scheme"
+	)
 
 
 func test_setup_errors_name_the_problem() -> void:
@@ -72,7 +76,11 @@ func test_a_rejected_plan_blocks_the_start_with_its_reason() -> void:
 
 
 func test_ctx_fields() -> void:
-	var b := _solo("tiny", {"options": {"speed": 4}, "content_overrides": {"levels.json": {"speed_scale": 3}}}, 1)
+	var b := _solo(
+		"tiny",
+		{"options": {"speed": 4}, "content_overrides": {"levels.json": {"speed_scale": 3}}},
+		1
+	)
 	assert_eq(b["err"], "")
 	var ctx := _host(b).ctx
 	assert_eq(ctx.game_id, "fx_solo")
@@ -90,13 +98,17 @@ func test_ctx_fields() -> void:
 	assert_true(ctx.directives is DirectiveRouter)
 	assert_eq(ctx.options, {"speed": 4, "mirror": false, "mode": "a"}, "defaults filled in")
 	assert_eq(ctx.players[0].options, {"offset": 0, "reel_pct": 60, "relaxed": false})
-	assert_eq(ctx.players[1].options, {"offset": 0, "reel_pct": 60, "relaxed": false}, "bots get defaults")
+	assert_eq(
+		ctx.players[1].options, {"offset": 0, "reel_pct": 60, "relaxed": false}, "bots get defaults"
+	)
 	assert_true(ctx.hud is HudRouter)
 	assert_true(ctx.intents is IntentRouter)
 	assert_true(ctx.stats is SessionStatsTracker)
 	assert_eq(ctx.roster, {})
 	assert_not_null(ctx.strings)
-	assert_eq(ctx.strings.t("FX_SOLO_TITLE"), "Fixture solo", "the registry loaded the game's strings")
+	assert_eq(
+		ctx.strings.t("FX_SOLO_TITLE"), "Fixture solo", "the registry loaded the game's strings"
+	)
 	assert_eq(ctx.events, b["bus"])
 	assert_eq(ctx.scaling_mode, Wl.FAIR_FTP)
 	assert_eq(ctx.game_dir, Kit.FIXTURES.path_join("runtime/fx_solo"))
@@ -124,7 +136,9 @@ func test_bot_plans_are_built_and_finalized() -> void:
 func test_start_enters_phase_zero_and_emits_phase_started() -> void:
 	var b := _solo("tiny", {}, 1)
 	var got: Array = []
-	(b["bus"] as WlEventBus).phase_started.connect(func(peer: int, index: int) -> void: got.append([peer, index]))
+	(b["bus"] as WlEventBus).phase_started.connect(
+		func(peer: int, index: int) -> void: got.append([peer, index])
+	)
 	_host(b).start()
 	assert_eq(got, [[1, 0], [-1, 0]])
 	assert_eq(_rider(b).get("phases_started"), [0] as Array[int])
@@ -160,13 +174,19 @@ func test_sim_step_gets_a_constant_dt_and_every_slot() -> void:
 func test_phases_per_rider_with_differing_plans() -> void:
 	var b := _solo("split", {}, 1)
 	var got: Array = []
-	(b["bus"] as WlEventBus).phase_started.connect(func(peer: int, index: int) -> void: got.append([peer, index, _host(b).clock.game_tick]))
+	(b["bus"] as WlEventBus).phase_started.connect(
+		func(peer: int, index: int) -> void: got.append([peer, index, _host(b).clock.game_tick])
+	)
 	_host(b).start()
 	Kit.step(b, 200)
 	# Rider 1 (slot 0): 2 s, 3 s, ...; the bot (slot 1): 4 s, 3 s, then the cool-down.
 	assert_eq(got[0], [1, 0, 0])
 	assert_eq(got[1], [-1, 0, 0])
-	assert_has(got, [1, 1, 39], "rider 1's second phase starts at tick 40 (the change is emitted at the end of tick 39)")
+	assert_has(
+		got,
+		[1, 1, 39],
+		"rider 1's second phase starts at tick 40 (the change is emitted at the end of tick 39)"
+	)
 	assert_has(got, [-1, 1, 79])
 	assert_has(got, [1, 2, 99])
 	assert_has(got, [-1, 2, 139], "the bot's cool-down")
@@ -178,7 +198,9 @@ func test_pause_stops_sim_step_and_resumes_on_pedal_start() -> void:
 	var b := _solo("tiny")
 	var host := _host(b)
 	var paused: Array = []
-	(b["bus"] as WlEventBus).paused_changed.connect(func(p: bool, why: String) -> void: paused.append([p, why]))
+	(b["bus"] as WlEventBus).paused_changed.connect(
+		func(p: bool, why: String) -> void: paused.append([p, why])
+	)
 	host.start()
 	Kit.step(b, 10)
 	_rider(b).pause_requested.emit("coasting")
@@ -231,7 +253,11 @@ func test_shift_and_panic_actions() -> void:
 	assert_eq(_rider(b).get("panics"), 2)
 	var calls: Array = _game(b).get("local_intent_calls")
 	assert_eq(calls.size(), 1)
-	assert_eq(calls[0]["actions"], [&"shift_up", &"shift_down"] as Array[StringName], "pause and panic are consumed")
+	assert_eq(
+		calls[0]["actions"],
+		[&"shift_up", &"shift_down"] as Array[StringName],
+		"pause and panic are consumed"
+	)
 
 
 func test_local_intents_and_ctx_intents_reach_the_frame_once() -> void:
@@ -249,15 +275,22 @@ func test_local_intents_and_ctx_intents_reach_the_frame_once() -> void:
 	assert_eq(seen.size(), 2)
 	assert_eq(seen[1]["intent"], {"k": "boost", "gesture": "surge"})
 	assert_eq(int(seen[1]["tick"]), 1)
-	game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		if frame.tick == 3:
-			g.ctx.intents.send({"k": "from_step"}))
+	game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			if frame.tick == 3:
+				g.ctx.intents.send({"k": "from_step"})
+	)
 	Kit.step(b, 3)
 	var last: Dictionary = seen[seen.size() - 1]
 	assert_eq(last["intent"], {"k": "from_step"})
 	assert_eq(int(last["tick"]), 4, "sent during tick 3, delivered in the next frame")
 	var calls: Array = game.get("local_intent_calls")
-	assert_eq(calls[0]["gestures"], [Wl.G_SURGE] as Array[StringName], "gestures arrive apart from actions")
+	assert_eq(
+		calls[0]["gestures"],
+		[Wl.G_SURGE] as Array[StringName],
+		"gestures arrive apart from actions"
+	)
 	assert_eq(calls[0]["actions"], [] as Array[StringName], "a surge never arrives as confirm")
 
 
@@ -296,7 +329,9 @@ func test_rescue_and_afk_edges_call_the_game_once_per_transition() -> void:
 	var host := _host(b)
 	var game := _game(b)
 	var bus_rescue: Array = []
-	(b["bus"] as WlEventBus).rescue_changed.connect(func(peer: int, on: bool) -> void: bus_rescue.append([peer, on]))
+	(b["bus"] as WlEventBus).rescue_changed.connect(
+		func(peer: int, on: bool) -> void: bus_rescue.append([peer, on])
+	)
 	host.start()
 	Kit.step(b, 5)
 	_rider(b).set("rescue", true)
@@ -316,12 +351,15 @@ func test_end_phase_takes_effect_at_the_end_of_the_tick() -> void:
 	var game := _game(b)
 	var ended := [false]
 	var after: Array = []
-	game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		var ps: PhaseState = frame.phase[1]
-		if ended[0] and after.is_empty():
-			after.append(ps.to_dict())
-		if ps.index == 3 and ps.elapsed_s >= 2.0 and not ended[0]:
-			ended[0] = g.ctx.directives.end_phase(1))
+	game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			var ps: PhaseState = frame.phase[1]
+			if ended[0] and after.is_empty():
+				after.append(ps.to_dict())
+			if ps.index == 3 and ps.elapsed_s >= 2.0 and not ended[0]:
+				ended[0] = g.ctx.directives.end_phase(1)
+	)
 	host.start()
 	Kit.step(b, 800)
 	assert_true(ended[0])
@@ -377,9 +415,12 @@ func test_early_finished_skips_every_rider_to_the_cooldown() -> void:
 	var game := _game(b)
 	var finished: Array = []
 	(b["bus"] as WlEventBus).game_finished.connect(func(why: String) -> void: finished.append(why))
-	game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		if frame.tick == 50:
-			g.finished.emit("complete"))
+	game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			if frame.tick == 50:
+				g.finished.emit("complete")
+	)
 	host.start()
 	Kit.step(b, 52)
 	for peer: int in [1, -1]:
@@ -423,7 +464,9 @@ func test_results_progress_and_fit_after_the_cooldown() -> void:
 	assert_eq(res.grade, "B")
 	assert_eq(res.rows.size(), 2)
 	assert_gt(float(res.row(1)["kj"]), 0.0, "ctx.stats is final in results()")
-	assert_string_starts_with(res.session_id, "fx_solo/tiny/7/", "game/content/seed plus the session's nonce")
+	assert_string_starts_with(
+		res.session_id, "fx_solo/tiny/7/", "game/content/seed plus the session's nonce"
+	)
 	assert_eq(res.session_id, host.session_id)
 	assert_true(FileAccess.file_exists(host.ctx.progress.path), "the store is saved")
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(host.ctx.progress.path))
@@ -432,7 +475,9 @@ func test_results_progress_and_fit_after_the_cooldown() -> void:
 	assert_eq(_rider(b, -1).get("finished_rides"), 0, "no FIT for bots")
 	assert_eq(host.fit_paths(), {1: fit_target})
 	assert_true(FileAccess.file_exists(fit_target))
-	assert_true(FileAccess.file_exists(fit_target.get_basename() + ".json"), "the summary moves along")
+	assert_true(
+		FileAccess.file_exists(fit_target.get_basename() + ".json"), "the summary moves along"
+	)
 	Kit.step(b, 10)
 	assert_eq(game.get("results_count"), 1, "results once")
 
@@ -460,10 +505,13 @@ func test_lap_marker_and_phase_changed_are_recorded_not_acted_on() -> void:
 	(b["bus"] as WlEventBus).lap_marked.connect(func(l: String) -> void: laps.append(l))
 	var emitted := [0]
 	game.phase_changed.connect(func(_i: int) -> void: emitted[0] += 1)
-	game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		if frame.tick == 5:
-			g.lap_marker.emit("Gate")
-			g.phase_changed.emit(7))
+	game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			if frame.tick == 5:
+				g.lap_marker.emit("Gate")
+				g.phase_changed.emit(7)
+	)
 	host.start()
 	Kit.step(b, 120)
 	assert_eq(_rider(b).get("laps"), ["Gate"] as Array[String])
@@ -497,11 +545,37 @@ func test_report_data() -> void:
 	host.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 50}))
 	Kit.step(b, 41)
 	var d := host.report_data()
-	for k: String in ["events", "directives", "trace", "snapshots", "max_snapshot_bytes", "oversize_snapshots", "phases", "plans", "plan_warnings", "finished_reason"]:
+	for k: String in [
+		"events",
+		"directives",
+		"trace",
+		"snapshots",
+		"max_snapshot_bytes",
+		"oversize_snapshots",
+		"phases",
+		"plans",
+		"plan_warnings",
+		"finished_reason"
+	]:
 		assert_true(d.has(k), k)
 	assert_eq((d["trace"] as Dictionary).keys(), ["1", "-1"])
 	var row: Dictionary = d["trace"]["1"][0]
-	for k: String in ["t", "phase", "kind", "mode", "applied_target_w", "applied_pct", "applied_grade_pct", "clamped_by", "rescue", "afk", "paused", "haptic", "power_w", "cadence_rpm"]:
+	for k: String in [
+		"t",
+		"phase",
+		"kind",
+		"mode",
+		"applied_target_w",
+		"applied_pct",
+		"applied_grade_pct",
+		"clamped_by",
+		"rescue",
+		"afk",
+		"paused",
+		"haptic",
+		"power_w",
+		"cadence_rpm"
+	]:
 		assert_true(row.has(k), "trace " + k)
 	assert_eq((d["trace"]["1"] as Array).size(), 3, "1 Hz: platform ticks 0, 20, 40")
 	assert_eq((d["snapshots"] as Array).size(), 21, "10 Hz")
@@ -514,7 +588,11 @@ func test_report_data() -> void:
 	assert_eq(int(d["max_snapshot_bytes"]), biggest)
 	assert_eq((d["directives"] as Array).size(), 1)
 	assert_not_null(d["directives"][0]["applied"])
-	assert_eq((_rider(b).get("ack_queue") as Array).size(), 0, "a local rider's ack queue is drained on the host")
+	assert_eq(
+		(_rider(b).get("ack_queue") as Array).size(),
+		0,
+		"a local rider's ack queue is drained on the host"
+	)
 	assert_eq((d["phases"]["1"] as Array)[0]["ended_by"], Wl.ENDED_DURATION)
 
 
@@ -532,7 +610,23 @@ func test_results_get_a_row_per_rider_when_the_game_leaves_rows_out() -> void:
 	assert_eq(int(res.rows[1]["peer_id"]), -1)
 	assert_eq(res.rows[1]["name"], "Bot 1")
 	assert_almost_eq(float(res.row(1)["kj"]), host.ctx.stats.kj(1), 1e-9)
-	for k: String in ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s", "time_in_band_s", "time_in_band_pct", "xp", "unlocks", "stats", "slot_index", "is_bot"]:
+	for k: String in [
+		"kj",
+		"avg_power_w",
+		"avg_ftp_pct",
+		"np_w",
+		"best_1m_w",
+		"best_5m_w",
+		"best_20m_w",
+		"ride_s",
+		"time_in_band_s",
+		"time_in_band_pct",
+		"xp",
+		"unlocks",
+		"stats",
+		"slot_index",
+		"is_bot"
+	]:
 		assert_true(res.rows[0].has(k), k)
 
 
@@ -568,7 +662,11 @@ func test_a_confirm_that_resumes_is_not_also_a_game_confirm() -> void:
 	host.inject_action(&"confirm")
 	Kit.step(b, 1)
 	var calls: Array = _game(b).get("local_intent_calls")
-	assert_eq(calls[calls.size() - 1]["actions"], [&"confirm"] as Array[StringName], "the next confirm is the game's")
+	assert_eq(
+		calls[calls.size() - 1]["actions"],
+		[&"confirm"] as Array[StringName],
+		"the next confirm is the game's"
+	)
 
 
 class FakeRouter:
@@ -632,22 +730,52 @@ func test_a_headless_app_session_steps_from_process() -> void:
 	var slot := Kit.human(1, 0)
 	var host := GameHost.new()
 	_root.add_child(host)
-	assert_eq(host.setup({
-		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [slot] as Array[PlayerSlot],
-		"local_riders": {1: Kit.rider(_root, slot)}, "local_peer": 1, "bus": Kit.new_bus(_root, "AppBus"),
-		"registry": reg, "headless": true, "progress_path": tmp.path_join("progress.json"),
-	}), "")
+	assert_eq(
+		(
+			host
+			. setup(
+				{
+					"game_id": "fx_solo",
+					"content_id": "tiny",
+					"seed": 7,
+					"role": Wl.SOLO,
+					"players": [slot] as Array[PlayerSlot],
+					"local_riders": {1: Kit.rider(_root, slot)},
+					"local_peer": 1,
+					"bus": Kit.new_bus(_root, "AppBus"),
+					"registry": reg,
+					"headless": true,
+					"progress_path": tmp.path_join("progress.json"),
+				}
+			)
+		),
+		""
+	)
 	host.start()
 	host._process(0.5)
 	assert_eq(host.clock.platform_tick, 10, "0.5 s of wall time at sim speed 1 is 10 steps")
 	var stepped := GameHost.new()
 	_root.add_child(stepped)
 	var s2 := Kit.human(1, 0)
-	stepped.setup({
-		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [s2] as Array[PlayerSlot],
-		"local_riders": {1: Kit.rider(_root, s2)}, "local_peer": 1, "bus": Kit.new_bus(_root, "RunnerBus"),
-		"registry": reg, "headless": true, "realtime": false, "progress_path": tmp.path_join("p2.json"),
-	})
+	(
+		stepped
+		. setup(
+			{
+				"game_id": "fx_solo",
+				"content_id": "tiny",
+				"seed": 7,
+				"role": Wl.SOLO,
+				"players": [s2] as Array[PlayerSlot],
+				"local_riders": {1: Kit.rider(_root, s2)},
+				"local_peer": 1,
+				"bus": Kit.new_bus(_root, "RunnerBus"),
+				"registry": reg,
+				"headless": true,
+				"realtime": false,
+				"progress_path": tmp.path_join("p2.json"),
+			}
+		)
+	)
 	stepped.start()
 	stepped._process(0.5)
 	assert_eq(stepped.clock.platform_tick, 0, "realtime false: only step() advances it")
@@ -681,7 +809,10 @@ func test_the_input_routers_pause_and_confirm_belong_to_the_session_screen() -> 
 	assert_true(host.is_paused(), "neither the router's confirm nor pedalling ends a user pause")
 	var calls: Array = game.get("local_intent_calls")
 	for k in range(calls_before, calls.size()):
-		assert_false((calls[k]["actions"] as Array).has(&"confirm"), "the pause menu's confirm is not the game's")
+		assert_false(
+			(calls[k]["actions"] as Array).has(&"confirm"),
+			"the pause menu's confirm is not the game's"
+		)
 	host.resume()
 	assert_false(host.is_paused())
 	_rider(b).pause_requested.emit("coasting")
@@ -716,7 +847,11 @@ func test_platform_pause_off_leaves_pausing_to_the_app() -> void:
 	Kit.step(b, 1)
 	assert_true(host.is_paused(), "confirm does not resume")
 	var calls: Array = game.get("local_intent_calls")
-	assert_eq(calls[calls.size() - 1]["actions"], [&"confirm"] as Array[StringName], "the confirm stays an ordinary action")
+	assert_eq(
+		calls[calls.size() - 1]["actions"],
+		[&"confirm"] as Array[StringName],
+		"the confirm stays an ordinary action"
+	)
 	host.resume()
 	assert_false(host.is_paused(), "the app resumes")
 	_rider(b).pause_requested.emit("coasting")
@@ -835,7 +970,10 @@ func test_ctx_routers_hand_out_no_local_rider() -> void:
 	assert_eq(b["err"], "")
 	var ctx := _host(b).ctx
 	for router: Object in [ctx.directives, ctx.hud]:
-		assert_false("riders" in router, "%s has no public riders map" % router.get_script().get_global_name())
+		assert_false(
+			"riders" in router,
+			"%s has no public riders map" % router.get_script().get_global_name()
+		)
 		for prop: Dictionary in router.get_property_list():
 			var pname := str(prop["name"])
 			if pname.begins_with("_") or not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
@@ -852,7 +990,11 @@ func test_ctx_routers_hand_out_no_local_rider() -> void:
 				for x: Variant in v:
 					if x is LocalRider:
 						found.append(x)
-			assert_eq(found.size(), 0, "%s.%s exposes no LocalRider" % [router.get_script().get_global_name(), pname])
+			assert_eq(
+				found.size(),
+				0,
+				"%s.%s exposes no LocalRider" % [router.get_script().get_global_name(), pname]
+			)
 	# The routers still drive the riders simulated here.
 	ctx.hud.power_band(1, 120.0, 160.0)
 	assert_eq(_rider(b).power_band(), Vector2(120.0, 160.0))

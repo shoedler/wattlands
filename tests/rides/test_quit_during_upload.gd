@@ -95,7 +95,9 @@ func test_an_upload_interrupted_by_quit_is_retried_at_the_next_launch() -> void:
 	var ups: Array = await _mock.uploads()
 	assert_eq(ups.size(), 1, "the ride reaches Strava without a prompt")
 	assert_eq(r2.queue_size(), 0, "and leaves the queue")
-	var s: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(str(ride["path"]).get_basename() + ".json"))
+	var s: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(str(ride["path"]).get_basename() + ".json")
+	)
 	assert_true(str(s["upload"]["state"]) in ["uploaded", "duplicate"], str(s["upload"]))
 	await _quit(r2)
 
@@ -131,5 +133,7 @@ func test_a_settled_upload_leaves_no_queue_entry() -> void:
 	await r.wait_uploads_idle()
 	assert_eq(r.queue_size(), 0)
 	assert_eq(r.rides()[0]["state"], "uploaded")
-	assert_false(FileAccess.file_exists(Paths.upload_queue_path()), "no queue file left: %s" % str(ride))
+	assert_false(
+		FileAccess.file_exists(Paths.upload_queue_path()), "no queue file left: %s" % str(ride)
+	)
 	await _quit(r)

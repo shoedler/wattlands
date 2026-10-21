@@ -37,9 +37,16 @@ func before_each() -> void:
 	_hud.slots = {1: s1, 2: s2, -1: sb}
 	_hud.bus = _bus
 	_hud.send = func(peer: int, msg: Dictionary) -> void: _sent.append([peer, msg])
-	_bus.toast_requested.connect(func(key: String, args: Variant) -> void: _toasts.append([key, args]))
-	_bus.banner_requested.connect(func(key: String, args: Variant, seconds: float) -> void: _banners.append([key, args, seconds]))
-	_bus.power_band_changed.connect(func(peer: int, lo: float, hi: float) -> void: _pbands.append([peer, lo, hi]))
+	_bus.toast_requested.connect(
+		func(key: String, args: Variant) -> void: _toasts.append([key, args])
+	)
+	_bus.banner_requested.connect(
+		func(key: String, args: Variant, seconds: float) -> void:
+			_banners.append([key, args, seconds])
+	)
+	_bus.power_band_changed.connect(
+		func(peer: int, lo: float, hi: float) -> void: _pbands.append([peer, lo, hi])
+	)
 
 
 func after_each() -> void:
@@ -48,7 +55,9 @@ func after_each() -> void:
 	_tmp.clear()
 
 
-func _multi(humans: int, content: String = "tiny", extra: Dictionary = {}, bots: int = 0) -> Dictionary:
+func _multi(
+	humans: int, content: String = "tiny", extra: Dictionary = {}, bots: int = 0
+) -> Dictionary:
 	var b := Kit.multi(_root, humans, content, extra, bots)
 	_tmp.append(str(b["tmp"]))
 	return b
@@ -57,7 +66,11 @@ func _multi(humans: int, content: String = "tiny", extra: Dictionary = {}, bots:
 func test_power_band_for_the_hosts_own_rider() -> void:
 	_hud.power_band(1, 240, 280)
 	assert_eq(_local.get("band_power"), [240.0, 280.0])
-	assert_eq((_local.device as Object).call("last_power_band"), [240.0, 280.0], "MockTrainer's erg rides the band in SIM")
+	assert_eq(
+		(_local.device as Object).call("last_power_band"),
+		[240.0, 280.0],
+		"MockTrainer's erg rides the band in SIM"
+	)
 	assert_eq(_pbands, [[1, 240.0, 280.0]])
 	assert_eq(_sent, [], "nothing is sent for a local rider")
 	assert_eq(_hud.band_of(1), [240.0, 280.0])
@@ -173,13 +186,17 @@ func test_host_power_band_reaches_a_clients_gauge_and_mock_trainer() -> void:
 	Kit.step(b, 2)
 	var host: GameHost = b["host"]
 	var got: Array = []
-	(b["buses"][1] as WlEventBus).power_band_changed.connect(func(peer: int, lo: float, hi: float) -> void: got.append([peer, lo, hi]))
+	(b["buses"][1] as WlEventBus).power_band_changed.connect(
+		func(peer: int, lo: float, hi: float) -> void: got.append([peer, lo, hi])
+	)
 	host.ctx.hud.power_band(2, 210, 260)
 	Kit.step(b, 1)
 	assert_eq(got, [[2, 210.0, 260.0]], "the client's gauge")
 	var r2: LocalRider = b["riders"][2]
 	assert_eq(r2.get("band_power"), [210.0, 260.0])
-	assert_eq((r2.device as Object).call("last_power_band"), [210.0, 260.0], "the client's MockTrainer")
+	assert_eq(
+		(r2.device as Object).call("last_power_band"), [210.0, 260.0], "the client's MockTrainer"
+	)
 	var r3: LocalRider = b["riders"][3]
 	assert_eq(r3.get("band_power"), [0.0, 0.0], "nobody else")
 
@@ -191,7 +208,9 @@ func test_toast_with_a_peer_reaches_only_that_peer() -> void:
 	var counts := [0, 0, 0]
 	for i in 3:
 		var idx := i
-		(b["buses"][i] as WlEventBus).toast_requested.connect(func(_k: String, _a: Variant) -> void: counts[idx] += 1)
+		(b["buses"][i] as WlEventBus).toast_requested.connect(
+			func(_k: String, _a: Variant) -> void: counts[idx] += 1
+		)
 	var host: GameHost = b["host"]
 	host.ctx.hud.toast("FX_ONLY_YOU", [], 3)
 	Kit.step(b, 2)

@@ -19,6 +19,7 @@ func _make(size: Vector2, base: Vector2i = BASE, screen_scale: float = 0.0) -> P
 
 # --- Pure layout math ----------------------------------------------------------------------
 
+
 func test_fit_scale_common_sizes() -> void:
 	assert_eq(PixelViewport.fit_scale(Vector2(1920, 1080), BASE), 3)
 	assert_eq(PixelViewport.fit_scale(Vector2(1280, 720), BASE), 2)
@@ -86,6 +87,7 @@ func test_fit_layout_bad_device_scale_falls_back_to_one() -> void:
 
 
 # --- The node -------------------------------------------------------------------------------
+
 
 func test_node_scale_and_letterbox_for_sizes() -> void:
 	var cases: Array[Array] = [
@@ -222,7 +224,9 @@ func test_subviewport_renders_pixel_art() -> void:
 	var pv := _make(Vector2(1920, 1080))
 	var sv := pv.subviewport()
 	assert_eq(sv.size, BASE)
-	assert_eq(sv.canvas_item_default_texture_filter, Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
+	assert_eq(
+		sv.canvas_item_default_texture_filter, Viewport.DEFAULT_CANVAS_ITEM_TEXTURE_FILTER_NEAREST
+	)
 	assert_true(sv.snap_2d_transforms_to_pixel)
 	assert_true(sv.snap_2d_vertices_to_pixel)
 	assert_true(sv.disable_3d)
@@ -334,6 +338,7 @@ func test_defaults_full_rect_and_mouse_ignore() -> void:
 
 # --- Demo scene (W2D8) --------------------------------------------------------------------
 
+
 func test_demo_scene_runs_headless() -> void:
 	var scene: PackedScene = load("res://addons/wattlands/world2d/demo.tscn")
 	assert_not_null(scene)
@@ -367,7 +372,9 @@ func test_demo_scene_runs_headless() -> void:
 	for f: Sprite2D in fish:
 		assert_true(f.material is ShaderMaterial, "wobbling fish")
 	assert_ne((demo.get("caption") as Label).text, "")
-	assert_false((demo.get("caption") as Label).text.begins_with("WORLD_"), "the caption is translated")
+	assert_false(
+		(demo.get("caption") as Label).text.begins_with("WORLD_"), "the caption is translated"
+	)
 
 
 func test_demo_scene_animates_over_time() -> void:

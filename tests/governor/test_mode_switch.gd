@@ -109,9 +109,14 @@ func test_sim_to_erg_entry_at_3_s_power_then_slew() -> void:
 	for i in range(1, w.size()):
 		assert_lte(int(w[i]["w"]) - int(w[i - 1]["w"]), 15, "then slew")
 	assert_eq(rig.applied_w(), 180)
-	var entry_status := first_where(rig, func(s: Dictionary) -> bool:
-		return float(s["rig_t"]) > t0 and s["mode"] == Wl.ERG)
-	assert_has(entry_status["clamped_by"], Wl.CLAMP_SWITCH, "switch_ramp reported while slewing up from the entry")
+	var entry_status := first_where(
+		rig, func(s: Dictionary) -> bool: return float(s["rig_t"]) > t0 and s["mode"] == Wl.ERG
+	)
+	assert_has(
+		entry_status["clamped_by"],
+		Wl.CLAMP_SWITCH,
+		"switch_ramp reported while slewing up from the entry"
+	)
 
 
 func test_sim_to_erg_entry_never_below_the_floor() -> void:

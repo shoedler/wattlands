@@ -2,8 +2,8 @@ extends GutTest
 ## SpinningPart, SlidingPart and ScrollingChain (BRIEF 3.9, 3.10; OWNERSHIP W2D3, W2D4):
 ## signed speed -1..1, reversing, rates, phase, inertia, sliding range and scroll wrap.
 
-
 # --- SpinningPart --------------------------------------------------------------------------
+
 
 func _spin(rpm: float = 60.0) -> SpinningPart:
 	var s: SpinningPart = autofree(SpinningPart.new())
@@ -47,7 +47,7 @@ func test_negative_speed_runs_backwards() -> void:
 func test_speed_scales_rate() -> void:
 	var a := _spin(120.0)
 	var b := _spin(120.0)
-	a.speed = 0.75   # cadence 90 / 120
+	a.speed = 0.75  # cadence 90 / 120
 	b.drive(90.0, 120.0)
 	assert_almost_eq(b.speed, 0.75, 0.0001)
 	a.tick(2.0)
@@ -95,7 +95,7 @@ func test_snap_steps_quantize_angle() -> void:
 	var s := _spin(60.0)
 	s.snap_steps = 8
 	s.speed = 1.0
-	s.tick(0.1)   # 36 degrees -> nearest 45
+	s.tick(0.1)  # 36 degrees -> nearest 45
 	assert_almost_eq(s.angle(), PI / 4.0, 0.0001)
 	s.snap_steps = 0
 	assert_almost_eq(s.angle(), TAU * 0.1, 0.0001)
@@ -123,6 +123,7 @@ func test_spinning_part_animates_in_tree() -> void:
 
 
 # --- SlidingPart ---------------------------------------------------------------------------
+
 
 func _slide(mode: SlidingPart.Mode = SlidingPart.Mode.RECIPROCATE) -> SlidingPart:
 	var s: SlidingPart = autofree(SlidingPart.new())
@@ -154,7 +155,7 @@ func test_reciprocate_half_cycle_is_full_stroke() -> void:
 	s.travel_px = 6.0
 	s.max_cps = 2.0
 	s.speed = 1.0
-	s.tick(0.25)   # half a cycle at 2 cycles/s
+	s.tick(0.25)  # half a cycle at 2 cycles/s
 	assert_almost_eq(s.offset(), 6.0, 0.0001)
 	assert_almost_eq(s.travel(), 0.5, 0.0001)
 
@@ -241,6 +242,7 @@ func test_sliding_speed_clamped_and_drive() -> void:
 
 # --- ScrollingChain ------------------------------------------------------------------------
 
+
 func _chain() -> ScrollingChain:
 	var c: ScrollingChain = autofree(ScrollingChain.new())
 	c.auto_process = false
@@ -263,7 +265,9 @@ func test_links_are_even_and_evenly_spaced() -> void:
 	assert_eq(links.size() % 2, 0, "an even number of links alternates colors around the loop")
 	assert_almost_eq(float(links.size()) * c.effective_pitch(), c.path_length(), 0.001)
 	for i in range(1, links.size()):
-		assert_almost_eq(float(links[i]["d"]) - float(links[i - 1]["d"]), c.effective_pitch(), 0.0001)
+		assert_almost_eq(
+			float(links[i]["d"]) - float(links[i - 1]["d"]), c.effective_pitch(), 0.0001
+		)
 		assert_ne(int(links[i]["color_index"]), int(links[i - 1]["color_index"]))
 
 
@@ -274,7 +278,9 @@ func test_chain_scrolls_with_signed_speed() -> void:
 	assert_almost_eq(c.travel(), 1.5, 0.0001)
 	c.speed = -1.0
 	c.tick(0.1)
-	assert_almost_eq(c.travel(), fposmod(1.5 - 3.0, c.effective_pitch() * 2.0), 0.0001, "backwards wraps")
+	assert_almost_eq(
+		c.travel(), fposmod(1.5 - 3.0, c.effective_pitch() * 2.0), 0.0001, "backwards wraps"
+	)
 	for i in 30:
 		c.tick(0.07)
 		assert_true(c.travel() >= 0.0 and c.travel() < c.effective_pitch() * 2.0)
@@ -284,7 +290,9 @@ func test_belt_round_a_tank_track() -> void:
 	# Drive sprocket and idler up high, three road wheels along the ground.
 	var c: ScrollingChain = autofree(ScrollingChain.new())
 	c.auto_process = false
-	var centers := PackedVector2Array([Vector2(10, 10), Vector2(90, 10), Vector2(25, 22), Vector2(50, 22), Vector2(75, 22)])
+	var centers := PackedVector2Array(
+		[Vector2(10, 10), Vector2(90, 10), Vector2(25, 22), Vector2(50, 22), Vector2(75, 22)]
+	)
 	var radii := PackedFloat32Array([6.0, 5.0, 5.0, 5.0, 5.0])
 	c.set_belt(centers, radii)
 	assert_true(c.closed)
@@ -308,7 +316,9 @@ func test_set_loop_is_a_two_wheel_belt() -> void:
 	var a: ScrollingChain = autofree(ScrollingChain.new())
 	var b: ScrollingChain = autofree(ScrollingChain.new())
 	a.set_loop(Vector2(10, 20), 6.0, Vector2(60, 20), 4.0)
-	b.set_belt(PackedVector2Array([Vector2(10, 20), Vector2(60, 20)]), PackedFloat32Array([6.0, 4.0]))
+	b.set_belt(
+		PackedVector2Array([Vector2(10, 20), Vector2(60, 20)]), PackedFloat32Array([6.0, 4.0])
+	)
 	assert_eq(a.points, b.points)
 
 

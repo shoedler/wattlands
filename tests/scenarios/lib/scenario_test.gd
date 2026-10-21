@@ -60,4 +60,7 @@ func human_rider(runner: GameSimRunner) -> LocalRider:
 static func first(problems: Array, limit: int = 8) -> String:
 	if problems.size() <= limit:
 		return "\n".join(PackedStringArray(problems))
-	return "%s\n... and %d more" % ["\n".join(PackedStringArray(problems.slice(0, limit))), problems.size() - limit]
+	return (
+		"%s\n... and %d more"
+		% ["\n".join(PackedStringArray(problems.slice(0, limit))), problems.size() - limit]
+	)

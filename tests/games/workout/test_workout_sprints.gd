@@ -28,7 +28,9 @@ func test_streaks_peaks_and_hits() -> void:
 	var res := t.result()
 	assert_eq(res["peak_w"], 900)
 	assert_almost_eq(t.held_s, 5.05, 0.001)
-	assert_almost_eq(float(res["held_s"]), snappedf(t.held_s, 0.1), 0.0001, "results round to 0.1 s")
+	assert_almost_eq(
+		float(res["held_s"]), snappedf(t.held_s, 0.1), 0.0001, "results round to 0.1 s"
+	)
 	assert_true(bool(res["hit"]))
 
 
@@ -113,7 +115,9 @@ func test_a_lagging_rider_is_scored_once_per_sprint() -> void:
 		for slot in players:
 			var t := tick if slot.peer_id == 1 else maxi(tick - 3, 0)
 			var ps := U.phase_state(timeline, starts, t)
-			frame.players[slot.peer_id] = U.telemetry(slot, U.compliant(slot, timeline[ps.index], ps), tick)
+			frame.players[slot.peer_id] = U.telemetry(
+				slot, U.compliant(slot, timeline[ps.index], ps), tick
+			)
 			frame.phase[slot.peer_id] = ps
 		g.sim_step(DT, frame)
 	var sprints := U.of_type(events, WorkoutRules.EV_SPRINT)
@@ -133,7 +137,9 @@ func test_a_lagging_rider_is_scored_once_per_sprint() -> void:
 ## phase after the warm-up is still a sprint.
 func test_a_long_free_ride_is_no_sprint() -> void:
 	var g := U.game("e2e", U.players(1, 0, 200.0))
-	var warm := PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "WORKOUT_LBL_WARMUP").with_ramp(65.0).with_lap()
+	var warm := (
+		PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "WORKOUT_LBL_WARMUP").with_ramp(65.0).with_lap()
+	)
 	var free := PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 600.0, "Free ride").with_lap()
 	var work := PlanPhase.erg(Wl.WORK, 75.0, 120.0, "WORKOUT_LBL_ENDURANCE").with_lap()
 	var timeline: Array[PlanPhase] = [warm, free, work]
@@ -155,7 +161,13 @@ func test_a_long_free_ride_is_no_sprint() -> void:
 	var timeline2: Array[PlanPhase] = [warm, sprint, work]
 	g2.state.set_timeline(timeline2)
 	assert_true(WorkoutSession.is_sprint(sprint))
-	assert_eq(WorkoutHud.band_for(g2.state, 1, g2.state.rider(1)), [240.0, 320.0], "a 30 s sprint keeps its band")
-	assert_eq(WorkoutHud.interval_banner(g2.state, 1, g2.ctx.strings)["key"], "WORKOUT_BANNER_SPRINT")
+	assert_eq(
+		WorkoutHud.band_for(g2.state, 1, g2.state.rider(1)),
+		[240.0, 320.0],
+		"a 30 s sprint keeps its band"
+	)
+	assert_eq(
+		WorkoutHud.interval_banner(g2.state, 1, g2.ctx.strings)["key"], "WORKOUT_BANNER_SPRINT"
+	)
 	assert_eq(U.of_type(U.ride(g2), WorkoutRules.EV_SPRINT).size(), 1, "and its score")
 	g2.free()

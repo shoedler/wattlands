@@ -146,7 +146,9 @@ func _refresh() -> void:
 	var b := band()
 	var glowing := in_band()
 	var top := maxf(maxf(ftp_w * 1.5, b.y * 1.25), maxf(_power_w * 1.1, 100.0))
-	_bar.set_state(_power_w, top, b.x, b.y, _target_w if _mode == Wl.ERG and _target_w > 0.0 else -1.0, glowing)
+	_bar.set_state(
+		_power_w, top, b.x, b.y, _target_w if _mode == Wl.ERG and _target_w > 0.0 else -1.0, glowing
+	)
 	_watts.label_settings.font_color = WlTheme.GLOW if glowing else WlTheme.TEXT
 	if _mode == Wl.ERG and _target_w > 0.0:
 		_target.text = _t("UI_HUD_TARGET", [roundi(_target_w)])

@@ -280,6 +280,7 @@ func backend_name() -> String:
 
 # --- Additive API ----------------------------------------------------------------------
 
+
 ## Advance every timer by dt seconds (backoff, backend start, attempt and setup timeouts,
 ## scan length).
 func tick(dt: float) -> void:
@@ -353,8 +354,15 @@ func is_ready() -> bool:
 
 ## True while waiting to reconnect, or reconnecting, after a ready trainer was lost.
 func is_reconnecting() -> bool:
-	return _ever_ready and (_link == Link.WAIT_RETRY or _link == Link.CONNECTING \
-			or _link == Link.REINIT or _link == Link.SETUP)
+	return (
+		_ever_ready
+		and (
+			_link == Link.WAIT_RETRY
+			or _link == Link.CONNECTING
+			or _link == Link.REINIT
+			or _link == Link.SETUP
+		)
+	)
 
 
 ## Seconds until the next reconnect attempt (0 unless waiting).
@@ -396,7 +404,9 @@ static func read_last_device() -> Dictionary:
 	if not FileAccess.file_exists(path):
 		return {}
 	var json := JSON.new()
-	var parsed: Variant = json.data if json.parse(FileAccess.get_file_as_string(path)) == OK else null
+	var parsed: Variant = (
+		json.data if json.parse(FileAccess.get_file_as_string(path)) == OK else null
+	)
 	if not (parsed is Dictionary):
 		push_warning("Bluetooth: ignored an unreadable last device file (%s)" % path)
 		return {}
@@ -406,14 +416,21 @@ static func read_last_device() -> Dictionary:
 		push_warning("Bluetooth: ignored a last device file without an address (%s)" % path)
 		return {}
 	var name_v: Variant = d.get("name", "")
-	return {"address": String(addr_v).strip_edges(), "name": String(name_v) if name_v is String else ""}
+	return {
+		"address": String(addr_v).strip_edges(), "name": String(name_v) if name_v is String else ""
+	}
 
 
 ## Remember {address, name} as the last device. Returns false (push_warning) on failure.
 static func write_last_device(address: String, device_name: String) -> bool:
 	var f := FileAccess.open(Paths.last_device_path(), FileAccess.WRITE)
 	if f == null:
-		push_warning("Bluetooth: could not save the last device (%s)" % error_string(FileAccess.get_open_error()))
+		push_warning(
+			(
+				"Bluetooth: could not save the last device (%s)"
+				% error_string(FileAccess.get_open_error())
+			)
+		)
 		return false
 	f.store_string(JSON.stringify({"address": address, "name": device_name}, "\t") + "\n")
 	f.close()
@@ -421,6 +438,7 @@ static func write_last_device(address: String, device_name: String) -> bool:
 
 
 # --- Backend selection -----------------------------------------------------------------
+
 
 func _try_next_backend() -> void:
 	while not _candidates.is_empty():
@@ -547,6 +565,7 @@ func _auto_rescan() -> bool:
 
 # --- Scanning --------------------------------------------------------------------------
 
+
 func _halt_scan() -> void:
 	_scan_queued = -1.0
 	if not _scanning:
@@ -570,16 +589,23 @@ func _on_device_found(info: Dictionary) -> void:
 	var changed := true
 	if prev is Dictionary:
 		var p: Dictionary = prev
-		changed = String(p.get("name", "")) != String(info.get("name", "")) \
-				or p.get("services", []) != info.get("services", [])
+		changed = (
+			String(p.get("name", "")) != String(info.get("name", ""))
+			or p.get("services", []) != info.get("services", [])
+		)
 	if changed:
 		device_found.emit(info)
-	if _auto_connect and _link == Link.IDLE and not _last.is_empty() \
-			and _same_address(addr, String(_last["address"])):
+	if (
+		_auto_connect
+		and _link == Link.IDLE
+		and not _last.is_empty()
+		and _same_address(addr, String(_last["address"]))
+	):
 		connect_to(addr)
 
 
 # --- Link state machine ----------------------------------------------------------------
+
 
 func _begin_attempt() -> void:
 	if _transport == null:
@@ -587,7 +613,10 @@ func _begin_attempt() -> void:
 		push_warning("Bluetooth: cannot connect (%s)" % _status_detail)
 		return
 	_attempt_left = CONNECT_TIMEOUT_S
-	_set_status(TrainerDevice.STATUS_CONNECTING, tr("BLE_STATUS_CONNECTING").format({"name": _target_label()}))
+	_set_status(
+		TrainerDevice.STATUS_CONNECTING,
+		tr("BLE_STATUS_CONNECTING").format({"name": _target_label()})
+	)
 	if _backend != Backend.READY:
 		# Wait for the backend: still starting (its adapter_ready connects), or lost
 		# (initialize it again first).
@@ -616,7 +645,9 @@ func _on_device_connected(address: String) -> void:
 func _enter_setup() -> void:
 	_link = Link.SETUP
 	_setup_left = SETUP_TIMEOUT_S
-	_set_status(TrainerDevice.STATUS_CONNECTED, tr("BLE_STATUS_SETUP").format({"name": _target_label()}))
+	_set_status(
+		TrainerDevice.STATUS_CONNECTED, tr("BLE_STATUS_SETUP").format({"name": _target_label()})
+	)
 	_client.begin()
 
 
@@ -657,7 +688,9 @@ func _schedule_retry(key: String, error: String) -> void:
 	_attempt += 1
 	_retry_left = delay
 	_link = Link.WAIT_RETRY
-	_set_status(TrainerDevice.STATUS_DISCONNECTED, tr(key).format({"s": int(delay), "error": error}))
+	_set_status(
+		TrainerDevice.STATUS_DISCONNECTED, tr(key).format({"s": int(delay), "error": error})
+	)
 
 
 func _setup_failed(reason: String) -> void:
@@ -673,6 +706,7 @@ func _setup_failed(reason: String) -> void:
 
 
 # --- FtmsClient ------------------------------------------------------------------------
+
 
 func _ensure_client() -> void:
 	if _client == null:
@@ -703,8 +737,11 @@ func _on_client_ready() -> void:
 	var old: TrainerDevice = null
 	if _device == null or not _same_address(_device_address, address) or _client_released(_device):
 		old = _device
-		var made: Variant = make_trainer.call(_client, label) if make_trainer.is_valid() \
-				else FtmsTrainer.create(_client, label)
+		var made: Variant = (
+			make_trainer.call(_client, label)
+			if make_trainer.is_valid()
+			else FtmsTrainer.create(_client, label)
+		)
 		_device = made as TrainerDevice
 		_device.process_mode = Node.PROCESS_MODE_ALWAYS
 		if _device.get_parent() == null:
@@ -744,6 +781,7 @@ func _on_client_control_lost(_detail: String) -> void:
 
 
 # --- Helpers ---------------------------------------------------------------------------
+
 
 func _set_status(s: String, detail: String) -> void:
 	if s == _status and detail == _status_detail:

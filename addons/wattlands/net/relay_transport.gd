@@ -109,7 +109,12 @@ func poll() -> void:
 				_last_ping_at = now
 				send_ping(roundf(now * 1000.0))
 			if now - _last_rx_at > SILENCE_TIMEOUT_S:
-				push_warning("RelayTransport: no frame from the relay for %.0f s; reconnecting" % SILENCE_TIMEOUT_S)
+				push_warning(
+					(
+						"RelayTransport: no frame from the relay for %.0f s; reconnecting"
+						% SILENCE_TIMEOUT_S
+					)
+				)
 				_drop_socket()
 				_on_socket_closed("timeout")
 		WebSocketPeer.STATE_CLOSING:
@@ -121,11 +126,12 @@ func poll() -> void:
 
 # --- RelayClientTransport socket layer ------------------------------------------------------
 
+
 func _socket_open() -> void:
 	if url == "":
 		url = default_url(self)
 	if not is_valid_url(url):
-		push_warning("RelayTransport: \"%s\" is not a ws:// or wss:// URL" % url)
+		push_warning('RelayTransport: "%s" is not a ws:// or wss:// URL' % url)
 		_on_socket_closed("error")
 		return
 	_ws = WebSocketPeer.new()

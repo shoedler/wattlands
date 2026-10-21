@@ -26,7 +26,12 @@ static func read(bytes: PackedByteArray) -> Dictionary:
 		errors.append("bad data type")
 	var data_end: int = hs + int(header["data_size"])
 	if data_end + 2 != bytes.size():
-		errors.append("size mismatch: header says %d data bytes, file has %d" % [header["data_size"], bytes.size() - hs - 2])
+		errors.append(
+			(
+				"size mismatch: header says %d data bytes, file has %d"
+				% [header["data_size"], bytes.size() - hs - 2]
+			)
+		)
 		return out
 	if hs == 14 and int(header["crc"]) != FitCrc.compute(bytes, 0, 12):
 		errors.append("header crc")
@@ -44,7 +49,9 @@ static func read(bytes: PackedByteArray) -> Dictionary:
 		if rh & 0x40:
 			var dev := (rh & 0x20) != 0
 			var arch := bytes[pos + 1]
-			var global := bytes.decode_u16(pos + 2) if arch == 0 else (bytes[pos + 2] << 8) | bytes[pos + 3]
+			var global := (
+				bytes.decode_u16(pos + 2) if arch == 0 else (bytes[pos + 2] << 8) | bytes[pos + 3]
+			)
 			var n := bytes[pos + 4]
 			pos += 5
 			var fields: Array = []
@@ -58,7 +65,13 @@ static func read(bytes: PackedByteArray) -> Dictionary:
 				for i in nd:
 					dev_fields.append([bytes[pos], bytes[pos + 1], bytes[pos + 2]])
 					pos += 3
-			var d := {"global": global, "local": local, "fields": fields, "dev_fields": dev_fields, "arch": arch}
+			var d := {
+				"global": global,
+				"local": local,
+				"fields": fields,
+				"dev_fields": dev_fields,
+				"arch": arch
+			}
 			defs[local] = d
 			(out["definitions"] as Array).append(d)
 		else:

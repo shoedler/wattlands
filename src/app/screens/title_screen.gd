@@ -59,7 +59,9 @@ func _build() -> void:
 		services.title_visits += 1
 	# The launch visit counts a stretch already running; later visits (back from a ride or a
 	# menu) wait for a fresh start, so spinning on after Continue never starts another ride.
-	zero.configure(services.profile().ftp_w, not has_profile, has_profile and services.title_visits > 1)
+	zero.configure(
+		services.profile().ftp_w, not has_profile, has_profile and services.title_visits > 1
+	)
 	if quick_game == "":
 		zero.cancel()
 	push_menu(_menu_items(), _on_pick, Callable(), 0)
@@ -88,7 +90,9 @@ func _pick_quick_target() -> void:
 	var reg := services.registry
 	if reg == null:
 		return
-	var last := str(services.settings.get_value("last_game", "")) if services.settings != null else ""
+	var last := (
+		str(services.settings.get_value("last_game", "")) if services.settings != null else ""
+	)
 	if has_profile and last != "" and reg.has_game(last):
 		quick_game = last
 	else:
@@ -113,7 +117,12 @@ func _menu_items() -> Array:
 	if quick_game != "":
 		var m := services.registry.manifest(quick_game)
 		var ride_key := "APP_MENU_QUICK" if has_profile else "APP_MENU_RIDE_NOW"
-		quick_text = t(ride_key).format([str(m.get("title", quick_game)), AppLobbyModel.content_label(quick_game, quick_content)])
+		quick_text = t(ride_key).format(
+			[
+				str(m.get("title", quick_game)),
+				AppLobbyModel.content_label(quick_game, quick_content)
+			]
+		)
 	items.append({"id": "quick", "text": quick_text, "disabled": quick_game == ""})
 	if has_profile:
 		items.append({"id": "picker", "text": t("APP_MENU_CHOOSE_GAME")})
@@ -160,7 +169,10 @@ func quick_start() -> void:
 	zero.cancel()
 	if not has_profile:
 		create_first_run_profile(services)
-	goto("session", {"role": Wl.SOLO, "game_id": quick_game, "content_id": quick_content, "quick": true})
+	goto(
+		"session",
+		{"role": Wl.SOLO, "game_id": quick_game, "content_id": quick_content, "quick": true}
+	)
 
 
 ## The first-run profile (BRIEF 3.5): "Rider", FTP 200, unverified, saved. Built from the
@@ -218,7 +230,9 @@ func _refresh_labels() -> void:
 	if profile_label != null:
 		if has_profile:
 			var verified := "" if p.ftp_verified else " " + t("APP_UNVERIFIED")
-			profile_label.text = t("APP_TITLE_PROFILE").format([p.display_name, int(round(p.ftp_w))]) + verified
+			profile_label.text = (
+				t("APP_TITLE_PROFILE").format([p.display_name, int(round(p.ftp_w))]) + verified
+			)
 		else:
 			profile_label.text = t("APP_TITLE_NO_PROFILE")
 	if trainer_label != null:
@@ -244,7 +258,11 @@ func _refresh_labels() -> void:
 
 
 func _attach_device(device: TrainerDevice) -> void:
-	if _device != null and is_instance_valid(_device) and _device.sample_received.is_connected(feed_sample):
+	if (
+		_device != null
+		and is_instance_valid(_device)
+		and _device.sample_received.is_connected(feed_sample)
+	):
 		_device.sample_received.disconnect(feed_sample)
 	_device = device
 	if _device != null:

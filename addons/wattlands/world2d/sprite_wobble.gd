@@ -24,7 +24,12 @@ static func shader() -> Shader:
 
 
 ## A new wobble material.
-static func make_material(amplitude_px: float = 1.0, wavelength_px: float = 16.0, frequency_hz: float = 1.0, vertical: bool = true) -> ShaderMaterial:
+static func make_material(
+	amplitude_px: float = 1.0,
+	wavelength_px: float = 16.0,
+	frequency_hz: float = 1.0,
+	vertical: bool = true
+) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = shader()
 	set_wave(mat, amplitude_px, wavelength_px, frequency_hz)
@@ -33,7 +38,13 @@ static func make_material(amplitude_px: float = 1.0, wavelength_px: float = 16.0
 
 
 ## Give `item` a new wobble material and return it.
-static func apply(item: CanvasItem, amplitude_px: float = 1.0, wavelength_px: float = 16.0, frequency_hz: float = 1.0, vertical: bool = true) -> ShaderMaterial:
+static func apply(
+	item: CanvasItem,
+	amplitude_px: float = 1.0,
+	wavelength_px: float = 16.0,
+	frequency_hz: float = 1.0,
+	vertical: bool = true
+) -> ShaderMaterial:
 	var mat := make_material(amplitude_px, wavelength_px, frequency_hz, vertical)
 	if item != null:
 		item.material = mat
@@ -42,7 +53,13 @@ static func apply(item: CanvasItem, amplitude_px: float = 1.0, wavelength_px: fl
 
 ## Change the wave of an existing material (wavelength must be > 0). The quad's margin
 ## follows the amplitude, so a stronger wave is never clipped at the sprite's edge.
-static func set_wave(mat: ShaderMaterial, amplitude_px: float, wavelength_px: float, frequency_hz: float, phase: float = 0.0) -> void:
+static func set_wave(
+	mat: ShaderMaterial,
+	amplitude_px: float,
+	wavelength_px: float,
+	frequency_hz: float,
+	phase: float = 0.0
+) -> void:
 	if wavelength_px <= 0.0:
 		push_error("SpriteWobble: wavelength_px must be > 0 (got %s)" % wavelength_px)
 		wavelength_px = 1.0
@@ -73,7 +90,9 @@ static func use_engine_time(mat: ShaderMaterial) -> void:
 
 ## Preset: a fish seen from the side; columns bob, the body (head half) stays still and the
 ## tail half swings. `facing_left`: the tail is on the right (Fishing's sprites face left).
-static func fish_tail(item: CanvasItem, facing_left: bool = true, amplitude_px: float = 1.0, frequency_hz: float = 2.0) -> ShaderMaterial:
+static func fish_tail(
+	item: CanvasItem, facing_left: bool = true, amplitude_px: float = 1.0, frequency_hz: float = 2.0
+) -> ShaderMaterial:
 	var mat := apply(item, amplitude_px, 10.0, frequency_hz, true)
 	if facing_left:
 		set_falloff(mat, 0.45, 1.0)
@@ -83,14 +102,29 @@ static func fish_tail(item: CanvasItem, facing_left: bool = true, amplitude_px: 
 
 
 ## Preset: water bands and light rays; rows sway sideways slowly.
-static func water(item: CanvasItem, amplitude_px: float = 1.0, frequency_hz: float = 0.6) -> ShaderMaterial:
+static func water(
+	item: CanvasItem, amplitude_px: float = 1.0, frequency_hz: float = 0.6
+) -> ShaderMaterial:
 	return apply(item, amplitude_px, 8.0, frequency_hz, false)
 
 
 ## CPU reference of the shader's displacement in art pixels for a texel at `along_px`
 ## (texel index along the wave axis) and time t, with falloff weight `weight` (0..1).
 ## Views use it to keep attached things (a fishing line's end at the tail) in step.
-static func displacement(along_px: float, t: float, amplitude_px: float, wavelength_px: float, frequency_hz: float, phase: float = 0.0, weight: float = 1.0, snap: bool = true) -> float:
+static func displacement(
+	along_px: float,
+	t: float,
+	amplitude_px: float,
+	wavelength_px: float,
+	frequency_hz: float,
+	phase: float = 0.0,
+	weight: float = 1.0,
+	snap: bool = true
+) -> float:
 	var along := floorf(along_px) + 0.5 if snap else along_px
-	var d := amplitude_px * clampf(weight, 0.0, 1.0) * sin(TAU * (along / maxf(wavelength_px, 0.001) - frequency_hz * t + phase))
+	var d := (
+		amplitude_px
+		* clampf(weight, 0.0, 1.0)
+		* sin(TAU * (along / maxf(wavelength_px, 0.001) - frequency_hz * t + phase))
+	)
 	return roundf(d) if snap else d

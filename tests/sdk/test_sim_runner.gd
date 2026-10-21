@@ -9,10 +9,34 @@ const Kit := preload("res://tests/sdk/helpers/session_kit.gd")
 const FakeRider := preload("res://tests/sdk/helpers/fake_rider.gd")
 const FakeNetHub := preload("res://tests/sdk/helpers/fake_net_hub.gd")
 const REPORT_KEYS: Array[String] = [
-	"schema", "args", "game_id", "content_id", "role", "seed", "slots", "plans", "plan_warnings",
-	"overrides", "end_reason", "finished_reason", "sim_seconds", "game_seconds", "max_sim_seconds",
-	"events", "phases", "directives", "trace", "snapshots", "max_snapshot_bytes",
-	"oversize_snapshots", "results", "unlocks", "clients", "fit_paths", "meta", "deterministic_hash",
+	"schema",
+	"args",
+	"game_id",
+	"content_id",
+	"role",
+	"seed",
+	"slots",
+	"plans",
+	"plan_warnings",
+	"overrides",
+	"end_reason",
+	"finished_reason",
+	"sim_seconds",
+	"game_seconds",
+	"max_sim_seconds",
+	"events",
+	"phases",
+	"directives",
+	"trace",
+	"snapshots",
+	"max_snapshot_bytes",
+	"oversize_snapshots",
+	"results",
+	"unlocks",
+	"clients",
+	"fit_paths",
+	"meta",
+	"deterministic_hash",
 ]
 
 var _reg: WlGameRegistry = null
@@ -44,7 +68,9 @@ func after_each() -> void:
 
 
 func _factory() -> Callable:
-	return func(slot: PlayerSlot, profile: RiderProfile, spec: String, opts: Dictionary) -> LocalRider:
+	return func(
+		slot: PlayerSlot, profile: RiderProfile, spec: String, opts: Dictionary
+	) -> LocalRider:
 		var r: LocalRider = FakeRider.new()
 		var dev := MockTrainer.from_spec(spec, slot.ftp, {"seed": 3})
 		r.setup(slot.peer_id, profile, slot, dev, opts)
@@ -61,7 +87,13 @@ func _factory() -> Callable:
 
 
 func _args(extra: Dictionary = {}) -> Dictionary:
-	var a := {"game": "fx_solo", "content": "tiny", "registry": _reg, "rider_factory": _factory(), "seed": 3}
+	var a := {
+		"game": "fx_solo",
+		"content": "tiny",
+		"registry": _reg,
+		"rider_factory": _factory(),
+		"seed": 3
+	}
 	for k: Variant in extra.keys():
 		a[k] = extra[k]
 	return a
@@ -85,19 +117,43 @@ func _host_net() -> Callable:
 
 
 func test_parse_args_reads_every_flag() -> void:
-	var a := GameSimRunner.parse_args(PackedStringArray([
-		"--game=siege", "--content=hold_the_line", "--players=2", "--bots=1", "--rider=erg:compliance=0.9",
-		"--rider=zero", "--sim-speed=200", "--seed=7", "--report=build/x.json", "--autopilot=0,1",
-		"--ftp=180,220", "--unverified", "--haptics-off=1", "--options={\"rotation\":true}",
-		"--player-options=[{\"wave_offset\":-3},{}]", "--max-sim-seconds=900", "--at=10,20.5",
-		"--screenshot-dir=build/shots",
-	]))
+	var a := (
+		GameSimRunner
+		. parse_args(
+			PackedStringArray(
+				[
+					"--game=siege",
+					"--content=hold_the_line",
+					"--players=2",
+					"--bots=1",
+					"--rider=erg:compliance=0.9",
+					"--rider=zero",
+					"--sim-speed=200",
+					"--seed=7",
+					"--report=build/x.json",
+					"--autopilot=0,1",
+					"--ftp=180,220",
+					"--unverified",
+					"--haptics-off=1",
+					'--options={"rotation":true}',
+					'--player-options=[{"wave_offset":-3},{}]',
+					"--max-sim-seconds=900",
+					"--at=10,20.5",
+					"--screenshot-dir=build/shots",
+				]
+			)
+		)
+	)
 	assert_false(a.has("error"), str(a.get("error", "")))
 	assert_eq(a["game"], "siege")
 	assert_eq(a["content"], "hold_the_line")
 	assert_eq(a["players"], 2)
 	assert_eq(a["bots"], 1)
-	assert_eq(a["riders"], ["erg:compliance=0.9", "zero"] as Array[String], "--rider repeats, never comma-joined")
+	assert_eq(
+		a["riders"],
+		["erg:compliance=0.9", "zero"] as Array[String],
+		"--rider repeats, never comma-joined"
+	)
 	assert_eq(a["sim_speed"], 200.0)
 	assert_eq(a["seed"], 7)
 	assert_eq(a["report"], "build/x.json")
@@ -120,7 +176,9 @@ func test_parse_args_defaults() -> void:
 	assert_eq(a["ftp"], [] as Array[float])
 	assert_false(a["unverified"])
 	assert_true(a["headless"])
-	assert_eq(GameSimRunner.parse_args(PackedStringArray(["--game=x", "--windowed"]))["headless"], false)
+	assert_eq(
+		GameSimRunner.parse_args(PackedStringArray(["--game=x", "--windowed"]))["headless"], false
+	)
 
 
 func test_parse_args_errors_name_the_flag() -> void:
@@ -147,7 +205,10 @@ func test_parse_args_errors_name_the_flag() -> void:
 	for c: Array in cases:
 		var a := GameSimRunner.parse_args(PackedStringArray(c[0]))
 		assert_true(a.has("error"), str(c[0]))
-		assert_true(str(a.get("error", "")).begins_with(str(c[1])), "%s -> %s" % [str(c[0]), str(a.get("error", ""))])
+		assert_true(
+			str(a.get("error", "")).begins_with(str(c[1])),
+			"%s -> %s" % [str(c[0]), str(a.get("error", ""))]
+		)
 
 
 func test_parse_args_reads_the_override_file() -> void:
@@ -198,7 +259,16 @@ func test_invalid_rider_profile_is_a_setup_error() -> void:
 
 
 func test_one_human_with_bots_runs_solo() -> void:
-	var r := _runner({"players": 1, "bots": 2, "ftp": [250.0], "unverified": true, "haptics_off": [2], "autopilot": "none"})
+	var r := _runner(
+		{
+			"players": 1,
+			"bots": 2,
+			"ftp": [250.0],
+			"unverified": true,
+			"haptics_off": [2],
+			"autopilot": "none"
+		}
+	)
 	assert_eq(r.role, Wl.SOLO)
 	assert_eq(r.clients.size(), 0)
 	assert_eq(r.host.ctx.role, Wl.SOLO)
@@ -218,11 +288,23 @@ func test_one_human_with_bots_runs_solo() -> void:
 	assert_false(bot.haptics_on, "--haptics-off=2")
 	assert_eq(r.slot_specs, ["erg"] as Array[String])
 	assert_eq(r.riders.size(), 3)
-	assert_eq(bool((r.riders[1] as Object).get("options")["multiplayer"]), false, "SOLO riders pause when coasting")
+	assert_eq(
+		bool((r.riders[1] as Object).get("options")["multiplayer"]),
+		false,
+		"SOLO riders pause when coasting"
+	)
 
 
 func test_two_humans_run_host_with_loopback_clients() -> void:
-	var r := _runner({"players": 2, "bots": 1, "riders": ["erg", "erg:compliance=0.9"], "net_factory": _host_net(), "autopilot": [1]})
+	var r := _runner(
+		{
+			"players": 2,
+			"bots": 1,
+			"riders": ["erg", "erg:compliance=0.9"],
+			"net_factory": _host_net(),
+			"autopilot": [1]
+		}
+	)
 	assert_eq(r.role, Wl.HOST)
 	assert_eq(r.clients.size(), 1)
 	assert_eq(r.nets.size(), 2)
@@ -240,7 +322,9 @@ func test_two_humans_run_host_with_loopback_clients() -> void:
 func test_complete_end_report_and_fit_files() -> void:
 	var report_path := _tmp.path_join("out/run1.json")
 	var r := _runner({"players": 1, "bots": 1, "report": report_path})
-	assert_almost_eq(r.max_sim_seconds, 2.0 + 3.0 + 30.0 + 6.0 + 180.0 + 600.0, 1e-6, "worst-case plan + 600 s")
+	assert_almost_eq(
+		r.max_sim_seconds, 2.0 + 3.0 + 30.0 + 6.0 + 180.0 + 600.0, 1e-6, "worst-case plan + 600 s"
+	)
 	var end := r.run_to_end()
 	assert_eq(end, "complete")
 	var rep := r.build_report()
@@ -278,18 +362,57 @@ func _has_keys(d: Variant, keys: Array, what: String) -> void:
 
 
 func test_report_schema_nested_keys_sim4() -> void:
-	var r := _runner({"players": 1, "bots": 1, "report": _tmp.path_join("schema.json"), "max_sim_seconds": 12.0})
-	r.host.game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		if frame.tick == 50:
-			g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 58}))
-			g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 99})))
+	var r := _runner(
+		{"players": 1, "bots": 1, "report": _tmp.path_join("schema.json"), "max_sim_seconds": 12.0}
+	)
+	r.host.game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			if frame.tick == 50:
+				g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 58}))
+				g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 99}))
+	)
 	r.run_to_end()
 	var path := r.write_report()
 	var rep: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
 	_has_keys(rep, REPORT_KEYS, "report")
-	_has_keys(rep["args"], ["game", "content", "players", "bots", "riders", "seed", "autopilot", "ftp", "unverified", "haptics_off", "options", "player_options", "override", "max_sim_seconds"], "args")
+	_has_keys(
+		rep["args"],
+		[
+			"game",
+			"content",
+			"players",
+			"bots",
+			"riders",
+			"seed",
+			"autopilot",
+			"ftp",
+			"unverified",
+			"haptics_off",
+			"options",
+			"player_options",
+			"override",
+			"max_sim_seconds"
+		],
+		"args"
+	)
 	for s: Variant in rep["slots"]:
-		_has_keys(s, ["slot", "peer", "name", "is_bot", "ftp", "ftp_verified", "rider", "autopilot", "haptics_on", "options"], "slots[]")
+		_has_keys(
+			s,
+			[
+				"slot",
+				"peer",
+				"name",
+				"is_bot",
+				"ftp",
+				"ftp_verified",
+				"rider",
+				"autopilot",
+				"haptics_on",
+				"options"
+			],
+			"slots[]"
+		)
 	for peer: String in ["1", "-1"]:
 		assert_true((rep["plans"] as Dictionary).has(peer), "plans." + peer)
 		assert_true((rep["plan_warnings"] as Dictionary).has(peer), "plan_warnings." + peer)
@@ -297,12 +420,39 @@ func test_report_schema_nested_keys_sim4() -> void:
 			_has_keys(ph, ["index", "kind", "start", "end", "ended_by"], "phases[]")
 		var trace: Array = rep["trace"][peer]
 		assert_eq(trace.size(), 12, "1 Hz over 12 s")
-		_has_keys(trace[0], ["t", "phase", "kind", "mode", "applied_target_w", "applied_pct", "applied_grade_pct", "clamped_by", "rescue", "afk", "paused", "haptic", "power_w", "cadence_rpm"], "trace[]")
+		_has_keys(
+			trace[0],
+			[
+				"t",
+				"phase",
+				"kind",
+				"mode",
+				"applied_target_w",
+				"applied_pct",
+				"applied_grade_pct",
+				"clamped_by",
+				"rescue",
+				"afk",
+				"paused",
+				"haptic",
+				"power_w",
+				"cadence_rpm"
+			],
+			"trace[]"
+		)
 	var dirs: Array = rep["directives"]
 	assert_eq(dirs.size(), 2)
 	for d: Variant in dirs:
-		_has_keys(d, ["id", "peer", "t", "kind", "requested", "accepted", "reason", "applied"], "directives[]")
-		_has_keys(d["applied"], ["id", "kind", "requested", "applied", "clamped_by", "refused", "reason", "t"], "directives[].applied")
+		_has_keys(
+			d,
+			["id", "peer", "t", "kind", "requested", "accepted", "reason", "applied"],
+			"directives[]"
+		)
+		_has_keys(
+			d["applied"],
+			["id", "kind", "requested", "applied", "clamped_by", "refused", "reason", "t"],
+			"directives[].applied"
+		)
 	assert_eq(str(dirs[1]["reason"]), Wl.REFUSE_RANGE, "the refusal reason")
 	assert_true(bool(dirs[1]["applied"]["refused"]))
 	assert_push_warning("outside_range_pct")
@@ -314,7 +464,9 @@ func test_report_schema_nested_keys_sim4() -> void:
 	assert_eq(int(rep["max_snapshot_bytes"]), biggest)
 	for e: Variant in rep["events"]:
 		_has_keys(e, ["t", "pt", "type"], "events[]")
-	_has_keys(rep["results"], ["grade", "score", "summary_key", "rows", "team", "session_id"], "results")
+	_has_keys(
+		rep["results"], ["grade", "score", "summary_key", "rows", "team", "session_id"], "results"
+	)
 	_has_keys(rep["meta"], ["wall_s", "utc_start_unix"], "meta")
 	assert_eq(str(rep["deterministic_hash"]).length(), 64)
 
@@ -331,7 +483,9 @@ func test_timeout_end_still_writes_results_and_fit() -> void:
 func test_zero_rider_pauses_in_solo_and_ends_paused() -> void:
 	var r := _runner({"riders": ["zero"], "report": _tmp.path_join("p.json")})
 	assert_eq(r.run_to_end(), "paused")
-	assert_almost_eq(r.sim_seconds(), 10.0 + 120.0, 0.06, "paused at 10 s, ended 120 s of platform time later")
+	assert_almost_eq(
+		r.sim_seconds(), 10.0 + 120.0, 0.06, "paused at 10 s, ended 120 s of platform time later"
+	)
 	assert_not_null(r.host.final_results(), "results() on every ending")
 	assert_true(FileAccess.file_exists(_tmp.path_join("fit/p_slot0.fit")))
 	var types: Array = []
@@ -341,7 +495,14 @@ func test_zero_rider_pauses_in_solo_and_ends_paused() -> void:
 
 
 func test_zero_rider_goes_afk_in_host() -> void:
-	var r := _runner({"players": 2, "riders": ["erg", "zero"], "net_factory": _host_net(), "max_sim_seconds": 20.0})
+	var r := _runner(
+		{
+			"players": 2,
+			"riders": ["erg", "zero"],
+			"net_factory": _host_net(),
+			"max_sim_seconds": 20.0
+		}
+	)
 	assert_eq(r.run_to_end(), "timeout", "a HOST run never pauses")
 	assert_has(r.host.game.get("afk_log"), [2, true])
 	assert_false(r.host.is_paused())
@@ -375,8 +536,12 @@ func test_override_reaches_content_and_the_report() -> void:
 
 func test_runs_are_isolated_in_a_temp_profile() -> void:
 	var r := _runner({"players": 2, "net_factory": _host_net(), "max_sim_seconds": 5.0})
-	assert_eq(Paths.user_dir(), r.temp_root(), "every persisted file goes under the run's temp root")
-	assert_ne(r.host.ctx.progress.path, r.clients[0].ctx.progress.path if r.clients[0].ctx != null else "")
+	assert_eq(
+		Paths.user_dir(), r.temp_root(), "every persisted file goes under the run's temp root"
+	)
+	assert_ne(
+		r.host.ctx.progress.path, r.clients[0].ctx.progress.path if r.clients[0].ctx != null else ""
+	)
 	assert_string_contains(r.host.ctx.progress.path, "slot0/games/fx_solo/progress.json")
 	r.run_to_end()
 	assert_string_contains(r.clients[0].ctx.progress.path, "slot1/games/fx_solo/progress.json")
@@ -395,13 +560,25 @@ func test_fit_without_a_report_goes_to_the_temp_root() -> void:
 
 func test_requested_directive_keys_round_trip_into_the_report() -> void:
 	var r := _runner({"max_sim_seconds": 8.0})
-	r.host.game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		if frame.tick == 60:
-			g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 58, "duration_s": 1, "reason": "pull", "source": "fx"})))
+	r.host.game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			if frame.tick == 60:
+				g.ctx.directives.request(
+					1,
+					EffortDirective.from_dict(
+						{"target_pct": 58, "duration_s": 1, "reason": "pull", "source": "fx"}
+					)
+				)
+	)
 	r.run_to_end()
 	var dirs: Array = r.build_report()["directives"]
 	assert_eq(dirs.size(), 1)
-	assert_eq((dirs[0]["requested"] as Dictionary).keys(), ["target_pct", "duration_s", "reason", "source", "id"], "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1, 19.1)")
+	assert_eq(
+		(dirs[0]["requested"] as Dictionary).keys(),
+		["target_pct", "duration_s", "reason", "source", "id"],
+		"the game's keys plus duration_s and the sink's id (GAME_SDK 8.1, 19.1)"
+	)
 	assert_not_null(dirs[0]["applied"])
 
 

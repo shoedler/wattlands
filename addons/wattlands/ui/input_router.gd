@@ -308,6 +308,7 @@ func load_bindings() -> void:
 
 # --- internals ---------------------------------------------------------------------------
 
+
 func _on_press(a: StringName, src: String) -> void:
 	if a == &"panic":
 		if _is_joy(src) and _has_joy_binding(&"pause"):

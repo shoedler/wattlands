@@ -21,8 +21,21 @@ const EXIT_SCRIPT_ERRORS := 5
 
 ## run_game_sim flags that take a value (BRIEF 3.6). Only `rider` may repeat.
 const VALUE_FLAGS: Array[String] = [
-	"game", "content", "players", "bots", "rider", "sim-speed", "seed", "report", "autopilot",
-	"ftp", "haptics-off", "options", "player-options", "override", "max-sim-seconds",
+	"game",
+	"content",
+	"players",
+	"bots",
+	"rider",
+	"sim-speed",
+	"seed",
+	"report",
+	"autopilot",
+	"ftp",
+	"haptics-off",
+	"options",
+	"player-options",
+	"override",
+	"max-sim-seconds",
 ]
 ## run_game_sim flags without a value.
 const BOOL_FLAGS: Array[String] = ["unverified"]
@@ -37,7 +50,8 @@ const USAGE := """usage: tools/run_game_sim --game=<id> --report=<path> [--conte
   (tools/run_game_sim.ps1 in PowerShell; docs/GAME_SDK.md explains every flag and the report)"""
 
 ## (args: PackedStringArray) -> Dictionary, the parsed args or {"error": String}.
-var parse_fn: Callable = func(a: PackedStringArray) -> Dictionary: return GameSimRunner.parse_args(a)
+var parse_fn: Callable = func(a: PackedStringArray) -> Dictionary:
+	return GameSimRunner.parse_args(a)
 ## () -> GameSimRunner.
 var make_runner: Callable = func() -> GameSimRunner: return GameSimRunner.new()
 ## (name: String) -> String.
@@ -66,14 +80,24 @@ class ScriptErrorCounter:
 	var _mutex: Mutex = Mutex.new()
 
 	## Godot calls this from any thread.
-	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
-			_editor_notify: bool, error_type: int, _script_backtraces: Array[ScriptBacktrace]) -> void:
+	func _log_error(
+		function: String,
+		file: String,
+		line: int,
+		code: String,
+		rationale: String,
+		_editor_notify: bool,
+		error_type: int,
+		_script_backtraces: Array[ScriptBacktrace]
+	) -> void:
 		if error_type != ERROR_TYPE_SCRIPT:
 			return
 		_mutex.lock()
 		count += 1
 		if first == "":
-			first = "%s (%s:%d, %s)" % [rationale if rationale != "" else code, file, line, function]
+			first = (
+				"%s (%s:%d, %s)" % [rationale if rationale != "" else code, file, line, function]
+			)
 		_mutex.unlock()
 
 	func snapshot() -> Array:
@@ -96,7 +120,12 @@ func main(raw: PackedStringArray, parent: Node) -> int:
 	script_errors = int(seen[0])
 	first_script_error = str(seen[1])
 	if script_errors > 0 and code == EXIT_OK:
-		_fail("run_game_sim: %d script error(s) during the run, the first: %s. Fix them (BRIEF 7); the report, if written, is kept" % [script_errors, first_script_error])
+		_fail(
+			(
+				"run_game_sim: %d script error(s) during the run, the first: %s. Fix them (BRIEF 7); the report, if written, is kept"
+				% [script_errors, first_script_error]
+			)
+		)
 		return EXIT_SCRIPT_ERRORS
 	return code
 
@@ -106,7 +135,7 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 	var flags: Array = []  # [[key, value or null], ...] in order
 	for a in raw:
 		if not a.begins_with("--") or a == "--":
-			return _usage("unexpected argument \"%s\" (flags look like --name=value)" % a)
+			return _usage('unexpected argument "%s" (flags look like --name=value)' % a)
 		var eq := a.find("=")
 		flags.append([a.substr(2, eq - 2), a.substr(eq + 1)] if eq >= 0 else [a.substr(2), null])
 	if _has(flags, "help"):
@@ -114,10 +143,20 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 		return EXIT_OK
 	for v in LOCK_VARS:
 		if env_fn.call(v) != "1":
-			return _usage("refusing to run: %s is not 1. Start simulations with tools/run_game_sim, which sets the hardware and network locks" % v)
+			return _usage(
+				(
+					"refusing to run: %s is not 1. Start simulations with tools/run_game_sim, which sets the hardware and network locks"
+					% v
+				)
+			)
 	var mock: Variant = _value(flags, "mock-trainer")
-	if not _has(flags, "mock-trainer") or (mock != null and str(mock).to_lower() in ["false", "0", "no", "off"]):
-		return _usage("refusing to run without --mock-trainer: every simulated rider is a MockTrainer (tools/run_game_sim adds it)")
+	if (
+		not _has(flags, "mock-trainer")
+		or (mock != null and str(mock).to_lower() in ["false", "0", "no", "off"])
+	):
+		return _usage(
+			"refusing to run without --mock-trainer: every simulated rider is a MockTrainer (tools/run_game_sim adds it)"
+		)
 	var problems := _check(flags)
 	if not problems.is_empty():
 		for p in problems:
@@ -138,18 +177,40 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 		passthrough.append("--%s" % f[0] if v == null else "--%s=%s" % [f[0], v])
 	if _has(flags, "override"):
 		var op := resolve_path(str(_value(flags, "override")), cwd)
-		var patch: Variant = parse_json(FileAccess.get_file_as_string(op)) if FileAccess.file_exists(op) else null
+		var patch: Variant = (
+			parse_json(FileAccess.get_file_as_string(op)) if FileAccess.file_exists(op) else null
+		)
 		if not (patch is Dictionary):
-			return _usage("--override=%s is not a readable JSON object file (keys: files under content/<game>/, values: merge patches)" % op)
+			return _usage(
+				(
+					"--override=%s is not a readable JSON object file (keys: files under content/<game>/, values: merge patches)"
+					% op
+				)
+			)
 	if _has(flags, "echo-args"):
 		_say("run_game_sim: args %s" % JSON.stringify(Array(passthrough)))
-		_say("run_game_sim: locks %s=%s %s=%s mock-trainer=%s" % [LOCK_VARS[0], env_fn.call(LOCK_VARS[0]),
-			LOCK_VARS[1], env_fn.call(LOCK_VARS[1]), "true" if mock == null else str(mock)])
+		_say(
+			(
+				"run_game_sim: locks %s=%s %s=%s mock-trainer=%s"
+				% [
+					LOCK_VARS[0],
+					env_fn.call(LOCK_VARS[0]),
+					LOCK_VARS[1],
+					env_fn.call(LOCK_VARS[1]),
+					"true" if mock == null else str(mock)
+				]
+			)
+		)
 		return EXIT_OK
 	var report := resolve_path(str(_value(flags, "report")), cwd)
 	var removed := clear_report(report)
 	if not removed.is_empty():
-		_say("run_game_sim: removed %d file(s) an earlier run left at %s (a failed run leaves no stale report)" % [removed.size(), report])
+		_say(
+			(
+				"run_game_sim: removed %d file(s) an earlier run left at %s (a failed run leaves no stale report)"
+				% [removed.size(), report]
+			)
+		)
 	parsed = parse_fn.call(passthrough)
 	if parsed.has("error"):
 		return _usage("bad flags: %s" % parsed["error"])
@@ -168,7 +229,12 @@ func _run_session(parent: Node) -> int:
 	runner.process_mode = Node.PROCESS_MODE_ALWAYS  # a system node (BRIEF 4.1)
 	parent.add_child(runner)
 	var code := EXIT_OK
-	_say("run_game_sim: %s/%s, seed %s" % [parsed.get("game", "?"), parsed.get("content", "default"), parsed.get("seed", "?")])
+	_say(
+		(
+			"run_game_sim: %s/%s, seed %s"
+			% [parsed.get("game", "?"), parsed.get("content", "default"), parsed.get("seed", "?")]
+		)
+	)
 	var setup_error := runner.setup(parsed)
 	if setup_error != "":
 		_fail("run_game_sim: setup failed: %s" % setup_error)
@@ -180,7 +246,12 @@ func _run_session(parent: Node) -> int:
 			_fail("run_game_sim: the report could not be written (end_reason %s)" % reason)
 			code = EXIT_REPORT
 		else:
-			_say("run_game_sim: end_reason=%s sim_seconds=%.1f report=%s" % [reason, runner.sim_seconds(), path])
+			_say(
+				(
+					"run_game_sim: end_reason=%s sim_seconds=%.1f report=%s"
+					% [reason, runner.sim_seconds(), path]
+				)
+			)
 	# cleanup() shuts the riders down and deletes the runner's temp root (wattlands_sim_*), which
 	# lives under OS temp, not under this run's own user dir (W3 QT-4).
 	runner.cleanup()
@@ -205,7 +276,11 @@ func _template_registry(parent: Node) -> WlGameRegistry:
 	reg.scan_on_ready = false
 	parent.add_child(reg)
 	reg.scan()
-	var err := reg.add_game(reg.template_manifest(), WlGameRegistry.GAMES_ROOT.path_join(WlGameRegistry.TEMPLATE_ID), true)
+	var err := reg.add_game(
+		reg.template_manifest(),
+		WlGameRegistry.GAMES_ROOT.path_join(WlGameRegistry.TEMPLATE_ID),
+		true
+	)
 	if err != "":
 		_fail("run_game_sim: src/games/_template/game.json: %s" % err)
 	parsed["registry"] = reg
@@ -225,7 +300,11 @@ func _check(flags: Array) -> Array[String]:
 		if VALUE_FLAGS.has(key) and (f[1] == null or str(f[1]) == ""):
 			problems.append("--%s needs a value: --%s=<value>" % [key, key])
 			continue
-		if BOOL_FLAGS.has(key) and f[1] != null and not (str(f[1]).to_lower() in ["true", "false", "1", "0"]):
+		if (
+			BOOL_FLAGS.has(key)
+			and f[1] != null
+			and not (str(f[1]).to_lower() in ["true", "false", "1", "0"])
+		):
 			problems.append("--%s takes no value" % key)
 		if seen.has(key) and key != "rider":
 			problems.append("--%s given more than once" % key)
@@ -248,23 +327,56 @@ func _check_slots(flags: Array) -> Array[String]:
 	var players := _int_flag(flags, "players", 1)
 	var bots := _int_flag(flags, "bots", 0)
 	if players + bots > Wl.MAX_SLOTS:
-		problems.append("--players plus --bots is %d: a session has at most %d slots" % [players + bots, Wl.MAX_SLOTS])
+		problems.append(
+			(
+				"--players plus --bots is %d: a session has at most %d slots"
+				% [players + bots, Wl.MAX_SLOTS]
+			)
+		)
 	var riders := _count(flags, "rider")
 	if riders > 1 and riders != players:
-		problems.append("--rider given %d times for %d human slots: give it once, or once per slot" % [riders, players])
+		problems.append(
+			(
+				"--rider given %d times for %d human slots: give it once, or once per slot"
+				% [riders, players]
+			)
+		)
 	for key: String in ["autopilot", "haptics-off"]:
 		var v: Variant = _value(flags, key)
 		if v == null or str(v) in ["all", "none"] or _check_value(key, str(v)) != "":
 			continue
 		for s in str(v).split(","):
 			if int(s.strip_edges()) >= players:
-				problems.append("--%s=%s: slot %d is not a human slot (0..%d)" % [key, v, int(s.strip_edges()), players - 1])
+				problems.append(
+					(
+						"--%s=%s: slot %d is not a human slot (0..%d)"
+						% [key, v, int(s.strip_edges()), players - 1]
+					)
+				)
 	var ftp: Variant = _value(flags, "ftp")
-	if ftp != null and _check_value("ftp", str(ftp)) == "" and str(ftp).split(",").size() > players + bots:
-		problems.append("--ftp=%s: %d values for %d slots (give one, or one per slot)" % [ftp, str(ftp).split(",").size(), players + bots])
+	if (
+		ftp != null
+		and _check_value("ftp", str(ftp)) == ""
+		and str(ftp).split(",").size() > players + bots
+	):
+		problems.append(
+			(
+				"--ftp=%s: %d values for %d slots (give one, or one per slot)"
+				% [ftp, str(ftp).split(",").size(), players + bots]
+			)
+		)
 	var po: Variant = _value(flags, "player-options")
-	if po != null and _check_value("player-options", str(po)) == "" and (parse_json(str(po)) as Array).size() > players:
-		problems.append("--player-options: %d objects for %d human slots" % [(parse_json(str(po)) as Array).size(), players])
+	if (
+		po != null
+		and _check_value("player-options", str(po)) == ""
+		and (parse_json(str(po)) as Array).size() > players
+	):
+		problems.append(
+			(
+				"--player-options: %d objects for %d human slots"
+				% [(parse_json(str(po)) as Array).size(), players]
+			)
+		)
 	return problems
 
 
@@ -289,7 +401,12 @@ static func clear_report(report: String) -> Array[String]:
 		return removed
 	for f in DirAccess.get_files_at(fit_dir):
 		var n := f.trim_prefix(prefix).trim_suffix(".fit")
-		if f.begins_with(prefix) and f.ends_with(".fit") and n.is_valid_int() and DirAccess.remove_absolute(fit_dir.path_join(f)) == OK:
+		if (
+			f.begins_with(prefix)
+			and f.ends_with(".fit")
+			and n.is_valid_int()
+			and DirAccess.remove_absolute(fit_dir.path_join(f)) == OK
+		):
 			removed.append(fit_dir.path_join(f))
 	return removed
 
@@ -297,7 +414,11 @@ static func clear_report(report: String) -> Array[String]:
 func _check_value(key: String, v: String) -> String:
 	match key:
 		"players":
-			return "" if v.is_valid_int() and int(v) >= 1 and int(v) <= Wl.MAX_SLOTS else "an integer 1..%d" % Wl.MAX_SLOTS
+			return (
+				""
+				if v.is_valid_int() and int(v) >= 1 and int(v) <= Wl.MAX_SLOTS
+				else "an integer 1..%d" % Wl.MAX_SLOTS
+			)
 		"bots", "seed":
 			return "" if v.is_valid_int() and int(v) >= 0 else "an integer >= 0"
 		"sim-speed", "max-sim-seconds":
@@ -311,12 +432,18 @@ func _check_value(key: String, v: String) -> String:
 				return ""
 			for s in v.split(","):
 				if not s.strip_edges().is_valid_int() or int(s) < 0:
-					return "slot numbers (0, 1, ...), comma separated" + (", or all or none" if key == "autopilot" else "")
+					return (
+						"slot numbers (0, 1, ...), comma separated"
+						+ (", or all or none" if key == "autopilot" else "")
+					)
 		"options":
 			return "" if parse_json(v) is Dictionary else "a JSON object"
 		"player-options":
 			var arr: Variant = parse_json(v)
-			if not (arr is Array) or (arr as Array).any(func(o: Variant) -> bool: return not (o is Dictionary)):
+			if (
+				not (arr is Array)
+				or (arr as Array).any(func(o: Variant) -> bool: return not (o is Dictionary))
+			):
 				return "a JSON array of objects, one per human slot"
 	return ""
 

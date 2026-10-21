@@ -44,7 +44,9 @@ func add_event(t: float, type: String, peer: int, extra: Dictionary = {}) -> Dic
 func add_directive(peer: int, record: Dictionary) -> bool:
 	var r := record.duplicate(true)
 	r["peer"] = peer
-	var key := "%d|%s|%s|%s" % [peer, str(r.get("id", "")), str(r.get("kind", "")), str(r.get("t", ""))]
+	var key := (
+		"%d|%s|%s|%s" % [peer, str(r.get("id", "")), str(r.get("kind", "")), str(r.get("t", ""))]
+	)
 	if r.get("id", null) == null and not r.has("t"):
 		key = JSON.stringify(r)
 	if _directive_keys.has(key):
@@ -85,11 +87,21 @@ func add_upload(state: String, activity_id: Variant) -> void:
 
 func to_dict() -> Dictionary:
 	return {
-		"schema": SCHEMA, "role": role, "peer_id": peer_id, "room": room, "game_id": game_id,
-		"content_id": content_id, "exit_reason": exit_reason, "events": events.duplicate(true),
-		"directives": directives.duplicate(true), "trace": trace.duplicate(true),
-		"fit_paths": fit_paths.duplicate(), "uploads": uploads.duplicate(true),
-		"desync_warnings": desync_warnings, "script_errors": script_errors, "errors": errors,
+		"schema": SCHEMA,
+		"role": role,
+		"peer_id": peer_id,
+		"room": room,
+		"game_id": game_id,
+		"content_id": content_id,
+		"exit_reason": exit_reason,
+		"events": events.duplicate(true),
+		"directives": directives.duplicate(true),
+		"trace": trace.duplicate(true),
+		"fit_paths": fit_paths.duplicate(),
+		"uploads": uploads.duplicate(true),
+		"desync_warnings": desync_warnings,
+		"script_errors": script_errors,
+		"errors": errors,
 		"final_state": final_state.duplicate(true),
 	}
 

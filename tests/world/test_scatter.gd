@@ -37,7 +37,7 @@ func test_different_seed_different_transforms() -> void:
 
 func test_inside_area_and_outside_exclusions() -> void:
 	var r := MultiMeshScatter.generate(_config())
-	for p: Vector2 in (r["positions"] as PackedVector2Array):
+	for p: Vector2 in r["positions"] as PackedVector2Array:
 		assert_true(Rect2(-100, -100, 200, 200).has_point(p))
 		assert_false(Rect2(-20, -20, 40, 40).has_point(p), "outside the rect exclusion")
 		assert_gt(p.distance_to(Vector2(60, 60)), 15.0, "outside the circle exclusion")
@@ -48,7 +48,7 @@ func test_polygon_area_and_polygon_exclusion() -> void:
 	var hole := PackedVector2Array([Vector2(5, 5), Vector2(30, 5), Vector2(5, 30)])
 	var r := MultiMeshScatter.generate({"seed": 3, "count": 80, "polygon": tri, "exclude": [hole]})
 	assert_eq(_xforms(r).size(), 80)
-	for p: Vector2 in (r["positions"] as PackedVector2Array):
+	for p: Vector2 in r["positions"] as PackedVector2Array:
 		assert_true(Geometry2D.is_point_in_polygon(p, tri))
 		assert_false(Geometry2D.is_point_in_polygon(p, hole))
 
@@ -70,29 +70,48 @@ func test_scale_rotation_and_colors() -> void:
 		assert_almost_eq(s.x, s.y, 0.0001, "uniform without height jitter")
 		yaws[snappedf(t.basis.get_euler().y, 0.5)] = true
 	assert_gt(yaws.size(), 5, "random yaw")
-	for c: Color in (r["colors"] as PackedColorArray):
+	for c: Color in r["colors"] as PackedColorArray:
 		assert_true(c.r > 0.85 or c.g > 0.85, "picked from the palette, jittered")
 
 
 func test_height_function_and_offset() -> void:
 	var hf := func(x: float, z: float) -> float: return x * 0.1 - z * 0.2
-	var r := MultiMeshScatter.generate({"seed": 1, "count": 20, "area": Rect2(0, 0, 50, 50), "height": hf, "y_offset": -0.5, "yaw": false})
+	var r := MultiMeshScatter.generate(
+		{
+			"seed": 1,
+			"count": 20,
+			"area": Rect2(0, 0, 50, 50),
+			"height": hf,
+			"y_offset": -0.5,
+			"yaw": false
+		}
+	)
 	for t: Transform3D in _xforms(r):
 		assert_almost_eq(t.origin.y, t.origin.x * 0.1 - t.origin.z * 0.2 - 0.5, 0.0001)
 		assert_eq(t.basis, Basis(), "no yaw, tilt or scale")
 
 
 func test_custom_random() -> void:
-	var r := MultiMeshScatter.generate({"seed": 5, "count": 30, "area": Rect2(0, 0, 10, 10), "custom": "random"})
+	var r := MultiMeshScatter.generate(
+		{"seed": 5, "count": 30, "area": Rect2(0, 0, 10, 10), "custom": "random"}
+	)
 	var distinct := {}
-	for c: Color in (r["customs"] as PackedColorArray):
+	for c: Color in r["customs"] as PackedColorArray:
 		assert_true(c.r >= 0.0 and c.r < 1.0)
 		distinct[snappedf(c.r, 0.01)] = true
 	assert_gt(distinct.size(), 5, "phases differ")
 
 
 func test_crowded_area_places_fewer() -> void:
-	var r := MultiMeshScatter.generate({"seed": 2, "count": 100, "area": Rect2(0, 0, 10, 10), "min_spacing": 4.0, "max_attempts": 500})
+	var r := MultiMeshScatter.generate(
+		{
+			"seed": 2,
+			"count": 100,
+			"area": Rect2(0, 0, 10, 10),
+			"min_spacing": 4.0,
+			"max_attempts": 500
+		}
+	)
 	assert_lt(_xforms(r).size(), 100)
 
 
@@ -163,20 +182,49 @@ func test_set_instances_before_setup_is_an_error() -> void:
 
 
 func test_pack_buffer_layout() -> void:
-	var xf := Transform3D(Basis.from_euler(Vector3(0.1, 0.2, 0.3)).scaled(Vector3(1, 2, 3)), Vector3(4, 5, 6))
+	var xf := Transform3D(
+		Basis.from_euler(Vector3(0.1, 0.2, 0.3)).scaled(Vector3(1, 2, 3)), Vector3(4, 5, 6)
+	)
 	var xs: Array[Transform3D] = [Transform3D(), xf]
-	var buf := MultiMeshScatter.pack_buffer(xs, PackedColorArray([Color.RED, Color(0.1, 0.2, 0.3, 0.4)]), PackedColorArray([Color.BLACK, Color(0.5, 0.6, 0.7, 0.8)]), 3, true, true)
+	var buf := MultiMeshScatter.pack_buffer(
+		xs,
+		PackedColorArray([Color.RED, Color(0.1, 0.2, 0.3, 0.4)]),
+		PackedColorArray([Color.BLACK, Color(0.5, 0.6, 0.7, 0.8)]),
+		3,
+		true,
+		true
+	)
 	assert_eq(buf.size(), 3 * 20)
 	var o := 20
-	var expect := [xf.basis.x.x, xf.basis.y.x, xf.basis.z.x, xf.origin.x,
-		xf.basis.x.y, xf.basis.y.y, xf.basis.z.y, xf.origin.y,
-		xf.basis.x.z, xf.basis.y.z, xf.basis.z.z, xf.origin.z,
-		0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+	var expect := [
+		xf.basis.x.x,
+		xf.basis.y.x,
+		xf.basis.z.x,
+		xf.origin.x,
+		xf.basis.x.y,
+		xf.basis.y.y,
+		xf.basis.z.y,
+		xf.origin.y,
+		xf.basis.x.z,
+		xf.basis.y.z,
+		xf.basis.z.z,
+		xf.origin.z,
+		0.1,
+		0.2,
+		0.3,
+		0.4,
+		0.5,
+		0.6,
+		0.7,
+		0.8
+	]
 	for k in 20:
 		assert_almost_eq(buf[o + k], float(expect[k]), 0.0001, "float %d" % k)
 	for k in 20:
 		assert_eq(buf[40 + k], 0.0, "unused capacity is zero")
-	var plain := MultiMeshScatter.pack_buffer(xs, PackedColorArray(), PackedColorArray(), 2, false, false)
+	var plain := MultiMeshScatter.pack_buffer(
+		xs, PackedColorArray(), PackedColorArray(), 2, false, false
+	)
 	assert_eq(plain.size(), 24)
 	assert_almost_eq(plain[12 + 3], 4.0, 0.0001)
 
@@ -187,13 +235,17 @@ func test_along_path_spacing_and_scroll() -> void:
 	assert_eq(a.size(), 11, "0, 2, ... 20 m")
 	assert_eq(a[0].origin, Vector3.ZERO)
 	assert_almost_eq(a[6].origin.z, 2.0, 0.0001, "round the corner")
-	assert_almost_eq(a[1].basis.z.dot(Vector3(-1, 0, 0)), 1.0, 0.0001, "faces along the path (-Z forward)")
+	assert_almost_eq(
+		a[1].basis.z.dot(Vector3(-1, 0, 0)), 1.0, 0.0001, "faces along the path (-Z forward)"
+	)
 	var b := MultiMeshScatter.along_path(path, 2.0, 0.5)
 	assert_almost_eq(b[0].origin.x, 0.5, 0.0001, "offset scrolls forward")
 	var c := MultiMeshScatter.along_path(path, 2.0, 2.5)
 	assert_almost_eq(c[0].origin.x, 0.5, 0.0001, "and wraps every spacing")
 	assert_eq(MultiMeshScatter.along_path(PackedVector3Array([Vector3.ZERO]), 1.0).size(), 0)
-	var loop := MultiMeshScatter.along_path(PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4)]), 1.0, 0.0, true)
+	var loop := MultiMeshScatter.along_path(
+		PackedVector3Array([Vector3(0, 0, 0), Vector3(4, 0, 0), Vector3(4, 0, 4)]), 1.0, 0.0, true
+	)
 	assert_eq(loop.size(), 14, "closed: 4 + 4 + 5.66 m")
 
 
@@ -209,7 +261,11 @@ func test_walk_bob_material() -> void:
 
 
 func test_is_excluded_kinds() -> void:
-	var ex: Array = [Rect2(0, 0, 1, 1), Vector3(5, 5, 1), PackedVector2Array([Vector2(10, 10), Vector2(12, 10), Vector2(10, 12)])]
+	var ex: Array = [
+		Rect2(0, 0, 1, 1),
+		Vector3(5, 5, 1),
+		PackedVector2Array([Vector2(10, 10), Vector2(12, 10), Vector2(10, 12)])
+	]
 	assert_true(MultiMeshScatter.is_excluded(Vector2(0.5, 0.5), ex))
 	assert_true(MultiMeshScatter.is_excluded(Vector2(5.5, 5.5), ex))
 	assert_true(MultiMeshScatter.is_excluded(Vector2(10.5, 10.5), ex))

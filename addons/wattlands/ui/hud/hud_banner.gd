@@ -54,7 +54,9 @@ func _init() -> void:
 	_safety_label = _safety_panel.get_child(0) as Label
 	_game_panel = _panel("Game")
 	_game_label = _game_panel.get_child(0) as Label
-	_game_panel.add_theme_stylebox_override("panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.94), WlTheme.TEXT, 3))
+	_game_panel.add_theme_stylebox_override(
+		"panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.94), WlTheme.TEXT, 3)
+	)
 	_refresh()
 
 
@@ -173,7 +175,9 @@ func _refresh() -> void:
 		_safety_label.label_settings.font_size = px
 		_safety_label.label_settings.font_color = WlTheme.text_on(bg)
 		_safety_label.label_settings.outline_size = 0
-		_safety_panel.add_theme_stylebox_override("panel", WlTheme.panel_style(Color(bg, 0.95), Color.BLACK, 3))
+		_safety_panel.add_theme_stylebox_override(
+			"panel", WlTheme.panel_style(Color(bg, 0.95), Color.BLACK, 3)
+		)
 	_game_panel.visible = not _game_text.is_empty()
 	_game_label.text = _game_text
 	_game_label.label_settings.font_size = font_px

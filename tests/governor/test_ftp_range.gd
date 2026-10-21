@@ -25,8 +25,12 @@ func test_an_out_of_range_low_ftp_is_not_replaced_by_200_w() -> void:
 	for i in roundi(30.0 / DT):
 		r.tick(DT)
 	var w := int(r.governor.status()["applied_target_w"])
-	gut.p("profile FTP 25 W: rider ftp_w() %.0f, governor applied %d W at 100%% FTP" % [r.ftp_w(), w])
-	assert_lte(w, 50, "100%% of the rider's 25 W FTP rides the 50 W floor at most; applied %d W" % w)
+	gut.p(
+		"profile FTP 25 W: rider ftp_w() %.0f, governor applied %d W at 100%% FTP" % [r.ftp_w(), w]
+	)
+	assert_lte(
+		w, 50, "100%% of the rider's 25 W FTP rides the 50 W floor at most; applied %d W" % w
+	)
 
 
 func test_a_high_out_of_range_ftp_still_keeps_the_previous_value() -> void:

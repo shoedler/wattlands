@@ -33,7 +33,9 @@ var _body := PackedByteArray()
 
 ## Write a definition message for `local` (0..15) and global message `global`.
 ## fields: [[field num, size, base type], ...]; dev_fields: [[num, size, developer index], ...].
-func define(local: int, global: int, fields: Array, big_endian: bool = false, dev_fields: Array = []) -> QaFitWriter:
+func define(
+	local: int, global: int, fields: Array, big_endian: bool = false, dev_fields: Array = []
+) -> QaFitWriter:
 	var h := 0x40 | (local & 0x0F)
 	if not dev_fields.is_empty():
 		h |= 0x20
@@ -54,7 +56,9 @@ func define(local: int, global: int, fields: Array, big_endian: bool = false, de
 			_body.append(int(da[0]))
 			_body.append(int(da[1]))
 			_body.append(int(da[2]))
-	_defs[local] = {"big": big_endian, "fields": fields.duplicate(true), "dev": dev_fields.duplicate(true)}
+	_defs[local] = {
+		"big": big_endian, "fields": fields.duplicate(true), "dev": dev_fields.duplicate(true)
+	}
 	return self
 
 
@@ -136,35 +140,126 @@ static func activity_writer(opts: Dictionary = {}) -> QaFitWriter:
 	var skip: Array = opts.get("skip", [])
 	var w := QaFitWriter.new()
 	if not skip.has("file_id"):
-		w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, ENUM], [1, 2, UINT16], [2, 2, UINT16], [3, 4, UINT32Z], [4, 4, UINT32]])
+		w.define(
+			0,
+			QaFitDecoder.MESG_FILE_ID,
+			[[0, 1, ENUM], [1, 2, UINT16], [2, 2, UINT16], [3, 4, UINT32Z], [4, 4, UINT32]]
+		)
 		w.data(0, [int(opts.get("file_type", 4)), 255, 1, 12345, start])
 	if not skip.has("device_info"):
-		w.define(1, QaFitDecoder.MESG_DEVICE_INFO, [[253, 4, UINT32], [0, 1, UINT8], [2, 2, UINT16], [4, 2, UINT16]])
+		w.define(
+			1,
+			QaFitDecoder.MESG_DEVICE_INFO,
+			[[253, 4, UINT32], [0, 1, UINT8], [2, 2, UINT16], [4, 2, UINT16]]
+		)
 		w.data(1, [start, 0, 255, 1])
 	w.define(2, QaFitDecoder.MESG_EVENT, [[253, 4, UINT32], [0, 1, ENUM], [1, 1, ENUM]])
 	if not skip.has("event"):
 		w.data(2, [start, 0, 0])
-	w.define(3, QaFitDecoder.MESG_RECORD, [[253, 4, UINT32], [7, 2, UINT16], [4, 1, UINT8], [6, 2, UINT16], [5, 4, UINT32]])
+	w.define(
+		3,
+		QaFitDecoder.MESG_RECORD,
+		[[253, 4, UINT32], [7, 2, UINT16], [4, 1, UINT8], [6, 2, UINT16], [5, 4, UINT32]]
+	)
 	var dist := 0.0
 	for i in n:
-		w.data(3, [start + i, power, cadence, int(roundf(speed * 1000.0)), int(roundf(dist * 100.0))])
+		w.data(
+			3, [start + i, power, cadence, int(roundf(speed * 1000.0)), int(roundf(dist * 100.0))]
+		)
 		dist += speed
 	if not skip.has("event"):
 		w.data(2, [start + n, 0, 4])
-	w.define(4, QaFitDecoder.MESG_LAP, [[253, 4, UINT32], [254, 2, UINT16], [2, 4, UINT32], [7, 4, UINT32], [8, 4, UINT32], [9, 4, UINT32], [41, 4, UINT32], [19, 2, UINT16], [20, 2, UINT16], [17, 1, UINT8], [18, 1, UINT8]])
+	w.define(
+		4,
+		QaFitDecoder.MESG_LAP,
+		[
+			[253, 4, UINT32],
+			[254, 2, UINT16],
+			[2, 4, UINT32],
+			[7, 4, UINT32],
+			[8, 4, UINT32],
+			[9, 4, UINT32],
+			[41, 4, UINT32],
+			[19, 2, UINT16],
+			[20, 2, UINT16],
+			[17, 1, UINT8],
+			[18, 1, UINT8]
+		]
+	)
 	var t := 0
 	var li := 0
 	if not skip.has("lap"):
 		for len_v: Variant in lap_lengths:
 			var length := int(len_v)
-			w.data(4, [start + t + length, li, start + t, length * 1000, length * 1000, int(roundf(length * speed * 100.0)), length * power, power, power, cadence, cadence])
+			w.data(
+				4,
+				[
+					start + t + length,
+					li,
+					start + t,
+					length * 1000,
+					length * 1000,
+					int(roundf(length * speed * 100.0)),
+					length * power,
+					power,
+					power,
+					cadence,
+					cadence
+				]
+			)
 			t += length
 			li += 1
 	if not skip.has("session"):
-		w.define(5, QaFitDecoder.MESG_SESSION, [[253, 4, UINT32], [2, 4, UINT32], [5, 1, ENUM], [6, 1, ENUM], [7, 4, UINT32], [8, 4, UINT32], [9, 4, UINT32], [48, 4, UINT32], [20, 2, UINT16], [21, 2, UINT16], [18, 1, UINT8], [19, 1, UINT8], [26, 2, UINT16]])
-		w.data(5, [start + n, start, int(opts.get("sport", 2)), int(opts.get("sub_sport", 58)), n * 1000, n * 1000, int(roundf(n * speed * 100.0)), n * power, power, power, cadence, cadence, int(opts.get("num_laps", li))])
+		w.define(
+			5,
+			QaFitDecoder.MESG_SESSION,
+			[
+				[253, 4, UINT32],
+				[2, 4, UINT32],
+				[5, 1, ENUM],
+				[6, 1, ENUM],
+				[7, 4, UINT32],
+				[8, 4, UINT32],
+				[9, 4, UINT32],
+				[48, 4, UINT32],
+				[20, 2, UINT16],
+				[21, 2, UINT16],
+				[18, 1, UINT8],
+				[19, 1, UINT8],
+				[26, 2, UINT16]
+			]
+		)
+		w.data(
+			5,
+			[
+				start + n,
+				start,
+				int(opts.get("sport", 2)),
+				int(opts.get("sub_sport", 58)),
+				n * 1000,
+				n * 1000,
+				int(roundf(n * speed * 100.0)),
+				n * power,
+				power,
+				power,
+				cadence,
+				cadence,
+				int(opts.get("num_laps", li))
+			]
+		)
 	if not skip.has("activity"):
-		w.define(6, QaFitDecoder.MESG_ACTIVITY, [[253, 4, UINT32], [0, 4, UINT32], [1, 2, UINT16], [2, 1, ENUM], [3, 1, ENUM], [4, 1, ENUM]])
+		w.define(
+			6,
+			QaFitDecoder.MESG_ACTIVITY,
+			[
+				[253, 4, UINT32],
+				[0, 4, UINT32],
+				[1, 2, UINT16],
+				[2, 1, ENUM],
+				[3, 1, ENUM],
+				[4, 1, ENUM]
+			]
+		)
 		w.data(6, [start + n, n * 1000, 1, 0, 26, 1])
 	return w
 

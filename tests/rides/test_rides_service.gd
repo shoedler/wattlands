@@ -40,7 +40,9 @@ func before_each() -> void:
 	_saved = []
 	_bus = WlEventBus.new()
 	add_child_autofree(_bus)
-	_bus.upload_state_changed.connect(func(id: String, s: String, d: String) -> void: _states.append([id, s, d]))
+	_bus.upload_state_changed.connect(
+		func(id: String, s: String, d: String) -> void: _states.append([id, s, d])
+	)
 	_bus.strava_state_changed.connect(func(s: String, d: String) -> void: _strava.append([s, d]))
 	_bus.ride_saved.connect(func(p: String, _s: Dictionary) -> void: _saved.append(p))
 	if _mock_ok:
@@ -111,7 +113,9 @@ func test_upload_reports_states_and_marks_the_ride() -> void:
 	assert_eq(_states_for(id), ["uploading", "processing", "uploaded"])
 	var act := int(_states.back()[2])
 	assert_gt(act, 0, "detail is the activity id")
-	var s: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json"))
+	var s: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(path.get_basename() + ".json")
+	)
 	assert_eq(s["upload"]["state"], "uploaded")
 	assert_eq(int(s["upload"]["activity_id"]), act)
 	var hist := r.rides()
@@ -121,7 +125,11 @@ func test_upload_reports_states_and_marks_the_ride() -> void:
 	assert_eq(hist[0]["fit_path"], path)
 	await r.upload(path, rec.summary())
 	assert_eq((await _mock.uploads()).size(), 1, "an uploaded ride isn't sent again")
-	assert_eq(_states.back(), [id, "uploaded", str(act)], "its state is reported again for the results screen")
+	assert_eq(
+		_states.back(),
+		[id, "uploaded", str(act)],
+		"its state is reported again for the results screen"
+	)
 
 
 func test_offline_upload_is_queued_and_retried() -> void:
@@ -201,7 +209,9 @@ func test_a_permanent_failure_leaves_the_queue() -> void:
 	await r.upload(path, rec.summary())
 	assert_eq(_states_for(rec.ride_id).back(), "failed")
 	assert_eq(r.queue_size(), 0, "retrying can't fix a corrupt file")
-	var s: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json"))
+	var s: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(path.get_basename() + ".json")
+	)
 	assert_eq(s["upload"]["state"], "failed")
 
 
@@ -303,10 +313,13 @@ func test_import_refuses_values_outside_the_editor_ranges() -> void:
 	assert_push_warning("Strava ftp 1500")
 	assert_push_warning("Strava weight 9")
 	assert_eq(res["applied"], [], "nothing outside the ranges is applied")
-	assert_eq(res["refused"], [
-		{"field": "ftp", "value": 1500.0, "min": 50.0, "max": 600.0},
-		{"field": "weight", "value": 9.0, "min": 30.0, "max": 200.0},
-	])
+	assert_eq(
+		res["refused"],
+		[
+			{"field": "ftp", "value": 1500.0, "min": 50.0, "max": 600.0},
+			{"field": "weight", "value": 9.0, "min": 30.0, "max": 200.0},
+		]
+	)
 	assert_eq(p.ftp_w, 200.0, "the FTP stays")
 	assert_false(p.ftp_verified, "and stays unverified")
 	assert_eq(p.cp_w, 200.0)
@@ -338,12 +351,22 @@ func test_strava_base_points_both_bases_at_the_mock() -> void:
 	assert_eq(r.client.oauth_base, _mock.base() + "/oauth")
 	await r.strava_connect(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
 	assert_true(r.strava_connected(), "connects to the mock through --strava-base")
-	assert_eq(StravaClient.bases_from_root("http://127.0.0.1:9/"), {"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"})
+	assert_eq(
+		StravaClient.bases_from_root("http://127.0.0.1:9/"),
+		{"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"}
+	)
 
 
 func test_startup_connects_from_the_command_line() -> void:
-	CmdLine.set_args(PackedStringArray(["--strava-base=" + _mock.base(), "--strava-client-id=" + MockRunner.CLIENT_ID,
-		"--strava-client-secret=" + MockRunner.CLIENT_SECRET]))
+	CmdLine.set_args(
+		PackedStringArray(
+			[
+				"--strava-base=" + _mock.base(),
+				"--strava-client-id=" + MockRunner.CLIENT_ID,
+				"--strava-client-secret=" + MockRunner.CLIENT_SECRET
+			]
+		)
+	)
 	var r := WlRides.new()
 	r.events = _bus
 	add_child_autofree(r)
@@ -354,8 +377,13 @@ func test_startup_connects_from_the_command_line() -> void:
 
 func test_activity_name_and_description() -> void:
 	assert_eq(WlRides.activity_name({"game_id": "workout"}), "Wattlands: Workout")
-	assert_eq(WlRides.activity_name({"game_id": "siege", "game_title": "Generator Siege"}), "Wattlands: Generator Siege")
-	var d := WlRides.activity_description({"content_id": "easy30", "kj": 360.4, "avg_power_w": 199.6})
+	assert_eq(
+		WlRides.activity_name({"game_id": "siege", "game_title": "Generator Siege"}),
+		"Wattlands: Generator Siege"
+	)
+	var d := WlRides.activity_description(
+		{"content_id": "easy30", "kj": 360.4, "avg_power_w": 199.6}
+	)
 	assert_string_contains(d, "easy30")
 	assert_string_contains(d, "360 kJ")
 	assert_string_contains(d, "200 W")
@@ -366,7 +394,11 @@ func test_upload_with_an_empty_summary_uses_the_saved_one() -> void:
 	var rec := _record(r)
 	var path := r.save_ride(rec)
 	await r.upload(path, {})
-	assert_eq(_states_for(rec.ride_id).back(), "uploaded", "the ride id came from the JSON next to the FIT")
+	assert_eq(
+		_states_for(rec.ride_id).back(),
+		"uploaded",
+		"the ride id came from the JSON next to the FIT"
+	)
 	var ups: Array = await _mock.uploads()
 	assert_eq(ups.size(), 1)
 	assert_eq((ups[0] as Dictionary)["external_id"], rec.ride_id)
@@ -403,12 +435,21 @@ func test_an_entry_is_dropped_after_max_attempts() -> void:
 	var r: WlRides = await _connected()
 	var rec := _record(r)
 	var path := r.save_ride(rec)
-	r.queue.put({"ride_id": rec.ride_id, "fit_path": path, "attempts": UploadQueue.MAX_ATTEMPTS - 1, "last_state": "failed"})
+	r.queue.put(
+		{
+			"ride_id": rec.ride_id,
+			"fit_path": path,
+			"attempts": UploadQueue.MAX_ATTEMPTS - 1,
+			"last_state": "failed"
+		}
+	)
 	await _mock.fault("upload", 500, 1)
 	await r.process_queue()
 	assert_eq(_states_for(rec.ride_id).back(), "failed")
 	assert_eq(r.queue_size(), 0, "the eighth failure gives up")
-	var s: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json"))
+	var s: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(path.get_basename() + ".json")
+	)
 	assert_eq(s["upload"]["state"], "failed")
 	assert_eq(s["upload"]["error"], "server_error_500")
 
@@ -424,8 +465,14 @@ func test_bases_come_from_settings_without_the_flag() -> void:
 
 
 func test_strava_base_with_a_suffix_maps_the_same() -> void:
-	assert_eq(StravaClient.bases_from_root("http://127.0.0.1:9/api/v3"), {"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"})
-	assert_eq(StravaClient.bases_from_root(" http://127.0.0.1:9/oauth/ "), {"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"})
+	assert_eq(
+		StravaClient.bases_from_root("http://127.0.0.1:9/api/v3"),
+		{"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"}
+	)
+	assert_eq(
+		StravaClient.bases_from_root(" http://127.0.0.1:9/oauth/ "),
+		{"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"}
+	)
 
 
 func test_auto_upload_follows_the_profile_setting() -> void:
@@ -454,7 +501,11 @@ func test_a_second_upload_of_the_same_ride_waits_for_the_first() -> void:
 	assert_true(r.uploads_busy())
 	await r.upload(path, rec.summary())
 	done.append("second")
-	assert_eq(_states_for(rec.ride_id).back(), "uploaded", "the second call returned after the upload settled")
+	assert_eq(
+		_states_for(rec.ride_id).back(),
+		"uploaded",
+		"the second call returned after the upload settled"
+	)
 	await r.wait_uploads_idle()
 	assert_false(r.uploads_busy())
 	assert_eq((await _mock.uploads()).size(), 1, "one upload, not two")

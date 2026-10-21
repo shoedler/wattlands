@@ -137,9 +137,11 @@ func test_no_pause_or_afk_before_a_phase_runs() -> void:
 func test_mock_trainer_zero_rider() -> void:
 	var mock := MockTrainer.from_spec("zero", 200.0, {"seed": 7})
 	var first := [-1.0]
-	mock.sample_received.connect(func(s: TrainerSample) -> void:
-		if first[0] < 0.0:
-			first[0] = s.t)
+	mock.sample_received.connect(
+		func(s: TrainerSample) -> void:
+			if first[0] < 0.0:
+				first[0] = s.t
+	)
 	var rig := make_rig({}, mock)
 	rig.start([erg(Wl.WORK, 80.0, 120.0)])
 	var reached := rig.run_until(func() -> bool: return bool(rig.s()["coasting"]), 6.0)

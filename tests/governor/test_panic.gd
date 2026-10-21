@@ -83,7 +83,9 @@ func test_panic_during_a_sim_block() -> void:
 	rig.start([erg(Wl.WORK, 65.0, 600.0)])
 	rig.run(40.0)
 	rig.gov.shift(6)
-	var rec := rig.directive({"mode": "SIM", "duration_s": 30.0, "reason": "overdrive", "source": "siege"})
+	var rec := rig.directive(
+		{"mode": "SIM", "duration_s": 30.0, "reason": "overdrive", "source": "siege"}
+	)
 	assert_false(rec["refused"])
 	rig.gov.shift(6)
 	rig.run(5.0)

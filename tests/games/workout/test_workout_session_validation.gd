@@ -7,11 +7,36 @@ const U := preload("res://tests/games/workout/workout_test_util.gd")
 
 func _valid() -> Dictionary:
 	return {
-		"id": "x", "label": "WORKOUT_CONTENT_X", "summary": "WORKOUT_SUMMARY_X",
-		"phases": [
-			{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
-			{"kind": "WORK", "mode": "ERG", "target_pct": 80, "duration_s": 120, "lap": true, "label": "WORKOUT_LBL_STEADY"},
-			{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT"},
+		"id": "x",
+		"label": "WORKOUT_CONTENT_X",
+		"summary": "WORKOUT_SUMMARY_X",
+		"phases":
+		[
+			{
+				"kind": "WARMUP",
+				"mode": "ERG",
+				"target_pct": 50,
+				"ramp_to_pct": 65,
+				"duration_s": 300,
+				"lap": true,
+				"label": "WORKOUT_LBL_WARMUP"
+			},
+			{
+				"kind": "WORK",
+				"mode": "ERG",
+				"target_pct": 80,
+				"duration_s": 120,
+				"lap": true,
+				"label": "WORKOUT_LBL_STEADY"
+			},
+			{
+				"kind": "FREE",
+				"mode": "SIM",
+				"grade_source": "flat",
+				"duration_s": 30,
+				"lap": true,
+				"label": "WORKOUT_LBL_SPRINT"
+			},
 		],
 	}
 
@@ -58,7 +83,16 @@ func test_label_and_summary_are_strings_keys() -> void:
 
 func test_game_written_cooldown_is_rejected() -> void:
 	var d := _valid()
-	d["phases"].append({"kind": "COOLDOWN", "mode": "ERG", "target_pct": 50, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_STEADY"})
+	d["phases"].append(
+		{
+			"kind": "COOLDOWN",
+			"mode": "ERG",
+			"target_pct": 50,
+			"duration_s": 180,
+			"lap": true,
+			"label": "WORKOUT_LBL_STEADY"
+		}
+	)
 	_rejects(d, "phases[3].kind")
 
 
@@ -85,7 +119,14 @@ func test_targets_and_durations() -> void:
 
 func test_free_rides_sim_and_sim_takes_no_target() -> void:
 	var d := _valid()
-	d["phases"][2] = {"kind": "FREE", "mode": "ERG", "target_pct": 100, "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT"}
+	d["phases"][2] = {
+		"kind": "FREE",
+		"mode": "ERG",
+		"target_pct": 100,
+		"duration_s": 30,
+		"lap": true,
+		"label": "WORKOUT_LBL_SPRINT"
+	}
 	_rejects(d, "FREE phases ride SIM")
 	var e := _valid()
 	e["phases"][2]["target_pct"] = 120
@@ -97,14 +138,36 @@ func test_free_rides_sim_and_sim_takes_no_target() -> void:
 
 func test_course_phases_need_a_course() -> void:
 	var d := _valid()
-	d["phases"].append({"kind": "WORK", "mode": "SIM", "grade_source": "course", "duration_s": 600, "lap": true, "label": "WORKOUT_LBL_ROLLING_ROAD"})
+	d["phases"].append(
+		{
+			"kind": "WORK",
+			"mode": "SIM",
+			"grade_source": "course",
+			"duration_s": 600,
+			"lap": true,
+			"label": "WORKOUT_LBL_ROLLING_ROAD"
+		}
+	)
 	_rejects(d, "course: required")
 	var e := _valid()
-	e["course"] = {"seed": 1, "length_m": 20000, "step_m": 250, "min_grade_pct": -2, "max_grade_pct": 6}
+	e["course"] = {
+		"seed": 1, "length_m": 20000, "step_m": 250, "min_grade_pct": -2, "max_grade_pct": 6
+	}
 	_rejects(e, "course: no phase uses it")
 	var f := _valid()
-	f["phases"].append({"kind": "WORK", "mode": "SIM", "grade_source": "course", "duration_s": 600, "lap": true, "label": "WORKOUT_LBL_ROLLING_ROAD"})
-	f["course"] = {"seed": 1, "length_m": 20000, "step_m": 250, "min_grade_pct": -12, "max_grade_pct": 6}
+	f["phases"].append(
+		{
+			"kind": "WORK",
+			"mode": "SIM",
+			"grade_source": "course",
+			"duration_s": 600,
+			"lap": true,
+			"label": "WORKOUT_LBL_ROLLING_ROAD"
+		}
+	)
+	f["course"] = {
+		"seed": 1, "length_m": 20000, "step_m": 250, "min_grade_pct": -12, "max_grade_pct": 6
+	}
 	_rejects(f, "grades must stay within")
 
 
@@ -119,8 +182,21 @@ func test_sessions_open_with_the_warmup_ramp() -> void:
 
 func test_warmup_only_sessions_stay_inside_the_limits() -> void:
 	var d := {
-		"id": "x", "label": "WORKOUT_CONTENT_X", "summary": "WORKOUT_SUMMARY_X", "warmup_only": true,
-		"phases": [{"kind": "WORK", "mode": "ERG", "target_pct": 70, "duration_s": 60, "lap": true, "label": "WORKOUT_LBL_STEADY"}],
+		"id": "x",
+		"label": "WORKOUT_CONTENT_X",
+		"summary": "WORKOUT_SUMMARY_X",
+		"warmup_only": true,
+		"phases":
+		[
+			{
+				"kind": "WORK",
+				"mode": "ERG",
+				"target_pct": 70,
+				"duration_s": 60,
+				"lap": true,
+				"label": "WORKOUT_LBL_STEADY"
+			}
+		],
 	}
 	_rejects(d, "warmup_only")
 	d["phases"][0]["target_pct"] = 65

@@ -21,7 +21,9 @@ func test_drop_and_rejoin_before_the_start_keeps_peer_id_and_slot() -> void:
 	assert_true(U.same(events("host", "peer_left"), [["peer_left", 2, "dropped"]]))
 	assert_true(U.same(events("host", "bus_peer_left"), [["bus_peer_left", 2, "dropped"]]))
 	pump()
-	assert_true(U.same(events("c1", "state").front(), ["state", "reconnecting", "dropped"]), str(logs["c1"]))
+	assert_true(
+		U.same(events("c1", "state").front(), ["state", "reconnecting", "dropped"]), str(logs["c1"])
+	)
 	assert_eq(c1.state, "joined")
 	assert_eq(c1.local_peer, 2, "the token keeps the peer id")
 	assert_true(U.same(events("host", "peer_joined"), [["peer_joined", 2]]))
@@ -82,7 +84,6 @@ func test_restarted_client_rejoins_with_its_saved_token() -> void:
 	assert_true(U.same(events("host", "rejoin_requested"), [["rejoin_requested", 2]]))
 	assert_eq(events("c1b", "refused").size(), 0)
 	assert_true(again.session_started)
-
 
 
 func test_host_left_ends_the_session_gracefully() -> void:
@@ -163,7 +164,9 @@ func test_bad_codes_and_unknown_rooms() -> void:
 
 func test_room_full_at_the_lobby() -> void:
 	var h := make_session("host", rider("Hana"))
-	h.set_game_manifest({"id": "duo", "version": "1", "min_players": 1, "max_players": 2, "bots": false})
+	h.set_game_manifest(
+		{"id": "duo", "version": "1", "min_players": 1, "max_players": 2, "bots": false}
+	)
 	h.set_game("duo", "1", "a")
 	h.host_room(8)
 	pump()
@@ -179,13 +182,24 @@ func test_room_full_at_the_lobby() -> void:
 
 func test_other_schema_versions_are_refused_both_ways() -> void:
 	var r := room()
-	(r[1].transport as RelayClientTransport).send_encoded(1, JSON.stringify(
-		{"type": "player_info", "v": NetMessages.VERSION + 1, "name": "Future"}))
+	(r[1].transport as RelayClientTransport).send_encoded(
+		1, JSON.stringify({"type": "player_info", "v": NetMessages.VERSION + 1, "name": "Future"})
+	)
 	pump()
 	assert_true(U.same(events("c1", "refused"), [["refused", "version_mismatch"]]))
 	assert_eq(r[0].lobby_slots().size(), 2, "the host dropped the mismatched client from the lobby")
-	(r[0].transport as RelayClientTransport).send_encoded(3, JSON.stringify(
-		{"type": "phase", "v": NetMessages.VERSION + 1, "index": 1, "start_tick": 0, "ended_by": "x"}))
+	(r[0].transport as RelayClientTransport).send_encoded(
+		3,
+		JSON.stringify(
+			{
+				"type": "phase",
+				"v": NetMessages.VERSION + 1,
+				"index": 1,
+				"start_tick": 0,
+				"ended_by": "x"
+			}
+		)
+	)
 	pump()
 	assert_true(U.same(events("c2", "refused"), [["refused", "version_mismatch"]]))
 

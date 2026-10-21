@@ -9,7 +9,15 @@ const PLATFORM_ROOTS: Array[String] = ["res://addons/wattlands", "res://src/app"
 ## The registered games' class prefixes (Workout ships with the platform; Siege, Tank and Fishing
 ## come later; Template is the scaffold tools/new_game copies). Upper-case forms too.
 const GAME_PREFIXES: Array[String] = [
-	"Workout", "WORKOUT", "Siege", "SIEGE", "Tank", "TANK", "Fishing", "FISHING", "Template",
+	"Workout",
+	"WORKOUT",
+	"Siege",
+	"SIEGE",
+	"Tank",
+	"TANK",
+	"Fishing",
+	"FISHING",
+	"Template",
 ]
 
 

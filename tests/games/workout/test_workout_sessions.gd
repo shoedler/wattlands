@@ -7,7 +7,14 @@ extends GutTest
 const U := preload("res://tests/games/workout/workout_test_util.gd")
 const BUILT_IN: Array[String] = ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"]
 ## content id -> total minutes including the cool-down (BRIEF 3.7).
-const TOTAL_MIN := {"easy_30": 28.0, "sweet_spot": 36.0, "threshold": 40.0, "vo2": 35.0, "rolling_road": 38.0, "e2e": 5.0}
+const TOTAL_MIN := {
+	"easy_30": 28.0,
+	"sweet_spot": 36.0,
+	"threshold": 40.0,
+	"vo2": 35.0,
+	"rolling_road": 38.0,
+	"e2e": 5.0
+}
 
 
 func _load(id: String) -> WorkoutSession:
@@ -20,7 +27,15 @@ func _load(id: String) -> WorkoutSession:
 func _rows(s: WorkoutSession) -> Array:
 	var out: Array = []
 	for p in s.phases:
-		out.append([p.kind, p.mode, p.target_pct if p.mode == Wl.ERG else -1.0, p.ramp_to_pct if p.has_ramp() else -1.0, p.duration_s])
+		out.append(
+			[
+				p.kind,
+				p.mode,
+				p.target_pct if p.mode == Wl.ERG else -1.0,
+				p.ramp_to_pct if p.has_ramp() else -1.0,
+				p.duration_s
+			]
+		)
 	return out
 
 
@@ -33,7 +48,10 @@ func test_every_session_loads_with_laps_and_labels() -> void:
 		assert_false(s.phases.is_empty(), "%s has phases" % id)
 		for p in s.phases:
 			assert_true(p.lap, "%s %s has lap = true" % [id, p.label])
-			assert_true(p.label.begins_with("WORKOUT_LBL_"), "%s phase label is a strings key: %s" % [id, p.label])
+			assert_true(
+				p.label.begins_with("WORKOUT_LBL_"),
+				"%s phase label is a strings key: %s" % [id, p.label]
+			)
 			assert_ne(p.kind, Wl.COOLDOWN, "%s never writes a cool-down" % id)
 			assert_false(p.open_ended, "%s phases are fixed" % id)
 
@@ -43,7 +61,9 @@ func test_totals_include_the_platform_cooldown() -> void:
 		var s := _load(id)
 		if s == null:
 			continue
-		assert_almost_eq(s.total_with_cooldown_s(), float(TOTAL_MIN[id]) * 60.0, 0.001, "%s total" % id)
+		assert_almost_eq(
+			s.total_with_cooldown_s(), float(TOTAL_MIN[id]) * 60.0, 0.001, "%s total" % id
+		)
 		var tl := s.timeline()
 		assert_eq(tl.back().kind, Wl.COOLDOWN, "%s timeline ends with the cool-down" % id)
 		assert_eq(tl.back().duration_s, 180.0)
@@ -56,21 +76,28 @@ func test_sessions_open_with_the_warmup_ramp_except_e2e() -> void:
 		if s == null or id == "e2e":
 			continue
 		var w := s.phases[0]
-		assert_eq([w.kind, w.mode, w.target_pct, w.ramp_to_pct, w.duration_s], [Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0], "%s warm-up" % id)
+		assert_eq(
+			[w.kind, w.mode, w.target_pct, w.ramp_to_pct, w.duration_s],
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
+			"%s warm-up" % id
+		)
 
 
 func test_easy_30_table() -> void:
 	var s := _load("easy_30")
-	assert_eq(_rows(s), [
-		[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
-		[Wl.WORK, Wl.ERG, 65.0, -1.0, 360.0],
-		[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
-		[Wl.WORK, Wl.ERG, 65.0, -1.0, 330.0],
-		[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
-		[Wl.WORK, Wl.ERG, 65.0, -1.0, 330.0],
-		[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
-		[Wl.WORK, Wl.ERG, 65.0, -1.0, 90.0],
-	])
+	assert_eq(
+		_rows(s),
+		[
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
+			[Wl.WORK, Wl.ERG, 65.0, -1.0, 360.0],
+			[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
+			[Wl.WORK, Wl.ERG, 65.0, -1.0, 330.0],
+			[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
+			[Wl.WORK, Wl.ERG, 65.0, -1.0, 330.0],
+			[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
+			[Wl.WORK, Wl.ERG, 65.0, -1.0, 90.0],
+		]
+	)
 	# Sprints at minutes 6, 12 and 18 of the 20-minute main set.
 	var main_start := 300.0
 	var sprint_starts: Array[float] = []
@@ -83,23 +110,29 @@ func test_easy_30_table() -> void:
 
 
 func test_sweet_spot_table() -> void:
-	assert_eq(_rows(_load("sweet_spot")), [
-		[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
-		[Wl.WORK, Wl.ERG, 90.0, -1.0, 720.0],
-		[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
-		[Wl.WORK, Wl.ERG, 90.0, -1.0, 720.0],
-	])
+	assert_eq(
+		_rows(_load("sweet_spot")),
+		[
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
+			[Wl.WORK, Wl.ERG, 90.0, -1.0, 720.0],
+			[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
+			[Wl.WORK, Wl.ERG, 90.0, -1.0, 720.0],
+		]
+	)
 
 
 func test_threshold_table() -> void:
-	assert_eq(_rows(_load("threshold")), [
-		[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
-		[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
-		[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
-		[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
-		[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
-		[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
-	])
+	assert_eq(
+		_rows(_load("threshold")),
+		[
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
+			[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
+			[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
+			[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
+			[Wl.RECOVERY, Wl.ERG, 55.0, -1.0, 240.0],
+			[Wl.WORK, Wl.ERG, 98.0, -1.0, 480.0],
+		]
+	)
 
 
 func test_vo2_table() -> void:
@@ -113,10 +146,13 @@ func test_vo2_table() -> void:
 
 func test_rolling_road_table() -> void:
 	var s := _load("rolling_road")
-	assert_eq(_rows(s), [
-		[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
-		[Wl.WORK, Wl.SIM, -1.0, -1.0, 1800.0],
-	])
+	assert_eq(
+		_rows(s),
+		[
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0],
+			[Wl.WORK, Wl.SIM, -1.0, -1.0, 1800.0],
+		]
+	)
 	var road := s.phases[1]
 	assert_eq(road.grade_source, Wl.GRADE_COURSE)
 	assert_false(road.course_profile.is_empty(), "the course travels in the plan")
@@ -127,11 +163,14 @@ func test_rolling_road_table() -> void:
 
 func test_e2e_table_and_warmup_limits() -> void:
 	var s := _load("e2e")
-	assert_eq(_rows(s), [
-		[Wl.WARMUP, Wl.ERG, 50.0, 60.0, 60.0],
-		[Wl.WORK, Wl.ERG, 65.0, -1.0, 30.0],
-		[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
-	])
+	assert_eq(
+		_rows(s),
+		[
+			[Wl.WARMUP, Wl.ERG, 50.0, 60.0, 60.0],
+			[Wl.WORK, Wl.ERG, 65.0, -1.0, 30.0],
+			[Wl.FREE, Wl.SIM, -1.0, -1.0, 30.0],
+		]
+	)
 	assert_eq(s.phases[2].grade_source, Wl.GRADE_FLAT)
 	assert_true(s.warmup_only)
 	assert_eq(s.total_s(), 120.0, "2 minutes before the cool-down")
@@ -163,7 +202,10 @@ func test_no_session_has_switches_closer_than_30_s() -> void:
 			continue
 		var sw := _switch_times(s)
 		for i in range(1, sw.size()):
-			assert_true(float(sw[i]) - float(sw[i - 1]) >= 30.0, "%s switches at %s and %s" % [id, sw[i - 1], sw[i]])
+			assert_true(
+				float(sw[i]) - float(sw[i - 1]) >= 30.0,
+				"%s switches at %s and %s" % [id, sw[i - 1], sw[i]]
+			)
 
 
 func test_safety_rules_the_table_relies_on() -> void:
@@ -179,7 +221,9 @@ func test_safety_rules_the_table_relies_on() -> void:
 				continue
 			assert_lte(p.peak_pct(), 150.0, "%s %s <= 150%%" % [id, p.label])
 			if p.duration_s > 300.0:
-				assert_lte(p.peak_pct(), 105.0, "%s %s: phases > 300 s cap at 105%%" % [id, p.label])
+				assert_lte(
+					p.peak_pct(), 105.0, "%s %s: phases > 300 s cap at 105%%" % [id, p.label]
+				)
 			if p.peak_pct() > 105.0:
 				accrued_105 += p.duration_s
 				reset_run = 0.0

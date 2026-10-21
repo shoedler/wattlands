@@ -62,16 +62,26 @@ func build_effort_plans() -> Dictionary:
 func _plan_for(p: PlayerSlot) -> EffortPlan:
 	match ctx.content_id:
 		"short":
-			return EffortPlan.of([
-				PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65).with_lap(),
-				PlanPhase.erg(Wl.WORK, 75, 120, "Push").with_lap(),
-			])
+			return (
+				EffortPlan
+				. of(
+					[
+						PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65).with_lap(),
+						PlanPhase.erg(Wl.WORK, 75, 120, "Push").with_lap(),
+					]
+				)
+			)
 		"split":
 			if p.slot_index != 0:
-				return EffortPlan.of([
-					PlanPhase.erg(Wl.WARMUP, 50, 4, "Warm-up").with_lap(),
-					PlanPhase.erg(Wl.WORK, 60, 3, "Push"),
-				])
+				return (
+					EffortPlan
+					. of(
+						[
+							PlanPhase.erg(Wl.WARMUP, 50, 4, "Warm-up").with_lap(),
+							PlanPhase.erg(Wl.WORK, 60, 3, "Push"),
+						]
+					)
+				)
 			return _tiny()
 		"bad":
 			return EffortPlan.of([PlanPhase.erg(Wl.WORK, 90, 60, "Too hard")])
@@ -79,12 +89,17 @@ func _plan_for(p: PlayerSlot) -> EffortPlan:
 
 
 func _tiny() -> EffortPlan:
-	return EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 2, "Warm-up").with_lap(),
-		PlanPhase.erg(Wl.WORK, 60, 3, "Push").with_range(55, 65),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 30, "Climb"),
-		PlanPhase.erg(Wl.WORK, 60, 0, "Hold").with_range(55, 65).with_open(2, 6),
-	])
+	return (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 2, "Warm-up").with_lap(),
+				PlanPhase.erg(Wl.WORK, 60, 3, "Push").with_range(55, 65),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 30, "Climb"),
+				PlanPhase.erg(Wl.WORK, 60, 0, "Hold").with_range(55, 65).with_open(2, 6),
+			]
+		)
+	)
 
 
 func sim_step(dt: float, frame: InputFrame) -> void:
@@ -109,7 +124,14 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 		events_sent += 1
 		send_event({"type": "tick", "n": float(events_sent)})
 	if keep_frames:
-		frames_seen.append({"tick": frame.tick, "t": frame.t, "players": frame.players.duplicate(), "phase": frame.phase.duplicate()})
+		frames_seen.append(
+			{
+				"tick": frame.tick,
+				"t": frame.t,
+				"players": frame.players.duplicate(),
+				"phase": frame.phase.duplicate()
+			}
+		)
 	if on_step.is_valid():
 		on_step.call(self, frame)
 
@@ -132,7 +154,9 @@ func on_afk(peer_id: int, afk: bool) -> void:
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	var out: Array = []
 	if not actions.is_empty() or not gestures.is_empty():
-		local_intent_calls.append({"actions": actions.duplicate(), "gestures": gestures.duplicate()})
+		local_intent_calls.append(
+			{"actions": actions.duplicate(), "gestures": gestures.duplicate()}
+		)
 	for g in gestures:
 		if g == Wl.G_SURGE:
 			out.append({"k": "boost", "gesture": "surge"})
@@ -172,7 +196,9 @@ func make_view() -> Node:
 
 
 func hud_spec() -> HudSpec:
-	return HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT).add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+	return HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT).add(
+		HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT
+	)
 
 
 func results() -> GameResults:
@@ -184,14 +210,18 @@ func results() -> GameResults:
 	if results_mode == "partial":
 		var part := GameResults.new()
 		part.grade = "A"
-		part.rows.append({"peer_id": ctx.players[0].peer_id, "kj": 999.0, "stats": {"custom": "yes"}})
+		part.rows.append(
+			{"peer_id": ctx.players[0].peer_id, "kj": 999.0, "stats": {"custom": "yes"}}
+		)
 		return part
 	var r := GameResults.from_stats(ctx.stats, ctx.players)
 	r.grade = "B"
 	r.score = float(steps)
 	for row in r.rows:
 		row["xp"] = 10
-		(row["stats"] as Dictionary)["distance"] = snappedf(float(distance.get(int(row["peer_id"]), 0.0)), 0.001)
+		(row["stats"] as Dictionary)["distance"] = snappedf(
+			float(distance.get(int(row["peer_id"]), 0.0)), 0.001
+		)
 	return r
 
 

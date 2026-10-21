@@ -43,8 +43,11 @@ func test_p_eff_w() -> void:
 	# RAW: actual watts.
 	assert_eq(EffortScaling.p_eff_w(Wl.RAW, 320.0, 250.0, 80.0), 320.0)
 	# Riders at the same %FTP get the same P_eff in FAIR_FTP.
-	assert_almost_eq(EffortScaling.p_eff_w(Wl.FAIR_FTP, 160.0, 200.0, 60.0),
-		EffortScaling.p_eff_w(Wl.FAIR_FTP, 320.0, 400.0, 95.0), 1e-9)
+	assert_almost_eq(
+		EffortScaling.p_eff_w(Wl.FAIR_FTP, 160.0, 200.0, 60.0),
+		EffortScaling.p_eff_w(Wl.FAIR_FTP, 320.0, 400.0, 95.0),
+		1e-9
+	)
 
 
 func test_rider_mass_kg() -> void:

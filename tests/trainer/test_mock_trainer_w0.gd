@@ -38,6 +38,7 @@ func _run(m: MockTrainer, seconds: float) -> void:
 
 # --- spec grammar ---------------------------------------------------------------------
 
+
 func test_parse_spec_single_profile() -> void:
 	var comps := MockTrainer.parse_spec("erg")
 	assert_eq(comps.size(), 1)
@@ -60,7 +61,9 @@ func test_parse_spec_whitespace_case_and_repeats() -> void:
 	assert_eq(comps[0]["name"], "erg")
 	assert_eq(comps[0]["params"], {"compliance": 1.0})
 	assert_eq(comps[1]["name"], "zero")
-	comps = MockTrainer.parse_spec("ramp:from_w=100,to_w=200,over_s=60+ramp:from_w=1,to_w=2,over_s=0")
+	comps = MockTrainer.parse_spec(
+		"ramp:from_w=100,to_w=200,over_s=60+ramp:from_w=1,to_w=2,over_s=0"
+	)
 	assert_eq(comps.size(), 2, "a profile may appear more than once")
 	assert_eq(comps[1]["params"]["over_s"], 0.0)
 	assert_push_error_count(0)
@@ -68,13 +71,31 @@ func test_parse_spec_whitespace_case_and_repeats() -> void:
 
 func test_parse_spec_invalid() -> void:
 	var bad: Array[String] = [
-		"", "   ", "bogus", "erg+", "+erg", "erg++zero", "erg:", ":w=1", "erg:compliance",
-		"erg:compliance=", "erg:compliance=abc", "erg:compliance=1.5", "erg:compliance=-0.1",
-		"erg:foo=1", "erg:=1", "const", "const:rpm=80", "const:w=1,w=2", "const:w=-5",
-		"ramp:from_w=1,to_w=2", "ramp:from_w=1,to_w=2,over_s=-1", "zero:w=3",
+		"",
+		"   ",
+		"bogus",
+		"erg+",
+		"+erg",
+		"erg++zero",
+		"erg:",
+		":w=1",
+		"erg:compliance",
+		"erg:compliance=",
+		"erg:compliance=abc",
+		"erg:compliance=1.5",
+		"erg:compliance=-0.1",
+		"erg:foo=1",
+		"erg:=1",
+		"const",
+		"const:rpm=80",
+		"const:w=1,w=2",
+		"const:w=-5",
+		"ramp:from_w=1,to_w=2",
+		"ramp:from_w=1,to_w=2,over_s=-1",
+		"zero:w=3",
 	]
 	for spec in bad:
-		assert_eq(MockTrainer.parse_spec(spec), [], "\"%s\" is invalid" % spec)
+		assert_eq(MockTrainer.parse_spec(spec), [], '"%s" is invalid' % spec)
 		assert_push_error("invalid profile spec", spec)
 
 
@@ -84,7 +105,9 @@ func test_from_spec_invalid_falls_back_to_erg() -> void:
 	assert_eq(m.spec, MockTrainer.DEFAULT_SPEC)
 	assert_eq(m.components(), [{"name": "erg", "params": {}}])
 	_run(m, 20.0)
-	assert_almost_eq(m.instantaneous_power_w(), 0.9 * FTP, 1.0, "rides like erg (90% FTP before any command)")
+	assert_almost_eq(
+		m.instantaneous_power_w(), 0.9 * FTP, 1.0, "rides like erg (90% FTP before any command)"
+	)
 
 
 func test_from_spec_keeps_the_spec_and_options() -> void:
@@ -102,6 +125,7 @@ func test_bot_spec_is_valid() -> void:
 
 
 # --- device surface -------------------------------------------------------------------
+
 
 func test_ready_from_the_start() -> void:
 	var m := _mock("erg")
@@ -146,10 +170,13 @@ func test_control_responses_arrive_on_the_next_tick() -> void:
 	m.set_simulation(0.0, 0.0, 0.004, 0.51)
 	assert_eq(_responses.size(), 0, "not synchronous")
 	m.tick(DT)
-	assert_eq(_responses, [
-		Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS),
-		Vector2i(MockTrainer.OP_SET_SIMULATION, MockTrainer.RESULT_SUCCESS),
-	])
+	assert_eq(
+		_responses,
+		[
+			Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS),
+			Vector2i(MockTrainer.OP_SET_SIMULATION, MockTrainer.RESULT_SUCCESS),
+		]
+	)
 	m.tick(DT)
 	assert_eq(_responses.size(), 2, "each response once")
 	m.set_resistance(5.0)
@@ -161,9 +188,10 @@ func test_control_responses_arrive_on_the_next_tick() -> void:
 
 # --- scripted profiles ----------------------------------------------------------------
 
+
 func test_const_power_and_cadence() -> void:
 	var m := _mock("const:w=150,rpm=85")
-	m.set_target_power(300) # scripted profiles ignore the trainer
+	m.set_target_power(300)  # scripted profiles ignore the trainer
 	_run(m, 30.0)
 	assert_between(_samples.size(), 27, 34)
 	for s in _samples:
@@ -236,6 +264,7 @@ func test_zero_profile_emits_zero() -> void:
 
 
 # --- erg follower ---------------------------------------------------------------------
+
 
 ## Instantaneous power every tick for `seconds` after the current state.
 func _trace(m: MockTrainer, seconds: float) -> Array[float]:
@@ -346,6 +375,7 @@ func test_erg_target_above_the_power_range_is_limited() -> void:
 
 
 # --- notifications --------------------------------------------------------------------
+
 
 func test_samples_about_1_hz_with_jitter() -> void:
 	var m := _mock("const:w=100", FTP, {"seed": 5})

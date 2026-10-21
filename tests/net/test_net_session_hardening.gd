@@ -12,10 +12,13 @@ func _lt(s: WlNetSession) -> LoopbackTransport:
 
 
 func _grade(id: int, g: float) -> Dictionary:
-	return Protocol.game_msg("directive", {"kind": NetMessages.DIRECTIVE_COURSE_GRADE, "id": id, "grade_pct": g})
+	return Protocol.game_msg(
+		"directive", {"kind": NetMessages.DIRECTIVE_COURSE_GRADE, "id": id, "grade_pct": g}
+	)
 
 
 # --- leaving while connecting ---------------------------------------------------------------
+
 
 func test_leave_while_joining_cancels_the_join() -> void:
 	var h := make_session("host", rider("Hana"))
@@ -28,7 +31,9 @@ func test_leave_while_joining_cancels_the_join() -> void:
 	assert_eq(c.state, "offline")
 	assert_eq(c.local_peer, 0)
 	assert_false(c.transport.is_open(), "the in-flight join never lands")
-	assert_false(events("c1", "state").any(func(e: Array) -> bool: return e[1] == "joined"), str(logs["c1"]))
+	assert_false(
+		events("c1", "state").any(func(e: Array) -> bool: return e[1] == "joined"), str(logs["c1"])
+	)
 	assert_eq(h.lobby_slots().size(), 1, "the host never lists it")
 	var left := events("host", "peer_left")
 	if not left.is_empty():
@@ -46,7 +51,9 @@ func test_leave_while_reconnecting_stops_the_rejoin() -> void:
 	pump(8)
 	assert_eq(c1.state, "offline")
 	assert_eq(c1.local_peer, 0)
-	assert_false(events("c1", "state").any(func(e: Array) -> bool: return e[1] == "joined"), str(logs["c1"]))
+	assert_false(
+		events("c1", "state").any(func(e: Array) -> bool: return e[1] == "joined"), str(logs["c1"])
+	)
 	assert_eq(r[0].lobby_slots().size(), 2)
 
 
@@ -62,6 +69,7 @@ func test_refusal_while_hosting_is_pending_cancels_the_create() -> void:
 
 
 # --- coalescing ----------------------------------------------------------------------------
+
 
 func test_coalescing_holds_100_ms_at_real_time_poll_rates() -> void:
 	# The autoload polls every frame (here 100 fps) while the GameHost sends a course grade
@@ -133,9 +141,12 @@ func test_autoload_polling_several_times_a_frame_never_releases_early() -> void:
 
 # --- lobby limits --------------------------------------------------------------------------
 
+
 func test_player_limit_holds_when_peers_join_together() -> void:
 	var h := make_session("host", rider("Hana", "1", 250, {"games": {"duo": "1"}}))
-	h.set_game_manifest({"id": "duo", "version": "1", "min_players": 1, "max_players": 2, "bots": false})
+	h.set_game_manifest(
+		{"id": "duo", "version": "1", "min_players": 1, "max_players": 2, "bots": false}
+	)
 	h.set_game("duo", "1", "a")
 	h.host_room(8)
 	pump()
@@ -151,18 +162,28 @@ func test_player_limit_holds_when_peers_join_together() -> void:
 
 # --- installed games from the GameRegistry ---------------------------------------------------
 
+
 class FakeRegistry:
 	extends Node
 
 	func games() -> Array[Dictionary]:
-		var out: Array[Dictionary] = [{"id": "workout", "version": "1"}, {"id": "siege", "version": 2.0}]
+		var out: Array[Dictionary] = [
+			{"id": "workout", "version": "1"}, {"id": "siege", "version": 2.0}
+		]
 		return out
 
 	func manifest(id: String) -> Dictionary:
 		if id == "siege":
-			return {"id": "siege", "version": "2", "min_players": 1, "max_players": 4, "bots": true,
+			return {
+				"id": "siege",
+				"version": "2",
+				"min_players": 1,
+				"max_players": 4,
+				"bots": true,
 				"options": [{"id": "rotation", "type": "toggle", "default": true}],
-				"player_options": [{"id": "wave_offset", "type": "int", "default": 0, "min": -5, "max": 5}]}
+				"player_options":
+				[{"id": "wave_offset", "type": "int", "default": 0, "min": -5, "max": 5}]
+			}
 		return {}
 
 
@@ -196,6 +217,7 @@ func test_local_profile_without_games_uses_the_registry() -> void:
 
 # --- persistence ---------------------------------------------------------------------------
 
+
 func test_token_file_defaults_to_paths() -> void:
 	var h := make_session("host", rider("Hana"))
 	h.host_room()
@@ -226,6 +248,7 @@ func test_token_file_defaults_to_paths() -> void:
 
 
 # --- reconnect -----------------------------------------------------------------------------
+
 
 func test_drop_during_the_rejoin_handshake_retries_with_the_same_token() -> void:
 	var r := room()
@@ -262,7 +285,9 @@ func test_rate_limited_rejoin_keeps_trying() -> void:
 
 
 func _snap(seq: int) -> Dictionary:
-	return Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "t": seq * 0.1, "state": {"n": seq}})
+	return Protocol.game_msg(
+		"snapshot", {"game_id": "workout", "seq": seq, "t": seq * 0.1, "state": {"n": seq}}
+	)
 
 
 func test_rejoined_client_takes_the_hosts_latest_snapshot_whatever_its_seq() -> void:
@@ -288,7 +313,9 @@ func test_snapshots_of_another_game_start_a_new_buffer() -> void:
 	var c1 := r[1]
 	for i in range(1, 4):
 		h.broadcast(_snap(i))
-	h.broadcast(Protocol.game_msg("snapshot", {"game_id": "siege", "seq": 1, "t": 0.5, "state": {}}))
+	h.broadcast(
+		Protocol.game_msg("snapshot", {"game_id": "siege", "seq": 1, "t": 0.5, "state": {}})
+	)
 	pump()
 	assert_eq(c1.snapshot_buffer().size(), 1, "never interpolate across games")
 	assert_eq(c1.latest_snapshot()["game_id"], "siege")
@@ -336,14 +363,21 @@ func _scripted_run(tag: String) -> Array:
 		h.broadcast(_snap(i + 1))
 		h.send_to(2, _grade(i, 0.5 * i))
 		if i % 4 == 0:
-			c.send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": 2, "power_w": 150.0 + i}}))
+			c.send_to_host(
+				Protocol.game_msg("telemetry", {"tm": {"peer": 2, "power_w": 150.0 + i}})
+			)
 		if i == 20:
 			_lt(c).simulate_drop()
 		h.tick(Wl.SIM_DT)
 		c.tick(Wl.SIM_DT)
 	pump(30)
-	return [h.room_code, (logs["host" + tag] as Array).duplicate(true), (logs["c" + tag] as Array).duplicate(true),
-		h.stats.duplicate(), c.stats.duplicate()]
+	return [
+		h.room_code,
+		(logs["host" + tag] as Array).duplicate(true),
+		(logs["c" + tag] as Array).duplicate(true),
+		h.stats.duplicate(),
+		c.stats.duplicate()
+	]
 
 
 func test_loopback_runs_are_deterministic() -> void:
@@ -360,6 +394,7 @@ func test_loopback_runs_are_deterministic() -> void:
 
 # --- host-side checks ------------------------------------------------------------------------
 
+
 func test_telemetry_peer_is_the_sender() -> void:
 	var r := room()
 	clear_logs()
@@ -368,14 +403,24 @@ func test_telemetry_peer_is_the_sender() -> void:
 	var tm := messages("host", "telemetry")
 	assert_eq(tm.size(), 1)
 	assert_eq(tm[0][1], 2)
-	assert_eq(((tm[0][2] as Dictionary)["tm"] as Dictionary)["peer"], 2, "a client can't speak for another rider")
+	assert_eq(
+		((tm[0][2] as Dictionary)["tm"] as Dictionary)["peer"],
+		2,
+		"a client can't speak for another rider"
+	)
 
 
 # --- system nodes ----------------------------------------------------------------------------
 
+
 func test_session_and_transports_run_while_paused() -> void:
-	var nodes: Array[Node] = [WlNetSession.new(), LoopbackTransport.hub_transport(hub), RelayTransport.new(),
-		LanTransport.new(), LocalRelayServer.new()]
+	var nodes: Array[Node] = [
+		WlNetSession.new(),
+		LoopbackTransport.hub_transport(hub),
+		RelayTransport.new(),
+		LanTransport.new(),
+		LocalRelayServer.new()
+	]
 	for n in nodes:
 		assert_eq(n.process_mode, Node.PROCESS_MODE_ALWAYS, n.get_class())
 		n.free()
@@ -388,11 +433,14 @@ func test_session_and_transports_run_while_paused() -> void:
 	r[0].broadcast(_snap(1))
 	pump()
 	get_tree().paused = false
-	assert_eq(processing, [true, true, true], "sessions and transports keep processing while paused")
+	assert_eq(
+		processing, [true, true, true], "sessions and transports keep processing while paused"
+	)
 	assert_eq(messages("c1", "snapshot").size(), 1)
 
 
 # --- strings -------------------------------------------------------------------------------
+
 
 func test_every_end_reason_has_a_readable_text() -> void:
 	var reasons: Array[String] = []
@@ -402,7 +450,9 @@ func test_every_end_reason_has_a_readable_text() -> void:
 		var key := WlNetSession.reason_key(reason)
 		assert_true(key.begins_with("NET_REFUSED_"), key)
 		assert_ne(WlNetSession.reason_text(reason), reason, "a text for %s" % reason)
-	assert_eq(WlNetSession.reason_text("no_such_reason"), "no_such_reason", "unknown reasons pass through")
+	assert_eq(
+		WlNetSession.reason_text("no_such_reason"), "no_such_reason", "unknown reasons pass through"
+	)
 
 
 func test_net_strings_are_platform_keys() -> void:
@@ -421,39 +471,69 @@ func test_net_strings_are_platform_keys() -> void:
 
 # --- protocol --------------------------------------------------------------------------------
 
+
 func test_hud_args_come_back_as_drawn_on_the_host() -> void:
-	var msg := Protocol.game_msg("hud", {"kind": "toast", "key": "SIEGE_TOAST_BUY", "args": ["ram", 2, 2.5, -3]})
+	var msg := Protocol.game_msg(
+		"hud", {"kind": "toast", "key": "SIEGE_TOAST_BUY", "args": ["ram", 2, 2.5, -3]}
+	)
 	var back := Protocol.decode_game(U.json_round_trip(msg))
 	assert_true(U.same(back, msg), U.diff(back, msg))
-	var named := Protocol.game_msg("hud", {"kind": "banner", "key": "K", "args": {"name": "Bo", "n": 4}, "seconds": 3.0})
+	var named := Protocol.game_msg(
+		"hud", {"kind": "banner", "key": "K", "args": {"name": "Bo", "n": 4}, "seconds": 3.0}
+	)
 	var back2 := Protocol.decode(Protocol.encode(named))
 	assert_true(U.same(back2, named), U.diff(back2, named))
 	assert_typeof(back2["seconds"], TYPE_FLOAT)
 
 
 func test_platform_events_get_ints_without_game_fields() -> void:
-	var ev := Protocol.decode(Protocol.encode(Protocol.game_msg("event", {"seq": 1, "events": [
-		{"type": "phase_started", "peer_id": 2, "index": 3, "tick": 120}, {"type": "boom", "n": 2}]})))
+	var ev := Protocol.decode(
+		Protocol.encode(
+			Protocol.game_msg(
+				"event",
+				{
+					"seq": 1,
+					"events":
+					[
+						{"type": "phase_started", "peer_id": 2, "index": 3, "tick": 120},
+						{"type": "boom", "n": 2}
+					]
+				}
+			)
+		)
+	)
 	Protocol.apply_game_int_fields(ev, {})
 	var e0: Dictionary = (ev["events"] as Array)[0]
 	assert_typeof(e0["index"], TYPE_INT)
 	assert_typeof(e0["tick"], TYPE_INT)
-	assert_typeof(((ev["events"] as Array)[1] as Dictionary)["n"], TYPE_FLOAT, "game events need int_fields")
+	assert_typeof(
+		((ev["events"] as Array)[1] as Dictionary)["n"], TYPE_FLOAT, "game events need int_fields"
+	)
 	var r := room()
 	clear_logs()
-	r[0].broadcast(Protocol.game_msg("event", {"seq": 1, "events": [{"type": "phase_started", "peer_id": 2, "index": 1}]}))
+	r[0].broadcast(
+		Protocol.game_msg(
+			"event", {"seq": 1, "events": [{"type": "phase_started", "peer_id": 2, "index": 1}]}
+		)
+	)
 	pump()
 	var got: Dictionary = ((messages("c1", "event")[0][2] as Dictionary)["events"] as Array)[0]
-	assert_typeof(got["index"], TYPE_INT, "a client without set_game_int_fields still gets an int index")
+	assert_typeof(
+		got["index"], TYPE_INT, "a client without set_game_int_fields still gets an int index"
+	)
 
 
 func test_decode_tolerates_any_json_whitespace() -> void:
-	var text := "{\"type\":\"snapshot\",\"v\":1,\"game_id\":\"g\",\"seq\":\n 4,\"state\":{\"target_id\" :\r\n\t3,\"x\": 1.5,\"name_id\": \"n\"}}"
+	var text := '{"type":"snapshot","v":1,"game_id":"g","seq":\n 4,"state":{"target_id" :\r\n\t3,"x": 1.5,"name_id": "n"}}'
 	var d := Protocol.decode(text)
 	assert_false(d.is_empty())
 	assert_typeof(d["seq"], TYPE_INT)
 	assert_typeof((d["state"] as Dictionary)["target_id"], TYPE_INT)
 	assert_eq((d["state"] as Dictionary)["name_id"], "n")
-	var pretty := Protocol.decode(JSON.stringify(Protocol.game_msg("event", {"seq": 1,
-		"events": [{"type": "kill", "enemy_id": 7}]}), "\t"))
+	var pretty := Protocol.decode(
+		JSON.stringify(
+			Protocol.game_msg("event", {"seq": 1, "events": [{"type": "kill", "enemy_id": 7}]}),
+			"\t"
+		)
+	)
 	assert_typeof(((pretty["events"] as Array)[0] as Dictionary)["enemy_id"], TYPE_INT)

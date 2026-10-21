@@ -19,8 +19,12 @@ func test_new_directive_is_empty() -> void:
 
 
 func test_to_dict_emits_only_set_fields() -> void:
-	var e := EffortDirective.from_dict({"target_pct": 85, "duration_s": 20, "reason": "dig in", "source": "tank"})
-	assert_eq(e.to_dict(), {"target_pct": 85.0, "duration_s": 20.0, "reason": "dig in", "source": "tank"})
+	var e := EffortDirective.from_dict(
+		{"target_pct": 85, "duration_s": 20, "reason": "dig in", "source": "tank"}
+	)
+	assert_eq(
+		e.to_dict(), {"target_pct": 85.0, "duration_s": 20.0, "reason": "dig in", "source": "tank"}
+	)
 	e.id = 7
 	assert_eq(e.to_dict()["id"], 7)
 	var sim := EffortDirective.from_dict({"mode": "SIM", "mode_grade": 4.0, "duration_s": 30.0})
@@ -56,8 +60,10 @@ func test_channels() -> void:
 		[{"haptic_wind": 3.0}, ["haptic"]],
 		[{"crr": 0.8}, ["factors"]],
 		[{"cw": 0.6}, ["factors"]],
-		[{"mode": "SIM", "mode_grade": 4.0, "haptic": 1.0, "crr": 0.9, "target_pct": 90.0},
-			["erg_target", "sim_block", "mode_grade", "haptic", "factors"]],
+		[
+			{"mode": "SIM", "mode_grade": 4.0, "haptic": 1.0, "crr": 0.9, "target_pct": 90.0},
+			["erg_target", "sim_block", "mode_grade", "haptic", "factors"]
+		],
 	]
 	for c: Array in cases:
 		var e := EffortDirective.from_dict(c[0])
@@ -70,7 +76,9 @@ func test_helpers() -> void:
 	assert_true(e.sets_sim_block())
 	assert_true(e.sets_haptic())
 	assert_true(e.sets_factors())
-	assert_false(EffortDirective.from_dict({"mode": "ERG"}).sets_sim_block(), "mode ERG ends a block")
+	assert_false(
+		EffortDirective.from_dict({"mode": "ERG"}).sets_sim_block(), "mode ERG ends a block"
+	)
 
 
 func test_channels_for_phase() -> void:
@@ -84,11 +92,26 @@ func test_channels_for_phase() -> void:
 
 
 func test_json_round_trip() -> void:
-	var e := EffortDirective.from_dict({
-		"mode": "SIM", "target_pct": 92.5, "target_wkg": 3.1, "target_w": 240.0, "mode_grade": 4.0,
-		"haptic": 2.5, "haptic_wind": 1.5, "crr": 0.8, "cw": 0.6, "duration_s": 25.0,
-		"reason": "overdrive", "source": "siege", "id": 42,
-	})
+	var e := (
+		EffortDirective
+		. from_dict(
+			{
+				"mode": "SIM",
+				"target_pct": 92.5,
+				"target_wkg": 3.1,
+				"target_w": 240.0,
+				"mode_grade": 4.0,
+				"haptic": 2.5,
+				"haptic_wind": 1.5,
+				"crr": 0.8,
+				"cw": 0.6,
+				"duration_s": 25.0,
+				"reason": "overdrive",
+				"source": "siege",
+				"id": 42,
+			}
+		)
+	)
 	var d := e.to_dict()
 	var back := EffortDirective.from_dict(_rt(d))
 	assert_eq(back.to_dict(), d)

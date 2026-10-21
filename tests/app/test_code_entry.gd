@@ -129,7 +129,10 @@ func test_join_refused_shows_the_reason_and_returns_to_entry() -> void:
 
 func test_recent_rooms_are_listed_and_joinable() -> void:
 	fx.give_profile()
-	fx.settings.set_value("recent_rooms", [{"code": "ABC123", "role": Wl.CLIENT, "game_id": "workout", "game_title": "Workout"}])
+	fx.settings.set_value(
+		"recent_rooms",
+		[{"code": "ABC123", "role": Wl.CLIENT, "game_id": "workout", "game_title": "Workout"}]
+	)
 	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
 	assert_true(menu(s).ids().has("recent:ABC123"))
 	surge_pick(s, "recent:ABC123")
@@ -146,7 +149,9 @@ func test_a_coast_on_the_keyboard_keeps_the_half_typed_code() -> void:
 	s.feed_gesture(Wl.G_COAST)
 	assert_eq(s.page, AppLobbyScreen.PAGE_JOIN)
 	assert_eq(s.code_field.value(), "7", "the code is kept")
-	assert_eq(menu(s).highlighted(), menu(s).index_of_id(AppKeyboard.ID_CANCEL), "Back is highlighted")
+	assert_eq(
+		menu(s).highlighted(), menu(s).index_of_id(AppKeyboard.ID_CANCEL), "Back is highlighted"
+	)
 	assert_ne(fx.app.state, "title")
 	s.feed_action(&"back")
 	assert_eq(fx.app.state, "title", "a second back leaves")
@@ -163,4 +168,6 @@ func test_text_entry_back_keeps_the_text_until_confirmed() -> void:
 	assert_not_null(s.text_field, "a coast keeps the editor open")
 	surge_pick(s, AppKeyboard.ID_CANCEL)
 	assert_null(s.text_field, "picking Back closes it")
-	assert_ne(fx.settings.get_value("relay_url", ""), "ws://10.0.0.9:8787/v1", "cancelled: nothing saved")
+	assert_ne(
+		fx.settings.get_value("relay_url", ""), "ws://10.0.0.9:8787/v1", "cancelled: nothing saved"
+	)

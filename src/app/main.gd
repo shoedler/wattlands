@@ -59,7 +59,11 @@ func boot() -> void:
 	if services.settings != null:
 		services.settings.load_all()
 		AppSettingsScreen.apply_volume(float(services.settings.get_value("master_volume_db", 0.0)))
-	if services.trainer != null and services.trainer.device() == null and services.trainer.status() == TrainerDevice.STATUS_DISCONNECTED:
+	if (
+		services.trainer != null
+		and services.trainer.device() == null
+		and services.trainer.status() == TrainerDevice.STATUS_DISCONNECTED
+	):
 		services.trainer.start()
 	if services.rides != null:
 		services.rides.process_queue()

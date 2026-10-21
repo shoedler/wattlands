@@ -25,7 +25,15 @@ class FakeRunner:
 		seen["temp_root"] = _temp_root
 		# The registry is freed after the run; record what it held now.
 		var reg := args.get("registry") as WlGameRegistry
-		seen["registry"] = "none" if reg == null else ("template" if reg.has_game("_template") and not reg.ids().has("_template") else "other")
+		seen["registry"] = (
+			"none"
+			if reg == null
+			else (
+				"template"
+				if reg.has_game("_template") and not reg.ids().has("_template")
+				else "other"
+			)
+		)
 		seen["user_dir"] = Paths.user_dir()
 		seen["process_mode"] = process_mode
 		return setup_error
@@ -35,7 +43,16 @@ class FakeRunner:
 		var bt: Array[ScriptBacktrace] = []
 		for t in log_error_types:
 			if cli != null and cli.error_counter != null:
-				cli.error_counter._log_error("run_to_end", "res://fake_game.gd", 7, "", "Invalid access to key 'x'", false, t, bt)
+				cli.error_counter._log_error(
+					"run_to_end",
+					"res://fake_game.gd",
+					7,
+					"",
+					"Invalid access to key 'x'",
+					false,
+					t,
+					bt
+				)
 		return end_reason
 
 	func write_report() -> String:
@@ -50,7 +67,9 @@ class FakeRunner:
 		super.cleanup()
 
 
-const BASE: Array[String] = ["--mock-trainer=erg", "--caller-cwd=C:/work", "--game=_template", "--report=build/r.json"]
+const BASE: Array[String] = [
+	"--mock-trainer=erg", "--caller-cwd=C:/work", "--game=_template", "--report=build/r.json"
+]
 
 var env: Dictionary = {}
 var parse_calls: Array = []
@@ -140,17 +159,46 @@ func _errors(cli: GameSimCli) -> String:
 
 
 func test_a_good_run_calls_setup_run_and_write_and_exits_0() -> void:
-	var r := _run(["--content=short", "--players=2", "--bots=1", "--rider=erg", "--rider=zero", "--sim-speed=200", "--seed=3"])
+	var r := _run(
+		[
+			"--content=short",
+			"--players=2",
+			"--bots=1",
+			"--rider=erg",
+			"--rider=zero",
+			"--sim-speed=200",
+			"--seed=3"
+		]
+	)
 	assert_eq(r[0], GameSimCli.EXIT_OK, _errors(r[1]))
 	assert_eq(calls, ["setup", "run", "write"])
 	assert_true(seen["setup_args"]["headless"], "run_game_sim is always headless")
 	assert_eq(parse_calls.size(), 1)
-	assert_eq(parse_calls[0], ["--game=_template", "--report=C:/work/build/r.json", "--content=short", "--players=2",
-		"--bots=1", "--rider=erg", "--rider=zero", "--sim-speed=200", "--seed=3"], "wrapper flags never reach parse_args")
+	assert_eq(
+		parse_calls[0],
+		[
+			"--game=_template",
+			"--report=C:/work/build/r.json",
+			"--content=short",
+			"--players=2",
+			"--bots=1",
+			"--rider=erg",
+			"--rider=zero",
+			"--sim-speed=200",
+			"--seed=3"
+		],
+		"wrapper flags never reach parse_args"
+	)
 	assert_true(r[1].out[r[1].out.size() - 1].contains("end_reason=complete"))
 	assert_true(r[1].out[r[1].out.size() - 1].contains("report=C:/reports/r.json"))
-	assert_eq(get_children().filter(func(n: Node) -> bool: return n is GameSimRunner), [], "the runner is freed")
-	assert_eq(seen["process_mode"], Node.PROCESS_MODE_ALWAYS, "the runner is a system node (BRIEF 4.1)")
+	assert_eq(
+		get_children().filter(func(n: Node) -> bool: return n is GameSimRunner),
+		[],
+		"the runner is freed"
+	)
+	assert_eq(
+		seen["process_mode"], Node.PROCESS_MODE_ALWAYS, "the runner is a system node (BRIEF 4.1)"
+	)
 
 
 ## The template is never listed; `--game=_template` runs with a private registry that holds it.
@@ -158,7 +206,11 @@ func test_the_template_runs_with_a_registry_that_holds_it() -> void:
 	parse_result = {"game": "_template", "content": "short", "report": "C:/reports/r.json"}
 	var r := _run()
 	assert_eq(r[0], GameSimCli.EXIT_OK)
-	assert_eq(seen["registry"], "template", "setup gets a registry that holds the template, still unlisted")
+	assert_eq(
+		seen["registry"],
+		"template",
+		"setup gets a registry that holds the template, still unlisted"
+	)
 	parse_result = {"game": "workout", "report": "C:/reports/r.json"}
 	_run()
 	assert_eq(seen["registry"], "none", "other games use the GameRegistry autoload")
@@ -179,7 +231,9 @@ func test_a_run_that_logged_a_script_error_exits_5_and_keeps_its_report() -> voi
 	assert_eq(calls, ["setup", "run", "write"], "the report is still written")
 	assert_eq(r[1].script_errors, 2)
 	assert_string_contains(_errors(r[1]), "2 script error(s)")
-	assert_string_contains(_errors(r[1]), "Invalid access to key 'x' (res://fake_game.gd:7, run_to_end)")
+	assert_string_contains(
+		_errors(r[1]), "Invalid access to key 'x' (res://fake_game.gd:7, run_to_end)"
+	)
 
 
 func test_push_errors_and_warnings_are_not_script_errors() -> void:
@@ -205,7 +259,9 @@ func test_the_script_error_counter_is_a_godot_logger() -> void:
 	c._log_error("f", "res://a.gd", 1, "", "", false, Logger.ERROR_TYPE_SHADER, bt)
 	c._log_error("g", "res://b.gd", 2, "code_text", "", false, Logger.ERROR_TYPE_SCRIPT, bt)
 	c._log_error("h", "res://c.gd", 3, "", "later", false, Logger.ERROR_TYPE_SCRIPT, bt)
-	assert_eq(c.snapshot(), [2, "code_text (res://b.gd:2, g)"], "counts script errors and keeps the first")
+	assert_eq(
+		c.snapshot(), [2, "code_text (res://b.gd:2, g)"], "counts script errors and keeps the first"
+	)
 
 
 func test_every_end_reason_is_a_completed_run() -> void:
@@ -263,11 +319,23 @@ func test_it_refuses_to_run_without_mock_trainer() -> void:
 
 
 func test_every_brief_flag_is_accepted_and_passed_through_in_order() -> void:
-	var flags := ["--content=default", "--players=3", "--bots=1", "--rider=erg:compliance=0.9",
-		"--rider=erg+cadence_drop:rpm=40,at_s=1200", "--rider=zero", "--sim-speed=200", "--seed=7",
-		"--autopilot=0,2", "--ftp=180,220,250,200", "--unverified", "--haptics-off=1",
-		"--options={\"boosts\":false}", "--player-options=[{\"work_offset\":5},{},{\"work_offset\":-10}]",
-		"--max-sim-seconds=900"]
+	var flags := [
+		"--content=default",
+		"--players=3",
+		"--bots=1",
+		"--rider=erg:compliance=0.9",
+		"--rider=erg+cadence_drop:rpm=40,at_s=1200",
+		"--rider=zero",
+		"--sim-speed=200",
+		"--seed=7",
+		"--autopilot=0,2",
+		"--ftp=180,220,250,200",
+		"--unverified",
+		"--haptics-off=1",
+		'--options={"boosts":false}',
+		'--player-options=[{"work_offset":5},{},{"work_offset":-10}]',
+		"--max-sim-seconds=900"
+	]
 	var r := _run(flags)
 	assert_eq(r[0], GameSimCli.EXIT_OK, _errors(r[1]))
 	assert_eq(parse_calls[0].slice(2), flags)
@@ -304,7 +372,10 @@ func test_unverified_reaches_the_parser_as_a_bare_flag() -> void:
 	assert_has(parse_calls[0], "--unverified")
 	parse_calls.clear()
 	_run(["--unverified=false"])
-	assert_false(parse_calls[0].any(func(a: String) -> bool: return a.begins_with("--unverified")), "false drops it")
+	assert_false(
+		parse_calls[0].any(func(a: String) -> bool: return a.begins_with("--unverified")),
+		"false drops it"
+	)
 
 
 func test_slot_lists_must_fit_the_slots() -> void:
@@ -320,8 +391,14 @@ func test_slot_lists_must_fit_the_slots() -> void:
 		assert_eq(r[0], GameSimCli.EXIT_USAGE, c)
 		assert_string_contains(_errors(r[1]), cases[c])
 		assert_eq(parse_calls, [], c)
-	for ok: String in ["--players=4 --bots=4", "--players=2 --autopilot=1 --haptics-off=0,1", "--players=1 --bots=2 --ftp=200,210,220",
-			"--players=2 --bots=2 --ftp=180,220", "--players=3 --player-options=[{},{}]", "--autopilot=none"]:
+	for ok: String in [
+		"--players=4 --bots=4",
+		"--players=2 --autopilot=1 --haptics-off=0,1",
+		"--players=1 --bots=2 --ftp=200,210,220",
+		"--players=2 --bots=2 --ftp=180,220",
+		"--players=3 --player-options=[{},{}]",
+		"--autopilot=none"
+	]:
 		assert_eq(_run(Array(ok.split(" ")))[0], GameSimCli.EXIT_OK, ok)
 
 
@@ -331,30 +408,60 @@ func test_rider_is_given_once_or_once_per_human_slot() -> void:
 	var r := _run(["--players=3", "--rider=erg", "--rider=zero"])
 	assert_eq(r[0], GameSimCli.EXIT_USAGE)
 	assert_string_contains(_errors(r[1]), "--rider given 2 times for 3 human slots")
-	assert_eq(_run(["--rider=erg", "--rider=zero"])[0], GameSimCli.EXIT_USAGE, "--players defaults to 1")
+	assert_eq(
+		_run(["--rider=erg", "--rider=zero"])[0], GameSimCli.EXIT_USAGE, "--players defaults to 1"
+	)
 
 
 func test_bad_values_are_refused_with_the_flag_named() -> void:
-	for f: String in ["--players=0", "--players=x", "--players=9", "--bots=-1", "--seed=1.5", "--sim-speed=0",
-			"--max-sim-seconds=-5", "--ftp=200,abc", "--ftp=0", "--autopilot=some", "--autopilot=0,-1",
-			"--haptics-off=all", "--options=[1]", "--options=nope", "--player-options={\"a\":1}",
-			"--player-options=[{},3]"]:
+	for f: String in [
+		"--players=0",
+		"--players=x",
+		"--players=9",
+		"--bots=-1",
+		"--seed=1.5",
+		"--sim-speed=0",
+		"--max-sim-seconds=-5",
+		"--ftp=200,abc",
+		"--ftp=0",
+		"--autopilot=some",
+		"--autopilot=0,-1",
+		"--haptics-off=all",
+		"--options=[1]",
+		"--options=nope",
+		'--player-options={"a":1}',
+		"--player-options=[{},3]"
+	]:
 		var r := _run([f])
 		assert_eq(r[0], GameSimCli.EXIT_USAGE, f)
 		assert_string_contains(_errors(r[1]), f.get_slice("=", 0), false)
 
 
 func test_good_values_pass() -> void:
-	for f: String in ["--autopilot=all", "--autopilot=none", "--autopilot=0", "--ftp=150.5", "--sim-speed=0.5",
-			"--options={}", "--player-options=[]", "--bots=0", "--seed=0"]:
+	for f: String in [
+		"--autopilot=all",
+		"--autopilot=none",
+		"--autopilot=0",
+		"--ftp=150.5",
+		"--sim-speed=0.5",
+		"--options={}",
+		"--player-options=[]",
+		"--bots=0",
+		"--seed=0"
+	]:
 		assert_eq(_run([f])[0], GameSimCli.EXIT_OK, f)
 
 
 func test_report_and_override_resolve_against_the_callers_directory() -> void:
 	var dir := _temp_dir("cli_override")
-	_write(dir.path_join("over.json"), "{\"default.json\": {\"nudge_pct\": 4}}")
-	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir.replace("/", "\\"), "--game=_template",
-		"--report=out\\r.json", "--override=over.json"]
+	_write(dir.path_join("over.json"), '{"default.json": {"nudge_pct": 4}}')
+	var base: Array[String] = [
+		"--mock-trainer=erg",
+		"--caller-cwd=" + dir.replace("/", "\\"),
+		"--game=_template",
+		"--report=out\\r.json",
+		"--override=over.json"
+	]
 	var r := _run([], base)
 	assert_eq(r[0], GameSimCli.EXIT_OK, _errors(r[1]))
 	assert_has(parse_calls[0], "--report=" + dir.path_join("out/r.json"))
@@ -363,17 +470,27 @@ func test_report_and_override_resolve_against_the_callers_directory() -> void:
 	assert_eq(missing[0], GameSimCli.EXIT_USAGE)
 	assert_string_contains(_errors(missing[1]), "--override=C:/work/nope.json")
 	_write(dir.path_join("list.json"), "[1, 2]")
-	var no_override: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
-	assert_eq(_run(["--override=list.json"], no_override)[0], GameSimCli.EXIT_USAGE, "an override must be a JSON object")
+	var no_override: Array[String] = [
+		"--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"
+	]
+	assert_eq(
+		_run(["--override=list.json"], no_override)[0],
+		GameSimCli.EXIT_USAGE,
+		"an override must be a JSON object"
+	)
 
 
 func test_a_run_first_removes_what_an_earlier_run_left_at_the_report_path() -> void:
 	var dir := _temp_dir("cli_stale")
 	var old := ["r.json", "fit/r_slot0.fit", "fit/r_slot1.fit"]
-	var other := ["r2.json", "fit/r2_slot0.fit", "fit/r_slotx.fit", "fit/r_slot0.fit.bak", "fit/rr_slot0.fit"]
+	var other := [
+		"r2.json", "fit/r2_slot0.fit", "fit/r_slotx.fit", "fit/r_slot0.fit.bak", "fit/rr_slot0.fit"
+	]
 	for f: String in old + other:
 		_write(dir.path_join(f), "old")
-	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
+	var base: Array[String] = [
+		"--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"
+	]
 	assert_eq(_run(["--echo-args"], base)[0], GameSimCli.EXIT_OK)
 	assert_file_exists(dir.path_join("r.json"))
 	setup_error = "plan rejected: warm-up target 70% above 65%"
@@ -392,7 +509,9 @@ func test_a_parser_error_also_leaves_no_stale_report() -> void:
 	var dir := _temp_dir("cli_stale_parse")
 	_write(dir.path_join("r.json"), "old")
 	parse_result = {"error": "--content=nope is not one of default, short"}
-	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
+	var base: Array[String] = [
+		"--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"
+	]
 	assert_eq(_run([], base)[0], GameSimCli.EXIT_USAGE)
 	assert_file_does_not_exist(dir.path_join("r.json"))
 
@@ -412,7 +531,10 @@ func test_echo_args_prints_the_resolved_flags_and_runs_nothing() -> void:
 	assert_false(made_runner)
 	var line: String = r[1].out[0]
 	assert_true(line.begins_with("run_game_sim: args "))
-	assert_eq(JSON.parse_string(line.trim_prefix("run_game_sim: args ")), ["--game=_template", "--report=C:/work/build/r.json", "--seed=4"])
+	assert_eq(
+		JSON.parse_string(line.trim_prefix("run_game_sim: args ")),
+		["--game=_template", "--report=C:/work/build/r.json", "--seed=4"]
+	)
 	assert_string_contains(r[1].out[1], "WATTLANDS_NO_HW_CONTROL=1")
 	assert_string_contains(r[1].out[1], "mock-trainer=erg")
 
@@ -430,7 +552,9 @@ func test_the_run_uses_a_temp_user_dir_and_removes_it() -> void:
 	cli.isolate_user_dir = true
 	assert_eq(cli.run(PackedStringArray(BASE), self), GameSimCli.EXIT_OK)
 	assert_ne(seen.get("user_dir", outer), outer, "the run saw its own temp user dir")
-	assert_false(DirAccess.dir_exists_absolute(str(seen.get("user_dir", ""))), "and removed it afterwards")
+	assert_false(
+		DirAccess.dir_exists_absolute(str(seen.get("user_dir", ""))), "and removed it afterwards"
+	)
 	assert_eq(Paths.user_dir(), outer, "the previous override is restored")
 
 
@@ -444,7 +568,11 @@ func test_the_runner_temp_root_is_removed_after_the_run() -> void:
 		assert_eq(r[0], GameSimCli.EXIT_OK if err == "" else GameSimCli.EXIT_SETUP)
 		var root := str(seen.get("temp_root", ""))
 		assert_ne(root, "", "the fake runner made a temp root")
-		assert_eq(int(seen.get("cleanups", 0)), 1, "the CLI called cleanup() once (setup error \"%s\")" % err)
+		assert_eq(
+			int(seen.get("cleanups", 0)),
+			1,
+			'the CLI called cleanup() once (setup error "%s")' % err
+		)
 		assert_false(DirAccess.dir_exists_absolute(root), "%s is gone after the run" % root)
 
 

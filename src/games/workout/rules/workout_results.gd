@@ -13,7 +13,9 @@ extends RefCounted
 ## the results screen draws: grade, time in band, intervals in band, best 1-, 5- and 20-minute power
 ## (each only once the ride is that long), every sprint's peak and the best one, sprints hit.
 
-const POWER_KEYS: Array[String] = ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s"]
+const POWER_KEYS: Array[String] = [
+	"kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s"
+]
 const XP_PER_SPRINT := 10
 const STAT_GRADE := "WORKOUT_STAT_GRADE"
 const STAT_TIB := "WORKOUT_STAT_TIB_PCT"
@@ -22,13 +24,19 @@ const STAT_SPRINT_PEAK := "WORKOUT_STAT_SPRINT_PEAK_W"
 const STAT_SPRINTS_HIT := "WORKOUT_STAT_SPRINTS_HIT"
 const STAT_SPRINT_PEAKS := "WORKOUT_STAT_SPRINT_PEAKS_W"
 ## Row key -> stats key for the best-power display stats (BRIEF 3.7 results).
-const BEST_STATS: Dictionary = {"best_1m_w": "WORKOUT_STAT_BEST_1M_W", "best_5m_w": "WORKOUT_STAT_BEST_5M_W", "best_20m_w": "WORKOUT_STAT_BEST_20M_W"}
+const BEST_STATS: Dictionary = {
+	"best_1m_w": "WORKOUT_STAT_BEST_1M_W",
+	"best_5m_w": "WORKOUT_STAT_BEST_5M_W",
+	"best_20m_w": "WORKOUT_STAT_BEST_20M_W"
+}
 const TEAM_TIB := "WORKOUT_STAT_GROUP_TIB_PCT"
 const TEAM_RIDERS := "WORKOUT_STAT_RIDERS"
 const TEAM_SPRINTS := "WORKOUT_STAT_GROUP_SPRINTS_HIT"
 
 
-static func build(state: WorkoutState, stats: SessionStats, players: Array[PlayerSlot]) -> GameResults:
+static func build(
+	state: WorkoutState, stats: SessionStats, players: Array[PlayerSlot]
+) -> GameResults:
 	var res := GameResults.from_stats(stats, players)
 	var fractions: Array[float] = []
 	var team_hits := 0
@@ -52,10 +60,19 @@ static func build(state: WorkoutState, stats: SessionStats, players: Array[Playe
 				continue
 			var iv: Array = r.intervals[i]
 			var pct := snappedf(r.interval_fraction(i) * 100.0, 0.1)
-			intervals.append({
-				"i": i, "label": p.label, "kind": p.kind,
-				"tib_s": snappedf(float(iv[0]), 0.05), "ride_s": snappedf(float(iv[1]), 0.05), "tib_pct": pct,
-			})
+			(
+				intervals
+				. append(
+					{
+						"i": i,
+						"label": p.label,
+						"kind": p.kind,
+						"tib_s": snappedf(float(iv[0]), 0.05),
+						"ride_s": snappedf(float(iv[1]), 0.05),
+						"tib_pct": pct,
+					}
+				)
+			)
 			interval_text.append(str(int(round(pct))))
 		var sprints: Array = []
 		var peaks: Array[String] = []

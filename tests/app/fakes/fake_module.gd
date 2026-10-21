@@ -7,8 +7,11 @@ var snap: Dictionary = {"tick": 7}
 
 
 func session_preview(content_id: String) -> Dictionary:
-	return {"title": "%s %s" % [preview_title, content_id], "total_s": preview_total_s,
-		"lines": ["line for " + content_id]}
+	return {
+		"title": "%s %s" % [preview_title, content_id],
+		"total_s": preview_total_s,
+		"lines": ["line for " + content_id]
+	}
 
 
 func snapshot() -> Dictionary:

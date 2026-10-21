@@ -22,10 +22,17 @@ func test_import_lists_clamps_and_skips_unknown_tags() -> void:
 	var clamps: Array = r["clamps"]
 	assert_gt(clamps.size(), 0, "the clamps are listed for the preview")
 	var text := "\n".join(PackedStringArray(clamps))
-	assert_true(text.contains("105") or text.contains("1.05"), "the 110 %% block is capped at 105 %%:\n%s" % text)
+	assert_true(
+		text.contains("105") or text.contains("1.05"),
+		"the 110 %% block is capped at 105 %%:\n%s" % text
+	)
 	for c: Variant in clamps:
 		assert_true(str(c).strip_edges() != "", "each clamp names its block and reason")
-	assert_string_contains("\n".join(PackedStringArray(r["warnings"])), "MaxEffort", "the unsupported tag is skipped with a warning")
+	assert_string_contains(
+		"\n".join(PackedStringArray(r["warnings"])),
+		"MaxEffort",
+		"the unsupported tag is skipped with a warning"
+	)
 	var blocks: Array = r["blocks"]
 	assert_gte(blocks.size(), 6, "the raw blocks are kept for the preview")
 
@@ -48,9 +55,17 @@ func test_imported_plan_respects_the_safety_limits() -> void:
 		elif ph.mode == Wl.ERG:
 			assert_lte(ph.peak_pct(), 150.0 + S.EPS, "%s within 150 %%" % ph.label)
 			if ph.worst_case_length_s() > 300.0:
-				assert_lte(ph.peak_pct(), 105.0 + S.EPS, "%s (%.0f s) capped at 105 %%" % [ph.label, ph.worst_case_length_s()])
+				assert_lte(
+					ph.peak_pct(),
+					105.0 + S.EPS,
+					"%s (%.0f s) capped at 105 %%" % [ph.label, ph.worst_case_length_s()]
+				)
 			if t < S.WARMUP_S:
-				assert_lte(ph.peak_pct(), S.WARMUP_ERG_MAX_PCT + S.EPS, "%s starts inside the first 300 s, so <= 65 %%" % ph.label)
+				assert_lte(
+					ph.peak_pct(),
+					S.WARMUP_ERG_MAX_PCT + S.EPS,
+					"%s starts inside the first 300 s, so <= 65 %%" % ph.label
+				)
 		t += ph.best_case_length_s()
 	assert_true(has_sim, "FreeRide becomes a SIM phase")
 	var plan := EffortPlan.of(phases)
@@ -75,7 +90,19 @@ func test_imported_plan_plays_inside_its_clamps() -> void:
 	var device := MockTrainer.from_spec("erg", S.FTP, {"seed": 3})
 	var rider := LocalRider.new()
 	add_child_autofree(rider)
-	rider.setup(1, profile, slot, device, {"multiplayer": false, "record": false, "game_id": S.WORKOUT, "content_id": "qa_sample", "seed": 3})
+	rider.setup(
+		1,
+		profile,
+		slot,
+		device,
+		{
+			"multiplayer": false,
+			"record": false,
+			"game_id": S.WORKOUT,
+			"content_id": "qa_sample",
+			"seed": 3
+		}
+	)
 	if device.get_parent() == null:
 		add_child_autofree(device)
 	rider.set_plan(fin)
@@ -94,9 +121,16 @@ func test_imported_plan_plays_inside_its_clamps() -> void:
 			var applied := float(st.get("applied_pct", 0.0))
 			var planned := ph.planned_pct_at(k * Wl.SIM_DT) if ph.mode == Wl.ERG else 0.0
 			if ph.mode == Wl.ERG and applied > maxf(planned, ph.peak_pct()) + 0.5:
-				problems.append("t=%.1f %s: applied %.1f %% above the clamped plan's %.1f %%" % [t, ph.label, applied, planned])
+				problems.append(
+					(
+						"t=%.1f %s: applied %.1f %% above the clamped plan's %.1f %%"
+						% [t, ph.label, applied, planned]
+					)
+				)
 			if ph.worst_case_length_s() > 300.0 and applied > 105.0 + S.EPS:
-				problems.append("t=%.1f %s: applied %.1f %% above the long-phase cap" % [t, ph.label, applied])
+				problems.append(
+					"t=%.1f %s: applied %.1f %% above the long-phase cap" % [t, ph.label, applied]
+				)
 			problems.append_array(S.warmup_problems(st, t))
 	assert_eq(problems, [] as Array[String], first(problems))
 	assert_false(rider.governor.is_rescue(), "a compliant rider ends the import without rescue")
@@ -109,7 +143,9 @@ func test_imported_plan_plays_inside_its_clamps() -> void:
 ## session preview, when it has one, shows each).
 func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 	var sessions := S.zwo_sessions()
-	assert_gt(sessions.size(), 0, "Workout lists a .zwo session in game.json (BRIEF 3.7 Workout Director)")
+	assert_gt(
+		sessions.size(), 0, "Workout lists a .zwo session in game.json (BRIEF 3.7 Workout Director)"
+	)
 	if sessions.is_empty():
 		return
 	var content := str(sessions[0]["content"])
@@ -128,9 +164,14 @@ func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 		return
 	var game: GameModule = runner.host.game
 	if game != null and game.has_method("session_preview"):
-		assert_true(S.ensure_game_strings(self, "WORKOUT_PREVIEW_CLAMP"), "Workout's strings are registered")
+		assert_true(
+			S.ensure_game_strings(self, "WORKOUT_PREVIEW_CLAMP"), "Workout's strings are registered"
+		)
 		var preview: Variant = game.call("session_preview", content)
-		assert_true(preview is Dictionary and not (preview as Dictionary).is_empty(), "Workout's session preview of %s" % content)
+		assert_true(
+			preview is Dictionary and not (preview as Dictionary).is_empty(),
+			"Workout's session preview of %s" % content
+		)
 		var text := JSON.stringify(preview)
 		for c: Variant in clamps:
 			assert_string_contains(text, str(c), "the preview shows the clamp")
@@ -159,7 +200,15 @@ func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 	assert_eq(runner.run_to_end(), "complete", "%s ends after its cool-down" % content)
 	var report := S.read_json(runner.write_report())
 	var row := S.result_row(report, peer)
-	assert_gte(float(row.get("time_in_band_pct", 0.0)), 90.0, "%s: a compliant rider stays in band" % content)
+	assert_gte(
+		float(row.get("time_in_band_pct", 0.0)),
+		90.0,
+		"%s: a compliant rider stays in band" % content
+	)
 	for f in S.fit_paths(report):
-		var fit := S.fit_problems(f, rider.recorder.summary() if rider.recorder != null else {}, S.expected_laps(report, peer))
+		var fit := S.fit_problems(
+			f,
+			rider.recorder.summary() if rider.recorder != null else {},
+			S.expected_laps(report, peer)
+		)
 		assert_eq(fit, [] as Array[String], "%s: FIT\n%s" % [content, first(fit)])

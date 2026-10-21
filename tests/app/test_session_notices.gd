@@ -18,9 +18,22 @@ func _client_session() -> AppSessionScreen:
 	var b := PlayerSlot.new()
 	b.peer_id = 2
 	b.apply_look(1)
-	var start := {"type": "session_start", "v": 1, "game_id": "workout", "game_version": "1.0.0", "content_id": "e2e",
-		"seed": 1, "players": [a.to_dict(), b.to_dict()], "options": {}, "scaling": Wl.FAIR_FTP, "start_tick": 0}
-	return open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start}) as AppSessionScreen
+	var start := {
+		"type": "session_start",
+		"v": 1,
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "e2e",
+		"seed": 1,
+		"players": [a.to_dict(), b.to_dict()],
+		"options": {},
+		"scaling": Wl.FAIR_FTP,
+		"start_tick": 0
+	}
+	return (
+		open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start})
+		as AppSessionScreen
+	)
 
 
 func test_client_shows_the_host_dropped_notice_until_the_host_is_back() -> void:
@@ -63,12 +76,18 @@ func test_the_notice_draws_above_the_hud() -> void:
 
 func test_a_solo_session_never_shows_the_host_notice() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}
+		)
+		as AppSessionScreen
+	)
 	fx.net.peer_left.emit(1, "dropped")
 	assert_false(s.net_notice.visible)
 
 
 # --- ERG hint (ZIH-6) ----------------------------------------------------------------------------
+
 
 func _hint(m: PedalScanList) -> String:
 	var h := m.find_child("Hint", true, false) as Label
@@ -79,18 +98,33 @@ func test_ride_menu_in_erg_says_keep_pedaling_and_ignores_coast() -> void:
 	fx.give_profile()
 	var rider := fx.fake_trainer().rider as FakeRider
 	rider.tm.mode = Wl.ERG
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}
+		)
+		as AppSessionScreen
+	)
 	s.open_menu()
 	s.tick(0.05)
 	var m := s.active_menu()
 	assert_not_null(m)
-	assert_eq(_hint(m), TranslationServer.translate("UI_SCAN_HINT_ERG"), "in ERG the hint says keep pedaling")
+	assert_eq(
+		_hint(m),
+		TranslationServer.translate("UI_SCAN_HINT_ERG"),
+		"in ERG the hint says keep pedaling"
+	)
 	assert_false(m.erg_auto_confirm, "the ride menu never auto-picks")
 	s.feed_gesture(Wl.G_COAST)
-	assert_true(s.overlay.visible, "a coast in ERG doesn't close the menu (coast never means back in ERG)")
+	assert_true(
+		s.overlay.visible, "a coast in ERG doesn't close the menu (coast never means back in ERG)"
+	)
 	rider.tm.mode = Wl.SIM
 	s.tick(0.05)
-	assert_eq(_hint(m), TranslationServer.translate("UI_SCAN_HINT"), "out of ERG: stop pedaling to go back")
+	assert_eq(
+		_hint(m),
+		TranslationServer.translate("UI_SCAN_HINT"),
+		"out of ERG: stop pedaling to go back"
+	)
 	s.feed_gesture(Wl.G_COAST)
 	assert_false(s.overlay.visible, "and a coast backs out again")
 
@@ -100,4 +134,6 @@ func test_menus_follow_the_attached_riders_mode() -> void:
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	assert_eq(s.local_trainer_mode(), fx.input.local_mode())
 	s.tick(0.05)
-	assert_eq(_hint(s.active_menu()), TranslationServer.translate("UI_SCAN_HINT"), "menus ride SIM flat")
+	assert_eq(
+		_hint(s.active_menu()), TranslationServer.translate("UI_SCAN_HINT"), "menus ride SIM flat"
+	)

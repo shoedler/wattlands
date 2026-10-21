@@ -56,7 +56,9 @@ func _on_sample(_s: TrainerSample) -> void:
 func test_mock_samples_and_control_responses_arrive_while_paused() -> void:
 	var mock := MockTrainer.from_spec("erg", 200.0, {"seed": 1})
 	mock.sample_received.connect(_on_sample)
-	mock.control_response.connect(func(op: int, res: int) -> void: _mock_responses.append(Vector2i(op, res)))
+	mock.control_response.connect(
+		func(op: int, res: int) -> void: _mock_responses.append(Vector2i(op, res))
+	)
 	var driver := Driver.new()
 	driver.device = mock
 	add_child_autofree(driver)
@@ -65,7 +67,9 @@ func test_mock_samples_and_control_responses_arrive_while_paused() -> void:
 	var fake: FakeKickr = FakeKickr.new()
 	var client: FtmsClient = UnlockedClient.new()
 	client.attach(fake)
-	client.control_response.connect(func(op: int, res: int) -> void: _client_responses.append(Vector2i(op, res)))
+	client.control_response.connect(
+		func(op: int, res: int) -> void: _client_responses.append(Vector2i(op, res))
+	)
 	client.begin()
 	for i in 40:
 		fake.flush()
@@ -90,9 +94,14 @@ func test_mock_samples_and_control_responses_arrive_while_paused() -> void:
 	assert_eq(pausable.frames, frames_before, "the tree really is paused")
 	assert_gt(driver.ticks, FRAMES - 2, "the PROCESS_MODE_ALWAYS driver kept ticking")
 	assert_gt(_samples, samples_before + 3, "mock samples kept arriving")
-	assert_eq(_mock_responses, [Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS)] as Array[Vector2i])
+	assert_eq(
+		_mock_responses,
+		[Vector2i(MockTrainer.OP_SET_TARGET_POWER, MockTrainer.RESULT_SUCCESS)] as Array[Vector2i]
+	)
 	assert_eq(_client_responses.size(), responses_before + 1, "the control-point response arrived")
-	assert_eq(_client_responses.back(), Vector2i(FtmsCodec.OP_SET_TARGET_POWER, FtmsCodec.RESULT_SUCCESS))
+	assert_eq(
+		_client_responses.back(), Vector2i(FtmsCodec.OP_SET_TARGET_POWER, FtmsCodec.RESULT_SUCCESS)
+	)
 	assert_eq(fake.writes_with_op(FtmsCodec.OP_SET_TARGET_POWER), 1)
 	get_tree().paused = false
 
@@ -105,7 +114,9 @@ func test_connection_flow_completes_while_paused() -> void:
 	fake.deliver_in_process = true
 	var client: FtmsClient = UnlockedClient.new()
 	client.attach(fake)
-	client.control_response.connect(func(op: int, res: int) -> void: _client_responses.append(Vector2i(op, res)))
+	client.control_response.connect(
+		func(op: int, res: int) -> void: _client_responses.append(Vector2i(op, res))
+	)
 	add_child_autofree(fake)
 	add_child_autofree(client)
 	var pausable := Pausable.new()
@@ -121,10 +132,16 @@ func test_connection_flow_completes_while_paused() -> void:
 	assert_true(get_tree().paused)
 	assert_eq(pausable.frames, frames_before, "the tree really is paused")
 	assert_true(client.is_ready(), "the flow finished while paused (state %s)" % client.state())
-	assert_eq(_client_responses, [
-		Vector2i(FtmsCodec.OP_REQUEST_CONTROL, FtmsCodec.RESULT_SUCCESS),
-		Vector2i(FtmsCodec.OP_SET_SIMULATION, FtmsCodec.RESULT_SUCCESS),
-	] as Array[Vector2i])
+	assert_eq(
+		_client_responses,
+		(
+			[
+				Vector2i(FtmsCodec.OP_REQUEST_CONTROL, FtmsCodec.RESULT_SUCCESS),
+				Vector2i(FtmsCodec.OP_SET_SIMULATION, FtmsCodec.RESULT_SUCCESS),
+			]
+			as Array[Vector2i]
+		)
+	)
 	get_tree().paused = false
 
 

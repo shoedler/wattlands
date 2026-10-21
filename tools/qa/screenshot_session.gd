@@ -47,7 +47,9 @@ var _peer_bus: WlEventBus = null
 var _registry: WlGameRegistry = null
 
 
-static func create(p_tree: SceneTree, p_main: Node, p_app: WlApp, p_opts: Dictionary) -> QaScreenshotSession:
+static func create(
+	p_tree: SceneTree, p_main: Node, p_app: WlApp, p_opts: Dictionary
+) -> QaScreenshotSession:
 	var s := QaScreenshotSession.new()
 	s.tree = p_tree
 	s.main = p_main
@@ -79,7 +81,10 @@ func start() -> AppSessionScreen:
 	var ok := false
 	match role:
 		"solo":
-			app.goto("session", {"role": Wl.SOLO, "game_id": game_id, "content_id": content_id, "quick": true})
+			app.goto(
+				"session",
+				{"role": Wl.SOLO, "game_id": game_id, "content_id": content_id, "quick": true}
+			)
 			ok = true
 		"client":
 			ok = await _start_as_client()
@@ -89,7 +94,9 @@ func start() -> AppSessionScreen:
 			error = "--app-role must be client, host or solo"
 	if not ok:
 		return null
-	if not await _wait(func() -> bool: return _session() != null and _session().host != null, WAIT_START_MS):
+	if not await _wait(
+		func() -> bool: return _session() != null and _session().host != null, WAIT_START_MS
+	):
 		error = "the app never opened its session screen (%s)" % role
 		return null
 	return _session()
@@ -106,7 +113,12 @@ func session_seconds() -> float:
 ## Wait (rendering frames) until the app's session reached `at` platform seconds.
 func advance_to(at: float) -> bool:
 	var limit_ms := int((at / sim_speed + 60.0) * 1000.0)
-	return await _wait(func() -> bool: return session_seconds() + 1e-6 >= at or _session() == null, limit_ms) and _session() != null
+	return (
+		await _wait(
+			func() -> bool: return session_seconds() + 1e-6 >= at or _session() == null, limit_ms
+		)
+		and _session() != null
+	)
 
 
 ## One line for the run log: the panic button, the HUD's reserved corner and its stack.
@@ -119,8 +131,19 @@ func describe(screen: AppSessionScreen) -> String:
 	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
 	var box_rect := box.get_global_rect() if box != null and box.visible else Rect2()
 	var overlap := box_rect.has_area() and box_rect.intersects(pb)
-	return "screenshot: session %s at %.1f s: panic button %s, reserved bottom-right %s, bottom-right stack %s, overlap %s, top layer %d above HUD layer %d" % [
-		role, session_seconds(), _rect_text(pb), reserved, _rect_text(box_rect), overlap, screen.top_layer.layer, hud.layer]
+	return (
+		"screenshot: session %s at %.1f s: panic button %s, reserved bottom-right %s, bottom-right stack %s, overlap %s, top layer %d above HUD layer %d"
+		% [
+			role,
+			session_seconds(),
+			_rect_text(pb),
+			reserved,
+			_rect_text(box_rect),
+			overlap,
+			screen.top_layer.layer,
+			hud.layer
+		]
+	)
 
 
 func cleanup() -> void:
@@ -131,6 +154,7 @@ func cleanup() -> void:
 
 
 # --- the app as a client of an in-process host ------------------------------------------------
+
 
 func _start_as_client() -> bool:
 	var app_net := tree.root.get_node_or_null(^"NetSession") as WlNetSession
@@ -143,7 +167,9 @@ func _start_as_client() -> bool:
 	var m := _registry.manifest(game_id)
 	_peer_net.set_local_player_info(_peer_info())
 	_peer_net.host_room(AppLobbyModel.max_players(m))
-	if not await _wait(func() -> bool: return _peer_net.room_code != "" and _peer_net.local_peer != 0, WAIT_NET_MS):
+	if not await _wait(
+		func() -> bool: return _peer_net.room_code != "" and _peer_net.local_peer != 0, WAIT_NET_MS
+	):
 		error = "the in-process host never opened a room"
 		return false
 	_peer_net.set_game(game_id, str(m.get("version", "")), content_id)
@@ -156,13 +182,19 @@ func _start_as_client() -> bool:
 		error = "the app did not open its lobby"
 		return false
 	lobby.join_code(_peer_net.room_code)
-	if not await _wait(func() -> bool: return lobby.page == AppLobbyScreen.PAGE_LOBBY and lobby.current_game() == game_id, WAIT_NET_MS):
+	if not await _wait(
+		func() -> bool:
+			return lobby.page == AppLobbyScreen.PAGE_LOBBY and lobby.current_game() == game_id,
+		WAIT_NET_MS
+	):
 		error = "the app never joined room %s" % _peer_net.room_code
 		return false
 	# A rider readies with pedal_start (the mock pedals in the menus); feed it so the run
 	# doesn't depend on the menu rider's timing.
 	lobby.feed_gesture(Wl.G_PEDAL_START)
-	if not await _wait(func() -> bool: return _peer_net.peers().size() == 2 and _peer_net.all_ready(), WAIT_NET_MS):
+	if not await _wait(
+		func() -> bool: return _peer_net.peers().size() == 2 and _peer_net.all_ready(), WAIT_NET_MS
+	):
 		error = "the app never readied in the host's lobby"
 		return false
 	_peer_net.mark_started()
@@ -176,14 +208,31 @@ func _start_as_client() -> bool:
 	_peer_host.name = "PeerHost"
 	_peer_host.process_mode = Node.PROCESS_MODE_ALWAYS
 	_holder.add_child(_peer_host)
-	var err := _peer_host.setup({
-		"game_id": game_id, "content_id": content_id, "seed": CmdLine.get_int("seed", 7), "role": Wl.HOST,
-		"players": players, "local_riders": {_peer_net.local_peer: _peer_rider}, "local_peer": _peer_net.local_peer,
-		"net": _peer_net, "bus": _peer_bus, "registry": _registry,
-		"options": AppLobbyModel.resolve_game_options(_registry, game_id, {}), "scaling_mode": Wl.FAIR_FTP,
-		"sim_speed": sim_speed, "headless": true, "realtime": true, "record_rides": false, "report": false,
-		"input_router": null,
-	})
+	var err := (
+		_peer_host
+		. setup(
+			{
+				"game_id": game_id,
+				"content_id": content_id,
+				"seed": CmdLine.get_int("seed", 7),
+				"role": Wl.HOST,
+				"players": players,
+				"local_riders": {_peer_net.local_peer: _peer_rider},
+				"local_peer": _peer_net.local_peer,
+				"net": _peer_net,
+				"bus": _peer_bus,
+				"registry": _registry,
+				"options": AppLobbyModel.resolve_game_options(_registry, game_id, {}),
+				"scaling_mode": Wl.FAIR_FTP,
+				"sim_speed": sim_speed,
+				"headless": true,
+				"realtime": true,
+				"record_rides": false,
+				"report": false,
+				"input_router": null,
+			}
+		)
+	)
 	if err != "":
 		error = "the in-process host failed to set up: %s" % err
 		return false
@@ -192,6 +241,7 @@ func _start_as_client() -> bool:
 
 
 # --- the app as the host of an in-process client ------------------------------------------------
+
 
 func _start_as_host() -> bool:
 	var app_net := tree.root.get_node_or_null(^"NetSession") as WlNetSession
@@ -213,7 +263,11 @@ func _start_as_host() -> bool:
 	_peer_net.set_local_player_info(_peer_info())
 	_peer_net.game_message.connect(_on_peer_message)
 	_peer_net.join_room(app_net.room_code)
-	if not await _wait(func() -> bool: return _peer_net.local_peer != 0 and str(_peer_net.lobby.get("game_id", "")) == game_id, WAIT_NET_MS):
+	if not await _wait(
+		func() -> bool:
+			return _peer_net.local_peer != 0 and str(_peer_net.lobby.get("game_id", "")) == game_id,
+		WAIT_NET_MS
+	):
 		error = "the in-process client never joined room %s" % app_net.room_code
 		return false
 	_peer_net.set_local_player_info(_peer_info())
@@ -241,12 +295,26 @@ func _on_peer_message(from: int, data: Dictionary) -> void:
 	_peer_host.name = "PeerClient"
 	_peer_host.process_mode = Node.PROCESS_MODE_ALWAYS
 	_holder.add_child(_peer_host)
-	var err := _peer_host.setup({
-		"role": Wl.CLIENT, "local_peer": _peer_net.local_peer, "local_riders": {_peer_net.local_peer: _peer_rider},
-		"net": _peer_net, "bus": _peer_bus, "registry": _registry, "sim_speed": sim_speed,
-		"headless": true, "realtime": true, "record_rides": false, "report": false, "input_router": null,
-		"session_start": data.duplicate(true),
-	})
+	var err := (
+		_peer_host
+		. setup(
+			{
+				"role": Wl.CLIENT,
+				"local_peer": _peer_net.local_peer,
+				"local_riders": {_peer_net.local_peer: _peer_rider},
+				"net": _peer_net,
+				"bus": _peer_bus,
+				"registry": _registry,
+				"sim_speed": sim_speed,
+				"headless": true,
+				"realtime": true,
+				"record_rides": false,
+				"report": false,
+				"input_router": null,
+				"session_start": data.duplicate(true),
+			}
+		)
+	)
 	if err != "":
 		push_warning("screenshot: the in-process client failed to set up: %s" % err)
 		return
@@ -256,6 +324,7 @@ func _on_peer_message(from: int, data: Dictionary) -> void:
 
 
 # --- helpers ----------------------------------------------------------------------------------
+
 
 func _new_peer_net() -> WlNetSession:
 	var n := WlNetSession.new()
@@ -280,20 +349,41 @@ func _peer_profile() -> RiderProfile:
 
 
 func _peer_info() -> Dictionary:
-	return AppLobbyModel.player_info(_peer_profile(), Wl.FAIR_FTP, AppLobbyModel.resolve_player_options(_registry, game_id, {}),
-		AppLobbyModel.installed_games(_registry), TrainerDevice.STATUS_READY)
+	return AppLobbyModel.player_info(
+		_peer_profile(),
+		Wl.FAIR_FTP,
+		AppLobbyModel.resolve_player_options(_registry, game_id, {}),
+		AppLobbyModel.installed_games(_registry),
+		TrainerDevice.STATUS_READY
+	)
 
 
 func _make_peer_rider(slot: PlayerSlot) -> void:
-	_peer_device = MockTrainer.from_spec(str(opts.get("mock_trainer", QaScreenshotOptions.DEFAULT_MOCK)), slot.ftp, {"seed": 11})
+	_peer_device = MockTrainer.from_spec(
+		str(opts.get("mock_trainer", QaScreenshotOptions.DEFAULT_MOCK)), slot.ftp, {"seed": 11}
+	)
 	_peer_rider = LocalRider.new()
 	_peer_rider.name = "PeerRider"
 	_holder.add_child(_peer_rider)
 	_peer_rider.add_child(_peer_device)
-	_peer_rider.setup(slot.peer_id, _peer_profile(), slot, _peer_device, {
-		"multiplayer": true, "scaling_mode": Wl.FAIR_FTP, "record": false, "game_id": game_id,
-		"content_id": content_id, "seed": 11, "bus": _peer_bus,
-	})
+	(
+		_peer_rider
+		. setup(
+			slot.peer_id,
+			_peer_profile(),
+			slot,
+			_peer_device,
+			{
+				"multiplayer": true,
+				"scaling_mode": Wl.FAIR_FTP,
+				"record": false,
+				"game_id": game_id,
+				"content_id": content_id,
+				"seed": 11,
+				"bus": _peer_bus,
+			}
+		)
+	)
 
 
 static func _slot_of(players: Array[PlayerSlot], peer: int) -> PlayerSlot:
@@ -322,4 +412,7 @@ func _wait(done: Callable, limit_ms: int) -> bool:
 
 
 static func _rect_text(r: Rect2) -> String:
-	return "(%d, %d %dx%d)" % [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
+	return (
+		"(%d, %d %dx%d)"
+		% [roundi(r.position.x), roundi(r.position.y), roundi(r.size.x), roundi(r.size.y)]
+	)

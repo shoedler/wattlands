@@ -10,18 +10,34 @@ const DEVICE := "BleDevice"
 
 ## BRIEF 4.2 (the 0.5.x surface) with argument counts.
 const MANAGER_METHODS := {
-	"initialize": 0, "start_scan": 1, "stop_scan": 0, "connect_device": 1, "get_device": 1,
+	"initialize": 0,
+	"start_scan": 1,
+	"stop_scan": 0,
+	"connect_device": 1,
+	"get_device": 1,
 }
 const MANAGER_SIGNALS := {
-	"adapter_initialized": 2, "device_discovered": 1, "device_connected": 1, "device_disconnected": 1,
+	"adapter_initialized": 2,
+	"device_discovered": 1,
+	"device_connected": 1,
+	"device_disconnected": 1,
 }
 const DEVICE_METHODS := {
-	"connect_async": 0, "discover_services": 0, "read_characteristic": 2,
-	"write_characteristic": 4, "subscribe_characteristic": 2, "disconnect": 0,
+	"connect_async": 0,
+	"discover_services": 0,
+	"read_characteristic": 2,
+	"write_characteristic": 4,
+	"subscribe_characteristic": 2,
+	"disconnect": 0,
 }
 const DEVICE_SIGNALS := {
-	"connected": 0, "disconnected": 0, "connection_failed": 1, "services_discovered": 1,
-	"characteristic_read": 2, "characteristic_written": 1, "characteristic_notified": 2,
+	"connected": 0,
+	"disconnected": 0,
+	"connection_failed": 1,
+	"services_discovered": 1,
+	"characteristic_read": 2,
+	"characteristic_written": 1,
+	"characteristic_notified": 2,
 	"operation_failed": 2,
 }
 ## 0.6 extras GdbleTransport connects or calls when present (docs/deps.d/gdble.md).
@@ -53,13 +69,17 @@ static func _signal_args(cls: String, sig: String) -> int:
 func _check_methods(cls: String, expected: Dictionary) -> void:
 	for method: String in expected:
 		assert_true(ClassDB.class_has_method(cls, method, true), "%s.%s exists" % [cls, method])
-		assert_eq(_method_args(cls, method), int(expected[method]), "%s.%s argument count" % [cls, method])
+		assert_eq(
+			_method_args(cls, method), int(expected[method]), "%s.%s argument count" % [cls, method]
+		)
 
 
 func _check_signals(cls: String, expected: Dictionary) -> void:
 	for sig: String in expected:
 		assert_true(ClassDB.class_has_signal(cls, sig), "%s signal %s exists" % [cls, sig])
-		assert_eq(_signal_args(cls, sig), int(expected[sig]), "%s signal %s argument count" % [cls, sig])
+		assert_eq(
+			_signal_args(cls, sig), int(expected[sig]), "%s signal %s argument count" % [cls, sig]
+		)
 
 
 func test_manager_surface() -> void:
@@ -68,7 +88,9 @@ func test_manager_surface() -> void:
 		return
 	_check_methods(MANAGER, MANAGER_METHODS)
 	_check_signals(MANAGER, MANAGER_SIGNALS)
-	assert_true(ClassDB.is_parent_class(MANAGER, "Node"), "BluetoothManager is a Node (held as Node)")
+	assert_true(
+		ClassDB.is_parent_class(MANAGER, "Node"), "BluetoothManager is a Node (held as Node)"
+	)
 	assert_true(ClassDB.can_instantiate(MANAGER))
 
 
@@ -78,7 +100,10 @@ func test_device_surface() -> void:
 		return
 	_check_methods(DEVICE, DEVICE_METHODS)
 	_check_signals(DEVICE, DEVICE_SIGNALS)
-	assert_true(ClassDB.is_parent_class(DEVICE, "RefCounted"), "BleDevice is RefCounted (held as RefCounted)")
+	assert_true(
+		ClassDB.is_parent_class(DEVICE, "RefCounted"),
+		"BleDevice is RefCounted (held as RefCounted)"
+	)
 
 
 func test_extras_the_transport_uses() -> void:
@@ -102,8 +127,12 @@ func test_fakes_match_the_loaded_surface() -> void:
 	_compare_fake(fake_mgr, MANAGER, mgr_methods, mgr_signals)
 	var dev_signals: Array = DEVICE_SIGNALS.keys() + ["ble_event"]
 	_compare_fake(fake_dev, DEVICE, DEVICE_METHODS.keys(), dev_signals)
-	assert_eq(fake_mgr.get_instance_base_type(), &"Node", "fake manager is a Node like BluetoothManager")
-	assert_eq(fake_dev.get_instance_base_type(), &"RefCounted", "fake device is RefCounted like BleDevice")
+	assert_eq(
+		fake_mgr.get_instance_base_type(), &"Node", "fake manager is a Node like BluetoothManager"
+	)
+	assert_eq(
+		fake_dev.get_instance_base_type(), &"RefCounted", "fake device is RefCounted like BleDevice"
+	)
 
 
 func _compare_fake(fake: Script, cls: String, methods: Array, signals: Array) -> void:
@@ -116,14 +145,23 @@ func _compare_fake(fake: Script, cls: String, methods: Array, signals: Array) ->
 		var real := _method_args(cls, method)
 		var max_args := (info["args"] as Array).size()
 		var min_args := max_args - (info["default_args"] as Array).size()
-		assert_true(real >= min_args and real <= max_args,
-				"%s fake %s() takes %d..%d arguments; GDBLE takes %d" % [cls, method, min_args, max_args, real])
+		assert_true(
+			real >= min_args and real <= max_args,
+			(
+				"%s fake %s() takes %d..%d arguments; GDBLE takes %d"
+				% [cls, method, min_args, max_args, real]
+			)
+		)
 	for s: Variant in signals:
 		var sig := String(s)
 		var info := _script_entry(fake.get_script_signal_list(), sig)
 		assert_false(info.is_empty(), "%s fake has signal %s" % [cls, sig])
 		if not info.is_empty():
-			assert_eq((info["args"] as Array).size(), _signal_args(cls, sig), "%s fake signal %s argument count" % [cls, sig])
+			assert_eq(
+				(info["args"] as Array).size(),
+				_signal_args(cls, sig),
+				"%s fake signal %s argument count" % [cls, sig]
+			)
 
 
 static func _script_entry(list: Array[Dictionary], entry_name: String) -> Dictionary:
@@ -143,9 +181,16 @@ func test_no_static_gdble_types_in_the_transport() -> void:
 	var src := _code_only(FileAccess.get_file_as_string(TRANSPORT))
 	assert_false(src.is_empty(), "transport source readable")
 	var re := RegEx.new()
-	re.compile("(:\\s*|->\\s*|\\bas\\s+|\\bis\\s+|\\bextends\\s+)(BluetoothManager|BleDevice)\\b|\\b(BluetoothManager|BleDevice)\\s*\\.")
+	(
+		re
+		. compile(
+			"(:\\s*|->\\s*|\\bas\\s+|\\bis\\s+|\\bextends\\s+)(BluetoothManager|BleDevice)\\b|\\b(BluetoothManager|BleDevice)\\s*\\."
+		)
+	)
 	var hit := re.search(src)
-	assert_null(hit, "GDBLE class used as a static type: %s" % (hit.get_string() if hit != null else ""))
+	assert_null(
+		hit, "GDBLE class used as a static type: %s" % (hit.get_string() if hit != null else "")
+	)
 
 
 func test_only_the_gdble_transport_names_gdble_classes() -> void:

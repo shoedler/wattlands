@@ -36,11 +36,11 @@ func test_tree_pause_keeps_trainer_io() -> void:
 	for i in 100:
 		runner.step()
 	var counts := {"samples": 0, "responses": 0}
-	mock.sample_received.connect(func(_s: TrainerSample) -> void:
-		counts["samples"] = int(counts["samples"]) + 1
+	mock.sample_received.connect(
+		func(_s: TrainerSample) -> void: counts["samples"] = int(counts["samples"]) + 1
 	)
-	mock.control_response.connect(func(_op: int, _result: int) -> void:
-		counts["responses"] = int(counts["responses"]) + 1
+	mock.control_response.connect(
+		func(_op: int, _result: int) -> void: counts["responses"] = int(counts["responses"]) + 1
 	)
 	var ordinary := Node.new()
 	ordinary.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -61,6 +61,10 @@ func test_tree_pause_keeps_trainer_io() -> void:
 	tree.paused = false
 	assert_eq(stopped, [] as Array[String], "system nodes run with PROCESS_MODE_ALWAYS")
 	assert_almost_eq(t1 - t0, 20.0, 0.051, "platform time kept running while the tree was paused")
-	assert_gte(int(counts["samples"]), 15, "about 1 Hz samples kept arriving (%d in 20 s)" % int(counts["samples"]))
+	assert_gte(
+		int(counts["samples"]),
+		15,
+		"about 1 Hz samples kept arriving (%d in 20 s)" % int(counts["samples"])
+	)
 	assert_gt(int(counts["responses"]), 0, "control-point responses kept arriving")
 	assert_false(runner.host.is_paused(), "a tree pause is not a game pause")

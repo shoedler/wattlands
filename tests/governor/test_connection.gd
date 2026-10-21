@@ -11,12 +11,16 @@ const WARM := {"skip_warmup": false}
 
 ## What LocalRider.setup() does on the same device: a fresh governor that adopts the old one's
 ## trainer connection, configured afterwards; the rig ticks the new governor from now on.
-func _next_governor(rig: Rig, params: Dictionary = {}, device: TrainerDevice = null) -> SafetyGovernor:
+func _next_governor(
+	rig: Rig, params: Dictionary = {}, device: TrainerDevice = null
+) -> SafetyGovernor:
 	var old := rig.gov
 	var dev := device if device != null else rig.device
 	var g := SafetyGovernor.new()
 	autofree(g)
-	g.warmup_changed.connect(func(v: bool) -> void: rig.events.append({"t": rig.t, "name": "warmup_changed", "value": v}))
+	g.warmup_changed.connect(
+		func(v: bool) -> void: rig.events.append({"t": rig.t, "name": "warmup_changed", "value": v})
+	)
 	g.setup(dev)
 	g.adopt_connection(old)
 	var p := BASE_PARAMS.duplicate()
@@ -85,9 +89,14 @@ func test_a_plan_before_its_first_phase_rides_sim_flat_and_entering_erg_is_a_swi
 	assert_eq(rec["reason"], Wl.REFUSE_SWITCH_SPACING)
 	assert_push_warning("switch_spacing")
 	rig.run(28.0)
-	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "29 s after: still refused")
+	assert_true(
+		rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "29 s after: still refused"
+	)
 	rig.run(1.0)
-	assert_false(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "30 s after the switch: accepted")
+	assert_false(
+		rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"],
+		"30 s after the switch: accepted"
+	)
 
 
 ## SAF-6: a fresh governor whose controller has written nothing knows no previous mode, so its
@@ -120,19 +129,34 @@ func test_switch_spacing_holds_across_the_hand_over() -> void:
 	g.set_plan(plan_with_cooldown([erg(Wl.WARMUP, 50.0, 300.0)]))
 	g.start_phase(0)
 	rig.run(1.0)
-	assert_eq((rig.device as ScriptedDevice).mode, Wl.ERG, "precondition: the session switched to ERG")
-	assert_almost_eq(float(rig.s()["last_switch_t"]), 0.0, 1e-6, "the SIM flat -> ERG switch at the new governor's t 0")
-	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "SIM -> ERG -> SIM within 1 s is refused")
+	assert_eq(
+		(rig.device as ScriptedDevice).mode, Wl.ERG, "precondition: the session switched to ERG"
+	)
+	assert_almost_eq(
+		float(rig.s()["last_switch_t"]),
+		0.0,
+		1e-6,
+		"the SIM flat -> ERG switch at the new governor's t 0"
+	)
+	assert_true(
+		rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"],
+		"SIM -> ERG -> SIM within 1 s is refused"
+	)
 	assert_push_warning("switch_spacing")
 	rig.run(39.0)
 	g.clear_plan()
 	assert_almost_eq(float(rig.s()["last_switch_t"]), 40.0, 1e-6, "ERG -> SIM flat at t 40")
 	var g2 := _next_governor(rig)
-	assert_almost_eq(float(rig.s()["last_switch_t"]), 0.0, 1e-6, "carried over, at the next governor's t 0")
+	assert_almost_eq(
+		float(rig.s()["last_switch_t"]), 0.0, 1e-6, "carried over, at the next governor's t 0"
+	)
 	g2.set_plan(plan_with_cooldown([erg(Wl.WORK, 70.0, 300.0)]))
 	g2.start_phase(0)
 	rig.run(1.0)
-	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "1 s after the carried switch: refused")
+	assert_true(
+		rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"],
+		"1 s after the carried switch: refused"
+	)
 	assert_push_warning("switch_spacing")
 
 
@@ -198,13 +222,19 @@ func test_warmup_begun_with_no_plan_continues_under_the_next_governor() -> void:
 	assert_almost_eq(float(rig.s()["warmup_remaining_s"]), 300.0 - (rig.t - first_pedal), 1e-6)
 	var g := _next_governor(rig, WARM)
 	assert_true(g.is_warmup_active())
-	assert_almost_eq(float(g.status()["warmup_remaining_s"]), 300.0 - (rig.t - first_pedal), 1e-6,
-		"the menus' warm-up carries into the session")
+	assert_almost_eq(
+		float(g.status()["warmup_remaining_s"]),
+		300.0 - (rig.t - first_pedal),
+		1e-6,
+		"the menus' warm-up carries into the session"
+	)
 	rig.start([erg(Wl.WORK, 80.0, 900.0)])
 	rig.run(10.0)
 	assert_eq(rig.applied_w(), 130, "the 65% cap still holds")
 	var ended := rig.run_until(func() -> bool: return not g.is_warmup_active(), 250.0)
-	assert_time(ended, first_pedal + 300.0, "ends 300 s after the first stroke after the connection")
+	assert_time(
+		ended, first_pedal + 300.0, "ends 300 s after the first stroke after the connection"
+	)
 	rig.run(5.0)
 	assert_eq(rig.applied_w(), 160)
 
@@ -246,7 +276,9 @@ func test_twenty_minutes_without_pedaling_resets_it_across_governors() -> void:
 	assert_false(g.is_warmup_active(), "not before 20 minutes")
 	rig.step()
 	assert_true(g.is_warmup_active(), "20 minutes without pedaling reset it")
-	assert_almost_eq(float(g.status()["warmup_remaining_s"]), 300.0, 1e-9, "pending until the next stroke")
+	assert_almost_eq(
+		float(g.status()["warmup_remaining_s"]), 300.0, 1e-9, "pending until the next stroke"
+	)
 
 
 func test_a_new_device_starts_a_new_warmup() -> void:
@@ -270,7 +302,12 @@ func test_a_reconnect_keeps_it() -> void:
 	var other: ScriptedDevice = follower()
 	autofree(other)
 	rig.gov.setup(other)
-	assert_almost_eq(float(rig.s()["warmup_remaining_s"]), before, 1e-9, "a rebind to a new object of the same trainer")
+	assert_almost_eq(
+		float(rig.s()["warmup_remaining_s"]),
+		before,
+		1e-9,
+		"a rebind to a new object of the same trainer"
+	)
 
 
 func test_adopt_does_nothing_with_null_itself_or_another_device() -> void:
@@ -324,7 +361,11 @@ func test_the_write_slot_holds_across_the_hand_over() -> void:
 	rig.run(2.0)
 	var later := dev.writes_of("erg", t_last + 1e-6)
 	assert_gt(later.size(), 0)
-	assert_gte(float(later[0]["t"]) - t_last, 0.5 - 1e-6, "no write within 0.5 s of the old governor's last one")
+	assert_gte(
+		float(later[0]["t"]) - t_last,
+		0.5 - 1e-6,
+		"no write within 0.5 s of the old governor's last one"
+	)
 	assert_lte(dev.max_writes_in_window(1.0), 2)
 
 
@@ -336,7 +377,12 @@ func test_a_shut_down_predecessor_leaves_the_mode_off() -> void:
 	var g := _next_governor(rig, WARM)
 	assert_eq(g.status()["mode"], Wl.OFF, "SIM flat then Stop went out")
 	assert_false(bool(g.status()["shut_down"]))
-	assert_almost_eq(float(g.status()["warmup_remaining_s"]), 300.0 - (rig.t - 1.0), 1e-6, "the warm-up still carries")
+	assert_almost_eq(
+		float(g.status()["warmup_remaining_s"]),
+		300.0 - (rig.t - 1.0),
+		1e-6,
+		"the warm-up still carries"
+	)
 
 
 # --- adopt_connection: duration limits (W4, SAF-2) ------------------------------------------------

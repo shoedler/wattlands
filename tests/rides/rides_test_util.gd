@@ -26,8 +26,16 @@ class LogCapture:
 		lines.append(message)
 		_mutex.unlock()
 
-	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
-			_editor_notify: bool, _error_type: int, _script_backtraces: Array) -> void:
+	func _log_error(
+		function: String,
+		file: String,
+		line: int,
+		code: String,
+		rationale: String,
+		_editor_notify: bool,
+		_error_type: int,
+		_script_backtraces: Array
+	) -> void:
 		_mutex.lock()
 		lines.append("%s %s %s:%d %s" % [code, rationale, file, line, function])
 		_mutex.unlock()

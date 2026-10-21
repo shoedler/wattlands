@@ -43,9 +43,15 @@ var _events: Array = []
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	services = [
-		{"uuid": BleTransport.expand_uuid("1826"), "characteristics": _chars(["2acc", "2ad2", "2ad3", "2ad6", "2ad8", "2ad9", "2ada"])},
+		{
+			"uuid": BleTransport.expand_uuid("1826"),
+			"characteristics": _chars(["2acc", "2ad2", "2ad3", "2ad6", "2ad8", "2ad9", "2ada"])
+		},
 		{"uuid": BleTransport.expand_uuid("1818"), "characteristics": _chars(["2a63", "2a65"])},
-		{"uuid": BleTransport.expand_uuid("180a"), "characteristics": _chars(["2a29", "2a24", "2a26"])},
+		{
+			"uuid": BleTransport.expand_uuid("180a"),
+			"characteristics": _chars(["2a29", "2a24", "2a26"])
+		},
 	]
 	read_values = {
 		"2acc": vector_bytes("feature_kickr_core"),
@@ -91,7 +97,9 @@ func read_characteristic(_service_uuid: String, char_uuid: String) -> void:
 	ops.append("read " + s)
 	if unreadable.has(s):
 		return
-	_queue("characteristic_read", [BleTransport.expand_uuid(s), read_values.get(s, PackedByteArray())])
+	_queue(
+		"characteristic_read", [BleTransport.expand_uuid(s), read_values.get(s, PackedByteArray())]
+	)
 
 
 func subscribe_characteristic(_service_uuid: String, char_uuid: String) -> void:
@@ -101,7 +109,9 @@ func subscribe_characteristic(_service_uuid: String, char_uuid: String) -> void:
 		subscribed.append(s)
 
 
-func write_characteristic(_service_uuid: String, char_uuid: String, data: PackedByteArray, _with_response: bool) -> void:
+func write_characteristic(
+	_service_uuid: String, char_uuid: String, data: PackedByteArray, _with_response: bool
+) -> void:
 	var s := short(char_uuid)
 	ops.append("write %s %s" % [s, FtmsCodec.to_hex(data)])
 	if s == FtmsCodec.CHAR_CONTROL_POINT:

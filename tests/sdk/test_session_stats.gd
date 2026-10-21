@@ -11,7 +11,15 @@ func before_each() -> void:
 	_s.add_rider(1, 200.0)
 
 
-func _ride(seconds: float, power: float, mode: String = Wl.ERG, target: float = 0.0, lo: float = 0.0, hi: float = 0.0, peer: int = 1) -> void:
+func _ride(
+	seconds: float,
+	power: float,
+	mode: String = Wl.ERG,
+	target: float = 0.0,
+	lo: float = 0.0,
+	hi: float = 0.0,
+	peer: int = 1
+) -> void:
 	for i in PhaseTracker.ticks(seconds):
 		_s.add_sample(peer, DT, power, mode, target, lo, hi)
 
@@ -23,7 +31,18 @@ func test_kj_average_and_ftp_pct() -> void:
 	assert_almost_eq(float(row["avg_power_w"]), 200.0, 1e-6)
 	assert_almost_eq(float(row["avg_ftp_pct"]), 100.0, 1e-6)
 	assert_almost_eq(float(row["ride_s"]), 100.0, 1e-6)
-	for k: String in ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s", "time_in_band_s", "time_in_band_pct"]:
+	for k: String in [
+		"kj",
+		"avg_power_w",
+		"avg_ftp_pct",
+		"np_w",
+		"best_1m_w",
+		"best_5m_w",
+		"best_20m_w",
+		"ride_s",
+		"time_in_band_s",
+		"time_in_band_pct"
+	]:
 		assert_true(row.has(k), k)
 
 
@@ -65,7 +84,12 @@ func test_time_in_band_erg_and_sim() -> void:
 	_ride(60, 250, Wl.SIM, 0, 0, 0)
 	var row := _s.base_row(1)
 	assert_almost_eq(float(row["time_in_band_s"]), 180.0, 1e-6)
-	assert_almost_eq(float(row["time_in_band_pct"]), 180.0 / 300.0 * 100.0, 1e-6, "SIM without a band is not counted")
+	assert_almost_eq(
+		float(row["time_in_band_pct"]),
+		180.0 / 300.0 * 100.0,
+		1e-6,
+		"SIM without a band is not counted"
+	)
 	assert_almost_eq(float(row["ride_s"]), 360.0, 1e-6)
 
 

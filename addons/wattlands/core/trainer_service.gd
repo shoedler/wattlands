@@ -184,16 +184,23 @@ func use_mock(spec: String) -> void:
 	if old != null:
 		_unlink_after_safe(old, _retire_manager.bind(old))
 	var p := _profile()
-	var m := MockTrainer.from_spec(s, p.ftp_w, {
-		"seed": CmdLine.get_int("seed", 0),
-		"preferred_cadence_rpm": p.preferred_cadence_rpm,
-		"cp_w": p.cp_w,
-		"wprime_j": p.wprime_j,
-		"weight_kg": p.weight_kg,
-		# BRIEF 4.2 keyboard control (W/S power, A/D cadence), only with the explicit flag:
-		# the keys are also the menus' up/down/left/right bindings (W2r2).
-		"keyboard": CmdLine.get_bool("mock-keyboard", false),
-	})
+	var m := (
+		MockTrainer
+		. from_spec(
+			s,
+			p.ftp_w,
+			{
+				"seed": CmdLine.get_int("seed", 0),
+				"preferred_cadence_rpm": p.preferred_cadence_rpm,
+				"cp_w": p.cp_w,
+				"wprime_j": p.wprime_j,
+				"weight_kg": p.weight_kg,
+				# BRIEF 4.2 keyboard control (W/S power, A/D cadence), only with the explicit flag:
+				# the keys are also the menus' up/down/left/right bindings (W2r2).
+				"keyboard": CmdLine.get_bool("mock-keyboard", false),
+			}
+		)
+	)
 	m.name = "MockTrainer"
 	_mock_spec = m.spec
 	_mock_key = _mock_params(p)
@@ -226,7 +233,9 @@ func connect_trainer(address: String) -> void:
 		push_warning("TrainerService: no Bluetooth connection manager (a mock trainer is in use)")
 		return
 	var current := m.linked_address()
-	var switching := current != "" and not GdbleTransport.same_address(current, address.strip_edges())
+	var switching := (
+		current != "" and not GdbleTransport.same_address(current, address.strip_edges())
+	)
 	if not switching or _device == null:
 		m.connect_to(address)
 		return
@@ -257,7 +266,12 @@ func effective_sim_speed() -> float:
 		return spd
 	if not _sim_speed_warned:
 		_sim_speed_warned = true
-		push_warning("TrainerService: --sim-speed=%s ignored with a real trainer; the trainer runs in real time" % str(spd))
+		push_warning(
+			(
+				"TrainerService: --sim-speed=%s ignored with a real trainer; the trainer runs in real time"
+				% str(spd)
+			)
+		)
 	return 1.0
 
 
@@ -405,7 +419,12 @@ func _advance_unlinks(dt: float) -> void:
 		var timed_out := float(e["left_s"]) <= 1e-6
 		if timed_out or _control_point_idle(e["manager"] as FtmsConnectionManager):
 			if timed_out:
-				push_warning("TrainerService: the trainer's safe commands did not all go out within %.1f s; dropping the link anyway" % SAFE_UNLINK_TIMEOUT_S)
+				push_warning(
+					(
+						"TrainerService: the trainer's safe commands did not all go out within %.1f s; dropping the link anyway"
+						% SAFE_UNLINK_TIMEOUT_S
+					)
+				)
 			due.append(e["action"] as Callable)
 		else:
 			keep.append(e)
@@ -575,10 +594,22 @@ func _on_trainer_ready(d: TrainerDevice) -> void:
 	if d == null:
 		return
 	if d != _device:
-		if _external_tick and _rider != null and is_instance_valid(_rider) and _device != null and not _owns_device:
+		if (
+			_external_tick
+			and _rider != null
+			and is_instance_valid(_rider)
+			and _device != null
+			and not _owns_device
+		):
 			# Mid-session reconnect with a new device object: keep the GameHost's rider.
-			push_warning("TrainerService: a new trainer object arrived during a session; rebinding the session rider")
-			if _device != null and is_instance_valid(_device) and _device.status_changed.is_connected(_on_device_status):
+			push_warning(
+				"TrainerService: a new trainer object arrived during a session; rebinding the session rider"
+			)
+			if (
+				_device != null
+				and is_instance_valid(_device)
+				and _device.status_changed.is_connected(_on_device_status)
+			):
 				_device.status_changed.disconnect(_on_device_status)
 			_device = d
 			d.process_mode = Node.PROCESS_MODE_ALWAYS

@@ -53,8 +53,14 @@ func _art() -> Dictionary:
 	return {
 		"palette": PALETTE,
 		"style": "pixel art",
-		"sprites": [
-			{"id": "boat", "prompt": "boat", "size": [80, 32], "parts": {"hull": [0, 16, 80, 16], "cabin": [20, 0, 40, 16]}},
+		"sprites":
+		[
+			{
+				"id": "boat",
+				"prompt": "boat",
+				"size": [80, 32],
+				"parts": {"hull": [0, 16, 80, 16], "cabin": [20, 0, 40, 16]}
+			},
 			{"id": "fish_tuna", "prompt": "tuna", "size": [44, 16], "anchor": "center"},
 			{"id": "bg_sky", "prompt": "sky", "size": [120, 40], "background": "opaque"},
 			{"id": "reef", "prompt": "reef", "size": [200, 10], "tile": true, "mirror": true},
@@ -62,10 +68,20 @@ func _art() -> Dictionary:
 	}
 
 
-func _entry(sprite: String, rid: String, selected: bool, status: String = "ok", background: String = "transparent") -> Dictionary:
+func _entry(
+	sprite: String,
+	rid: String,
+	selected: bool,
+	status: String = "ok",
+	background: String = "transparent"
+) -> Dictionary:
 	return {
-		"sprite": sprite, "request_id": rid, "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
-		"input": {"background": background}, "status": status, "selected": selected,
+		"sprite": sprite,
+		"request_id": rid,
+		"endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+		"input": {"background": background},
+		"status": status,
+		"selected": selected,
 		"cache": ".art_cache/%s/%s.png" % [GAME, rid],
 	}
 
@@ -82,7 +98,10 @@ func _make_root(art: Dictionary = _art(), with_raw: bool = true) -> String:
 		_entry("bg_sky", "r-sky", true, "ok", "opaque"),
 		_entry("reef", "r-reef", true),
 	]
-	_write_text(game_dir.path_join("art_manifest.json"), JSON.stringify({"version": 1, "game": GAME, "requests": reqs}, "  "))
+	_write_text(
+		game_dir.path_join("art_manifest.json"),
+		JSON.stringify({"version": 1, "game": GAME, "requests": reqs}, "  ")
+	)
 	if with_raw:
 		var cache: String = root.path_join(".art_cache").path_join(GAME)
 		DirAccess.make_dir_recursive_absolute(cache)
@@ -123,28 +142,44 @@ func test_writes_every_sprite_its_parts_and_the_index() -> void:
 	var root: String = _make_root()
 	var report: Dictionary = ArtPixelate.run_game(root, GAME)
 	assert_true(report["ok"], str(report["errors"]))
-	assert_eq(report["written"], [
-		"assets/fixture/sprites/boat.png",
-		"assets/fixture/sprites/boat__cabin.png",
-		"assets/fixture/sprites/boat__hull.png",
-		"assets/fixture/sprites/fish_tuna.png",
-		"assets/fixture/sprites/bg_sky.png",
-		"assets/fixture/sprites/reef.png",
-	])
+	assert_eq(
+		report["written"],
+		[
+			"assets/fixture/sprites/boat.png",
+			"assets/fixture/sprites/boat__cabin.png",
+			"assets/fixture/sprites/boat__hull.png",
+			"assets/fixture/sprites/fish_tuna.png",
+			"assets/fixture/sprites/bg_sky.png",
+			"assets/fixture/sprites/reef.png",
+		]
+	)
 	var dir: String = _sprites_dir(root)
-	var sizes: Dictionary = {"boat": Vector2i(80, 32), "fish_tuna": Vector2i(44, 16), "bg_sky": Vector2i(120, 40), "reef": Vector2i(200, 10)}
+	var sizes: Dictionary = {
+		"boat": Vector2i(80, 32),
+		"fish_tuna": Vector2i(44, 16),
+		"bg_sky": Vector2i(120, 40),
+		"reef": Vector2i(200, 10)
+	}
 	for id: String in sizes.keys():
 		var img: Image = _load(dir.path_join(id + ".png"))
 		assert_eq(img.get_size(), sizes[id], id)
 		_assert_palette_only(img)
 	var boat: Image = _load(dir.path_join("boat.png"))
-	assert_eq(_load(dir.path_join("boat__hull.png")).get_data(), boat.get_region(Rect2i(0, 16, 80, 16)).get_data())
-	assert_eq(_load(dir.path_join("boat__cabin.png")).get_data(), boat.get_region(Rect2i(20, 0, 40, 16)).get_data())
+	assert_eq(
+		_load(dir.path_join("boat__hull.png")).get_data(),
+		boat.get_region(Rect2i(0, 16, 80, 16)).get_data()
+	)
+	assert_eq(
+		_load(dir.path_join("boat__cabin.png")).get_data(),
+		boat.get_region(Rect2i(20, 0, 40, 16)).get_data()
+	)
 	# The transparent boat is fitted bottom-centre: its content touches the bottom edge.
 	assert_eq(ArtPixelate.trim_rect(boat, 255).end.y, 32)
 	# The opaque sky covers every pixel.
 	assert_eq(ArtPixelate.trim_rect(_load(dir.path_join("bg_sky.png")), 255), Rect2i(0, 0, 120, 40))
-	var index: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join("sprites.json")))
+	var index: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(dir.path_join("sprites.json"))
+	)
 	assert_eq(index["game"], GAME)
 	var sprites: Dictionary = index["sprites"]
 	assert_eq(sprites.keys().size(), 4)
@@ -152,7 +187,10 @@ func test_writes_every_sprite_its_parts_and_the_index() -> void:
 	assert_eq(b["file"], "boat.png")
 	assert_eq(b["size"], [80.0, 32.0])
 	assert_eq(b["anchor"], [40.0, 32.0])
-	assert_eq((b["parts"] as Dictionary)["hull"], {"file": "boat__hull.png", "rect": [0.0, 16.0, 80.0, 16.0]})
+	assert_eq(
+		(b["parts"] as Dictionary)["hull"],
+		{"file": "boat__hull.png", "rect": [0.0, 16.0, 80.0, 16.0]}
+	)
 	assert_eq((b["source"] as Dictionary)["request_id"], "r-boat")
 	assert_eq((sprites["fish_tuna"] as Dictionary)["anchor"], [22.0, 8.0])
 	assert_eq((sprites["reef"] as Dictionary)["tile"], true)
@@ -169,7 +207,11 @@ func test_uses_only_the_selected_result() -> void:
 	_write_text(mpath, JSON.stringify(m))
 	assert_true(ArtPixelate.run_game(root, GAME, PackedStringArray(["fish_tuna"]))["ok"])
 	var tuna: Image = _load(_sprites_dir(root).path_join("fish_tuna.png"))
-	assert_eq(tuna.get_pixel(22, 8), Color("#2a5aa8"), "the selected (blue) result, not the newer unselected one")
+	assert_eq(
+		tuna.get_pixel(22, 8),
+		Color("#2a5aa8"),
+		"the selected (blue) result, not the newer unselected one"
+	)
 	# Select the other one: the sprite follows the selection.
 	(reqs[1] as Dictionary)["selected"] = false
 	(reqs[4] as Dictionary)["selected"] = true
@@ -198,7 +240,9 @@ func test_only_limits_the_sprites_and_keeps_the_index_whole() -> void:
 	assert_true(ArtPixelate.run_game(root, GAME)["ok"])
 	var report: Dictionary = ArtPixelate.run_game(root, GAME, PackedStringArray(["reef"]))
 	assert_eq(report["written"], ["assets/fixture/sprites/reef.png"])
-	var index: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(_sprites_dir(root).path_join("sprites.json")))
+	var index: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(_sprites_dir(root).path_join("sprites.json"))
+	)
 	assert_eq((index["sprites"] as Dictionary).size(), 4)
 
 
@@ -220,7 +264,11 @@ func test_sprites_without_a_selected_result_are_skipped_with_a_warning() -> void
 func test_the_default_relies_on_the_project_importer_defaults() -> void:
 	# OWNERSHIP C36: one mechanism, project.godot's [importer_defaults] texture.
 	assert_eq(ArtPixelate.import_preset_mode, ArtPixelate.IMPORT_PROJECT_DEFAULTS)
-	assert_eq(PixelImportPreset.check_project_defaults(), PackedStringArray(), "project.godot holds the preset")
+	assert_eq(
+		PixelImportPreset.check_project_defaults(),
+		PackedStringArray(),
+		"project.godot holds the preset"
+	)
 
 
 func test_import_preset_files() -> void:
@@ -270,7 +318,9 @@ func test_an_invalid_art_json_is_an_error() -> void:
 
 func test_a_missing_manifest_or_art_json_is_an_error() -> void:
 	var root: String = _make_root()
-	DirAccess.remove_absolute(root.path_join("assets").path_join(GAME).path_join("art_manifest.json"))
+	DirAccess.remove_absolute(
+		root.path_join("assets").path_join(GAME).path_join("art_manifest.json")
+	)
 	assert_false(ArtPixelate.run_game(root, GAME)["ok"])
 	assert_push_error("run node tools/art/generate.mjs")
 	assert_false(ArtPixelate.run_game(root, "nogame")["ok"])
@@ -280,7 +330,7 @@ func test_a_missing_manifest_or_art_json_is_an_error() -> void:
 func test_an_unknown_only_id_is_an_error() -> void:
 	var root: String = _make_root()
 	assert_false(ArtPixelate.run_game(root, GAME, PackedStringArray(["ghost"]))["ok"])
-	assert_push_error("no sprite \"ghost\"")
+	assert_push_error('no sprite "ghost"')
 
 
 func test_a_background_mismatch_is_a_warning() -> void:
@@ -302,7 +352,9 @@ func test_stale_part_files_are_removed() -> void:
 	var art: Dictionary = _art()
 	var boat: Dictionary = (art["sprites"] as Array)[0]
 	boat["parts"] = {"hull": [0, 16, 80, 16], "deck": [20, 0, 40, 16]}
-	_write_text(root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  "))
+	_write_text(
+		root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  ")
+	)
 	var report: Dictionary = ArtPixelate.run_game(root, GAME)
 	assert_true(report["ok"], str(report["errors"]))
 	assert_eq(report["removed"], ["assets/fixture/sprites/boat__cabin.png"])
@@ -325,7 +377,9 @@ func test_parts_of_a_skipped_sprite_are_kept() -> void:
 	_write_text(mpath, JSON.stringify(m))
 	var art: Dictionary = _art()
 	((art["sprites"] as Array)[0] as Dictionary).erase("parts")
-	_write_text(root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  "))
+	_write_text(
+		root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  ")
+	)
 	var report: Dictionary = ArtPixelate.run_game(root, GAME)
 	assert_eq(report["skipped"], ["boat"])
 	assert_push_warning("boat: no selected result")
@@ -343,16 +397,28 @@ func test_a_selected_result_that_no_longer_matches_art_json_is_a_warning() -> vo
 	(reqs[0] as Dictionary)["input"] = {"prompt": "pixel art boat", "background": "transparent"}
 	# The tuna's result is a flare draft from an older prompt.
 	(reqs[1] as Dictionary)["endpoint"] = "openai/gpt-image-2.5/flare/text-to-image"
-	(reqs[1] as Dictionary)["input"] = {"prompt": "pixel art an old tuna prompt", "background": "transparent"}
+	(reqs[1] as Dictionary)["input"] = {
+		"prompt": "pixel art an old tuna prompt", "background": "transparent"
+	}
 	_write_text(mpath, JSON.stringify(m))
-	var report: Dictionary = ArtPixelate.run_game(root, GAME, PackedStringArray(["boat", "fish_tuna"]))
+	var report: Dictionary = ArtPixelate.run_game(
+		root, GAME, PackedStringArray(["boat", "fish_tuna"])
+	)
 	assert_true(report["ok"], str(report["errors"]))
 	assert_eq((report["warnings"] as Array).size(), 1, str(report["warnings"]))
-	assert_push_warning("fish_tuna: uses the selected result r-tuna, but it is from openai/gpt-image-2.5/flare/text-to-image")
+	assert_push_warning(
+		"fish_tuna: uses the selected result r-tuna, but it is from openai/gpt-image-2.5/flare/text-to-image"
+	)
 	assert_string_contains(str(report["warnings"][0]), "another prompt than art.json's")
-	assert_true(FileAccess.file_exists(_sprites_dir(root).path_join("fish_tuna.png")), "pixelate still uses the selected result")
+	assert_true(
+		FileAccess.file_exists(_sprites_dir(root).path_join("fish_tuna.png")),
+		"pixelate still uses the selected result"
+	)
 
 
 func test_compose_prompt_matches_generate_mjs() -> void:
 	# style.trim() + " " + prompt.trim(), as tools/art/lib/art_json.mjs composePrompt().
-	assert_eq(ArtPixelate.compose_prompt({"style": "  Pixel art. "}, {"prompt": " a boat \n"}), "Pixel art. a boat")
+	assert_eq(
+		ArtPixelate.compose_prompt({"style": "  Pixel art. "}, {"prompt": " a boat \n"}),
+		"Pixel art. a boat"
+	)

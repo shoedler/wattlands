@@ -46,8 +46,12 @@ func test_default_store_is_per_game_under_the_user_dir() -> void:
 
 
 func test_apply_progress_runs_once_and_is_saved_per_rider() -> void:
-	var a := Kit.solo(_root, "tiny", {"progress_path": _tmp.path_join("riderA/games/fx_solo/progress.json")})
-	var b := Kit.solo(_root, "tiny", {"progress_path": _tmp.path_join("riderB/games/fx_solo/progress.json")})
+	var a := Kit.solo(
+		_root, "tiny", {"progress_path": _tmp.path_join("riderA/games/fx_solo/progress.json")}
+	)
+	var b := Kit.solo(
+		_root, "tiny", {"progress_path": _tmp.path_join("riderB/games/fx_solo/progress.json")}
+	)
 	_finish(a)
 	var ha: GameHost = a["host"]
 	assert_eq(ha.game.get("progress_calls"), 1)
@@ -55,7 +59,10 @@ func test_apply_progress_runs_once_and_is_saved_per_rider() -> void:
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(ha.ctx.progress.path))
 	assert_eq(float(saved["xp"]), 10.0)
 	assert_true(bool(saved["badge"]))
-	assert_false(FileAccess.file_exists((b["host"] as GameHost).ctx.progress.path), "the other rider's store is untouched")
+	assert_false(
+		FileAccess.file_exists((b["host"] as GameHost).ctx.progress.path),
+		"the other rider's store is untouched"
+	)
 	# A second session for rider A keeps building on its own store.
 	var a2 := Kit.solo(_root, "tiny", {"progress_path": ha.ctx.progress.path})
 	_finish(a2)

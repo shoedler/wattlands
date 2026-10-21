@@ -135,8 +135,12 @@ func test_setup_again_rebinds_and_keeps_plan_phase_and_warmup() -> void:
 	assert_eq(after["phase_index"], 1, "the phase is kept")
 	assert_almost_eq(float(after["phase_elapsed_s"]), float(before["phase_elapsed_s"]) + 20.0, 1e-6)
 	assert_true(after["warmup_active"])
-	assert_almost_eq(float(after["warmup_remaining_s"]), float(before["warmup_remaining_s"]) - 20.0, 1e-6,
-		"warm-up keeps counting from the first pedal stroke")
+	assert_almost_eq(
+		float(after["warmup_remaining_s"]),
+		float(before["warmup_remaining_s"]) - 20.0,
+		1e-6,
+		"warm-up keeps counting from the first pedal stroke"
+	)
 	assert_eq(dev.writes.size(), old_writes, "the old device gets nothing more")
 	assert_gt(dev2.writes.size(), 0)
 	assert_eq(dev2.writes[0]["op"], "erg")
@@ -157,7 +161,9 @@ func test_configure_again_replaces_parameters_and_keeps_state() -> void:
 	assert_eq(after["phase_index"], before["phase_index"])
 	assert_almost_eq(float(after["phase_elapsed_s"]), float(before["phase_elapsed_s"]) + 5.0, 1e-6)
 	assert_true(after["warmup_active"], "warm-up is kept")
-	assert_almost_eq(float(after["warmup_remaining_s"]), float(before["warmup_remaining_s"]) - 5.0, 1e-6)
+	assert_almost_eq(
+		float(after["warmup_remaining_s"]), float(before["warmup_remaining_s"]) - 5.0, 1e-6
+	)
 	assert_true(after["ftp_verified"])
 	assert_eq(rig.applied_w(), 120, "the new parameter applies on the next ticks")
 	rig.gov.configure({"ftp_w": 250.0})

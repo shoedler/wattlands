@@ -38,11 +38,18 @@ func _new_runner() -> GameSimRunner:
 
 
 func _run(content: String, extra: Array[String] = []) -> Dictionary:
-	var argv := PackedStringArray([
-		"--game=workout", "--content=" + content, "--players=1", "--bots=1",
-		"--rider=erg:compliance=1.0", "--seed=11", "--sim-speed=100000",
-		"--report=" + _tmp.path_join("%s.json" % content.replace(":", "_").replace("/", "_")),
-	])
+	var argv := PackedStringArray(
+		[
+			"--game=workout",
+			"--content=" + content,
+			"--players=1",
+			"--bots=1",
+			"--rider=erg:compliance=1.0",
+			"--seed=11",
+			"--sim-speed=100000",
+			"--report=" + _tmp.path_join("%s.json" % content.replace(":", "_").replace("/", "_")),
+		]
+	)
 	for a in extra:
 		var key := a.split("=")[0]
 		for i in range(argv.size() - 1, -1, -1):
@@ -76,7 +83,10 @@ func test_compliant_riders_grade_a_or_better_in_every_session() -> void:
 			continue
 		assert_true(["S", "A"].has(res.grade), "%s grade %s" % [id, res.grade])
 		for row in res.rows:
-			assert_true(float(row["time_in_band_pct"]) >= 90.0, "%s rider %s in band %s%%" % [id, row["peer_id"], row["time_in_band_pct"]])
+			assert_true(
+				float(row["time_in_band_pct"]) >= 90.0,
+				"%s rider %s in band %s%%" % [id, row["peer_id"], row["time_in_band_pct"]]
+			)
 		# Warm-up limits hold (4.6.8): every applied ERG target in the first 300 s <= 65% FTP.
 		var points: Array[Dictionary] = []
 		_collect(report.get("traces", report.get("trace", [])), points)
@@ -86,7 +96,10 @@ func test_compliant_riders_grade_a_or_better_in_every_session() -> void:
 				continue
 			for key: String in ["applied_pct", "applied_ftp_pct"]:
 				if pt.has(key):
-					assert_true(float(pt[key]) <= 65.0 + 0.001, "%s: %s inside the warm-up cap: %s" % [id, key, pt])
+					assert_true(
+						float(pt[key]) <= 65.0 + 0.001,
+						"%s: %s inside the warm-up cap: %s" % [id, key, pt]
+					)
 
 
 func test_e2e_host_play_stays_inside_the_warmup_limits() -> void:
@@ -101,10 +114,15 @@ func test_e2e_host_play_stays_inside_the_warmup_limits() -> void:
 	for pt in points:
 		for key: String in ["applied_pct", "applied_ftp_pct"]:
 			if pt.has(key):
-				assert_true(float(pt[key]) <= 65.0 + 0.001, "%s inside the warm-up cap: %s" % [key, pt])
+				assert_true(
+					float(pt[key]) <= 65.0 + 0.001, "%s inside the warm-up cap: %s" % [key, pt]
+				)
 		for key: String in ["applied_grade_pct", "applied_grade"]:
 			if pt.has(key):
-				assert_true(float(pt[key]) >= -2.0 - 0.001 and float(pt[key]) <= 3.0 + 0.001, "%s inside -2..+3: %s" % [key, pt])
+				assert_true(
+					float(pt[key]) >= -2.0 - 0.001 and float(pt[key]) <= 3.0 + 0.001,
+					"%s inside -2..+3: %s" % [key, pt]
+				)
 
 
 ## Every Dictionary inside `v` that looks like a trace point.
@@ -144,10 +162,22 @@ func test_the_sample_zwo_plays() -> void:
 ## ctx.content_id and the imported session plays.
 func test_a_zwo_path_content_id_runs_through_the_runner_and_reaches_clients() -> void:
 	var content := "zwo:" + ProjectSettings.globalize_path("res://content/workout/zwo/sample.zwo")
-	var args := GameSimRunner.parse_args(PackedStringArray([
-		"--game=workout", "--content=" + content, "--players=2", "--bots=1", "--seed=4",
-		"--max-sim-seconds=20", "--report=" + _tmp.path_join("zwo_path.json"),
-	]))
+	var args := (
+		GameSimRunner
+		. parse_args(
+			PackedStringArray(
+				[
+					"--game=workout",
+					"--content=" + content,
+					"--players=2",
+					"--bots=1",
+					"--seed=4",
+					"--max-sim-seconds=20",
+					"--report=" + _tmp.path_join("zwo_path.json"),
+				]
+			)
+		)
+	)
 	assert_false(args.has("error"), str(args.get("error", "")))
 	args["headless"] = true
 	var runner := _new_runner()
@@ -156,9 +186,16 @@ func test_a_zwo_path_content_id_runs_through_the_runner_and_reaches_clients() ->
 	assert_eq(runner.build_report()["content_id"], content)
 	for gh in runner.hosts():
 		assert_eq(gh.ctx.content_id, content, "peer %d" % gh.local_peer())
-		assert_true(gh.plans.has(gh.local_peer()), "peer %d has its imported plan" % gh.local_peer())
+		assert_true(
+			gh.plans.has(gh.local_peer()), "peer %d has its imported plan" % gh.local_peer()
+		)
 	var bad := _new_runner()
-	assert_string_starts_with(bad.setup(GameSimRunner.parse_args(PackedStringArray(["--game=workout", "--content=mp3:x"]))), "--content:")
+	assert_string_starts_with(
+		bad.setup(
+			GameSimRunner.parse_args(PackedStringArray(["--game=workout", "--content=mp3:x"]))
+		),
+		"--content:"
+	)
 
 
 func test_same_seed_same_hash() -> void:
@@ -192,7 +229,9 @@ func test_rescue_on_cadence_collapse_only_at_or_above_60_pct() -> void:
 		["vo2", "erg+cadence_drop:rpm=30,at_phase=2,after_s=20,for_s=30", 2, 700, false],
 	]
 	for c: Array in cases:
-		var report := _run(str(c[0]), ["--rider=" + str(c[1]), "--bots=0", "--max-sim-seconds=%d" % int(c[3])])
+		var report := _run(
+			str(c[0]), ["--rider=" + str(c[1]), "--bots=0", "--max-sim-seconds=%d" % int(c[3])]
+		)
 		if report.is_empty():
 			continue
 		var points: Array[Dictionary] = []
@@ -207,9 +246,15 @@ func test_rescue_on_cadence_collapse_only_at_or_above_60_pct() -> void:
 			for pt in rescued:
 				var idx := _phase_of(pt)
 				if idx >= 0:
-					assert_eq(idx, int(c[2]), "%s: rescue only in the phase with the drop: %s" % [c[0], pt])
+					assert_eq(
+						idx,
+						int(c[2]),
+						"%s: rescue only in the phase with the drop: %s" % [c[0], pt]
+					)
 		else:
-			assert_eq(rescued.size(), 0, "%s: no rescue below 60%% FTP: %s" % [c[0], rescued.slice(0, 3)])
+			assert_eq(
+				rescued.size(), 0, "%s: no rescue below 60%% FTP: %s" % [c[0], rescued.slice(0, 3)]
+			)
 
 
 ## The phase index of a trace point (-1 if the report names it otherwise).

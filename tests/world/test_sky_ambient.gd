@@ -72,12 +72,18 @@ func test_haze_end_before_begin_stays_valid() -> void:
 	s.haze_begin_m = 200.0
 	s.haze_end_m = 50.0
 	s.apply()
-	assert_gt(s.environment.fog_depth_end, s.environment.fog_depth_begin, "fog never ends before it begins")
+	assert_gt(
+		s.environment.fog_depth_end,
+		s.environment.fog_depth_begin,
+		"fog never ends before it begins"
+	)
 
 
 func test_haze_mesh_is_a_no_op_with_fog() -> void:
 	var s := _sky()
-	var lp := LowPolyMesh.new().add_box(Vector3.ONE, Color.RED, Transform3D(Basis(), Vector3(0, 0, -500)))
+	var lp := LowPolyMesh.new().add_box(
+		Vector3.ONE, Color.RED, Transform3D(Basis(), Vector3(0, 0, -500))
+	)
 	assert_false(s.haze_mesh(lp, Vector3.ZERO))
 	assert_eq(lp.colors()[0], Color.RED)
 
@@ -134,13 +140,16 @@ func test_runs_in_tree() -> void:
 
 # --- ScreenVignette ------------------------------------------------------------------------------
 
+
 func test_vignette_darkens_corners_at_most_strength() -> void:
 	assert_eq(ScreenVignette.darkening_at(Vector2(0.5, 0.5), 0.12, 0.55), 0.0, "centre untouched")
 	assert_almost_eq(ScreenVignette.darkening_at(Vector2(0, 0), 0.12, 0.55), 0.12, 0.0001)
 	assert_almost_eq(ScreenVignette.darkening_at(Vector2(1, 1), 0.12, 0.55), 0.12, 0.0001)
 	var prev := 0.0
 	for k in 11:
-		var d := ScreenVignette.darkening_at(Vector2(0.5, 0.5).lerp(Vector2.ZERO, k / 10.0), 0.12, 0.55)
+		var d := ScreenVignette.darkening_at(
+			Vector2(0.5, 0.5).lerp(Vector2.ZERO, k / 10.0), 0.12, 0.55
+		)
 		assert_true(d >= prev and d <= 0.12 + 0.0001)
 		prev = d
 

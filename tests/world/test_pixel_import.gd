@@ -126,7 +126,9 @@ func test_an_imported_repo_png_meets_the_required_preset() -> void:
 
 func test_validate_texture() -> void:
 	var img := Image.create_empty(8, 8, false, Image.FORMAT_RGBA8)
-	assert_eq(PixelImportPreset.validate_texture(ImageTexture.create_from_image(img)), PackedStringArray())
+	assert_eq(
+		PixelImportPreset.validate_texture(ImageTexture.create_from_image(img)), PackedStringArray()
+	)
 	var mip := Image.create_empty(8, 8, true, Image.FORMAT_RGBA8)
 	var problems := PixelImportPreset.validate_texture(ImageTexture.create_from_image(mip))
 	assert_eq(problems.size(), 1)

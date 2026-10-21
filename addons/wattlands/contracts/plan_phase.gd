@@ -46,7 +46,9 @@ var label: String = ""
 var meta: Dictionary = {}
 
 
-static func erg(p_kind: String, p_target_pct: float, p_duration_s: float, p_label: String = "") -> PlanPhase:
+static func erg(
+	p_kind: String, p_target_pct: float, p_duration_s: float, p_label: String = ""
+) -> PlanPhase:
 	var p := PlanPhase.new()
 	p.kind = p_kind
 	p.mode = Wl.ERG
@@ -56,7 +58,9 @@ static func erg(p_kind: String, p_target_pct: float, p_duration_s: float, p_labe
 	return p
 
 
-static func sim(p_kind: String, p_grade_source: String, p_duration_s: float, p_label: String = "") -> PlanPhase:
+static func sim(
+	p_kind: String, p_grade_source: String, p_duration_s: float, p_label: String = ""
+) -> PlanPhase:
 	var p := PlanPhase.new()
 	p.kind = p_kind
 	p.mode = Wl.SIM

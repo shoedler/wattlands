@@ -15,7 +15,9 @@ const UNLOCKS: Array[Dictionary] = [
 	{"id": "pennant_bolt", "sprints_hit": 10.0},
 	{"id": "pennant_gold", "kj": 5000.0},
 ]
-const PENNANT_STYLES: Array[String] = ["", "pennant_swallowtail", "pennant_chevron", "pennant_star", "pennant_bolt", "pennant_gold"]
+const PENNANT_STYLES: Array[String] = [
+	"", "pennant_swallowtail", "pennant_chevron", "pennant_star", "pennant_bolt", "pennant_gold"
+]
 
 
 ## Updates `progress` from the local rider's row and returns the new unlock ids.
@@ -30,7 +32,12 @@ static func apply(results: GameResults, progress: ProgressStore, local_peer: int
 		if s is Dictionary and bool(s.get("hit", false)):
 			hits += 1
 	var stats: Dictionary = row.get("stats", {})
-	var grade := str(stats.get(WorkoutResults.STAT_GRADE, GameResults.grade_from_fraction(float(row.get("time_in_band_pct", 0.0)) / 100.0)))
+	var grade := str(
+		stats.get(
+			WorkoutResults.STAT_GRADE,
+			GameResults.grade_from_fraction(float(row.get("time_in_band_pct", 0.0)) / 100.0)
+		)
+	)
 	var totals := {
 		"rides": progress.add("rides", 1.0),
 		"kj": progress.add("kj_total", float(row.get("kj", 0.0))),

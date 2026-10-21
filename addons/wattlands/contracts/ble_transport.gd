@@ -73,7 +73,9 @@ func read_characteristic(_service_uuid: String, _char_uuid: String) -> void:
 	pass
 
 
-func write_characteristic(_service_uuid: String, _char_uuid: String, _data: PackedByteArray, _with_response: bool) -> void:
+func write_characteristic(
+	_service_uuid: String, _char_uuid: String, _data: PackedByteArray, _with_response: bool
+) -> void:
 	pass
 
 

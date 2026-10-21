@@ -23,7 +23,9 @@ var distance_m: float = -1.0
 var flags: int = 0
 
 
-static func make(p_t: float, p_power_w: float, p_cadence_rpm: float = -1.0, p_speed_kmh: float = -1.0) -> TrainerSample:
+static func make(
+	p_t: float, p_power_w: float, p_cadence_rpm: float = -1.0, p_speed_kmh: float = -1.0
+) -> TrainerSample:
 	var s := TrainerSample.new()
 	s.t = p_t
 	s.power_w = p_power_w
@@ -46,5 +48,11 @@ func has_speed() -> bool:
 
 
 func to_dict() -> Dictionary:
-	return {"t": t, "power_w": power_w, "cadence_rpm": cadence_rpm, "speed_kmh": speed_kmh,
-		"distance_m": distance_m, "flags": flags}
+	return {
+		"t": t,
+		"power_w": power_w,
+		"cadence_rpm": cadence_rpm,
+		"speed_kmh": speed_kmh,
+		"distance_m": distance_m,
+		"flags": flags
+	}

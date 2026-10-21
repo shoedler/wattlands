@@ -22,21 +22,41 @@ func after_each() -> void:
 func _zwo(repeat: int) -> String:
 	var path := _tmp.path_join("many_%d.zwo" % repeat)
 	var f := FileAccess.open(path, FileAccess.WRITE)
-	f.store_string("""<workout_file><name>Many intervals</name><sportType>bike</sportType><workout>
+	(
+		f
+		. store_string(
+			(
+				"""<workout_file><name>Many intervals</name><sportType>bike</sportType><workout>
 <Warmup Duration="600" PowerLow="0.45" PowerHigh="0.65"/>
 <IntervalsT Repeat="%d" OnDuration="30" OffDuration="30" OnPower="1.00" OffPower="0.50"/>
 <Cooldown Duration="300" PowerLow="0.60" PowerHigh="0.45"/>
-</workout></workout_file>""" % repeat)
+</workout></workout_file>"""
+				% repeat
+			)
+		)
+	)
 	f.close()
 	return path
 
 
 func test_a_long_imported_zwo_reaches_every_client() -> void:
 	var path := _zwo(200)
-	var args := GameSimRunner.parse_args(PackedStringArray([
-		"--game=workout", "--content=zwo:" + path, "--players=3", "--bots=1", "--seed=2",
-		"--max-sim-seconds=40", "--report=" + _tmp.path_join("big.json"),
-	]))
+	var args := (
+		GameSimRunner
+		. parse_args(
+			PackedStringArray(
+				[
+					"--game=workout",
+					"--content=zwo:" + path,
+					"--players=3",
+					"--bots=1",
+					"--seed=2",
+					"--max-sim-seconds=40",
+					"--report=" + _tmp.path_join("big.json"),
+				]
+			)
+		)
+	)
 	assert_false(args.has("error"), str(args.get("error", "")))
 	args["headless"] = true
 	var runner := GameSimRunner.new()
@@ -48,17 +68,32 @@ func test_a_long_imported_zwo_reaches_every_client() -> void:
 	for gh in runner.clients:
 		var peer := gh.local_peer()
 		var plan: EffortPlan = host.plans[peer]
-		var bytes := Protocol.encoded_size(Protocol.game_msg("plan", {"peer": peer, "plan": plan.to_dict()}))
+		var bytes := Protocol.encoded_size(
+			Protocol.game_msg("plan", {"peer": peer, "plan": plan.to_dict()})
+		)
 		assert_gt(plan.phases.size(), 400, "precondition: a 400-block workout")
-		assert_gt(bytes, NetMessages.MAX_MESSAGE_BYTES, "precondition: its plan is %d bytes" % bytes)
+		assert_gt(
+			bytes, NetMessages.MAX_MESSAGE_BYTES, "precondition: its plan is %d bytes" % bytes
+		)
 		assert_true(gh.plans.has(peer), "peer %d got its plan" % peer)
 		if gh.plans.has(peer):
 			# Through JSON both sides, as the wire has it (ints in `meta` come back as floats).
-			assert_eq(JSON.parse_string(JSON.stringify((gh.plans[peer] as EffortPlan).to_dict())),
-				JSON.parse_string(JSON.stringify(plan.to_dict())), "peer %d's plan is the host's, whole" % peer)
+			assert_eq(
+				JSON.parse_string(JSON.stringify((gh.plans[peer] as EffortPlan).to_dict())),
+				JSON.parse_string(JSON.stringify(plan.to_dict())),
+				"peer %d's plan is the host's, whole" % peer
+			)
 		var wg := gh.game as WorkoutGame
-		assert_eq(wg.state.phases.size(), plan.phases.size(), "peer %d's view has the whole timeline" % peer)
+		assert_eq(
+			wg.state.phases.size(),
+			plan.phases.size(),
+			"peer %d's view has the whole timeline" % peer
+		)
 		var rider: LocalRider = gh.local_rider(peer)
 		assert_eq(rider.plan().phases.size(), plan.phases.size(), "and its governor rides it")
 		assert_eq(gh.local_phase_state().index, host.tracker.index_of(peer), "in the host's phase")
-	assert_eq(int(host.net.stats.get("oversize_dropped", 0)), 0, "nothing was dropped for size (plan parts, timeline parts)")
+	assert_eq(
+		int(host.net.stats.get("oversize_dropped", 0)),
+		0,
+		"nothing was dropped for size (plan parts, timeline parts)"
+	)

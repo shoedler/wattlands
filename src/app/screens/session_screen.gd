@@ -181,7 +181,11 @@ func _prepare_offline_lobby() -> void:
 		return
 	var gid := str(params.get("game_id", ""))
 	var m: Dictionary = services.registry.manifest(gid) if services.registry != null else {}
-	var sc := str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP)) if services.settings != null else Wl.FAIR_FTP
+	var sc := (
+		str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP))
+		if services.settings != null
+		else Wl.FAIR_FTP
+	)
 	if not Wl.SCALING_MODES.has(sc):
 		sc = Wl.FAIR_FTP
 	net.start_offline()
@@ -190,7 +194,11 @@ func _prepare_offline_lobby() -> void:
 	net.set_setting("options", AppLobbyModel.resolve_game_options(services.registry, gid, {}))
 	var popts := AppLobbyModel.resolve_player_options(services.registry, gid, {})
 	var st := services.trainer.status() if services.trainer != null else ""
-	net.set_local_player_info(AppLobbyModel.player_info(services.profile(), sc, popts, AppLobbyModel.installed_games(services.registry), st))
+	net.set_local_player_info(
+		AppLobbyModel.player_info(
+			services.profile(), sc, popts, AppLobbyModel.installed_games(services.registry), st
+		)
+	)
 	net.set_ready(true)
 
 
@@ -221,6 +229,7 @@ func local_trainer_mode() -> String:
 
 
 # --- network notice (NET-6) ----------------------------------------------------------------------
+
 
 func _build_net_notice() -> void:
 	net_notice = AppStyle.paragraph("", AppStyle.FONT_HEADING, AppStyle.WARN)
@@ -276,6 +285,7 @@ func _on_net_state(state: String, _detail: String) -> void:
 
 # --- overlay and panic -------------------------------------------------------------------------
 
+
 func _build_overlay() -> void:
 	overlay_scrim = ColorRect.new()
 	overlay_scrim.name = "OverlayScrim"
@@ -318,7 +328,9 @@ func _build_panic_button() -> void:
 	# A safety control looks like one: white text on red with a light-red border, unlike every
 	# HUD panel (the word carries the meaning; the color is a second cue).
 	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
-		panic_button.add_theme_stylebox_override(state, _panic_style(PANIC_BG_HI if state in ["hover", "pressed"] else PANIC_BG))
+		panic_button.add_theme_stylebox_override(
+			state, _panic_style(PANIC_BG_HI if state in ["hover", "pressed"] else PANIC_BG)
+		)
 	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
 		panic_button.add_theme_color_override(c, Color.WHITE)
 	panic_button.add_theme_color_override("font_outline_color", Color.BLACK)
@@ -466,7 +478,9 @@ func overlay_items() -> Array:
 	else:
 		items.append({"id": "resume", "text": t("APP_SESSION_RESUME")})
 		items.append({"id": "panic", "text": t("APP_PANIC")})
-	items.append({"id": "end", "text": t("APP_SESSION_END") if role != Wl.CLIENT else t("APP_SESSION_LEAVE")})
+	items.append(
+		{"id": "end", "text": t("APP_SESSION_END") if role != Wl.CLIENT else t("APP_SESSION_LEAVE")}
+	)
 	return items
 
 
@@ -515,12 +529,15 @@ func end_ride() -> void:
 
 func _fail(reason: String) -> void:
 	error = reason
-	error_label.text = t(reason) if reason.begins_with("APP_") else t("APP_SESSION_SETUP_FAILED").format([reason])
+	error_label.text = (
+		t(reason) if reason.begins_with("APP_") else t("APP_SESSION_SETUP_FAILED").format([reason])
+	)
 	error_label.visible = true
 	_show_overlay()
 
 
 # --- input -------------------------------------------------------------------------------------
+
 
 func _handle_action(action: StringName) -> bool:
 	if action == &"panic":
@@ -543,13 +560,20 @@ func _handle_action(action: StringName) -> bool:
 
 
 func _handle_gesture(gesture: StringName) -> bool:
-	if gesture == Wl.G_PEDAL_START and paused and host != null and role != Wl.CLIENT and pause_reason != "user":
+	if (
+		gesture == Wl.G_PEDAL_START
+		and paused
+		and host != null
+		and role != Wl.CLIENT
+		and pause_reason != "user"
+	):
 		host.resume()
 		return true
 	return not overlay.visible
 
 
 # --- session events ----------------------------------------------------------------------------
+
 
 func _connect_bus() -> void:
 	var bus := services.bus
@@ -570,16 +594,24 @@ func _connect_bus() -> void:
 func _disconnect_bus() -> void:
 	var bus := services.bus
 	if bus != null:
-		for pair: Array in [[bus.results_ready, _on_results_ready], [bus.unlocks_ready, _on_unlocks],
-				[bus.ride_saved, _on_ride_saved], [bus.paused_changed, _on_paused_changed],
-				[bus.panic_requested, _on_panic_requested]]:
+		for pair: Array in [
+			[bus.results_ready, _on_results_ready],
+			[bus.unlocks_ready, _on_unlocks],
+			[bus.ride_saved, _on_ride_saved],
+			[bus.paused_changed, _on_paused_changed],
+			[bus.panic_requested, _on_panic_requested]
+		]:
 			var sig: Signal = pair[0]
 			if sig.is_connected(pair[1]):
 				sig.disconnect(pair[1])
 	var net := services.net
 	if net != null:
-		for pair: Array in [[net.refused, _on_refused], [net.peer_left, _on_net_peer_left],
-				[net.peer_joined, _on_net_peer_joined], [net.state_changed, _on_net_state]]:
+		for pair: Array in [
+			[net.refused, _on_refused],
+			[net.peer_left, _on_net_peer_left],
+			[net.peer_joined, _on_net_peer_joined],
+			[net.state_changed, _on_net_state]
+		]:
 			var sig: Signal = pair[0]
 			if sig.is_connected(pair[1]):
 				sig.disconnect(pair[1])
@@ -656,12 +688,20 @@ func _finish(r: GameResults) -> void:
 			fit_path = str(paths[local_peer()])
 	if ride_summary.is_empty():
 		ride_summary = read_summary(local_rider(), fit_path)
-	goto("results", {
-		"results": results, "fit_path": fit_path, "summary": ride_summary, "unlocks": unlocks,
-		"game_id": str(config.get("game_id", params.get("game_id", ""))),
-		"content_id": str(config.get("content_id", params.get("content_id", ""))),
-		"role": role, "local_peer": local_peer(), "host_left": host_left,
-	})
+	goto(
+		"results",
+		{
+			"results": results,
+			"fit_path": fit_path,
+			"summary": ride_summary,
+			"unlocks": unlocks,
+			"game_id": str(config.get("game_id", params.get("game_id", ""))),
+			"content_id": str(config.get("content_id", params.get("content_id", ""))),
+			"role": role,
+			"local_peer": local_peer(),
+			"host_left": host_left,
+		}
+	)
 
 
 ## The ride's JSON summary: the recorder's, else the JSON written next to the FIT file.

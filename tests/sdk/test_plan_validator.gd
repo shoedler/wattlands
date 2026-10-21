@@ -94,22 +94,37 @@ func test_warmup_rejects_targets_above_65_in_the_first_300_s() -> void:
 	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 300).with_ramp(66)]), "ramp_to_pct 66%")
 	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 200).with_range(50, 70)]), "range_pct[1] 70%")
 	# A phase that starts inside the first 300 s counts whole.
-	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 299), PlanPhase.erg(Wl.WORK, 80, 120)]), "phase 1")
+	_rejected(
+		_plan([PlanPhase.erg(Wl.WARMUP, 50, 299), PlanPhase.erg(Wl.WORK, 80, 120)]), "phase 1"
+	)
 
 
 func test_warmup_allows_65_exactly_and_work_from_300_s() -> void:
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 95, 120)]))
-	_ok(_plan([PlanPhase.erg(Wl.WARMUP, 65, 300).with_range(50, 65), PlanPhase.erg(Wl.WORK, 100, 60)]))
+	_ok(
+		_plan(
+			[PlanPhase.erg(Wl.WARMUP, 65, 300).with_range(50, 65), PlanPhase.erg(Wl.WORK, 100, 60)]
+		)
+	)
 
 
 func test_warmup_allows_sim_phases_c35() -> void:
 	# Tank's depot (SIM game from t = 0), Workout's e2e sprint and Fishing's e2e landing.
-	_ok(_plan([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, 240, "Depot"), PlanPhase.erg(Wl.WORK, 55, 120).with_range(55, 65)]))
-	var e2e := _plan([
-		PlanPhase.erg(Wl.WARMUP, 50, 60).with_ramp(60),
-		PlanPhase.erg(Wl.WORK, 65, 30),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Sprint"),
-	])
+	_ok(
+		_plan(
+			[
+				PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, 240, "Depot"),
+				PlanPhase.erg(Wl.WORK, 55, 120).with_range(55, 65)
+			]
+		)
+	)
+	var e2e := _plan(
+		[
+			PlanPhase.erg(Wl.WARMUP, 50, 60).with_ramp(60),
+			PlanPhase.erg(Wl.WORK, 65, 30),
+			PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Sprint"),
+		]
+	)
 	var res := _ok(e2e)
 	assert_eq(res["warnings"], [], "the e2e session's switches are exactly 30 s apart")
 
@@ -124,7 +139,9 @@ func test_open_ended_phases_at_min_s_decide_the_warmup_window() -> void:
 func test_absolute_ceiling_150() -> void:
 	_rejected(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 151, 20)]), "151% > 150%")
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 150, 20)]))
-	_rejected(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 100, 20).with_range(90, 155)]), "155% > 150%")
+	_rejected(
+		_plan([_warmup(), PlanPhase.erg(Wl.WORK, 100, 20).with_range(90, 155)]), "155% > 150%"
+	)
 
 
 func test_long_phase_cap_105() -> void:
@@ -133,48 +150,81 @@ func test_long_phase_cap_105() -> void:
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 110, 300)]))
 	# The range top counts (Tank's boss: max_s 360 at <= 100 % is fine; 106 % is not).
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 55, 180).with_range(55, 100).with_open(90, 360)]))
-	_rejected(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 55, 180).with_range(55, 106).with_open(90, 360)]), "longer than 300 s")
+	_rejected(
+		_plan([_warmup(), PlanPhase.erg(Wl.WORK, 55, 180).with_range(55, 106).with_open(90, 360)]),
+		"longer than 300 s"
+	)
 
 
 func test_open_ended_long_phase_at_max_s_pl16() -> void:
 	# Fishing's tuna: 104.76 % accepted at max_s 540; the marlin at 104 % for 1320 s.
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 104.76, 0, "Tuna").with_open(120, 540)]))
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 104, 0, "Marlin").with_open(300, 1320)]))
-	_rejected(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 105.5, 0, "Tuna").with_open(120, 540)]), "longer than 300 s")
+	_rejected(
+		_plan([_warmup(), PlanPhase.erg(Wl.WORK, 105.5, 0, "Tuna").with_open(120, 540)]),
+		"longer than 300 s"
+	)
 
 
 func test_105_accrual_and_reset_pl17() -> void:
 	# 200 s + 200 s above 105 % with only 60 s of recovery: 400 s accrued.
-	_rejected(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-		PlanPhase.erg(Wl.RECOVERY, 50, 60),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-	]), "accrued above 105%")
+	_rejected(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+				PlanPhase.erg(Wl.RECOVERY, 50, 60),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+			]
+		),
+		"accrued above 105%"
+	)
 	# 120 s at exactly 90 % resets (inclusive).
-	_ok(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-		PlanPhase.erg(Wl.RECOVERY, 90, 120),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-	]))
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+				PlanPhase.erg(Wl.RECOVERY, 90, 120),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+			]
+		)
+	)
 	# 119 s does not.
-	_rejected(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-		PlanPhase.erg(Wl.RECOVERY, 90, 119),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-	]), "accrued above 105%")
+	_rejected(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+				PlanPhase.erg(Wl.RECOVERY, 90, 119),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+			]
+		),
+		"accrued above 105%"
+	)
 	# Consecutive qualifying phases add up to the reset.
-	_ok(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-		PlanPhase.erg(Wl.RECOVERY, 60, 60),
-		PlanPhase.erg(Wl.RECOVERY, 85, 60),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-	]))
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+				PlanPhase.erg(Wl.RECOVERY, 60, 60),
+				PlanPhase.erg(Wl.RECOVERY, 85, 60),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+			]
+		)
+	)
 	# Exactly 300 s accrued is allowed.
-	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 110, 150), PlanPhase.erg(Wl.WORK, 100, 30), PlanPhase.erg(Wl.WORK, 110, 150)]))
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 150),
+				PlanPhase.erg(Wl.WORK, 100, 30),
+				PlanPhase.erg(Wl.WORK, 110, 150)
+			]
+		)
+	)
 
 
 func test_workout_vo2_blocks_are_valid() -> void:
@@ -187,36 +237,69 @@ func test_workout_vo2_blocks_are_valid() -> void:
 
 
 func test_120_accrual() -> void:
-	_rejected(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 125, 40),
-		PlanPhase.erg(Wl.WORK, 100, 30),
-		PlanPhase.erg(Wl.WORK, 125, 30),
-	]), "accrued above 120%")
-	_ok(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 125, 30),
-		PlanPhase.erg(Wl.WORK, 100, 30),
-		PlanPhase.erg(Wl.WORK, 125, 30),
-	]))
+	_rejected(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 125, 40),
+				PlanPhase.erg(Wl.WORK, 100, 30),
+				PlanPhase.erg(Wl.WORK, 125, 30),
+			]
+		),
+		"accrued above 120%"
+	)
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 125, 30),
+				PlanPhase.erg(Wl.WORK, 100, 30),
+				PlanPhase.erg(Wl.WORK, 125, 30),
+			]
+		)
+	)
 
 
 func test_open_ended_accrual_at_max_s_and_reset_at_min_s() -> void:
-	var fight := func() -> PlanPhase: return PlanPhase.erg(Wl.WORK, 110, 0, "Fight").with_open(60, 200)
-	_rejected(_plan([_warmup(), fight.call(), PlanPhase.erg(Wl.RECOVERY, 50, 0, "Reel").with_open(100, 400), fight.call()]),
-		"accrued above 105%")
-	_ok(_plan([_warmup(), fight.call(), PlanPhase.erg(Wl.RECOVERY, 50, 0, "Reel").with_open(120, 400), fight.call()]))
+	var fight := func() -> PlanPhase:
+		return PlanPhase.erg(Wl.WORK, 110, 0, "Fight").with_open(60, 200)
+	_rejected(
+		_plan(
+			[
+				_warmup(),
+				fight.call(),
+				PlanPhase.erg(Wl.RECOVERY, 50, 0, "Reel").with_open(100, 400),
+				fight.call()
+			]
+		),
+		"accrued above 105%"
+	)
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				fight.call(),
+				PlanPhase.erg(Wl.RECOVERY, 50, 0, "Reel").with_open(120, 400),
+				fight.call()
+			]
+		)
+	)
 
 
 func test_sim_phase_restarts_the_reset_count() -> void:
-	_rejected(_plan([
-		_warmup(),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-		PlanPhase.erg(Wl.RECOVERY, 50, 60),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40),
-		PlanPhase.erg(Wl.RECOVERY, 50, 60),
-		PlanPhase.erg(Wl.WORK, 110, 200),
-	]), "accrued above 105%")
+	_rejected(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+				PlanPhase.erg(Wl.RECOVERY, 50, 60),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 40),
+				PlanPhase.erg(Wl.RECOVERY, 50, 60),
+				PlanPhase.erg(Wl.WORK, 110, 200),
+			]
+		),
+		"accrued above 105%"
+	)
 
 
 func test_ramp_test_skips_caps_but_not_warmup() -> void:
@@ -227,15 +310,40 @@ func test_ramp_test_skips_caps_but_not_warmup() -> void:
 
 
 func test_mode_switch_warning_pl18() -> void:
-	var res := _ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 80, 60), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 20), PlanPhase.erg(Wl.WORK, 80, 60)]))
+	var res := _ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 80, 60),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 20),
+				PlanPhase.erg(Wl.WORK, 80, 60)
+			]
+		)
+	)
 	assert_eq((res["warnings"] as Array).size(), 1)
 	assert_string_contains(str(res["warnings"][0]), "20 s apart")
 	# Exactly 30 s: no warning (Fishing's Fight, Landing, Reel).
-	res = _ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 80, 0, "Fight").with_range(70, 95).with_open(60, 240),
-		PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, 30, "Landing"), PlanPhase.erg(Wl.RECOVERY, 60, 0, "Reel").with_open(120, 300)]))
+	res = _ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.erg(Wl.WORK, 80, 0, "Fight").with_range(70, 95).with_open(60, 240),
+				PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, 30, "Landing"),
+				PlanPhase.erg(Wl.RECOVERY, 60, 0, "Reel").with_open(120, 300)
+			]
+		)
+	)
 	assert_eq(res["warnings"], [])
 	# Open-ended phases count at min_s.
-	res = _ok(_plan([_warmup(), PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 60).with_open(20, 120), PlanPhase.erg(Wl.WORK, 70, 60)]))
+	res = _ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_GAME, 60).with_open(20, 120),
+				PlanPhase.erg(Wl.WORK, 70, 60)
+			]
+		)
+	)
 	assert_eq((res["warnings"] as Array).size(), 1)
 	# The switch into the appended cool-down counts.
 	res = _ok(_plan([_warmup(), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 20)]))
@@ -253,15 +361,28 @@ func test_structural_errors() -> void:
 	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 60).with_range(60, 55)]), "range_pct")
 	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 60).with_open(0, 30)]), "open_ended")
 	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 60).with_open(90, 30)]), "open_ended")
-	_rejected(_plan([PlanPhase.erg(Wl.WARMUP, 50, 0).with_ramp(60).with_open(60, 120)]), "a ramp needs duration_s > 0")
+	_rejected(
+		_plan([PlanPhase.erg(Wl.WARMUP, 50, 0).with_ramp(60).with_open(60, 120)]),
+		"a ramp needs duration_s > 0"
+	)
 	_rejected(_plan([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_COURSE, 60)]), "course_profile")
-	_rejected(_plan([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_FLAT, 60).with_course([[0, 1], [0, 2]])]), "course_profile[1]")
+	_rejected(
+		_plan([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_FLAT, 60).with_course([[0, 1], [0, 2]])]),
+		"course_profile[1]"
+	)
 	_rejected(_plan([PlanPhase.sim(Wl.WARMUP, "hilly", 60)]), "grade_source")
 
 
 func test_open_ended_with_zero_nominal_duration_is_valid_c15() -> void:
 	_ok(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 80, 0, "Reel").with_open(120, 240)]))
-	_ok(_plan([_warmup(), PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 120).with_course([[0, 0], [500, 3]])]))
+	_ok(
+		_plan(
+			[
+				_warmup(),
+				PlanPhase.sim(Wl.WORK, Wl.GRADE_COURSE, 120).with_course([[0, 0], [500, 3]])
+			]
+		)
+	)
 
 
 func test_error_names_the_phase_and_label() -> void:
@@ -270,7 +391,9 @@ func test_error_names_the_phase_and_label() -> void:
 
 
 func test_spliced_keeps_the_head_and_drops_the_cooldown() -> void:
-	var cur := PlanValidator.finalize(_plan([_warmup(), PlanPhase.erg(Wl.WORK, 70, 60, "A"), PlanPhase.erg(Wl.WORK, 70, 60, "B")]))
+	var cur := PlanValidator.finalize(
+		_plan([_warmup(), PlanPhase.erg(Wl.WORK, 70, 60, "A"), PlanPhase.erg(Wl.WORK, 70, 60, "B")])
+	)
 	var rest := _plan([PlanPhase.erg(Wl.WORK, 80, 90, "C")])
 	var s := PlanValidator.spliced(cur, 1, rest)
 	assert_eq(s.size(), 3)
@@ -280,7 +403,9 @@ func test_spliced_keeps_the_head_and_drops_the_cooldown() -> void:
 
 
 func test_validation_is_pure_and_fast_enough() -> void:
-	var plan := _plan([_warmup(), PlanPhase.erg(Wl.WORK, 104, 0).with_range(80, 104).with_open(120, 600)])
+	var plan := _plan(
+		[_warmup(), PlanPhase.erg(Wl.WORK, 104, 0).with_range(80, 104).with_open(120, 600)]
+	)
 	var before := JSON.stringify(plan.to_dict())
 	for i in 2000:
 		PlanValidator.validate(plan)

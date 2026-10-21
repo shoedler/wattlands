@@ -38,8 +38,14 @@ var _crypto: Crypto = null
 
 
 func open(conn: int) -> void:
-	_conns[conn] = {"hello": false, "code": "", "peer": 0, "last_rx": now_s,
-		"bucket": float(NetMessages.BURST_MSGS), "bucket_t": now_s}
+	_conns[conn] = {
+		"hello": false,
+		"code": "",
+		"peer": 0,
+		"last_rx": now_s,
+		"bucket": float(NetMessages.BURST_MSGS),
+		"bucket_t": now_s
+	}
 
 
 func is_open(conn: int) -> bool:
@@ -155,7 +161,11 @@ func advance(dt: float) -> void:
 				_close_room(room)
 				break
 			_forget_peer(room, int(peer))
-		if _rooms.has(code) and _live_count(room) == 0 and (room["dropped_at"] as Dictionary).is_empty():
+		if (
+			_rooms.has(code)
+			and _live_count(room) == 0
+			and (room["dropped_at"] as Dictionary).is_empty()
+		):
 			_rooms.erase(code)
 
 
@@ -191,6 +201,7 @@ func room_peers(code: String) -> Dictionary:
 
 # --- handlers ----------------------------------------------------------------------------
 
+
 func _on_hello(conn: int, c: Dictionary, msg: Dictionary) -> void:
 	if int(msg["proto"]) != Wl.PROTO:
 		_error(conn, "version_mismatch")
@@ -214,8 +225,15 @@ func _on_create(conn: int, c: Dictionary, msg: Dictionary) -> void:
 		code = wanted
 	else:
 		code = _new_code()
-	var room := {"code": code, "max": max_n, "created": now_s, "next_peer": HOST_PEER + 1,
-		"peers": {}, "dropped_at": {}, "tokens": {}}
+	var room := {
+		"code": code,
+		"max": max_n,
+		"created": now_s,
+		"next_peer": HOST_PEER + 1,
+		"peers": {},
+		"dropped_at": {},
+		"tokens": {}
+	}
 	_rooms[code] = room
 	(room["peers"] as Dictionary)[HOST_PEER] = conn
 	var token := _new_token(room, HOST_PEER)
@@ -268,8 +286,19 @@ func _on_join(conn: int, c: Dictionary, msg: Dictionary) -> void:
 		if int(p) != peer and int(peers[p]) >= 0:
 			others.append(int(p))
 	others.sort()
-	_out.append([conn, {"t": "joined", "peer": peer, "host": HOST_PEER, "token": peer_token,
-		"rejoin": rejoin, "peers": others}])
+	_out.append(
+		[
+			conn,
+			{
+				"t": "joined",
+				"peer": peer,
+				"host": HOST_PEER,
+				"token": peer_token,
+				"rejoin": rejoin,
+				"peers": others
+			}
+		]
+	)
 	_to_room(room, {"t": "peer_joined", "peer": peer}, peer)
 
 
@@ -313,6 +342,7 @@ func _route(conn: int, c: Dictionary, to: int) -> Array[int]:
 
 
 # --- helpers -----------------------------------------------------------------------------
+
 
 func _to_room(room: Dictionary, env: Dictionary, except_peer: int) -> void:
 	var peers: Dictionary = room["peers"]
@@ -360,7 +390,9 @@ func _take_token(c: Dictionary) -> bool:
 		return true
 	var elapsed := now_s - float(c["bucket_t"])
 	c["bucket_t"] = now_s
-	var b := minf(float(NetMessages.BURST_MSGS), float(c["bucket"]) + elapsed * NetMessages.MAX_MSGS_PER_S)
+	var b := minf(
+		float(NetMessages.BURST_MSGS), float(c["bucket"]) + elapsed * NetMessages.MAX_MSGS_PER_S
+	)
 	if b < 1.0:
 		c["bucket"] = b
 		return false

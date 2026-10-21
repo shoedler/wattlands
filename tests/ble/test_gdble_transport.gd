@@ -24,9 +24,17 @@ func before_each() -> void:
 	_t = GdbleTransport.new()
 	_t.manager_factory = func() -> Node: return _mgr
 	add_child_autofree(_t)
-	for sig: String in ["adapter_ready", "device_found", "device_connected", "device_disconnected",
-			"services_discovered", "characteristic_read", "characteristic_written",
-			"characteristic_notified", "operation_failed"]:
+	for sig: String in [
+		"adapter_ready",
+		"device_found",
+		"device_connected",
+		"device_disconnected",
+		"services_discovered",
+		"characteristic_read",
+		"characteristic_written",
+		"characteristic_notified",
+		"operation_failed"
+	]:
 		_t.connect(sig, _recorder(sig))
 
 
@@ -68,6 +76,7 @@ func _connected() -> FakeDevice:
 
 # --- availability and initialization -------------------------------------------------
 
+
 func test_available_with_a_factory() -> void:
 	assert_true(_t.is_available())
 
@@ -86,14 +95,19 @@ func test_initialize_twice_reuses_the_manager() -> void:
 	_t.initialize()
 	assert_eq(_mgr.count("initialize"), 2)
 	assert_eq(_t.get_child_count(), 1)
-	assert_eq(_named("adapter_ready").size(), 2, "each initialize answers once (signals not doubled)")
+	assert_eq(
+		_named("adapter_ready").size(), 2, "each initialize answers once (signals not doubled)"
+	)
 
 
 func test_no_adapter_is_a_warning_not_an_error() -> void:
 	_mgr.adapter_ok = false
 	_mgr.adapter_error = "no Bluetooth adapter (D-Bus unavailable)"
 	_t.initialize()
-	assert_eq(_named("adapter_ready"), [["adapter_ready", false, "no Bluetooth adapter (D-Bus unavailable)"]])
+	assert_eq(
+		_named("adapter_ready"),
+		[["adapter_ready", false, "no Bluetooth adapter (D-Bus unavailable)"]]
+	)
 	assert_push_warning("no adapter")
 	_t.start_scan(5.0)
 	assert_eq(_mgr.count("start_scan"), 0, "no scan without an adapter")
@@ -113,18 +127,36 @@ func test_library_missing_reports_no_adapter() -> void:
 
 # --- scanning --------------------------------------------------------------------------
 
+
 func test_scan_maps_discovery_and_expands_service_uuids() -> void:
 	_t.initialize()
 	_t.start_scan(5.0)
 	assert_eq(_mgr.calls.back(), ["start_scan", 5.0])
-	_mgr.device_discovered.emit({"address": ADDR, "name": "KICKR CORE 2B7E", "rssi": -61,
-		"services": ["00001826-0000-1000-8000-00805F9B34FB", "180A"], "manufacturer_data": {}})
+	_mgr.device_discovered.emit(
+		{
+			"address": ADDR,
+			"name": "KICKR CORE 2B7E",
+			"rssi": -61,
+			"services": ["00001826-0000-1000-8000-00805F9B34FB", "180A"],
+			"manufacturer_data": {}
+		}
+	)
 	_mgr.device_updated.emit({"address": "11:22", "name": null, "rssi": null, "services": []})
 	var found := _named("device_found")
 	assert_eq(found.size(), 2)
-	assert_eq(found[0][1], {"address": ADDR, "name": "KICKR CORE 2B7E", "rssi": -61,
-		"services": [FTMS, "0000180a-0000-1000-8000-00805f9b34fb"]})
-	assert_eq(found[1][1], {"address": "11:22", "name": "", "rssi": GdbleTransport.RSSI_UNKNOWN, "services": []})
+	assert_eq(
+		found[0][1],
+		{
+			"address": ADDR,
+			"name": "KICKR CORE 2B7E",
+			"rssi": -61,
+			"services": [FTMS, "0000180a-0000-1000-8000-00805f9b34fb"]
+		}
+	)
+	assert_eq(
+		found[1][1],
+		{"address": "11:22", "name": "", "rssi": GdbleTransport.RSSI_UNKNOWN, "services": []}
+	)
 
 
 func test_scan_reports_devices_cached_by_an_earlier_scan() -> void:
@@ -144,6 +176,7 @@ func test_stop_scan() -> void:
 
 
 # --- connecting ----------------------------------------------------------------------------
+
 
 func test_connect_device_is_a_factory_then_connect_async() -> void:
 	_t.initialize()
@@ -186,7 +219,9 @@ func test_connection_failed_maps_to_operation_failed() -> void:
 	_t.initialize()
 	_t.connect_device(ADDR)
 	_device().connection_failed.emit("CONNECTION_FAILED: timeout")
-	assert_eq(_named("operation_failed"), [["operation_failed", "connect", "CONNECTION_FAILED: timeout"]])
+	assert_eq(
+		_named("operation_failed"), [["operation_failed", "connect", "CONNECTION_FAILED: timeout"]]
+	)
 	assert_false(_t.is_link_up())
 
 
@@ -209,7 +244,7 @@ func test_remote_disconnect_reported_once() -> void:
 func test_local_disconnect_uses_the_zero_argument_method() -> void:
 	var d := _connected()
 	_t.disconnect_device()
-	assert_eq(d.count("disconnect"), 1, "reached through call(&\"disconnect\")")
+	assert_eq(d.count("disconnect"), 1, 'reached through call(&"disconnect")')
 	_mgr.device_disconnected.emit(ADDR)
 	d.disconnected.emit()
 	assert_eq(_named("device_disconnected"), [["device_disconnected", ADDR, "local"]])
@@ -246,6 +281,7 @@ func test_switching_device_detaches_the_old_handle() -> void:
 
 # --- GATT ----------------------------------------------------------------------------------
 
+
 func test_uuids_are_expanded_before_every_call() -> void:
 	var d := _connected()
 	_t.read_characteristic("1826", "2ACC")
@@ -267,24 +303,62 @@ func test_values_are_mapped_with_canonical_uuids() -> void:
 	d.operation_failed.emit("read", "READ_FAILED")
 	assert_eq(_named("characteristic_notified"), [["characteristic_notified", IBD, bytes]])
 	assert_true(BleTransport.same_uuid(_named("characteristic_notified")[0][1], "2AD2"))
-	assert_eq(_named("characteristic_read"), [["characteristic_read", "00002acc-0000-1000-8000-00805f9b34fb", PackedByteArray([1])]])
+	assert_eq(
+		_named("characteristic_read"),
+		[["characteristic_read", "00002acc-0000-1000-8000-00805f9b34fb", PackedByteArray([1])]]
+	)
 	assert_eq(_named("characteristic_written"), [["characteristic_written", CP]])
 	assert_eq(_named("operation_failed"), [["operation_failed", "read", "READ_FAILED"]])
 
 
 func test_services_are_normalized_and_matched_case_insensitively() -> void:
 	var d := _connected()
-	d.services_discovered.emit([{
-		"uuid": "00001826-0000-1000-8000-00805F9B34FB",
-		"characteristics": [
-			{"uuid": "00002AD2-0000-1000-8000-00805F9B34FB", "properties": {"read": false, "notify": true, "indicate": false, "write": false, "write_without_response": false}},
-			{"uuid": "00002ad9-0000-1000-8000-00805f9b34fb", "properties": {"write": true, "indicate": true, "read": false, "notify": false, "write_without_response": false}},
-		],
-	}])
-	var expected := [{"uuid": FTMS, "characteristics": [
-		{"uuid": IBD, "properties": ["notify"]},
-		{"uuid": CP, "properties": ["indicate", "write"]},
-	]}]
+	(
+		d
+		. services_discovered
+		. emit(
+			[
+				{
+					"uuid": "00001826-0000-1000-8000-00805F9B34FB",
+					"characteristics":
+					[
+						{
+							"uuid": "00002AD2-0000-1000-8000-00805F9B34FB",
+							"properties":
+							{
+								"read": false,
+								"notify": true,
+								"indicate": false,
+								"write": false,
+								"write_without_response": false
+							}
+						},
+						{
+							"uuid": "00002ad9-0000-1000-8000-00805f9b34fb",
+							"properties":
+							{
+								"write": true,
+								"indicate": true,
+								"read": false,
+								"notify": false,
+								"write_without_response": false
+							}
+						},
+					],
+				}
+			]
+		)
+	)
+	var expected := [
+		{
+			"uuid": FTMS,
+			"characteristics":
+			[
+				{"uuid": IBD, "properties": ["notify"]},
+				{"uuid": CP, "properties": ["indicate", "write"]},
+			]
+		}
+	]
 	assert_eq(_named("services_discovered"), [["services_discovered", expected]])
 	assert_eq(_t.services(), expected)
 	assert_true(_t.has_characteristic("1826", "2AD9"))
@@ -312,22 +386,39 @@ func test_writes_honour_the_hardware_lock() -> void:
 		assert_eq(_named("operation_failed"), [["operation_failed", "write", Locks.HW_MESSAGE]])
 		assert_push_warning(Locks.HW_MESSAGE)
 	else:
-		assert_eq(d.last("write_characteristic"), ["write_characteristic", FTMS, CP, PackedByteArray([0x00]), true])
+		assert_eq(
+			d.last("write_characteristic"),
+			["write_characteristic", FTMS, CP, PackedByteArray([0x00]), true]
+		)
 
 
 func test_device_write_mapping() -> void:
 	# The bytes path behind the lock, exercised on the fake only.
 	var d := _connected()
 	_t._device_write("0x1826", "2AD9", PackedByteArray([0x05, 0x64, 0x00]), true)
-	assert_eq(d.last("write_characteristic"), ["write_characteristic", FTMS, CP, PackedByteArray([0x05, 0x64, 0x00]), true])
+	assert_eq(
+		d.last("write_characteristic"),
+		["write_characteristic", FTMS, CP, PackedByteArray([0x05, 0x64, 0x00]), true]
+	)
 
 
 # --- ble_event -----------------------------------------------------------------------------
 
-static func _event(op: String, phase: String, code: String, address: String = "", terminal: bool = false) -> Dictionary:
-	return {"operation": StringName(op), "phase": StringName(phase), "operation_id": 0,
-		"terminal": terminal, "device_address": address, "service_uuid": "", "characteristic_uuid": "",
-		"data": null, "error": {"code": code, "message": code, "retryable": true, "details": {}}}
+
+static func _event(
+	op: String, phase: String, code: String, address: String = "", terminal: bool = false
+) -> Dictionary:
+	return {
+		"operation": StringName(op),
+		"phase": StringName(phase),
+		"operation_id": 0,
+		"terminal": terminal,
+		"device_address": address,
+		"service_uuid": "",
+		"characteristic_uuid": "",
+		"data": null,
+		"error": {"code": code, "message": code, "retryable": true, "details": {}}
+	}
 
 
 func test_notification_overflow_asks_for_a_gatt_reset() -> void:
@@ -336,10 +427,13 @@ func test_notification_overflow_asks_for_a_gatt_reset() -> void:
 	_mgr.ble_event.emit(_event("discover_services", "failed", "SERVICES_CHANGED", ADDR.to_lower()))
 	_mgr.ble_event.emit(_event("scan", "failed", "EVENT_OVERFLOW"))
 	_mgr.ble_event.emit(_event("notification", "failed", "EVENT_OVERFLOW", "aa:aa:aa:aa:aa:aa"))
-	assert_eq(_named("operation_failed"), [
-		["operation_failed", GdbleTransport.OP_GATT_RESET, "EVENT_OVERFLOW"],
-		["operation_failed", GdbleTransport.OP_GATT_RESET, "SERVICES_CHANGED"],
-	])
+	assert_eq(
+		_named("operation_failed"),
+		[
+			["operation_failed", GdbleTransport.OP_GATT_RESET, "EVENT_OVERFLOW"],
+			["operation_failed", GdbleTransport.OP_GATT_RESET, "SERVICES_CHANGED"],
+		]
+	)
 
 
 func test_adapter_lost_at_runtime() -> void:
@@ -351,16 +445,22 @@ func test_adapter_lost_at_runtime() -> void:
 	_mgr.ble_event.emit(_event("initialize", "failed", "ADAPTER_UNAVAILABLE"))
 	assert_eq(_named("adapter_ready").size(), 1, "reported once")
 	_t.initialize()
-	assert_eq(_named("adapter_ready").back(), ["adapter_ready", true, ""], "initialize() again recovers")
+	assert_eq(
+		_named("adapter_ready").back(), ["adapter_ready", true, ""], "initialize() again recovers"
+	)
 
 
 func test_adapter_lost_under_a_live_link_drops_the_link_first() -> void:
 	var d := _connected()
 	_mgr.ble_event.emit(_event("initialize", "failed", "ADAPTER_UNAVAILABLE"))
-	assert_eq(_events, [
-		["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
-		["adapter_ready", false, "ADAPTER_UNAVAILABLE"],
-	], "link down first, then the adapter")
+	assert_eq(
+		_events,
+		[
+			["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
+			["adapter_ready", false, "ADAPTER_UNAVAILABLE"],
+		],
+		"link down first, then the adapter"
+	)
 	assert_push_warning("adapter unavailable")
 	assert_false(_t.is_link_up())
 	assert_eq(_t.services(), [])
@@ -376,10 +476,13 @@ func test_adapter_lost_under_a_live_link_drops_the_link_first() -> void:
 func test_no_adapter_answer_while_linked_drops_the_link() -> void:
 	_connected()
 	_mgr.adapter_initialized.emit(false, "ADAPTER_NOT_FOUND")
-	assert_eq(_events, [
-		["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
-		["adapter_ready", false, "ADAPTER_NOT_FOUND"],
-	])
+	assert_eq(
+		_events,
+		[
+			["device_disconnected", ADDR, GdbleTransport.REASON_ADAPTER_LOST],
+			["adapter_ready", false, "ADAPTER_NOT_FOUND"],
+		]
+	)
 	assert_push_warning("no adapter")
 
 
@@ -409,8 +512,15 @@ func test_real_manager_signals_connect_by_name() -> void:
 	assert_not_null(m)
 	assert_eq(m.get_class(), GdbleTransport.MANAGER_CLASS)
 	var cb := func(_a: Variant = null, _b: Variant = null) -> void: pass
-	for sig: String in ["adapter_initialized", "device_discovered", "device_updated", "device_connected",
-			"device_disconnected", "error_occurred", "ble_event"]:
+	for sig: String in [
+		"adapter_initialized",
+		"device_discovered",
+		"device_updated",
+		"device_connected",
+		"device_disconnected",
+		"error_occurred",
+		"ble_event"
+	]:
 		GdbleTransport._connect_signal(m, StringName(sig), cb)
 		assert_true(Signal(m, StringName(sig)).is_connected(cb), sig)
 	m.free()
@@ -418,10 +528,21 @@ func test_real_manager_signals_connect_by_name() -> void:
 
 # --- pure helpers --------------------------------------------------------------------------
 
+
 func test_normalize_services_accepts_property_lists() -> void:
-	var out := GdbleTransport.normalize_services([{"uuid": "180A", "characteristics": [{"uuid": "2A29", "properties": ["read"]}]}, "junk"])
-	assert_eq(out, [{"uuid": "0000180a-0000-1000-8000-00805f9b34fb", "characteristics": [
-		{"uuid": "00002a29-0000-1000-8000-00805f9b34fb", "properties": ["read"]}]}])
+	var out := GdbleTransport.normalize_services(
+		[{"uuid": "180A", "characteristics": [{"uuid": "2A29", "properties": ["read"]}]}, "junk"]
+	)
+	assert_eq(
+		out,
+		[
+			{
+				"uuid": "0000180a-0000-1000-8000-00805f9b34fb",
+				"characteristics":
+				[{"uuid": "00002a29-0000-1000-8000-00805f9b34fb", "properties": ["read"]}]
+			}
+		]
+	)
 
 
 func test_same_address() -> void:

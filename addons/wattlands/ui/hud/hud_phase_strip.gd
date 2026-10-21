@@ -72,8 +72,12 @@ func _draw() -> void:
 			var step := maxf(6.0, h * 0.3)
 			var sx := rect.position.x - h
 			while sx < rect.end.x:
-				var a := Vector2(maxf(sx, rect.position.x), rect.end.y - maxf(0.0, rect.position.x - sx))
-				var bpt := Vector2(minf(sx + bh, rect.end.x), rect.end.y - minf(bh, rect.end.x - sx))
+				var a := Vector2(
+					maxf(sx, rect.position.x), rect.end.y - maxf(0.0, rect.position.x - sx)
+				)
+				var bpt := Vector2(
+					minf(sx + bh, rect.end.x), rect.end.y - minf(bh, rect.end.x - sx)
+				)
 				if bpt.x > a.x:
 					draw_line(a, bpt, Color(0, 0, 0, 0.45), 2.0)
 				sx += step

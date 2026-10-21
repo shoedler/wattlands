@@ -57,10 +57,15 @@ func test_content_overrides_reach_the_game_and_are_validated() -> void:
 	assert_eq(float(g.state["mps_per_w"]), 0.05)
 	assert_eq(g.build_effort_plans()[1].phase(1).range_pct, [75.0, 79.0])
 	var bad := F.make_ctx()
-	bad.content_overrides = {"default.json": {"phases": [{"kind": "COOLDOWN", "target_pct": 50, "duration_s": 180, "label": "x"}]}}
+	bad.content_overrides = {
+		"default.json":
+		{"phases": [{"kind": "COOLDOWN", "target_pct": 50, "duration_s": 180, "label": "x"}]}
+	}
 	var g2 := _game(bad)
 	assert_push_error("never COOLDOWN")
-	assert_eq(g2.build_effort_plans(), {}, "a game never writes the cool-down; bad content gives no plans")
+	assert_eq(
+		g2.build_effort_plans(), {}, "a game never writes the cool-down; bad content gives no plans"
+	)
 
 
 func test_one_plan_per_slot_bots_included() -> void:
@@ -71,13 +76,20 @@ func test_one_plan_per_slot_bots_included() -> void:
 		var plan: EffortPlan = plans[peer]
 		assert_eq(plan.size(), 2)
 		var warm := plan.phase(0)
-		assert_eq([warm.kind, warm.mode, warm.target_pct, warm.ramp_to_pct, warm.duration_s, warm.lap],
-			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0, true])
+		assert_eq(
+			[warm.kind, warm.mode, warm.target_pct, warm.ramp_to_pct, warm.duration_s, warm.lap],
+			[Wl.WARMUP, Wl.ERG, 50.0, 65.0, 300.0, true]
+		)
 		var work := plan.phase(1)
-		assert_eq([work.kind, work.mode, work.target_pct, work.duration_s, work.lap], [Wl.WORK, Wl.ERG, 75.0, 180.0, true])
+		assert_eq(
+			[work.kind, work.mode, work.target_pct, work.duration_s, work.lap],
+			[Wl.WORK, Wl.ERG, 75.0, 180.0, true]
+		)
 		assert_eq(work.range_pct, [75.0, 80.0], "the +5% hill fits inside range_pct")
 		assert_eq([warm.label, work.label], ["_TEMPLATE_PHASE_WARMUP", "_TEMPLATE_PHASE_WORK"])
-		assert_false(plan.cooldown_appended, "the PlanValidator appends the cool-down, never the game")
+		assert_false(
+			plan.cooldown_appended, "the PlanValidator appends the cool-down, never the game"
+		)
 
 
 func test_work_offset_moves_only_work_targets_and_is_clamped() -> void:
@@ -86,10 +98,14 @@ func test_work_offset_moves_only_work_targets_and_is_clamped() -> void:
 	for i in 4:
 		ctx.players[i].options["work_offset"] = offsets[i]
 	var plans := _game(ctx).build_effort_plans()
-	var expect := [[65.0, [65.0, 70.0]], [80.0, [80.0, 85.0]], [80.0, [80.0, 85.0]], [65.0, [65.0, 70.0]]]
+	var expect := [
+		[65.0, [65.0, 70.0]], [80.0, [80.0, 85.0]], [80.0, [80.0, 85.0]], [65.0, [65.0, 70.0]]
+	]
 	for i in 4:
 		var plan: EffortPlan = plans[i + 1]
-		assert_eq([plan.phase(1).target_pct, plan.phase(1).range_pct], expect[i], "offset %d" % offsets[i])
+		assert_eq(
+			[plan.phase(1).target_pct, plan.phase(1).range_pct], expect[i], "offset %d" % offsets[i]
+		)
 		assert_eq(plan.phase(0).target_pct, 50.0, "warm-up targets never move")
 
 
@@ -106,7 +122,11 @@ func test_every_content_and_offset_keeps_the_warmup_and_long_phase_limits() -> v
 				assert_true(p.lap, where)
 				if start < PlanValidator.WARMUP_S:
 					assert_lte(p.peak_pct(), PlanValidator.WARMUP_MAX_PCT, where + ": BRIEF 4.6.8")
-				assert_lte(p.peak_pct(), PlanValidator.LONG_PHASE_CAP_PCT if p.worst_case_length_s() > 300.0 else 150.0, where)
+				assert_lte(
+					p.peak_pct(),
+					PlanValidator.LONG_PHASE_CAP_PCT if p.worst_case_length_s() > 300.0 else 150.0,
+					where
+				)
 				assert_gt(p.duration_s, 0.0, where)
 				start += p.duration_s
 
@@ -121,7 +141,12 @@ func test_a_full_session_sends_exactly_one_hill_per_rider_and_nothing_in_the_coo
 	tick = F.run(g, plans, tick, 0.2)
 	var expected: Array = []
 	for peer: int in [1, 2, -1]:
-		expected.append([peer, {"target_pct": 80.0, "duration_s": 30.0, "reason": "hill", "source": "_template"}])
+		expected.append(
+			[
+				peer,
+				{"target_pct": 80.0, "duration_s": 30.0, "reason": "hill", "source": "_template"}
+			]
+		)
 	assert_eq(_dirs(ctx).requests, expected, "exactly the fields the game sets, once per rider")
 	assert_eq(_dirs(ctx).cadence_bands, [[1, 80.0, 100.0], [2, 80.0, 100.0], [-1, 80.0, 100.0]])
 	var bands := _hud(ctx).of("power_band")
@@ -145,14 +170,24 @@ func test_a_full_session_sends_exactly_one_hill_per_rider_and_nothing_in_the_coo
 
 func test_every_work_phase_gets_its_own_hill_and_lap_marker() -> void:
 	var ctx := F.make_ctx(1)
-	var warm := {"kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "label": "_TEMPLATE_PHASE_WARMUP"}
-	var work := {"kind": "WORK", "target_pct": 75, "duration_s": 180, "label": "_TEMPLATE_PHASE_WORK"}
+	var warm := {
+		"kind": "WARMUP",
+		"target_pct": 50,
+		"ramp_to_pct": 65,
+		"duration_s": 300,
+		"label": "_TEMPLATE_PHASE_WARMUP"
+	}
+	var work := {
+		"kind": "WORK", "target_pct": 75, "duration_s": 180, "label": "_TEMPLATE_PHASE_WORK"
+	}
 	ctx.content_overrides = {"default.json": {"phases": [warm, work, work]}}
 	var g := _game(ctx)
 	watch_signals(g)
 	F.run(g, F.plans_of(g), 0, 670.0)
 	assert_eq(_dirs(ctx).requests.size(), 2, "one hill in each WORK phase")
-	assert_eq(_dirs(ctx).requests.map(func(r: Array) -> float: return r[1]["target_pct"]), [80.0, 80.0])
+	assert_eq(
+		_dirs(ctx).requests.map(func(r: Array) -> float: return r[1]["target_pct"]), [80.0, 80.0]
+	)
 	assert_signal_emit_count(g, "lap_marker", 2)
 
 
@@ -176,7 +211,10 @@ func test_boost_intents_raise_boost_events_unless_the_option_is_off() -> void:
 	var g := _game(ctx)
 	watch_signals(g)
 	var plans := F.plans_of(g)
-	g.sim_step(Wl.SIM_DT, F.frame(ctx, plans, 0, 100.0, {2: [5, {"k": 7}, {"k": "boost", "via": "action"}]}))
+	g.sim_step(
+		Wl.SIM_DT,
+		F.frame(ctx, plans, 0, 100.0, {2: [5, {"k": 7}, {"k": "boost", "via": "action"}]})
+	)
 	assert_signal_emitted_with_parameters(g, "game_event", [{"type": "boost", "slot": 1}])
 	ctx.options["boosts"] = false
 	var g2 := _game(ctx)
@@ -194,7 +232,11 @@ func test_the_host_toasts_only_its_own_riders_laps() -> void:
 	g.sim_step(Wl.SIM_DT, F.frame(ctx, F.plans_of(g), 0))
 	assert_signal_emit_count(g, "game_event", 2, "both laps go to clients")
 	var toasts := _hud(ctx).of("toast")
-	assert_eq(toasts, [["toast", "_TEMPLATE_LAP_DONE", [1], 1]], "peer = ctx.local_peer draws on the host only")
+	assert_eq(
+		toasts,
+		[["toast", "_TEMPLATE_LAP_DONE", [1], 1]],
+		"peer = ctx.local_peer draws on the host only"
+	)
 
 
 func test_rescue_is_a_stagger_with_a_toast_for_humans_only() -> void:
@@ -228,7 +270,11 @@ func test_local_intents_tag_gestures_apart_from_actions() -> void:
 	var g := _game(F.make_ctx())
 	assert_eq(g.local_intents([], [Wl.G_SURGE]), [{"k": "boost", "via": "surge"}])
 	assert_eq(g.local_intents([&"confirm"], []), [{"k": "boost", "via": "action"}])
-	assert_eq(g.local_intents([&"confirm"], [Wl.G_SURGE]), [{"k": "boost", "via": "surge"}], "a surge wins")
+	assert_eq(
+		g.local_intents([&"confirm"], [Wl.G_SURGE]),
+		[{"k": "boost", "via": "surge"}],
+		"a surge wins"
+	)
 	assert_eq(g.local_intents([&"left"], [Wl.G_COAST]), [])
 
 
@@ -270,7 +316,9 @@ func test_snapshots_round_trip_through_json_and_restore_a_client() -> void:
 		assert_eq(c["laps"], h["laps"])
 		assert_typeof(c["laps"], TYPE_INT)
 		assert_eq([c["rescue"], c["afk"]], [h["rescue"], h["afk"]])
-	assert_eq(_hud(client.ctx).of("readout").back()[2], str(TemplateRules.rider(client.state, 2)["laps"]))
+	assert_eq(
+		_hud(client.ctx).of("readout").back()[2], str(TemplateRules.rider(client.state, 2)["laps"])
+	)
 
 
 func test_int_fields_cover_the_snapshot_and_every_event_type() -> void:
@@ -303,15 +351,26 @@ func test_client_predict_moves_only_the_local_marker() -> void:
 	var before2 := float(TemplateRules.rider(g.state, 2)["dist_m"])
 	for _i in 20:
 		g.client_predict(Wl.SIM_DT, local)
-	assert_almost_eq(float(TemplateRules.rider(g.state, 2)["dist_m"]) - before2, 250.0 * float(g.content["mps_per_w"]), 1e-6)
+	assert_almost_eq(
+		float(TemplateRules.rider(g.state, 2)["dist_m"]) - before2,
+		250.0 * float(g.content["mps_per_w"]),
+		1e-6
+	)
 	assert_eq(float(TemplateRules.rider(g.state, 1)["dist_m"]), before1)
 
 
 func test_hud_spec_places_kit_widgets_and_a_boost_button() -> void:
 	var ctx := F.make_ctx()
 	var spec := _game(ctx).hud_spec()
-	for w: String in [HudSpec.TIMELINE, HudSpec.POWER_GAUGE, HudSpec.CADENCE, HudSpec.WBAL, HudSpec.GEAR,
-			HudSpec.TEAMMATES, HudSpec.READOUT]:
+	for w: String in [
+		HudSpec.TIMELINE,
+		HudSpec.POWER_GAUGE,
+		HudSpec.CADENCE,
+		HudSpec.WBAL,
+		HudSpec.GEAR,
+		HudSpec.TEAMMATES,
+		HudSpec.READOUT
+	]:
 		assert_true(spec.has_widget(w), w)
 	for entry in spec.widgets:
 		assert_true(HudSpec.is_valid_position(entry["at"]), str(entry))
@@ -336,14 +395,20 @@ func test_make_view_returns_a_node2d_that_draws_the_state() -> void:
 func test_results_fill_platform_rows_with_laps_xp_unlocks_and_a_grade() -> void:
 	var ctx := F.make_ctx(2, 1)
 	var g := _game(ctx)
-	(ctx.stats as F.Stats).rows = {1: {"kj": 120.0, "time_in_band_pct": 80.0},
-		2: {"kj": 80.0, "time_in_band_pct": 82.0}, -1: {"kj": 100.0, "time_in_band_pct": 84.0}}
+	(ctx.stats as F.Stats).rows = {
+		1: {"kj": 120.0, "time_in_band_pct": 80.0},
+		2: {"kj": 80.0, "time_in_band_pct": 82.0},
+		-1: {"kj": 100.0, "time_in_band_pct": 84.0}
+	}
 	TemplateRules.rider(g.state, 1)["laps"] = 4
 	TemplateRules.rider(g.state, 2)["laps"] = 1
 	TemplateRules.rider(g.state, -1)["laps"] = 3
 	var res := g.results()
 	assert_eq(res.rows.size(), 3)
-	assert_eq([res.row(1)["xp"], res.row(1)["unlocks"], res.row(1)["stats"]["laps"]], [32, ["gold_marker"], 4])
+	assert_eq(
+		[res.row(1)["xp"], res.row(1)["unlocks"], res.row(1)["stats"]["laps"]],
+		[32, ["gold_marker"], 4]
+	)
 	assert_eq([res.row(2)["xp"], res.row(2)["unlocks"]], [13, []])
 	assert_eq([res.row(-1)["xp"], res.row(-1)["is_bot"]], [25, true])
 	assert_eq(res.row(1)["kj"], 120.0, "the platform's columns stay")
@@ -380,7 +445,9 @@ func test_apply_progress_counts_a_session_once_and_returns_only_new_unlocks() ->
 	assert_eq(store.get_value("xp"), 60.0)
 	assert_eq(store.get_value("unlocks"), ["gold_marker"])
 	var other := _game(F.make_ctx(2, 0, "default", Wl.CLIENT, 3))
-	assert_eq(other.apply_progress(res, ProgressStore.open("_template", "")), [], "no row for this peer")
+	assert_eq(
+		other.apply_progress(res, ProgressStore.open("_template", "")), [], "no row for this peer"
+	)
 
 
 func _hashes(rng_seed: int) -> Array:
@@ -437,7 +504,10 @@ func test_short_feeds_its_sim_phase_with_course_grade_and_replans_to_an_open_end
 		var mine := banners.filter(func(c: Array) -> bool: return c[4] == peer)
 		assert_eq(mine.size(), 3, "one banner per phase, on rider %d's own peer" % peer)
 		if mine.size() == 3:
-			assert_eq(mine[1].slice(1, 4), ["_TEMPLATE_BANNER_PHASE", [ctx.strings.t("_TEMPLATE_PHASE_ROLLERS")], 3.0])
+			assert_eq(
+				mine[1].slice(1, 4),
+				["_TEMPLATE_BANNER_PHASE", [ctx.strings.t("_TEMPLATE_PHASE_ROLLERS")], 3.0]
+			)
 	assert_eq(banners.size(), 6, "and no banner to every peer")
 
 
@@ -458,14 +528,22 @@ func test_phase_banners_follow_each_riders_own_phase() -> void:
 	var cool := ctx.strings.t(PlanValidator.cooldown_phase().label)
 	var to := func(peer: int) -> Array:
 		return _hud(ctx).of("banner").filter(func(c: Array) -> bool: return c[4] == peer)
-	assert_eq((to.call(1) as Array).size(), 4, "rider 1: a banner per phase, the cool-down's included")
+	assert_eq(
+		(to.call(1) as Array).size(), 4, "rider 1: a banner per phase, the cool-down's included"
+	)
 	assert_eq((to.call(1) as Array).back().slice(1, 3), ["_TEMPLATE_BANNER_PHASE", [cool]])
-	assert_eq((to.call(2) as Array).size(), 3, "rider 2 still rides its last phase: no cool-down banner yet")
+	assert_eq(
+		(to.call(2) as Array).size(),
+		3,
+		"rider 2 still rides its last phase: no cool-down banner yet"
+	)
 	assert_eq(to.call(0), [], "no banner goes to every peer")
 	assert_eq(to.call(-1), [], "bots get no banner")
 	assert_signal_emit_count(g, "phase_changed", 3, "the group is not in the cool-down yet")
 	F.run(g, plans, tick, 18.0)  # 178.1 s: rider 2 and the bot entered it too
-	assert_eq((to.call(2) as Array).size(), 4, "rider 2's cool-down banner comes with its own change")
+	assert_eq(
+		(to.call(2) as Array).size(), 4, "rider 2's cool-down banner comes with its own change"
+	)
 	assert_eq((to.call(2) as Array).back().slice(1, 3), ["_TEMPLATE_BANNER_PHASE", [cool]])
 	assert_eq((to.call(1) as Array).size(), 4, "rider 1 gets no second cool-down banner")
 	assert_signal_emit_count(g, "phase_changed", 4)
@@ -478,10 +556,24 @@ func test_an_open_ended_phase_ends_with_end_phase_after_min_s_in_band() -> void:
 	for power_pct: float in [100.0, 50.0]:
 		var ctx := F.make_ctx(1)
 		var g := _game(ctx)
-		var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 60, "_TEMPLATE_PHASE_WARMUP").with_lap(),
-			PlanPhase.erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH").with_range(55, 60).with_open(30, 50).with_lap()])
+		var plan := EffortPlan.of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 60, "_TEMPLATE_PHASE_WARMUP").with_lap(),
+				(
+					PlanPhase
+					. erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH")
+					. with_range(55, 60)
+					. with_open(30, 50)
+					. with_lap()
+				)
+			]
+		)
 		var plans := {1: F.with_cooldown(plan)}
 		var tick := F.run(g, plans, 0, 89.9, power_pct)
 		assert_eq(_dirs(ctx).ended, [], "not before min_s")
 		F.run(g, plans, tick, 2.0, power_pct)
-		assert_eq(_dirs(ctx).ended, [1] if power_pct == 100.0 else [], "in band after min_s: end_phase once (power %d%%)" % power_pct)
+		assert_eq(
+			_dirs(ctx).ended,
+			[1] if power_pct == 100.0 else [],
+			"in band after min_s: end_phase once (power %d%%)" % power_pct
+		)

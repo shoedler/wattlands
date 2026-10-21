@@ -18,7 +18,8 @@ const STOP := "write 2ad9 0801"
 
 
 ## The fake KICKR plus what FtmsConnectionManager needs from a backend.
-class KickrLink extends "res://tests/trainer/fake_kickr_transport.gd":
+class KickrLink:
+	extends "res://tests/trainer/fake_kickr_transport.gd"
 	var linked: String = ""
 
 	func initialize() -> void:
@@ -107,7 +108,9 @@ func _ready_service() -> WlTrainerService:
 	svc.connect_trainer(ADDR)
 	_pump(svc, 3.0)
 	assert_true(_client.is_ready(), "precondition: in control")
-	assert_true(svc.device() is FtmsTrainer, "precondition: the FTMS trainer is the service's device")
+	assert_true(
+		svc.device() is FtmsTrainer, "precondition: the FTMS trainer is the service's device"
+	)
 	assert_not_null(svc.local_rider())
 	assert_true(_link.ops.has(FLAT), "precondition: the menus ride SIM flat")
 	return svc
@@ -118,7 +121,11 @@ func _since(from: int) -> Array[String]:
 	var out: Array[String] = []
 	for i in range(from, _link.ops.size()):
 		var op := _link.ops[i]
-		if op.begins_with("write 2ad9") or op.begins_with("disconnect") or op.begins_with("connect"):
+		if (
+			op.begins_with("write 2ad9")
+			or op.begins_with("disconnect")
+			or op.begins_with("connect")
+		):
 			out.append(op)
 	return out
 
@@ -134,7 +141,9 @@ func test_disconnect_sends_sim_flat_then_stop_before_the_link_drops() -> void:
 	assert_false(_since(n).has("disconnect " + ADDR), "not yet dropped")
 	_pump(svc, 1.0)
 	assert_false(svc.is_unlinking())
-	assert_eq(_since(n), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop, then the link drops")
+	assert_eq(
+		_since(n), [FLAT, STOP, "disconnect " + ADDR], "SIM flat, then Stop, then the link drops"
+	)
 	assert_eq(_manager.status(), TrainerDevice.STATUS_DISCONNECTED)
 
 
@@ -161,8 +170,15 @@ func test_switching_trainers_makes_the_old_one_safe_and_never_stops_the_new_one(
 	var ops := _since(n)
 	var at_connect := ops.find("connect " + OTHER)
 	assert_gt(at_connect, -1, "connected to the other trainer: %s" % str(ops))
-	assert_eq(ops.slice(0, 3), [FLAT, STOP, "disconnect " + ADDR], "the old trainer: SIM flat, Stop, then the link drops")
-	assert_false(ops.slice(at_connect).has(STOP), "no Stop reaches the new trainer: %s" % str(ops.slice(at_connect)))
+	assert_eq(
+		ops.slice(0, 3),
+		[FLAT, STOP, "disconnect " + ADDR],
+		"the old trainer: SIM flat, Stop, then the link drops"
+	)
+	assert_false(
+		ops.slice(at_connect).has(STOP),
+		"no Stop reaches the new trainer: %s" % str(ops.slice(at_connect))
+	)
 	assert_true(_client.is_ready(), "in control of the other trainer")
 	assert_ne(svc.device(), old_device)
 	assert_not_null(svc.local_rider())
@@ -179,7 +195,11 @@ func test_use_mock_sends_stop_before_dropping_the_real_trainer() -> void:
 	assert_true(svc.is_unlinking())
 	assert_false(m.is_queued_for_deletion(), "the old manager waits for the Stop")
 	_pump(svc, 1.0, m)
-	assert_eq(_since(n), [FLAT, STOP, "disconnect " + ADDR], "W3: only SIM flat went out before the link dropped")
+	assert_eq(
+		_since(n),
+		[FLAT, STOP, "disconnect " + ADDR],
+		"W3: only SIM flat went out before the link dropped"
+	)
 	assert_true(m.is_queued_for_deletion())
 
 
@@ -191,7 +211,10 @@ func test_an_unanswering_trainer_is_dropped_after_the_timeout() -> void:
 	_pump(svc, WlTrainerService.SAFE_UNLINK_TIMEOUT_S - 0.1)
 	assert_false(_since(n).has("disconnect " + ADDR), "still waiting")
 	_pump(svc, 0.2)
-	assert_true(_since(n).has("disconnect " + ADDR), "dropped after %.1f s" % WlTrainerService.SAFE_UNLINK_TIMEOUT_S)
+	assert_true(
+		_since(n).has("disconnect " + ADDR),
+		"dropped after %.1f s" % WlTrainerService.SAFE_UNLINK_TIMEOUT_S
+	)
 	assert_push_warning("did not all go out")
 
 

@@ -111,7 +111,12 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		tracker.close_block(peer, tick)
 	_log(peer, id, NetMessages.DIRECTIVE_REQUEST, d.to_dict(), true, "")
 	if _riders.has(peer):
-		var rec := _normalize((_riders[peer] as LocalRider).apply_directive(d), id, NetMessages.DIRECTIVE_REQUEST, d.to_dict())
+		var rec := _normalize(
+			(_riders[peer] as LocalRider).apply_directive(d),
+			id,
+			NetMessages.DIRECTIVE_REQUEST,
+			d.to_dict()
+		)
 		if opened and bool(rec.get("refused", false)):
 			# The rider's governor refused the block: no switch happened.
 			tracker.cancel_block(peer, prev_switch, prev_mode)
@@ -120,7 +125,15 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		if opened:
 			_open_blocks[peer] = {"id": id, "prev_switch": prev_switch, "prev_mode": prev_mode}
 		_remember_sent(peer, id, d.to_dict())
-		_remote(peer, {"kind": NetMessages.DIRECTIVE_REQUEST, "id": id, "peer": peer, "directive": d.to_dict()})
+		_remote(
+			peer,
+			{
+				"kind": NetMessages.DIRECTIVE_REQUEST,
+				"id": id,
+				"peer": peer,
+				"directive": d.to_dict()
+			}
+		)
 	return DirectiveResult.ok(id)
 
 
@@ -149,8 +162,10 @@ func take_sent_request(peer: int, id: int) -> Dictionary:
 
 func _remember_sent(peer: int, id: int, requested: Dictionary) -> void:
 	_sent[id] = {
-		"peer": peer, "requested": requested.duplicate(true),
-		"t": clock.platform_time() if clock != null else 0.0, "game_t": _t(),
+		"peer": peer,
+		"requested": requested.duplicate(true),
+		"t": clock.platform_time() if clock != null else 0.0,
+		"game_t": _t(),
 		"phase_index": tracker.index_of(peer) if tracker != null else -1,
 	}
 	while _sent.size() > SENT_KEEP:
@@ -185,7 +200,11 @@ func end_phase(peer: int) -> bool:
 		push_warning("DirectiveRouter: end_phase ignored on a client")
 		return false
 	var id := _take_id()
-	var why := Wl.REFUSE_UNKNOWN_PEER if not slots.has(peer) else (tracker.request_end(peer) if tracker != null else Wl.REFUSE_NO_PHASE)
+	var why := (
+		Wl.REFUSE_UNKNOWN_PEER
+		if not slots.has(peer)
+		else (tracker.request_end(peer) if tracker != null else Wl.REFUSE_NO_PHASE)
+	)
 	if why != "":
 		_refuse(peer, "end_phase", {}, why, id)
 		return false
@@ -205,7 +224,14 @@ func cadence_band(peer: int, lo_rpm: float, hi_rpm: float) -> void:
 		why = Wl.REFUSE_UNKNOWN_PEER
 	elif tracker != null and (tracker.is_cooldown(peer) or tracker.is_done(peer)):
 		why = Wl.REFUSE_COOLDOWN
-	elif is_nan(lo_rpm) or is_nan(hi_rpm) or is_inf(lo_rpm) or is_inf(hi_rpm) or lo_rpm < 0.0 or hi_rpm < lo_rpm:
+	elif (
+		is_nan(lo_rpm)
+		or is_nan(hi_rpm)
+		or is_inf(lo_rpm)
+		or is_inf(hi_rpm)
+		or lo_rpm < 0.0
+		or hi_rpm < lo_rpm
+	):
 		why = Wl.REFUSE_BAD_FIELDS
 	if why != "":
 		_refuse(peer, kind, req, why, id)
@@ -228,7 +254,13 @@ func replan(peer: int, plan: EffortPlan) -> bool:
 	var whole := PlanValidator.spliced(tracker.plan_of(peer), tracker.index_of(peer), plan)
 	var res := PlanValidator.validate(whole)
 	if not bool(res["ok"]):
-		_refuse(peer, "replan", {"plan": plan.to_dict(), "errors": res["errors"]}, Wl.REFUSE_PLAN_INVALID, id)
+		_refuse(
+			peer,
+			"replan",
+			{"plan": plan.to_dict(), "errors": res["errors"]},
+			Wl.REFUSE_PLAN_INVALID,
+			id
+		)
 		return false
 	var fin := PlanValidator.finalize(whole)
 	tracker.set_pending_plan(peer, fin)
@@ -340,7 +372,11 @@ func _check_request(peer: int, d: EffortDirective) -> String:
 ## True when `d` opens a SIM block: mode "SIM" in an ERG phase while no block runs. The same
 ## request during a running block only confirms it (never extends it), like the governor.
 func _opens_block(peer: int, d: EffortDirective, tick: int) -> bool:
-	return d.mode == Wl.SIM and tracker.phase_of(peer).mode == Wl.ERG and not tracker.block_active(peer, tick)
+	return (
+		d.mode == Wl.SIM
+		and tracker.phase_of(peer).mode == Wl.ERG
+		and not tracker.block_active(peer, tick)
+	)
 
 
 func _fields_ok(d: EffortDirective) -> bool:
@@ -414,7 +450,16 @@ func _apply_band(peer: int, lo: float, hi: float, id: int) -> void:
 	if _riders.has(peer):
 		(_riders[peer] as LocalRider).set_cadence_band(lo, hi)
 	else:
-		_remote(peer, {"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "id": id, "peer": peer, "lo_rpm": lo, "hi_rpm": hi})
+		_remote(
+			peer,
+			{
+				"kind": NetMessages.DIRECTIVE_CADENCE_BAND,
+				"id": id,
+				"peer": peer,
+				"lo_rpm": lo,
+				"hi_rpm": hi
+			}
+		)
 	if bus != null:
 		bus.cadence_band_changed.emit(peer, lo, hi)
 
@@ -426,11 +471,20 @@ func _remote(peer: int, payload: Dictionary) -> void:
 		push_warning("DirectiveRouter: no route to remote rider %d" % peer)
 
 
-func _refuse(peer: int, kind: String, requested: Dictionary, reason: String, id: int) -> DirectiveResult:
+func _refuse(
+	peer: int, kind: String, requested: Dictionary, reason: String, id: int
+) -> DirectiveResult:
 	push_warning("DirectiveRouter: %s for peer %d refused: %s" % [kind, peer, reason])
 	var rec := {
-		"id": id, "kind": kind, "requested": requested, "applied": {}, "clamped_by": [],
-		"refused": true, "reason": reason, "t": _t(), "by": "host",
+		"id": id,
+		"kind": kind,
+		"requested": requested,
+		"applied": {},
+		"clamped_by": [],
+		"refused": true,
+		"reason": reason,
+		"t": _t(),
+		"by": "host",
 	}
 	_log(peer, id, kind, requested, false, reason)
 	if bus != null:
@@ -440,7 +494,9 @@ func _refuse(peer: int, kind: String, requested: Dictionary, reason: String, id:
 	return DirectiveResult.refused(reason, id)
 
 
-func _log(peer: int, id: int, kind: String, requested: Dictionary, accepted: bool, reason: String) -> void:
+func _log(
+	peer: int, id: int, kind: String, requested: Dictionary, accepted: bool, reason: String
+) -> void:
 	if report != null:
 		report.directive_requested(peer, id, kind, requested, _t(), accepted, reason)
 
@@ -470,7 +526,9 @@ func _normalize(rec: Dictionary, id: int, kind: String, requested: Dictionary) -
 	elif not (out["refused"] is bool):
 		# Telemetry.acks documents refused as a String ("" or the reason); records carry a bool.
 		var rv: Variant = out["refused"]
-		out["refused"] = (rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
+		out["refused"] = (
+			(rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
+		)
 	if not out.has("reason"):
 		out["reason"] = ""
 	if not out.has("t"):

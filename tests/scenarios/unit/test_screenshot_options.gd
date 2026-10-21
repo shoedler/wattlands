@@ -8,7 +8,18 @@ func _parse(args: Array) -> Dictionary:
 
 
 func test_game_mode() -> void:
-	var o := _parse(["--mock-trainer=erg", "--game=siege", "--content=short", "--at=600,60,360,60", "--players=4", "--bots=0", "--rider=zero", "--seed=3"])
+	var o := _parse(
+		[
+			"--mock-trainer=erg",
+			"--game=siege",
+			"--content=short",
+			"--at=600,60,360,60",
+			"--players=4",
+			"--bots=0",
+			"--rider=zero",
+			"--seed=3"
+		]
+	)
 	assert_eq(o["error"], "")
 	assert_eq(o["mode"], "game")
 	assert_eq(o["at"], [60.0, 360.0, 600.0], "sorted and unique")
@@ -17,12 +28,30 @@ func test_game_mode() -> void:
 	assert_eq(o["players"], 4)
 	assert_eq(o["mock_trainer"], "erg")
 	assert_eq(o["out"], "build/screenshots/siege")
-	assert_eq(Array(o["sim_args"]), ["--game=siege", "--content=short", "--players=4", "--bots=0", "--rider=zero", "--seed=3"], "screenshot flags never reach GameSimRunner")
+	assert_eq(
+		Array(o["sim_args"]),
+		["--game=siege", "--content=short", "--players=4", "--bots=0", "--rider=zero", "--seed=3"],
+		"screenshot flags never reach GameSimRunner"
+	)
 
 
 func test_repeated_riders_keep_their_order() -> void:
-	var o := _parse(["--game=tank", "--at=1", "--rider=erg", "--rider=erg+cadence_drop:rpm=30,at_phase=4,after_s=20,for_s=30"])
-	assert_eq(Array(o["sim_args"]), ["--game=tank", "--rider=erg", "--rider=erg+cadence_drop:rpm=30,at_phase=4,after_s=20,for_s=30"])
+	var o := _parse(
+		[
+			"--game=tank",
+			"--at=1",
+			"--rider=erg",
+			"--rider=erg+cadence_drop:rpm=30,at_phase=4,after_s=20,for_s=30"
+		]
+	)
+	assert_eq(
+		Array(o["sim_args"]),
+		[
+			"--game=tank",
+			"--rider=erg",
+			"--rider=erg+cadence_drop:rpm=30,at_phase=4,after_s=20,for_s=30"
+		]
+	)
 
 
 func test_game_needs_at() -> void:
@@ -43,7 +72,9 @@ func test_bad_values() -> void:
 
 func test_exactly_one_mode() -> void:
 	assert_string_contains(_parse([])["error"], "exactly one of")
-	assert_string_contains(_parse(["--game=g", "--at=1", "--app-screen=title"])["error"], "exactly one of")
+	assert_string_contains(
+		_parse(["--game=g", "--at=1", "--app-screen=title"])["error"], "exactly one of"
+	)
 
 
 func test_scene_mode() -> void:
@@ -66,17 +97,28 @@ func test_app_mode() -> void:
 
 func test_file_names() -> void:
 	assert_eq(QaScreenshotOptions.file_name("siege", "short", 4, 360.0), "siege_short_4p_360s.png")
-	assert_eq(QaScreenshotOptions.file_name("fishing", "free_30", 2, 90.5), "fishing_free_30_2p_90.5s.png")
+	assert_eq(
+		QaScreenshotOptions.file_name("fishing", "free_30", 2, 90.5), "fishing_free_30_2p_90.5s.png"
+	)
 	assert_eq(QaScreenshotOptions.format_seconds(0.25), "0.25")
 	assert_eq(QaScreenshotOptions.format_seconds(12.0), "12")
-	assert_eq(QaScreenshotOptions.scene_file_name("res://addons/wattlands/world2d/demo.tscn"), "world2d_demo.png")
-	assert_eq(QaScreenshotOptions.scene_file_name("res://addons/wattlands/world3d/demo.tscn"), "world3d_demo.png")
+	assert_eq(
+		QaScreenshotOptions.scene_file_name("res://addons/wattlands/world2d/demo.tscn"),
+		"world2d_demo.png"
+	)
+	assert_eq(
+		QaScreenshotOptions.scene_file_name("res://addons/wattlands/world3d/demo.tscn"),
+		"world3d_demo.png"
+	)
 	assert_eq(QaScreenshotOptions.app_file_name("picker"), "app_picker.png")
 
 
 func test_output_dirs_resolve_against_the_project() -> void:
 	var root := ProjectSettings.globalize_path("res://").replace("\\", "/")
-	assert_eq(QaScreenshotOptions.resolve_dir("build/screenshots/siege"), root.path_join("build/screenshots/siege").simplify_path())
+	assert_eq(
+		QaScreenshotOptions.resolve_dir("build/screenshots/siege"),
+		root.path_join("build/screenshots/siege").simplify_path()
+	)
 	assert_eq(QaScreenshotOptions.resolve_dir("C:\\shots"), "C:/shots")
 	assert_eq(QaScreenshotOptions.default_out("game", "tank"), "build/screenshots/tank")
 	assert_eq(QaScreenshotOptions.default_out("app", ""), "build/screenshots/app")

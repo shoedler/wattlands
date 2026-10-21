@@ -52,7 +52,9 @@ func _make() -> WlTrainerService:
 		_manager = Fakes.FakeConnectionManager.new()
 		return _manager
 	svc.rider_options_factory = func() -> Dictionary:
-		return {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus}
+		return {
+			"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus
+		}
 	add_child_autofree(svc)
 	return svc
 
@@ -148,7 +150,9 @@ func test_ftms_path_auto_connects_through_the_manager() -> void:
 	assert_null(svc.local_rider(), "no rider without a trainer")
 	_manager.status_changed.emit(TrainerDevice.STATUS_SCANNING, "looking for a trainer")
 	assert_eq(svc.status(), TrainerDevice.STATUS_SCANNING)
-	assert_signal_emitted_with_parameters(_bus, "trainer_status_changed", [TrainerDevice.STATUS_SCANNING, "looking for a trainer"])
+	assert_signal_emitted_with_parameters(
+		_bus, "trainer_status_changed", [TrainerDevice.STATUS_SCANNING, "looking for a trainer"]
+	)
 	var d := Fakes.FakeDevice.new()
 	autofree(d)
 	_manager.make_ready(d)
@@ -202,8 +206,12 @@ func test_device_status_and_control_lost_are_mirrored() -> void:
 	watch_signals(_bus)
 	d.set_dev_status(TrainerDevice.STATUS_CONTROL_LOST, "another app may hold control")
 	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST)
-	assert_signal_emitted_with_parameters(svc, "status_changed", [TrainerDevice.STATUS_CONTROL_LOST, "another app may hold control"])
-	assert_signal_emitted_with_parameters(_bus, "trainer_control_lost", ["another app may hold control"])
+	assert_signal_emitted_with_parameters(
+		svc, "status_changed", [TrainerDevice.STATUS_CONTROL_LOST, "another app may hold control"]
+	)
+	assert_signal_emitted_with_parameters(
+		_bus, "trainer_control_lost", ["another app may hold control"]
+	)
 	d.set_dev_status(TrainerDevice.STATUS_CONTROL_LOST, "another app may hold control")
 	assert_signal_emit_count(svc, "status_changed", 1, "unchanged status: no repeat")
 
@@ -262,7 +270,9 @@ func test_mock_keyboard_flag_enables_it_on_every_mock() -> void:
 	assert_ne(svc.device(), m, "new rider parameters rebuild the mock")
 	assert_true((svc.device() as MockTrainer).is_keyboard_enabled(), "the rebuilt mock keeps it")
 	svc.use_mock("zero")
-	assert_true((svc.device() as MockTrainer).is_keyboard_enabled(), "and a mock picked in Settings")
+	assert_true(
+		(svc.device() as MockTrainer).is_keyboard_enabled(), "and a mock picked in Settings"
+	)
 
 
 # --- ticking ----------------------------------------------------------------------------------
@@ -314,7 +324,12 @@ func test_sim_speed_is_ignored_with_a_real_trainer() -> void:
 		assert_eq(svc.effective_sim_speed(), 1.0, spd)
 		var r := svc.local_rider()
 		svc._process(Wl.SIM_DT)
-		assert_almost_eq(r.platform_time(), Wl.SIM_DT, 1e-9, "one step per 0.05 s of wall time (--sim-speed=%s)" % spd)
+		assert_almost_eq(
+			r.platform_time(),
+			Wl.SIM_DT,
+			1e-9,
+			"one step per 0.05 s of wall time (--sim-speed=%s)" % spd
+		)
 		assert_eq(svc.effective_sim_speed(), 1.0)
 		var n := 0
 		for e: Variant in get_errors():
@@ -408,8 +423,12 @@ func _session_setup(svc: WlTrainerService, rec: RideRecorderApi = null) -> Local
 	var r := svc.local_rider()
 	svc.set_external_tick(true)
 	var slot := _settings.profile.to_slot(2, Wl.FAIR_FTP)
-	var opts := {"multiplayer": true, "governor": Fakes.FakeGovernor.new(),
-		"gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	var opts := {
+		"multiplayer": true,
+		"governor": Fakes.FakeGovernor.new(),
+		"gestures": Fakes.FakeGestures.new(),
+		"bus": _bus
+	}
 	if rec != null:
 		opts["recorder"] = rec
 	r.setup(2, _settings.profile, slot, svc.device(), opts)
@@ -433,8 +452,18 @@ func test_set_menu_ticking_is_the_external_tick_switch() -> void:
 	assert_true(svc.is_external_tick())
 	svc._process(1.0)
 	assert_eq(r.platform_time(), t0, "no second ticker during a session")
-	r.setup(2, _settings.profile, _settings.profile.to_slot(2, Wl.FAIR_FTP), svc.device(),
-		{"multiplayer": true, "governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		2,
+		_settings.profile,
+		_settings.profile.to_slot(2, Wl.FAIR_FTP),
+		svc.device(),
+		{
+			"multiplayer": true,
+			"governor": Fakes.FakeGovernor.new(),
+			"gestures": Fakes.FakeGestures.new(),
+			"bus": _bus
+		}
+	)
 	svc.set_menu_ticking(true)
 	assert_false(svc.is_external_tick())
 	assert_eq(r.peer_id, 1, "handing back sets the menu rider up afresh")
@@ -485,7 +514,9 @@ func test_menu_reset_attaches_the_rider_to_the_input_router_again() -> void:
 	assert_eq(router.attached_rider(), r, "the menu rider is attached again")
 	router.take_gestures()
 	r.gesture_detected.emit(Wl.G_SURGE)
-	assert_eq(router.take_gestures(), [Wl.G_SURGE] as Array[StringName], "its gestures reach the menus")
+	assert_eq(
+		router.take_gestures(), [Wl.G_SURGE] as Array[StringName], "its gestures reach the menus"
+	)
 
 
 ## W2r2: the reset that waited for a ride still recording attaches the rider too, and so does
@@ -558,9 +589,13 @@ func test_reconnect_with_a_new_trainer_object_during_a_session_rebinds() -> void
 	assert_eq(r.plan().size(), 2, "the session plan stays")
 	assert_signal_emitted_with_parameters(svc, "device_changed", [d2])
 	d2.set_dev_status(TrainerDevice.STATUS_CONTROL_LOST, "x")
-	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the new object's status is mirrored")
+	assert_eq(
+		svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the new object's status is mirrored"
+	)
 	d1.set_dev_status(TrainerDevice.STATUS_ERROR, "old")
-	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the old object is no longer watched")
+	assert_eq(
+		svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the old object is no longer watched"
+	)
 
 
 ## W2 (BRIEF 4.4): the manager keeps one FtmsTrainer per address, so a reconnect hands back
@@ -601,7 +636,11 @@ func test_reconnect_with_a_new_object_rebinds_then_resyncs() -> void:
 	assert_push_warning("during a session")
 	assert_eq(r.device, d2)
 	assert_eq(g.setup_device, d2)
-	assert_eq(g.called("on_trainer_reconnected").size(), 1, "the rebound governor learns the flow reset the trainer")
+	assert_eq(
+		g.called("on_trainer_reconnected").size(),
+		1,
+		"the rebound governor learns the flow reset the trainer"
+	)
 	_manager.reconnected.emit(d1)
 	assert_eq(g.called("on_trainer_reconnected").size(), 1, "a stale object is ignored")
 
@@ -616,8 +655,18 @@ func test_switching_trainers_saves_a_ride_still_recording() -> void:
 	_manager.make_ready(d1)
 	var rec := Fakes.FakeRecorder.new()
 	var r := svc.local_rider()
-	r.setup(1, _settings.profile, null, d1, {"recorder": rec, "governor": Fakes.FakeGovernor.new(),
-		"gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		1,
+		_settings.profile,
+		null,
+		d1,
+		{
+			"recorder": rec,
+			"governor": Fakes.FakeGovernor.new(),
+			"gestures": Fakes.FakeGestures.new(),
+			"bus": _bus
+		}
+	)
 	_manager.make_ready(d2)
 	assert_push_warning("saving it first")
 	assert_eq(rec.saves.size(), 1)
@@ -642,7 +691,9 @@ func test_system_nodes_process_while_the_tree_is_paused() -> void:
 		ok.append(n.can_process())
 	get_tree().paused = false
 	for i in nodes.size():
-		assert_true(ok[i], "%s keeps processing while the tree is paused (BRIEF 4.1)" % nodes[i].name)
+		assert_true(
+			ok[i], "%s keeps processing while the tree is paused (BRIEF 4.1)" % nodes[i].name
+		)
 
 
 func test_panic_makes_the_rider_safe() -> void:
@@ -663,7 +714,13 @@ func test_shutdown_all_covers_every_live_rider() -> void:
 		autofree(m)
 		var r := LocalRider.new()
 		add_child_autofree(r)
-		r.setup(-(i + 1), RiderProfile.new(), null, m, {"governor": Fakes.FakeGovernor.new(), "bus": _bus})
+		r.setup(
+			-(i + 1),
+			RiderProfile.new(),
+			null,
+			m,
+			{"governor": Fakes.FakeGovernor.new(), "bus": _bus}
+		)
 		extra.append(r)
 	var n := svc.shutdown_all()
 	assert_gte(n, 3)

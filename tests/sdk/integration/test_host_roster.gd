@@ -44,10 +44,23 @@ func after_each() -> void:
 
 func test_three_human_slots_roster_power_and_phases_follow_each_riders_own_telemetry() -> void:
 	_runner = GameSimRunner.new()
-	assert_eq(_runner.setup({
-		"game": "fx_conform", "content": "tiny", "players": 3, "riders": ["erg", "erg+band", "erg"],
-		"seed": 5, "registry": _reg, "max_sim_seconds": 300.0,
-	}), "")
+	assert_eq(
+		(
+			_runner
+			. setup(
+				{
+					"game": "fx_conform",
+					"content": "tiny",
+					"players": 3,
+					"riders": ["erg", "erg+band", "erg"],
+					"seed": 5,
+					"registry": _reg,
+					"max_sim_seconds": 300.0,
+				}
+			)
+		),
+		""
+	)
 	var r := _runner
 	assert_eq(r.role, Wl.HOST)
 	var peers: Array[int] = []
@@ -77,16 +90,37 @@ func test_three_human_slots_roster_power_and_phases_follow_each_riders_own_telem
 			roster_checks += 1
 			for p in peers:
 				var row: Dictionary = r.host.ctx.roster.get(p, {})
-				if row.is_empty() or not _seen_recently(power_hist[p], float(row.get("raw_w", -1.0)), ROSTER_LAG_TICKS):
-					roster_misses.append([tick, p, row.get("raw_w"), (power_hist[p] as Array).slice(-ROSTER_LAG_TICKS)])
+				if (
+					row.is_empty()
+					or not _seen_recently(
+						power_hist[p], float(row.get("raw_w", -1.0)), ROSTER_LAG_TICKS
+					)
+				):
+					roster_misses.append(
+						[
+							tick,
+							p,
+							row.get("raw_w"),
+							(power_hist[p] as Array).slice(-ROSTER_LAG_TICKS)
+						]
+					)
 				for c in r.clients:
 					var crow: Dictionary = c.ctx.roster.get(p, {}) if c.ctx != null else {}
-					if crow.is_empty() or not _seen_recently(power_hist[p], float(crow.get("raw_w", -1.0)), ROSTER_LAG_TICKS + 1):
+					if (
+						crow.is_empty()
+						or not _seen_recently(
+							power_hist[p], float(crow.get("raw_w", -1.0)), ROSTER_LAG_TICKS + 1
+						)
+					):
 						client_roster_misses.append([tick, c.local_peer(), p, crow.get("raw_w")])
 		for p in peers:
 			var host_index := r.host.tracker.index_of(p)
 			var own := (r.riders[p] as LocalRider).telemetry().phase_index
-			var gh_index: int = r.host.local_phase_state().index if p == r.host.local_peer() else (by_peer[p] as GameHost).local_phase_state().index
+			var gh_index: int = (
+				r.host.local_phase_state().index
+				if p == r.host.local_peer()
+				else (by_peer[p] as GameHost).local_phase_state().index
+			)
 			max_phase[p] = maxi(int(max_phase.get(p, -1)), own)
 			if own != host_index or gh_index != host_index:
 				var lag := int(phase_lag.get(p, 0)) + 1
@@ -96,9 +130,21 @@ func test_three_human_slots_roster_power_and_phases_follow_each_riders_own_telem
 			else:
 				phase_lag[p] = 0
 	assert_gt(roster_checks, 200)
-	assert_eq(roster_misses.slice(0, 5), [], "host roster raw_w is each rider's own recent power (%d misses)" % roster_misses.size())
-	assert_eq(client_roster_misses.slice(0, 5), [], "every client's roster copy too (%d misses)" % client_roster_misses.size())
-	assert_eq(phase_misses.slice(0, 5), [], "each rider's own phase is the host's (%d misses)" % phase_misses.size())
+	assert_eq(
+		roster_misses.slice(0, 5),
+		[],
+		"host roster raw_w is each rider's own recent power (%d misses)" % roster_misses.size()
+	)
+	assert_eq(
+		client_roster_misses.slice(0, 5),
+		[],
+		"every client's roster copy too (%d misses)" % client_roster_misses.size()
+	)
+	assert_eq(
+		phase_misses.slice(0, 5),
+		[],
+		"each rider's own phase is the host's (%d misses)" % phase_misses.size()
+	)
 	for p in peers:
 		assert_eq(int(max_phase[p]), 4, "peer %d reached the cool-down on its own governor" % p)
 		var row: Dictionary = r.host.ctx.roster[p]

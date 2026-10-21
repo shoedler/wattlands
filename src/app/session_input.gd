@@ -19,7 +19,9 @@ var screen_owns_input: Callable = Callable()
 var menu_rider: Callable = Callable()
 
 
-static func create(p_router: WlInputRouter, owns: Callable = Callable(), p_menu_rider: Callable = Callable()) -> AppSessionInput:
+static func create(
+	p_router: WlInputRouter, owns: Callable = Callable(), p_menu_rider: Callable = Callable()
+) -> AppSessionInput:
 	var s := AppSessionInput.new()
 	s.name = "SessionInput"
 	s.router = p_router

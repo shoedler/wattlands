@@ -41,7 +41,11 @@ static func step(state: WorkoutState, inputs: InputFrame, dt: float) -> Array[Di
 	state.tick = inputs.tick
 	var lead := _lead_phase(state, inputs)
 	if lead != null:
-		state.plan_t = lead.plan_elapsed_s if lead.plan_elapsed_s > 0.0 else state.phase_start_s(lead.index) + lead.elapsed_s
+		state.plan_t = (
+			lead.plan_elapsed_s
+			if lead.plan_elapsed_s > 0.0
+			else state.phase_start_s(lead.index) + lead.elapsed_s
+		)
 		if lead.index != state.phase_index:
 			var prev := state.phase_index
 			if prev >= 0:
@@ -72,7 +76,9 @@ static func _lead_phase(state: WorkoutState, inputs: InputFrame) -> PhaseState:
 	return lead
 
 
-static func _step_rider(state: WorkoutState, r: WorkoutRiderState, tel: Telemetry, ps: PhaseState, dt: float) -> void:
+static func _step_rider(
+	state: WorkoutState, r: WorkoutRiderState, tel: Telemetry, ps: PhaseState, dt: float
+) -> void:
 	r.power_w = tel.power_w
 	r.cadence_rpm = tel.cadence_rpm
 	r.connected = tel.connected
@@ -92,7 +98,10 @@ static func _step_rider(state: WorkoutState, r: WorkoutRiderState, tel: Telemetr
 	r.in_band = in_band(p, ps, tel, r, state.band_pct)
 	if WorkoutSession.is_sprint(p):
 		# A rider a tick behind the lead whose sprint was already scored starts no second one.
-		if (r.sprint == null or r.sprint.phase_index != index) and sprint_result(r, index).is_empty():
+		if (
+			(r.sprint == null or r.sprint.phase_index != index)
+			and sprint_result(r, index).is_empty()
+		):
 			r.sprint = WorkoutSprintTracker.create(r.ftp, index)
 		if r.sprint != null and r.sprint.phase_index == index:
 			r.sprint.update(tel.power_w, dt)
@@ -102,7 +111,9 @@ static func _step_rider(state: WorkoutState, r: WorkoutRiderState, tel: Telemetr
 
 ## Advances the rider's speed model by dt (see the class comment) and, in a course phase,
 ## its distance along the course.
-static func _move(state: WorkoutState, r: WorkoutRiderState, index: int, tel: Telemetry, dt: float) -> void:
+static func _move(
+	state: WorkoutState, r: WorkoutRiderState, index: int, tel: Telemetry, dt: float
+) -> void:
 	var on_course := state.is_course_phase(index)
 	var grade := course_speed_grade(state, r, tel) if on_course else 0.0
 	var before := r.speed.distance_m
@@ -120,7 +131,9 @@ static func course_speed_grade(state: WorkoutState, r: WorkoutRiderState, tel: T
 
 
 ## Is the rider in band right now? (See the class comment.)
-static func in_band(p: PlanPhase, ps: PhaseState, tel: Telemetry, r: WorkoutRiderState, band_pct: Array) -> bool:
+static func in_band(
+	p: PlanPhase, ps: PhaseState, tel: Telemetry, r: WorkoutRiderState, band_pct: Array
+) -> bool:
 	if tel == null or not tel.connected or tel.afk or tel.rescue:
 		return false
 	if r != null and (r.rescue_cb or r.afk_cb):
@@ -128,7 +141,11 @@ static func in_band(p: PlanPhase, ps: PhaseState, tel: Telemetry, r: WorkoutRide
 	if p.mode == Wl.ERG:
 		var target := float(tel.applied_target_w) if tel.mode == Wl.ERG else 0.0
 		if target <= 0.0:
-			var planned := ps.planned_pct if ps != null and ps.planned_pct > 0.0 else p.planned_pct_at(ps.elapsed_s if ps != null else 0.0)
+			var planned := (
+				ps.planned_pct
+				if ps != null and ps.planned_pct > 0.0
+				else p.planned_pct_at(ps.elapsed_s if ps != null else 0.0)
+			)
 			target = planned / 100.0 * r.ftp * (1.0 if r.ftp_verified else UNVERIFIED_FACTOR)
 		return erg_in_band(tel.power_w, target)
 	if p.kind == Wl.FREE:
@@ -185,7 +202,14 @@ static func _sprint_event(state: WorkoutState, index: int) -> Dictionary:
 		var res := sprint_result(r, index)
 		if res.is_empty():
 			res = {"peak_w": 0, "best_s": 0.0, "hit": false}
-		rows.append([peer, int(res["peak_w"]), int(round(float(res["best_s"]) * 10.0)), 1 if bool(res["hit"]) else 0])
+		rows.append(
+			[
+				peer,
+				int(res["peak_w"]),
+				int(round(float(res["best_s"]) * 10.0)),
+				1 if bool(res["hit"]) else 0
+			]
+		)
 	return {"type": EV_SPRINT, "i": index, "r": rows}
 
 

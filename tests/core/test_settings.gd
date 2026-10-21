@@ -95,7 +95,7 @@ func test_settings_round_trip() -> void:
 
 
 func test_corrupt_profile_gives_defaults() -> void:
-	Util.write_text(Paths.profile_path(), "{\"display_name\": \"Ann\", oops")
+	Util.write_text(Paths.profile_path(), '{"display_name": "Ann", oops')
 	var s := _make()
 	s.load_all()
 	assert_push_warning("corrupt")
@@ -129,10 +129,26 @@ func test_empty_settings_file_gives_defaults() -> void:
 
 
 func test_bad_profile_values_are_dropped_or_clamped() -> void:
-	Util.write_text(Paths.profile_path(), JSON.stringify({
-		"display_name": "Ann", "ftp_w": "lots", "weight_kg": 5000, "units": "furlongs",
-		"preferred_cadence_rpm": 85, "created": true, "unknown_key": 1,
-	}))
+	(
+		Util
+		. write_text(
+			Paths.profile_path(),
+			(
+				JSON
+				. stringify(
+					{
+						"display_name": "Ann",
+						"ftp_w": "lots",
+						"weight_kg": 5000,
+						"units": "furlongs",
+						"preferred_cadence_rpm": 85,
+						"created": true,
+						"unknown_key": 1,
+					}
+				)
+			)
+		)
+	)
 	var s := _make()
 	s.load_all()
 	assert_push_warning("ftp_w")
@@ -173,22 +189,42 @@ func test_save_profile_clamps_into_the_profile_ranges() -> void:
 
 
 func test_grade_range_edges_load_cleanly() -> void:
-	Util.write_text(Paths.profile_path(), JSON.stringify({"grade_min_pct": -1, "grade_max_pct": 0, "created": true}))
+	Util.write_text(
+		Paths.profile_path(),
+		JSON.stringify({"grade_min_pct": -1, "grade_max_pct": 0, "created": true})
+	)
 	var s := _make()
 	s.load_all()
 	assert_eq(s.profile.grade_min_pct, -1.0)
 	assert_eq(s.profile.grade_max_pct, 0.0)
-	Util.write_text(Paths.profile_path(), JSON.stringify({"grade_min_pct": 0, "grade_max_pct": 0, "created": true}))
+	Util.write_text(
+		Paths.profile_path(),
+		JSON.stringify({"grade_min_pct": 0, "grade_max_pct": 0, "created": true})
+	)
 	s.load_all()
 	assert_eq(s.profile.grade_min_pct, 0.0, "an empty range is still ordered")
 	assert_push_warning_count(0)
 
 
 func test_bad_settings_values_are_ignored() -> void:
-	Util.write_text(Paths.settings_path(), JSON.stringify({
-		"relay_url": 5, "fullscreen": "yes", "master_volume_db": -12, "scaling_mode": "FAST",
-		"custom": {"a": 1},
-	}))
+	(
+		Util
+		. write_text(
+			Paths.settings_path(),
+			(
+				JSON
+				. stringify(
+					{
+						"relay_url": 5,
+						"fullscreen": "yes",
+						"master_volume_db": -12,
+						"scaling_mode": "FAST",
+						"custom": {"a": 1},
+					}
+				)
+			)
+		)
+	)
 	var s := _make()
 	s.load_all()
 	assert_push_warning("relay_url")
@@ -235,18 +271,30 @@ func test_set_value_refuses_values_json_cannot_hold() -> void:
 	assert_eq(s.get_value("ui_ok"), {"a": [1, 2.5, "x", true, null, {"b": &"name"}]})
 	var t := _make()
 	t.load_all()
-	assert_eq(t.get_value("ui_ok"), {"a": [1.0, 2.5, "x", true, null, {"b": "name"}]}, "round-trips through JSON")
+	assert_eq(
+		t.get_value("ui_ok"),
+		{"a": [1.0, 2.5, "x", true, null, {"b": "name"}]},
+		"round-trips through JSON"
+	)
 
 
 func test_set_last_device_stores_json_safe_values() -> void:
 	var s := _make()
 	s.load_all()
-	s.set_last_device({"address": "AA:BB", "name": "KICKR CORE", "rssi": -60,
-		"services": PackedStringArray(["1826", "1818"])})
+	s.set_last_device(
+		{
+			"address": "AA:BB",
+			"name": "KICKR CORE",
+			"rssi": -60,
+			"services": PackedStringArray(["1826", "1818"])
+		}
+	)
 	var t := _make()
 	t.load_all()
-	assert_eq(t.get_value("last_device"), {"address": "AA:BB", "name": "KICKR CORE", "rssi": -60.0,
-		"services": ["1826", "1818"]})
+	assert_eq(
+		t.get_value("last_device"),
+		{"address": "AA:BB", "name": "KICKR CORE", "rssi": -60.0, "services": ["1826", "1818"]}
+	)
 
 
 func test_set_value_emits_changed_once_per_change() -> void:
@@ -269,7 +317,9 @@ func test_autosave() -> void:
 	assert_eq((Util.read_json(Paths.settings_path()) as Dictionary).get("locale"), "fr")
 	s.autosave = false
 	s.set_value("locale", "it")
-	assert_eq((Util.read_json(Paths.settings_path()) as Dictionary).get("locale"), "fr", "not saved yet")
+	assert_eq(
+		(Util.read_json(Paths.settings_path()) as Dictionary).get("locale"), "fr", "not saved yet"
+	)
 	assert_true(s.save_settings())
 	assert_eq((Util.read_json(Paths.settings_path()) as Dictionary).get("locale"), "it")
 	assert_false(FileAccess.file_exists(Paths.settings_path() + ".tmp"), "no temp file left")
@@ -388,27 +438,48 @@ func test_recent_rooms_refuse_bad_input() -> void:
 
 
 func test_recent_rooms_are_cleaned_on_load() -> void:
-	Util.write_text(Paths.settings_path(), JSON.stringify({"recent_rooms": [
-		{"code": "k7q-x2m", "at": 5.0, "role": "host"},
-		{"code": "K7QX2M", "at": 4, "role": "CLIENT"},
-		{"code": "bad!", "at": 3, "role": "HOST"},
-		{"code": "ABCDEF", "at": 2, "role": "nobody"},
-		"junk",
-		{"code": "Q1Q1Q1", "at": "x", "role": "CLIENT"},
-	]}))
+	(
+		Util
+		. write_text(
+			Paths.settings_path(),
+			(
+				JSON
+				. stringify(
+					{
+						"recent_rooms":
+						[
+							{"code": "k7q-x2m", "at": 5.0, "role": "host"},
+							{"code": "K7QX2M", "at": 4, "role": "CLIENT"},
+							{"code": "bad!", "at": 3, "role": "HOST"},
+							{"code": "ABCDEF", "at": 2, "role": "nobody"},
+							"junk",
+							{"code": "Q1Q1Q1", "at": "x", "role": "CLIENT"},
+						]
+					}
+				)
+			)
+		)
+	)
 	var s := _make()
 	s.load_all()
-	assert_eq(s.recent_rooms(), [
-		{"code": "K7QX2M", "at": 5, "role": Wl.HOST},
-		{"code": "Q1Q1Q1", "at": 0, "role": Wl.CLIENT},
-	])
+	assert_eq(
+		s.recent_rooms(),
+		[
+			{"code": "K7QX2M", "at": 5, "role": Wl.HOST},
+			{"code": "Q1Q1Q1", "at": 0, "role": Wl.CLIENT},
+		]
+	)
 
 
 func test_load_all_rereads_after_override_change() -> void:
 	var a := _temp()
 	var b := _temp()
-	Util.write_text(a.path_join("profile.json"), JSON.stringify({"display_name": "A", "created": true}))
-	Util.write_text(b.path_join("profile.json"), JSON.stringify({"display_name": "B", "created": true}))
+	Util.write_text(
+		a.path_join("profile.json"), JSON.stringify({"display_name": "A", "created": true})
+	)
+	Util.write_text(
+		b.path_join("profile.json"), JSON.stringify({"display_name": "B", "created": true})
+	)
 	Util.write_text(b.path_join("settings.json"), JSON.stringify({"locale": "nl"}))
 	var s := _make()
 	Paths.set_override(a)

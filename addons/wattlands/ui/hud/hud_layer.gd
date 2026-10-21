@@ -177,8 +177,12 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 			c.get_parent().remove_child(c)
 		_game_controls.append(c)
 		_place(c, at)
-	_place(_banner, _spec.banner_area if HudSpec.is_valid_position(_spec.banner_area) else HudSpec.TOP)
-	_place(_toasts, _spec.toast_area if HudSpec.is_valid_position(_spec.toast_area) else HudSpec.TOP)
+	_place(
+		_banner, _spec.banner_area if HudSpec.is_valid_position(_spec.banner_area) else HudSpec.TOP
+	)
+	_place(
+		_toasts, _spec.toast_area if HudSpec.is_valid_position(_spec.toast_area) else HudSpec.TOP
+	)
 	for c: Control in old_controls:
 		if is_instance_valid(c) and c.get_parent() == null and not _game_controls.has(c):
 			c.free()
@@ -232,6 +236,7 @@ func set_safety_state(warmup_active: bool, rescue: bool, paused: bool) -> void:
 
 
 # --- drawing API (the local feed and the bus handlers use it) --------------------------------
+
 
 ## A toast from a string key (game or platform) with {0}/{name} args.
 func show_toast(key: String, args: Variant = []) -> void:
@@ -297,7 +302,11 @@ func set_roster(roster: Dictionary) -> void:
 func set_readout(id: String, text: String) -> void:
 	_readouts[id] = text
 	for w in _widgets:
-		if w is HudReadout and (w as HudReadout).source == "custom" and (w as HudReadout).readout_id == id:
+		if (
+			w is HudReadout
+			and (w as HudReadout).source == "custom"
+			and (w as HudReadout).readout_id == id
+		):
 			(w as HudReadout).set_text(text)
 
 
@@ -335,7 +344,9 @@ func make_widget(id: String, options: Dictionary = {}) -> HudWidget:
 		HudSpec.GEAR:
 			w = HudGear.new()
 		_:
-			push_error("HudLayer: unknown kit widget '%s' (use %s)" % [id, ", ".join(HudSpec.KIT_WIDGETS)])
+			push_error(
+				"HudLayer: unknown kit widget '%s' (use %s)" % [id, ", ".join(HudSpec.KIT_WIDGETS)]
+			)
 			return null
 	w.name = "%s_%d" % [id, _widgets.size()]
 	w.ftp_w = _ftp
@@ -351,6 +362,7 @@ func make_widget(id: String, options: Dictionary = {}) -> HudWidget:
 
 
 # --- layout --------------------------------------------------------------------------------
+
 
 func relayout() -> void:
 	_relayout_queued = false
@@ -393,7 +405,9 @@ func center_width(center: String, ss: Vector2) -> float:
 	var side := 0.0
 	for corner in corners:
 		if _boxes.has(corner):
-			side = maxf(side, (_boxes[corner] as Control).get_combined_minimum_size().x + WlTheme.GAP_PX)
+			side = maxf(
+				side, (_boxes[corner] as Control).get_combined_minimum_size().x + WlTheme.GAP_PX
+			)
 		if _reserved.has(corner):
 			side = maxf(side, (_reserved[corner] as Vector2).x + WlTheme.GAP_PX)
 	return maxf(120.0, ss.x - 2.0 * (WlTheme.MARGIN_PX + side))
@@ -406,7 +420,9 @@ func center_width(center: String, ss: Vector2) -> float:
 ## and the centre stack of the same edge keeps clear of the reserved width. Vector2.ZERO
 ## releases the corner. Additive (W2).
 func reserve_corner(anchor: String, size: Vector2) -> void:
-	if not [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT].has(anchor):
+	if not [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT].has(
+		anchor
+	):
 		push_error("HudLayer: reserve_corner needs a corner anchor, not '%s'" % anchor)
 		return
 	if size.x <= 0.0 or size.y <= 0.0:
@@ -460,6 +476,7 @@ func map_rect(r: Rect2i) -> Rect2:
 
 
 # --- queries (tests, the GameHost, games) ----------------------------------------------------
+
 
 func root() -> Control:
 	return _root
@@ -527,6 +544,7 @@ func slot_screen_rect(node: Node) -> Rect2:
 
 
 # --- internals -------------------------------------------------------------------------------
+
 
 func _clear() -> void:
 	_disconnect_bus()
@@ -631,7 +649,9 @@ static func corner_text_width(ss: Vector2) -> float:
 ## widgets shrink, toast and banner text wraps.
 func _fit_centers(ss: Vector2) -> void:
 	var corner_w := corner_text_width(ss)
-	for corner: String in [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT]:
+	for corner: String in [
+		HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT
+	]:
 		if not _boxes.has(corner):
 			continue
 		for c in (_boxes[corner] as Control).get_children():
@@ -722,7 +742,11 @@ func _shows_power() -> bool:
 			return true
 		if id == HudSpec.READOUT:
 			var opts: Variant = entry.get("options", {})
-			var src := str((opts as Dictionary).get("source", "power_w")) if opts is Dictionary else "power_w"
+			var src := (
+				str((opts as Dictionary).get("source", "power_w"))
+				if opts is Dictionary
+				else "power_w"
+			)
 			power = power or src == "power_w"
 			pct = pct or src == "ftp_pct"
 	return power and pct
@@ -784,6 +808,7 @@ func _play(sound: String) -> void:
 
 
 # --- bus ---------------------------------------------------------------------------------------
+
 
 func _connect_bus() -> void:
 	if _bus == null:

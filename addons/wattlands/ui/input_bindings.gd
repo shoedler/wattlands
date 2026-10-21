@@ -91,7 +91,10 @@ static func same_input(a: InputEvent, b: InputEvent) -> bool:
 		"joy_button", "mouse_button":
 			return int(da["button"]) == int(db["button"])
 		"joy_motion":
-			return int(da["axis"]) == int(db["axis"]) and signf(float(da["value"])) == signf(float(db["value"]))
+			return (
+				int(da["axis"]) == int(db["axis"])
+				and signf(float(da["value"])) == signf(float(db["value"]))
+			)
 	return false
 
 
@@ -167,7 +170,9 @@ static func load_from(path: String) -> bool:
 		return false
 	var version := int(cfg.get_value(SECTION_META, "version", 0))
 	if version != VERSION:
-		push_warning("InputBindings: %s has version %d (want %d), using defaults" % [path, version, VERSION])
+		push_warning(
+			"InputBindings: %s has version %d (want %d), using defaults" % [path, version, VERSION]
+		)
 		return false
 	if not cfg.has_section(SECTION_BINDINGS):
 		return true
@@ -192,14 +197,20 @@ static func load_from(path: String) -> bool:
 static func event_to_dict(event: InputEvent) -> Dictionary:
 	if event is InputEventKey:
 		var k := event as InputEventKey
-		return {"type": "key", "physical_keycode": int(k.physical_keycode), "keycode": int(k.keycode)}
+		return {
+			"type": "key", "physical_keycode": int(k.physical_keycode), "keycode": int(k.keycode)
+		}
 	if event is InputEventJoypadButton:
 		return {"type": "joy_button", "button": int((event as InputEventJoypadButton).button_index)}
 	if event is InputEventJoypadMotion:
 		var m := event as InputEventJoypadMotion
-		return {"type": "joy_motion", "axis": int(m.axis), "value": -1.0 if m.axis_value < 0.0 else 1.0}
+		return {
+			"type": "joy_motion", "axis": int(m.axis), "value": -1.0 if m.axis_value < 0.0 else 1.0
+		}
 	if event is InputEventMouseButton:
-		return {"type": "mouse_button", "button": int((event as InputEventMouseButton).button_index)}
+		return {
+			"type": "mouse_button", "button": int((event as InputEventMouseButton).button_index)
+		}
 	return {}
 
 
@@ -245,15 +256,23 @@ static func describe(event: InputEvent) -> String:
 		return text if not text.is_empty() else _tr("UI_INPUT_KEY", [int(code)])
 	if event is InputEventJoypadButton:
 		var names := {
-			JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
-			JOY_BUTTON_LEFT_STICK: "LS", JOY_BUTTON_RIGHT_STICK: "RS",
-			JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB",
+			JOY_BUTTON_A: "A",
+			JOY_BUTTON_B: "B",
+			JOY_BUTTON_X: "X",
+			JOY_BUTTON_Y: "Y",
+			JOY_BUTTON_LEFT_STICK: "LS",
+			JOY_BUTTON_RIGHT_STICK: "RS",
+			JOY_BUTTON_LEFT_SHOULDER: "LB",
+			JOY_BUTTON_RIGHT_SHOULDER: "RB",
 		}
 		var keys := {
-			JOY_BUTTON_BACK: "UI_INPUT_VIEW", JOY_BUTTON_GUIDE: "UI_INPUT_GUIDE",
+			JOY_BUTTON_BACK: "UI_INPUT_VIEW",
+			JOY_BUTTON_GUIDE: "UI_INPUT_GUIDE",
 			JOY_BUTTON_START: "UI_INPUT_MENU",
-			JOY_BUTTON_DPAD_UP: "UI_INPUT_DPAD_UP", JOY_BUTTON_DPAD_DOWN: "UI_INPUT_DPAD_DOWN",
-			JOY_BUTTON_DPAD_LEFT: "UI_INPUT_DPAD_LEFT", JOY_BUTTON_DPAD_RIGHT: "UI_INPUT_DPAD_RIGHT",
+			JOY_BUTTON_DPAD_UP: "UI_INPUT_DPAD_UP",
+			JOY_BUTTON_DPAD_DOWN: "UI_INPUT_DPAD_DOWN",
+			JOY_BUTTON_DPAD_LEFT: "UI_INPUT_DPAD_LEFT",
+			JOY_BUTTON_DPAD_RIGHT: "UI_INPUT_DPAD_RIGHT",
 		}
 		var b := int((event as InputEventJoypadButton).button_index)
 		if names.has(b):

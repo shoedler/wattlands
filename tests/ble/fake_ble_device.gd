@@ -38,7 +38,9 @@ func read_characteristic(service_uuid: String, char_uuid: String) -> int:
 	return _id()
 
 
-func write_characteristic(service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool) -> int:
+func write_characteristic(
+	service_uuid: String, char_uuid: String, data: PackedByteArray, with_response: bool
+) -> int:
 	calls.append(["write_characteristic", service_uuid, char_uuid, data, with_response])
 	return _id()
 

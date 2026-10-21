@@ -147,7 +147,14 @@ func state(peer: int) -> PhaseState:
 
 ## A PhaseState for phase `index` of `plan` after `elapsed_ticks` (clients build their own
 ## rider's state with it). A done rider shows its cool-down at its end.
-static func make_state(plan: EffortPlan, index: int, elapsed_ticks: int, plan_ticks: int = 0, prev_ended_by: String = "", done: bool = false) -> PhaseState:
+static func make_state(
+	plan: EffortPlan,
+	index: int,
+	elapsed_ticks: int,
+	plan_ticks: int = 0,
+	prev_ended_by: String = "",
+	done: bool = false
+) -> PhaseState:
 	var s := PhaseState.new()
 	if plan == null or plan.phase(index) == null:
 		return s
@@ -248,7 +255,9 @@ func advance(game_tick: int) -> Array[Dictionary]:
 		next = clampi(next, 0, r.plan.size() - 1)
 		r.plan_ticks += r.elapsed_ticks
 		_enter(r, next, ended_by, game_tick + 1)
-		out.append({"peer": peer, "index": next, "ended_by": ended_by, "plan_changed": plan_changed})
+		out.append(
+			{"peer": peer, "index": next, "ended_by": ended_by, "plan_changed": plan_changed}
+		)
 	_finishing = false
 	return out
 
@@ -358,10 +367,21 @@ func _enter(r: Rider, index: int, ended_by: String, start_tick: int) -> void:
 	r.block_end_tick = -1
 	r.block_phase = -1
 	var p := r.plan.phase(index)
-	r.history.append({
-		"index": index, "kind": p.kind, "mode": p.mode, "label": p.label,
-		"start": start_tick * DT, "end": -1.0, "ended_by": "",
-	})
+	(
+		r
+		. history
+		. append(
+			{
+				"index": index,
+				"kind": p.kind,
+				"mode": p.mode,
+				"label": p.label,
+				"start": start_tick * DT,
+				"end": -1.0,
+				"ended_by": "",
+			}
+		)
+	)
 
 
 func _close(r: Rider, t: float, ended_by: String) -> void:

@@ -17,8 +17,12 @@ func test_title_with_profile() -> void:
 	fx.give_profile()
 	var s := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	assert_true(s.has_profile)
-	assert_eq(menu(s).ids(), ["quick", "picker", "host", "join", "profile", "settings", "rides", "quit"])
-	assert_eq(menu(s).highlighted(), 0, "the quick ride is highlighted while the countdown is armed")
+	assert_eq(
+		menu(s).ids(), ["quick", "picker", "host", "join", "profile", "settings", "rides", "quit"]
+	)
+	assert_eq(
+		menu(s).highlighted(), 0, "the quick ride is highlighted while the countdown is armed"
+	)
 	assert_eq(s.zero.hold_s, AppZeroTouch.HOLD_START_S)
 
 
@@ -86,7 +90,9 @@ func test_profile_show_wkg_toggle_by_pedal() -> void:
 func test_settings_screen_pages() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
-	for section: String in ["trainer", "strava", "haptics", "controls", "audio", "network", "pedal_ui"]:
+	for section: String in [
+		"trainer", "strava", "haptics", "controls", "audio", "network", "pedal_ui"
+	]:
 		confirm_pick(s, section)
 		assert_eq(s.menus.size(), 2, "%s page open" % section)
 		confirm_pick(s, "back")
@@ -175,10 +181,14 @@ func test_picker_cards_and_generated_title_card() -> void:
 
 func test_lobby_solo_host_join_open() -> void:
 	fx.give_profile()
-	var solo := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	var solo := (
+		open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_eq(solo.page, AppLobbyScreen.PAGE_LOBBY)
 	assert_false(solo.code_label.visible)
-	var host := open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	var host := (
+		open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	)
 	assert_eq(host.role, Wl.HOST)
 	var join := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
 	assert_eq(join.page, AppLobbyScreen.PAGE_JOIN)
@@ -187,7 +197,13 @@ func test_lobby_solo_host_join_open() -> void:
 
 func test_session_screen_opens_headless() -> void:
 	fx.give_profile()
-	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var s := (
+		open_screen(
+			AppSessionScreen.new(),
+			{"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}
+		)
+		as AppSessionScreen
+	)
 	assert_eq(s.error, "")
 	assert_not_null(s.host)
 	assert_true((s.host as FakeHost).started)
@@ -199,7 +215,10 @@ func test_results_screen_opens() -> void:
 	fx.give_profile()
 	var r := GameResults.new()
 	r.grade = "A"
-	var s := open_screen(AppResultsScreen.new(), {"results": r, "game_id": "workout", "local_peer": 1}) as AppResultsScreen
+	var s := (
+		open_screen(AppResultsScreen.new(), {"results": r, "game_id": "workout", "local_peer": 1})
+		as AppResultsScreen
+	)
 	assert_eq(s.grade_label.text, "A")
 	assert_gte(font_size(s.grade_label), AppStyle.KEY_NUMBER_MIN)
 	assert_gte(font_size(s.xp_label), AppStyle.KEY_NUMBER_MIN)
@@ -270,7 +289,9 @@ func test_main_boot_starts_trainer_and_upload_queue() -> void:
 
 func test_room_code_is_readable_from_3_m() -> void:
 	fx.give_profile()
-	var s := open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	var s := (
+		open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	)
 	fx.fake_net().simulate_hosting("K7QX2M")
 	assert_eq(s.code_label.text, "K7Q-X2M")
 	assert_true(s.code_label.visible)
@@ -289,7 +310,10 @@ func test_settings_trainer_scan_connect_and_mock() -> void:
 	fx.fake_trainer().st = TrainerDevice.STATUS_DISCONNECTED
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	confirm_pick(s, "trainer")
-	assert_eq(menu(s).text_of("status"), AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_NONE"))
+	assert_eq(
+		menu(s).text_of("status"),
+		AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_NONE")
+	)
 	confirm_pick(s, "scan")
 	assert_eq(conn.get("scans"), [10.0] as Array[float])
 	conn.device_found.emit({"address": "AA:BB", "name": "KICKR CORE 1234", "rssi": -60})
@@ -300,6 +324,9 @@ func test_settings_trainer_scan_connect_and_mock() -> void:
 	assert_eq(conn.get("connects"), ["AA:BB"] as Array[String])
 	confirm_pick(s, "mock")
 	assert_eq(fx.fake_trainer().mock_specs, ["erg"] as Array[String])
-	assert_eq(menu(s).text_of("status"), AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_OK"))
+	assert_eq(
+		menu(s).text_of("status"),
+		AppScreen.t("APP_SET_TRAINER_STATUS") + ": " + AppScreen.t("APP_TRAINER_OK")
+	)
 	confirm_pick(s, "disconnect")
 	assert_eq(conn.get("disconnects"), 1)

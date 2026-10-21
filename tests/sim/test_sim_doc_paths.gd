@@ -46,11 +46,19 @@ func test_every_path_the_sim_docs_name_exists() -> void:
 func test_zwo_import_names_no_alias() -> void:
 	var src := FileAccess.get_file_as_string(SIM_DIR.path_join("workout_import.gd"))
 	assert_false(src.contains("rules/workout_import"), "the deleted alias's path")
-	assert_false(FileAccess.file_exists("res://src/games/workout/rules/workout_import.gd"), "the alias is gone")
+	assert_false(
+		FileAccess.file_exists("res://src/games/workout/rules/workout_import.gd"),
+		"the alias is gone"
+	)
 
 
 func test_the_path_pattern() -> void:
-	assert_eq(named_paths("see src/games/workout/rules/workout_import.gd and `content/strings/sim.csv`."),
-		PackedStringArray(["src/games/workout/rules/workout_import.gd", "content/strings/sim.csv"]))
-	assert_eq(named_paths("sim/workout_import.gd and res://addons/x.gd"), PackedStringArray(["addons/x.gd"]),
-		"a path relative to a module is not checked")
+	assert_eq(
+		named_paths("see src/games/workout/rules/workout_import.gd and `content/strings/sim.csv`."),
+		PackedStringArray(["src/games/workout/rules/workout_import.gd", "content/strings/sim.csv"])
+	)
+	assert_eq(
+		named_paths("sim/workout_import.gd and res://addons/x.gd"),
+		PackedStringArray(["addons/x.gd"]),
+		"a path relative to a module is not checked"
+	)

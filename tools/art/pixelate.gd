@@ -15,12 +15,19 @@ func _initialize() -> void:
 	var args: Dictionary = CmdLine.parse(OS.get_cmdline_user_args())
 	for key: String in args.keys():
 		if not ["game", "root", "only"].has(key):
-			printerr("pixelate: unknown option --%s (usage: -- --game=<id> [--root=<dir>] [--only=<ids>])" % key)
+			printerr(
+				(
+					"pixelate: unknown option --%s (usage: -- --game=<id> [--root=<dir>] [--only=<ids>])"
+					% key
+				)
+			)
 			quit(2)
 			return
 	var game: String = _last(args, "game")
 	if game.is_empty() or game == "true":
-		printerr("pixelate: --game=<id> is required (usage: -- --game=<id> [--root=<dir>] [--only=<ids>])")
+		printerr(
+			"pixelate: --game=<id> is required (usage: -- --game=<id> [--root=<dir>] [--only=<ids>])"
+		)
 		quit(2)
 		return
 	# --root: absolute, res://, or relative to this project (the wrapper runs with --path .).
@@ -47,8 +54,15 @@ func _initialize() -> void:
 		printerr("pixelate: error: %s" % msg)
 	var ok: bool = report["ok"]
 	print(
-		"pixelate: %d file(s) written, %d sprite(s) skipped, %d error(s), %d warning(s)"
-		% [(report["written"] as Array).size(), (report["skipped"] as Array).size(), (report["errors"] as Array).size(), (report["warnings"] as Array).size()]
+		(
+			"pixelate: %d file(s) written, %d sprite(s) skipped, %d error(s), %d warning(s)"
+			% [
+				(report["written"] as Array).size(),
+				(report["skipped"] as Array).size(),
+				(report["errors"] as Array).size(),
+				(report["warnings"] as Array).size()
+			]
+		)
 	)
 	quit(0 if ok else 1)
 

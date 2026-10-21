@@ -13,7 +13,9 @@ extends RefCounted
 
 const WORKOUT := "workout"
 ## BRIEF 3.7's built-in sessions (every one must be in workout's game.json `contents`).
-const WORKOUT_SESSIONS: Array[String] = ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"]
+const WORKOUT_SESSIONS: Array[String] = [
+	"easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"
+]
 const FTP := 200.0
 const EPS := 1e-6
 const WARMUP_S := 300.0
@@ -33,8 +35,14 @@ const COAST_PAUSE_S := 10.0
 ## default --rider when `extra` holds one).
 static func flags(content: String, report_path: String, extra: Array = []) -> PackedStringArray:
 	var defaults: Array[String] = [
-		"--game=%s" % WORKOUT, "--content=%s" % content, "--players=1", "--bots=1",
-		"--rider=erg", "--seed=7", "--sim-speed=1000", "--report=%s" % report_path,
+		"--game=%s" % WORKOUT,
+		"--content=%s" % content,
+		"--players=1",
+		"--bots=1",
+		"--rider=erg",
+		"--seed=7",
+		"--sim-speed=1000",
+		"--report=%s" % report_path,
 	]
 	var overridden: Dictionary = {}
 	for e: Variant in extra:
@@ -198,7 +206,10 @@ static func lap_markers(report: Dictionary, peer: int) -> int:
 		if e is Dictionary:
 			var ed: Dictionary = e
 			var type := str(ed.get("type", ""))
-			if (type == "lap_marker" or type == "lap") and (not ed.has("peer") or int(ed["peer"]) == peer):
+			if (
+				(type == "lap_marker" or type == "lap")
+				and (not ed.has("peer") or int(ed["peer"]) == peer)
+			):
 				n += 1
 	return n
 
@@ -235,18 +246,73 @@ static func fit_problems(path: String, summary: Dictionary, expected_laps_n: int
 	var duration := float(summary.get("duration_s", ses.get("elapsed_s", 0.0)))
 	var records := int(d["records"])
 	if duration > 0.0 and absf(records - duration) > maxf(1.0, 0.01 * duration):
-		out.append("%s: %d records for a %.0f s ride (one per second within 1%%)" % [path.get_file(), records, duration])
+		out.append(
+			(
+				"%s: %d records for a %.0f s ride (one per second within 1%%)"
+				% [path.get_file(), records, duration]
+			)
+		)
 	if summary.has("records") and int(summary["records"]) != records:
-		out.append("%s: %d records, the recorder kept %d" % [path.get_file(), records, int(summary["records"])])
-	if summary.has("kj") and absf(float(ses.get("work_kj", 0.0)) - float(summary["kj"])) > 0.01 + 0.001 * float(summary["kj"]):
-		out.append("%s: session work %.3f kJ, recorder %.3f kJ" % [path.get_file(), float(ses.get("work_kj", 0.0)), float(summary["kj"])])
-	for pair: Array in [["avg_power_w", "avg_power_w"], ["max_power_w", "max_power_w"], ["avg_cadence_rpm", "avg_cadence_rpm"], ["max_cadence_rpm", "max_cadence_rpm"]]:
-		if summary.has(pair[1]) and absf(float(ses.get(pair[0], 0.0)) - float(summary[pair[1]])) > 1.0:
-			out.append("%s: session %s %.1f, recorder %.1f" % [path.get_file(), pair[0], float(ses.get(pair[0], 0.0)), float(summary[pair[1]])])
-	if summary.has("distance_m") and absf(float(ses.get("distance_m", 0.0)) - float(summary["distance_m"])) > maxf(1.0, 0.001 * float(summary["distance_m"])):
-		out.append("%s: session distance %.1f m, recorder %.1f m" % [path.get_file(), float(ses.get("distance_m", 0.0)), float(summary["distance_m"])])
+		out.append(
+			(
+				"%s: %d records, the recorder kept %d"
+				% [path.get_file(), records, int(summary["records"])]
+			)
+		)
+	if (
+		summary.has("kj")
+		and (
+			absf(float(ses.get("work_kj", 0.0)) - float(summary["kj"]))
+			> 0.01 + 0.001 * float(summary["kj"])
+		)
+	):
+		out.append(
+			(
+				"%s: session work %.3f kJ, recorder %.3f kJ"
+				% [path.get_file(), float(ses.get("work_kj", 0.0)), float(summary["kj"])]
+			)
+		)
+	for pair: Array in [
+		["avg_power_w", "avg_power_w"],
+		["max_power_w", "max_power_w"],
+		["avg_cadence_rpm", "avg_cadence_rpm"],
+		["max_cadence_rpm", "max_cadence_rpm"]
+	]:
+		if (
+			summary.has(pair[1])
+			and absf(float(ses.get(pair[0], 0.0)) - float(summary[pair[1]])) > 1.0
+		):
+			out.append(
+				(
+					"%s: session %s %.1f, recorder %.1f"
+					% [
+						path.get_file(),
+						pair[0],
+						float(ses.get(pair[0], 0.0)),
+						float(summary[pair[1]])
+					]
+				)
+			)
+	if (
+		summary.has("distance_m")
+		and (
+			absf(float(ses.get("distance_m", 0.0)) - float(summary["distance_m"]))
+			> maxf(1.0, 0.001 * float(summary["distance_m"]))
+		)
+	):
+		out.append(
+			(
+				"%s: session distance %.1f m, recorder %.1f m"
+				% [path.get_file(), float(ses.get("distance_m", 0.0)), float(summary["distance_m"])]
+			)
+		)
 	if duration > 0.0 and absf(float(ses.get("elapsed_s", 0.0)) - duration) > 1.0:
-		out.append("%s: session elapsed %.1f s, recorder %.1f s" % [path.get_file(), float(ses.get("elapsed_s", 0.0)), duration])
+		out.append(
+			(
+				"%s: session elapsed %.1f s, recorder %.1f s"
+				% [path.get_file(), float(ses.get("elapsed_s", 0.0)), duration]
+			)
+		)
 	return out
 
 
@@ -289,7 +355,12 @@ static func zwo_sessions(root: String = "res://") -> Array[Dictionary]:
 		var session := read_json(root.path_join("content/%s/sessions/%s.json" % [WORKOUT, str(c)]))
 		var zwo: Variant = session.get("zwo", null)
 		if zwo is String and str(zwo) != "":
-			out.append({"content": str(c), "zwo": root.path_join("content/%s" % WORKOUT).path_join(str(zwo))})
+			out.append(
+				{
+					"content": str(c),
+					"zwo": root.path_join("content/%s" % WORKOUT).path_join(str(zwo))
+				}
+			)
 	return out
 
 
@@ -304,7 +375,9 @@ static func cap_problems(status: Dictionary, phase_length_s: float, t: float) ->
 	if pct > 150.0 + EPS:
 		out.append("t=%.2f: ERG %.2f%% FTP above the 150%% ceiling" % [t, pct])
 	if phase_length_s > 300.0 and pct > 105.0 + EPS:
-		out.append("t=%.2f: ERG %.2f%% FTP above 105%% in a %.0f s phase" % [t, pct, phase_length_s])
+		out.append(
+			"t=%.2f: ERG %.2f%% FTP above 105%% in a %.0f s phase" % [t, pct, phase_length_s]
+		)
 	return out
 
 

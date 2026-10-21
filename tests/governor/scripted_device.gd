@@ -61,7 +61,16 @@ func set_simulation(p_wind_mps: float, p_grade_pct: float, p_crr: float, p_cw: f
 	grade_pct = p_grade_pct
 	crr = p_crr
 	cw = p_cw
-	writes.append({"t": t, "op": "sim", "wind_mps": p_wind_mps, "grade_pct": p_grade_pct, "crr": p_crr, "cw": p_cw})
+	writes.append(
+		{
+			"t": t,
+			"op": "sim",
+			"wind_mps": p_wind_mps,
+			"grade_pct": p_grade_pct,
+			"crr": p_crr,
+			"cw": p_cw
+		}
+	)
 
 
 func set_resistance(p_level: float) -> void:

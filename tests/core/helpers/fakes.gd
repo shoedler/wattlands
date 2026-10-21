@@ -50,9 +50,14 @@ class FakeGovernor:
 
 	func apply_directive(directive: EffortDirective) -> Dictionary:
 		var rec := {
-			"id": directive.id, "kind": "request", "requested": directive.to_dict(),
-			"applied": {"target_pct": directive.target_pct}, "clamped_by": ["slew"],
-			"refused": false, "reason": "", "t": 0.0,
+			"id": directive.id,
+			"kind": "request",
+			"requested": directive.to_dict(),
+			"applied": {"target_pct": directive.target_pct},
+			"clamped_by": ["slew"],
+			"refused": false,
+			"reason": "",
+			"t": 0.0,
 		}
 		if emit_on_apply:
 			directive_applied.emit(rec)

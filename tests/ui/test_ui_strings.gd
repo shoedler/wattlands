@@ -50,7 +50,7 @@ func test_csv_is_well_formed() -> void:
 
 
 func test_every_ui_key_in_the_code_is_in_ui_csv() -> void:
-	var re := RegEx.create_from_string("\"(UI_[A-Z0-9_]*[A-Z0-9])\"")
+	var re := RegEx.create_from_string('"(UI_[A-Z0-9_]*[A-Z0-9])"')
 	var files: Array[String] = []
 	for d in SOURCE_DIRS:
 		_gd_files(d, files)
@@ -64,7 +64,9 @@ func test_every_ui_key_in_the_code_is_in_ui_csv() -> void:
 	for k: String in keys.keys():
 		assert_ne(tr(k), k, "%s (used in %s) translates" % [k, keys[k]])
 	for kind in Wl.PHASE_KINDS:
-		assert_ne(tr("UI_KIND_" + kind), "UI_KIND_" + kind, "the timeline's kind fallback for %s" % kind)
+		assert_ne(
+			tr("UI_KIND_" + kind), "UI_KIND_" + kind, "the timeline's kind fallback for %s" % kind
+		)
 
 
 func test_binding_labels_are_never_raw_keys() -> void:

@@ -41,7 +41,9 @@ func test_title_after_a_menu_is_a_new_visit() -> void:
 	fx.services.goto("settings")
 	fx.services.goto("title")
 	assert_eq(fx.services.title_visits, 2)
-	assert_true((current_screen(m) as AppTitleScreen).zero.need_fresh, "after a menu: stop first, then 5 s")
+	assert_true(
+		(current_screen(m) as AppTitleScreen).zero.need_fresh, "after a menu: stop first, then 5 s"
+	)
 
 
 func _opt_out_in_settings() -> void:
@@ -109,6 +111,7 @@ func test_first_run_copy_never_shares_the_object() -> void:
 
 # --- units -------------------------------------------------------------------------------------
 
+
 func _weight_field(ps: AppProfileScreen) -> Dictionary:
 	for f: Dictionary in ps.profile_fields():
 		if str(f.get("id", "")) == "weight":
@@ -145,6 +148,12 @@ func test_switching_units_rebuilds_the_weight_field() -> void:
 func test_weight_text_rule() -> void:
 	assert_eq(AppStyle.weight_text(70.0, "metric"), "70 kg")
 	assert_eq(AppStyle.weight_text(70.0, "imperial"), "154 lb")
-	var f := AppFormScreen.weight_field("w", "W", "imperial", func() -> float: return 200.0, func(_kg: float) -> void: pass)
-	assert_lte(float(f["max"]) / AppStyle.LB_PER_KG, AppStyle.WEIGHT_MAX_KG, "the lb range stays inside the kg range")
+	var f := AppFormScreen.weight_field(
+		"w", "W", "imperial", func() -> float: return 200.0, func(_kg: float) -> void: pass
+	)
+	assert_lte(
+		float(f["max"]) / AppStyle.LB_PER_KG,
+		AppStyle.WEIGHT_MAX_KG,
+		"the lb range stays inside the kg range"
+	)
 	assert_gte(float(f["min"]) / AppStyle.LB_PER_KG, AppStyle.WEIGHT_MIN_KG)

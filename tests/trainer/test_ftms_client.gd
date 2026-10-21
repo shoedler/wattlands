@@ -65,8 +65,13 @@ func _make(unlocked: bool = true) -> void:
 	_client.attach(_fake)
 	_client.client_ready.connect(func() -> void: _ready_count += 1)
 	_client.state_changed.connect(func(s: String, _d: String) -> void: _states.append(s))
-	_client.control_response.connect(func(op: int, res: int) -> void: _responses.append(Vector2i(op, res)))
-	_client.machine_status.connect(func(code: int, data: PackedByteArray) -> void: _statuses.append([code, FtmsCodec.to_hex(data)]))
+	_client.control_response.connect(
+		func(op: int, res: int) -> void: _responses.append(Vector2i(op, res))
+	)
+	_client.machine_status.connect(
+		func(code: int, data: PackedByteArray) -> void:
+			_statuses.append([code, FtmsCodec.to_hex(data)])
+	)
 	_client.control_lost.connect(func(d: String) -> void: _lost.append(d))
 	_client.failed.connect(func(r: String) -> void: _failed.append(r))
 	_client.bike_data.connect(func(rec: Dictionary) -> void: _records.append(rec))
@@ -96,21 +101,45 @@ func _writes() -> Array[String]:
 
 # --- connection flow ------------------------------------------------------------------
 
+
 func test_flow_order_and_ready() -> void:
 	_make()
 	_client.begin()
 	_pump(1.0)
-	assert_eq(_fake.ops, [
-		"discover",
-		"read 2acc", "read 2ad8", "read 2ad6", "read 2a29", "read 2a24", "read 2a26",
-		"subscribe 2ad2", "subscribe 2ada", "subscribe 2ad9",
-		"write 2ad9 00",
-		"write 2ad9 " + FLAT,
-	] as Array[String])
-	assert_eq(_states, [
-		FtmsClient.STATE_DISCOVERING, FtmsClient.STATE_READING, FtmsClient.STATE_SUBSCRIBING,
-		FtmsClient.STATE_REQUESTING_CONTROL, FtmsClient.STATE_SETTING_SIM, FtmsClient.STATE_READY,
-	] as Array[String])
+	assert_eq(
+		_fake.ops,
+		(
+			[
+				"discover",
+				"read 2acc",
+				"read 2ad8",
+				"read 2ad6",
+				"read 2a29",
+				"read 2a24",
+				"read 2a26",
+				"subscribe 2ad2",
+				"subscribe 2ada",
+				"subscribe 2ad9",
+				"write 2ad9 00",
+				"write 2ad9 " + FLAT,
+			]
+			as Array[String]
+		)
+	)
+	assert_eq(
+		_states,
+		(
+			[
+				FtmsClient.STATE_DISCOVERING,
+				FtmsClient.STATE_READING,
+				FtmsClient.STATE_SUBSCRIBING,
+				FtmsClient.STATE_REQUESTING_CONTROL,
+				FtmsClient.STATE_SETTING_SIM,
+				FtmsClient.STATE_READY,
+			]
+			as Array[String]
+		)
+	)
 	assert_eq(_ready_count, 1)
 	assert_true(_client.is_ready())
 	assert_false(_client.is_read_only())
@@ -120,7 +149,10 @@ func test_flow_order_and_ready() -> void:
 	var rr := _client.resistance_range()
 	assert_almost_eq(float(rr["max"]), 100.0, 1e-9)
 	assert_almost_eq(float(rr["step"]), 0.1, 1e-9)
-	assert_eq(_client.device_info(), {"manufacturer": "Wahoo Fitness", "model": "KICKR CORE", "firmware_revision": "4.2.1"})
+	assert_eq(
+		_client.device_info(),
+		{"manufacturer": "Wahoo Fitness", "model": "KICKR CORE", "firmware_revision": "4.2.1"}
+	)
 	assert_false(_client.cps_fallback_active(), "the KICKR reports power itself")
 	assert_eq(_failed.size(), 0)
 
@@ -249,6 +281,7 @@ func test_read_power_range_is_used() -> void:
 
 # --- control-point queue --------------------------------------------------------------
 
+
 func test_one_write_in_flight_and_coalescing() -> void:
 	_connect_ready()
 	_fake.auto_respond = false
@@ -270,7 +303,9 @@ func test_one_write_in_flight_and_coalescing() -> void:
 	_fake.notify("2ad9", PackedByteArray([0x80, 0x11, 0x01]))
 	_fake.flush()
 	var w := _writes()
-	assert_eq(w.slice(before), ["write 2ad9 059600", "write 2ad9 05fa00", "write 2ad9 110000c8002833"])
+	assert_eq(
+		w.slice(before), ["write 2ad9 059600", "write 2ad9 05fa00", "write 2ad9 110000c8002833"]
+	)
 	assert_eq(_responses.slice(2), [Vector2i(0x05, 1), Vector2i(0x05, 1), Vector2i(0x11, 1)])
 	assert_eq(_client.in_flight_opcode(), -1)
 	assert_eq(_client.queued_count(), 0)
@@ -286,7 +321,9 @@ func test_coalescing_never_reorders_commands() -> void:
 	_answer_until_idle()
 	var w := _writes()
 	assert_eq(w.back(), "write 2ad9 05b400", "the newest command (ERG 180 W) is applied last")
-	assert_eq(_fake.writes_with_op(0x11), 2, "the flow's SIM flat and the SIM entry before ERG 180 W")
+	assert_eq(
+		_fake.writes_with_op(0x11), 2, "the flow's SIM flat and the SIM entry before ERG 180 W"
+	)
 
 
 func test_coalescing_keeps_the_first_command_of_a_mode() -> void:
@@ -297,17 +334,35 @@ func test_coalescing_keeps_the_first_command_of_a_mode() -> void:
 	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 0.0, 0.004, 0.51))
 	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 2.0, 0.004, 0.51))
 	_client.write_control(FtmsCodec.encode_indoor_bike_simulation(0.0, 3.0, 0.004, 0.51))
-	assert_eq(_client.queued_count(), 2, "SIM grade 0 (the mode switch's entry) stays; 2 % gave way to 3 %")
+	assert_eq(
+		_client.queued_count(),
+		2,
+		"SIM grade 0 (the mode switch's entry) stays; 2 % gave way to 3 %"
+	)
 	_client.write_control(FtmsCodec.encode_target_power(120))
 	_client.write_control(FtmsCodec.encode_target_power(140))
-	assert_eq(_client.queued_count(), 4, "ERG 120 W (the switch back) is an entry, so 140 W queues behind it")
+	assert_eq(
+		_client.queued_count(),
+		4,
+		"ERG 120 W (the switch back) is an entry, so 140 W queues behind it"
+	)
 	_client.write_control(FtmsCodec.encode_target_power(160))
 	assert_eq(_client.queued_count(), 4, "ERG 160 W replaced 140 W, not the entry at 120 W")
 	_answer_until_idle()
-	assert_eq(_writes().slice(before), [
-		"write 2ad9 059600", "write 2ad9 11000000002833", "write 2ad9 1100002c012833",
-		"write 2ad9 057800", "write 2ad9 05a000",
-	] as Array[String], "every mode switch keeps its entry command and the newest command goes last (BRIEF 4.5)")
+	assert_eq(
+		_writes().slice(before),
+		(
+			[
+				"write 2ad9 059600",
+				"write 2ad9 11000000002833",
+				"write 2ad9 1100002c012833",
+				"write 2ad9 057800",
+				"write 2ad9 05a000",
+			]
+			as Array[String]
+		),
+		"every mode switch keeps its entry command and the newest command goes last (BRIEF 4.5)"
+	)
 
 
 ## Answers the write in flight until nothing is left (auto_respond off).
@@ -421,6 +476,7 @@ func test_machine_status_passthrough() -> void:
 
 # --- control lost and failures --------------------------------------------------------
 
+
 func test_request_control_not_permitted_means_control_lost() -> void:
 	_make()
 	_fake.other_app_has_control = true
@@ -505,6 +561,7 @@ func test_reattach_moves_to_the_new_transport() -> void:
 
 # --- telemetry ------------------------------------------------------------------------
 
+
 func test_bike_data_records_and_multi_notification_records() -> void:
 	_connect_ready()
 	_fake.send_bike_data({"speed_kmh": 30.5, "cadence_rpm": 90.0, "power_w": 200})
@@ -567,6 +624,7 @@ func test_runs_while_paused_and_ticks_itself_in_the_tree() -> void:
 
 # --- hardware lock (BRIEF 1) ----------------------------------------------------------
 
+
 func test_hardware_lock_refuses_request_control_and_every_write() -> void:
 	_set_lock_env("1")
 	assert_true(FtmsClient.hardware_locked())
@@ -586,9 +644,13 @@ func test_hardware_lock_refuses_request_control_and_every_write() -> void:
 	assert_false(_client.is_ready())
 	assert_eq(_ready_count, 1, "telemetry-only client is ready to stream")
 	for payload: PackedByteArray in [
-		FtmsCodec.encode_request_control(), FtmsCodec.encode_target_power(200),
-		FtmsCodec.encode_indoor_bike_simulation(0.0, 5.0, 0.004, 0.51), FtmsCodec.encode_target_resistance(10.0),
-		FtmsCodec.encode_stop_pause(1), FtmsCodec.encode_reset(), FtmsCodec.encode_start_resume(),
+		FtmsCodec.encode_request_control(),
+		FtmsCodec.encode_target_power(200),
+		FtmsCodec.encode_indoor_bike_simulation(0.0, 5.0, 0.004, 0.51),
+		FtmsCodec.encode_target_resistance(10.0),
+		FtmsCodec.encode_stop_pause(1),
+		FtmsCodec.encode_reset(),
+		FtmsCodec.encode_start_resume(),
 	]:
 		_client.write_control(payload)
 		assert_push_warning("hardware control locked")

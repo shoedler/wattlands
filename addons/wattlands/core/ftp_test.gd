@@ -131,11 +131,25 @@ static func step_pct(n: int) -> float:
 ## The ramp_test plan: ramp-in, the steps and the standard cool-down (cooldown_appended).
 static func build_plan(p_ftp_w: float, trainer_max_w: float = 1800.0) -> EffortPlan:
 	var p := EffortPlan.new()
-	p.add(PlanPhase.erg(Wl.WARMUP, RAMP_FROM_PCT, RAMP_IN_S, TranslationServer.translate("CORE_FTP_RAMP_IN"))
-		.with_ramp(RAMP_TO_PCT).with_lap())
+	p.add(
+		(
+			PlanPhase
+			. erg(
+				Wl.WARMUP, RAMP_FROM_PCT, RAMP_IN_S, TranslationServer.translate("CORE_FTP_RAMP_IN")
+			)
+			. with_ramp(RAMP_TO_PCT)
+			. with_lap()
+		)
+	)
 	var step_label := TranslationServer.translate("CORE_FTP_STEP")
 	for n in range(1, step_count(p_ftp_w, trainer_max_w) + 1):
-		p.add(PlanPhase.erg(Wl.WORK, step_pct(n), STEP_S, step_label.replace("{n}", str(n))).with_lap())
+		p.add(
+			(
+				PlanPhase
+				. erg(Wl.WORK, step_pct(n), STEP_S, step_label.replace("{n}", str(n)))
+				. with_lap()
+			)
+		)
 	p.add(PlanValidator.cooldown_phase())
 	p.cooldown_appended = true
 	return p
@@ -223,7 +237,9 @@ func is_running() -> bool:
 ## Drive `rider` (normally TrainerService.local_rider()): ramp_test profile, the plan,
 ## phases, telemetry; saves through `p_settings` (default the Settings autoload). Returns
 ## the plan.
-func run_on(rider: LocalRider, p_settings: WlSettings = null, p_service: WlTrainerService = null) -> EffortPlan:
+func run_on(
+	rider: LocalRider, p_settings: WlSettings = null, p_service: WlTrainerService = null
+) -> EffortPlan:
 	_detach()
 	_rider = rider
 	_settings = p_settings if p_settings != null else AutoloadLookup.settings()
@@ -284,7 +300,11 @@ func _end_condition(dt: float, tel: Telemetry) -> String:
 		return END_RESCUE
 	if tel.coasting:
 		return END_COASTING
-	if tel.mode == Wl.ERG and tel.applied_target_w > 0 and tel.power_w < LOW_POWER_FRACTION * float(tel.applied_target_w):
+	if (
+		tel.mode == Wl.ERG
+		and tel.applied_target_w > 0
+		and tel.power_w < LOW_POWER_FRACTION * float(tel.applied_target_w)
+	):
 		_low_power_s += dt
 	else:
 		_low_power_s = 0.0
@@ -324,7 +344,9 @@ func _end_test(reason: String) -> void:
 	end_reason = reason
 	# A best minute that isn't one completed step at least is mostly ramp-in (50-65% FTP).
 	var valid := steps_completed >= 1 and reason != END_BACK and best_1min_w > 0.0
-	var last_pct := step_pct(phase_index) if phase_index > 0 else plan.phase(0).planned_pct_at(phase_elapsed_s)
+	var last_pct := (
+		step_pct(phase_index) if phase_index > 0 else plan.phase(0).planned_pct_at(phase_elapsed_s)
+	)
 	var ftp := roundf(FTP_FACTOR * best_1min_w)
 	if valid:
 		# W4r2 (SAF-1 range): the FTP saved is one the profile can hold (WlSettings.PROFILE_RANGES).
@@ -412,7 +434,9 @@ func _detach() -> void:
 		if _rider.telemetry_updated.is_connected(_on_telemetry):
 			_rider.telemetry_updated.disconnect(_on_telemetry)
 		_rider.configure_governor({"profile": "normal"})
-	for pair: Array in [[phase_requested, _on_phase_requested], [saved, _on_saved], [finished, _on_finished]]:
+	for pair: Array in [
+		[phase_requested, _on_phase_requested], [saved, _on_saved], [finished, _on_finished]
+	]:
 		var sig: Signal = pair[0]
 		var cb: Callable = pair[1]
 		if sig.is_connected(cb):

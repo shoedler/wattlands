@@ -2,7 +2,9 @@ extends GutTest
 ## Rolling road's procedural course (BRIEF 3.7): grade -2% to +6%, seeded from the content,
 ## long enough for 30 minutes at any realistic speed.
 
-const SPEC := {"seed": 7342, "length_m": 50000.0, "step_m": 250.0, "min_grade_pct": -2.0, "max_grade_pct": 6.0}
+const SPEC := {
+	"seed": 7342, "length_m": 50000.0, "step_m": 250.0, "min_grade_pct": -2.0, "max_grade_pct": 6.0
+}
 
 
 func test_same_seed_same_course() -> void:
@@ -115,9 +117,19 @@ func test_rolling_road_puts_both_extremes_within_every_riders_reach() -> void:
 		if i <= w:
 			window_step = maxf(window_step, step)
 	for seam in [w, 2 * w, 3 * w]:
-		assert_eq(float(c.profile[seam + 1][1]), float(c.profile[seam - 1][1]), "mirrored at the seam %d" % seam)
-	assert_almost_eq(max_step, window_step, 0.0001, "no seam adds a grade jump the window does not have")
-	assert_lte(window_step, 2.0, "250 m steps change the grade by at most 2 %% (1 %% applied at 50 %% difficulty)")
+		assert_eq(
+			float(c.profile[seam + 1][1]),
+			float(c.profile[seam - 1][1]),
+			"mirrored at the seam %d" % seam
+		)
+	assert_almost_eq(
+		max_step, window_step, 0.0001, "no seam adds a grade jump the window does not have"
+	)
+	assert_lte(
+		window_step,
+		2.0,
+		"250 m steps change the grade by at most 2 %% (1 %% applied at 50 %% difficulty)"
+	)
 
 
 func test_window_m_spec_errors() -> void:

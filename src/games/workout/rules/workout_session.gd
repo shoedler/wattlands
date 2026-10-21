@@ -19,8 +19,12 @@ extends RefCounted
 const SESSIONS_DIR := "sessions"
 const CONTENT_DIR := "res://content/workout"
 const ZWO_PREFIX := "zwo:"
-const TOP_KEYS: Array[String] = ["id", "label", "summary", "phases", "zwo", "course", "band_pct", "warmup_only"]
-const PHASE_KEYS: Array[String] = ["kind", "mode", "target_pct", "ramp_to_pct", "duration_s", "lap", "label", "grade_source"]
+const TOP_KEYS: Array[String] = [
+	"id", "label", "summary", "phases", "zwo", "course", "band_pct", "warmup_only"
+]
+const PHASE_KEYS: Array[String] = [
+	"kind", "mode", "target_pct", "ramp_to_pct", "duration_s", "lap", "label", "grade_source"
+]
 const GAME_KINDS: Array[String] = [Wl.WARMUP, Wl.WORK, Wl.RECOVERY, Wl.FREE]
 const WARMUP_S := 300.0
 const WARMUP_FROM_PCT := 50.0
@@ -91,7 +95,9 @@ static func load_id(content_id: String, quiet: bool = false) -> WorkoutSession:
 
 ## Validates a parsed session file. Returns null and push_error (one message listing
 ## every problem) when invalid.
-static func parse(data: Variant, content_id: String, content_dir: String = CONTENT_DIR, quiet: bool = false) -> WorkoutSession:
+static func parse(
+	data: Variant, content_id: String, content_dir: String = CONTENT_DIR, quiet: bool = false
+) -> WorkoutSession:
 	var errs := validate(data, content_id)
 	if not errs.is_empty():
 		push_error("WorkoutSession: %s rejected: %s" % [content_id, "; ".join(errs)])
@@ -128,7 +134,7 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 		if not TOP_KEYS.has(str(key)):
 			errs.append("%s: unknown key" % key)
 	if str(d.get("id", "")) != content_id:
-		errs.append("id: must be \"%s\" (the content id), got \"%s\"" % [content_id, d.get("id", "")])
+		errs.append('id: must be "%s" (the content id), got "%s"' % [content_id, d.get("id", "")])
 	for key: String in ["label", "summary"]:
 		if not (d.get(key) is String) or not str(d[key]).begins_with("WORKOUT_"):
 			errs.append("%s: must be a WORKOUT_ strings key" % key)
@@ -136,8 +142,15 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 		errs.append("warmup_only: must be true or false")
 	if d.has("band_pct"):
 		var b: Variant = d["band_pct"]
-		if not (b is Array) or (b as Array).size() != 2 or not _is_number(b[0]) or not _is_number(b[1]) \
-				or float(b[0]) <= 0.0 or float(b[0]) >= float(b[1]) or float(b[1]) > MAX_PCT:
+		if (
+			not (b is Array)
+			or (b as Array).size() != 2
+			or not _is_number(b[0])
+			or not _is_number(b[1])
+			or float(b[0]) <= 0.0
+			or float(b[0]) >= float(b[1])
+			or float(b[1]) > MAX_PCT
+		):
 			errs.append("band_pct: must be [lo, hi] with 0 < lo < hi <= 150")
 	var has_course := d.has("course")
 	if has_course:
@@ -169,7 +182,7 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 	if not errs.is_empty():
 		return errs
 	if uses_course and not has_course:
-		errs.append("course: required by phases with grade_source \"course\"")
+		errs.append('course: required by phases with grade_source "course"')
 	if has_course and not uses_course:
 		errs.append("course: no phase uses it")
 	var warmup_only := bool(d.get("warmup_only", false))
@@ -179,13 +192,25 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 			total += float(pd["duration_s"])
 			for key: String in ["target_pct", "ramp_to_pct"]:
 				if pd.has(key) and float(pd[key]) > WARMUP_MAX_PCT:
-					errs.append("warmup_only: %s %s is above %s%% FTP" % [pd["label"], key, WARMUP_MAX_PCT])
+					errs.append(
+						"warmup_only: %s %s is above %s%% FTP" % [pd["label"], key, WARMUP_MAX_PCT]
+					)
 		if total > WARMUP_S:
-			errs.append("warmup_only: the session lasts %s s, more than the %s s warm-up" % [total, WARMUP_S])
+			errs.append(
+				(
+					"warmup_only: the session lasts %s s, more than the %s s warm-up"
+					% [total, WARMUP_S]
+				)
+			)
 	else:
 		var w: Dictionary = arr[0]
-		if str(w["kind"]) != Wl.WARMUP or str(w["mode"]) != Wl.ERG or float(w["duration_s"]) != WARMUP_S \
-				or float(w.get("target_pct", -1.0)) != WARMUP_FROM_PCT or float(w.get("ramp_to_pct", -1.0)) != WARMUP_TO_PCT:
+		if (
+			str(w["kind"]) != Wl.WARMUP
+			or str(w["mode"]) != Wl.ERG
+			or float(w["duration_s"]) != WARMUP_S
+			or float(w.get("target_pct", -1.0)) != WARMUP_FROM_PCT
+			or float(w.get("ramp_to_pct", -1.0)) != WARMUP_TO_PCT
+		):
 			errs.append("phases[0]: must be the 5-minute WARMUP ERG ramp from 50 to 65 % FTP")
 	return errs
 
@@ -199,7 +224,12 @@ static func _phase_errors(pd: Dictionary, i: int) -> Array[String]:
 	var kind := str(pd.get("kind", ""))
 	var mode := str(pd.get("mode", ""))
 	if not GAME_KINDS.has(kind):
-		errs.append("%s.kind: must be one of %s (the platform appends the cool-down)" % [at, ", ".join(GAME_KINDS)])
+		errs.append(
+			(
+				"%s.kind: must be one of %s (the platform appends the cool-down)"
+				% [at, ", ".join(GAME_KINDS)]
+			)
+		)
 	if mode != Wl.ERG and mode != Wl.SIM:
 		errs.append("%s.mode: must be ERG or SIM" % at)
 	if not _is_number(pd.get("duration_s")) or float(pd["duration_s"]) <= 0.0:
@@ -209,9 +239,20 @@ static func _phase_errors(pd: Dictionary, i: int) -> Array[String]:
 	if not (pd.get("label") is String) or str(pd["label"]).strip_edges() == "":
 		errs.append("%s.label: must be a non-empty string" % at)
 	if mode == Wl.ERG:
-		if not _is_number(pd.get("target_pct")) or float(pd["target_pct"]) <= 0.0 or float(pd["target_pct"]) > MAX_PCT:
+		if (
+			not _is_number(pd.get("target_pct"))
+			or float(pd["target_pct"]) <= 0.0
+			or float(pd["target_pct"]) > MAX_PCT
+		):
 			errs.append("%s.target_pct: must be a number in (0, 150]" % at)
-		if pd.has("ramp_to_pct") and (not _is_number(pd["ramp_to_pct"]) or float(pd["ramp_to_pct"]) <= 0.0 or float(pd["ramp_to_pct"]) > MAX_PCT):
+		if (
+			pd.has("ramp_to_pct")
+			and (
+				not _is_number(pd["ramp_to_pct"])
+				or float(pd["ramp_to_pct"]) <= 0.0
+				or float(pd["ramp_to_pct"]) > MAX_PCT
+			)
+		):
 			errs.append("%s.ramp_to_pct: must be a number in (0, 150]" % at)
 		if pd.has("grade_source"):
 			errs.append("%s.grade_source: only for SIM phases" % at)
@@ -231,7 +272,9 @@ static func _phase_errors(pd: Dictionary, i: int) -> Array[String]:
 static func _phase_from(pd: Dictionary, p_course: WorkoutCourse) -> PlanPhase:
 	var p: PlanPhase
 	if str(pd["mode"]) == Wl.ERG:
-		p = PlanPhase.erg(str(pd["kind"]), float(pd["target_pct"]), float(pd["duration_s"]), str(pd["label"]))
+		p = PlanPhase.erg(
+			str(pd["kind"]), float(pd["target_pct"]), float(pd["duration_s"]), str(pd["label"])
+		)
 		if pd.has("ramp_to_pct"):
 			p.with_ramp(float(pd["ramp_to_pct"]))
 	else:
@@ -255,7 +298,12 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		return null
 	var result: Dictionary = parse_zwo_path(path)
 	if not bool(result.get("ok", false)):
-		push_error("WorkoutSession: .zwo import of %s failed: %s" % [path, result.get("error", "unknown error")])
+		push_error(
+			(
+				"WorkoutSession: .zwo import of %s failed: %s"
+				% [path, result.get("error", "unknown error")]
+			)
+		)
 		return null
 	var s := WorkoutSession.new()
 	s.id = content_id
@@ -281,7 +329,12 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		n += 1
 		if p.kind == Wl.COOLDOWN:
 			p.kind = Wl.RECOVERY
-		if p.mode == Wl.SIM and p.kind != Wl.FREE and p.grade_source == Wl.GRADE_FLAT and p.course_profile.is_empty():
+		if (
+			p.mode == Wl.SIM
+			and p.kind != Wl.FREE
+			and p.grade_source == Wl.GRADE_FLAT
+			and p.course_profile.is_empty()
+		):
 			p.kind = Wl.FREE
 		p.lap = true
 		if p.label.strip_edges() == "":
@@ -362,7 +415,9 @@ static func parse_zwo_path(path: String) -> Dictionary:
 
 ## The phase as a session-file entry (for validating imported phases).
 static func _phase_dict(p: PlanPhase) -> Dictionary:
-	var d := {"kind": p.kind, "mode": p.mode, "duration_s": p.duration_s, "lap": p.lap, "label": p.label}
+	var d := {
+		"kind": p.kind, "mode": p.mode, "duration_s": p.duration_s, "lap": p.lap, "label": p.label
+	}
 	if p.mode == Wl.ERG:
 		d["target_pct"] = p.target_pct
 		if p.has_ramp():
@@ -429,18 +484,24 @@ func preview() -> Dictionary:
 
 ## One line for a phase: "5:00  Warm-up  50 -> 65% FTP". `band` is the session's SIM WORK
 ## band in % FTP (Rolling road's 76-105).
-static func describe_phase(p: PlanPhase, strings: GameStrings, band: Array = DEFAULT_BAND_PCT) -> String:
+static func describe_phase(
+	p: PlanPhase, strings: GameStrings, band: Array = DEFAULT_BAND_PCT
+) -> String:
 	var what := ""
 	if p.mode == Wl.ERG:
 		if p.has_ramp():
-			what = strings.t("WORKOUT_PREVIEW_RAMP", {"from": _pct(p.target_pct), "to": _pct(p.ramp_to_pct)})
+			what = strings.t(
+				"WORKOUT_PREVIEW_RAMP", {"from": _pct(p.target_pct), "to": _pct(p.ramp_to_pct)}
+			)
 		else:
 			what = strings.t("WORKOUT_PREVIEW_ERG", {"pct": _pct(p.target_pct)})
 	elif p.kind == Wl.FREE:
 		what = strings.t("WORKOUT_PREVIEW_FREE" if is_sprint(p) else "WORKOUT_PREVIEW_FREE_RIDE")
 	else:
 		var b: Array = band if band.size() == 2 else DEFAULT_BAND_PCT
-		what = strings.t("WORKOUT_PREVIEW_COURSE", {"lo": _pct(float(b[0])), "hi": _pct(float(b[1]))})
+		what = strings.t(
+			"WORKOUT_PREVIEW_COURSE", {"lo": _pct(float(b[0])), "hi": _pct(float(b[1]))}
+		)
 	return "%s  %s  %s" % [clock(p.duration_s), strings.t(p.label), what]
 
 

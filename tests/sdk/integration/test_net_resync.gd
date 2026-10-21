@@ -36,7 +36,8 @@ var _spy: bool = false
 ## the phase in the governor and MockTrainer; like the real one it laps only a real phase change
 ## (the rider rode another phase of this plan), never a restarted client's first phase. Its
 ## start_phase calls are recorded too.
-class ResumeSpyRider extends LocalRider:
+class ResumeSpyRider:
+	extends LocalRider
 	var resumes: Array = []
 	var starts: Array[int] = []
 
@@ -53,7 +54,12 @@ class ResumeSpyRider extends LocalRider:
 		if device is MockTrainer:
 			(device as MockTrainer).set_phase(index)
 		var ph := plan().phase(index) if plan() != null else null
-		if ph != null and (ph.lap or ph.kind == Wl.COOLDOWN) and previous >= 0 and previous != index:
+		if (
+			ph != null
+			and (ph.lap or ph.kind == Wl.COOLDOWN)
+			and previous >= 0
+			and previous != index
+		):
 			lap(ph.label)
 
 
@@ -149,13 +155,31 @@ func _start_host() -> void:
 	_host = GameHost.new()
 	_host.name = "Host"
 	_root.add_child(_host)
-	assert_eq(_host.setup({
-		"game_id": GAME, "content_id": _content, "seed": 9, "role": Wl.HOST, "players": players,
-		"local_riders": riders, "local_peer": net.local_peer, "net": net, "bus": _buses[0],
-		"registry": _reg, "headless": true, "realtime": false,
-		"report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
-	}), "")
+	assert_eq(
+		(
+			_host
+			. setup(
+				{
+					"game_id": GAME,
+					"content_id": _content,
+					"seed": 9,
+					"role": Wl.HOST,
+					"players": players,
+					"local_riders": riders,
+					"local_peer": net.local_peer,
+					"net": net,
+					"bus": _buses[0],
+					"registry": _reg,
+					"headless": true,
+					"realtime": false,
+					"report": true,
+					"record_rides": false,
+					"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
+				}
+			)
+		),
+		""
+	)
 	_host.start()
 
 
@@ -171,13 +195,26 @@ func _on_client_message(_from: int, data: Dictionary, i: int) -> void:
 	var gh := GameHost.new()
 	gh.name = "Client%d" % net.local_peer
 	_root.add_child(gh)
-	var err := gh.setup({
-		"role": Wl.CLIENT, "local_peer": net.local_peer,
-		"local_riders": {net.local_peer: _rider(_root, slot, true)}, "net": net, "bus": _buses[i],
-		"registry": _reg, "headless": true, "realtime": false, "report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
-		"session_start": data.duplicate(true),
-	})
+	var err := (
+		gh
+		. setup(
+			{
+				"role": Wl.CLIENT,
+				"local_peer": net.local_peer,
+				"local_riders": {net.local_peer: _rider(_root, slot, true)},
+				"net": net,
+				"bus": _buses[i],
+				"registry": _reg,
+				"headless": true,
+				"realtime": false,
+				"report": true,
+				"record_rides": false,
+				"progress_path":
+				_tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
+				"session_start": data.duplicate(true),
+			}
+		)
+	)
 	assert_eq(err, "")
 	gh.session_finished.connect(func(r: GameResults) -> void: _finished[i] = r)
 	gh.start()
@@ -212,17 +249,37 @@ func test_host_drop_and_reclaim_resyncs_client_phases() -> void:
 	_step(60)  # host game tick ~80: the 2 s WARMUP has ended on the host
 	assert_eq(host_net.state, WlNetSession.STATE_RECONNECTING, "host is away")
 	for i in [1, 2]:
-		assert_eq((_clients[i] as GameHost).local_phase_state().index, 0, "precondition: client %d missed the change" % i)
+		assert_eq(
+			(_clients[i] as GameHost).local_phase_state().index,
+			0,
+			"precondition: client %d missed the change" % i
+		)
 	host_net.rejoin()
-	assert_true(_pump(func() -> bool: return host_net.state == WlNetSession.STATE_HOSTING), "host reclaimed peer 1")
+	assert_true(
+		_pump(func() -> bool: return host_net.state == WlNetSession.STATE_HOSTING),
+		"host reclaimed peer 1"
+	)
 	_step(10)  # still inside the host's WORK phase (ends at tick 100)
 	for i in [1, 2]:
 		var gh: GameHost = _clients[i]
 		var peer := gh.local_peer()
 		var rider: LocalRider = gh.local_rider(peer)
-		assert_eq(gh.local_phase_state().index, _host.tracker.index_of(peer), "peer %d follows the host's phase again" % peer)
-		assert_eq(int(rider.governor.status()["phase_index"]), _host.tracker.index_of(peer), "and so does its governor")
-		assert_almost_eq(gh.local_phase_state().elapsed_s, _host.tracker.state(peer).elapsed_s, 0.3, "with the host's phase clock")
+		assert_eq(
+			gh.local_phase_state().index,
+			_host.tracker.index_of(peer),
+			"peer %d follows the host's phase again" % peer
+		)
+		assert_eq(
+			int(rider.governor.status()["phase_index"]),
+			_host.tracker.index_of(peer),
+			"and so does its governor"
+		)
+		assert_almost_eq(
+			gh.local_phase_state().elapsed_s,
+			_host.tracker.state(peer).elapsed_s,
+			0.3,
+			"with the host's phase clock"
+		)
 	assert_eq(_desyncs(), 0, "the gap after the host's return is expected, not a desync")
 
 
@@ -251,9 +308,15 @@ func test_peer_that_left_while_host_was_away_is_marked_dropped() -> void:
 			marked = true
 	var row: Dictionary = _host.ctx.roster.get(gone_peer, {})
 	assert_true(marked, "on_afk(%d, true) after it left while the host was away" % gone_peer)
-	assert_false(bool(row.get("connected", true)), "the roster shows the departed rider disconnected")
-	assert_eq(float(row.get("raw_w", -1.0)), 0.0, "a departed rider's stale power is not live power")
-	assert_false(host_net.peers().has(gone_peer), "the host's lobby no longer lists it as connected")
+	assert_false(
+		bool(row.get("connected", true)), "the roster shows the departed rider disconnected"
+	)
+	assert_eq(
+		float(row.get("raw_w", -1.0)), 0.0, "a departed rider's stale power is not live power"
+	)
+	assert_false(
+		host_net.peers().has(gone_peer), "the host's lobby no longer lists it as connected"
+	)
 	var stayed: GameHost = _clients[1]
 	assert_eq(stayed.local_phase_state().index, _host.tracker.index_of(stayed.local_peer()))
 
@@ -275,7 +338,12 @@ func test_socket_rejoin_mid_ramp_keeps_the_ramp_and_laps() -> void:
 	assert_eq(_nets[1].state, WlNetSession.STATE_JOINED, "rejoined")
 	var after_w := rider.telemetry().applied_target_w
 	var gov_elapsed := float(rider.governor.status()["phase_elapsed_s"])
-	assert_almost_eq(gov_elapsed, _host.tracker.state(peer).elapsed_s, 1.0, "the governor's phase clock follows the host after a rejoin")
+	assert_almost_eq(
+		gov_elapsed,
+		_host.tracker.state(peer).elapsed_s,
+		1.0,
+		"the governor's phase clock follows the host after a rejoin"
+	)
 	assert_gte(after_w, before_w, "the warm-up ramp does not start over after a rejoin")
 	assert_eq(rec.lap_count(), laps_before, "a rejoin inside the same phase adds no FIT lap")
 	assert_almost_eq(c.local_phase_state().elapsed_s, _host.tracker.state(peer).elapsed_s, 0.3)
@@ -298,7 +366,11 @@ func _net_gives_up(reason: String) -> void:
 	for k in 20:
 		c.step()
 	var cd := rider.plan().cooldown_index()
-	assert_eq(int(rider.governor.status()["phase_index"]), cd, "%s: the rider rides its cool-down at once" % reason)
+	assert_eq(
+		int(rider.governor.status()["phase_index"]),
+		cd,
+		"%s: the rider rides its cool-down at once" % reason
+	)
 	assert_eq(c.state, "cooldown")
 	assert_push_warning("riding the cool-down here")
 	for k in roundi(180.0 / Wl.SIM_DT):
@@ -353,7 +425,9 @@ func test_a_restarted_client_resumes_its_phase_at_the_hosts_elapsed_time() -> vo
 	var call: Array = rider.resumes[0]
 	assert_eq(int(call[0]), _host.tracker.index_of(peer), "the host's phase index")
 	assert_gt(float(call[1]), 119.0, "resumed mid-ramp, not at 0")
-	assert_almost_eq(float(call[1]), _host_elapsed_at(call, rider, peer), 0.2, "at the host's elapsed time")
+	assert_almost_eq(
+		float(call[1]), _host_elapsed_at(call, rider, peer), 0.2, "at the host's elapsed time"
+	)
 	assert_eq(int(rider.governor.status()["phase_index"]), 0, "the governor rides the warm-up")
 	var rec: RideRecorder = _recorders[peer]
 	assert_eq(rec.lap_count(), 1, "the new FIT has one open lap")
@@ -380,7 +454,9 @@ func test_a_phase_change_during_a_socket_outage_is_resumed_with_its_lap() -> voi
 	assert_eq(_host.tracker.index_of(peer), 1, "precondition: the host's WORK phase")
 	assert_eq(c.local_phase_state().index, 0, "precondition: the client missed the change")
 	_nets[1].rejoin()
-	assert_true(_pump(func() -> bool: return _nets[1].state == WlNetSession.STATE_JOINED), "rejoined")
+	assert_true(
+		_pump(func() -> bool: return _nets[1].state == WlNetSession.STATE_JOINED), "rejoined"
+	)
 	_step(10)
 	assert_eq(rider.starts, [0] as Array[int], "WORK is not started at 0")
 	assert_eq(rider.resumes.size(), 1, "one resume_phase: %s" % str(rider.resumes))
@@ -414,20 +490,30 @@ func test_a_phase_change_while_the_host_was_away_is_resumed() -> void:
 	(host_net.transport as LoopbackTransport).simulate_drop()
 	_step(60)  # the 2 s warm-up ended on the host
 	host_net.rejoin()
-	assert_true(_pump(func() -> bool: return host_net.state == WlNetSession.STATE_HOSTING), "host reclaimed peer 1")
+	assert_true(
+		_pump(func() -> bool: return host_net.state == WlNetSession.STATE_HOSTING),
+		"host reclaimed peer 1"
+	)
 	_step(10)
 	for i in [1, 2]:
 		var gh: GameHost = _clients[i]
 		var peer := gh.local_peer()
 		var rider := gh.local_rider(peer) as ResumeSpyRider
 		assert_eq(rider.starts, [0] as Array[int], "peer %d: only the warm-up was started" % peer)
-		assert_eq(rider.resumes.size(), 1, "peer %d: one resume_phase: %s" % [peer, str(rider.resumes)])
+		assert_eq(
+			rider.resumes.size(), 1, "peer %d: one resume_phase: %s" % [peer, str(rider.resumes)]
+		)
 		if rider.resumes.size() != 1:
 			continue
 		var call: Array = rider.resumes[0]
 		assert_eq(int(call[0]), 1, "peer %d resumes WORK" % peer)
 		assert_gt(float(call[1]), 0.0)
-		assert_almost_eq(float(call[1]), _host_elapsed_at(call, rider, peer), 0.2, "peer %d: at the host's elapsed time" % peer)
+		assert_almost_eq(
+			float(call[1]),
+			_host_elapsed_at(call, rider, peer),
+			0.2,
+			"peer %d: at the host's elapsed time" % peer
+		)
 		assert_eq(int(rider.governor.status()["phase_index"]), _host.tracker.index_of(peer))
 	assert_eq(_desyncs(), 0)
 
@@ -453,11 +539,19 @@ func test_a_restarted_client_with_the_real_rider_follows_the_hosts_phase() -> vo
 	var c: GameHost = _clients[1]
 	var rider := c.local_rider(peer)
 	var st: Dictionary = rider.governor.status()
-	assert_eq(int(st["phase_index"]), _host.tracker.index_of(peer), "the governor rides the host's phase")
+	assert_eq(
+		int(st["phase_index"]), _host.tracker.index_of(peer), "the governor rides the host's phase"
+	)
 	if rider.has_method("resume_phase"):
-		assert_almost_eq(float(st["phase_elapsed_s"]), _host.tracker.state(peer).elapsed_s, 1.0,
-			"the restarted client's governor resumes the phase at the host's elapsed time")
-		assert_gte(rider.telemetry().applied_target_w, before_w - 2, "the warm-up ramp does not start over")
+		assert_almost_eq(
+			float(st["phase_elapsed_s"]),
+			_host.tracker.state(peer).elapsed_s,
+			1.0,
+			"the restarted client's governor resumes the phase at the host's elapsed time"
+		)
+		assert_gte(
+			rider.telemetry().applied_target_w, before_w - 2, "the warm-up ramp does not start over"
+		)
 	else:
 		assert_lt(float(st["phase_elapsed_s"]), 5.0, "without resume_phase the phase starts over")
 	assert_almost_eq(c.local_phase_state().elapsed_s, _host.tracker.state(peer).elapsed_s, 0.3)

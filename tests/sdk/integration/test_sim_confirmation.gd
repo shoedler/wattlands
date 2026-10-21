@@ -38,11 +38,17 @@ func after_each() -> void:
 	_remove_tree(_tmp)
 
 
-static func _rider(slot: PlayerSlot, profile: RiderProfile, spec: String, options: Dictionary) -> LocalRider:
+static func _rider(
+	slot: PlayerSlot, profile: RiderProfile, spec: String, options: Dictionary
+) -> LocalRider:
 	var opts := options.duplicate()
 	opts["skip_warmup"] = true
 	opts["record"] = false
-	var device := MockTrainer.from_spec(spec, slot.ftp, {"seed": 3 + slot.slot_index, "preferred_cadence_rpm": slot.preferred_cadence_rpm})
+	var device := MockTrainer.from_spec(
+		spec,
+		slot.ftp,
+		{"seed": 3 + slot.slot_index, "preferred_cadence_rpm": slot.preferred_cadence_rpm}
+	)
 	var r := LocalRider.new()
 	r.setup(slot.peer_id, profile, slot, device, opts)
 	if device.get_parent() == null:
@@ -52,26 +58,63 @@ static func _rider(slot: PlayerSlot, profile: RiderProfile, spec: String, option
 
 func test_a_mode_sim_haptic_inside_a_running_block_is_confirmed_by_host_and_governor() -> void:
 	_runner = GameSimRunner.new()
-	assert_eq(_runner.setup({
-		"game": "fx_conform", "content": "short", "players": 2, "seed": 5, "registry": _reg,
-		"max_sim_seconds": 70.0, "rider_factory": _rider,
-	}), "")
+	assert_eq(
+		(
+			_runner
+			. setup(
+				{
+					"game": "fx_conform",
+					"content": "short",
+					"players": 2,
+					"seed": 5,
+					"registry": _reg,
+					"max_sim_seconds": 70.0,
+					"rider_factory": _rider,
+				}
+			)
+		),
+		""
+	)
 	var results: Dictionary = {}
-	_runner.host.game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
-		for peer: int in [1, 2]:
-			if frame.tick == OPEN_TICK:
-				results["open%d" % peer] = g.ctx.directives.request(peer, EffortDirective.from_dict(
-					{"mode": "SIM", "duration_s": 20, "reason": "overdrive", "source": "test"}))
-			elif frame.tick == HAPTIC_TICK:
-				results["hit%d" % peer] = g.ctx.directives.request(peer, EffortDirective.from_dict(
-					{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "test"})))
+	_runner.host.game.set(
+		"on_step",
+		func(g: GameModule, frame: InputFrame) -> void:
+			for peer: int in [1, 2]:
+				if frame.tick == OPEN_TICK:
+					results["open%d" % peer] = g.ctx.directives.request(
+						peer,
+						EffortDirective.from_dict(
+							{
+								"mode": "SIM",
+								"duration_s": 20,
+								"reason": "overdrive",
+								"source": "test"
+							}
+						)
+					)
+				elif frame.tick == HAPTIC_TICK:
+					results["hit%d" % peer] = g.ctx.directives.request(
+						peer,
+						EffortDirective.from_dict(
+							{
+								"mode": "SIM",
+								"haptic": 2.0,
+								"duration_s": 1.5,
+								"reason": "hit",
+								"source": "test"
+							}
+						)
+					)
+	)
 	assert_eq(_runner.run_to_end(), "timeout")
 	var rep := _runner.build_report()
 	for peer: int in [1, 2]:
 		var open: DirectiveResult = results["open%d" % peer]
 		var hit: DirectiveResult = results["hit%d" % peer]
 		assert_true(open.accepted, "peer %d: the block opens" % peer)
-		assert_true(hit.accepted, "peer %d: the host accepts the confirmation (was sim_block_length)" % peer)
+		assert_true(
+			hit.accepted, "peer %d: the host accepts the confirmation (was sim_block_length)" % peer
+		)
 		var entry := _directive(rep, hit.id)
 		assert_false(entry.is_empty(), "peer %d: the haptic is in the report" % peer)
 		var applied: Variant = entry.get("applied")
@@ -79,14 +122,29 @@ func test_a_mode_sim_haptic_inside_a_running_block_is_confirmed_by_host_and_gove
 		if not (applied is Dictionary):
 			continue
 		var rec: Dictionary = applied
-		assert_false(bool(rec["refused"]), "peer %d: the governor confirms too: %s" % [peer, str(rec.get("reason", ""))])
-		assert_eq(str(rec["applied"].get("mode", "")), Wl.SIM, "peer %d: applied as a confirmation" % peer)
-		assert_almost_eq(float(rec["applied"].get("haptic_s", 0.0)), 1.5, 1e-6, "peer %d: with its haptic" % peer)
+		assert_false(
+			bool(rec["refused"]),
+			"peer %d: the governor confirms too: %s" % [peer, str(rec.get("reason", ""))]
+		)
+		assert_eq(
+			str(rec["applied"].get("mode", "")), Wl.SIM, "peer %d: applied as a confirmation" % peer
+		)
+		assert_almost_eq(
+			float(rec["applied"].get("haptic_s", 0.0)), 1.5, 1e-6, "peer %d: with its haptic" % peer
+		)
 		assert_false(rec["applied"].has("sim_block"), "peer %d: no new block" % peer)
 		var trace: Array = _trace(rep, peer)
 		assert_eq(_mode_at(trace, 58.0), Wl.SIM, "peer %d: the block runs to its end" % peer)
-		assert_eq(_mode_at(trace, 63.0), Wl.ERG, "peer %d: and ends on time (40 s + 20 s), never extended" % peer)
-		assert_gt(_max_haptic(trace, 45.0, 47.0), 0.0, "peer %d: the haptic reached the trainer grade" % peer)
+		assert_eq(
+			_mode_at(trace, 63.0),
+			Wl.ERG,
+			"peer %d: and ends on time (40 s + 20 s), never extended" % peer
+		)
+		assert_gt(
+			_max_haptic(trace, 45.0, 47.0),
+			0.0,
+			"peer %d: the haptic reached the trainer grade" % peer
+		)
 
 
 func _directive(rep: Dictionary, id: int) -> Dictionary:

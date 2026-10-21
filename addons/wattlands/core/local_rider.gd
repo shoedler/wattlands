@@ -167,7 +167,12 @@ static func live_riders() -> Array[LocalRider]:
 	var keep: Array[WeakRef] = []
 	for w in _live:
 		var r: Object = w.get_ref()
-		if r != null and is_instance_valid(r) and r is LocalRider and not (r as LocalRider).is_shut_down():
+		if (
+			r != null
+			and is_instance_valid(r)
+			and r is LocalRider
+			and not (r as LocalRider).is_shut_down()
+		):
 			out.append(r as LocalRider)
 			keep.append(w)
 	_live = keep
@@ -181,20 +186,33 @@ static func live_riders() -> Array[LocalRider]:
 ## governor (SafetyGovernor), gestures (GestureRecognizer), cadence (CadenceEstimator),
 ## recorder (RideRecorderApi, or null for none) and bus (WlEventBus).
 ## A null profile means the defaults; a null slot means profile.to_slot(peer, scaling).
-func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
+func setup(
+	p_peer_id: int,
+	p_profile: RiderProfile,
+	p_slot: PlayerSlot,
+	p_device: TrainerDevice,
+	p_options: Dictionary = {}
+) -> void:
 	_setup_gen += 1
 	# The governor this setup replaces, when it drove the same device object: what belongs to
 	# the trainer connection (warm-up, the trainer's written state) carries over (W2r2).
 	var prev_gov: SafetyGovernor = null
-	if governor != null and is_instance_valid(governor) and device != null and is_instance_valid(device) \
-			and device == p_device:
+	if (
+		governor != null
+		and is_instance_valid(governor)
+		and device != null
+		and is_instance_valid(device)
+		and device == p_device
+	):
 		prev_gov = governor
 	_teardown()
 	_options = p_options.duplicate()
 	peer_id = p_peer_id
 	profile = p_profile if p_profile != null else RiderProfile.new()
 	is_multiplayer = bool(_options.get("multiplayer", false))
-	scaling_mode = str(_options.get("scaling_mode", p_slot.scaling_mode if p_slot != null else Wl.FAIR_FTP))
+	scaling_mode = str(
+		_options.get("scaling_mode", p_slot.scaling_mode if p_slot != null else Wl.FAIR_FTP)
+	)
 	slot = p_slot if p_slot != null else profile.to_slot(p_peer_id, scaling_mode)
 	is_bot = slot.is_bot
 	if p_profile != null and p_slot != null and not slot.is_bot:
@@ -239,7 +257,9 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 		recorder = _new_recorder()
 	if recorder != null:
 		var utc: int = int(_options.get("utc_start_unix", int(Time.get_unix_time_from_system())))
-		recorder.start(str(_options.get("game_id", "")), str(_options.get("content_id", "")), utc, 0.0)
+		recorder.start(
+			str(_options.get("game_id", "")), str(_options.get("content_id", "")), utc, 0.0
+		)
 	device.sample_received.connect(_on_sample)
 	_ready_to_tick = true
 	_register()
@@ -308,7 +328,12 @@ func start_phase(index: int) -> void:
 ## test double that overrides start_phase), is start_phase(index).
 func resume_phase(index: int, elapsed_s: float) -> void:
 	if not is_finite(elapsed_s) or elapsed_s < 0.0:
-		push_error("LocalRider: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)" % [index, str(elapsed_s)])
+		push_error(
+			(
+				"LocalRider: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)"
+				% [index, str(elapsed_s)]
+			)
+		)
 		return
 	if elapsed_s <= 0.0 or governor == null:
 		# Nothing to resume without a governor (a rider not set up, a test double): the phase is
@@ -319,8 +344,12 @@ func resume_phase(index: int, elapsed_s: float) -> void:
 	_phase_index = index
 	var ph: PlanPhase = _plan.phase(index) if _plan != null else null
 	var ridden := -1.0
-	if ph != null and ph.mode == Wl.SIM and ph.grade_source == Wl.GRADE_COURSE \
-			and governor.distance_ridden_since(governor.game_time_s() - elapsed_s) < 0.0:
+	if (
+		ph != null
+		and ph.mode == Wl.SIM
+		and ph.grade_source == Wl.GRADE_COURSE
+		and governor.distance_ridden_since(governor.game_time_s() - elapsed_s) < 0.0
+	):
 		ridden = estimate_course_distance(ph, elapsed_s)
 	governor.resume_phase(index, elapsed_s, ridden)
 	if device is MockTrainer:
@@ -340,8 +369,14 @@ func resume_phase(index: int, elapsed_s: float) -> void:
 ## mass and the course grade scaled by the profile's difficulty and limited to its grade range
 ## (W4r2, for resume_phase). 0 for a phase without a course or a rider not set up.
 func estimate_course_distance(phase: PlanPhase, elapsed_s: float) -> float:
-	if phase == null or phase.course_profile.is_empty() or slot == null or profile == null \
-			or not is_finite(elapsed_s) or elapsed_s <= 0.0:
+	if (
+		phase == null
+		or phase.course_profile.is_empty()
+		or slot == null
+		or profile == null
+		or not is_finite(elapsed_s)
+		or elapsed_s <= 0.0
+	):
 		return 0.0
 	var p_eff := ftp_w() * RESUME_ESTIMATE_PCT / 100.0 * slot.p_eff_per_w
 	var m := SpeedModel.create(slot.rider_mass_kg)
@@ -480,11 +515,17 @@ func is_shut_down() -> bool:
 ## devices. Before setup() it does nothing but push_error.
 func rebind_device(p_device: TrainerDevice) -> void:
 	if p_device == null or not _ready_to_tick:
-		push_error("LocalRider: rebind_device needs a set-up rider and a device (peer %d)" % peer_id)
+		push_error(
+			"LocalRider: rebind_device needs a set-up rider and a device (peer %d)" % peer_id
+		)
 		return
 	if p_device == device:
 		return
-	if device != null and is_instance_valid(device) and device.sample_received.is_connected(_on_sample):
+	if (
+		device != null
+		and is_instance_valid(device)
+		and device.sample_received.is_connected(_on_sample)
+	):
 		device.sample_received.disconnect(_on_sample)
 	device = p_device
 	_pending.clear()
@@ -535,7 +576,9 @@ func tick(dt: float) -> void:
 	var v_kmh := _speed_kmh(t)
 	_distance_m += v_kmh / 3.6 * dt
 	var st := _status()
-	var grade := float(st.get("applied_grade_pct", 0.0)) if str(st.get("mode", Wl.OFF)) == Wl.SIM else 0.0
+	var grade := (
+		float(st.get("applied_grade_pct", 0.0)) if str(st.get("mode", Wl.OFF)) == Wl.SIM else 0.0
+	)
 	speed.step(dt, p * slot.p_eff_per_w, grade)
 	governor.set_course_distance(speed.distance_m)
 	governor.tick(dt)
@@ -639,10 +682,16 @@ func _reset_state() -> void:
 
 func _teardown() -> void:
 	if _recording():
-		push_warning("LocalRider: peer %d was set up again while recording; saving that ride first" % peer_id)
+		push_warning(
+			"LocalRider: peer %d was set up again while recording; saving that ride first" % peer_id
+		)
 		finish_ride()
 	_ready_to_tick = false
-	if device != null and is_instance_valid(device) and device.sample_received.is_connected(_on_sample):
+	if (
+		device != null
+		and is_instance_valid(device)
+		and device.sample_received.is_connected(_on_sample)
+	):
 		device.sample_received.disconnect(_on_sample)
 	if governor != null and is_instance_valid(governor):
 		_disconnect_governor()
@@ -658,11 +707,29 @@ func _teardown() -> void:
 ## the rider's own profile, whatever the slot (a host's copy on a CLIENT) said.
 func _take_safety_values_from_profile() -> void:
 	var own_intensity := profile.haptic_intensity_pct / 100.0
-	var differs := absf(slot.ftp - profile.ftp_w) >= 1.0 or slot.ftp_verified != profile.ftp_verified or slot.haptics_on != profile.haptics_on or absf(slot.haptic_intensity - own_intensity) > 1e-6
+	var differs := (
+		absf(slot.ftp - profile.ftp_w) >= 1.0
+		or slot.ftp_verified != profile.ftp_verified
+		or slot.haptics_on != profile.haptics_on
+		or absf(slot.haptic_intensity - own_intensity) > 1e-6
+	)
 	if differs:
-		push_warning("LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; using the rider's own profile: FTP %s W (verified %s), haptics %s at %s" % [
-			peer_id, str(slot.ftp), str(slot.ftp_verified), str(slot.haptics_on), str(slot.haptic_intensity),
-			str(profile.ftp_w), str(profile.ftp_verified), str(profile.haptics_on), str(own_intensity)])
+		push_warning(
+			(
+				"LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; using the rider's own profile: FTP %s W (verified %s), haptics %s at %s"
+				% [
+					peer_id,
+					str(slot.ftp),
+					str(slot.ftp_verified),
+					str(slot.haptics_on),
+					str(slot.haptic_intensity),
+					str(profile.ftp_w),
+					str(profile.ftp_verified),
+					str(profile.haptics_on),
+					str(own_intensity)
+				]
+			)
+		)
 	slot.ftp = profile.ftp_w
 	slot.ftp_verified = profile.ftp_verified
 	slot.haptics_on = profile.haptics_on
@@ -844,17 +911,26 @@ func _queue_ack(rec: Dictionary) -> void:
 	if d is Array:
 		for e: Variant in d:
 			if e is Dictionary:
-				dropped.append({"channel": str((e as Dictionary).get("channel", "")),
-					"reason": str((e as Dictionary).get("reason", ""))})
-	_acks.append({
-		"id": rec.get("id", 0),
-		"kind": rec.get("kind", ""),
-		"applied": (applied as Dictionary).duplicate(true) if applied is Dictionary else {},
-		"clamped_by": clamp_list,
-		"refused": bool(rec.get("refused", false)),
-		"reason": str(rec.get("reason", "")),
-		"dropped": dropped,
-	})
+				dropped.append(
+					{
+						"channel": str((e as Dictionary).get("channel", "")),
+						"reason": str((e as Dictionary).get("reason", ""))
+					}
+				)
+	(
+		_acks
+		. append(
+			{
+				"id": rec.get("id", 0),
+				"kind": rec.get("kind", ""),
+				"applied": (applied as Dictionary).duplicate(true) if applied is Dictionary else {},
+				"clamped_by": clamp_list,
+				"refused": bool(rec.get("refused", false)),
+				"reason": str(rec.get("reason", "")),
+				"dropped": dropped,
+			}
+		)
+	)
 	_trim(_acks)
 
 

@@ -56,7 +56,11 @@ func test_every_field_on_host_and_clients() -> void:
 		assert_eq(c.ctx.players.size(), 5)
 		for i in 5:
 			var s := c.ctx.players[i]
-			assert_eq(JSON.stringify(s.to_dict()), reference[i], "slot %d on peer %d" % [i, c.local_peer()])
+			assert_eq(
+				JSON.stringify(s.to_dict()),
+				reference[i],
+				"slot %d on peer %d" % [i, c.local_peer()]
+			)
 			assert_typeof(s.peer_id, TYPE_INT)
 			assert_typeof(s.slot_index, TYPE_INT)
 			assert_eq(s.slot_index, i, "contiguous slot order")

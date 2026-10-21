@@ -35,18 +35,57 @@ const RELAY: Dictionary = {
 # Game messages inside the relay's "d" ("type" field), BRIEF 5.5.
 const GAME: Dictionary = {
 	# client -> host
-	"player_info": {"req": ["name", "ftp", "ftp_verified", "p_eff_per_w", "preferred_cadence_rpm",
-		"haptics_on", "autopilot", "player_options", "games"], "ints": []},
+	"player_info":
+	{
+		"req":
+		[
+			"name",
+			"ftp",
+			"ftp_verified",
+			"p_eff_per_w",
+			"preferred_cadence_rpm",
+			"haptics_on",
+			"autopilot",
+			"player_options",
+			"games"
+		],
+		"ints": []
+	},
 	"ready": {"req": ["ready"], "ints": []},
-	"telemetry": {"req": ["tm"], "ints": ["tm.peer", "tm.applied_target_w", "tm.gear",
-		"tm.phase_index", "tm.acks[].id"]},
+	"telemetry":
+	{
+		"req": ["tm"],
+		"ints": ["tm.peer", "tm.applied_target_w", "tm.gear", "tm.phase_index", "tm.acks[].id"]
+	},
 	"clock_ping": {"req": ["t0"], "ints": []},
 	# host -> all
-	"lobby_state": {"req": ["players", "game_id", "game_version", "content_id", "scaling",
-		"settings"], "ints": ["players[].slot_index", "players[].ftp", "settings.bot_ftp",
-		"settings.max_players", "settings.min_players"]},
-	"session_start": {"req": ["game_id", "game_version", "content_id", "seed", "players",
-		"options", "scaling", "start_tick"], "ints": ["seed", "start_tick", "players[].slot_index"]},
+	"lobby_state":
+	{
+		"req": ["players", "game_id", "game_version", "content_id", "scaling", "settings"],
+		"ints":
+		[
+			"players[].slot_index",
+			"players[].ftp",
+			"settings.bot_ftp",
+			"settings.max_players",
+			"settings.min_players"
+		]
+	},
+	"session_start":
+	{
+		"req":
+		[
+			"game_id",
+			"game_version",
+			"content_id",
+			"seed",
+			"players",
+			"options",
+			"scaling",
+			"start_tick"
+		],
+		"ints": ["seed", "start_tick", "players[].slot_index"]
+	},
 	"snapshot": {"req": ["game_id", "seq", "state"], "ints": ["tick"]},
 	"event": {"req": ["seq", "events"], "ints": []},
 	"roster": {"req": ["riders"], "ints": ["riders{}.slot_index"]},
@@ -81,8 +120,9 @@ const DIRECTIVE_COURSE_GRADE := "course_grade"
 const DIRECTIVE_CADENCE_BAND := "cadence_band"
 const DIRECTIVE_POWER_BAND := "power_band"
 ## Host-side end of a rider's phase (applied by the client through its `phase` message).
-const DIRECTIVE_KINDS: Array[String] = [DIRECTIVE_REQUEST, DIRECTIVE_COURSE_GRADE,
-	DIRECTIVE_CADENCE_BAND, DIRECTIVE_POWER_BAND]
+const DIRECTIVE_KINDS: Array[String] = [
+	DIRECTIVE_REQUEST, DIRECTIVE_COURSE_GRADE, DIRECTIVE_CADENCE_BAND, DIRECTIVE_POWER_BAND
+]
 
 ## Relay limits (BRIEF 5.3).
 const MAX_PEERS := 8

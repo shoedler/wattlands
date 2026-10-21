@@ -68,6 +68,7 @@ func _init() -> void:
 
 # --- Surfaces ----------------------------------------------------------------------------
 
+
 ## Send the following primitives to surface `key`, created with `material` (null: the shared
 ## vertex-color material; a material given for an existing key replaces its material).
 func use_surface(key: StringName, material: Material = null) -> LowPolyMesh:
@@ -150,26 +151,38 @@ func aabb() -> AABB:
 
 # --- Primitives (centred on the origin, then transformed by `xform`) ----------------------
 
+
 ## One triangle, given in any order: it faces `outward` (a direction in the same space as
 ## the points; zero = keep the given order, clockwise seen from the front).
-func add_triangle(a: Vector3, b: Vector3, c: Vector3, col: Color, outward: Vector3 = Vector3.ZERO) -> LowPolyMesh:
+func add_triangle(
+	a: Vector3, b: Vector3, c: Vector3, col: Color, outward: Vector3 = Vector3.ZERO
+) -> LowPolyMesh:
 	_tri(a, b, c, col, outward)
 	return self
 
 
 ## A quad a-b-c-d (a convex outline in order) facing `outward`.
-func add_quad(a: Vector3, b: Vector3, c: Vector3, d: Vector3, col: Color, outward: Vector3 = Vector3.ZERO) -> LowPolyMesh:
+func add_quad(
+	a: Vector3, b: Vector3, c: Vector3, d: Vector3, col: Color, outward: Vector3 = Vector3.ZERO
+) -> LowPolyMesh:
 	_quad(a, b, c, d, col, outward)
 	return self
 
 
 ## A box of `size`, centred. `top_col` (alpha > 0) colors the top face differently.
-func add_box(size: Vector3, col: Color, xform: Transform3D = Transform3D.IDENTITY, top_col: Color = Color(0, 0, 0, 0)) -> LowPolyMesh:
+func add_box(
+	size: Vector3,
+	col: Color,
+	xform: Transform3D = Transform3D.IDENTITY,
+	top_col: Color = Color(0, 0, 0, 0)
+) -> LowPolyMesh:
 	var h := size * 0.5
 	var p: Array[Vector3] = []
 	for i in 8:
 		var v := Vector3(
-			h.x if (i & 1) != 0 else -h.x, h.y if (i & 2) != 0 else -h.y, h.z if (i & 4) != 0 else -h.z
+			h.x if (i & 1) != 0 else -h.x,
+			h.y if (i & 2) != 0 else -h.y,
+			h.z if (i & 4) != 0 else -h.z
 		)
 		p.append(xform * v)
 	var center := xform.origin
@@ -185,7 +198,15 @@ func add_box(size: Vector3, col: Color, xform: Transform3D = Transform3D.IDENTIT
 
 ## A prism with `sides` sides (a cylinder at 8+), radius_bottom at -height/2 and radius_top
 ## at +height/2, centred. radius_top 0 makes a cone. Caps unless `caps` is false.
-func add_cylinder(radius_bottom: float, radius_top: float, height: float, sides: int, col: Color, xform: Transform3D = Transform3D.IDENTITY, caps: bool = true) -> LowPolyMesh:
+func add_cylinder(
+	radius_bottom: float,
+	radius_top: float,
+	height: float,
+	sides: int,
+	col: Color,
+	xform: Transform3D = Transform3D.IDENTITY,
+	caps: bool = true
+) -> LowPolyMesh:
 	var n := maxi(sides, 3)
 	var hy := height * 0.5
 	var bottom: Array[Vector3] = []
@@ -216,7 +237,9 @@ func add_cylinder(radius_bottom: float, radius_top: float, height: float, sides:
 
 
 ## A cone (a pyramid at 3 or 4 sides) of `radius` and `height`, centred.
-func add_cone(radius: float, height: float, sides: int, col: Color, xform: Transform3D = Transform3D.IDENTITY) -> LowPolyMesh:
+func add_cone(
+	radius: float, height: float, sides: int, col: Color, xform: Transform3D = Transform3D.IDENTITY
+) -> LowPolyMesh:
 	return add_cylinder(radius, 0.0, height, sides, col, xform)
 
 
@@ -233,14 +256,16 @@ func add_wedge(size: Vector3, col: Color, xform: Transform3D = Transform3D.IDENT
 	_quad_c(b0, b1, b2, b3, col, center)  # bottom
 	_quad_c(b0, b1, t1, t0, col, center)  # back (vertical)
 	_quad_c(t0, t1, b2, b3, col, center)  # slope
-	_tri_c(b0, t0, b3, col, center)       # -x side
-	_tri_c(b1, t1, b2, col, center)       # +x side
+	_tri_c(b0, t0, b3, col, center)  # -x side
+	_tri_c(b1, t1, b2, col, center)  # +x side
 	return self
 
 
 ## A low-poly UV sphere: `rings` latitude bands (>= 2) and `segments` around (>= 3),
 ## centred. rings 3, segments 6 gives 24 faceted triangles (bushes, olive crowns, rocks).
-func add_sphere(radius: float, rings: int, segments: int, col: Color, xform: Transform3D = Transform3D.IDENTITY) -> LowPolyMesh:
+func add_sphere(
+	radius: float, rings: int, segments: int, col: Color, xform: Transform3D = Transform3D.IDENTITY
+) -> LowPolyMesh:
 	var nr := maxi(rings, 2)
 	var ns := maxi(segments, 3)
 	var center := xform.origin
@@ -269,7 +294,14 @@ func add_sphere(radius: float, rings: int, segments: int, col: Color, xform: Tra
 
 ## A flat ring around the local Z axis (a wheel rim): `segments` blocks between radius - width
 ## and radius, `depth` thick along Z, centred.
-func add_ring(radius: float, width: float, depth: float, segments: int, col: Color, xform: Transform3D = Transform3D.IDENTITY) -> LowPolyMesh:
+func add_ring(
+	radius: float,
+	width: float,
+	depth: float,
+	segments: int,
+	col: Color,
+	xform: Transform3D = Transform3D.IDENTITY
+) -> LowPolyMesh:
 	var n := maxi(segments, 3)
 	var r_in := maxf(radius - width, 0.0)
 	var hz := depth * 0.5
@@ -288,11 +320,11 @@ func add_ring(radius: float, width: float, depth: float, segments: int, col: Col
 		var i0b := xform * (d0 * r_in - Vector3(0, 0, hz))
 		var i1b := xform * (d1 * r_in - Vector3(0, 0, hz))
 		var mid := xform.basis * ((d0 + d1).normalized())
-		_quad(o0f, o1f, o1b, o0b, col, mid)          # outer
+		_quad(o0f, o1f, o1b, o0b, col, mid)  # outer
 		if r_in > 0.0:
-			_quad(i0f, i1f, i1b, i0b, col, -mid)     # inner
-		_quad(i0f, i1f, o1f, o0f, col, axis)         # front (+z)
-		_quad(i0b, i1b, o1b, o0b, col, -axis)        # back (-z)
+			_quad(i0f, i1f, i1b, i0b, col, -mid)  # inner
+		_quad(i0f, i1f, o1f, o0f, col, axis)  # front (+z)
+		_quad(i0b, i1b, o1b, o0b, col, -axis)  # back (-z)
 	return self
 
 
@@ -310,7 +342,14 @@ func add_plane(size: Vector2, col: Color, xform: Transform3D = Transform3D.IDENT
 ## A terrain grid of `size` (x, z) in `cells`, centred, heights from `height_fn.call(x, z)`
 ## (local x, z; returns y) and colors from `color_fn.call(center: Vector3, normal: Vector3)`
 ## per triangle (an invalid Callable uses `col`). Cells split along alternating diagonals.
-func add_grid(size: Vector2, cells: Vector2i, height_fn: Callable, col: Color, color_fn: Callable = Callable(), xform: Transform3D = Transform3D.IDENTITY) -> LowPolyMesh:
+func add_grid(
+	size: Vector2,
+	cells: Vector2i,
+	height_fn: Callable,
+	col: Color,
+	color_fn: Callable = Callable(),
+	xform: Transform3D = Transform3D.IDENTITY
+) -> LowPolyMesh:
 	var nx := maxi(cells.x, 1)
 	var nz := maxi(cells.y, 1)
 	var pts: Array[Vector3] = []
@@ -403,11 +442,14 @@ func transform(xform: Transform3D) -> LowPolyMesh:
 
 # --- Vertex-color effects ---------------------------------------------------------------
 
+
 ## Darken vertex colors near the ground to ground an object without SSAO (BRIEF 3.9): a
 ## vertex at `ground_y` gets its color times (1 - strength), one at ground_y + height or
 ## above keeps it, smoothly in between. Applies to everything added so far, so call it on a
 ## prop in local space before append().
-func darken_near_ground(ground_y: float = 0.0, height: float = 1.0, strength: float = 0.4) -> LowPolyMesh:
+func darken_near_ground(
+	ground_y: float = 0.0, height: float = 1.0, strength: float = 0.4
+) -> LowPolyMesh:
 	for key: StringName in _surfaces:
 		var surf := _surface(key)
 		var verts := surf.verts
@@ -424,13 +466,23 @@ func darken_near_ground(ground_y: float = 0.0, height: float = 1.0, strength: fl
 ## `max_blend` at `end_m` and beyond (horizontal distance unless `horizontal` is false).
 ## The vertex-color haze fallback (Siege S3: hazy blue beyond 120 m); SkyAmbient.haze_mesh()
 ## calls it only when Environment fog is not used.
-func apply_haze(origin: Vector3, start_m: float, end_m: float, haze_color: Color, max_blend: float = 1.0, horizontal: bool = true) -> LowPolyMesh:
+func apply_haze(
+	origin: Vector3,
+	start_m: float,
+	end_m: float,
+	haze_color: Color,
+	max_blend: float = 1.0,
+	horizontal: bool = true
+) -> LowPolyMesh:
 	for key: StringName in _surfaces:
 		var surf := _surface(key)
 		var verts := surf.verts
 		var cols := surf.colors
 		for i in verts.size():
-			var t := haze_amount(verts[i], origin, start_m, end_m, horizontal) * clampf(max_blend, 0.0, 1.0)
+			var t := (
+				haze_amount(verts[i], origin, start_m, end_m, horizontal)
+				* clampf(max_blend, 0.0, 1.0)
+			)
 			if t > 0.0:
 				var c := cols[i]
 				var h := c.lerp(haze_color, t)
@@ -460,7 +512,9 @@ static func darkening_factor(y: float, ground_y: float, height: float, strength:
 
 
 ## The haze blend (0..1) apply_haze() uses at point p.
-static func haze_amount(p: Vector3, origin: Vector3, start_m: float, end_m: float, horizontal: bool = true) -> float:
+static func haze_amount(
+	p: Vector3, origin: Vector3, start_m: float, end_m: float, horizontal: bool = true
+) -> float:
 	var d := p - origin
 	if horizontal:
 		d.y = 0.0
@@ -471,6 +525,7 @@ static func haze_amount(p: Vector3, origin: Vector3, start_m: float, end_m: floa
 
 
 # --- Output -------------------------------------------------------------------------------
+
 
 ## Build an ArrayMesh: one surface per non-empty surface key, through SurfaceTool with
 ## smooth group -1 (flat normals) and vertex colors. Pass `into` to append surfaces to an
@@ -532,6 +587,7 @@ static func unshaded_material() -> StandardMaterial3D:
 
 
 # --- Internals -----------------------------------------------------------------------------
+
 
 func _ensure_surface(key: StringName) -> void:
 	if not _surfaces.has(key):

@@ -96,6 +96,7 @@ func tick(dt: float) -> void:
 
 # --- Added in W1 ----------------------------------------------------------------------
 
+
 ## The latest sample emitted (null before the first).
 func last_sample() -> TrainerSample:
 	return _last_sample
@@ -152,6 +153,7 @@ func release_client() -> void:
 
 
 # --- Internals ------------------------------------------------------------------------
+
 
 func _bind(p_client: FtmsClient, p_name: String) -> void:
 	_client = p_client

@@ -150,7 +150,9 @@ func test_set_metronome_is_idempotent() -> void:
 		_sfx.set_metronome(60.0, true)
 	assert_eq(_sfx.metronome_clicks(), 0, "no click from repeated calls")
 	_sfx.tick(0.4)
-	assert_eq(_sfx.metronome_clicks(), 1, "the stroke phase kept running: a click 1 s after the start")
+	assert_eq(
+		_sfx.metronome_clicks(), 1, "the stroke phase kept running: a click 1 s after the start"
+	)
 	_sfx.set_metronome(0.0, false)
 	_sfx.set_metronome(0.0, false)
 	assert_false(_sfx.metronome_on())

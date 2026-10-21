@@ -161,6 +161,7 @@ func _changed() -> void:
 
 # --- network-side helpers for tests ------------------------------------------------------------
 
+
 ## A human slot for `peer` named `name` at the next slot index.
 func add_human(peer: int, p_name: String, ftp: float = 200.0) -> PlayerSlot:
 	var s := PlayerSlot.new()

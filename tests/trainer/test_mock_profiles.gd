@@ -43,6 +43,7 @@ func _samples_in(t0: float, t1: float) -> Array[TrainerSample]:
 
 # --- grammar --------------------------------------------------------------------------
 
+
 func test_brief_and_game_brief_specs_parse() -> void:
 	var specs: Array[String] = [
 		"intervals:on_w=300,off_w=100,on_s=30,off_s=60,rpm=95",
@@ -72,16 +73,32 @@ func test_brief_and_game_brief_specs_parse() -> void:
 
 func test_new_profiles_reject_bad_specs() -> void:
 	var bad: Array[String] = [
-		"intervals:on_w=300", "intervals:off_w=100", "intervals:on_w=1,off_w=1,on_s=0",
-		"cadence_drop:rpm=30", "cadence_drop:at_s=10", "cadence_drop:rpm=30,at_s=10,at_phase=2",
-		"cadence_drop:rpm=30,at_s=10,after_s=5", "cadence_drop:rpm=30,at_s=10,at_target_pct=50",
-		"cadence_drop:rpm=30,at_phase=1.5", "cadence_drop:rpm=-5,at_s=1", "cadence_drop:rpm=30,at_s=1,for_s=0",
-		"cadence_drop:rpm=30,at_target_pct=0", "cadence_drop:rpm=30,at_target_pct=400",
-		"surge:for_s=60", "surge:every_s=10,for_s=12", "surge:every_s=0", "surge:lift=3", "surge:lift=-0.1",
-		"surge:sim_pct=0", "surge:sim_pct=400", "noise:sd_w=-1", "band:rpm=80", "band:offset_rpm=abc",
+		"intervals:on_w=300",
+		"intervals:off_w=100",
+		"intervals:on_w=1,off_w=1,on_s=0",
+		"cadence_drop:rpm=30",
+		"cadence_drop:at_s=10",
+		"cadence_drop:rpm=30,at_s=10,at_phase=2",
+		"cadence_drop:rpm=30,at_s=10,after_s=5",
+		"cadence_drop:rpm=30,at_s=10,at_target_pct=50",
+		"cadence_drop:rpm=30,at_phase=1.5",
+		"cadence_drop:rpm=-5,at_s=1",
+		"cadence_drop:rpm=30,at_s=1,for_s=0",
+		"cadence_drop:rpm=30,at_target_pct=0",
+		"cadence_drop:rpm=30,at_target_pct=400",
+		"surge:for_s=60",
+		"surge:every_s=10,for_s=12",
+		"surge:every_s=0",
+		"surge:lift=3",
+		"surge:lift=-0.1",
+		"surge:sim_pct=0",
+		"surge:sim_pct=400",
+		"noise:sd_w=-1",
+		"band:rpm=80",
+		"band:offset_rpm=abc",
 	]
 	for spec in bad:
-		assert_eq(MockTrainer.parse_spec(spec), [], "\"%s\" is invalid" % spec)
+		assert_eq(MockTrainer.parse_spec(spec), [], '"%s" is invalid' % spec)
 		assert_push_error("invalid profile spec", spec)
 
 
@@ -104,6 +121,7 @@ func test_negative_band_offset_is_allowed() -> void:
 
 
 # --- intervals ------------------------------------------------------------------------
+
 
 func test_intervals_alternate_on_and_off() -> void:
 	var m := _mock("intervals:on_w=300,off_w=100,on_s=30,off_s=60,rpm=95")
@@ -141,6 +159,7 @@ func test_scripted_profiles_ignore_fatigue() -> void:
 
 
 # --- noise ----------------------------------------------------------------------------
+
 
 func test_noise_on_power_and_cadence() -> void:
 	var m := _mock("const:w=200,rpm=90+noise:sd_w=5,sd_rpm=2", FTP, {"seed": 4})
@@ -181,6 +200,7 @@ func test_noise_is_seeded() -> void:
 
 
 # --- band -----------------------------------------------------------------------------
+
 
 func _band_run(offset: float, lo: float, hi: float, seed: int = 1) -> MockTrainer:
 	var m := _mock("erg+band:offset_rpm=%s" % offset, FTP, {"seed": seed})
@@ -252,6 +272,7 @@ func test_band_is_ignored_without_the_band_profile() -> void:
 
 
 # --- cadence_drop ---------------------------------------------------------------------
+
 
 func test_cadence_drop_at_s_for_s() -> void:
 	var m := _mock("erg+cadence_drop:rpm=40,at_s=30,for_s=20")
@@ -366,7 +387,9 @@ func test_at_target_pct_ignores_sim_and_uses_the_applied_target() -> void:
 
 
 func test_two_drops_are_independent_and_the_lowest_wins() -> void:
-	var m := _mock("erg+cadence_drop:rpm=30,at_s=10,for_s=5+cadence_drop:rpm=50,at_s=30,for_s=10+cadence_drop:rpm=60,at_s=32,for_s=2")
+	var m := _mock(
+		"erg+cadence_drop:rpm=30,at_s=10,for_s=5+cadence_drop:rpm=50,at_s=30,for_s=10+cadence_drop:rpm=60,at_s=32,for_s=2"
+	)
 	m.set_target_power(150)
 	_run_to(m, 12.0)
 	assert_eq(m.cadence_rpm(), 30.0)
@@ -393,7 +416,9 @@ func test_cadence_drop_to_zero_stops_the_rider() -> void:
 
 
 func test_cadence_drop_wins_over_surge_and_band() -> void:
-	var m := _mock("erg+band+surge:every_s=20,for_s=2+cadence_drop:rpm=40,at_s=15", FTP, {"seed": 2})
+	var m := _mock(
+		"erg+band+surge:every_s=20,for_s=2+cadence_drop:rpm=40,at_s=15", FTP, {"seed": 2}
+	)
 	m.set_target_power(150)
 	_run_to(m, 20.5)
 	assert_true(m.surging())
@@ -401,6 +426,7 @@ func test_cadence_drop_wins_over_surge_and_band() -> void:
 
 
 # --- surge ----------------------------------------------------------------------------
+
 
 func test_surge_for_s_sets_how_long_the_lift_lasts() -> void:
 	var m := _mock("erg+surge:every_s=30,for_s=5,lift=0.25", FTP, {"seed": 5})
@@ -418,7 +444,12 @@ func test_surge_for_s_sets_how_long_the_lift_lasts() -> void:
 	for s in _samples:
 		if s.cadence_rpm > 100.0:
 			lifted += 1
-			assert_between(fmod(s.t, 30.0), 0.0, 5.0 + MockTrainer.SAMPLE_MAX_S, "only inside a surge (t %.2f)" % s.t)
+			assert_between(
+				fmod(s.t, 30.0),
+				0.0,
+				5.0 + MockTrainer.SAMPLE_MAX_S,
+				"only inside a surge (t %.2f)" % s.t
+			)
 	assert_between(lifted, 4 * 4, 4 * 6, "about five notifications per 5 s surge")
 
 
@@ -492,7 +523,9 @@ func test_ten_surges_fire_the_speed_rule_ten_times() -> void:
 	for seed in [1, 2, 3, 11, 12]:
 		for dropouts: bool in [false, true]:
 			_samples = []
-			var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts})
+			var m := _mock(
+				"erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts}
+			)
 			m.set_target_power(200)
 			_run(m, 650.0)
 			var fires := _speed_rule_fires(_samples)
@@ -505,7 +538,9 @@ func test_ten_surges_fire_the_speed_rule_ten_times() -> void:
 func test_surge_fires_the_real_gesture_recognizer() -> void:
 	for seed in [3, 11]:
 		for dropouts: bool in [false, true]:
-			var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts})
+			var m := _mock(
+				"erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts}
+			)
 			m.set_target_power(200)
 			_recognizer = GestureRecognizer.new()
 			_recognizer.configure(FTP, true)
@@ -513,15 +548,19 @@ func test_surge_fires_the_real_gesture_recognizer() -> void:
 			_recognized_surges = 0
 			m.sample_received.connect(_feed_recognizer)
 			_run(m, 650.0)
-			assert_eq(_recognized_surges, 10,
-				"the test fires 10 surges and expects 10 gestures (C30; seed %d, dropouts %s)" % [seed, dropouts])
+			assert_eq(
+				_recognized_surges,
+				10,
+				(
+					"the test fires 10 surges and expects 10 gestures (C30; seed %d, dropouts %s)"
+					% [seed, dropouts]
+				)
+			)
 
 
 func _feed_recognizer(s: TrainerSample) -> void:
 	if _recognizer.on_sample(s).has(Wl.G_SURGE):
 		_recognized_surges += 1
-
-
 
 
 func test_surge_sim_pct_rides_n_pct_ftp_in_sim() -> void:
@@ -532,7 +571,9 @@ func test_surge_sim_pct_rides_n_pct_ftp_in_sim() -> void:
 	m.set_simulation(0.0, 0.0, 0.004, 0.51)
 	m.set_power_band(150.0, 170.0)
 	_run(m, 15.0)
-	assert_almost_eq(m.instantaneous_power_w(), 260.0, 2.0, "SIM: 130% FTP, overriding erg's band rule")
+	assert_almost_eq(
+		m.instantaneous_power_w(), 260.0, 2.0, "SIM: 130% FTP, overriding erg's band rule"
+	)
 	assert_almost_eq(m.last_sample().power_w, 260.0, 2.0)
 	m.set_target_power(150)
 	_run(m, 15.0)
@@ -576,6 +617,7 @@ func test_independent_surges() -> void:
 
 # --- zero and erg ---------------------------------------------------------------------
 
+
 func test_zero_is_zero_from_the_start() -> void:
 	var m := _mock("zero+surge:every_s=10+band")
 	m.set_cadence_band(80.0, 90.0)
@@ -602,8 +644,11 @@ func test_erg_compliance_in_sim_and_erg() -> void:
 
 # --- profile time ---------------------------------------------------------------------
 
+
 func test_restart_profile_restarts_at_s_surges_and_scripts() -> void:
-	var m := _mock("erg+surge:every_s=60,for_s=2+cadence_drop:rpm=40,at_s=30,for_s=10", FTP, {"seed": 3})
+	var m := _mock(
+		"erg+surge:every_s=60,for_s=2+cadence_drop:rpm=40,at_s=30,for_s=10", FTP, {"seed": 3}
+	)
 	m.set_target_power(150)
 	_run_to(m, 35.0)
 	assert_true(m.cadence_drop_active(), "menu time: the drop already fired")
@@ -623,7 +668,11 @@ func test_restart_profile_restarts_at_s_surges_and_scripts() -> void:
 	assert_true(m.surging(), "the first surge is every_s after the restart")
 	assert_almost_eq(m.instantaneous_power_w(), 150.0, 1.0, "the rider carried on")
 	for i in range(1, _samples.size()):
-		assert_lt(_samples[i].t - _samples[i - 1].t, MockTrainer.SAMPLE_MAX_S + DT + 1e-6, "no gap in notifications")
+		assert_lt(
+			_samples[i].t - _samples[i - 1].t,
+			MockTrainer.SAMPLE_MAX_S + DT + 1e-6,
+			"no gap in notifications"
+		)
 	var r := _mock("ramp:from_w=100,to_w=200,over_s=100")
 	_run_to(r, 150.0)
 	assert_eq(r.instantaneous_power_w(), 200.0)
@@ -633,6 +682,7 @@ func test_restart_profile_restarts_at_s_surges_and_scripts() -> void:
 
 
 # --- helpers --------------------------------------------------------------------------
+
 
 func _sample_dicts(spec: String, options: Dictionary, seconds: float, target: int) -> Array:
 	_samples = []

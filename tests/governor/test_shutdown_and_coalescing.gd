@@ -63,10 +63,23 @@ func test_setup_again_revives_after_shutdown() -> void:
 
 func test_busy_session_never_exceeds_2_writes_per_second() -> void:
 	var rig := make_rig({"haptic_intensity": 1.0}, follower())
-	rig.start([erg(Wl.WORK, 70.0, 120.0).with_range(60.0, 110.0), sim(Wl.GRADE_GAME, 120.0), erg(Wl.WORK, 65.0, 120.0)])
+	rig.start(
+		[
+			erg(Wl.WORK, 70.0, 120.0).with_range(60.0, 110.0),
+			sim(Wl.GRADE_GAME, 120.0),
+			erg(Wl.WORK, 65.0, 120.0)
+		]
+	)
 	for i in 2400:
 		if i % 10 == 0:
-			rig.directive({"mode": "ERG", "target_pct": 60.0 + float(i % 500) / 10.0, "duration_s": 0.0, "reason": "pull"})
+			rig.directive(
+				{
+					"mode": "ERG",
+					"target_pct": 60.0 + float(i % 500) / 10.0,
+					"duration_s": 0.0,
+					"reason": "pull"
+				}
+			)
 		rig.step()
 	rig.gov.start_phase(1)
 	for i in 2400:

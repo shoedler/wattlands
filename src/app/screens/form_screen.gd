@@ -32,15 +32,36 @@ func make_form_page(title_text: String) -> Dictionary:
 
 ## A weight stepper in the rider's units (BRIEF 3.2 units): kg in steps of 1 (metric) or lb in
 ## steps of 1 (imperial, 67-440 lb), always stored in kg through `set_kg` (W3 PROF-6).
-static func weight_field(id: String, label: String, units: String, get_kg: Callable, set_kg: Callable) -> Dictionary:
+static func weight_field(
+	id: String, label: String, units: String, get_kg: Callable, set_kg: Callable
+) -> Dictionary:
 	if units == "imperial":
-		return {"id": id, "label": label, "type": "stepper", "step": 1.0, "unit": "lb",
-			"min": ceilf(AppStyle.WEIGHT_MIN_KG * AppStyle.LB_PER_KG), "max": floorf(AppStyle.WEIGHT_MAX_KG * AppStyle.LB_PER_KG),
+		return {
+			"id": id,
+			"label": label,
+			"type": "stepper",
+			"step": 1.0,
+			"unit": "lb",
+			"min": ceilf(AppStyle.WEIGHT_MIN_KG * AppStyle.LB_PER_KG),
+			"max": floorf(AppStyle.WEIGHT_MAX_KG * AppStyle.LB_PER_KG),
 			"get": func() -> Variant: return roundf(float(get_kg.call()) * AppStyle.LB_PER_KG),
-			"set": func(v: Variant) -> void: set_kg.call(clampf(float(v) / AppStyle.LB_PER_KG, AppStyle.WEIGHT_MIN_KG, AppStyle.WEIGHT_MAX_KG))}
-	return {"id": id, "label": label, "type": "stepper", "step": 1.0, "unit": "kg",
-		"min": AppStyle.WEIGHT_MIN_KG, "max": AppStyle.WEIGHT_MAX_KG,
-		"get": func() -> Variant: return float(get_kg.call()), "set": func(v: Variant) -> void: set_kg.call(float(v))}
+			"set": func(v: Variant) -> void: set_kg.call(_lb_to_kg(v))
+		}
+	return {
+		"id": id,
+		"label": label,
+		"type": "stepper",
+		"step": 1.0,
+		"unit": "kg",
+		"min": AppStyle.WEIGHT_MIN_KG,
+		"max": AppStyle.WEIGHT_MAX_KG,
+		"get": func() -> Variant: return float(get_kg.call()),
+		"set": func(v: Variant) -> void: set_kg.call(float(v))
+	}
+
+
+static func _lb_to_kg(lb: Variant) -> float:
+	return clampf(float(lb) / AppStyle.LB_PER_KG, AppStyle.WEIGHT_MIN_KG, AppStyle.WEIGHT_MAX_KG)
 
 
 ## Push a list of fields as a menu. back: what coast/back does (default: pop, or nothing).
@@ -64,7 +85,9 @@ func items_for(fields: Array) -> Array:
 		if en is Callable and (en as Callable).is_valid():
 			enabled = bool((en as Callable).call())
 		var typ := str(f.get("type", "action"))
-		items.append({"id": f.get("id"), "text": field_text(f), "disabled": not enabled or typ == "info"})
+		items.append(
+			{"id": f.get("id"), "text": field_text(f), "disabled": not enabled or typ == "info"}
+		)
 	return items
 
 
@@ -238,7 +261,9 @@ func _open_text(f: Dictionary) -> void:
 	var rows: Array[String] = []
 	for r: Variant in f.get("rows", AppTextField.ROWS_NAME):
 		rows.append(str(r))
-	text_field = AppTextField.make_text(str(f.get("label", "")), rows, int(f.get("max_length", 64)), bool(f.get("secret", false)))
+	text_field = AppTextField.make_text(
+		str(f.get("label", "")), rows, int(f.get("max_length", 64)), bool(f.get("secret", false))
+	)
 	text_field.name = "TextEntry"
 	if content_box != null:
 		content_box.add_child(text_field)

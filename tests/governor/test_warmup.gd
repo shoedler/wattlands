@@ -125,7 +125,9 @@ func test_reset_after_20_minutes_without_pedaling() -> void:
 	assert_eq(ev[ev.size() - 1]["value"], true)
 	var t2 := _pedal(rig, true)
 	rig.run(10.0)
-	assert_almost_eq(float(rig.s()["warmup_remaining_s"]), 300.0 - (rig.t - t2), 1e-6, "counts again")
+	assert_almost_eq(
+		float(rig.s()["warmup_remaining_s"]), 300.0 - (rig.t - t2), 1e-6, "counts again"
+	)
 	assert_lte(rig.applied_w(), 130, "65% cap again")
 
 
@@ -148,7 +150,9 @@ func test_floor_wins_over_the_warmup_cap_at_low_ftp() -> void:
 		var cb: Array = rig.s()["clamped_by"]
 		assert_has(cb, Wl.CLAMP_WARMUP)
 		assert_has(cb, Wl.CLAMP_FLOOR)
-		assert_true(cb.find(Wl.CLAMP_WARMUP) < cb.find(Wl.CLAMP_FLOOR), "the warm-up cap, then the floor")
+		assert_true(
+			cb.find(Wl.CLAMP_WARMUP) < cb.find(Wl.CLAMP_FLOOR), "the warm-up cap, then the floor"
+		)
 	var rig77 := make_rig(WARM.merged({"ftp_w": 77.0}), follower())
 	rig77.start([erg(Wl.WORK, 100.0, 600.0)])
 	rig77.run(10.0)

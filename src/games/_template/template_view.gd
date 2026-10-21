@@ -19,6 +19,8 @@ func _draw() -> void:
 		var slot := int(rd["slot"])
 		var y := 360.0 * (slot + 0.5) / riders.size()
 		var x := 40.0 + 560.0 * fmod(float(rd["dist_m"]), track) / track
-		var color: Color = game.ctx.players[slot].color if slot < game.ctx.players.size() else Color.WHITE
+		var color: Color = (
+			game.ctx.players[slot].color if slot < game.ctx.players.size() else Color.WHITE
+		)
 		draw_line(Vector2(40, y), Vector2(600, y), Color("#5a6270"), 2.0)
 		draw_circle(Vector2(x, y), 6.0, Color.DIM_GRAY if rd["afk"] else color)

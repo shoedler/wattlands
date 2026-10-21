@@ -47,9 +47,24 @@ func test_player_info_fields_reach_player_slots() -> void:
 	var h := make_session("host", rider("Hana", "1", 250))
 	h.host_room(8)
 	pump()
-	var c := make_session("c1", rider("Bo", "1", 300, {"ftp_verified": true,
-		"preferred_cadence_rpm": 95.0, "haptics_on": false, "haptic_intensity": 0.4,
-		"autopilot": true, "weight_kg": 80.0, "trainer": "mock", "color": Color("#0072B2")}))
+	var c := make_session(
+		"c1",
+		rider(
+			"Bo",
+			"1",
+			300,
+			{
+				"ftp_verified": true,
+				"preferred_cadence_rpm": 95.0,
+				"haptics_on": false,
+				"haptic_intensity": 0.4,
+				"autopilot": true,
+				"weight_kg": 80.0,
+				"trainer": "mock",
+				"color": Color("#0072B2")
+			}
+		)
+	)
 	c.join_room(h.room_code)
 	pump()
 	var s := c.lobby_slots()[1]
@@ -98,8 +113,12 @@ func test_local_profile_follows_the_lobby_scaling() -> void:
 	assert_eq(float(player(h, 2)["rider_mass_kg"]), 75.0)
 	h.set_scaling(Wl.WKG)
 	pump()
-	assert_almost_eq(float(player(h, 2)["p_eff_per_w"]), 75.0 / 80.0, 1e-9,
-		"the client recomputed P_eff for WKG and re-sent player_info")
+	assert_almost_eq(
+		float(player(h, 2)["p_eff_per_w"]),
+		75.0 / 80.0,
+		1e-9,
+		"the client recomputed P_eff for WKG and re-sent player_info"
+	)
 	assert_false(h.lobby_slots()[1].options.is_empty())
 	var info := WlNetSession.player_info_from_profile(p, Wl.FAIR_FTP)
 	assert_false(info.has("weight_kg"), "weight only if shared")
@@ -234,17 +253,23 @@ func test_bots_add_remove_and_bot_ftp() -> void:
 func test_manifest_limits_bots_and_players() -> void:
 	var r := room()
 	var h := r[0]
-	h.set_game_manifest({"id": "duo", "version": "1", "min_players": 1, "max_players": 4, "bots": true})
+	h.set_game_manifest(
+		{"id": "duo", "version": "1", "min_players": 1, "max_players": 4, "bots": true}
+	)
 	h.set_game("duo", "1", "a")
 	assert_true(h.add_bot())
 	assert_false(h.add_bot(), "3 humans + 1 bot = max_players 4")
 	pump()
 	assert_eq(r[1].lobby["settings"]["max_players"], 4)
-	h.set_game_manifest({"id": "nobots", "version": "1", "min_players": 1, "max_players": 8, "bots": false})
+	h.set_game_manifest(
+		{"id": "nobots", "version": "1", "min_players": 1, "max_players": 8, "bots": false}
+	)
 	h.set_game("nobots", "1", "a")
 	assert_eq(h.bot_count(), 0, "bots leave when the game allows none")
 	assert_false(h.add_bot())
-	h.set_game_manifest({"id": "big", "version": "1", "min_players": 5, "max_players": 8, "bots": true})
+	h.set_game_manifest(
+		{"id": "big", "version": "1", "min_players": 5, "max_players": 8, "bots": true}
+	)
 	h.set_game("big", "1", "a")
 	for s in r:
 		s.set_ready(true)
@@ -260,9 +285,18 @@ func test_options_and_player_options_in_lobby_state() -> void:
 	var r := room()
 	var h := r[0]
 	var c1 := r[1]
-	h.set_game_manifest({"id": "siege", "version": "1", "min_players": 1, "max_players": 4, "bots": true,
-		"options": [{"id": "rotation", "type": "toggle", "default": true}],
-		"player_options": [{"id": "wave_offset", "type": "int", "default": 0, "min": -10, "max": 5}]})
+	h.set_game_manifest(
+		{
+			"id": "siege",
+			"version": "1",
+			"min_players": 1,
+			"max_players": 4,
+			"bots": true,
+			"options": [{"id": "rotation", "type": "toggle", "default": true}],
+			"player_options":
+			[{"id": "wave_offset", "type": "int", "default": 0, "min": -10, "max": 5}]
+		}
+	)
 	h.set_game("siege", "1", "shift_1")
 	h.add_bot()
 	pump()
@@ -374,6 +408,7 @@ func test_lobby_changed_on_session_and_bus() -> void:
 
 # --- NET2, NET5, NET7 (OWNERSHIP names this file) -----------------------------------------
 
+
 func _directive(kind: String, fields: Dictionary) -> Dictionary:
 	var d := fields.duplicate()
 	d["kind"] = kind
@@ -381,8 +416,9 @@ func _directive(kind: String, fields: Dictionary) -> Dictionary:
 
 
 func _snapshot(seq: int, t: float, state: Dictionary) -> Dictionary:
-	return Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "t": t, "tick": seq * 2,
-		"state": state})
+	return Protocol.game_msg(
+		"snapshot", {"game_id": "workout", "seq": seq, "t": t, "tick": seq * 2, "state": state}
+	)
 
 
 func test_oversize_messages_are_dropped() -> void:
@@ -399,6 +435,7 @@ func test_oversize_messages_are_dropped() -> void:
 	assert_eq(got.size(), 1, "a message just under the limit still goes")
 	assert_eq((got[0][2] as Dictionary)["seq"], 2)
 
+
 func test_four_rider_session_stays_under_the_relay_rate_limit() -> void:
 	# OWNERSHIP NET5 / 3.1 C11: snapshot 10 Hz + roster 2 Hz + events 10 Hz + per-client
 	# Fishing-like directives (2 Hz requests, 2 Hz grade, 2 Hz cadence band, 1 Hz power
@@ -408,20 +445,30 @@ func test_four_rider_session_stays_under_the_relay_rate_limit() -> void:
 	var h := r[0]
 	var state := {"lanes": []}
 	for i in 4:
-		(state["lanes"] as Array).append({"fish": i, "x": 12.5, "tension": 0.75, "run": false,
-			"marks": [1, 2, 3, 4, 5, 6, 7, 8]})
+		(state["lanes"] as Array).append(
+			{"fish": i, "x": 12.5, "tension": 0.75, "run": false, "marks": [1, 2, 3, 4, 5, 6, 7, 8]}
+		)
 	clear_logs()
 	var seq := 0
 	for step in 600:
 		hub.advance(Wl.SIM_DT)
 		if step % 2 == 0:
 			seq += 1
-			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
+			h.broadcast(
+				Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]})
+			)
 			h.broadcast(_snapshot(seq, step * Wl.SIM_DT, state))
 		if step % 10 == 0:
-			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}, 2: {"raw_w": 180.0}}}))
+			h.broadcast(
+				Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}, 2: {"raw_w": 180.0}}})
+			)
 			for peer in [2, 3, 4]:
-				h.send_to(peer, _directive("request", {"id": step + peer, "target_pct": 70.0, "duration_s": 1.0}))
+				h.send_to(
+					peer,
+					_directive(
+						"request", {"id": step + peer, "target_pct": 70.0, "duration_s": 1.0}
+					)
+				)
 				h.send_to(peer, _directive("course_grade", {"grade_pct": 2.0}))
 				h.send_to(peer, _directive("cadence_band", {"lo_rpm": 80.0, "hi_rpm": 95.0}))
 		if step % 20 == 0:
@@ -429,8 +476,15 @@ func test_four_rider_session_stays_under_the_relay_rate_limit() -> void:
 				h.send_to(peer, _directive("power_band", {"lo_w": 150.0, "hi_w": 210.0}))
 		for i in range(1, 4):
 			if step % 4 == i:
-				r[i].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": r[i].local_peer,
-					"power_w": 190.0, "intents": [{"k": "reel"}]}}))
+				r[i].send_to_host(
+					Protocol.game_msg(
+						"telemetry",
+						{
+							"tm":
+							{"peer": r[i].local_peer, "power_w": 190.0, "intents": [{"k": "reel"}]}
+						}
+					)
+				)
 		for s in r:
 			s.tick(Wl.SIM_DT)
 	pump()
@@ -458,7 +512,9 @@ func test_joins_after_the_start_are_refused_with_session_in_progress() -> void:
 	h.mark_started()
 	pump()
 	raw.poll()
-	assert_true(raw_msgs.any(func(d: Dictionary) -> bool: return d["type"] == "refused" and d["reason"] == "session_in_progress"))
+	var in_progress := func(d: Dictionary) -> bool:
+		return d["type"] == "refused" and d["reason"] == "session_in_progress"
+	assert_true(raw_msgs.any(in_progress))
 	clear_logs()
 	var late := make_session("late", rider("Late"))
 	late.join_room(h.room_code)
@@ -468,7 +524,9 @@ func test_joins_after_the_start_are_refused_with_session_in_progress() -> void:
 	assert_eq(late.state, "error")
 	assert_eq(late.refusal_reason, "session_in_progress")
 	assert_false(late.transport.is_open(), "the refused client leaves the room")
-	assert_ne(WlNetSession.reason_text("session_in_progress"), "session_in_progress", "a readable message")
+	assert_ne(
+		WlNetSession.reason_text("session_in_progress"), "session_in_progress", "a readable message"
+	)
 	assert_eq(events("host", "peer_joined").size(), 0, "the host never lists it")
 	assert_eq(events("host", "peer_left").size(), 0)
 	assert_eq(h.lobby_slots().size(), 3)
@@ -482,7 +540,9 @@ func test_peers_lists_lobby_riders_only() -> void:
 	raw.poll()
 	pump()
 	assert_eq(raw.local_peer, 4)
-	assert_eq(r[0].peers(), [1, 2, 3] as Array[int], "a peer without player_info is not a rider yet")
+	assert_eq(
+		r[0].peers(), [1, 2, 3] as Array[int], "a peer without player_info is not a rider yet"
+	)
 	assert_eq(r[2].peers(), [1, 2, 3] as Array[int])
 	r[0].add_bot()
 	pump()
@@ -491,7 +551,9 @@ func test_peers_lists_lobby_riders_only() -> void:
 
 func test_limits_reset_for_a_game_without_manifest() -> void:
 	var h := make_session("host", rider("Hana"))
-	h.set_game_manifest({"id": "duo", "version": "1", "min_players": 2, "max_players": 2, "bots": false})
+	h.set_game_manifest(
+		{"id": "duo", "version": "1", "min_players": 2, "max_players": 2, "bots": false}
+	)
 	h.set_game("duo", "1", "a")
 	assert_eq(h.max_players, 2)
 	assert_false(h.bots_allowed)

@@ -47,10 +47,22 @@ func test_a_lost_event_batch_is_reported_as_a_desync() -> void:
 	var applied_before := (client.game.get("events_applied") as Array).size()
 	# A first batch sets the baseline; any later jump is a gap.
 	var gaps := 2 if int(client.get("_event_seq_applied")) > 0 else 1
-	client.call("_client_message", 1, {"type": "event", "seq": 1000, "events": [{"type": "fx_a", "n": 1}]})
-	client.call("_client_message", 1, {"type": "event", "seq": 1002, "events": [{"type": "fx_c", "n": 3}]})
-	assert_eq((client.game.get("events_applied") as Array).size() - applied_before, 2, "both delivered batches were applied")
-	assert_eq(_desyncs() - before, gaps, "a gap in the event sequence (1000 -> 1002) is reported as a desync warning")
+	client.call(
+		"_client_message", 1, {"type": "event", "seq": 1000, "events": [{"type": "fx_a", "n": 1}]}
+	)
+	client.call(
+		"_client_message", 1, {"type": "event", "seq": 1002, "events": [{"type": "fx_c", "n": 3}]}
+	)
+	assert_eq(
+		(client.game.get("events_applied") as Array).size() - applied_before,
+		2,
+		"both delivered batches were applied"
+	)
+	assert_eq(
+		_desyncs() - before,
+		gaps,
+		"a gap in the event sequence (1000 -> 1002) is reported as a desync warning"
+	)
 	assert_eq(client.desync_count, gaps)
 	assert_push_warning("desync: event batch 1002 after 1000: 1 batch(es) lost")
 	assert_eq(int(client.report_data()["desync_warnings"]), gaps, "the report counts them")
@@ -108,11 +120,18 @@ func test_a_lost_phase_message_is_detected_and_resynced() -> void:
 	(hub.get("dropped") as Dictionary).erase(2)
 	assert_eq(host.tracker.index_of(2), 1, "the host moved rider 2 to WORK")
 	assert_eq(client.local_phase_state().index, 0, "precondition: the client missed it")
-	var steps := Kit.step_until(b, func() -> bool: return client.local_phase_state().index == 1, 200)
+	var steps := Kit.step_until(
+		b, func() -> bool: return client.local_phase_state().index == 1, 200
+	)
 	assert_lt(steps, 200, "the client is back in phase 1 within 10 s")
 	assert_gte(client.desync_count, 1, "the mismatch was reported")
 	assert_push_warning("desync: rider 2 rides phase 0 here but phase 1 on the host")
 	assert_gte(host.resync_count, 1, "the host answered a resync")
 	var rider: LocalRider = b["riders"][2]
 	assert_eq((rider.get("phases_started") as Array).back(), 1, "the rider entered phase 1")
-	assert_almost_eq(client.local_phase_state().elapsed_s, host.tracker.state(2).elapsed_s, 0.3, "at the host's elapsed time")
+	assert_almost_eq(
+		client.local_phase_state().elapsed_s,
+		host.tracker.state(2).elapsed_s,
+		0.3,
+		"at the host's elapsed time"
+	)

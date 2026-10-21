@@ -116,7 +116,9 @@ func poll() -> void:
 		var now := _now()
 		if now - _last_beacon_at >= BEACON_INTERVAL_S:
 			_last_beacon_at = now
-			var text := LanDiscovery.beacon(room_code, server.port if server != null else port, host_name, game_id)
+			var text := LanDiscovery.beacon(
+				room_code, server.port if server != null else port, host_name, game_id
+			)
 			_beacon.put_packet(text.to_utf8_buffer())
 
 

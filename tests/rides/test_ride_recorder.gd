@@ -5,7 +5,7 @@ extends GutTest
 
 const Reader := preload("res://tests/rides/fit_reader.gd")
 const Util := preload("res://tests/rides/rides_test_util.gd")
-const START := 1_800_000_000 # 2027-01-15T08:00:00Z
+const START := 1_800_000_000  # 2027-01-15T08:00:00Z
 const DT := 0.05
 
 var _dir: String = ""
@@ -22,7 +22,9 @@ func after_each() -> void:
 
 
 ## Feeds constant values at 20 Hz from t0 for `seconds` and stops.
-func _ride_20hz(rec: RideRecorder, t0: float, seconds: float, power: float, cad: float, kmh: float) -> float:
+func _ride_20hz(
+	rec: RideRecorder, t0: float, seconds: float, power: float, cad: float, kmh: float
+) -> float:
 	var steps := roundi(seconds / DT)
 	var t := t0
 	for i in steps + 1:
@@ -202,9 +204,22 @@ func test_summary_keys() -> void:
 	rec.record(0.0, 100.0, 80.0, 20.0)
 	rec.stop(5.0)
 	var s := rec.summary()
-	for k in ["ride_id", "game_id", "content_id", "utc_start", "duration_s", "distance_m",
-			"records", "laps", "kj", "avg_power_w", "max_power_w", "avg_cadence_rpm",
-			"max_cadence_rpm", "fit_path"]:
+	for k in [
+		"ride_id",
+		"game_id",
+		"content_id",
+		"utc_start",
+		"duration_s",
+		"distance_m",
+		"records",
+		"laps",
+		"kj",
+		"avg_power_w",
+		"max_power_w",
+		"avg_cadence_rpm",
+		"max_cadence_rpm",
+		"fit_path"
+	]:
 		assert_true(s.has(k), "summary has %s" % k)
 	assert_eq(s["ride_id"], "11111111-2222-4333-8444-555555555555", "a preset ride id is kept")
 	assert_eq(s["utc_start"], "2027-01-15T08:00:00Z")
@@ -217,7 +232,9 @@ func test_summary_keys() -> void:
 
 
 func test_ride_ids_are_uuid_v4_and_new_per_ride() -> void:
-	var re := RegEx.create_from_string("^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+	var re := RegEx.create_from_string(
+		"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+	)
 	var a := RideRecorder.new()
 	a.start("g", "c", START, 0.0)
 	var b := RideRecorder.new()
@@ -245,7 +262,9 @@ func test_save_names_and_json() -> void:
 	var rec2 := RideRecorder.new()
 	rec2.start("workout", "easy30", START, 0.0)
 	rec2.stop(1.0)
-	assert_eq(rec2.save(), Paths.rides_dir().path_join("20270115T080000Z_workout_2.fit"), "no overwrite")
+	assert_eq(
+		rec2.save(), Paths.rides_dir().path_join("20270115T080000Z_workout_2.fit"), "no overwrite"
+	)
 	var rec3 := RideRecorder.new()
 	rec3.start("My Game!", "c", START, 0.0)
 	rec3.stop(1.0)
@@ -281,7 +300,12 @@ func test_fit_totals_equal_the_summary() -> void:
 			rec.lap("Work", t)
 		if i == 1800:
 			rec.lap("Cool-down", t)
-		rec.record(t, 150.0 + SeededRng.range_f(rng, 0.0, 100.0), 85.0 + SeededRng.range_f(rng, 0.0, 10.0), 28.0 + SeededRng.range_f(rng, 0.0, 8.0))
+		rec.record(
+			t,
+			150.0 + SeededRng.range_f(rng, 0.0, 100.0),
+			85.0 + SeededRng.range_f(rng, 0.0, 10.0),
+			28.0 + SeededRng.range_f(rng, 0.0, 8.0)
+		)
 	rec.stop(t)
 	var s := rec.summary()
 	var d := Reader.read(rec.fit_bytes())
@@ -319,8 +343,13 @@ func test_ten_minute_synthetic_ride() -> void:
 	var rec := RideRecorder.new()
 	rec.utc_offset_s = 7200
 	rec.start("workout", "synthetic10", START, 0.0)
-	var plan := [["Warm-up", 120.0, 110.0, 160.0], ["Work 1", 120.0, 250.0, 250.0],
-		["Recovery", 60.0, 120.0, 120.0], ["Work 2", 120.0, 260.0, 260.0], ["Cool-down", 180.0, 100.0, 100.0]]
+	var plan := [
+		["Warm-up", 120.0, 110.0, 160.0],
+		["Work 1", 120.0, 250.0, 250.0],
+		["Recovery", 60.0, 120.0, 120.0],
+		["Work 2", 120.0, 260.0, 260.0],
+		["Cool-down", 180.0, 100.0, 100.0]
+	]
 	var t := 0.0
 	var phase_start := 0.0
 	for ph: Array in plan:
@@ -366,8 +395,13 @@ func test_paused_ride_with_a_dropout_for_fit_check() -> void:
 	var rec := RideRecorder.new()
 	rec.start("workout", "paused", START + 3600, 0.0)
 	var rng := SeededRng.make(11)
-	var plan := [["Warm-up", 0.0, 60.0, 150.0], ["Work 1", 60.0, 120.0, 240.0],
-		["Recovery", 120.0, 150.0, 120.0], ["Work 2", 150.0, 210.0, 250.0], ["Cool-down", 210.0, 300.0, 100.0]]
+	var plan := [
+		["Warm-up", 0.0, 60.0, 150.0],
+		["Work 1", 60.0, 120.0, 240.0],
+		["Recovery", 120.0, 150.0, 120.0],
+		["Work 2", 150.0, 210.0, 250.0],
+		["Cool-down", 210.0, 300.0, 100.0]
+	]
 	for ph: Array in plan:
 		var from := float(ph[1])
 		var to := float(ph[2])
@@ -380,7 +414,9 @@ func test_paused_ride_with_a_dropout_for_fit_check() -> void:
 			if k == 100.0:
 				rec.set_timer_running(true, 100.0)
 			if k < 125.0 or k >= 137.0:
-				var cad := -1.0 if str(ph[0]) == "Cool-down" else 88.0 + SeededRng.range_f(rng, -5.0, 5.0)
+				var cad := (
+					-1.0 if str(ph[0]) == "Cool-down" else 88.0 + SeededRng.range_f(rng, -5.0, 5.0)
+				)
 				rec.record(t, float(ph[3]) + SeededRng.range_f(rng, -10.0, 10.0), cad, 30.0)
 			k += 1.0
 	rec.record(300.0, 100.0, -1.0, 30.0)
@@ -390,7 +426,11 @@ func test_paused_ride_with_a_dropout_for_fit_check() -> void:
 	var s := rec.summary()
 	assert_almost_eq(float(s["duration_s"]), 300.0, 0.001)
 	assert_almost_eq(float(s["timer_s"]), 290.0, 0.001, "10 s paused")
-	var path := rec.save_as(ProjectSettings.globalize_path("res://build/rides_test").path_join("paused_dropout_ride.fit"))
+	var path := rec.save_as(
+		ProjectSettings.globalize_path("res://build/rides_test").path_join(
+			"paused_dropout_ride.fit"
+		)
+	)
 	assert_ne(path, "")
 	var d := Reader.read(FileAccess.get_file_as_bytes(path))
 	assert_eq(d["errors"], [])

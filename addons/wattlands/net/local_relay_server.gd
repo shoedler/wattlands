@@ -44,7 +44,9 @@ func start(p_port: int = 0, bind_address: String = "*") -> Error:
 	_tcp = TCPServer.new()
 	var err := _tcp.listen(p_port, bind_address)
 	if err != OK:
-		push_warning("LocalRelayServer: can't listen on %s:%d (error %d)" % [bind_address, p_port, err])
+		push_warning(
+			"LocalRelayServer: can't listen on %s:%d (error %d)" % [bind_address, p_port, err]
+		)
 		_tcp = null
 		return err
 	port = _tcp.get_local_port()

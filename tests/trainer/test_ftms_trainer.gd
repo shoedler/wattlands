@@ -110,15 +110,23 @@ func test_responses_and_machine_status_pass_through() -> void:
 	watch_signals(_trainer)
 	_trainer.set_target_power(150)
 	_pump(0.1)
-	assert_signal_emitted_with_parameters(_trainer, "control_response", [FtmsCodec.OP_SET_TARGET_POWER, FtmsCodec.RESULT_SUCCESS])
-	assert_signal_emitted_with_parameters(_trainer, "machine_status", [FtmsCodec.STATUS_TARGET_POWER_CHANGED, PackedByteArray([0x96, 0x00])])
+	assert_signal_emitted_with_parameters(
+		_trainer, "control_response", [FtmsCodec.OP_SET_TARGET_POWER, FtmsCodec.RESULT_SUCCESS]
+	)
+	assert_signal_emitted_with_parameters(
+		_trainer,
+		"machine_status",
+		[FtmsCodec.STATUS_TARGET_POWER_CHANGED, PackedByteArray([0x96, 0x00])]
+	)
 
 
 func test_bike_data_becomes_samples() -> void:
 	_ready_trainer()
 	_pump(0.5)
 	var t := _trainer.platform_time_s()
-	_fake.send_bike_data({"speed_kmh": 30.5, "cadence_rpm": 85.5, "power_w": 200, "distance_m": 1234})
+	_fake.send_bike_data(
+		{"speed_kmh": 30.5, "cadence_rpm": 85.5, "power_w": 200, "distance_m": 1234}
+	)
 	_fake.flush()
 	assert_eq(_samples.size(), 1)
 	var s := _samples[0]
@@ -127,7 +135,15 @@ func test_bike_data_becomes_samples() -> void:
 	assert_eq(s.cadence_rpm, 85.5, "0.5 rpm units")
 	assert_eq(s.speed_kmh, 30.5, "0.01 km/h units")
 	assert_eq(s.distance_m, 1234.0)
-	assert_eq(s.flags, TrainerSample.HAS_POWER | TrainerSample.HAS_CADENCE | TrainerSample.HAS_SPEED | TrainerSample.HAS_DISTANCE)
+	assert_eq(
+		s.flags,
+		(
+			TrainerSample.HAS_POWER
+			| TrainerSample.HAS_CADENCE
+			| TrainerSample.HAS_SPEED
+			| TrainerSample.HAS_DISTANCE
+		)
+	)
 	assert_same(_trainer.last_sample(), s)
 
 
@@ -155,7 +171,9 @@ func test_negative_power_becomes_zero() -> void:
 
 
 func test_cycling_power_samples_are_flagged() -> void:
-	var s := FtmsTrainer.sample_from_record({"power_w": 250, "power_source": "cps", "speed_kmh": 30.0}, 1.0)
+	var s := FtmsTrainer.sample_from_record(
+		{"power_w": 250, "power_source": "cps", "speed_kmh": 30.0}, 1.0
+	)
 	assert_eq(s.power_w, 250.0)
 	assert_true((s.flags & TrainerSample.POWER_FROM_CPS) != 0)
 	assert_true((s.flags & TrainerSample.HAS_POWER) != 0)
@@ -256,15 +274,24 @@ func test_without_a_client() -> void:
 ## inside addons/wattlands/trainer/*.gd, write_control is called only by ftms_trainer.gd,
 ## write_characteristic only by ftms_client.gd, and no file calls a TrainerDevice setter.
 func test_only_ftms_trainer_calls_write_control() -> void:
-	var calls := {"write_control": [], "write_characteristic": [], "set_target_power": [],
-		"set_simulation": [], "set_resistance": []}
+	var calls := {
+		"write_control": [],
+		"write_characteristic": [],
+		"set_target_power": [],
+		"set_simulation": [],
+		"set_resistance": []
+	}
 	for file: String in DirAccess.get_files_at(TRAINER_DIR):
 		if not file.ends_with(".gd"):
 			continue
 		var text := FileAccess.get_file_as_string(TRAINER_DIR + file)
 		for line: String in text.split("\n"):
 			var code := line.strip_edges()
-			if code.begins_with("#") or code.begins_with("func ") or code.begins_with("static func "):
+			if (
+				code.begins_with("#")
+				or code.begins_with("func ")
+				or code.begins_with("static func ")
+			):
 				continue
 			for fn: String in calls.keys():
 				var re := RegEx.create_from_string("(^|[^A-Za-z0-9_])%s\\s*\\(" % fn)

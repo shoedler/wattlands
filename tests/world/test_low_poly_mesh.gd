@@ -70,7 +70,9 @@ func test_box_top_color() -> void:
 
 
 func test_transformed_box_faces_outward() -> void:
-	var xf := Transform3D(Basis(Vector3(1, 1, 0).normalized(), 0.7).scaled(Vector3(1, 2, 0.5)), Vector3(5, 1, -3))
+	var xf := Transform3D(
+		Basis(Vector3(1, 1, 0).normalized(), 0.7).scaled(Vector3(1, 2, 0.5)), Vector3(5, 1, -3)
+	)
 	var lp := LowPolyMesh.new().add_box(Vector3(2, 2, 2), RED, xf)
 	_assert_flat(lp)
 	_assert_outward(lp, xf.origin)
@@ -136,7 +138,7 @@ func test_plane_and_grid() -> void:
 	var plane := LowPolyMesh.new().add_plane(Vector2(4, 2), RED)
 	assert_eq(plane.triangle_count(), 2)
 	var a := _arrays(plane)
-	for n: Vector3 in (a[0] as PackedVector3Array):
+	for n: Vector3 in a[0] as PackedVector3Array:
 		assert_almost_eq(n.y, 1.0, 0.0001, "faces up")
 	var hf := func(x: float, z: float) -> float: return x * 0.1 + z * 0.05
 	var grid := LowPolyMesh.new().add_grid(Vector2(8, 6), Vector2i(4, 3), hf, RED)
@@ -144,12 +146,13 @@ func test_plane_and_grid() -> void:
 	for v: Vector3 in grid.vertices():
 		assert_almost_eq(v.y, v.x * 0.1 + v.z * 0.05, 0.0001)
 	var g := _arrays(grid)
-	for n: Vector3 in (g[0] as PackedVector3Array):
+	for n: Vector3 in g[0] as PackedVector3Array:
 		assert_gt(n.y, 0.0, "terrain faces up")
 
 
 func test_grid_color_fn() -> void:
-	var cf := func(center: Vector3, normal: Vector3) -> Color: return Color.GREEN if center.x < 0.0 else Color.BLUE
+	var cf := func(center: Vector3, normal: Vector3) -> Color:
+		return Color.GREEN if center.x < 0.0 else Color.BLUE
 	var hf := func(_x: float, _z: float) -> float: return 0.0
 	var grid := LowPolyMesh.new().add_grid(Vector2(4, 4), Vector2i(2, 2), hf, RED, cf)
 	var verts := grid.vertices()
@@ -205,7 +208,9 @@ func test_append_mirrored_keeps_faces_outward() -> void:
 
 
 func test_darken_near_ground() -> void:
-	var lp := LowPolyMesh.new().add_box(Vector3(1, 4, 1), Color.WHITE, Transform3D(Basis(), Vector3(0, 2, 0)))
+	var lp := LowPolyMesh.new().add_box(
+		Vector3(1, 4, 1), Color.WHITE, Transform3D(Basis(), Vector3(0, 2, 0))
+	)
 	lp.darken_near_ground(0.0, 1.0, 0.4)
 	var verts := lp.vertices()
 	var cols := lp.colors()
@@ -217,7 +222,9 @@ func test_darken_near_ground() -> void:
 	assert_almost_eq(LowPolyMesh.darkening_factor(0.0, 0.0, 2.0, 0.5), 0.5, 0.0001)
 	assert_almost_eq(LowPolyMesh.darkening_factor(1.0, 0.0, 2.0, 0.5), 0.75, 0.0001)
 	assert_almost_eq(LowPolyMesh.darkening_factor(5.0, 0.0, 2.0, 0.5), 1.0, 0.0001)
-	assert_almost_eq(LowPolyMesh.darkening_factor(-1.0, 0.0, 2.0, 0.5), 0.5, 0.0001, "below ground clamps")
+	assert_almost_eq(
+		LowPolyMesh.darkening_factor(-1.0, 0.0, 2.0, 0.5), 0.5, 0.0001, "below ground clamps"
+	)
 	var prev := 0.0
 	for k in 11:
 		var f := LowPolyMesh.darkening_factor(k * 0.2, 0.0, 2.0, 0.5)
@@ -238,8 +245,15 @@ func test_apply_haze_blends_with_distance() -> void:
 			assert_eq(cols[i], RED, "near: unchanged")
 		else:
 			assert_almost_eq(cols[i].b, haze.b, 0.0001, "far: hazed")
-	assert_almost_eq(LowPolyMesh.haze_amount(Vector3(0, 50, -180), Vector3.ZERO, 120.0, 240.0), 0.5, 0.0001, "horizontal distance")
-	assert_gt(LowPolyMesh.haze_amount(Vector3(0, 500, -180), Vector3.ZERO, 120.0, 240.0, false), 0.99)
+	assert_almost_eq(
+		LowPolyMesh.haze_amount(Vector3(0, 50, -180), Vector3.ZERO, 120.0, 240.0),
+		0.5,
+		0.0001,
+		"horizontal distance"
+	)
+	assert_gt(
+		LowPolyMesh.haze_amount(Vector3(0, 500, -180), Vector3.ZERO, 120.0, 240.0, false), 0.99
+	)
 
 
 func test_tint_clear_and_empty() -> void:
@@ -252,13 +266,16 @@ func test_tint_clear_and_empty() -> void:
 
 
 func test_make_instance_casts_shadows() -> void:
-	var mi: MeshInstance3D = autofree(LowPolyMesh.new().add_box(Vector3.ONE, RED).make_instance("Box"))
+	var mi: MeshInstance3D = autofree(
+		LowPolyMesh.new().add_box(Vector3.ONE, RED).make_instance("Box")
+	)
 	assert_eq(mi.name, &"Box")
 	assert_eq(mi.cast_shadow, GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
 	assert_eq(mi.mesh.get_surface_count(), 1)
 
 
 # --- Demo scene (W3D6) --------------------------------------------------------------------
+
 
 func test_demo_scene_runs_headless() -> void:
 	var scene: PackedScene = load("res://addons/wattlands/world3d/demo.tscn")

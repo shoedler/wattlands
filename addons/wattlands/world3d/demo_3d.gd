@@ -79,12 +79,17 @@ func _process(delta: float) -> void:
 		_next_shake += 7.0
 		rig.shake(0.15, 0.6)
 	if _frames == 30:
-		print("world3d demo: draw calls %d, primitives %d, objects %d, scenery triangles %d" % [
-			int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
-			int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
-			int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
-			_scenery_triangles(),
-		])
+		print(
+			(
+				"world3d demo: draw calls %d, primitives %d, objects %d, scenery triangles %d"
+				% [
+					int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+					int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+					int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME)),
+					_scenery_triangles(),
+				]
+			)
+		)
 
 
 ## Ground height (deterministic): a flat plateau under the fort that falls away to rolling
@@ -98,7 +103,9 @@ func height_at(x: float, z: float) -> float:
 
 
 func _terrain_color(center: Vector3, normal: Vector3) -> Color:
-	var n := sin(center.x * 0.21) * cos(center.z * 0.17) + 0.5 * sin(center.x * 0.05 - center.z * 0.08)
+	var n := (
+		sin(center.x * 0.21) * cos(center.z * 0.17) + 0.5 * sin(center.x * 0.05 - center.z * 0.08)
+	)
 	var base := OCHRE
 	if center.y < 1.0 and n > 0.2:
 		base = OLIVE
@@ -115,7 +122,12 @@ func _add_terrain(lp: LowPolyMesh) -> void:
 func _road_points() -> PackedVector3Array:
 	var pts := PackedVector3Array()
 	var xz: Array[Vector2] = [
-		Vector2(0, 21), Vector2(0, 40), Vector2(-8, 62), Vector2(-4, 84), Vector2(10, 104), Vector2(18, 140),
+		Vector2(0, 21),
+		Vector2(0, 40),
+		Vector2(-8, 62),
+		Vector2(-4, 84),
+		Vector2(10, 104),
+		Vector2(18, 140),
 	]
 	for p: Vector2 in xz:
 		pts.append(Vector3(p.x, height_at(p.x, p.y), p.y))
@@ -147,25 +159,55 @@ func _add_fort(lp: LowPolyMesh) -> void:
 	var thick := 2.5
 	var wall := LowPolyMesh.new()
 	# North, west and east walls; the south wall leaves an 8 m gate gap.
-	wall.add_box(Vector3(FORT_SIZE.x, wall_h, thick), MARBLE, _at(Vector3(0, wall_h * 0.5, -hd)), MARBLE_SHADE)
-	wall.add_box(Vector3(thick, wall_h, FORT_SIZE.y), MARBLE, _at(Vector3(-hw, wall_h * 0.5, 0)), MARBLE_SHADE)
-	wall.add_box(Vector3(thick, wall_h, FORT_SIZE.y), MARBLE, _at(Vector3(hw, wall_h * 0.5, 0)), MARBLE_SHADE)
+	wall.add_box(
+		Vector3(FORT_SIZE.x, wall_h, thick),
+		MARBLE,
+		_at(Vector3(0, wall_h * 0.5, -hd)),
+		MARBLE_SHADE
+	)
+	wall.add_box(
+		Vector3(thick, wall_h, FORT_SIZE.y),
+		MARBLE,
+		_at(Vector3(-hw, wall_h * 0.5, 0)),
+		MARBLE_SHADE
+	)
+	wall.add_box(
+		Vector3(thick, wall_h, FORT_SIZE.y), MARBLE, _at(Vector3(hw, wall_h * 0.5, 0)), MARBLE_SHADE
+	)
 	var seg := (FORT_SIZE.x - 8.0) * 0.5
-	wall.add_box(Vector3(seg, wall_h, thick), MARBLE, _at(Vector3(-4.0 - seg * 0.5, wall_h * 0.5, hd)), MARBLE_SHADE)
-	wall.add_box(Vector3(seg, wall_h, thick), MARBLE, _at(Vector3(4.0 + seg * 0.5, wall_h * 0.5, hd)), MARBLE_SHADE)
+	wall.add_box(
+		Vector3(seg, wall_h, thick),
+		MARBLE,
+		_at(Vector3(-4.0 - seg * 0.5, wall_h * 0.5, hd)),
+		MARBLE_SHADE
+	)
+	wall.add_box(
+		Vector3(seg, wall_h, thick),
+		MARBLE,
+		_at(Vector3(4.0 + seg * 0.5, wall_h * 0.5, hd)),
+		MARBLE_SHADE
+	)
 	wall.darken_near_ground(0.0, 2.0, 0.3)
 	lp.append(wall, _at(c))
 
 	var tower := LowPolyMesh.new()
 	tower.add_box(Vector3(8, 11, 8), MARBLE, _at(Vector3(0, 5.5, 0)), MARBLE_SHADE)
-	tower.add_cone(6.6, 4.5, 4, TERRACOTTA, Transform3D(Basis(Vector3.UP, PI * 0.25), Vector3(0, 13.25, 0)))
+	tower.add_cone(
+		6.6, 4.5, 4, TERRACOTTA, Transform3D(Basis(Vector3.UP, PI * 0.25), Vector3(0, 13.25, 0))
+	)
 	tower.darken_near_ground(0.0, 2.5, 0.32)
 	for corner: Vector2 in [Vector2(-hw, -hd), Vector2(hw, -hd), Vector2(-hw, hd), Vector2(hw, hd)]:
 		lp.append(tower, _at(c + Vector3(corner.x, 0, corner.y)))
 	# Gate towers and the gate.
 	var gate_tower := LowPolyMesh.new()
 	gate_tower.add_box(Vector3(5, 9, 5), MARBLE, _at(Vector3(0, 4.5, 0)), MARBLE_SHADE)
-	gate_tower.add_cone(4.2, 3.0, 4, TERRACOTTA_LIGHT, Transform3D(Basis(Vector3.UP, PI * 0.25), Vector3(0, 10.5, 0)))
+	gate_tower.add_cone(
+		4.2,
+		3.0,
+		4,
+		TERRACOTTA_LIGHT,
+		Transform3D(Basis(Vector3.UP, PI * 0.25), Vector3(0, 10.5, 0))
+	)
 	gate_tower.darken_near_ground(0.0, 2.0, 0.3)
 	lp.append(gate_tower, _at(c + Vector3(-6.5, 0, hd)))
 	lp.append(gate_tower, _at(c + Vector3(6.5, 0, hd)))
@@ -178,7 +220,11 @@ func _add_fort(lp: LowPolyMesh) -> void:
 	# Barracks blocks inside, with terracotta roofs (wedges back to back).
 	var block := LowPolyMesh.new()
 	block.add_box(Vector3(14, 4, 7), MARBLE_SHADE, _at(Vector3(0, 2, 0)))
-	block.add_wedge(Vector3(14.6, 2.0, 3.8), TERRACOTTA, Transform3D(Basis(Vector3.UP, PI), Vector3(0, 5, -1.85)))
+	block.add_wedge(
+		Vector3(14.6, 2.0, 3.8),
+		TERRACOTTA,
+		Transform3D(Basis(Vector3.UP, PI), Vector3(0, 5, -1.85))
+	)
 	block.add_wedge(Vector3(14.6, 2.0, 3.8), TERRACOTTA, _at(Vector3(0, 5, 1.85)))
 	block.darken_near_ground(0.0, 1.5, 0.3)
 	lp.append(block, _at(c + Vector3(-18, 0, -16)))
@@ -198,13 +244,17 @@ func _add_machines(lp: LowPolyMesh) -> void:
 	fly.add_ring(3.0, 0.6, 0.9, 20, BRONZE)
 	for k in 8:
 		fly.add_box(Vector3(0.3, 2.5, 0.3), BRONZE_DARK, _spoke(TAU * float(k) / 8.0, 1.25, 0.0))
-	fly.add_cylinder(0.7, 0.7, 1.2, 10, BRONZE_DARK, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3.ZERO))
+	fly.add_cylinder(
+		0.7, 0.7, 1.2, 10, BRONZE_DARK, Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3.ZERO)
+	)
 	var fly_mi := fly.make_instance("Flywheel")
 	fly_mi.position = c + Vector3(0, 5.2, 0)
 	add_child(fly_mi)
 	drum = fly_mi
 	# Four treadwheels around it, one per slot color, axles pointing at the generator.
-	var spots: Array[Vector3] = [Vector3(-17, 0, -3), Vector3(-9, 0, 8), Vector3(9, 0, 8), Vector3(17, 0, -3)]
+	var spots: Array[Vector3] = [
+		Vector3(-17, 0, -3), Vector3(-9, 0, 8), Vector3(9, 0, 8), Vector3(17, 0, -3)
+	]
 	for i in 4:
 		var color: Color = Wl.slot_look(i)["color"]
 		var frame := LowPolyMesh.new()
@@ -219,8 +269,12 @@ func _add_machines(lp: LowPolyMesh) -> void:
 		var wheel_lp := LowPolyMesh.new()
 		wheel_lp.add_ring(2.5, 0.35, 2.2, 16, WOOD)
 		for k in 8:
-			wheel_lp.add_box(Vector3(0.18, 2.2, 0.18), WOOD_DARK, _spoke(TAU * float(k) / 8.0, 1.1, -0.9))
-			wheel_lp.add_box(Vector3(0.18, 2.2, 0.18), WOOD_DARK, _spoke(TAU * float(k) / 8.0, 1.1, 0.9))
+			wheel_lp.add_box(
+				Vector3(0.18, 2.2, 0.18), WOOD_DARK, _spoke(TAU * float(k) / 8.0, 1.1, -0.9)
+			)
+			wheel_lp.add_box(
+				Vector3(0.18, 2.2, 0.18), WOOD_DARK, _spoke(TAU * float(k) / 8.0, 1.1, 0.9)
+			)
 		wheel_lp.add_box(Vector3(0.3, 0.3, 3.0), IRON, _at(Vector3.ZERO))
 		var wheel := Node3D.new()
 		wheel.name = "Wheel%d" % i
@@ -255,35 +309,62 @@ func _add_scatter() -> void:
 	cypress.darken_near_ground(0.0, 1.6, 0.4)
 	var olive := LowPolyMesh.new()
 	olive.add_cylinder(0.3, 0.22, 1.6, 5, WOOD, _at(Vector3(0, 0.8, 0)))
-	olive.add_sphere(2.0, 3, 6, OLIVE, Transform3D(Basis().scaled(Vector3(1.2, 0.8, 1.2)), Vector3(0, 2.6, 0)))
+	olive.add_sphere(
+		2.0, 3, 6, OLIVE, Transform3D(Basis().scaled(Vector3(1.2, 0.8, 1.2)), Vector3(0, 2.6, 0))
+	)
 	olive.darken_near_ground(0.0, 1.8, 0.4)
 	var rock := LowPolyMesh.new()
-	rock.add_sphere(1.0, 2, 5, ROCK, Transform3D(Basis().scaled(Vector3(1.3, 0.6, 1.0)), Vector3(0, 0.2, 0)))
+	rock.add_sphere(
+		1.0, 2, 5, ROCK, Transform3D(Basis().scaled(Vector3(1.3, 0.6, 1.0)), Vector3(0, 0.2, 0))
+	)
 	rock.darken_near_ground(0.0, 0.5, 0.35)
 	var kinds: Array[Dictionary] = [
-		{"mesh": cypress, "count": 300, "seed": 1, "scale": Vector2(0.7, 1.3), "colors": PackedColorArray([Color.WHITE, Color(0.9, 0.95, 0.85)])},
-		{"mesh": olive, "count": 220, "seed": 2, "scale": Vector2(0.7, 1.2), "colors": PackedColorArray([Color.WHITE, Color(1.05, 1.0, 0.9)])},
-		{"mesh": rock, "count": 140, "seed": 3, "scale": Vector2(0.5, 1.6), "colors": PackedColorArray([Color.WHITE, Color(0.85, 0.85, 0.85)])},
+		{
+			"mesh": cypress,
+			"count": 300,
+			"seed": 1,
+			"scale": Vector2(0.7, 1.3),
+			"colors": PackedColorArray([Color.WHITE, Color(0.9, 0.95, 0.85)])
+		},
+		{
+			"mesh": olive,
+			"count": 220,
+			"seed": 2,
+			"scale": Vector2(0.7, 1.2),
+			"colors": PackedColorArray([Color.WHITE, Color(1.05, 1.0, 0.9)])
+		},
+		{
+			"mesh": rock,
+			"count": 140,
+			"seed": 3,
+			"scale": Vector2(0.5, 1.6),
+			"colors": PackedColorArray([Color.WHITE, Color(0.85, 0.85, 0.85)])
+		},
 	]
 	for k: Dictionary in kinds:
 		var mm := MultiMeshScatter.new()
 		mm.name = "Scatter%d" % int(k["seed"])
 		var lp: LowPolyMesh = k["mesh"]
 		mm.setup(lp.build(), int(k["count"]), true, false)
-		mm.scatter({
-			"seed": SeededRng.derive(SEED, "scatter%d" % int(k["seed"])),
-			"count": int(k["count"]),
-			"area": Rect2(-145, -145, 290, 290),
-			"exclude": excludes,
-			"min_spacing": 3.0,
-			"scale": k["scale"],
-			"height_jitter": 0.15,
-			"tilt_deg": 4.0,
-			"colors": k["colors"],
-			"color_jitter": 0.06,
-			"height": height_at,
-			"y_offset": -0.1,
-		})
+		(
+			mm
+			. scatter(
+				{
+					"seed": SeededRng.derive(SEED, "scatter%d" % int(k["seed"])),
+					"count": int(k["count"]),
+					"area": Rect2(-145, -145, 290, 290),
+					"exclude": excludes,
+					"min_spacing": 3.0,
+					"scale": k["scale"],
+					"height_jitter": 0.15,
+					"tilt_deg": 4.0,
+					"colors": k["colors"],
+					"color_jitter": 0.06,
+					"height": height_at,
+					"y_offset": -0.1,
+				}
+			)
+		)
 		add_child(mm)
 		trees.append(mm)
 
@@ -295,7 +376,14 @@ func _add_marchers() -> void:
 	figure.add_box(Vector3(0.2, 0.35, 0.2), Color("#857a6b"), _at(Vector3(0.13, 0.18, 0)))
 	figure.add_sphere(0.22, 2, 5, Color("#c9a27e"), _at(Vector3(0, 1.35, 0)))
 	figure.add_box(Vector3(0.08, 1.9, 0.08), WOOD, _at(Vector3(0.32, 1.0, 0)))
-	figure.add_cylinder(0.32, 0.32, 0.08, 8, Color("#7a6650"), Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(-0.3, 0.8, -0.05)))
+	figure.add_cylinder(
+		0.32,
+		0.32,
+		0.08,
+		8,
+		Color("#7a6650"),
+		Transform3D(Basis(Vector3.RIGHT, PI * 0.5), Vector3(-0.3, 0.8, -0.05))
+	)
 	marchers = MultiMeshScatter.new()
 	marchers.name = "Marchers"
 	marchers.setup(figure.build(), 40, false, true)

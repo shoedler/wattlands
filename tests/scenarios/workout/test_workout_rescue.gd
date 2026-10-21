@@ -31,7 +31,7 @@ func _plan(runner: GameSimRunner, peer: int) -> Array:
 		if raw is EffortPlan:
 			var fin := PlanValidator.finalize(raw as EffortPlan)
 			if fin != null:
-				return (fin.to_dict()["phases"] as Array)
+				return fin.to_dict()["phases"] as Array
 	return []
 
 
@@ -43,30 +43,62 @@ static func schedule(plan: Array) -> Array:
 		if str(ph.get("mode", Wl.ERG)) != Wl.ERG:
 			continue
 		var start := float(ph.get("target_pct", 0.0))
-		var end := float(ph.get("ramp_to_pct", start)) if float(ph.get("ramp_to_pct", -1.0)) >= 0.0 else start
-		var dur := float(ph.get("min_s", 0.0)) if bool(ph.get("open_ended", false)) else float(ph.get("duration_s", 0.0))
+		var end := (
+			float(ph.get("ramp_to_pct", start))
+			if float(ph.get("ramp_to_pct", -1.0)) >= 0.0
+			else start
+		)
+		var dur := (
+			float(ph.get("min_s", 0.0))
+			if bool(ph.get("open_ended", false))
+			else float(ph.get("duration_s", 0.0))
+		)
 		if dur < 20.0:
 			continue
 		var lo := minf(start, end)
 		var hi := maxf(start, end)
 		if hi < S.RESCUE_MIN_PCT - S.EPS:
-			out.append({"phase": i, "after_s": minf(10.0, dur / 3.0), "at_target_pct": -1.0, "expect_rescue": false})
+			out.append(
+				{
+					"phase": i,
+					"after_s": minf(10.0, dur / 3.0),
+					"at_target_pct": -1.0,
+					"expect_rescue": false
+				}
+			)
 		elif lo >= S.RESCUE_MIN_PCT - S.EPS:
 			out.append({"phase": i, "after_s": 5.0, "at_target_pct": -1.0, "expect_rescue": true})
 		elif end > start:
 			# A rising ramp across 60 %: one drop well before the crossing, one after it.
 			var t_cross := dur * (S.RESCUE_MIN_PCT - start) / (end - start)
 			if t_cross >= 30.0:
-				out.append({"phase": i, "after_s": minf(20.0, t_cross / 3.0), "at_target_pct": -1.0, "expect_rescue": false})
+				out.append(
+					{
+						"phase": i,
+						"after_s": minf(20.0, t_cross / 3.0),
+						"at_target_pct": -1.0,
+						"expect_rescue": false
+					}
+				)
 			if dur - t_cross >= 20.0:
-				out.append({"phase": i, "after_s": 3.0, "at_target_pct": S.RESCUE_MIN_PCT, "expect_rescue": true})
+				out.append(
+					{
+						"phase": i,
+						"after_s": 3.0,
+						"at_target_pct": S.RESCUE_MIN_PCT,
+						"expect_rescue": true
+					}
+				)
 	return out
 
 
 static func profile(drops: Array) -> String:
 	var parts := PackedStringArray(["erg"])
 	for d: Dictionary in drops:
-		var spec := "cadence_drop:rpm=%d,at_phase=%d,after_s=%s,for_s=%s" % [DROP_RPM, int(d["phase"]), _n(float(d["after_s"])), _n(DROP_S)]
+		var spec := (
+			"cadence_drop:rpm=%d,at_phase=%d,after_s=%s,for_s=%s"
+			% [DROP_RPM, int(d["phase"]), _n(float(d["after_s"])), _n(DROP_S)]
+		)
 		if float(d["at_target_pct"]) >= 0.0:
 			spec += ",at_target_pct=%s" % _n(float(d["at_target_pct"]))
 		parts.append(spec)
@@ -90,12 +122,18 @@ func test_schedule_covers_every_erg_phase() -> void:
 		PlanPhase.erg(Wl.COOLDOWN, 50, 180, "Cool-down").to_dict(),
 	]
 	var s := schedule(plan)
-	var by_phase := s.map(func(d: Dictionary) -> String: return "%d:%s" % [int(d["phase"]), str(d["expect_rescue"])])
+	var by_phase := s.map(
+		func(d: Dictionary) -> String: return "%d:%s" % [int(d["phase"]), str(d["expect_rescue"])]
+	)
 	assert_eq(by_phase, ["0:false", "0:true", "1:true", "2:false", "4:false"])
-	assert_eq(profile([s[1]]), "erg+cadence_drop:rpm=30,at_phase=0,after_s=3,for_s=8,at_target_pct=60")
+	assert_eq(
+		profile([s[1]]), "erg+cadence_drop:rpm=30,at_phase=0,after_s=3,for_s=8,at_target_pct=60"
+	)
 
 
-func test_rescue_follows_the_60_percent_rule(p: Variant = use_parameters(S.WORKOUT_SESSIONS)) -> void:
+func test_rescue_follows_the_60_percent_rule(
+	p: Variant = use_parameters(S.WORKOUT_SESSIONS)
+) -> void:
 	var content := str(p)
 	var probe := start_runner(S.flags(content, report_path("%s_plan" % content)))
 	if probe == null:
@@ -103,10 +141,20 @@ func test_rescue_follows_the_60_percent_rule(p: Variant = use_parameters(S.WORKO
 	var plan := _plan(probe, S.human_peer(probe))
 	assert_false(plan.is_empty(), "%s: the rider's validated plan" % content)
 	var drops := schedule(plan)
-	assert_gt(drops.filter(func(d: Dictionary) -> bool: return bool(d["expect_rescue"])).size(), 0, "%s has ERG time at >= 60 %%" % content)
-	assert_gt(drops.filter(func(d: Dictionary) -> bool: return not bool(d["expect_rescue"])).size(), 0, "%s has ERG time below 60 %%" % content)
+	assert_gt(
+		drops.filter(func(d: Dictionary) -> bool: return bool(d["expect_rescue"])).size(),
+		0,
+		"%s has ERG time at >= 60 %%" % content
+	)
+	assert_gt(
+		drops.filter(func(d: Dictionary) -> bool: return not bool(d["expect_rescue"])).size(),
+		0,
+		"%s has ERG time below 60 %%" % content
+	)
 
-	var runner := start_runner(S.flags(content, report_path(content), ["--rider=%s" % profile(drops), "--bots=0"]))
+	var runner := start_runner(
+		S.flags(content, report_path(content), ["--rider=%s" % profile(drops), "--bots=0"])
+	)
 	if runner == null:
 		return
 	var rider := human_rider(runner)
@@ -126,7 +174,14 @@ func test_rescue_follows_the_60_percent_rule(p: Variant = use_parameters(S.WORKO
 		var s := mock.last_sample()
 		var collapsed := s != null and s.has_cadence() and s.cadence_rpm < COLLAPSE_RPM
 		if collapsed and current.is_empty():
-			current = {"t": t, "end": -1.0, "phase": int(st.get("phase_index", -1)), "pct": float(st.get("applied_pct", 0.0)), "mode": str(st.get("mode", "")), "rescue": false}
+			current = {
+				"t": t,
+				"end": -1.0,
+				"phase": int(st.get("phase_index", -1)),
+				"pct": float(st.get("applied_pct", 0.0)),
+				"mode": str(st.get("mode", "")),
+				"rescue": false
+			}
 			episodes.append(current)
 		if not current.is_empty():
 			if not collapsed and float(current["end"]) < 0.0:
@@ -137,17 +192,40 @@ func test_rescue_follows_the_60_percent_rule(p: Variant = use_parameters(S.WORKO
 				current = {}
 		var rescue := bool(st.get("rescue", false))
 		if rescue and not was_rescue and current.is_empty():
-			stray.append("t=%.2f: rescue started without a cadence collapse (phase %d, %.1f %% FTP)" % [t, int(st.get("phase_index", -1)), float(st.get("applied_pct", 0.0))])
+			stray.append(
+				(
+					"t=%.2f: rescue started without a cadence collapse (phase %d, %.1f %% FTP)"
+					% [t, int(st.get("phase_index", -1)), float(st.get("applied_pct", 0.0))]
+				)
+			)
 		was_rescue = rescue
 	assert_true(runner.host.is_finished(), "%s finished" % content)
 	assert_eq(stray, [] as Array[String], first(stray))
-	assert_eq(episodes.size(), drops.size(), "%s: one collapse per scheduled drop (%s)" % [content, str(episodes)])
+	assert_eq(
+		episodes.size(),
+		drops.size(),
+		"%s: one collapse per scheduled drop (%s)" % [content, str(episodes)]
+	)
 	for i in mini(episodes.size(), drops.size()):
 		var ep: Dictionary = episodes[i]
 		var d: Dictionary = drops[i]
-		var where := "%s drop %d (phase %d, %.1f %% FTP at t=%.1f)" % [content, i, int(ep["phase"]), float(ep["pct"]), float(ep["t"])]
+		var where := (
+			"%s drop %d (phase %d, %.1f %% FTP at t=%.1f)"
+			% [content, i, int(ep["phase"]), float(ep["pct"]), float(ep["t"])]
+		)
 		assert_eq(int(ep["phase"]), int(d["phase"]), "%s happened in the scheduled phase" % where)
 		assert_eq(ep["mode"], Wl.ERG, "%s: in ERG" % where)
 		var at_or_above := float(ep["pct"]) >= S.RESCUE_MIN_PCT - S.EPS
-		assert_eq(bool(ep["rescue"]), at_or_above, "%s: rescue iff the applied target was >= 60 %% FTP" % where)
-		assert_eq(bool(ep["rescue"]), bool(d["expect_rescue"]), "%s: rescue %s as planned" % [where, "expected" if bool(d["expect_rescue"]) else "not expected"])
+		assert_eq(
+			bool(ep["rescue"]),
+			at_or_above,
+			"%s: rescue iff the applied target was >= 60 %% FTP" % where
+		)
+		assert_eq(
+			bool(ep["rescue"]),
+			bool(d["expect_rescue"]),
+			(
+				"%s: rescue %s as planned"
+				% [where, "expected" if bool(d["expect_rescue"]) else "not expected"]
+			)
+		)

@@ -95,7 +95,9 @@ static func from_parsed(parsed: Dictionary) -> AppScriptedConfig:
 	c.strava_base = _last(parsed, "strava-base")
 	c.strava_client_id = _last(parsed, "strava-client-id")
 	c.strava_client_secret = _last(parsed, "strava-client-secret")
-	c.strava_auto_upload = parsed.has("strava-auto-upload") and _bool(_last(parsed, "strava-auto-upload"))
+	c.strava_auto_upload = (
+		parsed.has("strava-auto-upload") and _bool(_last(parsed, "strava-auto-upload"))
+	)
 	if (c.strava_client_id == "") != (c.strava_client_secret == ""):
 		c.errors.append("--strava-client-id and --strava-client-secret go together")
 	# is_loopback_url, not url_host: an ambiguous authority ("http://127.0.0.1?@other/") reaches
@@ -117,11 +119,22 @@ func wants_strava_connect() -> bool:
 ## The flags without the secret (for logs and the report).
 func describe() -> Dictionary:
 	return {
-		"role": role, "join": join_code, "game": game_id, "content": content_id, "e2e": e2e,
-		"wait_peers": wait_peers, "relay": relay, "mock_trainer": mock_trainer,
-		"autopilot": autopilot, "seed": seed if has_seed else null, "sim_speed": sim_speed,
-		"report": report_path, "run_seconds": run_seconds, "strava_base": strava_base,
-		"strava_connect": wants_strava_connect(), "strava_auto_upload": strava_auto_upload,
+		"role": role,
+		"join": join_code,
+		"game": game_id,
+		"content": content_id,
+		"e2e": e2e,
+		"wait_peers": wait_peers,
+		"relay": relay,
+		"mock_trainer": mock_trainer,
+		"autopilot": autopilot,
+		"seed": seed if has_seed else null,
+		"sim_speed": sim_speed,
+		"report": report_path,
+		"run_seconds": run_seconds,
+		"strava_base": strava_base,
+		"strava_connect": wants_strava_connect(),
+		"strava_auto_upload": strava_auto_upload,
 	}
 
 

@@ -46,12 +46,28 @@ static func shape_points(p_shape: String, r: Rect2) -> PackedVector2Array:
 	var pts := PackedVector2Array()
 	match p_shape:
 		"triangle":
-			pts = PackedVector2Array([Vector2(c.x, c.y - hh), Vector2(c.x + hw, c.y + hh), Vector2(c.x - hw, c.y + hh)])
+			pts = PackedVector2Array(
+				[Vector2(c.x, c.y - hh), Vector2(c.x + hw, c.y + hh), Vector2(c.x - hw, c.y + hh)]
+			)
 		"square":
 			var s := minf(hw, hh) * 0.9
-			pts = PackedVector2Array([Vector2(c.x - s, c.y - s), Vector2(c.x + s, c.y - s), Vector2(c.x + s, c.y + s), Vector2(c.x - s, c.y + s)])
+			pts = PackedVector2Array(
+				[
+					Vector2(c.x - s, c.y - s),
+					Vector2(c.x + s, c.y - s),
+					Vector2(c.x + s, c.y + s),
+					Vector2(c.x - s, c.y + s)
+				]
+			)
 		"diamond":
-			pts = PackedVector2Array([Vector2(c.x, c.y - hh), Vector2(c.x + hw, c.y), Vector2(c.x, c.y + hh), Vector2(c.x - hw, c.y)])
+			pts = PackedVector2Array(
+				[
+					Vector2(c.x, c.y - hh),
+					Vector2(c.x + hw, c.y),
+					Vector2(c.x, c.y + hh),
+					Vector2(c.x - hw, c.y)
+				]
+			)
 		_:
 			for i in 24:
 				var a := TAU * i / 24.0
@@ -84,7 +100,9 @@ func _draw() -> void:
 			draw_rect(Rect2(c.x - 2.0 * u, c.y + 0.6 * u, 4.0 * u, 0.8 * u), mark)
 		"dotted":
 			for k: int in [-1, 0, 1]:
-				draw_circle(c + Vector2(k * 1.6 * u, 0.6 * u if shape == "triangle" else 0.0), 0.6 * u, mark)
+				draw_circle(
+					c + Vector2(k * 1.6 * u, 0.6 * u if shape == "triangle" else 0.0), 0.6 * u, mark
+				)
 		"double":
 			var inner := shape_points(shape, Rect2(c - r.size * 0.25, r.size * 0.5))
 			var inner_closed := inner.duplicate()

@@ -48,7 +48,12 @@ func _fake_device() -> Fakes.FakeDevice:
 
 
 ## A rider with a FakeGovernor, FakeGestures and (optionally) a FakeRecorder.
-func _rider(device: TrainerDevice, opts: Dictionary = {}, profile: RiderProfile = null, slot: PlayerSlot = null) -> LocalRider:
+func _rider(
+	device: TrainerDevice,
+	opts: Dictionary = {},
+	profile: RiderProfile = null,
+	slot: PlayerSlot = null
+) -> LocalRider:
 	var r := LocalRider.new()
 	add_child_autofree(r)
 	var o := {
@@ -141,7 +146,13 @@ func test_setup_resets_a_reused_mock() -> void:
 	r.set_cadence_band(80.0, 95.0)
 	r.set_power_band(150.0, 250.0)
 	r.start_phase(3)
-	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		3,
+		_profile(),
+		null,
+		m,
+		{"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	)
 	assert_eq(m.cadence_bands.back(), [0.0, 0.0], "no band left over from the last session")
 	assert_eq(m.power_bands.back(), [0.0, 0.0])
 	assert_eq(m.phases.back(), -1)
@@ -155,7 +166,13 @@ func test_setup_again_while_recording_saves_the_ride_first() -> void:
 	var r := _rider(m, {"recorder": rec, "rides_dir": "C:/rides/a"})
 	_run(r, 2.0)
 	watch_signals(_bus)
-	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		3,
+		_profile(),
+		null,
+		m,
+		{"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	)
 	assert_push_warning("recording")
 	assert_eq(rec.saves, ["C:/rides/a"] as Array[String], "saved where the old options said")
 	assert_almost_eq(rec.stopped_at, 2.0, 1e-9)
@@ -242,15 +259,26 @@ func test_timed_gestures_fire_between_samples() -> void:
 ## W2: Telemetry.acks carry refused as a bool and the governor's dropped channels.
 func test_acks_have_a_bool_refused_and_the_dropped_channels() -> void:
 	var r := _rider(_mock())
-	_gov(r).directive_applied.emit({"id": 5, "kind": "request", "applied": {"mode": "SIM"},
-		"clamped_by": [], "refused": 0, "reason": "", "requested": {},
-		"dropped": [{"channel": "haptic", "reason": Wl.REFUSE_HAPTIC_WARMUP, "extra": 1}]})
+	_gov(r).directive_applied.emit(
+		{
+			"id": 5,
+			"kind": "request",
+			"applied": {"mode": "SIM"},
+			"clamped_by": [],
+			"refused": 0,
+			"reason": "",
+			"requested": {},
+			"dropped": [{"channel": "haptic", "reason": Wl.REFUSE_HAPTIC_WARMUP, "extra": 1}]
+		}
+	)
 	var acks := r.take_acks()
 	assert_eq(acks.size(), 1)
 	assert_eq(typeof(acks[0]["refused"]), TYPE_BOOL)
 	assert_false(acks[0]["refused"])
 	assert_eq(acks[0]["dropped"], [{"channel": "haptic", "reason": Wl.REFUSE_HAPTIC_WARMUP}])
-	_gov(r).directive_applied.emit({"id": 6, "kind": "request", "refused": true, "reason": Wl.REFUSE_RANGE})
+	_gov(r).directive_applied.emit(
+		{"id": 6, "kind": "request", "refused": true, "reason": Wl.REFUSE_RANGE}
+	)
 	acks = r.take_acks()
 	assert_true(acks[0]["refused"])
 	assert_eq(acks[0]["dropped"], [], "no dropped list: empty")
@@ -264,10 +292,18 @@ func test_setup_restarts_a_mock_profile() -> void:
 	var r := _rider(m)
 	_run(r, 15.0)
 	assert_almost_eq(m.profile_time_s(), 15.0, 1e-6)
-	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		3,
+		_profile(),
+		null,
+		m,
+		{"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	)
 	assert_almost_eq(m.profile_time_s(), 0.0, 1e-9, "profile time starts again with the session")
 	_run(r, 7.0)
-	assert_false(m.cadence_drop_active(), "at_s=20 counts from the new setup (22 s since the mock started)")
+	assert_false(
+		m.cadence_drop_active(), "at_s=20 counts from the new setup (22 s since the mock started)"
+	)
 	_run(r, 14.0)
 	assert_true(m.cadence_drop_active(), "21 s after the setup")
 
@@ -297,7 +333,9 @@ func test_setup_again_rebuilds_without_double_samples() -> void:
 	var r := _rider(m)
 	var first := _gov(r)
 	var g2 := Fakes.FakeGovernor.new()
-	r.setup(4, _profile(), null, m, {"governor": g2, "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	r.setup(
+		4, _profile(), null, m, {"governor": g2, "gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	)
 	assert_eq(r.peer_id, 4)
 	assert_true(first.is_queued_for_deletion(), "the old governor goes away")
 	_run(r, 5.0)
@@ -320,20 +358,32 @@ func test_setup_from_a_gesture_handler_ends_the_tick() -> void:
 	var seen: Array[StringName] = []
 	var telemetry_ts: Array[float] = []
 	r.telemetry_updated.connect(func(tel: Telemetry) -> void: telemetry_ts.append(tel.t))
-	r.gesture_detected.connect(func(g: StringName) -> void:
-		seen.append(g)
-		if r.governor == first:
-			r.setup(4, _profile(), null, m, {"governor": g2, "gestures": ges2, "recorder": rec2, "bus": _bus}))
+	r.gesture_detected.connect(
+		func(g: StringName) -> void:
+			seen.append(g)
+			if r.governor == first:
+				r.setup(
+					4,
+					_profile(),
+					null,
+					m,
+					{"governor": g2, "gestures": ges2, "recorder": rec2, "bus": _bus}
+				)
+	)
 	var ticks := 0
 	while seen.is_empty() and ticks < 100:
 		r.tick(DT)
 		ticks += 1
 	assert_push_warning("recording")
-	assert_eq(seen, [&"surge"] as Array[StringName], "the old setup's remaining gestures are dropped")
+	assert_eq(
+		seen, [&"surge"] as Array[StringName], "the old setup's remaining gestures are dropped"
+	)
 	assert_eq(r.take_gestures().size(), 0, "nothing from the old setup is queued for the new one")
 	assert_eq(r.governor, g2)
 	assert_almost_eq(r.platform_time(), 0.0, 1e-12, "the new setup's time starts at 0")
-	assert_eq(first.samples.size(), 0, "the sample that fired the gesture never reaches the old governor")
+	assert_eq(
+		first.samples.size(), 0, "the sample that fired the gesture never reaches the old governor"
+	)
 	assert_eq(first.ticks.size(), ticks - 1, "the old governor isn't ticked in the cut tick")
 	assert_eq(g2.ticks.size(), 0, "the new governor isn't ticked with the old time")
 	assert_eq(g2.samples.size(), 0)
@@ -356,9 +406,11 @@ func test_setup_from_a_sample_handler_ends_the_tick() -> void:
 	var first := _gov(r)
 	var g2 := Fakes.FakeGovernor.new()
 	var ges2 := Fakes.FakeGestures.new()
-	m.sample_received.connect(func(_s: TrainerSample) -> void:
-		if r.governor == first:
-			r.setup(5, _profile(), null, m, {"governor": g2, "gestures": ges2, "bus": _bus}))
+	m.sample_received.connect(
+		func(_s: TrainerSample) -> void:
+			if r.governor == first:
+				r.setup(5, _profile(), null, m, {"governor": g2, "gestures": ges2, "bus": _bus})
+	)
 	var ticks := 0
 	while r.governor == first and ticks < 100:
 		r.tick(DT)
@@ -402,9 +454,18 @@ func test_telemetry_fields() -> void:
 	var r := _rider(_mock())
 	var g := _gov(r)
 	g.st = {
-		"mode": Wl.ERG, "applied_target_w": 150, "applied_grade_pct": 4.0, "gear": 14,
-		"clamped_by": [Wl.CLAMP_SLEW, Wl.CLAMP_WARMUP], "rescue": true, "coasting": false,
-		"afk": false, "paused": false, "s_left_105": 250.0, "s_left_120": 50.0, "haptic_pct": 0.0,
+		"mode": Wl.ERG,
+		"applied_target_w": 150,
+		"applied_grade_pct": 4.0,
+		"gear": 14,
+		"clamped_by": [Wl.CLAMP_SLEW, Wl.CLAMP_WARMUP],
+		"rescue": true,
+		"coasting": false,
+		"afk": false,
+		"paused": false,
+		"s_left_105": 250.0,
+		"s_left_120": 50.0,
+		"haptic_pct": 0.0,
 	}
 	r.start_phase(2)
 	watch_signals(r)
@@ -477,7 +538,9 @@ func test_p_eff_follows_the_slot_in_every_mode() -> void:
 		_run(r, 1.5)
 		var tel := r.telemetry()
 		assert_eq(tel.power_w, 300.0, mode)
-		assert_eq(tel.p_eff_w, 300.0 * slot.p_eff_per_w, mode + ": p_eff_w == power_w x p_eff_per_w")
+		assert_eq(
+			tel.p_eff_w, 300.0 * slot.p_eff_per_w, mode + ": p_eff_w == power_w x p_eff_per_w"
+		)
 		assert_almost_eq(tel.effort, EffortScaling.effort(mode, 300.0, 250.0, 70.0), 1e-9, mode)
 
 
@@ -499,7 +562,9 @@ func test_speed_model_uses_p_eff_and_the_applied_grade() -> void:
 	_run(flat, 30.0)
 	_run(hill, 30.0)
 	assert_gt(flat.speed.v_mps, hill.speed.v_mps, "a grade slows the speed model")
-	assert_eq(_gov(flat).course_distance, flat.speed.distance_m, "course distance from the speed model")
+	assert_eq(
+		_gov(flat).course_distance, flat.speed.distance_m, "course distance from the speed model"
+	)
 	var erg := _rider(_mock())
 	_gov(erg).st = {"mode": Wl.ERG, "applied_grade_pct": 6.0}
 	_run(erg, 30.0)
@@ -533,7 +598,9 @@ func test_cadence_age() -> void:
 	assert_almost_eq(r.telemetry().cadence_age_s, 0.0, 1e-9)
 	d.emit_sample(150.0)
 	_run(r, 2.0)
-	assert_almost_eq(r.telemetry().cadence_age_s, 2.0, 1e-6, "a sample without cadence doesn't refresh it")
+	assert_almost_eq(
+		r.telemetry().cadence_age_s, 2.0, 1e-6, "a sample without cadence doesn't refresh it"
+	)
 	assert_eq(r.telemetry().cadence_rpm, 0.0)
 
 
@@ -604,15 +671,27 @@ func test_intents_queue() -> void:
 func test_apply_directive_acks_once_when_the_governor_emits() -> void:
 	var r := _rider(_mock())
 	watch_signals(r)
-	var d := EffortDirective.from_dict({"target_pct": 80.0, "duration_s": 10, "reason": "pull", "source": "fishing"})
+	var d := EffortDirective.from_dict(
+		{"target_pct": 80.0, "duration_s": 10, "reason": "pull", "source": "fishing"}
+	)
 	d.id = 41
 	var rec := r.apply_directive(d)
 	assert_eq(rec.get("id"), 41)
 	assert_signal_emit_count(r, "directive_applied", 1)
 	var acks := r.take_acks()
 	assert_eq(acks.size(), 1)
-	assert_eq(acks[0], {"id": 41, "kind": "request", "applied": {"target_pct": 80.0},
-		"clamped_by": [Wl.CLAMP_SLEW], "refused": false, "reason": "", "dropped": []})
+	assert_eq(
+		acks[0],
+		{
+			"id": 41,
+			"kind": "request",
+			"applied": {"target_pct": 80.0},
+			"clamped_by": [Wl.CLAMP_SLEW],
+			"refused": false,
+			"reason": "",
+			"dropped": []
+		}
+	)
 	assert_eq(r.take_acks(), [], "taken once")
 
 
@@ -632,8 +711,17 @@ func test_governor_records_outside_apply_are_acked() -> void:
 	watch_signals(r)
 	r.apply_course_grade(3.5)
 	assert_eq(_gov(r).course_grade, 3.5)
-	_gov(r).directive_applied.emit({"id": 9, "kind": "course_grade", "applied": {"grade_pct": 3.5},
-		"clamped_by": [], "refused": false, "reason": "", "requested": {"grade_pct": 3.5}})
+	_gov(r).directive_applied.emit(
+		{
+			"id": 9,
+			"kind": "course_grade",
+			"applied": {"grade_pct": 3.5},
+			"clamped_by": [],
+			"refused": false,
+			"reason": "",
+			"requested": {"grade_pct": 3.5}
+		}
+	)
 	assert_signal_emit_count(r, "directive_applied", 1)
 	var acks := r.take_acks()
 	assert_eq(acks[0]["kind"], "course_grade")
@@ -706,12 +794,17 @@ func test_bad_bands_are_refused() -> void:
 
 
 func _plan() -> EffortPlan:
-	var plan := EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65),
-		PlanPhase.erg(Wl.WORK, 80, 120, "Wave 1").with_lap(),
-		PlanPhase.erg(Wl.RECOVERY, 55, 60, "Rest"),
-		PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "").with_lap(),
-	])
+	var plan := (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up").with_ramp(65),
+				PlanPhase.erg(Wl.WORK, 80, 120, "Wave 1").with_lap(),
+				PlanPhase.erg(Wl.RECOVERY, 55, 60, "Rest"),
+				PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "").with_lap(),
+			]
+		)
+	)
 	plan.add(PlanPhase.erg(Wl.COOLDOWN, 50, 180, ""))
 	plan.cooldown_appended = true
 	return plan
@@ -721,7 +814,9 @@ func test_start_phase_forwards_and_laps() -> void:
 	var m := Fakes.RecordingMock.new()
 	autofree(m)
 	var rec := Fakes.FakeRecorder.new()
-	var r := _rider(m, {"recorder": rec, "game_id": "siege", "content_id": "fort", "utc_start_unix": 1792000000})
+	var r := _rider(
+		m, {"recorder": rec, "game_id": "siege", "content_id": "fort", "utc_start_unix": 1792000000}
+	)
 	assert_eq(rec.started, ["siege", "fort", 1792000000, 0.0])
 	assert_eq(m.phases, [-1] as Array[int], "setup resets a reused mock's phase")
 	m.phases.clear()
@@ -756,7 +851,9 @@ func test_cooldown_clears_the_bands() -> void:
 func test_cooldown_lap_by_kind_without_the_flag() -> void:
 	var rec := Fakes.FakeRecorder.new()
 	var r := _rider(_mock(), {"recorder": rec})
-	var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 300), PlanPhase.erg(Wl.COOLDOWN, 50, 180)])
+	var plan := EffortPlan.of(
+		[PlanPhase.erg(Wl.WARMUP, 50, 300), PlanPhase.erg(Wl.COOLDOWN, 50, 180)]
+	)
 	r.set_plan(plan)
 	r.start_phase(1)
 	assert_eq(rec.laps, [["Cool-down", 0.0]])
@@ -773,11 +870,16 @@ func test_game_lap_marker() -> void:
 func test_lap_names_translate_strings_keys() -> void:
 	var rec := Fakes.FakeRecorder.new()
 	var r := _rider(_mock(), {"recorder": rec})
-	var plan := EffortPlan.of([
-		PlanPhase.erg(Wl.WARMUP, 50, 300, "CORE_FTP_TITLE").with_lap(),
-		PlanPhase.erg(Wl.WORK, 70, 60, "Wave 2").with_lap(),
-		PlanPhase.erg(Wl.WORK, 70, 60).with_lap(),
-	])
+	var plan := (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.erg(Wl.WARMUP, 50, 300, "CORE_FTP_TITLE").with_lap(),
+				PlanPhase.erg(Wl.WORK, 70, 60, "Wave 2").with_lap(),
+				PlanPhase.erg(Wl.WORK, 70, 60).with_lap(),
+			]
+		)
+	)
 	r.set_plan(plan)
 	r.start_phase(0)
 	r.start_phase(1)
@@ -787,8 +889,16 @@ func test_lap_names_translate_strings_keys() -> void:
 	var names: Array = []
 	for l: Array in rec.laps:
 		names.append(l[0])
-	assert_eq(names, [tr("CORE_FTP_TITLE"), "Wave 2", tr("CORE_LAP_PHASE").replace("{n}", "3"),
-		tr("CORE_LAP_COOLDOWN"), "Boss 1"])
+	assert_eq(
+		names,
+		[
+			tr("CORE_FTP_TITLE"),
+			"Wave 2",
+			tr("CORE_LAP_PHASE").replace("{n}", "3"),
+			tr("CORE_LAP_COOLDOWN"),
+			"Boss 1"
+		]
+	)
 	assert_ne(tr("CORE_LAP_PHASE"), "CORE_LAP_PHASE", "the key is in core.csv")
 	assert_ne(names[0], "CORE_FTP_TITLE", "a strings-key label becomes text in the FIT lap name")
 
@@ -939,7 +1049,9 @@ func test_live_riders_forget_freed_riders() -> void:
 	a.free()
 	live = LocalRider.live_riders()
 	assert_eq(live.has(b), true)
-	assert_eq(live.size(), live.filter(func(x: LocalRider) -> bool: return is_instance_valid(x)).size())
+	assert_eq(
+		live.size(), live.filter(func(x: LocalRider) -> bool: return is_instance_valid(x)).size()
+	)
 	b.free()
 	assert_false(LocalRider.live_riders().any(func(x: LocalRider) -> bool: return x == null))
 

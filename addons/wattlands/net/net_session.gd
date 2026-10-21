@@ -80,10 +80,19 @@ const STATE_ERROR := "error"
 ## Game messages a client may send to the host; every other type travels host -> clients.
 const CLIENT_TO_HOST: Array[String] = ["player_info", "ready", "telemetry", "clock_ping"]
 ## Relay refusals that end a join or a session (Transport.disconnected reasons).
-const REFUSALS: Array[String] = ["room_not_found", "room_full", "version_mismatch",
-	"rate_limited", "bad_request", "session_in_progress"]
-const COALESCED_KINDS: Array[String] = [NetMessages.DIRECTIVE_COURSE_GRADE,
-	NetMessages.DIRECTIVE_CADENCE_BAND, NetMessages.DIRECTIVE_POWER_BAND]
+const REFUSALS: Array[String] = [
+	"room_not_found",
+	"room_full",
+	"version_mismatch",
+	"rate_limited",
+	"bad_request",
+	"session_in_progress"
+]
+const COALESCED_KINDS: Array[String] = [
+	NetMessages.DIRECTIVE_COURSE_GRADE,
+	NetMessages.DIRECTIVE_CADENCE_BAND,
+	NetMessages.DIRECTIVE_POWER_BAND
+]
 const COALESCE_S := 0.1
 ## A coalesced directive waiting on a clock that stands still goes out after this many polls.
 const FROZEN_CLOCK_POLLS := 3
@@ -356,7 +365,7 @@ func _join(code: String) -> void:
 	_explicit_leave = false
 	_ensure_local_info()
 	if c == "":
-		push_warning("NetSession: \"%s\" is not a room code" % code)
+		push_warning('NetSession: "%s" is not a room code' % code)
 		_refuse("room_not_found")
 		return
 	room_code = c
@@ -409,9 +418,15 @@ func set_ready(ready_flag: bool) -> void:
 		var issue := ready_block_reason()
 		if issue != "":
 			_ready_wanted = false
-			ready_refused.emit(issue, _ready_text(issue, str(lobby.get("game_id", "")),
-				_version_str(_local_info.get("games", {}).get(lobby.get("game_id", ""), "")),
-				_version_str(lobby.get("game_version", ""))))
+			ready_refused.emit(
+				issue,
+				_ready_text(
+					issue,
+					str(lobby.get("game_id", "")),
+					_version_str(_local_info.get("games", {}).get(lobby.get("game_id", ""), "")),
+					_version_str(lobby.get("game_version", ""))
+				)
+			)
 			return
 	if _in_room():
 		_send(host_peer, Protocol.game_msg("ready", {"ready": ready_flag}))
@@ -444,7 +459,7 @@ func set_scaling(mode: String) -> void:
 	if not _require_authority("set_scaling"):
 		return
 	if not Wl.SCALING_MODES.has(mode):
-		push_error("NetSession.set_scaling: unknown scaling mode \"%s\"" % mode)
+		push_error('NetSession.set_scaling: unknown scaling mode "%s"' % mode)
 		return
 	_scaling = mode
 	if _local_profile != null:
@@ -537,8 +552,13 @@ func lobby_slots() -> Array[PlayerSlot]:
 	var popts: Variant = lobby.get("player_options", {})
 	var scaling := str(lobby.get("scaling", Wl.FAIR_FTP))
 	var arr: Array = (players as Array).duplicate()
-	arr.sort_custom(func(a: Variant, b: Variant) -> bool:
-		return int((a as Dictionary).get("slot_index", 0)) < int((b as Dictionary).get("slot_index", 0)))
+	arr.sort_custom(
+		func(a: Variant, b: Variant) -> bool:
+			return (
+				int((a as Dictionary).get("slot_index", 0))
+				< int((b as Dictionary).get("slot_index", 0))
+			)
+	)
 	for p: Variant in arr:
 		if not p is Dictionary:
 			continue
@@ -693,6 +713,7 @@ func queued_frames() -> int:
 
 # --- additions: time ---------------------------------------------------------------------
 
+
 ## Advance this session's platform time by dt and poll (the GameHost calls it once per
 ## platform step with Wl.SIM_DT). With auto_poll on (the autoload, which ticks itself from
 ## _process) it only polls.
@@ -720,6 +741,7 @@ func local_time() -> float:
 
 # --- additions: lobby ----------------------------------------------------------------------
 
+
 ## True on the host, in the offline lobby and before any room exists (lobby settings made
 ## then carry into host_room()); false on clients.
 func is_authority() -> bool:
@@ -729,8 +751,12 @@ func is_authority() -> bool:
 ## Build player_info from a RiderProfile and keep it current: p_eff_per_w follows the
 ## lobby's scaling mode (re-sent when the host changes it). Empty `games` means the
 ## registry's installed games ({id: version}).
-func set_local_profile(profile: RiderProfile, games: Dictionary = {}, player_options: Dictionary = {},
-		trainer: String = "") -> void:
+func set_local_profile(
+	profile: RiderProfile,
+	games: Dictionary = {},
+	player_options: Dictionary = {},
+	trainer: String = ""
+) -> void:
 	_local_profile = profile
 	_local_profile_games = games.duplicate(true)
 	_local_profile_trainer = trainer
@@ -740,8 +766,13 @@ func set_local_profile(profile: RiderProfile, games: Dictionary = {}, player_opt
 
 
 ## player_info fields from a profile for scaling `mode` (weight only if shared).
-static func player_info_from_profile(profile: RiderProfile, mode: String = Wl.FAIR_FTP,
-		games: Dictionary = {}, player_options: Dictionary = {}, trainer: String = "") -> Dictionary:
+static func player_info_from_profile(
+	profile: RiderProfile,
+	mode: String = Wl.FAIR_FTP,
+	games: Dictionary = {},
+	player_options: Dictionary = {},
+	trainer: String = ""
+) -> Dictionary:
 	var by_mode := {
 		Wl.FAIR_FTP: profile.p_eff_per_w(Wl.FAIR_FTP),
 		Wl.RAW: 1.0,
@@ -855,6 +886,7 @@ func bot_ftp() -> int:
 
 # --- additions: reconnect and rooms --------------------------------------------------------
 
+
 ## Re-join the current room with the reconnect token now (also what auto_reconnect does).
 func rejoin() -> void:
 	if room_code == "" or transport == null:
@@ -894,6 +926,7 @@ func last_hosted_code() -> String:
 
 
 # --- additions: LAN rooms (P1, BRIEF 5.4) -------------------------------------------------
+
 
 ## P1: the LAN rooms heard recently, sorted by code: [{code, name, game_id, address, port,
 ## build}]. `address` and `port` are where the room's host (a LanTransport) serves the relay
@@ -938,9 +971,16 @@ func join_lan(room: Dictionary) -> void:
 	stop_lan_discovery()
 	var code := RoomCode.normalize(str(room.get("code", "")))
 	var address := str(room.get("address", "")).strip_edges()
-	var p := int(room.get("port", 0)) if (room.get("port") is int or room.get("port") is float) else 0
+	var p := (
+		int(room.get("port", 0)) if (room.get("port") is int or room.get("port") is float) else 0
+	)
 	if code == "" or address == "" or p <= 0 or p > 65535:
-		push_warning("NetSession: join_lan needs a room from lan_rooms() with code, address and port; got %s" % JSON.stringify(room))
+		push_warning(
+			(
+				"NetSession: join_lan needs a room from lan_rooms() with code, address and port; got %s"
+				% JSON.stringify(room)
+			)
+		)
 		_join("")
 		return
 	_restore_relay_transport()
@@ -1005,11 +1045,19 @@ func _lan_list() -> Array[Dictionary]:
 	codes.sort()
 	for code: Variant in codes:
 		var r: Dictionary = _lan.rooms[code]
-		out.append({
-			"code": str(r.get("code", code)), "name": str(r.get("name", "")),
-			"game_id": str(r.get("game_id", "")), "address": str(r.get("ip", "")),
-			"port": int(r.get("port", 0)), "build": str(r.get("build", "")),
-		})
+		(
+			out
+			. append(
+				{
+					"code": str(r.get("code", code)),
+					"name": str(r.get("name", "")),
+					"game_id": str(r.get("game_id", "")),
+					"address": str(r.get("ip", "")),
+					"port": int(r.get("port", 0)),
+					"build": str(r.get("build", "")),
+				}
+			)
+		)
 	return out
 
 
@@ -1023,6 +1071,7 @@ func _publish_lan_rooms() -> void:
 
 
 # --- additions: snapshots ----------------------------------------------------------------
+
 
 ## The latest snapshot message ({game_id, seq, state, ...}): received (client) or sent
 ## (host); {} if none.
@@ -1085,6 +1134,7 @@ func set_game_int_fields(fields: Dictionary) -> void:
 
 # --- additions: strings ------------------------------------------------------------------
 
+
 ## The strings key (content/strings/net.csv) for a refusal or end reason.
 static func reason_key(reason: String) -> String:
 	return "NET_REFUSED_" + reason.to_upper()
@@ -1099,6 +1149,7 @@ static func reason_text(reason: String) -> String:
 
 
 # --- transport events ----------------------------------------------------------------------
+
 
 func _on_connected() -> void:
 	if _explicit_leave or role == "":
@@ -1145,7 +1196,12 @@ func _on_disconnected(reason: String) -> void:
 	if _explicit_leave:
 		return
 	_drop_queue()
-	if _host_retry_max > 0 and role == Wl.HOST and not _ever_connected and CODE_REFUSALS.has(reason):
+	if (
+		_host_retry_max > 0
+		and role == Wl.HOST
+		and not _ever_connected
+		and CODE_REFUSALS.has(reason)
+	):
 		_host_again_without_code(reason)
 		return
 	_host_retry_max = 0
@@ -1251,7 +1307,7 @@ func _on_message(from: int, data: Dictionary) -> void:
 			if _refused_peers.has(from):
 				return
 			if not CLIENT_TO_HOST.has(type):
-				push_warning("NetSession: host ignored \"%s\" from peer %d" % [type, from])
+				push_warning('NetSession: host ignored "%s" from peer %d' % [type, from])
 				_count("ignored")
 				return
 			if session_started and not _session_players.has(from):
@@ -1268,7 +1324,7 @@ func _on_message(from: int, data: Dictionary) -> void:
 				_sanitize_telemetry(from, data)
 	elif role == Wl.CLIENT:
 		if (from != host_peer and from != local_peer) or CLIENT_TO_HOST.has(type):
-			push_warning("NetSession: client ignored \"%s\" from peer %d" % [type, from])
+			push_warning('NetSession: client ignored "%s" from peer %d' % [type, from])
 			_count("ignored")
 			return
 		match type:
@@ -1334,9 +1390,14 @@ func _reconcile_after_reclaim() -> void:
 
 # --- host handlers ----------------------------------------------------------------------
 
+
 func _on_player_info(from: int, data: Dictionary) -> void:
-	if from != local_peer and not session_started and not _lobby_humans().has(from) \
-			and _lobby_humans().size() >= max_players:
+	if (
+		from != local_peer
+		and not session_started
+		and not _lobby_humans().has(from)
+		and _lobby_humans().size() >= max_players
+	):
 		# Several peers joined before any of them sent player_info: the first ones fill the
 		# lobby, the rest are refused.
 		_refuse_peer(from, "room_full")
@@ -1356,8 +1417,18 @@ func _on_ready(from: int, data: Dictionary) -> void:
 		var issue := _game_issue(from)
 		if issue != "":
 			_ready_flags[from] = false
-			_send(from, Protocol.game_msg("refused", {"reason": issue, "scope": "ready",
-				"game_id": _game_id, "game_version": _game_version}))
+			_send(
+				from,
+				Protocol.game_msg(
+					"refused",
+					{
+						"reason": issue,
+						"scope": "ready",
+						"game_id": _game_id,
+						"game_version": _game_version
+					}
+				)
+			)
 			_publish_lobby()
 			return
 	_ready_flags[from] = want
@@ -1383,8 +1454,12 @@ func _sanitize_telemetry(from: int, data: Dictionary) -> void:
 			continue
 		kept.append(it)
 	if dropped > 0:
-		push_warning("NetSession: dropped %d intents from peer %d (max %d per telemetry, %d bytes each)"
-			% [dropped, from, MAX_INTENTS, MAX_INTENT_BYTES])
+		push_warning(
+			(
+				"NetSession: dropped %d intents from peer %d (max %d per telemetry, %d bytes each)"
+				% [dropped, from, MAX_INTENTS, MAX_INTENT_BYTES]
+			)
+		)
 		stats["intents_dropped"] = int(stats.get("intents_dropped", 0)) + dropped
 		tm["intents"] = kept
 
@@ -1404,6 +1479,7 @@ func _refuse_peer(peer: int, reason: String) -> void:
 
 # --- client handlers ----------------------------------------------------------------------
 
+
 func _on_lobby_state(data: Dictionary) -> void:
 	lobby = data
 	var started := bool(data.get("started", session_started))
@@ -1411,7 +1487,10 @@ func _on_lobby_state(data: Dictionary) -> void:
 		# A session began or ended: its snapshot seqs start over.
 		clear_snapshots()
 	session_started = started
-	if _local_profile != null and str(_local_info.get("p_eff_mode", "")) != str(data.get("scaling", Wl.FAIR_FTP)):
+	if (
+		_local_profile != null
+		and str(_local_info.get("p_eff_mode", "")) != str(data.get("scaling", Wl.FAIR_FTP))
+	):
 		var po: Variant = _local_info.get("player_options", {})
 		_local_info = _normalize_info(_info_from_local_profile())
 		_local_info["player_options"] = po
@@ -1426,7 +1505,9 @@ func _on_refused_msg(data: Dictionary) -> void:
 		_ready_wanted = false
 		var gid := str(data.get("game_id", lobby.get("game_id", "")))
 		var mine := _version_str((_local_info.get("games", {}) as Dictionary).get(gid, ""))
-		ready_refused.emit(reason, _ready_text(reason, gid, mine, _version_str(data.get("game_version", ""))))
+		ready_refused.emit(
+			reason, _ready_text(reason, gid, mine, _version_str(data.get("game_version", "")))
+		)
 		game_message.emit(host_peer, data)
 		return
 	game_message.emit(host_peer, data)
@@ -1484,6 +1565,7 @@ func _send_player_info() -> void:
 
 # --- lobby model ---------------------------------------------------------------------------
 
+
 func _publish_lobby() -> void:
 	if not is_authority() or local_peer == 0:
 		return
@@ -1529,20 +1611,26 @@ func _publish_lobby() -> void:
 	settings["min_players"] = min_players
 	settings["bots_allowed"] = bots_allowed
 	_lobby_seq += 1
-	var msg := Protocol.game_msg("lobby_state", {
-		"seq": _lobby_seq,
-		"host": host_peer,
-		"started": session_started,
-		"game_id": _game_id,
-		"game_version": _game_version,
-		"content_id": _content_id,
-		"scaling": _scaling,
-		"settings": settings,
-		"players": players,
-		"player_options": popts,
-		"ready_flags": ready_flags,
-		"trainers": trainers,
-	})
+	var msg := (
+		Protocol
+		. game_msg(
+			"lobby_state",
+			{
+				"seq": _lobby_seq,
+				"host": host_peer,
+				"started": session_started,
+				"game_id": _game_id,
+				"game_version": _game_version,
+				"content_id": _content_id,
+				"scaling": _scaling,
+				"settings": settings,
+				"players": players,
+				"player_options": popts,
+				"ready_flags": ready_flags,
+				"trainers": trainers,
+			}
+		)
+	)
 	_lobby_text = Protocol.encode(msg)
 	lobby = Protocol.decode(_lobby_text)
 	_lobby_wire = _lobby_text if _scaling != Wl.WKG else Protocol.encode(_redacted_lobby(msg))
@@ -1699,12 +1787,15 @@ func _require_authority(what: String) -> bool:
 
 # --- player info ---------------------------------------------------------------------------
 
+
 func _ensure_local_info() -> void:
 	if not _local_info.is_empty():
 		return
 	var profile := _settings_profile()
 	if profile != null:
-		_local_info = _normalize_info(player_info_from_profile(profile, _scaling, _registry_games()))
+		_local_info = _normalize_info(
+			player_info_from_profile(profile, _scaling, _registry_games())
+		)
 	else:
 		_local_info = _normalize_info({"games": _registry_games()})
 
@@ -1713,16 +1804,25 @@ func _info_from_local_profile() -> Dictionary:
 	var mode := _scaling if is_authority() else str(lobby.get("scaling", Wl.FAIR_FTP))
 	var po: Variant = _local_info.get("player_options", {})
 	var games := _local_profile_games if not _local_profile_games.is_empty() else _registry_games()
-	var info := player_info_from_profile(_local_profile, mode, games,
-		po if po is Dictionary else {}, _local_profile_trainer)
+	var info := player_info_from_profile(
+		_local_profile, mode, games, po if po is Dictionary else {}, _local_profile_trainer
+	)
 	return info
 
 
 static func _normalize_info(info: Dictionary) -> Dictionary:
 	var d := {
-		"name": "Rider", "color": "d55e00", "ftp": 200, "ftp_verified": false,
-		"p_eff_per_w": 1.25, "preferred_cadence_rpm": 90.0, "haptics_on": true,
-		"haptic_intensity": 0.7, "autopilot": false, "player_options": {}, "games": {},
+		"name": "Rider",
+		"color": "d55e00",
+		"ftp": 200,
+		"ftp_verified": false,
+		"p_eff_per_w": 1.25,
+		"preferred_cadence_rpm": 90.0,
+		"haptics_on": true,
+		"haptic_intensity": 0.7,
+		"autopilot": false,
+		"player_options": {},
+		"games": {},
 	}
 	for k: Variant in info.keys():
 		if k == "type" or k == "v":
@@ -1763,7 +1863,9 @@ func _registry_games() -> Dictionary:
 	if list is Array:
 		for m: Variant in list:
 			if m is Dictionary and (m as Dictionary).has("id"):
-				out[str((m as Dictionary)["id"])] = _version_str((m as Dictionary).get("version", ""))
+				out[str((m as Dictionary)["id"])] = _version_str(
+					(m as Dictionary).get("version", "")
+				)
 	return out
 
 
@@ -1802,6 +1904,7 @@ static func _ready_text(reason: String, game_id: String, mine: String, theirs: S
 
 # --- sending -------------------------------------------------------------------------------
 
+
 func _send(to: int, data: Dictionary) -> bool:
 	var d := data
 	if not d.has("v"):
@@ -1809,7 +1912,12 @@ func _send(to: int, data: Dictionary) -> bool:
 		d["v"] = NetMessages.VERSION
 	var err := Protocol.check_game(d)
 	if err != "":
-		push_error("NetSession: refusing to send an invalid \"%s\" message (%s)" % [str(d.get("type", "")), err])
+		push_error(
+			(
+				'NetSession: refusing to send an invalid "%s" message (%s)'
+				% [str(d.get("type", "")), err]
+			)
+		)
 		_count("invalid_sends")
 		return false
 	if not _in_room():
@@ -1829,10 +1937,14 @@ func _send_text(to: int, type: String, text: String, key: String = "") -> bool:
 	if not _in_room():
 		_count("dropped_offline")
 		return false
-	var size := text.to_utf8_buffer().size() + ("{\"t\":\"msg\",\"to\":%d,\"d\":}" % to).length()
+	var size := text.to_utf8_buffer().size() + ('{"t":"msg","to":%d,"d":}' % to).length()
 	if size > NetMessages.MAX_MESSAGE_BYTES:
-		push_warning("NetSession: \"%s\" message of %d bytes is over the %d-byte limit; dropped"
-			% [type, size, NetMessages.MAX_MESSAGE_BYTES])
+		push_warning(
+			(
+				'NetSession: "%s" message of %d bytes is over the %d-byte limit; dropped'
+				% [type, size, NetMessages.MAX_MESSAGE_BYTES]
+			)
+		)
 		_count("oversize_dropped")
 		if type == "snapshot":
 			_count("oversize_snapshots")
@@ -1918,7 +2030,10 @@ func _drop_queue(peer: int = -1) -> void:
 func _coalesce_send(to: int, kind: String, d: Dictionary) -> bool:
 	var key := "%d:%s" % [to, kind]
 	var now := _clock_now()
-	if not _co_pending.has(key) and (not _co_last.has(key) or now - float(_co_last[key]) >= COALESCE_S - 1e-9):
+	if (
+		not _co_pending.has(key)
+		and (not _co_last.has(key) or now - float(_co_last[key]) >= COALESCE_S - 1e-9)
+	):
 		_co_last[key] = now
 		return _send_text(to, "directive", Protocol.encode(d), "co:" + key)
 	if _co_pending.has(key):
@@ -1948,8 +2063,9 @@ func _flush_coalesced(peer: int, due_only: bool) -> void:
 			continue
 		if due_only:
 			var last := float(_co_last.get(key, -INF))
-			var frozen := not auto_poll and now <= float(e[3]) \
-				and _polls - int(e[2]) >= FROZEN_CLOCK_POLLS
+			var frozen := (
+				not auto_poll and now <= float(e[3]) and _polls - int(e[2]) >= FROZEN_CLOCK_POLLS
+			)
 			if now - last < COALESCE_S - 1e-9 and not frozen:
 				continue
 		_co_pending.erase(key)
@@ -1969,7 +2085,9 @@ func _deliver_self(data: Dictionary) -> void:
 		d = data.duplicate()
 		d["v"] = NetMessages.VERSION
 	if Protocol.check_game(d) != "":
-		push_error("NetSession: refusing to deliver an invalid \"%s\" message" % str(d.get("type", "")))
+		push_error(
+			'NetSession: refusing to deliver an invalid "%s" message' % str(d.get("type", ""))
+		)
 		_count("invalid_sends")
 		return
 	_self_inbox.append(Protocol.encode(d))
@@ -1987,6 +2105,7 @@ func _drain_self_inbox() -> void:
 
 
 # --- connection helpers ------------------------------------------------------------------
+
 
 func _ensure_transport() -> void:
 	if transport != null:
@@ -2007,7 +2126,10 @@ func _disconnect_transport(t: Transport) -> void:
 		t.peer_left.disconnect(_on_peer_left)
 	if t.message.is_connected(_on_message):
 		t.message.disconnect(_on_message)
-	if t.has_signal("protocol_mismatch") and t.is_connected("protocol_mismatch", _on_protocol_mismatch):
+	if (
+		t.has_signal("protocol_mismatch")
+		and t.is_connected("protocol_mismatch", _on_protocol_mismatch)
+	):
 		t.disconnect("protocol_mismatch", _on_protocol_mismatch)
 	if t.has_signal("relay_error") and t.is_connected("relay_error", _on_relay_error):
 		t.disconnect("relay_error", _on_relay_error)
@@ -2046,7 +2168,12 @@ func _reconnect_step() -> void:
 func _host_again_without_code(reason: String) -> void:
 	var n := _host_retry_max
 	_host_retry_max = 0
-	push_warning("NetSession: the relay refused the requested room code (%s); hosting with a new code" % reason)
+	push_warning(
+		(
+			"NetSession: the relay refused the requested room code (%s); hosting with a new code"
+			% reason
+		)
+	)
 	if transport is RelayClientTransport:
 		(transport as RelayClientTransport).requested_code = ""
 	_set_state(STATE_CONNECTING, "host")
@@ -2146,12 +2273,24 @@ func _count(key: String) -> void:
 
 
 func _reset_stats() -> void:
-	stats = {"sent": 0, "received": 0, "dropped_offline": 0, "oversize_dropped": 0,
-		"oversize_snapshots": 0, "stale_snapshots": 0, "invalid_sends": 0, "ignored": 0,
-		"intents_dropped": 0, "coalesced": 0, "superseded": 0, "queued_max": 0}
+	stats = {
+		"sent": 0,
+		"received": 0,
+		"dropped_offline": 0,
+		"oversize_dropped": 0,
+		"oversize_snapshots": 0,
+		"stale_snapshots": 0,
+		"invalid_sends": 0,
+		"ignored": 0,
+		"intents_dropped": 0,
+		"coalesced": 0,
+		"superseded": 0,
+		"queued_max": 0
+	}
 
 
 # --- persistence ---------------------------------------------------------------------------
+
 
 func _token_file() -> String:
 	return token_path if token_path != "" else Paths.reconnect_token_path()
@@ -2164,7 +2303,9 @@ func _recent_rooms_path() -> String:
 func _save_token() -> void:
 	if not persist_token or room_code == "" or _token == "":
 		return
-	_write_json(_token_file(), {"code": room_code, "token": _token, "peer": local_peer, "role": role})
+	_write_json(
+		_token_file(), {"code": room_code, "token": _token, "peer": local_peer, "role": role}
+	)
 
 
 func _load_token_for(code: String) -> String:

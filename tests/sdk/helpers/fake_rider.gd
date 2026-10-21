@@ -46,7 +46,13 @@ var t: float = 0.0
 var _fake_phase: int = -1
 
 
-func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
+func setup(
+	p_peer_id: int,
+	p_profile: RiderProfile,
+	p_slot: PlayerSlot,
+	p_device: TrainerDevice,
+	p_options: Dictionary = {}
+) -> void:
 	peer_id = p_peer_id
 	profile = p_profile
 	slot = p_slot
@@ -69,13 +75,27 @@ func start_phase(index: int) -> void:
 func apply_directive(d: EffortDirective) -> Dictionary:
 	directives.append(d)
 	var rec := {
-		"id": d.id, "kind": "request", "requested": d.to_dict(),
-		"applied": {} if refuse_reason != "" else d.to_dict(), "clamped_by": [],
-		"refused": refuse_reason != "", "reason": refuse_reason, "t": t,
+		"id": d.id,
+		"kind": "request",
+		"requested": d.to_dict(),
+		"applied": {} if refuse_reason != "" else d.to_dict(),
+		"clamped_by": [],
+		"refused": refuse_reason != "",
+		"reason": refuse_reason,
+		"t": t,
 	}
 	if bare_acks:
-		ack_queue.append({"id": rec["id"], "kind": rec["kind"], "applied": (rec["applied"] as Dictionary).duplicate(true),
-			"clamped_by": [], "refused": rec["refused"], "reason": rec["reason"], "dropped": []})
+		ack_queue.append(
+			{
+				"id": rec["id"],
+				"kind": rec["kind"],
+				"applied": (rec["applied"] as Dictionary).duplicate(true),
+				"clamped_by": [],
+				"refused": rec["refused"],
+				"reason": rec["reason"],
+				"dropped": []
+			}
+		)
 	else:
 		ack_queue.append(rec.duplicate(true))
 	return rec
@@ -139,7 +159,11 @@ func telemetry() -> Telemetry:
 	tm.mode = phase.mode if phase != null else Wl.ERG
 	if tm.mode == Wl.ERG and phase != null:
 		tm.applied_target_w = int(floor(phase.target_pct * ftp / 100.0))
-	tm.power_w = float(tm.applied_target_w) if (follow_target and tm.mode == Wl.ERG and phase != null) else power_w
+	tm.power_w = (
+		float(tm.applied_target_w)
+		if (follow_target and tm.mode == Wl.ERG and phase != null)
+		else power_w
+	)
 	if game_paused and follow_target:
 		tm.power_w = power_w
 	tm.cadence_rpm = cadence_rpm

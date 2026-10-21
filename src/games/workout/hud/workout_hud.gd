@@ -24,17 +24,26 @@ const WARMUP_S := 300.0
 
 
 static func spec() -> HudSpec:
-	return HudSpec.new() \
-		.add(HudSpec.TIMELINE, HudSpec.TOP) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w", "label": "WORKOUT_HUD_WATTS"}) \
-		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": READOUT_TIB, "label": "WORKOUT_HUD_IN_BAND"}) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
-		.add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT) \
-		.toasts_at(HudSpec.TOP_LEFT) \
-		.banners_at(HudSpec.TOP)
+	return (
+		HudSpec
+		. new()
+		. add(HudSpec.TIMELINE, HudSpec.TOP)
+		. add(
+			HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w", "label": "WORKOUT_HUD_WATTS"}
+		)
+		. add(
+			HudSpec.READOUT,
+			HudSpec.TOP_RIGHT,
+			{"source": "custom", "id": READOUT_TIB, "label": "WORKOUT_HUD_IN_BAND"}
+		)
+		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
+		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
+		. add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
+		. toasts_at(HudSpec.TOP_LEFT)
+		. banners_at(HudSpec.TOP)
+	)
 
 
 ## The power band (W) for `rider` in SIM phase `index`, or [] for none:
@@ -49,7 +58,9 @@ static func band_for(state: WorkoutState, index: int, rider: WorkoutRiderState) 
 		if state.phase_start_s(index) < WARMUP_S or not WorkoutSession.is_sprint(p):
 			return []
 		return [float(SPRINT_BAND[0]) * rider.ftp, float(SPRINT_BAND[1]) * rider.ftp]
-	return [float(state.band_pct[0]) / 100.0 * rider.ftp, float(state.band_pct[1]) / 100.0 * rider.ftp]
+	return [
+		float(state.band_pct[0]) / 100.0 * rider.ftp, float(state.band_pct[1]) / 100.0 * rider.ftp
+	]
 
 
 ## Banner key and args for the start of phase `index` ({} for none: the cool-down has the
@@ -67,7 +78,11 @@ static func interval_banner(state: WorkoutState, index: int, strings: GameString
 		args["pct"] = int(round(p.target_pct))
 		return {"key": "WORKOUT_BANNER_ERG", "args": args}
 	if p.kind == Wl.FREE:
-		return {"key": "WORKOUT_BANNER_SPRINT" if WorkoutSession.is_sprint(p) else "WORKOUT_BANNER_FREE", "args": args}
+		return {
+			"key":
+			"WORKOUT_BANNER_SPRINT" if WorkoutSession.is_sprint(p) else "WORKOUT_BANNER_FREE",
+			"args": args
+		}
 	args["lo"] = int(round(float(state.band_pct[0])))
 	args["hi"] = int(round(float(state.band_pct[1])))
 	return {"key": "WORKOUT_BANNER_ROLLING", "args": args}

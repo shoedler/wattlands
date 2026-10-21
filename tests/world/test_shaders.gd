@@ -15,6 +15,7 @@ func _uniform_names(sh: Shader) -> Array[String]:
 
 # --- PaletteSwap ---------------------------------------------------------------------------
 
+
 func test_palette_swap_shader_loads() -> void:
 	var sh := PaletteSwap.shader()
 	assert_not_null(sh)
@@ -38,7 +39,9 @@ func test_make_material_sets_ramps() -> void:
 
 func test_apply_sets_item_material() -> void:
 	var s: Sprite2D = autofree(Sprite2D.new())
-	var mat := PaletteSwap.apply(s, PackedColorArray(KEYS), PackedColorArray([Color.RED, Color.DARK_RED]))
+	var mat := PaletteSwap.apply(
+		s, PackedColorArray(KEYS), PackedColorArray([Color.RED, Color.DARK_RED])
+	)
 	assert_eq(s.material, mat)
 
 
@@ -113,12 +116,25 @@ func test_swap_image_recolors_only_keys() -> void:
 
 # --- SpriteWobble ---------------------------------------------------------------------------
 
+
 func test_sprite_wobble_shader_loads() -> void:
 	var sh := SpriteWobble.shader()
 	assert_not_null(sh)
 	assert_eq(sh.get_mode(), Shader.MODE_CANVAS_ITEM)
 	var names := _uniform_names(sh)
-	for n: String in ["amplitude_px", "wavelength_px", "frequency_hz", "phase", "vertical", "falloff_from", "falloff_to", "pixel_snap", "use_engine_time", "time_s", "margin_px"]:
+	for n: String in [
+		"amplitude_px",
+		"wavelength_px",
+		"frequency_hz",
+		"phase",
+		"vertical",
+		"falloff_from",
+		"falloff_to",
+		"pixel_snap",
+		"use_engine_time",
+		"time_s",
+		"margin_px"
+	]:
 		assert_has(names, n)
 
 
@@ -146,10 +162,18 @@ func test_presets() -> void:
 	var m := SpriteWobble.fish_tail(fish, true)
 	assert_eq(fish.material, m)
 	assert_eq(m.get_shader_parameter("vertical"), true)
-	assert_lt(float(m.get_shader_parameter("falloff_from")), float(m.get_shader_parameter("falloff_to")), "tail on the right")
+	assert_lt(
+		float(m.get_shader_parameter("falloff_from")),
+		float(m.get_shader_parameter("falloff_to")),
+		"tail on the right"
+	)
 	var right: Sprite2D = autofree(Sprite2D.new())
 	var m2 := SpriteWobble.fish_tail(right, false)
-	assert_gt(float(m2.get_shader_parameter("falloff_from")), float(m2.get_shader_parameter("falloff_to")), "tail on the left")
+	assert_gt(
+		float(m2.get_shader_parameter("falloff_from")),
+		float(m2.get_shader_parameter("falloff_to")),
+		"tail on the left"
+	)
 	var water: Sprite2D = autofree(Sprite2D.new())
 	var m3 := SpriteWobble.water(water)
 	assert_eq(m3.get_shader_parameter("vertical"), false)
@@ -178,7 +202,9 @@ func test_displacement_reference() -> void:
 			var d := SpriteWobble.displacement(float(x), t, 2.0, 16.0, 1.0)
 			assert_eq(d, roundf(d), "pixel snapped")
 			assert_true(absf(d) <= 2.0, "bounded by the amplitude")
-	assert_eq(SpriteWobble.displacement(5.0, 0.3, 2.0, 16.0, 1.0, 0.0, 0.0), 0.0, "no wobble at weight 0")
+	assert_eq(
+		SpriteWobble.displacement(5.0, 0.3, 2.0, 16.0, 1.0, 0.0, 0.0), 0.0, "no wobble at weight 0"
+	)
 	var a := SpriteWobble.displacement(3.0, 0.2, 3.0, 10.0, 0.5, 0.0, 1.0, false)
 	var b := SpriteWobble.displacement(13.0, 0.2, 3.0, 10.0, 0.5, 0.0, 1.0, false)
 	var c := SpriteWobble.displacement(3.0, 2.2, 3.0, 10.0, 0.5, 0.0, 1.0, false)
@@ -187,6 +213,7 @@ func test_displacement_reference() -> void:
 
 
 # --- DitherDissolve --------------------------------------------------------------------------
+
 
 func test_dither_dissolve_shader_loads() -> void:
 	var sh := DitherDissolve.shader()

@@ -43,15 +43,31 @@ func _session(platform_pause: bool) -> Dictionary:
 	var bus := Kit.new_bus(_root, "PauseBus")
 	var host := GameHost.new()
 	_root.add_child(host)
-	var err := host.setup({
-		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO,
-		"players": [slot] as Array[PlayerSlot], "local_riders": {1: rider}, "local_peer": 1,
-		"bus": bus, "registry": Kit.registry(_root), "headless": true, "realtime": false,
-		"record_rides": false, "platform_pause": platform_pause,
-		"progress_path": _tmp.path_join("progress.json"),
-	})
+	var err := (
+		host
+		. setup(
+			{
+				"game_id": "fx_solo",
+				"content_id": "tiny",
+				"seed": 7,
+				"role": Wl.SOLO,
+				"players": [slot] as Array[PlayerSlot],
+				"local_riders": {1: rider},
+				"local_peer": 1,
+				"bus": bus,
+				"registry": Kit.registry(_root),
+				"headless": true,
+				"realtime": false,
+				"record_rides": false,
+				"platform_pause": platform_pause,
+				"progress_path": _tmp.path_join("progress.json"),
+			}
+		)
+	)
 	var log: Array = []
-	bus.paused_changed.connect(func(p: bool, why: String) -> void: log.append([p, why, host.clock.platform_time()]))
+	bus.paused_changed.connect(
+		func(p: bool, why: String) -> void: log.append([p, why, host.clock.platform_time()])
+	)
 	return {"host": host, "rider": rider, "err": err, "log": log}
 
 
@@ -62,7 +78,8 @@ func _step_until_paused(host: GameHost, max_s: float) -> float:
 	return host.clock.platform_time()
 
 
-func test_the_coasting_pause_works_with_either_owner_and_only_the_platform_resumes_on_pedalling() -> void:
+func test_the_coasting_pause_works_with_either_owner_and_only_the_platform_resumes_on_pedalling(
+) -> void:
 	for platform_pause: bool in [true, false]:
 		var s := _session(platform_pause)
 		assert_eq(s["err"], "")
@@ -71,7 +88,10 @@ func test_the_coasting_pause_works_with_either_owner_and_only_the_platform_resum
 		var log: Array = s["log"]
 		host.start()
 		var t := _step_until_paused(host, 65.0)
-		assert_true(host.is_paused(), "platform_pause %s: the coasting rider pauses (4.6.4)" % platform_pause)
+		assert_true(
+			host.is_paused(),
+			"platform_pause %s: the coasting rider pauses (4.6.4)" % platform_pause
+		)
 		assert_eq(host.tracker.phase_of(1).kind, Wl.COOLDOWN, "in the ERG cool-down")
 		assert_between(t, 55.0, 57.0, "10 s after the first not_pedaling sample at ~45.5 s")
 		assert_eq(log[0].slice(0, 2), [true, "coasting"])

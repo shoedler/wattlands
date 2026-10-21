@@ -114,6 +114,7 @@ func _on_leave() -> void:
 
 # --- net wiring ----------------------------------------------------------------------------
 
+
 func _connect_net() -> void:
 	var net := services.net
 	if net == null:
@@ -133,16 +134,27 @@ func _connect_net() -> void:
 func _disconnect_net() -> void:
 	var net := services.net
 	if net != null:
-		for pair: Array in [[net.state_changed, _on_net_state], [net.lobby_changed, _on_lobby_changed],
-				[net.refused, _on_refused], [net.game_message, _on_game_message],
-				[net.peer_joined, _on_peer_changed], [net.peer_left, _on_peer_left]]:
+		for pair: Array in [
+			[net.state_changed, _on_net_state],
+			[net.lobby_changed, _on_lobby_changed],
+			[net.refused, _on_refused],
+			[net.game_message, _on_game_message],
+			[net.peer_joined, _on_peer_changed],
+			[net.peer_left, _on_peer_left]
+		]:
 			var sig: Signal = pair[0]
 			var cb: Callable = pair[1]
 			if sig.is_connected(cb):
 				sig.disconnect(cb)
-		if net.has_signal("lan_rooms_changed") and net.is_connected("lan_rooms_changed", _on_lan_rooms_changed):
+		if (
+			net.has_signal("lan_rooms_changed")
+			and net.is_connected("lan_rooms_changed", _on_lan_rooms_changed)
+		):
 			net.disconnect("lan_rooms_changed", _on_lan_rooms_changed)
-	if services.trainer != null and services.trainer.status_changed.is_connected(_on_trainer_status):
+	if (
+		services.trainer != null
+		and services.trainer.status_changed.is_connected(_on_trainer_status)
+	):
 		services.trainer.status_changed.disconnect(_on_trainer_status)
 
 
@@ -185,6 +197,7 @@ func manifest() -> Dictionary:
 
 # --- host and solo setup ---------------------------------------------------------------------
 
+
 func _host_room() -> void:
 	page = PAGE_CONNECTING
 	_set_message(t("APP_LOBBY_CREATING"))
@@ -208,15 +221,29 @@ func _init_local_lobby() -> void:
 		_set_message(t("APP_ERR_NO_GAME"))
 		return
 	var wanted := str(params.get("content_id", ""))
-	if wanted == "" and CmdLine.has("content") and (not CmdLine.has("game") or CmdLine.get_str("game", "") == game_id):
+	if (
+		wanted == ""
+		and CmdLine.has("content")
+		and (not CmdLine.has("game") or CmdLine.get_str("game", "") == game_id)
+	):
 		# --content=<id> (for example zwo:<absolute path>) picks the content in the app too.
 		wanted = CmdLine.get_str("content", "")
-	var last_game := str(services.settings.get_value("last_game", "")) if services.settings != null else ""
-	var last_content := str(services.settings.get_value("last_content", "")) if services.settings != null else ""
+	var last_game := (
+		str(services.settings.get_value("last_game", "")) if services.settings != null else ""
+	)
+	var last_content := (
+		str(services.settings.get_value("last_content", "")) if services.settings != null else ""
+	)
 	if wanted == "" and last_game == game_id and AppLobbyModel.content_available(m, last_content):
 		wanted = last_content
-	content_id = wanted if AppLobbyModel.content_available(m, wanted) else str(m.get("default_content", ""))
-	var sc := str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP)) if services.settings != null else Wl.FAIR_FTP
+	content_id = (
+		wanted if AppLobbyModel.content_available(m, wanted) else str(m.get("default_content", ""))
+	)
+	var sc := (
+		str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP))
+		if services.settings != null
+		else Wl.FAIR_FTP
+	)
 	scaling = sc if Wl.SCALING_MODES.has(sc) else Wl.FAIR_FTP
 	game_options = AppLobbyModel.resolve_game_options(services.registry, game_id, {})
 	my_player_options = AppLobbyModel.resolve_player_options(services.registry, game_id, {})
@@ -251,8 +278,14 @@ func build_player_info() -> Dictionary:
 	if not Wl.SCALING_MODES.has(sc):
 		sc = Wl.FAIR_FTP
 	var st := services.trainer.status() if services.trainer != null else ""
-	return AppLobbyModel.player_info(services.profile(), sc, my_player_options,
-		AppLobbyModel.installed_games(services.registry), st, my_autopilot)
+	return AppLobbyModel.player_info(
+		services.profile(),
+		sc,
+		my_player_options,
+		AppLobbyModel.installed_games(services.registry),
+		st,
+		my_autopilot
+	)
 
 
 ## Toggle this rider's Autopilot for the session (sent in player_info; the profile keeps its
@@ -310,12 +343,24 @@ func release_code_focus_for(event: InputEvent) -> bool:
 
 
 func take_typed_key(event: InputEvent) -> bool:
-	if page != PAGE_JOIN or code_field == null or not code_field.visible or code_field.line_edit == null:
+	if (
+		page != PAGE_JOIN
+		or code_field == null
+		or not code_field.visible
+		or code_field.line_edit == null
+	):
 		return false
 	if not (event is InputEventKey):
 		return false
 	var k := event as InputEventKey
-	if not k.pressed or k.echo or k.ctrl_pressed or k.alt_pressed or k.meta_pressed or k.unicode <= 0:
+	if (
+		not k.pressed
+		or k.echo
+		or k.ctrl_pressed
+		or k.alt_pressed
+		or k.meta_pressed
+		or k.unicode <= 0
+	):
 		return false
 	if not is_inside_tree() or get_viewport().gui_get_focus_owner() != null:
 		return false
@@ -357,10 +402,24 @@ func _join_extra_items() -> Array:
 	for r: Dictionary in recent_rooms():
 		var code := str(r.get("code", ""))
 		if RoomCode.is_valid(code):
-			items.append({"id": "recent:" + code, "text": t("APP_JOIN_RECENT").format([RoomCode.format(code), str(r.get("game_title", r.get("game_id", "")))])})
+			items.append(
+				{
+					"id": "recent:" + code,
+					"text":
+					t("APP_JOIN_RECENT").format(
+						[RoomCode.format(code), str(r.get("game_title", r.get("game_id", "")))]
+					)
+				}
+			)
 	for room: Dictionary in lan_rooms():
 		var code := str(room.get("code", ""))
-		items.append({"id": "lan:" + code, "text": t("APP_JOIN_LAN").format([str(room.get("name", "?")), RoomCode.format(code)])})
+		items.append(
+			{
+				"id": "lan:" + code,
+				"text":
+				t("APP_JOIN_LAN").format([str(room.get("name", "?")), RoomCode.format(code)])
+			}
+		)
 	return items
 
 
@@ -371,7 +430,11 @@ func _on_join_extra(id: Variant) -> void:
 	elif sid.begins_with("lan:"):
 		var code := sid.substr(4)
 		for room: Dictionary in lan_rooms():
-			if str(room.get("code", "")) == code and services.net != null and services.net.has_method("join_lan"):
+			if (
+				str(room.get("code", "")) == code
+				and services.net != null
+				and services.net.has_method("join_lan")
+			):
 				_begin_join(code)
 				services.net.call("join_lan", room)
 				return
@@ -425,6 +488,7 @@ func _on_lan_rooms_changed(_rooms: Variant = null) -> void:
 
 # --- recent rooms (P1) -----------------------------------------------------------------------
 
+
 func recent_rooms() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if services.settings == null:
@@ -442,7 +506,14 @@ func _remember_room(code: String, as_role: String) -> void:
 		return
 	var list: Array = []
 	var m := manifest()
-	list.append({"code": code, "role": as_role, "game_id": current_game(), "game_title": str(m.get("title", current_game()))})
+	list.append(
+		{
+			"code": code,
+			"role": as_role,
+			"game_id": current_game(),
+			"game_title": str(m.get("title", current_game()))
+		}
+	)
 	for r: Dictionary in recent_rooms():
 		if str(r.get("code", "")) != code and list.size() < RECENT_MAX:
 			list.append(r)
@@ -459,6 +530,7 @@ func _recent_hosted_code() -> String:
 
 # --- lobby page ------------------------------------------------------------------------------
 
+
 func _show_lobby_page() -> void:
 	page = PAGE_LOBBY
 	clear_menus()
@@ -471,35 +543,88 @@ func _show_lobby_page() -> void:
 func lobby_items() -> Array:
 	var items: Array = []
 	var m := manifest()
-	var problem := AppLobbyModel.game_problem(services.registry, lobby()) if role == Wl.CLIENT else ""
+	var problem := (
+		AppLobbyModel.game_problem(services.registry, lobby()) if role == Wl.CLIENT else ""
+	)
 	if role == Wl.CLIENT:
 		var ready_text := t("APP_LOBBY_UNREADY") if local_ready else t("APP_LOBBY_READY_UP")
-		items.append({"id": "ready", "text": ready_text, "disabled": problem != "" or current_game() == ""})
+		items.append(
+			{"id": "ready", "text": ready_text, "disabled": problem != "" or current_game() == ""}
+		)
 	else:
 		var start_text := t("APP_LOBBY_CANCEL_START") if start_requested else t("APP_LOBBY_START")
 		items.append({"id": "start", "text": start_text, "disabled": m.is_empty()})
 		var contents: Array = m.get("contents", [])
 		if contents.size() > 1 or AppLobbyModel.accepts_zwo(m):
-			items.append({"id": "content", "text": t("APP_LOBBY_CONTENT").format([AppLobbyModel.content_label(game_id, content_id)])})
-		items.append({"id": "scaling", "text": t("APP_LOBBY_SCALING").format([scaling_text(scaling)])})
+			items.append(
+				{
+					"id": "content",
+					"text":
+					t("APP_LOBBY_CONTENT").format(
+						[AppLobbyModel.content_label(game_id, content_id)]
+					)
+				}
+			)
+		items.append(
+			{"id": "scaling", "text": t("APP_LOBBY_SCALING").format([scaling_text(scaling)])}
+		)
 		for e: Variant in m.get("options", []):
 			if e is Dictionary:
 				var om := AppOptionModel.make(game_id, e as Dictionary)
-				items.append({"id": "opt:" + om.id(), "text": "%s: %s" % [om.label_text(), om.value_text(game_options.get(om.id(), om.default_value()))]})
+				items.append(
+					{
+						"id": "opt:" + om.id(),
+						"text":
+						(
+							"%s: %s"
+							% [
+								om.label_text(),
+								om.value_text(game_options.get(om.id(), om.default_value()))
+							]
+						)
+					}
+				)
 	if problem == "" and not m.is_empty():
 		var gid := current_game()
 		for e: Variant in m.get("player_options", []):
 			if e is Dictionary:
 				var pm := AppOptionModel.make(gid, e as Dictionary)
 				var v: Variant = my_player_options.get(pm.id(), pm.default_value())
-				items.append({"id": "popt:" + pm.id(), "text": t("APP_LOBBY_MY_OPTION").format([pm.label_text(), pm.value_text(v)])})
-		items.append({"id": "autopilot", "text": t("APP_LOBBY_AUTOPILOT").format([t("APP_ON") if my_autopilot else t("APP_OFF")])})
+				items.append(
+					{
+						"id": "popt:" + pm.id(),
+						"text": t("APP_LOBBY_MY_OPTION").format([pm.label_text(), pm.value_text(v)])
+					}
+				)
+		items.append(
+			{
+				"id": "autopilot",
+				"text":
+				t("APP_LOBBY_AUTOPILOT").format([t("APP_ON") if my_autopilot else t("APP_OFF")])
+			}
+		)
 	if role != Wl.CLIENT and bool(m.get("bots", false)):
 		var all := slots()
-		items.append({"id": "add_bot", "text": t("APP_LOBBY_ADD_BOT"), "disabled": not AppLobbyModel.can_add_bot(m, all.size())})
-		items.append({"id": "remove_bot", "text": t("APP_LOBBY_REMOVE_BOT"), "disabled": AppLobbyModel.bots(all).is_empty()})
-		items.append({"id": "bot_ftp", "text": t("APP_LOBBY_BOT_FTP").format([int(round(bot_ftp))])})
-	items.append({"id": "leave", "text": t("APP_LOBBY_LEAVE") if role != Wl.SOLO else t("APP_BACK")})
+		items.append(
+			{
+				"id": "add_bot",
+				"text": t("APP_LOBBY_ADD_BOT"),
+				"disabled": not AppLobbyModel.can_add_bot(m, all.size())
+			}
+		)
+		items.append(
+			{
+				"id": "remove_bot",
+				"text": t("APP_LOBBY_REMOVE_BOT"),
+				"disabled": AppLobbyModel.bots(all).is_empty()
+			}
+		)
+		items.append(
+			{"id": "bot_ftp", "text": t("APP_LOBBY_BOT_FTP").format([int(round(bot_ftp))])}
+		)
+	items.append(
+		{"id": "leave", "text": t("APP_LOBBY_LEAVE") if role != Wl.SOLO else t("APP_BACK")}
+	)
 	return items
 
 
@@ -577,6 +702,7 @@ func _refresh_root_menu() -> void:
 
 
 # --- sub-menus -------------------------------------------------------------------------------
+
 
 ## The content picker: the game's contents, then the rider's own .zwo files (pedal-scan
 ## selectable like the rest). The session preview below follows the highlighted pick once chosen.
@@ -658,9 +784,20 @@ func _open_option(option_id: String, per_player: bool) -> void:
 		var vals := _editing_option.values()
 		for i in vals.size():
 			items.append({"id": i, "text": _editing_option.value_text(vals[i])})
-		push_menu(items, _on_option_value_pick, Callable(), maxi(_editing_option.index_of(current), 0))
+		push_menu(
+			items, _on_option_value_pick, Callable(), maxi(_editing_option.index_of(current), 0)
+		)
 	else:
-		push_menu(_stepper_items(_editing_option.label_text(), _editing_option.value_text(current), str(_editing_option.int_step())), _on_option_step_pick, Callable(), 2)
+		push_menu(
+			_stepper_items(
+				_editing_option.label_text(),
+				_editing_option.value_text(current),
+				str(_editing_option.int_step())
+			),
+			_on_option_step_pick,
+			Callable(),
+			2
+		)
 
 
 func _stepper_items(label: String, value_text: String, step_text: String) -> Array:
@@ -699,7 +836,13 @@ func _on_option_step_pick(_index: int, id: Variant, _auto: bool) -> void:
 			refresh_menu(lobby_items())
 			return
 	set_option(oid, v, _editing_player)
-	refresh_menu(_stepper_items(_editing_option.label_text(), _editing_option.value_text(v), str(_editing_option.int_step())))
+	refresh_menu(
+		_stepper_items(
+			_editing_option.label_text(),
+			_editing_option.value_text(v),
+			str(_editing_option.int_step())
+		)
+	)
 
 
 ## Current value of a game option (host's or the lobby's) or of this rider's player option.
@@ -732,7 +875,12 @@ func set_option(option_id: String, value: Variant, per_player: bool) -> void:
 
 
 func _open_bot_ftp() -> void:
-	push_menu(_stepper_items(t("APP_LOBBY_BOT_FTP_LABEL"), "%d W" % int(round(bot_ftp)), "10 W"), _on_bot_ftp_pick, Callable(), 2)
+	push_menu(
+		_stepper_items(t("APP_LOBBY_BOT_FTP_LABEL"), "%d W" % int(round(bot_ftp)), "10 W"),
+		_on_bot_ftp_pick,
+		Callable(),
+		2
+	)
 
 
 func _on_bot_ftp_pick(_index: int, id: Variant, _auto: bool) -> void:
@@ -760,6 +908,7 @@ func set_bot_ftp(w: float) -> void:
 
 
 # --- start -----------------------------------------------------------------------------------
+
 
 ## Host/solo: start once the start was requested and every human is ready (solo: this rider).
 ## Returns true when the session screen was opened.
@@ -799,7 +948,11 @@ func _tick(_dt: float) -> void:
 func _handle_gesture(gesture: StringName) -> bool:
 	if gesture == Wl.G_PEDAL_START and page == PAGE_LOBBY:
 		if role == Wl.CLIENT:
-			if not local_ready and AppLobbyModel.game_problem(services.registry, lobby()) == "" and current_game() != "":
+			if (
+				not local_ready
+				and AppLobbyModel.game_problem(services.registry, lobby()) == ""
+				and current_game() != ""
+			):
 				_set_ready(true)
 		elif role == Wl.SOLO and not start_requested:
 			start_requested = true
@@ -812,6 +965,7 @@ func _handle_gesture(gesture: StringName) -> bool:
 
 
 # --- net events ------------------------------------------------------------------------------
+
 
 func _on_net_state(state: String, detail: String) -> void:
 	match state:
@@ -832,7 +986,10 @@ func _on_net_state(state: String, detail: String) -> void:
 		"joined":
 			if role == Wl.CLIENT and page != PAGE_LOBBY:
 				page = PAGE_LOBBY
-				_remember_room(services.net.room_code if services.net.room_code != "" else joining_code, Wl.CLIENT)
+				_remember_room(
+					services.net.room_code if services.net.room_code != "" else joining_code,
+					Wl.CLIENT
+				)
 				_set_message("")
 				_send_player_info()
 				_show_lobby_page()
@@ -848,7 +1005,11 @@ func _on_net_state(state: String, detail: String) -> void:
 func _on_lobby_changed(_lobby: Dictionary) -> void:
 	if role == Wl.CLIENT:
 		var g := current_game()
-		if g != "" and g != _options_game and AppLobbyModel.game_problem(services.registry, lobby()) == "":
+		if (
+			g != ""
+			and g != _options_game
+			and AppLobbyModel.game_problem(services.registry, lobby()) == ""
+		):
 			_options_game = g
 			my_player_options = AppLobbyModel.resolve_player_options(services.registry, g, {})
 		_send_player_info_if_changed()
@@ -903,7 +1064,14 @@ func _on_game_message(from: int, data: Dictionary) -> void:
 		goto("session", {"role": Wl.CLIENT, "session_start": data.duplicate(true)})
 	elif type in ["plan", "phase", "snapshot"] and page == PAGE_LOBBY:
 		launched = true
-		goto("session", {"role": Wl.CLIENT, "rejoin": true, "replay": [{"from": from, "data": data.duplicate(true)}]})
+		goto(
+			"session",
+			{
+				"role": Wl.CLIENT,
+				"rejoin": true,
+				"replay": [{"from": from, "data": data.duplicate(true)}]
+			}
+		)
 
 
 func _on_peer_changed(_peer: int) -> void:
@@ -921,6 +1089,7 @@ func _on_trainer_status(_status: String, _detail: String) -> void:
 
 
 # --- view ------------------------------------------------------------------------------------
+
 
 func _set_message(text: String) -> void:
 	message = text
@@ -941,7 +1110,9 @@ func _refresh_all() -> void:
 			_set_message(t("APP_LOBBY_MISSING_GAME").format([str(lobby().get("game_id", ""))]))
 		elif problem == AppLobbyModel.VERSION_MISMATCH:
 			var have := str(services.registry.manifest(current_game()).get("version", ""))
-			_set_message(t("APP_LOBBY_VERSION_MISMATCH").format([str(lobby().get("game_version", "")), have]))
+			_set_message(
+				t("APP_LOBBY_VERSION_MISMATCH").format([str(lobby().get("game_version", "")), have])
+			)
 
 
 func _refresh_title() -> void:
@@ -989,7 +1160,11 @@ func _refresh_cards() -> void:
 		var text := options_text(gid, m, opts)
 		var autopilot := my_autopilot if is_me else slot.autopilot
 		if autopilot and not slot.is_bot:
-			text = t("APP_LOBBY_AUTOPILOT_TAG") if text == "" else t("APP_LOBBY_AUTOPILOT_TAG") + " · " + text
+			text = (
+				t("APP_LOBBY_AUTOPILOT_TAG")
+				if text == ""
+				else t("APP_LOBBY_AUTOPILOT_TAG") + " · " + text
+			)
 		card.update(ready, trainer, text, slot.is_bot)
 
 
@@ -999,7 +1174,15 @@ static func options_text(gid: String, m: Dictionary, values: Dictionary) -> Stri
 	for e: Variant in m.get("player_options", []):
 		if e is Dictionary:
 			var om := AppOptionModel.make(gid, e as Dictionary)
-			parts.append("%s: %s" % [om.label_text(), om.value_text(om.normalize(values.get(om.id(), om.default_value())))])
+			parts.append(
+				(
+					"%s: %s"
+					% [
+						om.label_text(),
+						om.value_text(om.normalize(values.get(om.id(), om.default_value())))
+					]
+				)
+			)
 	return " · ".join(parts)
 
 
@@ -1015,7 +1198,9 @@ func _refresh_info() -> void:
 		return
 	var m := manifest()
 	var parts: PackedStringArray = []
-	parts.append(t("APP_LOBBY_CONTENT").format([AppLobbyModel.content_label(gid, current_content())]))
+	parts.append(
+		t("APP_LOBBY_CONTENT").format([AppLobbyModel.content_label(gid, current_content())])
+	)
 	var sc := scaling if role != Wl.CLIENT else str(lobby().get("scaling", Wl.FAIR_FTP))
 	parts.append(t("APP_LOBBY_SCALING").format([scaling_text(sc)]))
 	for e: Variant in m.get("options", []):

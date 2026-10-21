@@ -30,12 +30,12 @@ func test_laps_at_phases_markers_and_cooldown() -> void:
 	# Phase 0 (lap-true) starts with the ride: renames the opening lap.
 	rec.lap("Wave 1", 0.0)
 	_feed(rec, 0.0, 30.0, 200.0)
-	rec.lap("Wave 2", 30.0)       # lap-true phase
+	rec.lap("Wave 2", 30.0)  # lap-true phase
 	_feed(rec, 30.0, 45.0, 250.0)
-	rec.lap("Marker", 45.0)       # the game's lap_marker
+	rec.lap("Marker", 45.0)  # the game's lap_marker
 	_feed(rec, 45.0, 60.0, 260.0)
 	# A lap-false phase at 50 s calls nothing: the lap continues.
-	rec.lap("Cool-down", 60.0)    # always its own lap
+	rec.lap("Cool-down", 60.0)  # always its own lap
 	_feed(rec, 60.0, 90.0, 100.0)
 	rec.stop(90.0)
 	assert_eq(_labels(rec), ["Wave 1", "Wave 2", "Marker", "Cool-down"])
@@ -93,7 +93,11 @@ func test_fractional_lap_times_keep_millisecond_durations() -> void:
 	var laps := Reader.of(d, 19)
 	assert_eq(laps[0]["fields"][7], 60050, "first lap elapsed ms")
 	assert_eq(laps[1]["fields"][7], 39950, "second lap elapsed ms")
-	assert_eq(int(laps[0]["fields"][7]) + int(laps[1]["fields"][7]), Reader.of(d, 18)[0]["fields"][7], "laps cover the session")
+	assert_eq(
+		int(laps[0]["fields"][7]) + int(laps[1]["fields"][7]),
+		Reader.of(d, 18)[0]["fields"][7],
+		"laps cover the session"
+	)
 
 
 func test_a_ride_ending_before_the_cooldown_has_no_cooldown_lap() -> void:
@@ -103,7 +107,7 @@ func test_a_ride_ending_before_the_cooldown_has_no_cooldown_lap() -> void:
 	_feed(rec, 0.0, 30.0, 200.0)
 	rec.lap("Segment 2", 30.0)
 	_feed(rec, 30.0, 50.0, 200.0)
-	rec.stop(50.0) # timeout or paused ending
+	rec.stop(50.0)  # timeout or paused ending
 	assert_eq(_labels(rec), ["Segment 1", "Segment 2"])
 
 

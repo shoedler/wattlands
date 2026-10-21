@@ -56,8 +56,7 @@ func _make() -> WlTrainerService:
 	svc.connection_factory = func() -> FtmsConnectionManager:
 		_manager = Fakes.FakeConnectionManager.new()
 		return _manager
-	svc.rider_options_factory = func() -> Dictionary:
-		return {"bus": _bus}
+	svc.rider_options_factory = func() -> Dictionary: return {"bus": _bus}
 	add_child_autofree(svc)
 	return svc
 
@@ -79,8 +78,12 @@ func _ride(r: LocalRider, seconds: float) -> void:
 func _session(svc: WlTrainerService, phases: Array, rec: RideRecorderApi = null) -> LocalRider:
 	var r := svc.local_rider()
 	svc.set_external_tick(true)
-	var opts := {"multiplayer": false, "scaling_mode": Wl.FAIR_FTP, "bus": _bus,
-		"skip_warmup": _settings.profile.skip_warmup}
+	var opts := {
+		"multiplayer": false,
+		"scaling_mode": Wl.FAIR_FTP,
+		"bus": _bus,
+		"skip_warmup": _settings.profile.skip_warmup
+	}
 	if rec != null:
 		opts["recorder"] = rec
 	r.setup(1, _settings.profile, _settings.profile.to_slot(1, Wl.FAIR_FTP), svc.device(), opts)
@@ -95,9 +98,19 @@ func _session(svc: WlTrainerService, phases: Array, rec: RideRecorderApi = null)
 ## Every control response the mock sends (one per write, on the tick after it), with the state
 ## the write left: [op, commanded_mode, commanded_target_w, commanded_grade_pct, wind, t].
 func _watch_writes(m: MockTrainer, out: Array) -> void:
-	m.control_response.connect(func(op: int, _result: int) -> void:
-		out.append([op, m.commanded_mode, m.commanded_target_w, m.commanded_grade_pct,
-			m.commanded_wind_mps, m.platform_time_s()]))
+	m.control_response.connect(
+		func(op: int, _result: int) -> void:
+			out.append(
+				[
+					op,
+					m.commanded_mode,
+					m.commanded_target_w,
+					m.commanded_grade_pct,
+					m.commanded_wind_mps,
+					m.platform_time_s()
+				]
+			)
+	)
 
 
 func _assert_sim_flat(svc: WlTrainerService, why: String) -> void:
@@ -142,7 +155,9 @@ func test_end_ride_mid_interval_hands_back_to_sim_flat_through_a_ramp() -> void:
 	var svc := _make()
 	svc.start()
 	_menus(svc, 5.0)
-	var r := _session(svc, [PlanPhase.erg(Wl.WARMUP, 50.0, 60.0), PlanPhase.erg(Wl.WORK, 80.0, 600.0)])
+	var r := _session(
+		svc, [PlanPhase.erg(Wl.WARMUP, 50.0, 60.0), PlanPhase.erg(Wl.WORK, 80.0, 600.0)]
+	)
 	_ride(r, 60.0)
 	r.start_phase(1)
 	_ride(r, 30.0)
@@ -159,7 +174,9 @@ func test_end_ride_mid_interval_hands_back_to_sim_flat_through_a_ramp() -> void:
 	_assert_sim_flat(svc, "after End ride")
 	assert_eq(writes.size(), 2, "the ERG step-down, then SIM flat")
 	assert_eq(writes[0][1], Wl.ERG, "step 1 stays in ERG")
-	assert_between(int(writes[0][2]), 100, 115, "at min(applied target, 3 s power): the rider's ~109 W")
+	assert_between(
+		int(writes[0][2]), 100, 115, "at min(applied target, 3 s power): the rider's ~109 W"
+	)
 	assert_eq(writes[1][1], Wl.SIM)
 	assert_gte(float(writes[1][5]) - float(writes[0][5]), 0.5 - 1e-6, "one write slot apart")
 	var n := m.command_count
@@ -229,7 +246,9 @@ func test_warmup_begun_in_the_menus_continues_into_a_session_and_back() -> void:
 	svc.set_external_tick(false)
 	assert_almost_eq(_warm_left(r), left - 80.0, 1e-6, "the menu reset keeps it")
 	_menus(svc, left - 80.0 + 1.0)
-	assert_false(r.governor.is_warmup_active(), "done 300 s after the first stroke, wherever it rode")
+	assert_false(
+		r.governor.is_warmup_active(), "done 300 s after the first stroke, wherever it rode"
+	)
 	r = _session(svc, [PlanPhase.erg(Wl.WARMUP, 50.0, 60.0), PlanPhase.erg(Wl.WORK, 80.0, 600.0)])
 	assert_false(r.governor.is_warmup_active(), "a second session gets no fresh warm-up")
 	r.start_phase(1)
@@ -297,9 +316,13 @@ func test_a_reconnect_keeps_it_and_a_new_trainer_resets_it() -> void:
 	_manager.make_ready(d1b)
 	assert_push_warning("during a session")
 	assert_eq(r.device, d1b)
-	assert_almost_eq(_warm_left(r), left, 1e-9, "a reconnect with a new object of the same trainer (rebind)")
+	assert_almost_eq(
+		_warm_left(r), left, 1e-9, "a reconnect with a new object of the same trainer (rebind)"
+	)
 	svc.set_external_tick(false)
-	assert_almost_eq(_warm_left(svc.local_rider()), left, 1e-9, "the menu reset on that object keeps it")
+	assert_almost_eq(
+		_warm_left(svc.local_rider()), left, 1e-9, "the menu reset on that object keeps it"
+	)
 	var d2 := Fakes.FakeDevice.new()
 	autofree(d2)
 	_manager.make_ready(d2)
@@ -323,5 +346,8 @@ func test_skip_warmup_in_the_profile_still_skips_it() -> void:
 	_settings.profile.skip_warmup = false
 	svc.set_external_tick(false)
 	_menus(svc, 0.1)
-	assert_true(svc.local_rider().governor.is_warmup_active(), "turning the setting off brings the remaining warm-up back")
+	assert_true(
+		svc.local_rider().governor.is_warmup_active(),
+		"turning the setting off brings the remaining warm-up back"
+	)
 	assert_between(_warm_left(svc.local_rider()), 268.0, 271.5, "it kept counting while skipped")

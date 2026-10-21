@@ -17,7 +17,9 @@ func _build() -> void:
 	# An FTP the FTP test verified before the profile existed shows as verified.
 	ftp_touched = draft.ftp_verified
 	make_form_page(t("APP_FIRST_RUN_TITLE"))
-	content_box.add_child(AppStyle.paragraph(t("APP_FIRST_RUN_INTRO"), AppStyle.FONT_BODY, AppStyle.TEXT))
+	content_box.add_child(
+		AppStyle.paragraph(t("APP_FIRST_RUN_INTRO"), AppStyle.FONT_BODY, AppStyle.TEXT)
+	)
 	open_fields(fields(), _back)
 
 
@@ -27,13 +29,34 @@ func scanning_enabled() -> bool:
 
 func fields() -> Array:
 	return [
-		{"id": "name", "label": t("APP_FIELD_NAME"), "type": "text", "rows": AppTextField.ROWS_NAME, "max_length": 16,
-			"get": func() -> Variant: return draft.display_name, "set": set_name_value},
-		{"id": "ftp", "label": t("APP_FIELD_FTP"), "type": "stepper", "min": 50.0, "max": 600.0, "step": 5.0, "unit": "W",
-			"get": func() -> Variant: return draft.ftp_w, "set": set_ftp,
-			"value_text": ftp_text},
-		AppFormScreen.weight_field("weight", t("APP_FIELD_WEIGHT"), draft.units,
-			func() -> float: return draft.weight_kg, func(kg: float) -> void: draft.weight_kg = kg),
+		{
+			"id": "name",
+			"label": t("APP_FIELD_NAME"),
+			"type": "text",
+			"rows": AppTextField.ROWS_NAME,
+			"max_length": 16,
+			"get": func() -> Variant: return draft.display_name,
+			"set": set_name_value
+		},
+		{
+			"id": "ftp",
+			"label": t("APP_FIELD_FTP"),
+			"type": "stepper",
+			"min": 50.0,
+			"max": 600.0,
+			"step": 5.0,
+			"unit": "W",
+			"get": func() -> Variant: return draft.ftp_w,
+			"set": set_ftp,
+			"value_text": ftp_text
+		},
+		AppFormScreen.weight_field(
+			"weight",
+			t("APP_FIELD_WEIGHT"),
+			draft.units,
+			func() -> float: return draft.weight_kg,
+			func(kg: float) -> void: draft.weight_kg = kg
+		),
 		{"id": "done", "label": t("APP_FIRST_RUN_DONE"), "type": "action", "run": finish},
 		{"id": "back", "label": t("APP_BACK"), "type": "action", "run": _back},
 	]

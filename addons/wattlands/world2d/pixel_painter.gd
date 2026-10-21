@@ -36,7 +36,9 @@ static func from_rows(rows: PackedStringArray, palette: Dictionary) -> Image:
 
 ## A gear seen face-on: `teeth` square teeth `tooth_depth` px deep around `radius`, a darker
 ## rim pixel, four lightening holes (so rotation reads) and a hub. Size 2 * radius.
-static func gear(radius: int, teeth: int, body: Color, edge: Color, hub: Color, tooth_depth: int = 2) -> Image:
+static func gear(
+	radius: int, teeth: int, body: Color, edge: Color, hub: Color, tooth_depth: int = 2
+) -> Image:
 	var r := maxi(radius, 3)
 	var size := r * 2
 	var img := Image.create_empty(size, size, false, Image.FORMAT_RGBA8)
@@ -84,7 +86,9 @@ static func disc(radius: int, fill: Color, outline: Color) -> Image:
 
 ## A vertical gradient from `top` to `bottom` in `bands` flat colors, ordered-dithered at the
 ## band edges when `dither` (classic 16-bit skies and water).
-static func vertical_gradient(w: int, h: int, top: Color, bottom: Color, bands: int = 8, dither: bool = true) -> Image:
+static func vertical_gradient(
+	w: int, h: int, top: Color, bottom: Color, bands: int = 8, dither: bool = true
+) -> Image:
 	var img := Image.create_empty(maxi(w, 1), maxi(h, 1), false, Image.FORMAT_RGBA8)
 	var n := maxi(bands, 2)
 	for y in img.get_height():
@@ -99,7 +103,9 @@ static func vertical_gradient(w: int, h: int, top: Color, bottom: Color, bands: 
 
 ## Column heights (pixels from the top, 0..h) of a hill line that tiles seamlessly across
 ## `w` (whole sine periods). `seed` picks the shape; base and amplitude are fractions of h.
-static func hill_heights(w: int, h: int, seed: int, base_frac: float = 0.5, amp_frac: float = 0.25, waves: int = 3) -> PackedFloat32Array:
+static func hill_heights(
+	w: int, h: int, seed: int, base_frac: float = 0.5, amp_frac: float = 0.25, waves: int = 3
+) -> PackedFloat32Array:
 	var rng := SeededRng.make(seed)
 	var freqs: Array[int] = []
 	var phases: Array[float] = []
@@ -123,7 +129,9 @@ static func hill_heights(w: int, h: int, seed: int, base_frac: float = 0.5, amp_
 
 ## A silhouette strip: each column filled from its height (pixels from the top) to the
 ## bottom, with a 1 px `edge` color on top.
-static func silhouette(w: int, h: int, heights: PackedFloat32Array, fill: Color, edge: Color) -> Image:
+static func silhouette(
+	w: int, h: int, heights: PackedFloat32Array, fill: Color, edge: Color
+) -> Image:
 	var img := Image.create_empty(maxi(w, 1), maxi(h, 1), false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	for x in img.get_width():

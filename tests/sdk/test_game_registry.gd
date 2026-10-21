@@ -23,10 +23,20 @@ func after_each() -> void:
 
 func _valid() -> Dictionary:
 	return {
-		"id": "fx_valid", "title": "Valid", "summary": "s", "version": "1.0.0",
-		"min_players": 1, "max_players": 4, "bots": true, "presentation": "2d",
-		"pixel_base": [640, 360], "entry": ENTRY, "contents": ["a", "b"],
-		"default_content": "a", "e2e_content": "b", "zero_input_content": "a",
+		"id": "fx_valid",
+		"title": "Valid",
+		"summary": "s",
+		"version": "1.0.0",
+		"min_players": 1,
+		"max_players": 4,
+		"bots": true,
+		"presentation": "2d",
+		"pixel_base": [640, 360],
+		"entry": ENTRY,
+		"contents": ["a", "b"],
+		"default_content": "a",
+		"e2e_content": "b",
+		"zero_input_content": "a",
 	}
 
 
@@ -50,7 +60,9 @@ func test_scan_lists_valid_games_sorted_by_title() -> void:
 	var m := _reg.manifest("fx_solo")
 	assert_typeof(m["min_players"], TYPE_INT, "whole numbers are normalized to int")
 	assert_eq(m["first_run_priority"], 0)
-	assert_eq(_reg.manifest("fx_crew")["first_run_priority"], -1, "negative priorities are valid (C18)")
+	assert_eq(
+		_reg.manifest("fx_crew")["first_run_priority"], -1, "negative priorities are valid (C18)"
+	)
 	assert_eq(_reg.game_dir("fx_solo"), FIXTURES.path_join("runtime/fx_solo"))
 	assert_eq(_reg.content_dir("fx_solo"), FIXTURES.path_join("_content/fx_solo"))
 
@@ -94,14 +106,24 @@ func test_missing_picker_image_only_warns() -> void:
 	assert_string_contains(w[0], "missing")
 	assert_eq(_reg.warnings("fx_valid"), [] as Array[String], "an existing texture is fine")
 	assert_push_warning("generated title card")
-	assert_string_contains(WlGameRegistry.picker_image_warning({"picker_image": ENTRY}), "unreadable")
+	assert_string_contains(
+		WlGameRegistry.picker_image_warning({"picker_image": ENTRY}), "unreadable"
+	)
 
 
 func test_validate_manifest_accepts_the_reference() -> void:
 	assert_eq(_reg.validate_manifest(_valid()), "")
-	assert_eq(_reg.validate_manifest(_with({"presentation": "3d"}, ["pixel_base"])), "", "3d needs no pixel_base")
+	assert_eq(
+		_reg.validate_manifest(_with({"presentation": "3d"}, ["pixel_base"])),
+		"",
+		"3d needs no pixel_base"
+	)
 	assert_eq(_reg.validate_manifest(_with({"first_run_priority": -1})), "")
-	assert_eq(_reg.validate_manifest(_with({"min_players": 2.0, "max_players": 4.0})), "", "JSON floats with whole values")
+	assert_eq(
+		_reg.validate_manifest(_with({"min_players": 2.0, "max_players": 4.0})),
+		"",
+		"JSON floats with whole values"
+	)
 
 
 func test_validate_manifest_names_each_failing_field() -> void:
@@ -132,7 +154,10 @@ func test_validate_manifest_names_each_failing_field() -> void:
 		[_with({"first_run_priority": 1.5}), "first_run_priority:"],
 		[_with({"picker_image": 5}), "picker_image:"],
 		[_with({"options": {}}), "options:"],
-		[_with({"player_options": [{"id": "x", "type": "slider", "default": 1}]}), "player_options[0].type:"],
+		[
+			_with({"player_options": [{"id": "x", "type": "slider", "default": 1}]}),
+			"player_options[0].type:"
+		],
 		[_with({"content_schemes": "zwo"}), "content_schemes:"],
 		[_with({"content_schemes": ["Zwo"]}), "content_schemes:"],
 		[_with({"content_schemes": ["zwo", "zwo"]}), "content_schemes:"],
@@ -152,23 +177,59 @@ func test_every_option_type_validates() -> void:
 		{"id": "t", "type": "toggle", "default": true},
 		{"id": "i", "type": "int", "min": -10, "max": 5, "default": 0},
 		{"id": "s", "type": "int", "min": 50, "max": 70, "step": 5, "default": 60},
-		{"id": "c", "type": "choice", "choices": [{"value": 1, "label": "ONE"}, {"value": 2}], "default": 2},
-		{"id": "w", "type": "choice", "choices": [{"value": "x"}], "default": "x", "label": "FX_OPT"},
+		{
+			"id": "c",
+			"type": "choice",
+			"choices": [{"value": 1, "label": "ONE"}, {"value": 2}],
+			"default": 2
+		},
+		{
+			"id": "w",
+			"type": "choice",
+			"choices": [{"value": "x"}],
+			"default": "x",
+			"label": "FX_OPT"
+		},
 	]
 	assert_eq(WlGameRegistry.validate_option_entries(good, "options"), "")
 	var bad := [
 		[[{"type": "toggle", "default": true}], "options[0].id:"],
-		[[{"id": "a", "type": "toggle", "default": true}, {"id": "a", "type": "toggle", "default": false}], "options[1].id:"],
+		[
+			[
+				{"id": "a", "type": "toggle", "default": true},
+				{"id": "a", "type": "toggle", "default": false}
+			],
+			"options[1].id:"
+		],
 		[[{"id": "a", "type": "toggle"}], "options[0].default:"],
 		[[{"id": "a", "type": "toggle", "default": "yes"}], "options[0].default:"],
 		[[{"id": "a", "type": "int", "max": 3, "default": 1}], "options[0].min:"],
 		[[{"id": "a", "type": "int", "min": 4, "max": 3, "default": 4}], "options[0].max:"],
-		[[{"id": "a", "type": "int", "min": 1, "max": 3, "step": 0, "default": 1}], "options[0].step:"],
+		[
+			[{"id": "a", "type": "int", "min": 1, "max": 3, "step": 0, "default": 1}],
+			"options[0].step:"
+		],
 		[[{"id": "a", "type": "int", "min": 1, "max": 5, "default": 7}], "options[0].default:"],
-		[[{"id": "a", "type": "int", "min": 50, "max": 70, "step": 5, "default": 62}], "options[0].default:"],
+		[
+			[{"id": "a", "type": "int", "min": 50, "max": 70, "step": 5, "default": 62}],
+			"options[0].default:"
+		],
 		[[{"id": "a", "type": "choice", "choices": [], "default": 1}], "options[0].choices:"],
-		[[{"id": "a", "type": "choice", "choices": [{"value": 1}, {"value": 1.0}], "default": 1}], "options[0].choices:"],
-		[[{"id": "a", "type": "choice", "choices": [{"value": 1}], "default": 3}], "options[0].default:"],
+		[
+			[
+				{
+					"id": "a",
+					"type": "choice",
+					"choices": [{"value": 1}, {"value": 1.0}],
+					"default": 1
+				}
+			],
+			"options[0].choices:"
+		],
+		[
+			[{"id": "a", "type": "choice", "choices": [{"value": 1}], "default": 3}],
+			"options[0].default:"
+		],
 		[[{"id": "a", "type": "radio", "default": 1}], "options[0].type:"],
 		[[{"id": "a", "type": "toggle", "default": true, "label": 3}], "options[0].label:"],
 	]
@@ -198,9 +259,23 @@ func test_first_run_rule() -> void:
 		if prio != null:
 			d["first_run_priority"] = prio
 		return d
-	assert_eq(WlGameRegistry.pick_first_run([m.call("alpha", 0), m.call("fishing", 10), m.call("workout", null)]), "fishing")
-	assert_eq(WlGameRegistry.pick_first_run([m.call("zeta", 0), m.call("alpha", null)]), "alpha", "ties without workout: lowest id")
-	assert_eq(WlGameRegistry.pick_first_run([m.call("alpha", 0), m.call("workout", 0), m.call("siege", -1)]), "workout")
+	assert_eq(
+		WlGameRegistry.pick_first_run(
+			[m.call("alpha", 0), m.call("fishing", 10), m.call("workout", null)]
+		),
+		"fishing"
+	)
+	assert_eq(
+		WlGameRegistry.pick_first_run([m.call("zeta", 0), m.call("alpha", null)]),
+		"alpha",
+		"ties without workout: lowest id"
+	)
+	assert_eq(
+		WlGameRegistry.pick_first_run(
+			[m.call("alpha", 0), m.call("workout", 0), m.call("siege", -1)]
+		),
+		"workout"
+	)
 	assert_eq(WlGameRegistry.pick_first_run([m.call("siege", -1), m.call("tank", -1)]), "siege")
 	assert_eq(WlGameRegistry.pick_first_run([m.call("_template", 99), m.call("tank", -1)]), "tank")
 	assert_eq(WlGameRegistry.pick_first_run([]), "")
@@ -216,7 +291,10 @@ func test_resolve_options_fills_defaults_and_drops_unknown_keys() -> void:
 	assert_eq(got, {"speed": 2, "mirror": false, "mode": "a"})
 	assert_push_warning("using the default")
 	assert_push_warning("unknown option")
-	assert_eq(_reg.resolve_options("fx_solo", {"offset": -10}, true), {"offset": -10, "reel_pct": 60, "relaxed": false})
+	assert_eq(
+		_reg.resolve_options("fx_solo", {"offset": -10}, true),
+		{"offset": -10, "reel_pct": 60, "relaxed": false}
+	)
 
 
 func test_check_option_values_for_tools() -> void:
@@ -224,7 +302,9 @@ func test_check_option_values_for_tools() -> void:
 	assert_eq(_reg.check_option_values("fx_solo", {"speed": 3}), "")
 	assert_eq(_reg.check_option_values("fx_solo", {"nope": 1}), "options.nope: unknown option")
 	assert_string_starts_with(_reg.check_option_values("fx_solo", {"speed": 9}), "options.speed:")
-	assert_string_starts_with(_reg.check_option_values("fx_solo", {"reel_pct": 62}, true), "player_options.reel_pct:")
+	assert_string_starts_with(
+		_reg.check_option_values("fx_solo", {"reel_pct": 62}, true), "player_options.reel_pct:"
+	)
 	assert_string_starts_with(_reg.check_option_values("fx_solo", {"mode": "z"}), "options.mode:")
 
 
@@ -235,14 +315,22 @@ func test_label_keys() -> void:
 
 
 func test_game_translations_reach_the_translation_server() -> void:
-	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "not registered before the scan")
+	assert_eq(
+		String(TranslationServer.translate("FX_SOLO_TITLE")),
+		"FX_SOLO_TITLE",
+		"not registered before the scan"
+	)
 	_reg.scan(FIXTURES.path_join("runtime"))
 	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo")
 	var strings := GameStrings.new()
 	assert_eq(strings.t("FX_SOLO_HELLO", ["Ann"]), "Hello Ann")
 	assert_eq(strings.t("FX_SOLO_MISSING"), "FX_SOLO_MISSING", "a missing key returns the key")
 	_reg.clear()
-	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "clear() removes them")
+	assert_eq(
+		String(TranslationServer.translate("FX_SOLO_TITLE")),
+		"FX_SOLO_TITLE",
+		"clear() removes them"
+	)
 
 
 func test_a_cleared_private_registry_keeps_another_registrys_strings() -> void:
@@ -257,11 +345,21 @@ func test_a_cleared_private_registry_keeps_another_registrys_strings() -> void:
 	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo")
 	other.clear()
 	other.free()
-	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "still registered for _reg")
+	assert_eq(
+		String(TranslationServer.translate("FX_SOLO_TITLE")),
+		"Fixture solo",
+		"still registered for _reg"
+	)
 	_reg.scan(FIXTURES.path_join("runtime"))
-	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "a rescan keeps them")
+	assert_eq(
+		String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "a rescan keeps them"
+	)
 	_reg.clear()
-	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "the last owner removes them")
+	assert_eq(
+		String(TranslationServer.translate("FX_SOLO_TITLE")),
+		"FX_SOLO_TITLE",
+		"the last owner removes them"
+	)
 
 
 ## game-workout W1: Workout's "zwo:<absolute path>" content ids are not in `contents`; a game
@@ -270,7 +368,10 @@ func test_content_schemes_admit_scheme_content_ids() -> void:
 	assert_eq(_reg.validate_manifest(_with({"content_schemes": ["zwo", "url"]})), "")
 	var m := WlGameRegistry.normalized(_with({"content_schemes": ["zwo"]}))
 	assert_true(WlGameRegistry.content_allowed(m, "a"))
-	assert_true(WlGameRegistry.content_allowed(m, "zwo:C:/rides/my ride.zwo"), "the value is the game's to check")
+	assert_true(
+		WlGameRegistry.content_allowed(m, "zwo:C:/rides/my ride.zwo"),
+		"the value is the game's to check"
+	)
 	assert_false(WlGameRegistry.content_allowed(m, "zwo:"), "a value is needed")
 	assert_false(WlGameRegistry.content_allowed(m, ":x"))
 	assert_false(WlGameRegistry.content_allowed(m, "url:x"), "only listed schemes")
@@ -299,7 +400,11 @@ func test_freeing_a_private_registry_keeps_the_autoloads_game_strings() -> void:
 		private.scan()
 		remove_child(private)
 		private.free()
-		assert_eq(String(TranslationServer.translate(key)), text, "still translated after private registry %d" % k)
+		assert_eq(
+			String(TranslationServer.translate(key)),
+			text,
+			"still translated after private registry %d" % k
+		)
 
 
 func test_json_equal_and_is_whole() -> void:
@@ -318,7 +423,11 @@ func test_autoload_is_a_registry_without_template() -> void:
 	assert_true(auto is WlGameRegistry)
 	assert_false((auto as WlGameRegistry).ids().has("_template"))
 	for id: String in (auto as WlGameRegistry).ids():
-		assert_eq((auto as WlGameRegistry).validate_manifest((auto as WlGameRegistry).manifest(id)), "", id)
+		assert_eq(
+			(auto as WlGameRegistry).validate_manifest((auto as WlGameRegistry).manifest(id)),
+			"",
+			id
+		)
 
 
 ## W3 SDK-3 (GAME_SDK 3): an int off its min + n * step grid falls back to the default with a
@@ -327,5 +436,8 @@ func test_off_grid_ints_fall_back_in_the_lobby_and_fail_the_tool() -> void:
 	_reg.scan(FIXTURES.path_join("runtime"))
 	assert_eq(_reg.resolve_options("fx_solo", {"reel_pct": 62}, true)["reel_pct"], 60)
 	assert_push_warning("not on the 50 + n * 5 grid")
-	assert_eq(_reg.check_option_values("fx_solo", {"reel_pct": 62}, true), "player_options.reel_pct: 62 is not on the 50 + n * 5 grid")
+	assert_eq(
+		_reg.check_option_values("fx_solo", {"reel_pct": 62}, true),
+		"player_options.reel_pct: 62 is not on the 50 + n * 5 grid"
+	)
 	assert_eq(_reg.check_option_values("fx_solo", {"reel_pct": 65}, true), "")

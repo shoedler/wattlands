@@ -17,7 +17,9 @@ func _use_lan_net() -> FakeLanNet:
 func test_lan_rooms_are_listed_and_joinable_by_pedal() -> void:
 	fx.give_profile()
 	var lan := _use_lan_net()
-	lan.rooms = [{"code": "Q2W3E4", "name": "Ada's PC", "game_id": "workout", "address": "192.168.1.20"}]
+	lan.rooms = [
+		{"code": "Q2W3E4", "name": "Ada's PC", "game_id": "workout", "address": "192.168.1.20"}
+	]
 	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
 	assert_true(menu(s).ids().has("lan:Q2W3E4"))
 	assert_true(menu(s).text_of("lan:Q2W3E4").contains("Q2W-3E4"))
@@ -34,8 +36,29 @@ func test_rides_history_reupload() -> void:
 	fx.give_profile()
 	fx.fake_rides().connected = true
 	fx.fake_rides().ride_list = [
-		{"fit_path": "C:/rides/b.fit", "summary": {"ride_id": "b", "utc_start": "2026-10-21T08:00:00Z", "game_id": "workout", "duration_s": 1680.0}, "uploaded": true, "activity_id": 5},
-		{"fit_path": "C:/rides/a.fit", "summary": {"ride_id": "a", "utc_start": "2026-10-20T08:00:00Z", "game_id": "siege", "duration_s": 3300.0}, "uploaded": false},
+		{
+			"fit_path": "C:/rides/b.fit",
+			"summary":
+			{
+				"ride_id": "b",
+				"utc_start": "2026-10-21T08:00:00Z",
+				"game_id": "workout",
+				"duration_s": 1680.0
+			},
+			"uploaded": true,
+			"activity_id": 5
+		},
+		{
+			"fit_path": "C:/rides/a.fit",
+			"summary":
+			{
+				"ride_id": "a",
+				"utc_start": "2026-10-20T08:00:00Z",
+				"game_id": "siege",
+				"duration_s": 3300.0
+			},
+			"uploaded": false
+		},
 	]
 	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
 	assert_eq(menu(s).ids(), [0, 1, "back"])
@@ -48,7 +71,9 @@ func test_rides_history_reupload() -> void:
 	assert_eq(fx.fake_rides().reuploads, ["b"] as Array[String], "re-upload of an uploaded ride")
 	assert_eq(fx.fake_rides().uploads.size(), 0, "not the plain upload, which skips uploaded rides")
 	fx.bus.upload_state_changed.emit("b", "duplicate", "")
-	assert_true(menu(s).text_of(0).contains(AppScreen.t("APP_UPLOAD_DUPLICATE").format([""]).strip_edges()))
+	assert_true(
+		menu(s).text_of(0).contains(AppScreen.t("APP_UPLOAD_DUPLICATE").format([""]).strip_edges())
+	)
 	assert_true(scan_to(s, 1))
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(fx.fake_rides().uploads.size(), 1, "a ride never uploaded goes through upload()")
@@ -89,15 +114,25 @@ func test_ftp_test_runs_to_a_saved_ftp() -> void:
 	rider.tm.cadence_rpm = 90.0
 	for _i in int(390.0 / Wl.SIM_DT):
 		s.step_fixed()
-	assert_eq(rider.phases_started.slice(0, 3), [0, 1, 2] as Array[int], "the first step after the 300 s ramp-in, then the second")
+	assert_eq(
+		rider.phases_started.slice(0, 3),
+		[0, 1, 2] as Array[int],
+		"the first step after the 300 s ramp-in, then the second"
+	)
 	assert_eq(s.stage, "running")
 	rider.tm.cadence_rpm = 30.0
 	for _i in int(6.0 / Wl.SIM_DT):
 		s.step_fixed()
 	assert_eq(s.stage, "cooldown", "cadence < 50 rpm for 5 s ends the test")
 	assert_eq(s.test.end_reason, FtpTest.END_CADENCE)
-	assert_eq(rider.phases_started[rider.phases_started.size() - 1], rider.plan_set.cooldown_index())
-	assert_eq(menu(s).ids(), ["save", "keep", "panic"], "the 10 s save countdown runs as the cool-down starts")
+	assert_eq(
+		rider.phases_started[rider.phases_started.size() - 1], rider.plan_set.cooldown_index()
+	)
+	assert_eq(
+		menu(s).ids(),
+		["save", "keep", "panic"],
+		"the 10 s save countdown runs as the cool-down starts"
+	)
 	s.tick(10.5)
 	assert_eq(prof.ftp_w, 188.0, "0.75 x 250 W, rounded")
 	assert_true(prof.ftp_verified)

@@ -90,8 +90,11 @@ func test_from_empty_dict_gives_defaults() -> void:
 func test_color_parsing() -> void:
 	assert_eq(RiderProfile.from_dict({"color": "009e73"}).color, Color("#009E73"))
 	assert_eq(RiderProfile.from_dict({"color": "#0072B2"}).color, Color("#0072B2"))
-	assert_eq(RiderProfile.from_dict({"color": "not a color"}).color, RiderProfile.new().color,
-		"an invalid color keeps the default")
+	assert_eq(
+		RiderProfile.from_dict({"color": "not a color"}).color,
+		RiderProfile.new().color,
+		"an invalid color keeps the default"
+	)
 	assert_engine_error_count(0)
 
 
@@ -115,11 +118,32 @@ func test_missing_cp_defaults_to_ftp() -> void:
 
 func test_to_dict_has_every_field() -> void:
 	var keys := RiderProfile.new().to_dict().keys()
-	for k: String in ["display_name", "color", "units", "weight_kg", "share_weight", "show_wkg", "ftp_w",
-			"ftp_verified", "cp_w", "wprime_j", "preferred_cadence_rpm", "drivetrain",
-			"difficulty_pct", "haptics_on", "haptic_intensity_pct", "grade_min_pct",
-			"grade_max_pct", "skip_warmup", "autopilot_default", "pedal_ui", "scan_interval_s",
-			"strava_auto_upload", "metronome", "created"]:
+	for k: String in [
+		"display_name",
+		"color",
+		"units",
+		"weight_kg",
+		"share_weight",
+		"show_wkg",
+		"ftp_w",
+		"ftp_verified",
+		"cp_w",
+		"wprime_j",
+		"preferred_cadence_rpm",
+		"drivetrain",
+		"difficulty_pct",
+		"haptics_on",
+		"haptic_intensity_pct",
+		"grade_min_pct",
+		"grade_max_pct",
+		"skip_warmup",
+		"autopilot_default",
+		"pedal_ui",
+		"scan_interval_s",
+		"strava_auto_upload",
+		"metronome",
+		"created"
+	]:
 		assert_has(keys, k)
 
 

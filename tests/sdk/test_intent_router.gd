@@ -17,7 +17,11 @@ func test_the_queue_holds_a_copy() -> void:
 	var intent := {"k": "buy", "items": ["x"]}
 	r.send(intent)
 	(intent["items"] as Array).append("y")
-	assert_eq(r.take(), [{"k": "buy", "items": ["x"]}], "a later change by the game never edits a sent intent")
+	assert_eq(
+		r.take(),
+		[{"k": "buy", "items": ["x"]}],
+		"a later change by the game never edits a sent intent"
+	)
 
 
 func test_an_intent_over_1_kb_is_dropped_with_a_warning() -> void:

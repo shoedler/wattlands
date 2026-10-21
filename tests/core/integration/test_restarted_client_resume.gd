@@ -109,13 +109,31 @@ func _start_host() -> void:
 	_host = GameHost.new()
 	_host.name = "Host"
 	_root.add_child(_host)
-	assert_eq(_host.setup({
-		"game_id": GAME, "content_id": _content, "seed": 9, "role": Wl.HOST, "players": players,
-		"local_riders": riders, "local_peer": net.local_peer, "net": net, "bus": _buses[0],
-		"registry": _reg, "headless": true, "realtime": false,
-		"report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
-	}), "")
+	assert_eq(
+		(
+			_host
+			. setup(
+				{
+					"game_id": GAME,
+					"content_id": _content,
+					"seed": 9,
+					"role": Wl.HOST,
+					"players": players,
+					"local_riders": riders,
+					"local_peer": net.local_peer,
+					"net": net,
+					"bus": _buses[0],
+					"registry": _reg,
+					"headless": true,
+					"realtime": false,
+					"report": true,
+					"record_rides": false,
+					"progress_path": _tmp.path_join("p1/games/%s/progress.json" % GAME),
+				}
+			)
+		),
+		""
+	)
 	_host.start()
 
 
@@ -132,13 +150,26 @@ func _on_client_message(_from: int, data: Dictionary, i: int) -> void:
 	var gh := GameHost.new()
 	gh.name = "Client%d" % net.local_peer
 	_root.add_child(gh)
-	var err := gh.setup({
-		"role": Wl.CLIENT, "local_peer": net.local_peer,
-		"local_riders": {net.local_peer: rider}, "net": net, "bus": _buses[i],
-		"registry": _reg, "headless": true, "realtime": false, "report": true, "record_rides": false,
-		"progress_path": _tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
-		"session_start": data.duplicate(true),
-	})
+	var err := (
+		gh
+		. setup(
+			{
+				"role": Wl.CLIENT,
+				"local_peer": net.local_peer,
+				"local_riders": {net.local_peer: rider},
+				"net": net,
+				"bus": _buses[i],
+				"registry": _reg,
+				"headless": true,
+				"realtime": false,
+				"report": true,
+				"record_rides": false,
+				"progress_path":
+				_tmp.path_join("p%d/games/%s/progress.json" % [net.local_peer, GAME]),
+				"session_start": data.duplicate(true),
+			}
+		)
+	)
 	assert_eq(err, "")
 	gh.start()
 	_clients[i] = gh
@@ -175,10 +206,43 @@ func test_restarted_client_resumes_the_ramp() -> void:
 	var after_w := rider.telemetry().applied_target_w
 	var gov_after := float(rider.governor.status()["phase_elapsed_s"])
 	var host_el := _host.tracker.state(peer).elapsed_s
-	gut.p("restarted peer %d: applied %d W -> %d W; governor phase elapsed %.1f s -> %.1f s; GameHost local phase elapsed %.1f s; host phase elapsed %.1f s; phase %d vs host %d"
-		% [peer, before_w, after_w, gov_before, gov_after, c.local_phase_state().elapsed_s, host_el, c.local_phase_state().index, _host.tracker.index_of(peer)])
-	assert_eq(c.local_phase_state().index, _host.tracker.index_of(peer), "the same phase as the host")
-	assert_almost_eq(gov_after, host_el, 1.0, "the restarted client's governor resumes the phase at the host's elapsed time")
-	assert_almost_eq(gov_after, c.local_phase_state().elapsed_s, 1.0, "the trainer's ramp and the HUD clock agree")
+	(
+		gut
+		. p(
+			(
+				"restarted peer %d: applied %d W -> %d W; governor phase elapsed %.1f s -> %.1f s; GameHost local phase elapsed %.1f s; host phase elapsed %.1f s; phase %d vs host %d"
+				% [
+					peer,
+					before_w,
+					after_w,
+					gov_before,
+					gov_after,
+					c.local_phase_state().elapsed_s,
+					host_el,
+					c.local_phase_state().index,
+					_host.tracker.index_of(peer)
+				]
+			)
+		)
+	)
+	assert_eq(
+		c.local_phase_state().index, _host.tracker.index_of(peer), "the same phase as the host"
+	)
+	assert_almost_eq(
+		gov_after,
+		host_el,
+		1.0,
+		"the restarted client's governor resumes the phase at the host's elapsed time"
+	)
+	assert_almost_eq(
+		gov_after,
+		c.local_phase_state().elapsed_s,
+		1.0,
+		"the trainer's ramp and the HUD clock agree"
+	)
 	assert_gte(after_w, before_w - 2, "the warm-up ramp does not start over after a restart")
-	assert_lte((rider.recorder as RideRecorder).lap_count(), 1, "the new FIT starts at the rejoin with no extra lap")
+	assert_lte(
+		(rider.recorder as RideRecorder).lap_count(),
+		1,
+		"the new FIT starts at the rejoin with no extra lap"
+	)
