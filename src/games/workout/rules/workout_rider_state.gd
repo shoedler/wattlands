@@ -16,9 +16,15 @@ var speed: SpeedModel = null
 var course_d: float = 0.0
 var phase_index: int = -1
 var in_band: bool = false
+## Shown state: telemetry's flags or the platform's callbacks below.
 var rescue: bool = false
 var afk: bool = false
 var connected: bool = true
+## Set by GameModule.on_rescue / on_afk (host) and held until the matching false call, so a
+## stagger the platform reports only through the callback (an AFK mark before telemetry
+## says so, a rejoin before fresh pedaling) still counts as out of band.
+var rescue_cb: bool = false
+var afk_cb: bool = false
 var power_w: float = 0.0
 var cadence_rpm: float = 0.0
 ## Seconds in band and seconds ridden over the session's own phases (cool-down excluded).

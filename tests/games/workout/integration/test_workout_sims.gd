@@ -127,7 +127,48 @@ func test_a_zero_watt_rider_grades_d() -> void:
 	var report := _run("e2e", ["--rider=zero", "--bots=0"])
 	if report.is_empty():
 		return
+	assert_eq(report["_end"], "paused", "a 0 W solo rider pauses (4.6.4), and the run ends paused")
 	var res: GameResults = report["_results"]
 	assert_not_null(res)
 	if res != null:
 		assert_eq(res.grade, "D")
+
+
+## BRIEF 7.4: rescue triggers on cadence collapse in an ERG phase while the applied target
+## is >= 60% FTP (a WORK interval, Easy 30's main set, the warm-up ramp past 60%) and never
+## below it (a RECOVERY at 50%). A verified-FTP mock rider, no bots; each run stops a little
+## after the drop.
+func test_rescue_on_cadence_collapse_only_at_or_above_60_pct() -> void:
+	var cases := [
+		["vo2", "erg+cadence_drop:rpm=30,at_phase=1,after_s=20,for_s=30", 1, 700, true],
+		["easy_30", "erg+cadence_drop:rpm=30,at_phase=1,after_s=20,for_s=30", 1, 700, true],
+		["vo2", "erg+cadence_drop:rpm=30,at_phase=0,at_target_pct=60,for_s=30", 0, 300, true],
+		["vo2", "erg+cadence_drop:rpm=30,at_phase=2,after_s=20,for_s=30", 2, 700, false],
+	]
+	for c: Array in cases:
+		var report := _run(str(c[0]), ["--rider=" + str(c[1]), "--bots=0", "--max-sim-seconds=%d" % int(c[3])])
+		if report.is_empty():
+			continue
+		var points: Array[Dictionary] = []
+		_collect(report.get("traces", report.get("trace", [])), points)
+		assert_gt(points.size(), 0, "%s has 1 Hz traces" % c[0])
+		var rescued: Array[Dictionary] = []
+		for pt in points:
+			if bool(pt.get("rescue", false)):
+				rescued.append(pt)
+		if bool(c[4]):
+			assert_gt(rescued.size(), 0, "%s: rescue in phase %d (%s)" % [c[0], c[2], c[1]])
+			for pt in rescued:
+				var idx := _phase_of(pt)
+				if idx >= 0:
+					assert_eq(idx, int(c[2]), "%s: rescue only in the phase with the drop: %s" % [c[0], pt])
+		else:
+			assert_eq(rescued.size(), 0, "%s: no rescue below 60%% FTP: %s" % [c[0], rescued.slice(0, 3)])
+
+
+## The phase index of a trace point (-1 if the report names it otherwise).
+func _phase_of(pt: Dictionary) -> int:
+	for key: String in ["phase_index", "phase", "index"]:
+		if pt.has(key) and (pt[key] is int or pt[key] is float):
+			return int(pt[key])
+	return -1

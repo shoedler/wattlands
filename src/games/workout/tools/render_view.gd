@@ -90,10 +90,10 @@ func _process(_delta: float) -> bool:
 ## The fixture's numbers back to ints (JSON parses them as floats).
 static func _int_fields(snap: Dictionary) -> Dictionary:
 	var out := snap.duplicate(true)
-	for key in ["t", "p", "pt"]:
+	for key: String in ["t", "p", "pt"]:
 		if out.has(key):
 			out[key] = int(out[key])
-	for list_key in ["r", "tl"]:
+	for list_key: String in ["r", "tl"]:
 		var arr: Array = out.get(list_key, [])
 		for row: Variant in arr:
 			if row is Array:

@@ -158,6 +158,7 @@ static func telemetry(slot: PlayerSlot, values: Dictionary, tick: int) -> Teleme
 	t.ftp_pct = t.power_w / slot.ftp * 100.0
 	t.mode = str(values.get("mode", Wl.ERG))
 	t.applied_target_w = int(values.get("applied_target_w", 0))
+	t.applied_grade_pct = float(values.get("applied_grade_pct", 0.0))
 	t.rescue = bool(values.get("rescue", false))
 	t.afk = bool(values.get("afk", false))
 	t.connected = bool(values.get("connected", true))

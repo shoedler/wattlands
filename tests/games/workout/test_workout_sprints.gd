@@ -94,3 +94,34 @@ func test_no_sprint_band_inside_the_warmup() -> void:
 	assert_eq(hud.of("power_band").size(), 0, "the e2e sprint starts at 90 s: no band")
 	assert_eq(U.of_type(events, WorkoutRules.EV_SPRINT).size(), 1, "it is still scored")
 	g.free()
+
+
+## A rider whose phase lags the lead by a few ticks has its sprint scored with everyone's
+## when the lead leaves the sprint; its last ticks in the sprint start no second result.
+func test_a_lagging_rider_is_scored_once_per_sprint() -> void:
+	var players := U.players(2)
+	var g := U.game("e2e", players)
+	autofree(g)
+	var events: Array[Dictionary] = []
+	g.game_event.connect(func(e: Dictionary) -> void: events.append(e))
+	var timeline := g.state.phases
+	var starts := U.phase_ticks(timeline)
+	for tick in starts[3] + 20:
+		var frame := InputFrame.new()
+		frame.tick = tick
+		frame.t = float(tick) * DT
+		for slot in players:
+			var t := tick if slot.peer_id == 1 else maxi(tick - 3, 0)
+			var ps := U.phase_state(timeline, starts, t)
+			frame.players[slot.peer_id] = U.telemetry(slot, U.compliant(slot, timeline[ps.index], ps), tick)
+			frame.phase[slot.peer_id] = ps
+		g.sim_step(DT, frame)
+	var sprints := U.of_type(events, WorkoutRules.EV_SPRINT)
+	assert_eq(sprints.size(), 1)
+	assert_eq((sprints[0]["r"] as Array).size(), 2, "both riders in the one sprint event")
+	for peer: int in [1, 2]:
+		var r := g.state.rider(peer)
+		assert_eq(r.sprints.size(), 1, "rider %d: one sprint result" % peer)
+		assert_eq(int(r.sprints[0]["i"]), 2)
+		assert_null(r.sprint, "no tracker left running")
+	assert_eq((g.results().row(2)["sprints"] as Array).size(), 1)

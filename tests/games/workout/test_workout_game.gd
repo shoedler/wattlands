@@ -154,33 +154,121 @@ func test_rolling_road_band_for_every_rider() -> void:
 	assert_gt(r.course_d, 5000.0)
 
 
+## In Rolling road each rider moves on the trainer's applied SIM grade (what the rider's own
+## speed model follows the course by), so the drawn position matches the grade the governor
+## applies; a rider whose trainer is still in ERG moves on the course grade.
+func test_course_position_follows_the_applied_sim_grade() -> void:
+	var players := U.players(2)
+	var g := U.game("rolling_road", players)
+	autofree(g)
+	var timeline := g.state.phases
+	var starts := U.phase_ticks(timeline)
+	var ref := SpeedModel.create(players[0].rider_mass_kg)
+	var ref_course := 0.0
+	for tick in starts[1] + 1200:
+		var frame := InputFrame.new()
+		frame.tick = tick
+		frame.t = float(tick) * U.DT
+		var ps := U.phase_state(timeline, starts, tick)
+		var p := timeline[ps.index]
+		for slot in players:
+			var v := U.compliant(slot, p, ps)
+			if p.mode == Wl.SIM:
+				v["applied_grade_pct"] = 0.0 if slot.peer_id == 1 else 5.0
+			frame.players[slot.peer_id] = U.telemetry(slot, v, tick)
+			frame.phase[slot.peer_id] = ps
+		var tel: Telemetry = frame.players[1]
+		var before := ref.distance_m
+		ref.step(U.DT, tel.p_eff_w, tel.applied_grade_pct if p.mode == Wl.SIM else 0.0)
+		if p.mode == Wl.SIM:
+			ref_course += ref.distance_m - before
+		g.sim_step(U.DT, frame)
+	var flat := g.state.rider(1)
+	var steep := g.state.rider(2)
+	assert_almost_eq(flat.distance_m(), ref.distance_m, 0.001, "same model, same P_eff, same grade")
+	assert_almost_eq(flat.course_d, ref_course, 0.001, "course distance counts from the phase start")
+	assert_lt(steep.course_d, flat.course_d - 50.0, "a steeper applied grade is slower along the course")
+	# The grade source: SIM telemetry's applied grade, else the course under the rider.
+	var tel_sim := Telemetry.new()
+	tel_sim.mode = Wl.SIM
+	tel_sim.applied_grade_pct = 3.5
+	assert_eq(WorkoutRules.course_speed_grade(g.state, steep, tel_sim), 3.5)
+	var tel_erg := Telemetry.new()
+	tel_erg.mode = Wl.ERG
+	assert_eq(WorkoutRules.course_speed_grade(g.state, steep, tel_erg), g.state.course.grade_at(steep.course_d))
+	var no_course := WorkoutState.new()
+	assert_eq(WorkoutRules.course_speed_grade(no_course, steep, tel_erg), 0.0)
+
+
 func test_rescue_and_afk_are_staggers() -> void:
 	var g := U.game("threshold", U.players(2))
 	autofree(g)
-	# Rider 2 is rescued for the first 60 s of the first threshold block (index 1, 300 s).
+	# Rider 2 is rescued for the first 60 s of the first threshold block (index 1, 300 s) and
+	# AFK for the first 30 s of the second (index 3); the platform calls on_rescue / on_afk
+	# on the transitions, as the GameHost does.
 	var rescued := func(slot: PlayerSlot, p: PlanPhase, ps: PhaseState, tick: int) -> Dictionary:
 		var v := U.compliant(slot, p, ps)
-		if slot.peer_id == 2 and ps.index == 1 and ps.elapsed_s < 60.0:
+		if slot.peer_id != 2:
+			return v
+		if ps.index == 1 and ps.elapsed_s < 60.0:
 			v["rescue"] = true
 			v["power_w"] = 0.5 * slot.ftp
 			v["applied_target_w"] = int(0.5 * slot.ftp)
-		if slot.peer_id == 2 and ps.index == 3 and ps.elapsed_s < 30.0:
+		if ps.index == 3 and ps.elapsed_s < 30.0:
 			v["afk"] = true
 			v["power_w"] = 0.0
+		if ps.index == 1 and is_zero_approx(ps.elapsed_s):
+			g.on_rescue(2, true)
+		elif ps.index == 1 and is_equal_approx(ps.elapsed_s, 60.0):
+			g.on_rescue(2, false)
+		elif ps.index == 3 and is_zero_approx(ps.elapsed_s):
+			g.on_afk(2, true)
+		elif ps.index == 3 and is_equal_approx(ps.elapsed_s, 30.0):
+			g.on_afk(2, false)
 		return v
-	g.on_rescue(2, true)
-	assert_true(g.state.rider(2).rescue)
 	U.ride(g, rescued)
 	var r := g.state.rider(2)
 	assert_almost_eq(r.interval_fraction(1), (480.0 - 60.0) / 480.0, 0.001)
 	assert_almost_eq(r.interval_fraction(3), (480.0 - 30.0) / 480.0, 0.001)
 	assert_almost_eq(r.tib_s, 2220.0 - 90.0, 0.01, "only the time in band is lost")
 	assert_almost_eq(g.state.rider(1).tib_s, 2220.0, 0.01)
+	assert_false(r.rescue or r.afk, "both staggers ended")
 	g.on_afk(2, true)
 	assert_true(g.state.rider(2).afk)
 	g.on_afk(2, false)
 	assert_false(g.state.rider(2).afk)
 	assert_eq(g.results().row(2)["xp"], WorkoutResults.xp_for(float(g.results().row(2)["kj"]), r.tib_fraction(), 0))
+
+
+## The platform may mark a rider AFK (a dropped peer, a rejoin before fresh pedaling) or
+## rescued before telemetry says so: the callback alone keeps the rider out of band until
+## its false call, and nothing else is taken away.
+func test_callbacks_hold_until_cleared() -> void:
+	var g := U.game("sweet_spot", U.players(2))
+	autofree(g)
+	var marked := func(slot: PlayerSlot, p: PlanPhase, ps: PhaseState, tick: int) -> Dictionary:
+		if slot.peer_id == 2 and ps.index == 1:
+			if is_equal_approx(ps.elapsed_s, 100.0):
+				g.on_afk(2, true)
+			elif is_equal_approx(ps.elapsed_s, 140.0):
+				g.on_afk(2, false)
+			elif is_equal_approx(ps.elapsed_s, 200.0):
+				g.on_rescue(2, true)
+			elif is_equal_approx(ps.elapsed_s, 210.0):
+				g.on_rescue(2, false)
+		return U.compliant(slot, p, ps)
+	var events := U.ride(g, marked)
+	var r := g.state.rider(2)
+	assert_almost_eq(r.interval_fraction(1), (720.0 - 50.0) / 720.0, 0.001, "40 s AFK + 10 s rescue, by callback only")
+	assert_almost_eq(g.state.rider(1).interval_fraction(1), 1.0, 0.0001)
+	assert_false(r.afk_cb or r.rescue_cb)
+	assert_false(r.afk or r.rescue)
+	var end_1: Dictionary = U.of_type(events, WorkoutRules.EV_INTERVAL_END)[1]
+	assert_eq(end_1["r"], [[1, 1000], [2, int(round((720.0 - 50.0) / 720.0 * 1000.0))]])
+	# While marked, the snapshot shows the rider AFK to every client.
+	g.on_afk(2, true)
+	var snap := g.snapshot()
+	assert_eq(int(snap["r"][1][4]) & WorkoutSnapshot.F_AFK, WorkoutSnapshot.F_AFK)
 
 
 func test_every_built_in_session_grades_s_for_compliant_riders() -> void:
@@ -217,4 +305,10 @@ func test_session_preview_for_every_content() -> void:
 		assert_false(pv.is_empty(), id)
 		assert_ne(str(pv["title"]), "WORKOUT_CONTENT_" + id.to_upper(), "%s title is translated" % id)
 	assert_string_contains(str(g.session_preview("easy_30")["lines"][2]), "Sprint 1")
+	var road_line := str(g.session_preview("rolling_road")["lines"][1])
+	assert_string_contains(road_line, "30:00")
+	assert_string_contains(road_line, "76-105% FTP", "the session's own band")
+	assert_eq(WorkoutSession.block_label(g.ctx.strings if g.ctx != null else GameStrings.new(), 3), "Block 3")
 	U.unregister_strings(tr)
+	assert_eq(WorkoutSession.block_label(GameStrings.new(), 4), "Block 4", "plain text without the strings table, never the key")
+	assert_eq(WorkoutSession.block_label(null, 5), "Block 5")

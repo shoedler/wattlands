@@ -107,8 +107,14 @@ func test_placeholders_match() -> void:
 	assert_string_contains(s["WORKOUT_TOAST_SPRINT_HIT"], "{w}")
 	assert_string_contains(s["WORKOUT_LBL_BLOCK"], "{n}")
 	assert_string_contains(s["WORKOUT_PREVIEW_CLAMP"], "{text}")
+	assert_string_contains(s["WORKOUT_PREVIEW_COURSE"], "{lo}")
+	assert_string_contains(s["WORKOUT_PREVIEW_COURSE"], "{hi}")
+	assert_string_contains(s["WORKOUT_BANNER_ROLLING"], "{lo}")
 
 
+## The committed card matches a fresh render. A handful of edge pixels may differ where
+## another platform's libm rounds a sin() the other way (the CI runs on Linux), so the
+## check allows at most 0.1% of the pixels to differ.
 func test_picker_card_is_16_9_and_matches_the_generator() -> void:
 	assert_true(FileAccess.file_exists(CARD))
 	var img := Image.new()
@@ -116,4 +122,10 @@ func test_picker_card_is_16_9_and_matches_the_generator() -> void:
 	assert_eq(img.get_size(), Vector2i(640, 360), "16:9")
 	var fresh := WorkoutArt.picker_card()
 	fresh.convert(img.get_format())
-	assert_eq(img.get_data(), fresh.get_data(), "regenerate with src/games/workout/tools/make_picker_card.gd")
+	assert_eq(fresh.get_size(), img.get_size())
+	var differ := 0
+	for y in img.get_height():
+		for x in img.get_width():
+			if not img.get_pixel(x, y).is_equal_approx(fresh.get_pixel(x, y)):
+				differ += 1
+	assert_lte(differ, int(float(img.get_width() * img.get_height()) * 0.001), "regenerate with src/games/workout/tools/make_picker_card.gd (%d pixels differ)" % differ)

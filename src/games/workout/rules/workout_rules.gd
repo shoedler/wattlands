@@ -9,11 +9,15 @@ extends RefCounted
 ##     before the governor reports one, the planned target x the unverified factor);
 ##   SIM WORK phases (Rolling road): power within the session band (76-105% FTP);
 ##   FREE sprints (SIM flat, virtual gears): cadence >= 60 rpm.
-## A rider in rescue, AFK or disconnected is out of band (a stagger: no other penalty).
+## A rider in rescue, AFK or disconnected is out of band (a stagger: no other penalty), by
+## telemetry's flags or by the platform's on_rescue / on_afk callbacks.
 ## Time in band counts per interval and for the session; the cool-down is not counted.
 ## Sprints are scored with WorkoutSprintTracker (SprintRule's 1.2 x FTP threshold).
-## Each rider's speed and distance come from SpeedModel with P_eff (BRIEF 3.11) on the
-## course grade in course phases and flat otherwise; they only drive the view.
+## Each rider's speed and distance come from SpeedModel with P_eff (BRIEF 3.11), flat
+## outside course phases; in a course phase on the trainer's applied SIM grade (the grade
+## the rider's own speed model follows the course by, so the drawn position matches what
+## the governor applies), or the course grade while the trainer is not in SIM yet. They
+## only drive the view.
 ##
 ## Events (each a JSON-safe Dictionary with "type"):
 ##   {"type": "interval_start", "i": index}
@@ -70,37 +74,54 @@ static func _step_rider(state: WorkoutState, r: WorkoutRiderState, tel: Telemetr
 	r.power_w = tel.power_w
 	r.cadence_rpm = tel.cadence_rpm
 	r.connected = tel.connected
-	r.afk = tel.afk or not tel.connected
-	r.rescue = tel.rescue
+	r.afk = tel.afk or not tel.connected or r.afk_cb
+	r.rescue = tel.rescue or r.rescue_cb
 	var index := ps.index if ps != null else -1
 	if index != r.phase_index:
 		_finish_sprint(r)
 		r.phase_index = index
 		r.course_d = 0.0
 	var p := state.phase(index)
-	var grade := 0.0
-	if state.is_course_phase(index) and state.course != null:
-		grade = state.course.grade_at(r.course_d)
-	var before := r.speed.distance_m
-	r.speed.step(dt, tel.p_eff_w, grade)
-	if state.is_course_phase(index):
-		r.course_d += r.speed.distance_m - before
+	_move(state, r, index, tel, dt)
 	r.stats.add(tel.power_w, dt)
 	if p == null:
 		r.in_band = false
 		return
 	r.in_band = in_band(p, ps, tel, r, state.band_pct)
 	if p.kind == Wl.FREE:
-		if r.sprint == null or r.sprint.phase_index != index:
+		# A rider a tick behind the lead whose sprint was already scored starts no second one.
+		if (r.sprint == null or r.sprint.phase_index != index) and sprint_result(r, index).is_empty():
 			r.sprint = WorkoutSprintTracker.create(r.ftp, index)
-		r.sprint.update(tel.power_w, dt)
+		if r.sprint != null and r.sprint.phase_index == index:
+			r.sprint.update(tel.power_w, dt)
 	if p.kind != Wl.COOLDOWN:
 		r.add_interval_time(index, r.in_band, dt)
+
+
+## Advances the rider's speed model by dt (see the class comment) and, in a course phase,
+## its distance along the course.
+static func _move(state: WorkoutState, r: WorkoutRiderState, index: int, tel: Telemetry, dt: float) -> void:
+	var on_course := state.is_course_phase(index)
+	var grade := course_speed_grade(state, r, tel) if on_course else 0.0
+	var before := r.speed.distance_m
+	r.speed.step(dt, tel.p_eff_w, grade)
+	if on_course:
+		r.course_d += r.speed.distance_m - before
+
+
+## The grade (%) a rider's speed integrates on in a course phase: the trainer's applied SIM
+## grade while telemetry reports SIM, else the course grade at the rider's course distance.
+static func course_speed_grade(state: WorkoutState, r: WorkoutRiderState, tel: Telemetry) -> float:
+	if tel != null and tel.mode == Wl.SIM:
+		return tel.applied_grade_pct
+	return state.course.grade_at(r.course_d) if state.course != null else 0.0
 
 
 ## Is the rider in band right now? (See the class comment.)
 static func in_band(p: PlanPhase, ps: PhaseState, tel: Telemetry, r: WorkoutRiderState, band_pct: Array) -> bool:
 	if tel == null or not tel.connected or tel.afk or tel.rescue:
+		return false
+	if r != null and (r.rescue_cb or r.afk_cb):
 		return false
 	if p.mode == Wl.ERG:
 		var target := float(tel.applied_target_w) if tel.mode == Wl.ERG else 0.0
@@ -188,11 +209,5 @@ static func predict(state: WorkoutState, peer: int, dt: float, local: Telemetry)
 	var r := state.rider(peer)
 	if r == null or local == null:
 		return
-	var grade := 0.0
-	if state.is_course_phase(r.phase_index) and state.course != null:
-		grade = state.course.grade_at(r.course_d)
-	var before := r.speed.distance_m
-	r.speed.step(dt, local.p_eff_w, grade)
-	if state.is_course_phase(r.phase_index):
-		r.course_d += r.speed.distance_m - before
+	_move(state, r, r.phase_index, local, dt)
 	state.plan_t += dt

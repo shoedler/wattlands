@@ -45,7 +45,7 @@ WORKOUT_LBL_BLOCK,Block {n}
 WORKOUT_PREVIEW_RAMP,{from} -> {to}% FTP
 WORKOUT_PREVIEW_ERG,{pct}% FTP
 WORKOUT_PREVIEW_FREE,"Free sprint, flat, virtual gears"
-WORKOUT_PREVIEW_COURSE,"Rolling course, 76-105% FTP"
+WORKOUT_PREVIEW_COURSE,"Rolling course, {lo}-{hi}% FTP"
 WORKOUT_PREVIEW_CLAMP,Clamped: {text}
 WORKOUT_PREVIEW_WARNING,Skipped: {text}
 WORKOUT_HUD_WATTS,Watts
@@ -62,10 +62,10 @@ WORKOUT_STAT_GRADE,Grade
 WORKOUT_STAT_TIB_PCT,In band (%)
 WORKOUT_STAT_INTERVALS,Intervals in band (%)
 WORKOUT_STAT_SPRINT_PEAK_W,Best sprint peak (W)
-WORKOUT_STAT_SPRINTS_HIT,Sprints over 120% FTP
+WORKOUT_STAT_SPRINTS_HIT,Sprints over 120% FTP for 3 s
 WORKOUT_STAT_GROUP_TIB_PCT,Group in band (%)
 WORKOUT_STAT_RIDERS,Riders
-WORKOUT_STAT_GROUP_SPRINTS_HIT,Group sprints over 120% FTP
+WORKOUT_STAT_GROUP_SPRINTS_HIT,Group sprints over 120% FTP for 3 s
 WORKOUT_RESULT_S,Grade S: a perfect ride
 WORKOUT_RESULT_A,Grade A: strong and steady
 WORKOUT_RESULT_B,Grade B: solid work

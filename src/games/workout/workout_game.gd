@@ -58,18 +58,22 @@ func autopilot_intents(_peer_id: int) -> Array:
 	return []
 
 
-## A stagger: the rider is out of band while rescued; nothing else changes.
+## A stagger: the rider is out of band while rescued (until on_rescue(peer, false)); nothing
+## else changes.
 func on_rescue(peer_id: int, active: bool) -> void:
 	var r := state.rider(peer_id)
 	if r != null:
+		r.rescue_cb = active
 		r.rescue = active
 
 
-## A stagger: the slot stays and keeps its scores; it is out of band while AFK.
+## A stagger: the slot stays and keeps its scores; it is out of band while AFK (until
+## on_afk(peer, false)).
 func on_afk(peer_id: int, afk: bool) -> void:
 	var r := state.rider(peer_id)
 	if r != null:
-		r.afk = afk
+		r.afk_cb = afk
+		r.afk = afk or not r.connected
 
 
 ## Workout reads no input: everything is pedaling.

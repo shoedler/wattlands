@@ -122,7 +122,7 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 			errs.append("%s: unknown key" % key)
 	if str(d.get("id", "")) != content_id:
 		errs.append("id: must be \"%s\" (the content id), got \"%s\"" % [content_id, d.get("id", "")])
-	for key in ["label", "summary"]:
+	for key: String in ["label", "summary"]:
 		if not (d.get(key) is String) or not str(d[key]).begins_with("WORKOUT_"):
 			errs.append("%s: must be a WORKOUT_ strings key" % key)
 	if d.has("warmup_only") and not (d["warmup_only"] is bool):
@@ -170,7 +170,7 @@ static func validate(data: Variant, content_id: String) -> Array[String]:
 		var total := 0.0
 		for pd: Dictionary in arr:
 			total += float(pd["duration_s"])
-			for key in ["target_pct", "ramp_to_pct"]:
+			for key: String in ["target_pct", "ramp_to_pct"]:
 				if pd.has(key) and float(pd[key]) > WARMUP_MAX_PCT:
 					errs.append("warmup_only: %s %s is above %s%% FTP" % [pd["label"], key, WARMUP_MAX_PCT])
 		if total > WARMUP_S:
@@ -278,7 +278,7 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 			p.kind = Wl.FREE
 		p.lap = true
 		if p.label.strip_edges() == "":
-			p.label = strings.t("WORKOUT_LBL_BLOCK", {"n": n})
+			p.label = block_label(strings, n)
 		p.open_ended = false
 		s.phases.append(p)
 	var errs: Array[String] = []
@@ -291,6 +291,14 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		push_error("WorkoutSession: .zwo %s rejected: %s" % [path, "; ".join(errs)])
 		return null
 	return s
+
+
+## The label of imported block `n` ("Block 3"), which is also its FIT lap name. Plain text
+## even where Workout's strings aren't registered (a headless run), never the bare key.
+static func block_label(strings: GameStrings, n: int) -> String:
+	if strings != null and strings.has("WORKOUT_LBL_BLOCK"):
+		return strings.t("WORKOUT_LBL_BLOCK", {"n": n})
+	return "Block %d" % n
 
 
 ## Runs the .zwo parser (WorkoutImport, or zwo_parser in tests).
@@ -357,7 +365,7 @@ func preview() -> Dictionary:
 	var strings := GameStrings.new()
 	var lines: Array[String] = []
 	for p in phases:
-		lines.append(describe_phase(p, strings))
+		lines.append(describe_phase(p, strings, band_pct))
 	for c in clamps:
 		lines.append(strings.t("WORKOUT_PREVIEW_CLAMP", {"text": c}))
 	for w in warnings:
@@ -368,8 +376,9 @@ func preview() -> Dictionary:
 	return {"title": title, "total_s": total_with_cooldown_s(), "lines": lines}
 
 
-## One line for a phase: "5:00  Warm-up  50 -> 65% FTP".
-static func describe_phase(p: PlanPhase, strings: GameStrings) -> String:
+## One line for a phase: "5:00  Warm-up  50 -> 65% FTP". `band` is the session's SIM WORK
+## band in % FTP (Rolling road's 76-105).
+static func describe_phase(p: PlanPhase, strings: GameStrings, band: Array = DEFAULT_BAND_PCT) -> String:
 	var what := ""
 	if p.mode == Wl.ERG:
 		if p.has_ramp():
@@ -379,7 +388,8 @@ static func describe_phase(p: PlanPhase, strings: GameStrings) -> String:
 	elif p.kind == Wl.FREE:
 		what = strings.t("WORKOUT_PREVIEW_FREE")
 	else:
-		what = strings.t("WORKOUT_PREVIEW_COURSE")
+		var b: Array = band if band.size() == 2 else DEFAULT_BAND_PCT
+		what = strings.t("WORKOUT_PREVIEW_COURSE", {"lo": _pct(float(b[0])), "hi": _pct(float(b[1]))})
 	return "%s  %s  %s" % [clock(p.duration_s), strings.t(p.label), what]
 
 
