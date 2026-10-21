@@ -252,6 +252,17 @@ func test_set_game_view_places_and_replaces() -> void:
 	assert_false(is_instance_valid(b))
 
 
+func test_game_view_freed_elsewhere_reads_null() -> void:
+	var pv := _make(Vector2(1920, 1080))
+	var v := Node2D.new()
+	pv.set_game_view(v)
+	v.free()
+	assert_null(pv.game_view())
+	var w := Node2D.new()
+	pv.set_game_view(w)
+	assert_eq(pv.game_view(), w, "a new view after the old one was freed")
+
+
 func test_set_game_view_moves_a_parented_view() -> void:
 	var pv := _make(Vector2(1920, 1080))
 	var holder := Node.new()

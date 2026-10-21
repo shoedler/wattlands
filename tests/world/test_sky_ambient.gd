@@ -67,6 +67,14 @@ func test_haze_uses_depth_fog_on_this_engine() -> void:
 	assert_eq(s.haze_begin_m, 120.0, "Siege: haze beyond 120 m")
 
 
+func test_haze_end_before_begin_stays_valid() -> void:
+	var s := _sky()
+	s.haze_begin_m = 200.0
+	s.haze_end_m = 50.0
+	s.apply()
+	assert_gt(s.environment.fog_depth_end, s.environment.fog_depth_begin, "fog never ends before it begins")
+
+
 func test_haze_mesh_is_a_no_op_with_fog() -> void:
 	var s := _sky()
 	var lp := LowPolyMesh.new().add_box(Vector3.ONE, Color.RED, Transform3D(Basis(), Vector3(0, 0, -500)))

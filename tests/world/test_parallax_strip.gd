@@ -38,7 +38,7 @@ func test_scroll_is_world_x_times_factor() -> void:
 func test_tiles_cover_the_width_with_a_narrow_texture() -> void:
 	# Tank's 240 x 80 bg_ground across a 640 px view.
 	var s := _strip(240, 1.0)
-	for wx: float in [0.0, 17.0, 239.0, 240.0, 1000.0]:
+	for wx: float in [0.0, 17.0, 239.0, 240.0, 1000.0, -17.0, -1000.0]:
 		s.world_x = wx
 		var tiles := s.visible_tiles()
 		assert_true(float(tiles[0]["x"]) <= 0.0, "starts at or left of 0 (world_x %s)" % wx)
