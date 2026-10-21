@@ -50,6 +50,20 @@ func test_override_is_the_user_dir() -> void:
 	assert_eq(Paths.user_dir(), tmp)
 
 
+## W2 (sdk-tools): get_override() returns what set_override() set, so a caller can restore it.
+func test_get_override_returns_the_current_override() -> void:
+	assert_eq(Paths.get_override(), "", "none by default")
+	var tmp := _temp()
+	Paths.set_override(tmp.replace("/", "\\") + "/")
+	assert_eq(Paths.get_override(), tmp, "normalised like user_dir()")
+	var saved := Paths.get_override()
+	Paths.set_override(_temp())
+	Paths.set_override(saved)
+	assert_eq(Paths.user_dir(), tmp, "restored")
+	Paths.set_override("")
+	assert_eq(Paths.get_override(), "")
+
+
 func test_override_is_normalised() -> void:
 	var tmp := _temp()
 	Paths.set_override(tmp.replace("/", "\\") + "\\")

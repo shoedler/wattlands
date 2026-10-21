@@ -19,11 +19,14 @@ extends Node
 ##   arrival order, as copies stamped with the rider's time. The governor, the gestures and
 ##   the recorder therefore share one time base.
 ## - Per sample: CadenceEstimator.process() -> gestures.set_erg(governor mode is ERG) and
-##   gestures.on_sample() -> governor.on_sample(). Per tick: W' balance steps on the latest
+##   gestures.on_sample() -> governor.on_sample(). Per tick: gestures.advance(t) fires the
+##   timed gestures (coast, stop_5s, pedal_start) due between samples (W2); W' balance steps on the latest
 ##   raw power, the trainer-speed distance integrates, the speed model steps on
 ##   P_eff = power x slot.p_eff_per_w at the governor's applied SIM grade (0 outside SIM),
 ##   governor.set_course_distance(speed.distance_m), governor.tick(dt), the recorder gets
-##   the latest values (it keeps one record per second), then telemetry_updated.
+##   the latest values every tick (RideRecorder keeps one record per second; a cadence or
+##   speed the trainer doesn't report, or a stale sample's, is passed as -1 = absent, and a
+##   stale sample's power as 0 W), then telemetry_updated.
 ## - A sample older than STALE_S counts as gone: power, cadence and speed read 0.
 ## - Telemetry: power_w, cadence_rpm and speed_kmh are the trainer's (raw); effort and
 ##   p_eff_w follow the session's scaling (p_eff_w == power_w x slot.p_eff_per_w exactly);
@@ -32,8 +35,9 @@ extends Node
 ##   paused, s_left_105/120 and haptic_pct come from governor.status(); phase_index is the
 ##   last start_phase(); cadence_age_s counts from the last sample with a cadence.
 ## - Acks: every directive_applied record from the governor (directives, course grades)
-##   is re-emitted and queued for take_acks() as {id, kind, applied, clamped_by, refused,
-##   reason}; apply_directive() acks exactly once whether or not the governor emits.
+##   is re-emitted and queued for take_acks() as {id, kind, applied, clamped_by, refused
+##   (bool), reason, dropped ([{channel, reason}], W2)}; apply_directive() acks exactly once
+##   whether or not the governor emits.
 ## - A stop_5s gesture in a solo session also emits pause_requested("stop_5s"); the
 ##   governor's own pause_requested (coasting 10 s) is forwarded as is.
 ## - Bands: set_cadence_band/set_power_band forward to a MockTrainer device and emit
@@ -43,10 +47,16 @@ extends Node
 ##   it rebuilds every component around the given device. The device is never freed here;
 ##   its creator owns it. A ride still recording is finished (stopped and saved) first, with
 ##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
-##   cleared and its phase reset to -1, so nothing from an earlier session steers the mock.
+##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
+##   nothing from an earlier session steers the mock and a profile's at_s, surges, ramps
+##   and intervals count from this setup, like the rider's platform time.
 ## - rebind_device(d): a reconnect that hands over a new device object for the same trainer
 ##   keeps the session (plan, phase, time, queues, recorder) and rebinds the governor and the
 ##   sample feed to the new object.
+## - trainer_reconnected() (W2): the same device object reconnected (FtmsConnectionManager
+##   keeps one FtmsTrainer per address, so TrainerService calls this on `reconnected`). The
+##   governor restores the last safe mode through its ramped path
+##   (SafetyGovernor.on_trainer_reconnected, BRIEF 4.4); everything else is kept.
 ## - Lap names: a phase label or lap_marker label that is a strings key is translated (plain
 ##   text passes through); unlabelled lap phases are CORE_LAP_PHASE, the cool-down
 ##   CORE_LAP_COOLDOWN.
@@ -162,6 +172,7 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 		mock.set_cadence_band(0.0, 0.0)
 		mock.set_power_band(0.0, 0.0)
 		mock.set_phase(-1)
+		mock.restart_profile()
 	cadence = _options.get("cadence") as CadenceEstimator
 	if cadence == null:
 		cadence = CadenceEstimator.new()
@@ -361,6 +372,17 @@ func rebind_device(p_device: TrainerDevice) -> void:
 	device.sample_received.connect(_on_sample)
 
 
+## The same trainer reconnected on the same device object (FtmsConnectionManager.reconnected):
+## the governor restores the last safe mode through its ramped path (BRIEF 4.4, 4.5, 4.6.2;
+## SafetyGovernor.on_trainer_reconnected). Plan, phase, time, queues and recorder are kept.
+## Does nothing before setup() or after shutdown().
+func trainer_reconnected() -> void:
+	if not _ready_to_tick or _shut_down:
+		return
+	if governor != null and is_instance_valid(governor):
+		governor.on_trainer_reconnected()
+
+
 ## Advance by dt platform seconds.
 func tick(dt: float) -> void:
 	if not _ready_to_tick or dt <= 0.0:
@@ -375,6 +397,7 @@ func tick(dt: float) -> void:
 	while not _pending.is_empty():
 		var raw: TrainerSample = _pending.pop_front()
 		_process_sample(raw, t)
+	_queue_gestures(gestures.advance(t))
 	var p := _power(t)
 	wbal.step(p, dt)
 	var v_kmh := _speed_kmh(t)
@@ -385,7 +408,7 @@ func tick(dt: float) -> void:
 	governor.set_course_distance(speed.distance_m)
 	governor.tick(dt)
 	if _recording() and not _shut_down:
-		recorder.record(t, p, _cadence(t), v_kmh)
+		recorder.record(t, p, _recorded_cadence(t), _recorded_speed(t))
 	telemetry_updated.emit(_build_telemetry())
 
 
@@ -566,15 +589,19 @@ func _process_sample(raw: TrainerSample, t: float) -> void:
 	if s.has_cadence():
 		_last_cadence_t = t
 	gestures.set_erg(str(_status().get("mode", Wl.OFF)) == Wl.ERG)
-	var fired := gestures.on_sample(s)
-	if not _shut_down:
-		for g in fired:
-			_gesture_queue.append(g)
-			_trim_gestures()
-			gesture_detected.emit(g)
-			if g == Wl.G_STOP_5S and not is_multiplayer:
-				pause_requested.emit("stop_5s")
+	_queue_gestures(gestures.on_sample(s))
 	governor.on_sample(s)
+
+
+func _queue_gestures(fired: Array[StringName]) -> void:
+	if _shut_down:
+		return
+	for g in fired:
+		_gesture_queue.append(g)
+		_trim_gestures()
+		gesture_detected.emit(g)
+		if g == Wl.G_STOP_5S and not is_multiplayer:
+			pause_requested.emit("stop_5s")
 
 
 func _fresh(t: float) -> bool:
@@ -591,6 +618,15 @@ func _cadence(t: float) -> float:
 
 func _speed_kmh(t: float) -> float:
 	return _last.speed_kmh if _fresh(t) and _last.has_speed() else 0.0
+
+
+## For the recorder: -1 (absent) when the trainer reports no cadence or the sample is stale.
+func _recorded_cadence(t: float) -> float:
+	return _last.cadence_rpm if _fresh(t) and _last.has_cadence() else -1.0
+
+
+func _recorded_speed(t: float) -> float:
+	return _last.speed_kmh if _fresh(t) and _last.has_speed() else -1.0
 
 
 func _status() -> Dictionary:
@@ -645,13 +681,21 @@ func _queue_ack(rec: Dictionary) -> void:
 	if clamps is Array:
 		for c: Variant in clamps:
 			clamp_list.append(str(c))
+	var dropped: Array = []
+	var d: Variant = rec.get("dropped", [])
+	if d is Array:
+		for e: Variant in d:
+			if e is Dictionary:
+				dropped.append({"channel": str((e as Dictionary).get("channel", "")),
+					"reason": str((e as Dictionary).get("reason", ""))})
 	_acks.append({
 		"id": rec.get("id", 0),
 		"kind": rec.get("kind", ""),
 		"applied": (applied as Dictionary).duplicate(true) if applied is Dictionary else {},
 		"clamped_by": clamp_list,
-		"refused": rec.get("refused", false),
-		"reason": rec.get("reason", ""),
+		"refused": bool(rec.get("refused", false)),
+		"reason": str(rec.get("reason", "")),
+		"dropped": dropped,
 	})
 	_trim(_acks)
 

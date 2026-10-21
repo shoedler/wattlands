@@ -197,6 +197,81 @@ func test_rebind_device_keeps_the_session() -> void:
 	assert_eq(g.called("setup").size(), 2, "rebinding to the same object does nothing")
 
 
+## W2: the same device object reconnected (BRIEF 4.4): the governor restores the last safe
+## mode through its ramped path; the session stays.
+func test_trainer_reconnected_resyncs_the_governor() -> void:
+	var d := _fake_device()
+	var rec := Fakes.FakeRecorder.new()
+	var r := _rider(d, {"recorder": rec})
+	var g := _gov(r)
+	var plan := _plan()
+	r.set_plan(plan)
+	r.start_phase(1)
+	_run(r, 1.0)
+	r.trainer_reconnected()
+	assert_eq(g.called("on_trainer_reconnected").size(), 1)
+	assert_eq(g.called("setup").size(), 1, "no rebind: same device, same governor binding")
+	assert_eq(r.device, d)
+	assert_eq(r.plan(), plan)
+	assert_eq(r.telemetry().phase_index, 1)
+	assert_eq(r.recorder, rec)
+	r.shutdown()
+	r.trainer_reconnected()
+	assert_eq(g.called("on_trainer_reconnected").size(), 1, "nothing after shutdown")
+	var fresh := LocalRider.new()
+	add_child_autofree(fresh)
+	fresh.trainer_reconnected()
+	assert_null(fresh.governor, "nothing before setup")
+
+
+## W2: the timed gestures (coast, stop_5s, pedal_start) due between samples fire on the tick
+## they are due (GestureRecognizer.advance), not only with the next sample.
+func test_timed_gestures_fire_between_samples() -> void:
+	var r := _rider(_fake_device())
+	var ges := _ges(r)
+	ges.advance_fire = {2: [Wl.G_STOP_5S]}
+	watch_signals(r)
+	_run(r, 3 * DT)
+	assert_eq(ges.advance_calls.size(), 3, "once per tick")
+	assert_almost_eq(ges.advance_calls[1], 2 * DT, 1e-9, "at the tick's platform time")
+	assert_eq(r.take_gestures(), [Wl.G_STOP_5S] as Array[StringName])
+	assert_signal_emitted_with_parameters(r, "gesture_detected", [Wl.G_STOP_5S])
+	assert_signal_emitted_with_parameters(r, "pause_requested", ["stop_5s"])
+
+
+## W2: Telemetry.acks carry refused as a bool and the governor's dropped channels.
+func test_acks_have_a_bool_refused_and_the_dropped_channels() -> void:
+	var r := _rider(_mock())
+	_gov(r).directive_applied.emit({"id": 5, "kind": "request", "applied": {"mode": "SIM"},
+		"clamped_by": [], "refused": 0, "reason": "", "requested": {},
+		"dropped": [{"channel": "haptic", "reason": Wl.REFUSE_HAPTIC_WARMUP, "extra": 1}]})
+	var acks := r.take_acks()
+	assert_eq(acks.size(), 1)
+	assert_eq(typeof(acks[0]["refused"]), TYPE_BOOL)
+	assert_false(acks[0]["refused"])
+	assert_eq(acks[0]["dropped"], [{"channel": "haptic", "reason": Wl.REFUSE_HAPTIC_WARMUP}])
+	_gov(r).directive_applied.emit({"id": 6, "kind": "request", "refused": true, "reason": Wl.REFUSE_RANGE})
+	acks = r.take_acks()
+	assert_true(acks[0]["refused"])
+	assert_eq(acks[0]["dropped"], [], "no dropped list: empty")
+
+
+## W2 (trainer-core's note): a mock that rode through the menus restarts its profile at the
+## session's setup, so `cadence_drop:at_s`, surges, ramps and intervals count from the
+## session start, like the rider's platform time.
+func test_setup_restarts_a_mock_profile() -> void:
+	var m := _mock("erg+cadence_drop:rpm=30,at_s=20,for_s=5")
+	var r := _rider(m)
+	_run(r, 15.0)
+	assert_almost_eq(m.profile_time_s(), 15.0, 1e-6)
+	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	assert_almost_eq(m.profile_time_s(), 0.0, 1e-9, "profile time starts again with the session")
+	_run(r, 7.0)
+	assert_false(m.cadence_drop_active(), "at_s=20 counts from the new setup (22 s since the mock started)")
+	_run(r, 14.0)
+	assert_true(m.cadence_drop_active(), "21 s after the setup")
+
+
 func test_rebind_device_needs_a_set_up_rider() -> void:
 	var r := LocalRider.new()
 	add_child_autofree(r)
@@ -468,7 +543,7 @@ func test_apply_directive_acks_once_when_the_governor_emits() -> void:
 	var acks := r.take_acks()
 	assert_eq(acks.size(), 1)
 	assert_eq(acks[0], {"id": 41, "kind": "request", "applied": {"target_pct": 80.0},
-		"clamped_by": [Wl.CLAMP_SLEW], "refused": false, "reason": ""})
+		"clamped_by": [Wl.CLAMP_SLEW], "refused": false, "reason": "", "dropped": []})
 	assert_eq(r.take_acks(), [], "taken once")
 
 
@@ -664,6 +739,31 @@ func test_recorder_is_fed_while_recording() -> void:
 	var sorted := times.duplicate()
 	sorted.sort()
 	assert_eq(times, sorted)
+
+
+## W2: the recorder gets -1 (absent) for a cadence or speed the trainer doesn't report, and
+## for a stale sample, so the FIT holds no made-up zeros; a stale sample's power is 0 W.
+func test_recorder_gets_absent_values_for_missing_or_stale_fields() -> void:
+	var rec := Fakes.FakeRecorder.new()
+	var d := _fake_device()
+	var r := _rider(d, {"recorder": rec})
+	r.tick(DT)
+	d.emit_sample(180.0)
+	r.tick(DT)
+	var row: Array = rec.records.back()
+	assert_eq(row[1], 180.0)
+	assert_eq(row[2], -1.0, "no cadence from the trainer: absent")
+	assert_eq(row[3], -1.0, "no speed: absent")
+	d.emit_sample(190.0, 88.0, 31.5)
+	r.tick(DT)
+	row = rec.records.back()
+	assert_eq(row[2], 88.0)
+	assert_eq(row[3], 31.5)
+	_run(r, LocalRider.STALE_S + 0.2)
+	row = rec.records.back()
+	assert_eq(row[1], 0.0, "stale: 0 W")
+	assert_eq(row[2], -1.0, "stale: absent")
+	assert_eq(row[3], -1.0)
 
 
 func test_record_option_uses_the_rides_service() -> void:

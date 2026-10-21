@@ -11,8 +11,12 @@ extends GutTest
 ##   - a string or StringName literal that is exactly a guarded name, which is how dynamic
 ##     calls name a method: call("set_target_power", ...), callv(&"write_control", ...),
 ##     Callable(dev, "set_resistance"), call_deferred(...), has_method(...).
-## Not call sites: definitions (`func set_target_power(`), comments and doc comments, and
-## strings that merely mention a name ("never call set_target_power here").
+## Not call sites: definitions (`func set_target_power(`, so the BleTransport implementations'
+## `func write_characteristic(` are definitions), comments and doc comments, and strings that
+## merely mention a name ("never call set_target_power here").
+## ALLOW admits a name anywhere in a file; ALLOW_SITES admits at most n call sites of a name in
+## a file (W2: GdbleTransport's single hand-off of the bytes to the GDBLE device, the
+## &"write_characteristic" in _device_write); a second call site there is flagged.
 ## Names built at run time from pieces cannot be seen by any static scan; code review covers them.
 ## Besides the five names BRIEF 4.6.11 lists, the scan guards TrainerDevice.request_stop (Stop,
 ## 0x08 0x01): the TrainerDevice contract gives it to TrainerController alone, and the exit path
@@ -28,8 +32,11 @@ const ALLOW := {
 	"res://addons/wattlands/trainer/control/trainer_controller.gd": ["set_target_power", "set_simulation", "set_resistance", "request_stop"],
 	"res://addons/wattlands/trainer/ftms_trainer.gd": ["write_control"],
 	"res://addons/wattlands/trainer/ftms_client.gd": ["write_characteristic"],
-	"res://addons/wattlands/trainer/ble/gdble_transport.gd": ["write_characteristic"],
-	"res://addons/wattlands/trainer/ble/bridge_transport.gd": ["write_characteristic"],
+}
+## Path -> {guarded name: the most call sites that file may have}. BridgeTransport only
+## defines write_characteristic (it sends a JSON request), so it needs no entry.
+const ALLOW_SITES := {
+	"res://addons/wattlands/trainer/ble/gdble_transport.gd": {"write_characteristic": 1},
 }
 
 const _QUOTE := 34
@@ -109,7 +116,23 @@ static func _is_ident(c: int) -> bool:
 
 
 ## Violations in one file's source: [{path, line, name, how}] with how "reference" or "dynamic".
-static func scan_source(src: String, path: String, allow: Dictionary = ALLOW) -> Array[Dictionary]:
+## `sites` (ALLOW_SITES by default) admits the first n call sites of a name in that file, in
+## source order; any further one is a violation.
+static func scan_source(src: String, path: String, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES) -> Array[Dictionary]:
+	var found := _call_sites(src, path, allow)
+	var budget: Dictionary = (sites.get(path, {}) as Dictionary).duplicate()
+	var out: Array[Dictionary] = []
+	for v in found:
+		var name := str(v["name"])
+		if int(budget.get(name, 0)) > 0:
+			budget[name] = int(budget[name]) - 1
+			continue
+		out.append(v)
+	return out
+
+
+## Every call site of a guarded name the file's ALLOW entry doesn't admit, in source order.
+static func _call_sites(src: String, path: String, allow: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var lexed := lex(src)
 	var code: String = lexed["code"]
@@ -130,6 +153,7 @@ static func scan_source(src: String, path: String, allow: Dictionary = ALLOW) ->
 		var text := str(s["text"])
 		if GUARDED.has(text) and not allowed.has(text):
 			out.append({"path": path, "line": int(s["line"]), "name": text, "how": "dynamic"})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"]))
 	return out
 
 
@@ -149,13 +173,13 @@ static func gd_files(root: String) -> Array[String]:
 	return out
 
 
-static func scan_roots(roots: Array, allow: Dictionary = ALLOW) -> Dictionary:
+static func scan_roots(roots: Array, allow: Dictionary = ALLOW, sites: Dictionary = ALLOW_SITES) -> Dictionary:
 	var files: Array[String] = []
 	var violations: Array[Dictionary] = []
 	for root: String in roots:
 		for path in gd_files(root):
 			files.append(path)
-			violations.append_array(scan_source(FileAccess.get_file_as_string(path), path, allow))
+			violations.append_array(scan_source(FileAccess.get_file_as_string(path), path, allow, sites))
 	return {"files": files, "violations": violations}
 
 
@@ -217,6 +241,48 @@ func test_the_governor_has_no_call_sites() -> void:
 	var path := "res://addons/wattlands/trainer/control/safety_governor.gd"
 	assert_eq(scan_source(FileAccess.get_file_as_string(path), path, {}).size(), 0,
 		"the governor only talks to its controller")
+
+
+## ble (W2): the BleTransport implementations define write_characteristic; the definitions are
+## no call sites. GdbleTransport hands the bytes to the GDBLE device exactly once (a dynamic
+## &"write_characteristic" in _device_write); BridgeTransport sends a JSON request instead.
+func test_ble_transports_define_and_hand_off_once() -> void:
+	var gdble := "res://addons/wattlands/trainer/ble/gdble_transport.gd"
+	var bridge := "res://addons/wattlands/trainer/ble/bridge_transport.gd"
+	var contract := "res://addons/wattlands/contracts/ble_transport.gd"
+	assert_eq(scan_source(FileAccess.get_file_as_string(bridge), bridge, {}, {}).size(), 0,
+		"BridgeTransport only defines write_characteristic")
+	assert_eq(scan_source(FileAccess.get_file_as_string(contract), contract, {}, {}).size(), 0,
+		"the BleTransport contract only defines it")
+	var raw := scan_source(FileAccess.get_file_as_string(gdble), gdble, {}, {})
+	assert_eq(raw.size(), 1, "GdbleTransport has exactly one call site, its hand-off:
+" + describe(raw))
+	if raw.size() == 1:
+		assert_eq(raw[0]["name"], "write_characteristic")
+		assert_eq(raw[0]["how"], "dynamic")
+	assert_eq(scan_source(FileAccess.get_file_as_string(gdble), gdble).size(), 0, "and ALLOW_SITES admits it")
+
+
+func test_a_second_hand_off_in_gdble_transport_is_flagged() -> void:
+	var gdble := "res://addons/wattlands/trainer/ble/gdble_transport.gd"
+	var src := FileAccess.get_file_as_string(gdble)
+	src += "
+
+func _sneaky(dev: Object) -> void:
+	dev.write_characteristic(\"a\", \"b\", PackedByteArray(), true)
+"
+	var v := scan_source(src, gdble)
+	assert_eq(v.size(), 1, "the extra call site shows:
+" + describe(v))
+	if v.size() == 1:
+		assert_eq(v[0]["how"], "reference")
+	var twice := "func _w(d: Object) -> void:
+	d.call(&\"write_characteristic\")
+	d.call(&\"write_characteristic\")
+"
+	assert_eq(scan_source(twice, gdble).size(), 1, "only one hand-off is admitted")
+	assert_eq(scan_source(twice, "res://addons/wattlands/trainer/ble/bridge_transport.gd").size(), 2,
+		"BridgeTransport has no hand-off allowance")
 
 
 # --- fixtures: the scanner flags a bypass ------------------------------------------------------

@@ -19,7 +19,8 @@ class FakeGovernor:
 	var course_distance: float = -1.0
 	var course_grade: float = NAN
 	var emit_on_apply: bool = true
-	var gear: int = 12
+	## The fake's own gear (the real SafetyGovernor has gear(), so the field has another name).
+	var fake_gear: int = 12
 	var shutdown_count: int = 0
 	var plan: EffortPlan = null
 
@@ -60,9 +61,12 @@ class FakeGovernor:
 		course_distance = distance_m
 
 	func shift(delta: int) -> int:
-		gear = clampi(gear + delta, 1, 24)
+		fake_gear = clampi(fake_gear + delta, 1, 24)
 		calls.append(["shift", delta])
-		return gear
+		return fake_gear
+
+	func gear() -> int:
+		return fake_gear
 
 	func on_sample(sample: TrainerSample) -> void:
 		samples.append(sample)
@@ -75,6 +79,9 @@ class FakeGovernor:
 
 	func resume() -> void:
 		calls.append(["resume"])
+
+	func on_trainer_reconnected() -> void:
+		calls.append(["on_trainer_reconnected"])
 
 	func shutdown() -> void:
 		shutdown_count += 1
@@ -112,6 +119,17 @@ class FakeGestures:
 		seen.append(sample)
 		var out: Array[StringName] = []
 		for g: Variant in fire_at.get(count, []):
+			out.append(StringName(str(g)))
+		return out
+
+	## advance(t) calls, and advance_fire[n] (1-based call count) -> [gesture names].
+	var advance_calls: Array[float] = []
+	var advance_fire: Dictionary = {}
+
+	func advance(t: float) -> Array[StringName]:
+		advance_calls.append(t)
+		var out: Array[StringName] = []
+		for g: Variant in advance_fire.get(advance_calls.size(), []):
 			out.append(StringName(str(g)))
 		return out
 
@@ -237,6 +255,11 @@ class FakeConnectionManager:
 		dev = d
 		status_changed.emit(TrainerDevice.STATUS_READY, "fake ready")
 		trainer_ready.emit(d)
+
+	## A successful reconnect, as the real manager reports it: trainer_ready, then reconnected.
+	func make_reconnected(d: TrainerDevice) -> void:
+		make_ready(d)
+		reconnected.emit(d)
 
 
 ## Records attach_rider / detach_rider.

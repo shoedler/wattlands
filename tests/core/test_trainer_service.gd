@@ -335,6 +335,30 @@ func _session_setup(svc: WlTrainerService, rec: RideRecorderApi = null) -> Local
 	return r
 
 
+## W2 (app-shell): the app shell calls set_menu_ticking(false) when a session or the FTP test
+## starts ticking the rider and set_menu_ticking(true) at the end; the service must stop
+## ticking in between, or the rider would be ticked twice per frame.
+func test_set_menu_ticking_is_the_external_tick_switch() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var r := svc.local_rider()
+	svc._process(1.0)
+	var t0 := r.platform_time()
+	assert_gt(t0, 0.0, "menu time ticks the rider")
+	svc.set_menu_ticking(false)
+	assert_true(svc.is_external_tick())
+	svc._process(1.0)
+	assert_eq(r.platform_time(), t0, "no second ticker during a session")
+	r.setup(2, _settings.profile, _settings.profile.to_slot(2, Wl.FAIR_FTP), svc.device(),
+		{"multiplayer": true, "governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	svc.set_menu_ticking(true)
+	assert_false(svc.is_external_tick())
+	assert_eq(r.peer_id, 1, "handing back sets the menu rider up afresh")
+	svc._process(1.0)
+	assert_gt(r.platform_time(), 0.0, "and menu time ticks it again")
+
+
 func test_handing_ticking_back_sets_the_menu_rider_up_afresh() -> void:
 	_args(["--mock-trainer=erg"])
 	var svc := _make()
@@ -407,6 +431,49 @@ func test_reconnect_with_a_new_trainer_object_during_a_session_rebinds() -> void
 	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the new object's status is mirrored")
 	d1.set_dev_status(TrainerDevice.STATUS_ERROR, "old")
 	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the old object is no longer watched")
+
+
+## W2 (BRIEF 4.4): the manager keeps one FtmsTrainer per address, so a reconnect hands back
+## the same object: trainer_ready, then reconnected. The session rider stays and its governor
+## restores the last safe mode (SafetyGovernor.on_trainer_reconnected).
+func test_reconnect_of_the_same_trainer_object_resyncs_the_governor() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	autofree(d1)
+	_manager.make_ready(d1)
+	var r := _session_setup(svc)
+	var g := r.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d1)
+	assert_eq(svc.local_rider(), r)
+	assert_eq(r.device, d1)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1)
+	assert_eq(g.called("setup").size(), 1, "same object: no rebind")
+	assert_eq(r.plan().size(), 2, "the session plan stays")
+	svc.set_external_tick(false)
+	var menu := svc.local_rider()
+	var g2 := menu.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d1)
+	assert_eq(g2.called("on_trainer_reconnected").size(), 1, "the menu rider resyncs too")
+
+
+func test_reconnect_with_a_new_object_rebinds_then_resyncs() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	var d2 := Fakes.FakeDevice.new()
+	autofree(d1)
+	autofree(d2)
+	_manager.make_ready(d1)
+	var r := _session_setup(svc)
+	var g := r.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d2)
+	assert_push_warning("during a session")
+	assert_eq(r.device, d2)
+	assert_eq(g.setup_device, d2)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1, "the rebound governor learns the flow reset the trainer")
+	_manager.reconnected.emit(d1)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1, "a stale object is ignored")
 
 
 func test_switching_trainers_saves_a_ride_still_recording() -> void:

@@ -9,6 +9,10 @@ extends Node
 ## while no GameHost is running (the GameHost ticks it during a session).
 ##
 ## Details (W1):
+## - Passive until start(): only WlApp.boot() calls it, and the App never boots in a process
+##   whose main loop is not the app (GUT, check_scripts, the -s drivers of run_game_sim and
+##   screenshot), so those never touch Bluetooth; with --mock-trainer, start() never creates
+##   an FtmsConnectionManager at all.
 ## - start() is idempotent. The mock is MockTrainer.from_spec(spec, profile FTP, {seed
 ##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg}); a bare --mock-trainer
 ##   means "erg". The FTMS path adds an FtmsConnectionManager child and calls
@@ -31,7 +35,10 @@ extends Node
 ##   Switching trainers shuts the old rider down (SIM flat, then Stop) first, after saving a
 ##   ride it was still recording. A reconnect that hands over a new device object during a
 ##   session rebinds the session rider (LocalRider.rebind_device) instead, so the GameHost's
-##   rider stays valid. EventBus.panic_requested makes the rider's governor safe.
+##   rider stays valid. A reconnect of the same device object (the manager's `reconnected`,
+##   W2) calls LocalRider.trainer_reconnected(), so the governor restores the last safe mode
+##   through its ramped path (BRIEF 4.4). EventBus.panic_requested makes the rider's governor
+##   safe.
 ## - status_changed mirrors the device's and the manager's status, also on
 ##   EventBus.trainer_status_changed (and trainer_control_lost for "control_lost").
 ## - shutdown_all() shuts down every live LocalRider in the process (App.quit and the exit
@@ -202,6 +209,13 @@ func is_external_tick() -> bool:
 	return _external_tick
 
 
+## The app shell's name for the same switch (W2, app-shell request): false while a GameHost
+## or the FTP test screen ticks the rider (set_external_tick(true)), true when menu time
+## takes over again (set_external_tick(false), with its menu reset).
+func set_menu_ticking(on: bool) -> void:
+	set_external_tick(not on)
+
+
 ## One fixed 0.05 s step of menu time: the rider (and through it the device), or the device
 ## alone before a rider exists. _process calls it once per due step.
 func step() -> void:
@@ -239,6 +253,7 @@ func _start_ftms() -> void:
 	add_child(m)
 	m.status_changed.connect(_on_manager_status)
 	m.trainer_ready.connect(_on_trainer_ready)
+	m.reconnected.connect(_on_trainer_reconnected)
 	m.start(true)
 
 
@@ -250,6 +265,8 @@ func _stop_manager() -> void:
 			_manager.status_changed.disconnect(_on_manager_status)
 		if _manager.trainer_ready.is_connected(_on_trainer_ready):
 			_manager.trainer_ready.disconnect(_on_trainer_ready)
+		if _manager.reconnected.is_connected(_on_trainer_reconnected):
+			_manager.reconnected.disconnect(_on_trainer_reconnected)
 		_manager.disconnect_trainer()
 		if _manager.get_parent() == self:
 			remove_child(_manager)
@@ -401,6 +418,16 @@ func _on_trainer_ready(d: TrainerDevice) -> void:
 		if not info.is_empty():
 			s.set_last_device(info)
 	_set_status(d.status(), d.device_name())
+
+
+## The manager emits trainer_ready(d) and then reconnected(d) after every successful
+## reconnect. A new device object was already rebound (or the rider rebuilt) by
+## _on_trainer_ready; the governor still learns that the trainer was reset to SIM flat.
+func _on_trainer_reconnected(d: TrainerDevice) -> void:
+	if d == null or d != _device:
+		return
+	if _rider != null and is_instance_valid(_rider):
+		_rider.trainer_reconnected()
 
 
 func _on_manager_status(s: String, detail: String) -> void:

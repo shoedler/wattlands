@@ -407,9 +407,9 @@ func test_no_run_seconds_never_quits() -> void:
 	assert_eq(app.quit_codes.size(), 0)
 
 
-func test_fallback_report_is_written() -> void:
+func test_fallback_report_is_written_for_a_non_scripted_run() -> void:
 	var path := _dir.path_join("out/report.json")
-	_args(["--join=K7QX2M", "--game=workout", "--report=" + path])
+	_args(["--game=workout", "--report=" + path])
 	var app := _make()
 	app.exit_reason = "relay_unreachable"
 	app.quit(2)
@@ -418,10 +418,25 @@ func test_fallback_report_is_written() -> void:
 	var d: Dictionary = rep
 	assert_eq(d.get("exit_code"), 2.0)
 	assert_eq(d.get("exit_reason"), "relay_unreachable")
-	assert_eq(d.get("role"), Wl.CLIENT)
-	assert_eq(d.get("room"), "K7QX2M")
+	assert_eq(d.get("role"), "")
+	assert_eq(d.get("game_id"), "workout")
 	for key: String in ["events", "directives", "trace", "fit_paths", "uploads", "desync_warnings", "script_errors", "final_state"]:
 		assert_true(d.has(key), key)
+
+
+## W2 (docs/ARCHITECTURE.md "Scripted peers"): the app shell owns a scripted peer's report and
+## its --run-seconds hard stop (exit 2); WlApp writes no report and never quits on its own.
+func test_scripted_peer_report_and_hard_stop_are_the_app_shells() -> void:
+	var path := _dir.path_join("out/scripted.json")
+	_args(["--join=K7QX2M", "--game=workout", "--report=" + path, "--run-seconds=1"])
+	var app := _make()
+	app.boot()
+	app._process(5.0)
+	assert_eq(app.quit_codes.size(), 0, "no WlApp hard stop for a scripted peer")
+	assert_eq(app.state, "lobby")
+	app.quit(2)
+	assert_eq(app.quit_codes, [2] as Array[int], "quit() still shuts down and quits")
+	assert_false(FileAccess.file_exists(path), "the shell writes the report after App.quit")
 
 
 func test_report_from_the_app_shell_is_kept() -> void:
