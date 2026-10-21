@@ -24,7 +24,7 @@ Nothing here has run against a real trainer yet. `docs/HARDWARE_TEST_PLAN.md` is
 | `color` | `#D55E00` | profile palette (8 colors) | Shown in menus only; sessions use the slot look (section 10) |
 | `units` | metric | metric, imperial | Imperial shows and edits the weight in whole lb (67–440 lb) and stores kg; the weight is the only unit-bearing value the app shows |
 | `weight_kg` | 75 | 20–300 (editor 30–200 kg) | Never leaves the machine unless `share_weight` is on |
-| `share_weight` | off | | Adds the weight to `player_info`; only RAW scaling uses it (speed-model mass) |
+| `share_weight` | off | | Adds the weight to the `player_info` sent while the lobby is RAW, the only scaling that uses it (speed-model mass); other clients never see it, and every lobby_state and session_start carries 75 kg for the other humans |
 | `show_wkg` | off | | Your W/kg on the HUD power gauge and an average W/kg line on the results. Computed on this PC from the local weight and never sent; independent of `share_weight` |
 | `ftp_w` | 200 | 30–2000 (editor 50–600, 5 W steps) | Typing it sets CP = FTP and marks it verified |
 | `ftp_verified` | false | | Set by typing the FTP, finishing the FTP test, or the Strava import. Unverified: every ERG target × 0.85 |
@@ -101,7 +101,7 @@ CP and W′ come from the profile (bots: CP = bot FTP, W′ 20 kJ). It is a disp
 | pause | P | Start (Menu) |
 | panic | Backspace held 1.0 s | View + Menu together (View alone never panics) |
 
-- Everything is rebindable (Settings → Controls) and saved to `input.cfg`. A Controls row shows the action with its first key and first pad binding; the content column lists them all. Esc or B cancels a capture, and so does leaving the page.
+- Everything is rebindable (Settings → Controls) and saved to `input.cfg`. A Controls row shows the action with its first key and first pad binding; the content column lists them all. Esc or B cancels a capture, and so does leaving the page; the page says so. The first row, Reset to defaults, puts every default back (Esc and B on back included) after a Keep / Reset confirm and saves input.cfg.
 - Actions are edge-detected (one per press). A gesture never also arrives as an action (a surge is never also `confirm`), so a menu fed both gets each pick once.
 - While a text field has focus, keyboard presses belong to it (no actions, no Backspace panic); controller input still passes, so View + Menu always panics. On the join page the first code character typed on a physical keyboard goes into the code field without a click. Esc and the arrow keys take the focus off the code field and keep their actions: Esc is `back`, the arrows (Left/Right as well as Up/Down) move the on-screen keyboard and its room lists, and the next code character takes the focus back.
 - Games decide what `swap`, the abilities and `item` do.
@@ -125,7 +125,8 @@ Surge details: the baseline is the mean of the samples in the 10 s before the st
 
 ### 5.3 Pedal-scan menus (`PedalScanList`)
 
-- Menus scan when `InputRouter.pedal_ui_active()`: Autopilot or pedal UI is on (pedal UI defaults to on), or no keyboard or controller has been used yet.
+- Menus scan when `InputRouter.pedal_ui_active()`: Autopilot or pedal UI is on (pedal UI defaults to on), or no keyboard or controller has been used yet. The lobby, the session's pause menu and results also scan when the rider's Autopilot for this session is on (the lobby's "My Autopilot").
+- A Settings page taller than the screen (Controls; Strava at 1080p; Trainer with many found trainers) scrolls its menu column: the highlighted row, and the scan hint under the last row, is always fully in view, whether the scan, the keyboard or a controller moved it. Pages that fit never scroll.
 - Focus steps through the enabled items every `scan_interval_s` (1.6 s). `surge` picks, `coast` backs out (never while the local rider is in ERG). Up/down/left/right move focus and pause scanning for 10 s.
 - ERG auto-confirm (for game shops and pickers shown during ERG): the highlighted item is picked 2 × enabled items × scan interval after the last input or pick, then again two cycles later if the list stays open. Put the recommended item first.
 - App-shell menus pass the local rider's trainer mode to the active menu but never turn on ERG auto-confirm: in ERG the hint reads "keep pedaling" and a coast doesn't back out. Since the menus ride SIM flat (section 11.6), coast works there.

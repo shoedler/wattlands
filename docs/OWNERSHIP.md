@@ -42,7 +42,7 @@ How to read it:
 | `src/games/workout/`, `content/workout/`, `assets/workout/`, `tests/games/workout/`, `.github/workflows/game-workout.yml` | game-workout | The reference game (B 3.7) |
 | `tools/e2e/`, `tools/screenshot`, `tools/screenshot.ps1`, `tools/qa/`, `tools/fit_decode/`, `tests/scenarios/` | qa | End-to-end harness; screenshot tool (its GDScript driver lives in `tools/qa/`, which has no `.gdignore`); fallback FIT decoder; the B 7.4 scenario runner and its assertions |
 | `tools/godot.sh`, `tools/godot.ps1`, `tools/env.sh`, `tools/env.ps1`, `tools/run_tests`, `tools/run_tests.ps1`, `tools/check_scripts.gd`, `tools/lib/` | lead | Wrappers, Godot lock (`godot_lock.mjs`), locks, test runner, script check |
-| `tools/tests/` | lead, per file | Node tests of the wrappers, lock and env scripts (lead); `new_game.test.mjs`, `run_game_sim.test.mjs` (sdk-tools); `screenshot.test.mjs` (qa) |
+| `tools/tests/` | lead, per file | Node tests of the wrappers, lock and env scripts (lead); `new_game.test.mjs`, `run_game_sim.test.mjs` (sdk-tools); `screenshot.test.mjs` (qa); `export_windows.test.mjs` (platform) |
 | `addons/gut/`, `addons/gdble/` | lead | Vendored, pinned (`docs/deps.d/`) |
 | `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `.gitignore`, `gdlintrc`, every `.gdignore` | lead | |
 | `docs/PROTOCOL.md` | net-client | The relay and game-message protocol (net-client wrote it in W1; the lead reviews changes) |
@@ -377,7 +377,7 @@ All rows are covered by `tests/trainer/test_mock_profiles.gd` unless another tes
 | MR6 | `cadence_drop` (`rpm`; `at_s`, or `at_phase` with optional `after_s`; `at_target_pct` with optional `at_phase` and `after_s`; `for_s`, default the rest of the run) | S4 (`erg+cadence_drop:rpm=40,at_s=1200`), T4 S5 (by segment and applied target), F4.2 #7 (`rpm=40,at_s=600,for_s=20`) | `at_phase` is the rider's plan phase index; `at_target_pct` compares the applied ERG target (after the unverified factor) with n % FTP | trainer-core |
 | MR7 | `surge` (`every_s` 60, `for_s` 2, `lift` 0.2, `sim_pct`) | S4 (`erg+surge:every_s=60,for_s=2,lift=0.2,sim_pct=130`; S10 needs ≥ 3 Overdrives a run) | Multiplies cadence and reported speed by 1 + `lift`, and every surge contains at least two notifications so the ERG `surge` gesture fires each time (3.1 C30); `sim_pct` rides n % FTP while the trainer is in SIM | trainer-core, sim |
 | MR8 | Seeded randomness | S4 S7, T4 S7, F4.2 #8 | Jitter, noise and dropouts come from (run seed, slot) | trainer-core |
-| MR9 | Bots | S2.2 | `Bots.RIDER_SPEC` `"erg:compliance=1.0"` | sim |
+| MR9 | Bots | S2.2 | `Bots.RIDER_SPEC` `"erg:compliance=1.0+band"` | sim |
 | MR10 | `--mock-trainer=<profile>` in the app | S6, T6, F6 (commands to play solo with a mock) | | platform, trainer-core |
 
 ### 2.21 Sim helpers

@@ -36,7 +36,8 @@ How to start the app for these tests: the exported build (`node tools/export_win
 
 - [ ] Start the app as above (exported build, or from source with `--allow-hw`). Expected: auto-connect (or connect from Settings), status "ready", live power and cadence on the title screen within 2 s of pedaling.
 - [ ] Another app holding control (start the Wahoo app first, connected): Expected: "another app may hold control" message, no crash.
-- [ ] Mid-ride, start Zwift or the Wahoo app and let it take control. Expected: the session HUD shows "Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect." in the banner area until the trainer is ready again.
+- [ ] Mid-ride, start Zwift or the Wahoo app and let it take control. Expected: the session HUD shows "Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect." in the banner area, with one warning sound, until the trainer is ready again.
+- [ ] Let the Wahoo app hold control, then start a session from the lobby without regaining it. Expected: the session HUD shows the same notice from its first frame, with one warning sound, until the trainer is ready again (Settings, connect the same trainer).
 
 ## 3. SIM flat
 

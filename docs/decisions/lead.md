@@ -94,3 +94,21 @@
 - Alternatives: keep lint reported but non-fatal (docs/decisions/tooling.md); gdlint's defaults (100 columns, 20 public methods, 6 returns, 1000 lines, the fixed member order); format only new files.
 - Reason: a style gate that only reports never converges (2214 gdlint problems and 337 unformatted files when this landed), and game sessions copy the template, so it has to be clean. `class-definitions-order`: our files group members by role (a constant or signal next to the code that uses it, test helpers next to their tests), which a fixed order would scatter. 120 columns: gdformat wraps code at 100 but can't split comments, long string literals or regexes. 100 public methods: the SDK facades (GameHost, NetSession, SafetyGovernor, LocalRider, HudLayer, the app screens) have wide, documented APIs. 25 returns: validators and CLI parsers return one error per check, which reads best as early returns. 3000 lines: NetSession, GameHost, SafetyGovernor and the lobby screen are long and cohesive; splitting them for the linter would hurt.
 - Consequences: gdformat 4.5.0 has bugs Godot exposes. A lambda too long for one line, nested in a call or collection, is wrapped into a form Godot rejects ("Unindent doesn't match the previous indentation level") and can duplicate the file's comments into it; a comment above a dictionary entry it expands can move into the entry; a string literal with a raw line break stops gdtoolkit. The formatting pass replaced such lambdas with methods or local variables, put moved comments back and wrote `\n`; CLAUDE.md lists the pitfalls. `tests/tools/test_template_size.gd` now counts logical lines (a statement wrapped inside brackets counts once): with game.json the formatted template is 452 physical lines but 296 logical ones (295 before formatting), so BRIEF 3.6's "under 300 lines" keeps measuring the code, not the formatter. A game fresh from `tools/new_game` needs one gdformat run, since its shorter names let gdformat join a few wrapped lines; new_game's "next:" line, CLAUDE.md and docs/GAME_SDK.md say so.
+
+## 2026-10-22: A final Definition of Done sweep before the v0.1.0 tag
+
+- Decision: after W4's two fixer rounds, the lead ran one read-only sweep of every BRIEF 9 Definition of Done bullet (14 checkers: one per BRIEF area, one for the docs, one per game brief, with three skeptics trying to refute each reported gap). It confirmed 24 gaps. Three were the missing `v0.1.0` tag. The lead fixed seven doc mismatches itself and the gate coverage (the static step parses every CI workflow as YAML through `uv`; the node step runs every `tests/games/<id>/` folder's Node tests; the fit step decodes `build/core_stack_test`). Eight small fixes went to isolated worktrees, each reviewed by a fresh agent and fixed again where the review found a problem:
+  - the rescue banner always shows (4.6.3);
+  - a mid-ride control loss shows a HUD notice (4.4);
+  - no client learns another rider's weight in any scaling mode (3.2);
+  - offline uploads never count toward the retry cap (3.8);
+  - scenario FITs go to `build/scenarios` for the SDK decode;
+  - one shared not_pedaling detector, with edge tests (3.5, 4.6.3, 4.6.4);
+  - bots follow a published cadence band (3.6);
+  - a Reset to defaults row for bindings and per-session Autopilot scanning (3.5), with over-tall Settings pages scrolling to the highlighted row (3.9);
+  - Workout clients interpolate other riders and blend their own toward the host (5.1);
+  - an export-time default relay URL (`export_windows --relay-url`), so a joining friend types only the code (DoD 2).
+
+  What stays open is listed under "Known gaps in v0.1.0" in `docs/BACKLOG.md`.
+- Alternatives: tag after W4 round 2 and list every sweep finding as a known issue; run a full third W3/W4 cycle.
+- Reason: BRIEF 8 caps W4 at two fixer rounds but leaves the lead's closing step: rerun every gate, finish the docs, then tag. Each fix here is small, tested and reviewed, and four of them close BRIEF 3.2, 3.8, 4.4 and 4.6.3 gaps, which shouldn't ship as known issues when they are hours of work. The rest are P1 or design follow-ups, recorded rather than built.

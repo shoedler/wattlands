@@ -66,7 +66,7 @@ Nothing reads the wall clock except the real-time driver (`SimClock.advance(delt
 
 ## The per-rider stack: LocalRider
 
-`LocalRider` (core) composes one rider's stack on this machine: `TrainerDevice` -> `SafetyGovernor` (which owns the `TrainerController`), `GestureRecognizer`, `WBalance`, `SpeedModel`, `EffortScaling`, the `RideRecorder` and telemetry. Each tick: `device.tick(dt)` emits samples; samples feed gestures, W' balance, the governor (rescue, coasting, warm-up, 3 s power) and the recorder (1 Hz); the speed model integrates P_eff on the applied grade; `governor.tick(dt)` applies the rules and commands the controller (which coalesces to at most 2 writes per second and ramps mode switches). There is one LocalRider per local human rider and one per bot (bots ride `MockTrainer` `erg:compliance=1.0` on the host, with no recorder).
+`LocalRider` (core) composes one rider's stack on this machine: `TrainerDevice` -> `SafetyGovernor` (which owns the `TrainerController`), `GestureRecognizer`, `WBalance`, `SpeedModel`, `EffortScaling`, the `RideRecorder` and telemetry. Each tick: `device.tick(dt)` emits samples; samples feed gestures, W' balance, the governor (rescue, coasting, warm-up, 3 s power) and the recorder (1 Hz); the speed model integrates P_eff on the applied grade; `governor.tick(dt)` applies the rules and commands the controller (which coalesces to at most 2 writes per second and ramps mode switches). There is one LocalRider per local human rider and one per bot (bots ride `MockTrainer` `erg:compliance=1.0+band`, `Bots.RIDER_SPEC`, on the host, with no recorder).
 
 Every rider's governor is local to the machine that owns the rider's trainer. The network never sends device commands (BRIEF 4.6.7).
 

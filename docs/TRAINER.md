@@ -210,7 +210,7 @@ One `FtmsTrainer` is kept per trainer address, so a reconnect hands back the sam
 
 ## 5. MockTrainer (BRIEF 4.2)
 
-`MockTrainer.from_spec(spec, ftp_w, options)` builds a simulated trainer and rider. It serves tests, `GameSimRunner`, bots (`erg:compliance=1.0`) and `--mock-trainer=<profile>` (bare: `erg`).
+`MockTrainer.from_spec(spec, ftp_w, options)` builds a simulated trainer and rider. It serves tests, `GameSimRunner`, bots (`Bots.RIDER_SPEC`, `erg:compliance=1.0+band`) and `--mock-trainer=<profile>` (bare: `erg`).
 
 **Spec grammar.** Components are `name:key=value,…` joined with `+`; names and keys are case-insensitive, values are numbers. A component may repeat, each instance independent. An unknown name or key, a missing required key or a bad value logs `push_error` and falls back to `erg`.
 

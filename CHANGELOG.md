@@ -6,6 +6,14 @@ Platform entries are merged here from `docs/changelog.d/` fragments by the lead.
 
 The first release: the Wattlands platform and the reference game Workout, built in one autonomous run (W0 foundation, W1 sixteen parallel builders, W2 integration, W3 review, W4 fixes).
 
+### lead
+
+- Added `tools/run_tests` and `tools/run_tests.ps1` (one Node runner, `tools/lib/run_tests.mjs`): import, the full GUT suite with the strict gate (exit code, "Run Summary", JUnit count at or above the last green count, no forbidden log line, no pending or risky test outside `tests/pending_allowlist.txt`), the 7.3 scaffold check in a throwaway copy, `check_scripts` plus gdlint and `gdformat --check` (gdtoolkit 4.5.0, `./gdlintrc`) plus a PyYAML parse of every CI workflow (through `uv`, skipped without it), `tools/run_game_sim` over every registered game's contents, `tools/fit_check` on every FIT the sims and tests wrote, every Node suite (game folders under `tests/games/` included) and the 3-peer end-to-end test.
+- Added the machine-wide Godot lock behind `tools/godot.sh` and `tools/godot.ps1` (FIFO tickets, leases, a 4-slot cap on this machine, exit 75 on a lock-wait timeout) and the per-checkout `.userdata/` user dir.
+- Added `tools/export_windows.mjs`: the Windows Desktop export (the GDBLE DLL, LICENSE, CREDITS and third-party notices next to the exe), `--with-vcruntime` and `--smoke`.
+- Added `export_presets.cfg` with a test that the Windows preset ships the GDBLE DLL, and `.github/workflows/lead.yml`, which runs every gate on Linux.
+- Wired the app end to end: autoloads, the input map, the main scene, menus to lobby to session to results, and the merged docs (README, DESIGN, ARCHITECTURE, GAME_SDK, TRAINER, PROTOCOL, HARDWARE_TEST_PLAN, DECISIONS, OWNERSHIP, DEPENDENCIES, CREDITS).
+
 ### platform
 
 #### Unreleased (W1)
@@ -17,6 +25,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - `FtpTest` (P1): the BRIEF 3.2 ramp test with its end rules, best 1-minute power, 0.75 x best FTP, cool-down, save countdown and `back`.
 - `AutoloadLookup`: run-time access to the autoloads for injectable services.
 - Hardening: the session rider becomes the menu rider again when a session hands ticking back (after its ride is saved), profile changes during a session are applied then, `LocalRider.rebind_device()` keeps a session alive when a reconnect hands over a new trainer object, rebuilds and trainer switches save a ride still recording, setup clears a reused MockTrainer's bands and phase, FIT lap names translate strings keys, settings hold JSON values only, and a dropped `FtpTest` releases its hold.
+- Default relay URL per build: `node tools/export_windows.mjs --relay-url=<ws:// or wss:// url>` writes `override.cfg` next to the exe, and Settings uses it as the default relay URL (a rider's own choice and `--relay` still win), so a friend joins with only the room code.
 
 ### trainer-core
 
@@ -44,8 +53,15 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - Opting out of haptics ends a running haptic at once.
 - The no-bypass scan also guards `TrainerDevice.request_stop` (Stop): only `TrainerController` may call it.
 - New tests: the frozen W0 API surface (methods, signals, status and record keys), both duration limits resetting together, factor and mode-grade expiry, the ramp span in the default range, the paused floor counting toward the reset, and a determinism check over a busy seeded ride.
+- One shared not_pedaling detector (BRIEF 3.5): the governor calls `GestureRecognizer.is_not_pedaling`, so the governor, `CadenceEstimator` and the GestureRecognizer share one copy of 15 W and 20 rpm (`GameHost`'s rejoin check calls it too); new tests pin the exact edges of not_pedaling (15 W, 20 rpm) and rescue (45 rpm, 70 rpm, 75 % of the target).
 
 ### sim
+
+#### Unreleased (W4 final, 2026-10-21)
+
+##### Changed
+
+- `Bots.RIDER_SPEC` is `erg:compliance=1.0+band`: bots follow the cadence band a game publishes for them (BRIEF 3.6 `cadence_band`), reaching its centre after a 2 s lag with seeded noise within ±1.5 rpm, and ride 90 rpm (88.5-91.5 rpm with the noise) without one. In ERG, a band step up of more than about 12% (in practice about 18% and up, because of the lag) makes a bot fire the `surge` gesture, as a human following the band would. Runs with bots get new `deterministic_hash` values.
 
 #### Unreleased (W1, 2026-10-21)
 
@@ -53,8 +69,8 @@ The first release: the Wattlands platform and the reference game Workout, built 
 
 - `GestureRecognizer`: pedal_start, surge (power outside ERG, flywheel speed in ERG), coast, stop_5s and the shared not_pedaling detector, with arbitration and re-arming (BRIEF 3.5). New: `advance(t)`, `not_pedaling_s_at(t)`, `not_pedaling_since()`, `is_pedaling()`, `surge_baseline()`, signal `not_pedaling_changed(active)`.
 - `SprintRule`: >= 1.2 x FTP, instantaneous or over a trailing window, with `held_s()` and `best_s()`. New: `current_w()`.
-- `WorkoutImport.parse_zwo` / `parse_zwo_file`: SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (SIM flat); unsupported tags skipped with warnings; the 5-minute warm-up prefix; clamps for the warm-up limits, the 150% and long-phase caps, the 105%/120% duration limits and the 30 s switch spacing, each listed with its reason. New: `clamp_records`, `prefix_inserted`, `total_s`, `WorkoutImport.to_plan(result)`.
-- `WorkoutImport` guards: durations are rounded to whole seconds, a leading byte-order mark is ignored, IntervalsT `Repeat` is limited to 200 (with a warning), workouts longer than 24 h are rejected, and a missing file returns the full result shape.
+- `ZwoImport.parse_zwo` / `parse_zwo_file` (the class was `WorkoutImport` until W4; platform classes carry no game prefix): SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (SIM flat); unsupported tags skipped with warnings; the 5-minute warm-up prefix; clamps for the warm-up limits, the 150% and long-phase caps, the 105%/120% duration limits and the 30 s switch spacing, each listed with its reason. New: `clamp_records`, `prefix_inserted`, `total_s`, `ZwoImport.to_plan(result)`.
+- `ZwoImport` guards: durations are rounded to whole seconds, a leading byte-order mark is ignored, IntervalsT `Repeat` is limited to 200 (with a warning), workouts longer than 24 h are rejected, and a missing file returns the full result shape.
 - `content/strings/sim.csv`: labels, clamp lines, warnings and errors of the .zwo importer.
 - `tests/fixtures/zwo/`: sample .zwo files for every tag, every clamp kind and broken files.
 - Tests: gestures, sprint rule, the .zwo importer, a speed-model oracle sweep with game-feel parameters and effort scaling, and a hand-computed W' balance sequence; seeded property sweeps over random .zwo files and random gesture streams; a PlanValidator check of imported plans that runs once the real validator is merged.
@@ -62,7 +78,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 
 ##### Changed
 
-- `WorkoutImport`: a block split at the 300 s warm-up boundary keeps its full length for the 105% long-phase cap.
+- `ZwoImport`: a block split at the 300 s warm-up boundary keeps its full length for the 105% long-phase cap.
 
 ### ble
 
@@ -98,6 +114,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - `NetRoster`: the 2 Hz roster builder; `LocalRelayServer`: the relay protocol served by Godot.
 - `docs/PROTOCOL.md`: the relay protocol, every game message, int conversion, versioning, reconnect and limits.
 - Hardening: `leave()` cancels a join or create in flight; coalesced directives hold their 100 ms at any poll rate; the lobby refuses `player_info` beyond `max_players`; `set_local_profile()` without games uses the game registry (`WlNetSession.registry`); rate-limited rejoins are retried; the host stamps `telemetry.tm.peer` with the sender; clients clear the snapshot buffer on rejoin and when a session starts or ends; `RelayRooms` keeps one reconnect token per peer; `LoopbackTransport.drop(peer)`; readable texts for every Transport reason.
+- Privacy (BRIEF 3.2): no client learns another rider's shared weight in RAW either: `lobby_state` and `session_start` carry 75 kg for every other human, and `player_info` carries `weight_kg` only while the lobby is RAW (`WlNetSession.wire_player_info()`). A client's ready waits for its first `lobby_state` and follows the `player_info` for that scaling, so a RAW host never starts a rider who shared the weight at 75 kg.
 
 ### rides
 
@@ -109,6 +126,8 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - Rides history with re-upload, and an opt-in import of FTP and weight from Strava (P1).
 - `server/mock_strava`: a zero-dependency mock of Strava's OAuth and upload API for tests.
 - `tools/fit_check`: decodes FIT files with Garmin's FIT SDK and checks sport, records, laps and totals (`--expect-laps`, `--json`).
+- Offline Strava uploads stay in the upload queue however many launches pass without a network; only real upload failures (error responses) count toward the 8-attempt limit.
+- The FIT files the scenario tests write are now also decoded with Garmin's FIT SDK (copied to `build/scenarios/`, which the fit step of `tools/run_tests` checks).
 
 ### sdk-runtime
 
@@ -155,6 +174,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - HUD kit: power gauge with a target band that glows in band, cadence with its band, W' bar, phase timeline with next-phase preview, teammate strip with slot chips (color, shape, pattern, hollow), toasts, rescue, warm-up and pause banners, big readouts and the gear indicator; `HudLayer` places them at anchors or at art-pixel rects through the `PixelViewport` and follows the session bus.
 - Shared Theme and `WlTheme` sizes and colors (Godot's default font until Atkinson Hyperlegible is added).
 - `Sfx`: fifteen synthesized effects, game-registered clips, looping synth clips and a cadence metronome.
+- HUD: the rescue banner always shows (`show_safety_banners = false` now hides only warm-up and pause), and a lost trainer control mid-ride (Request Control 0x05 or Machine Status 0xFF) shows "another app (Zwift, the Wahoo app) may hold control" in the banner area until the trainer is ready again, also when control was already lost before the session started.
 
 ### app-shell
 
@@ -186,6 +206,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - Results screen with grade, rows, XP, unlocks, the saved ride and Upload to Strava (auto-upload honoured). A session without results shows no grade.
 - Scripted peers for the end-to-end test: `--host`, `--join=<code>`, stdout lines, report JSON and exit codes. A session without results, or `--strava-auto-upload` without a Strava connection, exits 1.
 - P1: Recent rooms, a LAN room list (when NetSession provides one), rides history with re-upload, and the FTP test.
+- The Controls page in Settings has a Reset to defaults row (Keep / Reset confirm) that brings back every default binding, Esc and B included, and saves input.cfg; the page says Esc or B cancels a capture. Autopilot switched on in the lobby turns pedal-scan on for the lobby, the session's pause menu and results. Settings pages taller than the screen (Controls; Strava at 1080p) scroll so the highlighted row stays in view.
 
 ### art-pipeline
 
@@ -202,6 +223,10 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - Sessions Easy 30 (default, first-run and zero-input), Sweet spot, Threshold, VO2, Rolling road (30 minutes of SIM on a seeded rolling course, −2% to +6%), E2E (2 minutes inside the warm-up limits) and a sample `.zwo`; `--content=zwo:<path>` imports any `.zwo` file, with its clamps in the session preview.
 - Time in band per interval and rider (ERG ±5% of the applied target, Rolling road 76–105% FTP, sprints cadence ≥ 60 rpm), sprint scoring at 1.2 × FTP, group grade S–D, kJ, average and normalized power, best 1/5/20-minute power, XP, levels and cosmetic pennant unlocks.
 - A 640 × 360 side-scrolling ride view: parallax landscape, one pennant per rider (slot color, shape and pattern), the course profile in Rolling road and the interval blocks on the ground; HUD layout with timeline, power gauge, cadence, W′, teammate strip, big readouts and the gear indicator; a procedural picker card.
+
+##### Changed (Workout)
+
+- A client's ride view draws the other riders between snapshots, behind the newest by the snapshots' mean spacing (100 ms at 10 Hz, about 1 s under the 8-rider load), and the local rider from its own prediction, blended softly toward the host and never moving backwards (BRIEF 5.1).
 
 ### qa
 

@@ -18,7 +18,7 @@ Wattlands runs on Windows 10/11 (x86_64). Build it once from this repository (th
 node tools/export_windows.mjs --smoke
 ```
 
-The build lands in `build/windows/`: `Wattlands.exe`, `Wattlands.pck`, the Bluetooth library `libgdble.windows.x86_64.dll`, `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt`. Copy the whole folder. With the .NET editor the tool points the export at the installed standard template; `--template=<path to windows_release_x86_64.exe>` picks another one. `--with-vcruntime` also copies the Visual C++ runtime next to the exe (see Troubleshooting).
+The build lands in `build/windows/`: `Wattlands.exe`, `Wattlands.pck`, the Bluetooth library `libgdble.windows.x86_64.dll`, `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt`. Copy the whole folder. With the .NET editor the tool points the export at the installed standard template; `--template=<path to windows_release_x86_64.exe>` picks another one. `--with-vcruntime` also copies the Visual C++ runtime next to the exe (see Troubleshooting). `--relay-url=<ws:// or wss:// url>` writes `override.cfg` next to the exe, which makes that relay the build's default (see Playing together); `--smoke` then also checks that the exported app reports it. The built-in `ws://localhost:8787/v1` needs no `override.cfg`, so `--relay-url` with exactly that value writes none.
 
 ## Quick start (players)
 
@@ -31,10 +31,10 @@ Every menu, game, shop and results screen works with no input: focus moves throu
 
 ### Playing together
 
-Multiplayer goes through a small relay server that every PC can reach. The app's default relay is `ws://localhost:8787/v1`, which only works on the PC that runs the relay.
+Multiplayer goes through a small relay server that every PC can reach. A build's default relay is the URL it was exported with: `node tools/export_windows.mjs --relay-url=ws://<relay PC's address>:8787/v1` (or `--relay-url=wss://<hosted relay>/v1`) writes `override.cfg` next to the exe. Without `--relay-url` the default is `ws://localhost:8787/v1`, which only works on the PC that runs the relay.
 
 1. One PC (or a hosted server) runs the relay. With Node.js: `node server/relay/src/main.ts` (it listens on port 8787 and prints its URL; on Node 22.12 to 22.17 add `--experimental-strip-types` after `node`). With Docker: `docker build -t wattlands-relay server/relay`, then `docker run -p 8787:8787 wattlands-relay`. Allow port 8787 through the firewall.
-2. Every rider sets Settings, Network, Relay URL to `ws://<that PC's address>:8787/v1` (the relay PC itself can keep `ws://localhost:8787/v1`).
+2. Give the riders a build exported with `--relay-url=ws://<that PC's address>:8787/v1` (copy the whole folder, `override.cfg` included); they change nothing in Settings and only type the room code. With a build exported without it, every rider sets Settings, Network, Relay URL to `ws://<that PC's address>:8787/v1` (the relay PC itself can keep `ws://localhost:8787/v1`). A Relay URL set in Settings wins over the build's default, and clearing the field goes back to it.
 3. The host picks a game, chooses Host, and reads the room code (like `K7Q-X2M`) to the friends. They choose Join and type the code; dashes, spaces and case don't matter. Joining needs only the code.
 
 A rider who drops can restart the app and join again with the same code within two minutes: they get their place back.
@@ -53,7 +53,7 @@ A rider who drops can restart the app and join again with the same code within t
 | Pause | P | Start |
 | Panic (trainer to safe at once) | Hold Backspace 1 s | View + Menu together |
 
-Every binding can be changed in Settings, Controls and is saved to `input.cfg` in your profile folder. The session screen also has an on-screen PANIC button.
+Every binding can be changed in Settings, Controls and is saved to `input.cfg` in your profile folder. Esc or B cancels a change, and Reset to defaults at the top of that page puts every key and button back. The session screen also has an on-screen PANIC button.
 
 Pedal gestures: pedaling for 3 seconds starts things; a surge (about 30% above your recent power for a second and a half, or a burst of flywheel speed in ERG) confirms; coasting for 3 seconds goes back outside ERG. Stopping for 5 seconds pauses a solo ride outside ERG; in ERG the trainer drops to its floor after 3 seconds and the ride pauses after 10.
 

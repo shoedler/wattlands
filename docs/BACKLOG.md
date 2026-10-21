@@ -20,3 +20,15 @@ Design notes only (BRIEF 1: P2 is never built in this run). Game-specific P2 not
 - A Cloudflare Durable Objects relay (the Node relay's protocol is small enough to port).
 - Uploads to intervals.icu or Garmin Connect next to Strava.
 - Split screen with two trainers on one PC (two LocalRiders, two HUD lanes).
+
+## Known gaps in v0.1.0 (follow-ups, not P2)
+
+Found by the final Definition of Done sweep or left open by W3/W4 with a reason in `docs/DECISIONS.md`. None blocks a game session.
+
+- Hardware and services: nothing has run against a real KICKR CORE, the real Strava API or the real fal API; `docs/HARDWARE_TEST_PLAN.md` is the first pass. CI has never run on GitHub (the workflows parse and their commands ran green locally).
+- Trainer: the app never launches the `trainer_bridge` exe itself (start `trainer_bridge serve` by hand when GDBLE can't be used); RESISTANCE is never used as a fallback for a trainer without ERG or SIM support (the governor doesn't read the FTMS target-setting feature bits); `CadenceEstimator.start_calibration()` has no caller, so a trainer that never reports cadence gets no estimate (the KICKR CORE reports cadence); a SIM-block request in the first 30 s of the first ERG phase is accepted by the DirectiveRouter and then refused by the rider's governor for switch spacing (the refusal is reported, the trainer is never wrong).
+- Network: LAN hosting (`LanTransport`, P1) works but no menu starts it; a client's view can't reach `NetSession.host_time()` or `snapshot_pair_at()` (no net handle in `GameContext`), so Workout interpolates on snapshot ticks; right after the host switches a lobby to RAW, a rider already marked ready counts at 75 kg for one round trip; a FIT lap is missing when a replan takes effect during a client outage; requests wait about 1 s under the 8-rider overload; `NetSession.set_trainer_status` is an uncalled API.
+- Session: retrying trainer control inside a session (a pause-menu item) isn't offered; reconnect through Settings, Trainer. `QUIT_GRACE` uses a SceneTreeTimer, so its timing follows frame timing. A surge after slow soft-pedaling doesn't pick (ADR).
+- Tooling: `tools/new_game` output needs one gdformat pass; `.github/workflows/sim.yml` runs with `--no-lint`; the static step's workflow YAML check needs `uv` (skipped without it, as on the Linux CI image); bleak has no wheels for Python 3.15 (the bridge probe needs 3.12-3.14).
+- Content: the UI font and the audio are the BRIEF 3.9 fallbacks (Godot's default font, synthesized cues), because downloading assets needs approval in chat.
+- `_template` shows every SDK call in 296 logical lines (the 300-line limit counted without blank lines, comments and wrapped continuation lines); its files hold 452 physical lines.
