@@ -1,2 +1,3 @@
 keys,en
 CORE_MODULE_NAME,Core
+CORE_TRAINER_MOCK,Mock trainer ({spec})
