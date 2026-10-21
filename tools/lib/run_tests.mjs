@@ -258,6 +258,8 @@ async function stepScaffold(o) {
     log: path.join(o.project, 'build', 'scaffold_import.log'), timeoutS: SCAFFOLD_TIMEOUT_S,
   });
   notes.push(`import exit ${imp.code}`);
+  fs.mkdirSync(path.join(copy, 'build'), { recursive: true });
+  fs.writeFileSync(path.join(copy, 'build', '.gdignore'), '');
   const junit = path.join(copy, 'build', 'junit_scaffold.xml');
   const log = path.join(o.project, 'build', 'scaffold_gut.log');
   const r = await godot(
