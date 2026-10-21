@@ -850,8 +850,8 @@ func last_hosted_code() -> String:
 ## not announce it). The first call starts listening for beacons on lan_discovery_port (if that
 ## fails: push_warning, an empty list, and no retry until stop_lan_discovery()); poll() then
 ## hears more, forgets rooms silent for LanDiscovery.STALE_S of wall time (lan_time_func) and
-## emits lan_rooms_changed when the list changes. host_room(), join_room(), join_lan(), start_offline() and
-## stop_lan_discovery() stop listening.
+## emits lan_rooms_changed when the list changes. host_room(), join_room(), join_lan(),
+## start_offline() and stop_lan_discovery() stop listening.
 func lan_rooms() -> Array[Dictionary]:
 	if _lan == null:
 		_lan = LanDiscovery.new()

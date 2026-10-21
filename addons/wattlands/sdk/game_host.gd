@@ -187,10 +187,10 @@ func _process(delta: float) -> void:
 ##   pause that was not the rider's own, resumes it; false: the GameHost never pauses or
 ##   resumes on actions or gestures and the app calls pause()/resume() itself; either way
 ##   the SOLO coasting and stop_5s pause, LocalRider.pause_requested, still pauses, BRIEF
-##   4.6.4). A CLIENT's game, players, options
-##   and seed come from the host's session_start: config.session_start (the message that
-##   opened the session, which the app shell received before this GameHost existed) is
-##   applied on the first step(), else the first session_start from the net.
+##   4.6.4). A CLIENT's game, players, options and seed come from the host's session_start:
+##   config.session_start (the message that opened the session, which the app shell received
+##   before this GameHost existed) is applied on the first step(), else the first
+##   session_start from the net.
 ## Returns "" on success or an error string (invalid plan, unknown game, ...).
 func setup(p_config: Dictionary) -> String:
 	if clock != null:
