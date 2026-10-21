@@ -28,13 +28,13 @@ Notes (power numbers, timings, screenshots):
 
 ## 1. Probe (read-only)
 
-The commands in this plan are finalised in W4 together with the README.
+How to start the app for these tests: the exported build (`node tools/export_windows.mjs`, then `build/windows/Wattlands.exe`) never sets the locks. From source, use `tools/godot.ps1 --allow-hw --allow-network --path .` (PowerShell) or `tools/godot.sh --allow-hw --allow-network --path .` (Git Bash); without those two flags the wrappers keep the hardware and network locks on.
 
-- [ ] Run the read-only probe (Python bridge, `tools/trainer_bridge`). Expected: the trainer is found by service 0x1826 or a name containing KICKR; device information, Fitness Machine Feature, Supported Power Range (max about 1800 W) and Supported Resistance Level Range print; Indoor Bike Data prints for 30 s with power, cadence and speed that match your pedaling.
+- [ ] Run the read-only probe: `cd tools/trainer_bridge`, then `uv run --with bleak --with websockets python -m trainer_bridge probe --seconds 30` (bleak needs Python 3.12-3.14 on Windows; it has no wheels for 3.15 yet). Exit codes: 0 done, 2 no adapter or no trainer, 4 connect failed. Expected: the trainer is found by service 0x1826 or a name containing KICKR; device information, Fitness Machine Feature, Supported Power Range (max about 1800 W) and Supported Resistance Level Range print; Indoor Bike Data prints for 30 s with power, cadence and speed that match your pedaling.
 
 ## 2. Connect and read-only data in the app
 
-- [ ] Start the app with `--allow-hw`. Expected: auto-connect (or connect from Settings), status "ready", live power and cadence on the title screen within 2 s of pedaling.
+- [ ] Start the app as above (exported build, or from source with `--allow-hw`). Expected: auto-connect (or connect from Settings), status "ready", live power and cadence on the title screen within 2 s of pedaling.
 - [ ] Another app holding control (start the Wahoo app first, connected): Expected: "another app may hold control" message, no crash.
 
 ## 3. SIM flat
@@ -107,6 +107,13 @@ The builders listed these while working against MockTrainer and fake transports.
 - [ ] Virtual gears: one shift changes resistance at constant flywheel speed by about 6-8% near 30 km/h (the approximation is documented in docs/TRAINER.md).
 - [ ] Strava: the real token response, upload duplicate text and 429 headers match what the mock assumed; revoke works (the client falls back to /oauth/deauthorize).
 
+- [ ] A clean PC without the Visual C++ 2015-2022 x64 runtime: the build made without `--with-vcruntime` shows no trainers; installing the runtime (or a `--with-vcruntime` build) fixes it.
+
 ## Safety findings that need hardware
 
-Findings from the W3 review that can only be confirmed on the real trainer are added here in W4.
+From the W3 review (`docs/DECISIONS.md` has the details):
+
+- [ ] Silent notifications (W3 SAF-7): with the link up but no Indoor Bike Data notifications for more than 3 s (hard to provoke; a trainer that stops notifying while connected), the stack treats the rider as not pedaling, so the coasting floor and pause/AFK still apply. Confirm the KICKR never stops notifying while the flywheel turns, and log what happens when it does.
+- [ ] An unanswered control-point write while ready (W3 ftms-ble-1, fixed): if the KICKR stops answering control-point writes, the app reconnects and restores the last safe mode instead of staying "ready" while dropping writes. Expected after a forced disconnect: the reconnect sequence of section 11 and the safe-mode restore above.
+- [ ] Settings Disconnect, trainer switch and "use mock" (W3 SAF-8, fixed): the trainer goes to SIM flat, then Stop, before the link drops.
+- [ ] A rider's own FTP on a client (W3 SAF-1, fixed): a client riding with a host whose copy of the client's FTP differs still gets ERG targets from its own profile (check the target on the client's power gauge against its own FTP).
