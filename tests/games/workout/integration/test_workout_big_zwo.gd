@@ -58,7 +58,7 @@ func test_a_long_imported_zwo_reaches_every_client() -> void:
 				JSON.parse_string(JSON.stringify(plan.to_dict())), "peer %d's plan is the host's, whole" % peer)
 		var wg := gh.game as WorkoutGame
 		assert_eq(wg.state.phases.size(), plan.phases.size(), "peer %d's view has the whole timeline" % peer)
-		var rider: LocalRider = gh.local_riders[peer]
+		var rider: LocalRider = gh.local_rider(peer)
 		assert_eq(rider.plan().phases.size(), plan.phases.size(), "and its governor rides it")
 		assert_eq(gh.local_phase_state().index, host.tracker.index_of(peer), "in the host's phase")
 	assert_eq(int(host.net.stats.get("oversize_dropped", 0)), 0, "nothing was dropped for size (plan parts, timeline parts)")

@@ -66,13 +66,13 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 	var peer := p.peer_id
 	var in_band := tm != null and absf(tm.power_w - tm.applied_target_w) <= 0.05 * tm.applied_target_w
 	if ph.index != int(_last_index.get(peer, -1)):
-		_last_index[peer] = ph.index
+		_last_index[peer] = ph.index  # the group's phase is the lowest: phase_changed once every rider reached it
+		if _last_index.size() == ctx.players.size() and _first("group%d" % _last_index.values().min()):
+			phase_changed.emit(_last_index.values().min())
 		if ph.kind == Wl.WORK:  # the gauge's band (drawn while in SIM) and a cadence band
 			ctx.hud.power_band(peer, 0.70 * p.ftp, 0.80 * p.ftp)
 			ctx.directives.cadence_band(peer, 80.0, 100.0)
-		if p.slot_index == 0:  # every rider shares one phase sequence, so slot 0 speaks for all
-			phase_changed.emit(ph.index)
-			ctx.hud.banner("_TEMPLATE_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0)
+		if not p.is_bot: ctx.hud.banner("_TEMPLATE_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0, peer)  # its own phase only
 		if ph.index == int(content.get("replan_at", -1)):  # the rest of the plan, validated like the first
 			ctx.directives.replan(peer, EffortPlan.of([PlanPhase.erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH").with_range(55, 60).with_open(30, 50).with_lap()]))
 	if ph.mode == Wl.SIM and int(state["tick"]) % 10 == 0:  # grade_source "game": gentle rollers at 2 Hz

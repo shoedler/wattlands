@@ -179,3 +179,52 @@ func test_a_real_zwo_with_a_zero_power_block_loads() -> void:
 		assert_true(s.clamps.any(func(c: String) -> bool: return c.contains("30%")), "and the preview lists it: %s" % str(s.clamps))
 	DirAccess.remove_absolute(path)
 	DirAccess.remove_absolute(path.get_base_dir())
+
+
+## W4r2 R17: a block raised to the floor reads like the importer's own clamps. Its label names
+## the range it now rides ("Steady 0%" becomes "Steady 30%"; the label is also the banner and the
+## FIT lap name), a ramp raised to the floor at both ends rides as a steady block, and the clamp
+## line reads "Block N (old label): old range to new range, the trainer's 30% FTP floor".
+func test_a_floor_raised_block_is_relabelled_and_listed_like_the_importers_clamps() -> void:
+	WorkoutSession.zwo_parser = Callable()
+	var path := Paths.make_temp_dir("wo5r2").path_join("floor.zwo")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("<workout_file><name>Z</name><sportType>bike</sportType><workout>" +
+		"<Warmup Duration=\"300\" PowerLow=\"0.5\" PowerHigh=\"0.65\"/>" +
+		"<SteadyState Duration=\"60\" Power=\"0\"/>" +
+		"<Ramp Duration=\"120\" PowerLow=\"0.0\" PowerHigh=\"0.2\"/>" +
+		"<Cooldown Duration=\"120\" PowerLow=\"0.4\" PowerHigh=\"0.0\"/>" +
+		"<SteadyState Duration=\"30\" Power=\"1.6\"/></workout></workout_file>")
+	f.close()
+	var s := WorkoutSession.from_zwo("zwo:" + path, path)
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(path.get_base_dir())
+	assert_not_null(s)
+	if s == null:
+		return
+	var strings := GameStrings.new()
+	assert_eq(s.phases[1].label, "Steady 30%", "the label names the target it rides")
+	assert_eq(s.phases[2].label, "Ramp 30%")
+	assert_false(s.phases[2].has_ramp(), "a ramp raised to the floor at both ends is steady")
+	assert_eq(s.phases[2].target_pct, WorkoutSession.FLOOR_PCT)
+	assert_eq(s.phases[3].label, "Cool-down ramp 40-30%", "a ramp down to 0 ends at the floor")
+	assert_eq([s.phases[3].target_pct, s.phases[3].ramp_to_pct], [40.0, WorkoutSession.FLOOR_PCT])
+	assert_eq(s.phases[4].label, "Steady 150%", "the importer's own clamp relabels as before")
+	var lines: Array = s.preview()["lines"]
+	assert_has(lines, "1:00  Steady 30%  30% FTP")
+	assert_has(lines, "2:00  Ramp 30%  30% FTP")
+	assert_has(lines, "2:00  Cool-down ramp 40-30%  40 -> 30% FTP")
+	for c: String in ["Block 2 (Steady 0%): 0% to 30%, the trainer's 30% FTP floor",
+			"Block 3 (Ramp 0-20%): 0-20% to 30%, the trainer's 30% FTP floor",
+			"Block 4 (Cool-down ramp 40-0%): 40-0% to 40-30%, the trainer's 30% FTP floor"]:
+		assert_has(s.clamps, c)
+		assert_has(lines, strings.t("WORKOUT_PREVIEW_CLAMP", {"text": c}))
+	for c: String in s.clamps:
+		assert_true(c.begins_with("Block "), "every clamp line names its block: %s" % c)
+		assert_false(c.contains("->"), "no garbled arrows: %s" % c)
+	var st := WorkoutState.create(s, U.players(1))
+	var banner := WorkoutHud.interval_banner(st, 1, strings)
+	assert_eq(strings.t(str(banner["key"]), banner["args"]), "Steady 30%: 30% FTP for 1:00", "the in-ride banner")
+	var plan := s.build_plan()
+	assert_eq(plan.phase(1).label, "Steady 30%", "the plan (and so the FIT lap) carries the new label")
+	assert_true(PlanValidator.validate(plan)["ok"])

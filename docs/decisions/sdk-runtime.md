@@ -241,3 +241,15 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: `DirectiveRouter.riders` and `HudRouter.riders` became `_riders`, set once through the write-only `bind_riders()`; nothing hands a LocalRider to a game through `ctx`.
 - Alternatives: keep them public and rely on the arch gate alone.
 - Reason: W3 SAF-4 (defence in depth for the coming game sessions; extending the arch gate belongs to its owner).
+
+## 2026-10-21 (W4 round 2): GameHost holds its LocalRiders privately behind local_rider(peer)
+
+- Decision: `GameHost.local_riders` became `_local_riders`; the platform and tests read one rider through `GameHost.local_rider(peer) -> LocalRider`, and the `config` the GameHost keeps no longer holds the `local_riders` map. The `local_riders` setup key is unchanged.
+- Alternatives: keep the public map and rely on the arch gate flagging `.local_riders` (a game reaches the GameHost through `get_parent()` without naming it); a read-only copy (still hands out the LocalRiders).
+- Reason: W4r2 R3 (W3 SAF-4): the GameModule is the GameHost's child, so `get_parent().local_riders[peer]` gave any game a LocalRider whose `setup()`, `set_plan()` and `start_phase()` lift 4.6 rules. The accessor's name is one the no-bypass gate already forbids under `src/games/` (`.local_rider`); the trainer fixer extends the gate for the rest. This is a change to a W0 public field, made at the lead's request; nothing outside the sdk and its tests read it.
+
+## 2026-10-21 (W4 round 2): A client resumes a phase it enters at the host's elapsed time
+
+- Decision: a client entering a phase from a `phase` message with `elapsed_s` > 0 (a restarted client, a phase that changed while its socket or the host was away, a resync) calls `LocalRider.resume_phase(index, elapsed_s)` with the host's elapsed time, through a `has_method` guard until trainer-core's method is merged (then a direct call), else `start_phase(index)`. FIT laps are `resume_phase`'s (a real phase change laps, a restarted client's first phase does not), so the GameHost writes none itself. A `phase` message for the phase the client already rides (same index and start_tick) still only catches its phase clock up.
+- Alternatives: the GameHost writes the lap for a phase that changed while away (trainer-core's `resume_phase` already does, so it would lap twice); send a fresh `start_phase` and patch the governor's clock afterwards (the ramp and course would jump).
+- Reason: W4r2 R8 (W3 NET-2): a restarted client's governor started a 300 s ERG ramp over at 0 while the HUD showed the host's 122 s, and `course` profiles started over; the same fallback hit a rejoin or the host's return across a phase change.

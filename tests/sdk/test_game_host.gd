@@ -858,6 +858,43 @@ func test_ctx_routers_hand_out_no_local_rider() -> void:
 	assert_eq(_rider(b).power_band(), Vector2(120.0, 160.0))
 
 
+## W4 SAF-4 (round 2): the GameModule is the GameHost's child, so get_parent() reaches the
+## GameHost without naming it. No public property of the GameHost hands a game a LocalRider
+## (the rider map is private); the platform reads one rider through local_rider(peer), a name
+## the no-bypass gate forbids under src/games/.
+func test_the_game_host_hands_its_game_no_local_rider() -> void:
+	var b := _solo("tiny", {}, 1)
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	assert_same(_game(b).get_parent(), host, "precondition: the game is the GameHost's child")
+	assert_false("local_riders" in host, "GameHost has no public local_riders map")
+	for prop: Dictionary in host.get_property_list():
+		var pname := str(prop["name"])
+		if pname.begins_with("_") or not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		assert_eq(_riders_in(host.get(pname), 3), 0, "GameHost.%s exposes no LocalRider" % pname)
+	assert_false(host.config.has("local_riders"), "nor does the config it keeps")
+	assert_same(host.local_rider(1), _rider(b), "the platform's accessor: the player's rider")
+	assert_same(host.local_rider(-1), _rider(b, -1), "and a bot's on the host")
+	assert_null(host.local_rider(7), "null for a peer simulated elsewhere")
+
+
+## LocalRiders inside `v` (nested dictionaries and arrays down to `depth`).
+static func _riders_in(v: Variant, depth: int) -> int:
+	if v is LocalRider:
+		return 1
+	if depth <= 0:
+		return 0
+	var n := 0
+	if v is Dictionary:
+		for x: Variant in (v as Dictionary).values():
+			n += _riders_in(x, depth - 1)
+	elif v is Array:
+		for x: Variant in v:
+			n += _riders_in(x, depth - 1)
+	return n
+
+
 ## W3 SDK-5 (GAME_SDK 15): results.session_id is unique per session, so a game that skips a
 ## repeated id (the template's apply_progress) credits a second session with the same game,
 ## content and seed. session_nonce "" (GameSimRunner) keeps the deterministic game/content/seed.

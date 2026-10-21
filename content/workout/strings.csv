@@ -45,6 +45,7 @@ WORKOUT_LBL_BLOCK,Block {n}
 WORKOUT_PREVIEW_RAMP,{from} -> {to}% FTP
 WORKOUT_PREVIEW_ERG,{pct}% FTP
 WORKOUT_PREVIEW_FREE,"Free sprint, flat, virtual gears"
+WORKOUT_PREVIEW_FREE_RIDE,"Free ride, flat, virtual gears"
 WORKOUT_PREVIEW_COURSE,"Rolling course, {lo}-{hi}% FTP"
 WORKOUT_PREVIEW_CLAMP,Clamped: {text}
 WORKOUT_PREVIEW_WARNING,Skipped: {text}
@@ -54,7 +55,7 @@ WORKOUT_BANNER_RAMP,{label}: {from} -> {to}% FTP for {time}
 WORKOUT_BANNER_ERG,{label}: {pct}% FTP for {time}
 WORKOUT_BANNER_SPRINT,{label}! Shift up and go for {time}
 WORKOUT_BANNER_FREE,{label}: ride free for {time}
-WORKOUT_CLAMP_FLOOR,"{label}: {from} -> {to} FTP (the trainer's {floor}% FTP floor)"
+WORKOUT_CLAMP_FLOOR,"{label}: {from} to {to}, the trainer's {floor}% FTP floor"
 WORKOUT_BANNER_ROLLING,{label}: hold {lo}-{hi}% FTP for {time}
 WORKOUT_TOAST_INTERVAL_DONE,{label} done: {pct}% in band
 WORKOUT_TOAST_SPRINT_HIT,Sprint! Peak {w} W

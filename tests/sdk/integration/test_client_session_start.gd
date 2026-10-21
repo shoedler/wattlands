@@ -168,7 +168,7 @@ func test_clients_started_like_the_app_shell_run_the_session() -> void:
 		assert_eq(gh.state, "running", "client %d left the lobby" % peer)
 		assert_true(gh.plans.has(peer), "client %d got its plan" % peer)
 		assert_gt(gh.local_phase_state().index, -1, "client %d got its phase" % peer)
-		var rider: LocalRider = gh.local_riders[peer]
+		var rider: LocalRider = gh.local_rider(peer)
 		assert_eq(rider.telemetry().mode, Wl.ERG, "client %d's governor follows the plan" % peer)
 		assert_eq(gh.ctx.players.size(), 4, "every slot, the bot included")
 		assert_eq(gh.ctx.options["speed"], 4)

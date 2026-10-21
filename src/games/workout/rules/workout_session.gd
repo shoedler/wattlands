@@ -287,7 +287,7 @@ static func from_zwo(content_id: String, path: String, quiet: bool = false) -> W
 		if p.label.strip_edges() == "":
 			p.label = block_label(strings, n)
 		p.open_ended = false
-		_raise_to_floor(p, s, strings)
+		_raise_to_floor(p, s, strings, n)
 		s.phases.append(p)
 	var errs: Array[String] = []
 	if s.phases.is_empty():
@@ -307,23 +307,41 @@ static func is_sprint(p: PlanPhase) -> bool:
 
 
 ## An imported ERG block below the 30 % FTP floor (a Power="0" rest) rides at the floor, as
-## the governor would make it anyway; the change is listed with the importer's clamps.
-static func _raise_to_floor(p: PlanPhase, s: WorkoutSession, strings: GameStrings) -> void:
+## the governor would make it anyway. Like the importer's own clamps (W4r2 R17): the block's label
+## names the new range when it ends in the old one ("Steady 0%" becomes "Steady 30%", which is also
+## the banner and the FIT lap name), a ramp raised to the floor at both ends becomes a steady block,
+## and the clamp line reads "Block 3 (Steady 0%): 0% to 30%, the trainer's 30% FTP floor".
+## `n` is the phase's 1-based number, the block number when the importer gave none.
+static func _raise_to_floor(p: PlanPhase, s: WorkoutSession, strings: GameStrings, n: int) -> void:
 	if p.mode != Wl.ERG:
 		return
 	var low_ramp := p.has_ramp() and p.ramp_to_pct < FLOOR_PCT
 	if p.target_pct >= FLOOR_PCT and not low_ramp:
 		return
-	var was := "%s%%" % _pct(p.target_pct) if not p.has_ramp() else "%s -> %s%%" % [_pct(p.target_pct), _pct(p.ramp_to_pct)]
+	var was := range_text(p)
+	var old_label := p.label
 	p.target_pct = maxf(p.target_pct, FLOOR_PCT)
 	if p.has_ramp():
 		p.ramp_to_pct = maxf(p.ramp_to_pct, FLOOR_PCT)
-	var now := "%s%%" % _pct(p.target_pct) if not p.has_ramp() else "%s -> %s%%" % [_pct(p.target_pct), _pct(p.ramp_to_pct)]
-	var args := {"label": p.label, "from": was, "to": now, "floor": _pct(FLOOR_PCT)}
+		if is_equal_approx(p.ramp_to_pct, p.target_pct):
+			p.ramp_to_pct = PlanPhase.NONE
+	var now := range_text(p)
+	if p.label.ends_with(" " + was):
+		p.label = p.label.left(p.label.length() - was.length()) + now
+	var block := block_label(strings, int(p.meta.get("zwo_block", n)))
+	var name := old_label if old_label == block else "%s (%s)" % [block, old_label]
+	var args := {"label": name, "from": was, "to": now, "floor": _pct(FLOOR_PCT)}
 	if strings != null and strings.has("WORKOUT_CLAMP_FLOOR"):
 		s.clamps.append(strings.t("WORKOUT_CLAMP_FLOOR", args))
 	else:
-		s.clamps.append("{label}: {from} -> {to} FTP (the trainer's {floor}% FTP floor)".format(args))
+		s.clamps.append("{label}: {from} to {to}, the trainer's {floor}% FTP floor".format(args))
+
+
+## A phase's % FTP range as the importer writes it in labels and clamp lines: "30%", "0-20%".
+static func range_text(p: PlanPhase) -> String:
+	if not p.has_ramp():
+		return "%s%%" % _pct(p.target_pct)
+	return "%s-%s%%" % [_pct(p.target_pct), _pct(p.ramp_to_pct)]
 
 
 ## The label of imported block `n` ("Block 3"), which is also its FIT lap name. Plain text
@@ -419,7 +437,7 @@ static func describe_phase(p: PlanPhase, strings: GameStrings, band: Array = DEF
 		else:
 			what = strings.t("WORKOUT_PREVIEW_ERG", {"pct": _pct(p.target_pct)})
 	elif p.kind == Wl.FREE:
-		what = strings.t("WORKOUT_PREVIEW_FREE")
+		what = strings.t("WORKOUT_PREVIEW_FREE" if is_sprint(p) else "WORKOUT_PREVIEW_FREE_RIDE")
 	else:
 		var b: Array = band if band.size() == 2 else DEFAULT_BAND_PCT
 		what = strings.t("WORKOUT_PREVIEW_COURSE", {"lo": _pct(float(b[0])), "hi": _pct(float(b[1]))})

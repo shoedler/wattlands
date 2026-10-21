@@ -403,7 +403,7 @@ func test_the_same_seed_gives_the_same_snapshots() -> void:
 ## W3 SDK-7: "short" shows the SDK calls the default content has no room for. Its SIM phase
 ## (grade_source "game") gets a gentle course_grade at 2 Hz and nothing else does; at that phase's
 ## start every rider's remaining plan is replanned, once, to an open-ended "Finish" the PlanValidator
-## accepts; slot 0 announces every phase with a banner.
+## accepts; every rider's phase change shows a banner on that rider's own peer.
 func test_short_feeds_its_sim_phase_with_course_grade_and_replans_to_an_open_ended_finish() -> void:
 	var ctx := F.make_ctx(2, 0, "short")
 	var g := _game(ctx)
@@ -433,8 +433,43 @@ func test_short_feeds_its_sim_phase_with_course_grade_and_replans_to_an_open_end
 	F.run(g, plans, tick, 30.0)
 	assert_eq(_dirs(ctx).course_grades.size(), grades.size(), "no course grade after the SIM phase")
 	var banners := _hud(ctx).of("banner")
-	assert_eq(banners.size(), 3, "one banner per phase, from slot 0 only")
-	assert_eq(banners[1].slice(1, 4), ["_TEMPLATE_BANNER_PHASE", [ctx.strings.t("_TEMPLATE_PHASE_ROLLERS")], 3.0])
+	for peer: int in [1, 2]:
+		var mine := banners.filter(func(c: Array) -> bool: return c[4] == peer)
+		assert_eq(mine.size(), 3, "one banner per phase, on rider %d's own peer" % peer)
+		if mine.size() == 3:
+			assert_eq(mine[1].slice(1, 4), ["_TEMPLATE_BANNER_PHASE", [ctx.strings.t("_TEMPLATE_PHASE_ROLLERS")], 3.0])
+	assert_eq(banners.size(), 6, "and no banner to every peer")
+
+
+## W4r2 R12: after "short"'s open-ended Finish the riders' phases drift apart (each ends by its own
+## end_phase or max_s). Each rider's banner then comes when ITS phase changes, on its own peer only,
+## never to every peer; bots get none; phase_changed (the group's phase) comes once the last rider
+## got there.
+func test_phase_banners_follow_each_riders_own_phase() -> void:
+	var ctx := F.make_ctx(2, 1, "short")
+	var g := _game(ctx)
+	watch_signals(g)
+	var plans := F.plans_of(g)
+	# Rider 2 and the bot ride their last phase 18 s longer (their Finish ends at max_s).
+	for peer: int in [2, -1]:
+		var late: EffortPlan = plans[peer]
+		late.phase(2).duration_s += 18.0
+	var tick := F.run(g, plans, 0, 160.1)  # rider 1 entered the cool-down at 160 s
+	var cool := ctx.strings.t(PlanValidator.cooldown_phase().label)
+	var to := func(peer: int) -> Array:
+		return _hud(ctx).of("banner").filter(func(c: Array) -> bool: return c[4] == peer)
+	assert_eq((to.call(1) as Array).size(), 4, "rider 1: a banner per phase, the cool-down's included")
+	assert_eq((to.call(1) as Array).back().slice(1, 3), ["_TEMPLATE_BANNER_PHASE", [cool]])
+	assert_eq((to.call(2) as Array).size(), 3, "rider 2 still rides its last phase: no cool-down banner yet")
+	assert_eq(to.call(0), [], "no banner goes to every peer")
+	assert_eq(to.call(-1), [], "bots get no banner")
+	assert_signal_emit_count(g, "phase_changed", 3, "the group is not in the cool-down yet")
+	F.run(g, plans, tick, 18.0)  # 178.1 s: rider 2 and the bot entered it too
+	assert_eq((to.call(2) as Array).size(), 4, "rider 2's cool-down banner comes with its own change")
+	assert_eq((to.call(2) as Array).back().slice(1, 3), ["_TEMPLATE_BANNER_PHASE", [cool]])
+	assert_eq((to.call(1) as Array).size(), 4, "rider 1 gets no second cool-down banner")
+	assert_signal_emit_count(g, "phase_changed", 4)
+	assert_eq(get_signal_parameters(g, "phase_changed", 3), [3], "the group reached the cool-down")
 
 
 ## W3 SDK-7: an open-ended phase ends with end_phase, once, after min_s while the rider is in

@@ -45,6 +45,8 @@ const ZONE_TEMPO := Color("#e3c04a")
 const ZONE_THRESHOLD := Color("#e88a3a")
 const ZONE_VO2 := Color("#d4553f")
 const ZONE_SPRINT := Color("#b45fc4")
+## A FREE phase longer than a sprint (an imported FreeRide): free riding, no target.
+const ZONE_FREE := Color("#a3b0a0")
 const ZONE_COURSE := Color("#4f8fc4")
 const ZONE_COOLDOWN := Color("#6f8296")
 
@@ -75,8 +77,10 @@ static func zone_color(pct: float) -> Color:
 static func phase_color(p: PlanPhase) -> Color:
 	if p.kind == Wl.COOLDOWN:
 		return ZONE_COOLDOWN
+	if p.kind == Wl.FREE:
+		return ZONE_SPRINT if WorkoutSession.is_sprint(p) else ZONE_FREE
 	if p.mode == Wl.SIM:
-		return ZONE_SPRINT if p.kind == Wl.FREE else ZONE_COURSE
+		return ZONE_COURSE
 	return zone_color(maxf(p.target_pct, p.ramp_to_pct if p.has_ramp() else 0.0))
 
 

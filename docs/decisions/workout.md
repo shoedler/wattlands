@@ -43,3 +43,15 @@ Short ADRs for the reference game Workout (`src/games/workout/`, `content/workou
 
 - Decision: a timeline of more than 120 phases travels in parts (`tlo`, `tln`) on consecutive snapshots at the start of each 20-snapshot cycle; a client sets its timeline once every part is in. `WorkoutResults` adds the best 1-, 5- and 20-minute power (only for windows the ride covered) and every sprint's peak to each row's display stats.
 - Reason: W3 NET-3 (a 400-block .zwo pushed the timeline snapshot past 16 KB) and WO-2 (BRIEF 3.7 lists those results; the results screen draws only the row's stats beyond its fixed columns).
+
+## 2026-10-21 (W4 round 2): The preview and the strip tell a free ride from a sprint
+
+- Decision: `WorkoutSession.describe_phase` previews a FREE phase longer than 30 s as a free ride (`WORKOUT_PREVIEW_FREE_RIDE`, "Free ride, flat, virtual gears") and keeps "Free sprint" for sprints; `WorkoutArt.phase_color` gives it the new `ZONE_FREE` (a muted grey-green) and the ride view's strip draws it low (55 % on the strip's scale) and hatched, like the course's "no fixed target" block, where a sprint stands at 130 % in `ZONE_SPRINT`.
+- Alternatives: the endurance colour (reads as an ERG target the rider must hold); leave the strip and fix only the text.
+- Reason: W4r2 R15: after WO-6 the HUD, the rules and the results treated a long FREE phase as free riding, but the lobby still previewed the built-in zwo_sample's 60 s FreeRide as a "Free sprint" and the strip drew it as one.
+
+## 2026-10-21 (W4 round 2): A floor-raised block is relabelled and listed like the importer's clamps
+
+- Decision: `_raise_to_floor` renames a block whose label ends in its old range (the importer's labels do: "Steady 0%" becomes "Steady 30%", "Ramp 0-20%" becomes "Ramp 30%"), turns a ramp raised to the floor at both ends into a steady block, and writes the clamp line in the importer's shape: "Block 3 (Steady 0%): 0% to 30%, the trainer's 30% FTP floor" (block number from the phase's `zwo_block` meta, else its position; just "Block 3: ..." when the label is the block label).
+- Alternatives: keep the importer's label and add the floor to the banner text only (the FIT lap name would still say 0 %).
+- Reason: W4r2 R17: the preview, the in-ride banner and the FIT lap name said "Steady 0%" while the target was 30 %, and the ramp line read "0 -> 20% -> 30 -> 30% FTP".
