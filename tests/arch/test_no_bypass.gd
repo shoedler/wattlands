@@ -187,6 +187,27 @@ func test_the_scan_sees_the_controllers_real_calls() -> void:
 	assert_eq(scan_source(FileAccess.get_file_as_string(path), path).size(), 0, "and the allowlist admits them")
 
 
+## Code references to the TrainerController class outside its own file and the governor.
+static func controller_holders(roots: Array) -> Array[String]:
+	var out: Array[String] = []
+	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])TrainerController(?![A-Za-z0-9_])")
+	var own := ["res://addons/wattlands/trainer/control/trainer_controller.gd",
+		"res://addons/wattlands/trainer/control/safety_governor.gd"]
+	for root: String in roots:
+		for path in gd_files(root):
+			if own.has(path):
+				continue
+			var code: String = lex(FileAccess.get_file_as_string(path))["code"]
+			if re.search(code) != null:
+				out.append(path)
+	return out
+
+
+func test_only_the_governor_holds_a_trainer_controller() -> void:
+	var holders := controller_holders(ROOTS)
+	assert_eq(holders.size(), 0, "TrainerController referenced outside SafetyGovernor:\n" + "\n".join(holders))
+
+
 func test_the_governor_has_no_call_sites() -> void:
 	var path := "res://addons/wattlands/trainer/control/safety_governor.gd"
 	assert_eq(scan_source(FileAccess.get_file_as_string(path), path, {}).size(), 0,
