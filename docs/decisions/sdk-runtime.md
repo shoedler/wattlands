@@ -169,3 +169,15 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: a client's report events get a `phase_started` entry for every rider: its own from its `phase` message, the others from the host's `wl.phase_started` events (the bus already emitted both).
 - Alternatives: only the client's own rider (W1).
 - Reason: qa's e2e compares event sequences across peers and expects `phase_started` per rider on every peer.
+
+## 2026-10-21 (W2): content_schemes admit content ids outside `contents`
+
+- Decision: `game.json` may list `content_schemes` (lower-case scheme names, default `[]`). A content id `<scheme>:<value>` with a listed scheme and a non-empty value starts a session although it is not in `contents`; `WlGameRegistry.content_allowed(manifest, id)` is the one check (GameHost setup, `GameSimRunner --content`), the id reaches `ctx.content_id` unchanged on every peer through `session_start`, and the game validates the value when it loads the content. Workout lists `zwo` for `zwo:<absolute path>` (BRIEF 3.7 Workout Director).
+- Alternatives: accept any id containing `:` for every game; let Workout list every possible file.
+- Reason: game-workout's W1 request; an opt-in per game keeps a typo like `--content=eas:30` an error for every other game.
+
+## 2026-10-21 (W2): The warm-up window of the PlanValidator is [0, 300) s
+
+- Decision: the warm-up rule covers phases that start in the half-open window [0, 300) s (open-ended phases at `min_s`); a phase that starts at exactly 300 s is outside it. This was already the code (`starts[i] >= 300 - 1e-6` ends the scan) and `test_warmup_allows_65_exactly_and_work_from_300_s` covers it; the doc comment now says so.
+- Alternatives: a closed window [0, 300], which would cap every Workout session's first work phase at 65 %.
+- Reason: game-workout's W1 request (every Workout session but `e2e` starts its work at exactly 300 s); BRIEF 4.6.8's "first 5 minutes" end at 300 s, and the governor enforces its own run-time warm-up independently.

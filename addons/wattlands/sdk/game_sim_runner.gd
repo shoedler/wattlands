@@ -247,8 +247,10 @@ func setup(p_args: Dictionary) -> String:
 	if content == "":
 		content = str(manifest["default_content"])
 		args["content"] = content
-	if not (manifest["contents"] as Array).has(content):
-		return "--content: \"%s\" is not one of %s" % [content, ", ".join(PackedStringArray(manifest["contents"]))]
+	if not WlGameRegistry.content_allowed(manifest, content):
+		var schemes: Array = manifest.get("content_schemes", [])
+		return "--content: \"%s\" is not one of %s%s" % [content, ", ".join(PackedStringArray(manifest["contents"])),
+			" (or <scheme>:<value> for %s)" % ", ".join(PackedStringArray(schemes)) if not schemes.is_empty() else ""]
 	var players := int(args["players"])
 	var bots := int(args["bots"])
 	if players < 1:

@@ -10,6 +10,7 @@
 	"pixel_base": [640, 360],
 	"entry": "res://src/games/workout/workout_game.gd",
 	"contents": ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e", "zwo_sample"],
+	"content_schemes": ["zwo"],
 	"default_content": "easy_30",
 	"e2e_content": "e2e",
 	"zero_input_content": "easy_30",

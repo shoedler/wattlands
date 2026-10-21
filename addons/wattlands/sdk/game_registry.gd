@@ -15,6 +15,10 @@ extends Node
 ## player_options (entries {id, type: "toggle"|"int"|"choice", default, label?, min, max,
 ## step (int, default 1), choices: [{value, label}]}). Labels default to
 ## <ID>_OPT_<OPTION ID>; content labels are <ID>_CONTENT_<CONTENT ID> (or the bare id).
+## W2 addition: content_schemes (optional list of lower-case scheme names, default []): a
+## content id "<scheme>:<value>" with a listed scheme is accepted although it is not in
+## `contents` (Workout's "zwo:<absolute path>" imports any .zwo file); the platform passes it
+## to ctx.content_id unchanged and the game validates the value (content_allowed()).
 ##
 ## Validation (validate_manifest) names the failing field first: "<field>: <reason>", for
 ## example "presentation: must be \"2d\" or \"3d\"" or "options[1].default: 7 is outside
@@ -208,6 +212,17 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 			return "%s: must be one of contents" % f
 	if m.has("first_run_priority") and not is_whole(m["first_run_priority"]):
 		return "first_run_priority: must be a whole number"
+	if m.has("content_schemes"):
+		var schemes: Variant = m["content_schemes"]
+		if not (schemes is Array):
+			return "content_schemes: must be a list of scheme names"
+		var seen_schemes := {}
+		for sv: Variant in schemes:
+			if not (sv is String) or not _valid_id(str(sv)) or str(sv) == TEMPLATE_ID:
+				return "content_schemes: \"%s\" is not a scheme name matching ^[a-z][a-z0-9_]*$" % str(sv)
+			if seen_schemes.has(str(sv)):
+				return "content_schemes: \"%s\" is listed twice" % str(sv)
+			seen_schemes[str(sv)] = true
 	if m.has("picker_image") and not (m["picker_image"] is String):
 		return "picker_image: must be a res:// path string"
 	for f: String in ["options", "player_options"]:
@@ -493,10 +508,26 @@ static func parse_json(text: String) -> Variant:
 	return json.data
 
 
+## True when `content_id` may start a session of the game `m` (a game.json): one of its
+## `contents`, or "<scheme>:<value>" with a non-empty value and a scheme listed in its
+## `content_schemes`. The game checks the value itself when it loads the content.
+static func content_allowed(m: Dictionary, content_id: String) -> bool:
+	var contents: Variant = m.get("contents", [])
+	if contents is Array and (contents as Array).has(content_id):
+		return true
+	var colon := content_id.find(":")
+	if colon <= 0 or colon == content_id.length() - 1:
+		return false
+	var schemes: Variant = m.get("content_schemes", [])
+	return schemes is Array and (schemes as Array).has(content_id.substr(0, colon))
+
+
 ## A copy with whole numbers as int and optional fields filled (first_run_priority 0,
-## picker_image "", options [], player_options []).
+## picker_image "", options [], player_options [], content_schemes []).
 static func normalized(m: Dictionary) -> Dictionary:
 	var out := m.duplicate(true)
+	if not out.has("content_schemes"):
+		out["content_schemes"] = []
 	for f: String in ["min_players", "max_players"]:
 		out[f] = int(out[f])
 	out["first_run_priority"] = int(out.get("first_run_priority", 0))

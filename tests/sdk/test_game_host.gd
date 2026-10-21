@@ -42,6 +42,18 @@ func _rider(b: Dictionary, peer: int = 1) -> LocalRider:
 	return b["riders"][peer]
 
 
+## game-workout W1: a content id "<scheme>:<value>" passes through to ctx.content_id when
+## the game lists the scheme in content_schemes; any other id outside `contents` is refused.
+func test_a_listed_content_scheme_passes_the_content_id_through() -> void:
+	var m := Kit.registry(_root).manifest("fx_solo").duplicate(true)
+	m["content_schemes"] = ["zwo"]
+	var b := _solo("zwo:C:/rides/my.zwo", {"manifest": m})
+	assert_eq(b["err"], "")
+	assert_eq(_host(b).ctx.content_id, "zwo:C:/rides/my.zwo")
+	assert_string_starts_with(str(_solo("url:x", {"manifest": m})["err"]), "content_id:")
+	assert_string_starts_with(str(_solo("zwo:C:/rides/my.zwo")["err"]), "content_id:", "fx_solo lists no scheme")
+
+
 func test_setup_errors_name_the_problem() -> void:
 	assert_string_starts_with(str(_solo("tiny", {"game_id": "nope"})["err"]), "game_id:")
 	assert_string_starts_with(str(_solo("zzz")["err"]), "content_id:")

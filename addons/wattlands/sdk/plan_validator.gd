@@ -4,7 +4,8 @@ extends RefCounted
 ## 3-minute cool-down at 50% FTP (BRIEF 3.6). Owned by sdk-runtime; public API frozen after
 ## W0. It only accepts or rejects (the .zwo importer clamps before it runs).
 ##
-## Rejects a plan whose first 300 s break the warm-up limits (4.6.8: every ERG target,
+## Rejects a plan whose first 300 s (the half-open window [0, 300): a phase that starts at
+## exactly 300 s is outside it) break the warm-up limits (4.6.8: every ERG target,
 ## ramp end and range_pct bound <= 65% FTP; SIM phases are allowed there because the
 ## governor clamps their grade to -2..+3 % and drops haptics during warm-up), or whose
 ## ERG phases break 4.6.1: any target/ramp/range_pct value above 150% or below 0; a phase

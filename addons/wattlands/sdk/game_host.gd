@@ -484,8 +484,9 @@ func _setup_authority() -> String:
 	var content_id := str(config.get("content_id", ""))
 	if content_id == "":
 		content_id = str(manifest.get("default_content", ""))
-	if not (manifest.get("contents", []) as Array).has(content_id):
-		return "content_id: \"%s\" is not one of %s" % [content_id, JSON.stringify(manifest.get("contents", []))]
+	if not WlGameRegistry.content_allowed(manifest, content_id):
+		return "content_id: \"%s\" is not one of %s%s" % [content_id, JSON.stringify(manifest.get("contents", [])),
+			" or <scheme>:<value> for a scheme in %s" % JSON.stringify(manifest["content_schemes"]) if not (manifest.get("content_schemes", []) as Array).is_empty() else ""]
 	game = config.get("game") as GameModule
 	if game == null:
 		game = WlGameRegistry.instantiate_manifest(manifest)
