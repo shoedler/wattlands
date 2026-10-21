@@ -241,7 +241,8 @@ static func replay_messages(params: Dictionary, net: WlNetSession) -> Array[Dict
 	return out
 
 
-## A bot's LocalRider: MockTrainer erg at compliance 1.0 with the bot FTP, no recorder.
+## A bot's LocalRider: MockTrainer Bots.RIDER_SPEC ("erg:compliance=1.0+band": erg at
+## compliance 1.0 plus the band cadence policy) with the bot FTP, no recorder.
 func make_bot_rider(
 	slot: PlayerSlot, role: String, scaling: String, game_id: String, content_id: String, seed: int
 ) -> LocalRider:

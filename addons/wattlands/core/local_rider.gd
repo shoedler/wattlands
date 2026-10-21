@@ -3,8 +3,8 @@ extends Node
 ## One rider's trainer stack on this machine (BRIEF 4.1): TrainerDevice -> SafetyGovernor
 ## -> telemetry, with the GestureRecognizer, W' balance, speed model, effort scaling and the
 ## ride recorder. One per local human rider and one per bot (bots on the host, with a
-## MockTrainer "erg:compliance=1.0" and no recorder). Owned by platform; public API frozen
-## after W0. Runs with PROCESS_MODE_ALWAYS and advances only through tick(dt).
+## MockTrainer Bots.RIDER_SPEC "erg:compliance=1.0+band" and no recorder). Owned by platform;
+## public API frozen after W0. Runs with PROCESS_MODE_ALWAYS and advances only through tick(dt).
 ##
 ## Per tick: device.tick(dt) -> new samples feed gestures, W' balance (on raw power), the
 ## governor (rescue/coasting/warm-up) and the recorder (1 Hz); the speed model integrates
