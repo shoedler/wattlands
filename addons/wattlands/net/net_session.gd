@@ -45,8 +45,12 @@ extends Node
 ## (reason "dropped"), one that came back gets peer_joined and rejoin_requested, every other
 ## connected session peer gets resync_requested (the GameHost resends its state). A client
 ## sends its player_info (and a pending ready-up) again when the host comes back.
-## Privacy (W3 PROF-2): in a WKG lobby p_eff_per_w is 75 / weight, so the lobby_state the
-## clients get carries 1.0 (the 75 kg reference) for every human; the host keeps the values.
+## Privacy (W3 PROF-2, BRIEF 3.2): the lobby_state the clients get carries rider_mass_kg 75 (the
+## reference) for every human in every scaling mode, and in WKG p_eff_per_w 1.0 (75 / weight
+## would give the weight away); the host keeps the real values, and a client's lobby_slots()
+## takes its own from its own player_info. A client's player_info carries weight_kg only in a
+## RAW lobby (the only mode that uses it) and p_eff_by_mode's WKG entry only in a WKG lobby,
+## and it is re-sent whenever a scaling change changes what it carries.
 
 ## "offline", "connecting", "hosting", "joined", "reconnecting", "error".
 signal state_changed(state: String, detail: String)
@@ -190,6 +194,8 @@ var _local_profile: RiderProfile = null
 var _local_profile_games: Dictionary = {}
 var _local_profile_trainer: String = ""
 var _ready_wanted: bool = false
+# Client: the player_info last sent to the host, as it went out (wire_player_info()).
+var _sent_info: Dictionary = {}
 
 # Host / offline lobby model.
 var _infos: Dictionary = {}
@@ -252,7 +258,7 @@ var _tokens: float = -1.0
 var _tokens_t: float = 0.0
 var _still_polls: int = 0
 var _outq: Array = []
-# The lobby_state text clients get (redacted in WKG); _lobby_text is the host's own.
+# The lobby_state text clients get (_redacted_lobby); _lobby_text is the host's own.
 var _lobby_wire: String = ""
 
 # LAN (P1): the join page's beacon listener, the list last emitted, the LanTransport made by
@@ -389,7 +395,8 @@ func leave() -> void:
 ## player_options, games ({id: version}).
 ## Optional extras: haptic_intensity, trainer (status text), p_eff_mode (the scaling
 ## mode p_eff_per_w was computed for) and p_eff_by_mode ({mode: value}); missing fields
-## get defaults.
+## get defaults. A client sends it as wire_player_info() for the lobby's scaling mode
+## (weight_kg only in RAW, BRIEF 3.2) and keeps the full copy for its own lobby_slots() entry.
 func set_local_player_info(info: Dictionary) -> void:
 	var src := info
 	if not info.has("games"):
@@ -566,9 +573,10 @@ func lobby_slots() -> Array[PlayerSlot]:
 		s.apply_look(s.slot_index)
 		s.scaling_mode = scaling
 		if not is_authority() and s.peer_id == local_peer and not s.is_bot:
-			# A WKG lobby_state carries the 75 kg reference for every human (W3 PROF-2); this
-			# rider's own value comes from its own player_info.
+			# A client's lobby_state carries the 75 kg reference for every human (W3 PROF-2);
+			# this rider's own values come from its own player_info.
 			s.p_eff_per_w = _p_eff_for(_local_info, scaling)
+			s.rider_mass_kg = _mass_for(_local_info, scaling)
 		s.options = {}
 		if popts is Dictionary and (popts as Dictionary).get(s.peer_id) is Dictionary:
 			s.options = ((popts as Dictionary)[s.peer_id] as Dictionary).duplicate(true)
@@ -765,7 +773,9 @@ func set_local_profile(
 	set_local_player_info(info)
 
 
-## player_info fields from a profile for scaling `mode` (weight only if shared).
+## player_info fields from a profile for scaling `mode`: weight_kg only if shared and `mode` is
+## RAW, the WKG entry of p_eff_by_mode (75 / weight) only when `mode` is WKG (BRIEF 3.2: the
+## host receives only what the selected scaling needs).
 static func player_info_from_profile(
 	profile: RiderProfile,
 	mode: String = Wl.FAIR_FTP,
@@ -791,13 +801,28 @@ static func player_info_from_profile(
 		"player_options": player_options.duplicate(true),
 		"games": games.duplicate(true),
 	}
-	if profile.share_weight:
+	if profile.share_weight and mode == Wl.RAW:
 		info["weight_kg"] = profile.weight_kg
+	if mode == Wl.WKG:
 		by_mode[Wl.WKG] = profile.p_eff_per_w(Wl.WKG)
 	info["p_eff_by_mode"] = by_mode
 	if trainer != "":
 		info["trainer"] = trainer
 	return info
+
+
+## `info` as a client sends it to the host in a lobby with scaling `mode` (BRIEF 3.2, the host
+## receives only what the selected scaling needs): weight_kg only in RAW (the speed model's
+## mass) and the WKG entry of p_eff_by_mode (75 / weight) only in WKG. Everything else is
+## unchanged; `info` itself is not modified.
+static func wire_player_info(info: Dictionary, mode: String) -> Dictionary:
+	var out := info.duplicate(true)
+	if mode != Wl.RAW:
+		out.erase("weight_kg")
+	var by: Variant = out.get("p_eff_by_mode")
+	if mode != Wl.WKG and by is Dictionary:
+		(by as Dictionary).erase(Wl.WKG)
+	return out
 
 
 ## Register a game.json manifest (Dictionary): its min/max players, bots flag and option
@@ -1497,6 +1522,14 @@ func _on_lobby_state(data: Dictionary) -> void:
 		_send_player_info()
 	lobby_changed.emit(lobby)
 	_emit_bus("lobby_changed", [lobby])
+	# A scaling change can change what player_info carries (weight_kg only in RAW) even when
+	# the info itself is unchanged; the lobby_changed handlers above may already have re-sent.
+	if (
+		role == Wl.CLIENT
+		and not _sent_info.is_empty()
+		and wire_player_info(_local_info, _lobby_scaling()) != _sent_info
+	):
+		_send_player_info()
 
 
 func _on_refused_msg(data: Dictionary) -> void:
@@ -1560,7 +1593,14 @@ func _buffer_snapshot(data: Dictionary) -> bool:
 
 func _send_player_info() -> void:
 	_ensure_local_info()
-	_send(host_peer, Protocol.game_msg("player_info", _local_info))
+	var wire := wire_player_info(_local_info, _lobby_scaling())
+	if _send(host_peer, Protocol.game_msg("player_info", wire)):
+		_sent_info = wire
+
+
+## The lobby's scaling mode as this peer knows it (a client: the last lobby_state's).
+func _lobby_scaling() -> String:
+	return _scaling if is_authority() else str(lobby.get("scaling", Wl.FAIR_FTP))
 
 
 # --- lobby model ---------------------------------------------------------------------------
@@ -1633,21 +1673,26 @@ func _publish_lobby() -> void:
 	)
 	_lobby_text = Protocol.encode(msg)
 	lobby = Protocol.decode(_lobby_text)
-	_lobby_wire = _lobby_text if _scaling != Wl.WKG else Protocol.encode(_redacted_lobby(msg))
+	_lobby_wire = Protocol.encode(_redacted_lobby(msg))
 	lobby_changed.emit(lobby)
 	_emit_bus("lobby_changed", [lobby])
 	if role == Wl.HOST and _in_room():
 		_send_text(Wl.ALL_PEERS, "lobby_state", _lobby_wire, "lobby:0")
 
 
-## lobby_state as clients get it in WKG: every human's p_eff_per_w (75 / weight) becomes 1.0,
-## the 75 kg reference, so no client learns another rider's weight (W3 PROF-2). The host keeps
-## the real values in its own `lobby` (its GameHost needs them for target_wkg).
+## lobby_state as clients get it, in every scaling mode: every human's rider_mass_kg becomes
+## the 75 kg reference (in RAW it is the weight the rider shared with the host), and in WKG
+## every human's p_eff_per_w (75 / weight) becomes 1.0, so no client learns another rider's
+## weight (BRIEF 3.2, W3 PROF-2). Bots keep theirs (75 kg). The host keeps the real values in
+## its own `lobby` (its GameHost needs them for the speed model and target_wkg).
 static func _redacted_lobby(msg: Dictionary) -> Dictionary:
 	var out := msg.duplicate(true)
+	var wkg := str(out.get("scaling", "")) == Wl.WKG
 	for p: Variant in out.get("players", []):
 		if p is Dictionary and not bool((p as Dictionary).get("is_bot", false)):
-			(p as Dictionary)["p_eff_per_w"] = 1.0
+			(p as Dictionary)["rider_mass_kg"] = EffortScaling.REFERENCE_KG
+			if wkg:
+				(p as Dictionary)["p_eff_per_w"] = 1.0
 	return out
 
 
@@ -1723,9 +1768,11 @@ func _p_eff_for(info: Dictionary, mode: String = "") -> float:
 			return EffortScaling.p_eff_per_w(Wl.FAIR_FTP, ftp, EffortScaling.REFERENCE_KG)
 
 
-func _mass_for(info: Dictionary) -> float:
+func _mass_for(info: Dictionary, mode: String = "") -> float:
+	if mode == "":
+		mode = _scaling
 	var shared := info.has("weight_kg")
-	return EffortScaling.rider_mass_kg(_scaling, float(info.get("weight_kg", 0.0)), shared)
+	return EffortScaling.rider_mass_kg(mode, float(info.get("weight_kg", 0.0)), shared)
 
 
 func _effective_bot_ftp() -> int:
@@ -1801,7 +1848,7 @@ func _ensure_local_info() -> void:
 
 
 func _info_from_local_profile() -> Dictionary:
-	var mode := _scaling if is_authority() else str(lobby.get("scaling", Wl.FAIR_FTP))
+	var mode := _lobby_scaling()
 	var po: Variant = _local_info.get("player_options", {})
 	var games := _local_profile_games if not _local_profile_games.is_empty() else _registry_games()
 	var info := player_info_from_profile(
@@ -2214,6 +2261,7 @@ func _reset_room_state() -> void:
 	lobby = {}
 	_lobby_text = ""
 	_lobby_wire = ""
+	_sent_info = {}
 	_token = ""
 	_ever_connected = false
 	_reconnect_pending = false

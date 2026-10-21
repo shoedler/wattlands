@@ -123,9 +123,41 @@ func test_local_profile_follows_the_lobby_scaling() -> void:
 	var info := WlNetSession.player_info_from_profile(p, Wl.FAIR_FTP)
 	assert_false(info.has("weight_kg"), "weight only if shared")
 	assert_false((info["p_eff_by_mode"] as Dictionary).has(Wl.WKG))
+	info = WlNetSession.player_info_from_profile(p, Wl.RAW)
+	assert_false(info.has("weight_kg"), "RAW without the opt-in: no weight either")
+
+
+## BRIEF 3.2: a shared weight goes into player_info only when the lobby's scaling needs it
+## (RAW, the speed model's mass); 75 / weight (p_eff_by_mode's WKG entry) only in WKG.
+func test_player_info_carries_the_weight_only_in_raw() -> void:
+	var p := RiderProfile.new()
+	p.ftp_w = 250.0
+	p.weight_kg = 80.0
 	p.share_weight = true
-	info = WlNetSession.player_info_from_profile(p, Wl.FAIR_FTP)
-	assert_eq(info["weight_kg"], 80.0)
+	var fair := WlNetSession.player_info_from_profile(p, Wl.FAIR_FTP)
+	assert_false(fair.has("weight_kg"), "FAIR_FTP never uses the weight")
+	assert_eq(fair["p_eff_by_mode"], {Wl.FAIR_FTP: 1.0, Wl.RAW: 1.0}, "no 75 / weight entry")
+	var wkg := WlNetSession.player_info_from_profile(p, Wl.WKG)
+	assert_false(wkg.has("weight_kg"), "WKG sends 75 / weight, never the weight")
+	assert_almost_eq(float(wkg["p_eff_per_w"]), 75.0 / 80.0, 1e-9)
+	assert_almost_eq(float((wkg["p_eff_by_mode"] as Dictionary)[Wl.WKG]), 75.0 / 80.0, 1e-9)
+	var raw := WlNetSession.player_info_from_profile(p, Wl.RAW)
+	assert_eq(raw["weight_kg"], 80.0, "RAW: the shared weight, for the speed model")
+	assert_false((raw["p_eff_by_mode"] as Dictionary).has(Wl.WKG))
+	# Info built elsewhere (the app's lobby) goes out the same way.
+	var app := rider("Bo", "1", 300, {"weight_kg": 68.0, "p_eff_by_mode": {Wl.WKG: 75.0 / 68.0}})
+	for mode: String in [Wl.FAIR_FTP, Wl.WKG]:
+		assert_false(WlNetSession.wire_player_info(app, mode).has("weight_kg"), mode)
+	assert_eq(WlNetSession.wire_player_info(app, Wl.RAW)["weight_kg"], 68.0)
+	assert_eq(WlNetSession.wire_player_info(app, Wl.FAIR_FTP)["p_eff_by_mode"], {})
+	assert_eq(WlNetSession.wire_player_info(app, Wl.RAW)["p_eff_by_mode"], {})
+	assert_almost_eq(
+		float((WlNetSession.wire_player_info(app, Wl.WKG)["p_eff_by_mode"] as Dictionary)[Wl.WKG]),
+		75.0 / 68.0,
+		1e-9
+	)
+	assert_eq(app["weight_kg"], 68.0, "the local copy keeps the weight")
+	assert_true((app["p_eff_by_mode"] as Dictionary).has(Wl.WKG))
 
 
 func test_ready_up_and_all_ready() -> void:
