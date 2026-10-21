@@ -23,7 +23,7 @@ The reference game (BRIEF 3.7): a group interval ride for 1–8 riders, bots opt
 - `workout_game.gd`: `WorkoutGame extends GameModule`, the SDK entry point.
 - `rules/`: pure, deterministic logic. `WorkoutRules.step(state, frame, dt)` scores time in band (ERG ±5% of the applied target, Rolling road 76–105% FTP, sprints cadence ≥ 60 rpm), sprints (`WorkoutSprintTracker`, 1.2 × FTP) and moves each rider with `SpeedModel` from P_eff. `WorkoutSession` loads and validates sessions, `WorkoutCourse` builds the course, `WorkoutSnapshot` encodes the all-int snapshot, `WorkoutResults` and `WorkoutProgress` build results, XP and pennant unlocks.
 - `hud/workout_hud.gd`: the HUD layout and the host's banners, toasts, power bands and teammate statuses.
-- `view/`: the 640 × 360 ride view (`WorkoutRideView`) with procedural art (`WorkoutArt`).
+- `view/`: the 640 × 360 ride view (`WorkoutRideView`) with procedural art (`WorkoutArt`). On a client it draws the other riders between the last two snapshots, 100 ms behind the newest (`WorkoutSnapHistory`, filled by `apply_snapshot`), and the local rider from its own prediction, blended softly toward the host (BRIEF 5.1).
 - `tools/make_picker_card.gd`: writes `assets/workout/picker_card.png`:
   `tools/godot.sh --headless --path . -s src/games/workout/tools/make_picker_card.gd`
 - `tools/render_view.gd`: renders the ride view from a snapshot fixture to a PNG (windowed, it needs a renderer):
