@@ -71,6 +71,7 @@ var _values: Dictionary = {}
 
 
 func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_values = DEFAULTS.duplicate(true)
 
 
@@ -207,9 +208,11 @@ func set_last_game(game_id: String, content_id: String) -> void:
 		save_settings()
 
 
-## The last trainer ({address, name, ...}, as FtmsConnectionManager.last_device()).
+## The last trainer ({address, name, ...}, as FtmsConnectionManager.last_device()). Values
+## JSON can't hold as themselves (packed arrays, vectors) are stored as JSON writes them.
 func set_last_device(info: Dictionary) -> void:
-	set_value("last_device", info)
+	var clean: Variant = JSON.parse_string(JSON.stringify(info))
+	set_value("last_device", clean if clean is Dictionary else {})
 
 
 # --- loading -------------------------------------------------------------------------
@@ -325,8 +328,8 @@ static func _clean_rooms(rooms: Array) -> Array:
 
 ## {ok: bool, value: the checked (normalized) value}; push_error when refused.
 static func _check_value(key: String, value: Variant) -> Dictionary:
-	if value is Object or value is Callable or value is Signal:
-		push_error("Settings: %s must be a JSON value" % key)
+	if not _is_json_value(value):
+		push_error("Settings: %s must be a JSON value (null, bool, number, string, array or dictionary of those)" % key)
 		return {"ok": false, "value": null}
 	if not DEFAULTS.has(key):
 		return {"ok": true, "value": _copy(value)}
@@ -343,6 +346,34 @@ static func _check_value(key: String, value: Variant) -> Dictionary:
 	if DEFAULTS[key] is float:
 		return {"ok": true, "value": float(value)}
 	return {"ok": true, "value": _copy(value)}
+
+
+## True for values that survive JSON.stringify and JSON.parse_string as themselves (numbers
+## come back as floats): null, bool, int, float, String, StringName, and arrays and
+## string-keyed dictionaries of those.
+static func _is_json_value(v: Variant, depth: int = 0) -> bool:
+	if depth > 32:
+		return false
+	match typeof(v):
+		TYPE_NIL, TYPE_BOOL, TYPE_STRING, TYPE_STRING_NAME:
+			return true
+		TYPE_INT:
+			return true
+		TYPE_FLOAT:
+			var f: float = v
+			return not is_nan(f) and not is_inf(f)
+		TYPE_ARRAY:
+			for e: Variant in (v as Array):
+				if not _is_json_value(e, depth + 1):
+					return false
+			return true
+		TYPE_DICTIONARY:
+			var d: Dictionary = v
+			for k: Variant in d.keys():
+				if not (k is String or k is StringName) or not _is_json_value(d[k], depth + 1):
+					return false
+			return true
+	return false
 
 
 static func _copy(v: Variant) -> Variant:

@@ -20,11 +20,18 @@ extends Node
 ##   rider again with the lobby's peer id, slot and options.
 ## - Between sessions _process advances its own SimClock (--sim-speed, default 1) and ticks
 ##   the rider (which ticks the device) once per due 0.05 s step. set_external_tick(true)
-##   hands ticking to a GameHost; set_external_tick(false) takes it back.
+##   hands ticking to a GameHost; set_external_tick(false) takes it back and turns the
+##   session rider into the menu rider again (set up afresh: peer 1, the profile's slot,
+##   solo, no plan, not recorded, applying any profile change made meanwhile). While that
+##   rider's ride is still recording, the menu reset waits until the ride is finished
+##   (LocalRider.finish_ride), so the results screen can still save it.
 ## - A profile or scaling change outside a session re-sets the rider up (and rebuilds a
-##   mock whose rider parameters changed); hold_rider(true) defers that until released.
-##   Switching trainers shuts the old rider down (SIM flat, then Stop) first.
-##   EventBus.panic_requested makes the rider's governor safe.
+##   mock whose rider parameters changed); during a session (external tick) or while
+##   hold_rider(true) it waits for the hand-back or the release.
+##   Switching trainers shuts the old rider down (SIM flat, then Stop) first, after saving a
+##   ride it was still recording. A reconnect that hands over a new device object during a
+##   session rebinds the session rider (LocalRider.rebind_device) instead, so the GameHost's
+##   rider stays valid. EventBus.panic_requested makes the rider's governor safe.
 ## - status_changed mirrors the device's and the manager's status, also on
 ##   EventBus.trainer_status_changed (and trainer_control_lost for "control_lost").
 ## - shutdown_all() shuts down every live LocalRider in the process (App.quit and the exit
@@ -53,10 +60,16 @@ var _mock_key: Array = []
 var _external_tick: bool = false
 var _held: bool = false
 var _pending_change: bool = false
+## The rider must be set up afresh as the menu rider (after a session or a hold).
+var _menu_reset_due: bool = false
 var _clock: SimClock = null
 var _started: bool = false
 var _settings_conn: WlSettings = null
 var _bus_conn: WlEventBus = null
+
+
+func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _ready() -> void:
@@ -157,13 +170,8 @@ func hold_rider(on: bool) -> void:
 	_held = on
 	if on or not was_held:
 		return
-	_pending_change = false
-	if _external_tick or _device == null:
-		return
-	if is_mock() and _mock_params(_profile()) != _mock_key:
-		use_mock(_mock_spec)
-	elif _rider != null and is_instance_valid(_rider):
-		_setup_rider()
+	_menu_reset_due = true
+	_apply_menu_reset()
 
 
 func is_rider_held() -> bool:
@@ -171,10 +179,23 @@ func is_rider_held() -> bool:
 
 
 ## A GameHost ticks the rider during a session (true); the service ticks it in menus (false).
+## Handing ticking back (true -> false) sets the rider up afresh as the menu rider (see the
+## class doc; it waits while the rider's ride is still recording).
 func set_external_tick(on: bool) -> void:
+	var was_external := _external_tick
 	_external_tick = on
-	if not on and _clock != null:
+	if on:
+		return
+	if _clock != null:
 		_clock.reset()
+	if was_external:
+		_menu_reset_due = true
+		_apply_menu_reset()
+
+
+## True while the menu reset after a session or a hold still waits (a ride still recording).
+func is_menu_reset_pending() -> bool:
+	return _menu_reset_due
 
 
 func is_external_tick() -> bool:
@@ -184,6 +205,8 @@ func is_external_tick() -> bool:
 ## One fixed 0.05 s step of menu time: the rider (and through it the device), or the device
 ## alone before a rider exists. _process calls it once per due step.
 func step() -> void:
+	if _menu_reset_due:
+		_apply_menu_reset()
 	if _rider != null and is_instance_valid(_rider):
 		_rider.tick(Wl.SIM_DT)
 	elif _device != null and is_instance_valid(_device):
@@ -247,10 +270,14 @@ func _set_device(d: TrainerDevice, owned: bool) -> void:
 
 
 func _release_device() -> void:
+	_menu_reset_due = false
 	if _rider != null and is_instance_valid(_rider):
 		var router := _router()
 		if router != null:
 			router.detach_rider()
+		if _rider.recorder != null and _rider.recorder.is_recording():
+			push_warning("TrainerService: switching trainers while a ride records; saving it first")
+			_rider.finish_ride()
 		_rider.shutdown()
 		if _rider.get_parent() == self:
 			remove_child(_rider)
@@ -310,15 +337,38 @@ func _connect_services() -> void:
 func _on_settings_changed(key: String) -> void:
 	if key != "" and key != "profile" and key != "scaling_mode":
 		return
-	if _held:
+	if _held or _external_tick or _menu_reset_due:
+		# Applied by the release, the hand-back or the pending menu reset.
 		_pending_change = true
 		return
-	if _external_tick or _device == null:
+	if _device == null:
 		return
+	_rebuild_menu_rider()
+
+
+## Sets the rider up afresh as the menu rider once nothing holds it: not during a session,
+## not while held, and not while its ride is still recording (saved by finish_ride first).
+## A shut-down rider (quitting) is left alone.
+func _apply_menu_reset() -> void:
+	if not _menu_reset_due or _held or _external_tick:
+		return
+	if _device == null or _rider == null or not is_instance_valid(_rider) or _rider.is_shut_down():
+		_menu_reset_due = false
+		_pending_change = false
+		return
+	if _rider.recorder != null and _rider.recorder.is_recording():
+		return
+	_menu_reset_due = false
+	_pending_change = false
+	_rebuild_menu_rider()
+
+
+## The menu rider for the current profile: a mock whose rider parameters changed is rebuilt
+## (which builds a new rider), otherwise the rider is set up again around the same device.
+func _rebuild_menu_rider() -> void:
 	if is_mock() and _mock_params(_profile()) != _mock_key:
 		use_mock(_mock_spec)
-		return
-	if _rider != null and is_instance_valid(_rider):
+	elif _rider != null and is_instance_valid(_rider):
 		_setup_rider()
 
 
@@ -331,8 +381,20 @@ func _on_trainer_ready(d: TrainerDevice) -> void:
 	if d == null:
 		return
 	if d != _device:
-		_release_device()
-		_set_device(d, false)
+		if _external_tick and _rider != null and is_instance_valid(_rider) and _device != null and not _owns_device:
+			# Mid-session reconnect with a new device object: keep the GameHost's rider.
+			push_warning("TrainerService: a new trainer object arrived during a session; rebinding the session rider")
+			if _device != null and is_instance_valid(_device) and _device.status_changed.is_connected(_on_device_status):
+				_device.status_changed.disconnect(_on_device_status)
+			_device = d
+			d.process_mode = Node.PROCESS_MODE_ALWAYS
+			if not d.status_changed.is_connected(_on_device_status):
+				d.status_changed.connect(_on_device_status)
+			_rider.rebind_device(d)
+			device_changed.emit(d)
+		else:
+			_release_device()
+			_set_device(d, false)
 	var s := _settings()
 	if s != null and _manager != null:
 		var info := _manager.last_device()

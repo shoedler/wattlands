@@ -193,6 +193,36 @@ func test_set_value_refuses_wrong_types() -> void:
 	assert_false(FileAccess.file_exists(Paths.settings_path()), "nothing was saved")
 
 
+func test_set_value_refuses_values_json_cannot_hold() -> void:
+	var s := _make()
+	s.load_all()
+	s.set_value("ui_offset", Vector2(1, 2))
+	assert_push_error("JSON value")
+	s.set_value("ui_list", [1, "a", Color.RED])
+	assert_push_error("JSON value")
+	s.set_value("ui_map", {1: "int key"})
+	assert_push_error("JSON value")
+	s.set_value("ui_nan", NAN)
+	assert_push_error("JSON value")
+	assert_eq(s.get_value("ui_offset", "none"), "none")
+	s.set_value("ui_ok", {"a": [1, 2.5, "x", true, null, {"b": &"name"}]})
+	assert_eq(s.get_value("ui_ok"), {"a": [1, 2.5, "x", true, null, {"b": &"name"}]})
+	var t := _make()
+	t.load_all()
+	assert_eq(t.get_value("ui_ok"), {"a": [1.0, 2.5, "x", true, null, {"b": "name"}]}, "round-trips through JSON")
+
+
+func test_set_last_device_stores_json_safe_values() -> void:
+	var s := _make()
+	s.load_all()
+	s.set_last_device({"address": "AA:BB", "name": "KICKR CORE", "rssi": -60,
+		"services": PackedStringArray(["1826", "1818"])})
+	var t := _make()
+	t.load_all()
+	assert_eq(t.get_value("last_device"), {"address": "AA:BB", "name": "KICKR CORE", "rssi": -60.0,
+		"services": ["1826", "1818"]})
+
+
 func test_set_value_emits_changed_once_per_change() -> void:
 	var s := _make()
 	s.load_all()

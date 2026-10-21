@@ -134,6 +134,79 @@ func test_slot_drives_multiplayer_and_mass() -> void:
 	assert_eq(r.peer_id, 3, "the peer id given to setup()")
 
 
+func test_setup_resets_a_reused_mock() -> void:
+	var m := Fakes.RecordingMock.new()
+	autofree(m)
+	var r := _rider(m)
+	r.set_cadence_band(80.0, 95.0)
+	r.set_power_band(150.0, 250.0)
+	r.start_phase(3)
+	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	assert_eq(m.cadence_bands.back(), [0.0, 0.0], "no band left over from the last session")
+	assert_eq(m.power_bands.back(), [0.0, 0.0])
+	assert_eq(m.phases.back(), -1)
+	assert_eq(r.cadence_band(), Vector2.ZERO)
+	assert_eq(r.telemetry().phase_index, -1)
+
+
+func test_setup_again_while_recording_saves_the_ride_first() -> void:
+	var rec := Fakes.FakeRecorder.new()
+	var m := _mock()
+	var r := _rider(m, {"recorder": rec, "rides_dir": "C:/rides/a"})
+	_run(r, 2.0)
+	watch_signals(_bus)
+	r.setup(3, _profile(), null, m, {"governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	assert_push_warning("recording")
+	assert_eq(rec.saves, ["C:/rides/a"] as Array[String], "saved where the old options said")
+	assert_almost_eq(rec.stopped_at, 2.0, 1e-9)
+	assert_signal_emitted(_bus, "ride_saved")
+	assert_null(r.recorder, "the new setup records only if asked")
+
+
+func test_rebind_device_keeps_the_session() -> void:
+	var d1 := _fake_device()
+	var d2 := _fake_device()
+	var rec := Fakes.FakeRecorder.new()
+	var r := _rider(d1, {"recorder": rec})
+	var g := _gov(r)
+	var plan := _plan()
+	r.set_plan(plan)
+	r.start_phase(1)
+	r.push_intent({"k": "keep"})
+	_run(r, 1.0)
+	d1.emit_sample(150.0, 80.0)
+	r.rebind_device(d2)
+	assert_eq(r.device, d2)
+	assert_eq(g.setup_device, d2, "the governor drives the new object")
+	assert_eq(r.governor, g, "same governor, same plan and phase state")
+	assert_eq(r.plan(), plan)
+	assert_eq(r.recorder, rec)
+	r.tick(DT)
+	assert_eq(g.samples.size(), 0, "a sample queued from the old object is dropped")
+	d1.emit_sample(999.0, 80.0)
+	d2.emit_sample(210.0, 85.0)
+	r.tick(DT)
+	assert_eq(g.samples.size(), 1, "only the new object feeds the rider")
+	assert_eq(g.samples[0].power_w, 210.0)
+	var tel := r.telemetry()
+	assert_almost_eq(tel.t, 1.1, 1e-9, "the rider's time keeps running")
+	assert_eq(tel.phase_index, 1)
+	assert_eq(r.take_intents(), [{"k": "keep"}])
+	assert_true(LocalRider.live_riders().has(r))
+	r.rebind_device(d2)
+	assert_eq(g.called("setup").size(), 2, "rebinding to the same object does nothing")
+
+
+func test_rebind_device_needs_a_set_up_rider() -> void:
+	var r := LocalRider.new()
+	add_child_autofree(r)
+	r.rebind_device(_fake_device())
+	assert_push_error("rebind_device")
+	var ok := _rider(_fake_device())
+	ok.rebind_device(null)
+	assert_push_error("rebind_device")
+
+
 func test_setup_without_device_is_refused() -> void:
 	var r := LocalRider.new()
 	add_child_autofree(r)
@@ -454,6 +527,9 @@ func test_bands_reach_the_mock_trainer_and_the_bus() -> void:
 	var m := Fakes.RecordingMock.new()
 	autofree(m)
 	var r := _rider(m)
+	assert_eq(m.cadence_bands, [[0.0, 0.0]], "setup clears a reused mock's band")
+	m.cadence_bands.clear()
+	m.power_bands.clear()
 	watch_signals(_bus)
 	r.set_cadence_band(80.0, 95.0)
 	r.set_power_band(150.0, 250.0)
@@ -503,6 +579,8 @@ func test_start_phase_forwards_and_laps() -> void:
 	var rec := Fakes.FakeRecorder.new()
 	var r := _rider(m, {"recorder": rec, "game_id": "siege", "content_id": "fort", "utc_start_unix": 1792000000})
 	assert_eq(rec.started, ["siege", "fort", 1792000000, 0.0])
+	assert_eq(m.phases, [-1] as Array[int], "setup resets a reused mock's phase")
+	m.phases.clear()
 	var plan := _plan()
 	r.set_plan(plan)
 	assert_eq(_gov(r).plan, plan)
@@ -546,6 +624,29 @@ func test_game_lap_marker() -> void:
 	_run(r, 2.5)
 	r.lap("Boss")
 	assert_eq(rec.laps, [["Boss", 2.5]])
+
+
+func test_lap_names_translate_strings_keys() -> void:
+	var rec := Fakes.FakeRecorder.new()
+	var r := _rider(_mock(), {"recorder": rec})
+	var plan := EffortPlan.of([
+		PlanPhase.erg(Wl.WARMUP, 50, 300, "CORE_FTP_TITLE").with_lap(),
+		PlanPhase.erg(Wl.WORK, 70, 60, "Wave 2").with_lap(),
+		PlanPhase.erg(Wl.WORK, 70, 60).with_lap(),
+	])
+	r.set_plan(plan)
+	r.start_phase(0)
+	r.start_phase(1)
+	r.start_phase(2)
+	r.lap("CORE_LAP_COOLDOWN")
+	r.lap("Boss 1")
+	var names: Array = []
+	for l: Array in rec.laps:
+		names.append(l[0])
+	assert_eq(names, [tr("CORE_FTP_TITLE"), "Wave 2", tr("CORE_LAP_PHASE").replace("{n}", "3"),
+		tr("CORE_LAP_COOLDOWN"), "Boss 1"])
+	assert_ne(tr("CORE_LAP_PHASE"), "CORE_LAP_PHASE", "the key is in core.csv")
+	assert_ne(names[0], "CORE_FTP_TITLE", "a strings-key label becomes text in the FIT lap name")
 
 
 func test_recorder_is_fed_while_recording() -> void:

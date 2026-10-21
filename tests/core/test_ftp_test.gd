@@ -376,6 +376,25 @@ func test_stop_mid_test_leaves_the_rider_in_the_cooldown() -> void:
 	assert_eq(gov.called("start_phase").size(), calls, "no longer driven")
 
 
+func test_dropping_a_running_test_releases_the_rider() -> void:
+	var service := HoldLog.new()
+	autofree(service)
+	var gov := Fakes.FakeGovernor.new()
+	var r := _rider(gov)
+	var t := FtpTest.new()
+	t.run_on(r, null, service)
+	for _i in 20:
+		r.tick(DT)
+	assert_eq(service.holds, [true] as Array[bool])
+	t = null
+	assert_eq(service.holds, [true, false] as Array[bool], "the screen let go without stop(): the hold ends")
+	assert_eq(gov.configured.get("profile"), "normal")
+	var calls := gov.called("start_phase").size()
+	for _i in 20:
+		r.tick(DT)
+	assert_eq(gov.called("start_phase").size(), calls, "nothing drives the rider any more")
+
+
 func test_estimate_matches_an_analytic_w_prime_rider() -> void:
 	# A synthetic rider holds every target until Skiba's W' balance runs out, then rides at
 	# CP: the test ends on the power rule and the estimate is 0.75 x the minute before.

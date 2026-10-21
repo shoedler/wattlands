@@ -41,7 +41,15 @@ extends Node
 ##   cool-down clears both.
 ## - setup() may be called again (for example to turn the menu rider into a session rider):
 ##   it rebuilds every component around the given device. The device is never freed here;
-##   its creator owns it.
+##   its creator owns it. A ride still recording is finished (stopped and saved) first, with
+##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
+##   cleared and its phase reset to -1, so nothing from an earlier session steers the mock.
+## - rebind_device(d): a reconnect that hands over a new device object for the same trainer
+##   keeps the session (plan, phase, time, queues, recorder) and rebinds the governor and the
+##   sample feed to the new object.
+## - Lap names: a phase label or lap_marker label that is a strings key is translated (plain
+##   text passes through); unlabelled lap phases are CORE_LAP_PHASE, the cool-down
+##   CORE_LAP_COOLDOWN.
 ## - Every set-up rider is listed by LocalRider.live_riders() until shutdown() or freed,
 ##   so the app can make every trainer safe on exit (BRIEF 4.6.9).
 
@@ -149,6 +157,11 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 	if device == null:
 		push_error("LocalRider: setup needs a TrainerDevice (peer %d)" % peer_id)
 		return
+	if device is MockTrainer:
+		var mock := device as MockTrainer
+		mock.set_cadence_band(0.0, 0.0)
+		mock.set_power_band(0.0, 0.0)
+		mock.set_phase(-1)
 	cadence = _options.get("cadence") as CadenceEstimator
 	if cadence == null:
 		cadence = CadenceEstimator.new()
@@ -329,6 +342,25 @@ func is_shut_down() -> bool:
 	return _shut_down
 
 
+## A reconnect handed over a new device object for the same trainer: keep everything (plan,
+## phase, time, queues, recorder, governor state) and rebind the governor and the sample
+## feed to `p_device`. Samples queued from the old object are dropped. The caller owns both
+## devices. Before setup() it does nothing but push_error.
+func rebind_device(p_device: TrainerDevice) -> void:
+	if p_device == null or not _ready_to_tick:
+		push_error("LocalRider: rebind_device needs a set-up rider and a device (peer %d)" % peer_id)
+		return
+	if p_device == device:
+		return
+	if device != null and is_instance_valid(device) and device.sample_received.is_connected(_on_sample):
+		device.sample_received.disconnect(_on_sample)
+	device = p_device
+	_pending.clear()
+	if governor != null and is_instance_valid(governor):
+		governor.setup(device)
+	device.sample_received.connect(_on_sample)
+
+
 ## Advance by dt platform seconds.
 func tick(dt: float) -> void:
 	if not _ready_to_tick or dt <= 0.0:
@@ -389,10 +421,10 @@ func take_acks() -> Array:
 	return out
 
 
-## A FIT lap from the game's lap_marker.
+## A FIT lap from the game's lap_marker (a strings key is translated).
 func lap(label: String) -> void:
 	if _recording():
-		recorder.lap(label, platform_time())
+		recorder.lap(_text(label), platform_time())
 
 
 ## Stop the recorder and write the FIT and summary. Returns the FIT path or "".
@@ -449,6 +481,9 @@ func _reset_state() -> void:
 
 
 func _teardown() -> void:
+	if _recording():
+		push_warning("LocalRider: peer %d was set up again while recording; saving that ride first" % peer_id)
+		finish_ride()
 	_ready_to_tick = false
 	if device != null and is_instance_valid(device) and device.sample_received.is_connected(_on_sample):
 		device.sample_received.disconnect(_on_sample)
@@ -654,8 +689,15 @@ func _recording() -> bool:
 
 func _lap_label(ph: PlanPhase, index: int, is_cooldown: bool) -> String:
 	if ph.label != "":
-		return ph.label
-	return "Cool-down" if is_cooldown else "Phase %d" % (index + 1)
+		return _text(ph.label)
+	if is_cooldown:
+		return _text("CORE_LAP_COOLDOWN")
+	return _text("CORE_LAP_PHASE").replace("{n}", str(index + 1))
+
+
+## A strings key's text, or `s` itself when it isn't a key (plain text passes through).
+static func _text(s: String) -> String:
+	return String(TranslationServer.translate(s))
 
 
 func _band_ok(lo: float, hi: float, what: String) -> bool:

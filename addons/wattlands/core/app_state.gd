@@ -23,7 +23,8 @@ extends Node
 ## - quit(code): goto("quitting"), emit quitting(code) (the app shell saves the ride and
 ##   writes the --report there), save any ride still recording, shut down every live
 ##   LocalRider through TrainerService.shutdown_all() (SIM flat, then Stop, BRIEF 4.6.9),
-##   write a minimal --report if nobody wrote one, then get_tree().quit(code) - after
+##   hand ticking back to the TrainerService (so the safe commands go out even if a GameHost
+##   stops ticking), write a minimal --report if nobody wrote one, then get_tree().quit(code) - after
 ##   QUIT_GRACE_S of real time when a real trainer is connected, so the safe commands go
 ##   out. A window close request quits the same way; NOTIFICATION_CRASH and leaving the
 ##   tree without quit() shut the riders down at once.
@@ -64,6 +65,10 @@ var _booted: bool = false
 var _quitting: bool = false
 var _clock: SimClock = null
 var _run_seconds: float = 0.0
+
+
+func _init() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
 func _ready() -> void:
@@ -197,10 +202,12 @@ func quit(p_exit_code: int = 0) -> void:
 	quitting.emit(p_exit_code)
 	_save_open_rides()
 	var real_trainer := _real_trainer_connected()
+	_shutdown_riders()
+	# The service ticks the shut-down riders from here on, so the safe commands go out; the
+	# riders are shut down first, so handing ticking back never re-sets one up.
 	var ts := _trainer_service()
 	if ts != null:
 		ts.set_external_tick(false)
-	_shutdown_riders()
 	_write_fallback_report()
 	if real_trainer and is_inside_tree():
 		get_tree().create_timer(QUIT_GRACE_S, true, false, true).timeout.connect(_quit_tree.bind(p_exit_code))

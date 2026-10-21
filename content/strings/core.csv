@@ -16,3 +16,5 @@ CORE_FTP_SAVING,Saving in {s} s. Back keeps your old FTP.
 CORE_FTP_SAVED,FTP saved.
 CORE_FTP_NOT_SAVED,FTP not changed.
 CORE_FTP_COOLDOWN,Cool-down: three easy minutes.
+CORE_LAP_PHASE,Phase {n}
+CORE_LAP_COOLDOWN,Cool-down

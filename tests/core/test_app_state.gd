@@ -87,6 +87,8 @@ func after_each() -> void:
 	Paths.set_override("")
 	CmdLine.set_args(PackedStringArray(), false)
 	Util.remove_tree(_dir)
+	# Let replaced governors (queue_free) go before GUT counts orphans.
+	await wait_process_frames(1)
 
 
 func _args(list: Array) -> void:
@@ -267,6 +269,37 @@ func test_quit_shuts_the_riders_down_after_the_quitting_signal() -> void:
 	assert_signal_emitted_with_parameters(_bus, "app_state_changed", ["quitting"])
 	app.quit(5)
 	assert_eq(app.quit_codes, [3] as Array[int], "quit runs once")
+
+
+func test_quit_mid_session_shuts_the_session_rider_down_and_ticks_it_on() -> void:
+	_args(["--mock-trainer=erg"])
+	var ts := WlTrainerService.new()
+	ts.input_router = Fakes.FakeInputRouter.new()
+	autofree(ts.input_router)
+	ts.bus = _bus
+	ts.settings = _settings
+	ts.rider_options_factory = func() -> Dictionary:
+		return {"governor": Fakes.FakeGovernor.new(), "bus": _bus}
+	add_child_autofree(ts)
+	_settings.load_all()
+	ts.start()
+	var r := ts.local_rider()
+	ts.set_external_tick(true)
+	var g := Fakes.FakeGovernor.new()
+	r.setup(2, _settings.profile, null, ts.device(), {"multiplayer": true, "governor": g, "bus": _bus})
+	var app := QuitRecordingApp.new()
+	app.settings = _settings
+	app.trainer_service = ts
+	app.rides = _rides
+	app.bus = _bus
+	add_child_autofree(app)
+	app.quit(0)
+	assert_eq(g.shutdown_count, 1, "the session governor itself goes SIM flat, then Stop")
+	assert_eq(r.governor, g, "no menu rider is built while quitting")
+	assert_false(ts.is_external_tick(), "the service ticks the shut-down rider from now on")
+	var ticks := g.ticks.size()
+	ts.step()
+	assert_eq(g.ticks.size(), ticks + 1, "so the safe commands keep going out")
 
 
 func test_quit_without_a_trainer_service_still_shuts_down() -> void:

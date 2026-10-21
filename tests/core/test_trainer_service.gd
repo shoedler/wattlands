@@ -265,8 +265,10 @@ func test_process_runs_menu_time_at_sim_speed_until_a_session_takes_over() -> vo
 	svc._process(1.0)
 	assert_almost_eq(r.platform_time(), 4 * Wl.SIM_DT, 1e-9, "the GameHost ticks during a session")
 	svc.set_external_tick(false)
+	assert_eq(svc.local_rider(), r, "the same rider object")
+	assert_almost_eq(r.platform_time(), 0.0, 1e-9, "set up afresh as the menu rider")
 	svc._process(Wl.SIM_DT)
-	assert_almost_eq(r.platform_time(), 8 * Wl.SIM_DT, 1e-9, "no backlog from the session")
+	assert_almost_eq(r.platform_time(), 4 * Wl.SIM_DT, 1e-9, "no backlog from the session")
 
 
 # --- profile, panic, shutdown -------------------------------------------------------------------
@@ -311,6 +313,139 @@ func test_profile_changes_wait_while_a_session_runs() -> void:
 	_settings.save_profile()
 	assert_eq(svc.device(), m)
 	assert_eq(svc.local_rider().ftp_w(), 200.0)
+	svc.set_external_tick(false)
+	assert_ne(svc.device(), m, "applied when the session hands ticking back")
+	assert_eq((svc.device() as MockTrainer).spec, "erg")
+	assert_eq(svc.local_rider().ftp_w(), 320.0)
+	assert_eq(svc.local_rider().device, svc.device())
+
+
+## What an app shell does at a session start: the menu rider becomes the session rider.
+func _session_setup(svc: WlTrainerService, rec: RideRecorderApi = null) -> LocalRider:
+	var r := svc.local_rider()
+	svc.set_external_tick(true)
+	var slot := _settings.profile.to_slot(2, Wl.FAIR_FTP)
+	var opts := {"multiplayer": true, "governor": Fakes.FakeGovernor.new(),
+		"gestures": Fakes.FakeGestures.new(), "bus": _bus}
+	if rec != null:
+		opts["recorder"] = rec
+	r.setup(2, _settings.profile, slot, svc.device(), opts)
+	r.set_plan(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 300), PlanPhase.erg(Wl.WORK, 80, 120)]))
+	r.start_phase(1)
+	return r
+
+
+func test_handing_ticking_back_sets_the_menu_rider_up_afresh() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var r := _session_setup(svc)
+	var session_gov := r.governor as Fakes.FakeGovernor
+	assert_true(r.is_multiplayer)
+	svc.set_external_tick(false)
+	assert_false(svc.is_menu_reset_pending())
+	assert_eq(svc.local_rider(), r, "the InputRouter keeps the same rider object")
+	assert_eq(r.peer_id, 1)
+	assert_false(r.is_multiplayer, "menus are solo")
+	assert_null(r.plan(), "no plan left over from the session")
+	assert_eq(r.telemetry().phase_index, -1)
+	assert_null(r.recorder)
+	assert_ne(r.governor, session_gov, "a fresh governor")
+	assert_eq(session_gov.shutdown_count, 0, "handing back never sends Stop")
+	assert_eq(_router.attached, [r])
+	svc.set_external_tick(false)
+	assert_eq(r.peer_id, 1, "already in menus: nothing happens")
+
+
+func test_menu_reset_waits_for_a_ride_still_recording() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var rec := Fakes.FakeRecorder.new()
+	var r := _session_setup(svc, rec)
+	svc.set_external_tick(false)
+	assert_true(svc.is_menu_reset_pending(), "the results screen still has to save the ride")
+	assert_eq(r.peer_id, 2)
+	_settings.profile.display_name = "Later"
+	_settings.save_profile()
+	assert_eq(r.peer_id, 2, "profile changes wait for the reset too")
+	for _i in 10:
+		svc.step()
+	assert_true(svc.is_menu_reset_pending())
+	assert_eq(r.recorder, rec)
+	assert_eq(r.finish_ride(), rec.save_path)
+	svc.step()
+	assert_false(svc.is_menu_reset_pending())
+	assert_eq(r.peer_id, 1)
+	assert_eq(r.slot.name, "Later")
+	assert_eq(rec.saves.size(), 1, "saved once, by finish_ride")
+
+
+func test_reconnect_with_a_new_trainer_object_during_a_session_rebinds() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	var d2 := Fakes.FakeDevice.new()
+	autofree(d1)
+	autofree(d2)
+	_manager.make_ready(d1)
+	var r := _session_setup(svc)
+	var g := r.governor as Fakes.FakeGovernor
+	watch_signals(svc)
+	_manager.make_ready(d2)
+	assert_push_warning("during a session")
+	assert_eq(svc.local_rider(), r, "the GameHost's rider stays valid")
+	assert_true(is_instance_valid(r))
+	assert_false(r.is_shut_down())
+	assert_eq(r.device, d2)
+	assert_eq(svc.device(), d2)
+	assert_eq(g.setup_device, d2)
+	assert_eq(g.shutdown_count, 0)
+	assert_eq(r.plan().size(), 2, "the session plan stays")
+	assert_signal_emitted_with_parameters(svc, "device_changed", [d2])
+	d2.set_dev_status(TrainerDevice.STATUS_CONTROL_LOST, "x")
+	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the new object's status is mirrored")
+	d1.set_dev_status(TrainerDevice.STATUS_ERROR, "old")
+	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the old object is no longer watched")
+
+
+func test_switching_trainers_saves_a_ride_still_recording() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	var d2 := Fakes.FakeDevice.new()
+	autofree(d1)
+	autofree(d2)
+	_manager.make_ready(d1)
+	var rec := Fakes.FakeRecorder.new()
+	var r := svc.local_rider()
+	r.setup(1, _settings.profile, null, d1, {"recorder": rec, "governor": Fakes.FakeGovernor.new(),
+		"gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	_manager.make_ready(d2)
+	assert_push_warning("saving it first")
+	assert_eq(rec.saves.size(), 1)
+	assert_eq(svc.local_rider().device, d2)
+
+
+func test_system_nodes_process_while_the_tree_is_paused() -> void:
+	var ftms := _make()
+	ftms.start()
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var r := svc.local_rider()
+	var app := WlApp.new()
+	add_child_autofree(app)
+	var s := WlSettings.new()
+	add_child_autofree(s)
+	get_tree().paused = true
+	var nodes: Array[Node] = [svc, r, r.governor, svc.device(), ftms, _manager, app, s]
+	var ok: Array[bool] = []
+	for n in nodes:
+		ok.append(n.can_process())
+	get_tree().paused = false
+	for i in nodes.size():
+		assert_true(ok[i], "%s keeps processing while the tree is paused (BRIEF 4.1)" % nodes[i].name)
 
 
 func test_panic_makes_the_rider_safe() -> void:

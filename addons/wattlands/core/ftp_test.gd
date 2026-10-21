@@ -93,6 +93,21 @@ var _service: WlTrainerService = null
 var _last_t: float = -1.0
 
 
+## Dropped while driving a rider (the screen let go of it without stop()): release the
+## rider's ramp_test profile and the TrainerService hold, so menus never stay held. (Inline:
+## a RefCounted can't call its own methods during PREDELETE; the rider's connection to this
+## object goes away with it.)
+func _notification(what: int) -> void:
+	if what != NOTIFICATION_PREDELETE:
+		return
+	if _rider != null and is_instance_valid(_rider):
+		_rider.configure_governor({"profile": "normal"})
+	_rider = null
+	if _service != null and is_instance_valid(_service):
+		_service.hold_rider(false)
+	_service = null
+
+
 ## Steps the plan holds for `p_ftp_w` on a trainer with `trainer_max_w`: every step whose
 ## target stays at or below min(1000 W, trainer max), at least 1, at most MAX_STEPS.
 static func step_count(p_ftp_w: float, trainer_max_w: float = 1800.0) -> int:
