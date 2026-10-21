@@ -32,6 +32,18 @@ func _runtime_ready() -> bool:
 	return true
 
 
+## The installed games, plus the template itself (never listed, so the GameRegistry autoload
+## does not know it; the conformance test loads it the same way).
+func _registry() -> WlGameRegistry:
+	var reg := WlGameRegistry.new()
+	reg.scan_on_ready = false
+	add_child_autofree(reg)
+	reg.scan()
+	if not _is_scaffolded_game():
+		assert_eq(reg.add_game(F.manifest(), F.GAME_DIR, true), "")
+	return reg
+
+
 ## The template is never listed; a game scaffolded from it must be. (The literal is split so
 ## tools/new_game leaves it alone.)
 func _is_scaffolded_game() -> bool:
@@ -72,6 +84,7 @@ func _run(flags: Array[String]) -> Dictionary:
 	var parsed := GameSimRunner.parse_args(args)
 	assert_false(parsed.has("error"), str(parsed.get("error", "")))
 	parsed["headless"] = true
+	parsed["registry"] = _registry()
 	var runner := GameSimRunner.new()
 	add_child_autofree(runner)
 	assert_eq(runner.setup(parsed), "")
