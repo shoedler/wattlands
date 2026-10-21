@@ -9,6 +9,10 @@ extends Node
 ## while no GameHost is running (the GameHost ticks it during a session).
 ##
 ## Details (W1):
+## - Passive until start(): only WlApp.boot() calls it, and the App never boots in a process
+##   whose main loop is not the app (GUT, check_scripts, the -s drivers of run_game_sim and
+##   screenshot), so those never touch Bluetooth; with --mock-trainer, start() never creates
+##   an FtmsConnectionManager at all.
 ## - start() is idempotent. The mock is MockTrainer.from_spec(spec, profile FTP, {seed
 ##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg}); a bare --mock-trainer
 ##   means "erg". The FTMS path adds an FtmsConnectionManager child and calls

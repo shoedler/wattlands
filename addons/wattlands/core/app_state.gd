@@ -26,8 +26,9 @@ extends Node
 ##   Settings.load_all(), TrainerService.start(), Rides.process_queue(), emits booted, then
 ##   goto("title"), or for a scripted peer goto("lobby", launch_options()); the app shell
 ##   drives the scripted flow from there. Tests call boot() on a private instance.
-## - goto() accepts only the states above (push_error otherwise), emits state_changed and
-##   EventBus.app_state_changed, and never leaves "quitting".
+## - goto() accepts only the states above (push_error otherwise), sets state and params and
+##   emits state_changed and EventBus.app_state_changed synchronously (a client's GameHost is
+##   created in the same signal chain as session_start), and never leaves "quitting".
 ## - quit(code): goto("quitting"), emit quitting(code) (the app shell saves the ride and
 ##   writes the --report there), save any ride still recording, shut down every live
 ##   LocalRider through TrainerService.shutdown_all() (SIM flat, then Stop, BRIEF 4.6.9),
