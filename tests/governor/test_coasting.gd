@@ -109,6 +109,131 @@ func test_cadence_alone_keeps_a_rider_pedaling() -> void:
 	assert_true(rig.s()["coasting"], "an absent cadence counts as low")
 
 
+# ------------------------------------------------- not_pedaling edges (BRIEF 3.5, strict <)
+
+
+## The rider holds `power` W (unrounded) and `cadence` rpm (-1: no cadence) from the next sample
+## on; returns that sample's time.
+func _hold(rig: Rig, power: float, cadence: float) -> float:
+	var dev: ScriptedDevice = rig.device
+	dev.erg_follow = -1.0
+	dev.round_power = false
+	dev.power_w = power
+	dev.cadence_rpm = cadence
+	var before := dev.samples_sent
+	while dev.samples_sent == before:
+		rig.step()
+	return dev.sample_times[dev.sample_times.size() - 1]
+
+
+## A solo rig in a 50% ERG phase (below rescue's 60% arming, so only coasting reacts), 5 s in.
+func _edge_rig() -> Rig:
+	var rig := make_rig({"multiplayer": false}, follower())
+	rig.start([erg(Wl.WORK, 50.0, 120.0)])
+	rig.run(5.0)
+	return rig
+
+
+func test_the_shared_detector_thresholds_are_15_w_and_20_rpm() -> void:
+	assert_eq(GestureRecognizer.NOT_PEDALING_W, 15.0)
+	assert_eq(GestureRecognizer.NOT_PEDALING_RPM, 20.0)
+	assert_eq(SafetyGovernor.NOT_PEDALING_W, 15.0, "an alias of the shared threshold")
+	assert_eq(SafetyGovernor.NOT_PEDALING_RPM, 20.0, "an alias of the shared threshold")
+	assert_eq(CadenceEstimator.COAST_POWER_W, 15.0, "the shared power threshold")
+
+
+func test_game_host_rejoin_check_matches_the_shared_thresholds() -> void:
+	# GameHost (sdk-runtime) still writes 15 W and 20 rpm for its rejoin "shows pedaling"
+	# check. Until it calls GestureRecognizer.is_not_pedaling, its numbers must match; read
+	# by name, so this keeps passing once the lead removes them.
+	var script := load("res://addons/wattlands/sdk/game_host.gd") as Script
+	assert_not_null(script, "GameHost script loads")
+	if script == null:
+		return
+	var consts := script.get_script_constant_map()
+	if consts.has("PEDAL_POWER_W"):
+		assert_eq(float(consts["PEDAL_POWER_W"]), GestureRecognizer.NOT_PEDALING_W)
+	if consts.has("PEDAL_CADENCE_RPM"):
+		assert_eq(float(consts["PEDAL_CADENCE_RPM"]), GestureRecognizer.NOT_PEDALING_RPM)
+
+
+func test_the_governor_calls_the_shared_detector() -> void:
+	# BRIEF 3.5: one detector drives coast, stop_5s and 4.6.4. The governor keeps no copy.
+	var path := "res://addons/wattlands/trainer/control/safety_governor.gd"
+	var src := FileAccess.get_file_as_string(path)
+	assert_gt(src.length(), 0, "governor source readable")
+	assert_string_contains(src, "GestureRecognizer.is_not_pedaling(")
+	var own := RegEx.create_from_string("<\\s*NOT_PEDALING_(W|RPM)\\b")
+	assert_null(own.search(src), "no comparison against its own not_pedaling thresholds")
+
+
+func test_exactly_15_w_is_pedaling() -> void:
+	for cadence: float in [0.0, 19.99, -1.0]:
+		var rig := _edge_rig()
+		_hold(rig, 15.0, cadence)
+		rig.run(12.0)
+		assert_false(rig.s()["coasting"], "15 W is not < 15 W (cadence %s)" % cadence)
+		assert_eq(rig.events_named("coasting_changed").size(), 0, "cadence %s" % cadence)
+		assert_eq(rig.events_named("pause_requested").size(), 0, "cadence %s" % cadence)
+
+
+func test_exactly_20_rpm_is_pedaling() -> void:
+	for power: float in [0.0, 14.99]:
+		var rig := _edge_rig()
+		_hold(rig, power, 20.0)
+		rig.run(12.0)
+		assert_false(rig.s()["coasting"], "20 rpm is not < 20 rpm (%s W)" % power)
+		assert_eq(rig.events_named("coasting_changed").size(), 0, "%s W" % power)
+		assert_eq(rig.events_named("pause_requested").size(), 0, "%s W" % power)
+
+
+func test_just_under_both_edges_coasts_at_3_s_and_pauses_at_10_s() -> void:
+	for cadence: float in [19.99, -1.0]:
+		var rig := _edge_rig()
+		var t_s := _hold(rig, 14.99, cadence)
+		rig.run_until(func() -> bool: return rig.t >= t_s + 2.95 - 1e-6, 5.0)
+		assert_false(rig.s()["coasting"], "not before 3 s (cadence %s)" % cadence)
+		rig.step()
+		assert_true(rig.s()["coasting"], "14.99 W, cadence %s: coasting at 3 s" % cadence)
+		assert_has(rig.s()["clamped_by"], Wl.CLAMP_COASTING)
+		var ev := rig.events_named("coasting_changed")
+		assert_eq(ev.size(), 1)
+		assert_time(float(ev[0]["t"]), t_s + 3.0)
+		rig.run(8.0)
+		var pause := rig.events_named("pause_requested")
+		assert_eq(pause.size(), 1, "cadence %s" % cadence)
+		assert_time(float(pause[0]["t"]), t_s + 10.0, "pause at 10 s (cadence %s)" % cadence)
+
+
+func test_governor_and_gesture_recognizer_agree_at_the_edges() -> void:
+	# One detector: the governor's coasting and the GestureRecognizer's not_pedaling state come
+	# out the same for every edge value (-1: no cadence).
+	var cases := [
+		[14.99, 19.99],
+		[15.0, 19.99],
+		[14.99, 20.0],
+		[15.0, 20.0],
+		[0.0, 0.0],
+		[14.99, -1.0],
+		[15.0, -1.0],
+		[0.0, 45.0],
+		[200.0, 0.0],
+	]
+	for c: Array in cases:
+		var power := float(c[0])
+		var cadence := float(c[1])
+		var rig := _edge_rig()
+		var g := GestureRecognizer.new()
+		g.configure(200.0, true)
+		rig.device.sample_received.connect(g.on_sample)
+		_hold(rig, power, cadence)
+		rig.run(4.0)
+		var expect := GestureRecognizer.is_not_pedaling(power, cadence)
+		var label := "%s W, %s rpm" % [power, cadence]
+		assert_eq(g.not_pedaling(), expect, "recognizer: " + label)
+		assert_eq(bool(rig.s()["coasting"]), expect, "governor: " + label)
+
+
 func test_coasting_in_sim_marks_afk_but_leaves_the_grade() -> void:
 	var rig := make_rig({"multiplayer": true}, follower())
 	rig.start([sim(Wl.GRADE_GAME, 120.0)])

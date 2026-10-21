@@ -10,6 +10,8 @@ var cadence_rpm: float = 90.0
 var speed_kmh: float = 30.0
 ## In ERG, power = commanded target x erg_follow (instantly). < 0: always power_w.
 var erg_follow: float = -1.0
+## Samples carry whole watts (like FTMS); false sends the exact power (boundary tests).
+var round_power: bool = true
 var sample_period_s: float = 1.0
 var first_sample_s: float = 1.0
 var max_power_w: int = 1800
@@ -124,7 +126,8 @@ func max_writes_in_window(window_s: float = 1.0) -> int:
 
 
 func _emit() -> void:
-	var s := TrainerSample.make(t, roundf(current_power_w()), cadence_rpm, speed_kmh)
+	var p := current_power_w()
+	var s := TrainerSample.make(t, roundf(p) if round_power else p, cadence_rpm, speed_kmh)
 	last_sample = s
 	samples_sent += 1
 	sample_times.append(t)
