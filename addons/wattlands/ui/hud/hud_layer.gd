@@ -6,23 +6,662 @@ extends CanvasLayer
 ## It reads from the session's WlEventBus (power_band_changed, cadence_band_changed,
 ## roster_changed, toast_requested, banner_requested, readout_changed, rescue_changed,
 ## phase_started) and from update() calls the GameHost makes every tick for the local rider.
+##
+## Layout (sizes in 1080p pixels, the window's base size):
+## - Anchors: one stack per anchor, WlTheme.MARGIN_PX (32 px) from the screen edges. Entries
+##   at one anchor stack in the order added: top anchors downward, bottom anchors upward
+##   (the first entry sits nearest the edge). Kit widgets come first, then the game's
+##   Controls, then the banner area and the toast area if they share that anchor.
+## - Rect2i positions are art pixels mapped through PixelViewport.art_rect_to_screen()
+##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
+##   resizes. Kit widgets in a rect shrink to fit it (several in one rect stack and share
+##   it); key numbers stay >= 48 px, so a rect below a widget's min_rect() overflows. Game
+##   Controls in a rect are sized to it. Without a PixelViewport (3D games) a Rect2i is
+##   taken as 1080p pixels.
+## - The CanvasLayer `layer` is LAYER (10): a game view's own CanvasLayer with a lower
+##   layer draws under the HUD (vignettes), a higher one above it.
+## - Raw W and %FTP always show: if the spec has no power gauge (and not both a power_w and
+##   an ftp_pct readout), a power gauge is added at bottom_left (ensure_power_visible).
+##   W/kg shows only if the rider opted in (profile `show_wkg` if present, else
+##   `share_weight`; or wkg_weight_kg).
+## - Safety banners: rescue (4.6.3), warm-up (4.6.8) and pause, from set_safety_state(),
+##   update()'s telemetry (rescue, paused) and the bus (rescue_changed, paused_changed,
+##   governor_status {warmup, rescue, paused}) for the local rider, unless
+##   spec.show_safety_banners is false.
+
+const LAYER := 10
+const BASE_SIZE := Vector2(1920, 1080)
+
+## Screen size for layout (tests); ZERO uses the viewport's visible rect.
+var screen_size_override: Vector2 = Vector2.ZERO
+## Add a power gauge when the spec shows no raw W and %FTP (BRIEF 3.3, 3.1 pillar 2).
+var ensure_power_visible: bool = true
+## Play Sfx cues (toast, banner warning, rescue start, phase start).
+var sounds: bool = true
+## >= 0 overrides the W/kg weight (0 hides W/kg); < 0 reads the profile opt-in.
+var wkg_weight_kg: float = -1.0
+
+var _spec: HudSpec = null
+var _ctx: GameContext = null
+var _pv: PixelViewport = null
+var _bus: WlEventBus = null
+var _root: Control = null
+var _boxes: Dictionary = {}
+## [{"rect": Rect2i, "node": VBoxContainer}]
+var _slots: Array[Dictionary] = []
+var _widgets: Array[HudWidget] = []
+var _game_controls: Array[Control] = []
+var _toasts: HudToasts = null
+var _banner: HudBanner = null
+var _feed: HudLocalFeed = null
+var _local_peer: int = 0
+var _readouts: Dictionary = {}
+var _bus_links: Array[Dictionary] = []
+var _relayout_queued: bool = false
+var _warned_no_pv: bool = false
+var _ftp: float = 200.0
+var _wprime: float = 20000.0
+var _weight: float = 0.0
+var _ext_warmup: bool = false
+var _ext_rescue: bool = false
+var _ext_paused: bool = false
+var _tele_rescue: bool = false
+var _tele_paused: bool = false
+var _rescue_shown: bool = false
+
+
+func _init() -> void:
+	layer = LAYER
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_root = Control.new()
+	_root.name = "Root"
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_root.theme = WlTheme.get_theme()
+	add_child(_root)
+	_toasts = HudToasts.new()
+	_banner = HudBanner.new()
+	_feed = HudLocalFeed.new(self)
+
+
+func _ready() -> void:
+	var vp := get_viewport()
+	if vp != null and not vp.size_changed.is_connected(_queue_relayout):
+		vp.size_changed.connect(_queue_relayout)
+	relayout()
+
+
+func _process(delta: float) -> void:
+	tick(delta)
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PREDELETE:
+		_disconnect_bus()
+		for n: Node in [_toasts, _banner]:
+			if n != null and is_instance_valid(n) and n.get_parent() == null:
+				n.free()
+
 
 ## Build widgets for `spec`. `pixel_viewport` maps 2D Rect2i positions (art pixels) through
 ## its integer scale and letterbox offset; null for 3D games.
-func build(_spec: HudSpec, _ctx: GameContext, _pixel_viewport: PixelViewport = null) -> void:
-	pass
+func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null) -> void:
+	var old_controls := _game_controls.duplicate()
+	_clear()
+	_spec = spec if spec != null else HudSpec.new()
+	_ctx = ctx
+	_set_pixel_viewport(pixel_viewport)
+	_local_peer = ctx.local_peer if ctx != null else 0
+	_bus = ctx.events if ctx != null and ctx.events != null else _autoload_bus()
+	_read_rider_data()
+	_banner.show_safety = _spec.show_safety_banners
+	for entry: Dictionary in _spec.widgets:
+		var id := str(entry.get("widget", ""))
+		var at: Variant = entry.get("at", null)
+		if not HudSpec.is_valid_position(at):
+			push_error("HudLayer: widget '%s' has an invalid position %s" % [id, at])
+			continue
+		var opts: Variant = entry.get("options", {})
+		var w := make_widget(id, opts if opts is Dictionary else {})
+		if w != null:
+			_widgets.append(w)
+			_place(w, at)
+	if ensure_power_visible and not _shows_power():
+		var g := make_widget(HudSpec.POWER_GAUGE, {})
+		_widgets.append(g)
+		_place(g, HudSpec.BOTTOM_LEFT)
+	for entry: Dictionary in _spec.controls:
+		var c := entry.get("control", null) as Control
+		var at: Variant = entry.get("at", null)
+		if c == null:
+			push_error("HudLayer: a game control entry has no Control")
+			continue
+		if not HudSpec.is_valid_position(at):
+			push_error("HudLayer: control '%s' has an invalid position %s" % [c.name, at])
+			continue
+		if c.get_parent() != null:
+			c.get_parent().remove_child(c)
+		_game_controls.append(c)
+		_place(c, at)
+	_place(_banner, _spec.banner_area if HudSpec.is_valid_position(_spec.banner_area) else HudSpec.TOP)
+	_place(_toasts, _spec.toast_area if HudSpec.is_valid_position(_spec.toast_area) else HudSpec.TOP)
+	for c: Control in old_controls:
+		if is_instance_valid(c) and c.get_parent() == null and not _game_controls.has(c):
+			c.free()
+	if ctx != null and not ctx.roster.is_empty():
+		set_roster(ctx.roster)
+	for id: String in _readouts.keys():
+		set_readout(id, _readouts[id])
+	_connect_bus()
+	_refresh_safety()
+	relayout()
 
 
 ## Per-tick local data: the local rider's telemetry, current phase, and plan (timeline).
-func update(_telemetry: Telemetry, _phase: PhaseState, _plan: EffortPlan) -> void:
-	pass
+func update(telemetry: Telemetry, phase: PhaseState, plan: EffortPlan) -> void:
+	if telemetry != null:
+		for w in _widgets:
+			w.set_telemetry(telemetry)
+		_tele_rescue = telemetry.rescue
+		_tele_paused = telemetry.paused
+		_refresh_safety()
+	if phase != null:
+		for w in _widgets:
+			w.set_phase(phase, plan)
 
 
 ## A HudFeed that draws on this layer only (the GameHost wraps it with network routing).
 func local_feed() -> HudFeed:
-	return HudFeed.new()
+	return _feed
 
 
 ## Show the kit's warm-up or rescue banner state.
-func set_safety_state(_warmup_active: bool, _rescue: bool, _paused: bool) -> void:
-	pass
+func set_safety_state(warmup_active: bool, rescue: bool, paused: bool) -> void:
+	_ext_warmup = warmup_active
+	_ext_rescue = rescue
+	_ext_paused = paused
+	_refresh_safety()
+
+
+# --- drawing API (the local feed and the bus handlers use it) --------------------------------
+
+## A toast from a string key (game or platform) with {0}/{name} args.
+func show_toast(key: String, args: Variant = []) -> void:
+	_toasts.push(_text(key, args))
+	_play("toast")
+
+
+## A banner from a string key for `seconds`.
+func show_banner(key: String, args: Variant = [], seconds: float = 3.0) -> void:
+	_banner.show_game_banner(_text(key, args), seconds)
+	_play("warning")
+
+
+## The power band of `peer`'s gauges (SIM band; 0, 0 clears).
+func apply_power_band(peer: int, lo_w: float, hi_w: float) -> void:
+	for w in _widgets:
+		if w is HudPowerGauge and (w as HudPowerGauge).peer == peer:
+			(w as HudPowerGauge).set_power_band(lo_w, hi_w)
+
+
+## The cadence band of `peer`'s cadence widgets (0, 0 clears).
+func apply_cadence_band(peer: int, lo_rpm: float, hi_rpm: float) -> void:
+	for w in _widgets:
+		if w is HudCadence and (w as HudCadence).peer == peer:
+			(w as HudCadence).set_cadence_band(lo_rpm, hi_rpm)
+
+
+## One rider's teammate_status (local only; the host's statuses arrive in the roster).
+func apply_teammate_status(peer: int, status: Dictionary) -> void:
+	for w in _widgets:
+		if w is HudTeammates:
+			(w as HudTeammates).set_status(peer, status)
+
+
+func set_roster(roster: Dictionary) -> void:
+	for w in _widgets:
+		if w is HudTeammates:
+			(w as HudTeammates).set_roster(roster)
+
+
+## The text of custom readouts with this id (kept for readouts built later).
+func set_readout(id: String, text: String) -> void:
+	_readouts[id] = text
+	for w in _widgets:
+		if w is HudReadout and (w as HudReadout).source == "custom" and (w as HudReadout).readout_id == id:
+			(w as HudReadout).set_text(text)
+
+
+## Advance toasts and banners (_process calls it with the frame delta).
+func tick(dt: float) -> void:
+	_toasts.tick(dt)
+	_banner.tick(dt)
+
+
+## A kit widget for `id` configured for this layer's rider (null and push_error if unknown).
+func make_widget(id: String, options: Dictionary = {}) -> HudWidget:
+	var w: HudWidget = null
+	match id:
+		HudSpec.POWER_GAUGE:
+			var g := HudPowerGauge.new()
+			g.peer = int(options.get("peer", _local_peer))
+			w = g
+		HudSpec.CADENCE:
+			var c := HudCadence.new()
+			c.peer = int(options.get("peer", _local_peer))
+			w = c
+		HudSpec.WBAL:
+			var wb := HudWbal.new()
+			wb.wprime_j = _wprime
+			w = wb
+		HudSpec.TIMELINE:
+			w = HudTimeline.new()
+		HudSpec.TEAMMATES:
+			var tm := HudTeammates.new()
+			tm.local_peer = _local_peer
+			w = tm
+		HudSpec.READOUT:
+			w = HudReadout.new()
+		HudSpec.GEAR:
+			w = HudGear.new()
+		_:
+			push_error("HudLayer: unknown kit widget '%s' (use %s)" % [id, ", ".join(HudSpec.KIT_WIDGETS)])
+			return null
+	w.name = "%s_%d" % [id, _widgets.size()]
+	w.ftp_w = _ftp
+	w.weight_kg = _weight
+	w.configure(options)
+	return w
+
+
+# --- layout --------------------------------------------------------------------------------
+
+func relayout() -> void:
+	_relayout_queued = false
+	var ss := screen_size()
+	_root.position = Vector2.ZERO
+	_root.size = ss
+	for anchor: String in _boxes.keys():
+		var box: VBoxContainer = _boxes[anchor]
+		var sz := box.get_combined_minimum_size()
+		box.size = sz
+		box.position = anchor_position(anchor, sz, ss)
+	for slot in _slots:
+		var r := map_rect(slot["rect"])
+		var holder: Control = slot["node"]
+		holder.position = r.position
+		holder.size = r.size
+		var stack: VBoxContainer = slot["stack"]
+		_fit_slot(stack, r.size)
+		stack.position = Vector2.ZERO
+		stack.size = r.size
+
+
+func screen_size() -> Vector2:
+	if screen_size_override != Vector2.ZERO:
+		return screen_size_override
+	if is_inside_tree():
+		var vp := get_viewport()
+		if vp != null:
+			return vp.get_visible_rect().size
+	return BASE_SIZE
+
+
+## Top-left of an anchor stack of size `sz` on a screen of size `ss`.
+static func anchor_position(anchor: String, sz: Vector2, ss: Vector2) -> Vector2:
+	var m := float(WlTheme.MARGIN_PX)
+	match anchor:
+		HudSpec.TOP_LEFT:
+			return Vector2(m, m)
+		HudSpec.TOP:
+			return Vector2(roundf((ss.x - sz.x) * 0.5), m)
+		HudSpec.TOP_RIGHT:
+			return Vector2(ss.x - sz.x - m, m)
+		HudSpec.BOTTOM_LEFT:
+			return Vector2(m, ss.y - sz.y - m)
+		HudSpec.BOTTOM:
+			return Vector2(roundf((ss.x - sz.x) * 0.5), ss.y - sz.y - m)
+		HudSpec.BOTTOM_RIGHT:
+			return Vector2(ss.x - sz.x - m, ss.y - sz.y - m)
+	return Vector2(m, m)
+
+
+## An art-pixel rect in screen pixels (through the PixelViewport; 1:1 without one).
+func map_rect(r: Rect2i) -> Rect2:
+	if _pv != null and is_instance_valid(_pv):
+		return _pv.art_rect_to_screen(r)
+	if not _warned_no_pv:
+		_warned_no_pv = true
+		push_warning("HudLayer: a Rect2i position without a PixelViewport is taken as 1080p pixels")
+	return Rect2(r)
+
+
+# --- queries (tests, the GameHost, games) ----------------------------------------------------
+
+func root() -> Control:
+	return _root
+
+
+func spec() -> HudSpec:
+	return _spec
+
+
+func local_peer() -> int:
+	return _local_peer
+
+
+func toasts() -> HudToasts:
+	return _toasts
+
+
+func banner() -> HudBanner:
+	return _banner
+
+
+## Every kit widget of `id` (HudSpec.POWER_GAUGE, ...) in build order.
+func widgets_of(id: String) -> Array[HudWidget]:
+	var out: Array[HudWidget] = []
+	for w in _widgets:
+		if w.widget_id == id:
+			out.append(w)
+	return out
+
+
+## The first kit widget of `id`, or null.
+func widget(id: String) -> HudWidget:
+	var all := widgets_of(id)
+	return all[0] if not all.is_empty() else null
+
+
+## The stack Control of an anchor (null if nothing sits there).
+func anchor_box(anchor: String) -> Control:
+	return _boxes.get(anchor, null)
+
+
+## The anchor a node sits at ("" if it sits in a rect or nowhere).
+func anchor_of(node: Node) -> String:
+	for anchor: String in _boxes.keys():
+		if node.get_parent() == _boxes[anchor]:
+			return anchor
+	return ""
+
+
+## The art-pixel rect a node sits in (Rect2i() if none).
+func rect_of(node: Node) -> Rect2i:
+	for slot in _slots:
+		if node.get_parent() == slot["stack"]:
+			return slot["rect"]
+	return Rect2i()
+
+
+## The screen rect of the rect slot holding `node` (Rect2() if none).
+func slot_screen_rect(node: Node) -> Rect2:
+	for slot in _slots:
+		if node.get_parent() == slot["stack"]:
+			var n: Control = slot["node"]
+			return Rect2(n.position, n.size)
+	return Rect2()
+
+
+# --- internals -------------------------------------------------------------------------------
+
+func _clear() -> void:
+	_disconnect_bus()
+	for n: Node in [_toasts, _banner]:
+		if n.get_parent() != null:
+			n.get_parent().remove_child(n)
+	for c: Control in _game_controls:
+		if is_instance_valid(c) and c.get_parent() != null:
+			c.get_parent().remove_child(c)
+	_game_controls.clear()
+	for anchor: String in _boxes.keys():
+		var box: Node = _boxes[anchor]
+		_root.remove_child(box)
+		box.free()
+	_boxes.clear()
+	for slot in _slots:
+		var node: Node = slot["node"]
+		_root.remove_child(node)
+		node.free()
+	_slots.clear()
+	_widgets.clear()
+	_toasts.clear()
+
+
+func _place(node: Control, at: Variant) -> void:
+	if at is Rect2i:
+		var slot := _slot_for(at)
+		slot.add_child(node)
+		return
+	var anchor := str(at)
+	var box := _box(anchor)
+	box.add_child(node)
+	if anchor.begins_with("bottom"):
+		box.move_child(node, 0)
+	if anchor.ends_with("left"):
+		node.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	elif anchor.ends_with("right"):
+		node.size_flags_horizontal = Control.SIZE_SHRINK_END
+	else:
+		node.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+
+
+func _box(anchor: String) -> VBoxContainer:
+	if _boxes.has(anchor):
+		return _boxes[anchor]
+	var box := VBoxContainer.new()
+	box.name = "Anchor_" + anchor
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", WlTheme.GAP_PX)
+	if anchor.begins_with("bottom"):
+		box.alignment = BoxContainer.ALIGNMENT_END
+	box.minimum_size_changed.connect(_queue_relayout)
+	_root.add_child(box)
+	_boxes[anchor] = box
+	return box
+
+
+## The stack inside the holder of `rect` (the holder keeps exactly the mapped rect; content
+## below a widget's min_rect overflows it).
+func _slot_for(rect: Rect2i) -> VBoxContainer:
+	for slot in _slots:
+		if slot["rect"] == rect:
+			return slot["stack"]
+	var holder := Control.new()
+	holder.name = "Rect_%d_%d_%d_%d" % [rect.position.x, rect.position.y, rect.size.x, rect.size.y]
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var stack := VBoxContainer.new()
+	stack.name = "Stack"
+	stack.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stack.add_theme_constant_override("separation", 4)
+	holder.add_child(stack)
+	_root.add_child(holder)
+	_slots.append({"rect": rect, "node": holder, "stack": stack})
+	return stack
+
+
+func _fit_slot(node: VBoxContainer, avail: Vector2) -> void:
+	var kit: Array[HudWidget] = []
+	var others: Array[Control] = []
+	for c in node.get_children():
+		if c is HudWidget:
+			kit.append(c)
+		elif c is Control:
+			others.append(c)
+	if not kit.is_empty():
+		var total_h := 0.0
+		var max_w := 0.0
+		for w in kit:
+			total_h += w.base_size().y
+			max_w = maxf(max_w, w.base_size().x)
+		var sep := 4.0 * float(node.get_child_count() - 1)
+		var s := 1.0
+		if total_h > 0.0 and max_w > 0.0:
+			s = minf(1.0, minf(avail.x / max_w, maxf(avail.y - sep, 1.0) / total_h))
+		for w in kit:
+			w.set_ui_scale(maxf(s, 0.25))
+			w.size_flags_horizontal = Control.SIZE_FILL
+	for c in others:
+		if c is HudToasts:
+			(c as HudToasts).fit_to(avail)
+		elif c is HudBanner:
+			(c as HudBanner).fit_to(avail)
+		else:
+			c.size_flags_horizontal = Control.SIZE_FILL
+			c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+
+func _queue_relayout() -> void:
+	if _relayout_queued or not is_inside_tree():
+		return
+	_relayout_queued = true
+	relayout.call_deferred()
+
+
+func _set_pixel_viewport(pv: PixelViewport) -> void:
+	if _pv != null and is_instance_valid(_pv) and _pv.resized.is_connected(_queue_relayout):
+		_pv.resized.disconnect(_queue_relayout)
+	_pv = pv
+	if _pv != null and not _pv.resized.is_connected(_queue_relayout):
+		_pv.resized.connect(_queue_relayout)
+
+
+func _shows_power() -> bool:
+	var power := false
+	var pct := false
+	for entry: Dictionary in _spec.widgets:
+		var id := str(entry.get("widget", ""))
+		if id == HudSpec.POWER_GAUGE:
+			return true
+		if id == HudSpec.READOUT:
+			var opts: Variant = entry.get("options", {})
+			var src := str((opts as Dictionary).get("source", "power_w")) if opts is Dictionary else "power_w"
+			power = power or src == "power_w"
+			pct = pct or src == "ftp_pct"
+	return power and pct
+
+
+func _read_rider_data() -> void:
+	var prof := _profile()
+	var slot: PlayerSlot = _ctx.local_player() if _ctx != null else null
+	_ftp = slot.ftp if slot != null else (prof.ftp_w if prof != null else 200.0)
+	_wprime = prof.wprime_j if prof != null else 20000.0
+	_weight = 0.0
+	if wkg_weight_kg >= 0.0:
+		_weight = wkg_weight_kg
+	elif prof != null:
+		var opt_in: Variant = prof.get("show_wkg")
+		var on := bool(opt_in) if opt_in != null else prof.share_weight
+		if on:
+			_weight = prof.weight_kg
+
+
+func _profile() -> RiderProfile:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	var s := tree.root.get_node_or_null("Settings") as WlSettings
+	return s.profile if s != null else null
+
+
+func _autoload_bus() -> WlEventBus:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return null
+	return tree.root.get_node_or_null("EventBus") as WlEventBus
+
+
+func _text(key: String, args: Variant) -> String:
+	var a: Variant = args
+	if a == null:
+		a = []
+	elif not (a is Array or a is Dictionary):
+		a = [a]
+	if _ctx != null and _ctx.strings != null:
+		return _ctx.strings.t(key, a)
+	return GameStrings.new().t(key, a)
+
+
+func _refresh_safety() -> void:
+	var rescue := _ext_rescue or _tele_rescue
+	if rescue and not _rescue_shown:
+		_play("rescue")
+	_rescue_shown = rescue
+	_banner.set_safety(_ext_warmup, rescue, _ext_paused or _tele_paused)
+
+
+func _play(sound: String) -> void:
+	if not sounds or not is_inside_tree():
+		return
+	var sfx := get_node_or_null("/root/Sfx") as WlSfx
+	if sfx != null:
+		sfx.play(sound, -4.0)
+
+
+# --- bus ---------------------------------------------------------------------------------------
+
+func _connect_bus() -> void:
+	if _bus == null:
+		return
+	_link(_bus.power_band_changed, apply_power_band)
+	_link(_bus.cadence_band_changed, apply_cadence_band)
+	_link(_bus.roster_changed, set_roster)
+	_link(_bus.toast_requested, _on_toast)
+	_link(_bus.banner_requested, _on_banner)
+	_link(_bus.readout_changed, set_readout)
+	_link(_bus.rescue_changed, _on_rescue_changed)
+	_link(_bus.phase_started, _on_phase_started)
+	_link(_bus.paused_changed, _on_paused_changed)
+	_link(_bus.governor_status, _on_governor_status)
+
+
+func _link(sig: Signal, c: Callable) -> void:
+	if not sig.is_connected(c):
+		sig.connect(c)
+	_bus_links.append({"signal": sig, "callable": c})
+
+
+func _disconnect_bus() -> void:
+	for l in _bus_links:
+		var sig: Signal = l["signal"]
+		var c: Callable = l["callable"]
+		if sig.is_null() or not is_instance_valid(sig.get_object()):
+			continue
+		if sig.is_connected(c):
+			sig.disconnect(c)
+	_bus_links.clear()
+
+
+func _on_toast(key: String, args: Variant) -> void:
+	show_toast(key, args)
+
+
+func _on_banner(key: String, args: Variant, seconds: float) -> void:
+	show_banner(key, args, seconds)
+
+
+func _on_rescue_changed(peer: int, active: bool) -> void:
+	if peer == _local_peer:
+		_ext_rescue = active
+		_refresh_safety()
+
+
+func _on_phase_started(peer: int, _index: int) -> void:
+	if peer == _local_peer:
+		_play("phase")
+
+
+func _on_paused_changed(paused: bool, _reason: String) -> void:
+	_ext_paused = paused
+	_refresh_safety()
+
+
+func _on_governor_status(peer: int, status: Dictionary) -> void:
+	if peer != _local_peer:
+		return
+	if status.has("warmup"):
+		_ext_warmup = bool(status["warmup"])
+	if status.has("rescue"):
+		_ext_rescue = bool(status["rescue"])
+	if status.has("paused"):
+		_ext_paused = bool(status["paused"])
+	_refresh_safety()

@@ -1,0 +1,512 @@
+extends GutTest
+## HudLayer (BRIEF 3.6, 3.9; docs/OWNERSHIP.md HUD1-HUD12, GM15, PL11): anchors and stacking,
+## Rect2i art-pixel placement through a (fake) PixelViewport at scales 2 and 3 with a
+## letterbox and on resize, the game's own Controls, the toast and banner areas, everything
+## the session bus drives (bands, roster, toasts, banners, readouts, rescue, pause, warm-up),
+## the local feed, per-tick update(), and raw W / %FTP always visible.
+
+const FakePV := preload("res://tests/ui/fake_pixel_viewport.gd")
+const LOCAL := 1
+
+var _bus: WlEventBus = null
+var _ctx: GameContext = null
+var _hud: HudLayer = null
+
+
+func before_each() -> void:
+	_bus = autofree(WlEventBus.new())
+	_ctx = GameContext.new()
+	_ctx.events = _bus
+	_ctx.local_peer = LOCAL
+	_ctx.strings = GameStrings.new()
+	var me := PlayerSlot.new()
+	me.peer_id = LOCAL
+	me.ftp = 250.0
+	me.apply_look(0)
+	_ctx.players = [me]
+	_hud = HudLayer.new()
+	_hud.screen_size_override = Vector2(1920, 1080)
+	_hud.sounds = false
+	_hud.wkg_weight_kg = 0.0
+	add_child_autofree(_hud)
+	_hud.set_process(false)
+
+
+func _spec() -> HudSpec:
+	return HudSpec.new() \
+		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
+		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": "gate_hp"}) \
+		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM) \
+		.add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
+
+
+func _tele(mode: String, power: float, target: int = 0) -> Telemetry:
+	var t := Telemetry.new()
+	t.peer_id = LOCAL
+	t.mode = mode
+	t.power_w = power
+	t.applied_target_w = target
+	t.ftp_pct = power / 2.5
+	t.cadence_rpm = 90.0
+	t.wbal_j = 10000.0
+	return t
+
+
+# --- basics -----------------------------------------------------------------------------------
+
+func test_layer_and_process_mode() -> void:
+	assert_eq(_hud.layer, HudLayer.LAYER)
+	assert_eq(HudLayer.LAYER, 10)
+	assert_eq(_hud.process_mode, Node.PROCESS_MODE_ALWAYS)
+	assert_same(_hud.root().theme, WlTheme.get_theme(), "the shared Theme")
+
+
+func test_build_places_each_widget_at_its_anchor() -> void:
+	_hud.build(_spec(), _ctx)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.TIMELINE)), HudSpec.TOP_LEFT)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.POWER_GAUGE)), HudSpec.BOTTOM_LEFT)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.CADENCE)), HudSpec.BOTTOM_LEFT)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.READOUT)), HudSpec.TOP_RIGHT)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.TEAMMATES)), HudSpec.BOTTOM)
+	assert_eq(_hud.anchor_of(_hud.widget(HudSpec.GEAR)), HudSpec.BOTTOM_RIGHT)
+	assert_eq(_hud.widgets_of(HudSpec.POWER_GAUGE).size(), 1, "no extra gauge when the spec has one")
+
+
+func test_bottom_anchors_stack_upward_top_anchors_downward() -> void:
+	var spec := HudSpec.new() \
+		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
+		.add(HudSpec.WBAL, HudSpec.TOP_LEFT)
+	_hud.build(spec, _ctx)
+	var bl := _hud.anchor_box(HudSpec.BOTTOM_LEFT)
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	var cad := _hud.widget(HudSpec.CADENCE)
+	assert_gt(gauge.get_index(), cad.get_index(), "the first bottom entry sits nearest the bottom edge")
+	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
+	assert_lt(_hud.widget(HudSpec.TIMELINE).get_index(), _hud.widget(HudSpec.WBAL).get_index(), "top entries stack downward")
+	assert_not_null(bl)
+	assert_not_null(tl)
+
+
+func test_anchor_boxes_sit_at_the_screen_edges() -> void:
+	_hud.build(_spec(), _ctx)
+	var m := float(WlTheme.MARGIN_PX)
+	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
+	assert_eq(tl.position, Vector2(m, m))
+	var tr_box := _hud.anchor_box(HudSpec.TOP_RIGHT)
+	assert_almost_eq(tr_box.position.x + tr_box.size.x, 1920.0 - m, 0.01)
+	assert_eq(tr_box.position.y, m)
+	var bl := _hud.anchor_box(HudSpec.BOTTOM_LEFT)
+	assert_eq(bl.position.x, m)
+	assert_almost_eq(bl.position.y + bl.size.y, 1080.0 - m, 0.01)
+	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
+	assert_almost_eq(br.position.x + br.size.x, 1920.0 - m, 0.01)
+	var b := _hud.anchor_box(HudSpec.BOTTOM)
+	assert_almost_eq(b.position.x + b.size.x * 0.5, 960.0, 1.0, "bottom is centered")
+	assert_gt(bl.size.y, 300.0, "three stacked widgets")
+
+
+func test_anchor_position_math() -> void:
+	var ss := Vector2(1920, 1080)
+	var sz := Vector2(100, 50)
+	assert_eq(HudLayer.anchor_position(HudSpec.TOP, sz, ss), Vector2(910, 32))
+	assert_eq(HudLayer.anchor_position(HudSpec.BOTTOM, sz, ss), Vector2(910, 998))
+	assert_eq(HudLayer.anchor_position(HudSpec.BOTTOM_RIGHT, sz, ss), Vector2(1788, 998))
+
+
+func test_relayout_on_screen_size_change() -> void:
+	_hud.build(_spec(), _ctx)
+	_hud.screen_size_override = Vector2(2560, 1080)
+	_hud.relayout()
+	var tr_box := _hud.anchor_box(HudSpec.TOP_RIGHT)
+	assert_almost_eq(tr_box.position.x + tr_box.size.x, 2560.0 - WlTheme.MARGIN_PX, 0.01)
+
+
+func test_invalid_positions_and_unknown_widgets_are_rejected() -> void:
+	var spec := HudSpec.new() \
+		.add(HudSpec.POWER_GAUGE, "middle") \
+		.add("radar", HudSpec.TOP) \
+		.add(HudSpec.CADENCE, HudSpec.TOP)
+	_hud.build(spec, _ctx)
+	assert_push_error("invalid position")
+	assert_push_error("unknown kit widget")
+	assert_not_null(_hud.widget(HudSpec.CADENCE))
+
+
+func test_power_is_always_visible() -> void:
+	_hud.build(HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP), _ctx)
+	var g := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_not_null(g, "a gauge is added when the game shows no raw W and %FTP")
+	assert_eq(_hud.anchor_of(g), HudSpec.BOTTOM_LEFT)
+	_hud.build(HudSpec.new() \
+		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
+		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "ftp_pct"}), _ctx)
+	assert_null(_hud.widget(HudSpec.POWER_GAUGE), "power_w and ftp_pct readouts are enough")
+	_hud.ensure_power_visible = false
+	_hud.build(HudSpec.new(), _ctx)
+	assert_null(_hud.widget(HudSpec.POWER_GAUGE))
+
+
+func test_rebuild_replaces_widgets_and_frees_unused_controls() -> void:
+	var card := Label.new()
+	_hud.build(_spec().add_control(card, HudSpec.TOP), _ctx)
+	var old_gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.TOP), _ctx)
+	assert_false(is_instance_valid(old_gauge), "old widgets freed")
+	assert_false(is_instance_valid(card), "a control the new spec doesn't use is freed")
+	assert_eq(_hud.widgets_of(HudSpec.POWER_GAUGE).size(), 1)
+
+
+# --- game controls, toasts and banner areas ---------------------------------------------------
+
+func test_game_controls_at_anchors_after_kit_widgets() -> void:
+	var card := PanelContainer.new()
+	card.name = "RoutingCard"
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_RIGHT).add_control(card, HudSpec.BOTTOM_RIGHT)
+	_hud.build(spec, _ctx)
+	assert_eq(_hud.anchor_of(card), HudSpec.BOTTOM_RIGHT)
+	assert_lt(card.get_index(), _hud.widget(HudSpec.POWER_GAUGE).get_index(), "stacks above the gauge (bottom anchors go up)")
+
+
+func test_toast_and_banner_areas_at_anchors() -> void:
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT).toasts_at(HudSpec.BOTTOM).banners_at(HudSpec.TOP)
+	_hud.build(spec, _ctx)
+	assert_eq(_hud.anchor_of(_hud.toasts()), HudSpec.BOTTOM)
+	assert_eq(_hud.anchor_of(_hud.banner()), HudSpec.TOP)
+
+
+# --- Rect2i placement --------------------------------------------------------------------------
+
+func _fishing_spec(card: Control) -> HudSpec:
+	return HudSpec.new() \
+		.add(HudSpec.POWER_GAUGE, Rect2i(427, 0, 213, 42)) \
+		.add(HudSpec.CADENCE, Rect2i(427, 42, 213, 42)) \
+		.add_control(card, Rect2i(0, 10, 100, 20)) \
+		.toasts_at(Rect2i(0, 40, 640, 30)) \
+		.banners_at(Rect2i(0, 90, 427, 60))
+
+
+func test_rect_positions_map_through_the_pixel_viewport_at_scale_2() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 2
+	pv.fake_offset = Vector2(0, 30)
+	var card := Control.new()
+	_hud.build(_fishing_spec(card), _ctx, pv)
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_eq(_hud.rect_of(gauge), Rect2i(427, 0, 213, 42))
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(854, 30, 426, 84))
+	assert_eq(_hud.slot_screen_rect(_hud.widget(HudSpec.CADENCE)), Rect2(854, 114, 426, 84))
+	assert_eq(_hud.slot_screen_rect(card), Rect2(0, 50, 200, 40))
+	assert_eq(_hud.slot_screen_rect(_hud.toasts()), Rect2(0, 110, 1280, 60))
+	assert_eq(_hud.slot_screen_rect(_hud.banner()), Rect2(0, 210, 854, 120))
+	assert_eq(_hud.anchor_of(gauge), "", "not at an anchor")
+	assert_lt(gauge.ui_scale, 1.0, "shrunk to its rect")
+
+
+func test_rect_positions_at_scale_3_and_on_resize() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 3
+	pv.fake_offset = Vector2.ZERO
+	var card := Control.new()
+	_hud.build(_fishing_spec(card), _ctx, pv)
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1281, 0, 639, 126))
+	pv.set_fake(2, Vector2(320, 180))
+	await wait_process_frames(2)
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1174, 180, 426, 84), "re-laid out on resize")
+	assert_eq(_hud.slot_screen_rect(card), Rect2(320, 200, 200, 40))
+
+
+func test_widgets_sharing_a_rect_stack_and_share_it() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 3
+	var rect := Rect2i(0, 0, 160, 90)
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, rect).add(HudSpec.WBAL, rect)
+	_hud.build(spec, _ctx, pv)
+	var g := _hud.widget(HudSpec.POWER_GAUGE)
+	var w := _hud.widget(HudSpec.WBAL)
+	assert_eq(_hud.rect_of(g), rect)
+	assert_eq(_hud.rect_of(w), rect)
+	assert_lt(g.get_index(), w.get_index(), "stacked in the order added")
+	await wait_process_frames(2)
+	var total := g.get_combined_minimum_size().y + w.get_combined_minimum_size().y + 4.0
+	assert_lte(total, 270.0, "they share the 480 x 270 px rect")
+
+
+## Fishing's local-lane HUD zone at 4 lanes (x 427-639, 84 art px tall; 639 x 252 px at
+## scale 3), split the way docs/GAME_SDK.md recommends: timeline on top, power gauge and
+## cadence side by side, W' and gear below. Every widget fits its rect and W and rpm stay
+## >= 48 px (F3.5).
+func test_fishing_zone_layout_fits_with_48_px_numbers() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 3
+	var rects := {
+		HudSpec.TIMELINE: Rect2i(427, 0, 213, 34),
+		HudSpec.POWER_GAUGE: Rect2i(427, 34, 107, 36),
+		HudSpec.CADENCE: Rect2i(534, 34, 106, 36),
+		HudSpec.WBAL: Rect2i(427, 70, 133, 14),
+		HudSpec.GEAR: Rect2i(560, 70, 80, 14),
+	}
+	var spec := HudSpec.new()
+	for id: String in rects.keys():
+		spec.add(id, rects[id])
+	_hud.build(spec, _ctx, pv)
+	var t := _tele(Wl.SIM, 1000.0)
+	t.ftp_pct = 150.0
+	t.cadence_rpm = 120.0
+	_hud.update(t, null, null)
+	_hud.apply_cadence_band(LOCAL, 100.0, 120.0)
+	_hud.relayout()
+	await wait_process_frames(2)
+	assert_true(_hud.widget(HudSpec.GEAR).visible, "Landing is SIM: the gear shows")
+	for id: String in rects.keys():
+		var wd := _hud.widget(id)
+		var screen := _hud.slot_screen_rect(wd)
+		var got := wd.get_combined_minimum_size()
+		assert_true(got.x <= screen.size.x + 1.0 and got.y <= screen.size.y + 1.0, "%s %s fits %s" % [id, got, screen.size])
+	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()), 48, "W >= 48 px")
+	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label()), 48, "rpm >= 48 px")
+
+
+func test_rect_without_pixel_viewport_is_1080p_pixels() -> void:
+	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, Rect2i(100, 100, 420, 150)), _ctx)
+	assert_push_warning("without a PixelViewport")
+	assert_eq(_hud.slot_screen_rect(_hud.widget(HudSpec.POWER_GAUGE)), Rect2(100, 100, 420, 150))
+
+
+# --- the session bus ----------------------------------------------------------------------------
+
+func test_bus_power_band_reaches_the_local_gauge_only() -> void:
+	_hud.build(_spec(), _ctx)
+	var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+	_bus.power_band_changed.emit(7, 100.0, 200.0)
+	_hud.update(_tele(Wl.SIM, 150.0), null, null)
+	assert_eq(g.band(), Vector2.ZERO, "another peer's band")
+	_bus.power_band_changed.emit(LOCAL, 190.0, 262.0)
+	assert_eq(g.band(), Vector2(190, 262))
+	_hud.update(_tele(Wl.SIM, 200.0), null, null)
+	assert_true(g.in_band())
+	_bus.power_band_changed.emit(LOCAL, 0.0, 0.0)
+	assert_eq(g.band(), Vector2.ZERO, "cleared")
+
+
+func test_gauge_peer_option() -> void:
+	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.TOP, {"peer": 4}), _ctx)
+	var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+	assert_eq(g.peer, 4)
+	_bus.power_band_changed.emit(4, 100.0, 120.0)
+	g.set_telemetry(_tele(Wl.SIM, 110.0))
+	assert_true(g.in_band())
+
+
+func test_bus_cadence_band() -> void:
+	_hud.build(_spec(), _ctx)
+	var c := _hud.widget(HudSpec.CADENCE) as HudCadence
+	_bus.cadence_band_changed.emit(LOCAL, 80.0, 95.0)
+	assert_eq(c.band(), Vector2(80, 95))
+	_hud.update(_tele(Wl.ERG, 200.0, 200), null, null)
+	assert_true(c.in_band())
+	_bus.cadence_band_changed.emit(2, 50.0, 60.0)
+	assert_eq(c.band(), Vector2(80, 95), "another peer's band")
+	_bus.cadence_band_changed.emit(LOCAL, 0.0, 0.0)
+	assert_eq(c.band(), Vector2.ZERO)
+
+
+func test_bus_roster_fills_the_teammate_strip() -> void:
+	_hud.build(_spec(), _ctx)
+	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
+	_bus.roster_changed.emit({
+		LOCAL: {"name": "Ada", "slot_index": 0, "raw_w": 200.0, "ftp_pct": 80.0},
+		2: {"name": "Bo", "slot_index": 4, "raw_w": 150.0, "ftp_pct": 60.0, "afk": true},
+	})
+	assert_eq(tm.peers(), [LOCAL, 2])
+	assert_true(tm.card(2).chip().hollow, "slot 4: hollow circle")
+	assert_eq(tm.card(2).chip().shape, "circle")
+	assert_eq(tm.card(2).status_text(), tr("UI_HUD_AFK"))
+
+
+func test_ctx_roster_at_build() -> void:
+	_ctx.roster = {LOCAL: {"name": "Ada", "slot_index": 0}, 3: {"name": "Cy", "slot_index": 2}}
+	_hud.build(_spec(), _ctx)
+	assert_eq((_hud.widget(HudSpec.TEAMMATES) as HudTeammates).peers(), [LOCAL, 3])
+
+
+func test_bus_toasts_and_banners() -> void:
+	_hud.build(_spec(), _ctx)
+	_bus.toast_requested.emit("UI_HUD_PCT_FTP", [42])
+	assert_eq(_hud.toasts().texts().size(), 1)
+	assert_string_contains(_hud.toasts().texts()[0], "42", "args fill the key's placeholders")
+	_bus.toast_requested.emit("Plain text passes through", [])
+	assert_eq(_hud.toasts().texts()[1], "Plain text passes through")
+	_bus.banner_requested.emit("WAVE {0}", [3], 2.0)
+	assert_eq(_hud.banner().game_text(), "WAVE 3")
+	_hud.tick(2.1)
+	assert_eq(_hud.banner().game_text(), "")
+	_hud.tick(3.0)
+	assert_eq(_hud.toasts().texts().size(), 0)
+
+
+func test_bus_readout_and_late_readouts() -> void:
+	_hud.build(_spec(), _ctx)
+	_bus.readout_changed.emit("gate_hp", "1250")
+	var r := _hud.widget(HudSpec.READOUT) as HudReadout
+	assert_eq(r.value_text(), "1250")
+	_bus.readout_changed.emit("other", "9")
+	assert_eq(r.value_text(), "1250")
+	_hud.build(_spec(), _ctx)
+	assert_eq((_hud.widget(HudSpec.READOUT) as HudReadout).value_text(), "1250", "kept across rebuilds")
+
+
+func test_bus_rescue_pause_and_warmup_banners() -> void:
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	_bus.governor_status.emit(LOCAL, {"warmup": true, "rescue": false})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_WARMUP)
+	_bus.rescue_changed.emit(2, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_WARMUP, "another rider's rescue")
+	_bus.rescue_changed.emit(LOCAL, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
+	_bus.paused_changed.emit(true, "coasting")
+	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
+	_bus.paused_changed.emit(false, "")
+	_bus.rescue_changed.emit(LOCAL, false)
+	_bus.governor_status.emit(LOCAL, {"warmup": false})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
+
+
+func test_safety_banners_can_be_turned_off() -> void:
+	var spec := _spec()
+	spec.show_safety_banners = false
+	_hud.build(spec, _ctx)
+	_hud.set_safety_state(true, true, false)
+	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_NONE)
+
+
+func test_set_safety_state_and_telemetry_rescue() -> void:
+	_hud.build(_spec(), _ctx)
+	_hud.set_safety_state(true, false, false)
+	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_WARMUP)
+	var t := _tele(Wl.ERG, 100.0, 125)
+	t.rescue = true
+	_hud.update(t, null, null)
+	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_RESCUE)
+	t.rescue = false
+	_hud.update(t, null, null)
+	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_WARMUP)
+
+
+func test_phase_started_is_harmless() -> void:
+	_hud.sounds = true
+	_hud.build(_spec(), _ctx)
+	_bus.phase_started.emit(LOCAL, 2)
+	_bus.phase_started.emit(5, 1)
+	pass_test("no error")
+
+
+func test_rebuild_disconnects_the_old_bus() -> void:
+	_hud.build(_spec(), _ctx)
+	var other := GameContext.new()
+	var other_bus: WlEventBus = autofree(WlEventBus.new())
+	other.events = other_bus
+	other.local_peer = LOCAL
+	_hud.build(_spec(), other)
+	_bus.toast_requested.emit("old bus", [])
+	assert_eq(_hud.toasts().texts().size(), 0)
+	other_bus.toast_requested.emit("new bus", [])
+	assert_eq(_hud.toasts().texts(), ["new bus"])
+
+
+# --- local feed and update --------------------------------------------------------------------
+
+func test_local_feed_draws_on_this_layer() -> void:
+	_hud.build(_spec(), _ctx)
+	var feed := _hud.local_feed()
+	assert_true(feed is HudLocalFeed)
+	assert_same(feed, _hud.local_feed())
+	feed.toast("Line snapped", [], 3)
+	assert_eq(_hud.toasts().texts(), ["Line snapped"], "a client draws whatever peer says")
+	feed.banner("Boss!", [], 4.0, 0)
+	assert_eq(_hud.banner().game_text(), "Boss!")
+	feed.power_band(LOCAL, 190.0, 260.0)
+	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2.ZERO, "ERG/OFF shows no SIM band")
+	_hud.update(_tele(Wl.SIM, 200.0), null, null)
+	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).band(), Vector2(190, 260))
+	feed.teammate_status(2, {"in_band": true, "icon": "", "text": "Diesel"})
+	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
+	assert_eq(tm.card(2).status_text(), "Diesel")
+	feed.readout("gate_hp", "900")
+	assert_eq((_hud.widget(HudSpec.READOUT) as HudReadout).value_text(), "900")
+
+
+func test_local_feed_outlives_the_layer_safely() -> void:
+	var hud := HudLayer.new()
+	hud.sounds = false
+	var feed := hud.local_feed()
+	hud.free()
+	feed.toast("nobody", [])
+	feed.power_band(1, 1.0, 2.0)
+	pass_test("no crash after the layer is gone")
+
+
+func test_update_feeds_every_widget() -> void:
+	_hud.build(_spec(), _ctx)
+	var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 300, "Warm-up"), PlanPhase.sim(Wl.FREE, Wl.GRADE_FLAT, 30, "Sprint")])
+	var ph := PhaseState.new()
+	ph.index = 1
+	ph.kind = Wl.FREE
+	ph.mode = Wl.SIM
+	ph.label = "Sprint"
+	ph.duration_s = 30.0
+	ph.elapsed_s = 10.0
+	ph.remaining_s = 20.0
+	var t := _tele(Wl.SIM, 412.0)
+	t.gear = 15
+	_hud.update(t, ph, plan)
+	assert_eq((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label().text, "412")
+	assert_eq((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label().text, "90")
+	assert_almost_eq((_hud.widget(HudSpec.WBAL) as HudWbal).fraction(), 0.5, 1e-6)
+	assert_eq((_hud.widget(HudSpec.TIMELINE) as HudTimeline).phase_text(), "Sprint")
+	assert_eq((_hud.widget(HudSpec.TIMELINE) as HudTimeline).time_text(), "0:20")
+	var gear := _hud.widget(HudSpec.GEAR) as HudGear
+	assert_true(gear.visible, "gear shows in SIM")
+	assert_eq(gear.gear(), 15)
+	_hud.update(_tele(Wl.ERG, 200.0, 200), null, null)
+	assert_false(gear.visible, "and hides in ERG")
+
+
+func test_ftp_and_wkg_from_the_rider() -> void:
+	_hud.wkg_weight_kg = 80.0
+	_hud.build(_spec(), _ctx)
+	var g := _hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge
+	assert_eq(g.ftp_w, 250.0, "the local slot's FTP")
+	var t := _tele(Wl.SIM, 240.0)
+	t.ftp_pct = 0.0
+	g.set_telemetry(t)
+	assert_string_contains(g.pct_label().text, "96")
+	assert_true(g.wkg_label().visible)
+	assert_string_contains(g.wkg_label().text, "3.0")
+
+
+func test_key_numbers_on_the_layer_are_at_least_48_px() -> void:
+	_hud.build(_spec().add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}), _ctx)
+	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.POWER_GAUGE) as HudPowerGauge).watts_label()), 48)
+	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.CADENCE) as HudCadence).rpm_label()), 48)
+	assert_gte(HudWidget.font_px((_hud.widget(HudSpec.GEAR) as HudGear).gear_label()), 48)
+	for r in _hud.widgets_of(HudSpec.READOUT):
+		assert_gte(HudWidget.font_px((r as HudReadout).value_label()), 48)
+
+
+func test_build_without_ctx_uses_defaults() -> void:
+	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.TOP), null)
+	assert_eq(_hud.local_peer(), 0)
+	assert_not_null(_hud.widget(HudSpec.POWER_GAUGE))
+
+
+func test_hud_runs_in_a_paused_tree_settings() -> void:
+	_hud.build(_spec(), _ctx)
+	for w in _hud.widgets_of(HudSpec.POWER_GAUGE):
+		assert_eq(w.process_mode, Node.PROCESS_MODE_ALWAYS)

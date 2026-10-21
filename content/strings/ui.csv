@@ -1,2 +1,56 @@
 keys,en
 UI_MODULE_NAME,Interface
+UI_HUD_W,W
+UI_HUD_WATTS,{0} W
+UI_HUD_RPM,rpm
+UI_HUD_FTP,% FTP
+UI_HUD_PCT_FTP,{0}% FTP
+UI_HUD_PCT,{0}%
+UI_HUD_WKG,{0} W/kg
+UI_HUD_WKG_UNIT,W/kg
+UI_HUD_TARGET,Target {0} W
+UI_HUD_BAND_W,{0}–{1} W
+UI_HUD_BAND_RPM,{0}–{1} rpm
+UI_HUD_WBAL,W'
+UI_HUD_WBAL_LOW,{0}% low
+UI_HUD_GEAR,Gear
+UI_HUD_OPEN_RANGE,{0}–{1}
+UI_HUD_NEXT_ERG,Next: {0} · {1}% · {2}
+UI_HUD_NEXT_RAMP,Next: {0} · {1}–{2}% · {3}
+UI_HUD_NEXT_SIM,Next: {0} · free ride · {1}
+UI_HUD_LAST_PHASE,Last phase
+UI_HUD_YOU_NAME,{0} (you)
+UI_HUD_IN_BAND,In band
+UI_HUD_RESCUE,Rescue
+UI_HUD_AFK,AFK
+UI_HUD_OFFLINE,Offline
+UI_KIND_WARMUP,Warm-up
+UI_KIND_WORK,Work
+UI_KIND_RECOVERY,Recovery
+UI_KIND_FREE,Free ride
+UI_KIND_COOLDOWN,Cool-down
+UI_BANNER_RESCUE,"Rescue: easy spin, lift your cadence above 70 rpm"
+UI_BANNER_WARMUP,Warm-up: the first 5 minutes stay easy
+UI_BANNER_PAUSED,Paused
+UI_SCAN_HINT,Surge to pick · stop pedaling to go back
+UI_SCAN_AUTO_IN,Picks itself in {0} s · surge to pick now
+UI_ACTION_CONFIRM,Confirm
+UI_ACTION_BACK,Back
+UI_ACTION_UP,Up
+UI_ACTION_DOWN,Down
+UI_ACTION_LEFT,Left
+UI_ACTION_RIGHT,Right
+UI_ACTION_ABILITY_1,Ability 1
+UI_ACTION_ABILITY_2,Ability 2
+UI_ACTION_ITEM,Item
+UI_ACTION_SWAP,Swap
+UI_ACTION_SHIFT_UP,Shift up
+UI_ACTION_SHIFT_DOWN,Shift down
+UI_ACTION_PAUSE,Pause
+UI_ACTION_PANIC,Panic (trainer safe)
+UI_GESTURE_PEDAL_START,Start pedaling
+UI_GESTURE_SURGE,Surge
+UI_GESTURE_COAST,Coast
+UI_GESTURE_STOP_5S,Stop for 5 s
+UI_BINDING_HOLD,Hold {0} for 1 s
+UI_BINDING_CHORD,{0} + {1} together
