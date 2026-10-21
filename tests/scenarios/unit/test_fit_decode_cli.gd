@@ -157,6 +157,91 @@ func test_out_writes_the_json_report() -> void:
 	assert_eq((parsed as Dictionary)["ok"], true)
 
 
+func _contract(args: Array, json_out: String) -> Dictionary:
+	var r := QaFitDecoder.run_cli(PackedStringArray(args + ["--json-out=%s" % json_out]))
+	assert_eq(r["code"], 0, "--json-out exits 0 even for bad files (tools/fit_check/README.md)")
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(json_out))
+	assert_true(parsed is Dictionary, "the --json-out file holds a JSON object")
+	return parsed if parsed is Dictionary else {}
+
+
+func test_fit_check_fallback_contract() -> void:
+	# The shape tools/fit_check/check.mjs reads when @garmin/fitsdk is unavailable.
+	var dir := _temp()
+	var p := _write(dir.path_join("ride.fit"), QaFitWriter.activity({"records": 120, "laps": [60, 60], "power": 150, "start": 1_100_000_000}))
+	var j := _contract(["--file=%s" % p], dir.path_join("out/decode.json"))
+	var files: Array = j.get("files", [])
+	assert_eq(files.size(), 1)
+	var f: Dictionary = files[0]
+	assert_eq(f["path"], p, "path is the --file value")
+	assert_eq(f["is_fit"], true)
+	assert_eq(f["integrity"], true)
+	assert_eq(f["errors"], [])
+	assert_eq(int((f["file_id"] as Dictionary)["type"]), 4)
+	assert_eq(int((f["file_id"] as Dictionary)["manufacturer"]), 255)
+	assert_eq(int(f["records"]), 120)
+	assert_eq(f["record_timestamps_monotonic"], true)
+	assert_eq(f["has_gps"], false)
+	assert_eq(int(f["session_count"]), 1)
+	assert_eq(int(f["activity_count"]), 1)
+	assert_eq(int((f["timer_events"] as Dictionary)["start"]), 1)
+	assert_eq(int((f["timer_events"] as Dictionary)["stop"]), 1)
+	var laps: Array = f["laps"]
+	assert_eq(laps.size(), 2)
+	var lap1: Dictionary = laps[1]
+	assert_eq(int(lap1["start_time"]), 1_100_000_000 + 60 + QaFitDecoder.FIT_EPOCH_UNIX, "Unix seconds")
+	assert_eq(float(lap1["total_elapsed_time"]), 60.0)
+	assert_eq(float(lap1["total_work"]), 9000.0, "joules")
+	assert_eq(float(lap1["avg_power"]), 150.0)
+	assert_eq(lap1["name"], "")
+	var ses: Dictionary = f["session"]
+	assert_eq(int(ses["sport"]), 2)
+	assert_eq(int(ses["sub_sport"]), 58)
+	assert_eq(int(ses["start_time"]), 1_100_000_000 + QaFitDecoder.FIT_EPOCH_UNIX)
+	assert_eq(float(ses["total_elapsed_time"]), 120.0)
+	assert_eq(float(ses["total_work"]), 18000.0)
+	assert_eq(int(ses["num_laps"]), 2)
+	for key: String in ["total_timer_time", "total_distance", "avg_power", "max_power", "avg_cadence", "max_cadence"]:
+		assert_true(ses.has(key), "session.%s" % key)
+
+
+func test_fit_check_fallback_reports_decode_errors_only() -> void:
+	var dir := _temp()
+	var wrong_sport := _write(dir.path_join("rowing.fit"), QaFitWriter.activity({"sport": 15}))
+	var bad_crc := _write(dir.path_join("bad.fit"), QaFitWriter.activity_writer().to_bytes({"bad_file_crc": true}))
+	var not_fit := _write(dir.path_join("text.fit"), "hello, this is not a FIT file at all".to_utf8_buffer())
+	var j := _contract(["--file=%s" % wrong_sport, "--file=%s" % bad_crc, "--file=%s" % not_fit], dir.path_join("decode.json"))
+	var files: Array = j.get("files", [])
+	assert_eq(files.size(), 3)
+	assert_eq((files[0] as Dictionary)["errors"], [], "check.mjs judges the sport itself")
+	assert_eq(int(((files[0] as Dictionary)["session"] as Dictionary)["sport"]), 15)
+	assert_eq((files[1] as Dictionary)["integrity"], false)
+	assert_string_contains(str((files[1] as Dictionary)["errors"]), "file CRC mismatch")
+	assert_eq((files[2] as Dictionary)["is_fit"], false)
+	assert_eq((files[2] as Dictionary)["session"], null)
+
+
+func test_lap_names_come_from_the_lap_name_developer_field() -> void:
+	var w := QaFitWriter.new()
+	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM]])
+	w.data(0, [4])
+	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [0, 4, QaFitWriter.SINT32], [7, 2, QaFitWriter.UINT16]])
+	w.data(1, [1_100_000_000, 123456, 100])
+	w.define(2, QaFitDecoder.MESG_LAP, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]], false, [[0, 16, 0]])
+	var name := "Warm-up".to_utf8_buffer()
+	name.resize(16)
+	w.data(2, [1_100_000_001, 1_100_000_000, 1000], name)
+	w.define(3, QaFitDecoder.MESG_SESSION, [[2, 4, QaFitWriter.UINT32], [5, 1, QaFitWriter.ENUM], [6, 1, QaFitWriter.ENUM], [7, 4, QaFitWriter.UINT32]])
+	w.data(3, [1_100_000_000, 2, 58, 1000])
+	w.define(4, QaFitDecoder.MESG_ACTIVITY, [[1, 2, QaFitWriter.UINT16]])
+	w.data(4, [1])
+	var s := QaFitDecoder.decode_bytes(w.to_bytes())
+	assert_eq(s["errors"], [])
+	assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "Warm-up")
+	assert_eq(s["has_gps"], true, "a record with position_lat")
+	assert_eq(QaFitDecoder.rides_contract(s)["has_gps"], true)
+
+
 func test_relative_paths_resolve_against_the_project_root() -> void:
 	var root := ProjectSettings.globalize_path("res://").replace("\\", "/")
 	assert_eq(QaFitDecoder.resolve_path("build/x.fit"), root.path_join("build/x.fit").simplify_path())

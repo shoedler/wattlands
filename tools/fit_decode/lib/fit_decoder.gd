@@ -18,6 +18,13 @@ extends RefCounted
 ##    max_cadence_rpm}], session: {...} or {}, sessions, activity: {...} or {}, events,
 ##    timer_starts, timer_stops, device_infos}
 ## Times in the summary are seconds; FIT timestamps (start_time) stay raw FIT seconds.
+## "decode_errors" holds the structural problems only (header, CRCs, truncation, undefined
+## messages); "errors" adds the Wattlands checks (file type, one session and activity, sport,
+## records, laps).
+##
+## tools/fit_check/check.mjs (rides) calls the fallback as
+## `decode.gd -- --json-out=<abs path> --file=<abs path>...` and reads the JSON that
+## rides_contract() builds (schema in tools/fit_check/README.md, "Fallback decoder contract").
 
 ## FIT time zero, 1989-12-31 00:00:00 UTC, in Unix seconds (BRIEF 3.8).
 const FIT_EPOCH_UNIX := 631065600
@@ -99,13 +106,13 @@ static func fit_to_unix(fit_ts: int) -> int:
 static func decode_file(path: String, opts: Dictionary = {}) -> Dictionary:
 	if not FileAccess.file_exists(path):
 		var missing := _empty_summary(path)
-		_err(missing, "no such file: %s" % path)
+		_derr(missing, "no such file: %s" % path)
 		missing["ok"] = false
 		return missing
 	var bytes := FileAccess.get_file_as_bytes(path)
 	if bytes.is_empty() and FileAccess.get_open_error() != OK:
 		var unreadable := _empty_summary(path)
-		_err(unreadable, "cannot read %s (%s)" % [path, error_string(FileAccess.get_open_error())])
+		_derr(unreadable, "cannot read %s (%s)" % [path, error_string(FileAccess.get_open_error())])
 		unreadable["ok"] = false
 		return unreadable
 	return decode_bytes(bytes, path, opts)
@@ -120,11 +127,13 @@ static func decode_bytes(bytes: PackedByteArray, path: String = "", opts: Dictio
 	var crc_ok := true
 	while offset < bytes.size():
 		if segment > 0 and not _looks_like_header(bytes, offset):
-			_err(s, "%d trailing byte(s) after the file CRC at offset %d" % [bytes.size() - offset, offset])
+			_derr(s, "%d trailing byte(s) after the file CRC at offset %d" % [bytes.size() - offset, offset])
 			break
 		var seg := _decode_segment(bytes, offset, s, messages)
 		if seg["header"] is Dictionary and segment == 0:
 			s["header"] = seg["header"]
+		if segment == 0:
+			s["is_fit"] = bool(seg["header_ok"])
 		if not bool(seg["crc_ok"]):
 			crc_ok = false
 		segment += 1
@@ -132,25 +141,30 @@ static func decode_bytes(bytes: PackedByteArray, path: String = "", opts: Dictio
 			break
 		offset = int(seg["next"])
 	if bytes.is_empty():
-		_err(s, "empty file")
+		_derr(s, "empty file")
 		crc_ok = false
 	s["segments"] = segment
 	s["crc_ok"] = crc_ok
+	s["integrity"] = bool(s["is_fit"]) and crc_ok
 	_summarize(s, messages, opts)
 	s["ok"] = (s["errors"] as Array).is_empty()
 	return s
 
 
-## Command line of tools/fit_decode/decode.gd: `<file|dir>... [--expect-laps=<n>] [--json]
-## [--out=<file>]`. Returns {"code": int, "out": PackedStringArray, "err": PackedStringArray,
-## "result": Dictionary}. Exit codes: 0 every file decoded without errors, 1 any error,
-## 2 usage error. Relative paths resolve against the project root (Godot runs with --path).
+## Command line of tools/fit_decode/decode.gd:
+##   <file|dir>... [--file=<path>]... [--expect-laps=<n>] [--json] [--out=<file>] [--json-out=<file>]
+## Returns {"code": int, "out": PackedStringArray, "err": PackedStringArray, "result": Dictionary}.
+## Exit codes: 0 every file decoded without errors, 1 any error, 2 usage error. --json-out writes
+## the JSON tools/fit_check/check.mjs reads (rides_contract(), decode errors only) and then exits 0
+## even for bad files, as that contract asks. Relative paths resolve against the project root
+## (Godot runs with --path).
 static func run_cli(argv: PackedStringArray) -> Dictionary:
 	var out := PackedStringArray()
 	var err := PackedStringArray()
 	var as_json := false
 	var expect_laps := -1
 	var out_file := ""
+	var json_out := ""
 	var inputs: Array[String] = []
 	for a in argv:
 		if a == "--json":
@@ -165,11 +179,21 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 				err.append(usage())
 				return {"code": 2, "out": out, "err": err, "result": {}}
 			expect_laps = int(v)
-		elif a.begins_with("--out="):
-			out_file = a.substr("--out=".length())
-			if out_file == "":
-				err.append("fit_decode: --out needs a file path")
+		elif a.begins_with("--out=") or a.begins_with("--json-out="):
+			var target := a.substr(a.find("=") + 1)
+			if target == "":
+				err.append("fit_decode: %s needs a file path" % a.substr(0, a.find("=")))
 				return {"code": 2, "out": out, "err": err, "result": {}}
+			if a.begins_with("--out="):
+				out_file = target
+			else:
+				json_out = target
+		elif a.begins_with("--file="):
+			var f := a.substr("--file=".length())
+			if f == "":
+				err.append("fit_decode: --file needs a path")
+				return {"code": 2, "out": out, "err": err, "result": {}}
+			inputs.append(f)
 		elif a.begins_with("--"):
 			err.append("fit_decode: unknown option \"%s\"" % a)
 			err.append(usage())
@@ -190,13 +214,15 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 			found.sort()
 			if found.is_empty():
 				var none := _empty_summary(p)
-				_err(none, "no FIT files under %s" % p)
+				_derr(none, "no FIT files under %s" % p)
 				none["ok"] = false
 				files.append(none)
 			for f in found:
 				files.append(decode_file(f, {"expect_laps": expect_laps}))
 		else:
-			files.append(decode_file(p, {"expect_laps": expect_laps}))
+			var one := decode_file(p, {"expect_laps": expect_laps})
+			one["input"] = input
+			files.append(one)
 	var failed := 0
 	for f in files:
 		if not bool(f["ok"]):
@@ -209,25 +235,44 @@ static func run_cli(argv: PackedStringArray) -> Dictionary:
 		"failed": failed,
 	}
 	if out_file != "":
-		var target := resolve_path(out_file)
-		DirAccess.make_dir_recursive_absolute(target.get_base_dir())
-		var fa := FileAccess.open(target, FileAccess.WRITE)
-		if fa == null:
-			err.append("fit_decode: cannot write %s (%s)" % [target, error_string(FileAccess.get_open_error())])
+		var why := _write_json(out_file, result)
+		if why != "":
+			err.append("fit_decode: %s" % why)
 			return {"code": 2, "out": out, "err": err, "result": result}
-		fa.store_string(JSON.stringify(result, "  ", true) + "\n")
-		fa.close()
+	if json_out != "":
+		var contract: Array = []
+		for f in files:
+			contract.append(rides_contract(f))
+		var why2 := _write_json(json_out, {"decoder": "gdscript", "files": contract})
+		if why2 != "":
+			err.append("fit_decode: %s" % why2)
+			return {"code": 2, "out": out, "err": err, "result": result}
 	if as_json:
 		out.append(JSON.stringify(result, "", true))
-	else:
+	elif json_out == "":
 		for f in files:
 			out.append_array(format_text(f))
 		out.append("fit_decode: %d file(s), %d with errors" % [files.size(), failed])
-	return {"code": 0 if failed == 0 else 1, "out": out, "err": err, "result": result}
+	else:
+		out.append("fit_decode: %d file(s), %d with errors, JSON in %s" % [files.size(), failed, resolve_path(json_out)])
+	var code := 0 if failed == 0 or (json_out != "" and out_file == "" and not as_json) else 1
+	return {"code": code, "out": out, "err": err, "result": result}
+
+
+static func _write_json(path: String, value: Dictionary) -> String:
+	var target := resolve_path(path)
+	DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+	var fa := FileAccess.open(target, FileAccess.WRITE)
+	if fa == null:
+		return "cannot write %s (%s)" % [target, error_string(FileAccess.get_open_error())]
+	fa.store_string(JSON.stringify(value, "  ", true) + "
+")
+	fa.close()
+	return ""
 
 
 static func usage() -> String:
-	return "usage: tools/godot.sh --headless --path . -s tools/fit_decode/decode.gd -- <file|dir>... [--expect-laps=<n>] [--json] [--out=<file>]"
+	return "usage: tools/godot.sh --headless --path . -s tools/fit_decode/decode.gd -- <file|dir>... [--file=<path>]... [--expect-laps=<n>] [--json] [--out=<file>] [--json-out=<file>]"
 
 
 ## Absolute OS path for a CLI argument: res:// and user:// are globalized, relative paths are
@@ -287,16 +332,16 @@ static func _looks_like_header(bytes: PackedByteArray, at: int) -> bool:
 
 ## One FIT file starting at `start`. Appends its messages. Returns {ok, next, crc_ok, header}.
 static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, messages: Array[Dictionary]) -> Dictionary:
-	var res := {"ok": false, "next": bytes.size(), "crc_ok": false, "header": null}
+	var res := {"ok": false, "next": bytes.size(), "crc_ok": false, "header": null, "header_ok": false}
 	if start + 12 > bytes.size():
-		_err(s, "file too short for a FIT header (%d bytes)" % (bytes.size() - start))
+		_derr(s, "file too short for a FIT header (%d bytes)" % (bytes.size() - start))
 		return res
 	var hs := bytes[start]
 	if hs != 12 and hs != 14:
-		_err(s, "bad header size %d (expected 12 or 14)" % hs)
+		_derr(s, "bad header size %d (expected 12 or 14)" % hs)
 		return res
 	if start + hs > bytes.size():
-		_err(s, "file too short for its %d-byte header" % hs)
+		_derr(s, "file too short for its %d-byte header" % hs)
 		return res
 	var sig := bytes.slice(start + 8, start + 12).get_string_from_ascii()
 	var header := {
@@ -310,10 +355,11 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 	}
 	res["header"] = header
 	if sig != ".FIT":
-		_err(s, "missing \".FIT\" signature in the header")
+		_derr(s, "missing \".FIT\" signature in the header")
 		return res
+	res["header_ok"] = true
 	if (int(header["protocol_version"]) >> 4) > 2:
-		_err(s, "unsupported protocol version %d.%d" % [int(header["protocol_version"]) >> 4, int(header["protocol_version"]) & 0xF])
+		_derr(s, "unsupported protocol version %d.%d" % [int(header["protocol_version"]) >> 4, int(header["protocol_version"]) & 0xF])
 	if hs == 14:
 		var hcrc := bytes.decode_u16(start + 12)
 		header["header_crc"] = hcrc
@@ -321,12 +367,12 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 			var calc := crc16(bytes, start, start + 12)
 			if calc != hcrc:
 				header["header_crc_ok"] = false
-				_err(s, "header CRC mismatch: stored 0x%04X, computed 0x%04X" % [hcrc, calc])
+				_derr(s, "header CRC mismatch: stored 0x%04X, computed 0x%04X" % [hcrc, calc])
 	var data_start := start + hs
 	var data_size := int(header["data_size"])
 	var data_end := data_start + data_size
 	if data_end + 2 > bytes.size():
-		_err(s, "data size %d plus the 2-byte CRC runs past the end of the file (%d bytes after the header)" % [data_size, bytes.size() - data_start])
+		_derr(s, "data size %d plus the 2-byte CRC runs past the end of the file (%d bytes after the header)" % [data_size, bytes.size() - data_start])
 		data_end = mini(data_end, bytes.size())
 		_decode_records(bytes, data_start, data_end, s, messages)
 		return res
@@ -334,7 +380,7 @@ static func _decode_segment(bytes: PackedByteArray, start: int, s: Dictionary, m
 	var computed := crc16(bytes, start, data_end)
 	res["crc_ok"] = stored == computed and bool(header["header_crc_ok"])
 	if stored != computed:
-		_err(s, "file CRC mismatch: stored 0x%04X, computed 0x%04X" % [stored, computed])
+		_derr(s, "file CRC mismatch: stored 0x%04X, computed 0x%04X" % [stored, computed])
 	_decode_records(bytes, data_start, data_end, s, messages)
 	res["ok"] = true
 	res["next"] = data_end + 2
@@ -354,10 +400,10 @@ static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dicti
 			var local_c := (h >> 5) & 0x3
 			var offset := h & 0x1F
 			if not defs.has(local_c):
-				_err(s, "compressed-timestamp data message for undefined local type %d at offset %d" % [local_c, p - 1])
+				_derr(s, "compressed-timestamp data message for undefined local type %d at offset %d" % [local_c, p - 1])
 				return
 			if last_ts < 0:
-				_err(s, "compressed timestamp at offset %d before any full timestamp" % (p - 1))
+				_derr(s, "compressed timestamp at offset %d before any full timestamp" % (p - 1))
 				return
 			var ts := (last_ts & ~0x1F) + offset
 			if offset < (last_ts & 0x1F):
@@ -380,7 +426,7 @@ static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dicti
 			defs[local] = d
 		else:
 			if not defs.has(local):
-				_err(s, "data message for undefined local type %d at offset %d" % [local, p - 1])
+				_derr(s, "data message for undefined local type %d at offset %d" % [local, p - 1])
 				return
 			var dm2 := _read_data(bytes, p, to, defs[local], s)
 			if dm2.is_empty():
@@ -395,17 +441,17 @@ static func _decode_records(bytes: PackedByteArray, from: int, to: int, s: Dicti
 ## {num, big, fields: [[num, size, base]], dev_size, next} or {} on a truncated definition.
 static func _read_definition(bytes: PackedByteArray, p: int, to: int, has_dev: bool, s: Dictionary) -> Dictionary:
 	if p + 5 > to:
-		_err(s, "truncated definition message at offset %d" % (p - 1))
+		_derr(s, "truncated definition message at offset %d" % (p - 1))
 		return {}
 	var big := bytes[p + 1] == 1
 	if bytes[p + 1] > 1:
-		_err(s, "bad architecture byte %d in a definition at offset %d" % [bytes[p + 1], p - 1])
+		_derr(s, "bad architecture byte %d in a definition at offset %d" % [bytes[p + 1], p - 1])
 		return {}
 	var num := _read_uint(bytes, p + 2, 2, big)
 	var n := bytes[p + 4]
 	var q := p + 5
 	if q + n * 3 > to:
-		_err(s, "truncated field definitions at offset %d" % (p - 1))
+		_derr(s, "truncated field definitions at offset %d" % (p - 1))
 		return {}
 	var fields: Array = []
 	for i in n:
@@ -422,19 +468,21 @@ static func _read_definition(bytes: PackedByteArray, p: int, to: int, has_dev: b
 		fields.append([fnum, fsize, base])
 		q += 3
 	var dev_size := 0
+	var dev_fields: Array = []
 	if has_dev:
 		if q + 1 > to:
-			_err(s, "truncated developer field count at offset %d" % (p - 1))
+			_derr(s, "truncated developer field count at offset %d" % (p - 1))
 			return {}
 		var nd := bytes[q]
 		q += 1
 		if q + nd * 3 > to:
-			_err(s, "truncated developer field definitions at offset %d" % (p - 1))
+			_derr(s, "truncated developer field definitions at offset %d" % (p - 1))
 			return {}
 		for i in nd:
+			dev_fields.append([bytes[q], bytes[q + 1], bytes[q + 2]])
 			dev_size += bytes[q + 1]
 			q += 3
-	return {"num": num, "big": big, "fields": fields, "dev_size": dev_size, "next": q}
+	return {"num": num, "big": big, "fields": fields, "dev_fields": dev_fields, "dev_size": dev_size, "next": q}
 
 
 ## {num, fields: {field num: value}, next} or {} when the message runs past `to`.
@@ -446,7 +494,7 @@ static func _read_data(bytes: PackedByteArray, p: int, to: int, def: Dictionary,
 		var f: Array = fd
 		var fsize := int(f[1])
 		if q + fsize > to:
-			_err(s, "truncated data message (global %d) at offset %d" % [int(def["num"]), p - 1])
+			_derr(s, "truncated data message (global %d) at offset %d" % [int(def["num"]), p - 1])
 			return {}
 		var v: Variant = _read_value(bytes, q, fsize, int(f[2]), big)
 		if v != null:
@@ -454,9 +502,13 @@ static func _read_data(bytes: PackedByteArray, p: int, to: int, def: Dictionary,
 		q += fsize
 	var dev := int(def["dev_size"])
 	if q + dev > to:
-		_err(s, "truncated developer fields (global %d) at offset %d" % [int(def["num"]), p - 1])
+		_derr(s, "truncated developer fields (global %d) at offset %d" % [int(def["num"]), p - 1])
 		return {}
-	q += dev
+	# Developer fields stay raw bytes under "dev_<developer index>_<field number>".
+	for df: Variant in def.get("dev_fields", []):
+		var d: Array = df
+		values["dev_%d_%d" % [int(d[2]), int(d[0])]] = bytes.slice(q, q + int(d[1]))
+		q += int(d[1])
 	return {"num": def["num"], "fields": values, "next": q}
 
 
@@ -543,7 +595,10 @@ static func _empty_summary(path: String) -> Dictionary:
 		"path": path,
 		"ok": false,
 		"errors": [],
+		"decode_errors": [],
 		"warnings": [],
+		"is_fit": false,
+		"integrity": false,
 		"header": {},
 		"crc_ok": false,
 		"segments": 0,
@@ -552,12 +607,15 @@ static func _empty_summary(path: String) -> Dictionary:
 		"records": 0,
 		"record_span_s": 0.0,
 		"record_gaps": 0,
+		"record_timestamps_monotonic": true,
+		"has_gps": false,
 		"first_record_ts": -1,
 		"last_record_ts": -1,
 		"laps": [],
 		"session": {},
 		"sessions": 0,
 		"activity": {},
+		"activity_count": 0,
 		"events": 0,
 		"timer_starts": 0,
 		"timer_stops": 0,
@@ -625,6 +683,8 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		var gaps := 0
 		var missing_ts := 0
 		for r in records:
+			if r.has(0) or r.has(1):
+				s["has_gps"] = true
 			if not r.has(FIELD_TIMESTAMP):
 				missing_ts += 1
 				continue
@@ -642,6 +702,7 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 			_err(s, "%d record(s) without a timestamp" % missing_ts)
 		if backwards > 0:
 			_err(s, "record timestamps go backwards %d time(s)" % backwards)
+		s["record_timestamps_monotonic"] = backwards == 0 and missing_ts == 0
 		s["first_record_ts"] = first
 		s["last_record_ts"] = last
 		s["record_span_s"] = float(last - first) if first >= 0 else 0.0
@@ -698,6 +759,7 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		var lst := int(lf.get(2, -1))
 		lap_out.append({
 			"index": i,
+			"name": _dev_string(lf, "dev_0_0"),
 			"start_time": lf.get(2, null),
 			"start_s": float(lst - origin) if lst >= 0 and origin >= 0 else 0.0,
 			"duration_s": _scaled(lf, 7, 1000.0),
@@ -722,6 +784,7 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		_err(s, "expected %d lap(s), found %d" % [expect, laps.size()])
 
 	# Activity.
+	s["activity_count"] = activities.size()
 	if activities.is_empty():
 		_err(s, "no activity message")
 	else:
@@ -742,6 +805,69 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		_warn(s, "no device_info message")
 	if int(s["timer_starts"]) == 0:
 		_warn(s, "no timer start event")
+
+
+## One file in the JSON tools/fit_check/check.mjs reads from the fallback (tools/fit_check/README.md):
+## physical values, enum numbers, times in Unix seconds, and "errors" holding decode errors only
+## (check.mjs applies the Wattlands checks itself).
+static func rides_contract(s: Dictionary) -> Dictionary:
+	var laps: Array = []
+	for lap: Variant in s["laps"]:
+		var l: Dictionary = lap
+		laps.append({
+			"start_time": _unix_or_null(l.get("start_time", null)),
+			"total_elapsed_time": l["duration_s"],
+			"total_timer_time": l["timer_s"],
+			"total_distance": l["distance_m"],
+			"total_work": float(l["work_kj"]) * 1000.0,
+			"avg_power": l["avg_power_w"],
+			"name": l.get("name", ""),
+		})
+	var fid: Dictionary = s["file_id"]
+	var out := {
+		"path": s.get("input", s["path"]),
+		"is_fit": s["is_fit"],
+		"integrity": s["integrity"],
+		"errors": (s["decode_errors"] as Array).duplicate(),
+		"file_id": {"type": fid.get("type", null), "manufacturer": fid.get("manufacturer", null)},
+		"records": s["records"],
+		"record_timestamps_monotonic": s["record_timestamps_monotonic"],
+		"has_gps": s["has_gps"],
+		"laps": laps,
+		"session_count": s["sessions"],
+		"activity_count": s["activity_count"],
+		"session": null,
+		"timer_events": {"start": s["timer_starts"], "stop": s["timer_stops"]},
+	}
+	var ses: Dictionary = s["session"]
+	if not ses.is_empty():
+		out["session"] = {
+			"sport": ses["sport"], "sub_sport": ses["sub_sport"],
+			"start_time": _unix_or_null(ses.get("start_time", null)),
+			"total_elapsed_time": ses["elapsed_s"], "total_timer_time": ses["timer_s"],
+			"total_distance": ses["distance_m"], "total_work": float(ses["work_kj"]) * 1000.0,
+			"avg_power": ses["avg_power_w"], "max_power": ses["max_power_w"],
+			"avg_cadence": ses["avg_cadence_rpm"], "max_cadence": ses["max_cadence_rpm"],
+			"num_laps": ses["num_laps"],
+		}
+	return out
+
+
+static func _unix_or_null(fit_ts: Variant) -> Variant:
+	if fit_ts == null:
+		return null
+	return fit_to_unix(int(fit_ts))
+
+
+## A developer string field (raw bytes) as text, "" when absent.
+static func _dev_string(fields: Dictionary, key: String) -> String:
+	if not fields.has(key):
+		return ""
+	var raw: PackedByteArray = fields[key]
+	var end := raw.find(0)
+	if end >= 0:
+		raw = raw.slice(0, end)
+	return raw.get_string_from_utf8()
 
 
 static func _scaled(fields: Dictionary, num: int, scale: float) -> float:
@@ -773,6 +899,14 @@ static func _err(s: Dictionary, msg: String) -> void:
 		errors.append(msg)
 	elif errors.size() == MAX_ERRORS:
 		errors.append("too many errors, the rest are not listed")
+
+
+## A structural decode error: listed in "decode_errors" and in "errors".
+static func _derr(s: Dictionary, msg: String) -> void:
+	var de: Array = s["decode_errors"]
+	if de.size() < MAX_ERRORS:
+		de.append(msg)
+	_err(s, msg)
 
 
 static func _warn(s: Dictionary, msg: String) -> void:

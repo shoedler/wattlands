@@ -97,7 +97,7 @@ if (!(fault === 'no_fit' && role === 'client1')) {
 
 const uploads = [];
 if (has('strava-auto-upload')) {
-  if (!flag('strava-client-id') || !flag('strava-client-secret')) die(9, 'auto-upload without credentials');
+  if (flag('strava-client-id') !== '12345' || flag('strava-client-secret') !== 'mock-client-secret') die(9, 'auto-upload without the mock client credentials');
   const times = fault === 'double_upload' ? 2 : 1;
   for (let i = 0; i < times; i++) {
     const res = await fetch(`${flag('strava-base')}/api/v3/uploads`, { method: 'POST', body: 'FAKEFIT' });

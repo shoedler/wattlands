@@ -35,7 +35,7 @@ test('a clean run passes every check and writes the report', async () => {
     assert.equal(rep.fit_paths.host.length, 1);
     assert.equal(rep.services.mock_strava.uploads.length, 1);
     for (const k of ['total_s', 'room_s', 'kill_s', 'restart_s', 'duration_excl_cooldown_s']) assert.equal(typeof rep.timings[k], 'number', k);
-    assert.ok(!JSON.stringify(rep).includes('e2e-mock-secret'), 'the Strava secret is never written to the report');
+    assert.ok(!JSON.stringify(rep).includes('mock-client-secret'), 'the Strava secret is never written to the report');
     // Per-peer logs exist.
     const out = path.join(s.repo, 'build', 'e2e', 'fake');
     for (const f of ['host/stdout.log', 'client1/stdout.log', 'client2/stdout.log', 'client2/stdout_restart.log', 'relay.log', 'mock_strava.log']) {

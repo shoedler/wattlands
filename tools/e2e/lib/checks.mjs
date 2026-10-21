@@ -314,7 +314,7 @@ export function scanLog(lines) {
   return out;
 }
 
-/** A listening port in a line of server output (a URL, "port 1234" or {"port": 1234}). */
+/** A listening port in a line of server output ("MOCK_STRAVA_PORT 1234", a URL, "port 1234" or {"port": 1234}). */
 export function parsePort(line) {
   const s = String(line).trim();
   const valid = (p) => Number.isInteger(p) && p > 0 && p < 65536;
@@ -328,7 +328,9 @@ export function parsePort(line) {
       // not JSON after all
     }
   }
-  let m = /https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0):(\d{1,5})/i.exec(s);
+  let m = /^[A-Z][A-Z_]*_PORT\s+(\d{1,5})$/.exec(s); // server/mock_strava: "MOCK_STRAVA_PORT 53211"
+  if (m && valid(Number(m[1]))) return Number(m[1]);
+  m = /https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\]|0\.0\.0\.0):(\d{1,5})/i.exec(s);
   if (m && valid(Number(m[1]))) return Number(m[1]);
   m = /\bport\b\D{0,3}(\d{2,5})\b/i.exec(s);
   if (m && valid(Number(m[1]))) return Number(m[1]);

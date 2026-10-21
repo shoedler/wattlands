@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 // A stand-in mock Strava for the harness tests: counts POST /api/v3/uploads and lists them at
-// GET /__admin/uploads. Prints its URL like the real mock.
+// GET /admin/uploads as a JSON array, and prints "MOCK_STRAVA_PORT <port>" like server/mock_strava.
+// --parent-pid=<pid> makes it exit when the harness is gone, like the real mock.
 import http from 'node:http';
 
-const arg = process.argv.find((a) => a.startsWith('--port='));
-const port = arg ? Number(arg.slice('--port='.length)) : 0;
+const arg = (k) => {
+  const a = process.argv.find((x) => x.startsWith(`--${k}=`));
+  return a ? a.slice(k.length + 3) : null;
+};
+const port = Number(arg('port') ?? 0);
+const parent = Number(arg('parent-pid') ?? 0);
 const uploads = [];
 const server = http.createServer((req, res) => {
   let body = '';
@@ -19,9 +24,9 @@ const server = http.createServer((req, res) => {
       res.end(JSON.stringify(up));
       return;
     }
-    if (req.method === 'GET' && req.url === '/__admin/uploads') {
+    if (req.method === 'GET' && req.url === '/admin/uploads') {
       res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({ uploads }));
+      res.end(JSON.stringify(uploads));
       return;
     }
     res.writeHead(req.url === '/' ? 200 : 404, { 'content-type': 'text/plain' });
@@ -29,5 +34,15 @@ const server = http.createServer((req, res) => {
   });
 });
 server.listen(port, '127.0.0.1', () => {
-  process.stdout.write(`mock strava listening on http://127.0.0.1:${server.address().port}\n`);
+  process.stdout.write(`MOCK_STRAVA_PORT ${server.address().port}\n`);
+  process.stdout.write(`mock_strava listening on http://127.0.0.1:${server.address().port}\n`);
 });
+if (parent > 0) {
+  setInterval(() => {
+    try {
+      process.kill(parent, 0);
+    } catch {
+      process.exit(0);
+    }
+  }, 500).unref();
+}

@@ -156,7 +156,9 @@ test('scanLog finds script errors, push_error output, desync warnings and rate l
 });
 
 test('parsePort reads URLs, "port N" and JSON', () => {
+  assert.equal(C.parsePort('MOCK_STRAVA_PORT 53211'), 53211);
   assert.equal(C.parsePort('mock strava listening on http://127.0.0.1:53211'), 53211);
+  assert.equal(C.parsePort('WATTLANDS_RELAY ws://127.0.0.1:8787/v1'), null, 'a ws URL is not an HTTP port line');
   assert.equal(C.parsePort('listening at http://localhost:8080/'), 8080);
   assert.equal(C.parsePort('{"port": 4321}'), 4321);
   assert.equal(C.parsePort('{"url": "http://127.0.0.1:999"}'), 999);

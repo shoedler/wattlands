@@ -19,8 +19,9 @@ options:
   --relay-cmd=<cmd>         relay command; {port} is replaced and PORT is set
                             (default "node server/relay/src/main.ts")
   --strava-cmd=<cmd>        mock Strava command; with {port} the harness picks the port, otherwise
-                            it reads it from the output (default "node server/mock_strava/server.mjs --port=0")
-  --strava-admin=<path>     the mock's upload listing (default: tries /__admin/uploads and friends)
+                            it reads it from the output; {pid} is the harness's pid
+                            (default "node server/mock_strava/server.mjs --port=0 --parent-pid={pid}")
+  --strava-admin=<path>     the mock's upload listing (default: tries /admin/uploads, /__admin/uploads, ...)
   --fit-check-cmd=<cmd>     FIT checker; FIT paths and --json are appended
                             (default node tools/fit_check/check.mjs, else tools/fit_decode/decode.gd)
   --kill-after=<s>          kill the victim client this long after its session starts (default 25)
@@ -50,7 +51,7 @@ export const DEFAULTS = Object.freeze({
   autoUpload: 'client1',
   out: null,
   relayCmd: 'node server/relay/src/main.ts',
-  stravaCmd: 'node server/mock_strava/server.mjs --port=0',
+  stravaCmd: 'node server/mock_strava/server.mjs --port=0 --parent-pid={pid}',
   stravaAdmin: null,
   fitCheckCmd: null,
   killAfterS: 25,

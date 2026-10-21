@@ -67,7 +67,7 @@ export function tokenize(cmd) {
   return out;
 }
 
-/** Replaces {port} (and any other {key} from vars) in every token. */
+/** Replaces {port}, {pid} (and any other {key} from vars) in every token. */
 export function substitute(tokens, vars) {
   return tokens.map((t) => t.replace(/\{(\w+)\}/g, (m, k) => (k in vars ? String(vars[k]) : m)));
 }
@@ -147,9 +147,12 @@ export function findBash() {
   return null;
 }
 
-/** Strava credentials the harness gives the auto-upload peer. Dummies: the mock accepts anything. */
-export const STRAVA_CLIENT_ID = 'wattlands-e2e';
-export const STRAVA_CLIENT_SECRET = 'e2e-mock-secret';
+/**
+ * Strava credentials the harness gives the auto-upload peer: server/mock_strava's default test
+ * client (its README), never a real app's. The mock checks the secret on the token exchange.
+ */
+export const STRAVA_CLIENT_ID = '12345';
+export const STRAVA_CLIENT_SECRET = 'mock-client-secret';
 
 /** argv with secrets masked, for logs and the report. */
 export function redact(args) {

@@ -5,7 +5,7 @@ import { parsePort, parseUploads } from './checks.mjs';
 import { childEnv, getFreePort, resolveProgram, sleep, substitute, tokenize } from './util.mjs';
 
 /** Candidate upload listings on the mock when --strava-admin isn't given. */
-export const ADMIN_CANDIDATES = ['/__admin/uploads', '/_admin/uploads', '/admin/uploads', '/__mock/uploads', '/_mock/uploads', '/mock/uploads'];
+export const ADMIN_CANDIDATES = ['/admin/uploads', '/__admin/uploads', '/_admin/uploads', '/__mock/uploads', '/_mock/uploads', '/mock/uploads'];
 
 async function httpGet(url, timeoutMs = 3000) {
   try {
@@ -29,7 +29,7 @@ function commandFor(template, vars) {
  */
 export async function startRelay({ repo, relayCmd, logFile, timeoutMs, env = process.env, echo }) {
   const port = await getFreePort();
-  const { cmd, args } = commandFor(relayCmd, { port });
+  const { cmd, args } = commandFor(relayCmd, { port, pid: process.pid });
   const proc = new Proc('relay', cmd, args, {
     cwd: repo,
     env: childEnv(env, { PORT: String(port), RELAY_PORT: String(port), HOST: '127.0.0.1' }),
@@ -59,7 +59,7 @@ export async function startRelay({ repo, relayCmd, logFile, timeoutMs, env = pro
  */
 export async function startStrava({ repo, stravaCmd, logFile, timeoutMs, env = process.env, echo }) {
   const fixed = stravaCmd.includes('{port}') ? await getFreePort() : null;
-  const { cmd, args } = commandFor(stravaCmd, fixed ? { port: fixed } : {});
+  const { cmd, args } = commandFor(stravaCmd, fixed ? { port: fixed, pid: process.pid } : { pid: process.pid });
   const proc = new Proc('mock_strava', cmd, args, { cwd: repo, env: childEnv(env), logFile, echo });
   let port = fixed;
   if (!port) {

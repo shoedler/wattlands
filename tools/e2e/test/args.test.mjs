@@ -33,7 +33,7 @@ test('defaults', () => {
   assert.equal(o.mockTrainer, 'erg:compliance=1.0');
   assert.equal(o.autoUpload, 'client1');
   assert.equal(o.relayCmd, 'node server/relay/src/main.ts');
-  assert.equal(o.stravaCmd, 'node server/mock_strava/server.mjs --port=0');
+  assert.equal(o.stravaCmd, 'node server/mock_strava/server.mjs --port=0 --parent-pid={pid}');
   assert.equal(o.repo, path.resolve(DEFAULT_REPO));
   assert.equal(o.out, path.join(path.resolve(DEFAULT_REPO), 'build', 'e2e'));
   assert.equal(o.maxDurationS, 360);
