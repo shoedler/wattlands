@@ -162,3 +162,42 @@ func _assert_all_ints(v: Variant, where: String) -> void:
 		fail_test("%s is a float (%s)" % [where, v])
 	elif not (v is int or v is String or v is bool):
 		fail_test("%s has type %d" % [where, typeof(v)])
+
+
+## W3 NET-3: a long imported timeline (403 phases) never makes a snapshot over the relay's
+## 16 KB limit: it travels in parts on consecutive snapshots, and a client that cannot read the
+## .zwo itself rebuilds the whole timeline from them (Protocol's int_fields included).
+func test_a_long_timeline_goes_in_parts_under_16_kb() -> void:
+	var players := U.players(2)
+	var host := U.game("threshold", players)
+	var long: Array[PlanPhase] = [PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "Warm-up").with_ramp(65.0).with_lap()]
+	for i in 200:
+		# Labels like the importer's ("Intervals 7/200: on, 30 s at 100%").
+		long.append(PlanPhase.erg(Wl.WORK, 100.0, 30.0, "Intervals %d/200: on, 30 s at 100%%" % (i + 1)).with_lap())
+		long.append(PlanPhase.erg(Wl.RECOVERY, 50.0, 30.0, "Intervals %d/200: off, 30 s at 50%%" % (i + 1)).with_lap())
+	long.append(PlanValidator.cooldown_phase())
+	host.state.set_timeline(long)
+	var parts := WorkoutSnapshot.timeline_parts(long)
+	assert_eq(parts, 4, "403 phases in parts of %d" % WorkoutSnapshot.TIMELINE_PART_PHASES)
+	assert_gt(JSON.stringify(WorkoutSnapshot.encode_timeline(long)).to_utf8_buffer().size(), NetMessages.MAX_MESSAGE_BYTES,
+		"precondition: the whole timeline alone is over 16 KB")
+	var client := U.game("threshold", players, Wl.CLIENT, 2)
+	var empty: Array[PlanPhase] = []
+	client.state.set_timeline(empty)
+	var paths: Array = host.int_fields()["snapshot"]
+	for k in WorkoutGame.TIMELINE_EVERY:
+		var snap := host.snapshot()
+		var wire := Protocol.encode(Protocol.game_msg("snapshot", {"game_id": "workout", "seq": k + 1, "tick": k, "state": snap}))
+		assert_lt(wire.to_utf8_buffer().size() + 32, NetMessages.MAX_MESSAGE_BYTES, "snapshot %d fits one relay frame" % k)
+		assert_eq(snap.has("tl"), k < parts, "snapshot %d carries a timeline part" % k)
+		var back: Variant = Protocol.apply_int_fields(JSON.parse_string(JSON.stringify(snap)), paths)
+		if k < parts - 1:
+			client.apply_snapshot(back)
+			assert_eq(client.state.phases.size(), 0, "no timeline before every part is in")
+		else:
+			client.apply_snapshot(back)
+	assert_eq(client.state.phases.size(), long.size(), "the client has the whole timeline")
+	for i in long.size():
+		assert_eq(client.state.phases[i].to_dict(), long[i].to_dict(), "phase %d" % i)
+	host.free()
+	client.free()

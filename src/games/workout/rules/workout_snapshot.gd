@@ -9,6 +9,10 @@ extends RefCounted
 ##  "tl": [[kind, mode, target_x10, ramp_x10 or -1, duration_ds, grade_source], ...],
 ##  "tll": [label, ...]}                                       # timeline, every 20th snapshot
 ## [/codeblock]
+## A timeline of more than TIMELINE_PART_PHASES phases (a long imported .zwo) would push the
+## snapshot past the relay's 16 KB limit (W3 NET-3), so it travels in parts on consecutive
+## snapshots: "tl"/"tll" hold a slice, "tlo" its first phase index and "tln" the whole count;
+## a client sets its timeline once it holds every part.
 ## flags: 1 in band, 2 rescue, 4 AFK, 8 disconnected. Kind indexes Wl.PHASE_KINDS, mode is
 ## 0 ERG / 1 SIM, grade_source 0 flat / 1 course / 2 game.
 
@@ -19,10 +23,18 @@ const F_DISCONNECTED := 8
 const MODES: Array[String] = [Wl.ERG, Wl.SIM]
 const SOURCES: Array[String] = [Wl.GRADE_FLAT, Wl.GRADE_COURSE, Wl.GRADE_GAME]
 ## Protocol int_fields for the snapshot.
-const INT_FIELDS: Array[String] = ["t", "p", "pt", "r[][]", "tl[][]"]
+const INT_FIELDS: Array[String] = ["t", "p", "pt", "r[][]", "tl[][]", "tlo", "tln"]
+## Phases per timeline part (about 6 KB with labels).
+const TIMELINE_PART_PHASES := 120
 
 
-static func encode(state: WorkoutState, with_timeline: bool) -> Dictionary:
+## How many snapshots the timeline takes (1 unless it is longer than TIMELINE_PART_PHASES).
+static func timeline_parts(phases: Array[PlanPhase]) -> int:
+	return maxi(1, ceili(float(phases.size()) / float(TIMELINE_PART_PHASES)))
+
+
+## `timeline_part`: -1 for none, else the part to carry (0 for a timeline in one part).
+static func encode(state: WorkoutState, with_timeline: bool, timeline_part: int = 0) -> Dictionary:
 	var rows: Array = []
 	for peer: int in state.order:
 		var r := state.rider(peer)
@@ -47,10 +59,20 @@ static func encode(state: WorkoutState, with_timeline: bool) -> Dictionary:
 			int(round(r.interval_fraction(r.phase_index) * 1000.0)),
 		])
 	var snap := {"t": state.tick, "p": state.phase_index, "pt": int(round(state.plan_t * 10.0)), "r": rows}
-	if with_timeline:
-		var tl := encode_timeline(state.phases)
-		snap["tl"] = tl["tl"]
-		snap["tll"] = tl["tll"]
+	if with_timeline and timeline_part >= 0:
+		var parts := timeline_parts(state.phases)
+		if parts == 1:
+			var tl := encode_timeline(state.phases)
+			snap["tl"] = tl["tl"]
+			snap["tll"] = tl["tll"]
+		elif timeline_part < parts:
+			var lo := timeline_part * TIMELINE_PART_PHASES
+			var slice: Array[PlanPhase] = state.phases.slice(lo, lo + TIMELINE_PART_PHASES)
+			var tl := encode_timeline(slice)
+			snap["tl"] = tl["tl"]
+			snap["tll"] = tl["tll"]
+			snap["tlo"] = lo
+			snap["tln"] = state.phases.size()
 	return snap
 
 
@@ -94,6 +116,26 @@ static func decode_timeline(tl: Array, labels: Array, course: WorkoutCourse) -> 
 	return out
 
 
+## One part of a long timeline: kept in state.timeline_parts until every phase is in, then the
+## whole timeline is set. A part of another length starts over.
+static func _apply_timeline_part(state: WorkoutState, tl: Array, labels: Array, offset: int, total: int) -> void:
+	if total <= 0 or offset < 0 or offset >= total:
+		return
+	if int(state.timeline_parts.get("n", -1)) != total:
+		state.timeline_parts = {"n": total, "parts": {}}
+	(state.timeline_parts["parts"] as Dictionary)[offset] = [tl, labels]
+	var all_tl: Array = []
+	var all_labels: Array = []
+	while all_tl.size() < total:
+		var part: Variant = (state.timeline_parts["parts"] as Dictionary).get(all_tl.size())
+		if part == null or ((part as Array)[0] as Array).is_empty():
+			return
+		all_tl.append_array((part as Array)[0])
+		all_labels.append_array((part as Array)[1])
+	state.set_timeline(decode_timeline(all_tl.slice(0, total), all_labels.slice(0, total), state.course))
+	state.timeline_parts = {}
+
+
 ## Applies a snapshot to a client's state. Riders not in the state are ignored.
 static func apply(state: WorkoutState, snap: Dictionary) -> void:
 	state.tick = int(snap.get("t", state.tick))
@@ -101,7 +143,10 @@ static func apply(state: WorkoutState, snap: Dictionary) -> void:
 	state.plan_t = float(snap.get("pt", 0)) / 10.0
 	if snap.has("tl") and snap["tl"] is Array:
 		var labels: Array = snap.get("tll", []) if snap.get("tll", []) is Array else []
-		state.set_timeline(decode_timeline(snap["tl"], labels, state.course))
+		if snap.has("tln"):
+			_apply_timeline_part(state, snap["tl"], labels, int(snap.get("tlo", 0)), int(snap["tln"]))
+		else:
+			state.set_timeline(decode_timeline(snap["tl"], labels, state.course))
 	var rows: Variant = snap.get("r", [])
 	if not (rows is Array):
 		return

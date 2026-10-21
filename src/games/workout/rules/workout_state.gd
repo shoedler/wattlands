@@ -22,6 +22,9 @@ var order: Array[int] = []
 var sprint_warned: Dictionary = {}
 ## Clients: the latest interval_end and sprint events (for the view).
 var last_interval: Dictionary = {}
+## Client: the parts of a long timeline received so far ({n, parts: {offset: [tl, labels]}};
+## WorkoutSnapshot).
+var timeline_parts: Dictionary = {}
 var last_sprint: Dictionary = {}
 
 
