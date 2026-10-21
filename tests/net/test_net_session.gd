@@ -2,7 +2,9 @@ extends "res://tests/net/net_session_test_base.gd"
 ## WlNetSession lobby over LoopbackTransport (BRIEF 3.6, 5.4, 5.5; OWNERSHIP NET7, NET8,
 ## PS10, CTX1): a host with two client NetSessions, join with slot looks, player_info
 ## fields, ready-up, version and missing-game refusals, bots and bot FTP, options and
-## player_options in lobby_state, the offline SOLO lobby and per-session buses.
+## player_options in lobby_state, the offline SOLO lobby and per-session buses; NET2 (nothing
+## over 16 384 bytes), NET5 (a 4-rider session under the relay's rate limit) and NET7
+## (session_in_progress).
 
 
 func test_host_and_two_clients_join_with_slot_looks() -> void:
@@ -207,6 +209,7 @@ func test_bots_add_remove_and_bot_ftp() -> void:
 	assert_true(b1.autopilot)
 	assert_true(b1.ftp_verified)
 	assert_eq(b1.ftp, 250.0, "bot FTP defaults to the host's FTP")
+	assert_eq(b1.preferred_cadence_rpm, 90.0, "bots ride at 90 rpm (PS10)")
 	assert_eq(slots[4].peer_id, -2)
 	assert_eq(slots[4].shape, Wl.slot_look(4)["shape"])
 	assert_true(slots[4].hollow, "slots 4-7 are hollow")
@@ -361,3 +364,105 @@ func test_lobby_changed_on_session_and_bus() -> void:
 	assert_eq(seen, bus_seen)
 	assert_eq(states, ["connecting", "hosting"])
 	assert_typeof(seen[0], TYPE_INT)
+
+
+# --- NET2, NET5, NET7 (OWNERSHIP names this file) -----------------------------------------
+
+func _directive(kind: String, fields: Dictionary) -> Dictionary:
+	var d := fields.duplicate()
+	d["kind"] = kind
+	return Protocol.game_msg("directive", d)
+
+
+func _snapshot(seq: int, t: float, state: Dictionary) -> Dictionary:
+	return Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "t": t, "tick": seq * 2,
+		"state": state})
+
+
+func test_oversize_messages_are_dropped() -> void:
+	var r := room()
+	clear_logs()
+	var blob := "x".repeat(NetMessages.MAX_MESSAGE_BYTES)
+	r[0].broadcast(_snapshot(1, 0.1, {"blob": blob}))
+	assert_push_warning("over the 16384-byte limit")
+	r[0].broadcast(_snapshot(2, 0.2, {"blob": "x".repeat(NetMessages.MAX_MESSAGE_BYTES - 200)}))
+	pump()
+	assert_eq(int(r[0].stats["oversize_snapshots"]), 1)
+	assert_eq(int(r[0].stats["oversize_dropped"]), 1)
+	var got := messages("c1", "snapshot")
+	assert_eq(got.size(), 1, "a message just under the limit still goes")
+	assert_eq((got[0][2] as Dictionary)["seq"], 2)
+
+func test_four_rider_session_stays_under_the_relay_rate_limit() -> void:
+	# OWNERSHIP NET5 / 3.1 C11: snapshot 10 Hz + roster 2 Hz + events 10 Hz + per-client
+	# Fishing-like directives (2 Hz requests, 2 Hz grade, 2 Hz cadence band, 1 Hz power
+	# band), clients' telemetry 5 Hz, for 30 s with the relay's limits on.
+	hub.enforce_limits(true)
+	var r := room(["1", "1", "1"])
+	var h := r[0]
+	var state := {"lanes": []}
+	for i in 4:
+		(state["lanes"] as Array).append({"fish": i, "x": 12.5, "tension": 0.75, "run": false,
+			"marks": [1, 2, 3, 4, 5, 6, 7, 8]})
+	clear_logs()
+	var seq := 0
+	for step in 600:
+		hub.advance(Wl.SIM_DT)
+		if step % 2 == 0:
+			seq += 1
+			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
+			h.broadcast(_snapshot(seq, step * Wl.SIM_DT, state))
+		if step % 10 == 0:
+			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}, 2: {"raw_w": 180.0}}}))
+			for peer in [2, 3, 4]:
+				h.send_to(peer, _directive("request", {"id": step + peer, "target_pct": 70.0, "duration_s": 1.0}))
+				h.send_to(peer, _directive("course_grade", {"grade_pct": 2.0}))
+				h.send_to(peer, _directive("cadence_band", {"lo_rpm": 80.0, "hi_rpm": 95.0}))
+		if step % 20 == 0:
+			for peer in [2, 3, 4]:
+				h.send_to(peer, _directive("power_band", {"lo_w": 150.0, "hi_w": 210.0}))
+		for i in range(1, 4):
+			if step % 4 == i:
+				r[i].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": r[i].local_peer,
+					"power_w": 190.0, "intents": [{"k": "reel"}]}}))
+		for s in r:
+			s.tick(Wl.SIM_DT)
+	pump()
+	assert_eq(int(hub.error_counts.get("rate_limited", 0)), 0, str(hub.error_counts))
+	for label in ["c1", "c2", "c3"]:
+		assert_eq(messages(label, "snapshot").size(), 300, label)
+		assert_eq(messages(label, "event").size(), 300, label)
+		assert_eq(messages(label, "roster").size(), 60, label)
+		assert_eq(events(label, "refused").size(), 0)
+	assert_eq(messages("host", "telemetry").size(), 450)
+
+
+func test_joins_after_the_start_are_refused_with_session_in_progress() -> void:
+	var r := room()
+	var h := r[0]
+	# A peer that joined but never sent player_info is refused at the start.
+	var raw := LoopbackTransport.hub_transport(hub)
+	add_child_autofree(raw)
+	var raw_msgs: Array = []
+	raw.message.connect(func(_f: int, d: Dictionary) -> void: raw_msgs.append(d))
+	raw.join(h.room_code)
+	raw.poll()
+	pump()
+	raw.poll()
+	h.mark_started()
+	pump()
+	raw.poll()
+	assert_true(raw_msgs.any(func(d: Dictionary) -> bool: return d["type"] == "refused" and d["reason"] == "session_in_progress"))
+	clear_logs()
+	var late := make_session("late", rider("Late"))
+	late.join_room(h.room_code)
+	pump()
+	assert_true(U.same(events("late", "refused"), [["refused", "session_in_progress"]]))
+	assert_true(U.same(events("late", "bus_refused"), [["bus_refused", "session_in_progress"]]))
+	assert_eq(late.state, "error")
+	assert_eq(late.refusal_reason, "session_in_progress")
+	assert_false(late.transport.is_open(), "the refused client leaves the room")
+	assert_ne(WlNetSession.reason_text("session_in_progress"), "session_in_progress", "a readable message")
+	assert_eq(events("host", "peer_joined").size(), 0, "the host never lists it")
+	assert_eq(events("host", "peer_left").size(), 0)
+	assert_eq(h.lobby_slots().size(), 3)

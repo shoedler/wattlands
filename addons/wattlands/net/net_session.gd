@@ -526,6 +526,26 @@ func broadcast(data: Dictionary) -> void:
 	_send(Wl.ALL_PEERS, data)
 
 
+## Host: broadcast the 2 Hz roster ({peer: entry}, see NetRoster.build()) and keep it as
+## latest_roster, decoded exactly as clients see it (int peer keys). Emits the bus's
+## roster_changed on the host; clients emit it when the roster arrives. Returns the roster.
+func send_roster(riders: Dictionary) -> Dictionary:
+	if not is_authority():
+		push_warning("NetSession.send_roster: only the host sends the roster")
+		return latest_roster
+	var msg := Protocol.game_msg("roster", {"riders": riders})
+	var text := Protocol.encode(msg)
+	var decoded := Protocol.decode(text)
+	if decoded.is_empty():
+		push_error("NetSession.send_roster: the roster is not a valid message")
+		return latest_roster
+	latest_roster = decoded["riders"]
+	if role == Wl.HOST and _in_room():
+		_send_text(Wl.ALL_PEERS, "roster", text)
+	_emit_bus("roster_changed", [latest_roster])
+	return latest_roster
+
+
 ## Estimated host platform time now (clock offset from clock_ping/clock_pong).
 func host_time() -> float:
 	if role == Wl.CLIENT:
@@ -993,6 +1013,7 @@ func _on_message(from: int, data: Dictionary) -> void:
 				Protocol.apply_game_int_fields(data, game_int_fields)
 			"roster":
 				latest_roster = data["riders"]
+				_emit_bus("roster_changed", [latest_roster])
 	game_message.emit(from, data)
 
 

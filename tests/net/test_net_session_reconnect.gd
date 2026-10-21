@@ -84,36 +84,6 @@ func test_restarted_client_rejoins_with_its_saved_token() -> void:
 	assert_true(again.session_started)
 
 
-func test_joins_after_the_start_are_refused_with_session_in_progress() -> void:
-	var r := room()
-	var h := r[0]
-	# A peer that joined but never sent player_info is refused at the start.
-	var raw := LoopbackTransport.hub_transport(hub)
-	add_child_autofree(raw)
-	var raw_msgs: Array = []
-	raw.message.connect(func(_f: int, d: Dictionary) -> void: raw_msgs.append(d))
-	raw.join(h.room_code)
-	raw.poll()
-	pump()
-	raw.poll()
-	h.mark_started()
-	pump()
-	raw.poll()
-	assert_true(raw_msgs.any(func(d: Dictionary) -> bool: return d["type"] == "refused" and d["reason"] == "session_in_progress"))
-	clear_logs()
-	var late := make_session("late", rider("Late"))
-	late.join_room(h.room_code)
-	pump()
-	assert_true(U.same(events("late", "refused"), [["refused", "session_in_progress"]]))
-	assert_true(U.same(events("late", "bus_refused"), [["bus_refused", "session_in_progress"]]))
-	assert_eq(late.state, "error")
-	assert_eq(late.refusal_reason, "session_in_progress")
-	assert_false(late.transport.is_open(), "the refused client leaves the room")
-	assert_ne(WlNetSession.reason_text("session_in_progress"), "session_in_progress", "a readable message")
-	assert_eq(events("host", "peer_joined").size(), 0, "the host never lists it")
-	assert_eq(events("host", "peer_left").size(), 0)
-	assert_eq(h.lobby_slots().size(), 3)
-
 
 func test_host_left_ends_the_session_gracefully() -> void:
 	var r := room()

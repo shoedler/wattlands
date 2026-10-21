@@ -1,8 +1,8 @@
 extends "res://tests/net/net_session_test_base.gd"
-## WlNetSession messaging over LoopbackTransport (BRIEF 5.4, 5.5; OWNERSHIP NET1-NET5,
-## C9, C11, GM10): routing rules, local delivery, invalid and oversize sends, telemetry
-## intent caps, directive coalescing, the snapshot buffer with game int_fields, events,
-## clock offset and the relay budget of a 4-rider session.
+## WlNetSession messaging over LoopbackTransport (BRIEF 5.4, 5.5; OWNERSHIP NET1, NET3,
+## NET4, C11, GM10, CTX12): routing rules, local delivery, invalid sends, telemetry intent
+## caps, directive coalescing, the snapshot buffer with game int_fields, events, the
+## roster and the clock offset.
 
 
 func _directive(kind: String, fields: Dictionary) -> Dictionary:
@@ -85,20 +85,6 @@ func test_invalid_messages_are_not_sent() -> void:
 	assert_eq(messages("host", "ready").size(), 1, "a missing v is filled in")
 	assert_eq(int(r[0].stats["invalid_sends"]), 2)
 
-
-func test_oversize_messages_are_dropped() -> void:
-	var r := room()
-	clear_logs()
-	var blob := "x".repeat(NetMessages.MAX_MESSAGE_BYTES)
-	r[0].broadcast(_snapshot(1, 0.1, {"blob": blob}))
-	assert_push_warning("over the 16384-byte limit")
-	r[0].broadcast(_snapshot(2, 0.2, {"blob": "x".repeat(NetMessages.MAX_MESSAGE_BYTES - 200)}))
-	pump()
-	assert_eq(int(r[0].stats["oversize_snapshots"]), 1)
-	assert_eq(int(r[0].stats["oversize_dropped"]), 1)
-	var got := messages("c1", "snapshot")
-	assert_eq(got.size(), 1, "a message just under the limit still goes")
-	assert_eq((got[0][2] as Dictionary)["seq"], 2)
 
 
 func test_telemetry_intents_are_capped() -> void:
@@ -228,45 +214,44 @@ func test_clock_offset_from_clock_ping() -> void:
 	assert_eq(c.local_time(), 6.5)
 
 
-func test_four_rider_session_stays_under_the_relay_rate_limit() -> void:
-	# OWNERSHIP NET5 / 3.1 C11: snapshot 10 Hz + roster 2 Hz + events 10 Hz + per-client
-	# Fishing-like directives (2 Hz requests, 2 Hz grade, 2 Hz cadence band, 1 Hz power
-	# band), clients' telemetry 5 Hz, for 30 s with the relay's limits on.
-	hub.enforce_limits(true)
-	var r := room(["1", "1", "1"])
+func test_roster_reaches_every_peer_with_int_keys() -> void:
+	var r := room()
 	var h := r[0]
-	var state := {"lanes": []}
-	for i in 4:
-		(state["lanes"] as Array).append({"fish": i, "x": 12.5, "tension": 0.75, "run": false,
-			"marks": [1, 2, 3, 4, 5, 6, 7, 8]})
-	clear_logs()
-	var seq := 0
-	for step in 600:
-		hub.advance(Wl.SIM_DT)
-		if step % 2 == 0:
-			seq += 1
-			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
-			h.broadcast(_snapshot(seq, step * Wl.SIM_DT, state))
-		if step % 10 == 0:
-			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}, 2: {"raw_w": 180.0}}}))
-			for peer in [2, 3, 4]:
-				h.send_to(peer, _directive("request", {"id": step + peer, "target_pct": 70.0, "duration_s": 1.0}))
-				h.send_to(peer, _directive("course_grade", {"grade_pct": 2.0}))
-				h.send_to(peer, _directive("cadence_band", {"lo_rpm": 80.0, "hi_rpm": 95.0}))
-		if step % 20 == 0:
-			for peer in [2, 3, 4]:
-				h.send_to(peer, _directive("power_band", {"lo_w": 150.0, "hi_w": 210.0}))
-		for i in range(1, 4):
-			if step % 4 == i:
-				r[i].send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": r[i].local_peer,
-					"power_w": 190.0, "intents": [{"k": "reel"}]}}))
-		for s in r:
-			s.tick(Wl.SIM_DT)
+	var host_seen: Array = []
+	h.bus.roster_changed.connect(func(ro: Dictionary) -> void: host_seen.append(ro))
+	var c_seen: Array = []
+	r[2].bus.roster_changed.connect(func(ro: Dictionary) -> void: c_seen.append(ro))
+	var slots := h.lobby_slots()
+	var tm := Telemetry.new()
+	tm.peer_id = 2
+	tm.power_w = 180.0
+	tm.cadence_rpm = 88.0
+	tm.ftp_pct = 85.5
+	tm.rescue = true
+	var riders := NetRoster.build(slots, {2: tm}, {2: {"in_band": true, "text": "Diesel"}})
+	assert_eq(riders.keys(), [1, 2, 3], "slot order")
+	assert_eq(riders[1]["raw_w"], 0.0, "no telemetry yet")
+	assert_true(riders[1]["connected"])
+	var sent := h.send_roster(riders)
 	pump()
-	assert_eq(int(hub.error_counts.get("rate_limited", 0)), 0, str(hub.error_counts))
-	for label in ["c1", "c2", "c3"]:
-		assert_eq(messages(label, "snapshot").size(), 300, label)
-		assert_eq(messages(label, "event").size(), 300, label)
-		assert_eq(messages(label, "roster").size(), 60, label)
-		assert_eq(events(label, "refused").size(), 0)
-	assert_eq(messages("host", "telemetry").size(), 450)
+	assert_eq(host_seen.size(), 1, "the host's own bus")
+	assert_eq(c_seen.size(), 1)
+	for s in [h, r[1], r[2]]:
+		var ro: Dictionary = s.latest_roster
+		assert_true(U.same(ro, sent), s.name + ": " + U.diff(ro, sent))
+		var e: Dictionary = ro[2]
+		assert_eq(e["raw_w"], 180.0)
+		assert_eq(e["cadence_rpm"], 88.0)
+		assert_eq(e["ftp_pct"], 85.5)
+		assert_true(e["rescue"])
+		assert_eq((e["status"] as Dictionary)["text"], "Diesel")
+		assert_typeof(e["slot_index"], TYPE_INT)
+		for f in NetRoster.FIELDS:
+			assert_true(e.has(f), f)
+	assert_eq(messages("c1", "roster").size(), 1)
+	r[1].send_roster({})
+	assert_push_warning("only the host sends the roster")
+	var t2 := Telemetry.new()
+	t2.power_w = 125.0
+	var bot := Bots.make_slot(1, 3, 250.0)
+	assert_eq(NetRoster.entry(bot, t2)["ftp_pct"], 50.0, "%FTP from power when telemetry has none")
