@@ -16,6 +16,7 @@ export const OP = Object.freeze({ CONT: 0x0, TEXT: 0x1, BINARY: 0x2, CLOSE: 0x8,
 const CLOSE_WAIT_MS = 2000;
 
 const utf8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+const EMPTY = Buffer.alloc(0);
 
 /** An unmasked server frame. */
 export function encodeFrame(opcode: number, payload: Buffer, fin = true): Buffer {
@@ -53,7 +54,12 @@ export class BuiltinSocket implements RelayConn {
   #maxPayload: number;
   #onGone: () => void;
   #handlers: ConnHandlers | null = null;
-  #buf: Buffer = Buffer.alloc(0);
+  /** Received bytes not parsed yet, joined only once a whole frame (or header) is there. */
+  #chunks: Buffer[] = [];
+  #chunkBytes = 0;
+  /** Bytes the frame being received needs before parsing can continue. */
+  #need = 2;
+  #buf: Buffer = EMPTY;
   #fragOpcode = 0;
   #fragments: Buffer[] = [];
   #fragBytes = 0;
@@ -109,15 +115,27 @@ export class BuiltinSocket implements RelayConn {
   /** Parse incoming bytes (also used for the bytes that came with the upgrade request). */
   feed(chunk: Buffer): void {
     if (this.#failed || this.#closeReceived || this.#finished) return;
-    this.#buf = this.#buf.length === 0 ? chunk : Buffer.concat([this.#buf, chunk]);
+    this.#chunks.push(chunk);
+    this.#chunkBytes += chunk.length;
+    // A frame trickling in byte by byte is joined once, not once per byte.
+    if (this.#chunkBytes < this.#need) return;
+    this.#buf = this.#chunks.length === 1 ? this.#chunks[0] : Buffer.concat(this.#chunks, this.#chunkBytes);
+    this.#chunks = [];
+    this.#chunkBytes = 0;
     while (!this.#failed && !this.#closeReceived && this.#parseOne()) {
       // one frame per iteration
     }
+    if (!this.#failed && !this.#closeReceived && this.#buf.length > 0) {
+      this.#chunks = [this.#buf];
+      this.#chunkBytes = this.#buf.length;
+    }
+    this.#buf = EMPTY;
   }
 
   /** Consume one complete frame from the buffer; false when more bytes are needed or on error. */
   #parseOne(): boolean {
     const buf = this.#buf;
+    this.#need = 2;
     if (buf.length < 2) return false;
     const b0 = buf[0];
     const b1 = buf[1];
@@ -137,10 +155,12 @@ export class BuiltinSocket implements RelayConn {
     let len = b1 & 0x7f;
     let off = 2;
     if (len === 126) {
+      this.#need = 4;
       if (buf.length < 4) return false;
       len = buf.readUInt16BE(2);
       off = 4;
     } else if (len === 127) {
+      this.#need = 10;
       if (buf.length < 10) return false;
       const hi = buf.readUInt32BE(2);
       if ((hi & 0x80000000) !== 0) return this.#fail(1002, 'invalid payload length');
@@ -154,6 +174,7 @@ export class BuiltinSocket implements RelayConn {
       if (total > this.#maxPayload) return this.#fail(1009, 'message too big');
     }
     const end = off + 4 + len;
+    this.#need = end;
     if (buf.length < end) return false;
     const m0 = buf[off];
     const m1 = buf[off + 1];
@@ -166,6 +187,7 @@ export class BuiltinSocket implements RelayConn {
       payload[i] = buf[start + i] ^ k;
     }
     this.#buf = buf.subarray(end);
+    this.#need = 2;
     this.#handlers?.onActivity();
     switch (opcode) {
       case OP.TEXT:
@@ -250,7 +272,9 @@ export class BuiltinSocket implements RelayConn {
 
   #fail(code: number, reason: string): false {
     this.#failed = true;
-    this.#buf = Buffer.alloc(0);
+    this.#buf = EMPTY;
+    this.#chunks = [];
+    this.#chunkBytes = 0;
     this.#fragments = [];
     if (!this.#closeSent) this.#sendClose(code, reason);
     if (this.#socket.writable) this.#socket.end();

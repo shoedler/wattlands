@@ -102,6 +102,31 @@ for (const { impl, skip } of await implementations()) {
         assert.deepEqual(await c.json(), { t: 'pong', ts: 3 });
       });
 
+      it('parses frames that trickle in byte by byte and several frames in one packet', async () => {
+        const c = await connected();
+        c.socket.setNoDelay(true);
+        const one = clientFrame({ opcode: TEXT, payload: '{"t":"ping","ts":11}' });
+        for (const byte of one) {
+          c.write(Buffer.from([byte]));
+          await new Promise((r) => setImmediate(r));
+        }
+        assert.deepEqual(await c.json(), { t: 'pong', ts: 11 });
+        const big = clientFrame({ opcode: TEXT, payload: pingOfSize(3000) });
+        const packed = Buffer.concat([
+          clientFrame({ opcode: TEXT, payload: '{"t":"ping","ts":12}' }),
+          clientFrame({ opcode: TEXT, payload: '{"t":"ping","ts":13}' }),
+          big.subarray(0, 3),
+        ]);
+        c.write(packed);
+        assert.deepEqual(await c.json(), { t: 'pong', ts: 12 });
+        assert.deepEqual(await c.json(), { t: 'pong', ts: 13 });
+        for (let i = 3; i < big.length; i += 700) {
+          c.write(big.subarray(i, i + 700));
+          await new Promise((r) => setImmediate(r));
+        }
+        assert.deepEqual(await c.json(), { t: 'pong', ts: 7 });
+      });
+
       it('answers a WebSocket ping with a pong carrying the same payload', async () => {
         const c = await connected();
         c.send({ opcode: PING, payload: Buffer.from([1, 2, 3, 250]) });
