@@ -96,8 +96,7 @@ func start_test() -> void:
 			"haptic_intensity": p.haptic_intensity_pct / 100.0, "skip_warmup": false, "multiplayer": false,
 			"profile": "ramp_test",
 		})
-	if services.trainer.has_method("set_menu_ticking"):
-		services.trainer.call("set_menu_ticking", false)
+	services.set_menu_ticking(false)
 	rider.set_plan(plan)
 	stage = "running"
 	_start_phase(0)
@@ -228,8 +227,8 @@ func _refresh() -> void:
 
 
 func _release() -> void:
-	if services != null and services.trainer != null and services.trainer.has_method("set_menu_ticking"):
-		services.trainer.call("set_menu_ticking", true)
+	if services != null:
+		services.set_menu_ticking(true)
 	if _own_rider and rider != null and is_instance_valid(rider) and rider.get_parent() == null:
 		rider.free()
 	rider = null

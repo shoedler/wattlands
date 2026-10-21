@@ -134,8 +134,10 @@ func start() -> void:
 		if not (m.get("contents", []) as Array).has(content_id):
 			finish("error:unknown_content:" + content_id, EXIT_ERROR)
 			return
+		_send_player_info(game_id)
 		net.host_room(AppLobbyModel.max_players(m))
 	else:
+		_send_player_info("")
 		net.join_room(config.join_code)
 
 
@@ -373,6 +375,7 @@ func launch(role: String, params: Dictionary) -> void:
 	if rider != null:
 		rider.directive_applied.connect(_on_local_directive)
 	_next_trace_t = clock
+	services.set_menu_ticking(false)
 	host.start()
 	for r: Variant in p.get("replay", []):
 		if r is Dictionary:

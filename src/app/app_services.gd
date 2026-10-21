@@ -94,6 +94,14 @@ func utc_now() -> int:
 	return int(Time.get_unix_time_from_system())
 
 
+## Ask TrainerService to stop (false) or resume (true) ticking the device and the menu-time
+## rider, while a GameHost or the FTP test ticks the rider itself. Requested as an additive
+## WlTrainerService.set_menu_ticking(on); without it this does nothing.
+func set_menu_ticking(on: bool) -> void:
+	if trainer != null and trainer.has_method("set_menu_ticking"):
+		trainer.call("set_menu_ticking", on)
+
+
 func play_sound(sound: String) -> void:
 	if sfx != null:
 		sfx.play(sound)

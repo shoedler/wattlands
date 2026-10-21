@@ -284,6 +284,7 @@ func join_code(code: String) -> void:
 		return
 	_begin_join(c)
 	if services.net != null:
+		_send_player_info()
 		services.net.join_room(c)
 
 

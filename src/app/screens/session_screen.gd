@@ -72,6 +72,7 @@ func _build() -> void:
 		return
 	host.state_changed.connect(_on_host_state)
 	host.session_finished.connect(_on_session_finished)
+	services.set_menu_ticking(false)
 	host.start()
 	for r: Variant in params.get("replay", []):
 		if r is Dictionary and services.net != null:
@@ -80,6 +81,7 @@ func _build() -> void:
 
 func _on_leave() -> void:
 	_disconnect_bus()
+	services.set_menu_ticking(true)
 	if host != null and is_instance_valid(host):
 		if host.state_changed.is_connected(_on_host_state):
 			host.state_changed.disconnect(_on_host_state)
