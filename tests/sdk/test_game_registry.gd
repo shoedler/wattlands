@@ -242,6 +242,25 @@ func test_game_translations_reach_the_translation_server() -> void:
 	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "clear() removes them")
 
 
+func test_a_cleared_private_registry_keeps_another_registrys_strings() -> void:
+	# The conformance test and other tests scan with private registries while the GameRegistry
+	# autoload holds the same (cached) Translation objects: clearing one must not unregister
+	# strings another still uses.
+	_reg.scan(FIXTURES.path_join("runtime"))
+	var other := WlGameRegistry.new()
+	other.scan_on_ready = false
+	other.content_root = FIXTURES.path_join("_content")
+	other.scan(FIXTURES.path_join("runtime"))
+	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo")
+	other.clear()
+	other.free()
+	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "still registered for _reg")
+	_reg.scan(FIXTURES.path_join("runtime"))
+	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "a rescan keeps them")
+	_reg.clear()
+	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "the last owner removes them")
+
+
 func test_json_equal_and_is_whole() -> void:
 	assert_true(WlGameRegistry.json_equal(1, 1.0))
 	assert_true(WlGameRegistry.json_equal({"a": [1, "x"]}, {"a": [1.0, "x"]}))

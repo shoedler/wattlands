@@ -29,6 +29,9 @@ extends Node
 ## Translations: each valid game's content/<id>/strings.csv is imported by Godot into
 ## strings.<locale>.translation next to it (read from strings.csv.import); the registry adds
 ## those Translation resources to the TranslationServer (and removes them on a rescan).
+## The resource cache hands every registry instance the same Translation object, so the
+## registrations are reference-counted across instances: a private registry (a test, the
+## conformance run) that clears never removes strings the GameRegistry autoload still uses.
 
 signal games_changed
 
@@ -40,6 +43,9 @@ const GAME_MODULE_SCRIPT := "res://addons/wattlands/contracts/game_module.gd"
 const MAX_PLAYERS := 8
 const OPTION_TYPES: Array[String] = ["toggle", "int", "choice"]
 const PRESENTATIONS: Array[String] = ["2d", "3d"]
+
+## Translation -> how many registry instances registered it with the TranslationServer.
+static var _translation_refs: Dictionary = {}
 
 ## Where content/<id>/ and assets/<id>/ live (tests point them at fixtures).
 var content_root: String = CONTENT_ROOT
@@ -628,15 +634,24 @@ func _load_translations(id: String) -> void:
 		var tr := ResourceLoader.load(p) as Translation
 		if tr == null:
 			continue
-		TranslationServer.add_translation(tr)
+		var refs := int(_translation_refs.get(tr, 0))
+		if refs == 0:
+			TranslationServer.add_translation(tr)
+		_translation_refs[tr] = refs + 1
 		added.append(tr)
 	if not added.is_empty():
 		_translations[id] = added
 
 
 func _remove_translations(id: String) -> void:
-	for tr: Variant in _translations.get(id, []):
-		TranslationServer.remove_translation(tr as Translation)
+	for trv: Variant in _translations.get(id, []):
+		var tr := trv as Translation
+		var refs := int(_translation_refs.get(tr, 0)) - 1
+		if refs > 0:
+			_translation_refs[tr] = refs
+			continue
+		_translation_refs.erase(tr)
+		TranslationServer.remove_translation(tr)
 	_translations.erase(id)
 
 
