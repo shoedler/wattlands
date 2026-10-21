@@ -312,6 +312,12 @@ func test_clients_cannot_change_the_lobby() -> void:
 
 func test_settings_made_before_hosting_carry_over() -> void:
 	var h := make_session("host", rider("Hana", "1", 250))
+	# An empty registry: the installed games' manifests (the GameRegistry autoload) would drop
+	# the unknown player option "x"; this test is about carrying settings over.
+	var reg := WlGameRegistry.new()
+	reg.scan_on_ready = false
+	add_child_autofree(reg)
+	h.registry = reg
 	h.set_game("workout", "1", "e2e")
 	h.set_scaling(Wl.RAW)
 	h.set_player_option(1, "x", 1)
