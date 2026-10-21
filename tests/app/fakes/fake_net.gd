@@ -41,8 +41,8 @@ func start_offline() -> void:
 	local_peer = Wl.HOST_PEER
 
 
-func host_room(max_peers: int = 8) -> void:
-	record("host_room", [max_peers])
+func host_room(max_peers: int = 8, preferred_code: String = "") -> void:
+	record("host_room", [max_peers] if preferred_code == "" else [max_peers, preferred_code])
 	role = Wl.HOST
 
 

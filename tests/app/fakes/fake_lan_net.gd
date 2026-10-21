@@ -1,14 +1,13 @@
 extends "res://tests/app/fakes/fake_net.gd"
 ## FakeNet plus the LAN discovery API the app shell asks net-client for (P1, BRIEF 5.4):
-## lan_rooms() -> [{code, name, game_id, address}], signal lan_rooms_changed, join_lan(room).
+## lan_rooms() -> [{code, name, game_id, address}], signal lan_rooms_changed (inherited from
+## WlNetSession), join_lan(room).
 
-signal lan_rooms_changed(rooms: Array)
-
-var rooms: Array = []
+var rooms: Array[Dictionary] = []
 var lan_joins: Array = []
 
 
-func lan_rooms() -> Array:
+func lan_rooms() -> Array[Dictionary]:
 	return rooms.duplicate(true)
 
 
@@ -18,5 +17,5 @@ func join_lan(room: Dictionary) -> void:
 
 
 func announce(new_rooms: Array) -> void:
-	rooms = new_rooms
+	rooms.assign(new_rooms)
 	lan_rooms_changed.emit(rooms)
