@@ -115,10 +115,12 @@ describe('through Godot', () => {
         "the wrapper's own --mock-trainer=erg and --caller-cwd replace the caller's");
     });
 
-    test(`${sh.name}: a missing --report exits 2 and names it`, { skip, timeout: 600_000 }, async () => {
-      const r = await runSim(sh.name, ['--game=_template', '--godot-timeout=300'], { env: minimalEnv(), cwd: os.tmpdir(), timeoutMs: 600_000 });
+    test(`${sh.name}: a missing --report, an unknown flag and a bad value exit 2, each named (OWNERSHIP SIM1)`, { skip, timeout: 600_000 }, async () => {
+      const r = await runSim(sh.name, ['--game=_template', '--player=2', '--players=0', '--godot-timeout=300'], { env: minimalEnv(), cwd: os.tmpdir(), timeoutMs: 600_000 });
       assert.equal(r.code, 2, r.stdout + r.stderr);
       assert.match(r.stderr, /--report is required/);
+      assert.match(r.stderr, /unknown flag --player\b/);
+      assert.match(r.stderr, /--players=0: an integer 1\.\.8/);
     });
   }
 
