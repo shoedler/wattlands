@@ -6,7 +6,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs, USAGE, UsageError } from './args.mjs';
 import { ArtJsonError, composePrompt, loadArt } from './art_json.mjs';
 import { endpointLimits, REPO_ROOT } from './config.mjs';
-import { checkMockUrl, extractBilledUsd, FalClient } from './fal.mjs';
+import { checkMockUrl, extractBilledUsd, FalClient, FalError } from './fal.mjs';
 import { checkArtLock, EXIT_LOCKED, makeRedactor } from './locks.mjs';
 import {
   inputMatches,
@@ -188,9 +188,20 @@ export function formatPlan(art, plan, opts, manifest) {
   return { text: `${lines.join('\n')}\n`, toPayUsd: ticksToUsd(payTicks) };
 }
 
+/**
+ * True when a submit error proves fal took no request: fal answered with an HTTP error status, or
+ * the client refused to send it. A lost connection, a timeout or an unreadable answer may come
+ * after fal queued (and will bill) the request (W3 ART-W3-3).
+ */
+export function submitSurelyRejected(err) {
+  if (!(err instanceof FalError)) return false;
+  if (err.refused) return true;
+  return err.status >= 400 && err.status <= 599;
+}
+
 class Run {
-  constructor({ art, plan, manifest, mfile, root, game, client, opts, out, err }) {
-    Object.assign(this, { art, plan, manifest, mfile, root, game, client, opts, out, err });
+  constructor({ art, plan, manifest, mfile, root, game, client, opts, out, err, redact = (s) => String(s) }) {
+    Object.assign(this, { art, plan, manifest, mfile, root, game, client, opts, out, err, redact });
     this.cacheDir = path.join(root, '.art_cache', game);
     this.stats = { cached: 0, recovered: 0, paid: 0, failed: 0, skipped: [], notPaid: [] };
     this.runTicks = 0;
@@ -202,7 +213,7 @@ class Run {
   }
 
   save() {
-    saveManifest(this.mfile, this.manifest);
+    saveManifest(this.mfile, this.manifest, this.redact);
   }
 
   newEntry(p, source) {
@@ -235,12 +246,22 @@ class Run {
     return e;
   }
 
-  /** Selects `entry` for its sprite unless the user picked another result with --select. */
+  /**
+   * Selects `entry` for its sprite unless the user picked another result with --select that is
+   * still usable. A --select choice that could not be fetched (no longer "ok") gives way to the
+   * usable result, with a warning, so the sprite keeps exactly one usable selected result
+   * (W3 ART-W3-4).
+   */
   selectAfterRun(entry, isNewResult) {
     const cur = selectedEntry(this.manifest, entry.sprite);
     if (!isNewResult && cur && cur !== entry && cur.selected_by === 'user') {
-      this.out(`${entry.sprite}: keeps its --select choice ${cur.request_id}`);
-      return;
+      if (cur.status === 'ok') {
+        this.out(`${entry.sprite}: keeps its --select choice ${cur.request_id}`);
+        return;
+      }
+      this.err(
+        `warning: ${entry.sprite}: the --select choice ${cur.request_id} is "${cur.status}" (${cur.error ?? 'not usable'}); selecting ${entry.request_id} instead (--select it again once it can be fetched)`,
+      );
     }
     if (cur === entry) return;
     selectEntry(this.manifest, entry, 'run');
@@ -282,7 +303,8 @@ class Run {
   writeResultJson(entry, body) {
     try {
       fs.mkdirSync(this.cacheDir, { recursive: true });
-      fs.writeFileSync(path.join(this.cacheDir, `${entry.request_id}.json`), `${JSON.stringify(body, null, 2)}\n`);
+      // fal's own text, redacted like everything else this tool writes (W3 ART-W3-1).
+      fs.writeFileSync(path.join(this.cacheDir, `${entry.request_id}.json`), this.redact(`${JSON.stringify(body, null, 2)}\n`));
     } catch {
       // The raw JSON is a convenience; the manifest already holds what matters.
     }
@@ -453,6 +475,17 @@ class Run {
     for (const it of found) {
       let e = this.manifest.requests.find((r) => r.sprite === p.sprite.id && r.request_id === it.request_id);
       if (!e) {
+        // A submit whose answer was lost (counted as paid, no request id): this is that request.
+        e = this.manifest.requests.find(
+          (r) => r.sprite === p.sprite.id && r.status === 'submit_unconfirmed' && !r.request_id && sameInput(r.input, p.input),
+        );
+        if (e) {
+          e.request_id = it.request_id;
+          e.status = 'download_failed';
+          e.submitted_at = e.submitted_at ?? it.started_at ?? null;
+        }
+      }
+      if (!e) {
         e = this.newEntry(p, 'recovered');
         e.request_id = it.request_id;
         e.paid = true;
@@ -488,13 +521,29 @@ class Run {
       e.paid = true;
       e.submitted_at = now();
     } catch (err) {
-      // fal took no request, so nothing was paid: release this sprite's share of the budget.
-      this.runTicks -= usdToTicks(p.estimate);
-      e.status = 'submit_failed';
+      if (submitSurelyRejected(err)) {
+        // fal answered with an error (or nothing was sent), so nothing was paid: release this
+        // sprite's share of the budget.
+        this.runTicks -= usdToTicks(p.estimate);
+        e.status = 'submit_failed';
+        e.error = err.message;
+        this.save();
+        this.stats.failed += 1;
+        this.err(`${p.sprite.id}: submit failed: ${err.message}`);
+        return;
+      }
+      // The answer was lost (connection reset, timeout, unreadable body): fal may have queued the
+      // request and will bill it when it completes. Keep the budget reservation and count it as
+      // paid until fal's request history shows it (a later run adopts it there; W3 ART-W3-3).
+      e.status = 'submit_unconfirmed';
+      e.paid = true;
+      e.submitted_at = now();
       e.error = err.message;
       this.save();
       this.stats.failed += 1;
-      this.err(`${p.sprite.id}: submit failed: ${err.message}`);
+      this.err(
+        `${p.sprite.id}: submit's answer was lost (${err.message}); counted as paid (${formatUsd(p.estimate)} of this run's budget) because fal may have queued it; the next run looks for it in fal's request history`,
+      );
       return;
     }
     this.save();
@@ -640,7 +689,9 @@ export async function main(argv, env, io = {}) {
       stderr.write(lock.message);
       return EXIT_LOCKED;
     }
-    key = env.FAL_KEY;
+    // fetch trims header values, so the key fal sees (and could echo) is the trimmed one
+    // (W3 ART-W3-2).
+    key = env.FAL_KEY.trim();
   }
   const redact = makeRedactor(key);
   const out = (line) => stdout.write(`${redact(line)}\n`);
@@ -681,6 +732,6 @@ export async function main(argv, env, io = {}) {
   }
   const client = new FalClient({ mockOrigin, key, redact, timeoutMs: 120000 });
   out(`generate: ${opts.game} on ${mockOrigin ? `the mock at ${mockOrigin}` : 'fal'} (${art.endpoint}, quality ${art.quality}, budget ${formatUsd(opts.budget)})`);
-  const run = new Run({ art, plan, manifest, mfile, root, game: opts.game, client, opts, out, err });
+  const run = new Run({ art, plan, manifest, mfile, root, game: opts.game, client, opts, out, err, redact });
   return run.run();
 }

@@ -26,11 +26,17 @@ export function checkArtLock(env) {
 
 /**
  * Returns a function that replaces the key, and each ":"-separated part of it that is 4 or more
- * characters long, with "[redacted]". With no key it returns text unchanged.
+ * characters long, with "[redacted]". The key is also known without surrounding whitespace (fetch
+ * trims header values, so a server echoes the trimmed key; W3 ART-W3-2). With no key it returns
+ * text unchanged.
  */
 export function makeRedactor(key) {
-  if (typeof key !== 'string' || key === '') return (text) => String(text);
-  const parts = [key, ...key.split(':').filter((p) => p.length >= 4)];
+  if (typeof key !== 'string' || key.trim() === '') return (text) => String(text);
+  const variants = new Set([key, key.trim()]);
+  const parts = [];
+  for (const v of variants) {
+    parts.push(v, ...v.split(':').filter((p) => p.length >= 4), ...v.split(':').map((p) => p.trim()).filter((p) => p.length >= 4));
+  }
   parts.sort((a, b) => b.length - a.length);
   return (text) => {
     let s = String(text);

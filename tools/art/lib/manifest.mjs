@@ -30,7 +30,9 @@ export function loadManifest(file, game) {
 
 /**
  * The spend total (docs/OWNERSHIP.md C38): for every paid request id, the larger of the estimate
- * and the billed amount, summed. Also the estimate and billed sums on their own.
+ * and the billed amount, summed. Also the estimate and billed sums on their own. A paid entry with
+ * no request id (a submit whose answer was lost, `submit_unconfirmed`) counts on its own: fal may
+ * have queued and billed it (W3 ART-W3-3).
  */
 export function computeSpend(m) {
   const seen = new Set();
@@ -39,8 +41,11 @@ export function computeSpend(m) {
   let billed = 0;
   let n = 0;
   for (const r of m.requests) {
-    if (!r.paid || !r.request_id || seen.has(r.request_id)) continue;
-    seen.add(r.request_id);
+    if (!r.paid) continue;
+    if (r.request_id) {
+      if (seen.has(r.request_id)) continue;
+      seen.add(r.request_id);
+    }
     const e = usdToTicks(r.estimated_usd ?? 0);
     const b = typeof r.billed_usd === 'number' ? usdToTicks(r.billed_usd) : 0;
     total += Math.max(e, b);
@@ -51,13 +56,18 @@ export function computeSpend(m) {
   return { total_usd: ticksToUsd(total), estimated_usd: ticksToUsd(est), billed_usd: ticksToUsd(billed), paid_requests: n };
 }
 
-/** Writes the manifest atomically (temp file, then rename), with the spend total refreshed. */
-export function saveManifest(file, m) {
+/**
+ * Writes the manifest atomically (temp file, then rename), with the spend total refreshed. `redact`
+ * (text -> text) runs over the whole file text, so nothing fal sent back (an error, a URL) can put
+ * the key into this committed file (W3 ART-W3-1).
+ */
+export function saveManifest(file, m, redact = null) {
   m.spend = computeSpend(m);
   m.updated_at = new Date().toISOString();
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, `${JSON.stringify(m, null, 2)}\n`);
+  const text = `${JSON.stringify(m, null, 2)}\n`;
+  fs.writeFileSync(tmp, typeof redact === 'function' ? redact(text) : text);
   fs.renameSync(tmp, file);
 }
 

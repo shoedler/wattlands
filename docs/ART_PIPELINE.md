@@ -14,7 +14,7 @@ assets/<id>/art.json ──► node tools/art/generate.mjs ──► .art_cache/
 
 Real generation needs two environment variables, both set by a human (Simon), never by an agent:
 
-- `FAL_KEY`: the fal API key (`<id>:<secret>`). Never print, log or commit it. `generate.mjs` sends it only to `queue.fal.run` and `api.fal.ai`, never to an image host, and redacts it from every message.
+- `FAL_KEY`: the fal API key (`<id>:<secret>`). Never print, log or commit it. `generate.mjs` sends it only to `queue.fal.run` and `api.fal.ai`, never to an image host, and redacts it from every message and from every file it writes (`art_manifest.json` and the `.art_cache` result JSON, whatever fal sends back). It uses the key with surrounding whitespace trimmed, as it goes on the wire.
 - `WATTLANDS_ALLOW_ART=1`: the permission for paid calls.
 
 Without both, `generate.mjs` refuses (exit 4) before it opens any connection, unless `--mock=<url>` points it at `tools/art/mock_fal`. The art lock replaces the network lock for this one tool: `generate.mjs` never reads `WATTLANDS_NO_NETWORK_INTEGRATIONS`, so keep that lock on (`. tools/env.sh`) for everything, art runs included. `tools/env.*` and the Godot wrappers never touch `FAL_KEY` or `WATTLANDS_ALLOW_ART`; `tools/run_tests` removes both from every process it starts, so no test can reach the real fal. Run your own test commands the same way: `env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/run_tests`.
@@ -26,7 +26,7 @@ In the Claude desktop app, add both variables to the app's Local environment bef
 - Every run stops before its own estimated spend would pass `--budget=<usd>` (default `$10`). The stop sums, per request, the larger of the estimate and the billed amount fal reports (exit 3, with the sprites it didn't pay for). Cached and recovered results cost nothing.
 - A game session's total art spend is `spend.total_usd` in `assets/<id>/art_manifest.json` (the larger of estimate and billed amount per paid request, summed). Pass `--budget=<session cap − spent>` on every run (Tank: $15, Fishing: $10).
 - Estimates come from `tools/art/prices.json`: sunburst at high quality is $0.07 an image up to 1536 × 864 (more above, by pixel count); flare uses fal's listed per-size price plus a prompt allowance (about $0.04–0.06 at the sizes the tool requests). fal bills on completion, even when the download fails afterwards (see Recovery).
-- fal credits: top up in fal's dashboard (Billing). When the balance runs out fal refuses new requests (an HTTP 403 "exhausted balance" error); the run records them as `submit_failed`, which costs nothing, and exits 1.
+- fal credits: top up in fal's dashboard (Billing). When the balance runs out fal refuses new requests (an HTTP 403 "exhausted balance" error); the run records them as `submit_failed`, which costs nothing, and exits 1. A submit whose answer never arrives (a dropped connection or a timeout) is different: fal may have queued it, so it stays counted against `--budget` and in `spend.total_usd` (`submit_unconfirmed`), and the next run adopts it from fal's request history.
 
 ## Writing art.json
 
@@ -90,7 +90,7 @@ Every request is a row in `assets/<id>/art_manifest.json`; exactly one usable (`
 
 - A run selects, for each sprite it processes, the result for the sprite's current input: a new paid result, a recovered one, or the cached one. So the newest result wins by default, and returning to an earlier prompt or endpoint selects its cached result again.
 - "Newest" means the newest request. A paid result that is newer than the cached one (say a `--reroll` whose download failed) is recovered by the next run and selected, without paying again. An unfinished newer request gets one status check; until fal has finished it, the cached result is used and the request stays recoverable.
-- `--select=<sprite>:<request id>` picks any usable result (`"selected_by": "user"`). A later run that only finds the cache keeps that choice; a new or recovered result for the sprite replaces it (fetching an image that was already fine again, after a cache wipe, does not). If the chosen result's raw image is missing from `.art_cache` (a fresh clone), the next run that includes the sprite fetches it again from its stored image URL for free.
+- `--select=<sprite>:<request id>` picks any usable result (`"selected_by": "user"`). A later run that only finds the cache keeps that choice; a new or recovered result for the sprite replaces it (fetching an image that was already fine again, after a cache wipe, does not). If the chosen result's raw image is missing from `.art_cache` (a fresh clone), the next run that includes the sprite fetches it again from its stored image URL for free. If that fetch fails, the choice is no longer usable: the run warns and selects the usable result it has instead, so `pixelate.gd` never skips the sprite for it; `--select` the old one again once it can be fetched.
 - `pixelate.gd` warns when the selected result no longer matches `art.json` (another endpoint, prompt or background), for example a flare draft that is still selected after you switched to sunburst, and uses it anyway.
 
 ### The manifest
@@ -120,7 +120,7 @@ Every request is a row in `assets/<id>/art_manifest.json`; exactly one usable (`
 }
 ```
 
-`status` is `ok`, `submitted` (in flight or interrupted), `timeout`, `result_failed`, `download_failed` (all four recoverable without paying again), `failed` (fal reported an error; counted as paid to stay conservative) or `submit_failed` (fal took nothing; not counted). `source` is `generated` or `recovered`. fal documents no per-request cost today; when a response carries one (`cost_total` at the top level or under `billing` or `metrics`, as `mock_fal` sends it), it lands in `billed_usd`.
+`status` is `ok`, `submitted` (in flight or interrupted), `timeout`, `result_failed`, `download_failed` (all four recoverable without paying again), `failed` (fal reported an error; counted as paid to stay conservative), `submit_unconfirmed` (the submit's answer was lost, so there is no request id yet; counted as paid, and the next run adopts the request from fal's history when it is there) or `submit_failed` (fal answered with an error; nothing taken, not counted). `source` is `generated` or `recovered`. fal documents no per-request cost today; when a response carries one (`cost_total` at the top level or under `billing` or `metrics`, as `mock_fal` sends it), it lands in `billed_usd`.
 
 ### Recovering a paid result after a failed download
 

@@ -272,3 +272,31 @@ test('a result image on a host the client may not contact stops all further paym
   assert.equal(mock.state.counts.submit, 4, 'only the three sprites never paid');
   assert.equal(readManifest(root, GAME).spend.paid_requests, 4);
 });
+
+// W3 ART-W3-4: a --select choice that can't be fetched again gives way to the usable result, so the
+// sprite keeps exactly one usable selected result and pixelate never skips it.
+test('a --select choice that cannot be fetched again gives way to the usable result, with a warning', async (t) => {
+  const { mock, root } = await setup(t);
+  assert.equal((await gen(root, mock, ['--only=boat'])).code, 0);
+  assert.equal((await gen(root, mock, ['--reroll=boat'])).code, 0);
+  const [r1, r2] = readManifest(root, GAME).requests;
+  const sel = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, `--select=boat:${r1.request_id}`], { env: childEnv() });
+  assert.equal(sel.code, 0, sel.stderr);
+  fs.rmSync(path.join(root, '.art_cache'), { recursive: true, force: true }); // a fresh clone
+  mock.configure({ fail_downloads: 3 }); // r1's stored URL no longer serves (3 attempts); r2's does
+  const r = await gen(root, mock, ['--only=boat']);
+  assert.match(r.stderr, new RegExp(`warning: boat: the --select choice ${r1.request_id} is "download_failed"`));
+  const m = readManifest(root, GAME);
+  const selected = m.requests.filter((e) => e.selected);
+  assert.equal(selected.length, 1);
+  assert.equal(selected[0].status, 'ok', `the selected result is "${selected[0].status}"`);
+  assert.equal(selected[0].request_id, r2.request_id);
+  assert.ok(fs.existsSync(path.join(root, selected[0].cache)));
+  assert.equal(mock.state.counts.submit, 2, 'nothing paid again');
+  // The next healthy run keeps the usable result selected.
+  const again = await gen(root, mock, ['--only=boat']);
+  assert.equal(again.code, 0, again.stderr);
+  const m2 = readManifest(root, GAME);
+  assert.equal(m2.requests.filter((e) => e.selected).length, 1);
+  assert.equal(m2.requests.find((e) => e.selected).status, 'ok');
+});
