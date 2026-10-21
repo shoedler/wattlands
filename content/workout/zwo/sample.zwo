@@ -1,0 +1,18 @@
+<workout_file>
+    <author>Wattlands</author>
+    <name>Sample builds</name>
+    <description>A sample .zwo for Workout's importer. Some blocks break the safety limits on purpose, so the session preview lists the clamps: a warm-up that ends above 65% FTP, a 7-minute block above the 105% cap for phases longer than 5 minutes, a 30-second block above 150% FTP and one tag the importer does not support.</description>
+    <sportType>bike</sportType>
+    <tags/>
+    <workout>
+        <Warmup Duration="300" PowerLow="0.50" PowerHigh="0.70"/>
+        <SteadyState Duration="240" Power="0.75"/>
+        <IntervalsT Repeat="3" OnDuration="60" OffDuration="120" OnPower="1.10" OffPower="0.55"/>
+        <Ramp Duration="180" PowerLow="0.60" PowerHigh="0.85"/>
+        <SteadyState Duration="420" Power="1.10"/>
+        <FreeRide Duration="60" FlatRoad="1"/>
+        <SteadyState Duration="30" Power="1.60"/>
+        <MaxEffort Duration="20"/>
+        <Cooldown Duration="120" PowerLow="0.60" PowerHigh="0.45"/>
+    </workout>
+</workout_file>

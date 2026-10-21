@@ -1,0 +1,11 @@
+{
+	"id": "e2e",
+	"label": "WORKOUT_CONTENT_E2E",
+	"summary": "WORKOUT_SUMMARY_E2E",
+	"warmup_only": true,
+	"phases": [
+		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 60, "duration_s": 60, "lap": true, "label": "WORKOUT_LBL_RAMP_IN"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 65, "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_STEADY"},
+		{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT"}
+	]
+}

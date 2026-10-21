@@ -1,0 +1,15 @@
+{
+	"id": "easy_30",
+	"label": "WORKOUT_CONTENT_EASY_30",
+	"summary": "WORKOUT_SUMMARY_EASY_30",
+	"phases": [
+		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 65, "duration_s": 360, "lap": true, "label": "WORKOUT_LBL_ENDURANCE_1"},
+		{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT_1"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 65, "duration_s": 330, "lap": true, "label": "WORKOUT_LBL_ENDURANCE_2"},
+		{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT_2"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 65, "duration_s": 330, "lap": true, "label": "WORKOUT_LBL_ENDURANCE_3"},
+		{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30, "lap": true, "label": "WORKOUT_LBL_SPRINT_3"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 65, "duration_s": 90, "lap": true, "label": "WORKOUT_LBL_ENDURANCE_4"}
+	]
+}
