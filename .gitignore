@@ -1,6 +1,15 @@
-.env
-.env.*
+# Godot caches and per-worktree user data
+.godot/
+.userdata/
+# Art pipeline raw results (paid fal outputs are recoverable, see docs/ART_PIPELINE.md)
+.art_cache/
+build/
+node_modules/
 __pycache__/
 *.pyc
 .venv/
+.env
+.env.*
 .DS_Store
+# Machine-local path to the Godot console binary (see tools/godot.sh)
+tools/godot_bin.local
