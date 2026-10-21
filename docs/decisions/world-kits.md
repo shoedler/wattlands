@@ -38,9 +38,15 @@
 
 ## 2026-10-21: MultiMesh custom data always comes with colors
 
-- Decision: `MultiMeshScatter.setup(..., use_custom = true)` also turns on per-instance colors (white unless given). The walk-bob shader writes `ALBEDO = COLOR.rgb`.
-- Alternatives: custom data alone.
-- Reason: on 4.7.2 Compatibility a MultiMesh with custom data but no colors drew wrong vertex colors (brown figures came out green). In a spatial shader on Compatibility `COLOR` already matches what `LowPolyMesh`'s `StandardMaterial3D` (vertex color as sRGB albedo) shows, so converting it again darkened it.
+- Decision: `MultiMeshScatter.setup(..., use_custom = true)` also turns on per-instance colors (white unless given). The walk-bob shader writes `ALBEDO = COLOR.rgb` and, like `StandardMaterial3D` with `vertex_color_is_srgb`, decodes the sRGB vertex colors only when `OUTPUT_IS_SRGB` is false.
+- Alternatives: custom data alone; always decoding the vertex colors in the shader.
+- Reason: on 4.7.2 Compatibility a MultiMesh with custom data but no colors drew wrong vertex colors (brown figures came out green). Compatibility outputs sRGB (`OUTPUT_IS_SRGB`), so there `COLOR` already matches what `LowPolyMesh`'s `StandardMaterial3D` (vertex color as sRGB albedo) shows, and decoding it again darkened it. The guard keeps walking figures matching static props on a linear renderer too.
+
+## 2026-10-21: PixelViewport also emits `resized` on layout changes at a fixed size
+
+- Decision: when the layout changes while the control keeps its size (the window was resized at the fixed 1920 x 1080 canvas, so only the device scale moved, or `pixel_base` changed), `PixelViewport` emits `resized` after `layout_changed`. A real size change keeps Control's own single `resized`.
+- Alternatives: only `layout_changed`, and ask ui-hud to listen to it.
+- Reason: the frozen W0 API has no layout signal, so `HudLayer` re-lays out on the control's `resized`. A 1920 x 1080 window shrunk to 1600 x 900 keeps the canvas size but moves the image from scale 3 to scale 2 with a 192 x 108 letterbox; without the extra `resized` the HUD would stay where it was. A windowed 1600 x 900 run reports scale 2, art scale 2.4, offset (192, 108).
 
 ## 2026-10-21: LowPolyMesh is a builder of triangle lists per surface
 

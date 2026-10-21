@@ -154,6 +154,61 @@ func test_layout_changed_quiet_when_nothing_changes() -> void:
 	watch_signals(pv)
 	pv.refresh_layout()
 	assert_signal_not_emitted(pv, "layout_changed")
+	assert_signal_not_emitted(pv, "resized")
+
+
+func test_device_scale_change_also_emits_resized_for_the_hud() -> void:
+	# A 1920 x 1080 window shrunk to 1600 x 900 keeps the 1920 x 1080 canvas, so the control
+	# keeps its size; the HUD (HudLayer re-lays out on `resized`) must still hear about it.
+	var pv := _make(Vector2(1920, 1080))
+	assert_eq(pv.integer_scale(), 3)
+	watch_signals(pv)
+	pv.screen_scale_override = 1600.0 / 1920.0
+	assert_signal_emitted(pv, "layout_changed")
+	assert_signal_emit_count(pv, "resized", 1)
+	assert_eq(pv.size, Vector2(1920, 1080), "the control kept its size")
+	assert_eq(pv.integer_scale(), 2, "1600 x 900 device px fit 2x")
+	assert_almost_eq(pv.art_scale(), 2.4, 0.0001)
+	assert_almost_eq(pv.letterbox_offset().x, 192.0, 0.001)
+	assert_almost_eq(pv.letterbox_offset().y, 108.0, 0.001)
+	var r := pv.art_rect_to_screen(Rect2i(10, 10, 10, 10))
+	assert_almost_eq(r.position.x, 192.0 + 24.0, 0.001)
+	assert_almost_eq(r.size.y, 24.0, 0.001)
+
+
+func test_size_change_emits_resized_once() -> void:
+	var pv := _make(Vector2(1920, 1080))
+	watch_signals(pv)
+	pv.size = Vector2(1280, 720)
+	assert_signal_emit_count(pv, "resized", 1, "Control's own signal, not a second one")
+	assert_signal_emit_count(pv, "layout_changed", 1)
+
+
+func test_pixel_base_change_emits_resized() -> void:
+	var pv := _make(Vector2(1920, 1080))
+	watch_signals(pv)
+	pv.pixel_base = Vector2i(480, 270)
+	assert_signal_emitted(pv, "layout_changed")
+	assert_signal_emit_count(pv, "resized", 1)
+	assert_eq(pv.integer_scale(), 4)
+
+
+func test_parallax_strip_in_the_view_covers_the_art_width() -> void:
+	var pv := _make(Vector2(1920, 1080), Vector2i(320, 180))
+	var view := Node2D.new()
+	pv.set_game_view(view)
+	var strip := ParallaxStrip.new()
+	var img := Image.create_empty(48, 8, false, Image.FORMAT_RGBA8)
+	img.fill(Color.WHITE)
+	strip.texture = ImageTexture.create_from_image(img)
+	strip.mirror_alternate = true
+	view.add_child(strip)
+	assert_eq(strip.covered_width(), 320.0, "the art width, not the window's")
+	strip.world_x = 1000.0
+	var tiles := strip.visible_tiles()
+	var last: Dictionary = tiles[tiles.size() - 1]
+	assert_true(float(last["x"]) + 48.0 >= 320.0)
+	assert_true(float(tiles[0]["x"]) <= 0.0)
 
 
 func test_pixel_base_change_resizes_subviewport_and_rescales() -> void:
@@ -301,3 +356,34 @@ func test_demo_scene_runs_headless() -> void:
 	for f: Sprite2D in fish:
 		assert_true(f.material is ShaderMaterial, "wobbling fish")
 	assert_ne((demo.get("caption") as Label).text, "")
+	assert_false((demo.get("caption") as Label).text.begins_with("WORLD_"), "the caption is translated")
+
+
+func test_demo_scene_animates_over_time() -> void:
+	var scene: PackedScene = load("res://addons/wattlands/world2d/demo.tscn")
+	var demo: Control = scene.instantiate()
+	add_child_autofree(demo)
+	await wait_process_frames(4)
+	var strips: Array = demo.get("strips")
+	var gears: Array = demo.get("gears")
+	var chain: ScrollingChain = demo.get("chain")
+	var fish: Array = demo.get("fish")
+	var fish_x: float = (fish[0] as Sprite2D).position.x
+	var spun := 0.0
+	for g: SpinningPart in gears:
+		spun += absf(g.revolutions())
+	var chain_before := chain.travel()
+	await wait_process_frames(8)
+	# Headless frames are very short, so also step half a second explicitly: the demo sets
+	# the drive signal and moves the fish, each part advances itself.
+	demo.call("_process", 0.5)
+	for g: SpinningPart in gears:
+		g.tick(0.5)
+	chain.tick(0.5)
+	assert_gt((strips[0] as ParallaxStrip).world_x, 0.0, "the backdrop scrolls")
+	var spun_after := 0.0
+	for g: SpinningPart in gears:
+		spun_after += absf(g.revolutions())
+	assert_gt(spun_after, spun, "gears turn")
+	assert_ne(chain.travel(), chain_before, "the chain scrolls")
+	assert_lt((fish[0] as Sprite2D).position.x, fish_x, "fish swim left")

@@ -35,6 +35,10 @@ extends SubViewportContainer
 ## disabled and ignores GUI input (input reaches games through InputRouter).
 
 ## Emitted after the integer scale, the letterbox offset or the image rect changed.
+## When that happens without this control changing size (the window was resized at a fixed
+## 1920 x 1080 canvas, so only the device scale moved, or pixel_base changed), `resized` is
+## emitted as well, so code written against the W0 API, which re-lays out on `resized`
+## (HudLayer), follows every layout change.
 signal layout_changed
 
 ## Art resolution, e.g. Vector2i(640, 360).
@@ -282,13 +286,16 @@ func refresh_layout() -> void:
 	if _screen == null:
 		return
 	var ds := device_scale()
+	var had_layout := not _layout_key.is_empty()
+	var prev_size: Vector2 = _layout_key[0] if had_layout else Vector2(-1.0, -1.0)
 	_layout_key = [size, pixel_base, ds]
 	var l: Dictionary = fit_layout(size, pixel_base, ds)
 	var new_scale: int = l["scale"]
 	var new_offset: Vector2 = l["offset"]
 	var new_size: Vector2 = l["size"]
 	var new_art_scale: float = l["art_scale"]
-	_device_scale = l["device_scale"]
+	# The raw measurement, so _process compares like with like (fit_layout sanitizes it).
+	_device_scale = ds
 	var changed: bool = (
 		new_scale != _scale
 		or not new_offset.is_equal_approx(_offset)
@@ -304,6 +311,10 @@ func refresh_layout() -> void:
 	queue_redraw()
 	if changed:
 		layout_changed.emit()
+		# A size change emits `resized` by itself (Control); any other layout change says so
+		# too, for listeners that only know the frozen W0 API.
+		if had_layout and is_inside_tree() and prev_size == size:
+			resized.emit()
 
 
 ## The largest integer scale (>= 1) at which `base` fits in `available` device pixels.
