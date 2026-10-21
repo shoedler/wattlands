@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# tools/run_tests: every gate in BRIEF 7, in one command. Godot steps run through tools/godot.sh.
+#
+#   tools/run_tests [--only=<step,...>] [--skip=<step,...>] [--min-count=<n>] [--gdir=<res path>]
+#                   [--gut-arg=<arg>]... [--strict-lint] [--no-lint] [--project=<dir>]
+#
+# Steps: import (never a gate), gut, scaffold, static, sim, fit, node, e2e. Exits non-zero if any
+# gate failed and prints a summary table. tools/run_tests.ps1 is the PowerShell twin; both call
+# tools/lib/run_tests.mjs, where each step is one function (tools/run_tests --help lists options).
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export WATTLANDS_NO_HW_CONTROL=1
+export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
+command -v node >/dev/null 2>&1 || {
+  printf 'run_tests: node not found on PATH (Node 22.12+ is required)\n' >&2
+  exit 127
+}
+bash_bin="${BASH:-bash}"
+if command -v cygpath >/dev/null 2>&1; then
+  bash_bin="$(cygpath -m "$bash_bin")"
+fi
+export WATTLANDS_BASH="$bash_bin"
+exec node "$here/lib/run_tests.mjs" --shell=bash "$@" </dev/null
