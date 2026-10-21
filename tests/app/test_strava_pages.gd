@@ -88,6 +88,34 @@ func test_import_ftp_and_weight_from_strava() -> void:
 	assert_true(s.status_label.text.contains("250"), s.status_label.text)
 
 
+## W4r2 R20: leaving the page while GET /athlete runs (main.show_state: leave, remove,
+## queue_free) still saves what Rides wrote into the live profile.
+func test_leaving_the_page_mid_import_still_saves_it() -> void:
+	var p := fx.give_profile(200.0)
+	p.ftp_verified = false
+	p.weight_kg = 80.0
+	_real_rides()
+	var s := _settings_on_strava()
+	await s.strava_connect_profile()
+	s.import_weight = true
+	var saves_before := (fx.settings as Object).get("profile_saves") as int
+	var changed: Array[int] = [0]
+	fx.bus.profile_changed.connect(func() -> void: changed[0] += 1)
+	s.strava_import()  # not awaited: the rider leaves the page while the request runs
+	s.leave()
+	remove_child(s)
+	s.queue_free()
+	for i in 120:
+		await get_tree().process_frame
+		if (fx.settings as Object).get("profile_saves") as int > saves_before:
+			break
+	assert_eq(p.ftp_w, 250.0, "Strava's FTP")
+	assert_true(p.ftp_verified)
+	assert_eq(p.weight_kg, 72.5)
+	assert_gt((fx.settings as Object).get("profile_saves") as int, saves_before, "the import was saved")
+	assert_eq(changed[0], 1, "profile_changed once")
+
+
 func test_import_only_what_was_picked() -> void:
 	var p := fx.give_profile(200.0)
 	p.weight_kg = 80.0

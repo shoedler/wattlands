@@ -252,3 +252,44 @@
 
 - Decision: picking a ride whose upload state is uploaded or duplicate calls `Rides.reupload(ride_id)`; any other ride goes through `Rides.upload()`.
 - Reason: BRIEF 3.8 P1 "Rides history with re-upload"; `upload()` only reports the stored state of an uploaded ride, so a ride deleted on Strava could not go up again.
+
+## 2026-10-21 (W4r2): App.quit ends the tree, not the app shell (W4r2 R9/R10, W3 NET-6)
+
+- Decision: `AppServices.quit` calls `App.quit`, then `last`, and calls `SceneTree.quit` only when the App is not quitting inside the tree (`app_ends_tree()`: a test double or a private App). A window close re-enters it through the main scene's "quitting" branch before App.quit has left the room; it now does nothing more, so App.quit leaves the hosted room, shuts the riders down and ends the tree itself after `QUIT_GRACE_S`. The "quitting" branch also freezes the current screen (`AppScreen.freeze()`: input disconnected, `_process` off on the screen and every node under it, a GameHost included), so during the grace only the TrainerService ticks the shut-down riders. `quit_hook` now stands in for `SceneTree.quit` alone.
+- Alternatives: main.gd ignores "quitting" while App quits (leaves the scripted path, where AppServices.quit followed App.quit with an immediate `SceneTree.quit`, unfixed); `leave()` the screen on quitting (hands ticking back and re-sets the menu rider up before App.quit shuts it down).
+- Reason: `SceneTree.quit` ends the process at the end of the frame, so the grace timer App.quit started afterwards never fired: no `host_left` reached the relay's linger and the governor's SIM flat and Stop (BRIEF 4.6.9) had no time to go out with a real trainer. `tests/app/test_quit_chain.gd` drives the real main.gd, AppServices and WlApp on a hosting loopback session.
+
+## 2026-10-21 (W4r2): The results page fits 1080p by measured fit steps (W4r2 R16, R26)
+
+- Decision: the results page never scrolls, so it is laid out to fit. The menu column holds the menu, the upload status and the host-left notice; the content column the grade, the local rider's summary and new unlocks, and the rows grid; the custom stats lines, the team line and "Ride saved" run the full page width below both columns (two lines for a real Workout row instead of four). While the page is taller than the screen (checked one frame after each layout change, also after a longer upload status), it takes the next fit step: a compact top row (grade at FONT_NUMBER, XP beside it), then only the local rider's custom stats (every rider's kJ, W, %FTP, NP, time in band and XP stay in the grid; each rider's own screen has their stats), then FONT_SMALL grid rows, then caps with an ellipsis (stats line 3 lines, team 1; then 1 or 2 lines everywhere). Pages with more than 3 rows start at the own-stats step. Real Workout stats (10 intervals, 4-digit sprint peaks, 16-character names, the Strava URL, unlocks, W/kg, the host-left notice) fit uncut from 1 to 8 riders; only stats as long as a 200-interval .zwo are cut. `tools/screenshot --app-screen=results --app-riders=<1..8>` shoots the real screen.
+- Alternatives: a ScrollContainer (pedal-scan and zero-input riders can't scroll); fixed tiers by rider count (a long .zwo or a long status line still overflows); truncating every stats line to one line (loses the local rider's own numbers).
+- Reason: W4 WO-2 made each stats line twice as long; from one rider the upload status (BRIEF 3.8) and with two or more the ride-saved line fell below a 1080 px screen.
+
+## 2026-10-21 (W4r2): Results stats keep the game's order (W4r2 R18)
+
+- Decision: `AppResultsScreen.stats_text` lists custom and team stats in the Dictionary's insertion order, which is the order the game added them; Protocol encodes without sorted keys, so clients show the host's order.
+- Alternatives: a fixed key order in the app (the app can't know a game's keys); sorting (showed "Best 1 min, Best 20 min, Best 5 min").
+- Reason: BRIEF 3.7 lists best 1-, 5- and 20-minute power in that order; WorkoutResults adds its stats in BRIEF order.
+
+## 2026-10-21 (W4r2): Settings use TrainerService's safe unlink (W4r2 R6, R7; supersedes the W4 SAF-8 entry above)
+
+- Decision: Settings' Connect, Disconnect and "use the mock trainer" call `TrainerService.connect_trainer(address)`, `disconnect_trainer()` and `use_mock()`, as the platform's SAF-8 decision says. The service shuts the rider down and drops the link only once the control point has sent SIM flat and Stop (up to its 3 s timeout); picking the trainer that is already linked connects at once and leaves the menu rider alone; the next ready trainer gets a new menu rider. The page's own fixed `SAFE_DRAIN_S` wait, its `_rearm_menu_rider()` and its "leaving the page drops the link at once" are gone: the wait belongs to the service and outlives the page. The page follows the service's connection manager (none with the mock) and shows "Making the trainer safe…" while `is_unlinking()`.
+- Alternatives: keep the page's wait and only skip the same address (still too short for a retried write).
+- Reason: a KICKR answering SIM flat later than 0.5 s lost the Stop (BRIEF 4.6.9), and re-picking the linked trainer left the menu rider shut down for good.
+
+## 2026-10-21 (W4r2): A Strava import outlives the Settings page (W4r2 R20)
+
+- Decision: `AppSettingsScreen.import_from_strava()` is a static coroutine that awaits `Rides.strava_import_athlete()` and then saves the profile and emits `profile_changed`; the page only shows the result. Leaving the page while GET /athlete runs still saves the import.
+- Alternatives: import into a copy and apply it from the page (leaving the page would drop the import the rider asked for).
+- Reason: Rides writes the values into the live profile while it waits, so a page freed mid-request left an imported, unsaved profile in memory.
+
+## 2026-10-21 (W4r2): The Controls content column follows a rebind (W4r2 R28)
+
+- Decision: ending a capture on the Controls page refreshes the content column (`all_bindings_text()`) as well as the rows; the unused `binding_text()` helper is removed (W4r2 R32/R44).
+- Reason: InputBindings.rebind can take an input away from another action, so the list of every binding went stale until the page was reopened.
+
+## 2026-10-21 (W4r2): Esc and the arrows keep working on the join page after typing (W4r2 R27)
+
+- Decision: while the code field has the keyboard focus, Esc and the four arrow keys take the focus off it in the lobby's `_input` (which runs before the InputRouter autoload's) and go on unhandled, so the router routes them: Esc backs out (the first highlights Cancel, the second leaves), the arrows move the on-screen keyboard and the room lists. The next code character takes the focus back (ZIH-7). Backspace and Enter stay with the field.
+- Alternatives: let WlInputRouter route these keys while a LineEdit has the focus (every text field in the app would lose its caret keys); never focus the field (the ZIH-7 typing needs it).
+- Reason: WlInputRouter drops key presses while a LineEdit has the focus, so after one typed character a keyboard rider could neither back out nor reach Recent or LAN rooms.

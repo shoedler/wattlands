@@ -64,7 +64,10 @@ func test_results_menu_and_ftp_column_fit_on_a_1080p_screen() -> void:
 	assert_not_null(stats, "the stats line is still shown")
 	if stats != null:
 		assert_true(stats.text.contains("284"), stats.text)
-		assert_true(stats.get_global_rect().end.x <= col.get_global_rect().position.x, "the stats line wraps inside the content column")
+		# W4r2 R26: the stats lines run the full page width under the content and menu columns
+		# (tests/app/test_results_fit.gd checks the whole page against 1080p).
+		assert_true(stats.get_global_rect().end.x <= vp_w - AppStyle.MARGIN + 0.5, "the stats line wraps inside the page")
+		assert_true(stats.get_global_rect().position.y >= col.get_global_rect().end.y, "under the menu column, never across it")
 
 
 func test_results_show_wkg_when_the_rider_opted_in() -> void:

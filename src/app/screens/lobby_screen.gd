@@ -275,13 +275,38 @@ func _send_player_info_if_changed() -> bool:
 
 # --- join page -------------------------------------------------------------------------------
 
+## Keys that keep their routed actions while the code field has the keyboard focus (W4r2 R27).
+const JOIN_NAV_KEYS: Array[Key] = [KEY_ESCAPE, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT]
+
+
 ## A key typed on the join page while nothing has the keyboard focus goes into the code field,
-## which keeps the focus from then on, so typing a code needs no click first (W3 ZIH-7). Only a
-## character a code can hold starts it; arrows, Enter, Esc and Space keep their actions, and the
-## controller and pedal-scan keep the on-screen keyboard.
+## which takes the focus, so typing a code needs no click first (W3 ZIH-7). Only a character a
+## code can hold starts it; Enter submits the code, and the controller and pedal-scan keep the
+## on-screen keyboard. Esc and the arrow keys keep their actions even after typing (W4r2 R27):
+## they take the focus off the field (WlInputRouter ignores keys while a LineEdit has the
+## focus), so Esc backs out and the arrows move the on-screen keyboard and the room lists, and
+## the next code character takes the focus back.
 func _input(event: InputEvent) -> void:
 	if take_typed_key(event):
 		get_viewport().set_input_as_handled()
+	else:
+		release_code_focus_for(event)
+
+
+## True when `event` is Esc or an arrow pressed while the code field has the focus: the field
+## lets go of it, and the event goes on to the InputRouter (it is not marked handled).
+func release_code_focus_for(event: InputEvent) -> bool:
+	if page != PAGE_JOIN or code_field == null or code_field.line_edit == null:
+		return false
+	if not (event is InputEventKey):
+		return false
+	var k := event as InputEventKey
+	if not k.pressed or k.echo or not code_field.line_edit.has_focus():
+		return false
+	if not (JOIN_NAV_KEYS.has(k.keycode) or JOIN_NAV_KEYS.has(k.physical_keycode)):
+		return false
+	code_field.line_edit.release_focus()
+	return true
 
 
 func take_typed_key(event: InputEvent) -> bool:

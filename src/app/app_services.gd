@@ -29,7 +29,8 @@ var game_host_factory: Callable
 var rider_factory: Callable
 ## Fixed UTC time for tests (-1: the system clock).
 var utc_override: int = -1
-## Called by quit() instead of SceneTree.quit (tests).
+## Called by quit() instead of SceneTree.quit (tests). Like SceneTree.quit it is not called
+## while WlApp's own quit() ends the tree (app_ends_tree()).
 var quit_hook: Callable
 ## Last exit code passed to quit().
 var quit_code: int = -1
@@ -115,22 +116,34 @@ func play_sound(sound: String) -> void:
 		sfx.play(sound)
 
 
-## Quit the app: App.quit (governor shutdown on every local rider), then `last` (the scripted
-## peer writes its report and DONE line there, after App.quit, so nothing overwrites them), then
-## SceneTree.quit(code).
+## Quit the app: App.quit (governor shutdown on every local rider, a hosted room left), then
+## `last` (the scripted peer writes its report and DONE line there, after App.quit, so nothing
+## overwrites them), then SceneTree.quit(code) - unless WlApp ends the tree itself
+## (app_ends_tree()). WlApp.quit waits QUIT_GRACE_S of real time before it quits the tree when it
+## left a hosted room or a real trainer is connected, so the relay reads the leave and the
+## governor's shutdown writes (SIM flat, then Stop, BRIEF 4.6.9) go out. SceneTree.quit ends the
+## process at the end of the frame, so calling it here would cut that grace off. A window close
+## re-enters here (App.quit -> goto("quitting") -> the main scene's "quitting" branch) before
+## App.quit has left the room; the re-entered App.quit returns at once and nothing else happens
+## (W4r2 R9/R10, W3 NET-6).
 func quit(code: int = 0, last: Callable = Callable()) -> void:
 	quit_code = code
-	if quit_hook.is_valid():
-		if last.is_valid():
-			last.call()
-		quit_hook.call(code)
-		return
 	if app != null:
 		app.quit(code)
 	if last.is_valid():
 		last.call()
-	if tree != null:
+	if app_ends_tree():
+		return
+	if quit_hook.is_valid():
+		quit_hook.call(code)
+	elif tree != null:
 		tree.quit(code)
+
+
+## True while WlApp.quit() runs inside the tree: it ends the tree itself (after its grace).
+## A test double or a private App outside the tree leaves that to quit().
+func app_ends_tree() -> bool:
+	return app != null and app.is_quitting() and app.is_inside_tree()
 
 
 func _default_scan_list() -> PedalScanList:

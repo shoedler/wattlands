@@ -10,13 +10,46 @@ const FAL_DOMAINS = ['fal.run', 'fal.ai', 'fal.media'];
 export const MOCK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 export class FalError extends Error {
-  /** `refused`: the client itself refused (a host it may not contact, or the key to a non-API host). */
-  constructor(message, { status = 0, body = '', refused = false } = {}) {
+  /**
+   * `refused`: the client itself refused (a host it may not contact, or the key to a non-API host).
+   * `code`: the transport error code when the request failed below HTTP (ECONNREFUSED, ...).
+   * `notSent`: that failure happened before the request could leave this machine (W4r2 R24).
+   */
+  constructor(message, { status = 0, body = '', refused = false, code = null, notSent = false } = {}) {
     super(message);
     this.status = status;
     this.body = body;
     this.refused = refused;
+    this.code = code;
+    this.notSent = notSent;
   }
+}
+
+/**
+ * Transport errors that prove the request never left this machine: no connection was made (refused,
+ * unreachable, no DNS answer, connect timeout) or the TLS handshake failed (the HTTP request goes
+ * out only after it). A reset, a closed socket or a timeout after connecting may come after fal
+ * read the request, so those stay ambiguous.
+ */
+export const NOT_SENT_CODES = new Set([
+  'ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'EAI_FAIL', 'EAI_NONAME', 'EAI_NODATA', 'ENODATA',
+  'UND_ERR_CONNECT_TIMEOUT', 'ENETUNREACH', 'EHOSTUNREACH', 'EHOSTDOWN', 'ENETDOWN', 'EADDRNOTAVAIL',
+  'CERT_HAS_EXPIRED', 'CERT_NOT_YET_VALID', 'CERT_REVOKED', 'CERT_UNTRUSTED', 'CERT_REJECTED',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'UNABLE_TO_GET_ISSUER_CERT', 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'DEPTH_ZERO_SELF_SIGNED_CERT', 'SELF_SIGNED_CERT_IN_CHAIN', 'ERR_TLS_CERT_ALTNAME_INVALID',
+  'ERR_TLS_HANDSHAKE_TIMEOUT',
+]);
+
+/** The transport error code of a failed fetch (undici puts it on `cause`, or on the errors of an AggregateError there). */
+export function transportCode(err) {
+  const c = err?.cause;
+  const code = c?.code ?? (Array.isArray(c?.errors) ? c.errors.find((e) => typeof e?.code === 'string')?.code : undefined);
+  return typeof code === 'string' ? code : null;
+}
+
+/** True when `code` proves the request was never sent (NOT_SENT_CODES, or any ERR_SSL_ handshake error). */
+export function notSentCode(code) {
+  return typeof code === 'string' && (NOT_SENT_CODES.has(code) || code.startsWith('ERR_SSL_'));
 }
 
 export function isFalHost(hostname) {
@@ -101,8 +134,9 @@ export class FalClient {
           signal: AbortSignal.timeout(this.timeoutMs),
         });
       } catch (err) {
-        const cause = err?.cause?.code ?? err?.cause?.message ?? err?.message ?? String(err);
-        throw new FalError(this.redact(`${method} ${u.origin}${u.pathname} failed: ${cause}`));
+        const code = transportCode(err);
+        const cause = code ?? err?.cause?.message ?? err?.message ?? String(err);
+        throw new FalError(this.redact(`${method} ${u.origin}${u.pathname} failed: ${cause}`), { code, notSent: notSentCode(code) });
       }
       const loc = res.headers?.get?.('location');
       if (res.status >= 300 && res.status < 400 && loc && method === 'GET' && hop < 3) {

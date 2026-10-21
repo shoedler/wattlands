@@ -109,14 +109,25 @@ export function selectedEntry(m, sprite) {
   return m.requests.find((r) => r.sprite === sprite && r.selected === true) ?? null;
 }
 
-/** Marks `entry` as the one selected result of its sprite. `by` is "run" or "user". */
-export function selectEntry(m, entry, by) {
+/**
+ * Marks `entry` as the one selected result of its sprite. `by` is "run" or "user". A user's pick, or a
+ * new result (`dropPending`), ends any --select choice still waiting for its image (`reselect`).
+ */
+export function selectEntry(m, entry, by, dropPending = by === 'user') {
   for (const r of m.requests) {
     if (r.sprite === entry.sprite) {
       r.selected = false;
       delete r.selected_by;
+      if (dropPending) delete r.reselect;
     }
   }
   entry.selected = true;
   entry.selected_by = by;
+}
+
+/** The --select choices of `sprite` that wait for their image to be fetched (newest request first). */
+export function pendingChoices(m, sprite) {
+  return m.requests
+    .filter((r) => r.sprite === sprite && r.reselect === true)
+    .sort((a, b) => String(b.submitted_at ?? b.created_at ?? '').localeCompare(String(a.submitted_at ?? a.created_at ?? '')));
 }
