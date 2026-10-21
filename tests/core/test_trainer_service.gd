@@ -32,6 +32,8 @@ func after_each() -> void:
 	Paths.set_override("")
 	CmdLine.set_args(PackedStringArray(), false)
 	Util.remove_tree(_dir)
+	# Let replaced nodes (queue_free) go before GUT counts orphans.
+	await wait_process_frames(1)
 
 
 func _args(list: Array) -> void:

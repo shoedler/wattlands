@@ -16,6 +16,11 @@ func before_each() -> void:
 	autofree(_bus)
 
 
+func after_each() -> void:
+	# Let replaced governors (queue_free) go before GUT counts orphans.
+	await wait_process_frames(1)
+
+
 func _profile(ftp: float = 200.0) -> RiderProfile:
 	var p := RiderProfile.new()
 	p.display_name = "Tester"
