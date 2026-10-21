@@ -8,7 +8,9 @@ extends GameModule
 ##
 ## Host/SOLO: WorkoutRules.step() advances the state each 0.05 s; its events go to clients
 ## (send_event) and become banners and toasts. Clients rebuild the state from snapshots and
-## predict their own marker. Rules live in rules/, the HUD layout in hud/, the view in view/.
+## predict their own marker; their view draws the other riders between snapshots and blends
+## the local marker toward the host (WorkoutRideView). Rules live in rules/, the HUD layout in
+## hud/, the view in view/.
 
 const GAME_ID := "workout"
 ## A snapshot carries the timeline every this many snapshots (2 s at 10 Hz), so a client
@@ -23,6 +25,9 @@ var _band_peers: Dictionary = {}
 ## peer -> the in-band value last sent with teammate_status.
 var _status_sent: Dictionary = {}
 var _snapshots: int = 0
+## Client: the riders' distances of the last snapshots by host time, for the ride view's
+## interpolation (WorkoutSnapHistory).
+var history: WorkoutSnapHistory = WorkoutSnapHistory.new()
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -32,6 +37,7 @@ func configure(p_ctx: GameContext) -> void:
 	_band_peers.clear()
 	_status_sent.clear()
 	_snapshots = 0
+	history.clear()
 
 
 ## The same %FTP plan for every rider (bots included); the PlanValidator appends the
@@ -93,6 +99,7 @@ func snapshot() -> Dictionary:
 
 func apply_snapshot(snap: Dictionary) -> void:
 	WorkoutSnapshot.apply(state, snap)
+	history.push(float(state.tick) * Wl.SIM_DT, state)
 	var r := state.rider(ctx.local_peer) if ctx != null else null
 	if r != null and ctx.hud != null:
 		ctx.hud.readout(

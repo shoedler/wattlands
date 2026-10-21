@@ -8,7 +8,11 @@ extends Node2D
 ## on the ground with a "now" mark under the local rider. No people are drawn.
 ##
 ## It reads WorkoutGame.state (the host's rules state or a client's snapshot state) and
-## never changes it. refresh() rebuilds the drawing model; _process calls it every frame.
+## never changes it. refresh() rebuilds the drawing model; _process calls advance() every
+## frame, which on a client first moves the client display (BRIEF 5.1) on by the frame's delta:
+## the other riders are drawn between the two snapshots around render_t (WorkoutGame.history),
+## the local rider from its own prediction blended softly toward the host's value. The host and
+## SOLO draw the state as it is.
 
 const RIDER_X := 200.0
 const ROAD_Y := 236.0
@@ -32,6 +36,32 @@ const PENNANT_SCALE := 1.5
 ## Off-screen riders sit this far inside the left and right edges (the flag points right).
 const EDGE_MARGIN_LEFT := 10.0
 const EDGE_MARGIN_RIGHT := 30.0
+## Client display, other riders: render_t runs on the frame clock interp_delay() behind the
+## newest snapshot's host time (a game has no NetSession handle, so the snapshot's tick is the
+## host time) and never passes the newest snapshot (no extrapolation). The delay is the mean
+## spacing of the snapshot history, at least INTERP_DELAY_S (NetSession's documented 100 ms
+## interpolation at 10 Hz, host_time() - 0.1) and at most INTERP_DELAY_MAX_S. Under the 8-rider
+## load snapshots arrive about once a second; a 0.1 s delay would hold the other riders at the
+## newest snapshot for most of each second and then hurry them on.
+const INTERP_DELAY_S := 0.1
+## render_t further than this from where it belongs (the first snapshot, a rejoin, a stall)
+## jumps there.
+const CLOCK_RESYNC_S := 1.5
+## The longest delay. It stays under CLOCK_RESYNC_S, so a render_t held at the newest snapshot
+## is never resynced (sent back) when the delay grows.
+const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
+## A render_t that fell behind (a late snapshot held it at the newest) catches up with this
+## time constant.
+const CLOCK_CATCHUP_TAU_S := 0.25
+## Client display, local rider: drawn from its own prediction (moved by its predicted speed
+## each frame) and blended toward the client state's value (the host's latest plus the
+## prediction since) with this time constant. It never moves backwards; it jumps to the state
+## only when they differ by more than LOCAL_SNAP_M (a rejoin, a long stall).
+const LOCAL_BLEND_TAU_S := 0.3
+const LOCAL_SNAP_M := 10.0
+## The predicted speed stops moving the local rider once the state has not moved for this long
+## (a pause: no prediction runs).
+const LOCAL_STALE_S := 0.15
 
 var game: WorkoutGame = null
 var sky: ParallaxStrip = null
@@ -42,7 +72,16 @@ var near_trees: ParallaxStrip = null
 var track: WorkoutTrackLayer = null
 ## The latest model (tests and screenshots read it).
 var model: Dictionary = {}
+## Client: the host time (s) the other riders are drawn at.
+var render_t: float = 0.0
+## Client: the distance (m) the local rider is drawn at.
+var local_d: float = 0.0
 var _built: bool = false
+var _clock_set: bool = false
+var _local_set: bool = false
+## Client: the local rider's state distance last frame, and for how long it has not moved.
+var _local_seen: float = 0.0
+var _local_still_s: float = 0.0
 
 
 func bind(p_game: WorkoutGame) -> void:
@@ -56,8 +95,87 @@ func _ready() -> void:
 	refresh()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	advance(delta)
+
+
+## One frame of `delta` seconds: on a client the render clock and the local rider's drawn
+## distance move on, then refresh(). The host and SOLO only refresh.
+func advance(delta: float) -> void:
+	if _is_client() and game.state != null:
+		_advance_clock(delta)
+		_advance_local(delta)
 	refresh()
+
+
+func _is_client() -> bool:
+	return game != null and game.ctx != null and game.ctx.role == Wl.CLIENT
+
+
+## Client: how far render_t runs behind the newest snapshot (s): the snapshot history's mean
+## spacing, clamped to INTERP_DELAY_S..INTERP_DELAY_MAX_S (INTERP_DELAY_S before two snapshots
+## are in). 0.1 at 10 Hz, 1.0 for snapshots a second apart.
+func interp_delay() -> float:
+	var spacing := game.history.mean_spacing() if game != null and game.history != null else 0.0
+	return clampf(spacing, INTERP_DELAY_S, INTERP_DELAY_MAX_S)
+
+
+## render_t moves with the frame clock, catches up softly when it is behind the newest
+## snapshot's time minus interp_delay(), and stops at the newest snapshot. A delay that grows
+## leaves render_t ahead of its goal: it runs on and waits at the newest snapshot, never back.
+func _advance_clock(delta: float) -> void:
+	var history := game.history
+	if history == null or history.is_empty():
+		return
+	var newest := history.newest_t()
+	var goal := newest - interp_delay()
+	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
+		render_t = goal
+		_clock_set = true
+		return
+	render_t += delta
+	var behind := goal - render_t
+	if behind > 0.0:
+		render_t += behind * (1.0 - exp(-delta / CLOCK_CATCHUP_TAU_S))
+	render_t = minf(render_t, newest)
+
+
+## The local rider moves on by its predicted speed, then blends toward the state's distance;
+## it never goes backwards and jumps only past LOCAL_SNAP_M.
+func _advance_local(delta: float) -> void:
+	var r := game.state.rider(game.ctx.local_peer)
+	if r == null:
+		return
+	var target := r.distance_m()
+	if target != _local_seen:
+		_local_seen = target
+		_local_still_s = 0.0
+	else:
+		_local_still_s += delta
+	if not _local_set or absf(target - local_d) > LOCAL_SNAP_M:
+		local_d = target
+		_local_set = true
+		return
+	var v := maxf(r.speed_mps(), 0.0) if _local_still_s <= LOCAL_STALE_S else 0.0
+	var moved := local_d + v * delta
+	moved += (target - moved) * (1.0 - exp(-delta / LOCAL_BLEND_TAU_S))
+	local_d = maxf(local_d, moved)
+
+
+## The distance `peer` is drawn at: the state's on the host and in SOLO; on a client the local
+## rider's blended prediction and every other rider between the snapshots around render_t
+## (the state's until the first advance()).
+func shown_distance(peer: int) -> float:
+	var r := game.state.rider(peer)
+	if r == null:
+		return 0.0
+	if not _is_client():
+		return r.distance_m()
+	if peer == game.ctx.local_peer:
+		return local_d if _local_set else r.distance_m()
+	if _clock_set and game.history != null:
+		return game.history.distance_at(peer, render_t, r.distance_m())
+	return r.distance_m()
 
 
 func _build() -> void:
@@ -92,31 +210,32 @@ func refresh() -> void:
 		return
 	var state := game.state
 	var cam := state.rider(game.view_peer())
-	var cam_d := cam.distance_m() if cam != null else 0.0
+	var cam_d := shown_distance(cam.peer_id) if cam != null else 0.0
 	var world_x := cam_d * VISUAL_PX_PER_M
 	for layer: ParallaxStrip in [sky, clouds, far_hills, mid_hills, near_trees]:
 		if layer.world_x != world_x:
 			layer.world_x = world_x
-	var road := _road(state, cam)
+	var road := _road(state, cam, cam_d)
 	model = {
 		"road": road,
 		"dash_offset": fposmod(world_x, 16.0),
 		"blocks": _blocks(state),
 		"now_x": RIDER_X,
-		"markers": _markers(state, cam, road),
+		"markers": _markers(state, cam_d, road),
 	}
 	track.set_model(model)
 
 
 ## Road y per column; it follows the course elevation around the local rider in a course
-## phase, and is flat otherwise.
-func _road(state: WorkoutState, cam: WorkoutRiderState) -> PackedFloat64Array:
+## phase, and is flat otherwise. `cam_d` is the local rider's drawn distance: its course
+## distance moves by the same offset from the state.
+func _road(state: WorkoutState, cam: WorkoutRiderState, cam_d: float) -> PackedFloat64Array:
 	var cols := int(ceil(float(WorkoutArt.W) / float(WorkoutTrackLayer.COLUMN_W)))
 	var road := PackedFloat64Array()
 	road.resize(cols)
 	var index := cam.phase_index if cam != null and cam.phase_index >= 0 else state.phase_index
 	var course_on := state.is_course_phase(index) and state.course != null
-	var cam_cd := cam.course_d if cam != null else 0.0
+	var cam_cd := maxf(cam.course_d + (cam_d - cam.distance_m()), 0.0) if cam != null else 0.0
 	var e0 := state.course.elevation_at(cam_cd) if course_on else 0.0
 	for i in cols:
 		var y := ROAD_Y
@@ -183,11 +302,10 @@ static func _strip_h(pct: float) -> float:
 	return clampf(pct / 150.0 * STRIP_MAX_H, 3.0, STRIP_MAX_H)
 
 
-## One marker per rider at its distance from the local rider; the local rider is drawn
-## last. Riders off screen sit at the edge with an arrow.
-func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Array) -> Array:
+## One marker per rider at its drawn distance from the local rider's (`cam_d`); the local
+## rider is drawn last. Riders off screen sit at the edge with an arrow.
+func _markers(state: WorkoutState, cam_d: float, road: PackedFloat64Array) -> Array:
 	var out: Array = []
-	var cam_d := cam.distance_m() if cam != null else 0.0
 	var local_peer := game.view_peer()
 	var peers: Array[int] = []
 	for peer: int in state.order:
@@ -206,7 +324,7 @@ func _markers(state: WorkoutState, cam: WorkoutRiderState, road: PackedFloat64Ar
 				"pattern": slot.pattern,
 				"hollow": slot.hollow
 			}
-		var x := RIDER_X + (r.distance_m() - cam_d) / MAP_M_PER_PX
+		var x := RIDER_X + (shown_distance(peer) - cam_d) / MAP_M_PER_PX
 		var edge := 0
 		if x < EDGE_MARGIN_LEFT:
 			x = EDGE_MARGIN_LEFT
