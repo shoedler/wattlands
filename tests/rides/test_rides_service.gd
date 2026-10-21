@@ -7,6 +7,10 @@ extends GutTest
 const MockRunner := preload("res://tests/rides/mock_strava_runner.gd")
 const Util := preload("res://tests/rides/rides_test_util.gd")
 const NOW := 1_800_000_000
+## A closed loopback port: every API request to it ends "offline" (no connectivity).
+const OFFLINE_API := "http://127.0.0.1:1/api/v3"
+## BRIEF 3.8: this many offline attempts in a row still leave the ride queued.
+const OFFLINE_ATTEMPTS := 20
 
 var _mock: Node = null
 var _mock_ok: bool = false
@@ -93,6 +97,28 @@ func _states_for(id: String) -> Array:
 		if s[0] == id:
 			out.append(s[1])
 	return out
+
+
+func _count_state(id: String, state: String) -> int:
+	return _states_for(id).count(state)
+
+
+## Every request from `r` now fails to connect (the trainer PC has no internet).
+func _go_offline(r: WlRides) -> void:
+	r.set_bases(OFFLINE_API, _mock.oauth_base())
+	r.client.request_timeout_s = 0.25
+
+
+func _go_online(r: WlRides) -> void:
+	r.set_bases(_mock.api_base(), _mock.oauth_base())
+	r.client.request_timeout_s = 30.0
+
+
+func _summary_of(fit_path: String) -> Dictionary:
+	var parsed: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(fit_path.get_basename() + ".json")
+	)
+	return parsed if parsed is Dictionary else {}
 
 
 func test_new_recorder_is_a_ride_recorder() -> void:
@@ -452,6 +478,96 @@ func test_an_entry_is_dropped_after_max_attempts() -> void:
 	)
 	assert_eq(s["upload"]["state"], "failed")
 	assert_eq(s["upload"]["error"], "server_error_500")
+
+
+## BRIEF 3.8 "keep failed or offline uploads in rides/upload_queue.json for the next launch":
+## twenty offline attempts in a row (far past MAX_ATTEMPTS = 8) leave the ride queued with no
+## attempt counted, and the next launch with a network uploads it.
+func test_twenty_offline_attempts_keep_the_ride_queued() -> void:
+	var r: WlRides = await _connected()
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	_go_offline(r)
+	await r.upload(path, rec.summary())
+	for i in OFFLINE_ATTEMPTS - 1:
+		await r.process_queue()
+	assert_eq(_count_state(rec.ride_id, "offline"), OFFLINE_ATTEMPTS, "every attempt was offline")
+	assert_eq(_count_state(rec.ride_id, "failed"), 0)
+	assert_eq(r.queue_size(), 1, "still queued after 20 offline attempts")
+	var e := r.queue.get_entry(rec.ride_id)
+	assert_eq(int(e["attempts"]), 0, "offline attempts don't count toward MAX_ATTEMPTS")
+	assert_eq(e["last_state"], "offline")
+	assert_false(_summary_of(path).has("upload"), "the ride isn't marked failed")
+	# Next launch, with a network: a fresh WlRides reads the queue file and uploads the ride.
+	var r2 := _rides()
+	assert_eq(r2.queue_size(), 1, "the queue file kept it for the next launch")
+	assert_eq(r2.rides()[0]["state"], "queued")
+	await r2.process_queue()
+	assert_eq(_states_for(rec.ride_id).back(), "uploaded")
+	assert_eq(r2.queue_size(), 0)
+	assert_eq((await _mock.uploads()).size(), 1)
+
+
+## The cap stays for real failures: eight server errors in a row drop the ride from the queue
+## and mark it failed on the eighth (seven leave it queued with 7 attempts).
+func test_eight_real_failures_mark_the_ride_failed() -> void:
+	var r: WlRides = await _connected()
+	await _mock.fault("upload", 500, UploadQueue.MAX_ATTEMPTS)
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	await r.upload(path, rec.summary())
+	for i in UploadQueue.MAX_ATTEMPTS - 2:
+		await r.process_queue()
+	assert_eq(_count_state(rec.ride_id, "failed"), 7)
+	assert_eq(r.queue_size(), 1, "seven failures: still queued")
+	assert_eq(int(r.queue.get_entry(rec.ride_id)["attempts"]), 7)
+	await r.process_queue()
+	assert_eq(_count_state(rec.ride_id, "failed"), 8)
+	assert_eq(r.queue_size(), 0, "the eighth real failure gives up")
+	assert_false(FileAccess.file_exists(Paths.upload_queue_path()))
+	var up: Dictionary = _summary_of(path).get("upload", {})
+	assert_eq(up.get("state", ""), "failed")
+	assert_eq(up.get("error", ""), "server_error_500")
+	await r.process_queue()
+	assert_eq(_count_state(rec.ride_id, "failed"), 8, "a dropped ride isn't retried")
+	assert_eq((await _mock.uploads()).size(), 0)
+
+
+## Mixed: 3 server errors, 10 offline attempts, 4 server errors (7 counted of 17), one more
+## offline attempt at 7 (kept), then the 8th server error drops it.
+func test_offline_attempts_between_failures_are_not_counted() -> void:
+	var r: WlRides = await _connected()
+	await _mock.fault("upload", 500, UploadQueue.MAX_ATTEMPTS)
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	await r.upload(path, rec.summary())
+	await r.process_queue()
+	await r.process_queue()
+	assert_eq(int(r.queue.get_entry(rec.ride_id)["attempts"]), 3)
+	_go_offline(r)
+	for i in 10:
+		await r.process_queue()
+	assert_eq(_count_state(rec.ride_id, "offline"), 10)
+	var e := r.queue.get_entry(rec.ride_id)
+	assert_eq(int(e["attempts"]), 3, "ten offline attempts added nothing")
+	assert_eq(e["last_state"], "offline")
+	_go_online(r)
+	for i in 4:
+		await r.process_queue()
+	assert_eq(int(r.queue.get_entry(rec.ride_id)["attempts"]), 7)
+	_go_offline(r)
+	await r.process_queue()
+	assert_eq(r.queue_size(), 1, "offline at 7 counted failures: still queued")
+	assert_eq(int(r.queue.get_entry(rec.ride_id)["attempts"]), 7)
+	assert_false(_summary_of(path).has("upload"), "not marked failed")
+	_go_online(r)
+	await r.process_queue()
+	assert_eq(r.queue_size(), 0, "the eighth real failure gives up")
+	assert_eq(_count_state(rec.ride_id, "failed"), 8)
+	assert_eq(_count_state(rec.ride_id, "offline"), 11)
+	var up: Dictionary = _summary_of(path).get("upload", {})
+	assert_eq(up.get("state", ""), "failed")
+	assert_eq(up.get("error", ""), "server_error_500")
 
 
 func test_bases_come_from_settings_without_the_flag() -> void:

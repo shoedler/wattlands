@@ -8,8 +8,14 @@ extends RefCounted
 ##         upload_id (0 = not created on Strava yet; else poll it instead of re-uploading)}
 
 const VERSION := 1
-## An entry is dropped after this many failed attempts.
+## An entry is dropped (and its ride marked "failed") after this many failed attempts. Only
+## real failures count (counts_as_attempt()): an offline attempt (no connectivity) or one
+## while not connected never does, so an offline upload stays queued for every next launch
+## (BRIEF 3.8).
 const MAX_ATTEMPTS := 8
+## Upload states that never count toward MAX_ATTEMPTS: "queued" (not connected to Strava
+## yet) and "offline" (the network or Strava can't be reached).
+const UNCOUNTED_STATES: Array[String] = ["queued", "offline"]
 
 ## The queue file ("" = Paths.upload_queue_path(), resolved on each load and save).
 var path: String = ""
@@ -96,6 +102,13 @@ func remove(ride_id: String) -> void:
 	if i >= 0:
 		items.remove_at(i)
 		save_file()
+
+
+## True when an upload attempt that ended in `state` counts toward MAX_ATTEMPTS: a real
+## failure ("failed": an error response, a processing error or timeout), not "queued" or
+## "offline".
+static func counts_as_attempt(state: String) -> bool:
+	return not UNCOUNTED_STATES.has(state)
 
 
 func ride_ids() -> Array[String]:
