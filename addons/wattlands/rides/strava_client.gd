@@ -30,6 +30,10 @@ extends Node
 signal state_changed(state: String, detail: String)
 ## Intermediate upload states: "uploading", "processing" (WlRides emits the final state).
 signal upload_progress(ride_id: String, state: String, detail: String)
+## Strava accepted the upload POST and named its upload id (W4, additive): WlRides stores it in
+## the upload queue at once, so an upload cut short (the app quits while it is processing) is
+## polled at the next launch rather than sent again.
+signal upload_created(ride_id: String, upload_id: int)
 
 const STATE_DISCONNECTED := "disconnected"
 const STATE_CONNECTING := "connecting"
@@ -434,7 +438,10 @@ func upload_fit(ride_id: String, fit_path: String, activity_name: String, descri
 	var done := _upload_outcome(j)
 	if not done.is_empty():
 		return done
-	return await poll_upload(ride_id, _upload_id(j))
+	var upload_id := _upload_id(j)
+	if upload_id > 0:
+		upload_created.emit(ride_id, upload_id)
+	return await poll_upload(ride_id, upload_id)
 
 
 ## Polls GET /uploads/{id} until activity_id or error (or poll_timeout_s passes).

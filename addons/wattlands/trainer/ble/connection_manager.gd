@@ -37,7 +37,11 @@ extends Node
 ## backoff wait it tries at once and starts the backoff over.
 ## A setup failure (FtmsClient.failed, or no client_ready within SETUP_TIMEOUT_S) drops the
 ## link and retries the same way, except under the hardware lock (BRIEF 1), where it keeps
-## the read-only link and stops.
+## the read-only link and stops. (W4, ftms-ble-1) FtmsClient.failed on a ready trainer (a
+## control-point write unanswered after its two retries: "the link is presumed dead") or after
+## a control loss is handled the same way: drop the link, back off, connect, run begin()
+## again, then trainer_ready + reconnected, so the governor restores its last safe mode
+## (BRIEF 4.4) and panic, rescue and the exit writes reach the trainer again.
 ## Control lost (Request Control 0x05 or Machine Status 0xFF, FtmsClient.control_lost):
 ## status STATUS_CONTROL_LOST with the "another app may hold control" detail, control_lost
 ## emitted, and no automatic retry (grabbing control back from a running Zwift session
@@ -48,7 +52,16 @@ extends Node
 ## device the moment it is seen (addresses compared case-insensitively). While no trainer is
 ## linked it keeps scanning in AUTO_SCAN_S windows, so a trainer switched on after the app
 ## started is still picked up with no input (BRIEF 3.5); stop_scan() or disconnect_trainer()
-## ends that search until the next start(true).
+## ends that search until the next start(true). (W4, ftms-ble-3) Every scan the manager
+## starts after an earlier one first stops it (transport.stop_scan(), then start_scan()):
+## GDBLE refuses a second start while its own timer for the first still runs (BUSY), and the
+## manager's window and GDBLE's are two clocks.
+##
+## Trainer switch (W4, SAF-8): connect_to() another address while a trainer is linked releases
+## the old FtmsTrainer from the shared FtmsClient (FtmsTrainer.release_client()) before the
+## link drops, so a late write from the old trainer's rider can never reach the next trainer.
+## Making the old trainer safe first (SIM flat, then Stop) is WlTrainerService's job
+## (disconnect_trainer(), connect_trainer(), use_mock()).
 ##
 ## Time: every timer (backoff, backend start, attempt and setup timeouts, scan length)
 ## advances in tick(dt). _process(delta) calls tick(delta) unless manual_clock is set
@@ -130,6 +143,8 @@ var _setup_left: float = 0.0
 var _auto_connect: bool = false
 var _last: Dictionary = {}
 var _scanning: bool = false
+## A start_scan() went to the transport and no stop_scan() since (its scan may still run).
+var _scan_issued: bool = false
 var _scan_left: float = 0.0
 var _scan_queued: float = -1.0
 ## address (lower case) -> info, for the current scan
@@ -182,6 +197,10 @@ func scan(seconds: float = DEFAULT_SCAN_S) -> void:
 	_scan_left = maxf(seconds, 0.0)
 	if _link == Link.IDLE:
 		_set_status(TrainerDevice.STATUS_SCANNING, tr("BLE_STATUS_SCANNING"))
+	if _scan_issued:
+		# The previous scan may still run in the backend (ftms-ble-3): stop it first.
+		_transport.stop_scan()
+	_scan_issued = true
 	_transport.start_scan(seconds)
 
 
@@ -217,6 +236,7 @@ func connect_to(address: String) -> void:
 			return
 	if switching and _link != Link.IDLE:
 		_link = Link.IDLE
+		_release_old_device()
 		_transport.disconnect_device()
 	if switching or _link == Link.IDLE:
 		_ever_ready = false
@@ -243,6 +263,14 @@ func device() -> TrainerDevice:
 
 func last_device() -> Dictionary:
 	return read_last_device()
+
+
+## The address of the trainer being connected or kept, or "" when none (W4, additive):
+## WlTrainerService tells a trainer switch from a reconnect with it.
+func linked_address() -> String:
+	if _link == Link.IDLE or _target.is_empty():
+		return ""
+	return String(_target["address"])
 
 
 ## "gdble", "bridge" or "" (none available).
@@ -527,6 +555,7 @@ func _halt_scan() -> void:
 	_scan_left = 0.0
 	if _transport != null:
 		_transport.stop_scan()
+		_scan_issued = false
 
 
 func _on_device_found(info: Dictionary) -> void:
@@ -672,7 +701,7 @@ func _on_client_ready() -> void:
 	var again := _ever_ready
 	_ever_ready = true
 	var old: TrainerDevice = null
-	if _device == null or not _same_address(_device_address, address):
+	if _device == null or not _same_address(_device_address, address) or _client_released(_device):
 		old = _device
 		var made: Variant = make_trainer.call(_client, label) if make_trainer.is_valid() \
 				else FtmsTrainer.create(_client, label)
@@ -681,6 +710,8 @@ func _on_client_ready() -> void:
 		if _device.get_parent() == null:
 			add_child(_device)
 		_device_address = address
+		# The old trainer object no longer speaks for the linked trainer (the client is shared).
+		_release_device_client(old)
 	_set_status(TrainerDevice.STATUS_READY, tr("BLE_STATUS_READY").format({"name": label}))
 	trainer_ready.emit(_device)
 	if again:
@@ -690,8 +721,18 @@ func _on_client_ready() -> void:
 
 
 func _on_client_failed(reason: String) -> void:
+	# SETUP: the 4.4 flow failed. READY or CONTROL_LOST (W4, ftms-ble-1): a control-point write
+	# stayed unanswered after its retries, so the link is presumed dead; recover the same way
+	# (drop, back off, reconnect, begin() again, then reconnected restores the safe mode).
 	if _link == Link.SETUP:
 		_setup_failed(reason)
+	elif _link == Link.READY or _link == Link.CONTROL_LOST:
+		# Not a setup failure: under the hardware lock a ready client is read-only and never
+		# writes, so this can't come from the lock; reconnect in every case.
+		push_warning("Bluetooth: the trainer stopped answering (%s); reconnecting" % reason)
+		_schedule_retry("BLE_STATUS_RETRY", reason)
+		if _transport != null:
+			_transport.disconnect_device()
 
 
 func _on_client_control_lost(_detail: String) -> void:
@@ -710,6 +751,22 @@ func _set_status(s: String, detail: String) -> void:
 	_status = s
 	_status_detail = detail
 	status_changed.emit(s, detail)
+
+
+## The trainer object of a link being replaced by another trainer's: unbind it from the shared
+## client (SAF-8) so nothing it is still asked to write reaches the next trainer.
+func _release_old_device() -> void:
+	_release_device_client(_device)
+
+
+## True for a trainer object that was released from the client by a switch (it can't write).
+static func _client_released(d: TrainerDevice) -> bool:
+	return d is FtmsTrainer and (d as FtmsTrainer).client() == null
+
+
+static func _release_device_client(d: TrainerDevice) -> void:
+	if d != null and is_instance_valid(d) and d is FtmsTrainer:
+		(d as FtmsTrainer).release_client()
 
 
 func _known_name(address: String) -> String:

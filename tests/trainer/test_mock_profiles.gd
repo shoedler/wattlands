@@ -503,9 +503,6 @@ func test_ten_surges_fire_the_speed_rule_ten_times() -> void:
 
 
 func test_surge_fires_the_real_gesture_recognizer() -> void:
-	if not _recognizer_is_implemented():
-		pending("GestureRecognizer is still the W0 stub in this worktree; runs after the W2 merge")
-		return
 	for seed in [3, 11]:
 		for dropouts: bool in [false, true]:
 			var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts})
@@ -525,16 +522,6 @@ func _feed_recognizer(s: TrainerSample) -> void:
 		_recognized_surges += 1
 
 
-## The W0 stub's not_pedaling() is always false; any implementation reports a 0 W, 0 rpm
-## sample as not pedaling (BRIEF 3.5's shared detector). This probe never depends on the surge
-## rule itself, so a real recognizer that misses surges fails the test instead of skipping it.
-func _recognizer_is_implemented() -> bool:
-	var g := GestureRecognizer.new()
-	g.configure(FTP, true)
-	g.set_erg(false)
-	for i in 3:
-		g.on_sample(TrainerSample.make(float(i + 1), 0.0, 0.0, 0.0))
-	return g.not_pedaling()
 
 
 func test_surge_sim_pct_rides_n_pct_ftp_in_sim() -> void:

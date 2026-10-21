@@ -22,6 +22,8 @@ class FakeGovernor:
 	## The fake's own gear (the real SafetyGovernor has gear(), so the field has another name).
 	var fake_gear: int = 12
 	var shutdown_count: int = 0
+	## Called by shutdown() (W4: tests check what happened before the link dropped).
+	var shutdown_hook: Callable = Callable()
 	var plan: EffortPlan = null
 
 	func setup(p_device: TrainerDevice) -> void:
@@ -86,6 +88,8 @@ class FakeGovernor:
 	func shutdown() -> void:
 		shutdown_count += 1
 		calls.append(["shutdown"])
+		if shutdown_hook.is_valid():
+			shutdown_hook.call()
 
 	func status() -> Dictionary:
 		return st.duplicate(true)

@@ -49,7 +49,8 @@ extends Node
 ##   (SafetyGovernor.adopt_connection): the warm-up (BRIEF 4.6.8 counts from the first pedal
 ##   stroke after the trainer connects, so it continues from the menus into a session and
 ##   across sessions) and what was last written to the trainer (so the next mode change is
-##   ramped from the trainer's real state). A different device object starts afresh. The
+##   ramped from the trainer's real state). (W4) The duration limits and the last ERG/SIM
+##   switch carry over the same way (SAF-2, SAF-6). A different device object starts afresh. The
 ##   device is never freed here; its creator owns it. A ride still recording is finished (stopped and saved) first, with
 ##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
 ##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
@@ -67,6 +68,14 @@ extends Node
 ##   keeps one FtmsTrainer per address, so TrainerService calls this on `reconnected`). The
 ##   governor restores the last safe mode through its ramped path
 ##   (SafetyGovernor.on_trainer_reconnected, BRIEF 4.4); everything else is kept.
+## - (W4, SAF-1) The rider's own profile is the source of the local human rider's safety
+##   values: when setup() gets both a profile and a slot for a human (not a bot), it overwrites
+##   the slot's ftp, ftp_verified, haptics_on and haptic_intensity from the profile before
+##   configuring the governor (BRIEF 3.3 "ERG targets always come from each rider's own FTP",
+##   4.6.7 "each client validates and clamps them locally"). A CLIENT's slot comes from the
+##   host's session_start, so the host can never set the client's watt basis, lift the
+##   unverified factor or turn opted-out haptics back on; a difference is logged with
+##   push_warning. With a null profile the slot is used as given (tests, in-process riders).
 ## - Lap names: a phase label or lap_marker label that is a strings key is translated (plain
 ##   text passes through); unlabelled lap phases are CORE_LAP_PHASE, the cool-down
 ##   CORE_LAP_COOLDOWN.
@@ -180,6 +189,8 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 	scaling_mode = str(_options.get("scaling_mode", p_slot.scaling_mode if p_slot != null else Wl.FAIR_FTP))
 	slot = p_slot if p_slot != null else profile.to_slot(p_peer_id, scaling_mode)
 	is_bot = slot.is_bot
+	if p_profile != null and p_slot != null and not slot.is_bot:
+		_take_safety_values_from_profile()
 	bus = _options.get("bus") as WlEventBus
 	device = p_device
 	_reset_state()
@@ -567,6 +578,21 @@ func _teardown() -> void:
 	governor = null
 	_owns_governor = false
 	_unregister()
+
+
+## SAF-1 (W4): the local human's ftp, ftp_verified, haptics_on and haptic_intensity come from
+## the rider's own profile, whatever the slot (a host's copy on a CLIENT) said.
+func _take_safety_values_from_profile() -> void:
+	var own_intensity := profile.haptic_intensity_pct / 100.0
+	var differs := absf(slot.ftp - profile.ftp_w) >= 1.0 or slot.ftp_verified != profile.ftp_verified 		or slot.haptics_on != profile.haptics_on or absf(slot.haptic_intensity - own_intensity) > 1e-6
+	if differs:
+		push_warning("LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; using the rider's own profile: FTP %s W (verified %s), haptics %s at %s" % [
+			peer_id, str(slot.ftp), str(slot.ftp_verified), str(slot.haptics_on), str(slot.haptic_intensity),
+			str(profile.ftp_w), str(profile.ftp_verified), str(profile.haptics_on), str(own_intensity)])
+	slot.ftp = profile.ftp_w
+	slot.ftp_verified = profile.ftp_verified
+	slot.haptics_on = profile.haptics_on
+	slot.haptic_intensity = own_intensity
 
 
 func _make_governor_params() -> Dictionary:

@@ -63,21 +63,77 @@ func test_no_plan_rides_sim_flat() -> void:
 	assert_eq(rig.gov.shift(1), 12, "no gear shifts without a SIM phase")
 
 
-func test_a_plan_before_its_first_phase_rides_sim_flat_and_is_no_switch() -> void:
+## W4 (SAF-6, BRIEF 4.5): the no-phase SIM flat is SIM at the trainer, so the first ERG phase
+## after it is a real SIM -> ERG switch and a directive SIM block must wait 30 s after it.
+## (W2r2 counted it as no switch; W3 found that let a game switch SIM -> ERG -> SIM within 1 s.)
+func test_a_plan_before_its_first_phase_rides_sim_flat_and_entering_erg_is_a_switch() -> void:
 	var rig := make_rig({}, follower())
 	var dev: ScriptedDevice = rig.device
 	rig.gov.set_plan(EffortPlan.of([erg(Wl.WORK, 80.0, 600.0)]))
 	rig.run(1.0)
 	assert_eq(dev.mode, Wl.SIM)
 	assert_almost_eq(dev.grade_pct, 0.0, 1e-12)
+	var t_erg := rig.t
 	rig.gov.start_phase(0)
 	rig.run(1.0)
 	var ergs := dev.writes_of("erg")
 	assert_eq(ergs.size(), 1, "SIM flat already: straight to the ERG entry")
 	assert_lte(int(ergs[0]["w"]), 160, "never above the planned target")
-	assert_almost_eq(float(rig.s()["last_switch_t"]), -1e9, 1e-3, "SIM flat with no phase counts as no switch")
+	assert_almost_eq(float(rig.s()["last_switch_t"]), t_erg, 1e-6, "SIM flat -> ERG is a switch")
 	var rec := rig.directive({"mode": "SIM", "duration_s": 15.0})
-	assert_false(rec["refused"], "a SIM block right away is not held to the 30 s spacing")
+	assert_true(rec["refused"], "a SIM block 1 s after the SIM -> ERG switch is refused")
+	assert_eq(rec["reason"], Wl.REFUSE_SWITCH_SPACING)
+	assert_push_warning("switch_spacing")
+	rig.run(28.0)
+	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "29 s after: still refused")
+	rig.run(1.0)
+	assert_false(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "30 s after the switch: accepted")
+
+
+## SAF-6: a fresh governor whose controller has written nothing knows no previous mode, so its
+## first ERG phase is no switch (the rig's sessions start that way).
+func test_a_first_erg_phase_before_any_write_is_no_switch() -> void:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 80.0, 600.0)])
+	assert_almost_eq(float(rig.s()["last_switch_t"]), -1e9, 1e-3)
+	rig.run(1.0)
+	assert_false(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"])
+
+
+## SAF-6: clear_plan() from ERG is an ERG -> SIM switch (the governor rides SIM flat from then).
+func test_clear_plan_from_erg_is_a_switch() -> void:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 80.0, 600.0)])
+	rig.run(40.0)
+	var t_clear := rig.t
+	rig.gov.clear_plan()
+	assert_almost_eq(float(rig.s()["last_switch_t"]), t_clear, 1e-6)
+
+
+## SAF-6 across sessions (the W3 repro): the menus ride SIM flat, the next governor on the same
+## trainer starts an ERG phase (a switch), and a SIM block 1 s later is refused. A switch made
+## under the old governor carries over to the next one (adopt_connection) on its own clock.
+func test_switch_spacing_holds_across_the_hand_over() -> void:
+	var rig := make_rig({}, follower())
+	rig.run(5.0)
+	var g := _next_governor(rig)
+	g.set_plan(plan_with_cooldown([erg(Wl.WARMUP, 50.0, 300.0)]))
+	g.start_phase(0)
+	rig.run(1.0)
+	assert_eq((rig.device as ScriptedDevice).mode, Wl.ERG, "precondition: the session switched to ERG")
+	assert_almost_eq(float(rig.s()["last_switch_t"]), 0.0, 1e-6, "the SIM flat -> ERG switch at the new governor's t 0")
+	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "SIM -> ERG -> SIM within 1 s is refused")
+	assert_push_warning("switch_spacing")
+	rig.run(39.0)
+	g.clear_plan()
+	assert_almost_eq(float(rig.s()["last_switch_t"]), 40.0, 1e-6, "ERG -> SIM flat at t 40")
+	var g2 := _next_governor(rig)
+	assert_almost_eq(float(rig.s()["last_switch_t"]), 0.0, 1e-6, "carried over, at the next governor's t 0")
+	g2.set_plan(plan_with_cooldown([erg(Wl.WORK, 70.0, 300.0)]))
+	g2.start_phase(0)
+	rig.run(1.0)
+	assert_true(rig.directive({"mode": "SIM", "duration_s": 15.0})["refused"], "1 s after the carried switch: refused")
+	assert_push_warning("switch_spacing")
 
 
 func test_clear_plan_ramps_from_erg_to_sim_flat() -> void:
@@ -281,3 +337,58 @@ func test_a_shut_down_predecessor_leaves_the_mode_off() -> void:
 	assert_eq(g.status()["mode"], Wl.OFF, "SIM flat then Stop went out")
 	assert_false(bool(g.status()["shut_down"]))
 	assert_almost_eq(float(g.status()["warmup_remaining_s"]), 300.0 - (rig.t - 1.0), 1e-6, "the warm-up still carries")
+
+
+# --- adopt_connection: duration limits (W4, SAF-2) ------------------------------------------------
+# BRIEF 4.6.1: a latched limit "stays there until the applied target has been <= 90% FTP for 120
+# consecutive seconds of ERG (inclusive)"; "time in SIM adds nothing". A new session on the same
+# trainer is no release, so the counters, both latches and the reset run carry over.
+
+
+func test_a_latch_carries_to_the_next_governor_on_the_same_trainer() -> void:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 125.0, 60.0)])
+	rig.run(70.0)
+	assert_true(bool(rig.s()["latched_120"]), "precondition: the 120% limit latched")
+	var left_105 := float(rig.s()["s_left_105"])
+	var g := _next_governor(rig)
+	var s := g.status()
+	assert_true(bool(s["latched_120"]), "the 120% latch carries over")
+	assert_almost_eq(float(s["s_left_120"]), 0.0, 1e-9)
+	assert_almost_eq(float(s["s_left_105"]), left_105, 1e-9, "the 105% count carries over")
+	# The next session: SIM first (adds nothing, restarts the reset count), then 125% ERG.
+	rig.start([sim(Wl.GRADE_FLAT, 300.0, Wl.WARMUP), erg(Wl.WORK, 125.0, 60.0)])
+	rig.run(300.0)
+	g.start_phase(1)
+	rig.run(30.0)
+	assert_eq(rig.applied_w(), 240, "no ERG reset run happened: the 120% cap (240 W) holds")
+	assert_has(rig.s()["clamped_by"], Wl.CLAMP_LIMIT_120)
+
+
+func test_the_reset_run_carries_and_completes_under_the_next_governor() -> void:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 125.0, 70.0), erg(Wl.RECOVERY, 80.0, 600.0)])
+	rig.run(70.0)
+	assert_true(bool(rig.s()["latched_120"]))
+	rig.gov.start_phase(1)
+	rig.run(80.0)
+	var run_s := float(rig.s()["reset_run_s"])
+	assert_gt(run_s, 60.0, "precondition: most of the 120 s reset run done")
+	var g := _next_governor(rig)
+	assert_almost_eq(float(g.status()["reset_run_s"]), run_s, 1e-9, "the reset run carries over")
+	assert_true(bool(g.status()["latched_120"]))
+	rig.start([erg(Wl.RECOVERY, 80.0, 600.0)])
+	var released := rig.run_until(func() -> bool: return not bool(g.status()["latched_120"]), 60.0)
+	assert_gt(released, 0.0, "the run completes under the new governor")
+	assert_lte(float(g.status()["reset_run_s"]) - 120.0, 1.0)
+
+
+func test_a_new_trainer_connection_starts_the_limits_afresh() -> void:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 125.0, 60.0)])
+	rig.run(70.0)
+	assert_true(bool(rig.s()["latched_120"]))
+	var g := _next_governor(rig, {}, follower())
+	assert_false(bool(g.status()["latched_120"]), "another device object is a new connection")
+	assert_almost_eq(float(g.status()["s_left_120"]), 60.0, 1e-9)
+	assert_almost_eq(float(g.status()["s_left_105"]), 300.0, 1e-9)

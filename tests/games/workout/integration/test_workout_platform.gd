@@ -1,6 +1,6 @@
 extends GutTest
 ## Workout against the real platform pieces (W2: needs sdk-runtime's PlanValidator and
-## GameRegistry, sim's WorkoutImport and net-client's Protocol). In W1 these are stubs, so
+## GameRegistry, sim's ZwoImport and net-client's Protocol). In W1 these are stubs, so
 ## this folder is left out of game-workout's W1 test command; the full suite runs it.
 
 const U := preload("res://tests/games/workout/workout_test_util.gd")
@@ -35,7 +35,7 @@ func test_every_session_passes_the_plan_validator_without_warnings() -> void:
 
 func test_the_sample_zwo_imports_with_clamps() -> void:
 	var s := WorkoutSession.load_id("zwo_sample")
-	assert_not_null(s, "the real WorkoutImport parses content/workout/zwo/sample.zwo")
+	assert_not_null(s, "the real ZwoImport parses content/workout/zwo/sample.zwo")
 	if s == null:
 		return
 	assert_eq(s.source, "zwo")

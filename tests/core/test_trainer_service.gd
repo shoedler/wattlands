@@ -297,9 +297,64 @@ func test_process_runs_menu_time_at_sim_speed_until_a_session_takes_over() -> vo
 	assert_almost_eq(r.platform_time(), 0.0, 1e-9, "set up afresh as the menu rider")
 	svc._process(Wl.SIM_DT)
 	assert_almost_eq(r.platform_time(), 4 * Wl.SIM_DT, 1e-9, "no backlog from the session")
+	assert_eq(svc.effective_sim_speed(), 4.0, "a mock may run fast")
 
 
-# --- profile, panic, shutdown -------------------------------------------------------------------
+## W4 (SAF-3): with a real trainer --sim-speed would scale every governor time rule in wall
+## time (4x slew and writes, a quarter of every rescue/coasting window); it is ignored.
+func test_sim_speed_is_ignored_with_a_real_trainer() -> void:
+	for spd: String in ["4", "0.25"]:
+		_args(["--sim-speed=" + spd])
+		var svc := _make()
+		svc.start()
+		var d := Fakes.FakeDevice.new()
+		autofree(d)
+		_manager.make_ready(d)
+		assert_push_warning("--sim-speed=%s ignored with a real trainer" % str(float(spd)))
+		assert_eq(svc.effective_sim_speed(), 1.0, spd)
+		var r := svc.local_rider()
+		svc._process(Wl.SIM_DT)
+		assert_almost_eq(r.platform_time(), Wl.SIM_DT, 1e-9, "one step per 0.05 s of wall time (--sim-speed=%s)" % spd)
+		assert_eq(svc.effective_sim_speed(), 1.0)
+		var n := 0
+		for e: Variant in get_errors():
+			if (e as Object).call("contains_text", "--sim-speed=%s ignored" % str(float(spd))):
+				n += 1
+		assert_eq(n, 1, "warned once per service")
+
+
+func test_effective_sim_speed_defaults_to_one() -> void:
+	var svc := _make()
+	assert_eq(svc.effective_sim_speed(), 1.0, "no flag")
+	_args(["--mock-trainer=erg", "--sim-speed=3"])
+	assert_eq(svc.effective_sim_speed(), 3.0, "before any device, --mock-trainer counts as a mock")
+	_args(["--sim-speed=-2"])
+	assert_eq(svc.effective_sim_speed(), 1.0, "a nonsense value")
+
+
+# --- W4 (SAF-8): disconnect, switch and use_mock make the trainer safe first ------------------------
+# The fake manager has no FtmsClient, so nothing waits for the control point; the full-stack
+# order (SIM flat, Stop, then the link drops) is in tests/core/integration/test_safe_unlink.gd.
+
+
+func test_disconnect_shuts_the_rider_down_before_the_link_drops() -> void:
+	var svc := _make()
+	svc.start()
+	var d := Fakes.FakeDevice.new()
+	autofree(d)
+	_manager.make_ready(d)
+	var g := _gov(svc)
+	var order: Array[String] = []
+	g.shutdown_hook = func() -> void: order.append("shutdown %d" % _manager.disconnects)
+	svc.disconnect_trainer()
+	assert_eq(g.shutdown_count, 1, "SIM flat, then Stop")
+	assert_eq(order, ["shutdown 0"], "before the link dropped")
+	assert_eq(_manager.disconnects, 1)
+	assert_null(svc.device())
+	assert_eq(svc.connection(), _manager, "the manager stays for the next connect")
+	_manager.make_ready(d)
+	assert_eq(svc.device(), d, "the trainer back: a new menu rider")
+	assert_false(svc.local_rider().is_shut_down())
 
 
 func test_profile_change_rebuilds_the_mock_and_the_rider() -> void:

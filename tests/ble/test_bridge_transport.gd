@@ -132,6 +132,20 @@ func test_only_loopback_urls() -> void:
 	assert_eq(_server.received.size(), 0, "nothing was opened")
 
 
+## W4 (RS-1): a URL whose text before "?" or "\" is 127.0.0.1 but whose real host (after the
+## "@", as Godot's URL parser reads it) is elsewhere is refused too.
+func test_ambiguous_loopback_urls_are_refused() -> void:
+	for u: String in ["ws://127.0.0.1?@192.168.1.20:8765", "ws://127.0.0.1\\@192.168.1.20:8765"]:
+		_events.clear()
+		_t.url = u
+		_t.initialize()
+		assert_eq(_named("adapter_ready").size(), 1, u)
+		assert_false(_named("adapter_ready")[0][1], u)
+		assert_push_warning("127.0.0.1", u)
+	_pump(10)
+	assert_eq(_server.received.size(), 0, "nothing was opened")
+
+
 func test_bad_messages_are_ignored_with_a_warning() -> void:
 	_ready_bridge()
 	_t.handle_message("not json")

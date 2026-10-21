@@ -23,9 +23,12 @@ extends RefCounted
 ##   (a duplicate notification never counts twice). Both compare against the 10 s average
 ##   frozen when the streak's first sample arrived, so the surge never raises its own bar.
 ##   That baseline is the plain mean of the samples in the 10 s before the streak, counting
-##   only samples after the latest not_pedaling one, and it needs at least
-##   SURGE_MIN_HISTORY_S of such history. A surge also needs pedaling to be established
-##   (pedal_start fired since the last stop), so starting to pedal is never a surge.
+##   only samples from the moment pedal_start fired and since the pedal_start condition last
+##   held without a break (W4, ZIH-2: never the spin-up before it, nor a soft-pedal dip), and
+##   it needs at least SURGE_MIN_HISTORY_S of such history. A surge therefore needs pedaling
+##   to be established (pedal_start fired since the last stop) and 5 s of steady riding after
+##   that, so starting to pedal, or coming back from a dip, is never a surge: the low samples
+##   of a spin-up from rest never pull the baseline under a rider who then just settles.
 ##   One surge per streak: a sample that doesn't qualify re-arms it.
 ## - Any not_pedaling sample ends the current start: it re-arms pedal_start and clears the
 ##   surge history. A stop that reaches 3 s (or 5 s) while in ERG (or, for stop_5s, in
@@ -79,6 +82,9 @@ var _pedal_since: float = -1.0
 var _pedal_armed: bool = true
 ## True between pedal_start and the next not_pedaling sample.
 var _pedaling: bool = false
+## Platform time pedal_start fired for the current start (-1 before): the surge baseline counts
+## only samples from then on (ZIH-2).
+var _pedal_start_t: float = -1.0
 ## Surge streak: qualifying samples, the first one's t, the frozen baseline, fired.
 var _surge_count: int = 0
 var _surge_first_t: float = -1.0
@@ -128,6 +134,7 @@ func on_sample(sample: TrainerSample) -> Array[StringName]:
 			not_pedaling_changed.emit(true)
 		_pedal_armed = true
 		_pedaling = false
+		_pedal_start_t = -1.0
 		_history.clear()
 		_clear_surge_streak()
 	elif _last_np:
@@ -225,6 +232,7 @@ func reset() -> void:
 	_pedal_since = -1.0
 	_pedal_armed = true
 	_pedaling = false
+	_pedal_start_t = -1.0
 	_clear_surge_streak()
 
 
@@ -232,6 +240,7 @@ func _fire_timed(t: float, fired: Array[StringName]) -> void:
 	if _last_pedal_cond and _pedal_armed and t - _pedal_since >= PEDAL_START_S - EPS:
 		_pedal_armed = false
 		_pedaling = true
+		_pedal_start_t = t
 		fired.append(Wl.G_PEDAL_START)
 	if _last_np:
 		var stopped := t - _np_since
@@ -274,16 +283,22 @@ func _qualifies(value: float, baseline: float) -> bool:
 	return value >= bar - EPS
 
 
-## Mean of the history in [t - 10 s, t) for the current mode's quantity, or -1 when that
-## pedaling history is shorter than SURGE_MIN_HISTORY_S.
+## Mean of the history in [t - 10 s, t) for the current mode's quantity, counting only samples
+## from pedal_start and from the start of the current unbroken pedal_start-condition streak
+## on, or -1 when that history is shorter than SURGE_MIN_HISTORY_S (or pedaling isn't
+## established).
 func _baseline(t: float) -> float:
+	if _pedal_start_t < 0.0 or _pedal_since < 0.0:
+		return -1.0
+	# History counts from pedal_start, or from the end of a later soft-pedal dip (ZIH-2).
+	var origin := maxf(_pedal_start_t, _pedal_since)
 	var key := "speed_kmh" if in_erg else "power_w"
 	var total := 0.0
 	var n := 0
 	var oldest := INF
 	for h in _history:
 		var ht: float = h["t"]
-		if ht >= t - EPS or ht < t - SURGE_WINDOW_S - EPS:
+		if ht >= t - EPS or ht < t - SURGE_WINDOW_S - EPS or ht < origin - EPS:
 			continue
 		var v: float = h[key]
 		if v < 0.0:

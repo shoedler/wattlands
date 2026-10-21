@@ -82,7 +82,7 @@ func is_available() -> bool:
 
 
 func initialize() -> void:
-	if not Locks.is_loopback_host(Locks.url_host(url)):
+	if not Locks.is_loopback_url(url):
 		var refused := "the trainer bridge must run on 127.0.0.1 (got %s)" % Locks.url_host(url)
 		push_warning("trainer bridge: %s" % refused)
 		adapter_ready.emit(false, refused)

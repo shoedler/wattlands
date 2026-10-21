@@ -51,9 +51,23 @@ extends Node
 ##   EventBus.trainer_status_changed (and trainer_control_lost for "control_lost").
 ## - shutdown_all() shuts down every live LocalRider in the process (App.quit and the exit
 ##   paths, BRIEF 4.6.9); leaving the tree shuts down this service's own rider.
+## - (W4, SAF-3) --sim-speed runs the menu clock faster or slower only with a MockTrainer:
+##   with a real trainer every governor time rule (slew, write rate, rescue, coasting,
+##   warm-up) must run on wall time, so effective_sim_speed() is 1 then (push_warning once).
+##   The app's session launcher uses the same helper for the GameHost's clock.
+## - (W4, SAF-8; BRIEF 4.6.9 "on exit, crash paths and disconnect: try SIM flat, then Stop")
+##   disconnect_trainer(), connect_trainer() (a switch to another trainer) and use_mock() make
+##   the trainer safe before its link drops: the rider is shut down (its governor sends SIM
+##   flat, then Stop, through the controller) and released, and the link action waits until
+##   the FTMS control point has sent both, or SAFE_UNLINK_TIMEOUT_S at most. Without a pending
+##   control-point write (a mock, a fake manager, the hardware lock) it happens at once.
 
 signal status_changed(status: String, detail: String)
 signal device_changed(device: TrainerDevice)
+
+## The longest a link action waits for the old trainer's SIM flat and Stop (W4, SAF-8): one
+## 2 s control-point timeout plus a little.
+const SAFE_UNLINK_TIMEOUT_S := 3.0
 
 ## Test and tool injections; null or invalid means the autoload or the real class.
 var settings: WlSettings = null
@@ -74,13 +88,16 @@ var _mock_spec: String = ""
 var _mock_key: Array = []
 var _external_tick: bool = false
 var _held: bool = false
-var _pending_change: bool = false
 ## The rider must be set up afresh as the menu rider (after a session or a hold).
 var _menu_reset_due: bool = false
 var _clock: SimClock = null
 var _started: bool = false
 var _settings_conn: WlSettings = null
 var _bus_conn: WlEventBus = null
+## Link actions waiting for a trainer's safe commands to go out (SAF-8):
+## [{manager: FtmsConnectionManager, left_s: float, action: Callable}].
+var _unlinks: Array[Dictionary] = []
+var _sim_speed_warned: bool = false
 
 
 func _init() -> void:
@@ -97,6 +114,7 @@ func _exit_tree() -> void:
 
 
 func _process(delta: float) -> void:
+	_advance_unlinks(delta)
 	if _external_tick or _device == null or _clock == null:
 		return
 	var n := _clock.advance(delta)
@@ -109,8 +127,8 @@ func start() -> void:
 	if _started:
 		return
 	_started = true
-	var spd := CmdLine.get_float("sim-speed", 1.0)
-	_clock = SimClock.create(spd if spd > 0.0 else 1.0)
+	# The speed follows the device (effective_sim_speed(), SAF-3); set in _set_device().
+	_clock = SimClock.create(1.0)
 	_connect_services()
 	if CmdLine.has("mock-trainer"):
 		use_mock(CmdLine.get_str("mock-trainer", "erg"))
@@ -160,8 +178,11 @@ func use_mock(spec: String) -> void:
 		_started = true
 		_clock = SimClock.create(1.0)
 		_connect_services()
+	# SAF-8: the real trainer goes SIM flat, then Stop, before its link drops.
+	var old := _detach_manager()
 	_release_device()
-	_stop_manager()
+	if old != null:
+		_unlink_after_safe(old, _retire_manager.bind(old))
 	var p := _profile()
 	var m := MockTrainer.from_spec(s, p.ftp_w, {
 		"seed": CmdLine.get_int("seed", 0),
@@ -178,6 +199,66 @@ func use_mock(spec: String) -> void:
 	_mock_key = _mock_params(p)
 	_set_device(m, true)
 	_set_status(m.status(), tr("CORE_TRAINER_MOCK").replace("{spec}", m.spec))
+
+
+## Settings "Disconnect" (W4, SAF-8; BRIEF 4.6.9): the rider is shut down (its governor sends
+## SIM flat, then Stop) and released, then the link drops once the control point has sent both
+## (or after SAFE_UNLINK_TIMEOUT_S). device() is null until a trainer is ready again, which
+## sets a new rider up. Refused during a session (push_warning), like use_mock().
+func disconnect_trainer() -> void:
+	if _external_tick:
+		push_warning("TrainerService: can't disconnect the trainer during a session")
+		return
+	var m := _manager
+	if m == null or not is_instance_valid(m):
+		return
+	_release_device()
+	_unlink_after_safe(m, _manager_disconnect.bind(m))
+
+
+## Settings "connect to <address>" (W4, SAF-8): switching from a linked trainer to another one
+## first makes the old one safe like disconnect_trainer(), then connects; the same trainer, or
+## none linked, connects at once (FtmsConnectionManager.connect_to). A switch is refused during
+## a session (push_warning).
+func connect_trainer(address: String) -> void:
+	var m := _manager
+	if m == null or not is_instance_valid(m):
+		push_warning("TrainerService: no Bluetooth connection manager (a mock trainer is in use)")
+		return
+	var current := m.linked_address()
+	var switching := current != "" and not GdbleTransport.same_address(current, address.strip_edges())
+	if not switching or _device == null:
+		m.connect_to(address)
+		return
+	if _external_tick:
+		push_warning("TrainerService: can't switch trainers during a session")
+		return
+	_release_device()
+	_unlink_after_safe(m, _manager_connect.bind(m, address))
+
+
+## True while a disconnect, switch or mock change waits for the old trainer's SIM flat and
+## Stop to go out (SAF-8).
+func is_unlinking() -> bool:
+	return not _unlinks.is_empty()
+
+
+## The --sim-speed the trainer stack may run at (W4, SAF-3): the flag (default 1) with a
+## MockTrainer, or before any device when --mock-trainer is given; 1 with a real trainer
+## (push_warning once), since the governor's time rules (slew 30 W/s, 2 writes per second,
+## rescue, coasting, warm-up) must hold in wall time on real hardware. The app's session
+## launcher passes it to the GameHost.
+func effective_sim_speed() -> float:
+	var spd := CmdLine.get_float("sim-speed", 1.0)
+	if not is_finite(spd) or spd <= 0.0 or is_equal_approx(spd, 1.0):
+		return 1.0
+	var mock := _device is MockTrainer or (_device == null and CmdLine.has("mock-trainer"))
+	if mock:
+		return spd
+	if not _sim_speed_warned:
+		_sim_speed_warned = true
+		push_warning("TrainerService: --sim-speed=%s ignored with a real trainer; the trainer runs in real time" % str(spd))
+	return 1.0
 
 
 ## Keep the rider as it is while something drives it outside a session (the FTP test):
@@ -249,8 +330,10 @@ func shutdown_all() -> int:
 
 
 func _start_ftms() -> void:
+	var old := _detach_manager()
 	_release_device()
-	_stop_manager()
+	if old != null:
+		_unlink_after_safe(old, _retire_manager.bind(old))
 	var m: FtmsConnectionManager = null
 	if connection_factory.is_valid():
 		m = connection_factory.call() as FtmsConnectionManager
@@ -266,21 +349,80 @@ func _start_ftms() -> void:
 	m.start(true)
 
 
-func _stop_manager() -> void:
-	if _manager == null:
-		return
-	if is_instance_valid(_manager):
-		if _manager.status_changed.is_connected(_on_manager_status):
-			_manager.status_changed.disconnect(_on_manager_status)
-		if _manager.trainer_ready.is_connected(_on_trainer_ready):
-			_manager.trainer_ready.disconnect(_on_trainer_ready)
-		if _manager.reconnected.is_connected(_on_trainer_reconnected):
-			_manager.reconnected.disconnect(_on_trainer_reconnected)
-		_manager.disconnect_trainer()
-		if _manager.get_parent() == self:
-			remove_child(_manager)
-		_manager.queue_free()
+## Stop listening to the manager and forget it; returns it (null when none) so its link can be
+## dropped once the trainer is safe (_retire_manager).
+func _detach_manager() -> FtmsConnectionManager:
+	var m := _manager
 	_manager = null
+	if m == null or not is_instance_valid(m):
+		return null
+	if m.status_changed.is_connected(_on_manager_status):
+		m.status_changed.disconnect(_on_manager_status)
+	if m.trainer_ready.is_connected(_on_trainer_ready):
+		m.trainer_ready.disconnect(_on_trainer_ready)
+	if m.reconnected.is_connected(_on_trainer_reconnected):
+		m.reconnected.disconnect(_on_trainer_reconnected)
+	return m
+
+
+## Drop a detached manager's link and free it (after its trainer was made safe).
+func _retire_manager(m: FtmsConnectionManager) -> void:
+	if m == null or not is_instance_valid(m):
+		return
+	m.disconnect_trainer()
+	if m.get_parent() == self:
+		remove_child(m)
+	m.queue_free()
+
+
+func _manager_disconnect(m: FtmsConnectionManager) -> void:
+	if m != null and is_instance_valid(m):
+		m.disconnect_trainer()
+
+
+func _manager_connect(m: FtmsConnectionManager, address: String) -> void:
+	if m != null and is_instance_valid(m):
+		m.connect_to(address)
+
+
+## Runs `action` once the manager's control point has sent what the trainer was last asked
+## (the shut-down rider's SIM flat and Stop), or after SAFE_UNLINK_TIMEOUT_S; at once when
+## nothing is pending.
+func _unlink_after_safe(m: FtmsConnectionManager, action: Callable) -> void:
+	if _control_point_idle(m):
+		action.call()
+		return
+	_unlinks.append({"manager": m, "left_s": SAFE_UNLINK_TIMEOUT_S, "action": action})
+
+
+func _advance_unlinks(dt: float) -> void:
+	if _unlinks.is_empty():
+		return
+	var due: Array[Callable] = []
+	var keep: Array[Dictionary] = []
+	for e in _unlinks:
+		e["left_s"] = float(e["left_s"]) - maxf(dt, 0.0)
+		var timed_out := float(e["left_s"]) <= 1e-6
+		if timed_out or _control_point_idle(e["manager"] as FtmsConnectionManager):
+			if timed_out:
+				push_warning("TrainerService: the trainer's safe commands did not all go out within %.1f s; dropping the link anyway" % SAFE_UNLINK_TIMEOUT_S)
+			due.append(e["action"] as Callable)
+		else:
+			keep.append(e)
+	_unlinks = keep
+	for a in due:
+		a.call()
+
+
+## Nothing more can go out or nothing is waiting: no client, a client not in control (writes
+## are dropped then), or an empty control-point queue with nothing in flight.
+static func _control_point_idle(m: FtmsConnectionManager) -> bool:
+	if m == null or not is_instance_valid(m):
+		return true
+	var c := m.client()
+	if c == null or not is_instance_valid(c) or not c.is_ready():
+		return true
+	return c.queued_count() == 0 and c.in_flight_opcode() < 0
 
 
 func _set_device(d: TrainerDevice, owned: bool) -> void:
@@ -291,8 +433,15 @@ func _set_device(d: TrainerDevice, owned: bool) -> void:
 	d.process_mode = Node.PROCESS_MODE_ALWAYS
 	if not d.status_changed.is_connected(_on_device_status):
 		d.status_changed.connect(_on_device_status)
+	_apply_sim_speed()
 	device_changed.emit(d)
 	_build_rider()
+
+
+## The menu clock runs at effective_sim_speed() for the current device (SAF-3).
+func _apply_sim_speed() -> void:
+	if _clock != null:
+		_clock.sim_speed = effective_sim_speed()
 
 
 func _release_device() -> void:
@@ -370,8 +519,8 @@ func _on_settings_changed(key: String) -> void:
 	if key != "" and key != "profile" and key != "scaling_mode":
 		return
 	if _held or _external_tick or _menu_reset_due:
-		# Applied by the release, the hand-back or the pending menu reset.
-		_pending_change = true
+		# The release, the hand-back or the pending menu reset sets the rider up afresh from
+		# the current profile anyway.
 		return
 	if _device == null:
 		return
@@ -399,12 +548,10 @@ func _apply_menu_reset() -> void:
 		return
 	if _device == null or _rider == null or not is_instance_valid(_rider) or _rider.is_shut_down():
 		_menu_reset_due = false
-		_pending_change = false
 		return
 	if _rider.recorder != null and _rider.recorder.is_recording():
 		return
 	_menu_reset_due = false
-	_pending_change = false
 	_rebuild_menu_rider()
 
 
@@ -437,6 +584,7 @@ func _on_trainer_ready(d: TrainerDevice) -> void:
 			d.process_mode = Node.PROCESS_MODE_ALWAYS
 			if not d.status_changed.is_connected(_on_device_status):
 				d.status_changed.connect(_on_device_status)
+			_apply_sim_speed()
 			_rider.rebind_device(d)
 			device_changed.emit(d)
 		else:

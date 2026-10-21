@@ -32,7 +32,7 @@ const DEFAULT_BAND_PCT := [76.0, 105.0]
 const COOLDOWN_S := 180.0
 
 ## Optional zwo parser for tests: Callable(path: String) -> Dictionary shaped like
-## WorkoutImport.parse_zwo_file(). Unset: WorkoutImport is used.
+## ZwoImport.parse_zwo_file(). Unset: ZwoImport is used.
 static var zwo_parser: Callable = Callable()
 
 var id: String = ""
@@ -235,7 +235,7 @@ static func _phase_from(pd: Dictionary, p_course: WorkoutCourse) -> PlanPhase:
 	return p
 
 
-## Imports a .zwo file through WorkoutImport (BRIEF 3.7): phases come back clamped to 4.6
+## Imports a .zwo file through ZwoImport (BRIEF 3.7): phases come back clamped to 4.6
 ## and the warm-up limits with a warm-up prefix; their clamps and warnings are kept for
 ## session_preview(). Workout then sets lap = true and a label on every phase and turns
 ## an imported cool-down block into a RECOVERY phase (the platform appends its own).
@@ -301,12 +301,12 @@ static func block_label(strings: GameStrings, n: int) -> String:
 	return "Block %d" % n
 
 
-## Runs the .zwo parser (WorkoutImport, or zwo_parser in tests).
+## Runs the .zwo parser (ZwoImport, or zwo_parser in tests).
 static func parse_zwo_path(path: String) -> Dictionary:
 	if zwo_parser.is_valid():
 		var r: Variant = zwo_parser.call(path)
 		return r if r is Dictionary else {"ok": false, "error": "parser returned no result"}
-	return WorkoutImport.parse_zwo_file(path)
+	return ZwoImport.parse_zwo_file(path)
 
 
 ## The phase as a session-file entry (for validating imported phases).

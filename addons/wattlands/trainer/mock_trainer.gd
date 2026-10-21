@@ -207,8 +207,6 @@ var _components: Array = []
 var _scripted_power: Dictionary = {}
 var _erg_compliance: float = 1.0
 var _ftp_w: float = 200.0
-## from_spec's options as given.
-var _options: Dictionary = {}
 var _preferred_cadence_rpm: float = DEFAULT_CADENCE_RPM
 var _max_power_w: int = DEFAULT_MAX_POWER_W
 var _seed: int = 0
@@ -587,7 +585,6 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 	spec = p_spec
 	_components = comps
 	_ftp_w = maxf(p_ftp_w, 1.0)
-	_options = options.duplicate(true)
 	_preferred_cadence_rpm = float(options.get("preferred_cadence_rpm", DEFAULT_CADENCE_RPM))
 	_max_power_w = int(options.get("max_power_w", DEFAULT_MAX_POWER_W))
 	_seed = int(options.get("seed", 0))

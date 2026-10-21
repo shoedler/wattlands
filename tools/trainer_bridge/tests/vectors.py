@@ -60,6 +60,16 @@ def _is_bike(path: str, entry: dict) -> bool:
     return "bike" in text or "2ad2" in text
 
 
+def load_shared():
+    """The shared tests/vectors/ftms.json as a dict, or (None, reason) when it is missing."""
+    if not SHARED.exists():
+        return None, "tests/vectors/ftms.json is not in this checkout yet (trainer-core writes it)"
+    try:
+        return json.loads(SHARED.read_text(encoding="utf-8")), ""
+    except ValueError as exc:
+        return None, "tests/vectors/ftms.json is not JSON: %s" % exc
+
+
 def shared_bike_cases():
     """([(name, payload, {our_key: expected_value})], "") for every comparable Indoor Bike Data
     case in the shared file, or (None, reason) when it is missing or has none."""

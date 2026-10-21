@@ -5,7 +5,7 @@ import unittest
 
 from trainer_bridge import ftms
 
-from .vectors import load_local, shared_bike_cases
+from .vectors import load_local, load_shared, shared_bike_cases
 
 STATE_KEYS = {"flags", "more_data", "truncated"}
 EVERY_FIELD = "fe1fc4096009b400aa00393000fbfffa00f000640058020a8c375802b004"
@@ -61,6 +61,93 @@ class VectorTest(unittest.TestCase):
             for key, value in expected.items():
                 self.assertIn(key, got, name)
                 self.assertTrue(math.isclose(float(got[key]), float(value), abs_tol=0.01), "%s: %s" % (name, key))
+
+
+# BRIEF 4.3: "Keep byte-exact golden vectors in tests/vectors/ftms.json and reuse them in the
+# Python tests." W4 (ftms-ble-5): every shared encode case and every parse case of a kind this
+# codec implements runs here, not only the Indoor Bike Data parse cases, so the two codecs can't
+# drift apart (W3 found 7 mismatches: unclamped target power, ties rounded to even, raising on
+# out-of-range SIM fields).
+SHARED_ENCODERS = {
+    "request_control": lambda a: ftms.encode_request_control(),
+    "reset": lambda a: ftms.encode_reset(),
+    "start_resume": lambda a: ftms.encode_start(),
+    "stop_pause": lambda a: ftms.encode_stop(a["param"] == 2),
+    "target_power": lambda a: ftms.encode_target_power(a["watts"]),
+    "target_resistance": lambda a: ftms.encode_target_resistance(a["level"], a["encoding"]),
+    "indoor_bike_simulation": lambda a: ftms.encode_simulation(a["wind_mps"], a["grade_pct"], a["crr"], a["cw"]),
+}
+
+SHARED_PARSERS = {
+    "feature": ftms.parse_feature,
+    "power_range": ftms.parse_power_range,
+    "resistance_range": ftms.parse_resistance_range,
+    "control_response": ftms.parse_control_response,
+    "machine_status": ftms.parse_machine_status,
+    "indoor_bike_data": ftms.parse_indoor_bike_data,
+}
+
+
+# Indoor Bike Data keys the GDScript codec names differently (the bridge's own names stay).
+BIKE_KEYS = {"total_energy_kcal": "energy_total_kcal", "energy_per_minute_kcal": "energy_per_min_kcal"}
+
+
+def _invalid(kind: str, got: dict) -> bool:
+    if got.get("truncated"):
+        return True
+    return kind == "control_response" and got.get("result_name") == "malformed"
+
+
+class SharedVectorTest(unittest.TestCase):
+    def setUp(self) -> None:
+        doc, why = load_shared()
+        if doc is None:
+            self.skipTest(why)
+        self.doc = doc
+
+    def test_every_shared_encode_case(self) -> None:
+        seen = set()
+        for case in self.doc["encode"]:
+            encode = SHARED_ENCODERS.get(case["op"])
+            if encode is None:
+                continue
+            seen.add(case["op"])
+            with self.subTest(case=case["name"]):
+                self.assertEqual(encode(case["args"]).hex(), case["hex"], case["name"])
+        self.assertEqual(seen, set(SHARED_ENCODERS), "every encoder this codec has is covered")
+
+    def test_every_shared_parse_case(self) -> None:
+        seen = set()
+        for case in self.doc["parse"]:
+            parse = SHARED_PARSERS.get(case["kind"])
+            if parse is None:
+                continue
+            seen.add(case["kind"])
+            with self.subTest(case=case["name"]):
+                got = parse(bytes.fromhex(case["hex"]))
+                if not case["valid"]:
+                    self.assertTrue(_invalid(case["kind"], got), "%s: accepted %s" % (case["name"], got))
+                    continue
+                self.assertFalse(_invalid(case["kind"], got), "%s: rejected %s" % (case["name"], got))
+                for shared_key, value in case["expect"].items():
+                    key = BIKE_KEYS.get(shared_key, shared_key) if case["kind"] == "indoor_bike_data" else shared_key
+                    self.assertIn(key, got, "%s: missing %s in %s" % (case["name"], key, got))
+                    if isinstance(value, bool) or isinstance(value, str):
+                        self.assertEqual(got[key], value, "%s: %s" % (case["name"], key))
+                    else:
+                        self.assertTrue(math.isclose(float(got[key]), float(value), abs_tol=1e-6),
+                                        "%s: %s %r != %r" % (case["name"], key, got[key], value))
+        self.assertEqual(seen, set(SHARED_PARSERS), "every parser this codec has is covered")
+
+    def test_rounding_and_clamping_match_the_gdscript_codec(self) -> None:
+        self.assertEqual(ftms.encode_target_power(-5).hex(), "050000")
+        self.assertEqual(ftms.encode_target_power(40000).hex(), "05ff7f")
+        self.assertEqual(ftms.encode_target_resistance(1.25).hex(), "040d", "a tie rounds away from zero")
+        self.assertEqual(ftms.encode_simulation(0.0, -0.125).hex(), "110000f3ff2833")
+        self.assertEqual(ftms.encode_simulation(40.0, 400.0, 0.03, 3.0).hex(), "11ff7fff7fffff")
+        self.assertEqual(ftms.encode_simulation(float("nan"), 0.0).hex(), "11000000002833")
+        with self.assertRaises(ValueError):
+            ftms.encode_target_resistance(1.0, "uint4")
 
 
 class ParserEdgeTest(unittest.TestCase):

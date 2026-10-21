@@ -37,6 +37,11 @@ extends Node
 ##   QUIT_GRACE_S of real time when a real trainer is connected, so the safe commands go
 ##   out. A window close request quits the same way; NOTIFICATION_CRASH and leaving the
 ##   tree without quit() shut the riders down at once.
+## - (W4, NET-6) quit() while this peer hosts a room (NetSession role HOST, not offline, not
+##   yet left) calls NetSession.leave() first, so the relay ends the room with host_left at
+##   once (BRIEF 5.3, 5.5) instead of holding it 120 s as a dropped host; the tree then quits
+##   after QUIT_GRACE_S of real time, so the relay transport can send the leave. A client
+##   never leaves here: its saved reconnect token lets a restarted client rejoin.
 ## - --run-seconds=<n> (not scripted): an own SimClock (--sim-speed aware) quits with
 ##   run_seconds_exit_code (default 0) once n platform seconds have passed since boot;
 ##   exit_reason "run_seconds". The fallback --report is written for non-scripted runs only.
@@ -64,6 +69,8 @@ var settings: WlSettings = null
 var trainer_service: WlTrainerService = null
 var rides: WlRides = null
 var bus: WlEventBus = null
+## The NetSession to leave on quit while hosting (W4); null means the autoload.
+var net_session: WlNetSession = null
 ## Exit code when --run-seconds runs out (the app shell may set it for scripted peers).
 var run_seconds_exit_code: int = 0
 ## Why the app quit: set it before quit(); "run_seconds" and "window_closed" are set here.
@@ -211,6 +218,7 @@ func quit(p_exit_code: int = 0) -> void:
 	exit_code = p_exit_code
 	goto("quitting", {"exit_code": p_exit_code})
 	quitting.emit(p_exit_code)
+	var left_room := _leave_hosted_room()
 	_save_open_rides()
 	var real_trainer := _real_trainer_connected()
 	_shutdown_riders()
@@ -220,7 +228,7 @@ func quit(p_exit_code: int = 0) -> void:
 	if ts != null:
 		ts.set_external_tick(false)
 	_write_fallback_report()
-	if real_trainer and is_inside_tree():
+	if (real_trainer or left_room) and is_inside_tree():
 		get_tree().create_timer(QUIT_GRACE_S, true, false, true).timeout.connect(_quit_tree.bind(p_exit_code))
 	else:
 		_quit_tree(p_exit_code)
@@ -247,6 +255,17 @@ func _save_open_rides() -> void:
 	for r in LocalRider.live_riders():
 		if r.recorder != null and r.recorder.is_recording():
 			r.finish_ride()
+
+
+## NET-6: a host quitting the app leaves its room explicitly. True when it left one.
+func _leave_hosted_room() -> bool:
+	var n := _net()
+	if n == null or n.offline or n.role != Wl.HOST:
+		return false
+	if n.state == WlNetSession.STATE_OFFLINE or n.state == WlNetSession.STATE_ERROR:
+		return false
+	n.leave()
+	return true
 
 
 func _real_trainer_connected() -> bool:
@@ -299,3 +318,7 @@ func _rides() -> WlRides:
 
 func _bus() -> WlEventBus:
 	return bus if bus != null else AutoloadLookup.bus()
+
+
+func _net() -> WlNetSession:
+	return net_session if net_session != null else AutoloadLookup.net()

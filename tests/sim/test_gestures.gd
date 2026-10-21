@@ -217,18 +217,22 @@ func test_surge_needs_established_pedaling() -> void:
 	assert_eq(ev2, [], "no surge before pedal_start")
 
 
-func test_surge_baseline_needs_5_s_since_the_last_stop() -> void:
+## W4 (ZIH-2): the baseline's 5 s of history count from pedal_start (16 here), not from the
+## stop, so the spin-up before it never lowers the bar. (W2 counted from the stop: the history
+## then held 13-15 too, and 300 W at 22-23 cleared a 222 W baseline; from 16 the baseline,
+## 233 W with the early 300 W samples, needs 304 W.)
+func test_surge_baseline_needs_5_s_since_pedal_start() -> void:
 	var g := _warmed(200.0)
 	_feed(g, 12.0, 1, 0.0, 0.0)
 	assert_false(g.is_pedaling(), "a stop ends the start")
 	var ev := _feed(g, 13.0, 4, 200.0)
 	assert_eq(_names(ev), [Wl.G_PEDAL_START], "restart at t = 16")
-	assert_eq(g.surge_baseline(), -1.0, "4 s of history since the stop")
+	assert_eq(g.surge_baseline(), -1.0, "no history since pedal_start")
 	ev = _feed(g, 17.0, 2, 300.0)
-	assert_eq(ev, [], "t = 17: only 4 s of history before the streak")
+	assert_eq(ev, [], "t = 17: only 1 s of history since pedal_start before the streak")
 	ev = _feed(g, 19.0, 3, 200.0)
-	ev.append_array(_feed(g, 22.0, 2, 300.0))
-	assert_eq(ev, [[23.0, Wl.G_SURGE]], "enough history now")
+	ev.append_array(_feed(g, 22.0, 2, 320.0))
+	assert_eq(ev, [[23.0, Wl.G_SURGE]], "enough history now (6 s since pedal_start)")
 
 
 func test_surge_never_while_not_pedaling() -> void:
@@ -358,8 +362,8 @@ func test_arbitration_over_a_whole_ride() -> void:
 	ev.append_array(_feed(_g, 15.0, 2, 300.0))  # surge at 16
 	ev.append_array(_feed(_g, 17.0, 3, 200.0))
 	ev.append_array(_feed(_g, 20.0, 7, 0.0, 0.0))  # coast at 23, stop_5s at 25
-	ev.append_array(_feed(_g, 27.0, 6, 200.0))  # pedal_start at 30
-	ev.append_array(_feed(_g, 33.0, 2, 300.0))  # 6 s since the stop: surge at 34
+	ev.append_array(_feed(_g, 27.0, 10, 200.0))  # pedal_start at 30
+	ev.append_array(_feed(_g, 37.0, 2, 300.0))  # 7 s since pedal_start (W4, ZIH-2): surge at 38
 	assert_eq(
 		ev,
 		[
@@ -368,7 +372,7 @@ func test_arbitration_over_a_whole_ride() -> void:
 			[23.0, Wl.G_COAST],
 			[25.0, Wl.G_STOP_5S],
 			[30.0, Wl.G_PEDAL_START],
-			[34.0, Wl.G_SURGE]
+			[38.0, Wl.G_SURGE]
 		]
 	)
 
@@ -538,3 +542,110 @@ func test_returned_and_emitted_gestures_are_wl_names() -> void:
 		seen[e[1]] = true
 		assert_true(Wl.GESTURES.has(e[1]), "%s is a Wl gesture" % e[1])
 	assert_eq(seen.size(), 4, "pedal_start, surge, coast and stop_5s all seen")
+
+
+# ------------------------------------------------------------- W4 (ZIH-2): starting is no surge
+# BRIEF 3.5: "surge picks" in every pedal-scan menu, so starting to pedal must never pick. The
+# W3 streams (build/w3/zero-input-hud/test_zero_input_hud_w3.gd and the verifier's
+# build/w3/verify_zero-input-hud_0/test_verify_zih.gd) fired a surge about 5 s after the start.
+
+
+func _fired(watts: Array, cadence: float = 85.0, t0: float = 0.0) -> Array:
+	var g := GestureRecognizer.new()
+	g.configure(FTP, true)
+	g.set_erg(false)
+	var fired: Array = []
+	for i in watts.size():
+		for name in g.on_sample(_s(t0 + float(i), float(watts[i]), cadence)):
+			fired.append("%s@%d" % [name, i])
+	return fired
+
+
+func _first_order(steady_w: float, tau_s: float, n: int) -> Array:
+	var out: Array = []
+	for i in n:
+		out.append(steady_w * (1.0 - exp(-float(i + 1) / tau_s)))
+	return out
+
+
+func test_spinning_up_from_rest_is_not_a_surge() -> void:
+	var watts := [60.0, 110.0, 145.0, 165.0, 175.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0]
+	assert_eq(_fired(watts), ["pedal_start@3"], "only pedal_start (W3: [pedal_start@3, surge@6])")
+
+
+## The exact sample stream the real app's menu rider produced on the first-run title with
+## --mock-trainer=erg (build/w3/zero-input-hud/run4.log); it fired a surge at 7.2 s that picked
+## the held "Ride now" item.
+func test_the_apps_first_run_stream_is_not_a_surge() -> void:
+	var g := GestureRecognizer.new()
+	g.configure(FTP, true)
+	var stream := [[1.10, 56.0], [2.05, 119.0], [3.00, 160.0], [4.05, 180.0], [5.10, 184.0],
+		[6.20, 183.0], [7.20, 182.0], [8.2, 181.0], [9.2, 180.0], [10.2, 181.0], [11.2, 182.0],
+		[12.2, 181.0], [13.2, 180.0], [14.2, 182.0]]
+	var fired: Array = []
+	for smp: Array in stream:
+		for name in g.on_sample(_s(float(smp[0]), float(smp[1]), 90.0)):
+			fired.append(name)
+	assert_eq(fired, [Wl.G_PEDAL_START], "steady 180-184 W after starting")
+
+
+func test_first_order_spin_ups_are_never_a_surge() -> void:
+	for steady: float in [120.0, 150.0, 170.0, 180.0, 200.0, 250.0, 400.0]:
+		for tau: float in [1.0, 1.5, 2.0, 3.0, 5.0]:
+			var fired := _fired(_first_order(steady, tau, 30))
+			assert_eq(fired.filter(func(x: String) -> bool: return x.begins_with("surge")), [],
+				"spin-up to %.0f W, tau %.1f s: %s" % [steady, tau, str(fired)])
+			# Also by power alone (no cadence reported).
+			var by_power := _fired(_first_order(steady, tau, 30), -1.0)
+			assert_eq(by_power.filter(func(x: String) -> bool: return x.begins_with("surge")), [],
+				"spin-up to %.0f W, tau %.1f s, no cadence: %s" % [steady, tau, str(by_power)])
+
+
+func test_spike_then_settle_is_not_a_surge() -> void:
+	var fired := _fired([250.0, 230.0, 200.0, 185.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0, 180.0])
+	assert_eq(fired, ["pedal_start@3"])
+
+
+func test_coming_back_from_a_soft_pedal_dip_is_not_a_surge() -> void:
+	var watts: Array = []
+	for i in 12:
+		watts.append(160.0)
+	for i in 3:
+		watts.append(30.0)
+	for i in 10:
+		watts.append(160.0)
+	var g := GestureRecognizer.new()
+	g.configure(FTP, true)
+	var fired: Array = []
+	for i in watts.size():
+		var cad := 30.0 if float(watts[i]) < 50.0 else 85.0
+		for name in g.on_sample(_s(float(i), float(watts[i]), cad)):
+			fired.append("%s@%d" % [name, i])
+	assert_eq(fired, ["pedal_start@3"], "the dip restarts the surge history: %s" % str(fired))
+
+
+## A real surge after the start still fires once 5 s of steady riding follow pedal_start.
+func test_a_surge_after_a_settled_start_still_fires() -> void:
+	var watts: Array = _first_order(180.0, 2.0, 12)
+	watts.append_array([300.0, 300.0])
+	var fired := _fired(watts)
+	assert_eq(fired, ["pedal_start@3", "surge@13"])
+
+
+## MockTrainer `erg` riders starting from rest (W3 verifier: 9 of 20 seeds fired a surge).
+func test_mock_erg_riders_starting_from_rest_never_surge() -> void:
+	for sd in range(1, 21):
+		var mock := MockTrainer.from_spec("erg", FTP, {"seed": sd})
+		add_child(mock)
+		var g := GestureRecognizer.new()
+		g.configure(FTP, true)
+		var fired: Array = []
+		mock.sample_received.connect(func(smp: TrainerSample) -> void:
+			for name in g.on_sample(smp):
+				fired.append("%s@%.1f" % [name, smp.t]))
+		for _i in int(30.0 / Wl.SIM_DT):
+			mock.tick(Wl.SIM_DT)
+		remove_child(mock)
+		mock.free()
+		var surges := fired.filter(func(x: String) -> bool: return x.begins_with("surge"))
+		assert_eq(surges, [], "seed %d: %s" % [sd, str(fired)])
