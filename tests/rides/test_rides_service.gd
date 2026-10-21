@@ -121,6 +121,7 @@ func test_upload_reports_states_and_marks_the_ride() -> void:
 	assert_eq(hist[0]["fit_path"], path)
 	await r.upload(path, rec.summary())
 	assert_eq((await _mock.uploads()).size(), 1, "an uploaded ride isn't sent again")
+	assert_eq(_states.back(), [id, "uploaded", str(act)], "its state is reported again for the results screen")
 
 
 func test_offline_upload_is_queued_and_retried() -> void:
@@ -326,6 +327,87 @@ func test_activity_name_and_description() -> void:
 	assert_string_contains(d, "easy30")
 	assert_string_contains(d, "360 kJ")
 	assert_string_contains(d, "200 W")
+
+
+func test_upload_with_an_empty_summary_uses_the_saved_one() -> void:
+	var r: WlRides = await _connected()
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	await r.upload(path, {})
+	assert_eq(_states_for(rec.ride_id).back(), "uploaded", "the ride id came from the JSON next to the FIT")
+	var ups: Array = await _mock.uploads()
+	assert_eq(ups.size(), 1)
+	assert_eq((ups[0] as Dictionary)["external_id"], rec.ride_id)
+	assert_eq((ups[0] as Dictionary)["name"], "Wattlands: Workout", "named from the saved summary")
+	await r.upload(_dir.path_join("no_such.fit"), {})
+	assert_push_warning("without ride_id")
+
+
+func test_uploads_busy_while_a_connect_will_drain_the_queue() -> void:
+	var r := _rides()
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	await r.upload(path, rec.summary())
+	assert_eq(_states_for(rec.ride_id), ["queued"])
+	assert_false(r.uploads_busy(), "nothing runs while not connected")
+	r.strava_connect(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
+	assert_true(r.uploads_busy(), "the connect will retry the queue: a scripted peer must wait")
+	await r.wait_uploads_idle()
+	assert_eq(_states_for(rec.ride_id).back(), "uploaded")
+	assert_eq(r.queue_size(), 0)
+	assert_false(r.uploads_busy())
+
+
+func test_a_queued_ride_without_its_fit_is_dropped() -> void:
+	var r: WlRides = await _connected()
+	r.queue.put({"ride_id": "gone", "fit_path": _dir.path_join("rides/gone.fit")})
+	await r.process_queue()
+	assert_push_warning("no FIT file any more")
+	assert_eq(r.queue_size(), 0)
+	assert_eq((await _mock.uploads()).size(), 0)
+
+
+func test_an_entry_is_dropped_after_max_attempts() -> void:
+	var r: WlRides = await _connected()
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	r.queue.put({"ride_id": rec.ride_id, "fit_path": path, "attempts": UploadQueue.MAX_ATTEMPTS - 1, "last_state": "failed"})
+	await _mock.fault("upload", 500, 1)
+	await r.process_queue()
+	assert_eq(_states_for(rec.ride_id).back(), "failed")
+	assert_eq(r.queue_size(), 0, "the eighth failure gives up")
+	var s: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(path.get_basename() + ".json"))
+	assert_eq(s["upload"]["state"], "failed")
+	assert_eq(s["upload"]["error"], "server_error_500")
+
+
+func test_bases_come_from_settings_without_the_flag() -> void:
+	CmdLine.set_args(PackedStringArray([]))
+	var r := _rides(false)
+	r.reload()
+	var settings := get_node_or_null("/root/Settings") as WlSettings
+	assert_not_null(settings, "the Settings autoload")
+	assert_eq(r.client.api_base, settings.strava_api_base().trim_suffix("/"))
+	assert_eq(r.client.oauth_base, settings.strava_oauth_base().trim_suffix("/"))
+
+
+func test_strava_base_with_a_suffix_maps_the_same() -> void:
+	assert_eq(StravaClient.bases_from_root("http://127.0.0.1:9/api/v3"), {"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"})
+	assert_eq(StravaClient.bases_from_root(" http://127.0.0.1:9/oauth/ "), {"api": "http://127.0.0.1:9/api/v3", "oauth": "http://127.0.0.1:9/oauth"})
+
+
+func test_auto_upload_follows_the_profile_setting() -> void:
+	var settings := get_node_or_null("/root/Settings") as WlSettings
+	assert_not_null(settings, "the Settings autoload")
+	var r := _rides()
+	r.auto_upload_override = null
+	CmdLine.set_args(PackedStringArray([]))
+	var before := settings.profile.strava_auto_upload
+	settings.profile.strava_auto_upload = false
+	assert_false(r.auto_upload_enabled(), "off by default (BRIEF 3.8)")
+	settings.profile.strava_auto_upload = true
+	assert_true(r.auto_upload_enabled(), "the rider turned it on")
+	settings.profile.strava_auto_upload = before
 
 
 func test_a_second_upload_of_the_same_ride_waits_for_the_first() -> void:

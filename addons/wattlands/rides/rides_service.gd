@@ -92,6 +92,8 @@ func strava_disconnect() -> void:
 
 ## Upload a saved ride (FIT path + summary); queues it when offline or on failure.
 ## Progress arrives on EventBus.upload_state_changed(ride_id, state, detail).
+## A summary without ride_id uses the JSON saved next to the FIT. A ride already on Strava
+## is not sent again; its state ("uploaded" or "duplicate") is reported once more.
 func upload(fit_path: String, summary: Dictionary) -> void:
 	await _upload(fit_path, summary, false)
 
@@ -199,9 +201,12 @@ func strava_cancel_connect() -> void:
 		client.cancel_connect()
 
 
-## True while uploads (or a queue run) are in progress.
+## True while uploads (or a queue run) are in progress, or while a connect is running that
+## will retry a non-empty queue when it succeeds.
 func uploads_busy() -> bool:
-	return not _in_flight.is_empty() or _queue_running
+	if not _in_flight.is_empty() or _queue_running:
+		return true
+	return client != null and client.is_connecting() and queue.size() > 0
 
 
 ## Waits until no upload or queue run is in progress (scripted peers before they quit).
@@ -298,7 +303,11 @@ func _connect(client_id: String, client_secret: String, with_profile: bool) -> v
 
 
 func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
-	var ride_id := str(summary.get("ride_id", ""))
+	var sum := summary
+	if str(sum.get("ride_id", "")) == "":
+		# No ride id given (an empty or partial summary): use the saved one next to the FIT.
+		sum = _read_summary(fit_path)
+	var ride_id := str(sum.get("ride_id", ""))
 	if ride_id == "":
 		push_warning("Rides: a ride summary without ride_id can't be uploaded")
 		return
@@ -311,16 +320,20 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 	if not force:
 		var up: Variant = _read_summary(fit_path).get("upload", {})
 		if up is Dictionary and str((up as Dictionary).get("state", "")) in ["uploaded", "duplicate"]:
+			# Already on Strava: report its state again (no new attempt), so a results screen that
+			# asks after an auto-upload still shows it.
+			var act := int((up as Dictionary).get("activity_id", 0))
+			_emit_upload(ride_id, str((up as Dictionary)["state"]), str(act) if act > 0 else "")
 			return
 	_in_flight[ride_id] = true
 	_resolve_bases()
 	var entry := queue.get_entry(ride_id)
 	var name := str(entry.get("name", ""))
 	if name == "":
-		name = activity_name(summary)
+		name = activity_name(sum)
 	var desc := str(entry.get("description", ""))
 	if desc == "":
-		desc = activity_description(summary)
+		desc = activity_description(sum)
 	var res: Dictionary
 	if not strava_connected():
 		res = {"state": "queued", "detail": "not_connected", "upload_id": 0, "permanent": false}

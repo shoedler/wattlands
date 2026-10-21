@@ -147,9 +147,13 @@ func has_scope(scope: String) -> bool:
 	return str(_creds.get("scope", "")).split(",").has(scope)
 
 
-## <root>/api/v3 and <root>/oauth for --strava-base=<root> (the mock serves both).
+## <root>/api/v3 and <root>/oauth for --strava-base=<root> (the mock serves both). A root
+## given with either suffix ("<root>/api/v3" or "<root>/oauth") maps the same way.
 static func bases_from_root(root: String) -> Dictionary:
 	var r := root.strip_edges().trim_suffix("/")
+	for suffix: String in ["/api/v3", "/oauth"]:
+		if r.ends_with(suffix):
+			r = r.substr(0, r.length() - suffix.length())
 	return {"api": r + "/api/v3", "oauth": r + "/oauth"}
 
 
@@ -303,7 +307,8 @@ func disconnect_account() -> bool:
 	elif FileAccess.file_exists(store_file()):
 		DirAccess.remove_absolute(store_file())
 	print("Strava: disconnected")
-	_set_state(STATE_DISCONNECTED, "" if revoked else "revoke_failed")
+	# Nothing to revoke (never connected) is not a failure.
+	_set_state(STATE_DISCONNECTED, "" if revoked or refresh == "" else "revoke_failed")
 	return revoked
 
 

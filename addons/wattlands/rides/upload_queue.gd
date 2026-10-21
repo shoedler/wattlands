@@ -30,6 +30,8 @@ func load_file() -> void:
 	var parsed: Variant = StravaClient.parse_json(FileAccess.get_file_as_string(p))
 	if not (parsed is Dictionary) or not ((parsed as Dictionary).get("items", null) is Array):
 		push_warning("UploadQueue: unreadable %s; starting empty" % p)
+		if FileAccess.file_exists(p + ".bad"):
+			DirAccess.remove_absolute(p + ".bad")
 		DirAccess.rename_absolute(p, p + ".bad")
 		return
 	for it: Variant in (parsed as Dictionary)["items"]:

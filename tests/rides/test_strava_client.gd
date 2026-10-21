@@ -116,6 +116,28 @@ func test_connect_through_the_locked_loopback_flow() -> void:
 	assert_false(info.has("access_token") or info.has("client_secret") or info.has("refresh_token"), "info() has no secrets")
 
 
+func test_defaults_follow_the_brief() -> void:
+	var c := StravaClient.new()
+	assert_eq(c.api_base, "https://www.strava.com/api/v3")
+	assert_eq(c.oauth_base, "https://www.strava.com/oauth")
+	assert_eq(c.poll_interval_s, 3.0, "poll every 3 s")
+	assert_eq(c.poll_timeout_s, 120.0, "for up to 2 minutes")
+	assert_eq(c.callback_timeout_s, 300.0, "the loopback callback waits up to 5 minutes")
+	assert_eq(StravaClient.ACCESS_LIFETIME_S, 21600, "6 h access tokens")
+	assert_between(StravaClient.REFRESH_MARGIN_S, 1, 3600, "refresh shortly before expiry")
+	assert_eq(c.process_mode, Node.PROCESS_MODE_ALWAYS)
+	c.free()
+
+
+func test_disconnect_when_never_connected_sends_nothing() -> void:
+	var c := _client()
+	var details: Array = []
+	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
+	assert_false(await c.disconnect_account(), "nothing was revoked")
+	assert_eq(details, [""], "not a failure")
+	assert_eq(await _routes(), [], "no request")
+
+
 func test_authorize_url_parameters() -> void:
 	var c := _client()
 	var url := c.authorize_url("12345", "http://127.0.0.1:5000/strava/callback", "abc", false)
