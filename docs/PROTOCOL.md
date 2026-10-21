@@ -138,7 +138,13 @@ All transports run with `PROCESS_MODE_ALWAYS` and do their I/O in `poll()`, whic
 
 ## 8. LAN play (P1)
 
-`LanTransport` hosts by starting a `LocalRelayServer` on the LAN and joining it over `ws://127.0.0.1`, then announces the room by UDP broadcast; a client joins by code: it listens for the announcement of that code, then connects to the announcing host. See `addons/wattlands/net/lan_transport.gd` for the beacon format and ports.
+`LanTransport` (a `RelayTransport`) plays on a local network without the internet relay:
+
+- **Host.** `host()` starts a `LocalRelayServer` on TCP port 8790 (`port`; every interface), joins it over `ws://127.0.0.1:8790/v1` as peer 1, and once the room exists broadcasts a beacon every second to UDP 255.255.255.255:8791 (`discovery_address`, `discovery_port`).
+- **Beacon.** One datagram of JSON: `{"wattlands": "lan", "proto": 1, "code": "K7QX2M", "port": 8790, "name": "<host name>", "build": "0.1.0"}`. Receivers take the host's address from the datagram, never from the payload, and ignore beacons of another `proto` (`LanDiscovery.parse_beacon`).
+- **Client.** `join(code)` listens on UDP 8791 (`LanDiscovery`) until it hears that code (at most 5 s, else `disconnected("room_not_found")`), then joins `ws://<sender>:<port>/v1` like any relay. With `url` set it connects straight to that host. A rejoin after a drop reuses the address it found.
+- `lan_rooms()` lists the rooms heard so far (`{code: {code, ip, port, name, build, seen}}`; a room not heard for 5 s is forgotten), for a LAN room list in the UI.
+- Everything else (codes, tokens, limits, lobby, reconnect) is the relay protocol above. Windows asks once to allow the game through the firewall when a LAN host first listens.
 
 ## 9. Files
 
