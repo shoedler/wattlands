@@ -123,6 +123,16 @@ func test_missing_fields_stay_absent() -> void:
 	assert_eq(none.flags & TrainerSample.HAS_POWER, 0, "no power field, no HAS_POWER")
 
 
+func test_negative_power_becomes_zero() -> void:
+	_ready_trainer()
+	_fake.notify("2ad2", FtmsCodec.from_hex("60000000fbfff6ff"))
+	_fake.flush()
+	var s := _samples[0]
+	assert_eq(s.power_w, 0.0, "the vector's -10 W (back-pedalling) is 0 W")
+	assert_true((s.flags & TrainerSample.HAS_POWER) != 0)
+	assert_eq(s.speed_kmh, 0.0)
+
+
 func test_cycling_power_samples_are_flagged() -> void:
 	var s := FtmsTrainer.sample_from_record({"power_w": 250, "power_source": "cps", "speed_kmh": 30.0}, 1.0)
 	assert_eq(s.power_w, 250.0)

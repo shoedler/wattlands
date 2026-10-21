@@ -7,7 +7,8 @@ extends TrainerDevice
 ## TrainerSamples (cadence estimated from speed when absent or stale, BRIEF 4.5).
 ##
 ## W1 details:
-## - Samples: power_w (HAS_POWER, POWER_FROM_CPS when the client filled it from 0x2A63),
+## - Samples: power_w (HAS_POWER, POWER_FROM_CPS when the client filled it from 0x2A63;
+##   FTMS power is signed, and a negative reading, such as when back-pedalling, becomes 0 W),
 ##   cadence_rpm (0.5 rpm units, HAS_CADENCE), speed_kmh (0.01 km/h, HAS_SPEED) and
 ##   distance_m (HAS_DISTANCE) when the record has them; `t` is this device's platform time
 ##   (the sum of tick(dt)). Cadence estimation itself is CadenceEstimator's (trainer-control),
@@ -111,7 +112,7 @@ static func sample_from_record(record: Dictionary, t: float) -> TrainerSample:
 	s.t = t
 	s.flags = 0
 	if record.has("power_w"):
-		s.power_w = float(record["power_w"])
+		s.power_w = maxf(float(record["power_w"]), 0.0)
 		s.flags |= TrainerSample.HAS_POWER
 		if str(record.get("power_source", "")) == "cps":
 			s.flags |= TrainerSample.POWER_FROM_CPS
