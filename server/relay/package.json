@@ -1,0 +1,20 @@
+{
+  "name": "wattlands-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wattlands multiplayer relay: room codes, peer routing and reconnect tokens over WebSocket (BRIEF 5.3).",
+  "license": "MIT",
+  "type": "module",
+  "main": "src/server.ts",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "start": "node --experimental-strip-types src/main.ts",
+    "start:builtin": "node --experimental-strip-types src/main.ts --impl=builtin",
+    "test": "node --experimental-strip-types --test"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  }
+}
