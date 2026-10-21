@@ -5,7 +5,8 @@ extends SceneTree
 ##
 ## Reads <root>/assets/<id>/art.json and art_manifest.json, uses only each sprite's selected result
 ## (raw PNG in <root>/.art_cache/<id>/), and writes <root>/assets/<id>/sprites/<sprite id>.png, one
-## <sprite id>__<part>.png per part and sprites.json. <root> defaults to this project. The work is in
+## <sprite id>__<part>.png per part and sprites.json. <root> defaults to this project; a relative
+## <root> is relative to the project. The work is in
 ## ArtPixelate (tools/art/pixelate_lib.gd). Exits 0 when every selected sprite was written (sprites
 ## without a selected result are skipped with a warning), 1 on any error, 2 on bad arguments.
 
@@ -22,9 +23,14 @@ func _initialize() -> void:
 		printerr("pixelate: --game=<id> is required (usage: -- --game=<id> [--root=<dir>] [--only=<ids>])")
 		quit(2)
 		return
-	var root: String = _last(args, "root")
-	if root.is_empty():
+	# --root: absolute, res://, or relative to this project (the wrapper runs with --path .).
+	var root: String = _last(args, "root").replace("\\", "/")
+	if root.is_empty() or root == "true":
 		root = ProjectSettings.globalize_path("res://")
+	elif root.begins_with("res://"):
+		root = ProjectSettings.globalize_path(root)
+	elif root.is_relative_path():
+		root = ProjectSettings.globalize_path("res://").path_join(root)
 	var only: PackedStringArray = PackedStringArray()
 	for v: Variant in args.get("only", []):
 		for id: String in str(v).split(",", false):
