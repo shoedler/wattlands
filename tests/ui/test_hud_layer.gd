@@ -221,6 +221,28 @@ func test_rect_positions_at_scale_3_and_on_resize() -> void:
 	assert_eq(_hud.slot_screen_rect(card), Rect2(320, 200, 200, 40))
 
 
+## world-kits' PixelViewport re-lays out on a stretch-factor change without resizing and
+## emits only `layout_changed`; the HUD follows it, and a rebuild with another PixelViewport
+## stops following the old one.
+func test_rect_positions_follow_layout_changed() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 3
+	var card := Control.new()
+	_hud.build(_fishing_spec(card), _ctx, pv)
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(1281, 0, 639, 126))
+	pv.set_fake_layout(2, Vector2(0, 90))
+	await wait_process_frames(2)
+	assert_eq(_hud.slot_screen_rect(gauge), Rect2(854, 90, 426, 84), "re-laid out on layout_changed")
+	var pv2: FakePV = add_child_autofree(FakePV.new())
+	pv2.fake_scale = 1
+	_hud.build(_fishing_spec(Control.new()), _ctx, pv2)
+	assert_false(pv.is_connected("layout_changed", _hud._queue_relayout), "the old PixelViewport is let go")
+	assert_false(pv.resized.is_connected(_hud._queue_relayout))
+	assert_true(pv2.is_connected("layout_changed", _hud._queue_relayout))
+	assert_eq(_hud.slot_screen_rect(_hud.widget(HudSpec.POWER_GAUGE)), Rect2(427, 0, 213, 42))
+
+
 func test_widgets_sharing_a_rect_stack_and_share_it() -> void:
 	var pv: FakePV = add_child_autofree(FakePV.new())
 	pv.fake_scale = 3
@@ -659,6 +681,32 @@ func test_long_toasts_and_banners_wrap_between_the_corners() -> void:
 	assert_false(center.intersects(Rect2(tl.position, tl.size)), "clear of the timeline")
 	assert_false(center.intersects(Rect2(tr_box.position, tr_box.size)), "clear of the readout")
 	assert_gt(center.size.y, 150.0, "wrapped onto more lines")
+
+
+## Workout's layout: the timeline in the top centre, toasts at top_left. A long toast wraps
+## within a third of the screen, so it never runs under the timeline and never squeezes it.
+func test_corner_toasts_wrap_and_leave_the_centre_its_room() -> void:
+	var spec := HudSpec.new() \
+		.add(HudSpec.TIMELINE, HudSpec.TOP) \
+		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "power_w"}) \
+		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
+		.toasts_at(HudSpec.TOP_LEFT) \
+		.banners_at(HudSpec.BOTTOM_RIGHT)
+	_hud.build(spec, _ctx)
+	_hud.show_toast("Interval 3 done: 96% in band, the best of the session so far, keep it going", [])
+	_hud.show_banner("A very long banner in a corner that must wrap instead of crossing the screen", [], 5.0)
+	_hud.relayout()
+	await wait_process_frames(3)
+	_hud.relayout()
+	await wait_process_frames(2)
+	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
+	var top := _hud.anchor_box(HudSpec.TOP)
+	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
+	var third := HudLayer.corner_text_width(Vector2(1920, 1080))
+	assert_lte(tl.size.x, third + 1.0, "the toast wraps within a third: %s" % tl.size)
+	assert_lte(br.size.x, third + 1.0, "so does a corner banner: %s" % br.size)
+	assert_false(Rect2(tl.position, tl.size).intersects(Rect2(top.position, top.size)), "clear of the timeline")
+	assert_gt(_hud.widget(HudSpec.TIMELINE).ui_scale, 0.9, "the timeline keeps (nearly) its full size")
 
 
 func test_demo_scene_builds_headless() -> void:

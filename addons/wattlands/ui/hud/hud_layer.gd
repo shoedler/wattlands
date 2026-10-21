@@ -15,12 +15,13 @@ extends CanvasLayer
 ##   Controls, then the banner area and the toast area if they share that anchor. The top and
 ##   bottom centre stacks keep clear of the corner stacks on their edge (center_width()):
 ##   a teammate strip wraps into two rows and then shrinks, other kit widgets shrink, and
-##   toast and banner text wraps.
+##   toast and banner text wraps. Toasts and banners in a corner wrap within a third of the
+##   screen (corner_text_width()).
 ## - Rect2i positions are art pixels mapped through PixelViewport.art_rect_to_screen()
 ##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
-##   resizes. Kit widgets in a rect shrink to fit it (several in one rect stack and share
-##   it); key numbers stay >= 48 px, so a rect below a widget's min_rect() overflows. Game
-##   Controls in a rect are sized to it. Without a PixelViewport (3D games) a Rect2i is
+##   resizes, or the PixelViewport emits `layout_changed`. Kit widgets in a rect shrink to
+##   fit it (several in one rect stack and share it); key numbers stay >= 48 px, so a rect
+##   below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without a PixelViewport (3D games) a Rect2i is
 ##   taken as 1080p pixels.
 ## - The CanvasLayer `layer` is LAYER (10): a game view's own CanvasLayer with a lower
 ##   layer draws under the HUD (vignettes), a higher one above it.
@@ -38,6 +39,8 @@ extends CanvasLayer
 
 const LAYER := 10
 const BASE_SIZE := Vector2(1920, 1080)
+## The PixelViewport signal (world-kits addition) for layout changes without a resize.
+const PV_LAYOUT_SIGNAL := &"layout_changed"
 
 ## Screen size for layout (tests); ZERO uses the viewport's visible rect.
 var screen_size_override: Vector2 = Vector2.ZERO
@@ -542,9 +545,25 @@ func _slot_for(rect: Rect2i) -> VBoxContainer:
 	return stack
 
 
-## Keep the top and bottom centre stacks between the corner stacks: teammate strips wrap and
-## shrink, other kit widgets shrink, toast and banner text wraps.
+## Widest a toast or banner gets in a corner anchor: a third of the usable width, so corner
+## messages wrap instead of running under (or squeezing) the centre stacks.
+static func corner_text_width(ss: Vector2) -> float:
+	return maxf(240.0, floorf((ss.x - 2.0 * WlTheme.MARGIN_PX - 2.0 * WlTheme.GAP_PX) / 3.0))
+
+
+## Corner toasts and banners wrap within corner_text_width(); then the top and bottom centre
+## stacks are kept between the corner stacks: teammate strips wrap and shrink, other kit
+## widgets shrink, toast and banner text wraps.
 func _fit_centers(ss: Vector2) -> void:
+	var corner_w := corner_text_width(ss)
+	for corner: String in [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT]:
+		if not _boxes.has(corner):
+			continue
+		for c in (_boxes[corner] as Control).get_children():
+			if c is HudToasts:
+				(c as HudToasts).set_max_width(corner_w)
+			elif c is HudBanner:
+				(c as HudBanner).set_max_width(corner_w)
 	for center: String in [HudSpec.TOP, HudSpec.BOTTOM]:
 		if not _boxes.has(center):
 			continue
@@ -601,12 +620,21 @@ func _queue_relayout() -> void:
 	relayout.call_deferred()
 
 
+## Follow the PixelViewport's `resized` and, when it has one, its `layout_changed` signal
+## (world-kits emits it when the integer scale or letterbox change without a resize, e.g. a
+## window whose stretch factor changes while the 1080p canvas keeps its size).
 func _set_pixel_viewport(pv: PixelViewport) -> void:
-	if _pv != null and is_instance_valid(_pv) and _pv.resized.is_connected(_queue_relayout):
-		_pv.resized.disconnect(_queue_relayout)
+	if _pv != null and is_instance_valid(_pv):
+		if _pv.resized.is_connected(_queue_relayout):
+			_pv.resized.disconnect(_queue_relayout)
+		if _pv.has_signal(PV_LAYOUT_SIGNAL) and _pv.is_connected(PV_LAYOUT_SIGNAL, _queue_relayout):
+			_pv.disconnect(PV_LAYOUT_SIGNAL, _queue_relayout)
 	_pv = pv
-	if _pv != null and not _pv.resized.is_connected(_queue_relayout):
-		_pv.resized.connect(_queue_relayout)
+	if _pv != null:
+		if not _pv.resized.is_connected(_queue_relayout):
+			_pv.resized.connect(_queue_relayout)
+		if _pv.has_signal(PV_LAYOUT_SIGNAL) and not _pv.is_connected(PV_LAYOUT_SIGNAL, _queue_relayout):
+			_pv.connect(PV_LAYOUT_SIGNAL, _queue_relayout)
 
 
 func _shows_power() -> bool:
