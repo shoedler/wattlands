@@ -84,6 +84,62 @@ func test_records_hold_the_latest_value() -> void:
 	assert_eq(float(rec.summary()["max_power_w"]), 300.0)
 
 
+func test_a_dropout_stops_crediting_the_held_values() -> void:
+	var rec := RideRecorder.new()
+	assert_eq(rec.hold_limit_s, 3.0, "default: the platform's 3 s staleness")
+	rec.start("g", "c", START, 0.0)
+	rec.record(0.0, 200.0, 90.0, 36.0)
+	rec.record(1.0, 200.0, 90.0, 36.0)
+	# The trainer goes quiet for 9 s: values are held until 4.0 (3 s), then 0 W and absent.
+	rec.record(10.0, 100.0, 80.0, 18.0)
+	rec.stop(11.0)
+	var recs := rec.records()
+	assert_eq(recs.size(), 12, "still one record per second through the dropout")
+	assert_eq(float(recs[4]["power_w"]), 200.0, "held up to the limit")
+	assert_eq(float(recs[5]["power_w"]), 0.0, "expired: 0 W")
+	assert_eq(float(recs[5]["cadence_rpm"]), -1.0, "expired: cadence absent")
+	assert_eq(float(recs[9]["speed_kmh"]), -1.0, "expired: speed absent")
+	assert_almost_eq(float(recs[7]["distance_m"]), 40.0, 0.001, "no distance during the dropout")
+	assert_eq(float(recs[10]["power_w"]), 100.0, "fresh again")
+	var s := rec.summary()
+	# 200 W for 4 s, 0 W for 6 s, 100 W for 1 s.
+	assert_almost_eq(float(s["kj"]), 0.9, 0.0005)
+	# 10 m/s for 4 s, then 5 m/s for 1 s.
+	assert_almost_eq(float(s["distance_m"]), 45.0, 0.01)
+	# Cadence averages over the time it was known: (90 x 4 + 80 x 1) / 5.
+	assert_almost_eq(float(s["avg_cadence_rpm"]), 88.0, 0.05)
+	var d := Reader.read(rec.fit_bytes())
+	assert_eq(d["errors"], [])
+	assert_eq(Reader.of(d, 20)[5]["fields"][4], 0xFF, "the FIT record has no cadence")
+	assert_eq(Reader.of(d, 18)[0]["fields"][48], 900, "session total_work")
+
+
+func test_hold_limit_zero_holds_forever() -> void:
+	var rec := RideRecorder.new()
+	rec.hold_limit_s = 0.0
+	rec.start("g", "c", START, 0.0)
+	rec.record(0.0, 200.0, 90.0, 36.0)
+	rec.stop(10.0)
+	assert_almost_eq(float(rec.summary()["kj"]), 2.0, 0.0005)
+	assert_eq(float(rec.records()[10]["power_w"]), 200.0)
+
+
+func test_non_finite_values_count_as_zero_or_absent() -> void:
+	var rec := RideRecorder.new()
+	rec.start("g", "c", START, 0.0)
+	rec.record(0.0, NAN, INF, NAN)
+	rec.record(1.0, INF, -INF, INF)
+	rec.stop(2.0)
+	var s := rec.summary()
+	assert_eq(float(s["kj"]), 0.0)
+	assert_eq(float(s["max_power_w"]), 0.0)
+	assert_eq(float(s["avg_cadence_rpm"]), -1.0)
+	assert_eq(float(s["distance_m"]), 0.0)
+	assert_eq(Reader.read(rec.fit_bytes())["errors"], [])
+	var text := JSON.stringify(s).to_lower()
+	assert_false(text.contains("inf") or text.contains("nan"), "the JSON summary stays valid")
+
+
 func test_absent_cadence_and_speed() -> void:
 	var rec := RideRecorder.new()
 	rec.start("g", "c", START, 0.0)

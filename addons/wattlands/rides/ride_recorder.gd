@@ -7,7 +7,10 @@ extends RideRecorderApi
 ## Records: one per second of platform time since start(), stamped at whole seconds
 ## (utc_start + k). Each record holds the latest values fed at or before its second
 ## (sample and hold), so a 1 Hz trainer feed and a 20 Hz tick feed both give one record per
-## second.
+## second. A value is held for at most hold_limit_s without a fresh record() call (a trainer
+## dropout): after that power counts as 0 W and cadence and speed as absent (no distance)
+## until the next record(), so a dropout never credits work the rider may not have done.
+## Non-finite inputs count as 0 W (power) or absent (cadence, speed).
 ## Totals: work, distance (from the reported speed), time-weighted cadence and speed are
 ## integrated over platform time between record() calls with the held values, so they don't
 ## depend on the feed rate. Averages are time-weighted over the elapsed time; maxima are the
@@ -25,6 +28,8 @@ extends RideRecorderApi
 const EPS := 1e-4
 ## Summary format version.
 const SUMMARY_VERSION := 1
+## Default hold_limit_s.
+const DEFAULT_HOLD_LIMIT_S := 3.0
 
 ## The ride's UUID (Strava external_id). start() generates one if empty; set it before
 ## start() to choose it.
@@ -32,6 +37,9 @@ var ride_id: String = ""
 ## The local time zone's offset from UTC in seconds (FIT activity.local_timestamp), or null
 ## to leave it out. WlRides.new_recorder() sets it from the system time zone.
 var utc_offset_s: Variant = null
+## Seconds a fed value stays valid without a fresh record() call (default 3 s, the
+## platform's telemetry staleness, OWNERSHIP C20); 0 or less holds values forever.
+var hold_limit_s: float = DEFAULT_HOLD_LIMIT_S
 
 var _started_id: String = ""
 var _game_id: String = ""
@@ -50,6 +58,8 @@ var _c: float = -1.0
 var _s: float = -1.0
 var _dist: float = 0.0
 var _next_k: int = 0
+## Platform time of the last record() call (the held values' age).
+var _fresh_t: float = 0.0
 
 # Records (parallel arrays): second index, power W, cadence rpm (-1 absent),
 # speed km/h (-1 absent), distance m.
@@ -88,6 +98,7 @@ func start(game_id: String, content_id: String, utc_start_unix: int, t: float) -
 	_s = -1.0
 	_dist = 0.0
 	_next_k = 0
+	_fresh_t = t
 	_rk = PackedInt32Array()
 	_rp = PackedFloat32Array()
 	_rc = PackedFloat32Array()
@@ -110,9 +121,10 @@ func record(t: float, power_w: float, cadence_rpm: float, speed_kmh: float) -> v
 		push_warning("RideRecorder: time went backwards (%.3f < %.3f); sample ignored" % [t, _last_t])
 		return
 	_advance_to(t)
-	_p = maxf(power_w, 0.0)
-	_c = cadence_rpm if cadence_rpm >= 0.0 else -1.0
-	_s = speed_kmh if speed_kmh >= 0.0 else -1.0
+	_p = maxf(power_w, 0.0) if is_finite(power_w) else 0.0
+	_c = cadence_rpm if is_finite(cadence_rpm) and cadence_rpm >= 0.0 else -1.0
+	_s = speed_kmh if is_finite(speed_kmh) and speed_kmh >= 0.0 else -1.0
+	_fresh_t = maxf(t, _last_t)
 	_note_max(_laps[_laps.size() - 1])
 	_note_max(_total)
 	_emit_record_at(t)
@@ -358,11 +370,25 @@ func _advance_to(t: float) -> void:
 	while _t0 + float(_next_k) < t - EPS:
 		var b := _t0 + float(_next_k)
 		if b > _last_t:
-			_integrate(b - _last_t)
-			_last_t = b
+			_integrate_to(b)
 		_emit_record()
-	_integrate(t - _last_t)
-	_last_t = t
+	_integrate_to(t)
+
+
+## Integrates the held values from _last_t to b; values older than hold_limit_s expire on
+## the way (power 0, cadence and speed absent).
+func _integrate_to(b: float) -> void:
+	if hold_limit_s > 0.0 and (_p > 0.0 or _c >= 0.0 or _s >= 0.0):
+		var stale_at := _fresh_t + hold_limit_s
+		if stale_at < b:
+			if stale_at > _last_t:
+				_integrate(stale_at - _last_t)
+				_last_t = stale_at
+			_p = 0.0
+			_c = -1.0
+			_s = -1.0
+	_integrate(b - _last_t)
+	_last_t = maxf(b, _last_t)
 
 
 func _integrate(dt: float) -> void:
