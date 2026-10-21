@@ -246,6 +246,9 @@ func setup(device: TrainerDevice) -> void:
 	_power_hist.clear()
 	_pending.clear()
 	_speed_mps = -1.0
+	if _panic:
+		# A trainer that connects during panic goes straight to SIM flat.
+		_controller.emergency_safe(_crr, _cw)
 	if device != null and not _trainer_max_configured:
 		_trainer_max_w = _device_max_w(device)
 	_update_status()
@@ -406,6 +409,7 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 	var opens_block := false
 	var ends_block := false
 	var confirm_sim := false
+	var confirm_erg := false
 	var target_pct := NAN
 
 	if phase_sim:
@@ -438,8 +442,9 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 					return _refuse(rec, Wl.REFUSE_SWITCH_SPACING,
 						"%.2f s since the last ERG/SIM switch (< 30 s)" % (_t - _last_switch_t))
 				opens_block = true
-		elif directive.mode == Wl.ERG and block_active:
-			ends_block = true
+		elif directive.mode == Wl.ERG:
+			ends_block = block_active
+			confirm_erg = not block_active
 		if sets_mode_grade and not (block_active or opens_block):
 			return _refuse(rec, Wl.REFUSE_MODE_GRADE, "mode_grade outside a SIM phase or SIM block")
 
@@ -471,6 +476,8 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		applied["sim_block"] = false
 	if confirm_sim:
 		applied["mode"] = Wl.SIM
+	if confirm_erg:
+		applied["mode"] = Wl.ERG
 	if sets_mode_grade:
 		_ch_mode_grade = {"grade": directive.mode_grade, "id": directive.id, "expires": expiry}
 		applied["mode_grade"] = directive.mode_grade

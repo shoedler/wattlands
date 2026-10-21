@@ -117,3 +117,13 @@ func test_sim_block_refused_during_panic() -> void:
 	var rec := rig.directive({"mode": "SIM", "duration_s": 20.0})
 	assert_true(rec["refused"])
 	assert_eq(rec["reason"], Wl.REFUSE_SIM_BLOCK_UNSAFE)
+
+
+func test_trainer_bound_during_panic_goes_sim_flat() -> void:
+	var gov: SafetyGovernor = autofree(SafetyGovernor.new())
+	gov.emergency_safe()
+	var dev: ScriptedDevice = autofree(ScriptedDevice.new())
+	gov.setup(dev)
+	assert_eq(dev.writes.size(), 1, "written in setup()")
+	assert_eq(dev.writes[0]["op"], "sim")
+	assert_almost_eq(float(dev.writes[0]["grade_pct"]), 0.0, 1e-9)

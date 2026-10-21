@@ -268,3 +268,10 @@ func test_ids_echoed() -> void:
 	var rec := rig.gov.apply_directive(d)
 	assert_eq(rec["id"], 42)
 	assert_eq(rig.records[rig.records.size() - 1]["id"], 42)
+
+
+func test_mode_erg_alone_in_an_erg_phase_confirms() -> void:
+	var rig := _erg_rig(erg(Wl.WORK, 60.0, 600.0))
+	var rec := rig.directive({"mode": "ERG"})
+	assert_false(rec["refused"])
+	assert_eq(rec["applied"], {"mode": "ERG"})
