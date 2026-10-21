@@ -39,6 +39,8 @@ func _initialize() -> void:
 	var report: Dictionary = ArtPixelate.run_game(root, game, only)
 	for path: Variant in report["written"]:
 		print("pixelate: wrote %s" % path)
+	for path: Variant in report["removed"]:
+		print("pixelate: removed stale part %s" % path)
 	for id: Variant in report["skipped"]:
 		print("pixelate: skipped %s (no selected result)" % id)
 	for msg: Variant in report["errors"]:

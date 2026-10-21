@@ -283,3 +283,70 @@ func test_a_background_mismatch_is_a_warning() -> void:
 	var root: String = _make_root(art)
 	assert_true(ArtPixelate.run_game(root, GAME, PackedStringArray(["fish_tuna"]))["ok"])
 	assert_push_warning("generated with background transparent")
+
+
+func test_stale_part_files_are_removed() -> void:
+	var root: String = _make_root()
+	var dir: String = _sprites_dir(root)
+	assert_true(ArtPixelate.run_game(root, GAME)["ok"])
+	assert_true(FileAccess.file_exists(dir.path_join("boat__cabin.png")))
+	# A hand-made file without the part separator and another sprite's parts are never touched.
+	_raw(8, 8, Color("#a33412")).save_png(dir.path_join("boat_extra.png"))
+	# The cabin part is renamed to deck.
+	var art: Dictionary = _art()
+	var boat: Dictionary = (art["sprites"] as Array)[0]
+	boat["parts"] = {"hull": [0, 16, 80, 16], "deck": [20, 0, 40, 16]}
+	_write_text(root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  "))
+	var report: Dictionary = ArtPixelate.run_game(root, GAME)
+	assert_true(report["ok"], str(report["errors"]))
+	assert_eq(report["removed"], ["assets/fixture/sprites/boat__cabin.png"])
+	assert_false(FileAccess.file_exists(dir.path_join("boat__cabin.png")))
+	assert_false(FileAccess.file_exists(dir.path_join("boat__cabin.png.import")))
+	assert_true(FileAccess.file_exists(dir.path_join("boat__deck.png")))
+	assert_true(FileAccess.file_exists(dir.path_join("boat__hull.png")))
+	assert_true(FileAccess.file_exists(dir.path_join("boat_extra.png")))
+	# A second run removes nothing.
+	assert_eq(ArtPixelate.run_game(root, GAME)["removed"], [])
+
+
+func test_parts_of_a_skipped_sprite_are_kept() -> void:
+	var root: String = _make_root()
+	var dir: String = _sprites_dir(root)
+	assert_true(ArtPixelate.run_game(root, GAME)["ok"])
+	var mpath: String = root.path_join("assets").path_join(GAME).path_join("art_manifest.json")
+	var m: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(mpath))
+	((m["requests"] as Array)[0] as Dictionary)["selected"] = false
+	_write_text(mpath, JSON.stringify(m))
+	var art: Dictionary = _art()
+	((art["sprites"] as Array)[0] as Dictionary).erase("parts")
+	_write_text(root.path_join("assets").path_join(GAME).path_join("art.json"), JSON.stringify(art, "  "))
+	var report: Dictionary = ArtPixelate.run_game(root, GAME)
+	assert_eq(report["skipped"], ["boat"])
+	assert_push_warning("boat: no selected result")
+	assert_eq(report["removed"], [])
+	assert_true(FileAccess.file_exists(dir.path_join("boat__cabin.png")))
+
+
+func test_a_selected_result_that_no_longer_matches_art_json_is_a_warning() -> void:
+	var art: Dictionary = _art()
+	var root: String = _make_root(art)
+	var mpath: String = root.path_join("assets").path_join(GAME).path_join("art_manifest.json")
+	var m: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(mpath))
+	var reqs: Array = m["requests"]
+	# The boat's result matches art.json exactly: no warning.
+	(reqs[0] as Dictionary)["input"] = {"prompt": "pixel art boat", "background": "transparent"}
+	# The tuna's result is a flare draft from an older prompt.
+	(reqs[1] as Dictionary)["endpoint"] = "openai/gpt-image-2.5/flare/text-to-image"
+	(reqs[1] as Dictionary)["input"] = {"prompt": "pixel art an old tuna prompt", "background": "transparent"}
+	_write_text(mpath, JSON.stringify(m))
+	var report: Dictionary = ArtPixelate.run_game(root, GAME, PackedStringArray(["boat", "fish_tuna"]))
+	assert_true(report["ok"], str(report["errors"]))
+	assert_eq((report["warnings"] as Array).size(), 1, str(report["warnings"]))
+	assert_push_warning("fish_tuna: uses the selected result r-tuna, but it is from openai/gpt-image-2.5/flare/text-to-image")
+	assert_string_contains(str(report["warnings"][0]), "another prompt than art.json's")
+	assert_true(FileAccess.file_exists(_sprites_dir(root).path_join("fish_tuna.png")), "pixelate still uses the selected result")
+
+
+func test_compose_prompt_matches_generate_mjs() -> void:
+	# style.trim() + " " + prompt.trim(), as tools/art/lib/art_json.mjs composePrompt().
+	assert_eq(ArtPixelate.compose_prompt({"style": "  Pixel art. "}, {"prompt": " a boat \n"}), "Pixel art. a boat")

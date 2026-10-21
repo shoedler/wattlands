@@ -31,6 +31,8 @@ const DITHERS: Array[String] = ["none", "ordered"]
 const MAX_PALETTE: int = 32
 const PART_SEPARATOR: String = "__"
 const INDEX_FILE: String = "sprites.json"
+## art.json's default `endpoint` (BRIEF 3.10), as in tools/art/lib/config.mjs.
+const DEFAULT_ENDPOINT: String = "openai/gpt-image-2.5/sunburst/text-to-image"
 
 ## How sprite PNGs get the pixel import preset (filter off, mipmaps off, lossless):
 ## IMPORT_WRITE_FILE writes a `.import` with the preset next to each PNG that has none (and fixes the
@@ -583,6 +585,50 @@ static func part_file_name(sprite_id: String, part: String) -> String:
 	return "%s%s%s.png" % [sprite_id, PART_SEPARATOR, part]
 
 
+## The prompt generate.mjs sends for a sprite: the shared style prefix, a space, the sprite prompt.
+static func compose_prompt(art: Dictionary, sprite: Dictionary) -> String:
+	return "%s %s" % [str(art.get("style", "")).strip_edges(), str(sprite.get("prompt", "")).strip_edges()]
+
+
+## Why the selected manifest entry no longer matches the sprite in art.json (another endpoint,
+## prompt or background), or an empty array. Pixelate still uses the entry; the caller warns.
+static func selection_mismatches(entry: Dictionary, art: Dictionary, sprite: Dictionary) -> PackedStringArray:
+	var out: PackedStringArray = PackedStringArray()
+	var endpoint: String = str(art.get("endpoint", DEFAULT_ENDPOINT))
+	if entry.has("endpoint") and str(entry["endpoint"]) != endpoint:
+		out.append("it is from %s, art.json's endpoint is %s" % [entry["endpoint"], endpoint])
+	var input: Variant = entry.get("input", {})
+	if typeof(input) != TYPE_DICTIONARY:
+		return out
+	var inp: Dictionary = input
+	if inp.has("prompt") and str(inp["prompt"]) != compose_prompt(art, sprite):
+		out.append("it was generated from another prompt than art.json's")
+	var background: String = str(sprite.get("background", "transparent"))
+	if inp.has("background") and str(inp["background"]) != background:
+		out.append("it was generated with background %s, art.json now says %s" % [inp["background"], background])
+	return out
+
+
+## Removes `<sprite id>__<part>.png` files (and their .import) of parts art.json no longer lists, so a
+## renamed or dropped part leaves no stale, possibly off-palette PNG behind. Returns the removed names.
+static func remove_stale_parts(out_dir: String, sprite_id: String, keep: Array) -> PackedStringArray:
+	var wanted: Dictionary = {}
+	for name: Variant in keep:
+		wanted[part_file_name(sprite_id, str(name))] = true
+	var prefix: String = sprite_id + PART_SEPARATOR
+	var files: PackedStringArray = DirAccess.get_files_at(out_dir)
+	files.sort()
+	var removed: PackedStringArray = PackedStringArray()
+	for f: String in files:
+		if not f.begins_with(prefix) or not f.ends_with(".png") or wanted.has(f):
+			continue
+		DirAccess.remove_absolute(out_dir.path_join(f))
+		if FileAccess.file_exists(out_dir.path_join(f + ".import")):
+			DirAccess.remove_absolute(out_dir.path_join(f + ".import"))
+		removed.append(f)
+	return removed
+
+
 ## Writes `bytes` unless the file already holds exactly them. Returns OK or the error.
 static func write_if_changed(path: String, bytes: PackedByteArray) -> Error:
 	if FileAccess.file_exists(path) and FileAccess.get_file_as_bytes(path) == bytes:
@@ -670,10 +716,11 @@ static func _num(v: float) -> Variant:
 
 
 ## Pixelates every sprite of <root>/assets/<game>/art.json (or only `only`) from its selected
-## manifest result. Returns {"ok": bool, "written", "skipped", "errors", "warnings": Array of String};
-## paths in "written" are relative to root. Fatal problems push_error; skipped sprites push_warning.
+## manifest result. Returns {"ok": bool, "written", "skipped", "removed", "errors", "warnings": Array
+## of String}; paths in "written" and "removed" (stale part files) are relative to root. Fatal problems
+## push_error; skipped sprites and selected results that no longer match art.json push_warning.
 static func run_game(root: String, game: String, only: PackedStringArray = PackedStringArray()) -> Dictionary:
-	var report: Dictionary = {"ok": true, "written": [], "skipped": [], "errors": [], "warnings": []}
+	var report: Dictionary = {"ok": true, "written": [], "skipped": [], "removed": [], "errors": [], "warnings": []}
 	var base: String = root.replace("\\", "/").trim_suffix("/")
 	var game_dir: String = base.path_join("assets").path_join(game)
 	var art_path: String = game_dir.path_join("art.json")
@@ -722,9 +769,9 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 		if raw.load_png_from_buffer(FileAccess.get_file_as_bytes(raw_path)) != OK:
 			_fail(report, "%s: %s is not a readable PNG" % [id, raw_path])
 			continue
-		var input: Variant = entry.get("input", {})
-		if typeof(input) == TYPE_DICTIONARY and (input as Dictionary).has("background") and str((input as Dictionary)["background"]) != spec["background"]:
-			_warn(report, "%s: the selected result was generated with background %s, art.json now says %s" % [id, (input as Dictionary)["background"], spec["background"]])
+		var mismatches: PackedStringArray = selection_mismatches(entry, art, s)
+		if not mismatches.is_empty():
+			_warn(report, "%s: uses the selected result %s, but %s (run generate.mjs for a matching result, or --select another)" % [id, entry.get("request_id", "?"), "; ".join(mismatches)])
 		var sprite: Image = process_sprite(raw, spec, palette)
 		var out_path: String = out_dir.path_join(id + ".png")
 		if write_if_changed(out_path, sprite.save_png_to_buffer()) != OK:
@@ -742,6 +789,8 @@ static func run_game(root: String, game: String, only: PackedStringArray = Packe
 				continue
 			apply_import_preset(part_path)
 			(report["written"] as Array).append("assets/%s/sprites/%s" % [game, part_file_name(id, str(name))])
+		for f: String in remove_stale_parts(out_dir, id, names):
+			(report["removed"] as Array).append("assets/%s/sprites/%s" % [game, f])
 	_write_index(report, art, selected, out_dir, game)
 	return report
 
