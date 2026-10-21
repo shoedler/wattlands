@@ -19,7 +19,7 @@ func test_first_run_game_comes_from_the_registry() -> void:
 
 
 func test_a_higher_priority_game_takes_the_first_run() -> void:
-	fx.fake_registry().add_game(FakeRegistry.fishing())
+	fx.fake_registry().add_fixture(FakeRegistry.fishing())
 	assert_eq(fx.registry.first_run_game(), "fishing")
 	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	assert_eq(title.quick_game, "fishing")
@@ -35,7 +35,7 @@ func test_negative_priority_never_takes_the_first_run() -> void:
 
 
 func test_twenty_seconds_of_pedaling_creates_rider_and_starts() -> void:
-	fx.fake_registry().add_game(FakeRegistry.fishing())
+	fx.fake_registry().add_fixture(FakeRegistry.fishing())
 	var m := open_main()
 	var title := current_screen(m) as AppTitleScreen
 	assert_false(fx.settings.has_profile())

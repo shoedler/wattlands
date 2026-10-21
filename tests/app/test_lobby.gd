@@ -65,7 +65,7 @@ func test_toggle_option() -> void:
 func test_int_option_lists_values_on_its_step_grid() -> void:
 	var s := _host_lobby()
 	confirm_pick(s, "opt:laps")
-	assert_eq(menu(s).items.size(), 4, "1..4")
+	assert_eq(menu(s).item_count(), 4, "1..4")
 	assert_eq(menu(s).highlighted(), 1, "the current value (2) is highlighted")
 	confirm_pick(s, 3)
 	assert_eq(fx.fake_net().settings_sent["options"]["laps"], 4)
@@ -79,6 +79,8 @@ func test_choice_option_with_labels() -> void:
 	_translation.add_message("WORKOUT_OPT_THEME", "Theme")
 	_translation.add_message("WORKOUT_CONTENT_SWEET_SPOT", "Sweet spot")
 	TranslationServer.add_translation(_translation)
+	# A content id with no label key anywhere (the real Workout strings label its own contents).
+	(fx.fake_registry().manifests["workout"]["contents"] as Array).append("no_label")
 	var s := _host_lobby()
 	assert_eq(menu(s).text_of("opt:theme"), "Theme: day", "the label key <ID>_OPT_<OPTION ID>")
 	confirm_pick(s, "opt:theme")
@@ -89,7 +91,7 @@ func test_choice_option_with_labels() -> void:
 	assert_eq(menu(s).text_of("opt:theme"), "Theme: Night ride")
 	confirm_pick(s, "content")
 	assert_eq(menu(s).text_of("sweet_spot"), "Sweet spot", "<ID>_CONTENT_<CID> label")
-	assert_eq(menu(s).text_of("easy_30"), "easy_30", "bare id when the key is missing")
+	assert_eq(menu(s).text_of("no_label"), "no_label", "bare id when the key is missing")
 
 
 func test_long_int_player_option_uses_a_stepper() -> void:
@@ -347,7 +349,7 @@ func test_min_players_needs_bots() -> void:
 	fx.give_profile()
 	var m := FakeRegistry.siege()
 	m["min_players"] = 2
-	fx.fake_registry().add_game(m)
+	fx.fake_registry().add_fixture(m)
 	fx.fake_net().add_human(1, "Ada")
 	var s := open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "siege"}) as AppLobbyScreen
 	confirm_pick(s, "start")
