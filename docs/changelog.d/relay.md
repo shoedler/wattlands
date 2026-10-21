@@ -1,0 +1,9 @@
+### Added (relay)
+
+- `server/relay`: the multiplayer relay from BRIEF 5.3, written in TypeScript and run by Node's type stripping. It supports `hello`, `create`, `join`, `msg`, `ping` and `leave`, and sends `created`, `joined`, `peer_joined`, `peer_left`, `host_left`, `pong` and `error`. Room codes are 6-character Crockford codes, and the relay normalizes typed input. It holds a dropped seat for 120 s; the seat's reconnect token stays the same across reconnects, so a lost reply can be retried. A dropped host's room is held for 120 s, and `host_left` goes out on an explicit leave, on host token expiry and at the 4 h room lifetime. Every BRIEF limit is enforced: 8 peers, 16 KB, 60 messages a second with a burst of 120, a 60 s idle timeout and 10 joins a minute per IP. P1: `create` may ask for a previous code.
+- The relay prefers the `ws` 8.22.0 package. Without it, it uses its own zero-dependency RFC 6455 server (`RELAY_WS_IMPL=auto|ws|builtin`).
+- `GET /health` reports JSON status and counts. The WebSocket is at `/v1`, by default `ws://localhost:8787/v1`, and `PORT`, `HOST` and `RELAY_TRUST_PROXY` configure the server. On start the relay prints `WATTLANDS_RELAY <url>`.
+- Additive protocol fields: `created.max`; `joined.rejoin` and `joined.peers`; `peer_joined.rejoin`; `host_left.reason` (`left`, `timeout` or `expired`); and `error.detail`, `error.re` and `error.proto` (on `version_mismatch`).
+- The relay ships with a Dockerfile (`node:24-alpine`, non-root, `HEALTHCHECK` on `/health`), a README, and example `fly.toml` and `render.yaml` files.
+- Tests: 180 `node:test` cases run in about a second with an injected clock. The same protocol and frame suites run against both WebSocket layers.
+- CI: `.github/workflows/relay.yml` runs the suite with zero dependencies and again with `ws`, then builds the image and checks `/health`.

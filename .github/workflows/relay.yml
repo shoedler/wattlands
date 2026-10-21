@@ -1,0 +1,57 @@
+# Relay (server/relay, BRIEF 5.3 and 7.6): the node:test suites with zero npm dependencies
+# and with ws installed, then the Docker image and its /health endpoint.
+name: relay
+
+on:
+  push:
+    paths:
+      - 'server/relay/**'
+      - '.github/workflows/relay.yml'
+  pull_request:
+    paths:
+      - 'server/relay/**'
+      - '.github/workflows/relay.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: node --test (built-in and ws layers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: server/relay
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - name: Zero-dependency suite (ws suites skipped)
+        run: node --test
+      - name: Install ws
+        run: npm ci --no-audit --no-fund
+      - name: Both WebSocket layers
+        run: node --test
+        env:
+          RELAY_REQUIRE_WS: '1'
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: docker build -t wattlands-relay:ci server/relay
+      - name: Health check
+        run: |
+          docker run -d --name relay -p 8787:8787 wattlands-relay:ci
+          for i in $(seq 1 20); do
+            if curl -fsS http://127.0.0.1:8787/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs relay
+          exit 1

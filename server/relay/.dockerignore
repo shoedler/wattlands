@@ -1,0 +1,9 @@
+node_modules
+test
+testkit
+*.md
+fly.toml
+render.yaml
+tsconfig.json
+Dockerfile
+.dockerignore
