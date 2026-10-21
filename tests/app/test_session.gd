@@ -325,6 +325,92 @@ func test_a_user_pause_menu_scans() -> void:
 	assert_true(menu(s).scanning, "a pause the rider asked for scans like any menu")
 
 
+## A solo session from a lobby whose own slot has `autopilot`, with a router that would not scan
+## (the fake's pedal_ui = false: pedal UI off and a device used).
+func _autopilot_session(autopilot: bool) -> AppSessionScreen:
+	fx.give_profile(250.0)
+	fx.input.set("pedal_ui", false)
+	var net := fx.fake_net()
+	net.local_peer = 1
+	net.add_human(1, "Ada", 250.0).autopilot = autopilot
+	net.lobby = {
+		"game_id": "workout",
+		"game_version": "1.0.0",
+		"content_id": "easy_30",
+		"scaling": Wl.FAIR_FTP,
+		"settings": {}
+	}
+	return (
+		open_screen(
+			AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30"}
+		)
+		as AppSessionScreen
+	)
+
+
+## BRIEF 3.5 "with Autopilot or pedal UI on": the Autopilot the rider chose in the lobby (their
+## slot's flag) makes the pause menu and the results scan.
+func test_session_autopilot_scans_the_pause_menu_and_results() -> void:
+	var s := _autopilot_session(true)
+	assert_true(s.session_autopilot(), "the rider's own slot rides on Autopilot")
+	assert_true(s.scanning_enabled())
+	s.feed_action(&"pause")
+	assert_true(s.overlay.visible)
+	assert_true(menu(s).scanning, "the pause menu scans")
+	(s.host as FakeHost).finish_with(GameResults.new())
+	assert_eq(fx.app.state, "results")
+	assert_true(fx.app.params["autopilot"], "results learn the session's Autopilot")
+	var r := open_screen(AppResultsScreen.new(), fx.app.params) as AppResultsScreen
+	assert_true(menu(r).scanning, "the results menu scans")
+
+
+func test_without_autopilot_the_session_follows_the_router() -> void:
+	var s := _autopilot_session(false)
+	assert_false(s.session_autopilot())
+	s.feed_action(&"pause")
+	assert_true(s.overlay.visible)
+	assert_false(menu(s).scanning, "the router says no and Autopilot is off")
+	(s.host as FakeHost).finish_with(GameResults.new())
+	assert_false(fx.app.params["autopilot"])
+	var r := open_screen(AppResultsScreen.new(), fx.app.params) as AppResultsScreen
+	assert_false(menu(r).scanning)
+
+
+func test_an_autopilot_session_still_holds_resume_on_a_coasting_pause() -> void:
+	var s := _autopilot_session(true)
+	(s.host as FakeHost).pause("coasting")
+	fx.bus.paused_changed.emit(true, "coasting")
+	assert_true(s.auto_paused())
+	assert_false(menu(s).scanning, "the auto-pause overlay holds Resume, Autopilot or not")
+	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"))
+
+
+func test_a_client_reads_its_autopilot_from_session_start() -> void:
+	fx.give_profile()
+	fx.input.set("pedal_ui", false)
+	var net := fx.fake_net()
+	net.local_peer = 2
+	var me := PlayerSlot.new()
+	me.peer_id = 2
+	me.slot_index = 1
+	me.autopilot = true
+	var start := {
+		"type": "session_start",
+		"game_id": "workout",
+		"content_id": "e2e",
+		"seed": 1,
+		"players": [Bots.make_slot(1, 0, 200.0).to_dict(), me.to_dict()],
+		"options": {},
+		"scaling": Wl.FAIR_FTP
+	}
+	var s := (
+		open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start})
+		as AppSessionScreen
+	)
+	assert_true(s.session_autopilot(), "the client's own slot from session_start")
+	assert_true(s.scanning_enabled())
+
+
 func test_metronome_runs_during_the_session_when_on() -> void:
 	var p := fx.give_profile()
 	p.metronome = true

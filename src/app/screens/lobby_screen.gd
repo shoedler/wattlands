@@ -289,12 +289,20 @@ func build_player_info() -> Dictionary:
 
 
 ## Toggle this rider's Autopilot for the session (sent in player_info; the profile keeps its
-## own default).
+## own default). Switching it on turns pedal-scan on at once (scanning_enabled).
 func set_autopilot(on: bool) -> void:
 	my_autopilot = on
 	_send_player_info()
+	set_scanning(scanning_enabled())
 	_refresh_root_menu()
 	_refresh_all()
+
+
+## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this rider's Autopilot for the
+## session (the lobby toggle) counts as well as everything InputRouter.pedal_ui_active() checks
+## (pedal UI, the profile's Autopilot default, no input device used yet).
+func scanning_enabled() -> bool:
+	return my_autopilot or super.scanning_enabled()
 
 
 ## Send player_info only when it differs from the last one sent: the host's lobby_state echo of

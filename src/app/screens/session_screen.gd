@@ -219,6 +219,21 @@ func local_rider() -> LocalRider:
 	return riders.get(local_peer(), null)
 
 
+## True when this machine's rider rides this session on Autopilot: its own slot's flag (the
+## lobby toggle, or the profile's default for a quick start). False before the GameHost config.
+func session_autopilot() -> bool:
+	for slot: PlayerSlot in config.get("players", []):
+		if slot.peer_id == local_peer() and not slot.is_bot:
+			return slot.autopilot
+	return false
+
+
+## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this session's Autopilot counts as
+## well as InputRouter.pedal_ui_active(). An auto-pause still holds Resume without scanning.
+func scanning_enabled() -> bool:
+	return session_autopilot() or super.scanning_enabled()
+
+
 ## The session's own rider's trainer mode (the overlay menu's hint and coast follow it).
 func local_trainer_mode() -> String:
 	var r := local_rider()
@@ -700,6 +715,7 @@ func _finish(r: GameResults) -> void:
 			"role": role,
 			"local_peer": local_peer(),
 			"host_left": host_left,
+			"autopilot": session_autopilot(),
 		}
 	)
 
