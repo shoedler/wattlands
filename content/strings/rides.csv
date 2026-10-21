@@ -24,3 +24,5 @@ RIDES_HISTORY,Rides
 RIDES_REUPLOAD,Upload again
 RIDES_IMPORT_FTP_WEIGHT,Import FTP and weight from Strava
 RIDES_SAVED,Ride saved
+RIDES_CALLBACK_CONNECTING,Wattlands is connecting to Strava. You can close this window and return to the game.
+RIDES_CALLBACK_DENIED,Strava did not connect ({error}). You can close this window and return to Wattlands.

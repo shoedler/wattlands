@@ -4,6 +4,9 @@ extends Node
 ## that waits for GET /strava/callback?code=...&state=... and answers with a short page.
 ## Other paths get a 404 and the wait goes on. The owner stops it after the first callback
 ## or when its time window (5 minutes) runs out. Polled in _process; PROCESS_MODE_ALWAYS.
+## A connection that sends no complete request within idle_timeout_s is dropped, so idle
+## (speculative) browser connections never use up the MAX_CONNECTIONS slots. The page texts
+## come from content/strings/rides.csv.
 
 ## The first request to CALLBACK_PATH arrived: its decoded query parameters.
 signal received(params: Dictionary)
@@ -12,14 +15,18 @@ const CALLBACK_PATH := "/strava/callback"
 const BIND_ADDRESS := "127.0.0.1"
 const MAX_REQUEST_BYTES := 8192
 const MAX_CONNECTIONS := 8
+const DEFAULT_IDLE_TIMEOUT_S := 10.0
 
 var port: int = 0
 var done: bool = false
 var params: Dictionary = {}
+## Seconds a connection may stay open without sending a complete request.
+var idle_timeout_s: float = DEFAULT_IDLE_TIMEOUT_S
 
 var _server: TCPServer = null
 var _conns: Array[StreamPeerTCP] = []
 var _bufs: Array[PackedByteArray] = []
+var _ages: Array[float] = []
 
 
 func _init() -> void:
@@ -46,6 +53,11 @@ func is_listening() -> bool:
 	return _server != null and _server.is_listening()
 
 
+## Connections accepted and not yet answered or dropped.
+func open_connections() -> int:
+	return _conns.size()
+
+
 ## The redirect_uri for this server.
 func redirect_uri() -> String:
 	return "http://%s:%d%s" % [BIND_ADDRESS, port, CALLBACK_PATH]
@@ -56,6 +68,7 @@ func stop() -> void:
 		c.disconnect_from_host()
 	_conns.clear()
 	_bufs.clear()
+	_ages.clear()
 	if _server != null:
 		_server.stop()
 		_server = null
@@ -66,7 +79,7 @@ func _exit_tree() -> void:
 	stop()
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
 	if _server == null:
 		return
 	while _server.is_connection_available() and _conns.size() < MAX_CONNECTIONS:
@@ -74,12 +87,15 @@ func _process(_delta: float) -> void:
 		if c != null:
 			_conns.append(c)
 			_bufs.append(PackedByteArray())
+			_ages.append(0.0)
 	var i := 0
 	while i < _conns.size():
-		if _service(i):
+		_ages[i] += delta
+		if _service(i) or _ages[i] > idle_timeout_s:
 			_conns[i].disconnect_from_host()
 			_conns.remove_at(i)
 			_bufs.remove_at(i)
+			_ages.remove_at(i)
 		else:
 			i += 1
 
@@ -120,9 +136,10 @@ func _service(i: int) -> bool:
 	params = parse_query(query)
 	done = true
 	if params.has("error"):
-		_respond(c, 200, "Strava did not connect (%s). You can close this window and return to Wattlands." % str(params["error"]).xml_escape())
+		var denied := tr_or("RIDES_CALLBACK_DENIED", "Strava did not connect ({error}). You can close this window and return to Wattlands.")
+		_respond(c, 200, denied.xml_escape().format({"error": str(params["error"]).xml_escape()}))
 	else:
-		_respond(c, 200, "Wattlands is connecting to Strava. You can close this window and return to the game.")
+		_respond(c, 200, tr_or("RIDES_CALLBACK_CONNECTING", "Wattlands is connecting to Strava. You can close this window and return to the game.").xml_escape())
 	received.emit(params)
 	return true
 
@@ -135,6 +152,12 @@ func _respond(c: StreamPeerTCP, code: int, message: String) -> void:
 		code, str(reason.get(code, "OK")), body.size()]
 	c.put_data(head.to_ascii_buffer())
 	c.put_data(body)
+
+
+## The translation of `key` (content/strings/rides.csv), or `fallback` when there is none.
+static func tr_or(key: String, fallback: String) -> String:
+	var t := String(TranslationServer.translate(key))
+	return fallback if t == key or t == "" else t
 
 
 ## "a=1&b=x%20y" -> {"a": "1", "b": "x y"} ("+" is a space).

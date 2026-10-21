@@ -174,6 +174,82 @@ func test_callback_server_binds_loopback_and_times_out() -> void:
 	cb.stop()
 
 
+## GET `url` straight from the test (loopback only): [result, code, body text]. Resumes on
+## the next frame, outside the HTTPRequest's signal, so the request can be freed.
+func _http_get(url: String, timeout_s: float = 5.0) -> Array:
+	var req := HTTPRequest.new()
+	req.timeout = timeout_s
+	add_child(req)
+	req.request(url)
+	var res: Array = await req.request_completed
+	req.queue_free()
+	await get_tree().process_frame
+	return [int(res[0]), int(res[1]), (res[3] as PackedByteArray).get_string_from_utf8()]
+
+
+func test_callback_page_texts_come_from_the_strings_csv() -> void:
+	assert_ne(TranslationServer.translate("RIDES_CALLBACK_CONNECTING"), &"RIDES_CALLBACK_CONNECTING", "the key is in rides.csv")
+	assert_ne(TranslationServer.translate("RIDES_CALLBACK_DENIED"), &"RIDES_CALLBACK_DENIED", "the key is in rides.csv")
+	var cb := StravaCallbackServer.new()
+	add_child_autofree(cb)
+	assert_true(cb.start())
+	var other: Array = await _http_get("http://127.0.0.1:%d/favicon.ico" % cb.port)
+	assert_eq(other[1], 404, "other paths: 404, the wait goes on")
+	assert_false(cb.done)
+	var denied: Array = await _http_get(cb.redirect_uri() + "?state=s&error=access_denied")
+	assert_eq(denied[1], 200)
+	assert_string_contains(str(denied[2]), String(TranslationServer.translate("RIDES_CALLBACK_DENIED")).format({"error": "access_denied"}))
+	assert_true(cb.done)
+	assert_eq(cb.params, {"state": "s", "error": "access_denied"})
+	cb.start()
+	var ok: Array = await _http_get(cb.redirect_uri() + "?state=s&code=c&scope=read,activity:write")
+	assert_string_contains(str(ok[2]), String(TranslationServer.translate("RIDES_CALLBACK_CONNECTING")))
+	assert_eq(cb.params["code"], "c")
+	cb.stop()
+
+
+func test_idle_connections_never_block_the_callback() -> void:
+	var cb := StravaCallbackServer.new()
+	add_child_autofree(cb)
+	assert_true(cb.start())
+	assert_eq(cb.idle_timeout_s, 10.0, "default")
+	cb.idle_timeout_s = 60.0
+	# A browser's speculative connections: open, then silent. They fill every slot.
+	var idle: Array[StreamPeerTCP] = []
+	for i in StravaCallbackServer.MAX_CONNECTIONS:
+		var p := StreamPeerTCP.new()
+		assert_eq(p.connect_to_host("127.0.0.1", cb.port), OK)
+		idle.append(p)
+	await wait_until(func() -> bool: return cb.open_connections() == StravaCallbackServer.MAX_CONNECTIONS, 5.0)
+	assert_eq(cb.open_connections(), StravaCallbackServer.MAX_CONNECTIONS, "every slot is taken")
+	cb.idle_timeout_s = 0.3
+	var res: Array = await _http_get(cb.redirect_uri() + "?state=s&code=c", 5.0)
+	assert_eq(res[0], HTTPRequest.RESULT_SUCCESS, "the real callback got through once the idle ones were dropped")
+	assert_eq(res[1], 200)
+	assert_true(cb.done)
+	for p in idle:
+		p.disconnect_from_host()
+	cb.stop()
+
+
+func test_two_connects_use_different_states() -> void:
+	OS.unset_environment(Locks.NET_ENV)
+	var urls: Array = []
+	var c := _client(_mock.api_base(), _mock.oauth_base())
+	c.callback_timeout_s = 0.05
+	c.browser_opener = func(url: String) -> void: urls.append(url)
+	await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
+	await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
+	OS.set_environment(Locks.NET_ENV, "1")
+	assert_eq(urls.size(), 2)
+	var states: Array = []
+	for u: String in urls:
+		var q := StravaCallbackServer.parse_query(u.substr(u.find("?") + 1))
+		states.append(str(q.get("state", "")))
+		assert_eq(str(q.get("state", "")).length(), 32, "128 random bits")
+	assert_ne(states[0], states[1], "a fresh random state per connect")
+
+
 func test_connect_can_be_cancelled() -> void:
 	OS.unset_environment(Locks.NET_ENV)
 	var c := _client(_mock.api_base(), _mock.oauth_base())
