@@ -497,6 +497,7 @@ func test_report_data() -> void:
 	assert_eq(int(d["max_snapshot_bytes"]), biggest)
 	assert_eq((d["directives"] as Array).size(), 1)
 	assert_not_null(d["directives"][0]["applied"])
+	assert_eq((_rider(b).get("ack_queue") as Array).size(), 0, "a local rider's ack queue is drained on the host")
 	assert_eq((d["phases"]["1"] as Array)[0]["ended_by"], Wl.ENDED_DURATION)
 
 

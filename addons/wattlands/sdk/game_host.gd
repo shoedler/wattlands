@@ -214,6 +214,11 @@ func setup(p_config: Dictionary) -> String:
 	_connect_riders()
 	if not bus.panic_requested.is_connected(_on_panic):
 		bus.panic_requested.connect(_on_panic)
+	if not bus.cadence_band_changed.is_connected(_on_cadence_band_changed):
+		bus.cadence_band_changed.connect(_on_cadence_band_changed)
+	var own: LocalRider = local_riders.get(_local_peer)
+	if _input_router != null and own != null and _input_router.has_method("attach_rider"):
+		_input_router.call("attach_rider", own)
 	if role == Wl.CLIENT:
 		_setup_ok = true
 		return ""
@@ -240,6 +245,7 @@ func start() -> void:
 	_event("session_start", {"role": role, "players": _order.size()})
 	for c in tracker.start():
 		_on_phase_change(c, true)
+	_update_metronome(0.0, 0.0)
 
 
 ## One fixed 0.05 s platform step (headless loops); _process uses the clock in real time.
@@ -349,6 +355,9 @@ func end_session(reason: String) -> void:
 			end_reason = reason
 		_save_fits()
 	_event("session_end", {"reason": reason})
+	_stop_metronome()
+	if _input_router != null and _input_router.has_method("detach_rider"):
+		_input_router.call("detach_rider")
 	_set_state("ended")
 
 
@@ -612,6 +621,9 @@ func _authority_step() -> void:
 		var r: LocalRider = local_riders[peer]
 		r.tick(DT)
 		gestures[peer] = _take_gestures(r)
+		# Riders simulated here already reported through apply_directive's return value;
+		# their ack queue (meant for Telemetry.acks) is drained so it never grows.
+		r.take_acks()
 	var actions := _take_actions()
 	var running := state == "running" or state == "paused" or state == "cooldown"
 	if not running:
@@ -692,6 +704,7 @@ func _remote_frame_telemetry(peer: int, pt: float) -> Telemetry:
 	r["gestures"] = []
 	r["intents"] = []
 	tm.age_s = pt - float(r["rx_t"])
+	tm.cadence_age_s += tm.age_s
 	tm.connected = not bool(r["dropped"])
 	if bool(r["dropped"]):
 		tm.power_w = 0.0
@@ -1197,6 +1210,7 @@ func _on_session_start(data: Dictionary) -> void:
 	_configured = true
 	_set_state("running")
 	_event("session_start", {"role": role, "players": players.size()})
+	_update_metronome(0.0, 0.0)
 	if _pending_snapshot != null:
 		var snap: Variant = _pending_snapshot
 		_pending_snapshot = null
@@ -1426,6 +1440,34 @@ func _on_lap_marker(label: String) -> void:
 	bus.lap_marked.emit(label)
 	_queue_event({"type": "wl.lap_marker", "label": label})
 	_event("lap_marker", {"label": label})
+
+
+func _on_cadence_band_changed(peer: int, lo: float, hi: float) -> void:
+	if peer == _local_peer:
+		_update_metronome(lo, hi)
+
+
+## The optional cadence metronome (BRIEF 3.9; docs/OWNERSHIP.md AU2): the local rider's
+## published cadence band centre, else the preferred cadence; on only when the rider's
+## profile turned it on. Rendering peers only.
+func _update_metronome(lo: float, hi: float) -> void:
+	if _headless:
+		return
+	var sfx := _autoload("Sfx")
+	var rider: LocalRider = local_riders.get(_local_peer)
+	if sfx == null or not sfx.has_method("set_metronome") or rider == null:
+		return
+	var on := rider.profile != null and rider.profile.metronome
+	var rpm := 0.5 * (lo + hi) if hi > 0.0 else (rider.slot.preferred_cadence_rpm if rider.slot != null else 90.0)
+	sfx.call("set_metronome", rpm, on)
+
+
+func _stop_metronome() -> void:
+	if _headless:
+		return
+	var sfx := _autoload("Sfx")
+	if sfx != null and sfx.has_method("set_metronome"):
+		sfx.call("set_metronome", 0.0, false)
 
 
 func _on_pause_requested(reason: String) -> void:
