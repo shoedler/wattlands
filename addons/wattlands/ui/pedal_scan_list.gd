@@ -89,6 +89,11 @@ func _ready() -> void:
 	_update_listening()
 
 
+## Listen again whenever the list re-enters the tree (_ready runs only once).
+func _enter_tree() -> void:
+	_update_listening()
+
+
 func _exit_tree() -> void:
 	_disconnect_router()
 

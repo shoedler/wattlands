@@ -366,6 +366,29 @@ func test_listens_to_the_router_menu_input() -> void:
 	assert_signal_emit_count(list, "item_picked", 2, "listen_to_input off")
 
 
+## A list taken out of the tree and put back (a menu stack popping back to it) listens again.
+func test_relistens_after_leaving_and_reentering_the_tree() -> void:
+	var bus: WlEventBus = autofree(WlEventBus.new())
+	var router := WlInputRouter.new()
+	router.bus = bus
+	router.load_on_ready = false
+	add_child_autofree(router)
+	var list := PedalScanList.new()
+	list.router = router
+	list.real_time = false
+	list.sounds = false
+	add_child_autofree(list)
+	watch_signals(list)
+	list.set_items(_items(3))
+	remove_child(list)
+	router.inject_action(&"confirm")
+	assert_signal_not_emitted(list, "item_picked", "out of the tree: deaf")
+	add_child(list)
+	router.inject_action(&"down")
+	router.inject_action(&"confirm")
+	assert_eq(get_signal_parameters(list, "item_picked"), [1, "item1", "action"], "back in the tree: listening")
+
+
 func test_router_coast_in_erg_never_backs_out() -> void:
 	var bus: WlEventBus = autofree(WlEventBus.new())
 	var router := WlInputRouter.new()
