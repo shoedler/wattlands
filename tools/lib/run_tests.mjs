@@ -254,10 +254,19 @@ async function stepScaffold(o) {
     cwd: copy, log: path.join(o.project, 'build', 'scaffold_new_game.log'), timeoutS: 300,
   });
   if (ng.code !== 0) return { status: 'FAIL', note: `tools/new_game demo exited ${ng.code} (copy kept in build/scaffold_check)` };
-  const imp = await godot(o, ['--headless', '--path', copy, '--import'], {
+  let imp = await godot(o, ['--headless', '--path', copy, '--import'], {
     log: path.join(o.project, 'build', 'scaffold_import.log'), timeoutS: SCAFFOLD_TIMEOUT_S,
   });
   notes.push(`import exit ${imp.code}`);
+  if (imp.code !== 0) {
+    // BRIEF 2/4.2's first-import rule: a fresh import that fails is run once more (a 4.7.2 first
+    // import crashed once mid-run here); the copy must then import cleanly.
+    imp = await godot(o, ['--headless', '--path', copy, '--import'], {
+      log: path.join(o.project, 'build', 'scaffold_import2.log'), timeoutS: SCAFFOLD_TIMEOUT_S,
+    });
+    notes.push(`second import exit ${imp.code}`);
+    if (imp.code !== 0) return { status: 'FAIL', note: `${notes.join(', ')} (copy kept in build/scaffold_check)` };
+  }
   fs.mkdirSync(path.join(copy, 'build'), { recursive: true });
   fs.writeFileSync(path.join(copy, 'build', '.gdignore'), '');
   const junit = path.join(copy, 'build', 'junit_scaffold.xml');
