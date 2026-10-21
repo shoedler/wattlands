@@ -60,10 +60,13 @@ extends Node
 ## Keeping a client in step (W3 NET-1, NET-2, NET-5): a client re-applies nothing it already
 ## has (an identical plan, or a phase message for the phase it rides with the same start_tick,
 ## only catches its phase clock up), so a rejoin or resync never restarts a ramp or adds a FIT
-## lap. A gap in the event sequence, or the roster showing another phase index for this rider
-## twice in a row, logs push_warning("GameHost: desync: ...") (counted in desync_count, the
-## scripted peer's report and the e2e check) and asks the host for a resync (`resync` in the
-## next telemetry, at most every RESYNC_EVERY_S). The expected gap after this client's own
+## lap. A phase it enters at the host's elapsed_s (a restarted client, or a phase that changed
+## while it was away) is resumed there through LocalRider.resume_phase (W4 NET-2), not
+## restarted, and gets the one lap start_phase would write. A gap in the event sequence, or
+## the roster showing another phase index for this rider twice in a row, logs
+## push_warning("GameHost: desync: ...") (counted in desync_count, the scripted peer's report
+## and the e2e check) and asks the host for a resync (`resync` in the next telemetry, at most
+## every RESYNC_EVERY_S). The expected gap after this client's own
 ## rejoin or the host's return is no desync. Snapshot seq gaps are not checked: every snapshot
 ## carries the full state and the NetSession may drop superseded ones under its send budget.
 ## The host answers a resync, a rejoin and its own return to the room (WlNetSession's
@@ -178,6 +181,9 @@ var _client_plan: EffortPlan = null
 var _client_phase: int = -1
 var _client_phase_ticks: int = 0
 var _client_phase_start_tick: int = 0
+# The phase this client GameHost entered last, as (index, start_tick); (-1, -1) before the
+# first entry.
+var _client_entry: Vector2i = Vector2i(-1, -1)
 var _client_prev_ended_by: String = ""
 var _client_cadence: Array = [0.0, 0.0]
 var _snap_seq_applied: int = 0
@@ -1597,9 +1603,19 @@ func _on_phase(data: Dictionary) -> void:
 
 
 ## Enter plan phase `index` on this client (a `phase` message, or the local cool-down after the
-## net session ended). `elapsed_s` > 0 (a rejoin into a running phase) resumes the phase there
-## when the LocalRider can (resume_phase(index, elapsed_s)), else starts it.
+## net session ended). `elapsed_s` > 0 is the host's elapsed time in a running phase (a rejoin,
+## a restarted client, the host's return, a resync): the rider resumes the phase there through
+## LocalRider.resume_phase(index, elapsed_s) when it has it (W3 NET-2: the governor's ramp,
+## course distance and duration rules carry on from the host's clock), else starts it.
+## resume_phase writes no FIT lap, so the lap start_phase would have written for a lap phase
+## is written here (a restarted client's first entry: the new FIT's opening lap takes the phase's
+## name; a phase that changed while the socket or the host was away: its own lap, so the FIT
+## keeps one lap per interval). Re-entering the phase entry it rode (same index and start_tick,
+## after a plan that changed while it was away reset the phase) writes none.
 func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_s: float) -> void:
+	var entry := Vector2i(index, start_tick)
+	var new_phase := _client_entry != entry
+	_client_entry = entry
 	_client_phase = index
 	_client_phase_ticks = roundi(elapsed_s / DT)
 	_client_phase_start_tick = start_tick
@@ -1609,6 +1625,8 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 	if rider != null:
 		if elapsed_s > 0.0 and rider.has_method("resume_phase"):
 			rider.call("resume_phase", index, elapsed_s)
+			if new_phase:
+				_lap_on_resume(rider, index)
 		else:
 			rider.start_phase(index)
 	bus.phase_started.emit(_local_peer, index)
@@ -1622,6 +1640,23 @@ func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_
 		hud_router.clear_power_band(_local_peer)
 		if state == "running":
 			_set_state("cooldown")
+
+
+## The FIT lap LocalRider.start_phase writes for phase `index` (a lap phase or the cool-down),
+## for a resumed phase (resume_phase writes none).
+func _lap_on_resume(rider: LocalRider, index: int) -> void:
+	var ph := _client_plan.phase(index) if _client_plan != null else null
+	if ph == null:
+		return
+	var is_cooldown := ph.kind == Wl.COOLDOWN or index == _client_plan.cooldown_index()
+	if not (ph.lap or is_cooldown):
+		return
+	var label := ph.label
+	if label == "" and is_cooldown:
+		label = String(TranslationServer.translate("CORE_LAP_COOLDOWN"))
+	elif label == "":
+		label = String(TranslationServer.translate("CORE_LAP_PHASE")).replace("{n}", str(index + 1))
+	rider.lap(label)
 
 
 func _on_directive(data: Dictionary) -> void:
