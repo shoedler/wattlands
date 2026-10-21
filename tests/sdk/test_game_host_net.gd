@@ -655,7 +655,8 @@ func test_phase_started_on_every_bus_without_cross_talk() -> void:
 
 ## W3 PROF-2 (BRIEF 3.2): in WKG every rider's p_eff_per_w is 75 / weight, so session_start goes
 ## to each client with only its own value; other humans carry the 75 kg reference (1.0). The
-## host keeps every value (target_wkg needs it); FAIR_FTP still broadcasts one session_start.
+## host keeps every value (target_wkg needs it); FAIR_FTP still broadcasts one session_start
+## (rider_mass_kg in RAW: test_raw_session_start_carries_only_the_recipients_own_mass).
 func test_wkg_session_start_carries_only_the_recipients_own_p_eff() -> void:
 	var b := Kit.multi(_root, 3, "tiny", {"scaling_mode": Wl.WKG})
 	_tmp.append(str(b["tmp"]))
@@ -700,3 +701,64 @@ func test_wkg_session_start_carries_only_the_recipients_own_p_eff() -> void:
 		2,
 		"one per client"
 	)
+
+
+## BRIEF 3.2: in RAW a rider's rider_mass_kg is the weight it shared with the host (the speed
+## model's mass), so session_start goes to each client with only its own; other humans carry
+## the 75 kg reference. Bots keep 75 kg, the host keeps every real value, and a rejoining client
+## gets its own mass back.
+func test_raw_session_start_carries_only_the_recipients_own_mass() -> void:
+	var b := Kit.multi(_root, 3, "tiny", {"scaling_mode": Wl.RAW}, 1)
+	_tmp.append(str(b["tmp"]))
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var weights := {1: 70.0, 2: 82.5, 3: 61.0}
+	for p in host.players():
+		if not p.is_bot:
+			p.rider_mass_kg = float(weights[p.peer_id])
+	Kit.start(b)
+	Kit.step(b, 2)
+	for i in 2:
+		var c := _client(b, i)
+		var me := c.local_peer()
+		assert_eq(c.ctx.players.size(), 4, "three humans and a bot")
+		for slot in c.ctx.players:
+			if slot.is_bot:
+				assert_eq(slot.rider_mass_kg, 75.0, "a bot rides at 75 kg")
+			elif slot.peer_id == me:
+				assert_eq(slot.rider_mass_kg, float(weights[me]), "peer %d gets its own mass" % me)
+			else:
+				assert_eq(
+					slot.rider_mass_kg,
+					75.0,
+					"peer %d never learns peer %d's weight" % [me, slot.peer_id]
+				)
+	for p in host.ctx.players:
+		assert_eq(
+			p.rider_mass_kg,
+			75.0 if p.is_bot else float(weights[p.peer_id]),
+			"the host computes RAW with peer %d's real mass" % p.peer_id
+		)
+	var net1: WlNetSession = (b["nets"] as Array)[0]
+	assert_eq(
+		(
+			(net1.get("sent") as Array)
+			. filter(func(s: Array) -> bool: return s[1] == "session_start")
+			. size()
+		),
+		2,
+		"one per client"
+	)
+	var again: Dictionary = host.call("_session_start_payload", 3)
+	for d: Dictionary in again["players"]:
+		if bool(d["is_bot"]):
+			continue
+		var own := int(d["peer_id"]) == 3
+		assert_eq(
+			float(d["rider_mass_kg"]),
+			61.0 if own else 75.0,
+			"a rejoin of peer 3 gets back its own mass and no other"
+		)
+	var everyone: Dictionary = host.call("_session_start_payload")
+	for d: Dictionary in everyone["players"]:
+		assert_eq(float(d["rider_mass_kg"]), 75.0, "a payload for every client names no weight")
