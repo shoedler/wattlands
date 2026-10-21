@@ -174,3 +174,44 @@ func test_displacement_reference() -> void:
 	var c := SpriteWobble.displacement(3.0, 2.2, 3.0, 10.0, 0.5, 0.0, 1.0, false)
 	assert_almost_eq(a, b, 0.0001, "periodic in the wavelength")
 	assert_almost_eq(a, c, 0.0001, "periodic in 1 / frequency")
+
+
+# --- DitherDissolve --------------------------------------------------------------------------
+
+func test_dither_dissolve_shader_loads() -> void:
+	var sh := DitherDissolve.shader()
+	assert_not_null(sh)
+	assert_eq(sh.get_mode(), Shader.MODE_CANVAS_ITEM)
+	var names := _uniform_names(sh)
+	assert_has(names, "amount")
+	assert_has(names, "cell_px")
+
+
+func test_dither_bayer_matches_painter_table() -> void:
+	for y in 4:
+		for x in 4:
+			assert_eq(DitherDissolve.bayer4(x, y), PixelPainter.BAYER4[y * 4 + x])
+	assert_eq(DitherDissolve.bayer4(5, 6), DitherDissolve.bayer4(1, 2), "tiles every 4 texels")
+
+
+func test_dither_visible_fraction_follows_amount() -> void:
+	for step in 17:
+		var amount := step / 16.0
+		var shown := 0
+		for y in 4:
+			for x in 4:
+				if DitherDissolve.visible_at(x, y, amount):
+					shown += 1
+		assert_eq(shown, 16 - step, "amount %s" % amount)
+
+
+func test_dither_material_and_amount_clamp() -> void:
+	var s: Sprite2D = autofree(Sprite2D.new())
+	var mat := DitherDissolve.apply(s, 0.25, 2)
+	assert_eq(s.material, mat)
+	assert_eq(mat.get_shader_parameter("amount"), 0.25)
+	assert_eq(mat.get_shader_parameter("cell_px"), 2.0)
+	DitherDissolve.set_amount(mat, 3.0)
+	assert_eq(mat.get_shader_parameter("amount"), 1.0)
+	DitherDissolve.set_amount(mat, -1.0)
+	assert_eq(mat.get_shader_parameter("amount"), 0.0)

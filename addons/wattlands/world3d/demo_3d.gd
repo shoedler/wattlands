@@ -3,8 +3,8 @@ extends Node3D
 ## A plateau with a plain-walled fort, four treadwheels in the slot colors driving a bronze
 ## generator drum, roads, ~650 scattered trees and rocks (three MultiMeshes), a column of
 ## walking figures (one MultiMesh with the walk-bob shader), the miniature camera rig with a
-## push-in and an occasional shake, and the Compatibility sky, ambient, sun and depth-fog
-## haze. Every mesh is a LowPolyMesh; static geometry merges into one mesh per material.
+## push-in and an occasional shake, the Compatibility sky, ambient, sun and depth-fog haze,
+## and a 12% corner vignette. Every mesh is a LowPolyMesh; static geometry merges into one mesh per material.
 ## After 30 frames it prints one "world3d demo:" line with the draw calls and primitives.
 ## tools/screenshot captures this scene.
 
@@ -63,6 +63,7 @@ func _ready() -> void:
 	add_child(scenery.make_instance("Scenery"))
 	_add_scatter()
 	_add_marchers()
+	add_child(ScreenVignette.new())
 	_add_caption()
 
 

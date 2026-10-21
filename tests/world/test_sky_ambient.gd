@@ -104,3 +104,30 @@ func test_runs_in_tree() -> void:
 	await wait_process_frames(2)
 	assert_true(s.world_environment.is_inside_tree())
 	assert_true(s.sun.is_inside_tree())
+
+
+# --- ScreenVignette ------------------------------------------------------------------------------
+
+func test_vignette_darkens_corners_at_most_strength() -> void:
+	assert_eq(ScreenVignette.darkening_at(Vector2(0.5, 0.5), 0.12, 0.55), 0.0, "centre untouched")
+	assert_almost_eq(ScreenVignette.darkening_at(Vector2(0, 0), 0.12, 0.55), 0.12, 0.0001)
+	assert_almost_eq(ScreenVignette.darkening_at(Vector2(1, 1), 0.12, 0.55), 0.12, 0.0001)
+	var prev := 0.0
+	for k in 11:
+		var d := ScreenVignette.darkening_at(Vector2(0.5, 0.5).lerp(Vector2.ZERO, k / 10.0), 0.12, 0.55)
+		assert_true(d >= prev and d <= 0.12 + 0.0001)
+		prev = d
+
+
+func test_vignette_layer_sits_under_the_hud() -> void:
+	var v: ScreenVignette = autofree(ScreenVignette.new())
+	assert_eq(v.layer, -1)
+	assert_eq(v.strength, 0.12, "Siege: at most 12%")
+	assert_eq(v.rect.mouse_filter, Control.MOUSE_FILTER_IGNORE)
+	assert_eq(v.vignette_material.get_shader_parameter("strength"), 0.12)
+	v.strength = 2.0
+	assert_eq(v.strength, 1.0)
+	assert_eq(v.vignette_material.get_shader_parameter("strength"), 1.0)
+	var sh := v.vignette_material.shader
+	assert_not_null(sh)
+	assert_eq(sh.get_mode(), Shader.MODE_CANVAS_ITEM)
