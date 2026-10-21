@@ -23,12 +23,15 @@ SIM_ZWO_W_BAD_BLOCK,Block {block}: <{tag}> {why} and was skipped
 SIM_ZWO_W_PERCENT,Block {block}: power {value} was read as a percentage of FTP
 SIM_ZWO_W_MEAN,Block {block}: <{tag}> uses the mean of its low and high power
 SIM_ZWO_W_SPORT,"Sport type ""{sport}"": powers are read as fractions of cycling FTP"
+SIM_ZWO_W_REPEAT,Block {block}: Repeat {repeat} was limited to {max}
 SIM_ZWO_WHY_DURATION,has no valid duration
 SIM_ZWO_WHY_POWER,has no valid power
 SIM_ZWO_WHY_NEGATIVE,has a negative power
 SIM_ZWO_WHY_REPEAT,has no valid Repeat
 SIM_ZWO_E_XML,Not a .zwo workout: {why}
 SIM_ZWO_E_EMPTY,The workout has no supported blocks
+SIM_ZWO_E_TOO_LONG,The workout is longer than {hours} hours
+SIM_ZWO_E_MISSING,The file is missing: {path}
 SIM_ZWO_WHY_EMPTY,the file is empty
 SIM_ZWO_WHY_ROOT,"the root element is <{tag}>, not <workout_file>"
 SIM_ZWO_WHY_NESTING,</{tag}> does not match its opening tag

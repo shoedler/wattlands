@@ -26,7 +26,8 @@ extends RefCounted
 ##    "warmup_split"; the second part continues the lap), then the part inside is clamped
 ##    (rule "warmup").
 ## 4. 150% absolute cap (rule "ceiling").
-## 5. Phases longer than 300 s cap at 105% (rule "long_phase").
+## 5. Phases longer than 300 s cap at 105% (rule "long_phase"); a part split off in step 3
+##    counts its whole block's length, so the split never lifts a long block's cap.
 ## 6. Duration limits, walked in order like the PlanValidator: a phase whose peak is above
 ##    120% (105%) accrues its whole length; >= 120 consecutive ERG seconds whose peaks are
 ##    <= 90% reset both counts; a SIM phase restarts that reset count and accrues nothing.
@@ -34,6 +35,8 @@ extends RefCounted
 ##    "limit_120"); one that would take the 105% count past 300 s is clamped to 105% (rule
 ##    "limit_105").
 ## Percentages are rounded to 0.01. Nothing here changes a block's length except step 2.
+## Guards against malformed files: an IntervalsT Repeat above MAX_REPEAT is limited to it
+## (with a warning), and a workout longer than MAX_TOTAL_S is rejected.
 
 const WARMUP_S := 300.0
 const WARMUP_MAX_PCT := 65.0
@@ -53,6 +56,10 @@ const SWITCH_SPACING_S := 30.0
 const WORK_MIN_PCT := 76.0
 ## A power attribute above this is read as a percentage, not a fraction of FTP.
 const PERCENT_GUESS_ABOVE := 5.0
+## IntervalsT Repeat is limited to this (a typo like Repeat="10000" can't explode the plan).
+const MAX_REPEAT := 200
+## Longest workout accepted, seconds (24 h), counted from the parsed blocks.
+const MAX_TOTAL_S := 86400.0
 const EPS := 1e-6
 
 ## clamp_records[].rule values. Shared names match Wl.CLAMP_* where the governor has one.
@@ -63,6 +70,8 @@ const RULE_LONG_PHASE := Wl.CLAMP_LONG_PHASE
 const RULE_LIMIT_105 := Wl.CLAMP_LIMIT_105
 const RULE_LIMIT_120 := Wl.CLAMP_LIMIT_120
 const RULE_SWITCH_SPACING := Wl.REFUSE_SWITCH_SPACING
+
+const BOM := "﻿"
 
 const TAG_STEADY := "SteadyState"
 const TAG_WARMUP := "Warmup"
@@ -89,11 +98,12 @@ const SUPPORTED_TAGS: Array[String] = [
 ## "prefix_inserted": bool; "total_s": float (sum of phase lengths). Each block also
 ## carries "index" (its element number) and "cadence_resting" (IntervalsT, else -1).
 ## Powers in "blocks" are fractions of FTP as in the file (-1 where a tag has none).
-## A rejected file (not XML, no <workout_file>, no supported block) returns ok false with
-## "error" set and logs it with push_warning: a .zwo is user content.
+## A rejected file (not XML, no <workout_file>, no supported block, longer than 24 h, or a
+## missing file for parse_zwo_file) returns ok false with "error" set and logs it with
+## push_warning: a .zwo is user content. A leading byte-order mark is ignored.
 static func parse_zwo(xml_text: String) -> Dictionary:
 	var result := _empty_result()
-	var doc := _read_xml(xml_text)
+	var doc := _read_xml(xml_text.trim_prefix(BOM))
 	if not bool(doc["ok"]):
 		return _fail(result, str(doc["error"]))
 	result["name"] = doc["name"]
@@ -118,6 +128,11 @@ static func parse_zwo(xml_text: String) -> Dictionary:
 	result["warnings"] = warnings
 	if blocks.is_empty():
 		return _fail(result, _t("SIM_ZWO_E_EMPTY"))
+	var file_s := 0.0
+	for b in blocks:
+		file_s += float(b["duration_s"])
+	if file_s > MAX_TOTAL_S + EPS:
+		return _fail(result, _t("SIM_ZWO_E_TOO_LONG", {"hours": roundi(MAX_TOTAL_S / 3600.0)}))
 
 	var ctx := {"next_id": 0, "records": []}
 	var segs := _expand(blocks, ctx)
@@ -157,10 +172,11 @@ static func parse_zwo(xml_text: String) -> Dictionary:
 	return result
 
 
+## parse_zwo on a file's text. A missing file returns the same result shape as a rejected
+## one, with "error" naming the path.
 static func parse_zwo_file(path: String) -> Dictionary:
 	if not FileAccess.file_exists(path):
-		return {"ok": false, "error": "missing file %s" % path, "phases": [], "blocks": [],
-			"clamps": [], "warnings": [], "name": "", "description": ""}
+		return _fail(_empty_result(), _t("SIM_ZWO_E_MISSING", {"path": path}))
 	return parse_zwo(FileAccess.get_file_as_string(path))
 
 
@@ -337,7 +353,10 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 			elif on_p < 0.0 or (off_s > 0.0 and off_p < 0.0):
 				why = "SIM_ZWO_WHY_NEGATIVE"
 			else:
-				var rep := int(floor(rep_f))
+				var rep := int(floor(minf(rep_f, float(MAX_REPEAT))))
+				if rep_f >= MAX_REPEAT + 1.0:
+					warnings.append(_t("SIM_ZWO_W_REPEAT", {"block": index, "repeat": str(attrs["repeat"]),
+						"max": MAX_REPEAT}))
 				b["repeat"] = rep
 				b["on_s"] = on_s
 				b["off_s"] = off_s
@@ -407,15 +426,16 @@ static func _interval_power(attrs: Dictionary, key: String, low_key: String, hig
 # ------------------------------------------------------------------------- segments
 
 
-## A working phase: {id, block, part, kind, mode, from, to, dur, lap, rep, reps, cadence,
-## label_key, orig}. from/to are % FTP (ERG; equal when steady).
+## A working phase: {id, block, part, kind, mode, from, to, dur, span, lap, rep, reps,
+## cadence, label_key, orig}. from/to are % FTP (ERG; equal when steady); span is the
+## phase's length before the warm-up split (the long-phase cap uses it).
 static func _seg(ctx: Dictionary, block: int, part: String, kind: String, mode: String,
 		from_pct: float, to_pct: float, dur: float) -> Dictionary:
 	var id := int(ctx["next_id"])
 	ctx["next_id"] = id + 1
 	return {"id": id, "block": block, "part": part, "kind": kind, "mode": mode,
-		"from": _round_pct(from_pct), "to": _round_pct(to_pct), "dur": dur, "lap": true,
-		"rep": 0, "reps": 0, "cadence": -1.0, "label_key": "", "orig": ""}
+		"from": _round_pct(from_pct), "to": _round_pct(to_pct), "dur": dur, "span": dur,
+		"lap": true, "rep": 0, "reps": 0, "cadence": -1.0, "label_key": "", "orig": ""}
 
 
 static func _expand(blocks: Array[Dictionary], ctx: Dictionary) -> Array[Dictionary]:
@@ -548,7 +568,8 @@ static func _apply_ceiling(segs: Array[Dictionary], ctx: Dictionary) -> void:
 
 static func _apply_long_phase_cap(segs: Array[Dictionary], ctx: Dictionary) -> void:
 	for s in segs:
-		if str(s["mode"]) == Wl.ERG and float(s["dur"]) > LONG_PHASE_S + EPS:
+		var length := maxf(float(s["dur"]), float(s["span"]))
+		if str(s["mode"]) == Wl.ERG and length > LONG_PHASE_S + EPS:
 			_clamp_to(ctx, s, LONG_PHASE_CAP_PCT, RULE_LONG_PHASE, "SIM_ZWO_REASON_LONG_PHASE")
 
 
