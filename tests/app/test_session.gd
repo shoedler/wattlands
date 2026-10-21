@@ -385,21 +385,32 @@ func test_an_autopilot_session_still_holds_resume_on_a_coasting_pause() -> void:
 	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"))
 
 
-func test_a_client_reads_its_autopilot_from_session_start() -> void:
+## A client (peer 2) from a session_start whose players are the host (peer 1, a human), the
+## client's own slot and a bot (which always rides on Autopilot), with a router that would not
+## scan (the fake's pedal_ui = false).
+func _client_session(my_autopilot: bool, host_autopilot: bool) -> AppSessionScreen:
 	fx.give_profile()
 	fx.input.set("pedal_ui", false)
 	var net := fx.fake_net()
 	net.local_peer = 2
+	var host := PlayerSlot.new()
+	host.peer_id = 1
+	host.name = "Host"
+	host.apply_look(0)
+	host.autopilot = host_autopilot
 	var me := PlayerSlot.new()
 	me.peer_id = 2
-	me.slot_index = 1
-	me.autopilot = true
+	me.name = "Me"
+	me.apply_look(1)
+	me.autopilot = my_autopilot
+	var bot := Bots.make_slot(1, 2, 200.0)
+	assert_true(bot.autopilot and bot.is_bot, "precondition: the bot rides on Autopilot")
 	var start := {
 		"type": "session_start",
 		"game_id": "workout",
 		"content_id": "e2e",
 		"seed": 1,
-		"players": [Bots.make_slot(1, 0, 200.0).to_dict(), me.to_dict()],
+		"players": [host.to_dict(), me.to_dict(), bot.to_dict()],
 		"options": {},
 		"scaling": Wl.FAIR_FTP
 	}
@@ -407,8 +418,31 @@ func test_a_client_reads_its_autopilot_from_session_start() -> void:
 		open_screen(AppSessionScreen.new(), {"role": Wl.CLIENT, "session_start": start})
 		as AppSessionScreen
 	)
+	assert_eq(s.local_peer(), 2, "precondition: the client is peer 2")
+	assert_eq(
+		(s.config.get("players", []) as Array).size(), 3, "precondition: host, client and bot"
+	)
+	return s
+
+
+func test_a_client_reads_its_autopilot_from_session_start() -> void:
+	var s := _client_session(true, false)
 	assert_true(s.session_autopilot(), "the client's own slot from session_start")
 	assert_true(s.scanning_enabled())
+	s.feed_action(&"pause")
+	assert_true(s.overlay.visible)
+	assert_true(menu(s).scanning, "the client's pause menu scans")
+
+
+## Only the client's own slot counts: the host's and the bot's Autopilot leave it off while the
+## router says no.
+func test_a_client_without_autopilot_ignores_the_other_slots() -> void:
+	var s := _client_session(false, true)
+	assert_false(s.session_autopilot(), "the host's and the bot's Autopilot are not the client's")
+	assert_false(s.scanning_enabled(), "and the router says no")
+	s.feed_action(&"pause")
+	assert_true(s.overlay.visible)
+	assert_false(menu(s).scanning, "the client's pause menu does not scan")
 
 
 func test_metronome_runs_during_the_session_when_on() -> void:
