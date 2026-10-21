@@ -94,6 +94,21 @@ func test_non_loopback_strava_base_is_refused_while_locked() -> void:
 	assert_true(c.errors[0].contains(Locks.NET_MESSAGE))
 
 
+## W4r2 R22: a base whose authority parsers read differently is refused up front, like
+## network_allows() refuses each request to it (W4 RS-1).
+func test_ambiguous_loopback_strava_base_is_refused_while_locked() -> void:
+	if not Locks.network_locked():
+		pending("network lock not set in this run")
+		return
+	for base: String in ["http://127.0.0.1?@evil.example:8899", "http://127.0.0.1#@evil.example/",
+			"http://localhost\\@evil.example/", "http://127.0.0.1%40evil.example/"]:
+		var c := _config(["--host", "--game=workout", "--strava-base=" + base])
+		assert_false(c.is_valid(), base)
+		assert_true(not c.errors.is_empty() and c.errors[0].contains(Locks.NET_MESSAGE), base)
+	for base: String in ["http://127.0.0.1:9100", "http://localhost:9100/api"]:
+		assert_true(_config(["--host", "--game=workout", "--strava-base=" + base]).is_valid(), "%s stays allowed" % base)
+
+
 func test_content_resolution() -> void:
 	var m := FakeRegistry.workout()
 	assert_eq(AppLobbyModel.scripted_content(m, "", true), "e2e")

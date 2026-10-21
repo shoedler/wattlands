@@ -98,7 +98,9 @@ static func from_parsed(parsed: Dictionary) -> AppScriptedConfig:
 	c.strava_auto_upload = parsed.has("strava-auto-upload") and _bool(_last(parsed, "strava-auto-upload"))
 	if (c.strava_client_id == "") != (c.strava_client_secret == ""):
 		c.errors.append("--strava-client-id and --strava-client-secret go together")
-	if c.strava_base != "" and Locks.network_locked() and not Locks.is_loopback_host(Locks.url_host(c.strava_base)):
+	# is_loopback_url, not url_host: an ambiguous authority ("http://127.0.0.1?@other/") reaches
+	# `other` through HTTPRequest, so it is refused here up front too (W4 RS-1, W4r2 R22).
+	if c.strava_base != "" and Locks.network_locked() and not Locks.is_loopback_url(c.strava_base):
 		c.errors.append("--strava-base: %s (only loopback bases)" % Locks.NET_MESSAGE)
 	return c
 
