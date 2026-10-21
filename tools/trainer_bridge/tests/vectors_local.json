@@ -1,0 +1,60 @@
+{
+  "about": "FTMS golden vectors transcribed from BRIEF 4.3 by the ble builder for the Python bridge tests. Little-endian hex. tests/vectors/ftms.json (trainer-core) is the shared source of truth; the tests also check every comparable case found there.",
+  "indoor_bike_data": [
+    {"name": "speed_cadence_power", "hex": "4400c409b400c800",
+     "expect": {"flags": 68, "more_data": false, "truncated": false, "speed_kmh": 25.0, "cadence_rpm": 90.0, "power_w": 200}},
+    {"name": "more_data_set_no_speed", "hex": "4500b400c800",
+     "expect": {"flags": 69, "more_data": true, "truncated": false, "cadence_rpm": 90.0, "power_w": 200}},
+    {"name": "every_field", "hex": "fe1fc4096009b400aa00393000fbfffa00f000640058020a8c375802b004",
+     "expect": {"flags": 8190, "more_data": false, "truncated": false, "speed_kmh": 25.0, "avg_speed_kmh": 24.0,
+                "cadence_rpm": 90.0, "avg_cadence_rpm": 85.0, "distance_m": 12345, "resistance_level": -5,
+                "power_w": 250, "avg_power_w": 240, "energy_total_kcal": 100, "energy_per_hour_kcal": 600,
+                "energy_per_min_kcal": 10, "heart_rate_bpm": 140, "met": 5.5, "elapsed_s": 600, "remaining_s": 1200}},
+    {"name": "negative_power", "hex": "40000000f4ff",
+     "expect": {"flags": 64, "more_data": false, "truncated": false, "speed_kmh": 0.0, "power_w": -12}},
+    {"name": "truncated_cadence", "hex": "4400c409b4",
+     "expect": {"flags": 68, "more_data": false, "truncated": true, "speed_kmh": 25.0}},
+    {"name": "flags_only_half", "hex": "44",
+     "expect": {"flags": 0, "more_data": false, "truncated": true}}
+  ],
+  "feature": [
+    {"name": "kickr_core", "hex": "824000000ce00000",
+     "expect": {"machine": 16514, "target": 57356,
+                "machine_features": ["cadence", "resistance_level", "power_measurement"],
+                "target_features": ["resistance", "power", "indoor_bike_simulation", "wheel_circumference", "spin_down"],
+                "truncated": false}}
+  ],
+  "power_range": [
+    {"name": "kickr_0_1800", "hex": "000008070100", "expect": {"min_w": 0, "max_w": 1800, "step_w": 1, "truncated": false}},
+    {"name": "short", "hex": "00000807", "expect": {"truncated": true}}
+  ],
+  "resistance_range": [
+    {"name": "zero_to_100", "hex": "0000e8030100", "expect": {"min": 0.0, "max": 100.0, "step": 0.1, "truncated": false}}
+  ],
+  "control_point": [
+    {"name": "request_control", "encode": "request_control", "args": [], "hex": "00"},
+    {"name": "reset", "encode": "reset", "args": [], "hex": "01"},
+    {"name": "target_power_200", "encode": "target_power", "args": [200], "hex": "05c800"},
+    {"name": "target_power_1800", "encode": "target_power", "args": [1800], "hex": "050807"},
+    {"name": "target_resistance_10", "encode": "target_resistance", "args": [10.0], "hex": "0464"},
+    {"name": "start", "encode": "start", "args": [], "hex": "07"},
+    {"name": "stop", "encode": "stop", "args": [false], "hex": "0801"},
+    {"name": "pause", "encode": "stop", "args": [true], "hex": "0802"},
+    {"name": "sim_flat", "encode": "simulation", "args": [0.0, 0.0, 0.004, 0.51], "hex": "11000000002833"},
+    {"name": "sim_grade_5", "encode": "simulation", "args": [0.0, 5.0, 0.004, 0.51], "hex": "110000f4012833"},
+    {"name": "sim_grade_minus_2_5", "encode": "simulation", "args": [0.0, -2.5, 0.004, 0.51], "hex": "11000006ff2833"},
+    {"name": "sim_wind_1_5_grade_1", "encode": "simulation", "args": [1.5, 1.0, 0.004, 0.51], "hex": "11dc0564002833"}
+  ],
+  "control_response": [
+    {"name": "request_control_ok", "hex": "800001", "expect": {"request": 0, "result": 1, "result_name": "success", "truncated": false}},
+    {"name": "power_not_permitted", "hex": "800505", "expect": {"request": 5, "result": 5, "result_name": "control_not_permitted", "truncated": false}},
+    {"name": "sim_invalid_parameter", "hex": "801103", "expect": {"request": 17, "result": 3, "result_name": "invalid_parameter", "truncated": false}},
+    {"name": "malformed", "hex": "8000", "expect": {"request": -1, "result": -1, "result_name": "malformed", "truncated": true}}
+  ],
+  "machine_status": [
+    {"name": "target_power_changed", "hex": "08c800", "expect": {"code": 8, "name": "target_power_changed", "params": "c800", "truncated": false}},
+    {"name": "control_lost", "hex": "ff", "expect": {"code": 255, "name": "control_permission_lost", "params": "", "truncated": false}},
+    {"name": "stopped_by_user", "hex": "0201", "expect": {"code": 2, "name": "stopped_or_paused_by_user", "params": "01", "truncated": false}},
+    {"name": "simulation_changed", "hex": "12000000002833", "expect": {"code": 18, "name": "indoor_bike_simulation_changed", "params": "000000002833", "truncated": false}}
+  ]
+}
