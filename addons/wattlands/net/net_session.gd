@@ -351,8 +351,11 @@ func set_scaling(mode: String) -> void:
 		return
 	_scaling = mode
 	if _local_profile != null:
-		_local_info = _info_from_local_profile()
-		_infos[local_peer] = _local_info.duplicate(true)
+		var po: Variant = _local_info.get("player_options", {})
+		_local_info = _normalize_info(_info_from_local_profile())
+		_local_info["player_options"] = po if po is Dictionary else {}
+		if local_peer != 0:
+			_infos[local_peer] = _local_info.duplicate(true)
 	_publish_lobby()
 
 
@@ -553,20 +556,18 @@ func host_time() -> float:
 	return _clock_now()
 
 
+## The human riders of the lobby (or the started session) who are connected, this one
+## included, sorted. Peers that joined but sent no player_info yet are not listed.
 func peers() -> Array[int]:
 	var out: Array[int] = []
-	for p: Variant in _connected_peers.keys():
-		out.append(int(p))
-	if role == Wl.CLIENT:
-		out.clear()
-		var players: Variant = lobby.get("players", [])
-		if players is Array:
-			for d: Variant in players:
-				var pd: Dictionary = d
-				if not bool(pd.get("is_bot", false)) and bool(pd.get("connected", true)):
-					out.append(int(pd.get("peer_id", 0)))
-		if local_peer != 0 and not out.has(local_peer):
-			out.append(local_peer)
+	var players: Variant = lobby.get("players", [])
+	if players is Array:
+		for d: Variant in players:
+			var pd: Dictionary = d
+			if not bool(pd.get("is_bot", false)) and bool(pd.get("connected", true)):
+				out.append(int(pd.get("peer_id", 0)))
+	if local_peer != 0 and not out.has(local_peer):
+		out.append(local_peer)
 	out.sort()
 	return out
 
@@ -759,11 +760,8 @@ func rejoin() -> void:
 ## is taken).
 func host_room_reclaim(max_peers: int = 8) -> void:
 	_requested_code = last_hosted_code()
-	var code := _requested_code
 	host_room(max_peers)
 	_requested_code = ""
-	if code == "":
-		return
 
 
 ## P1: recently used rooms, newest first: [{code, role}].
@@ -1321,6 +1319,9 @@ func _has_manifest() -> bool:
 
 func _apply_manifest_limits() -> void:
 	if not _has_manifest():
+		max_players = NetMessages.MAX_PEERS
+		min_players = 1
+		bots_allowed = true
 		return
 	var m: Dictionary = _manifests[_game_id]
 	max_players = clampi(int(m.get("max_players", NetMessages.MAX_PEERS)), 1, NetMessages.MAX_PEERS)

@@ -466,3 +466,30 @@ func test_joins_after_the_start_are_refused_with_session_in_progress() -> void:
 	assert_eq(events("host", "peer_joined").size(), 0, "the host never lists it")
 	assert_eq(events("host", "peer_left").size(), 0)
 	assert_eq(h.lobby_slots().size(), 3)
+
+
+func test_peers_lists_lobby_riders_only() -> void:
+	var r := room()
+	var raw := LoopbackTransport.hub_transport(hub)
+	add_child_autofree(raw)
+	raw.join(r[0].room_code)
+	raw.poll()
+	pump()
+	assert_eq(raw.local_peer, 4)
+	assert_eq(r[0].peers(), [1, 2, 3] as Array[int], "a peer without player_info is not a rider yet")
+	assert_eq(r[2].peers(), [1, 2, 3] as Array[int])
+	r[0].add_bot()
+	pump()
+	assert_eq(r[1].peers(), [1, 2, 3] as Array[int], "bots are not peers")
+
+
+func test_limits_reset_for_a_game_without_manifest() -> void:
+	var h := make_session("host", rider("Hana"))
+	h.set_game_manifest({"id": "duo", "version": "1", "min_players": 2, "max_players": 2, "bots": false})
+	h.set_game("duo", "1", "a")
+	assert_eq(h.max_players, 2)
+	assert_false(h.bots_allowed)
+	h.set_game("workout", "1", "a")
+	assert_eq(h.max_players, NetMessages.MAX_PEERS)
+	assert_eq(h.min_players, 1)
+	assert_true(h.bots_allowed)
