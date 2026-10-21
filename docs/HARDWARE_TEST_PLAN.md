@@ -92,6 +92,21 @@ Each game keeps its own real-trainer checklist; this plan only links to it.
 - Tank Crew: `src/games/tank/HARDWARE_TEST.md` (written by the Tank Crew session).
 - Big Game Fishing: `src/games/fishing/HARDWARE_TEST.md` (written by the Fishing session).
 
+## Checks only a real trainer can confirm (from the build)
+
+The builders listed these while working against MockTrainer and fake transports. Log each like the steps above.
+
+- [ ] FTMS link timing: subscriptions settle within the 0.25 s the client waits; discovery finishes inside the 10 s timeout on Windows; the KICKR sends one complete Indoor Bike Data record per notification (the client also reassembles split records).
+- [ ] Set Target Resistance Level (RESISTANCE mode, P1 fallback): the KICKR accepts the uint8 0.1 encoding (the codec can switch to sint16).
+- [ ] The control-point queue and coalescing: at most 2 writes a second against real response timing; no "operation failed" responses in a 10-minute session.
+- [ ] Panic latency: from holding Backspace for 1 s to ERG off and SIM 0% on the trainer, under 1 s.
+- [ ] Mode switches: ERG -> SIM -> ERG around a 30 s sprint with no power spike, ERG re-entered at or below the planned target.
+- [ ] Reconnect resync: drop the Bluetooth link mid-ERG at about 200 W (switch the trainer off for 10 s). Expected: on reconnect the trainer returns to SIM flat, then ERG from the floor with 30 W/s slew back to the target, at most 2 writes a second. In a SIM phase the stacked grade returns in one write. During panic it stays at SIM flat.
+- [ ] Quit with a real trainer: closing the app sends SIM flat, then Stop, within the 0.5 s grace before the process exits.
+- [ ] Cadence estimation on a trainer that reports no cadence: the estimate tracks real cadence within a few rpm after 10 s of riding.
+- [ ] Virtual gears: one shift changes resistance at constant flywheel speed by about 6-8% near 30 km/h (the approximation is documented in docs/TRAINER.md).
+- [ ] Strava: the real token response, upload duplicate text and 429 headers match what the mock assumed; revoke works (the client falls back to /oauth/deauthorize).
+
 ## Safety findings that need hardware
 
 Findings from the W3 review that can only be confirmed on the real trainer are added here in W4.
