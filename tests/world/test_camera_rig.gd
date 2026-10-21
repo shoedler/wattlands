@@ -79,6 +79,16 @@ func test_push_in_eases_to_distance() -> void:
 	assert_signal_emitted(r, "push_in_finished")
 
 
+func test_zero_length_push_in_finishes_at_once() -> void:
+	var r := _rig()
+	r.distance = 80.0
+	watch_signals(r)
+	r.push_in(2.0, 0.0)
+	assert_false(r.is_pushing_in())
+	assert_eq(r.effective_distance(), 80.0)
+	assert_signal_emit_count(r, "push_in_finished", 1)
+
+
 func test_shake_is_bounded_and_decays() -> void:
 	var r := _rig()
 	r.distance = 100.0

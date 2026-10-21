@@ -128,6 +128,14 @@ func covered_width() -> float:
 	return 640.0
 
 
+## The local y of the strip's top edge: 0, or minus the texture height with align_bottom
+## (position.y is then the bottom edge, e.g. a ground line).
+func top_y() -> float:
+	if align_bottom and texture != null:
+		return -float(texture.get_height())
+	return 0.0
+
+
 ## The tiles drawn for the current scroll: [{"x": float (local left edge), "index": int
 ## (tile number along the strip), "flipped": bool}], left to right, covering 0..covered_width().
 func visible_tiles() -> Array[Dictionary]:
@@ -150,7 +158,7 @@ func _draw() -> void:
 	if texture == null:
 		return
 	var w := tile_width()
-	var y := -float(texture.get_height()) if align_bottom else 0.0
+	var y := top_y()
 	for tile: Dictionary in visible_tiles():
 		var x: float = tile["x"]
 		if tile["flipped"]:

@@ -137,12 +137,15 @@ func orbit(delta_yaw_deg: float, delta_pitch_deg: float = 0.0) -> void:
 
 
 ## Start a push-in: the camera starts `from_factor` times farther out and eases (cubic out)
-## to `distance` over `duration_s`.
+## to `distance` over `duration_s`. A duration of 0 or less places the camera at `distance`
+## and emits push_in_finished at once, so code awaiting the signal never hangs.
 func push_in(from_factor: float = 1.5, duration_s: float = 4.0) -> void:
 	_push_from = maxf(from_factor, 1.0)
 	_push_t = 0.0
 	_push_duration = maxf(duration_s, 0.0)
 	update_camera()
+	if _push_duration <= 0.0:
+		push_in_finished.emit()
 
 
 func is_pushing_in() -> bool:

@@ -140,6 +140,17 @@ func test_deterministic_for_the_same_world_x() -> void:
 	assert_eq(_xs(a.visible_tiles()), _xs(b.visible_tiles()))
 
 
+func test_vertical_placement() -> void:
+	var s := _strip(32, 1.0)
+	s.position.y = 296.0   # Tank's ground line
+	assert_eq(s.top_y(), 0.0, "position.y is the top edge by default")
+	s.align_bottom = true
+	assert_eq(s.top_y(), -8.0, "align_bottom: position.y is the bottom edge")
+	assert_eq(s.position.y + s.top_y(), 288.0)
+	s.texture = null
+	assert_eq(s.top_y(), 0.0)
+
+
 func test_no_texture_draws_nothing() -> void:
 	var s: ParallaxStrip = autofree(ParallaxStrip.new())
 	assert_eq(s.visible_tiles().size(), 0)
