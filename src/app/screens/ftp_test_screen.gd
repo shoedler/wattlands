@@ -55,8 +55,7 @@ func _on_pick(_index: int, id: Variant, _auto: bool) -> void:
 		"save":
 			finish_result(true)
 		"panic":
-			if rider != null:
-				rider.panic()
+			panic()
 
 
 func _on_back() -> void:
@@ -205,6 +204,22 @@ func step_fixed() -> void:
 			test.on_plan_end(platform_t)
 			_enter_cooldown()
 	_refresh()
+
+
+## The panic action (Backspace held, View+Menu) works here as in a session (BRIEF 4.6.5): the
+## rider's governor goes safe at once, whatever the menu shows.
+func _handle_action(action: StringName) -> bool:
+	if action == &"panic":
+		panic()
+		return true
+	return false
+
+
+func panic() -> void:
+	if services.bus != null:
+		services.bus.panic_requested.emit()
+	if rider != null and (stage == "running" or stage == "cooldown"):
+		rider.panic()
 
 
 func _handle_gesture(gesture: StringName) -> bool:

@@ -127,3 +127,15 @@ func test_ftp_test_refused_plan() -> void:
 	surge_pick(s, "start")
 	assert_eq(s.stage, "error")
 	assert_eq(s.detail_label.text, AppScreen.t("APP_FTP_PLAN_REJECTED"))
+
+
+func test_ftp_test_panic_action_goes_safe_at_once() -> void:
+	fx.give_profile(200.0)
+	var s := open_screen(AppFtpTestScreen.new()) as AppFtpTestScreen
+	s.plan_finalizer = _with_cooldown
+	surge_pick(s, "start")
+	watch_signals(fx.bus)
+	fx.input.inject_action(&"panic")
+	assert_eq((fx.trainer.local_rider() as FakeRider).panics, 1, "the rider's governor goes safe")
+	assert_signal_emitted(fx.bus, "panic_requested")
+	assert_eq(s.stage, "running", "the menu did not take the action")
