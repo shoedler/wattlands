@@ -28,3 +28,4 @@
 - Results screen with grade, rows, XP, unlocks, the saved ride and Upload to Strava (auto-upload honoured). A session without results shows no grade.
 - Scripted peers for the end-to-end test: `--host`, `--join=<code>`, stdout lines, report JSON and exit codes. A session without results, or `--strava-auto-upload` without a Strava connection, exits 1.
 - P1: Recent rooms, a LAN room list (when NetSession provides one), rides history with re-upload, and the FTP test.
+- The Controls page in Settings has a Reset to defaults row (Keep / Reset confirm) that brings back every default binding, Esc and B included, and saves input.cfg; the page says Esc or B cancels a capture. Autopilot switched on in the lobby turns pedal-scan on for the lobby, the session's pause menu and results.
