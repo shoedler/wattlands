@@ -230,3 +230,14 @@ APP_TRAINER_ERROR,error
 APP_TRAINER_NONE,not connected
 APP_TRAINER_UNKNOWN,unknown
 APP_SCRIPTED,Scripted peer
+APP_SET_TRAINER_SAFE,"Making the trainer safe (flat, then stop) before the link drops…"
+APP_SET_STRAVA_CONNECT_PROFILE,Connect with profile access (for the import)
+APP_SET_STRAVA_IMPORT_FTP,Import my FTP
+APP_SET_STRAVA_IMPORT_WEIGHT,Import my weight
+APP_SET_STRAVA_IMPORT,Import from Strava now
+APP_STRAVA_IMPORT_NONE,"Strava sent no FTP or weight. Connect with profile access first, and set them on Strava."
+APP_STRAVA_IMPORT_FTP_DONE,FTP {0} W imported (verified)
+APP_STRAVA_IMPORT_WEIGHT_DONE,weight {0} imported
+APP_RESULTS_WKG,{0} W/kg average
+APP_CONTENT_ZWO,Your .zwo: {0}
+APP_LOBBY_ZWO_HINT,"Your own .zwo workouts: put them in {0}, then pick them under Ride."

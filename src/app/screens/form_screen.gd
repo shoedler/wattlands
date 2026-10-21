@@ -31,6 +31,19 @@ func make_form_page(title_text: String) -> Dictionary:
 	return page
 
 
+## A weight stepper in the rider's units (BRIEF 3.2 units): kg in steps of 1 (metric) or lb in
+## steps of 1 (imperial, 67-440 lb), always stored in kg through `set_kg` (W3 PROF-6).
+static func weight_field(id: String, label: String, units: String, get_kg: Callable, set_kg: Callable) -> Dictionary:
+	if units == "imperial":
+		return {"id": id, "label": label, "type": "stepper", "step": 1.0, "unit": "lb",
+			"min": ceilf(AppStyle.WEIGHT_MIN_KG * AppStyle.LB_PER_KG), "max": floorf(AppStyle.WEIGHT_MAX_KG * AppStyle.LB_PER_KG),
+			"get": func() -> Variant: return roundf(float(get_kg.call()) * AppStyle.LB_PER_KG),
+			"set": func(v: Variant) -> void: set_kg.call(clampf(float(v) / AppStyle.LB_PER_KG, AppStyle.WEIGHT_MIN_KG, AppStyle.WEIGHT_MAX_KG))}
+	return {"id": id, "label": label, "type": "stepper", "step": 1.0, "unit": "kg",
+		"min": AppStyle.WEIGHT_MIN_KG, "max": AppStyle.WEIGHT_MAX_KG,
+		"get": func() -> Variant: return float(get_kg.call()), "set": func(v: Variant) -> void: set_kg.call(float(v))}
+
+
 ## Push a list of fields as a menu. back: what coast/back does (default: pop, or nothing).
 func open_fields(fields: Array, back: Callable = Callable(), highlight: int = -1) -> PedalScanList:
 	var list := push_menu(items_for(fields), _on_field_pick, back, highlight)

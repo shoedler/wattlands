@@ -6,7 +6,11 @@ extends AppScreen
 ##   - First run with no input: 20 s of pedaling creates the profile "Rider" (FTP 200,
 ##     unverified) and starts GameRegistry.first_run_game() solo with its zero_input_content.
 ##   - Back on the title after a ride or a menu (not the launch visit), the 5 s hold starts only
-##     after a stop, so a rider still spinning after the results never starts another ride.
+##     after a stop, so a rider still spinning after the results never starts another ride. The
+##     launch visit is one visit even though the title is built twice at launch (main shows it,
+##     then the App's deferred boot shows it again; W3 PROF-1).
+##   - The first-run profile keeps every choice made in Settings before it existed (haptics
+##     opt-out, auto-upload, pedal UI, audio; W3 PROF-3).
 ## While that countdown is armed the menu holds its first item, the same quick ride, so a surge
 ## also starts it. A keyboard or controller action disarms the countdown for this visit; with a
 ## saved profile a coast after pedaling does too, and the menu then scans so a pedal-only rider
@@ -51,7 +55,8 @@ func _build() -> void:
 	progress_bar.custom_minimum_size = Vector2(600, 28)
 	left.add_child(progress_bar)
 	_pick_quick_target()
-	services.title_visits += 1
+	if services.previous_state != "title":
+		services.title_visits += 1
 	# The launch visit counts a stretch already running; later visits (back from a ride or a
 	# menu) wait for a fresh start, so spinning on after Continue never starts another ride.
 	zero.configure(services.profile().ftp_w, not has_profile, has_profile and services.title_visits > 1)
@@ -158,13 +163,12 @@ func quick_start() -> void:
 	goto("session", {"role": Wl.SOLO, "game_id": quick_game, "content_id": quick_content, "quick": true})
 
 
-## The first-run profile (BRIEF 3.5): "Rider", FTP 200, unverified, saved.
+## The first-run profile (BRIEF 3.5): "Rider", FTP 200, unverified, saved. Built from the
+## profile as it is (AppFirstRunScreen.first_run_copy), so the haptics opt-out and the other
+## Settings choices made before it existed survive (BRIEF 3.2, 4.6.6).
 static func create_first_run_profile(s: AppServices) -> RiderProfile:
-	var p := RiderProfile.new()
+	var p := AppFirstRunScreen.first_run_copy(s.profile())
 	p.display_name = "Rider"
-	p.ftp_w = 200.0
-	p.cp_w = 200.0
-	p.ftp_verified = false
 	p.created = true
 	if s.settings != null:
 		s.settings.profile = p
