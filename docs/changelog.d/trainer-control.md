@@ -9,3 +9,10 @@
 - `CadenceEstimator`: cadence from flywheel speed when absent or stale, learned ratio and 10 s calibration.
 - `tests/arch/test_no_bypass.gd`: the BRIEF 4.6.11 scan over `addons/wattlands` and `src`, with bypass fixtures.
 - `content/strings/governor.csv`: banner and toast strings for rescue, warm-up, coasting, AFK, panic, duration limits, the FTP test end and the gear.
+
+## Fixed (hardening review)
+
+- Rescue arms when the whole-watt governed target reaches floor(60 % FTP), so a target exactly at 60 % arms it at every FTP (4.6.1's whole-watt comparison).
+- Opting out of haptics ends a running haptic at once.
+- The no-bypass scan also guards `TrainerDevice.request_stop` (Stop): only `TrainerController` may call it.
+- New tests: the frozen W0 API surface (methods, signals, status and record keys), both duration limits resetting together, factor and mode-grade expiry, the ramp span in the default range, the paused floor counting toward the reset, and a determinism check over a busy seeded ride.
