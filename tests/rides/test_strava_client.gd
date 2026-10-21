@@ -159,6 +159,30 @@ func test_connect_rejects_a_forged_state() -> void:
 	assert_false((await _routes()).has("token:200"), "the code is never exchanged")
 
 
+func test_connect_without_the_upload_permission_fails() -> void:
+	# The rider unticked "Upload your activities" on Strava's consent page.
+	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault", {"route": "authorize", "status": 302, "scope": "read"})
+	var c := _client()
+	var details: Array = []
+	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
+	assert_false(await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET))
+	assert_eq(details.back(), "scope_missing")
+	assert_false(c.has_tokens())
+	assert_eq(await _routes(), ["authorize:302"], "the code is never exchanged")
+
+
+func test_a_redirect_loop_stops_at_max_redirects() -> void:
+	var loop_url: String = _mock.oauth_base() + "/authorize?client_id=12345&response_type=code"
+	await _mock.admin(HTTPClient.METHOD_POST, "/admin/fault", {"route": "authorize", "status": 302, "count": 20, "location": loop_url})
+	var c := _client()
+	c.max_redirects = 3
+	var details: Array = []
+	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
+	assert_false(await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET))
+	assert_eq(details.back(), "authorize_failed")
+	assert_eq((await _routes()).size(), 4, "the first request plus three redirects, then it gives up")
+
+
 func test_connect_denied_by_the_rider() -> void:
 	await _mock.fault("authorize", 403)
 	var c := _client()

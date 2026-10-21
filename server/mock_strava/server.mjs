@@ -25,7 +25,8 @@
 //                         deauthorize, upload, upload_status, athlete, * (every non-admin route). Extras:
 //                         {location} answers with that redirect (status 3xx) instead; an authorize
 //                         fault with status 403 redirects with error=access_denied; one with
-//                         tamper_state: true redirects with a changed state
+//                         tamper_state: true redirects with a changed state; one with
+//                         scope: "<scopes>" grants only those (the rider unticked a permission)
 //   POST /admin/config   {processing_polls?, athlete?}
 //   GET  /admin/uploads  every upload with its checks
 //   GET  /admin/requests every request: method, path, route, auth kind, token_in_query, status
@@ -204,7 +205,7 @@ export function createMockStrava(opts = {}) {
 
   // --- OAuth ----------------------------------------------------------------------
 
-  function authorize(req, res, url, { deny = false, tamperState = false } = {}) {
+  function authorize(req, res, url, { deny = false, tamperState = false, grantScope = null } = {}) {
     const q = url.searchParams;
     const clientId = q.get('client_id') ?? '';
     const redirect = q.get('redirect_uri') ?? '';
@@ -225,7 +226,10 @@ export function createMockStrava(opts = {}) {
       target.searchParams.set('error', 'access_denied');
     } else {
       const code = token();
-      const granted = ['read', ...scopes.filter((s) => s !== 'read')];
+      // grantScope: the rider unticked boxes on the consent page, so Strava grants less.
+      const granted = grantScope !== null
+        ? String(grantScope).split(',').map((s) => s.trim()).filter(Boolean)
+        : ['read', ...scopes.filter((s) => s !== 'read')];
       state.codes.set(code, { client_id: clientId, scope: granted.join(','), used: false, expires_at: now() + 600 });
       target.searchParams.set('code', code);
       target.searchParams.set('scope', granted.join(','));
@@ -413,6 +417,7 @@ export function createMockStrava(opts = {}) {
       const f = {
         route: String(json.route ?? '*'), status: Number(json.status ?? 500), count: Number(json.count ?? 1),
         retry_after: json.retry_after ?? null, location: json.location ?? null, tamper_state: Boolean(json.tamper_state),
+        scope: json.scope ?? null,
       };
       state.faults.push(f);
       return send(res, 200, { faults: strip(state.faults) });
@@ -471,6 +476,10 @@ export function createMockStrava(opts = {}) {
     if (fault && route === 'authorize' && fault.tamper_state) {
       // A forged callback: the state no longer matches the one the client sent.
       return (entry.status = authorize(req, res, url, { tamperState: true }));
+    }
+    if (fault && route === 'authorize' && fault.scope !== null) {
+      // The rider unticked a permission: the callback carries a narrower scope.
+      return (entry.status = authorize(req, res, url, { grantScope: fault.scope }));
     }
     if (fault && fault.location) {
       // A redirect somewhere else (tests that the network lock checks every hop).

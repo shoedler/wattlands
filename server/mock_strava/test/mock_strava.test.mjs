@@ -175,6 +175,19 @@ test('faults can tamper with the state or redirect elsewhere', async () => {
   assert.equal(r2.headers.get('location'), 'https://example.com/elsewhere');
 });
 
+test('an authorize fault with a scope grants only that scope', async () => {
+  const q = new URLSearchParams({ client_id: DEFAULT_CLIENT_ID, response_type: 'code', redirect_uri: 'http://127.0.0.1:1/strava/callback', scope: 'activity:write', state: 's' });
+  await post('/admin/fault', { route: 'authorize', status: 302, scope: 'read' });
+  const r = await fetch(`${base}/oauth/authorize?${q}`, { redirect: 'manual' });
+  assert.equal(r.status, 302);
+  const loc = new URL(r.headers.get('location'));
+  assert.equal(loc.searchParams.get('scope'), 'read');
+  assert.ok(loc.searchParams.get('code'));
+  assert.equal(loc.searchParams.get('state'), 's');
+  const again = await fetch(`${base}/oauth/authorize?${q}`, { redirect: 'manual' });
+  assert.equal(new URL(again.headers.get('location')).searchParams.get('scope'), 'read,activity:write', 'one fault, then the full grant');
+});
+
 test('codes are single use and need the right secret', async () => {
   const q = new URLSearchParams({ client_id: DEFAULT_CLIENT_ID, response_type: 'code', redirect_uri: 'http://127.0.0.1:1/strava/callback', scope: 'activity:write', state: 's' });
   const r = await fetch(`${base}/oauth/authorize?${q}`, { redirect: 'manual' });
