@@ -182,7 +182,7 @@ A fishing game wants a marlin whose tail wobbles, a tiled reef and a backdrop sk
 }
 ```
 
-1. `node tools/art/generate.mjs --game=fishing --dry-run`: the marlin is requested at 1536 × 528 (aspect error 0.00 %), the sky at 1664 × 624 (−0.00 %), and `reef_front` (23:1) is listed as outside the limits, requested at 3:1 as a tile segment. Total about $0.16 on flare.
+1. `node tools/art/generate.mjs --game=fishing --dry-run`: the marlin is requested at 1536 × 528 and the sky at 1664 × 624 (aspect error +0.00 % each); `reef_front` (23.11:1) is listed as outside the limits and requested at 1776 × 592 (3:1) as a tile segment. Total $0.1641 on flare ($0.0547 each).
 2. Draft: `node tools/art/generate.mjs --game=fishing --only=fish_marlin --budget=0.5`, then `tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=fishing --only=fish_marlin` and look at `assets/fishing/sprites/fish_marlin.png` at 4×.
 3. Final: set `endpoint` to sunburst and run `node tools/art/generate.mjs --game=fishing --budget=<10 − spent>`. The sunburst marlin is newer, so it is selected. Pixelate everything, then import.
 4. A sprite fails review (say the marlin faces right): sharpen its prompt ("…facing LEFT, head on the left…") and run with `--only=fish_marlin`; the old result stays in the manifest, unselected. To go back to it: `--select=fish_marlin:<its request id>`.
