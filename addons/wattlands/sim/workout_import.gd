@@ -34,7 +34,8 @@ extends RefCounted
 ##    A phase that would take the 120% count past 60 s is clamped to 120% (rule
 ##    "limit_120"); one that would take the 105% count past 300 s is clamped to 105% (rule
 ##    "limit_105").
-## Percentages are rounded to 0.01. Nothing here changes a block's length except step 2.
+## Percentages are rounded to 0.01 and durations to whole seconds (a duration that rounds to
+## 0 makes the block invalid). Nothing here changes a block's length except step 2.
 ## Guards against malformed files: an IntervalsT Repeat above MAX_REPEAT is limited to it
 ## (with a warning), and a workout longer than MAX_TOTAL_S is rejected.
 
@@ -324,7 +325,7 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 	var why := ""
 	match tag:
 		TAG_STEADY:
-			var d := _num(attrs, "duration")
+			var d := _seconds(attrs, "duration")
 			var p := _power(attrs, "power", index, warnings)
 			if is_nan(p):
 				var lo := _power(attrs, "powerlow", index, warnings)
@@ -343,7 +344,7 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 				b["power_lo"] = p
 				b["power_hi"] = p
 		TAG_WARMUP, TAG_COOLDOWN, TAG_RAMP:
-			var d := _num(attrs, "duration")
+			var d := _seconds(attrs, "duration")
 			var lo := _power(attrs, "powerlow", index, warnings)
 			var hi := _power(attrs, "powerhigh", index, warnings)
 			if is_nan(lo) or is_nan(hi):
@@ -363,8 +364,8 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 				b["power_hi"] = hi
 		TAG_INTERVALS:
 			var rep_f := _num(attrs, "repeat")
-			var on_s := _num(attrs, "onduration")
-			var off_s := _num_or(attrs, "offduration", 0.0)
+			var on_s := _seconds(attrs, "onduration")
+			var off_s := _seconds(attrs, "offduration", 0.0)
 			var on_p := _interval_power(
 				attrs, "onpower", "poweronlow", "poweronhigh", index, tag, warnings
 			)
@@ -396,7 +397,7 @@ static func _parse_block(el: Dictionary, index: int, warnings: Array[String]) ->
 				b["duration_s"] = rep * (on_s + off_s)
 				b["cadence_resting"] = _num_or(attrs, "cadenceresting", -1.0)
 		TAG_FREE:
-			var d := _num(attrs, "duration")
+			var d := _seconds(attrs, "duration")
 			if is_nan(d) or d <= 0.0:
 				why = "SIM_ZWO_WHY_DURATION"
 			else:
@@ -428,6 +429,15 @@ static func _num(attrs: Dictionary, key: String) -> float:
 static func _num_or(attrs: Dictionary, key: String, fallback: float) -> float:
 	var v := _num(attrs, key)
 	return fallback if is_nan(v) else v
+
+
+## A duration attribute rounded to whole seconds (Zwift writes whole seconds; converters
+## leave artefacts like 29.999999), `fallback` when missing, or NAN when not a number.
+static func _seconds(attrs: Dictionary, key: String, fallback: float = NAN) -> float:
+	if not attrs.has(key):
+		return fallback
+	var v := _num(attrs, key)
+	return v if is_nan(v) or is_inf(v) else roundf(v)
 
 
 ## A power attribute as a fraction of FTP (a value above PERCENT_GUESS_ABOVE is read as a

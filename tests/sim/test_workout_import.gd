@@ -639,6 +639,30 @@ func test_byte_order_mark_is_ignored() -> void:
 	assert_eq(_phases(r).size(), 1)
 
 
+func test_durations_are_whole_seconds() -> void:
+	var r := (
+		WorkoutImport
+		. parse_zwo(
+			"""<workout_file><workout>
+		<SteadyState Duration="299.6" Power="0.5"/>
+		<FreeRide Duration="29.999999"/>
+		<SteadyState Duration="0.4" Power="0.5"/>
+		<IntervalsT Repeat="2" OnDuration="59.5" OffDuration="0.3" OnPower="0.6" OffPower="0.5"/>
+		</workout></workout_file>"""
+		)
+	)
+	assert_true(r["ok"], str(r["error"]))
+	var lens: Array = []
+	for p: PlanPhase in _phases(r):
+		lens.append(p.duration_s)
+	assert_eq(lens, [300.0, 30.0, 60.0, 60.0], "rounded; a 0.3 s OffDuration means no off phases")
+	assert_eq((r["clamps"] as Array).size(), 0, "29.999999 s is a 30 s free ride, no spacing clamp")
+	var w: Array = r["warnings"]
+	assert_eq(w.size(), 1, "%s" % [w])
+	assert_string_contains(str(w[0]), "Block 3: <SteadyState> has no valid duration")
+	assert_eq(float(r["blocks"][0]["duration_s"]), 300.0)
+
+
 func test_repeat_is_limited() -> void:
 	var r := (
 		WorkoutImport
