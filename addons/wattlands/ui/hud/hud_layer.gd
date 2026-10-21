@@ -75,6 +75,8 @@ var _cadence_bands: Dictionary = {}
 var _statuses: Dictionary = {}
 var _bus_links: Array[Dictionary] = []
 var _relayout_queued: bool = false
+## anchor -> Vector2 kept clear at that corner (reserve_corner).
+var _reserved: Dictionary = {}
 var _warned_no_pv: bool = false
 var _ftp: float = 200.0
 var _wprime: float = 20000.0
@@ -333,7 +335,7 @@ func relayout() -> void:
 		var box: VBoxContainer = _boxes[anchor]
 		var sz := box.get_combined_minimum_size()
 		box.size = sz
-		box.position = anchor_position(anchor, sz, ss)
+		box.position = anchor_position(anchor, sz, ss) + _reserve_shift(anchor)
 	for slot in _slots:
 		var r := map_rect(slot["rect"])
 		var holder: Control = slot["node"]
@@ -365,7 +367,40 @@ func center_width(center: String, ss: Vector2) -> float:
 	for corner in corners:
 		if _boxes.has(corner):
 			side = maxf(side, (_boxes[corner] as Control).get_combined_minimum_size().x + WlTheme.GAP_PX)
+		if _reserved.has(corner):
+			side = maxf(side, (_reserved[corner] as Vector2).x + WlTheme.GAP_PX)
 	return maxf(120.0, ss.x - 2.0 * (WlTheme.MARGIN_PX + side))
+
+
+## Keep `size` (1080p pixels, measured from the screen corner's margin) clear at a corner
+## anchor (HudSpec.TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT or BOTTOM_RIGHT) for something the host
+## draws there, such as the app shell's on-screen panic button (BRIEF 4.6.5): that corner's
+## stack moves inward by the reserved height plus a gap (bottom corners up, top corners down)
+## and the centre stack of the same edge keeps clear of the reserved width. Vector2.ZERO
+## releases the corner. Additive (W2).
+func reserve_corner(anchor: String, size: Vector2) -> void:
+	if not [HudSpec.TOP_LEFT, HudSpec.TOP_RIGHT, HudSpec.BOTTOM_LEFT, HudSpec.BOTTOM_RIGHT].has(anchor):
+		push_error("HudLayer: reserve_corner needs a corner anchor, not '%s'" % anchor)
+		return
+	if size.x <= 0.0 or size.y <= 0.0:
+		_reserved.erase(anchor)
+	else:
+		_reserved[anchor] = size
+	_queue_relayout()
+
+
+## The size kept clear at `anchor` (Vector2.ZERO if none).
+func reserved_corner(anchor: String) -> Vector2:
+	return _reserved.get(anchor, Vector2.ZERO)
+
+
+func _reserve_shift(anchor: String) -> Vector2:
+	if not _reserved.has(anchor):
+		return Vector2.ZERO
+	var dy := (_reserved[anchor] as Vector2).y + WlTheme.GAP_PX
+	if anchor == HudSpec.BOTTOM_LEFT or anchor == HudSpec.BOTTOM_RIGHT:
+		return Vector2(0.0, -dy)
+	return Vector2(0.0, dy)
 
 
 ## Top-left of an anchor stack of size `sz` on a screen of size `ss`.

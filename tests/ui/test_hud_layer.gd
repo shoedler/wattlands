@@ -221,6 +221,32 @@ func test_rect_positions_at_scale_3_and_on_resize() -> void:
 	assert_eq(_hud.slot_screen_rect(card), Rect2(320, 200, 200, 40))
 
 
+## The app shell keeps its on-screen panic button clear of the HUD: a reserved corner moves
+## that corner's stack inward and narrows the centre stack of that edge.
+func test_reserve_corner_keeps_the_corner_clear() -> void:
+	var spec := HudSpec.new() 		.add(HudSpec.READOUT, HudSpec.BOTTOM_RIGHT, {"source": "power_w"}) 		.add(HudSpec.READOUT, HudSpec.TOP_LEFT, {"source": "cadence_rpm"})
+	_hud.build(spec, _ctx)
+	_hud.relayout()
+	var br := _hud.anchor_box(HudSpec.BOTTOM_RIGHT)
+	var tl := _hud.anchor_box(HudSpec.TOP_LEFT)
+	var before := br.position
+	var tl_before := tl.position
+	var wide := _hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080))
+	_hud.reserve_corner(HudSpec.BOTTOM_RIGHT, Vector2(380, 100))
+	_hud.reserve_corner(HudSpec.TOP_LEFT, Vector2(200, 50))
+	_hud.relayout()
+	assert_eq(_hud.reserved_corner(HudSpec.BOTTOM_RIGHT), Vector2(380, 100))
+	assert_eq(br.position, before - Vector2(0, 100 + WlTheme.GAP_PX), "the bottom-right stack sits above it")
+	assert_eq(tl.position, tl_before + Vector2(0, 50 + WlTheme.GAP_PX), "a top corner moves down")
+	assert_true(br.get_global_rect().end.y <= 1080 - WlTheme.MARGIN_PX - 100, "nothing under the reserved area")
+	assert_true(_hud.center_width(HudSpec.BOTTOM, Vector2(1920, 1080)) <= wide, "the bottom centre keeps clear")
+	_hud.reserve_corner(HudSpec.BOTTOM_RIGHT, Vector2.ZERO)
+	_hud.relayout()
+	assert_eq(br.position, before, "released")
+	_hud.reserve_corner(HudSpec.BOTTOM, Vector2(10, 10))
+	assert_push_error("corner anchor")
+
+
 ## The real world-kits PixelViewport (not the double): rects map through its
 ## art_rect_to_screen(), and a pixel_base change, which moves the scale without a resize,
 ## re-lays the HUD out through `layout_changed`.

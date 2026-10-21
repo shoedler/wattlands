@@ -144,3 +144,9 @@
 - Decision: the session screen hands its GameHost an `AppSessionInput` as `config.input_router`: the router's actions without `pause` (the screen pauses and resumes) and, while the overlay menu is open, without anything but `panic` (which always passes); gestures unchanged; `detach_rider()` at the session end re-attaches TrainerService's menu rider.
 - Alternatives: let the GameHost own pause (then the overlay's confirm both picks an item and resumes); ask sdk-runtime to stop toggling pause (app-shell's W1 request, not taken).
 - Reason: with the real GameHost a P press paused (screen) and resumed (GameHost, next tick), and a confirm on the overlay both picked the highlighted item and resumed; after a session the router had no rider, so results and menus lost pedal gestures.
+
+## 2026-10-21 (W2): Overlay and panic button above the HUD
+
+- Decision: the session screen puts its pause overlay and the panic button in a CanvasLayer at `HudLayer.LAYER + 10`; the panic button sits at the HUD margin in the bottom-right corner, grows left and up with its text, and the HudLayer keeps that corner clear (`reserve_corner`).
+- Alternatives: keep them in the screen's canvas (drawn under the HudLayer CanvasLayer).
+- Reason: seen in a windowed run on the real GameHost: HUD widgets and toasts drew over the overlay, the gear widget under the panic button, and the button's text ran off screen.

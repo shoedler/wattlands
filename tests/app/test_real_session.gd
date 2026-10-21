@@ -47,6 +47,9 @@ func test_a_solo_session_on_the_real_game_host_reaches_the_results() -> void:
 	assert_eq(s.host.state, "running")
 	assert_true(fx.trainer.is_external_tick(), "the GameHost ticks the rider, TrainerService does not")
 	assert_same(s.local_rider(), rider)
+	assert_gt(s.top_layer.layer, HudLayer.LAYER, "the overlay and the panic button draw above the HUD")
+	assert_same(s.panic_button.get_parent(), s.top_root)
+	assert_same(s.overlay.get_parent(), s.top_root)
 	assert_true(rider.recorder != null and rider.recorder.is_recording(), "the ride records from the start")
 	var states: Array[String] = []
 	s.host.state_changed.connect(func(st: String) -> void: states.append(st))

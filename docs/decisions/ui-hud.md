@@ -117,3 +117,9 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 - Decision: HudLayer connects `PixelViewport.layout_changed` directly (plus `resized`), tested against the real PixelViewport; `WlInputRouter`'s `action` signal never carries an action made from a gesture (test_the_action_signal_never_carries_a_gesture); a hand-driven `PedalScanList` (listen_to_input off, processing off) moves only through `feed_action`, `feed_gesture` and `tick`, emits `item_chosen` then `item_picked` synchronously, and `set_items()` starts at the first enabled item, so a refresh in place restores the index itself (test_a_list_driven_by_hand); `WlSfx.set_metronome` is idempotent (test_set_metronome_is_idempotent).
 - Alternatives: make `set_items()` keep a valid highlight (app-shell's W1 wording).
 - Reason: these were documented assumptions on both sides; `AppScreen.refresh_menu()` already restores the highlight, and changing `set_items()` would change ui-hud's tested behaviour for games' shops.
+
+## 2026-10-21 (W2): HudLayer.reserve_corner for the host's own controls
+
+- Decision: additive `HudLayer.reserve_corner(anchor, size)` / `reserved_corner(anchor)`: a reserved corner's stack moves inward by the reserved height plus a gap and the centre stack of that edge keeps clear of the reserved width. The app shell reserves the bottom-right corner for its on-screen panic button.
+- Alternatives: move the panic button elsewhere (every corner may hold game widgets; Workout uses all six anchors); let games avoid a corner.
+- Reason: Workout's gear widget (bottom-right, shown in SIM sprints) sat under the panic button, and the button's text ran off the screen edge.
