@@ -42,6 +42,18 @@ func _rider(b: Dictionary, peer: int = 1) -> LocalRider:
 	return b["riders"][peer]
 
 
+## game-workout W1: a content id "<scheme>:<value>" passes through to ctx.content_id when
+## the game lists the scheme in content_schemes; any other id outside `contents` is refused.
+func test_a_listed_content_scheme_passes_the_content_id_through() -> void:
+	var m := Kit.registry(_root).manifest("fx_solo").duplicate(true)
+	m["content_schemes"] = ["zwo"]
+	var b := _solo("zwo:C:/rides/my.zwo", {"manifest": m})
+	assert_eq(b["err"], "")
+	assert_eq(_host(b).ctx.content_id, "zwo:C:/rides/my.zwo")
+	assert_string_starts_with(str(_solo("url:x", {"manifest": m})["err"]), "content_id:")
+	assert_string_starts_with(str(_solo("zwo:C:/rides/my.zwo")["err"]), "content_id:", "fx_solo lists no scheme")
+
+
 func test_setup_errors_name_the_problem() -> void:
 	assert_string_starts_with(str(_solo("tiny", {"game_id": "nope"})["err"]), "game_id:")
 	assert_string_starts_with(str(_solo("zzz")["err"]), "content_id:")
@@ -607,6 +619,76 @@ func test_rendering_takes_gestures_and_actions_from_the_input_router() -> void:
 	assert_eq(calls.size(), 1, "one source: the rider's own queue is the router's to merge")
 	host.end_session("timeout")
 	assert_eq(router.detached, 1)
+
+
+## qa W1 (real e2e: the clients stayed in the lobby): the app gives a headless scripted peer's
+## GameHost no "realtime" key, so it must still advance from _process; only GameSimRunner and
+## tests, which call step() themselves, pass realtime = false.
+func test_a_headless_app_session_steps_from_process() -> void:
+	var reg := Kit.registry(_root)
+	var tmp := Paths.make_temp_dir("wattlands_sdk_test")
+	_tmp.append(tmp)
+	var slot := Kit.human(1, 0)
+	var host := GameHost.new()
+	_root.add_child(host)
+	assert_eq(host.setup({
+		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [slot] as Array[PlayerSlot],
+		"local_riders": {1: Kit.rider(_root, slot)}, "local_peer": 1, "bus": Kit.new_bus(_root, "AppBus"),
+		"registry": reg, "headless": true, "progress_path": tmp.path_join("progress.json"),
+	}), "")
+	host.start()
+	host._process(0.5)
+	assert_eq(host.clock.platform_tick, 10, "0.5 s of wall time at sim speed 1 is 10 steps")
+	var stepped := GameHost.new()
+	_root.add_child(stepped)
+	var s2 := Kit.human(1, 0)
+	stepped.setup({
+		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [s2] as Array[PlayerSlot],
+		"local_riders": {1: Kit.rider(_root, s2)}, "local_peer": 1, "bus": Kit.new_bus(_root, "RunnerBus"),
+		"registry": reg, "headless": true, "realtime": false, "progress_path": tmp.path_join("p2.json"),
+	})
+	stepped.start()
+	stepped._process(0.5)
+	assert_eq(stepped.clock.platform_tick, 0, "realtime false: only step() advances it")
+	host.end_session("timeout")
+	stepped.end_session("timeout")
+
+
+## app-shell W1: the session screen owns pausing (it calls pause() and resume() and runs the
+## pause menu), so the InputRouter's pause never toggles the GameHost, and its confirm during a
+## pause belongs to the pause menu, not to a resume or the game. A user pause does not end when
+## the rider pedals; a coasting pause does.
+func test_the_input_routers_pause_and_confirm_belong_to_the_session_screen() -> void:
+	var router := FakeRouter.new()
+	_root.add_child(router)
+	var b := _solo("tiny", {"headless": false, "input_router": router})
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var game := _game(b)
+	host.start()
+	Kit.step(b, 2)
+	router.actions.append(&"pause")
+	Kit.step(b, 1)
+	assert_false(host.is_paused(), "the router's pause is the screen's")
+	for c: Dictionary in game.get("local_intent_calls"):
+		assert_false((c["actions"] as Array).has(&"pause"), "and never reaches the game")
+	host.pause("user")
+	var calls_before: int = (game.get("local_intent_calls") as Array).size()
+	router.actions.append(&"confirm")
+	router.gestures.append(Wl.G_PEDAL_START)
+	Kit.step(b, 1)
+	assert_true(host.is_paused(), "neither the router's confirm nor pedalling ends a user pause")
+	var calls: Array = game.get("local_intent_calls")
+	for k in range(calls_before, calls.size()):
+		assert_false((calls[k]["actions"] as Array).has(&"confirm"), "the pause menu's confirm is not the game's")
+	host.resume()
+	assert_false(host.is_paused())
+	_rider(b).pause_requested.emit("coasting")
+	assert_true(host.is_paused())
+	router.gestures.append(Wl.G_PEDAL_START)
+	Kit.step(b, 1)
+	assert_false(host.is_paused(), "pedalling again ends a coasting pause")
+	host.end_session("timeout")
 
 
 func test_headless_takes_gestures_from_the_local_rider() -> void:

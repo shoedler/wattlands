@@ -62,7 +62,8 @@ What `tools/new_game <id>` produces (section 19.2): `src/games/<id>/` with `game
 | `presentation` | `"2d"` or `"3d"` | yes | 2D views go into a `PixelViewport` |
 | `pixel_base` | `[w, h]` | 2D only | Art resolution, for example `[640, 360]` |
 | `entry` | res path | yes | The GameModule script, for example `res://src/games/siege/siege_game.gd` |
-| `contents` | Array of String | yes | Content ids the lobby offers |
+| `contents` | Array of String | yes | Content ids the lobby offers (`^[a-z0-9][a-z0-9_]*$`, unique) |
+| `content_schemes` | Array of String | no, default `[]` | Schemes of content ids outside `contents`: an id `<scheme>:<value>` with a listed scheme and a non-empty value starts a session too (Workout lists `zwo` for `--content=zwo:<absolute path>`). `WlGameRegistry.content_allowed(manifest, id)` is the check the GameHost and `run_game_sim` make; the id reaches `ctx.content_id` unchanged on every peer, and your game validates the value when it loads the content |
 | `default_content` | String | yes | One of `contents` |
 | `e2e_content` | String | yes | About 2 minutes, for `tools/e2e/run.mjs` |
 | `zero_input_content` | String | yes | What a solo 5 s `pedal_start` on the title screen, or the first run, plays |
@@ -100,7 +101,7 @@ Life cycle on every peer: `configure(ctx)` → (host/SOLO: `build_effort_plans()
 | `on_rescue(peer_id, active: bool)` | host, SOLO | once per transition, on the first tick the rider's `rescue` flag changes (remote riders up to 0.2 s later) | A stagger, never a wipe. `false` comes when the rescue hold ends (cadence ≥ 70 rpm for 3 s); the governor's 10 s ramp-back starts then |
 | `on_afk(peer_id, afk: bool)` | host, SOLO | once per transition: `true` at the multiplayer coasting AFK (10 s not pedaling) and on a dropped peer in the same tick; `false` once fresh telemetry from that peer shows pedaling | Keep the slot; freeze or hand over its station. A SOLO coasting rider pauses instead (no `on_afk`) |
 | `local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array` | every peer | every tick, for the local rider only | Turn this tick's input actions and pedal gestures into intents (section 11) |
-| `snapshot() -> Dictionary` | host | every second tick (10 Hz) | Compact, JSON-safe full state (section 12) |
+| `snapshot() -> Dictionary` | host; SOLO only in `run_game_sim`, `tools/screenshot` and conformance runs | every second tick (10 Hz) | Compact, JSON-safe full state (section 12). A SOLO session that records a report measures each snapshot (size, SHA-256) and sends it nowhere |
 | `apply_snapshot(snapshot: Dictionary)` | clients | in `seq` order (older ones dropped); once right after a rejoin with the host's latest | Overwrite your state from it |
 | `apply_event(event: Dictionary)` | clients only, never host or SOLO | each event once, in the host's emission order, before that tick's snapshot | Apply it; raise local effects (toasts, sounds) |
 | `client_predict(dt: float, local: Telemetry)` | clients | every 0.05 s, after any snapshot applied that tick, with the client's own latest telemetry | Move your own rider ahead of the next snapshot |
@@ -120,9 +121,9 @@ Life cycle on every peer: `configure(ctx)` → (host/SOLO: `build_effort_plans()
 
 What each role runs:
 
-- **SOLO**: `configure`, `build_effort_plans`, `sim_step` (with `autopilot_intents` merged and `local_intents` for the one human), `on_rescue`, `on_afk` (never for the human: a coasting solo rider pauses), `make_view`, `hud_spec`, `results`, `apply_progress`. Never `snapshot`, `apply_snapshot`, `apply_event` or `client_predict`.
+- **SOLO**: `configure`, `build_effort_plans`, `sim_step` (with `autopilot_intents` merged and `local_intents` for the one human), `on_rescue`, `on_afk` (never for the human: a coasting solo rider pauses), `make_view`, `hud_spec`, `results`, `apply_progress`. Never `apply_snapshot`, `apply_event` or `client_predict`; `snapshot` only when the session records a report (`run_game_sim`, `tools/screenshot`, conformance), never in the app's solo play.
 - **HOST**: everything SOLO runs, plus `snapshot` at 10 Hz and `send_event` delivery to clients.
-- **CLIENT**: `configure`, `local_intents`, `apply_snapshot`, `apply_event`, `client_predict`, `make_view`, `hud_spec`, `apply_progress`. Never `build_effort_plans`, `sim_step`, `autopilot_intents`, `on_rescue`, `on_afk` or `results`. `ctx.directives` calls on a client are ignored with a warning.
+- **CLIENT**: `configure`, `local_intents`, `apply_snapshot`, `apply_event`, `client_predict`, `make_view`, `hud_spec`, `apply_progress`. Never `build_effort_plans`, `sim_step`, `autopilot_intents`, `on_rescue`, `on_afk` or `results`. `ctx.directives` calls on a client are ignored with a warning. A client's GameHost configures from the host's `session_start`: the app shell creates it when that message arrives and hands it over as `config.session_start` (the GameHost applies it on its first step; `plan` and `phase` follow on the net).
 
 Worked example: `src/games/_template/template_game.gd` overrides every method above and uses every signal; section 22 walks through it.
 
@@ -135,7 +136,7 @@ Worked example: `src/games/_template/template_game.gd` overrides every method ab
 | `game_id` | String | This game's id |
 | `manifest` | Dictionary | The validated `game.json` |
 | `players` | `Array[PlayerSlot]` | Every slot, sorted by `slot_index` 0..n−1, humans first then bots, identical on every peer. No peer outside it ever appears in `frame.players` |
-| `content_id` | String | The lobby's content, one of `contents` |
+| `content_id` | String | The lobby's content: one of `contents`, or `<scheme>:<value>` for a scheme in `content_schemes` (section 3) |
 | `seed` | int | The session seed, the same on every peer (`--seed` in tools) |
 | `role` | String | `Wl.SOLO`, `Wl.HOST` or `Wl.CLIENT`; `is_authority()` is true for SOLO and HOST |
 | `local_peer` | int | This machine's rider (the host's own in HOST and SOLO). Host peer id is `Wl.HOST_PEER` (1); clients 2..; bots negative |
@@ -215,7 +216,7 @@ var plan := EffortPlan.of([
 It rejects a plan when:
 
 - **Structure**: the plan is empty; a kind or mode is unknown; a fixed phase has `duration_s` ≤ 0; an open-ended phase lacks 0 < `min_s` ≤ `max_s`; a `course` phase has no profile; the game wrote a `COOLDOWN` (a finalized plan with `cooldown_appended` true is re-validated by setting aside exactly one trailing standard cool-down, which is how clients re-validate their `plan` message).
-- **Warm-up (BRIEF 4.6.8)**: in the first 300 s, every ERG `target_pct`, `ramp_to_pct` and `range_pct` bound is ≤ 65 %. Open-ended phases count at `min_s` to decide which phases fall inside the first 300 s. SIM phases are allowed there: the governor clamps their grade to −2…+3 % and drops haptics during the rider's warm-up.
+- **Warm-up (BRIEF 4.6.8)**: in the first 300 s, every ERG `target_pct`, `ramp_to_pct` and `range_pct` bound is ≤ 65 %. The window is half-open, [0, 300): a phase that starts inside it counts whole, and a phase that starts at exactly 300 s is outside it (every Workout session but `e2e` starts its work there). Open-ended phases count at `min_s` to decide which phases fall inside the first 300 s. SIM phases are allowed there: the governor clamps their grade to −2…+3 % and drops haptics during the rider's warm-up.
 - **Caps (BRIEF 4.6.1)**: any ERG value above 150 % or below 0; a phase longer than 300 s (open-ended: its `max_s`) above 105 % (inclusive: 105 is allowed), checked on `target_pct`, `ramp_to_pct` and `range_pct`.
 - **Duration limits (BRIEF 4.6.1)**: more than 300 s accrued above 105 %, or more than 60 s above 120 %, without a reset in between. Open-ended phases accrue at `max_s` and at their range top. A reset is ≥ 120 consecutive ERG seconds at ≤ 90 % (inclusive; open-ended phases count at `min_s`). A SIM phase restarts the reset count and accrues nothing.
 
@@ -350,18 +351,31 @@ func hud_spec() -> HudSpec:
 
 - Anchors: `top_left`, `top`, `top_right`, `bottom_left`, `bottom`, `bottom_right` (`HudSpec.TOP_LEFT`, ...). Entries at one anchor stack in the order added: top anchors downward, bottom anchors upward. "Bottom center" is `bottom`.
 - `add(widget, at, options = {})`, `add_control(control, at)`, `toasts_at(at)`, `banners_at(at)`, `show_safety_banners` (default true: the kit's rescue and warm-up banners), `has_widget(widget)`, `HudSpec.is_valid_position(at)`.
-- **Rect2i placement (2D)**: a `Rect2i` is in art pixels of `pixel_base`. The HUD maps it through `PixelViewport.art_rect_to_screen(rect)`, which applies the viewport's integer scale and letterbox offset, and re-lays it out on resize. At 1080p a 640 × 360 view has scale 3, so Fishing's 4-lane HUD zone, art x 427–639 and 84 px high, is 639 × 252 screen pixels. Kit widgets shrink to fit their rect; key numbers keep ≥ 48 px at 1080p where the rect allows. (W2: ui-hud adds each widget's minimum rect here.)
-- The HUD draws at native resolution above the game view (base size 1920 × 1080, `canvas_items` stretch, so HUD sizes are 1080p pixels). (W2: ui-hud adds the HudLayer's CanvasLayer `layer` value, so a view's own CanvasLayer below it, such as Siege's vignette, draws under the HUD, and the shared Theme's res path and font sizes, so your Controls match the kit.)
+- **Rect2i placement (2D)**: a `Rect2i` is in art pixels of `pixel_base`. The HUD maps it through `PixelViewport.art_rect_to_screen(rect)`, which applies the viewport's integer scale and letterbox offset, and re-lays it out on resize. At 1080p a 640 × 360 view has scale 3, so Fishing's 4-lane HUD zone, art x 427–639 and 84 px high, is 639 × 252 screen pixels. Kit widgets shrink to fit their rect (several in one rect stack and share it); key numbers keep ≥ 48 px at 1080p, so a rect smaller than a widget's `min_rect()` overflows instead of shrinking those numbers further. Your own Controls in a rect are sized to it. Without a PixelViewport (3D games) a `Rect2i` is taken as 1080p pixels. Sizes per kit widget, in 1080p pixels (`base_size()` at full size, `min_rect()` the smallest that keeps the key numbers readable; at scale 3 divide by 3 for art pixels):
+
+| Widget | Full size | Minimum rect |
+| --- | --- | --- |
+| `power_gauge` | 420 × 136 | 300 × 106 |
+| `cadence` | 360 × 124 | 290 × 98 |
+| `wbal` | 380 × 56 | 240 × 40 |
+| `timeline` | 640 × 150 | 380 × 100 |
+| `teammates` | one card 260 × 124 per rider in a row (10 px gaps) | one card at half scale, 130 × 62 (the strip wraps into two rows, then scales down) |
+| `readout` | 240 × 150 | 170 × 108 |
+| `gear` | 300 × 80 | 150 × 42 (not a key number: it shrinks with its rect) |
+
+  Fishing's 4-lane zone (639 × 252 px at 1080p) holds the timeline (380 × 100 minimum) above a row of power gauge and cadence (300 + 290 = 590 × 106); W′ and the gear need a second rect or must share one, each widget then shrinking toward its minimum.
+- The HUD draws at native resolution above the game view (base size 1920 × 1080, `canvas_items` stretch, so HUD sizes are 1080p pixels). `HudLayer` is a CanvasLayer with `layer` = `HudLayer.LAYER` = 10: give your view's own CanvasLayer a lower `layer` (Siege's vignette: 1..9) to draw under the HUD, a higher one to draw above it. Anchored stacks sit `WlTheme.MARGIN_PX` (32 px) from the screen edges with `WlTheme.GAP_PX` (12 px) between entries.
+- **Theme**: set `theme = load(WlTheme.THEME_PATH)` (`res://addons/wattlands/ui/theme/wattlands_theme.tres`, or `WlTheme.get_theme()`) on your Controls to match the kit. Font: Atkinson Hyperlegible when its files are in `addons/wattlands/ui/theme/fonts/`, else Godot's default. Sizes (`WlTheme`, 1080p px): key numbers `KEY_NUMBER_PX` 64 (never below `KEY_NUMBER_MIN_PX` 48), big readout 72, banners 56, menu and pedal-scan items 40, toasts 36, body 32, labels 26, small 22, nothing below 14, an 8 px dark outline on HUD text. Colors: `WlTheme.TEXT`, `TEXT_DIM`, `PANEL`, `ACCENT` (Okabe-Ito sky blue, bands and focus), `GLOW` (in band), `WARN` (orange, rescue), `WARMUP` (purple); always pair a color with a shape, pattern or text. The kit widgets themselves: `addons/wattlands/ui/hud/` (`HudLayer`, one script per widget; `hud_demo.tscn` shows them all).
 
 Kit widgets (BRIEF 3.9):
 
 | Widget | Shows | Options |
 | --- | --- | --- |
-| `power_gauge` | ERG: the applied target band; SIM: the band set with `ctx.hud.power_band`; glows in band | `{"peer": int}` (default the local rider) |
-| `cadence` | Cadence with the band published by `ctx.directives.cadence_band` | |
-| `wbal` | W′ balance bar | |
+| `power_gauge` | Raw watts (key number), %FTP and W/kg if the rider opted in; ERG: the applied target ± 5 %; SIM: the band set with `ctx.hud.power_band` (none until set); glows in band. The HUD adds one at `bottom_left` when your spec shows neither a gauge nor both a `power_w` and an `ftp_pct` readout | `{"peer": int}` (default the local rider) |
+| `cadence` | Cadence with the band published by `ctx.directives.cadence_band`; dims when `cadence_age_s` > 3 s | `{"peer": int}` |
+| `wbal` | W′ balance bar with its %; orange with "low" below 25 % | `{"wprime_j": float}` (default the profile's W′, 20 000 J) |
 | `timeline` | The local rider's plan, the current phase and a preview of the next; open-ended phases by nominal length or `min_s`–`max_s` | |
-| `teammates` | One chip per slot from `ctx.roster`: color, shape, pattern and `hollow`, name, raw W, %FTP, rescue, AFK, disconnected, and the latest `teammate_status` (`in_band`, `icon` as a `res://` texture path, `text`) | |
+| `teammates` | One card per slot from `ctx.roster`, in slot order: chip with color, shape, pattern and `hollow`, name, raw W, %FTP, rescue, AFK, disconnected, and the latest `teammate_status` (`in_band`, `icon` as a `res://` texture path, `text`) | `{"include_local": bool (default true), "vertical": bool (default false)}` |
 | `readout` | A big number (≥ 48 px) | `{"source": "power_w" \| "cadence_rpm" \| "ftp_pct" \| "wkg" \| "custom", "id": String, "label": key}`; custom readouts are fed by `ctx.hud.readout(id, text)` |
 | `gear` | The virtual gear, shown whenever the local trainer is in SIM (SIM phases and SIM blocks), hidden in ERG | |
 
@@ -397,7 +411,7 @@ The template does the same with its lap toast (host: `peer = ctx.local_peer`; cl
 `PedalScanList` (`addons/wattlands/ui/pedal_scan_list.gd`, a VBoxContainer) is the pedal-scan component for shops and pickers (BRIEF 3.5):
 
 - `set_items([{id, text, disabled?, icon?, detail?}])`, `highlighted()`, `set_highlight(i)`, `tick(dt)` (headless tests; `_process` drives it in real time), `feed_gesture(name)`, `feed_action(name)`.
-- `scan_interval_s` (1.6), `scanning`, `erg_auto_confirm`, `follow_local_mode` (in sessions `erg_auto_confirm` follows the local rider's mode: on in ERG), `listen_to_input` (follow InputRouter automatically; off in headless tests).
+- `scan_interval_s` (1.6), `scanning`, `erg_auto_confirm`, `follow_local_mode` (default false; set it true in a session and `erg_auto_confirm` follows the local rider's trainer mode, on in ERG: from the InputRouter's attached rider every tick, or from `set_local_mode(Telemetry.mode)` if you call it), `listen_to_input` (follow InputRouter automatically; off in headless tests), `items()`, `item_count()`, `set_item_disabled(i, disabled)` (disabled items are skipped), `auto_confirm_after_s()`, `auto_confirm_left_s()`; left and right move focus like up and down.
 - `surge` or `confirm` picks; `coast` or `back` backs out (`coast` never in ERG); up/down move focus and pause scanning for 10 s.
 - ERG auto-confirm: with `erg_auto_confirm` on, the highlighted item is picked after two full cycles (2 × item count × `scan_interval_s`) without input, whether or not scanning is on, so a rider with Autopilot off who only pedals still gets picks.
 - Signals: `item_chosen(index, id, auto: bool)` (auto is true for an auto-confirm), `item_picked(index, id, via: String)` emitted with it (`via` is `"action"`, `"surge"` or `"auto"`), `backed_out`, `highlight_changed(index)`.
@@ -406,7 +420,7 @@ The platform never edits intents: tag your own, for example Siege's buy `{"k": "
 
 ## 11. Input, intents and Autopilot
 
-**Actions** (BRIEF 3.5): `confirm`, `back`, `up`, `down`, `left`, `right`, `ability_1`, `ability_2`, `item`, `swap`, `shift_up`, `shift_down`, `pause`, `panic` (`Wl.ACTIONS`). Keyboard: arrows or WASD, Enter or Space, Esc, 1 and 2, F, R, Q and E, P, Backspace held 1 s. Xbox: stick or D-pad, A, B, X and Y, RB, LB, LT and RT, Start, View + Menu. `pause` and `panic` are consumed by the platform and never reach a game; `shift_up` and `shift_down` drive the virtual gears.
+**Actions** (BRIEF 3.5): `confirm`, `back`, `up`, `down`, `left`, `right`, `ability_1`, `ability_2`, `item`, `swap`, `shift_up`, `shift_down`, `pause`, `panic` (`Wl.ACTIONS`). Keyboard: arrows or WASD, Enter or Space, Esc, 1 and 2, F, R, Q and E, P, Backspace held 1 s. Xbox: stick or D-pad, A, B, X and Y, RB, LB, LT and RT, Start, View + Menu. `pause` and `panic` are consumed by the platform and never reach a game; `shift_up` and `shift_down` drive the virtual gears (and still reach `local_intents`). In the app the session screen owns pausing: it pauses on `pause` and runs its pause menu, so the GameHost ignores the InputRouter's `pause` (and its `confirm` while paused); `GameHost.inject_action(&"pause")` still toggles pause in tools and tests.
 
 **Gestures** (`Wl.G_*`): `pedal_start` (cadence ≥ 40 rpm or ≥ 30 % FTP for 3 s), `surge` (confirm; in ERG by flywheel speed ≥ 1.12 × its 10 s average for 1.5 s, else by power), `coast` (back; not pedaling 3 s, never in ERG), `stop_5s` (pause; solo, outside ERG). `not_pedaling` (power < 15 W and cadence < 20 rpm) is the shared detector behind them and the coasting rule. A stricter scored sprint is `SprintRule` (≥ 1.2 × FTP, optionally over a trailing window): `SprintRule.create(ftp_w, window_s)`, `update(t, power_w)`, `holds()`, `held_s()`, `best_s()`, `threshold_w()`, `reset()`.
 
@@ -442,24 +456,24 @@ func int_fields() -> Dictionary:
 ```
 
 - **`client_predict(dt, local)`** runs on clients every tick after any snapshot applied that tick. Move only what the local rider controls (your own wheel, cadence marker or machinery); interpolate everything else between snapshots.
-- **Protocol** also converts `peer`, `host`, `from`, `to`, `seq`, `proto`, `max` and every `*_id` key, gives peer-keyed dictionaries int keys, and rejects messages that fail their schema or version (`docs/PROTOCOL.md`).
+- **Protocol** also converts `peer`, `host`, `from`, `to`, `seq`, `proto` and `max`, every `*_id` key at any depth whose value is a whole number (string ids such as `game_id` stay strings), gives peer-keyed dictionaries int keys, and rejects messages that fail their schema or version (`docs/PROTOCOL.md`). Game options and player options arrive on clients as JSON numbers; the GameHost passes `ctx.options` and every `PlayerSlot.options` through the manifest's option entries on every peer, so an `int` option is an `int` everywhere.
 - **Bandwidth**: the host sends about 35 messages a second (snapshots 10, roster 2, events ≤ 10, directives); NetSession keeps only the latest `course_grade`, `cadence_band` and `power_band` per peer per 100 ms and never drops or reorders a `request` or a `phase`.
 
 ## 13. Phases, cool-down, finishing and laps
 
-- The GameHost tracks every rider's plan itself. A phase ends by its duration, at `max_s`, by `end_phase`, or by `finished`. On every change (the cool-down start included) it emits `ctx.events.phase_started(peer, index)`, sends that rider's client a `phase` message `{index, start_tick, ended_by}` (the client's governor starts the phase from it), records a `phase_started` event in the report, and updates `frame.phase`.
+- The GameHost tracks every rider's plan itself. A phase ends by its duration, at `max_s`, by `end_phase`, or by `finished`. On every change (the cool-down start included) it emits `ctx.events.phase_started(peer, index)`, sends that rider's client a `phase` message `{peer, index, start_tick, ended_by}` (the client's governor starts the phase from it), queues a platform event `wl.phase_started {peer, index, ended_by}` for every client (each client's bus emits `phase_started` for the other riders from it), records a `phase_started` event in the report (clients record one per rider too), and updates `frame.phase`. Event types starting with `wl.` are the platform's (`wl.phase_started`, `wl.lap_marker`, `wl.finished`): never name your own events so, and never `snapshot`.
 - **`phase_changed`**: the GameHost never emits it, never changes phases or laps on it, and records the game's emits as `game_phase_changed` report events. Games whose riders share one sequence may emit it (Siege, Tank, the template); games with per-rider plans don't need it (Fishing).
 - **The cool-down**: the validator appends `COOLDOWN`, ERG 50 %, 180 s, `lap` true, label `Cool-down`. During it the GameHost keeps your view on screen and keeps calling `sim_step` with `frame.phase` kind `COOLDOWN` (show the ride home), refuses every directive (`cooldown`) and clears every band. It always starts its own FIT lap.
 - **`finished(reason)`**: every rider not yet in the cool-down ends its phase (`ended_by: "finished"`) and starts the cool-down; unused phases never start (no lap). Emitted during the cool-down it only records the reason. Emit it once.
-- **FIT laps**: one lap at each lap-true phase that started, one per `lap_marker` emit, and one for the cool-down. Expected laps = lap-true phases that started + `lap_marker` emits + 1. A run that ends by `timeout` or `paused` before the cool-down has no cool-down lap. The template's `default` content gives 2 + 1 + 1 = 4.
+- **FIT laps**: one lap at each lap-true phase that started, one per `lap_marker` emit, and one for the cool-down. Expected laps = lap-true phases that started + `lap_marker` emits + 1, when the plan's first phase is lap-true (a lap-false first phase adds one lap for the opening segment). A run that ends by `timeout` or `paused` before the cool-down has no cool-down lap. The template's `default` content gives 2 + 1 + 1 = 4; Workout's `vo2` gives 10 lap-true phases + 1 = 11.
 
 ## 14. Rescue, AFK, pause, drops and rejoins
 
 - **Rescue** (BRIEF 4.6.3): in ERG with a governed target ≥ 60 % FTP, cadence < 45 rpm for 3 s or power < 75 % of the target for 5 s drops the rider to 50 % FTP; the hold ends at cadence ≥ 70 rpm for 3 s, then the target ramps back over 10 s. `on_rescue(peer, true/false)` brackets the hold; `Telemetry.rescue` shows it. Treat it as a stagger. Don't send `request`s to a rider in rescue unless you mean them (they keep counting underneath); a SIM block is refused then.
 - **Coasting** (BRIEF 4.6.4): `not_pedaling` for 3 s drops ERG to the floor; at 10 s a SOLO rider is paused (game time stops: no `sim_step`) and a multiplayer rider goes AFK (`on_afk(peer, true)`, `Telemetry.afk`). `on_afk(peer, false)` follows when they pedal again.
-- **Pause**: game time stops (no `sim_step`, phase clocks and directive expiries stop); the trainer goes to the ERG floor or SIM flat; trainer I/O, telemetry and panic keep working.
+- **Pause** (SOLO only): game time stops (no `sim_step`, phase clocks and directive expiries stop); the trainer goes to the ERG floor or SIM flat; trainer I/O, telemetry and panic keep working. A coasting or `stop_5s` pause ends when the rider pedals again (`pedal_start`); a user pause (the pause menu) ends from the menu (`GameHost.resume()`) or an injected `pause` or `confirm`, never just by pedaling. A run_game_sim SOLO run that stays paused 120 s of platform time ends `paused`.
 - **A dropped client**: `on_afk(peer, true)` at once; its `frame.players[peer]` has `connected` false, power and cadence 0 and a growing `age_s`; its last telemetry never counts as pedaling. The slot stays until the session ends, with its plan.
-- **Rejoin**: a client that reconnects with the relay's reconnect token gets `lobby_state`, its `plan`, its `phase` and the latest snapshot (`apply_snapshot` once), then `on_afk(peer, false)` once fresh telemetry shows pedaling. A restarted client starts a new FIT file from the rejoin. After the token expires the slot stays AFK. Joins without a token after the start are refused with `session_in_progress`, which the client shows.
+- **Rejoin**: a client that reconnects with the relay's reconnect token gets `lobby_state`, then from the GameHost `session_start` again, its `plan`, its `phase` (with the phase's real `start_tick`, so its phase clock catches up) and the latest snapshot (`apply_snapshot` once), plus the `results` if the session already ended; then `on_afk(peer, false)` once fresh telemetry shows pedaling. A restarted client starts a new FIT file from the rejoin. After the token expires the slot stays AFK. Joins without a token after the start are refused with `session_in_progress`, which the client shows.
 - **Staleness**: `age_s` is set every tick for remote riders; `cadence_age_s` tells a fresh cadence from a held one (Fishing freezes its meters when it passes 3 s).
 
 ## 15. Results and progression
@@ -489,12 +503,18 @@ Each row holds `peer_id`, `slot_index`, `name`, `is_bot`, `kj`, `avg_power_w`, `
 
 ## 18. Presentation and audio kits
 
-- **2D** (`addons/wattlands/world2d/`, BRIEF 3.9): `PixelViewport` (`pixel_base`, `set_game_view(view)`, `game_view()`, `integer_scale()`, `letterbox_offset()`, `art_rect_to_screen(rect)`, `capture()`); `ParallaxStrip` (any factor ≥ 0, including > 1 for foreground debris; tiles a narrow texture across the width; `mirror_alternate` alternates flipped copies); `SpinningPart` and `SlidingPart` (signed speed −1..1, negative runs backwards; `SlidingPart` reciprocates or scrolls); the `PaletteSwap` shader (key colors to slot colors, with a two-tone ramp helper); the `SpriteWobble` shader; the pixel import preset (filter off, mipmaps off: `project.godot` sets the texture importer defaults, so sprites need no hand-written `.import`). Demo: `addons/wattlands/world2d/demo.tscn`.
-- **3D** (`addons/wattlands/world3d/`): `LowPolyMesh` (primitives, flat shading, vertex colors, merging, ground darkening, haze blend), MultiMesh scatter (seeded, exclusion zones, per-instance custom data), the miniature camera rig (high three-quarter view, limited orbit, push-in, shake), sky and ambient for the Compatibility renderer (no SSAO, no depth of field). Demo: `addons/wattlands/world3d/demo.tscn`.
+Each kit has an overview page with every class and its main properties: `addons/wattlands/world2d/README.md` and `addons/wattlands/world3d/README.md`; every class documents itself in its script.
+
+- **2D** (`addons/wattlands/world2d/`, BRIEF 3.9):
+  - `PixelViewport`: `pixel_base`, `set_game_view(view)`, `game_view()`, `integer_scale()` (3 at 1920 × 1080), `letterbox_offset()`, `art_rect_to_screen(Rect2i)`, `art_to_screen(p)`, `screen_to_art(p)`, `art_scale()`, `capture()` (the art-resolution frame) and `capture_scaled()`, `refresh_layout()`, signal `layout_changed`; `bar_color`, `background_color`. Nearest filtering and 2D pixel snapping inside; headless captures are blank frames in `background_color`.
+  - `ParallaxStrip` (a Node2D): set `world_x` every frame and it scrolls by `world_x × factor` (+ `offset_x`, + drift from `drift_px_s` advanced by `tick(dt)`), snapped to whole art pixels (`pixel_snap`). `factor` ≥ 0 (0 for sky, > 1 for foreground debris); `texture` tiles across `cover_width` (default the viewport width), so a 240 px texture covers 640 px; `mirror_alternate` alternates flipped copies so unseamed edges meet; `position.y` is the top edge (`align_bottom` makes it the bottom edge). `scroll()`, `tile_width()`, `period()`, `visible_tiles()`. Workout's ride view uses five (section 22.2).
+  - Parts, all with signed `speed` −1..1 (negative runs backwards), `drive(value, full_scale)` (`drive(cadence, 120)` is Tank's `cadence / 120`), `tick(dt)` and `auto_process` (turn it off and tick from sim time for a deterministic view): `SpinningPart` (`max_rpm`, `ratio`, `phase_deg`, `inertia_s`, `snap_steps`, `texture`; `angle()`, `revolutions()`), `SlidingPart` (`mode` `SlidingPart.Mode.RECIPROCATE` for pistons between 0 and `travel_px` along `axis`, or `SCROLL` for track links at `max_px_s` wrapping at `wrap_px`), `ScrollingChain` (code-drawn chains and tracks: `set_loop`, `set_belt`).
+  - Shaders, each a static helper that builds or applies a ShaderMaterial: `PaletteSwap` (`apply(item, keys, swaps)`, `apply_slot(item, keys, slot_index)`, `slot_ramp(slot_index, steps)`, `ramp_from(color, steps)`, `swap_image(...)`: key colors to the slot's colors), `SpriteWobble` (`apply(item, amplitude_px, wavelength_px, frequency_hz, ...)`, `fish_tail(item, ...)`, `water(item, ...)`, `set_time(mat, t)` for sim-time animation), `DitherDissolve` (`apply(item, amount, cell_px)`, `set_amount`).
+  - `PixelImportPreset`: the pixel import preset (filter off, mipmaps off). `project.godot` sets the texture importer defaults, so sprites need no hand-written `.import`; `PixelImportPreset.check_project_defaults()` and `validate_texture()` verify it. `PixelPainter` draws simple procedural pixel art (gears, discs, gradients, hill silhouettes). Demo: `addons/wattlands/world2d/demo.tscn`.
+- **3D** (`addons/wattlands/world3d/`): `LowPolyMesh` (`add_box`, `add_cylinder`, `add_cone`, `add_wedge`, `add_sphere`, `add_ring`, `add_plane`, `add_quad`, `add_triangle`, `add_grid`; `append(other, xform)`, `transform(xform)`, `use_surface(key, material)`, `darken_near_ground(ground_y, height, strength)`, `apply_haze(...)`, `build()`, `make_instance(name)`, `vertex_count()`, `triangle_count()`), `MultiMeshScatter` (`setup(mesh, capacity, use_colors, use_custom)`, seeded `scatter(config)` with exclusion zones and jitter, `set_instances(...)` each frame; the `walk_bob.gdshader` bobs instances by custom data), `MiniatureCameraRig` (high three-quarter view: `pitch_deg` 42, `fov_deg` 32, `orbit()` within `orbit_limit_deg`, `push_in(from_factor, duration_s)`, `shake(amplitude_m, duration_s)` up to 0.15 m), `SkyAmbient` (sky, ambient and one warm sun for the Compatibility renderer, no SSAO or depth of field; depth fog haze from `haze_begin_m`, or the vertex-color fallback through `haze_mesh(lp, camera_origin)`), `ScreenVignette`. Demo: `addons/wattlands/world3d/demo.tscn`.
 - **Art**: generated 2D pixel art comes from `tools/art` (`docs/ART_PIPELINE.md`).
-- **Audio**: the `Sfx` autoload: `play(name, volume_db, pitch)`, `register(name, stream)`, `has_sound(name)`, `synth(kind, freq_hz, duration_s, attack_s, release_s, loop)` (`"sine"`, `"square"`, `"saw"`, `"noise"`; `loop` for continuous sounds you pitch live), `set_metronome(rpm, on)`. Silent and error-free headless. Built-in effect names: `ui_move`, `ui_confirm`, `ui_back`, `toast`, `warning`, `rescue`, `phase`, `countdown`, `lap`, `results`, `coin`, `hit`, `boom`, `whoosh`, `click`. Credit your sounds in `docs/credits.d/<id>.md`.
-- **Metronome**: optional, on per the rider's profile setting. During a session the GameHost drives it: one click per pedal stroke at the centre of the local rider's published cadence band, else at `preferred_cadence_rpm`. A game needn't call `set_metronome`: publishing a band with `ctx.directives.cadence_band` moves the click. (W2: ui-hud and sdk-runtime confirm against their code.)
-- (W2: world-kits and ui-hud check these names against their code and link their API docs.)
+- **Audio**: the `Sfx` autoload (`WlSfx`): `play(name, volume_db, pitch)`, `register(name, stream)` (replaces a built-in of the same name), `has_sound(name)`, `synth(kind, freq_hz, duration_s, attack_s, release_s, loop)` (`"sine"`, `"square"`, `"saw"`, `"triangle"`, `"noise"`; up to 30 s; `loop` true for continuous sounds you pitch live with an AudioStreamPlayer's `pitch_scale`), `stop_all()`. Silent and error-free headless. Built-in effect names: `ui_move`, `ui_confirm`, `ui_back`, `toast`, `warning`, `rescue`, `phase`, `countdown`, `lap`, `results`, `coin`, `hit`, `boom`, `whoosh`, `click`. Credit your sounds in `docs/credits.d/<id>.md`.
+- **Metronome** (`Sfx.set_metronome(rpm, on)`): optional, on only when the rider's profile turns it on (`RiderProfile.metronome`, Settings). It clicks (`click`) once per pedal stroke, every 60 / rpm seconds. On a rendering peer the GameHost drives it: at the start it sets the centre of the local rider's published cadence band, else the rider's `preferred_cadence_rpm`, and every `ctx.events.cadence_band_changed` for the local rider moves it (a cleared band goes back to the preferred cadence); the session's end stops it. A game never calls `set_metronome`: publishing a band with `ctx.directives.cadence_band` moves the click, on the host and on clients alike. Headless runs never touch it.
 
 ## 19. Tools
 
@@ -520,14 +540,14 @@ tools\run_game_sim.ps1 --game=siege --content=vo2 --players=4 --bots=0 --rider=e
 | --- | --- | --- |
 | `--game=<id>` | required | The game |
 | `--report=<path>` | required | Where the JSON report goes (relative paths are taken from your current directory) |
-| `--content=<id>` | `default_content` | One of `contents` |
+| `--content=<id>` | `default_content` | One of `contents`, or `<scheme>:<value>` for a scheme in `content_schemes` (`--content=zwo:C:/rides/my.zwo`) |
 | `--players=<n>` | 1 | Human slots, 1..8 |
 | `--bots=<n>` | 0 | Bot slots added after the humans (only if `bots` is true) |
 | `--rider=<profile>` | `erg` | A MockTrainer profile (section 20). Give it once for every human slot, or repeat it once per human slot in slot order. Profiles contain commas, so it is never comma-joined. Bots always ride `erg:compliance=1.0` |
-| `--sim-speed=<x>` | 1 | Fixed 0.05 s steps per 0.05 s of wall time: 1 is real time, 200 runs a 55-minute session in about 66 s. It never touches `Engine.time_scale` |
+| `--sim-speed=<x>` | 1 | Recorded in `args` (and kept out of the hash). A headless `run_game_sim` always steps as fast as it can, whatever the value: Workout's 28-minute `easy_30` takes about 6 s SOLO and 21 s as HOST with a client and two bots. It never touches `Engine.time_scale`. In the app, `--sim-speed` runs x fixed steps per 0.05 s of wall time |
 | `--seed=<n>` | 1 | The session seed (`ctx.seed`; MockTrainer jitter, noise and dropouts are seeded per slot from it) |
 | `--autopilot=all\|none\|<slot,...>` | `all` | Which human slots have `autopilot` true. Bots always do |
-| `--ftp=<w>[,<w>...]` | 200 | One value for every slot, or one per slot in slot order (humans, then bots); bots without a value use the first slot's FTP |
+| `--ftp=<w>[,<w>...]` | 200 | One value for every slot; one per human slot (bots take the first value); or one per slot in slot order (humans, then bots) |
 | `--unverified` | off | Every human slot's FTP is unverified (×0.85 on ERG targets); bots stay verified |
 | `--haptics-off=<slot,...>` | none | These human slots have `haptics_on` false |
 | `--options=<json object>` | defaults | Session options, validated against `game.json` |
@@ -535,7 +555,7 @@ tools\run_game_sim.ps1 --game=siege --content=vo2 --players=4 --bots=0 --rider=e
 | `--override=<json file>` | none | `{"<file under content/<id>/>": <JSON merge patch>}` applied by `ctx.load_content_json` before validation, for stress runs; recorded in the report |
 | `--max-sim-seconds=<n>` | the validated plan with every open-ended phase at `max_s`, plus 600 | Hard stop: `end_reason: "timeout"` |
 
-The defaults are `GameSimRunner.parse_args`'s (W2: the lead checks this table against it). Wrapper-only flags: `--godot-timeout=<s>` (kill Godot after s seconds, default 1800) and `--godot-lock-timeout=<s>` (stop waiting for a Godot slot). The wrappers always run with the hardware and network locks, add `--mock-trainer=erg` (it only marks the process as mock-only, so nothing in it looks for a real trainer; each rider rides its own `--rider` profile) and `--caller-cwd` (replacing any you pass), refuse `--allow-hw` and `--allow-network`, and run `tools/godot.sh --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>`. The entry script refuses to run without the locks or `--mock-trainer`. `--echo-args` prints the flags Godot received and exits; `--help` prints the usage.
+The defaults are `GameSimRunner.parse_args`'s and `default_args()`'s. Wrapper-only flags: `--godot-timeout=<s>` (kill Godot after s seconds, default 1800) and `--godot-lock-timeout=<s>` (stop waiting for a Godot slot). The wrappers always run with the hardware and network locks, add `--mock-trainer=erg` (it only marks the process as mock-only, so nothing in it looks for a real trainer; each rider rides its own `--rider` profile) and `--caller-cwd` (replacing any you pass), refuse `--allow-hw` and `--allow-network`, and run `tools/godot.sh --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>`. The entry script refuses to run without the locks or `--mock-trainer`. `--echo-args` prints the flags Godot received and exits; `--help` prints the usage.
 
 Before it starts, the tool checks every flag name and its syntax, and the slot lists against the slots: `--players` plus `--bots` at most 8; `--rider` once or once per human slot; `--autopilot` and `--haptics-off` slots below `--players`; at most one `--ftp` value per slot; at most one `--player-options` object per human slot. Values that need the game's manifest (content ids, option ranges) are checked by `GameSimRunner.parse_args` and `setup`. Then it deletes what an earlier run left at the same `--report` path (the report and its `fit/<report stem>_slot<n>.fit` files), so a run that fails can never leave a stale report for your checker to read.
 
@@ -547,28 +567,33 @@ Exit codes: 0 the run completed, whatever `end_reason` says; 2 bad flags (an unk
 
 **FIT files**: one per human slot, none for bots, at `<report dir>/fit/<report stem>_slot<n>.fit` (`build/siege/sims/fit/s10_vo2_slot0.fit`).
 
-**The report** (`GameSimRunner.build_report()`, schema 1). JSON object keys are strings, so peer-keyed maps use the peer id as a string (`"1"`, `"-1"`). (W2: the lead checks every key below against `tests/sdk/test_sim_report.gd`'s schema fixture and corrects whichever side is wrong.)
+**The report** (`GameSimRunner.build_report()`, schema 1, written with tab indents). JSON object keys are strings, so peer-keyed maps use the peer id as a string (`"1"`, `"-1"`). Times: `t` is game seconds (the game clock stops while paused), `pt` and a trace row's `t` are platform seconds. `tests/sdk/test_sim_runner.gd` (`test_report_schema_nested_keys_sim4`) pins these keys.
 
 | Key | Type | Content |
 | --- | --- | --- |
 | `schema` | int | 1 |
-| `args` | object | The parsed arguments (`game`, `content`, `players`, `bots`, `riders`, `sim_speed`, `seed`, `autopilot`, `ftp`, `unverified`, `haptics_off`, `options`, `player_options`, `max_sim_seconds`) |
-| `slots` | array | Per slot: `{slot, peer, name, is_bot, role, ftp, ftp_verified, rider, autopilot, haptics_on, options}` |
-| `plans` | object | peer → the validated plan (`EffortPlan.to_dict()`, cool-down included) |
-| `plan_warnings` | object | peer → the validator's warnings |
+| `args` | object | The normalized arguments: `game`, `content`, `players`, `bots`, `riders`, `sim_speed`, `seed`, `report`, `autopilot`, `ftp`, `unverified`, `haptics_off`, `options`, `player_options`, `override`, `override_path`, `max_sim_seconds`, `headless`, `at`, `screenshot_dir` |
+| `game_id`, `content_id`, `role`, `seed` | string, string, string, int | The game, the content, `SOLO` or `HOST`, the seed |
+| `slots` | array | Per slot, in slot order: `{slot, peer, name, is_bot, ftp, ftp_verified, rider, autopilot, haptics_on, options}` (`rider` is the profile; bots `erg:compliance=1.0`) |
+| `plans` | object | peer → the validated plan (`EffortPlan.to_dict()`: `{phases, cooldown_appended}`, cool-down included) |
+| `plan_warnings` | object | peer → the validator's warnings (`[]` when clean) |
 | `overrides` | object | The `--override` patches applied |
 | `end_reason` | string | `complete`, `timeout` or `paused` |
 | `finished_reason` | string | The game's `finished(reason)`, or `""` |
-| `events` | array | In order: `{t, tick, type, peer?, ...}`: `session_state`, `phase_started` (`peer`, `index`, `ended_by`), every game event as emitted (`type` is yours), `game_phase_changed` (`index`), `lap_marker` (`label`), `rescue` and `afk` (`peer`, `active`), `paused`, `finished` (`reason`), `results` |
-| `phases` | object | peer → `[{index, kind, mode, label, start_s, end_s, ended_by}]`; `ended_by` is `duration`, `max_s`, `end_phase` or `finished` (game seconds) |
-| `directives` | array | Every directive: `{t, peer, id, kind, requested, accepted, refused, applied, clamped_by}`; `kind` is `request`, `course_grade`, `end_phase`, `cadence_band` or `power_band`; `requested` is exactly what the game set (`EffortDirective.to_dict()`); `refused` is the refusal reason or `""`; `applied` is what the rider's governor applied |
-| `traces` | object | peer → 1 Hz samples `{t, phase_index, kind, mode, applied_target_w, applied_pct, applied_grade_pct, clamped_by, rescue, afk, paused, haptic_pct, power_w, cadence_rpm}` for every rider, bots included |
-| `snapshots` | array | `{tick, bytes, sha256}` for every snapshot the host builds at 10 Hz (W2: sdk-runtime states whether SOLO runs record them too) |
+| `sim_seconds`, `game_seconds`, `max_sim_seconds` | float | Platform seconds simulated, game seconds (pauses excluded), the timeout used |
+| `events` | array | The host's events in order, each `{t, pt, type, ...}`: `session_state` (`state`), `session_start` (`role`, `players`), `phase_started` (`peer`, `index`, `ended_by`, `kind`), `game_event` (`event`: your event exactly as sent), `game_phase_changed` (`index`), `lap_marker` (`label`), `finished` (`reason`), `rescue` (`peer`, `active`), `afk` (`peer`, `afk`), `paused` (`paused`, `reason`), `peer_left` (`peer`, `reason`), `rejoin` (`peer`), `hud` (`kind` `toast`, `banner` or `power_band`, with `key` and `peer`, or `peer`, `lo_w`, `hi_w`), `results` (`grade`, `reason`), `session_end` (`reason`) |
+| `phases` | object | peer → `[{index, kind, mode, label, start, end, ended_by}]` (game seconds); `ended_by` is how the phase ended: `duration`, `max_s`, `end_phase` or `finished` (`end` −1 and `ended_by` `""` for a phase still running when the run stopped). The `phase_started` events carry the previous phase's `ended_by` (`start` for phase 0) |
+| `directives` | array | Every `ctx.directives` call in order: `{id, peer, t, kind, requested, accepted, reason, applied}`. `kind` is `request`, `course_grade`, `end_phase`, `cadence_band` or `replan`; `requested` is exactly what the game set (`EffortDirective.to_dict()` for a request); `accepted` and `reason` are the host's check; `applied` is the rider's governor record `{id, kind, requested, applied, clamped_by, refused (bool), reason, t}` (null until it arrives). `power_band` calls are `hud` events |
+| `directives_unmatched` | array | Applied records whose id matched no request (normally empty) |
+| `trace` | object | peer → 1 Hz rows for every rider, bots included: `{t, game_t, phase, kind, mode, applied_target_w, applied_pct, applied_grade_pct, clamped_by, rescue, afk, paused, haptic, power_w, cadence_rpm, connected}` (`applied_pct` is % FTP; `haptic` the applied haptic grade) |
+| `snapshots` | array | `{seq, tick, sha256, bytes}` for every snapshot the host built at 10 Hz. SOLO runs record them too (measured, sent nowhere) |
 | `max_snapshot_bytes`, `oversize_snapshots` | int | The largest snapshot, and how many exceeded 16 384 bytes |
-| `results` | object | `GameResults.to_dict()` |
+| `results` | object | `GameResults.to_dict()`: `{grade, score, summary_key, rows, team, session_id}` |
+| `unlocks` | object | peer → the new unlock ids `apply_progress` returned on that peer |
+| `clients` | array | HOST runs: per loopback client `{peer, state, events, directives, trace, results_grade}` (its own report data; `[]` in SOLO) |
 | `fit_paths` | array | Absolute FIT paths, one per human slot in slot order |
-| `meta` | object | Wall-clock values (start time, duration, Godot version); excluded from the hash |
-| `deterministic_hash` | string | SHA-256 of the canonical report without `fit_paths`, `meta` and any path |
+| `meta` | object | `{wall_s, utc_start_unix, godot, report, temp_root}`; excluded from the hash |
+| `deterministic_hash` | string | SHA-256 of the canonical (sorted-key) report without `fit_paths`, `meta`, itself and the args `report`, `override_path`, `screenshot_dir`, `at`, `headless` and `sim_speed` |
 
 Read reports with Node (`JSON.parse`) in your `check_sims.mjs`; a scenario asserts over `events`, `directives`, `traces`, `phases`, `results` and `deterministic_hash`.
 
@@ -594,7 +619,7 @@ tools/screenshot --game=<id> --content=<id> --at=<s>[,<s>...] [--players=<n>] [-
 tools\screenshot.ps1 --game=<id> --content=<id> --at=<s>[,<s>...] ...
 ```
 
-Runs the game windowed through `GameSimRunner` with `run_game_sim`'s slot, role and profile rules, steps the sim as fast as it can to just before each `--at` (sim seconds: the fast-forward), renders at normal speed and saves the full frame, HUD included, from the host's view (slot 0; Fishing's highlighted lane is slot 0's). It also accepts `--ftp`, `--unverified`, `--options`, `--player-options`, `--override` and `--screenshot-dir=<dir>` (default `build/screenshots/<game>/`). Files: `<game>_<content>_<players>p_<at>s.png`. (W2: qa confirms against `tools/screenshot`.)
+Runs the game windowed through `GameSimRunner` with `run_game_sim`'s slot, role and profile rules, steps the sim as fast as it can to just before each `--at` (sim seconds: the fast-forward), renders at normal speed for `--settle=<s>` (default 1) and saves the full frame, HUD included, from the host's view (slot 0; Fishing's highlighted lane is slot 0's). Every other `run_game_sim` flag passes through to `GameSimRunner.parse_args` (`--ftp`, `--unverified`, `--haptics-off`, `--options`, `--player-options`, `--override`, `--max-sim-seconds`). Output: `--out=<dir>` (alias `--screenshot-dir`, default `build/screenshots/<game>/`), files `<game>_<content>_<players>p_<at>s.png` (`workout_e2e_2p_95s.png`). Two more modes: `--scene=<res path> [--frames=<n>]` captures a scene such as a kit demo (`build/screenshots/scenes/`), and `--app-screen=title|picker|lobby [--app-game=<id>]` the app shell (`build/screenshots/app/`). Wrapper flags: `--mock-trainer=<profile>` (default `erg:compliance=1.0`; never off), `--size=<W>x<H>` (default 1920x1080), `--timeout=<s>` (default 900), `--lock-timeout=<s>`, `--dry-run` (print the Godot command and exit). Without a display (Linux with no `DISPLAY` and no `xvfb-run`) it prints `screenshot: skipped` and exits 0. The driver is `tools/qa/screenshot_main.gd`; the options are `tools/qa/screenshot_options.gd`.
 
 ### 19.4 End to end: tools/e2e/run.mjs and e2e_check.mjs
 
@@ -602,7 +627,21 @@ Runs the game windowed through `GameSimRunner` with `run_game_sim`'s slot, role 
 node tools/e2e/run.mjs --games=<id>[,<id>...]
 ```
 
-Per game: starts the relay, the mock Strava server, a host and two clients (headless, mock trainers, Autopilot, separate profile dirs, `--sim-speed=1`) under one Godot lease, plays the game's `e2e_content`, kills and restarts one client to test the reconnect, checks one auto-upload, and writes `build/e2e/<id>/report.json` (per peer: events in order, game events included, applied directives, the 1 Hz trace, FIT paths, uploads, desync warnings, script errors). If `tests/games/<id>/e2e_check.mjs` exists it runs `node tests/games/<id>/e2e_check.mjs build/e2e/<id>/report.json` and fails the game on a non-zero exit. One pass or fail line per game; a non-zero exit if any failed; ≤ 6 minutes per game, not counting the cool-down. It holds three Godot slots at once, so run it while no other Godot work runs. (W2: qa links the report schema in `tools/e2e/README.md`.)
+Per game: starts the relay, the mock Strava server, a host and two clients (headless, mock trainers, Autopilot, separate profile dirs, `--sim-speed=1`) under one Godot lease, plays the game's `e2e_content`, kills and restarts one client to test the reconnect, checks one auto-upload, and writes `build/e2e/<id>/report.json` (per peer: events in order, game events included, applied directives, the 1 Hz trace, FIT paths, uploads, desync warnings, script errors). If `tests/games/<id>/e2e_check.mjs` exists it runs `node tests/games/<id>/e2e_check.mjs build/e2e/<id>/report.json` and fails the game on a non-zero exit. One pass or fail line per game; a non-zero exit if any failed (0 all passed, 1 a game failed, 2 usage, 75 Godot lock wait timeout); ≤ 6 minutes per game, not counting the cool-down. It holds three Godot slots at once, so run it while no other Godot work runs. `tools/e2e/README.md` lists every check and option. The report:
+
+```
+{schema: 1, game_id, content_id, seed, room, ok, failures: [String], checks: [{name, ok, details}],
+ timings: {...}, services: {...}, auto_upload_peer, victim,
+ peers: {host|client1|client2: {role, peer_id, exit_code, exit_reason, states, events, directives,
+         trace, fit_paths, uploads, final_state, desync_warnings, script_errors, restarted, ...}},
+ events_by_peer: {<peer id>: [events in arrival order]},   // host: sent; clients: applied
+ directives: [{peer_role, ...applied record}],
+ fit_paths: {host|client1|client2: [paths]},
+ fit_check: {host|client1|client2: {ok, code, label, json, errors}},
+ e2e_check: {path, exit_code, timed_out, output} | null}
+```
+
+Your `tests/games/<id>/e2e_check.mjs` gets the report path as `process.argv[2]`, reads `events_by_peer` (or `peers.<role>.events`) to assert your own events (for example one landed mackerel per rider), and may import the helpers in `tools/e2e/lib/checks.mjs` (`comparableEvents`, `eventType`, `checkWarmup`, ...). Workout's is `tests/games/workout/e2e_check.mjs`. Each peer's own `--report` follows the scripted-peer contract in `docs/ARCHITECTURE.md`.
 
 ### 19.5 tools/fit_check
 
@@ -610,7 +649,20 @@ Per game: starts the relay, the mock Strava server, a host and two clients (head
 node tools/fit_check/check.mjs <file|dir>... [--expect-laps=<n>] [--json]
 ```
 
-Decodes every FIT file given (directories recursively) and prints, per file, its errors, record count, laps (start, duration) and session totals; exits non-zero on any error or on a lap count other than `--expect-laps`. `--json` prints the same as JSON (W2: rides documents the JSON fields in `tools/fit_check/README.md`). Expected laps: section 13.
+Decodes every FIT file given (directories recursively) and prints, per file, its errors, record count, laps (start, duration, name) and session totals; exits non-zero on any error or on a lap count other than `--expect-laps` (0 all passed, 1 any error, 2 usage). It checks integrity and CRCs, sport cycling and sub_sport virtual_activity, one record per second, laps that add up to the session, timer events, and the FIT against the RideRecorder's JSON summary next to it. It uses Garmin's `@garmin/fitsdk` once `npm ci --prefix tools/fit_check` has installed it; otherwise it says so on stderr and runs qa's GDScript decoder (`tools/fit_decode/decode.gd`) through `tools/godot.sh` with the same checks. `--json` prints one document:
+
+```
+{"ok": bool, "decoder": "fitsdk" | "gdscript",
+ "files": [{"path", "ok", "decoder", "errors": [String], "records": int,
+            "laps": [{"start", "start_unix", "start_offset_s", "duration_s", "timer_s", "distance_m",
+                      "work_j", "avg_power_w", "name"}],
+            "session": {"sport", "sub_sport", "start", "elapsed_s", "timer_s", "distance_m", "work_j",
+                        "kj", "avg_power_w", "max_power_w", "avg_cadence_rpm", "max_cadence_rpm",
+                        "num_laps"} | null,
+            "summary_checked": bool}]}
+```
+
+Details: `tools/fit_check/README.md`. Expected laps: section 13 (a plan whose first phase is lap-false adds one lap for the opening segment).
 
 ### 19.6 Tests, the script check and the wrappers
 
@@ -626,16 +678,17 @@ Decodes every FIT file given (directories recursively) and prints, per file, its
 
 | Profile | Parameters | Behaviour |
 | --- | --- | --- |
-| `erg` | `compliance` 0–1, default 1.0 | In ERG, follows the applied target × compliance with τ ≈ 2 s settling and a slight overshoot; fatigue from W′ eventually fails high targets. In SIM, rides compliance × the centre of the power band published with `ctx.hud.power_band`, else 90 % FTP (Tank's steam rider relies on the 90 %) |
+| `erg` | `compliance` 0–1, default 1.0 | In ERG, follows the applied target × compliance with τ ≈ 2 s settling (a second-order response, about 2.5 % overshoot, within 2 % after about 6 s); fatigue from W′ eventually fails high targets. In SIM, rides compliance × the centre of the power band published with `ctx.hud.power_band`, else 90 % FTP (Tank's steam rider relies on the 90 %) |
 | `zero` | none | 0 W and 0 rpm from t = 0 (coasting: the floor at 3 s, pause or AFK at 10 s) |
 | `const` | `w` (required), `rpm` | Constant power (and cadence; default the preferred cadence) |
 | `ramp` | `from_w`, `to_w`, `over_s` (required), `rpm` | A linear power ramp |
-| `band` | `offset_rpm`, default 0 | Cadence follows the published cadence band's centre + `offset_rpm`, with 2 s lag and noise bounded to ±2 rpm; with no band, the preferred cadence. `offset_rpm` is measured from the centre, so ±(half the band width + n) holds the rider n rpm outside it: with a 16 rpm band, `offset_rpm=-18` holds 10 rpm below the low edge and `18` 10 rpm above the high edge |
+| `band` | `offset_rpm`, default 0 | Cadence follows the published cadence band's centre + `offset_rpm`, with a 2 s first-order lag and seeded noise bounded to ±1.5 rpm; with no band, the profile's rpm or the preferred cadence. `offset_rpm` is measured from the centre, so ±(half the band width + n) holds the rider n rpm outside it: with a 16 rpm band, `offset_rpm=-18` holds 10 rpm below the low edge and `18` 10 rpm above the high edge |
 | `cadence_drop` | `rpm`; a start: `at_s`, or `at_phase` (the rider's plan phase index) with optional `after_s`, or `at_target_pct` (with optional `at_phase` and `after_s`); `for_s` (default the rest of the run) | Cadence drops to `rpm`. With `at_target_pct=<n>` it first waits (inside `at_phase` if given) until the applied ERG target, after the unverified factor, is ≥ n % FTP, then counts `after_s` |
 | `surge` | `every_s` 60, `for_s` 2, `lift` 0.2, `sim_pct` | Every `every_s` it multiplies cadence and reported speed by 1 + `lift` for `for_s`, aligned so each surge spans at least two notifications, so the ERG `surge` gesture fires every time. With `sim_pct=<n>` the rider rides n % FTP whenever its trainer is in SIM, overriding `erg`'s band rule |
-| `intervals`, `noise` | (W2: trainer-core lists their keys) | Scripted intervals; power and cadence noise |
+| `intervals` | `on_w`, `off_w` (required), `on_s` 60, `off_s` 60, `rpm` | Scripted power: `on_w` for `on_s`, then `off_w` for `off_s`, repeating from t = 0 (starts "on") |
+| `noise` | `sd_w` 5, `sd_rpm` 2 | Seeded Gaussian noise on each sample's power and cadence while pedaling |
 
-Precedence: cadence: an active `cadence_drop` > `surge`'s lift (it multiplies) > `band` > the preferred cadence. Power: `zero` or `const` (or `ramp`) > `surge`'s `sim_pct` in SIM > `erg`. Bots ride `erg:compliance=1.0` (`Bots.RIDER_SPEC`).
+Precedence: cadence: an active `cadence_drop` (several active: the lowest; `rpm=0` stops the rider at 0 W) > `surge`'s lift (it multiplies) > `band` > the profile's `rpm` > the preferred cadence. Power: the first scripted profile in the spec (`zero`, `const`, `ramp`, `intervals`) > `surge`'s `sim_pct` in SIM > `erg` (a spec without `erg` uses the follower at compliance 1.0). Profile time (`at_s`, surges, `ramp`, `intervals`) starts when the mock is created. `MockTrainer.parse_spec(spec)` returns `[]` with `push_error` for a bad spec; `run_game_sim` refuses one at setup. Bots ride `erg:compliance=1.0` (`Bots.RIDER_SPEC`).
 
 Examples: `erg:compliance=0.85+band`; `erg+band:offset_rpm=-18`; `erg+cadence_drop:rpm=40,at_s=1200`; `erg+cadence_drop:rpm=40,at_s=600,for_s=20`; `erg+cadence_drop:rpm=30,at_phase=4,after_s=20,for_s=30`; `erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30`; `erg+surge:every_s=60,for_s=2,lift=0.2,sim_pct=130`; `erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=20+cadence_drop:rpm=30,at_phase=3,after_s=30,for_s=20` (two drops in one rider).
 
@@ -684,17 +737,48 @@ Its tests show how to test a game without the platform runtime: `template_fakes.
 
 ### 22.2 Workout (`src/games/workout/`)
 
-(W2: the lead fills this section from `src/games/workout/` once game-workout merges: how Workout builds its sessions from `content/workout/sessions/<id>.json` with a 5-minute ramp-in, ERG phases and the FREE SIM-flat sprints with virtual gears; Rolling road's `course` phase and its 76–105 % `power_band`; time in band per interval and the S–D grade; SprintRule sprint scoring; the pedal-scan session picker; its `e2e` content inside the warm-up limits; and its simulation tests through `GameSimRunner`.)
+Workout is the reference game (BRIEF 3.7): a group interval ride for 1–8 riders, bots optional, where the plan does all the trainer work. It sends no `ctx.directives` at all: every phase is in the plan, and the governor applies it. Read it for plans built from content, SIM phases (flat and course), power bands, results and progress, snapshots with `int_fields`, and simulation tests. `src/games/workout/README.md` lists every file.
+
+| SDK feature | Where in Workout |
+| --- | --- |
+| Content as JSON, validated at load, through `ctx.load_content_json` | `WorkoutSession.load_for(ctx)` reads `content/workout/sessions/<content id>.json` (`{id, label, summary, phases: [...]}`, or `{..., zwo: "zwo/sample.zwo"}`; optional `course`, `band_pct`, `warmup_only`) and rejects a bad file with one `push_error` naming every problem; a client loads quietly (`quiet = true`) because a `.zwo` may exist only on the host |
+| A content scheme | `game.json` lists `"content_schemes": ["zwo"]`; `--content=zwo:<absolute path>` imports that file with the platform's `WorkoutImport` (`parse_zwo_file`), clamps each block to BRIEF 4.6 and the warm-up first, then post-processes it (every phase lap-true and labelled `Block n`) |
+| One plan for every rider, bots included | `build_effort_plans()`: `session.build_plan()` per slot, the same %FTP timeline at each rider's own FTP. Each session opens with `PlanPhase.erg(Wl.WARMUP, 50, 300).with_ramp(65).with_lap()` (the 5-minute ramp-in) and starts its work at exactly 300 s, outside the validator's [0, 300) warm-up window; `e2e` (`warmup_only`) stays ≤ 65 % throughout: a 60 s ramp 50 → 60 %, 30 s at 65 %, a 30 s FREE sprint, two mode switches exactly 30 s apart, no warnings |
+| ERG phases | `easy_30`, `sweet_spot`, `threshold`, `vo2`: `{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_1"}`; VO2's 3-minute recoveries at 50 % reset the 105 % duration limit, Threshold's 8-minute blocks stay at 98 % under the long-phase cap |
+| SIM flat with virtual gears | FREE sprints: `{"kind": "FREE", "mode": "SIM", "grade_source": "flat", "duration_s": 30}`; the kit's `gear` widget shows whenever the trainer is in SIM, `shift_up`/`shift_down` move the gears |
+| A `course` phase | Rolling road: one `WORK` SIM phase with `grade_source` `course` and a `course_profile` that `WorkoutCourse` generates from a seeded spec (`{"seed", "length_m", "step_m", "min_grade_pct": -2, "max_grade_pct": 6}`); the rider's own speed model follows it by distance |
+| `ctx.hud.power_band` | `_publish_bands()` at each interval start: Rolling road 76–105 % FTP, sprints after the warm-up 120–160 % FTP, for every rider (a bot's band goes to its own MockTrainer, which rides the band's centre in SIM); an ERG phase clears a band Workout set, and the platform clears every band at the cool-down |
+| HUD | `WorkoutHud.spec()`: `timeline` at `top`, readouts (watts, a custom time-in-band readout) at `top_right`, `power_gauge`, `cadence` and `wbal` at `bottom_left`, `teammates` at `bottom`, `gear` at `bottom_right`, toasts `top_left`, banners `top`. Host side: a banner per interval (`WORKOUT_BANNER_ERG`, `_RAMP`, `_SPRINT`, `_ROLLING`), toasts with a `peer` for each rider's interval and sprint result, `teammate_status` with each rider's compliance, `ctx.hud.readout` for time in band |
+| Pure rules | `WorkoutRules.step(state, frame, dt)` scores time in band (ERG: power within ± 5 % of `applied_target_w`; Rolling road: 76–105 % FTP; FREE sprints: cadence ≥ 60 rpm; out of band while rescued, AFK or disconnected), sprints (`WorkoutSprintTracker` on the platform's `SprintRule`, 1.2 × FTP; a hit once it held 3 s) and each rider's distance (`SpeedModel` on P_eff) for the view; it returns events |
+| Events and `int_fields` | `interval_start {i}`, `interval_end {i, r: [[peer, tib_permille]]}`, `sprint {i, r: [[peer, peak_w, best_ds, hit]]}` sent with `send_event`; `int_fields()` declares `i`, `r[][]` and the snapshot's `t`, `p`, `pt`, `r[][]`, `tl[][]` |
+| Snapshots and prediction | `WorkoutSnapshot.encode(state, with_timeline)`: all ints (distances in decimetres, speeds in cm/s, permille), the timeline every 20th snapshot so a client that can't read the content still gets it; 300–700 bytes. `client_predict` moves the local marker between snapshots |
+| Rescue and AFK | `on_rescue`, `on_afk`: the rider is out of band until the matching `false` call; nothing else changes |
+| No input, Autopilot | `local_intents` and `autopilot_intents` return `[]`: everything is pedaling, so every session plays to the results with no input |
+| Results and progress | `WorkoutResults.build(state, ctx.stats, ctx.players)` starts from `GameResults.from_stats` and adds per rider `intervals` (time in band per interval) and `sprints` (peaks), display stats under `stats` (`WORKOUT_STAT_*` keys), the group grade from the average session time in band (`GameResults.grade_from_fraction`: S ≥ 95 %, A ≥ 90 %, B ≥ 80 %, C ≥ 65 %, else D) and XP; `WorkoutProgress.apply` keeps totals, a level and pennant unlocks in `ctx.progress` and returns the new ones |
+| View | `WorkoutRideView` (640 × 360): five `ParallaxStrip`s of procedural art scrolled by the local rider's distance, one pennant per rider in its slot color, shape and pattern, the course profile in Rolling road and the interval blocks on the ground |
+| Lobby preview | `session_preview(content_id)`: total length, one line per phase, and a `.zwo`'s clamps and skipped tags; the app's lobby shows it next to its pedal-scan content picker |
+
+Its tests: `tests/games/workout/` unit-tests the rules, sessions, snapshot, results and view with synthetic frames; `tests/games/workout/integration/` runs the real validator, importer, registry, protocol and `GameSimRunner` (a compliant verified rider grades A or better in every built-in session; VO2 never latches the 105 % limit; the same seed gives the same hash; `zwo:<path>` reaches every peer); `tests/scenarios/workout/` holds qa's BRIEF 7.4 gates (coasting, rescue only at ≥ 60 %, warm-up limits, pause keeps trainer I/O, the sample `.zwo` with its clamps). Its simulation matrix:
+
+```bash
+for c in easy_30 sweet_spot threshold vo2 rolling_road e2e zwo_sample; do
+  tools/run_game_sim --game=workout --content=$c --players=1 --bots=0 --rider=erg --seed=7 --report=build/workout/sims/solo_$c.json
+  tools/run_game_sim --game=workout --content=$c --players=2 --bots=2 --rider=erg --seed=7 --report=build/workout/sims/host_$c.json
+done
+node tools/fit_check/check.mjs build/workout/sims/fit
+```
+
+Every run ends `complete` with grade S or A (time in band 95–100 %), one FIT per human slot whose lap count is the session's phases + 1 (`vo2` 11, `easy_30` 9, `rolling_road` 3, `e2e` 4), and snapshots under 1 KB.
 
 ## 23. FAQ
 
 Answers to the questions the game briefs' G0 steps ask (and to `docs/OWNERSHIP.md` 2.23).
 
-**Q1. Which mock rider profiles exist, with which parameters?** Section 20: `erg` (`compliance`), `zero`, `const` (`w`, `rpm`), `ramp`, `band` (`offset_rpm`), `cadence_drop` (`rpm`, `at_s` | `at_phase` [+ `after_s`] | `at_target_pct` [+ `at_phase`, `after_s`], `for_s`), `surge` (`every_s`, `for_s`, `lift`, `sim_pct`), joined with `+`, components repeatable.
+**Q1. Which mock rider profiles exist, with which parameters?** Section 20: `erg` (`compliance`), `zero`, `const` (`w`, `rpm`), `ramp` (`from_w`, `to_w`, `over_s`, `rpm`), `intervals` (`on_w`, `off_w`, `on_s`, `off_s`, `rpm`), `noise` (`sd_w`, `sd_rpm`), `band` (`offset_rpm`), `cadence_drop` (`rpm`, `at_s` | `at_phase` [+ `after_s`] | `at_target_pct` [+ `at_phase`, `after_s`], `for_s`), `surge` (`every_s`, `for_s`, `lift`, `sim_pct`), joined with `+`, components repeatable.
 
 **Q2. How does run_game_sim count `--players` and `--bots`? What FTP, verified status, profile and Autopilot does each rider get?** `--players` counts human slots (slots 0..n−1), `--bots` adds bot slots after them. Each human gets the FTP from `--ftp` (default 200), is verified unless `--unverified`, rides its `--rider` profile (one for all, or one per slot), and has Autopilot per `--autopilot` (default `all`). Bots are verified, ride `erg:compliance=1.0` and always run Autopilot. One human runs SOLO, two or more run HOST with loopback clients (section 19.1).
 
-**Q3. What does the report hold, and where do the FIT files go?** Section 19.1: arguments, slots, plans and warnings, overrides, `end_reason`, `finished_reason`, events, per-rider phases with `ended_by`, every directive as requested and as applied with `clamped_by` or its refusal, the 1 Hz trace per rider (applied target, mode, grade, `clamped_by`, rescue, AFK, haptic, power, cadence), each snapshot's size and SHA-256 with `max_snapshot_bytes`, the results, `fit_paths` and `deterministic_hash`. FIT files: `<report dir>/fit/<report stem>_slot<n>.fit`, one per human slot. Each run first deletes the old report and FIT files at its path, so a failed run (non-zero exit) leaves none behind; exit 5 means the run logged a script error.
+**Q3. What does the report hold, and where do the FIT files go?** Section 19.1 lists every key: `args`, `slots`, `plans` and `plan_warnings`, `overrides`, `end_reason`, `finished_reason`, `events`, per-rider `phases` with `ended_by`, every directive as requested and as applied with `clamped_by` or its refusal (`directives`), the 1 Hz `trace` per rider (applied target and %FTP, mode, grade, `clamped_by`, rescue, AFK, paused, haptic, power, cadence), each snapshot's size and SHA-256 (`snapshots`, `max_snapshot_bytes`, `oversize_snapshots`), the `results`, each peer's `unlocks`, the loopback `clients`, `fit_paths`, `meta` and `deterministic_hash`. FIT files: `<report dir>/fit/<report stem>_slot<n>.fit`, one per human slot. Each run first deletes the old report and FIT files at its path, so a failed run (non-zero exit) leaves none behind; exit 5 means the run logged a script error.
 
 **Q4. How do I invoke fit_check?** `node tools/fit_check/check.mjs <file|dir>... [--expect-laps=<n>] [--json]` (section 19.5), for example `node tools/fit_check/check.mjs build/siege/sims/fit`.
 
@@ -718,7 +802,7 @@ Answers to the questions the game briefs' G0 steps ask (and to `docs/OWNERSHIP.m
 
 **Q14. `phase_changed` with per-rider plans: does the GameHost emit it?** No, never. It emits `phase_started(peer, index)` on `ctx.events` for each rider and updates `frame.phase`. Emit `phase_changed` yourself only if your riders share one sequence (Siege, Tank); Fishing doesn't need it.
 
-**Q15. Can `tools/screenshot` set the player count, seed and time, and fast-forward?** Yes: `--players`, `--bots`, `--rider`, `--autopilot`, `--seed`, and `--at=<s>[,<s>...]` in sim seconds, stepping as fast as it can to just before each time (section 19.3). HOST runs show the host's view (slot 0).
+**Q15. Can `tools/screenshot` set the player count, seed and time, and fast-forward?** Yes: `--players`, `--bots`, `--rider`, `--autopilot`, `--seed` (and every other `run_game_sim` flag), and `--at=<s>[,<s>...]` in sim seconds, stepping as fast as it can to just before each time, then rendering `--settle` seconds at normal speed (section 19.3). HOST runs show the host's view (slot 0). Files: `build/screenshots/<game>/<game>_<content>_<players>p_<at>s.png`.
 
 **Q16. How do HudSpec positions map to PixelViewport art pixels?** A `Rect2i` in art pixels goes through `PixelViewport.art_rect_to_screen()`: × the integer scale, + the letterbox offset, re-laid out on resize (section 10.1). Anchors ignore the viewport.
 

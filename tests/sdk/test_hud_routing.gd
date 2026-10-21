@@ -56,7 +56,7 @@ func _multi(humans: int, content: String = "tiny", extra: Dictionary = {}, bots:
 
 func test_power_band_for_the_hosts_own_rider() -> void:
 	_hud.power_band(1, 240, 280)
-	assert_eq(_local.get("power_band"), [240.0, 280.0])
+	assert_eq(_local.get("band_power"), [240.0, 280.0])
 	assert_eq((_local.device as Object).call("last_power_band"), [240.0, 280.0], "MockTrainer's erg rides the band in SIM")
 	assert_eq(_pbands, [[1, 240.0, 280.0]])
 	assert_eq(_sent, [], "nothing is sent for a local rider")
@@ -77,9 +77,9 @@ func test_power_band_for_a_remote_rider_is_a_directive() -> void:
 
 func test_power_band_for_a_bot_and_clearing() -> void:
 	_hud.power_band(-1, 100, 120)
-	assert_eq(_bot.get("power_band"), [100.0, 120.0])
+	assert_eq(_bot.get("band_power"), [100.0, 120.0])
 	_hud.power_band(-1, 0, 0)
-	assert_eq(_bot.get("power_band"), [0.0, 0.0])
+	assert_eq(_bot.get("band_power"), [0.0, 0.0])
 	assert_eq(_hud.band_of(-1), [0.0, 0.0])
 	_hud.power_band(1, 300, 200)
 	assert_push_warning("power_band")
@@ -89,7 +89,7 @@ func test_cooldown_clears_a_power_band() -> void:
 	_hud.power_band(1, 240, 280)
 	_pbands.clear()
 	_hud.clear_power_band(1)
-	assert_eq(_local.get("power_band"), [0.0, 0.0])
+	assert_eq(_local.get("band_power"), [0.0, 0.0])
 	assert_eq(_pbands, [[1, 0.0, 0.0]])
 
 
@@ -135,7 +135,7 @@ func test_client_draws_everything_locally() -> void:
 	_hud.banner("FX_Y")
 	assert_eq(_banners.size(), 1)
 	_hud.power_band(2, 200, 240)
-	assert_eq(own.get("power_band"), [200.0, 240.0], "the client's own rider (C27)")
+	assert_eq(own.get("band_power"), [200.0, 240.0], "the client's own rider (C27)")
 	_hud.power_band(1, 100, 140)
 	assert_eq(_pbands.size(), 2, "another peer's band only draws")
 	assert_eq(_sent, [], "a client sends nothing")
@@ -144,6 +144,10 @@ func test_client_draws_everything_locally() -> void:
 func test_teammate_status() -> void:
 	_hud.teammate_status(2, {"in_band": true, "icon": "res://x.png", "text": "Diesel", "junk": 1})
 	assert_eq(_hud.statuses[2], {"in_band": true, "icon": "res://x.png", "text": "Diesel"})
+	# game-workout W1: a bot's status is accepted (Workout shows every rider's compliance).
+	_hud.teammate_status(-1, {"in_band": false, "text": "92%"})
+	assert_eq(_hud.statuses[-1], {"in_band": false, "icon": "", "text": "92%"})
+	assert_eq(_sent, [], "statuses travel in the roster, never as messages")
 	var got: Array = []
 	_hud.role = Wl.CLIENT
 	_hud.local_status_changed.connect(func(peer: int, s: Dictionary) -> void: got.append([peer, s]))
@@ -174,10 +178,10 @@ func test_host_power_band_reaches_a_clients_gauge_and_mock_trainer() -> void:
 	Kit.step(b, 1)
 	assert_eq(got, [[2, 210.0, 260.0]], "the client's gauge")
 	var r2: LocalRider = b["riders"][2]
-	assert_eq(r2.get("power_band"), [210.0, 260.0])
+	assert_eq(r2.get("band_power"), [210.0, 260.0])
 	assert_eq((r2.device as Object).call("last_power_band"), [210.0, 260.0], "the client's MockTrainer")
 	var r3: LocalRider = b["riders"][3]
-	assert_eq(r3.get("power_band"), [0.0, 0.0], "nobody else")
+	assert_eq(r3.get("band_power"), [0.0, 0.0], "nobody else")
 
 
 func test_toast_with_a_peer_reaches_only_that_peer() -> void:

@@ -43,6 +43,8 @@ func test_manifest_fields() -> void:
 	assert_eq(m["default_content"], "easy_30")
 	assert_eq(m["e2e_content"], "e2e")
 	assert_eq(m["zero_input_content"], "easy_30")
+	assert_eq(m["content_schemes"], ["zwo"], "content zwo:<absolute path> imports any .zwo (BRIEF 3.7)")
+	assert_true(WlGameRegistry.content_allowed(m, "zwo:C:/rides/my.zwo"))
 	assert_eq(int(m["first_run_priority"]), 0)
 	assert_eq(m["picker_image"], CARD)
 	assert_false(m.has("options"), "no lobby options")

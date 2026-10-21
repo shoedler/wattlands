@@ -10,7 +10,7 @@ class FakeRunner:
 	var calls: Array[String] = []
 	var seen: Dictionary = {}
 	var setup_error: String = ""
-	var end_reason: String = "complete"
+	# end_reason is GameSimRunner's own member; _cli() sets it before the run.
 	var report_path: String = "C:/reports/r.json"
 	## Feed these error types to the CLI's script error counter during run_to_end (stands in for
 	## Godot logging errors, without a real SCRIPT ERROR in the test log).
@@ -20,6 +20,9 @@ class FakeRunner:
 	func setup(args: Dictionary) -> String:
 		calls.append("setup")
 		seen["setup_args"] = args
+		# The registry is freed after the run; record what it held now.
+		var reg := args.get("registry") as WlGameRegistry
+		seen["registry"] = "none" if reg == null else ("template" if reg.has_game("_template") and not reg.ids().has("_template") else "other")
 		seen["user_dir"] = Paths.user_dir()
 		seen["process_mode"] = process_mode
 		return setup_error
@@ -141,6 +144,17 @@ func test_a_good_run_calls_setup_run_and_write_and_exits_0() -> void:
 	assert_true(r[1].out[r[1].out.size() - 1].contains("report=C:/reports/r.json"))
 	assert_eq(get_children().filter(func(n: Node) -> bool: return n is GameSimRunner), [], "the runner is freed")
 	assert_eq(seen["process_mode"], Node.PROCESS_MODE_ALWAYS, "the runner is a system node (BRIEF 4.1)")
+
+
+## The template is never listed; `--game=_template` runs with a private registry that holds it.
+func test_the_template_runs_with_a_registry_that_holds_it() -> void:
+	parse_result = {"game": "_template", "content": "short", "report": "C:/reports/r.json"}
+	var r := _run()
+	assert_eq(r[0], GameSimCli.EXIT_OK)
+	assert_eq(seen["registry"], "template", "setup gets a registry that holds the template, still unlisted")
+	parse_result = {"game": "workout", "report": "C:/reports/r.json"}
+	_run()
+	assert_eq(seen["registry"], "none", "other games use the GameRegistry autoload")
 
 
 func test_main_is_run_plus_a_script_error_check() -> void:

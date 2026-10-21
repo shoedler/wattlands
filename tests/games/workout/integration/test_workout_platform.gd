@@ -72,7 +72,8 @@ func test_game_json_validates_in_the_registry() -> void:
 	assert_eq(reg.validate_manifest(m, "res://src/games/workout/game.json"), "")
 	reg.scan()
 	assert_true(reg.has_game("workout"))
-	assert_true(reg.instantiate("workout") is WorkoutGame)
+	var g: GameModule = autofree(reg.instantiate("workout"))
+	assert_true(g is WorkoutGame)
 	assert_eq(reg.content_label_key("workout", "easy_30"), "WORKOUT_CONTENT_EASY_30")
 
 

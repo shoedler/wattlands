@@ -133,6 +133,9 @@ func test_validate_manifest_names_each_failing_field() -> void:
 		[_with({"picker_image": 5}), "picker_image:"],
 		[_with({"options": {}}), "options:"],
 		[_with({"player_options": [{"id": "x", "type": "slider", "default": 1}]}), "player_options[0].type:"],
+		[_with({"content_schemes": "zwo"}), "content_schemes:"],
+		[_with({"content_schemes": ["Zwo"]}), "content_schemes:"],
+		[_with({"content_schemes": ["zwo", "zwo"]}), "content_schemes:"],
 	]
 	for c: Array in cases:
 		var err := _reg.validate_manifest(c[0])
@@ -259,6 +262,44 @@ func test_a_cleared_private_registry_keeps_another_registrys_strings() -> void:
 	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "Fixture solo", "a rescan keeps them")
 	_reg.clear()
 	assert_eq(String(TranslationServer.translate("FX_SOLO_TITLE")), "FX_SOLO_TITLE", "the last owner removes them")
+
+
+## game-workout W1: Workout's "zwo:<absolute path>" content ids are not in `contents`; a game
+## lists the schemes it accepts in content_schemes and validates the value itself.
+func test_content_schemes_admit_scheme_content_ids() -> void:
+	assert_eq(_reg.validate_manifest(_with({"content_schemes": ["zwo", "url"]})), "")
+	var m := WlGameRegistry.normalized(_with({"content_schemes": ["zwo"]}))
+	assert_true(WlGameRegistry.content_allowed(m, "a"))
+	assert_true(WlGameRegistry.content_allowed(m, "zwo:C:/rides/my ride.zwo"), "the value is the game's to check")
+	assert_false(WlGameRegistry.content_allowed(m, "zwo:"), "a value is needed")
+	assert_false(WlGameRegistry.content_allowed(m, ":x"))
+	assert_false(WlGameRegistry.content_allowed(m, "url:x"), "only listed schemes")
+	assert_false(WlGameRegistry.content_allowed(m, "c"))
+	var plain := WlGameRegistry.normalized(_valid())
+	assert_eq(plain["content_schemes"], [], "normalized fills the default")
+	assert_false(WlGameRegistry.content_allowed(plain, "zwo:C:/x.zwo"), "no schemes unless listed")
+
+
+## qa W1: a private registry freed or rescanned mid-suite must not unregister the game strings
+## the GameRegistry autoload serves (Workout's preview showed raw keys).
+func test_freeing_a_private_registry_keeps_the_autoloads_game_strings() -> void:
+	var auto := get_tree().root.get_node_or_null("GameRegistry") as WlGameRegistry
+	assert_not_null(auto)
+	if not auto.has_game("workout"):
+		pass_test("Workout is not installed")
+		return
+	var key := "WORKOUT_CONTENT_EASY_30"
+	var text := String(TranslationServer.translate(key))
+	assert_ne(text, key, "the autoload registered Workout's strings")
+	for k in 2:
+		var private := WlGameRegistry.new()
+		private.scan_on_ready = false
+		add_child(private)
+		private.scan()
+		private.scan()
+		remove_child(private)
+		private.free()
+		assert_eq(String(TranslationServer.translate(key)), text, "still translated after private registry %d" % k)
 
 
 func test_json_equal_and_is_whole() -> void:

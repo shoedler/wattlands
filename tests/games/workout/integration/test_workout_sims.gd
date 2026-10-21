@@ -125,6 +125,30 @@ func test_the_sample_zwo_plays() -> void:
 	assert_gt((g.session_preview("zwo_sample")["lines"] as Array).size(), 0)
 
 
+## game-workout W1: "zwo:<absolute path>" is not in game.json contents; Workout lists the zwo
+## scheme (content_schemes), so the runner, the host and every client pass it through as
+## ctx.content_id and the imported session plays.
+func test_a_zwo_path_content_id_runs_through_the_runner_and_reaches_clients() -> void:
+	var content := "zwo:" + ProjectSettings.globalize_path("res://content/workout/zwo/sample.zwo")
+	var args := GameSimRunner.parse_args(PackedStringArray([
+		"--game=workout", "--content=" + content, "--players=2", "--bots=1", "--seed=4",
+		"--max-sim-seconds=20", "--report=" + _tmp.path_join("zwo_path.json"),
+	]))
+	assert_false(args.has("error"), str(args.get("error", "")))
+	args["headless"] = true
+	var runner := GameSimRunner.new()
+	add_child_autofree(runner)
+	assert_eq(runner.setup(args), "")
+	assert_eq(runner.run_to_end(), "timeout")
+	assert_eq(runner.build_report()["content_id"], content)
+	for gh in runner.hosts():
+		assert_eq(gh.ctx.content_id, content, "peer %d" % gh.local_peer())
+		assert_true(gh.plans.has(gh.local_peer()), "peer %d has its imported plan" % gh.local_peer())
+	var bad := GameSimRunner.new()
+	add_child_autofree(bad)
+	assert_string_starts_with(bad.setup(GameSimRunner.parse_args(PackedStringArray(["--game=workout", "--content=mp3:x"]))), "--content:")
+
+
 func test_same_seed_same_hash() -> void:
 	var a := _run("e2e")
 	var b := _run("e2e")

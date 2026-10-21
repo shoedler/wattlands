@@ -163,6 +163,7 @@ func _run_session(parent: Node) -> int:
 	if isolate_user_dir:
 		temp_dir = Paths.make_temp_dir("run_game_sim")
 		Paths.set_override(temp_dir)
+	var template_registry := _template_registry(parent)
 	var runner: GameSimRunner = make_runner.call()
 	runner.process_mode = Node.PROCESS_MODE_ALWAYS  # a system node (BRIEF 4.1)
 	parent.add_child(runner)
@@ -182,10 +183,30 @@ func _run_session(parent: Node) -> int:
 			_say("run_game_sim: end_reason=%s sim_seconds=%.1f report=%s" % [reason, runner.sim_seconds(), path])
 	parent.remove_child(runner)
 	runner.free()
+	if template_registry != null:
+		parent.remove_child(template_registry)
+		template_registry.free()
 	if isolate_user_dir:
 		Paths.set_override(saved_override)
 		remove_tree(temp_dir)
 	return code
+
+
+## `--game=_template`: the template is never listed, so the GameRegistry autoload can't run
+## it; the run gets a private registry with the installed games plus the template (the way the
+## conformance test loads it). Null for every other game (the autoload serves it).
+func _template_registry(parent: Node) -> WlGameRegistry:
+	if str(parsed.get("game", "")) != WlGameRegistry.TEMPLATE_ID or parsed.has("registry"):
+		return null
+	var reg := WlGameRegistry.new()
+	reg.scan_on_ready = false
+	parent.add_child(reg)
+	reg.scan()
+	var err := reg.add_game(reg.template_manifest(), WlGameRegistry.GAMES_ROOT.path_join(WlGameRegistry.TEMPLATE_ID), true)
+	if err != "":
+		_fail("run_game_sim: src/games/_template/game.json: %s" % err)
+	parsed["registry"] = reg
+	return reg
 
 
 ## Problems with the flag names and syntax ([] when fine). Values that need the game's

@@ -24,8 +24,9 @@ extends Node
 ## snapshot, roster, hud, results on a client) -> tick every local rider on platform time ->
 ## drain gestures (the local rider's from the InputRouter when rendering, else from its
 ## LocalRider; bots' from their LocalRiders) and actions (InputRouter or inject_action;
-## `pause` and `panic` are consumed here, as is a `confirm` that resumes a paused session;
-## shift_up/shift_down also shift the gears) ->
+## `pause` and `panic` are consumed here, as is a `confirm` that resumes a paused session; the
+## InputRouter's `pause` (and its `confirm` while paused) is dropped, because the app's
+## session screen owns pausing; shift_up/shift_down also shift the gears) ->
 ## local_intents(actions, gestures) on every peer -> authority: unless paused, build the
 ## InputFrame (frame.tick/t = game ticks/seconds completed before this tick), call
 ## on_rescue/on_afk on edges, sim_step(0.05, frame), feed ctx.stats, advance phases (a
@@ -126,6 +127,8 @@ var _snapshot_seq: int = 0
 var _last_snapshot_msg: Dictionary = {}
 var _last_snapshot_state: Dictionary = {}
 var _state_before_pause: String = "running"
+## Why the session is paused ("user", "coasting", "stop_5s", ...; "" while running).
+var _pause_reason: String = ""
 var _progress_done: Dictionary = {}
 var _fit_paths: Dictionary = {}
 var _view_root: Node = null
@@ -173,9 +176,12 @@ func _process(delta: float) -> void:
 ##   local rider's FIT there after finish_ride), input_router (Node with take_actions() and
 ##   take_gestures(); default the InputRouter autoload unless headless; when rendering, the
 ##   local rider's gestures come from it), sfx (Node with set_metronome(); default the Sfx
-##   autoload), realtime (bool: _process drives the clock; default: not headless), poll_net
+##   autoload), realtime (bool: _process drives the clock with the wall-clock delta;
+##   default true, headless or not: GameSimRunner and tests pass false and call step()), poll_net
 ##   (bool, default true: step() polls the net session). A CLIENT's game, players, options
-##   and seed come from the host's session_start.
+##   and seed come from the host's session_start: config.session_start (the message that
+##   opened the session, which the app shell received before this GameHost existed) is
+##   applied on the first step(), else the first session_start from the net.
 ## Returns "" on success or an error string (invalid plan, unknown game, ...).
 func setup(p_config: Dictionary) -> String:
 	if clock != null:
@@ -185,7 +191,9 @@ func setup(p_config: Dictionary) -> String:
 	if role != Wl.SOLO and role != Wl.HOST and role != Wl.CLIENT:
 		return "role: must be SOLO, HOST or CLIENT"
 	_headless = bool(config.get("headless", DisplayServer.get_name() == "headless"))
-	_realtime = bool(config.get("realtime", not _headless))
+	# The app (windowed or a headless scripted peer) is driven by _process; GameSimRunner and
+	# tests step it themselves and pass realtime = false.
+	_realtime = bool(config.get("realtime", true))
 	_record_rides = bool(config.get("record_rides", true))
 	bus = config.get("bus") as WlEventBus
 	if bus == null:
@@ -227,6 +235,7 @@ func setup(p_config: Dictionary) -> String:
 	if _input_router != null and own != null and _input_router.has_method("attach_rider"):
 		_input_router.call("attach_rider", own)
 	if role == Wl.CLIENT:
+		_queue_session_start(config.get("session_start", {}))
 		_setup_ok = true
 		return ""
 	var err := _setup_authority()
@@ -275,6 +284,7 @@ func pause(reason: String = "user") -> void:
 	if state != "running" and state != "cooldown":
 		return
 	_state_before_pause = state
+	_pause_reason = reason
 	clock.set_game_paused(true)
 	for peer in _local_order():
 		(local_riders[peer] as LocalRider).set_game_paused(true)
@@ -286,6 +296,7 @@ func pause(reason: String = "user") -> void:
 func resume() -> void:
 	if state != "paused":
 		return
+	_pause_reason = ""
 	clock.set_game_paused(false)
 	for peer in _local_order():
 		(local_riders[peer] as LocalRider).set_game_paused(false)
@@ -411,6 +422,18 @@ func pixel_viewport() -> PixelViewport:
 # --- setup -----------------------------------------------------------------------------
 
 
+## A client created by the app when the host's session_start arrived (the app shell builds the
+## GameHost inside that game_message emission, so the GameHost never sees it on the net): the
+## payload from config.session_start is processed on the first step(), before any later
+## message. A copy that arrives again over the net is ignored (configured once).
+func _queue_session_start(ss: Variant) -> void:
+	if not (ss is Dictionary) or (ss as Dictionary).is_empty():
+		return
+	var msg := (ss as Dictionary).duplicate(true)
+	msg["type"] = "session_start"
+	_inbox.append([net.host_peer if net != null else Wl.HOST_PEER, msg])
+
+
 func _make_routers() -> void:
 	tracker = PhaseTracker.new()
 	intent_router = IntentRouter.new()
@@ -464,8 +487,9 @@ func _setup_authority() -> String:
 	var content_id := str(config.get("content_id", ""))
 	if content_id == "":
 		content_id = str(manifest.get("default_content", ""))
-	if not (manifest.get("contents", []) as Array).has(content_id):
-		return "content_id: \"%s\" is not one of %s" % [content_id, JSON.stringify(manifest.get("contents", []))]
+	if not WlGameRegistry.content_allowed(manifest, content_id):
+		return "content_id: \"%s\" is not one of %s%s" % [content_id, JSON.stringify(manifest.get("contents", [])),
+			" or <scheme>:<value> for a scheme in %s" % JSON.stringify(manifest["content_schemes"]) if not (manifest.get("content_schemes", []) as Array).is_empty() else ""]
 	game = config.get("game") as GameModule
 	if game == null:
 		game = WlGameRegistry.instantiate_manifest(manifest)
@@ -788,7 +812,10 @@ func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName
 				out.append(a)
 			_:
 				out.append(a)
-	if state == "paused" and (resume_now or out.has(&"confirm") or my_gestures.has(Wl.G_PEDAL_START)):
+	# A user pause ends by resume(), an injected pause or confirm; a coasting or stop_5s pause
+	# also ends when the rider pedals again (the session screen follows the same rule).
+	var pedal_resume := my_gestures.has(Wl.G_PEDAL_START) and _pause_reason != "user"
+	if state == "paused" and (resume_now or out.has(&"confirm") or pedal_resume):
 		if not resume_now and out.has(&"confirm"):
 			# The confirm that resumed the session is the platform's, never also a game confirm.
 			out.erase(&"confirm")
@@ -1412,7 +1439,9 @@ func _platform_event(e: Dictionary) -> void:
 		"wl.phase_started":
 			var peer := int(e.get("peer", 0))
 			if peer != _local_peer:
+				# The client's own rider is recorded from its `phase` message.
 				bus.phase_started.emit(peer, int(e.get("index", 0)))
+				_event("phase_started", {"peer": peer, "index": int(e.get("index", 0)), "ended_by": str(e.get("ended_by", ""))})
 		"wl.lap_marker":
 			var rider: LocalRider = local_riders.get(_local_peer)
 			var label := str(e.get("label", ""))
@@ -1632,10 +1661,18 @@ func _local_gestures(rider: LocalRider) -> Array[StringName]:
 	return _take_gestures(rider)
 
 
+## The InputRouter's actions, then the injected ones. The router's `pause` is dropped, and so
+## is its `confirm` while paused: the app's session screen owns pausing and its pause menu
+## (it calls pause() and resume() itself), so the GameHost never toggles pause on them. An
+## injected `pause` (on-screen buttons, tools, tests) still toggles.
 func _take_actions() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if _input_router != null and _input_router.has_method("take_actions"):
-		out.assign(_input_router.call("take_actions"))
+		for a: Variant in _input_router.call("take_actions"):
+			var action := StringName(a)
+			if action == &"pause" or (action == &"confirm" and state == "paused"):
+				continue
+			out.append(action)
 	out.append_array(_injected_actions)
 	_injected_actions.clear()
 	return out

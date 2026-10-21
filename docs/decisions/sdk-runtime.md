@@ -145,3 +145,45 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: when `confirm` resumes a paused SOLO session it is consumed; the game's `local_intents` never sees it. `pedal_start` that resumes still reaches the game as a gesture.
 - Alternatives: pass it through.
 - Reason: a rider pressing A to resume must not also buy, cast or pick in the game on the same tick.
+
+## 2026-10-21 (W2): Loopback HOST runs wait for every client's player_info
+
+- Decision: `GameSimRunner` starts a HOST run (`WlNetSession.mark_started()`) only once the host's lobby lists every human rider, i.e. after each loopback client's `player_info` has arrived.
+- Alternatives: start as soon as each client has a peer id (W1); have NetSession admit any connected peer at the start.
+- Reason: `mark_started()` fixes the session's players from the lobby, which lists a peer only after its `player_info`; the last client was still in flight, got `session_in_progress` and never rode, so the host's roster showed it at 0 W (qa W1) and HOST runs never reached `complete`.
+
+## 2026-10-21 (W2): A client GameHost takes the session_start that opened it from its config
+
+- Decision: `GameHost.setup()` in the CLIENT role queues `config.session_start` (the message the app shell received before the GameHost existed) and applies it on the first `step()`, before any later message; a copy that arrives again on the net is ignored because the client configures once. The GameHost keeps connecting to `config.net.game_message` in `setup()`, so `plan` and `phase`, sent right after `session_start`, still reach it.
+- Alternatives: have the app shell re-emit `session_start` after `start()`; add a resync request to the protocol.
+- Reason: the app shell creates the client's GameHost inside the `game_message` emission of `session_start`, so the GameHost never saw it and stayed in `setup` (qa's real e2e run: both clients stayed in the lobby). `tests/sdk/integration/test_client_session_start.gd` reproduces the app shell's start and failed before this change.
+
+## 2026-10-21 (W2): The session screen owns pausing
+
+- Decision: the GameHost drops the InputRouter's `pause` action, and its `confirm` while paused, instead of toggling pause on them; `inject_action(&"pause")` and an injected `confirm` still pause and resume (tools, tests, on-screen buttons). A user pause ends only through `resume()`, an injected `pause` or `confirm`; a coasting or `stop_5s` pause also ends on `pedal_start`, the same rule the session screen applies.
+- Alternatives: keep toggling on the router's `pause` (the screen and the GameHost then fight: the screen pauses and opens its menu, the GameHost resumes on the same press).
+- Reason: app-shell's W1 request; the session screen calls `pause()` and `resume()` and runs the pause menu, whose confirm must not also resume the session or reach the game.
+
+## 2026-10-21 (W2): Clients record phase_started for every rider
+
+- Decision: a client's report events get a `phase_started` entry for every rider: its own from its `phase` message, the others from the host's `wl.phase_started` events (the bus already emitted both).
+- Alternatives: only the client's own rider (W1).
+- Reason: qa's e2e compares event sequences across peers and expects `phase_started` per rider on every peer.
+
+## 2026-10-21 (W2): content_schemes admit content ids outside `contents`
+
+- Decision: `game.json` may list `content_schemes` (lower-case scheme names, default `[]`). A content id `<scheme>:<value>` with a listed scheme and a non-empty value starts a session although it is not in `contents`; `WlGameRegistry.content_allowed(manifest, id)` is the one check (GameHost setup, `GameSimRunner --content`), the id reaches `ctx.content_id` unchanged on every peer through `session_start`, and the game validates the value when it loads the content. Workout lists `zwo` for `zwo:<absolute path>` (BRIEF 3.7 Workout Director).
+- Alternatives: accept any id containing `:` for every game; let Workout list every possible file.
+- Reason: game-workout's W1 request; an opt-in per game keeps a typo like `--content=eas:30` an error for every other game.
+
+## 2026-10-21 (W2): The warm-up window of the PlanValidator is [0, 300) s
+
+- Decision: the warm-up rule covers phases that start in the half-open window [0, 300) s (open-ended phases at `min_s`); a phase that starts at exactly 300 s is outside it. This was already the code (`starts[i] >= 300 - 1e-6` ends the scan) and `test_warmup_allows_65_exactly_and_work_from_300_s` covers it; the doc comment now says so.
+- Alternatives: a closed window [0, 300], which would cap every Workout session's first work phase at 65 %.
+- Reason: game-workout's W1 request (every Workout session but `e2e` starts its work at exactly 300 s); BRIEF 4.6.8's "first 5 minutes" end at 300 s, and the governor enforces its own run-time warm-up independently.
+
+## 2026-10-21 (W2): A GameHost steps itself unless told not to
+
+- Decision: `config.realtime` now defaults to true, headless or not: `_process` advances the SimClock by the wall-clock delta × `sim_speed` and steps the session. GameSimRunner, the conformance run and the tests, which call `step()` themselves, pass `realtime: false` (they all did already).
+- Alternatives: default to `not headless` (W1); have the app shell's scripted peer call `step()`.
+- Reason: the app shell gives a headless scripted peer's GameHost no `realtime` key, so in the real e2e run no GameHost ever advanced: the host printed `running` from `start()`, and each client's GameHost never processed the `session_start` it was handed, so the clients stayed in the lobby (qa W1).

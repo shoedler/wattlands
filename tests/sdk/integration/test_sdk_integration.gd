@@ -87,6 +87,26 @@ func test_zero_rider_goes_afk_in_host() -> void:
 	assert_true(afk)
 
 
+## qa W1: in a HOST run every loopback client joins the started session (none is refused with
+## session_in_progress because its player_info was still in flight), so its rider rides and
+## the host's roster shows its power, not 0 W.
+func test_every_loopback_client_rides_and_reaches_the_host_roster() -> void:
+	var r := _run({"players": 3, "max_sim_seconds": 40.0})
+	assert_eq(r.nets[0].peers(), [1, 2, 3] as Array[int], "the host's lobby lists every rider")
+	for n in r.nets:
+		assert_eq(n.refusal_reason, "", "peer %d was not refused" % n.local_peer)
+	assert_eq(r.run_to_end(), "timeout")
+	var roster: Dictionary = r.host.ctx.roster
+	for peer: int in [2, 3]:
+		assert_true(roster.has(peer))
+		assert_gt(float((roster[peer] as Dictionary)["raw_w"]), 50.0, "peer %d rides in the host's roster" % peer)
+		assert_true(bool((roster[peer] as Dictionary)["connected"]))
+	for c in r.clients:
+		assert_eq(c.state, "ended")
+		assert_gt(int(c.local_phase_state().index), -1, "client %d got its plan and phase" % c.local_peer())
+		assert_true(c.ctx.roster.has(1), "the roster reached client %d" % c.local_peer())
+
+
 ## B7.1 loopback host + two clients: each client's governor follows its remote plan; results
 ## and FIT files on every human slot; SIM5 the same hash twice.
 func test_host_with_two_loopback_clients() -> void:

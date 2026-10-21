@@ -1,7 +1,8 @@
 class_name WorkoutRideView
 extends Node2D
 ## Workout's ride view (BRIEF 3.7): a 640 x 360 side-scrolling landscape. Sky, clouds and
-## three parallax strips scroll with the local rider's distance; one pennant per rider
+## three parallax strips (world2d ParallaxStrip, BRIEF 3.9) scroll with the local rider's
+## distance; one pennant per rider
 ## (slot color + shape + pattern, BRIEF 3.9) sits on the road at its distance from the local
 ## rider; in Rolling road the road follows the course profile; the interval blocks are drawn
 ## on the ground with a "now" mark under the local rider. No people are drawn.
@@ -29,11 +30,11 @@ const EDGE_MARGIN_LEFT := 10.0
 const EDGE_MARGIN_RIGHT := 30.0
 
 var game: WorkoutGame = null
-var sky: WorkoutParallaxLayer = null
-var clouds: WorkoutParallaxLayer = null
-var far_hills: WorkoutParallaxLayer = null
-var mid_hills: WorkoutParallaxLayer = null
-var near_trees: WorkoutParallaxLayer = null
+var sky: ParallaxStrip = null
+var clouds: ParallaxStrip = null
+var far_hills: ParallaxStrip = null
+var mid_hills: ParallaxStrip = null
+var near_trees: ParallaxStrip = null
 var track: WorkoutTrackLayer = null
 ## The latest model (tests and screenshots read it).
 var model: Dictionary = {}
@@ -59,14 +60,26 @@ func _build() -> void:
 	if _built:
 		return
 	_built = true
-	sky = WorkoutParallaxLayer.make(ImageTexture.create_from_image(WorkoutArt.sky_image()), 0.0, 0.0)
-	clouds = WorkoutParallaxLayer.make(ImageTexture.create_from_image(WorkoutArt.clouds_image()), 0.02, 30.0)
-	far_hills = WorkoutParallaxLayer.make(ImageTexture.create_from_image(WorkoutArt.far_hills_image()), 0.06, 230.0 - WorkoutArt.FAR_SIZE.y)
-	mid_hills = WorkoutParallaxLayer.make(ImageTexture.create_from_image(WorkoutArt.mid_hills_image()), 0.18, 238.0 - WorkoutArt.MID_SIZE.y)
-	near_trees = WorkoutParallaxLayer.make(ImageTexture.create_from_image(WorkoutArt.trees_image()), 0.5, 244.0 - WorkoutArt.NEAR_SIZE.y)
+	sky = _strip(WorkoutArt.sky_image(), 0.0, 0.0)
+	clouds = _strip(WorkoutArt.clouds_image(), 0.02, 30.0)
+	far_hills = _strip(WorkoutArt.far_hills_image(), 0.06, 230.0 - WorkoutArt.FAR_SIZE.y)
+	mid_hills = _strip(WorkoutArt.mid_hills_image(), 0.18, 238.0 - WorkoutArt.MID_SIZE.y)
+	near_trees = _strip(WorkoutArt.trees_image(), 0.5, 244.0 - WorkoutArt.NEAR_SIZE.y)
 	track = WorkoutTrackLayer.new()
 	for layer: Node2D in [sky, clouds, far_hills, mid_hills, near_trees, track]:
 		add_child(layer)
+
+
+## A world2d ParallaxStrip of a seamless procedural image, its top edge at `top_y`, covering
+## the 640 px view and scrolled only by the world x refresh() sets (deterministic, no drift).
+static func _strip(image: Image, factor: float, top_y: float) -> ParallaxStrip:
+	var strip := ParallaxStrip.new()
+	strip.texture = ImageTexture.create_from_image(image)
+	strip.factor = factor
+	strip.position.y = top_y
+	strip.cover_width = float(WorkoutArt.W)
+	strip.auto_process = false
+	return strip
 
 
 ## Recomputes the drawing model from the game's state.
@@ -77,8 +90,9 @@ func refresh() -> void:
 	var cam := state.rider(game.view_peer())
 	var cam_d := cam.distance_m() if cam != null else 0.0
 	var world_x := cam_d * VISUAL_PX_PER_M
-	for layer: WorkoutParallaxLayer in [sky, clouds, far_hills, mid_hills, near_trees]:
-		layer.set_scroll(world_x)
+	for layer: ParallaxStrip in [sky, clouds, far_hills, mid_hills, near_trees]:
+		if layer.world_x != world_x:
+			layer.world_x = world_x
 	var road := _road(state, cam)
 	model = {
 		"road": road,
