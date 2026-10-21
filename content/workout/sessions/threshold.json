@@ -1,0 +1,13 @@
+{
+	"id": "threshold",
+	"label": "WORKOUT_CONTENT_THRESHOLD",
+	"summary": "WORKOUT_SUMMARY_THRESHOLD",
+	"phases": [
+		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 98, "duration_s": 480, "lap": true, "label": "WORKOUT_LBL_THRESHOLD_1"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 55, "duration_s": 240, "lap": true, "label": "WORKOUT_LBL_RECOVERY_1"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 98, "duration_s": 480, "lap": true, "label": "WORKOUT_LBL_THRESHOLD_2"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 55, "duration_s": 240, "lap": true, "label": "WORKOUT_LBL_RECOVERY_2"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 98, "duration_s": 480, "lap": true, "label": "WORKOUT_LBL_THRESHOLD_3"}
+	]
+}

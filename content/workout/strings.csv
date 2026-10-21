@@ -1,0 +1,78 @@
+keys,en
+WORKOUT_CONTENT_EASY_30,Easy 30
+WORKOUT_CONTENT_SWEET_SPOT,Sweet spot
+WORKOUT_CONTENT_THRESHOLD,Threshold
+WORKOUT_CONTENT_VO2,VO2
+WORKOUT_CONTENT_ROLLING_ROAD,Rolling road
+WORKOUT_CONTENT_E2E,E2E (2 minutes)
+WORKOUT_CONTENT_ZWO_SAMPLE,Sample .zwo
+WORKOUT_CONTENT_ZWO,Imported .zwo
+WORKOUT_SUMMARY_EASY_30,"20 minutes at 65% FTP with three 30-second free sprints. 28 minutes."
+WORKOUT_SUMMARY_SWEET_SPOT,"2 x 12 minutes at 90% FTP, 4 minutes easy between. 36 minutes."
+WORKOUT_SUMMARY_THRESHOLD,"3 x 8 minutes at 98% FTP, 4 minutes easy between. 40 minutes."
+WORKOUT_SUMMARY_VO2,"5 x 3 minutes at 110% FTP, 3 minutes easy between. 35 minutes."
+WORKOUT_SUMMARY_ROLLING_ROAD,"30 minutes on a rolling course, holding 76-105% FTP. 38 minutes."
+WORKOUT_SUMMARY_E2E,"A 2-minute check ride inside the warm-up limits, plus the cool-down."
+WORKOUT_SUMMARY_ZWO_SAMPLE,"A sample .zwo workout, clamped to the safety limits."
+WORKOUT_SUMMARY_ZWO,"A .zwo workout, clamped to the safety limits."
+WORKOUT_LBL_WARMUP,Warm-up
+WORKOUT_LBL_ENDURANCE_1,Endurance 1
+WORKOUT_LBL_ENDURANCE_2,Endurance 2
+WORKOUT_LBL_ENDURANCE_3,Endurance 3
+WORKOUT_LBL_ENDURANCE_4,Endurance 4
+WORKOUT_LBL_SPRINT,Sprint
+WORKOUT_LBL_SPRINT_1,Sprint 1
+WORKOUT_LBL_SPRINT_2,Sprint 2
+WORKOUT_LBL_SPRINT_3,Sprint 3
+WORKOUT_LBL_SWEET_SPOT_1,Sweet spot 1
+WORKOUT_LBL_SWEET_SPOT_2,Sweet spot 2
+WORKOUT_LBL_THRESHOLD_1,Threshold 1
+WORKOUT_LBL_THRESHOLD_2,Threshold 2
+WORKOUT_LBL_THRESHOLD_3,Threshold 3
+WORKOUT_LBL_VO2_1,VO2 1
+WORKOUT_LBL_VO2_2,VO2 2
+WORKOUT_LBL_VO2_3,VO2 3
+WORKOUT_LBL_VO2_4,VO2 4
+WORKOUT_LBL_VO2_5,VO2 5
+WORKOUT_LBL_RECOVERY_1,Recovery 1
+WORKOUT_LBL_RECOVERY_2,Recovery 2
+WORKOUT_LBL_RECOVERY_3,Recovery 3
+WORKOUT_LBL_RECOVERY_4,Recovery 4
+WORKOUT_LBL_ROLLING_ROAD,Rolling road
+WORKOUT_LBL_RAMP_IN,Ramp-in
+WORKOUT_LBL_STEADY,Steady
+WORKOUT_LBL_BLOCK,Block {n}
+WORKOUT_PREVIEW_RAMP,{from} -> {to}% FTP
+WORKOUT_PREVIEW_ERG,{pct}% FTP
+WORKOUT_PREVIEW_FREE,"Free sprint, flat, virtual gears"
+WORKOUT_PREVIEW_COURSE,"Rolling course, {lo}-{hi}% FTP"
+WORKOUT_PREVIEW_CLAMP,Clamped: {text}
+WORKOUT_PREVIEW_WARNING,Skipped: {text}
+WORKOUT_HUD_WATTS,Watts
+WORKOUT_HUD_IN_BAND,In band
+WORKOUT_BANNER_RAMP,{label}: {from} -> {to}% FTP for {time}
+WORKOUT_BANNER_ERG,{label}: {pct}% FTP for {time}
+WORKOUT_BANNER_SPRINT,{label}! Shift up and go for {time}
+WORKOUT_BANNER_ROLLING,{label}: hold {lo}-{hi}% FTP for {time}
+WORKOUT_TOAST_INTERVAL_DONE,{label} done: {pct}% in band
+WORKOUT_TOAST_SPRINT_HIT,Sprint! Peak {w} W
+WORKOUT_TOAST_SPRINT_PEAK,Sprint over. Peak {w} W
+WORKOUT_TOAST_SPRINT_SOON,Sprint in {s} s
+WORKOUT_STAT_GRADE,Grade
+WORKOUT_STAT_TIB_PCT,In band (%)
+WORKOUT_STAT_INTERVALS,Intervals in band (%)
+WORKOUT_STAT_SPRINT_PEAK_W,Best sprint peak (W)
+WORKOUT_STAT_SPRINTS_HIT,Sprints over 120% FTP for 3 s
+WORKOUT_STAT_GROUP_TIB_PCT,Group in band (%)
+WORKOUT_STAT_RIDERS,Riders
+WORKOUT_STAT_GROUP_SPRINTS_HIT,Group sprints over 120% FTP for 3 s
+WORKOUT_RESULT_S,Grade S: a perfect ride
+WORKOUT_RESULT_A,Grade A: strong and steady
+WORKOUT_RESULT_B,Grade B: solid work
+WORKOUT_RESULT_C,Grade C: you got it done
+WORKOUT_RESULT_D,Grade D: every ride counts
+WORKOUT_UNLOCK_PENNANT_SWALLOWTAIL,Swallowtail pennant
+WORKOUT_UNLOCK_PENNANT_CHEVRON,Chevron pennant
+WORKOUT_UNLOCK_PENNANT_STAR,Star pennant
+WORKOUT_UNLOCK_PENNANT_BOLT,Bolt pennant
+WORKOUT_UNLOCK_PENNANT_GOLD,Gold pennant

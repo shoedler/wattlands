@@ -1,0 +1,6 @@
+{
+	"id": "zwo_sample",
+	"label": "WORKOUT_CONTENT_ZWO_SAMPLE",
+	"summary": "WORKOUT_SUMMARY_ZWO_SAMPLE",
+	"zwo": "zwo/sample.zwo"
+}

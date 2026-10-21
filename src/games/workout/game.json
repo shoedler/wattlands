@@ -1,0 +1,18 @@
+{
+	"id": "workout",
+	"title": "Workout",
+	"summary": "Group interval rides: everyone rides the same timeline at their own % of FTP, with ERG intervals, free sprints and a rolling road.",
+	"version": "0.1.0",
+	"min_players": 1,
+	"max_players": 8,
+	"bots": true,
+	"presentation": "2d",
+	"pixel_base": [640, 360],
+	"entry": "res://src/games/workout/workout_game.gd",
+	"contents": ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e", "zwo_sample"],
+	"default_content": "easy_30",
+	"e2e_content": "e2e",
+	"zero_input_content": "easy_30",
+	"first_run_priority": 0,
+	"picker_image": "res://assets/workout/picker_card.png"
+}

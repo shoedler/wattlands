@@ -1,0 +1,11 @@
+{
+	"id": "sweet_spot",
+	"label": "WORKOUT_CONTENT_SWEET_SPOT",
+	"summary": "WORKOUT_SUMMARY_SWEET_SPOT",
+	"phases": [
+		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 90, "duration_s": 720, "lap": true, "label": "WORKOUT_LBL_SWEET_SPOT_1"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 55, "duration_s": 240, "lap": true, "label": "WORKOUT_LBL_RECOVERY_1"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 90, "duration_s": 720, "lap": true, "label": "WORKOUT_LBL_SWEET_SPOT_2"}
+	]
+}

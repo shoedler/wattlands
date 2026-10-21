@@ -1,0 +1,67 @@
+# Workout (BRIEF 3.7): the game's own GUT tests, the e2e report checker's node tests and
+# the script check. The full-session simulations (tests/games/workout/integration/) and the
+# e2e run need the whole platform and run in the lead's suite (tools/run_tests).
+name: game-workout
+
+on:
+  push:
+    paths:
+      - "src/games/workout/**"
+      - "content/workout/**"
+      - "assets/workout/**"
+      - "tests/games/workout/**"
+      - ".github/workflows/game-workout.yml"
+  pull_request:
+    paths:
+      - "src/games/workout/**"
+      - "content/workout/**"
+      - "assets/workout/**"
+      - "tests/games/workout/**"
+      - ".github/workflows/game-workout.yml"
+
+jobs:
+  workout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: Install Godot
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+
+      - name: Workout GUT tests
+        run: |
+          mkdir -p build
+          set +e
+          tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/games/workout -gexit -gdisable_colors -gjunit_xml_file=build/junit_workout_game-workout.xml > build/gut_workout.log 2>&1
+          code=$?
+          set -e
+          cat build/gut_workout.log
+          GUT_EXIT=$code node --input-type=module -e "
+          import fs from 'node:fs';
+          import { evaluateGut } from './tools/lib/gut_gate.mjs';
+          const v = evaluateGut({ exitCode: Number(process.env.GUT_EXIT), log: fs.readFileSync('build/gut_workout.log', 'utf8'), junitXml: fs.readFileSync('build/junit_workout_game-workout.xml', 'utf8'), narrow: true });
+          console.log(JSON.stringify(v));
+          process.exit(v.pass ? 0 : 1);
+          "
+
+      - name: e2e report checker tests
+        run: node --test tests/games/workout/e2e_check.test.mjs
+
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd

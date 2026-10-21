@@ -1,0 +1,17 @@
+{
+	"id": "vo2",
+	"label": "WORKOUT_CONTENT_VO2",
+	"summary": "WORKOUT_SUMMARY_VO2",
+	"phases": [
+		{"kind": "WARMUP", "mode": "ERG", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "lap": true, "label": "WORKOUT_LBL_WARMUP"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_1"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 50, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_RECOVERY_1"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_2"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 50, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_RECOVERY_2"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_3"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 50, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_RECOVERY_3"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_4"},
+		{"kind": "RECOVERY", "mode": "ERG", "target_pct": 50, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_RECOVERY_4"},
+		{"kind": "WORK", "mode": "ERG", "target_pct": 110, "duration_s": 180, "lap": true, "label": "WORKOUT_LBL_VO2_5"}
+	]
+}
