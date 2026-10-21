@@ -10,13 +10,16 @@ extends DirectiveSink
 ##   unknown mode), erg_in_sim_phase (mode "ERG" in a SIM phase), outside_range_pct (an ERG
 ##   target outside the phase's effective range; target_w / target_wkg are converted to
 ##   % FTP first; a SIM phase has no ERG range), sim_block_length (a SIM block, i.e. mode
-##   "SIM" in an ERG phase, needs 10 s <= duration_s <= 30 s), sim_block_unsafe (a SIM block
-##   during rescue, coasting, AFK or pause), switch_spacing (a SIM block must start >= 30 s
-##   after the rider's previous ERG<->SIM switch: plan phase changes and directive blocks;
-##   the block's own exit is exempt), mode_grade_outside_sim (mode_grade outside a SIM phase
-##   or block), haptic_in_erg (a haptic for a rider in ERG), haptics_off (the rider opted
-##   out). In a SIM phase mode "SIM" is a no-op confirmation (C4). A refusal refuses the whole
-##   request.
+##   "SIM" in an ERG phase while no block runs, needs 10 s <= duration_s <= 30 s),
+##   sim_block_unsafe (a SIM block during rescue, coasting, AFK or pause), switch_spacing (a
+##   SIM block must start >= 30 s after the rider's previous ERG<->SIM switch: plan phase
+##   changes and directive blocks; the block's own exit is exempt), mode_grade_outside_sim
+##   (mode_grade outside a SIM phase or block), haptic_in_erg (a haptic for a rider in ERG),
+##   haptics_off (the rider opted out). Mode "SIM" in a SIM phase (C4), and mode "SIM" in an
+##   ERG phase while a SIM block runs, is a no-op confirmation: no block opens, the running
+##   one is neither extended nor re-checked (length, safety, spacing), and the request's
+##   other channels (a haptic, mode_grade, factors) apply as inside the block, as the
+##   governor does (DirectiveSink contract). A refusal refuses the whole request.
 ## Every request gets an id (refused ones too). An accepted request goes to a rider
 ## simulated here through LocalRider.apply_directive() (its record is emitted as
 ## EventBus.directive_applied at once; a SIM block its governor refused is taken back, so
@@ -87,7 +90,7 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 	var opened := false
 	var prev_switch := tracker.last_switch_tick(peer)
 	var prev_mode := tracker.mode_now(peer)
-	if phase.mode == Wl.ERG and d.mode == Wl.SIM:
+	if _opens_block(peer, d, tick):
 		tracker.open_block(peer, tick, PhaseTracker.ticks(d.duration_s))
 		opened = true
 	elif phase.mode == Wl.ERG and d.mode == Wl.ERG and tracker.block_active(peer, tick):
@@ -268,7 +271,7 @@ func _check_request(peer: int, d: EffortDirective) -> String:
 	var tick := _tick()
 	var phase := tracker.phase_of(peer)
 	var block := tracker.block_active(peer, tick)
-	var opens_block := phase.mode == Wl.ERG and d.mode == Wl.SIM
+	var opens_block := _opens_block(peer, d, tick)
 	if phase.mode == Wl.SIM and d.mode == Wl.ERG:
 		return Wl.REFUSE_ERG_IN_SIM
 	if d.sets_erg_target():
@@ -296,6 +299,12 @@ func _check_request(peer: int, d: EffortDirective) -> String:
 		if not slot.haptics_on:
 			return Wl.REFUSE_HAPTIC_OFF
 	return ""
+
+
+## True when `d` opens a SIM block: mode "SIM" in an ERG phase while no block runs. The same
+## request during a running block only confirms it (never extends it), like the governor.
+func _opens_block(peer: int, d: EffortDirective, tick: int) -> bool:
+	return d.mode == Wl.SIM and tracker.phase_of(peer).mode == Wl.ERG and not tracker.block_active(peer, tick)
 
 
 func _fields_ok(d: EffortDirective) -> bool:
