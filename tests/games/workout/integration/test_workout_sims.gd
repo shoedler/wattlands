@@ -63,6 +63,16 @@ func test_compliant_riders_grade_a_or_better_in_every_session() -> void:
 		assert_true(["S", "A"].has(res.grade), "%s grade %s" % [id, res.grade])
 		for row in res.rows:
 			assert_true(float(row["time_in_band_pct"]) >= 90.0, "%s rider %s in band %s%%" % [id, row["peer_id"], row["time_in_band_pct"]])
+		# Warm-up limits hold (4.6.8): every applied ERG target in the first 300 s <= 65% FTP.
+		var points: Array[Dictionary] = []
+		_collect(report.get("traces", report.get("trace", [])), points)
+		assert_gt(points.size(), 0, "%s has 1 Hz traces" % id)
+		for pt in points:
+			if float(pt.get("t", INF)) >= 300.0:
+				continue
+			for key: String in ["applied_pct", "applied_ftp_pct"]:
+				if pt.has(key):
+					assert_true(float(pt[key]) <= 65.0 + 0.001, "%s: %s inside the warm-up cap: %s" % [id, key, pt])
 
 
 func test_e2e_host_play_stays_inside_the_warmup_limits() -> void:
