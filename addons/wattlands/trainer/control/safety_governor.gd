@@ -856,7 +856,9 @@ func _warmup_remaining_s() -> float:
 func _update_rescue() -> void:
 	var armed := false
 	if _desired == Wl.ERG and not _game_paused and not _panic:
-		armed = float(_erg_out.get("armed_w", 0)) >= GovernorClamps.pct_to_w(RESCUE_ARM_PCT, _ftp_w) - _EPS
+		# Whole watts on both sides (4.6.1): a target exactly at 60% FTP arms rescue even when
+		# 60% FTP is not a whole number of watts (FTP 201: a 60% target is 120 W).
+		armed = int(_erg_out.get("armed_w", 0)) >= _cap_w(RESCUE_ARM_PCT)
 	if armed and not _rescue_armed:
 		_rescue_armed_t = _t
 	_rescue_armed = armed

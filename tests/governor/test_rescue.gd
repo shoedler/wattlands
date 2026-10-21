@@ -73,6 +73,20 @@ func test_armed_exactly_at_60_pct() -> void:
 	assert_time(at, 1.0 + 3.0, "first low sample at 1 s, rescue 3 s later")
 
 
+func test_armed_in_whole_watts_at_an_odd_ftp() -> void:
+	# FTP 201: 60% FTP is 120.6 W. A 60% target governs to 120 W, which is 60% in whole watts
+	# (4.6.1 compares whole-watt values), so rescue arms; a 59.5% target (119 W) does not.
+	var rig := make_rig({"ftp_w": 201.0}, follower(40.0))
+	rig.start([erg(Wl.WORK, 60.0, 120.0)])
+	var at := rig.run_until(func() -> bool: return bool(rig.s()["rescue"]), 10.0)
+	assert_time(at, 1.0 + 3.0, "a target exactly at 60% arms rescue")
+	var rig2 := make_rig({"ftp_w": 201.0}, follower(40.0))
+	rig2.start([erg(Wl.WORK, 59.5, 120.0)])
+	rig2.run(20.0)
+	assert_eq(int(rig2.s()["governed_target_w"]), 119)
+	assert_false(rig2.s()["rescue"], "119 W is below 60% of 201 W in whole watts")
+
+
 func test_hold_until_cadence_70_for_3_s_then_ramp_back_over_10_s() -> void:
 	var rig := make_rig({}, follower())
 	rig.start([erg(Wl.WORK, 80.0, 120.0)])

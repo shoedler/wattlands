@@ -14,14 +14,18 @@ extends GutTest
 ## Not call sites: definitions (`func set_target_power(`), comments and doc comments, and
 ## strings that merely mention a name ("never call set_target_power here").
 ## Names built at run time from pieces cannot be seen by any static scan; code review covers them.
+## Besides the five names BRIEF 4.6.11 lists, the scan guards TrainerDevice.request_stop (Stop,
+## 0x08 0x01): the TrainerDevice contract gives it to TrainerController alone, and the exit path
+## (4.6.9) reaches it only through SafetyGovernor.shutdown().
 
 const GUARDED: Array[String] = [
 	"write_characteristic", "write_control", "set_target_power", "set_simulation", "set_resistance",
+	"request_stop",
 ]
 const ROOTS: Array[String] = ["res://addons/wattlands", "res://src"]
 ## Path -> the guarded names that file may call.
 const ALLOW := {
-	"res://addons/wattlands/trainer/control/trainer_controller.gd": ["set_target_power", "set_simulation", "set_resistance"],
+	"res://addons/wattlands/trainer/control/trainer_controller.gd": ["set_target_power", "set_simulation", "set_resistance", "request_stop"],
 	"res://addons/wattlands/trainer/ftms_trainer.gd": ["write_control"],
 	"res://addons/wattlands/trainer/ftms_client.gd": ["write_characteristic"],
 	"res://addons/wattlands/trainer/ble/gdble_transport.gd": ["write_characteristic"],
@@ -184,6 +188,7 @@ func test_the_scan_sees_the_controllers_real_calls() -> void:
 	assert_true(names.has("set_target_power"), "without the allowlist the controller's calls show")
 	assert_true(names.has("set_simulation"))
 	assert_true(names.has("set_resistance"))
+	assert_true(names.has("request_stop"))
 	assert_eq(scan_source(FileAccess.get_file_as_string(path), path).size(), 0, "and the allowlist admits them")
 
 
@@ -235,6 +240,9 @@ func bad() -> void:
 line set_simulation(1) string\"\"\"
 	var m := dev.write_characteristic
 	super.set_resistance(2.0)
+	dev.request_stop()
+	dev.call_deferred(&"request_stop")
+	var ok := dev.has_method("request_stop_soon") # not exactly a guarded name
 """
 
 
@@ -263,6 +271,8 @@ func test_fixture_file_is_flagged() -> void:
 		"14:write_control:dynamic",
 		"18:write_characteristic:reference",
 		"19:set_resistance:reference",
+		"20:request_stop:reference",
+		"21:request_stop:dynamic",
 	]
 	for e: String in expected:
 		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
@@ -277,6 +287,12 @@ func test_allowlist_is_per_file_and_per_name() -> void:
 	assert_eq(v[0]["name"], "write_control", "the controller may not write the control point")
 	var other := scan_source(src, "res://addons/wattlands/core/local_rider.gd")
 	assert_eq(other.size(), 2, "the same lines anywhere else are both violations")
+	var stop := "func shutdown(d) -> void:\n\td.request_stop()\n"
+	assert_eq(scan_source(stop, ctl).size(), 0, "the controller sends Stop")
+	var rider_stop := scan_source(stop, "res://addons/wattlands/core/local_rider.gd")
+	assert_eq(rider_stop.size(), 1, "anyone else must go through SafetyGovernor.shutdown()")
+	assert_eq(scan_source(stop, "res://addons/wattlands/trainer/ftms_trainer.gd").size(), 1,
+		"FtmsTrainer implements request_stop, it never calls it")
 
 
 func test_lexer_strings_comments_and_lines() -> void:

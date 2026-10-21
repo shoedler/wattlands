@@ -261,6 +261,43 @@ func test_channels_are_independent() -> void:
 	assert_almost_eq(float(rig.s()["cw"]), 0.51 * 0.8, 1e-9, "the factor channel kept its value")
 
 
+func test_factors_expire_back_to_none() -> void:
+	var rig := _erg_rig(sim(Wl.GRADE_GAME, 600.0))
+	var rec := rig.directive({"crr": 0.6, "cw": 0.7, "duration_s": 5.0, "reason": "draft"})
+	assert_false(rec["refused"])
+	rig.run(1.0)
+	assert_almost_eq(float(rig.s()["crr"]), 0.004 * 0.6, 1e-12)
+	assert_almost_eq(float(rig.s()["cw"]), 0.51 * 0.7, 1e-12)
+	rig.run(4.5)
+	assert_almost_eq(float(rig.s()["crr"]), 0.004, 1e-12, "back to no factor")
+	assert_almost_eq(float(rig.s()["cw"]), 0.51, 1e-12)
+	var dev: ScriptedDevice = rig.device
+	assert_almost_eq(dev.cw, 0.51, 1e-9, "the trainer got the plain cw again")
+
+
+func test_ramp_span_is_part_of_the_default_range() -> void:
+	# PlanPhase.effective_range(): a 50 -> 70% ramp without range_pct accepts 50..70%.
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WARMUP, 50.0, 300.0).with_ramp(70.0)])
+	rig.run(10.0)
+	assert_false(rig.directive({"target_pct": 70.0})["refused"])
+	assert_false(rig.directive({"target_pct": 50.0})["refused"])
+	assert_eq(rig.directive({"target_pct": 70.5})["reason"], Wl.REFUSE_RANGE)
+	assert_eq(rig.directive({"target_pct": 49.5})["reason"], Wl.REFUSE_RANGE)
+
+
+func test_mode_grade_with_duration_expires_inside_a_running_block() -> void:
+	var rig := _erg_rig(erg(Wl.WORK, 65.0, 600.0))
+	rig.run(30.0)
+	assert_false(rig.directive({"mode": "SIM", "duration_s": 30.0})["refused"])
+	assert_false(rig.directive({"mode_grade": 4.0, "duration_s": 5.0})["refused"])
+	rig.run(2.0)
+	assert_almost_eq(float(rig.s()["mode_grade_pct"]), 4.0, 1e-9)
+	rig.run(3.5)
+	assert_almost_eq(float(rig.s()["mode_grade_pct"]), 0.0, 1e-9, "the mode grade expired")
+	assert_true(rig.s()["sim_block_active"], "the block keeps its own expiry")
+
+
 func test_ids_echoed() -> void:
 	var rig := _erg_rig(erg(Wl.WORK, 60.0, 600.0).with_range(50.0, 100.0))
 	var d := EffortDirective.from_dict({"target_pct": 70.0})

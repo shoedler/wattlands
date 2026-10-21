@@ -114,6 +114,44 @@ func test_reset_after_120_s_at_or_below_90_pct_inclusive() -> void:
 	assert_true(bool(rig.trace[reset_i - 1]["latched_105"]), "still latched at 119.95 s")
 
 
+func test_reset_clears_both_limits() -> void:
+	# 125% latches the 120% limit at 60 s and the 105% limit at 300 s; 120 s at 90% resets both
+	# counters and both latches, so the next 125% interval runs unclamped.
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 125.0, 290.0), erg(Wl.WORK, 125.0, 290.0), erg(Wl.RECOVERY, 90.0, 200.0),
+		erg(Wl.WORK, 125.0, 100.0)])
+	rig.run(290.0)
+	rig.gov.start_phase(1)
+	rig.run(20.0)
+	assert_true(rig.s()["latched_120"])
+	assert_true(rig.s()["latched_105"])
+	assert_eq(rig.applied_w(), 210)
+	rig.gov.start_phase(2)
+	rig.run(119.0)
+	assert_true(rig.s()["latched_120"], "not reset before 120 s")
+	assert_true(rig.s()["latched_105"])
+	rig.run(1.5)
+	assert_false(rig.s()["latched_120"])
+	assert_false(rig.s()["latched_105"])
+	assert_almost_eq(float(rig.s()["s_left_105"]), 300.0, 1e-9)
+	assert_almost_eq(float(rig.s()["s_left_120"]), 60.0, 1e-9)
+	rig.gov.start_phase(3)
+	rig.run(10.0)
+	assert_eq(rig.applied_w(), 250, "125% again after the reset")
+	for name: String in [Wl.CLAMP_LIMIT_105, Wl.CLAMP_LIMIT_120]:
+		assert_does_not_have(rig.s()["clamped_by"], name)
+
+
+func test_paused_floor_counts_toward_the_reset() -> void:
+	# A pause holds the ERG floor (<= 90%) in ERG, so it is part of the 120 s recovery.
+	var rig := _latched_rig()
+	rig.gov.start_phase(2)
+	rig.run(60.0)
+	rig.gov.set_game_paused(true)
+	rig.run(61.0)
+	assert_false(rig.s()["latched_105"], "60 s at 90% plus 60 s at the paused floor")
+
+
 func test_91_pct_never_resets() -> void:
 	var rig := make_rig({}, follower())
 	rig.start([erg(Wl.WORK, 110.0, 290.0), erg(Wl.WORK, 110.0, 290.0), erg(Wl.RECOVERY, 90.5, 290.0)])
