@@ -691,6 +691,10 @@ func try_launch() -> bool:
 	var m := manifest()
 	if m.is_empty():
 		return false
+	if role == Wl.HOST and (services.net == null or services.net.room_code == ""):
+		# The relay has not created the room yet (or failed to): a HOST session needs one.
+		_set_message(t("APP_LOBBY_CREATING"))
+		return false
 	var all := slots()
 	if not all.is_empty() and all.size() < AppLobbyModel.min_players(m):
 		_set_message(t("APP_LOBBY_NEED_PLAYERS").format([AppLobbyModel.min_players(m)]))
@@ -739,9 +743,14 @@ func _on_net_state(state: String, detail: String) -> void:
 				code_label.visible = true
 				code_label.text = RoomCode.format(services.net.room_code)
 				_remember_room(services.net.room_code, Wl.HOST)
-				_push_lobby_settings()
 				_set_message("")
+				# The new room's lobby starts empty: send the game, settings, player_info and a
+				# ready flag set before the room existed.
+				_push_lobby_settings()
+				if local_ready:
+					services.net.set_ready(true)
 				_refresh_all()
+				try_launch()
 		"joined":
 			if role == Wl.CLIENT and page != PAGE_LOBBY:
 				page = PAGE_LOBBY

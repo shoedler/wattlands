@@ -317,6 +317,19 @@ func test_refusal_texts() -> void:
 		assert_false(text.begins_with("APP_"), "%s has a string" % reason)
 
 
+func test_host_never_starts_before_the_room_exists() -> void:
+	fx.give_profile(250.0)
+	fx.fake_net().add_human(1, "Ada", 250.0)
+	var s := open_screen(AppLobbyScreen.new(), {"mode": "host", "game_id": "workout"}) as AppLobbyScreen
+	confirm_pick(s, "start")
+	s.tick(0.1)
+	assert_ne(fx.app.state, "session", "no room code yet")
+	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_CREATING"))
+	fx.fake_net().simulate_hosting("K7QX2M")
+	s.tick(0.1)
+	assert_eq(fx.app.state, "session", "the room exists and the host is ready: the start goes ahead")
+
+
 func test_host_starts_once_everyone_is_ready() -> void:
 	var s := _host_lobby()
 	var net := fx.fake_net()
