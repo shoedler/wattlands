@@ -96,3 +96,45 @@
 - Decision: the launch visit to the title counts a pedaling stretch that is already running when the title opens. Later visits (back from a ride, the results or a menu) count the 5 s hold only after one sample without pedaling. A coast after that old stretch does not disarm the countdown. `AppServices.title_visits` counts the visits in one app run.
 - Alternatives: arm the countdown only on the launch visit; arm it the same way on every visit.
 - Reason: riders keep spinning after the cool-down, so a rider who picks Continue would otherwise be put into a new ride 5 s later. Arming only at launch would break "hold pedal_start 5 s on the title" for later visits.
+
+## 2026-10-21 (W2): Sessions hand ticking to the GameHost through set_external_tick
+
+- Decision: `AppServices.set_menu_ticking(on)` calls `WlTrainerService.set_external_tick(not on)` (the platform's name for the requested `set_menu_ticking`). The session screen, the scripted peer and the FTP test call it as before.
+- Alternatives: ask platform for an alias `set_menu_ticking`; keep the duck-typed call.
+- Reason: the duck-typed call found no method on the real service, so TrainerService and the GameHost both ticked the session rider on two clocks.
+
+## 2026-10-21 (W2): The GameHost runs on wall time in every app run
+
+- Decision: `AppSessionLauncher.build_config()` sets `config.realtime` (params `realtime`, default true): the session screen passes its `auto_process`, the scripted peer its own. Headless app runs (scripted e2e peers) therefore advance the GameHost's SimClock in `_process` like windowed ones; tests drive it by hand.
+- Alternatives: step the GameHost from the screen's `_process`.
+- Reason: the GameHost's default is `realtime = not headless`, meant for `GameSimRunner`; a headless app session never stepped.
+
+## 2026-10-21 (W2): A client's GameHost gets the message that opened it
+
+- Decision: right after `GameHost.start()` the shell re-emits on `NetSession.game_message` what made it create the client's GameHost: `params.replay` (a rejoin's plan/phase/snapshot) or else the host's `session_start` (`AppSessionLauncher.replay_messages`). The client's GameHost is still created inside that `session_start` emission, so the `plan` that follows it in the same poll reaches it directly.
+- Alternatives: the GameHost reads `config.session_start` (asked of sdk-runtime in W1; its `_on_session_start` ignores a second copy, so both can coexist).
+- Reason: a GameHost connects to `game_message` in `setup()`, after the `session_start` emission it was created in already went past it, so clients never left the lobby.
+
+## 2026-10-21 (W2): SOLO and HOST sessions start after the tick that triggered them
+
+- Decision: in the real app (screen `auto_process` on) the session screen builds its overlay at once and creates the GameHost with `call_deferred`; CLIENT sessions and tests start synchronously.
+- Alternatives: harden `LocalRider.tick()` against `setup()` re-entering from its own gesture or sample signal (requested of platform as well); defer every navigation.
+- Reason: Start is usually picked by a surge or the zero-touch sample, both emitted inside `LocalRider.tick()`; setting that rider up for the session there let the rest of the tick record menu time into the new ride (RideRecorder "time went backwards", the first seconds of the FIT lost).
+
+## 2026-10-21 (W2): The session screen owns InputRouter.solo
+
+- Decision: the session screen sets `InputRouter.solo = (role == SOLO)` at the start and back to true when it leaves.
+- Alternatives: the GameHost sets it (ui-hud's W1 note; sdk-runtime's GameHost does not).
+- Reason: `stop_5s` must map to pause only in a solo session (BRIEF 3.5); the shell already owns the session's lifetime.
+
+## 2026-10-21 (W2): Scripted peers end the same way whichever clock runs out
+
+- Decision: the scripted peer sets `App.run_seconds_exit_code = 2` and finishes through its own `finish()` on `App.quitting` (report, DONE line, exit 2 for `run_seconds`).
+- Alternatives: ask platform to stop counting `--run-seconds` for scripted peers.
+- Reason: `WlApp` also counts `--run-seconds` and quits on its own; without this its quit (exit 0, fallback report) could win the race.
+
+## 2026-10-21 (W2): App tests drive the real PedalScanList
+
+- Decision: `tests/app/fakes/fake_scan_list.gd` is the real `PedalScanList` plus read-only probes (`ids`, `text_of`, `index_of_id`, `is_disabled_id`, `picks`); `FakeRegistry.add_game` is `add_fixture`. Screens set `sounds = false` on their lists and play the UI cues themselves.
+- Alternatives: keep the W1 double under private names.
+- Reason: the double redeclared members of the real class and no longer compiled; the real list now exists and the screens should be tested against it.
