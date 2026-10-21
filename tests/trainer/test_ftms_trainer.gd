@@ -84,6 +84,27 @@ func test_setters_become_control_point_payloads() -> void:
 	assert_eq(_last_write(), "0801")
 
 
+## BRIEF 4.6.9: on exit, crash paths and disconnect the controller tries SIM flat, then Stop.
+## Queued behind a write in flight, both still go out in that order, after the ERG target.
+func test_exit_sequence_sim_flat_then_stop_keeps_its_order() -> void:
+	_ready_trainer()
+	_fake.auto_respond = false
+	var before := _fake.cp_writes.size()
+	_trainer.set_target_power(220)
+	_trainer.set_simulation(0.0, 0.0, 0.004, 0.51)
+	_trainer.request_stop()
+	for i in 5:
+		var op := _client.in_flight_opcode()
+		if op < 0:
+			break
+		_fake.notify("2ad9", PackedByteArray([0x80, op, 0x01]))
+		_fake.flush()
+	var sent: Array[String] = []
+	for w in _fake.cp_writes.slice(before):
+		sent.append(FtmsCodec.to_hex(w))
+	assert_eq(sent, ["05dc00", "11000000002833", "0801"] as Array[String])
+
+
 func test_responses_and_machine_status_pass_through() -> void:
 	_ready_trainer()
 	watch_signals(_trainer)
