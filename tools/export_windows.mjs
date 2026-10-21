@@ -15,10 +15,12 @@
 // writes override.cfg next to the exe with [wattlands] net/default_relay_url="<url>"; Godot
 // reads override.cfg from the folder of the exe and .pck at startup, and Settings uses that
 // project setting as the default relay URL (a rider's own choice and --relay=<url> still win),
-// so a friend's copy needs only the room code. --smoke starts the console exe headless with a
-// mock trainer for a few seconds (it hosts and joins nothing, so it connects to no relay) and
-// fails on a non-zero exit, a script error, or a default relay URL other than the one this
-// export set. Godot runs go through tools/godot.sh's lock helper. Zero dependencies.
+// so a friend's copy needs only the room code. The built-in ws://localhost:8787/v1 needs no
+// override.cfg, so --relay-url with exactly that value writes none and says so. --smoke starts
+// the exported app headless with a mock trainer for a few seconds (it hosts and joins nothing, so
+// it connects to no relay) and fails on a non-zero exit, a script error, or a default relay URL
+// other than the one this export set (none for the built-in default). Godot runs go through
+// tools/godot.sh's lock helper. Zero dependencies.
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -34,6 +36,9 @@ export const RELAY_SECTION = 'wattlands';
 export const RELAY_KEY = 'net/default_relay_url';
 // The line Settings.load_all prints when the default relay URL is not the built-in one.
 export const RELAY_LOG_PREFIX = 'Settings: build default relay URL ';
+// Settings.DEFAULTS.relay_url. Settings prints no line for exactly this value, so no
+// override.cfg is written for it and --smoke expects no line.
+export const BUILT_IN_RELAY_URL = 'ws://localhost:8787/v1';
 
 export const USAGE = `usage: node tools/export_windows.mjs [options]
   --out=<dir>            output folder (default build/windows; emptied first)
@@ -48,8 +53,9 @@ export const USAGE = `usage: node tools/export_windows.mjs [options]
                            ${RELAY_KEY}="<url>"
                          Godot reads it at startup and Settings uses it as the default relay URL,
                          so a friend who runs this copy types only the room code. A relay URL the
-                         rider set in Settings > Network and --relay=<url> still win. Without it the
-                         build keeps ws://localhost:8787/v1.
+                         rider set in Settings > Network and --relay=<url> still win. Without it,
+                         or with the built-in ${BUILT_IN_RELAY_URL} itself (no override.cfg is
+                         written then), the build keeps ${BUILT_IN_RELAY_URL}.
   --smoke                run the exported app headless with a mock trainer for 8 s (it hosts and
                          joins nothing, so it connects to no relay) and check the exit code, script
                          errors and the default relay URL the build reports
@@ -91,6 +97,17 @@ export function overrideCfg(url) {
     `${RELAY_KEY}="${r.url}"`,
     '',
   ].join('\n');
+}
+
+// What --relay-url (`relayUrl` from parseExportArgs) writes next to the exe: {write: true, text,
+// note} for override.cfg, else {write: false, note}: note null without --relay-url, and a note
+// that it already is the default for the built-in value.
+export function relayOverride(relayUrl) {
+  if (!relayUrl) return { write: false, note: null };
+  if (relayUrl === BUILT_IN_RELAY_URL) {
+    return { write: false, note: `default relay URL ${relayUrl} is already the built-in default; no override.cfg written` };
+  }
+  return { write: true, text: overrideCfg(relayUrl), note: `default relay URL ${relayUrl} (override.cfg)` };
 }
 
 // {ok, help, out, template, withVcruntime, relayUrl, smoke} or {ok: false, error}. Unknown
@@ -144,16 +161,17 @@ export function parseExportArgs(argv) {
 }
 
 // Checks the smoke run's output for the default relay URL the build reports: `relayUrl` when
-// --relay-url was given, else none (the built-in localhost default prints nothing).
+// --relay-url set one other than the built-in default, else none (the built-in default prints
+// nothing).
 export function checkSmokeRelay(output, relayUrl) {
   const seen = String(output).split(/\r?\n/).filter((l) => l.startsWith(RELAY_LOG_PREFIX)).map((l) => l.slice(RELAY_LOG_PREFIX.length).trim());
-  if (relayUrl) {
+  if (relayUrl && relayUrl !== BUILT_IN_RELAY_URL) {
     if (!seen.includes(relayUrl)) return { ok: false, error: `the exported app did not report the default relay URL ${relayUrl} (saw ${seen.length ? seen.join(', ') : 'none'})` };
     if (seen.some((u) => u !== relayUrl)) return { ok: false, error: `the exported app reported another default relay URL: ${seen.join(', ')}` };
     return { ok: true, line: `${RELAY_LOG_PREFIX}${relayUrl}` };
   }
-  if (seen.length) return { ok: false, error: `a build without --relay-url reported a default relay URL: ${seen.join(', ')}` };
-  return { ok: true, line: 'default relay URL ws://localhost:8787/v1 (built in)' };
+  if (seen.length) return { ok: false, error: `a build with the built-in default relay URL reported another one: ${seen.join(', ')}` };
+  return { ok: true, line: `default relay URL ${BUILT_IN_RELAY_URL} (built in)` };
 }
 
 function die(msg, code = 1) {
@@ -240,10 +258,9 @@ function main(argv) {
       if (fs.existsSync(path.join(sys, dll))) fs.copyFileSync(path.join(sys, dll), path.join(out, dll));
     }
   }
-  if (opts.relayUrl) {
-    fs.writeFileSync(path.join(out, 'override.cfg'), overrideCfg(opts.relayUrl));
-    process.stdout.write(`export_windows: default relay URL ${opts.relayUrl} (override.cfg)\n`);
-  }
+  const relayCfg = relayOverride(opts.relayUrl);
+  if (relayCfg.write) fs.writeFileSync(path.join(out, 'override.cfg'), relayCfg.text);
+  if (relayCfg.note) process.stdout.write(`export_windows: ${relayCfg.note}\n`);
   const files = fs.readdirSync(out).sort();
   process.stdout.write(`export_windows: ${out}\n  ${files.join('\n  ')}\n`);
   if (!files.some((f) => /^libgdble\.windows\.x86_64\.dll$/i.test(f))) die('the GDBLE DLL was not exported next to the exe');
