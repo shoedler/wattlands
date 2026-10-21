@@ -447,3 +447,24 @@ func test_report_dedupes_and_keeps_order() -> void:
 	r.add_fit("x.fit")
 	r.add_fit("x.fit")
 	assert_eq(r.fit_paths, ["x.fit"])
+
+
+func test_setup_failure_quits_without_ending_the_session() -> void:
+	fx.services.game_host_factory = func() -> GameHost:
+		var h := FakeHost.new()
+		h.setup_error = "plan rejected"
+		fx.hosts.append(h)
+		return h
+	var p := _host()
+	fx.fake_net().simulate_hosting("K7QX2M")
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_ERROR)
+	assert_eq(p.exit_reason, "error:setup:plan rejected")
+	assert_eq(fx.last_host().ended_reasons.size(), 0)
+
+
+func test_mock_trainer_flag_reaches_the_trainer_service() -> void:
+	fx.fake_trainer().dev = null
+	_peer(["--join=K7QX2M", "--mock-trainer=erg:compliance=0.9"]).start()
+	assert_eq(fx.fake_trainer().starts, 1, "the configured backend starts first")
+	assert_eq(fx.fake_trainer().mock_specs, ["erg:compliance=0.9"] as Array[String])
+	assert_not_null(fx.trainer.device())

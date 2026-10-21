@@ -350,6 +350,7 @@ func launch(role: String, params: Dictionary) -> void:
 	launcher = AppSessionLauncher.create(services)
 	session_config = launcher.build_config(role, p, view_parent, hud_parent, headless)
 	if session_config.is_empty():
+		phase = "setup_failed"
 		finish("error:" + launcher.error, EXIT_ERROR)
 		return
 	game_id = str(session_config.get("game_id", ""))
@@ -365,6 +366,7 @@ func launch(role: String, params: Dictionary) -> void:
 	add_child(host)
 	var err := host.setup(session_config)
 	if err != "":
+		phase = "setup_failed"
 		finish("error:setup:" + err, EXIT_ERROR)
 		return
 	host.state_changed.connect(_on_host_state)
