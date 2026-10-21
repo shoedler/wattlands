@@ -12,7 +12,7 @@
 # --godot-lock-timeout=<s> (give up waiting for a Godot slot, exit 75).
 #
 # Every rider is a MockTrainer. This script exports WATTLANDS_NO_HW_CONTROL=1 and
-# WATTLANDS_NO_NETWORK_INTEGRATIONS=1, refuses --allow-hw and --allow-network, adds --mock-trainer and
+# WATTLANDS_NO_NETWORK_INTEGRATIONS=1, refuses --allow-hw and --allow-network, adds --mock-trainer=erg and
 # --caller-cwd (relative --report and --override paths are taken from your current directory), and runs
 #   tools/godot.sh --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>
 # Exit codes: 0 the run completed (any end_reason; the report says which), 2 bad flags or locks,
@@ -42,4 +42,4 @@ done
 
 exec "${BASH:-bash}" "$here/godot.sh" "--timeout=$timeout_s" ${lock_opts[@]+"${lock_opts[@]}"} \
   --headless --path "$repo" -s tools/sdk/run_game_sim_main.gd -- \
-  --mock-trainer "--caller-cwd=$(pwd)" ${flags[@]+"${flags[@]}"}
+  --mock-trainer=erg "--caller-cwd=$(pwd)" ${flags[@]+"${flags[@]}"}

@@ -12,15 +12,24 @@ class FakeRunner:
 	var setup_error: String = ""
 	var end_reason: String = "complete"
 	var report_path: String = "C:/reports/r.json"
+	## Feed these error types to the CLI's script error counter during run_to_end (stands in for
+	## Godot logging errors, without a real SCRIPT ERROR in the test log).
+	var log_error_types: Array[int] = []
+	var cli: GameSimCli = null
 
 	func setup(args: Dictionary) -> String:
 		calls.append("setup")
 		seen["setup_args"] = args
 		seen["user_dir"] = Paths.user_dir()
+		seen["process_mode"] = process_mode
 		return setup_error
 
 	func run_to_end() -> String:
 		calls.append("run")
+		var bt: Array[ScriptBacktrace] = []
+		for t in log_error_types:
+			if cli != null and cli.error_counter != null:
+				cli.error_counter._log_error("run_to_end", "res://fake_game.gd", 7, "", "Invalid access to key 'x'", false, t, bt)
 		return end_reason
 
 	func write_report() -> String:
@@ -31,7 +40,7 @@ class FakeRunner:
 		return 660.0
 
 
-const BASE: Array[String] = ["--mock-trainer", "--caller-cwd=C:/work", "--game=_template", "--report=build/r.json"]
+const BASE: Array[String] = ["--mock-trainer=erg", "--caller-cwd=C:/work", "--game=_template", "--report=build/r.json"]
 
 var env: Dictionary = {}
 var parse_calls: Array = []
@@ -41,8 +50,11 @@ var made_runner: bool = false
 var setup_error: String = ""
 var end_reason: String = "complete"
 var report_path: String = "C:/reports/r.json"
+var log_error_types: Array[int] = []
 var calls: Array[String] = []
 var seen: Dictionary = {}
+## Temp dirs made by a test (removed in after_each).
+var temp_dirs: Array[String] = []
 
 
 func before_each() -> void:
@@ -53,8 +65,30 @@ func before_each() -> void:
 	setup_error = ""
 	end_reason = "complete"
 	report_path = "C:/reports/r.json"
+	log_error_types = []
 	calls = []
 	seen = {}
+	Paths.set_override(_temp_dir("cli_user"))  # anything the code under test persists lands here
+
+
+func after_each() -> void:
+	Paths.set_override("")
+	for d in temp_dirs:
+		GameSimCli.remove_tree(d)
+	temp_dirs.clear()
+
+
+func _temp_dir(prefix: String) -> String:
+	var d := Paths.make_temp_dir(prefix)
+	temp_dirs.append(d)
+	return d
+
+
+func _write(path: String, text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
 
 
 func _cli() -> GameSimCli:
@@ -64,6 +98,7 @@ func _cli() -> GameSimCli:
 	cli.parse_fn = func(a: PackedStringArray) -> Dictionary:
 		parse_calls.append(Array(a))
 		return parse_result.duplicate()
+	var cli_ref: WeakRef = weakref(cli)  # a strong capture would make cli -> make_runner -> cli a leaking cycle
 	cli.make_runner = func() -> GameSimRunner:
 		made_runner = true
 		var r := FakeRunner.new()
@@ -72,6 +107,8 @@ func _cli() -> GameSimCli:
 		r.setup_error = setup_error
 		r.end_reason = end_reason
 		r.report_path = report_path
+		r.log_error_types = log_error_types
+		r.cli = cli_ref.get_ref()
 		return r
 	return cli
 
@@ -79,6 +116,12 @@ func _cli() -> GameSimCli:
 func _run(extra: Array = [], base: Array[String] = BASE) -> Array:
 	var cli := _cli()
 	var code := cli.run(PackedStringArray(base + extra), self)
+	return [code, cli]
+
+
+func _main(extra: Array = [], base: Array[String] = BASE) -> Array:
+	var cli := _cli()
+	var code := cli.main(PackedStringArray(base + extra), self)
 	return [code, cli]
 
 
@@ -97,6 +140,51 @@ func test_a_good_run_calls_setup_run_and_write_and_exits_0() -> void:
 	assert_true(r[1].out[r[1].out.size() - 1].contains("end_reason=complete"))
 	assert_true(r[1].out[r[1].out.size() - 1].contains("report=C:/reports/r.json"))
 	assert_eq(get_children().filter(func(n: Node) -> bool: return n is GameSimRunner), [], "the runner is freed")
+	assert_eq(seen["process_mode"], Node.PROCESS_MODE_ALWAYS, "the runner is a system node (BRIEF 4.1)")
+
+
+func test_main_is_run_plus_a_script_error_check() -> void:
+	var r := _main(["--seed=3"])
+	assert_eq(r[0], GameSimCli.EXIT_OK, _errors(r[1]))
+	assert_eq(calls, ["setup", "run", "write"])
+	assert_eq(r[1].script_errors, 0)
+	assert_null(r[1].error_counter, "the logger is removed after the run")
+
+
+func test_a_run_that_logged_a_script_error_exits_5_and_keeps_its_report() -> void:
+	log_error_types = [Logger.ERROR_TYPE_SCRIPT, Logger.ERROR_TYPE_SCRIPT]
+	var r := _main()
+	assert_eq(r[0], GameSimCli.EXIT_SCRIPT_ERRORS)
+	assert_eq(calls, ["setup", "run", "write"], "the report is still written")
+	assert_eq(r[1].script_errors, 2)
+	assert_string_contains(_errors(r[1]), "2 script error(s)")
+	assert_string_contains(_errors(r[1]), "Invalid access to key 'x' (res://fake_game.gd:7, run_to_end)")
+
+
+func test_push_errors_and_warnings_are_not_script_errors() -> void:
+	log_error_types = [Logger.ERROR_TYPE_ERROR, Logger.ERROR_TYPE_WARNING]
+	var r := _main()
+	assert_eq(r[0], GameSimCli.EXIT_OK, "push_error reports bad input, it is not a broken run")
+	assert_eq(r[1].script_errors, 0)
+
+
+func test_a_failing_exit_code_wins_over_the_script_error_code() -> void:
+	log_error_types = [Logger.ERROR_TYPE_SCRIPT]
+	report_path = ""
+	assert_eq(_main()[0], GameSimCli.EXIT_REPORT)
+	setup_error = "unknown game"
+	calls.clear()
+	assert_eq(_main()[0], GameSimCli.EXIT_SETUP)
+
+
+func test_the_script_error_counter_is_a_godot_logger() -> void:
+	var c := GameSimCli.ScriptErrorCounter.new()
+	assert_is(c, Logger)
+	var bt: Array[ScriptBacktrace] = []
+	c._log_error("f", "res://a.gd", 1, "", "", false, Logger.ERROR_TYPE_SHADER, bt)
+	c._log_error("g", "res://b.gd", 2, "code_text", "", false, Logger.ERROR_TYPE_SCRIPT, bt)
+	c._log_error("h", "res://c.gd", 3, "", "later", false, Logger.ERROR_TYPE_SCRIPT, bt)
+	assert_eq(c.snapshot(), [2, "code_text (res://b.gd:2, g)"], "counts script errors and keeps the first")
 
 
 func test_every_end_reason_is_a_completed_run() -> void:
@@ -146,8 +234,11 @@ func test_it_refuses_to_run_without_mock_trainer() -> void:
 	var r := _run([], no_mock)
 	assert_eq(r[0], GameSimCli.EXIT_USAGE)
 	assert_string_contains(_errors(r[1]), "--mock-trainer")
+	assert_eq(parse_calls, [])
 	assert_eq(_run(["--mock-trainer=false"], no_mock)[0], GameSimCli.EXIT_USAGE)
+	assert_eq(_run(["--mock-trainer=off"], no_mock)[0], GameSimCli.EXIT_USAGE)
 	assert_eq(_run(["--mock-trainer=erg"], no_mock)[0], GameSimCli.EXIT_OK)
+	assert_eq(_run(["--mock-trainer"], no_mock)[0], GameSimCli.EXIT_OK, "a bare flag counts too")
 
 
 func test_every_brief_flag_is_accepted_and_passed_through_in_order() -> void:
@@ -184,6 +275,35 @@ func test_game_and_report_are_required() -> void:
 	assert_string_contains(_errors(r[1]), "--report is required")
 
 
+func test_unverified_reaches_the_parser_as_a_bare_flag() -> void:
+	_run(["--unverified=true"])
+	assert_has(parse_calls[0], "--unverified")
+	parse_calls.clear()
+	_run(["--unverified=1"])
+	assert_has(parse_calls[0], "--unverified")
+	parse_calls.clear()
+	_run(["--unverified=false"])
+	assert_false(parse_calls[0].any(func(a: String) -> bool: return a.begins_with("--unverified")), "false drops it")
+
+
+func test_slot_lists_must_fit_the_slots() -> void:
+	var cases := {
+		"--players=6 --bots=3": "a session has at most 8 slots",
+		"--players=2 --autopilot=0,2": "--autopilot=0,2: slot 2 is not a human slot (0..1)",
+		"--players=2 --haptics-off=5": "--haptics-off=5: slot 5 is not a human slot (0..1)",
+		"--players=1 --bots=1 --ftp=200,210,220": "3 values for 2 slots",
+		"--players=1 --player-options=[{},{}]": "2 objects for 1 human slots",
+	}
+	for c: String in cases:
+		var r := _run(Array(c.split(" ")))
+		assert_eq(r[0], GameSimCli.EXIT_USAGE, c)
+		assert_string_contains(_errors(r[1]), cases[c])
+		assert_eq(parse_calls, [], c)
+	for ok: String in ["--players=4 --bots=4", "--players=2 --autopilot=1 --haptics-off=0,1", "--players=1 --bots=2 --ftp=200,210,220",
+			"--players=2 --bots=2 --ftp=180,220", "--players=3 --player-options=[{},{}]", "--autopilot=none"]:
+		assert_eq(_run(Array(ok.split(" ")))[0], GameSimCli.EXIT_OK, ok)
+
+
 func test_rider_is_given_once_or_once_per_human_slot() -> void:
 	assert_eq(_run(["--players=3", "--rider=erg"])[0], GameSimCli.EXIT_OK)
 	assert_eq(_run(["--players=2", "--rider=erg", "--rider=zero"])[0], GameSimCli.EXIT_OK)
@@ -210,20 +330,50 @@ func test_good_values_pass() -> void:
 
 
 func test_report_and_override_resolve_against_the_callers_directory() -> void:
-	var dir := Paths.make_temp_dir("cli_override")
-	var f := FileAccess.open(dir.path_join("over.json"), FileAccess.WRITE)
-	f.store_string("{\"default.json\": {\"nudge_pct\": 4}}")
-	f.close()
-	var base: Array[String] = ["--mock-trainer", "--caller-cwd=" + dir.replace("/", "\\"), "--game=_template",
+	var dir := _temp_dir("cli_override")
+	_write(dir.path_join("over.json"), "{\"default.json\": {\"nudge_pct\": 4}}")
+	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir.replace("/", "\\"), "--game=_template",
 		"--report=out\\r.json", "--override=over.json"]
 	var r := _run([], base)
 	assert_eq(r[0], GameSimCli.EXIT_OK, _errors(r[1]))
 	assert_has(parse_calls[0], "--report=" + dir.path_join("out/r.json"))
 	assert_has(parse_calls[0], "--override=" + dir.path_join("over.json"))
-	GameSimCli.remove_tree(dir)
 	var missing := _run(["--override=nope.json"])
 	assert_eq(missing[0], GameSimCli.EXIT_USAGE)
 	assert_string_contains(_errors(missing[1]), "--override=C:/work/nope.json")
+	_write(dir.path_join("list.json"), "[1, 2]")
+	var no_override: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
+	assert_eq(_run(["--override=list.json"], no_override)[0], GameSimCli.EXIT_USAGE, "an override must be a JSON object")
+
+
+func test_a_run_first_removes_what_an_earlier_run_left_at_the_report_path() -> void:
+	var dir := _temp_dir("cli_stale")
+	var old := ["r.json", "fit/r_slot0.fit", "fit/r_slot1.fit"]
+	var other := ["r2.json", "fit/r2_slot0.fit", "fit/r_slotx.fit", "fit/r_slot0.fit.bak", "fit/rr_slot0.fit"]
+	for f: String in old + other:
+		_write(dir.path_join(f), "old")
+	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
+	assert_eq(_run(["--echo-args"], base)[0], GameSimCli.EXIT_OK)
+	assert_file_exists(dir.path_join("r.json"))
+	setup_error = "plan rejected: warm-up target 70% above 65%"
+	var r := _run([], base)
+	assert_eq(r[0], GameSimCli.EXIT_SETUP)
+	for f: String in old:
+		assert_file_does_not_exist(dir.path_join(f))
+	for f: String in other:
+		assert_file_exists(dir.path_join(f))
+	assert_string_contains("\n".join(r[1].out), "removed 3 file(s)")
+	assert_eq(GameSimCli.clear_report(dir.path_join("r.json")), [], "nothing left to remove")
+	assert_eq(GameSimCli.clear_report(""), [])
+
+
+func test_a_parser_error_also_leaves_no_stale_report() -> void:
+	var dir := _temp_dir("cli_stale_parse")
+	_write(dir.path_join("r.json"), "old")
+	parse_result = {"error": "--content=nope is not one of default, short"}
+	var base: Array[String] = ["--mock-trainer=erg", "--caller-cwd=" + dir, "--game=_template", "--report=r.json"]
+	assert_eq(_run([], base)[0], GameSimCli.EXIT_USAGE)
+	assert_file_does_not_exist(dir.path_join("r.json"))
 
 
 func test_resolve_path() -> void:
@@ -243,6 +393,7 @@ func test_echo_args_prints_the_resolved_flags_and_runs_nothing() -> void:
 	assert_true(line.begins_with("run_game_sim: args "))
 	assert_eq(JSON.parse_string(line.trim_prefix("run_game_sim: args ")), ["--game=_template", "--report=C:/work/build/r.json", "--seed=4"])
 	assert_string_contains(r[1].out[1], "WATTLANDS_NO_HW_CONTROL=1")
+	assert_string_contains(r[1].out[1], "mock-trainer=erg")
 
 
 func test_help_prints_usage() -> void:
@@ -252,7 +403,7 @@ func test_help_prints_usage() -> void:
 
 
 func test_the_run_uses_a_temp_user_dir_and_removes_it() -> void:
-	var outer := Paths.make_temp_dir("cli_outer")
+	var outer := _temp_dir("cli_outer")
 	Paths.set_override(outer)
 	var cli := _cli()
 	cli.isolate_user_dir = true
@@ -260,12 +411,10 @@ func test_the_run_uses_a_temp_user_dir_and_removes_it() -> void:
 	assert_ne(seen.get("user_dir", outer), outer, "the run saw its own temp user dir")
 	assert_false(DirAccess.dir_exists_absolute(str(seen.get("user_dir", ""))), "and removed it afterwards")
 	assert_eq(Paths.user_dir(), outer, "the previous override is restored")
-	Paths.set_override("")
-	GameSimCli.remove_tree(outer)
 
 
 func test_the_main_script_is_a_scene_tree_entry() -> void:
 	var s: GDScript = load("res://tools/sdk/run_game_sim_main.gd")
 	assert_not_null(s)
 	assert_eq(s.get_instance_base_type(), &"SceneTree")
-	assert_string_contains(s.source_code, "GameSimCli.new().run(OS.get_cmdline_user_args()")
+	assert_string_contains(s.source_code, "GameSimCli.new().main(OS.get_cmdline_user_args(), root)")

@@ -1,20 +1,23 @@
 class_name GameSimCli
 extends RefCounted
-## The logic behind tools/run_game_sim (BRIEF 3.6): tools/sdk/run_game_sim_main.gd calls run().
+## The logic behind tools/run_game_sim (BRIEF 3.6): tools/sdk/run_game_sim_main.gd calls main().
 ## It refuses to run without the hardware and network locks or without --mock-trainer (the
 ## wrappers add both), checks the flag names and syntax, resolves --report and --override against
-## the caller's directory (--caller-cwd; Godot itself runs in the project folder), parses the
-## flags with GameSimRunner.parse_args, runs the session headless with MockTrainer riders and
-## writes the report and FIT files with GameSimRunner.write_report().
+## the caller's directory (--caller-cwd; Godot itself runs in the project folder), removes what an
+## earlier run left at that report path, parses the flags with GameSimRunner.parse_args, runs the
+## session headless with MockTrainer riders and writes the report and FIT files with
+## GameSimRunner.write_report().
 ##
 ## Exit codes: 0 the run completed (any end_reason), 2 bad flags or missing locks, 3 setup failed
-## (unknown game or content, a rejected plan, ...), 4 the report could not be written.
+## (unknown game or content, a rejected plan, ...), 4 the report could not be written, 5 Godot
+## logged a SCRIPT ERROR during the run (the report is written if the run got that far).
 ## Tests replace parse_fn, make_runner and env_fn with fakes.
 
 const EXIT_OK := 0
 const EXIT_USAGE := 2
 const EXIT_SETUP := 3
 const EXIT_REPORT := 4
+const EXIT_SCRIPT_ERRORS := 5
 
 ## run_game_sim flags that take a value (BRIEF 3.6). Only `rider` may repeat.
 const VALUE_FLAGS: Array[String] = [
@@ -47,6 +50,55 @@ var err: PackedStringArray = PackedStringArray()
 ## The args handed to parse_fn (after path resolution) and what it returned.
 var passthrough: PackedStringArray = PackedStringArray()
 var parsed: Dictionary = {}
+## Counts Godot's script errors while main() runs (null outside main()).
+var error_counter: ScriptErrorCounter = null
+## Script errors logged during the last main() call, and the first one's description.
+var script_errors: int = 0
+var first_script_error: String = ""
+
+
+## Counts SCRIPT ERRORs (GDScript runtime errors in this tool, the platform or the game) through
+## Godot's Logger API. push_error and push_warning are not counted: they report bad input.
+class ScriptErrorCounter:
+	extends Logger
+	var count: int = 0
+	var first: String = ""
+	var _mutex: Mutex = Mutex.new()
+
+	## Godot calls this from any thread.
+	func _log_error(function: String, file: String, line: int, code: String, rationale: String,
+			_editor_notify: bool, error_type: int, _script_backtraces: Array[ScriptBacktrace]) -> void:
+		if error_type != ERROR_TYPE_SCRIPT:
+			return
+		_mutex.lock()
+		count += 1
+		if first == "":
+			first = "%s (%s:%d, %s)" % [rationale if rationale != "" else code, file, line, function]
+		_mutex.unlock()
+
+	func snapshot() -> Array:
+		_mutex.lock()
+		var out := [count, first]
+		_mutex.unlock()
+		return out
+
+
+## The whole tool: run() with Godot's script errors counted. GDScript ends a function that hits a
+## script error and returns its type's default (0 for run(), which would read as success), so a run
+## that logged any SCRIPT ERROR exits EXIT_SCRIPT_ERRORS instead of 0 (BRIEF 7: no script errors).
+func main(raw: PackedStringArray, parent: Node) -> int:
+	error_counter = ScriptErrorCounter.new()
+	OS.add_logger(error_counter)
+	var code := run(raw, parent)
+	OS.remove_logger(error_counter)
+	var seen: Array = error_counter.snapshot()
+	error_counter = null
+	script_errors = int(seen[0])
+	first_script_error = str(seen[1])
+	if script_errors > 0 and code == EXIT_OK:
+		_fail("run_game_sim: %d script error(s) during the run, the first: %s. Fix them (BRIEF 7); the report, if written, is kept" % [script_errors, first_script_error])
+		return EXIT_SCRIPT_ERRORS
+	return code
 
 
 ## Runs one simulation; `parent` holds the runner node while it runs. Returns the exit code.
@@ -79,6 +131,10 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 		var v: Variant = f[1]
 		if f[0] in ["report", "override"]:
 			v = resolve_path(str(v), cwd)
+		if BOOL_FLAGS.has(f[0]):  # parse_args sees a bare flag or nothing: --unverified=false drops it
+			if v != null and str(v).to_lower() in ["false", "0"]:
+				continue
+			v = null
 		passthrough.append("--%s" % f[0] if v == null else "--%s=%s" % [f[0], v])
 	if _has(flags, "override"):
 		var op := resolve_path(str(_value(flags, "override")), cwd)
@@ -87,8 +143,13 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 			return _usage("--override=%s is not a readable JSON object file (keys: files under content/<game>/, values: merge patches)" % op)
 	if _has(flags, "echo-args"):
 		_say("run_game_sim: args %s" % JSON.stringify(Array(passthrough)))
-		_say("run_game_sim: locks %s=%s %s=%s" % [LOCK_VARS[0], env_fn.call(LOCK_VARS[0]), LOCK_VARS[1], env_fn.call(LOCK_VARS[1])])
+		_say("run_game_sim: locks %s=%s %s=%s mock-trainer=%s" % [LOCK_VARS[0], env_fn.call(LOCK_VARS[0]),
+			LOCK_VARS[1], env_fn.call(LOCK_VARS[1]), "true" if mock == null else str(mock)])
 		return EXIT_OK
+	var report := resolve_path(str(_value(flags, "report")), cwd)
+	var removed := clear_report(report)
+	if not removed.is_empty():
+		_say("run_game_sim: removed %d file(s) an earlier run left at %s (a failed run leaves no stale report)" % [removed.size(), report])
 	parsed = parse_fn.call(passthrough)
 	if parsed.has("error"):
 		return _usage("bad flags: %s" % parsed["error"])
@@ -103,6 +164,7 @@ func _run_session(parent: Node) -> int:
 		temp_dir = Paths.make_temp_dir("run_game_sim")
 		Paths.set_override(temp_dir)
 	var runner: GameSimRunner = make_runner.call()
+	runner.process_mode = Node.PROCESS_MODE_ALWAYS  # a system node (BRIEF 4.1)
 	parent.add_child(runner)
 	var code := EXIT_OK
 	_say("run_game_sim: %s/%s, seed %s" % [parsed.get("game", "?"), parsed.get("content", "default"), parsed.get("seed", "?")])
@@ -151,11 +213,61 @@ func _check(flags: Array) -> Array[String]:
 	for key in ["game", "report"]:
 		if not seen.has(key):
 			problems.append("--%s is required" % key)
+	problems.append_array(_check_slots(flags))
+	return problems
+
+
+## Slot counts across flags: --players plus --bots, and the --rider, --ftp, --autopilot,
+## --haptics-off and --player-options lists against them (only for values that passed their own check).
+func _check_slots(flags: Array) -> Array[String]:
+	var problems: Array[String] = []
+	var players := _int_flag(flags, "players", 1)
+	var bots := _int_flag(flags, "bots", 0)
+	if players + bots > Wl.MAX_SLOTS:
+		problems.append("--players plus --bots is %d: a session has at most %d slots" % [players + bots, Wl.MAX_SLOTS])
 	var riders := _count(flags, "rider")
-	var players := int(_value(flags, "players")) if str(_value(flags, "players")).is_valid_int() else 1
 	if riders > 1 and riders != players:
 		problems.append("--rider given %d times for %d human slots: give it once, or once per slot" % [riders, players])
+	for key: String in ["autopilot", "haptics-off"]:
+		var v: Variant = _value(flags, key)
+		if v == null or str(v) in ["all", "none"] or _check_value(key, str(v)) != "":
+			continue
+		for s in str(v).split(","):
+			if int(s.strip_edges()) >= players:
+				problems.append("--%s=%s: slot %d is not a human slot (0..%d)" % [key, v, int(s.strip_edges()), players - 1])
+	var ftp: Variant = _value(flags, "ftp")
+	if ftp != null and _check_value("ftp", str(ftp)) == "" and str(ftp).split(",").size() > players + bots:
+		problems.append("--ftp=%s: %d values for %d slots (give one, or one per slot)" % [ftp, str(ftp).split(",").size(), players + bots])
+	var po: Variant = _value(flags, "player-options")
+	if po != null and _check_value("player-options", str(po)) == "" and (parse_json(str(po)) as Array).size() > players:
+		problems.append("--player-options: %d objects for %d human slots" % [(parse_json(str(po)) as Array).size(), players])
 	return problems
+
+
+## The int value of `key`, or `default` when it is missing or not an int.
+func _int_flag(flags: Array, key: String, default: int) -> int:
+	var v := str(_value(flags, key))
+	return int(v) if v.is_valid_int() else default
+
+
+## Deletes what an earlier run left at `report`: the report file and its FIT files
+## (<report dir>/fit/<report stem>_slot<n>.fit), so a run that fails can't leave stale results for
+## a checker to read. Returns the removed paths.
+static func clear_report(report: String) -> Array[String]:
+	var removed: Array[String] = []
+	if report == "":
+		return removed
+	if FileAccess.file_exists(report) and DirAccess.remove_absolute(report) == OK:
+		removed.append(report)
+	var fit_dir := report.get_base_dir().path_join("fit")
+	var prefix := report.get_file().get_basename() + "_slot"
+	if not DirAccess.dir_exists_absolute(fit_dir):
+		return removed
+	for f in DirAccess.get_files_at(fit_dir):
+		var n := f.trim_prefix(prefix).trim_suffix(".fit")
+		if f.begins_with(prefix) and f.ends_with(".fit") and n.is_valid_int() and DirAccess.remove_absolute(fit_dir.path_join(f)) == OK:
+			removed.append(fit_dir.path_join(f))
+	return removed
 
 
 func _check_value(key: String, v: String) -> String:

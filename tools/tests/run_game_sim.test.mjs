@@ -59,16 +59,16 @@ describe('structure', () => {
       assert.ok(text.includes(godot), godot);
       assert.ok(text.includes('tools/sdk/run_game_sim_main.gd'));
       assert.ok(text.includes("'--headless'") || text.includes('--headless '), '--headless');
-      assert.ok(text.includes('--mock-trainer'));
+      assert.ok(text.includes('--mock-trainer=erg'), 'a valid profile, so nothing in the process reads a bare flag as a spec');
       assert.ok(text.includes('--caller-cwd='));
       assert.doesNotMatch(text, /FAL_KEY|WATTLANDS_ALLOW_ART/, 'the art variables are never touched');
     });
   }
 
-  test('the entry script exists and hands over to GameSimCli', () => {
+  test('the entry script exists and hands over to GameSimCli.main (script errors counted)', () => {
     const main = read('tools/sdk/run_game_sim_main.gd');
     assert.match(main, /^extends SceneTree$/m);
-    assert.match(main, /GameSimCli\.new\(\)\.run\(OS\.get_cmdline_user_args\(\), root\)/);
+    assert.match(main, /GameSimCli\.new\(\)\.main\(OS\.get_cmdline_user_args\(\), root\)/);
   });
 });
 
@@ -98,7 +98,8 @@ describe('through Godot', () => {
         sh.name,
         ['--echo-args', '--game=_template', '--content=short', '--players=2', '--bots=1', '--rider=erg+cadence_drop:rpm=40,at_s=1200',
           '--rider=erg:compliance=0.9', '--report=out/r.json', '--override=over.json', `--options=${options}`,
-          `--player-options=${players}`, '--seed=3', '--sim-speed=200', '--unverified', '--godot-timeout=300'],
+          `--player-options=${players}`, '--seed=3', '--sim-speed=200', '--unverified', '--mock-trainer=false',
+          '--caller-cwd=/elsewhere', '--godot-timeout=300'],
         { env: minimalEnv(), cwd, timeoutMs: 600_000 },
       );
       assert.equal(r.code, 0, r.stderr + r.stdout);
@@ -110,7 +111,8 @@ describe('through Godot', () => {
         `--override=${slash(path.join(cwd, 'over.json'))}`, `--options=${options}`, `--player-options=${players}`,
         '--seed=3', '--sim-speed=200', '--unverified',
       ]);
-      assert.match(r.stdout, /run_game_sim: locks WATTLANDS_NO_HW_CONTROL=1 WATTLANDS_NO_NETWORK_INTEGRATIONS=1/);
+      assert.match(r.stdout, /run_game_sim: locks WATTLANDS_NO_HW_CONTROL=1 WATTLANDS_NO_NETWORK_INTEGRATIONS=1 mock-trainer=erg/,
+        "the wrapper's own --mock-trainer=erg and --caller-cwd replace the caller's");
     });
 
     test(`${sh.name}: a missing --report exits 2 and names it`, { skip, timeout: 600_000 }, async () => {

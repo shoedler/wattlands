@@ -10,7 +10,7 @@
 #
 # Wrapper flags (consumed here): --godot-timeout=<s> (default 1800) and --godot-lock-timeout=<s>.
 # Every rider is a MockTrainer: it sets WATTLANDS_NO_HW_CONTROL=1 and WATTLANDS_NO_NETWORK_INTEGRATIONS=1
-# for Godot, refuses --allow-hw and --allow-network, adds --mock-trainer and --caller-cwd, and runs
+# for Godot, refuses --allow-hw and --allow-network, adds --mock-trainer=erg and --caller-cwd, and runs
 #   tools\godot.ps1 --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>
 # in its own powershell -File process, so every argument (JSON included) reaches Godot unchanged.
 # Exit codes as tools/run_game_sim: 0 completed, 2 flags or locks, 3 setup, 4 report, 75, 124.
@@ -42,7 +42,7 @@ foreach ($x in @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path
     $call.Add($x)
 }
 if ($null -ne $lockTimeout) { $call.Add("--lock-timeout=$lockTimeout") }
-foreach ($x in @('--headless', '--path', $repo, '-s', 'tools/sdk/run_game_sim_main.gd', '--', '--mock-trainer', "--caller-cwd=$cwd")) {
+foreach ($x in @('--headless', '--path', $repo, '-s', 'tools/sdk/run_game_sim_main.gd', '--', '--mock-trainer=erg', "--caller-cwd=$cwd")) {
     $call.Add($x)
 }
 $call.AddRange([string[]]$flags.ToArray())
