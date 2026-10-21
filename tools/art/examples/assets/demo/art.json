@@ -1,0 +1,15 @@
+{
+  "_comment": "Fixture for node tools/art/pixelate_e2e.mjs: generated against tools/art/mock_fal, then pixelated by tools/art/pixelate.gd.",
+  "palette": ["#0b0b0e", "#3e3e46", "#a9a6aa", "#d6d2cf", "#a33412", "#f08a2c", "#ffc24d", "#2a5aa8", "#6fb4ff", "#2d3128", "#6b6e5a", "#fff0a8"],
+  "style": "Side-view 2D game sprite in chunky pixel art, flat shading, hard edges, no text, letters, numbers or logos.",
+  "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+  "sprites": [
+    { "id": "boat", "prompt": "a small white sport-fishing boat, bow right", "size": [80, 32], "parts": { "hull": [0, 16, 80, 16], "cabin": [20, 0, 40, 16] } },
+    { "id": "fish_marlin", "prompt": "a blue marlin facing left", "size": [64, 22], "anchor": "center", "parts": { "body": [0, 0, 48, 22], "tail": [48, 0, 16, 22] } },
+    { "id": "gear_large", "prompt": "a large iron gear, face-on", "size": [24, 24], "align": "center" },
+    { "id": "turret_tall", "prompt": "a tall periscope turret", "size": [16, 40], "align": "bottom_left", "anchor": [8, 40] },
+    { "id": "bg_sky", "prompt": "a hazy evening sky over a ruined city", "size": [320, 120], "background": "opaque" },
+    { "id": "reef_front", "prompt": "colorful corals and rocks, flat at the right end", "size": [416, 18], "tile": true, "mirror": true },
+    { "id": "bg_ground", "prompt": "muddy ground strip", "size": [960, 80], "background": "opaque", "tile": true, "dither": "ordered" }
+  ]
+}
