@@ -5,11 +5,24 @@ extends Node
 ## Strava credentials and tokens are NOT here (rides keeps them in strava.json).
 ##
 ## App setting keys and defaults:
-##   relay_url "ws://localhost:8787/v1", strava_api_base "https://www.strava.com/api/v3",
+##   relay_url default_relay_url(), strava_api_base "https://www.strava.com/api/v3",
 ##   strava_oauth_base "https://www.strava.com/oauth", scaling_mode "FAIR_FTP",
 ##   last_game "", last_content "", last_device {}, recent_rooms [], locale "en",
 ##   master_volume_db 0.0, fullscreen false.
 ## --relay=<url> and --strava-base=<url> override the stored values for this run.
+##
+## The default relay URL (W4fin, additive) is the project setting
+## wattlands/net/default_relay_url when it holds a ws:// or wss:// URL with a host, else
+## DEFAULTS.relay_url (ws://localhost:8787/v1). project.godot leaves it unset; a build sets it
+## with an override.cfg next to the exe (tools/export_windows.mjs --relay-url=<url>), so a
+## friend's copy reaches that relay and the friend types only the room code. Precedence:
+## --relay=<url>, then a relay_url the rider chose, then the default. settings.json keeps
+## relay_url (with relay_url_custom true) only while the rider's choice differs from the
+## default; set_value("relay_url", "") or the default's own value follows the default again,
+## and so does a saved "ws://localhost:8787/v1" without relay_url_custom (earlier builds wrote
+## the default on every save). relay_url_custom itself can't be set; a loaded one that isn't a
+## bool is dropped with push_warning. load_all prints "Settings: build default relay URL <url>"
+## once per process when the default isn't built in.
 ##
 ## Loading: a missing file leaves the defaults (a normal first run). A corrupt file (bad
 ## JSON, not an object) gives the defaults with push_warning; a value of the wrong type or
@@ -41,6 +54,10 @@ const DEFAULTS: Dictionary = {
 	"master_volume_db": 0.0,
 	"fullscreen": false,
 }
+## The project setting that holds this build's default relay URL (see above).
+const DEFAULT_RELAY_SETTING := "wattlands/net/default_relay_url"
+## settings.json marks a relay_url the rider chose with this key (true).
+const RELAY_CUSTOM_KEY := "relay_url_custom"
 const STRAVA_API_SUFFIX := "/api/v3"
 const STRAVA_OAUTH_SUFFIX := "/oauth"
 ## Ranges a loaded profile.json is clamped into: key -> [min, max].
@@ -61,18 +78,22 @@ const PROFILE_CHOICES: Dictionary = {
 	"drivetrain": ["cassette", "single_speed"],
 }
 
+# The build default relay URL load_all printed last (it prints each one once per process).
+static var _printed_relay_default: String = ""
+
 var profile: RiderProfile = RiderProfile.new()
 ## Save settings.json after every set_value (on by default; tests may turn it off).
 var autosave: bool = true
 ## The EventBus to notify; null means the `EventBus` autoload (if any).
 var bus: WlEventBus = null
 
+# The stored values; relay_url only while it is the rider's choice (else default_relay_url()).
 var _values: Dictionary = {}
 
 
 func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_values = DEFAULTS.duplicate(true)
+	_values = _defaults()
 
 
 func _ready() -> void:
@@ -84,6 +105,10 @@ func _ready() -> void:
 func load_all() -> void:
 	profile = _load_profile()
 	_values = _load_settings()
+	var relay_default := default_relay_url()
+	if relay_default != str(DEFAULTS["relay_url"]) and relay_default != _printed_relay_default:
+		print("Settings: build default relay URL %s" % relay_default)
+	_printed_relay_default = relay_default
 	changed.emit("")
 	var b := _bus()
 	if b != null:
@@ -106,7 +131,10 @@ func save_profile() -> bool:
 
 
 func save_settings() -> bool:
-	return _write_json(Paths.settings_path(), _values)
+	var data := _values.duplicate(true)
+	if data.has("relay_url"):
+		data[RELAY_CUSTOM_KEY] = true
+	return _write_json(Paths.settings_path(), data)
 
 
 ## True once a profile was created (first run creates "Rider", FTP 200, unverified).
@@ -125,13 +153,15 @@ func create_profile(display_name: String = "Rider") -> bool:
 
 
 ## The value for `key`: a command-line override if one applies, else the stored value
-## (a copy), else `default`.
+## (a copy), else `default` (for relay_url: default_relay_url()).
 func get_value(key: String, default: Variant = null) -> Variant:
 	var o := _override(key)
 	if o != "":
 		return o
 	if _values.has(key):
 		return _copy(_values[key])
+	if key == "relay_url":
+		return default_relay_url()
 	return default
 
 
@@ -139,13 +169,24 @@ func set_value(key: String, value: Variant) -> void:
 	if key == "":
 		push_error("Settings: empty key")
 		return
+	if key == RELAY_CUSTOM_KEY:
+		push_error("Settings: %s is kept by Settings itself; set relay_url instead" % key)
+		return
 	var checked := _check_value(key, value)
 	if not checked["ok"]:
 		return
 	var clean: Variant = checked["value"]
-	if _values.has(key) and typeof(_values[key]) == typeof(clean) and _values[key] == clean:
+	if key == "relay_url":
+		clean = str(clean).strip_edges()
+	if key == "relay_url" and (clean == "" or clean == default_relay_url()):
+		# Blank or the default's own value: follow the default again.
+		if not _values.has(key):
+			return
+		_values.erase(key)
+	elif _values.has(key) and typeof(_values[key]) == typeof(clean) and _values[key] == clean:
 		return
-	_values[key] = clean
+	else:
+		_values[key] = clean
 	if autosave:
 		save_settings()
 	changed.emit(key)
@@ -160,7 +201,14 @@ func is_overridden(key: String) -> bool:
 
 
 func relay_url() -> String:
-	return str(get_value("relay_url", DEFAULTS["relay_url"]))
+	return str(get_value("relay_url"))
+
+
+## This build's default relay URL (W4fin, additive): the project setting DEFAULT_RELAY_SETTING
+## when it is a ws:// or wss:// URL with a host, else DEFAULTS.relay_url. It ignores --relay and
+## the rider's choice; relay_url() applies those.
+static func default_relay_url() -> String:
+	return _project_relay_url(false)
 
 
 func strava_api_base() -> String:
@@ -239,7 +287,8 @@ func _load_profile() -> RiderProfile:
 
 
 func _load_settings() -> Dictionary:
-	var out: Dictionary = DEFAULTS.duplicate(true)
+	var out := _defaults()
+	var relay_default := _project_relay_url(true)
 	var r := _read_json(Paths.settings_path())
 	if r["missing"]:
 		return out
@@ -252,11 +301,25 @@ func _load_settings() -> Dictionary:
 	for key: Variant in d.keys():
 		var k := str(key)
 		var v: Variant = d[key]
+		if k == RELAY_CUSTOM_KEY:
+			# Read with relay_url below; one that is not a bool counts as missing.
+			if typeof(v) != TYPE_BOOL:
+				push_warning("Settings: ignoring %s of the wrong type in settings.json" % k)
+			continue
 		if DEFAULTS.has(k):
 			if not _same_kind(v, DEFAULTS[k]):
 				push_warning("Settings: ignoring %s of the wrong type in settings.json" % k)
 				continue
-			if k == "recent_rooms":
+			if k == "relay_url":
+				var u := str(v).strip_edges()
+				# typeof first: == between a String or number and a bool is a runtime error.
+				var marker: Variant = d.get(RELAY_CUSTOM_KEY)
+				var marked: bool = typeof(marker) == TYPE_BOOL and bool(marker)
+				var legacy: bool = u == str(DEFAULTS["relay_url"]) and not marked
+				if u == "" or u == relay_default or legacy:
+					continue
+				v = u
+			elif k == "recent_rooms":
 				v = _clean_rooms(v as Array)
 			elif k == "scaling_mode" and not Wl.SCALING_MODES.has(str(v)):
 				push_warning('Settings: unknown scaling_mode "%s" in settings.json' % str(v))
@@ -359,6 +422,55 @@ static func _clean_rooms(rooms: Array) -> Array:
 		seen[c] = true
 		out.append({"code": c, "at": int(at) if (at is float or at is int) else 0, "role": r})
 	return out
+
+
+## DEFAULTS without relay_url (stored only while it is the rider's choice).
+static func _defaults() -> Dictionary:
+	var out: Dictionary = DEFAULTS.duplicate(true)
+	out.erase("relay_url")
+	return out
+
+
+## The project setting DEFAULT_RELAY_SETTING when it is a usable relay URL, else
+## DEFAULTS.relay_url; with `warn`, a set but unusable value gets push_warning.
+static func _project_relay_url(warn: bool) -> String:
+	var built_in := str(DEFAULTS["relay_url"])
+	var v: Variant = ProjectSettings.get_setting(DEFAULT_RELAY_SETTING, built_in)
+	var is_text := v is String or v is StringName
+	var u := str(v).strip_edges() if is_text else ""
+	if is_text and u == "":
+		return built_in
+	if not _is_relay_url(u):
+		if warn:
+			push_warning(
+				(
+					'Settings: ignoring %s "%s" (not a ws:// or wss:// URL with a host); using %s'
+					% [DEFAULT_RELAY_SETTING, str(v), built_in]
+				)
+			)
+		return built_in
+	return u
+
+
+## True for a ws:// or wss:// URL with a host and no spaces, control characters, quotes or
+## backslashes.
+static func _is_relay_url(u: String) -> bool:
+	var rest := ""
+	if u.begins_with("ws://"):
+		rest = u.substr(5)
+	elif u.begins_with("wss://"):
+		rest = u.substr(6)
+	else:
+		return false
+	for i in u.length():
+		var c := u.unicode_at(i)
+		if c <= 32 or c == 127 or c == 34 or c == 92:
+			return false
+	var authority := rest.get_slice("/", 0).get_slice("?", 0).get_slice("#", 0)
+	var host := authority.get_slice("@", authority.get_slice_count("@") - 1)
+	if host.begins_with("["):
+		return host.find("]") > 1
+	return host.get_slice(":", 0) != ""
 
 
 # --- saving and checks -------------------------------------------------------------------
