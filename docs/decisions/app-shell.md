@@ -15,7 +15,7 @@
 
 ## 2026-10-21: Zero-touch rules on the title screen
 
-- Decision: "pedaling" is the pedal_start condition (cadence >= 40 rpm or power >= 30% FTP) held continuously, timed by sample time: 5 s with a saved profile, 20 s on the first run. While the countdown is armed the title's menu holds its first item, which is the same quick ride (last-played game, else `GameRegistry.first_run_game()`, with its `zero_input_content`), so a surge also starts it. A keyboard or controller action, or a coast after pedaling, disarms it for this visit; the main menu then runs on pedal-scan, so a pedal-only rider can still host, join or open settings.
+- Decision: "pedaling" is the pedal_start condition (cadence >= 40 rpm or power >= 30% FTP) held continuously, timed by sample time: 5 s with a saved profile, 20 s on the first run. While the countdown is armed the title's menu holds its first item, which is the same quick ride (last-played game, else `GameRegistry.first_run_game()`, with its `zero_input_content`), so a surge also starts it. A keyboard or controller action disarms it for this visit. With a saved profile, a coast after pedaling does too, and the main menu then runs on pedal-scan, so a pedal-only rider can still host, join or open settings. On the first run a coast never disarms it (see "Coasting never takes a pedal-only rider out of a flow").
 - Alternatives: a separate splash screen; counting pedal_start gestures; scanning the menu during the countdown.
 - Reason: scanning during the countdown would let the start-of-pedaling surge pick a random item; holding the quick ride makes the two zero-input paths agree, and coast gives pedal-only riders the full menu.
 
@@ -66,3 +66,27 @@
 - Decision: `Settings` key `recent_rooms` holds up to 8 rooms {code, role, game_id, game_title}, newest first; the join page lists them; a host reclaims its last code through `NetSession.host_room(max, code)` when NetSession takes that second argument.
 - Alternatives: a separate file under `Paths.user_dir()`.
 - Reason: settings.json already persists through Paths; the call degrades to a new code until net-client adds the argument.
+
+## 2026-10-21: A client sends player_info only when it changed
+
+- Decision: the lobby keeps the last player_info it sent. On every lobby_state a client rebuilds its player_info (the host's scaling decides `p_eff_per_w`) and sends it only if it differs. Player-option defaults are filled in once per game, so an echo never resets an edited value.
+- Alternatives: send on every lobby_state; send only on the first one.
+- Reason: a host answers each player_info with a lobby_state broadcast. Sending on every lobby_state looped host and client for a game without player_options (Tank) and would hit the relay's rate limit. Sending only once left a stale `p_eff_per_w` after the host changed scaling.
+
+## 2026-10-21: Coasting never takes a pedal-only rider out of a flow
+
+- Decision:
+  - First run: a coast never disarms the 20 s countdown; stopping only restarts the stretch. A device action still disarms it.
+  - On-screen keyboard (code entry, text fields): the first back or coast only highlights Back; a second back, or picking Back, cancels.
+  - Session paused by the platform (coasting, stop_5s): the overlay holds Resume and does not scan.
+- Alternatives: treat coast as back everywhere (BRIEF 3.5 default).
+- Reason:
+  - First run: no profile means no scanning menu, so a disarmed countdown left a rider without input stuck on the title.
+  - Keyboard: a rider who pauses while scanning six characters would lose the code.
+  - Pause: from rest a surge (1.5 s) fires before pedal_start (3 s), so a scanning overlay could pick End ride or Panic when the rider starts pedaling again.
+
+## 2026-10-21: Autopilot in the lobby, metronome in sessions
+
+- Decision: the lobby has a per-session "My Autopilot" item for the local rider. It starts at the profile's default, goes out in player_info and shows on the rider's card; the profile default is not changed. The session screen starts the Sfx cadence metronome at the preferred cadence when the profile's metronome is on, and stops it when the screen goes. The main scene applies the saved master volume at boot.
+- Alternatives: Autopilot only in the profile; leave the metronome to the HUD.
+- Reason: BRIEF 3.5 says Autopilot is toggled "in the profile or lobby". Nothing else turned on the metronome or the saved volume, so those settings would have done nothing. Both calls are idempotent if ui-hud also makes them.

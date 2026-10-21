@@ -427,6 +427,31 @@ func test_upload_timeout() -> void:
 	assert_eq(p.exit_reason, "error:upload_timeout")
 
 
+func test_auto_upload_without_strava_fails_at_once() -> void:
+	# --strava-auto-upload with no saved connection and no credentials to connect with.
+	var p := _client(["--strava-auto-upload"])
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.receive(1, _start_msg())
+	fx.last_host().fits = {2: "C:/rides/c.fit"}
+	fx.last_host().finish_with(GameResults.new())
+	assert_eq(p.exit_reason, "error:strava_not_connected", "no 150 s wait for an upload that can't happen")
+	assert_eq(fx.fake_rides().uploads.size(), 0)
+
+
+func test_auto_upload_waits_for_a_running_connect() -> void:
+	var p := _client(["--strava-client-id=1", "--strava-client-secret=x", "--strava-auto-upload"])
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.receive(1, _start_msg())
+	fx.last_host().fits = {2: "C:/rides/c.fit"}
+	fx.last_host().finish_with(GameResults.new())
+	assert_eq(p.phase, "uploading", "the connect is still running")
+	fx.fake_rides().connected = true
+	fx.bus.strava_state_changed.emit("connected", "")
+	assert_eq(fx.fake_rides().uploads.size(), 1, "uploads once connected")
+
+
 func test_strava_connect_error_fails() -> void:
 	var p := _client(["--strava-client-id=1", "--strava-client-secret=x"])
 	fx.bus.strava_state_changed.emit("error", "denied")

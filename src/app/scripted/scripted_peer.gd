@@ -518,7 +518,9 @@ func _check_upload() -> void:
 		finish("error:no_rides", EXIT_ERROR)
 		return
 	if not services.rides.strava_connected():
-		if strava_state == "error":
+		# Wait only while a connect started by --strava-client-id/secret is still running;
+		# --strava-auto-upload without a connection (none saved, none asked for) fails at once.
+		if strava_state == "error" or strava_state != "connecting":
 			finish("error:strava_not_connected", EXIT_ERROR)
 		return
 	upload_requested = true
