@@ -137,7 +137,8 @@ func start() -> void:
 			return
 		var m := services.registry.manifest(game_id)
 		content_id = AppLobbyModel.scripted_content(m, config.content_id, config.e2e)
-		if not (m.get("contents", []) as Array).has(content_id):
+		# One of the game's contents, or <scheme>:<value> for a scheme it lists (zwo:<path>).
+		if not WlGameRegistry.content_allowed(m, content_id):
 			finish("error:unknown_content:" + content_id, EXIT_ERROR)
 			return
 		_send_player_info(game_id)

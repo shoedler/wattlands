@@ -119,8 +119,60 @@ static func game_problem(registry: WlGameRegistry, lobby: Dictionary) -> String:
 	return ""
 
 
-## The content's label: <ID>_CONTENT_<CONTENT ID> if that key exists, else the bare id.
+## The folder (under Paths.user_dir()) for a rider's own .zwo workouts (BRIEF 3.7 Workout
+## Director): every *.zwo in it is offered as content "zwo:<absolute path>" by a game whose
+## game.json lists the "zwo" content scheme.
+const WORKOUTS_DIR := "workouts"
+const ZWO_SCHEME := "zwo"
+
+
+## The rider's .zwo folder (absolute); created when missing.
+static func workouts_dir() -> String:
+	var d := Paths.user_dir().path_join(WORKOUTS_DIR)
+	if not DirAccess.dir_exists_absolute(d):
+		DirAccess.make_dir_recursive_absolute(d)
+	return d
+
+
+## True when the game accepts "zwo:<path>" content (content_schemes in its game.json).
+static func accepts_zwo(manifest: Dictionary) -> bool:
+	var schemes: Variant = manifest.get("content_schemes", [])
+	return schemes is Array and (schemes as Array).has(ZWO_SCHEME)
+
+
+## "zwo:<absolute path>" for every *.zwo file in workouts_dir(), sorted by file name; [] for a
+## game without the zwo scheme.
+static func user_zwo_contents(manifest: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	if not accepts_zwo(manifest):
+		return out
+	var dir := workouts_dir()
+	var files := Array(DirAccess.get_files_at(dir))
+	files.sort_custom(func(a: Variant, b: Variant) -> bool: return str(a).naturalnocasecmp_to(str(b)) < 0)
+	for f: Variant in files:
+		if str(f).get_extension().to_lower() == ZWO_SCHEME:
+			out.append(ZWO_SCHEME + ":" + dir.path_join(str(f)))
+	return out
+
+
+## True when `content_id` may be picked for the game in this app: one of its contents, or a
+## "zwo:<path>" whose file exists here, for a game with the zwo scheme.
+static func content_available(manifest: Dictionary, content_id: String) -> bool:
+	if content_id == "":
+		return false
+	if (manifest.get("contents", []) as Array).has(content_id):
+		return true
+	if content_id.begins_with(ZWO_SCHEME + ":") and accepts_zwo(manifest):
+		return FileAccess.file_exists(content_id.substr(ZWO_SCHEME.length() + 1))
+	return false
+
+
+## The content's label: <ID>_CONTENT_<CONTENT ID> if that key exists, else the bare id. A
+## rider's own .zwo shows its file name (APP_CONTENT_ZWO).
 static func content_label(game_id: String, content_id: String) -> String:
+	if content_id.begins_with(ZWO_SCHEME + ":"):
+		var file := content_id.substr(ZWO_SCHEME.length() + 1).replace("\\", "/").get_file().get_basename()
+		return String(TranslationServer.translate("APP_CONTENT_ZWO")).format([file])
 	var key := "%s_CONTENT_%s" % [game_id.to_upper(), content_id.to_upper()]
 	var t := String(TranslationServer.translate(key))
 	return content_id if t == key else t
