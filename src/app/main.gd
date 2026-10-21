@@ -23,7 +23,7 @@ var scripted: AppScriptedPeer = null
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	theme = AppStyle.theme()
 	if services == null:
 		services = AppServices.from_tree(get_tree())

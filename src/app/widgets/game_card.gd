@@ -69,7 +69,7 @@ static func make_title_card(title: String, id: String) -> Control:
 	card.color = AppStyle.color_for_id(id)
 	card.custom_minimum_size = IMAGE_SIZE
 	var l := AppStyle.label(title.to_upper(), AppStyle.FONT_HEADING, Color.WHITE)
-	l.set_anchors_preset(Control.PRESET_FULL_RECT)
+	l.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

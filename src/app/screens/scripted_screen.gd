@@ -12,12 +12,12 @@ func _build() -> void:
 	add_child(AppStyle.background(Color.BLACK))
 	view_layer = Control.new()
 	view_layer.name = "View"
-	view_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	view_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	view_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(view_layer)
 	hud_layer = Control.new()
 	hud_layer.name = "Hud"
-	hud_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hud_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hud_layer)
 	status_label = AppStyle.label(t("APP_SCRIPTED"), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)

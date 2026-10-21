@@ -109,7 +109,7 @@ static func hbox(separation: int = 24) -> HBoxContainer:
 static func background(color: Color = BG) -> ColorRect:
 	var r := ColorRect.new()
 	r.color = color
-	r.set_anchors_preset(Control.PRESET_FULL_RECT)
+	r.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
 

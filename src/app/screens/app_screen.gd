@@ -27,7 +27,7 @@ var text_focus: bool = false
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 
 ## Called by the main scene once the screen is in the tree.
@@ -351,7 +351,7 @@ static func t(key: String, args: Variant = []) -> String:
 func make_page(title_text: String) -> Dictionary:
 	add_child(AppStyle.background())
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side: String in ["margin_left", "margin_right", "margin_top", "margin_bottom"]:
 		margin.add_theme_constant_override(side, AppStyle.MARGIN)
 	add_child(margin)
