@@ -65,4 +65,13 @@ func test_unreadable_file_is_set_aside() -> void:
 	assert_push_warning("unreadable")
 	assert_eq(q.size(), 0)
 	assert_true(FileAccess.file_exists(p + ".bad"))
+	assert_false(FileAccess.file_exists(p), "moved aside, not left to warn on every launch")
+	# A second bad file replaces the first one set aside.
+	var f2 := FileAccess.open(p, FileAccess.WRITE)
+	f2.store_string("[also bad")
+	f2.close()
+	q.load_file()
+	assert_push_warning("unreadable")
+	assert_false(FileAccess.file_exists(p), "set aside again although a .bad already existed")
+	assert_eq(FileAccess.get_file_as_string(p + ".bad"), "[also bad")
 	DirAccess.remove_absolute(p + ".bad")
