@@ -14,9 +14,12 @@ extends Node
 ##   screenshot), so those never touch Bluetooth; with --mock-trainer, start() never creates
 ##   an FtmsConnectionManager at all.
 ## - start() is idempotent. The mock is MockTrainer.from_spec(spec, profile FTP, {seed
-##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg}); a bare --mock-trainer
-##   means "erg". The FTMS path adds an FtmsConnectionManager child and calls
-##   start(true); its trainer_ready device becomes device() and its last_device() is saved
+##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg, keyboard}); a bare
+##   --mock-trainer means "erg". keyboard (BRIEF 4.2: W/S +-10 W, A/D cadence, read only while
+##   the app window has focus) is on only with --mock-keyboard (W2r2); W/S/A/D then also move
+##   menu focus, since they are the InputRouter's movement bindings too. The FTMS path adds
+##   an FtmsConnectionManager child and calls start(true); its trainer_ready device becomes
+##   device() and its last_device() is saved
 ##   in Settings. Tests pass connection_factory so nothing touches Bluetooth.
 ## - The rider is created as soon as a device exists: LocalRider.setup(1, profile,
 ##   profile.to_slot(1, Settings scaling_mode), device, {multiplayer false, record false}),
@@ -26,9 +29,14 @@ extends Node
 ##   the rider (which ticks the device) once per due 0.05 s step. set_external_tick(true)
 ##   hands ticking to a GameHost; set_external_tick(false) takes it back and turns the
 ##   session rider into the menu rider again (set up afresh: peer 1, the profile's slot,
-##   solo, no plan, not recorded, applying any profile change made meanwhile). While that
+##   solo, no plan, not recorded, applying any profile change made meanwhile, and attached
+##   to the InputRouter again, since GameHost.end_session detaches it). While that
 ##   rider's ride is still recording, the menu reset waits until the ride is finished
-##   (LocalRider.finish_ride), so the results screen can still save it.
+##   (LocalRider.finish_ride), so the results screen can still save it; the session's plan
+##   is dropped at once (LocalRider.clear_plan) all the same. Without a plan the governor
+##   rides SIM grade 0, wind 0, so menus after a session (its cool-down, or an interval cut
+##   short by End ride) ride free at SIM flat (W2r2). The reset keeps the trainer connection's
+##   warm-up (SafetyGovernor.adopt_connection).
 ## - A profile or scaling change outside a session re-sets the rider up (and rebuilds a
 ##   mock whose rider parameters changed); during a session (external tick) or while
 ##   hold_rider(true) it waits for the hand-back or the release.
@@ -161,6 +169,9 @@ func use_mock(spec: String) -> void:
 		"cp_w": p.cp_w,
 		"wprime_j": p.wprime_j,
 		"weight_kg": p.weight_kg,
+		# BRIEF 4.2 keyboard control (W/S power, A/D cadence), only with the explicit flag:
+		# the keys are also the menus' up/down/left/right bindings (W2r2).
+		"keyboard": CmdLine.get_bool("mock-keyboard", false),
 	})
 	m.name = "MockTrainer"
 	_mock_spec = m.spec
@@ -177,8 +188,7 @@ func hold_rider(on: bool) -> void:
 	_held = on
 	if on or not was_held:
 		return
-	_menu_reset_due = true
-	_apply_menu_reset()
+	_request_menu_reset()
 
 
 func is_rider_held() -> bool:
@@ -196,8 +206,7 @@ func set_external_tick(on: bool) -> void:
 	if _clock != null:
 		_clock.reset()
 	if was_external:
-		_menu_reset_due = true
-		_apply_menu_reset()
+		_request_menu_reset()
 
 
 ## True while the menu reset after a session or a hold still waits (a ride still recording).
@@ -319,8 +328,14 @@ func _build_rider() -> void:
 		_rider.name = "LocalRider"
 		add_child(_rider)
 	_setup_rider()
+	_attach_rider()
+
+
+## Menus follow the app's rider: (re)attach it to the InputRouter. GameHost.end_session
+## detaches the session's rider, so every menu reset attaches it again.
+func _attach_rider() -> void:
 	var router := _router()
-	if router != null:
+	if router != null and _rider != null and is_instance_valid(_rider):
 		router.attach_rider(_rider)
 
 
@@ -363,6 +378,19 @@ func _on_settings_changed(key: String) -> void:
 	_rebuild_menu_rider()
 
 
+## The session or the hold let go of the rider: set it up afresh as the menu rider now, or,
+## while its ride still records, as soon as the ride is saved. Meanwhile the session's plan is
+## dropped at once (LocalRider.clear_plan), so the trainer rides SIM flat in the menus rather
+## than holding the cool-down or an interrupted interval (W2r2).
+func _request_menu_reset() -> void:
+	_menu_reset_due = true
+	_apply_menu_reset()
+	if not _menu_reset_due or _held or _external_tick:
+		return
+	if _rider != null and is_instance_valid(_rider) and not _rider.is_shut_down():
+		_rider.clear_plan()
+
+
 ## Sets the rider up afresh as the menu rider once nothing holds it: not during a session,
 ## not while held, and not while its ride is still recording (saved by finish_ride first).
 ## A shut-down rider (quitting) is left alone.
@@ -382,11 +410,13 @@ func _apply_menu_reset() -> void:
 
 ## The menu rider for the current profile: a mock whose rider parameters changed is rebuilt
 ## (which builds a new rider), otherwise the rider is set up again around the same device.
+## Either way the rider ends up attached to the InputRouter, like _build_rider leaves it.
 func _rebuild_menu_rider() -> void:
 	if is_mock() and _mock_params(_profile()) != _mock_key:
 		use_mock(_mock_spec)
 	elif _rider != null and is_instance_valid(_rider):
 		_setup_rider()
+		_attach_rider()
 
 
 func _on_panic() -> void:

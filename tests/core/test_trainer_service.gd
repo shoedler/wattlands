@@ -237,6 +237,34 @@ func test_use_mock_is_refused_during_a_session() -> void:
 	assert_eq(svc.device(), m)
 
 
+## W2r2 (BRIEF 4.2): MockTrainer's W/S/A/D keyboard control is on only with the explicit
+## --mock-keyboard flag (the keys are also the movement bindings). No key is read here: the
+## service is never ticked.
+func test_mock_keyboard_is_off_without_its_flag() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	assert_false((svc.device() as MockTrainer).is_keyboard_enabled())
+	_args(["--mock-trainer=erg", "--mock-keyboard=false"])
+	var svc2 := _make()
+	svc2.start()
+	assert_false((svc2.device() as MockTrainer).is_keyboard_enabled(), "--mock-keyboard=false")
+
+
+func test_mock_keyboard_flag_enables_it_on_every_mock() -> void:
+	_args(["--mock-trainer=erg", "--mock-keyboard"])
+	var svc := _make()
+	svc.start()
+	var m := svc.device() as MockTrainer
+	assert_true(m.is_keyboard_enabled(), "options.keyboard from --mock-keyboard")
+	_settings.profile.ftp_w = 280.0
+	_settings.save_profile()
+	assert_ne(svc.device(), m, "new rider parameters rebuild the mock")
+	assert_true((svc.device() as MockTrainer).is_keyboard_enabled(), "the rebuilt mock keeps it")
+	svc.use_mock("zero")
+	assert_true((svc.device() as MockTrainer).is_keyboard_enabled(), "and a mock picked in Settings")
+
+
 # --- ticking ----------------------------------------------------------------------------------
 
 
@@ -376,9 +404,56 @@ func test_handing_ticking_back_sets_the_menu_rider_up_afresh() -> void:
 	assert_null(r.recorder)
 	assert_ne(r.governor, session_gov, "a fresh governor")
 	assert_eq(session_gov.shutdown_count, 0, "handing back never sends Stop")
-	assert_eq(_router.attached, [r])
+	assert_eq(_router.attached, [r, r], "attached at start and again by the menu reset")
 	svc.set_external_tick(false)
 	assert_eq(r.peer_id, 1, "already in menus: nothing happens")
+	assert_eq(_router.attached.size(), 2)
+
+
+## W2r2: GameHost.end_session detaches the session's rider from the InputRouter; the menu
+## reset attaches it again, as _build_rider did, so menus after a session get its gestures.
+func test_menu_reset_attaches_the_rider_to_the_input_router_again() -> void:
+	_args(["--mock-trainer=erg"])
+	var router := WlInputRouter.new()
+	router.load_on_ready = false
+	router.bus = _bus
+	add_child_autofree(router)
+	var svc := _make()
+	svc.input_router = router
+	svc.start()
+	var r := svc.local_rider()
+	assert_eq(router.attached_rider(), r)
+	_session_setup(svc)
+	router.detach_rider()
+	assert_null(router.attached_rider(), "what GameHost.end_session does")
+	svc.set_external_tick(false)
+	assert_eq(router.attached_rider(), r, "the menu rider is attached again")
+	router.take_gestures()
+	r.gesture_detected.emit(Wl.G_SURGE)
+	assert_eq(router.take_gestures(), [Wl.G_SURGE] as Array[StringName], "its gestures reach the menus")
+
+
+## W2r2: the reset that waited for a ride still recording attaches the rider too, and so does
+## a profile change in menus (the same rider set up again).
+func test_delayed_menu_reset_and_profile_changes_attach_the_rider() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var rec := Fakes.FakeRecorder.new()
+	var r := _session_setup(svc, rec)
+	_router.detach_rider()
+	svc.set_external_tick(false)
+	assert_true(svc.is_menu_reset_pending())
+	assert_eq(_router.attached.size(), 1, "not yet: the session's ride still records")
+	r.finish_ride()
+	svc.step()
+	assert_false(svc.is_menu_reset_pending())
+	assert_eq(_router.attached.size(), 2)
+	assert_eq(_router.attached.back(), r)
+	_settings.profile.display_name = "Renamed"
+	_settings.save_profile()
+	assert_eq(_router.attached.size(), 3)
+	assert_eq(_router.attached.back(), r)
 
 
 func test_menu_reset_waits_for_a_ride_still_recording() -> void:

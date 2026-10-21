@@ -17,6 +17,12 @@ extends RefCounted
 ##     sprint) is replaced by the estimate too.
 ##   - No ratio yet (or no speed): the sample is returned unchanged.
 ##   - A sample that arrives already marked CADENCE_ESTIMATED is passed through untouched.
+##   - Coasting (W2r2): with a reported power below COAST_POWER_W (BRIEF 3.5 not_pedaling:
+##     15 W) the flywheel's speed is momentum, not pedaling, so nothing is estimated from it:
+##     a reported cadence is kept even when unchanged while the flywheel spins down (a crank
+##     at rest reads 0 and stays 0), and an absent one stays absent. Otherwise a coasting
+##     rider's spinning flywheel would read as pedaling, hiding the governor's coasting,
+##     pause and AFK rules (4.6.4), stop_5s and the warm-up's 20-minute reset (4.6.8).
 ## Time comes from sample.t only (platform time); nothing reads the wall clock.
 
 var stale_s: float = 3.0
@@ -29,6 +35,9 @@ const CALIBRATION_S := 10.0
 const STALE_SPEED_CHANGE := 0.15
 ## Relative speed change that stops learning from a repeated cadence value.
 const FROZEN_SPEED_CHANGE := 0.05
+## Reported power below this means the rider isn't pedaling (BRIEF 3.5 not_pedaling), so no
+## cadence is estimated from the flywheel's speed (W2r2).
+const COAST_POWER_W := 15.0
 
 var _ratio: float = 0.0
 var _calibrating: bool = false
@@ -67,12 +76,16 @@ func process(sample: TrainerSample) -> TrainerSample:
 			var ref := maxf(_speed_at_change_kmh, MIN_LEARN_KMH)
 			repeated_while_moving = moved > FROZEN_SPEED_CHANGE * ref
 			stale = sample.t - _reported_changed_t > stale_s and moved > STALE_SPEED_CHANGE * ref
+	var coasting := (sample.flags & TrainerSample.HAS_POWER) != 0 and sample.power_w < COAST_POWER_W
+	if stale and coasting:
+		# A spinning-down flywheel under a resting crank: the reading is right, not frozen.
+		stale = false
 	if present and not stale:
 		if not was_calibrating and not repeated_while_moving:
 			_learn(sample)
 		_last_fresh_t = sample.t
 		return sample
-	if _ratio <= 0.0 or not sample.has_speed():
+	if _ratio <= 0.0 or not sample.has_speed() or coasting:
 		return sample
 	var est := TrainerSample.new()
 	est.t = sample.t

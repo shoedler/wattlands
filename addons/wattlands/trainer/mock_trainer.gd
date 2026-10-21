@@ -54,6 +54,10 @@ extends TrainerDevice
 ## chain and never touch a surge or the 10 s before it). Control responses arrive on the next
 ## tick with response_result (success by default).
 ## Keyboard control when enabled: W/S +-10 W, A/D cadence -+5 rpm (Input is read only then).
+## W2r2: the app enables it only with --mock-keyboard (WlTrainerService passes
+## options.keyboard), and keys are read (Input.is_physical_key_pressed) only while the app
+## window has focus. W/S/A/D are also the InputRouter's up/down/left/right bindings, so with
+## the flag they move menu focus too (docs/decisions/trainer-core.md).
 ## Everything time-based advances only in tick(dt) (platform time, fixed steps of at most
 ## Wl.SIM_DT); every random stream derives from options.seed, so a run is reproducible.
 ## Profile time (at_s, surges, ramp, intervals) starts at creation; restart_profile() restarts
@@ -156,6 +160,8 @@ const DROPOUT_MAX_S := 4.0
 ## Keyboard steps.
 const KEY_POWER_STEP_W := 10.0
 const KEY_CADENCE_STEP_RPM := 5.0
+## The keyboard-control keys (BRIEF 4.2): W and S power, A and D cadence.
+const KEYBOARD_KEYS: Array[Key] = [KEY_W, KEY_S, KEY_A, KEY_D]
 
 const _DROP_WAITING := 0
 const _DROP_COUNTING := 1
@@ -188,6 +194,13 @@ class SurgeState:
 	var start_t: float = 0.0
 	var samples: int = 0
 
+
+## Keyboard control seams (W2r2), for tests: (key: Key) -> bool reads a physical key
+## (default Input.is_physical_key_pressed) and () -> bool says whether the app window has
+## focus (default: this node's Window.has_focus(); false outside the tree). Read only while
+## keyboard control is enabled.
+var key_reader: Callable = Callable()
+var focus_reader: Callable = Callable()
 
 var _components: Array = []
 ## The scripted power component (zero, const, ramp, intervals) or {} for the erg follower.
@@ -252,6 +265,8 @@ var _samples_emitted: int = 0
 var _kb_power_offset_w: float = 0.0
 var _kb_cadence_offset_rpm: float = 0.0
 var _kb_down: Dictionary = {}
+## The next focused poll only notes the held keys (after enabling or regaining focus).
+var _kb_baseline: bool = true
 
 
 func _init() -> void:
@@ -341,7 +356,14 @@ func set_phase(index: int) -> void:
 
 
 func set_keyboard_enabled(on: bool) -> void:
+	if on and not _keyboard:
+		_kb_baseline = true
 	_keyboard = on
+
+
+## True while keyboard control reads W/S/A/D (options.keyboard or set_keyboard_enabled). W2r2.
+func is_keyboard_enabled() -> bool:
+	return _keyboard
 
 
 ## The latest sample emitted (null before the first).
@@ -570,6 +592,7 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 	_max_power_w = int(options.get("max_power_w", DEFAULT_MAX_POWER_W))
 	_seed = int(options.get("seed", 0))
 	_keyboard = bool(options.get("keyboard", false))
+	_kb_baseline = true
 	_scripted_power = {}
 	_erg_compliance = 1.0
 	_has_band = false
@@ -888,11 +911,20 @@ func _sample_interval() -> float:
 	return SeededRng.range_f(_sample_rng, SAMPLE_MIN_S, SAMPLE_MAX_S)
 
 
+## Keyboard control (BRIEF 4.2), only while enabled and while the app window has focus: a
+## key counts when it goes down. W2r2: keys are read only while focused, and the first poll
+## after enabling or after the window regains focus only notes which keys are held, so a key
+## pressed in another window never nudges the rider.
 func _poll_keyboard() -> void:
-	var keys: Array[Key] = [KEY_W, KEY_S, KEY_A, KEY_D]
-	for k in keys:
-		var down := Input.is_physical_key_pressed(k)
-		if down and not bool(_kb_down.get(k, false)):
+	var focused: bool = bool(focus_reader.call()) if focus_reader.is_valid() else _window_focused()
+	if not focused:
+		_kb_baseline = true
+		return
+	var baseline := _kb_baseline
+	_kb_baseline = false
+	for k: Key in KEYBOARD_KEYS:
+		var down: bool = bool(key_reader.call(k)) if key_reader.is_valid() else Input.is_physical_key_pressed(k)
+		if down and not baseline and not bool(_kb_down.get(k, false)):
 			match k:
 				KEY_W:
 					nudge_power(KEY_POWER_STEP_W)
@@ -903,6 +935,14 @@ func _poll_keyboard() -> void:
 				KEY_D:
 					nudge_cadence(KEY_CADENCE_STEP_RPM)
 		_kb_down[k] = down
+
+
+## True while this mock's window (the app's) has focus; false outside the tree.
+func _window_focused() -> bool:
+	if not is_inside_tree():
+		return false
+	var w := get_window()
+	return w != null and w.has_focus()
 
 
 func _record(opcode: int) -> void:
