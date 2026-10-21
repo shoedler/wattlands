@@ -1,0 +1,24 @@
+[project]
+name = "wattlands-trainer-bridge"
+version = "0.1.0"
+description = "Bluetooth LE GATT proxy and read-only FTMS probe for the Wattlands app"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "bleak>=0.22",
+    "websockets>=13",
+]
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6"]
+
+[project.scripts]
+trainer-bridge = "trainer_bridge.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["trainer_bridge"]

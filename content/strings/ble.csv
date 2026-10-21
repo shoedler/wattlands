@@ -1,2 +1,16 @@
 keys,en
 BLE_MODULE_NAME,Bluetooth
+BLE_STATUS_STARTING,Starting Bluetooth
+BLE_STATUS_NO_ADAPTER,No Bluetooth adapter found
+BLE_STATUS_NO_BACKEND,"Bluetooth is unavailable: the Bluetooth library is not loaded and the trainer bridge is not running"
+BLE_STATUS_SCANNING,Looking for trainers
+BLE_STATUS_NONE_FOUND,No trainer found
+BLE_STATUS_CONNECTING,Connecting to {name}
+BLE_STATUS_SETUP,Setting up {name}
+BLE_STATUS_READY,{name} ready
+BLE_STATUS_LOST,Connection lost. Reconnecting in {s} s
+BLE_STATUS_RETRY,Could not connect ({error}). Retrying in {s} s
+BLE_STATUS_SETUP_FAILED,Trainer setup failed ({error}).
+BLE_STATUS_HW_LOCKED,Hardware control is locked (read-only).
+BLE_STATUS_CONTROL_HELD,"Another app may hold control of the trainer (Zwift, the Wahoo app). Close it, then retry."
+BLE_STATUS_DISCONNECTED,Disconnected
