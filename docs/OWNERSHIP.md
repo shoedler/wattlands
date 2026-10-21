@@ -61,13 +61,13 @@ How to read it:
 
 ### 1.3 Seams between W1 owners
 
-Frozen in W0 so 15 builders can work in parallel. A builder that needs one changed asks the lead.
+Frozen in W0 so the 16 W1 builders can work in parallel. A builder that needs one changed asks the lead.
 
 | Seam | Producer → consumer | Fixed by |
 | --- | --- | --- |
 | Time | sim → every module on the sim path | `SimClock` (platform time always runs; game time stops on pause), `Wl.SIM_DT` 0.05 |
-| Rider stack | platform (`LocalRider`) ↔ trainer-control, trainer-core, sim, rides, sdk-runtime | `LocalRider.setup/set_plan/start_phase/apply_directive/apply_course_grade/set_cadence_band/set_power_band/tick/telemetry/take_gestures/take_intents/take_acks` |
-| Governor | trainer-control → platform, sdk-runtime | `SafetyGovernor.configure/set_plan/start_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status`; `Wl.CLAMP_*`, `Wl.REFUSE_*` |
+| Rider stack | platform (`LocalRider`) ↔ trainer-control, trainer-core, sim, rides, sdk-runtime | `LocalRider.setup/set_plan/start_phase/resume_phase/apply_directive/apply_course_grade/set_cadence_band/set_power_band/tick/telemetry/take_gestures/take_intents/take_acks` (`resume_phase` added in W4r2). The GameHost keeps its riders private (`_local_riders`; the platform reads one through `local_rider(peer)`), and `tests/arch/test_no_bypass.gd` forbids both names under `src/games/`, so games can't reach a rider |
+| Governor | trainer-control → platform, sdk-runtime | `SafetyGovernor.configure/set_plan/start_phase/resume_phase/set_game_paused/apply_directive/set_course_grade/shift/tick/status` (`resume_phase` added in W4r2); `Wl.CLAMP_*`, `Wl.REFUSE_*` |
 | Mock rider feed | sdk-runtime, platform → trainer-core | `MockTrainer.from_spec/parse_spec/set_cadence_band/set_power_band/set_phase` |
 | Pixel layout | world-kits → ui-hud | `PixelViewport.integer_scale/letterbox_offset/art_rect_to_screen` |
 | HUD feed | sdk-runtime → ui-hud | `HudFeed`, `HudSpec`, `HudLayer.build/update/local_feed`, `WlEventBus` HUD signals |
