@@ -34,6 +34,20 @@ func test_int_default_step_and_stepper_for_long_ranges() -> void:
 	assert_eq(m.step_value(-8, -5), -10)
 
 
+func test_int_stepper_stays_on_the_step_grid() -> void:
+	# min 0, max 10, step 3: the grid is 0, 3, 6, 9 (10 is not on it).
+	var m := AppOptionModel.make("x", {"id": "n", "type": "int", "default": 3, "min": 0, "max": 10, "step": 3})
+	assert_eq(m.values(), [0, 3, 6, 9])
+	assert_eq(m.step_value(9, 1), 9, "the last grid value, never the off-grid max")
+	assert_eq(m.step_value(6, 5), 9)
+	assert_eq(m.step_value(4, 1), 6, "an off-grid value snaps to 3, then steps")
+	assert_eq(m.step_value(5, 0), 6, "snaps to the nearest grid value")
+	assert_eq(m.step_value(3, -5), 0)
+	var reel := AppOptionModel.make("fishing", {"id": "reel_pct", "type": "int", "default": 60, "min": 50, "max": 70, "step": 5})
+	assert_eq(reel.step_value(63, 1), 70, "63 snaps to 65 and steps to 70")
+	assert_eq(reel.step_value(60, -1), 55)
+
+
 func test_choice() -> void:
 	var m := AppOptionModel.make("workout", {"id": "theme", "type": "choice", "default": "day",
 		"choices": [{"value": "day", "label": "WORKOUT_THEME_DAY"}, {"value": "night", "label": "Night"}]})

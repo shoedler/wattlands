@@ -53,11 +53,12 @@ func _exit_tree() -> void:
 		services.navigated.disconnect(_on_app_state)
 
 
-## Launch-time work (BRIEF 3.5, 3.8): profile and settings, the trainer backend (auto-connect to
-## the last trainer), queued uploads.
+## Launch-time work (BRIEF 3.5, 3.8): profile and settings (and the saved master volume), the
+## trainer backend (auto-connect to the last trainer), queued uploads.
 func boot() -> void:
 	if services.settings != null:
 		services.settings.load_all()
+		AppSettingsScreen.apply_volume(float(services.settings.get_value("master_volume_db", 0.0)))
 	if services.trainer != null and services.trainer.device() == null and services.trainer.status() == TrainerDevice.STATUS_DISCONNECTED:
 		services.trainer.start()
 	if services.rides != null:

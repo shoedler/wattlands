@@ -12,6 +12,8 @@ const DONE_STATES: Array[String] = ["uploaded", "duplicate"]
 const BUSY_STATES: Array[String] = ["queued", "uploading", "processing"]
 
 var results: GameResults = null
+## False when the session ended without GameResults (shown without a grade).
+var has_results: bool = false
 var fit_path: String = ""
 var summary: Dictionary = {}
 var unlocks: Array = []
@@ -28,7 +30,8 @@ var rows_grid: GridContainer = null
 
 func _build() -> void:
 	var r: Variant = params.get("results", null)
-	results = r as GameResults if r is GameResults else GameResults.new()
+	has_results = r is GameResults
+	results = r as GameResults if has_results else GameResults.new()
 	fit_path = str(params.get("fit_path", ""))
 	var sv: Variant = params.get("summary", {})
 	summary = (sv as Dictionary).duplicate(true) if sv is Dictionary else {}
@@ -43,7 +46,9 @@ func _build() -> void:
 	var left: VBoxContainer = page["left"]
 	var top := AppStyle.hbox(48)
 	left.add_child(top)
-	grade_label = AppStyle.label(results.grade, AppStyle.FONT_GRADE, grade_color(results.grade))
+	# A session that ended without results (the host left first) shows no grade, never a "D".
+	var grade_text := results.grade if has_results else "—"
+	grade_label = AppStyle.label(grade_text, AppStyle.FONT_GRADE, grade_color(results.grade) if has_results else AppStyle.TEXT_DIM)
 	grade_label.name = "Grade"
 	top.add_child(grade_label)
 	var side := AppStyle.vbox(8)

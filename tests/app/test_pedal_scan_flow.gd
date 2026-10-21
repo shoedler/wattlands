@@ -127,3 +127,46 @@ func test_results_upload_is_pedal_selectable() -> void:
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(fx.fake_rides().uploads.size(), 1)
 	assert_eq(fx.fake_rides().uploads[0]["fit_path"], "C:/x/ride.fit")
+
+
+## The active menu scans at the profile's interval, and up/down move it (keyboard, controller).
+func _assert_scans(s: AppScreen, what: String) -> void:
+	var m := menu(s)
+	assert_not_null(m, "%s has a pedal-scan menu" % what)
+	if m == null:
+		return
+	assert_true(m.scanning, "%s scans" % what)
+	assert_eq(m.scan_interval_s, 2.0, "%s uses the profile's scan interval" % what)
+	assert_false(m.listen_to_input, "%s: the screen feeds the list, never both" % what)
+	var before := m.highlighted()
+	assert_gte(before, 0, "%s highlights an item" % what)
+	s.tick(1.9)
+	assert_eq(m.highlighted(), before, "%s: no move before the interval" % what)
+	s.tick(0.1)
+	assert_ne(m.highlighted(), before, "%s: the focus moves every interval" % what)
+	s.feed_action(&"up")
+	assert_eq(m.highlighted(), before, "%s: up moves the focus back" % what)
+	s.feed_action(&"down")
+	assert_ne(m.highlighted(), before, "%s: down moves it on" % what)
+
+
+func test_every_screen_runs_on_pedal_scan() -> void:
+	var p := fx.give_profile()
+	p.scan_interval_s = 2.0
+	fx.fake_rides().connected = true
+	fx.fake_rides().ride_list = [{"fit_path": "C:/r/a.fit", "summary": {"ride_id": "a", "game_id": "workout", "duration_s": 600.0}}]
+	fx.fake_net().add_human(1, "Ada")
+	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
+	title.feed_sample(sample(0.0, 150.0, 85.0))
+	title.feed_gesture(Wl.G_COAST)
+	_assert_scans(title, "title")
+	_assert_scans(open_screen(AppFirstRunScreen.new()), "first run")
+	_assert_scans(open_screen(AppProfileScreen.new()), "profile")
+	_assert_scans(open_screen(AppSettingsScreen.new()), "settings")
+	_assert_scans(open_screen(AppPickerScreen.new(), {"mode": "host"}), "picker")
+	_assert_scans(open_screen(AppLobbyScreen.new(), {"mode": "solo", "game_id": "workout"}), "solo lobby")
+	_assert_scans(open_screen(AppLobbyScreen.new(), {"mode": "join"}), "code entry")
+	_assert_scans(open_screen(AppResultsScreen.new(), {"results": GameResults.new(), "fit_path": "C:/r/a.fit",
+		"summary": {"ride_id": "a"}, "local_peer": 1}), "results")
+	_assert_scans(open_screen(AppRidesScreen.new()), "rides")
+	_assert_scans(open_screen(AppFtpTestScreen.new()), "FTP test")

@@ -105,10 +105,16 @@ func normalize(value: Variant) -> Variant:
 	return value
 
 
-## The value `steps` positions away (wrapping for toggles and choices, clamped for ints).
+## The value `steps` positions away (wrapping for toggles and choices, clamped for ints). Ints
+## move on the min + n x step grid (the lobby stepper honours `step`): an off-grid value snaps to
+## its nearest grid value first, and the last value is the highest grid value <= max.
 func step_value(value: Variant, steps: int) -> Variant:
 	if type() == INT:
-		return clampi(int(normalize(value)) + steps * int_step(), int_min(), int_max())
+		var grid := values()
+		if grid.is_empty():
+			return clampi(int(normalize(value)) + steps * int_step(), int_min(), int_max())
+		var at := int(round(float(int(normalize(value)) - int_min()) / float(int_step())))
+		return grid[clampi(clampi(at, 0, grid.size() - 1) + steps, 0, grid.size() - 1)]
 	var vals := values()
 	if vals.is_empty():
 		return value

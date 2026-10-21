@@ -66,6 +66,23 @@ func test_stopping_restarts_the_twenty_seconds() -> void:
 	assert_eq(fx.app.state, "session")
 
 
+func test_a_coast_on_the_first_run_only_restarts_the_twenty_seconds() -> void:
+	# A rider with no input who stops for a while (the coast gesture) must still get in: the
+	# countdown stays armed and the stretch starts again when they pedal.
+	var m := open_main()
+	var title := current_screen(m) as AppTitleScreen
+	_pedal(title, 0, 12)
+	title.feed_sample(sample(13.0, 0.0, 0.0))
+	fx.input.inject_gesture(Wl.G_COAST)
+	assert_true(title.zero.armed, "a coast never disarms the first-run countdown")
+	assert_true(current_screen(m) is AppTitleScreen, "and never backs out of the title")
+	_pedal(title, 20, 39)
+	assert_eq(fx.app.state, "title", "19 s since the restart")
+	title.feed_sample(sample(40.0, 140.0, 82.0))
+	assert_eq(fx.app.state, "session", "20 s of pedaling after the coast starts the first run")
+	assert_eq(fx.settings.profile.display_name, "Rider")
+
+
 func test_any_key_cancels_the_first_run_countdown() -> void:
 	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	_pedal(title, 0, 10)

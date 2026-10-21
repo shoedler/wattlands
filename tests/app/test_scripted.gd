@@ -307,6 +307,32 @@ func test_client_rejoin_replays_the_session() -> void:
 	assert_eq(fx.last_host().config_seen["role"], Wl.CLIENT)
 
 
+func test_a_session_that_ends_without_results_fails() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.receive(1, _start_msg())
+	fx.last_host().fits = {2: "C:/rides/c.fit"}
+	fx.last_host().finish_with(null)
+	assert_eq(p.exit_code, AppScriptedPeer.EXIT_ERROR, "no GameResults: the run did not complete")
+	assert_eq(p.exit_reason, "error:no_results")
+	assert_eq(_read_report()["fit_paths"], ["C:/rides/c.fit"], "the FIT is still reported")
+
+
+func test_results_from_the_bus_count_when_the_host_passes_none() -> void:
+	var p := _client()
+	var net := fx.fake_net()
+	net.simulate_joined(2, "K7QX2M", _lobby())
+	net.receive(1, _start_msg())
+	var r := GameResults.new()
+	r.grade = "B"
+	fx.bus.results_ready.emit(r)
+	fx.last_host().fits = {2: "C:/rides/c.fit"}
+	fx.last_host().finish_with(null)
+	assert_eq(p.exit_code, 0)
+	assert_eq(_read_report()["final_state"]["grade"], "B")
+
+
 func test_client_refused_exit_codes() -> void:
 	var p := _client()
 	fx.fake_net().refuse("session_in_progress")

@@ -171,6 +171,50 @@ func test_coasting_pause_resumes_on_pedal_start() -> void:
 	assert_eq(h.resumes, 1)
 
 
+func test_coasting_pause_holds_resume_so_a_surge_resumes() -> void:
+	# From rest a surge fires before pedal_start: it must resume, never pick End ride or Panic.
+	fx.give_profile()
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	var h := s.host as FakeHost
+	h.pause("coasting")
+	fx.bus.paused_changed.emit(true, "coasting")
+	assert_true(s.auto_paused())
+	assert_false(menu(s).scanning, "the auto-pause overlay does not scan")
+	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"))
+	for _i in 10:
+		s.tick(1.6)
+	assert_eq(menu(s).highlighted(), menu(s).index_of_id("resume"), "Resume stays highlighted")
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(h.resumes, 1, "the surge resumed the ride")
+	assert_eq(h.ended_reasons.size(), 0)
+	assert_eq((fx.trainer.local_rider() as FakeRider).panics, 0)
+
+
+func test_a_user_pause_menu_scans() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	s.feed_action(&"pause")
+	assert_false(s.auto_paused())
+	assert_true(menu(s).scanning, "a pause the rider asked for scans like any menu")
+
+
+func test_metronome_runs_during_the_session_when_on() -> void:
+	var p := fx.give_profile()
+	p.metronome = true
+	p.preferred_cadence_rpm = 85.0
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	assert_eq(fx.fake_sfx().metronome_calls, [[85.0, true]])
+	s.leave()
+	assert_eq(fx.fake_sfx().metronome_calls, [[85.0, true], [0.0, false]], "stopped when the session screen goes")
+
+
+func test_no_metronome_when_off() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen
+	s.leave()
+	assert_eq(fx.fake_sfx().metronome_calls, [])
+
+
 func test_on_screen_panic() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "easy_30", "quick": true}) as AppSessionScreen

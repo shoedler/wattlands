@@ -20,14 +20,23 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	var launchers: Array[AppSessionLauncher] = []
 	for n in _opened:
 		if is_instance_valid(n):
 			if n is AppScreen:
 				(n as AppScreen).leave()
+			if n is AppSessionScreen and (n as AppSessionScreen).launcher != null:
+				launchers.append((n as AppSessionScreen).launcher)
+			if n is AppScriptedPeer and (n as AppScriptedPeer).launcher != null:
+				launchers.append((n as AppScriptedPeer).launcher)
 			if n.get_parent() != null:
 				n.get_parent().remove_child(n)
 			n.free()
 	_opened.clear()
+	# The screens release their bot riders and devices deferred (after the GameHost is gone);
+	# do it now so the orphan check after each test sees none.
+	for l in launchers:
+		l.release()
 	fx.free_all()
 	fx = null
 

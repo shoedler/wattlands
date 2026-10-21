@@ -281,8 +281,13 @@ func audio_fields() -> Array:
 func set_volume(v: Variant) -> void:
 	var db := float(v)
 	set_setting("master_volume_db", db)
+	apply_volume(db)
+
+
+## Set the master bus volume (the Settings key master_volume_db; also applied at boot).
+static func apply_volume(db: float) -> void:
 	if AudioServer.bus_count > 0:
-		AudioServer.set_bus_volume_db(0, db)
+		AudioServer.set_bus_volume_db(0, clampf(db, -80.0, 6.0))
 
 
 func network_fields() -> Array:

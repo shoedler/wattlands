@@ -232,6 +232,8 @@ func test_main_boot_starts_trainer_and_upload_queue() -> void:
 	fx.give_profile()
 	fx.fake_trainer().dev = null
 	fx.fake_trainer().st = TrainerDevice.STATUS_DISCONNECTED
+	fx.settings.set_value("master_volume_db", -9.0)
+	var before := AudioServer.get_bus_volume_db(0)
 	var m: Control = MainScene.new()
 	m.set("services", fx.services)
 	m.set("screens_auto_process", false)
@@ -241,6 +243,8 @@ func test_main_boot_starts_trainer_and_upload_queue() -> void:
 	assert_eq(fx.fake_trainer().starts, 1)
 	assert_eq(fx.fake_rides().queue_runs, 1)
 	assert_eq((fx.settings as Object).get("loads"), 1)
+	assert_almost_eq(AudioServer.get_bus_volume_db(0), -9.0, 0.01, "the saved master volume")
+	AudioServer.set_bus_volume_db(0, before)
 
 
 func test_room_code_is_readable_from_3_m() -> void:

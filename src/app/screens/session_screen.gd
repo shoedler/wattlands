@@ -33,6 +33,8 @@ var ride_summary: Dictionary = {}
 var fit_path: String = ""
 var host_left: bool = false
 var headless: bool = false
+## True while this screen runs the Sfx cadence metronome.
+var metronome_on: bool = false
 var _overlay_menu_open: bool = false
 
 
@@ -74,6 +76,7 @@ func _build() -> void:
 	host.session_finished.connect(_on_session_finished)
 	services.set_menu_ticking(false)
 	host.start()
+	_start_metronome()
 	for r: Variant in params.get("replay", []):
 		if r is Dictionary and services.net != null:
 			services.net.game_message.emit(int((r as Dictionary).get("from", Wl.HOST_PEER)), (r as Dictionary).get("data", {}))
@@ -82,6 +85,9 @@ func _build() -> void:
 func _on_leave() -> void:
 	_disconnect_bus()
 	services.set_menu_ticking(true)
+	if metronome_on and services.sfx != null:
+		services.sfx.set_metronome(0.0, false)
+		metronome_on = false
 	if host != null and is_instance_valid(host):
 		if host.state_changed.is_connected(_on_host_state):
 			host.state_changed.disconnect(_on_host_state)
@@ -89,6 +95,15 @@ func _on_leave() -> void:
 			host.session_finished.disconnect(_on_session_finished)
 	if launcher != null:
 		launcher.release.call_deferred()
+
+
+## The optional cadence metronome (BRIEF 3.9 audio; profile setting, Settings -> Audio) clicks at
+## the rider's preferred cadence while the session runs.
+func _start_metronome() -> void:
+	var p := services.profile()
+	if p.metronome and services.sfx != null:
+		services.sfx.set_metronome(p.preferred_cadence_rpm, true)
+		metronome_on = true
 
 
 ## Solo quick start (zero-touch): the offline lobby the menus would have set up.
@@ -215,6 +230,28 @@ func _show_overlay(force_menu: bool = false) -> void:
 		push_menu(items, _on_overlay_pick, _on_overlay_back)
 	else:
 		refresh_menu(items, menus[0])
+	_hold_resume_on_auto_pause()
+
+
+## True while the session is paused by the platform (coasting 4.6.4, stop_5s), not by the rider.
+func auto_paused() -> bool:
+	return paused and pause_reason != "" and pause_reason != "user" and not panicked and error == ""
+
+
+## A rider who coasted into a pause starts pedaling again to resume. From rest a surge (1.5 s)
+## fires before pedal_start (3 s), so a scanning overlay could pick End ride or Panic by accident:
+## while auto-paused the menu holds Resume and does not scan, so that surge resumes too.
+func _hold_resume_on_auto_pause() -> void:
+	if menus.is_empty():
+		return
+	var m := menus[0]
+	if auto_paused():
+		m.scanning = false
+		var i := item_index("resume", m)
+		if i >= 0:
+			m.set_highlight(i)
+	else:
+		m.scanning = scanning_enabled()
 
 
 func overlay_items() -> Array:

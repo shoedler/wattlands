@@ -15,6 +15,7 @@ const FakeInput := preload("res://tests/app/fakes/fake_input.gd")
 const FakeScanList := preload("res://tests/app/fakes/fake_scan_list.gd")
 const FakeHost := preload("res://tests/app/fakes/fake_game_host.gd")
 const FakeRider := preload("res://tests/app/fakes/fake_rider.gd")
+const FakeSfx := preload("res://tests/app/fakes/fake_sfx.gd")
 
 var services: AppServices = null
 var app: WlApp = null
@@ -44,7 +45,7 @@ func _init() -> void:
 	rides = FakeRides.new()
 	input = FakeInput.new()
 	bus = WlEventBus.new()
-	sfx = WlSfx.new()
+	sfx = FakeSfx.new()
 	services = AppServices.new()
 	services.app = app
 	services.settings = settings
@@ -120,6 +121,10 @@ func fake_trainer() -> FakeTrainer:
 
 func fake_app() -> FakeApp:
 	return app as FakeApp
+
+
+func fake_sfx() -> FakeSfx:
+	return sfx as FakeSfx
 
 
 func last_host() -> FakeHost:

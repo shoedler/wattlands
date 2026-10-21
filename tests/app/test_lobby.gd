@@ -231,11 +231,55 @@ func test_version_mismatch_blocks_ready_with_a_message() -> void:
 func test_host_left_message() -> void:
 	var s := _client_lobby(workout_lobby())
 	fx.fake_net().refuse("host_left")
-	assert_eq(s.message_label.text, AppScreen.t("APP_REFUSED_HOST_LEFT"))
+	assert_eq(s.message_label.text, AppScreen.t("APP_LOBBY_HOST_LEFT"), "no ride to save in the lobby")
 	assert_eq(menu(s).ids(), ["leave"])
 	confirm_pick(s, "leave")
 	assert_eq(fx.fake_net().calls_named("leave").size(), 1)
 	assert_eq(fx.app.state, "title")
+
+
+func test_client_answers_no_lobby_echo_with_player_info() -> void:
+	# A host answers each player_info with a lobby_state broadcast. The client must not answer
+	# that echo with another player_info, even for a game without player_options (Tank).
+	var lobby := workout_lobby()
+	lobby["game_id"] = "tank"
+	lobby["game_version"] = "0.2.0"
+	lobby["content_id"] = "ashfall_road"
+	var net := fx.fake_net()
+	net.echo_player_info = true
+	var s := _client_lobby(lobby)
+	var sends := net.calls_named("set_local_player_info").size()
+	assert_lt(sends, 4, "a bounded number of sends while joining (got %d)" % sends)
+	for _i in 5:
+		net.lobby_changed.emit(net.lobby)
+	assert_eq(net.calls_named("set_local_player_info").size(), sends, "lobby_state echoes send nothing")
+	assert_eq(s.my_player_options, {}, "tank has no player options")
+
+
+func test_client_player_options_survive_lobby_echoes() -> void:
+	var net := fx.fake_net()
+	net.echo_player_info = true
+	var s := _client_lobby(workout_lobby())
+	confirm_pick(s, "popt:offset")
+	confirm_pick(s, "inc")
+	confirm_pick(s, "done")
+	net.lobby_changed.emit(net.lobby)
+	assert_eq(s.my_player_options, {"offset": 1}, "an echo never resets an edited value")
+	assert_eq(net.info["player_options"], {"offset": 1})
+
+
+func test_client_resends_player_info_when_the_host_changes_scaling() -> void:
+	var s := _client_lobby(workout_lobby())
+	var net := fx.fake_net()
+	var before := net.calls_named("set_local_player_info").size()
+	assert_almost_eq(float(net.info["p_eff_per_w"]), 250.0 / 220.0, 1e-6)
+	net.lobby["scaling"] = Wl.WKG
+	net.lobby_changed.emit(net.lobby)
+	assert_eq(net.calls_named("set_local_player_info").size(), before + 1, "one resend for the new scaling")
+	assert_almost_eq(float(net.info["p_eff_per_w"]), 75.0 / 75.0, 1e-6, "WKG: 75 / weight")
+	net.lobby_changed.emit(net.lobby)
+	assert_eq(net.calls_named("set_local_player_info").size(), before + 1)
+	assert_not_null(s)
 
 
 func test_refusal_texts() -> void:

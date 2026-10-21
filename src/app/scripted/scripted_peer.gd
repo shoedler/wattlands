@@ -455,6 +455,10 @@ func _on_session_finished(r: GameResults) -> void:
 		return
 	if r != null:
 		results = r
+	if results == null:
+		# The session ended without GameResults (aborted, host gone): the run failed.
+		finish("error:no_results", EXIT_ERROR)
+		return
 	report.add_event(clock, "results", local_peer, {
 		"grade": results.grade if results != null else "",
 		"session_id": results.session_id if results != null else ""})

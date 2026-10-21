@@ -121,3 +121,13 @@ func test_grade_colors_and_host_left_note() -> void:
 		if (c as Label).text == AppScreen.t("APP_REFUSED_HOST_LEFT"):
 			found = true
 	assert_true(found)
+
+
+func test_a_session_without_results_shows_no_grade() -> void:
+	# A client whose host left before the results: the ride is saved, but there is no grade.
+	var s := _open({"results": null, "host_left": true})
+	assert_false(s.has_results)
+	assert_eq(s.grade_label.text, "—", "never a D for a session that had no results")
+	assert_eq(s.rows_grid.get_child_count(), 7, "only the column headers")
+	assert_eq(s.ride_label.text, AppScreen.t("APP_RESULTS_SAVED").format(["C:/rides/2026-10-21_workout.fit"]))
+	assert_true(menu(s).ids().has("continue"))

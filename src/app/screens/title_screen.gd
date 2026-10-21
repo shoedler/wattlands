@@ -6,9 +6,10 @@ extends AppScreen
 ##   - First run with no input: 20 s of pedaling creates the profile "Rider" (FTP 200,
 ##     unverified) and starts GameRegistry.first_run_game() solo with its zero_input_content.
 ## While that countdown is armed the menu holds its first item, the same quick ride, so a surge
-## also starts it. A keyboard or controller action, or a coast after pedaling, disarms the
-## countdown for this visit; the menu then scans (pedal-scan with a saved profile) so a
-## pedal-only rider can still host, join or open settings.
+## also starts it. A keyboard or controller action disarms the countdown for this visit; with a
+## saved profile a coast after pedaling does too, and the menu then scans so a pedal-only rider
+## can still host, join or open settings. On the first run a coast never disarms it: the 20 s
+## rule is the only way in for a rider with no input, so stopping just restarts the stretch.
 
 var zero: AppZeroTouch = AppZeroTouch.new()
 var quick_game: String = ""
@@ -187,8 +188,12 @@ func _handle_action(_action: StringName) -> bool:
 func _handle_gesture(gesture: StringName) -> bool:
 	if gesture == Wl.G_PEDAL_START:
 		return true
-	if gesture == Wl.G_COAST and zero.armed and zero.pedaled and not started:
-		_disarm()
+	if gesture == Wl.G_COAST and zero.armed and not started:
+		# With a saved profile a coast after pedaling opens the scanning menu. On the first run
+		# the 20 s rule is the only path for a rider without input, so a pause in pedaling only
+		# restarts the stretch (the tracker does that) and never disarms it.
+		if has_profile and zero.pedaled:
+			_disarm()
 		return true
 	return false
 

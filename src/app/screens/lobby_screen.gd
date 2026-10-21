@@ -35,6 +35,11 @@ var game_options: Dictionary = {}
 var bot_ftp: float = 200.0
 ## This rider's player_options values.
 var my_player_options: Dictionary = {}
+## Client: the game whose player_options defaults were filled in (so a lobby_state echo never
+## resets edited values or re-sends player_info for a game without player_options).
+var _options_game: String = ""
+## The last player_info sent (a client resends only when it changed, e.g. the host's scaling).
+var _last_info: Dictionary = {}
 var message: String = ""
 var code_field: AppTextField = null
 var keyboard: AppKeyboard = null
@@ -217,11 +222,28 @@ func _push_lobby_settings() -> void:
 func _send_player_info() -> void:
 	if services.net == null:
 		return
-	var sc := scaling if role != Wl.CLIENT else str(lobby().get("scaling", Wl.FAIR_FTP))
-	var st := services.trainer.status() if services.trainer != null else ""
-	var info := AppLobbyModel.player_info(services.profile(), sc, my_player_options,
-		AppLobbyModel.installed_games(services.registry), st)
+	var info := build_player_info()
+	_last_info = info.duplicate(true)
 	services.net.set_local_player_info(info)
+
+
+## This rider's player_info now (a client's p_eff_per_w follows the host's scaling mode).
+func build_player_info() -> Dictionary:
+	var sc := scaling if role != Wl.CLIENT else str(lobby().get("scaling", Wl.FAIR_FTP))
+	if not Wl.SCALING_MODES.has(sc):
+		sc = Wl.FAIR_FTP
+	var st := services.trainer.status() if services.trainer != null else ""
+	return AppLobbyModel.player_info(services.profile(), sc, my_player_options,
+		AppLobbyModel.installed_games(services.registry), st)
+
+
+## Send player_info only when it differs from the last one sent: the host's lobby_state echo of
+## our own player_info must never trigger another send (that would loop host <-> client).
+func _send_player_info_if_changed() -> bool:
+	if services.net == null or build_player_info() == _last_info:
+		return false
+	_send_player_info()
+	return true
 
 
 # --- join page -------------------------------------------------------------------------------
@@ -723,9 +745,10 @@ func _on_net_state(state: String, detail: String) -> void:
 func _on_lobby_changed(_lobby: Dictionary) -> void:
 	if role == Wl.CLIENT:
 		var g := current_game()
-		if g != "" and my_player_options.is_empty() and AppLobbyModel.game_problem(services.registry, lobby()) == "":
+		if g != "" and g != _options_game and AppLobbyModel.game_problem(services.registry, lobby()) == "":
+			_options_game = g
 			my_player_options = AppLobbyModel.resolve_player_options(services.registry, g, {})
-			_send_player_info()
+		_send_player_info_if_changed()
 		if page == PAGE_CONNECTING:
 			page = PAGE_LOBBY
 			_show_lobby_page()
@@ -760,7 +783,7 @@ static func refusal_text(reason: String) -> String:
 		"rate_limited":
 			return AppScreen.t("APP_REFUSED_RATE")
 		"host_left":
-			return AppScreen.t("APP_REFUSED_HOST_LEFT")
+			return AppScreen.t("APP_LOBBY_HOST_LEFT")
 		AppLobbyModel.MISSING_GAME:
 			return AppScreen.t("APP_LOBBY_MISSING_GAME")
 	return AppScreen.t("APP_REFUSED_OTHER").format([reason])

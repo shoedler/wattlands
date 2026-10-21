@@ -11,6 +11,9 @@ var info: Dictionary = {}
 var emit_on_change: bool = true
 ## -1: computed from ready flags; 0/1 forced.
 var all_ready_override: int = -1
+## Echo each player_info as a lobby_changed (a host broadcasting lobby_state).
+var echo_player_info: bool = false
+var _echo_depth: int = 0
 
 
 func record(call_name: String, args: Array = []) -> void:
@@ -56,6 +59,15 @@ func leave() -> void:
 func set_local_player_info(p_info: Dictionary) -> void:
 	info = p_info.duplicate(true)
 	record("set_local_player_info", [info])
+	# Like a real host: every player_info comes back as a lobby_state broadcast. The depth guard
+	# keeps a looping client from overflowing the stack, so its test fails instead of crashing.
+	if echo_player_info and _echo_depth < 20:
+		_echo_depth += 1
+		var po: Dictionary = lobby.get("player_options", {})
+		po[local_peer] = (info.get("player_options", {}) as Dictionary).duplicate(true)
+		lobby["player_options"] = po
+		lobby_changed.emit(lobby)
+		_echo_depth -= 1
 
 
 func set_ready(ready_flag: bool) -> void:
