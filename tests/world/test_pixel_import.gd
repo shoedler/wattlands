@@ -4,15 +4,34 @@ extends GutTest
 ## filtering on CanvasItems.
 
 var _dir: String = ""
+## Every temp dir an earlier test in this file used (test_temp_dirs_are_removed checks them).
+var _used_dirs: Array[String] = []
 
 
 func before_each() -> void:
 	_dir = Paths.make_temp_dir("wattlands_pixel_import")
+	_used_dirs.append(_dir)
 	Paths.set_override(_dir)
 
 
+## The temp dir goes with each test (W4r2 R41, W3 QT-4): PNGs and .import files included.
 func after_each() -> void:
 	Paths.set_override("")
+	_remove_tree(_dir)
+
+
+static func _remove_tree(dir: String) -> void:
+	if dir == "" or not DirAccess.dir_exists_absolute(dir):
+		return
+	var da := DirAccess.open(dir)
+	if da == null:
+		return
+	da.include_hidden = true
+	for f in da.get_files():
+		DirAccess.remove_absolute(dir.path_join(f))
+	for sub in da.get_directories():
+		_remove_tree(dir.path_join(sub))
+	DirAccess.remove_absolute(dir)
 
 
 func _png(name: String) -> String:
@@ -122,3 +141,11 @@ func test_apply_to_sets_nearest() -> void:
 	assert_eq(s.texture_repeat, CanvasItem.TEXTURE_REPEAT_DISABLED)
 	PixelImportPreset.apply_to(null)
 	pass_test("null is ignored")
+
+
+## Runs last (GUT keeps file order): no earlier test left its temp dir behind.
+func test_zz_temp_dirs_are_removed() -> void:
+	assert_gt(_used_dirs.size(), 1, "earlier tests used temp dirs")
+	for d in _used_dirs:
+		if d != _dir:
+			assert_false(DirAccess.dir_exists_absolute(d), "%s was removed" % d)
