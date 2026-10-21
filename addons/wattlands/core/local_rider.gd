@@ -49,8 +49,8 @@ extends Node
 ##   (SafetyGovernor.adopt_connection): the warm-up (BRIEF 4.6.8 counts from the first pedal
 ##   stroke after the trainer connects, so it continues from the menus into a session and
 ##   across sessions) and what was last written to the trainer (so the next mode change is
-##   ramped from the trainer's real state). A different device object starts afresh. The device is never freed here;
-##   its creator owns it. A ride still recording is finished (stopped and saved) first, with
+##   ramped from the trainer's real state). A different device object starts afresh. The
+##   device is never freed here; its creator owns it. A ride still recording is finished (stopped and saved) first, with
 ##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
 ##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
 ##   nothing from an earlier session steers the mock and a profile's at_s, surges, ramps
