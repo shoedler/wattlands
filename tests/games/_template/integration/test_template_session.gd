@@ -1,11 +1,12 @@
 extends GutTest
 ## The game through the real platform runtime: GameRegistry, PlanValidator and GameSimRunner
-## (sdk-runtime) on top of the trainer stack. Each test is pending while the runtime is still a W0
-## stub (the sdk-tools worktree builds before sdk-runtime merges); from W2 on they run for real.
+## (sdk-runtime) on top of the trainer stack.
 
 const F := preload("res://tests/games/_template/template_fakes.gd")
 
 var _dirs: Array[String] = []
+## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
+var _runners: Array[GameSimRunner] = []
 
 
 func before_each() -> void:
@@ -15,21 +16,14 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	for r in _runners:
+		if is_instance_valid(r):
+			r.cleanup()
+	_runners.clear()
 	Paths.set_override("")
 	for d in _dirs:
 		GameSimCli.remove_tree(d)
 	_dirs.clear()
-
-
-func _runtime_ready() -> bool:
-	if PlanValidator.finalize(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 60)])) == null:
-		pending("needs sdk-runtime's PlanValidator (W2)")
-		return false
-	var probe := PackedStringArray(["--game=" + F.GAME_ID, "--report=" + _dirs[0].path_join("probe.json")])
-	if str(GameSimRunner.parse_args(probe).get("error", "")) == "not implemented":  # valid flags: no push_error
-		pending("needs sdk-runtime's GameSimRunner (W2)")
-		return false
-	return true
 
 
 ## The installed games, plus the template itself (never listed, so the GameRegistry autoload
@@ -51,8 +45,6 @@ func _is_scaffolded_game() -> bool:
 
 
 func test_the_manifest_validates_and_the_listing_rule_holds() -> void:
-	if not _runtime_ready():
-		return
 	var reg := WlGameRegistry.new()
 	add_child_autofree(reg)
 	reg.scan()
@@ -61,8 +53,6 @@ func test_the_manifest_validates_and_the_listing_rule_holds() -> void:
 
 
 func test_every_plan_passes_the_plan_validator_without_warnings() -> void:
-	if not _runtime_ready():
-		return
 	for content_id: String in F.manifest()["contents"]:
 		for offset: int in [-10, 0, 5]:
 			var ctx := F.make_ctx(1, 1, content_id)
@@ -87,6 +77,7 @@ func _run(flags: Array[String]) -> Dictionary:
 	parsed["registry"] = _registry()
 	var runner := GameSimRunner.new()
 	add_child_autofree(runner)
+	_runners.append(runner)
 	assert_eq(runner.setup(parsed), "")
 	var reason := runner.run_to_end()
 	var out := runner.build_report()
@@ -96,8 +87,6 @@ func _run(flags: Array[String]) -> Dictionary:
 
 
 func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:
-	if not _runtime_ready():
-		return
 	var r := _run(["--content=default", "--players=1", "--bots=1", "--rider=erg", "--seed=3"])
 	assert_eq(r["_end"], "complete")
 	assert_eq(r.get("end_reason"), "complete")
@@ -113,8 +102,6 @@ func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:
 
 
 func test_a_host_run_with_two_humans_completes() -> void:
-	if not _runtime_ready():
-		return
 	var r := _run(["--content=short", "--players=2", "--bots=0", "--rider=erg", "--seed=5"])
 	assert_eq(r["_end"], "complete")
 	assert_eq((r.get("fit_paths", []) as Array).size(), 2)
