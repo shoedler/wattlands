@@ -676,6 +676,11 @@ func _make_loopback_nets(count: int) -> Variant:
 		cn.join_room(host_net.room_code)
 		if not _pump(out, func() -> bool: return cn.local_peer != 0):
 			return "net: loopback client %d never joined room %s" % [i, host_net.room_code]
+	# mark_started() fixes the session's players from the host's lobby, which lists a peer only
+	# once its player_info arrived; a client still missing then would be refused with
+	# session_in_progress and never get session_start.
+	if not _pump(out, func() -> bool: return host_net.peers().size() == count):
+		return "net: the loopback host never listed all %d riders in its lobby" % count
 	host_net.mark_started()
 	return out
 

@@ -145,3 +145,9 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: when `confirm` resumes a paused SOLO session it is consumed; the game's `local_intents` never sees it. `pedal_start` that resumes still reaches the game as a gesture.
 - Alternatives: pass it through.
 - Reason: a rider pressing A to resume must not also buy, cast or pick in the game on the same tick.
+
+## 2026-10-21 (W2): Loopback HOST runs wait for every client's player_info
+
+- Decision: `GameSimRunner` starts a HOST run (`WlNetSession.mark_started()`) only once the host's lobby lists every human rider, i.e. after each loopback client's `player_info` has arrived.
+- Alternatives: start as soon as each client has a peer id (W1); have NetSession admit any connected peer at the start.
+- Reason: `mark_started()` fixes the session's players from the lobby, which lists a peer only after its `player_info`; the last client was still in flight, got `session_in_progress` and never rode, so the host's roster showed it at 0 W (qa W1) and HOST runs never reached `complete`.
