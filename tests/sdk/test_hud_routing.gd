@@ -14,6 +14,7 @@ var _banners: Array = []
 var _pbands: Array = []
 var _local: LocalRider = null
 var _bot: LocalRider = null
+var _tmp: Array[String] = []
 
 
 func before_each() -> void:
@@ -39,6 +40,18 @@ func before_each() -> void:
 	_bus.toast_requested.connect(func(key: String, args: Variant) -> void: _toasts.append([key, args]))
 	_bus.banner_requested.connect(func(key: String, args: Variant, seconds: float) -> void: _banners.append([key, args, seconds]))
 	_bus.power_band_changed.connect(func(peer: int, lo: float, hi: float) -> void: _pbands.append([peer, lo, hi]))
+
+
+func after_each() -> void:
+	for d in _tmp:
+		Kit.remove_tree(d)
+	_tmp.clear()
+
+
+func _multi(humans: int, content: String = "tiny", extra: Dictionary = {}, bots: int = 0) -> Dictionary:
+	var b := Kit.multi(_root, humans, content, extra, bots)
+	_tmp.append(str(b["tmp"]))
+	return b
 
 
 func test_power_band_for_the_hosts_own_rider() -> void:
@@ -150,7 +163,7 @@ func test_readout_is_local() -> void:
 
 
 func test_host_power_band_reaches_a_clients_gauge_and_mock_trainer() -> void:
-	var b := Kit.multi(_root, 3)
+	var b := _multi(3)
 	assert_eq(b["err"], "")
 	Kit.start(b)
 	Kit.step(b, 2)
@@ -168,7 +181,7 @@ func test_host_power_band_reaches_a_clients_gauge_and_mock_trainer() -> void:
 
 
 func test_toast_with_a_peer_reaches_only_that_peer() -> void:
-	var b := Kit.multi(_root, 3)
+	var b := _multi(3)
 	Kit.start(b)
 	Kit.step(b, 2)
 	var counts := [0, 0, 0]
@@ -185,7 +198,7 @@ func test_toast_with_a_peer_reaches_only_that_peer() -> void:
 
 
 func test_roster_reaches_every_client() -> void:
-	var b := Kit.multi(_root, 3, "tiny", {}, 1)
+	var b := _multi(3, "tiny", {}, 1)
 	Kit.start(b)
 	var host: GameHost = b["host"]
 	host.ctx.hud.teammate_status(2, {"in_band": true, "text": "Diesel"})
