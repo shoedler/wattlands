@@ -8,3 +8,4 @@
 - `ctx.directives` (DirectiveRouter), `ctx.hud` (HudRouter), `ctx.intents` (IntentRouter) and `ctx.stats` (SessionStatsTracker): host-side directive checks and routing (a SIM block the governor refuses is taken back), course-grade coalescing, cadence and power bands, toasts and banners per peer, kJ, average and normalized power, best 1/5/20-minute power and time in band.
 - GameSimRunner: the `tools/run_game_sim` and `tools/screenshot` engine and flag parser; SOLO or HOST with loopback clients, bots, FTPs, Autopilot, haptics, options, player options and content overrides; `complete`, `timeout` and `paused` endings; the JSON report with `deterministic_hash`; FIT files per human slot.
 - `tests/sdk/test_conformance.gd` and SdkConformance: the BRIEF 3.6 / 7.3 checks for `_template` and every registered game.
+- Bots ride `erg:compliance=1.0+band` and follow the cadence band a game publishes for them (its centre after a 2 s lag; 90 rpm without one), BRIEF 3.6.
