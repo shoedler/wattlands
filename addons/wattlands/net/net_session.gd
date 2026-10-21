@@ -175,6 +175,8 @@ var _clock_next_at: float = 0.0
 # Snapshots.
 var _snapshots: Array = []
 var _latest_snapshot: Dictionary = {}
+# Host: the latest sent snapshot's text, decoded on demand by latest_snapshot().
+var _latest_snapshot_text: String = ""
 
 # Coalescer: "peer:kind" -> last send time / [peer, data, polls].
 var _co_last: Dictionary = {}
@@ -797,6 +799,11 @@ func last_hosted_code() -> String:
 ## The latest snapshot message ({game_id, seq, state, ...}): received (client) or sent
 ## (host); {} if none.
 func latest_snapshot() -> Dictionary:
+	if _latest_snapshot_text != "":
+		var snap := Protocol.decode(_latest_snapshot_text)
+		_latest_snapshot_text = ""
+		if not snap.is_empty():
+			_latest_snapshot = Protocol.apply_game_int_fields(snap, game_int_fields)
 	return _latest_snapshot
 
 
@@ -839,8 +846,8 @@ func snapshot_pair_at(t: float) -> Dictionary:
 
 func clear_snapshots() -> void:
 	_snapshots.clear()
-	if not is_authority():
-		_latest_snapshot = {}
+	_latest_snapshot = {}
+	_latest_snapshot_text = ""
 
 
 ## The running game's int_fields() for snapshots and events (see game_int_fields).
@@ -1512,9 +1519,7 @@ func _send_text(to: int, type: String, text: String) -> bool:
 		transport.send(to, parsed if parsed is Dictionary else {})
 	_count("sent")
 	if type == "snapshot" and role == Wl.HOST:
-		var snap := Protocol.decode(text)
-		if not snap.is_empty():
-			_latest_snapshot = Protocol.apply_game_int_fields(snap, game_int_fields)
+		_latest_snapshot_text = text
 	return true
 
 
@@ -1674,6 +1679,7 @@ func _reset_room_state() -> void:
 	_session_players.clear()
 	_snapshots.clear()
 	_latest_snapshot = {}
+	_latest_snapshot_text = ""
 	_co_last.clear()
 	_co_pending.clear()
 	_self_inbox.clear()
