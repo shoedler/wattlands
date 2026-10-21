@@ -44,7 +44,12 @@ extends Node
 ##   cadence_band_changed/power_band_changed on the rider's bus when the band changes. The
 ##   cool-down clears both.
 ## - setup() may be called again (for example to turn the menu rider into a session rider):
-##   it rebuilds every component around the given device. The device is never freed here;
+##   it rebuilds every component around the given device. (W2r2) On the same device object
+##   the new governor takes over the old one's trainer-connection state
+##   (SafetyGovernor.adopt_connection): the warm-up (BRIEF 4.6.8 counts from the first pedal
+##   stroke after the trainer connects, so it continues from the menus into a session and
+##   across sessions) and what was last written to the trainer (so the next mode change is
+##   ramped from the trainer's real state). A different device object starts afresh. The device is never freed here;
 ##   its creator owns it. A ride still recording is finished (stopped and saved) first, with
 ##   push_warning, so a rebuild never loses a ride. A MockTrainer device gets its bands
 ##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
@@ -161,6 +166,12 @@ static func live_riders() -> Array[LocalRider]:
 ## A null profile means the defaults; a null slot means profile.to_slot(peer, scaling).
 func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
 	_setup_gen += 1
+	# The governor this setup replaces, when it drove the same device object: what belongs to
+	# the trainer connection (warm-up, the trainer's written state) carries over (W2r2).
+	var prev_gov: SafetyGovernor = null
+	if governor != null and is_instance_valid(governor) and device != null and is_instance_valid(device) \
+			and device == p_device:
+		prev_gov = governor
 	_teardown()
 	_options = p_options.duplicate()
 	peer_id = p_peer_id
@@ -199,6 +210,8 @@ func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device
 	governor.process_mode = Node.PROCESS_MODE_ALWAYS
 	_connect_governor()
 	governor.setup(device)
+	if prev_gov != null and prev_gov != governor and is_instance_valid(prev_gov):
+		governor.adopt_connection(prev_gov)
 	_gov_params = _make_governor_params()
 	governor.configure(_gov_params.duplicate(true))
 	if _options.has("recorder"):
@@ -224,6 +237,21 @@ func set_plan(p_plan: EffortPlan) -> void:
 ## The plan given to set_plan (null before).
 func plan() -> EffortPlan:
 	return _plan
+
+
+## Drop the plan (W2r2): the session is over but the rider isn't set up again yet (its ride
+## still waits to be saved). The governor rides free at SIM grade 0, wind 0
+## (SafetyGovernor.clear_plan), the phase is -1 (a MockTrainer's too) and the bands are
+## cleared; the recorder keeps recording.
+func clear_plan() -> void:
+	_plan = null
+	_phase_index = -1
+	if governor != null and is_instance_valid(governor):
+		governor.clear_plan()
+	if device is MockTrainer:
+		(device as MockTrainer).set_phase(-1)
+	set_cadence_band(0.0, 0.0)
+	set_power_band(0.0, 0.0)
 
 
 ## Enter plan phase `index` (the GameHost's phase tracking, or a client's `phase` message).

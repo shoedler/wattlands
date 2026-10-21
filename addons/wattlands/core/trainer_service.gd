@@ -29,7 +29,11 @@ extends Node
 ##   solo, no plan, not recorded, applying any profile change made meanwhile, and attached
 ##   to the InputRouter again, since GameHost.end_session detaches it). While that
 ##   rider's ride is still recording, the menu reset waits until the ride is finished
-##   (LocalRider.finish_ride), so the results screen can still save it.
+##   (LocalRider.finish_ride), so the results screen can still save it; the session's plan
+##   is dropped at once (LocalRider.clear_plan) all the same. Without a plan the governor
+##   rides SIM grade 0, wind 0, so menus after a session (its cool-down, or an interval cut
+##   short by End ride) ride free at SIM flat (W2r2). The reset keeps the trainer connection's
+##   warm-up (SafetyGovernor.adopt_connection).
 ## - A profile or scaling change outside a session re-sets the rider up (and rebuilds a
 ##   mock whose rider parameters changed); during a session (external tick) or while
 ##   hold_rider(true) it waits for the hand-back or the release.
@@ -178,8 +182,7 @@ func hold_rider(on: bool) -> void:
 	_held = on
 	if on or not was_held:
 		return
-	_menu_reset_due = true
-	_apply_menu_reset()
+	_request_menu_reset()
 
 
 func is_rider_held() -> bool:
@@ -197,8 +200,7 @@ func set_external_tick(on: bool) -> void:
 	if _clock != null:
 		_clock.reset()
 	if was_external:
-		_menu_reset_due = true
-		_apply_menu_reset()
+		_request_menu_reset()
 
 
 ## True while the menu reset after a session or a hold still waits (a ride still recording).
@@ -368,6 +370,19 @@ func _on_settings_changed(key: String) -> void:
 	if _device == null:
 		return
 	_rebuild_menu_rider()
+
+
+## The session or the hold let go of the rider: set it up afresh as the menu rider now, or,
+## while its ride still records, as soon as the ride is saved. Meanwhile the session's plan is
+## dropped at once (LocalRider.clear_plan), so the trainer rides SIM flat in the menus rather
+## than holding the cool-down or an interrupted interval (W2r2).
+func _request_menu_reset() -> void:
+	_menu_reset_due = true
+	_apply_menu_reset()
+	if not _menu_reset_due or _held or _external_tick:
+		return
+	if _rider != null and is_instance_valid(_rider) and not _rider.is_shut_down():
+		_rider.clear_plan()
 
 
 ## Sets the rider up afresh as the menu rider once nothing holds it: not during a session,
