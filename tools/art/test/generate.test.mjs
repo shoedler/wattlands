@@ -146,7 +146,7 @@ test('--select picks a result; a cache-hit run keeps it; a new result replaces i
   let boats = readManifest(root, GAME).requests.filter((e) => e.sprite === 'boat');
   const older = boats[0].request_id;
   const submits = mock.state.counts.submit;
-  let r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--select=boat:${older}`], { env: childEnv() });
+  let r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, `--select=boat:${older}`], { env: childEnv() });
   assert.equal(r.code, 0, r.stderr);
   assert.match(r.stdout, new RegExp(`boat: selected ${older}`));
   assert.equal(mock.state.counts.submit, submits, '--select contacts nothing');
@@ -170,14 +170,14 @@ test('--select rejects unknown sprites, unknown requests and flags it cannot com
   const { mock, root } = await setup(t);
   assert.equal((await gen(root, mock, ['--only=boat'])).code, 0);
   const env = childEnv();
-  let r = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--select=boat:nope'], { env });
+  let r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, '--select=boat:nope'], { env });
   assert.equal(r.code, 2);
   assert.match(r.stderr, /has no request nope for boat/);
-  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--select=ghost:x'], { env });
+  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, '--select=ghost:x'], { env });
   assert.equal(r.code, 2);
-  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--select=boat', '--only=boat'], { env });
+  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, '--select=boat', '--only=boat'], { env });
   assert.equal(r.code, 2);
-  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--select=boat:x', '--only=boat'], { env });
+  r = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, '--select=boat:x', '--only=boat'], { env });
   assert.equal(r.code, 2);
   assert.match(r.stderr, /--select only edits the manifest/);
 });

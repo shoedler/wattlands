@@ -2,8 +2,9 @@
 // WATTLANDS_ALLOW_ART=1, else generate.mjs refuses before any socket opens; --mock runs need neither;
 // generate.mjs never reads WATTLANDS_NO_NETWORK_INTEGRATIONS, so it behaves the same with it set or unset.
 //
-// Every refusal case below runs without --mock and without WATTLANDS_ALLOW_ART, under a preload that
-// makes every connection attempt throw and records it.
+// The art-lock cases below run without --mock and without WATTLANDS_ALLOW_ART, under a preload that
+// makes every connection attempt throw and records it: the refusals, and one case showing that
+// --dry-run and --select (which contact nothing) need neither the variables nor --mock.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';

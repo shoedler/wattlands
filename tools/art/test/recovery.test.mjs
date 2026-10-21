@@ -156,3 +156,24 @@ test('a missing cache file with a known image URL is fetched again for free', as
   assert.equal(mock.state.counts.submit, 1);
   assert.ok(fs.existsSync(path.join(root, e.cache)));
 });
+
+test('a record from another host (real fal in a mock run) is left alone and never contacted', async (t) => {
+  const { mock, root } = await setup(t, { polls_to_complete: 1000 });
+  assert.equal((await gen(root, mock, ['--only=boat', '--timeout-s=0.2'])).code, 1);
+  const m = readManifest(root, GAME);
+  const e = m.requests[0];
+  assert.equal(e.status, 'timeout');
+  e.status_url = `https://queue.fal.run/openai/gpt-image-2.5/requests/${e.request_id}/status`;
+  e.response_url = `https://queue.fal.run/openai/gpt-image-2.5/requests/${e.request_id}`;
+  fs.writeFileSync(manifestFile(root, GAME), JSON.stringify(m, null, 2));
+  mock.configure({ polls_to_complete: 1 });
+  const r = await gen(root, mock, ['--only=boat']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.doesNotMatch(r.stderr, /refusing/);
+  assert.equal(mock.state.counts.submit, 2, 'paid for a new result instead');
+  const after = readManifest(root, GAME).requests;
+  assert.equal(after[0].status, 'timeout');
+  assert.equal(after[0].status_url, e.status_url);
+  assert.equal(after[1].status, 'ok');
+  assert.equal(after[1].selected, true);
+});

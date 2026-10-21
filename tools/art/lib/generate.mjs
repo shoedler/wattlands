@@ -353,6 +353,9 @@ class Run {
       return true;
     }
     for (const e of findRecoverable(this.manifest, this.root, id, p.endpoint, p.input)) {
+      // A record from another host (fal versus the mock) is left exactly as it is.
+      const where = e.image_url ?? e.status_url;
+      if (!where || !this.client.allowed(where) || (e.response_url && !this.client.allowed(e.response_url))) continue;
       let ok = false;
       if (e.image_url) {
         ok = await this.download(e);
