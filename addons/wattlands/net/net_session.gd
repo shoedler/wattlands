@@ -106,6 +106,9 @@ var token_path: String = ""
 var recent_rooms_file: String = ""
 ## Relay URL for the default RelayTransport; "" means RelayTransport.default_url().
 var relay_url: String = ""
+## Where installed games and their manifests come from: any Node with games() (manifests
+## with "id" and "version") and manifest(id); null means the GameRegistry autoload.
+var registry: Node = null
 ## Lobby limits (set_game_manifest() fills them from game.json).
 var max_players: int = NetMessages.MAX_PEERS
 var min_players: int = 1
@@ -229,9 +232,8 @@ func use_transport(t: Transport) -> void:
 
 ## Offline lobby for SOLO play (no transport; the local rider is peer 1).
 func start_offline() -> void:
-	if transport != null and transport.is_open():
-		_explicit_leave = true
-		transport.leave()
+	_explicit_leave = true
+	_leave_transport()
 	_reset_room_state()
 	offline = true
 	role = ""
@@ -280,8 +282,7 @@ func join_room(code: String) -> void:
 func leave() -> void:
 	_explicit_leave = true
 	_reconnect_pending = false
-	if transport != null and transport.is_open():
-		transport.leave()
+	_leave_transport()
 	_clear_token_file()
 	_reset_room_state()
 	offline = false
@@ -627,7 +628,8 @@ func is_authority() -> bool:
 
 
 ## Build player_info from a RiderProfile and keep it current: p_eff_per_w follows the
-## lobby's scaling mode (re-sent when the host changes it).
+## lobby's scaling mode (re-sent when the host changes it). Empty `games` means the
+## registry's installed games ({id: version}).
 func set_local_profile(profile: RiderProfile, games: Dictionary = {}, player_options: Dictionary = {},
 		trainer: String = "") -> void:
 	_local_profile = profile
@@ -873,6 +875,10 @@ static func reason_text(reason: String) -> String:
 # --- transport events ----------------------------------------------------------------------
 
 func _on_connected() -> void:
+	if _explicit_leave or role == "":
+		# A room that arrived after leave(), a refusal or the session's end: leave it.
+		_leave_transport()
+		return
 	local_peer = transport.local_peer
 	host_peer = transport.host_peer
 	room_code = transport.room_code
@@ -908,6 +914,9 @@ func _on_disconnected(reason: String) -> void:
 	_reconnect_in_flight = false
 	if reason == "host_left":
 		_end("host_left", STATE_OFFLINE)
+		return
+	if _reconnect_pending and reason == "rate_limited":
+		# The relay throttled a rejoin attempt: try again at the next backoff step.
 		return
 	if REFUSALS.has(reason):
 		_refuse(reason)
@@ -1048,6 +1057,12 @@ func _on_relay_error(code: String) -> void:
 # --- host handlers ----------------------------------------------------------------------
 
 func _on_player_info(from: int, data: Dictionary) -> void:
+	if from != local_peer and not session_started and not _lobby_humans().has(from) \
+			and _lobby_humans().size() >= max_players:
+		# Several peers joined before any of them sent player_info: the first ones fill the
+		# lobby, the rest are refused.
+		_refuse_peer(from, "room_full")
+		return
 	var info := _normalize_info(data)
 	_infos[from] = info
 	if from != local_peer and not _join_order.has(from):
@@ -1073,6 +1088,8 @@ func _on_ready(from: int, data: Dictionary) -> void:
 
 func _sanitize_telemetry(from: int, data: Dictionary) -> void:
 	var tm: Dictionary = data["tm"]
+	# A client speaks only for its own rider.
+	tm["peer"] = from
 	var intents: Variant = tm.get("intents", [])
 	if not intents is Array:
 		return
@@ -1397,7 +1414,8 @@ func _ensure_local_info() -> void:
 func _info_from_local_profile() -> Dictionary:
 	var mode := _scaling if is_authority() else str(lobby.get("scaling", Wl.FAIR_FTP))
 	var po: Variant = _local_info.get("player_options", {})
-	var info := player_info_from_profile(_local_profile, mode, _local_profile_games,
+	var games := _local_profile_games if not _local_profile_games.is_empty() else _registry_games()
+	var info := player_info_from_profile(_local_profile, mode, games,
 		po if po is Dictionary else {}, _local_profile_trainer)
 	return info
 
@@ -1430,10 +1448,17 @@ static func _normalize_info(info: Dictionary) -> Dictionary:
 	return d
 
 
-## {id: version} of the games the GameRegistry autoload lists ({} without one).
+## The game registry: `registry`, else the GameRegistry autoload (null without one).
+func _registry() -> Node:
+	if registry != null and is_instance_valid(registry):
+		return registry
+	return get_node_or_null("/root/GameRegistry") if is_inside_tree() else null
+
+
+## {id: version} of the games the registry lists ({} without one).
 func _registry_games() -> Dictionary:
 	var out: Dictionary = {}
-	var reg: Node = get_node_or_null("/root/GameRegistry") if is_inside_tree() else null
+	var reg := _registry()
 	if reg == null or not reg.has_method("games"):
 		return out
 	var list: Variant = reg.call("games")
@@ -1444,9 +1469,9 @@ func _registry_games() -> Dictionary:
 	return out
 
 
-## A game's manifest from the GameRegistry autoload ({} if unknown or no registry).
+## A game's manifest from the registry ({} if unknown or no registry).
 func _registry_manifest(game_id: String) -> Dictionary:
-	var reg: Node = get_node_or_null("/root/GameRegistry") if is_inside_tree() else null
+	var reg := _registry()
 	if reg == null or not reg.has_method("manifest"):
 		return {}
 	var m: Variant = reg.call("manifest", game_id)
@@ -1531,12 +1556,18 @@ func _coalesce_send(to: int, kind: String, d: Dictionary) -> bool:
 		return _send_text(to, "directive", Protocol.encode(d))
 	if _co_pending.has(key):
 		_count("coalesced")
-	_co_pending[key] = [to, d.duplicate(true), _polls]
+		var held: Array = _co_pending[key]
+		held[1] = d.duplicate(true)
+		return true
+	# [peer, data, poll and time when it started waiting]
+	_co_pending[key] = [to, d.duplicate(true), _polls, now]
 	return true
 
 
 ## Flush pending coalesced directives: for one peer (before another message to it), or
-## all due ones (peer -1, due_only) from poll().
+## all due ones (peer -1, due_only) from poll(). A pending one is due once 100 ms passed
+## since the last send of its kind, or, if this session's clock stands still (only polled
+## after a set_time()), two polls after it started waiting.
 func _flush_coalesced(peer: int, due_only: bool) -> void:
 	if _co_pending.is_empty():
 		return
@@ -1548,7 +1579,8 @@ func _flush_coalesced(peer: int, due_only: bool) -> void:
 			continue
 		if due_only:
 			var last := float(_co_last.get(key, -INF))
-			if now - last < COALESCE_S - 1e-9 and _polls - int(e[2]) < 2:
+			var frozen := now <= float(e[3]) and _polls - int(e[2]) >= 2
+			if now - last < COALESCE_S - 1e-9 and not frozen:
 				continue
 		_co_pending.erase(key)
 		_co_last[key] = now
@@ -1615,6 +1647,14 @@ func _in_room() -> bool:
 	return transport != null and transport.is_open() and not offline
 
 
+## Leave the room, or cancel a create/join (or a rejoin) still in flight.
+func _leave_transport() -> void:
+	if transport == null:
+		return
+	if transport.is_open() or transport is RelayClientTransport:
+		transport.leave()
+
+
 func _reconnect_step() -> void:
 	if not _reconnect_pending or transport == null:
 		return
@@ -1636,8 +1676,7 @@ func _refuse(reason: String) -> void:
 	refusal_reason = reason
 	_explicit_leave = true
 	_reconnect_pending = false
-	if transport != null and transport.is_open():
-		transport.leave()
+	_leave_transport()
 	_clear_token_file()
 	_reset_room_state()
 	_set_state(STATE_ERROR, reason)
@@ -1650,8 +1689,7 @@ func _end(reason: String, end_state: String) -> void:
 	refusal_reason = reason
 	_explicit_leave = true
 	_reconnect_pending = false
-	if transport != null and transport.is_open():
-		transport.leave()
+	_leave_transport()
 	_clear_token_file()
 	_reset_room_state()
 	_set_state(end_state, reason)

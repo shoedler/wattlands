@@ -81,11 +81,14 @@ func send_encoded(to: int, d_text: String) -> void:
 	_send_msg_text(to, d_text)
 
 
-## Leave the room explicitly (the relay sends host_left when the host leaves).
+## Leave the room explicitly (the relay sends host_left when the host leaves). Also cancels a
+## create or join still in flight: the relay gets a leave (harmless outside a room) and the
+## socket closes, so a late created/joined never lands.
 func leave() -> void:
+	var was_pending := not _pending.is_empty()
 	_pending = {}
 	var was_open := _in_room
-	if _socket_state == SocketState.OPEN and _in_room:
+	if _socket_state == SocketState.OPEN and (_in_room or was_pending):
 		_send_envelope({"t": "leave"})
 	_leaving = true
 	_in_room = false
@@ -169,7 +172,11 @@ func _handle_text(text: String) -> void:
 
 ## One decoded relay envelope ("msg" carries a decoded game message in "d").
 func _handle_envelope(env: Dictionary) -> void:
-	match str(env["t"]):
+	var t := str(env["t"])
+	if (t == "created" or t == "joined") and (_pending.is_empty() or _leaving):
+		# A late answer to a create or join that was cancelled.
+		return
+	match t:
 		"created":
 			room_code = str(env["code"])
 			local_peer = int(env["peer"])

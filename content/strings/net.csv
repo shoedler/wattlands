@@ -20,3 +20,6 @@ NET_READY_MISSING_GAME,"You don't have {game} installed, so you can't ready up."
 NET_READY_VERSION_MISMATCH,"Your {game} is version {mine}, the host has {theirs}. Update to the same version to ready up."
 NET_LAN_SEARCHING,Looking for rooms on your network…
 NET_LAN_NOT_FOUND,No room with that code on your network.
+NET_REFUSED_CLOSED,You left the room.
+NET_REFUSED_TIMEOUT,The relay server stopped answering.
+NET_REFUSED_ERROR,The connection to the room failed.

@@ -422,23 +422,36 @@ static func _hints_for(text: String) -> int:
 	return h
 
 
-## True if some key ending in "_id" holds a number (`_id":` then a digit or "-"), so a
-## message whose only *_id keys hold strings (game_id, content_id) skips the walk.
+## True if some key ending in "_id" holds a number (`_id"`, a colon, then a digit or "-",
+## with any JSON whitespace between), so a message whose only *_id keys hold strings
+## (game_id, content_id) skips the walk.
 static func _has_numeric_id(text: String) -> bool:
+	var n := text.length()
 	var from := 0
 	while true:
-		var at := text.find("_id\":", from)
+		var at := text.find("_id\"", from)
 		if at < 0:
 			return false
-		var k := at + 5
-		while k < text.length() and text[k] == " ":
-			k += 1
-		if k < text.length():
+		from = at + 4
+		var k := _skip_ws(text, from, n)
+		if k >= n or text.unicode_at(k) != 58:  # ':'
+			continue
+		k = _skip_ws(text, k + 1, n)
+		if k < n:
 			var c := text.unicode_at(k)
 			if (c >= 48 and c <= 57) or c == 45:
 				return true
-		from = at + 5
 	return false
+
+
+## The first index at or after `k` that is not JSON whitespace (space, tab, LF, CR).
+static func _skip_ws(text: String, k: int, n: int) -> int:
+	while k < n:
+		var c := text.unicode_at(k)
+		if c != 32 and c != 9 and c != 10 and c != 13:
+			return k
+		k += 1
+	return k
 
 
 static func _reject(reason: String, text: String) -> Dictionary:

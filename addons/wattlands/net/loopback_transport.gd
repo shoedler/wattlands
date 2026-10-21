@@ -113,6 +113,8 @@ func _send_msg_text(to: int, d_text: String) -> void:
 
 
 func _socket_close() -> void:
+	# Frames still queued belong to the closed socket and are never read.
+	_inbox.clear()
 	if _conn != 0 and _hub != null:
 		var conn := _conn
 		_conn = 0
