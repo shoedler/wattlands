@@ -1,2 +1,26 @@
 keys,en
 RIDES_MODULE_NAME,Rides
+RIDES_ACTIVITY_NAME,Wattlands: {game}
+RIDES_ACTIVITY_DESCRIPTION,"{content}: {kj} kJ, {avg_w} W average. Recorded with Wattlands on a smart trainer."
+RIDES_UPLOAD_TO_STRAVA,Upload to Strava
+RIDES_UPLOAD_QUEUED,Waiting to upload
+RIDES_UPLOAD_UPLOADING,Uploading to Strava
+RIDES_UPLOAD_PROCESSING,Strava is processing the ride
+RIDES_UPLOAD_UPLOADED,Uploaded to Strava
+RIDES_UPLOAD_DUPLICATE,Already on Strava
+RIDES_UPLOAD_FAILED,Upload failed: {detail}
+RIDES_UPLOAD_OFFLINE,Offline: the upload will be retried
+RIDES_STRAVA_CONNECT,Connect Strava
+RIDES_STRAVA_DISCONNECT,Disconnect Strava
+RIDES_STRAVA_DISCONNECTED,Strava not connected
+RIDES_STRAVA_CONNECTING,Connecting to Strava. Approve Wattlands in your browser.
+RIDES_STRAVA_CONNECTED,Strava connected
+RIDES_STRAVA_ERROR,Strava connection failed: {detail}
+RIDES_STRAVA_CLIENT_ID,Client ID
+RIDES_STRAVA_CLIENT_SECRET,Client secret
+RIDES_STRAVA_HELP,"Create your own Strava API app at strava.com/settings/api with the callback domain localhost, then enter its client ID and secret here."
+RIDES_STRAVA_AUTO_UPLOAD,Upload rides automatically
+RIDES_HISTORY,Rides
+RIDES_REUPLOAD,Upload again
+RIDES_IMPORT_FTP_WEIGHT,Import FTP and weight from Strava
+RIDES_SAVED,Ride saved
