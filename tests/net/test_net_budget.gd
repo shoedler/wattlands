@@ -119,3 +119,114 @@ func test_a_newer_snapshot_replaces_the_queued_one_and_keeps_order() -> void:
 		if str(d.get("type", "")) in ["snapshot", "event"]:
 			got.append([d["type"], int(d["seq"])])
 	assert_eq(got, [["event", 1], ["snapshot", 2]])
+
+
+## W4 R11 (PROTOCOL 6, GAME_SDK 10: under the budget snapshots "arrive less often (the newest
+## wins)"): with the 8-rider load running, a queued snapshot replaced by every newer one would go
+## to the back each time and never reach the front, so a client got no snapshot for as long as
+## the load lasted. A replaceable frame stops being replaced once its chain is SUPERSEDE_MAX_S
+## old, so snapshots, rosters and coalesced directives keep arriving during the load, in order.
+func test_snapshots_keep_arriving_while_the_load_lasts() -> void:
+	hub.enforce_limits(true)
+	var r := room(["1", "1", "1", "1", "1", "1", "1"])
+	var h := r[0]
+	var state := {"lanes": []}
+	clear_logs()
+	var seq := 0
+	var last := {"snapshot": [0, 0.0, 0.0], "roster": [0, 0.0, 0.0], "course_grade": [0, 0.0, 0.0]}
+	var qlen: Array[int] = []
+	for step in 600:
+		var t := step * Wl.SIM_DT
+		hub.advance(Wl.SIM_DT)
+		if step % 2 == 0:
+			seq += 1
+			h.broadcast(Protocol.game_msg("event", {"seq": seq, "events": [{"type": "tick", "n": step}]}))
+			h.broadcast(Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "tick": seq * 2, "state": state}))
+		if step % 10 == 0:
+			h.broadcast(Protocol.game_msg("roster", {"riders": {1: {"raw_w": 200.0}}}))
+			for peer in range(2, 9):
+				h.send_to(peer, Protocol.game_msg("directive", {"kind": "request", "id": step * 10 + peer, "directive": {"target_pct": 70.0, "duration_s": 1.0}}))
+				h.send_to(peer, Protocol.game_msg("directive", {"kind": "course_grade", "grade_pct": 2.0 + step}))
+				h.send_to(peer, Protocol.game_msg("directive", {"kind": "cadence_band", "lo_rpm": 80.0, "hi_rpm": 95.0}))
+		if step % 20 == 0:
+			for peer in range(2, 9):
+				h.send_to(peer, Protocol.game_msg("directive", {"kind": "power_band", "lo_w": 150.0, "hi_w": 210.0}))
+			qlen.append(h.queued_frames())
+		for s in r:
+			s.tick(Wl.SIM_DT)
+		for what: String in last.keys():
+			var n := _arrived("c1", what)
+			var e: Array = last[what]
+			if n != int(e[0]):
+				e[2] = maxf(float(e[2]), t - float(e[1]))
+				e[0] = n
+				e[1] = t
+	var end_t := 600 * Wl.SIM_DT
+	for what: String in last.keys():
+		var e: Array = last[what]
+		e[2] = maxf(float(e[2]), end_t - float(e[1]))
+		gut.p("%s: %d arrived at c1 during the load, longest gap %.2f s" % [what, int(e[0]), float(e[2])])
+		assert_lt(float(e[2]), 1.5, "%s: c1 gets one at least every 1.5 s during the load" % what)
+	gut.p("host queue every 1 s: %s; stats %s" % [str(qlen), str(h.stats)])
+	assert_gt(int(h.stats["superseded"]), 0, "replaceable frames still give way")
+	assert_lt(qlen.max(), 100, "the backlog stays bounded (at most two frames of each replaceable key)")
+	assert_lte(qlen.slice(-10).max(), qlen.slice(10, 20).max() + 10, "and stops growing")
+	assert_eq(int(hub.error_counts.get("rate_limited", 0)), 0, "and the relay rate-limits nothing")
+	# Order holds: snapshots arrive with rising seq, and each after the event batch of its tick.
+	var order: Array = []
+	for m: Array in messages("c1"):
+		var d: Dictionary = m[2]
+		if str(d.get("type", "")) in ["snapshot", "event"]:
+			order.append([str(d["type"]), int(d["seq"])])
+	var last_event := 0
+	var last_snap := 0
+	for o: Array in order:
+		if o[0] == "event":
+			last_event = int(o[1])
+		else:
+			assert_lte(int(o[1]), last_event, "snapshot %d never overtakes its event batch" % int(o[1]))
+			assert_gt(int(o[1]), last_snap, "snapshots arrive newest-last")
+			last_snap = int(o[1])
+
+
+## Frames of `what` (a message type, or a coalesced directive kind) that reached `label`.
+func _arrived(label: String, what: String) -> int:
+	if what == "snapshot" or what == "roster":
+		return messages(label, what).size()
+	var n := 0
+	for m: Array in messages(label, "directive"):
+		if str((m[2] as Dictionary).get("kind", "")) == what:
+			n += 1
+	return n
+
+
+## A replaceable frame keeps being replaced while its chain is young; once the chain is
+## SUPERSEDE_MAX_S old it stays where it is and the newer one waits behind it, where newer ones
+## keep replacing it: never more than two frames of one key, in order, the newest last.
+func test_a_queued_snapshot_stops_being_replaced_once_its_chain_is_old() -> void:
+	var r := room(["1"])
+	var h := r[0]
+	h.send_budget_per_s = 0.1
+	h.send_burst = 1.0
+	h.set_time(10.0)
+	h.set("_tokens", 0.0)
+	h.set("_tokens_t", 10.0)
+	clear_logs()
+	for n in range(1, 41):  # 2 s of snapshots at 20 Hz, no token to send any
+		h.broadcast(Protocol.game_msg("snapshot", {"game_id": "x", "seq": n, "tick": n, "state": {}}))
+		h.tick(Wl.SIM_DT)
+	var seqs: Array[int] = []
+	for e: Array in h.get("_outq"):
+		seqs.append(int(JSON.parse_string(str(e[2]))["seq"]))
+	gut.p("queued snapshot seqs after 2 s: %s" % str(seqs))
+	assert_eq(seqs, [10, 40] as Array[int], "the chain kept at 0.5 s, then the newest behind it")
+	assert_eq(int(h.stats["superseded"]), 38)
+	# The budget comes back: the kept one goes out first, then the newest.
+	h.send_budget_per_s = 50.0
+	for k in 20:
+		h.tick(Wl.SIM_DT)
+	pump()
+	var got: Array[int] = []
+	for m: Array in messages("c1", "snapshot"):
+		got.append(int((m[2] as Dictionary)["seq"]))
+	assert_eq(got, [10, 40] as Array[int])

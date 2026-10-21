@@ -32,7 +32,14 @@ extends Node
 ## so the relay never drops one with rate_limited. Frames wait in one queue, in order, while
 ## the bucket is empty; a newer snapshot, roster, lobby_state or coalesced directive (same
 ## recipient and kind) replaces the queued older one and goes to the back, every other message
-## (request, phase, plan, event, telemetry, ...) waits its turn and is never dropped.
+## (request, phase, plan, event, telemetry, ...) waits its turn and is never dropped. Under
+## sustained overload a frame that is replaced every time before it reaches the front would
+## never be sent (W4 R11: clients got no snapshot while the load lasted), so a replaceable
+## frame whose chain of replacements started SUPERSEDE_MAX_S ago is kept where it is and the
+## newer one queues behind it; at most two frames of one key wait (the kept one and the newest,
+## which newer ones keep replacing). Each key then still goes out about once per queue drain,
+## the newest always arrives in the end, the queue stays bounded, and nothing ever moves ahead
+## of a frame queued before it.
 ## Host reclaim (W3 NET-1): when the host gets peer 1 back after a drop, the relay's
 ## joined.peers says who is still there: a session peer that left meanwhile gets peer_left
 ## (reason "dropped"), one that came back gets peer_joined and rejoin_requested, every other
@@ -80,6 +87,9 @@ const COALESCED_KINDS: Array[String] = [NetMessages.DIRECTIVE_COURSE_GRADE,
 const COALESCE_S := 0.1
 ## A coalesced directive waiting on a clock that stands still goes out after this many polls.
 const FROZEN_CLOCK_POLLS := 3
+## A queued replaceable frame is replaced by a newer one only while its chain of replacements
+## is younger than this (seconds); then it stays and goes out (see the class comment).
+const SUPERSEDE_MAX_S := 0.5
 ## OWNERSHIP 3.1 C11: at most 32 intents per telemetry message, each <= 1 KB.
 const MAX_INTENTS := 32
 const MAX_INTENT_BYTES := 1024
@@ -227,7 +237,8 @@ var _co_pending: Dictionary = {}
 var _self_inbox: Array[String] = []
 
 # Send budget: tokens, the time they were last refilled, polls the clock stood still, and the
-# queue of frames waiting for a token: [to, type, text, key] ("" key: never replaced).
+# queue of frames waiting for a token: [to, type, text, key, since] ("" key: never replaced;
+# since: when the first frame this one replaced was queued).
 var _tokens: float = -1.0
 var _tokens_t: float = 0.0
 var _still_polls: int = 0
@@ -1828,13 +1839,25 @@ func _send_text(to: int, type: String, text: String, key: String = "") -> bool:
 		return false
 	if key == "" and (type == "snapshot" or type == "roster"):
 		key = "%s:%d" % [type, to]
+	var now := _clock_now()
+	var since := now
 	if key != "":
+		var newest := -1
+		var waiting := 0
 		for i in range(_outq.size() - 1, -1, -1):
 			if str((_outq[i] as Array)[3]) == key:
-				_outq.remove_at(i)
+				waiting += 1
+				if newest < 0:
+					newest = i
+		if newest >= 0:
+			var chain := float((_outq[newest] as Array)[4])
+			# The newest queued frame of this key is replaced while its chain is young (a clock
+			# that went backwards counts as old), or when an older kept one already waits.
+			if waiting >= 2 or (now >= chain and now - chain < SUPERSEDE_MAX_S):
+				since = chain
+				_outq.remove_at(newest)
 				_count("superseded")
-				break
-	_outq.append([to, type, text, key])
+	_outq.append([to, type, text, key, since])
 	stats["queued_max"] = maxi(int(stats.get("queued_max", 0)), _outq.size())
 	_pump_out(false)
 	return true
