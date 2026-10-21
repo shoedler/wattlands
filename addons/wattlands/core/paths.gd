@@ -25,6 +25,12 @@ static func set_override(dir: String) -> void:
 	_override = dir.replace("\\", "/").trim_suffix("/")
 
 
+## The current override set by set_override() ("" when none), so a caller can restore it
+## after pointing user_dir() somewhere else for a while (run_game_sim). Added in W2.
+static func get_override() -> String:
+	return _override
+
+
 static func profile_path() -> String:
 	return user_dir().path_join("profile.json")
 

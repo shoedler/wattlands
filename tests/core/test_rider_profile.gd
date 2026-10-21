@@ -15,6 +15,7 @@ func test_defaults_match_brief_3_2() -> void:
 	assert_eq(p.cp_w, 200.0, "CP = FTP")
 	assert_eq(p.weight_kg, 75.0, "weight 75 kg")
 	assert_false(p.share_weight, "weight stays local")
+	assert_false(p.show_wkg, "W/kg only on opt-in (BRIEF 3.3)")
 	assert_eq(p.wprime_j, 20000.0, "W' 20000 J")
 	assert_eq(p.preferred_cadence_rpm, 90.0, "cadence 90")
 	assert_eq(p.difficulty_pct, 50.0, "difficulty 50%")
@@ -37,6 +38,7 @@ func _custom() -> RiderProfile:
 	p.units = "imperial"
 	p.weight_kg = 68.5
 	p.share_weight = true
+	p.show_wkg = true
 	p.ftp_w = 265.0
 	p.ftp_verified = true
 	p.cp_w = 270.0
@@ -66,6 +68,7 @@ func test_round_trip_through_json() -> void:
 	assert_eq(q.color, Color("#0072B2"))
 	assert_eq(q.weight_kg, 68.5)
 	assert_true(q.share_weight)
+	assert_true(q.show_wkg)
 	assert_eq(q.ftp_w, 265.0)
 	assert_true(q.ftp_verified)
 	assert_eq(q.cp_w, 270.0)
@@ -92,6 +95,18 @@ func test_color_parsing() -> void:
 	assert_engine_error_count(0)
 
 
+## W2 (ui-hud): show_wkg is independent of share_weight, and an older profile.json without
+## it loads with the opt-in off.
+func test_show_wkg_is_its_own_opt_in() -> void:
+	var p := RiderProfile.from_dict({"share_weight": true})
+	assert_true(p.share_weight)
+	assert_false(p.show_wkg, "missing in an older file: off")
+	var q := RiderProfile.from_dict({"show_wkg": true})
+	assert_true(q.show_wkg)
+	assert_false(q.share_weight, "showing W/kg never shares the weight")
+	assert_eq(q.to_dict()["show_wkg"], true)
+
+
 func test_missing_cp_defaults_to_ftp() -> void:
 	var p := RiderProfile.from_dict({"ftp_w": 310.0})
 	assert_eq(p.ftp_w, 310.0)
@@ -100,7 +115,7 @@ func test_missing_cp_defaults_to_ftp() -> void:
 
 func test_to_dict_has_every_field() -> void:
 	var keys := RiderProfile.new().to_dict().keys()
-	for k: String in ["display_name", "color", "units", "weight_kg", "share_weight", "ftp_w",
+	for k: String in ["display_name", "color", "units", "weight_kg", "share_weight", "show_wkg", "ftp_w",
 			"ftp_verified", "cp_w", "wprime_j", "preferred_cadence_rpm", "drivetrain",
 			"difficulty_pct", "haptics_on", "haptic_intensity_pct", "grade_min_pct",
 			"grade_max_pct", "skip_warmup", "autopilot_default", "pedal_ui", "scan_interval_s",

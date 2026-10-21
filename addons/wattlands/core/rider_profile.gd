@@ -11,6 +11,9 @@ var units: String = "metric"
 var weight_kg: float = 75.0
 ## Share weight with the host (only WKG/RAW scaling ever needs it; BRIEF 3.2, 3.3).
 var share_weight: bool = false
+## Show W/kg on the HUD and results (opt-in, BRIEF 3.3; independent of share_weight, since
+## W/kg is computed locally). Added in W2.
+var show_wkg: bool = false
 var ftp_w: float = 200.0
 ## False until the rider types an FTP, finishes the FTP test or imports it from Strava.
 var ftp_verified: bool = false
@@ -69,7 +72,7 @@ func to_slot(peer_id: int, scaling_mode: String) -> PlayerSlot:
 func to_dict() -> Dictionary:
 	return {
 		"display_name": display_name, "color": color.to_html(false), "units": units,
-		"weight_kg": weight_kg, "share_weight": share_weight, "ftp_w": ftp_w,
+		"weight_kg": weight_kg, "share_weight": share_weight, "show_wkg": show_wkg, "ftp_w": ftp_w,
 		"ftp_verified": ftp_verified, "cp_w": cp_w, "wprime_j": wprime_j,
 		"preferred_cadence_rpm": preferred_cadence_rpm, "drivetrain": drivetrain,
 		"difficulty_pct": difficulty_pct, "haptics_on": haptics_on,
@@ -89,6 +92,7 @@ static func from_dict(d: Dictionary) -> RiderProfile:
 	p.units = str(d.get("units", p.units))
 	p.weight_kg = float(d.get("weight_kg", p.weight_kg))
 	p.share_weight = bool(d.get("share_weight", p.share_weight))
+	p.show_wkg = bool(d.get("show_wkg", p.show_wkg))
 	p.ftp_w = float(d.get("ftp_w", p.ftp_w))
 	p.ftp_verified = bool(d.get("ftp_verified", p.ftp_verified))
 	p.cp_w = float(d.get("cp_w", p.ftp_w))

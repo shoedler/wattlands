@@ -409,6 +409,49 @@ func test_reconnect_with_a_new_trainer_object_during_a_session_rebinds() -> void
 	assert_eq(svc.status(), TrainerDevice.STATUS_CONTROL_LOST, "the old object is no longer watched")
 
 
+## W2 (BRIEF 4.4): the manager keeps one FtmsTrainer per address, so a reconnect hands back
+## the same object: trainer_ready, then reconnected. The session rider stays and its governor
+## restores the last safe mode (SafetyGovernor.on_trainer_reconnected).
+func test_reconnect_of_the_same_trainer_object_resyncs_the_governor() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	autofree(d1)
+	_manager.make_ready(d1)
+	var r := _session_setup(svc)
+	var g := r.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d1)
+	assert_eq(svc.local_rider(), r)
+	assert_eq(r.device, d1)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1)
+	assert_eq(g.called("setup").size(), 1, "same object: no rebind")
+	assert_eq(r.plan().size(), 2, "the session plan stays")
+	svc.set_external_tick(false)
+	var menu := svc.local_rider()
+	var g2 := menu.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d1)
+	assert_eq(g2.called("on_trainer_reconnected").size(), 1, "the menu rider resyncs too")
+
+
+func test_reconnect_with_a_new_object_rebinds_then_resyncs() -> void:
+	var svc := _make()
+	svc.start()
+	var d1 := Fakes.FakeDevice.new()
+	var d2 := Fakes.FakeDevice.new()
+	autofree(d1)
+	autofree(d2)
+	_manager.make_ready(d1)
+	var r := _session_setup(svc)
+	var g := r.governor as Fakes.FakeGovernor
+	_manager.make_reconnected(d2)
+	assert_push_warning("during a session")
+	assert_eq(r.device, d2)
+	assert_eq(g.setup_device, d2)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1, "the rebound governor learns the flow reset the trainer")
+	_manager.reconnected.emit(d1)
+	assert_eq(g.called("on_trainer_reconnected").size(), 1, "a stale object is ignored")
+
+
 func test_switching_trainers_saves_a_ride_still_recording() -> void:
 	var svc := _make()
 	svc.start()

@@ -80,6 +80,9 @@ class FakeGovernor:
 	func resume() -> void:
 		calls.append(["resume"])
 
+	func on_trainer_reconnected() -> void:
+		calls.append(["on_trainer_reconnected"])
+
 	func shutdown() -> void:
 		shutdown_count += 1
 		calls.append(["shutdown"])
@@ -116,6 +119,17 @@ class FakeGestures:
 		seen.append(sample)
 		var out: Array[StringName] = []
 		for g: Variant in fire_at.get(count, []):
+			out.append(StringName(str(g)))
+		return out
+
+	## advance(t) calls, and advance_fire[n] (1-based call count) -> [gesture names].
+	var advance_calls: Array[float] = []
+	var advance_fire: Dictionary = {}
+
+	func advance(t: float) -> Array[StringName]:
+		advance_calls.append(t)
+		var out: Array[StringName] = []
+		for g: Variant in advance_fire.get(advance_calls.size(), []):
 			out.append(StringName(str(g)))
 		return out
 
@@ -241,6 +255,11 @@ class FakeConnectionManager:
 		dev = d
 		status_changed.emit(TrainerDevice.STATUS_READY, "fake ready")
 		trainer_ready.emit(d)
+
+	## A successful reconnect, as the real manager reports it: trainer_ready, then reconnected.
+	func make_reconnected(d: TrainerDevice) -> void:
+		make_ready(d)
+		reconnected.emit(d)
 
 
 ## Records attach_rider / detach_rider.
