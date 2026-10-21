@@ -1,2 +1,228 @@
 keys,en
 APP_MODULE_NAME,Wattlands
+APP_TITLE,WATTLANDS
+APP_TAGLINE,Pedal-powered party games
+APP_TITLE_PROFILE,Riding as {0} · FTP {1} W
+APP_TITLE_NO_PROFILE,"No profile yet: just pedal, or set one up"
+APP_TITLE_TRAINER,Trainer: {0}
+APP_ZERO_HINT,Keep pedaling {1} s to ride {0} solo
+APP_ZERO_FIRST_RUN,New here? Just pedal: after {1} s you ride {0}
+APP_ZERO_COUNTDOWN,Riding {0} solo in {1} s
+APP_MENU_QUICK,Ride {0}: {1} solo
+APP_MENU_RIDE_NOW,"Ride now: {0}, {1}"
+APP_MENU_CHOOSE_GAME,Choose a game
+APP_MENU_HOST,Host a room
+APP_MENU_JOIN,Join a room
+APP_MENU_PROFILE,Profile
+APP_MENU_SETTINGS,Settings
+APP_MENU_RIDES,Rides
+APP_MENU_SETUP,Set up your profile
+APP_MENU_QUIT,Quit
+APP_NO_GAMES,No games installed
+APP_BACK,Back
+APP_ON,On
+APP_OFF,Off
+APP_VERIFIED,verified
+APP_UNVERIFIED,(unverified)
+APP_TYPE_HERE,Type here
+APP_RIDERS_EXACT,{0} rider(s)
+APP_RIDERS_RANGE,{0}–{1} riders
+APP_PICKER_TITLE_SOLO,Choose a game
+APP_PICKER_TITLE_HOST,Choose a game to host
+APP_KEY_DELETE,Delete
+APP_KEY_DONE,Done
+APP_KEY_SPACE,Space
+APP_JOIN_TITLE,Join a room
+APP_JOIN_CODE,Room code
+APP_JOIN_GO,Join
+APP_JOIN_HINT,"Type the host's code, or pick its rows and letters with pedal-scan. Dashes and spaces don't matter."
+APP_JOIN_RECENT,Recent: {0} ({1})
+APP_JOIN_LAN,On your network: {0} ({1})
+APP_JOIN_BAD_CODE,"That isn't a room code: codes have 6 letters and digits, like K7Q-X2M."
+APP_JOIN_JOINING,Joining {0}…
+APP_JOIN_CANCEL,Cancel
+APP_LOBBY_TITLE_SOLO,{0}: ride solo
+APP_LOBBY_TITLE_HOST,{0}: your room
+APP_LOBBY_TITLE_CLIENT,{0}: lobby
+APP_LOBBY_CREATING,Creating your room…
+APP_LOBBY_START,Start ride
+APP_LOBBY_CANCEL_START,Cancel start
+APP_LOBBY_READY_UP,Ready up
+APP_LOBBY_UNREADY,Not ready yet
+APP_LOBBY_READY,Ready
+APP_LOBBY_NOT_READY,Not ready
+APP_LOBBY_CONTENT,Ride: {0}
+APP_LOBBY_SCALING,Scaling: {0}
+APP_LOBBY_MY_OPTION,My {0}: {1}
+APP_LOBBY_ADD_BOT,Add bot
+APP_LOBBY_REMOVE_BOT,Remove bot
+APP_LOBBY_BOT_FTP,Bot FTP: {0} W
+APP_LOBBY_BOT_FTP_LABEL,Bot FTP
+APP_LOBBY_BOT_DETAIL,Bot · FTP {0}
+APP_LOBBY_BOT_TRAINER,Mock trainer
+APP_LOBBY_YOU,{0} (you)
+APP_LOBBY_LEAVE,Leave room
+APP_LOBBY_NEED_PLAYERS,This game needs at least {0} riders: add bots or wait for friends.
+APP_LOBBY_WAITING_READY,Waiting for every rider to ready up (pedal or press confirm).
+APP_LOBBY_MISSING_GAME,You don't have the game {0}. Install it to ride in this room.
+APP_LOBBY_VERSION_MISMATCH,The host has version {0} of this game and you have {1}: update so both match.
+APP_SCALING_FAIR_FTP,Fair (by FTP)
+APP_SCALING_WKG,Watts per kilo
+APP_SCALING_RAW,Raw watts
+APP_NET_ERROR,Network problem: {0}
+APP_NET_LOST,Lost the connection to the room.
+APP_REFUSED_IN_PROGRESS,This ride has already started. Ask the host to let you in after it ends.
+APP_REFUSED_VERSION,Your Wattlands version doesn't match the host's. Update both to the same version.
+APP_REFUSED_NOT_FOUND,No room with that code. Check it with the host.
+APP_REFUSED_FULL,That room is full.
+APP_REFUSED_RATE,Too many tries: wait a minute and join again.
+APP_REFUSED_HOST_LEFT,The host left the room. Your ride is saved.
+APP_REFUSED_OTHER,The room refused you ({0}).
+APP_ERR_NO_GAME,That game isn't installed.
+APP_ERR_NO_PLAYERS,No riders in the lobby.
+APP_ERR_NO_LOCAL_SLOT,You aren't in this session's rider list.
+APP_ERR_NO_TRAINER,"No trainer connected: connect one in Settings, or use the mock trainer."
+APP_PANIC,PANIC: trainer safe
+APP_SESSION_MENU,Ride menu
+APP_SESSION_PAUSED,Paused
+APP_SESSION_PAUSED_DETAIL,Start pedaling or pick Resume to ride on ({0}).
+APP_SESSION_PANIC_TITLE,Trainer safe
+APP_SESSION_PANIC_DETAIL,Resistance is off. Resume the trainer when you're ready.
+APP_SESSION_RESUME,Resume
+APP_SESSION_RESUME_TRAINER,Resume the trainer
+APP_SESSION_END,End the ride
+APP_SESSION_LEAVE,Leave the ride
+APP_SESSION_ERROR_TITLE,Can't start
+APP_SESSION_SETUP_FAILED,The session could not start: {0}
+APP_RESULTS_TITLE,{0}: results
+APP_RESULTS_XP,+{0} XP
+APP_RESULTS_ME,{0} kJ · {1} W · {2}% in band
+APP_RESULTS_UNLOCKS,New: {0}
+APP_RESULTS_TEAM,Team: {0}
+APP_RESULTS_SAVED,Ride saved: {0}
+APP_RESULTS_NOT_SAVED,This ride wasn't saved.
+APP_RESULTS_UPLOAD,Upload to Strava
+APP_RESULTS_CONTINUE,Continue
+APP_RESULTS_STRAVA_OFF,"Strava isn't connected (Settings, Strava)."
+APP_RESULTS_AUTO,Auto-upload is on.
+APP_COL_RIDER,Rider
+APP_COL_KJ,kJ
+APP_COL_AVG_W,Avg W
+APP_COL_FTP,% FTP
+APP_COL_NP,NP
+APP_COL_BAND,In band
+APP_COL_XP,XP
+APP_UPLOAD_QUEUED,Upload queued {0}
+APP_UPLOAD_UPLOADING,Uploading to Strava… {0}
+APP_UPLOAD_PROCESSING,Strava is processing the ride… {0}
+APP_UPLOAD_UPLOADED,Uploaded to Strava {0}
+APP_UPLOAD_DUPLICATE,Already on Strava {0}
+APP_UPLOAD_FAILED,Upload failed: {0}
+APP_UPLOAD_OFFLINE,Offline: the upload will retry at the next launch {0}
+APP_PROFILE_TITLE,Profile
+APP_PROFILE_HINT,Your profile stays on this PC. Typing your FTP marks it verified.
+APP_FIELD_NAME,Name
+APP_FIELD_COLOR,Menu color
+APP_FIELD_UNITS,Units
+APP_FIELD_FTP,FTP
+APP_FIELD_WEIGHT,Weight
+APP_FIELD_SHARE_WEIGHT,Share weight with the host
+APP_FIELD_WPRIME,W′ (stamina)
+APP_FIELD_CADENCE,Preferred cadence
+APP_FIELD_DRIVETRAIN,Drivetrain
+APP_FIELD_DIFFICULTY,Trainer difficulty
+APP_FIELD_GRADE_MIN,Lowest grade
+APP_FIELD_GRADE_MAX,Steepest grade
+APP_FIELD_SKIP_WARMUP,Skip the warm-up
+APP_FIELD_AUTOPILOT,Autopilot by default
+APP_UNITS_METRIC,Metric
+APP_UNITS_IMPERIAL,Imperial
+APP_DRIVETRAIN_CASSETTE,Cassette
+APP_DRIVETRAIN_SINGLE,Single-speed cog
+APP_COLOR_0,Vermillion
+APP_COLOR_1,Blue
+APP_COLOR_2,Yellow
+APP_COLOR_3,Green
+APP_COLOR_4,Pink
+APP_COLOR_5,Sky
+APP_COLOR_6,Orange
+APP_COLOR_7,White
+APP_FIRST_RUN_TITLE,Welcome to Wattlands
+APP_FIRST_RUN_INTRO,Set up your rider. Don't know your FTP? Keep 200 W: it stays unverified and ERG targets are eased by 15% until you set it or take the FTP test.
+APP_FIRST_RUN_DONE,Start riding
+APP_SETTINGS_TITLE,Settings
+APP_SET_TRAINER,Trainer
+APP_SET_STRAVA,Strava
+APP_SET_HAPTICS,Haptics
+APP_SET_CONTROLS,Controls
+APP_SET_AUDIO,Audio
+APP_SET_NETWORK,Network
+APP_SET_PEDAL_UI,Pedal UI
+APP_SET_FTP_TEST,FTP test
+APP_SET_RIDES,Rides history
+APP_SET_TRAINER_STATUS,Status
+APP_SET_TRAINER_SCAN,Scan for trainers
+APP_SET_TRAINER_CONNECT,Connect {0} ({1} dBm)
+APP_SET_TRAINER_MOCK,Use the mock trainer
+APP_SET_TRAINER_DISCONNECT,Disconnect
+APP_SET_TRAINER_HELP,"Current trainer: {0}. If connecting fails, close other apps that hold the trainer and remove any Windows pairing."
+APP_SET_STRAVA_STATUS,Status
+APP_SET_STRAVA_ID,Client ID
+APP_SET_STRAVA_SECRET,Client secret
+APP_SET_STRAVA_CONNECT,Connect
+APP_SET_STRAVA_DISCONNECT,Disconnect
+APP_SET_STRAVA_AUTO,Auto-upload rides
+APP_SET_STRAVA_HELP,"Use your own Strava API app (strava.com/settings/api, callback domain localhost). The secret stays on this PC."
+APP_STRAVA_CONNECTED,Connected
+APP_STRAVA_CONNECTING,Connecting…
+APP_STRAVA_DISCONNECTED,Not connected
+APP_STRAVA_ERROR,Connection failed
+APP_SET_HAPTICS_ON,Haptic effects
+APP_SET_HAPTICS_INTENSITY,Intensity
+APP_SET_VOLUME,Volume
+APP_SET_METRONOME,Cadence metronome
+APP_SET_RELAY,Relay
+APP_SET_PEDAL_UI_ON,Pedal-scan menus
+APP_SET_SCAN_INTERVAL,Scan interval
+APP_SET_CAPTURE,Press a key or button for {0} (Esc cancels)
+APP_ACTION_CONFIRM,Confirm
+APP_ACTION_BACK,Back
+APP_ACTION_UP,Up
+APP_ACTION_DOWN,Down
+APP_ACTION_LEFT,Left
+APP_ACTION_RIGHT,Right
+APP_ACTION_ABILITY_1,Ability 1
+APP_ACTION_ABILITY_2,Ability 2
+APP_ACTION_ITEM,Item
+APP_ACTION_SWAP,Swap
+APP_ACTION_SHIFT_UP,Shift up
+APP_ACTION_SHIFT_DOWN,Shift down
+APP_ACTION_PAUSE,Pause
+APP_ACTION_PANIC,Panic
+APP_RIDES_TITLE,Rides
+APP_RIDES_NONE,No rides saved yet.
+APP_RIDES_HINT,Pick a ride to upload it to Strava again.
+APP_RIDES_UPLOADED,on Strava
+APP_FTP_TITLE,FTP test
+APP_FTP_INTRO,"A 5-minute ramp-in, then one-minute steps that get 6% harder each minute until you can't hold the target. Stop pedaling to end it. Your new FTP is 75% of your best minute."
+APP_FTP_START,Start the FTP test
+APP_FTP_STOP,End the test
+APP_FTP_RUNNING,{0} · best minute {1} W
+APP_FTP_COOLDOWN,Cool-down
+APP_FTP_ENDED,Test over: {0}. Spin easy for 3 minutes.
+APP_FTP_END_POWER,you couldn't hold the target
+APP_FTP_END_CADENCE,your cadence dropped
+APP_FTP_END_COAST,you stopped
+APP_FTP_END_RESCUE,the trainer eased off for safety
+APP_FTP_END_PLAN_END,the last step
+APP_FTP_RESULT,Best minute {0} W. Saving in {1} s (back keeps your old FTP).
+APP_FTP_SAVE,Save the new FTP
+APP_FTP_KEEP,Keep my old FTP
+APP_FTP_PLAN_REJECTED,The FTP test plan was rejected by the safety checks.
+APP_TRAINER_OK,ready
+APP_TRAINER_CONNECTING,connecting…
+APP_TRAINER_CONTROL_LOST,another app may hold control
+APP_TRAINER_ERROR,error
+APP_TRAINER_NONE,not connected
+APP_TRAINER_UNKNOWN,unknown
+APP_SCRIPTED,Scripted peer
