@@ -1,0 +1,77 @@
+{
+	"id": "fx_solo",
+	"title": "Fixture Solo",
+	"summary": "Fixture game for sdk-runtime tests.",
+	"version": "0.1.0",
+	"min_players": 1,
+	"max_players": 4,
+	"bots": true,
+	"presentation": "2d",
+	"pixel_base": [
+		640,
+		360
+	],
+	"entry": "res://tests/fixtures/games/fx_game.gd",
+	"contents": [
+		"tiny",
+		"short",
+		"split",
+		"bad"
+	],
+	"default_content": "tiny",
+	"e2e_content": "tiny",
+	"zero_input_content": "tiny",
+	"options": [
+		{
+			"id": "speed",
+			"type": "int",
+			"min": 1,
+			"max": 5,
+			"step": 1,
+			"default": 2
+		},
+		{
+			"id": "mirror",
+			"type": "toggle",
+			"default": false
+		},
+		{
+			"id": "mode",
+			"type": "choice",
+			"choices": [
+				{
+					"value": "a",
+					"label": "FX_SOLO_MODE_A"
+				},
+				{
+					"value": "b",
+					"label": "FX_SOLO_MODE_B"
+				}
+			],
+			"default": "a"
+		}
+	],
+	"player_options": [
+		{
+			"id": "offset",
+			"type": "int",
+			"min": -10,
+			"max": 5,
+			"default": 0
+		},
+		{
+			"id": "reel_pct",
+			"type": "int",
+			"min": 50,
+			"max": 70,
+			"step": 5,
+			"default": 60
+		},
+		{
+			"id": "relaxed",
+			"type": "toggle",
+			"default": false
+		}
+	],
+	"first_run_priority": 0
+}

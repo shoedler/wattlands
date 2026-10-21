@@ -1,0 +1,23 @@
+{
+	"id": "fx_crew",
+	"title": "Fixture Crew",
+	"summary": "Fixture game for sdk-runtime tests.",
+	"version": "0.1.0",
+	"min_players": 1,
+	"max_players": 3,
+	"bots": false,
+	"presentation": "3d",
+	"pixel_base": [
+		640,
+		360
+	],
+	"entry": "res://tests/fixtures/games/fx_game.gd",
+	"contents": [
+		"tiny",
+		"split"
+	],
+	"default_content": "tiny",
+	"e2e_content": "tiny",
+	"zero_input_content": "tiny",
+	"first_run_priority": -1
+}

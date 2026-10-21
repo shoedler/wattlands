@@ -1,0 +1,40 @@
+# sdk-runtime: GameRegistry, PlanValidator, GameHost, routers, GameSimRunner and the SDK
+# conformance test (BRIEF 3.6, 7.1, 7.3). Runs the same commands the sdk-runtime builder ran
+# green locally. tests/sdk/integration/ needs the other W1 modules and runs in the full suite.
+name: sdk-runtime
+
+on:
+  push:
+    paths:
+      - "addons/wattlands/sdk/**"
+      - "tests/sdk/**"
+      - "tests/fixtures/games/**"
+      - "src/games/**"
+      - ".github/workflows/sdk-runtime.yml"
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Godot (Linux build)
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d "$HOME/godot"
+          echo "GODOT=$HOME/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import
+        run: tools/godot.sh --headless --path . --import
+      - name: SDK runtime tests (GUT)
+        run: tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/sdk -gexit -gjunit_xml_file=build/junit_sdk_runtime.xml
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd

@@ -1,0 +1,7 @@
+{
+	"speed_scale": 1.5,
+	"boss": {
+		"hp": 50,
+		"armor": 2
+	}
+}
