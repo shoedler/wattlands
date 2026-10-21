@@ -1,0 +1,40 @@
+Wattlands third-party notices
+==============================
+
+Wattlands is MIT licensed (see LICENSE.txt). The Windows build also contains the
+following third-party software. tools/export_windows.mjs copies this file next to the
+executable.
+
+Godot Engine 4.7.2
+------------------
+Copyright (c) 2014-present Godot Engine contributors.
+Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.
+MIT License. https://godotengine.org/license
+Godot itself includes third-party components under their own licenses (FreeType, mbedTLS,
+zlib and others); the full list ships with the engine and is printed by
+Engine.get_license_info() / Engine.get_copyright_info(), and is published at
+https://github.com/godotengine/godot/blob/4.7.2-stable/COPYRIGHT.txt
+
+GDBLE 0.6.0 (addons/gdble, libgdble.windows.x86_64.dll)
+-------------------------------------------------------
+Copyright (c) 2025 Fantety. MIT License. https://github.com/Fantety/GDBLE
+
+The GDBLE library statically links Rust crates under their own licenses, among them:
+- btleplug 0.12 (MIT OR Apache-2.0 OR BSD-3-Clause), https://github.com/deviceplug/btleplug
+- godot-rust "godot" 0.5.2 (Mozilla Public License 2.0), https://github.com/godot-rust/gdext
+  The MPL-2.0 covered source code is available at https://github.com/godot-rust/gdext and
+  on crates.io (https://crates.io/crates/godot). The MPL-2.0 text is at
+  https://www.mozilla.org/MPL/2.0/
+
+Microsoft Visual C++ runtime (only if vcruntime140.dll is shipped next to the exe)
+---------------------------------------------------------------------------------
+The GDBLE library needs the Microsoft Visual C++ 2015-2022 x64 runtime
+(vcruntime140.dll). It is part of the Microsoft Visual C++ Redistributable and is
+distributed under its license terms. Without it Bluetooth trainers cannot connect; install
+the redistributable from https://aka.ms/vs/17/release/vc_redist.x64.exe
+
+Not shipped (development and test tools only)
+---------------------------------------------
+GUT 9.7.1 (MIT), ws 8.22.0 for the relay server (MIT), @garmin/fitsdk (Garmin FIT Protocol
+License, used only by tools/fit_check), gdtoolkit (MIT, lint only). See CREDITS.md and
+docs/DEPENDENCIES.md.
