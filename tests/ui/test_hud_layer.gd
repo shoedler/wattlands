@@ -721,12 +721,58 @@ func test_bus_rescue_pause_and_warmup_banners() -> void:
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
 
 
-func test_safety_banners_can_be_turned_off() -> void:
+## BRIEF 4.6.3 says show "rescue": show_safety_banners = false hides only the warm-up and
+## pause banners; the local rider's rescue banner still shows, from every source.
+func test_show_safety_banners_off_hides_only_warmup_and_pause() -> void:
+	assert_true(HudSpec.new().show_safety_banners, "on by default")
 	var spec := _spec()
 	spec.show_safety_banners = false
 	_hud.build(spec, _ctx)
+	var b := _hud.banner()
+	assert_false(b.show_safety)
+	_hud.set_safety_state(true, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up hidden")
+	assert_eq(b.safety_text(), "")
+	_hud.set_safety_state(false, false, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "pause hidden")
 	_hud.set_safety_state(true, true, false)
-	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_NONE)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue still shows")
+	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"))
+	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "full size")
+	_hud.set_safety_state(true, true, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue while the pause is hidden")
+	_hud.set_safety_state(false, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
+	var t := _tele(Wl.ERG, 100.0, 125)
+	t.rescue = true
+	_hud.update(t, null, null)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "telemetry rescue")
+	t.rescue = false
+	_hud.update(t, null, null)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
+	_bus.rescue_changed.emit(LOCAL, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "bus rescue_changed")
+	_bus.governor_status.emit(LOCAL, {"rescue": false, "warmup": true})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up stays hidden")
+	_bus.governor_status.emit(LOCAL, {"rescue": true})
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "bus governor_status rescue")
+	_bus.rescue_changed.emit(2, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "another rider's rescue changes nothing")
+
+
+## The default spec still shows warm-up and pause, with pause over rescue over warm-up.
+func test_default_spec_shows_warmup_pause_and_rescue() -> void:
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	assert_true(b.show_safety)
+	_hud.set_safety_state(true, false, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_WARMUP)
+	assert_eq(b.safety_text(), tr("UI_BANNER_WARMUP"))
+	_hud.set_safety_state(true, true, false)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
+	_hud.set_safety_state(true, true, true)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
+	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"))
 
 
 func test_set_safety_state_and_telemetry_rescue() -> void:
@@ -740,6 +786,89 @@ func test_set_safety_state_and_telemetry_rescue() -> void:
 	t.rescue = false
 	_hud.update(t, null, null)
 	assert_eq(_hud.banner().safety_state(), HudBanner.SAFETY_WARMUP)
+
+
+# --- trainer control lost (BRIEF 4.4) ------------------------------------------------------------
+
+
+func _sfx() -> WlSfx:
+	return get_tree().root.get_node_or_null("Sfx") as WlSfx
+
+
+## Request Control 0x05 or Machine Status 0xFF mid-ride (TrainerService emits
+## trainer_status_changed("control_lost") then trainer_control_lost): the HUD tells the
+## player another app (Zwift, the Wahoo app) may hold control, once per loss, until the
+## trainer is ready again.
+func test_trainer_control_lost_shows_the_notice_once_until_ready() -> void:
+	var sfx := _sfx()
+	assert_not_null(sfx, "the Sfx autoload")
+	if sfx == null:
+		return
+	var was_muted := sfx.muted
+	sfx.muted = true
+	_hud.sounds = true
+	_hud.build(_spec(), _ctx)
+	var b := _hud.banner()
+	var panel := b.trainer_label().get_parent() as Control
+	assert_eq(b.trainer_text(), "")
+	assert_false(panel.visible)
+	var plays := sfx.play_count
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONTROL_LOST, "held")
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_string_contains(b.trainer_text(), "Zwift")
+	assert_string_contains(b.trainer_text(), "Wahoo")
+	assert_true(panel.visible)
+	assert_eq(b.trainer_label().text, tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_eq(_hud.anchor_of(b), HudSpec.TOP, "in the banner area")
+	assert_eq(sfx.play_count, plays + 1, "one sound")
+	assert_eq(sfx.last_played, "warning")
+	_bus.trainer_control_lost.emit("held again")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONNECTED, "retrying")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_CONTROL_LOST, "held")
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(sfx.play_count, plays + 1, "once per loss: a failed retry adds nothing")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "still up while retrying")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "Trainer ready")
+	assert_eq(b.trainer_text(), "", "cleared when control comes back")
+	assert_false(panel.visible)
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "a new loss shows it again")
+	assert_eq(sfx.play_count, plays + 2)
+	sfx.muted = was_muted
+
+
+## The notice is not a safety banner: it shows with show_safety_banners off, next to the
+## rescue banner, and stays up across a rebuild.
+func test_trainer_notice_ignores_show_safety_banners_and_survives_a_rebuild() -> void:
+	var spec := _spec()
+	spec.show_safety_banners = false
+	spec.banners_at(HudSpec.TOP_RIGHT)
+	_hud.build(spec, _ctx)
+	_hud.set_safety_state(false, true, false)
+	_bus.trainer_control_lost.emit("held")
+	var b := _hud.banner()
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "both show")
+	assert_eq(_hud.anchor_of(b), HudSpec.TOP_RIGHT)
+	_hud.build(_spec(), _ctx)
+	assert_eq(b.trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"), "kept across a rebuild")
+	_bus.trainer_status_changed.emit(TrainerDevice.STATUS_READY, "")
+	assert_eq(b.trainer_text(), "", "the rebuilt layer still clears it")
+
+
+## Only this layer's bus drives the notice (a rebuild onto another bus drops the old one).
+func test_trainer_control_lost_on_an_old_bus_is_ignored() -> void:
+	_hud.build(_spec(), _ctx)
+	var other := GameContext.new()
+	var other_bus: WlEventBus = autofree(WlEventBus.new())
+	other.events = other_bus
+	other.local_peer = LOCAL
+	_hud.build(_spec(), other)
+	_bus.trainer_control_lost.emit("held")
+	assert_eq(_hud.banner().trainer_text(), "")
+	other_bus.trainer_control_lost.emit("held")
+	assert_eq(_hud.banner().trainer_text(), tr("TRAINER_ANOTHER_APP_CONTROL"))
 
 
 func test_phase_started_is_harmless() -> void:
