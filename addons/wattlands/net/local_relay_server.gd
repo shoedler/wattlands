@@ -10,6 +10,9 @@ extends Node
 
 const HANDSHAKE_TIMEOUT_S := 10.0
 const BUFFER_BYTES := 1 << 20
+## Sockets the relay closes (version mismatch, idle) stay open this long first, so the
+## error frame is read before the close.
+const LINGER_MS := 250
 
 var rooms: RelayRooms = RelayRooms.new()
 ## The listening port (the OS picks one when started with port 0).
@@ -23,6 +26,8 @@ var _tcp: TCPServer = null
 # conn -> {"ws": WebSocketPeer, "open": bool, "since": float}
 var _peers: Dictionary = {}
 var _closing: Array[WebSocketPeer] = []
+# [WebSocketPeer, close-at msec]
+var _lingering: Array = []
 var _next_conn: int = 1
 var _last_t: float = -1.0
 
@@ -62,6 +67,7 @@ func stop() -> void:
 		ws.close(1001, "server stopped")
 	_peers.clear()
 	_closing.clear()
+	_lingering.clear()
 	if _tcp != null:
 		_tcp.stop()
 		_tcp = null
@@ -70,6 +76,17 @@ func stop() -> void:
 func poll() -> void:
 	if _tcp == null:
 		return
+	for i in range(_lingering.size() - 1, -1, -1):
+		var lw: WebSocketPeer = _lingering[i][0]
+		lw.poll()
+		while lw.get_available_packet_count() > 0:
+			lw.get_packet()
+		if lw.get_ready_state() == WebSocketPeer.STATE_CLOSED:
+			_lingering.remove_at(i)
+		elif Time.get_ticks_msec() >= int(_lingering[i][1]):
+			lw.close(1000, "closed by relay")
+			_closing.append(lw)
+			_lingering.remove_at(i)
 	for i in range(_closing.size() - 1, -1, -1):
 		_closing[i].poll()
 		if _closing[i].get_ready_state() == WebSocketPeer.STATE_CLOSED:
@@ -97,17 +114,19 @@ func poll() -> void:
 		var p: Dictionary = _peers[conn]
 		var ws: WebSocketPeer = p["ws"]
 		ws.poll()
-		match ws.get_ready_state():
-			WebSocketPeer.STATE_OPEN:
-				if not p["open"]:
-					p["open"] = true
-					rooms.open(int(conn))
-				while ws.get_available_packet_count() > 0:
-					var pkt := ws.get_packet()
-					if ws.was_string_packet():
-						rooms.receive(int(conn), pkt.get_string_from_utf8())
-					else:
-						rooms.receive(int(conn), "")
+		var st := ws.get_ready_state()
+		if st == WebSocketPeer.STATE_OPEN and not p["open"]:
+			p["open"] = true
+			rooms.open(int(conn))
+		# Frames that arrived before a close are read first (a leave followed by the close).
+		if p["open"]:
+			while ws.get_available_packet_count() > 0:
+				var pkt := ws.get_packet()
+				if ws.was_string_packet():
+					rooms.receive(int(conn), pkt.get_string_from_utf8())
+				else:
+					rooms.receive(int(conn), "")
+		match st:
 			WebSocketPeer.STATE_CONNECTING:
 				if now - float(p["since"]) > HANDSHAKE_TIMEOUT_S:
 					ws.close()
@@ -150,8 +169,7 @@ func _flush() -> void:
 	for conn in rooms.take_closes():
 		if _peers.has(conn):
 			var ws: WebSocketPeer = (_peers[conn] as Dictionary)["ws"]
-			ws.close(1000, "closed by relay")
-			_closing.append(ws)
+			_lingering.append([ws, Time.get_ticks_msec() + LINGER_MS])
 			rooms.closed(conn)
 			_peers.erase(conn)
 
