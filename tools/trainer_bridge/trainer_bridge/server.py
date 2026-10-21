@@ -54,6 +54,7 @@ class BridgeServer:
         self.log = log
         self._ws = None
         self._address = ""
+        self._name = ""
         self._linked = False
         self._scan_task: Optional[asyncio.Task] = None
         self._loop: Optional[asyncio.AbstractEventLoop] = None
@@ -188,10 +189,19 @@ class BridgeServer:
 
     async def _op_connect(self, msg: dict) -> dict:
         address = require_str(msg, "address")
+        if self._linked:
+            if self._address.strip().lower() == address.lower():
+                # Already linked (the client's earlier connect may have timed out on its
+                # side): answer again instead of opening a second link.
+                return {"address": self._address, "name": self._name}
+            # A different trainer: release the old link first (one link at a time).
+            self._linked = False
+            await self.backend.disconnect()
         result = await self.backend.connect(address)
         self._address = str(result.get("address") or address)
+        self._name = str(result.get("name") or "")
         self._linked = True
-        return {"address": self._address, "name": str(result.get("name") or "")}
+        return {"address": self._address, "name": self._name}
 
     async def _op_disconnect(self, _msg: dict) -> dict:
         await self.backend.disconnect()

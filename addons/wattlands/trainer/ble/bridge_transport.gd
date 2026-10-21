@@ -126,10 +126,13 @@ func connect_device(address: String) -> void:
 	_request("connect", {"address": address}, CONNECT_REQUEST_TIMEOUT_S)
 
 
+## Also cancels a connect still in flight: its late answer is ignored, and the bridge
+## (which runs requests in order) releases that link on this disconnect.
 func disconnect_device() -> void:
 	if not is_available() or (not _link_up and not _connecting):
 		return
 	_disconnect_requested = true
+	_connecting = false
 	_request("disconnect", {})
 
 
@@ -335,6 +338,9 @@ func _handle_response(msg: Dictionary) -> void:
 			var adapter := bool(result.get("adapter", false))
 			_set_adapter(adapter, String(result.get("error", "")) if not adapter else "")
 		"connect":
+			if not _connecting:
+				# Cancelled by disconnect_device(); the queued disconnect releases it.
+				return
 			if not String(result.get("address", "")).is_empty():
 				_address = String(result["address"])
 			_link_came_up()
@@ -396,8 +402,13 @@ func _on_failure(op: String, _char_uuid: String, error: String) -> void:
 			else:
 				_set_adapter(false, error)
 		"connect":
+			var was_connecting := _connecting
 			_connecting = false
 			operation_failed.emit("connect", error)
+			if was_connecting and error == "timeout" and is_available():
+				# The bridge may still finish that connect: have it release the trainer.
+				_disconnect_requested = true
+				_request("disconnect", {})
 		"discover":
 			operation_failed.emit("discover_services", error)
 		_:

@@ -182,6 +182,38 @@ func test_connect_while_linked_reports_the_link_again() -> void:
 	assert_eq(connects, 1, "no second connect request")
 
 
+func test_disconnect_while_connecting_cancels_the_connect() -> void:
+	_server.silent_ops = ["connect", "disconnect"]
+	_ready_bridge()
+	_t.connect_device(ADDR)
+	assert_true(_pump_until(func() -> bool: return _server.ops().has("connect")))
+	_t.disconnect_device()
+	assert_true(_pump_until(func() -> bool: return _server.ops().has("disconnect")), "cancel sent")
+	# The bridge runs requests in order: the connect finishes, then the disconnect releases it.
+	_server.reply(int(_server.last("connect")["id"]), true, {"address": ADDR, "name": "KICKR CORE"})
+	_server.reply(int(_server.last("disconnect")["id"]), true, {})
+	_server.send({"event": "disconnected", "address": ADDR, "reason": "local"})
+	assert_true(_pump_until(func() -> bool: return _t.pending_count() == 0))
+	_pump(10)
+	assert_eq(_named("device_connected").size(), 0, "a cancelled connect stays down")
+	assert_eq(_named("device_disconnected").size(), 0)
+	assert_eq(_named("operation_failed").size(), 0)
+	assert_false(_t.is_link_up())
+
+
+func test_connect_timeout_asks_the_bridge_to_release_a_late_link() -> void:
+	_server.silent_ops = ["connect"]
+	_ready_bridge()
+	_t.connect_device(ADDR)
+	assert_true(_pump_until(func() -> bool: return _server.ops().has("connect")))
+	_t.tick(BridgeTransport.CONNECT_REQUEST_TIMEOUT_S + 0.1)
+	assert_eq(_named("operation_failed"), [["operation_failed", "connect", "timeout"]])
+	assert_true(_pump_until(func() -> bool: return _server.ops().has("disconnect")), "release requested")
+	_server.reply(int(_server.last("connect")["id"]), true, {"address": ADDR, "name": "KICKR CORE"})
+	_pump(15)
+	assert_eq(_named("device_connected").size(), 0, "the late answer is ignored")
+
+
 func test_connect_error_is_operation_failed() -> void:
 	_server.connect_error = "device not found"
 	_ready_bridge()

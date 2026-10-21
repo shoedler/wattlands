@@ -137,6 +137,20 @@ class ServerTest(unittest.IsolatedAsyncioTestCase):
         gone = await self.wait_event("disconnected")
         self.assertEqual(gone["reason"], "local")
 
+    async def test_connect_again_is_idempotent_and_switching_releases(self) -> None:
+        await self.request("connect", address="AA:BB")
+        again = await self.request("connect", address="aa:bb")
+        self.assertTrue(again["ok"])
+        self.assertEqual(again["result"], {"address": "AA:BB", "name": "KICKR CORE 2B7E"})
+        self.assertEqual(self.backend.ops().count("connect"), 1, "no second link to the same trainer")
+        other = await self.request("connect", address="CC:DD")
+        self.assertEqual(other["result"]["address"], "CC:DD")
+        self.assertEqual(self.backend.ops()[-2:], ["disconnect", "connect"], "the old link is released first")
+        self.backend.drop("remote")
+        await self.wait_event("disconnected")
+        await self.request("connect", address="CC:DD")
+        self.assertEqual(self.backend.ops().count("connect"), 3, "after a drop it connects again")
+
     async def test_writes_refused_when_locked(self) -> None:
         await self.request("connect", address="AA")
         reply = await self.request("write", service="1826", char="2ad9", data="00", with_response=True)
