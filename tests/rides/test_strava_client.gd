@@ -443,3 +443,27 @@ func test_secrets_never_reach_a_log() -> void:
 	for secret: String in [MockRunner.CLIENT_SECRET, str(store["access_token"]), str(store["refresh_token"]),
 			str(latest["access_token"]), str(latest["refresh_token"])]:
 		assert_false(text.contains(secret), "a secret or token appeared in the log")
+
+
+func test_an_expired_token_while_offline_is_offline_not_disconnected() -> void:
+	var c: StravaClient = await _connected_client()
+	c.oauth_base = "http://127.0.0.1:1/oauth"
+	c.request_timeout_s = 1.5
+	_now = NOW + 30000
+	var ride := _ride()
+	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")
+	assert_eq(res["state"], "offline", "the refresh couldn't reach Strava")
+	assert_true(c.has_tokens(), "tokens kept for later")
+
+
+func test_rejected_client_credentials_ask_for_a_reconnect() -> void:
+	var c: StravaClient = await _connected_client()
+	await _mock.fault("upload", 401)
+	await _mock.fault("token", 401)
+	var ride := _ride()
+	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")
+	assert_eq(res["state"], "failed")
+	assert_eq(res["detail"], "unauthorized")
+	assert_push_warning("credentials were rejected")
+	assert_eq(c.state(), "error")
+	assert_true(c.has_tokens(), "a 401 from the token endpoint keeps the tokens")

@@ -69,6 +69,7 @@ var _connecting: bool = false
 var _cancel_requested: bool = false
 var _refreshing: bool = false
 var _last_refresh_ok: bool = false
+var _last_refresh_result: Dictionary = {}
 
 
 func _init() -> void:
@@ -351,7 +352,12 @@ func refresh_tokens() -> bool:
 		_creds = {"client_id": keep_id, "client_secret": keep_secret}
 		save_store()
 		_set_state(STATE_ERROR, "reauthorize")
+	elif code == 401:
+		# Strava rejected the client id or secret (the app's secret was changed): reconnect.
+		push_warning("Strava: the API app credentials were rejected; reconnect in Settings")
+		_set_state(STATE_ERROR, "client_credentials")
 	_last_refresh_ok = ok
+	_last_refresh_result = {} if ok else r
 	_refreshing = false
 	return ok
 
@@ -363,6 +369,9 @@ func refresh_tokens() -> bool:
 ## 429. Returns _request()'s result ({code, result, headers, body, refused, offline}).
 func api(method: int, api_path: String, headers: PackedStringArray = PackedStringArray(), body: PackedByteArray = PackedByteArray()) -> Dictionary:
 	if not await ensure_token():
+		if has_tokens() and not _last_refresh_result.is_empty():
+			# The refresh failed for now (offline, refused, a server error): report that.
+			return _last_refresh_result
 		return _result(0, HTTPRequest.RESULT_SUCCESS, PackedStringArray(), PackedByteArray(), false, false, "not_connected")
 	var refreshed := false
 	var attempt := 0
