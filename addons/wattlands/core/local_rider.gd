@@ -50,6 +50,11 @@ extends Node
 ##   cleared, its phase reset to -1 and (W2) its profile restarted (restart_profile()), so
 ##   nothing from an earlier session steers the mock and a profile's at_s, surges, ramps
 ##   and intervals count from this setup, like the rider's platform time.
+## - (W2r2) setup() from inside the rider's own tick (a gesture, sample or governor signal
+##   handler, such as a menu pick that starts a session) ends that tick at once: a setup
+##   generation counter is read at the start of tick() and checked after every call that can
+##   emit, so the rest of the tick never hands the old platform time, sample or gestures to
+##   the new governor, gestures or ride (no governor.tick, recorder.record or telemetry).
 ## - rebind_device(d): a reconnect that hands over a new device object for the same trainer
 ##   keeps the session (plan, phase, time, queues, recorder) and rebinds the governor and the
 ##   sample feed to the new object.
@@ -121,6 +126,8 @@ var _ready_to_tick: bool = false
 var _in_apply: bool = false
 var _apply_acked: bool = false
 var _ride_path: String = ""
+## Bumped by every setup(); tick() stops when a handler it called set the rider up again.
+var _setup_gen: int = 0
 
 
 func _init() -> void:
@@ -153,6 +160,7 @@ static func live_riders() -> Array[LocalRider]:
 ## recorder (RideRecorderApi, or null for none) and bus (WlEventBus).
 ## A null profile means the defaults; a null slot means profile.to_slot(peer, scaling).
 func setup(p_peer_id: int, p_profile: RiderProfile, p_slot: PlayerSlot, p_device: TrainerDevice, p_options: Dictionary = {}) -> void:
+	_setup_gen += 1
 	_teardown()
 	_options = p_options.duplicate()
 	peer_id = p_peer_id
@@ -393,11 +401,22 @@ func tick(dt: float) -> void:
 		return
 	_t_us += roundi(dt * 1000000.0)
 	var t := platform_time()
+	# A handler of a signal this tick emits (a sample, a gesture, a governor signal) may set
+	# the rider up again (a menu pick that starts a session). The rest of this tick belongs to
+	# the old setup: it must not feed this tick's platform time into the new governor, ride
+	# or gestures, so the tick stops as soon as the generation changes.
+	var gen := _setup_gen
 	device.tick(dt)
+	if gen != _setup_gen:
+		return
 	while not _pending.is_empty():
 		var raw: TrainerSample = _pending.pop_front()
 		_process_sample(raw, t)
+		if gen != _setup_gen:
+			return
 	_queue_gestures(gestures.advance(t))
+	if gen != _setup_gen:
+		return
 	var p := _power(t)
 	wbal.step(p, dt)
 	var v_kmh := _speed_kmh(t)
@@ -407,6 +426,8 @@ func tick(dt: float) -> void:
 	speed.step(dt, p * slot.p_eff_per_w, grade)
 	governor.set_course_distance(speed.distance_m)
 	governor.tick(dt)
+	if gen != _setup_gen:
+		return
 	if _recording() and not _shut_down:
 		recorder.record(t, p, _recorded_cadence(t), _recorded_speed(t))
 	telemetry_updated.emit(_build_telemetry())
@@ -589,17 +610,26 @@ func _process_sample(raw: TrainerSample, t: float) -> void:
 	if s.has_cadence():
 		_last_cadence_t = t
 	gestures.set_erg(str(_status().get("mode", Wl.OFF)) == Wl.ERG)
+	var gen := _setup_gen
 	_queue_gestures(gestures.on_sample(s))
+	if gen != _setup_gen:
+		return
 	governor.on_sample(s)
 
 
 func _queue_gestures(fired: Array[StringName]) -> void:
 	if _shut_down:
 		return
+	var gen := _setup_gen
 	for g in fired:
+		if gen != _setup_gen:
+			# A handler set the rider up again: the rest belongs to the old setup.
+			return
 		_gesture_queue.append(g)
 		_trim_gestures()
 		gesture_detected.emit(g)
+		if gen != _setup_gen:
+			return
 		if g == Wl.G_STOP_5S and not is_multiplayer:
 			pause_requested.emit("stop_5s")
 

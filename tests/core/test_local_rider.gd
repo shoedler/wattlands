@@ -306,6 +306,75 @@ func test_setup_again_rebuilds_without_double_samples() -> void:
 	assert_almost_eq(r.platform_time(), 5.0, 1e-9, "time restarts at setup")
 
 
+## W2r2: a gesture handler (a menu pick) that sets the rider up again from inside the rider's
+## own tick ends that tick: the new governor, ride and gestures never see the old platform time.
+func test_setup_from_a_gesture_handler_ends_the_tick() -> void:
+	var m := _mock()
+	var rec1 := Fakes.FakeRecorder.new()
+	var r := _rider(m, {"recorder": rec1})
+	var first := _gov(r)
+	_ges(r).fire_at = {1: ["surge", "coast"]}
+	var g2 := Fakes.FakeGovernor.new()
+	var ges2 := Fakes.FakeGestures.new()
+	var rec2 := Fakes.FakeRecorder.new()
+	var seen: Array[StringName] = []
+	var telemetry_ts: Array[float] = []
+	r.telemetry_updated.connect(func(tel: Telemetry) -> void: telemetry_ts.append(tel.t))
+	r.gesture_detected.connect(func(g: StringName) -> void:
+		seen.append(g)
+		if r.governor == first:
+			r.setup(4, _profile(), null, m, {"governor": g2, "gestures": ges2, "recorder": rec2, "bus": _bus}))
+	var ticks := 0
+	while seen.is_empty() and ticks < 100:
+		r.tick(DT)
+		ticks += 1
+	assert_push_warning("recording")
+	assert_eq(seen, [&"surge"] as Array[StringName], "the old setup's remaining gestures are dropped")
+	assert_eq(r.take_gestures().size(), 0, "nothing from the old setup is queued for the new one")
+	assert_eq(r.governor, g2)
+	assert_almost_eq(r.platform_time(), 0.0, 1e-12, "the new setup's time starts at 0")
+	assert_eq(first.samples.size(), 0, "the sample that fired the gesture never reaches the old governor")
+	assert_eq(first.ticks.size(), ticks - 1, "the old governor isn't ticked in the cut tick")
+	assert_eq(g2.ticks.size(), 0, "the new governor isn't ticked with the old time")
+	assert_eq(g2.samples.size(), 0)
+	assert_eq(ges2.advance_calls.size(), 0, "the new gestures never see the old time")
+	assert_eq(rec2.records.size(), 0, "the new ride gets no record at the old time")
+	assert_eq(telemetry_ts.size(), ticks - 1, "no telemetry for the cut tick")
+	r.tick(DT)
+	assert_almost_eq(r.platform_time(), DT, 1e-12)
+	assert_eq(g2.ticks, [DT] as Array[float])
+	assert_eq(ges2.advance_calls.size(), 1)
+	assert_almost_eq(ges2.advance_calls[0], DT, 1e-12)
+	assert_eq(rec2.records.size(), 1)
+	assert_almost_eq(float(rec2.records[0][0]), DT, 1e-12, "the new ride starts at its own time")
+
+
+## W2r2: the same holds for a handler of the device's own sample signal.
+func test_setup_from_a_sample_handler_ends_the_tick() -> void:
+	var m := _mock()
+	var r := _rider(m)
+	var first := _gov(r)
+	var g2 := Fakes.FakeGovernor.new()
+	var ges2 := Fakes.FakeGestures.new()
+	m.sample_received.connect(func(_s: TrainerSample) -> void:
+		if r.governor == first:
+			r.setup(5, _profile(), null, m, {"governor": g2, "gestures": ges2, "bus": _bus}))
+	var ticks := 0
+	while r.governor == first and ticks < 100:
+		r.tick(DT)
+		ticks += 1
+	assert_eq(r.governor, g2)
+	assert_almost_eq(r.platform_time(), 0.0, 1e-12)
+	assert_eq(first.ticks.size(), ticks - 1)
+	assert_eq(g2.ticks.size(), 0)
+	assert_eq(g2.samples.size(), 0, "the sample from the old setup isn't handed on")
+	assert_eq(ges2.seen.size(), 0)
+	assert_eq(ges2.advance_calls.size(), 0)
+	_run(r, 2.0)
+	assert_eq(g2.ticks.size(), 40)
+	assert_almost_eq(r.platform_time(), 2.0, 1e-9)
+
+
 # --- sample flow and telemetry -------------------------------------------------------------
 
 
