@@ -56,6 +56,110 @@ func test_power_at_75_pct_does_not_trigger() -> void:
 	dev.erg_follow = 0.75
 	rig.run(20.0)
 	assert_false(rig.s()["rescue"], "120 W is not < 75% of 160 W")
+	assert_eq(rig.events_named("rescue_changed").size(), 0, "never triggered, not just over")
+
+
+# ------------------------------------------------------- trigger and recovery edges (4.6.3)
+
+
+## A rider 20 s into an 80% ERG phase (160 W, armed) at 90 rpm.
+func _armed_rig() -> Rig:
+	var rig := make_rig({}, follower())
+	rig.start([erg(Wl.WORK, 80.0, 120.0)])
+	rig.run(20.0)
+	assert_eq(rig.applied_w(), 160)
+	return rig
+
+
+## The rider holds `watts` (unrounded unless `whole`) at 90 rpm from the next sample on;
+## returns that sample's time.
+func _power(rig: Rig, watts: float, whole: bool = false) -> float:
+	var dev: ScriptedDevice = rig.device
+	dev.erg_follow = -1.0
+	dev.round_power = whole
+	dev.power_w = watts
+	var before := dev.samples_sent
+	while dev.samples_sent == before:
+		rig.step()
+	return dev.sample_times[dev.sample_times.size() - 1]
+
+
+func test_cadence_exactly_45_never_triggers() -> void:
+	var rig := _armed_rig()
+	_cadence(rig, 45.0)
+	rig.run(10.0)
+	assert_false(rig.s()["rescue"], "45 rpm is not < 45 rpm")
+	assert_eq(rig.events_named("rescue_changed").size(), 0)
+	assert_eq(rig.applied_w(), 160)
+
+
+func test_cadence_just_under_45_triggers_at_3_s() -> void:
+	for rpm: float in [44.9, 44.99]:
+		var rig := _armed_rig()
+		var t_s := _cadence(rig, rpm)
+		rig.run_until(func() -> bool: return rig.t >= t_s + 2.95 - 1e-6, 5.0)
+		assert_false(rig.s()["rescue"], "not before 3 s at %s rpm" % rpm)
+		rig.step()
+		assert_true(rig.s()["rescue"], "%s rpm < 45 for 3 s" % rpm)
+		var ev := rig.events_named("rescue_changed")
+		assert_eq(ev.size(), 1)
+		assert_time(float(ev[0]["t"]), t_s + 3.0)
+		assert_eq(rig.applied_w(), 100, "50% FTP")
+
+
+func test_power_exactly_75_pct_of_the_target_never_triggers() -> void:
+	# BRIEF 4.6.3 "power < 75% of the applied target": 120 W of 160 W is not below it.
+	var rig := _armed_rig()
+	_power(rig, 120.0)
+	rig.run(15.0)
+	assert_false(rig.s()["rescue"], "120 W is not < 75% of 160 W")
+	assert_eq(rig.events_named("rescue_changed").size(), 0)
+
+
+func test_power_just_under_75_pct_triggers_at_5_s() -> void:
+	for c: Array in [[119.99, false], [119.0, true]]:
+		var rig := _armed_rig()
+		var t_s := _power(rig, float(c[0]), bool(c[1]))
+		rig.run_until(func() -> bool: return rig.t >= t_s + 4.95 - 1e-6, 6.0)
+		assert_false(rig.s()["rescue"], "not before 5 s at %s W" % c[0])
+		rig.step()
+		assert_true(rig.s()["rescue"], "%s W < 120 W for 5 s" % c[0])
+		var ev := rig.events_named("rescue_changed")
+		assert_eq(ev.size(), 1)
+		assert_time(float(ev[0]["t"]), t_s + 5.0)
+
+
+## An armed rider driven into the rescue hold by 40 rpm.
+func _held_rig() -> Rig:
+	var rig := _armed_rig()
+	_cadence(rig, 40.0)
+	rig.run(4.0)
+	assert_true(rig.s()["rescue"])
+	return rig
+
+
+func test_cadence_exactly_70_ends_the_hold_at_3_s() -> void:
+	var rig := _held_rig()
+	var t_h := _cadence(rig, 70.0)
+	rig.run_until(func() -> bool: return rig.t >= t_h + 2.95 - 1e-6, 5.0)
+	assert_true(rig.s()["rescue"], "not before 3 s at 70 rpm")
+	rig.step()
+	assert_false(rig.s()["rescue"], "70 rpm counts (>= 70): the hold ends at 3 s")
+	assert_true(rig.s()["rescue_ramp"])
+	var ev := rig.events_named("rescue_changed")
+	assert_eq(ev.size(), 2)
+	assert_eq(ev[1]["value"], false)
+	assert_time(float(ev[1]["t"]), t_h + 3.0)
+
+
+func test_cadence_just_under_70_never_ends_the_hold() -> void:
+	var rig := _held_rig()
+	_cadence(rig, 69.9)
+	rig.run(15.0)
+	assert_true(rig.s()["rescue"], "69.9 rpm is not >= 70 rpm")
+	assert_false(rig.s()["rescue_ramp"])
+	assert_eq(rig.applied_w(), 100)
+	assert_eq(rig.events_named("rescue_changed").size(), 1)
 
 
 func test_not_armed_below_60_pct() -> void:
