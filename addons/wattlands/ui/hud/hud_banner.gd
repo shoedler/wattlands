@@ -12,6 +12,11 @@ const SAFETY_RESCUE := "rescue"
 const SAFETY_PAUSED := "paused"
 ## Panel margins and border around a banner label.
 const PANEL_PAD := 44.0
+## Banner text never shrinks below this in a small rect: the rescue banner must read from
+## 3 m, so it wraps or overflows the rect instead.
+const MIN_FONT_PX := 32
+## The smaller warm-up banner's floor.
+const MIN_WARMUP_PX := 28
 
 ## Show the kit's safety banners (HudSpec.show_safety_banners).
 var show_safety: bool = true:
@@ -111,7 +116,7 @@ func game_label() -> Label:
 func fit_to(avail: Vector2) -> void:
 	var px := WlTheme.BANNER_PX
 	if avail.y > 0.0:
-		px = clampi(roundi(avail.y / 4.0), WlTheme.MIN_TEXT_PX, WlTheme.BANNER_PX)
+		px = clampi(roundi(avail.y / 4.0), MIN_FONT_PX, WlTheme.BANNER_PX)
 	font_px = px
 	max_width = avail.x if avail.x > 0.0 else INF
 	_refresh()
@@ -150,7 +155,7 @@ func _refresh() -> void:
 		SAFETY_WARMUP:
 			bg = WlTheme.WARMUP
 			key = "UI_BANNER_WARMUP"
-			px = maxi(WlTheme.MIN_TEXT_PX, roundi(font_px * 0.6))
+			px = maxi(MIN_WARMUP_PX, roundi(font_px * 0.6))
 	if state != SAFETY_NONE:
 		_safety_label.text = HudWidget._t(key)
 		_safety_label.label_settings.font_size = px

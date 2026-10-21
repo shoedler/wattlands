@@ -510,6 +510,28 @@ func test_toasts_stack_expire_and_cap() -> void:
 	assert_eq(t.texts().size(), 0, "empty text ignored")
 
 
+## A toast area in a small art-pixel rect keeps its text readable (>= MIN_FONT_PX) and shows
+## fewer toasts at once instead of shrinking them.
+func test_toasts_in_a_small_rect_stay_readable() -> void:
+	var t: HudToasts = _add(HudToasts.new())
+	t.fit_to(Vector2(1280, 90))
+	assert_gte(t.font_px, HudToasts.MIN_FONT_PX)
+	assert_gte(HudToasts.MIN_FONT_PX, 24)
+	assert_eq(t.max_visible, 1, "one toast fits 90 px")
+	t.push("one")
+	t.push("two")
+	assert_eq(t.texts(), ["two"], "the newest shows")
+	t.fit_to(Vector2(1280, 400))
+	assert_eq(t.font_px, WlTheme.TOAST_PX, "full size in a tall rect")
+	assert_eq(t.max_visible, HudToasts.MAX_VISIBLE)
+	t.push("three")
+	t.push("four")
+	assert_eq(t.texts(), ["two", "three", "four"])
+	t.fit_to(Vector2(1280, 30))
+	assert_eq(t.font_px, HudToasts.MIN_FONT_PX, "never below the floor")
+	assert_eq(t.texts(), ["four"], "trimmed to what fits")
+
+
 func test_banner_safety_priority() -> void:
 	var b: HudBanner = _add(HudBanner.new())
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
@@ -530,6 +552,23 @@ func test_banner_safety_priority() -> void:
 	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"), "and back when turned on")
 	b.set_safety(false, false, false)
 	assert_eq(b.safety_text(), "")
+
+
+## In a small art-pixel rect the safety banners stay readable from 3 m (they wrap or
+## overflow the rect rather than shrink below the floor).
+func test_banners_in_a_small_rect_stay_readable() -> void:
+	var b: HudBanner = _add(HudBanner.new())
+	b.fit_to(Vector2(640, 60))
+	b.set_safety(false, true, false)
+	assert_gte(HudWidget.font_px(b.safety_label()), HudBanner.MIN_FONT_PX, "rescue")
+	assert_gte(HudBanner.MIN_FONT_PX, 32)
+	b.set_safety(true, false, false)
+	assert_gte(HudWidget.font_px(b.safety_label()), HudBanner.MIN_WARMUP_PX, "warm-up")
+	b.show_game_banner("Strike!", 2.0)
+	assert_gte(HudWidget.font_px(b.game_label()), HudBanner.MIN_FONT_PX, "game banner")
+	b.fit_to(Vector2(1280, 400))
+	b.set_safety(false, true, false)
+	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "full size in a tall rect")
 
 
 func test_banner_game_text_expires() -> void:

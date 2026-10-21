@@ -99,3 +99,9 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 
 - Decision: `InputBindings.describe()` takes its words ("Left stick up", "D-pad up", "Key {0}", "View", "Menu") from `UI_INPUT_*` keys; Xbox letters (A, B, X, Y, LB, RB, LT, RT, LS, RS) and engine key names stay as printed. A test checks that every `UI_*` key used under `addons/wattlands/ui` and `audio` is in `ui.csv`.
 - Reason: BRIEF 6, user strings live in `content/strings/<module>.csv`.
+
+## 2026-10-21: Toasts and banners in a small rect keep a readable size
+
+- Decision: in a Rect2i area, toasts show as many as fit (up to 3) at up to 36 px but never below 24 px (`HudToasts.MIN_FONT_PX`), dropping the oldest instead of shrinking; banners never go below 32 px (`HudBanner.MIN_FONT_PX`, warm-up 28 px) and wrap or overflow the rect instead.
+- Alternatives: shrink to fit three toasts (a 90 px toast strip gave 16 px text) and banners down to 14 px.
+- Reason: the HUD must read from 3 m, and the rescue banner (4.6.3) is safety text.
