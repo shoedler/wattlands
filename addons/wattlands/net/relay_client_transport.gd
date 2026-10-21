@@ -28,6 +28,12 @@ enum SocketState { CLOSED, OPENING, OPEN }
 var requested_code: String = ""
 ## The latest relay error code (fatal or not), for logs and UI.
 var last_error: String = ""
+## From the latest `joined`: the other peers connected in the room (the relay's optional
+## joined.peers; W3 NET-1 reconciles a reclaiming host's peer list with it), whether the relay
+## sent that list, and whether the join reclaimed a peer id (joined.rejoin).
+var joined_peers: Array[int] = []
+var joined_peers_known: bool = false
+var rejoined: bool = false
 
 var _socket_state: SocketState = SocketState.CLOSED
 var _in_room: bool = false
@@ -190,6 +196,13 @@ func _handle_envelope(env: Dictionary) -> void:
 			local_peer = int(env["peer"])
 			host_peer = int(env["host"])
 			reconnect_token = str(env["token"])
+			joined_peers.clear()
+			joined_peers_known = env.get("peers") is Array
+			if joined_peers_known:
+				for p: Variant in env["peers"]:
+					if p is int or p is float:
+						joined_peers.append(int(p))
+			rejoined = bool(env.get("rejoin", false))
 			_in_room = true
 			_pending = {}
 			connected.emit()
