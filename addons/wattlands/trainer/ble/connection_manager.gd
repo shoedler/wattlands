@@ -51,8 +51,8 @@ extends Node
 ## ends that search until the next start(true).
 ##
 ## Time: every timer (backoff, backend start, attempt and setup timeouts, scan length)
-## advances in tick(dt). _process(delta) calls tick(delta) unless manual_clock is set (tests drive
-## tick() themselves). Runs with PROCESS_MODE_ALWAYS, and so do its transport, client and
+## advances in tick(dt). _process(delta) calls tick(delta) unless manual_clock is set
+## (tests drive tick() themselves). Runs with PROCESS_MODE_ALWAYS, and so do its transport, client and
 ## device children. The manager never writes to the trainer itself.
 
 ## {"address", "name", "rssi", "services"}
@@ -252,7 +252,8 @@ func backend_name() -> String:
 
 # --- Additive API ----------------------------------------------------------------------
 
-## Advance every timer by dt seconds (backoff, attempt and setup timeouts, scan length).
+## Advance every timer by dt seconds (backoff, backend start, attempt and setup timeouts,
+## scan length).
 func tick(dt: float) -> void:
 	if _backend == Backend.STARTING:
 		_init_left -= dt
