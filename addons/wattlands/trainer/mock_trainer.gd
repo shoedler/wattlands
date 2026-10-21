@@ -2,7 +2,7 @@ class_name MockTrainer
 extends TrainerDevice
 ## A simulated trainer plus rider (BRIEF 4.2). Owned by trainer-core; public API frozen
 ## after W0 (additive changes only). Used by tests, headless simulations, demos, bots
-## (profile "erg:compliance=1.0") and `--mock-trainer=<profile>`.
+## (Bots.RIDER_SPEC, profile "erg:compliance=1.0+band") and `--mock-trainer=<profile>`.
 ##
 ## Profiles are parsed as "name:key=value,...", combined with "+" (BRIEF 4.2); names and keys
 ## are case-insensitive, values are numbers, and a profile may appear more than once:

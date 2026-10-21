@@ -2,9 +2,14 @@ class_name Bots
 extends RefCounted
 ## Bot riders (BRIEF 3.6): named "Bot n", negative peer ids, is_bot = true, Autopilot on,
 ## the lobby's bot FTP as a verified FTP, riding MockTrainer's erg profile at compliance
-## 1.0 (BRIEF 4.2). Owned by sim; public API frozen after W0.
+## 1.0 (BRIEF 4.2) plus its `band` cadence policy, so a bot follows the cadence band a game
+## publishes for it (BRIEF 3.6 cadence_band): the band's centre after a 2 s lag, with seeded
+## noise within +-1.5 rpm, and the preferred cadence (90 rpm) while no band is published.
+## Owned by sim; public API frozen after W0.
 
-const RIDER_SPEC := "erg:compliance=1.0"
+## Every bot's MockTrainer profile: the app's lobby bots (SessionLauncher) and
+## run_game_sim's bots (GameSimRunner) are built from it.
+const RIDER_SPEC := "erg:compliance=1.0+band"
 
 
 ## Peer id of the n-th bot (n = 1, 2, ...): -n.

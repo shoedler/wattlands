@@ -23,8 +23,9 @@ extends Node
 ##
 ## Rules: FTP 200 W per slot unless --ftp gives one value (every slot), one per human slot
 ## (bots take the first) or one per slot; human slots are verified unless --unverified;
-## bots are verified, run Autopilot and ride "erg:compliance=1.0" at the bot FTP (the first
-## human's); --autopilot (default all) sets the human slots' Autopilot; --haptics-off turns
+## bots are verified, run Autopilot and ride Bots.RIDER_SPEC ("erg:compliance=1.0+band", so
+## they follow a published cadence band) at the bot FTP (the first human's); --autopilot
+## (default all) sets the human slots' Autopilot; --haptics-off turns
 ## haptics off for the listed slots; --player-options holds one object per human slot (bots
 ## and missing keys get defaults). Each human slot gets a private profile dir under a temp
 ## root (Paths' override is moved there for the run and restored by cleanup()), so the

@@ -1,5 +1,11 @@
 # Changelog: sim
 
+## Unreleased (W4 final, 2026-10-21)
+
+### Changed
+
+- `Bots.RIDER_SPEC` is `erg:compliance=1.0+band`: bots follow the cadence band a game publishes for them (BRIEF 3.6 `cadence_band`), reaching its centre after a 2 s lag with seeded noise within ±1.5 rpm, and ride 90 rpm (88.5-91.5 rpm with the noise) without one. In ERG, a band step up of more than about 12% (in practice about 18% and up, because of the lag) makes a bot fire the `surge` gesture, as a human following the band would. Runs with bots get new `deterministic_hash` values.
+
 ## Unreleased (W1, 2026-10-21)
 
 ### Added
