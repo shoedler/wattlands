@@ -34,9 +34,11 @@ extends Node
 ##     time, so LocalRider's order (device.tick, on_sample, governor.tick) times every rule
 ##     from the tick in which the sample arrived.
 ##   - not_pedaling = power < 15 W and cadence < 20 rpm (an absent cadence counts as low).
-##     Coasting (3 s), the 10 s pause/AFK, the rescue triggers and the rescue hold are timed
-##     from the first sample that meets their condition; a sample that breaks it restarts it.
-##     Pause and AFK are raised only while a plan phase is running.
+##     Coasting (3 s), the 10 s pause/AFK and the rescue hold are timed from the first sample
+##     that meets their condition; a sample that breaks it restarts it. The rescue triggers
+##     need their condition for the whole 3 s / 5 s while rescue is armed (in ERG with a
+##     governed target >= 60% FTP), so a low reading from an unarmed phase never fires at the
+##     moment a harder phase arms it. Pause and AFK are raised only while a phase runs.
 ##   - Directive channels per BRIEF 3.6. Structural problems refuse the whole request; a
 ##     haptic dropped for warm-up, opt-out or cooldown is reported in record.dropped and the
 ##     rest of the request still applies (refused only when nothing else was set). A haptic
@@ -184,6 +186,8 @@ var _cad_low_since: float = -1.0
 var _pow_low_since: float = -1.0
 var _cad_high_since: float = -1.0
 var _rescue_ramp_t: float = 0.0
+var _rescue_armed: bool = false
+var _rescue_armed_t: float = 0.0
 var _test_ended: bool = false
 
 # --- duration limits -----------------------------------------------------------------------
@@ -237,6 +241,11 @@ func setup(device: TrainerDevice) -> void:
 	_device = device
 	_controller.setup(device)
 	_shut_down = false
+	# The 3 s power and speed of a previous connection are stale: the next ERG entry starts
+	# from the floor until fresh samples arrive.
+	_power_hist.clear()
+	_pending.clear()
+	_speed_mps = -1.0
 	if device != null and not _trainer_max_configured:
 		_trainer_max_w = _device_max_w(device)
 	_update_status()
@@ -841,8 +850,15 @@ func _update_rescue() -> void:
 	var armed := false
 	if _desired == Wl.ERG and not _game_paused and not _panic:
 		armed = float(_erg_out.get("armed_w", 0)) >= GovernorClamps.pct_to_w(RESCUE_ARM_PCT, _ftp_w) - _EPS
-	var triggered := (_cad_low_since >= 0.0 and _t - _cad_low_since >= RESCUE_CADENCE_LOW_S - _EPS) \
-		or (_pow_low_since >= 0.0 and _t - _pow_low_since >= RESCUE_POWER_LOW_S - _EPS)
+	if armed and not _rescue_armed:
+		_rescue_armed_t = _t
+	_rescue_armed = armed
+	# Each trigger needs its condition for the whole window while armed: the window starts at
+	# the later of the first sample that met it and the moment rescue armed.
+	var triggered := false
+	if armed:
+		triggered = (_cad_low_since >= 0.0 and _t - maxf(_cad_low_since, _rescue_armed_t) >= RESCUE_CADENCE_LOW_S - _EPS) \
+			or (_pow_low_since >= 0.0 and _t - maxf(_pow_low_since, _rescue_armed_t) >= RESCUE_POWER_LOW_S - _EPS)
 	match _rescue_state:
 		_RESCUE_NONE, _RESCUE_RAMP:
 			if armed and triggered:

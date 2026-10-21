@@ -193,8 +193,8 @@ func test_warmup_ramp_triggers_once_it_passes_60_pct() -> void:
 	rig.start([erg(Wl.WARMUP, 50.0, 300.0).with_ramp(65.0)])
 	var at := rig.run_until(func() -> bool: return bool(rig.s()["rescue"]), 260.0)
 	assert_gt(at, 0.0)
-	assert_gte(at, 200.0 - 1e-6, "not while the ramp is below 60% (before 200 s)")
-	assert_lte(at, 200.1, "as soon as it reaches 60%")
+	assert_gte(at, 203.0 - 1e-6, "the ramp reaches 60% at 200 s; 3 s of low cadence after that")
+	assert_lte(at, 203.1, "and no later")
 
 
 func test_rescue_not_armed_while_paused() -> void:
@@ -204,5 +204,21 @@ func test_rescue_not_armed_while_paused() -> void:
 	rig.run(10.0)
 	assert_false(rig.s()["rescue"])
 	rig.gov.set_game_paused(false)
-	rig.step()
-	assert_true(rig.s()["rescue"], "the low cadence has lasted > 3 s")
+	var t0 := rig.t
+	var at := rig.run_until(func() -> bool: return bool(rig.s()["rescue"]), 5.0)
+	assert_time(at, t0 + 3.0 + DT, "3 s of low cadence while armed, counted from the unpause")
+
+
+func test_low_power_from_an_unarmed_phase_does_not_fire_at_once() -> void:
+	var dev := ScriptedDevice.new()
+	dev.erg_follow = 0.7
+	var rig := make_rig({}, dev)
+	rig.start([erg(Wl.RECOVERY, 50.0, 60.0), erg(Wl.WORK, 100.0, 60.0)])
+	rig.run(30.0)
+	assert_false(rig.s()["rescue"], "50% is not armed")
+	rig.gov.start_phase(1)
+	var t0 := rig.t
+	var at := rig.run_until(func() -> bool: return bool(rig.s()["rescue"]), 10.0)
+	assert_gt(at, 0.0, "a rider at 70% of the target is rescued")
+	assert_gte(at - t0, 5.0 - 1e-6, "but only after 5 s of the armed phase")
+	assert_lte(at - t0, 6.1)
