@@ -12,6 +12,7 @@ extends Node
 ## as pause (solo, outside ERG).
 ##
 ## How the parts fit:
+## - Keyboard presses are ignored while a LineEdit or TextEdit has focus (text_input_focused()).
 ## - Device actions fire once per press (edge-detected per key, button or stick direction;
 ##   key repeats are ignored). Each goes into the take_actions() queue, the `action` signal,
 ##   EventBus.action_pressed and `menu_input(action, "action")`.
@@ -84,6 +85,8 @@ func handle_event(event: InputEvent) -> void:
 	if event == null:
 		return
 	if event is InputEventKey and (event as InputEventKey).echo:
+		return
+	if event is InputEventKey and (event as InputEventKey).pressed and text_input_focused():
 		return
 	var src := _source_id(event)
 	if src.is_empty():
@@ -177,6 +180,20 @@ func pedal_ui_active() -> bool:
 ## True once a keyboard or controller action was pressed.
 func device_used() -> bool:
 	return _device_used
+
+
+## True while a text field (LineEdit, TextEdit) has keyboard focus: key presses then belong
+## to the field (typing a room code, holding Backspace to delete) and fire no action and no
+## panic hold. Key releases still pass so held actions end cleanly. Controller input is
+## never filtered.
+func text_input_focused() -> bool:
+	if not is_inside_tree():
+		return false
+	var vp := get_viewport()
+	if vp == null:
+		return false
+	var owner_control := vp.gui_get_focus_owner()
+	return owner_control is LineEdit or owner_control is TextEdit
 
 
 ## Inject an action (on-screen buttons, tests).

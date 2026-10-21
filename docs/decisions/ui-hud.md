@@ -59,3 +59,9 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 
 - Decision: `res://addons/wattlands/ui/theme/wattlands_theme.tres` (dark panels, 32 px body, 40 px buttons, 48 px line edits, sky-blue focus) and `WlTheme` (sizes, Okabe-Ito based colors, `label_settings()`, `panel_style()`). Kit widgets use LabelSettings with a dark outline so text reads over any game art.
 - Reason: games match the kit by setting the same Theme and using the same constants (HUD11).
+
+## 2026-10-21: Key presses belong to a focused text field
+
+- Decision: while a LineEdit or TextEdit has focus, the router ignores keyboard presses (no action, no Backspace panic hold); releases and controller input still pass, so the View+Menu panic always works.
+- Alternatives: let screens unbind keys while typing.
+- Reason: typing a room code fires R (swap), P (pause), Q and E (shifts), and holding Backspace to delete would otherwise trigger panic.
