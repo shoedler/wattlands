@@ -163,3 +163,9 @@
 - Alternatives: tie W/kg to `share_weight`.
 - Reason: BRIEF 3.3 shows W/kg only if the rider opted in; seeing your own W/kg doesn't need your weight to leave the PC.
 
+## 2026-10-21 (W2 round 2): The session overlay dims the HUD; the panic button looks like one
+
+- Decision: the session overlay gets a full-screen scrim (black, 60%) under it in the top layer, and its panel is opaque (97%); an empty detail line is hidden. The on-screen panic button reads "PANIC" (the menu item keeps "PANIC: trainer safe") in white on red with a light-red border, at least 380 x 100. A test seam `AppSessionScreen.render_headless` builds the view and HUD under GUT's headless display server. The lobby's message line starts hidden.
+- Alternatives: the 82% panel alone; a status-like panic label in the HUD's own colors.
+- Reason: seen in tools/screenshot --app-screen=session as a client: the panic overlay's title ran into the sprint banner showing through the panel; the panic button looked like one more HUD panel, and its long label reserved 559 px of the bottom edge from the teammate strip. In the solo lobby an empty message line pushed the content down.
+

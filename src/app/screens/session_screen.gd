@@ -5,8 +5,9 @@ extends AppScreen
 ## bot on the host, MockTrainer.from_spec(Bots.RIDER_SPEC, bot FTP)), the net session, the
 ## options and the scaling mode (AppSessionLauncher). The GameHost places the game's view in
 ## its PixelViewport (2D) or the 3D root inside `view_layer` and its HudLayer in `hud_layer`.
-## On top: a pause overlay with its own pedal-scan menu, and an always-visible on-screen panic
-## button (EventBus.panic_requested plus LocalRider.panic(): the governor goes safe at once).
+## On top: a pause overlay with its own pedal-scan menu over a dimming scrim, and an
+## always-visible on-screen panic button in the warning colors (EventBus.panic_requested plus
+## LocalRider.panic(): the governor goes safe at once).
 ## params: role (Wl.SOLO/HOST/CLIENT), game_id, content_id, quick (solo zero-touch start: set
 ## up the offline lobby here), session_start (CLIENT), rejoin + replay (a restarted client:
 ## messages that arrived before the GameHost existed are re-emitted to it).
@@ -33,6 +34,8 @@ var ride_summary: Dictionary = {}
 var fit_path: String = ""
 var host_left: bool = false
 var headless: bool = false
+## Tests: build the game's view and HUD even under the headless display server.
+var render_headless: bool = false
 ## True while this screen runs the Sfx cadence metronome.
 var metronome_on: bool = false
 var _overlay_menu_open: bool = false
@@ -42,14 +45,21 @@ var session_input: AppSessionInput = null
 ## Above the HudLayer: the pause overlay and the panic button.
 var top_layer: CanvasLayer = null
 var top_root: Control = null
+## Dims the HUD and the game behind the overlay (shown with it), so the overlay's text never
+## mixes with the HUD's banners and widgets.
+var overlay_scrim: ColorRect = null
 var _panic_reserved: bool = false
 
 const PANIC_SIZE := Vector2(380, 100)
+const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
+const OVERLAY_PANEL_COLOR := Color(0.06, 0.07, 0.09, 0.97)
+const PANIC_BG := Color("#8a1f17")
+const PANIC_BG_HI := Color("#b02a20")
 
 
 func _build() -> void:
 	role = str(params.get("role", Wl.SOLO))
-	headless = DisplayServer.get_name() == "headless"
+	headless = DisplayServer.get_name() == "headless" and not render_headless
 	add_child(AppStyle.background(Color.BLACK))
 	view_layer = Control.new()
 	view_layer.name = "View"
@@ -196,13 +206,20 @@ func local_rider() -> LocalRider:
 # --- overlay and panic -------------------------------------------------------------------------
 
 func _build_overlay() -> void:
+	overlay_scrim = ColorRect.new()
+	overlay_scrim.name = "OverlayScrim"
+	overlay_scrim.color = SCRIM_COLOR
+	overlay_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	overlay_scrim.visible = false
+	top_root.add_child(overlay_scrim)
+	overlay_scrim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay = CenterContainer.new()
 	overlay.name = "PauseOverlay"
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.visible = false
 	top_root.add_child(overlay)
-	var panel := AppStyle.panel(Color(0, 0, 0, 0.82))
+	var panel := AppStyle.panel(OVERLAY_PANEL_COLOR)
 	panel.custom_minimum_size = Vector2(1100, 560)
 	overlay.add_child(panel)
 	var box := AppStyle.vbox(16)
@@ -224,8 +241,17 @@ func _build_overlay() -> void:
 func _build_panic_button() -> void:
 	panic_button = Button.new()
 	panic_button.name = "Panic"
-	panic_button.text = t("APP_PANIC")
+	panic_button.text = t("APP_PANIC_BUTTON")
+	panic_button.tooltip_text = t("APP_PANIC")
 	panic_button.add_theme_font_size_override("font_size", AppStyle.FONT_HEADING)
+	# A safety control looks like one: white text on red with a light-red border, unlike every
+	# HUD panel (the word carries the meaning; the color is a second cue).
+	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
+		panic_button.add_theme_stylebox_override(state, _panic_style(PANIC_BG_HI if state in ["hover", "pressed"] else PANIC_BG))
+	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
+		panic_button.add_theme_color_override(c, Color.WHITE)
+	panic_button.add_theme_color_override("font_outline_color", Color.BLACK)
+	panic_button.add_theme_constant_override("outline_size", 6)
 	panic_button.focus_mode = Control.FOCUS_NONE
 	panic_button.custom_minimum_size = PANIC_SIZE
 	top_root.add_child(panic_button)
@@ -239,6 +265,19 @@ func _build_panic_button() -> void:
 	panic_button.offset_left = panic_button.offset_right - PANIC_SIZE.x
 	panic_button.offset_top = panic_button.offset_bottom - PANIC_SIZE.y
 	panic_button.pressed.connect(panic)
+
+
+static func _panic_style(bg: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = AppStyle.BAD
+	sb.set_border_width_all(4)
+	sb.set_corner_radius_all(12)
+	sb.content_margin_left = 24
+	sb.content_margin_right = 24
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
 
 
 ## The panic button's size (its text may make it wider than PANIC_SIZE).
@@ -289,6 +328,7 @@ func open_menu() -> void:
 func _show_overlay(force_menu: bool = false) -> void:
 	var show := force_menu or panicked or paused or error != "" or _overlay_menu_open
 	overlay.visible = show
+	overlay_scrim.visible = show
 	if not show:
 		if _overlay_menu_open:
 			clear_menus()
@@ -306,6 +346,7 @@ func _show_overlay(force_menu: bool = false) -> void:
 	else:
 		overlay_title.text = t("APP_SESSION_MENU")
 		overlay_detail.text = ""
+	overlay_detail.visible = overlay_detail.text != ""
 	var items := overlay_items()
 	if not _overlay_menu_open:
 		_overlay_menu_open = true

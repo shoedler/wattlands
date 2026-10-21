@@ -8,7 +8,8 @@ extends PanelContainer
 ## shrinks a widget to fit a rect (never grows it above 1.0). Key numbers (own watts, rpm,
 ## big readouts) never go below WlTheme.KEY_NUMBER_MIN_PX (48 px), so a widget asked to fit
 ## a rect smaller than min_rect() overflows it instead of shrinking those numbers. The gear
-## (48 px at full size) and the timeline's clock are secondary and shrink with their rect.
+## and the timeline's clock (time left in the phase) are 48 px at full size and shrink with
+## their rect.
 ## Options (HudSpec.add(..., options)): "panel": false drops the dark background panel.
 
 ## The kit widget id (HudSpec.POWER_GAUGE, ...).

@@ -151,6 +151,125 @@ func test_scripted_host_and_client_play_a_session_over_loopback() -> void:
 	assert_eq(client_fx.quits, [0])
 
 
+func _loop_net(hub: RefCounted, net_name: String) -> WlNetSession:
+	var net := WlNetSession.new()
+	net.name = net_name
+	add_child_autofree(net)
+	var t := LoopbackTransport.hub_transport(hub)
+	net.use_transport(t)
+	if t.get_parent() == null:
+		net.add_child(t)
+	return net
+
+
+static func _pump(nets: Array, done: Callable, max_iter: int = 400) -> bool:
+	for _k in max_iter:
+		for n: Variant in nets:
+			(n as WlNetSession).poll()
+		if done.call():
+			return true
+	return false
+
+
+## A CLIENT's session screen builds its HUD from the host's session_start (seen windowed in
+## tools/screenshot --app-screen=session): the panic button's corner is reserved on that HUD,
+## the gear stack sits above the button in the sprint, and the overlay, its scrim and the
+## button draw above the HUD.
+func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void:
+	var registry := get_tree().root.get_node("GameRegistry") as WlGameRegistry
+	var games := AppLobbyModel.installed_games(registry)
+	var hub: RefCounted = LoopbackTransport.create_hub()
+	var host_net := _loop_net(hub, "HostNet")
+	var host_prof := RiderProfile.new()
+	host_prof.display_name = "Host"
+	host_prof.ftp_w = 220.0
+	host_prof.cp_w = 220.0
+	host_prof.ftp_verified = true
+	host_prof.created = true
+	host_net.set_local_player_info(AppLobbyModel.player_info(host_prof, Wl.FAIR_FTP, {}, games, "ready"))
+	host_net.host_room(8)
+	assert_true(_pump([host_net], func() -> bool: return host_net.room_code != "" and host_net.local_peer != 0), "the host has a room")
+	host_net.set_game("workout", str(registry.manifest("workout").get("version", "")), "e2e")
+	host_net.set_ready(true)
+	fx.give_profile(200.0, "Guest")
+	_go_real(fx)
+	var cnet := _loop_net(hub, "ClientNet")
+	fx.services.net = cnet
+	cnet.set_local_player_info(AppLobbyModel.player_info(fx.settings.profile, Wl.FAIR_FTP, {}, games, "ready"))
+	cnet.join_room(host_net.room_code)
+	assert_true(_pump([host_net, cnet], func() -> bool: return cnet.local_peer != 0 and host_net.peers().size() == 2), "the client joined")
+	cnet.set_ready(true)
+	assert_true(_pump([host_net, cnet], func() -> bool: return host_net.all_ready()), "everyone ready")
+	host_net.mark_started()
+	var players := host_net.lobby_slots()
+	var mine: PlayerSlot = null
+	for p in players:
+		if p.peer_id == host_net.local_peer:
+			mine = p
+	assert_not_null(mine, "the host's slot")
+	if mine == null:
+		return
+	var hbus: WlEventBus = autofree(WlEventBus.new())
+	var hdev := MockTrainer.from_spec("erg:compliance=1.0", 220.0)
+	var hr := LocalRider.new()
+	add_child_autofree(hr)
+	hr.add_child(hdev)
+	hr.setup(mine.peer_id, host_prof, mine, hdev, {"multiplayer": true, "record": false, "bus": hbus})
+	var gh := GameHost.new()
+	add_child_autofree(gh)
+	assert_eq(gh.setup({"game_id": "workout", "content_id": "e2e", "seed": 3, "role": Wl.HOST, "players": players,
+		"local_riders": {mine.peer_id: hr}, "local_peer": mine.peer_id, "net": host_net, "bus": hbus,
+		"registry": registry, "options": {}, "scaling_mode": Wl.FAIR_FTP, "headless": true, "realtime": false,
+		"record_rides": false, "report": false, "input_router": null}), "")
+	# Like the lobby screen: the session screen opens in the signal chain of session_start, so
+	# its GameHost listens before the plan that follows in the same poll.
+	var s := AppSessionScreen.new()
+	s.render_headless = true
+	var opened := [false]
+	cnet.game_message.connect(func(_from: int, d: Dictionary) -> void:
+		if str(d.get("type", "")) == "session_start" and not opened[0]:
+			opened[0] = true
+			open_screen(s, {"role": Wl.CLIENT, "session_start": d.duplicate(true)}))
+	gh.start()
+	assert_true(_pump([host_net, cnet], func() -> bool: return opened[0]), "session_start reached the client")
+	if not opened[0]:
+		s.free()
+		return
+	assert_eq(s.error, "", "the client session set up")
+	if s.host == null:
+		return
+	for _i in 10:
+		gh.step()
+		s.host.step()
+	var hud := s.host.hud_layer()
+	assert_not_null(hud, "the client's HUD was built from session_start")
+	if hud == null:
+		return
+	assert_eq(hud.reserved_corner(HudSpec.BOTTOM_RIGHT), s.panic_button_size(), "the panic corner is kept clear")
+	assert_eq(s.panic_button.text, AppScreen.t("APP_PANIC_BUTTON"))
+	assert_eq((s.panic_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color, AppSessionScreen.PANIC_BG, "the panic button is red")
+	var n := 0
+	while s.host.clock.platform_time() < 100.0 and n < 3000:
+		gh.step()
+		s.host.step()
+		n += 1
+	assert_eq(s.host.local_phase_state().kind, Wl.FREE, "in the e2e sprint (SIM)")
+	hud.screen_size_override = Vector2(1920, 1080)
+	hud.relayout()
+	var gear := hud.widget(HudSpec.GEAR)
+	assert_true(gear != null and gear.visible, "the gear shows in SIM")
+	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
+	var bottom := box.position.y + box.size.y
+	assert_lte(bottom, 1080.0 - WlTheme.MARGIN_PX - s.panic_button_size().y - WlTheme.GAP_PX + 0.5, "the gear sits above the panic button")
+	s.open_menu()
+	assert_true(s.overlay.visible and s.overlay_scrim.visible, "the overlay and its scrim show")
+	assert_gt(s.top_layer.layer, hud.layer, "the overlay and the panic button draw above the HUD")
+	var kids := s.top_root.get_children()
+	assert_true(kids.find(s.overlay_scrim) < kids.find(s.overlay) and kids.find(s.overlay) < kids.find(s.panic_button),
+		"scrim, then the overlay, then the panic button")
+	assert_false(s.overlay_detail.visible, "no empty detail line in the ride menu")
+
+
 func _real_router() -> WlInputRouter:
 	var router := WlInputRouter.new()
 	router.load_on_ready = false

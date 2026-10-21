@@ -4,6 +4,8 @@ extends SceneTree
 ##   tools/screenshot --game=<id> --content=<id> --at=<s>[,<s>...] [run_game_sim flags] [--out=<dir>]
 ##   tools/screenshot --scene=res://addons/wattlands/world2d/demo.tscn [--frames=<n>]
 ##   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>] [--frames=<n>]
+##   tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>]
+##                    [--content=<id>] [--at=<s>[,<s>...]] [--app-overlay=menu|panic|none]
 ##
 ## (tools/screenshot runs tools/godot.sh --path . --resolution 1920x1080 -s tools/qa/screenshot_main.gd
 ## -- --mock-trainer=<profile> <flags>; see tools/qa/screenshot_options.gd for every flag.)
@@ -172,6 +174,9 @@ func _run_app(out_dir: String) -> void:
 	if app == null:
 		_fail("the App autoload is missing")
 		return
+	if screen == "session":
+		await _run_session(out_dir, main, app)
+		return
 	var params := {}
 	if screen == "lobby":
 		params = {"game_id": str(_opts["app_game"])}
@@ -180,6 +185,38 @@ func _run_app(out_dir: String) -> void:
 	for i in int(_opts["frames"]):
 		await process_frame
 	await _capture(out_dir.path_join(Options.app_file_name(screen)))
+
+
+## The app's session screen (tools/qa/screenshot_session.gd): one shot per --at, then one with
+## the overlay open (--app-overlay).
+func _run_session(out_dir: String, main: Node, app: WlApp) -> void:
+	await process_frame
+	var run := QaScreenshotSession.create(self, main, app, _opts)
+	var screen: AppSessionScreen = await run.start()
+	if screen == null:
+		_fail("session: %s" % run.error)
+		run.cleanup()
+		return
+	var role := str(_opts["app_role"])
+	var last := 0.0
+	for at: float in _opts["at"]:
+		if not await run.advance_to(at):
+			_fail("session: the app's session ended before %s s" % Options.format_seconds(at))
+			continue
+		last = at
+		print(run.describe(screen))
+		await _capture(out_dir.path_join(Options.session_file_name(role, at)))
+	var overlay := str(_opts["app_overlay"])
+	if overlay != "none" and is_instance_valid(screen) and screen.host != null:
+		if overlay == "panic":
+			screen.panic()
+		else:
+			screen.open_menu()
+		for i in 3:
+			await process_frame
+		print(run.describe(screen))
+		await _capture(out_dir.path_join(Options.session_file_name(role, last, overlay)))
+	run.cleanup()
 
 
 ## Saves the next fully drawn frame of the window (HUD included) as a PNG.

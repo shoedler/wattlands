@@ -5,7 +5,7 @@ extends HudWidget
 ## phase. Labels go through the string table (plain text passes through). Fixed phases show
 ## the time left; open-ended phases show the time elapsed and their min_s-max_s range, and
 ## take their nominal duration_s (or the middle of min_s-max_s when it is 0) as their block
-## width. base_size 640 x 150; min_rect 380 x 100.
+## width. base_size 640 x 162; min_rect 380 x 108 (the clock is 48 px at full size).
 
 var _phase_text: String = ""
 var _time_text: String = ""
@@ -31,7 +31,7 @@ func _init() -> void:
 	_range = _make_label("Range", WlTheme.SMALL_PX, WlTheme.TEXT_DIM)
 	top.add_child(_range)
 	_range.visible = false
-	_time = _make_label("Time", 40, WlTheme.TEXT, false, true)
+	_time = _make_label("Time", WlTheme.KEY_NUMBER_MIN_PX, WlTheme.TEXT, false, true)
 	_time.text = "0:00"
 	top.add_child(_time)
 	_strip = HudPhaseStrip.new()
@@ -46,11 +46,11 @@ func _init() -> void:
 
 
 func base_size() -> Vector2:
-	return Vector2(640, 150)
+	return Vector2(640, 162)
 
 
 func min_rect() -> Vector2:
-	return Vector2(380, 100)
+	return Vector2(380, 108)
 
 
 func set_phase(phase: PhaseState, plan: EffortPlan) -> void:
@@ -115,6 +115,11 @@ func next_text() -> String:
 
 func strip() -> HudPhaseStrip:
 	return _strip
+
+
+## The phase clock's Label (time left, or elapsed in an open-ended phase). Additive (W2).
+func time_label() -> Label:
+	return _time
 
 
 func _preview(p: PlanPhase, have_plan: bool) -> String:

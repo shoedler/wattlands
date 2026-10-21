@@ -87,6 +87,7 @@ APP_ERR_NO_PLAYERS,No riders in the lobby.
 APP_ERR_NO_LOCAL_SLOT,You aren't in this session's rider list.
 APP_ERR_NO_TRAINER,"No trainer connected: connect one in Settings, or use the mock trainer."
 APP_PANIC,PANIC: trainer safe
+APP_PANIC_BUTTON,PANIC
 APP_SESSION_MENU,Ride menu
 APP_SESSION_PAUSED,Paused
 APP_SESSION_PAUSED_DETAIL,You stopped pedaling. Start pedaling again to ride on.

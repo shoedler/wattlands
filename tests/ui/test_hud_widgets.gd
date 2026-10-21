@@ -424,6 +424,8 @@ func test_key_numbers_are_at_least_48_px_at_any_scale() -> void:
 	for l in keys:
 		assert_gte(HudWidget.font_px(l), 48, "%s at full size" % l.name)
 	assert_eq(HudWidget.font_px(gear.gear_label()), 48, "the gear is 48 px at full size")
+	var tl: HudTimeline = _add(HudTimeline.new())
+	assert_eq(HudWidget.font_px(tl.time_label()), 48, "the phase clock is 48 px at full size")
 	assert_gte(HudWidget.font_px(g.watts_label()), WlTheme.KEY_NUMBER_PX)
 	assert_gte(HudWidget.font_px(r.value_label()), WlTheme.BIG_READOUT_PX)
 	for w: HudWidget in [g, c, r, gear]:

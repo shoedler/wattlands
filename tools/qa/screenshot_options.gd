@@ -11,12 +11,23 @@ extends RefCounted
 ##                                   captured from the host's view at each sim second
 ##   --scene=<res path>              a scene (for example a kit demo) after --frames frames
 ##   --app-screen=title|picker|lobby the app shell on that screen with a mock trainer
+##   --app-screen=session            the app's session screen (HUD, panic button, overlay) with
+##                                   --app-role=client|host|solo (default client: the app joins
+##                                   an in-process host over loopback; tools/qa/screenshot_session.gd),
+##                                   shot at each --at (platform seconds of the app's session,
+##                                   default 30) plus one with --app-overlay=menu|panic|none
+##                                   (default menu)
 ## Screenshot flags: --out=<dir> (alias --screenshot-dir), --frames=<n> (scene and app modes,
 ## default 30), --settle=<s> (game mode: render this long at normal speed before each shot,
-## default 1), --app-game=<id> (lobby, default workout), --mock-trainer=<profile> (app mode).
+## default 1), --app-game=<id> (lobby and session, default workout), --app-role and
+## --app-overlay (session), --mock-trainer=<profile> (app mode).
 ## Every other flag goes to GameSimRunner.parse_args unchanged.
 
-const APP_SCREENS: Array[String] = ["title", "picker", "lobby"]
+const APP_SCREENS: Array[String] = ["title", "picker", "lobby", "session"]
+const APP_ROLES: Array[String] = ["client", "host", "solo"]
+const APP_OVERLAYS: Array[String] = ["menu", "panic", "none"]
+## Session shots without --at: this many platform seconds into the app's session.
+const DEFAULT_SESSION_AT := 30.0
 const DEFAULT_FRAMES := 30
 const DEFAULT_SETTLE_S := 1.0
 const DEFAULT_MOCK := "erg:compliance=1.0"
@@ -24,18 +35,20 @@ const SCREENSHOT_ROOT := "build/screenshots"
 ## Flags this tool consumes; they never reach GameSimRunner.parse_args.
 const OWN_FLAGS: Array[String] = [
 	"at", "out", "screenshot-dir", "scene", "frames", "app-screen", "app-game", "settle",
-	"mock-trainer", "profile-dir",
+	"mock-trainer", "profile-dir", "app-role", "app-overlay",
 ]
 
 
 ## {error: String ("" when valid), mode: "game" | "scene" | "app", at: Array[float] (sorted,
 ## unique), out: String (as given, or the default folder), frames: int, settle_s: float,
-## scene: String, app_screen: String, app_game: String, mock_trainer: String, game: String,
-## content: String, players: int, sim_args: PackedStringArray}.
+## scene: String, app_screen: String, app_game: String, app_role: String, app_overlay: String,
+## mock_trainer: String, game: String, content: String, players: int,
+## sim_args: PackedStringArray}.
 static func parse(args: PackedStringArray) -> Dictionary:
 	var o := {
 		"error": "", "mode": "", "at": [], "out": "", "frames": DEFAULT_FRAMES,
 		"settle_s": DEFAULT_SETTLE_S, "scene": "", "app_screen": "", "app_game": "workout",
+		"app_role": "client", "app_overlay": "menu",
 		"mock_trainer": DEFAULT_MOCK, "game": "", "content": "", "players": 1,
 		"sim_args": PackedStringArray(),
 	}
@@ -92,6 +105,14 @@ static func parse(args: PackedStringArray) -> Dictionary:
 				o["app_screen"] = val
 			"app-game":
 				o["app_game"] = val
+			"app-role":
+				if not APP_ROLES.has(val):
+					return _fail(o, "--app-role must be one of %s, got \"%s\"" % [", ".join(APP_ROLES), val])
+				o["app_role"] = val
+			"app-overlay":
+				if not APP_OVERLAYS.has(val):
+					return _fail(o, "--app-overlay must be one of %s, got \"%s\"" % [", ".join(APP_OVERLAYS), val])
+				o["app_overlay"] = val
 			"mock-trainer":
 				o["mock_trainer"] = val
 			"profile-dir":
@@ -104,7 +125,7 @@ static func parse(args: PackedStringArray) -> Dictionary:
 		if str(o[m]) != "":
 			modes += 1
 	if modes != 1:
-		return _fail(o, "give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=title|picker|lobby")
+		return _fail(o, "give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=title|picker|lobby|session")
 	if str(o["game"]) != "":
 		o["mode"] = "game"
 		if at.is_empty():
@@ -113,6 +134,8 @@ static func parse(args: PackedStringArray) -> Dictionary:
 		o["mode"] = "scene"
 	else:
 		o["mode"] = "app"
+		if str(o["app_screen"]) == "session" and at.is_empty():
+			at.append(DEFAULT_SESSION_AT)
 	if str(o["out"]) == "":
 		o["out"] = default_out(str(o["mode"]), str(o["game"]))
 	return o
@@ -165,6 +188,12 @@ static func scene_file_name(scene_path: String) -> String:
 
 static func app_file_name(screen: String) -> String:
 	return "app_%s.png" % screen
+
+
+## app_session_<role>_<at>s.png, or app_session_<role>_<at>s_<overlay>.png for the overlay shot.
+static func session_file_name(app_role: String, at: float, overlay: String = "") -> String:
+	var base := "app_session_%s_%ss" % [app_role, format_seconds(at)]
+	return (base + "_" + overlay + ".png") if overlay != "" else (base + ".png")
 
 
 static func _fail(o: Dictionary, msg: String) -> Dictionary:

@@ -3,7 +3,8 @@ extends VBoxContainer
 ## The toast area (BRIEF 3.9): short messages stacked newest last, each shown for
 ## `seconds` (default 3 s) and faded out over its last 0.3 s; at most max_visible at once
 ## (MAX_VISIBLE, fewer in a small rect; the oldest goes first). Time advances through
-## tick(dt) (HudLayer._process). Owned by ui-hud.
+## tick(dt) (HudLayer: the session's platform time). Toasts line up on `side` (HudLayer sets it
+## from the anchor: left in a left corner, right in a right corner). Owned by ui-hud.
 
 const MAX_VISIBLE := 3
 const DEFAULT_S := 3.0
@@ -22,6 +23,8 @@ var max_visible: int = MAX_VISIBLE
 ## Widest a toast may get (HudLayer keeps centre stacks clear of the corners); text wraps
 ## past it.
 var max_width: float = INF
+## Which side the toasts line up on: -1 left, 0 centre, 1 right.
+var side: int = 0
 
 ## [{"panel": PanelContainer, "label": Label, "left": float, "text": String}]
 var _items: Array[Dictionary] = []
@@ -39,13 +42,13 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 		return
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	panel.size_flags_horizontal = side_flags(side)
 	panel.add_theme_stylebox_override("panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.92), WlTheme.ACCENT, 2))
 	var l := Label.new()
 	l.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.label_settings = WlTheme.label_settings(font_px)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.horizontal_alignment = side_alignment(side)
 	l.text = text
 	HudWidget.wrap_label(l, max_width - PANEL_PAD)
 	panel.add_child(l)
@@ -73,6 +76,32 @@ func texts() -> Array[String]:
 	for it in _items:
 		out.append(str(it["text"]))
 	return out
+
+
+## Line the toasts up on `s` (-1 left, 0 centre, 1 right). Additive (W2).
+func set_side(s: int) -> void:
+	side = clampi(s, -1, 1)
+	for it in _items:
+		(it["panel"] as Control).size_flags_horizontal = side_flags(side)
+		(it["label"] as Label).horizontal_alignment = side_alignment(side)
+
+
+## Size flags for a panel lined up on `s` (-1 left, 0 centre, 1 right).
+static func side_flags(s: int) -> int:
+	if s < 0:
+		return Control.SIZE_SHRINK_BEGIN
+	if s > 0:
+		return Control.SIZE_SHRINK_END
+	return Control.SIZE_SHRINK_CENTER
+
+
+## Text alignment inside a panel lined up on `s`.
+static func side_alignment(s: int) -> HorizontalAlignment:
+	if s < 0:
+		return HORIZONTAL_ALIGNMENT_LEFT
+	if s > 0:
+		return HORIZONTAL_ALIGNMENT_RIGHT
+	return HORIZONTAL_ALIGNMENT_CENTER
 
 
 func set_max_width(w: float) -> void:

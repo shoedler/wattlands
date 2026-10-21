@@ -6,7 +6,7 @@
 #   tools/screenshot --game=<id> --content=<id> --at=<s>[,<s>...] [--players=<n>] [--bots=<n>]
 #                    [--rider=<profile>] [--autopilot=all|none] [--seed=<n>] [--out=<dir>]
 #   tools/screenshot --scene=res://addons/wattlands/world2d/demo.tscn [--frames=<n>]
-#   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>]
+#   tools/screenshot --app-screen=title|picker|lobby|session [--app-game=<id>] [--app-role=client|host|solo]
 #   tools/screenshot --help
 #
 # Without a display (Linux with no DISPLAY and no xvfb-run) it prints "screenshot: skipped" and
