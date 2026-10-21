@@ -22,8 +22,9 @@ extends Node
 ##   the rider (which ticks the device) once per due 0.05 s step. set_external_tick(true)
 ##   hands ticking to a GameHost; set_external_tick(false) takes it back.
 ## - A profile or scaling change outside a session re-sets the rider up (and rebuilds a
-##   mock whose rider parameters changed). Switching trainers shuts the old rider down
-##   (SIM flat, then Stop) first. EventBus.panic_requested makes the rider's governor safe.
+##   mock whose rider parameters changed); hold_rider(true) defers that until released.
+##   Switching trainers shuts the old rider down (SIM flat, then Stop) first.
+##   EventBus.panic_requested makes the rider's governor safe.
 ## - status_changed mirrors the device's and the manager's status, also on
 ##   EventBus.trainer_status_changed (and trainer_control_lost for "control_lost").
 ## - shutdown_all() shuts down every live LocalRider in the process (App.quit and the exit
@@ -50,6 +51,8 @@ var _detail: String = ""
 var _mock_spec: String = ""
 var _mock_key: Array = []
 var _external_tick: bool = false
+var _held: bool = false
+var _pending_change: bool = false
 var _clock: SimClock = null
 var _started: bool = false
 var _settings_conn: WlSettings = null
@@ -144,6 +147,27 @@ func use_mock(spec: String) -> void:
 	_mock_key = _mock_params(p)
 	_set_device(m, true)
 	_set_status(m.status(), tr("CORE_TRAINER_MOCK").replace("{spec}", m.spec))
+
+
+## Keep the rider as it is while something drives it outside a session (the FTP test):
+## profile and scaling changes wait until hold_rider(false). Releasing applies them, or
+## else sets the rider up afresh, so no plan or governor profile from the holder stays.
+func hold_rider(on: bool) -> void:
+	var was_held := _held
+	_held = on
+	if on or not was_held:
+		return
+	_pending_change = false
+	if _external_tick or _device == null:
+		return
+	if is_mock() and _mock_params(_profile()) != _mock_key:
+		use_mock(_mock_spec)
+	elif _rider != null and is_instance_valid(_rider):
+		_setup_rider()
+
+
+func is_rider_held() -> bool:
+	return _held
 
 
 ## A GameHost ticks the rider during a session (true); the service ticks it in menus (false).
@@ -285,6 +309,9 @@ func _connect_services() -> void:
 
 func _on_settings_changed(key: String) -> void:
 	if key != "" and key != "profile" and key != "scaling_mode":
+		return
+	if _held:
+		_pending_change = true
 		return
 	if _external_tick or _device == null:
 		return

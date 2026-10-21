@@ -350,3 +350,39 @@ func test_leaving_the_tree_shuts_the_own_rider_down() -> void:
 	remove_child(svc)
 	assert_eq(g.shutdown_count, 1)
 	add_child(svc)
+
+
+func test_hold_rider_defers_profile_changes_until_released() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var m := svc.device()
+	var r := svc.local_rider()
+	var g := _gov(svc)
+	svc.hold_rider(true)
+	assert_true(svc.is_rider_held())
+	_settings.profile.ftp_w = 280.0
+	_settings.save_profile()
+	assert_eq(svc.device(), m, "nothing is rebuilt while held")
+	assert_eq(r.governor, g)
+	svc.hold_rider(false)
+	assert_false(svc.is_rider_held())
+	assert_ne(svc.device(), m, "applied on release")
+	assert_eq(svc.local_rider().ftp_w(), 280.0)
+
+
+func test_releasing_a_held_rider_sets_it_up_afresh() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var g := _gov(svc)
+	var m := svc.device()
+	svc.hold_rider(true)
+	svc.local_rider().set_plan(FtpTest.build_plan(200.0))
+	svc.hold_rider(false)
+	assert_eq(svc.device(), m)
+	assert_ne(_gov(svc), g, "a fresh governor")
+	assert_null(svc.local_rider().plan(), "no plan left over from the holder")
+	var g2 := _gov(svc)
+	svc.hold_rider(false)
+	assert_eq(_gov(svc), g2, "releasing twice changes nothing")
