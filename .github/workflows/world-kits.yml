@@ -1,0 +1,71 @@
+# world-kits module (addons/wattlands/world2d, addons/wattlands/world3d, tests/world): the
+# GUT suite for PixelViewport, the 2D parts, shaders and import preset, the world3d helpers
+# and both demo scenes (headless), plus the script check. Owned by world-kits. Never executed
+# during the autonomous build (nothing is pushed), so it is unverified on GitHub; every run
+# step below ran green locally through tools/godot.sh (BRIEF 7.9). The Godot download is
+# setup only.
+name: world-kits
+
+on:
+  push:
+    paths:
+      - "addons/wattlands/world2d/**"
+      - "addons/wattlands/world3d/**"
+      - "tests/world/**"
+      - "content/strings/world.csv"
+      - ".github/workflows/world-kits.yml"
+  pull_request:
+    paths:
+      - "addons/wattlands/world2d/**"
+      - "addons/wattlands/world3d/**"
+      - "tests/world/**"
+      - "content/strings/world.csv"
+      - ".github/workflows/world-kits.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  world:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Godot (standard build)
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/godot"
+          cd "$RUNNER_TEMP/godot"
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import
+
+      - name: GUT (tests/world)
+        run: |
+          set -uo pipefail
+          mkdir -p build
+          tools/godot.sh --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests/world -ginclude_subdirs -gexit -gdisable_colors -gjunit_xml_file=build/junit_world.xml 2>&1 | tee build/gut_world.log
+          code=${PIPESTATUS[0]}
+          test "$code" -eq 0
+          grep -q "Run Summary" build/gut_world.log
+          if grep -E -q "SCRIPT ERROR|Parse Error|Debugger Break|Ignoring script|Nothing was run" build/gut_world.log; then
+            echo "forbidden string in the GUT log"; exit 1
+          fi
+          tests=$(grep -o 'tests="[0-9]*"' build/junit_world.xml | head -1 | grep -o '[0-9]*')
+          test "${tests:-0}" -gt 0
+
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
