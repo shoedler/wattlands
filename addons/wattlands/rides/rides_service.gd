@@ -192,6 +192,24 @@ func reupload(ride_id: String) -> void:
 	push_warning("Rides: no saved ride %s" % ride_id)
 
 
+## Cancels a running connect (Settings' Cancel button); it ends with strava state
+## "error"/"cancelled".
+func strava_cancel_connect() -> void:
+	if client != null:
+		client.cancel_connect()
+
+
+## True while uploads (or a queue run) are in progress.
+func uploads_busy() -> bool:
+	return not _in_flight.is_empty() or _queue_running
+
+
+## Waits until no upload or queue run is in progress (scripted peers before they quit).
+func wait_uploads_idle() -> void:
+	while uploads_busy() and is_inside_tree():
+		await get_tree().process_frame
+
+
 ## Connect with profile:read_all as well, for the FTP and weight import (P1).
 func strava_connect_with_profile(client_id: String, client_secret: String) -> void:
 	await _connect(client_id, client_secret, true)
@@ -285,6 +303,10 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 		push_warning("Rides: a ride summary without ride_id can't be uploaded")
 		return
 	if _in_flight.has(ride_id):
+		# Already uploading (auto-upload and the results screen, say): wait for that one, so a
+		# caller that awaits upload() still returns only once the ride is settled.
+		while _in_flight.has(ride_id) and is_inside_tree():
+			await get_tree().process_frame
 		return
 	if not force:
 		var up: Variant = _read_summary(fit_path).get("upload", {})

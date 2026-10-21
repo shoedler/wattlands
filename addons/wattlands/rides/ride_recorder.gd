@@ -33,6 +33,7 @@ var ride_id: String = ""
 ## to leave it out. WlRides.new_recorder() sets it from the system time zone.
 var utc_offset_s: Variant = null
 
+var _started_id: String = ""
 var _game_id: String = ""
 var _content_id: String = ""
 var _utc_start: int = 0
@@ -67,6 +68,11 @@ var _total: Dictionary = {}
 var _saved_fit_path: String = ""
 
 
+func _init() -> void:
+	_laps = [_new_lap("", 0.0)]
+	_total = _new_lap("", 0.0)
+
+
 func start(game_id: String, content_id: String, utc_start_unix: int, t: float) -> void:
 	_game_id = game_id
 	_content_id = content_id
@@ -91,8 +97,10 @@ func start(game_id: String, content_id: String, utc_start_unix: int, t: float) -
 	_laps = [_new_lap("", 0.0)]
 	_total = _new_lap("", 0.0)
 	_saved_fit_path = ""
-	if ride_id == "":
+	# A new ride gets a new id unless the caller set one since the last start().
+	if ride_id == "" or ride_id == _started_id:
 		ride_id = new_uuid()
+	_started_id = ride_id
 
 
 func record(t: float, power_w: float, cadence_rpm: float, speed_kmh: float) -> void:

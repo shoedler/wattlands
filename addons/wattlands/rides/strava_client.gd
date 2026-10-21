@@ -66,6 +66,7 @@ var browser_opener: Callable = Callable()
 var _creds: Dictionary = {}
 var _state: String = STATE_DISCONNECTED
 var _connecting: bool = false
+var _cancel_requested: bool = false
 var _refreshing: bool = false
 var _last_refresh_ok: bool = false
 
@@ -180,10 +181,22 @@ func connect_account(p_client_id: String, p_client_secret: String, with_profile:
 		push_warning("Strava: a connect is already running")
 		return false
 	_connecting = true
+	_cancel_requested = false
 	_set_state(STATE_CONNECTING, "")
 	var ok := await _connect_flow(cid, secret, with_profile)
 	_connecting = false
+	_cancel_requested = false
 	return ok
+
+
+## Stops waiting for the browser's callback (the connect ends with "error"/"cancelled").
+func cancel_connect() -> void:
+	if _connecting:
+		_cancel_requested = true
+
+
+func is_connecting() -> bool:
+	return _connecting
 
 
 func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
@@ -209,14 +222,14 @@ func _connect_flow(cid: String, secret: String, with_profile: bool) -> bool:
 		else:
 			OS.shell_open(url)
 		var timer := _timer(callback_timeout_s)
-		while not cb.done and timer.time_left > 0.0:
+		while not cb.done and timer.time_left > 0.0 and not _cancel_requested:
 			await get_tree().process_frame
 	var params := cb.params.duplicate()
 	var got := cb.done
 	cb.stop()
 	cb.queue_free()
 	if not got:
-		_set_state(STATE_ERROR, "callback_timeout")
+		_set_state(STATE_ERROR, "cancelled" if _cancel_requested else "callback_timeout")
 		return false
 	if str(params.get("state", "")) != oauth_state:
 		push_warning("Strava: the callback's state doesn't match; ignoring it")

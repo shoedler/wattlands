@@ -172,3 +172,16 @@ func test_callback_server_binds_loopback_and_times_out() -> void:
 	assert_string_contains(cb.redirect_uri(), "http://127.0.0.1:")
 	assert_eq(StravaCallbackServer.parse_query("code=a%2Bb&state=x+y&e"), {"code": "a+b", "state": "x y", "e": ""})
 	cb.stop()
+
+
+func test_connect_can_be_cancelled() -> void:
+	OS.unset_environment(Locks.NET_ENV)
+	var c := _client(_mock.api_base(), _mock.oauth_base())
+	var details: Array = []
+	c.state_changed.connect(func(_s: String, d: String) -> void: details.append(d))
+	c.browser_opener = func(_url: String) -> void: c.cancel_connect.call_deferred()
+	var ok: bool = await c.connect_account(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
+	OS.set_environment(Locks.NET_ENV, "1")
+	assert_false(ok)
+	assert_eq(details.back(), "cancelled")
+	assert_false(c.is_connecting())

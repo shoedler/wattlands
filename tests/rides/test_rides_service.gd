@@ -326,3 +326,22 @@ func test_activity_name_and_description() -> void:
 	assert_string_contains(d, "easy30")
 	assert_string_contains(d, "360 kJ")
 	assert_string_contains(d, "200 W")
+
+
+func test_a_second_upload_of_the_same_ride_waits_for_the_first() -> void:
+	var r: WlRides = await _connected()
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	var done: Array = []
+	var first := func() -> void:
+		await r.upload(path, rec.summary())
+		done.append("first")
+	first.call()
+	assert_true(r.uploads_busy())
+	await r.upload(path, rec.summary())
+	done.append("second")
+	assert_eq(_states_for(rec.ride_id).back(), "uploaded", "the second call returned after the upload settled")
+	await r.wait_uploads_idle()
+	assert_false(r.uploads_busy())
+	assert_eq((await _mock.uploads()).size(), 1, "one upload, not two")
+	assert_true(done.has("second"))

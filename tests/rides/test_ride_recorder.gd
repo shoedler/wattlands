@@ -300,3 +300,24 @@ func test_ten_minute_synthetic_ride() -> void:
 	assert_eq(sess[6], 58)
 	assert_eq(sess[7], 600000)
 	assert_eq(Reader.of(d, 34)[0]["fields"][5], START + 600 - 631065600 + 7200, "local timestamp")
+
+
+func test_summary_before_start_is_empty_not_an_error() -> void:
+	var rec := RideRecorder.new()
+	var s := rec.summary()
+	assert_eq(int(s["records"]), 0)
+	assert_eq(float(s["kj"]), 0.0)
+	assert_eq((s["laps"] as Array).size(), 1)
+
+
+func test_a_reused_recorder_gets_a_new_ride_id_unless_one_is_set() -> void:
+	var rec := RideRecorder.new()
+	rec.start("g", "c", START, 0.0)
+	var first := rec.ride_id
+	rec.stop(1.0)
+	rec.start("g", "c", START + 10, 0.0)
+	assert_ne(rec.ride_id, first, "a new ride, a new id")
+	rec.stop(1.0)
+	rec.ride_id = "fixed-id"
+	rec.start("g", "c", START + 20, 0.0)
+	assert_eq(rec.ride_id, "fixed-id", "an id set before start() is kept")
