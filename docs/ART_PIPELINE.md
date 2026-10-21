@@ -89,7 +89,9 @@ Flare is cheaper and fine for checking style, palette and silhouettes. Set `"end
 Every request is a row in `assets/<id>/art_manifest.json`; exactly one usable (`"status": "ok"`) row per sprite has `"selected": true`, and `pixelate.gd` uses only that one.
 
 - A run selects, for each sprite it processes, the result for the sprite's current input: a new paid result, a recovered one, or the cached one. So the newest result wins by default, and returning to an earlier prompt or endpoint selects its cached result again.
-- `--select=<sprite>:<request id>` picks any usable result (`"selected_by": "user"`). A later run that only finds the cache keeps that choice; a new or recovered result for the sprite replaces it.
+- "Newest" means the newest request. A paid result that is newer than the cached one (say a `--reroll` whose download failed) is recovered by the next run and selected, without paying again. An unfinished newer request gets one status check; until fal has finished it, the cached result is used and the request stays recoverable.
+- `--select=<sprite>:<request id>` picks any usable result (`"selected_by": "user"`). A later run that only finds the cache keeps that choice; a new or recovered result for the sprite replaces it (fetching an image that was already fine again, after a cache wipe, does not). If the chosen result's raw image is missing from `.art_cache` (a fresh clone), the next run that includes the sprite fetches it again from its stored image URL for free.
+- `pixelate.gd` warns when the selected result no longer matches `art.json` (another endpoint, prompt or background), for example a flare draft that is still selected after you switched to sunburst, and uses it anyway.
 
 ### The manifest
 
@@ -143,7 +145,7 @@ tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=<id> [--on
 3. downsamples with area averaging (exact pixel coverage, premultiplied alpha, so edges don't go dark);
 4. thresholds alpha (≥ 0.5 opaque, else transparent) and quantizes every opaque pixel to the nearest palette color in Oklab, with no dithering unless `dither: "ordered"`;
 5. cuts `parts` from the finished sprite;
-6. writes `assets/<id>/sprites/<sprite id>.png`, `<sprite id>__<part>.png` and `sprites.json`, only when the bytes change. Re-runs are byte-identical.
+6. writes `assets/<id>/sprites/<sprite id>.png`, `<sprite id>__<part>.png` and `sprites.json`, only when the bytes change, and removes the `<sprite id>__*.png` files (with their `.import`) of parts that `art.json` no longer lists, so a renamed part leaves no stale, off-palette PNG behind. Re-runs are byte-identical.
 
 Every pixel of the output is a palette color at alpha 255 or `(0, 0, 0, 0)`, which is what a game's palette test (F4.1) checks. Sprites without a selected result are skipped with a warning (exit 0), so you can pixelate drafts before the full pass; a selected result whose raw PNG is missing from `.art_cache` is an error (run `generate.mjs` again: it re-downloads for free).
 
