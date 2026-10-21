@@ -1,2 +1,13 @@
 keys,en
 GOVERNOR_MODULE_NAME,Safety
+GOVERNOR_RESCUE,Rescue: easing off. Spin above 70 rpm to get back.
+GOVERNOR_RESCUE_RAMP,Back to the plan over 10 s
+GOVERNOR_WARMUP,Warm-up: {0} s left
+GOVERNOR_COASTING,Not pedaling: trainer at its lightest load
+GOVERNOR_AFK,Away
+GOVERNOR_PAUSED_COASTING,Paused: start pedaling to go on
+GOVERNOR_PANIC,Trainer safe: resistance off. Resume when ready.
+GOVERNOR_LIMIT_105,Threshold time used up: capped at 105% FTP until you recover
+GOVERNOR_LIMIT_120,Sprint time used up: capped at 120% FTP until you recover
+GOVERNOR_TEST_ENDED,FTP test over: easing off
+GOVERNOR_GEAR,Gear {0}
