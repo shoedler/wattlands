@@ -117,3 +117,47 @@ func test_a_host_run_with_two_humans_completes() -> void:
 		kinds[d["kind"]] = int(kinds.get(d["kind"], 0)) + 1
 	for kind: String in ["course_grade", "replan", "end_phase", "request", "cadence_band"]:
 		assert_gt(int(kinds.get(kind, 0)), 0, "the report has %s directives" % kind)
+
+
+## W4r2 R12 through the platform (the review's run): after "short"'s open-ended Finish the riders
+## reach the cool-down at different times. Every human rider gets each phase banner on its own peer
+## when its own phase starts, nothing goes to every peer, and the game's phase_changed for the
+## cool-down comes once the last rider got there.
+func test_short_with_three_riders_banners_each_riders_own_phases() -> void:
+	var r := _run(["--content=short", "--players=3", "--bots=1", "--rider=erg", "--rider=erg:compliance=0.85",
+		"--rider=zero", "--seed=9"])
+	assert_eq(r["_end"], "complete")
+	var starts := {}
+	var banners: Array = []
+	var group: Array = []
+	for e: Dictionary in r.get("events", []):
+		match str(e.get("type", "")):
+			"phase_started":
+				var peer := int(e["peer"])
+				if peer > 0:
+					if not starts.has(peer):
+						starts[peer] = []
+					(starts[peer] as Array).append([int(e["index"]), float(e["t"])])
+			"hud":
+				if str(e.get("kind", "")) == "banner" and str(e.get("key", "")) == "_TEMPLATE_BANNER_PHASE":
+					banners.append([int(e["peer"]), float(e["t"])])
+			"game_phase_changed":
+				group.append([int(e["index"]), float(e["t"])])
+	assert_eq(starts.keys().size(), 3, "three human riders")
+	assert_eq(banners.filter(func(b: Array) -> bool: return b[0] == 0), [], "no banner to every peer")
+	var last_cool := 0.0
+	for peer: int in starts.keys():
+		var mine := banners.filter(func(b: Array) -> bool: return b[0] == peer)
+		assert_eq(mine.size(), (starts[peer] as Array).size(), "peer %d: one banner per phase it started" % peer)
+		for i in mine.size():
+			var st: Array = starts[peer][i]
+			assert_between(float(mine[i][1]), float(st[1]), float(st[1]) + 0.11, "peer %d: phase %d's banner when it starts" % [peer, int(st[0])])
+		last_cool = maxf(last_cool, float((starts[peer] as Array).back()[1]))
+	var cool := group.filter(func(g: Array) -> bool: return g[0] == 3)
+	assert_eq(cool.size(), 1, "one phase_changed for the cool-down")
+	if cool.size() == 1:
+		assert_gte(float(cool[0][1]), last_cool, "after the last rider reached it")
+	var ends := []
+	for peer: int in starts.keys():
+		ends.append(snappedf(float((starts[peer] as Array).back()[1]), 0.05))
+	assert_ne(ends.min(), ends.max(), "precondition: the riders reached the cool-down at different times")

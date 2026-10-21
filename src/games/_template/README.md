@@ -20,8 +20,9 @@ The `short` content (the e2e content, about 3 minutes plus the cool-down) shows 
 content has no room for: a 60 s warm-up ramp, a 40 s SIM "Rollers" phase whose grade the game feeds
 with `ctx.directives.course_grade` (`grade_source: "game"`), and at the Rollers' start a
 `ctx.directives.replan` of the rest of the plan into an open-ended "Finish" (30-50 s) that the game
-ends with `ctx.directives.end_phase` once the rider holds the target after `min_s`. Every phase change
-shows a `ctx.hud.banner`.
+ends with `ctx.directives.end_phase` once the rider holds the target after `min_s`. After it the riders'
+phases drift apart, so each rider's phase change shows a `ctx.hud.banner` on that rider's own peer only,
+and `phase_changed` reports the group's phase (the lowest index any rider is in).
 
 ## Files
 
