@@ -31,8 +31,10 @@ var _watch: AppLogWatch = null
 var _spy: bool = false
 
 
-## W4 NET-2: a LocalRider with resume_phase(index, elapsed_s). It records each call and enters
-## the phase in the governor and MockTrainer without a FIT lap, as LocalRider.resume_phase does;
+## W4 NET-2: a LocalRider with resume_phase(index, elapsed_s), the signature trainer-core's
+## LocalRider.resume_phase has. It records each call (with the rider's platform time) and enters
+## the phase in the governor and MockTrainer; like the real one it laps only a real phase change
+## (the rider rode another phase of this plan), never a restarted client's first phase. Its
 ## start_phase calls are recorded too.
 class ResumeSpyRider extends LocalRider:
 	var resumes: Array = []
@@ -44,11 +46,15 @@ class ResumeSpyRider extends LocalRider:
 
 	func resume_phase(index: int, elapsed_s: float) -> void:
 		resumes.append([index, elapsed_s, platform_time()])
+		var previous := _phase_index
 		_phase_index = index
 		if governor != null:
 			governor.start_phase(index)
 		if device is MockTrainer:
 			(device as MockTrainer).set_phase(index)
+		var ph := plan().phase(index) if plan() != null else null
+		if ph != null and (ph.lap or ph.kind == Wl.COOLDOWN) and previous >= 0 and previous != index:
+			lap(ph.label)
 
 
 func before_each() -> void:
@@ -355,8 +361,8 @@ func test_a_restarted_client_resumes_its_phase_at_the_hosts_elapsed_time() -> vo
 
 
 ## W4 NET-2: the phase changes while a client's socket is down. After the rejoin the client
-## resumes the NEW phase at the host's elapsed time, and its FIT gets that phase's lap (the
-## one start_phase would have written), so it keeps one lap per interval.
+## resumes the NEW phase at the host's elapsed time (resume_phase, not start_phase); its FIT
+## gets that phase's lap from resume_phase, once, and a resync of it changes nothing.
 func test_a_phase_change_during_a_socket_outage_is_resumed_with_its_lap() -> void:
 	_spy = true
 	_lobby("short")
