@@ -19,7 +19,9 @@ extends DirectiveSink
 ##   request.
 ## Every request gets an id (refused ones too). An accepted request goes to a rider
 ## simulated here through LocalRider.apply_directive() (its record is emitted as
-## EventBus.directive_applied at once) or to a remote rider as a 5.5 `directive`
+## EventBus.directive_applied at once; a SIM block its governor refused is taken back, so
+## the host's spacing and mode_grade bookkeeping never count a block that never ran) or to a
+## remote rider as a 5.5 `directive`
 ## {kind: "request", id, peer, directive: {...}}; the client's governor acks it in
 ## Telemetry.acks and the GameHost emits the ack as directive_applied.
 ## Every refusal is logged with push_warning, emitted as directive_applied {refused: true,
@@ -62,6 +64,8 @@ var _cadence_bands: Dictionary = {}
 var _grade_pending: Dictionary = {}
 ## peer -> game tick of the last delivered course grade
 var _grade_last_tick: Dictionary = {}
+## peer -> {id, prev_switch, prev_mode}: a remote rider's SIM block awaiting its ack.
+var _open_blocks: Dictionary = {}
 
 
 func is_authority() -> bool:
@@ -80,17 +84,38 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		return _refuse(peer, NetMessages.DIRECTIVE_REQUEST, d.to_dict(), why, id)
 	var tick := _tick()
 	var phase := tracker.phase_of(peer)
+	var opened := false
+	var prev_switch := tracker.last_switch_tick(peer)
+	var prev_mode := tracker.mode_now(peer)
 	if phase.mode == Wl.ERG and d.mode == Wl.SIM:
 		tracker.open_block(peer, tick, PhaseTracker.ticks(d.duration_s))
+		opened = true
 	elif phase.mode == Wl.ERG and d.mode == Wl.ERG and tracker.block_active(peer, tick):
 		tracker.close_block(peer, tick)
 	_log(peer, id, NetMessages.DIRECTIVE_REQUEST, d.to_dict(), true, "")
 	if riders.has(peer):
 		var rec := _normalize((riders[peer] as LocalRider).apply_directive(d), id, NetMessages.DIRECTIVE_REQUEST, d.to_dict())
+		if opened and bool(rec.get("refused", false)):
+			# The rider's governor refused the block: no switch happened.
+			tracker.cancel_block(peer, prev_switch, prev_mode)
 		_applied(peer, rec)
 	else:
+		if opened:
+			_open_blocks[peer] = {"id": id, "prev_switch": prev_switch, "prev_mode": prev_mode}
 		_remote(peer, {"kind": NetMessages.DIRECTIVE_REQUEST, "id": id, "peer": peer, "directive": d.to_dict()})
 	return DirectiveResult.ok(id)
+
+
+## A remote rider's ack arrived (the GameHost calls this for every Telemetry.acks record): a
+## SIM block its governor refused is taken back while it is still the running block.
+func on_ack(peer: int, rec: Dictionary) -> void:
+	var pending: Dictionary = _open_blocks.get(peer, {})
+	if pending.is_empty() or int(rec.get("id", 0)) != int(pending["id"]):
+		return
+	_open_blocks.erase(peer)
+	var refused: Variant = rec.get("refused", false)
+	if refused is bool and refused and tracker != null and tracker.block_active(peer, _tick()):
+		tracker.cancel_block(peer, int(pending["prev_switch"]), str(pending["prev_mode"]))
 
 
 func course_grade(peer: int, grade_pct: float) -> void:
@@ -397,6 +422,10 @@ func _normalize(rec: Dictionary, id: int, kind: String, requested: Dictionary) -
 		out["clamped_by"] = []
 	if not out.has("refused"):
 		out["refused"] = false
+	elif not (out["refused"] is bool):
+		# Telemetry.acks documents refused as a String ("" or the reason); records carry a bool.
+		var rv: Variant = out["refused"]
+		out["refused"] = (rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
 	if not out.has("reason"):
 		out["reason"] = ""
 	if not out.has("t"):

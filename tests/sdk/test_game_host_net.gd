@@ -146,6 +146,21 @@ func test_remote_directive_is_applied_and_acked() -> void:
 	assert_not_null(entry["applied"], "the report joins requested and applied")
 
 
+func test_a_remote_governor_refusal_comes_back_and_releases_the_block() -> void:
+	var b := _multi(3)
+	var host := _host(b)
+	Kit.start(b)
+	Kit.step(b, 10)
+	_rider(b, 2).set("refuse_reason", Wl.REFUSE_SIM_BLOCK_UNSAFE)
+	assert_true(host.ctx.directives.request(2, EffortDirective.from_dict({"mode": "SIM", "duration_s": 12})).accepted)
+	assert_true(host.tracker.block_active(2, host.clock.game_tick))
+	Kit.step(b, 8)
+	assert_false(host.tracker.block_active(2, host.clock.game_tick), "the refused block is taken back")
+	var entry: Dictionary = host.report.directives[0]
+	assert_true(bool(entry["applied"]["refused"]), "the report keeps the governor's refusal")
+	assert_eq(entry["applied"]["reason"], Wl.REFUSE_SIM_BLOCK_UNSAFE)
+
+
 func test_events_reach_clients_in_order_and_never_the_host() -> void:
 	var b := _multi(3)
 	var host := _host(b)

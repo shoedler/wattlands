@@ -1133,6 +1133,7 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	for ack: Variant in tm.acks:
 		if ack is Dictionary:
 			var rec := _normalized_ack(ack)
+			directive_router.on_ack(from, rec)
 			bus.directive_applied.emit(from, rec)
 			if report != null:
 				report.directive_applied(from, rec)
@@ -1690,8 +1691,10 @@ func _normalized_ack(rec: Dictionary, id: int = 0, requested: Dictionary = {}) -
 		out["clamped_by"] = []
 	if not out.has("refused"):
 		out["refused"] = false
-	elif out["refused"] is String:
-		out["refused"] = str(out["refused"]) != ""
+	elif not (out["refused"] is bool):
+		# Telemetry.acks documents refused as a String ("" or the reason); records carry a bool.
+		var rv: Variant = out["refused"]
+		out["refused"] = (rv is String and str(rv) != "") or ((rv is int or rv is float) and float(rv) != 0.0)
 	if not out.has("reason"):
 		out["reason"] = ""
 	if not out.has("t"):

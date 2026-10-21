@@ -274,6 +274,24 @@ func open_block(peer: int, game_tick: int, block_ticks: int) -> void:
 		r.last_switch_tick = game_tick
 
 
+## Undo open_block when the rider's governor refused the block: no switch happened, so the
+## rider's mode and latest switch go back to `prev_mode` and `prev_switch_tick`.
+func cancel_block(peer: int, prev_switch_tick: int, prev_mode: String) -> void:
+	var r: Rider = _riders.get(peer)
+	if r == null:
+		return
+	r.block_end_tick = -1
+	r.block_phase = -1
+	r.last_switch_tick = prev_switch_tick
+	r.mode_now = prev_mode
+
+
+## The rider's effective trainer mode as last recorded ("" before the start).
+func mode_now(peer: int) -> String:
+	var r: Rider = _riders.get(peer)
+	return r.mode_now if r != null else ""
+
+
 ## A mode "ERG" request ended the block early (the block's exit switch).
 func close_block(peer: int, game_tick: int) -> void:
 	var r: Rider = _riders.get(peer)

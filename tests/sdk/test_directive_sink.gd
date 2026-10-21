@@ -159,6 +159,36 @@ func test_governor_refusal_is_reported_but_the_host_check_passed() -> void:
 	assert_eq(_applied[0][1]["reason"], Wl.REFUSE_HAPTIC_WARMUP)
 
 
+func test_a_block_the_governor_refuses_is_taken_back() -> void:
+	_start()
+	_fake().set("refuse_reason", Wl.REFUSE_SIM_BLOCK_UNSAFE)
+	var r := _req({"mode": "SIM", "duration_s": 10})
+	assert_true(r.accepted, "the host-side checks passed")
+	assert_true(bool(_applied[0][1]["refused"]), "the governor refused it")
+	assert_false(_tracker.block_active(1, _clock.game_tick), "no block runs")
+	assert_eq(_tracker.last_switch_tick(1), PhaseTracker.NO_SWITCH, "and no switch happened")
+	assert_eq(_tracker.mode_now(1), Wl.ERG)
+	assert_eq(_req({"mode_grade": 2.0}).reason, Wl.REFUSE_MODE_GRADE, "no SIM block to hold a grade")
+	_fake().set("refuse_reason", "")
+	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "spacing is not spent on a block that never ran")
+	assert_true(_tracker.block_active(1, _clock.game_tick))
+
+
+func test_a_remote_block_refused_in_its_ack_is_taken_back() -> void:
+	_start()
+	assert_true(_req({"mode": "SIM", "duration_s": 10}, 2).accepted)
+	assert_true(_tracker.block_active(2, _clock.game_tick), "the host assumes it runs until the ack")
+	var id := int(_sent[0][1]["id"])
+	_router.on_ack(2, {"id": id + 99, "refused": true})
+	assert_true(_tracker.block_active(2, _clock.game_tick), "another directive's ack changes nothing")
+	_router.on_ack(2, {"id": id, "refused": true})
+	assert_false(_tracker.block_active(2, _clock.game_tick))
+	assert_eq(_tracker.last_switch_tick(2), PhaseTracker.NO_SWITCH)
+	assert_true(_req({"mode": "SIM", "duration_s": 10}, 2).accepted)
+	_router.on_ack(2, {"id": int(_sent[1][1]["id"]), "refused": false})
+	assert_true(_tracker.block_active(2, _clock.game_tick), "an applied block stays")
+
+
 func test_sim_block_length() -> void:
 	_start()
 	assert_eq(_req({"mode": "SIM", "duration_s": 9.9}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH)
