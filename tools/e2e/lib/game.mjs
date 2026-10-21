@@ -39,8 +39,12 @@ export function readManifest(repo, gameId) {
 /** The scripted-peer flags after "--" (docs/ARCHITECTURE.md "Scripted peers"). */
 export function peerUserArgs(o, role, ctx) {
   const a = [];
-  if (role === 'host') a.push('--host');
-  else a.push(`--join=${ctx.code}`);
+  if (role === 'host') {
+    a.push('--host');
+    if (ctx.content) a.push(`--content=${ctx.content}`);
+  } else {
+    a.push(`--join=${ctx.code}`);
+  }
   a.push(
     `--game=${ctx.gameId}`,
     '--e2e',
@@ -166,7 +170,7 @@ export async function runGame(o, gameId, lease, log = () => {}) {
     strava = await startStrava({ repo: o.repo, stravaCmd: o.stravaCmd, logFile: serviceLog(outDir, 'mock_strava'), timeoutMs: o.serviceTimeoutS * 1000, echo: echo('strava') });
     timings.strava_ready_s = rel(Date.now());
     log(`e2e: ${gameId}: mock Strava on ${strava.base}`);
-    const ctx = { relayUrl: relay.url, stravaBase: strava.base, code: null };
+    const ctx = { relayUrl: relay.url, stravaBase: strava.base, code: null, content };
 
     const host = startPeer('host', 0, ctx);
     const room = await host.proc.waitFor(ROOM_RE, o.bootTimeoutS * 1000);

@@ -36,6 +36,7 @@ const profile = flag('profile-dir');
 const report = flag('report');
 const isHost = has('host');
 if (!isHost && !flag('join')) die(8, 'neither --host nor --join');
+if (isHost && flag('content') !== 'e2e') die(8, 'the host needs --content=<e2e_content>');
 const role = isHost ? 'host' : path.basename(path.dirname(profile));
 let peerId = isHost ? 1 : role === 'client1' ? 2 : 3;
 const tokenFile = path.join(profile, 'reconnect_token.json');

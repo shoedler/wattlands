@@ -56,15 +56,17 @@ test('slash uses forward slashes', () => {
 
 test('peer flags follow the scripted-peer contract', () => {
   const o = parseArgs(['--games=workout', '--seed=5']).opts;
-  const ctx = { gameId: 'workout', code: 'K7QX2M', relayUrl: 'ws://127.0.0.1:1234/v1', stravaBase: 'http://127.0.0.1:99', profileDir: 'C:/x/host/profile', reportPath: 'C:/x/host/report.json' };
+  const ctx = { gameId: 'workout', content: 'e2e', code: 'K7QX2M', relayUrl: 'ws://127.0.0.1:1234/v1', stravaBase: 'http://127.0.0.1:99', profileDir: 'C:/x/host/profile', reportPath: 'C:/x/host/report.json' };
   const host = peerUserArgs(o, 'host', ctx);
   assert.equal(host[0], '--host');
+  assert.equal(host[1], '--content=e2e', 'the host plays the e2e_content explicitly');
   for (const f of ['--game=workout', '--e2e', '--wait-peers=3', '--relay=ws://127.0.0.1:1234/v1', '--mock-trainer=erg:compliance=1.0', '--autopilot', '--profile-dir=C:/x/host/profile', '--sim-speed=1', '--seed=5', '--report=C:/x/host/report.json', '--strava-base=http://127.0.0.1:99']) {
     assert.ok(host.includes(f), f);
   }
   assert.ok(!host.some((a) => a.startsWith('--strava-client')), 'auto-upload is client1 by default');
   const c1 = peerUserArgs(o, 'client1', ctx);
   assert.equal(c1[0], '--join=K7QX2M');
+  assert.ok(!c1.some((a) => a.startsWith('--content=')), 'the host chooses the content');
   assert.ok(c1.includes('--strava-auto-upload'));
   assert.ok(c1.some((a) => a.startsWith('--strava-client-id=')));
   assert.ok(c1.some((a) => a.startsWith('--strava-client-secret=')));
