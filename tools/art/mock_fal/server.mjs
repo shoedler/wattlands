@@ -17,7 +17,8 @@
 // and an admin API for tests:
 //   GET  /_admin/state      counters, every request (no image bytes), the request log, the billing ledger
 //   POST /_admin/config     {polls_to_complete, billed_usd, report_billed, fail_downloads, fail_download_mode,
-//                            fail_500: {submit, status, result, listing, download}, model_errors, require_auth}
+//                            fail_500: {submit, status, result, listing, download}, model_errors, require_auth,
+//                            image_url_base (result image URLs on another origin, e.g. a host the client refuses)}
 //   POST /_admin/requests   insert a finished request {endpoint, input, started_at?, ended_at?, request_id?}
 //   POST /_admin/reset      forget everything
 import crypto from 'node:crypto';
@@ -44,6 +45,7 @@ function defaultConfig() {
     fail_500: { submit: 0, status: 0, result: 0, listing: 0, download: 0 },
     model_errors: 0,
     require_auth: true,
+    image_url_base: null,
   };
 }
 
@@ -165,7 +167,7 @@ export async function startMockFal({ port = 0, host = '127.0.0.1', config = {} }
     const body = {
       images: [
         {
-          url: `${origin}/files/${r.id}.png`,
+          url: `${state.config.image_url_base ?? origin}/files/${r.id}.png`,
           content_type: 'image/png',
           file_name: `${r.id}.png`,
           file_size: r.png ? r.png.length : null,

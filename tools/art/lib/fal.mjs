@@ -10,10 +10,12 @@ const FAL_DOMAINS = ['fal.run', 'fal.ai', 'fal.media'];
 export const MOCK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]', '::1']);
 
 export class FalError extends Error {
-  constructor(message, { status = 0, body = '' } = {}) {
+  /** `refused`: the client itself refused (a host it may not contact, or the key to a non-API host). */
+  constructor(message, { status = 0, body = '', refused = false } = {}) {
     super(message);
     this.status = status;
     this.body = body;
+    this.refused = refused;
   }
 }
 
@@ -69,7 +71,7 @@ export class FalClient {
   _authHeader(u) {
     if (this.mock) return 'Key mock';
     if (!AUTH_HOSTS.has(u.hostname.toLowerCase())) {
-      throw new FalError(`refusing to send the fal key to ${u.hostname} (only ${[...AUTH_HOSTS].join(' and ')})`);
+      throw new FalError(`refusing to send the fal key to ${u.hostname} (only ${[...AUTH_HOSTS].join(' and ')})`, { refused: true });
     }
     return `Key ${this.key}`;
   }
@@ -83,6 +85,7 @@ export class FalClient {
       if (!this.allowed(target)) {
         throw new FalError(
           `refusing to contact ${this.redact(target)}: ${this.mock ? `only the mock at ${this.mock}` : "only fal's hosts"} may be contacted`,
+          { refused: true },
         );
       }
       u = new URL(target);

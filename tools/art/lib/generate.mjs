@@ -192,10 +192,13 @@ class Run {
   constructor({ art, plan, manifest, mfile, root, game, client, opts, out, err }) {
     Object.assign(this, { art, plan, manifest, mfile, root, game, client, opts, out, err });
     this.cacheDir = path.join(root, '.art_cache', game);
-    this.stats = { cached: 0, recovered: 0, paid: 0, failed: 0, skipped: [] };
+    this.stats = { cached: 0, recovered: 0, paid: 0, failed: 0, skipped: [], notPaid: [] };
     this.runTicks = 0;
     this.budgetTicks = usdToTicks(opts.budget);
     this.budgetStopped = false;
+    // Set when the client refused to fetch an image (a host it may not contact): paying for more
+    // results whose images can't be fetched would only burn money, so the run stops paying.
+    this.hostStop = null;
   }
 
   save() {
@@ -264,6 +267,10 @@ class Run {
         return true;
       } catch (e) {
         lastErr = e;
+        if (e?.refused) {
+          this.hostStop ??= e.message;
+          break;
+        }
         if (attempt < DOWNLOAD_ATTEMPTS) await sleep(Math.min(this.opts.pollMs, 1000));
       }
     }
@@ -521,7 +528,7 @@ class Run {
     let next = 0;
     const worker = async () => {
       for (;;) {
-        if (this.budgetStopped) return;
+        if (this.budgetStopped || this.hostStop) return;
         const i = next;
         if (i >= payList.length) return;
         next += 1;
@@ -543,10 +550,16 @@ class Run {
     await Promise.all(Array.from({ length: n }, () => worker()));
     this.save();
     const s = this.stats;
+    if (this.hostStop) {
+      s.notPaid = payList.slice(next).map((x) => x.sprite.id);
+      this.err(
+        `stopped paying: ${this.hostStop}. A result whose image can't be fetched is money lost, so no further sprite was paid${s.notPaid.length ? ` (not paid: ${s.notPaid.join(', ')})` : ''}. The paid request stays in the manifest as download_failed with its image URL; once that host is allowed, a run fetches it for free.`,
+      );
+    }
     this.out(
-      `generate: ${s.paid} paid, ${s.cached} cached, ${s.recovered} recovered, ${s.failed} failed${s.skipped.length ? `, ${s.skipped.length} skipped by the budget stop` : ''}; this run ${formatUsd(ticksToUsd(this.runTicks))} of ${formatUsd(this.opts.budget)} budget; manifest spend total ${formatUsd(this.manifest.spend.total_usd)}`,
+      `generate: ${s.paid} paid, ${s.cached} cached, ${s.recovered} recovered, ${s.failed} failed${s.skipped.length ? `, ${s.skipped.length} skipped by the budget stop` : ''}${s.notPaid.length ? `, ${s.notPaid.length} not paid after a refused host` : ''}; this run ${formatUsd(ticksToUsd(this.runTicks))} of ${formatUsd(this.opts.budget)} budget; manifest spend total ${formatUsd(this.manifest.spend.total_usd)}`,
     );
-    if (s.failed > 0) return EXIT_FAILED;
+    if (s.failed > 0 || this.hostStop) return EXIT_FAILED;
     if (this.budgetStopped) return EXIT_BUDGET;
     return EXIT_OK;
   }

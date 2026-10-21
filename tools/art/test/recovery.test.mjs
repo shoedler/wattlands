@@ -250,3 +250,25 @@ test('a --select choice whose raw image is missing is fetched again for free and
   assert.ok(fs.existsSync(path.join(root, newer.cache)));
   assert.equal(mock.state.counts.submit, 2);
 });
+
+test('a result image on a host the client may not contact stops all further payment; the paid result is recoverable later', async (t) => {
+  const { mock, root } = await setup(t, { image_url_base: 'https://images.example.com' });
+  const r = await gen(root, mock);
+  assert.equal(r.code, 1, r.stdout + r.stderr);
+  assert.equal(mock.state.counts.submit, 1, 'one paid result, then the run stops paying');
+  assert.equal(mock.state.counts.download, 0, 'the other host is never contacted');
+  assert.match(r.stderr, /stopped paying: refusing to contact https:\/\/images\.example\.com\/files\//);
+  assert.match(r.stderr, /not paid: fish_tuna, bg_sky, reef/);
+  assert.match(r.stdout, /3 not paid after a refused host/);
+  const e = readManifest(root, GAME).requests[0];
+  assert.equal(e.status, 'download_failed');
+  assert.equal(e.paid, true);
+  assert.match(e.image_url, /^https:\/\/images\.example\.com\//);
+  // Once results live on an allowed host again, the paid one comes back from the history for free.
+  mock.configure({ image_url_base: null });
+  const r2 = await gen(root, mock);
+  assert.equal(r2.code, 0, r2.stderr);
+  assert.match(r2.stdout, new RegExp(`boat: recovered paid result ${e.request_id} from fal's request history`));
+  assert.equal(mock.state.counts.submit, 4, 'only the three sprites never paid');
+  assert.equal(readManifest(root, GAME).spend.paid_requests, 4);
+});

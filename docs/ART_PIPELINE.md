@@ -132,6 +132,8 @@ fal bills when a request completes, even if the image download fails afterwards.
 
 A stored `image_url` or `status_url` keeps working for as long as fal keeps the request; the history lookup covers the last 24 hours only, so rerun soon after a failure. Older results are still visible in fal's dashboard.
 
+If fal ever hands back an image URL outside its own domains (`*.fal.run`, `*.fal.ai`, `*.fal.media`), `generate.mjs` refuses to fetch it, stops paying for further sprites (each would be paid and unfetchable), names the sprites it did not pay for and exits 1. The paid request stays in the manifest as `download_failed` with its URL; tell a human, because allowing another host is a change to the art lock's host list in `tools/art/lib/fal.mjs`.
+
 ## Pixelating
 
 ```
