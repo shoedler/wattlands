@@ -1,0 +1,19 @@
+# Example Render Blueprint for the Wattlands relay (BRIEF 5.3, P1). Not deployed by the build.
+# Render reads a Blueprint from render.yaml at the repository root: copy this file there
+# (or point a Blueprint at it). Render sets PORT; the relay honours it.
+# Rooms live in memory: keep exactly one instance.
+# Clients connect to wss://<service>.onrender.com/v1.
+services:
+  - type: web
+    name: wattlands-relay
+    runtime: docker
+    rootDir: server/relay
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    numInstances: 1
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: RELAY_TRUST_PROXY
+        value: "1"
