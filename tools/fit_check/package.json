@@ -1,0 +1,14 @@
+{
+  "name": "wattlands-fit-check",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Decodes FIT files with Garmin's FIT SDK and checks them (BRIEF 3.8, 7.5).",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@garmin/fitsdk": "21.218.0"
+  }
+}
