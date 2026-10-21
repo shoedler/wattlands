@@ -288,6 +288,21 @@ func test_attached_rider_gestures_are_forwarded() -> void:
 	assert_null(_router.attached_rider())
 
 
+## Menu presses pile up (nobody drains the queue in menus); a session attaching its rider
+## starts with empty queues. Re-attaching the same rider keeps what is queued.
+func test_attaching_a_new_rider_clears_stale_menu_input() -> void:
+	for i in 40:
+		_tap(KEY_DOWN)
+	_router.inject_gesture(Wl.G_SURGE)
+	var rider: LocalRider = autofree(FakeRider.new())
+	_router.attach_rider(rider)
+	assert_eq(_router.take_actions(), [], "stale menu actions dropped")
+	assert_eq(_router.take_gestures(), [], "stale gestures dropped")
+	_tap(KEY_1)
+	_router.attach_rider(rider)
+	assert_eq(_router.take_actions(), [&"ability_1"], "same rider: nothing dropped")
+
+
 func test_menu_mapping_outside_erg() -> void:
 	var rider: FakeRider = autofree(FakeRider.new())
 	rider.fake_mode = Wl.SIM

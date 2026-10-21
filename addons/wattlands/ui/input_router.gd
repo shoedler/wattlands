@@ -128,8 +128,13 @@ func tick(dt: float) -> void:
 
 
 ## Gestures from this rider feed menus and sessions (TrainerService/GameHost attach it).
+## Attaching a different rider (a session starting) clears the action and gesture queues,
+## so presses made in menus, which nobody drains, never reach the session's first tick.
 func attach_rider(rider: LocalRider) -> void:
+	var changed := rider != attached_rider()
 	detach_rider()
+	if changed:
+		clear_queues()
 	_rider = rider
 	if rider != null and not rider.gesture_detected.is_connected(_on_rider_gesture):
 		rider.gesture_detected.connect(_on_rider_gesture)

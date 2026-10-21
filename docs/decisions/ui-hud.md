@@ -105,3 +105,9 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 - Decision: in a Rect2i area, toasts show as many as fit (up to 3) at up to 36 px but never below 24 px (`HudToasts.MIN_FONT_PX`), dropping the oldest instead of shrinking; banners never go below 32 px (`HudBanner.MIN_FONT_PX`, warm-up 28 px) and wrap or overflow the rect instead.
 - Alternatives: shrink to fit three toasts (a 90 px toast strip gave 16 px text) and banners down to 14 px.
 - Reason: the HUD must read from 3 m, and the rescue banner (4.6.3) is safety text.
+
+## 2026-10-21: Attaching a new rider clears the input queues
+
+- Decision: `InputRouter.attach_rider()` with a different rider than the attached one clears the action and gesture queues; re-attaching the same rider keeps them.
+- Alternatives: rely on the GameHost calling `clear_queues()` at session start (sdk-runtime's GameHost does not).
+- Reason: nobody drains `take_actions()` in menus, so up to 256 menu presses would otherwise reach the session's first `local_intents` (GM8).
