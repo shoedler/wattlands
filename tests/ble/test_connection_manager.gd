@@ -8,6 +8,8 @@ extends GutTest
 
 const FakeTransport := preload("res://tests/ble/fake_transport.gd")
 const FakeClient := preload("res://tests/ble/fake_ftms_client.gd")
+const FakeManager := preload("res://tests/ble/fake_bluetooth_manager.gd")
+const FakeDevice := preload("res://tests/ble/fake_ble_device.gd")
 
 const DT := 0.05
 const ADDR := "C4:9D:A1:00:2B:7E"
@@ -188,6 +190,88 @@ func test_start_again_after_nothing_was_available() -> void:
 	assert_eq(_m.backend_name(), "bridge", "a second start() tries the backends again")
 
 
+func test_backend_that_never_answers_is_skipped() -> void:
+	_gdble.init_result = "silent"
+	_m.start(false)
+	_run(FtmsConnectionManager.INIT_TIMEOUT_S - 0.5)
+	assert_eq(_m.backend_name(), "", "still starting")
+	assert_eq(_bridge.count("initialize"), 0)
+	_run(0.5)
+	assert_push_warning("no answer within")
+	assert_eq(_m.backend_name(), "bridge")
+	assert_eq(_bridge.count("start_scan"), 1)
+	_gdble.adapter_ready.emit(true, "")
+	assert_eq(_m.backend_name(), "bridge", "a late answer from the dropped backend is ignored")
+
+
+func test_connect_during_start_up_waits_for_the_backend() -> void:
+	_gdble.init_result = "silent"
+	_m.start(false)
+	_m.connect_to(ADDR)
+	assert_eq(_gdble.count("initialize"), 1, "no second initialize() while starting")
+	assert_eq(_gdble.count("connect_device"), 0)
+	assert_eq(_m.status(), TrainerDevice.STATUS_CONNECTING)
+	_gdble.adapter_ready.emit(true, "")
+	assert_eq(_gdble.count("connect_device"), 1, "connects as soon as the backend is ready")
+	assert_eq(_gdble.count("start_scan"), 0, "no scan while connecting")
+	assert_true(_m.is_ready())
+
+
+func test_connect_during_start_up_moves_to_the_bridge() -> void:
+	_gdble.init_result = "silent"
+	_m.start(false)
+	_m.connect_to(ADDR)
+	_gdble.adapter_ready.emit(false, "no adapter")
+	assert_push_warning("backend unavailable")
+	assert_eq(_m.backend_name(), "bridge")
+	assert_eq(_bridge.count("connect_device"), 1)
+	assert_true(_m.is_ready())
+
+
+func test_connect_during_start_up_with_no_backend_stops() -> void:
+	_gdble.init_result = "silent"
+	_bridge.init_result = "fail"
+	_m.start(false)
+	_m.connect_to(ADDR)
+	_gdble.adapter_ready.emit(false, "no adapter")
+	assert_push_warning("no backend available")
+	assert_eq(_m.backend_name(), "")
+	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")])
+	_run(60.0)
+	assert_false(_m.is_reconnecting())
+	assert_eq(_m.retry_in(), 0.0)
+	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")], "the status stays clear")
+
+
+func test_adapter_lost_while_idle_then_scan_initializes_again() -> void:
+	_m.start(false)
+	_gdble.adapter_ready.emit(false, "ADAPTER_UNAVAILABLE")
+	assert_push_warning("adapter lost")
+	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")])
+	_run(FtmsConnectionManager.DEFAULT_SCAN_S)
+	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")], "no scan end over it")
+	_m.scan(5.0)
+	assert_eq(_gdble.count("initialize"), 2, "initialize() again first")
+	assert_eq(_gdble.last("start_scan"), ["start_scan", 5.0])
+	assert_eq(_gdble.count("start_scan"), 2)
+	assert_eq(_m.status(), TrainerDevice.STATUS_SCANNING)
+
+
+func test_start_again_after_the_adapter_was_lost() -> void:
+	FtmsConnectionManager.write_last_device(ADDR, NAME)
+	_m.start(false)
+	_gdble.adapter_ready.emit(false, "ADAPTER_UNAVAILABLE")
+	_gdble.init_result = "fail"
+	_m.scan()
+	assert_eq(_gdble.count("start_scan"), 1, "no scan while the adapter is still gone")
+	assert_eq(_last_status(), [TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER")])
+	_gdble.init_result = "ok"
+	_m.start(true)
+	assert_eq(_gdble.last("start_scan"), ["start_scan", FtmsConnectionManager.AUTO_SCAN_S])
+	_gdble.advertise(ADDR, NAME)
+	assert_true(_m.is_ready(), "auto-connected once the adapter is back")
+
+
 func test_scan_requested_while_the_backend_starts_is_queued() -> void:
 	_gdble.init_result = "silent"
 	_m.start(false)
@@ -276,6 +360,23 @@ func test_connect_timeout_retries() -> void:
 	assert_eq(_m.retry_in(), 1.0)
 	_run(1.0)
 	assert_eq(_gdble.count("connect_device"), 2)
+
+
+func test_connect_to_while_connecting_sends_one_request() -> void:
+	_m.start(false)
+	_gdble.connect_result = "hang"
+	_m.connect_to(ADDR)
+	_m.connect_to(ADDR.to_lower())
+	assert_eq(_gdble.count("connect_device"), 1, "already connecting: no second request")
+	_run(FtmsConnectionManager.CONNECT_TIMEOUT_S)
+	assert_eq(_m.retry_in(), 1.0)
+	_m.connect_to(ADDR)
+	assert_eq(_gdble.count("connect_device"), 2, "during a backoff wait it tries at once")
+	_gdble.connect_result = "fail"
+	_gdble.drop(ADDR)
+	_m.connect_to(ADDR)
+	assert_eq(_gdble.count("connect_device"), 3)
+	assert_eq(_m.retry_in(), 1.0, "a manual try starts the backoff over")
 
 
 func test_setup_timeout() -> void:
@@ -467,6 +568,33 @@ func test_adapter_lost_reinitializes_before_reconnecting() -> void:
 	assert_eq(_reconnected, [dev])
 
 
+func test_adapter_lost_under_a_gdble_link_reconnects_for_real() -> void:
+	# The real GdbleTransport over the fake GDBLE manager: after the adapter comes back the
+	# reconnect must call connect_async() again, not take the "already linked" shortcut.
+	var fake_mgr: FakeManager = FakeManager.new()
+	var gt := GdbleTransport.new()
+	gt.manager_factory = func() -> Node: return fake_mgr
+	_m.make_gdble = func() -> BleTransport: return gt
+	_m.start(false)
+	assert_eq(_m.backend_name(), "gdble")
+	_m.connect_to(ADDR)
+	var d: FakeDevice = fake_mgr.devices[ADDR.to_lower()]
+	d.connected.emit()
+	assert_true(_m.is_ready())
+	fake_mgr.ble_event.emit({"operation": &"initialize", "phase": &"failed", "operation_id": 0,
+		"terminal": false, "device_address": "", "service_uuid": "", "characteristic_uuid": "",
+		"data": null, "error": {"code": "ADAPTER_UNAVAILABLE", "message": "", "retryable": true, "details": {}}})
+	assert_push_warning("adapter unavailable")
+	assert_false(gt.is_link_up())
+	assert_true(_m.is_reconnecting())
+	_run(1.0)
+	assert_eq(fake_mgr.count("initialize"), 2, "the adapter is initialized again first")
+	assert_eq(d.count("connect_async"), 2, "a real reconnect")
+	d.connected.emit()
+	assert_true(_m.is_ready())
+	assert_eq(_reconnected.size(), 1)
+
+
 func test_adapter_still_missing_backs_off() -> void:
 	_ready_on(_gdble)
 	_gdble.adapter_ready.emit(false, "ADAPTER_UNAVAILABLE")
@@ -528,6 +656,17 @@ func test_connect_to_the_linked_trainer() -> void:
 	_m.connect_to(ADDR)
 	assert_eq(_gdble.count("connect_device"), 1, "no second connect")
 	assert_eq(_client.begin_count, 2, "begin() again after the control loss")
+	assert_true(_m.is_ready())
+
+
+func test_gatt_reset_after_a_control_loss_does_not_take_control() -> void:
+	_ready_on(_gdble)
+	_client.control_lost.emit("Machine Status 0xFF")
+	_gdble.operation_failed.emit(GdbleTransport.OP_GATT_RESET, "SERVICES_CHANGED")
+	assert_eq(_client.begin_count, 1, "no begin(): it would request control again")
+	assert_eq(_m.status(), TrainerDevice.STATUS_CONTROL_LOST)
+	_m.retry_control()
+	assert_eq(_client.begin_count, 2)
 	assert_true(_m.is_ready())
 
 

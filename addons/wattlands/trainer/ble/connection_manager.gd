@@ -12,8 +12,13 @@ extends Node
 ## Backend choice (start()): GdbleTransport when the GDBLE library is loaded and its
 ## adapter initializes; otherwise BridgeTransport if the bridge on ws://127.0.0.1:8765
 ## answers; otherwise none: backend_name() is "" and status_changed(STATUS_DISCONNECTED,
-## "No Bluetooth adapter found" or "Bluetooth is unavailable ...") says why. Add the manager
-## to the scene tree before start(): GDBLE drains its events while its node processes.
+## "No Bluetooth adapter found" or "Bluetooth is unavailable ...") says why. A backend that
+## doesn't answer initialize() within INIT_TIMEOUT_S counts as unavailable. Calling start()
+## again after "none" tries every backend again. Add the manager to the scene tree before
+## start(): GDBLE drains its events while its node processes.
+## An adapter lost while no trainer is linked (powered off, bridge closed) sets
+## STATUS_DISCONNECTED "No Bluetooth adapter found"; scan() or start() initializes it again
+## and then scans. connect_to() during start-up waits for the backend, then connects.
 ##
 ## Connection flow: connect_to(address) -> transport.connect_device -> device_connected ->
 ## FtmsClient.attach(transport) (once per transport) + FtmsClient.begin() (the 4.4 flow:
@@ -27,20 +32,23 @@ extends Node
 ## again (resubscribe, re-request control), then emits trainer_ready(device) followed by
 ## reconnected(device): the platform hands that to the rider's governor so it restores the
 ## last safe mode (begin() leaves the trainer in SIM flat). A GATT reset (notification
-## overflow, services changed) runs begin() the same way without dropping the link.
+## overflow, services changed) on a ready trainer runs begin() the same way without dropping
+## the link. connect_to() for the trainer being connected sends no second request; during a
+## backoff wait it tries at once and starts the backoff over.
 ## A setup failure (FtmsClient.failed, or no client_ready within SETUP_TIMEOUT_S) drops the
 ## link and retries the same way, except under the hardware lock (BRIEF 1), where it keeps
 ## the read-only link and stops.
 ## Control lost (Request Control 0x05 or Machine Status 0xFF, FtmsClient.control_lost):
 ## status STATUS_CONTROL_LOST with the "another app may hold control" detail, control_lost
 ## emitted, and no automatic retry (grabbing control back from a running Zwift session
-## would fight the other app); retry_control() runs begin() again on request.
+## would fight the other app; a GATT reset doesn't retry either); retry_control() runs
+## begin() again on request.
 ##
 ## Auto-connect: start(true) scans as soon as the backend is ready and connects to the last
 ## device the moment it is seen (addresses compared case-insensitively).
 ##
-## Time: every timer (backoff, attempt and setup timeouts, scan length) advances in
-## tick(dt). _process(delta) calls tick(delta) unless manual_clock is set (tests drive
+## Time: every timer (backoff, backend start, attempt and setup timeouts, scan length)
+## advances in tick(dt). _process(delta) calls tick(delta) unless manual_clock is set (tests drive
 ## tick() themselves). Runs with PROCESS_MODE_ALWAYS, and so do its transport, client and
 ## device children. The manager never writes to the trainer itself.
 
@@ -71,6 +79,8 @@ const BACKOFF_MAX_S := 15.0
 const CONNECT_TIMEOUT_S := 30.0
 ## FtmsClient.begin() must reach client_ready within this.
 const SETUP_TIMEOUT_S := 30.0
+## A backend whose initialize() gets no adapter_ready within this is skipped (start()).
+const INIT_TIMEOUT_S := 10.0
 const DEFAULT_SCAN_S := 10.0
 ## start(true) scans this long when a last device is remembered.
 const AUTO_SCAN_S := 30.0
@@ -98,6 +108,7 @@ var _candidates: Array[String] = []
 var _backend_errors: Array[String] = []
 var _adapter_missing: bool = false
 var _started: bool = false
+var _init_left: float = 0.0
 
 var _client: FtmsClient = null
 var _client_transport: BleTransport = null
@@ -139,7 +150,8 @@ func start(auto_connect_last: bool = true) -> void:
 	_auto_connect = auto_connect_last
 	_last = read_last_device()
 	if _started and _backend != Backend.NONE:
-		if _backend == Backend.READY and _link == Link.IDLE:
+		# READY: scan again; LOST: scan() initializes the adapter again first.
+		if (_backend == Backend.READY or _backend == Backend.LOST) and _link == Link.IDLE:
 			scan(_start_scan_seconds())
 		return
 	_started = true
@@ -152,6 +164,12 @@ func start(auto_connect_last: bool = true) -> void:
 func scan(seconds: float = DEFAULT_SCAN_S) -> void:
 	if _backend == Backend.STARTING:
 		_scan_queued = seconds
+		return
+	if _backend == Backend.LOST and _transport != null and _link == Link.IDLE:
+		# The adapter went away earlier: initialize it again, then scan (_on_adapter_ready).
+		_scan_queued = seconds
+		_set_status(TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_STARTING"))
+		_transport.initialize()
 		return
 	if _transport == null or _backend != Backend.READY:
 		push_warning("Bluetooth: cannot scan (%s)" % _status_detail)
@@ -185,6 +203,9 @@ func connect_to(address: String) -> void:
 		# The trainer already linked: nothing to do when ready or setting up; after a
 		# control loss or a failed setup, run begin() again instead of reconnecting.
 		if _link == Link.READY or _link == Link.SETUP:
+			return
+		# Already connecting (or waiting for the backend): no second request.
+		if _link == Link.CONNECTING or _link == Link.REINIT:
 			return
 		if _link == Link.CONTROL_LOST or _link == Link.SETUP_FAILED:
 			retry_control()
@@ -228,6 +249,11 @@ func backend_name() -> String:
 
 ## Advance every timer by dt seconds (backoff, attempt and setup timeouts, scan length).
 func tick(dt: float) -> void:
+	if _backend == Backend.STARTING:
+		_init_left -= dt
+		if _init_left <= _EPS:
+			# Treated like adapter_ready(false): drop this backend, try the next one.
+			_on_adapter_ready(false, "no answer within %d s" % int(INIT_TIMEOUT_S))
 	if _scanning:
 		_scan_left -= dt
 		if _scan_left <= _EPS:
@@ -374,6 +400,7 @@ func _try_next_backend() -> void:
 			continue
 		_use_transport(t, which)
 		_backend = Backend.STARTING
+		_init_left = INIT_TIMEOUT_S
 		_set_status(TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_STARTING"))
 		t.initialize()
 		return
@@ -427,7 +454,10 @@ func _on_adapter_ready(ok: bool, error: String) -> void:
 			_backend = Backend.READY
 			var queued := _scan_queued
 			_scan_queued = -1.0
-			if _link == Link.IDLE:
+			if _link == Link.REINIT:
+				# connect_to() arrived while the backend was starting.
+				_send_connect()
+			elif _link == Link.IDLE:
 				scan(queued if queued >= 0.0 else _start_scan_seconds())
 			return
 		push_warning("Bluetooth: %s backend unavailable (%s)" % [_backend_name, error])
@@ -436,11 +466,18 @@ func _on_adapter_ready(ok: bool, error: String) -> void:
 			_adapter_missing = true
 		_drop_transport()
 		_try_next_backend()
+		if _backend == Backend.NONE and _link == Link.REINIT:
+			# A connect waiting for start-up can't run: no backend (the status says why).
+			_link = Link.IDLE
 		return
 	if ok:
 		_backend = Backend.READY
 		if _link == Link.REINIT:
 			_send_connect()
+		elif _link == Link.IDLE and _scan_queued >= 0.0:
+			var queued := _scan_queued
+			_scan_queued = -1.0
+			scan(queued)
 		return
 	push_warning("Bluetooth: adapter lost (%s)" % error)
 	_backend = Backend.LOST
@@ -449,7 +486,13 @@ func _on_adapter_ready(ok: bool, error: String) -> void:
 			_attempt_failed(error)
 		Link.SETUP, Link.READY, Link.CONTROL_LOST, Link.SETUP_FAILED:
 			_link_lost()
+		Link.IDLE:
+			_scanning = false
+			_scan_left = 0.0
+			_scan_queued = -1.0
+			_set_status(TrainerDevice.STATUS_DISCONNECTED, tr("BLE_STATUS_NO_ADAPTER"))
 		_:
+			# WAIT_RETRY: the next attempt initializes the adapter first.
 			pass
 
 
@@ -493,11 +536,18 @@ func _on_device_found(info: Dictionary) -> void:
 # --- Link state machine ----------------------------------------------------------------
 
 func _begin_attempt() -> void:
+	if _transport == null:
+		_link = Link.IDLE
+		push_warning("Bluetooth: cannot connect (%s)" % _status_detail)
+		return
 	_attempt_left = CONNECT_TIMEOUT_S
 	_set_status(TrainerDevice.STATUS_CONNECTING, tr("BLE_STATUS_CONNECTING").format({"name": _target_label()}))
 	if _backend != Backend.READY:
+		# Wait for the backend: still starting (its adapter_ready connects), or lost
+		# (initialize it again first).
 		_link = Link.REINIT
-		_transport.initialize()
+		if _backend != Backend.STARTING:
+			_transport.initialize()
 		return
 	_send_connect()
 
@@ -542,7 +592,9 @@ func _on_device_disconnected(address: String, _reason: String) -> void:
 func _on_operation_failed(op: String, error: String) -> void:
 	if op == "connect" and _link == Link.CONNECTING:
 		_attempt_failed(error)
-	elif op == GdbleTransport.OP_GATT_RESET and (_link == Link.READY or _link == Link.CONTROL_LOST):
+	elif op == GdbleTransport.OP_GATT_RESET and _link == Link.READY:
+		# Subscriptions are gone: begin() rediscovers and resubscribes. Not after a control
+		# loss, where begin() would also take control back (retry_control() does that).
 		_enter_setup()
 
 
