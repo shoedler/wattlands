@@ -8,3 +8,4 @@
 - `WlApp` (autoload `App`): the state machine, boot order, scripted peers (`is_scripted`, `launch_options`), `quit()` with governor shutdown on every exit path, `--run-seconds` and a fallback `--report`.
 - `FtpTest` (P1): the BRIEF 3.2 ramp test with its end rules, best 1-minute power, 0.75 x best FTP, cool-down, save countdown and `back`.
 - `AutoloadLookup`: run-time access to the autoloads for injectable services.
+- Hardening: the session rider becomes the menu rider again when a session hands ticking back (after its ride is saved), profile changes during a session are applied then, `LocalRider.rebind_device()` keeps a session alive when a reconnect hands over a new trainer object, rebuilds and trainer switches save a ride still recording, setup clears a reused MockTrainer's bands and phase, FIT lap names translate strings keys, settings hold JSON values only, and a dropped `FtpTest` releases its hold.
