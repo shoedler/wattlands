@@ -146,3 +146,67 @@ func test_scripted_host_and_client_play_a_session_over_loopback() -> void:
 	assert_eq(client_states.size(), 2, "the client's GameHost got both players from session_start")
 	assert_eq(host_fx.quits, [0])
 	assert_eq(client_fx.quits, [0])
+
+
+func _real_router() -> WlInputRouter:
+	var router := WlInputRouter.new()
+	router.load_on_ready = false
+	router.bus = fx.bus
+	router.profile = fx.settings.profile
+	add_child_autofree(router)
+	router.set_process(false)
+	router.set_process_input(false)
+	return router
+
+
+## The session screen owns pause and its overlay menu; the GameHost reads input through
+## AppSessionInput, so it neither undoes the screen's pause on its next tick nor resumes on the
+## confirm that picks an overlay item.
+func test_the_screen_owns_pause_and_the_overlay_menu() -> void:
+	fx.give_profile(200.0)
+	_go_real(fx)
+	var router := _real_router()
+	fx.services.input = router
+	var s := open_screen(AppSessionScreen.new(), {"role": Wl.SOLO, "game_id": "workout", "content_id": "e2e"}) as AppSessionScreen
+	assert_not_null(s.session_input, "the GameHost reads input through the screen")
+	if s.host == null:
+		return
+	for _i in 20:
+		s.host.step()
+	router.inject_action(&"pause")
+	assert_eq(s.host.state, "paused", "P pauses at once")
+	assert_true(s.overlay.visible)
+	for _i in 40:
+		s.host.step()
+	assert_eq(s.host.state, "paused", "the GameHost does not toggle it back")
+	assert_eq(menu(s).highlighted_id(), "resume")
+	router.inject_action(&"confirm")
+	assert_eq(s.host.state, "running", "Resume picked from the overlay")
+	assert_false(s.overlay.visible)
+	for _i in 20:
+		s.host.step()
+	assert_eq(s.host.state, "running", "the confirm did not reach the GameHost as a second toggle")
+
+
+func test_session_input_filters_for_the_game_host() -> void:
+	var router := _real_router()
+	var owned := [false]
+	var menu_rider: LocalRider = autofree(FakeRider.new())
+	var si := AppSessionInput.create(router, func() -> bool: return owned[0], func() -> LocalRider: return menu_rider)
+	add_child_autofree(si)
+	router.inject_action(&"pause")
+	router.inject_action(&"ability_1")
+	router.inject_action(&"confirm")
+	assert_eq(si.take_actions(), [&"ability_1", &"confirm"] as Array[StringName], "pause is the screen's")
+	owned[0] = true
+	router.inject_action(&"confirm")
+	router.inject_action(&"panic")
+	router.inject_action(&"down")
+	assert_eq(si.take_actions(), [&"panic"] as Array[StringName], "the overlay owns input; panic always passes")
+	router.inject_gesture(Wl.G_SURGE)
+	assert_eq(si.take_gestures(), [Wl.G_SURGE] as Array[StringName])
+	var session_rider: LocalRider = autofree(FakeRider.new())
+	si.attach_rider(session_rider)
+	assert_same(router.attached_rider(), session_rider)
+	si.detach_rider()
+	assert_same(router.attached_rider(), menu_rider, "menus after the session get pedal gestures again")

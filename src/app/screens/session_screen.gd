@@ -37,6 +37,8 @@ var headless: bool = false
 var metronome_on: bool = false
 var _overlay_menu_open: bool = false
 var _left: bool = false
+## What the GameHost reads from the InputRouter (AppSessionInput); null without a router.
+var session_input: AppSessionInput = null
 
 
 func _build() -> void:
@@ -81,6 +83,11 @@ func _start_session() -> void:
 	if config.is_empty():
 		_fail(launcher.error)
 		return
+	if services.input != null:
+		# The GameHost reads input through the screen, which owns pause and its overlay menu.
+		session_input = AppSessionInput.create(services.input, _overlay_owns_input, _menu_rider)
+		add_child(session_input)
+		config["input_router"] = session_input
 	if role == Wl.HOST and services.net != null:
 		services.net.mark_started()
 	host = services.make_game_host()
@@ -148,6 +155,14 @@ func _prepare_offline_lobby() -> void:
 	var st := services.trainer.status() if services.trainer != null else ""
 	net.set_local_player_info(AppLobbyModel.player_info(services.profile(), sc, popts, AppLobbyModel.installed_games(services.registry), st))
 	net.set_ready(true)
+
+
+func _overlay_owns_input() -> bool:
+	return overlay != null and overlay.visible
+
+
+func _menu_rider() -> LocalRider:
+	return services.trainer.local_rider() if services.trainer != null else null
 
 
 func local_peer() -> int:

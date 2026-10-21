@@ -138,3 +138,9 @@
 - Decision: `tests/app/fakes/fake_scan_list.gd` is the real `PedalScanList` plus read-only probes (`ids`, `text_of`, `index_of_id`, `is_disabled_id`, `picks`); `FakeRegistry.add_game` is `add_fixture`. Screens set `sounds = false` on their lists and play the UI cues themselves.
 - Alternatives: keep the W1 double under private names.
 - Reason: the double redeclared members of the real class and no longer compiled; the real list now exists and the screens should be tested against it.
+
+## 2026-10-21 (W2): The GameHost reads input through the session screen
+
+- Decision: the session screen hands its GameHost an `AppSessionInput` as `config.input_router`: the router's actions without `pause` (the screen pauses and resumes) and, while the overlay menu is open, without anything but `panic` (which always passes); gestures unchanged; `detach_rider()` at the session end re-attaches TrainerService's menu rider.
+- Alternatives: let the GameHost own pause (then the overlay's confirm both picks an item and resumes); ask sdk-runtime to stop toggling pause (app-shell's W1 request, not taken).
+- Reason: with the real GameHost a P press paused (screen) and resumed (GameHost, next tick), and a confirm on the overlay both picked the highlighted item and resumed; after a session the router had no rider, so results and menus lost pedal gestures.
