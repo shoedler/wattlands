@@ -12,6 +12,7 @@ import {
   inputMatches,
   loadManifest,
   manifestPath,
+  pendingChoices,
   RECOVERABLE,
   sameInput,
   saveManifest,
@@ -189,13 +190,14 @@ export function formatPlan(art, plan, opts, manifest) {
 }
 
 /**
- * True when a submit error proves fal took no request: fal answered with an HTTP error status, or
- * the client refused to send it. A lost connection, a timeout or an unreadable answer may come
- * after fal queued (and will bill) the request (W3 ART-W3-3).
+ * True when a submit error proves fal took no request: fal answered with an HTTP error status, the
+ * client refused to send it, or the request never left this machine (no connection, no DNS answer,
+ * a failed TLS handshake; W4r2 R24). A reset, a timeout after connecting or an unreadable answer
+ * may come after fal queued (and will bill) the request (W3 ART-W3-3).
  */
 export function submitSurelyRejected(err) {
   if (!(err instanceof FalError)) return false;
-  if (err.refused) return true;
+  if (err.refused || err.notSent) return true;
   return err.status >= 400 && err.status <= 599;
 }
 
@@ -210,6 +212,9 @@ class Run {
     // Set when the client refused to fetch an image (a host it may not contact): paying for more
     // results whose images can't be fetched would only burn money, so the run stops paying.
     this.hostStop = null;
+    // Set when a submit could not reach fal at all (offline, no DNS, a failed TLS handshake): the
+    // next submits would fail the same way, so the run stops submitting (W4r2 R24).
+    this.netStop = null;
   }
 
   save() {
@@ -259,12 +264,41 @@ class Run {
         this.out(`${entry.sprite}: keeps its --select choice ${cur.request_id}`);
         return;
       }
+      // The choice stays on record: a later run fetches its image again and selects it (W4r2 R25).
+      cur.reselect = true;
       this.err(
-        `warning: ${entry.sprite}: the --select choice ${cur.request_id} is "${cur.status}" (${cur.error ?? 'not usable'}); selecting ${entry.request_id} instead (--select it again once it can be fetched)`,
+        `warning: ${entry.sprite}: the --select choice ${cur.request_id} is "${cur.status}" (${cur.error ?? 'not usable'}); selecting ${entry.request_id} for now. A later run fetches ${cur.request_id} again for free and selects it once its image can be fetched`,
       );
     }
     if (cur === entry) return;
-    selectEntry(this.manifest, entry, 'run');
+    // A new or recovered result replaces a --select choice, also one still waiting for its image.
+    selectEntry(this.manifest, entry, 'run', isNewResult);
+  }
+
+  /**
+   * A --select choice that had to give way because its image could not be fetched (`reselect`) is
+   * fetched again from its stored image URL, for free, and selected again once that works.
+   */
+  async retryPendingChoice(id) {
+    for (const e of pendingChoices(this.manifest, id)) {
+      if (e.status === 'ok' && cacheFileExists(this.root, e)) {
+        selectEntry(this.manifest, e, 'user');
+        this.save();
+        this.out(`${id}: selected the --select choice ${e.request_id} again`);
+        return;
+      }
+      if (!e.image_url || !this.reachable(e)) continue;
+      const ok = await this.download(e);
+      if (ok) {
+        selectEntry(this.manifest, e, 'user');
+        this.save();
+        this.out(`${id}: fetched the --select choice ${e.request_id} again and selected it (${e.cache})`);
+        return;
+      }
+      this.save();
+      this.err(`warning: ${id}: the --select choice ${e.request_id} still can't be fetched (${e.error}); a later run tries again`);
+      return;
+    }
   }
 
   async download(entry) {
@@ -409,6 +443,7 @@ class Run {
   async resolveLocally(p) {
     const id = p.sprite.id;
     await this.refetchUserSelection(id);
+    await this.retryPendingChoice(id);
     const hit = findCacheHit(this.manifest, this.root, id, p.endpoint, p.input);
     for (const e of findRecoverable(this.manifest, this.root, id, p.endpoint, p.input)) {
       if (hit && requestedMs(e) <= requestedMs(hit)) break;
@@ -527,9 +562,10 @@ class Run {
         this.runTicks -= usdToTicks(p.estimate);
         e.status = 'submit_failed';
         e.error = err.message;
+        if (err.notSent) this.netStop ??= `fal can't be reached (${err.message})`;
         this.save();
         this.stats.failed += 1;
-        this.err(`${p.sprite.id}: submit failed: ${err.message}`);
+        this.err(`${p.sprite.id}: submit failed: ${err.message}${err.notSent ? ' (it never left this machine: nothing was paid)' : ''}`);
         return;
       }
       // The answer was lost (connection reset, timeout, unreadable body): fal may have queued the
@@ -577,7 +613,7 @@ class Run {
     let next = 0;
     const worker = async () => {
       for (;;) {
-        if (this.budgetStopped || this.hostStop) return;
+        if (this.budgetStopped || this.hostStop || this.netStop) return;
         const i = next;
         if (i >= payList.length) return;
         next += 1;
@@ -599,6 +635,15 @@ class Run {
     await Promise.all(Array.from({ length: n }, () => worker()));
     this.save();
     const s = this.stats;
+    if (this.netStop) {
+      s.notPaid = payList
+        .slice(next)
+        .map((x) => x.sprite.id)
+        .filter((id) => !s.skipped.includes(id));
+      this.err(
+        `stopped submitting: ${this.netStop}. Nothing was paid for it${s.notPaid.length ? `; not submitted: ${s.notPaid.join(', ')}` : ''}. Run again once fal can be reached.`,
+      );
+    }
     if (this.hostStop) {
       s.notPaid = payList
         .slice(next)
@@ -609,9 +654,9 @@ class Run {
       );
     }
     this.out(
-      `generate: ${s.paid} paid, ${s.cached} cached, ${s.recovered} recovered, ${s.failed} failed${s.skipped.length ? `, ${s.skipped.length} skipped by the budget stop` : ''}${s.notPaid.length ? `, ${s.notPaid.length} not paid after a refused host` : ''}; this run ${formatUsd(ticksToUsd(this.runTicks))} of ${formatUsd(this.opts.budget)} budget; manifest spend total ${formatUsd(this.manifest.spend.total_usd)}`,
+      `generate: ${s.paid} paid, ${s.cached} cached, ${s.recovered} recovered, ${s.failed} failed${s.skipped.length ? `, ${s.skipped.length} skipped by the budget stop` : ''}${s.notPaid.length ? `, ${s.notPaid.length} not paid after ${this.netStop ? 'fal could not be reached' : 'a refused host'}` : ''}; this run ${formatUsd(ticksToUsd(this.runTicks))} of ${formatUsd(this.opts.budget)} budget; manifest spend total ${formatUsd(this.manifest.spend.total_usd)}`,
     );
-    if (s.failed > 0 || this.hostStop) return EXIT_FAILED;
+    if (s.failed > 0 || this.hostStop || this.netStop) return EXIT_FAILED;
     if (this.budgetStopped) return EXIT_BUDGET;
     return EXIT_OK;
   }
@@ -630,7 +675,7 @@ function applySelect(art, manifest, root, opts, out, err) {
       problems.push(`--select ${sprite}:${rid}: the manifest has no request ${rid} for ${sprite}`);
       continue;
     }
-    if (e.status !== 'ok') {
+    if (e.status !== 'ok' && !(e.image_url && RECOVERABLE.has(e.status))) {
       problems.push(`--select ${sprite}:${rid}: that request is "${e.status}", not a usable result`);
       continue;
     }
@@ -641,6 +686,14 @@ function applySelect(art, manifest, root, opts, out, err) {
     return EXIT_USAGE;
   }
   for (const e of chosen) {
+    if (e.status !== 'ok') {
+      // A paid result whose image could not be fetched yet: the next run fetches it for free and
+      // selects it then; until then the sprite keeps its usable selection (W4r2 R25).
+      for (const r of manifest.requests) if (r.sprite === e.sprite) delete r.reselect;
+      e.reselect = true;
+      out(`${e.sprite}: ${e.request_id} is "${e.status}"; the next generate run fetches its image (for free) and selects it`);
+      continue;
+    }
     selectEntry(manifest, e, 'user');
     out(`${e.sprite}: selected ${e.request_id}`);
     if (!cacheFileExists(root, e)) err(`warning: ${e.sprite}: the raw result ${e.cache} is missing; run generate.mjs to fetch it again before pixelating`);
