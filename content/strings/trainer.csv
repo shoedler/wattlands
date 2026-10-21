@@ -1,2 +1,13 @@
 keys,en
 TRAINER_MODULE_NAME,Trainer
+TRAINER_ANOTHER_APP_CONTROL,"Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect."
+TRAINER_HW_LOCKED,Hardware control locked: the trainer is read-only in this run.
+TRAINER_STATUS_DISCONNECTED,Trainer disconnected
+TRAINER_STATUS_SCANNING,Looking for your trainer
+TRAINER_STATUS_CONNECTING,Connecting to the trainer
+TRAINER_STATUS_CONNECTED,Trainer connected
+TRAINER_STATUS_READY,Trainer ready
+TRAINER_STATUS_CONTROL_LOST,Trainer control lost
+TRAINER_STATUS_ERROR,Trainer error
+TRAINER_MOCK_NAME,Mock trainer (%s)
+TRAINER_MOCK_KEYS,"Mock trainer keys: W/S power +-10 W, A/D cadence -+5 rpm"
