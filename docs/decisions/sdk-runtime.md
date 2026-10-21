@@ -199,3 +199,45 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: the host's `DirectiveRouter` opens a SIM block only for mode SIM in an ERG phase while no block runs. The same request while a block runs is a confirmation, as the `DirectiveSink` contract and the governor say: accepted whatever its `duration_s`, no length, safety or spacing re-check, no switch, the block keeps its own end, and the request's other channels apply as inside the block (a haptic subject to the haptic rules: refused in ERG and for an opted-out rider on the host; warm-up and the 15 s cooldown are the governor's). A refused ack for a confirmation never takes the running block back (only the opening request's ack can). `test_sim_block_spacing_and_the_bracketing_exemption` asserted the old refusal of a second mode SIM 0 s after the entry (`switch_spacing`); it now asserts the confirmation, and the 0 s spacing check moved to a new block right after an early exit.
 - Alternatives: keep refusing (`sim_block_length` / `switch_spacing`) and document "send haptics inside a block without mode" (docs/TRAINER.md known difference 7); make the governor refuse too (it would contradict the contract every game brief reads).
 - Reason: lead W2 round 2. A game that tags its haptics with mode SIM (Tank Crew's hits) lost them on the host though the rider's governor would have applied them.
+
+## 2026-10-21 (W4): Clients re-apply nothing they already ride; rejoins and resyncs resend bands
+
+- Decision: a client ignores a `plan` identical to the one it rides (compared as `EffortPlan.to_dict()`) and a `phase` for the index it rides with the same `start_tick` (it only catches its phase clock up from the message's new `elapsed_s`). A different plan resets the client's phase to -1, so the next `phase` enters one. Rejoins, resync requests and the host's return (`WlNetSession.resync_requested`) all resend the same set: plan, phase with `elapsed_s`, the latest snapshot, the power and cadence bands the host holds for the rider, and the results if any. A client entering a phase with `elapsed_s` > 0 calls `LocalRider.resume_phase(index, elapsed_s)` when the rider has it, else `start_phase(index)`.
+- Alternatives: compute a resume offset on the client from the snapshot tick (the snapshot arrives after the phase); let games republish their bands in `on_afk(peer, false)` (every game would have to, and a cadence band the platform holds would still be lost).
+- Reason: W3 NET-2 (every rejoin restarted the governor's phase, the ramp and course following, and wrote an extra FIT lap) and WO-4 (a restarted client lost its Rolling road band for the rest of the phase). The governor cannot yet enter a phase at an offset; that is requested from its owner, and until then a restarted client starts its phase from 0 (downward load, the safe side).
+
+## 2026-10-21 (W4): Desync warnings come from clients, with an expected-gap exception
+
+- Decision: a client logs `push_warning("GameHost: desync: ...")`, counts it (`desync_count`, the report's `desync_warnings`) and asks for a resync (`telemetry.resync`, at most every 2 s; the host answers at most once a second per peer) when an event batch skips a `seq`, or when two rosters in a row show another phase index for its rider (the roster now carries `phase`). The first gap after the client's own rejoin (net state back to joined) or after the host's return (`peer_joined` of the host) is expected and only recorded. Snapshot `seq` gaps are not checked.
+- Alternatives: warn on every gap, outages included (the e2e restart would fail its own "no desync warnings" check); compare a state hash in snapshots (every game would need a canonical hash); check snapshot gaps (the send budget legitimately drops superseded snapshots, and each carries the whole state).
+- Reason: W3 NET-5/QT-1: nothing emitted a desync warning, so BRIEF 7.7's e2e assertion could not fail, while lost event batches (an oversize drop, a rate-limited frame) and lost phase messages went unnoticed.
+
+## 2026-10-21 (W4): A client whose net session ends for good rides its cool-down, then ends
+
+- Decision: on any terminal refusal of its `WlNetSession` (`host_left`, `dropped` after the 120 s rejoin window, `room_not_found`, ...) during a session without results, a client GameHost enters its plan's cool-down locally (unless it is in it already), rides it to its end, then calls `end_session(reason)` and emits `session_finished(null)`. Before it has a plan or a phase it ends at once.
+- Alternatives: end at once and let the app put the rider on SIM flat (no cool-down, and the app ended the session only for `host_left`); ride SIM flat until the rider acts (a zero-input rider never gets out).
+- Reason: W3 SAF-5: a client whose host vanished held its last interval's ERG target indefinitely. BRIEF 3.1 pillar 4 ("warm-up and recovery built in") and the zero-input rule. The app's session screen still ends a `host_left` session itself at once; it is asked to treat the other reasons alike.
+
+## 2026-10-21 (W4): Plans over 16 KB go in parts of whole phases
+
+- Decision: the GameHost sends a plan whose message would be over 16 384 bytes as several `plan` messages, each a slice of whole phases with the plan's other fields, numbered `part`/`parts` under a `plan_id`; the client joins them (at most 64 parts; a newer `plan_id` drops older parts) and validates the whole plan as before. `NetMessages` is unchanged (the extra fields are optional).
+- Alternatives: a compact plan encoding (still has a limit: the importer accepts 24 h workouts); refuse to start such a session (Workout Director is P0); a generic NetSession fragmentation layer (needs a new message type in the frozen contracts).
+- Reason: W3 NET-3: an imported `.zwo` of about 124 phases or more never reached the clients; its plan was dropped as oversize at the start and on every rejoin.
+
+## 2026-10-21 (W4): results.session_id gets a per-session nonce
+
+- Decision: the host's `session_id` is `<game>/<content>/<seed>/<nonce>`, the nonce being the host's UTC start in milliseconds (hex) plus a per-process counter; `setup()` takes `session_nonce` (default that nonce; `""` keeps `<game>/<content>/<seed>`). `GameSimRunner` passes `""`, so `run_game_sim` reports and their `deterministic_hash` stay reproducible. Clients take the host's id from `session_start`.
+- Alternatives: document the id as unique per game/content/seed only (the template's documented apply_progress pattern would keep crediting nothing to a second `--seed` session in one profile); the relay room code (one room hosts several sessions).
+- Reason: W3 SDK-5. The id is not game state: it never reaches the rules or `ctx.rng`, so reading the wall clock here breaks no determinism rule.
+
+## 2026-10-21 (W4): A remote rider's applied record is completed from the routed request
+
+- Decision: the DirectiveRouter keeps each routed remote request (at most 512) until its ack arrives; the GameHost fills the ack's missing `requested`, and `t`, `game_t` and `phase_index` as of routing when the ack has none, so the report's `applied` record has the local record's shape. Only `request` entries get an `applied` record; GAME_SDK 19.1 and Q10 say so.
+- Alternatives: send the requested dict back in every ack (more telemetry bytes for data the host already has).
+- Reason: W3 SDK-4.
+
+## 2026-10-21 (W4): ctx.directives and ctx.hud hold their LocalRiders privately
+
+- Decision: `DirectiveRouter.riders` and `HudRouter.riders` became `_riders`, set once through the write-only `bind_riders()`; nothing hands a LocalRider to a game through `ctx`.
+- Alternatives: keep them public and rely on the arch gate alone.
+- Reason: W3 SAF-4 (defence in depth for the coming game sessions; extending the arch gate belongs to its owner).
