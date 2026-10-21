@@ -452,7 +452,7 @@ func _make_routers() -> void:
 	directive_router.role = role
 	directive_router.tracker = tracker
 	directive_router.clock = clock
-	directive_router.riders = local_riders
+	directive_router.bind_riders(local_riders)
 	directive_router.bus = bus
 	directive_router.report = report
 	directive_router.remote_send = _send_directive
@@ -461,7 +461,7 @@ func _make_routers() -> void:
 	hud_router = HudRouter.new()
 	hud_router.role = role
 	hud_router.local_peer = _local_peer
-	hud_router.riders = local_riders
+	hud_router.bind_riders(local_riders)
 	hud_router.bus = bus
 	hud_router.report = report
 	hud_router.clock_now = _now

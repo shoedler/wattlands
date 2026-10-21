@@ -33,7 +33,7 @@ func before_each() -> void:
 	_hud = HudRouter.new()
 	_hud.role = Wl.HOST
 	_hud.local_peer = 1
-	_hud.riders = {1: _local, -1: _bot}
+	_hud.bind_riders({1: _local, -1: _bot})
 	_hud.slots = {1: s1, 2: s2, -1: sb}
 	_hud.bus = _bus
 	_hud.send = func(peer: int, msg: Dictionary) -> void: _sent.append([peer, msg])
@@ -129,7 +129,7 @@ func test_client_draws_everything_locally() -> void:
 	_hud.role = Wl.CLIENT
 	_hud.local_peer = 2
 	var own := Kit.rider(_root, Kit.human(2, 1))
-	_hud.riders = {2: own}
+	_hud.bind_riders({2: own})
 	_hud.toast("FX_X", [], 1)
 	assert_eq(_toasts.size(), 1)
 	_hud.banner("FX_Y")

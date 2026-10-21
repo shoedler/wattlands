@@ -23,8 +23,11 @@ signal local_status_changed(peer: int, status: Dictionary)
 
 var role: String = Wl.SOLO
 var local_peer: int = 0
-## Riders simulated on this peer: peer -> LocalRider.
-var riders: Dictionary = {}
+## Riders simulated on this peer: peer -> LocalRider. Private (W3 SAF-4): `ctx.hud` is
+## this object, so a public map would hand a game every LocalRider (set_plan, start_phase,
+## resume, the governor) past the DirectiveSink's checks. The GameHost sets it with
+## bind_riders(); nothing reads it from outside.
+var _riders: Dictionary = {}
 ## Every rider in the session: peer -> PlayerSlot.
 var slots: Dictionary = {}
 var bus: WlEventBus = null
@@ -44,6 +47,12 @@ func is_authority() -> bool:
 	return role == Wl.SOLO or role == Wl.HOST
 
 
+## The riders simulated on this peer (peer -> LocalRider); the GameHost calls this once at
+## setup. There is deliberately no getter.
+func bind_riders(p_riders: Dictionary) -> void:
+	_riders = p_riders
+
+
 func power_band(peer: int, lo_w: float, hi_w: float) -> void:
 	if is_nan(lo_w) or is_nan(hi_w) or is_inf(lo_w) or is_inf(hi_w) or lo_w < 0.0 or hi_w < lo_w:
 		push_warning("HudRouter: power_band(%d, %s, %s) ignored: needs 0 <= lo <= hi" % [peer, lo_w, hi_w])
@@ -53,8 +62,8 @@ func power_band(peer: int, lo_w: float, hi_w: float) -> void:
 	else:
 		power_bands[peer] = [lo_w, hi_w]
 	if is_authority():
-		if riders.has(peer):
-			(riders[peer] as LocalRider).set_power_band(lo_w, hi_w)
+		if _riders.has(peer):
+			(_riders[peer] as LocalRider).set_power_band(lo_w, hi_w)
 		elif slots.has(peer):
 			_send(peer, Protocol.game_msg("directive", {
 				"kind": NetMessages.DIRECTIVE_POWER_BAND, "peer": peer, "lo_w": lo_w, "hi_w": hi_w}))
@@ -62,8 +71,8 @@ func power_band(peer: int, lo_w: float, hi_w: float) -> void:
 			push_warning("HudRouter: power_band for unknown peer %d" % peer)
 			return
 		_record("power_band", {"peer": peer, "lo_w": lo_w, "hi_w": hi_w})
-	elif peer == local_peer and riders.has(peer):
-		(riders[peer] as LocalRider).set_power_band(lo_w, hi_w)
+	elif peer == local_peer and _riders.has(peer):
+		(_riders[peer] as LocalRider).set_power_band(lo_w, hi_w)
 	if bus != null:
 		bus.power_band_changed.emit(peer, lo_w, hi_w)
 
@@ -97,8 +106,8 @@ func clear_power_band(peer: int) -> void:
 	if not power_bands.has(peer):
 		return
 	power_bands.erase(peer)
-	if riders.has(peer):
-		(riders[peer] as LocalRider).set_power_band(0.0, 0.0)
+	if _riders.has(peer):
+		(_riders[peer] as LocalRider).set_power_band(0.0, 0.0)
 	if bus != null:
 		bus.power_band_changed.emit(peer, 0.0, 0.0)
 
@@ -124,7 +133,7 @@ func _message(kind: String, key: String, args: Variant, seconds: float, peer: in
 		_send(Wl.ALL_PEERS, _hud_msg(kind, key, safe_args, seconds))
 	elif peer == local_peer:
 		_draw(kind, key, safe_args, seconds)
-	elif riders.has(peer):
+	elif _riders.has(peer):
 		pass
 	elif slots.has(peer):
 		_send(peer, _hud_msg(kind, key, safe_args, seconds))

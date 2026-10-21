@@ -51,7 +51,7 @@ func before_each() -> void:
 	_router.tracker = _tracker
 	_router.clock = _clock
 	_router.slots = {1: s1, 2: s2, 3: s3}
-	_router.riders = {1: _rider}
+	_router.bind_riders({1: _rider})
 	_router.bus = _bus
 	_router.remote_send = func(peer: int, payload: Dictionary) -> void: _sent.append([peer, payload])
 	_router.telemetry_of = func(_peer: int) -> Variant: return _unsafe_tm

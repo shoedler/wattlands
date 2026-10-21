@@ -824,3 +824,34 @@ func test_stats_accumulate_while_riding() -> void:
 	Kit.step(b, 100)
 	assert_gt(host.ctx.stats.kj(1), 0.0)
 	assert_almost_eq((host.stats as SessionStatsTracker).ride_s(1), 5.0, 1e-6)
+
+
+## W3 SAF-4: ctx.directives and ctx.hud are the routers that drive the riders, but no public
+## property of theirs hands a game a LocalRider (whose set_plan, start_phase, resume and
+## governor bypass the DirectiveSink's checks). Their rider maps are private and write-only.
+func test_ctx_routers_hand_out_no_local_rider() -> void:
+	var b := _solo("tiny", {}, 1)
+	assert_eq(b["err"], "")
+	var ctx := _host(b).ctx
+	for router: Object in [ctx.directives, ctx.hud]:
+		assert_false("riders" in router, "%s has no public riders map" % router.get_script().get_global_name())
+		for prop: Dictionary in router.get_property_list():
+			var pname := str(prop["name"])
+			if pname.begins_with("_") or not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+				continue
+			var v: Variant = router.get(pname)
+			var found: Array = []
+			if v is LocalRider:
+				found.append(v)
+			elif v is Dictionary:
+				for x: Variant in (v as Dictionary).values():
+					if x is LocalRider:
+						found.append(x)
+			elif v is Array:
+				for x: Variant in v:
+					if x is LocalRider:
+						found.append(x)
+			assert_eq(found.size(), 0, "%s.%s exposes no LocalRider" % [router.get_script().get_global_name(), pname])
+	# The routers still drive the riders simulated here.
+	ctx.hud.power_band(1, 120.0, 160.0)
+	assert_eq(_rider(b).power_band(), Vector2(120.0, 160.0))
