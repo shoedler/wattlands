@@ -464,6 +464,35 @@ func test_auto_connect_to_the_last_device() -> void:
 	assert_eq(_made[0][1], NAME)
 
 
+func test_auto_connect_keeps_looking_for_the_last_device() -> void:
+	FtmsConnectionManager.write_last_device(ADDR, NAME)
+	_m.start(true)
+	_run(FtmsConnectionManager.AUTO_SCAN_S)
+	assert_eq(_gdble.count("start_scan"), 2, "a new window when the first ends")
+	assert_eq(_m.status(), TrainerDevice.STATUS_SCANNING, "still looking, no 'none found'")
+	_run(FtmsConnectionManager.AUTO_SCAN_S * 2)
+	assert_eq(_gdble.count("start_scan"), 4)
+	_gdble.advertise(ADDR, NAME)
+	assert_true(_m.is_ready(), "a trainer switched on later is still picked up")
+	_run(FtmsConnectionManager.AUTO_SCAN_S * 2)
+	assert_eq(_gdble.count("start_scan"), 4, "no scanning once linked")
+
+
+func test_stop_scan_ends_the_auto_connect_search() -> void:
+	FtmsConnectionManager.write_last_device(ADDR, NAME)
+	_m.start(true)
+	_m.stop_scan()
+	_run(FtmsConnectionManager.AUTO_SCAN_S * 2)
+	assert_eq(_gdble.count("start_scan"), 1)
+	assert_eq(_m.status(), TrainerDevice.STATUS_DISCONNECTED)
+	_gdble.advertise(ADDR, NAME)
+	assert_eq(_gdble.count("connect_device"), 0, "auto-connect is off until start(true)")
+	_m.start(true)
+	assert_eq(_gdble.count("start_scan"), 2)
+	_gdble.advertise(ADDR, NAME)
+	assert_true(_m.is_ready())
+
+
 func test_no_auto_connect_when_off() -> void:
 	FtmsConnectionManager.write_last_device(ADDR, NAME)
 	_m.start(false)

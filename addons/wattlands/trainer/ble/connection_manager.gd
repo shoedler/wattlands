@@ -45,7 +45,10 @@ extends Node
 ## begin() again on request.
 ##
 ## Auto-connect: start(true) scans as soon as the backend is ready and connects to the last
-## device the moment it is seen (addresses compared case-insensitively).
+## device the moment it is seen (addresses compared case-insensitively). While no trainer is
+## linked it keeps scanning in AUTO_SCAN_S windows, so a trainer switched on after the app
+## started is still picked up with no input (BRIEF 3.5); stop_scan() or disconnect_trainer()
+## ends that search until the next start(true).
 ##
 ## Time: every timer (backoff, backend start, attempt and setup timeouts, scan length)
 ## advances in tick(dt). _process(delta) calls tick(delta) unless manual_clock is set (tests drive
@@ -182,8 +185,10 @@ func scan(seconds: float = DEFAULT_SCAN_S) -> void:
 	_transport.start_scan(seconds)
 
 
+## Also ends auto-connect's search for the last device (start(true) resumes it).
 func stop_scan() -> void:
 	var was := _scanning
+	_auto_connect = false
 	_halt_scan()
 	if was and _link == Link.IDLE and _status == TrainerDevice.STATUS_SCANNING:
 		_set_status(TrainerDevice.STATUS_DISCONNECTED, "")
@@ -258,7 +263,9 @@ func tick(dt: float) -> void:
 		_scan_left -= dt
 		if _scan_left <= _EPS:
 			_scanning = false
-			if _link == Link.IDLE and _status == TrainerDevice.STATUS_SCANNING:
+			if _auto_rescan():
+				pass
+			elif _link == Link.IDLE and _status == TrainerDevice.STATUS_SCANNING:
 				var detail := tr("BLE_STATUS_NONE_FOUND") if _found.is_empty() else ""
 				_set_status(TrainerDevice.STATUS_DISCONNECTED, detail)
 	match _link:
@@ -498,6 +505,15 @@ func _on_adapter_ready(ok: bool, error: String) -> void:
 
 func _start_scan_seconds() -> float:
 	return AUTO_SCAN_S if _auto_connect and not _last.is_empty() else DEFAULT_SCAN_S
+
+
+## Zero-touch start (BRIEF 3.5): while auto-connect waits for the remembered trainer and no
+## trainer is linked, a finished scan window starts the next one. True when it did.
+func _auto_rescan() -> bool:
+	if not _auto_connect or _last.is_empty() or _link != Link.IDLE or _backend != Backend.READY:
+		return false
+	scan(AUTO_SCAN_S)
+	return true
 
 
 # --- Scanning --------------------------------------------------------------------------
