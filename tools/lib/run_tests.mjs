@@ -22,7 +22,18 @@ const REPO = path.dirname(TOOLS);
 
 const STEP_NAMES = ['import', 'gut', 'scaffold', 'static', 'sim', 'fit', 'node', 'e2e'];
 const LINT_DIRS = ['addons/wattlands', 'src', 'tests', 'tools'];
-const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art'];
+const NODE_SUITES = ['tools/tests', 'server/relay', 'server/mock_strava', 'tools/art', 'tools/fit_check', 'tools/e2e'];
+// Suites with a package-lock.json get `npm ci` first when their node_modules is missing; a failed
+// install is reported and the suite runs anyway (the relay and fit_check have zero-dependency
+// fallbacks, BRIEF 5.3, 3.8).
+const NPM_DIRS = ['server/relay', 'tools/fit_check'];
+// Extra Node commands run after the suites, from the project root (each may start Godot through
+// the wrapper itself, one slot at a time).
+const NODE_EXTRA = [['tools/art/pixelate_e2e.mjs']];
+const SIM_SPEED = 2000;
+const SIM_TIMEOUT_S = 900;
+const SCAFFOLD_TIMEOUT_S = 1800;
+const E2E_TIMEOUT_S = 3600;
 const NODE_SUITE_TIMEOUT_S = 1800;
 const NESTED_ENV = 'WATTLANDS_RUN_TESTS_NESTED';
 const ART_VARS = ['FAL_KEY', 'WATTLANDS_ALLOW_ART'];
@@ -216,8 +227,54 @@ async function stepGut(o) {
  * `git ls-files -co --exclude-standard` into build/scaffold_check/, run tools/new_game demo there,
  * import the copy through the wrapper, run GUT on res://tests/sdk/test_conformance.gd, delete the copy.
  */
-async function stepScaffold(_o) {
-  return { status: 'SKIP', note: 'not wired yet (BRIEF 7.3, lead adds it in W2)' };
+async function stepScaffold(o) {
+  if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests' };
+  if (!fs.existsSync(path.join(o.project, 'tools', 'lib', 'new_game.mjs'))) {
+    return { status: 'FAIL', note: 'tools/lib/new_game.mjs is missing' };
+  }
+  const copy = path.join(o.project, 'build', 'scaffold_check');
+  fs.rmSync(copy, { recursive: true, force: true });
+  const ls = spawnSync('git', ['ls-files', '-co', '--exclude-standard', '-z'], {
+    cwd: o.project, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024,
+  });
+  if (ls.status !== 0) return { status: 'FAIL', note: `git ls-files failed: ${ls.stderr}` };
+  const files = ls.stdout.split('\0').filter(Boolean);
+  for (const f of files) {
+    const src = path.join(o.project, f);
+    if (!fs.existsSync(src) || fs.statSync(src).isDirectory()) continue;
+    const dst = path.join(copy, f);
+    fs.mkdirSync(path.dirname(dst), { recursive: true });
+    fs.copyFileSync(src, dst);
+  }
+  if (fs.existsSync(path.join(o.project, 'src', 'games', 'demo'))) {
+    return { status: 'FAIL', note: 'the live tree holds a demo game' };
+  }
+  const notes = [`copied ${files.length} files`];
+  const ng = await run(process.execPath, [path.join(copy, 'tools', 'lib', 'new_game.mjs'), 'demo'], {
+    cwd: copy, log: path.join(o.project, 'build', 'scaffold_new_game.log'), timeoutS: 300,
+  });
+  if (ng.code !== 0) return { status: 'FAIL', note: `tools/new_game demo exited ${ng.code} (copy kept in build/scaffold_check)` };
+  const imp = await godot(o, ['--headless', '--path', copy, '--import'], {
+    log: path.join(o.project, 'build', 'scaffold_import.log'), timeoutS: SCAFFOLD_TIMEOUT_S,
+  });
+  notes.push(`import exit ${imp.code}`);
+  const junit = path.join(copy, 'build', 'junit_scaffold.xml');
+  const log = path.join(o.project, 'build', 'scaffold_gut.log');
+  const r = await godot(
+    o,
+    ['--headless', '--path', copy, '-s', 'addons/gut/gut_cmdln.gd', '-gtest=res://tests/sdk/test_conformance.gd',
+      '-gexit', '-gdisable_colors', `-gjunit_xml_file=${junit}`],
+    { log, timeoutS: SCAFFOLD_TIMEOUT_S },
+  );
+  const junitXml = fs.existsSync(junit) ? fs.readFileSync(junit, 'utf8') : '';
+  const v = evaluateGut({ exitCode: r.code, log: r.text, junitXml, previousGreen: null, minCount: 1, narrow: true });
+  const demoOk = /conformance: demo ok/.test(r.text);
+  if (!v.pass) {
+    return { status: 'FAIL', note: `${notes.join(', ')}; conformance in the copy failed: ${v.reasons.join('; ')} (copy kept in build/scaffold_check)` };
+  }
+  if (!demoOk) return { status: 'FAIL', note: `${notes.join(', ')}; the log never says "conformance: demo ok" (copy kept)` };
+  fs.rmSync(copy, { recursive: true, force: true });
+  return { status: 'PASS', note: `${notes.join(', ')}; demo conforms (tests ${v.tests}); copy deleted` };
 }
 
 /** static: tools/check_scripts.gd, then gdlint and gdformat --check when gdtoolkit is available. */
@@ -283,13 +340,104 @@ async function lintStep(o) {
 }
 
 /** sim: BRIEF 7.4 simulation gates. Extension point for the lead (tools/run_game_sim). */
-async function stepSim(_o) {
-  return { status: 'SKIP', note: 'not wired yet (BRIEF 7.4)' };
+async function stepSim(o) {
+  // The BRIEF 7.4 assertions run as GUT tests (tests/scenarios, tests/core/integration) in the gut
+  // step. This step drives the real CLI, tools/run_game_sim, through every registered game's
+  // contents in SOLO (one rider plus a bot) and once in HOST (two riders plus a bot), writes the
+  // reports and FIT files to build/sims/ for the fit step, and checks that every run completed.
+  if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests' };
+  const out = path.join(o.project, 'build', 'sims');
+  fs.rmSync(out, { recursive: true, force: true });
+  fs.mkdirSync(out, { recursive: true });
+  const games = registeredGames(o);
+  if (games.length === 0) return { status: 'SKIP', note: 'no registered games' };
+  const runs = [];
+  for (const g of games) {
+    for (const c of g.contents) runs.push({ game: g.id, content: c, players: 1, bots: 1 });
+    const hostBots = g.bots ? Math.min(1, Math.max(0, g.max_players - 2)) : 0;
+    if (g.max_players >= 2) runs.push({ game: g.id, content: g.e2e_content, players: 2, bots: hostBots, tag: 'host' });
+  }
+  const bad = [];
+  for (const sim of runs) {
+    const bots = games.find((g) => g.id === sim.game).bots ? sim.bots : 0;
+    const stem = `${sim.game}_${sim.content}${sim.tag ? `_${sim.tag}` : ''}`.replace(/[^A-Za-z0-9_.-]/g, '_');
+    const report = path.join(out, `${stem}.json`);
+    const args = [
+      `--game=${sim.game}`, `--content=${sim.content}`, `--players=${sim.players}`, `--bots=${bots}`,
+      '--rider=erg:compliance=1.0', `--sim-speed=${SIM_SPEED}`, '--seed=1', `--report=${report}`,
+    ];
+    const tool = o.shell === 'ps'
+      ? [powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_game_sim.ps1'), ...args]]
+      : [process.env.WATTLANDS_BASH || 'bash', [path.join(TOOLS, 'run_game_sim').replaceAll('\\', '/'), ...args]];
+    process.stdout.write(`run_tests: sim ${stem}\n`);
+    const r = await run(tool[0], tool[1], { cwd: o.project, log: path.join(out, `${stem}.log`), timeoutS: SIM_TIMEOUT_S, quiet: true });
+    let endReason = '';
+    try {
+      endReason = JSON.parse(fs.readFileSync(report, 'utf8')).end_reason ?? '';
+    } catch {
+      endReason = '(no report)';
+    }
+    if (r.code !== 0 || endReason !== 'complete') bad.push(`${stem}: exit ${r.code}, end_reason ${endReason}`);
+  }
+  const note = `${runs.length - bad.length}/${runs.length} run_game_sim runs complete (build/sims)`;
+  if (bad.length) return { status: 'FAIL', note: `${note}; ${bad.join('; ')}` };
+  return { status: 'PASS', note };
+}
+
+/** Registered games (every src/games/<id>/game.json except _template) with what the steps need. */
+function registeredGames(o) {
+  const root = path.join(o.project, 'src', 'games');
+  const out = [];
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name === '_template' || e.name.startsWith('.')) continue;
+    const file = path.join(root, e.name, 'game.json');
+    try {
+      const m = JSON.parse(fs.readFileSync(file, 'utf8'));
+      out.push({
+        id: m.id ?? e.name,
+        contents: Array.isArray(m.contents) ? m.contents : [],
+        e2e_content: m.e2e_content ?? m.default_content,
+        max_players: Number(m.max_players ?? 1),
+        bots: Boolean(m.bots),
+      });
+    } catch {
+      // An invalid game.json is the conformance test's to report.
+    }
+  }
+  return out.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** `npm ci` in a suite dir with a lockfile and no node_modules. Returns 'ok', 'installed' or the error. */
+async function ensureNpm(o, dir) {
+  const abs = path.join(o.project, dir);
+  if (!fs.existsSync(path.join(abs, 'package-lock.json')) || fs.existsSync(path.join(abs, 'node_modules'))) return 'ok';
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const r = spawnSync(npm, ['ci', '--no-audit', '--no-fund'], {
+    cwd: abs, encoding: 'utf8', shell: process.platform === 'win32', timeout: 600_000,
+  });
+  return r.status === 0 ? 'installed' : `npm ci failed (exit ${r.status})`;
 }
 
 /** fit: BRIEF 7.5, tools/fit_check on every FIT file the sims wrote. Extension point. */
-async function stepFit(_o) {
-  return { status: 'SKIP', note: 'not wired yet (BRIEF 7.5)' };
+async function stepFit(o) {
+  // BRIEF 7.5: every FIT the simulations wrote must decode with zero errors.
+  const dirs = ['build/sims', 'build/rides_test', 'build/scenarios'].filter((d) => fs.existsSync(path.join(o.project, d)));
+  if (dirs.length === 0) return { status: 'SKIP', note: 'no FIT files written (run the sim step first)' };
+  const npm = await ensureNpm(o, 'tools/fit_check');
+  const r = await run(process.execPath, ['tools/fit_check/check.mjs', ...dirs], {
+    cwd: o.project, log: path.join(o.project, 'build', 'fit_check.log'), timeoutS: 900, quiet: true,
+  });
+  const fitFiles = (r.text.match(/\.fit/g) || []).length;
+  const note = `${dirs.join(', ')} (npm: ${npm}; log build/fit_check.log)`;
+  if (r.code !== 0) return { status: 'FAIL', note: `exit ${r.code}; ${note}` };
+  if (fitFiles === 0) return { status: 'FAIL', note: `no FIT files found; ${note}` };
+  return { status: 'PASS', note };
 }
 
 const TEST_FILE_RE = /(^test\.[cm]?js$)|(^test-.+\.[cm]?js$)|([.\-_]test\.[cm]?js$)/;
@@ -331,6 +479,10 @@ async function stepNode(o) {
       results.push(`${suite} SKIP (no tests)`);
       continue;
     }
+    if (NPM_DIRS.includes(suite)) {
+      const npm = await ensureNpm(o, suite);
+      if (npm !== 'ok') process.stdout.write(`run_tests: ${suite}: ${npm}\n`);
+    }
     process.stdout.write(`run_tests: node --test in ${suite}\n`);
     const log = path.join(o.project, 'build', `node_${suite.replaceAll('/', '_')}.log`);
     const r = await run(process.execPath, ['--test'], {
@@ -346,6 +498,20 @@ async function stepNode(o) {
       results.push(`${suite} FAIL (exit ${r.code})`);
     }
   }
+  for (const extra of NODE_EXTRA) {
+    if (!fs.existsSync(path.join(o.project, extra[0]))) continue;
+    process.stdout.write(`run_tests: node ${extra.join(' ')}\n`);
+    const log = path.join(o.project, 'build', `node_${path.basename(extra[0])}.log`);
+    const r = await run(process.execPath, extra, {
+      cwd: o.project, log, timeoutS: NODE_SUITE_TIMEOUT_S, env: { ...process.env, [NESTED_ENV]: '1' },
+    });
+    ran += 1;
+    if (r.code === 0) results.push(`${extra[0]} PASS`);
+    else {
+      failed += 1;
+      results.push(`${extra[0]} FAIL (exit ${r.code})`);
+    }
+  }
   process.stdout.write(`run_tests: node suites: ${results.join(', ')}\n`);
   if (failed > 0) return { status: 'FAIL', note: results.join(', ') };
   if (ran === 0) return { status: 'SKIP', note: results.join(', ') };
@@ -353,8 +519,20 @@ async function stepNode(o) {
 }
 
 /** e2e: BRIEF 7.7, node tools/e2e/run.mjs --games=<registered games>. Extension point. */
-async function stepE2e(_o) {
-  return { status: 'SKIP', note: 'not wired yet (BRIEF 7.7)' };
+async function stepE2e(o) {
+  // BRIEF 7.7: one host and two clients per registered game; holds 3 Godot slots, so it runs last.
+  if (process.env[NESTED_ENV]) return { status: 'SKIP', note: 'nested run_tests' };
+  const games = registeredGames(o).map((g) => g.id);
+  if (games.length === 0) return { status: 'SKIP', note: 'no registered games' };
+  if (!fs.existsSync(path.join(o.project, 'tools', 'e2e', 'run.mjs'))) return { status: 'FAIL', note: 'tools/e2e/run.mjs is missing' };
+  await ensureNpm(o, 'server/relay');
+  await ensureNpm(o, 'tools/fit_check');
+  const r = await run(process.execPath, ['tools/e2e/run.mjs', `--games=${games.join(',')}`], {
+    cwd: o.project, log: path.join(o.project, 'build', 'e2e.log'), timeoutS: E2E_TIMEOUT_S,
+  });
+  if (r.code === 0) return { status: 'PASS', note: `games ${games.join(', ')} (log build/e2e.log)` };
+  if (r.code === 75) return { status: 'FAIL', note: 'godot lock wait timeout (exit 75)' };
+  return { status: 'FAIL', note: `exit ${r.code} for games ${games.join(', ')} (log build/e2e.log)` };
 }
 
 export const STEPS = [

@@ -114,6 +114,8 @@ const G_SURGE := &"surge"
 const G_COAST := &"coast"
 const G_STOP_5S := &"stop_5s"
 const GESTURES: Array[StringName] = [G_PEDAL_START, G_SURGE, G_COAST, G_STOP_5S]
+## The shared not_pedaling detector's name (BRIEF 3.5): a state, never a fired gesture.
+const G_NOT_PEDALING := &"not_pedaling"
 
 # Session slot looks (BRIEF 3.9): colorblind-safe colors (Okabe-Ito), always with a shape
 # and a pattern. Slots 4-7 repeat 0-3 with hollow shapes.

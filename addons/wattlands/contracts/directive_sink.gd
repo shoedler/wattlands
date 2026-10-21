@@ -9,6 +9,13 @@ extends RefCounted
 ## governor validates and clamps it again and reports what it applied. On a CLIENT the
 ## calls are ignored with a warning (only the authority simulates).
 ##
+## Channel edge cases (sink and governor agree): a haptic for a rider in ERG refuses the
+## whole request; `mode: SIM` while a SIM block is running only confirms it (never extends
+## it); `mode: ERG` in an ERG phase ends a running block, or confirms when none runs; a
+## haptic dropped because the rider opted out, is in warm-up or is inside the 15 s haptic
+## cooldown is reported in the applied record's `dropped` list and the rest of the request
+## applies.
+##
 ## Every refusal is logged with push_warning and reported (DirectiveResult and the
 ## EventBus `directive_applied` record). Applied values, `clamped_by` and refusals reach
 ## `EventBus.directive_applied(peer, record)` on the host for every rider.

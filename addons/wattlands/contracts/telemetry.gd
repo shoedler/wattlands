@@ -13,6 +13,8 @@ var peer_id: int = 0
 var t: float = 0.0
 var power_w: float = 0.0
 var cadence_rpm: float = 0.0
+## The trainer's reported (flywheel) speed, raw; distance_m integrates it. Games that move a
+## vehicle integrate their own SpeedModel from p_eff_w (BRIEF 3.11).
 var speed_kmh: float = 0.0
 ## Effort in the session's scaling mode: P/FTP (FAIR_FTP), P/kg (WKG) or W (RAW).
 var effort: float = 0.0
@@ -46,8 +48,9 @@ var intents: Array = []
 var distance_m: float = 0.0
 ## The rider's current plan phase index as its governor follows it.
 var phase_index: int = -1
-## Directive acknowledgements since the previous telemetry:
-## [{id, kind, applied: {...}, clamped_by: [...], refused: "", reason: ""}].
+## Directive acknowledgements since the previous telemetry (the rider's governor records):
+## [{id, kind, requested: {...}, applied: {...}, clamped_by: [...], refused: bool,
+##   reason: String, dropped: [{channel, reason}] (optional), t: float}].
 var acks: Array = []
 var connected: bool = true
 ## Seconds since this rider's latest telemetry arrived. The host sets it every tick for every

@@ -6,7 +6,8 @@ extends RefCounted
 ##
 ## Godot's JSON parser returns every number as a float, so Protocol.decode() converts the
 ## int fields listed here (and peer, host, from, to, seq, proto, max and every key ending
-## in "_id" anywhere in a message) back to int, converts Dictionary keys that are peer ids
+## in "_id" anywhere in a message, only when the value is a number: game_id, content_id and
+## session_id are strings) back to int, converts Dictionary keys that are peer ids
 ## (fields named in PEER_KEYED) to int, and rejects a message that lacks a required field
 ## or whose "v" differs from VERSION. Dotted paths use "[]" for every array element and
 ## "{}" for every dictionary value, e.g. "players[].slot_index", "riders{}.raw_w".
@@ -42,7 +43,8 @@ const GAME: Dictionary = {
 	"clock_ping": {"req": ["t0"], "ints": []},
 	# host -> all
 	"lobby_state": {"req": ["players", "game_id", "game_version", "content_id", "scaling",
-		"settings"], "ints": ["players[].slot_index", "players[].ftp"]},
+		"settings"], "ints": ["players[].slot_index", "players[].ftp", "settings.bot_ftp",
+		"settings.max_players", "settings.min_players"]},
 	"session_start": {"req": ["game_id", "game_version", "content_id", "seed", "players",
 		"options", "scaling", "start_tick"], "ints": ["seed", "start_tick", "players[].slot_index"]},
 	"snapshot": {"req": ["game_id", "seq", "state"], "ints": ["tick"]},
@@ -58,6 +60,17 @@ const GAME: Dictionary = {
 	"hud": {"req": ["kind", "key"], "ints": []},
 	"clock_pong": {"req": ["t0", "th"], "ints": []},
 }
+
+## Optional fields beyond `req` (documented in docs/PROTOCOL.md): the relay adds created.max,
+## joined.rejoin, joined.peers (ids, cast them), peer_joined.rejoin, host_left.reason
+## ("left", "timeout", "expired"), error.detail, error.re and error.proto, and create may
+## carry a previous code (P1). The GameHost adds session_start.session_id,
+## content_overrides and the suffix-free copies game, content and session; plan.peer;
+## phase.peer; snapshot.tick; directive.peer, directive.directive (the EffortDirective dict
+## for kind request), grade_pct, lo_rpm/hi_rpm and lo_w/hi_w; hud.args and hud.seconds.
+## `refused` may carry scope: "ready" (with game_id and game_version) for a refused ready-up
+## that does not end the session, and is accepted on any schema version. Event types that
+## start with "wl." are platform events (wl.phase_started, wl.lap_marker, wl.finished).
 
 ## Fields whose Dictionary keys are int peer ids after decoding.
 const PEER_KEYED: Array[String] = ["riders", "player_options", "ready_flags", "trainers"]

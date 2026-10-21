@@ -17,12 +17,16 @@ func start(_game_id: String, _content_id: String, _utc_start_unix: int, _t: floa
 	pass
 
 
-## Feed the latest values; the recorder keeps one record per second of platform time.
+## Feed the latest values; the recorder keeps one record per second of platform time (callers
+## may call it every tick). A value is held at most a few seconds without a fresh call; after
+## that power counts as 0 W and cadence and speed as absent.
 func record(_t: float, _power_w: float, _cadence_rpm: float, _speed_kmh: float) -> void:
 	pass
 
 
-## Close the current lap and open a new one named `label` at platform time `t`.
+## Close the current lap and open a new one named `label` at platform time `t`. A lap() at
+## the instant the current lap started only renames it (no zero-length lap), so a ride has
+## (lap() calls after its start instant) + 1 laps.
 func lap(_label: String, _t: float) -> void:
 	pass
 
@@ -44,6 +48,13 @@ func is_recording() -> bool:
 ## Write the FIT file and the JSON summary into `dir` (default Paths.rides_dir()).
 ## Returns the FIT path, or "" on failure.
 func save(_dir: String = "") -> String:
+	return ""
+
+
+## Write the FIT at exactly `fit_path` (overwriting) and the JSON summary next to it with the
+## same stem. Returns the path, or "" on failure (run_game_sim writes
+## <report dir>/fit/<report stem>_slot<n>.fit this way).
+func save_as(_fit_path: String) -> String:
 	return ""
 
 
