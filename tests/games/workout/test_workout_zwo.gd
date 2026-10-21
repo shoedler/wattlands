@@ -134,3 +134,48 @@ func test_unsafe_imported_blocks_are_rejected() -> void:
 		return {"ok": true, "phases": [PlanPhase.erg(Wl.WORK, 180.0, 30.0, "x")], "clamps": [], "warnings": []}
 	assert_null(WorkoutSession.load_id("zwo_sample"))
 	assert_push_error("target_pct")
+
+
+## W3 WO-5 (BRIEF 3.7: the importer clamps each block and lists the clamp): an imported ERG
+## block below the 30 % FTP floor (a Power="0" rest, a ramp down to 0) is raised to the floor
+## and listed with the clamps; the session still loads.
+func test_a_zero_power_block_is_raised_to_the_floor_and_listed() -> void:
+	WorkoutSession.zwo_parser = func(_p: String) -> Dictionary:
+		return {"ok": true, "name": "Zero", "phases": [
+			PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "").with_ramp(65.0),
+			PlanPhase.erg(Wl.WORK, 90.0, 120.0, ""),
+			PlanPhase.erg(Wl.RECOVERY, 0.0, 60.0, ""),
+			PlanPhase.erg(Wl.RECOVERY, 40.0, 60.0, "").with_ramp(0.0),
+			PlanPhase.erg(Wl.WORK, 90.0, 120.0, "")], "clamps": [], "warnings": []}
+	var s := WorkoutSession.load_id("zwo_sample")
+	assert_not_null(s, "the .zwo with a 0-power block loads")
+	if s == null:
+		return
+	assert_eq(s.phases[2].target_pct, WorkoutSession.FLOOR_PCT, "Power=0 rides at the 30 % floor")
+	assert_eq([s.phases[3].target_pct, s.phases[3].ramp_to_pct], [40.0, WorkoutSession.FLOOR_PCT], "a ramp to 0 ends at the floor")
+	assert_eq(s.phases[1].target_pct, 90.0, "other blocks keep their targets")
+	assert_eq(s.clamps.size(), 2, "both raises are listed: %s" % str(s.clamps))
+	assert_string_contains(s.clamps[0], "0%")
+	assert_string_contains(s.clamps[0], "30%")
+	var v := PlanValidator.validate(s.build_plan())
+	assert_true(v["ok"], str(v["errors"]))
+
+
+## The same through the real importer and a real file: Power="0" no longer rejects the file.
+func test_a_real_zwo_with_a_zero_power_block_loads() -> void:
+	WorkoutSession.zwo_parser = Callable()
+	var path := Paths.make_temp_dir("wo5").path_join("zero.zwo")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string("<workout_file><name>Z</name><sportType>bike</sportType><workout>" +
+		"<Warmup Duration=\"300\" PowerLow=\"0.5\" PowerHigh=\"0.65\"/>" +
+		"<SteadyState Duration=\"120\" Power=\"0.9\"/><SteadyState Duration=\"60\" Power=\"0\"/>" +
+		"<SteadyState Duration=\"120\" Power=\"0.9\"/></workout></workout_file>")
+	f.close()
+	var s := WorkoutSession.from_zwo("zwo:" + path, path)
+	assert_not_null(s, "imported, not rejected")
+	if s != null:
+		var floored := s.phases.filter(func(p: PlanPhase) -> bool: return p.mode == Wl.ERG and is_equal_approx(p.target_pct, WorkoutSession.FLOOR_PCT))
+		assert_eq(floored.size(), 1, "the 0 W block rides at the floor")
+		assert_true(s.clamps.any(func(c: String) -> bool: return c.contains("30%")), "and the preview lists it: %s" % str(s.clamps))
+	DirAccess.remove_absolute(path)
+	DirAccess.remove_absolute(path.get_base_dir())

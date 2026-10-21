@@ -398,3 +398,55 @@ func _hashes(rng_seed: int) -> Array:
 func test_the_same_seed_gives_the_same_snapshots() -> void:
 	assert_eq(_hashes(11), _hashes(11))
 	assert_ne(_hashes(11), _hashes(12), "the seed reaches the rules through ctx.rng")
+
+
+## W3 SDK-7: "short" shows the SDK calls the default content has no room for. Its SIM phase
+## (grade_source "game") gets a gentle course_grade at 2 Hz and nothing else does; at that phase's
+## start every rider's remaining plan is replanned, once, to an open-ended "Finish" the PlanValidator
+## accepts; slot 0 announces every phase with a banner.
+func test_short_feeds_its_sim_phase_with_course_grade_and_replans_to_an_open_ended_finish() -> void:
+	var ctx := F.make_ctx(2, 0, "short")
+	var g := _game(ctx)
+	var plans := F.plans_of(g)
+	var built: EffortPlan = g.build_effort_plans()[1]
+	assert_eq([built.phase(1).mode, built.phase(1).grade_source], [Wl.SIM, Wl.GRADE_GAME])
+	var tick := F.run(g, plans, 0, 59.9)
+	assert_eq(_dirs(ctx).course_grades, [], "no course grade outside the SIM phase")
+	assert_eq(_dirs(ctx).replans, [])
+	tick = F.run(g, plans, tick, 40.0)
+	var grades: Array = _dirs(ctx).course_grades
+	for peer: int in [1, 2]:
+		var mine := grades.filter(func(c: Array) -> bool: return c[0] == peer)
+		assert_between(mine.size(), 79, 81, "2 Hz over the 40 s SIM phase for peer %d" % peer)
+		for c: Array in mine:
+			assert_between(float(c[1]), -1.5, 1.5, "a gentle roller")
+	assert_eq(_dirs(ctx).replans.size(), 2, "one replan per rider")
+	for r: Array in _dirs(ctx).replans:
+		var rest: EffortPlan = r[1]
+		assert_eq(rest.size(), 1)
+		assert_true(rest.phase(0).open_ended)
+		assert_eq([rest.phase(0).min_s, rest.phase(0).max_s], [30.0, 50.0])
+		var whole := PlanValidator.spliced(built, 1, rest)
+		var v := PlanValidator.validate(whole)
+		assert_true(v["ok"], "the replanned plan validates: %s" % str(v["errors"]))
+		assert_eq(v["warnings"], [], "no mode-switch warning")
+	F.run(g, plans, tick, 30.0)
+	assert_eq(_dirs(ctx).course_grades.size(), grades.size(), "no course grade after the SIM phase")
+	var banners := _hud(ctx).of("banner")
+	assert_eq(banners.size(), 3, "one banner per phase, from slot 0 only")
+	assert_eq(banners[1].slice(1, 4), ["_TEMPLATE_BANNER_PHASE", [ctx.strings.t("_TEMPLATE_PHASE_ROLLERS")], 3.0])
+
+
+## W3 SDK-7: an open-ended phase ends with end_phase, once, after min_s while the rider is in
+## band; out of band the game leaves it to the platform's max_s.
+func test_an_open_ended_phase_ends_with_end_phase_after_min_s_in_band() -> void:
+	for power_pct: float in [100.0, 50.0]:
+		var ctx := F.make_ctx(1)
+		var g := _game(ctx)
+		var plan := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 60, "_TEMPLATE_PHASE_WARMUP").with_lap(),
+			PlanPhase.erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH").with_range(55, 60).with_open(30, 50).with_lap()])
+		var plans := {1: F.with_cooldown(plan)}
+		var tick := F.run(g, plans, 0, 89.9, power_pct)
+		assert_eq(_dirs(ctx).ended, [], "not before min_s")
+		F.run(g, plans, tick, 2.0, power_pct)
+		assert_eq(_dirs(ctx).ended, [1] if power_pct == 100.0 else [], "in band after min_s: end_phase once (power %d%%)" % power_pct)

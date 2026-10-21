@@ -91,6 +91,10 @@ func test_rows_from_a_synthetic_ride() -> void:
 	assert_eq((me["sprints"] as Array).size(), 3)
 	assert_eq(me["sprints"][0]["label"], "WORKOUT_LBL_SPRINT_1")
 	assert_eq(me["stats"][WorkoutResults.STAT_SPRINT_PEAK], 280)
+	# W3 WO-2: the results screen draws row stats, so best powers and each sprint's peak go there.
+	assert_eq(me["stats"][WorkoutResults.STAT_SPRINT_PEAKS], "280 / 280 / 280", "every sprint's peak")
+	for key: String in WorkoutResults.BEST_STATS:
+		assert_eq(me["stats"][WorkoutResults.BEST_STATS[key]], roundi(float(me[key])), key)
 	assert_eq(me["stats"][WorkoutResults.STAT_SPRINTS_HIT], "3/3")
 	assert_eq(me["xp"], WorkoutResults.xp_for(float(me["kj"]), 1.0, 3))
 	assert_eq(res.team[WorkoutResults.TEAM_SPRINTS], 6)
@@ -157,3 +161,17 @@ func test_apply_progress_for_an_unknown_rider_does_nothing() -> void:
 	assert_false(store.has("rides"))
 	assert_eq(WorkoutProgress.level_for(2500.0), 3)
 	assert_eq(WorkoutProgress.equipped(store), "")
+
+
+## W3 WO-2: a ride shorter than 20 minutes shows no best 20-minute power (it has none), but its
+## best minute is on the results screen.
+func test_best_power_stats_skip_windows_longer_than_the_ride() -> void:
+	var g := U.game("e2e", U.players(1))
+	U.ride(g)
+	var row := g.results().row(1)
+	var st: Dictionary = row["stats"]
+	assert_eq(float(row["best_20m_w"]), 0.0, "precondition: a 5-minute ride has no 20-minute power")
+	assert_false(st.has(WorkoutResults.BEST_STATS["best_20m_w"]), "no 20-minute stat")
+	assert_eq(st[WorkoutResults.BEST_STATS["best_1m_w"]], roundi(float(row["best_1m_w"])))
+	assert_gt(int(st[WorkoutResults.BEST_STATS["best_1m_w"]]), 0)
+	g.free()

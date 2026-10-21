@@ -27,6 +27,19 @@ extends Node
 ## course_grade, cadence_band and power_band to one peer are coalesced to at most one per
 ## 100 ms per kind (the latest wins, flushed before any other message to that peer), so
 ## `request` and `phase` are never dropped or reordered. See docs/PROTOCOL.md.
+## Send budget (W3 NET-4): every frame this session sends spends one token of a bucket that
+## refills at send_budget_per_s up to send_burst, below the relay's 60/s (burst 120) per peer,
+## so the relay never drops one with rate_limited. Frames wait in one queue, in order, while
+## the bucket is empty; a newer snapshot, roster, lobby_state or coalesced directive (same
+## recipient and kind) replaces the queued older one and goes to the back, every other message
+## (request, phase, plan, event, telemetry, ...) waits its turn and is never dropped.
+## Host reclaim (W3 NET-1): when the host gets peer 1 back after a drop, the relay's
+## joined.peers says who is still there: a session peer that left meanwhile gets peer_left
+## (reason "dropped"), one that came back gets peer_joined and rejoin_requested, every other
+## connected session peer gets resync_requested (the GameHost resends its state). A client
+## sends its player_info (and a pending ready-up) again when the host comes back.
+## Privacy (W3 PROF-2): in a WKG lobby p_eff_per_w is 75 / weight, so the lobby_state the
+## clients get carries 1.0 (the 75 kg reference) for every human; the host keeps the values.
 
 ## "offline", "connecting", "hosting", "joined", "reconnecting", "error".
 signal state_changed(state: String, detail: String)
@@ -40,6 +53,9 @@ signal peer_left(peer_id: int, reason: String)
 signal refused(reason: String)
 ## Host: a peer came back with its token; send it its state.
 signal rejoin_requested(peer_id: int)
+## Addition (W3 NET-1): host: a session peer that stayed connected while this host was away
+## needs its state again (what was sent meanwhile is lost).
+signal resync_requested(peer_id: int)
 ## Addition: our ready-up was refused ("missing_game" or "version_mismatch"), with a
 ## translated message for the lobby.
 signal ready_refused(reason: String, message: String)
@@ -142,8 +158,13 @@ var clock_rtt: float = -1.0
 ## Why the latest refusal happened ("" if none).
 var refusal_reason: String = ""
 ## Counters: sent, received, dropped_offline, oversize_dropped, oversize_snapshots,
-## stale_snapshots, invalid_sends, ignored, intents_dropped, coalesced.
+## stale_snapshots, invalid_sends, ignored, intents_dropped, coalesced, superseded (a queued
+## replaceable frame replaced by a newer one), queued_max (the longest send queue seen).
 var stats: Dictionary = {}
+## Outgoing frames per second and burst (W3 NET-4), kept under the relay's 60/s and 120 so
+## its own pings and clock drift never tip a peer over. 0 turns the budget off.
+var send_budget_per_s: float = 50.0
+var send_burst: float = 100.0
 
 var _local_info: Dictionary = {}
 var _local_profile: RiderProfile = null
@@ -204,6 +225,15 @@ var _co_pending: Dictionary = {}
 
 # Messages to ourselves, delivered on the next poll.
 var _self_inbox: Array[String] = []
+
+# Send budget: tokens, the time they were last refilled, polls the clock stood still, and the
+# queue of frames waiting for a token: [to, type, text, key] ("" key: never replaced).
+var _tokens: float = -1.0
+var _tokens_t: float = 0.0
+var _still_polls: int = 0
+var _outq: Array = []
+# The lobby_state text clients get (redacted in WKG); _lobby_text is the host's own.
+var _lobby_wire: String = ""
 
 # LAN (P1): the join page's beacon listener, the list last emitted, the LanTransport made by
 # join_lan() and the transport it replaced (restored by host_room/join_room/start_offline).
@@ -504,6 +534,10 @@ func lobby_slots() -> Array[PlayerSlot]:
 		var s := PlayerSlot.from_dict(p)
 		s.apply_look(s.slot_index)
 		s.scaling_mode = scaling
+		if not is_authority() and s.peer_id == local_peer and not s.is_bot:
+			# A WKG lobby_state carries the 75 kg reference for every human (W3 PROF-2); this
+			# rider's own value comes from its own player_info.
+			s.p_eff_per_w = _p_eff_for(_local_info, scaling)
 		s.options = {}
 		if popts is Dictionary and (popts as Dictionary).get(s.peer_id) is Dictionary:
 			s.options = ((popts as Dictionary)[s.peer_id] as Dictionary).duplicate(true)
@@ -638,6 +672,12 @@ func poll() -> void:
 	_flush_coalesced(-1, true)
 	if role == Wl.CLIENT and state == STATE_JOINED and _clock_now() >= _clock_next_at:
 		_send_clock_ping()
+	_pump_out(true)
+
+
+## Frames waiting for the send budget (W3 NET-4).
+func queued_frames() -> int:
+	return _outq.size()
 
 
 # --- additions: time ---------------------------------------------------------------------
@@ -1054,6 +1094,7 @@ func _on_connected() -> void:
 		# A room that arrived after leave(), a refusal or the session's end: leave it.
 		_leave_transport()
 		return
+	var reclaimed := _reconnect_pending and _ever_connected
 	local_peer = transport.local_peer
 	host_peer = transport.host_peer
 	room_code = transport.room_code
@@ -1074,6 +1115,8 @@ func _on_connected() -> void:
 		_infos[local_peer] = _local_info.duplicate(true)
 		_set_state(STATE_HOSTING, room_code)
 		_publish_lobby()
+		if reclaimed:
+			_reconcile_after_reclaim()
 	else:
 		role = Wl.CLIENT
 		# After a rejoin the host sends its latest snapshot; an older buffer (or one from a
@@ -1090,6 +1133,7 @@ func _on_connected() -> void:
 func _on_disconnected(reason: String) -> void:
 	if _explicit_leave:
 		return
+	_drop_queue()
 	if _host_retry_max > 0 and role == Wl.HOST and not _ever_connected and CODE_REFUSALS.has(reason):
 		_host_again_without_code(reason)
 		return
@@ -1122,6 +1166,11 @@ func _on_disconnected(reason: String) -> void:
 
 func _on_peer_joined(id: int) -> void:
 	if role != Wl.HOST:
+		if role == Wl.CLIENT and id == host_peer and _in_room():
+			# The host came back to the room: what we sent while it was away is lost.
+			_send_player_info()
+			if _ready_wanted and not session_started:
+				_send(host_peer, Protocol.game_msg("ready", {"ready": true}))
 		peer_joined.emit(id)
 		_emit_bus("peer_joined", [id])
 		return
@@ -1146,8 +1195,8 @@ func _on_peer_joined(id: int) -> void:
 	_emit_bus("peer_joined", [id])
 	if _infos.has(id):
 		_publish_lobby()
-	elif _lobby_text != "":
-		_send_text(id, "lobby_state", _lobby_text)
+	elif _lobby_wire != "":
+		_send_text(id, "lobby_state", _lobby_wire, "lobby:%d" % id)
 
 
 func _on_peer_left(id: int) -> void:
@@ -1161,10 +1210,17 @@ func _on_peer_left(id: int) -> void:
 	if _refused_peers.has(id):
 		_refused_peers.erase(id)
 		return
+	_peer_gone(id, reason)
+
+
+## Host: peer `id` is no longer in the room (its peer_left, or missing from joined.peers after
+## this host reclaimed the room).
+func _peer_gone(id: int, reason: String) -> void:
 	if not _connected_peers.has(id):
 		return
 	_connected_peers.erase(id)
 	_drop_coalesced(id)
+	_drop_queue(id)
 	if not session_started:
 		_ready_flags[id] = false
 		if reason == "left":
@@ -1235,6 +1291,34 @@ func _on_protocol_mismatch(from: int) -> void:
 
 func _on_relay_error(code: String) -> void:
 	_count("relay_" + code)
+
+
+## Host, after reclaiming peer 1 (W3 NET-1): bring the peer list in line with the relay's
+## joined.peers and have every session peer that stayed resynced.
+func _reconcile_after_reclaim() -> void:
+	var rt := transport as RelayClientTransport
+	var present := {}
+	if rt != null and rt.joined_peers_known:
+		for p: int in rt.joined_peers:
+			present[p] = true
+	else:
+		for p: Variant in _connected_peers.keys():
+			present[int(p)] = true
+	for p: Variant in _connected_peers.keys():
+		var peer := int(p)
+		if peer != local_peer and not present.has(peer):
+			_peer_gone(peer, "dropped")
+	var keys: Array = present.keys()
+	keys.sort()
+	for p: Variant in keys:
+		var peer := int(p)
+		if peer == local_peer:
+			continue
+		if not _connected_peers.has(peer):
+			_on_peer_joined(peer)
+		elif session_started and _session_players.has(peer):
+			resync_requested.emit(peer)
+	_publish_lobby()
 
 
 # --- host handlers ----------------------------------------------------------------------
@@ -1450,10 +1534,22 @@ func _publish_lobby() -> void:
 	})
 	_lobby_text = Protocol.encode(msg)
 	lobby = Protocol.decode(_lobby_text)
+	_lobby_wire = _lobby_text if _scaling != Wl.WKG else Protocol.encode(_redacted_lobby(msg))
 	lobby_changed.emit(lobby)
 	_emit_bus("lobby_changed", [lobby])
 	if role == Wl.HOST and _in_room():
-		_send_text(Wl.ALL_PEERS, "lobby_state", _lobby_text)
+		_send_text(Wl.ALL_PEERS, "lobby_state", _lobby_wire, "lobby:0")
+
+
+## lobby_state as clients get it in WKG: every human's p_eff_per_w (75 / weight) becomes 1.0,
+## the 75 kg reference, so no client learns another rider's weight (W3 PROF-2). The host keeps
+## the real values in its own `lobby` (its GameHost needs them for target_wkg).
+static func _redacted_lobby(msg: Dictionary) -> Dictionary:
+	var out := msg.duplicate(true)
+	for p: Variant in out.get("players", []):
+		if p is Dictionary and not bool((p as Dictionary).get("is_bot", false)):
+			(p as Dictionary)["p_eff_per_w"] = 1.0
+	return out
 
 
 func _human_entry(peer: int, slot: int) -> Dictionary:
@@ -1508,8 +1604,9 @@ func _game_issue(peer: int) -> String:
 	return ""
 
 
-func _p_eff_for(info: Dictionary) -> float:
-	var mode := _scaling
+func _p_eff_for(info: Dictionary, mode: String = "") -> float:
+	if mode == "":
+		mode = _scaling
 	if str(info.get("p_eff_mode", "")) == mode and info.has("p_eff_per_w"):
 		return float(info["p_eff_per_w"])
 	var by: Variant = info.get("p_eff_by_mode")
@@ -1715,7 +1812,9 @@ func _send(to: int, data: Dictionary) -> bool:
 	return _send_text(to, type, Protocol.encode(d))
 
 
-func _send_text(to: int, type: String, text: String) -> bool:
+## Queue one encoded frame for the send budget (see the class comment) and send what the
+## budget allows now. `key` marks a replaceable frame; snapshots and rosters get theirs here.
+func _send_text(to: int, type: String, text: String, key: String = "") -> bool:
 	if not _in_room():
 		_count("dropped_offline")
 		return false
@@ -1727,6 +1826,54 @@ func _send_text(to: int, type: String, text: String) -> bool:
 		if type == "snapshot":
 			_count("oversize_snapshots")
 		return false
+	if key == "" and (type == "snapshot" or type == "roster"):
+		key = "%s:%d" % [type, to]
+	if key != "":
+		for i in range(_outq.size() - 1, -1, -1):
+			if str((_outq[i] as Array)[3]) == key:
+				_outq.remove_at(i)
+				_count("superseded")
+				break
+	_outq.append([to, type, text, key])
+	stats["queued_max"] = maxi(int(stats.get("queued_max", 0)), _outq.size())
+	_pump_out(false)
+	return true
+
+
+## Send queued frames while the budget has tokens (all of them when it is off). From poll(),
+## a clock that stood still for FROZEN_CLOCK_POLLS polls (a private session only polled after
+## a set_time()) refills one Wl.SIM_DT per poll, as the coalescer does.
+func _pump_out(from_poll: bool) -> void:
+	if _outq.is_empty():
+		return
+	if not _in_room():
+		_drop_queue()
+		return
+	_refill_tokens(from_poll)
+	while not _outq.is_empty() and (send_budget_per_s <= 0.0 or _tokens >= 1.0):
+		var e: Array = _outq.pop_front()
+		_transmit(int(e[0]), str(e[1]), str(e[2]))
+		if send_budget_per_s > 0.0:
+			_tokens -= 1.0
+
+
+func _refill_tokens(from_poll: bool) -> void:
+	var now := _clock_now()
+	if _tokens < 0.0:
+		_tokens = send_burst
+		_tokens_t = now
+		return
+	if now > _tokens_t:
+		_tokens = minf(send_burst, _tokens + (now - _tokens_t) * send_budget_per_s)
+		_tokens_t = now
+		_still_polls = 0
+	elif from_poll and not auto_poll:
+		_still_polls += 1
+		if _still_polls >= FROZEN_CLOCK_POLLS:
+			_tokens = minf(send_burst, _tokens + Wl.SIM_DT * send_budget_per_s)
+
+
+func _transmit(to: int, type: String, text: String) -> void:
 	if transport is RelayClientTransport:
 		(transport as RelayClientTransport).send_encoded(to, text)
 	else:
@@ -1735,7 +1882,14 @@ func _send_text(to: int, type: String, text: String) -> bool:
 	_count("sent")
 	if type == "snapshot" and role == Wl.HOST:
 		_latest_snapshot_text = text
-	return true
+
+
+## Forget queued frames (to `peer` only, or all): the peer left, or our socket did.
+func _drop_queue(peer: int = -1) -> void:
+	for i in range(_outq.size() - 1, -1, -1):
+		if peer < 0 or int((_outq[i] as Array)[0]) == peer:
+			_outq.remove_at(i)
+			_count("dropped_offline")
 
 
 func _coalesce_send(to: int, kind: String, d: Dictionary) -> bool:
@@ -1743,7 +1897,7 @@ func _coalesce_send(to: int, kind: String, d: Dictionary) -> bool:
 	var now := _clock_now()
 	if not _co_pending.has(key) and (not _co_last.has(key) or now - float(_co_last[key]) >= COALESCE_S - 1e-9):
 		_co_last[key] = now
-		return _send_text(to, "directive", Protocol.encode(d))
+		return _send_text(to, "directive", Protocol.encode(d), "co:" + key)
 	if _co_pending.has(key):
 		_count("coalesced")
 		var held: Array = _co_pending[key]
@@ -1777,7 +1931,7 @@ func _flush_coalesced(peer: int, due_only: bool) -> void:
 				continue
 		_co_pending.erase(key)
 		_co_last[key] = now
-		_send_text(to, "directive", Protocol.encode(e[1]))
+		_send_text(to, "directive", Protocol.encode(e[1]), "co:" + str(key))
 
 
 func _drop_coalesced(peer: int) -> void:
@@ -1909,6 +2063,7 @@ func _reset_room_state() -> void:
 	session_started = false
 	lobby = {}
 	_lobby_text = ""
+	_lobby_wire = ""
 	_token = ""
 	_ever_connected = false
 	_reconnect_pending = false
@@ -1925,6 +2080,7 @@ func _reset_room_state() -> void:
 	_latest_snapshot_text = ""
 	_co_last.clear()
 	_co_pending.clear()
+	_outq.clear()
 	_self_inbox.clear()
 	_clock_samples.clear()
 	clock_offset = 0.0
@@ -1969,7 +2125,7 @@ func _count(key: String) -> void:
 func _reset_stats() -> void:
 	stats = {"sent": 0, "received": 0, "dropped_offline": 0, "oversize_dropped": 0,
 		"oversize_snapshots": 0, "stale_snapshots": 0, "invalid_sends": 0, "ignored": 0,
-		"intents_dropped": 0, "coalesced": 0}
+		"intents_dropped": 0, "coalesced": 0, "superseded": 0, "queued_max": 0}
 
 
 # --- persistence ---------------------------------------------------------------------------

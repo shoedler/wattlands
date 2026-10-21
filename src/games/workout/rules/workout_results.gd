@@ -9,7 +9,9 @@ extends RefCounted
 ## Rows start from GameResults.from_stats(ctx.stats, players). Ride statistics the platform
 ## reports as 0 (or doesn't report) are filled from Workout's own WorkoutPowerStats.
 ## Extra row keys: "intervals" [{i, label, kind, tib_s, ride_s, tib_pct}] and "sprints"
-## [{i, label, peak_w, best_s, held_s, hit}]; display stats go in "stats" (strings keys).
+## [{i, label, peak_w, best_s, held_s, hit}]; display stats go in "stats" (strings keys), which
+## the results screen draws: grade, time in band, intervals in band, best 1-, 5- and 20-minute power
+## (each only once the ride is that long), every sprint's peak and the best one, sprints hit.
 
 const POWER_KEYS: Array[String] = ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s"]
 const XP_PER_SPRINT := 10
@@ -18,6 +20,9 @@ const STAT_TIB := "WORKOUT_STAT_TIB_PCT"
 const STAT_INTERVALS := "WORKOUT_STAT_INTERVALS"
 const STAT_SPRINT_PEAK := "WORKOUT_STAT_SPRINT_PEAK_W"
 const STAT_SPRINTS_HIT := "WORKOUT_STAT_SPRINTS_HIT"
+const STAT_SPRINT_PEAKS := "WORKOUT_STAT_SPRINT_PEAKS_W"
+## Row key -> stats key for the best-power display stats (BRIEF 3.7 results).
+const BEST_STATS: Dictionary = {"best_1m_w": "WORKOUT_STAT_BEST_1M_W", "best_5m_w": "WORKOUT_STAT_BEST_5M_W", "best_20m_w": "WORKOUT_STAT_BEST_20M_W"}
 const TEAM_TIB := "WORKOUT_STAT_GROUP_TIB_PCT"
 const TEAM_RIDERS := "WORKOUT_STAT_RIDERS"
 const TEAM_SPRINTS := "WORKOUT_STAT_GROUP_SPRINTS_HIT"
@@ -53,6 +58,7 @@ static func build(state: WorkoutState, stats: SessionStats, players: Array[Playe
 			})
 			interval_text.append(str(int(round(pct))))
 		var sprints: Array = []
+		var peaks: Array[String] = []
 		var best_peak := 0
 		var hits := 0
 		for s in r.sprints:
@@ -60,6 +66,7 @@ static func build(state: WorkoutState, stats: SessionStats, players: Array[Playe
 			var entry: Dictionary = s.duplicate()
 			entry["label"] = p.label if p != null else ""
 			sprints.append(entry)
+			peaks.append(str(int(s["peak_w"])))
 			best_peak = maxi(best_peak, int(s["peak_w"]))
 			if bool(s["hit"]):
 				hits += 1
@@ -70,8 +77,13 @@ static func build(state: WorkoutState, stats: SessionStats, players: Array[Playe
 		st[STAT_GRADE] = GameResults.grade_from_fraction(frac)
 		st[STAT_TIB] = snappedf(frac * 100.0, 0.1)
 		st[STAT_INTERVALS] = " / ".join(interval_text)
+		for key: String in BEST_STATS:
+			# A ride shorter than the window has no best power for it (0): no stat then.
+			if float(row.get(key, 0.0)) > 0.0:
+				st[BEST_STATS[key]] = roundi(float(row[key]))
 		if not r.sprints.is_empty():
 			st[STAT_SPRINT_PEAK] = best_peak
+			st[STAT_SPRINT_PEAKS] = " / ".join(peaks)
 			st[STAT_SPRINTS_HIT] = "%d/%d" % [hits, r.sprints.size()]
 		row["stats"] = st
 		row["xp"] = xp_for(float(row["kj"]), frac, hits)

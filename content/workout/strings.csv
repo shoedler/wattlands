@@ -53,6 +53,8 @@ WORKOUT_HUD_IN_BAND,In band
 WORKOUT_BANNER_RAMP,{label}: {from} -> {to}% FTP for {time}
 WORKOUT_BANNER_ERG,{label}: {pct}% FTP for {time}
 WORKOUT_BANNER_SPRINT,{label}! Shift up and go for {time}
+WORKOUT_BANNER_FREE,{label}: ride free for {time}
+WORKOUT_CLAMP_FLOOR,"{label}: {from} -> {to} FTP (the trainer's {floor}% FTP floor)"
 WORKOUT_BANNER_ROLLING,{label}: hold {lo}-{hi}% FTP for {time}
 WORKOUT_TOAST_INTERVAL_DONE,{label} done: {pct}% in band
 WORKOUT_TOAST_SPRINT_HIT,Sprint! Peak {w} W
@@ -62,6 +64,10 @@ WORKOUT_STAT_GRADE,Grade
 WORKOUT_STAT_TIB_PCT,In band (%)
 WORKOUT_STAT_INTERVALS,Intervals in band (%)
 WORKOUT_STAT_SPRINT_PEAK_W,Best sprint peak (W)
+WORKOUT_STAT_SPRINT_PEAKS_W,Sprint peaks (W)
+WORKOUT_STAT_BEST_1M_W,Best 1 min (W)
+WORKOUT_STAT_BEST_5M_W,Best 5 min (W)
+WORKOUT_STAT_BEST_20M_W,Best 20 min (W)
 WORKOUT_STAT_SPRINTS_HIT,Sprints over 120% FTP for 3 s
 WORKOUT_STAT_GROUP_TIB_PCT,Group in band (%)
 WORKOUT_STAT_RIDERS,Riders

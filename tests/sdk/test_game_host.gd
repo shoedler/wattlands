@@ -423,7 +423,8 @@ func test_results_progress_and_fit_after_the_cooldown() -> void:
 	assert_eq(res.grade, "B")
 	assert_eq(res.rows.size(), 2)
 	assert_gt(float(res.row(1)["kj"]), 0.0, "ctx.stats is final in results()")
-	assert_eq(res.session_id, "fx_solo/tiny/7")
+	assert_string_starts_with(res.session_id, "fx_solo/tiny/7/", "game/content/seed plus the session's nonce")
+	assert_eq(res.session_id, host.session_id)
 	assert_true(FileAccess.file_exists(host.ctx.progress.path), "the store is saved")
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(host.ctx.progress.path))
 	assert_eq(float(saved["xp"]), 10.0)
@@ -824,3 +825,53 @@ func test_stats_accumulate_while_riding() -> void:
 	Kit.step(b, 100)
 	assert_gt(host.ctx.stats.kj(1), 0.0)
 	assert_almost_eq((host.stats as SessionStatsTracker).ride_s(1), 5.0, 1e-6)
+
+
+## W3 SAF-4: ctx.directives and ctx.hud are the routers that drive the riders, but no public
+## property of theirs hands a game a LocalRider (whose set_plan, start_phase, resume and
+## governor bypass the DirectiveSink's checks). Their rider maps are private and write-only.
+func test_ctx_routers_hand_out_no_local_rider() -> void:
+	var b := _solo("tiny", {}, 1)
+	assert_eq(b["err"], "")
+	var ctx := _host(b).ctx
+	for router: Object in [ctx.directives, ctx.hud]:
+		assert_false("riders" in router, "%s has no public riders map" % router.get_script().get_global_name())
+		for prop: Dictionary in router.get_property_list():
+			var pname := str(prop["name"])
+			if pname.begins_with("_") or not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+				continue
+			var v: Variant = router.get(pname)
+			var found: Array = []
+			if v is LocalRider:
+				found.append(v)
+			elif v is Dictionary:
+				for x: Variant in (v as Dictionary).values():
+					if x is LocalRider:
+						found.append(x)
+			elif v is Array:
+				for x: Variant in v:
+					if x is LocalRider:
+						found.append(x)
+			assert_eq(found.size(), 0, "%s.%s exposes no LocalRider" % [router.get_script().get_global_name(), pname])
+	# The routers still drive the riders simulated here.
+	ctx.hud.power_band(1, 120.0, 160.0)
+	assert_eq(_rider(b).power_band(), Vector2(120.0, 160.0))
+
+
+## W3 SDK-5 (GAME_SDK 15): results.session_id is unique per session, so a game that skips a
+## repeated id (the template's apply_progress) credits a second session with the same game,
+## content and seed. session_nonce "" (GameSimRunner) keeps the deterministic game/content/seed.
+func test_session_ids_are_unique_per_session_even_with_the_same_seed() -> void:
+	var a := _solo("tiny")
+	var b := _solo("tiny")
+	assert_eq(a["err"], "")
+	assert_eq(b["err"], "")
+	var ida := _host(a).session_id
+	var idb := _host(b).session_id
+	assert_string_starts_with(ida, "fx_solo/tiny/7/")
+	assert_string_starts_with(idb, "fx_solo/tiny/7/")
+	assert_ne(ida, idb, "two sessions with seed 7 get two ids")
+	var c := _solo("tiny", {"session_nonce": ""})
+	assert_eq(_host(c).session_id, "fx_solo/tiny/7", "no nonce: the deterministic id")
+	var d := _solo("tiny", {"session_nonce": "room-K7QX2M-3"})
+	assert_eq(_host(d).session_id, "fx_solo/tiny/7/room-K7QX2M-3")

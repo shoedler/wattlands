@@ -49,8 +49,11 @@ var tracker: PhaseTracker = null
 var clock: SimClock = null
 ## Every rider in the session: peer -> PlayerSlot.
 var slots: Dictionary = {}
-## Riders simulated on this peer: peer -> LocalRider.
-var riders: Dictionary = {}
+## Riders simulated on this peer: peer -> LocalRider. Private (W3 SAF-4): `ctx.directives` is
+## this object, so a public map would hand a game every LocalRider (set_plan, start_phase,
+## resume, the governor) past the DirectiveSink's checks. The GameHost sets it with
+## bind_riders(); nothing reads it from outside.
+var _riders: Dictionary = {}
 var bus: WlEventBus = null
 var report: ReportCollector = null
 ## (peer: int, payload: Dictionary) -> void: sends a 5.5 `directive` to a remote rider.
@@ -69,10 +72,21 @@ var _grade_pending: Dictionary = {}
 var _grade_last_tick: Dictionary = {}
 ## peer -> {id, prev_switch, prev_mode}: a remote rider's SIM block awaiting its ack.
 var _open_blocks: Dictionary = {}
+## id -> {peer, requested, t, game_t, phase_index}: a remote rider's routed request awaiting
+## its ack (W3 SDK-4). The client's ack carries no `requested` (nor, today, its own times),
+## so the GameHost completes the applied record from here. Oldest dropped past SENT_KEEP.
+var _sent: Dictionary = {}
+const SENT_KEEP := 512
 
 
 func is_authority() -> bool:
 	return role == Wl.SOLO or role == Wl.HOST
+
+
+## The riders simulated on this peer (peer -> LocalRider); the GameHost calls this once at
+## setup. There is deliberately no getter.
+func bind_riders(p_riders: Dictionary) -> void:
+	_riders = p_riders
 
 
 func request(peer: int, directive: EffortDirective) -> DirectiveResult:
@@ -96,8 +110,8 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 	elif phase.mode == Wl.ERG and d.mode == Wl.ERG and tracker.block_active(peer, tick):
 		tracker.close_block(peer, tick)
 	_log(peer, id, NetMessages.DIRECTIVE_REQUEST, d.to_dict(), true, "")
-	if riders.has(peer):
-		var rec := _normalize((riders[peer] as LocalRider).apply_directive(d), id, NetMessages.DIRECTIVE_REQUEST, d.to_dict())
+	if _riders.has(peer):
+		var rec := _normalize((_riders[peer] as LocalRider).apply_directive(d), id, NetMessages.DIRECTIVE_REQUEST, d.to_dict())
 		if opened and bool(rec.get("refused", false)):
 			# The rider's governor refused the block: no switch happened.
 			tracker.cancel_block(peer, prev_switch, prev_mode)
@@ -105,6 +119,7 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 	else:
 		if opened:
 			_open_blocks[peer] = {"id": id, "prev_switch": prev_switch, "prev_mode": prev_mode}
+		_remember_sent(peer, id, d.to_dict())
 		_remote(peer, {"kind": NetMessages.DIRECTIVE_REQUEST, "id": id, "peer": peer, "directive": d.to_dict()})
 	return DirectiveResult.ok(id)
 
@@ -119,6 +134,27 @@ func on_ack(peer: int, rec: Dictionary) -> void:
 	var refused: Variant = rec.get("refused", false)
 	if refused is bool and refused and tracker != null and tracker.block_active(peer, _tick()):
 		tracker.cancel_block(peer, int(pending["prev_switch"]), str(pending["prev_mode"]))
+
+
+## The routed request a remote rider's ack answers, once (W3 SDK-4): {requested (the
+## EffortDirective.to_dict() sent), t (host platform time), game_t (host game time) and
+## phase_index (the rider's phase), all as of routing}; {} for an unknown id or another peer.
+func take_sent_request(peer: int, id: int) -> Dictionary:
+	var e: Dictionary = _sent.get(id, {})
+	if e.is_empty() or int(e["peer"]) != peer:
+		return {}
+	_sent.erase(id)
+	return e.duplicate(true)
+
+
+func _remember_sent(peer: int, id: int, requested: Dictionary) -> void:
+	_sent[id] = {
+		"peer": peer, "requested": requested.duplicate(true),
+		"t": clock.platform_time() if clock != null else 0.0, "game_t": _t(),
+		"phase_index": tracker.index_of(peer) if tracker != null else -1,
+	}
+	while _sent.size() > SENT_KEEP:
+		_sent.erase(_sent.keys()[0])
 
 
 func course_grade(peer: int, grade_pct: float) -> void:
@@ -224,8 +260,8 @@ func clear_bands(peer: int) -> void:
 	if not _cadence_bands.has(peer):
 		return
 	_cadence_bands.erase(peer)
-	if riders.has(peer):
-		(riders[peer] as LocalRider).set_cadence_band(0.0, 0.0)
+	if _riders.has(peer):
+		(_riders[peer] as LocalRider).set_cadence_band(0.0, 0.0)
 	if bus != null:
 		bus.cadence_band_changed.emit(peer, 0.0, 0.0)
 
@@ -364,8 +400,8 @@ func _deliver_grade(peer: int, grade: float, tick: int) -> void:
 	var id := _take_id()
 	var kind := NetMessages.DIRECTIVE_COURSE_GRADE
 	_log(peer, id, kind, {"grade_pct": grade}, true, "")
-	if riders.has(peer):
-		(riders[peer] as LocalRider).apply_course_grade(grade)
+	if _riders.has(peer):
+		(_riders[peer] as LocalRider).apply_course_grade(grade)
 	else:
 		_remote(peer, {"kind": kind, "id": id, "peer": peer, "grade_pct": grade})
 
@@ -375,8 +411,8 @@ func _apply_band(peer: int, lo: float, hi: float, id: int) -> void:
 		_cadence_bands.erase(peer)
 	else:
 		_cadence_bands[peer] = [lo, hi]
-	if riders.has(peer):
-		(riders[peer] as LocalRider).set_cadence_band(lo, hi)
+	if _riders.has(peer):
+		(_riders[peer] as LocalRider).set_cadence_band(lo, hi)
 	else:
 		_remote(peer, {"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "id": id, "peer": peer, "lo_rpm": lo, "hi_rpm": hi})
 	if bus != null:

@@ -12,7 +12,8 @@ extends GameModule
 
 const GAME_ID := "workout"
 ## A snapshot carries the timeline every this many snapshots (2 s at 10 Hz), so a client
-## that can't read the content itself (a .zwo only the host has) still gets it.
+## that can't read the content itself (a .zwo only the host has) still gets it. A long one
+## goes in parts on the snapshots right after (WorkoutSnapshot.timeline_parts).
 const TIMELINE_EVERY := 20
 
 var session: WorkoutSession = null
@@ -83,7 +84,9 @@ func local_intents(_actions: Array[StringName], _gestures: Array[StringName]) ->
 
 func snapshot() -> Dictionary:
 	_snapshots += 1
-	return WorkoutSnapshot.encode(state, (_snapshots - 1) % TIMELINE_EVERY == 0)
+	var k := (_snapshots - 1) % TIMELINE_EVERY
+	var part := k if k < WorkoutSnapshot.timeline_parts(state.phases) else -1
+	return WorkoutSnapshot.encode(state, part >= 0, part)
 
 
 func apply_snapshot(snap: Dictionary) -> void:
@@ -209,7 +212,7 @@ func _hud_tick() -> void:
 	if ctx == null or ctx.hud == null:
 		return
 	var next := state.phase(state.phase_index + 1)
-	if next != null and next.kind == Wl.FREE and not state.sprint_warned.has(state.phase_index + 1):
+	if WorkoutSession.is_sprint(next) and not state.sprint_warned.has(state.phase_index + 1):
 		var left := state.phase_start_s(state.phase_index + 1) - state.plan_t
 		if left <= WorkoutHud.SPRINT_WARN_S:
 			state.sprint_warned[state.phase_index + 1] = true

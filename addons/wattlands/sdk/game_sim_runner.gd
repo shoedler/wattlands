@@ -89,9 +89,15 @@ func _init() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 
+## Freeing the runner restores Paths' override and deletes the run's temp root too (W3 QT-4),
+## so a runner freed without cleanup() (autofree in tests, a tool that forgot it) never leaves a
+## wattlands_sim_* dir behind.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		_restore_paths()
+		if _temp_root != "":
+			_remove_tree(_temp_root)
+			_temp_root = ""
 
 
 ## The one flag parser shared by tools/run_game_sim and tools/screenshot: turns
@@ -384,6 +390,10 @@ func setup(p_args: Dictionary) -> String:
 		"registry": registry, "progress_path": _progress_path(0, game_id),
 		"content_overrides": (ov as Dictionary).duplicate(true),
 		"fit_paths": {peer_ids[0]: _fit_targets[0]}, "input_router": null,
+		# No per-session nonce: a simulation's results.session_id stays game/content/seed, so two
+		# runs with the same arguments keep the same deterministic_hash (each run has its own
+		# temp profile, so the id never meets an earlier session's progress).
+		"session_nonce": "",
 	}
 	var err := host.setup(cfg)
 	if err != "":

@@ -1,8 +1,10 @@
 {
   "phases": [
     {"kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 60, "duration_s": 60, "label": "_TEMPLATE_PHASE_WARMUP"},
+    {"kind": "WARMUP", "sim": true, "duration_s": 40, "label": "_TEMPLATE_PHASE_ROLLERS"},
     {"kind": "WARMUP", "target_pct": 60, "duration_s": 60, "label": "_TEMPLATE_PHASE_SHORT"}
   ],
+  "replan_at": 1,
   "nudge_pct": 5,
   "nudge_at_s": 20,
   "nudge_s": 10,

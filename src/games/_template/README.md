@@ -16,6 +16,13 @@ phase at 90 s. Confirm, a `surge` or the HUD's Boost button boosts your marker f
 every 30 s. Rescue and AFK make a marker wait. Results grade the team's time in band and give XP per kJ
 and per lap; 3 laps unlock the gold marker.
 
+The `short` content (the e2e content, about 3 minutes plus the cool-down) shows the calls the default
+content has no room for: a 60 s warm-up ramp, a 40 s SIM "Rollers" phase whose grade the game feeds
+with `ctx.directives.course_grade` (`grade_source: "game"`), and at the Rollers' start a
+`ctx.directives.replan` of the rest of the plan into an open-ended "Finish" (30-50 s) that the game
+ends with `ctx.directives.end_phase` once the rider holds the target after `min_s`. Every phase change
+shows a `ctx.hud.banner`.
+
 ## Files
 
 | File | What |

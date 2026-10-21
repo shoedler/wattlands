@@ -257,10 +257,19 @@ func _on_join(conn: int, c: Dictionary, msg: Dictionary) -> void:
 		peer = int(room["next_peer"])
 		room["next_peer"] = peer + 1
 		peer_token = _new_token(room, peer)
+	var rejoin := token is String and tokens.has(token)
 	peers[peer] = conn
 	c["code"] = code
 	c["peer"] = peer
-	_out.append([conn, {"t": "joined", "peer": peer, "host": HOST_PEER, "token": peer_token}])
+	# As server/relay: joined.peers lists the other connected peers (a reclaiming host uses it
+	# to learn who left or came while it was away) and joined.rejoin marks a reclaimed id.
+	var others: Array = []
+	for p: Variant in peers.keys():
+		if int(p) != peer and int(peers[p]) >= 0:
+			others.append(int(p))
+	others.sort()
+	_out.append([conn, {"t": "joined", "peer": peer, "host": HOST_PEER, "token": peer_token,
+		"rejoin": rejoin, "peers": others}])
 	_to_room(room, {"t": "peer_joined", "peer": peer}, peer)
 
 

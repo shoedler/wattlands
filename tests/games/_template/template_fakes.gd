@@ -17,6 +17,8 @@ class Directives:
 	var cadence_bands: Array = []
 	var course_grades: Array = []
 	var ended: Array = []
+	## [[peer, EffortPlan]]
+	var replans: Array = []
 
 	func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		requests.append([peer, directive.to_dict()])
@@ -31,6 +33,10 @@ class Directives:
 
 	func cadence_band(peer: int, lo_rpm: float, hi_rpm: float) -> void:
 		cadence_bands.append([peer, lo_rpm, hi_rpm])
+
+	func replan(peer: int, plan: EffortPlan) -> bool:
+		replans.append([peer, plan])
+		return true
 
 
 class Hud:
@@ -150,6 +156,9 @@ static func phase_at(plan: EffortPlan, t: float) -> PhaseState:
 			s.elapsed_s = t - start
 			s.duration_s = ph.duration_s
 			s.label = ph.label
+			s.open_ended = ph.open_ended
+			s.min_s = ph.min_s
+			s.max_s = ph.max_s
 			s.planned_pct = ph.planned_pct_at(s.elapsed_s) if ph.mode == Wl.ERG else 0.0
 			s.remaining_s = maxf(ph.duration_s - s.elapsed_s, 0.0)
 			s.count = plan.size()

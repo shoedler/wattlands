@@ -42,16 +42,36 @@ extends Node
 ##   session_start {game_id, game_version, content_id, seed, players: [PlayerSlot.to_dict()],
 ##     options, scaling, start_tick, session_id, content_overrides, game, content, session}
 ##     (game/content/session repeat the string ids without the "_id" suffix)
-##   plan {peer, plan: EffortPlan.to_dict()}; phase {peer, index, start_tick, ended_by}
+##   plan {peer, plan: EffortPlan.to_dict()}, or for a plan over the 16 KB message limit
+##     several parts {peer, plan: {..., phases: [a slice]}, part, parts, plan_id} that the
+##     client joins in order before it validates the whole plan (W3 NET-3);
+##   phase {peer, index, start_tick, ended_by[, elapsed_s on a rejoin or resync]}
 ##   directive {kind: request, id, peer, directive: EffortDirective.to_dict()} |
 ##     {kind: course_grade, id, peer, grade_pct} | {kind: cadence_band, id, peer, lo_rpm,
 ##     hi_rpm} | {kind: power_band, peer, lo_w, hi_w}
 ##   event {seq, events: [game events and platform events whose type starts with "wl.":
 ##     wl.phase_started {peer, index, ended_by}, wl.lap_marker {label}, wl.finished {reason}]}
-##   snapshot {game_id, seq, tick, state}; roster {riders: {peer: {...}}};
+##   snapshot {game_id, seq, tick, state}; roster {riders: {peer: {..., phase}}} (phase: the
+##     host's phase index for that rider);
 ##   hud {kind: toast|banner, key, args, seconds}; results {results}; session_end {reason};
-##   telemetry {tm: Telemetry.to_dict()} (client -> host).
+##   telemetry {tm: Telemetry.to_dict()[, resync: reason]} (client -> host).
 ## Game event types starting with "wl." are reserved for the platform.
+##
+## Keeping a client in step (W3 NET-1, NET-2, NET-5): a client re-applies nothing it already
+## has (an identical plan, or a phase message for the phase it rides with the same start_tick,
+## only catches its phase clock up), so a rejoin or resync never restarts a ramp or adds a FIT
+## lap. A gap in the event sequence, or the roster showing another phase index for this rider
+## twice in a row, logs push_warning("GameHost: desync: ...") (counted in desync_count, the
+## scripted peer's report and the e2e check) and asks the host for a resync (`resync` in the
+## next telemetry, at most every RESYNC_EVERY_S). The expected gap after this client's own
+## rejoin or the host's return is no desync. Snapshot seq gaps are not checked: every snapshot
+## carries the full state and the NetSession may drop superseded ones under its send budget.
+## The host answers a resync, a rejoin and its own return to the room (WlNetSession's
+## resync_requested) with the rider's plan, its phase with elapsed_s, the latest snapshot, its
+## power and cadence bands and the results if any.
+## A client whose net session ends for good (any refusal: host_left, dropped after the 120 s
+## rejoin window, room_not_found, ...) rides its plan's cool-down here, then ends the session
+## with that reason and emits session_finished(null) (W3 SAF-5).
 
 ## "setup", "running", "paused", "cooldown", "results", "ended".
 signal state_changed(state: String)
@@ -70,6 +90,14 @@ const TRACE_EVERY := 20
 const PEDAL_POWER_W := 15.0
 const PEDAL_CADENCE_RPM := 20.0
 const PLATFORM_EVENT_PREFIX := "wl."
+## A client asks for a resync at most this often (platform seconds); the host answers one
+## peer's requests at most this often.
+const RESYNC_EVERY_S := 2.0
+## Rosters in a row that must show another phase index before a client calls it a desync.
+const PHASE_MISMATCH_ROSTERS := 2
+## A plan split into more parts than this is refused by the client (a 16 KB part holds about
+## 120 phases, so this is far beyond any real workout).
+const MAX_PLAN_PARTS := 64
 
 var ctx: GameContext = null
 var game: GameModule = null
@@ -105,6 +133,10 @@ var end_reason: String = ""
 var session_id: String = ""
 ## The local rider's new unlocks from apply_progress.
 var unlocks: Array = []
+## Desync warnings this peer logged (a client's event gaps and phase mismatches; W3 NET-5).
+var desync_count: int = 0
+## Resyncs this peer asked for (client) or answered (host).
+var resync_count: int = 0
 
 var _setup_ok: bool = false
 var _headless: bool = true
@@ -149,6 +181,18 @@ var _snap_seq_applied: int = 0
 var _event_seq_applied: int = 0
 var _pending_snapshot: Variant = null
 var _int_fields: Dictionary = {}
+## Client: the next event gap is expected (this client rejoined, or the host came back).
+var _expect_gap: bool = false
+var _phase_mismatch: int = 0
+var _resync_reason: String = ""
+var _last_resync_ask: float = -INF
+## Client: plan parts by plan_id ({parts, got: {part: plan dict}}).
+var _plan_parts: Dictionary = {}
+## Client: why the net session ended for good ("" while it runs); the cool-down then runs here.
+var _net_lost: String = ""
+# host side
+var _plan_seq: int = 0
+var _last_resync_answer: Dictionary = {}
 
 
 func _init() -> void:
@@ -187,7 +231,10 @@ func _process(delta: float) -> void:
 ##   pause that was not the rider's own, resumes it; false: the GameHost never pauses or
 ##   resumes on actions or gestures and the app calls pause()/resume() itself; either way
 ##   the SOLO coasting and stop_5s pause, LocalRider.pause_requested, still pauses, BRIEF
-##   4.6.4). A CLIENT's game, players, options and seed come from the host's session_start:
+##   4.6.4), session_nonce (String appended to results.session_id as
+##   "<game>/<content>/<seed>/<nonce>"; default a fresh UTC-millisecond nonce, so every
+##   session's id is unique; "" keeps "<game>/<content>/<seed>", which GameSimRunner passes
+##   for deterministic reports). A CLIENT's game, players, options and seed come from the host's session_start:
 ##   config.session_start (the message that opened the session, which the app shell received
 ##   before this GameHost existed) is applied on the first step(), else the first
 ##   session_start from the net.
@@ -263,10 +310,10 @@ func start() -> void:
 		return
 	if net != null:
 		net.mark_started()
-		_broadcast(Protocol.game_msg("session_start", _session_start_payload()))
+		_send_session_start()
 		for peer in _order:
 			if not local_riders.has(peer):
-				_send_to(peer, Protocol.game_msg("plan", {"peer": peer, "plan": (plans[peer] as EffortPlan).to_dict()}))
+				_send_plan(peer, plans[peer] as EffortPlan)
 	_set_state("running")
 	_event("session_start", {"role": role, "players": _order.size()})
 	for c in tracker.start():
@@ -358,6 +405,8 @@ func report_data() -> Dictionary:
 	d["role"] = role
 	d["local_peer"] = _local_peer
 	d["unlocks"] = unlocks.duplicate(true)
+	d["desync_warnings"] = desync_count
+	d["resyncs"] = resync_count
 	d["game_seconds"] = clock.game_tick * DT if clock != null else 0.0
 	d["platform_seconds"] = clock.platform_tick * DT if clock != null else 0.0
 	return d
@@ -452,7 +501,7 @@ func _make_routers() -> void:
 	directive_router.role = role
 	directive_router.tracker = tracker
 	directive_router.clock = clock
-	directive_router.riders = local_riders
+	directive_router.bind_riders(local_riders)
 	directive_router.bus = bus
 	directive_router.report = report
 	directive_router.remote_send = _send_directive
@@ -461,7 +510,7 @@ func _make_routers() -> void:
 	hud_router = HudRouter.new()
 	hud_router.role = role
 	hud_router.local_peer = _local_peer
-	hud_router.riders = local_riders
+	hud_router.bind_riders(local_riders)
 	hud_router.bus = bus
 	hud_router.report = report
 	hud_router.clock_now = _now
@@ -543,6 +592,13 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 		_slots[p.peer_id] = p
 	var game_id := str(manifest.get("id", ""))
 	session_id = "%s/%s/%d" % [game_id, content_id, p_seed]
+	if role != Wl.CLIENT:
+		# Unique per session (W3 SDK-5): two sessions with the same game, content and seed in one
+		# profile (the --seed flag) must not share an id, or apply_progress's documented
+		# "skip a repeated session_id" would credit the second nothing. Clients take the host's.
+		var nonce := str(config.get("session_nonce", _new_session_nonce()))
+		if nonce != "":
+			session_id += "/" + nonce
 	ctx = GameContext.new()
 	ctx.game_id = game_id
 	ctx.manifest = manifest.duplicate(true)
@@ -585,10 +641,17 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 	_int_fields = game.int_fields() if game != null else {}
 
 
-func _session_start_payload() -> Dictionary:
+## session_start for `for_peer` (0: for every client). In WKG a rider's p_eff_per_w is 75 /
+## weight, so every other human's entry carries the 75 kg reference (1.0) instead: the
+## recipient gets only its own (BRIEF 3.2 "weight never leaves the machine unless the player
+## opts in"; W3 PROF-2). Clients never simulate other riders; the host keeps every value.
+func _session_start_payload(for_peer: int = 0) -> Dictionary:
 	var ps: Array = []
 	for p in _players:
-		ps.append(p.to_dict())
+		var d := p.to_dict()
+		if ctx.scaling_mode == Wl.WKG and not p.is_bot and p.peer_id != for_peer:
+			d["p_eff_per_w"] = 1.0
+		ps.append(d)
 	var game_id := str(manifest.get("id", ""))
 	# "game", "content" and "session" repeat the string ids under names without the "_id"
 	# suffix, which Protocol.decode may convert to int (net_messages.gd); clients read them first.
@@ -599,6 +662,17 @@ func _session_start_payload() -> Dictionary:
 		"content_overrides": ctx.content_overrides.duplicate(true),
 		"game": game_id, "content": ctx.content_id, "session": session_id,
 	}
+
+
+## session_start to every client: one broadcast, or one message per client in WKG (each with
+## only its own p_eff_per_w, see _session_start_payload).
+func _send_session_start() -> void:
+	if ctx.scaling_mode != Wl.WKG:
+		_broadcast(Protocol.game_msg("session_start", _session_start_payload()))
+		return
+	for peer in _order:
+		if not local_riders.has(peer) and not (_slots[peer] as PlayerSlot).is_bot:
+			_send_to(peer, Protocol.game_msg("session_start", _session_start_payload(peer)))
 
 
 ## A string id from a host message: the suffix-free copy ("game") when present, else the
@@ -627,8 +701,11 @@ func _connect_net() -> void:
 		return
 	net.game_message.connect(_on_net_message)
 	net.peer_left.connect(_on_net_peer_left)
+	net.peer_joined.connect(_on_net_peer_joined)
 	net.rejoin_requested.connect(_on_net_rejoin)
+	net.resync_requested.connect(_on_net_resync)
 	net.refused.connect(_on_net_refused)
+	net.state_changed.connect(_on_net_state)
 
 
 func _connect_riders() -> void:
@@ -868,7 +945,7 @@ func _on_phase_change(c: Dictionary, starting: bool) -> void:
 		r.start_phase(index)
 	else:
 		if plan_changed:
-			_send_to(peer, Protocol.game_msg("plan", {"peer": peer, "plan": plan.to_dict()}))
+			_send_plan(peer, plan)
 		_send_to(peer, Protocol.game_msg("phase", {"peer": peer, "index": index, "start_tick": start_tick, "ended_by": ended_by}))
 	bus.phase_started.emit(peer, index)
 	_queue_event({"type": "wl.phase_started", "peer": peer, "index": index, "ended_by": ended_by})
@@ -928,7 +1005,7 @@ func _send_roster() -> void:
 			"ftp_pct": tm.power_w / maxf(slot.ftp, 1.0) * 100.0,
 			"rescue": tm.rescue, "afk": bool(_afk.get(peer, tm.afk)), "connected": connected,
 			"status": (hud_router.statuses.get(peer, {}) as Dictionary).duplicate(),
-			"name": slot.name, "slot_index": slot.slot_index,
+			"name": slot.name, "slot_index": slot.slot_index, "phase": tracker.index_of(peer),
 		}
 	ctx.roster = riders
 	bus.roster_changed.emit(riders)
@@ -1090,7 +1167,9 @@ func _client_step() -> void:
 			game.client_predict(DT, rider.telemetry())
 	if _client_phase >= 0:
 		_client_phase_ticks += 1
-	if state != "ended" and clock.platform_tick % TELEMETRY_EVERY == 0:
+	if _net_lost != "" and state != "ended" and _local_cooldown_over():
+		_end_after_net_loss()
+	if state != "ended" and _net_lost == "" and clock.platform_tick % TELEMETRY_EVERY == 0:
 		_send_telemetry()
 	if report != null and rider != null and clock.platform_tick % TRACE_EVERY == 0:
 		var ftp := (_slots[_local_peer] as PlayerSlot).ftp if _slots.has(_local_peer) else 200.0
@@ -1113,7 +1192,11 @@ func _send_telemetry() -> void:
 		ints = ints.slice(0, IntentRouter.MAX_PER_TELEMETRY)
 	tm.intents = ints
 	tm.acks = rider.take_acks()
-	net.send_to_host(Protocol.game_msg("telemetry", {"tm": tm.to_dict()}))
+	var payload := {"tm": tm.to_dict()}
+	if _resync_reason != "":
+		payload["resync"] = _resync_reason
+		_resync_reason = ""
+	net.send_to_host(Protocol.game_msg("telemetry", payload))
 
 
 # --- messages ----------------------------------------------------------------------------
@@ -1134,6 +1217,20 @@ func _on_net_peer_left(peer_id: int, reason: String) -> void:
 
 func _on_net_rejoin(peer_id: int) -> void:
 	_inbox.append([peer_id, {"type": "_rejoin"}])
+
+
+func _on_net_resync(peer_id: int) -> void:
+	_inbox.append([peer_id, {"type": "_resync", "reason": "host_back"}])
+
+
+func _on_net_peer_joined(peer_id: int) -> void:
+	_inbox.append([peer_id, {"type": "_peer_joined"}])
+
+
+## A client's own rejoin (reconnecting -> joined): the next event gap is expected.
+func _on_net_state(net_state: String, _detail: String) -> void:
+	if role == Wl.CLIENT and net_state == WlNetSession.STATE_JOINED and _configured:
+		_expect_gap = true
 
 
 func _on_net_refused(reason: String) -> void:
@@ -1161,6 +1258,8 @@ func _authority_message(from: int, data: Dictionary) -> void:
 			_on_peer_left(from, str(data.get("reason", "")))
 		"_rejoin":
 			_on_rejoin(from)
+		"_resync":
+			_resync_peer(from, str(data.get("reason", "")))
 
 
 func _on_telemetry(from: int, data: Dictionary) -> void:
@@ -1175,7 +1274,15 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	(r["intents"] as Array).append_array(tm.intents)
 	for ack: Variant in tm.acks:
 		if ack is Dictionary:
-			var rec := _normalized_ack(ack)
+			# The ack carries the governor's result only: `requested` (and, when the ack has
+			# none, t, game_t and phase_index as of routing) come from the routed request, so a
+			# remote rider's record has the shape of a local one (W3 SDK-4).
+			var a := (ack as Dictionary).duplicate(true)
+			var sent := directive_router.take_sent_request(from, int(a.get("id", 0)))
+			for k: String in ["t", "game_t", "phase_index"]:
+				if not a.has(k) and sent.has(k):
+					a[k] = sent[k]
+			var rec := _normalized_ack(a, int(a.get("id", 0)), sent.get("requested", {}))
 			directive_router.on_ack(from, rec)
 			bus.directive_applied.emit(from, rec)
 			if report != null:
@@ -1183,6 +1290,11 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	tm.gestures.clear()
 	tm.intents = []
 	tm.acks = []
+	if data.has("resync"):
+		var now := clock.platform_time()
+		if now - float(_last_resync_answer.get(from, -INF)) >= RESYNC_EVERY_S * 0.5:
+			_last_resync_answer[from] = now
+			_resync_peer(from, str(data["resync"]))
 	r["tm"] = tm
 	r["rx_t"] = clock.platform_time()
 	r["seen"] = true
@@ -1221,9 +1333,20 @@ func _on_rejoin(peer: int) -> void:
 	r["dropped"] = false
 	r["await_pedal"] = true
 	_event("rejoin", {"peer": peer})
-	_send_to(peer, Protocol.game_msg("session_start", _session_start_payload()))
+	_send_to(peer, Protocol.game_msg("session_start", _session_start_payload(peer)))
+	_resync_peer(peer, "rejoin")
+
+
+## Everything a client needs to ride on in step (a rejoin, its resync request, the host's
+## return to the room): its plan, its phase with elapsed_s, the latest snapshot, its power and
+## cadence bands (BRIEF 3.6: a band holds until replaced; W3 WO-4) and the results if any.
+func _resync_peer(peer: int, reason: String) -> void:
+	if not _remote.has(peer) or ctx == null or bool((_remote[peer] as Dictionary)["dropped"]):
+		return
+	resync_count += 1
+	_event("resync", {"peer": peer, "reason": reason})
 	if plans.has(peer):
-		_send_to(peer, Protocol.game_msg("plan", {"peer": peer, "plan": (plans[peer] as EffortPlan).to_dict()}))
+		_send_plan(peer, plans[peer] as EffortPlan)
 	if tracker.index_of(peer) >= 0:
 		var hist := tracker.history(peer)
 		var last: Dictionary = hist[hist.size() - 1] if not hist.is_empty() else {}
@@ -1231,11 +1354,57 @@ func _on_rejoin(peer: int) -> void:
 		_send_to(peer, Protocol.game_msg("phase", {
 			"peer": peer, "index": tracker.index_of(peer),
 			"start_tick": int(roundf(float(last.get("start", 0.0)) / DT)),
-			"ended_by": prev if prev != "" else Wl.ENDED_START}))
+			"ended_by": prev if prev != "" else Wl.ENDED_START,
+			"elapsed_s": tracker.state(peer).elapsed_s}))
 	if not _last_snapshot_msg.is_empty():
 		_send_to(peer, _last_snapshot_msg)
+	var pb: Array = hud_router.band_of(peer)
+	if float(pb[0]) != 0.0 or float(pb[1]) != 0.0:
+		_send_to(peer, Protocol.game_msg("directive", {
+			"kind": NetMessages.DIRECTIVE_POWER_BAND, "peer": peer, "lo_w": float(pb[0]), "hi_w": float(pb[1])}))
+	var cb: Array = directive_router.cadence_band_of(peer)
+	if not cb.is_empty() and (float(cb[0]) != 0.0 or float(cb[1]) != 0.0):
+		_send_to(peer, Protocol.game_msg("directive", {
+			"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "peer": peer, "lo_rpm": float(cb[0]), "hi_rpm": float(cb[1])}))
 	if results != null:
 		_send_to(peer, Protocol.game_msg("results", {"results": results.to_dict()}))
+
+
+## The rider's plan: one `plan` message, or, over the 16 KB message limit (a long imported
+## .zwo), several parts of whole phases with {part, parts, plan_id} (W3 NET-3).
+func _send_plan(peer: int, plan: EffortPlan) -> void:
+	var pd := plan.to_dict()
+	var whole := Protocol.game_msg("plan", {"peer": peer, "plan": pd})
+	if _wire_bytes(peer, whole) <= NetMessages.MAX_MESSAGE_BYTES:
+		_send_to(peer, whole)
+		return
+	_plan_seq += 1
+	var base := pd.duplicate()
+	base["phases"] = []
+	var room := NetMessages.MAX_MESSAGE_BYTES - _wire_bytes(peer, Protocol.game_msg("plan", {
+		"peer": peer, "plan": base, "part": MAX_PLAN_PARTS, "parts": MAX_PLAN_PARTS, "plan_id": _plan_seq})) - 64
+	var parts: Array = []
+	var cur: Array = []
+	var used := 0
+	for ph: Variant in pd["phases"]:
+		var bytes := Protocol.encode({"p": ph}).to_utf8_buffer().size()
+		if not cur.is_empty() and used + bytes > room:
+			parts.append(cur)
+			cur = []
+			used = 0
+		cur.append(ph)
+		used += bytes
+	if not cur.is_empty():
+		parts.append(cur)
+	for i in parts.size():
+		var d := base.duplicate()
+		d["phases"] = parts[i]
+		_send_to(peer, Protocol.game_msg("plan", {"peer": peer, "plan": d, "part": i, "parts": parts.size(), "plan_id": _plan_seq}))
+
+
+## Bytes the relay counts for `msg` to `peer` (the encoded `d` plus the msg envelope).
+static func _wire_bytes(peer: int, msg: Dictionary) -> int:
+	return Protocol.encoded_size(msg) + ("{\"t\":\"msg\",\"to\":%d,\"d\":}" % peer).length()
 
 
 func _client_message(from: int, data: Dictionary) -> void:
@@ -1261,11 +1430,17 @@ func _client_message(from: int, data: Dictionary) -> void:
 		"session_end":
 			end_session(str(data.get("reason", "host_ended")))
 		"_refused":
-			if state != "ended" and (str(data.get("reason", "")) == "host_left"):
-				end_session("host_left")
+			if state != "ended" and results == null:
+				_lose_net(str(data.get("reason", "")))
 		"_peer_left":
 			if from == (net.host_peer if net != null else Wl.HOST_PEER) and state != "ended" and results == null:
 				_event("host_dropped", {"peer": from})
+		"_peer_joined":
+			if from == (net.host_peer if net != null else Wl.HOST_PEER) and state != "ended":
+				# The host came back to the room: what it sent while away is gone, and it resends
+				# this rider's state (WlNetSession.resync_requested on the host).
+				_expect_gap = true
+				_event("host_back", {"peer": from})
 
 
 func _on_session_start(data: Dictionary) -> void:
@@ -1324,7 +1499,17 @@ func _on_plan(data: Dictionary) -> void:
 	if not (pd is Dictionary):
 		push_warning("GameHost: plan message without a plan")
 		return
+	if data.has("parts"):
+		pd = _join_plan_part(data)
+		if pd == null:
+			return
+	if _net_lost != "":
+		return
 	var plan := EffortPlan.from_dict(pd)
+	if _client_plan != null and plan.to_dict() == _client_plan.to_dict():
+		# The plan this rider already rides (a rejoin or resync re-sends it): applying it again
+		# would clear the governor's directive channels and restart the phase.
+		return
 	var res := PlanValidator.validate(plan)
 	if not bool(res["ok"]) or not plan.cooldown_appended:
 		var why := "; ".join(res["errors"]) if not bool(res["ok"]) else "no cool-down appended"
@@ -1334,24 +1519,75 @@ func _on_plan(data: Dictionary) -> void:
 	plans[_local_peer] = plan
 	plan_warnings[_local_peer] = (res["warnings"] as Array).duplicate()
 	_client_plan = plan
+	# A new plan starts no phase by itself: the next `phase` message enters one.
+	_client_phase = -1
 	var rider: LocalRider = local_riders.get(_local_peer)
 	if rider != null:
 		rider.set_plan(plan)
 
 
+## One part of a split plan (W3 NET-3): the whole plan dict once every part of the newest
+## plan_id is in, else null. Older plans' parts are dropped.
+func _join_plan_part(data: Dictionary) -> Variant:
+	var parts := int(data.get("parts", 0))
+	var part := int(data.get("part", -1))
+	var pid := int(data.get("plan_id", 0))
+	var pd: Dictionary = data["plan"]
+	if parts < 1 or parts > MAX_PLAN_PARTS or part < 0 or part >= parts or not (pd.get("phases") is Array):
+		push_warning("GameHost: plan part %d of %d dropped (bad part)" % [part, parts])
+		return null
+	if not _plan_parts.has(pid):
+		_plan_parts.clear()
+		_plan_parts[pid] = {"parts": parts, "got": {}}
+	var entry: Dictionary = _plan_parts[pid]
+	if int(entry["parts"]) != parts:
+		push_warning("GameHost: plan %d parts disagree (%d, %d); dropped" % [pid, int(entry["parts"]), parts])
+		_plan_parts.clear()
+		return null
+	(entry["got"] as Dictionary)[part] = pd
+	if (entry["got"] as Dictionary).size() < parts:
+		return null
+	var whole: Dictionary = ((entry["got"] as Dictionary)[0] as Dictionary).duplicate(true)
+	var phases: Array = []
+	for i in parts:
+		phases.append_array(((entry["got"] as Dictionary)[i] as Dictionary)["phases"])
+	whole["phases"] = phases
+	_plan_parts.clear()
+	return whole
+
+
 func _on_phase(data: Dictionary) -> void:
 	var index := int(data.get("index", -1))
+	if _net_lost != "":
+		return
 	if _client_plan == null or _client_plan.phase(index) == null:
 		push_warning("GameHost: phase %d without a matching plan" % index)
 		return
+	var start_tick := int(data.get("start_tick", 0))
+	var elapsed := maxf(float(data.get("elapsed_s", 0.0)), 0.0)
+	if index == _client_phase and start_tick == _client_phase_start_tick:
+		# The phase this rider already rides (a rejoin or resync re-sends it): keep riding it
+		# (no restarted ramp, no extra FIT lap), only catch the phase clock up.
+		_client_phase_ticks = maxi(_client_phase_ticks, roundi(elapsed / DT))
+		return
+	_enter_client_phase(index, start_tick, str(data.get("ended_by", "")), elapsed)
+
+
+## Enter plan phase `index` on this client (a `phase` message, or the local cool-down after the
+## net session ended). `elapsed_s` > 0 (a rejoin into a running phase) resumes the phase there
+## when the LocalRider can (resume_phase(index, elapsed_s)), else starts it.
+func _enter_client_phase(index: int, start_tick: int, ended_by: String, elapsed_s: float) -> void:
 	_client_phase = index
-	_client_phase_ticks = 0
-	_client_phase_start_tick = int(data.get("start_tick", 0))
-	var ended_by := str(data.get("ended_by", ""))
+	_client_phase_ticks = roundi(elapsed_s / DT)
+	_client_phase_start_tick = start_tick
+	_phase_mismatch = 0
 	_client_prev_ended_by = "" if ended_by == Wl.ENDED_START else ended_by
 	var rider: LocalRider = local_riders.get(_local_peer)
 	if rider != null:
-		rider.start_phase(index)
+		if elapsed_s > 0.0 and rider.has_method("resume_phase"):
+			rider.call("resume_phase", index, elapsed_s)
+		else:
+			rider.start_phase(index)
 	bus.phase_started.emit(_local_peer, index)
 	_event("phase_started", {"peer": _local_peer, "index": index, "ended_by": ended_by})
 	if _client_plan.phase(index).kind == Wl.COOLDOWN:
@@ -1430,6 +1666,13 @@ func _on_event(data: Dictionary) -> void:
 	var seq := int(data.get("seq", 0))
 	if seq <= _event_seq_applied:
 		return
+	if _event_seq_applied > 0 and seq != _event_seq_applied + 1:
+		if _expect_gap:
+			_event("event_gap_expected", {"after": _event_seq_applied, "seq": seq})
+		else:
+			_desync("event batch %d after %d: %d batch(es) lost" % [seq, _event_seq_applied, seq - _event_seq_applied - 1])
+			_ask_resync("event_gap")
+	_expect_gap = false
 	_event_seq_applied = seq
 	var evs: Variant = data.get("events", [])
 	if not (evs is Array):
@@ -1486,6 +1729,72 @@ func _on_roster(data: Dictionary) -> void:
 	if ctx != null:
 		ctx.roster = roster
 	bus.roster_changed.emit(roster)
+	_check_roster_phase(roster.get(_local_peer))
+
+
+## The host's phase index for this rider (roster `phase`) against the one it rides: twice in a
+## row apart is a desync (a lost `phase` message), and a resync is asked for.
+func _check_roster_phase(row: Variant) -> void:
+	if not _configured or _client_plan == null or _net_lost != "" or not (row is Dictionary):
+		return
+	if (state != "running" and state != "cooldown") or not (row as Dictionary).has("phase"):
+		return
+	var host_index := int((row as Dictionary)["phase"])
+	if host_index < 0 or host_index == _client_phase:
+		_phase_mismatch = 0
+		return
+	_phase_mismatch += 1
+	if _phase_mismatch < PHASE_MISMATCH_ROSTERS:
+		return
+	_phase_mismatch = 0
+	_desync("rider %d rides phase %d here but phase %d on the host" % [_local_peer, _client_phase, host_index])
+	_ask_resync("phase")
+
+
+func _desync(why: String) -> void:
+	desync_count += 1
+	push_warning("GameHost: desync: %s" % why)
+	_event("desync", {"why": why})
+
+
+## Ask the host for this rider's state again (sent with the next telemetry).
+func _ask_resync(reason: String) -> void:
+	var now := clock.platform_time()
+	if now - _last_resync_ask < RESYNC_EVERY_S:
+		return
+	_last_resync_ask = now
+	_resync_reason = reason
+	resync_count += 1
+
+
+## SAF-5: the net session ended for good. The rider rides its plan's cool-down here (from the
+## current phase unless it is already in it), then the session ends with this reason.
+func _lose_net(reason: String) -> void:
+	if _net_lost != "":
+		return
+	_net_lost = reason if reason != "" else "dropped"
+	_event("net_lost", {"reason": _net_lost})
+	var cd := _client_plan.cooldown_index() if _client_plan != null else -1
+	if not _configured or cd < 0 or _client_phase < 0:
+		push_warning("GameHost: the session's network ended (%s)" % _net_lost)
+		_end_after_net_loss()
+		return
+	push_warning("GameHost: the session's network ended (%s): riding the cool-down here" % _net_lost)
+	if _client_phase != cd:
+		_enter_client_phase(cd, clock.game_tick, Wl.ENDED_FINISHED, 0.0)
+
+
+func _local_cooldown_over() -> bool:
+	if _client_plan == null or _client_phase < 0:
+		return true
+	if _client_phase != _client_plan.cooldown_index():
+		return false
+	return _client_phase_ticks >= PhaseTracker.ticks(_client_plan.phase(_client_phase).duration_s)
+
+
+func _end_after_net_loss() -> void:
+	end_session(_net_lost)
+	session_finished.emit(null)
 
 
 func _on_results(data: Dictionary) -> void:
@@ -1754,6 +2063,17 @@ func _normalized_ack(rec: Dictionary, id: int = 0, requested: Dictionary = {}) -
 	if not out.has("t"):
 		out["t"] = clock.game_tick * DT if clock != null else 0.0
 	return out
+
+
+## A nonce for results.session_id: the host's UTC start in milliseconds (hex) plus a counter for
+## sessions started in the same millisecond in this process. Not game state: it never reaches
+## the rules or ctx.rng, only the results' id.
+static var _nonce_count: int = 0
+
+
+static func _new_session_nonce() -> String:
+	_nonce_count += 1
+	return "%x-%x" % [int(Time.get_unix_time_from_system() * 1000.0), _nonce_count]
 
 
 static func _sorted_players(v: Variant) -> Array[PlayerSlot]:

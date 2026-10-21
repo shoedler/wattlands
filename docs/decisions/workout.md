@@ -20,3 +20,26 @@ Short ADRs for the reference game Workout (`src/games/workout/`, `content/workou
 - **2026-10-21: Imported block labels are plain text.** "Block n" comes from `WORKOUT_LBL_BLOCK` when the strings table is registered and from a literal fallback otherwise (a headless run), never the bare key, because the label is also the FIT lap name.
 - **2026-10-21: Ride view scales.** Riders and the course profile at 2 m per art pixel (the local rider at x 200), the course elevation exaggerated 2.5 px per metre, parallax at 3 px per metre at factor 1, and the interval blocks at 0.5 px per plan second (about 21 minutes across the screen). Pennants are polygon lists drawn at 1.5 × their base size (pole heights staggered by slot so a bunch stays readable), and the picker card rasterizes the same shapes at 2 ×. `src/games/workout/tools/render_view.gd` renders the view from a snapshot fixture (windowed) for a look at the art.
 - **2026-10-21 (W2): The ride view uses world2d's ParallaxStrip; sprints use the real SprintRule.** Supersedes "Workout's own parallax layer" and "Sprint scoring uses SprintRule's threshold with Workout's own streak counter". The five backdrop strips are `ParallaxStrip`s (top edge at the old `top_y`, `cover_width` 640, no drift, scroll snapped to whole art pixels) and `WorkoutParallaxLayer` is gone; `WorkoutSprintTracker` feeds `SprintRule` (window 0) on the sprint's own clock and reads `held_s()`/`best_s()`, keeping its own total of time held. *Alternative:* keep Workout's stand-ins. *Reason:* both platform classes exist now (B 3.9, SH1); the view scrolls the same way (rounded instead of floored, under one art pixel) and the sprint results are unchanged (the tests that pinned them pass as they are).
+
+## 2026-10-21 (W4): Rolling road normalizes its course over an 8 km window
+
+- Decision: `WorkoutCourse` takes an optional `window_m` (a multiple of `step_m`, at most `length_m`). The road is generated over [0, window_m], normalized to exactly span the session's grades there, and repeated back and forth (mirrored, so no grade jumps at a seam) up to `length_m`. Rolling road uses 8 km, which even a 120 W P_eff rider passes in the 30-minute phase.
+- Alternatives: shorter wavelengths over 50 km (the extremes still land wherever the waves put them); repeat the window without mirroring (a grade jump at every seam).
+- Reason: W3 WO-3: normalized over 50 km, the first -2 % point lay at 36 km, beyond every rider's 30 minutes, so the road ridden spanned about -1..+6 %.
+
+## 2026-10-21 (W4): Only a FREE phase of at most 30 s is a sprint
+
+- Decision: `WorkoutSession.is_sprint(phase)` is a FREE phase of at most 30 s (BRIEF 3.7's sprints). Only sprints get the 120-160 % band, the sprint banner and countdown and SprintRule scoring. A longer FREE phase (an imported FreeRide) is free riding: no band, `WORKOUT_BANNER_FREE`, no sprint result; its time in band stays cadence >= 60 rpm.
+- Alternatives: a `sprint` flag in session files (a .zwo has no such flag); a 60 s limit (a 60 s FreeRide is not a sprint either).
+- Reason: W3 WO-6: a 10-minute FreeRide told the rider to hold 120-160 % FTP for 10 minutes.
+
+## 2026-10-21 (W4): Imported ERG blocks below the floor ride the floor
+
+- Decision: `WorkoutSession.from_zwo` raises an imported ERG block (target or ramp end) below 30 % FTP to 30 % and lists it with the importer's clamps (`WORKOUT_CLAMP_FLOOR`) instead of rejecting the file.
+- Alternatives: accept 0 % in Workout's own re-check and leave it to the governor's floor (the preview would show a 0 % block the rider never rides).
+- Reason: W3 WO-5 and BRIEF 3.7 ("clamps each block to 4.6 ... listing each clamp"): a single `Power="0"` rest rejected the whole workout. A floor clamp in the importer itself belongs to its owner.
+
+## 2026-10-21 (W4): A long timeline goes in snapshot parts; results show best powers
+
+- Decision: a timeline of more than 120 phases travels in parts (`tlo`, `tln`) on consecutive snapshots at the start of each 20-snapshot cycle; a client sets its timeline once every part is in. `WorkoutResults` adds the best 1-, 5- and 20-minute power (only for windows the ride covered) and every sprint's peak to each row's display stats.
+- Reason: W3 NET-3 (a 400-block .zwo pushed the timeline snapshot past 16 KB) and WO-2 (BRIEF 3.7 lists those results; the results screen draws only the row's stats beyond its fixed columns).

@@ -20,6 +20,9 @@ class FakeRunner:
 	func setup(args: Dictionary) -> String:
 		calls.append("setup")
 		seen["setup_args"] = args
+		# Like GameSimRunner.setup(): the run's own temp root under OS temp (W3 QT-4).
+		_temp_root = Paths.make_temp_dir("wattlands_sim")
+		seen["temp_root"] = _temp_root
 		# The registry is freed after the run; record what it held now.
 		var reg := args.get("registry") as WlGameRegistry
 		seen["registry"] = "none" if reg == null else ("template" if reg.has_game("_template") and not reg.ids().has("_template") else "other")
@@ -41,6 +44,10 @@ class FakeRunner:
 
 	func sim_seconds() -> float:
 		return 660.0
+
+	func cleanup() -> void:
+		seen["cleanups"] = int(seen.get("cleanups", 0)) + 1
+		super.cleanup()
 
 
 const BASE: Array[String] = ["--mock-trainer=erg", "--caller-cwd=C:/work", "--game=_template", "--report=build/r.json"]
@@ -425,6 +432,20 @@ func test_the_run_uses_a_temp_user_dir_and_removes_it() -> void:
 	assert_ne(seen.get("user_dir", outer), outer, "the run saw its own temp user dir")
 	assert_false(DirAccess.dir_exists_absolute(str(seen.get("user_dir", ""))), "and removed it afterwards")
 	assert_eq(Paths.user_dir(), outer, "the previous override is restored")
+
+
+## W3 QT-4: the runner's temp root (wattlands_sim_* under OS temp, outside the CLI's own temp user
+## dir) is deleted after every run, a failed setup included.
+func test_the_runner_temp_root_is_removed_after_the_run() -> void:
+	for err: String in ["", "content_id: nope"]:
+		seen.clear()
+		setup_error = err
+		var r := _run()
+		assert_eq(r[0], GameSimCli.EXIT_OK if err == "" else GameSimCli.EXIT_SETUP)
+		var root := str(seen.get("temp_root", ""))
+		assert_ne(root, "", "the fake runner made a temp root")
+		assert_eq(int(seen.get("cleanups", 0)), 1, "the CLI called cleanup() once (setup error \"%s\")" % err)
+		assert_false(DirAccess.dir_exists_absolute(root), "%s is gone after the run" % root)
 
 
 func test_the_main_script_is_a_scene_tree_entry() -> void:

@@ -51,7 +51,7 @@ func before_each() -> void:
 	_router.tracker = _tracker
 	_router.clock = _clock
 	_router.slots = {1: s1, 2: s2, 3: s3}
-	_router.riders = {1: _rider}
+	_router.bind_riders({1: _rider})
 	_router.bus = _bus
 	_router.remote_send = func(peer: int, payload: Dictionary) -> void: _sent.append([peer, payload])
 	_router.telemetry_of = func(_peer: int) -> Variant: return _unsafe_tm
@@ -490,4 +490,4 @@ func test_report_keeps_requested_and_applied() -> void:
 	assert_false(bool(rep.directives[1]["accepted"]))
 	assert_eq(rep.directives[1]["reason"], Wl.REFUSE_RANGE)
 	assert_true(bool((rep.directives[1]["applied"] as Dictionary)["refused"]))
-	assert_eq(rep.directives[0]["requested"], {"target_pct": 55.0, "duration_s": 0.0, "id": 1}, "exactly the game's keys")
+	assert_eq(rep.directives[0]["requested"], {"target_pct": 55.0, "duration_s": 0.0, "id": 1}, "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1)")

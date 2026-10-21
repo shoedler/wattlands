@@ -401,5 +401,20 @@ func test_requested_directive_keys_round_trip_into_the_report() -> void:
 	r.run_to_end()
 	var dirs: Array = r.build_report()["directives"]
 	assert_eq(dirs.size(), 1)
-	assert_eq((dirs[0]["requested"] as Dictionary).keys(), ["target_pct", "duration_s", "reason", "source", "id"], "exactly the game's keys")
+	assert_eq((dirs[0]["requested"] as Dictionary).keys(), ["target_pct", "duration_s", "reason", "source", "id"], "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1, 19.1)")
 	assert_not_null(dirs[0]["applied"])
+
+
+## W3 QT-4: a runner freed without cleanup() (autofree in tests, a tool that forgot it) still
+## deletes its wattlands_sim_* temp root under OS temp and restores Paths' override.
+func test_freeing_a_runner_removes_its_temp_root() -> void:
+	var r := GameSimRunner.new()
+	var err := r.setup(_args())
+	assert_eq(err, "", "setup")
+	var root := r.temp_root()
+	assert_ne(root, "")
+	assert_true(DirAccess.dir_exists_absolute(root), "precondition: the run has its temp root")
+	assert_eq(Paths.user_dir(), root, "precondition: Paths points at it")
+	r.free()
+	assert_false(DirAccess.dir_exists_absolute(root), "freeing the runner deleted %s" % root)
+	assert_eq(Paths.user_dir(), _tmp, "and restored the previous override")

@@ -11,6 +11,8 @@ extends GutTest
 const BUILT_IN: Array[String] = ["easy_30", "sweet_spot", "threshold", "vo2", "rolling_road", "e2e"]
 
 var _tmp: String = ""
+## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
+var _runners: Array[GameSimRunner] = []
 
 
 func before_each() -> void:
@@ -19,7 +21,20 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	for r in _runners:
+		if is_instance_valid(r):
+			r.cleanup()
+	_runners.clear()
 	Paths.set_override("")
+	GameSimRunner._remove_tree(_tmp)
+
+
+## A runner added to the tree (autofree) whose temp root after_each deletes.
+func _new_runner() -> GameSimRunner:
+	var runner := GameSimRunner.new()
+	add_child_autofree(runner)
+	_runners.append(runner)
+	return runner
 
 
 func _run(content: String, extra: Array[String] = []) -> Dictionary:
@@ -37,8 +52,7 @@ func _run(content: String, extra: Array[String] = []) -> Dictionary:
 	var args := GameSimRunner.parse_args(argv)
 	assert_false(args.has("error"), "args: %s" % args.get("error", ""))
 	args["headless"] = true
-	var runner := GameSimRunner.new()
-	add_child_autofree(runner)
+	var runner := _new_runner()
 	var err := runner.setup(args)
 	assert_eq(err, "", "setup %s" % content)
 	if err != "":
@@ -136,16 +150,14 @@ func test_a_zwo_path_content_id_runs_through_the_runner_and_reaches_clients() ->
 	]))
 	assert_false(args.has("error"), str(args.get("error", "")))
 	args["headless"] = true
-	var runner := GameSimRunner.new()
-	add_child_autofree(runner)
+	var runner := _new_runner()
 	assert_eq(runner.setup(args), "")
 	assert_eq(runner.run_to_end(), "timeout")
 	assert_eq(runner.build_report()["content_id"], content)
 	for gh in runner.hosts():
 		assert_eq(gh.ctx.content_id, content, "peer %d" % gh.local_peer())
 		assert_true(gh.plans.has(gh.local_peer()), "peer %d has its imported plan" % gh.local_peer())
-	var bad := GameSimRunner.new()
-	add_child_autofree(bad)
+	var bad := _new_runner()
 	assert_string_starts_with(bad.setup(GameSimRunner.parse_args(PackedStringArray(["--game=workout", "--content=mp3:x"]))), "--content:")
 
 

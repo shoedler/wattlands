@@ -39,13 +39,14 @@ static func spec() -> HudSpec:
 
 ## The power band (W) for `rider` in SIM phase `index`, or [] for none:
 ## Rolling road: the session band (76-105% FTP); a FREE sprint after the warm-up:
-## 120-160% FTP; a sprint inside the first 300 s: none (the rider stays easy there).
+## 120-160% FTP; a sprint inside the first 300 s: none (the rider stays easy there); a
+## longer FREE phase (free riding, WorkoutSession.is_sprint false): none.
 static func band_for(state: WorkoutState, index: int, rider: WorkoutRiderState) -> Array:
 	var p := state.phase(index)
 	if p == null or p.mode != Wl.SIM:
 		return []
 	if p.kind == Wl.FREE:
-		if state.phase_start_s(index) < WARMUP_S:
+		if state.phase_start_s(index) < WARMUP_S or not WorkoutSession.is_sprint(p):
 			return []
 		return [float(SPRINT_BAND[0]) * rider.ftp, float(SPRINT_BAND[1]) * rider.ftp]
 	return [float(state.band_pct[0]) / 100.0 * rider.ftp, float(state.band_pct[1]) / 100.0 * rider.ftp]
@@ -66,7 +67,7 @@ static func interval_banner(state: WorkoutState, index: int, strings: GameString
 		args["pct"] = int(round(p.target_pct))
 		return {"key": "WORKOUT_BANNER_ERG", "args": args}
 	if p.kind == Wl.FREE:
-		return {"key": "WORKOUT_BANNER_SPRINT", "args": args}
+		return {"key": "WORKOUT_BANNER_SPRINT" if WorkoutSession.is_sprint(p) else "WORKOUT_BANNER_FREE", "args": args}
 	args["lo"] = int(round(float(state.band_pct[0])))
 	args["hi"] = int(round(float(state.band_pct[1])))
 	return {"key": "WORKOUT_BANNER_ROLLING", "args": args}
