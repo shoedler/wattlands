@@ -1,7 +1,7 @@
 extends "res://tests/scenarios/lib/scenario_test.gd"
 ## BRIEF 7.4 and 3.7: an imported sample .zwo plays with its clamps shown. The fixture has no
 ## warm-up of its own, a 10-minute block at 110 % FTP (above the 105 % cap for phases longer than
-## 300 s), intervals, a ramp, a free ride and a tag the importer does not support. WorkoutImport
+## 300 s), intervals, a ramp, a free ride and a tag the importer does not support. ZwoImport
 ## must insert a warm-up prefix, clamp to BRIEF 4.6 and the warm-up limits, list every clamp with
 ## its reason (what the session preview shows) and skip the unknown tag with a warning; the
 ## PlanValidator then accepts the plan, and the rider's stack plays it with every applied ERG
@@ -12,7 +12,7 @@ const FIXTURE := "res://tests/scenarios/workout/fixtures/qa_sample.zwo"
 
 
 func _import() -> Dictionary:
-	return WorkoutImport.parse_zwo_file(ProjectSettings.globalize_path(FIXTURE))
+	return ZwoImport.parse_zwo_file(ProjectSettings.globalize_path(FIXTURE))
 
 
 func test_import_lists_clamps_and_skips_unknown_tags() -> void:
@@ -105,7 +105,7 @@ func test_imported_plan_plays_inside_its_clamps() -> void:
 ## BRIEF 7.4 end to end: Workout plays its own .zwo session (content/workout/sessions/<id>.json
 ## with a "zwo" key) through GameSimRunner, a compliant verified-FTP rider finishes it, every
 ## applied ERG target stays inside BRIEF 4.6.1 and the warm-up limits, no duration limit
-## latches, and the importer's clamps are shown (WorkoutImport lists them, and Workout's
+## latches, and the importer's clamps are shown (ZwoImport lists them, and Workout's
 ## session preview, when it has one, shows each).
 func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 	var sessions := S.zwo_sessions()
@@ -114,7 +114,7 @@ func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
 		return
 	var content := str(sessions[0]["content"])
 	var zwo := str(sessions[0]["zwo"])
-	var imported := WorkoutImport.parse_zwo_file(ProjectSettings.globalize_path(zwo))
+	var imported := ZwoImport.parse_zwo_file(ProjectSettings.globalize_path(zwo))
 	assert_true(bool(imported["ok"]), "%s imports: %s" % [zwo, str(imported.get("error", ""))])
 	var clamps: Array = imported["clamps"]
 	assert_gt(clamps.size(), 0, "%s needs clamps, so the preview has some to show" % zwo)

@@ -53,8 +53,8 @@ static func is_loopback_host(host: String) -> bool:
 
 
 ## True when the URL's authority (after "scheme://", up to the first "/") holds a character
-## that URL parsers read differently (W4, RS-1): "@" (user info), "?", "#", "", "%" or
-## whitespace and control characters. url_host() ends the authority at "?", "#" or "" like a
+## that URL parsers read differently (W4, RS-1): "@" (user info), "?", "#", a backslash, "%" or
+## whitespace and control characters. url_host() ends the authority at "?", "#" or a backslash like a
 ## browser, but Godot's HTTPRequest (String::parse_url) cuts only at "#" and "/" and then
 ## drops everything up to the first "@", so "http://127.0.0.1?@other/" reaches `other`.
 static func authority_ambiguous(url: String) -> bool:

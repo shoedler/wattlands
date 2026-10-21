@@ -25,7 +25,7 @@ How to read it:
 | `addons/wattlands/trainer/control/` | trainer-control | `TrainerController`, `SafetyGovernor`, `GovernorClamps`, `CadenceEstimator`, virtual gears |
 | `tests/governor/`, `tests/control/`, `tests/arch/test_no_bypass.gd` | trainer-control | Every B 4.6 rule; the 4.6.11 scan |
 | `addons/wattlands/trainer/ble/`, `tools/trainer_bridge/`, `tests/ble/` | ble | `GdbleTransport`, `BridgeTransport`, `FtmsConnectionManager`, the Python bridge and `probe` |
-| `addons/wattlands/sim/`, `tests/sim/` | sim | `SimClock`, `SeededRng`, `SpeedModel`, `WBalance`, `Bots`, `GestureRecognizer`, `SprintRule`, `WorkoutImport` |
+| `addons/wattlands/sim/`, `tests/sim/` | sim | `SimClock`, `SeededRng`, `SpeedModel`, `WBalance`, `Bots`, `GestureRecognizer`, `SprintRule`, `ZwoImport` |
 | `server/relay/` | relay | Node relay, Dockerfile, README, `node:test` suite |
 | `addons/wattlands/net/`, `tests/net/` | net-client | `Transport` impls (`RelayTransport`, `LoopbackTransport`, P1 `LanTransport`), `WlNetSession`, lobby, `RoomCode`, `Protocol` |
 | `addons/wattlands/rides/`, `tests/rides/` | rides | `RideRecorder`, FIT encoder, Strava client, upload queue, `WlRides` |
@@ -388,7 +388,7 @@ All rows are covered by `tests/trainer/test_mock_profiles.gd` unless another tes
 | SH2 | `SpeedModel.create(rider_mass_kg, cda, mass_offset_kg)`, `step(dt, p_eff_w, grade_pct, wind_mps)`, `steady_state_speed(...)`, `visual_multiplier` | T2.4 (CdA 0.5 m², m + 8 kg; tested against the B3.11 oracle) | | sim | `tests/sim/test_speed_model.gd` |
 | SH3 | `WBalance` and `Telemetry.wbal_j` | S2.4 (W′ drains in Overdrive), T2.4 (W′ pays for Overpressure) | Skiba's model, B3.4 | sim | `tests/sim/test_wbal.gd` |
 | SH4 | `GestureRecognizer` | S2.4, S2.5, T2.4, T2.5, F2.4, F2.5 | ERG `surge` by flywheel speed; `coast` never in ERG; `stop_5s` solo outside ERG only | sim | `tests/sim/test_gestures.gd` |
-| SH5 | `WorkoutImport.parse_zwo(text)`, `parse_zwo_file(path)` | S2.9 P1, F2.9 P1 | Returns `phases`, `blocks`, `clamps`, `warnings` | sim | `tests/sim/test_workout_import.gd` |
+| SH5 | `ZwoImport.parse_zwo(text)`, `parse_zwo_file(path)` (named WorkoutImport until W4) | S2.9 P1, F2.9 P1 | Returns `phases`, `blocks`, `clamps`, `warnings` | sim | `tests/sim/test_workout_import.gd` |
 | SH6 | Virtual gears (`shift_up`, `shift_down`, `SafetyGovernor.shift`) | S2.4, T2.3, F2.4 | Work in every SIM phase and SIM block; shown by the gear widget | trainer-control | `tests/governor/test_gears.gd` |
 
 ### 2.22 Governor behaviours the games rely on
@@ -516,7 +516,7 @@ The W3 SDK-completeness reviewer ticks each name against the code and `docs/GAME
 - [ ] `GameRegistry` (autoload), `GameHost`, `PlanValidator`, `EventBus` (autoload), `NetSession` (autoload), `Protocol`, `LoopbackTransport`
 - [ ] `PedalScanList`, `PixelViewport`, `ParallaxStrip`, `SpinningPart`, `SlidingPart`, `PaletteSwap`, `SpriteWobble`, `LowPolyMesh`
 - [ ] `MockTrainer`, `SafetyGovernor`, `TrainerController`, `FtmsClient`, `SprintRule`, `Paths`
-- [ ] `addons/wattlands/sim/workout_import` (`WorkoutImport`)
+- [ ] `addons/wattlands/sim/workout_import` (`ZwoImport`)
 - [ ] Names Siege's and Tank's static tests scan for, which must stay the platform's only call sites: `TrainerController`, `SafetyGovernor`, `FtmsClient`, `write_control`, `set_target_power`, `set_simulation`, `set_resistance`
 
 **GameModule**

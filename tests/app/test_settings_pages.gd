@@ -167,7 +167,7 @@ func test_controls_page_rows_fit_the_menu_column() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	confirm_pick(s, "controls")
-	await wait_frames(2)
+	await wait_process_frames(2)
 	var m := s.active_menu()
 	var w := m.get_combined_minimum_size().x
 	var col := s.find_child("MenuColumn", true, false) as Control

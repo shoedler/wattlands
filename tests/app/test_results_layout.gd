@@ -42,7 +42,7 @@ func test_results_menu_and_ftp_column_fit_on_a_1080p_screen() -> void:
 		"results": _workout_results(), "fit_path": "user://rides/x.fit", "game_id": "workout",
 		"content_id": "easy_30", "role": Wl.SOLO, "local_peer": 1,
 	}) as AppResultsScreen
-	await wait_frames(3)
+	await wait_process_frames(3)
 	var grid_w := s.rows_grid.get_combined_minimum_size().x
 	# make_page: 48 px margins, a 48 px gap, a 640 px menu column.
 	var budget := 1920.0 - 2.0 * AppStyle.MARGIN - 48.0 - 640.0

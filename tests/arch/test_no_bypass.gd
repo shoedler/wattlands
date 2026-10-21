@@ -31,7 +31,7 @@ extends GutTest
 ##     manager and transports, and DirectiveRouter / HudRouter, whose rider maps sit behind
 ##     ctx.directives and ctx.hud), also inside strings ("/root/TrainerService");
 ##   - member access to GAME_MEMBER_NAMES (.governor, .configure_governor, .emergency_safe,
-##     .resume, .local_rider, .trainer_service, ._riders) and the routers' rider maps
+##     .resume, .local_rider, .trainer_service, ._riders, .bind_riders) and the routers' rider maps
 ##     (directives.riders, hud.riders), calls of configure_governor(, emergency_safe( and
 ##     resume( (definitions excepted), and those names as exact string literals (dynamic calls).
 ## Workout's own WorkoutState.riders is a game field, so a bare ".riders" is not flagged; the
@@ -53,10 +53,10 @@ const GAME_CLASS_NAMES: Array[String] = [
 ]
 const GAME_MEMBER_NAMES: Array[String] = [
 	"governor", "configure_governor", "emergency_safe", "resume", "local_rider", "trainer_service",
-	"_riders",
+	"_riders", "bind_riders",
 ]
 ## Calls of these by bare name are flagged in games too (definitions excepted).
-const GAME_CALL_NAMES: Array[String] = ["configure_governor", "emergency_safe", "resume"]
+const GAME_CALL_NAMES: Array[String] = ["configure_governor", "emergency_safe", "resume", "bind_riders"]
 ## Script paths a game scene may not reference.
 const GAME_SCRIPT_PATHS: Array[String] = [
 	"addons/wattlands/trainer/", "addons/wattlands/core/local_rider.gd",

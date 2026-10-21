@@ -272,6 +272,16 @@ func setup(p_config: Dictionary) -> String:
 			var rider := (lr as Dictionary)[k] as LocalRider
 			if rider != null:
 				local_riders[int(k)] = rider
+	# W3 SAF-3: every governor rule runs on platform time, so a sim speed other than 1 would
+	# speed up (or slow down) slew, the write rate, rescue, coasting and warm-up on a real
+	# trainer. Only sessions whose local riders all ride MockTrainers may change it.
+	if not is_equal_approx(clock.sim_speed, 1.0):
+		for peer: int in local_riders.keys():
+			var dev := (local_riders[peer] as LocalRider).device
+			if dev != null and not (dev is MockTrainer):
+				push_warning("GameHost: sim_speed %.2f ignored: rider %d rides a real trainer" % [clock.sim_speed, peer])
+				clock.sim_speed = 1.0
+				break
 	var default_peer := Wl.HOST_PEER
 	if role == Wl.CLIENT and net != null:
 		default_peer = net.local_peer

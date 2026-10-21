@@ -126,14 +126,14 @@ func _key(ch: String) -> InputEventKey:
 func test_typing_a_code_on_the_join_page_reaches_the_field() -> void:
 	fx.give_profile()
 	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
-	await wait_frames(2)
+	await wait_process_frames(2)
 	for ch in "K7QX2M":
 		var ev := _key(ch)
 		get_viewport().push_input(ev)
 		var up := ev.duplicate() as InputEventKey
 		up.pressed = false
 		get_viewport().push_input(up)
-	await wait_frames(1)
+	await wait_process_frames(1)
 	assert_eq(s.code_field.value(), "K7QX2M", "focus owner: %s" % str(get_viewport().gui_get_focus_owner()))
 	assert_true(s.text_focus, "the field owns the keyboard from the first character on")
 
@@ -141,7 +141,7 @@ func test_typing_a_code_on_the_join_page_reaches_the_field() -> void:
 func test_only_code_characters_start_typing() -> void:
 	fx.give_profile()
 	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
-	await wait_frames(1)
+	await wait_process_frames(1)
 	var down := InputEventKey.new()
 	down.keycode = KEY_DOWN
 	down.physical_keycode = KEY_DOWN

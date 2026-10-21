@@ -170,7 +170,7 @@ jobs:
 
 const FRAGMENTS = {
   'docs/decisions': (id) =>
-    `# Decisions: ${id}\n\nShort ADRs for the ${id} game: date, decision, alternatives, reason. The lead merges them into docs/DECISIONS.md.\n`,
+    `# Decisions: ${id}\n\nShort ADRs for the ${id} game: date, decision, alternatives, reason. Game sessions keep their decisions here only; docs/DECISIONS.md holds the platform's.\n`,
   'docs/credits.d': (id) =>
     `# Credits: ${id}\n\nThird-party assets (art, audio, fonts) the ${id} game ships, with their licenses and sources.\n`,
   'docs/changelog.d': (id) => `# Changelog: ${id}\n\n- Scaffolded from the template with tools/new_game.\n`,

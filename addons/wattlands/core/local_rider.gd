@@ -584,7 +584,7 @@ func _teardown() -> void:
 ## the rider's own profile, whatever the slot (a host's copy on a CLIENT) said.
 func _take_safety_values_from_profile() -> void:
 	var own_intensity := profile.haptic_intensity_pct / 100.0
-	var differs := absf(slot.ftp - profile.ftp_w) >= 1.0 or slot.ftp_verified != profile.ftp_verified 		or slot.haptics_on != profile.haptics_on or absf(slot.haptic_intensity - own_intensity) > 1e-6
+	var differs := absf(slot.ftp - profile.ftp_w) >= 1.0 or slot.ftp_verified != profile.ftp_verified or slot.haptics_on != profile.haptics_on or absf(slot.haptic_intensity - own_intensity) > 1e-6
 	if differs:
 		push_warning("LocalRider: peer %d's slot said FTP %s W (verified %s), haptics %s at %s; using the rider's own profile: FTP %s W (verified %s), haptics %s at %s" % [
 			peer_id, str(slot.ftp), str(slot.ftp_verified), str(slot.haptics_on), str(slot.haptic_intensity),
