@@ -551,7 +551,10 @@ class Run {
     this.save();
     const s = this.stats;
     if (this.hostStop) {
-      s.notPaid = payList.slice(next).map((x) => x.sprite.id);
+      s.notPaid = payList
+        .slice(next)
+        .map((x) => x.sprite.id)
+        .filter((id) => !s.skipped.includes(id));
       this.err(
         `stopped paying: ${this.hostStop}. A result whose image can't be fetched is money lost, so no further sprite was paid${s.notPaid.length ? ` (not paid: ${s.notPaid.join(', ')})` : ''}. The paid request stays in the manifest as download_failed with its image URL; once that host is allowed, a run fetches it for free.`,
       );
