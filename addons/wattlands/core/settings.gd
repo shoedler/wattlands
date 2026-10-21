@@ -91,7 +91,12 @@ func load_all() -> void:
 		b.settings_changed.emit("")
 
 
+## Write profile.json and announce the change. (W4r2) The profile is first clamped into
+## PROFILE_RANGES (clamp_profile), so every write (the profile screen, the Strava import, the FTP
+## test) keeps the ranges a loaded profile gets, and the rider stack set up from it never sees an
+## FTP or a weight outside them.
 func save_profile() -> bool:
+	clamp_profile(profile)
 	var ok := _write_json(Paths.profile_path(), profile.to_dict())
 	changed.emit("profile")
 	var b := _bus()
@@ -267,6 +272,29 @@ static func _read_json(path: String) -> Dictionary:
 		return {"missing": false, "data": null,
 			"why": "line %d: %s" % [json.get_error_line(), json.get_error_message()]}
 	return {"missing": false, "data": json.data, "why": "not a JSON object"}
+
+
+## Clamp `p`'s ranged numbers into PROFILE_RANGES in place (W4r2, additive), as loading does: a
+## value out of range takes the nearest bound and a NaN or infinite one the default, each with
+## push_warning. Returns the keys it changed.
+static func clamp_profile(p: RiderProfile) -> PackedStringArray:
+	var changed_keys := PackedStringArray()
+	if p == null:
+		return changed_keys
+	var defaults := RiderProfile.new()
+	for k: String in PROFILE_RANGES.keys():
+		var lim: Array = PROFILE_RANGES[k]
+		var f := float(p.get(k))
+		var c := f
+		if is_nan(f) or is_inf(f):
+			c = float(defaults.get(k))
+		else:
+			c = clampf(f, float(lim[0]), float(lim[1]))
+		if c != f:
+			push_warning("Settings: profile %s %s out of range, using %s" % [k, str(f), str(c)])
+			p.set(k, c)
+			changed_keys.append(k)
+	return changed_keys
 
 
 ## Keeps the profile keys whose type matches the default and clamps numbers into range.

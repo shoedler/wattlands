@@ -61,6 +61,9 @@ extends Node
 ##     STALE_SAMPLE_S counts as one not_pedaling sample (0 W, no cadence) at the moment it went
 ##     stale, so the coasting floor, pause/AFK and the rescue power trigger run as for a rider
 ##     who stopped. The watchdog counts from setup(device), a reconnect, or the latest sample.
+##   - Resume (W4r2, NET-2): resume_phase(index, elapsed_s) enters a phase at elapsed_s (a
+##     client rejoining a running phase); only the phase clock and the course distance differ
+##     from start_phase(), every 4.6 counter keeps its state.
 
 ## Any status field changed (at most once per tick).
 signal status_changed(status: Dictionary)
@@ -128,6 +131,9 @@ const POWER_WINDOW_S := 3.0
 ## A trainer sample older than this counts as gone (LocalRider.STALE_S): with the link up, the
 ## stream stopping counts as a not_pedaling sample (W4, SAF-7).
 const STALE_SAMPLE_S := 3.0
+## The distance record for resume_phase (W4r2): one entry per game second, six hours at most.
+const DISTANCE_HIST_S := 1.0
+const DISTANCE_HIST_MAX := 21600
 ## Speed assumed for the haptic wind bound when the trainer reports none (m/s). A higher
 ## speed allows less wind, so an unknown speed is the conservative case.
 const UNKNOWN_SPEED_MPS := 20.0
@@ -238,6 +244,12 @@ var _course_applied: float = 0.0
 var _course_applied_t: float = _NEVER
 var _distance_m: float = -1.0
 var _distance_origin: float = -1.0
+## Metres of the current phase ridden before this governor entered it (resume_phase, W4r2):
+## a "course" phase follows its profile from _distance_offset + the distance since the entry.
+var _distance_offset: float = 0.0
+## (game t, distance) about once per game second, so resume_phase can tell how far the rider
+## rode since a phase began on the host (W4r2, NET-2). Bounded to DISTANCE_HIST_MAX entries.
+var _distance_hist: PackedVector2Array = PackedVector2Array()
 
 # --- outputs ---------------------------------------------------------------------------------
 var _erg_out: Dictionary = {}
@@ -296,7 +308,9 @@ func setup(device: TrainerDevice) -> void:
 ## W1 adds: weight_kg (75, for target_wkg), system_mass_kg (83, rider + bike for the haptic
 ## wind bound). Out-of-range values are clamped with push_warning; an unknown profile or an
 ## FTP outside 30-2000 W (GovernorClamps.FTP_MIN_W..FTP_MAX_W, the range Settings allows;
-## W4) is rejected with push_error and the previous value stays.
+## W4) is a push_error. An FTP above the range (or NaN) is rejected and the previous value
+## stays; one below it (zero, negative) gives 30 W (W4r2), so an invalid FTP never sets a
+## higher watt basis than the rider's lowest possible one.
 ## Calling it again (LocalRider.configure_governor, the FTP test) replaces only the given
 ## parameters: the plan, the phase and its elapsed time, warm-up, duration limits, rescue,
 ## coasting and the directive channels are kept, and the next tick applies the new values.
@@ -308,6 +322,12 @@ func configure(params: Dictionary) -> void:
 		var f := float(params["ftp_w"])
 		if GovernorClamps.ftp_in_range(f):
 			_ftp_w = f
+		elif f < GovernorClamps.FTP_MIN_W:
+			# W4r2 (SAF-1 range): below the range (zero, negative, -inf) the rider gets the lowest
+			# basis there is, never the previous or default one (200 W for a 25 W rider).
+			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); using %d W" % [
+				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), int(GovernorClamps.FTP_MIN_W)])
+			_ftp_w = GovernorClamps.FTP_MIN_W
 		else:
 			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); keeping %s W" % [
 				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), str(_ftp_w)])
@@ -390,26 +410,76 @@ func set_plan(plan: EffortPlan) -> void:
 ## max_s, end_phase, finished, rejoin). Directive channels revert to the plan; the
 ## cool-down clears every directive.
 func start_phase(index: int) -> void:
-	if _plan == null:
-		push_error("SafetyGovernor: start_phase(%d) before set_plan()" % index)
+	if not _phase_index_ok(index, "start_phase(%d)" % index):
 		return
-	if index < 0 or index >= _plan.size():
-		push_error("SafetyGovernor: start_phase(%d) outside the plan (0..%d)" % [index, _plan.size() - 1])
+	_enter_phase(index, 0.0, 0.0)
+
+
+## Re-enter phase `index` `elapsed_s` game seconds after it began (W4r2, NET-2, additive): a
+## client that rejoins a running phase, for example after the app restarted (GameHost on a
+## `phase` message with elapsed_s). As start_phase(index) (directive channels revert to the
+## plan, a "game" course grade waits for the game's next one, a SIM phase ends rescue), except:
+##   - the phase clock starts at elapsed_s, so a ramp continues at the host's point of it;
+##   - a "course" phase follows its profile from the distance already ridden in the phase:
+##     `phase_distance_m` when the caller knows it (>= 0), else this governor's own record of
+##     the distance since game time (now - elapsed_s) (the same governor across a socket
+##     rejoin), else 0 (a new governor knows nothing older; LocalRider.resume_phase estimates
+##     it first). See distance_ridden_since().
+## Nothing 4.6 counts changes: the warm-up stays the trainer connection's (the skipped
+## elapsed time never counts toward its 300 s), the 105% / 120% times, their latches and the
+## 120 s reset run, the 30 s switch spacing, the haptic cooldown, coasting, rescue arming and
+## panic all keep their state, and the long-phase cap and every ceiling apply as for any phase.
+## elapsed_s must be finite and >= 0 (push_error otherwise; nothing changes); 0 is
+## start_phase(index).
+func resume_phase(index: int, elapsed_s: float, phase_distance_m: float = -1.0) -> void:
+	if not is_finite(elapsed_s) or elapsed_s < 0.0:
+		push_error("SafetyGovernor: resume_phase(%d) needs a finite elapsed_s >= 0 (got %s)" % [index, str(elapsed_s)])
 		return
-	_clear_channels()
-	_phase_index = index
-	_phase = _plan.phase(index)
-	_phase_elapsed = 0.0
-	_course_source = 0.0
-	_course_source_set = false
-	_course_applied = 0.0
-	_course_applied_t = _NEVER
-	_distance_origin = _distance_m
-	_update_desired()
-	if _phase.mode == Wl.SIM and _rescue_state != _RESCUE_NONE:
-		_end_rescue(false)
-	_recompute_outputs()
-	_update_status()
+	if not _phase_index_ok(index, "resume_phase(%d)" % index):
+		return
+	var ridden := phase_distance_m
+	if not is_finite(ridden) or ridden < 0.0:
+		ridden = maxf(distance_ridden_since(_game_t - elapsed_s), 0.0)
+	_enter_phase(index, elapsed_s, ridden)
+
+
+## Metres ridden since game time `game_t` from this governor's own distance record
+## (set_course_distance, about one entry per game second), or -1 when the record doesn't reach
+## back that far (a new governor, more than DISTANCE_HIST_MAX seconds ago) or no distance came
+## yet. Added in W4r2 for resume_phase.
+func distance_ridden_since(game_t: float) -> float:
+	if _distance_m < 0.0 or _distance_hist.is_empty() or not is_finite(game_t):
+		return -1.0
+	var first := _distance_hist[0]
+	if game_t < float(first.x) - _EPS:
+		return -1.0
+	var lo := 0
+	var hi := _distance_hist.size() - 1
+	while lo < hi:
+		var mid := (lo + hi + 1) >> 1
+		if float(_distance_hist[mid].x) <= game_t + _EPS:
+			lo = mid
+		else:
+			hi = mid - 1
+	var a := _distance_hist[lo]
+	# After the last entry, interpolate toward now (the latest distance at the current game time).
+	var b := _distance_hist[lo + 1] if lo + 1 < _distance_hist.size() else Vector2(_game_t, _distance_m)
+	var at := float(a.y)
+	var span := float(b.x) - float(a.x)
+	if span > _EPS:
+		at = lerpf(float(a.y), float(b.y), clampf((game_t - float(a.x)) / span, 0.0, 1.0))
+	return maxf(_distance_m - at, 0.0)
+
+
+## Metres of the current phase ridden so far, as its course profile is followed (0 without a
+## phase or a distance). Added in W4r2 (diagnostics and tests).
+func phase_distance_m() -> float:
+	if _phase == null:
+		return 0.0
+	var d := _distance_offset
+	if _distance_m >= 0.0 and _distance_origin >= 0.0:
+		d += _distance_m - _distance_origin
+	return d
 
 
 ## Pause (4.1): the game clock stops; the trainer goes to the ERG floor or SIM flat;
@@ -625,6 +695,11 @@ func set_course_distance(distance_m: float) -> void:
 	_distance_m = distance_m
 	if _distance_origin < 0.0:
 		_distance_origin = distance_m
+	var n := _distance_hist.size()
+	if n == 0 or _game_t - float(_distance_hist[n - 1].x) >= DISTANCE_HIST_S - _EPS:
+		_distance_hist.append(Vector2(_game_t, distance_m))
+		if n + 1 > DISTANCE_HIST_MAX + 600:
+			_distance_hist = _distance_hist.slice(n + 1 - DISTANCE_HIST_MAX)
 
 
 ## Virtual gears (4.5): +1 / -1 steps within 1..24. Returns the new gear.
@@ -808,6 +883,7 @@ func clear_plan() -> void:
 	_course_source_set = false
 	_course_applied = 0.0
 	_course_applied_t = _NEVER
+	_distance_offset = 0.0
 	_update_desired()
 	if _rescue_state != _RESCUE_NONE:
 		_end_rescue(false)
@@ -1347,6 +1423,37 @@ func _update_clamped_by() -> void:
 # Channels, phases and mode
 # =============================================================================================
 
+## True when `index` is a phase of the current plan; push_error (naming `what`) otherwise.
+func _phase_index_ok(index: int, what: String) -> bool:
+	if _plan == null:
+		push_error("SafetyGovernor: %s before set_plan()" % what)
+		return false
+	if index < 0 or index >= _plan.size():
+		push_error("SafetyGovernor: %s outside the plan (0..%d)" % [what, _plan.size() - 1])
+		return false
+	return true
+
+
+## Enter phase `index` with its clock at `elapsed_s` and `ridden_m` metres of its course
+## already behind the rider (start_phase: 0, 0; resume_phase).
+func _enter_phase(index: int, elapsed_s: float, ridden_m: float) -> void:
+	_clear_channels()
+	_phase_index = index
+	_phase = _plan.phase(index)
+	_phase_elapsed = elapsed_s
+	_course_source = 0.0
+	_course_source_set = false
+	_course_applied = 0.0
+	_course_applied_t = _NEVER
+	_distance_origin = _distance_m
+	_distance_offset = ridden_m
+	_update_desired()
+	if _phase.mode == Wl.SIM and _rescue_state != _RESCUE_NONE:
+		_end_rescue(false)
+	_recompute_outputs()
+	_update_status()
+
+
 func _update_desired() -> void:
 	var next := Wl.OFF
 	if _panic:
@@ -1426,10 +1533,7 @@ func _update_course_grade() -> void:
 		if _course_source_set:
 			src = _course_source
 	elif _phase.grade_source == Wl.GRADE_COURSE:
-		var d := 0.0
-		if _distance_m >= 0.0 and _distance_origin >= 0.0:
-			d = _distance_m - _distance_origin
-		src = profile_grade(_phase.course_profile, d)
+		src = profile_grade(_phase.course_profile, phase_distance_m())
 	if is_nan(src):
 		return
 	if absf(src - _course_applied) > 1e-9 and _t - _course_applied_t >= COURSE_GRADE_INTERVAL_S - _EPS:

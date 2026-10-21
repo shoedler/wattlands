@@ -42,6 +42,9 @@ class FakeGovernor:
 	func start_phase(index: int) -> void:
 		calls.append(["start_phase", index])
 
+	func resume_phase(index: int, elapsed_s: float, phase_distance_m: float = -1.0) -> void:
+		calls.append(["resume_phase", index, elapsed_s, phase_distance_m])
+
 	func set_game_paused(paused: bool) -> void:
 		calls.append(["set_game_paused", paused])
 

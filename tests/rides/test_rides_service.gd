@@ -290,6 +290,38 @@ func test_import_ftp_and_weight() -> void:
 	assert_eq(q.ftp_w, 200.0, "FTP untouched when not chosen")
 
 
+## W4r2 (PROF): a typo on Strava (FTP 1500 W, weight 9 kg) is refused, not imported: the
+## profile editor's 50-600 W and 30-200 kg are the ranges an import may set (W4r2 proof
+## build/w4r2/profile/test_prof4_leave_mid_import.gd: it became a verified 1500 W FTP).
+func test_import_refuses_values_outside_the_editor_ranges() -> void:
+	await _mock.config({"athlete": {"ftp": 1500, "weight": 9.0}})
+	var r := _rides()
+	await r.strava_connect_with_profile(MockRunner.CLIENT_ID, MockRunner.CLIENT_SECRET)
+	var p := RiderProfile.new()
+	p.weight_kg = 80.0
+	var res: Dictionary = await r.strava_import_athlete(p, true, true)
+	assert_push_warning("Strava ftp 1500")
+	assert_push_warning("Strava weight 9")
+	assert_eq(res["applied"], [], "nothing outside the ranges is applied")
+	assert_eq(res["refused"], [
+		{"field": "ftp", "value": 1500.0, "min": 50.0, "max": 600.0},
+		{"field": "weight", "value": 9.0, "min": 30.0, "max": 200.0},
+	])
+	assert_eq(p.ftp_w, 200.0, "the FTP stays")
+	assert_false(p.ftp_verified, "and stays unverified")
+	assert_eq(p.cp_w, 200.0)
+	assert_eq(p.weight_kg, 80.0)
+	# The bounds themselves are fine.
+	await _mock.config({"athlete": {"ftp": 600, "weight": 30.0}})
+	var q := RiderProfile.new()
+	var ok: Dictionary = await r.strava_import_athlete(q, true, true)
+	assert_eq(ok["applied"], ["ftp", "weight"])
+	assert_eq(ok["refused"], [])
+	assert_eq(q.ftp_w, 600.0)
+	assert_eq(q.weight_kg, 30.0)
+	await _mock.config({"athlete": {"ftp": 250, "weight": 72.5}})
+
+
 func test_import_without_the_profile_scope_applies_nothing() -> void:
 	var r: WlRides = await _connected()
 	var p := RiderProfile.new()

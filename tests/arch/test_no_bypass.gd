@@ -39,6 +39,23 @@ extends GutTest
 ## Scene and resource files (.tscn, .tres) are scanned as text too: a signal connection or an
 ## AnimationPlayer method track naming a guarded setter is a call site anywhere, and under
 ## src/games/ so is any name above or a script path into the trainer stack.
+##
+## W4r2 (SAF-4 recheck): a GameModule is its GameHost's child, so get_parent() is the GameHost
+## and its rider map reaches LocalRider.setup({governor_profile: "ramp_test", skip_warmup}) and
+## set_plan()/start_phase() with no name above. Under src/games/ the scan also fails on
+##   - GameHost (GAME_CLASS_NAMES) and any member access whose name holds "local_rider"
+##     (.local_riders, ._local_riders, an accessor such as .local_rider_for());
+##   - governor_profile anywhere in code (an identifier, a Lua-style dict key) or as a string;
+##   - a call of .setup(, .set_plan(, .start_phase( or .resume_phase( (RECEIVER_CALL_NAMES) on
+##     a receiver that is not rooted at ctx, self or super, unless the receiver is a plain
+##     variable that the file declares, everywhere, with a type that cannot hold a LocalRider,
+##     SafetyGovernor or GameHost (anything but untyped, Variant, Object, Node or a stack class):
+##     `var scatter: MultiMeshScatter` then `scatter.setup(mesh, 64)` passes, `$Scatter.setup(`
+##     or `get_parent().setup(` does not (type the variable first);
+##   - those method names as exact string literals (call("start_phase", 0)), and any string
+##     holding a stack script's file name (GAME_STRING_FRAGMENTS: a preload or load by path).
+## A bare "setup" string is not flagged: it is a common state or phase name in a game, and a
+## dynamic call needs a reference to the rider, which the rules above guard.
 
 const GUARDED: Array[String] = [
 	"write_characteristic", "write_control", "set_target_power", "set_simulation", "set_resistance",
@@ -50,6 +67,7 @@ const GAME_CLASS_NAMES: Array[String] = [
 	"TrainerService", "WlTrainerService", "LocalRider", "SafetyGovernor", "TrainerController",
 	"TrainerDevice", "MockTrainer", "FtmsTrainer", "FtmsClient", "FtmsConnectionManager",
 	"GdbleTransport", "BridgeTransport", "BleTransport", "DirectiveRouter", "HudRouter",
+	"GameHost",
 ]
 const GAME_MEMBER_NAMES: Array[String] = [
 	"governor", "configure_governor", "emergency_safe", "resume", "local_rider", "trainer_service",
@@ -57,11 +75,26 @@ const GAME_MEMBER_NAMES: Array[String] = [
 ]
 ## Calls of these by bare name are flagged in games too (definitions excepted).
 const GAME_CALL_NAMES: Array[String] = ["configure_governor", "emergency_safe", "resume", "bind_riders"]
+## W4r2: flagged anywhere in a game's code (identifier or dict key) and as an exact string.
+const GAME_IDENT_NAMES: Array[String] = ["governor_profile"]
+## W4r2: a member access whose name contains this is flagged in games (.local_riders, ...).
+const GAME_MEMBER_FRAGMENT := "local_rider"
+## W4r2: LocalRider / SafetyGovernor / GameHost methods a game may call only on ctx, self, super
+## or a variable typed with a class that cannot hold one of those (see the header).
+const RECEIVER_CALL_NAMES: Array[String] = ["setup", "set_plan", "start_phase", "resume_phase"]
+## W4r2: declared types that can hold a LocalRider, SafetyGovernor or GameHost (all extend Node);
+## an untyped declaration counts as Variant.
+const HOLDER_TYPES: Array[String] = ["Variant", "Object", "Node"]
+## W4r2: a game string holding one of these names a stack script (preload, load by path).
+const GAME_STRING_FRAGMENTS: Array[String] = [
+	"local_rider", "safety_governor", "trainer_controller", "trainer_service", "game_host",
+	"directive_router", "hud_router", "addons/wattlands/trainer/",
+]
 ## Script paths a game scene may not reference.
 const GAME_SCRIPT_PATHS: Array[String] = [
 	"addons/wattlands/trainer/", "addons/wattlands/core/local_rider.gd",
 	"addons/wattlands/core/trainer_service.gd", "addons/wattlands/sdk/directive_router.gd",
-	"addons/wattlands/sdk/hud_router.gd",
+	"addons/wattlands/sdk/hud_router.gd", "addons/wattlands/sdk/game_host.gd",
 ]
 const GAMES_DIR := "/src/games/"
 ## Path -> the guarded names that file may call.
@@ -217,15 +250,187 @@ static func scan_game_source(src: String, path: String) -> Array[Dictionary]:
 		out.append(_hit(code, start, path, m.get_string(1), "call"))
 	for m in routers.search_all(code):
 		out.append(_hit(code, m.get_start(2), path, m.get_string(1) + ".riders", "router"))
+	# W4r2: the GameHost's rider map and any accessor named after it.
+	var fragment := RegEx.create_from_string("\\.\\s*([A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*)")
+	for m in fragment.search_all(code):
+		if not GAME_MEMBER_NAMES.has(m.get_string(1)):
+			out.append(_hit(code, m.get_start(1), path, m.get_string(1), "member"))
+	var idents := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(GAME_IDENT_NAMES) + ")(?![A-Za-z0-9_])")
+	for m in idents.search_all(code):
+		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "ident"))
+	out.append_array(_receiver_calls(code, path))
 	for st: Dictionary in lexed["strings"]:
 		var text := str(st["text"])
-		if GAME_MEMBER_NAMES.has(text):
+		if GAME_MEMBER_NAMES.has(text) or GAME_IDENT_NAMES.has(text) or (RECEIVER_CALL_NAMES.has(text) and text != "setup"):
 			out.append({"path": path, "line": int(st["line"]), "name": text, "how": "dynamic"})
 			continue
 		var cm := classes.search(text)
 		if cm != null:
 			out.append({"path": path, "line": int(st["line"]), "name": cm.get_string(1), "how": "dynamic"})
+			continue
+		for frag: String in GAME_STRING_FRAGMENTS:
+			if text.contains(frag):
+				out.append({"path": path, "line": int(st["line"]), "name": frag, "how": "dynamic"})
+				break
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"]))
+	return out
+
+
+## W4r2: calls of RECEIVER_CALL_NAMES on a receiver that may hold a LocalRider, SafetyGovernor or
+## GameHost (how "receiver"): anything but ctx..., self, super or a variable whose every
+## declaration in the file has a type outside HOLDER_TYPES and GAME_CLASS_NAMES.
+static func _receiver_calls(code: String, path: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var re := RegEx.create_from_string("\\.\\s*(" + "|".join(RECEIVER_CALL_NAMES) + ")\\s*\\(")
+	var decls: Dictionary = {}
+	for m in re.search_all(code):
+		var recv := receiver_of(code, m.get_start(0))
+		if receiver_is_safe(recv, code, decls):
+			continue
+		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "receiver"))
+	return out
+
+
+## The receiver expression in front of the "." at `dot`: identifiers, dots, balanced (...) and
+## [...] groups and a leading $ or % node shorthand, so "get_parent().local_riders[1]" for
+## "get_parent().local_riders[1].setup(". Whitespace and line continuations around dots are
+## skipped. "" when nothing sensible precedes the dot.
+static func receiver_of(code: String, dot: int) -> String:
+	var i := _skip_space_back(code, dot - 1)
+	var end := i + 1
+	while i >= 0:
+		var c := code.unicode_at(i)
+		if _is_ident(c):
+			i -= 1
+		elif c == 41 or c == 93:
+			var open := _match_open(code, i)
+			if open < 0:
+				return ""
+			i = open - 1
+		elif c == 46:
+			i = _skip_space_back(code, i - 1)
+		elif c == 36 or c == 37:
+			i -= 1
+			break
+		else:
+			break
+	return code.substr(i + 1, end - i - 1).strip_edges()
+
+
+static func _skip_space_back(code: String, i: int) -> int:
+	while i >= 0:
+		var c := code.unicode_at(i)
+		if c == 32 or c == 9 or c == 10 or c == 13 or c == _BACKSLASH:
+			i -= 1
+		else:
+			break
+	return i
+
+
+## Index of the "(" or "[" that opens the group closed at `close`, or -1.
+static func _match_open(code: String, close: int) -> int:
+	var depth := 0
+	var i := close
+	while i >= 0:
+		var c := code.unicode_at(i)
+		if c == 41 or c == 93:
+			depth += 1
+		elif c == 40 or c == 91:
+			depth -= 1
+			if depth == 0:
+				return i
+		i -= 1
+	return -1
+
+
+## True when a call on `recv` can't reach the trainer stack (see _receiver_calls). `decls`
+## caches declared_types() per name.
+static func receiver_is_safe(recv: String, code: String, decls: Dictionary) -> bool:
+	if recv == "self" or recv == "super":
+		return true
+	var root := RegEx.create_from_string("^ctx(?![A-Za-z0-9_])")
+	if root.search(recv) != null:
+		return true
+	if not RegEx.create_from_string("^[A-Za-z_][A-Za-z0-9_]*$").search(recv):
+		return false
+	if not decls.has(recv):
+		decls[recv] = declared_types(code, recv)
+	var types: Array = decls[recv]
+	if types.is_empty():
+		return false
+	for t: String in types:
+		var base := t.get_slice(".", t.get_slice_count(".") - 1) if t.contains(".") else t
+		if t == "" or HOLDER_TYPES.has(t) or GAME_CLASS_NAMES.has(t) or GAME_CLASS_NAMES.has(base):
+			return false
+	return true
+
+
+## Every declaration of `name` in `code` (lexed): its type, or "" when untyped or inferred from
+## anything but TYPE.new(...). Covers var (members, locals, @onready), const, for loops, match
+## bindings and function and lambda parameters.
+static func declared_types(code: String, name: String) -> Array:
+	var out: Array = []
+	var n := name
+	var typed := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)")
+	var made := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "\\s*:?=\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s*\\.\\s*new\\s*\\(")
+	var any := RegEx.create_from_string("(?<![A-Za-z0-9_])(?:var|const)\\s+" + n + "(?![A-Za-z0-9_])")
+	var typed_n := typed.search_all(code).size()
+	var made_n := made.search_all(code).size()
+	for m in typed.search_all(code):
+		out.append(m.get_string(1))
+	for m in made.search_all(code):
+		out.append(m.get_string(1))
+	for i in any.search_all(code).size() - typed_n - made_n:
+		out.append("")
+	var loop_typed := RegEx.create_from_string("(?<![A-Za-z0-9_])for\\s+" + n + "\\s*:\\s*([A-Za-z_][A-Za-z0-9_.]*)\\s+in(?![A-Za-z0-9_])")
+	var loop_any := RegEx.create_from_string("(?<![A-Za-z0-9_])for\\s+" + n + "(?![A-Za-z0-9_])")
+	var lt := loop_typed.search_all(code)
+	for m in lt:
+		out.append(m.get_string(1))
+	for i in loop_any.search_all(code).size() - lt.size():
+		out.append("")
+	var sig := RegEx.create_from_string("(?<![A-Za-z0-9_])func(?:\\s+[A-Za-z_][A-Za-z0-9_]*)?\\s*\\(")
+	for m in sig.search_all(code):
+		var open := m.get_end(0) - 1
+		var close := _match_close(code, open)
+		if close < 0:
+			continue
+		for p: String in _split_params(code.substr(open + 1, close - open - 1)):
+			var pm := RegEx.create_from_string("^\\s*" + n + "\\s*(:\\s*([A-Za-z_][A-Za-z0-9_.]*))?(?![A-Za-z0-9_])").search(p)
+			if pm == null:
+				continue
+			out.append(pm.get_string(2))
+	return out
+
+
+static func _match_close(code: String, open: int) -> int:
+	var depth := 0
+	for i in range(open, code.length()):
+		var c := code.unicode_at(i)
+		if c == 40 or c == 91:
+			depth += 1
+		elif c == 41 or c == 93:
+			depth -= 1
+			if depth == 0:
+				return i
+	return -1
+
+
+## A parameter list split at its top-level commas.
+static func _split_params(s: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var depth := 0
+	var start := 0
+	for i in s.length():
+		var c := s.unicode_at(i)
+		if c == 40 or c == 91 or c == 123:
+			depth += 1
+		elif c == 41 or c == 93 or c == 125:
+			depth -= 1
+		elif c == 44 and depth == 0:
+			out.append(s.substr(start, i - start))
+			start = i + 1
+	out.append(s.substr(start))
 	return out
 
 
@@ -245,6 +450,9 @@ static func scan_scene_text(text: String, path: String) -> Array[Dictionary]:
 	if is_game_path(path):
 		names.append_array(GAME_CLASS_NAMES)
 		names.append_array(GAME_MEMBER_NAMES)
+		# W4r2: a signal connection or method track into the GameHost (to="..") or a rider.
+		names.append_array(GAME_IDENT_NAMES)
+		names.append_array(["set_plan", "start_phase", "resume_phase", "[A-Za-z0-9_]*" + GAME_MEMBER_FRAGMENT + "[A-Za-z0-9_]*"])
 	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(names) + ")(?![A-Za-z0-9_])")
 	for m in re.search_all(text):
 		out.append(_hit(text, m.get_start(1), path, m.get_string(1), "scene"))
@@ -643,3 +851,134 @@ tracks/0/keys = {"values": [{"args": [], "method": &"emergency_safe"}]}
 	assert_true(got.has("rogue.tscn:addons/wattlands/core/local_rider.gd"), "a game scene scripting a LocalRider\n" + describe(v))
 	assert_true(got.has("anim.tres:emergency_safe"), "a method track in a game resource\n" + describe(v))
 	assert_eq((result["files"] as Array).filter(func(f: String) -> bool: return not f.ends_with(".gd")).size(), 3)
+
+
+# --- W4r2 (SAF-4 recheck): the GameHost's rider map, setup / set_plan / start_phase -------------
+
+## The W4r2 fixture (build/w4r2/safety/fixture/src/games/rogue2/rogue2_game.gd): the GameModule's
+## parent is its GameHost, whose rider map hands out the LocalRider; setup() with
+## governor_profile "ramp_test" lifts the 150% cap and the warm-up. W4r2: 0 violations.
+const ROGUE2 := """extends GameModule
+## W4r2 safety fixture (scanned as text, never loaded).
+
+
+func sim_step(_dt: float, _frame: InputFrame) -> void:
+	var r = get_parent().local_riders[ctx.local_peer]
+	# Rebuild the rider's governor with the FTP test's profile and without the warm-up.
+	r.setup(r.peer_id, r.profile, r.slot, r.device, {"governor_profile": "ramp_test", "skip_warmup": true})
+	# A plan the PlanValidator never saw.
+	r.set_plan(EffortPlan.of([PlanPhase.erg(Wl.WORK, 200.0, 600.0, "no validator")]))
+	r.start_phase(0)
+"""
+
+## More shapes of the same route, each on its own line.
+const ROGUE3 := """extends GameModule
+const LR := preload("res://addons/wattlands/core/local_rider.gd")
+var _host: Node
+
+
+func sim_step(_dt: float, _frame: InputFrame) -> void:
+	var host := get_parent() as GameHost
+	var a: Variant = get_parent()._local_riders
+	var b: Variant = get_parent().local_rider_for(ctx.local_peer)
+	var c: Variant = get_parent().get("local_riders")
+	var opts := {governor_profile = "ramp_test"}
+	_host.setup({})
+	$Rider.start_phase(2)
+	a[1].resume_phase(0, 30.0)
+	a[1].call("set_plan", null)
+	var path := "res://addons/wattlands/" + "core/local_rider.gd"
+	get_parent().setup({})
+"""
+
+## A game's own setup calls on typed variables (the 3D kit's MultiMeshScatter.setup, a view's
+## own setup, a typed loop variable or parameter), ctx, self and super: all fine.
+const HONEST := """extends GameModule
+const LaneView := preload("res://src/games/honest/view/lane_view.gd")
+var _scatter: MultiMeshScatter
+var _lanes: Array[Node2D] = []
+
+
+func setup(_x: int) -> void:
+	pass
+
+
+func on_start() -> void:
+	_scatter.setup(_mesh(), 64)
+	var lane := LaneView.new()
+	lane.setup(3)
+	var other: HonestWave = HonestWave.new()
+	other.start_phase(1)
+	for w: HonestWave in _waves():
+		w.set_plan([])
+	self.setup(1)
+	super.setup(2)
+	_view_ready(lane)
+	var state := "setup"
+
+
+func _view_ready(view: HonestView) -> void:
+	view.setup(
+		1)
+"""
+
+
+func test_the_w4r2_rogue_game_is_flagged() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/games/rogue2/rogue2_game.gd", ROGUE2)
+	var v: Array[Dictionary] = scan_roots([root])["violations"]
+	var got := {}
+	for x in v:
+		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
+	for e: String in [
+		"6:local_riders:member", "8:setup:receiver", "8:governor_profile:dynamic",
+		"10:set_plan:receiver", "11:start_phase:receiver",
+	]:
+		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
+	assert_gt(v.size(), 0, "W4r2: a game reaching get_parent().local_riders gave 0 violations")
+
+
+func test_more_shapes_of_the_game_host_route_are_flagged() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/games/rogue3/rogue3_game.gd", ROGUE3)
+	var v: Array[Dictionary] = scan_roots([root])["violations"]
+	var got := {}
+	for x in v:
+		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
+	for e: String in [
+		"2:local_rider:dynamic", "7:GameHost:class", "8:_local_riders:member",
+		"9:local_rider_for:member", "10:local_rider:dynamic", "11:governor_profile:ident",
+		"12:setup:receiver", "13:start_phase:receiver", "14:resume_phase:receiver",
+		"15:set_plan:dynamic", "16:local_rider:dynamic", "17:setup:receiver",
+	]:
+		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
+
+
+func test_a_games_own_typed_setup_calls_pass() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/games/honest/honest_game.gd", HONEST)
+	var v: Array[Dictionary] = scan_roots([root])["violations"]
+	assert_eq(v.size(), 0, "typed receivers, ctx, self and super are fine:\n" + describe(v))
+
+
+func test_receiver_rules() -> void:
+	var code: String = lex("var a: MultiMeshScatter\nvar b\nvar c: Node\nvar d: LocalRider\nvar e: Foo\nvar e = 1\n")["code"]
+	var decls := {}
+	assert_true(receiver_is_safe("a", code, decls), "typed with a kit class")
+	assert_false(receiver_is_safe("b", code, decls), "untyped")
+	assert_false(receiver_is_safe("c", code, decls), "Node can hold a LocalRider")
+	assert_false(receiver_is_safe("d", code, decls), "a stack class")
+	assert_false(receiver_is_safe("e", code, decls), "one untyped declaration is enough")
+	assert_false(receiver_is_safe("undeclared", code, decls), "not declared in the file (an autoload)")
+	assert_true(receiver_is_safe("ctx.hud", code, decls))
+	assert_false(receiver_is_safe("context.hud", code, decls), "ctx only as the whole root")
+	assert_false(receiver_is_safe("$Scatter", code, decls))
+	var direct := "x := get_parent().local_riders[ctx.local_peer].setup("
+	assert_eq(receiver_of(direct, direct.rfind(".setup")), "get_parent().local_riders[ctx.local_peer]")
+	# A chain over a line continuation, with spaces before a dot.
+	var chained := "\tfoo(a)\\\n\t\t.bar[1] .setup("
+	assert_eq(receiver_of(chained, chained.rfind(".")), "foo(a)\\\n\t\t.bar[1]")
+	var node_path := "\t$Node/Path.setup("
+	assert_eq(receiver_of(node_path, node_path.rfind(".")), "Path", "a node path ends the receiver: not declared, so flagged")
+	var shorthand := "\t$Scatter.setup("
+	assert_eq(receiver_of(shorthand, shorthand.rfind(".")), "$Scatter")

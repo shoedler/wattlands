@@ -146,6 +146,45 @@ func test_network_lock_refuses_ambiguous_authorities() -> void:
 		assert_true(Locks.network_allows(url), url)
 
 
+## W4r2 (RS residual): url_host() and authority_ambiguous() take whatever precedes the first
+## "://" as the scheme, but WebSocketPeer reads a scheme-less URL as ws://, so
+## "127.0.0.2:8765/x://127.0.0.1" connected the trainer bridge to 127.0.0.2. A URL must start
+## with http://, https://, ws:// or wss:// (any case), and "[" or "]" in the authority (an IPv6
+## host, never loopback here) is ambiguous.
+func test_loopback_needs_a_known_scheme_and_no_brackets() -> void:
+	OS.set_environment(Locks.NET_ENV, "1")
+	var refused := [
+		"127.0.0.2:8765/x://127.0.0.1",
+		"evil:8765/://127.0.0.1/",
+		"127.0.0.1:8765/",
+		"localhost:8899/api",
+		"ftp://127.0.0.1/",
+		"file://localhost/x",
+		" http://127.0.0.1:8899/",
+		"://127.0.0.1/",
+		"http://[127.0.0.1]127.0.0.2:8899/",
+		"http://[127.0.0.1]:8899]127.0.0.2/",
+		"ws://[::1]:8765",
+	]
+	for url: String in refused:
+		assert_false(Locks.is_loopback_url(url), url)
+		assert_false(Locks.network_allows(url), url)
+		assert_push_warning("network integrations locked", url)
+	assert_eq(Locks.url_host("127.0.0.2:8765/x://127.0.0.1"), "127.0.0.1", "url_host() alone is fooled")
+	assert_false(Locks.has_known_scheme("127.0.0.2:8765/x://127.0.0.1"))
+	var allowed := [
+		"http://127.0.0.1:8899/oauth/token",
+		"HTTP://LOCALHOST:8899/api/v3",
+		"https://localhost/",
+		"ws://127.0.0.1:8765",
+		"wss://localhost:8765/v1",
+	]
+	for url: String in allowed:
+		assert_true(Locks.has_known_scheme(url), url)
+		assert_true(Locks.is_loopback_url(url), url)
+		assert_true(Locks.network_allows(url), url)
+
+
 ## The parser HTTPRequest uses, for the record: the cases above really do reach the host after
 ## the "@" (this is why url_host() alone can't be trusted with them).
 func test_godot_parse_url_reads_the_host_after_the_at() -> void:
