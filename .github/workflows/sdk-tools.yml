@@ -1,0 +1,33 @@
+# CI for sdk-tools: the template game, tools/run_game_sim, tools/new_game (BRIEF 3.6, 7.9).
+# Nothing is pushed during the build, so GitHub never runs it there; every step below passed locally.
+name: sdk-tools
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      WATTLANDS_NO_HW_CONTROL: '1'
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Godot 4.7.2
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || true
+      - name: Template tests (BRIEF 7 strict rules)
+        run: tools/run_tests --only=gut --gdir=res://tests/games/_template
+      - name: Tool tests (BRIEF 7 strict rules)
+        run: tools/run_tests --only=gut --gdir=res://tests/tools
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
+      - name: new_game and run_game_sim (Node)
+        run: node --test tools/tests/new_game.test.mjs tools/tests/run_game_sim.test.mjs
