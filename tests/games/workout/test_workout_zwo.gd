@@ -1,7 +1,7 @@
 extends GutTest
 ## .zwo content (BRIEF 3.7): zwo_sample imports content/workout/zwo/sample.zwo through the
-## platform's WorkoutImport, "zwo:<path>" imports any file, and the importer's clamps and
-## warnings show in session_preview(). WorkoutImport is still a stub in W1, so these tests
+## platform's ZwoImport, "zwo:<path>" imports any file, and the importer's clamps and
+## warnings show in session_preview(). ZwoImport is still a stub in W1, so these tests
 ## inject a parser with the same result shape; tests/games/workout/integration/ runs the
 ## real importer.
 
@@ -35,7 +35,7 @@ func after_each() -> void:
 	WorkoutSession.zwo_parser = Callable()
 
 
-## What WorkoutImport.parse_zwo_file returns for the sample (clamped, warm-up first, no
+## What ZwoImport.parse_zwo_file returns for the sample (clamped, warm-up first, no
 ## cool-down appended), including an imported Cooldown block and a FreeRide.
 func _fake_parser(path: String) -> Dictionary:
 	_paths.append(path)

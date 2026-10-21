@@ -14,7 +14,7 @@ The reference game (BRIEF 3.7): a group interval ride for 1–8 riders, bots opt
 | `vo2` | 5 × 3 min at 110%, 3 min at 50% between | 35 min |
 | `rolling_road` | 30 min of SIM on a seeded rolling course (−2% to +6%), band 76–105% FTP | 38 min |
 | `e2e` | 60 s ramp 50 → 60%, 30 s at 65%, 30 s FREE sprint, all inside the warm-up limits | 2 min + cool-down |
-| `zwo_sample` | `content/workout/zwo/sample.zwo` through `WorkoutImport`, clamps in the preview | about 35 min |
+| `zwo_sample` | `content/workout/zwo/sample.zwo` through `ZwoImport`, clamps in the preview | about 35 min |
 
 `--content=zwo:<path>` imports any `.zwo` file the same way.
 

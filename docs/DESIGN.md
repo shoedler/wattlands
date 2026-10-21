@@ -184,7 +184,7 @@ Every session opens with a 300 s ERG ramp 50 → 65 % FTP (except `e2e`); every 
 | `vo2` | 5 × 3 min at 110 %, 3 min at 50 % between | 35 min |
 | `rolling_road` | 30 min SIM on a seeded rolling course, −2 % to +6 % (`grade_source: course`), power band 76–105 % FTP | 38 min |
 | `e2e` | 60 s ramp 50 → 60 %, 30 s at 65 %, 30 s FREE sprint, all inside the warm-up limits | 2 min + cool-down |
-| `zwo_sample` | `content/workout/zwo/sample.zwo` through `WorkoutImport` | about 35 min |
+| `zwo_sample` | `content/workout/zwo/sample.zwo` through `ZwoImport` | about 35 min |
 
 `--content=zwo:<path>` imports any `.zwo` file. The importer reads SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (as SIM), adds a warm-up prefix if needed, splits and clamps blocks to BRIEF 4.6 and the warm-up limits, and lists every clamp in the session preview.
 

@@ -1,6 +1,9 @@
-class_name WorkoutImport
+class_name ZwoImport
 extends RefCounted
 ## .zwo import (BRIEF 3.7, Workout Director, P0). Owned by sim; public API frozen after W0.
+## (W4, QT-6) Named WorkoutImport until W4: platform classes never carry a game prefix, so the
+## class is ZwoImport now (the file keeps the path BRIEF 3.7 names). The Workout game keeps a
+## deprecated WorkoutImport alias (src/games/workout/rules/workout_import.gd) for one qa test.
 ## Parses SteadyState, Warmup, Ramp, Cooldown, IntervalsT and FreeRide (as SIM flat) with
 ## power as a fraction of FTP. Unsupported tags are skipped with a warning. Inserts a
 ## warm-up prefix if missing and clamps each block to BRIEF 4.6 and the warm-up limits
@@ -847,5 +850,5 @@ static func _empty_result() -> Dictionary:
 static func _fail(result: Dictionary, error: String) -> Dictionary:
 	result["ok"] = false
 	result["error"] = error
-	push_warning("WorkoutImport: %s" % error)
+	push_warning("ZwoImport: %s" % error)
 	return result
