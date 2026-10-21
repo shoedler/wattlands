@@ -25,6 +25,9 @@ var discovery_address: String = "255.255.255.255"
 var discovery_bind: String = "*"
 ## The name shown in this host's beacon.
 var host_name: String = ""
+## The game id announced in this host's beacon ("" = none; WlNetSession keeps it at the
+## lobby's game).
+var game_id: String = ""
 ## The hosting peer's relay server (null on clients).
 var server: LocalRelayServer = null
 ## The client's discovery listener (while searching).
@@ -85,7 +88,7 @@ func join(code: String, token: String = "") -> void:
 	_search_started = _now()
 
 
-## The rooms heard on the LAN so far ({code: {code, ip, port, name, build, seen}}).
+## The rooms heard on the LAN so far ({code: {code, ip, port, name, build, game_id, seen}}).
 ## Starts listening if needed; call poll() to hear more.
 func lan_rooms() -> Dictionary:
 	if discovery == null:
@@ -113,7 +116,7 @@ func poll() -> void:
 		var now := _now()
 		if now - _last_beacon_at >= BEACON_INTERVAL_S:
 			_last_beacon_at = now
-			var text := LanDiscovery.beacon(room_code, server.port if server != null else port, host_name)
+			var text := LanDiscovery.beacon(room_code, server.port if server != null else port, host_name, game_id)
 			_beacon.put_packet(text.to_utf8_buffer())
 
 

@@ -691,6 +691,63 @@ func test_the_input_routers_pause_and_confirm_belong_to_the_session_screen() -> 
 	host.end_session("timeout")
 
 
+## lead W2 round 2: config.platform_pause = false hands pausing to the app (its session screen
+## pauses and resumes through AppSessionInput): the GameHost never toggles pause on `pause`,
+## never resumes on `confirm` or `pedal_start`, and a `confirm` stays the game's. The SOLO
+## coasting pause (LocalRider.pause_requested, BRIEF 4.6.4) still pauses.
+func test_platform_pause_off_leaves_pausing_to_the_app() -> void:
+	var b := _solo("tiny", {"platform_pause": false})
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var game := _game(b)
+	host.start()
+	Kit.step(b, 2)
+	host.inject_action(&"pause")
+	Kit.step(b, 1)
+	assert_false(host.is_paused(), "an injected pause does not pause")
+	for c: Dictionary in game.get("local_intent_calls"):
+		assert_false((c["actions"] as Array).has(&"pause"), "and never reaches the game")
+	host.pause("user")
+	host.inject_action(&"pause")
+	Kit.step(b, 1)
+	assert_true(host.is_paused(), "nor does it resume")
+	host.inject_action(&"confirm")
+	Kit.step(b, 1)
+	assert_true(host.is_paused(), "confirm does not resume")
+	var calls: Array = game.get("local_intent_calls")
+	assert_eq(calls[calls.size() - 1]["actions"], [&"confirm"] as Array[StringName], "the confirm stays an ordinary action")
+	host.resume()
+	assert_false(host.is_paused(), "the app resumes")
+	_rider(b).pause_requested.emit("coasting")
+	assert_true(host.is_paused(), "the coasting pause (4.6.4) still pauses")
+	(_rider(b).get("gesture_queue") as Array).append(Wl.G_PEDAL_START)
+	Kit.step(b, 3)
+	assert_true(host.is_paused(), "pedal_start does not resume: the app does")
+	host.resume()
+	assert_false(host.is_paused())
+	host.end_session("timeout")
+
+
+## The default (platform_pause on, every config without the key) keeps the W1 behaviour: an
+## injected pause toggles and pedalling again ends a coasting pause.
+func test_platform_pause_defaults_on() -> void:
+	for extra: Dictionary in [{}, {"platform_pause": true}]:
+		var b := _solo("tiny", extra)
+		var host := _host(b)
+		host.start()
+		host.inject_action(&"pause")
+		Kit.step(b, 1)
+		assert_true(host.is_paused(), str(extra))
+		host.inject_action(&"pause")
+		Kit.step(b, 1)
+		assert_false(host.is_paused(), str(extra))
+		_rider(b).pause_requested.emit("coasting")
+		(_rider(b).get("gesture_queue") as Array).append(Wl.G_PEDAL_START)
+		Kit.step(b, 1)
+		assert_false(host.is_paused(), str(extra))
+		host.end_session("timeout")
+
+
 func test_headless_takes_gestures_from_the_local_rider() -> void:
 	var router := FakeRouter.new()
 	_root.add_child(router)

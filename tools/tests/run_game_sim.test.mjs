@@ -149,4 +149,38 @@ describe('through Godot', () => {
     }
     assert.equal(reports[0].deterministic_hash, reports[1].deterministic_hash, 'same arguments and seed, same hash');
   });
+
+  // lead W2 round 2: Workout VO2 in HOST (two human slots over loopback plus a bot), twice with one
+  // seed through the real wrapper: the same deterministic_hash, and the same report apart from the
+  // paths and the wall-clock meta the hash leaves out (so nothing it hashes hides a difference).
+  test(`${sh ? sh.name : 'bash'}: Workout VO2 in HOST is deterministic`, { skip: skipReal, timeout: 1_200_000 }, async (t) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-host-'));
+    temps.push(cwd);
+    const flags = ['--game=workout', '--content=vo2', '--players=2', '--bots=1', '--rider=erg', '--sim-speed=100000', '--seed=42', '--godot-timeout=900'];
+    const reports = [];
+    for (const name of ['a', 'b']) {
+      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv(), cwd, timeoutMs: 1_000_000 });
+      if (r.code === 2 && /not implemented/.test(r.stderr)) {
+        t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
+        return;
+      }
+      assert.equal(r.code, 0, r.stderr + r.stdout);
+      const report = JSON.parse(fs.readFileSync(path.join(cwd, 'out', `${name}.json`), 'utf8'));
+      assert.equal(report.role, 'HOST');
+      assert.equal(report.end_reason, 'complete');
+      assert.equal(report.slots.length, 3);
+      assert.equal(report.clients.length, 1, 'one loopback client');
+      assert.equal(report.fit_paths.length, 2, 'a FIT per human slot');
+      reports.push(report);
+    }
+    assert.equal(reports[0].deterministic_hash, reports[1].deterministic_hash, 'same arguments and seed, same hash');
+    const strip = (rep) => {
+      const c = structuredClone(rep);
+      delete c.fit_paths;
+      delete c.meta;
+      delete c.args.report;
+      return c;
+    };
+    assert.deepEqual(strip(reports[0]), strip(reports[1]), 'the reports match apart from paths and meta');
+  });
 });

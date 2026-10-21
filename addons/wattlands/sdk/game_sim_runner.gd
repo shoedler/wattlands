@@ -311,7 +311,7 @@ func setup(p_args: Dictionary) -> String:
 	var p_seed := int(args["seed"])
 	# Isolation: every persisted file of this run lives under a temp root.
 	_temp_root = Paths.make_temp_dir("wattlands_sim")
-	_prev_paths_override = Paths._override
+	_prev_paths_override = Paths.get_override()
 	Paths.set_override(_temp_root)
 	_paths_overridden = true
 	_fit_targets.clear()

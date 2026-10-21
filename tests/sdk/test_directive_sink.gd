@@ -201,13 +201,66 @@ func test_sim_block_length() -> void:
 func test_sim_block_spacing_and_the_bracketing_exemption() -> void:
 	_start()
 	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted)
-	assert_eq(_req({"mode": "SIM", "duration_s": 10}).reason, Wl.REFUSE_SWITCH_SPACING, "the entry was 0 s ago")
+	# W2 round 2: a second mode SIM while the block runs only confirms it (DirectiveSink
+	# contract, as the governor does), so it neither switches nor counts against spacing.
+	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "0 s after the entry: a confirmation")
+	assert_eq(_tracker.last_switch_tick(1), 0, "the confirmation is no switch")
 	_advance(10)
 	assert_false(_tracker.block_active(1, _clock.game_tick), "the block expired (its exit is exempt)")
 	_advance(29.95)
 	assert_eq(_req({"mode": "SIM", "duration_s": 10}).reason, Wl.REFUSE_SWITCH_SPACING, "29.95 s after the exit")
 	_advance(0.05)
 	assert_true(_req({"mode": "SIM", "duration_s": 10}).accepted, "30 s after the exit")
+	assert_true(_req({"mode": "ERG"}).accepted, "an early exit right after the entry is exempt")
+	assert_eq(_req({"mode": "SIM", "duration_s": 10}).reason, Wl.REFUSE_SWITCH_SPACING, "the exit was 0 s ago")
+
+
+## W2 round 2 (docs/TRAINER.md known difference 7): mode SIM in an ERG phase while a SIM block
+## runs is a confirmation, as the DirectiveSink contract and the governor say: it is accepted
+## whatever its duration_s, never extends or re-checks the block, and carries its haptic (the
+## haptic rules still apply: never in ERG, never for an opted-out rider).
+func test_mode_sim_during_a_running_block_confirms_it_and_carries_its_haptic() -> void:
+	_start()
+	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH,
+		"with no block running a mode SIM haptic would open a 1.5 s block")
+	assert_true(_req({"mode": "SIM", "duration_s": 20, "reason": "overdrive"}).accepted)
+	_advance(5)
+	_unsafe_tm = Telemetry.new()
+	_unsafe_tm.rescue = true
+	var r := _req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit"})
+	assert_true(r.accepted, "a confirmation plus its haptic, not a too-short block")
+	assert_eq(r.reason, "")
+	var dirs: Array = _fake().get("directives")
+	assert_eq((dirs[dirs.size() - 1] as EffortDirective).to_dict(),
+		{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "id": r.id},
+		"the governor gets the request as sent and confirms it")
+	assert_true(_req({"mode": "SIM", "duration_s": 40, "mode_grade": 3.0}).accepted, "no length or safety re-check")
+	_unsafe_tm = null
+	assert_eq(_tracker.last_switch_tick(1), 0, "no switch")
+	_advance(14.95)
+	assert_true(_tracker.block_active(1, _clock.game_tick), "the block still runs at 19.95 s")
+	_advance(0.05)
+	assert_false(_tracker.block_active(1, _clock.game_tick), "and ends at its own 20 s: never extended")
+	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_SIM_BLOCK_LENGTH,
+		"after the block a mode SIM haptic is a block request again")
+	assert_eq(_req({"haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_HAPTIC_ERG, "and a bare haptic is in ERG")
+	assert_push_warning("haptic_in_erg")
+
+
+func test_a_confirmation_keeps_the_haptic_rules_and_a_remote_block() -> void:
+	_start()
+	assert_true(_req({"mode": "SIM", "duration_s": 20}, 3).accepted)
+	assert_eq(_req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}, 3).reason, Wl.REFUSE_HAPTIC_OFF,
+		"peer 3 opted out of haptics")
+	assert_true(_req({"mode": "SIM", "duration_s": 20}, 2).accepted)
+	var open_id := int(_sent[_sent.size() - 1][1]["id"])
+	var r := _req({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}, 2)
+	assert_true(r.accepted)
+	assert_eq(_sent[_sent.size() - 1][1]["directive"]["mode"], "SIM", "the remote governor gets it as sent")
+	_router.on_ack(2, {"id": r.id, "refused": true, "reason": Wl.REFUSE_HAPTIC_COOLDOWN})
+	assert_true(_tracker.block_active(2, _clock.game_tick), "a refused confirmation never takes the block back")
+	_router.on_ack(2, {"id": open_id, "refused": false})
+	assert_true(_tracker.block_active(2, _clock.game_tick))
 
 
 func test_plan_phase_changes_count_as_switches() -> void:

@@ -159,7 +159,7 @@ func run(raw: PackedStringArray, parent: Node) -> int:
 
 func _run_session(parent: Node) -> int:
 	var temp_dir := ""
-	var saved_override: String = Paths._override
+	var saved_override: String = Paths.get_override()
 	if isolate_user_dir:
 		temp_dir = Paths.make_temp_dir("run_game_sim")
 		Paths.set_override(temp_dir)
