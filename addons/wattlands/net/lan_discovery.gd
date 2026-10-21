@@ -5,8 +5,9 @@ extends RefCounted
 ##
 ## Beacon (one UDP datagram, JSON):
 ##   {"wattlands": "lan", "proto": 1, "code": "K7QX2M", "port": 8790, "name": "Hana",
-##    "build": "0.1.0"}
-## The sender's address comes from the datagram, never from the payload.
+##    "build": "0.1.0", "game": "workout"}
+## "game" (the lobby's game id) is optional (W2 round 2); a beacon without it parses with
+## game_id "". The sender's address comes from the datagram, never from the payload.
 
 const MAGIC := "lan"
 const DEFAULT_PORT := 8791
@@ -16,7 +17,7 @@ const STALE_S := 5.0
 var port: int = DEFAULT_PORT
 ## "*" listens on every interface; tests use "127.0.0.1".
 var bind_address: String = "*"
-## code -> {code, ip, port, name, build, seen}
+## code -> {code, ip, port, name, build, game_id, seen}
 var rooms: Dictionary = {}
 
 var _udp: PacketPeerUDP = null
@@ -70,14 +71,17 @@ func find(code: String) -> Dictionary:
 	return rooms.get(RoomCode.normalize(code), {})
 
 
-## A beacon's JSON text.
-static func beacon(code: String, relay_port: int, name: String = "") -> String:
-	return JSON.stringify({"wattlands": MAGIC, "proto": Wl.PROTO, "code": RoomCode.normalize(code),
-		"port": relay_port, "name": name, "build": Wl.BUILD})
+## A beacon's JSON text ("game" only when game_id is set).
+static func beacon(code: String, relay_port: int, name: String = "", game_id: String = "") -> String:
+	var b := {"wattlands": MAGIC, "proto": Wl.PROTO, "code": RoomCode.normalize(code),
+		"port": relay_port, "name": name, "build": Wl.BUILD}
+	if game_id != "":
+		b["game"] = game_id
+	return JSON.stringify(b)
 
 
-## A beacon's fields {code, port, name, build}, or {} if the text is not a valid beacon of
-## this protocol version.
+## A beacon's fields {code, port, name, build, game_id}, or {} if the text is not a valid
+## beacon of this protocol version.
 static func parse_beacon(text: String) -> Dictionary:
 	if text.length() > 512:
 		return {}
@@ -94,4 +98,6 @@ static func parse_beacon(text: String) -> Dictionary:
 	var p: Variant = b.get("port")
 	if code == "" or not (p is float or p is int) or int(p) <= 0 or int(p) > 65535:
 		return {}
-	return {"code": code, "port": int(p), "name": str(b.get("name", "")), "build": str(b.get("build", ""))}
+	var game: Variant = b.get("game", "")
+	return {"code": code, "port": int(p), "name": str(b.get("name", "")), "build": str(b.get("build", "")),
+		"game_id": str(game) if game is String else ""}

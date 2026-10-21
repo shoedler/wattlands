@@ -43,6 +43,9 @@ signal rejoin_requested(peer_id: int)
 ## Addition: our ready-up was refused ("missing_game" or "version_mismatch"), with a
 ## translated message for the lobby.
 signal ready_refused(reason: String, message: String)
+## Addition (P1, BRIEF 5.4): the LAN rooms heard by lan_rooms() discovery changed; `rooms` is
+## the new lan_rooms() list.
+signal lan_rooms_changed(rooms: Array)
 
 const STATE_OFFLINE := "offline"
 const STATE_CONNECTING := "connecting"
@@ -69,6 +72,10 @@ const CLOCK_PING_FAST_S := 1.0
 const CLOCK_PING_S := 5.0
 const CLOCK_SAMPLES := 8
 const RECENT_ROOMS_MAX := 10
+## Relay answers to a create that asked for a code (P1 reclaim) after which host_room() asks
+## once more without the code: the relay refused the code itself, not the host. (The relays in
+## this repo never refuse: they hand out a new code when the asked one is taken.)
+const CODE_REFUSALS: Array[String] = ["bad_request", "room_full", "room_not_found", "code_taken"]
 
 var transport: Transport = null
 ## "", Wl.HOST or Wl.CLIENT.
@@ -111,6 +118,13 @@ var relay_url: String = ""
 ## Where installed games and their manifests come from: any Node with games() (manifests
 ## with "id" and "version") and manifest(id); null means the GameRegistry autoload.
 var registry: Node = null
+## P1 LAN discovery (lan_rooms()): the UDP port and interface the join page listens on for
+## LanTransport hosts' beacons ("*": every interface; tests use "127.0.0.1").
+var lan_discovery_port: int = LanDiscovery.DEFAULT_PORT
+var lan_discovery_bind: String = "*"
+## Seconds-returning clock for LAN room staleness (beacons are a real-time, 1 Hz affair, like
+## RelayTransport's timers); the wall clock when invalid. Tests inject one.
+var lan_time_func: Callable = Callable()
 ## Lobby limits (set_game_manifest() fills them from game.json).
 var max_players: int = NetMessages.MAX_PEERS
 var min_players: int = 1
@@ -166,7 +180,8 @@ var _reconnect_in_flight: bool = false
 var _reconnect_attempts: int = 0
 var _reconnect_at: float = 0.0
 var _reconnect_started: float = 0.0
-var _requested_code: String = ""
+## While a create that asked for a code is in flight: its max peers (0: none).
+var _host_retry_max: int = 0
 
 # Time.
 var _now_s: float = 0.0
@@ -189,6 +204,14 @@ var _co_pending: Dictionary = {}
 
 # Messages to ourselves, delivered on the next poll.
 var _self_inbox: Array[String] = []
+
+# LAN (P1): the join page's beacon listener, the list last emitted, the LanTransport made by
+# join_lan() and the transport it replaced (restored by host_room/join_room/start_offline).
+var _lan: LanDiscovery = null
+var _lan_failed: bool = false
+var _lan_published: String = "[]"
+var _lan_transport: LanTransport = null
+var _replaced_transport: Transport = null
 
 
 func _init() -> void:
@@ -236,6 +259,8 @@ func use_transport(t: Transport) -> void:
 func start_offline() -> void:
 	_explicit_leave = true
 	_leave_transport()
+	stop_lan_discovery()
+	_restore_relay_transport()
 	_reset_room_state()
 	offline = true
 	role = ""
@@ -249,21 +274,39 @@ func start_offline() -> void:
 	_publish_lobby()
 
 
-func host_room(max_peers: int = 8) -> void:
+## Host a room for up to `max_peers` riders. `preferred_code` (P1, BRIEF 5.2: the code this
+## host had before, any spelling RoomCode.normalize() accepts) is sent in the relay's create
+## message; the relay gives it back when it is free and a new code otherwise. If the relay
+## refuses the create itself (CODE_REFUSALS: a relay that does not know the field), the
+## session asks once more without the code, so hosting never fails because of it. An empty or
+## invalid preferred code asks for a new code. room_code is the code actually granted.
+func host_room(max_peers: int = 8, preferred_code: String = "") -> void:
+	stop_lan_discovery()
+	_restore_relay_transport()
 	_ensure_transport()
 	_reset_room_state()
 	offline = false
 	role = Wl.HOST
 	_explicit_leave = false
 	_ensure_local_info()
+	var want := RoomCode.normalize(preferred_code)
+	var n := clampi(max_peers, 1, NetMessages.MAX_PEERS)
 	if transport is RelayClientTransport:
-		(transport as RelayClientTransport).requested_code = _requested_code
-	_requested_code = ""
+		(transport as RelayClientTransport).requested_code = want
+		_host_retry_max = n if want != "" else 0
+	_sync_lan_beacon()
 	_set_state(STATE_CONNECTING, "host")
-	transport.host(clampi(max_peers, 1, NetMessages.MAX_PEERS))
+	transport.host(n)
 
 
 func join_room(code: String) -> void:
+	stop_lan_discovery()
+	_restore_relay_transport()
+	_join(code)
+
+
+## join_room() on the current transport.
+func _join(code: String) -> void:
 	var c := RoomCode.normalize(code)
 	_ensure_transport()
 	_reset_room_state()
@@ -337,6 +380,8 @@ func set_ready(ready_flag: bool) -> void:
 func set_game(game_id: String, game_version: String, content_id: String) -> void:
 	if not _require_authority("set_game"):
 		return
+	if transport is LanTransport:
+		(transport as LanTransport).game_id = game_id
 	var changed := game_id != _game_id or _version_str(game_version) != _game_version
 	if game_id != "" and not _manifests.has(game_id):
 		var m := _registry_manifest(game_id)
@@ -587,6 +632,7 @@ func poll() -> void:
 	_polls += 1
 	if transport != null:
 		transport.poll()
+	_poll_lan()
 	_drain_self_inbox()
 	_reconnect_step()
 	_flush_coalesced(-1, true)
@@ -777,9 +823,7 @@ func rejoin() -> void:
 ## P1: host again with the code this profile hosted last (the relay gives a new one if it
 ## is taken).
 func host_room_reclaim(max_peers: int = 8) -> void:
-	_requested_code = last_hosted_code()
-	host_room(max_peers)
-	_requested_code = ""
+	host_room(max_peers, last_hosted_code())
 
 
 ## P1: recently used rooms, newest first: [{code, role}].
@@ -796,6 +840,135 @@ func last_hosted_code() -> String:
 		if r is Dictionary and str((r as Dictionary).get("role", "")) == Wl.HOST:
 			return RoomCode.normalize(str((r as Dictionary).get("code", "")))
 	return ""
+
+
+# --- additions: LAN rooms (P1, BRIEF 5.4) -------------------------------------------------
+
+## P1: the LAN rooms heard recently, sorted by code: [{code, name, game_id, address, port,
+## build}]. `address` and `port` are where the room's host (a LanTransport) serves the relay
+## protocol; `name` is the host's name and `game_id` its lobby's game ("" from a host that does
+## not announce it). The first call starts listening for beacons on lan_discovery_port (if that
+## fails: push_warning, an empty list, and no retry until stop_lan_discovery()); poll() then
+## hears more, forgets rooms silent for LanDiscovery.STALE_S of wall time (lan_time_func) and
+## emits lan_rooms_changed when the list changes. host_room(), join_room(), join_lan(), start_offline() and
+## stop_lan_discovery() stop listening.
+func lan_rooms() -> Array[Dictionary]:
+	if _lan == null:
+		_lan = LanDiscovery.new()
+	if not _lan.is_listening() and not _lan_failed:
+		_lan.port = lan_discovery_port
+		_lan.bind_address = lan_discovery_bind
+		_lan_failed = _lan.start() != OK
+	return _lan_list()
+
+
+## P1: true while lan_rooms() discovery listens for beacons.
+func is_lan_discovering() -> bool:
+	return _lan != null and _lan.is_listening()
+
+
+## P1: stop listening for LAN beacons and forget the rooms heard (lan_rooms_changed([]) if
+## the list was not empty).
+func stop_lan_discovery() -> void:
+	_lan_failed = false
+	if _lan == null:
+		return
+	_lan.stop()
+	_lan.rooms.clear()
+	_publish_lan_rooms()
+
+
+## P1: join a room from lan_rooms() ({code, address, port}) directly: a LanTransport connects
+## to ws://<address>:<port>/v1 (no relay, no beacon wait) and joins by the room's code, like
+## join_room() (same states, refusals, ready-up and reconnect token). The transport in use
+## before (the relay) comes back with the next host_room(), join_room() or start_offline().
+## A room without a valid code, address or port is refused as room_not_found.
+func join_lan(room: Dictionary) -> void:
+	stop_lan_discovery()
+	var code := RoomCode.normalize(str(room.get("code", "")))
+	var address := str(room.get("address", "")).strip_edges()
+	var p := int(room.get("port", 0)) if (room.get("port") is int or room.get("port") is float) else 0
+	if code == "" or address == "" or p <= 0 or p > 65535:
+		push_warning("NetSession: join_lan needs a room from lan_rooms() with code, address and port; got %s" % JSON.stringify(room))
+		_join("")
+		return
+	_restore_relay_transport()
+	var lt := LanTransport.new()
+	lt.name = "LanTransport"
+	lt.url = "ws://%s:%d/v1" % [address, p]
+	if transport != null and is_instance_valid(transport):
+		_explicit_leave = true
+		_leave_transport()
+	_replaced_transport = transport
+	_lan_transport = lt
+	use_transport(lt)
+	_join(code)
+
+
+## The LanTransport join_lan() made goes away and the transport it replaced comes back
+## (null: the next _ensure_transport() makes a RelayTransport).
+func _restore_relay_transport() -> void:
+	if _lan_transport == null:
+		return
+	var lt := _lan_transport
+	_lan_transport = null
+	var prev := _replaced_transport
+	_replaced_transport = null
+	if is_instance_valid(lt):
+		if transport == lt:
+			_explicit_leave = true
+			_leave_transport()
+			use_transport(prev if prev != null and is_instance_valid(prev) else null)
+		# Freed at the end of the frame: this may run inside one of its own signals.
+		lt.queue_free()
+
+
+## A LanTransport we host on announces this lobby's game and the host's name in its beacon.
+func _sync_lan_beacon() -> void:
+	if not (transport is LanTransport):
+		return
+	var lt := transport as LanTransport
+	lt.game_id = _game_id
+	if lt.host_name == "":
+		lt.host_name = str(_local_info.get("name", ""))
+
+
+func _poll_lan() -> void:
+	if _lan == null or not _lan.is_listening():
+		return
+	_lan.poll(_lan_now())
+	_publish_lan_rooms()
+
+
+func _lan_now() -> float:
+	if lan_time_func.is_valid():
+		return float(lan_time_func.call())
+	return Time.get_ticks_msec() / 1000.0
+
+
+func _lan_list() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if _lan == null:
+		return out
+	var codes: Array = _lan.rooms.keys()
+	codes.sort()
+	for code: Variant in codes:
+		var r: Dictionary = _lan.rooms[code]
+		out.append({
+			"code": str(r.get("code", code)), "name": str(r.get("name", "")),
+			"game_id": str(r.get("game_id", "")), "address": str(r.get("ip", "")),
+			"port": int(r.get("port", 0)), "build": str(r.get("build", "")),
+		})
+	return out
+
+
+func _publish_lan_rooms() -> void:
+	var list := _lan_list()
+	var text := JSON.stringify(list)
+	if text == _lan_published:
+		return
+	_lan_published = text
+	lan_rooms_changed.emit(list)
 
 
 # --- additions: snapshots ----------------------------------------------------------------
@@ -888,6 +1061,7 @@ func _on_connected() -> void:
 	_reconnect_pending = false
 	_reconnect_in_flight = false
 	_ever_connected = true
+	_host_retry_max = 0
 	refusal_reason = ""
 	_save_token()
 	_record_recent_room()
@@ -916,6 +1090,10 @@ func _on_connected() -> void:
 func _on_disconnected(reason: String) -> void:
 	if _explicit_leave:
 		return
+	if _host_retry_max > 0 and role == Wl.HOST and not _ever_connected and CODE_REFUSALS.has(reason):
+		_host_again_without_code(reason)
+		return
+	_host_retry_max = 0
 	_reconnect_in_flight = false
 	if reason == "host_left":
 		_end("host_left", STATE_OFFLINE)
@@ -1687,6 +1865,17 @@ func _reconnect_step() -> void:
 	transport.join(room_code, _token)
 
 
+## The relay refused a create that asked for a code: create again with a new code.
+func _host_again_without_code(reason: String) -> void:
+	var n := _host_retry_max
+	_host_retry_max = 0
+	push_warning("NetSession: the relay refused the requested room code (%s); hosting with a new code" % reason)
+	if transport is RelayClientTransport:
+		(transport as RelayClientTransport).requested_code = ""
+	_set_state(STATE_CONNECTING, "host")
+	transport.host(n)
+
+
 func _refuse(reason: String) -> void:
 	refusal_reason = reason
 	_explicit_leave = true
@@ -1724,6 +1913,7 @@ func _reset_room_state() -> void:
 	_ever_connected = false
 	_reconnect_pending = false
 	_reconnect_in_flight = false
+	_host_retry_max = 0
 	_infos.clear()
 	_join_order.clear()
 	_connected_peers.clear()

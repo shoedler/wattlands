@@ -206,6 +206,93 @@ func test_recent_rooms_and_host_code_reclaim() -> void:
 	assert_eq(h.recent_rooms().size(), 1, "no duplicate entries")
 
 
+## A relay that refuses every create carrying a code (`refuse_all`: every create), like a relay
+## that does not know the P1 field.
+class CodeRefusingRooms:
+	extends RelayRooms
+	var refused: int = 0
+	var refuse_all: bool = false
+
+	func _on_create(conn: int, c: Dictionary, msg: Dictionary) -> void:
+		if refuse_all or msg.get("code") is String:
+			refused += 1
+			_error(conn, "bad_request")
+			return
+		super._on_create(conn, c, msg)
+
+
+func _refusing_hub(refuse_all: bool = false) -> CodeRefusingRooms:
+	var rooms := CodeRefusingRooms.new()
+	rooms.rng = SeededRng.make(7)
+	rooms.enforce_rate_limits = false
+	rooms.enforce_idle_timeout = false
+	rooms.refuse_all = refuse_all
+	hub.rooms = rooms
+	return rooms
+
+
+## lead W2 round 2, BRIEF 5.2 P1: host_room(max_peers, preferred_code), the form the lobby
+## calls (it checks get_method_argument_count("host_room") >= 2).
+func test_host_room_asks_for_the_preferred_code() -> void:
+	var h := make_session("host", rider("Hana"))
+	assert_eq(h.get_method_argument_count("host_room"), 2)
+	h.host_room(8, "k7q-x2m")
+	pump()
+	assert_eq(h.state, WlNetSession.STATE_HOSTING)
+	assert_eq(h.room_code, "K7QX2M", "any RoomCode spelling; the relay grants a free code")
+	assert_eq(events("host", "refused"), [])
+
+
+func test_a_taken_or_invalid_preferred_code_gets_a_new_code() -> void:
+	var r := room([])
+	var taken := r[0].room_code
+	var h2 := make_session("h2", rider("Bo"))
+	h2.host_room(8, taken)
+	pump()
+	assert_eq(h2.state, WlNetSession.STATE_HOSTING)
+	assert_ne(h2.room_code, taken, "the code is in use: a new one")
+	assert_true(RoomCode.is_valid(h2.room_code))
+	var h3 := make_session("h3", rider("Cy"))
+	h3.host_room(8, "not a code!")
+	pump()
+	assert_eq(h3.state, WlNetSession.STATE_HOSTING)
+	assert_true(RoomCode.is_valid(h3.room_code))
+	assert_eq(events("h2", "refused") + events("h3", "refused"), [])
+
+
+func test_a_relay_that_refuses_the_code_falls_back_to_a_new_code() -> void:
+	var rooms := _refusing_hub()
+	var h := make_session("host", rider("Hana"))
+	h.host_room(6, "K7QX2M")
+	pump()
+	assert_eq(rooms.refused, 1, "the coded create was refused once")
+	assert_push_warning("refused the requested room code")
+	assert_eq(h.state, WlNetSession.STATE_HOSTING, "and the session hosts anyway")
+	assert_true(RoomCode.is_valid(h.room_code))
+	assert_ne(h.room_code, "K7QX2M")
+	assert_eq(events("host", "refused"), [], "no refusal reaches the lobby")
+	var c := make_session("c1", rider("Ike"))
+	c.join_room(h.room_code)
+	pump()
+	assert_eq(c.state, WlNetSession.STATE_JOINED, "the fallback room works")
+
+
+func test_the_fallback_is_tried_once_and_a_plain_create_is_never_retried() -> void:
+	var rooms := _refusing_hub(true)
+	var h := make_session("host", rider("Hana"))
+	h.host_room(8, "K7QX2M")
+	pump()
+	assert_eq(rooms.refused, 2, "the coded create and one plain create")
+	assert_push_warning("refused the requested room code")
+	assert_eq(h.state, WlNetSession.STATE_ERROR)
+	assert_true(U.same(events("host", "refused"), [["refused", "bad_request"]]))
+	var h2 := make_session("h2", rider("Bo"))
+	h2.host_room(8)
+	pump()
+	assert_eq(rooms.refused, 3, "no code asked: no retry")
+	assert_true(U.same(events("h2", "refused"), [["refused", "bad_request"]]))
+
+
 func test_leave_forgets_the_token() -> void:
 	var r := room()
 	assert_true(FileAccess.file_exists(r[1].token_path))
