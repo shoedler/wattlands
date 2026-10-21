@@ -205,6 +205,13 @@ func is_external_tick() -> bool:
 	return _external_tick
 
 
+## The app shell's name for the same switch (W2, app-shell request): false while a GameHost
+## or the FTP test screen ticks the rider (set_external_tick(true)), true when menu time
+## takes over again (set_external_tick(false), with its menu reset).
+func set_menu_ticking(on: bool) -> void:
+	set_external_tick(not on)
+
+
 ## One fixed 0.05 s step of menu time: the rider (and through it the device), or the device
 ## alone before a rider exists. _process calls it once per due step.
 func step() -> void:

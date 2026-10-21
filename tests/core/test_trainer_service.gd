@@ -335,6 +335,30 @@ func _session_setup(svc: WlTrainerService, rec: RideRecorderApi = null) -> Local
 	return r
 
 
+## W2 (app-shell): the app shell calls set_menu_ticking(false) when a session or the FTP test
+## starts ticking the rider and set_menu_ticking(true) at the end; the service must stop
+## ticking in between, or the rider would be ticked twice per frame.
+func test_set_menu_ticking_is_the_external_tick_switch() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var r := svc.local_rider()
+	svc._process(1.0)
+	var t0 := r.platform_time()
+	assert_gt(t0, 0.0, "menu time ticks the rider")
+	svc.set_menu_ticking(false)
+	assert_true(svc.is_external_tick())
+	svc._process(1.0)
+	assert_eq(r.platform_time(), t0, "no second ticker during a session")
+	r.setup(2, _settings.profile, _settings.profile.to_slot(2, Wl.FAIR_FTP), svc.device(),
+		{"multiplayer": true, "governor": Fakes.FakeGovernor.new(), "gestures": Fakes.FakeGestures.new(), "bus": _bus})
+	svc.set_menu_ticking(true)
+	assert_false(svc.is_external_tick())
+	assert_eq(r.peer_id, 1, "handing back sets the menu rider up afresh")
+	svc._process(1.0)
+	assert_gt(r.platform_time(), 0.0, "and menu time ticks it again")
+
+
 func test_handing_ticking_back_sets_the_menu_rider_up_afresh() -> void:
 	_args(["--mock-trainer=erg"])
 	var svc := _make()

@@ -11,6 +11,14 @@ extends Node
 ## sets Autopilot; --run-seconds quits after n seconds of platform time; --report writes a
 ## JSON report on exit; --profile-dir moves Paths.user_dir(). With --host or --join the app
 ## skips the menus (headless e2e peers) and starts as soon as the lobby is ready.
+## Scripted peers (W2, docs/ARCHITECTURE.md "Scripted peers"): the app shell
+## (src/app/scripted/) owns that flow. WlApp only reports is_scripted() and
+## launch_options(), goes to the lobby state and shuts the riders down in quit(); it never
+## hosts, joins, quits at --run-seconds on its own or writes the --report of a scripted
+## peer (the shell's hard stop exits 2 and writes the full report).
+## Processes whose main loop is not the app (GUT, tools/check_scripts.gd, the run_game_sim
+## and screenshot drivers started with -s) never boot: WlApp stays in "boot", starts no
+## trainer and never writes a report, so it can't overwrite a tool's report at the same path.
 ##
 ## Details (W1):
 ## - Boot runs only in the real app (a SceneTree without a script, so never under GUT,
@@ -28,8 +36,9 @@ extends Node
 ##   QUIT_GRACE_S of real time when a real trainer is connected, so the safe commands go
 ##   out. A window close request quits the same way; NOTIFICATION_CRASH and leaving the
 ##   tree without quit() shut the riders down at once.
-## - --run-seconds=<n>: an own SimClock (--sim-speed aware) quits with run_seconds_exit_code
-##   (default 0) once n platform seconds have passed since boot; exit_reason "run_seconds".
+## - --run-seconds=<n> (not scripted): an own SimClock (--sim-speed aware) quits with
+##   run_seconds_exit_code (default 0) once n platform seconds have passed since boot;
+##   exit_reason "run_seconds". The fallback --report is written for non-scripted runs only.
 
 signal state_changed(state: String, params: Dictionary)
 ## Boot finished (settings loaded, trainer started, upload queue retried).
@@ -123,7 +132,8 @@ func boot() -> void:
 		r.process_queue()
 	var spd := CmdLine.get_float("sim-speed", 1.0)
 	_clock = SimClock.create(spd if spd > 0.0 else 1.0)
-	_run_seconds = maxf(CmdLine.get_float("run-seconds", 0.0), 0.0)
+	# A scripted peer's hard stop is the app shell's (exit 2 and its full report).
+	_run_seconds = 0.0 if is_scripted() else maxf(CmdLine.get_float("run-seconds", 0.0), 0.0)
 	booted.emit()
 	if is_scripted():
 		goto("lobby", launch_options())
@@ -243,9 +253,11 @@ func _real_trainer_connected() -> bool:
 	return ts != null and ts.device() != null and not ts.is_mock()
 
 
-## With --report=<path> and no report written by the app shell, a minimal one in the
-## scripted-peer schema, so the e2e harness always finds a JSON file.
+## A non-scripted run with --report=<path> and no report written yet gets a minimal one in
+## the scripted-peer schema. A scripted peer's report is the app shell's alone.
 func _write_fallback_report() -> void:
+	if is_scripted():
+		return
 	var path := CmdLine.get_str("report", "")
 	if path == "" or path == "true" or FileAccess.file_exists(path):
 		return
