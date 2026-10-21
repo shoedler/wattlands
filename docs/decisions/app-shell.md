@@ -270,3 +270,20 @@
 - Decision: `AppResultsScreen.stats_text` lists custom and team stats in the Dictionary's insertion order, which is the order the game added them; Protocol encodes without sorted keys, so clients show the host's order.
 - Alternatives: a fixed key order in the app (the app can't know a game's keys); sorting (showed "Best 1 min, Best 20 min, Best 5 min").
 - Reason: BRIEF 3.7 lists best 1-, 5- and 20-minute power in that order; WorkoutResults adds its stats in BRIEF order.
+
+## 2026-10-21 (W4r2): Settings use TrainerService's safe unlink (W4r2 R6, R7; supersedes the W4 SAF-8 entry above)
+
+- Decision: Settings' Connect, Disconnect and "use the mock trainer" call `TrainerService.connect_trainer(address)`, `disconnect_trainer()` and `use_mock()`, as the platform's SAF-8 decision says. The service shuts the rider down and drops the link only once the control point has sent SIM flat and Stop (up to its 3 s timeout); picking the trainer that is already linked connects at once and leaves the menu rider alone; the next ready trainer gets a new menu rider. The page's own fixed `SAFE_DRAIN_S` wait, its `_rearm_menu_rider()` and its "leaving the page drops the link at once" are gone: the wait belongs to the service and outlives the page. The page follows the service's connection manager (none with the mock) and shows "Making the trainer safe…" while `is_unlinking()`.
+- Alternatives: keep the page's wait and only skip the same address (still too short for a retried write).
+- Reason: a KICKR answering SIM flat later than 0.5 s lost the Stop (BRIEF 4.6.9), and re-picking the linked trainer left the menu rider shut down for good.
+
+## 2026-10-21 (W4r2): A Strava import outlives the Settings page (W4r2 R20)
+
+- Decision: `AppSettingsScreen.import_from_strava()` is a static coroutine that awaits `Rides.strava_import_athlete()` and then saves the profile and emits `profile_changed`; the page only shows the result. Leaving the page while GET /athlete runs still saves the import.
+- Alternatives: import into a copy and apply it from the page (leaving the page would drop the import the rider asked for).
+- Reason: Rides writes the values into the live profile while it waits, so a page freed mid-request left an imported, unsaved profile in memory.
+
+## 2026-10-21 (W4r2): The Controls content column follows a rebind (W4r2 R28)
+
+- Decision: ending a capture on the Controls page refreshes the content column (`all_bindings_text()`) as well as the rows; the unused `binding_text()` helper is removed (W4r2 R32/R44).
+- Reason: InputBindings.rebind can take an input away from another action, so the list of every binding went stale until the page was reopened.

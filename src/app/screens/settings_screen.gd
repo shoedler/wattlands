@@ -1,10 +1,13 @@
 class_name AppSettingsScreen
 extends AppFormScreen
 ## Settings (BRIEF 3.2, 3.5, 3.8, 3.9), every page on pedal-scan:
-##   Trainer   status, scan and connect (FtmsConnectionManager), use the mock trainer, disconnect.
-##             Before the link drops (Disconnect, another trainer, the mock) the rider's governor
-##             goes SIM flat, then Stop, and the control point gets SAFE_DRAIN_S to send them
-##             (BRIEF 4.6.9).
+##   Trainer   status, scan (FtmsConnectionManager), connect, use the mock trainer, disconnect.
+##             Connect, Disconnect and the mock go through TrainerService.connect_trainer(),
+##             disconnect_trainer() and use_mock(): before a link drops (Disconnect, another
+##             trainer, the mock) the rider's governor goes SIM flat, then Stop, and the link
+##             waits until the control point sent both (BRIEF 4.6.9; W4 SAF-8, W4r2 R6). Picking
+##             the trainer that is already linked changes nothing (W4r2 R7). Leaving the page never
+##             cuts that wait short.
 ##   Strava    the player's own API app client ID and secret, connect (loopback OAuth), disconnect,
 ##             auto-upload (off by default), and the opt-in FTP and weight import (P1, BRIEF 3.8:
 ##             connect with profile:read_all, pick FTP and/or weight, import). The secret is only
@@ -19,9 +22,6 @@ extends AppFormScreen
 ##   FTP test (P1) and Rides history (P1) open their own pages.
 
 const MOCK_SPEC := "erg"
-## Real seconds the control point gets to send SIM flat and Stop before the link drops (the same
-## grace App.quit gives a real trainer).
-const SAFE_DRAIN_S := 0.5
 
 var status_label: Label = null
 var strava_client_id: String = ""
@@ -32,9 +32,8 @@ var capturing: StringName = &""
 var _capture_cooldown: bool = false
 var _trainer_menu: PedalScanList = null
 var _connection: FtmsConnectionManager = null
-## What runs once the trainer was made safe and SAFE_DRAIN_S passed (dropping the link).
-var _unlink_pending: Callable = Callable()
-var _unlink_left: float = 0.0
+## True while this page waits for TrainerService's safe unlink (its status line says so).
+var _unlink_shown: bool = false
 ## The FTP and weight import (P1): what to import, and the last result line.
 var import_ftp: bool = true
 var import_weight: bool = false
@@ -51,9 +50,7 @@ func _build() -> void:
 		services.bus.strava_state_changed.connect(_on_strava_state)
 	if services.trainer != null:
 		services.trainer.status_changed.connect(_on_trainer_status)
-		_connection = services.trainer.connection()
-		if _connection != null:
-			_connection.device_found.connect(_on_device_found)
+		_sync_connection()
 	open_fields(root_fields(), _back)
 	var start_page := str(params.get("section", ""))
 	if start_page != "":
@@ -61,8 +58,7 @@ func _build() -> void:
 
 
 func _on_leave() -> void:
-	# A link drop still waiting for the safe commands happens now (the rider is already safe).
-	_run_unlink()
+	# A link drop still waiting for the safe commands keeps waiting in TrainerService.
 	_end_capture()
 	if services.bus != null and services.bus.strava_state_changed.is_connected(_on_strava_state):
 		services.bus.strava_state_changed.disconnect(_on_strava_state)
@@ -174,100 +170,46 @@ func scan_trainers() -> void:
 	_refresh_status("trainer")
 
 
+## Connect to `address` (TrainerService.connect_trainer): a switch from another linked trainer
+## makes that one safe first (SIM flat, then Stop, then the link drops); the trainer that is
+## already linked, or none, connects at once and the menu rider stays as it is (W4r2 R7).
 func connect_trainer(address: String) -> void:
-	if _connection == null:
+	if _connection == null or services.trainer == null:
 		_refresh_status("trainer")
 		return
-	# Switching trainers drops the current link first (FtmsConnectionManager.connect_to).
-	make_trainer_safe_then(_connect_now.bind(address))
-	_refresh_status("trainer")
+	services.trainer.connect_trainer(address)
+	_watch_unlink()
 
 
-func _connect_now(address: String) -> void:
-	if _connection != null and is_instance_valid(_connection):
-		_connection.connect_to(address)
-	_refresh_status("trainer")
-
-
+## Use the mock trainer (TrainerService.use_mock): a real trainer is made safe first.
 func use_mock() -> void:
-	make_trainer_safe_then(_use_mock_now)
-	_refresh_status("trainer")
-
-
-func _use_mock_now() -> void:
 	if services.trainer != null:
 		services.trainer.use_mock(MOCK_SPEC)
+	_sync_connection()
+	_watch_unlink()
 	_rebuild_trainer_page()
 
 
+## Disconnect (TrainerService.disconnect_trainer): the rider's governor goes SIM flat, then
+## Stop, and the link drops once the control point sent both (or after the service's timeout).
+## The next trainer that is ready gets a new menu rider.
 func disconnect_trainer() -> void:
-	if _connection == null:
+	if _connection == null or services.trainer == null:
 		_rebuild_trainer_page()
 		return
-	make_trainer_safe_then(_disconnect_now)
-	_refresh_status("trainer")
-
-
-func _disconnect_now() -> void:
-	if _connection != null and is_instance_valid(_connection):
-		_connection.disconnect_trainer()
-	_rearm_menu_rider()
+	services.trainer.disconnect_trainer()
+	_watch_unlink()
 	_rebuild_trainer_page()
 
 
-## BRIEF 4.6.9 ("on disconnect: try SIM flat, then Stop"): before this page drops the trainer
-## link, the menu rider's governor shuts down (SIM flat, then Stop) and the control point gets
-## SAFE_DRAIN_S of real time to send both; then `then` runs (from tick()). With a MockTrainer, no
-## rider, or a link that is not ready, `then` runs at once. Returns true when it waits (W3 SAF-8).
-## Until the trainer area's TrainerService method for this lands, the page uses the rider's own
-## shutdown (the API App.quit uses) and waits as App.quit does for a real trainer.
-func make_trainer_safe_then(then: Callable) -> bool:
-	_run_unlink()
-	var ts := services.trainer
-	var dev: TrainerDevice = ts.device() if ts != null else null
-	var rider: LocalRider = ts.local_rider() if ts != null and dev != null else null
-	if rider == null or dev is MockTrainer or not dev.is_ready() or rider.is_shut_down() or ts.is_external_tick():
-		then.call()
-		return false
-	rider.shutdown()
-	_unlink_pending = then
-	_unlink_left = SAFE_DRAIN_S
-	return true
-
-
-## True while a link drop waits for the safe commands to go out.
+## True while TrainerService waits for the old trainer's SIM flat and Stop before a link drops.
 func is_making_trainer_safe() -> bool:
-	return _unlink_pending.is_valid()
+	return services != null and services.trainer != null and services.trainer.is_unlinking()
 
 
-func _run_unlink() -> void:
-	if not _unlink_pending.is_valid():
-		return
-	var f := _unlink_pending
-	_unlink_pending = Callable()
-	_unlink_left = 0.0
-	f.call()
-
-
-## After Disconnect the same trainer object comes back on the next connect (the manager keeps it
-## per address), and TrainerService then keeps its rider as it is: set the shut-down menu rider
-## up again, as TrainerService's menu reset does, so the next connect has a live governor and
-## App.quit shuts it down again (BRIEF 4.6.9 on exit).
-func _rearm_menu_rider() -> void:
-	var ts := services.trainer
-	if ts == null or ts.is_external_tick():
-		return
-	var dev := ts.device()
-	var rider := ts.local_rider()
-	if dev == null or rider == null or not rider.is_shut_down():
-		return
-	var prof := p()
-	var mode := str(services.settings.get_value("scaling_mode", Wl.FAIR_FTP)) if services.settings != null else Wl.FAIR_FTP
-	if not Wl.SCALING_MODES.has(mode):
-		mode = Wl.FAIR_FTP
-	rider.setup(1, prof, prof.to_slot(1, mode), dev, {
-		"multiplayer": false, "scaling_mode": mode, "record": false, "seed": CmdLine.get_int("seed", 0),
-	})
+func _watch_unlink() -> void:
+	_unlink_shown = is_making_trainer_safe()
+	_refresh_status("trainer")
 
 
 func _on_device_found(info: Dictionary) -> void:
@@ -290,7 +232,23 @@ func _rebuild_trainer_page() -> void:
 
 
 func _on_trainer_status(_status: String, _detail: String) -> void:
+	_sync_connection()
 	refresh_fields()
+
+
+## Follow TrainerService's connection manager (the mock has none; the old one is freed once its
+## safe unlink ran), so Scan and Disconnect never reach a retired manager.
+func _sync_connection() -> void:
+	var now: FtmsConnectionManager = services.trainer.connection() if services.trainer != null else null
+	if _connection != null and not is_instance_valid(_connection):
+		_connection = null
+	if now == _connection:
+		return
+	if _connection != null and _connection.device_found.is_connected(_on_device_found):
+		_connection.device_found.disconnect(_on_device_found)
+	_connection = now
+	if _connection != null:
+		_connection.device_found.connect(_on_device_found)
 
 
 # --- strava ----------------------------------------------------------------------------------
@@ -362,13 +320,12 @@ func strava_import() -> Dictionary:
 		return {}
 	importing = true
 	refresh_fields()
-	var res: Dictionary = await services.rides.strava_import_athlete(p(), import_ftp, import_weight)
+	var res: Dictionary = await import_from_strava(services, p(), import_ftp, import_weight)
 	importing = false
 	var applied: Array = res.get("applied", [])
 	if applied.is_empty():
 		import_result = t("APP_STRAVA_IMPORT_NONE")
 	else:
-		save_profile()
 		var parts: PackedStringArray = []
 		if applied.has("ftp"):
 			parts.append(t("APP_STRAVA_IMPORT_FTP_DONE").format([int(round(p().ftp_w))]))
@@ -378,6 +335,22 @@ func strava_import() -> Dictionary:
 	if is_inside_tree():
 		refresh_fields()
 		_refresh_status("strava")
+	return res
+
+
+## The import itself (Rides.strava_import_athlete, then the profile saved and profile_changed).
+## Rides writes the imported values into the live profile while GET /athlete runs, so the save
+## must not depend on the page: a static coroutine has no page instance to lose, so leaving the
+## page mid-request still saves the import (W4r2 R20). Returns Rides' result.
+static func import_from_strava(s: AppServices, profile: RiderProfile, ftp: bool, weight: bool) -> Dictionary:
+	if s == null or s.rides == null or profile == null:
+		return {}
+	var res: Dictionary = await s.rides.strava_import_athlete(profile, ftp, weight)
+	if not (res.get("applied", []) as Array).is_empty():
+		if s.settings != null:
+			s.settings.save_profile()
+		if s.bus != null:
+			s.bus.profile_changed.emit()
 	return res
 
 
@@ -539,16 +512,6 @@ func all_bindings_text() -> String:
 	return "\n".join(lines)
 
 
-## The current bindings of `action` as text ("Enter, Space, Joypad Button 0").
-static func binding_text(action: StringName) -> String:
-	if not InputMap.has_action(action):
-		return "—"
-	var parts: PackedStringArray = []
-	for e: InputEvent in InputMap.action_get_events(action):
-		parts.append(e.as_text())
-	return ", ".join(parts) if not parts.is_empty() else "—"
-
-
 ## Wait for the next key, button or stick move and bind it to `action` (Esc cancels).
 func start_capture(action: StringName) -> void:
 	capturing = action
@@ -593,6 +556,7 @@ func _end_capture() -> void:
 	_capture_cooldown = true
 	if value_label != null:
 		value_label.text = ""
+	var on_controls := false
 	for m in menus:
 		var fields := fields_of(m)
 		if not fields.is_empty() and str((fields[0] as Dictionary).get("id", "")).begins_with("bind:"):
@@ -600,6 +564,11 @@ func _end_capture() -> void:
 			fresh.append({"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section})
 			_fields_by_menu[m.get_instance_id()] = fresh
 			refresh_menu(items_for(fresh), m)
+			on_controls = on_controls or m == active_menu()
+	# The content column lists every binding: a rebind changes this action's line and, since
+	# InputBindings.rebind takes the input away from any other action, maybe others (W4r2 R28).
+	if on_controls:
+		_refresh_status("controls")
 
 
 func _input(event: InputEvent) -> void:
@@ -611,12 +580,12 @@ func _handle_action(_action: StringName) -> bool:
 	return capturing != &"" or _capture_cooldown
 
 
-func _tick(dt: float) -> void:
+func _tick(_dt: float) -> void:
 	_capture_cooldown = false
-	if _unlink_pending.is_valid():
-		_unlink_left -= dt
-		if _unlink_left <= 1e-6:
-			_run_unlink()
+	# The status line drops its "making the trainer safe" note once the link action ran.
+	if _unlink_shown and not is_making_trainer_safe():
+		_unlink_shown = false
+		_rebuild_trainer_page()
 
 
 func _refresh_status(section: String) -> void:
