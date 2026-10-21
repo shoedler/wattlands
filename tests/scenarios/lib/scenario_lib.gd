@@ -28,6 +28,11 @@ const NOT_PEDALING_W := 15.0
 const NOT_PEDALING_RPM := 20.0
 const COAST_FLOOR_S := 3.0
 const COAST_PAUSE_S := 10.0
+## BRIEF 3.8: the scenario tests copy every FIT they write (with its summary JSON) here, where the
+## fit step of tools/run_tests decodes it with @garmin/fitsdk (tools/fit_check).
+const FIT_COPY_DIR := "res://build/scenarios"
+## The file in the copy dir naming the run that last cleared it (not a .fit: fit_check skips it).
+const FIT_RUN_STAMP := ".gut_run"
 
 
 ## run_game_sim flags for one Workout session: one human (the host, SOLO) and one bot, a
@@ -386,6 +391,66 @@ static func phase_length_s(phase: Dictionary) -> float:
 	if bool(phase.get("open_ended", false)):
 		return float(phase.get("max_s", phase.get("duration_s", 0.0)))
 	return float(phase.get("duration_s", 0.0))
+
+
+## Every .fit file under `dir` (recursively), sorted; [] when `dir` doesn't exist.
+static func fit_files(dir: String) -> Array[String]:
+	var out: Array[String] = []
+	if dir == "" or not DirAccess.dir_exists_absolute(dir):
+		return out
+	for f in DirAccess.get_files_at(dir):
+		if f.get_extension().to_lower() == "fit":
+			out.append(dir.path_join(f))
+	for sub in DirAccess.get_directories_at(dir):
+		out.append_array(fit_files(dir.path_join(sub)))
+	out.sort()
+	return out
+
+
+## Empties the FIT copy dir `dir` once per run: unless its FIT_RUN_STAMP already names `run_id`,
+## deletes everything in it (stale FITs of earlier runs) and writes the stamp. Returns true when
+## it cleared, false when this run already did (so later test scripts keep earlier copies).
+static func prepare_fit_dir(dir: String, run_id: String) -> bool:
+	var stamp := dir.path_join(FIT_RUN_STAMP)
+	if FileAccess.file_exists(stamp) and FileAccess.get_file_as_string(stamp) == run_id:
+		return false
+	remove_tree(dir)
+	DirAccess.make_dir_recursive_absolute(dir)
+	var f := FileAccess.open(stamp, FileAccess.WRITE)
+	if f != null:
+		f.store_string(run_id)
+		f.close()
+	return true
+
+
+## Copies every FIT under `src` and the summary JSON next to it (same stem, when there is one)
+## to `dest`, keeping the path below `src`; a name already taken there gets _2, _3, ...
+## Returns {copied: [the copied FIT paths], errors: [one line per failed copy]}.
+static func copy_fits(src: String, dest: String) -> Dictionary:
+	var copied: Array[String] = []
+	var errors: Array[String] = []
+	for fit in fit_files(src):
+		var stem := dest.path_join(fit.substr(src.length()).trim_prefix("/").get_basename())
+		var target_stem := stem
+		var n := 2
+		while (
+			FileAccess.file_exists(target_stem + ".fit")
+			or FileAccess.file_exists(target_stem + ".json")
+		):
+			target_stem = "%s_%d" % [stem, n]
+			n += 1
+		DirAccess.make_dir_recursive_absolute(target_stem.get_base_dir())
+		var err := DirAccess.copy_absolute(fit, target_stem + ".fit")
+		if err != OK:
+			errors.append("%s -> %s.fit: %s" % [fit, target_stem, error_string(err)])
+			continue
+		var summary := fit.get_basename() + ".json"
+		if FileAccess.file_exists(summary):
+			err = DirAccess.copy_absolute(summary, target_stem + ".json")
+			if err != OK:
+				errors.append("%s -> %s.json: %s" % [summary, target_stem, error_string(err)])
+		copied.append(target_stem + ".fit")
+	return {"copied": copied, "errors": errors}
 
 
 static func remove_tree(dir: String) -> void:
