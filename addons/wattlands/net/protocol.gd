@@ -21,6 +21,9 @@ extends RefCounted
 ##   (snapshot "state", event "events") and telemetry intents.
 ## - "refused" is accepted whatever its "v", so a peer on another schema version can always
 ##   read why it was refused.
+## - A `hud` message's `args` (an Array or a Dictionary of display values) get whole numbers
+##   back as ints.
+## - apply_game_int_fields() also converts the platform's own events (PLATFORM_EVENT_INTS).
 
 ## Envelope and game-message keys converted at the top level only.
 const TOP_INT_KEYS: Array[String] = ["peer", "host", "from", "to", "seq", "proto", "max", "v"]
@@ -69,6 +72,12 @@ const GAME_TYPES: Dictionary = {
 ## as an additive change): lobby settings that are whole numbers.
 const EXTRA_INTS: Dictionary = {
 	"lobby_state": ["settings.bot_ftp", "settings.max_players", "settings.min_players"],
+}
+
+## Int paths of the platform's own events inside `event` batches (the GameHost's
+## phase_started), applied by apply_game_int_fields() whatever the game declares.
+const PLATFORM_EVENT_INTS: Dictionary = {
+	"phase_started": ["peer", "index", "tick", "start_tick"],
 }
 
 ## Game payloads where peer-keyed key conversion does not apply.
@@ -193,10 +202,9 @@ static func schema_int_paths(type: String) -> Array:
 
 ## Apply a game's int_fields() to a decoded snapshot or event message in place: the
 ## snapshot's "state" gets fields["snapshot"]; each event in "events" gets
-## fields[event.type]. Returns `msg`.
+## fields[event.type], and the platform's own events (PLATFORM_EVENT_INTS) their paths.
+## Returns `msg`.
 static func apply_game_int_fields(msg: Dictionary, fields: Dictionary) -> Dictionary:
-	if fields.is_empty():
-		return msg
 	var type := str(msg.get("type", ""))
 	if type == "snapshot" and fields.has("snapshot") and msg.get("state") is Dictionary:
 		msg["state"] = apply_int_fields(msg["state"], fields["snapshot"])
@@ -206,8 +214,13 @@ static func apply_game_int_fields(msg: Dictionary, fields: Dictionary) -> Dictio
 			var e: Variant = events[i]
 			if e is Dictionary:
 				var et := str((e as Dictionary).get("type", ""))
-				if et != "" and et != "snapshot" and fields.has(et):
-					events[i] = apply_int_fields(e, fields[et])
+				if et == "" or et == "snapshot":
+					continue
+				if PLATFORM_EVENT_INTS.has(et):
+					e = apply_int_fields(e, PLATFORM_EVENT_INTS[et])
+				if fields.has(et):
+					e = apply_int_fields(e, fields[et])
+				events[i] = e
 	return msg
 
 
@@ -256,8 +269,23 @@ static func _decode_game_in_place(d: Dictionary, hints: int) -> bool:
 	apply_int_fields(d, NetMessages.GAME[type]["ints"])
 	if EXTRA_INTS.has(type):
 		apply_int_fields(d, EXTRA_INTS[type])
+	if type == "hud":
+		_whole_args_to_int(d.get("args"))
 	last_error = ""
 	return true
+
+
+## A toast's or banner's `args` ({0} or {name} values) are display values: whole numbers
+## come back as ints, so a client draws "2" where the host drew 2, not "2.0".
+static func _whole_args_to_int(args: Variant) -> void:
+	if args is Array:
+		var arr: Array = args
+		for i in arr.size():
+			arr[i] = _whole_to_int(arr[i])
+	elif args is Dictionary:
+		var dict: Dictionary = args
+		for k: Variant in dict.keys():
+			dict[k] = _whole_to_int(dict[k])
 
 
 ## Generic conversions below the top level: "_id" keys and peer-keyed dictionaries.

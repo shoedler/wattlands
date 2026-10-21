@@ -277,6 +277,48 @@ func test_session_start_and_end_in_lobby_state_reset_snapshot_seqs() -> void:
 	assert_eq(int(c1.latest_snapshot()["seq"]), 1, "a new session's first snapshot is not stale")
 
 
+## One scripted HOST + client run on a fresh hub; returns what each side saw.
+func _scripted_run(tag: String) -> Array:
+	sessions.clear()
+	hub = LoopbackHub.new(7)
+	var h := make_session("host" + tag, rider("Hana", "1", 250))
+	h.set_game("workout", "1", "easy30")
+	h.host_room(8)
+	pump()
+	var c := make_session("c" + tag, rider("Bo", "1", 210))
+	c.join_room(h.room_code)
+	pump()
+	h.add_bot()
+	c.set_ready(true)
+	h.set_ready(true)
+	pump()
+	h.mark_started()
+	for i in 40:
+		h.broadcast(_snap(i + 1))
+		h.send_to(2, _grade(i, 0.5 * i))
+		if i % 4 == 0:
+			c.send_to_host(Protocol.game_msg("telemetry", {"tm": {"peer": 2, "power_w": 150.0 + i}}))
+		if i == 20:
+			_lt(c).simulate_drop()
+		h.tick(Wl.SIM_DT)
+		c.tick(Wl.SIM_DT)
+	pump(30)
+	return [h.room_code, (logs["host" + tag] as Array).duplicate(true), (logs["c" + tag] as Array).duplicate(true),
+		h.stats.duplicate(), c.stats.duplicate()]
+
+
+func test_loopback_runs_are_deterministic() -> void:
+	# OWNERSHIP C29: same seed, same calls, same codes, messages, order and counters.
+	var a := _scripted_run("_a")
+	var b := _scripted_run("_b")
+	assert_eq(a[0], b[0], "same room code")
+	assert_true(U.same(a[1], b[1]), "host: " + U.diff(a[1], b[1]))
+	assert_true(U.same(a[2], b[2]), "client: " + U.diff(a[2], b[2]))
+	assert_true(U.same(a[3], b[3]), U.diff(a[3], b[3]))
+	assert_true(U.same(a[4], b[4]), U.diff(a[4], b[4]))
+	assert_gt((a[2] as Array).size(), 40)
+
+
 # --- host-side checks ------------------------------------------------------------------------
 
 func test_telemetry_peer_is_the_sender() -> void:
@@ -318,6 +360,32 @@ func test_net_strings_are_platform_keys() -> void:
 
 
 # --- protocol --------------------------------------------------------------------------------
+
+func test_hud_args_come_back_as_drawn_on_the_host() -> void:
+	var msg := Protocol.game_msg("hud", {"kind": "toast", "key": "SIEGE_TOAST_BUY", "args": ["ram", 2, 2.5, -3]})
+	var back := Protocol.decode_game(U.json_round_trip(msg))
+	assert_true(U.same(back, msg), U.diff(back, msg))
+	var named := Protocol.game_msg("hud", {"kind": "banner", "key": "K", "args": {"name": "Bo", "n": 4}, "seconds": 3.0})
+	var back2 := Protocol.decode(Protocol.encode(named))
+	assert_true(U.same(back2, named), U.diff(back2, named))
+	assert_typeof(back2["seconds"], TYPE_FLOAT)
+
+
+func test_platform_events_get_ints_without_game_fields() -> void:
+	var ev := Protocol.decode(Protocol.encode(Protocol.game_msg("event", {"seq": 1, "events": [
+		{"type": "phase_started", "peer_id": 2, "index": 3, "tick": 120}, {"type": "boom", "n": 2}]})))
+	Protocol.apply_game_int_fields(ev, {})
+	var e0: Dictionary = (ev["events"] as Array)[0]
+	assert_typeof(e0["index"], TYPE_INT)
+	assert_typeof(e0["tick"], TYPE_INT)
+	assert_typeof(((ev["events"] as Array)[1] as Dictionary)["n"], TYPE_FLOAT, "game events need int_fields")
+	var r := room()
+	clear_logs()
+	r[0].broadcast(Protocol.game_msg("event", {"seq": 1, "events": [{"type": "phase_started", "peer_id": 2, "index": 1}]}))
+	pump()
+	var got: Dictionary = ((messages("c1", "event")[0][2] as Dictionary)["events"] as Array)[0]
+	assert_typeof(got["index"], TYPE_INT, "a client without set_game_int_fields still gets an int index")
+
 
 func test_decode_tolerates_any_json_whitespace() -> void:
 	var text := "{\"type\":\"snapshot\",\"v\":1,\"game_id\":\"g\",\"seq\":\n 4,\"state\":{\"target_id\" :\r\n\t3,\"x\": 1.5,\"name_id\": \"n\"}}"
