@@ -19,6 +19,16 @@ test('comparableEvents drops per-peer types and volatile keys', () => {
   assert.deepEqual(C.comparableEvents(null), []);
 });
 
+test('the results event may carry the recording peer', () => {
+  const host = C.comparableEvents([{ t: 1, type: 'results', peer: 1, grade: 'A', session_id: 's1' }]);
+  const client = C.comparableEvents([{ t: 1.2, type: 'results', peer: 3, grade: 'A', session_id: 's1' }]);
+  assert.equal(C.compareSequences(host, client).ok, true);
+  const other = C.comparableEvents([{ t: 1.2, type: 'results', peer: 3, grade: 'B', session_id: 's1' }]);
+  assert.equal(C.compareSequences(host, other).ok, false);
+  // phase_started keeps its rider.
+  assert.equal(C.compareSequences(C.comparableEvents([ps(1, 0)]), C.comparableEvents([ps(2, 0)])).ok, false);
+});
+
 test('identical sequences with different arrival times match', () => {
   const client = HOST.map((e) => ({ ...e, t: e.t + 0.37 }));
   assert.equal(C.compareSequences(C.comparableEvents(HOST), C.comparableEvents(client)).ok, true);
@@ -78,13 +88,13 @@ test('checkSameEvents: host, a full client and a rejoined client', () => {
 });
 
 test('checkFinalState: tolerance, per-peer keys, missing state', () => {
-  const host = { score: 100, distance_m: 1000, local_peer: 1, fish: [{ hp: 10 }], local_cam: 3 };
-  const near = { score: 100, distance_m: 1010, local_peer: 2, fish: [{ hp: 10.05 }], local_cam: 9 };
+  const host = { score: 100, snapshot: { x: 1000 }, local_peer: 1, fish: [{ hp: 10 }], local_cam: 3, fit_path: 'a.fit', distance_m: 900, phase_index: 3 };
+  const near = { score: 100, snapshot: { x: 1010 }, local_peer: 2, fish: [{ hp: 10.05 }], local_cam: 9, fit_path: 'b.fit', distance_m: 950, phase_index: 4 };
   assert.equal(C.checkFinalState({ host, client1: near }).ok, true);
-  const far = { ...near, distance_m: 1100 };
+  const far = { ...near, snapshot: { x: 1100 } };
   const r = C.checkFinalState({ host, client1: far });
   assert.equal(r.ok, false);
-  assert.match(r.details[0], /distance_m/);
+  assert.match(r.details[0], /snapshot.x/);
   assert.equal(C.checkFinalState({ host, client1: { ...near, fish: [] } }).ok, false);
   assert.equal(C.checkFinalState({ host, client1: null }).ok, false);
   assert.equal(C.checkFinalState({ host: null }).ok, false);

@@ -24,8 +24,20 @@ export const VOLATILE_EVENT_KEYS = new Set([
   't', 'time', 'ts', 'at', 'wall', 'wall_t', 'wall_ms', 'received_t', 'local_t', 'arrived_t', 'recv_t',
 ]);
 
-/** final_state keys that legitimately differ per peer. */
-export const PER_PEER_STATE_KEYS = new Set(['role', 'local_peer', 'peer_id', 't', 'time', 'wall', 'meta', 'local', 'is_host']);
+/**
+ * Session-wide event types whose `peer` key names the peer that recorded them (the scripted
+ * peer stamps `results` with its own id), so `peer` is not compared for them.
+ */
+export const RECORDER_PEER_TYPES = new Set(['results', 'session_end', 'finished', 'game_finished']);
+
+/**
+ * final_state keys that legitimately differ per peer: who and where the peer is, and its own
+ * rider's ride (FIT path, distance, phase index; plans may differ per rider).
+ */
+export const PER_PEER_STATE_KEYS = new Set([
+  'role', 'local_peer', 'peer_id', 't', 'time', 'wall', 'meta', 'local', 'is_host', 'fit_path', 'fit_paths',
+  'distance_m', 'phase_index', 'profile_dir', 'report_path',
+]);
 
 function isObj(v) {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -52,7 +64,9 @@ export function comparableEvents(events) {
     if (type === '' || PER_PEER_EVENT_TYPES.has(type)) continue;
     const c = {};
     for (const [k, v] of Object.entries(e)) {
-      if (!VOLATILE_EVENT_KEYS.has(k)) c[k] = v;
+      if (VOLATILE_EVENT_KEYS.has(k)) continue;
+      if (k === 'peer' && RECORDER_PEER_TYPES.has(type)) continue;
+      c[k] = v;
     }
     out.push(c);
   }
