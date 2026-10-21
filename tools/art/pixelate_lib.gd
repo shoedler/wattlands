@@ -34,14 +34,16 @@ const INDEX_FILE: String = "sprites.json"
 ## art.json's default `endpoint` (BRIEF 3.10), as in tools/art/lib/config.mjs.
 const DEFAULT_ENDPOINT: String = "openai/gpt-image-2.5/sunburst/text-to-image"
 
-## How sprite PNGs get the pixel import preset (filter off, mipmaps off, lossless):
-## IMPORT_WRITE_FILE writes a `.import` with the preset next to each PNG that has none (and fixes the
-## preset keys of one that does, keeping its uid); IMPORT_PROJECT_DEFAULTS writes nothing and relies
-## on project.godot's [importer_defaults]. W2 can switch this, or point it at world-kits'
-## PixelImportPreset, in one place (docs/decisions/art-pipeline.md).
+## How sprite PNGs get the pixel import preset (filter off, mipmaps off, lossless; OWNERSHIP C36):
+## IMPORT_PROJECT_DEFAULTS (the default, the one documented mechanism) writes plain PNGs and relies
+## on project.godot's [importer_defaults] texture (lossless, no mipmaps), which run_game checks
+## first through world-kits' PixelImportPreset.check_project_defaults(); filtering is per
+## CanvasItem (PixelViewport draws nearest). IMPORT_WRITE_FILE (opt-in, for a sprite folder that
+## must pin the preset) also writes a `.import` with the preset next to each PNG that has none and
+## fixes the preset keys of one that does, keeping its uid (docs/decisions/art-pipeline.md).
 const IMPORT_WRITE_FILE: int = 0
 const IMPORT_PROJECT_DEFAULTS: int = 1
-static var import_preset_mode: int = IMPORT_WRITE_FILE
+static var import_preset_mode: int = IMPORT_PROJECT_DEFAULTS
 
 ## The preset's [params] in a sprite's .import file.
 const IMPORT_PARAMS: Dictionary = {
@@ -721,6 +723,11 @@ static func _num(v: float) -> Variant:
 ## push_error; skipped sprites and selected results that no longer match art.json push_warning.
 static func run_game(root: String, game: String, only: PackedStringArray = PackedStringArray()) -> Dictionary:
 	var report: Dictionary = {"ok": true, "written": [], "skipped": [], "removed": [], "errors": [], "warnings": []}
+	if import_preset_mode == IMPORT_PROJECT_DEFAULTS:
+		var preset_problems: PackedStringArray = PixelImportPreset.check_project_defaults()
+		if not preset_problems.is_empty():
+			_fail(report, "the pixel import preset relies on project.godot's [importer_defaults] texture: %s" % "; ".join(preset_problems))
+			return report
 	var base: String = root.replace("\\", "/").trim_suffix("/")
 	var game_dir: String = base.path_join("assets").path_join(game)
 	var art_path: String = game_dir.path_join("art.json")

@@ -82,7 +82,9 @@ func test_lobby_model_helpers() -> void:
 	assert_true(AppLobbyModel.can_add_bot({"bots": true, "max_players": 4}, 3))
 	assert_false(AppLobbyModel.can_add_bot({"bots": true, "max_players": 4}, 4))
 	assert_false(AppLobbyModel.can_add_bot({"bots": false, "max_players": 4}, 1))
-	assert_eq(AppLobbyModel.content_label("workout", "easy_30"), "easy_30")
+	assert_eq(AppLobbyModel.content_label("nogame", "easy_30"), "easy_30", "bare id when the key is missing")
+	assert_eq(AppLobbyModel.content_label("workout", "easy_30"), AppScreen.t("WORKOUT_CONTENT_EASY_30"),
+		"the game's <ID>_CONTENT_<CID> label when its strings are registered")
 	assert_eq(AppLobbyModel.zero_input_content({"default_content": "a"}), "a")
 	var p := RiderProfile.new()
 	p.share_weight = true

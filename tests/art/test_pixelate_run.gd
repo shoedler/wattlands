@@ -10,7 +10,7 @@ var _roots: Array[String] = []
 
 
 func after_each() -> void:
-	ArtPixelate.import_preset_mode = ArtPixelate.IMPORT_WRITE_FILE
+	ArtPixelate.import_preset_mode = ArtPixelate.IMPORT_PROJECT_DEFAULTS
 	for r: String in _roots:
 		_remove_tree(r)
 	_roots.clear()
@@ -217,7 +217,14 @@ func test_sprites_without_a_selected_result_are_skipped_with_a_warning() -> void
 	assert_false(FileAccess.file_exists(_sprites_dir(root).path_join("reef.png")))
 
 
+func test_the_default_relies_on_the_project_importer_defaults() -> void:
+	# OWNERSHIP C36: one mechanism, project.godot's [importer_defaults] texture.
+	assert_eq(ArtPixelate.import_preset_mode, ArtPixelate.IMPORT_PROJECT_DEFAULTS)
+	assert_eq(PixelImportPreset.check_project_defaults(), PackedStringArray(), "project.godot holds the preset")
+
+
 func test_import_preset_files() -> void:
+	ArtPixelate.import_preset_mode = ArtPixelate.IMPORT_WRITE_FILE
 	var root: String = _make_root()
 	assert_true(ArtPixelate.run_game(root, GAME, PackedStringArray(["boat"]))["ok"])
 	var imp: String = _sprites_dir(root).path_join("boat.png.import")
@@ -239,7 +246,6 @@ func test_import_preset_files() -> void:
 
 
 func test_project_defaults_mode_writes_no_import_files() -> void:
-	ArtPixelate.import_preset_mode = ArtPixelate.IMPORT_PROJECT_DEFAULTS
 	var root: String = _make_root()
 	assert_true(ArtPixelate.run_game(root, GAME, PackedStringArray(["boat"]))["ok"])
 	assert_true(FileAccess.file_exists(_sprites_dir(root).path_join("boat.png")))

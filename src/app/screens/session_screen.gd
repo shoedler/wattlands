@@ -36,6 +36,15 @@ var headless: bool = false
 ## True while this screen runs the Sfx cadence metronome.
 var metronome_on: bool = false
 var _overlay_menu_open: bool = false
+var _left: bool = false
+## What the GameHost reads from the InputRouter (AppSessionInput); null without a router.
+var session_input: AppSessionInput = null
+## Above the HudLayer: the pause overlay and the panic button.
+var top_layer: CanvasLayer = null
+var top_root: Control = null
+var _panic_reserved: bool = false
+
+const PANIC_SIZE := Vector2(380, 100)
 
 
 func _build() -> void:
@@ -52,16 +61,51 @@ func _build() -> void:
 	hud_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hud_layer)
+	# The pause overlay and the panic button draw above the GameHost's HudLayer (a CanvasLayer
+	# at HudLayer.LAYER), so no HUD widget or toast ever covers them.
+	top_layer = CanvasLayer.new()
+	top_layer.name = "Top"
+	top_layer.layer = HudLayer.LAYER + 10
+	add_child(top_layer)
+	top_root = Control.new()
+	top_root.name = "TopRoot"
+	top_root.theme = AppStyle.theme()
+	top_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	top_layer.add_child(top_root)
+	top_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_overlay()
 	_build_panic_button()
 	_connect_bus()
+	if role != Wl.CLIENT and auto_process:
+		# A SOLO or HOST start usually comes from inside the local rider's own tick (a surge that
+		# picked Start, the zero-touch sample): setting that rider up for the session there would
+		# let the rest of the tick record menu time into the new ride (stale time base). Start
+		# right after the tick. A CLIENT starts at once: its GameHost must be listening before the
+		# plan that follows session_start in the same NetSession poll.
+		_start_session.call_deferred()
+	else:
+		_start_session()
+
+
+## Create and start the GameHost (see the class doc).
+func _start_session() -> void:
+	if _left or host != null:
+		return
 	if role == Wl.SOLO and bool(params.get("quick", false)):
 		_prepare_offline_lobby()
 	launcher = AppSessionLauncher.create(services)
-	config = launcher.build_config(role, params, view_layer, hud_layer, headless)
+	var lp := params.duplicate()
+	# The GameHost runs on wall time like the screen (tests drive both by hand).
+	lp["realtime"] = auto_process
+	config = launcher.build_config(role, lp, view_layer, hud_layer, headless)
 	if config.is_empty():
 		_fail(launcher.error)
 		return
+	if services.input != null:
+		# The GameHost reads input through the screen, which owns pause and its overlay menu.
+		session_input = AppSessionInput.create(services.input, _overlay_owns_input, _menu_rider)
+		add_child(session_input)
+		config["input_router"] = session_input
 	if role == Wl.HOST and services.net != null:
 		services.net.mark_started()
 	host = services.make_game_host()
@@ -75,16 +119,22 @@ func _build() -> void:
 	host.state_changed.connect(_on_host_state)
 	host.session_finished.connect(_on_session_finished)
 	services.set_menu_ticking(false)
+	if services.input != null:
+		# stop_5s maps to pause only in a solo session (WlInputRouter.solo).
+		services.input.solo = role == Wl.SOLO
 	host.start()
+	_reserve_panic_corner()
 	_start_metronome()
-	for r: Variant in params.get("replay", []):
-		if r is Dictionary and services.net != null:
-			services.net.game_message.emit(int((r as Dictionary).get("from", Wl.HOST_PEER)), (r as Dictionary).get("data", {}))
+	for r in AppSessionLauncher.replay_messages(params, services.net):
+		services.net.game_message.emit(int(r["from"]), r["data"])
 
 
 func _on_leave() -> void:
+	_left = true
 	_disconnect_bus()
 	services.set_menu_ticking(true)
+	if services.input != null:
+		services.input.solo = true
 	if metronome_on and services.sfx != null:
 		services.sfx.set_metronome(0.0, false)
 		metronome_on = false
@@ -126,6 +176,14 @@ func _prepare_offline_lobby() -> void:
 	net.set_ready(true)
 
 
+func _overlay_owns_input() -> bool:
+	return overlay != null and overlay.visible
+
+
+func _menu_rider() -> LocalRider:
+	return services.trainer.local_rider() if services.trainer != null else null
+
+
 func local_peer() -> int:
 	return int(config.get("local_peer", Wl.HOST_PEER))
 
@@ -143,7 +201,7 @@ func _build_overlay() -> void:
 	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	overlay.visible = false
-	add_child(overlay)
+	top_root.add_child(overlay)
 	var panel := AppStyle.panel(Color(0, 0, 0, 0.82))
 	panel.custom_minimum_size = Vector2(1100, 560)
 	overlay.add_child(panel)
@@ -169,14 +227,38 @@ func _build_panic_button() -> void:
 	panic_button.text = t("APP_PANIC")
 	panic_button.add_theme_font_size_override("font_size", AppStyle.FONT_HEADING)
 	panic_button.focus_mode = Control.FOCUS_NONE
-	panic_button.custom_minimum_size = Vector2(380, 100)
-	add_child(panic_button)
+	panic_button.custom_minimum_size = PANIC_SIZE
+	top_root.add_child(panic_button)
+	# In the bottom-right corner at the HUD's margin, growing left and up with its text; the
+	# HudLayer keeps that corner clear (_reserve_panic_corner).
 	panic_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	panic_button.offset_left = -420.0
-	panic_button.offset_top = -130.0
-	panic_button.offset_right = -40.0
-	panic_button.offset_bottom = -30.0
+	panic_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
+	panic_button.grow_vertical = Control.GROW_DIRECTION_BEGIN
+	panic_button.offset_right = -WlTheme.MARGIN_PX
+	panic_button.offset_bottom = -WlTheme.MARGIN_PX
+	panic_button.offset_left = panic_button.offset_right - PANIC_SIZE.x
+	panic_button.offset_top = panic_button.offset_bottom - PANIC_SIZE.y
 	panic_button.pressed.connect(panic)
+
+
+## The panic button's size (its text may make it wider than PANIC_SIZE).
+func panic_button_size() -> Vector2:
+	if panic_button == null:
+		return Vector2.ZERO
+	var m := panic_button.get_combined_minimum_size()
+	return Vector2(maxf(m.x, PANIC_SIZE.x), maxf(m.y, PANIC_SIZE.y))
+
+
+## Ask the session's HudLayer to keep the panic button's corner clear (once it exists: a
+## client's HUD is built when session_start arrives).
+func _reserve_panic_corner() -> void:
+	if _panic_reserved or host == null or not is_instance_valid(host):
+		return
+	var hud := host.hud_layer()
+	if hud == null:
+		return
+	hud.reserve_corner(HudSpec.BOTTOM_RIGHT, panic_button_size())
+	_panic_reserved = true
 
 
 ## On-screen panic (BRIEF 4.6.5): ERG off, SIM grade 0 and wind 0 at once, through the
@@ -384,6 +466,7 @@ func _disconnect_bus() -> void:
 
 
 func _on_host_state(state: String) -> void:
+	_reserve_panic_corner()
 	match state:
 		"paused":
 			paused = true

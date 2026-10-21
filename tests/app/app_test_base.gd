@@ -97,7 +97,7 @@ func confirm_pick(s: AppScreen, id: Variant) -> void:
 func scan_to(s: AppScreen, id: Variant) -> bool:
 	var m := menu(s)
 	var target := m.index_of_id(id)
-	for _i in m.items.size() * 2 + 1:
+	for _i in m.item_count() * 2 + 1:
 		if m.highlighted() == target:
 			return true
 		s.tick(m.scan_interval_s)

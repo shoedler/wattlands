@@ -24,7 +24,10 @@ extends Node
 ## - Gestures come from the attached LocalRider's gesture_detected signal (or
 ##   inject_gesture). Each goes into the take_gestures() queue, the `gesture` signal and
 ##   EventBus.gesture. Gestures never enter the action queue: sessions read them apart through
-##   local_intents. Menus (PedalScanList, app screens) listen to `menu_input`, which maps
+##   local_intents. The `action` signal (and EventBus.action_pressed, take_actions()) never
+##   carries an action made from a gesture: a surge never also arrives as `confirm`, a coast
+##   never as `back`, a stop_5s never as `pause`. Screens that feed both the `action` and the
+##   `gesture` signal to one PedalScanList (the app shell) therefore get each pick once. Menus (PedalScanList, app screens) listen to `menu_input`, which maps
 ##   surge -> confirm (via "surge"), coast -> back (via "coast", never in ERG) and
 ##   stop_5s -> pause (via "stop_5s", solo and outside ERG only).
 ## - The GameHost drains take_actions() and take_gestures() each tick and must filter `pause`

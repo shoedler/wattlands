@@ -278,7 +278,12 @@ func test_client_flow() -> void:
 	var h := fx.last_host()
 	assert_eq(h.config_seen["role"], Wl.CLIENT)
 	assert_eq(h.config_seen["seed"], 5)
-	net.receive(1, {"type": "event", "v": 1, "seq": 1, "events": [{"type": "phase_started", "peer": 2, "index": 0}, {"type": "wave", "n": 2}]})
+	fx.bus.phase_started.emit(2, 0)
+	net.receive(1, {"type": "event", "v": 1, "seq": 1, "events": [
+		{"type": "wl.phase_started", "peer": 1, "index": 0, "ended_by": "start"},
+		{"type": "wl.phase_started", "peer": 2, "index": 0, "ended_by": "start"},
+		{"type": "wave", "n": 2}, {"type": "wl.lap_marker", "label": "x"}]})
+	net.receive(1, {"type": "event", "v": 1, "seq": 1, "events": [{"type": "wave", "n": 2}]})
 	net.receive(1, {"type": "snapshot", "v": 1, "game_id": "workout", "seq": 3, "state": {"tick": 40}})
 	h.fits = {2: "C:/rides/client.fit"}
 	h.finish_with(GameResults.new())
@@ -290,8 +295,17 @@ func test_client_flow() -> void:
 	for e: Variant in rep["events"]:
 		if (e as Dictionary)["type"] == "game_event":
 			game_events.append(e)
-	assert_eq(game_events.size(), 1, "platform events in the batch are not game events")
+	assert_eq(game_events.size(), 1, "platform events in the batch are not game events; a batch counts once")
 	assert_eq(game_events[0]["event_type"], "wave")
+	var shared: Array = []
+	for e: Variant in rep["events"]:
+		var d: Dictionary = e
+		if d["type"] == "phase_started":
+			shared.append(["phase_started", int(d["peer"]), int(d["index"])])
+		elif d["type"] == "game_event":
+			shared.append(["game_event", d["event_type"]])
+	assert_eq(shared, [["phase_started", 1, 0], ["phase_started", 2, 0], ["game_event", "wave"]],
+		"phase_started for every rider, in the host's batch order (not from the client's own bus)")
 	assert_eq(rep["final_state"]["snapshot"], {"tick": 40.0})
 
 

@@ -138,7 +138,7 @@ func test_settings_rebind_captures_the_next_key() -> void:
 
 func test_picker_cards_and_generated_title_card() -> void:
 	fx.give_profile()
-	fx.fake_registry().add_game(FakeRegistry.fishing())
+	fx.fake_registry().add_fixture(FakeRegistry.fishing())
 	var s := open_screen(AppPickerScreen.new(), {"mode": "host"}) as AppPickerScreen
 	assert_eq(s.cards.size(), 4)
 	var tank := s.cards["tank"] as AppGameCard

@@ -275,6 +275,26 @@ func test_gestures_queue_apart_from_actions() -> void:
 	assert_signal_not_emitted(_bus, "action_pressed")
 
 
+## The app shell feeds the `action` and `gesture` signals to one PedalScanList: a gesture that
+## also arrived as an action would pick (or back out) twice. Only `menu_input` maps them.
+func test_the_action_signal_never_carries_a_gesture() -> void:
+	var rider: FakeRider = autofree(FakeRider.new())
+	rider.fake_mode = Wl.SIM
+	_router.attach_rider(rider)
+	for g: StringName in [Wl.G_SURGE, Wl.G_COAST, Wl.G_STOP_5S, Wl.G_PEDAL_START]:
+		rider.gesture_detected.emit(g)
+	_router.inject_gesture(Wl.G_SURGE)
+	assert_signal_not_emitted(_router, "action", "surge is never confirm, coast never back, stop_5s never pause")
+	assert_signal_not_emitted(_bus, "action_pressed")
+	assert_eq(_router.take_actions(), [], "nor in the action queue")
+	assert_signal_emit_count(_router, "gesture", 5)
+	assert_signal_emit_count(_router, "menu_input", 4, "the pedal-UI mapping goes only to menu_input")
+	_tap(KEY_ENTER)
+	assert_signal_emit_count(_router, "action", 1, "a device confirm is an action")
+	assert_eq(get_signal_parameters(_router, "action"), [&"confirm"])
+	assert_signal_emit_count(_router, "gesture", 5, "and never a gesture")
+
+
 func test_attached_rider_gestures_are_forwarded() -> void:
 	var rider: LocalRider = autofree(FakeRider.new())
 	_router.attach_rider(rider)

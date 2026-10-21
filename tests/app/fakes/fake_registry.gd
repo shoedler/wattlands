@@ -9,7 +9,7 @@ var manifests: Dictionary = {}
 var instantiated: int = 0
 
 
-func add_game(m: Dictionary) -> void:
+func add_fixture(m: Dictionary) -> void:
 	manifests[str(m["id"])] = m
 
 

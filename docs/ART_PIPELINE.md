@@ -153,7 +153,7 @@ Every pixel of the output is a palette color at alpha 255 or `(0, 0, 0, 0)`, whi
 
 `sprites.json` lists every sprite that has a PNG: `file`, `size`, `anchor` (`[x, y]` in art pixels), `align`, `background`, `tile`, `mirror`, `parts` (`{name: {file, rect}}`) and `source` (`request_id`, `endpoint`).
 
-The pixel import preset (filter off, mipmaps off, lossless): `project.godot`'s `[importer_defaults]` already import textures lossless without mipmaps, and pixelate also writes a minimal `.import` with the preset next to each PNG that has none (Godot completes it on the next `--import`; commit both). Filtering is per CanvasItem in Godot 4: `PixelViewport` draws with nearest filtering. After pixelating, run `tools/godot.sh --headless --path . --import`.
+The pixel import preset (filter off, mipmaps off, lossless) has one mechanism (OWNERSHIP C36): `project.godot`'s `[importer_defaults] texture` imports every new PNG lossless (`compress/mode` 0) without mipmaps, so pixelate writes plain PNGs and no `.import` files. `pixelate.gd` checks those defaults first (`PixelImportPreset.check_project_defaults()`) and stops with an error if they are missing. Filtering is per CanvasItem in Godot 4: `PixelViewport` draws with nearest filtering, and `PixelImportPreset.apply_to(item)` sets nearest on a CanvasItem outside it. After pixelating, run `tools/godot.sh --headless --path . --import` and commit the PNGs with the `.import` files Godot writes. (`ArtPixelate.import_preset_mode = ArtPixelate.IMPORT_WRITE_FILE` is an opt-in for a sprite folder that must pin the preset in its own `.import` files; nothing uses it by default.)
 
 ## Animating by parts
 

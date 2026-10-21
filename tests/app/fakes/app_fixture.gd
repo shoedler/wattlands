@@ -61,9 +61,9 @@ func _init() -> void:
 	services.game_host_factory = _make_host
 	services.rider_factory = _make_rider
 	services.quit_hook = func(code: int) -> void: quits.append(code)
-	(registry as FakeRegistry).add_game(FakeRegistry.workout())
-	(registry as FakeRegistry).add_game(FakeRegistry.siege())
-	(registry as FakeRegistry).add_game(FakeRegistry.tank())
+	(registry as FakeRegistry).add_fixture(FakeRegistry.workout())
+	(registry as FakeRegistry).add_fixture(FakeRegistry.siege())
+	(registry as FakeRegistry).add_fixture(FakeRegistry.tank())
 	var t := trainer as FakeTrainer
 	t.dev = MockTrainer.from_spec("erg", 200.0)
 	t.add_child(t.dev)

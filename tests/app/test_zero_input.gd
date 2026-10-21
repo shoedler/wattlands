@@ -72,7 +72,7 @@ func test_five_second_hold_starts_the_last_played_game() -> void:
 
 func test_nothing_played_yet_uses_the_first_run_game() -> void:
 	fx.give_profile()
-	fx.fake_registry().add_game(FakeRegistry.fishing())
+	fx.fake_registry().add_fixture(FakeRegistry.fishing())
 	var title := open_screen(AppTitleScreen.new()) as AppTitleScreen
 	assert_eq(title.quick_game, "fishing")
 

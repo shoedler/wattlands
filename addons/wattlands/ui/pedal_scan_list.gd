@@ -22,6 +22,13 @@ extends VBoxContainer
 ##   follow_local_mode, the InputRouter's attached rider, read on every tick). With no mode
 ##   known, erg_auto_confirm on counts as ERG (a game that sets it from Telemetry.mode).
 ## - With listen_to_input on, the list follows InputRouter.menu_input while it is visible.
+## - Driven by hand (the app shell's screens): with listen_to_input off and processing off
+##   (set_process(false) or real_time false) the list moves only through feed_action(),
+##   feed_gesture() and tick(dt). A pick (confirm, surge, auto-confirm) emits item_chosen and
+##   then item_picked synchronously, inside that call.
+## - set_items() highlights the first enabled item and restarts the scan and auto-confirm
+##   counts; a caller refreshing a menu in place restores the highlighted index with
+##   set_highlight() afterwards (AppScreen.refresh_menu does).
 
 ## index, the item's id, and whether the pick was an ERG auto-confirm.
 signal item_chosen(index: int, id: Variant, auto: bool)
