@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# tools/run_game_sim: run a game headless with MockTrainer riders and write a JSON report and FIT
+# files (BRIEF 3.6). tools/run_game_sim.ps1 is the PowerShell twin; docs/GAME_SDK.md explains every
+# flag, the slot rules and the report.
+#
+#   tools/run_game_sim --game=<id> --content=<id> --players=<n> --bots=<n> --rider=<profile> \
+#       --sim-speed=<x> --seed=<n> --report=<path> [--autopilot=all|none|<slot,...>] \
+#       [--ftp=<w>[,<w>...]] [--unverified] [--haptics-off=<slot,...>] [--options=<json object>] \
+#       [--player-options=<json array>] [--override=<json file>] [--max-sim-seconds=<n>]
+#
+# Wrapper flags (consumed here): --godot-timeout=<s> (kill Godot after s seconds, default 1800) and
+# --godot-lock-timeout=<s> (give up waiting for a Godot slot, exit 75).
+#
+# Every rider is a MockTrainer. This script exports WATTLANDS_NO_HW_CONTROL=1 and
+# WATTLANDS_NO_NETWORK_INTEGRATIONS=1, refuses --allow-hw and --allow-network, adds --mock-trainer and
+# --caller-cwd (relative --report and --override paths are taken from your current directory), and runs
+#   tools/godot.sh --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>
+# Exit codes: 0 the run completed (any end_reason; the report says which), 2 bad flags or locks,
+# 3 setup failed (unknown game or content, rejected plan), 4 the report could not be written,
+# 75 Godot lock wait timeout, 124 Godot run timeout.
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo="$(dirname "$here")"
+export WATTLANDS_NO_HW_CONTROL=1
+export WATTLANDS_NO_NETWORK_INTEGRATIONS=1
+
+timeout_s=1800
+lock_opts=()
+flags=()
+for a in "$@"; do
+  case "$a" in
+    --allow-hw | --allow-network)
+      printf 'run_game_sim: %s is refused: simulations always ride MockTrainer with the locks on\n' "$a" >&2
+      exit 2
+      ;;
+    --godot-timeout=*) timeout_s="${a#--godot-timeout=}" ;;
+    --godot-lock-timeout=*) lock_opts+=("--lock-timeout=${a#--godot-lock-timeout=}") ;;
+    --mock-trainer | --mock-trainer=* | --caller-cwd=*) ;; # always set below
+    *) flags+=("$a") ;;
+  esac
+done
+
+exec "${BASH:-bash}" "$here/godot.sh" "--timeout=$timeout_s" ${lock_opts[@]+"${lock_opts[@]}"} \
+  --headless --path "$repo" -s tools/sdk/run_game_sim_main.gd -- \
+  --mock-trainer "--caller-cwd=$(pwd)" ${flags[@]+"${flags[@]}"}

@@ -1,0 +1,122 @@
+// Tests for tools/run_game_sim and tools/run_game_sim.ps1 (BRIEF 1 locks, BRIEF 3.6): the wrappers'
+// structure, their refusals, and (with a Godot binary) the whole chain wrapper -> godot wrapper ->
+// tools/sdk/run_game_sim_main.gd, checked with --echo-args from an empty environment: the locks are
+// set, --mock-trainer is added, relative --report and --override paths resolve against the caller's
+// directory, and JSON and rider specs reach Godot unchanged. The session itself (GameSimRunner) is
+// sdk-runtime's and is covered by tests/sdk/ and tests/games/_template/integration/.
+// The real-Godot cases need this checkout imported (tools/godot.sh --headless --path . --import).
+import { test, describe, after } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { REPO, TOOLS, IS_WIN, BASH, GIT, godotBin, minimalEnv, powershellExe, runProc, rmQuiet } from './helpers.mjs';
+
+const GODOT = godotBin();
+const temps = [];
+after(() => {
+  for (const d of temps) rmQuiet(d);
+});
+
+const read = (rel) => fs.readFileSync(path.join(REPO, rel), 'utf8');
+
+const shells = [{ name: 'bash', ok: Boolean(BASH) }];
+if (IS_WIN) shells.push({ name: 'PowerShell', ok: Boolean(powershellExe()) });
+
+function runSim(shell, args, opts) {
+  if (shell === 'bash') return runProc(BASH, [path.join(TOOLS, 'run_game_sim').replaceAll('\\', '/'), ...args], opts);
+  return runProc(powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_game_sim.ps1'), ...args], opts);
+}
+
+/** The JSON array after "run_game_sim: args " in stdout. */
+function echoedArgs(stdout) {
+  const line = stdout.split(/\r?\n/).find((l) => l.startsWith('run_game_sim: args '));
+  assert.ok(line, `no args line in:\n${stdout}`);
+  return JSON.parse(line.slice('run_game_sim: args '.length));
+}
+
+describe('structure', () => {
+  test('tools/run_game_sim is a bash script with a shebang, committed executable', () => {
+    const sh = read('tools/run_game_sim');
+    assert.match(sh, /^#!\/usr\/bin\/env bash\n/);
+    if (GIT) {
+      const r = spawnSync(GIT, ['-C', REPO, 'ls-files', '-s', 'tools/run_game_sim'], { encoding: 'utf8' });
+      if (r.stdout.trim()) assert.match(r.stdout, /^100755 /, 'git add --chmod=+x tools/run_game_sim');
+    }
+  });
+
+  test('tools/run_game_sim.ps1 keeps CRLF', () => {
+    const ps = read('tools/run_game_sim.ps1');
+    assert.ok(ps.includes('\r\n') && !/[^\r]\n/.test(ps), 'CRLF only');
+  });
+
+  for (const [file, godot] of [['tools/run_game_sim', 'godot.sh'], ['tools/run_game_sim.ps1', 'godot.ps1']]) {
+    test(`${file} sets both locks, adds --mock-trainer and runs the entry script through ${godot}`, () => {
+      const text = read(file);
+      assert.match(text, /WATTLANDS_NO_HW_CONTROL['"]? *=? *['"]?1/);
+      assert.match(text, /WATTLANDS_NO_NETWORK_INTEGRATIONS['"]? *=? *['"]?1/);
+      assert.ok(text.includes(godot), godot);
+      assert.ok(text.includes('tools/sdk/run_game_sim_main.gd'));
+      assert.ok(text.includes("'--headless'") || text.includes('--headless '), '--headless');
+      assert.ok(text.includes('--mock-trainer'));
+      assert.ok(text.includes('--caller-cwd='));
+      assert.doesNotMatch(text, /FAL_KEY|WATTLANDS_ALLOW_ART/, 'the art variables are never touched');
+    });
+  }
+
+  test('the entry script exists and hands over to GameSimCli', () => {
+    const main = read('tools/sdk/run_game_sim_main.gd');
+    assert.match(main, /^extends SceneTree$/m);
+    assert.match(main, /GameSimCli\.new\(\)\.run\(OS\.get_cmdline_user_args\(\), root\)/);
+  });
+});
+
+describe('refusals before Godot starts', () => {
+  for (const sh of shells) {
+    for (const flag of ['--allow-hw', '--allow-network']) {
+      test(`${sh.name}: ${flag} is refused with exit 2`, { skip: !sh.ok && `no ${sh.name}` }, async () => {
+        const r = await runSim(sh.name, ['--game=_template', '--report=r.json', flag], { env: minimalEnv(), cwd: os.tmpdir() });
+        assert.equal(r.code, 2, r.stderr);
+        assert.match(r.stderr, new RegExp(`${flag} is refused`));
+      });
+    }
+  }
+});
+
+describe('through Godot', () => {
+  for (const sh of shells) {
+    const skip = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh.ok && `no ${sh.name}`);
+
+    test(`${sh.name}: the locks, --mock-trainer and resolved paths reach the entry script`, { skip, timeout: 600_000 }, async () => {
+      const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-'));
+      temps.push(cwd);
+      fs.writeFileSync(path.join(cwd, 'over.json'), '{"default.json": {"nudge_pct": 4}}');
+      const options = '{"boosts":false,"track":800}';
+      const players = '[{"work_offset":5},{"work_offset":-10}]';
+      const r = await runSim(
+        sh.name,
+        ['--echo-args', '--game=_template', '--content=short', '--players=2', '--bots=1', '--rider=erg+cadence_drop:rpm=40,at_s=1200',
+          '--rider=erg:compliance=0.9', '--report=out/r.json', '--override=over.json', `--options=${options}`,
+          `--player-options=${players}`, '--seed=3', '--sim-speed=200', '--unverified', '--godot-timeout=300'],
+        { env: minimalEnv(), cwd, timeoutMs: 600_000 },
+      );
+      assert.equal(r.code, 0, r.stderr + r.stdout);
+      const args = echoedArgs(r.stdout);
+      const slash = (p) => p.replaceAll('\\', '/');
+      assert.deepEqual(args, [
+        '--game=_template', '--content=short', '--players=2', '--bots=1', '--rider=erg+cadence_drop:rpm=40,at_s=1200',
+        '--rider=erg:compliance=0.9', `--report=${slash(path.join(cwd, 'out', 'r.json'))}`,
+        `--override=${slash(path.join(cwd, 'over.json'))}`, `--options=${options}`, `--player-options=${players}`,
+        '--seed=3', '--sim-speed=200', '--unverified',
+      ]);
+      assert.match(r.stdout, /run_game_sim: locks WATTLANDS_NO_HW_CONTROL=1 WATTLANDS_NO_NETWORK_INTEGRATIONS=1/);
+    });
+
+    test(`${sh.name}: a missing --report exits 2 and names it`, { skip, timeout: 600_000 }, async () => {
+      const r = await runSim(sh.name, ['--game=_template', '--godot-timeout=300'], { env: minimalEnv(), cwd: os.tmpdir(), timeoutMs: 600_000 });
+      assert.equal(r.code, 2, r.stdout + r.stderr);
+      assert.match(r.stderr, /--report is required/);
+    });
+  }
+});
