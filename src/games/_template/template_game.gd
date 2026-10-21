@@ -71,10 +71,10 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 			ctx.directives.cadence_band(peer, 80.0, 100.0)
 		if p.slot_index == 0:  # every rider shares one phase sequence, so slot 0 speaks for all
 			phase_changed.emit(ph.index)
-	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["nudge_at_s"]) and _first("nudge%d" % peer):
+	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["nudge_at_s"]) and _first("nudge%d_%d" % [peer, ph.index]):
 		ctx.directives.request(peer, EffortDirective.from_dict({"target_pct": ph.planned_pct + float(content["nudge_pct"]),
 			"duration_s": float(content["nudge_s"]), "reason": "hill", "source": "_template"}))
-	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["lap_marker_at_s"]) and _first("lap_marker"):
+	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["lap_marker_at_s"]) and _first("lap_marker%d" % ph.index):
 		lap_marker.emit("_TEMPLATE_LAP_HALFWAY")
 	if ph.kind == Wl.COOLDOWN and _first("finished"):
 		finished.emit("complete")  # emitted in the cool-down, it only records the reason

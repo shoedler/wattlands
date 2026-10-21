@@ -143,6 +143,19 @@ func test_a_full_session_sends_exactly_one_hill_per_rider_and_nothing_in_the_coo
 	assert_gt(int(g.state["riders"][0]["laps"]), 3, "markers keep riding home in the cool-down")
 
 
+func test_every_work_phase_gets_its_own_hill_and_lap_marker() -> void:
+	var ctx := F.make_ctx(1)
+	var warm := {"kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300, "label": "_TEMPLATE_PHASE_WARMUP"}
+	var work := {"kind": "WORK", "target_pct": 75, "duration_s": 180, "label": "_TEMPLATE_PHASE_WORK"}
+	ctx.content_overrides = {"default.json": {"phases": [warm, work, work]}}
+	var g := _game(ctx)
+	watch_signals(g)
+	F.run(g, F.plans_of(g), 0, 670.0)
+	assert_eq(_dirs(ctx).requests.size(), 2, "one hill in each WORK phase")
+	assert_eq(_dirs(ctx).requests.map(func(r: Array) -> float: return r[1]["target_pct"]), [80.0, 80.0])
+	assert_signal_emit_count(g, "lap_marker", 2)
+
+
 func test_teammate_status_once_per_second_with_in_band() -> void:
 	var ctx := F.make_ctx(1)
 	var g := _game(ctx)
