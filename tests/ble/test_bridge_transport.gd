@@ -146,6 +146,33 @@ func test_ambiguous_loopback_urls_are_refused() -> void:
 	assert_eq(_server.received.size(), 0, "nothing was opened")
 
 
+## W4r2 (RS residual): a scheme-less URL whose text after a fake "x://" is 127.0.0.1. WebSocketPeer
+## reads it as ws://127.0.0.2:PORT, so before W4r2 the bridge connected to a listener there
+## (build/w4r2/rides-strava/test_lock_residuals.gd). A real socket on 127.0.0.2 shows nothing
+## connects; 127.0.0.2 is loopback, so nothing leaves the machine.
+func test_a_scheme_less_url_is_refused_and_reaches_nothing() -> void:
+	var listener := TCPServer.new()
+	assert_eq(listener.listen(0, "127.0.0.2"), OK, "listen on 127.0.0.2")
+	var port := listener.get_local_port()
+	for u: String in ["127.0.0.2:%d/x://127.0.0.1" % port, "127.0.0.2:%d/://localhost" % port]:
+		_events.clear()
+		_t.url = u
+		_t.initialize()
+		assert_eq(_named("adapter_ready").size(), 1, u)
+		assert_false(_named("adapter_ready")[0][1], u)
+		assert_push_warning("must run on 127.0.0.1", u)
+	var got := false
+	for i in 60:
+		_t.poll()
+		if listener.is_connection_available():
+			got = true
+			listener.take_connection().disconnect_from_host()
+			break
+		await get_tree().process_frame
+	listener.stop()
+	assert_false(got, "no connection on 127.0.0.2")
+
+
 func test_bad_messages_are_ignored_with_a_warning() -> void:
 	_ready_bridge()
 	_t.handle_message("not json")
