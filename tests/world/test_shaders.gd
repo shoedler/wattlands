@@ -131,6 +131,16 @@ func test_make_material_sets_wave() -> void:
 	assert_eq(mat.get_shader_parameter("margin_px"), 2.0, "the quad grows by the amplitude")
 
 
+func test_set_wave_grows_the_margin_with_the_amplitude() -> void:
+	var mat := SpriteWobble.make_material(1.0, 12.0, 1.0)
+	assert_eq(mat.get_shader_parameter("margin_px"), 1.0)
+	SpriteWobble.set_wave(mat, 3.4, 12.0, 1.0, 0.25)
+	assert_eq(mat.get_shader_parameter("margin_px"), 4.0, "a stronger wave is not clipped")
+	assert_eq(mat.get_shader_parameter("phase"), 0.25)
+	SpriteWobble.set_wave(mat, -2.0, 12.0, 1.0)
+	assert_eq(mat.get_shader_parameter("margin_px"), 2.0, "a negative amplitude swings as far")
+
+
 func test_presets() -> void:
 	var fish: Sprite2D = autofree(Sprite2D.new())
 	var m := SpriteWobble.fish_tail(fish, true)

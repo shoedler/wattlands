@@ -29,7 +29,6 @@ static func make_material(amplitude_px: float = 1.0, wavelength_px: float = 16.0
 	mat.shader = shader()
 	set_wave(mat, amplitude_px, wavelength_px, frequency_hz)
 	mat.set_shader_parameter("vertical", vertical)
-	mat.set_shader_parameter("margin_px", ceilf(absf(amplitude_px)))
 	return mat
 
 
@@ -41,12 +40,14 @@ static func apply(item: CanvasItem, amplitude_px: float = 1.0, wavelength_px: fl
 	return mat
 
 
-## Change the wave of an existing material (wavelength must be > 0).
+## Change the wave of an existing material (wavelength must be > 0). The quad's margin
+## follows the amplitude, so a stronger wave is never clipped at the sprite's edge.
 static func set_wave(mat: ShaderMaterial, amplitude_px: float, wavelength_px: float, frequency_hz: float, phase: float = 0.0) -> void:
 	if wavelength_px <= 0.0:
 		push_error("SpriteWobble: wavelength_px must be > 0 (got %s)" % wavelength_px)
 		wavelength_px = 1.0
 	mat.set_shader_parameter("amplitude_px", amplitude_px)
+	mat.set_shader_parameter("margin_px", ceilf(absf(amplitude_px)))
 	mat.set_shader_parameter("wavelength_px", wavelength_px)
 	mat.set_shader_parameter("frequency_hz", frequency_hz)
 	mat.set_shader_parameter("phase", phase)
