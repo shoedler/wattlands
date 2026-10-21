@@ -1,0 +1,18 @@
+{
+  "name": "wattlands-mock-strava",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Mock Strava OAuth and upload API for Wattlands tests (BRIEF 3.8). Zero dependencies.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "mock-strava": "server.mjs"
+  },
+  "scripts": {
+    "start": "node server.mjs --port=0",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
