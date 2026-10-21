@@ -23,6 +23,10 @@ const VISUAL_PX_PER_M := 3.0
 const STRIP_PX_PER_S := 0.5
 const STRIP_BASE := 298.0
 const STRIP_MAX_H := 32.0
+## Strip heights (% FTP scale) of FREE phases, which have no target: a sprint stands tall, free
+## riding (a FreeRide longer than a sprint, W4r2 R15) sits low and hatched.
+const SPRINT_STRIP_PCT := 130.0
+const FREE_STRIP_PCT := 55.0
 ## Pennants are drawn at this scale of WorkoutArt's base geometry.
 const PENNANT_SCALE := 1.5
 ## Off-screen riders sit this far inside the left and right edges (the flag points right).
@@ -140,9 +144,13 @@ func _blocks(state: WorkoutState) -> Array:
 		if p.mode == Wl.ERG:
 			h0 = _strip_h(p.target_pct)
 			h1 = _strip_h(p.ramp_to_pct if p.has_ramp() else p.target_pct)
-		elif p.kind == Wl.FREE:
-			h0 = _strip_h(130.0)
+		elif p.kind == Wl.FREE and WorkoutSession.is_sprint(p):
+			h0 = _strip_h(SPRINT_STRIP_PCT)
 			h1 = h0
+		elif p.kind == Wl.FREE:  # free riding (an imported FreeRide): no target, low and hatched
+			h0 = _strip_h(FREE_STRIP_PCT)
+			h1 = h0
+			hatched = true
 		else:
 			h0 = _strip_h(float(state.band_pct[1]))
 			h1 = h0
