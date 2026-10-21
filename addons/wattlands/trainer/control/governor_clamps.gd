@@ -14,6 +14,16 @@ const CEILING_PCT := 150.0
 const CEILING_ABS_W := 1000.0
 const UNVERIFIED_FACTOR := 0.85
 const KICKR_MAX_W := 1800
+## The FTP range a governor accepts (W4, SAF-1): the same 30-2000 W Settings clamps a profile
+## into (WlSettings.PROFILE_RANGES), so a value from elsewhere (a host's session_start, a
+## hand-edited file) can never set a rider's watt basis outside what the rider could enter.
+const FTP_MIN_W := 30.0
+const FTP_MAX_W := 2000.0
+
+
+## True when `ftp_w` is a finite FTP inside FTP_MIN_W..FTP_MAX_W.
+static func ftp_in_range(ftp_w: float) -> bool:
+	return is_finite(ftp_w) and ftp_w >= FTP_MIN_W and ftp_w <= FTP_MAX_W
 
 
 static func pct_to_w(pct: float, ftp_w: float) -> float:

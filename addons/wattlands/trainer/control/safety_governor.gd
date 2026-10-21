@@ -28,6 +28,8 @@ extends Node
 ##   governed_target_w (every rule but slew), planned_pct, haptic_pct, power_3s_w,
 ##   course_grade_pct, mode_grade_pct, base_grade_pct, rescue_ramp (bool), test_ended (bool),
 ##   shut_down (bool), ftp_w, ftp_verified, written_target_w, written_grade_pct.
+## Added in W4 (additive): reset_run_s (seconds of ERG at <= 90% FTP toward the 4.6.1 120 s
+##   reset), samples_stale (the trainer's sample stream went stale with the link up, SAF-7).
 ##
 ## Implementation notes (details in docs/decisions/trainer-control.md):
 ##   - on_sample() queues the sample; the next tick() processes it at that tick's platform
@@ -45,9 +47,20 @@ extends Node
 ##     to a rider in ERG refuses the whole request (never a mode switch).
 ##   - No phase (W2r2): with no plan, a plan before its first start_phase(), or after
 ##     clear_plan(), the governor commands SIM grade 0, wind 0 (menus ride free at SIM flat);
-##     desired_mode stays "OFF", so it counts as no ERG/SIM switch for the 30 s spacing.
+##     desired_mode stays "OFF". (W4, SAF-6) For the 30 s switch spacing (4.5) that SIM flat is
+##     SIM: leaving ERG for it is a switch, and so is entering ERG from it once the controller
+##     has the trainer at SIM (the menus, a session's first ERG phase). A governor whose
+##     controller has written nothing yet knows no previous mode, so its first ERG is no switch.
 ##   - Warm-up (4.6.8) belongs to the trainer connection, not the session: its state is a
 ##     GovernorWarmup that adopt_connection() carries to the next governor on the same device.
+##     (W4) So do the 4.6.1 duration limits (both counters, both latches and the 120 s reset
+##     run, SAF-2) and the time of the last ERG/SIM switch (SAF-6): they reset only as 4.6.1
+##     and 4.5 say, or with a new trainer connection (another device object).
+##   - Stale samples (W4, SAF-7): while the trainer link is up (device status not
+##     disconnected, scanning or connecting), a sample stream that stops for more than
+##     STALE_SAMPLE_S counts as one not_pedaling sample (0 W, no cadence) at the moment it went
+##     stale, so the coasting floor, pause/AFK and the rescue power trigger run as for a rider
+##     who stopped. The watchdog counts from setup(device), a reconnect, or the latest sample.
 
 ## Any status field changed (at most once per tick).
 signal status_changed(status: Dictionary)
@@ -112,6 +125,9 @@ const SIM_BLOCK_MAX_S := 30.0
 const SWITCH_SPACING_S := 30.0
 const COURSE_GRADE_INTERVAL_S := 0.5
 const POWER_WINDOW_S := 3.0
+## A trainer sample older than this counts as gone (LocalRider.STALE_S): with the link up, the
+## stream stopping counts as a not_pedaling sample (W4, SAF-7).
+const STALE_SAMPLE_S := 3.0
 ## Speed assumed for the haptic wind bound when the trainer reports none (m/s). A higher
 ## speed allows less wind, so an unknown speed is the conservative case.
 const UNKNOWN_SPEED_MPS := 20.0
@@ -172,6 +188,11 @@ var _pending: Array[TrainerSample] = []
 ## (platform t, power W) of recent samples, for the 3 s power.
 var _power_hist: Array[Vector2] = []
 var _speed_mps: float = -1.0
+## Platform t of the latest trainer sample, or of the bind or reconnect when none came since
+## (-1: no device, the stale-sample watchdog is off), and whether the stream has gone stale
+## since then (W4, SAF-7).
+var _last_sample_t: float = -1.0
+var _stale: bool = false
 
 # --- coasting --------------------------------------------------------------------------
 var _np_since: float = -1.0
@@ -254,6 +275,10 @@ func setup(device: TrainerDevice) -> void:
 	_power_hist.clear()
 	_pending.clear()
 	_speed_mps = -1.0
+	# The stale-sample watchdog (SAF-7) counts from the bind: a bound trainer is expected to
+	# notify about once per second.
+	_last_sample_t = _t if device != null else -1.0
+	_stale = false
 	if _panic:
 		# A trainer that connects during panic goes straight to SIM flat.
 		_controller.emergency_safe(_crr, _cw)
@@ -269,8 +294,9 @@ func setup(device: TrainerDevice) -> void:
 ##   crr (0.004), cw (0.51), trainer_max_w (from the device's power range),
 ##   profile ("normal" or "ramp_test", BRIEF 3.2).
 ## W1 adds: weight_kg (75, for target_wkg), system_mass_kg (83, rider + bike for the haptic
-## wind bound). Out-of-range values are clamped with push_warning; an unknown profile or a
-## non-positive FTP is rejected with push_error and the previous value stays.
+## wind bound). Out-of-range values are clamped with push_warning; an unknown profile or an
+## FTP outside 30-2000 W (GovernorClamps.FTP_MIN_W..FTP_MAX_W, the range Settings allows;
+## W4) is rejected with push_error and the previous value stays.
 ## Calling it again (LocalRider.configure_governor, the FTP test) replaces only the given
 ## parameters: the plan, the phase and its elapsed time, warm-up, duration limits, rescue,
 ## coasting and the directive channels are kept, and the next tick applies the new values.
@@ -280,10 +306,11 @@ func configure(params: Dictionary) -> void:
 			push_warning("SafetyGovernor: unknown configure key \"%s\" ignored" % str(key))
 	if params.has("ftp_w"):
 		var f := float(params["ftp_w"])
-		if f > 0.0 and is_finite(f):
+		if GovernorClamps.ftp_in_range(f):
 			_ftp_w = f
 		else:
-			push_error("SafetyGovernor: ftp_w must be > 0 (got %s)" % str(params["ftp_w"]))
+			push_error("SafetyGovernor: ftp_w must be within %d-%d W (got %s); keeping %s W" % [
+				int(GovernorClamps.FTP_MIN_W), int(GovernorClamps.FTP_MAX_W), str(params["ftp_w"]), str(_ftp_w)])
 	if params.has("ftp_verified"):
 		_ftp_verified = bool(params["ftp_verified"])
 	if params.has("difficulty_pct"):
@@ -630,6 +657,7 @@ func tick(dt: float) -> void:
 		if _phase != null:
 			_phase_elapsed += dt
 	_process_samples()
+	_check_stale_samples()
 	_update_coasting()
 	_update_warmup()
 	_expire_channels()
@@ -705,6 +733,8 @@ func on_trainer_reconnected() -> void:
 		return
 	_power_hist.clear()
 	_speed_mps = -1.0
+	_last_sample_t = _t
+	_stale = false
 	_controller.resync(_crr, _cw)
 	_recompute_outputs()
 	_update_clamped_by()
@@ -725,9 +755,16 @@ func on_trainer_reconnected() -> void:
 ##     hand-over.
 ##   - The rider's recent samples behind the 3 s power, and the latest speed: the same rider on
 ##     the same trainer, so the 4.5 step-down and SIM -> ERG entry use the rider's real power.
-## Plan, phase, directive channels, rescue, coasting, duration limits, gears and panic stay
-## this governor's own. Does nothing with null, itself or a freed governor, or unless both
-## are bound to the same device object (a new device is a new connection).
+##   - (W4, SAF-2) The 4.6.1 duration limits: time above 105% and above 120% FTP, both latches
+##     and the run of ERG at <= 90% FTP toward the 120 s reset. BRIEF 4.6.1 releases a latch
+##     only after 120 consecutive seconds of ERG at <= 90% FTP; ending a session or setting the
+##     rider up again is no such release.
+##   - (W4, SAF-6) The time of the last ERG/SIM switch, so the 4.5 30 s spacing counts from
+##     the rider's previous switch at the trainer, also when it happened under `previous`.
+##   - (W4, SAF-7) When the latest trainer sample arrived (the stale-sample watchdog).
+## Plan, phase, directive channels, rescue, coasting, gears and panic stay this governor's
+## own. Does nothing with null, itself or a freed governor, or unless both are bound to the
+## same device object (a new device is a new connection).
 func adopt_connection(previous: SafetyGovernor) -> void:
 	if previous == null or previous == self or not is_instance_valid(previous):
 		return
@@ -739,6 +776,16 @@ func adopt_connection(previous: SafetyGovernor) -> void:
 	for e: Vector2 in previous._power_hist:
 		_power_hist.append(Vector2(e.x - previous._t + _t, e.y))
 	_speed_mps = previous._speed_mps
+	_above_105_s = previous._above_105_s
+	_above_120_s = previous._above_120_s
+	_latched_105 = previous._latched_105
+	_latched_120 = previous._latched_120
+	_reset_run_s = previous._reset_run_s
+	if previous._last_switch_t > _NEVER * 0.5:
+		_last_switch_t = maxf(_last_switch_t, previous._last_switch_t - previous._t + _t)
+	if previous._last_sample_t >= 0.0:
+		_last_sample_t = previous._last_sample_t - previous._t + _t
+		_stale = previous._stale
 	_update_warmup()
 	_recompute_outputs()
 	_update_clamped_by()
@@ -748,7 +795,8 @@ func adopt_connection(previous: SafetyGovernor) -> void:
 ## Drop the plan and the phase (W2r2): the session is over before the rider is set up again,
 ## for example while its ride still waits to be saved. From the next tick the governor rides
 ## free at SIM grade 0, wind 0, as with no plan; every directive channel is cleared and a
-## rescue ends. Warm-up, duration limits, gears and panic are kept.
+## rescue ends. Warm-up, duration limits, gears and panic are kept. Leaving ERG for that SIM
+## flat counts as an ERG -> SIM switch for the 30 s spacing (W4, SAF-6).
 func clear_plan() -> void:
 	_plan = null
 	_phase = null
@@ -847,37 +895,75 @@ func _process_samples() -> void:
 	var batch := _pending
 	_pending = []
 	for s in batch:
-		_power_hist.append(Vector2(_t, s.power_w))
+		_last_sample_t = _t
+		_stale = false
+		_take_sample(_t, s.power_w, s.has_cadence(), s.cadence_rpm)
 		if s.has_speed():
 			_speed_mps = s.speed_kmh / 3.6
-		var has_cad := s.has_cadence()
-		var not_pedaling := s.power_w < NOT_PEDALING_W and (not has_cad or s.cadence_rpm < NOT_PEDALING_RPM)
-		if not_pedaling:
-			if _np_since < 0.0:
-				_np_since = _t
+	_trim_power_hist()
+
+
+## One sample's effect on the 3 s power, coasting, warm-up and rescue timers, at platform time
+## `at` (a real sample: the tick it arrived in; the stale-sample watchdog: when it went stale).
+func _take_sample(at: float, power_w: float, has_cad: bool, cadence_rpm: float) -> void:
+	_power_hist.append(Vector2(at, power_w))
+	var not_pedaling := power_w < NOT_PEDALING_W and (not has_cad or cadence_rpm < NOT_PEDALING_RPM)
+	if not_pedaling:
+		if _np_since < 0.0:
+			_np_since = at
+	else:
+		_np_since = -1.0
+		_wu.pedal()
+	if has_cad:
+		if cadence_rpm < RESCUE_CADENCE_LOW_RPM:
+			if _cad_low_since < 0.0:
+				_cad_low_since = at
 		else:
-			_np_since = -1.0
-			_wu.pedal()
-		if has_cad:
-			if s.cadence_rpm < RESCUE_CADENCE_LOW_RPM:
-				if _cad_low_since < 0.0:
-					_cad_low_since = _t
-			else:
-				_cad_low_since = -1.0
-			if s.cadence_rpm >= RESCUE_RECOVER_RPM:
-				if _cad_high_since < 0.0:
-					_cad_high_since = _t
-			else:
-				_cad_high_since = -1.0
-		var written := _controller.written_target_w()
-		if written > 0 and s.power_w < RESCUE_POWER_FRACTION * float(written):
-			if _pow_low_since < 0.0:
-				_pow_low_since = _t
+			_cad_low_since = -1.0
+		if cadence_rpm >= RESCUE_RECOVER_RPM:
+			if _cad_high_since < 0.0:
+				_cad_high_since = at
 		else:
-			_pow_low_since = -1.0
-	# Keep the samples inside the 3 s window plus the one before it.
+			_cad_high_since = -1.0
+	var written := _controller.written_target_w()
+	if written > 0 and power_w < RESCUE_POWER_FRACTION * float(written):
+		if _pow_low_since < 0.0:
+			_pow_low_since = at
+	else:
+		_pow_low_since = -1.0
+
+
+## Keep the samples inside the 3 s window plus the one before it.
+func _trim_power_hist() -> void:
 	while _power_hist.size() > 2 and _power_hist[1].x <= _t - POWER_WINDOW_S:
 		_power_hist.remove_at(0)
+
+
+## The stale-sample watchdog (W4, SAF-7; ADR in docs/decisions/trainer-control.md). While the
+## trainer link is up, no sample for more than STALE_SAMPLE_S counts as one not_pedaling sample
+## (0 W, no cadence) at the moment the stream went stale: LocalRider already shows such a rider
+## at 0 W, and the coasting floor, pause/AFK and the rescue power trigger now see the same.
+## Once per stale stretch; the next real sample ends it.
+func _check_stale_samples() -> void:
+	if _stale or _last_sample_t < 0.0 or not _link_up():
+		return
+	if _t - _last_sample_t <= STALE_SAMPLE_S + _EPS:
+		return
+	_stale = true
+	_cad_high_since = -1.0
+	_take_sample(_last_sample_t + STALE_SAMPLE_S, 0.0, false, 0.0)
+	_trim_power_hist()
+
+
+## True while the device reports a link (connected, ready, control lost or error): only then
+## is a silent sample stream a stopped rider rather than a dropped link (the reconnect flow
+## handles that).
+func _link_up() -> bool:
+	if _device == null or not is_instance_valid(_device):
+		return false
+	var st := _device.status()
+	return st != TrainerDevice.STATUS_DISCONNECTED and st != TrainerDevice.STATUS_SCANNING \
+		and st != TrainerDevice.STATUS_CONNECTING
 
 
 func _power_mean(window_s: float) -> float:
@@ -1272,8 +1358,13 @@ func _update_desired() -> void:
 			next = Wl.ERG
 	var was_erg := _desired == Wl.ERG
 	var now_erg := next == Wl.ERG
-	var was_sim := _desired == Wl.SIM or _desired == MODE_SAFE
-	var now_sim := next == Wl.SIM or next == MODE_SAFE
+	# No phase ("OFF") commands SIM grade 0 (W2r2), so for the 30 s spacing (BRIEF 4.5) it is
+	# SIM (W4, SAF-6): ERG -> OFF is a switch, and OFF -> ERG is one when the controller has the
+	# trainer at SIM (the menus, a cool-down that already stepped down). A fresh controller that
+	# has written nothing knows no previous mode, so a first ERG is no switch.
+	var was_sim := _desired == Wl.SIM or _desired == MODE_SAFE \
+		or (_desired == Wl.OFF and _controller.mode() == Wl.SIM)
+	var now_sim := next == Wl.SIM or next == MODE_SAFE or (next == Wl.OFF and not _shut_down)
 	if (was_erg and now_sim) or (was_sim and now_erg):
 		_last_switch_t = _t
 	if next != Wl.SIM and next != MODE_SAFE and not _ch_haptic.is_empty():
@@ -1473,6 +1564,8 @@ func _update_status() -> void:
 		"ftp_verified": _ftp_verified,
 		"written_target_w": _controller.written_target_w(),
 		"written_grade_pct": written_grade,
+		"reset_run_s": _reset_run_s,
+		"samples_stale": _stale,
 	}
 
 
