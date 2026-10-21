@@ -738,12 +738,14 @@ The template is the smallest complete game: `game.json`, `TemplateGame` (the Gam
 | --- | --- |
 | Content loading and validation | `configure`: `ctx.load_content_json("<content>.json")`, `TemplateRules.content_error()`, `push_error` on bad content |
 | `ctx.rng` | `configure`: the seeded start spread |
-| Plans with builders, a ramp, per-rider `int` option, `range_pct` | `build_effort_plans`: `PlanPhase.erg(...).with_lap()`, `.with_ramp(65)`, `work_offset` on WORK only, `.with_range(t, t + 5)` |
+| Plans with builders, a ramp, per-rider `int` option, `range_pct` | `build_effort_plans`: `PlanPhase.erg(...).with_lap()`, `.with_ramp(65)`, `work_offset` on WORK only, `.with_range(t, t + 5)`; a content phase with `"sim": true` becomes `PlanPhase.sim(kind, Wl.GRADE_GAME, ...)` |
+| `course_grade` in a `grade_source: "game"` phase | `_phase_rules`: `short`'s SIM "Rollers" phase gets a gentle ±1.5 % roller at 2 Hz |
+| `replan` and an open-ended phase ended by `end_phase` | `_phase_rules`: at the start of `short`'s phase `replan_at` (the Rollers) every rider's remaining plan becomes one open-ended "Finish" (`with_open(30, 50)`, `with_range(55, 60)`); `end_phase` ends it once `min_s` passed while the rider is in band, else the platform ends it at `max_s` |
 | Pure rules | `TemplateRules.step(state, inputs, dt)` returns the events it raised |
 | A directive inside `range_pct` that expires back to the plan | `_phase_rules`: the "hill" `request`, once per rider and WORK phase, at elapsed 60 s |
 | `cadence_band`, `power_band` | `_phase_rules`, at the WORK start of each rider |
 | `teammate_status`, `readout`, toasts with a `peer` | `_phase_rules` (1 Hz), `sim_step` and `apply_snapshot` (laps readout), `sim_step` (host lap toast with `ctx.local_peer`), `on_rescue` (toast to the rescued rider only), `apply_event` (client lap toast) |
-| `phase_changed`, `lap_marker`, `finished` | `_phase_rules`: on slot 0's index change; once per WORK phase at elapsed 90 s; once at the first COOLDOWN frame |
+| `phase_changed`, `banner`, `lap_marker`, `finished` | `_phase_rules`: `phase_changed` and a 3 s phase banner on slot 0's index change; `lap_marker` once per WORK phase at `lap_marker_at_s`; `finished` once every rider is in the cool-down (riders reach it at different times after an open-ended phase, and an earlier `finished` would end the others' phases) |
 | Autopilot | `autopilot_intents`: a boost every 30 s, tagged `"auto": 1`, never effort |
 | Rescue and AFK as staggers | `on_rescue`, `on_afk`: the marker waits |
 | Input | `local_intents`: surge and confirm tagged by `via`; the HUD button sends `{"k": "boost", "via": "button"}` with `ctx.intents.send` |

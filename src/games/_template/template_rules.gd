@@ -11,13 +11,13 @@ const NUMBERS: Array[String] = ["nudge_pct", "nudge_at_s", "nudge_s", "lap_marke
 static func content_error(c: Variant) -> String:
 	if not (c is Dictionary) or not (c.get("phases") is Array) or (c["phases"] as Array).is_empty():
 		return "content needs a non-empty \"phases\" array"
-	for k in NUMBERS:
+	for k in NUMBERS + (["replan_at"] if c.has("replan_at") else []):  # replan_at: the phase index that replans
 		if not str(c.get(k)).is_valid_float() or float(c[k]) < 0.0:
 			return "\"%s\" must be a number >= 0" % k
 	for ph: Variant in c["phases"]:
 		var ok: bool = ph is Dictionary and Wl.is_phase_kind(str(ph.get("kind"))) and ph["kind"] != Wl.COOLDOWN and ph.get("label") is String
-		if not ok or not (str(ph.get("target_pct")).is_valid_float() and str(ph.get("ramp_to_pct", 0)).is_valid_float() and float(str(ph.get("duration_s"))) > 0.0):
-			return "bad phase %s: kind (never COOLDOWN), target_pct, duration_s > 0, label, optional ramp_to_pct" % JSON.stringify(ph)
+		if not ok or not ((ph.get("sim", false) or str(ph.get("target_pct")).is_valid_float()) and str(ph.get("ramp_to_pct", 0)).is_valid_float() and float(str(ph.get("duration_s"))) > 0.0):
+			return "bad phase %s: kind (never COOLDOWN), target_pct (or sim: true), duration_s > 0, label, optional ramp_to_pct" % JSON.stringify(ph)
 	return ""
 
 
@@ -43,8 +43,7 @@ static func step(state: Dictionary, inputs: Dictionary, dt: float) -> Array:
 		if bool(inp.get("boost", false)) and float(rd["boost_s"]) <= 0.0:
 			rd["boost_s"] = float(state["boost_s"])
 			events.append({"type": "boost", "slot": rd["slot"]})
-		var stopped: bool = rd["rescue"] or rd["afk"]
-		var v := 0.0 if stopped else speed(state, float(inp.get("p_eff_w", 0.0)), float(rd["boost_s"]) > 0.0)
+		var v := 0.0 if rd["rescue"] or rd["afk"] else speed(state, float(inp.get("p_eff_w", 0.0)), float(rd["boost_s"]) > 0.0)
 		rd["boost_s"] = maxf(snappedf(float(rd["boost_s"]) - dt, 0.001), 0.0)  # whole ms: ends exactly
 		rd["dist_m"] = float(rd["dist_m"]) + v * dt
 		var laps := int(floorf(float(rd["dist_m"]) / float(state["track_m"])))

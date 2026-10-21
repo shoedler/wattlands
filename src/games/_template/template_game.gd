@@ -1,8 +1,8 @@
 class_name TemplateGame
 extends GameModule
 ## The template game (BRIEF 3.6; tools/new_game copies it, docs/GAME_SDK.md walks through it).
-## Each rider pushes a marker along a lane: a 5-minute warm-up ramp (50 -> 65% FTP), one
-## 3-minute WORK phase at 75% FTP with a +5% "hill" inside its range_pct, a lap marker, results.
+## Each rider pushes a marker along a lane: a 5-minute warm-up ramp (50 -> 65% FTP), one 3-minute WORK
+## phase at 75% FTP with a +5% "hill", a lap marker, results; "short" adds course_grade, replan, end_phase.
 
 var state: Dictionary = {}
 var content: Dictionary = {}
@@ -24,8 +24,8 @@ func configure(p_ctx: GameContext) -> void:
 		rd["dist_m"] = ctx.rng.randf_range(0.0, 2.0)  # ctx.rng is the only randomness
 
 
-## Host/SOLO: one plan per slot, bots included; only WORK targets take the rider's work_offset.
-## The PlanValidator checks every plan and appends the cool-down.
+## Host/SOLO: one plan per slot, bots included (WORK targets take the rider's work_offset; "sim": true is
+## a SIM phase the game feeds with course_grade). The PlanValidator checks each and appends the cool-down.
 func build_effort_plans() -> Dictionary:
 	var plans := {}
 	if content.is_empty():
@@ -33,9 +33,10 @@ func build_effort_plans() -> Dictionary:
 	for p in ctx.players:
 		var plan := EffortPlan.new()
 		for d: Dictionary in content["phases"]:
-			var ph := PlanPhase.erg(str(d["kind"]), float(d["target_pct"]), float(d["duration_s"]), str(d["label"])).with_lap()
-			if d.has("ramp_to_pct"):
-				ph.with_ramp(float(d["ramp_to_pct"]))
+			var ph := PlanPhase.erg(str(d["kind"]), float(d.get("target_pct", 0)), float(d["duration_s"]), str(d["label"])) \
+				.with_ramp(float(d.get("ramp_to_pct", PlanPhase.NONE))).with_lap()
+			if d.get("sim", false):
+				ph = PlanPhase.sim(ph.kind, Wl.GRADE_GAME, ph.duration_s, ph.label).with_lap()
 			if ph.kind == Wl.WORK:
 				ph.target_pct += clampf(float(p.options.get("work_offset", 0)), -10.0, 5.0)
 				ph.with_range(ph.target_pct, ph.target_pct + float(content["nudge_pct"]))
@@ -49,8 +50,7 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 	var inputs := {}
 	for p in ctx.players:
 		var tm := frame.telemetry(p.peer_id)
-		var boost := tm != null and bool(ctx.options.get("boosts", true)) and tm.intents.any(
-			func(it: Variant) -> bool: return it is Dictionary and str(it.get("k", "")) == "boost")
+		var boost := tm != null and bool(ctx.options.get("boosts", true)) and tm.intents.any(func(it: Variant) -> bool: return it is Dictionary and str(it.get("k", "")) == "boost")
 		inputs[p.peer_id] = {"p_eff_w": tm.p_eff_w if tm != null else 0.0, "boost": boost}
 		_phase_rules(p, frame.phase_of(p.peer_id), tm)
 	for e: Dictionary in TemplateRules.step(state, inputs, dt):
@@ -64,6 +64,7 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 	if ph == null:
 		return
 	var peer := p.peer_id
+	var in_band := tm != null and absf(tm.power_w - tm.applied_target_w) <= 0.05 * tm.applied_target_w
 	if ph.index != int(_last_index.get(peer, -1)):
 		_last_index[peer] = ph.index
 		if ph.kind == Wl.WORK:  # the gauge's band (drawn while in SIM) and a cadence band
@@ -71,15 +72,21 @@ func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
 			ctx.directives.cadence_band(peer, 80.0, 100.0)
 		if p.slot_index == 0:  # every rider shares one phase sequence, so slot 0 speaks for all
 			phase_changed.emit(ph.index)
+			ctx.hud.banner("_TEMPLATE_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0)
+		if ph.index == int(content.get("replan_at", -1)):  # the rest of the plan, validated like the first
+			ctx.directives.replan(peer, EffortPlan.of([PlanPhase.erg(Wl.WORK, 55, 40, "_TEMPLATE_PHASE_FINISH").with_range(55, 60).with_open(30, 50).with_lap()]))
+	if ph.mode == Wl.SIM and int(state["tick"]) % 10 == 0:  # grade_source "game": gentle rollers at 2 Hz
+		ctx.directives.course_grade(peer, 1.5 * sin(ph.elapsed_s / 5.0))
+	if ph.open_ended and ph.elapsed_s >= ph.min_s and in_band and _first("end%d_%d" % [peer, ph.index]):
+		ctx.directives.end_phase(peer)  # in band after min_s ends it; the platform ends it at max_s
 	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["nudge_at_s"]) and _first("nudge%d_%d" % [peer, ph.index]):
 		ctx.directives.request(peer, EffortDirective.from_dict({"target_pct": ph.planned_pct + float(content["nudge_pct"]),
 			"duration_s": float(content["nudge_s"]), "reason": "hill", "source": "_template"}))
 	if ph.kind == Wl.WORK and ph.elapsed_s >= float(content["lap_marker_at_s"]) and _first("lap_marker%d" % ph.index):
 		lap_marker.emit("_TEMPLATE_LAP_HALFWAY")
-	if ph.kind == Wl.COOLDOWN and _first("finished"):
-		finished.emit("complete")  # emitted in the cool-down, it only records the reason
+	if ph.kind == Wl.COOLDOWN and _first("cool%d" % peer) and _done.keys().filter(func(k: Variant) -> bool: return str(k).begins_with("cool")).size() == ctx.players.size():
+		finished.emit("complete")  # once every rider is in the cool-down (earlier it would end open phases)
 	if int(state["tick"]) % Wl.SIM_HZ == 0 and tm != null:
-		var in_band := absf(tm.power_w - tm.applied_target_w) <= 0.05 * tm.applied_target_w
 		var laps: int = TemplateRules.rider(state, peer).get("laps", 0)
 		ctx.hud.teammate_status(peer, {"in_band": in_band, "icon": "", "text": ctx.strings.t("_TEMPLATE_STATUS_LAPS", [laps])})
 
@@ -160,12 +167,10 @@ func hud_spec() -> HudSpec:
 	var boost := Button.new()  # the game's own Control sends intents through ctx.intents
 	boost.text = ctx.strings.t("_TEMPLATE_BOOST")
 	boost.pressed.connect(func() -> void: ctx.intents.send({"k": "boost", "via": "button"}))
-	return HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT) \
+	return HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT).add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT) \
 		.add(HudSpec.READOUT, HudSpec.TOP_RIGHT, {"source": "custom", "id": "laps", "label": "_TEMPLATE_LAPS"}) \
-		.add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT).add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT).add(HudSpec.GEAR, HudSpec.BOTTOM_LEFT) \
-		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM).add_control(boost, Rect2i(528, 300, 104, 48)) \
-		.toasts_at(HudSpec.TOP).banners_at(HudSpec.TOP)
+		.add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT).add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT).add(HudSpec.GEAR, HudSpec.BOTTOM_LEFT) \
+		.add(HudSpec.TEAMMATES, HudSpec.BOTTOM).add_control(boost, Rect2i(528, 300, 104, 48)).toasts_at(HudSpec.TOP).banners_at(HudSpec.TOP)
 
 
 ## Host/SOLO, once: the platform's rows (kJ, %FTP, time in band) plus the game's own.

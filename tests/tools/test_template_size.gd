@@ -26,5 +26,6 @@ func test_the_template_shows_every_sdk_call() -> void:
 			"ctx.directives.request(", "ctx.directives.cadence_band(", "ctx.hud.toast(", "ctx.hud.power_band(",
 			"ctx.hud.teammate_status(", "ctx.hud.readout(", "ctx.intents.send(", "lap_marker.emit(",
 			"finished.emit(", "phase_changed.emit(", "ctx.load_content_json(", "ctx.rng.", "with_range(",
-			"with_ramp(", "add_control("]:
+			"with_ramp(", "add_control(", "ctx.directives.course_grade(", "ctx.directives.end_phase(",
+			"ctx.directives.replan(", "ctx.hud.banner(", "with_open(", "PlanPhase.sim(", "Wl.GRADE_GAME"]:
 		assert_true(src.contains(call), call)

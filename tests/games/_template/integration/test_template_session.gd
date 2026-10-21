@@ -105,3 +105,15 @@ func test_a_host_run_with_two_humans_completes() -> void:
 	var r := _run(["--content=short", "--players=2", "--bots=0", "--rider=erg", "--seed=5"])
 	assert_eq(r["_end"], "complete")
 	assert_eq((r.get("fit_paths", []) as Array).size(), 2)
+	# W3 SDK-7: through the real platform, "short" replans every rider to an open-ended Finish that
+	# end_phase ends, and its SIM phase takes the game's course grades; nothing is refused.
+	for peer: String in ["1", "2"]:
+		var hist: Array = r["phases"][peer]
+		assert_eq(hist[2]["label"], "_TEMPLATE_PHASE_FINISH", "peer %s rode the replanned phase" % peer)
+		assert_eq(hist[2]["ended_by"], Wl.ENDED_END_PHASE, "peer %s: end_phase ended it" % peer)
+	var kinds := {}
+	for d: Dictionary in r.get("directives", []):
+		assert_true(bool(d["accepted"]), "accepted: %s" % JSON.stringify(d))
+		kinds[d["kind"]] = int(kinds.get(d["kind"], 0)) + 1
+	for kind: String in ["course_grade", "replan", "end_phase", "request", "cadence_band"]:
+		assert_gt(int(kinds.get(kind, 0)), 0, "the report has %s directives" % kind)
