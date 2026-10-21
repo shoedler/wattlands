@@ -6,3 +6,4 @@
 - Rides history with re-upload, and an opt-in import of FTP and weight from Strava (P1).
 - `server/mock_strava`: a zero-dependency mock of Strava's OAuth and upload API for tests.
 - `tools/fit_check`: decodes FIT files with Garmin's FIT SDK and checks sport, records, laps and totals (`--expect-laps`, `--json`).
+- Offline Strava uploads stay in the upload queue however many launches pass without a network; only real upload failures (error responses) count toward the 8-attempt limit.

@@ -91,3 +91,12 @@ func test_unreadable_file_is_set_aside() -> void:
 	assert_false(FileAccess.file_exists(p), "set aside again although a .bad already existed")
 	assert_eq(FileAccess.get_file_as_string(p + ".bad"), "[also bad")
 	DirAccess.remove_absolute(p + ".bad")
+
+
+## BRIEF 3.8: an offline attempt (or one while not connected) never counts toward the cap of
+## MAX_ATTEMPTS = 8; every real failure does.
+func test_only_real_failures_count_toward_max_attempts() -> void:
+	assert_eq(UploadQueue.MAX_ATTEMPTS, 8)
+	assert_false(UploadQueue.counts_as_attempt("offline"), "no connectivity is no failed attempt")
+	assert_false(UploadQueue.counts_as_attempt("queued"), "not connected yet is no failed attempt")
+	assert_true(UploadQueue.counts_as_attempt("failed"))

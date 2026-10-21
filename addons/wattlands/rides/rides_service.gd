@@ -11,8 +11,9 @@ extends Node
 ## Upload states go to EventBus.upload_state_changed(ride_id, state, detail): "queued" (not
 ## connected yet; uploads after connect), "uploading", "processing", then "uploaded"
 ## (detail: the activity id), "duplicate" (counts as uploaded; detail: the activity id if
-## known), "offline" (network down; kept in the queue) or "failed" (detail: the reason; kept
-## in the queue unless retrying can't help). Connection states go to
+## known), "offline" (network down; kept in the queue however often it happens) or "failed"
+## (detail: the reason; kept in the queue unless retrying can't help or it failed
+## UploadQueue.MAX_ATTEMPTS times; offline attempts don't count). Connection states go to
 ## EventBus.strava_state_changed. A ride's summary JSON records its upload under "upload".
 ##
 ## Start-up (unless auto_start is false): loads strava.json and the queue; with
@@ -440,8 +441,14 @@ func _apply_result(
 				detail = str(act)
 		_:
 			var prev := queue.get_entry(ride_id)
-			var attempts := int(prev.get("attempts", 0)) + (0 if state == "queued" else 1)
-			if bool(res.get("permanent", false)) or attempts >= UploadQueue.MAX_ATTEMPTS:
+			# BRIEF 3.8: an offline upload stays queued for the next launch. Only a real failure
+			# (an error response, a processing error or timeout) counts toward MAX_ATTEMPTS.
+			var counts := UploadQueue.counts_as_attempt(state)
+			var attempts := int(prev.get("attempts", 0)) + (1 if counts else 0)
+			if (
+				bool(res.get("permanent", false))
+				or (counts and attempts >= UploadQueue.MAX_ATTEMPTS)
+			):
 				queue.remove(ride_id)
 				_mark_summary(fit_path, {"state": "failed", "error": detail})
 			else:
