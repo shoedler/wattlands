@@ -5,6 +5,7 @@
 - Decision: every screen (`src/app/screens/`) extends `AppScreen` and is built in code, not in `.tscn` files. A screen keeps a stack of `PedalScanList` menus (sub-menus for option values, steppers and the on-screen keyboard) and only the top one is active. Lists get `listen_to_input = false` and `set_process(false)`; the screen feeds InputRouter's actions and gestures to the active list (`feed_action`, `feed_gesture`) and drives its scan timer with `tick(dt)`.
 - Alternatives: one `.tscn` per screen; every list listening to InputRouter itself.
 - Reason: a screen often shows two lists (a field list and a value list); if each listened, one surge would pick in both. Driving time and input from the screen makes every screen testable headless with injected gestures and exact scan timing.
+- Whether a menu scans comes from `InputRouter.pedal_ui_active()` (Autopilot or pedal UI on, or no input device used yet), with the profile's pedal UI or Autopilot flag as the fallback; the title holds its first item while the zero-touch countdown is armed.
 
 ## 2026-10-21: AppServices instead of autoload names in screens
 
