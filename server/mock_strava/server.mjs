@@ -14,6 +14,7 @@
 //   GET  /oauth/authorize   redirects straight to redirect_uri with code, state and scope
 //   POST /oauth/token       grant_type=authorization_code | refresh_token (rotating refresh tokens)
 //   POST /oauth/revoke      HTTP Basic client id/secret, token=<refresh or access token>
+//   POST /oauth/deauthorize Bearer access token (Strava's older revoke)
 //   POST /api/v3/uploads    multipart (file, data_type, trainer, name, description, external_id)
 //   GET  /api/v3/uploads/:id
 //   GET  /api/v3/athlete    ftp and weight only with the profile:read_all scope
@@ -21,7 +22,7 @@
 //   GET  /admin/state                 clock, counters
 //   POST /admin/clock    {now?, advance_s?}
 //   POST /admin/fault    {route, status, count?, retry_after?}  routes: authorize, token, revoke,
-//                         upload, upload_status, athlete, * (every non-admin route). Extras:
+//                         deauthorize, upload, upload_status, athlete, * (every non-admin route). Extras:
 //                         {location} answers with that redirect (status 3xx) instead; an authorize
 //                         fault with status 403 redirects with error=access_denied; one with
 //                         tamper_state: true redirects with a changed state
@@ -285,6 +286,17 @@ export function createMockStrava(opts = {}) {
     return send(res, 200, {});
   }
 
+  /** Strava's older endpoint: POST /oauth/deauthorize with the access token (header only here). */
+  async function deauthorize(req, res) {
+    await readBody(req);
+    const grant = bearerGrant(req);
+    if (!grant) return authError(res);
+    grant.revoked = true;
+    if (grant.refresh) state.refresh.delete(grant.refresh);
+    for (const [k, v] of state.access) if (v.grant === grant.id) state.access.delete(k);
+    return send(res, 200, { access_token: null });
+  }
+
   // --- API ------------------------------------------------------------------------
 
   function uploadJson(u) {
@@ -432,6 +444,7 @@ export function createMockStrava(opts = {}) {
     if (method === 'GET' && pathname === '/oauth/authorize') return 'authorize';
     if (method === 'POST' && pathname === '/oauth/token') return 'token';
     if (method === 'POST' && pathname === '/oauth/revoke') return 'revoke';
+    if (method === 'POST' && pathname === '/oauth/deauthorize') return 'deauthorize';
     if (method === 'POST' && pathname === '/api/v3/uploads') return 'upload';
     if (method === 'GET' && /^\/api\/v3\/uploads\/\d+$/.test(pathname)) return 'upload_status';
     if (method === 'GET' && pathname === '/api/v3/athlete') return 'athlete';
@@ -476,6 +489,8 @@ export function createMockStrava(opts = {}) {
         return (entry.status = await tokenEndpoint(req, res));
       case 'revoke':
         return (entry.status = await revoke(req, res));
+      case 'deauthorize':
+        return (entry.status = await deauthorize(req, res));
       default: {
         if (entry.token_in_query) {
           if (req.method === 'POST') await readBody(req);

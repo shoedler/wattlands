@@ -309,6 +309,14 @@ test('revoke needs HTTP Basic client auth and kills the grant', async () => {
   assert.equal(refresh.status, 400);
 });
 
+test('deauthorize revokes the grant with the access token in the header', async () => {
+  const t = await connect();
+  const r = await fetch(base + '/oauth/deauthorize', { method: 'POST', headers: { Authorization: 'Bearer ' + t.access_token } });
+  assert.equal(r.status, 200);
+  assert.equal((await status(t.access_token, 1)).status, 401);
+  assert.equal((await fetch(base + '/oauth/deauthorize', { method: 'POST' })).status, 401);
+});
+
 test('the request log records the auth kind and never a token', async () => {
   const t = await connect();
   await upload(t.access_token, 'log-1');

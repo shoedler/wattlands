@@ -467,3 +467,16 @@ func test_rejected_client_credentials_ask_for_a_reconnect() -> void:
 	assert_push_warning("credentials were rejected")
 	assert_eq(c.state(), "error")
 	assert_true(c.has_tokens(), "a 401 from the token endpoint keeps the tokens")
+
+
+func test_disconnect_falls_back_to_deauthorize() -> void:
+	var c: StravaClient = await _connected_client()
+	await _mock.fault("revoke", 404)
+	assert_true(await c.disconnect_account(), "revoked through /oauth/deauthorize")
+	var routes: Array = await _routes()
+	assert_eq(routes.slice(2), ["revoke:404", "deauthorize:200"])
+	var deauth: Array = (await _mock.requests()).filter(func(r: Dictionary) -> bool: return r["route"] == "deauthorize")
+	assert_eq(deauth[0]["auth"], "bearer", "the access token goes in the Authorization header")
+	assert_false(bool(deauth[0]["token_in_query"]))
+	var st: Dictionary = await _mock.admin(HTTPClient.METHOD_GET, "/admin/state")
+	assert_eq(int(st["active_grants"]), 0)

@@ -290,6 +290,11 @@ func disconnect_account() -> bool:
 			["Authorization: Basic " + basic, "Content-Type: application/x-www-form-urlencoded"],
 			form_encode({"token": refresh, "token_type_hint": "refresh_token"}).to_utf8_buffer())
 		revoked = int(r["code"]) == 200
+		if int(r["code"]) == 404 or int(r["code"]) == 405:
+			# No revoke endpoint at this base: use Strava's deauthorize, token in the header.
+			var d := await _request(HTTPClient.METHOD_POST, oauth_base + "/deauthorize",
+				["Authorization: Bearer " + str(_creds.get("access_token", ""))], PackedByteArray())
+			revoked = int(d["code"]) == 200
 	var keep_id := client_id()
 	_creds = {}
 	if keep_id != "":
