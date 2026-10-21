@@ -17,17 +17,21 @@ extends RefCounted
 ##                                   shot at each --at (platform seconds of the app's session,
 ##                                   default 30) plus one with --app-overlay=menu|panic|none
 ##                                   (default menu)
+##   --app-screen=results            the app's results screen with a Workout-like GameResults for
+##                                   --app-riders=<1..8> riders (default 1; tools/qa/screenshot_results.gd)
 ## Screenshot flags: --out=<dir> (alias --screenshot-dir), --frames=<n> (scene and app modes,
 ## default 30), --settle=<s> (game mode: render this long at normal speed before each shot,
 ## default 1), --app-game=<id> (lobby and session, default workout), --app-role and
-## --app-overlay (session), --mock-trainer=<profile> (app mode).
+## --app-overlay (session), --app-riders (results), --mock-trainer=<profile> (app mode).
 ## Every other flag goes to GameSimRunner.parse_args unchanged.
 
-const APP_SCREENS: Array[String] = ["title", "picker", "lobby", "session"]
+const APP_SCREENS: Array[String] = ["title", "picker", "lobby", "session", "results"]
 const APP_ROLES: Array[String] = ["client", "host", "solo"]
 const APP_OVERLAYS: Array[String] = ["menu", "panic", "none"]
 ## Session shots without --at: this many platform seconds into the app's session.
 const DEFAULT_SESSION_AT := 30.0
+## Results shots: 1 to this many riders (a full Workout room).
+const MAX_RESULTS_RIDERS := 8
 const DEFAULT_FRAMES := 30
 const DEFAULT_SETTLE_S := 1.0
 const DEFAULT_MOCK := "erg:compliance=1.0"
@@ -35,20 +39,20 @@ const SCREENSHOT_ROOT := "build/screenshots"
 ## Flags this tool consumes; they never reach GameSimRunner.parse_args.
 const OWN_FLAGS: Array[String] = [
 	"at", "out", "screenshot-dir", "scene", "frames", "app-screen", "app-game", "settle",
-	"mock-trainer", "profile-dir", "app-role", "app-overlay",
+	"mock-trainer", "profile-dir", "app-role", "app-overlay", "app-riders",
 ]
 
 
 ## {error: String ("" when valid), mode: "game" | "scene" | "app", at: Array[float] (sorted,
 ## unique), out: String (as given, or the default folder), frames: int, settle_s: float,
 ## scene: String, app_screen: String, app_game: String, app_role: String, app_overlay: String,
-## mock_trainer: String, game: String, content: String, players: int,
+## app_riders: int, mock_trainer: String, game: String, content: String, players: int,
 ## sim_args: PackedStringArray}.
 static func parse(args: PackedStringArray) -> Dictionary:
 	var o := {
 		"error": "", "mode": "", "at": [], "out": "", "frames": DEFAULT_FRAMES,
 		"settle_s": DEFAULT_SETTLE_S, "scene": "", "app_screen": "", "app_game": "workout",
-		"app_role": "client", "app_overlay": "menu",
+		"app_role": "client", "app_overlay": "menu", "app_riders": 1,
 		"mock_trainer": DEFAULT_MOCK, "game": "", "content": "", "players": 1,
 		"sim_args": PackedStringArray(),
 	}
@@ -113,6 +117,10 @@ static func parse(args: PackedStringArray) -> Dictionary:
 				if not APP_OVERLAYS.has(val):
 					return _fail(o, "--app-overlay must be one of %s, got \"%s\"" % [", ".join(APP_OVERLAYS), val])
 				o["app_overlay"] = val
+			"app-riders":
+				if not val.is_valid_int() or int(val) < 1 or int(val) > MAX_RESULTS_RIDERS:
+					return _fail(o, "--app-riders needs a whole number from 1 to %d, got \"%s\"" % [MAX_RESULTS_RIDERS, val])
+				o["app_riders"] = int(val)
 			"mock-trainer":
 				o["mock_trainer"] = val
 			"profile-dir":
@@ -125,7 +133,7 @@ static func parse(args: PackedStringArray) -> Dictionary:
 		if str(o[m]) != "":
 			modes += 1
 	if modes != 1:
-		return _fail(o, "give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=title|picker|lobby|session")
+		return _fail(o, "give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=%s" % "|".join(APP_SCREENS))
 	if str(o["game"]) != "":
 		o["mode"] = "game"
 		if at.is_empty():
@@ -188,6 +196,11 @@ static func scene_file_name(scene_path: String) -> String:
 
 static func app_file_name(screen: String) -> String:
 	return "app_%s.png" % screen
+
+
+## app_results_<riders>p.png.
+static func results_file_name(riders: int) -> String:
+	return "app_results_%dp.png" % riders
 
 
 ## app_session_<role>_<at>s.png, or app_session_<role>_<at>s_<overlay>.png for the overlay shot.

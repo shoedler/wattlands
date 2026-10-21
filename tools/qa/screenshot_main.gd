@@ -6,6 +6,7 @@ extends SceneTree
 ##   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>] [--frames=<n>]
 ##   tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>]
 ##                    [--content=<id>] [--at=<s>[,<s>...]] [--app-overlay=menu|panic|none]
+##   tools/screenshot --app-screen=results [--app-riders=<1..8>] [--frames=<n>]
 ##
 ## (tools/screenshot runs tools/godot.sh --path . --resolution 1920x1080 -s tools/qa/screenshot_main.gd
 ## -- --mock-trainer=<profile> <flags>; see tools/qa/screenshot_options.gd for every flag.)
@@ -178,13 +179,21 @@ func _run_app(out_dir: String) -> void:
 		await _run_session(out_dir, main, app)
 		return
 	var params := {}
+	var file := Options.app_file_name(screen)
 	if screen == "lobby":
 		params = {"game_id": str(_opts["app_game"])}
+	elif screen == "results":
+		params = QaScreenshotResults.params(int(_opts["app_riders"]))
+		file = Options.results_file_name(int(_opts["app_riders"]))
 	await process_frame
 	app.goto(screen, params)
 	for i in int(_opts["frames"]):
 		await process_frame
-	await _capture(out_dir.path_join(Options.app_file_name(screen)))
+	if screen == "results":
+		var shown := main.get("screen") as AppResultsScreen
+		if shown != null:
+			print(QaScreenshotResults.describe(shown))
+	await _capture(out_dir.path_join(file))
 
 
 ## The app's session screen (tools/qa/screenshot_session.gd): one shot per --at, then one with

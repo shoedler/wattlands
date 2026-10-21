@@ -8,6 +8,7 @@
 //   tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>]
 //   tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>]
 //                    [--content=<id>] [--at=<s>,...] [--app-overlay=menu|panic|none]
+//   tools/screenshot --app-screen=results [--app-riders=<1..8>]
 //
 // Runs Godot windowed (never headless) through tools/godot.sh (bash) or tools/godot.ps1
 // (PowerShell) with tools/qa/screenshot_main.gd, one Godot slot of the machine-wide lock, both
@@ -36,13 +37,14 @@ export const USAGE = `usage: tools/screenshot --game=<id> --at=<s>[,<s>...] [--c
        tools/screenshot --app-screen=title|picker|lobby [--app-game=<id>] [--frames=<n>] [--out=<dir>]
        tools/screenshot --app-screen=session [--app-role=client|host|solo] [--app-game=<id>] [--content=<id>]
                         [--at=<s>[,<s>...]] [--app-overlay=menu|panic|none] [--out=<dir>]
+       tools/screenshot --app-screen=results [--app-riders=<1..8>] [--frames=<n>] [--out=<dir>]
 wrapper flags: --mock-trainer=<profile> (default ${DEFAULT_MOCK}), --size=<W>x<H> (default 1920x1080),
                --timeout=<s> (default 900), --lock-timeout=<s>, --dry-run
 PNGs go to build/screenshots/<game>/<game>_<content>_<players>p_<at>s.png (game mode),
 build/screenshots/scenes/ or build/screenshots/app/ unless --out is given. (PowerShell: tools\\screenshot.ps1)`;
 
 const NOT_A_MOCK = /^(|none|off|no|false|0|real|ftms|ble|hw|hardware|trainer)$/i;
-const APP_SCREENS = ['title', 'picker', 'lobby', 'session'];
+const APP_SCREENS = ['title', 'picker', 'lobby', 'session', 'results'];
 
 /**
  * Splits wrapper flags from the flags for screenshot_main.gd and checks the mode.
@@ -108,7 +110,7 @@ export function parseScreenshotArgs(argv) {
     o.userArgs.push(a);
   }
   const modes = [game, scene, app].filter(Boolean).length;
-  if (modes !== 1) return fail('give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=title|picker|lobby|session');
+  if (modes !== 1) return fail(`give exactly one of --game=<id> (with --at), --scene=<res path> or --app-screen=${APP_SCREENS.join('|')}`);
   if (game && !at) return fail('--game needs --at=<sim seconds>[,<s>...]');
   o.mode = game ? 'game' : scene ? 'scene' : 'app';
   return o;
