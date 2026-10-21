@@ -1,2 +1,22 @@
 keys,en
 NET_MODULE_NAME,Network
+NET_STATE_OFFLINE,Offline
+NET_STATE_CONNECTING,Connecting…
+NET_STATE_HOSTING,Hosting room {code}
+NET_STATE_JOINED,In room {code}
+NET_STATE_RECONNECTING,Connection lost. Reconnecting…
+NET_STATE_ERROR,Connection error
+NET_CONNECT_FAILED,Couldn't reach the relay server. Check the relay address and your connection.
+NET_HOST_DROPPED,The host lost the connection. Waiting for them to come back…
+NET_REFUSED_SESSION_IN_PROGRESS,That session has already started. Ask the host to open a new room.
+NET_REFUSED_ROOM_NOT_FOUND,No room with that code. Check the code and try again.
+NET_REFUSED_ROOM_FULL,That room is full.
+NET_REFUSED_VERSION_MISMATCH,This version of Wattlands can't play with the host's. Update both to the same version.
+NET_REFUSED_RATE_LIMITED,Too many attempts. Wait a minute and try again.
+NET_REFUSED_BAD_REQUEST,The relay rejected the request.
+NET_REFUSED_HOST_LEFT,The host ended the session.
+NET_REFUSED_DROPPED,Lost the connection to the room.
+NET_READY_MISSING_GAME,"You don't have {game} installed, so you can't ready up."
+NET_READY_VERSION_MISMATCH,"Your {game} is version {mine}, the host has {theirs}. Update to the same version to ready up."
+NET_LAN_SEARCHING,Looking for rooms on your network…
+NET_LAN_NOT_FOUND,No room with that code on your network.
