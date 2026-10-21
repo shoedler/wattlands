@@ -447,6 +447,45 @@ func test_a_restarted_client_catches_up_with_its_phase_clock() -> void:
 	assert_eq(mine.prev_ended_by, Wl.ENDED_DURATION, "how the phase it rejoined into started")
 
 
+## W3 WO-4 (BRIEF 3.6: a band holds until replaced): a client restarted mid-phase gets the
+## power and cadence bands the host still holds for its rider, besides plan, phase and snapshot;
+## a resent phase it already rides restarts nothing (W3 NET-2).
+func test_a_restarted_client_gets_its_bands_back() -> void:
+	var b := _multi(2)
+	var host := _host(b)
+	Kit.start(b)
+	Kit.step(b, 60)
+	host.ctx.hud.power_band(2, 150.0, 210.0)
+	host.ctx.directives.cadence_band(2, 80.0, 95.0)
+	Kit.step(b, 6)
+	assert_eq(_rider(b, 2).get("band_power"), [150.0, 210.0], "precondition: the band reached the client")
+	var old := _client(b, 0)
+	(b["hub"] as RefCounted).call("drop", 2)
+	Kit.step(b, 2)
+	old.end_session("restart")
+	var fresh := Kit.rider(_root, host.players()[1])
+	var c := GameHost.new()
+	_root.add_child(c)
+	assert_eq(c.setup({
+		"role": Wl.CLIENT, "local_peer": 2, "local_riders": {2: fresh}, "net": b["nets"][1],
+		"bus": Kit.new_bus(_root, "RestartBus2"), "registry": b["registry"], "headless": true, "realtime": false,
+		"progress_path": str(b["tmp"]).path_join("p2b/games/fx_solo/progress.json"),
+	}), "")
+	(b["hub"] as RefCounted).call("rejoin", 2)
+	host.step()
+	c.step()
+	assert_eq(fresh.get("band_power"), [150.0, 210.0], "the power band is back on the gauge and MockTrainer")
+	assert_eq(fresh.get("band_cadence"), [80.0, 95.0], "and the cadence band")
+	assert_eq(c.hud_router.band_of(2), [150.0, 210.0])
+	var phases_before := (fresh.get("phases_started") as Array).size()
+	assert_eq(phases_before, 1, "the rejoin entered the running phase once")
+	host.call("_resync_peer", 2, "test")
+	host.step()
+	c.step()
+	assert_eq((fresh.get("phases_started") as Array).size(), phases_before, "a resent phase restarts nothing")
+	assert_eq((fresh.get("plans_set") as Array).size(), 1, "a resent identical plan is not applied again")
+
+
 func test_client_rejects_an_invalid_plan() -> void:
 	var b := _multi(2)
 	Kit.start(b)
@@ -477,3 +516,30 @@ func test_phase_started_on_every_bus_without_cross_talk() -> void:
 				count_own += 1
 		assert_eq(count_own, 1, "a client's own rider once (from its phase message)")
 		assert_eq((per_bus[i] as Array).size(), 6, "and the others from events")
+
+
+## W3 PROF-2 (BRIEF 3.2): in WKG every rider's p_eff_per_w is 75 / weight, so session_start goes
+## to each client with only its own value; other humans carry the 75 kg reference (1.0). The
+## host keeps every value (target_wkg needs it); FAIR_FTP still broadcasts one session_start.
+func test_wkg_session_start_carries_only_the_recipients_own_p_eff() -> void:
+	var b := Kit.multi(_root, 3, "tiny", {"scaling_mode": Wl.WKG})
+	_tmp.append(str(b["tmp"]))
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var weights := {1: 70.0, 2: 82.5, 3: 61.0}
+	for p in host.players():
+		p.p_eff_per_w = 75.0 / float(weights[p.peer_id])
+	Kit.start(b)
+	Kit.step(b, 2)
+	for i in 2:
+		var c := _client(b, i)
+		var me := c.local_peer()
+		for slot in c.ctx.players:
+			if slot.peer_id == me:
+				assert_almost_eq(slot.p_eff_per_w, 75.0 / float(weights[me]), 1e-9, "peer %d gets its own value" % me)
+			else:
+				assert_eq(slot.p_eff_per_w, 1.0, "peer %d never learns peer %d's weight" % [me, slot.peer_id])
+	for p in host.ctx.players:
+		assert_almost_eq(p.p_eff_per_w, 75.0 / float(weights[p.peer_id]), 1e-9, "the host keeps peer %d's value" % p.peer_id)
+	var net1: WlNetSession = (b["nets"] as Array)[0]
+	assert_eq((net1.get("sent") as Array).filter(func(s: Array) -> bool: return s[1] == "session_start").size(), 2, "one per client")
