@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // A stand-in scripted peer for the harness tests: speaks the stdout contract of
 // docs/ARCHITECTURE.md "Scripted peers" and writes a report, without Godot. Faults come from
-// FAKE_PEER_FAULT: script_error, desync, event_mismatch, warmup, double_upload, state,
-// host_exit, no_fit, wrong_peer, fast_victim.
+// FAKE_PEER_FAULT: script_error, push_error, desync, event_mismatch, warmup, double_upload, state,
+// host_exit, no_fit, bad_fit, wrong_peer, fast_victim, unclamped, missing_ack, bad_upload; and
+// late_replay, which is not a fault (the rejoined client's replayed phase arrives after a live
+// event).
 import fs from 'node:fs';
 import path from 'node:path';
 import { leaseTokenValid } from '../../lib/godot_lock.mjs';
@@ -74,7 +76,8 @@ say('WATTLANDS_STATE results');
 let events = ALL.map((e, i) => ({ t: i + (isHost ? 0 : 0.2), ...e }));
 if (rejoin) {
   const from = ALL.findIndex((e) => e.type === 'fake_event' && e.n === 2);
-  events = [{ t: 0, type: 'phase_started', peer: 3, index: 1 }, ...events.slice(from)];
+  const replay = { t: 0, type: 'phase_started', peer: 3, index: 1 };
+  events = fault === 'late_replay' ? [events[from], replay, ...events.slice(from + 1)] : [replay, ...events.slice(from)];
 }
 events.unshift({ t: 0, type: 'session_state', state: 'running' });
 if (fault === 'event_mismatch' && role === 'client1') events = events.map((e) => (e.type === 'fake_event' && e.n === 2 ? { ...e, n: 3 } : e));
@@ -84,15 +87,21 @@ const trace = [
   { t: 1, mode: 'ERG', applied_target_w: 130, applied_pct: fault === 'warmup' && isHost ? 70 : 65, applied_grade_pct: 0, warmup_active: true, clamped_by: [], rescue: false, afk: false },
   { t: 2, mode: 'SIM', applied_target_w: 0, applied_pct: 0, applied_grade_pct: 2.5, warmup_active: true, clamped_by: ['warmup'], rescue: false, afk: false },
 ];
+// The host records its own rider's directive and the applied record client1 acknowledged;
+// client1 records its own.
+const ack = { id: 2, peer: 2, kind: 'request', requested: { target_pct: 60 }, applied: { target_pct: 60 }, clamped_by: [], refused: false, reason: '', t: 6 };
 const directives = isHost
-  ? [{ id: 1, peer: 1, kind: 'request', requested: { target_pct: 70 }, applied: { target_pct: 65 }, clamped_by: ['warmup'], refused: false, reason: '', t: 5 }]
-  : [];
+  ? [
+    { id: 1, peer: 1, kind: 'request', requested: { target_pct: 70 }, applied: { target_pct: 65 }, clamped_by: fault === 'unclamped' ? undefined : ['warmup'], refused: false, reason: '', t: 5 },
+    ack,
+  ]
+  : role === 'client1' && fault !== 'missing_ack' ? [ack] : [];
 
 const fitPaths = [];
 if (!(fault === 'no_fit' && role === 'client1')) {
   const fit = path.join(profile, 'rides', `${role}${rejoin ? '_rejoin' : ''}.fit`);
   fs.mkdirSync(path.dirname(fit), { recursive: true });
-  fs.writeFileSync(fit, 'FAKEFIT');
+  fs.writeFileSync(fit, fault === 'bad_fit' && role === 'client1' ? 'JUNK' : 'FAKEFIT');
   fitPaths.push(fit.replaceAll('\\', '/'));
 }
 
@@ -101,7 +110,7 @@ if (has('strava-auto-upload')) {
   if (flag('strava-client-id') !== '12345' || flag('strava-client-secret') !== 'mock-client-secret') die(9, 'auto-upload without the mock client credentials');
   const times = fault === 'double_upload' ? 2 : 1;
   for (let i = 0; i < times; i++) {
-    const res = await fetch(`${flag('strava-base')}/api/v3/uploads`, { method: 'POST', body: 'FAKEFIT' });
+    const res = await fetch(`${flag('strava-base')}/api/v3/uploads`, { method: 'POST', body: fault === 'bad_upload' ? 'JUNK' : 'FAKEFIT' });
     const up = await res.json();
     uploads.push({ state: 'uploaded', activity_id: up.activity_id });
   }

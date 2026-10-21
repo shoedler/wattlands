@@ -31,7 +31,8 @@ test('a clean run passes every check and writes the report', async () => {
     assert.equal(String(rep.peers.client2.earlier_runs[0].peer_id), '3');
     assert.ok(rep.events_by_peer['1'].length > 0, 'events per peer');
     assert.ok(rep.events_by_peer['2'].length > 0);
-    assert.equal(rep.directives.length, 1);
+    assert.equal(rep.directives.length, 3, "the host's two records and client1's acknowledgement");
+    assert.equal(rep.services.mock_strava.uploads[0].fit_valid, true);
     assert.equal(rep.fit_paths.host.length, 1);
     assert.equal(rep.services.mock_strava.uploads.length, 1);
     for (const k of ['total_s', 'room_s', 'kill_s', 'restart_s', 'duration_excl_cooldown_s']) assert.equal(typeof rep.timings[k], 'number', k);
@@ -43,6 +44,19 @@ test('a clean run passes every check and writes the report', async () => {
     }
     // The lease is gone.
     assert.deepEqual(fs.readdirSync(s.lockDir).filter((f) => f.startsWith('t-') || f.startsWith('h-')), []);
+  } finally {
+    s.cleanup();
+  }
+});
+
+test('a rejoined client whose replayed phase arrives after a live event still passes', async () => {
+  const s = setup();
+  try {
+    const r = await runHarness(harnessArgs(s.repo), { lockDir: s.lockDir, env: { FAKE_PEER_FAULT: 'late_replay' } });
+    assert.equal(r.code, 0, r.out);
+    const c = check(s.report(), 'same_events');
+    assert.equal(c.ok, true, c.details.join('\n'));
+    assert.match(c.details.join('\n'), /client2: the last \d+ of \d+ events match \(from \d+, 1 replayed\)/);
   } finally {
     s.cleanup();
   }

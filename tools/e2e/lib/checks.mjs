@@ -135,28 +135,39 @@ export function compareSequences(ref, other) {
   return { ok: true, index: -1, detail: `${ref.length} events identical` };
 }
 
+/** How many of a rejoined client's first events may come before its replayed phase_started. */
+export const REPLAY_WINDOW = 8;
+
 /**
- * For a client that rejoined mid-session: its sequence must be the tail of the reference, after at
- * most one leading phase_started event that the rejoin replays (its own current phase, from the
- * `phase` message; when `replayPeer` is given, only one for that peer). The tail must not be empty.
+ * For a client that rejoined mid-session: its sequence must be the tail of the reference, apart
+ * from at most one phase_started event that the rejoin replays (its own current phase, from the
+ * `phase` message; when `replayPeer` is given, only one for that peer). The replay may arrive a
+ * few events after the first live ones (the relay forwards broadcasts as soon as the client is
+ * back, before the host has handled the rejoin), so it is looked for among the first
+ * REPLAY_WINDOW events, and it only counts when the host emitted the same event at some point.
+ * The tail must not be empty. `maxReplay` 0 allows no replay.
  */
 export function matchTail(ref, other, { replayPeer = null, maxReplay = 1 } = {}) {
-  for (let skip = 0; skip <= Math.min(maxReplay, other.length); skip++) {
-    if (skip > 0) {
-      const e = other[skip - 1];
-      if (eventType(e) !== 'phase_started') break;
-      if (replayPeer !== null && String(e.peer) !== String(replayPeer)) break;
-    }
-    const tailSeq = other.slice(skip);
-    if (tailSeq.length === 0) continue;
-    const from = ref.length - tailSeq.length;
-    if (from < 0) continue;
-    if (compareSequences(ref.slice(from), tailSeq).ok) {
-      return { ok: true, skipped: skip, from, detail: `the last ${tailSeq.length} of ${ref.length} events match (from ${from}, ${skip} replayed)` };
+  const tryTail = (seq, skipped, at) => {
+    if (seq.length === 0) return null;
+    const from = ref.length - seq.length;
+    if (from < 0 || !compareSequences(ref.slice(from), seq).ok) return null;
+    return { ok: true, skipped, from, replayAt: at, detail: `the last ${seq.length} of ${ref.length} events match (from ${from}, ${skipped} replayed)` };
+  };
+  const direct = tryTail(other, 0, -1);
+  if (direct) return direct;
+  if (maxReplay > 0) {
+    for (let i = 0; i < Math.min(REPLAY_WINDOW, other.length); i++) {
+      const e = other[i];
+      if (eventType(e) !== 'phase_started') continue;
+      if (replayPeer !== null && String(e.peer) !== String(replayPeer)) continue;
+      if (!ref.some((h) => eventsEqual(h, e))) continue;
+      const r = tryTail([...other.slice(0, i), ...other.slice(i + 1)], 1, i);
+      if (r) return r;
     }
   }
   const last = other.length ? brief(other[other.length - 1]) : 'none';
-  return { ok: false, skipped: 0, from: -1, detail: `its ${other.length} events are not a tail of the host's ${ref.length} (last: ${last})` };
+  return { ok: false, skipped: 0, from: -1, replayAt: -1, detail: `its ${other.length} events are not a tail of the host's ${ref.length} (last: ${last})` };
 }
 
 /**
@@ -387,7 +398,26 @@ export function observedCooldownS(entries) {
   return last - start;
 }
 
-/** Upload checks: exactly one mock upload, made by the auto-upload peer and by nobody else. */
+/**
+ * What the mock found wrong with one of its uploads (server/mock_strava's /admin/uploads entry:
+ * fit_valid and fit_error from its FIT header and CRC check, data_type, trainer, error). Keys the
+ * mock does not report are not checked.
+ */
+export function uploadProblems(u) {
+  if (!isObj(u)) return ['not an object'];
+  const out = [];
+  if (u.fit_valid === false) out.push(`the mock rejected the FIT file${u.fit_error ? ` (${u.fit_error})` : ''}`);
+  if (u.data_type !== undefined && String(u.data_type).toLowerCase() !== 'fit') out.push(`data_type is ${JSON.stringify(u.data_type)}, not "fit"`);
+  if (u.trainer !== undefined && !(u.trainer === true || u.trainer === 1 || u.trainer === '1' || u.trainer === 'true')) out.push(`trainer is ${JSON.stringify(u.trainer)}, not 1`);
+  if (typeof u.error === 'string' && u.error !== '') out.push(`error "${u.error}"`);
+  return out;
+}
+
+/**
+ * Upload checks: exactly one mock upload, a valid FIT that the mock accepted, made by the
+ * auto-upload peer (its reported activity id matches the mock's when both are known) and by
+ * nobody else.
+ */
 export function checkUploads(mockUploads, peers, autoRole) {
   const details = [];
   let ok = true;
@@ -398,8 +428,15 @@ export function checkUploads(mockUploads, peers, autoRole) {
     ok = false;
     details.push(`the mock Strava server holds ${mockUploads.length} uploads, expected exactly 1`);
   } else {
-    details.push('the mock Strava server holds exactly 1 upload');
+    const bad = uploadProblems(mockUploads[0]);
+    if (bad.length) {
+      ok = false;
+      details.push(`the mock Strava server's upload is not valid: ${bad.join('; ')}`);
+    } else {
+      details.push('the mock Strava server holds exactly 1 valid upload');
+    }
   }
+  const mockActivity = mockUploads.length === 1 && isObj(mockUploads[0]) ? mockUploads[0].activity_id ?? null : null;
   for (const [role, p] of Object.entries(peers)) {
     const ups = Array.isArray(p?.uploads) ? p.uploads : [];
     if (role === autoRole) {
@@ -407,6 +444,9 @@ export function checkUploads(mockUploads, peers, autoRole) {
       if (ups.length !== 1 || good.length !== 1) {
         ok = false;
         details.push(`${role} (auto-upload) reported ${ups.length} upload(s) (${ups.map((u) => u?.state).join(', ') || 'none'}), expected one finished upload`);
+      } else if (mockActivity !== null && good[0].activity_id != null && String(good[0].activity_id) !== String(mockActivity)) {
+        ok = false;
+        details.push(`${role} reported activity ${good[0].activity_id}, but the mock's upload became activity ${mockActivity}`);
       } else {
         details.push(`${role} uploaded (activity ${good[0].activity_id ?? '?'})`);
       }

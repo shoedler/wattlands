@@ -15,6 +15,10 @@ for (const [fault, name, pattern] of [
   ['host_exit', 'peers_exit', /host exited with 1/],
   ['no_fit', 'fit_files', /client1: report lists no FIT file/],
   ['wrong_peer', 'reconnect', /came back as peer 9, not 3/],
+  ['bad_fit', 'fit_files', /client1: .* exited 1.*not a FIT file/],
+  ['unclamped', 'directives_clamped', /host directives\[0\]: no clamped_by list/],
+  ['missing_ack', 'directives_clamped', /directive 2 for peer 2 has no applied record in client1's report/],
+  ['bad_upload', 'strava_upload', /rejected the FIT file \(not a FIT file\)/],
 ]) {
   test(`a fault fails the run: ${fault}`, async () => {
     const s = setup();

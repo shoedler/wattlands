@@ -72,6 +72,27 @@ test('a rejoined client must hold a tail of the host sequence', () => {
   assert.equal(C.matchTail(ref, []).ok, false);
 });
 
+test('the replayed phase may arrive after the first live events of a rejoin', () => {
+  const ref = C.comparableEvents(HOST);
+  // Live ge(2) reached the client before the host handled the rejoin and replayed phase 1.
+  const late = [ref[7], { type: 'phase_started', peer: 3, index: 1 }, ref[8]];
+  const r = C.matchTail(ref, late, { replayPeer: 3 });
+  assert.equal(r.ok, true, r.detail);
+  assert.equal(r.skipped, 1);
+  assert.equal(r.replayAt, 1);
+  // Only a phase the host really started counts as a replay.
+  assert.equal(C.matchTail(ref, [ref[7], { type: 'phase_started', peer: 3, index: 5 }, ref[8]], { replayPeer: 3 }).ok, false);
+  // Never more than one replayed event, and never outside the first REPLAY_WINDOW events.
+  assert.equal(C.matchTail(ref, [ref[7], ps(3, 1), ps(3, 0), ref[8]], { replayPeer: 3 }).ok, false);
+  const long = [...ref, ...ref].map((e, i) => ({ ...e, i }));
+  const refLong = [ps(3, 1), ...long];
+  const at = (k) => [...long.slice(5, 5 + k), ps(3, 1), ...long.slice(5 + k)];
+  assert.equal(C.matchTail(refLong, at(C.REPLAY_WINDOW - 1), { replayPeer: 3 }).ok, true);
+  assert.equal(C.matchTail(refLong, at(C.REPLAY_WINDOW), { replayPeer: 3 }).ok, false);
+  // maxReplay 0 allows no replay at all.
+  assert.equal(C.matchTail(ref, late, { replayPeer: 3, maxReplay: 0 }).ok, false);
+});
+
 test('checkSameEvents: host, a full client and a rejoined client', () => {
   const client1 = HOST.map((e) => ({ ...e, t: e.t + 1 }));
   const client2 = [{ type: 'session_state', state: 'running' }, ps(3, 1), ge(2), results()];
@@ -194,6 +215,23 @@ test('checkUploads: exactly one, from the auto-upload peer only', () => {
   assert.equal(C.checkUploads(null, peers, 'client1').ok, false);
   assert.equal(C.checkUploads([{}], { ...peers, host: { uploads: [{ state: 'uploaded' }] } }, 'client1').ok, false);
   assert.equal(C.checkUploads([{}], { ...peers, client1: { uploads: [{ state: 'failed' }] } }, 'client1').ok, false);
+});
+
+test('checkUploads: the mock accepted the FIT and the activity ids agree', () => {
+  const peers = { host: { uploads: [] }, client1: { uploads: [{ state: 'uploaded', activity_id: 5 }] } };
+  const good = { external_id: 'r1', data_type: 'fit', trainer: '1', fit_valid: true, status: 'ready', activity_id: 5 };
+  assert.equal(C.checkUploads([good], peers, 'client1').ok, true);
+  const bad = C.checkUploads([{ ...good, fit_valid: false, fit_error: 'file CRC mismatch' }], peers, 'client1');
+  assert.equal(bad.ok, false);
+  assert.match(bad.details.join('\n'), /rejected the FIT file \(file CRC mismatch\)/);
+  assert.equal(C.checkUploads([{ ...good, data_type: 'gpx' }], peers, 'client1').ok, false);
+  assert.equal(C.checkUploads([{ ...good, trainer: 0 }], peers, 'client1').ok, false);
+  assert.equal(C.checkUploads([{ ...good, error: 'duplicate of 4' }], peers, 'client1').ok, false);
+  const other = C.checkUploads([{ ...good, activity_id: 6 }], peers, 'client1');
+  assert.equal(other.ok, false);
+  assert.match(other.details.join('\n'), /activity 5, but the mock's upload became activity 6/);
+  // Keys the mock does not report are not checked.
+  assert.deepEqual(C.uploadProblems({ id: 1 }), []);
 });
 
 test('durations exclude the cool-down', () => {

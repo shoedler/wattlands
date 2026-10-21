@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-// A stand-in mock Strava for the harness tests: counts POST /api/v3/uploads and lists them at
-// GET /admin/uploads as a JSON array, and prints "MOCK_STRAVA_PORT <port>" like server/mock_strava.
-// --parent-pid=<pid> makes it exit when the harness is gone, like the real mock.
+// A stand-in mock Strava for the harness tests: counts POST /api/v3/uploads (a body starting with
+// FAKEFIT is a valid FIT file) and lists them at GET /admin/uploads as a JSON array with the real
+// mock's data_type, trainer, fit_valid, fit_error, error and activity_id, and prints
+// "MOCK_STRAVA_PORT <port>" like server/mock_strava. --parent-pid=<pid> makes it exit when the
+// harness is gone, like the real mock.
 import http from 'node:http';
 
 const arg = (k) => {
@@ -18,7 +20,8 @@ const server = http.createServer((req, res) => {
   });
   req.on('end', () => {
     if (req.method === 'POST' && req.url === '/api/v3/uploads') {
-      const up = { id: uploads.length + 1, activity_id: 1000 + uploads.length, size: body.length };
+      const fitValid = body.startsWith('FAKEFIT');
+      const up = { id: uploads.length + 1, activity_id: fitValid ? 1000 + uploads.length : null, size: body.length, data_type: 'fit', trainer: '1', fit_valid: fitValid, fit_error: fitValid ? null : 'not a FIT file', error: fitValid ? null : 'Improperly formatted data.' };
       uploads.push(up);
       res.writeHead(201, { 'content-type': 'application/json' });
       res.end(JSON.stringify(up));
