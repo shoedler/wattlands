@@ -221,13 +221,19 @@ func test_fit_check_fallback_reports_decode_errors_only() -> void:
 	assert_eq((files[2] as Dictionary)["session"], null)
 
 
-func test_lap_names_come_from_the_lap_name_developer_field() -> void:
+## A one-lap activity whose lap carries developer field 3 of developer index 1 (so nothing can
+## guess it), described as `described_as` by a field_description message ("" writes none).
+func _named_lap_file(described_as: String) -> PackedByteArray:
 	var w := QaFitWriter.new()
 	w.define(0, QaFitDecoder.MESG_FILE_ID, [[0, 1, QaFitWriter.ENUM]])
 	w.data(0, [4])
+	if described_as != "":
+		# field_description: developer_data_index, field_definition_number, fit_base_type_id, field_name.
+		w.define(5, QaFitDecoder.MESG_FIELD_DESCRIPTION, [[0, 1, QaFitWriter.UINT8], [1, 1, QaFitWriter.UINT8], [2, 1, QaFitWriter.UINT8], [3, 16, QaFitWriter.STRING]])
+		w.data(5, [1, 3, QaFitWriter.STRING, described_as])
 	w.define(1, QaFitDecoder.MESG_RECORD, [[253, 4, QaFitWriter.UINT32], [0, 4, QaFitWriter.SINT32], [7, 2, QaFitWriter.UINT16]])
 	w.data(1, [1_100_000_000, 123456, 100])
-	w.define(2, QaFitDecoder.MESG_LAP, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]], false, [[0, 16, 0]])
+	w.define(2, QaFitDecoder.MESG_LAP, [[253, 4, QaFitWriter.UINT32], [2, 4, QaFitWriter.UINT32], [7, 4, QaFitWriter.UINT32]], false, [[3, 16, 1]])
 	var name := "Warm-up".to_utf8_buffer()
 	name.resize(16)
 	w.data(2, [1_100_000_001, 1_100_000_000, 1000], name)
@@ -235,11 +241,24 @@ func test_lap_names_come_from_the_lap_name_developer_field() -> void:
 	w.data(3, [1_100_000_000, 2, 58, 1000])
 	w.define(4, QaFitDecoder.MESG_ACTIVITY, [[1, 2, QaFitWriter.UINT16]])
 	w.data(4, [1])
-	var s := QaFitDecoder.decode_bytes(w.to_bytes())
+	return w.to_bytes()
+
+
+func test_lap_names_come_from_the_lap_name_developer_field() -> void:
+	var s := QaFitDecoder.decode_bytes(_named_lap_file("lap_name"))
 	assert_eq(s["errors"], [])
-	assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "Warm-up")
+	assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "Warm-up", "found through its field_description")
+	assert_eq(((QaFitDecoder.rides_contract(s)["laps"] as Array)[0] as Dictionary)["name"], "Warm-up")
 	assert_eq(s["has_gps"], true, "a record with position_lat")
 	assert_eq(QaFitDecoder.rides_contract(s)["has_gps"], true)
+
+
+func test_an_undescribed_or_other_developer_field_is_no_lap_name() -> void:
+	# Like the FIT SDK: without a field_description named lap_name a lap has no name.
+	for described: String in ["", "power_zone"]:
+		var s := QaFitDecoder.decode_bytes(_named_lap_file(described))
+		assert_eq(s["errors"], [], described)
+		assert_eq(((s["laps"] as Array)[0] as Dictionary)["name"], "", "described as \"%s\"" % described)
 
 
 func test_relative_paths_resolve_against_the_project_root() -> void:

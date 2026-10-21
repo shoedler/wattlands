@@ -1,0 +1,165 @@
+{
+  "source": "@garmin/fitsdk 21.218.0 through rides tools/fit_check/testdata/fake_decode.mjs (the fallback contract of tools/fit_check/README.md)",
+  "files": [
+    {
+      "path": "rides_ten_minute.fit",
+      "is_fit": true,
+      "integrity": true,
+      "errors": [],
+      "file_id": {
+        "type": 4,
+        "manufacturer": 255
+      },
+      "records": 601,
+      "record_timestamps_monotonic": true,
+      "has_gps": false,
+      "laps": [
+        {
+          "start_time": 1800000000,
+          "total_elapsed_time": 120,
+          "total_timer_time": 120,
+          "total_distance": 1058.32,
+          "total_work": 16199,
+          "avg_power": 135,
+          "name": "Warm-up"
+        },
+        {
+          "start_time": 1800000120,
+          "total_elapsed_time": 120,
+          "total_timer_time": 120,
+          "total_distance": 1250,
+          "total_work": 30000,
+          "avg_power": 250,
+          "name": "Work 1"
+        },
+        {
+          "start_time": 1800000240,
+          "total_elapsed_time": 60,
+          "total_timer_time": 60,
+          "total_distance": 516.67,
+          "total_work": 7200,
+          "avg_power": 120,
+          "name": "Recovery"
+        },
+        {
+          "start_time": 1800000300,
+          "total_elapsed_time": 120,
+          "total_timer_time": 120,
+          "total_distance": 1266.67,
+          "total_work": 31200,
+          "avg_power": 260,
+          "name": "Work 2"
+        },
+        {
+          "start_time": 1800000420,
+          "total_elapsed_time": 180,
+          "total_timer_time": 180,
+          "total_distance": 1500,
+          "total_work": 18000,
+          "avg_power": 100,
+          "name": "Cool-down"
+        }
+      ],
+      "session_count": 1,
+      "activity_count": 1,
+      "session": {
+        "sport": 2,
+        "sub_sport": 58,
+        "start_time": 1800000000,
+        "total_elapsed_time": 600,
+        "total_timer_time": 600,
+        "total_distance": 5591.65,
+        "total_work": 102599,
+        "avg_power": 171,
+        "max_power": 260,
+        "avg_cadence": 90,
+        "max_cadence": 95,
+        "num_laps": 5
+      },
+      "timer_events": {
+        "start": 1,
+        "stop": 1
+      }
+    },
+    {
+      "path": "rides_paused_dropout.fit",
+      "is_fit": true,
+      "integrity": true,
+      "errors": [],
+      "file_id": {
+        "type": 4,
+        "manufacturer": 255
+      },
+      "records": 301,
+      "record_timestamps_monotonic": true,
+      "has_gps": false,
+      "laps": [
+        {
+          "start_time": 1800003600,
+          "total_elapsed_time": 60,
+          "total_timer_time": 60,
+          "total_distance": 500,
+          "total_work": 9038,
+          "avg_power": 151,
+          "name": "Warm-up"
+        },
+        {
+          "start_time": 1800003660,
+          "total_elapsed_time": 60,
+          "total_timer_time": 50,
+          "total_distance": 500,
+          "total_work": 14407,
+          "avg_power": 240,
+          "name": "Work 1"
+        },
+        {
+          "start_time": 1800003720,
+          "total_elapsed_time": 30,
+          "total_timer_time": 30,
+          "total_distance": 167.94,
+          "total_work": 2423,
+          "avg_power": 81,
+          "name": "Recovery"
+        },
+        {
+          "start_time": 1800003750,
+          "total_elapsed_time": 60,
+          "total_timer_time": 60,
+          "total_distance": 500,
+          "total_work": 14970,
+          "avg_power": 250,
+          "name": "Work 2"
+        },
+        {
+          "start_time": 1800003810,
+          "total_elapsed_time": 90,
+          "total_timer_time": 90,
+          "total_distance": 750,
+          "total_work": 9000,
+          "avg_power": 100,
+          "name": "Cool-down"
+        }
+      ],
+      "session_count": 1,
+      "activity_count": 1,
+      "session": {
+        "sport": 2,
+        "sub_sport": 58,
+        "start_time": 1800003600,
+        "total_elapsed_time": 300,
+        "total_timer_time": 290,
+        "total_distance": 2417.94,
+        "total_work": 49838,
+        "avg_power": 166,
+        "max_power": 259,
+        "avg_cadence": 88,
+        "max_cadence": 93,
+        "num_laps": 5
+      },
+      "timer_events": {
+        "start": 2,
+        "stop": 2
+      }
+    }
+  ]
+}

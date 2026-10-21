@@ -122,3 +122,33 @@ func test_fit_problems_against_the_recorder() -> void:
 	assert_string_contains(text, "the recorder kept 290")
 	assert_string_contains(text, "one per second within 1%")
 	assert_string_contains(text, "session elapsed")
+
+
+func test_cap_problems_and_phase_length() -> void:
+	assert_eq(S.cap_problems({"mode": "ERG", "applied_pct": 150.0}, 60.0, 1.0), [] as Array[String], "150 % is the ceiling itself")
+	assert_eq(S.cap_problems({"mode": "ERG", "applied_pct": 150.5}, 60.0, 1.0).size(), 1)
+	assert_eq(S.cap_problems({"mode": "ERG", "applied_pct": 110.0}, 300.0, 1.0), [] as Array[String], "a 300 s phase is not longer than 300 s")
+	assert_eq(S.cap_problems({"mode": "ERG", "applied_pct": 105.0}, 600.0, 1.0), [] as Array[String])
+	assert_string_contains(S.cap_problems({"mode": "ERG", "applied_pct": 106.0}, 301.0, 1.0)[0], "above 105%")
+	assert_eq(S.cap_problems({"mode": "SIM", "applied_pct": 200.0}, 600.0, 1.0), [] as Array[String], "SIM has no ERG cap")
+	assert_eq(S.phase_length_s(PlanPhase.erg(Wl.WORK, 90, 720, "Block").to_dict()), 720.0)
+	assert_eq(S.phase_length_s({"duration_s": 0.0, "open_ended": true, "min_s": 30.0, "max_s": 420.0}), 420.0, "an open-ended phase counts at max_s")
+
+
+func test_zwo_sessions_come_from_workouts_manifest() -> void:
+	var root := Paths.make_temp_dir("wattlands_scenario_zwo")
+	_dirs.append(root)
+	DirAccess.make_dir_recursive_absolute(root.path_join("src/games/workout"))
+	DirAccess.make_dir_recursive_absolute(root.path_join("content/workout/sessions"))
+	var write := func(rel: String, value: Variant) -> void:
+		var f := FileAccess.open(root.path_join(rel), FileAccess.WRITE)
+		f.store_string(JSON.stringify(value))
+		f.close()
+	write.call("src/games/workout/game.json", {"id": "workout", "contents": ["easy_30", "zwo_sample", "missing"]})
+	write.call("content/workout/sessions/easy_30.json", {"id": "easy_30", "phases": []})
+	write.call("content/workout/sessions/zwo_sample.json", {"id": "zwo_sample", "zwo": "zwo/sample.zwo"})
+	var found := S.zwo_sessions(root)
+	assert_eq(found.size(), 1)
+	assert_eq(found[0]["content"], "zwo_sample")
+	assert_eq(found[0]["zwo"], root.path_join("content/workout/zwo/sample.zwo"))
+	assert_eq(S.zwo_sessions(root.path_join("nowhere")), [] as Array[Dictionary])

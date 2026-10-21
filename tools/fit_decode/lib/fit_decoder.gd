@@ -7,16 +7,19 @@ extends RefCounted
 ##
 ## It checks the file header (size, ".FIT", data size, header CRC), the file CRC (the FIT SDK's
 ## CRC-16), every definition and data message (normal and compressed-timestamp headers, little
-## and big endian, developer fields skipped), chained files, and the messages Wattlands writes:
-## file_id (type activity 4), device_info, event, record, lap, session (sport cycling 2, sub_sport
+## and big endian, developer fields kept as raw bytes), chained files, and the messages Wattlands
+## writes: file_id (type activity 4), device_info, event, record, lap (its name from the developer
+## field that a field_description message calls "lap_name"), session (sport cycling 2, sub_sport
 ## virtual_activity 58) and activity. decode_bytes() returns the per-file summary that
 ## tools/fit_decode/decode.gd prints (the JSON schema is documented in docs/decisions/qa.md):
 ##   {path, ok, errors: [String], warnings: [String], header: {...}, crc_ok, segments,
 ##    messages: {name: count}, file_id: {...}, records, record_span_s, record_gaps,
-##    first_record_ts, last_record_ts, laps: [{index, start_time, start_s, duration_s,
+##    first_record_ts, last_record_ts, laps: [{index, name, start_time, start_s, duration_s,
 ##    timer_s, distance_m, work_kj, avg_power_w, max_power_w, avg_cadence_rpm,
 ##    max_cadence_rpm}], session: {...} or {}, sessions, activity: {...} or {}, events,
-##    timer_starts, timer_stops, device_infos}
+##    timer_starts, timer_stops (every timer event that isn't a start), device_infos}
+## tests/scenarios/unit/test_fit_decoder_vs_sdk.gd checks it against @garmin/fitsdk on real
+## rides-encoder files.
 ## Times in the summary are seconds; FIT timestamps (start_time) stay raw FIT seconds.
 ## "decode_errors" holds the structural problems only (header, CRCs, truncation, undefined
 ## messages); "errors" adds the Wattlands checks (file type, one session and activity, sport,
@@ -36,6 +39,9 @@ const MESG_RECORD := 20
 const MESG_EVENT := 21
 const MESG_DEVICE_INFO := 23
 const MESG_ACTIVITY := 34
+const MESG_FIELD_DESCRIPTION := 206
+## The developer field (described by a field_description message) that names laps.
+const LAP_NAME_FIELD := "lap_name"
 
 const MESG_NAMES: Dictionary = {
 	0: "file_id", 18: "session", 19: "lap", 20: "record", 21: "event", 23: "device_info",
@@ -629,6 +635,8 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 	var laps: Array[Dictionary] = []
 	var sessions: Array[Dictionary] = []
 	var activities: Array[Dictionary] = []
+	## "dev_<developer index>_<field number>" -> field name, from field_description messages.
+	var dev_names: Dictionary = {}
 	for m in messages:
 		var num := int(m["num"])
 		var name: String = MESG_NAMES.get(num, "mesg_%d" % num)
@@ -645,14 +653,26 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 				activities.append(f)
 			MESG_EVENT:
 				s["events"] = int(s["events"]) + 1
-				if int(f.get(0, -1)) == EVENT_TIMER:
-					var et := int(f.get(1, -1))
-					if et == EVENT_TYPE_START:
+				# Like the FIT SDK model check.mjs uses: every timer event that isn't a start
+				# (stop, stop_all, stop_disable, ...) counts as a stop.
+				if int(f.get(0, -1)) == EVENT_TIMER and f.has(1):
+					if int(f[1]) == EVENT_TYPE_START:
 						s["timer_starts"] = int(s["timer_starts"]) + 1
-					elif et == EVENT_TYPE_STOP or et == EVENT_TYPE_STOP_ALL:
+					else:
 						s["timer_stops"] = int(s["timer_stops"]) + 1
 			MESG_DEVICE_INFO:
 				s["device_infos"] = int(s["device_infos"]) + 1
+			MESG_FIELD_DESCRIPTION:
+				# developer_data_index (0), field_definition_number (1), field_name (3).
+				var fname: Variant = f.get(3, null)
+				if f.has(0) and f.has(1) and fname != null:
+					var label := str((fname as Array)[0]) if fname is Array else str(fname)
+					dev_names["dev_%d_%d" % [int(f[0]), int(f[1])]] = label
+	var lap_name_key := ""
+	for k: Variant in dev_names.keys():
+		if str(dev_names[k]) == LAP_NAME_FIELD:
+			lap_name_key = str(k)
+			break
 	s["messages"] = counts
 	if not (s["errors"] as Array).is_empty() and messages.is_empty():
 		return
@@ -759,7 +779,7 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 		var lst := int(lf.get(2, -1))
 		lap_out.append({
 			"index": i,
-			"name": _dev_string(lf, "dev_0_0"),
+			"name": _dev_string(lf, lap_name_key) if lap_name_key != "" else "",
 			"start_time": lf.get(2, null),
 			"start_s": float(lst - origin) if lst >= 0 and origin >= 0 else 0.0,
 			"duration_s": _scaled(lf, 7, 1000.0),

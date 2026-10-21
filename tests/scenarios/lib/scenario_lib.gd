@@ -257,6 +257,42 @@ static func read_json(path: String) -> Dictionary:
 	return v if v is Dictionary else {}
 
 
+## Workout's .zwo sessions (BRIEF 3.7 Workout Director): every content id in its game.json whose
+## content/workout/sessions/<id>.json names a .zwo, as [{content, zwo (res path)}]. `root` is the
+## project root (tests pass a fixture folder).
+static func zwo_sessions(root: String = "res://") -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var manifest := read_json(root.path_join("src/games/%s/game.json" % WORKOUT))
+	for c: Variant in manifest.get("contents", []):
+		var session := read_json(root.path_join("content/%s/sessions/%s.json" % [WORKOUT, str(c)]))
+		var zwo: Variant = session.get("zwo", null)
+		if zwo is String and str(zwo) != "":
+			out.append({"content": str(c), "zwo": root.path_join("content/%s" % WORKOUT).path_join(str(zwo))})
+	return out
+
+
+## Problems with one tick's governor status against BRIEF 4.6.1's caps (empty when fine): ERG at
+## most 150 % FTP, and at most 105 % FTP in a phase longer than 300 s (`phase_length_s`: its
+## duration, or max_s when open-ended).
+static func cap_problems(status: Dictionary, phase_length_s: float, t: float) -> Array[String]:
+	var out: Array[String] = []
+	if str(status.get("mode", "")) != Wl.ERG:
+		return out
+	var pct := float(status.get("applied_pct", 0.0))
+	if pct > 150.0 + EPS:
+		out.append("t=%.2f: ERG %.2f%% FTP above the 150%% ceiling" % [t, pct])
+	if phase_length_s > 300.0 and pct > 105.0 + EPS:
+		out.append("t=%.2f: ERG %.2f%% FTP above 105%% in a %.0f s phase" % [t, pct, phase_length_s])
+	return out
+
+
+## A plan phase's length for the 4.6.1 long-phase cap: duration_s, or max_s when open-ended.
+static func phase_length_s(phase: Dictionary) -> float:
+	if bool(phase.get("open_ended", false)):
+		return float(phase.get("max_s", phase.get("duration_s", 0.0)))
+	return float(phase.get("duration_s", 0.0))
+
+
 static func remove_tree(dir: String) -> void:
 	if dir == "" or not DirAccess.dir_exists_absolute(dir):
 		return

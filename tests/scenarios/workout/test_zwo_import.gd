@@ -99,3 +99,65 @@ func test_imported_plan_plays_inside_its_clamps() -> void:
 			problems.append_array(S.warmup_problems(st, t))
 	assert_eq(problems, [] as Array[String], first(problems))
 	assert_false(rider.governor.is_rescue(), "a compliant rider ends the import without rescue")
+
+
+## BRIEF 7.4 end to end: Workout plays its own .zwo session (content/workout/sessions/<id>.json
+## with a "zwo" key) through GameSimRunner, a compliant verified-FTP rider finishes it, every
+## applied ERG target stays inside BRIEF 4.6.1 and the warm-up limits, no duration limit
+## latches, and the importer's clamps are shown (WorkoutImport lists them, and Workout's
+## session preview, when it has one, shows each).
+func test_workout_plays_its_zwo_session_with_its_clamps_shown() -> void:
+	var sessions := S.zwo_sessions()
+	assert_gt(sessions.size(), 0, "Workout lists a .zwo session in game.json (BRIEF 3.7 Workout Director)")
+	if sessions.is_empty():
+		return
+	var content := str(sessions[0]["content"])
+	var zwo := str(sessions[0]["zwo"])
+	var imported := WorkoutImport.parse_zwo_file(ProjectSettings.globalize_path(zwo))
+	assert_true(bool(imported["ok"]), "%s imports: %s" % [zwo, str(imported.get("error", ""))])
+	var clamps: Array = imported["clamps"]
+	assert_gt(clamps.size(), 0, "%s needs clamps, so the preview has some to show" % zwo)
+
+	var runner := start_runner(S.flags(content, report_path(content), ["--bots=0"]))
+	if runner == null:
+		return
+	var peer := S.human_peer(runner)
+	var rider := human_rider(runner)
+	if rider == null:
+		return
+	var game: GameModule = runner.host.game
+	if game != null and game.has_method("session_preview"):
+		var preview: Variant = game.call("session_preview", content)
+		assert_true(preview is Dictionary and not (preview as Dictionary).is_empty(), "Workout's session preview of %s" % content)
+		var text := JSON.stringify(preview)
+		for c: Variant in clamps:
+			assert_string_contains(text, str(c), "the preview shows the clamp")
+	runner.step()
+	var plan := S.plan_phases(runner.build_report(), peer)
+	assert_false(plan.is_empty(), "%s: the rider's validated plan is in the report" % content)
+
+	var problems: Array[String] = []
+	var ticks := 0
+	var max_ticks := int(3.0 * 3600.0 / Wl.SIM_DT)
+	while not runner.host.is_finished() and ticks < max_ticks:
+		runner.step()
+		ticks += 1
+		if problems.size() >= 20:
+			continue
+		var st := rider.governor.status()
+		var t := S.platform_t(runner, rider)
+		var i := int(st.get("phase_index", -1))
+		var length := S.phase_length_s(plan[i]) if i >= 0 and i < plan.size() else 0.0
+		problems.append_array(S.cap_problems(st, length, t))
+		problems.append_array(S.warmup_problems(st, t))
+		if bool(st.get("latched_105", false)) or bool(st.get("latched_120", false)):
+			problems.append("t=%.2f: a 4.6.1 duration limit latched" % t)
+	assert_true(runner.host.is_finished(), "%s finished" % content)
+	assert_eq(problems, [] as Array[String], "%s:\n%s" % [content, first(problems)])
+	assert_eq(runner.run_to_end(), "complete", "%s ends after its cool-down" % content)
+	var report := S.read_json(runner.write_report())
+	var row := S.result_row(report, peer)
+	assert_gte(float(row.get("time_in_band_pct", 0.0)), 90.0, "%s: a compliant rider stays in band" % content)
+	for f in S.fit_paths(report):
+		var fit := S.fit_problems(f, rider.recorder.summary() if rider.recorder != null else {}, S.expected_laps(report, peer))
+		assert_eq(fit, [] as Array[String], "%s: FIT\n%s" % [content, first(fit)])
