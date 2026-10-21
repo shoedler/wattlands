@@ -45,7 +45,8 @@ How to read it:
 | `tools/tests/` | lead, per file | Node tests of the wrappers, lock and env scripts (lead); `new_game.test.mjs`, `run_game_sim.test.mjs` (sdk-tools); `screenshot.test.mjs` (qa) |
 | `addons/gut/`, `addons/gdble/` | lead | Vendored, pinned (`docs/deps.d/`) |
 | `README.md`, `CLAUDE.md`, `CHANGELOG.md`, `CREDITS.md`, `LICENSE`, `.gitignore`, every `.gdignore` | lead | |
-| `docs/BRIEF.md`, `docs/DESIGN.md`, `ARCHITECTURE.md`, `PROTOCOL.md`, `TRAINER.md`, `HARDWARE_TEST_PLAN.md`, `DECISIONS.md`, `BACKLOG.md`, `DEPENDENCIES.md`, `OWNERSHIP.md` | lead | Merged from owner fragments. `HARDWARE_TEST_PLAN.md` carries one section per game (workout, siege, tank, fishing) that only links to `src/games/<id>/HARDWARE_TEST.md`, so game sessions never edit it (B 4.7) |
+| `docs/PROTOCOL.md` | net-client | The relay and game-message protocol (net-client wrote it in W1; the lead reviews changes) |
+| `docs/BRIEF.md`, `docs/DESIGN.md`, `ARCHITECTURE.md`, `TRAINER.md`, `HARDWARE_TEST_PLAN.md`, `DECISIONS.md`, `BACKLOG.md`, `DEPENDENCIES.md`, `OWNERSHIP.md` | lead | Merged from owner fragments. `HARDWARE_TEST_PLAN.md` carries one section per game (workout, siege, tank, fishing) that only links to `src/games/<id>/HARDWARE_TEST.md`, so game sessions never edit it (B 4.7) |
 | `docs/games/`, `docs/concept/`, `docs/research.md`, `.gitattributes`, `.claude/settings.json` | nobody | Read only |
 | `src/games/<id>/`, `content/<id>/`, `assets/<id>/`, `tests/games/<id>/`, `.github/workflows/game-<id>.yml`, `docs/{decisions,credits.d,changelog.d}/<id>.md` | that game's session | Siege, Tank and Fishing come later; this run creates none of them |
 
