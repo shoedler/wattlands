@@ -244,7 +244,11 @@ static func _decode_game_in_place(d: Dictionary, hints: int) -> bool:
 		for k: Variant in d.keys():
 			var child: Variant = d[k]
 			if child is Dictionary or child is Array:
-				d[k] = _walk(child, str(k), hints, k != payload_field)
+				var in_payload: bool = k == payload_field
+				# Inside a game payload only the "_id" rule applies.
+				if in_payload and (hints & _HINT_ID) == 0:
+					continue
+				d[k] = _walk(child, str(k), hints, not in_payload)
 			elif (hints & _HINT_ID) != 0 and k is String and (k as String).ends_with("_id"):
 				d[k] = _whole_to_int(child)
 	if intents != null:
@@ -361,38 +365,80 @@ static func _path_tokens(path: String) -> Array[String]:
 
 
 static func _apply_tokens(node: Variant, tokens: Array[String], i: int) -> Variant:
-	if i >= tokens.size():
+	var n := tokens.size()
+	if i >= n:
 		return _declared_to_int(node)
 	var tok := tokens[i]
+	var last := i == n - 1
 	if tok == "[]":
 		if node is Array:
 			var arr: Array = node
-			for j in arr.size():
-				arr[j] = _apply_tokens(arr[j], tokens, i + 1)
+			if last:
+				# Hot path (compact int arrays in snapshots): convert in place, no calls.
+				for j in arr.size():
+					var v: Variant = arr[j]
+					if typeof(v) == TYPE_FLOAT:
+						var f: float = v
+						if is_finite(f) and absf(f) <= _MAX_SAFE_INT:
+							arr[j] = roundi(f)
+			else:
+				for j in arr.size():
+					var e: Variant = arr[j]
+					if typeof(e) == TYPE_ARRAY or typeof(e) == TYPE_DICTIONARY:
+						_apply_tokens(e, tokens, i + 1)
 		return node
 	if tok == "{}":
 		if node is Dictionary:
 			var dict: Dictionary = node
 			for k: Variant in dict.keys():
-				dict[k] = _apply_tokens(dict[k], tokens, i + 1)
+				if last:
+					dict[k] = _declared_to_int(dict[k])
+				else:
+					var e: Variant = dict[k]
+					if typeof(e) == TYPE_ARRAY or typeof(e) == TYPE_DICTIONARY:
+						_apply_tokens(e, tokens, i + 1)
 		return node
 	if node is Dictionary:
 		var dict: Dictionary = node
 		if dict.has(tok):
-			dict[tok] = _apply_tokens(dict[tok], tokens, i + 1)
+			if last:
+				dict[tok] = _declared_to_int(dict[tok])
+			else:
+				var e: Variant = dict[tok]
+				if typeof(e) == TYPE_ARRAY or typeof(e) == TYPE_DICTIONARY:
+					_apply_tokens(e, tokens, i + 1)
 	return node
 
 
 ## Cheap text scans that let decode() skip walks that cannot change anything.
 static func _hints_for(text: String) -> int:
 	var h := 0
-	if text.contains("_id\""):
+	if _has_numeric_id(text):
 		h |= _HINT_ID
 	for k in NetMessages.PEER_KEYED:
 		if text.contains("\"" + k + "\""):
 			h |= _HINT_PEER_KEYED
 			break
 	return h
+
+
+## True if some key ending in "_id" holds a number (`_id":` then a digit or "-"), so a
+## message whose only *_id keys hold strings (game_id, content_id) skips the walk.
+static func _has_numeric_id(text: String) -> bool:
+	var from := 0
+	while true:
+		var at := text.find("_id\":", from)
+		if at < 0:
+			return false
+		var k := at + 5
+		while k < text.length() and text[k] == " ":
+			k += 1
+		if k < text.length():
+			var c := text.unicode_at(k)
+			if (c >= 48 and c <= 57) or c == 45:
+				return true
+		from = at + 5
+	return false
 
 
 static func _reject(reason: String, text: String) -> Dictionary:
