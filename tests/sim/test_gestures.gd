@@ -57,11 +57,18 @@ func _warmed(power: float, speed: float = -1.0, in_erg: bool = false) -> Gesture
 
 
 func test_not_pedaling_thresholds() -> void:
+	assert_eq(GestureRecognizer.NOT_PEDALING_W, 15.0)
+	assert_eq(GestureRecognizer.NOT_PEDALING_RPM, 20.0)
 	assert_true(GestureRecognizer.is_not_pedaling(14.9, 19.9))
+	assert_true(GestureRecognizer.is_not_pedaling(14.99, 19.99), "just under both edges")
 	assert_true(GestureRecognizer.is_not_pedaling(0.0, 0.0))
 	assert_false(GestureRecognizer.is_not_pedaling(15.0, 0.0), "15 W is pedaling")
+	assert_false(GestureRecognizer.is_not_pedaling(15.0, 19.99), "15 W is pedaling")
 	assert_false(GestureRecognizer.is_not_pedaling(0.0, 20.0), "20 rpm is pedaling")
+	assert_false(GestureRecognizer.is_not_pedaling(14.99, 20.0), "20 rpm is pedaling")
 	assert_true(GestureRecognizer.is_not_pedaling(10.0, -1.0), "no cadence: power alone")
+	assert_true(GestureRecognizer.is_not_pedaling(14.99, -1.0), "no cadence: power alone")
+	assert_false(GestureRecognizer.is_not_pedaling(15.0, -1.0), "no cadence, 15 W is pedaling")
 	var g := GestureRecognizer.new()
 	g.on_sample(_s(0.0, 14.0, -1.0))
 	assert_true(g.not_pedaling(), "a sample without cadence uses power only")
@@ -90,6 +97,22 @@ func test_not_pedaling_state_and_timing() -> void:
 	assert_signal_emitted_with_parameters(_g, "not_pedaling_changed", [false])
 	assert_eq(GestureRecognizer.NOT_PEDALING, &"not_pedaling")
 	assert_false(Wl.GESTURES.has(GestureRecognizer.NOT_PEDALING), "a state, never a fired gesture")
+
+
+func test_coast_and_stop_5s_follow_the_detector_edges() -> void:
+	# Exactly 15 W or exactly 20 rpm is pedaling: no coast, no stop_5s, however long.
+	for c: Array in [[15.0, 0.0], [0.0, 20.0], [15.0, -1.0]]:
+		var g := GestureRecognizer.new()
+		g.configure(FTP, true)
+		var ev := _feed(g, 0.0, 8, float(c[0]), float(c[1]))
+		assert_eq(ev, [], "%s W, %s rpm is pedaling" % c)
+		assert_false(g.not_pedaling())
+	# Just under both: coast at 3 s, stop_5s at 5 s, timed from the first sample.
+	for c: Array in [[14.99, 19.99], [14.99, -1.0]]:
+		var g := GestureRecognizer.new()
+		g.configure(FTP, true)
+		var ev := _feed(g, 0.0, 8, float(c[0]), float(c[1]))
+		assert_eq(ev, [[3.0, Wl.G_COAST], [5.0, Wl.G_STOP_5S]], "%s W, %s rpm" % c)
 
 
 # ------------------------------------------------------------------------- pedal_start

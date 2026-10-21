@@ -35,12 +35,16 @@ extends Node
 ##   - on_sample() queues the sample; the next tick() processes it at that tick's platform
 ##     time, so LocalRider's order (device.tick, on_sample, governor.tick) times every rule
 ##     from the tick in which the sample arrived.
-##   - not_pedaling = power < 15 W and cadence < 20 rpm (an absent cadence counts as low).
+##   - not_pedaling is the one shared detector GestureRecognizer.is_not_pedaling (BRIEF 3.5:
+##     power < 15 W and cadence < 20 rpm, strict; an absent cadence counts as low), the same
+##     predicate coast and stop_5s use; the governor keeps no thresholds of its own.
 ##     Coasting (3 s), the 10 s pause/AFK and the rescue hold are timed from the first sample
 ##     that meets their condition; a sample that breaks it restarts it. The rescue triggers
 ##     need their condition for the whole 3 s / 5 s while rescue is armed (in ERG with a
 ##     governed target >= 60% FTP), so a low reading from an unarmed phase never fires at the
 ##     moment a harder phase arms it. Pause and AFK are raised only while a phase runs.
+##     Edges (BRIEF 4.6.3): rescue arms at >= 60% FTP, triggers on cadence < 45 rpm or power
+##     < 75% of the ERG target written to the trainer, and its hold ends on cadence >= 70 rpm.
 ##   - Directive channels per BRIEF 3.6. Structural problems refuse the whole request; a
 ##     haptic dropped for warm-up, opt-out or cooldown is reported in record.dropped and the
 ##     rest of the request still applies (refused only when nothing else was set). A haptic
@@ -61,6 +65,9 @@ extends Node
 ##     STALE_SAMPLE_S counts as one not_pedaling sample (0 W, no cadence) at the moment it went
 ##     stale, so the coasting floor, pause/AFK and the rescue power trigger run as for a rider
 ##     who stopped. The watchdog counts from setup(device), a reconnect, or the latest sample.
+##     It is a stricter governor-only rule layered on the shared detector: its synthetic sample
+##     goes through the same predicate, but the GestureRecognizer never sees it, so coast and
+##     stop_5s do not follow a dead stream (ADR in docs/decisions/trainer-control.md).
 ##   - Resume (W4r2, NET-2): resume_phase(index, elapsed_s) enters a phase at elapsed_s (a
 ##     client rejoining a running phase); only the phase clock and the course distance differ
 ##     from start_phase(), every 4.6 counter keeps its state.
@@ -107,8 +114,10 @@ const RESCUE_POWER_LOW_S := 5.0
 const RESCUE_RECOVER_RPM := 70.0
 const RESCUE_RECOVER_S := 3.0
 const RESCUE_RAMP_S := 10.0
-const NOT_PEDALING_W := 15.0
-const NOT_PEDALING_RPM := 20.0
+## The shared not_pedaling thresholds (BRIEF 3.5), kept as aliases of GestureRecognizer's:
+## the governor compares neither; _take_sample calls GestureRecognizer.is_not_pedaling.
+const NOT_PEDALING_W := GestureRecognizer.NOT_PEDALING_W
+const NOT_PEDALING_RPM := GestureRecognizer.NOT_PEDALING_RPM
 const COAST_FLOOR_S := 3.0
 const COAST_AFK_S := 10.0
 const WARMUP_S := 300.0
@@ -1056,7 +1065,9 @@ func _process_samples() -> void:
 ## `at` (a real sample: the tick it arrived in; the stale-sample watchdog: when it went stale).
 func _take_sample(at: float, power_w: float, has_cad: bool, cadence_rpm: float) -> void:
 	_power_hist.append(Vector2(at, power_w))
-	var not_pedaling := power_w < NOT_PEDALING_W and (not has_cad or cadence_rpm < NOT_PEDALING_RPM)
+	# The one shared not_pedaling detector (BRIEF 3.5); an absent cadence goes in as -1 (low).
+	var np_cadence := cadence_rpm if has_cad else -1.0
+	var not_pedaling := GestureRecognizer.is_not_pedaling(power_w, np_cadence)
 	if not_pedaling:
 		if _np_since < 0.0:
 			_np_since = at

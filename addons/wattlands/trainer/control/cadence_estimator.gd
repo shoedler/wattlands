@@ -36,8 +36,8 @@ const STALE_SPEED_CHANGE := 0.15
 ## Relative speed change that stops learning from a repeated cadence value.
 const FROZEN_SPEED_CHANGE := 0.05
 ## Reported power below this means the rider isn't pedaling (BRIEF 3.5 not_pedaling), so no
-## cadence is estimated from the flywheel's speed (W2r2).
-const COAST_POWER_W := 15.0
+## cadence is estimated from the flywheel's speed (W2r2). The shared detector's power threshold.
+const COAST_POWER_W := GestureRecognizer.NOT_PEDALING_W
 
 var _ratio: float = 0.0
 var _calibrating: bool = false

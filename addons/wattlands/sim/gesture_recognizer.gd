@@ -7,7 +7,8 @@ extends RefCounted
 ##     for 1.5 s (two consecutive ~1 Hz samples); inside ERG, flywheel speed >= 1.12 x its
 ##     10 s average for 1.5 s.
 ##   not_pedaling (shared detector): power < 15 W and cadence < 20 rpm. Drives coast,
-##     stop_5s and the governor's coasting rule (4.6.4).
+##     stop_5s and the governor's coasting rule (4.6.4): is_not_pedaling() is the one copy of
+##     the predicate, and SafetyGovernor calls it too.
 ##   coast (back): not_pedaling for 3 s, never during ERG.
 ##   stop_5s (pause): not_pedaling for 5 s, solo and outside ERG only.
 ## Arbitration: within one stop, coast fires once at 3 s and stop_5s once at 5 s (each only
@@ -45,6 +46,8 @@ const NOT_PEDALING := &"not_pedaling"
 const PEDAL_START_S := 3.0
 const PEDAL_START_RPM := 40.0
 const PEDAL_START_FTP_FRACTION := 0.30
+## The shared not_pedaling thresholds (BRIEF 3.5), written only here: SafetyGovernor and
+## CadenceEstimator use these constants rather than their own numbers.
 const NOT_PEDALING_W := 15.0
 const NOT_PEDALING_RPM := 20.0
 const COAST_S := 3.0
@@ -179,9 +182,12 @@ func advance(t: float) -> Array[StringName]:
 	return fired
 
 
-## The shared not_pedaling detector on a single sample.
+## The shared not_pedaling detector on a single sample (BRIEF 3.5): power < NOT_PEDALING_W and
+## cadence < NOT_PEDALING_RPM, strict on both edges (15 W, or 20 rpm, is pedaling). Pass -1 for
+## an absent cadence: it counts as low. The only copy of the predicate: on_sample() (coast,
+## stop_5s) and SafetyGovernor (coasting 4.6.4, the warm-up's pedal strokes) both call it.
 static func is_not_pedaling(power_w: float, cadence_rpm: float) -> bool:
-	return power_w < 15.0 and cadence_rpm < 20.0
+	return power_w < NOT_PEDALING_W and cadence_rpm < NOT_PEDALING_RPM
 
 
 ## True while the latest sample meets not_pedaling.
