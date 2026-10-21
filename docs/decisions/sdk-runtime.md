@@ -151,3 +151,21 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: `GameSimRunner` starts a HOST run (`WlNetSession.mark_started()`) only once the host's lobby lists every human rider, i.e. after each loopback client's `player_info` has arrived.
 - Alternatives: start as soon as each client has a peer id (W1); have NetSession admit any connected peer at the start.
 - Reason: `mark_started()` fixes the session's players from the lobby, which lists a peer only after its `player_info`; the last client was still in flight, got `session_in_progress` and never rode, so the host's roster showed it at 0 W (qa W1) and HOST runs never reached `complete`.
+
+## 2026-10-21 (W2): A client GameHost takes the session_start that opened it from its config
+
+- Decision: `GameHost.setup()` in the CLIENT role queues `config.session_start` (the message the app shell received before the GameHost existed) and applies it on the first `step()`, before any later message; a copy that arrives again on the net is ignored because the client configures once. The GameHost keeps connecting to `config.net.game_message` in `setup()`, so `plan` and `phase`, sent right after `session_start`, still reach it.
+- Alternatives: have the app shell re-emit `session_start` after `start()`; add a resync request to the protocol.
+- Reason: the app shell creates the client's GameHost inside the `game_message` emission of `session_start`, so the GameHost never saw it and stayed in `setup` (qa's real e2e run: both clients stayed in the lobby). `tests/sdk/integration/test_client_session_start.gd` reproduces the app shell's start and failed before this change.
+
+## 2026-10-21 (W2): The session screen owns pausing
+
+- Decision: the GameHost drops the InputRouter's `pause` action, and its `confirm` while paused, instead of toggling pause on them; `inject_action(&"pause")` and an injected `confirm` still pause and resume (tools, tests, on-screen buttons). A user pause ends only through `resume()`, an injected `pause` or `confirm`; a coasting or `stop_5s` pause also ends on `pedal_start`, the same rule the session screen applies.
+- Alternatives: keep toggling on the router's `pause` (the screen and the GameHost then fight: the screen pauses and opens its menu, the GameHost resumes on the same press).
+- Reason: app-shell's W1 request; the session screen calls `pause()` and `resume()` and runs the pause menu, whose confirm must not also resume the session or reach the game.
+
+## 2026-10-21 (W2): Clients record phase_started for every rider
+
+- Decision: a client's report events get a `phase_started` entry for every rider: its own from its `phase` message, the others from the host's `wl.phase_started` events (the bus already emitted both).
+- Alternatives: only the client's own rider (W1).
+- Reason: qa's e2e compares event sequences across peers and expects `phase_started` per rider on every peer.

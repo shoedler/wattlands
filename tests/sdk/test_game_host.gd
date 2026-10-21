@@ -609,6 +609,43 @@ func test_rendering_takes_gestures_and_actions_from_the_input_router() -> void:
 	assert_eq(router.detached, 1)
 
 
+## app-shell W1: the session screen owns pausing (it calls pause() and resume() and runs the
+## pause menu), so the InputRouter's pause never toggles the GameHost, and its confirm during a
+## pause belongs to the pause menu, not to a resume or the game. A user pause does not end when
+## the rider pedals; a coasting pause does.
+func test_the_input_routers_pause_and_confirm_belong_to_the_session_screen() -> void:
+	var router := FakeRouter.new()
+	_root.add_child(router)
+	var b := _solo("tiny", {"headless": false, "input_router": router})
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var game := _game(b)
+	host.start()
+	Kit.step(b, 2)
+	router.actions.append(&"pause")
+	Kit.step(b, 1)
+	assert_false(host.is_paused(), "the router's pause is the screen's")
+	for c: Dictionary in game.get("local_intent_calls"):
+		assert_false((c["actions"] as Array).has(&"pause"), "and never reaches the game")
+	host.pause("user")
+	var calls_before: int = (game.get("local_intent_calls") as Array).size()
+	router.actions.append(&"confirm")
+	router.gestures.append(Wl.G_PEDAL_START)
+	Kit.step(b, 1)
+	assert_true(host.is_paused(), "neither the router's confirm nor pedalling ends a user pause")
+	var calls: Array = game.get("local_intent_calls")
+	for k in range(calls_before, calls.size()):
+		assert_false((calls[k]["actions"] as Array).has(&"confirm"), "the pause menu's confirm is not the game's")
+	host.resume()
+	assert_false(host.is_paused())
+	_rider(b).pause_requested.emit("coasting")
+	assert_true(host.is_paused())
+	router.gestures.append(Wl.G_PEDAL_START)
+	Kit.step(b, 1)
+	assert_false(host.is_paused(), "pedalling again ends a coasting pause")
+	host.end_session("timeout")
+
+
 func test_headless_takes_gestures_from_the_local_rider() -> void:
 	var router := FakeRouter.new()
 	_root.add_child(router)
