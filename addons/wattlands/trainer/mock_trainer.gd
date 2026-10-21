@@ -418,6 +418,41 @@ func tick(dt: float) -> void:
 
 # --- Added in W1 ----------------------------------------------------------------------
 
+## Every profile for docs and tool help: {name: {"keys": [...], "required": [...],
+## "defaults": {key: value}, "summary": String}}, in PROFILE_KEYS order.
+static func describe_profiles() -> Dictionary:
+	var summaries := {
+		"erg": "ERG follower: compliance x the applied target (tau ~2 s); in SIM compliance x the power band's centre, else 90% FTP",
+		"zero": "0 W and 0 rpm from t = 0",
+		"const": "constant power w at rpm (default: the preferred cadence)",
+		"ramp": "power from from_w to to_w over over_s, then to_w",
+		"intervals": "on_w for on_s, then off_w for off_s, repeating from t = 0",
+		"noise": "seeded Gaussian noise (sd_w, sd_rpm) on each sample while pedaling",
+		"band": "cadence follows the published cadence band's centre + offset_rpm (2 s lag, noise within +-1.5 rpm); no band: the preferred cadence",
+		"cadence_drop": "cadence held at rpm from at_s, or after_s into phase at_phase, or once the applied ERG target reaches at_target_pct % FTP; for for_s (default: the rest of the run); rpm 0 stops the rider",
+		"surge": "every every_s, cadence and speed x (1 + lift) for for_s and at least two notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM",
+	}
+	var defaults := {
+		"erg": {"compliance": 1.0},
+		"const": {},
+		"ramp": {},
+		"intervals": {"on_s": INTERVALS_DEFAULT_S, "off_s": INTERVALS_DEFAULT_S},
+		"noise": {"sd_w": NOISE_SD_W, "sd_rpm": NOISE_SD_RPM},
+		"band": {"offset_rpm": 0.0},
+		"cadence_drop": {"after_s": 0.0, "for_s": INF},
+		"surge": {"every_s": SURGE_EVERY_S, "for_s": SURGE_FOR_S, "lift": SURGE_LIFT},
+	}
+	var out := {}
+	for pname: String in PROFILE_KEYS.keys():
+		out[pname] = {
+			"keys": (PROFILE_KEYS[pname] as Array).duplicate(),
+			"required": (REQUIRED_KEYS.get(pname, []) as Array).duplicate(),
+			"defaults": (defaults.get(pname, {}) as Dictionary).duplicate(),
+			"summary": str(summaries.get(pname, "")),
+		}
+	return out
+
+
 ## Keyboard control without the keyboard: add delta_w to the rider's power goal.
 func nudge_power(delta_w: float) -> void:
 	_kb_power_offset_w += delta_w

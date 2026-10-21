@@ -85,6 +85,19 @@ func test_new_profiles_reject_bad_specs() -> void:
 		assert_push_error("invalid profile spec", spec)
 
 
+func test_describe_profiles_covers_every_profile() -> void:
+	var d := MockTrainer.describe_profiles()
+	assert_eq(d.keys(), MockTrainer.PROFILE_KEYS.keys())
+	for pname: String in d.keys():
+		var e: Dictionary = d[pname]
+		assert_ne(str(e["summary"]), "", pname)
+		assert_eq(e["keys"], MockTrainer.PROFILE_KEYS[pname])
+		for key: String in (e["defaults"] as Dictionary).keys():
+			assert_has(e["keys"], key, "%s default %s is a key" % [pname, key])
+	assert_eq(d["cadence_drop"]["required"], ["rpm"])
+	assert_eq(d["surge"]["defaults"], {"every_s": 60.0, "for_s": 2.0, "lift": 0.2})
+
+
 func test_negative_band_offset_is_allowed() -> void:
 	var comps := MockTrainer.parse_spec("band:offset_rpm=-18")
 	assert_eq(comps, [{"name": "band", "params": {"offset_rpm": -18.0}}])
