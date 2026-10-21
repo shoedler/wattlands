@@ -282,3 +282,30 @@ func test_demo_scene_runs_headless() -> void:
 	var marchers: MultiMeshScatter = demo.get("marchers")
 	assert_gt(marchers.visible_count(), 0)
 	assert_eq((demo.get("wheels") as Array).size(), 4)
+
+
+func test_demo_scene_animates_and_logs_its_budget() -> void:
+	var scene: PackedScene = load("res://addons/wattlands/world3d/demo.tscn")
+	var demo: Node3D = scene.instantiate()
+	add_child_autofree(demo)
+	await wait_process_frames(2)
+	var rig: MiniatureCameraRig = demo.get("rig")
+	assert_true(rig.is_pushing_in(), "the 4 s push-in runs")
+	var cam_before := rig.camera.position
+	var marchers: MultiMeshScatter = demo.get("marchers")
+	var walker_before := marchers.instance_transform(0).origin
+	# Past frame 30, where the demo prints its "world3d demo:" draw-call line (W3D7).
+	await wait_process_frames(32)
+	assert_gt(int(demo.get("_frames")), 30)
+	# Headless frames are very short, so also step half a second of demo time explicitly.
+	demo.call("_process", 0.5)
+	rig.tick(0.5)
+	var wheel: Node3D = (demo.get("wheels") as Array)[0]
+	assert_ne(wheel.rotation.z, 0.0, "the treadwheels turn")
+	assert_ne(rig.camera.position, cam_before, "the camera pushes in")
+	assert_ne(marchers.instance_transform(0).origin, walker_before, "the column marches")
+	var scenery := demo.get_node("Scenery") as MeshInstance3D
+	var tris := 0
+	for i in scenery.mesh.get_surface_count():
+		tris += floori((scenery.mesh as ArrayMesh).surface_get_array_len(i) / 3.0)
+	assert_lt(tris, 400000, "Siege's triangle budget")

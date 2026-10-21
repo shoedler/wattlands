@@ -27,6 +27,24 @@ func test_no_ssao_or_other_unsupported_effects() -> void:
 	assert_false(env.volumetric_fog_enabled)
 
 
+func test_no_depth_of_field() -> void:
+	# Compatibility has no DoF blur (BRIEF 3.9): neither the environment nor the rig's camera
+	# carries camera attributes that could switch it on.
+	var s := _sky()
+	assert_null(s.world_environment.camera_attributes)
+	var rig: MiniatureCameraRig = autofree(MiniatureCameraRig.new())
+	assert_null(rig.camera.attributes)
+
+
+func test_walk_bob_shader_keeps_srgb_vertex_colors() -> void:
+	# The walk bob shades like LowPolyMesh's StandardMaterial3D (sRGB vertex colors, decoded
+	# only where the renderer is linear), so walking figures match static props.
+	var code := MultiMeshScatter.walk_bob_material().shader.code
+	assert_string_contains(code, "OUTPUT_IS_SRGB")
+	assert_string_contains(code, "INSTANCE_CUSTOM.r")
+	assert_true(LowPolyMesh.vertex_color_material().vertex_color_is_srgb)
+
+
 func test_one_shadowed_sun_from_the_front_left() -> void:
 	var s := _sky()
 	assert_true(s.sun.shadow_enabled)

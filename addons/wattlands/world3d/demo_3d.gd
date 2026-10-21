@@ -132,7 +132,7 @@ func _add_roads(lp: LowPolyMesh) -> void:
 			var p0 := a.lerp(b, float(s) / float(steps))
 			var p1 := a.lerp(b, float(s + 1) / float(steps))
 			var side := (p1 - p0).cross(Vector3.UP).normalized() * 3.0
-			var q := [p0 - side, p0 + side, p1 + side, p1 - side]
+			var q: Array[Vector3] = [p0 - side, p0 + side, p1 + side, p1 - side]
 			var pts: Array[Vector3] = []
 			for v: Vector3 in q:
 				pts.append(Vector3(v.x, height_at(v.x, v.z) + 0.08, v.z))
@@ -318,12 +318,12 @@ func _update_marchers() -> void:
 		if spots[i].origin.z > 88.0 or spots[i].origin.z < 26.0 or shown >= 20:
 			continue
 		shown += 1
-		for side in [-0.7, 0.7]:
+		for side: float in [-0.7, 0.7]:
 			var t := spots[i]
-			var p := t.origin + t.basis.x.normalized() * float(side)
+			var p := t.origin + t.basis.x.normalized() * side
 			p.y = height_at(p.x, p.z)
 			xforms.append(Transform3D(t.basis, p))
-			customs.append(Color(fposmod(float(i) * 0.37 + float(side), 1.0), 0, 0, 0))
+			customs.append(Color(fposmod(float(i) * 0.37 + side, 1.0), 0, 0, 0))
 	marchers.set_instances(xforms, PackedColorArray(), customs)
 
 
