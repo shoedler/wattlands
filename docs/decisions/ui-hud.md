@@ -65,3 +65,37 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 - Decision: while a LineEdit or TextEdit has focus, the router ignores keyboard presses (no action, no Backspace panic hold); releases and controller input still pass, so the View+Menu panic always works.
 - Alternatives: let screens unbind keys while typing.
 - Reason: typing a room code fires R (swap), P (pause), Q and E (shifts), and holding Backspace to delete would otherwise trigger panic.
+
+## 2026-10-21: A client's local teammate_status outlives the roster until the roster changes it
+
+- Decision: `HudTeammates.set_status()` (the local feed's `teammate_status`, which on a client draws only there, HUD8) keeps the status over the roster until the roster's own status for that rider changes; then the roster's newer value wins. `HudLayer` keeps the local statuses across a rebuild, minus any the roster has replaced.
+- Alternatives: merge once and let the next roster overwrite it (it vanished within 0.5 s, at the 2 Hz roster); local always wins (a host status set later would never show).
+- Reason: the latest call or roster update should show, without clocks. sdk-runtime's `HudRouter` overlays client statuses onto the roster itself; both paths agree.
+
+## 2026-10-21: HudLayer keeps the latest bands
+
+- Decision: `apply_power_band` and `apply_cadence_band` remember the latest band per peer (cleared bands are forgotten) and apply it to gauges and cadence widgets built later, as custom readout texts already were.
+- Alternatives: rely on the game publishing after `build()`.
+- Reason: a band published in `configure()` (before the GameHost builds the HUD) or before a rebuild would otherwise never show until the game changes it.
+
+## 2026-10-21: Rebound keys match by physical key
+
+- Decision: `InputBindings.dict_to_event()` builds key bindings with `physical_keycode` only (keycode 0) when a physical code is known, like project.godot's defaults; a key event without one binds by `keycode`.
+- Alternatives: keep both codes (Godot then matches by the logical keycode).
+- Reason: a rebound key keeps working when the keyboard layout changes, and `same_input()` (which removes an input from other actions) agrees with how actions match.
+
+## 2026-10-21: Corner toasts and banners wrap within a third of the screen
+
+- Decision: toasts and banners placed at a corner anchor wrap within `HudLayer.corner_text_width()` (a third of the usable width, 610 px at 1080p); the centre stacks keep the room between the corners.
+- Alternatives: no limit (a long toast at top_left, Workout's layout, ran under the centre timeline and squeezed it to its 0.25 floor).
+- Reason: corner messages must never cover or shrink the centre widgets.
+
+## 2026-10-21: HudLayer follows PixelViewport.layout_changed
+
+- Decision: besides the PixelViewport's `resized` and the window's `size_changed`, `HudLayer` re-lays out Rect2i slots on the PixelViewport's `layout_changed` signal when it has one (looked up by name, so the frozen stub without it still works).
+- Reason: world-kits re-lays out on a stretch-factor change without a resize and emits only `layout_changed`.
+
+## 2026-10-21: Controls-screen labels come from ui.csv
+
+- Decision: `InputBindings.describe()` takes its words ("Left stick up", "D-pad up", "Key {0}", "View", "Menu") from `UI_INPUT_*` keys; Xbox letters (A, B, X, Y, LB, RB, LT, RT, LS, RS) and engine key names stay as printed. A test checks that every `UI_*` key used under `addons/wattlands/ui` and `audio` is in `ui.csv`.
+- Reason: BRIEF 6, user strings live in `content/strings/<module>.csv`.
