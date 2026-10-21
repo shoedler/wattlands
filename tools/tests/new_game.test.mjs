@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { REPO, TOOLS, IS_WIN, BASH, GIT, powershellExe, runProc, rmQuiet } from './helpers.mjs';
-import { rewrite, classPrefix, titleOf, validateId, stripUids, scaffold, TREES } from '../lib/new_game.mjs';
+import { rewrite, classPrefix, titleOf, validateId, stripUids, scaffold, classNames, projectClasses, TREES } from '../lib/new_game.mjs';
 
 const temps = [];
 after(() => {
@@ -186,6 +186,41 @@ describe('scaffold', () => {
       assert.deepEqual(snapshotTree(root), before);
     });
   }
+
+  test('refuses an id whose class names already exist, writing nothing', () => {
+    const root = fixtureRoot('clash');
+    let before = snapshotTree(root);
+    const same = scaffold(root, 'template'); // a valid id whose prefix is the template's own
+    assert.equal(same.code, 1, same.message);
+    assert.match(same.message, /class_name TemplateGame \(src\/games\/_template\/template_game\.gd\) already exists/);
+    assert.match(same.message, /Nothing was written/);
+    assert.deepEqual(snapshotTree(root), before);
+    assert.equal(scaffold(root, 'big_fish').code, 0);
+    assert.equal(scaffold(root, 'a1b').code, 0);
+    before = snapshotTree(root);
+    for (const twin of ['big__fish', 'a_1b']) { // other folders, same class prefix (BigFish, A1b)
+      const dry = scaffold(root, twin, { dryRun: true });
+      assert.equal(dry.code, 1, dry.message);
+      assert.match(dry.message, new RegExp(`class_name ${classPrefix(twin)}Game`));
+      assert.equal(scaffold(root, twin).code, 1);
+    }
+    assert.deepEqual(snapshotTree(root), before);
+  });
+
+  test('class names are read from every script under addons, src, tests and tools', () => {
+    assert.deepEqual(classNames('class_name FooBar\nextends Node\n## class_name NotThis\n'), ['FooBar']);
+    assert.deepEqual(classNames('extends RefCounted\n'), []);
+    const root = fixtureRoot('classes');
+    write(root, 'addons/wattlands/x.gd', 'class_name DemoGame\nextends Node\n');
+    write(root, 'build/stale/y.gd', 'class_name DemoRules\n');
+    const classes = projectClasses(root);
+    assert.equal(classes.get('TemplateGame'), 'src/games/_template/template_game.gd');
+    assert.equal(classes.get('DemoGame'), 'addons/wattlands/x.gd');
+    assert.ok(!classes.has('DemoRules'), 'build/ is skipped');
+    const r = scaffold(root, 'demo');
+    assert.equal(r.code, 1, 'a platform class named DemoGame blocks the id demo');
+    assert.match(r.message, /DemoGame \(addons\/wattlands\/x\.gd\)/);
+  });
 
   test('a bad id exits 2 and writes nothing', () => {
     const root = fixtureRoot('badid');
