@@ -176,9 +176,9 @@ func results() -> GameResults:
 	for row in res.rows:
 		var laps: int = TemplateRules.rider(state, row["peer_id"]).get("laps", 0)
 		row["stats"]["laps"] = laps
-		row["xp"] = roundi(float(row["kj"]) / 10.0) + 5 * laps
+		row["xp"] = roundi(float(row.get("kj", 0.0)) / 10.0) + 5 * laps
 		row["unlocks"] = ["gold_marker"] if laps >= 3 else []
-		band += float(row["time_in_band_pct"]) / 100.0 / res.rows.size()
+		band += float(row.get("time_in_band_pct", 0.0)) / 100.0 / res.rows.size()
 		res.score += laps
 	res.grade = GameResults.grade_from_fraction(band)
 	res.team = {"laps": int(res.score)}

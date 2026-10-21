@@ -326,6 +326,16 @@ func test_results_fill_platform_rows_with_laps_xp_unlocks_and_a_grade() -> void:
 	assert_eq(res.summary_key, "_TEMPLATE_RESULTS")
 
 
+func test_results_work_without_platform_stats() -> void:
+	var ctx := F.make_ctx(1)
+	ctx.stats = null
+	var g := _game(ctx)
+	TemplateRules.rider(g.state, 1)["laps"] = 2
+	var res := g.results()
+	assert_eq(res.row(1)["xp"], 10, "XP from laps alone")
+	assert_eq(res.grade, "D")
+
+
 func test_apply_progress_counts_a_session_once_and_returns_only_new_unlocks() -> void:
 	var ctx := F.make_ctx(2)
 	var g := _game(ctx)
