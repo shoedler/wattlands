@@ -1,9 +1,11 @@
 class_name AppProfileScreen
 extends AppFormScreen
 ## The rider profile (BRIEF 3.2), saved to profile.json through Settings on every change: name,
-## menu color, units, weight (shared with the host only if opted in), FTP (typing it marks it
-## verified; CP follows FTP), W', preferred cadence, drivetrain, trainer difficulty, the SIM
-## grade range, skip warm-up, Autopilot default. Haptics, Strava and pedal UI live in Settings.
+## menu color, units, weight (shared with the host only if opted in), the W/kg opt-in
+## (RiderProfile.show_wkg: W/kg on the HUD and results, BRIEF 3.3; off by default and apart from
+## sharing the weight), FTP (typing it marks it verified; CP follows FTP), W', preferred cadence,
+## drivetrain, trainer difficulty, the SIM grade range, skip warm-up, Autopilot default.
+## Haptics, Strava and pedal UI live in Settings.
 
 const COLORS: Array[String] = ["#D55E00", "#0072B2", "#F0E442", "#009E73", "#CC79A7", "#56B4E9", "#E69F00", "#FFFFFF"]
 
@@ -117,6 +119,7 @@ func profile_fields() -> Array:
 		ftp,
 		num_field("weight", "APP_FIELD_WEIGHT", "weight_kg", 30.0, 200.0, 1.0, "kg"),
 		toggle_field("share_weight", "APP_FIELD_SHARE_WEIGHT", "share_weight"),
+		toggle_field("show_wkg", "APP_FIELD_SHOW_WKG", "show_wkg"),
 		num_field("wprime", "APP_FIELD_WPRIME", "wprime_j", 5000.0, 40000.0, 1000.0, "J"),
 		num_field("cadence", "APP_FIELD_CADENCE", "preferred_cadence_rpm", 50.0, 120.0, 5.0, "rpm"),
 		choice_field("drivetrain", "APP_FIELD_DRIVETRAIN", "drivetrain", [["cassette", t("APP_DRIVETRAIN_CASSETTE")], ["single_speed", t("APP_DRIVETRAIN_SINGLE")]]),

@@ -35,12 +35,22 @@ extends CanvasLayer
 ## - The latest power and cadence bands per peer, local teammate statuses and custom readout
 ##   texts are kept, so a band published before build() (in configure()) or across a rebuild
 ##   still shows.
+## - Toasts and game banners run on the session's platform time: update() advances them by
+##   how far the telemetry's time moved (at most MAX_MESSAGE_STEP_S per call), so a fast
+##   forward (tools/screenshot), --sim-speed or a slow frame never leaves a stale message up.
+##   _process advances them by frame time only while no telemetry time moves (a HUD used on
+##   its own, before the first tick, or after FRAME_FALLBACK_S without one).
+## - Toasts and banners in a corner anchor line up with that side of the screen (set_side).
 
 const LAYER := 10
 const BASE_SIZE := Vector2(1920, 1080)
 ## The PixelViewport signal for layout changes without a resize (connected by name before
 ## world-kits merged; now PixelViewport.layout_changed directly).
 const PV_LAYOUT_SIGNAL := &"layout_changed"
+## Longest step one update() advances toasts and banners (a rejoin's time jump).
+const MAX_MESSAGE_STEP_S := 1.0
+## Frame time without a telemetry time step after which frames advance the messages again.
+const FRAME_FALLBACK_S := 0.5
 
 ## Screen size for layout (tests); ZERO uses the viewport's visible rect.
 var screen_size_override: Vector2 = Vector2.ZERO
@@ -86,6 +96,11 @@ var _ext_paused: bool = false
 var _tele_rescue: bool = false
 var _tele_paused: bool = false
 var _rescue_shown: bool = false
+## The telemetry time update() last saw (-1 before the first), whether it ever moved, and
+## frame time since it last moved.
+var _tel_t: float = -1.0
+var _tel_clocked: bool = false
+var _frames_since_tel: float = 0.0
 
 
 func _init() -> void:
@@ -109,7 +124,9 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
-	tick(delta)
+	_frames_since_tel += delta
+	if not _tel_clocked or _frames_since_tel > FRAME_FALLBACK_S:
+		tick(delta)
 
 
 func _notification(what: int) -> void:
@@ -181,6 +198,7 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 ## Per-tick local data: the local rider's telemetry, current phase, and plan (timeline).
 func update(telemetry: Telemetry, phase: PhaseState, plan: EffortPlan) -> void:
 	if telemetry != null:
+		_advance_messages(telemetry.t)
 		for w in _widgets:
 			w.set_telemetry(telemetry)
 		_tele_rescue = telemetry.rescue
@@ -189,6 +207,15 @@ func update(telemetry: Telemetry, phase: PhaseState, plan: EffortPlan) -> void:
 	if phase != null:
 		for w in _widgets:
 			w.set_phase(phase, plan)
+
+
+## Toasts and banners follow the session's platform time (see the class doc).
+func _advance_messages(t: float) -> void:
+	if _tel_t >= 0.0 and t > _tel_t + 1e-9:
+		tick(minf(t - _tel_t, MAX_MESSAGE_STEP_S))
+		_tel_clocked = true
+		_frames_since_tel = 0.0
+	_tel_t = t
 
 
 ## A HudFeed that draws on this layer only (the GameHost wraps it with network routing).
@@ -274,7 +301,8 @@ func set_readout(id: String, text: String) -> void:
 			(w as HudReadout).set_text(text)
 
 
-## Advance toasts and banners (_process calls it with the frame delta).
+## Advance toasts and banners by dt seconds (update() with the session's platform time;
+## _process with the frame delta while no session time arrives).
 func tick(dt: float) -> void:
 	_toasts.tick(dt)
 	_banner.tick(dt)
@@ -532,6 +560,7 @@ func _place(node: Control, at: Variant) -> void:
 	if at is Rect2i:
 		var slot := _slot_for(at)
 		slot.add_child(node)
+		_set_side(node, 0)
 		return
 	var anchor := str(at)
 	var box := _box(anchor)
@@ -540,10 +569,21 @@ func _place(node: Control, at: Variant) -> void:
 		box.move_child(node, 0)
 	if anchor.ends_with("left"):
 		node.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		_set_side(node, -1)
 	elif anchor.ends_with("right"):
 		node.size_flags_horizontal = Control.SIZE_SHRINK_END
+		_set_side(node, 1)
 	else:
 		node.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		_set_side(node, 0)
+
+
+## Toasts and banners line up with their anchor's side.
+static func _set_side(node: Control, side: int) -> void:
+	if node is HudToasts:
+		(node as HudToasts).set_side(side)
+	elif node is HudBanner:
+		(node as HudBanner).set_side(side)
 
 
 func _box(anchor: String) -> VBoxContainer:

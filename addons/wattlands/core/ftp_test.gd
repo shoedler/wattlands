@@ -8,11 +8,14 @@ extends RefCounted
 ## profile (duration limits, the 150% cap, the long-phase cap and the unverified factor
 ## don't apply; slew, the floor, rescue, coasting and panic do).
 ## The test ends at once on a rescue or on coasting, after 10 s with power below 90% of the
-## applied ERG target, after 5 s with a fresh cadence below 50 rpm, on back(), or after the
+## applied ERG target, after 5 s with a fresh cadence below 50 rpm (measured, or estimated from
+## flywheel speed by the rider's CadenceEstimator; while the trainer reports none and nothing
+## can be estimated, Telemetry.cadence_age_s grows and the rule waits), on back(), or after the
 ## last step ("complete"). A 3-minute cool-down at 50% FTP follows at once (rescue's 50%
 ## stands; nothing ramps back into a step). FTP = 0.75 x the best 1-minute power so far.
-## A result counts only if the test reached the steps and wasn't ended with back(); it is
-## saved after a 10 s countdown (shown at the start of the cool-down) unless back() cancels.
+## A result counts only if at least one one-minute step was completed (so never from the
+## ramp-in) and the test wasn't ended with back(); it is saved after a 10 s countdown (shown at
+## the start of the cool-down) unless back() cancels it, or at once with save_now().
 ##
 ## The logic is pure: start() builds the plan and step(dt, telemetry) advances it, emitting
 ## phase_requested(index) for the driver. run_on(rider) drives a LocalRider: it sets the
@@ -20,6 +23,7 @@ extends RefCounted
 ## phase, saves the FTP through WlSettings (ftp_w, cp_w = FTP, ftp_verified) and restores
 ## the "normal" profile when the cool-down ends or stop() is called. While it runs, the
 ## TrainerService holds its rider so the saved profile doesn't rebuild it mid-cool-down.
+## The app's Settings -> FTP test page (AppFtpTestScreen) is the one driver in the app.
 
 ## The driver should start plan phase `index` now.
 signal phase_requested(index: int)
@@ -190,6 +194,16 @@ func back() -> void:
 				_result["cancelled"] = true
 
 
+## The countdown runs: save the result now instead of when it ends (the page's Save item).
+## Does nothing otherwise. Additive (W2).
+func save_now() -> void:
+	if state != COOLDOWN or _countdown_left <= 0.0:
+		return
+	_countdown_left = -1.0
+	_result["saved"] = true
+	saved.emit(float(_result["ftp_w"]))
+
+
 ## {end_reason, ftp_w (whole watts), best_1min_w, steps_completed, last_step_pct, valid,
 ##  saved, cancelled, test_s}; empty until the test ended.
 func result() -> Dictionary:
@@ -307,8 +321,8 @@ func _track_best(dt: float, power_w: float) -> void:
 
 func _end_test(reason: String) -> void:
 	end_reason = reason
-	var reached_steps := state == STEPS
-	var valid := reached_steps and reason != END_BACK and best_1min_w > 0.0
+	# A best minute that isn't one completed step at least is mostly ramp-in (50-65% FTP).
+	var valid := steps_completed >= 1 and reason != END_BACK and best_1min_w > 0.0
 	var last_pct := step_pct(phase_index) if phase_index > 0 else plan.phase(0).planned_pct_at(phase_elapsed_s)
 	_result = {
 		"end_reason": reason,

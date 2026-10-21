@@ -150,3 +150,22 @@
 - Decision: the session screen puts its pause overlay and the panic button in a CanvasLayer at `HudLayer.LAYER + 10`; the panic button sits at the HUD margin in the bottom-right corner, grows left and up with its text, and the HudLayer keeps that corner clear (`reserve_corner`).
 - Alternatives: keep them in the screen's canvas (drawn under the HudLayer CanvasLayer).
 - Reason: seen in a windowed run on the real GameHost: HUD widgets and toasts drew over the overlay, the gear widget under the panic button, and the button's text ran off screen.
+
+## 2026-10-21 (W2 round 2): The FTP test page drives the platform's FtpTest
+
+- Decision: `AppFtpTestScreen` starts `FtpTest.run_on(rider, Settings, TrainerService)` after checking `FtpTest.build_plan()` with the PlanValidator (`ramp_test`), sets the rider up as a recorded ride (`ftp_test`), ticks it in fixed 0.05 s steps while menu ticking is handed over, and saves the ride when the cool-down ends, the rider ends it or the page is left, before handing the rider back. `src/app/ftp_test.gd` (`AppFtpTest`) is removed. The page follows FtpTest's flow: the 10 s save countdown runs as the cool-down starts (Save, Keep my old FTP), then End the cool-down; `back` cancels a running test without a result, keeps the old FTP during the countdown and ends the cool-down after it. While the test runs its menu doesn't scan and surge and coast pick nothing; stopping pedaling is FtpTest's coasting rule and keeps the result.
+- Alternatives: keep the app's own protocol class; count down on a result page after the cool-down.
+- Reason: two implementations had drifted (the app's ended on a cadence that never arrived, saved results from the ramp-in, and ignored rescue's own end); BRIEF 3.2 has one protocol. A hard ERG effort can read as a surge, which must not cancel or panic the test.
+
+## 2026-10-21 (W2 round 2): W/kg opt-in on the profile page
+
+- Decision: the profile page has a "Show my W/kg in rides" toggle for `RiderProfile.show_wkg` right after "Share weight with the host"; it is a normal pedal-scan field and saves at once.
+- Alternatives: tie W/kg to `share_weight`.
+- Reason: BRIEF 3.3 shows W/kg only if the rider opted in; seeing your own W/kg doesn't need your weight to leave the PC.
+
+## 2026-10-21 (W2 round 2): The session overlay dims the HUD; the panic button looks like one
+
+- Decision: the session overlay gets a full-screen scrim (black, 60%) under it in the top layer, and its panel is opaque (97%); an empty detail line is hidden. The on-screen panic button reads "PANIC" (the menu item keeps "PANIC: trainer safe") in white on red with a light-red border, at least 380 x 100. A test seam `AppSessionScreen.render_headless` builds the view and HUD under GUT's headless display server. The lobby's message line starts hidden.
+- Alternatives: the 82% panel alone; a status-like panic label in the HUD's own colors.
+- Reason: seen in tools/screenshot --app-screen=session as a client: the panic overlay's title ran into the sprint banner showing through the panel; the panic button looked like one more HUD panel, and its long label reserved 559 px of the bottom edge from the teammate strip. In the solo lobby an empty message line pushed the content down.
+

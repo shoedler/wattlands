@@ -4,7 +4,9 @@ extends VBoxContainer
 ## banner. The safety banner shows the most urgent of paused, rescue (4.6.3) and warm-up
 ## (4.6.8), each with its own text and color (paused grey, rescue orange, warm-up purple, all
 ## with text so color is never the only cue); the warm-up banner is smaller. Game banners
-## (ctx.hud.banner) show for their `seconds`; a new one replaces the old. Owned by ui-hud.
+## (ctx.hud.banner) show for their `seconds` of the session's platform time (HudLayer ticks
+## them); a new one replaces the old. Banners line up on `side` (HudLayer sets it from the
+## anchor). Owned by ui-hud.
 
 const SAFETY_NONE := ""
 const SAFETY_WARMUP := "warmup"
@@ -28,6 +30,8 @@ var font_px: int = WlTheme.BANNER_PX
 ## Widest a banner may get (HudLayer keeps centre stacks clear of the corners); text wraps
 ## past it.
 var max_width: float = INF
+## Which side the banners line up on: -1 left, 0 centre, 1 right.
+var side: int = 0
 
 var _warmup: bool = false
 var _rescue: bool = false
@@ -89,6 +93,14 @@ func tick(dt: float) -> void:
 			_game_left = 0.0
 			_game_text = ""
 			_refresh()
+
+
+## Line the banners up on `s` (-1 left, 0 centre, 1 right). Additive (W2).
+func set_side(s: int) -> void:
+	side = clampi(s, -1, 1)
+	for p: PanelContainer in [_safety_panel, _game_panel]:
+		p.size_flags_horizontal = HudToasts.side_flags(side)
+		(p.get_child(0) as Label).horizontal_alignment = HudToasts.side_alignment(side)
 
 
 func set_max_width(w: float) -> void:

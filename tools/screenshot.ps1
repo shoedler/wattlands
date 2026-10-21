@@ -6,7 +6,7 @@
 #   tools\screenshot.ps1 --game=<id> --content=<id> --at=<s>[,<s>...] [--players=<n>] [--bots=<n>]
 #                        [--rider=<profile>] [--autopilot=all|none] [--seed=<n>] [--out=<dir>]
 #   tools\screenshot.ps1 --scene=res://addons/wattlands/world2d/demo.tscn [--frames=<n>]
-#   tools\screenshot.ps1 --app-screen=title|picker|lobby [--app-game=<id>]
+#   tools\screenshot.ps1 --app-screen=title|picker|lobby|session [--app-game=<id>] [--app-role=client|host|solo]
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tools\screenshot.ps1 ...   (how Node tools start it)
 #
 # It always passes --mock-trainer and refuses to run without one (BRIEF 1).

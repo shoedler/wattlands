@@ -425,6 +425,71 @@ func test_bus_toasts_and_banners() -> void:
 	assert_eq(_hud.toasts().texts().size(), 0)
 
 
+## Toasts and banners run on the session's platform time (update()'s telemetry), not on
+## frames: a fast-forwarded run (tools/screenshot) or --sim-speed never leaves a stale message
+## up, and frames don't shorten them while the session time moves slowly.
+func test_toasts_and_banners_follow_the_session_time() -> void:
+	_hud.build(_spec(), _ctx)
+	var tel := _tele(Wl.ERG, 200.0, 200)
+	tel.t = 9.95
+	_hud.update(tel, null, null)
+	tel.t = 10.0
+	_hud.update(tel, null, null)
+	_bus.toast_requested.emit("Sprint in 10 s", [])
+	_bus.banner_requested.emit("Endurance: 65% FTP", [], 4.0)
+	for i in 30:
+		tel.t += 0.05
+		_hud.update(tel, null, null)
+		_hud._process(0.1)
+	assert_eq(_hud.toasts().texts().size(), 1, "3 s of frames but 1.5 s of session time: still up")
+	assert_eq(_hud.banner().game_text(), "Endurance: 65% FTP")
+	for i in 31:
+		tel.t += 0.05
+		_hud.update(tel, null, null)
+	assert_eq(_hud.toasts().texts().size(), 0, "the toast's 3 s of session time are over")
+	assert_eq(_hud.banner().game_text(), "Endurance: 65% FTP", "the banner's 4 s are not")
+	tel.t = 100.0
+	_hud.update(tel, null, null)
+	assert_eq(_hud.banner().game_text(), "", "a fast forward ends the banner too")
+
+
+func test_frames_drive_messages_without_session_time() -> void:
+	_hud.build(_spec(), _ctx)
+	_bus.toast_requested.emit("Hello", [])
+	_hud._process(3.1)
+	assert_eq(_hud.toasts().texts().size(), 0, "no telemetry yet: frame time")
+	var tel := _tele(Wl.ERG, 200.0, 200)
+	tel.t = 5.0
+	_hud.update(tel, null, null)
+	tel.t = 5.05
+	_hud.update(tel, null, null)
+	_bus.toast_requested.emit("Again", [])
+	_hud._process(0.3)
+	assert_eq(_hud.toasts().texts().size(), 1, "the session clock runs: frames don't count")
+	_hud._process(0.3)
+	_hud._process(3.0)
+	assert_eq(_hud.toasts().texts().size(), 0, "no session time for over 0.5 s: frames count again")
+
+
+func test_corner_toasts_and_banners_line_up_with_their_side() -> void:
+	var spec := HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT).toasts_at(HudSpec.TOP_LEFT).banners_at(HudSpec.TOP_RIGHT)
+	_hud.build(spec, _ctx)
+	_bus.toast_requested.emit("Sprint in 10 s", [])
+	_bus.toast_requested.emit("Endurance 1 done: 100% in band", [])
+	_bus.banner_requested.emit("Wave 3", [], 3.0)
+	assert_eq(_hud.toasts().side, -1)
+	for p: Node in _hud.toasts().get_children():
+		assert_eq((p as Control).size_flags_horizontal, Control.SIZE_SHRINK_BEGIN, "left corner: toasts line up left")
+		assert_eq(((p as Control).get_child(0) as Label).horizontal_alignment, HORIZONTAL_ALIGNMENT_LEFT)
+	assert_eq(_hud.banner().side, 1)
+	assert_eq(_hud.banner().game_label().horizontal_alignment, HORIZONTAL_ALIGNMENT_RIGHT)
+	_hud.build(HudSpec.new().add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT), _ctx)
+	assert_eq(_hud.toasts().side, 0, "the default top-centre area centres them again")
+	assert_eq(_hud.banner().side, 0)
+	for p: Node in _hud.toasts().get_children():
+		assert_eq((p as Control).size_flags_horizontal, Control.SIZE_SHRINK_CENTER)
+
+
 ## A band or status published before build() (a game's configure() runs first) or before a
 ## rebuild still shows on the widgets built afterwards; a cleared band stays cleared.
 func test_bands_and_statuses_before_build_and_across_rebuilds() -> void:

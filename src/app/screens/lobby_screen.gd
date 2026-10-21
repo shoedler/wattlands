@@ -70,6 +70,7 @@ func _build() -> void:
 	_left.add_child(code_label)
 	message_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.WARN)
 	message_label.name = "Message"
+	message_label.visible = false
 	_left.add_child(message_label)
 	info_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT_DIM)
 	info_label.name = "Info"

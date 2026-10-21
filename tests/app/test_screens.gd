@@ -62,6 +62,27 @@ func test_profile_screen_edits_and_saves() -> void:
 	assert_gte(font_size(s.ftp_label), AppStyle.KEY_NUMBER_MIN)
 
 
+## BRIEF 3.3: W/kg shows only if the rider opted in; the opt-in is a profile toggle that
+## pedal-scan reaches like every other field.
+func test_profile_show_wkg_toggle_by_pedal() -> void:
+	fx.give_profile(200.0)
+	var s := open_screen(AppProfileScreen.new()) as AppProfileScreen
+	assert_false(fx.settings.profile.show_wkg, "off by default")
+	assert_true(menu(s).ids().has("show_wkg"))
+	assert_true(menu(s).text_of("show_wkg").begins_with(AppScreen.t("APP_FIELD_SHOW_WKG")))
+	assert_ne(AppScreen.t("APP_FIELD_SHOW_WKG"), "APP_FIELD_SHOW_WKG", "the label is translated")
+	assert_true(menu(s).text_of("show_wkg").ends_with(AppScreen.t("APP_OFF")))
+	var saves: int = (fx.settings as Object).get("profile_saves")
+	assert_true(scan_to(s, "show_wkg"), "pedal-scan reaches the W/kg toggle")
+	s.feed_gesture(Wl.G_SURGE)
+	assert_true(fx.settings.profile.show_wkg, "a surge turns it on")
+	assert_false(fx.settings.profile.share_weight, "independent of sharing the weight")
+	assert_gt((fx.settings as Object).get("profile_saves"), saves, "saved")
+	assert_true(menu(s).text_of("show_wkg").ends_with(AppScreen.t("APP_ON")))
+	confirm_pick(s, "show_wkg")
+	assert_false(fx.settings.profile.show_wkg, "and off again")
+
+
 func test_settings_screen_pages() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen

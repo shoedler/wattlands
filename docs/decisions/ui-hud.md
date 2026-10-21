@@ -123,3 +123,15 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 - Decision: additive `HudLayer.reserve_corner(anchor, size)` / `reserved_corner(anchor)`: a reserved corner's stack moves inward by the reserved height plus a gap and the centre stack of that edge keeps clear of the reserved width. The app shell reserves the bottom-right corner for its on-screen panic button.
 - Alternatives: move the panic button elsewhere (every corner may hold game widgets; Workout uses all six anchors); let games avoid a corner.
 - Reason: Workout's gear widget (bottom-right, shown in SIM sprints) sat under the panic button, and the button's text ran off the screen edge.
+
+## 2026-10-21 (W2 round 2): Toasts and banners run on the session's time
+
+- Decision: `HudLayer.update()` advances toasts and game banners by how far the telemetry's platform time moved (at most 1 s per call); `_process` advances them by frame time only while no session time arrives (a HUD on its own, before the first tick, or after 0.5 s without one). `tick(dt)` stays public.
+- Alternatives: frame time only (W1); let the screenshot tool tick the HUD by the skipped time.
+- Reason: seen in the W2 screenshots: after tools/screenshot fast-forwarded to 400 s and 675 s the warm-up and interval banners and "Sprint in 10 s" were still up, and at `--sim-speed=8` every toast lasted eight times its sim seconds. Game banners and toasts announce sim-time events (a 10 s sprint warning), so they count sim time.
+
+## 2026-10-21 (W2 round 2): Corner toasts and banners line up with their side; the phase clock is 48 px
+
+- Decision: additive `HudToasts.set_side()` / `HudBanner.set_side()` (-1 left, 0 centre, 1 right); HudLayer sets the side from the anchor (Rect2i areas centre). The timeline's clock (time left in the phase) is 48 px at full size, like the gear; the timeline's base_size grows to 640 x 162 and min_rect to 380 x 108.
+- Alternatives: keep centred toasts in corners; keep the clock at 40 px as a secondary number.
+- Reason: in Workout's top-left toast area a short toast sat centred under a longer one, half-way into the screen; the time left in an interval is the number a rider checks most after watts, and BRIEF 3.9 asks for key numbers of at least 48 px.

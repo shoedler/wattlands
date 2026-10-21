@@ -87,6 +87,7 @@ APP_ERR_NO_PLAYERS,No riders in the lobby.
 APP_ERR_NO_LOCAL_SLOT,You aren't in this session's rider list.
 APP_ERR_NO_TRAINER,"No trainer connected: connect one in Settings, or use the mock trainer."
 APP_PANIC,PANIC: trainer safe
+APP_PANIC_BUTTON,PANIC
 APP_SESSION_MENU,Ride menu
 APP_SESSION_PAUSED,Paused
 APP_SESSION_PAUSED_DETAIL,You stopped pedaling. Start pedaling again to ride on.
@@ -132,6 +133,7 @@ APP_FIELD_UNITS,Units
 APP_FIELD_FTP,FTP
 APP_FIELD_WEIGHT,Weight
 APP_FIELD_SHARE_WEIGHT,Share weight with the host
+APP_FIELD_SHOW_WKG,Show my W/kg in rides
 APP_FIELD_WPRIME,W′ (stamina)
 APP_FIELD_CADENCE,Preferred cadence
 APP_FIELD_DRIVETRAIN,Drivetrain
@@ -209,18 +211,15 @@ APP_RIDES_NONE,No rides saved yet.
 APP_RIDES_HINT,Pick a ride to upload it to Strava again.
 APP_RIDES_UPLOADED,on Strava
 APP_FTP_TITLE,FTP test
-APP_FTP_INTRO,"A 5-minute ramp-in, then one-minute steps that get 6% harder each minute until you can't hold the target. Stop pedaling to end it. Your new FTP is 75% of your best minute."
+APP_FTP_INTRO,"A 5-minute ramp-in, then one-minute steps that get 6% harder each minute until you can't hold the target. Stop pedaling to end it. Your new FTP is 75% of your best minute; it is saved 10 s after the test unless you keep your old one."
 APP_FTP_START,Start the FTP test
-APP_FTP_STOP,End the test
+APP_FTP_STOP,Cancel the test (no new FTP)
 APP_FTP_RUNNING,{0} · best minute {1} W
 APP_FTP_COOLDOWN,Cool-down
-APP_FTP_ENDED,Test over: {0}. Spin easy for 3 minutes.
-APP_FTP_END_POWER,you couldn't hold the target
-APP_FTP_END_CADENCE,your cadence dropped
-APP_FTP_END_COAST,you stopped
-APP_FTP_END_RESCUE,the trainer eased off for safety
-APP_FTP_END_PLAN_END,the last step
-APP_FTP_RESULT,Best minute {0} W. Saving in {1} s (back keeps your old FTP).
+APP_FTP_COOLDOWN_LEFT,Spin easy: {0} of cool-down left.
+APP_FTP_COOLDOWN_DONE,Cool-down done.
+APP_FTP_NO_RESULT,No new FTP: the test ended before the first one-minute step was done.
+APP_FTP_END_COOLDOWN,End the cool-down
 APP_FTP_SAVE,Save the new FTP
 APP_FTP_KEEP,Keep my old FTP
 APP_FTP_PLAN_REJECTED,The FTP test plan was rejected by the safety checks.
