@@ -285,7 +285,9 @@ func scanning_enabled() -> bool:
 
 
 ## While the field's LineEdit has keyboard focus, routed actions (WASD, Space...) stay out of
-## the menus; Esc and Enter still work.
+## the menus (WlInputRouter drops key presses then); Enter submits the field. A screen whose
+## keys must keep working there takes the focus off the field first (the join page does for Esc
+## and the arrows, W4r2 R27).
 func watch_text_focus(field: AppTextField) -> void:
 	if field == null or field.line_edit == null:
 		return

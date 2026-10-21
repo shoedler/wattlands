@@ -4,7 +4,8 @@ extends "res://tests/app/app_test_base.gd"
 ##   offered in the lobby's content picker (pedal-scan selectable) as "zwo:<absolute path>", the
 ##   page names the folder, and the session preview lists the importer's clamps.
 ## - BRIEF 3.5 / APP_JOIN_HINT: a code typed on a physical keyboard reaches the code field with
-##   no click first.
+##   no click first; after typing, Esc still backs out and the arrows still move the on-screen
+##   keyboard (W4r2 R27).
 
 const FIXTURE_ZWO := "res://tests/fixtures/zwo/caps.zwo"
 
@@ -152,3 +153,84 @@ func test_only_code_characters_start_typing() -> void:
 	assert_eq(s.code_field.value(), "")
 	assert_true(s.take_typed_key(_key("k")), "a code letter starts typing")
 	assert_eq(s.code_field.value(), "K")
+
+
+# --- Esc and the arrows after typing (W4r2 R27) ----------------------------------------------------
+
+var _router: WlInputRouter = null
+
+
+func after_each() -> void:
+	super.after_each()
+	if _router != null and is_instance_valid(_router):
+		remove_child(_router)
+		_router.free()
+	_router = null
+
+
+func _nav_key(code: Key) -> InputEventKey:
+	var ev := InputEventKey.new()
+	ev.keycode = code
+	ev.physical_keycode = code
+	ev.pressed = true
+	return ev
+
+
+func _push(ev: InputEventKey) -> void:
+	get_viewport().push_input(ev)
+	var up := ev.duplicate() as InputEventKey
+	up.pressed = false
+	get_viewport().push_input(up)
+
+
+## The join page with a real WlInputRouter ahead of the screen in the tree, as the autoload is.
+func _join_page_with_router() -> AppLobbyScreen:
+	fx.give_profile()
+	_router = WlInputRouter.new()
+	_router.load_on_ready = false
+	add_child(_router)
+	move_child(_router, 0)
+	fx.services.input = _router
+	var s := open_screen(AppLobbyScreen.new(), {"mode": "join"}) as AppLobbyScreen
+	await wait_process_frames(2)
+	return s
+
+
+func test_esc_backs_out_of_the_join_page_after_typing() -> void:
+	var s: AppLobbyScreen = await _join_page_with_router()
+	_push(_key("K"))
+	await wait_process_frames(1)
+	assert_eq(s.code_field.value(), "K")
+	assert_true(s.code_field.line_edit.has_focus(), "precondition: typing gave the field the focus")
+	_push(_nav_key(KEY_ESCAPE))
+	await wait_process_frames(1)
+	assert_false(s.code_field.line_edit.has_focus(), "Esc takes the focus off the field")
+	_push(_nav_key(KEY_ESCAPE))
+	await wait_process_frames(1)
+	assert_true(fx.app.history.has("title"), "two Esc presses back out, as without typing (history %s)" % str(fx.app.history))
+
+
+func test_arrows_move_the_on_screen_keyboard_after_typing() -> void:
+	var s: AppLobbyScreen = await _join_page_with_router()
+	_push(_key("K"))
+	await wait_process_frames(1)
+	var before := s.active_menu().highlighted()
+	_push(_nav_key(KEY_DOWN))
+	await wait_process_frames(1)
+	assert_ne(s.active_menu().highlighted(), before, "Down moved the highlight")
+	assert_eq(s.code_field.value(), "K", "the typed character stays")
+	_push(_key("7"))
+	await wait_process_frames(1)
+	assert_eq(s.code_field.value(), "K7", "the next code character takes the focus back and types on")
+	assert_true(s.code_field.line_edit.has_focus())
+
+
+func test_backspace_still_edits_the_code() -> void:
+	var s: AppLobbyScreen = await _join_page_with_router()
+	_push(_key("K"))
+	_push(_key("7"))
+	await wait_process_frames(1)
+	_push(_nav_key(KEY_BACKSPACE))
+	await wait_process_frames(1)
+	assert_eq(s.code_field.value(), "K", "Backspace stays with the field")
+	assert_false(fx.app.history.has("title"))

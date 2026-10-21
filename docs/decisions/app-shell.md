@@ -287,3 +287,9 @@
 
 - Decision: ending a capture on the Controls page refreshes the content column (`all_bindings_text()`) as well as the rows; the unused `binding_text()` helper is removed (W4r2 R32/R44).
 - Reason: InputBindings.rebind can take an input away from another action, so the list of every binding went stale until the page was reopened.
+
+## 2026-10-21 (W4r2): Esc and the arrows keep working on the join page after typing (W4r2 R27)
+
+- Decision: while the code field has the keyboard focus, Esc and the four arrow keys take the focus off it in the lobby's `_input` (which runs before the InputRouter autoload's) and go on unhandled, so the router routes them: Esc backs out (the first highlights Cancel, the second leaves), the arrows move the on-screen keyboard and the room lists. The next code character takes the focus back (ZIH-7). Backspace and Enter stay with the field.
+- Alternatives: let WlInputRouter route these keys while a LineEdit has the focus (every text field in the app would lose its caret keys); never focus the field (the ZIH-7 typing needs it).
+- Reason: WlInputRouter drops key presses while a LineEdit has the focus, so after one typed character a keyboard rider could neither back out nor reach Recent or LAN rooms.
