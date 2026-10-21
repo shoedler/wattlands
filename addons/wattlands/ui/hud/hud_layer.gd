@@ -37,7 +37,11 @@ extends CanvasLayer
 ##   0x05 or Machine Status 0xFF on this machine's trainer) puts up the trainer notice
 ##   TRAINER_ANOTHER_APP_CONTROL in the banner area, with the "warning" sound, once per loss;
 ##   it stays up (also across a rebuild) until trainer_status_changed reports the trainer
-##   ready again. Only a rendering GameHost builds a HudLayer, so headless peers show nothing.
+##   ready again. build() on the autoload EventBus (the app's session bus) also seeds it from
+##   the TrainerService autoload's status(), looked up like Settings: a session that starts
+##   while control is already lost (in the lobby, or in an earlier session and never
+##   regained) shows the notice and plays the sound as the signal would have, once.
+##   Only a rendering GameHost builds a HudLayer, so headless peers show nothing.
 ## - The latest power and cadence bands per peer, local teammate statuses and custom readout
 ##   texts are kept, so a band published before build() (in configure()) or across a rebuild
 ##   still shows.
@@ -203,6 +207,7 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	for id: String in _readouts.keys():
 		set_readout(id, _readouts[id])
 	_connect_bus()
+	_seed_trainer_notice()
 	_refresh_safety()
 	relayout()
 
@@ -788,6 +793,18 @@ func _autoload_bus() -> WlEventBus:
 	return tree.root.get_node_or_null("EventBus") as WlEventBus
 
 
+## The TrainerService autoload's status() ("" when there is no such node or it has no
+## status()). Read only for the app's own bus (_seed_trainer_notice).
+func _trainer_status() -> String:
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree == null or tree.root == null:
+		return ""
+	var ts := tree.root.get_node_or_null("TrainerService")
+	if ts == null or not ts.has_method("status"):
+		return ""
+	return str(ts.call("status"))
+
+
 func _text(key: String, args: Variant) -> String:
 	var a: Variant = args
 	if a == null:
@@ -896,6 +913,16 @@ func _on_trainer_control_lost(_detail: String) -> void:
 	_control_lost = true
 	_banner.set_trainer_notice(_text("TRAINER_ANOTHER_APP_CONTROL", []))
 	_play("warning")
+
+
+## A loss before this layer linked the bus (lobby, an earlier session) emitted no signal here:
+## on the autoload EventBus, which TrainerService emits on, its current status stands in for
+## it. A private bus (a test, an in-process sim) is not this machine's trainer.
+func _seed_trainer_notice() -> void:
+	if _bus == null or _bus != _autoload_bus():
+		return
+	if _trainer_status() == TrainerDevice.STATUS_CONTROL_LOST:
+		_on_trainer_control_lost("")
 
 
 ## Control is back once the trainer is ready again (a retry, a reconnect, another trainer).
