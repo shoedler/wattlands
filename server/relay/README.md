@@ -20,11 +20,13 @@ On Node 22.12 to 22.17, add `--experimental-strip-types`: `node --experimental-s
 
 | Option | Environment | Default | Meaning |
 | --- | --- | --- | --- |
-| `--port=<n>` | `PORT` | `8787` | TCP port; `0` picks a free one |
+| `--port=<n>` | `PORT` | `8787` | TCP port; `0` picks a free one. A blank `PORT` counts as unset |
 | `--host=<addr>` | `HOST` | all interfaces | Interface to bind, for example `127.0.0.1` |
 | `--impl=auto\|ws\|builtin` | `RELAY_WS_IMPL` | `auto` | WebSocket layer: `auto` uses `ws` when it imports, else the built-in server; `ws` fails if it is missing |
 | | `RELAY_TRUST_PROXY=1` | off | Take the client IP for the join limit from `Fly-Client-IP` or the first `X-Forwarded-For` entry. Set it only behind a proxy |
 | | `RELAY_LOG=quiet` | `info` | Turn off the operational log (room counts only; never codes, tokens or payloads) |
+
+Flags take the form `--name=value` and win over the environment. An unknown option or a bad value exits with code 1 and prints the usage text.
 
 Endpoints:
 
@@ -62,9 +64,9 @@ Rules:
 ### Drops and reconnects
 
 - A socket that closes or times out without `leave` is a drop. The others get `peer_left` with reason `dropped`, and the seat is held for 120 s. A held seat still counts toward `max`.
-- A `join` with the seat's token within those 120 s takes the same peer id back. The reply has `"rejoin":true` and a new token: clients save the token from every `created` and `joined`. The others get `peer_joined` with `"rejoin":true`. Nothing sent while the peer was away is replayed.
-- A token presented while its old socket is still open (the relay hasn't noticed the drop yet) replaces that socket. The old socket is closed with 4001, and the others see `peer_left` (`dropped`) and then `peer_joined` (`rejoin`).
-- After 120 s the seat is freed and the token stops working. A `join` with an unknown or expired token joins as a new peer.
+- A `join` with the seat's token within those 120 s takes the same peer id back. The reply has `"rejoin":true` and the same token: a seat keeps one token until it is freed, so a client saves it once, and a reconnect whose reply got lost can be retried with it. The 120 s restart at every drop. The others get `peer_joined` with `"rejoin":true`. Nothing sent while the peer was away is replayed.
+- A token presented while its old socket is still open (the relay hasn't noticed the drop yet) replaces that socket. The old socket is closed with 4001, and the others see `peer_left` (`dropped`) and then `peer_joined` (`rejoin`). A client closed with 4001 should not reconnect on its own: another copy of it holds the seat now.
+- After 120 s the seat is freed and the token stops working. A `join` with an unknown or expired token joins as a new peer. Expiry is checked when the `join` arrives, not only by the once-a-second sweep.
 - When the host drops, everyone gets `peer_left` for peer 1 with reason `dropped`, and the room is held for 120 s. Messages to the host are dropped meanwhile. If the host doesn't come back with its token in time, everyone gets `host_left` with reason `timeout` and the room closes.
 - A room closes 4 h after it was created: everyone, host included, gets `host_left` with reason `expired`.
 
@@ -73,13 +75,13 @@ Rules:
 | Limit | Value | What happens |
 | --- | --- | --- |
 | Peers per room | 8 (`create.max` is capped at 8) | `room_full` |
-| Message size | 16 KB (16 384 bytes of WebSocket payload, fragments included) | Close 1009 |
+| Message size | 16 KB (16 384 bytes of WebSocket payload, fragments included). A forwarded `msg` is a few bytes longer than the one sent (`"from":N` replaces `"to":N`), so clients keep their inbound buffer above 16 KB (Godot's default is 64 KB) | Close 1009 |
 | Message rate | 60 a second per connection, burst 120 (token bucket over every message, `ping` included) | Message dropped; at most one `rate_limited` error a second |
 | Idle timeout | 60 s without any frame (clients `ping` every 15 s; WebSocket pings count too) | Close 4000, a drop |
 | Join attempts | 10 a minute per IP address (sliding window; refused attempts don't count) | `rate_limited` |
 | Room lifetime | 4 h | `host_left` `expired` |
 | Reconnect token | 120 s after the drop | Seat freed; for the host, `host_left` `timeout` |
-| Unsent output | 1 MiB per connection | Close 4003 (slow consumer), a drop |
+| Unsent output | 1 MiB per connection, checked before each send and on each frame received (so a client that floods WebSocket pings and never reads is caught too) | Close 4003 (slow consumer), a drop |
 
 Close codes the relay sends: 1001 shutdown, 1002 protocol error, 1007 invalid UTF-8, 1009 message too big, 4000 idle timeout, 4001 replaced by a reconnect, 4002 version mismatch, 4003 slow consumer.
 
@@ -110,7 +112,7 @@ The relay keeps every room in memory. Run exactly one instance, and don't scale 
 
 ## Files
 
-- `src/main.ts`: the command-line entry.
+- `src/main.ts`: the command-line entry. `src/options.ts` parses its flags and environment.
 - `src/server.ts`: `startRelay()`, the HTTP routes and the choice of WebSocket layer.
 - `src/relay.ts`: the protocol core.
 - `src/ws_builtin.ts` and `src/handshake.ts`: the built-in RFC 6455 server.
