@@ -29,7 +29,11 @@ var v_mps: float = 0.0
 var distance_m: float = 0.0
 
 
-static func create(p_rider_mass_kg: float = 75.0, p_cda: float = DEFAULT_CDA, p_mass_offset_kg: float = DEFAULT_MASS_OFFSET_KG) -> SpeedModel:
+static func create(
+	p_rider_mass_kg: float = 75.0,
+	p_cda: float = DEFAULT_CDA,
+	p_mass_offset_kg: float = DEFAULT_MASS_OFFSET_KG
+) -> SpeedModel:
 	var m := SpeedModel.new()
 	m.rider_mass_kg = p_rider_mass_kg
 	m.cda = p_cda
@@ -68,8 +72,16 @@ func reset(v: float = 0.0) -> void:
 
 
 ## Steady-state speed (m/s) for power p_w, by bisection on [0, 30] m/s.
-static func steady_state_speed(p_w: float, grade_pct: float, mass_kg_total: float, p_cda: float = DEFAULT_CDA,
-		p_crr: float = DEFAULT_CRR, wind_mps: float = 0.0, p_rho: float = DEFAULT_RHO, p_eta: float = DEFAULT_ETA) -> float:
+static func steady_state_speed(
+	p_w: float,
+	grade_pct: float,
+	mass_kg_total: float,
+	p_cda: float = DEFAULT_CDA,
+	p_crr: float = DEFAULT_CRR,
+	wind_mps: float = 0.0,
+	p_rho: float = DEFAULT_RHO,
+	p_eta: float = DEFAULT_ETA
+) -> float:
 	var th := atan(grade_pct / 100.0)
 	var target := p_w * p_eta
 	var lo := 0.0
@@ -77,7 +89,10 @@ static func steady_state_speed(p_w: float, grade_pct: float, mass_kg_total: floa
 	for _i in 200:
 		var mid := 0.5 * (lo + hi)
 		var rel := mid + wind_mps
-		var need := mid * (mass_kg_total * G * (p_crr * cos(th) + sin(th)) + 0.5 * p_rho * p_cda * rel * rel)
+		var need := (
+			mid
+			* (mass_kg_total * G * (p_crr * cos(th) + sin(th)) + 0.5 * p_rho * p_cda * rel * rel)
+		)
 		if need < target:
 			lo = mid
 		else:

@@ -1,0 +1,7 @@
+<workout_file>
+    <name>Nothing usable</name>
+    <workout>
+        <MaxEffort Duration="30"/>
+        <SolidState Duration="60" Power="0.5"/>
+    </workout>
+</workout_file>

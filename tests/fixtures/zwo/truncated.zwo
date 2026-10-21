@@ -1,0 +1,4 @@
+<workout_file>
+    <name>Cut short</name>
+    <workout>
+        <SteadyState Duration="60" Power="0.5"/>

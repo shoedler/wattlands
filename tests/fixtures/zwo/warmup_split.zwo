@@ -1,0 +1,7 @@
+<workout_file>
+    <name>Long warm-up</name>
+    <workout>
+        <Warmup Duration="600" PowerLow="0.25" PowerHigh="0.75"/>
+        <SteadyState Duration="300" Power="0.85"/>
+    </workout>
+</workout_file>

@@ -1,0 +1,5 @@
+<plan>
+    <workout>
+        <SteadyState Duration="60" Power="0.5"/>
+    </workout>
+</plan>

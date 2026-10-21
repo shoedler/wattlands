@@ -1,2 +1,40 @@
 keys,en
 SIM_MODULE_NAME,Simulation
+SIM_ZWO_PREFIX,Warm-up
+SIM_ZWO_WARMUP,Warm-up {range}
+SIM_ZWO_COOLDOWN,Cool-down ramp {range}
+SIM_ZWO_STEADY,Steady {range}
+SIM_ZWO_RAMP,Ramp {range}
+SIM_ZWO_ON,Interval {n}/{count} {range}
+SIM_ZWO_OFF,Recovery {n}/{count} {range}
+SIM_ZWO_FREE,Free ride
+SIM_ZWO_CLAMP,"Block {block} ({label}): {from} to {to}, {reason}"
+SIM_ZWO_SPLIT,"Block {block} ({label}): split at 5:00, {reason}"
+SIM_ZWO_EXTEND,"Block {block} ({label}): {from} s to {to} s, {reason}"
+SIM_ZWO_REASON_WARMUP,warm-up: at most 65% FTP in the first 5 minutes
+SIM_ZWO_REASON_CEILING,at most 150% FTP
+SIM_ZWO_REASON_LONG_PHASE,blocks longer than 5 minutes: at most 105% FTP
+SIM_ZWO_REASON_LIMIT_105,at most 5 minutes above 105% FTP before 2 minutes at or below 90%
+SIM_ZWO_REASON_LIMIT_120,at most 60 s above 120% FTP before 2 minutes at or below 90%
+SIM_ZWO_REASON_SPACING,ERG and SIM switches at least 30 s apart
+SIM_ZWO_W_UNSUPPORTED,Block {block}: <{tag}> is not supported and was skipped
+SIM_ZWO_W_CHILD,Skipped {count} <{tag}> element(s) inside blocks (not supported)
+SIM_ZWO_W_BAD_BLOCK,Block {block}: <{tag}> {why} and was skipped
+SIM_ZWO_W_PERCENT,Block {block}: power {value} was read as a percentage of FTP
+SIM_ZWO_W_MEAN,Block {block}: <{tag}> uses the mean of its low and high power
+SIM_ZWO_W_SPORT,"Sport type ""{sport}"": powers are read as fractions of cycling FTP"
+SIM_ZWO_W_REPEAT,Block {block}: Repeat {repeat} was limited to {max}
+SIM_ZWO_WHY_DURATION,has no valid duration
+SIM_ZWO_WHY_POWER,has no valid power
+SIM_ZWO_WHY_NEGATIVE,has a negative power
+SIM_ZWO_WHY_REPEAT,has no valid Repeat
+SIM_ZWO_E_XML,Not a .zwo workout: {why}
+SIM_ZWO_E_EMPTY,The workout has no supported blocks
+SIM_ZWO_E_TOO_LONG,The workout is longer than {hours} hours
+SIM_ZWO_E_MISSING,The file is missing: {path}
+SIM_ZWO_WHY_EMPTY,the file is empty
+SIM_ZWO_WHY_ROOT,"the root element is <{tag}>, not <workout_file>"
+SIM_ZWO_WHY_NESTING,</{tag}> does not match its opening tag
+SIM_ZWO_WHY_TRUNCATED,<{tag}> is never closed
+SIM_ZWO_WHY_NO_WORKOUT,there is no <workout> element
+SIM_ZWO_WHY_NO_ROOT,there is no <workout_file> element

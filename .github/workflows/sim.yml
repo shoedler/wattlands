@@ -1,0 +1,64 @@
+# sim module (addons/wattlands/sim, tests/sim): SimClock, SeededRng, SpeedModel, WBalance, Bots,
+# GestureRecognizer, SprintRule and the .zwo importer (BRIEF 3.3-3.7, 3.11, 7.1).
+# Every run step below was run green locally (BRIEF 7.9); the Godot download is setup only.
+name: sim
+
+on:
+  push:
+    paths:
+      - "addons/wattlands/sim/**"
+      - "addons/wattlands/contracts/**"
+      - "tests/sim/**"
+      - "tests/fixtures/zwo/**"
+      - "content/strings/sim.csv"
+      - "tools/**"
+      - ".github/workflows/sim.yml"
+  pull_request:
+    paths:
+      - "addons/wattlands/sim/**"
+      - "addons/wattlands/contracts/**"
+      - "tests/sim/**"
+      - "tests/fixtures/zwo/**"
+      - "content/strings/sim.csv"
+      - "tools/**"
+      - ".github/workflows/sim.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sim:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+
+      - name: Install Godot (standard Linux build)
+        run: |
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$url"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import, sim GUT suite (strict gate) and script check
+        run: tools/run_tests --only=import,gut,static --gdir=res://tests/sim --no-lint
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-logs
+          path: |
+            build/*.log
+            build/junit.xml
+          if-no-files-found: ignore
