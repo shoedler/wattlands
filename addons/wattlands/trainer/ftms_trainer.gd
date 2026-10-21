@@ -128,6 +128,29 @@ static func sample_from_record(record: Dictionary, t: float) -> TrainerSample:
 	return s
 
 
+## Unbind from the client (W4, SAF-8; additive). FtmsConnectionManager keeps one FtmsClient
+## for every trainer, so when a link to this trainer is replaced by another trainer's it calls
+## this: from then on this object's writes are dropped (push_warning) instead of reaching the
+## next trainer, its status reads "disconnected" and no more bike data arrives here. The
+## manager makes a new FtmsTrainer when this trainer is linked again.
+func release_client() -> void:
+	if _client == null:
+		return
+	var pairs: Array = [
+		[_client.bike_data, _on_bike_data],
+		[_client.control_response, _on_control_response],
+		[_client.machine_status, _on_machine_status],
+		[_client.state_changed, _on_client_state],
+	]
+	for pair: Array in pairs:
+		var sig: Signal = pair[0]
+		var cb: Callable = pair[1]
+		if sig.is_connected(cb):
+			sig.disconnect(cb)
+	_client = null
+	status_changed.emit(STATUS_DISCONNECTED, "")
+
+
 # --- Internals ------------------------------------------------------------------------
 
 func _bind(p_client: FtmsClient, p_name: String) -> void:

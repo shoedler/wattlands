@@ -33,7 +33,11 @@ extends Node
 ##   of a ramped mode switch, is never dropped.
 ## - A response with result 0x05 (control not permitted) or Machine Status 0xFF emits
 ##   control_lost("another app may hold control") and clears the queue. A write that is still
-##   unanswered after its two retries emits failed() (the link is presumed dead).
+##   unanswered after its two retries emits failed() (the link is presumed dead; the
+##   FtmsConnectionManager then reconnects, W4 ftms-ble-1).
+## - (W4) A write the transport rejects synchronously, inside the write call itself (GDBLE's
+##   BUSY or QUEUE_FULL), is retried on the next tick, not from inside that call: three
+##   rejections in a row no longer recurse into failed() within one write.
 ## - Cycling Power fallback: when the Feature lacks power measurement (machine bit 14) and the
 ##   trainer offers 0x1818, the client subscribes to 0x2A63 and fills power_w (with
 ##   "power_source": "cps") into bike data records that lack it.
@@ -106,6 +110,8 @@ var _discover_left_s: float = -1.0
 var _queue: Array[Dictionary] = []
 var _in_flight: Dictionary = {}
 var _assembler: FtmsCodec.BikeDataAssembler = FtmsCodec.BikeDataAssembler.new()
+## True while the transport's write call runs (a failure it reports then is synchronous).
+var _sending: bool = false
 var _stats: Dictionary = {"cp_writes": 0, "cp_retries": 0, "cp_timeouts": 0, "refused_locked": 0, "records": 0}
 
 
@@ -205,9 +211,15 @@ func tick(dt: float) -> void:
 		if float(_read["elapsed"]) >= READ_TIMEOUT_S - TIME_EPSILON:
 			_retry_read("timeout")
 	if not _in_flight.is_empty():
-		_in_flight["elapsed"] = float(_in_flight["elapsed"]) + dt
-		if float(_in_flight["elapsed"]) >= CP_TIMEOUT_S - TIME_EPSILON:
-			_retry_write("timeout")
+		if _in_flight.has("rejected"):
+			# A synchronous rejection from the last send: retry now, one tick later.
+			var why := str(_in_flight["rejected"])
+			_in_flight.erase("rejected")
+			_retry_write(why)
+		else:
+			_in_flight["elapsed"] = float(_in_flight["elapsed"]) + dt
+			if float(_in_flight["elapsed"]) >= CP_TIMEOUT_S - TIME_EPSILON:
+				_retry_write("timeout")
 
 
 ## Re-request control after control_lost (or to refresh it while ready): Request Control,
@@ -499,9 +511,17 @@ func _send_in_flight() -> void:
 		_queue = []
 		_refuse_locked(int(payload[0]))
 		return
+	if _transport == null or not is_instance_valid(_transport):
+		# The transport is gone (the app is tearing the stack down): nothing can go out.
+		_in_flight = {}
+		_queue = []
+		push_warning("FtmsClient: no transport; dropped %s" % FtmsCodec.opcode_name(int(payload[0])))
+		return
 	_stats["cp_writes"] = int(_stats["cp_writes"]) + 1
+	_sending = true
 	_transport.write_characteristic(BleTransport.expand_uuid(FtmsCodec.SERVICE_FTMS),
 		BleTransport.expand_uuid(FtmsCodec.CHAR_CONTROL_POINT), payload, true)
+	_sending = false
 
 
 func _retry_write(why: String) -> void:
@@ -581,6 +601,10 @@ func _on_operation_failed(op: String, error: String) -> void:
 	if o.contains("read") and not _read.is_empty():
 		_retry_read(error)
 	elif o.contains("write") and not _in_flight.is_empty():
+		if _sending:
+			# Rejected inside the write call (BUSY, QUEUE_FULL): retry on the next tick.
+			_in_flight["rejected"] = error
+			return
 		_retry_write(error)
 	elif o.contains("discover") and _state == STATE_DISCOVERING:
 		_fail("service discovery failed: %s" % error)
