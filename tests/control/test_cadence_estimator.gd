@@ -65,6 +65,47 @@ func test_frozen_cadence_is_stale() -> void:
 	assert_almost_eq(stale.cadence_rpm, 48.0 / r, 1e-9)
 
 
+## W2r2: a coasting rider (power < 15 W, BRIEF 3.5) on a flywheel that spins down. The crank
+## reads 0 rpm and keeps reading 0 while the speed falls: that's no frozen estimate, so no
+## cadence is invented from the flywheel's momentum (it would hide coasting, pause, AFK and
+## the warm-up's 20-minute reset).
+func test_a_resting_crank_on_a_spinning_down_flywheel_is_not_stale() -> void:
+	var est := CadenceEstimator.new()
+	for i in 4:
+		est.process(_s(float(i), 200.0, 90.0, 36.0))
+	assert_almost_eq(est.ratio(), 0.4, 1e-9)
+	for i in 20:
+		var speed := 36.0 * pow(0.9, float(i + 1))
+		var out := est.process(_s(4.0 + float(i), 0.0, 0.0, speed))
+		assert_eq(out.flags & TrainerSample.CADENCE_ESTIMATED, 0, "coasting %d s: kept as reported" % (i + 1))
+		assert_eq(out.cadence_rpm, 0.0)
+	assert_almost_eq(est.ratio(), 0.4, 1e-9, "nothing learned from it")
+	assert_almost_eq(est.cadence_age_s(23.0), 0.0, 1e-9, "a fresh reading")
+
+
+func test_no_cadence_is_estimated_while_coasting() -> void:
+	var est := CadenceEstimator.new()
+	for i in 4:
+		est.process(_s(float(i), 200.0, 90.0, 36.0))
+	var coast := est.process(_s(5.0, 10.0, -1.0, 30.0))
+	assert_false(coast.has_cadence(), "under 15 W an absent cadence stays absent")
+	var pedal := est.process(_s(6.0, 150.0, -1.0, 30.0))
+	assert_ne(pedal.flags & TrainerSample.CADENCE_ESTIMATED, 0, "pedaling again: estimated as before")
+	assert_almost_eq(pedal.cadence_rpm, 75.0, 1e-9)
+
+
+func test_a_frozen_zero_while_pedaling_is_still_stale() -> void:
+	var est := CadenceEstimator.new()
+	for i in 4:
+		est.process(_s(float(i), 200.0, 90.0 + float(i % 2), 36.0))
+	var r := est.ratio()
+	est.process(_s(5.0, 200.0, 0.0, 36.0))
+	est.process(_s(7.0, 200.0, 0.0, 40.0))
+	var stale := est.process(_s(8.5, 200.0, 0.0, 44.0))
+	assert_ne(stale.flags & TrainerSample.CADENCE_ESTIMATED, 0, "200 W at a 0 rpm reading: the reading is frozen")
+	assert_almost_eq(stale.cadence_rpm, 44.0 / r, 1e-9)
+
+
 func test_unchanged_cadence_at_steady_speed_is_not_stale() -> void:
 	var est := CadenceEstimator.new()
 	for i in 10:
