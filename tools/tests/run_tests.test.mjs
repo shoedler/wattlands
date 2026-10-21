@@ -7,7 +7,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { TOOLS, REPO, IS_WIN, BASH, godotBin, makeScratchProject, runProc, powershellExe, rmQuiet, minimalEnv } from './helpers.mjs';
-import { evaluateLint, parseArgs, GDTOOLKIT_VERSION } from '../lib/run_tests.mjs';
+import {
+  evaluateLint,
+  evaluateWorkflows,
+  gameNodeSuites,
+  parseArgs,
+  workflowFiles,
+  GDTOOLKIT_VERSION,
+  PYYAML_VERSION,
+} from '../lib/run_tests.mjs';
 
 const GODOT = godotBin();
 const skipNoGodot = (!GODOT && 'no Godot binary') || (!BASH && 'bash not found');
@@ -41,6 +49,45 @@ describe('evaluateLint and the lint options', () => {
     const o = parseArgs(['--strict-lint']);
     assert.equal(o.noLint, false);
     assert.equal('strictLint' in o, false);
+  });
+});
+
+describe('the workflow YAML check and the game Node suites', () => {
+  test('evaluateWorkflows fails only on a file PyYAML rejected and skips when the script never ran', () => {
+    assert.deepEqual(evaluateWorkflows({ code: 0, text: 'workflows: 17 parsed, 0 failed\n' }), {
+      fail: false,
+      skipped: false,
+      note: 'workflows 17 YAML ok',
+    });
+    const bad = evaluateWorkflows({ code: 1, text: 'FAIL .github/workflows/x.yml: no jobs map\nworkflows: 3 parsed, 1 failed\n' });
+    assert.equal(bad.fail, true);
+    assert.equal(bad.note, 'workflows 1 of 3 YAML failed (see build/workflows.log)');
+    const offline = evaluateWorkflows({ code: 2, text: 'error: failed to fetch pyyaml' });
+    assert.equal(offline.fail, false);
+    assert.equal(offline.skipped, true);
+    assert.match(offline.note, /could not run \(exit 2\), skipped/);
+    assert.match(PYYAML_VERSION, /^\d+\.\d+\.\d+$/);
+  });
+
+  test('workflowFiles lists .yml and .yaml under .github/workflows, sorted; gameNodeSuites only folders with Node tests', () => {
+    const p = makeScratchProject('run-tests-wf');
+    try {
+      assert.deepEqual(workflowFiles(p), []);
+      assert.deepEqual(gameNodeSuites(p), []);
+      const wf = path.join(p, '.github', 'workflows');
+      fs.mkdirSync(wf, { recursive: true });
+      for (const n of ['b.yml', 'a.yaml', 'notes.md']) fs.writeFileSync(path.join(wf, n), 'jobs: {}\n');
+      assert.deepEqual(workflowFiles(p), ['.github/workflows/a.yaml', '.github/workflows/b.yml']);
+      const games = path.join(p, 'tests', 'games');
+      for (const id of ['zeta', 'alpha', 'gd_only']) fs.mkdirSync(path.join(games, id), { recursive: true });
+      fs.writeFileSync(path.join(games, 'zeta', 'check.test.mjs'), '');
+      fs.writeFileSync(path.join(games, 'alpha', 'e2e_check.test.mjs'), '');
+      fs.writeFileSync(path.join(games, 'gd_only', 'test_rules.gd'), '');
+      assert.deepEqual(gameNodeSuites(p), ['tests/games/alpha', 'tests/games/zeta']);
+      assert.ok(gameNodeSuites(REPO).includes('tests/games/workout'), "Workout's e2e_check unit tests run in the node step");
+    } finally {
+      rmQuiet(p);
+    }
   });
 });
 

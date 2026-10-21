@@ -315,7 +315,51 @@ async function stepStatic(o) {
     notes.push(lint.note);
     if (lint.fail) failed = true;
   }
+  const wf = await workflowStep(o);
+  notes.push(wf.note);
+  if (wf.fail) failed = true;
   return { status: failed ? 'FAIL' : 'PASS', note: notes.join('; ') };
+}
+
+// BRIEF 7.9: every CI workflow parses as YAML. tools/lib/check_workflows.py runs with a pinned
+// PyYAML through uv when uv is on PATH (the same opt-in pattern as gdtoolkit); without uv, or when
+// uv can't run the script, the check is skipped and says so. A file PyYAML rejects fails the step.
+export const PYYAML_VERSION = '6.0.2';
+
+/** The repo's CI workflow files (.github/workflows/*.yml|yaml), sorted, as project paths. */
+export function workflowFiles(project) {
+  let names;
+  try {
+    names = fs.readdirSync(path.join(project, '.github', 'workflows'));
+  } catch {
+    return [];
+  }
+  return names.filter((n) => /\.ya?ml$/.test(n)).sort().map((n) => `.github/workflows/${n}`);
+}
+
+/** The verdict from check_workflows.py's run ({code, text}). Returns {fail, skipped, note}. */
+export function evaluateWorkflows(r) {
+  const m = /workflows: (\d+) parsed, (\d+) failed/.exec(r.text);
+  if (!m) return { fail: false, skipped: true, note: `workflow YAML check could not run (exit ${r.code}), skipped` };
+  if (r.code === 0 && m[2] === '0') return { fail: false, skipped: false, note: `workflows ${m[1]} YAML ok` };
+  return { fail: true, skipped: false, note: `workflows ${m[2]} of ${m[1]} YAML failed (see build/workflows.log)` };
+}
+
+async function workflowStep(o) {
+  const files = workflowFiles(o.project);
+  if (files.length === 0) return { fail: false, note: 'workflows: none' };
+  const uv = spawnSync('uv', ['--version'], { encoding: 'utf8', timeout: 60_000, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  if (uv.status !== 0) {
+    process.stdout.write('run_tests: workflow YAML check unavailable (no uv), skipped\n');
+    return { fail: false, note: 'workflow YAML check unavailable (no uv), skipped' };
+  }
+  const script = path.join(LIB, 'check_workflows.py');
+  const args = ['run', '--no-project', '--quiet', '--with', `pyyaml==${PYYAML_VERSION}`, 'python', '-I', script, ...files];
+  const log = path.join(o.project, 'build', 'workflows.log');
+  const r = await run('uv', args, { cwd: o.project, log, quiet: true, timeoutS: 300 });
+  const v = evaluateWorkflows(r);
+  process.stdout.write(`run_tests: ${v.note}\n`);
+  return v;
 }
 
 // gdformat's output differs between gdtoolkit releases, so the fatal format check uses the pinned
@@ -454,7 +498,9 @@ async function ensureNpm(o, dir) {
 /** fit: BRIEF 7.5, tools/fit_check on every FIT file the sims wrote. Extension point. */
 async function stepFit(o) {
   // BRIEF 7.5: every FIT the simulations wrote must decode with zero errors.
-  const dirs = ['build/sims', 'build/rides_test', 'build/scenarios'].filter((d) => fs.existsSync(path.join(o.project, d)));
+  const dirs = ['build/sims', 'build/rides_test', 'build/scenarios', 'build/core_stack_test'].filter((d) =>
+    fs.existsSync(path.join(o.project, d)),
+  );
   if (dirs.length === 0) return { status: 'SKIP', note: 'no FIT files written (run the sim step first)' };
   const npm = await ensureNpm(o, 'tools/fit_check');
   const r = await run(process.execPath, ['tools/fit_check/check.mjs', ...dirs], {
@@ -468,6 +514,24 @@ async function stepFit(o) {
 }
 
 const TEST_FILE_RE = /(^test\.[cm]?js$)|(^test-.+\.[cm]?js$)|([.\-_]test\.[cm]?js$)/;
+
+/**
+ * Every tests/games/<id>/ folder that holds Node tests (sorted), so a game's own Node tests (its
+ * e2e_check unit tests, for example) run in the node step next to NODE_SUITES.
+ */
+export function gameNodeSuites(project) {
+  let entries;
+  try {
+    entries = fs.readdirSync(path.join(project, 'tests', 'games'), { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+    .map((e) => `tests/games/${e.name}`)
+    .filter((d) => hasNodeTests(path.join(project, d)))
+    .sort();
+}
 
 function hasNodeTests(dir) {
   const walk = (d, inTestDir) => {
@@ -496,7 +560,7 @@ async function stepNode(o) {
   const results = [];
   let ran = 0;
   let failed = 0;
-  for (const suite of NODE_SUITES) {
+  for (const suite of [...NODE_SUITES, ...gameNodeSuites(o.project)]) {
     const dir = path.join(o.project, suite);
     if (!fs.existsSync(dir)) {
       results.push(`${suite} SKIP (missing)`);
