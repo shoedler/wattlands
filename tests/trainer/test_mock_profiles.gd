@@ -506,15 +506,18 @@ func test_surge_fires_the_real_gesture_recognizer() -> void:
 	if not _recognizer_is_implemented():
 		pending("GestureRecognizer is still the W0 stub in this worktree; runs after the W2 merge")
 		return
-	var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": 3})
-	m.set_target_power(200)
-	_recognizer = GestureRecognizer.new()
-	_recognizer.configure(FTP, true)
-	_recognizer.set_erg(true)
-	_recognized_surges = 0
-	m.sample_received.connect(_feed_recognizer)
-	_run(m, 650.0)
-	assert_eq(_recognized_surges, 10, "the test fires 10 surges and expects 10 gestures (C30)")
+	for seed in [3, 11]:
+		for dropouts: bool in [false, true]:
+			var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": seed, "dropouts": dropouts})
+			m.set_target_power(200)
+			_recognizer = GestureRecognizer.new()
+			_recognizer.configure(FTP, true)
+			_recognizer.set_erg(true)
+			_recognized_surges = 0
+			m.sample_received.connect(_feed_recognizer)
+			_run(m, 650.0)
+			assert_eq(_recognized_surges, 10,
+				"the test fires 10 surges and expects 10 gestures (C30; seed %d, dropouts %s)" % [seed, dropouts])
 
 
 func _feed_recognizer(s: TrainerSample) -> void:
@@ -522,17 +525,16 @@ func _feed_recognizer(s: TrainerSample) -> void:
 		_recognized_surges += 1
 
 
+## The W0 stub's not_pedaling() is always false; any implementation reports a 0 W, 0 rpm
+## sample as not pedaling (BRIEF 3.5's shared detector). This probe never depends on the surge
+## rule itself, so a real recognizer that misses surges fails the test instead of skipping it.
 func _recognizer_is_implemented() -> bool:
 	var g := GestureRecognizer.new()
 	g.configure(FTP, true)
-	g.set_erg(true)
-	var fired := false
-	for i in 20:
-		var lifted := i >= 15
-		var got := g.on_sample(TrainerSample.make(float(i + 1), 200.0, 120.0 if lifted else 90.0, 48.0 if lifted else 36.0))
-		if got.has(Wl.G_SURGE):
-			fired = true
-	return fired
+	g.set_erg(false)
+	for i in 3:
+		g.on_sample(TrainerSample.make(float(i + 1), 0.0, 0.0, 0.0))
+	return g.not_pedaling()
 
 
 func test_surge_sim_pct_rides_n_pct_ftp_in_sim() -> void:
