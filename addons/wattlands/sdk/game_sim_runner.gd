@@ -390,6 +390,10 @@ func setup(p_args: Dictionary) -> String:
 		"registry": registry, "progress_path": _progress_path(0, game_id),
 		"content_overrides": (ov as Dictionary).duplicate(true),
 		"fit_paths": {peer_ids[0]: _fit_targets[0]}, "input_router": null,
+		# No per-session nonce: a simulation's results.session_id stays game/content/seed, so two
+		# runs with the same arguments keep the same deterministic_hash (each run has its own
+		# temp profile, so the id never meets an earlier session's progress).
+		"session_nonce": "",
 	}
 	var err := host.setup(cfg)
 	if err != "":

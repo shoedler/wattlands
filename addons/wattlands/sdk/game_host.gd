@@ -187,7 +187,10 @@ func _process(delta: float) -> void:
 ##   pause that was not the rider's own, resumes it; false: the GameHost never pauses or
 ##   resumes on actions or gestures and the app calls pause()/resume() itself; either way
 ##   the SOLO coasting and stop_5s pause, LocalRider.pause_requested, still pauses, BRIEF
-##   4.6.4). A CLIENT's game, players, options and seed come from the host's session_start:
+##   4.6.4), session_nonce (String appended to results.session_id as
+##   "<game>/<content>/<seed>/<nonce>"; default a fresh UTC-millisecond nonce, so every
+##   session's id is unique; "" keeps "<game>/<content>/<seed>", which GameSimRunner passes
+##   for deterministic reports). A CLIENT's game, players, options and seed come from the host's session_start:
 ##   config.session_start (the message that opened the session, which the app shell received
 ##   before this GameHost existed) is applied on the first step(), else the first
 ##   session_start from the net.
@@ -543,6 +546,13 @@ func _init_session(players: Array[PlayerSlot], content_id: String, p_seed: int, 
 		_slots[p.peer_id] = p
 	var game_id := str(manifest.get("id", ""))
 	session_id = "%s/%s/%d" % [game_id, content_id, p_seed]
+	if role != Wl.CLIENT:
+		# Unique per session (W3 SDK-5): two sessions with the same game, content and seed in one
+		# profile (the --seed flag) must not share an id, or apply_progress's documented
+		# "skip a repeated session_id" would credit the second nothing. Clients take the host's.
+		var nonce := str(config.get("session_nonce", _new_session_nonce()))
+		if nonce != "":
+			session_id += "/" + nonce
 	ctx = GameContext.new()
 	ctx.game_id = game_id
 	ctx.manifest = manifest.duplicate(true)
@@ -1762,6 +1772,17 @@ func _normalized_ack(rec: Dictionary, id: int = 0, requested: Dictionary = {}) -
 	if not out.has("t"):
 		out["t"] = clock.game_tick * DT if clock != null else 0.0
 	return out
+
+
+## A nonce for results.session_id: the host's UTC start in milliseconds (hex) plus a counter for
+## sessions started in the same millisecond in this process. Not game state: it never reaches
+## the rules or ctx.rng, only the results' id.
+static var _nonce_count: int = 0
+
+
+static func _new_session_nonce() -> String:
+	_nonce_count += 1
+	return "%x-%x" % [int(Time.get_unix_time_from_system() * 1000.0), _nonce_count]
 
 
 static func _sorted_players(v: Variant) -> Array[PlayerSlot]:

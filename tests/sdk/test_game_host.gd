@@ -423,7 +423,8 @@ func test_results_progress_and_fit_after_the_cooldown() -> void:
 	assert_eq(res.grade, "B")
 	assert_eq(res.rows.size(), 2)
 	assert_gt(float(res.row(1)["kj"]), 0.0, "ctx.stats is final in results()")
-	assert_eq(res.session_id, "fx_solo/tiny/7")
+	assert_string_starts_with(res.session_id, "fx_solo/tiny/7/", "game/content/seed plus the session's nonce")
+	assert_eq(res.session_id, host.session_id)
 	assert_true(FileAccess.file_exists(host.ctx.progress.path), "the store is saved")
 	var saved: Variant = JSON.parse_string(FileAccess.get_file_as_string(host.ctx.progress.path))
 	assert_eq(float(saved["xp"]), 10.0)
@@ -855,3 +856,22 @@ func test_ctx_routers_hand_out_no_local_rider() -> void:
 	# The routers still drive the riders simulated here.
 	ctx.hud.power_band(1, 120.0, 160.0)
 	assert_eq(_rider(b).power_band(), Vector2(120.0, 160.0))
+
+
+## W3 SDK-5 (GAME_SDK 15): results.session_id is unique per session, so a game that skips a
+## repeated id (the template's apply_progress) credits a second session with the same game,
+## content and seed. session_nonce "" (GameSimRunner) keeps the deterministic game/content/seed.
+func test_session_ids_are_unique_per_session_even_with_the_same_seed() -> void:
+	var a := _solo("tiny")
+	var b := _solo("tiny")
+	assert_eq(a["err"], "")
+	assert_eq(b["err"], "")
+	var ida := _host(a).session_id
+	var idb := _host(b).session_id
+	assert_string_starts_with(ida, "fx_solo/tiny/7/")
+	assert_string_starts_with(idb, "fx_solo/tiny/7/")
+	assert_ne(ida, idb, "two sessions with seed 7 get two ids")
+	var c := _solo("tiny", {"session_nonce": ""})
+	assert_eq(_host(c).session_id, "fx_solo/tiny/7", "no nonce: the deterministic id")
+	var d := _solo("tiny", {"session_nonce": "room-K7QX2M-3"})
+	assert_eq(_host(d).session_id, "fx_solo/tiny/7/room-K7QX2M-3")
