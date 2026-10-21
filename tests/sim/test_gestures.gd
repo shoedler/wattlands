@@ -403,6 +403,98 @@ func test_reset_clears_state_but_keeps_configuration() -> void:
 	assert_eq(_feed(_g, 0.0, 4, 150.0), [[3.0, Wl.G_PEDAL_START]], "time may restart after a reset")
 
 
+func test_random_streams_keep_the_rules() -> void:
+	# Seeded random rides (stops, soft pedaling, steady pedaling, surges, 0.8-1.2 s jitter) in
+	# every ERG/solo combination. Checks every fired gesture against BRIEF 3.5 and that each
+	# long enough stop fires exactly what it should.
+	var rng := SeededRng.make(31337)
+	var fired_total := {}
+	for run in 120:
+		var in_erg := run % 2 == 1
+		var solo := run % 4 < 2
+		var g := GestureRecognizer.new()
+		g.configure(FTP, solo)
+		g.set_erg(in_erg)
+		var t := 0.0
+		var stop_first := -1.0
+		var stop_last := -1.0
+		var stop_fired: Array = []
+		var cond_since := -1.0
+		var armed := true
+		var surge_ok_since := -1.0
+		for seg in 25:
+			var kind := SeededRng.range_i(rng, 0, 3)
+			var n := SeededRng.range_i(rng, 1, 12)
+			var base := SeededRng.range_f(rng, 80.0, 300.0)
+			for k in n:
+				var power := 0.0
+				var cadence := 0.0
+				match kind:
+					0:
+						power = SeededRng.range_f(rng, 0.0, 14.0)
+						cadence = SeededRng.range_f(rng, 0.0, 19.0)
+					1:
+						power = SeededRng.range_f(rng, 15.0, 55.0)
+						cadence = SeededRng.range_f(rng, 20.0, 39.0)
+					2:
+						power = base
+						cadence = 90.0
+					_:
+						power = base * (1.6 if k < 3 else 1.0)
+						cadence = 90.0 * (1.2 if k < 3 else 1.0)
+				var speed := cadence * 0.4
+				var np := GestureRecognizer.is_not_pedaling(power, cadence)
+				var cond := not np and (cadence >= 40.0 or power >= 0.3 * FTP)
+				if np:
+					if stop_first < 0.0:
+						stop_first = t
+						stop_fired = []
+					stop_last = t
+					armed = true
+					cond_since = -1.0
+					surge_ok_since = -1.0
+				else:
+					if stop_first >= 0.0:
+						_check_stop(stop_first, stop_last, stop_fired, in_erg, solo, "run %d" % run)
+						stop_first = -1.0
+					if cond and cond_since < 0.0:
+						cond_since = t
+					elif not cond:
+						cond_since = -1.0
+				var out := g.on_sample(_s(t, power, cadence, speed))
+				for name: StringName in out:
+					fired_total[name] = true
+					var tag := "run %d t %.2f %s" % [run, t, name]
+					match name:
+						Wl.G_PEDAL_START:
+							assert_true(armed, tag + ": once per start")
+							assert_true(cond and t - cond_since >= 3.0 - 1e-6, tag + ": 3 s of pedaling")
+							armed = false
+							surge_ok_since = t
+						Wl.G_SURGE:
+							assert_false(np, tag + ": never while not pedaling")
+							assert_true(surge_ok_since >= 0.0, tag + ": after pedal_start")
+						Wl.G_COAST, Wl.G_STOP_5S:
+							assert_true(np, tag + ": only while stopped")
+							stop_fired.append(name)
+				t += SeededRng.range_f(rng, 0.8, 1.2)
+		if stop_first >= 0.0:
+			_check_stop(stop_first, stop_last, stop_fired, in_erg, solo, "run %d (end)" % run)
+	for name in Wl.GESTURES:
+		assert_true(fired_total.has(name), "%s seen in the sweep" % name)
+
+
+## What one stop (first and last stopped sample) must have fired.
+func _check_stop(first: float, last: float, fired: Array, in_erg: bool, solo: bool, what: String) -> void:
+	var held := last - first
+	var want: Array = []
+	if not in_erg and held >= 3.0 - 1e-6:
+		want.append(Wl.G_COAST)
+	if not in_erg and solo and held >= 5.0 - 1e-6:
+		want.append(Wl.G_STOP_5S)
+	assert_eq(fired, want, "%s: stop from %.2f to %.2f (erg %s, solo %s)" % [what, first, last, in_erg, solo])
+
+
 func test_returned_and_emitted_gestures_are_wl_names() -> void:
 	var seen := {}
 	var g := GestureRecognizer.new()

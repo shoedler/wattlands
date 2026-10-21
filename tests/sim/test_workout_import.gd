@@ -481,9 +481,12 @@ func test_empty_and_missing() -> void:
 	assert_string_contains(str(no_workout["error"]), "<workout>")
 	var missing := WorkoutImport.parse_zwo_file(DIR + "does_not_exist.zwo")
 	assert_false(missing["ok"])
-	assert_string_contains(str(missing["error"]), "missing file")
-	for key in ["phases", "blocks", "clamps", "warnings", "name", "description"]:
+	assert_string_contains(str(missing["error"]), "missing")
+	assert_string_contains(str(missing["error"]), "does_not_exist.zwo", "names the path")
+	for key in ["phases", "blocks", "clamps", "warnings", "name", "description", "clamp_records",
+			"prefix_inserted", "total_s"]:
 		assert_true(missing.has(key), "missing-file result has %s" % key)
+	assert_true(missing["phases"] is Array and (missing["phases"] as Array).is_empty())
 
 
 func test_result_shape() -> void:
@@ -528,6 +531,187 @@ func test_deterministic() -> void:
 	assert_eq(JSON.stringify(da), JSON.stringify(db))
 	assert_eq(a["clamps"], b["clamps"])
 	assert_eq(a["warnings"], b["warnings"])
+
+
+func test_byte_order_mark_is_ignored() -> void:
+	var xml := """<?xml version="1.0" encoding="UTF-8"?><workout_file><name>BOM</name><workout>
+		<SteadyState Duration="300" Power="0.6"/></workout></workout_file>"""
+	var r := WorkoutImport.parse_zwo(WorkoutImport.BOM + xml)
+	assert_true(r["ok"], str(r["error"]))
+	assert_eq(r["name"], "BOM")
+	assert_eq(_phases(r).size(), 1)
+
+
+func test_repeat_is_limited() -> void:
+	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+		<SteadyState Duration="300" Power="0.5"/>
+		<IntervalsT Repeat="100000" OnDuration="10" OffDuration="10" OnPower="0.6" OffPower="0.5"/>
+		</workout></workout_file>""")
+	assert_true(r["ok"], str(r["error"]))
+	assert_eq(int(r["blocks"][1]["repeat"]), WorkoutImport.MAX_REPEAT)
+	assert_eq(_phases(r).size(), 1 + 2 * WorkoutImport.MAX_REPEAT)
+	var w: Array = r["warnings"]
+	assert_eq(w.size(), 1, "%s" % [w])
+	assert_string_contains(str(w[0]), "Block 2: Repeat 100000 was limited to 200")
+	var exact := WorkoutImport.parse_zwo("""<workout_file><workout>
+		<IntervalsT Repeat="200.9" OnDuration="10" OffDuration="10" OnPower="0.6" OffPower="0.5"/>
+		</workout></workout_file>""")
+	assert_eq(int(exact["blocks"][0]["repeat"]), 200)
+	assert_eq((exact["warnings"] as Array).size(), 0, "200 itself is allowed")
+
+
+func test_workouts_longer_than_a_day_are_rejected() -> void:
+	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+		<SteadyState Duration="86401" Power="0.5"/></workout></workout_file>""")
+	assert_false(r["ok"])
+	assert_string_contains(str(r["error"]), "longer than 24 hours")
+	assert_eq(_phases(r).size(), 0)
+	var day := WorkoutImport.parse_zwo("""<workout_file><workout>
+		<IntervalsT Repeat="144" OnDuration="300" OffDuration="300" OnPower="0.6" OffPower="0.5"/>
+		</workout></workout_file>""")
+	assert_true(day["ok"], "exactly 24 h is accepted")
+	assert_almost_eq(float(day["total_s"]), WorkoutImport.MAX_TOTAL_S, EPS)
+
+
+func test_split_block_keeps_the_long_phase_cap() -> void:
+	# A 600 s Warmup ramp 30 -> 120%: split at 300 s (75%), the first part clamped to 65%; the
+	# second part is only 300 s long, but its block is 600 s, so it caps at 105%.
+	var r := WorkoutImport.parse_zwo("""<workout_file><workout>
+		<Warmup Duration="600" PowerLow="0.30" PowerHigh="1.20"/>
+		<SteadyState Duration="120" Power="0.5"/>
+		</workout></workout_file>""")
+	assert_true(r["ok"], str(r["error"]))
+	assert_false(r["prefix_inserted"])
+	var ph := _phases(r)
+	assert_eq(ph.size(), 3)
+	_assert_erg(ph[0], Wl.WARMUP, 30.0, 65.0, 300.0, true, "inside the warm-up")
+	_assert_erg(ph[1], Wl.WARMUP, 75.0, 105.0, 300.0, false, "the block's second half")
+	assert_eq(_rules(r), [WorkoutImport.RULE_WARMUP_SPLIT, WorkoutImport.RULE_WARMUP,
+		WorkoutImport.RULE_LONG_PHASE])
+	var rec: Dictionary = (r["clamp_records"] as Array)[2]
+	assert_eq(rec["phase"], 1)
+	assert_eq(rec["from_pct"], [75.0, 120.0])
+	assert_eq(rec["to_pct"], [75.0, 105.0])
+	_assert_plan_safe(ph, "split_long")
+
+
+func test_random_workouts_always_import_safely() -> void:
+	# Seeded random .zwo files with every tag, powers 20-180% and lengths 5-900 s: each must
+	# import (ok), satisfy the PlanValidator's rules, never make a block harder, keep laps and
+	# be deterministic.
+	var rng := SeededRng.make(20261021)
+	var clamped := 0
+	for n in 300:
+		var xml := _random_zwo(rng)
+		var r := WorkoutImport.parse_zwo(xml)
+		var what := "random %d" % n
+		assert_true(r["ok"], "%s: %s" % [what, r["error"]])
+		if not bool(r["ok"]):
+			continue
+		var ph := _phases(r)
+		_assert_plan_safe(ph, what)
+		var total := 0.0
+		for p: PlanPhase in ph:
+			total += p.duration_s
+		assert_almost_eq(float(r["total_s"]), total, EPS, what + ": total_s")
+		_assert_never_harder(r, what)
+		for i in ph.size():
+			var p: PlanPhase = ph[i]
+			assert_false(p.label.is_empty() or p.label.begins_with("SIM_ZWO_"), what + ": label")
+			if not p.lap:
+				var prev: PlanPhase = ph[i - 1] if i > 0 else null
+				assert_true(prev != null and prev.meta.get("zwo_block") == p.meta.get("zwo_block"),
+					what + ": only a split part continues its block's lap")
+		var again := WorkoutImport.parse_zwo(xml)
+		assert_eq(_dicts(_phases(again)), _dicts(ph), what + ": deterministic")
+		assert_eq(again["clamps"], r["clamps"], what + ": same clamps")
+		if not (r["clamps"] as Array).is_empty():
+			clamped += 1
+	assert_gt(clamped, 100, "the sweep exercises the clamps")
+
+
+func test_imported_plans_pass_the_plan_validator() -> void:
+	# Becomes active once sdk-runtime's PlanValidator replaces the W0 stub (BRIEF 3.7: the
+	# importer clamps, the validator only accepts or rejects): every fixture and random
+	# workout must validate with no error and no warning.
+	var probe := PlanValidator.validate(EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50.0, 300.0, "w")]))
+	if (probe["errors"] as Array).has("not implemented"):
+		pending("PlanValidator is still the W0 stub in this worktree")
+		return
+	var results: Array = []
+	for f in ["all_tags.zwo", "caps.zwo", "easy_start.zwo", "limits_105.zwo", "limits_120.zwo",
+			"no_warmup.zwo", "real_world.zwo", "spacing.zwo", "warmup_clamp.zwo", "warmup_split.zwo"]:
+		results.append([f, _load(f)])
+	var rng := SeededRng.make(7)
+	for n in 100:
+		results.append(["random %d" % n, WorkoutImport.parse_zwo(_random_zwo(rng))])
+	for item: Array in results:
+		var r: Dictionary = item[1]
+		assert_true(r["ok"], str(item[0]))
+		var v := PlanValidator.validate(WorkoutImport.to_plan(r))
+		assert_true(v["ok"], "%s: %s" % [item[0], v["errors"]])
+		assert_eq((v["warnings"] as Array).size(), 0, "%s: %s" % [item[0], v["warnings"]])
+		var fin := PlanValidator.finalize(WorkoutImport.to_plan(r))
+		assert_not_null(fin, str(item[0]))
+		if fin != null:
+			assert_true(fin.cooldown_appended)
+			assert_eq(fin.size(), (r["phases"] as Array).size() + 1, "only the cool-down added")
+
+
+func _dicts(phases: Array) -> String:
+	var out: Array = []
+	for p: PlanPhase in phases:
+		out.append(p.to_dict())
+	return JSON.stringify(out)
+
+
+## A random .zwo with 1-10 blocks; the first one is always supported.
+func _random_zwo(rng: RandomNumberGenerator) -> String:
+	var lines: Array[String] = []
+	var count := SeededRng.range_i(rng, 1, 10)
+	for i in count:
+		var pick := SeededRng.range_i(rng, 0, 5 if i == 0 else 6)
+		var d := SeededRng.range_i(rng, 5, 900)
+		var a := SeededRng.range_f(rng, 0.2, 1.8)
+		var b := SeededRng.range_f(rng, 0.2, 1.8)
+		match pick:
+			0:
+				lines.append('<SteadyState Duration="%d" Power="%.2f"/>' % [d, a])
+			1:
+				lines.append('<Warmup Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, minf(a, b), maxf(a, b)])
+			2:
+				lines.append('<Ramp Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, a, b])
+			3:
+				lines.append('<Cooldown Duration="%d" PowerLow="%.2f" PowerHigh="%.2f"/>' % [d, maxf(a, b), minf(a, b)])
+			4:
+				lines.append('<IntervalsT Repeat="%d" OnDuration="%d" OffDuration="%d" OnPower="%.2f" OffPower="%.2f"/>'
+					% [SeededRng.range_i(rng, 1, 8), SeededRng.range_i(rng, 5, 300),
+					SeededRng.range_i(rng, 0, 300), a, b])
+			5:
+				lines.append('<FreeRide Duration="%d"/>' % SeededRng.range_i(rng, 5, 400))
+			_:
+				lines.append('<MaxEffort Duration="%d"/>' % d)
+	return "<workout_file><name>Random</name><workout>\n%s\n</workout></workout_file>" % "\n".join(lines)
+
+
+## No ERG phase is above its block's own highest value (the importer only lowers targets).
+func _assert_never_harder(r: Dictionary, what: String) -> void:
+	var raw_peak := {}
+	for b: Dictionary in r["blocks"]:
+		var peak := maxf(float(b["power_lo"]), float(b["power_hi"]))
+		if str(b["tag"]) == WorkoutImport.TAG_INTERVALS:
+			peak = maxf(float(b["on_power"]), float(b["off_power"]))
+		raw_peak[int(b["index"])] = roundf(peak * 10000.0) / 100.0
+	for p: PlanPhase in r["phases"]:
+		var block := int(p.meta.get("zwo_block", -1))
+		if p.mode != Wl.ERG:
+			continue
+		if block == 0:
+			assert_true(p.peak_pct() <= WorkoutImport.PREFIX_TO_PCT + EPS, what + ": prefix")
+			continue
+		assert_true(raw_peak.has(block), "%s: phase points at block %d" % [what, block])
+		assert_true(p.peak_pct() <= float(raw_peak.get(block, 0.0)) + EPS,
+			"%s: block %d %.2f <= %.2f" % [what, block, p.peak_pct(), float(raw_peak.get(block, 0.0))])
 
 
 func test_non_bike_sport_type_warns() -> void:
