@@ -14,9 +14,12 @@ extends Node
 ##   screenshot), so those never touch Bluetooth; with --mock-trainer, start() never creates
 ##   an FtmsConnectionManager at all.
 ## - start() is idempotent. The mock is MockTrainer.from_spec(spec, profile FTP, {seed
-##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg}); a bare --mock-trainer
-##   means "erg". The FTMS path adds an FtmsConnectionManager child and calls
-##   start(true); its trainer_ready device becomes device() and its last_device() is saved
+##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg, keyboard}); a bare
+##   --mock-trainer means "erg". keyboard (BRIEF 4.2: W/S +-10 W, A/D cadence, read only while
+##   the app window has focus) is on only with --mock-keyboard (W2r2); W/S/A/D then also move
+##   menu focus, since they are the InputRouter's movement bindings too. The FTMS path adds
+##   an FtmsConnectionManager child and calls start(true); its trainer_ready device becomes
+##   device() and its last_device() is saved
 ##   in Settings. Tests pass connection_factory so nothing touches Bluetooth.
 ## - The rider is created as soon as a device exists: LocalRider.setup(1, profile,
 ##   profile.to_slot(1, Settings scaling_mode), device, {multiplayer false, record false}),
@@ -166,6 +169,9 @@ func use_mock(spec: String) -> void:
 		"cp_w": p.cp_w,
 		"wprime_j": p.wprime_j,
 		"weight_kg": p.weight_kg,
+		# BRIEF 4.2 keyboard control (W/S power, A/D cadence), only with the explicit flag:
+		# the keys are also the menus' up/down/left/right bindings (W2r2).
+		"keyboard": CmdLine.get_bool("mock-keyboard", false),
 	})
 	m.name = "MockTrainer"
 	_mock_spec = m.spec
