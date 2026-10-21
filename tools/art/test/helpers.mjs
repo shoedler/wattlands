@@ -41,11 +41,18 @@ export function childEnv({ dummyKey = false, extra = {} } = {}) {
 
 /**
  * Runs generate.mjs in a child process (async, so an in-process mock keeps serving).
- * Options: env (required: from childEnv), preload (a module URL for --import), timeoutMs.
+ * Options: env (required: from childEnv), preload (a module URL for --import), timeoutMs, and
+ * refusal: true for an art-lock refusal case, the only kind of run allowed without --mock; such a
+ * run must use the no-network preload with NO_NET_LOG set, so it could not connect anywhere even if
+ * the lock failed.
  */
-export function runGenerate(args, { env, preload = null, timeoutMs = 60000 } = {}) {
+export function runGenerate(args, { env, preload = null, timeoutMs = 60000, refusal = false } = {}) {
   if (!env) throw new Error('runGenerate needs an explicit env from childEnv()');
   if (Object.hasOwn(env, 'WATTLANDS_ALLOW_ART')) throw new Error('tests never pass WATTLANDS_ALLOW_ART to generate.mjs');
+  if (!args.some((a) => a.startsWith('--mock='))) {
+    if (!refusal) throw new Error('every generate.mjs run passes --mock except the art-lock refusal cases (BRIEF 7.1)');
+    if (preload !== NO_NETWORK_PRELOAD || !env.NO_NET_LOG) throw new Error('a refusal case runs under the no-network preload with NO_NET_LOG set');
+  }
   const nodeArgs = preload ? ['--import', preload, GENERATE, ...args] : [GENERATE, ...args];
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, nodeArgs, { env, stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });

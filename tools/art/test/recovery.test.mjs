@@ -177,3 +177,76 @@ test('a record from another host (real fal in a mock run) is left alone and neve
   assert.equal(after[1].status, 'ok');
   assert.equal(after[1].selected, true);
 });
+
+test('a --reroll whose download failed is recovered by the next run and wins over the older cached result', async (t) => {
+  const { mock, root } = await setup(t);
+  assert.equal((await gen(root, mock, ['--only=boat'])).code, 0);
+  const first = readManifest(root, GAME).requests[0].request_id;
+  mock.configure({ fail_downloads: 3 });
+  assert.equal((await gen(root, mock, ['--reroll=boat'])).code, 1);
+  let boats = readManifest(root, GAME).requests;
+  assert.equal(boats[1].status, 'download_failed');
+  assert.equal(boats.find((e) => e.selected).request_id, first, 'the failed reroll is not selected yet');
+  const r = await gen(root, mock, ['--only=boat']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, new RegExp(`boat: recovered ${boats[1].request_id} without paying again`));
+  assert.equal(mock.state.counts.submit, 2, 'the paid reroll is fetched, not paid again');
+  boats = readManifest(root, GAME).requests;
+  assert.equal(boats.length, 2);
+  assert.equal(boats.find((e) => e.selected).request_id, boats[1].request_id, 'the newest paid result is selected');
+  // From now on the newer result is the cache hit.
+  const again = await gen(root, mock, ['--only=boat']);
+  assert.match(again.stdout, new RegExp(`boat: cached ${boats[1].request_id}`));
+});
+
+test('an unfinished newer request gets one status check, not a long wait, while an older result is cached', async (t) => {
+  const { mock, root } = await setup(t);
+  assert.equal((await gen(root, mock, ['--only=boat'])).code, 0);
+  const first = readManifest(root, GAME).requests[0].request_id;
+  mock.configure({ polls_to_complete: 1000 });
+  assert.equal((await gen(root, mock, ['--reroll=boat', '--timeout-s=0.2'])).code, 1);
+  const pending = readManifest(root, GAME).requests[1];
+  assert.equal(pending.status, 'timeout');
+  const statusBefore = mock.state.counts.status;
+  const started = Date.now();
+  const r = await gen(root, mock, ['--only=boat', '--timeout-s=60', '--poll-ms=200']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.ok(Date.now() - started < 20000, 'no wait for the unfinished request');
+  assert.equal(mock.state.counts.status - statusBefore, 1, 'one status check');
+  assert.match(r.stdout, new RegExp(`boat: cached ${first}`));
+  assert.equal(readManifest(root, GAME).requests[1].status, 'timeout', 'still recoverable');
+  // Once fal has finished it, the next run fetches it for free and selects it.
+  mock.configure({ polls_to_complete: 1 });
+  const r2 = await gen(root, mock, ['--only=boat']);
+  assert.equal(r2.code, 0, r2.stderr);
+  assert.match(r2.stdout, new RegExp(`boat: recovered ${pending.request_id}`));
+  assert.equal(mock.state.counts.submit, 2);
+  assert.equal(readManifest(root, GAME).requests.find((e) => e.selected).request_id, pending.request_id);
+});
+
+test('a --select choice whose raw image is missing is fetched again for free and stays selected', async (t) => {
+  const { mock, root } = await setup(t);
+  assert.equal((await gen(root, mock, ['--only=boat'])).code, 0);
+  assert.equal((await gen(root, mock, ['--reroll=boat'])).code, 0);
+  const [older, newer] = readManifest(root, GAME).requests;
+  const sel = await runGenerate([`--game=${GAME}`, `--root=${root}`, `--mock=${mock.url}`, `--select=boat:${older.request_id}`], { env: childEnv() });
+  assert.equal(sel.code, 0, sel.stderr);
+  fs.rmSync(path.join(root, older.cache));
+  const r = await gen(root, mock, ['--only=boat']);
+  assert.equal(r.code, 0, r.stderr);
+  assert.match(r.stdout, new RegExp(`boat: fetched the selected result ${older.request_id} again`));
+  assert.equal(mock.state.counts.submit, 2);
+  const m = readManifest(root, GAME);
+  const selected = m.requests.find((e) => e.selected);
+  assert.equal(selected.request_id, older.request_id);
+  assert.equal(selected.selected_by, 'user');
+  assert.ok(fs.existsSync(path.join(root, older.cache)));
+  // Re-fetching an image that was already fine (the newer one, after a cache wipe) keeps the choice too.
+  fs.rmSync(path.join(root, '.art_cache'), { recursive: true });
+  const r2 = await gen(root, mock, ['--only=boat']);
+  assert.equal(r2.code, 0, r2.stderr);
+  assert.equal(readManifest(root, GAME).requests.find((e) => e.selected).request_id, older.request_id);
+  assert.ok(fs.existsSync(path.join(root, older.cache)));
+  assert.ok(fs.existsSync(path.join(root, newer.cache)));
+  assert.equal(mock.state.counts.submit, 2);
+});

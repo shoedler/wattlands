@@ -55,8 +55,12 @@ function cacheFileExists(root, entry) {
   return typeof entry.cache === 'string' && entry.cache !== '' && fs.existsSync(path.join(root, entry.cache));
 }
 
+/** When a request was made: its submit time (or, for one never submitted, its creation time). */
+const requestedMs = (e) => ms(e.submitted_at) || ms(e.created_at);
+
+/** Newest request first; "newest" is when the request was made, not when its image was fetched. */
 function newestFirst(list) {
-  return [...list].sort((a, b) => ms(b.downloaded_at ?? b.completed_at ?? b.submitted_at) - ms(a.downloaded_at ?? a.completed_at ?? a.submitted_at));
+  return [...list].sort((a, b) => requestedMs(b) - requestedMs(a));
 }
 
 /** Manifest entries of `sprite` with exactly this endpoint and input. */
@@ -277,9 +281,12 @@ class Run {
     }
   }
 
-  /** Polls a submitted request to completion, fetches its result and downloads the image. */
-  async complete(entry) {
-    const deadline = Date.now() + this.opts.timeoutS * 1000;
+  /**
+   * Polls a submitted request to completion, fetches its result and downloads the image. With
+   * maxWaitS 0 it asks for the status once and gives up (still recoverable) unless fal is done.
+   */
+  async complete(entry, maxWaitS = this.opts.timeoutS) {
+    const deadline = Date.now() + maxWaitS * 1000;
     let errors = 0;
     let st = null;
     for (;;) {
@@ -297,9 +304,9 @@ class Run {
         st = null;
       }
       if (st?.status === 'COMPLETED') break;
-      if (Date.now() > deadline) {
+      if (Date.now() >= deadline) {
         entry.status = 'timeout';
-        entry.error = `not completed after ${this.opts.timeoutS} s (status ${st?.status ?? 'unknown'})`;
+        entry.error = `not completed after ${maxWaitS} s (status ${st?.status ?? 'unknown'})`;
         this.save();
         return false;
       }
@@ -341,37 +348,67 @@ class Run {
     return ok;
   }
 
-  /** Free paths first: the local cache, a stored image URL, or a request that was paid but not fetched. */
+  /** True when this run may fetch `e`'s image or resume it (a record from another host is left alone). */
+  reachable(e) {
+    const where = e.image_url ?? e.status_url;
+    return Boolean(where) && this.client.allowed(where) && (!e.response_url || this.client.allowed(e.response_url));
+  }
+
+  /**
+   * A result the user picked with --select whose raw image is missing from .art_cache (a fresh
+   * clone, a cleaned cache) is fetched again from its stored image URL, for free, whatever its input.
+   */
+  async refetchUserSelection(id) {
+    const cur = selectedEntry(this.manifest, id);
+    if (!cur || cur.selected_by !== 'user' || cur.status !== 'ok' || cacheFileExists(this.root, cur)) return;
+    if (!cur.image_url || !this.reachable(cur)) {
+      this.err(`warning: ${id}: the selected result ${cur.request_id} has no raw image in .art_cache and no image URL this run may fetch`);
+      return;
+    }
+    const ok = await this.download(cur);
+    this.save();
+    if (ok) this.out(`${id}: fetched the selected result ${cur.request_id} again (${cur.cache})`);
+    else this.err(`warning: ${id}: the selected result ${cur.request_id} could not be fetched again: ${cur.error}`);
+  }
+
+  /**
+   * Free paths first, newest request first: the local cache, a stored image URL, or a request that
+   * was paid but never fetched (for example a --reroll whose download failed). A paid result newer
+   * than the cached one is recovered and wins, so the newest result stays the default; an unfinished
+   * request newer than a cached result gets one status check rather than a long wait.
+   */
   async resolveLocally(p) {
     const id = p.sprite.id;
+    await this.refetchUserSelection(id);
     const hit = findCacheHit(this.manifest, this.root, id, p.endpoint, p.input);
-    if (hit) {
-      this.selectAfterRun(hit, false);
-      this.save();
-      this.stats.cached += 1;
-      this.out(`${id}: cached ${hit.request_id} (${hit.cache})`);
-      return true;
-    }
     for (const e of findRecoverable(this.manifest, this.root, id, p.endpoint, p.input)) {
-      // A record from another host (fal versus the mock) is left exactly as it is.
-      const where = e.image_url ?? e.status_url;
-      if (!where || !this.client.allowed(where) || (e.response_url && !this.client.allowed(e.response_url))) continue;
+      if (hit && requestedMs(e) <= requestedMs(hit)) break;
+      if (!this.reachable(e)) continue;
+      const wasOk = e.status === 'ok';
       let ok = false;
       if (e.image_url) {
         ok = await this.download(e);
         if (!ok && e.status !== 'ok') this.save();
       }
       if (!ok && e.status_url && e.response_url && RECOVERABLE.has(e.status) && !e.image_url) {
-        ok = await this.complete(e);
+        ok = await this.complete(e, hit ? 0 : this.opts.timeoutS);
       }
       if (ok) {
-        this.selectAfterRun(e, true);
+        // Fetching an image that was already fine again is not a new result: a --select choice stays.
+        this.selectAfterRun(e, !wasOk);
         this.save();
         this.stats.recovered += 1;
         this.out(`${id}: recovered ${e.request_id} without paying again (${e.cache})`);
         return true;
       }
       this.save();
+    }
+    if (hit) {
+      this.selectAfterRun(hit, false);
+      this.save();
+      this.stats.cached += 1;
+      this.out(`${id}: cached ${hit.request_id} (${hit.cache})`);
+      return true;
     }
     return false;
   }

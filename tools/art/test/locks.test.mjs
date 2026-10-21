@@ -2,18 +2,22 @@
 // WATTLANDS_ALLOW_ART=1, else generate.mjs refuses before any socket opens; --mock runs need neither;
 // generate.mjs never reads WATTLANDS_NO_NETWORK_INTEGRATIONS, so it behaves the same with it set or unset.
 //
-// The art-lock cases below run without --mock and without WATTLANDS_ALLOW_ART, under a preload that
-// makes every connection attempt throw and records it: the refusals, and one case showing that
-// --dry-run and --select (which contact nothing) need neither the variables nor --mock.
+// The art-lock refusal cases below are the only generate.mjs children that run without --mock. They
+// run without WATTLANDS_ALLOW_ART, under a preload that makes every connection attempt throw and
+// records it (helpers.runGenerate enforces both). The rest of the lock matrix (the permission set
+// without a key) and --dry-run / --select without --mock run main() in this process with a plain env
+// object and a fetch that throws, so no child ever gets WATTLANDS_ALLOW_ART.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { main } from '../lib/generate.mjs';
 import { checkArtLock, EXIT_LOCKED } from '../lib/locks.mjs';
 import {
   ART_DIR,
   childEnv,
+  DUMMY_KEY,
   DUMMY_KEY_PARTS,
   makeRoot,
   mockArgs,
@@ -46,6 +50,7 @@ async function refusal(t, { dummyKey, extra = {} }) {
   const r = await runGenerate([`--game=${GAME}`, `--root=${root}`], {
     env: childEnv({ dummyKey, extra: { ...extra, NO_NET_LOG: log } }),
     preload: NO_NETWORK_PRELOAD,
+    refusal: true,
   });
   return { r, log, root };
 }
@@ -118,16 +123,55 @@ test('--mock runs need neither variable', async (t) => {
   assert.equal(readManifest(root, GAME).requests[0].status, 'ok');
 });
 
-test('--select and --dry-run need neither variable and no --mock', async (t) => {
+/**
+ * Runs generate's main() in this process with `env` (a plain object, never process.env) while
+ * globalThis.fetch, the only network API generate.mjs uses, throws and records every call.
+ */
+async function mainInProcess(argv, env) {
+  const calls = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    throw new Error('blocked by the test');
+  };
+  let stdout = '';
+  let stderr = '';
+  try {
+    const code = await main(argv, env, { stdout: { write: (s) => (stdout += s) }, stderr: { write: (s) => (stderr += s) } });
+    return { code, stdout, stderr, calls };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+test('main(): every environment short of both variables refuses before any request, the permission without a key included', async (t) => {
   const root = rootFor(t);
-  const log = noNetLog(t);
-  const env = childEnv({ extra: { NO_NET_LOG: log } });
-  const dry = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--dry-run'], { env, preload: NO_NETWORK_PRELOAD });
+  for (const env of [
+    {},
+    { FAL_KEY: DUMMY_KEY },
+    { WATTLANDS_ALLOW_ART: '1' },
+    { FAL_KEY: DUMMY_KEY, WATTLANDS_ALLOW_ART: '0' },
+    { FAL_KEY: DUMMY_KEY, WATTLANDS_ALLOW_ART: 'true' },
+  ]) {
+    const r = await mainInProcess([`--game=${GAME}`, `--root=${root}`], env);
+    const what = JSON.stringify(Object.keys(env));
+    assert.equal(r.code, EXIT_LOCKED, what);
+    assert.match(r.stderr, /refusing to call fal/, what);
+    assert.deepEqual(r.calls, [], what);
+    for (const p of DUMMY_KEY_PARTS) assert.equal((r.stdout + r.stderr).includes(p), false, what);
+  }
+  assert.equal(fs.existsSync(path.join(root, 'assets', GAME, 'art_manifest.json')), false);
+});
+
+test('--dry-run and --select need neither variable and no --mock: they contact nothing', async (t) => {
+  const root = rootFor(t);
+  const dry = await mainInProcess([`--game=${GAME}`, `--root=${root}`, '--dry-run'], {});
   assert.equal(dry.code, 0, dry.stderr);
-  const sel = await runGenerate([`--game=${GAME}`, `--root=${root}`, '--select=boat:abc'], { env, preload: NO_NETWORK_PRELOAD });
+  assert.match(dry.stdout, /dry run: nothing contacted/);
+  const sel = await mainInProcess([`--game=${GAME}`, `--root=${root}`, '--select=boat:abc'], {});
   assert.equal(sel.code, 2, 'no such request, but no refusal either');
   assert.match(sel.stderr, /has no request abc/);
-  assert.equal(fs.existsSync(log), false);
+  assert.deepEqual([...dry.calls, ...sel.calls], []);
 });
 
 function normalize(text, mockUrl) {
