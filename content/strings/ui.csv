@@ -53,5 +53,24 @@ UI_GESTURE_PEDAL_START,Start pedaling
 UI_GESTURE_SURGE,Surge
 UI_GESTURE_COAST,Coast
 UI_GESTURE_STOP_5S,Stop for 5 s
+UI_INPUT_KEY,Key {0}
+UI_INPUT_BUTTON,Button {0}
+UI_INPUT_AXIS,Axis {0}{1}
+UI_INPUT_MOUSE,Mouse {0}
+UI_INPUT_VIEW,View
+UI_INPUT_MENU,Menu
+UI_INPUT_GUIDE,Guide
+UI_INPUT_DPAD_UP,D-pad up
+UI_INPUT_DPAD_DOWN,D-pad down
+UI_INPUT_DPAD_LEFT,D-pad left
+UI_INPUT_DPAD_RIGHT,D-pad right
+UI_INPUT_LS_UP,Left stick up
+UI_INPUT_LS_DOWN,Left stick down
+UI_INPUT_LS_LEFT,Left stick left
+UI_INPUT_LS_RIGHT,Left stick right
+UI_INPUT_RS_UP,Right stick up
+UI_INPUT_RS_DOWN,Right stick down
+UI_INPUT_RS_LEFT,Right stick left
+UI_INPUT_RS_RIGHT,Right stick right
 UI_BINDING_HOLD,Hold {0} for 1 s
 UI_BINDING_CHORD,{0} + {1} together

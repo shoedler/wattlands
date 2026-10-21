@@ -234,44 +234,58 @@ static func dict_to_event(d: Dictionary) -> InputEvent:
 
 
 ## A short label for an event, for the controls screen: "Enter", "W", "A", "LB", "Menu",
-## "Left stick up", "RT".
+## "Left stick up", "RT". Words come from content/strings/ui.csv (UI_INPUT_*); key names
+## from the engine; Xbox button letters (A, B, X, Y, LB, RB, LT, RT, LS, RS) stay as printed
+## on the controller.
 static func describe(event: InputEvent) -> String:
 	if event is InputEventKey:
 		var k := event as InputEventKey
 		var code: Key = k.physical_keycode if k.physical_keycode != KEY_NONE else k.keycode
 		var text := OS.get_keycode_string(code)
-		return text if not text.is_empty() else "Key %d" % int(code)
+		return text if not text.is_empty() else _tr("UI_INPUT_KEY", [int(code)])
 	if event is InputEventJoypadButton:
 		var names := {
 			JOY_BUTTON_A: "A", JOY_BUTTON_B: "B", JOY_BUTTON_X: "X", JOY_BUTTON_Y: "Y",
-			JOY_BUTTON_BACK: "View", JOY_BUTTON_GUIDE: "Guide", JOY_BUTTON_START: "Menu",
 			JOY_BUTTON_LEFT_STICK: "LS", JOY_BUTTON_RIGHT_STICK: "RS",
 			JOY_BUTTON_LEFT_SHOULDER: "LB", JOY_BUTTON_RIGHT_SHOULDER: "RB",
-			JOY_BUTTON_DPAD_UP: "D-pad up", JOY_BUTTON_DPAD_DOWN: "D-pad down",
-			JOY_BUTTON_DPAD_LEFT: "D-pad left", JOY_BUTTON_DPAD_RIGHT: "D-pad right",
+		}
+		var keys := {
+			JOY_BUTTON_BACK: "UI_INPUT_VIEW", JOY_BUTTON_GUIDE: "UI_INPUT_GUIDE",
+			JOY_BUTTON_START: "UI_INPUT_MENU",
+			JOY_BUTTON_DPAD_UP: "UI_INPUT_DPAD_UP", JOY_BUTTON_DPAD_DOWN: "UI_INPUT_DPAD_DOWN",
+			JOY_BUTTON_DPAD_LEFT: "UI_INPUT_DPAD_LEFT", JOY_BUTTON_DPAD_RIGHT: "UI_INPUT_DPAD_RIGHT",
 		}
 		var b := int((event as InputEventJoypadButton).button_index)
-		return str(names.get(b, "Button %d" % b))
+		if names.has(b):
+			return str(names[b])
+		if keys.has(b):
+			return _tr(str(keys[b]))
+		return _tr("UI_INPUT_BUTTON", [b])
 	if event is InputEventJoypadMotion:
 		var m := event as InputEventJoypadMotion
 		var neg := m.axis_value < 0.0
 		match int(m.axis):
 			JOY_AXIS_LEFT_X:
-				return "Left stick left" if neg else "Left stick right"
+				return _tr("UI_INPUT_LS_LEFT" if neg else "UI_INPUT_LS_RIGHT")
 			JOY_AXIS_LEFT_Y:
-				return "Left stick up" if neg else "Left stick down"
+				return _tr("UI_INPUT_LS_UP" if neg else "UI_INPUT_LS_DOWN")
 			JOY_AXIS_RIGHT_X:
-				return "Right stick left" if neg else "Right stick right"
+				return _tr("UI_INPUT_RS_LEFT" if neg else "UI_INPUT_RS_RIGHT")
 			JOY_AXIS_RIGHT_Y:
-				return "Right stick up" if neg else "Right stick down"
+				return _tr("UI_INPUT_RS_UP" if neg else "UI_INPUT_RS_DOWN")
 			JOY_AXIS_TRIGGER_LEFT:
 				return "LT"
 			JOY_AXIS_TRIGGER_RIGHT:
 				return "RT"
-		return "Axis %d%s" % [int(m.axis), "-" if neg else "+"]
+		return _tr("UI_INPUT_AXIS", [int(m.axis), "-" if neg else "+"])
 	if event is InputEventMouseButton:
-		return "Mouse %d" % int((event as InputEventMouseButton).button_index)
+		return _tr("UI_INPUT_MOUSE", [int((event as InputEventMouseButton).button_index)])
 	return ""
+
+
+static func _tr(key: String, args: Array = []) -> String:
+	var text := String(TranslationServer.translate(key))
+	return text.format(args) if not args.is_empty() else text
 
 
 static func _key_code(d: Dictionary) -> int:
