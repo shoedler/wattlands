@@ -1,2 +1,4 @@
 keys,en
 WORLD_MODULE_NAME,World
+WORLD_DEMO_2D_CAPTION,"PixelViewport {w} x {h}, scale x{scale}"
+WORLD_DEMO_3D_CAPTION,"world3d: LowPolyMesh, MultiMesh scatter, miniature camera"

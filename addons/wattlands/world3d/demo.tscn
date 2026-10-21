@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://addons/wattlands/world3d/demo_3d.gd" id="1_demo3d"]
+
+[node name="World3DDemo" type="Node3D"]
+script = ExtResource("1_demo3d")
