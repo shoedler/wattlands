@@ -98,9 +98,8 @@ func autopilot_intents(_peer_id: int) -> Array:
 ## Host/SOLO: rescue is a stagger (the marker waits), never a wipe.
 func on_rescue(peer_id: int, active: bool) -> void:
 	TemplateRules.rider(state, peer_id)["rescue"] = active
-	var slot := ctx.player(peer_id)
-	if active and slot != null and not slot.is_bot:
-		ctx.hud.toast("_TEMPLATE_STAGGER", [], peer_id)
+	if active and ctx.player(peer_id) != null and not ctx.player(peer_id).is_bot:
+		ctx.hud.toast("_TEMPLATE_STAGGER", [], peer_id)  # only that rider's peer shows it
 
 
 func on_afk(peer_id: int, afk: bool) -> void:
@@ -143,7 +142,7 @@ func apply_event(event: Dictionary) -> void:
 
 func client_predict(dt: float, local: Telemetry) -> void:
 	var rd := TemplateRules.rider(state, ctx.local_peer)
-	if not rd.is_empty() and not (rd["rescue"] or rd["afk"]):
+	if local != null and not rd.is_empty() and not (rd["rescue"] or rd["afk"]):
 		rd["dist_m"] = float(rd["dist_m"]) + TemplateRules.speed(state, local.p_eff_w, float(rd["boost_s"]) > 0.0) * dt
 
 

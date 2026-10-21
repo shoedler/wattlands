@@ -4,18 +4,21 @@ extends RefCounted
 ## the wall clock or a global RNG. state: {tick, track_m, mps_per_w, boost_mult, boost_s, riders:
 ## [{peer, slot, dist_m, laps, boost_s, rescue, afk}] in slot order}; inputs: {peer: {p_eff_w, boost}}.
 
-const CONTENT_KEYS: Array[String] = ["phases", "nudge_pct", "nudge_at_s", "nudge_s",
-	"lap_marker_at_s", "mps_per_w", "boost_mult", "boost_s"]
+const NUMBERS: Array[String] = ["nudge_pct", "nudge_at_s", "nudge_s", "lap_marker_at_s", "mps_per_w", "boost_mult", "boost_s"]
 
 
 ## "" when a content file is usable, else the reason (content is validated at load, BRIEF 6).
 static func content_error(c: Variant) -> String:
-	if not (c is Dictionary):
-		return "content is not a JSON object"
-	var missing := CONTENT_KEYS.filter(func(k: String) -> bool: return not (c as Dictionary).has(k))
-	if not missing.is_empty():
-		return "missing \"%s\"" % missing[0]
-	return "" if c["phases"] is Array and not (c["phases"] as Array).is_empty() else "\"phases\" is empty"
+	if not (c is Dictionary) or not (c.get("phases") is Array) or (c["phases"] as Array).is_empty():
+		return "content needs a non-empty \"phases\" array"
+	for k in NUMBERS:
+		if not str(c.get(k)).is_valid_float() or float(c[k]) < 0.0:
+			return "\"%s\" must be a number >= 0" % k
+	for ph: Variant in c["phases"]:
+		var ok: bool = ph is Dictionary and Wl.is_phase_kind(str(ph.get("kind"))) and ph["kind"] != Wl.COOLDOWN and ph.get("label") is String
+		if not ok or not (str(ph.get("target_pct")).is_valid_float() and str(ph.get("ramp_to_pct", 0)).is_valid_float() and float(str(ph.get("duration_s"))) > 0.0):
+			return "bad phase %s: kind (never COOLDOWN), target_pct, duration_s > 0, label, optional ramp_to_pct" % JSON.stringify(ph)
+	return ""
 
 
 static func new_state(c: Dictionary, peers: Array[int], track_m: float) -> Dictionary:

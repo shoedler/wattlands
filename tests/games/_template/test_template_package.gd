@@ -106,12 +106,18 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 		assert_has(keys, k, "%s (used in %s) is in strings.csv" % [k, used[k]])
 
 
+## Views are exempt: they only read state and may seed their own cosmetic RNG from ctx.seed.
 func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 	var re := RegEx.create_from_string(
 		"\\bTime\\.|OS\\.get_ticks|OS\\.get_unix_time|RandomNumberGenerator\\.new\\(|(?<![\\w.])(randi|randf|randi_range|randf_range|randfn|randomize)\\(")
+	var scanned := 0
 	for path in _files(F.GAME_DIR, ["gd"]):
+		if path.trim_prefix(F.GAME_DIR).contains("view"):
+			continue
+		scanned += 1
 		var hit := re.search(FileAccess.get_file_as_string(path))
 		assert_null(hit, "%s: %s" % [path, hit.get_string() if hit != null else ""])
+	assert_gte(scanned, 2, "the rules and the module are scanned")
 
 
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:

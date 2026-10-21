@@ -49,6 +49,20 @@ func test_bad_content_is_rejected_at_load_and_gives_no_plans() -> void:
 	assert_eq(g.build_effort_plans(), {})
 
 
+func test_content_overrides_reach_the_game_and_are_validated() -> void:
+	var ctx := F.make_ctx()
+	ctx.content_overrides = {"default.json": {"nudge_pct": 4, "mps_per_w": 0.05}}  # run_game_sim --override
+	var g := _game(ctx)
+	assert_eq(float(g.content["nudge_pct"]), 4.0)
+	assert_eq(float(g.state["mps_per_w"]), 0.05)
+	assert_eq(g.build_effort_plans()[1].phase(1).range_pct, [75.0, 79.0])
+	var bad := F.make_ctx()
+	bad.content_overrides = {"default.json": {"phases": [{"kind": "COOLDOWN", "target_pct": 50, "duration_s": 180, "label": "x"}]}}
+	var g2 := _game(bad)
+	assert_push_error("never COOLDOWN")
+	assert_eq(g2.build_effort_plans(), {}, "a game never writes the cool-down; bad content gives no plans")
+
+
 func test_one_plan_per_slot_bots_included() -> void:
 	var ctx := F.make_ctx(2, 2)
 	var plans := _game(ctx).build_effort_plans()

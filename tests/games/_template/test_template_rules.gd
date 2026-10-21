@@ -102,13 +102,48 @@ func test_same_inputs_give_the_same_state() -> void:
 
 func test_content_error_names_the_problem() -> void:
 	assert_eq(TemplateRules.content_error(_content()), "")
-	assert_eq(TemplateRules.content_error([]), "content is not a JSON object")
+	for bad: Variant in [[], null, "text", {}, {"phases": {}}]:
+		assert_string_contains(TemplateRules.content_error(bad), "\"phases\"")
 	var c := _content()
 	c.erase("boost_s")
 	assert_string_contains(TemplateRules.content_error(c), "boost_s")
 	c = _content()
 	c["phases"] = []
 	assert_string_contains(TemplateRules.content_error(c), "phases")
+	for k: String in ["nudge_pct", "mps_per_w"]:
+		for v: Variant in ["fast", -1.0, [5], true]:
+			c = _content()
+			c[k] = v
+			assert_string_contains(TemplateRules.content_error(c), "\"%s\" must be a number" % k)
+	c = _content()
+	c["boost_s"] = 5  # an int, as a GDScript-built dictionary has it
+	assert_eq(TemplateRules.content_error(c), "")
+
+
+func test_content_error_checks_every_phase() -> void:
+	var good := {"kind": "WORK", "target_pct": 75.0, "duration_s": 180.0, "label": "_TEMPLATE_PHASE_WORK"}
+	var breaks := {
+		"kind": ["COOLDOWN", "SPRINT", null], "target_pct": [null, "high", [75]], "duration_s": [0.0, -5.0, null, "x"],
+		"label": [null, 5], "ramp_to_pct": ["up", [65]],
+	}
+	for field: String in breaks:
+		for v: Variant in breaks[field]:
+			var broken := _content()
+			var ph := good.duplicate()
+			if v == null:
+				ph.erase(field)
+			else:
+				ph[field] = v
+			(broken["phases"] as Array).append(ph)
+			var err := TemplateRules.content_error(broken)
+			assert_true(err.begins_with("bad phase"), "%s = %s: %s" % [field, v, err])
+	var c := _content()
+	(c["phases"] as Array).append(good)
+	(c["phases"] as Array).append("not a phase")
+	assert_string_contains(TemplateRules.content_error(c), "bad phase \"not a phase\"")
+	c = _content()
+	(c["phases"] as Array).append(good.merged({"ramp_to_pct": 80.0}))
+	assert_eq(TemplateRules.content_error(c), "", "a ramp is optional")
 
 
 func test_rider_lookup_by_peer_and_by_slot() -> void:
