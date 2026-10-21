@@ -175,6 +175,17 @@ func test_tick_drives_a_client_outside_the_tree() -> void:
 	assert_eq(_trainer.process_mode, Node.PROCESS_MODE_ALWAYS)
 
 
+func test_tick_drives_a_client_in_the_tree_that_does_not_tick_itself() -> void:
+	_ready_trainer()
+	_client.process_self = false
+	add_child(_client)
+	_fake.auto_respond = false
+	_trainer.set_target_power(150)
+	_trainer.tick(FtmsClient.CP_TIMEOUT_S)
+	assert_eq(_fake.writes_with_op(0x05), 2)
+	remove_child(_client)
+
+
 func test_hardware_lock_blocks_every_setter() -> void:
 	_env_saved = true
 	_env_had = OS.has_environment(HW_ENV)

@@ -15,8 +15,8 @@ extends TrainerDevice
 ## - status_changed follows the client's state (STATUS_CONNECTED while the flow runs or under
 ##   the hardware lock, STATUS_READY, STATUS_CONTROL_LOST, STATUS_ERROR, STATUS_DISCONNECTED);
 ##   control_response and machine_status pass through.
-## - tick(dt) advances the sample clock and ticks a client that is outside the tree (a client
-##   inside the tree ticks itself).
+## - tick(dt) advances the sample clock and ticks a client that does not tick itself (one
+##   outside the tree, or with process_self off).
 
 ## Set Target Resistance Level encoding (FtmsCodec.RESISTANCE_UINT8 or RESISTANCE_SINT16).
 var resistance_encoding: String = FtmsCodec.RESISTANCE_UINT8
@@ -89,7 +89,7 @@ func tick(dt: float) -> void:
 	if dt <= 0.0:
 		return
 	_t += dt
-	if _client != null and not _client.is_inside_tree():
+	if _client != null and (not _client.is_inside_tree() or not _client.process_self):
 		_client.tick(dt)
 
 

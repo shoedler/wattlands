@@ -43,9 +43,10 @@ extends TrainerDevice
 ## below CP hold. Scripted profiles ignore fatigue. The rider pedals while its goal power is
 ## above 0 and stops at once (0 W, 0 rpm) at 0. Outside ERG at >= 120% FTP the follower
 ## sprints: its cadence rises 10% (unless `band` steers it) and the reported cadence lags its
-## fall for 5 s afterwards (tau 1.5 s), like a trainer's cadence estimate. Speed: in ERG, RESISTANCE and OFF the
-## flywheel speed is cadence x KMH_PER_RPM (a fixed virtual gear); in SIM a SpeedModel
-## integrates the rider's power at the commanded grade and wind with weight_kg + 8 kg.
+## fall for 5 s afterwards (tau 1.5 s), like a trainer's cadence estimate. Speed: in ERG,
+## RESISTANCE and OFF the flywheel speed is cadence x KMH_PER_RPM (a fixed virtual gear); in
+## SIM a SpeedModel integrates the rider's power at the commanded grade and wind with
+## weight_kg + 8 kg, starting from the flywheel speed.
 ## Notifications every 0.9-1.1 s (seeded jitter), rounded like FTMS data (1 W, 0.5 rpm,
 ## 0.01 km/h); with options.dropouts some are skipped (seeded gaps of 1.5-4 s that never
 ## chain and never touch a surge or the 10 s before it). Control responses arrive on the next
@@ -786,6 +787,7 @@ func _surge_lift() -> float:
 func _dropout_now() -> bool:
 	if _dropout_chance <= 0.0 or surging():
 		_in_dropout = false
+		_dropout_until_t = -1.0
 		return false
 	if _t < _dropout_until_t:
 		_in_dropout = true
