@@ -142,19 +142,19 @@ func test_the_shared_detector_thresholds_are_15_w_and_20_rpm() -> void:
 	assert_eq(CadenceEstimator.COAST_POWER_W, 15.0, "the shared power threshold")
 
 
-func test_game_host_rejoin_check_matches_the_shared_thresholds() -> void:
-	# GameHost (sdk-runtime) still writes 15 W and 20 rpm for its rejoin "shows pedaling"
-	# check. Until it calls GestureRecognizer.is_not_pedaling, its numbers must match; read
-	# by name, so this keeps passing once the lead removes them.
+func test_game_host_rejoin_check_uses_the_shared_detector() -> void:
+	# GameHost's rejoin "shows pedaling" check calls GestureRecognizer.is_not_pedaling and keeps
+	# no thresholds of its own (W4 final), so 15 W and 20 rpm exist only in GestureRecognizer.
 	var script := load("res://addons/wattlands/sdk/game_host.gd") as Script
 	assert_not_null(script, "GameHost script loads")
 	if script == null:
 		return
 	var consts := script.get_script_constant_map()
-	if consts.has("PEDAL_POWER_W"):
-		assert_eq(float(consts["PEDAL_POWER_W"]), GestureRecognizer.NOT_PEDALING_W)
-	if consts.has("PEDAL_CADENCE_RPM"):
-		assert_eq(float(consts["PEDAL_CADENCE_RPM"]), GestureRecognizer.NOT_PEDALING_RPM)
+	assert_false(consts.has("PEDAL_POWER_W"), "GameHost keeps no power threshold of its own")
+	assert_false(consts.has("PEDAL_CADENCE_RPM"), "GameHost keeps no cadence threshold of its own")
+	assert_string_contains(
+		script.source_code, "GestureRecognizer.is_not_pedaling(tm.power_w, tm.cadence_rpm)"
+	)
 
 
 func test_the_governor_calls_the_shared_detector() -> void:

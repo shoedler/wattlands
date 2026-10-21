@@ -89,9 +89,6 @@ const SNAPSHOT_EVERY := 2
 const ROSTER_EVERY := 10
 ## Platform ticks between report trace rows (1 Hz).
 const TRACE_EVERY := 20
-## Fresh telemetry "shows pedaling" (BRIEF 3.5's not_pedaling, inverted).
-const PEDAL_POWER_W := 15.0
-const PEDAL_CADENCE_RPM := 20.0
 const PLATFORM_EVENT_PREFIX := "wl."
 ## A client asks for a resync at most this often (platform seconds); the host answers one
 ## peer's requests at most this often.
@@ -1474,7 +1471,7 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	if (
 		bool(r["await_pedal"])
 		and not tm.afk
-		and (tm.power_w >= PEDAL_POWER_W or tm.cadence_rpm >= PEDAL_CADENCE_RPM)
+		and not GestureRecognizer.is_not_pedaling(tm.power_w, tm.cadence_rpm)
 	):
 		r["await_pedal"] = false
 

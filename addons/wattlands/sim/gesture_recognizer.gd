@@ -46,10 +46,9 @@ const NOT_PEDALING := &"not_pedaling"
 const PEDAL_START_S := 3.0
 const PEDAL_START_RPM := 40.0
 const PEDAL_START_FTP_FRACTION := 0.30
-## The shared not_pedaling thresholds (BRIEF 3.5). SafetyGovernor and CadenceEstimator use
-## these constants rather than their own numbers. GameHost's rejoin "shows pedaling" check
-## (PEDAL_POWER_W, PEDAL_CADENCE_RPM) still writes both numbers itself; a governor test fails
-## if they drift, and moving it onto is_not_pedaling() is a request to the lead (W4 final).
+## The shared not_pedaling thresholds (BRIEF 3.5), written only here. SafetyGovernor and
+## CadenceEstimator use these constants, and GameHost's rejoin "shows pedaling" check calls
+## is_not_pedaling(), so no other copy of 15 W and 20 rpm exists.
 const NOT_PEDALING_W := 15.0
 const NOT_PEDALING_RPM := 20.0
 const COAST_S := 3.0
