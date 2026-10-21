@@ -490,4 +490,4 @@ func test_report_keeps_requested_and_applied() -> void:
 	assert_false(bool(rep.directives[1]["accepted"]))
 	assert_eq(rep.directives[1]["reason"], Wl.REFUSE_RANGE)
 	assert_true(bool((rep.directives[1]["applied"] as Dictionary)["refused"]))
-	assert_eq(rep.directives[0]["requested"], {"target_pct": 55.0, "duration_s": 0.0, "id": 1}, "exactly the game's keys")
+	assert_eq(rep.directives[0]["requested"], {"target_pct": 55.0, "duration_s": 0.0, "id": 1}, "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1)")

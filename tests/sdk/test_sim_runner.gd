@@ -401,7 +401,7 @@ func test_requested_directive_keys_round_trip_into_the_report() -> void:
 	r.run_to_end()
 	var dirs: Array = r.build_report()["directives"]
 	assert_eq(dirs.size(), 1)
-	assert_eq((dirs[0]["requested"] as Dictionary).keys(), ["target_pct", "duration_s", "reason", "source", "id"], "exactly the game's keys")
+	assert_eq((dirs[0]["requested"] as Dictionary).keys(), ["target_pct", "duration_s", "reason", "source", "id"], "the game's keys plus duration_s and the sink's id (GAME_SDK 8.1, 19.1)")
 	assert_not_null(dirs[0]["applied"])
 
 

@@ -319,3 +319,13 @@ func test_autoload_is_a_registry_without_template() -> void:
 	assert_false((auto as WlGameRegistry).ids().has("_template"))
 	for id: String in (auto as WlGameRegistry).ids():
 		assert_eq((auto as WlGameRegistry).validate_manifest((auto as WlGameRegistry).manifest(id)), "", id)
+
+
+## W3 SDK-3 (GAME_SDK 3): an int off its min + n * step grid falls back to the default with a
+## warning on the lobby path, and is refused naming the field and the grid on the tool path.
+func test_off_grid_ints_fall_back_in_the_lobby_and_fail_the_tool() -> void:
+	_reg.scan(FIXTURES.path_join("runtime"))
+	assert_eq(_reg.resolve_options("fx_solo", {"reel_pct": 62}, true)["reel_pct"], 60)
+	assert_push_warning("not on the 50 + n * 5 grid")
+	assert_eq(_reg.check_option_values("fx_solo", {"reel_pct": 62}, true), "player_options.reel_pct: 62 is not on the 50 + n * 5 grid")
+	assert_eq(_reg.check_option_values("fx_solo", {"reel_pct": 65}, true), "")

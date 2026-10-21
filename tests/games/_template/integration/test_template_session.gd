@@ -98,7 +98,7 @@ func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:
 		if req.get("reason") == "hill":
 			var keys: Array = req.keys().filter(func(k: Variant) -> bool: return k != "id")
 			keys.sort()
-			assert_eq(keys, ["duration_s", "reason", "source", "target_pct"], "exactly the game's fields: %s" % req)
+			assert_eq(keys, ["duration_s", "reason", "source", "target_pct"], "the game's fields (id aside): %s" % req)
 
 
 func test_a_host_run_with_two_humans_completes() -> void:
