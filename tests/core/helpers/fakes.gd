@@ -19,7 +19,8 @@ class FakeGovernor:
 	var course_distance: float = -1.0
 	var course_grade: float = NAN
 	var emit_on_apply: bool = true
-	var gear: int = 12
+	## The fake's own gear (the real SafetyGovernor has gear(), so the field has another name).
+	var fake_gear: int = 12
 	var shutdown_count: int = 0
 	var plan: EffortPlan = null
 
@@ -60,9 +61,12 @@ class FakeGovernor:
 		course_distance = distance_m
 
 	func shift(delta: int) -> int:
-		gear = clampi(gear + delta, 1, 24)
+		fake_gear = clampi(fake_gear + delta, 1, 24)
 		calls.append(["shift", delta])
-		return gear
+		return fake_gear
+
+	func gear() -> int:
+		return fake_gear
 
 	func on_sample(sample: TrainerSample) -> void:
 		samples.append(sample)
