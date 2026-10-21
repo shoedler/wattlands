@@ -9,7 +9,7 @@ extends RefCounted
 ##   - 2 minutes of headless simulation through GameSimRunner on default_content at
 ##     min_players and max_players, with bots when the game allows them (one human slot,
 ##     so SOLO) or Autopilot human slots otherwise (HOST with LoopbackTransport clients);
-##   - results() with a row per rider;
+##   - results() with a row per rider and a grade S..D;
 ##   - determinism: two runs with the same seed give the same snapshot hashes;
 ##   - snapshot round trip: the latest snapshot survives JSON.stringify and
 ##     JSON.parse_string plus Protocol.apply_int_fields(int_fields()["snapshot"]) unchanged
@@ -20,6 +20,8 @@ const SIM_SECONDS := 120.0
 const SEED := 4242
 ## Room for the snapshot message envelope around the state.
 const ENVELOPE_BYTES := 256
+## GameResults.grade values (BRIEF 3.6: S to D).
+const GRADES: Array[String] = ["S", "A", "B", "C", "D"]
 
 
 ## Errors for game `id` (empty when it conforms). `opts` is merged into every
@@ -52,6 +54,8 @@ static func check_game(registry: WlGameRegistry, id: String, opts: Dictionary = 
 			continue
 		if int(a["rows"]) != n:
 			errors.append("%s: results() has %d rows for %d riders" % [at, int(a["rows"]), n])
+		if not GRADES.has(str(a["grade"])):
+			errors.append("%s: results().grade \"%s\" is not one of S, A, B, C, D" % [at, str(a["grade"])])
 		if (a["hashes"] as Array).is_empty():
 			errors.append("%s: no snapshot in %d s" % [at, int(SIM_SECONDS)])
 		if JSON.stringify(a["hashes"]) != JSON.stringify(b["hashes"]):
@@ -133,7 +137,15 @@ static func client_apply_error(registry: WlGameRegistry, id: String, run: Dictio
 	var players: Array[PlayerSlot] = []
 	for d: Variant in run["players"]:
 		players.append(PlayerSlot.from_dict(d))
+	# Like a CLIENT GameHost, the module lives in the scene tree before configure().
+	var holder := Node.new()
+	holder.name = "ConformanceClient"
+	var tree := Engine.get_main_loop() as SceneTree
+	if tree != null and tree.root != null:
+		tree.root.add_child(holder)
+	holder.add_child(gm)
 	var bus := WlEventBus.new()
+	holder.add_child(bus)
 	var ctx := GameContext.new()
 	ctx.game_id = id
 	ctx.manifest = registry.manifest(id)
@@ -168,8 +180,7 @@ static func client_apply_error(registry: WlGameRegistry, id: String, run: Dictio
 	var paths: Variant = gm.int_fields().get("snapshot", [])
 	var conv: Variant = Protocol.apply_int_fields(parsed, paths if paths is Array else [])
 	gm.apply_snapshot(conv if conv is Dictionary else {})
-	gm.free()
-	bus.free()
+	holder.free()
 	return ""
 
 
@@ -193,7 +204,7 @@ static func _runner(registry: WlGameRegistry, id: String, content: String, n: in
 
 static func _run(registry: WlGameRegistry, id: String, content: String, n: int, m: Dictionary, opts: Dictionary) -> Dictionary:
 	var r := _runner(registry, id, content, n, m, opts, SIM_SECONDS)
-	var out := {"err": str(r["err"]), "rows": 0, "hashes": [], "snapshot": {}, "int_fields": {},
+	var out := {"err": str(r["err"]), "rows": 0, "grade": "", "hashes": [], "snapshot": {}, "int_fields": {},
 		"max_bytes": 0, "oversize": 0, "role": "", "end_reason": "", "players": [], "options": {},
 		"content_id": content}
 	var runner: GameSimRunner = r["runner"]
@@ -202,6 +213,7 @@ static func _run(registry: WlGameRegistry, id: String, content: String, n: int, 
 		var host := runner.host
 		var res := host.final_results()
 		out["rows"] = res.rows.size() if res != null else 0
+		out["grade"] = res.grade if res != null else ""
 		out["hashes"] = host.report.snapshot_hashes() if host.report != null else []
 		out["snapshot"] = host.last_snapshot().duplicate(true)
 		out["int_fields"] = host.game.int_fields()

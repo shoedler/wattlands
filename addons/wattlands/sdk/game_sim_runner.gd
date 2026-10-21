@@ -83,6 +83,12 @@ var _utc_start: int = 0
 var _fit_targets: Array[String] = []
 
 
+func _init() -> void:
+	# A system node: its riders, trainers, net sessions and GameHosts keep running while the
+	# scene tree is paused (BRIEF 4.1).
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE:
 		_restore_paths()

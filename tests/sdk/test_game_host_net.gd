@@ -112,7 +112,7 @@ func test_end_phase_course_grade_and_cadence_band_reach_the_client() -> void:
 	Kit.step(b, 200)
 	var r2 := _rider(b, 2)
 	assert_eq(r2.get("cadence_band"), [82.0, 98.0])
-	assert_eq((r2.device as MockTrainer)._cadence_band_lo, 82.0, "the client's MockTrainer band policy")
+	assert_eq((r2.device as Object).call("last_cadence_band"), [82.0, 98.0], "the client's MockTrainer band policy")
 	assert_eq(c_bands[0], [2, 82.0, 98.0], "the client's HUD")
 	Kit.step(b, 560)
 	assert_eq(r2.get("grades"), [1.5, 2.5, 3.5] as Array[float])
@@ -175,6 +175,51 @@ func test_snapshots_and_client_predict() -> void:
 	assert_eq(JSON.stringify(cg.get("last_snapshot_applied")), JSON.stringify(host.last_snapshot()))
 	assert_eq(int(cg.get("predicts")), 21, "every client tick once configured")
 	assert_eq(int(host.game.get("snapshots_applied")), 0)
+
+
+func test_an_older_snapshot_is_dropped_gm10() -> void:
+	var b := _multi(2)
+	Kit.start(b)
+	Kit.step(b, 21)
+	var cg := _client(b, 0).game
+	var applied: int = cg.get("snapshots_applied")
+	var latest := JSON.stringify(cg.get("last_snapshot_applied"))
+	(b["nets"][0] as WlNetSession).send_to(2, Protocol.game_msg("snapshot", {"game_id": "fx_solo", "seq": 3, "tick": 4, "state": {"steps": -1.0}}))
+	_client(b, 0).step()
+	assert_eq(int(cg.get("snapshots_applied")), applied, "seq 3 is older than the applied one")
+	assert_eq(JSON.stringify(cg.get("last_snapshot_applied")), latest)
+
+
+func test_a_ticks_event_batch_goes_out_before_its_snapshot_c12() -> void:
+	var b := _multi(2)
+	var host_net: Object = b["nets"][0]
+	Kit.start(b)
+	host_net.set("sent", [])
+	Kit.step(b, 60)
+	var types: Array[String] = host_net.call("sent_types", 2)
+	var ev := types.find("event")
+	assert_gt(ev, -1, "fx_game sends an event every 20 ticks")
+	assert_eq(types[ev + 1], "snapshot", "the batch, then the same tick's snapshot")
+	var batches := types.count("event")
+	assert_lte(batches, 6, "at most one batch per 100 ms (60 ticks = 3 s, events every 1 s)")
+
+
+func test_more_than_32_intents_in_one_telemetry_are_dropped_c11() -> void:
+	var b := _multi(2)
+	var host := _host(b)
+	Kit.start(b)
+	Kit.step(b, 4)
+	for i in 40:
+		_client(b, 0).ctx.intents.send({"k": "spam", "i": float(i)})
+	Kit.step(b, 8)
+	assert_push_warning("8 dropped (max 32)")
+	var got: Array = []
+	for s: Dictionary in host.game.get("intents_seen"):
+		if int(s["peer"]) == 2:
+			got.append(int(float(s["intent"]["i"])))
+	assert_eq(got.size(), 32, "at most 32 per telemetry message")
+	assert_eq(got[0], 0, "in order")
+	assert_eq(got[31], 31)
 
 
 func test_client_intents_reach_the_host_frame_once() -> void:
@@ -247,6 +292,11 @@ func test_drop_and_rejoin() -> void:
 	Kit.step(b, 1)
 	var types: Array[String] = host_net.call("sent_types", 3)
 	assert_eq(types.slice(0, 4), ["session_start", "plan", "phase", "snapshot"] as Array[String], "the rejoin gets its state back")
+	tm = frames[frames.size() - 1]
+	assert_true(tm.connected, "back on the network")
+	assert_eq(tm.power_w, 0.0, "the pre-drop telemetry never shows up as live power")
+	assert_eq(tm.cadence_rpm, 0.0)
+	assert_true(tm.afk, "AFK until fresh telemetry shows pedaling")
 	Kit.step(b, 10)
 	assert_eq(game.get("afk_log"), [[3, true], [3, false]], "on_afk(false) once fresh telemetry shows pedaling")
 
@@ -322,6 +372,34 @@ func test_restarted_client_gets_exactly_one_apply_progress() -> void:
 	assert_not_null(c.final_results())
 	assert_eq(c.game.get("progress_calls"), 1)
 	assert_eq(int(old.game.get("progress_calls")), 0, "the killed process never applied it")
+
+
+func test_a_restarted_client_catches_up_with_its_phase_clock() -> void:
+	var b := _multi(2)
+	var host := _host(b)
+	Kit.start(b)
+	Kit.step(b, 300)
+	assert_eq(host.tracker.index_of(2), 2, "tiny's 30 s SIM phase, started at 5 s")
+	var old := _client(b, 0)
+	(b["hub"] as RefCounted).call("drop", 2)
+	Kit.step(b, 2)
+	old.end_session("restart")
+	var c := GameHost.new()
+	_root.add_child(c)
+	assert_eq(c.setup({
+		"role": Wl.CLIENT, "local_peer": 2, "local_riders": {2: _rider(b, 2)}, "net": b["nets"][1],
+		"bus": Kit.new_bus(_root, "RestartBus"), "registry": b["registry"], "headless": true, "realtime": false,
+		"progress_path": str(b["tmp"]).path_join("p2r/games/fx_solo/progress.json"),
+	}), "")
+	(b["hub"] as RefCounted).call("rejoin", 2)
+	host.step()
+	c.step()
+	var mine := c.local_phase_state()
+	var theirs := host.tracker.state(2)
+	assert_eq(mine.index, theirs.index)
+	assert_almost_eq(mine.elapsed_s, theirs.elapsed_s, 0.11, "the rejoined client's phase clock is the host's")
+	assert_gt(mine.elapsed_s, 9.0)
+	assert_eq(mine.prev_ended_by, Wl.ENDED_DURATION, "how the phase it rejoined into started")
 
 
 func test_client_rejects_an_invalid_plan() -> void:

@@ -22,20 +22,24 @@ extends Node
 ## One step(), in order: poll the net session and apply the queued messages (telemetry,
 ## drops and rejoins on the authority; session_start, plan, phase, directive, event,
 ## snapshot, roster, hud, results on a client) -> tick every local rider on platform time ->
-## drain gestures (from the LocalRider) and actions (InputRouter or inject_action; `pause`
-## and `panic` are consumed here, shift_up/shift_down also shift the gears) ->
+## drain gestures (the local rider's from the InputRouter when rendering, else from its
+## LocalRider; bots' from their LocalRiders) and actions (InputRouter or inject_action;
+## `pause` and `panic` are consumed here, as is a `confirm` that resumes a paused session;
+## shift_up/shift_down also shift the gears) ->
 ## local_intents(actions, gestures) on every peer -> authority: unless paused, build the
 ## InputFrame (frame.tick/t = game ticks/seconds completed before this tick), call
 ## on_rescue/on_afk on edges, sim_step(0.05, frame), feed ctx.stats, advance phases (a
 ## change: LocalRider.set_plan/start_phase or `plan`/`phase` messages, EventBus.phase_started,
 ## a "wl.phase_started" event; cool-down: bands cleared), deliver coalesced course grades,
 ## flush events then a snapshot every 2nd platform tick, results once every rider finished
-## its cool-down; client: client_predict, telemetry every 4th platform tick -> roster every
+## its cool-down (complete_rows: a row per rider); client: client_predict, telemetry every
+## 4th platform tick -> roster every
 ## 10th platform tick, report trace every 20th -> HUD update -> the clock steps.
 ##
 ## Wire formats (all through Protocol.game_msg and the WlNetSession):
 ##   session_start {game_id, game_version, content_id, seed, players: [PlayerSlot.to_dict()],
-##     options, scaling, start_tick, session_id, content_overrides}
+##     options, scaling, start_tick, session_id, content_overrides, game, content, session}
+##     (game/content/session repeat the string ids without the "_id" suffix)
 ##   plan {peer, plan: EffortPlan.to_dict()}; phase {peer, index, start_tick, ended_by}
 ##   directive {kind: request, id, peer, directive: EffortDirective.to_dict()} |
 ##     {kind: course_grade, id, peer, grade_pct} | {kind: cadence_band, id, peer, lo_rpm,
@@ -133,6 +137,7 @@ var _pending_gestures: Array[StringName] = []
 var _client_plan: EffortPlan = null
 var _client_phase: int = -1
 var _client_phase_ticks: int = 0
+var _client_phase_start_tick: int = 0
 var _client_prev_ended_by: String = ""
 var _client_cadence: Array = [0.0, 0.0]
 var _snap_seq_applied: int = 0
@@ -165,10 +170,12 @@ func _process(delta: float) -> void:
 ##   content_dir (res:// folder for ctx.content_dir), progress_path (the local rider's
 ##   progress.json; default Paths.progress_path(game_id)), content_overrides
 ##   ({rel path: merge patch} for ctx.content_overrides), fit_paths ({peer: path}: move each
-##   local rider's FIT there after finish_ride), input_router (Node with take_actions();
-##   default the InputRouter autoload unless headless), realtime (bool: _process drives the
-##   clock; default: not headless). A CLIENT's game, players, options and seed come from
-##   the host's session_start.
+##   local rider's FIT there after finish_ride), input_router (Node with take_actions() and
+##   take_gestures(); default the InputRouter autoload unless headless; when rendering, the
+##   local rider's gestures come from it), sfx (Node with set_metronome(); default the Sfx
+##   autoload), realtime (bool: _process drives the clock; default: not headless), poll_net
+##   (bool, default true: step() polls the net session). A CLIENT's game, players, options
+##   and seed come from the host's session_start.
 ## Returns "" on success or an error string (invalid plan, unknown game, ...).
 func setup(p_config: Dictionary) -> String:
 	if clock != null:
@@ -548,12 +555,28 @@ func _session_start_payload() -> Dictionary:
 	var ps: Array = []
 	for p in _players:
 		ps.append(p.to_dict())
+	var game_id := str(manifest.get("id", ""))
+	# "game", "content" and "session" repeat the string ids under names without the "_id"
+	# suffix, which Protocol.decode may convert to int (net_messages.gd); clients read them first.
 	return {
-		"game_id": str(manifest.get("id", "")), "game_version": str(manifest.get("version", "")),
+		"game_id": game_id, "game_version": str(manifest.get("version", "")),
 		"content_id": ctx.content_id, "seed": ctx.seed, "players": ps, "options": ctx.options.duplicate(true),
 		"scaling": ctx.scaling_mode, "start_tick": clock.game_tick, "session_id": session_id,
 		"content_overrides": ctx.content_overrides.duplicate(true),
+		"game": game_id, "content": ctx.content_id, "session": session_id,
 	}
+
+
+## A string id from a host message: the suffix-free copy ("game") when present, else the
+## "_id" field, unless that came back as a number.
+static func _string_field(data: Dictionary, plain: String, with_id: String, fallback: String = "") -> String:
+	var v: Variant = data.get(plain, null)
+	if v is String:
+		return v
+	v = data.get(with_id, null)
+	if v is String:
+		return v
+	return fallback
 
 
 func _connect_game() -> void:
@@ -620,7 +643,7 @@ func _authority_step() -> void:
 	for peer in _local_order():
 		var r: LocalRider = local_riders[peer]
 		r.tick(DT)
-		gestures[peer] = _take_gestures(r)
+		gestures[peer] = _local_gestures(r) if peer == _local_peer else _take_gestures(r)
 		# Riders simulated here already reported through apply_directive's return value;
 		# their ack queue (meant for Telemetry.acks) is drained so it never grows.
 		r.take_acks()
@@ -766,6 +789,9 @@ func _platform_actions(actions: Array[StringName], my_gestures: Array[StringName
 			_:
 				out.append(a)
 	if state == "paused" and (resume_now or out.has(&"confirm") or my_gestures.has(Wl.G_PEDAL_START)):
+		if not resume_now and out.has(&"confirm"):
+			# The confirm that resumed the session is the platform's, never also a game confirm.
+			out.erase(&"confirm")
 		resume()
 	return out
 
@@ -901,6 +927,7 @@ func _finish_session(reason: String) -> void:
 	var r: GameResults = game.results() if game != null else null
 	if r == null:
 		r = GameResults.from_stats(stats, ctx.players)
+	complete_rows(r)
 	r.session_id = session_id
 	results = r
 	if net != null:
@@ -910,6 +937,25 @@ func _finish_session(reason: String) -> void:
 	_save_fits()
 	_set_state("results")
 	session_finished.emit(r)
+
+
+## The platform's part of the results (BRIEF 3.6 "per-player rows"; docs/OWNERSHIP.md RES1):
+## every rider in ctx.players gets a row, with the SessionStatsTracker's base row for a rider
+## the game left out (appended after the game's rows, in slot order), and every row keeps
+## the base keys (kJ, power, NP, best powers, ride and band time, xp, unlocks, stats, slot
+## fields) the game did not set itself. Values the game set are never changed.
+func complete_rows(r: GameResults) -> void:
+	if r == null or ctx == null:
+		return
+	var base := GameResults.from_stats(stats, ctx.players)
+	for brow in base.rows:
+		var row := r.row(int(brow["peer_id"]))
+		if row.is_empty():
+			r.rows.append(brow)
+			continue
+		for k: Variant in brow.keys():
+			if not row.has(k):
+				row[k] = brow[k]
 
 
 func _apply_results(r: GameResults) -> void:
@@ -977,7 +1023,7 @@ func _client_step() -> void:
 	var gestures: Array[StringName] = []
 	if rider != null:
 		rider.tick(DT)
-		gestures = _take_gestures(rider)
+		gestures = _local_gestures(rider)
 	_pending_gestures.append_array(gestures)
 	var actions := _take_actions()
 	var active := _configured and (state == "running" or state == "cooldown")
@@ -1109,6 +1155,16 @@ func _on_peer_left(peer: int, reason: String) -> void:
 	var r: Dictionary = _remote[peer]
 	r["dropped"] = true
 	r["await_pedal"] = true
+	# The last telemetry before the drop must never reappear as live power: after a rejoin the
+	# rider shows 0 W and 0 rpm until fresh telemetry arrives.
+	var last: Telemetry = r["tm"]
+	if last != null:
+		last.power_w = 0.0
+		last.cadence_rpm = 0.0
+		last.speed_kmh = 0.0
+		last.p_eff_w = 0.0
+		last.ftp_pct = 0.0
+		last.effort = 0.0
 	_event("peer_left", {"peer": peer, "reason": reason})
 	if state == "running" or state == "cooldown" or state == "paused":
 		_set_afk(peer, true)
@@ -1127,9 +1183,11 @@ func _on_rejoin(peer: int) -> void:
 	if tracker.index_of(peer) >= 0:
 		var hist := tracker.history(peer)
 		var last: Dictionary = hist[hist.size() - 1] if not hist.is_empty() else {}
+		var prev := tracker.state(peer).prev_ended_by
 		_send_to(peer, Protocol.game_msg("phase", {
 			"peer": peer, "index": tracker.index_of(peer),
-			"start_tick": int(roundf(float(last.get("start", 0.0)) / DT)), "ended_by": Wl.ENDED_START}))
+			"start_tick": int(roundf(float(last.get("start", 0.0)) / DT)),
+			"ended_by": prev if prev != "" else Wl.ENDED_START}))
 	if not _last_snapshot_msg.is_empty():
 		_send_to(peer, _last_snapshot_msg)
 	if results != null:
@@ -1169,7 +1227,7 @@ func _client_message(from: int, data: Dictionary) -> void:
 func _on_session_start(data: Dictionary) -> void:
 	if _configured:
 		return
-	var game_id := str(data.get("game_id", ""))
+	var game_id := _string_field(data, "game", "game_id")
 	var m: Variant = config.get("manifest", {})
 	manifest = (m as Dictionary).duplicate(true) if m is Dictionary and not (m as Dictionary).is_empty() else {}
 	if manifest.is_empty() and registry != null:
@@ -1201,9 +1259,9 @@ func _on_session_start(data: Dictionary) -> void:
 	var opts: Variant = data.get("options", {})
 	var overrides: Variant = data.get("content_overrides", {})
 	var options := WlGameRegistry.resolve_option_values(manifest.get("options", []), opts if opts is Dictionary else {}, game_id)
-	_init_session(players, str(data.get("content_id", "")), int(data.get("seed", 0)), options,
+	_init_session(players, _string_field(data, "content", "content_id"), int(data.get("seed", 0)), options,
 		str(data.get("scaling", Wl.FAIR_FTP)), overrides if overrides is Dictionary else {})
-	session_id = str(data.get("session_id", session_id))
+	session_id = _string_field(data, "session", "session_id", session_id)
 	game.configure(ctx)
 	_int_fields = game.int_fields()
 	_build_presentation()
@@ -1244,12 +1302,14 @@ func _on_phase(data: Dictionary) -> void:
 		return
 	_client_phase = index
 	_client_phase_ticks = 0
-	_client_prev_ended_by = str(data.get("ended_by", ""))
+	_client_phase_start_tick = int(data.get("start_tick", 0))
+	var ended_by := str(data.get("ended_by", ""))
+	_client_prev_ended_by = "" if ended_by == Wl.ENDED_START else ended_by
 	var rider: LocalRider = local_riders.get(_local_peer)
 	if rider != null:
 		rider.start_phase(index)
 	bus.phase_started.emit(_local_peer, index)
-	_event("phase_started", {"peer": _local_peer, "index": index, "ended_by": _client_prev_ended_by})
+	_event("phase_started", {"peer": _local_peer, "index": index, "ended_by": ended_by})
 	if _client_plan.phase(index).kind == Wl.COOLDOWN:
 		if float(_client_cadence[0]) != 0.0 or float(_client_cadence[1]) != 0.0:
 			_client_cadence = [0.0, 0.0]
@@ -1302,6 +1362,11 @@ func _on_snapshot(data: Dictionary) -> void:
 	if seq <= _snap_seq_applied:
 		return
 	_snap_seq_applied = seq
+	# The snapshot's tick is the host's game tick just simulated: a client that joined or
+	# rejoined mid-phase catches its phase clock up from the phase's start_tick.
+	var host_tick := int(data.get("tick", -1))
+	if host_tick >= 0 and _client_phase >= 0:
+		_client_phase_ticks = maxi(_client_phase_ticks, host_tick + 1 - _client_phase_start_tick)
 	var st: Variant = data.get("state")
 	if not (st is Dictionary):
 		return
@@ -1453,7 +1518,7 @@ func _on_cadence_band_changed(peer: int, lo: float, hi: float) -> void:
 func _update_metronome(lo: float, hi: float) -> void:
 	if _headless:
 		return
-	var sfx := _autoload("Sfx")
+	var sfx := _sfx()
 	var rider: LocalRider = local_riders.get(_local_peer)
 	if sfx == null or not sfx.has_method("set_metronome") or rider == null:
 		return
@@ -1465,9 +1530,15 @@ func _update_metronome(lo: float, hi: float) -> void:
 func _stop_metronome() -> void:
 	if _headless:
 		return
-	var sfx := _autoload("Sfx")
+	var sfx := _sfx()
 	if sfx != null and sfx.has_method("set_metronome"):
 		sfx.call("set_metronome", 0.0, false)
+
+
+## config.sfx (a Node with set_metronome; tests) or the Sfx autoload.
+func _sfx() -> Node:
+	var injected := config.get("sfx") as Node
+	return injected if injected != null else _autoload("Sfx")
 
 
 func _on_pause_requested(reason: String) -> void:
@@ -1541,12 +1612,29 @@ func _take_gestures(rider: LocalRider) -> Array[StringName]:
 	return out
 
 
+## True when the local rider's gestures come from the InputRouter: a rendering session with
+## a router, which merges its attached rider's pedal gestures (BRIEF 3.5; WlInputRouter).
+func _gestures_from_router() -> bool:
+	return not _headless and _input_router != null and _input_router.has_method("take_gestures")
+
+
+## The local rider's gestures since the last tick: InputRouter.take_gestures() when rendering
+## (the rider's own queue is then left to the router, so no gesture is taken twice), else
+## LocalRider.take_gestures(); a headless session drains and ignores a router's queue.
+func _local_gestures(rider: LocalRider) -> Array[StringName]:
+	var out: Array[StringName] = []
+	if _gestures_from_router():
+		out.assign(_input_router.call("take_gestures"))
+		return out
+	if _input_router != null and _input_router.has_method("take_gestures"):
+		_input_router.call("take_gestures")
+	return _take_gestures(rider)
+
+
 func _take_actions() -> Array[StringName]:
 	var out: Array[StringName] = []
 	if _input_router != null and _input_router.has_method("take_actions"):
 		out.assign(_input_router.call("take_actions"))
-		if _input_router.has_method("take_gestures"):
-			_input_router.call("take_gestures")
 	out.append_array(_injected_actions)
 	_injected_actions.clear()
 	return out

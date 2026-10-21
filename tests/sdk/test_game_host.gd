@@ -89,6 +89,10 @@ func test_ctx_fields() -> void:
 	assert_eq(ctx.scaling_mode, Wl.FAIR_FTP)
 	assert_eq(ctx.game_dir, Kit.FIXTURES.path_join("runtime/fx_solo"))
 	assert_eq(ctx.content_dir, Kit.FIXTURES.path_join("_content/fx_solo"))
+	assert_eq(ctx.assets_dir, WlGameRegistry.ASSETS_ROOT.path_join("fx_solo"))
+	assert_eq(ctx.player(-1).name, "Bot 1")
+	assert_eq(ctx.peers(), [1, -1] as Array[int])
+	assert_eq(ctx.content_overrides, {"levels.json": {"speed_scale": 3}})
 	assert_eq(ctx.progress.game_id, "fx_solo")
 	assert_string_contains(ctx.progress.path, "p1/games/fx_solo/progress.json")
 	assert_eq(_game(b).get("configure_count"), 1)
@@ -499,6 +503,179 @@ func test_report_data() -> void:
 	assert_not_null(d["directives"][0]["applied"])
 	assert_eq((_rider(b).get("ack_queue") as Array).size(), 0, "a local rider's ack queue is drained on the host")
 	assert_eq((d["phases"]["1"] as Array)[0]["ended_by"], Wl.ENDED_DURATION)
+
+
+func test_results_get_a_row_per_rider_when_the_game_leaves_rows_out() -> void:
+	var b := _solo("tiny", {}, 1)
+	var host := _host(b)
+	_game(b).set("results_mode", "empty")
+	host.start()
+	Kit.step(b, 100)
+	host.end_session("timeout")
+	var res := host.final_results()
+	assert_eq(res.grade, "C", "the game's own fields stay")
+	assert_eq(res.rows.size(), 2, "the platform's base row for every rider")
+	assert_eq(int(res.rows[0]["peer_id"]), 1)
+	assert_eq(int(res.rows[1]["peer_id"]), -1)
+	assert_eq(res.rows[1]["name"], "Bot 1")
+	assert_almost_eq(float(res.row(1)["kj"]), host.ctx.stats.kj(1), 1e-9)
+	for k: String in ["kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s", "time_in_band_s", "time_in_band_pct", "xp", "unlocks", "stats", "slot_index", "is_bot"]:
+		assert_true(res.rows[0].has(k), k)
+
+
+func test_results_rows_the_game_wrote_keep_their_values() -> void:
+	var b := _solo("tiny", {}, 1)
+	var host := _host(b)
+	_game(b).set("results_mode", "partial")
+	host.start()
+	Kit.step(b, 100)
+	host.end_session("timeout")
+	var res := host.final_results()
+	assert_eq(res.rows.size(), 2)
+	var mine := res.row(1)
+	assert_eq(float(mine["kj"]), 999.0, "a value the game set is never changed")
+	assert_eq(mine["stats"], {"custom": "yes"})
+	assert_eq(mine["name"], "Rider 1", "missing base keys are filled in")
+	assert_true(mine.has("avg_power_w"))
+	assert_eq(int(res.rows[1]["peer_id"]), -1, "the missing rider is appended")
+
+
+func test_a_confirm_that_resumes_is_not_also_a_game_confirm() -> void:
+	var b := _solo("tiny")
+	var host := _host(b)
+	host.start()
+	Kit.step(b, 2)
+	host.pause("user")
+	Kit.step(b, 2)
+	host.inject_action(&"confirm")
+	Kit.step(b, 1)
+	assert_false(host.is_paused())
+	for c: Dictionary in _game(b).get("local_intent_calls"):
+		assert_false((c["actions"] as Array).has(&"confirm"), "consumed by the resume")
+	host.inject_action(&"confirm")
+	Kit.step(b, 1)
+	var calls: Array = _game(b).get("local_intent_calls")
+	assert_eq(calls[calls.size() - 1]["actions"], [&"confirm"] as Array[StringName], "the next confirm is the game's")
+
+
+class FakeRouter:
+	extends Node
+	var actions: Array[StringName] = []
+	var gestures: Array[StringName] = []
+	var attached: LocalRider = null
+	var detached: int = 0
+
+	func take_actions() -> Array[StringName]:
+		var out := actions
+		actions = []
+		return out
+
+	func take_gestures() -> Array[StringName]:
+		var out := gestures
+		gestures = []
+		return out
+
+	func attach_rider(rider: LocalRider) -> void:
+		attached = rider
+
+	func detach_rider() -> void:
+		detached += 1
+
+
+func test_rendering_takes_gestures_and_actions_from_the_input_router() -> void:
+	var router := FakeRouter.new()
+	_root.add_child(router)
+	var b := _solo("tiny", {"headless": false, "input_router": router})
+	assert_eq(b["err"], "")
+	var host := _host(b)
+	var game := _game(b)
+	assert_eq(router.attached, _rider(b), "the own rider is attached for pedal UI")
+	game.set("keep_frames", true)
+	host.start()
+	Kit.step(b, 2)
+	router.gestures.append(Wl.G_SURGE)
+	router.actions.append(&"confirm")
+	Kit.step(b, 1)
+	var calls: Array = game.get("local_intent_calls")
+	assert_eq(calls[0]["gestures"], [Wl.G_SURGE] as Array[StringName])
+	assert_eq(calls[0]["actions"], [&"confirm"] as Array[StringName])
+	var frames: Array = game.get("frames_seen")
+	var tm: Telemetry = (frames[frames.size() - 1]["players"] as Dictionary)[1]
+	assert_eq(tm.gestures, [Wl.G_SURGE] as Array[StringName], "the frame shows the same gesture")
+	(_rider(b).get("gesture_queue") as Array).append(Wl.G_COAST)
+	Kit.step(b, 1)
+	assert_eq(calls.size(), 1, "one source: the rider's own queue is the router's to merge")
+	host.end_session("timeout")
+	assert_eq(router.detached, 1)
+
+
+func test_headless_takes_gestures_from_the_local_rider() -> void:
+	var router := FakeRouter.new()
+	_root.add_child(router)
+	var b := _solo("tiny", {"input_router": router})
+	var host := _host(b)
+	host.start()
+	router.gestures.append(Wl.G_COAST)
+	(_rider(b).get("gesture_queue") as Array).append(Wl.G_SURGE)
+	Kit.step(b, 1)
+	var calls: Array = _game(b).get("local_intent_calls")
+	assert_eq(calls[0]["gestures"], [Wl.G_SURGE] as Array[StringName])
+	assert_eq(router.gestures, [] as Array[StringName], "the router's queue is drained and ignored")
+
+
+class FakeSfx:
+	extends Node
+	var calls: Array = []
+
+	func set_metronome(rpm: float, on: bool) -> void:
+		calls.append([rpm, on])
+
+
+func test_metronome_follows_the_cadence_band_au2() -> void:
+	var sfx := FakeSfx.new()
+	_root.add_child(sfx)
+	var b := _solo("tiny", {"headless": false, "sfx": sfx})
+	var host := _host(b)
+	var prof := RiderProfile.new()
+	prof.metronome = true
+	_rider(b).profile = prof
+	host.start()
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [90.0, true], "the preferred cadence without a band")
+	host.ctx.directives.cadence_band(1, 80, 100)
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [90.0, true], "the band's centre")
+	host.ctx.directives.cadence_band(1, 60, 70)
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [65.0, true])
+	host.ctx.directives.cadence_band(1, 0, 0)
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [90.0, true], "cleared: the preferred cadence again")
+	prof.metronome = false
+	host.ctx.directives.cadence_band(1, 70, 80)
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [75.0, false], "off in the profile: silent")
+	host.end_session("timeout")
+	assert_eq(sfx.calls[sfx.calls.size() - 1], [0.0, false], "stopped at the end")
+
+
+func test_headless_never_touches_the_metronome() -> void:
+	var sfx := FakeSfx.new()
+	_root.add_child(sfx)
+	var b := _solo("tiny", {"sfx": sfx})
+	_host(b).start()
+	_host(b).ctx.directives.cadence_band(1, 80, 100)
+	_host(b).end_session("timeout")
+	assert_eq(sfx.calls, [])
+
+
+func test_oversize_snapshots_are_counted_c9() -> void:
+	var b := _solo("tiny")
+	var host := _host(b)
+	_game(b).set("snapshot_pad", NetMessages.MAX_MESSAGE_BYTES + 100)
+	host.start()
+	Kit.step(b, 3)
+	assert_eq(host.report.oversize_snapshots, 2, "platform ticks 0 and 2")
+	assert_gt(host.report.max_snapshot_bytes, NetMessages.MAX_MESSAGE_BYTES)
+	assert_push_warning("is over 16384 bytes")
+	_game(b).set("snapshot_pad", 0)
+	Kit.step(b, 2)
+	assert_eq(host.report.oversize_snapshots, 2, "a small snapshot is not counted")
 
 
 func test_stats_accumulate_while_riding() -> void:

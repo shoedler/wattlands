@@ -14,6 +14,10 @@ extends GameModule
 
 ## Test hook: called at the end of every sim_step(dt, frame) with (self, frame).
 var on_step: Callable = Callable()
+## Test knobs: results() returns no rows ("empty") or only the first rider's ("partial");
+## snapshot() carries a string of snapshot_pad characters.
+var results_mode: String = ""
+var snapshot_pad: int = 0
 ## Recorded calls.
 var configure_count: int = 0
 var steps: int = 0
@@ -142,7 +146,10 @@ func snapshot() -> Dictionary:
 	var d := {}
 	for peer: Variant in distance.keys():
 		d[str(peer)] = snappedf(float(distance[peer]), 0.001)
-	return {"steps": float(steps), "d": d, "ev": float(events_sent), "name": "fx"}
+	var snap := {"steps": float(steps), "d": d, "ev": float(events_sent), "name": "fx"}
+	if snapshot_pad > 0:
+		snap["pad"] = "x".repeat(snapshot_pad)
+	return snap
 
 
 func apply_snapshot(snap: Dictionary) -> void:
@@ -170,6 +177,15 @@ func hud_spec() -> HudSpec:
 
 func results() -> GameResults:
 	results_count += 1
+	if results_mode == "empty":
+		var bare := GameResults.new()
+		bare.grade = "C"
+		return bare
+	if results_mode == "partial":
+		var part := GameResults.new()
+		part.grade = "A"
+		part.rows.append({"peer_id": ctx.players[0].peer_id, "kj": 999.0, "stats": {"custom": "yes"}})
+		return part
 	var r := GameResults.from_stats(ctx.stats, ctx.players)
 	r.grade = "B"
 	r.score = float(steps)
