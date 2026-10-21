@@ -218,7 +218,7 @@ func test_countdown_saves_after_10_s_and_the_cooldown_finishes() -> void:
 	t.saved.connect(func(w: float) -> void: saved.append(w))
 	t.finished.connect(func(r: Dictionary) -> void: finished.append(r))
 	t.start(200.0)
-	_ride(t, 330.0)
+	_ride(t, 390.0)
 	t.step(DT, _tel(t, 1.0, {"coasting": true}))
 	assert_eq(t.countdown_left(), 10.0)
 	_ride(t, 9.95)
@@ -244,7 +244,7 @@ func test_back_during_the_countdown_keeps_the_old_ftp() -> void:
 	var t := _new_test()
 	watch_signals(t)
 	t.start(200.0)
-	_ride(t, 330.0)
+	_ride(t, 390.0)
 	t.step(DT, _tel(t, 1.0, {"coasting": true}))
 	_ride(t, 4.0)
 	t.back()
@@ -282,6 +282,68 @@ func test_ending_in_the_ramp_in_is_not_a_result() -> void:
 	assert_eq(r["steps_completed"], 0)
 	assert_signal_not_emitted(t, "countdown")
 	assert_eq(t.state, FtpTest.COOLDOWN)
+
+
+func test_ending_before_the_first_step_is_complete_is_not_a_result() -> void:
+	var t := _new_test()
+	watch_signals(t)
+	t.start(200.0)
+	_ride(t, 300.0 + 59.0)
+	assert_eq(t.state, FtpTest.STEPS)
+	t.step(DT, _tel(t, 1.0, {"rescue": true}))
+	var r := t.result()
+	assert_eq(r["end_reason"], FtpTest.END_RESCUE)
+	assert_eq(r["steps_completed"], 0)
+	assert_gt(float(r["best_1min_w"]), 0.0, "a best minute exists, but it is ramp-in")
+	assert_false(r["valid"], "no completed one-minute step: no FTP to save")
+	assert_eq(t.countdown_left(), -1.0)
+	_ride(t, 15.0)
+	assert_signal_not_emitted(t, "countdown")
+	assert_signal_not_emitted(t, "saved")
+
+
+func test_one_completed_step_is_a_result() -> void:
+	var t := _new_test()
+	t.start(200.0)
+	_ride(t, 300.0 + 60.0 + 5.0)
+	t.step(DT, _tel(t, 1.0, {"coasting": true}))
+	var r := t.result()
+	assert_eq(r["steps_completed"], 1)
+	assert_true(r["valid"])
+	assert_eq(t.countdown_left(), 10.0)
+
+
+func test_save_now_saves_during_the_countdown_only() -> void:
+	var t := _new_test()
+	var saved: Array[float] = []
+	t.saved.connect(func(w: float) -> void: saved.append(w))
+	t.start(200.0)
+	t.save_now()
+	_ride(t, 390.0)
+	t.save_now()
+	assert_eq(saved.size(), 0, "nothing to save while the test runs")
+	t.step(DT, _tel(t, 1.0, {"coasting": true}))
+	_ride(t, 2.0)
+	t.save_now()
+	assert_eq(saved, [t.result()["ftp_w"]] as Array[float])
+	assert_true(t.result()["saved"])
+	assert_eq(t.countdown_left(), -1.0)
+	_ride(t, 12.0)
+	t.save_now()
+	assert_eq(saved.size(), 1, "saved once")
+	assert_eq(t.state, FtpTest.COOLDOWN, "the cool-down goes on")
+
+
+func test_save_now_after_back_does_nothing() -> void:
+	var t := _new_test()
+	watch_signals(t)
+	t.start(200.0)
+	_ride(t, 390.0)
+	t.step(DT, _tel(t, 1.0, {"coasting": true}))
+	t.back()
+	t.save_now()
+	assert_signal_not_emitted(t, "saved")
+	assert_true(t.result()["cancelled"])
 
 
 func test_idle_test_ignores_steps() -> void:
@@ -326,10 +388,10 @@ func test_run_on_drives_the_rider_and_saves_the_profile() -> void:
 	assert_eq(gov.configured.get("profile"), "ramp_test")
 	assert_eq(gov.plan, plan, "the rider's governor follows the test plan")
 	assert_eq(r.plan(), plan)
-	for _i in roundi(330.0 / DT):
+	for _i in roundi(390.0 / DT):
 		r.tick(DT)
 	assert_eq(t.state, FtpTest.STEPS)
-	assert_eq(r.telemetry().phase_index, 1)
+	assert_eq(r.telemetry().phase_index, 2, "step 1 done, in step 2")
 	gov.st = {"mode": Wl.ERG, "applied_target_w": 0, "coasting": true}
 	r.tick(DT)
 	assert_eq(t.state, FtpTest.COOLDOWN)
@@ -350,7 +412,7 @@ func test_run_on_drives_the_rider_and_saves_the_profile() -> void:
 	var starts: Array = []
 	for c: Array in gov.called("start_phase"):
 		starts.append(c[1])
-	assert_eq(starts, [0, 1, plan.cooldown_index()])
+	assert_eq(starts, [0, 1, 2, plan.cooldown_index()])
 	Paths.set_override("")
 	Util.remove_tree(dir)
 

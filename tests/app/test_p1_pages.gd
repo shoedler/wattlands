@@ -80,24 +80,26 @@ func test_ftp_test_runs_to_a_saved_ftp() -> void:
 	assert_eq(rider.phases_started, [0] as Array[int])
 	rider.tm.power_w = 250.0
 	rider.tm.cadence_rpm = 90.0
-	for _i in int(330.0 / Wl.SIM_DT):
+	for _i in int(390.0 / Wl.SIM_DT):
 		s.step_fixed()
-	assert_eq(rider.phases_started.slice(0, 2), [0, 1] as Array[int], "the first step after the 300 s ramp-in")
+	assert_eq(rider.phases_started.slice(0, 3), [0, 1, 2] as Array[int], "the first step after the 300 s ramp-in, then the second")
 	assert_eq(s.stage, "running")
 	rider.tm.cadence_rpm = 30.0
 	for _i in int(6.0 / Wl.SIM_DT):
 		s.step_fixed()
 	assert_eq(s.stage, "cooldown", "cadence < 50 rpm for 5 s ends the test")
-	assert_eq(s.test.end_reason, AppFtpTest.END_CADENCE)
+	assert_eq(s.test.end_reason, FtpTest.END_CADENCE)
 	assert_eq(rider.phases_started[rider.phases_started.size() - 1], rider.plan_set.cooldown_index())
-	for _i in int(181.0 / Wl.SIM_DT):
-		s.step_fixed()
-	assert_eq(s.stage, "result")
-	assert_eq(rider.finished_rides, 1, "the ride is saved")
-	assert_eq(menu(s).ids(), ["save", "keep"])
+	assert_eq(menu(s).ids(), ["save", "keep", "panic"], "the 10 s save countdown runs as the cool-down starts")
 	s.tick(10.5)
 	assert_eq(prof.ftp_w, 188.0, "0.75 x 250 W, rounded")
 	assert_true(prof.ftp_verified)
+	for _i in int(171.0 / Wl.SIM_DT):
+		s.step_fixed()
+	assert_eq(s.stage, "done")
+	assert_eq(rider.finished_rides, 1, "the ride is saved")
+	assert_eq(menu(s).ids(), ["back"])
+	s.feed_action(&"back")
 	assert_eq(fx.app.state, "settings")
 
 
@@ -109,14 +111,19 @@ func test_ftp_test_back_keeps_the_old_ftp() -> void:
 	var rider := fx.trainer.local_rider() as FakeRider
 	rider.tm.power_w = 300.0
 	rider.tm.cadence_rpm = 90.0
-	for _i in int(70.0 / Wl.SIM_DT):
+	for _i in int(400.0 / Wl.SIM_DT):
 		s.step_fixed()
-	s.feed_gesture(Wl.G_COAST)
-	assert_eq(s.test.end_reason, AppFtpTest.END_COAST)
+	rider.tm.coasting = true
+	s.step_fixed()
+	assert_eq(s.test.end_reason, FtpTest.END_COASTING, "stopping pedaling ends the test")
+	assert_true(s.result["valid"])
+	rider.tm.coasting = false
+	for _i in int(3.0 / Wl.SIM_DT):
+		s.step_fixed()
+	s.feed_action(&"back")
 	for _i in int(181.0 / Wl.SIM_DT):
 		s.step_fixed()
-	assert_eq(s.stage, "result")
-	s.feed_action(&"back")
+	assert_eq(s.stage, "done")
 	assert_eq(prof.ftp_w, 200.0, "back keeps the old FTP")
 
 
