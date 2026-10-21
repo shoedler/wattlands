@@ -1,0 +1,32 @@
+{
+  "_doc": "Conservative price estimates per endpoint and quality, in USD per image (BRIEF 3.10). `per_image`: a flat price up to `base_pixels`, scaled by pixel count above. `table`: fal's listed output price per size; a request costs the dearest listed row at or below the smallest listed size that holds it (scaled by pixel count above the largest row), plus `prompt_allowance_usd` for prompt text tokens. Estimates are rounded up to $0.0001. An endpoint without an entry uses `fallback` (the sunburst figure). The budget stop sums max(estimate, billed) per request.",
+  "fallback": "openai/gpt-image-2.5/sunburst/text-to-image",
+  "endpoints": {
+    "openai/gpt-image-2.5/sunburst/text-to-image": {
+      "kind": "per_image",
+      "source": "BRIEF 3.10 and docs/concept/manifest.json: $0.07 an image at high quality up to 1536 x 864, fal's historical average. Lower qualities are priced as high (never below it); xhigh, max and auto scale by flare's listed quality ratios (auto can reach max).",
+      "base_pixels": 1327104,
+      "usd": {
+        "low": 0.07,
+        "medium": 0.07,
+        "high": 0.07,
+        "xhigh": 0.125,
+        "max": 0.281,
+        "auto": 0.281
+      }
+    },
+    "openai/gpt-image-2.5/flare/text-to-image": {
+      "kind": "table",
+      "source": "fal model page for openai/gpt-image-2.5/flare/text-to-image, read 2026-10-21 (output cost per image; prompt text is extra at $5 per 1M tokens).",
+      "prompt_allowance_usd": 0.002,
+      "rows": [
+        { "width": 1024, "height": 768, "usd": { "low": 0.00402, "medium": 0.00903, "high": 0.03612, "xhigh": 0.0642, "max": 0.14445, "auto": 0.14445 } },
+        { "width": 1024, "height": 1024, "usd": { "low": 0.00588, "medium": 0.01317, "high": 0.05268, "xhigh": 0.09366, "max": 0.21072, "auto": 0.21072 } },
+        { "width": 1024, "height": 1536, "usd": { "low": 0.00474, "medium": 0.01029, "high": 0.04116, "xhigh": 0.07377, "max": 0.16464, "auto": 0.16464 } },
+        { "width": 1920, "height": 1072, "usd": { "low": 0.00441, "medium": 0.00951, "high": 0.03945, "xhigh": 0.07014, "max": 0.1578, "auto": 0.1578 } },
+        { "width": 2560, "height": 1440, "usd": { "low": 0.00615, "medium": 0.01434, "high": 0.05529, "xhigh": 0.09828, "max": 0.2211, "auto": 0.2211 } },
+        { "width": 3840, "height": 2160, "usd": { "low": 0.01113, "medium": 0.02595, "high": 0.10008, "xhigh": 0.1779, "max": 0.40026, "auto": 0.40026 } }
+      ]
+    }
+  }
+}

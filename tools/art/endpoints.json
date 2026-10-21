@@ -1,0 +1,36 @@
+{
+  "_doc": "Request limits per fal endpoint (BRIEF 3.10). generate.mjs requests each sprite at the valid size nearest the sprite's aspect: both sides multiples of `multiple`, at least `min_pixels`, at most `max_pixels`, `max_edge` and `max_aspect`. Among sizes that match the aspect equally well it prefers the one nearest `target_pixels`, and it never exceeds `max_request_pixels` (the size the base price covers) unless no valid size fits under it. `params` lists the input fields the endpoint takes and their allowed values; quality is sent only where the endpoint takes it. Missing fields fall back to `defaults` (fal's own figures where it states them, else 3840 px and 3:1 per BRIEF 3.10). Source: fal model API pages, read 2026-10-21.",
+  "defaults": {
+    "multiple": 16,
+    "min_pixels": 655360,
+    "max_pixels": 8294400,
+    "max_edge": 3840,
+    "max_aspect": 3,
+    "target_pixels": 1048576,
+    "max_request_pixels": 1327104,
+    "params": {
+      "background": ["auto", "transparent", "opaque"],
+      "output_format": ["jpeg", "png", "webp"]
+    }
+  },
+  "endpoints": {
+    "openai/gpt-image-2.5/sunburst/text-to-image": {
+      "label": "GPT Image 2.5 Sunburst",
+      "use": "final art",
+      "params": {
+        "quality": ["auto", "low", "medium", "high", "xhigh", "max"],
+        "background": ["auto", "transparent", "opaque"],
+        "output_format": ["jpeg", "png", "webp"]
+      }
+    },
+    "openai/gpt-image-2.5/flare/text-to-image": {
+      "label": "GPT Image 2.5 Flare",
+      "use": "cheap drafts",
+      "params": {
+        "quality": ["auto", "low", "medium", "high", "xhigh", "max"],
+        "background": ["auto", "transparent", "opaque"],
+        "output_format": ["jpeg", "png", "webp"]
+      }
+    }
+  }
+}
