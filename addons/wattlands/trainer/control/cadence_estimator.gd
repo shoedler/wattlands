@@ -9,6 +9,8 @@ extends RefCounted
 ## Rules (W1):
 ##   - Present and fresh: the sample is returned unchanged, and while cadence >= MIN_LEARN_RPM
 ##     and speed >= MIN_LEARN_KMH the km/h-per-rpm ratio is learned (exponential average).
+##     A reported value that repeats while the speed moved by more than FROZEN_SPEED_CHANGE
+##     since it last changed teaches nothing (it may be a frozen trainer estimate).
 ##   - Absent: estimated as speed / ratio, with HAS_CADENCE and CADENCE_ESTIMATED set.
 ##   - Stale: a reported cadence that has not changed for more than `stale_s` while the speed
 ##     moved by more than STALE_SPEED_CHANGE (a frozen trainer estimate, for example after a
@@ -21,10 +23,12 @@ var stale_s: float = 3.0
 
 const MIN_LEARN_RPM := 40.0
 const MIN_LEARN_KMH := 5.0
-const LEARN_ALPHA := 0.2
+const LEARN_ALPHA := 0.1
 const CALIBRATION_S := 10.0
 ## Relative speed change that marks an unchanged cadence as stale.
 const STALE_SPEED_CHANGE := 0.15
+## Relative speed change that stops learning from a repeated cadence value.
+const FROZEN_SPEED_CHANGE := 0.05
 
 var _ratio: float = 0.0
 var _calibrating: bool = false
@@ -47,20 +51,24 @@ func process(sample: TrainerSample) -> TrainerSample:
 	if (sample.flags & TrainerSample.CADENCE_ESTIMATED) != 0:
 		_last_fresh_t = sample.t
 		return sample
+	var was_calibrating := _calibrating
 	if _calibrating:
 		_calibrate(sample)
 	var present := sample.has_cadence()
 	var stale := false
+	var repeated_while_moving := false
 	if present:
 		if _last_reported_rpm < 0.0 or absf(sample.cadence_rpm - _last_reported_rpm) > 1e-6:
 			_last_reported_rpm = sample.cadence_rpm
 			_reported_changed_t = sample.t
 			_speed_at_change_kmh = sample.speed_kmh if sample.has_speed() else -1.0
-		elif sample.t - _reported_changed_t > stale_s and sample.has_speed() and _speed_at_change_kmh >= 0.0:
+		elif sample.has_speed() and _speed_at_change_kmh >= 0.0:
+			var moved := absf(sample.speed_kmh - _speed_at_change_kmh)
 			var ref := maxf(_speed_at_change_kmh, MIN_LEARN_KMH)
-			stale = absf(sample.speed_kmh - _speed_at_change_kmh) > STALE_SPEED_CHANGE * ref
+			repeated_while_moving = moved > FROZEN_SPEED_CHANGE * ref
+			stale = sample.t - _reported_changed_t > stale_s and moved > STALE_SPEED_CHANGE * ref
 	if present and not stale:
-		if not _calibrating:
+		if not was_calibrating and not repeated_while_moving:
 			_learn(sample)
 		_last_fresh_t = sample.t
 		return sample
