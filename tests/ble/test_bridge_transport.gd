@@ -170,6 +170,18 @@ func test_connect_and_disconnect() -> void:
 	assert_false(_t.is_link_up())
 
 
+func test_connect_while_linked_reports_the_link_again() -> void:
+	_connected()
+	_t.connect_device(ADDR.to_lower())
+	assert_eq(_named("device_connected"), [["device_connected", ADDR]])
+	_pump(10)
+	var connects := 0
+	for op: String in _server.ops():
+		if op == "connect":
+			connects += 1
+	assert_eq(connects, 1, "no second connect request")
+
+
 func test_connect_error_is_operation_failed() -> void:
 	_server.connect_error = "device not found"
 	_ready_bridge()

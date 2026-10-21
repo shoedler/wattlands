@@ -66,8 +66,9 @@ const FTMS_SERVICE_UUID := "1826"
 const NAME_HINT := "kickr"
 ## Backoff: 1, 2, 4, 8 s, then capped at 15 s (BRIEF 4.4).
 const BACKOFF_MAX_S := 15.0
-## A connect attempt (or a backend re-initialization) that takes longer fails.
-const CONNECT_TIMEOUT_S := 20.0
+## A connect attempt (or a backend re-initialization) that takes longer fails. Longer
+## than the bridge's own 25 s connect timeout, so the transport normally answers first.
+const CONNECT_TIMEOUT_S := 30.0
 ## FtmsClient.begin() must reach client_ready within this.
 const SETUP_TIMEOUT_S := 30.0
 const DEFAULT_SCAN_S := 10.0
@@ -180,6 +181,14 @@ func connect_to(address: String) -> void:
 		return
 	_halt_scan()
 	var switching := not _target.is_empty() and not _same_address(addr, String(_target["address"]))
+	if not switching and not _target.is_empty():
+		# The trainer already linked: nothing to do when ready or setting up; after a
+		# control loss or a failed setup, run begin() again instead of reconnecting.
+		if _link == Link.READY or _link == Link.SETUP:
+			return
+		if _link == Link.CONTROL_LOST or _link == Link.SETUP_FAILED:
+			retry_control()
+			return
 	if switching and _link != Link.IDLE:
 		_link = Link.IDLE
 		_transport.disconnect_device()

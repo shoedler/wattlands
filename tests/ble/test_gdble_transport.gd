@@ -227,6 +227,13 @@ func test_reconnect_reuses_the_handle_without_doubling_signals() -> void:
 	assert_eq(_named("characteristic_notified").size(), 1)
 
 
+func test_connect_while_linked_reports_the_link_again() -> void:
+	var d := _connected()
+	_t.connect_device(ADDR.to_lower())
+	assert_eq(d.count("connect_async"), 1, "no second connect_async()")
+	assert_eq(_named("device_connected"), [["device_connected", ADDR]])
+
+
 func test_switching_device_detaches_the_old_handle() -> void:
 	var d := _connected()
 	_t.connect_device("11:22:33:44:55:66")
@@ -360,6 +367,24 @@ func test_manager_error_signal_is_mapped() -> void:
 	_t.initialize()
 	_mgr.error_occurred.emit("scan failed")
 	assert_eq(_named("operation_failed"), [["operation_failed", "bluetooth", "scan failed"]])
+
+
+func test_real_manager_signals_connect_by_name() -> void:
+	# Creates the real BluetoothManager (no initialize(), no scan, never in the tree) and
+	# checks that every signal the transport connects by name exists and connects.
+	if not GdbleTransport.library_loaded():
+		pending("GDBLE is not loaded in this process")
+		return
+	var t: GdbleTransport = autofree(GdbleTransport.new())
+	var m: Node = t._create_manager()
+	assert_not_null(m)
+	assert_eq(m.get_class(), GdbleTransport.MANAGER_CLASS)
+	var cb := func(_a: Variant = null, _b: Variant = null) -> void: pass
+	for sig: String in ["adapter_initialized", "device_discovered", "device_updated", "device_connected",
+			"device_disconnected", "error_occurred", "ble_event"]:
+		GdbleTransport._connect_signal(m, StringName(sig), cb)
+		assert_true(Signal(m, StringName(sig)).is_connected(cb), sig)
+	m.free()
 
 
 # --- pure helpers --------------------------------------------------------------------------

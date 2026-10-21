@@ -520,10 +520,31 @@ func test_control_lost_while_riding() -> void:
 	assert_eq(_reconnected, [dev], "the governor restores the last safe mode")
 
 
+func test_connect_to_the_linked_trainer() -> void:
+	_ready_on(_gdble)
+	_m.connect_to(ADDR.to_lower())
+	assert_eq(_gdble.count("connect_device"), 1, "already ready: nothing to do")
+	_client.control_lost.emit("Machine Status 0xFF")
+	_m.connect_to(ADDR)
+	assert_eq(_gdble.count("connect_device"), 1, "no second connect")
+	assert_eq(_client.begin_count, 2, "begin() again after the control loss")
+	assert_true(_m.is_ready())
+
+
 func test_retry_control_only_when_lost() -> void:
 	_ready_on(_gdble)
 	_m.retry_control()
 	assert_eq(_client.begin_count, 1)
+
+
+func test_runs_while_the_tree_is_paused() -> void:
+	_ready_on(_gdble)
+	var tree := get_tree()
+	tree.paused = true
+	var running := [_m.can_process(), _m.transport().can_process(), _m.client().can_process(),
+		_m.device().can_process()]
+	tree.paused = false
+	assert_eq(running, [true, true, true, true], "manager, transport, client and device keep running")
 
 
 # --- strings and defaults ----------------------------------------------------------------

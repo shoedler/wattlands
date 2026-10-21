@@ -143,6 +143,10 @@ func stop_scan() -> void:
 func connect_device(address: String) -> void:
 	if not _require_manager("connect"):
 		return
+	if _link_up and same_address(address, _address):
+		# Already linked: report it again instead of a second connect_async().
+		device_connected.emit(_address)
+		return
 	var handle: Variant = _manager.call(&"connect_device", address)
 	if not (handle is RefCounted):
 		operation_failed.emit("connect", "device not found: %s" % address)

@@ -116,6 +116,10 @@ func stop_scan() -> void:
 func connect_device(address: String) -> void:
 	if not _require_ready("connect"):
 		return
+	if _link_up and GdbleTransport.same_address(address, _address):
+		# Already linked: report it again instead of a second connect request.
+		device_connected.emit(_address)
+		return
 	_address = address
 	_disconnect_requested = false
 	_connecting = true
