@@ -1,8 +1,8 @@
 class_name RelayRooms
 extends RefCounted
 ## The relay's room semantics (BRIEF 5.3) without sockets: hello and version check, room
-## codes, peer ids from 1, create/join/leave, reconnect tokens (120 s, same peer id), host
-## drops held for 120 s, `to: 0` broadcast excluding the sender, non-hosts only to the host,
+## codes, peer ids from 1, create/join/leave, reconnect tokens (one per peer, kept while the
+## peer is in the room, valid 120 s after a drop, same peer id), host drops held for 120 s, `to: 0` broadcast excluding the sender, non-hosts only to the host,
 ## 16 KB messages, 60 msgs/s per connection (burst 120), 60 s idle timeout and the 4 h room
 ## lifetime. It never looks inside `d`.
 ##
@@ -237,9 +237,12 @@ func _on_join(conn: int, c: Dictionary, msg: Dictionary) -> void:
 	var tokens: Dictionary = room["tokens"]
 	var token: Variant = msg.get("token")
 	var peer := 0
+	var peer_token := ""
 	if token is String and tokens.has(token):
+		# A peer keeps its token while it is in the room, so a rejoin whose answer is lost
+		# (a second drop mid-handshake) can still come back with the token it has.
 		peer = int(tokens[token])
-		tokens.erase(token)
+		peer_token = token
 		var old := int(peers.get(peer, -1))
 		if old >= 0 and old != conn and _conns.has(old):
 			# The old socket is still open (a half-open drop): it is superseded.
@@ -253,11 +256,11 @@ func _on_join(conn: int, c: Dictionary, msg: Dictionary) -> void:
 			return
 		peer = int(room["next_peer"])
 		room["next_peer"] = peer + 1
+		peer_token = _new_token(room, peer)
 	peers[peer] = conn
-	var new_token := _new_token(room, peer)
 	c["code"] = code
 	c["peer"] = peer
-	_out.append([conn, {"t": "joined", "peer": peer, "host": HOST_PEER, "token": new_token}])
+	_out.append([conn, {"t": "joined", "peer": peer, "host": HOST_PEER, "token": peer_token}])
 	_to_room(room, {"t": "peer_joined", "peer": peer}, peer)
 
 

@@ -202,6 +202,24 @@ func test_token_file_defaults_to_paths() -> void:
 
 # --- reconnect -----------------------------------------------------------------------------
 
+func test_drop_during_the_rejoin_handshake_retries_with_the_same_token() -> void:
+	var r := room()
+	var c1 := r[1]
+	r[0].mark_started()
+	pump()
+	clear_logs()
+	_lt(c1).simulate_drop()
+	pump(1)
+	assert_eq(c1.state, "reconnecting")
+	assert_eq(_lt(c1).pending_frames(), 1, "the rejoin went out at once; its answer is in flight")
+	_lt(c1).simulate_drop()
+	pump(60)
+	assert_eq(c1.state, "joined")
+	assert_eq(c1.local_peer, 2, "the token survived the lost answer")
+	assert_eq(events("c1", "refused").size(), 0)
+	assert_eq(events("host", "rejoin_requested").back(), ["rejoin_requested", 2])
+
+
 func test_rate_limited_rejoin_keeps_trying() -> void:
 	var r := room()
 	var c1 := r[1]
@@ -216,6 +234,47 @@ func test_rate_limited_rejoin_keeps_trying() -> void:
 	pump()
 	assert_eq(c1.state, "joined")
 	assert_eq(c1.local_peer, 2)
+
+
+func _snap(seq: int) -> Dictionary:
+	return Protocol.game_msg("snapshot", {"game_id": "workout", "seq": seq, "t": seq * 0.1, "state": {"n": seq}})
+
+
+func test_rejoined_client_takes_the_hosts_latest_snapshot_whatever_its_seq() -> void:
+	var r := room()
+	var h := r[0]
+	var c1 := r[1]
+	h.mark_started()
+	for i in range(1, 11):
+		h.broadcast(_snap(i))
+	pump()
+	assert_eq(int(c1.latest_snapshot()["seq"]), 10)
+	h.rejoin_requested.connect(func(peer: int) -> void: h.send_to(peer, _snap(3)))
+	_lt(c1).simulate_drop()
+	pump()
+	assert_eq(c1.state, "joined")
+	assert_eq(int(c1.latest_snapshot()["seq"]), 3, "the snapshot sent for the rejoin is applied")
+	assert_eq(int(c1.stats["stale_snapshots"]), 0)
+
+
+func test_session_start_and_end_in_lobby_state_reset_snapshot_seqs() -> void:
+	var r := room()
+	var h := r[0]
+	var c1 := r[1]
+	h.mark_started()
+	for i in range(1, 6):
+		h.broadcast(_snap(i))
+	pump()
+	assert_eq(c1.snapshot_buffer().size(), 5)
+	h.mark_ended()
+	pump()
+	assert_false(c1.session_started)
+	assert_true(c1.snapshot_buffer().is_empty(), "the session ended")
+	h.mark_started()
+	h.broadcast(_snap(1))
+	pump()
+	assert_true(c1.session_started)
+	assert_eq(int(c1.latest_snapshot()["seq"]), 1, "a new session's first snapshot is not stale")
 
 
 # --- host-side checks ------------------------------------------------------------------------

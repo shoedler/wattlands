@@ -19,7 +19,8 @@ var latency_ticks: int = 0
 var _hub: LoopbackHub = null
 var _conn: int = 0
 # Entries: [due_poll, kind, ...]; kind "text" (control frame), "msg" (from, d_text),
-# "close" (socket closed by the hub), "drop" (simulate_drop).
+# "close" (socket closed by the hub), "drop" and "fail" (simulate_drop in a room or while
+# connecting).
 var _inbox: Array = []
 var _polls: int = 0
 
@@ -38,19 +39,39 @@ static func hub_transport(hub: RefCounted) -> LoopbackTransport:
 
 
 ## Simulate this peer's socket dropping (the hub sends peer_left with reason "dropped").
+## Frames in flight are lost with the socket. In a room this emits disconnected("dropped")
+## on the next poll; while a create or join is in flight, disconnected("error"), as a real
+## socket that closes before the answer.
 func simulate_drop() -> void:
 	if _conn == 0 or _hub == null:
 		return
 	var was_in_room := _in_room
+	var was_pending := not _pending.is_empty()
 	var conn := _conn
 	_conn = 0
 	_socket_state = SocketState.CLOSED
 	_in_room = false
 	local_peer = 0
 	_pending = {}
+	_inbox.clear()
 	_hub.detach(conn)
-	if was_in_room and not _leaving:
+	if _leaving:
+		return
+	if was_in_room:
 		_inbox.append([_polls + latency_ticks, "drop"])
+	elif was_pending:
+		_inbox.append([_polls + latency_ticks, "fail"])
+
+
+## Fault injection (BRIEF 5.4): drop the socket of `peer` in this transport's room, this
+## transport's own when `peer` is its local peer. False if there is no such live peer.
+func drop(peer: int) -> bool:
+	if peer != 0 and peer == local_peer:
+		simulate_drop()
+		return true
+	if _hub == null or room_code == "":
+		return false
+	return _hub.drop_peer(room_code, peer)
 
 
 ## A freed transport is a dropped socket (a restarted or killed client).
@@ -89,6 +110,9 @@ func poll() -> void:
 			"drop":
 				last_error = "dropped"
 				disconnected.emit("dropped")
+			"fail":
+				last_error = "error"
+				disconnected.emit("error")
 
 
 # --- RelayClientTransport socket layer ------------------------------------------------------

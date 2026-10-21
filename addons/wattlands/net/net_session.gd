@@ -900,6 +900,9 @@ func _on_connected() -> void:
 		_publish_lobby()
 	else:
 		role = Wl.CLIENT
+		# After a rejoin the host sends its latest snapshot; an older buffer (or one from a
+		# session that ended while we were away) must not hold it back as stale.
+		clear_snapshots()
 		_set_state(STATE_JOINED, room_code)
 		_send_player_info()
 		if _ready_wanted and not session_started:
@@ -1128,7 +1131,11 @@ func _refuse_peer(peer: int, reason: String) -> void:
 
 func _on_lobby_state(data: Dictionary) -> void:
 	lobby = data
-	session_started = bool(data.get("started", session_started))
+	var started := bool(data.get("started", session_started))
+	if started != session_started:
+		# A session began or ended: its snapshot seqs start over.
+		clear_snapshots()
+	session_started = started
 	if _local_profile != null and str(_local_info.get("p_eff_mode", "")) != str(data.get("scaling", Wl.FAIR_FTP)):
 		var po: Variant = _local_info.get("player_options", {})
 		_local_info = _normalize_info(_info_from_local_profile())

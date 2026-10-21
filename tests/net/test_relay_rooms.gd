@@ -170,10 +170,15 @@ func test_drop_and_reconnect_keeps_peer_id() -> void:
 	var back := _join(5, code, j["token"])
 	assert_eq(back["t"], "joined")
 	assert_eq(back["peer"], 2, "the token keeps the peer id")
-	assert_ne(back["token"], j["token"], "a fresh token is issued")
-	# The used token is gone; a third connection with it joins as a new peer.
+	assert_eq(back["token"], j["token"], "the peer keeps its token")
+	# The answer may be lost (a second drop mid-handshake): the same token still works, and
+	# a socket that comes back with it supersedes the one still open.
 	var again := _join(6, code, j["token"])
-	assert_eq(again["peer"], 3)
+	assert_eq(again["peer"], 2)
+	assert_eq(r.take_closes(), [5] as Array[int], "the superseded socket is closed")
+	var fresh := _join(7, code)
+	assert_eq(fresh["peer"], 3, "a join without a token is a new peer")
+	assert_ne(fresh["token"], j["token"])
 
 
 func test_tokens_expire_after_120_s() -> void:

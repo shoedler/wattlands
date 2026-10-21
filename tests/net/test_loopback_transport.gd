@@ -165,7 +165,25 @@ func test_drop_and_reconnect_with_token_keeps_peer_id() -> void:
 	_pump()
 	assert_eq(a.local_peer, 2)
 	assert_true(U.same(events["h"].back(), ["peer_joined", 2]))
-	assert_ne(a.reconnect_token, token, "a fresh token after the rejoin")
+	assert_eq(a.reconnect_token, token, "the peer keeps its token")
+
+
+func test_drop_while_joining_fails_the_attempt_and_the_token_still_works() -> void:
+	var r := _room()
+	var a := r[1]
+	var token := a.reconnect_token
+	a.simulate_drop()
+	_pump()
+	a.join(a.room_code, token)
+	assert_eq(a.pending_frames(), 1, "the joined answer is in flight")
+	a.simulate_drop()
+	assert_eq(a.pending_frames(), 1, "frames in flight are lost; one failure event")
+	_pump()
+	assert_true(U.same(events["a"].back(), ["disconnected", "error"]), str(events["a"]))
+	assert_false(a.is_open())
+	a.join(a.room_code, token)
+	_pump()
+	assert_eq(a.local_peer, 2, "the same token after a lost answer")
 
 
 func test_hub_drop_peer_and_freed_transport_are_drops() -> void:
@@ -174,6 +192,18 @@ func test_hub_drop_peer_and_freed_transport_are_drops() -> void:
 	assert_false(hub.drop_peer(r[0].room_code, 9))
 	_pump()
 	assert_true(U.same(events["h"].back(), ["peer_left", 3, "dropped"]))
+	assert_true(r[0].drop(2), "the stub's drop(peer)")
+	assert_false(r[0].drop(9))
+	_pump()
+	assert_true(U.same(events["h"].back(), ["peer_left", 2, "dropped"]))
+	assert_true(U.same(events["a"].back(), ["disconnected", "dropped"]))
+	r[1].join(r[1].room_code, r[1].reconnect_token)
+	_pump()
+	assert_true(r[1].drop(r[1].local_peer), "its own peer: simulate_drop")
+	_pump()
+	assert_true(U.same(events["a"].back(), ["disconnected", "dropped"]))
+	r[1].join(r[1].room_code, r[1].reconnect_token)
+	_pump()
 	all.erase(r[1])
 	r[1].free()
 	_pump()
