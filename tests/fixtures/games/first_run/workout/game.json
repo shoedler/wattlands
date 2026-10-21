@@ -1,0 +1,25 @@
+{
+	"id": "workout",
+	"title": "Workout fixture",
+	"summary": "Fixture game for sdk-runtime tests.",
+	"version": "0.1.0",
+	"min_players": 1,
+	"max_players": 4,
+	"bots": true,
+	"presentation": "2d",
+	"pixel_base": [
+		640,
+		360
+	],
+	"entry": "res://tests/fixtures/games/fx_game.gd",
+	"contents": [
+		"tiny",
+		"short",
+		"split",
+		"bad"
+	],
+	"default_content": "tiny",
+	"e2e_content": "tiny",
+	"zero_input_content": "tiny",
+	"first_run_priority": 0
+}
