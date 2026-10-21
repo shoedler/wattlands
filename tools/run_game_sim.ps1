@@ -13,7 +13,7 @@
 # for Godot, refuses --allow-hw and --allow-network, adds --mock-trainer=erg and --caller-cwd, and runs
 #   tools\godot.ps1 --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>
 # in its own powershell -File process, so every argument (JSON included) reaches Godot unchanged.
-# Exit codes as tools/run_game_sim: 0 completed, 2 flags or locks, 3 setup, 4 report, 75, 124.
+# Exit codes as tools/run_game_sim: 0 completed, 2 flags or locks, 3 setup, 4 report, 5 script errors, 75, 124.
 
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'lib\wrapper_common.ps1')

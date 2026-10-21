@@ -121,4 +121,30 @@ describe('through Godot', () => {
       assert.match(r.stderr, /--report is required/);
     });
   }
+
+  // The CLI end to end (BRIEF 3.6, 7.1): a real _template session, twice with one seed. It needs
+  // sdk-runtime's GameSimRunner, so it skips itself while that is still the W0 stub (W1 worktrees).
+  const sh = shells.find((s) => s.ok);
+  const skipReal = (!GODOT && 'no Godot binary (tools/godot_bin.local or GODOT)') || (!sh && 'no shell');
+  test(`${sh ? sh.name : 'bash'}: a real _template session writes its report and FIT, deterministically`, { skip: skipReal, timeout: 1_200_000 }, async (t) => {
+    const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-run-game-sim-real-'));
+    temps.push(cwd);
+    const flags = ['--game=_template', '--content=short', '--players=1', '--bots=1', '--rider=erg', '--sim-speed=1000', '--seed=4', '--godot-timeout=600'];
+    const reports = [];
+    for (const name of ['a', 'b']) {
+      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv(), cwd, timeoutMs: 900_000 });
+      if (r.code === 2 && /not implemented/.test(r.stderr)) {
+        t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
+        return;
+      }
+      assert.equal(r.code, 0, r.stderr + r.stdout);
+      assert.match(r.stdout, /run_game_sim: end_reason=complete/);
+      const report = JSON.parse(fs.readFileSync(path.join(cwd, 'out', `${name}.json`), 'utf8'));
+      assert.equal(report.end_reason, 'complete');
+      assert.equal(report.fit_paths.length, 1, 'one FIT per human slot, none for the bot');
+      assert.ok(fs.existsSync(path.join(cwd, 'out', 'fit', `${name}_slot0.fit`)));
+      reports.push(report);
+    }
+    assert.equal(reports[0].deterministic_hash, reports[1].deterministic_hash, 'same arguments and seed, same hash');
+  });
 });

@@ -17,7 +17,8 @@
 #   tools/godot.sh --headless --path <repo> -s tools/sdk/run_game_sim_main.gd -- <flags>
 # Exit codes: 0 the run completed (any end_reason; the report says which), 2 bad flags or locks,
 # 3 setup failed (unknown game or content, rejected plan), 4 the report could not be written,
-# 75 Godot lock wait timeout, 124 Godot run timeout.
+# 5 Godot logged a script error during the run (report written if it got that far), 75 Godot lock
+# wait timeout, 124 Godot run timeout. Each run first deletes the old report and FIT files at --report.
 set -u
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(dirname "$here")"
