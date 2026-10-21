@@ -169,3 +169,86 @@
 - Alternatives: the 82% panel alone; a status-like panic label in the HUD's own colors.
 - Reason: seen in tools/screenshot --app-screen=session as a client: the panic overlay's title ran into the sprint banner showing through the panel; the panic button looked like one more HUD panel, and its long label reserved 559 px of the bottom edge from the teammate strip. In the solo lobby an empty message line pushed the content down.
 
+
+## 2026-10-21 (W4): A client's governor works from the rider's own profile (W3 SAF-1)
+
+- Decision: `AppSessionLauncher.build_config` overwrites a CLIENT's own slot's `ftp`, `ftp_verified`, `haptics_on` and `haptic_intensity` with the rider's profile (`apply_own_profile`) before `LocalRider.setup`, on both the `session_start` and the rejoin (`lobby_state`) path. HOST and SOLO keep their lobby slot, which comes from their own `player_info`.
+- Alternatives: trust the host's echo (an honest host only rounds the FTP); clamp the host's values to a range.
+- Reason: BRIEF 3.3 ("ERG targets always come from each rider's own FTP") and 4.6.7 (each client validates locally). A host that sent FTP 5000 made the client's floor 1500 W; the host also removed the 0.85 unverified factor and turned opted-out haptics back on. The core's own check in `LocalRider.setup` and `SafetyGovernor.configure` is the trainer and core fixers' part.
+
+## 2026-10-21 (W4): --sim-speed only drives a MockTrainer session (W3 SAF-3)
+
+- Decision: `AppSessionLauncher.effective_sim_speed(device, requested)` gives the requested speed only for a `MockTrainer`; any other device runs the session clock at 1 and logs a warning. It is a local copy of the rule; the trainer area adds the TrainerService helper for its menu clock, and the launcher can switch to it when that lands.
+- Alternatives: refuse to start; ignore the flag only above 1.
+- Reason: every governor time rule runs on platform time, so x4 meant 120 W/s slew and 8 writes/s on a real trainer (BRIEF 4.5, 4.6.2), and x0.25 stretched rescue and coasting.
+
+## 2026-10-21 (W4): Settings make the trainer safe before the link drops (W3 SAF-8)
+
+- Decision: Disconnect, connecting another trainer and "use the mock trainer" first shut the menu rider's governor down (`LocalRider.shutdown()`: SIM flat, then Stop) and wait `SAFE_DRAIN_S` (0.5 s, the grace App.quit gives a real trainer) of screen time before the link drops; with a MockTrainer, no rider, a link that isn't ready or during a session they act at once. Leaving the page mid-wait drops the link at once (the rider is already safe). After Disconnect the shut-down menu rider is set up again (as TrainerService's menu reset does), because the manager hands the same `FtmsTrainer` back on the next connect and TrainerService then keeps its rider; without that the governor would stay dead and App.quit would skip it. After a switch the old rider stays shut down, so its commands never reach the new trainer.
+- Alternatives: wait for the trainer area's TrainerService method (not merged when this round ran; the page has one helper, `make_trainer_safe_then`, to swap); drain by watching FtmsClient (the app never touches it, BRIEF 4.6.11).
+- Reason: BRIEF 4.6.9 "on disconnect: try SIM flat, then Stop". Proven on the emulated KICKR CORE (`tests/app/test_settings_pages.gd`); the effect on a real trainer is a hardware check.
+
+## 2026-10-21 (W4): Network notice on the session screen (W3 NET-6)
+
+- Decision: the session screen draws a banner in its top layer (above the HUD): on a client `NET_HOST_DROPPED` from `peer_left(host)` until `peer_joined(host)` or `host_left`, and `NET_STATE_RECONNECTING` while its own NetSession is reconnecting (HOST and CLIENT). Sending `leave` when the host's window closes is the net area's part.
+- Alternatives: a HUD toast (gone after a few seconds while the wait lasts up to 120 s); the pause overlay (the host's absence doesn't pause the client's ride).
+- Reason: BRIEF 5.5; clients sat 120 s with no notice.
+
+## 2026-10-21 (W4): Menus follow the rider's trainer mode and never ERG-auto-pick (W3 ZIH-6)
+
+- Decision: `AppScreen.tick` passes the local rider's trainer mode (`local_trainer_mode()`: the InputRouter's attached rider; the session screen's own rider) to the active menu with `PedalScanList.set_local_mode`, without `follow_local_mode`. In ERG the hint reads "keep pedaling" and a coast doesn't back out.
+- Alternatives: `follow_local_mode` (it also turns on ERG auto-confirm, which would auto-pick End ride or Panic in the ride menu).
+- Reason: BRIEF 3.5 (coast never means back in ERG); the old hint told an ERG rider to stop pedaling, which only triggered the coasting floor and a pause.
+
+## 2026-10-21 (W4): The first-run profile starts from the profile as it is (W3 PROF-3)
+
+- Decision: both first-run paths (the 20 s rule and the form) copy the current profile (`AppFirstRunScreen.first_run_copy`) and set the name ("Rider" or the typed one) and `created`; the FTP is 200 W unverified (CP = FTP) unless it is already verified, which only an FTP test finished before the profile existed can do.
+- Alternatives: copy only the Settings fields (haptics, Strava, pedal UI, audio) onto a fresh profile.
+- Reason: BRIEF 3.2, 4.6.6: a haptics opt-out made in Settings before the first ride must hold; a verified FTP is more accurate than the 200 W default.
+
+## 2026-10-21 (W4): One launch visit of the title (W3 PROF-1)
+
+- Decision: the main scene records the state it showed before (`AppServices.previous_state`); a title built over a title (the App's deferred `boot()` shows it a second time at launch) is not a new visit.
+- Alternatives: skip the App's second `goto("title")`; derive "fresh start" from the previous state alone.
+- Reason: the launch visit counted twice, so a rider already pedaling at launch never got the 5 s start (BRIEF 3.5). Checked in the real app: `--mock-trainer=const:w=150,rpm=85 --run-seconds=25` with a saved profile now starts Workout and saves the ride.
+
+## 2026-10-21 (W4): Imperial units edit the weight in pounds (W3 PROF-6)
+
+- Decision: with `units` imperial, the profile and first-run weight fields show and step in whole lb (67-440 lb, inside the 30-200 kg range) and store kg; changing units rebuilds the field list. The weight is the only measured value the app shows the rider.
+- Alternatives: remove the units choice; document it as stored only.
+- Reason: BRIEF 3.2 lists units; a visible choice that changed nothing was a defect.
+
+## 2026-10-21 (W4): Results: stats under the grid, W/kg, unlock names (W3 ZIH-1, PROF-5, ZIH-8)
+
+- Decision: each rider's custom stats are a wrapped line under the rows grid ("Ada · ..."), the grid keeps its seven columns, and the side column with the summary line expands and wraps. When the rider opted in (`show_wkg`) an "x.x W/kg average" line follows the summary, computed from the local weight and never sent. Unlock ids show `<GAME_ID>_UNLOCK_<ID>` when the game has that string (as content labels use `<GAME_ID>_CONTENT_<CID>`), else the id.
+- Alternatives: a W/kg grid column (would need every rider's weight); truncating the stats.
+- Reason: a real Workout row made the grid 2599 px wide and pushed Upload, Continue and %FTP off a 1080p screen (BRIEF 3.3, 3.8, 3.9).
+
+## 2026-10-21 (W4): Controls rows show one key and one pad binding (W3 ZIH-3, ZIH-4)
+
+- Decision: a Controls row reads "Action: <first key>, <first pad binding>" with InputBindings' short labels; the content column lists every binding of every action. Leaving the page (coast, back, the Back item, leaving Settings) ends a capture, and the controller's B button cancels one as Esc does (so B can't be captured as a binding, like Esc).
+- Alternatives: a two-line row with a detail line (14 rows would no longer fit 1080 px in height); truncating with an ellipsis.
+- Reason: the long `as_text()` rows were 2635 px wide; a capture left armed rebound the next key or button pressed on Settings.
+
+## 2026-10-21 (W4): Typing a room code needs no click (W3 ZIH-7)
+
+- Decision: on the join page, the first key press of a code character (letters and digits, Crockford rules) while nothing has keyboard focus goes into the code field, which then takes the focus; arrows, Enter, Esc and Space keep their actions, and the on-screen keyboard keeps working for the controller and pedal-scan until the rider types.
+- Alternatives: focus the field when the page opens (the screen then blocks every routed action but back and confirm, so the controller could no longer move the on-screen keyboard).
+- Reason: APP_JOIN_HINT says "Type the host's code"; keys went nowhere until the field was clicked.
+
+## 2026-10-21 (W4): A rider's own .zwo files in the lobby (W3 WO-1)
+
+- Decision: for a game whose game.json lists the `zwo` content scheme, the host and solo lobby's content picker lists the game's contents and then every `*.zwo` in `Paths.user_dir()/workouts/` (created on demand) as `zwo:<absolute path>`, labelled by file name (`APP_CONTENT_ZWO`) and pedal-scan selectable; the page names the folder (`APP_LOBBY_ZWO_HINT`); the session preview shows the importer's clamps. The interactive lobby also takes `--content=<id>` for the game it opens, and a scripted host accepts any id `WlGameRegistry.content_allowed` accepts. A `zwo:` id whose file is gone falls back to the default content.
+- Alternatives: a typed path field (long paths on the on-screen keyboard); only fixing the docs.
+- Reason: BRIEF 3.7 makes .zwo import (Workout Director) P0; no app screen could produce a `zwo:` id, and HARDWARE_TEST.md 6 asks for `--content=zwo:<path>`.
+
+## 2026-10-21 (W4): Strava FTP and weight import in Settings (W3 PROF-4)
+
+- Decision: Settings -> Strava adds "Connect with profile access (for the import)" (`Rides.strava_connect_with_profile`), two toggles (FTP on, weight off by default) and "Import from Strava now" (`Rides.strava_import_athlete`, then the profile is saved); a status line names what was imported.
+- Alternatives: import during the normal connect.
+- Reason: BRIEF 3.8 P1 asks for an opt-in import; profile:read_all is only requested when the rider asks for it.
+
+## 2026-10-21 (W4): The rides history re-uploads rides already on Strava (W3 RS-3)
+
+- Decision: picking a ride whose upload state is uploaded or duplicate calls `Rides.reupload(ride_id)`; any other ride goes through `Rides.upload()`.
+- Reason: BRIEF 3.8 P1 "Rides history with re-upload"; `upload()` only reports the stored state of an uploaded ride, so a ride deleted on Strava could not go up again.
