@@ -17,14 +17,16 @@ extends TrainerDevice
 ##     profile's rpm or the preferred cadence). offset_rpm is measured from the published
 ##     band's centre, so +-(half the band's width + n) holds the rider n rpm outside it.
 ##   cadence_drop (rpm; at_s | at_phase [+ after_s] | at_target_pct [+ at_phase, after_s];
-##     for_s default rest of run): at_s counts platform seconds since the mock was created;
+##     for_s default rest of run): at_s counts profile seconds (profile_time_s(): platform
+##     seconds since the mock was created or restart_profile() was last called);
 ##     at_phase is the plan phase index from set_phase() and after_s counts from entering it
 ##     (leaving the phase before the drop starts re-arms it); at_target_pct waits, inside
 ##     at_phase if given, until the commanded ERG target (the governor's applied target, after
 ##     the unverified factor) is >= n% of FTP, then counts after_s. While a drop is active the
 ##     cadence is its rpm (several active drops: the lowest); rpm 0 means the rider stops
 ##     (0 W). Every instance is independent and fires once.
-##   surge (every_s 60, for_s 2, lift 0.2, sim_pct): every every_s (first at t = every_s) it
+##   surge (every_s 60, for_s 2, lift 0.2, sim_pct): every every_s (first at profile time
+##     every_s) it
 ##     multiplies cadence and reported speed by 1 + lift for for_s, extended until at least
 ##     SURGE_MIN_SAMPLES notifications carried it, so the ERG surge gesture (flywheel speed
 ##     >= 1.12 x its 10 s average for two consecutive ~1 Hz samples) fires on every surge;
@@ -54,6 +56,8 @@ extends TrainerDevice
 ## Keyboard control when enabled: W/S +-10 W, A/D cadence -+5 rpm (Input is read only then).
 ## Everything time-based advances only in tick(dt) (platform time, fixed steps of at most
 ## Wl.SIM_DT); every random stream derives from options.seed, so a run is reproducible.
+## Profile time (at_s, surges, ramp, intervals) starts at creation; restart_profile() restarts
+## it, for a mock that rode through menus before its session started.
 
 ## The profile string this mock was built from ("erg" after an invalid spec fell back).
 var spec: String = ""
@@ -204,6 +208,8 @@ var _phase_index: int = -1
 var _phase_start_t: float = 0.0
 ## Rider model: platform seconds since creation, power, its rate (follower), cadence, speed.
 var _t: float = 0.0
+## Platform time at which profile time is 0 (creation, or the last restart_profile()).
+var _run_start_t: float = 0.0
 var _power_w: float = 0.0
 var _power_rate: float = 0.0
 var _cadence_rpm: float = 0.0
@@ -532,6 +538,27 @@ func restore_control() -> void:
 	status_changed.emit(STATUS_READY, "")
 
 
+## Seconds of profile time: at_s drops, surges, ramp and intervals count from here.
+func profile_time_s() -> float:
+	return _t - _run_start_t
+
+
+## Restart the profile from now (for example at session start, after the mock rode through
+## menus): profile time returns to 0, every cadence_drop re-arms and every surge is next due
+## every_s from now. The rider (power, W' balance, cadence, speed), the commanded state, the
+## published bands and phase, and the notification schedule carry on unchanged.
+func restart_profile() -> void:
+	_run_start_t = _t
+	for d in _drops:
+		d.state = _DROP_WAITING
+		d.trigger_t = 0.0
+		d.start_t = 0.0
+	for s in _surges:
+		s.active = false
+		s.samples = 0
+		s.next_t = _t + s.every_s
+
+
 # --- Configuration --------------------------------------------------------------------
 
 func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionary) -> void:
@@ -605,6 +632,7 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 	_band_rng = SeededRng.make(SeededRng.derive(_seed, "mock_trainer:band"))
 	_dropout_rng = SeededRng.make(SeededRng.derive(_seed, "mock_trainer:dropouts"))
 	_t = 0.0
+	_run_start_t = 0.0
 	_next_sample_t = _sample_interval()
 
 
@@ -617,7 +645,7 @@ func _step(h: float) -> void:
 	_update_surges()
 	var drop_rpm := _active_drop_rpm()
 	var follower := _scripted_power.is_empty()
-	var goal := _follower_goal_w() if follower else _scripted_power_w(_scripted_power, _t)
+	var goal := _follower_goal_w() if follower else _scripted_power_w(_scripted_power, profile_time_s())
 	if _kb_power_offset_w != 0.0:
 		goal = maxf(goal + _kb_power_offset_w, 0.0)
 	if drop_rpm >= 0.0 and drop_rpm < 1.0:
@@ -764,7 +792,7 @@ func _update_drops() -> void:
 	for d in _drops:
 		if d.state == _DROP_WAITING:
 			if d.at_s >= 0.0:
-				if _t + 1e-9 >= d.at_s:
+				if profile_time_s() + 1e-9 >= d.at_s:
 					d.state = _DROP_ACTIVE
 					d.start_t = _t
 			elif d.at_phase < 0 or _phase_index == d.at_phase:

@@ -402,6 +402,26 @@ func test_cadence_drop_wins_over_surge_and_band() -> void:
 
 # --- surge ----------------------------------------------------------------------------
 
+func test_surge_for_s_sets_how_long_the_lift_lasts() -> void:
+	var m := _mock("erg+surge:every_s=30,for_s=5,lift=0.25", FTP, {"seed": 5})
+	m.set_target_power(160)
+	for k in range(1, 5):
+		var start := 30.0 * k
+		_run_to(m, start - 0.1)
+		assert_false(m.surging(), "surge %d not yet" % k)
+		_run_to(m, start + 4.9)
+		assert_true(m.surging(), "surge %d still on just before for_s" % k)
+		assert_almost_eq(m.cadence_rpm(), 112.5, 1e-6, "lift 0.25")
+		_run_to(m, start + 5.0 + MockTrainer.SAMPLE_MAX_S + 0.1)
+		assert_false(m.surging(), "surge %d over after for_s (it had its two notifications)" % k)
+	var lifted := 0
+	for s in _samples:
+		if s.cadence_rpm > 100.0:
+			lifted += 1
+			assert_between(fmod(s.t, 30.0), 0.0, 5.0 + MockTrainer.SAMPLE_MAX_S, "only inside a surge (t %.2f)" % s.t)
+	assert_between(lifted, 4 * 4, 4 * 6, "about five notifications per 5 s surge")
+
+
 func test_surge_lifts_cadence_and_speed_every_every_s() -> void:
 	var m := _mock("erg+surge:every_s=60,for_s=2,lift=0.2", FTP, {"seed": 7})
 	m.set_target_power(200)
@@ -589,6 +609,38 @@ func test_erg_compliance_in_sim_and_erg() -> void:
 	m.set_power_band(152.0, 210.0)
 	_run(m, 20.0)
 	assert_almost_eq(m.instantaneous_power_w(), 0.7 * 181.0, 1.0, "compliance x the band centre")
+
+
+# --- profile time ---------------------------------------------------------------------
+
+func test_restart_profile_restarts_at_s_surges_and_scripts() -> void:
+	var m := _mock("erg+surge:every_s=60,for_s=2+cadence_drop:rpm=40,at_s=30,for_s=10", FTP, {"seed": 3})
+	m.set_target_power(150)
+	_run_to(m, 35.0)
+	assert_true(m.cadence_drop_active(), "menu time: the drop already fired")
+	_run_to(m, 100.0)
+	m.restart_profile()
+	assert_almost_eq(m.profile_time_s(), 0.0, 1e-9)
+	assert_almost_eq(m.platform_time_s(), 100.0, 1e-6, "platform time carries on")
+	assert_false(m.surging())
+	_run_to(m, 129.9)
+	assert_false(m.cadence_drop_active(), "the drop re-armed: at_s counts from the restart")
+	assert_false(m.surging(), "the 120 s surge of the old schedule is gone")
+	_run_to(m, 130.05)
+	assert_true(m.cadence_drop_active(), "at_s = 30 after the restart")
+	_run_to(m, 159.9)
+	assert_false(m.surging())
+	_run_to(m, 160.05)
+	assert_true(m.surging(), "the first surge is every_s after the restart")
+	assert_almost_eq(m.instantaneous_power_w(), 150.0, 1.0, "the rider carried on")
+	for i in range(1, _samples.size()):
+		assert_lt(_samples[i].t - _samples[i - 1].t, MockTrainer.SAMPLE_MAX_S + DT + 1e-6, "no gap in notifications")
+	var r := _mock("ramp:from_w=100,to_w=200,over_s=100")
+	_run_to(r, 150.0)
+	assert_eq(r.instantaneous_power_w(), 200.0)
+	r.restart_profile()
+	_run_to(r, 200.0)
+	assert_almost_eq(r.instantaneous_power_w(), 150.0, 1e-6, "the ramp starts again")
 
 
 # --- helpers --------------------------------------------------------------------------
