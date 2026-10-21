@@ -223,6 +223,13 @@ func test_id_keys_at_any_depth_become_ints() -> void:
 	assert_typeof(st["half_id"], TYPE_FLOAT, "a fractional value is not an id: left alone")
 	assert_eq(st["name_id"], "text", "strings stay strings")
 	assert_eq(back["game_id"], "siege", "game_id holds a string and stays one")
+	# decode() of the text takes the hinted path and must agree.
+	var back2 := Protocol.decode(JSON.stringify(msg))
+	assert_true(U.same(back, back2), U.diff(back, back2))
+	var only_strings := Protocol.decode(Protocol.encode(Protocol.game_msg("snapshot",
+		{"game_id": "g", "seq": 1, "state": {"v": [[1.0, 2.0]], "neg_id": -3.0}})))
+	assert_typeof((only_strings["state"] as Dictionary)["neg_id"], TYPE_INT, "negative ids too")
+	assert_typeof((((only_strings["state"] as Dictionary)["v"] as Array)[0] as Array)[0], TYPE_FLOAT)
 
 
 func test_telemetry_intents_are_never_converted() -> void:
