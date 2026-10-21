@@ -50,13 +50,13 @@
 
 ## 2026-10-21: Coalesced directives are rate-limited per kind, flushed before other messages
 
-- Decision: host `directive` messages of kind `course_grade`, `cadence_band`, `power_band` to one peer are sent at once unless one of the same kind went to that peer in the last 100 ms; then the latest waits and is sent when the window ends (or after two polls) or before any other message to that peer.
-- Alternatives: batch everything per tick; no coalescing.
+- Decision: host `directive` messages of kind `course_grade`, `cadence_band`, `power_band` to one peer are sent at once unless one of the same kind went to that peer in the last 100 ms; then the latest waits and is sent when the window ends or before any other message to that peer. The window is measured on the session's clock, whatever the poll rate; only a clock that stands still (polled without `tick()` after `set_time()`) releases a waiting directive two polls after it started waiting.
+- Alternatives: batch everything per tick; no coalescing; a fixed two-poll window (the first W1 version: at 60-144 fps it let 20 or more a second through per kind, against C11).
 - Reason: OWNERSHIP C11 keeps the host under 60 frames a second without delaying the common 2 Hz case and without reordering `request` or `phase`.
 
 ## 2026-10-21: Game manifests from GameRegistry, overridable
 
-- Decision: `set_game()` looks the manifest up in the `GameRegistry` autoload (duck-typed `manifest(id)`/`games()`) for `min_players`, `max_players`, `bots` and option defaults; `set_game_manifest()` registers one explicitly (tests, in-process runs). Player info without `games` gets the registry's `{id: version}`.
+- Decision: `set_game()` looks the manifest up in the game registry (`WlNetSession.registry`, default the `GameRegistry` autoload; duck-typed `manifest(id)`/`games()`) for `min_players`, `max_players`, `bots` and option defaults; `set_game_manifest()` registers one explicitly (tests, in-process runs). Player info without `games`, and `set_local_profile()` with empty `games`, get the registry's `{id: version}`.
 - Alternatives: change `set_game()`'s frozen signature; leave defaults to the app shell.
 - Reason: the lobby needs the limits and defaults (OWNERSHIP REG4, PS14) and the frozen API has no place for them.
 
@@ -65,3 +65,15 @@
 - Decision: after a leave (client) or a relay-initiated close (server) the WebSocket stays open 250 ms (wall clock) before `close()`, and both ends read every pending frame before handling a close.
 - Alternatives: close at once.
 - Reason: on Godot 4.7.2 a text frame sent right before `close()` never reaches the other side (measured with a probe); the relay would see a drop instead of a leave, and clients would miss the final `error`.
+
+## 2026-10-21: One reconnect token per peer in RelayRooms
+
+- Decision: the in-process relay (`RelayRooms`, behind `LoopbackHub` and `LocalRelayServer`) keeps one token per peer while the peer is in the room and returns the same token on every rejoin; a join with that token supersedes a socket still open for the peer. Clients still save whatever token each `created`/`joined` returns.
+- Alternatives: a fresh token on every join (the first W1 version).
+- Reason: with rotation, a second drop during the rejoin handshake loses the new token with the answer, and the client comes back as a new peer (after the start: `session_in_progress`). BRIEF 5.3 says a token "stays valid for 120 s and keeps the same peer id"; clients that save the latest token work with either relay.
+
+## 2026-10-21: Leaving cancels what is in flight
+
+- Decision: `WlNetSession.leave()`, refusals, the session's end and `start_offline()` call the transport's `leave()` even before the room exists; `RelayClientTransport.leave()` then sends `leave` (harmless outside a room) and closes the socket, and late `created`/`joined` frames are ignored. A rejoin attempt that fails to connect or is `rate_limited` is retried at the next backoff step instead of ending the session.
+- Alternatives: ignore stale `connected` events in NetSession only.
+- Reason: a join answered after `leave()` used to put the session back in the room ("joined" after "offline"), and the host listed a rider who had left.
