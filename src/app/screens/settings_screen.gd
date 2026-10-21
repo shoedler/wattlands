@@ -704,8 +704,8 @@ func set_scan_interval(v: Variant) -> void:
 
 ## The Controls page's rows: Reset to defaults first, then one row per action. Esc and B cancel
 ## a capture, so they can never be captured: Reset is how a rider who moved `back` off them gets
-## them back (BRIEF 3.5 defaults). It comes first because the 14 action rows and Back run below
-## the 1080p screen, and the scan must never highlight a row the rider can't see.
+## them back (BRIEF 3.5 defaults). It comes first because the last action rows and Back already
+## run below the 1080p screen, so a last row would be scanned while out of sight.
 func controls_fields() -> Array:
 	var fields: Array = [
 		{
