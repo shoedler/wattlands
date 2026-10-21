@@ -135,3 +135,15 @@ Short ADRs for `addons/wattlands/ui/`, `addons/wattlands/audio/`, `tests/ui/` an
 - Decision: additive `HudToasts.set_side()` / `HudBanner.set_side()` (-1 left, 0 centre, 1 right); HudLayer sets the side from the anchor (Rect2i areas centre). The timeline's clock (time left in the phase) is 48 px at full size, like the gear; the timeline's base_size grows to 640 x 162 and min_rect to 380 x 108.
 - Alternatives: keep centred toasts in corners; keep the clock at 40 px as a secondary number.
 - Reason: in Workout's top-left toast area a short toast sat centred under a longer one, half-way into the screen; the time left in an interval is the number a rider checks most after watts, and BRIEF 3.9 asks for key numbers of at least 48 px.
+
+## 2026-10-21 (W4): The rescue banner always shows; show_safety_banners hides only warm-up and pause
+
+- Decision: `HudBanner.safety_state()` shows rescue whatever `show_safety` says; `HudSpec.show_safety_banners = false` now hides only the warm-up and pause banners (contract doc comment updated, no API change). Priority with the flag on is unchanged (paused > rescue > warm-up); with it off, rescue shows even while paused.
+- Alternatives: a separate compact rescue fallback like `ensure_power_visible`; a conformance check that games keep the flag true; keep the opt-out as it was.
+- Reason: BRIEF 4.6.3 says the governor shows "rescue", and 4.6 outranks game choices. With the flag off and no local teammate card, only the rescue sound was left. No shipped game turns the flag off, so nothing visible changes for Workout or the template.
+
+## 2026-10-21 (W4): Trainer control lost shows a notice in the session HUD
+
+- Decision: `HudLayer` links `EventBus.trainer_control_lost` and `trainer_status_changed`. A loss puts up `TRAINER_ANOTHER_APP_CONTROL` ("Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect.") as a trainer notice in the banner area (additive `HudBanner.set_trainer_notice()` / `trainer_text()` / `trainer_label()`: dark panel, orange border, the warm-up banner's smaller size) and plays the "warning" sound, once per loss. It stays up, also across a rebuild and while a retry runs, until `trainer_status_changed` reports `ready`. `show_safety_banners` does not hide it. Only a rendering GameHost builds a HudLayer, so headless peers show nothing.
+- Alternatives: a toast (gone after 3 s while the trainer still has no load); `BLE_STATUS_CONTROL_HELD` ("... Close it, then retry.": no retry control exists in the session); clearing on any status other than `control_lost` (a retry's `connected` would hide it before control is back); a session-screen banner in the app shell (ui-hud already follows the session bus, and the app's session bus is the autoload EventBus that TrainerService emits on).
+- Reason: BRIEF 4.4 says to tell the player another app may hold control; a Machine Status 0xFF arrives mid-ride, and until now only the menus said so. `TRAINER_ANOTHER_APP_CONTROL` names Zwift and the Wahoo app in the brief's own words and its "reconnect" matches the way back (Settings, connect the same trainer, which calls `retry_control()`).

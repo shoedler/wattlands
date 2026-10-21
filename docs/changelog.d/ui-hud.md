@@ -5,3 +5,4 @@
 - HUD kit: power gauge with a target band that glows in band, cadence with its band, W' bar, phase timeline with next-phase preview, teammate strip with slot chips (color, shape, pattern, hollow), toasts, rescue, warm-up and pause banners, big readouts and the gear indicator; `HudLayer` places them at anchors or at art-pixel rects through the `PixelViewport` and follows the session bus.
 - Shared Theme and `WlTheme` sizes and colors (Godot's default font until Atkinson Hyperlegible is added).
 - `Sfx`: fifteen synthesized effects, game-registered clips, looping synth clips and a cadence metronome.
+- HUD: the rescue banner always shows (`show_safety_banners = false` now hides only warm-up and pause), and a lost trainer control mid-ride (Request Control 0x05 or Machine Status 0xFF) shows "another app (Zwift, the Wahoo app) may hold control" in the banner area until the trainer is ready again.
