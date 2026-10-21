@@ -36,14 +36,20 @@ const PENNANT_SCALE := 1.5
 ## Off-screen riders sit this far inside the left and right edges (the flag points right).
 const EDGE_MARGIN_LEFT := 10.0
 const EDGE_MARGIN_RIGHT := 30.0
-## Client display, other riders: render_t runs on the frame clock INTERP_DELAY_S behind the
-## newest snapshot's host time (NetSession's documented 100 ms interpolation, host_time() - 0.1;
-## a game has no NetSession handle, so the snapshot's tick is the host time) and never passes
-## the newest snapshot (no extrapolation).
+## Client display, other riders: render_t runs on the frame clock interp_delay() behind the
+## newest snapshot's host time (a game has no NetSession handle, so the snapshot's tick is the
+## host time) and never passes the newest snapshot (no extrapolation). The delay is the mean
+## spacing of the snapshot history, at least INTERP_DELAY_S (NetSession's documented 100 ms
+## interpolation at 10 Hz, host_time() - 0.1) and at most INTERP_DELAY_MAX_S. Under the 8-rider
+## load snapshots arrive about once a second; a 0.1 s delay would hold the other riders at the
+## newest snapshot for most of each second and then hurry them on.
 const INTERP_DELAY_S := 0.1
 ## render_t further than this from where it belongs (the first snapshot, a rejoin, a stall)
 ## jumps there.
 const CLOCK_RESYNC_S := 1.5
+## The longest delay. It stays under CLOCK_RESYNC_S, so a render_t held at the newest snapshot
+## is never resynced (sent back) when the delay grows.
+const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
 ## A render_t that fell behind (a late snapshot held it at the newest) catches up with this
 ## time constant.
 const CLOCK_CATCHUP_TAU_S := 0.25
@@ -106,14 +112,23 @@ func _is_client() -> bool:
 	return game != null and game.ctx != null and game.ctx.role == Wl.CLIENT
 
 
+## Client: how far render_t runs behind the newest snapshot (s): the snapshot history's mean
+## spacing, clamped to INTERP_DELAY_S..INTERP_DELAY_MAX_S (INTERP_DELAY_S before two snapshots
+## are in). 0.1 at 10 Hz, 1.0 for snapshots a second apart.
+func interp_delay() -> float:
+	var spacing := game.history.mean_spacing() if game != null and game.history != null else 0.0
+	return clampf(spacing, INTERP_DELAY_S, INTERP_DELAY_MAX_S)
+
+
 ## render_t moves with the frame clock, catches up softly when it is behind the newest
-## snapshot's time minus INTERP_DELAY_S, and stops at the newest snapshot.
+## snapshot's time minus interp_delay(), and stops at the newest snapshot. A delay that grows
+## leaves render_t ahead of its goal: it runs on and waits at the newest snapshot, never back.
 func _advance_clock(delta: float) -> void:
 	var history := game.history
 	if history == null or history.is_empty():
 		return
 	var newest := history.newest_t()
-	var goal := newest - INTERP_DELAY_S
+	var goal := newest - interp_delay()
 	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
 		render_t = goal
 		_clock_set = true

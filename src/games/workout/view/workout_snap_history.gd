@@ -2,7 +2,8 @@ class_name WorkoutSnapHistory
 extends RefCounted
 ## Client: every rider's distance in the last few snapshots, keyed by the host's game time
 ## (the snapshot's tick x Wl.SIM_DT), so the ride view can draw the other riders between two
-## snapshots (BRIEF 5.1; NetSession's 100 ms interpolation). WorkoutGame.apply_snapshot pushes
+## snapshots (BRIEF 5.1; 100 ms behind at 10 Hz like NetSession, longer when snapshots arrive
+## less often: mean_spacing()). WorkoutGame.apply_snapshot pushes
 ## one entry per snapshot it applies; the view only reads it. Times come from the host's
 ## ticks, never from a clock.
 
@@ -28,6 +29,14 @@ func is_empty() -> bool:
 ## The newest entry's host time (0 when empty).
 func newest_t() -> float:
 	return float(entries.back()["t"]) if not entries.is_empty() else 0.0
+
+
+## The mean host time between neighbouring entries (s): 0.1 at 10 Hz, about 1 under the
+## 8-rider load (NetSession's send budget). 0 with fewer than two entries.
+func mean_spacing() -> float:
+	if entries.size() < 2:
+		return 0.0
+	return (newest_t() - float(entries.front()["t"])) / float(entries.size() - 1)
 
 
 ## Records the distances of the snapshot just applied to `state`, at host time `t`. A time

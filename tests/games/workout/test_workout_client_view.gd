@@ -1,6 +1,7 @@
 extends GutTest
 ## BRIEF 5.1 on a client's ride view: the other riders are drawn between the two snapshots
-## around render_t (100 ms behind the newest snapshot, never past it), the local rider from its
+## around render_t (behind the newest snapshot by the snapshots' mean spacing, 100 ms at 10 Hz,
+## 1 s under the 8-rider load; never past the newest), the local rider from its
 ## own prediction blended softly toward the host's value (it snaps only past LOCAL_SNAP_M and
 ## never moves backwards otherwise). The host and SOLO draw the state as it is.
 
@@ -45,6 +46,7 @@ func test_other_riders_are_drawn_between_two_snapshots() -> void:
 	_game.apply_snapshot(_snap(20, 100.0, 100.5, 120.0))
 	_game.apply_snapshot(_snap(22, 101.0, 100.5, 122.0))
 	_view.advance(FRAME)
+	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "10 Hz: 0.1 s")
 	assert_almost_eq(_view.render_t, 1.0, 1e-9, "the first frame starts 0.1 s behind the newest")
 	assert_almost_eq(_view.shown_distance(1), 100.0, 1e-9, "the older snapshot at its own time")
 	_view.advance(0.05)
@@ -94,6 +96,84 @@ func test_render_time_catches_up_softly_and_resyncs_after_a_gap() -> void:
 	assert_almost_eq(_view.render_t, 223.0 * Wl.SIM_DT - V.INTERP_DELAY_S, 1e-9)
 	assert_eq(_game.history.entries.size(), 1)
 	assert_almost_eq(_view.shown_distance(1), 300.0, 1e-9, "the only entry")
+
+
+## Under the 8-rider load snapshots reach a client about once a second (GAME_SDK 12): the delay
+## grows to their spacing, so render_t runs on every frame and the other riders move at their
+## own speed, without waiting at the newest snapshot, hurrying on or going back.
+func test_snapshots_a_second_apart_interpolate_without_a_hold() -> void:
+	# At host time t rider 1 and the local rider are at 100 + 6 t, the bot at 120 + 5 t.
+	_game.apply_snapshot(_snap(20, 106.0, 106.0, 125.0))
+	_view.advance(FRAME)
+	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "one snapshot: no spacing yet")
+	assert_almost_eq(_view.render_t, 0.9, 1e-9)
+	for i in 59:
+		_view.advance(FRAME)
+	assert_almost_eq(_view.render_t, 1.0, 1e-9, "the first second waits at the only snapshot")
+	var last_t := _view.render_t
+	var last_one := _view.shown_distance(1)
+	var last_bot := _view.shown_distance(-1)
+	var frames := 0
+	var hold := 0
+	var longest_hold := 0
+	for second in range(2, 9):
+		var t := float(second)
+		_game.apply_snapshot(_snap(20 * second, 100.0 + 6.0 * t, 100.0 + 6.0 * t, 120.0 + 5.0 * t))
+		for i in 60:
+			_view.advance(FRAME)
+			frames += 1
+			var moved := _view.render_t - last_t
+			assert_true(moved >= 0.0, "frame %d: render_t never goes back" % frames)
+			hold = hold + 1 if moved < 0.5 * FRAME else 0
+			longest_hold = maxi(longest_hold, hold)
+			var one := _view.shown_distance(1)
+			var bot := _view.shown_distance(-1)
+			assert_true(one >= last_one and bot >= last_bot, "frame %d: never back" % frames)
+			assert_almost_eq(
+				one - last_one, 6.0 * FRAME, 1e-9, "frame %d: rider 1 at 6 m/s" % frames
+			)
+			assert_almost_eq(
+				bot - last_bot, 5.0 * FRAME, 1e-9, "frame %d: the bot at 5 m/s" % frames
+			)
+			last_t = _view.render_t
+			last_one = one
+			last_bot = bot
+		assert_almost_eq(_view.interp_delay(), 1.0, 1e-9, "second %d: 1 s behind" % second)
+		assert_almost_eq(_view.render_t, t, 1e-9, "second %d: at the newest" % second)
+	assert_eq(frames, 420)
+	assert_eq(longest_hold, 0, "once the spacing is known no frame waits")
+	assert_almost_eq(_view.shown_distance(1), 148.0, 1e-9, "100 + 6 x 8 s")
+	assert_almost_eq(_view.shown_distance(-1), 160.0, 1e-9, "120 + 5 x 8 s")
+
+
+## The delay is the history's mean spacing, never under INTERP_DELAY_S (a burst) and never over
+## INTERP_DELAY_MAX_S; a render_t ahead of its goal runs on and never goes back.
+func test_the_delay_follows_the_snapshot_spacing_within_bounds() -> void:
+	assert_almost_eq(V.INTERP_DELAY_MAX_S, 1.4, 1e-12, "CLOCK_RESYNC_S - 0.1")
+	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-12, "no snapshot yet")
+	for tick in [20, 21, 22]:
+		_game.apply_snapshot(_snap(tick, 100.0, 100.0, 100.0))
+	assert_almost_eq(_game.history.mean_spacing(), 0.05, 1e-9, "a burst 0.05 s apart")
+	assert_almost_eq(_view.interp_delay(), V.INTERP_DELAY_S, 1e-9, "never under 0.1 s")
+	_game.apply_snapshot(_snap(42, 100.0, 100.0, 100.0))
+	assert_almost_eq(_view.interp_delay(), 1.1 / 3.0, 1e-9, "the mean of 0.05, 0.05 and 1.0 s")
+	# 2.9 s later the history starts over; three snapshots 1.45 s apart.
+	for tick in [100, 129, 158]:
+		_game.apply_snapshot(_snap(tick, 100.0, 100.0, 100.0))
+	assert_eq(_game.history.entries.size(), 3)
+	assert_almost_eq(_game.history.mean_spacing(), 1.45, 1e-9)
+	assert_almost_eq(_view.interp_delay(), 1.4, 1e-9, "never over INTERP_DELAY_MAX_S")
+	_view.advance(FRAME)
+	assert_almost_eq(_view.render_t, 7.9 - 1.4, 1e-9)
+	for i in 120:
+		_view.advance(FRAME)
+	assert_almost_eq(_view.render_t, 7.9, 1e-9, "waits at the newest snapshot")
+	# A snapshot 0.05 s on shrinks the delay to 0.983 s: the goal (6.97 s) is behind render_t,
+	# which runs on from 7.9 s instead of going back.
+	_game.apply_snapshot(_snap(159, 100.0, 100.0, 100.0))
+	assert_almost_eq(_view.interp_delay(), 2.95 / 3.0, 1e-9)
+	_view.advance(FRAME)
+	assert_almost_eq(_view.render_t, 7.9 + FRAME, 1e-9, "on by one frame")
 
 
 func test_the_local_rider_converges_toward_the_host() -> void:
@@ -218,9 +298,13 @@ func test_snap_history_keeps_eight_and_interpolates() -> void:
 	var h := WorkoutSnapHistory.new()
 	var s := WorkoutState.create(null, U.players(1, 1))
 	assert_eq(h.distance_at(1, 1.0, 7.0), 7.0, "empty: the fallback")
+	assert_eq(h.mean_spacing(), 0.0, "empty: no spacing")
 	for i in 10:
 		s.rider(1).speed.distance_m = 10.0 * float(i)
 		h.push(0.1 * float(i), s)
+		if i == 0:
+			assert_eq(h.mean_spacing(), 0.0, "one entry: no spacing")
+	assert_almost_eq(h.mean_spacing(), 0.1, 1e-9, "(0.9 - 0.2) / 7")
 	assert_eq(h.entries.size(), WorkoutSnapHistory.CAPACITY, "the last 8 (0.8 s)")
 	assert_almost_eq(h.newest_t(), 0.9, 1e-9)
 	assert_almost_eq(h.distance_at(1, 0.55, 0.0), 55.0, 1e-9, "linear between 0.5 and 0.6")
