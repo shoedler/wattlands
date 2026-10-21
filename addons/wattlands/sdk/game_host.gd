@@ -724,16 +724,20 @@ func _init_session(
 	_int_fields = game.int_fields() if game != null else {}
 
 
-## session_start for `for_peer` (0: for every client). In WKG a rider's p_eff_per_w is 75 /
-## weight, so every other human's entry carries the 75 kg reference (1.0) instead: the
-## recipient gets only its own (BRIEF 3.2 "weight never leaves the machine unless the player
-## opts in"; W3 PROF-2). Clients never simulate other riders; the host keeps every value.
+## session_start for `for_peer` (0: for every client). Every other human's entry carries the
+## 75 kg reference instead of a weight: rider_mass_kg 75 in every scaling mode (in RAW it is
+## the weight the rider shared with the host) and, in WKG, p_eff_per_w 1.0 (75 / weight); the
+## recipient gets only its own values (BRIEF 3.2 "weight never leaves the machine unless the
+## player opts in"; W3 PROF-2). Bots keep theirs. Clients never simulate other riders; the
+## host keeps every value.
 func _session_start_payload(for_peer: int = 0) -> Dictionary:
 	var ps: Array = []
 	for p in _players:
 		var d := p.to_dict()
-		if ctx.scaling_mode == Wl.WKG and not p.is_bot and p.peer_id != for_peer:
-			d["p_eff_per_w"] = 1.0
+		if not p.is_bot and p.peer_id != for_peer:
+			d["rider_mass_kg"] = EffortScaling.REFERENCE_KG
+			if ctx.scaling_mode == Wl.WKG:
+				d["p_eff_per_w"] = 1.0
 		ps.append(d)
 	var game_id := str(manifest.get("id", ""))
 	# "game", "content" and "session" repeat the string ids under names without the "_id"
@@ -755,10 +759,11 @@ func _session_start_payload(for_peer: int = 0) -> Dictionary:
 	}
 
 
-## session_start to every client: one broadcast, or one message per client in WKG (each with
-## only its own p_eff_per_w, see _session_start_payload).
+## session_start to every client: one broadcast in FAIR_FTP (no slot carries a weight there:
+## 250 / FTP and 75 kg for everyone), else one message per client, each with only its own
+## p_eff_per_w and rider_mass_kg (see _session_start_payload).
 func _send_session_start() -> void:
-	if ctx.scaling_mode != Wl.WKG:
+	if ctx.scaling_mode == Wl.FAIR_FTP:
 		_broadcast(Protocol.game_msg("session_start", _session_start_payload()))
 		return
 	for peer in _order:
