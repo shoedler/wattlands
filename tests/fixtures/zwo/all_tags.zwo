@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workout_file>
+    <author>Wattlands tests</author>
+    <name>All tags</name>
+    <description>Every supported tag &amp; two unsupported ones</description>
+    <sportType>bike</sportType>
+    <tags>
+        <tag name="TEST"/>
+    </tags>
+    <workout>
+        <Warmup Duration="300" PowerLow="0.40" PowerHigh="0.65" Cadence="85"/>
+        <SteadyState Duration="240" Power="0.88">
+            <textevent timeoffset="10" message="Settle in"/>
+        </SteadyState>
+        <IntervalsT Repeat="3" OnDuration="60" OffDuration="120" OnPower="1.10" OffPower="0.50" Cadence="100" CadenceResting="85"/>
+        <MaxEffort Duration="20"/>
+        <Ramp Duration="180" PowerLow="0.60" PowerHigh="0.90"/>
+        <FreeRide Duration="60" FlatRoad="1"/>
+        <SteadyState Duration="120" Power="0.70"/>
+        <Cooldown Duration="300" PowerLow="0.70" PowerHigh="0.40">
+            <textevent timeoffset="0" message="Easy now"/>
+            <textevent timeoffset="60" message="Almost done"/>
+        </Cooldown>
+    </workout>
+</workout_file>

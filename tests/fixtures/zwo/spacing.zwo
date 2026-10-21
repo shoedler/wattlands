@@ -1,0 +1,13 @@
+<workout_file>
+    <name>Spacing</name>
+    <workout>
+        <Warmup Duration="300" PowerLow="0.50" PowerHigh="0.65"/>
+        <FreeRide Duration="20"/>
+        <SteadyState Duration="120" Power="0.70"/>
+        <FreeRide Duration="60"/>
+        <SteadyState Duration="10" Power="0.60"/>
+        <FreeRide Duration="45"/>
+        <SteadyState Duration="60" Power="0.60"/>
+        <FreeRide Duration="15"/>
+    </workout>
+</workout_file>

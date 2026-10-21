@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- exported by a third-party editor -->
+<workout_file>
+  <author>Coach &lt;K&gt;</author>
+  <name>Over &amp; unders</name>
+  <description><![CDATA[Sweet spot <b>over-unders</b>]]></description>
+  <sportType>bike</sportType>
+  <workout>
+    <warmup duration="420" powerlow="0.45" powerhigh="0.70"/>
+    <steadystate duration="300" power="88"/>
+    <SteadyState Duration="0" Power="0.9"/>
+    <SteadyState Duration="60"/>
+    <IntervalsT Repeat="2" OnDuration="120" OffDuration="60" PowerOnLow="0.95" PowerOnHigh="1.05" OffPower="0.80"/>
+    <Ramp Duration="60" PowerLow="-0.5" PowerHigh="0.5"/>
+    <cooldown duration="300" powerlow="0.60" powerhigh="0.40"/>
+  </workout>
+</workout_file>
