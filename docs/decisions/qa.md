@@ -101,3 +101,9 @@ FIT timestamps (`start_time`, `*_ts`) are raw FIT seconds there; `start_s` is re
 - Decision: the default `--relay-cmd` is `node --experimental-strip-types server/relay/src/main.ts` on a Node without default type stripping (22.6-22.17, 23.0-23.5) and `node server/relay/src/main.ts` otherwise (`defaultRelayCmd()`); `--relay-cmd` still overrides it. `tools/e2e/test/relay_cmd.test.mjs` starts the real relay as Node 22.12 would (`--no-experimental-strip-types` first) and shows the old default fails there.
 - Alternatives: raise the minimum Node to 22.18 (BRIEF 2 names 22.12).
 - Reason: BRIEF 5.3 asks for the flag on 22.12-22.17; the harness never passed it. `tools/run_tests`' relay node-suite step needs the same (the lead's file).
+
+## 2026-10-21 (W4r2): tools/screenshot --app-screen=results (W4r2 R26)
+
+- Decision: `--app-screen=results [--app-riders=<1..8>]` opens the app's real results screen through `App.goto("results", ...)` with a Workout-like GameResults from `tools/qa/screenshot_results.gd` (`QaScreenshotResults.params`): ten intervals, best 1/5/20 min, four-digit sprint peaks, 16-character names, two unlocks, a real-length FIT path, and the host-left notice from two riders on, so the shot is the tallest page a rider can get. It prints the page height, the fit level and the lowest line, and saves `app_results_<n>p.png`.
+- Alternatives: run a whole session to its results (about 30 minutes of sim time per shot).
+- Reason: the results page must fit 1080p for 1 to 8 riders; a windowed screenshot shows what the headless layout test measures.
