@@ -144,6 +144,10 @@ func test_client_draws_everything_locally() -> void:
 func test_teammate_status() -> void:
 	_hud.teammate_status(2, {"in_band": true, "icon": "res://x.png", "text": "Diesel", "junk": 1})
 	assert_eq(_hud.statuses[2], {"in_band": true, "icon": "res://x.png", "text": "Diesel"})
+	# game-workout W1: a bot's status is accepted (Workout shows every rider's compliance).
+	_hud.teammate_status(-1, {"in_band": false, "text": "92%"})
+	assert_eq(_hud.statuses[-1], {"in_band": false, "icon": "", "text": "92%"})
+	assert_eq(_sent, [], "statuses travel in the roster, never as messages")
 	var got: Array = []
 	_hud.role = Wl.CLIENT
 	_hud.local_status_changed.connect(func(peer: int, s: Dictionary) -> void: got.append([peer, s]))

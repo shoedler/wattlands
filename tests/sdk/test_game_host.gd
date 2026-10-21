@@ -621,6 +621,39 @@ func test_rendering_takes_gestures_and_actions_from_the_input_router() -> void:
 	assert_eq(router.detached, 1)
 
 
+## qa W1 (real e2e: the clients stayed in the lobby): the app gives a headless scripted peer's
+## GameHost no "realtime" key, so it must still advance from _process; only GameSimRunner and
+## tests, which call step() themselves, pass realtime = false.
+func test_a_headless_app_session_steps_from_process() -> void:
+	var reg := Kit.registry(_root)
+	var tmp := Paths.make_temp_dir("wattlands_sdk_test")
+	_tmp.append(tmp)
+	var slot := Kit.human(1, 0)
+	var host := GameHost.new()
+	_root.add_child(host)
+	assert_eq(host.setup({
+		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [slot] as Array[PlayerSlot],
+		"local_riders": {1: Kit.rider(_root, slot)}, "local_peer": 1, "bus": Kit.new_bus(_root, "AppBus"),
+		"registry": reg, "headless": true, "progress_path": tmp.path_join("progress.json"),
+	}), "")
+	host.start()
+	host._process(0.5)
+	assert_eq(host.clock.platform_tick, 10, "0.5 s of wall time at sim speed 1 is 10 steps")
+	var stepped := GameHost.new()
+	_root.add_child(stepped)
+	var s2 := Kit.human(1, 0)
+	stepped.setup({
+		"game_id": "fx_solo", "content_id": "tiny", "seed": 7, "role": Wl.SOLO, "players": [s2] as Array[PlayerSlot],
+		"local_riders": {1: Kit.rider(_root, s2)}, "local_peer": 1, "bus": Kit.new_bus(_root, "RunnerBus"),
+		"registry": reg, "headless": true, "realtime": false, "progress_path": tmp.path_join("p2.json"),
+	})
+	stepped.start()
+	stepped._process(0.5)
+	assert_eq(stepped.clock.platform_tick, 0, "realtime false: only step() advances it")
+	host.end_session("timeout")
+	stepped.end_session("timeout")
+
+
 ## app-shell W1: the session screen owns pausing (it calls pause() and resume() and runs the
 ## pause menu), so the InputRouter's pause never toggles the GameHost, and its confirm during a
 ## pause belongs to the pause menu, not to a resume or the game. A user pause does not end when

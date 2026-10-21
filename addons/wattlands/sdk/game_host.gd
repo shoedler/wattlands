@@ -176,7 +176,8 @@ func _process(delta: float) -> void:
 ##   local rider's FIT there after finish_ride), input_router (Node with take_actions() and
 ##   take_gestures(); default the InputRouter autoload unless headless; when rendering, the
 ##   local rider's gestures come from it), sfx (Node with set_metronome(); default the Sfx
-##   autoload), realtime (bool: _process drives the clock; default: not headless), poll_net
+##   autoload), realtime (bool: _process drives the clock with the wall-clock delta;
+##   default true, headless or not: GameSimRunner and tests pass false and call step()), poll_net
 ##   (bool, default true: step() polls the net session). A CLIENT's game, players, options
 ##   and seed come from the host's session_start: config.session_start (the message that
 ##   opened the session, which the app shell received before this GameHost existed) is
@@ -190,7 +191,9 @@ func setup(p_config: Dictionary) -> String:
 	if role != Wl.SOLO and role != Wl.HOST and role != Wl.CLIENT:
 		return "role: must be SOLO, HOST or CLIENT"
 	_headless = bool(config.get("headless", DisplayServer.get_name() == "headless"))
-	_realtime = bool(config.get("realtime", not _headless))
+	# The app (windowed or a headless scripted peer) is driven by _process; GameSimRunner and
+	# tests step it themselves and pass realtime = false.
+	_realtime = bool(config.get("realtime", true))
 	_record_rides = bool(config.get("record_rides", true))
 	bus = config.get("bus") as WlEventBus
 	if bus == null:

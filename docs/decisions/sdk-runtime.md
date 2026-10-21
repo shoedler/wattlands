@@ -181,3 +181,9 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: the warm-up rule covers phases that start in the half-open window [0, 300) s (open-ended phases at `min_s`); a phase that starts at exactly 300 s is outside it. This was already the code (`starts[i] >= 300 - 1e-6` ends the scan) and `test_warmup_allows_65_exactly_and_work_from_300_s` covers it; the doc comment now says so.
 - Alternatives: a closed window [0, 300], which would cap every Workout session's first work phase at 65 %.
 - Reason: game-workout's W1 request (every Workout session but `e2e` starts its work at exactly 300 s); BRIEF 4.6.8's "first 5 minutes" end at 300 s, and the governor enforces its own run-time warm-up independently.
+
+## 2026-10-21 (W2): A GameHost steps itself unless told not to
+
+- Decision: `config.realtime` now defaults to true, headless or not: `_process` advances the SimClock by the wall-clock delta × `sim_speed` and steps the session. GameSimRunner, the conformance run and the tests, which call `step()` themselves, pass `realtime: false` (they all did already).
+- Alternatives: default to `not headless` (W1); have the app shell's scripted peer call `step()`.
+- Reason: the app shell gives a headless scripted peer's GameHost no `realtime` key, so in the real e2e run no GameHost ever advanced: the host printed `running` from `start()`, and each client's GameHost never processed the `session_start` it was handed, so the clients stayed in the lobby (qa W1).
