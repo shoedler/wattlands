@@ -103,3 +103,45 @@ Short ADRs for `addons/wattlands/sdk/` (WlGameRegistry, PlanValidator, GameHost,
 - Decision: W1 tests drive the GameHost with `tests/sdk/helpers/fake_rider.gd` (a LocalRider subclass with a real MockTrainer) and `fake_net.gd`/`fake_net_hub.gd` (a WlNetSession subclass that sends every message through JSON). GameSimRunner takes `rider_factory` and `net_factory` args for them. `tests/sdk/integration/` runs GameSimRunner and SdkConformance over the real LocalRider, governor, NetSession, LoopbackTransport and Protocol; the W1 test command leaves that folder out (no `-ginclude_subdirs`), the full suite includes it.
 - Alternatives: wait for W2 to test the GameHost.
 - Reason: LocalRider, WlNetSession, LoopbackTransport and Protocol are W0 stubs in this worktree.
+
+## 2026-10-21: Rendering sessions take the local rider's gestures from the InputRouter (supersedes "Gestures come from the LocalRider")
+
+- Decision: when the GameHost renders (not headless) and has an InputRouter, the local rider's gestures for `local_intents`, `Telemetry.gestures` and the frame come from `InputRouter.take_gestures()`, which merges the attached rider's pedal gestures (BRIEF 3.5, `WlInputRouter.attach_rider`); the GameHost then leaves the LocalRider's own gesture queue to the router. Headless sessions read `LocalRider.take_gestures()` and drain and ignore a router's queue. Bots' gestures always come from their LocalRiders. Actions always come from `InputRouter.take_actions()` plus `inject_action()`.
+- Alternatives: the LocalRider's queue in every mode (the earlier ADR).
+- Reason: the frozen InputRouter contract makes it the merged source for menus and sessions; if the router collects the rider's gestures by pulling `take_gestures()` itself, a GameHost that also pulled them would race it and lose them. One source per mode, so no gesture arrives twice (GM8, C14).
+
+## 2026-10-21: The platform completes the results rows
+
+- Decision: after `game.results()` the GameHost calls `complete_rows()`: every rider in `ctx.players` gets a row (the SessionStatsTracker's base row for a rider the game left out, appended after the game's rows), and every row gets the base keys the game did not set. Values the game set are never changed.
+- Alternatives: trust the game to start from `GameResults.from_stats`.
+- Reason: BRIEF 3.6 promises per-player rows with kJ, %FTP and time in band; the default `GameModule.results()` returns no rows, and the results screen and conformance need one per rider.
+
+## 2026-10-21: Translations are reference-counted across registry instances
+
+- Decision: `WlGameRegistry` counts how many instances registered each Translation (the resource cache hands every instance the same object) and removes it from the TranslationServer only when the last one clears.
+- Alternatives: never remove translations.
+- Reason: the conformance test and other tests scan with private registries; clearing one removed the strings the GameRegistry autoload still served (CTX13).
+
+## 2026-10-21: Rejoin and stale telemetry
+
+- Decision: a dropped peer's stored telemetry is zeroed (power, cadence, speed, P_eff), so after a rejoin the rider shows 0 W and AFK until fresh telemetry shows pedaling. The rejoin `phase` message carries the phase's real `start_tick` and how it began (`ended_by` of the previous phase, `start` for phase 0); a client sets its phase clock from `start_tick` and each snapshot's `tick`, so a rejoined client's PhaseState matches the host's.
+- Alternatives: keep the last values until new telemetry arrives; restart the client's phase clock at 0.
+- Reason: IF6, NET6 and the HUD timeline after a rejoin.
+
+## 2026-10-21: A SIM block the governor refuses is taken back
+
+- Decision: when a rider's governor refuses a SIM block the host pre-approved (a local rider's returned record, or a remote rider's ack in `Telemetry.acks`), the host's PhaseTracker drops the block and restores the rider's mode and latest switch, while the block is still the running one.
+- Alternatives: keep the host's view until the block's nominal end.
+- Reason: otherwise the host would accept `mode_grade` and haptics for a block that never ran and spend the 30 s switch spacing on it (BRIEF 4.5).
+
+## 2026-10-21: session_start repeats its string ids without "_id"
+
+- Decision: `session_start` also carries `game`, `content` and `session` (copies of `game_id`, `content_id`, `session_id`); clients read those first and fall back to the `_id` fields when they are strings.
+- Alternatives: rely on Protocol.decode leaving string `*_id` values alone.
+- Reason: `net_messages.gd` says decode converts every `*_id` key to int; a strict implementation would turn `"workout"` into a number and the client could not find its game. The contract clarification is requested; this keeps sessions working either way.
+
+## 2026-10-21: A confirm that resumes a SOLO pause is the platform's
+
+- Decision: when `confirm` resumes a paused SOLO session it is consumed; the game's `local_intents` never sees it. `pedal_start` that resumes still reaches the game as a gesture.
+- Alternatives: pass it through.
+- Reason: a rider pressing A to resume must not also buy, cast or pick in the game on the same tick.
