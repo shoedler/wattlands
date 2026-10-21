@@ -30,6 +30,14 @@ extends Node
 ## Emitted when an upload attempt reached its final state for now (tests, e2e report).
 signal upload_finished(ride_id: String, state: String, detail: String)
 
+## The ranges strava_import_athlete() accepts (W4r2, PROF): the profile editor's own (the FTP
+## field 50-600 W, AppStyle.WEIGHT_MIN_KG..WEIGHT_MAX_KG 30-200 kg), so an import never sets
+## what the rider couldn't type. A value outside is refused, not clamped.
+const IMPORT_FTP_MIN_W := 50.0
+const IMPORT_FTP_MAX_W := 600.0
+const IMPORT_WEIGHT_MIN_KG := 30.0
+const IMPORT_WEIGHT_MAX_KG := 200.0
+
 ## The Strava client (a child node).
 var client: StravaClient = null
 ## The upload queue (rides/upload_queue.json).
@@ -234,6 +242,10 @@ func strava_connect_with_profile(client_id: String, client_secret: String) -> vo
 ## the chosen values to `profile` (FTP also sets cp_w and ftp_verified) and returns
 ## {ftp, weight, applied: [...]}, or {} when Strava gave nothing. The caller saves the
 ## profile.
+## (W4r2) A chosen value outside the profile editor's range (IMPORT_FTP_MIN_W..MAX_W,
+## IMPORT_WEIGHT_MIN_KG..MAX_KG) is refused with push_warning: it is not applied (an FTP typo on
+## Strava must not become a verified FTP) and is listed in the additive `refused`:
+## [{field ("ftp" or "weight"), value, min, max}].
 func strava_import_athlete(profile: RiderProfile, import_ftp: bool, import_weight: bool) -> Dictionary:
 	if not strava_connected():
 		return {}
@@ -244,15 +256,27 @@ func strava_import_athlete(profile: RiderProfile, import_ftp: bool, import_weigh
 	var ftp := float(a["ftp"]) if a.get("ftp", null) != null else 0.0
 	var weight := float(a["weight"]) if a.get("weight", null) != null else 0.0
 	var applied: Array = []
+	var refused: Array = []
 	if import_ftp and ftp > 0.0:
-		profile.ftp_w = ftp
-		profile.cp_w = ftp
-		profile.ftp_verified = true
-		applied.append("ftp")
+		if _import_ok(refused, "ftp", ftp, IMPORT_FTP_MIN_W, IMPORT_FTP_MAX_W):
+			profile.ftp_w = ftp
+			profile.cp_w = ftp
+			profile.ftp_verified = true
+			applied.append("ftp")
 	if import_weight and weight > 0.0:
-		profile.weight_kg = weight
-		applied.append("weight")
-	return {"ftp": ftp, "weight": weight, "applied": applied}
+		if _import_ok(refused, "weight", weight, IMPORT_WEIGHT_MIN_KG, IMPORT_WEIGHT_MAX_KG):
+			profile.weight_kg = weight
+			applied.append("weight")
+	return {"ftp": ftp, "weight": weight, "applied": applied, "refused": refused}
+
+
+## True when `value` is a finite number within [lo, hi]; otherwise records the refusal.
+func _import_ok(refused: Array, field: String, value: float, lo: float, hi: float) -> bool:
+	if is_finite(value) and value >= lo and value <= hi:
+		return true
+	push_warning("Rides: Strava %s %s is outside %s-%s; not imported" % [field, str(value), str(lo), str(hi)])
+	refused.append({"field": field, "value": value, "min": lo, "max": hi})
+	return false
 
 
 func strava_state() -> String:
