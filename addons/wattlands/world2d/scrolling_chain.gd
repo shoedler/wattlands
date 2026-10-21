@@ -123,12 +123,22 @@ func effective_pitch() -> float:
 ## A belt around two pulleys: the convex hull of both circles (sprocket centres and radii in
 ## art pixels). `segments` points per circle.
 func set_loop(center_a: Vector2, radius_a: float, center_b: Vector2, radius_b: float, segments: int = 16) -> void:
+	set_belt(PackedVector2Array([center_a, center_b]), PackedFloat32Array([radius_a, radius_b]), segments)
+
+
+## A belt around any number of pulleys, such as a tank track round its drive sprocket, idler
+## and road wheels: the convex hull of all circles (centres and radii in art pixels, one radius
+## per centre), clockwise on screen. `segments` points per circle.
+func set_belt(centers: PackedVector2Array, radii: PackedFloat32Array, segments: int = 16) -> void:
+	if centers.is_empty() or centers.size() != radii.size():
+		push_error("ScrollingChain: set_belt needs one radius per centre (%d centres, %d radii)" % [centers.size(), radii.size()])
+		return
 	var pts := PackedVector2Array()
 	var n := maxi(segments, 4)
 	for i in n:
 		var a := TAU * float(i) / float(n)
-		pts.append(center_a + Vector2(cos(a), sin(a)) * radius_a)
-		pts.append(center_b + Vector2(cos(a), sin(a)) * radius_b)
+		for k in centers.size():
+			pts.append(centers[k] + Vector2(cos(a), sin(a)) * maxf(radii[k], 0.0))
 	var hull := Geometry2D.convex_hull(pts)
 	if hull.size() > 1 and hull[0].is_equal_approx(hull[hull.size() - 1]):
 		hull.remove_at(hull.size() - 1)

@@ -280,6 +280,45 @@ func test_chain_scrolls_with_signed_speed() -> void:
 		assert_true(c.travel() >= 0.0 and c.travel() < c.effective_pitch() * 2.0)
 
 
+func test_belt_round_a_tank_track() -> void:
+	# Drive sprocket and idler up high, three road wheels along the ground.
+	var c: ScrollingChain = autofree(ScrollingChain.new())
+	c.auto_process = false
+	var centers := PackedVector2Array([Vector2(10, 10), Vector2(90, 10), Vector2(25, 22), Vector2(50, 22), Vector2(75, 22)])
+	var radii := PackedFloat32Array([6.0, 5.0, 5.0, 5.0, 5.0])
+	c.set_belt(centers, radii)
+	assert_true(c.closed)
+	assert_gt(ScrollingChain.screen_area(c.points), 0.0, "clockwise on screen")
+	for p: Vector2 in c.points:
+		var outside := true
+		for k in centers.size():
+			if p.distance_to(centers[k]) < radii[k] - 0.01:
+				outside = false
+		assert_true(outside, "the belt wraps the wheels, never cuts through them")
+	var lowest := -INF
+	for p: Vector2 in c.points:
+		lowest = maxf(lowest, p.y)
+	assert_almost_eq(lowest, 27.0, 0.01, "it runs under the road wheels")
+	var links := c.links()
+	assert_eq(links.size() % 2, 0)
+	assert_almost_eq(float(links.size()) * c.effective_pitch(), c.path_length(), 0.001)
+
+
+func test_set_loop_is_a_two_wheel_belt() -> void:
+	var a: ScrollingChain = autofree(ScrollingChain.new())
+	var b: ScrollingChain = autofree(ScrollingChain.new())
+	a.set_loop(Vector2(10, 20), 6.0, Vector2(60, 20), 4.0)
+	b.set_belt(PackedVector2Array([Vector2(10, 20), Vector2(60, 20)]), PackedFloat32Array([6.0, 4.0]))
+	assert_eq(a.points, b.points)
+
+
+func test_belt_needs_a_radius_per_centre() -> void:
+	var c: ScrollingChain = autofree(ScrollingChain.new())
+	c.set_belt(PackedVector2Array([Vector2.ZERO, Vector2(10, 0)]), PackedFloat32Array([2.0]))
+	assert_push_error("one radius per centre")
+	assert_eq(c.path_length(), 0.0, "nothing set")
+
+
 func test_open_chain_links_stay_on_path() -> void:
 	var c: ScrollingChain = autofree(ScrollingChain.new())
 	c.auto_process = false

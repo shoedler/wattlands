@@ -19,7 +19,7 @@ All parts take `speed` from -1 to 1, clamped. A negative speed runs the part bac
 | --- | --- | --- |
 | `SpinningPart` | Gears, flywheels, cranks, reels, wheels. It rotates itself, so child sprites turn with it, or set `texture` to draw a centred sprite. A positive speed turns clockwise. | `max_rpm`, `ratio` (negative for a meshing gear), `phase_deg`, `inertia_s`, `snap_steps` |
 | `SlidingPart` | `RECIPROCATE` moves pistons, rods and cradles between 0 and `travel_px` along `axis`. `SCROLL` moves track links by `max_px_s` and wraps at `wrap_px`. | `mode`, `axis`, `travel_px`, `max_cps`, `max_px_s`, `wrap_px`, `phase`, `rest_position` |
-| `ScrollingChain` | Code-drawn chains, belts and track loops. `set_loop(a, ra, b, rb)` builds a belt round two sprockets, clockwise, so a positive speed matches a `SpinningPart`. | `max_px_s`, `pitch_px`, `link_px`, `width_px`, `color_a`, `color_b`, `points`, `closed` |
+| `ScrollingChain` | Code-drawn chains, belts and track loops. `set_loop(a, ra, b, rb)` builds a belt round two sprockets and `set_belt(centers, radii)` one round any number of wheels (a tank track), clockwise, so a positive speed matches a `SpinningPart`. | `max_px_s`, `pitch_px`, `link_px`, `width_px`, `color_a`, `color_b`, `points`, `closed` |
 | `ParallaxStrip` | Backdrop strips that repeat a texture across the view. Set `world_x` every frame; the strip scrolls by `world_x * factor`. `mirror_alternate` alternates flipped copies so the edges meet. | `texture`, `factor` (>= 0; 0 for sky, > 1 for foreground debris), `mirror_alternate`, `drift_px_s`, `align_bottom`, `cover_width` |
 
 ## Shaders
