@@ -16,10 +16,11 @@ extends AppFormScreen
 ##   Controls  rebind every action (saved to input.cfg by InputRouter): each row shows the action
 ##             with its first keyboard and controller binding, the content column all of them.
 ##             Esc or the controller's B button cancels a capture, and so does leaving the page;
-##             the page says so. Reset to defaults, the first row (the action rows run below the
-##             1080p screen), puts every project.godot default back after a Keep / Reset confirm
-##             that highlights Keep, Esc and B on `back` included, and saves input.cfg
-##             (InputRouter.reset_bindings, save_bindings).
+##             the page says so. Reset to defaults, the first row, puts every project.godot default
+##             back after a Keep / Reset confirm that highlights Keep, Esc and B on `back`
+##             included, and saves input.cfg (InputRouter.reset_bindings, save_bindings). The page
+##             is taller than a 1080p screen, so the menu column scrolls and keeps the highlighted
+##             row in view (AppScreen.scroll_menu_column).
 ##   Audio     master volume, cadence metronome
 ##   Network   relay URL
 ##   Pedal UI  pedal-scan menus on/off, scan interval
@@ -51,7 +52,12 @@ var importing: bool = false
 
 
 func _build() -> void:
-	make_form_page(t("APP_SETTINGS_TITLE"))
+	var page := make_form_page(t("APP_SETTINGS_TITLE"))
+	# The Controls page (a row per action) is taller than a 1080p screen: its menu scrolls and
+	# keeps the highlighted row in view. Settings has no footer line, so the menu column reaches
+	# the bottom margin and the pages that fit look as they did.
+	(page["footer"] as Control).visible = false
+	scroll_menu_column(page["right"] as Control)
 	controls_help_label = AppStyle.paragraph(
 		t("APP_SET_CONTROLS_HELP"), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM
 	)
@@ -704,8 +710,8 @@ func set_scan_interval(v: Variant) -> void:
 
 ## The Controls page's rows: Reset to defaults first, then one row per action. Esc and B cancel
 ## a capture, so they can never be captured: Reset is how a rider who moved `back` off them gets
-## them back (BRIEF 3.5 defaults). It comes first because the last action rows and Back already
-## run below the 1080p screen, so a last row would be scanned while out of sight.
+## them back (BRIEF 3.5 defaults). It comes first, where it is on screen when the page opens; the
+## action rows and Back run below a 1080p screen and scroll into view as they are highlighted.
 func controls_fields() -> Array:
 	var fields: Array = [
 		{

@@ -12,6 +12,9 @@ extends "res://tests/app/app_test_base.gd"
 ## - BRIEF 3.5 (W4fin): the Controls page says Esc or B cancels, and its Reset to defaults row
 ##   (after a Keep / Reset confirm) puts every default back, Esc and B on back included, and
 ##   writes input.cfg; it works with pedal-scan alone, through the real InputRouter.
+## - BRIEF 3.9 (W4fin): the Settings menu column scrolls. At 1920 x 1080 every row the scan,
+##   the keyboard or a controller highlights is fully on screen (Controls, Strava), Back is
+##   reached and picked, and the pages that fit never scroll.
 
 const UnlockedClient := preload("res://tests/trainer/unlocked_ftms_client.gd")
 const DT := Wl.SIM_DT
@@ -50,10 +53,15 @@ var _link: KickrLink = null
 var _client: FtmsClient = null
 var _manager: FtmsConnectionManager = null
 var _svc: WlTrainerService = null
+## The root window's size before a test set 1920 x 1080 (zero when it didn't).
+var _old_root_size: Vector2i = Vector2i.ZERO
 
 
 func after_each() -> void:
 	super.after_each()
+	if _old_root_size != Vector2i.ZERO:
+		get_tree().root.size = _old_root_size
+		_old_root_size = Vector2i.ZERO
 	InputBindings.reset_to_defaults()
 	if _svc != null and is_instance_valid(_svc):
 		remove_child(_svc)
@@ -335,8 +343,8 @@ func test_controls_page_rows_fit_the_menu_column() -> void:
 
 
 ## At 1080p (the project's base size; the headless test viewport may be taller) the Controls
-## page's one-line help, its list of every binding and the Reset to defaults row are on screen.
-## The action rows run past the screen's bottom, so Reset comes first.
+## page's one-line help, its list of every binding and the Reset to defaults row are on screen
+## when the page opens.
 func test_controls_help_list_and_reset_row_are_on_a_1080p_screen() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
@@ -358,6 +366,184 @@ func test_controls_help_list_and_reset_row_are_on_a_1080p_screen() -> void:
 		reset_rect.end.y <= bottom + 0.5,
 		"Reset to defaults ends at y=%.0f (bottom margin at %.0f)" % [reset_rect.end.y, bottom]
 	)
+
+
+# --- controls: the page scrolls on a 1080p screen (BRIEF 3.9, W4fin) ---------------------------
+
+
+## The Settings screen on a 1920 x 1080 root window (restored in after_each).
+func _settings_at_1080p() -> AppSettingsScreen:
+	_old_root_size = get_tree().root.size
+	get_tree().root.size = Vector2i(1920, 1080)
+	fx.give_profile()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	await wait_process_frames(2)
+	assert_eq(s.get_viewport_rect(), Rect2(0, 0, 1920, 1080), "precondition: a 1080p screen")
+	return s
+
+
+## "" when `c` is fully inside the 1080p screen and the menu column's scroll view, else why not.
+func _off_screen(s: AppScreen, c: Control, what: String) -> String:
+	var r := c.get_global_rect()
+	var view := s.menu_scroll.get_global_rect()
+	var screen := s.get_viewport_rect()
+	if (
+		r.position.y >= view.position.y - 0.5
+		and r.end.y <= view.end.y + 0.5
+		and r.position.x >= screen.position.x - 0.5
+		and r.end.x <= screen.end.x + 0.5
+		and view.position.y >= screen.position.y - 0.5
+		and view.end.y <= screen.end.y + 0.5
+	):
+		return ""
+	return (
+		"%s at y=%.0f..%.0f (view y=%.0f..%.0f, screen %.0f x %.0f)"
+		% [what, r.position.y, r.end.y, view.position.y, view.end.y, screen.size.x, screen.size.y]
+	)
+
+
+## Highlight every enabled row of the active menu in turn: why each row (and on the last row the
+## scan hint under it) is not fully on screen; empty when all are.
+func _highlight_each_row(s: AppScreen, page: String) -> Array[String]:
+	var m := menu(s)
+	var off: Array[String] = []
+	for i in m.item_count():
+		if not m.is_item_enabled(i):
+			continue
+		m.set_highlight(i)
+		await wait_process_frames(2)
+		var why := _off_screen(s, m.row(i), "'%s' row %d (%s)" % [page, i, str(m.ids()[i])])
+		if why != "":
+			off.append(why)
+		if i == m.item_count() - 1:
+			why = _off_screen(s, m.get_node("Hint") as Control, "'%s' scan hint" % page)
+			if why != "":
+				off.append(why)
+	return off
+
+
+## BRIEF 3.9: the Controls page is taller than a 1080p screen, so its menu scrolls: whichever row
+## is highlighted is fully on screen, Back and the scan hint under it included.
+func test_every_controls_row_is_on_a_1080p_screen_when_highlighted() -> void:
+	var s: AppSettingsScreen = await _settings_at_1080p()
+	confirm_pick(s, "controls")
+	await wait_process_frames(2)
+	var m := menu(s)
+	var back := m.index_of_id("back")
+	assert_eq(back, Wl.ACTIONS.size() + 1, "Reset, a row per action, then Back")
+	var holder := m.get_parent() as Control
+	assert_gt(
+		holder.size.y,
+		s.menu_scroll.size.y,
+		"precondition: the page (%.0f px) is taller than its view" % holder.size.y
+	)
+	assert_eq(s.menu_scroll.scroll_vertical, 0, "the page opens at its top")
+	var off: Array[String] = await _highlight_each_row(s, "controls")
+	assert_eq(off, [] as Array[String], "every highlighted row is on screen")
+	assert_eq(m.highlighted(), back)
+	assert_gt(s.menu_scroll.scroll_vertical, 0, "Back scrolled the page")
+	m.set_highlight(0)
+	await wait_process_frames(2)
+	assert_eq(s.menu_scroll.scroll_vertical, 0, "Reset to defaults scrolls the page back up")
+	assert_eq(_off_screen(s, m.row(0), "Reset to defaults"), "")
+
+
+## Pedal-scan alone: every row the scan highlights is on screen, and Back is reached and picked.
+func test_pedal_scan_reaches_back_on_the_controls_page_at_1080p() -> void:
+	var s: AppSettingsScreen = await _settings_at_1080p()
+	confirm_pick(s, "controls")
+	await wait_process_frames(2)
+	var m := menu(s)
+	assert_true(m.scanning, "precondition: the page scans")
+	assert_eq(m.highlighted(), 0)
+	var off: Array[String] = []
+	var seen: Array[int] = [m.highlighted()]
+	while m.highlighted() != m.index_of_id("back") and seen.size() <= m.item_count():
+		s.tick(m.scan_interval_s)
+		await wait_process_frames(2)
+		seen.append(m.highlighted())
+		var why := _off_screen(s, m.row(m.highlighted()), "row %d" % m.highlighted())
+		if why != "":
+			off.append(why)
+	assert_eq(seen.size(), m.item_count(), "the scan went through every row to Back: %s" % [seen])
+	assert_eq(off, [] as Array[String], "every scanned row is on screen")
+	assert_eq(m.highlighted_id(), "back")
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids()[0], "trainer", "the surge on Back left the Controls page")
+	await wait_process_frames(2)
+	assert_eq(s.menu_scroll.scroll_vertical, 0, "the Settings menu fits again, unscrolled")
+	assert_eq(_off_screen(s, menu(s).row(0), "the Settings root's first row"), "")
+
+
+## Keyboard and controller focus moves keep the highlighted row on screen too, wrapping from the
+## first row up to Back and from Back down to the first row.
+func test_focus_moves_keep_the_controls_row_on_a_1080p_screen() -> void:
+	var s: AppSettingsScreen = await _settings_at_1080p()
+	confirm_pick(s, "controls")
+	await wait_process_frames(2)
+	var m := menu(s)
+	s.feed_action(&"up")
+	await wait_process_frames(2)
+	assert_eq(m.highlighted_id(), "back", "up from the first row wraps to Back")
+	assert_eq(_off_screen(s, m.row(m.highlighted()), "Back"), "")
+	assert_eq(_off_screen(s, m.get_node("Hint") as Control, "the scan hint"), "")
+	s.feed_action(&"down")
+	await wait_process_frames(2)
+	assert_eq(m.highlighted(), 0, "down from Back wraps to the first row")
+	assert_eq(s.menu_scroll.scroll_vertical, 0)
+	var off: Array[String] = []
+	for _k in m.item_count() - 1:
+		s.feed_action(&"down")
+		await wait_process_frames(2)
+		var why := _off_screen(s, m.row(m.highlighted()), "row %d" % m.highlighted())
+		if why != "":
+			off.append(why)
+	assert_eq(m.highlighted_id(), "back", "down through every row reaches Back")
+	assert_eq(off, [] as Array[String], "every focused row is on screen")
+	s.feed_action(&"confirm")
+	assert_eq(menu(s).ids()[0], "trainer", "Back by keyboard leaves the Controls page")
+
+
+## Every other Settings page: whichever row is highlighted is fully on screen. Strava's 11 rows
+## run past the bottom margin too (its scan hint was below the screen), so it scrolls a little
+## when Back is highlighted.
+func test_every_settings_row_is_on_a_1080p_screen_when_highlighted() -> void:
+	var s: AppSettingsScreen = await _settings_at_1080p()
+	var off: Array[String] = []
+	for page: String in ["", "trainer", "strava", "haptics", "audio", "network", "pedal_ui"]:
+		if page != "":
+			s.open_section(page)
+		await wait_process_frames(2)
+		off.append_array(await _highlight_each_row(s, page))
+		if page != "":
+			s._pop_section()
+	assert_eq(off, [] as Array[String], "every highlighted row is on screen")
+
+
+## The Settings pages that fit a 1080p screen look as they did: no scroll bar and never scrolled,
+## every row and the scan hint on screen, whichever row is highlighted.
+func test_settings_pages_that_fit_do_not_scroll() -> void:
+	var s: AppSettingsScreen = await _settings_at_1080p()
+	for page: String in ["", "trainer", "haptics", "audio", "network", "pedal_ui"]:
+		if page != "":
+			s.open_section(page)
+		await wait_process_frames(2)
+		var m := menu(s)
+		var off: Array[String] = []
+		for i in m.item_count():
+			var why := _off_screen(s, m.row(i), "'%s' row %d" % [page, i])
+			if why != "":
+				off.append(why)
+		var hint := _off_screen(s, m.get_node("Hint") as Control, "'%s' scan hint" % page)
+		if hint != "":
+			off.append(hint)
+		assert_eq(off, [] as Array[String], "every row of '%s' is on screen" % page)
+		m.set_highlight(m.index_of_id("back"))
+		await wait_process_frames(2)
+		assert_false(s.menu_scroll.get_v_scroll_bar().visible, "'%s' needs no scroll bar" % page)
+		assert_eq(s.menu_scroll.scroll_vertical, 0, "'%s' is not scrolled" % page)
+		if page != "":
+			s._pop_section()
 
 
 func test_compact_binding_text_takes_one_key_and_one_pad_binding() -> void:
