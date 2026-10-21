@@ -67,7 +67,10 @@ test('a victim that finishes before the kill fails the run clearly', async () =>
   try {
     const r = await runHarness(harnessArgs(s.repo, ['--kill-after=1']), { lockDir: s.lockDir, env: { FAKE_PEER_FAULT: 'fast_victim' } });
     assert.equal(r.code, 1, r.out);
-    assert.match(check(s.report(), 'run').details[0], /client2 exited .* before it could be killed/);
+    const detail = check(s.report(), 'run').details[0];
+    assert.match(detail, /client2 exited .* before it could be killed/);
+    // Where each peer had got to, for debugging a stuck session.
+    assert.match(detail, /last states: host \w+; client1 \w+; client2 \w+, exited 0\)/);
   } finally {
     s.cleanup();
   }

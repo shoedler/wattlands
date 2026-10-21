@@ -111,6 +111,22 @@ function readLines(file) {
 }
 
 /**
+ * Where every peer run had got to, for a failure message: " (last states: host running,
+ * client1 lobby, client2 lobby, exited 1)"; "" when no peer was started.
+ */
+export function peerStates(runs) {
+  const parts = [];
+  for (const [role, list] of Object.entries(runs)) {
+    list.forEach((run, i) => {
+      const name = i > 0 ? `${role}#${i + 1}` : role;
+      const st = lastMatch(run.proc, STATE_RE)?.[1] ?? 'no state';
+      parts.push(`${name} ${st}${run.proc.closed && !run.proc.killed ? `, exited ${run.proc.exitCode}` : ''}`);
+    });
+  }
+  return parts.length ? ` (last states: ${parts.join('; ')})` : '';
+}
+
+/**
  * Plays one game. Returns {gameId, ok, failures: [String], reportPath, durationS, checks}.
  * `lease` is the held 3-slot handle; `log` prints progress lines.
  */
@@ -209,7 +225,7 @@ export async function runGame(o, gameId, lease, log = () => {}) {
     if (q.error) log(`e2e: ${gameId}: ${q.error}`);
     timings.uploads_query = q.error ? q.error : q.path;
   } catch (err) {
-    flowError = err.message;
+    flowError = `${err.message}${peerStates(runs)}`;
     log(`e2e: ${gameId}: ${flowError}`);
   } finally {
     for (const list of Object.values(runs)) for (const r of list) r.proc.kill();
@@ -282,7 +298,9 @@ export async function runGame(o, gameId, lease, log = () => {}) {
   }
   const cooldownObs = runs.host ? C.observedCooldownS(runs.host[0].proc.lines) : null;
   timings.cooldown_observed_s = cooldownObs;
-  timings.duration_excl_cooldown_s = Math.round(C.durationExclCooldown((t1 - t0) / 1000, cooldownObs, o.cooldownS) * 10) / 10;
+  // A run that stopped early never rode the cool-down: nothing is subtracted unless it was seen.
+  const cooldownDefault = flowError ? 0 : o.cooldownS;
+  timings.duration_excl_cooldown_s = Math.round(C.durationExclCooldown((t1 - t0) / 1000, cooldownObs, cooldownDefault) * 10) / 10;
 
   // ------------------------------------------------------------------ checks
   if (flowError) add('run', false, flowError);

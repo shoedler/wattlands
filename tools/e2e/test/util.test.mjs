@@ -114,3 +114,12 @@ test('readManifest needs an e2e_content', () => {
     fs.rmSync(repo, { recursive: true, force: true });
   }
 });
+
+test('peerStates names each run and its last WATTLANDS_STATE', async () => {
+  const { peerStates } = await import('../lib/game.mjs');
+  const fake = (states, extra = {}) => ({ proc: { lines: states.map((s) => ({ line: `WATTLANDS_STATE ${s}` })), closed: false, killed: false, exitCode: null, ...extra } });
+  assert.equal(peerStates({}), '');
+  const s = peerStates({ host: [fake(['lobby', 'running'])], client1: [fake(['lobby'])], client2: [fake([], { closed: true, exitCode: 3 }), fake(['lobby'])] });
+  assert.equal(s, ' (last states: host running; client1 lobby; client2 no state, exited 3; client2#2 lobby)');
+  assert.equal(peerStates({ host: [fake(['lobby'], { closed: true, killed: true, exitCode: 1 })] }), ' (last states: host lobby)', 'a run the harness killed shows no exit code');
+});
