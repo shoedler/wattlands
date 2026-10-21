@@ -43,10 +43,17 @@ func test_rides_history_reupload() -> void:
 	assert_true(menu(s).text_of(0).contains(AppScreen.t("APP_RIDES_UPLOADED")))
 	assert_true(scan_to(s, 0))
 	s.feed_gesture(Wl.G_SURGE)
-	assert_eq(fx.fake_rides().uploads.size(), 1, "re-upload of an uploaded ride")
-	assert_eq(fx.fake_rides().uploads[0]["fit_path"], "C:/rides/b.fit")
+	# W3 RS-3: Rides.upload() would only report the stored state of a ride marked uploaded;
+	# the history re-uploads it (Rides.reupload) so a ride deleted on Strava goes up again.
+	assert_eq(fx.fake_rides().reuploads, ["b"] as Array[String], "re-upload of an uploaded ride")
+	assert_eq(fx.fake_rides().uploads.size(), 0, "not the plain upload, which skips uploaded rides")
 	fx.bus.upload_state_changed.emit("b", "duplicate", "")
 	assert_true(menu(s).text_of(0).contains(AppScreen.t("APP_UPLOAD_DUPLICATE").format([""]).strip_edges()))
+	assert_true(scan_to(s, 1))
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(fx.fake_rides().uploads.size(), 1, "a ride never uploaded goes through upload()")
+	assert_eq(fx.fake_rides().uploads[0]["fit_path"], "C:/rides/a.fit")
+	assert_eq(fx.fake_rides().reuploads.size(), 1)
 	surge_pick(s, "back")
 	assert_eq(fx.app.state, "settings")
 

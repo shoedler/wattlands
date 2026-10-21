@@ -5,6 +5,8 @@ extends WlRides
 var connected: bool = false
 var auto: bool = false
 var uploads: Array = []
+## Ride ids passed to reupload() (the history's re-upload of a ride already on Strava).
+var reuploads: Array[String] = []
 var connects: Array[String] = []
 var secret_passed: bool = false
 var disconnects: int = 0
@@ -28,6 +30,10 @@ func strava_disconnect() -> void:
 
 func upload(fit_path: String, summary: Dictionary) -> void:
 	uploads.append({"fit_path": fit_path, "summary": summary.duplicate(true)})
+
+
+func reupload(ride_id: String) -> void:
+	reuploads.append(ride_id)
 
 
 func process_queue() -> void:
