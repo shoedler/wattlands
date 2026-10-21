@@ -44,7 +44,7 @@ func before_each() -> void:
 func test_power_band_for_the_hosts_own_rider() -> void:
 	_hud.power_band(1, 240, 280)
 	assert_eq(_local.get("power_band"), [240.0, 280.0])
-	assert_eq((_local.device as MockTrainer)._power_band_lo, 240.0, "MockTrainer's erg rides the band in SIM")
+	assert_eq((_local.device as Object).call("last_power_band"), [240.0, 280.0], "MockTrainer's erg rides the band in SIM")
 	assert_eq(_pbands, [[1, 240.0, 280.0]])
 	assert_eq(_sent, [], "nothing is sent for a local rider")
 	assert_eq(_hud.band_of(1), [240.0, 280.0])
@@ -162,7 +162,7 @@ func test_host_power_band_reaches_a_clients_gauge_and_mock_trainer() -> void:
 	assert_eq(got, [[2, 210.0, 260.0]], "the client's gauge")
 	var r2: LocalRider = b["riders"][2]
 	assert_eq(r2.get("power_band"), [210.0, 260.0])
-	assert_eq((r2.device as MockTrainer)._power_band_hi, 260.0, "the client's MockTrainer")
+	assert_eq((r2.device as Object).call("last_power_band"), [210.0, 260.0], "the client's MockTrainer")
 	var r3: LocalRider = b["riders"][3]
 	assert_eq(r3.get("power_band"), [0.0, 0.0], "nobody else")
 

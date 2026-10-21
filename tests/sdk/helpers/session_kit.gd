@@ -5,6 +5,7 @@ extends RefCounted
 
 const FakeRider := preload("res://tests/sdk/helpers/fake_rider.gd")
 const FakeNetHub := preload("res://tests/sdk/helpers/fake_net_hub.gd")
+const RecordingMock := preload("res://tests/sdk/helpers/recording_mock.gd")
 const FIXTURES := "res://tests/fixtures/games"
 
 
@@ -29,9 +30,10 @@ static func human(peer: int, idx: int, ftp: float = 200.0) -> PlayerSlot:
 	return s
 
 
-static func rider(parent: Node, slot: PlayerSlot, spec: String = "erg") -> LocalRider:
+## A fake LocalRider with a real MockTrainer that records its bands (recording_mock.gd).
+static func rider(parent: Node, slot: PlayerSlot) -> LocalRider:
 	var r: LocalRider = FakeRider.new()
-	var dev := MockTrainer.from_spec(spec, slot.ftp, {"seed": 11 + slot.slot_index})
+	var dev: MockTrainer = RecordingMock.new()
 	r.setup(slot.peer_id, null, slot, dev, {})
 	r.add_child(dev)
 	r.name = "Rider%d" % slot.slot_index

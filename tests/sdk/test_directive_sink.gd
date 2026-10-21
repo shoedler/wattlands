@@ -228,6 +228,25 @@ func test_mode_grade_only_in_sim() -> void:
 	assert_true(_req({"mode_grade": 3.0}).accepted, "while the block runs")
 
 
+func test_a_short_haptic_over_a_held_mode_grade_touches_only_its_channel_ds3() -> void:
+	# BRIEF 7.1: "a 1.5 s haptic over a held mode_grade leaves the grade in place". The sink's
+	# part: the haptic request carries only its own channel to the governor and never ends or
+	# re-opens the SIM block that holds the grade.
+	_start()
+	assert_true(_req({"mode": "SIM", "duration_s": 20, "mode_grade": 2.0, "reason": "overdrive"}).accepted)
+	_advance(2)
+	assert_true(_req({"haptic": 2.0, "duration_s": 1.5, "reason": "hit"}).accepted)
+	var dirs: Array = _fake().get("directives")
+	assert_eq((dirs[1] as EffortDirective).to_dict(), {"haptic": 2.0, "duration_s": 1.5, "reason": "hit", "id": 2},
+		"no mode, no mode_grade: the governor changes only the haptic term")
+	_advance(1.5)
+	assert_true(_tracker.block_active(1, _clock.game_tick), "the block and its grade hold after the haptic")
+	assert_eq(_tracker.last_switch_tick(1), 0, "no switch from the haptic")
+	assert_true(_req({"mode_grade": 3.0}).accepted, "the grade channel is still open")
+	_advance(16.5)
+	assert_false(_tracker.block_active(1, _clock.game_tick), "the block expires on its own 20 s")
+
+
 func test_haptics() -> void:
 	_start()
 	assert_eq(_req({"haptic": 2.0, "duration_s": 1.5}).reason, Wl.REFUSE_HAPTIC_ERG)
@@ -319,9 +338,8 @@ func test_cadence_band_reaches_rider_mock_trainer_and_hud_and_clears() -> void:
 	_start()
 	_router.cadence_band(1, 80, 96)
 	assert_eq(_fake().get("cadence_band"), [80.0, 96.0])
-	var mock := _rider.device as MockTrainer
-	assert_eq(mock._cadence_band_lo, 80.0, "MockTrainer's band policy gets it")
-	assert_eq(mock._cadence_band_hi, 96.0)
+	var mock: Object = _rider.device
+	assert_eq(mock.call("last_cadence_band"), [80.0, 96.0], "MockTrainer's band policy gets it")
 	assert_eq(_bands, [[1, 80.0, 96.0]], "the HUD's cadence widget gets it")
 	_router.cadence_band(2, 60, 120)
 	assert_eq(_sent[0][1], {"kind": NetMessages.DIRECTIVE_CADENCE_BAND, "id": _sent[0][1]["id"], "peer": 2, "lo_rpm": 60.0, "hi_rpm": 120.0})
@@ -329,7 +347,7 @@ func test_cadence_band_reaches_rider_mock_trainer_and_hud_and_clears() -> void:
 	assert_eq(_router.cadence_band_of(1), [80.0, 96.0], "holds across phases")
 	_router.cadence_band(1, 0, 0)
 	assert_eq(_fake().get("cadence_band"), [0.0, 0.0], "(0, 0) clears")
-	assert_eq(mock._cadence_band_hi, 0.0)
+	assert_eq(mock.call("last_cadence_band"), [0.0, 0.0])
 	_router.cadence_band(1, 90, 80)
 	assert_eq(_applied[_applied.size() - 1][1]["reason"], Wl.REFUSE_BAD_FIELDS)
 

@@ -269,6 +269,56 @@ func test_complete_end_report_and_fit_files() -> void:
 	assert_eq(str(parsed["deterministic_hash"]), str(rep["deterministic_hash"]))
 
 
+func _has_keys(d: Variant, keys: Array, what: String) -> void:
+	assert_true(d is Dictionary, what)
+	if not (d is Dictionary):
+		return
+	for k: String in keys:
+		assert_true((d as Dictionary).has(k), "%s.%s" % [what, k])
+
+
+func test_report_schema_nested_keys_sim4() -> void:
+	var r := _runner({"players": 1, "bots": 1, "report": _tmp.path_join("schema.json"), "max_sim_seconds": 12.0})
+	r.host.game.set("on_step", func(g: GameModule, frame: InputFrame) -> void:
+		if frame.tick == 50:
+			g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 58}))
+			g.ctx.directives.request(1, EffortDirective.from_dict({"target_pct": 99})))
+	r.run_to_end()
+	var path := r.write_report()
+	var rep: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	_has_keys(rep, REPORT_KEYS, "report")
+	_has_keys(rep["args"], ["game", "content", "players", "bots", "riders", "seed", "autopilot", "ftp", "unverified", "haptics_off", "options", "player_options", "override", "max_sim_seconds"], "args")
+	for s: Variant in rep["slots"]:
+		_has_keys(s, ["slot", "peer", "name", "is_bot", "ftp", "ftp_verified", "rider", "autopilot", "haptics_on", "options"], "slots[]")
+	for peer: String in ["1", "-1"]:
+		assert_true((rep["plans"] as Dictionary).has(peer), "plans." + peer)
+		assert_true((rep["plan_warnings"] as Dictionary).has(peer), "plan_warnings." + peer)
+		for ph: Variant in rep["phases"][peer]:
+			_has_keys(ph, ["index", "kind", "start", "end", "ended_by"], "phases[]")
+		var trace: Array = rep["trace"][peer]
+		assert_eq(trace.size(), 12, "1 Hz over 12 s")
+		_has_keys(trace[0], ["t", "phase", "kind", "mode", "applied_target_w", "applied_pct", "applied_grade_pct", "clamped_by", "rescue", "afk", "paused", "haptic", "power_w", "cadence_rpm"], "trace[]")
+	var dirs: Array = rep["directives"]
+	assert_eq(dirs.size(), 2)
+	for d: Variant in dirs:
+		_has_keys(d, ["id", "peer", "t", "kind", "requested", "accepted", "reason", "applied"], "directives[]")
+		_has_keys(d["applied"], ["id", "kind", "requested", "applied", "clamped_by", "refused", "reason", "t"], "directives[].applied")
+	assert_eq(str(dirs[1]["reason"]), Wl.REFUSE_RANGE, "the refusal reason")
+	assert_true(bool(dirs[1]["applied"]["refused"]))
+	assert_push_warning("outside_range_pct")
+	for s: Variant in rep["snapshots"]:
+		_has_keys(s, ["seq", "tick", "sha256", "bytes"], "snapshots[]")
+	var biggest := 0
+	for s: Variant in rep["snapshots"]:
+		biggest = maxi(biggest, int(s["bytes"]))
+	assert_eq(int(rep["max_snapshot_bytes"]), biggest)
+	for e: Variant in rep["events"]:
+		_has_keys(e, ["t", "pt", "type"], "events[]")
+	_has_keys(rep["results"], ["grade", "score", "summary_key", "rows", "team", "session_id"], "results")
+	_has_keys(rep["meta"], ["wall_s", "utc_start_unix"], "meta")
+	assert_eq(str(rep["deterministic_hash"]).length(), 64)
+
+
 func test_timeout_end_still_writes_results_and_fit() -> void:
 	var r := _runner({"max_sim_seconds": 10.0, "report": _tmp.path_join("t.json")})
 	assert_eq(r.run_to_end(), "timeout")
