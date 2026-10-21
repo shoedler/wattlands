@@ -100,6 +100,7 @@ var session_id: String = ""
 ## The local rider's new unlocks from apply_progress.
 var unlocks: Array = []
 
+var _setup_ok: bool = false
 var _headless: bool = true
 var _realtime: bool = false
 var _record_rides: bool = true
@@ -214,8 +215,11 @@ func setup(p_config: Dictionary) -> String:
 	if not bus.panic_requested.is_connected(_on_panic):
 		bus.panic_requested.connect(_on_panic)
 	if role == Wl.CLIENT:
+		_setup_ok = true
 		return ""
-	return _setup_authority()
+	var err := _setup_authority()
+	_setup_ok = err == ""
+	return err
 
 
 ## Host/SOLO: build and validate plans, send session_start/plans, start the clock.
@@ -223,7 +227,7 @@ func setup(p_config: Dictionary) -> String:
 func start() -> void:
 	if role == Wl.CLIENT:
 		return
-	if game == null or state != "setup" or tracker.is_started():
+	if not _setup_ok or game == null or state != "setup" or tracker.is_started():
 		push_warning("GameHost: start() needs a successful setup()")
 		return
 	if net != null:
@@ -240,7 +244,7 @@ func start() -> void:
 
 ## One fixed 0.05 s platform step (headless loops); _process uses the clock in real time.
 func step() -> void:
-	if clock == null:
+	if clock == null or not _setup_ok:
 		return
 	_poll_net()
 	_process_inbox()
@@ -1170,6 +1174,8 @@ func _on_session_start(data: Dictionary) -> void:
 			if pd is Dictionary:
 				players.append(PlayerSlot.from_dict(pd))
 	players = _sorted_players(players)
+	for p in players:
+		p.options = WlGameRegistry.resolve_option_values(manifest.get("player_options", []), p.options, "%s player %d" % [game_id, p.peer_id])
 	game = config.get("game") as GameModule
 	if game == null:
 		game = WlGameRegistry.instantiate_manifest(manifest)
@@ -1181,9 +1187,9 @@ func _on_session_start(data: Dictionary) -> void:
 		add_child(game)
 	var opts: Variant = data.get("options", {})
 	var overrides: Variant = data.get("content_overrides", {})
-	_init_session(players, str(data.get("content_id", "")), int(data.get("seed", 0)),
-		(opts as Dictionary).duplicate(true) if opts is Dictionary else {}, str(data.get("scaling", Wl.FAIR_FTP)),
-		overrides if overrides is Dictionary else {})
+	var options := WlGameRegistry.resolve_option_values(manifest.get("options", []), opts if opts is Dictionary else {}, game_id)
+	_init_session(players, str(data.get("content_id", "")), int(data.get("seed", 0)), options,
+		str(data.get("scaling", Wl.FAIR_FTP)), overrides if overrides is Dictionary else {})
 	session_id = str(data.get("session_id", session_id))
 	game.configure(ctx)
 	_int_fields = game.int_fields()

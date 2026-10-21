@@ -32,6 +32,7 @@ var results_count: int = 0
 var progress_calls: int = 0
 var phases_seen: Dictionary = {}
 var cooldown_steps: int = 0
+var autopilot_calls: Dictionary = {}
 ## Game state (host).
 var distance: Dictionary = {}
 var events_sent: int = 0
@@ -110,6 +111,7 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 
 
 func autopilot_intents(peer_id: int) -> Array:
+	autopilot_calls[peer_id] = int(autopilot_calls.get(peer_id, 0)) + 1
 	if steps > 0 and steps % 40 == 0:
 		return [{"k": "auto", "peer": float(peer_id)}]
 	return []

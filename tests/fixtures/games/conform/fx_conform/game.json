@@ -1,0 +1,40 @@
+{
+	"id": "fx_conform",
+	"title": "Fixture Conform",
+	"summary": "A fixture that passes the SDK conformance checks.",
+	"version": "0.1.0",
+	"min_players": 1,
+	"max_players": 3,
+	"bots": true,
+	"presentation": "2d",
+	"pixel_base": [
+		640,
+		360
+	],
+	"entry": "res://tests/fixtures/games/fx_game.gd",
+	"contents": [
+		"tiny",
+		"short"
+	],
+	"default_content": "short",
+	"e2e_content": "tiny",
+	"zero_input_content": "tiny",
+	"options": [
+		{
+			"id": "speed",
+			"type": "int",
+			"min": 1,
+			"max": 5,
+			"default": 2
+		}
+	],
+	"player_options": [
+		{
+			"id": "offset",
+			"type": "int",
+			"min": -10,
+			"max": 5,
+			"default": 0
+		}
+	]
+}

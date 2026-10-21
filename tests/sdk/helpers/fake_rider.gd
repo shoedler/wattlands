@@ -31,6 +31,9 @@ var haptic_pct: float = 0.0
 ## Where finish_ride writes its file ("" = no recorder: returns "").
 var ride_dir: String = ""
 var refuse_reason: String = ""
+## Coasting stand-in for the governor's 4.6.4 rule: after this many ticks without pedaling
+## the rider asks to pause (options.multiplayer false) or marks itself AFK (true). -1: never.
+var coast_after_ticks: int = -1
 var gesture_queue: Array[StringName] = []
 var intent_queue: Array = []
 var ack_queue: Array = []
@@ -103,6 +106,11 @@ func tick(dt: float) -> void:
 	t += dt
 	if device != null:
 		device.tick(dt)
+	if coast_after_ticks >= 0 and ticks == coast_after_ticks:
+		if bool(options.get("multiplayer", false)):
+			afk = true
+		else:
+			pause_requested.emit("coasting")
 
 
 func telemetry() -> Telemetry:
