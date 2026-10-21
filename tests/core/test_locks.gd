@@ -112,6 +112,75 @@ func test_network_allows_only_loopback_when_locked() -> void:
 		assert_push_warning("network integrations locked", url)
 
 
+## W4 (RS-1): URLs whose authority two parsers read differently. url_host() (browser-style)
+## sees 127.0.0.1 in the first two, but HTTPRequest's String::parse_url connects to the host
+## after the "@". The lock refuses every URL whose authority holds "@", "?", "#", "\", "%" or
+## whitespace, whatever url_host() says.
+func test_network_lock_refuses_ambiguous_authorities() -> void:
+	OS.set_environment(Locks.NET_ENV, "1")
+	var refused := [
+		"http://127.0.0.1?@evil.example:8899/api/v3/athlete",
+		"http://127.0.0.1\\@evil.example:8899/api/v3/athlete",
+		"http://localhost?@evil.example/",
+		"http://127.0.0.1#@evil.example/",
+		"http://user@127.0.0.1:8899/",
+		"http://127.0.0.1@evil.example/",
+		"http://127.0.0.1%2f@evil.example/",
+		"http://127.0.0.1 @evil.example/",
+		"http://127.0.0.1\t:8899/",
+	]
+	for url: String in refused:
+		assert_true(Locks.authority_ambiguous(url), url)
+		assert_false(Locks.is_loopback_url(url), url)
+		assert_false(Locks.network_allows(url), url)
+		assert_push_warning("network integrations locked", url)
+	var allowed := [
+		"http://127.0.0.1:8899/oauth/token?x=1&y=@2",
+		"http://localhost:8899/api/v3/uploads#frag@x",
+		"ws://127.0.0.1:8765",
+		"http://127.0.0.1:8899/strava/callback?code=a@b\\c",
+	]
+	for url: String in allowed:
+		assert_false(Locks.authority_ambiguous(url), url)
+		assert_true(Locks.is_loopback_url(url), url)
+		assert_true(Locks.network_allows(url), url)
+
+
+## The parser HTTPRequest uses, for the record: the cases above really do reach the host after
+## the "@" (this is why url_host() alone can't be trusted with them).
+func test_godot_parse_url_reads_the_host_after_the_at() -> void:
+	var cases := {
+		"http://127.0.0.1?@evil.example:8899/api": "evil.example",
+		"http://127.0.0.1\\@evil.example:8899/api": "evil.example",
+	}
+	OS.set_environment(Locks.NET_ENV, "1")
+	for url: String in cases.keys():
+		assert_eq(str(_parse_like_http_request(url)["host"]), cases[url], url)
+		assert_eq(Locks.url_host(url), "127.0.0.1", "url_host() alone is fooled: " + url)
+		assert_false(Locks.network_allows(url), url)
+		assert_push_warning("network integrations locked", url)
+
+
+## String::parse_url as HTTPRequest applies it (scheme, then cut at "#", then at "/", then drop
+## everything up to the first "@", then the port).
+static func _parse_like_http_request(url: String) -> Dictionary:
+	var base := url
+	var pos := base.find("://")
+	if pos != -1:
+		base = base.substr(pos + 3)
+	pos = base.find("#")
+	if pos != -1:
+		base = base.substr(0, pos)
+	pos = base.find("/")
+	if pos != -1:
+		base = base.substr(0, pos)
+	pos = base.find("@")
+	if pos != -1:
+		base = base.substr(pos + 1)
+	pos = base.rfind(":")
+	return {"host": base.substr(0, pos) if pos != -1 else base}
+
+
 func test_network_allows_everything_when_unlocked() -> void:
 	OS.unset_environment(Locks.NET_ENV)
 	assert_true(Locks.network_allows("https://www.strava.com/api/v3/uploads"))
