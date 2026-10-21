@@ -11,6 +11,7 @@ codec the game relies on.
 
 from __future__ import annotations
 
+import math
 import struct
 
 BASE_UUID_SUFFIX = "-0000-1000-8000-00805f9b34fb"
@@ -253,29 +254,70 @@ def parse_resistance_range(data: bytes) -> dict:
     }
 
 
+# Machine Status parameters per op code, as the GDScript FtmsCodec decodes them:
+# (key, struct format, size, divisor). W4: the shared vectors check both codecs.
+_STATUS_FIELDS = {
+    0x02: (("stop_pause", "B", 1, 1),),
+    0x07: (("target_resistance", "B", 1, 10),),
+    0x08: (("target_power_w", "h", 2, 1),),
+    0x12: (("wind_mps", "h", 2, 1000), ("grade_pct", "h", 2, 100), ("crr", "B", 1, 10000),
+           ("cw", "B", 1, 100)),
+    0x14: (("spin_down_status", "B", 1, 1),),
+    0x15: (("target_cadence_rpm", "H", 2, 2),),
+}
+
+
 def parse_machine_status(data: bytes) -> dict:
-    """Machine Status (0x2ADA): op code and its parameter bytes."""
+    """Machine Status (0x2ADA): op code, its parameter bytes and, for the codes FTMS defines
+    parameters for, the decoded values (truncated when they are short)."""
     if len(data) < 1:
         return {"code": -1, "name": "empty", "params": "", "truncated": True}
     code = data[0]
-    return {
+    out = {
         "code": code,
         "name": MACHINE_STATUS_NAMES.get(code, "unknown"),
         "params": bytes(data[1:]).hex(),
         "truncated": False,
     }
+    r = _Reader(data[1:])
+    for key, fmt, size, divisor in _STATUS_FIELDS.get(code, ()):
+        value = r.take(fmt, size)
+        if value is None:
+            out["truncated"] = True
+            break
+        out[key] = value if divisor == 1 else round(value / divisor, 6)
+    return out
 
 
 def parse_control_response(data: bytes) -> dict:
-    """Control Point response indication: 0x80, request op code, result code."""
+    """Control Point response indication: 0x80, request op code, result code, parameters.
+    request_opcode and params (hex) match the GDScript FtmsCodec's keys (W4)."""
     if len(data) < 3 or data[0] != OP_RESPONSE:
-        return {"request": -1, "result": -1, "result_name": "malformed", "truncated": len(data) < 3}
+        return {"request": -1, "request_opcode": -1, "result": -1, "result_name": "malformed",
+                "params": "", "truncated": len(data) < 3}
     return {
         "request": data[1],
+        "request_opcode": data[1],
         "result": data[2],
         "result_name": RESULT_NAMES.get(data[2], "unknown"),
+        "params": bytes(data[3:]).hex(),
         "truncated": False,
     }
+
+
+# Set Target Resistance Level encodings (the GDScript FtmsCodec's names).
+RESISTANCE_UINT8 = "uint8_0.1"
+RESISTANCE_SINT16 = "sint16_0.1"
+
+
+def _scaled(value: float, scale: float, lo: int, hi: int) -> int:
+    """value x scale, clamped to [lo, hi] and rounded half away from zero (NaN -> 0), exactly
+    as the GDScript FtmsCodec._scaled does (W4: Python's round() rounds ties to even)."""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return max(lo, min(hi, 0))
+    x = max(float(lo), min(float(hi), float(value) * scale))
+    n = math.floor(abs(x) + 0.5)
+    return max(lo, min(hi, int(n if x >= 0 else -n)))
 
 
 def encode_request_control() -> bytes:
@@ -287,12 +329,18 @@ def encode_reset() -> bytes:
 
 
 def encode_target_power(watts: int) -> bytes:
-    return struct.pack("<Bh", OP_SET_TARGET_POWER, int(watts))
+    """Set Target Power: sint16 W, clamped to 0..32767 (a negative target is never sent)."""
+    return struct.pack("<Bh", OP_SET_TARGET_POWER, max(0, min(32767, int(watts))))
 
 
-def encode_target_resistance(level: float) -> bytes:
-    """Set Target Resistance Level as uint8 in 0.1 steps (BRIEF 4.3; kept configurable in the app)."""
-    return struct.pack("<BB", OP_SET_TARGET_RESISTANCE, max(0, min(255, round(level * 10))))
+def encode_target_resistance(level: float, encoding: str = RESISTANCE_UINT8) -> bytes:
+    """Set Target Resistance Level in 0.1 steps: uint8 (default, 0..25.5) or sint16 (BRIEF 4.3;
+    kept configurable in the app)."""
+    if encoding == RESISTANCE_SINT16:
+        return struct.pack("<Bh", OP_SET_TARGET_RESISTANCE, _scaled(level, 10.0, -32768, 32767))
+    if encoding != RESISTANCE_UINT8:
+        raise ValueError("unknown resistance encoding %r" % encoding)
+    return struct.pack("<BB", OP_SET_TARGET_RESISTANCE, _scaled(level, 10.0, 0, 255))
 
 
 def encode_start() -> bytes:
@@ -310,10 +358,10 @@ def encode_simulation(wind_mps: float = 0.0, grade_pct: float = 0.0,
     return struct.pack(
         "<BhhBB",
         OP_SET_INDOOR_BIKE_SIMULATION,
-        round(wind_mps * 1000),
-        round(grade_pct * 100),
-        max(0, min(255, round(crr * 10000))),
-        max(0, min(255, round(cw * 100))),
+        _scaled(wind_mps, 1000.0, -32768, 32767),
+        _scaled(grade_pct, 100.0, -32768, 32767),
+        _scaled(crr, 10000.0, 0, 255),
+        _scaled(cw, 100.0, 0, 255),
     )
 
 
