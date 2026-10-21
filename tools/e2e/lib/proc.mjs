@@ -139,11 +139,32 @@ export class Proc {
     return r;
   }
 
-  /** Kills the whole process tree (taskkill /T /F on Windows, the process group elsewhere). */
-  kill() {
+  /**
+   * Kills the whole process tree. Windows: taskkill /T /F. POSIX: SIGTERM to the process group
+   * first, because tools/lib/godot_lock.mjs starts Godot in a group of its own and kills that tree
+   * on SIGTERM; SIGKILL to the group follows after `graceMs`.
+   */
+  kill(graceMs = 3000) {
     if (this.closed || !this.child) return;
     this.killed = true;
-    killTree(this.child.pid);
+    const pid = this.child.pid;
+    if (IS_WIN) {
+      killTree(pid);
+      return;
+    }
+    try {
+      process.kill(-pid, 'SIGTERM');
+    } catch {
+      try {
+        process.kill(pid, 'SIGTERM');
+      } catch {
+        // already gone
+      }
+    }
+    const t = setTimeout(() => {
+      if (!this.closed) killTree(pid);
+    }, graceMs);
+    t.unref();
   }
 
   /** Every captured line, in arrival order. */
