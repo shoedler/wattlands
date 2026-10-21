@@ -15,7 +15,11 @@ extends AppFormScreen
 ##   Haptics   accept haptic effects on/off, intensity 0-100 %
 ##   Controls  rebind every action (saved to input.cfg by InputRouter): each row shows the action
 ##             with its first keyboard and controller binding, the content column all of them.
-##             Esc or the controller's B button cancels a capture, and so does leaving the page.
+##             Esc or the controller's B button cancels a capture, and so does leaving the page;
+##             the page says so. Reset to defaults, the first row (the action rows run below the
+##             1080p screen), puts every project.godot default back after a Keep / Reset confirm
+##             that highlights Keep, Esc and B on `back` included, and saves input.cfg
+##             (InputRouter.reset_bindings, save_bindings).
 ##   Audio     master volume, cadence metronome
 ##   Network   relay URL
 ##   Pedal UI  pedal-scan menus on/off, scan interval
@@ -24,6 +28,9 @@ extends AppFormScreen
 const MOCK_SPEC := "erg"
 
 var status_label: Label = null
+## The Controls page's one-line help above the bindings list (Esc or B cancels a capture, Reset
+## to defaults gets them back); hidden on the other pages.
+var controls_help_label: Label = null
 var strava_client_id: String = ""
 var strava_client_secret: String = ""
 var strava_state: String = ""
@@ -31,6 +38,8 @@ var found_devices: Array[Dictionary] = []
 var capturing: StringName = &""
 var _capture_cooldown: bool = false
 var _trainer_menu: PedalScanList = null
+## The Reset to defaults confirm menu while it is open.
+var _reset_menu: PedalScanList = null
 var _connection: FtmsConnectionManager = null
 ## True while this page waits for TrainerService's safe unlink (its status line says so).
 var _unlink_shown: bool = false
@@ -43,6 +52,12 @@ var importing: bool = false
 
 func _build() -> void:
 	make_form_page(t("APP_SETTINGS_TITLE"))
+	controls_help_label = AppStyle.paragraph(
+		t("APP_SET_CONTROLS_HELP"), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM
+	)
+	controls_help_label.name = "ControlsHelp"
+	controls_help_label.visible = false
+	content_box.add_child(controls_help_label)
 	status_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT)
 	status_label.name = "Status"
 	content_box.add_child(status_label)
@@ -687,8 +702,19 @@ func set_scan_interval(v: Variant) -> void:
 # --- controls ----------------------------------------------------------------------------------
 
 
+## The Controls page's rows: Reset to defaults first, then one row per action. Esc and B cancel
+## a capture, so they can never be captured: Reset is how a rider who moved `back` off them gets
+## them back (BRIEF 3.5 defaults). It comes first because the 14 action rows and Back run below
+## the 1080p screen, and the scan must never highlight a row the rider can't see.
 func controls_fields() -> Array:
-	var fields: Array = []
+	var fields: Array = [
+		{
+			"id": "reset_controls",
+			"label": t("APP_SET_CONTROLS_RESET"),
+			"type": "action",
+			"run": ask_reset_controls
+		}
+	]
 	for a: StringName in Wl.ACTIONS:
 		var label := "%s: %s" % [t("APP_ACTION_" + String(a).to_upper()), compact_binding_text(a)]
 		fields.append(
@@ -700,6 +726,55 @@ func controls_fields() -> Array:
 			}
 		)
 	return fields
+
+
+## True for a Controls page menu (its rows rebind actions).
+func _is_controls_menu(list: PedalScanList) -> bool:
+	for f: Dictionary in fields_of(list):
+		if str(f.get("id", "")).begins_with("bind:"):
+			return true
+	return false
+
+
+## Ask before Reset to defaults: Keep (highlighted first, so a stray surge keeps the bindings)
+## or Reset. Back, a coast or Keep returns to the Controls page unchanged.
+func ask_reset_controls() -> void:
+	_end_capture()
+	if _reset_menu != null and menus.has(_reset_menu):
+		return
+	var fields: Array = [
+		{
+			"id": "keep",
+			"label": t("APP_SET_CONTROLS_RESET_KEEP"),
+			"type": "action",
+			"run": close_reset_controls
+		},
+		{
+			"id": "reset",
+			"label": t("APP_SET_CONTROLS_RESET_YES"),
+			"type": "action",
+			"run": reset_controls
+		},
+	]
+	_reset_menu = open_fields(fields, close_reset_controls, 0)
+	_refresh_status("controls_reset")
+
+
+## Put every action back to its project.godot binding (Esc and B on `back` again) and save
+## input.cfg (InputRouter.reset_bindings, save_bindings), then return to the Controls page.
+func reset_controls() -> void:
+	if services.input != null:
+		services.input.reset_bindings()
+		services.input.save_bindings()
+	close_reset_controls()
+
+
+## Close the Reset to defaults confirm (if open) and show the Controls page as it is now.
+func close_reset_controls() -> void:
+	if _reset_menu != null and is_instance_valid(_reset_menu) and active_menu() == _reset_menu:
+		pop_menu()
+	_reset_menu = null
+	_refresh_controls_menus()
 
 
 ## Short labels (InputBindings.describe: "Enter", "A", "D-pad up") for every binding of `action`.
@@ -756,7 +831,7 @@ func all_bindings_text() -> String:
 	return "\n".join(lines)
 
 
-## Wait for the next key, button or stick move and bind it to `action` (Esc cancels).
+## Wait for the next key, button or stick move and bind it to `action` (Esc or B cancels).
 func start_capture(action: StringName) -> void:
 	capturing = action
 	if value_label != null:
@@ -802,13 +877,15 @@ func _end_capture() -> void:
 	_capture_cooldown = true
 	if value_label != null:
 		value_label.text = ""
+	_refresh_controls_menus()
+
+
+## Rebuild every open Controls page's rows (each shows its action's bindings now) and, when one
+## is on show, the content column's list of every binding.
+func _refresh_controls_menus() -> void:
 	var on_controls := false
 	for m in menus:
-		var fields := fields_of(m)
-		if (
-			not fields.is_empty()
-			and str((fields[0] as Dictionary).get("id", "")).begins_with("bind:")
-		):
+		if _is_controls_menu(m):
 			var fresh := controls_fields()
 			fresh.append(
 				{"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section}
@@ -842,6 +919,8 @@ func _tick(_dt: float) -> void:
 func _refresh_status(section: String) -> void:
 	if status_label == null:
 		return
+	if controls_help_label != null:
+		controls_help_label.visible = section == "controls"
 	match section:
 		"strava":
 			status_label.text = t("APP_SET_STRAVA_HELP")
@@ -856,5 +935,7 @@ func _refresh_status(section: String) -> void:
 				status_label.text += "\n" + t("APP_SET_TRAINER_SAFE")
 		"controls":
 			status_label.text = all_bindings_text()
+		"controls_reset":
+			status_label.text = t("APP_SET_CONTROLS_RESET_ASK")
 		_:
 			status_label.text = ""

@@ -191,7 +191,7 @@ APP_SET_METRONOME,Cadence metronome
 APP_SET_RELAY,Relay
 APP_SET_PEDAL_UI_ON,Pedal-scan menus
 APP_SET_SCAN_INTERVAL,Scan interval
-APP_SET_CAPTURE,Press a key or button for {0} (Esc cancels)
+APP_SET_CAPTURE,Press a key or button for {0}. Esc or B cancels.
 APP_ACTION_CONFIRM,Confirm
 APP_ACTION_BACK,Back
 APP_ACTION_UP,Up
@@ -241,3 +241,8 @@ APP_STRAVA_IMPORT_WEIGHT_DONE,weight {0} imported
 APP_RESULTS_WKG,{0} W/kg average
 APP_CONTENT_ZWO,Your .zwo: {0}
 APP_LOBBY_ZWO_HINT,"Your own .zwo workouts: put them in {0}, then pick them under Ride."
+APP_SET_CONTROLS_HELP,Esc or B cancels a new binding. Reset to defaults puts them back on Back.
+APP_SET_CONTROLS_RESET,Reset to defaults
+APP_SET_CONTROLS_RESET_ASK,"Put every key and button back to the defaults? Your own bindings are lost."
+APP_SET_CONTROLS_RESET_KEEP,Keep my bindings
+APP_SET_CONTROLS_RESET_YES,"Yes, reset to defaults"

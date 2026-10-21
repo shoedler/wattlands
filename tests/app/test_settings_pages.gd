@@ -9,6 +9,9 @@ extends "res://tests/app/app_test_base.gd"
 ## - BRIEF 3.5/3.9: the Controls rows fit the 640 px menu column; a capture ends when the page is
 ##   left (coast or back) and the controller's B button cancels it like Esc; the content column's
 ##   list of every binding follows a rebind (R28).
+## - BRIEF 3.5 (W4fin): the Controls page says Esc or B cancels, and its Reset to defaults row
+##   (after a Keep / Reset confirm) puts every default back, Esc and B on back included, and
+##   writes input.cfg; it works with pedal-scan alone, through the real InputRouter.
 
 const UnlockedClient := preload("res://tests/trainer/unlocked_ftms_client.gd")
 const DT := Wl.SIM_DT
@@ -331,6 +334,32 @@ func test_controls_page_rows_fit_the_menu_column() -> void:
 	assert_eq(s.status_label.text, all)
 
 
+## At 1080p (the project's base size; the headless test viewport may be taller) the Controls
+## page's one-line help, its list of every binding and the Reset to defaults row are on screen.
+## The action rows run past the screen's bottom, so Reset comes first.
+func test_controls_help_list_and_reset_row_are_on_a_1080p_screen() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "controls")
+	await wait_process_frames(2)
+	var base_h := float(ProjectSettings.get_setting("display/window/size/viewport_height", 1080))
+	var bottom := base_h - AppStyle.MARGIN
+	assert_true(s.controls_help_label.visible)
+	assert_eq(s.controls_help_label.get_line_count(), 1, "the help is one line")
+	var help_rect := s.controls_help_label.get_global_rect()
+	var list_rect := s.status_label.get_global_rect()
+	assert_true(help_rect.end.y <= list_rect.position.y + 0.5, "the help sits above the list")
+	assert_true(
+		list_rect.end.y <= bottom + 0.5,
+		"the bindings list ends at y=%.0f (bottom margin at %.0f)" % [list_rect.end.y, bottom]
+	)
+	var reset_rect := menu(s).row(menu(s).index_of_id("reset_controls")).get_global_rect()
+	assert_true(
+		reset_rect.end.y <= bottom + 0.5,
+		"Reset to defaults ends at y=%.0f (bottom margin at %.0f)" % [reset_rect.end.y, bottom]
+	)
+
+
 func test_compact_binding_text_takes_one_key_and_one_pad_binding() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
@@ -384,3 +413,182 @@ func test_controller_b_cancels_a_capture() -> void:
 	a.pressed = true
 	assert_true(s.capture_event(a))
 	assert_eq(rebinds.size(), 1, "another button still binds")
+
+
+# --- controls: Reset to defaults (BRIEF 3.5, W4fin) --------------------------------------------
+
+
+## FakeInput that counts reset_bindings() (the real reset of the InputMap runs too).
+class ResetCountingInput:
+	extends "res://tests/app/fakes/fake_input.gd"
+	var resets: int = 0
+
+	func reset_bindings() -> void:
+		resets += 1
+		super()
+
+
+## The real InputRouter as the services' router: no input.cfg loaded at start, the fixture's
+## profile and bus, and no device used yet, so the menus run on pedal-scan with zero input.
+func _real_router() -> WlInputRouter:
+	var r := WlInputRouter.new()
+	r.load_on_ready = false
+	r.bus = fx.bus
+	r.profile = fx.settings.profile
+	add_child_autofree(r)
+	r.set_process(false)
+	r.set_process_input(false)
+	fx.services.input = r
+	return r
+
+
+static func _key_event(code: Key) -> InputEventKey:
+	var e := InputEventKey.new()
+	e.physical_keycode = code
+	e.pressed = true
+	return e
+
+
+static func _pad_event(button: JoyButton) -> InputEventJoypadButton:
+	var e := InputEventJoypadButton.new()
+	e.button_index = button
+	e.pressed = true
+	return e
+
+
+## True when `action` is bound to `event`'s input now.
+static func _bound(action: StringName, event: InputEvent) -> bool:
+	for e: InputEvent in InputBindings.events_of(action):
+		if InputBindings.same_input(e, event):
+			return true
+	return false
+
+
+## Every action's bindings now, as plain data.
+static func _all_bindings() -> Dictionary:
+	var out := {}
+	for a: StringName in Wl.ACTIONS:
+		var list: Array = []
+		for e: InputEvent in InputBindings.events_of(a):
+			list.append(InputBindings.event_to_dict(e))
+		out[a] = list
+	return out
+
+
+## Every action's project.godot defaults, as plain data.
+static func _default_bindings() -> Dictionary:
+	var out := {}
+	for a: StringName in Wl.ACTIONS:
+		var list: Array = []
+		for e: InputEvent in InputBindings.default_events(a):
+			list.append(InputBindings.event_to_dict(e))
+		out[a] = list
+	return out
+
+
+func test_controls_page_has_a_reset_row_and_says_how_to_cancel() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	assert_false(s.controls_help_label.visible, "the help shows only on the Controls page")
+	confirm_pick(s, "controls")
+	var ids := menu(s).ids()
+	assert_eq(ids.size(), Wl.ACTIONS.size() + 2, "Reset to defaults, a row per action, Back")
+	assert_eq(ids[0], "reset_controls", "Reset to defaults comes first")
+	assert_eq(ids[1], "bind:" + String(Wl.ACTIONS[0]), "then the action rows")
+	assert_eq(ids[ids.size() - 1], "back")
+	assert_eq(menu(s).text_of("reset_controls"), AppScreen.t("APP_SET_CONTROLS_RESET"))
+	assert_false(menu(s).is_disabled_id("reset_controls"))
+	assert_true(s.controls_help_label.visible, "the Controls page says how to cancel")
+	assert_eq(s.controls_help_label.text, AppScreen.t("APP_SET_CONTROLS_HELP"))
+	assert_string_contains(s.controls_help_label.text, "Esc or B cancels")
+	assert_string_contains(s.controls_help_label.text, AppScreen.t("APP_SET_CONTROLS_RESET"))
+	s.start_capture(&"item")
+	assert_eq(
+		s.value_label.text,
+		AppScreen.t("APP_SET_CAPTURE").format([AppScreen.t("APP_ACTION_ITEM")]),
+		"the capture prompt"
+	)
+	assert_string_contains(s.value_label.text, "Esc or B cancels")
+	s._pop_section()
+	assert_false(s.controls_help_label.visible, "the help hides when the page is left")
+
+
+## BRIEF 3.5 puts Esc and B on back, and both cancel a capture, so once back moved to other
+## inputs only Reset to defaults brings them back. With pedal-scan alone (no device used yet) it
+## restores every default and writes input.cfg.
+func test_reset_to_defaults_by_pedal_scan_restores_esc_and_b_and_saves() -> void:
+	fx.give_profile()
+	var router := _real_router()
+	router.rebind(&"back", _key_event(KEY_K))
+	router.rebind(&"back", _pad_event(JOY_BUTTON_PADDLE1))
+	assert_true(router.save_bindings(), "precondition: a custom input.cfg")
+	assert_false(_bound(&"back", _key_event(KEY_ESCAPE)), "precondition: Esc left back")
+	assert_false(_bound(&"back", _pad_event(JOY_BUTTON_B)), "precondition: B left back")
+	assert_ne(_all_bindings(), _default_bindings(), "precondition: custom bindings")
+	assert_true(router.pedal_ui_active(), "precondition: no device used, the menus scan")
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	assert_true(menu(s).scanning)
+	assert_true(scan_to(s, "controls"), "the scan reaches Controls")
+	router.inject_gesture(Wl.G_SURGE)
+	assert_true(menu(s).scanning, "the Controls page scans")
+	assert_true(scan_to(s, "reset_controls"), "the scan reaches Reset to defaults")
+	router.inject_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids(), ["keep", "reset"], "a confirm: Keep, then Reset")
+	assert_eq(menu(s).text_of("keep"), AppScreen.t("APP_SET_CONTROLS_RESET_KEEP"))
+	assert_eq(menu(s).text_of("reset"), AppScreen.t("APP_SET_CONTROLS_RESET_YES"))
+	assert_eq(menu(s).highlighted(), 0, "Keep is highlighted first")
+	assert_true(menu(s).scanning, "the confirm scans")
+	assert_eq(s.status_label.text, AppScreen.t("APP_SET_CONTROLS_RESET_ASK"))
+	assert_true(scan_to(s, "reset"), "the scan reaches Reset")
+	router.inject_gesture(Wl.G_SURGE)
+	assert_eq(_all_bindings(), _default_bindings(), "every action has its default bindings")
+	assert_true(_bound(&"back", _key_event(KEY_ESCAPE)), "Esc is on back again")
+	assert_true(_bound(&"back", _pad_event(JOY_BUTTON_B)), "B is on back again")
+	assert_false(_bound(&"back", _key_event(KEY_K)), "K left back")
+	assert_false(_bound(&"back", _pad_event(JOY_BUTTON_PADDLE1)), "the paddle left back")
+	assert_eq(menu(s).ids()[1], "bind:confirm", "back on the Controls page")
+	assert_eq(
+		menu(s).text_of("bind:back"),
+		"%s: %s, B" % [AppScreen.t("APP_ACTION_BACK"), OS.get_keycode_string(KEY_ESCAPE)],
+		"the back row shows Esc and B"
+	)
+	assert_eq(s.status_label.text, s.all_bindings_text(), "the list shows the defaults")
+	assert_true(s.controls_help_label.visible)
+	# input.cfg holds the defaults: loading it undoes an unsaved change.
+	assert_true(FileAccess.file_exists(Paths.input_cfg_path()), "input.cfg written")
+	router.rebind(&"back", _key_event(KEY_K))
+	router.load_bindings()
+	assert_eq(_all_bindings(), _default_bindings(), "input.cfg was saved with the defaults")
+
+
+func test_keep_back_or_a_coast_leave_the_bindings_alone() -> void:
+	fx.give_profile()
+	var inp := ResetCountingInput.new()
+	add_child_autofree(inp)
+	fx.services.input = inp
+	InputBindings.rebind(&"back", _key_event(KEY_K))
+	var custom := _all_bindings()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "controls")
+	surge_pick(s, "reset_controls")
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids()[1], "bind:confirm", "a stray surge picks Keep")
+	confirm_pick(s, "reset_controls")
+	s.feed_gesture(Wl.G_COAST)
+	assert_eq(menu(s).ids()[1], "bind:confirm", "a coast backs out to Controls")
+	confirm_pick(s, "reset_controls")
+	s.feed_action(&"back")
+	assert_eq(menu(s).ids()[1], "bind:confirm", "back backs out to Controls")
+	confirm_pick(s, "reset_controls")
+	confirm_pick(s, "keep")
+	assert_eq(menu(s).ids()[1], "bind:confirm", "Keep returns to Controls")
+	assert_eq(inp.resets, 0, "nothing was reset")
+	assert_eq(inp.saves, 0, "nothing was saved")
+	assert_eq(_all_bindings(), custom, "the rider's bindings stay")
+	assert_eq(s.status_label.text, s.all_bindings_text(), "the Controls list is back")
+	confirm_pick(s, "reset_controls")
+	confirm_pick(s, "reset")
+	assert_eq(inp.resets, 1, "Reset resets")
+	assert_eq(inp.saves, 1, "and saves input.cfg")
+	assert_eq(_all_bindings(), _default_bindings())
+	assert_eq(menu(s).ids()[1], "bind:confirm")
