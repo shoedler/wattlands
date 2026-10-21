@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# tools/new_game <id>: scaffold a new game from the template (BRIEF 3.6). tools/new_game.ps1 is the
+# PowerShell twin; both run tools/lib/new_game.mjs (zero-dependency Node), which explains the rules.
+#
+#   tools/new_game <id> [--dry-run]
+#
+# Copies src/games/_template/, content/_template/, assets/_template/ and tests/games/_template/ to <id>
+# (renaming _template -> <id>, Template -> <Id>, _TEMPLATE_ -> <ID>_), writes
+# .github/workflows/game-<id>.yml and any missing docs/{decisions,credits.d,changelog.d}/<id>.md, and
+# copies no .uid, .import or .translation file. It refuses (exit 1, writing nothing) when
+# src/games/<id>/, content/<id>/, assets/<id>/, tests/games/<id>/ or the workflow already exists.
+# Exit codes: 0 done, 1 refused, 2 usage (no id or a bad id).
+set -u
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+command -v node >/dev/null 2>&1 || {
+  printf 'new_game: node not found on PATH (Node 22.12+ is required)\n' >&2
+  exit 127
+}
+exec node "$here/lib/new_game.mjs" "$@" </dev/null
