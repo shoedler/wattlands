@@ -21,12 +21,49 @@ extends GutTest
 ## Besides the five names BRIEF 4.6.11 lists, the scan guards TrainerDevice.request_stop (Stop,
 ## 0x08 0x01): the TrainerDevice contract gives it to TrainerController alone, and the exit path
 ## (4.6.9) reaches it only through SafetyGovernor.shutdown().
+##
+## W4 (SAF-4): games (any file under src/games/) change trainer load only through ctx.directives
+## (BRIEF 3.6, CLAUDE.md). A game must not reach the trainer stack at all, since the governor and
+## LocalRider APIs can lift 4.6 rules (configure({profile: "ramp_test", skip_warmup}), a plan the
+## PlanValidator never saw, resume() after a panic). So under src/games/ the scan also fails on
+##   - references to the stack's classes and autoload: GAME_CLASS_NAMES (TrainerService,
+##     LocalRider, SafetyGovernor, TrainerController, the devices, FtmsClient, the connection
+##     manager and transports, and DirectiveRouter / HudRouter, whose rider maps sit behind
+##     ctx.directives and ctx.hud), also inside strings ("/root/TrainerService");
+##   - member access to GAME_MEMBER_NAMES (.governor, .configure_governor, .emergency_safe,
+##     .resume, .local_rider, .trainer_service, ._riders) and the routers' rider maps
+##     (directives.riders, hud.riders), calls of configure_governor(, emergency_safe( and
+##     resume( (definitions excepted), and those names as exact string literals (dynamic calls).
+## Workout's own WorkoutState.riders is a game field, so a bare ".riders" is not flagged; the
+## routers' maps are private (the sdk's _riders) and reached only through the patterns above.
+## Scene and resource files (.tscn, .tres) are scanned as text too: a signal connection or an
+## AnimationPlayer method track naming a guarded setter is a call site anywhere, and under
+## src/games/ so is any name above or a script path into the trainer stack.
 
 const GUARDED: Array[String] = [
 	"write_characteristic", "write_control", "set_target_power", "set_simulation", "set_resistance",
 	"request_stop",
 ]
 const ROOTS: Array[String] = ["res://addons/wattlands", "res://src"]
+## W4 (SAF-4): what a file under src/games/ may not name (see the header).
+const GAME_CLASS_NAMES: Array[String] = [
+	"TrainerService", "WlTrainerService", "LocalRider", "SafetyGovernor", "TrainerController",
+	"TrainerDevice", "MockTrainer", "FtmsTrainer", "FtmsClient", "FtmsConnectionManager",
+	"GdbleTransport", "BridgeTransport", "BleTransport", "DirectiveRouter", "HudRouter",
+]
+const GAME_MEMBER_NAMES: Array[String] = [
+	"governor", "configure_governor", "emergency_safe", "resume", "local_rider", "trainer_service",
+	"_riders",
+]
+## Calls of these by bare name are flagged in games too (definitions excepted).
+const GAME_CALL_NAMES: Array[String] = ["configure_governor", "emergency_safe", "resume"]
+## Script paths a game scene may not reference.
+const GAME_SCRIPT_PATHS: Array[String] = [
+	"addons/wattlands/trainer/", "addons/wattlands/core/local_rider.gd",
+	"addons/wattlands/core/trainer_service.gd", "addons/wattlands/sdk/directive_router.gd",
+	"addons/wattlands/sdk/hud_router.gd",
+]
+const GAMES_DIR := "/src/games/"
 ## Path -> the guarded names that file may call.
 const ALLOW := {
 	"res://addons/wattlands/trainer/control/trainer_controller.gd": ["set_target_power", "set_simulation", "set_resistance", "request_stop"],
@@ -157,6 +194,84 @@ static func _call_sites(src: String, path: String, allow: Dictionary) -> Array[D
 	return out
 
 
+## W4 (SAF-4): a game file's reaches into the trainer stack: [{path, line, name, how}] with how
+## "class", "member", "call", "dynamic" or "router".
+static func scan_game_source(src: String, path: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var lexed := lex(src)
+	var code: String = lexed["code"]
+	var classes := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(GAME_CLASS_NAMES) + ")(?![A-Za-z0-9_])")
+	var members := RegEx.create_from_string("\\.\\s*(" + "|".join(GAME_MEMBER_NAMES) + ")(?![A-Za-z0-9_])")
+	var calls := RegEx.create_from_string("(?<![A-Za-z0-9_.])(" + "|".join(GAME_CALL_NAMES) + ")\\s*\\(")
+	var routers := RegEx.create_from_string("(?<![A-Za-z0-9_])(directives|hud)\\s*\\)?\\s*\\.\\s*(riders)(?![A-Za-z0-9_])")
+	var defn := RegEx.create_from_string("(^|[^A-Za-z0-9_])func\\s+$")
+	for m in classes.search_all(code):
+		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "class"))
+	for m in members.search_all(code):
+		out.append(_hit(code, m.get_start(1), path, m.get_string(1), "member"))
+	for m in calls.search_all(code):
+		var start := m.get_start(1)
+		var line_start := code.rfind("\n", start - 1) + 1 if start > 0 else 0
+		if defn.search(code.substr(line_start, start - line_start)) != null:
+			continue
+		out.append(_hit(code, start, path, m.get_string(1), "call"))
+	for m in routers.search_all(code):
+		out.append(_hit(code, m.get_start(2), path, m.get_string(1) + ".riders", "router"))
+	for st: Dictionary in lexed["strings"]:
+		var text := str(st["text"])
+		if GAME_MEMBER_NAMES.has(text):
+			out.append({"path": path, "line": int(st["line"]), "name": text, "how": "dynamic"})
+			continue
+		var cm := classes.search(text)
+		if cm != null:
+			out.append({"path": path, "line": int(st["line"]), "name": cm.get_string(1), "how": "dynamic"})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return int(a["line"]) < int(b["line"]))
+	return out
+
+
+static func _hit(code: String, start: int, path: String, name: String, how: String) -> Dictionary:
+	return {"path": path, "line": code.substr(0, start).count("\n") + 1, "name": name, "how": how}
+
+
+static func is_game_path(path: String) -> bool:
+	return path.replace("\\", "/").contains(GAMES_DIR)
+
+
+## W4 (SAF-4): a scene or resource file as text: whole-word guarded setters anywhere, and under
+## src/games/ every game-guarded name and trainer-stack script path. how is "scene".
+static func scan_scene_text(text: String, path: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var names: Array[String] = GUARDED.duplicate()
+	if is_game_path(path):
+		names.append_array(GAME_CLASS_NAMES)
+		names.append_array(GAME_MEMBER_NAMES)
+	var re := RegEx.create_from_string("(?<![A-Za-z0-9_])(" + "|".join(names) + ")(?![A-Za-z0-9_])")
+	for m in re.search_all(text):
+		out.append(_hit(text, m.get_start(1), path, m.get_string(1), "scene"))
+	if is_game_path(path):
+		for sp: String in GAME_SCRIPT_PATHS:
+			var at := text.find(sp)
+			while at >= 0:
+				out.append(_hit(text, at, path, sp, "scene"))
+				at = text.find(sp, at + sp.length())
+	return out
+
+
+## Every .tscn and .tres under `root` (recursively).
+static func scene_files(root: String) -> Array[String]:
+	var out: Array[String] = []
+	if DirAccess.open(root) == null:
+		return out
+	for f in DirAccess.get_files_at(root):
+		if f.ends_with(".tscn") or f.ends_with(".tres"):
+			out.append(root.path_join(f))
+	for d in DirAccess.get_directories_at(root):
+		if d.begins_with("."):
+			continue
+		out.append_array(scene_files(root.path_join(d)))
+	return out
+
+
 ## Every .gd under `root` (recursively).
 static func gd_files(root: String) -> Array[String]:
 	var out: Array[String] = []
@@ -179,7 +294,13 @@ static func scan_roots(roots: Array, allow: Dictionary = ALLOW, sites: Dictionar
 	for root: String in roots:
 		for path in gd_files(root):
 			files.append(path)
-			violations.append_array(scan_source(FileAccess.get_file_as_string(path), path, allow, sites))
+			var src := FileAccess.get_file_as_string(path)
+			violations.append_array(scan_source(src, path, allow, sites))
+			if is_game_path(path):
+				violations.append_array(scan_game_source(src, path))
+		for path in scene_files(root):
+			files.append(path)
+			violations.append_array(scan_scene_text(FileAccess.get_file_as_string(path), path))
 	return {"files": files, "violations": violations}
 
 
@@ -326,7 +447,17 @@ func test_fixture_file_is_flagged() -> void:
 	f.store_string(BYPASS)
 	f.close()
 	var result := scan_roots([root])
-	var v: Array[Dictionary] = result["violations"]
+	var all: Array[Dictionary] = result["violations"]
+	# W4: under src/games/ the game rules (SAF-4) flag the TrainerDevice reference too; this
+	# test checks the setter scan, so it compares the guarded setters' call sites only.
+	var v: Array[Dictionary] = []
+	var game_hits := 0
+	for x in all:
+		if GUARDED.has(str(x["name"])) and str(x["how"]) in ["reference", "dynamic"]:
+			v.append(x)
+		else:
+			game_hits += 1
+	assert_gt(game_hits, 0, "the game rules flag `var dev: TrainerDevice` as well")
 	var got := {}
 	for x in v:
 		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
@@ -381,3 +512,134 @@ func _remove_tree(path: String) -> void:
 	for d in DirAccess.get_directories_at(path):
 		_remove_tree(path.path_join(d))
 	DirAccess.remove_absolute(path)
+
+
+# --- W4 (SAF-4): games reach the trainer only through ctx.directives ------------------------------
+
+
+## The W3 fixture (build/w3/safety_fixture/src/games/rogue/rogue_game.gd): a game that changes
+## trainer load without ctx.directives, naming none of the guarded setters. W3: 0 violations.
+const ROGUE := """extends GameModule
+## W3 safety fixture: a game that changes trainer load without ctx.directives.
+
+
+func sim_step(_dt: float, _frame: InputFrame) -> void:
+	# Lift the 150% cap, the duration limits, the long-phase cap and the unverified factor.
+	var rider: LocalRider = TrainerService.local_rider()
+	rider.governor.configure({"profile": "ramp_test", "ftp_verified": true, "skip_warmup": true})
+	# Hand a rider a plan the PlanValidator never saw (ctx.directives exposes the LocalRiders).
+	var router := ctx.directives as DirectiveRouter
+	var other: LocalRider = router.riders[ctx.local_peer]
+	other.set_plan(EffortPlan.of([PlanPhase.erg(Wl.WORK, 200.0, 600.0, "no validator")]))
+	other.start_phase(0)
+	# Leave a panic the rider did not leave.
+	other.resume()
+"""
+
+## More ways in: the autoload by path, dynamic calls, the routers' maps, a bare resume().
+const SNEAKY := """extends GameModule
+
+
+func resume() -> void: # a game's own definition is fine
+	pass
+
+
+func sim_step(_dt: float, _frame: InputFrame) -> void:
+	var ts := get_node("/root/TrainerService")
+	ts.call("emergency_safe")
+	var r: Variant = ctx.directives.riders
+	var p: Variant = ctx.hud._riders
+	var g: Variant = some_rider.get("governor")
+	resume()
+	some_rider.configure_governor({"skip_warmup": true})
+	var gov := AutoloadLookup.trainer_service()
+"""
+
+
+func _write(root: String, rel: String, text: String) -> String:
+	var path := root.path_join(rel)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+	return path
+
+
+func test_the_games_reach_the_trainer_only_through_ctx_directives() -> void:
+	var result := scan_roots(["res://src/games"])
+	var files: Array[String] = result["files"]
+	assert_gt(files.size(), 5, "the scan walked the games (%d files)" % files.size())
+	assert_has(files, "res://src/games/workout/workout_game.gd")
+	var violations: Array[Dictionary] = result["violations"]
+	assert_eq(violations.size(), 0, "a game reaches the trainer stack:\n" + describe(violations))
+
+
+func test_the_w3_rogue_game_is_flagged() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/games/rogue/rogue_game.gd", ROGUE)
+	var v: Array[Dictionary] = scan_roots([root])["violations"]
+	var got := {}
+	for x in v:
+		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
+	for e: String in [
+		"7:LocalRider:class", "7:TrainerService:class", "7:local_rider:member",
+		"8:governor:member", "10:DirectiveRouter:class", "11:LocalRider:class",
+		"15:resume:member",
+	]:
+		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
+	assert_gt(v.size(), 0, "W3: a game that reconfigures the governor gave 0 violations")
+
+
+func test_more_ways_into_the_stack_are_flagged() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/games/sneaky/sneaky_game.gd", SNEAKY)
+	var v: Array[Dictionary] = scan_roots([root])["violations"]
+	var got := {}
+	for x in v:
+		got["%d:%s:%s" % [x["line"], x["name"], x["how"]]] = true
+	for e: String in [
+		"9:TrainerService:dynamic", "10:emergency_safe:dynamic", "11:directives.riders:router",
+		"12:_riders:member", "13:governor:dynamic", "14:resume:call", "15:configure_governor:member",
+		"16:trainer_service:member",
+	]:
+		assert_true(got.has(e), "flagged %s\n%s" % [e, describe(v)])
+	for x in v:
+		assert_ne(int(x["line"]), 4, "the game's own func resume() is a definition: %s" % str(x))
+
+
+func test_the_same_code_outside_src_games_is_the_platforms_business() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/app/screens/some_screen.gd", ROGUE)
+	assert_eq(scan_roots([root])["violations"].size(), 0, "only games are held to ctx.directives")
+
+
+func test_scene_files_are_scanned() -> void:
+	var root := _fixture_dir()
+	_write(root, "src/app/panel.tscn", """[gd_scene format=3]
+
+[node name="Panel" type="Control"]
+
+[connection signal="pressed" from="Button" to="." method="set_target_power"]
+""")
+	_write(root, "src/games/rogue/rogue.tscn", """[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://addons/wattlands/core/local_rider.gd" id="1"]
+
+[node name="Rogue" type="Node"]
+script = ExtResource("1")
+""")
+	_write(root, "src/games/rogue/anim.tres", """[gd_resource type="Animation" format=3]
+
+[resource]
+tracks/0/type = "method"
+tracks/0/keys = {"values": [{"args": [], "method": &"emergency_safe"}]}
+""")
+	var result := scan_roots([root])
+	var v: Array[Dictionary] = result["violations"]
+	var got := {}
+	for x in v:
+		got["%s:%s" % [str(x["path"]).get_file(), x["name"]]] = true
+	assert_true(got.has("panel.tscn:set_target_power"), "a signal connection naming a setter\n" + describe(v))
+	assert_true(got.has("rogue.tscn:addons/wattlands/core/local_rider.gd"), "a game scene scripting a LocalRider\n" + describe(v))
+	assert_true(got.has("anim.tres:emergency_safe"), "a method track in a game resource\n" + describe(v))
+	assert_eq((result["files"] as Array).filter(func(f: String) -> bool: return not f.ends_with(".gd")).size(), 3)
