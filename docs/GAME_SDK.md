@@ -354,7 +354,7 @@ func hud_spec() -> HudSpec:
 ```
 
 - Anchors: `top_left`, `top`, `top_right`, `bottom_left`, `bottom`, `bottom_right` (`HudSpec.TOP_LEFT`, ...). Entries at one anchor stack in the order added: top anchors downward, bottom anchors upward. "Bottom center" is `bottom`.
-- `add(widget, at, options = {})`, `add_control(control, at)`, `toasts_at(at)`, `banners_at(at)`, `show_safety_banners` (default true: the kit's rescue and warm-up banners), `has_widget(widget)`, `HudSpec.is_valid_position(at)`.
+- `add(widget, at, options = {})`, `add_control(control, at)`, `toasts_at(at)`, `banners_at(at)`, `show_safety_banners` (default true: the kit's warm-up and pause banners; the rescue banner (BRIEF 4.6.3) and the trainer-control notice (4.4) always show, so false hides only warm-up and pause), `has_widget(widget)`, `HudSpec.is_valid_position(at)`.
 - **Rect2i placement (2D)**: a `Rect2i` is in art pixels of `pixel_base`. The HUD maps it through `PixelViewport.art_rect_to_screen(rect)`, which applies the viewport's integer scale and letterbox offset, and re-lays it out on resize. At 1080p a 640 × 360 view has scale 3, so Fishing's 4-lane HUD zone, art x 427–639 and 84 px high, is 639 × 252 screen pixels. Kit widgets shrink to fit their rect (several in one rect stack and share it); key numbers keep ≥ 48 px at 1080p, so a rect smaller than a widget's `min_rect()` overflows instead of shrinking those numbers further. Your own Controls in a rect are sized to it. Without a PixelViewport (3D games) a `Rect2i` is taken as 1080p pixels. Sizes per kit widget, in 1080p pixels (`base_size()` at full size, `min_rect()` the smallest that keeps the key numbers readable; at scale 3 divide by 3 for art pixels):
 
 | Widget | Full size | Minimum rect |
