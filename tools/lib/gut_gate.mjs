@@ -3,7 +3,9 @@
 //
 // A GUT run passes only if: the exit code is 0, the log contains "Run Summary", the JUnit file's
 // test count is above 0 and at least the required count (the previous green count, or --min-count),
-// and the log contains none of FORBIDDEN.
+// the log contains none of FORBIDDEN, and no test is pending or risky (GUT exits 0 for both and counts
+// them in JUnit, so a regression that trips a pending() guard would otherwise stay green; W3 QT-3).
+// A narrow run (--gdir) may allow pending tests with allowPending.
 
 import fs from 'node:fs';
 
@@ -21,13 +23,14 @@ export function junitCounts(xml) {
   const root = /<testsuites\b[^>]*>/.exec(xml);
   if (root) {
     const tests = attr(root[0], 'tests');
-    if (tests !== null) return { tests, failures: attr(root[0], 'failures') ?? 0 };
+    if (tests !== null) return { tests, failures: attr(root[0], 'failures') ?? 0, skipped: attr(root[0], 'skipped') ?? skippedCases(xml) };
   }
   const suites = [...xml.matchAll(/<testsuite\b[^>]*>/g)];
   if (suites.length > 0 && suites.every((s) => attr(s[0], 'tests') !== null)) {
     return {
       tests: suites.reduce((sum, s) => sum + attr(s[0], 'tests'), 0),
       failures: suites.reduce((sum, s) => sum + (attr(s[0], 'failures') ?? 0), 0),
+      skipped: suites.reduce((sum, s) => sum + (attr(s[0], 'skipped') ?? 0), 0),
     };
   }
   const cases = (xml.match(/<testcase\b/g) || []).length;
@@ -35,12 +38,24 @@ export function junitCounts(xml) {
   return null;
 }
 
+function skippedCases(xml) {
+  return (xml.match(/<skipped\b/g) || []).length;
+}
+
+/** Pending/risky count from the GUT summary line ("Risky/Pending  N"), 0 when absent. */
+export function pendingFromLog(log) {
+  const clean = typeof log === 'string' ? log.replace(/\x1b\[[0-9;]*m/g, '') : '';
+  let n = 0;
+  for (const m of clean.matchAll(/Risky\/Pending\s+(\d+)/g)) n = Math.max(n, Number(m[1]));
+  return n;
+}
+
 /**
  * Applies the gate. `previousGreen` is the stored green count (null if none); `minCount`, when set,
  * replaces it as the required count; a `narrow` run (a subset of tests) only needs a count above 0.
  * Returns {pass, tests, failures, required, reasons}.
  */
-export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, minCount = null, narrow = false }) {
+export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, minCount = null, narrow = false, allowPending = false }) {
   const reasons = [];
   const counts = junitCounts(junitXml);
   const tests = counts ? counts.tests : 0;
@@ -57,7 +72,9 @@ export function evaluateGut({ exitCode, log, junitXml, previousGreen = null, min
   for (const bad of FORBIDDEN) {
     if (text.includes(bad)) reasons.push(`log contains "${bad}"`);
   }
-  return { pass: reasons.length === 0, tests, failures: counts ? counts.failures : null, required, reasons };
+  const pending = Math.max(counts ? counts.skipped ?? 0 : 0, pendingFromLog(text));
+  if (pending > 0 && !allowPending) reasons.push(`${pending} pending or risky test(s) (GUT "Risky/Pending")`);
+  return { pass: reasons.length === 0, tests, failures: counts ? counts.failures : null, pending, required, reasons };
 }
 
 export function readGreenCount(file) {

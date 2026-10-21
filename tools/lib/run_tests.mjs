@@ -312,7 +312,7 @@ function findGdtoolkit() {
     return r.status === 0;
   };
   if (probe('gdlint', ['--version'])) return { lint: ['gdlint'], format: ['gdformat'] };
-  const from = ['--from', 'gdtoolkit==4.*'];
+  const from = ['--from', 'gdtoolkit==4.5.0'];
   if (probe('uvx', [...from, 'gdlint', '--version'])) {
     return { lint: ['uvx', ...from, 'gdlint'], format: ['uvx', ...from, 'gdformat'] };
   }
@@ -487,7 +487,10 @@ async function stepNode(o) {
     }
     process.stdout.write(`run_tests: node --test in ${suite}\n`);
     const log = path.join(o.project, 'build', `node_${suite.replaceAll('/', '_')}.log`);
-    const r = await run(process.execPath, ['--test'], {
+    // Node 22.12-22.17 strips TypeScript types only with the flag (the relay's suite imports .ts).
+    const [maj, min] = process.versions.node.split('.').map(Number);
+    const strip = maj === 22 && min < 18 ? ['--experimental-strip-types'] : [];
+    const r = await run(process.execPath, [...strip, '--test'], {
       cwd: dir,
       log,
       timeoutS: NODE_SUITE_TIMEOUT_S,

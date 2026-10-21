@@ -11,11 +11,16 @@ const GREEN_LOG = 'GUT 9.7.1\n...\n=============================================
 
 describe('junitCounts', () => {
   test('reads the GUT root element', () => {
-    assert.deepEqual(junitCounts(GUT_XML(42, 1)), { tests: 42, failures: 1 });
+    assert.deepEqual(junitCounts(GUT_XML(42, 1)), { tests: 42, failures: 1, skipped: 0 });
   });
   test('sums testsuite counts when the root has none', () => {
     const xml = '<testsuites><testsuite tests="3" failures="1"></testsuite><testsuite tests="4"></testsuite></testsuites>';
-    assert.deepEqual(junitCounts(xml), { tests: 7, failures: 1 });
+    assert.deepEqual(junitCounts(xml), { tests: 7, failures: 1, skipped: 0 });
+  });
+  test('counts skipped (pending) tests from the root or the testcases', () => {
+    assert.equal(junitCounts('<testsuites tests="3" failures="0" skipped="1"></testsuites>').skipped, 1);
+    const cases = '<testsuites tests="2" failures="0"><testsuite tests="2"><testcase name="a"><skipped/></testcase><testcase name="b"/></testsuite></testsuites>';
+    assert.equal(junitCounts(cases).skipped, 1);
   });
   test('counts testcases as a last resort', () => {
     const xml = '<testsuite name="x"><testcase name="a"/><testcase name="b"><failure/></testcase></testsuite>';
@@ -39,6 +44,17 @@ describe('evaluateGut', () => {
 
   test('fails a non-zero exit code', () => {
     assert.equal(evaluateGut({ ...green, exitCode: 1 }).pass, false);
+  });
+
+  test('fails pending or risky tests (W3 QT-3) unless allowed', () => {
+    const log = `${GREEN_LOG}\n\x1b[33mRisky/Pending        2\x1b[0m\n`;
+    const v = evaluateGut({ ...green, log });
+    assert.equal(v.pass, false);
+    assert.equal(v.pending, 2);
+    assert.match(v.reasons.join('; '), /pending or risky/);
+    const skipped = evaluateGut({ ...green, junitXml: '<testsuites tests="10" failures="0" skipped="1"></testsuites>' });
+    assert.equal(skipped.pass, false);
+    assert.equal(evaluateGut({ ...green, log, allowPending: true }).pass, true);
   });
 
   test('fails without "Run Summary"', () => {

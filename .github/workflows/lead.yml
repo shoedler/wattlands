@@ -1,0 +1,45 @@
+# lead: every BRIEF 7 gate in one job, exactly as tools/run_tests runs them locally (the
+# command that ran green before v0.1.0): import, the full GUT suite (unit, contracts,
+# integration, the Workout scenarios, conformance), the 7.3 scaffold check, check_scripts,
+# tools/run_game_sim over every registered game's contents plus tools/fit_check on the FIT
+# files, every Node suite (wrappers and lock, relay, mock Strava, art pipeline and its pixelate
+# end-to-end, fit_check, the e2e harness's own tests) and the 3-peer end-to-end test
+# (node tools/e2e/run.mjs --games=<every registered game>). The module workflows run their
+# own narrower suites on every push.
+name: lead
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Godot (Linux build)
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip -d "$HOME/godot"
+          echo "GODOT=$HOME/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+      - name: All gates (tools/run_tests)
+        run: tools/run_tests --no-lint
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-tests-logs
+          path: |
+            build/*.log
+            build/junit.xml
+            build/e2e/**/report.json
+          if-no-files-found: ignore

@@ -1,6 +1,7 @@
 # Workout (BRIEF 3.7): the game's own GUT tests, the e2e report checker's node tests and
 # the script check. The full-session simulations (tests/games/workout/integration/) and the
-# e2e run need the whole platform and run in the lead's suite (tools/run_tests).
+# e2e run need the whole platform and run in the lead's suite (tools/run_tests, in
+# .github/workflows/lead.yml).
 name: game-workout
 
 on:

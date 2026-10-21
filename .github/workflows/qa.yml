@@ -4,7 +4,7 @@
 # pushed), so it is unverified on GitHub; every run step below ran green locally (BRIEF 7.9). The
 # Godot download is setup only. The Workout scenarios in tests/scenarios/workout/ and the e2e run
 # itself (node tools/e2e/run.mjs --games=workout) need the integrated platform and run from the
-# lead's tools/run_tests after W2.
+# lead's full tools/run_tests, which .github/workflows/lead.yml runs on every push.
 name: qa
 
 on:
