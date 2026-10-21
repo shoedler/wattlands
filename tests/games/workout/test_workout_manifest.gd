@@ -94,7 +94,10 @@ func test_code_keys_exist() -> void:
 		"WORKOUT_TOAST_INTERVAL_DONE", "WORKOUT_TOAST_SPRINT_HIT", "WORKOUT_TOAST_SPRINT_PEAK", "WORKOUT_TOAST_SPRINT_SOON",
 		WorkoutResults.STAT_GRADE, WorkoutResults.STAT_TIB, WorkoutResults.STAT_INTERVALS, WorkoutResults.STAT_SPRINT_PEAK,
 		WorkoutResults.STAT_SPRINTS_HIT, WorkoutResults.TEAM_TIB, WorkoutResults.TEAM_RIDERS, WorkoutResults.TEAM_SPRINTS,
+		WorkoutResults.STAT_SPRINT_PEAKS,
 	]
+	for k: String in WorkoutResults.BEST_STATS.values():
+		keys.append(k)
 	for g in WorkoutProgress.GRADES:
 		keys.append("WORKOUT_RESULT_" + g)
 	for u in WorkoutProgress.UNLOCKS:
