@@ -103,6 +103,12 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 	if local_slot == null:
 		error = "APP_ERR_NO_LOCAL_SLOT"
 		return {}
+	if role == Wl.CLIENT:
+		# BRIEF 3.3 ("ERG targets always come from each rider's own FTP") and 4.6.7 (each client
+		# validates and clamps locally): a client's slot came from the host (session_start, or
+		# lobby_state on a rejoin), so the values its governor works from are the rider's own
+		# (W3 SAF-1).
+		apply_own_profile(local_slot, profile)
 	var device: TrainerDevice = services.trainer.device() if services.trainer != null else null
 	if device == null:
 		error = "APP_ERR_NO_TRAINER"
@@ -123,12 +129,12 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 			if slot.is_bot:
 				riders[slot.peer_id] = make_bot_rider(slot, role, scaling, game_id, content_id, seed)
 	_remember_last(game_id, content_id)
-	var sim_speed := float(params.get("sim_speed", CmdLine.get_float("sim-speed", 1.0)))
+	var sim_speed := effective_sim_speed(device, float(params.get("sim_speed", CmdLine.get_float("sim-speed", 1.0))))
 	var config := {
 		"game_id": game_id, "content_id": content_id, "seed": seed, "role": role,
 		"players": players, "local_riders": riders, "local_peer": local_peer,
 		"net": net if role != Wl.SOLO else null, "bus": services.bus, "options": options,
-		"scaling_mode": scaling, "sim_speed": maxf(sim_speed, 0.01), "headless": headless,
+		"scaling_mode": scaling, "sim_speed": sim_speed, "headless": headless,
 		"realtime": bool(params.get("realtime", true)),
 		"view_parent": view_parent, "hud_parent": hud_parent,
 		"record_rides": bool(params.get("record_rides", true)), "report": false,
@@ -140,6 +146,31 @@ func build_config(role: String, params: Dictionary, view_parent: Node, hud_paren
 	if not ss.is_empty():
 		config["session_start"] = ss.duplicate(true)
 	return config
+
+
+## Overwrite the safety-relevant fields of this machine's own slot with the rider's profile: FTP
+## (the governor's absolute watt basis), ftp_verified (the 0.85 unverified factor), haptics on/off
+## and intensity (BRIEF 3.2, 4.6.6). Whatever the host sent for them is ignored.
+static func apply_own_profile(slot: PlayerSlot, profile: RiderProfile) -> void:
+	if slot == null or profile == null:
+		return
+	slot.ftp = profile.ftp_w
+	slot.ftp_verified = profile.ftp_verified
+	slot.haptics_on = profile.haptics_on
+	slot.haptic_intensity = clampf(profile.haptic_intensity_pct / 100.0, 0.0, 1.0)
+
+
+## The session clock's speed: --sim-speed (or params.sim_speed) only drives a MockTrainer. With a
+## real trainer every governor time rule (slew, write rate, rescue, coasting, warm-up, haptics)
+## runs on platform time, so a speed other than 1 would scale them in wall time (BRIEF 4.5,
+## 4.6): the session then runs at 1 and a warning says the flag was ignored (W3 SAF-3).
+## TrainerService applies the same rule to its menu clock (trainer area).
+static func effective_sim_speed(device: TrainerDevice, requested: float) -> float:
+	var spd := maxf(requested, 0.01)
+	if device is MockTrainer or is_equal_approx(spd, 1.0):
+		return spd
+	push_warning("AppSessionLauncher: --sim-speed=%s ignored: the trainer is not a MockTrainer, so the session runs at 1" % str(requested))
+	return 1.0
 
 
 ## The messages to re-emit on NetSession.game_message right after GameHost.start(), so the
