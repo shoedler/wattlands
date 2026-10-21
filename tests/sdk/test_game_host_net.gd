@@ -146,6 +146,36 @@ func test_remote_directive_is_applied_and_acked() -> void:
 	assert_not_null(entry["applied"], "the report joins requested and applied")
 
 
+## W3 SDK-4 (GAME_SDK 19.1): a remote rider's applied record has the local record's shape. Its
+## ack (the real LocalRider's Telemetry.acks shape) carries no `requested` or times, so the host
+## fills `requested` from the routed request and t, game_t and phase_index as of routing.
+func test_a_remote_applied_record_carries_requested_and_its_times() -> void:
+	var b := _multi(3)
+	var host := _host(b)
+	_rider(b, 3).set("bare_acks", true)
+	Kit.start(b)
+	Kit.step(b, 45)
+	var game_t := host.clock.game_tick * Wl.SIM_DT
+	var res := host.ctx.directives.request(3, EffortDirective.from_dict({"target_pct": 58, "reason": "bank", "source": "fx"}))
+	assert_true(res.accepted)
+	Kit.step(b, 8)
+	var entry: Dictionary = host.report.directives[0]
+	assert_not_null(entry["applied"], "the ack arrived")
+	var applied: Dictionary = entry["applied"]
+	assert_eq(applied["requested"], entry["requested"], "applied.requested is the routed request, not {}")
+	assert_eq(applied["requested"], {"target_pct": 58.0, "duration_s": 0.0, "reason": "bank", "source": "fx", "id": res.id})
+	assert_almost_eq(float(applied["game_t"]), game_t, 0.001, "game_t as of routing")
+	assert_eq(int(applied["phase_index"]), 1, "the rider's phase when the request was routed")
+	assert_true(applied.has("t"), "t is set")
+	assert_eq(entry["kind"], "request")
+	# cadence_band never gets an applied record (GAME_SDK 19.1).
+	host.ctx.directives.cadence_band(3, 80.0, 95.0)
+	Kit.step(b, 8)
+	var band: Dictionary = host.report.directives[1]
+	assert_eq(band["kind"], NetMessages.DIRECTIVE_CADENCE_BAND)
+	assert_null(band["applied"], "cadence_band entries keep applied null")
+
+
 func test_a_remote_governor_refusal_comes_back_and_releases_the_block() -> void:
 	var b := _multi(3)
 	var host := _host(b)

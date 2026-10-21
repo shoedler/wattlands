@@ -39,6 +39,9 @@ var coast_after_ticks: int = -1
 var gesture_queue: Array[StringName] = []
 var intent_queue: Array = []
 var ack_queue: Array = []
+## Queue acks in the real LocalRider's Telemetry.acks shape (no requested, t, game_t or
+## phase_index) instead of the full record.
+var bare_acks: bool = false
 var t: float = 0.0
 var _fake_phase: int = -1
 
@@ -70,7 +73,11 @@ func apply_directive(d: EffortDirective) -> Dictionary:
 		"applied": {} if refuse_reason != "" else d.to_dict(), "clamped_by": [],
 		"refused": refuse_reason != "", "reason": refuse_reason, "t": t,
 	}
-	ack_queue.append(rec.duplicate(true))
+	if bare_acks:
+		ack_queue.append({"id": rec["id"], "kind": rec["kind"], "applied": (rec["applied"] as Dictionary).duplicate(true),
+			"clamped_by": [], "refused": rec["refused"], "reason": rec["reason"], "dropped": []})
+	else:
+		ack_queue.append(rec.duplicate(true))
 	return rec
 
 

@@ -1175,7 +1175,15 @@ func _on_telemetry(from: int, data: Dictionary) -> void:
 	(r["intents"] as Array).append_array(tm.intents)
 	for ack: Variant in tm.acks:
 		if ack is Dictionary:
-			var rec := _normalized_ack(ack)
+			# The ack carries the governor's result only: `requested` (and, when the ack has
+			# none, t, game_t and phase_index as of routing) come from the routed request, so a
+			# remote rider's record has the shape of a local one (W3 SDK-4).
+			var a := (ack as Dictionary).duplicate(true)
+			var sent := directive_router.take_sent_request(from, int(a.get("id", 0)))
+			for k: String in ["t", "game_t", "phase_index"]:
+				if not a.has(k) and sent.has(k):
+					a[k] = sent[k]
+			var rec := _normalized_ack(a, int(a.get("id", 0)), sent.get("requested", {}))
 			directive_router.on_ack(from, rec)
 			bus.directive_applied.emit(from, rec)
 			if report != null:

@@ -72,6 +72,11 @@ var _grade_pending: Dictionary = {}
 var _grade_last_tick: Dictionary = {}
 ## peer -> {id, prev_switch, prev_mode}: a remote rider's SIM block awaiting its ack.
 var _open_blocks: Dictionary = {}
+## id -> {peer, requested, t, game_t, phase_index}: a remote rider's routed request awaiting
+## its ack (W3 SDK-4). The client's ack carries no `requested` (nor, today, its own times),
+## so the GameHost completes the applied record from here. Oldest dropped past SENT_KEEP.
+var _sent: Dictionary = {}
+const SENT_KEEP := 512
 
 
 func is_authority() -> bool:
@@ -114,6 +119,7 @@ func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 	else:
 		if opened:
 			_open_blocks[peer] = {"id": id, "prev_switch": prev_switch, "prev_mode": prev_mode}
+		_remember_sent(peer, id, d.to_dict())
 		_remote(peer, {"kind": NetMessages.DIRECTIVE_REQUEST, "id": id, "peer": peer, "directive": d.to_dict()})
 	return DirectiveResult.ok(id)
 
@@ -128,6 +134,27 @@ func on_ack(peer: int, rec: Dictionary) -> void:
 	var refused: Variant = rec.get("refused", false)
 	if refused is bool and refused and tracker != null and tracker.block_active(peer, _tick()):
 		tracker.cancel_block(peer, int(pending["prev_switch"]), str(pending["prev_mode"]))
+
+
+## The routed request a remote rider's ack answers, once (W3 SDK-4): {requested (the
+## EffortDirective.to_dict() sent), t (host platform time), game_t (host game time) and
+## phase_index (the rider's phase), all as of routing}; {} for an unknown id or another peer.
+func take_sent_request(peer: int, id: int) -> Dictionary:
+	var e: Dictionary = _sent.get(id, {})
+	if e.is_empty() or int(e["peer"]) != peer:
+		return {}
+	_sent.erase(id)
+	return e.duplicate(true)
+
+
+func _remember_sent(peer: int, id: int, requested: Dictionary) -> void:
+	_sent[id] = {
+		"peer": peer, "requested": requested.duplicate(true),
+		"t": clock.platform_time() if clock != null else 0.0, "game_t": _t(),
+		"phase_index": tracker.index_of(peer) if tracker != null else -1,
+	}
+	while _sent.size() > SENT_KEEP:
+		_sent.erase(_sent.keys()[0])
 
 
 func course_grade(peer: int, grade_pct: float) -> void:
