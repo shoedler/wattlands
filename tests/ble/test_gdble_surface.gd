@@ -89,6 +89,50 @@ func test_extras_the_transport_uses() -> void:
 	_check_signals(MANAGER, MANAGER_EXTRA_SIGNALS)
 
 
+## The test doubles (tests/ble/fake_*.gd) must expose the same names and argument counts as
+## the loaded GDBLE, so the transport tests exercise the real surface. Introspection only.
+func test_fakes_match_the_loaded_surface() -> void:
+	if not _loaded():
+		pending("GDBLE is not loaded in this process: fakes not compared")
+		return
+	var fake_mgr: Script = load("res://tests/ble/fake_bluetooth_manager.gd")
+	var fake_dev: Script = load("res://tests/ble/fake_ble_device.gd")
+	var mgr_methods: Array = MANAGER_METHODS.keys() + MANAGER_EXTRA_METHODS.keys()
+	var mgr_signals: Array = MANAGER_SIGNALS.keys() + MANAGER_EXTRA_SIGNALS.keys()
+	_compare_fake(fake_mgr, MANAGER, mgr_methods, mgr_signals)
+	var dev_signals: Array = DEVICE_SIGNALS.keys() + ["ble_event"]
+	_compare_fake(fake_dev, DEVICE, DEVICE_METHODS.keys(), dev_signals)
+	assert_eq(fake_mgr.get_instance_base_type(), &"Node", "fake manager is a Node like BluetoothManager")
+	assert_eq(fake_dev.get_instance_base_type(), &"RefCounted", "fake device is RefCounted like BleDevice")
+
+
+func _compare_fake(fake: Script, cls: String, methods: Array, signals: Array) -> void:
+	for m: Variant in methods:
+		var method := String(m)
+		var info := _script_entry(fake.get_script_method_list(), method)
+		assert_false(info.is_empty(), "%s fake has %s()" % [cls, method])
+		if info.is_empty():
+			continue
+		var real := _method_args(cls, method)
+		var max_args := (info["args"] as Array).size()
+		var min_args := max_args - (info["default_args"] as Array).size()
+		assert_true(real >= min_args and real <= max_args,
+				"%s fake %s() takes %d..%d arguments; GDBLE takes %d" % [cls, method, min_args, max_args, real])
+	for s: Variant in signals:
+		var sig := String(s)
+		var info := _script_entry(fake.get_script_signal_list(), sig)
+		assert_false(info.is_empty(), "%s fake has signal %s" % [cls, sig])
+		if not info.is_empty():
+			assert_eq((info["args"] as Array).size(), _signal_args(cls, sig), "%s fake signal %s argument count" % [cls, sig])
+
+
+static func _script_entry(list: Array[Dictionary], entry_name: String) -> Dictionary:
+	for e: Dictionary in list:
+		if String(e["name"]) == entry_name:
+			return e
+	return {}
+
+
 func test_transport_availability_follows_the_library() -> void:
 	assert_eq(GdbleTransport.library_loaded(), ClassDB.class_exists(MANAGER))
 	var t: GdbleTransport = autofree(GdbleTransport.new())
