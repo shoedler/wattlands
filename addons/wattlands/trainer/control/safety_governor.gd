@@ -43,6 +43,11 @@ extends Node
 ##     haptic dropped for warm-up, opt-out or cooldown is reported in record.dropped and the
 ##     rest of the request still applies (refused only when nothing else was set). A haptic
 ##     to a rider in ERG refuses the whole request (never a mode switch).
+##   - No phase (W2r2): with no plan, a plan before its first start_phase(), or after
+##     clear_plan(), the governor commands SIM grade 0, wind 0 (menus ride free at SIM flat);
+##     desired_mode stays "OFF", so it counts as no ERG/SIM switch for the 30 s spacing.
+##   - Warm-up (4.6.8) belongs to the trainer connection, not the session: its state is a
+##     GovernorWarmup that adopt_connection() carries to the next governor on the same device.
 
 ## Any status field changed (at most once per tick).
 signal status_changed(status: Dictionary)
@@ -173,11 +178,11 @@ var _np_since: float = -1.0
 var _coasting: bool = false
 var _afk: bool = false
 var _pause_emitted: bool = false
-var _last_pedal_t: float = -1.0
 
 # --- warm-up -----------------------------------------------------------------------------
-var _warmup_started_t: float = -1.0
-var _warmup_done: bool = false
+## The trainer connection's warm-up state (start, done, last pedal stroke) on its own clock;
+## adopt_connection() takes it over from the previous governor on the same device (W2r2).
+var _wu: GovernorWarmup = GovernorWarmup.new()
 var _warmup_active: bool = true
 
 # --- rescue ------------------------------------------------------------------------------
@@ -619,6 +624,7 @@ func tick(dt: float) -> void:
 	if dt <= 0.0 or _shut_down:
 		return
 	_t += dt
+	_wu.t += dt
 	if not _game_paused:
 		_game_t += dt
 		if _phase != null:
@@ -705,6 +711,69 @@ func on_trainer_reconnected() -> void:
 	_update_status()
 
 
+## Take over from `previous`, the governor this one replaces on the same device object, what
+## belongs to the trainer connection rather than to a session. Added in W2r2: LocalRider.setup()
+## builds a new governor for every session (and for the menus after it) around the same
+## device and calls this between setup(device) and configure().
+##   - The warm-up state (BRIEF 4.6.8: counted from the first pedal stroke after the trainer
+##     connects, reset after 20 minutes without pedaling), so a warm-up begun in the menus
+##     continues into the session and back-to-back sessions share one. skip_warmup still
+##     applies through configure().
+##   - What the controller last wrote to the trainer and its write-slot timing
+##     (TrainerController.adopt), so the next mode change is ramped from the trainer's real
+##     state (4.5: from ERG the step-down first) and the 2 writes per second hold across the
+##     hand-over.
+##   - The rider's recent samples behind the 3 s power, and the latest speed: the same rider on
+##     the same trainer, so the 4.5 step-down and SIM -> ERG entry use the rider's real power.
+## Plan, phase, directive channels, rescue, coasting, duration limits, gears and panic stay
+## this governor's own. Does nothing with null, itself or a freed governor, or unless both
+## are bound to the same device object (a new device is a new connection).
+func adopt_connection(previous: SafetyGovernor) -> void:
+	if previous == null or previous == self or not is_instance_valid(previous):
+		return
+	if _device == null or previous._device != _device:
+		return
+	_wu = previous._wu.copy()
+	_controller.adopt(previous._controller)
+	_power_hist.clear()
+	for e: Vector2 in previous._power_hist:
+		_power_hist.append(Vector2(e.x - previous._t + _t, e.y))
+	_speed_mps = previous._speed_mps
+	_update_warmup()
+	_recompute_outputs()
+	_update_clamped_by()
+	_update_status()
+
+
+## Drop the plan and the phase (W2r2): the session is over before the rider is set up again,
+## for example while its ride still waits to be saved. From the next tick the governor rides
+## free at SIM grade 0, wind 0, as with no plan; every directive channel is cleared and a
+## rescue ends. Warm-up, duration limits, gears and panic are kept.
+func clear_plan() -> void:
+	_plan = null
+	_phase = null
+	_phase_index = -1
+	_phase_elapsed = 0.0
+	_clear_channels()
+	_test_ended = false
+	_course_source = 0.0
+	_course_source_set = false
+	_course_applied = 0.0
+	_course_applied_t = _NEVER
+	_update_desired()
+	if _rescue_state != _RESCUE_NONE:
+		_end_rescue(false)
+	_recompute_outputs()
+	_update_clamped_by()
+	_update_status()
+
+
+## The trainer connection's warm-up state (W2r2, diagnostics and tests): {t (its clock),
+## started_t, done, last_pedal_t}; see GovernorWarmup.
+func warmup_state() -> Dictionary:
+	return _wu.to_dict()
+
+
 func is_rescue() -> bool:
 	return _rescue_state == _RESCUE_HOLD
 
@@ -788,9 +857,7 @@ func _process_samples() -> void:
 				_np_since = _t
 		else:
 			_np_since = -1.0
-			_last_pedal_t = _t
-			if _warmup_started_t < 0.0 and not _warmup_done:
-				_warmup_started_t = _t
+			_wu.pedal()
 		if has_cad:
 			if s.cadence_rpm < RESCUE_CADENCE_LOW_RPM:
 				if _cad_low_since < 0.0:
@@ -862,13 +929,13 @@ func _update_warmup() -> void:
 	if _skip_warmup:
 		active = false
 	else:
-		if _warmup_started_t >= 0.0 and not _warmup_done and _t - _warmup_started_t >= WARMUP_S - _EPS:
-			_warmup_done = true
-		if (_warmup_done or _warmup_started_t >= 0.0) and _last_pedal_t >= 0.0 \
-				and _t - _last_pedal_t >= WARMUP_RESET_S - _EPS:
-			_warmup_done = false
-			_warmup_started_t = -1.0
-		active = not _warmup_done
+		if _wu.started_t >= 0.0 and not _wu.done and _wu.t - _wu.started_t >= WARMUP_S - _EPS:
+			_wu.done = true
+		if (_wu.done or _wu.started_t >= 0.0) and _wu.last_pedal_t >= 0.0 \
+				and _wu.t - _wu.last_pedal_t >= WARMUP_RESET_S - _EPS:
+			_wu.done = false
+			_wu.started_t = -1.0
+		active = not _wu.done
 	if active != _warmup_active:
 		_warmup_active = active
 		if active:
@@ -879,9 +946,9 @@ func _update_warmup() -> void:
 func _warmup_remaining_s() -> float:
 	if not _warmup_active:
 		return 0.0
-	if _warmup_started_t < 0.0:
+	if _wu.started_t < 0.0:
 		return WARMUP_S
-	return maxf(0.0, WARMUP_S - (_t - _warmup_started_t))
+	return maxf(0.0, WARMUP_S - (_wu.t - _wu.started_t))
 
 
 func _update_rescue() -> void:
@@ -1162,7 +1229,10 @@ func _command_controller() -> void:
 		MODE_SAFE:
 			pass
 		_:
-			_controller.command_off()
+			# No phase (no plan yet, a plan before its first start_phase(), or after
+			# clear_plan()): the rider rides free at SIM grade 0, wind 0 (W2r2). From ERG the
+			# controller ramps there (the 4.5 step-down first).
+			_controller.command_sim(0.0, 0.0, _crr, _cw, _floor_w(), p3s)
 
 
 func _update_clamped_by() -> void:

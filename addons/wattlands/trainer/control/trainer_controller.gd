@@ -129,6 +129,32 @@ func resync(crr: float, cw: float) -> void:
 		_write_sim({"wind_mps": 0.0, "grade_pct": 0.0, "crr": crr, "cw": cw})
 
 
+## Take over `other`'s knowledge of the trainer (W2r2, SafetyGovernor.adopt_connection): a new
+## controller on the same device object after a session change. The written state (mode, ERG
+## target with its applied slew value, SIM state, resistance level, a pending forced SIM write,
+## a pending floor entry after a panic resume) and the time since `other`'s last write are
+## copied, so the next command is ramped from what the trainer really holds (4.5) and the
+## 0.5 s write slot (2 writes per second) holds across the hand-over. A stopped `other` (after
+## shutdown) wrote SIM flat then Stop, so the mode copied is OFF. Nothing is written here; a
+## panic hold, a running entry ramp or step-down and the command are not copied (the new
+## governor commands on its next tick). Does nothing with null, itself, or a different device.
+func adopt(other: TrainerController) -> void:
+	if other == null or other == self or other._device != _device:
+		return
+	_mode = other._mode
+	_written_erg_w = other._written_erg_w
+	_written_sim = other._written_sim.duplicate()
+	_written_level = other._written_level
+	_erg_w = other._erg_w if other._mode == Wl.ERG else 0.0
+	_force_sim_write = other._force_sim_write
+	_resume_floor = other._resume_floor or other._safe
+	_entry_active = false
+	_stepped_down = false
+	_safe = false
+	_stopped = false
+	_last_write_t = _t - (other._t - other._last_write_t)
+
+
 func device() -> TrainerDevice:
 	return _device
 
