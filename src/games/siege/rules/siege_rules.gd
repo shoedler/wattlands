@@ -3,29 +3,28 @@ extends RefCounted
 ## Generator Siege's pure rules (brief 2.4): step(state, inputs, dt) at dt 0.05 s, reading only
 ## its arguments (state.rng is the only randomness; no clock). Owner: B1 "rules".
 ##
-## G0 status: a minimal, correct skeleton (phase roles and wave events, the generator economy,
-## the budget's planned P_eff, the team watts mean, Overdrive wiring, the end of the shift).
-## B1 completes routing, the shop, the gate and Breach, combat (SiegeCombat), Autopilot calls
-## (SiegeAutopilot, B2) and the zero-input fallback, keeping these signatures.
-##
-## step() order (B1 keeps it; SiegeOverdrive and the module rely on 2 and 4):
-##   1. tick, t; each rider's telemetry, rescue, afk and connected from inputs (slot order).
+## step() order (SiegeOverdrive and the module rely on 2 and 4):
+##   1. tick, t; each rider's telemetry, rescue, afk and connected from inputs (slot order); a
+##      rescue or AFK that starts ends a running Overdrive (SiegeOverdrive.cancel).
 ##   2. A new phase index: close the old phase (wave_end for a wave; drop the queue; enemies
 ##      retreat; SiegeOverdrive.cancel(END_PHASE) for running Overdrives; Autopilot's per-break
 ##      buys reset), open the new one (wave_start for a wave, with its budget B); after the
 ##      shift's last wave, state.done = true (the module emits finished("complete")).
-##   3. Rescue / AFK starting while an Overdrive runs: SiegeOverdrive.cancel(END_RESCUE/END_AFK).
-##   4. Intents in slot order, each rider's in arrival order: route, buy, overdrive
-##      (SiegeOverdrive.try_start; at most one start per rider per tick).
-##   5. Autopilot for riders in a fallback (route once a second in slot order; shop picks in
-##      breaks, <= 2 per break).
-##   6. Reconnect timers, generator pay, tower output m (with SiegeOverdrive.multiplier), combat
-##      (spawns, movement, fire, zones, gate, Breach), SiegeOverdrive.step_rider and od_prompt,
-##      stats (wave time per target, planned kJ, team watts).
+##   3. Intents in slot order, each rider's in arrival order: route (SiegeRouting), buy
+##      (SiegeShop), overdrive (SiegeOverdrive.try_start).
+##   4. Autopilot for riders in a fallback: route once a second in slot order; shop picks in
+##      breaks (<= 2 per break).
+##   5. Generator pay, wave-time stats, then SiegeCombat.step (spawns, movement, tower output m
+##      with SiegeOverdrive.multiplier, fire, zones, gate, Breach).
+##   6. SiegeOverdrive.step_rider and od_prompt per rider, reconnect timers, the team watts mean.
 ##   7. Return the events in emission order (SiegeEvents dictionaries).
+##
+## Routing and the shop are separate files (SiegeRouting, SiegeShop); the economy is
+## SiegeEconomy; combat is src/games/siege/combat/. A rider's reconnect timer runs down at the
+## end of the tick, so a route intent gives exactly reconnect_s (2 s = 40 ticks) without output.
 
 
-## The session's starting state (SiegeState.create; B1 may add to it).
+## The session's starting state (SiegeState.create).
 static func new_state(
 	content: SiegeContent,
 	slots: Array[PlayerSlot],
@@ -40,43 +39,14 @@ static func step(state: SiegeState, inputs: SiegeInputs, dt: float) -> Array[Dic
 	var events: Array[Dictionary] = []
 	state.tick = inputs.tick
 	state.t = inputs.t
-	for inp in inputs.riders:
-		var r := state.rider(inp.peer)
-		if r == null:
-			continue
-		if (
-			r.od_state == SiegeIds.OD_ACTIVE
-			and ((inp.rescue and not r.rescue) or (inp.afk and not r.afk))
-		):
-			events.append_array(
-				SiegeOverdrive.cancel(
-					state, r, SiegeOverdrive.END_RESCUE if inp.rescue else SiegeOverdrive.END_AFK
-				)
-			)
-		r.p_eff_w = inp.p_eff_w
-		r.raw_w = inp.power_w
-		r.cadence_rpm = inp.cadence_rpm
-		r.rescue = inp.rescue
-		r.afk = inp.afk
-		r.connected = inp.connected
-		if inp.power_w >= state.content.num("wkg_min_power_w", 50.0) and inp.power_w > 0.0:
-			r.r_wkg = inp.p_eff_w / inp.power_w
+	_sync(state, inputs, events)
 	events.append_array(_phase(state, inputs))
-	for inp in inputs.riders:
-		var r := state.rider(inp.peer)
-		if r == null:
-			continue
-		for it in inp.intents:
-			if str(it.get("k", "")) == SiegeIds.INTENT_OVERDRIVE:
-				SiegeOverdrive.try_start(state, r, inputs.phase, it)
+	_intents(state, inputs, events)
+	SiegeRouting.autopilot(state, inputs, events)
+	SiegeShop.autopilot(state, inputs, events)
 	_economy(state, inputs, dt)
 	events.append_array(SiegeCombat.step(state, inputs, dt))
-	for inp in inputs.riders:
-		var r := state.rider(inp.peer)
-		if r == null:
-			continue
-		events.append_array(SiegeOverdrive.step_rider(state, r, inp.power_w, dt))
-		r.od_prompt = SiegeOverdrive.prompt(state, r, inputs.phase)
+	_finish(state, inputs, dt, events)
 	return events
 
 
@@ -111,6 +81,33 @@ static func budget(state: SiegeState, inputs: SiegeInputs) -> float:
 	return state.content.num("c_budget", 10.0) * sum * span / 60.0
 
 
+## Step 1: telemetry and safety flags.
+static func _sync(state: SiegeState, inputs: SiegeInputs, events: Array[Dictionary]) -> void:
+	var min_w := state.content.num("wkg_min_power_w", 50.0)
+	for inp in inputs.riders:
+		var r := state.rider(inp.peer)
+		if r == null:
+			continue
+		if (
+			r.od_state == SiegeIds.OD_ACTIVE
+			and ((inp.rescue and not r.rescue) or (inp.afk and not r.afk))
+		):
+			events.append_array(
+				SiegeOverdrive.cancel(
+					state, r, SiegeOverdrive.END_RESCUE if inp.rescue else SiegeOverdrive.END_AFK
+				)
+			)
+		r.p_eff_w = inp.p_eff_w
+		r.raw_w = inp.power_w
+		r.cadence_rpm = inp.cadence_rpm
+		r.rescue = inp.rescue
+		r.afk = inp.afk
+		r.connected = inp.connected
+		if inp.power_w >= min_w and inp.power_w > 0.0:
+			r.r_wkg = inp.p_eff_w / inp.power_w
+
+
+## Step 2: a new phase closes the old one and opens the next.
 static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 	var events: Array[Dictionary] = []
 	var ph := inputs.phase
@@ -133,7 +130,7 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 		for r in state.riders:
 			events.append_array(SiegeOverdrive.cancel(state, r, SiegeOverdrive.END_PHASE))
 			r.ap_buys = 0
-		state.queue.clear()
+		_retreat_all(state)
 		state.phase_index = ph.index
 		state.role = ph.role
 		state.wave_no = ph.number
@@ -142,13 +139,9 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 		if ph.is_wave():
 			state.wave.budget = budget(state, inputs)
 			if ph.role == SiegeIds.ROLE_WARMUP_WAVE:
-				state.wave.budget *= float(
-					(state.content.waves.get("warmup", {}) as Dictionary).get("budget_frac", 0.4)
-				)
+				state.wave.budget *= SiegeTune.wave_num(state.content, "warmup.budget_frac", 0.4)
 			state.wave.budget_left = state.wave.budget
-			var n := mini(SiegeIds.ROAD_COUNT, state.riders.size())
-			for i in n:
-				state.wave.active_roads.append(i if n == SiegeIds.ROAD_COUNT else [1, 0, 2][i])
+			SiegeSpawner.begin_wave(state)
 			events.append(
 				SiegeEvents.wave_start(
 					ph.index,
@@ -165,26 +158,73 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 	return events
 
 
+## A phase ends: the queue is dropped and every live enemy retreats for retreat_s, then vanishes
+## without bounty or damage.
+static func _retreat_all(state: SiegeState) -> void:
+	state.queue.clear()
+	var secs := float(state.content.enemies.get("retreat_s", 3.0))
+	for e in state.enemies:
+		if e.st != SiegeIds.EN_RETREAT:
+			e.st = SiegeIds.EN_RETREAT
+			e.retreat_s = secs
+			e.slow = 1.0
+			e.amp = 1.0
+
+
+## Step 3: intents in slot order, each rider's in arrival order.
+static func _intents(state: SiegeState, inputs: SiegeInputs, events: Array[Dictionary]) -> void:
+	for inp in inputs.riders:
+		var r := state.rider(inp.peer)
+		if r == null:
+			continue
+		for it in inp.intents:
+			match str(it.get("k", "")):
+				SiegeIds.INTENT_ROUTE:
+					SiegeRouting.intent(state, r, it, events)
+				SiegeIds.INTENT_BUY:
+					SiegeShop.intent(state, r, it, events)
+				SiegeIds.INTENT_OVERDRIVE:
+					SiegeOverdrive.try_start(state, r, inputs.phase, it)
+
+
+## Step 5a: the generator pays riders whose output reaches it (all output goes there in breaks),
+## the planned kJ for par, and the wave time per target.
 static func _economy(state: SiegeState, inputs: SiegeInputs, dt: float) -> void:
-	var mult := (
-		state.content.num("generator.denarii_per_kj", 1.0)
-		* (1.0 + state.content.num("generator.level_bonus", 0.2) * state.gen_level)
-	)
+	var rate := SiegeEconomy.generator_rate(state)
 	var counting := not inputs.phase.is_cooldown() and inputs.phase.index >= 0 and not state.done
+	var wave := state.in_wave() and not inputs.phase.is_cooldown()
+	for inp in inputs.riders:
+		var r := state.rider(inp.peer)
+		if r == null:
+			continue
+		if counting:
+			state.planned_kj += planned_p_eff_w(state, r, inp.planned_pct) * dt / 1000.0
+		if not r.delivering():
+			continue
+		var to_gen := r.target == SiegeIds.TARGET_GEN or not wave
+		if wave:
+			if to_gen:
+				r.wave_gen_s += dt
+			else:
+				r.wave_tower_s += dt
+		if counting and to_gen:
+			SiegeEconomy.pay_generator(state, r, inp.p_eff_w, dt, rate)
+
+
+## Step 6: Overdrive clocks and prompt, reconnect timers and the drum's 1 s mean.
+static func _finish(
+	state: SiegeState, inputs: SiegeInputs, dt: float, events: Array[Dictionary]
+) -> void:
 	var team := 0.0
 	for inp in inputs.riders:
 		var r := state.rider(inp.peer)
 		if r == null:
 			continue
-		team += inp.power_w if r.delivering() else 0.0
-		if counting:
-			state.planned_kj += planned_p_eff_w(state, r, inp.planned_pct) * dt / 1000.0
-		var to_gen := r.target == SiegeIds.TARGET_GEN or not inputs.phase.is_wave()
-		if counting and r.delivering() and to_gen:
-			var pay := maxf(inp.p_eff_w, 0.0) * dt / 1000.0 * mult
-			r.denarii += pay
-			r.gen_denarii += pay
-			state.team_earned += pay
+		events.append_array(SiegeOverdrive.step_rider(state, r, inp.power_w, dt))
+		r.od_prompt = SiegeOverdrive.prompt(state, r, inputs.phase)
+		r.reconnect_s = maxf(snappedf(r.reconnect_s - dt, 0.001), 0.0)
+		if r.connected and not r.afk:
+			team += inp.power_w
 	state.team_w_window.append(team)
 	while state.team_w_window.size() > Wl.SIM_HZ:
 		state.team_w_window.pop_front()
