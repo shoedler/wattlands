@@ -3,7 +3,8 @@ extends Node3D
 ## The enemy crowds (brief 3 "Enemies"): one MultiMesh per type (Raiders, Shield wall,
 ## Horsemen, ram), each with the vertex-shader walk bob, and two MultiMeshes of hit-point bars
 ## that only damaged Shield walls, Horsemen and rams get. There is no node per enemy: every
-## frame rewrites the instance buffers from the state through SiegeEnemyInterp.
+## frame rewrites the instance buffers from the state. Positions are the state's own on the host
+## and in SOLO; on a client they come from the module's SiegeSnapHistory (one interpolation path).
 
 const CAPACITY := 170
 const BAR_CAPACITY := 170
@@ -15,7 +16,6 @@ const BOB := {1: [0.1, 3.0], 2: [0.07, 2.0], 3: [0.12, 3.6], 4: [0.05, 0.8]}
 
 var map: SiegeMap = null
 var terrain: SiegeTerrain = null
-var interp := SiegeEnemyInterp.new()
 ## Enemy type code -> MultiMeshScatter (1..4).
 var crowds: Dictionary = {}
 var bars_back: MultiMeshScatter = null
@@ -63,8 +63,20 @@ func _bar_layer(layer_name: String) -> MultiMeshScatter:
 	return mm
 
 
-## Redraws every crowd from `state` (the render clock is the caller's: interp.observe/advance).
-func update(state: SiegeState, dt: float) -> void:
+## Road progress (m) of `e` as drawn: the history's (null: the state's own).
+static func drawn_prog(e: SiegeEnemyState, history: SiegeSnapHistory) -> float:
+	return e.prog_m if history == null else history.prog_of(e.id, e.prog_m)
+
+
+## Ground position (x, z) of `e` as drawn: the history's (null: the state's own).
+static func ground_pos(e: SiegeEnemyState, p_map: SiegeMap, history: SiegeSnapHistory) -> Vector2:
+	var own := p_map.point_at(e.road, e.prog_m, e.lat_m)
+	return own if history == null else history.pos_of(e.id, own)
+
+
+## Redraws every crowd from `state`; `history` (a client's snapshot history, its render clock
+## advanced by the caller) or null for the state's own positions.
+func update(state: SiegeState, dt: float, history: SiegeSnapHistory = null) -> void:
 	_time += dt
 	var xf: Dictionary = {}
 	var cu: Dictionary = {}
@@ -80,9 +92,8 @@ func update(state: SiegeState, dt: float) -> void:
 	for e in state.enemies:
 		if not xf.has(e.type):
 			continue
-		var prog := interp.prog_of(e)
-		var lat := interp.lat_of(e)
-		var p := map.point_at(e.road, prog, lat)
+		var prog := drawn_prog(e, history)
+		var p := ground_pos(e, map, history)
 		drawn[e.id] = p
 		var dir := map.dir_at(e.road, minf(prog, map.road_length(e.road) - 0.05))
 		if e.st == SiegeIds.EN_RETREAT:

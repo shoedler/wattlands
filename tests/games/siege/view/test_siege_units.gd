@@ -11,90 +11,72 @@ func before_each() -> void:
 	_map = _state.content.map
 
 
-# --- SiegeEnemyInterp ----------------------------------------------------------------------------------
+# --- enemy positions: the state's own, or the module's snapshot history on a client ---------------
 
 
-func _advance(it: SiegeEnemyInterp, seconds: float, step: float = 1.0 / 60.0) -> void:
-	var t := 0.0
-	while t < seconds:
-		it.advance(step)
-		t += step
-
-
-func test_interp_draws_between_two_states() -> void:
-	var it := SiegeEnemyInterp.new()
+func _history(prog_a: float, prog_b: float) -> SiegeSnapHistory:
+	var h := SiegeSnapHistory.new(_map)
 	var e := _state.enemies[0]
-	it.observe(_state)
-	var p0 := e.prog_m
-	_state.tick += 2
-	e.prog_m += 1.0
-	it.observe(_state)
-	assert_almost_eq(it.prog_of(e), p0, 0.2, "starts from the previous state")
-	_advance(it, 0.5)
-	assert_almost_eq(it.prog_of(e), p0 + 1.0, 0.05, "arrives at the newest")
+	var was := e.prog_m
+	e.prog_m = prog_a
+	h.push(10.0, _state.enemies)
+	e.prog_m = prog_b
+	h.push(10.1, _state.enemies)
+	e.prog_m = was
+	return h
 
 
-func test_interp_never_extrapolates() -> void:
-	var it := SiegeEnemyInterp.new()
+func test_without_a_history_enemies_are_drawn_at_the_state() -> void:
+	for e in _state.enemies:
+		assert_eq(SiegeEnemyView.drawn_prog(e, null), e.prog_m)
+		assert_almost_eq(SiegeEnemyView.ground_pos(e, _map, null).distance_to(e.pos), 0.0, 1e-3)
+
+
+func test_with_a_history_enemies_are_drawn_between_its_snapshots() -> void:
 	var e := _state.enemies[0]
-	it.observe(_state)
-	var p0 := e.prog_m
-	_state.tick += 2
-	e.prog_m += 1.0
-	it.observe(_state)
-	_advance(it, 5.0)
-	assert_almost_eq(it.prog_of(e), p0 + 1.0, 1e-4)
+	var h := _history(20.0, 21.0)
+	h.render_t = 10.05
+	assert_almost_eq(SiegeEnemyView.drawn_prog(e, h), 20.5, 1e-3)
+	var want := _map.point_at(e.road, 20.5, e.lat_m)
+	assert_almost_eq(SiegeEnemyView.ground_pos(e, _map, h).distance_to(want), 0.0, 0.01)
+	h.render_t = 10.1
+	assert_almost_eq(SiegeEnemyView.drawn_prog(e, h), 21.0, 1e-3, "never past the newest")
 
 
-func test_interp_spacing_follows_the_snapshot_rate() -> void:
-	var it := SiegeEnemyInterp.new()
-	it.observe(_state)
-	# A snapshot a second apart (the 8-rider load).
-	for i in 6:
-		_state.tick += 20
-		it.observe(_state)
-	assert_gt(it.spacing_s, 0.8)
-	assert_lte(it.spacing_s, SiegeEnemyInterp.MAX_SPACING_S)
-	var fast := SiegeEnemyInterp.new()
-	fast.observe(_state)
-	for i in 10:
-		_state.tick += 2
-		fast.observe(_state)
-	assert_almost_eq(fast.spacing_s, 0.1, 0.02)
-
-
-func test_interp_new_enemies_appear_at_their_state() -> void:
-	var it := SiegeEnemyInterp.new()
-	it.observe(_state)
-	_state.tick += 2
+func test_an_enemy_the_history_lacks_is_drawn_at_its_state() -> void:
+	var h := _history(20.0, 21.0)
+	h.render_t = 10.05
 	var fresh := SiegeEnemyState.new()
 	fresh.id = 9999
 	fresh.prog_m = 30.0
 	fresh.road = 1
-	_state.enemies.append(fresh)
-	it.observe(_state)
-	assert_eq(it.prog_of(fresh), 30.0)
+	assert_eq(SiegeEnemyView.drawn_prog(fresh, h), 30.0)
+	assert_almost_eq(
+		SiegeEnemyView.ground_pos(fresh, _map, h).distance_to(_map.point_at(1, 30.0, 0.0)),
+		0.0,
+		1e-3
+	)
 
 
-func test_interp_restarts_after_a_gap_or_a_clock_reset() -> void:
-	var it := SiegeEnemyInterp.new()
-	it.observe(_state)
+func test_the_view_follows_the_module_history_on_a_client_and_the_state_otherwise() -> void:
+	var view := SiegeViewUtil.make_view(self, _state)
+	autofree(view)
 	var e := _state.enemies[0]
-	var old := e.prog_m
-	_state.tick += 200
-	e.prog_m += 40.0
-	it.observe(_state)
-	assert_eq(it.prog_of(e), old + 40.0, "a long gap does not tween across the jump")
-	_state.tick = 3
-	it.observe(_state)
-	assert_eq(it.t_cur, 3 * Wl.SIM_DT)
-
-
-func test_interp_positions_are_on_the_road() -> void:
-	var it := SiegeEnemyInterp.new()
-	it.observe(_state)
-	for e in _state.enemies:
-		assert_almost_eq(it.pos_of(e, _map).distance_to(e.pos), 0.0, 1e-3)
+	assert_null(view.client_history(), "no game, no history")
+	assert_almost_eq(view.enemy_ground_pos(e).distance_to(e.pos), 0.0, 1e-3)
+	var game := SiegeGame.new()
+	autofree(game)
+	view.game = game
+	assert_null(view.client_history(), "an empty history is the host's or SOLO's")
+	game.history = _history(20.0, 21.0)
+	game.history.render_t = 10.05
+	assert_eq(view.client_history(), game.history)
+	var want := _map.point_at(e.road, 20.5, e.lat_m)
+	assert_almost_eq(view.enemy_ground_pos(e).distance_to(want), 0.0, 0.01)
+	view.refresh(1.0 / 60.0)
+	assert_almost_eq(game.history.render_t, 10.0, 0.02, "the view advances the render clock")
+	var drawn: Vector2 = view.enemies.drawn[e.id]
+	assert_almost_eq(drawn.distance_to(_map.point_at(e.road, 20.0, e.lat_m)), 0.0, 0.2)
 
 
 # --- SiegeEffectsView ------------------------------------------------------------------------------------

@@ -89,9 +89,10 @@ func refresh(dt: float) -> void:
 		wheels[slot].update(rider, dt, victory)
 		chains[slot].update(rider, dt)
 	generator.update(state.team_w, dt)
-	enemies.interp.observe(state)
-	enemies.interp.advance(dt)
-	enemies.update(state, dt)
+	var history := client_history()
+	if history != null:
+		history.advance(dt)
+	enemies.update(state, dt, history)
 	towers.update(state, dt, enemies.drawn)
 	effects.update(state, dt, enemies.drawn)
 	gate.update(state, dt)
@@ -100,10 +101,18 @@ func refresh(dt: float) -> void:
 	audio.update(state, dt, local_peer())
 
 
-## What the view draws for the enemy `e` (the one place the view reads enemy positions from;
-## SiegeEnemyInterp smooths them between states).
+## The module's snapshot history on a CLIENT (render clock behind the newest snapshot, like
+## Workout), else null: the host and SOLO draw the state's own positions.
+func client_history() -> SiegeSnapHistory:
+	if game != null and game.history != null and not game.history.is_empty():
+		return game.history
+	return null
+
+
+## Where the view draws the enemy `e` (ground x, z): the one path every enemy position takes,
+## whether the crowd, a bolt or a zone asks.
 func enemy_ground_pos(e: SiegeEnemyState) -> Vector2:
-	return enemies.interp.pos_of(e, map)
+	return SiegeEnemyView.ground_pos(e, map, client_history())
 
 
 func _update_shake() -> void:
