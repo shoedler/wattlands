@@ -1,0 +1,57 @@
+{
+  "short": {
+    "map": "rotae", "label": "SIEGE_CONTENT_SHORT", "total_s": 1680,
+    "phases": [
+      {"role": "warmup_wave", "kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300},
+      {"role": "build_break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 120},
+      {"role": "wave", "kind": "WORK", "target_pct": 95, "duration_s": 300},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 95, "duration_s": 300},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 95, "duration_s": 300}
+    ]
+  },
+  "vo2": {
+    "map": "rotae", "label": "SIEGE_CONTENT_VO2", "total_s": 2040,
+    "phases": [
+      {"role": "warmup_wave", "kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300},
+      {"role": "build_break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 120},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 180},
+      {"role": "wave", "kind": "WORK", "target_pct": 112, "duration_s": 120}
+    ]
+  },
+  "sweetspot": {
+    "map": "rotae", "label": "SIEGE_CONTENT_SWEETSPOT", "total_s": 2520,
+    "phases": [
+      {"role": "warmup_wave", "kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300},
+      {"role": "build_break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 120},
+      {"role": "wave", "kind": "WORK", "target_pct": 90, "duration_s": 900},
+      {"role": "break", "kind": "RECOVERY", "target_pct": 55, "duration_s": 300},
+      {"role": "wave", "kind": "WORK", "target_pct": 90, "duration_s": 900}
+    ]
+  },
+  "endurance": {
+    "map": "rotae", "label": "SIEGE_CONTENT_ENDURANCE", "total_s": 3120,
+    "phases": [
+      {"role": "warmup_wave", "kind": "WARMUP", "target_pct": 50, "ramp_to_pct": 65, "duration_s": 300},
+      {"role": "build_break", "kind": "RECOVERY", "target_pct": 50, "duration_s": 120},
+      {"role": "wave", "kind": "WORK", "target_pct": 70, "duration_s": 2700, "rushes_at_s": [480, 960, 1440, 1920, 2400]}
+    ]
+  },
+  "drill": {
+    "map": "rotae", "label": "SIEGE_CONTENT_DRILL", "total_s": 120,
+    "phases": [
+      {"role": "build_break", "kind": "WARMUP", "target_pct": 50, "duration_s": 20},
+      {"role": "wave", "kind": "WARMUP", "target_pct": 60, "duration_s": 100, "mix": "raiders_horsemen"}
+    ]
+  }
+}

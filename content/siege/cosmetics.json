@@ -1,0 +1,8 @@
+{
+  "unlocks": [
+    {"id": "swallowtail_pennant", "xp": 100, "kind": "pennant"},
+    {"id": "walnut_wheel", "xp": 250, "kind": "wheel"},
+    {"id": "bronze_chain_trim", "xp": 500, "kind": "chain"},
+    {"id": "long_banner", "xp": 1000, "kind": "banner"}
+  ]
+}

@@ -1,22 +1,145 @@
 keys,en
-SIEGE_CONTENT_DEFAULT,Track day (8 min)
-SIEGE_CONTENT_SHORT,Short spin (3 min)
-SIEGE_OPT_BOOSTS,Boosts
-SIEGE_OPT_TRACK,Track length
-SIEGE_TRACK_400,400 m
-SIEGE_TRACK_800,800 m
-SIEGE_OPT_WORK_OFFSET,Work offset (% FTP)
-SIEGE_PHASE_WARMUP,Warm-up
-SIEGE_PHASE_WORK,Push
-SIEGE_PHASE_SHORT,Easy spin
-SIEGE_PHASE_ROLLERS,Rollers
-SIEGE_PHASE_FINISH,Finish: hold the target
-SIEGE_BANNER_PHASE,{0}
-SIEGE_LAP_HALFWAY,Halfway
-SIEGE_LAP_DONE,Lap {0}!
-SIEGE_LAPS,Laps
-SIEGE_STATUS_LAPS,{0} laps
-SIEGE_STAGGER,Catch your breath: your marker waits
-SIEGE_BOOST,Boost
-SIEGE_RESULTS,Track day done
-SIEGE_UNLOCK_GOLD_MARKER,Gold marker
+SIEGE_CONTENT_SHORT,Short shift: 3 waves (31 min)
+SIEGE_CONTENT_VO2,VO2 shift: 6 hard waves (37 min)
+SIEGE_CONTENT_SWEETSPOT,Sweet spot shift: 2 long waves (45 min)
+SIEGE_CONTENT_ENDURANCE,Endurance shift: one long siege with rushes (55 min)
+SIEGE_CONTENT_DRILL,Drill: one short wave (5 min)
+SIEGE_OPT_WAVE_OFFSET,Wave offset (% FTP)
+SIEGE_MAP_ROTAE,Castellum Rotae
+SIEGE_PHASE_WARMUP_WAVE,Warm-up wave
+SIEGE_PHASE_BUILD_BREAK,Build break
+SIEGE_PHASE_WAVE_1,Wave 1
+SIEGE_PHASE_WAVE_2,Wave 2
+SIEGE_PHASE_WAVE_3,Wave 3
+SIEGE_PHASE_WAVE_4,Wave 4
+SIEGE_PHASE_WAVE_5,Wave 5
+SIEGE_PHASE_WAVE_6,Wave 6
+SIEGE_PHASE_WAVE_7,Wave 7
+SIEGE_PHASE_WAVE_8,Wave 8
+SIEGE_PHASE_WAVE_9,Wave 9
+SIEGE_PHASE_WAVE_10,Wave 10
+SIEGE_PHASE_BREAK_1,Break 1
+SIEGE_PHASE_BREAK_2,Break 2
+SIEGE_PHASE_BREAK_3,Break 3
+SIEGE_PHASE_BREAK_4,Break 4
+SIEGE_PHASE_BREAK_5,Break 5
+SIEGE_PHASE_BREAK_6,Break 6
+SIEGE_PHASE_BREAK_7,Break 7
+SIEGE_PHASE_BREAK_8,Break 8
+SIEGE_PHASE_BREAK_9,Break 9
+SIEGE_PHASE_BREAK_10,Break 10
+SIEGE_TOWER_BALLISTA,Ballista
+SIEGE_TOWER_SCORPION,Scorpion bolt thrower
+SIEGE_TOWER_CALTROP,Caltrop thrower
+SIEGE_ENEMY_RAIDERS,Raiders
+SIEGE_ENEMY_SHIELD_WALL,Shield wall
+SIEGE_ENEMY_HORSEMEN,Horsemen
+SIEGE_ENEMY_RAM,Battering ram
+SIEGE_ROAD_WEST,West road
+SIEGE_ROAD_VALLEY,Valley road
+SIEGE_ROAD_EAST,East road
+SIEGE_GENERATOR,Generator
+SIEGE_PAD,Pad {0}
+SIEGE_GATE,Gate
+SIEGE_PERK_RESERVE_FLYWHEEL,Reserve flywheel
+SIEGE_PERK_AQUEDUCT_DRIVE,Aqueduct drive
+SIEGE_SHOP_TITLE,Shop: {0} denarii
+SIEGE_SHOP_RECOMMENDED,Autopilot picks: {0}
+SIEGE_SHOP_COUNTDOWN,Shop closes in {0} s
+SIEGE_SHOP_COST,{0} denarii
+SIEGE_SHOP_ON_PAD,{0} on pad {1}
+SIEGE_ITEM_BUILD_BALLISTA,Build a Ballista
+SIEGE_ITEM_BUILD_SCORPION,Build a Scorpion
+SIEGE_ITEM_BUILD_CALTROP,Build a Caltrop thrower
+SIEGE_ITEM_UPGRADE,Upgrade
+SIEGE_ITEM_UPGRADE_1,Upgrade 1: +40% output
+SIEGE_ITEM_UPGRADE_2,Upgrade 2: +25% range
+SIEGE_ITEM_UPGRADE_3,Upgrade 3: special
+SIEGE_ITEM_GENERATOR,Generator level
+SIEGE_ITEM_GENERATOR_1,Generator level 1: +20% denarii
+SIEGE_ITEM_GENERATOR_2,Generator level 2: +40% denarii
+SIEGE_ITEM_GENERATOR_3,Generator level 3: +60% denarii
+SIEGE_ITEM_IRON_BANDS,Iron bands: +25 gate HP
+SIEGE_ITEM_REPAIR,Repair the gate: +20 HP
+SIEGE_ITEM_RESERVE_FLYWHEEL,Reserve flywheel (team perk)
+SIEGE_ITEM_AQUEDUCT_DRIVE,Aqueduct drive (team perk)
+SIEGE_ITEM_SAVE,Save denarii
+SIEGE_SPECIAL_BALLISTA,Ignores armor
+SIEGE_SPECIAL_SCORPION,Hits 5
+SIEGE_SPECIAL_CALTROP,+25% damage taken inside
+SIEGE_SHOP_REFUSED_CLOSED,The shop is closed
+SIEGE_SHOP_REFUSED_FUNDS,Not enough denarii
+SIEGE_SHOP_REFUSED_PAD_TAKEN,That pad already has a tower
+SIEGE_SHOP_REFUSED_NO_TOWER,No tower on that pad
+SIEGE_SHOP_REFUSED_MAX_LEVEL,Already fully upgraded
+SIEGE_SHOP_REFUSED_LIMIT,Sold out
+SIEGE_SHOP_REFUSED_GATE_FULL,The gate is already whole
+SIEGE_TOAST_WARMUP_START,Warm-up wave: raiders on the hill. Spin up the wheels!
+SIEGE_TOAST_WAVE_START,Wave {0}/{1}: hold the gate!
+SIEGE_TOAST_WAVE_END,Wave {0} held: gate {1} HP
+SIEGE_TOAST_BREAK,Break: recover and shop
+SIEGE_TOAST_ROADS,Horns! The raiders turn to new roads
+SIEGE_TOAST_PUSH,Battering rams at the gate road!
+SIEGE_TOAST_RUSH_START,Rush! Raiders and horsemen charge
+SIEGE_TOAST_RUSH_END,The rush breaks
+SIEGE_TOAST_RAM_DOWN,Ram destroyed!
+SIEGE_TOAST_LEAK,{0} reached the gate
+SIEGE_TOAST_BREACH,Breach! The towers fall silent
+SIEGE_TOAST_GATE_RESTORED,The gate is shored up: {0} HP
+SIEGE_TOAST_BUY_OK,Bought: {0}
+SIEGE_TOAST_BUY_REFUSED,Not bought: {0}
+SIEGE_TOAST_ROUTE,Chain to {0}
+SIEGE_TOAST_OVERDRIVE_START,Overdrive! Sprint for 30 s
+SIEGE_TOAST_OVERDRIVE_END,Overdrive spent
+SIEGE_TOAST_OVERDRIVE_SCORED,Overdrive sprint scored!
+SIEGE_TOAST_OVERDRIVE_REFUSED,Overdrive unavailable right now
+SIEGE_TOAST_STAGGER,The workers stumble: spin back up
+SIEGE_TOAST_AFK,Your wheel stopped
+SIEGE_WARN_HORN,Horns: roads change in {0} s
+SIEGE_WARN_RUSH,Rush incoming
+SIEGE_WARN_RAM,Rams in {0} s
+SIEGE_WARN_GATE_LOW,The gate is failing!
+SIEGE_TEACH_1,Your watts turn your treadwheel. Pedal steady!
+SIEGE_TEACH_2,Right or swap: send your watts to a tower. Up: back to the generator.
+SIEGE_TEACH_3,The generator pays denarii; spend them in the breaks.
+SIEGE_TEACH_4,Towers fire faster the more watts reach them.
+SIEGE_TEACH_5,"In a wave, surge when Overdrive glows: 30 s of double power."
+SIEGE_PROMPT_OVERDRIVE,Surge for Overdrive!
+SIEGE_HUD_GATE,Gate
+SIEGE_HUD_DENARII,Denarii
+SIEGE_HUD_WAVE,Wave {0}/{1}
+SIEGE_HUD_WARMUP_WAVE,Warm-up wave
+SIEGE_HUD_ENEMIES_LEFT,Left: {0}
+SIEGE_HUD_QUEUED,+{0} waiting
+SIEGE_HUD_ROUTE,Route
+SIEGE_HUD_ROUTE_GEN,Generator
+SIEGE_HUD_ROUTE_PAD,Tower {0}
+SIEGE_HUD_CONNECTING,Connecting...
+SIEGE_HUD_OVERDRIVE,Overdrive
+SIEGE_HUD_OVERDRIVE_READY,Ready
+SIEGE_HUD_OVERDRIVE_ON,{0} s
+SIEGE_HUD_OVERDRIVE_COOLDOWN,Recharging {0} s
+SIEGE_HUD_TEAM_WATTS,{0} W
+SIEGE_HUD_RUSHES,Rushes
+SIEGE_HUD_BREACH,Breach {0} s
+SIEGE_STATUS_GEN,Generator
+SIEGE_STATUS_TOWER,Tower {0}
+SIEGE_RESULTS,Castellum Rotae stands
+SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
+SIEGE_STAT_GEN_DENARII,Generator denarii
+SIEGE_STAT_BOUNTY_DENARII,Bounty denarii
+SIEGE_STAT_KILLS,Kills
+SIEGE_STAT_DAMAGE,Damage
+SIEGE_STAT_OVERDRIVES,Scored Overdrives
+SIEGE_STAT_GEN_TIME,Wave time on the generator (s)
+SIEGE_STAT_TOWER_TIME,Wave time on towers (s)
+SIEGE_STAT_TOWERS_BUILT,Towers built
+SIEGE_STAT_SCORE,Score
+SIEGE_STAT_GATE_PER_WAVE,Gate HP per wave
+SIEGE_STAT_BREACHES,Breaches
+SIEGE_STAT_LEAKS_BY_ROAD,Leaks by road (W/V/E)
+SIEGE_STAT_RAMS_STOPPED,Rams stopped
+SIEGE_UNLOCK_SWALLOWTAIL_PENNANT,Swallowtail pennant
+SIEGE_UNLOCK_WALNUT_WHEEL,Walnut wheel
+SIEGE_UNLOCK_BRONZE_CHAIN_TRIM,Bronze chain trim
+SIEGE_UNLOCK_LONG_BANNER,Long banner
