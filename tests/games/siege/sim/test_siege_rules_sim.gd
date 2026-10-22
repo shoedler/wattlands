@@ -3,11 +3,6 @@ extends GutTest
 ## these tests assert T2, the Breach case, the Overdrive cases and S8 (the 150-enemy cap and the
 ## 8 KB snapshot). Content is shortened with patches where the assertion allows, so the file
 ## runs in seconds.
-##
-## Guards for the G0 stubs: SiegeCombat spawns nothing and the G0 rules compute no tower output
-## m, so a test whose assertions need real enemies or real tower output ends in
-## pass_test("... not merged yet") when the sim never saw them. Each guard is one of
-## _no_combat() / _no_tower_output() below; the lead removes both at merge.
 
 const WAVE_T0 := 80.0
 const BREAK := "break"
@@ -24,22 +19,6 @@ func _sim(
 	if not trim.is_empty():
 		patches.merge(SiegeHeadlessSim.trim_patch(shift_id, trim), true)
 	return SiegeHeadlessSim.create(shift_id, specs, {"patches": patches, "seed": seed_n})
-
-
-func _no_combat(sim: SiegeHeadlessSim) -> bool:
-	if sim.combat_ran():
-		return false
-	pass_test("combat not merged yet: no enemy ever spawned")
-	return true
-
-
-## Pad `pad` never produced output m > 0 while a rider was routed to it (the G0 rules compute no
-## tower output).
-func _no_tower_output(seen_m: float) -> bool:
-	if seen_m > 0.0:
-		return false
-	pass_test("tower output not merged yet: m stayed 0")
-	return true
 
 
 func _types(sim: SiegeHeadlessSim, type: String) -> Array[float]:
@@ -256,8 +235,6 @@ func test_overdrive_doubles_the_riders_share_of_tower_output_while_raw_power_is_
 	}
 	var sim := _od_wave_sim([a, b])
 	var m := _tower_pad_m(sim, 3, w + 120.0, [w + 30.0, w + 50.0, w + 80.0])
-	if _no_tower_output(float(m[w + 30.0])):
-		return
 	assert_almost_eq(
 		float(m[w + 30.0]), (275.0 + 125.0) / 250.0, 0.02, "before: sum of P_eff / 250 W"
 	)
@@ -279,8 +256,6 @@ func test_overdrive_does_not_double_output_below_ftp_and_m_caps_at_4() -> void:
 	}
 	var sim := _od_wave_sim([weak])
 	var m := _tower_pad_m(sim, 3, w + 60.0, [w + 30.0, w + 50.0])
-	if _no_tower_output(float(m[w + 30.0])):
-		return
 	assert_almost_eq(float(m[w + 30.0]), 190.0 * 1.25 / 250.0, 0.02)
 	assert_almost_eq(float(m[w + 50.0]), float(m[w + 30.0]), 0.02, "no doubling below CP")
 	# Two big riders in Overdrive: 2 x (2 x 500 W P_eff) / 250 = 8, capped at 4.0.
@@ -323,8 +298,6 @@ func test_t2_a_tower_only_rider_earns_40_to_60_percent_of_a_generator_only_rider
 		{"warmup_s": 60, "build_s": 60, "break_s": 60, "wave_s": 180, "max_waves": 3}
 	)
 	sim.run_all()
-	if _no_combat(sim):
-		return
 	var tower_rate := (sim.earned_per_wave_minute(1) + sim.earned_per_wave_minute(2)) / 2.0
 	var gen_rate := (sim.earned_per_wave_minute(3) + sim.earned_per_wave_minute(4)) / 2.0
 	assert_gt(gen_rate, 0.0)
@@ -369,8 +342,6 @@ func test_breach_four_riders_at_0_w_breach_in_the_first_full_wave() -> void:
 				restored_hp = float(sim.state.gate_hp)
 				for r in sim.state.riders:
 					after[r.peer] = r.denarii
-	if _no_combat(sim):
-		return
 	assert_gte(breach_t, w0, "a Breach after the first full wave began")
 	assert_lt(breach_t, w0 + 300.0, "a Breach inside the first full wave")
 	assert_gt(restore_t, 0.0, "the gate came back")
@@ -417,8 +388,6 @@ func test_s8_vo2_with_triple_budget_stays_under_the_cap_and_the_snapshot_limit()
 		sim.stats["max_snapshot_bytes"], SiegeSnapshotSchema.MAX_BYTES, "every snapshot <= 8 KB"
 	)
 	assert_gt(sim.stats["snapshots"], 1000)
-	if _no_combat(sim):
-		return
 	if int(sim.stats["max_alive"]) >= 150:
 		assert_gt(sim.stats["max_queue"], 0, "extra spawns wait in the queue")
 
@@ -440,8 +409,6 @@ func test_s8_a_flood_hits_the_cap_with_the_rest_queued_and_a_small_snapshot() ->
 	assert_lte(
 		sim.stats["max_snapshot_bytes"], SiegeSnapshotSchema.MAX_BYTES, "8 KB even at the cap"
 	)
-	if _no_combat(sim):
-		return
 	assert_eq(sim.stats["max_alive"], 150, "the cap was reached")
 	assert_gt(sim.stats["max_queue"], 0, "the rest of the spawns queued")
 	assert_gt(sim.stats["max_snapshot_bytes"], 2500, "the biggest snapshot held ~150 enemies")
