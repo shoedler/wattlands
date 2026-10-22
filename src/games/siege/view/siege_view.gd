@@ -126,7 +126,8 @@ func _update_march(victory: bool) -> void:
 		var pos := Vector3(gp.x + cos(a) * MARCH_RADIUS_M, 0.1, gp.y + sin(a) * MARCH_RADIUS_M)
 		# Marching counter-clockwise: face along the tangent.
 		var tangent := Vector3(-sin(a), 0.0, cos(a))
-		xf.append(Transform3D(Basis.looking_at(tangent, Vector3.UP), pos))
+		var facing := Basis.looking_at(tangent, Vector3.UP) * Basis().scaled(Vector3.ONE * 1.4)
+		xf.append(Transform3D(facing, pos))
 		customs.append(Color(fposmod(float(i) * 0.37, 1.0), 0.0, 0.0, 0.0))
 	MultiMeshScatter.set_walk_time(_march_mat, _time * 2.4)
 	march.set_instances(xf, PackedColorArray(), customs)
