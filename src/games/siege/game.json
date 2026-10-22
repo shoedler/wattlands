@@ -1,11 +1,8 @@
-{
-  "id": "siege", "title": "Siege", "version": "0.1.0",
-  "summary": "Each rider pushes a marker along a track: a warm-up ramp, one work block with a hill, a lap marker.",
-  "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [640, 360],
-  "entry": "res://src/games/siege/siege_game.gd", "contents": ["default", "short"],
-  "default_content": "default", "e2e_content": "short", "zero_input_content": "default", "first_run_priority": -1,
-  "options": [{"id": "boosts", "type": "toggle", "default": true},
-    {"id": "track", "type": "choice", "default": 400, "label": "SIEGE_OPT_TRACK",
-     "choices": [{"value": 400, "label": "SIEGE_TRACK_400"}, {"value": 800, "label": "SIEGE_TRACK_800"}]}],
-  "player_options": [{"id": "work_offset", "type": "int", "min": -10, "max": 5, "step": 5, "default": 0}]
-}
+{"id": "siege", "title": "Generator Siege",
+ "summary": "Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator.",
+ "version": "0.1.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "3d",
+ "entry": "res://src/games/siege/siege_game.gd",
+ "contents": ["short", "vo2", "sweetspot", "endurance", "drill"],
+ "default_content": "short", "e2e_content": "drill", "zero_input_content": "short",
+ "first_run_priority": -1,
+ "player_options": [{"id": "wave_offset", "type": "int", "min": -10, "max": 5, "step": 1, "default": 0, "label": "SIEGE_OPT_WAVE_OFFSET"}]}
