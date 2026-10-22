@@ -20,9 +20,6 @@ extends RefCounted
 ## - Both return nothing outside their window: routing only in a wave (a break keeps the
 ##   target), the shop only while it is open.
 
-## Enemy HP at or below this counts as nothing in range.
-const MIN_ENEMY_HP := 0.001
-
 
 ## The target `rider` should route to now (TARGET_GEN or a pad), or -1 to keep the current one.
 ## Rules: the tower with the most enemy HP in range (state.enemy_hp_in_range), within the
@@ -54,8 +51,7 @@ static func route_choice(state: SiegeState, rider: SiegeRiderState) -> int:
 static func hot_target(state: SiegeState, rider: SiegeRiderState) -> int:
 	if state == null or rider == null or state.content == null:
 		return -1
-	var best := _best_pad(state, rider)
-	return -1 if best.is_empty() else int(best["pad"])
+	return SiegeRouting.hot_pad(state, rider)
 
 
 ## Autopilot's shop picks for `rider` in this break, best first, as normalized buy intents
@@ -100,21 +96,10 @@ static func build_type(state: SiegeState, road: int) -> int:
 
 
 ## The best pad `rider` may join: {"pad", "hp"} (most enemy HP in reach, ties to the lower pad,
-## towers already holding 2 other riders skipped), or {} when no tower has an enemy in reach.
+## towers already holding 2 other riders skipped), or {} when no tower has an enemy in reach. The
+## rules' own "hot" resolution (SiegeRouting.hot_choice), so the three never differ.
 static func _best_pad(state: SiegeState, rider: SiegeRiderState) -> Dictionary:
-	var best := {}
-	for tw in state.pads:
-		if not tw.built():
-			continue
-		var others := state.routed_count(tw.pad) - (1 if rider.target == tw.pad else 0)
-		if others >= 2:
-			continue
-		var hp := state.enemy_hp_in_range(tw.pad)
-		if hp <= MIN_ENEMY_HP:
-			continue
-		if best.is_empty() or hp > float(best["hp"]):
-			best = {"pad": tw.pad, "hp": hp}
-	return best
+	return SiegeRouting.hot_choice(state, rider)
 
 
 ## A throwaway copy of what a rider could buy, so the second pick sees the first.

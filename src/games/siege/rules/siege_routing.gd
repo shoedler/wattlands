@@ -60,16 +60,24 @@ static func can_route_to(state: SiegeState, r: SiegeRiderState, pad: int) -> boo
 
 
 ## The built pad with the most enemy HP in range that `r` may route to (ties: the lower pad), or
-## -1 when no tower has an enemy in range.
+## -1 when no tower has an enemy in range. The one "hot" resolution: the rules, Autopilot's
+## routing (SiegeAutopilot.route_choice) and a client's prediction (SiegeAutopilot.hot_target)
+## all read it.
 static func hot_pad(state: SiegeState, r: SiegeRiderState) -> int:
-	var best := -1
+	var best := hot_choice(state, r)
+	return -1 if best.is_empty() else int(best["pad"])
+
+
+## hot_pad with the enemy HP in range: {"pad", "hp"}, or {} when no tower has an enemy in range.
+static func hot_choice(state: SiegeState, r: SiegeRiderState) -> Dictionary:
+	var best := {}
 	var best_hp := 0.0
 	for n in range(1, SiegeIds.PAD_COUNT + 1):
 		if not can_route_to(state, r, n):
 			continue
 		var hp := state.enemy_hp_in_range(n)
 		if hp > best_hp:
-			best = n
+			best = {"pad": n, "hp": hp}
 			best_hp = hp
 	return best
 

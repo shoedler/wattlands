@@ -45,6 +45,29 @@ func test_a_tower_with_two_riders_is_skipped() -> void:
 	assert_eq(SiegeAutopilot.route_choice(st, st.rider_at(0)), -1, "a rider on it stays")
 
 
+func test_the_clients_hot_prediction_is_the_rules_hot_resolution() -> void:
+	var st := K.state(SiegeIds.ROLE_WAVE, 3)
+	var r := st.rider_at(2)
+	assert_eq(SiegeAutopilot.hot_target(st, r), SiegeRouting.hot_pad(st, r), "nothing in range")
+	for at: Vector2 in [EAST_OF_GATE, GATE]:
+		st.enemies.clear()
+		K.enemy(st, at, 45.0)
+		K.enemy(st, EAST_OF_GATE, 5.0)
+		for full in [false, true]:
+			st.rider_at(0).target = 3 if full else SiegeIds.TARGET_GEN
+			st.rider_at(1).target = 3 if full else SiegeIds.TARGET_GEN
+			for rider in st.riders:
+				var want := SiegeRouting.hot_pad(st, rider)
+				assert_eq(SiegeAutopilot.hot_target(st, rider), want)
+				assert_eq(
+					SiegeRoutePredict.resolve(st, rider, SiegeIds.ROUTE_HOT),
+					-1 if want == rider.target else want
+				)
+	st.rider_at(0).target = 3
+	st.rider_at(1).target = 3
+	assert_eq(SiegeRouting.hot_pad(st, r), 4, "pad 3 is full of others")
+
+
 func test_a_caltrop_thrower_counts_by_its_throw_range() -> void:
 	var st := K.state()
 	K.tower(st, 6, SiegeIds.TOWER_CALTROP)
