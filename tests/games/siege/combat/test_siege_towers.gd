@@ -7,9 +7,9 @@ const VALLEY := SiegeIds.ROAD_VALLEY
 var _rig: SiegeRig
 
 
-## Wave 1 of `short`, 10 s in, riders on the generator and the starting towers on pads 3 and 4.
+## Wave 1 of `short`, 10 s in, riders on the generator (no Autopilot) and the starting towers on pads 3 and 4.
 func _wave(humans: int = 2, patch: Callable = Callable()) -> SiegeRig:
-	_rig = SiegeRig.new("short", humans, 0, 7, Wl.FAIR_FTP, patch)
+	_rig = SiegeRig.new("short", humans, 0, 7, Wl.FAIR_FTP, patch).manual()
 	_rig.enter(2, 10.0)
 	return _rig
 

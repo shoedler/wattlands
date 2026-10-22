@@ -8,7 +8,7 @@ var _rig: SiegeRig
 
 
 func _wave(humans: int = 2, rng_seed: int = 7) -> SiegeRig:
-	_rig = SiegeRig.new("short", humans, 0, rng_seed)
+	_rig = SiegeRig.new("short", humans, 0, rng_seed).manual()
 	_rig.enter(2, 10.0)
 	# nothing spawns by itself during these tests
 	_rig.state.wave.budget_left = 0.0

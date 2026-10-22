@@ -126,6 +126,16 @@ func put(peer: int, target: int) -> void:
 	r.shop_fallback = false
 
 
+## Ends the zero-input fallbacks of every human, so Autopilot neither routes nor shops for them
+## and only the test's own intents (and `put`) move the riders. Bots stay on Autopilot.
+func manual() -> SiegeRig:
+	for r in state.riders:
+		if not r.is_bot:
+			r.route_fallback = false
+			r.shop_fallback = false
+	return self
+
+
 ## A live enemy placed on `road` at `prog_m` (lateral `lat`); hp < 0: the type's full HP.
 func spawn(
 	type: int, road: int, prog_m: float, lat: float = 0.0, hp: float = -1.0

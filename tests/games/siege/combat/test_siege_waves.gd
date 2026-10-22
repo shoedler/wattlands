@@ -40,7 +40,7 @@ func _threat(type: int) -> float:
 
 
 func _start(shift: String, phase: int, humans: int, into_s: float = 0.0) -> SiegeRig:
-	_rig = SiegeRig.new(shift, humans, 0, 11)
+	_rig = SiegeRig.new(shift, humans, 0, 11).manual()
 	_rig.enter(phase, into_s)
 	_seen = {}
 	_log = []
