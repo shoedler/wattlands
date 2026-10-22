@@ -141,7 +141,13 @@ for (const sh of shells) {
     });
 
     test('finds the binary through tools/godot_bin.local when GODOT is unset', { skip: skipNoGodot }, async () => {
-      const r = await runWrapper(sh.id, ['--headless', '--version'], { env: minimalEnv() });
+      // A scratch copy with its own godot_bin.local, so the case also runs where only GODOT is set (CI).
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'wattlands-binlocal-'));
+      scratch.push(tmp);
+      copyWrappers(tmp);
+      fs.writeFileSync(path.join(tmp, 'tools', 'godot_bin.local'), `${GODOT}
+`);
+      const r = await runWrapper(sh.id, ['--headless', '--version'], { env: minimalEnv(), cwd: tmp, tools: path.join(tmp, 'tools') });
       assert.equal(r.code, 0, r.stderr);
       assert.match(r.stdout, /^4\.7\.\d+/m);
     });

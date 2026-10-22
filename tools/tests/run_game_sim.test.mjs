@@ -5,6 +5,7 @@
 // directory, and JSON and rider specs reach Godot unchanged. The session itself (GameSimRunner) is
 // sdk-runtime's and is covered by tests/sdk/ and tests/games/_template/integration/.
 // The real-Godot cases need this checkout imported (tools/godot.sh --headless --path . --import).
+// They pass GODOT through (as wrappers.test.mjs does): CI has no tools/godot_bin.local, only GODOT.
 import { test, describe, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -100,7 +101,7 @@ describe('through Godot', () => {
           '--rider=erg:compliance=0.9', '--report=out/r.json', '--override=over.json', `--options=${options}`,
           `--player-options=${players}`, '--seed=3', '--sim-speed=200', '--unverified', '--mock-trainer=false',
           '--caller-cwd=/elsewhere', '--godot-timeout=300'],
-        { env: minimalEnv(), cwd, timeoutMs: 600_000 },
+        { env: minimalEnv({ GODOT }), cwd, timeoutMs: 600_000 },
       );
       assert.equal(r.code, 0, r.stderr + r.stdout);
       const args = echoedArgs(r.stdout);
@@ -116,7 +117,7 @@ describe('through Godot', () => {
     });
 
     test(`${sh.name}: a missing --report, an unknown flag and a bad value exit 2, each named (OWNERSHIP SIM1)`, { skip, timeout: 600_000 }, async () => {
-      const r = await runSim(sh.name, ['--game=_template', '--player=2', '--players=0', '--godot-timeout=300'], { env: minimalEnv(), cwd: os.tmpdir(), timeoutMs: 600_000 });
+      const r = await runSim(sh.name, ['--game=_template', '--player=2', '--players=0', '--godot-timeout=300'], { env: minimalEnv({ GODOT }), cwd: os.tmpdir(), timeoutMs: 600_000 });
       assert.equal(r.code, 2, r.stdout + r.stderr);
       assert.match(r.stderr, /--report is required/);
       assert.match(r.stderr, /unknown flag --player\b/);
@@ -134,7 +135,7 @@ describe('through Godot', () => {
     const flags = ['--game=_template', '--content=short', '--players=1', '--bots=1', '--rider=erg', '--sim-speed=1000', '--seed=4', '--godot-timeout=600'];
     const reports = [];
     for (const name of ['a', 'b']) {
-      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv(), cwd, timeoutMs: 900_000 });
+      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv({ GODOT }), cwd, timeoutMs: 900_000 });
       if (r.code === 2 && /not implemented/.test(r.stderr)) {
         t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
         return;
@@ -159,7 +160,7 @@ describe('through Godot', () => {
     const flags = ['--game=workout', '--content=vo2', '--players=2', '--bots=1', '--rider=erg', '--sim-speed=100000', '--seed=42', '--godot-timeout=900'];
     const reports = [];
     for (const name of ['a', 'b']) {
-      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv(), cwd, timeoutMs: 1_000_000 });
+      const r = await runSim(sh.name, [...flags, `--report=out/${name}.json`], { env: minimalEnv({ GODOT }), cwd, timeoutMs: 1_000_000 });
       if (r.code === 2 && /not implemented/.test(r.stderr)) {
         t.skip("sdk-runtime's GameSimRunner is still the W0 stub");
         return;
