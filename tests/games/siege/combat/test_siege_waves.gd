@@ -78,14 +78,18 @@ func test_b_in_raw_uses_the_ftp_itself() -> void:
 
 
 func test_b_in_wkg_uses_the_latest_p_eff_over_power() -> void:
-	_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.WKG)
-	for peer in [1, 2, 3, 4]:
-		_rig.power_w[peer] = 100.0
-		_rig.p_eff[peer] = 80.0
-	_rig.enter(2, 0.0)
-	var ftps := 200.0 + 220.0 + 240.0 + 260.0
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * ftps * 0.8 / 250.0, 1e-6)
-	assert_almost_eq(_rig.rider(1).r_wkg, 0.8, 1e-9)
+	for verified in [true, false]:
+		_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.WKG)
+		for r in _rig.state.riders:
+			r.ftp_verified = verified
+		for peer in [1, 2, 3, 4]:
+			_rig.power_w[peer] = 100.0
+			_rig.p_eff[peer] = 80.0
+		_rig.enter(2, 0.0)
+		var ftps := 200.0 + 220.0 + 240.0 + 260.0
+		var u := 1.0 if verified else 0.85
+		assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * ftps * 0.8 * u / 250.0, 1e-6)
+		assert_almost_eq(_rig.rider(1).r_wkg, 0.8, 1e-9)
 
 
 func test_wkg_r_is_one_before_telemetry_with_power_of_50_w() -> void:

@@ -140,7 +140,7 @@ static func compose(
 	var guard := 0
 	while left >= cheapest - 1e-6 and guard < 100000:
 		guard += 1
-		var pick := state.rng.randf() * total_w
+		var pick := state.rng.randf_range(0.0, 1.0) * total_w
 		var idx := 2
 		for i in 3:
 			if weights[i] > 0.0 and pick < weights[i]:
