@@ -53,12 +53,27 @@ func setup(p_fort: SiegeFortBuilder) -> void:
 	bm.size = Vector3(0.7, 0.7, 0.7)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = SiegePalette.DUST
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bm.material = mat
+	var ramp := Gradient.new()
+	ramp.set_color(0, Color(SiegePalette.DUST, 0.9))
+	ramp.set_color(1, Color(SiegePalette.DUST, 0.0))
+	dust.color_ramp = ramp
+	dust.scale_amount_curve = _dust_curve()
 	dust.mesh = bm
 	dust.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(dust)
 	_rebuild(0, 0)
+
+
+## The dust puffs swell and then thin out.
+static func _dust_curve() -> Curve:
+	var c := Curve.new()
+	c.add_point(Vector2(0.0, 0.5))
+	c.add_point(Vector2(0.4, 1.0))
+	c.add_point(Vector2(1.0, 1.6))
+	return c
 
 
 ## Planks lost at `hp_frac` (gate HP / max): 0 above 66%, 1 above 33%, else 2.

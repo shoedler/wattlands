@@ -1,9 +1,9 @@
 class_name SiegeStripOverlay
 extends HBoxContainer
 ## Siege's own Control beside the kit's teammate strip (brief 3 HUD): one SiegeStripCell per
-## slot, in slot order, each 260 px wide with the strip's 10 px gap so the cells line up under
-## the kit's cards. Shows every rider's routing target icon and markers, and (from the state,
-## so from the snapshot on a client) raw W and %FTP.
+## slot, in slot order, each 232 px wide (four fit between the corner stacks without wrapping).
+## Shows every rider's routing target icon and markers, and (from the state, so from the snapshot
+## on a client) raw W and %FTP.
 
 var game: SiegeGame = null
 var cells: Array[SiegeStripCell] = []
@@ -12,7 +12,7 @@ var cells: Array[SiegeStripCell] = []
 func _init() -> void:
 	name = "SiegeStripOverlay"
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_theme_constant_override("separation", 10)
+	add_theme_constant_override("separation", 8)
 	alignment = BoxContainer.ALIGNMENT_CENTER
 	for slot in 4:
 		var c := SiegeStripCell.new(slot)

@@ -161,6 +161,42 @@ static func pct_ftp(rider: SiegeRiderState) -> int:
 	return roundi(rider.raw_w / rider.ftp * 100.0)
 
 
+## The kind of the plan phase now (Wl.WARMUP, WORK or RECOVERY; COOLDOWN after the shift's last
+## phase), from the state or, on a client whose state never learns it, from the shift's plan.
+static func phase_kind(game: SiegeGame) -> String:
+	var s := game.state if game != null else null
+	if s == null:
+		return ""
+	if s.phase_kind != "":
+		return s.phase_kind
+	if s.role == SiegeIds.ROLE_COOLDOWN:
+		return Wl.COOLDOWN
+	if s.content != null and s.phase_index >= 0:
+		var phases: Array = s.content.shift.get("phases", [])
+		if s.phase_index < phases.size():
+			return str((phases[s.phase_index] as Dictionary).get("kind", ""))
+	return ""
+
+
+## Whether the Overdrive prompt shows for the local rider: the host's flag, or (on a client,
+## whose snapshot carries no prompt) the rules' own SiegeOverdrive.prompt on the state rebuilt
+## from the snapshot and the shift's plan.
+static func overdrive_prompt(game: SiegeGame) -> bool:
+	var r := own_rider(game)
+	if r == null:
+		return false
+	if r.od_prompt:
+		return true
+	if game.ctx.role != Wl.CLIENT:
+		return false
+	var info := SiegePhaseInfo.new()
+	info.index = game.state.phase_index
+	info.kind = phase_kind(game)
+	info.role = game.state.role
+	info.remaining_s = phase_remaining_s(game)
+	return SiegeOverdrive.prompt(game.state, r, info)
+
+
 ## The Overdrive button's face: {"mode": OD_*, "text": String, "fill": 0..1 (cooldown or active
 ## progress), "enabled": bool}.
 static func overdrive_face(game: SiegeGame) -> Dictionary:
@@ -192,14 +228,14 @@ static func overdrive_face(game: SiegeGame) -> Dictionary:
 				"fill": 1.0 - clampf(r.od_cd_s / cooldown_s, 0.0, 1.0),
 				"enabled": false,
 			}
-	if r.od_prompt:
+	if overdrive_prompt(game):
 		return {
 			"mode": OD_PROMPT,
 			"text": strings.t("SIEGE_PROMPT_OVERDRIVE"),
 			"fill": 1.0,
 			"enabled": true,
 		}
-	var in_work := s.role == SiegeIds.ROLE_WAVE and s.phase_kind == Wl.WORK
+	var in_work := s.role == SiegeIds.ROLE_WAVE and phase_kind(game) == Wl.WORK
 	return {
 		"mode": OD_READY if in_work else OD_CLOSED,
 		"text": strings.t("SIEGE_HUD_OVERDRIVE_READY"),

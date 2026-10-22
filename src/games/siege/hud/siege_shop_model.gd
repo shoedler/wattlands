@@ -9,7 +9,7 @@ extends RefCounted
 ## "cost": int, "disabled": bool, "recommended": bool}. The Save entry has item ITEM_SAVE and
 ## is never sent as an intent.
 
-const MAX_ENTRIES := 7
+const MAX_ENTRIES := 6
 
 
 ## The empty pad a new tower fits best: nearest to the road with the most gate damage so far,

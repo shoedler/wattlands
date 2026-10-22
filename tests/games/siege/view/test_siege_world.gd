@@ -70,8 +70,9 @@ func test_the_scatter_counts_and_exclusions() -> void:
 	var names: Array[String] = []
 	for mm in mms:
 		names.append(mm.name)
-		assert_gt(mm.visible_count(), 100, mm.name)
+		assert_eq(mm.visible_count(), mm.capacity(), "%s: every instance placed" % mm.name)
 	assert_eq(names, ["Cypress", "Olive", "Rocks"] as Array[String])
+	assert_eq([mms[0].capacity(), mms[1].capacity(), mms[2].capacity()], [600, 400, 300])
 	# Nothing grows inside the fort or on a road.
 	var excl := SiegeScatter.exclusions(_map)
 	for mm in mms:

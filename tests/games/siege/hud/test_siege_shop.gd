@@ -76,9 +76,9 @@ func test_costs_and_text() -> void:
 	var repair: Dictionary = by_item["repair/0"]
 	assert_eq(repair["cost"], 20)
 	assert_eq(repair["text"], "Repair the gate: +20 HP (20)")
-	var gen: Dictionary = by_item["generator/0"]
-	assert_eq(gen["cost"], 90, "the fixture is at generator level 1: level 2 costs 90")
-	assert_eq(gen["text"], "Generator level 2 (90)")
+	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_GENERATOR, 0), 90, "level 2 costs 90")
+	var more := _entries([_rec(SiegeIds.ITEM_GENERATOR)])
+	assert_eq(more[0]["text"], "Generator level 2 (90)")
 	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_IRON_BANDS, 0), 45)
 	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_RESERVE, 0), -1, "the fixture owns it")
 	_state.perks.clear()

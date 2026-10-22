@@ -86,10 +86,12 @@ func test_the_shop_is_a_centre_rect_clear_of_the_panic_corner_and_the_corner_sta
 	assert_false(Rect2(r).intersects(panic))
 	assert_gt(r.position.x, 672, "right of the top-left stack (640 wide + 32 margin)")
 	assert_lt(r.end.x, 1548, "left of the top-right stack")
+	assert_gte(r.position.y, 96, "below the top-centre banners")
+	assert_lte(r.end.y, 700, "above the bottom-centre strip")
 
 
 func test_toasts_and_banners_and_the_safety_banners_stay_on() -> void:
-	assert_eq(_spec.toast_area, HudSpec.TOP)
+	assert_eq(_spec.toast_area, HudSpec.TOP_RIGHT, "clear of the centre shop")
 	assert_eq(_spec.banner_area, HudSpec.TOP)
 	assert_true(_spec.show_safety_banners)
 

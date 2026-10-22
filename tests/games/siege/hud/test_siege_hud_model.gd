@@ -191,3 +191,36 @@ func test_rush_fractions_come_from_the_phase_meta() -> void:
 	assert_almost_eq(f[4], 2400.0 / 2700.0, 1e-4)
 	SiegeHudUtil.free_game(g)
 	assert_eq(SiegeHudModel.rush_fractions(_game).size(), 0, "vo2 has no rushes")
+
+
+func test_a_client_computes_the_overdrive_prompt_from_its_snapshot_state() -> void:
+	# A client: the snapshot-rebuilt state has no phase kind, duration or prompt flag.
+	var client := SiegeState.create(
+		SiegeFixtures.content("vo2"), SiegeFixtures.slots(), Wl.FAIR_FTP, null
+	)
+	SiegeSnapshot.apply(client, SiegeFixtures.snapshot())
+	client.role = SiegeIds.ROLE_WAVE
+	client.wave_no = 2
+	var g := SiegeHudUtil.make_game(client)
+	g.ctx.role = Wl.CLIENT
+	var r := client.rider_at(0)
+	assert_eq(r.od_state, SiegeIds.OD_ACTIVE, "the snapshot has slot 0 in Overdrive")
+	assert_false(SiegeHudModel.overdrive_prompt(g), "not ready")
+	r.od_state = SiegeIds.OD_READY
+	r.od_s = 0.0
+	assert_eq(SiegeHudModel.phase_kind(g), Wl.WORK, "vo2 wave 2, from the shift's plan")
+	client.phase_elapsed_s = 50.0
+	assert_true(client.target_hot(r.target), "an enemy is in range of pad 3")
+	assert_true(SiegeHudModel.overdrive_prompt(g), "ready, work, 70 s left, enemies in reach")
+	client.phase_elapsed_s = 100.0
+	assert_false(SiegeHudModel.overdrive_prompt(g), "under 30 s left")
+	client.phase_elapsed_s = 50.0
+	r.rescue = true
+	assert_false(SiegeHudModel.overdrive_prompt(g), "never in rescue")
+	r.rescue = false
+	client.pad(3).type = SiegeIds.TOWER_NONE
+	client.wave.rush_s = 0.0
+	assert_false(SiegeHudModel.overdrive_prompt(g), "no enemy in reach, no rush")
+	client.wave.rush_s = 10.0
+	assert_true(SiegeHudModel.overdrive_prompt(g), "a rush is on")
+	SiegeHudUtil.free_game(g)

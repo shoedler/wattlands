@@ -7,7 +7,7 @@ extends SiegeHudPanel
 ## keyboard, pad and Autopilot do the same through local_intents().
 
 const CONNECT_S := 2.0
-const BUTTON_SIZE := Vector2(88, 56)
+const BUTTON_SIZE := Vector2(84, 56)
 
 var caption_label: Label = null
 var target_label: Label = null
@@ -25,7 +25,7 @@ func _init() -> void:
 	add_child(box)
 	caption_label = make_label(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
 	box.add_child(caption_label)
-	target_label = make_label(WlTheme.MENU_PX, WlTheme.TEXT, true)
+	target_label = make_label(WlTheme.BODY_PX, WlTheme.TEXT, true)
 	box.add_child(target_label)
 	connect_label = make_label(WlTheme.LABEL_PX, WlTheme.ACCENT)
 	box.add_child(connect_label)
@@ -54,7 +54,7 @@ func _init() -> void:
 		row.add_child(b)
 		buttons[spec[0]] = b
 		b.set_meta("text_key", spec[1])
-	custom_minimum_size = Vector2(460, 0)
+	custom_minimum_size = Vector2(400, 0)
 	visible = false
 
 

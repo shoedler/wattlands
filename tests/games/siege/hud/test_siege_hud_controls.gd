@@ -189,10 +189,10 @@ func test_the_strip_has_a_cell_per_rider_with_target_and_markers() -> void:
 	assert_eq(s.cells[1].target_label.text, "GEN")
 	assert_eq(s.cells[2].target_label.text, "T4")
 	assert_eq(s.cells[3].target_label.text, "T2")
-	assert_string_contains(s.cells[0].marker_label.text, "OD 12")
-	assert_string_contains(s.cells[1].marker_label.text, "Rescue")
-	assert_string_contains(s.cells[1].marker_label.text, "OD ...", "recharging")
-	assert_eq(s.cells[2].marker_label.text, "", "reconnecting shows no marker")
+	assert_eq(s.cells[0].od_label.text, "OD 12")
+	assert_eq(s.cells[1].status_label.text, "Rescue")
+	assert_eq(s.cells[1].od_label.text, "OD ...", "recharging")
+	assert_eq(s.cells[2].od_label.text + s.cells[2].status_label.text, "", "reconnecting: none")
 	assert_true(s.cells[2].icon.dim, "no output while reconnecting")
 	assert_false(s.cells[0].icon.dim)
 
@@ -230,14 +230,16 @@ func test_afk_and_rescue_markers() -> void:
 	var s := _add(SiegeStripOverlay.new()) as SiegeStripOverlay
 	s.game = _game
 	s.refresh()
-	assert_string_contains(s.cells[2].marker_label.text, "AFK")
+	assert_string_contains(s.cells[2].status_label.text, "AFK")
 	assert_lt(s.cells[2].modulate.a, 1.0)
 
 
-func test_cells_match_the_kit_strip_spacing() -> void:
+func test_four_cells_fit_between_the_corner_stacks() -> void:
 	var s := _add(SiegeStripOverlay.new()) as SiegeStripOverlay
-	assert_eq(s.get_theme_constant("separation"), 10)
-	assert_eq(SiegeStripCell.SIZE.x, 260.0)
+	# Four cells and their gaps fit the bottom-centre room between the corner stacks (about 990
+	# px wide next to the 420 px power gauge) without wrapping.
+	var width := 4.0 * SiegeStripCell.SIZE.x + 3.0 * float(s.get_theme_constant("separation"))
+	assert_lte(width, 990.0)
 
 
 func test_an_empty_wheel_has_no_cell() -> void:

@@ -17,13 +17,15 @@ extends RefCounted
 ##                 by themselves. Nothing of Siege's sits in that reserve.
 ##   centre        the break shop (text >= 32 px) in a Rect2i that is only visible in breaks;
 ##                 the centre stays clear during waves.
-## Toasts and banners show at the top centre; the kit's warm-up and rescue banners stay on
-## (show_safety_banners is true: Siege has no banners of its own to replace them).
+## Toasts show under the denarii readout (top right, clear of the shop); banners at the top
+## centre; the kit's warm-up and rescue banners stay on (show_safety_banners is true: Siege has
+## no banners of its own to replace them).
 
 const READOUT_GATE := "siege_gate"
 const READOUT_DENARII := "siege_denarii"
-## Where the shop sits (1080p pixels): between the corner stacks, clear of the PANIC corner.
-const SHOP_RECT := Rect2i(690, 190, 640, 620)
+## Where the shop sits (1080p pixels): between the corner stacks, below the top-centre banners and
+## above the bottom-centre strip, clear of the PANIC corner.
+const SHOP_RECT := Rect2i(690, 100, 640, 600)
 
 
 static func spec(game: SiegeGame) -> HudSpec:
@@ -64,6 +66,6 @@ static func spec(game: SiegeGame) -> HudSpec:
 		. add_control(od, HudSpec.BOTTOM_RIGHT)
 		. add_control(route, HudSpec.BOTTOM_RIGHT)
 		. add_control(shop, SHOP_RECT)
-		. toasts_at(HudSpec.TOP)
+		. toasts_at(HudSpec.TOP_RIGHT)
 		. banners_at(HudSpec.TOP)
 	)

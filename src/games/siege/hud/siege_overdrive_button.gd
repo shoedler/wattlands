@@ -5,7 +5,7 @@ extends Button
 ## left while it runs, and the cooldown refilling. Pressing it sends the same intent as ability_1
 ## (SiegeIntents.overdrive("button")); the rules decide whether it is allowed.
 
-const SIZE := Vector2(460, 84)
+const SIZE := Vector2(400, 84)
 
 var game: SiegeGame = null
 var mode: String = SiegeHudModel.OD_CLOSED
