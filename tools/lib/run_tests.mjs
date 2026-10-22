@@ -32,6 +32,9 @@ const NPM_DIRS = ['server/relay', 'tools/fit_check'];
 const NODE_EXTRA = [['tools/art/pixelate_e2e.mjs']];
 const SIM_SPEED = 2000;
 const SIM_TIMEOUT_S = 900;
+// The full GUT run's wrapper timeout (the wrapper default is 1200 s; Linux CI took 675 s at 2720
+// tests, and every game adds its own).
+const GUT_TIMEOUT_S = 3600;
 const SCAFFOLD_TIMEOUT_S = 1800;
 const E2E_TIMEOUT_S = 3600;
 const NODE_SUITE_TIMEOUT_S = 1800;
@@ -114,9 +117,33 @@ function wrapperCommand(o, args) {
   return [bash, [path.join(TOOLS, 'godot.sh').replaceAll('\\', '/'), ...args]];
 }
 
+// Grace between the SIGTERM and the SIGKILL of a timed-out run, and the wait after the SIGKILL
+// before run() gives up on the pipes closing (POSIX).
+const KILL_GRACE_MS = 10_000;
+const CLOSE_WAIT_MS = 5_000;
+
+/**
+ * Stops a timed-out run. Windows: taskkill /T /F takes the tree. POSIX: the wrappers exec into
+ * tools/lib/godot_lock.mjs, which runs Godot in its own process group and kills that group on
+ * SIGTERM, so SIGTERM goes first and SIGKILL (killTree) follows after KILL_GRACE_MS.
+ */
+function stopTree(pid) {
+  if (process.platform === 'win32') {
+    killTree(pid);
+    return;
+  }
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+  setTimeout(() => killTree(pid), KILL_GRACE_MS).unref();
+}
+
 /**
  * Runs a command, echoes its output and returns {code, text}. With `log`, the output is also
- * written to that file. A run past timeoutS has its process tree killed and code 124.
+ * written to that file. A run past timeoutS is stopped (stopTree) and returns code 124, even if
+ * an orphan still holds its pipes open.
  */
 function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quiet = false } = {}) {
   return new Promise((resolve) => {
@@ -130,11 +157,17 @@ function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quie
       return;
     }
     let timedOut = false;
+    let giveUp = null;
     const timer =
       timeoutS > 0
         ? setTimeout(() => {
             timedOut = true;
-            killTree(child.pid);
+            stopTree(child.pid);
+            giveUp = setTimeout(() => {
+              child.stdout.destroy();
+              child.stderr.destroy();
+              done(124);
+            }, KILL_GRACE_MS + CLOSE_WAIT_MS);
           }, timeoutS * 1000)
         : null;
     const onData = (stream) => (buf) => {
@@ -149,6 +182,7 @@ function run(exe, args, { cwd, log = null, timeoutS = 0, env = process.env, quie
       if (settled) return;
       settled = true;
       if (timer) clearTimeout(timer);
+      if (giveUp) clearTimeout(giveUp);
       const text = Buffer.concat(chunks).toString('utf8');
       if (out) out.end();
       resolve({ code: timedOut ? 124 : code, text });
@@ -192,6 +226,7 @@ async function stepGut(o) {
   const narrow = o.gdir !== null || o.gutArgs.length > 0;
   fs.rmSync(junit, { force: true });
   const args = [
+    `--timeout=${GUT_TIMEOUT_S}`,
     '--headless',
     '--path',
     '.',
@@ -205,7 +240,7 @@ async function stepGut(o) {
   ];
   const r = await godot(o, args, { log });
   const junitXml = fs.existsSync(junit) ? fs.readFileSync(junit, 'utf8') : '';
-  const previousGreen = readGreenCount(greenFile);
+  const previousGreen = greenFloor(readGreenCount(greenFile), readGreenCount(path.join(o.project, GREEN_FLOOR_FILE)));
   const pendingAllowlist = readPendingAllowlist(path.join(o.project, 'tests', 'pending_allowlist.txt'));
   const v = evaluateGut({ exitCode: r.code, log: r.text, junitXml, previousGreen, minCount: o.minCount, narrow, pendingAllowlist });
   const counts =
@@ -436,6 +471,7 @@ async function stepSim(o) {
     const args = [
       `--game=${sim.game}`, `--content=${sim.content}`, `--players=${sim.players}`, `--bots=${bots}`,
       '--rider=erg:compliance=1.0', `--sim-speed=${SIM_SPEED}`, '--seed=1', `--report=${report}`,
+      `--godot-timeout=${SIM_TIMEOUT_S - 60}`,
     ];
     const tool = o.shell === 'ps'
       ? [powershellExe(), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(TOOLS, 'run_game_sim.ps1'), ...args]]
@@ -514,6 +550,17 @@ async function stepFit(o) {
 }
 
 const TEST_FILE_RE = /(^test\.[cm]?js$)|(^test-.+\.[cm]?js$)|([.\-_]test\.[cm]?js$)/;
+
+/**
+ * The full GUT run's floor: the larger of this checkout's last green count (build/, gitignored)
+ * and the tracked floor tests/green_count_floor.txt, so CI and fresh worktrees enforce the same
+ * minimum. null when neither exists. --min-count still overrides both.
+ */
+export const GREEN_FLOOR_FILE = 'tests/green_count_floor.txt';
+export function greenFloor(local, tracked) {
+  const counts = [local, tracked].filter((n) => Number.isInteger(n) && n > 0);
+  return counts.length ? Math.max(...counts) : null;
+}
 
 /**
  * Every tests/games/<id>/ folder that holds Node tests (sorted), so a game's own Node tests (its

@@ -13,6 +13,7 @@ The first release: the Wattlands platform and the reference game Workout, built 
 - Added `tools/export_windows.mjs`: the Windows Desktop export (the GDBLE DLL, LICENSE, CREDITS and third-party notices next to the exe), `--with-vcruntime` and `--smoke`.
 - Added `export_presets.cfg` with a test that the Windows preset ships the GDBLE DLL, and `.github/workflows/lead.yml`, which runs every gate on Linux.
 - Wired the app end to end: autoloads, the input map, the main scene, menus to lobby to session to results, and the merged docs (README, DESIGN, ARCHITECTURE, GAME_SDK, TRAINER, PROTOCOL, HARDWARE_TEST_PLAN, DECISIONS, OWNERSHIP, DEPENDENCIES, CREDITS).
+- CI hardening after the first GitHub run: a tracked GUT count floor (`tests/green_count_floor.txt`), SIGTERM-first step timeouts that can't hang a job, explicit sim and GUT wrapper timeouts, the strict gate in the sdk-runtime and art-pipeline workflows, and uv in lead.yml for the workflow YAML check.
 
 ### platform
 

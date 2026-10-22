@@ -136,6 +136,18 @@ Merged from the fragments in `docs/decisions/` (the fragments stay as the per-mo
 - Alternatives: tag after W4 round 2 and list every sweep finding as a known issue; run a full third W3/W4 cycle.
 - Reason: BRIEF 8 caps W4 at two fixer rounds but leaves the lead's closing step: rerun every gate, finish the docs, then tag. Each fix here is small, tested and reviewed, and four of them close BRIEF 3.2, 3.8, 4.4 and 4.6.3 gaps, which shouldn't ship as known issues when they are hours of work. The rest are P1 or design follow-ups, recorded rather than built.
 
+#### 2026-10-22: CI hardening after the first GitHub run
+
+- Decision: the first GitHub run of v0.1.0 passed every gate on Linux except two `tools/tests` cases that found Godot only through the gitignored `tools/godot_bin.local` (fixed: they pass `GODOT`, or bring their own `godot_bin.local`). A read-only sweep of Linux-only differences then found five gaps, now closed:
+  - The full GUT run's floor is the larger of `build/green_count.txt` and the tracked `tests/green_count_floor.txt` (2720), so CI and fresh worktrees enforce the count rule instead of "more than 0". `--min-count` still overrides. Raise the floor when a merge to main grows the suite.
+  - `run()` stops a timed-out step with SIGTERM first: the wrappers exec into `godot_lock.mjs`, which kills Godot's own process group on SIGTERM. SIGKILL follows after 10 s, and `run()` returns 124 even if an orphan holds its pipes, so a hung sim fails its row instead of hanging the job.
+  - The sim step passes `--godot-timeout=840`, so the wrapper's own timer fires first.
+  - The full GUT run gets an explicit 3600 s wrapper timeout. Linux CI took 675 s of the 1200 s default at 2720 tests.
+  - `sdk-runtime.yml` and `art-pipeline.yml` run their GUT step through `tools/run_tests --only=gut --gdir=...`, so the strict gate applies (Run Summary, JUnit count, forbidden lines from stdout and stderr, pending and risky tests). Before, sdk-runtime's JUnit write failed silently, because `build/` doesn't exist on a fresh runner.
+  - `lead.yml` installs uv, so the workflow YAML check runs on GitHub.
+- Alternatives: cache `build/green_count.txt` in CI (a cache miss silently brings back "> 0"); `--min-count=2720` in lead.yml (CI then differs from the local command); detach every child (Ctrl-C would no longer reach it).
+- Reason: CI should apply the gates exactly as `tools/run_tests` does locally, and fail loudly rather than hang or quietly loosen.
+
 ### tooling
 
 Short ADRs for `tools/godot.sh`, `tools/godot.ps1`, `tools/lib/godot_lock.mjs`, `tools/lib/wrapper_common.ps1`, `tools/env.sh`, `tools/env.ps1`, `tools/run_tests`, `tools/run_tests.ps1`, `tools/lib/run_tests.mjs`, `tools/lib/gut_gate.mjs`, `tools/check_scripts.gd` and `tools/tests/` (BRIEF 1, 2, 7).

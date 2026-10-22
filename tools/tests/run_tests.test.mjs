@@ -11,6 +11,8 @@ import {
   evaluateLint,
   evaluateWorkflows,
   gameNodeSuites,
+  greenFloor,
+  GREEN_FLOOR_FILE,
   parseArgs,
   workflowFiles,
   GDTOOLKIT_VERSION,
@@ -49,6 +51,19 @@ describe('evaluateLint and the lint options', () => {
     const o = parseArgs(['--strict-lint']);
     assert.equal(o.noLint, false);
     assert.equal('strictLint' in o, false);
+  });
+});
+
+describe('the tracked green-count floor', () => {
+  test('greenFloor takes the larger of the local and the tracked count; the repo floor is a positive integer', () => {
+    assert.equal(greenFloor(null, null), null);
+    assert.equal(greenFloor(2720, null), 2720);
+    assert.equal(greenFloor(null, 2720), 2720);
+    assert.equal(greenFloor(2800, 2720), 2800);
+    assert.equal(greenFloor(100, 2720), 2720);
+    assert.equal(GREEN_FLOOR_FILE, 'tests/green_count_floor.txt');
+    const floor = Number(fs.readFileSync(path.join(REPO, GREEN_FLOOR_FILE), 'utf8').trim());
+    assert.ok(Number.isInteger(floor) && floor > 0, `${GREEN_FLOOR_FILE} holds ${floor}`);
   });
 });
 
@@ -207,6 +222,24 @@ describe('tools/run_tests (bash)', { skip: skipNoGodot }, () => {
       assert.equal(row(r.stdout, 'gut').status, 'FAIL');
     }
     assert.equal(green(), 2);
+  });
+
+  test('the tracked floor raises the required count where build/ has a lower one; --min-count still overrides', async () => {
+    const floor = path.join(project, 'tests', 'green_count_floor.txt');
+    fs.writeFileSync(floor, '4\n');
+    try {
+      fakeGut({ tests: 3 });
+      const low = await runTests(['--only=gut']);
+      assert.equal(low.code, 1, low.stdout);
+      assert.match(row(low.stdout, 'gut').rest, /fewer than the required 4/);
+      assert.equal(green(), 2, 'a red run never changes the green count');
+      fakeGut({ tests: 2 });
+      const ok = await runTests(['--only=gut', '--min-count=2']);
+      assert.equal(ok.code, 0, ok.stdout);
+      assert.equal(green(), 2, 'the next tests expect the count they found');
+    } finally {
+      fs.rmSync(floor, { force: true });
+    }
   });
 
   test('--gdir runs narrow: no green-count comparison or update', async () => {
