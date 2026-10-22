@@ -165,7 +165,9 @@ static func _slot(i: int, r: Rider, mode: String) -> PlayerSlot:
 	s.apply_look(i)
 	s.ftp = r.ftp
 	s.ftp_verified = r.verified or r.bot
-	s.autopilot = true
+	# Humans ride by hand (Autopilot off): zero-input fallbacks still start on, and a deliberate
+	# route / buy intent ends them. Bots are Autopilot's anyway.
+	s.autopilot = false
 	s.scaling_mode = mode
 	s.p_eff_per_w = r.p_eff_per_w
 	if r.p_eff_per_w < 0.0:
