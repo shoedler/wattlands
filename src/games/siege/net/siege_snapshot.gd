@@ -4,9 +4,9 @@ extends RefCounted
 ## on a client. Owner: B2 "module". Every value written is an int; apply() casts everything it
 ## reads with int(), nested arrays included, so a JSON round trip without int_fields still works.
 ##
-## G0 status: complete for the schema. B2 adds the client's interpolation history (like
-## WorkoutSnapHistory: keyed by tick, render clock behind the newest snapshot by their mean
-## spacing) without changing encode()'s output.
+## The client's interpolation history is SiegeSnapHistory (this folder); SiegeGame pushes into it
+## after each apply. The optional "ro" / "ru" keys (SiegeSnapshotSchema) carry the active roads and
+## the rush so a rejoining client needs no event to know them.
 
 
 ## The snapshot of `state` (host, 10 Hz).
@@ -53,7 +53,7 @@ static func encode(state: SiegeState) -> Dictionary:
 	var f: Array = []
 	for s in state.shots:
 		f.append([s.pad, s.targets.duplicate()])
-	return {
+	var snap := {
 		"v": SiegeSnapshotSchema.VERSION,
 		"tick": state.tick,
 		"ph": state.phase_index,
@@ -70,6 +70,13 @@ static func encode(state: SiegeState) -> Dictionary:
 		"f": f,
 		"q": state.queued(),
 	}
+	# Additive keys, only off their defaults (all three roads active, no rush): the common
+	# snapshot stays as the brief 2.6 has it.
+	if state.wave.active_roads.size() != SiegeIds.ROAD_COUNT:
+		snap["ro"] = state.wave.active_roads.duplicate()
+	if state.wave.rush_s > 0.0:
+		snap["ru"] = [1, maxi(state.wave.rush_next - 1, 0), _ms(state.wave.rush_s)]
+	return snap
 
 
 ## Overwrites the snapshot part of `state` from `snap` (clients). Riders are matched by slot;
@@ -173,6 +180,27 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 			s.targets.append(int(id))
 		state.shots.append(s)
 	state.queue_len = int(snap.get("q", 0))
+	state.wave.active_roads.clear()
+	var ro: Variant = snap.get("ro")
+	if ro is Array:
+		for r: Variant in ro:
+			state.wave.active_roads.append(int(r))
+	else:
+		for r in SiegeIds.ROAD_COUNT:
+			state.wave.active_roads.append(r)
+	var ru: Variant = snap.get("ru")
+	if ru is Array and (ru as Array).size() > SiegeSnapshotSchema.RU_INDEX:
+		var left_ms := (
+			int(ru[SiegeSnapshotSchema.RU_LEFT_MS])
+			if (ru as Array).size() > SiegeSnapshotSchema.RU_LEFT_MS
+			else 1000
+		)
+		state.wave.rush_s = (
+			maxf(left_ms / 1000.0, 0.001) if int(ru[SiegeSnapshotSchema.RU_ON]) != 0 else 0.0
+		)
+		state.wave.rush_next = int(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
+	else:
+		state.wave.rush_s = 0.0
 
 
 static func _ms(s: float) -> int:

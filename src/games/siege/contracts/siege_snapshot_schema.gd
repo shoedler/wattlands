@@ -14,6 +14,11 @@ extends RefCounted
 ##  "z": [[road, prog_dm, ttl_ms], ...]   Caltrop zones; ttl_ms = (delay + ttl) x 1000
 ##  "f": [[pad, [target ids]], ...]   shots of the last 0.1 s (visuals only)
 ##  "q": queued spawns}
+## Optional keys (additive, ADR "snapshot roads and rush"), present only when not at their default so
+## the common mid-wave snapshot is unchanged:
+##  "ro": [road ids]   the active roads, only when they are not all three (a break: [])
+##  "ru": [1, i, left_ms]   a rush is on (index i, time left), absent otherwise
+## A client without "ro" has all three roads active and without "ru" no rush.
 ## od_ms is the Overdrive time left (0 unless ACTIVE), od_cd_ms the cooldown left (0 unless
 ## COOLDOWN); a client derives od_state from them (od_ms > 0 ACTIVE, od_cd_ms > 0 COOLDOWN, else
 ## READY).
@@ -24,6 +29,13 @@ const MAX_BYTES := 8192
 const KEYS: Array[String] = [
 	"v", "tick", "ph", "pt_ms", "gate", "nb", "gl", "pk", "w", "r", "tw", "e", "z", "f", "q"
 ]
+
+## Optional keys (see above); check() does not require them.
+const OPTIONAL_KEYS: Array[String] = ["ro", "ru"]
+# ru columns
+const RU_ON := 0
+const RU_INDEX := 1
+const RU_LEFT_MS := 2
 
 # r row columns
 const R_SLOT := 0
@@ -85,6 +97,8 @@ const INT_PATHS: Array[String] = [
 	"f[][]",
 	"f[][][]",
 	"q",
+	"ro[]",
+	"ru[]",
 ]
 
 
