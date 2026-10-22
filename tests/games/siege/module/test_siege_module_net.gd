@@ -106,6 +106,32 @@ func test_a_client_derives_the_phase_fields_the_snapshot_leaves_out() -> void:
 	_free(client)
 
 
+func test_a_clients_hud_shows_the_horn_warning_and_the_rush_marker() -> void:
+	var host := K.game(2, 0, "short", Wl.HOST, 1)
+	var client := K.game(2, 0, "short", Wl.CLIENT, 2)
+	var link := K.Link.new(host, client)
+	var tick := link.run(0, 430.0)
+	assert_eq(client.state.role, SiegeIds.ROLE_WAVE)
+	assert_true(SiegeHudModel.warning(client).is_empty(), "nothing to warn about yet")
+	# The host announces a road change: the horn event reaches the client, whose HUD counts it down.
+	host.state.wave.rotate_in_s = 0.0
+	tick = link.run(tick, 432.0)
+	assert_gt(client.state.wave.horn_s, 0.0, "the roads event set the horn")
+	var warn := SiegeHudModel.warning(client)
+	assert_eq(warn["key"], "SIEGE_WARN_HORN")
+	assert_gte(int(warn["args"][0]), 1)
+	assert_gt(SiegeHudModel.phase_duration_s(client), 0.0)
+	assert_eq(SiegeHudModel.phase_kind(client), Wl.WORK)
+	# A rush: the rush event and the snapshot's ru key set the client's clock and marker.
+	host.state.wave.rush_s = 20.0
+	host.state.wave.rush_next = 1
+	tick = link.run(tick, 434.0)
+	assert_true(client.state.rush_on())
+	assert_eq(SiegeHudModel.warning(client)["key"], "SIEGE_HUD_RUSH_ON")
+	_free(host)
+	_free(client)
+
+
 func test_a_host_and_a_client_stay_in_step_through_a_drill() -> void:
 	var host := K.game(2, 1, "drill", Wl.HOST, 1)
 	var client := K.game(2, 1, "drill", Wl.CLIENT, 2)
