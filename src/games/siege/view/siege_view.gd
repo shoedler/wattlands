@@ -27,7 +27,13 @@ const SHAKE_M := 0.15
 const SHAKE_S := 0.5
 const MARCH_COUNT := 20
 const MARCH_RADIUS_M := 6.2
+## The CanvasLayer of the 3D picture: above the session background (layer 0), below the HUD
+## (HudLayer.LAYER 10); the vignette sits just above it.
+const SCREEN_LAYER := 1
 
+## The CanvasLayer that shows the 3D world, and the SubViewport that holds it.
+var screen: CanvasLayer = null
+var world: SubViewport = null
 var game: SiegeGame = null
 var state: SiegeState = null
 var map: SiegeMap = null
@@ -43,6 +49,7 @@ var enemies: SiegeEnemyView = null
 var effects: SiegeEffectsView = null
 var gate: SiegeGateView = null
 var march: MultiMeshScatter = null
+var audio: SiegeAudio = null
 ## Turn off to drive refresh() yourself (tests, screenshots).
 var auto_process: bool = true
 var shakes: int = 0
@@ -90,6 +97,7 @@ func refresh(dt: float) -> void:
 	gate.update(state, dt)
 	_update_shake()
 	_update_march(victory)
+	audio.update(state, dt, local_peer())
 
 
 ## What the view draws for the enemy `e` (the one place the view reads enemy positions from;
@@ -126,6 +134,7 @@ func _update_march(victory: bool) -> void:
 
 func _build() -> void:
 	_built = true
+	_build_screen()
 	terrain = SiegeTerrain.from_map(map)
 	fort = SiegeFortBuilder.new(map)
 	_build_environment()
@@ -133,17 +142,47 @@ func _build() -> void:
 	_build_fort()
 	_build_machines()
 	_build_units()
-	add_child(ScreenVignette.new())
+	var vignette := ScreenVignette.new()
+	vignette.layer = SCREEN_LAYER + 1
+	add_child(vignette)
 	_build_march()
+	audio = SiegeAudio.new()
+	audio.name = "Audio"
+	add_child(audio)
+
+
+## The 3D world lives in its own SubViewport shown on a CanvasLayer (above the session screen's
+## background, below the HUD): the app's session screen paints an opaque background in the main
+## viewport's 2D canvas, which would hide any 3D drawn straight into it. Everything below is a
+## child of `world`; this node itself stays an empty Node3D.
+func _build_screen() -> void:
+	screen = CanvasLayer.new()
+	screen.name = "Screen"
+	screen.layer = SCREEN_LAYER
+	add_child(screen)
+	var container := SubViewportContainer.new()
+	container.name = "Container"
+	container.stretch = true
+	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	screen.add_child(container)
+	world = SubViewport.new()
+	world.name = "World"
+	world.own_world_3d = true
+	world.handle_input_locally = false
+	world.msaa_3d = Viewport.MSAA_2X
+	world.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	world.size = Vector2i(1920, 1080)
+	container.add_child(world)
 
 
 func _build_environment() -> void:
 	sky = SkyAmbient.new()
 	sky.name = "SkyAmbient"
-	add_child(sky)
+	world.add_child(sky)
 	rig = MiniatureCameraRig.new()
 	rig.name = "CameraRig"
-	add_child(rig)
+	world.add_child(rig)
 	var cam: Dictionary = map.data.get("camera", {})
 	var tgt: Array = cam.get("target", [0, 0, 22])
 	rig.target = Vector3(float(tgt[0]), float(tgt[1]), float(tgt[2]))
@@ -159,15 +198,15 @@ func _build_ground() -> void:
 	terrain.add_to(ground)
 	terrain.add_roads_to(ground, map)
 	sky.haze_mesh(ground, rig.camera_position())
-	add_child(ground.make_instance("Ground"))
+	world.add_child(ground.make_instance("Ground"))
 	for mm in SiegeScatter.build(map, terrain):
-		add_child(mm)
+		world.add_child(mm)
 
 
 func _build_fort() -> void:
 	var lp := fort.build_static()
 	sky.haze_mesh(lp, rig.camera_position())
-	add_child(lp.make_instance("Fort"))
+	world.add_child(lp.make_instance("Fort"))
 
 
 func _build_machines() -> void:
@@ -176,30 +215,30 @@ func _build_machines() -> void:
 		var rider := state.rider_at(slot) if state != null else null
 		var wheel := SiegeWheelView.new()
 		wheel.setup(slot, fort, look, rider != null and rider.is_bot)
-		add_child(wheel)
+		world.add_child(wheel)
 		wheels.append(wheel)
 		var chain := SiegeChainView.new()
 		chain.setup(slot, fort, look)
-		add_child(chain)
+		world.add_child(chain)
 		chains.append(chain)
 	generator = SiegeGeneratorView.new()
 	generator.setup(fort)
-	add_child(generator)
+	world.add_child(generator)
 
 
 func _build_units() -> void:
 	towers = SiegeTowersView.new()
 	towers.setup(fort)
-	add_child(towers)
+	world.add_child(towers)
 	enemies = SiegeEnemyView.new()
 	enemies.setup(map, terrain)
-	add_child(enemies)
+	world.add_child(enemies)
 	effects = SiegeEffectsView.new()
 	effects.setup(terrain, towers)
-	add_child(effects)
+	world.add_child(effects)
 	gate = SiegeGateView.new()
 	gate.setup(fort)
-	add_child(gate)
+	world.add_child(gate)
 
 
 func _build_march() -> void:
@@ -210,7 +249,14 @@ func _build_march() -> void:
 	MultiMeshScatter.set_walk_time(_march_mat, 0.0)
 	march.material_override = _march_mat
 	march.visible = false
-	add_child(march)
+	world.add_child(march)
+
+
+## The local rider's peer (the module's, else the first rider's): whose denarii the coins follow.
+func local_peer() -> int:
+	if game != null and game.ctx != null:
+		return game.ctx.local_peer
+	return state.riders[0].peer if state != null and not state.riders.is_empty() else 0
 
 
 ## The look (color, pattern) of `slot`: the player slot's when the module is attached, else
