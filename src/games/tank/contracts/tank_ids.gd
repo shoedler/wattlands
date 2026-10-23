@@ -84,6 +84,9 @@ const EM_TELEGRAPH := 2
 const EM_MOVE := 3
 const EM_BACKOFF := 4
 const EM_DEAD := 5
+## A raider breaking off (a light tank after its linger_s): rolls away, does not fire, leaves with no
+## kill. Distinct from EM_MOVE, a destroyer's shift after a shot.
+const EM_LEAVE := 6
 
 ## Where an Advance encounter enters.
 const FROM_FRONT := "front"

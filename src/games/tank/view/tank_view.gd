@@ -686,7 +686,7 @@ func _build_enemies(state: TankState, t: float) -> void:
 		}
 		if e.telegraph_s > 0.0:
 			_telegraph_light(state, e, type, Rect2(pos, sz))
-		elif e.mode in [TankIds.EM_ENTER, TankIds.EM_MOVE, TankIds.EM_BACKOFF]:
+		elif e.mode in [TankIds.EM_ENTER, TankIds.EM_MOVE, TankIds.EM_BACKOFF, TankIds.EM_LEAVE]:
 			var stack := pos + Vector2(sz.x * (0.25 if e.side > 0 else 0.7), 2.0)
 			fx.exhaust("e%d" % e.id, stack, 0.4, _dt)
 	_boss_rows(state, t, rows)

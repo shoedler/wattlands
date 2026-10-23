@@ -163,7 +163,7 @@ static func _linger(
 	aux.enemy_age[e.id] = age
 	if age >= linger:
 		aux.enemy_leaving[e.id] = true
-		e.mode = TankIds.EM_MOVE
+		e.mode = TankIds.EM_LEAVE
 		e.hold_px = 1.0e9 if e.side > 0 else 400.0
 		e.telegraph_s = 0.0
 	return false
@@ -193,9 +193,9 @@ static func _move_station(
 			if dist <= e.hold_px:
 				dist = e.hold_px
 				e.mode = TankIds.EM_HOLD
-		TankIds.EM_MOVE, TankIds.EM_BACKOFF:
+		TankIds.EM_MOVE, TankIds.EM_BACKOFF, TankIds.EM_LEAVE:
 			dist = move_toward(dist, e.hold_px, speed * dt)
-			if is_equal_approx(dist, e.hold_px):
+			if e.mode != TankIds.EM_LEAVE and is_equal_approx(dist, e.hold_px):
 				e.mode = TankIds.EM_HOLD
 		_:
 			var amp := float(def.get("weave_px", 0.0))
@@ -220,7 +220,7 @@ static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 		var gun: Dictionary = def.get("gun", {})
 		var tele := float(def.get("telegraph_s", 0.0))
 		e.gun_s = maxf(e.gun_s - dt, 0.0)
-		if e.mode == TankIds.EM_MOVE:
+		if e.mode == TankIds.EM_MOVE or e.mode == TankIds.EM_LEAVE:
 			continue
 		if tele > 0.0 and e.gun_s > 0.0 and e.gun_s <= tele:
 			e.mode = TankIds.EM_TELEGRAPH
