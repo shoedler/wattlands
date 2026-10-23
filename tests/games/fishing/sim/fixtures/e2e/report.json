@@ -1,0 +1,803 @@
+{
+ "schema": 1,
+ "game_id": "fishing",
+ "content_id": "e2e_2min",
+ "seed": 1,
+ "ok": true,
+ "failures": [],
+ "victim": "client2",
+ "peers": {
+  "host": {
+   "role": "host",
+   "peer_id": 1,
+   "exit_code": 0,
+   "exit_reason": "complete",
+   "events": [
+    {
+     "type": "session_state",
+     "state": "running",
+     "t": 1.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 0,
+     "t": 1.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 0,
+     "t": 1.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 0,
+     "t": 1.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 1,
+     "t": 18.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 1,
+     "t": 18.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 1,
+     "t": 18.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 2,
+     "t": 38.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 2,
+     "t": 38.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 2,
+     "t": 38.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 0,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 1,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 2,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "double_hookup",
+      "lanes": [
+       0,
+       1,
+       2
+      ],
+      "lvl": 3
+     },
+     "event_type": "double_hookup",
+     "peer": 1,
+     "t": 48.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 3,
+     "t": 83.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 3,
+     "t": 83.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 3,
+     "t": 83.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 0,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 83.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 1,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 83.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 2,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 84.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 0,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 113.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 1,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 113.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 4,
+     "t": 114.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 4,
+     "t": 114.5
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 4,
+     "t": 114.5
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 2,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 114.5
+    },
+    {
+     "type": "results",
+     "peer": 1,
+     "t": 301.5
+    }
+   ],
+   "directives": [],
+   "trace": [
+    {
+     "t": 2,
+     "mode": "ERG",
+     "applied_pct": 50,
+     "clamped_by": [
+      "warmup"
+     ]
+    },
+    {
+     "t": 60,
+     "mode": "ERG",
+     "applied_pct": 62,
+     "clamped_by": []
+    }
+   ],
+   "restarted": false
+  },
+  "client1": {
+   "role": "client1",
+   "peer_id": 2,
+   "exit_code": 0,
+   "exit_reason": "complete",
+   "events": [
+    {
+     "type": "session_state",
+     "state": "running",
+     "t": 1.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 0,
+     "t": 1.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 0,
+     "t": 1.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 0,
+     "t": 1.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 1,
+     "t": 18.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 1,
+     "t": 18.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 1,
+     "t": 18.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 2,
+     "t": 38.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 2,
+     "t": 38.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 2,
+     "t": 38.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 0,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 1,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "hookup",
+      "l": 2,
+      "sp": 0,
+      "n": 1,
+      "sch": 1
+     },
+     "event_type": "hookup",
+     "peer": 1,
+     "t": 38.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "double_hookup",
+      "lanes": [
+       0,
+       1,
+       2
+      ],
+      "lvl": 3
+     },
+     "event_type": "double_hookup",
+     "peer": 1,
+     "t": 48.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 3,
+     "t": 83.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 3,
+     "t": 83.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 3,
+     "t": 83.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 0,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 83.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 1,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 83.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 2,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 84.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 0,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 113.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 1,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 113.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 4,
+     "t": 114.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 4,
+     "t": 114.6
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 4,
+     "t": 114.6
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 2,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 114.6
+    },
+    {
+     "type": "results",
+     "peer": 1,
+     "t": 301.6
+    }
+   ],
+   "directives": [],
+   "trace": [
+    {
+     "t": 2,
+     "mode": "ERG",
+     "applied_pct": 50,
+     "clamped_by": [
+      "warmup"
+     ]
+    },
+    {
+     "t": 60,
+     "mode": "ERG",
+     "applied_pct": 62,
+     "clamped_by": []
+    }
+   ],
+   "restarted": false
+  },
+  "client2": {
+   "role": "client2",
+   "peer_id": 3,
+   "exit_code": 0,
+   "exit_reason": "complete",
+   "events": [
+    {
+     "type": "session_state",
+     "state": "running",
+     "t": 0.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 3,
+     "t": 82.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 3,
+     "t": 82.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 3,
+     "t": 82.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 0,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 82.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 1,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 82.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landing",
+      "l": 2,
+      "sp": 0
+     },
+     "event_type": "landing",
+     "peer": 1,
+     "t": 83.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 0,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 112.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 1,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 112.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 1,
+     "index": 4,
+     "t": 113.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 2,
+     "index": 4,
+     "t": 113.4
+    },
+    {
+     "type": "phase_started",
+     "peer": 3,
+     "index": 4,
+     "t": 113.4
+    },
+    {
+     "type": "game_event",
+     "event": {
+      "type": "landed",
+      "l": 2,
+      "sp": 0,
+      "grade": 0,
+      "kg": 11,
+      "points": 21,
+      "hk": 20
+     },
+     "event_type": "landed",
+     "peer": 1,
+     "t": 113.4
+    },
+    {
+     "type": "results",
+     "peer": 1,
+     "t": 300.4
+    }
+   ],
+   "directives": [],
+   "trace": [
+    {
+     "t": 2,
+     "mode": "ERG",
+     "applied_pct": 50,
+     "clamped_by": [
+      "warmup"
+     ]
+    },
+    {
+     "t": 60,
+     "mode": "ERG",
+     "applied_pct": 62,
+     "clamped_by": []
+    }
+   ],
+   "restarted": true
+  }
+ },
+ "events_by_peer": {},
+ "directives": [
+  {
+   "peer_role": "host",
+   "id": 1,
+   "kind": "request",
+   "requested": {
+    "mode": "ERG",
+    "target_pct": 62,
+    "duration_s": 0,
+    "reason": "pull",
+    "source": "fishing",
+    "id": 1
+   },
+   "applied": {
+    "target_pct": 62
+   },
+   "clamped_by": [
+    "warmup"
+   ],
+   "refused": false,
+   "reason": "",
+   "t": 50,
+   "game_t": 50,
+   "phase_index": 2
+  },
+  {
+   "peer_role": "client1",
+   "id": 1,
+   "kind": "request",
+   "requested": {
+    "mode": "ERG",
+    "target_pct": 63.5,
+    "duration_s": 0,
+    "reason": "pull",
+    "source": "fishing",
+    "id": 1
+   },
+   "applied": {
+    "target_pct": 63.5
+   },
+   "clamped_by": [
+    "slew",
+    "warmup"
+   ],
+   "refused": false,
+   "reason": "",
+   "t": 50,
+   "game_t": 50,
+   "phase_index": 2
+  },
+  {
+   "peer_role": "client2",
+   "id": 1,
+   "kind": "request",
+   "requested": {
+    "mode": "ERG",
+    "target_pct": 61,
+    "duration_s": 0,
+    "reason": "pull",
+    "source": "fishing",
+    "id": 1
+   },
+   "applied": {
+    "target_pct": 61
+   },
+   "clamped_by": [],
+   "refused": false,
+   "reason": "",
+   "t": 50,
+   "game_t": 50,
+   "phase_index": 2
+  }
+ ],
+ "fit_paths": {},
+ "fit_check": {
+  "host": {
+   "ok": true,
+   "json": {
+    "files": [
+     {
+      "ok": true,
+      "laps": [
+       {},
+       {},
+       {},
+       {}
+      ]
+     }
+    ]
+   }
+  },
+  "client1": {
+   "ok": true,
+   "json": {
+    "files": [
+     {
+      "ok": true,
+      "laps": [
+       {},
+       {},
+       {},
+       {}
+      ]
+     }
+    ]
+   }
+  },
+  "client2": {
+   "ok": true,
+   "json": {
+    "files": [
+     {
+      "ok": true,
+      "laps": [
+       {},
+       {},
+       {},
+       {}
+      ]
+     }
+    ]
+   }
+  }
+ },
+ "e2e_check": null
+}
