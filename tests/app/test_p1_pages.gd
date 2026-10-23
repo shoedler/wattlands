@@ -83,6 +83,43 @@ func test_rides_history_reupload() -> void:
 	assert_eq(fx.app.state, "settings")
 
 
+func _detail_of(s: AppScreen, id: Variant) -> String:
+	for it: Variant in menu(s).items():
+		if AppScreen.same_id((it as Dictionary).get("id"), id):
+			return str((it as Dictionary).get("detail", ""))
+	return ""
+
+
+func test_rides_history_shows_why_an_upload_failed() -> void:
+	fx.give_profile()
+	fx.fake_rides().connected = true
+	fx.fake_rides().ride_list = [
+		{
+			"fit_path": "C:/rides/f.fit",
+			"summary":
+			{
+				"ride_id": "f",
+				"utc_start": "2026-10-23T20:04:28Z",
+				"game_id": "fishing",
+				"duration_s": 1208.0,
+				"upload": {"state": "failed", "error": "Forbidden (403)"}
+			},
+			"uploaded": false,
+			"state": "failed"
+		},
+		{"fit_path": "C:/rides/g.fit", "summary": {"ride_id": "g"}, "uploaded": false},
+	]
+	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
+	var failed := AppScreen.t("APP_UPLOAD_FAILED")
+	assert_eq(_detail_of(s, 0), failed.format(["Forbidden (403)"]), "the saved reason")
+	assert_false(menu(s).text_of(0).contains(failed.format([""]).strip_edges()), "not twice")
+	assert_eq(_detail_of(s, 1), "", "no second line for a ride that never failed")
+	fx.bus.upload_state_changed.emit("g", "failed", "Forbidden (403)")
+	assert_eq(_detail_of(s, 1), failed.format(["Forbidden (403)"]), "this visit's reason")
+	fx.bus.upload_state_changed.emit("f", "uploaded", "123")
+	assert_eq(_detail_of(s, 0), "", "gone once it uploads")
+
+
 func test_rides_need_strava() -> void:
 	fx.give_profile()
 	fx.fake_rides().ride_list = [{"fit_path": "C:/r.fit", "summary": {"ride_id": "r"}}]

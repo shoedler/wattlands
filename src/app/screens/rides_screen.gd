@@ -7,6 +7,8 @@ extends AppScreen
 
 var rides: Array = []
 var states: Dictionary = {}
+## Why the last upload of ride i failed (the detail of a "failed" upload state).
+var reasons: Dictionary = {}
 var status_label: Label = null
 var list_box: VBoxContainer = null
 
@@ -50,17 +52,40 @@ func ride_text(i: int) -> String:
 	var game := str(s.get("game_id", ""))
 	var dur := AppStyle.duration_text(float(s.get("duration_s", 0.0)))
 	var state := str(states.get(i, ""))
-	if state == "":
+	if failure_text(i) != "":
+		state = ""
+	elif state == "":
 		state = t("APP_RIDES_UPLOADED") if bool(r.get("uploaded", false)) else ""
 	else:
 		state = t("APP_UPLOAD_" + state.to_upper()).format([""]).strip_edges()
 	return ("%s  %s  %s  %s" % [when, game, dur, state]).strip_edges()
 
 
+## "Upload failed: <reason>" when the last upload of ride `i` failed (this visit, or the one
+## saved in its summary), else "". Shown on the row's second line, which scrolls when long.
+func failure_text(i: int) -> String:
+	var reason := ""
+	if states.has(i):
+		if str(states[i]) != "failed":
+			return ""
+		reason = str(reasons.get(i, ""))
+	else:
+		var r: Dictionary = rides[i]
+		if str(r.get("state", "")) != "failed":
+			return ""
+		var up: Variant = (r.get("summary", {}) as Dictionary).get("upload", {})
+		reason = str((up as Dictionary).get("error", "")) if up is Dictionary else ""
+	return t("APP_UPLOAD_FAILED").format([reason]).strip_edges()
+
+
 func menu_items() -> Array:
 	var items: Array = []
 	for i in rides.size():
-		items.append({"id": i, "text": ride_text(i), "disabled": not strava_connected()})
+		var item := {"id": i, "text": ride_text(i), "disabled": not strava_connected()}
+		var failure := failure_text(i)
+		if failure != "":
+			item["detail"] = failure
+		items.append(item)
 	items.append({"id": "back", "text": t("APP_BACK")})
 	return items
 
@@ -100,11 +125,12 @@ func is_on_strava(i: int) -> bool:
 	return bool(r.get("uploaded", false)) or st == "uploaded" or st == "duplicate"
 
 
-func _on_upload_state(ride_id: String, state: String, _detail: String) -> void:
+func _on_upload_state(ride_id: String, state: String, detail: String) -> void:
 	for i in rides.size():
 		var s: Dictionary = (rides[i] as Dictionary).get("summary", {})
 		if str(s.get("ride_id", "")) == ride_id:
 			states[i] = state
+			reasons[i] = detail if state == "failed" else ""
 	refresh_menu(menu_items())
 
 
