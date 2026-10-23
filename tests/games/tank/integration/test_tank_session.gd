@@ -1,11 +1,11 @@
 extends GutTest
 ## The game through the real platform runtime: GameRegistry, PlanValidator and GameSimRunner
-## (sdk-runtime) on top of the trainer stack.
+## (sdk-runtime) on top of the trainer stack. G0 version; the module builder extends it.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 
 var _dirs: Array[String] = []
-## Runners made by a test: cleanup() deletes each one's temp root (W3 QT-4).
+## Runners made by a test: cleanup() deletes each one's temp root.
 var _runners: Array[GameSimRunner] = []
 
 
@@ -26,46 +26,75 @@ func after_each() -> void:
 	_dirs.clear()
 
 
-## The installed games, plus the template itself (never listed, so the GameRegistry autoload
-## does not know it; the conformance test loads it the same way).
 func _registry() -> WlGameRegistry:
 	var reg := WlGameRegistry.new()
 	reg.scan_on_ready = false
 	add_child_autofree(reg)
 	reg.scan()
-	if not _is_scaffolded_game():
-		assert_eq(reg.add_game(F.manifest(), F.GAME_DIR, true), "")
 	return reg
 
 
-## The template is never listed; a game scaffolded from it must be. (The literal is split so
-## tools/new_game leaves it alone.)
-func _is_scaffolded_game() -> bool:
-	return F.GAME_ID != "_tem" + "plate"
-
-
-func test_the_manifest_validates_and_the_listing_rule_holds() -> void:
+func test_the_manifest_validates_and_tank_is_listed() -> void:
 	var reg := WlGameRegistry.new()
 	add_child_autofree(reg)
 	reg.scan()
 	assert_eq(reg.validate_manifest(F.manifest(), F.GAME_DIR.path_join("game.json")), "")
-	assert_eq(reg.has_game(F.GAME_ID), _is_scaffolded_game())
+	assert_true(reg.has_game(F.GAME_ID))
 
 
-func test_every_plan_passes_the_plan_validator_without_warnings() -> void:
+## Every plan, every crew, rotation on and off: valid, no switch warning, the first 300 s within
+## 4.6.8, and per rider every ERG <-> SIM switch >= 60 s apart with each open phase at its min_s
+## and at its max_s (brief 2.3, BRIEF 4.5).
+func test_every_plan_passes_the_validator_with_switches_60_s_apart() -> void:
 	for content_id: String in F.manifest()["contents"]:
-		for offset: int in [-10, 0, 5]:
-			var ctx := F.make_ctx(1, 1, content_id)
-			ctx.players[0].options["work_offset"] = offset
-			var game: TankGame = autofree(F.make_game(ctx))
-			for peer: int in [1, -1]:
-				var plan: EffortPlan = game.build_effort_plans()[peer]
-				var v := PlanValidator.validate(plan)
-				assert_true(v["ok"], "%s %d: %s" % [content_id, offset, v["errors"]])
-				assert_eq(v["warnings"], [], "%s %d" % [content_id, offset])
-				var final := PlanValidator.finalize(plan)
-				assert_eq(final.size(), plan.size() + 1)
-				assert_eq(final.phase(final.size() - 1).kind, Wl.COOLDOWN)
+		for crew in [1, 2, 3]:
+			for rotation in [true, false]:
+				var ctx := F.make_ctx(crew, 0, content_id)
+				ctx.options["rotation"] = rotation
+				var game: TankGame = autofree(F.make_game(ctx))
+				var plans := game.build_effort_plans()
+				for peer: int in plans:
+					var at := "%s crew %d rotation %s peer %d" % [content_id, crew, rotation, peer]
+					var plan: EffortPlan = plans[peer]
+					var v := PlanValidator.validate(plan)
+					assert_true(v["ok"], "%s: %s" % [at, v["errors"]])
+					assert_eq(v["warnings"], [], at)
+					var final := PlanValidator.finalize(plan)
+					assert_eq(final.phase(final.size() - 1).kind, Wl.COOLDOWN, at)
+					for use_max in [false, true]:
+						assert_gte(
+							_min_switch_gap(final, use_max),
+							60.0,
+							"%s (open at %s)" % [at, "max" if use_max else "min"]
+						)
+					assert_true(_warmup_ok(plan), "%s: first 300 s within 4.6.8" % at)
+
+
+func _min_switch_gap(plan: EffortPlan, use_max: bool) -> float:
+	var t := 0.0
+	var last_switch := -INF
+	var gap := INF
+	var mode := ""
+	for i in plan.size():
+		var ph := plan.phase(i)
+		if mode != "" and ph.mode != mode:
+			gap = minf(gap, t - last_switch)
+			last_switch = t
+		mode = ph.mode
+		t += (ph.max_s if use_max else ph.min_s) if ph.open_ended else ph.duration_s
+	return gap
+
+
+func _warmup_ok(plan: EffortPlan) -> bool:
+	var t := 0.0
+	for i in plan.size():
+		var ph := plan.phase(i)
+		if t < 300.0 and ph.mode == Wl.ERG:
+			var r := ph.effective_range()
+			if ph.target_pct > 65.0 or float(r[1]) > 65.0:
+				return false
+		t += ph.min_s if ph.open_ended else ph.duration_s
+	return true
 
 
 func _run(flags: Array[String]) -> Dictionary:
@@ -88,107 +117,36 @@ func _run(flags: Array[String]) -> Dictionary:
 	return out
 
 
-func test_a_solo_run_with_a_bot_completes_and_writes_one_fit() -> void:
-	var r := _run(["--content=default", "--players=1", "--bots=1", "--rider=erg", "--seed=3"])
+func test_a_solo_drill_completes_with_one_fit_and_nothing_refused() -> void:
+	var r := _run(["--content=drill", "--players=1", "--rider=erg", "--seed=3"])
 	assert_eq(r["_end"], "complete")
-	assert_eq(r.get("end_reason"), "complete")
-	assert_true(FileAccess.file_exists(r["_path"]))
-	assert_eq((r.get("fit_paths", []) as Array).size(), 1, "one FIT per human slot, none for bots")
-	assert_eq(r.get("finished_reason"), "complete")
-	for d: Dictionary in r.get("directives", []):
-		var req: Dictionary = d.get("requested", {})
-		if req.get("reason") == "hill":
-			var keys: Array = req.keys().filter(func(k: Variant) -> bool: return k != "id")
-			keys.sort()
-			assert_eq(
-				keys,
-				["duration_s", "reason", "source", "target_pct"],
-				"the game's fields (id aside): %s" % req
-			)
-
-
-func test_a_host_run_with_two_humans_completes() -> void:
-	var r := _run(["--content=short", "--players=2", "--bots=0", "--rider=erg", "--seed=5"])
-	assert_eq(r["_end"], "complete")
-	assert_eq((r.get("fit_paths", []) as Array).size(), 2)
-	# W3 SDK-7: through the real platform, "short" replans every rider to an open-ended Finish that
-	# end_phase ends, and its SIM phase takes the game's course grades; nothing is refused.
-	for peer: String in ["1", "2"]:
-		var hist: Array = r["phases"][peer]
-		assert_eq(hist[2]["label"], "TANK_PHASE_FINISH", "peer %s rode the replanned phase" % peer)
-		assert_eq(hist[2]["ended_by"], Wl.ENDED_END_PHASE, "peer %s: end_phase ended it" % peer)
-	var kinds := {}
+	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
+	assert_eq((r.get("fit_paths", []) as Array).size(), 1)
 	for d: Dictionary in r.get("directives", []):
 		assert_true(bool(d["accepted"]), "accepted: %s" % JSON.stringify(d))
-		kinds[d["kind"]] = int(kinds.get(d["kind"], 0)) + 1
-	for kind: String in ["course_grade", "replan", "end_phase", "request", "cadence_band"]:
-		assert_gt(int(kinds.get(kind, 0)), 0, "the report has %s directives" % kind)
+	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
+	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
 
 
-## W4r2 R12 through the platform (the review's run): after "short"'s open-ended Finish the riders
-## reach the cool-down at different times. Every human rider gets each phase banner on its own peer
-## when its own phase starts, nothing goes to every peer, and the game's phase_changed for the
-## cool-down comes once the last rider got there.
-func test_short_with_three_riders_banners_each_riders_own_phases() -> void:
-	var r := _run(
-		[
-			"--content=short",
-			"--players=3",
-			"--bots=1",
-			"--rider=erg",
-			"--rider=erg:compliance=0.85",
-			"--rider=zero",
-			"--seed=9"
-		]
-	)
+func test_a_host_drill_with_two_humans_completes() -> void:
+	var r := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=5"])
 	assert_eq(r["_end"], "complete")
-	var starts := {}
-	var banners: Array = []
+	assert_eq((r.get("fit_paths", []) as Array).size(), 2)
 	var group: Array = []
 	for e: Dictionary in r.get("events", []):
-		match str(e.get("type", "")):
-			"phase_started":
-				var peer := int(e["peer"])
-				if peer > 0:
-					if not starts.has(peer):
-						starts[peer] = []
-					(starts[peer] as Array).append([int(e["index"]), float(e["t"])])
-			"hud":
-				if (
-					str(e.get("kind", "")) == "banner"
-					and str(e.get("key", "")) == "TANK_BANNER_PHASE"
-				):
-					banners.append([int(e["peer"]), float(e["t"])])
-			"game_phase_changed":
-				group.append([int(e["index"]), float(e["t"])])
-	assert_eq(starts.keys().size(), 3, "three human riders")
-	assert_eq(
-		banners.filter(func(b: Array) -> bool: return b[0] == 0), [], "no banner to every peer"
-	)
-	var last_cool := 0.0
-	for peer: int in starts.keys():
-		var mine := banners.filter(func(b: Array) -> bool: return b[0] == peer)
-		assert_eq(
-			mine.size(),
-			(starts[peer] as Array).size(),
-			"peer %d: one banner per phase it started" % peer
-		)
-		for i in mine.size():
-			var st: Array = starts[peer][i]
-			assert_between(
-				float(mine[i][1]),
-				float(st[1]),
-				float(st[1]) + 0.11,
-				"peer %d: phase %d's banner when it starts" % [peer, int(st[0])]
-			)
-		last_cool = maxf(last_cool, float((starts[peer] as Array).back()[1]))
-	var cool := group.filter(func(g: Array) -> bool: return g[0] == 3)
-	assert_eq(cool.size(), 1, "one phase_changed for the cool-down")
-	if cool.size() == 1:
-		assert_gte(float(cool[0][1]), last_cool, "after the last rider reached it")
-	var ends := []
-	for peer: int in starts.keys():
-		ends.append(snappedf(float((starts[peer] as Array).back()[1]), 0.05))
-	assert_ne(
-		ends.min(), ends.max(), "precondition: the riders reached the cool-down at different times"
-	)
+		if str(e.get("type", "")) == "game_phase_changed":
+			group.append(int(e["index"]))
+	assert_eq(group, [0, 1, 2, 3], "the group's phase, the cool-down included")
+
+
+## Zero input (brief 0.4): a solo Bulwark plays Ashfall Road to the results; every open phase
+## ends by end_phase, the boss last, and the mission is won.
+func test_a_solo_bulwark_plays_ashfall_road_to_the_results_with_zero_input() -> void:
+	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=1"])
+	assert_eq(r["_end"], "complete")
+	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_VICTORY)
+	var hist: Array = r["phases"]["1"]
+	assert_eq(hist.size(), 12, "11 segments and the cool-down")
+	for ph: Dictionary in hist:
+		if str(ph["kind"]) == Wl.WORK:
+			assert_eq(ph["ended_by"], Wl.ENDED_END_PHASE, "phase %d" % int(ph["index"]))

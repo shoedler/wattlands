@@ -1,8 +1,8 @@
 class_name TankFakes
 extends RefCounted
-## Test doubles for the template game's unit tests: a GameContext whose sinks record every call,
-## plus a tiny stand-in for the GameHost's phase clock (fixed phases only), so the module can be
-## driven with synthetic InputFrames without the platform runtime.
+## Test doubles for Tank's unit tests: a GameContext whose sinks record every call, plus a tiny
+## stand-in for the GameHost's phase clock (open-ended phases run their nominal duration_s), so the
+## module can be driven with synthetic InputFrames without the platform runtime. Lead-owned (G0).
 
 const GAME_ID := "tank"
 const GAME_DIR := "res://src/games/tank"
@@ -97,11 +97,12 @@ static func option_defaults(entries: Variant) -> Dictionary:
 	return out
 
 
-## A context like the GameHost builds: humans 1..n (1 is the host), then bots -1..-m.
+## A context like the GameHost builds: humans 1..n (1 is the host). Tank has no bots; `bots` is
+## kept for the scaffold's signature and must stay 0 for Tank.
 static func make_ctx(
 	humans: int = 1,
 	bots: int = 0,
-	content_id: String = "default",
+	content_id: String = "ashfall_road",
 	role: String = Wl.SOLO,
 	local_peer: int = 1,
 	rng_seed: int = 7
@@ -134,7 +135,7 @@ static func make_ctx(
 		s.apply_look(i)
 		s.ftp = 200.0 + 20.0 * i
 		s.ftp_verified = true
-		s.autopilot = s.is_bot
+		s.autopilot = true
 		s.p_eff_per_w = 250.0 / s.ftp
 		s.options = option_defaults(m.get("player_options", []))
 		ctx.players.append(s)
@@ -166,7 +167,9 @@ static func phase_at(plan: EffortPlan, t: float) -> PhaseState:
 			s.min_s = ph.min_s
 			s.max_s = ph.max_s
 			s.planned_pct = ph.planned_pct_at(s.elapsed_s) if ph.mode == Wl.ERG else 0.0
-			s.remaining_s = maxf(ph.duration_s - s.elapsed_s, 0.0)
+			var end_s := ph.max_s if ph.open_ended else ph.duration_s
+			s.remaining_s = maxf(end_s - s.elapsed_s, 0.0)
+			s.prev_ended_by = "" if i == 0 else Wl.ENDED_DURATION
 			s.count = plan.size()
 			s.plan_elapsed_s = t
 			return s
@@ -174,8 +177,8 @@ static func phase_at(plan: EffortPlan, t: float) -> PhaseState:
 	return s
 
 
-## One InputFrame: every rider rides `power_pct` of its applied target in ERG at 90 rpm.
-## `intents` maps peer -> Array of intents for this frame.
+## One InputFrame: in ERG every rider rides `power_pct` of its applied target, in SIM `power_pct`
+## of 90% FTP (the erg mock's SIM rule), at 90 rpm. `intents` maps peer -> Array of intents.
 static func frame(
 	ctx: GameContext,
 	plans: Dictionary,
@@ -191,9 +194,12 @@ static func frame(
 		var tm := Telemetry.new()
 		tm.peer_id = p.peer_id
 		tm.t = f.t
-		tm.mode = Wl.ERG
-		tm.applied_target_w = int(ph.planned_pct / 100.0 * p.ftp)
-		tm.power_w = tm.applied_target_w * power_pct / 100.0
+		tm.mode = Wl.ERG if ph.mode == Wl.ERG or ph.kind == Wl.COOLDOWN else Wl.SIM
+		if tm.mode == Wl.ERG:
+			tm.applied_target_w = int(ph.planned_pct / 100.0 * p.ftp)
+			tm.power_w = tm.applied_target_w * power_pct / 100.0
+		else:
+			tm.power_w = 0.9 * p.ftp * power_pct / 100.0
 		tm.p_eff_w = tm.power_w * p.p_eff_per_w
 		tm.ftp_pct = tm.power_w / p.ftp * 100.0
 		tm.cadence_rpm = 90.0

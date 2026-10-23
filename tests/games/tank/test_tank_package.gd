@@ -1,7 +1,7 @@
 extends GutTest
-## The template's files as a package: game.json (BRIEF 3.6 fields and the option entry format),
+## Tank's files as a package: game.json (brief 2.2, BRIEF 3.6 fields and the option entry format),
 ## content files, string keys, and the static rules every game keeps (no wall clock or global RNG
-## in rules, no trainer path but ctx.directives, BRIEF 4.6.11).
+## in rules, no trainer path but ctx.directives, BRIEF 4.6.11). Lead-owned (G0).
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 const REQUIRED := [
@@ -81,15 +81,31 @@ func test_entry_is_an_instantiable_game_module() -> void:
 	assert_is(game, GameModule)
 
 
+func test_game_json_is_exactly_the_brief() -> void:
+	var m := F.manifest()
+	assert_eq(m["title"], "Diesel Domestiques")
+	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 3])
+	assert_false(m["bots"], "no bots (brief 0.3)")
+	assert_eq(m["contents"], ["ashfall_road", "drill"])
+	assert_eq(
+		[m["default_content"], m["e2e_content"], m["zero_input_content"]],
+		["ashfall_road", "drill", "ashfall_road"]
+	)
+	assert_eq(int(m["first_run_priority"]), -1, "the first run never picks Tank")
+	assert_eq(
+		m["options"],
+		[{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
+	)
+	assert_false(m.has("player_options"))
+	assert_false(m.has("picker_image"), "G2 adds it once the PNG exists")
+
+
 func test_every_content_file_loads_and_validates() -> void:
 	for content_id: String in F.manifest()["contents"]:
-		var path := F.CONTENT_DIR.path_join(content_id + ".json")
+		var path := F.CONTENT_DIR.path_join(TankContent.mission_path(content_id))
 		assert_true(FileAccess.file_exists(path), path)
-		assert_eq(
-			TankRules.content_error(JSON.parse_string(FileAccess.get_file_as_string(path))),
-			"",
-			path
-		)
+		var c := TankContent.from_dicts(TankContent.read_files(content_id), content_id)
+		assert_eq(c.errors, [] as Array[String], content_id)
 
 
 func test_option_entries_use_the_sdk_entry_format() -> void:
@@ -122,16 +138,25 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 	for k in keys:
 		assert_true(k.begins_with(_prefix()), "%s starts with %s" % [k, _prefix()])
 	var used := {}
-	var re := RegEx.create_from_string(_prefix() + "[A-Z0-9_]+")
+	# Keys appear as string literals in code and as JSON values; constant names such as
+	# TankIds.TANK_BULWARK are not keys, so only quoted ones count.
+	var re := RegEx.create_from_string('"(' + _prefix() + '[A-Z0-9_]*[A-Z0-9])"')
 	var sources := _files(F.GAME_DIR, ["gd", "json"]) + _files(F.CONTENT_DIR, ["json"])
 	for path in sources:
 		for m in re.search_all(FileAccess.get_file_as_string(path)):
-			used[m.get_string()] = path
+			used[m.get_string(1)] = path
 	var man := F.manifest()
-	for e: Dictionary in man.get("options", []) + man.get("player_options", []):
+	for e: Dictionary in man.get("options", []):
 		used[str(e.get("label", "%sOPT_%s" % [_prefix(), str(e["id"]).to_upper()]))] = "game.json option label"
 	for c: String in man["contents"]:
 		used["%sCONTENT_%s" % [_prefix(), c.to_upper()]] = "game.json content label"
+	for t: String in TankIds.ENEMY_TYPES:
+		used["%sENEMY_%s" % [_prefix(), t.to_upper()]] = "enemy name"
+	for engine: String in TankIds.ENGINES:
+		used[str(TankIds.ENGINE_LABELS[engine])] = "engine name"
+	var c := TankContent.from_dicts(TankContent.read_files("ashfall_road"), "ashfall_road")
+	for u: Variant in c.unlocks():
+		used["%sUNLOCK_%s" % [_prefix(), str(u["id"]).to_upper()]] = "cosmetics.json unlock"
 	assert_gt(used.size(), 5)
 	for k: String in used:
 		assert_has(keys, k, "%s (used in %s) is in strings.csv" % [k, used[k]])
@@ -143,15 +168,16 @@ func test_every_unlock_id_has_its_results_screen_name() -> void:
 	var keys := _csv_keys()
 	var ctx := F.make_ctx(1)
 	var g: TankGame = autofree(F.make_game(ctx))
-	(ctx.stats as F.Stats).rows = {1: {"kj": 100.0, "time_in_band_pct": 90.0}}
-	TankRules.rider(g.state, 1)["laps"] = 3
+	(ctx.stats as F.Stats).rows = {1: {"kj": 100.0}}
+	g.state.seg.seg = TankIds.SEG_COOLDOWN
+	g.state.score.behemoth_killed = true
 	var unlocks: Array = g.results().row(1)["unlocks"]
-	assert_gt(unlocks.size(), 0, "3 laps unlock something")
-	for id: Variant in unlocks:
+	assert_has(unlocks, "soot", "a finished session")
+	assert_has(unlocks, "brass_machinery", "a Behemoth kill with no breakdown")
+	for u: Variant in g.content.unlocks():
+		var id := str(u["id"])
 		assert_has(
-			keys,
-			"%sUNLOCK_%s" % [_prefix(), str(id).to_upper()],
-			"unlock %s has its name string" % id
+			keys, "%sUNLOCK_%s" % [_prefix(), id.to_upper()], "unlock %s has its name string" % id
 		)
 
 
@@ -162,12 +188,13 @@ func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 	var re := RegEx.create_from_string(clocks + "|" + globals)
 	var scanned := 0
 	for path in _files(F.GAME_DIR, ["gd"]):
-		if path.trim_prefix(F.GAME_DIR).contains("view"):
+		var rel := path.trim_prefix(F.GAME_DIR)
+		if rel.contains("view") or rel.contains("hud") or rel.contains("audio"):
 			continue
 		scanned += 1
 		var hit := re.search(FileAccess.get_file_as_string(path))
 		assert_null(hit, "%s: %s" % [path, hit.get_string() if hit != null else ""])
-	assert_gte(scanned, 2, "the rules and the module are scanned")
+	assert_gte(scanned, 20, "the contracts, rules, effort, combat, net, autopilot and the module")
 
 
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
