@@ -1,7 +1,8 @@
 extends GutTest
 ## The module's network layer (brief 2.6): snapshots as ints after a JSON round trip and under
-## 8 KB at the cap, the optional roads and rush keys, a rejoining client, a host and client in
-## lockstep, the teammate strip from the snapshot, and the interpolation history.
+## 8 KB at the cap, the optional roads, rush, Iron bands and gate damage keys, a client's shop
+## recommendation equal to the host's, a rejoining client, a host and client in lockstep, the
+## teammate strip from the snapshot, and the interpolation history.
 
 const K := preload("res://tests/games/siege/module/siege_module_kit.gd")
 const F := preload("res://tests/games/siege/siege_fakes.gd")
@@ -52,13 +53,82 @@ func test_a_snapshot_stays_under_8_kb_at_the_enemy_cap_with_every_key() -> void:
 	host.state.wave.active_roads = [1] as Array[int]
 	host.state.wave.rush_s = 12.3
 	host.state.wave.rush_next = 3
+	host.state.iron_bands = 2
+	host.state.note_gate_damage(SiegeIds.ROAD_WEST, SiegeIds.ENEMY_SHIELD_WALL, 1234.56)
+	host.state.note_gate_damage(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAM, 1234.56)
+	host.state.note_gate_damage(SiegeIds.ROAD_EAST, SiegeIds.ENEMY_HORSEMEN, 1234.56)
 	var snap := host.snapshot()
 	assert_eq(snap["ro"], [1])
 	assert_eq(snap["ru"], [1, 2, 12300])
+	assert_eq(snap["ib"], 2)
+	assert_eq(snap["gd"], [12346, 12346, 12346])
 	var bytes := SiegeSnapshotSchema.byte_size(snap)
 	assert_lte(bytes, SiegeSnapshotSchema.MAX_BYTES, "%d bytes" % bytes)
 	assert_eq(SiegeSnapshotSchema.check(snap), "")
 	_free(host)
+
+
+func _break_index(g: SiegeGame) -> int:
+	for i in g.metas.size():
+		if g.metas[i].get("role", "") == SiegeIds.ROLE_BREAK:
+			return i
+	return -1
+
+
+func test_a_clients_shop_recommendation_equals_the_hosts_after_a_json_round_trip() -> void:
+	# Iron bands, the gate damage per road and per enemy type all steer SiegeShopModel.cost_of and
+	# SiegeAutopilot.shop_picks (the HUD shop panel's top entry); a client must see them.
+	var raiders := 1 << SiegeIds.ENEMY_RAIDERS
+	var wall := 1 << SiegeIds.ENEMY_SHIELD_WALL
+	var horse := 1 << SiegeIds.ENEMY_HORSEMEN
+	var ram := 1 << SiegeIds.ENEMY_RAM
+	var scenarios := [
+		# [iron_bands, gate_hp, damage by road, enemy types that did it, denarii]
+		[0, 130.0, [0.0, 0.0, 0.0], [0, 0, 0], 400.0],
+		[1, 130.0, [4.04, 0.0, 17.3], [raiders, 0, horse | ram], 400.0],
+		[2, 64.9, [3.0, 9.5, 2.0], [0, horse, wall], 400.0],
+		[2, 130.0, [9.0, 0.0, 2.0], [wall, 0, horse], 400.0],
+		[0, 130.0, [0.0, 12.0, 0.0], [0, raiders, 0], 90.0],
+		[1, 100.0, [0.0, 12.0, 20.0], [0, wall, horse], 400.0],
+	]
+	var seen := {}
+	for sc: Array in scenarios:
+		var host := K.game(2, 0, "short", Wl.HOST, 1)
+		var client := K.game(2, 0, "short", Wl.CLIENT, 2)
+		var brk := _break_index(host)
+		assert_gt(brk, 0)
+		var hs := host.state
+		hs.phase_index = brk
+		hs.role = SiegeIds.ROLE_BREAK
+		hs.iron_bands = sc[0]
+		hs.gate_hp = sc[1]
+		for road in SiegeIds.ROAD_COUNT:
+			hs.gate_damage_by_road[road] = sc[2][road]
+			hs.gate_damage_types_by_road[road] = sc[3][road]
+		hs.rider_at(0).denarii = sc[4]
+		client.apply_snapshot(_wire(host.snapshot(), host.int_fields()["snapshot"]))
+		var cs := client.state
+		assert_true(cs.shop_open())
+		var want := SiegeAutopilot.shop_picks(hs, hs.rider_at(0), 6)
+		var got := SiegeAutopilot.shop_picks(cs, cs.rider_at(0), 6)
+		assert_eq(got, want, "same picks for %s" % [sc])
+		assert_gt(want.size(), 0)
+		seen[want[0]["item"]] = true
+		assert_eq(SiegeAutopilot.target_road(cs), SiegeAutopilot.target_road(hs))
+		for road in SiegeIds.ROAD_COUNT:
+			assert_eq(SiegeAutopilot.build_type(cs, road), SiegeAutopilot.build_type(hs, road))
+		assert_eq(SiegeShopModel.suggest_pad(cs), SiegeShopModel.suggest_pad(hs))
+		for item: String in SiegeIds.ITEMS:
+			for pad in [0, 1, 2, 5, 8]:
+				assert_eq(
+					SiegeShopModel.cost_of(cs, item, pad),
+					SiegeShopModel.cost_of(hs, item, pad),
+					"%s on pad %d costs the same" % [item, pad]
+				)
+		assert_eq(cs.iron_bands, hs.iron_bands)
+		_free(host)
+		_free(client)
+	assert_gt(seen.size(), 1, "the scenarios recommend more than one thing")
 
 
 func test_the_active_roads_and_the_rush_ride_in_the_snapshot_for_a_rejoin() -> void:

@@ -51,9 +51,5 @@ func is_wave() -> bool:
 	return role == SiegeIds.ROLE_WAVE or role == SiegeIds.ROLE_WARMUP_WAVE
 
 
-func is_break() -> bool:
-	return role == SiegeIds.ROLE_BREAK or role == SiegeIds.ROLE_BUILD_BREAK
-
-
 func is_cooldown() -> bool:
 	return kind == Wl.COOLDOWN or role == SiegeIds.ROLE_COOLDOWN

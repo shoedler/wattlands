@@ -22,6 +22,10 @@ func before_each() -> void:
 	_state = SiegeState.create(_content, slots, Wl.FAIR_FTP, rng)
 	_human = _state.rider(1)
 	_bot = _state.rider(-1)
+	# Both riders are pedaling unless a test says otherwise (a coasting rider is refused).
+	for r: SiegeRiderState in [_human, _bot]:
+		r.raw_w = 180.0
+		r.cadence_rpm = 85.0
 
 
 func _work(remaining: float = 100.0) -> SiegePhaseInfo:
@@ -128,6 +132,38 @@ func test_preconditions() -> void:
 		_human.od_state = st
 		assert_eq(SiegeOverdrive.blocked_reason(_state, _human, work), SiegeOverdrive.WHY_NOT_READY)
 	_human.od_state = SiegeIds.OD_READY
+
+
+func test_a_rider_who_is_not_pedaling_cannot_start() -> void:
+	var work := _work()
+	_enemy_near_pad(3)
+	_human.target = 3
+	# The platform's not_pedaling rule: both power < 15 W and cadence < 20 rpm.
+	_human.raw_w = 0.0
+	_human.cadence_rpm = 0.0
+	assert_eq(SiegeOverdrive.blocked_reason(_state, _human, work), SiegeOverdrive.WHY_COASTING)
+	_human.raw_w = 14.9
+	_human.cadence_rpm = 19.9
+	assert_eq(SiegeOverdrive.blocked_reason(_state, _human, work), SiegeOverdrive.WHY_COASTING)
+	assert_false(SiegeOverdrive.prompt(_state, _human, work), "no prompt while coasting")
+	for via: String in [SiegeIds.VIA_BUTTON, SiegeIds.VIA_ACTION, SiegeIds.VIA_SURGE]:
+		assert_eq(
+			SiegeOverdrive.trigger_reason(_state, _human, work, _intent(via)),
+			SiegeOverdrive.WHY_COASTING,
+			"%s is refused up front, no SIM block request" % via
+		)
+		assert_false(SiegeOverdrive.try_start(_state, _human, work, _intent(via)))
+	assert_true(_state.od_requests.is_empty(), "nothing is queued for the sink to refuse")
+	assert_eq(_human.od_state, SiegeIds.OD_READY, "and the rider stays READY (no 30 s retry)")
+	# Either signal alone counts as pedaling.
+	_human.raw_w = 15.0
+	_human.cadence_rpm = 0.0
+	assert_eq(SiegeOverdrive.blocked_reason(_state, _human, work), "")
+	_human.raw_w = 0.0
+	_human.cadence_rpm = 20.0
+	assert_eq(SiegeOverdrive.blocked_reason(_state, _human, work), "")
+	assert_true(SiegeOverdrive.prompt(_state, _human, work), "pedaling again: the prompt returns")
+	assert_true(SiegeOverdrive.try_start(_state, _human, work, _intent(SiegeIds.VIA_SURGE)))
 
 
 func test_prompt_needs_an_enemy_in_range_of_the_target_or_a_rush() -> void:

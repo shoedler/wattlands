@@ -304,8 +304,10 @@ static func validate_shifts(d: Variant) -> Array[String]:
 
 
 ## balance.json: every path in BALANCE_SPEC with its kind; generator.level_costs has 3 numbers;
-## overdrive.duration_s is 10..30 (a directive SIM block, BRIEF 4.5) and min_left_s >= it;
-## refused_retry_s >= 30 (the governor's switch spacing); grades descend S > A > B > C.
+## overdrive.duration_s is exactly 30 (brief 2.3 fixes the directive's block at 30 s; a SIM block is
+## 10..30, BRIEF 4.5) and min_left_s >= it; refused_retry_s and cooldown_s >= 30 (the governor's
+## switch spacing: a shorter cooldown would only earn sim_block switch_spacing refusals); grades
+## descend S > A > B > C.
 static func validate_balance(d: Variant) -> Array[String]:
 	var errs := _check_spec(d, BALANCE_SPEC, "balance.json")
 	if not errs.is_empty():
@@ -313,12 +315,14 @@ static func validate_balance(d: Variant) -> Array[String]:
 	if (d["generator"]["level_costs"] as Array).size() != 3:
 		errs.append("balance.json: generator.level_costs needs 3 costs")
 	var od: Dictionary = d["overdrive"]
-	if float(od["duration_s"]) < 10.0 or float(od["duration_s"]) > 30.0:
-		errs.append("balance.json: overdrive.duration_s must be 10..30 (a SIM block)")
+	if not is_equal_approx(float(od["duration_s"]), 30.0):
+		errs.append("balance.json: overdrive.duration_s must be 30 (brief 2.3 fixes the directive)")
 	if float(od["min_left_s"]) < float(od["duration_s"]):
 		errs.append("balance.json: overdrive.min_left_s must be >= duration_s")
 	if float(od["refused_retry_s"]) < 30.0:
 		errs.append("balance.json: overdrive.refused_retry_s must be >= 30 (switch spacing)")
+	if float(od["cooldown_s"]) < 30.0:
+		errs.append("balance.json: overdrive.cooldown_s must be >= 30 (switch spacing)")
 	var g: Dictionary = d["score"]["grades"]
 	if not (
 		float(g["S"]) > float(g["A"])

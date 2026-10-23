@@ -62,6 +62,7 @@ var gate_max: float = 100.0
 var breach_s: float = 0.0
 ## [snap] (nb)
 var breaches: int = 0
+## [snap] (ib) Iron bands bought (0..2): the shop's price and the gate view's bands.
 var iron_bands: int = 0
 
 # --- Team economy ------------------------------------------------------------------------------------
@@ -81,7 +82,12 @@ var wave_gate_hp: Array[int] = []
 var wave_gate_frac: Array[float] = []
 ## Leaks and gate damage by road over waves 1..N.
 var leaks_by_road: Array[int] = [0, 0, 0]
+## [snap] (gd, in 0.1 HP) Gate damage by road over waves 1..N: the shop's "road with the most gate
+## damage" (Autopilot and the HUD's recommendation, brief 2.5). Compare roads with gate_damage_dm().
 var gate_damage_by_road: Array[float] = [0.0, 0.0, 0.0]
+## [snap] (gt) Per road, a bit mask over the enemy types that damaged the gate there over waves
+## 1..N (bit 1 << SiegeIds.ENEMY_*): Autopilot's build type reads it (brief 2.5).
+var gate_damage_types_by_road: Array[int] = [0, 0, 0]
 var rams_total: int = 0
 var rams_stopped: int = 0
 ## Team denarii earned (generator + bounties) from the warm-up to the last wave.
@@ -135,6 +141,27 @@ static func create(
 
 
 # --- Lookups -----------------------------------------------------------------------------------------
+
+
+## Records `applied` HP of gate damage by an enemy of `type` on `road` (waves only; the combat
+## calls it where it adds to gate_damage_by_road).
+func note_gate_damage(road: int, type: int, applied: float) -> void:
+	if road < 0 or road >= gate_damage_by_road.size():
+		return
+	gate_damage_by_road[road] += applied
+	if applied > 0.0:
+		gate_damage_types_by_road[road] |= 1 << type
+
+
+## Gate damage on `road` in 0.1 HP, the resolution the snapshot carries: a client and the host
+## rank the roads identically through it.
+func gate_damage_dm(road: int) -> int:
+	return roundi(gate_damage_by_road[road] * 10.0)
+
+
+## True when an enemy of `type` has damaged the gate on `road` over waves 1..N.
+func gate_damaged_by(road: int, type: int) -> bool:
+	return (gate_damage_types_by_road[road] & (1 << type)) != 0
 
 
 ## The rider of `peer`, or null.

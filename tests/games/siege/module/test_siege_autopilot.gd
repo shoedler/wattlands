@@ -196,6 +196,7 @@ func test_with_no_damage_yet_it_builds_ballista_scorpion_caltrop_in_turn() -> vo
 func test_it_builds_on_the_road_with_the_most_gate_damage() -> void:
 	var st := _shop(500.0)
 	st.gate_damage_by_road = [3.0, 1.0, 12.0]
+	st.gate_damage_types_by_road = [0, 0, 1 << SiegeIds.ENEMY_RAM]
 	assert_eq(SiegeAutopilot.target_road(st), SiegeIds.ROAD_EAST)
 	var pick := SiegeAutopilot.shop_picks(st, st.rider_at(0), 1)[0]
 	var map := st.content.map
@@ -207,43 +208,84 @@ func test_it_builds_on_the_road_with_the_most_gate_damage() -> void:
 		assert_lte(d, other + 1e-6, "pad %d is no closer to the east road" % n)
 
 
-func test_the_tower_type_follows_what_was_on_the_damaged_road() -> void:
+func _bit(type: int) -> int:
+	return 1 << type
+
+
+func _first_build(st: SiegeState) -> String:
+	return SiegeAutopilot.shop_picks(st, st.rider_at(0), 1)[0]["item"]
+
+
+func test_the_tower_type_follows_the_enemies_that_damaged_the_gate_on_the_road() -> void:
+	# Brief 2.5: a Ballista against Shield walls or rams, a Caltrop thrower against Horsemen if the
+	# road has none, otherwise a Scorpion. Read from the replicated mask, so the shop works in a
+	# break (no enemy on the road) and on a client.
 	var st := _shop(500.0)
+	assert_true(st.enemies.is_empty(), "nobody is on the road in a break")
 	st.gate_damage_by_road = [0.0, 0.0, 12.0]
-	var e := K.enemy(st, Vector2(40, 40), 160.0, SiegeIds.ENEMY_SHIELD_WALL, SiegeIds.ROAD_EAST)
-	var rider := st.rider_at(0)
-	assert_eq(
-		SiegeAutopilot.shop_picks(st, rider, 1)[0]["item"],
-		SiegeIds.ITEM_BUILD_BALLISTA,
-		"a Shield wall"
-	)
-	e.type = SiegeIds.ENEMY_RAM
-	assert_eq(
-		SiegeAutopilot.shop_picks(st, rider, 1)[0]["item"], SiegeIds.ITEM_BUILD_BALLISTA, "a ram"
-	)
-	e.type = SiegeIds.ENEMY_HORSEMEN
-	assert_eq(
-		SiegeAutopilot.shop_picks(st, rider, 1)[0]["item"],
-		SiegeIds.ITEM_BUILD_CALTROP,
-		"Horsemen and nothing heavier"
-	)
-	e.type = SiegeIds.ENEMY_RAIDERS
-	assert_eq(
-		SiegeAutopilot.shop_picks(st, rider, 1)[0]["item"],
-		SiegeIds.ITEM_BUILD_SCORPION,
-		"otherwise a Scorpion"
-	)
-	st.enemies.clear()
-	assert_eq(
-		SiegeAutopilot.shop_picks(st, rider, 1)[0]["item"],
-		SiegeIds.ITEM_BUILD_BALLISTA,
-		"in a break the damage came from the heavies"
-	)
+	var cases := [
+		[[SiegeIds.ENEMY_SHIELD_WALL], SiegeIds.ITEM_BUILD_BALLISTA, "a Shield wall"],
+		[[SiegeIds.ENEMY_RAM], SiegeIds.ITEM_BUILD_BALLISTA, "a ram"],
+		[
+			[SiegeIds.ENEMY_HORSEMEN, SiegeIds.ENEMY_RAIDERS, SiegeIds.ENEMY_SHIELD_WALL],
+			SiegeIds.ITEM_BUILD_BALLISTA,
+			"a Shield wall beats the Horsemen"
+		],
+		[
+			[SiegeIds.ENEMY_HORSEMEN, SiegeIds.ENEMY_RAM],
+			SiegeIds.ITEM_BUILD_BALLISTA,
+			"a ram beats the Horsemen"
+		],
+		[[SiegeIds.ENEMY_HORSEMEN], SiegeIds.ITEM_BUILD_CALTROP, "Horsemen and nothing heavier"],
+		[
+			[SiegeIds.ENEMY_HORSEMEN, SiegeIds.ENEMY_RAIDERS],
+			SiegeIds.ITEM_BUILD_CALTROP,
+			"Horsemen and Raiders"
+		],
+		[[SiegeIds.ENEMY_RAIDERS], SiegeIds.ITEM_BUILD_SCORPION, "Raiders only: a Scorpion"],
+		[[], SiegeIds.ITEM_BUILD_SCORPION, "no type recorded: otherwise a Scorpion"],
+	]
+	for c: Array in cases:
+		var mask := 0
+		for t: int in c[0]:
+			mask |= _bit(t)
+		st.gate_damage_types_by_road = [0, 0, mask]
+		assert_eq(_first_build(st), c[1], str(c[2]))
+		assert_eq(
+			SiegeAutopilot.build_type(st, SiegeIds.ROAD_EAST),
+			SiegeIds.tower_code(str(c[1]).trim_prefix("build_")),
+			"build_type agrees: %s" % c[2]
+		)
+
+
+func test_the_build_type_reads_the_busiest_roads_mask_not_another_roads() -> void:
+	var st := _shop(500.0)
+	st.gate_damage_by_road = [30.0, 5.0, 10.0]
+	st.gate_damage_types_by_road = [
+		_bit(SiegeIds.ENEMY_HORSEMEN), _bit(SiegeIds.ENEMY_RAM), _bit(SiegeIds.ENEMY_RAM)
+	]
+	assert_eq(SiegeAutopilot.target_road(st), SiegeIds.ROAD_WEST)
+	assert_eq(_first_build(st), SiegeIds.ITEM_BUILD_CALTROP, "west took the damage, from Horsemen")
+	st.gate_damage_by_road = [3.0, 5.0, 10.0]
+	assert_eq(SiegeAutopilot.target_road(st), SiegeIds.ROAD_EAST)
+	assert_eq(_first_build(st), SiegeIds.ITEM_BUILD_BALLISTA, "east took it from rams")
+
+
+func test_the_combat_records_which_types_damaged_the_gate_and_the_road_ties_to_the_lower() -> void:
+	var st := _shop(500.0)
+	st.note_gate_damage(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_HORSEMEN, 2.0)
+	st.note_gate_damage(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAIDERS, 0.0)
+	st.note_gate_damage(SiegeIds.ROAD_EAST, SiegeIds.ENEMY_HORSEMEN, 2.0)
+	assert_true(st.gate_damaged_by(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_HORSEMEN))
+	assert_false(st.gate_damaged_by(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAIDERS), "0 HP is none")
+	assert_eq(SiegeAutopilot.target_road(st), SiegeIds.ROAD_VALLEY, "a tie goes to the lower road")
+	assert_eq(SiegeAutopilot.build_type(st, SiegeIds.ROAD_VALLEY), SiegeIds.TOWER_CALTROP)
 
 
 func test_it_upgrades_the_lowest_tower_on_the_road_when_a_build_is_too_dear() -> void:
 	var st := _shop(45.0)
 	st.gate_damage_by_road = [0.0, 0.0, 12.0]
+	st.gate_damage_types_by_road = [0, 0, _bit(SiegeIds.ENEMY_RAM)]
 	st.pad(3).level = 1
 	var picks := SiegeAutopilot.shop_picks(st, st.rider_at(0))
 	assert_eq(_items(picks), [SiegeIds.ITEM_UPGRADE], "50 for a Ballista is out of reach; 40 isn't")

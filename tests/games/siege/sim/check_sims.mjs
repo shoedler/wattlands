@@ -34,6 +34,14 @@
 //                 `leak` event (it died before reaching the gate); rams spawned = the roads
 //                 listed by `push` events; pooled over all S9 runs, stopped / spawned >= 0.7.
 //   Overdrive     the directive {mode SIM, duration_s 30, reason overdrive, source siege}.
+//   Return (S10)  GAME_SDK 21: SIM -> ERG sets grade 0, then ERG at min(3 s power, the planned
+//                 target), never below the floor, slewing up at 30 W/s and never above the target.
+//                 A rider whose 3 s power is above the plan (a surger at 130 % FTP) is therefore put
+//                 straight on the plan, "exactly at a cap is neither clamped nor counted" (GAME_SDK
+//                 8.2): the trace rows carry clamped_by [] and no switch_ramp, which is correct. S10
+//                 checks the applied_target_w of the rows instead (returnProblems): never above the
+//                 plan, the first row at most min(3 s power, plan) + one row of slew, and the plan
+//                 reached within (plan - first) / 30 + 2 s.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -54,6 +62,15 @@ export const OD_SPAN_S = 30;
 export const OD_SPAN_TOL_S = 2;
 export const MIN_OVERDRIVES = 3;
 export const SWITCH_SPACING_S = 30;
+/** The governor's slew (GAME_SDK 21): ERG targets rise at most 30 W/s, fall at once. */
+export const SLEW_W_PER_S = 30;
+/** The return to ERG: slack on "at or below the plan" and on "back at the plan" (one whole watt). */
+export const RETURN_TOL_W = 1;
+/** The return to ERG: seconds on top of the slew time to reach the plan (write spacing, 1 Hz rows). */
+export const RETURN_PAD_S = 2;
+/** The governor's ERG floor: max(30 % FTP, 50 W) (GAME_SDK 21 "never below the floor"). */
+export const FLOOR_FTP_FRAC = 0.3;
+export const FLOOR_MIN_W = 50;
 export const WARMUP_S = 300;
 export const WARMUP_MAX_PCT = 65;
 export const MAX_SNAPSHOT_BYTES = 8192;
@@ -534,6 +551,63 @@ export function overdriveDirectives(report) {
   return (report.directives ?? []).filter((d) => d.kind === 'request' && d.requested?.reason === 'overdrive');
 }
 
+/** The ERG target in watts the plan asks of a trace row (the plan's target_pct of the row's phase,
+ *  x 0.85 for an unverified FTP, x the slot's FTP; the per-rider wave offset is already in the plan). */
+export function plannedW(plan, row, ftp, unverifiedFactor) {
+  const pct = plan[row.phase]?.target_pct;
+  return pct === undefined ? NaN : (Number(pct) * unverifiedFactor * ftp) / 100;
+}
+
+/** Problems with one return from an Overdrive's SIM span `span` (a modeSpans entry that ended) to
+ *  ERG (S10). The governor puts the ERG target at min(3 s power, the planned target) (never below
+ *  the floor) and slews it up at 30 W/s, never above the plan; a target exactly at the plan is
+ *  neither clamped nor counted (GAME_SDK 8.2), so clamped_by is [] for a surger and is not checked.
+ *  Asserted on the 1 Hz rows' applied_target_w, with `plan` the rider's phases and `slot` its slot:
+ *  1. no row of the phase after the SIM span, while it stays in ERG, is above the plan + 1 W;
+ *  2. the first ERG row is at most max(floor, min(3 s power, plan)) + 30 W (one row of slew) + 1 W,
+ *     the 3 s power being the mean power_w of the last three SIM rows;
+ *  3. the plan (+- 1 W) is reached within (plan - first row) / 30 + 2 s of the first ERG row. */
+export function returnProblems(name, peer, rows, span, slot, plan) {
+  const probs = [];
+  const time = (row) => Number(row.game_t ?? row.t);
+  const back = rows[span.afterIdx];
+  const at = `${name}: peer ${peer} returned to ERG at ${fmt(span.to)} s`;
+  if (back.mode !== 'ERG') return [`${name}: peer ${peer} left SIM at ${fmt(span.to)} s into ${back.mode}, not ERG`];
+  const ftp = Number(slot?.ftp ?? 200);
+  const u = slot && slot.ftp_verified === false ? 0.85 : 1;
+  const planned = plannedW(plan, back, ftp, u);
+  const first = Number(back.applied_target_w);
+  if (!Number.isFinite(first) || !Number.isFinite(planned)) return [`${at}: the trace row has no applied_target_w or its phase no target_pct`];
+  // 1. never above the plan while the phase goes on in ERG.
+  for (let i = span.afterIdx; i < rows.length && rows[i].mode === 'ERG' && rows[i].phase === back.phase; i++) {
+    const w = Number(rows[i].applied_target_w);
+    const limit = plannedW(plan, rows[i], ftp, u) + RETURN_TOL_W;
+    if (w > limit + EPS) {
+      probs.push(`${at}: ${fmt(w)} W at ${fmt(time(rows[i]))} s is above the planned ${fmt(limit - RETURN_TOL_W)} W (+ ${RETURN_TOL_W} W)`);
+      break;
+    }
+  }
+  // 2. the first row: min(3 s power, plan), at least the floor, plus the slew of one row.
+  const last3 = rows.slice(Math.max(span.startIdx, span.endIdx - 2), span.endIdx + 1).map((row) => Number(row.power_w));
+  if (last3.length && last3.every(Number.isFinite)) {
+    const p3 = mean(last3);
+    const floor = Math.max(FLOOR_FTP_FRAC * ftp, FLOOR_MIN_W);
+    const bound = Math.max(floor, Math.min(p3, planned)) + SLEW_W_PER_S + RETURN_TOL_W;
+    if (first > bound + EPS) probs.push(`${at} at ${fmt(first)} W, above min(3 s power ${fmt(p3)} W, planned ${fmt(planned)} W) + ${SLEW_W_PER_S} W of slew: not a ramped switch`);
+  }
+  // 3. the plan is reached at the slew rate.
+  const deadline = time(back) + Math.max(planned - first, 0) / SLEW_W_PER_S + RETURN_PAD_S;
+  let reached = false;
+  for (let i = span.afterIdx; i < rows.length && time(rows[i]) <= deadline + EPS; i++) {
+    if (rows[i].mode === 'ERG' && Math.abs(Number(rows[i].applied_target_w) - plannedW(plan, rows[i], ftp, u)) <= RETURN_TOL_W + EPS) {
+      reached = true;
+      break;
+    }
+  }
+  if (!reached) probs.push(`${at}: never got back to the planned ERG target (${fmt(planned)} W) within ${fmt(deadline - time(back))} s`);
+  return probs;
+}
+
 /** Problems with the Overdrive behaviour of one run (S10). */
 export function overdriveProblems(name, r) {
   const probs = [];
@@ -576,22 +650,8 @@ export function overdriveProblems(name, r) {
       }
       const len = s.to - s.from;
       if (Math.abs(len - OD_SPAN_S) > OD_SPAN_TOL_S + EPS) probs.push(`${name}: peer ${peer} SIM span from ${fmt(s.from)} s lasted ${fmt(len)} s (30 +- ${OD_SPAN_TOL_S})`);
-      // The return to ERG is a ramped switch to the planned target.
-      const back = rows[s.afterIdx];
-      if (back.mode !== 'ERG') probs.push(`${name}: peer ${peer} left SIM at ${fmt(s.to)} s into ${back.mode}, not ERG`);
-      const near = rows.slice(s.afterIdx, s.afterIdx + 4);
-      const ramped = near.some((row) => (row.clamped_by ?? []).some((c) => c === 'switch_ramp' || c === 'slew'));
-      if (!ramped) probs.push(`${name}: peer ${peer} returned to ERG at ${fmt(s.to)} s without the ramped switch (clamped_by ${JSON.stringify(back.clamped_by)})`);
       const slot = (r.slots ?? []).find((x) => String(x.peer) === peer);
-      const u = slot && slot.ftp_verified === false ? 0.85 : 1;
-      const plan = r.plans?.[peer]?.phases ?? [];
-      const oneWatt = 100 / Math.max(Number(slot?.ftp ?? 200), 1) + 0.5;
-      const window = rows.slice(s.afterIdx, s.afterIdx + 45);
-      const reached = window.some((row) => {
-        const tgt = plan[row.phase]?.target_pct;
-        return row.mode === 'ERG' && tgt !== undefined && Math.abs(Number(row.applied_pct) - tgt * u) <= oneWatt;
-      });
-      if (!reached) probs.push(`${name}: peer ${peer} never got back to the planned ERG target within 45 s of ${fmt(s.to)} s`);
+      probs.push(...returnProblems(name, peer, rows, s, slot, r.plans?.[peer]?.phases ?? []));
     }
     // Switch spacing: (ERG->SIM, SIM->ERG) is the exempt Overdrive bracket; every other pair >= 30 s.
     const sw = switches(rows);
@@ -604,7 +664,7 @@ export function overdriveProblems(name, r) {
 }
 
 export function checkS10(reports) {
-  const title = 'surgers: 3+ Overdrives, exact directives, 30 s SIM spans, ramped returns, spacing';
+  const title = 'surgers: 3+ Overdrives, exact directives, 30 s SIM spans, returns to ERG never above the plan, spacing';
   const names = ['s10_vo2', 's10_endurance', 's10_vo2_offsets'];
   const { found, missing } = pick(reports, names);
   if (found.length === 0) return skip('S10', title, 'no s10_* reports');

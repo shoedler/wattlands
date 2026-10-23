@@ -222,8 +222,7 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 	if to != null:
 		var route := SiegeIntents.route(to)
 		out.append(route)
-		if ctx.role == Wl.CLIENT:
-			_predict_route(int(SiegeIntents.normalize(route)["to"]))
+		predict_route(route)
 	return out
 
 
@@ -383,18 +382,35 @@ func client_predict(dt: float, local: Telemetry) -> void:
 			rd.reconnect_s = maxf(content.num("reconnect_s", 2.0) - _pred_age_s, 0.0)
 
 
-## Clients: a route intent the local rider just made, shown at once.
-func _predict_route(to: int) -> void:
-	var rd := state.rider(ctx.local_peer) if state != null else null
+## Clients: shows a route the local rider just asked for at once, before the host's route event or
+## the next snapshot. `to` is the route intent ({"k": "route", "to": ...}, as the controls and the
+## HUD route card send it) or just its target: "gen", "next", "prev", "hot", a pad 1..8 or a
+## normalized SiegeIds target. local_intents() calls it for the control routes; the HUD route card
+## calls it for its buttons so both predict alike. Returns true when a prediction was set (never on
+## the host or in SOLO, whose rules route at once, nor for a route that changes nothing).
+func predict_route(to: Variant) -> bool:
+	if state == null or ctx == null or ctx.role != Wl.CLIENT:
+		return false
+	var wire: Variant = to
+	if to is int:
+		# A normalized target (ROUTE_NEXT, TARGET_GEN, ...) goes back to its wire word.
+		for word: String in SiegeIds.ROUTE_WORDS:
+			if int(SiegeIds.ROUTE_WORDS[word]) == to:
+				wire = word
+	var intent := SiegeIntents.normalize(wire if wire is Dictionary else SiegeIntents.route(wire))
+	if intent.is_empty() or str(intent["k"]) != SiegeIds.INTENT_ROUTE:
+		return false
+	var rd := state.rider(ctx.local_peer)
 	if rd == null:
-		return
-	var want := SiegeRoutePredict.resolve(state, rd, to)
+		return false
+	var want := SiegeRoutePredict.resolve(state, rd, int(intent["to"]))
 	if want < 0:
-		return
+		return false
 	_pred_target = want
 	_pred_age_s = 0.0
 	rd.target = want
 	rd.reconnect_s = content.num("reconnect_s", 2.0)
+	return true
 
 
 func int_fields() -> Dictionary:

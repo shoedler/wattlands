@@ -127,6 +127,28 @@ func test_each_validator_rejects_a_broken_file() -> void:
 	assert_false(SiegeContent.from_dicts(missing, "short").ok())
 
 
+func test_overdrive_balance_is_bounded_by_the_briefs_and_the_governor() -> void:
+	var ok: Dictionary = _files["balance"].duplicate(true)
+	assert_eq(SiegeContent.validate_balance(ok).size(), 0, "the shipped balance passes")
+	for spec: Array in [
+		["duration_s", 45.0, "duration_s"],
+		["duration_s", 20.0, "duration_s"],
+		["duration_s", 0.0, "duration_s"],
+		["cooldown_s", 0.0, "cooldown_s"],
+		["cooldown_s", 29.0, "cooldown_s"],
+		["refused_retry_s", 29.0, "refused_retry_s"],
+	]:
+		var bad: Dictionary = _files["balance"].duplicate(true)
+		bad["overdrive"][spec[0]] = spec[1]
+		var errs := SiegeContent.validate_balance(bad)
+		assert_gt(errs.size(), 0, "%s = %s is refused" % [spec[0], spec[1]])
+		if errs.size() > 0:
+			assert_string_contains(errs[0], "overdrive.%s" % spec[2])
+	var edge: Dictionary = _files["balance"].duplicate(true)
+	edge["overdrive"]["cooldown_s"] = 30.0
+	assert_eq(SiegeContent.validate_balance(edge).size(), 0, "cooldown_s = 30 is the floor")
+
+
 func test_shift_rules_are_enforced() -> void:
 	var bad := {
 		"x":

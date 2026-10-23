@@ -22,9 +22,12 @@ extends RefCounted
 ##   ACTIVE --phase change, rescue or AFK (cancel)--> COOLDOWN with cooldown_s (event st 0)
 ##   COOLDOWN --od_cd_s runs out--> READY
 ## Triggers (try_start): an "overdrive" intent that is not auto (never Autopilot's, never a
-## bot's) from a READY human in a WORK phase with >= 30 s left, not in rescue, not AFK;
-## via "surge" also needs the prompt (target has an enemy in range, or a rush is on); via
-## "action" (ability_1) or "button" doesn't (ADR "Overdrive triggers").
+## bot's) from a READY human in a WORK phase with >= 30 s left, not in rescue, not AFK, and
+## delivering power (not coasting: the platform's not_pedaling rule, power < 15 W and cadence
+## < 20 rpm, GestureRecognizer.is_not_pedaling; the governor refuses a SIM block once its coasting
+## floor, 3 s of it, holds, so the rules never ask a rider who is already not pedaling); via
+## "surge" also needs the prompt (target has an enemy in range, or a rush is on); via "action"
+## (ability_1) or "button" doesn't (ADR "Overdrive triggers").
 ## While ACTIVE: od = 2 for that rider's routed output while raw power >= its FTP (CP, ADR
 ## "slot.ftp as CP"); the sprint rule (raw >= 1.2 x FTP) held >= 10 s in a row makes it a scored
 ## Overdrive. The rider's own peer publishes power_band(1.2 x FTP, 1.4 x FTP) while it is on.
@@ -42,6 +45,8 @@ const WHY_NOT_WORK := "not_work"
 const WHY_TOO_LATE := "too_late"
 const WHY_RESCUE := "rescue"
 const WHY_AFK := "afk"
+## Not pedaling (power and cadence both under the platform's not_pedaling thresholds).
+const WHY_COASTING := "coasting"
 const WHY_NO_PROMPT := "no_prompt"
 const WHY_NOT_INTENT := "not_overdrive"
 ## cancel() reasons (END events carry them in "why").
@@ -76,7 +81,7 @@ static func band_w(content: SiegeContent, ftp: float) -> Vector2:
 
 
 ## The safety and readiness gate: "" when `rider` may start Overdrive in `phase` now (READY,
-## a human, a WORK phase with >= min_left_s (30 s) left, not in rescue, delivering power).
+## a human, a WORK phase with >= min_left_s (30 s) left, not in rescue, not AFK, pedaling).
 static func blocked_reason(
 	state: SiegeState, rider: SiegeRiderState, phase: SiegePhaseInfo
 ) -> String:
@@ -92,6 +97,8 @@ static func blocked_reason(
 		return WHY_RESCUE
 	if rider.afk or not rider.connected:
 		return WHY_AFK
+	if GestureRecognizer.is_not_pedaling(rider.raw_w, rider.cadence_rpm):
+		return WHY_COASTING
 	return ""
 
 
