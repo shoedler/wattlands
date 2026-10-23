@@ -18,7 +18,7 @@ var ground_y: float = 82.0
 
 
 ## Builds the gear from rigs.json `tanks.<id>`.
-func setup(def: Dictionary) -> void:
+func assemble(def: Dictionary) -> void:
 	name = "RunningGear"
 	var line_y := float(def.get("wheel_line_y", 73))
 	var centers := PackedVector2Array()

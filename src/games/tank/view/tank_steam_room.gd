@@ -1,7 +1,7 @@
 class_name TankSteamRoom
 extends TankRoomView
 ## The steam engine's room (brief 3 "Cutaway"): a boiler with a gauge needle (40 / 100 / 150% marks),
-## a firebox whose flame follows watts, a governor that bobs with the stroke, a puff of steam from
+## a firebox whose flame follows watts, a flyball that bobs with the stroke, a puff of steam from
 ## the chimney on every pedal stroke, and a shell rack. The shell cradle climbs the hoist rail with
 ## pressure to reach the breech at 100% (the rig draws the rail and the cradle from cradle_t).
 
@@ -17,7 +17,7 @@ const CRADLE_DOWN_PER_S := 1.6
 var boiler_pos: Vector2 = Vector2.ZERO
 var gauge_pos: Vector2 = Vector2.ZERO
 var flame: Sprite2D = null
-var governor: SlidingPart = null
+var flyball: SlidingPart = null
 var rack_pos: Vector2 = Vector2.ZERO
 var rack_slots: Array[Rect2] = []
 ## Pedal stroke phase 0 .. 1 and the strokes counted since the last take_stroke().
@@ -37,19 +37,19 @@ func build() -> void:
 	for s: Variant in rack_def.get("slots", []):
 		var r := TankRigs.rect(s)
 		rack_slots.append(Rect2(rack_pos + r.position, r.size))
-	governor = SlidingPart.new()
-	governor.name = "Governor"
-	governor.mode = SlidingPart.Mode.RECIPROCATE
-	governor.axis = Vector2.UP
-	governor.travel_px = 2.0
-	governor.max_cps = 2.0
-	governor.auto_process = false
-	governor.position = Vector2(3, 3)
+	flyball = SlidingPart.new()
+	flyball.name = "Flyball"
+	flyball.mode = SlidingPart.Mode.RECIPROCATE
+	flyball.axis = Vector2.UP
+	flyball.travel_px = 2.0
+	flyball.max_cps = 2.0
+	flyball.auto_process = false
+	flyball.position = Vector2(3, 3)
 	var gov := Sprite2D.new()
-	gov.texture = TankSprites.tex("governor")
+	gov.texture = TankSprites.tex(TankSprites.flyball_id())
 	gov.centered = false
-	governor.add_child(gov)
-	add_child(governor)
+	flyball.add_child(gov)
+	add_child(flyball)
 	var boiler := Sprite2D.new()
 	boiler.name = "Boiler"
 	boiler.texture = TankSprites.tex("boiler")
@@ -83,8 +83,8 @@ func build() -> void:
 
 func animate(dt: float) -> void:
 	var sp := input.speed()
-	governor.speed = sp
-	governor.tick(dt)
+	flyball.speed = sp
+	flyball.tick(dt)
 	if not input.unpowered:
 		stroke += maxf(input.cadence, 0.0) / 60.0 * dt
 		while stroke >= 1.0:

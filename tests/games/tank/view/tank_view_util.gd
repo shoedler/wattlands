@@ -56,7 +56,7 @@ static func make_rig(test: GutTest, tank: String, seed_value: int = 7) -> TankRi
 	test.add_child_autofree(hub.fx)
 	test.add_child_autofree(hub.lights)
 	var rig := TankRig.new()
-	rig.setup(tank, hub)
+	rig.assemble(tank, hub)
 	test.add_child_autofree(rig)
 	return rig
 

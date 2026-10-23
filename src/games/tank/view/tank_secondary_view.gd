@@ -15,7 +15,7 @@ var sprite: Sprite2D = null
 
 
 ## Builds one entry of rigs.json `tanks.citadel.secondaries`.
-func setup(sec_def: Dictionary) -> void:
+func assemble(sec_def: Dictionary) -> void:
 	name = "Secondary_" + str(sec_def.get("id", ""))
 	facing = int(sec_def.get("facing", 1))
 	rect = TankRigs.rect(sec_def.get("rect"))

@@ -27,7 +27,7 @@ var _was_traversing: bool = false
 
 
 ## Builds the turret from rigs.json `tanks.<id>.turret`.
-func setup(p_tank: String, turret_def: Dictionary) -> void:
+func assemble(p_tank: String, turret_def: Dictionary) -> void:
 	name = "Turret"
 	tank = p_tank
 	ring = TankRigs.vec(turret_def.get("ring"))

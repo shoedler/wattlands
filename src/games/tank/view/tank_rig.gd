@@ -53,7 +53,7 @@ var _elev_prev: float = 0.0
 
 
 ## Builds the rig of `p_tank` ("bulwark", "rampart", "citadel") from rigs.json.
-func setup(p_tank: String, p_hub: TankRigHub) -> void:
+func assemble(p_tank: String, p_hub: TankRigHub) -> void:
 	tank = p_tank
 	hub = p_hub
 	name = "Rig_" + tank
@@ -65,7 +65,7 @@ func setup(p_tank: String, p_hub: TankRigHub) -> void:
 	base_pos = Vector2(TankConst.REAR_SCREEN_X, TankConst.GROUND_Y - GROUND_GAP - hull_h)
 	position = base_pos
 	gear = TankRunningGear.new()
-	gear.setup(def)
+	gear.assemble(def)
 	add_child(gear)
 	hull_sprite = Sprite2D.new()
 	hull_sprite.name = "Hull"
@@ -97,7 +97,7 @@ func _build_rooms() -> void:
 				room = TankSteamRoom.new()
 		if room == null:
 			continue
-		room.setup(room_def, TankRigs.machinery(), hub)
+		room.assemble(room_def, TankRigs.machinery(), hub)
 		add_child(room)
 		rooms.append(room)
 		if room is TankDieselRoom and diesel_room == null:
@@ -175,11 +175,11 @@ func _build_stack() -> void:
 func _build_guns() -> void:
 	for sd: Variant in def.get("secondaries", []):
 		var s := TankSecondaryView.new()
-		s.setup(sd)
+		s.assemble(sd)
 		add_child(s)
 		secondaries.append(s)
 	turret = TankTurretView.new()
-	turret.setup(tank, def.get("turret", {}))
+	turret.assemble(tank, def.get("turret", {}))
 	add_child(turret)
 
 

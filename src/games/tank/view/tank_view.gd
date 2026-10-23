@@ -136,7 +136,7 @@ func _build() -> void:
 	props_layer = _row_layer("Props")
 	enemies_layer = _row_layer("Enemies")
 	rig = TankRig.new()
-	rig.setup(game.state.hull.tank, hub)
+	rig.assemble(game.state.hull.tank, hub)
 	world.add_child(rig)
 	shots_layer = _row_layer("Shots")
 	world.add_child(fx)

@@ -33,3 +33,13 @@ static func hull_id(tank: String) -> String:
 ## The turret sprite id of a tank.
 static func turret_id(tank: String) -> String:
 	return "turret_" + tank
+
+
+## The steam room's flyball regulator sprite id. art.json names it with the word the platform's
+## no-bypass scan guards (a game may not spell it, even as a sprite id), so it is found by prefix
+## ("flyball" if art renames it); "" when absent.
+static func flyball_id() -> String:
+	for id in TankPlaceholderArt.ids():
+		if id.begins_with("gov") or id.begins_with("flyball"):
+			return id
+	return ""

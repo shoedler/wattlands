@@ -35,7 +35,7 @@ var flare_s: float = 0.0
 var _wall: Texture2D = null
 
 
-func setup(p_def: Dictionary, p_machinery: Dictionary, p_hub: TankRigHub) -> void:
+func assemble(p_def: Dictionary, p_machinery: Dictionary, p_hub: TankRigHub) -> void:
 	def = p_def
 	machinery = p_machinery
 	hub = p_hub
