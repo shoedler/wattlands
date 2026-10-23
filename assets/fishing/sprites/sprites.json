@@ -1,5 +1,4 @@
 {
-  "art_mode": "placeholder",
   "game": "fishing",
   "palette": [
     "#1a1f3a",
@@ -50,6 +49,10 @@
         32,
         12
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16882-6ad6-78f0-920c-d1f4413c890c"
+      },
       "tile": false
     },
     "boat": {
@@ -66,6 +69,10 @@
         80,
         32
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16881-25ac-7ee0-9ae0-5cd86f166f2b"
+      },
       "tile": false
     },
     "catch_flash": {
@@ -82,6 +89,10 @@
         24,
         24
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-d7d0-70d2-b6be-16cf6c62db5a"
+      },
       "tile": false
     },
     "clouds": {
@@ -98,6 +109,10 @@
         320,
         24
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-d959-7503-901f-4624b15efcf3"
+      },
       "tile": true
     },
     "current_seam": {
@@ -114,6 +129,10 @@
         48,
         4
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-49a1-79b3-9b8f-3ee5a7ba8e38"
+      },
       "tile": true
     },
     "fish_mackerel": {
@@ -149,6 +168,10 @@
         24,
         8
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-492d-7dc2-a865-c88f5e2f00f3"
+      },
       "tile": false
     },
     "fish_mahi": {
@@ -184,6 +207,10 @@
         40,
         16
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16882-04b9-7a50-bb2b-c2c5fdca4e6b"
+      },
       "tile": false
     },
     "fish_marlin": {
@@ -219,6 +246,10 @@
         64,
         22
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a1687f-c40d-78e3-9492-b56a3e2ca9b4"
+      },
       "tile": false
     },
     "fish_tuna": {
@@ -254,6 +285,10 @@
         44,
         16
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a1688a-7723-7ac3-940f-0cd39cf79883"
+      },
       "tile": false
     },
     "gull_down": {
@@ -270,6 +305,10 @@
         10,
         8
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-49a1-7d01-9531-2dce7a1972f2"
+      },
       "tile": false
     },
     "gull_up": {
@@ -286,6 +325,10 @@
         10,
         8
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-49a1-7402-b8e2-2f1ab176a2b8"
+      },
       "tile": false
     },
     "island_palm": {
@@ -302,6 +345,10 @@
         80,
         24
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-3214-7201-a5db-422d2139ce3b"
+      },
       "tile": true
     },
     "islands_far": {
@@ -318,6 +365,10 @@
         256,
         12
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-1b2e-7201-b068-b481b45e7dba"
+      },
       "tile": true
     },
     "light_rays": {
@@ -334,6 +385,10 @@
         128,
         64
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-6fbe-75c3-b892-548f87e3f016"
+      },
       "tile": false
     },
     "picker_card": {
@@ -350,6 +405,10 @@
         160,
         90
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16884-73a3-7913-ba32-5b159e4f54e7"
+      },
       "tile": false
     },
     "reef_back": {
@@ -366,6 +425,10 @@
         416,
         28
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-8d3d-7702-9289-28b7cf358cac"
+      },
       "tile": true
     },
     "reef_front": {
@@ -382,6 +445,10 @@
         416,
         18
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a1688a-7798-76e0-ac3e-f10ca7ea8abf"
+      },
       "tile": true
     },
     "rig_angler": {
@@ -398,6 +465,10 @@
         14,
         12
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a1687f-7134-7e20-a70f-8e06e9b53655"
+      },
       "tile": false
     },
     "rig_bike": {
@@ -414,6 +485,10 @@
         24,
         16
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16881-2626-76c3-a298-42d01037ef7b"
+      },
       "tile": false
     },
     "rig_crank": {
@@ -430,6 +505,10 @@
         10,
         10
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16881-2628-7891-a460-ccefc5acaba8"
+      },
       "tile": false
     },
     "rig_reel": {
@@ -446,6 +525,10 @@
         10,
         10
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16881-2628-71d0-b300-c56f823c67b1"
+      },
       "tile": false
     },
     "sand_strip": {
@@ -462,6 +545,10 @@
         64,
         8
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-c80a-7ea1-aac8-cf86d69a6819"
+      },
       "tile": true
     },
     "sonar_mark": {
@@ -478,6 +565,10 @@
         8,
         5
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16882-77bd-7f32-beed-67c443224bdf"
+      },
       "tile": false
     },
     "splash": {
@@ -494,6 +585,10 @@
         20,
         12
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-9bab-7501-b10c-49fe91962566"
+      },
       "tile": false
     },
     "spray": {
@@ -510,6 +605,10 @@
         32,
         24
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16886-b434-7883-a0ee-3deaa70ea9ae"
+      },
       "tile": false
     },
     "sun": {
@@ -526,6 +625,10 @@
         12,
         12
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-5302-75a0-99f4-51fb3be93149"
+      },
       "tile": false
     },
     "surface_strip": {
@@ -542,6 +645,10 @@
         64,
         6
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16883-d4c5-7301-acfd-99745122bfbd"
+      },
       "tile": true
     },
     "trophy_badge": {
@@ -558,6 +665,10 @@
         16,
         16
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16882-fc33-7020-95c4-904ab2105075"
+      },
       "tile": false
     },
     "wake": {
@@ -574,6 +685,10 @@
         32,
         6
       ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+        "request_id": "01a16887-6d9b-7592-bcc5-4ebcf1d3ee9d"
+      },
       "tile": true
     }
   }
