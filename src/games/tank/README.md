@@ -1,38 +1,23 @@
-# Tank game
+# Diesel Domestiques (`tank`)
 
-The smallest working Wattlands game (BRIEF 3.6). `tools/new_game <id>` copies it, with
-`content/tank/`, `assets/tank/` and `tests/games/tank/`, into a new game and renames
-everything (`tank` -> `<id>`, `Tank` -> `<Id>`, `TANK_` -> `<ID>_`).
-`docs/GAME_SDK.md` walks through every call it makes. Replace this README with your game's rules
-summary, schemas, tuning knobs and P2 notes.
+One to three riders crew a pedal-powered super-heavy tank, one engine each (diesel, dynamo, steam; the solo Bulwark's diesel drives everything through a three-way gearbox). Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`.
 
-## What it plays
+Status: G0. The game plays end to end with a placeholder drive and objective (the tank rolls at a fixed speed; each open-ended segment's objective is met at 90% of its nominal length), the full effort plans (`effort/tank_plan_builder.gd`), end_phase, cadence and power bands, the snapshot, results and progress. G1 builders replace the placeholders; the lead completes this README in G4 (rules, effort tables, content schemas, tuning knobs, art regeneration, P2 notes).
 
-Each rider pushes a marker along their own lane of a track, at a speed proportional to P_eff, so every
-FTP plays fair. The plan is a 5-minute warm-up ramp (50 -> 65% FTP), then 3 minutes of WORK at 75% FTP
-(plus the rider's `work_offset`), then the platform's 3-minute cool-down. 60 s into the WORK phase a
-"hill" raises the target by 5% for 30 s, inside the phase's `range_pct`. A lap marker splits the WORK
-phase at 90 s. Confirm, a `surge` or the HUD's Boost button boosts your marker for 5 s; Autopilot boosts
-every 30 s. Rescue and AFK make a marker wait. Results grade the team's time in band and give XP per kJ
-and per lap; 3 laps unlock the gold marker.
+## Contents
 
-The `short` content (the e2e content, about 3 minutes plus the cool-down) shows the calls the default
-content has no room for: a 60 s warm-up ramp, a 40 s SIM "Rollers" phase whose grade the game feeds
-with `ctx.directives.course_grade` (`grade_source: "game"`), and at the Rollers' start a
-`ctx.directives.replan` of the rest of the plan into an open-ended "Finish" (30-50 s) that the game
-ends with `ctx.directives.end_phase` once the rider holds the target after `min_s`. After it the riders'
-phases drift apart, so each rider's phase change shows a `ctx.hud.banner` on that rider's own peer only,
-and `phase_changed` reports the group's phase (the lowest index any rider is in).
+| Content | Plan | Notes |
+| --- | --- | --- |
+| `ashfall_road` | depot 300 s, 3 x (Advance 90-300 s, gun line 60-180 s, checkpoint 60 s), boss 120-360 s, cool-down 180 s | 30 min nominal, 41 min at most; 12 FIT laps |
+| `drill` | depot 30 s, skirmish 70 s (WARMUP), checkpoint 30 s, cool-down 180 s | the e2e content, inside the warm-up limits; 4 FIT laps |
 
-## Files
+Option: `rotation` (default on) moves every rider to the next engine at each checkpoint (stations.json `rotation`).
 
-| File | What |
-| --- | --- |
-| `game.json` | The manifest: ids, players, contents, options (`toggle`, `choice`) and player options (`int`) |
-| `tank_game.gd` | `TankGame`, the GameModule entry: every SDK call |
-| `tank_rules.gd` | `TankRules`, the pure rules: `step(state, inputs, dt)` |
-| `tank_view.gd` | `TankView`, the 2D view at `pixel_base` 640 x 360 |
-| `HARDWARE_TEST.md` | The real-trainer checklist for this game |
-| `content/tank/*.json` | One file per content id (phases and tuning), loaded with `ctx.load_content_json` |
-| `content/tank/strings.csv` | Every user-facing string, keys prefixed `TANK_` |
-| `tests/games/tank/` | Unit tests with recording fakes; `integration/` runs the real platform |
+## Commands
+
+```bash
+. tools/env.sh
+env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/run_tests --only=gut --gdir=res://tests/games/tank
+env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/run_game_sim --game=tank --content=drill --players=1 --rider=erg --seed=1 --report=build/tank/sims/drill.json
+node tools/fit_check/check.mjs build/tank/sims/fit --expect-laps=4
+```
