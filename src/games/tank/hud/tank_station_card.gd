@@ -284,8 +284,8 @@ func _dial(c: Rect2, m: Dictionary) -> void:
 		WlTheme.TEXT_DIM,
 		c.size.x - 8.0
 	)
-	var centre := Vector2(c.position.x + c.size.x * 0.5, c.position.y + 128.0)
-	var r := 86.0
+	var centre := Vector2(c.position.x + c.size.x * 0.5, c.position.y + 92.0)
+	var r := 56.0
 	var pts := PackedVector2Array()
 	for s in 33:
 		var a := PI + PI * float(s) / 32.0
@@ -307,7 +307,7 @@ func _dial(c: Rect2, m: Dictionary) -> void:
 		var d := Vector2(cos(a), sin(a))
 		line(centre + d * (r - 14.0), centre + d * (r + 8.0), WlTheme.TEXT, 4.0)
 		text(
-			centre + d * (r + 20.0) - Vector2(18.0 if mark > 99.0 else 12.0, 12.0),
+			centre + d * (r + 18.0) - Vector2(18.0 if mark > 99.0 else 12.0, 12.0),
 			"%d" % int(mark),
 			20.0,
 			WlTheme.TEXT_DIM
@@ -315,7 +315,7 @@ func _dial(c: Rect2, m: Dictionary) -> void:
 	var na := PI + PI * frac
 	line(centre, centre + Vector2(cos(na), sin(na)) * (r - 6.0), WlTheme.TEXT, 5.0)
 	text(
-		Vector2(c.position.x, c.position.y + 98.0),
+		Vector2(c.position.x, c.position.y + 96.0),
 		"%d" % roundi(float(m.get("pressure", 0.0))),
 		KEY_PX,
 		WlTheme.TEXT,
