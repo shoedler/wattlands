@@ -326,7 +326,13 @@ static func build() -> Dictionary:
 		_add(out, id, frames, a, "fish facing left, mouth at the anchor")
 	for id: String in ICONS:
 		_add(out, id, frames_of(ICON_GRIDS[id]), Vector2i(5, 4), "action icon")
-	_add(out, "scenery_town", [img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R))], Vector2i(0, 33), "harbour town in the haze")
+	_add(
+		out,
+		"scenery_town",
+		[img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R))],
+		Vector2i(0, 33),
+		"harbour town in the haze"
+	)
 	_add(out, "scenery_pier", [img(SCENERY_PIER)], Vector2i(0, 8), "wooden pier, deck on row 8")
 	_add(out, "picker_card", [card(0)], Vector2i.ZERO, "the game's picker card")
 	_add(out, "card_roam", [card(1)], Vector2i.ZERO, "Free Roam card")
@@ -497,7 +503,11 @@ static func card(kind: int) -> Image:
 	for i in 3:
 		out.fill_rect(Rect2i(0, i * surf / 3, CARD.x, surf / 3 + 1), bands[i])
 	if kind != 2:
-		blit(out, img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R)), Vector2i(-40 if kind == 0 else -70, surf - 33))
+		blit(
+			out,
+			img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R)),
+			Vector2i(-40 if kind == 0 else -70, surf - 33)
+		)
 	for i in FishingPalette.SEA.size():
 		var y0 := surf + roundi(pow(float(i) / 8.0, 1.4) * float(CARD.y - surf))
 		out.fill_rect(Rect2i(0, y0, CARD.x, CARD.y - y0), FishingPalette.SEA[i])

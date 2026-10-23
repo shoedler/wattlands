@@ -52,6 +52,13 @@ static func texture(id: String) -> Texture2D:
 	return tex
 
 
+## The sprite id of species index `sp` (FishingConst.SPECIES; mackerel when out of range).
+static func fish_id(sp: int) -> String:
+	if sp < 0 or sp >= FishingConst.SPECIES.size():
+		return "fish_mackerel"
+	return "fish_" + str(FishingConst.SPECIES[sp])
+
+
 ## Frames in `id` (0 when missing).
 static func count(id: String) -> int:
 	return frames(id).size()

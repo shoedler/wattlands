@@ -27,7 +27,7 @@ const HIP := Vector2(40, 12)
 const BB := Vector2(46, 19)
 const CRANK_R := 3.0
 const THIGH := 5.0
-const SHIN := 6.0
+const SHIN := 7.5
 ## The chain runs from the chainring (at BB) to the gearbox's input sprocket.
 const SPROCKET := Vector2(31, 18)
 const SPROCKET_R := 1.0

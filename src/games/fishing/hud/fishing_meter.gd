@@ -1,9 +1,8 @@
 class_name FishingMeter
 extends FishingHudControl
 ## The local rider's strain meter (red, zigzag icon; left of the cadence widget) or slack meter
-## (yellow, loop icon; right of it): a vertical bar filling 0..1 from the lane state the host
-## owns (brief 2.4 "Meters", 3.5). Hidden outside fights; the ride out's practice band shows no
-## meters (brief 2.4).
+## (yellow, loop icon; right of it): a vertical bar filling 0..1 from the rider state the host
+## owns. Shown only in a fight.
 
 const STRAIN := "strain"
 const SLACK := "slack"
@@ -19,14 +18,14 @@ static func make(p_game: FishingGame, p_kind: String) -> FishingMeter:
 	m.game = p_game
 	m.kind = p_kind
 	m.name = "FishingMeter_" + p_kind
-	m.design_h = float(FishingLayout.ROW_H * 3)
+	m.design_h = 108.0
 	return m
 
 
 func refresh() -> void:
-	var l := FishingHudModel.local_lane(game)
-	shown = l != null and l.state == FishingConst.ST_FIGHT
-	fill = (l.strain if kind == STRAIN else l.slack) if shown else 0.0
+	var r := FishingHudModel.local_rider(game)
+	shown = r != null and r.action == FishingConst.A_FIGHT
+	fill = (r.strain if kind == STRAIN else r.slack) if shown else 0.0
 
 
 func color() -> Color:

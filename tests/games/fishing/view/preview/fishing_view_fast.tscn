@@ -4,3 +4,4 @@
 
 [node name="FishingViewPreview" type="Node"]
 script = ExtResource("1")
+scenario = "fast"

@@ -18,9 +18,9 @@ const H := 360
 ## FLOOR_ROWS under the surface (y = SURF_Y + FLOOR_ROWS x sqrt(depth / view_depth_m)).
 const SURF_Y := 118
 const PX_PER_M := 2.0
-const FLOOR_ROWS := 214
+const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
-const VIEW_DEPTH_MIN_M := 8.0
+const VIEW_DEPTH_MIN_M := 3.0
 const ABYSS_M := 700.0
 ## Water band tops (m), one SEA colour each.
 const WATER_STEPS_M: Array[float] = [0.0, 6.0, 18.0, 40.0, 90.0, 170.0, 300.0, 470.0]
@@ -94,7 +94,7 @@ static func water_at(depth_m: float) -> Color:
 
 ## How far toward the water colour a fish at `depth_m` is tinted (0 near the surface).
 static func fog_at(depth_m: float) -> float:
-	return clampf(0.12 + sqrt(maxf(depth_m, 0.0)) / 30.0, 0.12, 0.75)
+	return clampf(0.1 + sqrt(maxf(depth_m, 0.0)) / 60.0, 0.1, 0.45)
 
 
 ## The floor colour at `depth_m`: sand in the shallows, then two steps darker than the water.
@@ -345,12 +345,14 @@ func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 	var qx := screen_x(0.0, cam_m)
 	if qx > 0.0:
 		var top := float(SURF_Y - QUAY_TOP)
-		c.draw_rect(Rect2(0, top, qx, float(H) - top), FishingPalette.SEA_4)
-		c.draw_rect(Rect2(0, top, qx, 1), FishingPalette.HAZE_2)
-		for y in range(int(top) + 3, H, 4):
-			var shift := 0 if (y / 4) % 2 == 0 else 3
-			for x in range(int(qx) - 1 - shift, -1, -6):
-				c.draw_rect(Rect2(x, y, 1, 1), FishingPalette.SEA_5)
+		c.draw_rect(Rect2(0, top, qx, float(H) - top), FishingPalette.HAZE_2)
+		c.draw_rect(Rect2(0, top, qx, 1), FishingPalette.CLOUD)
+		c.draw_rect(Rect2(0, top + 1, qx, 1), FishingPalette.SKY_0)
+		for y in range(int(top) + 6, H, 6):
+			c.draw_rect(Rect2(0, y, qx, 1), FishingPalette.HAZE_1)
+		for x in range(int(qx) - 14, -1, -40):
+			c.draw_rect(Rect2(x, top - 3, 3, 3), FishingPalette.WOOD_3)
+		c.draw_rect(Rect2(qx - 1, top, 1, float(H) - top), FishingPalette.SEA_3)
 	var pier := FishingSprites.frame("scenery_pier")
 	if pier == null:
 		return
@@ -414,7 +416,7 @@ static func _fall_col(fall: float) -> Color:
 func _paint_mist(c: CanvasItem, ex: float, t: float) -> void:
 	if ex >= float(W) + 30.0 or ex < -60.0:
 		return
-	for k in 16:
+	for k in 12:
 		var h := hash2(k, 77)
 		var cx := ex - 10.0 + float(h % 70) + sin(t * 0.5 + float(k)) * 4.0
 		var cy := float(SURF_Y - 4 + (h >> 6) % 120) - fmod(t * 3.0 + float(k) * 7.0, 20.0)
@@ -424,5 +426,8 @@ func _paint_mist(c: CanvasItem, ex: float, t: float) -> void:
 			for dx in range(-half, half + 1):
 				var px := roundi(cx) + dx
 				var py := roundi(cy) + dy
-				if (px + py) % 2 == 0 and px >= 0 and px < W:
-					c.draw_rect(Rect2(px, py, 1, 1), Color(FishingPalette.CLOUD, 0.7))
+				var edge := (
+					float(dx * dx) / float(maxi(half * half, 1)) + float(4 * dy * dy) / float(r * r)
+				)
+				if px >= 0 and px < W and DitherDissolve.visible_at(px, py, 0.35 + 0.6 * edge):
+					c.draw_rect(Rect2(px, py, 1, 1), FishingPalette.CLOUD)

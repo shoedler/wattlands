@@ -1,67 +1,55 @@
 class_name FishingHudModel
 extends RefCounted
-## What Fishing's HUD Controls show, as plain functions of the game (tests check them without a
-## HUD): the local lane, the phase chip (label, time left or elapsed, next phase from the rider's
-## own plan, else from the lane state), the fish row, the gaff meter, the catch board and each
-## lane's status text. Every key used here is in content/fishing/strings.csv.
+## What Turbo Reel's HUD shows, as plain functions of the game (tests check them without a HUD):
+## each rider's shown action and its icon, the leaderboard rows, the time left, the local fish
+## row and gaff meter, the menu chips' labels. Every key used here is in
+## content/fishing/strings.csv (KEYS); a missing translation falls back to the key's English.
 
-## Status text per lane state (FishingConst.ST_*), the same keys as FishingGame.STATUS_KEYS (a
-## cast reads as the reel, with the lure's distance), so a rider's status reads the same in the
-## kit's teammate chip and in the lane HUD. The texts are positional: REEL takes [lure m],
-## STRIKE and LANDING [species], FIGHT [species, m].
-const STATUS_KEYS: Array[String] = [
-	"FISHING_STATUS_RIDE_OUT",
-	"FISHING_STATUS_PICK",
-	"FISHING_STATUS_REEL",
-	"FISHING_STATUS_REEL",
-	"FISHING_STATUS_STRIKE",
-	"FISHING_STATUS_FIGHT",
-	"FISHING_STATUS_LANDING",
-	"FISHING_STATUS_IDLE",
-	"FISHING_STATUS_HOME",
-]
-const KEY_RESCUE := "FISHING_STATUS_RESCUE"
-const KEY_AFK := "FISHING_STATUS_AFK"
-const KEY_COOLDOWN := "FISHING_HUD_COOLDOWN"
-const KEY_LEFT := "FISHING_HUD_LEFT"
-const KEY_NEXT := "FISHING_HUD_NEXT"
+## Shown actions: FishingConst.A_* plus SPRINT (driving above 105 % FTP-equivalent).
+const SPRINT := 100
+const KEY_POINTS := "FISHING_HUD_POINTS"
 const KEY_DISTANCE := "FISHING_HUD_DISTANCE"
 const KEY_SPRINT := "FISHING_HUD_SPRINT"
 const KEY_SPIN := "FISHING_HUD_SPIN"
 const KEY_TROPHY := "FISHING_HUD_TROPHY"
-const KEY_POINTS := "FISHING_HUD_POINTS"
-const KEY_FISH := "FISHING_HUD_FISH"
-const KEY_HOOKUP := "FISHING_HUD_HOOKUP"
-const KEY_ENDS_IN := "FISHING_HUD_FISHING_LEFT"
-const KEY_RPM := "FISHING_HUD_RPM"
-const KEY_WATTS := "FISHING_HUD_WATTS"
 const KEY_YOU := "FISHING_HUD_YOU"
-const KEY_FISH_ON := "FISHING_HUD_FISH_ON"
-## The fallback chip's "next" label after a fight (the plan's own Landing label).
-const KEY_LANDING := "FISHING_PHASE_LANDING"
-## Every key the HUD uses (the HUD test checks each is in strings.csv).
+const KEY_TIME_UP := "FISHING_HUD_TIME_UP"
+const KEY_OVERTIME := "FISHING_HUD_OVERTIME"
+const KEY_CAST := "FISHING_MENU_CAST"
+const KEY_DRIVE_ON := "FISHING_MENU_DRIVE_ON"
+const KEY_TURN := "FISHING_MENU_TURN"
+const KEY_SPRINTING := "FISHING_ACTION_SPRINT"
+## FishingConst.ACTION_NAMES -> FISHING_ACTION_<NAME> (the leaderboard's action column).
+const ACTION_PREFIX := "FISHING_ACTION_"
 const KEYS: Array[String] = [
-	KEY_RESCUE,
-	KEY_AFK,
-	KEY_COOLDOWN,
-	KEY_LEFT,
-	KEY_NEXT,
+	KEY_POINTS,
 	KEY_DISTANCE,
 	KEY_SPRINT,
 	KEY_SPIN,
 	KEY_TROPHY,
-	KEY_POINTS,
-	KEY_FISH,
-	KEY_HOOKUP,
-	KEY_ENDS_IN,
-	KEY_RPM,
-	KEY_WATTS,
 	KEY_YOU,
-	KEY_FISH_ON,
-	KEY_LANDING,
+	KEY_TIME_UP,
+	KEY_OVERTIME,
+	KEY_CAST,
+	KEY_DRIVE_ON,
+	KEY_TURN,
+	KEY_SPRINTING,
 ]
-## Brief 3.5: W and rpm >= 48 px in the local lane (kit widgets), >= 32 px in a FishingLaneHud.
-const LANE_NUMBER_PX := 34
+## English stand-ins when a key has no translation (headless tests without ctx.strings).
+const FALLBACK := {
+	KEY_POINTS: "{0} pts",
+	KEY_DISTANCE: "{0} m",
+	KEY_SPRINT: "Sprint!",
+	KEY_SPIN: "Easy spin",
+	KEY_TROPHY: "Trophy!",
+	KEY_YOU: "YOU",
+	KEY_TIME_UP: "Time is up",
+	KEY_OVERTIME: "Overtime: land your fish",
+	KEY_CAST: "Cast: {species}",
+	KEY_DRIVE_ON: "Drive on",
+	KEY_TURN: "Turn around",
+	KEY_SPRINTING: "Sprinting",
+}
 
 
 static func strings_of(game: FishingGame) -> GameStrings:
@@ -70,159 +58,83 @@ static func strings_of(game: FishingGame) -> GameStrings:
 	return GameStrings.new()
 
 
-## The local rider's lane (null without a state or a lane).
-static func local_lane(game: FishingGame) -> FishingLaneState:
+## `key` translated with `args`, or its FALLBACK (with {0} / {name} filled) when untranslated.
+static func tr_key(game: FishingGame, key: String, args: Variant = []) -> String:
+	var tx := strings_of(game)
+	if tx.has(key):
+		return tx.t(key, args)
+	var s := str(FALLBACK.get(key, key))
+	if args is Array:
+		for i in (args as Array).size():
+			s = s.replace("{%d}" % i, str(args[i]))
+	elif args is Dictionary:
+		for k: String in args:
+			s = s.replace("{%s}" % k, str(args[k]))
+	return s
+
+
+## The local rider (null without a state or a boat).
+static func local_rider(game: FishingGame) -> FishingRiderState:
 	if game == null or game.state == null or game.ctx == null:
 		return null
-	return game.state.lane_of_peer(game.ctx.local_peer)
-
-
-## The local rider's slot (0 when unknown).
-static func local_slot(game: FishingGame) -> int:
-	var p := game.ctx.local_player() if game != null and game.ctx != null else null
-	return p.slot_index if p != null else 0
+	return game.state.rider_of_peer(game.ctx.local_peer)
 
 
 ## "m:ss" below an hour, else "h:mm:ss".
 static func clock(seconds: float) -> String:
-	var s := maxi(floori(seconds), 0)
+	var s := maxi(ceili(seconds), 0)
 	if s >= 3600:
 		return "%d:%02d:%02d" % [s / 3600, (s / 60) % 60, s % 60]
 	return "%d:%02d" % [s / 60, s % 60]
 
 
-## The local rider's plan (the same pre-roll every peer has), null when it can't be built.
-static func local_plan(game: FishingGame) -> EffortPlan:
-	if game == null or game.content == null or not game.content.ok or game.ctx == null:
-		return null
-	var slot := local_slot(game)
-	if slot < 0 or slot >= game.slots.size():
-		return null
-	var p := game.ctx.local_player()
-	var reel := int(p.options.get("reel_pct", FishingConst.REEL_PCT_DEFAULT)) if p != null else 60
-	var typed: Array[FishingPlanSlot] = []
-	for s: Variant in game.slots[slot]:
-		if s is FishingPlanSlot:
-			typed.append(s)
-	return FishingPlanBuilder.build(game.content.trip, typed, reel)
+## The action a rider shows: AFK, paused, sprint (driving above 105 %), else its action.
+static func shown_action(r: FishingRiderState) -> int:
+	if r.afk or r.stale:
+		return FishingConst.A_AFK
+	if r.paused:
+		return FishingConst.A_PAUSED
+	var sprinting := r.p_eff_w > FishingConst.SPRINT_P_FRAC * FishingConst.P_EFF_REF_W
+	if r.action == FishingConst.A_DRIVE and sprinting:
+		return SPRINT
+	return r.action
 
 
-## The phase chip: {"label", "left_s" (-1 open-ended), "elapsed_s", "next"} for lane `l` whose
-## phase started at game time `start_t`; `plan` may be null (labels then come from the state).
-static func phase_chip(
-	game: FishingGame, l: FishingLaneState, plan: EffortPlan, start_t: float
-) -> Dictionary:
+## The icon sprite of a shown action.
+static func icon_of(action: int) -> String:
+	match action:
+		SPRINT:
+			return "icon_sprint"
+		FishingConst.A_MENU, FishingConst.A_CAST, FishingConst.A_WAIT:
+			return "icon_wait"
+		FishingConst.A_FIGHT:
+			return "icon_fight"
+		FishingConst.A_LAND:
+			return "icon_landed"
+		FishingConst.A_PAUSED:
+			return "icon_paused"
+		FishingConst.A_AFK:
+			return "icon_afk"
+	return "icon_drive"
+
+
+## The action's word for the leaderboard.
+static func action_text(game: FishingGame, action: int) -> String:
+	if action == SPRINT:
+		return tr_key(game, KEY_SPRINTING)
+	var names: Array = FishingConst.ACTION_NAMES
+	var key := ACTION_PREFIX + str(names[clampi(action, 0, names.size() - 1)]).to_upper()
 	var tx := strings_of(game)
-	var out := {"label": "", "left_s": -1.0, "elapsed_s": 0.0, "next": ""}
-	if l == null:
-		return out
-	var t := game.state.t if game.state != null else 0.0
-	out["elapsed_s"] = maxf(t - start_t, 0.0)
-	var idx := l.phase_index
-	if plan != null and idx >= 0 and idx < plan.size() and l.state != FishingConst.ST_HOME:
-		var ph := plan.phase(idx)
-		out["label"] = tx.t(ph.label)
-		if not ph.open_ended:
-			out["left_s"] = maxf(ph.duration_s - float(out["elapsed_s"]), 0.0)
-		out["next"] = (
-			tx.t(plan.phase(idx + 1).label) if idx + 1 < plan.size() else tx.t(KEY_COOLDOWN)
-		)
-		return out
-	out["label"] = status_text(game, l)
-	out["next"] = tx.t(_next_key(l.state))
-	return out
+	return tx.t(key) if tx.has(key) else str(names[clampi(action, 0, names.size() - 1)])
 
 
-## The fallback chip's next label: keys without placeholders (the status texts need values).
-static func _next_key(st: int) -> String:
-	match st:
-		FishingConst.ST_RIDE_OUT, FishingConst.ST_LANDING:
-			return STATUS_KEYS[FishingConst.ST_IDLE]
-		FishingConst.ST_PICK, FishingConst.ST_CAST, FishingConst.ST_REEL, FishingConst.ST_STRIKE:
-			return KEY_FISH_ON
-		FishingConst.ST_FIGHT:
-			return KEY_LANDING
-	return KEY_COOLDOWN
-
-
-## The species' display name ("" for none), the module's own (FishingResults.species_name).
-static func species_name(game: FishingGame, sp: int) -> String:
-	var c := game.content if game != null else null
-	return FishingResults.species_name(sp, c, strings_of(game))
-
-
-## The fish row: {"visible", "sp", "name", "d_m", "stamina"} (visible only with a fish on).
-static func fish_row(game: FishingGame, l: FishingLaneState) -> Dictionary:
-	var on := (
-		l != null
-		and l.fish.sp >= 0
-		and not l.fish.off_line
-		and l.state in [FishingConst.ST_STRIKE, FishingConst.ST_FIGHT, FishingConst.ST_LANDING]
-	)
-	if not on:
-		return {"visible": false, "sp": -1, "name": "", "d_m": 0, "stamina": 0.0}
-	return {
-		"visible": true,
-		"sp": l.fish.sp,
-		"name": species_name(game, l.fish.sp),
-		"d_m": roundi(l.fish.d),
-		"stamina": clampf(l.fish.s, 0.0, 1.0),
-	}
-
-
-## The gaff meter during a Landing: {"visible", "fill", "phase" (KEY_SPRINT, KEY_SPIN or
-## KEY_TROPHY)}.
-static func gaff(l: FishingLaneState) -> Dictionary:
-	if l == null or l.state != FishingConst.ST_LANDING:
-		return {"visible": false, "fill": 0.0, "phase": ""}
-	var phase := KEY_SPRINT if l.state_t < FishingConst.GAFF_S else KEY_SPIN
-	if l.gaff >= 1.0:
-		phase = KEY_TROPHY
-	return {"visible": true, "fill": clampf(l.gaff, 0.0, 1.0), "phase": phase}
-
-
-## The catch board, newest last: [[lane, species, grade], ...] (at most 5).
-static func board(state: FishingState) -> Array:
-	var out: Array = []
-	if state == null:
-		return out
-	for i in state.catches.size() / 3:
-		out.append([state.catches[3 * i], state.catches[3 * i + 1], state.catches[3 * i + 2]])
-	while out.size() > FishingConst.CATCH_BOARD:
-		out.pop_front()
-	return out
-
-
-## "x1.5" for the hookup level's multiplier (level = fights on now).
-static func hookup_text(level: int) -> String:
-	var m := FishingConst.hookup_mult(level)
-	return "x%s" % (str(int(m)) if is_equal_approx(m, roundf(m)) else "%.1f" % m)
-
-
-## A lane's one-line status: rescue, AFK, else its lane state with the same positional args as
-## FishingGame.status_text (fight: species and distance; strike, Landing: species; cast, reel:
-## the lure's distance). Without a species a strike, fight or Landing reads "Fish on!".
-static func status_text(game: FishingGame, l: FishingLaneState) -> String:
-	var tx := strings_of(game)
-	if l == null:
-		return ""
-	if l.rescue:
-		return tx.t(KEY_RESCUE)
-	if l.afk or l.stale:
-		return tx.t(KEY_AFK)
-	var st := clampi(l.state, 0, STATUS_KEYS.size() - 1)
-	var key := STATUS_KEYS[st]
-	match st:
-		FishingConst.ST_FIGHT, FishingConst.ST_STRIKE, FishingConst.ST_LANDING:
-			var sp := species_name(game, l.fish.sp)
-			if sp == "":
-				return tx.t(KEY_FISH_ON)
-			if st == FishingConst.ST_FIGHT:
-				return tx.t(key, [sp, roundi(l.fish.d)])
-			return tx.t(key, [sp])
-		FishingConst.ST_CAST, FishingConst.ST_REEL:
-			return tx.t(key, [roundi(l.lure_d)])
-	return tx.t(key)
+## A rider's name (the slot's, else "P<n>").
+static func name_of(game: FishingGame, slot: int) -> String:
+	if game != null and game.ctx != null and slot >= 0 and slot < game.ctx.players.size():
+		var n := game.ctx.players[slot].name
+		if n != "":
+			return n
+	return "P%d" % (slot + 1)
 
 
 ## The slot look of `slot` from ctx.players (Wl.slot_look without one).
@@ -233,6 +145,101 @@ static func look(game: FishingGame, slot: int) -> Dictionary:
 	return Wl.slot_look(slot)
 
 
-## The band marker position 0..1 of `rpm` on a FishingLaneHud's band scale (50-130 rpm).
-static func rpm_frac(rpm: float) -> float:
-	return clampf((rpm - 50.0) / 80.0, 0.0, 1.0)
+## Leaderboard rows, most points first (ties: slot order): [{slot, name, points, action, local}].
+static func board(game: FishingGame) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if game == null or game.state == null:
+		return out
+	var me := local_rider(game)
+	for r in game.state.riders:
+		(
+			out
+			. append(
+				{
+					"slot": r.slot,
+					"name": name_of(game, r.slot),
+					"points": r.points,
+					"action": shown_action(r),
+					"local": me != null and me.slot == r.slot,
+				}
+			)
+		)
+	out.sort_custom(_before)
+	return out
+
+
+static func _before(a: Dictionary, b: Dictionary) -> bool:
+	if int(a["points"]) != int(b["points"]):
+		return int(a["points"]) > int(b["points"])
+	return int(a["slot"]) < int(b["slot"])
+
+
+## The clock line: time left, "Time is up" / overtime once play is over.
+static func time_text(game: FishingGame) -> String:
+	var st := game.state if game != null else null
+	if st == null:
+		return ""
+	if st.time_up:
+		for r in st.riders:
+			if r.in_fight():
+				return tr_key(game, KEY_OVERTIME)
+		return tr_key(game, KEY_TIME_UP)
+	return clock(st.time_left_s())
+
+
+## The species' display name ("" for none).
+static func species_name(game: FishingGame, sp: int) -> String:
+	if sp < 0 or sp >= FishingConst.SPECIES.size():
+		return ""
+	var key := "FISHING_SPECIES_" + str(FishingConst.SPECIES[sp]).to_upper()
+	var tx := strings_of(game)
+	return tx.t(key) if tx.has(key) else str(FishingConst.SPECIES[sp]).capitalize()
+
+
+## The fish row: {"visible", "sp", "name", "d_m", "stamina", "kg"} (with a fish on).
+static func fish_row(game: FishingGame, r: FishingRiderState) -> Dictionary:
+	var on := r != null and r.in_fight() and r.fish.sp >= 0 and not r.fish.off_line
+	if not on:
+		return {"visible": false, "sp": -1, "name": "", "d_m": 0, "stamina": 0.0}
+	return {
+		"visible": true,
+		"sp": r.fish.sp,
+		"name": species_name(game, r.fish.sp),
+		"d_m": roundi(r.line_m()),
+		"stamina": clampf(r.fish.s, 0.0, 1.0),
+	}
+
+
+## The gaff meter during a Landing: {"visible", "fill", "phase" (KEY_SPRINT, KEY_SPIN or
+## KEY_TROPHY)}.
+static func gaff(r: FishingRiderState) -> Dictionary:
+	if r == null or r.action != FishingConst.A_LAND:
+		return {"visible": false, "fill": 0.0, "phase": ""}
+	var phase := KEY_SPRINT if r.state_t < FishingConst.GAFF_S else KEY_SPIN
+	if r.gaff >= 1.0:
+		phase = KEY_TROPHY
+	return {"visible": true, "fill": clampf(r.gaff, 0.0, 1.0), "phase": phase}
+
+
+## The menu chips of the local rider in A_MENU: [{"entry", "text", "selected", "hint"}]: a cast
+## entry names its species (hint = its index), drive on and turn around have hint -1.
+static func chips(game: FishingGame, r: FishingRiderState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if r == null or r.action != FishingConst.A_MENU:
+		return out
+	for i in r.menu.size():
+		var e := r.menu[i]
+		var text := ""
+		var hint := -1
+		if e == FishingConst.M_DRIVE_ON:
+			text = tr_key(game, KEY_DRIVE_ON)
+		elif e == FishingConst.M_TURN:
+			text = tr_key(game, KEY_TURN)
+		elif e >= 0 and e < r.hint_count():
+			hint = e
+			var sp := int(r.hints[4 * e])
+			text = tr_key(game, KEY_CAST, {"species": species_name(game, sp), "0": ""})
+		else:
+			continue
+		out.append({"entry": e, "text": text, "selected": i == r.selected, "hint": hint})
+	return out
