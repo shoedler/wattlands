@@ -23,6 +23,23 @@ func _lobby_with_bots() -> void:
 	}
 
 
+## PlayerSlot.pedal_nav of this machine's rider is the profile's setting, whatever the lobby listed.
+func test_the_local_slot_takes_pedal_navigation_from_the_profile() -> void:
+	_lobby_with_bots()
+	for on: bool in [true, false]:
+		fx.settings.profile.pedal_nav = on
+		var s := (
+			open_screen(
+				AppSessionScreen.new(),
+				{"role": Wl.SOLO, "game_id": "workout", "content_id": "sweet_spot"}
+			)
+			as AppSessionScreen
+		)
+		var players: Array[PlayerSlot] = (s.host as FakeHost).config_seen["players"]
+		assert_eq(players[0].pedal_nav, on)
+		assert_false(players[1].pedal_nav, "bots never use pedal navigation")
+
+
 func test_solo_config_from_the_lobby() -> void:
 	_lobby_with_bots()
 	var s := (
@@ -326,10 +343,10 @@ func test_a_user_pause_menu_scans() -> void:
 
 
 ## A solo session from a lobby whose own slot has `autopilot`, with a router that would not scan
-## (the fake's pedal_ui = false: pedal UI off and a device used).
+## (the fake's pedal_nav = false: pedal UI off and a device used).
 func _autopilot_session(autopilot: bool) -> AppSessionScreen:
 	fx.give_profile(250.0)
-	fx.input.set("pedal_ui", false)
+	fx.input.set("pedal_nav", false)
 	var net := fx.fake_net()
 	net.local_peer = 1
 	net.add_human(1, "Ada", 250.0).autopilot = autopilot
@@ -387,10 +404,10 @@ func test_an_autopilot_session_still_holds_resume_on_a_coasting_pause() -> void:
 
 ## A client (peer 2) from a session_start whose players are the host (peer 1, a human), the
 ## client's own slot and a bot (which always rides on Autopilot), with a router that would not
-## scan (the fake's pedal_ui = false).
+## scan (the fake's pedal_nav = false).
 func _client_session(my_autopilot: bool, host_autopilot: bool) -> AppSessionScreen:
 	fx.give_profile()
-	fx.input.set("pedal_ui", false)
+	fx.input.set("pedal_nav", false)
 	var net := fx.fake_net()
 	net.local_peer = 2
 	var host := PlayerSlot.new()

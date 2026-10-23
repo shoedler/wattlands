@@ -17,6 +17,7 @@ func before_each() -> void:
 	_router = WlInputRouter.new()
 	_router.bus = _bus
 	_router.profile = RiderProfile.new()
+	_router.profile.pedal_nav = true
 	add_child_autofree(_router)
 	_router.set_process(false)
 	_router.set_process_input(false)
@@ -395,17 +396,30 @@ func test_device_actions_reach_menu_input() -> void:
 # --- pedal UI ---------------------------------------------------------------------------------
 
 
-func test_pedal_ui_active_follows_profile_and_device_use() -> void:
-	_router.profile.pedal_ui = true
-	assert_true(_router.pedal_ui_active())
-	_router.profile.pedal_ui = false
+func test_pedal_nav_active_follows_profile() -> void:
+	_router.profile.pedal_nav = false
 	_router.profile.autopilot_default = false
-	assert_true(_router.pedal_ui_active(), "no device used yet")
-	_tap(KEY_DOWN)
-	assert_true(_router.device_used())
-	assert_false(_router.pedal_ui_active())
+	assert_false(_router.pedal_nav_active(), "off by default, whatever device is used")
+	_router.profile.pedal_nav = true
+	assert_true(_router.pedal_nav_active())
+	_router.profile.pedal_nav = false
 	_router.profile.autopilot_default = true
-	assert_true(_router.pedal_ui_active(), "Autopilot keeps pedal-scan on")
+	assert_true(_router.pedal_nav_active(), "Autopilot keeps pedal navigation on")
+
+
+func test_surge_and_coast_pick_and_back_only_with_pedal_navigation() -> void:
+	var got: Array = []
+	_router.menu_input.connect(func(a: StringName, via: String) -> void: got.append([a, via]))
+	_router.profile.pedal_nav = false
+	_router.profile.autopilot_default = false
+	_router.inject_gesture(Wl.G_SURGE)
+	_router.inject_gesture(Wl.G_COAST)
+	assert_eq(got, [], "no menu input from pedal gestures while pedal navigation is off")
+	assert_eq(_router.take_gestures().size(), 2, "the gestures still reach sessions")
+	_router.profile.pedal_nav = true
+	_router.inject_gesture(Wl.G_SURGE)
+	_router.inject_gesture(Wl.G_COAST)
+	assert_eq(got, [[&"confirm", "surge"], [&"back", "coast"]])
 
 
 # --- rebinding ------------------------------------------------------------------------------

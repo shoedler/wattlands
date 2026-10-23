@@ -124,6 +124,26 @@ func test_rows_from_a_synthetic_ride() -> void:
 	g.free()
 
 
+func test_strava_tag_and_lines() -> void:
+	var tr := U.register_strings()
+	var g := U.game("sweet_spot", U.players(1))
+	U.ride(g)
+	var res := g.results()
+	assert_eq(res.ride_tag, "Sweet spot", "the workout's name")
+	assert_eq(
+		res.ride_lines,
+		["Time in band: 100%", "Intervals ridden: 2 of 2"] as Array[String],
+		"group time in band and the work intervals ridden"
+	)
+	g.free()
+	var cut := U.game("sweet_spot", U.players(1))
+	var starts := U.phase_ticks(cut.state.phases)
+	U.ride(cut, Callable(), starts[2] + 20)
+	assert_eq(cut.results().ride_lines[1], "Intervals ridden: 1 of 2", "stopped in the second one")
+	cut.free()
+	U.unregister_strings(tr)
+
+
 func test_platform_stats_win_when_present() -> void:
 	var players := U.players(1)
 	var c := U.ctx("e2e", players)

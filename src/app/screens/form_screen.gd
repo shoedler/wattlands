@@ -20,10 +20,16 @@ var _fields_by_menu: Dictionary = {}
 var _editing: Dictionary = {}
 
 
-## A page with the title, a content column and the menu column; returns the page dict.
+## A page with the title, a content column and the menu column; returns the page dict. A form is
+## taller than a 1080p screen (Profile, Settings' Controls): its menu column scrolls and keeps the
+## highlighted row in view, whether it moves by keyboard, controller or pedal scan. The footer
+## line is hidden so the menu column reaches the bottom margin.
 func make_form_page(title_text: String) -> Dictionary:
 	var page := make_page(title_text)
+	(page["footer"] as Control).visible = false
+	scroll_menu_column(page["right"] as Control)
 	content_box = page["left"]
+
 	value_label = AppStyle.label("", AppStyle.FONT_NUMBER, AppStyle.ACCENT)
 	value_label.name = "Value"
 	content_box.add_child(value_label)

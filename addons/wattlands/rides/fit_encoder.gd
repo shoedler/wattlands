@@ -66,13 +66,13 @@ const SOURCE_TYPE_LOCAL := 5
 
 ## Our product id under manufacturer "development" and the product name.
 const PRODUCT_ID := 1
-const PRODUCT_NAME := "Wattlands"
+const PRODUCT_NAME := "WATTLANDS"
 const NAME_FIELD_SIZE := 16
 ## Developer data: the lap name field (developer data index 0, field 0, a 32-byte string).
 const DEV_INDEX := 0
 const DEV_FIELD_LAP_NAME := 0
 const LAP_NAME_SIZE := 32
-## A fixed application id for Wattlands' developer data (16 bytes).
+## A fixed application id for WATTLANDS' developer data (16 bytes).
 const APPLICATION_ID: Array[int] = [
 	0x57,
 	0x61,

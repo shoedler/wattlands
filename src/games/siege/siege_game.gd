@@ -688,6 +688,9 @@ func results() -> GameResults:
 		"SIEGE_STAT_LEAKS_BY_ROAD": "%d / %d / %d" % [leaks[0], leaks[1], leaks[2]],
 		"SIEGE_STAT_RAMS_STOPPED": "%d / %d" % [state.rams_stopped, state.rams_total],
 	}
+	var tx := ctx.strings if ctx.strings != null else GameStrings.new()
+	res.ride_tag = SiegeScore.ride_tag(state, ctx.content_id, tx)
+	res.ride_lines = SiegeScore.ride_lines(state, res, tx)
 	return res
 
 

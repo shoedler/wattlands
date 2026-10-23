@@ -7,6 +7,9 @@ extends VBoxContainer
 ## `coast` (or back) backs out. Keyboard/controller up/down move focus and stop scanning for
 ## 10 s. With erg_auto_confirm on (picks shown during ERG phases), the highlighted item is
 ## picked automatically after two full scan cycles; such picks report auto = true.
+## Pedal navigation is opt-in (BRIEF 3.5): with pedal_nav off (set it from the rider's
+## PlayerSlot.pedal_nav or RiderProfile.pedal_nav) the list never scans, never auto-confirms and
+## ignores surge and coast; keyboard and controller actions work as always.
 ## Time advances in _process (PROCESS_MODE_ALWAYS) or through tick(dt) in headless tests.
 ##
 ## Details:
@@ -45,6 +48,12 @@ const MANUAL_PAUSE_S := 10.0
 const MIN_INTERVAL_S := 0.2
 
 var scan_interval_s: float = 1.6
+## The rider uses pedal navigation: scanning, ERG auto-confirm, surge and coast. Off: the list
+## answers keyboard and controller actions only.
+var pedal_nav: bool = true:
+	set(value):
+		pedal_nav = value
+		_update_hint()
 var scanning: bool = true
 var erg_auto_confirm: bool = false
 ## In sessions: erg_auto_confirm follows the local rider's trainer mode (on while in ERG).
@@ -178,6 +187,8 @@ func set_highlight(index: int) -> void:
 
 ## Feed a gesture or action by hand (headless tests, game-specific routing).
 func feed_gesture(gesture_name: StringName) -> void:
+	if not pedal_nav:
+		return
 	if gesture_name == Wl.G_SURGE:
 		_pick("surge")
 	elif gesture_name == Wl.G_COAST:
@@ -211,7 +222,7 @@ func tick(dt: float) -> void:
 		_auto_t = 0.0
 		return
 	var interval := maxf(scan_interval_s, MIN_INTERVAL_S)
-	var scan_active := scanning
+	var scan_active := scanning and pedal_nav
 	if _manual_pause_left > 0.0:
 		_manual_pause_left = maxf(0.0, _manual_pause_left - dt)
 		scan_active = false
@@ -220,7 +231,7 @@ func tick(dt: float) -> void:
 		while _scan_t >= interval - 1e-6:
 			_scan_t -= interval
 			_apply_highlight(_next_enabled(_highlight, 1), true)
-	if erg_auto_confirm:
+	if erg_auto_confirm and pedal_nav:
 		_auto_t += dt
 		if _auto_t >= auto_confirm_after_s() - 1e-6:
 			_pick("auto")
@@ -245,7 +256,7 @@ func auto_confirm_after_s() -> float:
 
 ## Seconds left until the ERG auto-pick (INF when auto-confirm is off).
 func auto_confirm_left_s() -> float:
-	if not erg_auto_confirm or _enabled_count() == 0:
+	if not erg_auto_confirm or not pedal_nav or _enabled_count() == 0:
 		return INF
 	return maxf(0.0, auto_confirm_after_s() - _auto_t)
 
@@ -482,8 +493,11 @@ func _style_row(i: int) -> void:
 func _update_hint() -> void:
 	if _hint == null:
 		return
-	if erg_auto_confirm and _enabled_count() > 0:
+	if not pedal_nav:
+		_hint.text = tr("UI_NAV_HINT")
+	elif erg_auto_confirm and _enabled_count() > 0:
 		_hint.text = tr("UI_SCAN_AUTO_IN").format([ceili(auto_confirm_left_s())])
+
 	elif _in_erg():
 		_hint.text = tr("UI_SCAN_HINT_ERG")
 	else:

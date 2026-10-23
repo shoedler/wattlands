@@ -15,6 +15,9 @@ WORKOUT_SUMMARY_ROLLING_ROAD,"30 minutes on a rolling course, holding 76-105% FT
 WORKOUT_SUMMARY_E2E,"A 2-minute check ride inside the warm-up limits, plus the cool-down."
 WORKOUT_SUMMARY_ZWO_SAMPLE,"A sample .zwo workout, clamped to the safety limits."
 WORKOUT_SUMMARY_ZWO,"A .zwo workout, clamped to the safety limits."
+WORKOUT_RIDE_TIB,Time in band: {0}%
+WORKOUT_RIDE_INTERVALS,Intervals ridden: {0} of {1}
+WORKOUT_RIDE_SPRINTS,Sprints hit: {0} of {1}
 WORKOUT_LBL_WARMUP,Warm-up
 WORKOUT_LBL_ENDURANCE_1,Endurance 1
 WORKOUT_LBL_ENDURANCE_2,Endurance 2

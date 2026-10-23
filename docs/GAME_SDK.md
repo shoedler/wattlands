@@ -1,6 +1,6 @@
 # Game SDK
 
-How to build a Wattlands game: the contract between a game and the platform, the tools a game session uses, and worked examples from the template game (`src/games/_template/`) and the reference game Workout (`src/games/workout/`). "BRIEF x.y" means a section of `docs/BRIEF.md`. The code is the final word: every type here is defined, with doc comments, in `addons/wattlands/contracts/` (frozen after W0; additive changes only), and the runtime that drives it lives in `addons/wattlands/sdk/`.
+How to build a WATTLANDS game: the contract between a game and the platform, the tools a game session uses, and worked examples from the template game (`src/games/_template/`) and the reference game Workout (`src/games/workout/`). "BRIEF x.y" means a section of `docs/BRIEF.md`. The code is the final word: every type here is defined, with doc comments, in `addons/wattlands/contracts/` (frozen after W0; additive changes only), and the runtime that drives it lives in `addons/wattlands/sdk/`.
 
 Read this with `CLAUDE.md` (rules, locks, conventions), `docs/ARCHITECTURE.md` (layers, time, sessions) and, for 2D pixel art, `docs/ART_PIPELINE.md`. Section 23 answers, one by one, the questions the game briefs' G0 steps ask of this document.
 
@@ -418,7 +418,8 @@ The template does the same with its lap toast (host: `peer = ctx.local_peer`; cl
 - `set_items([{id, text, disabled?, icon?, detail?}])`, `highlighted()`, `set_highlight(i)`, `tick(dt)` (headless tests; `_process` drives it in real time), `feed_gesture(name)`, `feed_action(name)`.
 - `scan_interval_s` (1.6), `scanning`, `erg_auto_confirm`, `follow_local_mode` (default false; set it true in a session and `erg_auto_confirm` follows the local rider's trainer mode, on in ERG: from the InputRouter's attached rider every tick, or from `set_local_mode(Telemetry.mode)` if you call it), `listen_to_input` (follow InputRouter automatically; off in headless tests), `items()`, `item_count()`, `set_item_disabled(i, disabled)` (disabled items are skipped), `auto_confirm_after_s()`, `auto_confirm_left_s()`; left and right move focus like up and down.
 - `surge` or `confirm` picks; `coast` or `back` backs out (`coast` never in ERG); up/down move focus and pause scanning for 10 s.
-- ERG auto-confirm: with `erg_auto_confirm` on, the highlighted item is picked after two full cycles (2 × item count × `scan_interval_s`) without input, whether or not scanning is on, so a rider with Autopilot off who only pedals still gets picks.
+- ERG auto-confirm: with `erg_auto_confirm` on, the highlighted item is picked after two full cycles (2 × item count × `scan_interval_s`) without input, whether or not scanning is on, so a rider who only pedals still gets picks.
+- Pedal navigation is opt-in (Settings, default off; BRIEF 3.5): set `pedal_nav = slot.pedal_nav` on every list from the local rider's `PlayerSlot` (`ctx.local_player()`). With it off the list never scans, never auto-confirms and ignores surge and coast, so a pick list is keyboard and controller only; Autopilot riders pick through `autopilot_intents`. `WlSurgeGraph` (`addons/wattlands/ui/surge_graph.gd`) is the reusable surge feedback widget for pedal-navigation pick lists: the last 5 s of the local rider's power with a line at the surge threshold (`GestureRecognizer.surge_threshold_w()`); set `enabled` from `slot.pedal_nav`; it hides itself in ERG, where the surge reads flywheel speed.
 - Signals: `item_chosen(index, id, auto: bool)` (auto is true for an auto-confirm), `item_picked(index, id, via: String)` emitted with it (`via` is `"action"`, `"surge"` or `"auto"`), `backed_out`, `highlight_changed(index)`.
 
 The platform never edits intents: tag your own, for example Siege's buy `{"k": "buy", "item": id, "pad": n, "auto": 1}` when `via == "auto"`.
@@ -503,7 +504,12 @@ Games never create a `GameHost`; the app shell, `GameSimRunner` (run_game_sim, c
 var res := GameResults.from_stats(ctx.stats, ctx.players)
 ```
 
-Each row holds `peer_id`, `slot_index`, `name`, `is_bot`, `kj`, `avg_power_w`, `avg_ftp_pct`, `np_w`, `best_1m_w`, `best_5m_w`, `best_20m_w`, `ride_s`, `time_in_band_s`, `time_in_band_pct` (generic: in ERG power within ±5 % of the applied target; in SIM power inside the published power band), plus `xp` (0), `unlocks` (`[]`) and `stats` (`{}`). Override time in band with your own definition, add custom per-rider values under `row["stats"]`, team values in `res.team`, and set `res.grade` (`"S"`..`"D"`; `GameResults.grade_from_fraction(f)` gives BRIEF 3.7's bands), `res.score` and `res.summary_key`. `res.row(peer)` finds a row. The platform sends the results to every client.
+Each row holds `peer_id`, `slot_index`, `name`, `is_bot`, `kj`, `avg_power_w`, `avg_ftp_pct`, `np_w`, `best_1m_w`, `best_5m_w`, `best_20m_w`, `ride_s`, `time_in_band_s`, `time_in_band_pct` (generic: in ERG power within ±5 % of the applied target; in SIM power inside the published power band), plus `xp` (0), `unlocks` (`[]`) and `stats` (`{}`). Override time in band with your own definition, add custom per-rider values under `row["stats"]`, team values in `res.team`, and set `res.grade` (`"S"`..`"D"`; `GameResults.grade_from_fraction(f)` gives BRIEF 3.7's bands), `res.score`, `res.summary_key`, `res.ride_tag` and `res.ride_lines`. `res.row(peer)` finds a row. The platform sends the results to every client.
+
+**Strava text.** Two more `GameResults` fields feed the ride's Strava activity (`WlRides`), so every game sets them:
+
+- `res.ride_tag: String`: the short tag in the title `WATTLANDS: <game title> - <ride_tag>`, for example the workout or plan name, or a mission and its outcome (`"Short shift - won"`). Empty falls back to the content's title (`<ID>_CONTENT_<CONTENT ID>`); with neither, the title is `WATTLANDS: <game title>`.
+- `res.ride_lines: Array[String]`: your own stat lines (translated, no heart rate), a few short ones. They open the description; the platform adds moving time, distance, average and normalized power, average cadence and work, and ends it with "Recorded with WATTLANDS". Strava's API takes no pictures, so there is no image.
 
 The results screen lists each row's `stats` and the `team` values in insertion order (the Dictionary's order), and the protocol keeps that order for clients, so add them in the order a rider should read them. Each rider's custom stats are one wrapped line that runs the full page width. With 4 or more rows, or when the page doesn't fit 1080p, each peer's results screen shows only the local rider's custom stats line (the grid still shows every rider's kJ, W, %FTP, NP, time in band and XP), so put what every rider needs to see in the grid's fields or in `res.team`.
 
@@ -612,7 +618,7 @@ Exit codes: 0 the run completed, whatever `end_reason` says; 2 bad flags (an unk
 | `trace` | object | peer → 1 Hz rows for every rider, bots included: `{t, game_t, phase, kind, mode, applied_target_w, applied_pct, applied_grade_pct, clamped_by, rescue, afk, paused, haptic, power_w, cadence_rpm, connected}` (`applied_pct` is % FTP; `haptic` the applied haptic grade) |
 | `snapshots` | array | `{seq, tick, sha256, bytes}` for every snapshot the host built at 10 Hz. SOLO runs record them too (measured, sent nowhere) |
 | `max_snapshot_bytes`, `oversize_snapshots` | int | The largest snapshot, and how many exceeded 16 384 bytes |
-| `results` | object | `GameResults.to_dict()`: `{grade, score, summary_key, rows, team, session_id}` |
+| `results` | object | `GameResults.to_dict()`: `{grade, score, summary_key, ride_tag, ride_lines, rows, team, session_id}` |
 | `unlocks` | object | peer → the new unlock ids `apply_progress` returned on that peer |
 | `clients` | array | HOST runs: per loopback client `{peer, state, events, directives, trace, results_grade}` (its own report data; `[]` in SOLO) |
 | `fit_paths` | array | Absolute FIT paths, one per human slot in slot order |

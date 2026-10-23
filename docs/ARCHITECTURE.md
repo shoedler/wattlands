@@ -1,6 +1,6 @@
-# Wattlands architecture
+# WATTLANDS architecture
 
-Wattlands is one Godot 4.7 project (GDScript, Compatibility renderer) that hosts several games. The platform lives in `addons/wattlands/`, the app shell in `src/app/`, games in `src/games/<id>/`, and the Node services in `server/` and `tools/`. "BRIEF x.y" refers to `docs/BRIEF.md`.
+WATTLANDS is one Godot 4.7 project (GDScript, Compatibility renderer) that hosts several games. The platform lives in `addons/wattlands/`, the app shell in `src/app/`, games in `src/games/<id>/`, and the Node services in `server/` and `tools/`. "BRIEF x.y" refers to `docs/BRIEF.md`.
 
 ## Layers
 

@@ -510,7 +510,7 @@ func test_focus_moves_keep_the_controls_row_on_a_1080p_screen() -> void:
 func test_every_settings_row_is_on_a_1080p_screen_when_highlighted() -> void:
 	var s: AppSettingsScreen = await _settings_at_1080p()
 	var off: Array[String] = []
-	for page: String in ["", "trainer", "strava", "haptics", "audio", "network", "pedal_ui"]:
+	for page: String in ["", "trainer", "strava", "haptics", "audio", "network", "pedal_nav"]:
 		if page != "":
 			s.open_section(page)
 		await wait_process_frames(2)
@@ -524,7 +524,7 @@ func test_every_settings_row_is_on_a_1080p_screen_when_highlighted() -> void:
 ## every row and the scan hint on screen, whichever row is highlighted.
 func test_settings_pages_that_fit_do_not_scroll() -> void:
 	var s: AppSettingsScreen = await _settings_at_1080p()
-	for page: String in ["", "trainer", "haptics", "audio", "network", "pedal_ui"]:
+	for page: String in ["", "trainer", "haptics", "audio", "network", "pedal_nav"]:
 		if page != "":
 			s.open_section(page)
 		await wait_process_frames(2)
@@ -700,10 +700,10 @@ func test_controls_page_has_a_reset_row_and_says_how_to_cancel() -> void:
 
 
 ## BRIEF 3.5 puts Esc and B on back, and both cancel a capture, so once back moved to other
-## inputs only Reset to defaults brings them back. With pedal-scan alone (no device used yet) it
-## restores every default and writes input.cfg.
+## inputs only Reset to defaults brings them back. With pedal navigation alone it restores every
+## default and writes input.cfg.
 func test_reset_to_defaults_by_pedal_scan_restores_esc_and_b_and_saves() -> void:
-	fx.give_profile()
+	fx.give_profile().pedal_nav = true
 	var router := _real_router()
 	router.rebind(&"back", _key_event(KEY_K))
 	router.rebind(&"back", _pad_event(JOY_BUTTON_PADDLE1))
@@ -711,7 +711,8 @@ func test_reset_to_defaults_by_pedal_scan_restores_esc_and_b_and_saves() -> void
 	assert_false(_bound(&"back", _key_event(KEY_ESCAPE)), "precondition: Esc left back")
 	assert_false(_bound(&"back", _pad_event(JOY_BUTTON_B)), "precondition: B left back")
 	assert_ne(_all_bindings(), _default_bindings(), "precondition: custom bindings")
-	assert_true(router.pedal_ui_active(), "precondition: no device used, the menus scan")
+	assert_true(router.pedal_nav_active(), "precondition: pedal navigation on, the menus scan")
+
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	assert_true(menu(s).scanning)
 	assert_true(scan_to(s, "controls"), "the scan reaches Controls")

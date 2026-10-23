@@ -109,6 +109,8 @@ func build_config(
 	if local_slot == null:
 		error = "APP_ERR_NO_LOCAL_SLOT"
 		return {}
+	# Pedal navigation is this machine's own choice, whatever the lobby listed.
+	local_slot.pedal_nav = profile.pedal_nav
 	if role == Wl.CLIENT:
 		# BRIEF 3.3 ("ERG targets always come from each rider's own FTP") and 4.6.7 (each client
 		# validates and clamps locally): a client's slot came from the host (session_start, or

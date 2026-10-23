@@ -1,7 +1,14 @@
 keys,en
 RIDES_MODULE_NAME,Rides
-RIDES_ACTIVITY_NAME,Wattlands: {game}
-RIDES_ACTIVITY_DESCRIPTION,"{content}: {kj} kJ, {avg_w} W average. Recorded with Wattlands on a smart trainer."
+RIDES_ACTIVITY_NAME,WATTLANDS: {game}
+RIDES_ACTIVITY_NAME_TAG,WATTLANDS: {game} - {tag}
+RIDES_DESC_MOVING,Moving time: {0}
+RIDES_DESC_DISTANCE,Distance: {0} km
+RIDES_DESC_AVG_POWER,Average power: {0} W
+RIDES_DESC_NP,Normalized power: {0} W
+RIDES_DESC_CADENCE,Average cadence: {0} rpm
+RIDES_DESC_KJ,Work: {0} kJ
+RIDES_DESC_FOOTER,Recorded with WATTLANDS
 RIDES_UPLOAD_TO_STRAVA,Upload to Strava
 RIDES_UPLOAD_QUEUED,Waiting to upload
 RIDES_UPLOAD_UPLOADING,Uploading to Strava
@@ -13,7 +20,7 @@ RIDES_UPLOAD_OFFLINE,Offline: the upload will be retried
 RIDES_STRAVA_CONNECT,Connect Strava
 RIDES_STRAVA_DISCONNECT,Disconnect Strava
 RIDES_STRAVA_DISCONNECTED,Strava not connected
-RIDES_STRAVA_CONNECTING,Connecting to Strava. Approve Wattlands in your browser.
+RIDES_STRAVA_CONNECTING,Connecting to Strava. Approve WATTLANDS in your browser.
 RIDES_STRAVA_CONNECTED,Strava connected
 RIDES_STRAVA_ERROR,Strava connection failed: {detail}
 RIDES_STRAVA_CLIENT_ID,Client ID
@@ -24,5 +31,5 @@ RIDES_HISTORY,Rides
 RIDES_REUPLOAD,Upload again
 RIDES_IMPORT_FTP_WEIGHT,Import FTP and weight from Strava
 RIDES_SAVED,Ride saved
-RIDES_CALLBACK_CONNECTING,Wattlands is connecting to Strava. You can close this window and return to the game.
-RIDES_CALLBACK_DENIED,Strava did not connect ({error}). You can close this window and return to Wattlands.
+RIDES_CALLBACK_CONNECTING,WATTLANDS is connecting to Strava. You can close this window and return to the game.
+RIDES_CALLBACK_DENIED,Strava did not connect ({error}). You can close this window and return to WATTLANDS.

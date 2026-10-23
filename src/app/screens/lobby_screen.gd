@@ -70,7 +70,10 @@ func _build() -> void:
 	role = Wl.SOLO if mode == "solo" else (Wl.HOST if mode == "host" else Wl.CLIENT)
 	my_autopilot = services.profile().autopilot_default
 	var ui := make_page("")
+	(ui["footer"] as Control).visible = false
+	scroll_menu_column(ui["right"] as Control)
 	title_label = ui["title"]
+
 	_left = ui["left"]
 	code_label = AppStyle.label("", AppStyle.FONT_CODE, AppStyle.ACCENT)
 	code_label.name = "RoomCode"
@@ -298,11 +301,11 @@ func set_autopilot(on: bool) -> void:
 	_refresh_all()
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this rider's Autopilot for the
-## session (the lobby toggle) counts as well as everything InputRouter.pedal_ui_active() checks
-## (pedal UI, the profile's Autopilot default, no input device used yet).
-func scanning_enabled() -> bool:
-	return my_autopilot or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): this rider's Autopilot for the session (the lobby toggle)
+## counts as well as everything InputRouter.pedal_nav_active() checks (the pedal navigation
+## setting, the profile's Autopilot default).
+func pedal_nav_enabled() -> bool:
+	return my_autopilot or super.pedal_nav_enabled()
 
 
 ## Send player_info only when it differs from the last one sent: the host's lobby_state echo of

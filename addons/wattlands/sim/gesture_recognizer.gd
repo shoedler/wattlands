@@ -228,6 +228,21 @@ func surge_baseline() -> float:
 	return _baseline(_last_t + EPS)
 
 
+## The power a surge needs right now outside ERG: max(1.3 x the 10 s average, the average +
+## 40 W), or -1 without enough pedaling history or inside ERG (where flywheel speed decides).
+## Read-only: the surge feedback graph draws it.
+func surge_threshold_w() -> float:
+	if in_erg:
+		return -1.0
+	var baseline := _baseline(_last_t + EPS)
+	return -1.0 if baseline < 0.0 else surge_bar_w(baseline)
+
+
+## The surge bar for a 10 s average power of `baseline_w`.
+static func surge_bar_w(baseline_w: float) -> float:
+	return maxf(SURGE_POWER_FACTOR * baseline_w, baseline_w + SURGE_POWER_ADD_W)
+
+
 func reset() -> void:
 	_history.clear()
 	_last_t = -INF
@@ -287,8 +302,7 @@ func _surge_check(t: float, power: float, speed: float) -> bool:
 func _qualifies(value: float, baseline: float) -> bool:
 	if in_erg:
 		return baseline > 0.0 and value >= SURGE_SPEED_FACTOR * baseline - EPS
-	var bar := maxf(SURGE_POWER_FACTOR * baseline, baseline + SURGE_POWER_ADD_W)
-	return value >= bar - EPS
+	return value >= surge_bar_w(baseline) - EPS
 
 
 ## Mean of the history in [t - 10 s, t) for the current mode's quantity, counting only samples
