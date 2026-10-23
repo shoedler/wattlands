@@ -1,29 +1,118 @@
-# CI for the tank game (written by tools/new_game; the tank game session owns this file).
-# Nothing is pushed during a build, so GitHub never runs it there: each step must pass locally first.
+# Diesel Domestiques (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, art,
+# rules-level balance harness, S8 stress, rules-step perf), its Node tests (the sim checker, the art
+# checks and the module's e2e report checker) and the script check; a second job runs a short subset of
+# the simulation matrix (tests/games/tank/sim/run_sims.sh: S2 zero riders, S5 rescue, S6 haptics off)
+# through tools/run_game_sim with the check_sims.mjs assertions and fit_check on every FIT. The full
+# matrix (S1-S7), the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
+# No fal call can happen here: FAL_KEY and WATTLANDS_ALLOW_ART are never set, and the art tests only
+# run generate.mjs with --dry-run.
+# Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
 name: game-tank
+
 on:
   push:
+    paths:
+      - "src/games/tank/**"
+      - "content/tank/**"
+      - "assets/tank/**"
+      - "tests/games/tank/**"
+      - ".github/workflows/game-tank.yml"
   pull_request:
+    paths:
+      - "src/games/tank/**"
+      - "content/tank/**"
+      - "assets/tank/**"
+      - "tests/games/tank/**"
+      - ".github/workflows/game-tank.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
-      WATTLANDS_NO_HW_CONTROL: '1'
-      WATTLANDS_NO_NETWORK_INTEGRATIONS: '1'
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '22'
-      - name: Install Godot 4.7.2
+          node-version: "22"
+
+      - name: Install Godot (standard Linux build)
         run: |
-          curl -fsSL -o "$RUNNER_TEMP/godot.zip" https://github.com/godotengine/godot/releases/download/4.7.2-stable/Godot_v4.7.2-stable_linux.x86_64.zip
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$url"
           unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
-          echo "GODOT=$RUNNER_TEMP/godot/Godot_v4.7.2-stable_linux.x86_64" >> "$GITHUB_ENV"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
       - name: Import
-        run: tools/godot.sh --headless --path . --import || true
-      - name: tank unit tests (BRIEF 7 strict rules)
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+
+      - name: Tank unit, static, art, balance, S8 and perf tests (GUT, BRIEF 7 strict rules)
         run: tools/run_tests --only=gut --gdir=res://tests/games/tank
+
+      - name: Tank Node tests (sim checker, art.json dry run, e2e report checker)
+        working-directory: tests/games/tank
+        run: node --test
+
       - name: Script check
         run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tank-test-logs
+          path: |
+            build/*.log
+            build/junit.xml
+          if-no-files-found: ignore
+
+  sims:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: test
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+      TANK_SEEDS: "1"
+      TANK_GODOT_TIMEOUT: "900"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Godot (standard Linux build)
+        run: |
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$url"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+
+      - name: FIT decoder dependencies (fit_check falls back to its GDScript decoder without them)
+        run: npm ci --prefix tools/fit_check || echo "npm ci failed (fit_check uses its GDScript decoder)"
+
+      - name: Simulation subset (S2, S5, S6 at seed 1), fit_check and check_sims
+        run: bash tests/games/tank/sim/run_sims.sh s2 s5 s6
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tank-sim-reports
+          path: build/tank/sims/*.json
+          if-no-files-found: ignore

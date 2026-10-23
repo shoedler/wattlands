@@ -709,7 +709,7 @@ export function rescueStats(r, peer) {
 export function checkS5(reports) {
   const title = 'cadence collapse to 30 rpm in a dynamo stage and in a 90% gun line: rescue, stagger, the plan continues';
   const cases = [
-    { name: 's5_c3_dynamo_drop', peer: '2', engine: 'dynamo', seg: 'advance', phase: 1 },
+    { name: 's5_c3_dynamo_drop', peer: '2', engine: 'dynamo', seg: 'gun_line', phase: 2 },
     { name: 's5_c3_gunline_drop', peer: '1', engine: 'diesel', seg: 'gun_line', phase: 2 },
   ];
   const { found, missing } = pick(reports, cases.map((c) => c.name));

@@ -13,7 +13,8 @@
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-3 as the S4 rule checks' other content (s1 is the other)
 #   s5  crew 3: cadence_drop to 30 rpm at at_phase + at_target_pct=60 in a dynamo stage (slot 1,
-#       stage 1 Advance, phase 1) and in a 90% gun line (slot 0, stage 1 gun line, phase 2)
+#       stage 1 gun line, phase 2: the dynamo is ERG 55-100% there and enemies drain the bank)
+#       and in a 90% gun line (slot 0, the same gun line, phase 2)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
 #
@@ -39,7 +40,7 @@ mkdir -p "$out"
 ERG='erg:compliance=1.0'
 # Cadence collapse to 30 rpm for 30 s once the rider's own plan phase is `at_phase` and its
 # applied ERG target is at least 60% FTP (the profile waits for it).
-DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
+DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 GUNLINE_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 
 # run <name> <run_game_sim flags...>: one run; stops the script when it fails.

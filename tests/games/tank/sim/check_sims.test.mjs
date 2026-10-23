@@ -489,29 +489,29 @@ function rescueRun(peer, phaseStart, from, to) {
 }
 
 test('S5 passes when the collapsing rider enters rescue in the right phase, recovers, and the plan continues', () => {
-  const set = { s5_c3_dynamo_drop: rescueRun('2', 300, 340, 380), s5_c3_gunline_drop: rescueRun('1', 500, 520, 560) };
+  const set = { s5_c3_dynamo_drop: rescueRun('2', 500, 520, 560), s5_c3_gunline_drop: rescueRun('1', 500, 520, 560) };
   const r = C.checkS5(set);
   assert.equal(r.status, 'PASS', ids(r.details));
   assert.equal(C.checkS5({}).status, 'SKIP');
 });
 
 test('S5 fails without rescue, with rescue that never ends, at the wrong power, and when the plan stops', () => {
-  const ok = rescueRun('2', 300, 340, 380);
+  const ok = rescueRun('2', 500, 520, 560);
   const gl = rescueRun('1', 500, 520, 560);
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: makeRun(3), s5_c3_gunline_drop: gl }).details), /never entered rescue/);
-  const endless = rescueRun('2', 300, 340, 99999);
+  const endless = rescueRun('2', 500, 520, 99999);
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: endless, s5_c3_gunline_drop: gl }).details), /rescue never ended/);
-  const strong = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 340 && row.t < 380 ? { ...row, rescue: true, applied_pct: 70, clamped_by: ['rescue'] } : row) });
+  const strong = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 520 && row.t < 560 ? { ...row, rescue: true, applied_pct: 70, clamped_by: ['rescue'] } : row) });
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: strong, s5_c3_gunline_drop: gl }).details), /rescue applied 70% FTP/);
-  const stopped = rescueRun('2', 300, 340, 380);
+  const stopped = rescueRun('2', 500, 520, 560);
   stopped.phases['2'] = stopped.phases['2'].slice(0, 5);
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: stopped, s5_c3_gunline_drop: gl }).details), /plan phases ran/);
-  const bystander = rescueRun('2', 300, 340, 380);
-  for (const row of bystander.trace['3']) if (row.t === 345) row.rescue = true;
+  const bystander = rescueRun('2', 500, 520, 560);
+  for (const row of bystander.trace["3"]) if (row.t === 525) row.rescue = true;
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: bystander, s5_c3_gunline_drop: gl }).details), /peer 3 \(not the collapsing rider\)/);
-  const unclamped = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 340 && row.t < 380 ? { ...row, rescue: true, applied_pct: 50 } : row) });
+  const unclamped = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 520 && row.t < 560 ? { ...row, rescue: true, applied_pct: 50 } : row) });
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: unclamped, s5_c3_gunline_drop: gl }).details), /clamped by rescue/);
-  const wrongPhase = makeRun(3, { extraRows: (row, p) => (p === '1' && row.t >= 320 && row.t < 360 ? { ...row, rescue: true, applied_pct: 50, clamped_by: ['rescue'] } : row) });
+  const wrongPhase = makeRun(3, { extraRows: (row, p) => (p === '1' && row.t >= 320 && row.t < 360 ? { ...row, rescue: true, applied_pct: 50, clamped_by: ["rescue"] } : row) });
   assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: ok, s5_c3_gunline_drop: wrongPhase }).details), /rescue began before phase 2/);
 });
 
