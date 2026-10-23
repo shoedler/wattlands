@@ -739,6 +739,57 @@ func test_teammates_max_width_wraps_then_scales() -> void:
 	assert_eq(v.columns(), 1)
 
 
+func _riders(n: int) -> Dictionary:
+	var r := {}
+	for i in n:
+		r[i + 1] = {"name": "R%d" % i, "slot_index": i}
+	return r
+
+
+func test_teammates_slot_prefers_one_row_scaled_to_width_and_height() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	tm.set_roster(_riders(3))
+	tm.set_max_size(Vector2(420, 66))
+	assert_eq(tm.columns(), 3, "one row")
+	var one_row_w := 3.0 * HudTeammates.CARD.x + 2.0 * HudTeammates.GAP
+	assert_almost_eq(tm.ui_scale, minf(420.0 / one_row_w, 66.0 / HudTeammates.CARD.y), 1e-4)
+	assert_gte(tm.ui_scale, HudTeammates.MIN_SCALE)
+	assert_lte(tm.custom_minimum_size.x, 420.0 + 0.5)
+	assert_lte(tm.custom_minimum_size.y, 66.0 + 0.5)
+	tm.set_roster(_riders(2))
+	tm.set_max_size(Vector2(420, 66))
+	assert_eq(tm.columns(), 2)
+	assert_almost_eq(tm.ui_scale, 66.0 / HudTeammates.CARD.y, 1e-4, "the height limits two cards")
+	tm.set_max_size(Vector2(2000, 500))
+	assert_eq(tm.ui_scale, 1.0, "never scaled up")
+
+
+func test_teammates_slot_too_small_keeps_the_minimum_scale_then_wraps() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	tm.set_roster(_riders(4))
+	tm.set_max_size(Vector2(420, 66))
+	assert_eq(tm.columns(), 2, "four cards need less than MIN_SCALE in one row: two rows")
+	assert_eq(tm.ui_scale, HudTeammates.MIN_SCALE)
+	tm.set_max_size(Vector2(10, 10))
+	assert_eq(tm.ui_scale, HudTeammates.MIN_SCALE, "never below MIN_SCALE")
+	tm.set_roster(_riders(1))
+	tm.set_max_size(Vector2(10, 10))
+	assert_eq(tm.columns(), 1)
+	assert_eq(tm.ui_scale, HudTeammates.MIN_SCALE)
+
+
+func test_teammates_set_max_width_after_a_slot_fit_is_anchored_again() -> void:
+	var tm: HudTeammates = _add(HudTeammates.new())
+	tm.set_roster(_riders(3))
+	tm.set_max_size(Vector2(420, 66))
+	tm.set_max_width(600.0)
+	assert_eq(tm.columns(), 2, "anchored: wraps into two rows, height ignored")
+	assert_eq(tm.ui_scale, 1.0)
+	tm.set_max_width(3000.0)
+	assert_eq(tm.columns(), 3)
+	assert_eq(tm.ui_scale, 1.0)
+
+
 func test_wrap_label() -> void:
 	var l := Label.new()
 	l.label_settings = WlTheme.label_settings(32)
