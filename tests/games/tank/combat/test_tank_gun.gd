@@ -413,3 +413,16 @@ func test_only_the_citadel_has_secondaries() -> void:
 		rig.no_fire = true
 		rig.run(4.0)
 		assert_eq(_secondary_shots(rig).size(), 0, "crew %d" % crew)
+
+
+func test_a_traverse_by_hand_pauses_the_auto_aim_so_it_is_not_undone() -> void:
+	var rig := _rig(2)
+	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	m.gun_s = 999.0
+	rig.send(_g(rig), {"k": "traverse"})
+	rig.run(0.1)
+	assert_almost_eq(rig.hull().aim_pause_s, 5.0, 0.2)
+	rig.load_shell(TankIds.SHELL_HEAVY)
+	rig.run(3.0)
+	assert_eq(rig.hull().facing, TankIds.FACE_LEFT, "turned to the rear and left there")
+	assert_eq(_gun_shots(rig).size(), 0)

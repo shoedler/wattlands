@@ -406,3 +406,44 @@ func test_at_the_shell_cap_an_enemy_shot_resolves_at_once() -> void:
 	)
 	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS, "no 25th shell")
 	assert_eq(rig.hull().hp, full - 4.0, "applied at once")
+
+
+# --- Raiders -------------------------------------------------------------------------------------
+
+
+func test_a_light_tank_harasses_for_linger_s_and_then_breaks_off_with_no_kill() -> void:
+	var rig := _rig(1)
+	var linger := float(rig.content.enemy_def("light")["linger_s"])
+	var e := _enter(rig, TankIds.ENEMY_LIGHT)
+	rig.run(8.0)
+	assert_eq(e.mode, TankIds.EM_HOLD)
+	rig.run(linger - 6.0)
+	assert_true(rig.state.enemies.has(e), "still on station")
+	assert_ne(e.mode, TankIds.EM_MOVE)
+	rig.run(10.0)
+	assert_eq(e.mode, TankIds.EM_MOVE, "it breaks off")
+	var shots := rig.of_type("shot").size()
+	rig.run(15.0)
+	assert_false(rig.state.enemies.has(e), "gone once off screen")
+	assert_eq(rig.of_type("kill").size(), 0)
+	assert_eq(rig.state.score.crew_kills, 0)
+	assert_eq(rig.of_type("shot").size(), shots, "a light tank that left fires no more")
+
+
+func test_a_light_tank_from_the_rear_breaks_off_to_the_left() -> void:
+	var rig := _rig(1)
+	var e := _enter(rig, TankIds.ENEMY_LIGHT, -1)
+	rig.run(float(rig.content.enemy_def("light")["linger_s"]) + 25.0)
+	assert_false(rig.state.enemies.has(e))
+	assert_eq(rig.of_type("kill").size(), 0)
+
+
+func test_other_enemies_never_leave() -> void:
+	var rig := _rig(3)
+	var m := _enter(rig, TankIds.ENEMY_MEDIUM)
+	var d := _enter(rig, TankIds.ENEMY_DESTROYER)
+	rig.hull().hp = 1.0e9
+	rig.hull().hp_max = 1.0e9
+	rig.run(120.0)
+	assert_true(rig.state.enemies.has(m))
+	assert_true(rig.state.enemies.has(d))

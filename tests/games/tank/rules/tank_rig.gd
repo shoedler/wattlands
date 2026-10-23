@@ -47,6 +47,8 @@ var no_fire: bool = false
 ## Seconds each segment ran when auto_phase moved on (index -> seconds).
 var seg_len: Dictionary = {}
 var ended_by: Dictionary = {}
+## The number of events each step raised, in order (event-rate checks).
+var event_counts: Array[int] = []
 
 
 func _init(
@@ -127,6 +129,7 @@ func step() -> Array[Dictionary]:
 	seg_t += Wl.SIM_DT
 	plan_t += Wl.SIM_DT
 	intents = {}
+	event_counts.append(out.size())
 	events.append_array(out)
 	if auto_phase:
 		_advance_phase()

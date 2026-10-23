@@ -119,3 +119,15 @@ func test_a_step_at_the_caps_stays_far_below_a_frame() -> void:
 		3.0,
 		"brief: <= 1 ms in a release build; the bound here is generous (debug build, shared CI)"
 	)
+
+
+func test_a_live_state_at_the_caps_encodes_into_a_valid_snapshot_under_4_kb() -> void:
+	var rig := _capped()
+	_top_up(rig)
+	rig.run(2.0)
+	_top_up(rig)
+	var snap := TankSnapshot.encode(rig.state)
+	assert_eq(TankSnapshotSchema.check(snap), "")
+	assert_lt(TankSnapshotSchema.byte_size(snap), TankConst.SNAPSHOT_MAX_BYTES)
+	assert_eq(rig.state.enemies.size(), TankConst.MAX_ENEMIES)
+	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS)

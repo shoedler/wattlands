@@ -109,6 +109,8 @@ static func _intent(
 		TankIds.INTENT_TRAVERSE:
 			if hull.traverse_s <= 0.0 and trav_rate > 0.0:
 				_start_traverse(state, gs)
+				# A turret turned by hand stays where it was sent for a while, like a nudge.
+				hull.aim_pause_s = c.num("tanks", "gun.manual_pause_s", 5.0)
 		TankIds.INTENT_FIRE:
 			if can_fire(hull):
 				var tgt := TankTargets.by_id(aux, hull.target_id)

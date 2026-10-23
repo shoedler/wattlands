@@ -593,3 +593,18 @@ func test_when_every_rider_is_afk_nothing_has_power() -> void:
 		"no gun fires"
 	)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY, "the loaded shell stays in the breech")
+
+
+func test_when_every_rider_is_afk_the_citadels_secondaries_stay_quiet_too() -> void:
+	var rig := TankRig.new(3)
+	rig.enter(ADVANCE, 20.0)
+	var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
+	e.hp = 500.0
+	e.hp_max = 500.0
+	for p in rig.slots:
+		rig.afk[p.peer_id] = true
+	rig.run(10.0)
+	assert_true(rig.state.all_afk)
+	assert_eq(e.hp, 500.0)
+	var quiet := rig.of_type("shot").filter(func(s: Dictionary) -> bool: return s["s"] >= 0)
+	assert_eq(quiet.size(), 0)
