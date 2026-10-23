@@ -10,6 +10,8 @@ extends Node2D
 ## Coordinates: the room node sits at its rect's top-left in the hull frame; its children use room
 ## coordinates, and anchor(key) / local(p) convert the rigs.json hull-frame points.
 
+## How long a lamp flares when the crew changes stations.
+const FLARE_S := 1.2
 ## Which room sprite shows the wall of `engine` ("room_<engine>").
 const WALL_PREFIX := "room_"
 
@@ -27,6 +29,8 @@ var station: TankStationState = null
 var front: TankPainter = null
 ## Pulse phase in cycles (one cycle per pedal stroke).
 var lamp_phase: float = 0.0
+## Seconds left of the station-change flare (the lamp glows whatever the band).
+var flare_s: float = 0.0
 
 var _wall: Texture2D = null
 
@@ -72,6 +76,7 @@ func feed(p_input: TankRoomInput, dt: float) -> void:
 	var inv := 1.0 / b
 	front.modulate = Color(inv, inv, inv)
 	lamp_phase = fposmod(lamp_phase + maxf(input.cadence, 0.0) / 60.0 * dt, 1.0)
+	flare_s = maxf(0.0, flare_s - dt)
 	animate(dt)
 	_lights()
 	front.queue_redraw()
@@ -197,4 +202,11 @@ func _lights() -> void:
 			tint(),
 			0.1 + 0.2 * clampf(input.frac, 0.0, 1.2)
 		)
+	if flare_s > 0.0:
+		var flare_look := (
+			input.look if not input.look.is_empty() else Wl.slot_look(maxi(input.slot, 0))
+		)
+		var k := flare_s / FLARE_S
+		var flare_color: Color = flare_look.get("color", Color.WHITE)
+		hub.lights.add(origin + anchor_local("lamp"), 26.0 + 14.0 * k, flare_color, 0.9 * k)
 	engine_lights()

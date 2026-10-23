@@ -531,3 +531,44 @@ func test_scenery_fires_burn_on_the_far_plane_and_tint_the_distance() -> void:
 				far = true
 	assert_true(far, "flames and smoke of distant fires sit on the hazed far plane")
 	assert_gt(v.backdrop.scenery_lights.count, 0)
+
+
+func test_the_halt_line_stands_where_the_road_ends() -> void:
+	var s := TankFixtures.state(1)
+	var length_m := float(s.content.segment(s.seg.phase_index)["length_m"])
+	s.hull.x_px = TankConst.m_to_px(length_m) - 300.0
+	var v := U.view_of(self, s)
+	var posts: Array[Dictionary] = []
+	for r in _rows(v.props_layer, "rect"):
+		if (r["r"] as Rect2).size == Vector2(3, 46):
+			posts.append(r)
+	assert_eq(posts.size(), 1, "one post with its banner")
+	var want := TankConst.m_to_px(length_m) + float(s.hull.hull_w) - s.camera_x()
+	assert_almost_eq((posts[0]["r"] as Rect2).position.x, want, 0.01)
+	s.hull.x_px = 0.0
+	s.tick += 1
+	U.run(v, 90)
+	var far := 0
+	for r in _rows(v.props_layer, "rect"):
+		far += 1 if (r["r"] as Rect2).size == Vector2(3, 46) else 0
+	assert_eq(far, 0, "off screen far from the end")
+	var g := TankFixtures.gun_line(1)
+	g.hull.x_px = TankConst.m_to_px(length_m) - 300.0
+	var vg := U.view_of(self, g)
+	var at_gun_line := 0
+	for r in _rows(vg.props_layer, "rect"):
+		at_gun_line += 1 if (r["r"] as Rect2).size == Vector2(3, 46) else 0
+	assert_eq(at_gun_line, 0, "only an Advance has a halt line")
+
+
+func test_a_station_change_flares_every_lamp() -> void:
+	var v := U.view_of(self, TankFixtures.state(3))
+	v.game.cue.emit(
+		TankEvents.ROTATION, TankEvents.rotation([[0, "dynamo"], [1, "steam"], [2, "diesel"]])
+	)
+	v.advance(0.016)
+	for room in v.rig.rooms:
+		assert_gt(room.flare_s, 0.0, room.engine)
+	U.run(v, 100)
+	for room in v.rig.rooms:
+		assert_eq(room.flare_s, 0.0)

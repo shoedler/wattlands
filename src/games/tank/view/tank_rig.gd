@@ -351,6 +351,12 @@ func hit(strength: float = 0.5) -> void:
 	add_shake(1.5 + 2.5 * strength)
 
 
+## The crew changed stations (a checkpoint): every room's lamp flares for a moment.
+func flash_rooms() -> void:
+	for room in rooms:
+		room.flare_s = TankRoomView.FLARE_S
+
+
 func add_shake(amp: float) -> void:
 	shake_amp = minf(maxf(shake_amp, amp), 4.0)
 

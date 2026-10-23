@@ -302,6 +302,8 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 		TankEvents.REPAIRED:
 			for i in 6:
 				fx.impact_sparks(rig.hull_point(Vector2(30.0 + float(i) * 12.0, 8.0)), Vector2.UP)
+		TankEvents.ROTATION:
+			rig.flash_rooms()
 		TankEvents.OVERRUN:
 			_cue_overrun(data)
 		TankEvents.BOSS_PHASE:
@@ -539,6 +541,7 @@ func _build_props(state: TankState) -> void:
 		var gs := TankSprites.size("depot_gate")
 		var gate_pos := Vector2(DEPOT_GATE_X - cam_x, ground - gs.y + 2.0)
 		rows.append(_sprite_row("depot_gate", gate_pos, gs, false, Color(0.78, 0.8, 0.84)))
+	_halt_line(rows, state)
 	_ground_props(rows, state)
 	for ob in state.obstacles:
 		_obstacle_row(rows, ob, state)
@@ -554,6 +557,30 @@ func _build_props(state: TankState) -> void:
 			var halo := 20.0 + 10.0 * burn
 			lights.add(pos + Vector2(sz.x * 0.5, sz.y * 0.3), halo, TankPalette.FIRE, 0.5 * burn)
 	props_layer.set_rows(rows)
+
+
+## The halt line of an Advance: a post with a striped banner and a lamp, standing where the hull's
+## front is when its rear reaches the end of the road (TankHudModel.halt_distance_m is zero there).
+func _halt_line(rows: Array[Dictionary], state: TankState) -> void:
+	if state.seg.seg != TankIds.SEG_ADVANCE or state.content == null:
+		return
+	var length_m := float(state.content.segment(state.seg.phase_index).get("length_m", 0.0))
+	if length_m <= 0.0:
+		return
+	var x := TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x
+	if x < -30.0 or x > float(TankConst.SCREEN_W) + 30.0:
+		return
+	var ground := float(TankConst.GROUND_Y)
+	rows.append({"t": "rect", "r": Rect2(x, ground - 46.0, 3, 46), "c": TankPalette.STEEL})
+	rows.append(
+		{"t": "rect", "r": Rect2(x - 1.0, ground - 48.0, 5, 3), "c": TankPalette.STEEL_BRIGHT}
+	)
+	for i in 5:
+		var col := TankPalette.PEARL if i % 2 == 0 else TankPalette.IRON
+		rows.append(
+			{"t": "rect", "r": Rect2(x + 3.0, ground - 44.0 + float(i) * 3.0, 20, 3), "c": col}
+		)
+	lights.add(Vector2(x + 1.5, ground - 50.0), 16.0, TankPalette.AMBER, 0.55)
 
 
 ## Craters and rubble on the ground plane, placed by a hash of the world cell (no RNG).

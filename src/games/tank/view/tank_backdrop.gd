@@ -41,6 +41,9 @@ var swaps: int = 0
 
 func _init() -> void:
 	name = "Backdrop"
+	# Every near plane is blurred now, once, so a segment change later is only a texture swap.
+	for id in NEAR_IDS:
+		TankBlur.plane(id, "near")
 	sky = _strip("Sky", "bg_sky", "sky", SKY_FACTOR, 0.0, false)
 	add_child(sky)
 	# The haze band sits between the sky and the hills so the hills' empty top shows smoke.
