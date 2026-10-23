@@ -197,6 +197,23 @@ func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 	assert_gte(scanned, 20, "the contracts, rules, effort, combat, net, autopilot and the module")
 
 
+func test_art_json_keeps_61_sprites_32_colours_and_the_no_people_no_text_clause() -> void:
+	var art: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string("res://assets/tank/art.json")
+	)
+	assert_lte((art["palette"] as Array).size(), 32)
+	assert_eq((art["sprites"] as Array).size(), 61)
+	var style := str(art["style"])
+	for clause: String in [
+		"No people, figures or faces", "no text, letters, numbers, flags, insignia"
+	]:
+		assert_string_contains(style, clause)
+	for id: String in TankPlaceholderArt.ids():
+		var img := TankPlaceholderArt.placeholder_image(id)
+		assert_eq(Vector2i(img.get_width(), img.get_height()), TankPlaceholderArt.size_of(id), id)
+		assert_not_null(TankPlaceholderArt.texture(id), id)
+
+
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
 	for path in _files(F.GAME_DIR, ["gd"]):
 		var text := FileAccess.get_file_as_string(path)
