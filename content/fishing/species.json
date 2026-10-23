@@ -1,0 +1,180 @@
+{
+	"species": [
+		{
+			"id": "mackerel",
+			"label": "FISHING_SPECIES_MACKEREL",
+			"sprite": "fish_mackerel",
+			"t_nom_s": [
+				60,
+				120
+			],
+			"max_s": 150,
+			"pull_pct": [
+				70,
+				80
+			],
+			"change_pct": 4,
+			"runs": {
+				"kind": "none",
+				"count": [
+					0,
+					0
+				],
+				"dur_s": [
+					0,
+					0
+				],
+				"peak_pct": [
+					0,
+					0
+				],
+				"peak_factor": 0,
+				"band_shift": 0,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": 10,
+			"kg": [
+				0.5,
+				2
+			],
+			"d_max": 40
+		},
+		{
+			"id": "mahi",
+			"label": "FISHING_SPECIES_MAHI",
+			"sprite": "fish_mahi",
+			"t_nom_s": [
+				120,
+				240
+			],
+			"max_s": 270,
+			"pull_pct": [
+				88,
+				95
+			],
+			"change_pct": 8,
+			"runs": {
+				"kind": "run",
+				"count": [
+					2,
+					3
+				],
+				"dur_s": [
+					15,
+					30
+				],
+				"peak_pct": [
+					105,
+					110
+				],
+				"peak_factor": 0,
+				"band_shift": 8,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": 8,
+			"kg": [
+				7,
+				20
+			],
+			"d_max": 80
+		},
+		{
+			"id": "tuna",
+			"label": "FISHING_SPECIES_TUNA",
+			"sprite": "fish_tuna",
+			"t_nom_s": [
+				240,
+				480
+			],
+			"max_s": 540,
+			"pull_pct": [
+				93,
+				97
+			],
+			"change_pct": 8,
+			"runs": {
+				"kind": "run",
+				"count": [
+					2,
+					4
+				],
+				"dur_s": [
+					20,
+					30
+				],
+				"peak_pct": [
+					0,
+					0
+				],
+				"peak_factor": 1.08,
+				"band_shift": 10,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": true
+			},
+			"band_offset": 5,
+			"kg": [
+				30,
+				90
+			],
+			"d_max": 120
+		},
+		{
+			"id": "marlin",
+			"label": "FISHING_SPECIES_MARLIN",
+			"sprite": "fish_marlin",
+			"t_nom_s": [
+				600,
+				1200
+			],
+			"max_s": 1320,
+			"pull_pct": [
+				85,
+				90
+			],
+			"change_pct": 8,
+			"runs": {
+				"kind": "jump",
+				"count": [
+					4,
+					8
+				],
+				"dur_s": [
+					20,
+					30
+				],
+				"peak_pct": [
+					104,
+					104
+				],
+				"peak_factor": 0,
+				"band_shift": 15,
+				"min_gap_s": 90,
+				"leaps": [
+					2,
+					3
+				],
+				"sounding": false
+			},
+			"band_offset": -2,
+			"kg": [
+				150,
+				400
+			],
+			"d_max": 200
+		}
+	]
+}

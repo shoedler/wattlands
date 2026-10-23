@@ -1,0 +1,24 @@
+{
+	"id": "e2e_2min",
+	"kind": "e2e",
+	"label": "FISHING_CONTENT_E2E_2MIN",
+	"area": "coral_bank",
+	"total_min": 2.25,
+	"ride_out": {
+		"duration_s": 15,
+		"target_pct": 50
+	},
+	"reel_pct": 55,
+	"schedule": {
+		"first_reel_s": 20,
+		"reel_s": 0,
+		"fights": 1,
+		"species": "mackerel",
+		"base_pct": 62,
+		"change_pct": 4,
+		"band_offset": 3,
+		"t_nom_s": 45,
+		"max_s": 70,
+		"runs": 0
+	}
+}

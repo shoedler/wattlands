@@ -1,0 +1,71 @@
+{
+	"unlock_every_xp": 500,
+	"items": [
+		{
+			"id": "line_orange",
+			"kind": "line",
+			"value": "#f28c28",
+			"label": "FISHING_UNLOCK_LINE_ORANGE"
+		},
+		{
+			"id": "canopy_stripes",
+			"kind": "canopy",
+			"value": "stripes",
+			"label": "FISHING_UNLOCK_CANOPY_STRIPES"
+		},
+		{
+			"id": "trim_teal",
+			"kind": "trim",
+			"value": "#2bb3a3",
+			"label": "FISHING_UNLOCK_TRIM_TEAL"
+		},
+		{
+			"id": "line_lime",
+			"kind": "line",
+			"value": "#9bd23c",
+			"label": "FISHING_UNLOCK_LINE_LIME"
+		},
+		{
+			"id": "canopy_dots",
+			"kind": "canopy",
+			"value": "dots",
+			"label": "FISHING_UNLOCK_CANOPY_DOTS"
+		},
+		{
+			"id": "trim_gold",
+			"kind": "trim",
+			"value": "#e8b730",
+			"label": "FISHING_UNLOCK_TRIM_GOLD"
+		},
+		{
+			"id": "line_pink",
+			"kind": "line",
+			"value": "#ef6fa6",
+			"label": "FISHING_UNLOCK_LINE_PINK"
+		},
+		{
+			"id": "canopy_waves",
+			"kind": "canopy",
+			"value": "waves",
+			"label": "FISHING_UNLOCK_CANOPY_WAVES"
+		},
+		{
+			"id": "trim_coral",
+			"kind": "trim",
+			"value": "#f2665a",
+			"label": "FISHING_UNLOCK_TRIM_CORAL"
+		},
+		{
+			"id": "line_violet",
+			"kind": "line",
+			"value": "#9b6be0",
+			"label": "FISHING_UNLOCK_LINE_VIOLET"
+		},
+		{
+			"id": "pennant_trophy",
+			"kind": "pennant",
+			"value": "trophy",
+			"label": "FISHING_UNLOCK_PENNANT_TROPHY"
+		}
+	]
+}
