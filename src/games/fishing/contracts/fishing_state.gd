@@ -13,6 +13,8 @@ var trip_kind: String = ""
 var roam: bool = false
 ## The ocean: the roam map or the endless workout map. Not serialized.
 var world: FishingWorld = null
+## species id -> FishingSpeciesDef (hint draws and Free Roam fights). Not serialized.
+var species: Dictionary = {}
 var riders: Array[FishingRiderState] = []
 
 # --- Clock -------------------------------------------------------------------------------------

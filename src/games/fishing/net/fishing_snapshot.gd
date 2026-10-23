@@ -1,172 +1,218 @@
 class_name FishingSnapshot
 extends RefCounted
-## Encodes FishingState as FishingSnapshotSchema's compact integer form and applies one back
-## (brief 2.6; fish-module owns this file). encode() runs on the host at 10 Hz; apply() overwrites
-## a client's state with everything the schema carries, so one snapshot fully restores a
-## rejoining client (its slots, peers and trip numbers come from its own configure). Every number
-## is cast with int() whatever Protocol.decode() did. Flags restore afk (also a stale rider),
-## rescue, run, replacement, off-line, stale cadence, the zero-input fallback, a frenzy (an
-## estimated end FRENZY_S after the client first sees it) and a jump (fight_slot points at the
-## lane's jumping slot); the trophy flag is the gaff meter at 255.
+## Encodes FishingState as FishingSnapshotSchema's compact integer form (v2) and applies one back.
+## encode() runs on the host at 10 Hz; apply() overwrites a client's state with everything the
+## schema carries, so one snapshot fully restores a rejoining client (its peers, world and
+## content come from its own configure). Every number is cast with int() whatever
+## Protocol.decode() did. The client's fish has no slot: its run kind comes from the jump flag.
+
+const S = preload("res://src/games/fishing/contracts/fishing_snapshot_schema.gd")
 
 
 static func encode(st: FishingState) -> Dictionary:
 	var rows: Array = []
-	for l in st.lanes:
-		var f := l.fish
-		var hints: Array = []
-		if l.state == FishingConst.ST_PICK:
-			for i in l.hint_count():
-				hints.append(
-					[
-						int(l.hints[3 * i]),
-						roundi(l.hints[3 * i + 1] * 10.0),
-						FishingSnapshotSchema.u8(l.hints[3 * i + 2])
-					]
-				)
-		var flags := 0
-		if l.rescue:
-			flags |= FishingSnapshotSchema.F_RESCUE
-		if l.afk or l.stale:
-			flags |= FishingSnapshotSchema.F_AFK
-		if f.run_active:
-			flags |= FishingSnapshotSchema.F_RUN
-			if l.fight_slot >= 0 and l.fight_slot < l.slots.size():
-				if l.slots[l.fight_slot].run_kind == FishingSpeciesDef.RUN_JUMP:
-					flags |= FishingSnapshotSchema.F_JUMP
-		if f.replacement:
-			flags |= FishingSnapshotSchema.F_REPLACEMENT
-		if l.gaff >= 1.0:
-			flags |= FishingSnapshotSchema.F_TROPHY
-		if l.cadence_stale or l.stale:
-			flags |= FishingSnapshotSchema.F_STALE
-		if l.frenzy_until_t > st.t:
-			flags |= FishingSnapshotSchema.F_FRENZY
-		if f.off_line:
-			flags |= FishingSnapshotSchema.F_OFF_LINE
-		if l.auto_plays():
-			flags |= FishingSnapshotSchema.F_FALLBACK
-		var row: Array = []
-		row.resize(FishingSnapshotSchema.L_COLUMNS)
-		row[FishingSnapshotSchema.L_SLOT] = l.slot
-		row[FishingSnapshotSchema.L_PHASE] = l.phase_index
-		row[FishingSnapshotSchema.L_STATE] = l.state
-		row[FishingSnapshotSchema.L_SPECIES] = f.sp
-		row[FishingSnapshotSchema.L_D_DM] = roundi(f.d * 10.0)
-		row[FishingSnapshotSchema.L_Z_PM] = roundi(f.z * 1000.0)
-		row[FishingSnapshotSchema.L_S] = FishingSnapshotSchema.u8(f.s)
-		row[FishingSnapshotSchema.L_STRAIN] = FishingSnapshotSchema.u8(l.strain)
-		row[FishingSnapshotSchema.L_SLACK] = FishingSnapshotSchema.u8(l.slack)
-		row[FishingSnapshotSchema.L_GAFF] = FishingSnapshotSchema.u8(l.gaff)
-		row[FishingSnapshotSchema.L_BAND_LO] = l.pub_lo
-		row[FishingSnapshotSchema.L_BAND_HI] = l.pub_hi
-		row[FishingSnapshotSchema.L_POWER_W] = roundi(l.power_w)
-		row[FishingSnapshotSchema.L_CADENCE] = roundi(l.cadence_ema)
-		row[FishingSnapshotSchema.L_SELECTED] = l.selected
-		row[FishingSnapshotSchema.L_LURE_DM] = roundi(l.lure_d * 10.0)
-		row[FishingSnapshotSchema.L_FLAGS] = flags
-		row[FishingSnapshotSchema.L_COSMETICS] = l.cosmetics.duplicate()
-		row[FishingSnapshotSchema.L_HINTS] = hints
-		row[FishingSnapshotSchema.L_STATE_DS] = roundi(l.state_t * 10.0)
-		row[FishingSnapshotSchema.L_POINTS] = l.points
-		row[FishingSnapshotSchema.L_LANDED] = l.fish_landed
-		rows.append(row)
+	for r in st.riders:
+		rows.append(_row(st, r))
 	var board: Array = []
-	for i in st.catches.size() / 3:
-		board.append([st.catches[3 * i], st.catches[3 * i + 1], st.catches[3 * i + 2]])
+	for i in st.catches.size() / 4:
+		board.append(
+			[st.catches[4 * i], st.catches[4 * i + 1], st.catches[4 * i + 2], st.catches[4 * i + 3]]
+		)
 	return {
-		"v": FishingSnapshotSchema.VERSION,
+		"v": S.VERSION,
 		"k": st.tick,
-		"L": rows,
+		"R": rows,
 		"T":
 		[
+			S.MODE_ROAM if st.roam else S.MODE_WORKOUT,
+			ceili(st.time_left_s() - 1e-6) if not st.time_up else 0,
+			int(st.time_up),
 			st.team_points,
 			st.team_fish,
 			st.hookup_level,
-			int(st.trip_over),
-			maxi(ceili(st.fishing_end_t - st.t), 0)
 		],
 		"C": board
 	}
 
 
+static func _row(st: FishingState, r: FishingRiderState) -> Array:
+	var f := r.fish
+	var hints: Array = []
+	if r.action == FishingConst.A_MENU:
+		for i in r.hint_count():
+			hints.append(
+				[
+					int(r.hints[4 * i]),
+					roundi(r.hints[4 * i + 1] * 10.0),
+					roundi(r.hints[4 * i + 2] * 10.0),
+					S.u8(r.hints[4 * i + 3])
+				]
+			)
+	var fighting := r.in_fight() and f.sp >= 0
+	var row: Array = []
+	row.resize(S.R_COLUMNS)
+	row[S.R_SLOT] = r.slot
+	row[S.R_X_DM] = roundi(r.x_m * 10.0)
+	row[S.R_HEADING] = r.heading
+	row[S.R_SPEED_CMS] = roundi(r.v_mps * 100.0)
+	row[S.R_PITCH_DD] = roundi(r.pitch_deg * 10.0)
+	row[S.R_WAKE] = S.u8(r.wake)
+	row[S.R_THROTTLE] = clampi(roundi(100.0 * r.p_eff_w / FishingConst.P_EFF_REF_W), 0, 255)
+	row[S.R_ACTION] = r.action
+	row[S.R_SELECTED] = r.selected if r.action == FishingConst.A_MENU else -1
+	row[S.R_MENU] = r.menu.duplicate() if r.action == FishingConst.A_MENU else []
+	row[S.R_SPECIES] = f.sp if fighting else r.target_sp
+	row[S.R_FISH_DX_DM] = roundi(r.fish_dx() * 10.0) if fighting else 0
+	row[S.R_FISH_DEPTH_DM] = roundi(f.depth_m() * 10.0) if fighting else 0
+	row[S.R_LURE_DX_DM] = roundi(r.lure_dx * 10.0)
+	row[S.R_LURE_DEPTH_DM] = roundi(r.lure_depth * 10.0)
+	row[S.R_LINE_DM] = roundi(r.line_m() * 10.0)
+	row[S.R_STRAIN] = S.u8(r.strain)
+	row[S.R_SLACK] = S.u8(r.slack)
+	row[S.R_GAFF] = S.u8(r.gaff)
+	row[S.R_STAMINA] = S.u8(f.s) if fighting else 0
+	row[S.R_BAND_LO] = r.pub_lo
+	row[S.R_BAND_HI] = r.pub_hi
+	row[S.R_POWER_W] = roundi(r.power_w)
+	row[S.R_CADENCE] = roundi(r.cadence_ema)
+	row[S.R_FLAGS] = flags(st, r)
+	row[S.R_POINTS] = r.points
+	row[S.R_LANDED] = r.fish_landed
+	row[S.R_COSMETICS] = r.cosmetics.duplicate()
+	row[S.R_HINTS] = hints
+	row[S.R_STATE_DS] = roundi(r.state_t * 10.0)
+	row[S.R_FURTHEST_DM] = roundi(r.furthest_x_m * 10.0)
+	return row
+
+
+static func flags(st: FishingState, r: FishingRiderState) -> int:
+	var fl := 0
+	if r.rescue or r.rescue_now:
+		fl |= S.F_RESCUE
+	if r.afk or r.stale:
+		fl |= S.F_AFK
+	if r.cadence_stale or r.stale:
+		fl |= S.F_STALE
+	if r.paused:
+		fl |= S.F_PAUSED
+	if r.p_eff_w > FishingConst.SPRINT_P_FRAC * FishingConst.P_EFF_REF_W:
+		fl |= S.F_SPRINT
+	var f := r.fish
+	if r.in_fight() and f.run_active:
+		fl |= S.F_RUN
+		if r.fight_slot >= 0 and r.fight_slot < r.slots.size():
+			if r.slots[r.fight_slot].run_kind == FishingSpeciesDef.RUN_JUMP:
+				fl |= S.F_JUMP
+	if r.gaff >= 1.0:
+		fl |= S.F_TROPHY
+	if r.in_fight() and f.replacement:
+		fl |= S.F_REPLACEMENT
+	if r.in_fight() and f.off_line:
+		fl |= S.F_OFF_LINE
+	if r.auto_plays():
+		fl |= S.F_AUTO
+	if r.pedal_nav:
+		fl |= S.F_PEDAL_NAV
+	if st.roam and r.phase_kind == Wl.WARMUP:
+		fl |= S.F_WARMUP
+	if r.is_bot:
+		fl |= S.F_BOT
+	return fl
+
+
 ## Overwrites `st` from `snap` (ints cast here whatever Protocol.decode did).
 static func apply(st: FishingState, snap: Dictionary) -> void:
-	if FishingSnapshotSchema.check(snap) != "":
-		push_warning("fishing: snapshot ignored: %s" % FishingSnapshotSchema.check(snap))
+	var why := S.check(snap)
+	if why != "":
+		push_warning("fishing: snapshot ignored: %s" % why)
 		return
 	st.tick = int(snap["k"])
 	st.t = st.tick * Wl.SIM_DT
-	for row: Array in snap["L"]:
-		var l := st.lane(int(row[FishingSnapshotSchema.L_SLOT]))
-		if l == null:
-			continue
-		var f := l.fish
-		l.phase_index = int(row[FishingSnapshotSchema.L_PHASE])
-		l.state = int(row[FishingSnapshotSchema.L_STATE])
-		f.sp = int(row[FishingSnapshotSchema.L_SPECIES])
-		f.d = int(row[FishingSnapshotSchema.L_D_DM]) / 10.0
-		f.z = int(row[FishingSnapshotSchema.L_Z_PM]) / 1000.0
-		f.s = FishingSnapshotSchema.unit(row[FishingSnapshotSchema.L_S])
-		l.strain = FishingSnapshotSchema.unit(row[FishingSnapshotSchema.L_STRAIN])
-		l.slack = FishingSnapshotSchema.unit(row[FishingSnapshotSchema.L_SLACK])
-		l.gaff = FishingSnapshotSchema.unit(row[FishingSnapshotSchema.L_GAFF])
-		l.pub_lo = int(row[FishingSnapshotSchema.L_BAND_LO])
-		l.pub_hi = int(row[FishingSnapshotSchema.L_BAND_HI])
-		l.power_w = float(int(row[FishingSnapshotSchema.L_POWER_W]))
-		l.cadence_ema = float(int(row[FishingSnapshotSchema.L_CADENCE]))
-		l.selected = int(row[FishingSnapshotSchema.L_SELECTED])
-		l.lure_d = int(row[FishingSnapshotSchema.L_LURE_DM]) / 10.0
-		var flags := int(row[FishingSnapshotSchema.L_FLAGS])
-		l.rescue = flags & FishingSnapshotSchema.F_RESCUE != 0
-		l.afk = flags & FishingSnapshotSchema.F_AFK != 0
-		f.run_active = flags & FishingSnapshotSchema.F_RUN != 0
-		f.replacement = flags & FishingSnapshotSchema.F_REPLACEMENT != 0
-		f.off_line = flags & FishingSnapshotSchema.F_OFF_LINE != 0
-		l.cadence_stale = flags & FishingSnapshotSchema.F_STALE != 0
-		l.fallback = flags & FishingSnapshotSchema.F_FALLBACK != 0
-		if flags & FishingSnapshotSchema.F_FRENZY == 0:
-			l.frenzy_until_t = 0.0
-		elif l.frenzy_until_t <= st.t:
-			l.frenzy_until_t = st.t + FishingConst.FRENZY_S
-		if f.run_active and flags & FishingSnapshotSchema.F_JUMP != 0:
-			l.fight_slot = _jump_slot(l, f.sp)
-		var cos: Array = row[FishingSnapshotSchema.L_COSMETICS]
-		for i in mini(cos.size(), 4):
-			l.cosmetics[i] = int(cos[i])
-		l.hints.clear()
-		for h: Variant in row[FishingSnapshotSchema.L_HINTS]:
-			l.hints.append(float(int(h[0])))
-			l.hints.append(int(h[1]) / 10.0)
-			l.hints.append(FishingSnapshotSchema.unit(h[2]))
-		l.state_t = int(row[FishingSnapshotSchema.L_STATE_DS]) / 10.0
-		l.points = int(row[FishingSnapshotSchema.L_POINTS])
-		l.fish_landed = int(row[FishingSnapshotSchema.L_LANDED])
+	for row: Array in snap["R"]:
+		var r := st.rider(int(row[S.R_SLOT]))
+		if r != null:
+			_apply_row(r, row)
 	var tm: Array = snap["T"]
-	st.team_points = int(tm[FishingSnapshotSchema.T_POINTS])
-	st.team_fish = int(tm[FishingSnapshotSchema.T_FISH])
-	st.hookup_level = int(tm[FishingSnapshotSchema.T_HOOKUP])
-	st.trip_over = int(tm[FishingSnapshotSchema.T_TRIP_OVER]) != 0
+	st.roam = int(tm[S.T_MODE]) == S.MODE_ROAM
+	st.time_up = int(tm[S.T_OVER]) != 0
+	if not st.time_up:
+		st.play_end_t = st.t + float(int(tm[S.T_TIME_LEFT_S]))
+	st.team_points = int(tm[S.T_POINTS])
+	st.team_fish = int(tm[S.T_FISH])
+	st.hookup_level = int(tm[S.T_HOOKUP])
 	st.catches.clear()
 	for c: Variant in snap["C"]:
 		for v: Variant in c:
 			st.catches.append(int(v))
 
 
-## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 lanes).
+static func _apply_row(r: FishingRiderState, row: Array) -> void:
+	var f := r.fish
+	r.x_m = int(row[S.R_X_DM]) / 10.0
+	r.heading = 1 if int(row[S.R_HEADING]) >= 0 else -1
+	r.v_mps = int(row[S.R_SPEED_CMS]) / 100.0
+	r.pitch_deg = int(row[S.R_PITCH_DD]) / 10.0
+	r.wake = S.unit(row[S.R_WAKE])
+	r.p_eff_w = int(row[S.R_THROTTLE]) * FishingConst.P_EFF_REF_W / 100.0
+	var action := int(row[S.R_ACTION])
+	if action != r.action:
+		r.action = action
+	r.selected = int(row[S.R_SELECTED])
+	r.menu.clear()
+	for m: Variant in row[S.R_MENU]:
+		r.menu.append(int(m))
+	var sp := int(row[S.R_SPECIES])
+	var fighting := r.in_fight()
+	r.target_sp = sp
+	f.sp = sp if fighting else FishingConst.SP_NONE
+	var dx := int(row[S.R_FISH_DX_DM]) / 10.0
+	f.d = absf(dx)
+	var depth := int(row[S.R_FISH_DEPTH_DM]) / 10.0
+	f.hook_depth_m = maxf(depth, 1.0)
+	f.z = depth / f.hook_depth_m
+	r.lure_dx = int(row[S.R_LURE_DX_DM]) / 10.0
+	r.lure_depth = int(row[S.R_LURE_DEPTH_DM]) / 10.0
+	r.strain = S.unit(row[S.R_STRAIN])
+	r.slack = S.unit(row[S.R_SLACK])
+	r.gaff = S.unit(row[S.R_GAFF])
+	f.s = S.unit(row[S.R_STAMINA])
+	r.pub_lo = int(row[S.R_BAND_LO])
+	r.pub_hi = int(row[S.R_BAND_HI])
+	r.power_w = float(int(row[S.R_POWER_W]))
+	r.cadence_ema = float(int(row[S.R_CADENCE]))
+	var fl := int(row[S.R_FLAGS])
+	r.rescue = fl & S.F_RESCUE != 0
+	r.afk = fl & S.F_AFK != 0
+	r.cadence_stale = fl & S.F_STALE != 0
+	r.paused = fl & S.F_PAUSED != 0
+	f.run_active = fl & S.F_RUN != 0
+	f.replacement = fl & S.F_REPLACEMENT != 0
+	f.off_line = fl & S.F_OFF_LINE != 0
+	r.pedal_nav = fl & S.F_PEDAL_NAV != 0
+	if fl & S.F_WARMUP != 0:
+		r.phase_kind = Wl.WARMUP
+	elif r.phase_kind == Wl.WARMUP:
+		r.phase_kind = Wl.FREE
+	r.points = int(row[S.R_POINTS])
+	r.fish_landed = int(row[S.R_LANDED])
+	var cos: Array = row[S.R_COSMETICS]
+	for i in mini(cos.size(), 4):
+		r.cosmetics[i] = int(cos[i])
+	r.hints.clear()
+	for h: Variant in row[S.R_HINTS]:
+		r.hints.append(float(int(h[S.H_SPECIES])))
+		r.hints.append(int(h[S.H_DX_DM]) / 10.0)
+		r.hints.append(int(h[S.H_DEPTH_DM]) / 10.0)
+		r.hints.append(S.unit(h[S.H_SIZE]))
+	r.state_t = int(row[S.R_STATE_DS]) / 10.0
+	r.furthest_x_m = int(row[S.R_FURTHEST_DM]) / 10.0
+
+
+## True when the row's active run is a jump (the client has no slot to ask).
+static func row_jumping(row: Array) -> bool:
+	return int(row[S.R_FLAGS]) & S.F_JUMP != 0
+
+
+## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 riders).
 static func byte_size(snap: Dictionary) -> int:
 	return JSON.stringify(snap).to_utf8_buffer().size()
-
-
-## A client knows its lanes' pre-rolled slots but not which one is on the line: the jump flag
-## points it at the lane's first jumping slot of that species (the marlin), keeping fight_slot
-## when it already is one.
-static func _jump_slot(l: FishingLaneState, sp: int) -> int:
-	if l.fight_slot >= 0 and l.fight_slot < l.slots.size():
-		var cur := l.slots[l.fight_slot]
-		if cur.sp == sp and cur.run_kind == FishingSpeciesDef.RUN_JUMP:
-			return l.fight_slot
-	for s in l.slots:
-		if s.sp == sp and s.run_kind == FishingSpeciesDef.RUN_JUMP:
-			return s.index
-	return l.fight_slot

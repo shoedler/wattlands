@@ -58,6 +58,8 @@ var hints: Array[float] = []
 var hints_x: float = -INF
 ## Autopilot and bots: stop at this x (NAN: no stop planned).
 var stop_x: float = NAN
+## The menu opened right after a catch (Autopilot may move on).
+var just_landed: bool = false
 
 # --- Lure ------------------------------------------------------------------------------------
 ## The species fished for (A_CAST, A_WAIT; -1 none) and the cast hint's size w.

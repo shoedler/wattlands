@@ -54,8 +54,9 @@ const BOAT_MASS_KG := 400.0
 const THRUST_V0 := 1.0  ## thrust = P_eff / max(|v|, V0) N
 const DRAG_QUAD := 1.6  ## N per (m/s)^2: 250 W holds 5 m/s, crossing 9 km in 30 min
 const DRAG_LIN := 2.0  ## N per m/s
+const DRIFT_DRAG_LIN := 80.0  ## with the prop free the hull brakes hard: ~5 s time constant
 const DRIFT_P_FRAC := 0.2  ## under 20 % FTP-equivalent the prop disengages
-const STOP_SPEED := 0.15  ## a drifting boat counts as stopped below this
+const STOP_SPEED := 0.3  ## a drifting boat counts as stopped below this
 const DRIVE_ON_P_FRAC := 0.8  ## pedaling >= 80 % for DRIVE_ON_S in the menu drives on
 const DRIVE_ON_S := 2.0
 const SPRINT_P_FRAC := 1.05  ## the sprint flag (wake icon): P_eff > 105 % FTP-equivalent
@@ -180,8 +181,9 @@ const HAPTIC_AT_MAX_S := 6.0
 const HAPTIC_PLAN_MIN_S := 300.0  ## never in the first 300 s of the plan
 
 # --- Points, grades, XP ---------------------------------------------------------------------
-const POINTS_BASE := 20.0  ## points = round(20 + 10 x sqrt(kg)) x grade x hookup
-const POINTS_PER_SQRT_KG := 10.0
+const POINTS_BASE := 15.0  ## points = round(15 + 12 x kg^0.55) x grade x hookup
+const POINTS_PER_KG_EXP := 12.0
+const POINTS_EXP := 0.55
 const GRADE_TROPHY := 1  ## landed event `grade`: 1 trophy, 0 landed
 const GRADE_LANDED := 0
 const TROPHY_MULT := 1.5
@@ -219,9 +221,11 @@ static func hookup_mult(count: int) -> float:
 	return float(HOOKUP_MULT[clampi(count, 0, HOOKUP_MULT.size() - 1)])
 
 
-## round(20 + 10 x sqrt(kg)): a fish's points before grade and hookup.
+## round(15 + 12 x kg^0.55): a fish's points before grade and hookup. A 1 kg mackerel scores 27,
+## a 13 kg mahi 64, a 60 kg tuna 128, a 200 kg grouper 237: many small fish near the dock and a
+## few giants far out both pay.
 static func base_points(kg: float) -> int:
-	return roundi(POINTS_BASE + POINTS_PER_SQRT_KG * sqrt(maxf(kg, 0.0)))
+	return roundi(POINTS_BASE + POINTS_PER_KG_EXP * pow(maxf(kg, 0.0), POINTS_EXP))
 
 
 ## Team grade letter for points / expected points (no started fish: "D").
