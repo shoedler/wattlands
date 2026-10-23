@@ -8,6 +8,13 @@ extends SiegeHudPanel
 
 const CONNECT_S := 2.0
 const BUTTON_SIZE := Vector2(84, 56)
+## The control each button stands for (SiegeGame.local_intents maps it to the route target).
+const ACTION_OF := {
+	"prev": &"left",
+	"gen": &"up",
+	"next": &"right",
+	"hot": &"down",
+}
 
 var caption_label: Label = null
 var target_label: Label = null
@@ -58,8 +65,16 @@ func _init() -> void:
 	visible = false
 
 
+## Goes through the module's local_intents, the path the keyboard and the pad take, so a client
+## also predicts the new route at once instead of waiting for the host's route event.
 func _on_route_pressed(to: String) -> void:
-	send(SiegeIntents.route(to, SiegeIds.VIA_BUTTON))
+	if game == null:
+		return
+	var actions: Array[StringName] = [ACTION_OF[to]]
+	var gestures: Array[StringName] = []
+	for intent: Dictionary in game.local_intents(actions, gestures):
+		intent["via"] = SiegeIds.VIA_BUTTON
+		send(intent)
 
 
 func refresh() -> void:

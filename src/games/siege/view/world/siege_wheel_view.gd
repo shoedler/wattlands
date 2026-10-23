@@ -10,7 +10,9 @@ extends Node3D
 const WHEEL_SEGMENTS := 16
 const SLATS := 12
 const MAST_TOP_Y := 7.7
-const FLAG_SIZE := Vector2(3.2, 1.9)
+## 1.5 times the first cut: a 3.2 x 1.9 m flag was too small to tell slots apart from 3 m away.
+const FLAG_SIZE := Vector2(4.8, 2.85)
+const FLAG_BASE_W := 3.2
 const WORKER_SCALE := 1.3
 
 var slot: int = 0
@@ -108,6 +110,8 @@ static func build_pennant_mesh(look: Dictionary, is_bot: bool) -> LowPolyMesh:
 	var w := FLAG_SIZE.x
 	var h := FLAG_SIZE.y
 	var pattern := str(look.get("pattern", "solid"))
+	# The marks were laid out for FLAG_BASE_W wide; k scales them with the flag.
+	var k := w / FLAG_BASE_W
 	# Both faces, as one thin slab.
 	m.add_box(Vector3(w, h, 0.06), col, Transform3D(Basis(), Vector3(w * 0.5, 0.0, 0.0)))
 	if is_bot:
@@ -115,7 +119,7 @@ static func build_pennant_mesh(look: Dictionary, is_bot: bool) -> LowPolyMesh:
 		for i in teeth:
 			var y := -h * 0.5 + h * (float(i) + 0.5) / float(teeth)
 			var p0 := Vector3(w, y - h / float(teeth) * 0.5, 0.0)
-			var p1 := Vector3(w + 0.38, y, 0.0)
+			var p1 := Vector3(w + 0.38 * k, y, 0.0)
 			var p2 := Vector3(w, y + h / float(teeth) * 0.5, 0.0)
 			m.add_triangle(p0, p1, p2, col, Vector3(0, 0, 1))
 			m.add_triangle(p0, p1, p2, col, Vector3(0, 0, -1))
@@ -125,31 +129,31 @@ static func build_pennant_mesh(look: Dictionary, is_bot: bool) -> LowPolyMesh:
 			for i in 3:
 				for zs: float in [-1.0, 1.0]:
 					m.add_box(
-						Vector3(0.7, 0.26, 0.04),
+						Vector3(0.7 * k, 0.26 * k, 0.04),
 						mark,
-						Transform3D(Basis(), Vector3(0.5 + float(i) * 0.95, 0.0, zs * z))
+						Transform3D(Basis(), Vector3((0.5 + float(i) * 0.95) * k, 0.0, zs * z))
 					)
 		"dotted":
 			for i in 4:
 				for zs: float in [-1.0, 1.0]:
 					m.add_box(
-						Vector3(0.3, 0.3, 0.04),
+						Vector3(0.3 * k, 0.3 * k, 0.04),
 						mark,
-						Transform3D(Basis(), Vector3(0.45 + float(i) * 0.75, 0.0, zs * z))
+						Transform3D(Basis(), Vector3((0.45 + float(i) * 0.75) * k, 0.0, zs * z))
 					)
 		"double":
-			for yy: float in [-0.55, 0.55]:
+			for yy: float in [-0.55 * k, 0.55 * k]:
 				for zs: float in [-1.0, 1.0]:
 					m.add_box(
-						Vector3(w - 0.3, 0.2, 0.04),
+						Vector3(w - 0.3 * k, 0.2 * k, 0.04),
 						mark,
 						Transform3D(Basis(), Vector3(w * 0.5, yy, zs * z))
 					)
-	# The mast stub.
+	# The mast stub: runs past the flag at both ends, so the flag hangs from a visible pole.
 	m.add_box(
-		Vector3(0.12, h + 0.3, 0.12),
+		Vector3(0.16, h + 1.1, 0.16),
 		SiegePalette.WOOD_DARK,
-		Transform3D(Basis(), Vector3(0.0, -0.05, 0.0))
+		Transform3D(Basis(), Vector3(0.0, 0.2, 0.0))
 	)
 	return m
 

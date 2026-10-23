@@ -92,6 +92,23 @@ func test_route_card_connect_bar_fills_over_the_2_s_reconnect() -> void:
 	assert_false(c.connect_bar.visible)
 
 
+func test_a_clients_route_button_predicts_the_route_at_once() -> void:
+	_game.ctx.role = Wl.CLIENT
+	var c := _add(SiegeRouteCard.new()) as SiegeRouteCard
+	c.game = _game
+	c.refresh()
+	var me := _state.rider(_game.ctx.local_peer)
+	var before := me.target
+	(c.buttons["gen"] as Button).pressed.emit()
+	if before == SiegeIds.TARGET_GEN:
+		(c.buttons["next"] as Button).pressed.emit()
+	assert_ne(me.target, before, "the local rider's target moved without a host reply")
+	assert_gt(me.reconnect_s, 0.0, "and the connect bar runs")
+	var sent := SiegeHudUtil.intents_sent(_game)
+	assert_gte(sent.size(), 1)
+	assert_eq((sent[0] as Dictionary)["via"], "button")
+
+
 func test_route_buttons_send_route_intents_tagged_button() -> void:
 	var c := _add(SiegeRouteCard.new()) as SiegeRouteCard
 	c.game = _game

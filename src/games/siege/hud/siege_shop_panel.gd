@@ -33,22 +33,25 @@ func _init() -> void:
 	card = PanelContainer.new()
 	card.name = "Card"
 	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	card.add_theme_stylebox_override("panel", WlTheme.panel_style())
+	var style := WlTheme.panel_style()
+	style.content_margin_top = 4.0
+	style.content_margin_bottom = 4.0
+	card.add_theme_stylebox_override("panel", style)
 	card.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	card.grow_vertical = Control.GROW_DIRECTION_END
 	add_child(card)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 8)
+	box.add_theme_constant_override("separation", 2)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	card.add_child(box)
-	title_label = SiegeHudPanel.make_label(WlTheme.MENU_PX, WlTheme.TEXT, true)
+	title_label = SiegeHudPanel.make_label(WlTheme.BODY_PX, WlTheme.TEXT, true)
 	box.add_child(title_label)
 	countdown_label = SiegeHudPanel.make_label(WlTheme.BODY_PX, WlTheme.WARN, true)
 	box.add_child(countdown_label)
 	list = PedalScanList.new()
 	list.name = "Items"
 	list.item_font_px = ITEM_PX
-	list.add_theme_constant_override("separation", 6)
+	list.add_theme_constant_override("separation", 3)
 	list.follow_local_mode = true
 	list.erg_auto_confirm = true
 	list.item_picked.connect(_on_item_picked)

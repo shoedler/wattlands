@@ -15,7 +15,7 @@ const GEN_RADIUS_M := 3.2
 const GEN_BODY_TOP_Y := 4.1
 const FLYWHEEL_Y := 4.55
 const PLAQUE_TILT_DEG := 30.0
-const PLAQUE_SIZE := Vector2(13.4, 4.6)
+const PLAQUE_SIZE := Vector2(14.6, 5.0)
 const PLAQUE_CENTER := Vector3(0.0, 10.8, -0.5)
 const CHAIN_LIFT_M := 0.45
 const GATE_DOOR_H := 4.4
@@ -220,7 +220,7 @@ func _wheel_frame() -> LowPolyMesh:
 		f.add_box(Vector3(0.45, post_h, 0.45), SiegePalette.WOOD, _at(0.6, post_h * 0.5, z))
 		f.add_box(Vector3(1.8, 0.35, 0.6), SiegePalette.BRONZE_DARK, _at(0.0, WHEEL_Y, z))
 	# The pennant mast stands at the back of the platform, clear of the wheel.
-	f.add_cylinder(0.09, 0.09, 5.25, 5, SiegePalette.WOOD_DARK, _at(0.0, 3.075, MAST_Z))
+	f.add_cylinder(0.11, 0.11, 7.6, 5, SiegePalette.WOOD_DARK, _at(0.0, 4.25, MAST_Z))
 	f.darken_near_ground(0.0, 1.0, 0.3)
 	return f
 

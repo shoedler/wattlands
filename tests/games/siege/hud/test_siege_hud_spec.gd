@@ -15,6 +15,11 @@ func before_each() -> void:
 
 
 func after_each() -> void:
+	# The spec's Controls are never added to a tree here: free them.
+	for c in _spec.controls:
+		var node: Control = c["control"]
+		if is_instance_valid(node):
+			node.free()
 	SiegeHudUtil.free_game(_game)
 
 
@@ -59,8 +64,9 @@ func test_bottom_left_has_gauge_cadence_and_wbal() -> void:
 	)
 
 
-func test_bottom_centre_has_the_teammate_strip_and_siege_own_strip_beside_it() -> void:
-	assert_eq(_widgets_at(HudSpec.BOTTOM), [HudSpec.TEAMMATES] as Array[String])
+func test_bottom_centre_has_only_siege_strip_so_w_and_ftp_show_once() -> void:
+	assert_eq(_widgets_at(HudSpec.BOTTOM), [] as Array[String], "no kit card strip beside it")
+	assert_false(_spec.has_widget(HudSpec.TEAMMATES))
 	var ctl := _controls_at(HudSpec.BOTTOM)
 	assert_eq(ctl.size(), 1)
 	assert_true(ctl[0] is SiegeStripOverlay)
@@ -74,7 +80,8 @@ func test_bottom_right_has_the_gear_the_overdrive_button_and_the_routing_card() 
 	assert_true(ctl[1] is SiegeRouteCard)
 
 
-func test_the_shop_is_a_centre_rect_clear_of_the_panic_corner_and_the_corner_stacks() -> void:
+func test_the_shop_is_a_centre_rect_below_the_fort_clear_of_the_panic_corner_and_the_stacks(
+) -> void:
 	var r := SiegeHud.SHOP_RECT
 	var found := false
 	for c in _spec.controls:
@@ -84,15 +91,20 @@ func test_the_shop_is_a_centre_rect_clear_of_the_panic_corner_and_the_corner_sta
 	assert_true(found)
 	var panic := Rect2(Vector2(SCREEN.x - 32.0 - PANIC.x, SCREEN.y - 32.0 - PANIC.y), PANIC)
 	assert_false(Rect2(r).intersects(panic))
-	assert_gt(r.position.x, 672, "right of the top-left stack (640 wide + 32 margin)")
-	assert_lt(r.end.x, 1548, "left of the top-right stack")
-	assert_gte(r.position.y, 96, "below the top-centre banners")
-	assert_lte(r.end.y, 700, "above the bottom-centre strip")
+	# The camera frames the fort's front wall down to y 455; the strip starts at about y 950.
+	assert_gte(
+		r.position.y, 455, "below the fort: the generator, drum, wheels and towers stay clear"
+	)
+	assert_lte(r.end.y, 950, "above the bottom-centre strip")
+	assert_gt(r.position.x, 450, "right of the bottom-left stack")
+	assert_lt(r.end.x, 1470, "left of the bottom-right stack")
+	assert_gte(r.get_center().x, 940)
+	assert_lte(r.get_center().x, 980)
 
 
 func test_toasts_and_banners_and_the_safety_banners_stay_on() -> void:
-	assert_eq(_spec.toast_area, HudSpec.TOP_RIGHT, "clear of the centre shop")
-	assert_eq(_spec.banner_area, HudSpec.TOP)
+	assert_eq(_spec.toast_area, HudSpec.TOP_RIGHT)
+	assert_eq(_spec.banner_area, HudSpec.TOP_LEFT, "the rescue banner stays off the generator")
 	assert_true(_spec.show_safety_banners)
 
 
