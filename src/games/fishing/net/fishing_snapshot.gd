@@ -1,7 +1,13 @@
 class_name FishingSnapshot
 extends RefCounted
 ## Encodes FishingState as FishingSnapshotSchema's compact integer form and applies one back
-## (brief 2.6). G0 version; fish-module owns this file.
+## (brief 2.6; fish-module owns this file). encode() runs on the host at 10 Hz; apply() overwrites
+## a client's state with everything the schema carries, so one snapshot fully restores a
+## rejoining client (its slots, peers and trip numbers come from its own configure). Every number
+## is cast with int() whatever Protocol.decode() did. Flags restore afk (also a stale rider),
+## rescue, run, replacement, off-line, stale cadence, the zero-input fallback, a frenzy (an
+## estimated end FRENZY_S after the client first sees it) and a jump (fight_slot points at the
+## lane's jumping slot); the trophy flag is the gaff meter at 255.
 
 
 static func encode(st: FishingState) -> Dictionary:
@@ -118,6 +124,13 @@ static func apply(st: FishingState, snap: Dictionary) -> void:
 		f.replacement = flags & FishingSnapshotSchema.F_REPLACEMENT != 0
 		f.off_line = flags & FishingSnapshotSchema.F_OFF_LINE != 0
 		l.cadence_stale = flags & FishingSnapshotSchema.F_STALE != 0
+		l.fallback = flags & FishingSnapshotSchema.F_FALLBACK != 0
+		if flags & FishingSnapshotSchema.F_FRENZY == 0:
+			l.frenzy_until_t = 0.0
+		elif l.frenzy_until_t <= st.t:
+			l.frenzy_until_t = st.t + FishingConst.FRENZY_S
+		if f.run_active and flags & FishingSnapshotSchema.F_JUMP != 0:
+			l.fight_slot = _jump_slot(l, f.sp)
 		var cos: Array = row[FishingSnapshotSchema.L_COSMETICS]
 		for i in mini(cos.size(), 4):
 			l.cosmetics[i] = int(cos[i])
@@ -138,3 +151,22 @@ static func apply(st: FishingState, snap: Dictionary) -> void:
 	for c: Variant in snap["C"]:
 		for v: Variant in c:
 			st.catches.append(int(v))
+
+
+## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 lanes).
+static func byte_size(snap: Dictionary) -> int:
+	return JSON.stringify(snap).to_utf8_buffer().size()
+
+
+## A client knows its lanes' pre-rolled slots but not which one is on the line: the jump flag
+## points it at the lane's first jumping slot of that species (the marlin), keeping fight_slot
+## when it already is one.
+static func _jump_slot(l: FishingLaneState, sp: int) -> int:
+	if l.fight_slot >= 0 and l.fight_slot < l.slots.size():
+		var cur := l.slots[l.fight_slot]
+		if cur.sp == sp and cur.run_kind == FishingSpeciesDef.RUN_JUMP:
+			return l.fight_slot
+	for s in l.slots:
+		if s.sp == sp and s.run_kind == FishingSpeciesDef.RUN_JUMP:
+			return s.index
+	return l.fight_slot
