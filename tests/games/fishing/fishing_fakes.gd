@@ -1,8 +1,17 @@
 class_name FishingFakes
 extends RefCounted
 ## Test doubles for the fishing game's unit tests: a GameContext whose sinks record every call,
-## plus a tiny stand-in for the GameHost's phase clock (fixed phases only), so the module can be
-## driven with synthetic InputFrames without the platform runtime.
+## plus two stand-ins for the GameHost's phase clock, so the module can be driven with synthetic
+## InputFrames without the platform runtime:
+##   - phase_at() / frame() / run(): stateless, fixed phases only (an open-ended phase runs its
+##     nominal duration_s);
+##   - Clock (clock_for()): the platform's own PhaseTracker, as the GameHost drives it. Open-ended
+##     phases end at max_s; ctx.directives.end_phase() after min_s ends the phase at the end of
+##     that tick (the next frame shows the next phase; before min_s it is refused and returns
+##     false); finished() moves every rider to the cool-down at the end of the tick; the
+##     cool-down's end marks the rider done. Telemetry follows the latest ERG request of the
+##     current phase (else the planned target), so whole trips run with the stub rules or the
+##     real ones.
 
 const GAME_ID := "fishing"
 const GAME_DIR := "res://src/games/fishing"
@@ -19,6 +28,10 @@ class Directives:
 	var ended: Array = []
 	## [[peer, EffortPlan]]
 	var replans: Array = []
+	## [[peer, refusal]] of end_phase calls a Clock refused.
+	var refused_ends: Array = []
+	## Set by a Clock: end_phase goes through its PhaseTracker (min_s, open-ended only).
+	var tracker: PhaseTracker = null
 
 	func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		requests.append([peer, directive.to_dict()])
@@ -28,6 +41,11 @@ class Directives:
 		course_grades.append([peer, grade_pct])
 
 	func end_phase(peer: int) -> bool:
+		if tracker != null:
+			var why := tracker.request_end(peer)
+			if why != "":
+				refused_ends.append([peer, why])
+				return false
 		ended.append(peer)
 		return true
 
@@ -229,3 +247,111 @@ static func make_game(ctx: GameContext) -> FishingGame:
 	var g := FishingGame.new()
 	g.configure(ctx)
 	return g
+
+
+## A GameHost-like phase clock over the platform's PhaseTracker for `game` (its plans with the
+## cool-down appended, or `plans` when given). Free it with the game (RefCounted).
+static func clock_for(game: FishingGame, plans: Dictionary = {}) -> Clock:
+	var c := Clock.new()
+	c.setup(game, plans if not plans.is_empty() else plans_of(game))
+	return c
+
+
+class Clock:
+	extends RefCounted
+	var game: FishingGame = null
+	var ctx: GameContext = null
+	var tracker: PhaseTracker = PhaseTracker.new()
+	var plans: Dictionary = {}
+	## The next game tick to simulate.
+	var tick: int = 0
+	## Riders ride this % of the applied ERG target (SIM phases: this % of FTP).
+	var power_pct: float = 100.0
+	var sim_power_pct: float = 100.0
+	## peer -> cadence (default 90 rpm).
+	var cadence: Dictionary = {}
+	## peer -> % FTP of the latest ERG request in the current phase.
+	var applied_pct: Dictionary = {}
+	## [{peer, index, ended_by, t}] for every phase change after the start.
+	var changes: Array = []
+	var finished_reasons: Array = []
+	var _seen_requests: int = 0
+
+	func setup(p_game: FishingGame, p_plans: Dictionary) -> void:
+		game = p_game
+		ctx = p_game.ctx
+		plans = p_plans
+		for p in ctx.players:
+			tracker.add_rider(p.peer_id, plans[p.peer_id])
+		tracker.start()
+		(ctx.directives as Directives).tracker = tracker
+		game.finished.connect(_on_finished)
+
+	func _on_finished(reason: String) -> void:
+		finished_reasons.append(reason)
+		tracker.finish_all()
+
+	## The InputFrame the GameHost would build for `tick`.
+	func frame(intents: Dictionary = {}) -> InputFrame:
+		var f := InputFrame.new()
+		f.tick = tick
+		f.t = tick * Wl.SIM_DT
+		for p in ctx.players:
+			var ph := tracker.state(p.peer_id)
+			var tm := Telemetry.new()
+			tm.peer_id = p.peer_id
+			tm.t = f.t
+			tm.mode = ph.mode if ph.mode != "" else Wl.ERG
+			if tm.mode == Wl.ERG:
+				var pct := float(applied_pct.get(p.peer_id, ph.planned_pct))
+				tm.applied_target_w = int(pct / 100.0 * p.ftp)
+				tm.power_w = tm.applied_target_w * power_pct / 100.0
+			else:
+				tm.power_w = p.ftp * sim_power_pct / 100.0
+			tm.p_eff_w = tm.power_w * p.p_eff_per_w
+			tm.ftp_pct = tm.power_w / p.ftp * 100.0
+			tm.cadence_rpm = float(cadence.get(p.peer_id, 90.0))
+			tm.phase_index = ph.index
+			tm.intents = (intents.get(p.peer_id, []) as Array).duplicate(true)
+			f.players[p.peer_id] = tm
+			f.phase[p.peer_id] = ph
+		return f
+
+	## One tick: sim_step, then the tracker applies the tick's end_phase, max_s, duration and
+	## finished like the GameHost.
+	func step(intents: Dictionary = {}) -> void:
+		game.sim_step(Wl.SIM_DT, frame(intents))
+		var reqs: Array = (ctx.directives as Directives).requests
+		while _seen_requests < reqs.size():
+			var r: Array = reqs[_seen_requests]
+			var d: Dictionary = r[1]
+			if str(d.get("mode", Wl.ERG)) == Wl.ERG and d.has("target_pct"):
+				applied_pct[int(r[0])] = float(d["target_pct"])
+			_seen_requests += 1
+		for c: Dictionary in tracker.advance(tick):
+			applied_pct.erase(int(c["peer"]))
+			changes.append(
+				{"peer": c["peer"], "index": c["index"], "ended_by": c["ended_by"], "t": tick_t()}
+			)
+		tick += 1
+
+	func run(seconds: float) -> void:
+		for _i in roundi(seconds / Wl.SIM_DT):
+			step()
+
+	## Steps until every rider finished its cool-down (or `max_s` of game time); true when done.
+	func run_until_done(max_s: float) -> bool:
+		var limit := tick + roundi(max_s / Wl.SIM_DT)
+		while not tracker.all_done() and tick < limit:
+			step()
+		return tracker.all_done()
+
+	func tick_t() -> float:
+		return (tick + 1) * Wl.SIM_DT
+
+	func index_of(peer: int) -> int:
+		return tracker.index_of(peer)
+
+	## Labels of the phases `peer` entered, in order (the start included).
+	func labels(peer: int) -> Array:
+		return tracker.history(peer).map(func(h: Dictionary) -> String: return str(h["label"]))
