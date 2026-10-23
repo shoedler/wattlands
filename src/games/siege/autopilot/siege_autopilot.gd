@@ -86,9 +86,9 @@ static func target_road(state: SiegeState) -> int:
 	return ShopPlan.new(state, 0.0).road()
 
 
-## The tower type Autopilot would build on `road` now (see shop_picks): Ballista against Shield
-## walls or rams, Caltrop against Horsemen, else Scorpion; with no gate damage yet the type built
-## least, in the order Ballista, Scorpion, Caltrop.
+## The tower type Autopilot would build on `road` now (see shop_picks): Ballista if Shield walls or
+## rams damaged the gate there, Caltrop if Horsemen did and those did not, else Scorpion; with no
+## gate damage yet the type built least, in the order Ballista, Scorpion, Caltrop.
 static func build_type(state: SiegeState, road: int) -> int:
 	if state == null or state.content == null or state.content.map == null:
 		return SiegeIds.TOWER_BALLISTA
@@ -118,7 +118,8 @@ class ShopPlan:
 	func _init(p_state: SiegeState, p_funds: float) -> void:
 		state = p_state
 		funds = p_funds
-		gate_hp = state.gate_hp
+		# The snapshot carries the gate HP rounded up, so a client decides on the same number.
+		gate_hp = ceilf(state.gate_hp)
 		gate_max = state.gate_max
 		gen_level = state.gen_level
 		bands = state.iron_bands
@@ -143,14 +144,14 @@ class ShopPlan:
 		return pick
 
 	func road() -> int:
-		var dmg := state.gate_damage_by_road
+		# Roads are ranked on the snapshot's 0.1 HP resolution, so a client agrees with the host.
 		var best := 0
-		var total := 0.0
-		for r in dmg.size():
-			total += dmg[r]
-			if dmg[r] > dmg[best] + 1e-9:
+		var total := 0
+		for r in SiegeIds.ROAD_COUNT:
+			total += state.gate_damage_dm(r)
+			if state.gate_damage_dm(r) > state.gate_damage_dm(best):
 				best = r
-		if total > 0.0:
+		if total > 0:
 			return best
 		var least := 0
 		var least_cover := 1000000
@@ -214,15 +215,16 @@ class ShopPlan:
 			return {"item": _build_item(type), "pad": pad, "cost": cost}
 		return {}
 
-	## Ballista against Shield walls or rams on the road, a Caltrop thrower against Horsemen
-	## when it has none, otherwise a Scorpion; no damage yet: the type built least, in the
-	## order Ballista, Scorpion, Caltrop. In a break nobody is on the road, so damage on it
-	## means the heavy enemies (every wave pushes a ram up each active road): a Ballista.
+	## Ballista if Shield walls or rams have damaged the gate on road `r`, a Caltrop thrower if
+	## Horsemen have and those have not, otherwise a Scorpion (brief 2.5; the types come from
+	## state.gate_damage_types_by_road, which the snapshot carries, so it works in a break and on
+	## a client). No gate damage yet: the type built least, in the order Ballista, Scorpion,
+	## Caltrop.
 	func build_type_for(r: int) -> int:
-		var total := 0.0
-		for d in state.gate_damage_by_road:
-			total += d
-		if total <= 0.0:
+		var total := 0
+		for road in SiegeIds.ROAD_COUNT:
+			total += state.gate_damage_dm(road)
+		if total <= 0:
 			var counts := {
 				SiegeIds.TOWER_BALLISTA: 0, SiegeIds.TOWER_SCORPION: 0, SiegeIds.TOWER_CALTROP: 0
 			}
@@ -233,18 +235,14 @@ class ShopPlan:
 				if counts[t] < counts[pick]:
 					pick = t
 			return pick
-		var live := 0
-		var horsemen := false
-		for e in state.enemies:
-			if e.road != r or e.st == SiegeIds.EN_RETREAT:
-				continue
-			live += 1
-			if e.type == SiegeIds.ENEMY_SHIELD_WALL or e.type == SiegeIds.ENEMY_RAM:
-				return SiegeIds.TOWER_BALLISTA
-			horsemen = horsemen or e.type == SiegeIds.ENEMY_HORSEMEN
-		if live == 0:
+		if (
+			state.gate_damaged_by(r, SiegeIds.ENEMY_SHIELD_WALL)
+			or state.gate_damaged_by(r, SiegeIds.ENEMY_RAM)
+		):
 			return SiegeIds.TOWER_BALLISTA
-		return SiegeIds.TOWER_CALTROP if horsemen else SiegeIds.TOWER_SCORPION
+		if state.gate_damaged_by(r, SiegeIds.ENEMY_HORSEMEN):
+			return SiegeIds.TOWER_CALTROP
+		return SiegeIds.TOWER_SCORPION
 
 	func _build_item(type: int) -> String:
 		for item: String in SiegeIds.BUILD_TOWER:

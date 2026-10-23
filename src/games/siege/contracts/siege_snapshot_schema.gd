@@ -18,7 +18,13 @@ extends RefCounted
 ## the common mid-wave snapshot is unchanged:
 ##  "ro": [road ids]   the active roads, only when they are not all three (a break: [])
 ##  "ru": [1, i, left_ms]   a rush is on (index i, time left), absent otherwise
-## A client without "ro" has all three roads active and without "ru" no rush.
+##  "ib": n   Iron bands bought (1 or 2), absent at 0
+##  "gd": [dm per road]   gate damage by road in 0.1 HP (west, valley, east), absent until a road took any
+##  "gt": [mask per road]   per road, the enemy types that damaged the gate there (bit 1 << type code)
+## A client without "ro" has all three roads active and without "ru" no rush; without "ib" no bands,
+## without "gd" / "gt" no gate damage. "ib", "gd" and "gt" feed the shop (price of Iron bands, the road
+## and tower type Autopilot recommends, brief 2.5) and the gate view, so a client's recommendation
+## equals the host's (SiegeShopModel.cost_of, SiegeAutopilot.shop_picks).
 ## od_ms is the Overdrive time left (0 unless ACTIVE), od_cd_ms the cooldown left (0 unless
 ## COOLDOWN); a client derives od_state from them (od_ms > 0 ACTIVE, od_cd_ms > 0 COOLDOWN, else
 ## READY).
@@ -31,7 +37,7 @@ const KEYS: Array[String] = [
 ]
 
 ## Optional keys (see above); check() does not require them.
-const OPTIONAL_KEYS: Array[String] = ["ro", "ru"]
+const OPTIONAL_KEYS: Array[String] = ["ro", "ru", "ib", "gd", "gt"]
 # ru columns
 const RU_ON := 0
 const RU_INDEX := 1
@@ -99,6 +105,9 @@ const INT_PATHS: Array[String] = [
 	"q",
 	"ro[]",
 	"ru[]",
+	"ib",
+	"gd[]",
+	"gt[]",
 ]
 
 

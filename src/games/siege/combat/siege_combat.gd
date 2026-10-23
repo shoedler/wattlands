@@ -158,7 +158,7 @@ static func _arrive(
 	w.gate_damage += applied
 	if by_road:
 		state.leaks_by_road[e.road] += 1
-		state.gate_damage_by_road[e.road] += applied
+		state.note_gate_damage(e.road, e.type, applied)
 	events.append(SiegeEvents.leak(e.id, e.type, e.road, roundi(applied)))
 	e.hp = 0.0
 	tb.removed += 1
@@ -177,7 +177,7 @@ static func _batter(
 	var applied := damage_gate(state, tb.ram_dps * dt, events)
 	state.wave.gate_damage += applied
 	if state.role == SiegeIds.ROLE_WAVE:
-		state.gate_damage_by_road[e.road] += applied
+		state.note_gate_damage(e.road, e.type, applied)
 	e.retreat_s += applied
 	while e.retreat_s >= 1.0 - 1e-9:
 		events.append(SiegeEvents.leak(e.id, e.type, e.road, 1))

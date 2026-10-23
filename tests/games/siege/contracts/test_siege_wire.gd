@@ -62,8 +62,11 @@ func test_the_snapshot_layout_is_exactly_the_brief_s() -> void:
 	var keys := snap.keys()
 	keys.sort()
 	var want := SiegeSnapshotSchema.KEYS.duplicate()
+	# The fixture has one Iron band bought; the other optional keys stay off their defaults.
+	want.append("ib")
 	want.sort()
 	assert_eq(keys, want)
+	assert_eq(snap["ib"], 1)
 	assert_eq(SiegeSnapshotSchema.check(snap), "")
 	assert_eq(snap["v"], 1)
 	assert_eq(snap["ph"], 4)
@@ -106,6 +109,44 @@ func test_at_the_cap_a_snapshot_stays_under_8_kb() -> void:
 	assert_eq(s.enemies.size(), 150)
 	var bytes := SiegeSnapshotSchema.byte_size(SiegeSnapshot.encode(s))
 	assert_lte(bytes, SiegeSnapshotSchema.MAX_BYTES, "%d bytes" % bytes)
+
+
+func test_the_shop_and_gate_keys_ride_only_when_they_are_off_their_defaults() -> void:
+	var s := FIX.mid_wave()
+	s.iron_bands = 0
+	var plain := SiegeSnapshot.encode(s)
+	for k in ["ib", "gd", "gt", "ro", "ru"]:
+		assert_false(plain.has(k), "%s is absent at its default" % k)
+	assert_eq(SiegeSnapshotSchema.check(plain), "")
+	s.iron_bands = 2
+	s.note_gate_damage(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAIDERS, 3.04)
+	s.note_gate_damage(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAM, 0.46)
+	s.note_gate_damage(SiegeIds.ROAD_EAST, SiegeIds.ENEMY_HORSEMEN, 12.0)
+	var snap := SiegeSnapshot.encode(s)
+	assert_eq(snap["ib"], 2)
+	assert_eq(snap["gd"], [0, 35, 120], "gate damage by road in 0.1 HP")
+	var raiders := 1 << SiegeIds.ENEMY_RAIDERS
+	var ram := 1 << SiegeIds.ENEMY_RAM
+	assert_eq(snap["gt"], [0, raiders | ram, 1 << SiegeIds.ENEMY_HORSEMEN])
+	for k in ["ib", "gd", "gt"]:
+		assert_true(SiegeSnapshotSchema.OPTIONAL_KEYS.has(k))
+	var back := _round_trip(snap, SiegeSnapshotSchema.INT_PATHS)
+	assert_eq(JSON.stringify(back), JSON.stringify(snap), "ints stay ints through the wire")
+	assert_eq(typeof(back["ib"]), TYPE_INT)
+	assert_eq(typeof(back["gd"][1]), TYPE_INT)
+	assert_eq(typeof(back["gt"][2]), TYPE_INT)
+	var client := SiegeState.create(FIX.content("vo2"), FIX.slots(), Wl.FAIR_FTP, null)
+	SiegeSnapshot.apply(client, JSON.parse_string(JSON.stringify(snap)))
+	assert_eq(client.iron_bands, 2)
+	assert_almost_eq(client.gate_damage_by_road[SiegeIds.ROAD_VALLEY], 3.5, 1e-6)
+	assert_eq(client.gate_damage_types_by_road, s.gate_damage_types_by_road)
+	assert_true(client.gate_damaged_by(SiegeIds.ROAD_VALLEY, SiegeIds.ENEMY_RAM))
+	assert_false(client.gate_damaged_by(SiegeIds.ROAD_WEST, SiegeIds.ENEMY_RAM))
+	# A snapshot without the keys (an older host, or nothing yet) clears them.
+	SiegeSnapshot.apply(client, JSON.parse_string(JSON.stringify(plain)))
+	assert_eq(client.iron_bands, 0)
+	assert_eq(client.gate_damage_by_road, [0.0, 0.0, 0.0] as Array[float])
+	assert_eq(client.gate_damage_types_by_road, [0, 0, 0] as Array[int])
 
 
 func test_a_client_applies_the_snapshot_without_int_fields() -> void:

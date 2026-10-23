@@ -6,7 +6,9 @@ extends RefCounted
 ##
 ## The client's interpolation history is SiegeSnapHistory (this folder); SiegeGame pushes into it
 ## after each apply. The optional "ro" / "ru" keys (SiegeSnapshotSchema) carry the active roads and
-## the rush so a rejoining client needs no event to know them.
+## the rush so a rejoining client needs no event to know them; "ib", "gd" and "gt" carry the Iron
+## bands and the gate damage by road and enemy type, which the client's shop recommendation and gate
+## view read.
 
 
 ## The snapshot of `state` (host, 10 Hz).
@@ -76,6 +78,18 @@ static func encode(state: SiegeState) -> Dictionary:
 		snap["ro"] = state.wave.active_roads.duplicate()
 	if state.wave.rush_s > 0.0:
 		snap["ru"] = [1, maxi(state.wave.rush_next - 1, 0), _ms(state.wave.rush_s)]
+	if state.iron_bands > 0:
+		snap["ib"] = state.iron_bands
+	var gd: Array = []
+	var gt: Array = []
+	var damaged := false
+	for road in SiegeIds.ROAD_COUNT:
+		gd.append(state.gate_damage_dm(road))
+		gt.append(state.gate_damage_types_by_road[road])
+		damaged = damaged or gd[road] != 0 or gt[road] != 0
+	if damaged:
+		snap["gd"] = gd
+		snap["gt"] = gt
 	return snap
 
 
@@ -201,6 +215,17 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 		state.wave.rush_next = int(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
 	else:
 		state.wave.rush_s = 0.0
+	state.iron_bands = int(snap.get("ib", 0))
+	for road in SiegeIds.ROAD_COUNT:
+		state.gate_damage_by_road[road] = _road_value(snap.get("gd"), road) / 10.0
+		state.gate_damage_types_by_road[road] = int(_road_value(snap.get("gt"), road))
+
+
+## The int at `road` in an optional per-road array (0 when it is absent or short).
+static func _road_value(arr: Variant, road: int) -> int:
+	if arr is Array and (arr as Array).size() > road:
+		return int((arr as Array)[road])
+	return 0
 
 
 static func _ms(s: float) -> int:
