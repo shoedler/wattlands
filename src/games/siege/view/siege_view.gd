@@ -17,8 +17,9 @@ extends Node3D
 ## SiegeTowersView, SiegeEnemyView, SiegeEffectsView (bolts, caltrop zones), SiegeGateView, and
 ## the camera rig with its 4 s push-in and gate-hit shake.
 
-## The fort fills this share of the screen width.
-const FORT_WIDTH_SHARE := 0.575
+## The fort, corner towers included, fills this share of the screen width (brief: 55-60%). The low
+## end: the pitch fixes how much road fits below the gate, and a wider fort pushes it off screen.
+const FORT_WIDTH_SHARE := 0.555
 const PUSH_IN_FROM := 1.45
 const PUSH_IN_S := 4.0
 ## A single gate-HP drop of at least this much shakes the camera.
@@ -199,7 +200,9 @@ func _build_environment() -> void:
 	rig.pitch_deg = float(cam.get("pitch_deg", 42.0))
 	rig.fov_deg = float(cam.get("fov_deg", 32.0))
 	rig.yaw_deg = float(cam.get("yaw_deg", 0.0))
-	rig.fit_width(map.fort_size.x / FORT_WIDTH_SHARE)
+	rig.distance = SiegeFraming.fit_distance(
+		SiegeFraming.fort_box(map), rig.target, rig.pitch_deg, rig.fov_deg, FORT_WIDTH_SHARE
+	)
 	rig.push_in(PUSH_IN_FROM, float(cam.get("push_in_s", PUSH_IN_S)))
 
 

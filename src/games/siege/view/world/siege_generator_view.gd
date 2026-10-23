@@ -3,18 +3,18 @@ extends Node3D
 ## The bronze generator's moving parts (brief 3 "Generator"): the flywheel on the drum, spinning
 ## with the team's watts, and the counter plaque above it. Four Label3D digit drums and a "W"
 ## plate show the team's raw watts (state.team_w, a 1 s mean), rolling with a 0.4 s ease and
-## clamped at 9999 (SiegeDrum). The digits are 3 m tall at the fort, about 50 px at 1080p with
+## clamped at 9999 (SiegeDrum). The digits are 3.4 m tall at the fort, about 50 px at 1080p with
 ## the miniature camera. The static drum body and the shafts are SiegeFortBuilder's.
 
 const FONT_PX := 128
-const PIXEL_SIZE := 0.034
+const PIXEL_SIZE := 0.037
 ## The digit pitch on the plaque (m) and where the first drum sits.
-const DIGIT_PITCH_M := 2.5
-const DIGIT_X0 := -4.75
-const W_PLATE_X := 5.2
-const WINDOW_SIZE := Vector2(2.3, 3.9)
-## The cap height of a digit in metres (0.72 of the 4.35 m em).
-const DIGIT_HEIGHT_M := 3.1
+const DIGIT_PITCH_M := 2.72
+const DIGIT_X0 := -5.2
+const W_PLATE_X := 5.7
+const WINDOW_SIZE := Vector2(2.5, 4.25)
+## The cap height of a digit in metres (0.72 of the 4.74 m em).
+const DIGIT_HEIGHT_M := 3.4
 const IVORY := Color("#F4F0E4")
 const FLY_SPIN_PER_KW := 1.5
 const FLY_SPIN_MAX := 5.0
@@ -102,7 +102,7 @@ func _build_plaque() -> void:
 			Transform3D(Basis(), Vector3(DIGIT_X0 + DIGIT_PITCH_M * float(i), 0.0, 0.3))
 		)
 	m.add_box(
-		Vector3(2.0, WINDOW_SIZE.y, 0.2),
+		Vector3(2.2, WINDOW_SIZE.y, 0.2),
 		SiegePalette.BRONZE_DARK,
 		Transform3D(Basis(), Vector3(W_PLATE_X, 0.0, 0.3))
 	)

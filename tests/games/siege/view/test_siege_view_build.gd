@@ -35,12 +35,91 @@ func test_camera_is_a_high_narrow_miniature_rig() -> void:
 	assert_eq(_view.rig.max_shake_m, 0.15)
 
 
-func test_the_fort_fills_55_to_60_percent_of_the_width() -> void:
-	var vfov := deg_to_rad(_view.rig.fov_deg)
-	var hfov := 2.0 * atan(tan(vfov * 0.5) * 16.0 / 9.0)
-	var width_at_target := 2.0 * _view.rig.distance * tan(hfov * 0.5)
-	var share := _state.content.map.fort_size.x / width_at_target
-	assert_between(share, 0.55, 0.6)
+## Hand-written 16:9 pinhole projection of `p` through the rig's real camera transform onto a
+## 1920 x 1080 picture (a headless Camera3D.unproject_position uses a square viewport).
+func _project(rig: MiniatureCameraRig, p: Vector3) -> Vector2:
+	var local := rig.camera.global_transform.affine_inverse() * p
+	var depth := -local.z
+	var t := tan(deg_to_rad(rig.fov_deg) * 0.5)
+	return Vector2(
+		960.0 + local.x / depth / (t * 16.0 / 9.0) * 960.0, 540.0 - local.y / depth / t * 540.0
+	)
+
+
+## The fort's box: the walls plus the 8.4 m corner towers, as tall as a corner tower.
+func _fort_corners() -> Array[Vector3]:
+	var map := _state.content.map
+	var hx := map.fort_size.x * 0.5 + 4.2
+	var hz := map.fort_size.y * 0.5 + 4.2
+	var h := 6.0 + SiegeFortBuilder.CORNER_EXTRA_H
+	var out: Array[Vector3] = []
+	for x: float in [-hx, hx]:
+		for y: float in [0.0, h]:
+			for z: float in [-hz, hz]:
+				out.append(Vector3(x, y, z))
+	return out
+
+
+## A road point `from_gate_m` metres of road before the gate end, on the ground.
+func _road_point(road: int, from_gate_m: float) -> Vector3:
+	var map := _state.content.map
+	var p := map.point_at(road, map.road_length(road) - from_gate_m)
+	return Vector3(p.x, 0.0, p.y)
+
+
+func _framed_view() -> SiegeView:
+	var v := SiegeView.new()
+	v.auto_process = false
+	v.bind(_state, _state.content.map)
+	add_child_autofree(v)
+	v.rig.auto_process = false
+	# Past the 4 s push-in.
+	v.rig.tick(4.5)
+	assert_false(v.rig.is_pushing_in())
+	return v
+
+
+func test_the_fort_fills_55_to_60_percent_of_the_width_in_the_upper_half() -> void:
+	var v := _framed_view()
+	var lo := INF
+	var hi := -INF
+	var top := INF
+	var bottom := -INF
+	for c in _fort_corners():
+		var q := _project(v.rig, c)
+		lo = minf(lo, q.x)
+		hi = maxf(hi, q.x)
+		top = minf(top, q.y)
+		bottom = maxf(bottom, q.y)
+	assert_between((hi - lo) / 1920.0, 0.55, 0.6, "the fort with its towers")
+	assert_gte(top, 0.0, "the far towers are inside the frame")
+	assert_lt(top, 60.0, "the far wall sits just under the top edge")
+	assert_lt(bottom, 540.0, "the whole fort is in the upper half")
+
+
+func test_the_valley_road_shows_below_the_gate_above_the_hud_stack() -> void:
+	# The pitch (about 42 degrees) and the 55 percent fort fix how much road fits: about 54 m of
+	# the Valley road before the bottom edge. The brief's 60 to 80 m do not fit with both (the
+	# pitch would have to drop to about 36 degrees, under the 40 to 45 the camera test allows).
+	var v := _framed_view()
+	var gate_y := _project(v.rig, Vector3(0.0, 0.0, 26.0)).y
+	assert_lt(gate_y, 540.0, "the gate is in the upper half")
+	assert_lt(_project(v.rig, _road_point(1, 40.0)).y, 880.0, "40 m is clear of the bottom stack")
+	var seen := 0.0
+	for m in range(0, 121, 2):
+		var q := _project(v.rig, _road_point(1, float(m)))
+		if q.y <= 1080.0 and q.x >= 0.0 and q.x <= 1920.0:
+			seen = float(m)
+	assert_gte(seen, 50.0, "at least 50 m of the Valley road is on screen")
+
+
+func test_the_side_roads_show_60_m_before_the_gate_on_screen() -> void:
+	var v := _framed_view()
+	for road in [0, 2]:
+		for m in [40.0, 60.0]:
+			var q := _project(v.rig, _road_point(road, m))
+			assert_between(q.x, 0.0, 1920.0, "road %d at %d m (x)" % [road, int(m)])
+			assert_between(q.y, 0.0, 1000.0, "road %d at %d m (y)" % [road, int(m)])
 
 
 func test_push_in_takes_four_seconds_by_default() -> void:
