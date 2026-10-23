@@ -227,3 +227,86 @@ func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 	assert_eq(engines, ["dynamo", "steam", "diesel"], "stage 2 with rotation")
 	assert_true(inp.rider(3).rescue)
 	assert_eq(inp.rider(2).intents.size(), 0, "already ownership-filtered")
+	for ri in inp.riders:
+		var ph := (plans[ri.peer] as EffortPlan).phase(4)
+		assert_eq(ri.phase_kind, Wl.WORK, "each rider's own phase kind")
+		assert_eq(ri.phase_mode, ph.mode)
+		assert_eq(ri.grade_source, ph.grade_source if ph.mode == Wl.SIM else "")
+		assert_eq(ri.plan_elapsed_s, 300.0 + 180.0 + 120.0 + 60.0 + 60.0)
+		assert_false(ri.in_first_window())
+		assert_false(ri.in_warmup())
+	assert_eq(inp.rider(3).grade_source, Wl.GRADE_GAME, "the diesel's terrain")
+	players[2].rider_mass_kg = 91.0
+	var heavy := TankInputs.from_frame(f, players, plans, {}, {}, {})
+	assert_eq(heavy.rider(3).rider_mass_kg, 91.0, "the drive's mass comes from the slot")
+
+
+func test_boss_part_ids_never_collide_with_entity_ids() -> void:
+	var s := TankFixtures.state(3)
+	for i in TankBossState.PART_COUNT:
+		var id := TankBossState.part_id(i)
+		assert_lt(id, 0)
+		assert_eq(TankBossState.part_of(id), i)
+		assert_true(TankBossState.is_part_id(id))
+	for _i in 5000:
+		var id := s.take_id()
+		assert_gt(id, 0)
+		assert_false(TankBossState.is_part_id(id))
+	assert_eq(TankBossState.part_of(0), -1, "0 is no target")
+	assert_eq(TankBossState.part_of(-5), -1)
+
+
+func test_the_geometry_contract_holds() -> void:
+	var g := TankGeometry.load_default()
+	assert_eq(g.validate(), [] as Array[String])
+	for t: String in TankIds.TANKS:
+		var m0 := g.muzzle(t, 0.0, TankIds.FACE_RIGHT)
+		assert_eq(m0, g.trunnion(t) + Vector2(g.barrel_px(t), 0.0), t)
+		var up := g.muzzle(t, 30.0, TankIds.FACE_RIGHT)
+		assert_lt(up.y, m0.y, "%s: elevation raises the muzzle" % t)
+		assert_almost_eq(up.distance_to(g.trunnion(t)), g.barrel_px(t), 0.001)
+		var left := g.muzzle(t, 0.0, TankIds.FACE_LEFT)
+		assert_almost_eq(left.x, 2.0 * g.ring(t).x - m0.x, 0.001, "%s: mirrored" % t)
+	assert_eq(g.secondary_muzzles(TankIds.TANK_CITADEL).size(), 2)
+	for i in TankBossState.PART_COUNT:
+		assert_true(g.boss_part_rect(i).has_area(), "boss part %d" % i)
+	assert_true(g.enemy_hitbox("enemy_dugin").has_area(), "the dug-in's turret")
+	var broken := TankGeometry.from_dict({"tanks": {}})
+	var problems := " | ".join(broken.validate())
+	assert_string_contains(problems, "tanks.bulwark.turret.trunnion: missing")
+
+
+## Thresholds that live in two files must agree (one meaning, two owners).
+func test_shared_thresholds_agree() -> void:
+	var c := TankFixtures.content()
+	var loader: Array = c.value("stations", "cadence_band.loader", [])
+	var band: Array = c.value("stations", "cadence_band.default", [])
+	assert_eq(c.num("tanks", "in_band.steam_cycle_cadence_rpm"), float(loader[0]))
+	assert_eq(c.num("tanks", "in_band.recovery_cadence_rpm"), float(band[0]))
+	assert_eq(c.num("tanks", "in_band.erg_cadence_rpm"), float(band[0]))
+	assert_null(c.value("stations", "power_band_pct"), "one source: tanks.json in_band")
+	assert_null(c.value("stations", "haptics.none_before_s"), "one source: TankConst.FIRST_S")
+	assert_null(c.value("tanks", "ram.no_ability_first_s"), "one source: TankConst.FIRST_S")
+	assert_null(c.value("tanks", "in_band.steam_build_tol_pct"), "one source: TankConst")
+
+
+## The in-band rule follows the rider's own phase kind: WARMUP and RECOVERY kinds (the drill's
+## skirmish included) are cadence >= 60 only, never the WORK power rules.
+func test_in_band_follows_the_phase_kind() -> void:
+	var s := TankFixtures.state(3)
+	var steam := s.station(TankIds.ENGINE_STEAM) as TankSteamState
+	steam.loaded = false
+	steam.cycling = false
+	var ri := TankRiderInput.new()
+	ri.ftp = 200.0
+	ri.mode = Wl.SIM
+	ri.power_w = 0.0
+	ri.cadence_rpm = 80.0
+	ri.phase_kind = Wl.WORK
+	assert_false(TankRules.in_band(s, ri, steam), "WORK: steam must build")
+	for kind: String in [Wl.WARMUP, Wl.RECOVERY]:
+		ri.phase_kind = kind
+		assert_true(TankRules.in_band(s, ri, steam), kind)
+		ri.cadence_rpm = 55.0
+		assert_false(TankRules.in_band(s, ri, steam), "%s below 60 rpm" % kind)
+		ri.cadence_rpm = 80.0

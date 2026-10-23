@@ -74,21 +74,40 @@ func test_plans_share_every_boundary_and_follow_the_rotation_table() -> void:
 					[a.kind, a.duration_s, a.open_ended, a.min_s, a.max_s, a.lap, a.label],
 					"crew %d peer %d phase %d" % [crew, peer, i]
 				)
-	var c3 := _game(F.make_ctx(3)).build_effort_plans()
-	var rows := {
-		1: ["diesel", "dynamo", "steam", "diesel"],
-		2: ["dynamo", "steam", "diesel", "dynamo"],
-		3: ["steam", "diesel", "dynamo", "steam"]
+	var tables := {
+		2:
+		{1: ["diesel", "dynamo", "diesel", "dynamo"], 2: ["dynamo", "diesel", "dynamo", "diesel"]},
+		3:
+		{
+			1: ["diesel", "dynamo", "steam", "diesel"],
+			2: ["dynamo", "steam", "diesel", "dynamo"],
+			3: ["steam", "diesel", "dynamo", "steam"]
+		},
 	}
-	for peer: int in rows:
-		var plan: EffortPlan = c3[peer]
-		for stage in 3:
+	for crew: int in tables:
+		var built := _game(F.make_ctx(crew)).build_effort_plans()
+		var rows: Dictionary = tables[crew]
+		for peer: int in rows:
+			var plan: EffortPlan = built[peer]
 			assert_eq(
-				plan.phase(1 + 3 * stage).meta["engine"],
-				rows[peer][stage],
-				"peer %d stage %d" % [peer, stage + 1]
+				plan.phase(0).meta["engine"], rows[peer][0], "crew %d peer %d depot" % [crew, peer]
 			)
-		assert_eq(plan.phase(10).meta["engine"], rows[peer][3], "peer %d boss" % peer)
+			for stage in 3:
+				for k in 2:
+					assert_eq(
+						plan.phase(1 + 3 * stage + k).meta["engine"],
+						rows[peer][stage],
+						"crew %d peer %d stage %d" % [crew, peer, stage + 1]
+					)
+			for cp in [3, 6, 9]:
+				assert_eq(
+					plan.phase(cp).meta["engine"],
+					plan.phase(cp + 1).meta["engine"],
+					"a checkpoint carries the next segment's engine"
+				)
+			assert_eq(
+				plan.phase(10).meta["engine"], rows[peer][3], "crew %d peer %d boss" % [crew, peer]
+			)
 
 
 func test_rotation_off_keeps_every_rider_on_its_start_engine() -> void:
@@ -102,48 +121,94 @@ func test_rotation_off_keeps_every_rider_on_its_start_engine() -> void:
 			assert_eq(plan.phase(i).meta["engine"], start, "peer %d phase %d" % [peer, i])
 
 
+## Contract-level session checks under the platform's phase rules (PhaseClock): whatever the rules
+## take, every end_phase ends all riders' phase in one step and never before min_s, each phase is
+## ended at most once, and finished comes exactly once with a mission outcome. Winning (T1) is a
+## G2 balance gate, not checked here.
 func test_a_full_session_ends_open_phases_together_and_finishes_once() -> void:
 	var ctx := F.make_ctx(3)
 	var g := _game(ctx)
-	var plans := F.plans_of(g)
+	var clock := F.clock_of(g)
 	watch_signals(g)
-	F.run(g, plans, 0, 1630.0)
-	var ended := _dirs(ctx).ended
-	assert_eq(ended.size(), 7 * 3, "3 riders x (3 advances, 3 gun lines, the boss)")
-	for i in range(0, ended.size(), 3):
-		assert_eq(ended.slice(i, i + 3), [1, 2, 3], "every rider in one step")
+	F.run_session(g, clock, 2.0)
+	assert_true(clock.all_in_cooldown(), "every rider reached the cool-down")
+	var seen := {}
+	for b: Dictionary in clock.batches:
+		var peers: Array = (b["peers"] as Array).duplicate()
+		peers.sort()
+		assert_eq(peers, [1, 2, 3], "every rider in one step (phase %d)" % b["index"])
+		assert_false(b["refused"], "never before min_s (phase %d)" % b["index"])
+		assert_gte(float(b["elapsed_s"]) + 1e-6, float(b["min_s"]))
+		assert_false(seen.has(b["index"]), "phase %d ended once" % b["index"])
+		seen[b["index"]] = true
+	for c: Dictionary in clock.changes:
+		if str(c["ended_by"]) == Wl.ENDED_END_PHASE or str(c["ended_by"]) == Wl.ENDED_MAX_S:
+			var ph := (clock.plans[c["peer"]] as EffortPlan).phase(int(c["index"]) - 1)
+			assert_true(ph.open_ended, "only open-ended phases end early or at max_s")
 	assert_signal_emit_count(g, "phase_changed", 12, "every segment and the cool-down")
-	assert_signal_emitted_with_parameters(g, "finished", [TankIds.OUTCOME_VICTORY])
 	assert_signal_emit_count(g, "finished", 1)
+	var reason: Variant = get_signal_parameters(g, "finished")[0]
+	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], reason)
 
 
 func test_nothing_is_sent_in_the_cooldown() -> void:
 	var ctx := F.make_ctx(2)
 	var g := _game(ctx)
-	var plans := F.plans_of(g)
-	var tick := F.run(g, plans, 0, 1620.5)
+	var clock := F.clock_of(g)
+	var tick := F.run_session(g, clock, 0.5)
 	var d := _dirs(ctx)
 	var counts := [
 		d.requests.size(), d.cadence_bands.size(), d.course_grades.size(), d.ended.size()
 	]
-	F.run(g, plans, tick, 170.0)
+	F.run(g, clock.plans, tick, 170.0, 100.0, clock)
 	assert_eq(
 		[d.requests.size(), d.cadence_bands.size(), d.course_grades.size(), d.ended.size()], counts
 	)
 
 
+## Every rider gets the cadence band and its power band in every segment it starts; the power band
+## is the in-band tempo band only for the diesel and the Bulwark in WORK SIM phases and cleared
+## (0, 0) everywhere else: the warm-up, checkpoints, ERG, the steam engine. At least one each per
+## segment (effort may re-send, for example after a rescue).
 func test_bands_at_each_segment_start() -> void:
-	var ctx := F.make_ctx(3)
-	var g := _game(ctx)
-	var plans := F.plans_of(g)
-	F.run(g, plans, 0, 1.0)
-	var bands := _dirs(ctx).cadence_bands
-	assert_eq(bands, [[1, 60.0, 120.0], [2, 60.0, 120.0], [3, 60.0, 120.0]])
-	var pb := _hud(ctx).of("power_band")
-	assert_eq(pb.size(), 3)
-	assert_eq(pb[0], ["power_band", 1, 0.76 * 200.0, 1.05 * 200.0], "the diesel's SIM band")
-	assert_eq(pb[1], ["power_band", 2, 0.0, 0.0], "the dynamo rides ERG")
-	assert_eq(pb[2], ["power_band", 3, 0.0, 0.0], "the steam band is on the station card only")
+	for crew in [1, 3]:
+		var ctx := F.make_ctx(crew)
+		var g := _game(ctx)
+		var clock := F.clock_of(g)
+		F.run_session(g, clock, 1.0)
+		var cad := _dirs(ctx).cadence_at
+		var pb := _hud(ctx).power_band_at
+		for p in ctx.players:
+			var plan: EffortPlan = clock.plans[p.peer_id]
+			for i in plan.size() - 1:
+				var t0 := clock.start_of(p.peer_id, i)
+				var t1 := clock.start_of(p.peer_id, i + 1)
+				var at := "crew %d peer %d phase %d" % [crew, p.peer_id, i]
+				var c_rows := _rows_in(cad, p.peer_id, t0, t1)
+				var p_rows := _rows_in(pb, p.peer_id, t0, t1)
+				assert_gt(c_rows.size(), 0, "%s: a cadence band" % at)
+				assert_gt(p_rows.size(), 0, "%s: a power band" % at)
+				for r: Array in c_rows:
+					assert_eq([r[2], r[3]], [60.0, 120.0], at)
+				var want := TankDirector.power_band_pct(g.content, plan.phase(i))
+				var ph := plan.phase(i)
+				var drives := ["diesel", "bulwark"].has(str(ph.meta["engine"]))
+				if ph.kind != Wl.WORK or ph.mode != Wl.SIM or not drives:
+					assert_eq(want, [0.0, 0.0] as Array[float], "%s: cleared" % at)
+				else:
+					assert_eq(want, [76.0, 105.0] as Array[float], "%s: tempo band" % at)
+				var last: Array = p_rows[-1]
+				assert_almost_eq(float(last[2]), want[0] / 100.0 * p.ftp, 0.001, at)
+				assert_almost_eq(float(last[3]), want[1] / 100.0 * p.ftp, 0.001, at)
+
+
+## The [t, peer, ...] rows of `peer` with t0 <= t < t1.
+func _rows_in(rows: Array, peer: int, t0: float, t1: float) -> Array:
+	var out: Array = []
+	for r: Array in rows:
+		if int(r[1]) == peer and float(r[0]) >= t0 and float(r[0]) < t1:
+			out.append(r)
+	return out
 
 
 func test_local_intents_by_engine_and_surge_never_fires() -> void:
@@ -251,8 +316,7 @@ func test_results_grade_xp_and_unlocks_after_a_full_session() -> void:
 	var ctx := F.make_ctx(1)
 	(ctx.stats as F.Stats).rows = {1: {"kj": 420.0}}
 	var g := _game(ctx)
-	var plans := F.plans_of(g)
-	F.run(g, plans, 0, 1630.0)
+	F.run_session(g, F.clock_of(g), 2.0)
 	var res := g.results()
 	assert_eq(res.rows.size(), 1)
 	assert_has(["S", "A", "B", "C", "D"], res.grade)
@@ -260,7 +324,7 @@ func test_results_grade_xp_and_unlocks_after_a_full_session() -> void:
 	var bonus := {"S": 60, "A": 40, "B": 25, "C": 10, "D": 0}
 	assert_eq(row["xp"], 42 + int(bonus[res.grade]))
 	assert_has(row["unlocks"], "soot", "a finished session")
-	assert_eq(res.summary_key, "TANK_RESULT_VICTORY")
+	assert_has(["TANK_RESULT_VICTORY", "TANK_RESULT_WITHDRAWN"], res.summary_key)
 	assert_gt(float(row["stats"]["TANK_STAT_BULWARK_S"]), 1000.0)
 
 
