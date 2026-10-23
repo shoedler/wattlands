@@ -203,10 +203,10 @@ func _on_leave() -> void:
 			services.bus.ride_saved.disconnect(_on_ride_saved)
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): the session's Autopilot
-## (params.autopilot, from the session screen) counts as well as InputRouter.pedal_ui_active().
-func scanning_enabled() -> bool:
-	return bool(params.get("autopilot", false)) or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): the session's Autopilot (params.autopilot, from the session
+## screen) counts as well as InputRouter.pedal_nav_active().
+func pedal_nav_enabled() -> bool:
+	return bool(params.get("autopilot", false)) or super.pedal_nav_enabled()
 
 
 static func grade_color(grade: String) -> Color:

@@ -2,8 +2,8 @@ extends WlInputRouter
 ## Test double of InputRouter: injected actions and gestures are emitted at once.
 
 var rebinds: Array = []
-## What pedal_ui_active() answers (the real router: Autopilot or pedal UI on, or no device used).
-var pedal_ui: bool = true
+## What pedal_nav_active() answers (the real router: pedal navigation or Autopilot on).
+var pedal_nav: bool = true
 var saves: int = 0
 
 
@@ -19,8 +19,8 @@ func rebind(action_name: StringName, event: InputEvent) -> void:
 	rebinds.append([action_name, event])
 
 
-func pedal_ui_active() -> bool:
-	return pedal_ui
+func pedal_nav_active() -> bool:
+	return pedal_nav
 
 
 func save_bindings() -> bool:

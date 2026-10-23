@@ -171,7 +171,8 @@ func test_signature_changes_with_content_and_affordability() -> void:
 # --- the panel -------------------------------------------------------------------------------------------
 
 
-func _panel(picks: Array[Dictionary] = []) -> SiegeShopPanel:
+func _panel(picks: Array[Dictionary] = [], pedal_nav: bool = true) -> SiegeShopPanel:
+	_game.ctx.local_player().pedal_nav = pedal_nav
 	var p := SiegeShopPanel.new()
 	p.game = _game
 	p.picks_override = picks
@@ -247,6 +248,25 @@ func test_an_erg_auto_confirm_is_tagged_auto() -> void:
 	assert_eq(sent[0]["auto"], 1)
 	assert_true(SiegeIntents.normalize(sent[0])["auto"])
 	assert_almost_eq(t, after, 0.2)
+
+
+func test_without_pedal_navigation_the_shop_takes_keyboard_and_controller_only() -> void:
+	_state.rider_at(0).denarii = 80.0
+	var p := _panel([_rec(SiegeIds.ITEM_BUILD_BALLISTA, 5)], false)
+	assert_false(p.list.pedal_nav, "the rider's slot has pedal navigation off")
+	p.list.erg_auto_confirm = true
+	for _i in 400:
+		p.list.tick(0.1)
+	p.list.feed_gesture(Wl.G_SURGE)
+	assert_eq(SiegeHudUtil.intents_sent(_game).size(), 0, "no scan, no auto-confirm, no surge pick")
+	assert_eq(p.list.highlighted(), 0, "the highlight never cycled")
+	p.list.feed_action(&"confirm")
+	var sent := SiegeHudUtil.intents_sent(_game)
+	assert_eq(sent.size(), 1, "confirm still buys")
+	assert_eq(sent[0]["item"], SiegeIds.ITEM_BUILD_BALLISTA)
+	_game.ctx.local_player().pedal_nav = true
+	p.refresh()
+	assert_true(p.list.pedal_nav, "turning it on in Settings reaches the open shop")
 
 
 func test_picking_save_sends_nothing() -> void:

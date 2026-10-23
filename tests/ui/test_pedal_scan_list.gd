@@ -228,6 +228,46 @@ func test_auto_confirm_without_scanning() -> void:
 	assert_eq(get_signal_parameters(_list, "item_chosen"), [1, "item1", true])
 
 
+# --- pedal navigation off (opt-in, BRIEF 3.5) -------------------------------------------------
+
+
+func test_without_pedal_navigation_nothing_scans_or_auto_confirms() -> void:
+	_list.pedal_nav = false
+	_list.erg_auto_confirm = true
+	_list.set_items(_items(3))
+	_run(30.0)
+	assert_eq(_list.highlighted(), 0, "no scan highlight cycling")
+	assert_signal_not_emitted(_list, "item_chosen")
+	assert_eq(_list.auto_confirm_left_s(), INF, "no auto-confirm countdown")
+
+
+func test_without_pedal_navigation_surge_and_coast_do_nothing() -> void:
+	_list.pedal_nav = false
+	_list.set_items(_items(3))
+	_list.feed_gesture(Wl.G_SURGE)
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_not_emitted(_list, "item_chosen")
+	assert_signal_not_emitted(_list, "backed_out")
+	_list.feed_action(&"down")
+	assert_eq(_list.highlighted(), 1, "up and down still move")
+	_list.feed_action(&"confirm")
+	assert_eq(get_signal_parameters(_list, "item_picked"), [1, "item1", "action"])
+	_list.feed_action(&"back")
+	assert_signal_emit_count(_list, "backed_out", 1)
+
+
+func test_the_hint_names_the_keyboard_without_pedal_navigation() -> void:
+	_list.set_items(_items(2))
+	var hint := _list.get_node("Hint") as Label
+	_list.tick(0.05)
+	assert_eq(hint.text, tr("UI_SCAN_HINT"))
+	_list.pedal_nav = false
+	assert_eq(hint.text, tr("UI_NAV_HINT"))
+	_list.pedal_nav = true
+	_list.tick(0.05)
+	assert_eq(hint.text, tr("UI_SCAN_HINT"))
+
+
 func test_auto_confirm_counts_enabled_items_only() -> void:
 	_list.erg_auto_confirm = true
 	_list.set_items(
@@ -363,6 +403,8 @@ func test_listens_to_the_router_menu_input() -> void:
 	var router := WlInputRouter.new()
 	router.bus = bus
 	router.load_on_ready = false
+	router.profile = RiderProfile.new()
+	router.profile.pedal_nav = true
 	add_child_autofree(router)
 	var list := PedalScanList.new()
 	list.router = router

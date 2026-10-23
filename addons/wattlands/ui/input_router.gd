@@ -8,8 +8,9 @@ extends Node
 ## Q/E shift down/up, P pause, Backspace held 1 s panic; controller: left stick/D-pad move,
 ## A confirm, B back, X/Y abilities, RB item, LB swap, LT/RT shift down/up, Start pause,
 ## View+Menu together panic. Panic emits EventBus.panic_requested immediately.
-## Pedal UI: `surge` acts as confirm and `coast` as back for menus (pedal-scan), `stop_5s`
-## as pause (solo, outside ERG).
+## Pedal navigation (opt-in, pedal_nav_active()): `surge` acts as confirm and `coast` as back
+## for menus (pedal-scan); with it off menus take the keyboard and controller only. `stop_5s`
+## acts as pause (solo, outside ERG) either way.
 ##
 ## How the parts fit:
 ## - Keyboard presses are ignored while a LineEdit or TextEdit has focus (text_input_focused()).
@@ -29,8 +30,8 @@ extends Node
 ##   never as `back`, a stop_5s never as `pause`. Screens that feed both the `action` and the
 ##   `gesture` signal to one PedalScanList (the app shell) therefore get each pick once.
 ##   Menus (PedalScanList, app screens) listen to `menu_input`, which maps surge -> confirm
-##   (via "surge"), coast -> back (via "coast", never in ERG) and stop_5s -> pause
-##   (via "stop_5s", solo and outside ERG only).
+##   (via "surge") and coast -> back (via "coast", never in ERG) only while
+##   pedal_nav_active(), and stop_5s -> pause (via "stop_5s", solo and outside ERG only).
 ## - The GameHost drains take_actions() and take_gestures() each tick and must filter `pause`
 ##   and `panic` out before calling GameModule.local_intents (they are platform actions,
 ##   PLATFORM_ACTIONS).
@@ -52,7 +53,7 @@ const PLATFORM_ACTIONS: Array[StringName] = [&"pause", &"panic"]
 
 ## The bus to emit on; null means the EventBus autoload.
 var bus: WlEventBus = null
-## The profile for pedal_ui_active(); null means Settings.profile.
+## The profile for pedal_nav_active(); null means Settings.profile.
 var profile: RiderProfile = null
 ## Solo session or menus (stop_5s maps to pause only when solo). The GameHost sets it.
 var solo: bool = true
@@ -68,7 +69,6 @@ var _held: Dictionary = {}
 var _panic_holds: Dictionary = {}
 ## Sources whose panic hold already fired (until released).
 var _panic_fired: Dictionary = {}
-var _device_used: bool = false
 var _capture_action: StringName = &""
 
 
@@ -112,7 +112,6 @@ func handle_event(event: InputEvent) -> void:
 			if _held.has(key):
 				continue
 			_held[key] = true
-			_device_used = true
 			_on_press(a, src)
 		elif _held.has(key):
 			_held.erase(key)
@@ -187,17 +186,11 @@ func clear_queues() -> void:
 	_gestures.clear()
 
 
-## True when menus run on pedal-scan (Autopilot or pedal UI on, or no input device used yet).
-func pedal_ui_active() -> bool:
+## True when menus run on pedal navigation: the rider turned it on in Settings, or Autopilot is
+## their default.
+func pedal_nav_active() -> bool:
 	var p := _profile()
-	if p != null and (p.pedal_ui or p.autopilot_default):
-		return true
-	return not _device_used
-
-
-## True once a keyboard or controller action was pressed.
-func device_used() -> bool:
-	return _device_used
+	return p != null and (p.pedal_nav or p.autopilot_default)
 
 
 ## True while a text field (LineEdit, TextEdit) has keyboard focus: key presses then belong
@@ -234,10 +227,12 @@ func inject_gesture(gesture_name: StringName) -> void:
 		b.gesture.emit(gesture_name)
 	var in_erg := local_mode() == Wl.ERG
 	if gesture_name == Wl.G_SURGE:
-		menu_input.emit(&"confirm", "surge")
+		if pedal_nav_active():
+			menu_input.emit(&"confirm", "surge")
 	elif gesture_name == Wl.G_COAST:
-		if not in_erg:
+		if not in_erg and pedal_nav_active():
 			menu_input.emit(&"back", "coast")
+
 	elif gesture_name == Wl.G_STOP_5S:
 		if solo and not in_erg:
 			menu_input.emit(&"pause", "stop_5s")

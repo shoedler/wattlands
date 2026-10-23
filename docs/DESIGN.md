@@ -1,4 +1,4 @@
-# Wattlands design
+# WATTLANDS design
 
 The player-facing and game-design view of the platform: what a rider sees, what the rules are, and the numbers behind them. "BRIEF x.y" is a section of `docs/BRIEF.md`. Every number here is taken from the code on `main`; where the code and the BRIEF differ, the code is described and the difference is listed under [Known differences](#13-known-differences-from-brief). The trainer stack itself (FTMS, the governor's internals, MockTrainer) is in `docs/TRAINER.md`; the game contract is in `docs/GAME_SDK.md`.
 
@@ -37,7 +37,7 @@ Nothing here has run against a real trainer yet. `docs/HARDWARE_TEST_PLAN.md` is
 | `grade_min_pct`, `grade_max_pct` | −5, +10 | −10…0, 0…+16 | The user's SIM grade range |
 | `skip_warmup` | off | | Skips the governor's warm-up caps only (plans still open with warm-up content; the FTP test ignores it) |
 | `autopilot_default` | off | | |
-| `pedal_ui`, `scan_interval_s` | on, 1.6 s | 0.5–10 s | Settings → Pedal UI |
+| `pedal_nav`, `scan_interval_s` | off, 1.6 s | 0.5–10 s | Settings → Pedal navigation (opt-in); copied into `PlayerSlot.pedal_nav` |
 | `strava_auto_upload` | off | | Settings → Strava |
 | `metronome` | off | | Settings → Audio; cadence metronome in sessions |
 
@@ -125,7 +125,8 @@ Surge details: the baseline is the mean of the samples in the 10 s before the st
 
 ### 5.3 Pedal-scan menus (`PedalScanList`)
 
-- Menus scan when `InputRouter.pedal_ui_active()`: Autopilot or pedal UI is on (pedal UI defaults to on), or no keyboard or controller has been used yet. The lobby, the session's pause menu and results also scan when the rider's Autopilot for this session is on (the lobby's "My Autopilot").
+- Pedal navigation is opt-in. Menus scan, and surge and coast pick and back out, only when `InputRouter.pedal_nav_active()`: the Settings toggle (default off) or Autopilot as the profile default is on. Off, every menu and in-game pick list answers the keyboard and controller only. The lobby, the session's pause menu and results also count the rider's Autopilot for this session (the lobby's "My Autopilot"). While it is on, each page shows a `WlSurgeGraph` under the menu column: the last 5 s of power and the surge threshold (hidden in ERG).
+- Every form page (Profile, Settings, first run) and the Rides and lobby menus scroll their menu column: the highlighted row is always fully in view.
 - A Settings page taller than the screen (Controls; Strava at 1080p; Trainer with many found trainers) scrolls its menu column: the highlighted row, and the scan hint under the last row, is always fully in view, whether the scan, the keyboard or a controller moved it. Pages that fit never scroll.
 - Focus steps through the enabled items every `scan_interval_s` (1.6 s). `surge` picks, `coast` backs out (never while the local rider is in ERG). Up/down/left/right move focus and pause scanning for 10 s.
 - ERG auto-confirm (for game shops and pickers shown during ERG): the highlighted item is picked 2 × enabled items × scan interval after the last input or pick, then again two cycles later if the list stays open. Put the recommended item first.

@@ -3,8 +3,10 @@ extends Control
 ## The break shop (brief 2.4 "Shop", 3 HUD): a PedalScanList with text of at least 32 px. The top
 ## entry is the Autopilot's recommendation (SiegeAutopilot.shop_picks), the second is "Save
 ## denarii", then what else the rider could buy. It follows the local trainer mode, so in an ERG
-## break (every break is) a rider who only pedals gets the top entry auto-confirmed after two scan
-## cycles; that pick goes out tagged "auto" and never ends the rider's zero-input shop fallback.
+## break (every break is) a rider with pedal navigation on (PlayerSlot.pedal_nav) who only pedals
+## gets the top entry auto-confirmed after two scan cycles; that pick goes out tagged "auto" and
+## never ends the rider's zero-input shop fallback. With pedal navigation off the list answers
+## the keyboard and controller only.
 ## A pick sends SiegeIntents.buy(item, pad, via == "auto") through ctx.intents. Visible only while
 ## the shop is open (every break, the build break included).
 ##
@@ -73,7 +75,10 @@ func refresh() -> void:
 		visible = false
 		return
 	visible = true
+	var me := game.ctx.local_player() if game.ctx != null else null
+	list.pedal_nav = me != null and me.pedal_nav
 	var tx := SiegeHudModel.strings_of(game)
+
 	title_label.text = tx.t("SIEGE_SHOP_TITLE", [floori(r.denarii)])
 	var left := SiegeHudModel.phase_remaining_s(game)
 	var window := s.content.num("shop.countdown_s", 10.0) if s.content != null else 10.0

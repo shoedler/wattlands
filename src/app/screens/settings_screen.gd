@@ -23,7 +23,7 @@ extends AppFormScreen
 ##             row in view (AppScreen.scroll_menu_column).
 ##   Audio     master volume, cadence metronome
 ##   Network   relay URL
-##   Pedal UI  pedal-scan menus on/off, scan interval
+##   Pedal navigation  on/off (default off: keyboard and controller only), scan interval
 ##   FTP test (P1) and Rides history (P1) open their own pages.
 
 const MOCK_SPEC := "erg"
@@ -52,12 +52,7 @@ var importing: bool = false
 
 
 func _build() -> void:
-	var page := make_form_page(t("APP_SETTINGS_TITLE"))
-	# The Controls page (a row per action) is taller than a 1080p screen: its menu scrolls and
-	# keeps the highlighted row in view. Settings has no footer line, so the menu column reaches
-	# the bottom margin and the pages that fit look as they did.
-	(page["footer"] as Control).visible = false
-	scroll_menu_column(page["right"] as Control)
+	make_form_page(t("APP_SETTINGS_TITLE"))
 	controls_help_label = AppStyle.paragraph(
 		t("APP_SET_CONTROLS_HELP"), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM
 	)
@@ -159,10 +154,10 @@ func root_fields() -> Array:
 			"run": open_section.bind("network")
 		},
 		{
-			"id": "pedal_ui",
-			"label": t("APP_SET_PEDAL_UI"),
+			"id": "pedal_nav",
+			"label": t("APP_SET_PEDAL_NAV"),
 			"type": "action",
-			"run": open_section.bind("pedal_ui")
+			"run": open_section.bind("pedal_nav")
 		},
 		{
 			"id": "ftp_test",
@@ -181,7 +176,7 @@ func root_fields() -> Array:
 
 
 ## Open a settings page by id ("trainer", "strava", "haptics", "controls", "audio", "network",
-## "pedal_ui").
+## "pedal_nav").
 func open_section(section: String) -> void:
 	var fields: Array = []
 	match section:
@@ -197,7 +192,7 @@ func open_section(section: String) -> void:
 			fields = audio_fields()
 		"network":
 			fields = network_fields()
-		"pedal_ui":
+		"pedal_nav":
 			fields = pedal_fields()
 	if fields.is_empty():
 		return
@@ -673,11 +668,11 @@ func current_relay_url() -> String:
 func pedal_fields() -> Array:
 	return [
 		{
-			"id": "pedal_ui",
-			"label": t("APP_SET_PEDAL_UI_ON"),
+			"id": "pedal_nav",
+			"label": t("APP_SET_PEDAL_NAV_ON"),
 			"type": "toggle",
-			"get": func() -> Variant: return p().pedal_ui,
-			"set": set_pedal_ui
+			"get": func() -> Variant: return p().pedal_nav,
+			"set": set_pedal_nav
 		},
 		{
 			"id": "scan_interval",
@@ -688,14 +683,15 @@ func pedal_fields() -> Array:
 			"step": 0.2,
 			"unit": "s",
 			"decimals": 1,
+			"enabled": func() -> bool: return p().pedal_nav,
 			"get": func() -> Variant: return p().scan_interval_s,
 			"set": set_scan_interval
 		},
 	]
 
 
-func set_pedal_ui(v: Variant) -> void:
-	_set_profile("pedal_ui", bool(v))
+func set_pedal_nav(v: Variant) -> void:
+	_set_profile("pedal_nav", bool(v))
 	set_scanning(scanning_enabled())
 
 

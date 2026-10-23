@@ -33,8 +33,9 @@ var grade_min_pct: float = -5.0
 var grade_max_pct: float = 10.0
 var skip_warmup: bool = false
 var autopilot_default: bool = false
-## Pedal-scan menus even with a controller (Autopilot or pedal UI, BRIEF 3.5).
-var pedal_ui: bool = true
+## Pedal navigation (BRIEF 3.5, opt-in): menus and pick lists scan, a surge picks and a coast
+## backs out. Off: keyboard and controller only.
+var pedal_nav: bool = false
 var scan_interval_s: float = 1.6
 var strava_auto_upload: bool = false
 var metronome: bool = false
@@ -66,6 +67,7 @@ func to_slot(peer_id: int, scaling_mode: String) -> PlayerSlot:
 	s.haptics_on = haptics_on
 	s.haptic_intensity = haptic_intensity_pct / 100.0
 	s.autopilot = autopilot_default
+	s.pedal_nav = pedal_nav
 	return s
 
 
@@ -90,7 +92,7 @@ func to_dict() -> Dictionary:
 		"grade_max_pct": grade_max_pct,
 		"skip_warmup": skip_warmup,
 		"autopilot_default": autopilot_default,
-		"pedal_ui": pedal_ui,
+		"pedal_nav": pedal_nav,
 		"scan_interval_s": scan_interval_s,
 		"strava_auto_upload": strava_auto_upload,
 		"metronome": metronome,
@@ -120,7 +122,7 @@ static func from_dict(d: Dictionary) -> RiderProfile:
 	p.grade_max_pct = float(d.get("grade_max_pct", p.grade_max_pct))
 	p.skip_warmup = bool(d.get("skip_warmup", p.skip_warmup))
 	p.autopilot_default = bool(d.get("autopilot_default", p.autopilot_default))
-	p.pedal_ui = bool(d.get("pedal_ui", p.pedal_ui))
+	p.pedal_nav = bool(d.get("pedal_nav", p.pedal_nav))
 	p.scan_interval_s = float(d.get("scan_interval_s", p.scan_interval_s))
 	p.strava_auto_upload = bool(d.get("strava_auto_upload", p.strava_auto_upload))
 	p.metronome = bool(d.get("metronome", p.metronome))

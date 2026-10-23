@@ -228,10 +228,10 @@ func session_autopilot() -> bool:
 	return false
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this session's Autopilot counts as
-## well as InputRouter.pedal_ui_active(). An auto-pause still holds Resume without scanning.
-func scanning_enabled() -> bool:
-	return session_autopilot() or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): this session's Autopilot counts as well as
+## InputRouter.pedal_nav_active(). An auto-pause still holds Resume without scanning.
+func pedal_nav_enabled() -> bool:
+	return session_autopilot() or super.pedal_nav_enabled()
 
 
 ## The session's own rider's trainer mode (the overlay menu's hint and coast follow it).

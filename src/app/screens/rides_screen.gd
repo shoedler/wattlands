@@ -15,7 +15,11 @@ var list_box: VBoxContainer = null
 
 func _build() -> void:
 	var page := make_page(t("APP_RIDES_TITLE"))
+	# One row per ride: the list scrolls and keeps the highlighted ride in view.
+	(page["footer"] as Control).visible = false
+	scroll_menu_column(page["right"] as Control)
 	var left: VBoxContainer = page["left"]
+
 	status_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.TEXT)
 	status_label.name = "Status"
 	left.add_child(status_label)

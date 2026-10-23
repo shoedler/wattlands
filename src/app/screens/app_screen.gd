@@ -5,11 +5,14 @@ extends Control
 ## on-screen keyboard). Input reaches only the active menu: the screen listens to InputRouter's
 ## actions and gestures and feeds them with feed_action()/feed_gesture(), and drives its scan
 ## timer with tick(dt), so several lists never react to one surge.
-## Pedal-scan: focus cycles every scan interval (profile setting, 1.6 s); surge or confirm picks;
-## coast or back backs out; up and down move focus. Keyboard and controller work the same way.
+## Pedal navigation is opt-in (Settings, BRIEF 3.5): with it on, focus cycles every scan interval
+## (profile setting, 1.6 s), surge picks, coast backs out and a surge feedback graph shows the
+## power a surge needs; with it off every menu answers the keyboard and controller only.
+## Confirm and back pick and back out; up and down move focus either way.
 ## Each tick the active menu learns the local rider's trainer mode (local_trainer_mode()): in
 ## ERG coast never means back (BRIEF 3.5), so its hint says "keep pedaling" (UI_SCAN_HINT_ERG)
 ## and a coast doesn't back out. Only the mode is passed: menus never ERG-auto-pick here.
+## surge_graph is the page's live power graph (make_page); it shows with pedal navigation.
 
 ## Emitted when the screen asks to leave (tests watch it; screens call services.goto).
 signal leaving(state: String)
@@ -26,6 +29,8 @@ var _menu_holder: Control = null
 ## The ScrollContainer around the menu holder when the page's menu column scrolls
 ## (scroll_menu_column); null on the screens whose menus always fit.
 var menu_scroll: ScrollContainer = null
+## The surge feedback graph under the page (make_page): on while pedal navigation is.
+var surge_graph: WlSurgeGraph = null
 var _connected: bool = false
 ## Set while a text field owns the keyboard (routed actions then go only to back/confirm).
 var text_focus: bool = false
@@ -99,6 +104,8 @@ func tick(dt: float) -> void:
 	if m != null:
 		m.set_local_mode(local_trainer_mode())
 		m.tick(dt)
+	if surge_graph != null and is_instance_valid(surge_graph):
+		surge_graph.tick(dt)
 	_tick(dt)
 
 
@@ -352,18 +359,25 @@ func pick_id(id: Variant) -> bool:
 func _configure_list(list: PedalScanList) -> void:
 	var p := services.profile() if services != null else RiderProfile.new()
 	list.scan_interval_s = clampf(p.scan_interval_s, 0.5, 10.0)
+	list.pedal_nav = pedal_nav_enabled()
 	list.scanning = scanning_enabled()
 	list.erg_auto_confirm = false
 
 
-## Pedal-scan on (BRIEF 3.5): InputRouter.pedal_ui_active() decides (Autopilot or pedal UI on,
-## or no input device used yet); without a router, the profile's pedal UI or Autopilot flag.
-## Screens may override.
-func scanning_enabled() -> bool:
+## Pedal navigation on (BRIEF 3.5, opt-in): InputRouter.pedal_nav_active() decides (the rider's
+## Settings toggle, or Autopilot as their default); without a router, the profile's flags. Off:
+## menus ignore surge and coast and never scan. Screens may override (a session's Autopilot).
+func pedal_nav_enabled() -> bool:
 	if services != null and services.input != null:
-		return services.input.pedal_ui_active()
+		return services.input.pedal_nav_active()
 	var p := services.profile() if services != null else RiderProfile.new()
-	return p.pedal_ui or p.autopilot_default
+	return p.pedal_nav or p.autopilot_default
+
+
+## Menus scan (focus cycles by itself): pedal navigation on. The title holds its first item
+## while the zero-touch countdown runs.
+func scanning_enabled() -> bool:
+	return pedal_nav_enabled()
 
 
 ## While the field's LineEdit has keyboard focus, routed actions (WASD, Space...) stay out of
@@ -378,9 +392,15 @@ func watch_text_focus(field: AppTextField) -> void:
 	field.tree_exiting.connect(func() -> void: text_focus = false)
 
 
+## Apply the scan state and pedal navigation to every open menu and the graph (Settings toggles
+## it live).
 func set_scanning(on: bool) -> void:
+	var nav := pedal_nav_enabled()
 	for m in menus:
+		m.pedal_nav = nav
 		m.scanning = on
+	if surge_graph != null:
+		surge_graph.enabled = nav
 
 
 func _on_item_chosen(index: int, id: Variant, auto: bool, list: PedalScanList) -> void:
@@ -491,4 +511,11 @@ func make_page(title_text: String) -> Dictionary:
 	var footer := AppStyle.label("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
 	footer.name = "Footer"
 	root.add_child(footer)
+	surge_graph = WlSurgeGraph.new()
+	surge_graph.real_time = false
+	surge_graph.enabled = pedal_nav_enabled()
+	surge_graph.size_flags_horizontal = Control.SIZE_SHRINK_END
+	surge_graph.custom_minimum_size = Vector2(640, 132)
+	root.add_child(surge_graph)
+
 	return {"root": root, "title": title, "left": left_col, "right": right_col, "footer": footer}

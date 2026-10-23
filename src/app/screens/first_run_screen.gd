@@ -2,11 +2,11 @@ class_name AppFirstRunScreen
 extends AppFormScreen
 ## First run (BRIEF 3.2, 3.5): create the local rider profile (no accounts). A name, the FTP
 ## (typing it marks it verified; otherwise 200 W, unverified, scaled by 0.85 for ERG targets)
-## and the weight. "Start riding" saves profile.json and returns to the title, whose menus then
-## run on pedal-scan. A rider who never touches anything gets the same profile from the title
+## and the weight. "Start riding" saves profile.json and returns to the title. A rider who never
+## touches anything gets the same profile from the title
 ## screen's 20 s zero-touch rule instead. Both start from a copy of the profile as it is, so the
 ## choices made in Settings before the profile existed (haptics opt-out and intensity, Strava
-## auto-upload, pedal UI, scan interval, metronome) are kept (W3 PROF-3).
+## auto-upload, pedal navigation, scan interval, metronome) are kept (W3 PROF-3).
 
 var draft: RiderProfile = null
 var ftp_touched: bool = false
@@ -21,10 +21,6 @@ func _build() -> void:
 		AppStyle.paragraph(t("APP_FIRST_RUN_INTRO"), AppStyle.FONT_BODY, AppStyle.TEXT)
 	)
 	open_fields(fields(), _back)
-
-
-func scanning_enabled() -> bool:
-	return true
 
 
 func fields() -> Array:

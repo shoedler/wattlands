@@ -35,6 +35,9 @@ UI_BANNER_PAUSED,Paused
 UI_SCAN_HINT,Surge to pick · stop pedaling to go back
 UI_SCAN_HINT_ERG,Surge to pick · keep pedaling
 UI_SCAN_AUTO_IN,Picks itself in {0} s · surge to pick now
+UI_NAV_HINT,Up and down to move · confirm to pick · back to return
+UI_SURGE_GRAPH_NOW,Surge above {0} W to pick
+UI_SURGE_GRAPH_WAIT,Keep pedaling steadily to arm the surge
 UI_ACTION_CONFIRM,Confirm
 UI_ACTION_BACK,Back
 UI_ACTION_UP,Up

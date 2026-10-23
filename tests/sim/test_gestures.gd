@@ -176,6 +176,20 @@ func test_surge_ratio_branch_at_200_w() -> void:
 	assert_eq(_feed(k, 12.0, 2, 250.0), [], "+40 W alone is not enough at 200 W")
 
 
+func test_surge_threshold_is_the_bar_a_surge_needs_and_read_only() -> void:
+	var g := _warmed(200.0)
+	assert_almost_eq(g.surge_threshold_w(), 260.0, 1e-9, "the ratio branch")
+	assert_almost_eq(_warmed(100.0).surge_threshold_w(), 140.0, 1e-9, "the +40 W branch")
+	assert_almost_eq(GestureRecognizer.surge_bar_w(150.0), 195.0, 1e-9)
+	assert_eq(_warmed(200.0, 30.0, true).surge_threshold_w(), -1.0, "in ERG speed decides")
+	var fresh := GestureRecognizer.new()
+	fresh.configure(FTP, true)
+	assert_eq(fresh.surge_threshold_w(), -1.0, "no history yet")
+	var before := g.surge_baseline()
+	g.surge_threshold_w()
+	assert_eq(g.surge_baseline(), before, "reading it changes nothing")
+
+
 func test_surge_plus_40_branch_at_100_w() -> void:
 	# Baseline 100 W: max(130, 140) = 140 W.
 	var g := _warmed(100.0)

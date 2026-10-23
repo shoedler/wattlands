@@ -1,5 +1,5 @@
 keys,en
-APP_MODULE_NAME,Wattlands
+APP_MODULE_NAME,WATTLANDS
 APP_TITLE,WATTLANDS
 APP_TAGLINE,Pedal-powered party games
 APP_TITLE_PROFILE,Riding as {0} · FTP {1} W
@@ -76,7 +76,7 @@ APP_SCALING_RAW,Raw watts
 APP_NET_ERROR,Network problem: {0}
 APP_NET_LOST,Lost the connection to the room.
 APP_REFUSED_IN_PROGRESS,This ride has already started. Ask the host to let you in after it ends.
-APP_REFUSED_VERSION,Your Wattlands version doesn't match the host's. Update both to the same version.
+APP_REFUSED_VERSION,Your WATTLANDS version doesn't match the host's. Update both to the same version.
 APP_REFUSED_NOT_FOUND,No room with that code. Check it with the host.
 APP_REFUSED_FULL,That room is full.
 APP_REFUSED_RATE,Too many tries: wait a minute and join again.
@@ -154,7 +154,7 @@ APP_COLOR_4,Pink
 APP_COLOR_5,Sky
 APP_COLOR_6,Orange
 APP_COLOR_7,White
-APP_FIRST_RUN_TITLE,Welcome to Wattlands
+APP_FIRST_RUN_TITLE,Welcome to WATTLANDS
 APP_FIRST_RUN_INTRO,Set up your rider. Don't know your FTP? Keep 200 W: it stays unverified and ERG targets are eased by 15% until you set it or take the FTP test.
 APP_FIRST_RUN_DONE,Start riding
 APP_SETTINGS_TITLE,Settings
@@ -164,7 +164,7 @@ APP_SET_HAPTICS,Haptics
 APP_SET_CONTROLS,Controls
 APP_SET_AUDIO,Audio
 APP_SET_NETWORK,Network
-APP_SET_PEDAL_UI,Pedal UI
+APP_SET_PEDAL_NAV,Pedal navigation
 APP_SET_FTP_TEST,FTP test
 APP_SET_RIDES,Rides history
 APP_SET_TRAINER_STATUS,Status
@@ -189,7 +189,7 @@ APP_SET_HAPTICS_INTENSITY,Intensity
 APP_SET_VOLUME,Volume
 APP_SET_METRONOME,Cadence metronome
 APP_SET_RELAY,Relay
-APP_SET_PEDAL_UI_ON,Pedal-scan menus
+APP_SET_PEDAL_NAV_ON,Pedal navigation
 APP_SET_SCAN_INTERVAL,Scan interval
 APP_SET_CAPTURE,Press a key or button for {0}. Esc or B cancels.
 APP_ACTION_CONFIRM,Confirm
