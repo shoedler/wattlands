@@ -61,6 +61,12 @@ extends Node
 ##   flat, then Stop, through the controller) and released, and the link action waits until
 ##   the FTMS control point has sent both, or SAFE_UNLINK_TIMEOUT_S at most. Without a pending
 ##   control-point write (a mock, a fake manager, the hardware lock) it happens at once.
+## - Heart rate sensor: the FTMS path also starts an HrSensorManager (hr_manager(), start(true):
+##   it reconnects the remembered sensor). Its transport rides the trainer's backend: a
+##   GdbleTransport sharing the trainer transport's BluetoothManager, or a second
+##   BridgeTransport; with a mock trainer (no FTMS manager) it has none, and the mock's own
+##   `hr` profile stands in. The app's rider reads heart_rate_bpm() through
+##   LocalRider.heart_rate_source; bots never get it.
 
 signal status_changed(status: String, detail: String)
 signal device_changed(device: TrainerDevice)
@@ -77,10 +83,13 @@ var input_router: WlInputRouter = null
 var connection_factory: Callable = Callable()
 ## Returns extra LocalRider.setup options for each (re)setup (tests inject doubles).
 var rider_options_factory: Callable = Callable()
+## Returns the HrSensorManager to use (tests return one with a fake transport factory).
+var hr_factory: Callable = Callable()
 
 var _device: TrainerDevice = null
 var _owns_device: bool = false
 var _manager: FtmsConnectionManager = null
+var _hr: HrSensorManager = null
 var _rider: LocalRider = null
 var _status: String = TrainerDevice.STATUS_DISCONNECTED
 var _detail: String = ""
@@ -164,6 +173,25 @@ func is_mock() -> bool:
 ## The FTMS connection manager (null when mocked).
 func connection() -> FtmsConnectionManager:
 	return _manager
+
+
+## The heart rate sensor manager (null until the FTMS path started; never with --mock-trainer).
+func hr_manager() -> HrSensorManager:
+	return _hr
+
+
+## The local rider's heart rate in bpm from the paired sensor, 0 when none.
+func heart_rate_bpm() -> int:
+	return _hr.current_bpm() if _hr != null and is_instance_valid(_hr) else 0
+
+
+## The heart rate sensor's TrainerDevice.STATUS_* ("disconnected" without a manager).
+func hr_status() -> String:
+	return (
+		_hr.status()
+		if _hr != null and is_instance_valid(_hr)
+		else TrainerDevice.STATUS_DISCONNECTED
+	)
 
 
 ## Switch to a MockTrainer with `spec` (settings screen "use mock trainer").
@@ -361,6 +389,46 @@ func _start_ftms() -> void:
 	m.trainer_ready.connect(_on_trainer_ready)
 	m.reconnected.connect(_on_trainer_reconnected)
 	m.start(true)
+	_start_hr()
+
+
+## The heart rate sensor manager (once): its transport follows the trainer's backend.
+func _start_hr() -> void:
+	if _hr == null or not is_instance_valid(_hr):
+		var h: HrSensorManager = null
+		if hr_factory.is_valid():
+			h = hr_factory.call() as HrSensorManager
+		if h == null:
+			h = HrSensorManager.new()
+			h.make_transport = _make_hr_transport
+		h.name = "HrSensorManager"
+		h.process_mode = Node.PROCESS_MODE_ALWAYS
+		_hr = h
+		add_child(h)
+	_hr.start(true)
+
+
+## A transport for the heart rate sensor on the trainer manager's backend, or null while it
+## has none (still starting, no adapter, a mock trainer).
+func _make_hr_transport() -> BleTransport:
+	var m := _manager
+	if m == null or not is_instance_valid(m):
+		return null
+	var t := m.transport()
+	match m.backend_name():
+		FtmsConnectionManager.BACKEND_GDBLE:
+			if t is GdbleTransport:
+				var g := GdbleTransport.new()
+				g.share_manager_of(t as GdbleTransport)
+				return g
+		FtmsConnectionManager.BACKEND_BRIDGE:
+			if t is BridgeTransport:
+				var b := BridgeTransport.new()
+				b.url = (t as BridgeTransport).url
+				return b
+		_:
+			pass
+	return null
 
 
 ## Stop listening to the manager and forget it; returns it (null when none) so its link can be
@@ -521,6 +589,7 @@ func _setup_rider() -> void:
 		if extra is Dictionary:
 			opts.merge(extra as Dictionary, true)
 	_rider.setup(1, p, p.to_slot(1, mode), _device, opts)
+	_rider.heart_rate_source = heart_rate_bpm
 
 
 func _connect_services() -> void:

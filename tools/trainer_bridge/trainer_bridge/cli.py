@@ -41,7 +41,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "serve":
             from .server import serve
 
-            asyncio.run(serve(BleakBackend(), port=args.port))
+            asyncio.run(serve(BleakBackend(), port=args.port, backend_factory=BleakBackend))
             return 0
         from .probe import run_probe
 

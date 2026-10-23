@@ -60,6 +60,15 @@ extends BleTransport
 ## "hardware control locked" (push_warning) and emits operation_failed("write", ...).
 ## Scanning, reading and subscribing still work. The transport never retries or reconnects:
 ## FtmsConnectionManager does.
+##
+## Several devices (the trainer and a heart rate sensor): GDBLE holds any number of BleDevice
+## handles on one BluetoothManager. A second transport calls share_manager_of(primary) and
+## then uses the primary's manager (owned by the primary): its initialize() never initializes
+## the adapter again (the primary's FtmsConnectionManager does) and reports adapter_ready
+## from the primary's state. Scans are shared too: one GDBLE scan serves both transports
+## (both see every discovery), start_scan() restarts it to cover the longer window, and
+## stop_scan() leaves it running while the other transport's window lasts. When the primary
+## leaves the tree, a sharing transport reports its link down and adapter_ready(false).
 
 const MANAGER_CLASS := "BluetoothManager"
 const DEVICE_CLASS := "BleDevice"
@@ -83,6 +92,12 @@ var _connecting: bool = false
 var _link_up: bool = false
 var _disconnect_requested: bool = false
 var _services: Array = []
+## The transport whose manager this one uses (null: this transport owns its manager).
+var _primary: GdbleTransport = null
+## Transports sharing this one's manager (weak references).
+var _sharers: Array[WeakRef] = []
+## Ticks (msec) until which this transport's scan window lasts (0: not scanning).
+var _scan_until_ms: int = 0
 
 
 func _init() -> void:
@@ -95,6 +110,8 @@ static func library_loaded() -> bool:
 
 
 func is_available() -> bool:
+	if _primary != null:
+		return is_instance_valid(_primary) and _primary.is_available()
 	if manager_factory.is_valid():
 		return true
 	return library_loaded()
@@ -104,6 +121,9 @@ func is_available() -> bool:
 ## which must be inside the tree for GDBLE to drain its events) and initializes the adapter.
 ## The result arrives as adapter_ready(ok, error).
 func initialize() -> void:
+	if _primary != null:
+		_initialize_shared()
+		return
 	if _manager == null:
 		_manager = _create_manager()
 		if _manager == null:
@@ -126,7 +146,16 @@ func initialize() -> void:
 func start_scan(seconds: float) -> void:
 	if not _require_manager("scan"):
 		return
-	_manager.call(&"start_scan", maxf(seconds, 0.0))
+	var now := Time.get_ticks_msec()
+	var until := now + int(maxf(seconds, 0.0) * 1000.0)
+	var peer_until := _peer_scan_until()
+	if peer_until > now:
+		# One GDBLE scan serves every transport on this manager: restart it for the longer
+		# window (GDBLE refuses a second start while a scan runs).
+		until = maxi(until, peer_until)
+		_manager.call(&"stop_scan")
+	_scan_until_ms = until
+	_manager.call(&"start_scan", float(until - now) / 1000.0)
 	# GDBLE deduplicates discovery over the adapter's lifetime, so a device seen by an
 	# earlier scan is not announced again: report the cache too.
 	if _manager.has_method(&"get_discovered_devices"):
@@ -138,7 +167,11 @@ func start_scan(seconds: float) -> void:
 
 
 func stop_scan() -> void:
-	if _manager == null:
+	_scan_until_ms = 0
+	if _manager == null or not is_instance_valid(_manager):
+		return
+	if _peer_scan_until() > Time.get_ticks_msec():
+		# The other transport's scan window still runs on the shared manager.
 		return
 	_manager.call(&"stop_scan")
 
@@ -201,6 +234,22 @@ func subscribe_characteristic(service_uuid: String, char_uuid: String) -> void:
 
 
 # --- Additive helpers ------------------------------------------------------------------
+
+
+## Use `primary`'s BluetoothManager instead of creating one (a second device on the same
+## adapter, see the class comment). Call before initialize().
+func share_manager_of(primary: GdbleTransport) -> void:
+	if primary == null or primary == self:
+		return
+	_primary = primary
+	primary._sharers.append(weakref(self))
+	if not primary.tree_exiting.is_connected(_on_primary_gone):
+		primary.tree_exiting.connect(_on_primary_gone)
+
+
+## The transport whose manager this one shares (null when it owns its own).
+func primary() -> GdbleTransport:
+	return _primary
 
 
 ## The address passed to the last connect_device() ("" before).
@@ -314,10 +363,64 @@ func _create_manager() -> Node:
 
 
 func _require_manager(op: String) -> bool:
-	if _manager == null or not _initialized:
+	if _manager == null or not is_instance_valid(_manager) or not _initialized:
 		operation_failed.emit(op, "Bluetooth is not initialized")
 		return false
 	return true
+
+
+## A sharing transport's initialize(): the primary's manager, initialized by the primary.
+## adapter_ready follows at once (deferred) when the primary's adapter is up, else with the
+## primary's own adapter_initialized.
+func _initialize_shared() -> void:
+	if not is_instance_valid(_primary) or _primary._manager == null:
+		adapter_ready.emit.call_deferred(false, "Bluetooth is not initialized")
+		return
+	if _manager != _primary._manager:
+		_manager = _primary._manager
+		_connect_signal(_manager, &"adapter_initialized", _on_adapter_initialized)
+		_connect_signal(_manager, &"device_discovered", _on_device_info)
+		_connect_signal(_manager, &"device_updated", _on_device_info)
+		_connect_signal(_manager, &"device_connected", _on_manager_device_connected)
+		_connect_signal(_manager, &"device_disconnected", _on_manager_device_disconnected)
+		_connect_signal(_manager, &"error_occurred", _on_manager_error)
+		_connect_signal(_manager, &"ble_event", _on_manager_event)
+	if _primary._initialized:
+		_initialized = true
+		adapter_ready.emit.call_deferred(true, "")
+
+
+## The latest scan window end (msec) of the other transports on this manager.
+func _peer_scan_until() -> int:
+	var best := 0
+	var peers: Array[GdbleTransport] = []
+	if _primary != null and is_instance_valid(_primary):
+		peers.append(_primary)
+		for w in _primary._sharers:
+			var o: Object = w.get_ref()
+			if o != null and o != self and is_instance_valid(o):
+				peers.append(o as GdbleTransport)
+	for w in _sharers:
+		var o: Object = w.get_ref()
+		if o != null and is_instance_valid(o):
+			peers.append(o as GdbleTransport)
+	for p in peers:
+		best = maxi(best, p._scan_until_ms)
+	return best
+
+
+## The primary (and its manager) is going away: this transport loses the adapter too.
+func _on_primary_gone() -> void:
+	var was_up := _link_up
+	_detach_device()
+	_manager = null
+	_initialized = false
+	_scan_until_ms = 0
+	_primary = null
+	_services = []
+	if was_up:
+		device_disconnected.emit(_address, REASON_ADAPTER_LOST)
+	adapter_ready.emit(false, REASON_ADAPTER_LOST)
 
 
 func _require_device(op: String) -> bool:
