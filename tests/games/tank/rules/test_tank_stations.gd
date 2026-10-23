@@ -62,7 +62,9 @@ func test_the_stabilizer_drains_1_5_units_a_second_while_an_enemy_is_in_range() 
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 	rig.run(10.0)
 	assert_true(dy.stabilizing)
-	assert_almost_eq(dy.bank, 60.0 - 15.0, 0.1)
+	var drain := rig.content.num("tanks", "dynamo.stabilizer_per_s")
+	assert_eq(drain, 2.0, "1.5 in the brief, tuned to 2.0")
+	assert_almost_eq(dy.bank, 60.0 - drain * 10.0, 0.1)
 
 
 func test_elevation_costs_half_a_unit_per_degree_and_runs_at_8_degrees_a_second() -> void:
@@ -497,14 +499,17 @@ func test_swap_cycles_and_left_right_step_the_lever() -> void:
 	assert_eq(g.lever, TankIds.LEVER_DRIVE, "right wraps")
 
 
-func test_hoist_lifts_a_heavy_shell_on_4_kj() -> void:
+func test_hoist_lifts_a_heavy_shell_on_the_hoist_energy() -> void:
 	var rig := _bulwark()
 	var g := rig.gearbox()
+	var full := rig.content.num("tanks", "gearbox.hoist_j")
+	assert_eq(full, 3500.0, "4 kJ in the brief, tuned to 3.5 kJ")
 	_lever(rig, "hoist")
 	g.hoist_j = 0.0
-	rig.run(17.5)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "225 W x 17.5 s = 3.9 kJ")
-	rig.run(0.6)
+	var secs := full / 225.0
+	rig.run(secs - 0.5)
+	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "225 W for a little under the time")
+	rig.run(1.0)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY)
 	assert_eq(g.hoist_j, 0.0)
 
@@ -512,11 +517,12 @@ func test_hoist_lifts_a_heavy_shell_on_4_kj() -> void:
 func test_confirm_at_40_percent_of_the_hoist_latches_a_light_shell() -> void:
 	var rig := _bulwark()
 	var g := rig.gearbox()
-	g.hoist_j = 1500.0
+	var full := rig.content.num("tanks", "gearbox.hoist_j")
+	g.hoist_j = 0.39 * full
 	rig.send(1, {"k": "latch"})
 	rig.run(0.1)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "1.5 kJ is under 40%")
-	g.hoist_j = 1700.0
+	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "under 40%")
+	g.hoist_j = 0.42 * full
 	rig.send(1, {"k": "latch"})
 	rig.run(0.1)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_LIGHT)

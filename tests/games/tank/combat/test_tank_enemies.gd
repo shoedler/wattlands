@@ -138,7 +138,7 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 	var table := {}
 	for type in TankIds.ENEMY_TYPES:
 		var gun: Dictionary = content.enemy_def(type)["gun"]
-		table[type] = [float(gun["damage"]), float(gun["every_s"])]
+		table[type] = [float(gun["damage"]), float(gun["every_s"]), float(gun["hit"])]
 	for type: String in table:
 		var rig := _rig(3)
 		rig.hull().hp = 100000.0
@@ -152,6 +152,8 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 				first = s
 		assert_not_null(first, type)
 		assert_eq(first.damage, table[type][0], "%s damage" % type)
+		var chance := float(rig.content.enemy_def(type)["gun"]["hit"])
+		assert_between(chance, 0.3, 0.95, "%s has a real hit chance" % type)
 		assert_eq(first.source, e.id)
 		assert_almost_eq(
 			e.gun_s, table[type][1] - 0.5, 0.1, "%s reloads in %.0f s" % [type, table[type][1]]

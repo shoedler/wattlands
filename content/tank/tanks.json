@@ -1,5 +1,5 @@
 {
-	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP.",
+	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). Added keys: ram.prompt_px (a light tank this near shows the Surge to ram prompt), props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull).",
 	"tanks": {
 		"bulwark": {
 			"code": 1,
@@ -70,7 +70,7 @@
 	"dynamo": {
 		"bank_max": 100,
 		"j_per_unit": 150,
-		"stabilizer_per_s": 1.5,
+		"stabilizer_per_s": 2.0,
 		"per_degree": 0.5,
 		"per_traverse": 15,
 		"per_hoist": 25,
@@ -97,11 +97,11 @@
 		"positions": ["drive", "turret", "hoist"],
 		"move_s": 1,
 		"turret_full_w": 200,
-		"hoist_j": 4000,
+		"hoist_j": 3500,
 		"light_latch_pct": 40,
 		"breech_cycle_s": 6,
 		"auto_dwell_s": 3,
-		"auto_drive_clear_px": 300,
+		"auto_drive_clear_px": 340,
 		"manual_suspend_s": 15
 	},
 	"gun": {

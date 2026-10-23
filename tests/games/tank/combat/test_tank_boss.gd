@@ -363,3 +363,23 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)
+
+
+func test_a_ram_at_the_boss_is_a_lunge_with_no_target_and_no_penalty() -> void:
+	var rig := _rig(2, true)
+	var d := _driver(rig)
+	rig.hull().speed_mps = 0.0
+	var hp := rig.hull().hp
+	rig.power_w[d] = 1.5 * rig.slots[d - 1].ftp
+	rig.run(4.0)
+	rig.send(d, {"k": "ram", "via": "surge"})
+	rig.run(0.2)
+	assert_gt(rig.diesel().ram_s, 9.0, "the window opens: the 24 px lunge")
+	rig.run(10.0)
+	assert_eq(rig.diesel().ram_s, 0.0)
+	assert_eq(rig.of_type("ram").size(), 0, "nothing to hit, nothing failed")
+	assert_gte(
+		rig.hull().hp, hp - 3.0, "no 10 HP loss (a Behemoth secondary may have scratched it)"
+	)
+	assert_eq(rig.hull().stall_s, 0.0)
+	assert_almost_eq(rig.diesel().ram_cd_s, 30.0, 1.0)
