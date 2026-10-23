@@ -57,5 +57,5 @@
   },
   "lake": {"center": [-140, -120], "radius_m": 40},
   "aqueduct": {"from": [-200, -160], "to": [60, -190], "arches": 18},
-  "camera": {"target": [0, 0, 40], "pitch_deg": 40, "fov_deg": 35, "yaw_deg": 0, "push_in_s": 4}
+  "camera": {"target": [0, 0, 38], "pitch_deg": 41, "fov_deg": 35, "yaw_deg": 0, "push_in_s": 4}
 }
