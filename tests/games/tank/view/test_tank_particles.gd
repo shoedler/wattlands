@@ -177,6 +177,7 @@ func test_a_muzzle_blast_makes_flash_ring_smoke_sparks_and_dust() -> void:
 	assert_eq(fx.flash, 1.0, "the muzzle flash lights the scene")
 	for k in [
 		TankParticles.Kind.FLASH,
+		TankParticles.Kind.MUZZLE,
 		TankParticles.Kind.FIRE,
 		TankParticles.Kind.RING,
 		TankParticles.Kind.SMOKE,
@@ -313,3 +314,14 @@ func test_the_view_stays_inside_the_cap_under_a_cue_storm() -> void:
 		v.advance(1.0 / 60.0)
 		assert_lte(v.fx.live(), TankParticles.CAP)
 	assert_lte(v._cues.size(), TankView.CUE_QUEUE_MAX)
+
+
+func test_the_muzzle_flash_points_along_the_barrel() -> void:
+	var fx := _fx()
+	fx.muzzle_blast(Vector2(300, 180), Vector2.LEFT, 0.8)
+	var found := false
+	for i in fx.particles.count:
+		if fx.particles.kind[i] == TankParticles.Kind.MUZZLE:
+			found = true
+			assert_almost_eq(absf(fx.particles.rot[i]), PI, 1e-4, "facing left")
+	assert_true(found)

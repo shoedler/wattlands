@@ -19,12 +19,15 @@ enum Kind {
 	FIRE,
 	EXPLOSION,
 	FLASH,
+	MUZZLE,
 }
 
 ## Hard cap on live particles.
 const CAP := 400
 ## Kinds drawn additively (lights); the rest are alpha-blended.
-const ADDITIVE: Array[int] = [Kind.SPARK, Kind.EMBER, Kind.FIRE, Kind.EXPLOSION, Kind.FLASH]
+const ADDITIVE: Array[int] = [
+	Kind.SPARK, Kind.EMBER, Kind.FIRE, Kind.EXPLOSION, Kind.FLASH, Kind.MUZZLE
+]
 ## Kinds that may be dropped when the pool is full (the rest evict the oldest particle).
 const DROPPABLE: Array[int] = [Kind.SMOKE, Kind.DUST, Kind.STEAM, Kind.HEAT, Kind.DIRT, Kind.EMBER]
 ## Depth planes: 0 on the tank's plane (sharp), 1 behind it (soft and hazy), -1 in front of it.

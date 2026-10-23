@@ -16,6 +16,8 @@ var _glow: Texture2D = null
 var _fire: Texture2D = null
 var _boom_large: Texture2D = null
 var _boom_small: Texture2D = null
+var _muzzle: Texture2D = null
+var _muzzle_real: bool = false
 
 
 func _init(p_additive: bool = false) -> void:
@@ -31,6 +33,8 @@ func _init(p_additive: bool = false) -> void:
 	_boom_large = (
 		TankSprites.tex("explosion_large") if TankSprites.has_real("explosion_large") else _fire
 	)
+	_muzzle_real = TankSprites.has_real("muzzle_flash")
+	_muzzle = TankSprites.tex("muzzle_flash") if _muzzle_real else _glow
 	_boom_small = (
 		TankSprites.tex("explosion_small") if TankSprites.has_real("explosion_small") else _fire
 	)
@@ -102,6 +106,15 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 		TankParticles.Kind.FLASH:
 			var s := Vector2(size, size)
 			draw_texture_rect(_glow, Rect2(at - s * 0.5, s), false, col)
+		TankParticles.Kind.MUZZLE:
+			# The flash sprite points along the barrel (rotation = the barrel's direction): the
+			# generated sprite when there is one, else a long soft glow.
+			var half := Vector2(size, size * (0.625 if _muzzle_real else 0.45)) * 0.5
+			draw_set_transform(
+				at + Vector2.from_angle(p.rot[i]) * size * 0.35, p.rot[i], Vector2.ONE
+			)
+			draw_texture_rect(_muzzle, Rect2(-half, half * 2.0), false, col)
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## The alpha factor of particle `i` of kind `k` at progress `t`.
@@ -121,6 +134,6 @@ static func _fade(k: int, t: float, p: TankParticles, i: int) -> float:
 			return (1.0 - t) * (0.65 + 0.35 * sin(p.life[i] * 31.0 + float(i) * 1.7))
 		TankParticles.Kind.FIRE:
 			return pow(1.0 - t, 1.5)
-		TankParticles.Kind.EXPLOSION, TankParticles.Kind.FLASH:
+		TankParticles.Kind.EXPLOSION, TankParticles.Kind.FLASH, TankParticles.Kind.MUZZLE:
 			return pow(1.0 - t, 2.0)
 	return 1.0 - t

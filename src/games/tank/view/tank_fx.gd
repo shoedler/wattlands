@@ -112,6 +112,16 @@ func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bo
 		120.0 * big,
 		TankPalette.GLOW_WARM
 	)
+	if particles.spawn(
+		TankParticles.Kind.MUZZLE,
+		at,
+		Vector2.ZERO,
+		0.09,
+		22.0 * big,
+		44.0 * big,
+		TankPalette.WHITE_WARM
+	):
+		particles.tumble(dir.angle(), 0.0)
 	for _i in _count(3):
 		var v := dir.rotated(r(-0.3, 0.3)) * r(60.0, 150.0)
 		particles.spawn(
