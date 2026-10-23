@@ -416,18 +416,25 @@ test('S9 fails a spread over 30%, too few rams stopped and no rams at all', () =
 
 // --- S10 -------------------------------------------------------------------------------------------------------
 
-/** A vo2 trace for peer 1: ERG rows with `spans` ([from, to]) in SIM and a ramped return. */
-function odTrace(spans, over = {}) {
+/** A vo2 trace for peer 1 (FTP 200): ERG rows with `spans` ([from, to]) in SIM. The rider is a
+ *  surger: `opts.simPower` W (default 260, above the plan) while in SIM, so the governor puts the
+ *  return exactly on the plan (min(3 s power, plan)) and the rows carry clamped_by [] and no
+ *  switch_ramp (GAME_SDK 8.2). `opts.ret(planned, k)` gives the applied_target_w k seconds after
+ *  the return (default: the plan). */
+function odTrace(spans, over = {}, opts = {}) {
   const rows = [];
+  const simPower = opts.simPower ?? 260;
   for (let t = 0; t < 2220; t++) {
     const sp = spans.find(([a, b]) => t >= a && t < b);
-    const ret = spans.find(([, b]) => t >= b && t < b + 3);
+    const ret = spans.find(([, b]) => t >= b && t < b + 60);
     const phase = spansOf('vo2').find((s) => t >= s.start && t < s.end)?.index ?? 13;
     const plan = planOf('vo2').phases[phase];
+    const planned = plan.target_pct * 2;
+    const w = sp ? 0 : ret && opts.ret ? opts.ret(planned, t - ret[1]) : planned;
     rows.push({
       t, game_t: t, phase, kind: plan.kind, mode: sp ? 'SIM' : 'ERG',
-      applied_pct: sp ? 90 : ret ? plan.target_pct - 30 + (t - ret[1]) * 10 : plan.target_pct,
-      clamped_by: ret ? ['switch_ramp', 'slew'] : [], rescue: false, haptic: 0, ...(over[t] ?? {}),
+      applied_pct: w / 2, applied_target_w: w, power_w: sp ? simPower : planned,
+      clamped_by: [], rescue: false, haptic: 0, ...(over[t] ?? {}),
     });
   }
   return rows;
@@ -442,7 +449,7 @@ function s10report(o = {}) {
     content: 'vo2',
     directives: o.directives ?? directives,
     events: starts.map((t) => ge(t, { type: 'overdrive', slot: 0, st: 1, scored: 0, why: '' })),
-    trace: { 1: odTrace(o.spans ?? spans, o.over ?? {}), ...(o.trace ?? {}) },
+    trace: { 1: odTrace(o.spans ?? spans, o.over ?? {}, o.opts ?? {}), ...(o.trace ?? {}) },
   });
 }
 
@@ -506,12 +513,77 @@ test('S10 fails a rescue around an Overdrive, a SIM span that is not 30 s and a 
   assert.match(cs.overdriveProblems('x', missing).join('\n'), /5 Overdrive directives but 4 SIM spans/);
 });
 
-test('S10 wants the return to ERG ramped and back at the planned target', () => {
-  const noramp = s10report({ over: { 460: { clamped_by: [] }, 461: { clamped_by: [] }, 462: { clamped_by: [] }, 463: { clamped_by: [] } } });
-  assert.match(cs.overdriveProblems('x', noramp).join('\n'), /without the ramped switch/);
+test('S10 accepts a surger put straight on the plan with clamped_by [] (GAME_SDK 21, 8.2)', () => {
+  // 3 s power 260 W > the 224 W plan: min(3 s power, plan) is the plan, "exactly at a cap is neither
+  // clamped nor counted", so no switch_ramp and no slew on the rows. That is the platform working.
+  const r = s10report();
+  assert.deepEqual(r.trace[1][460].clamped_by, []);
+  assert.equal(r.trace[1][460].applied_target_w, 224);
+  assert.deepEqual(cs.overdriveProblems('x', r), []);
+});
+
+test('S10 accepts a slower rider ramped back up at 30 W/s', () => {
+  // 3 s power 150 W: ERG at 150 W, then +30 W/s up to the 224 W plan (reached 3 s later).
+  const ramp = (planned, k) => Math.min(150 + 30 * k, planned);
+  const r = s10report({ opts: { simPower: 150, ret: ramp } });
+  assert.deepEqual(cs.overdriveProblems('x', r), []);
+  // The first row may be a second of slew past the 3 s power (a row is up to 1 s after the write).
+  const late = s10report({ opts: { simPower: 150, ret: (planned, k) => Math.min(180 + 30 * k, planned) } });
+  assert.deepEqual(cs.overdriveProblems('x', late), []);
+});
+
+test('S10 fails a return to ERG that spikes above the plan', () => {
+  // The first row, and a later row of the phase, above the 224 W plan (+ 1 W).
+  const spike = s10report({ opts: { ret: (planned, k) => (k === 0 ? planned + 20 : planned) } });
+  const d = cs.overdriveProblems('x', spike).join('\n');
+  assert.match(d, /returned to ERG at 460 s: 244 W at 460 s is above the planned 224 W/);
+  const later = s10report({ over: { 475: { applied_target_w: 250 } } });
+  assert.match(cs.overdriveProblems('x', later).join('\n'), /250 W at 475 s is above the planned 224 W/);
+  // +1 W is the tolerance.
+  const edge = s10report({ opts: { ret: (planned, k) => (k < 5 ? planned + 1 : planned) } });
+  assert.deepEqual(cs.overdriveProblems('x', edge), []);
+  const over = s10report({ opts: { ret: (planned, k) => (k < 5 ? planned + 2 : planned) } });
+  assert.match(cs.overdriveProblems('x', over).join('\n'), /is above the planned 224 W/);
+  // The limit is the plan of the row's own phase: an Overdrive that ends with its wave (510-540 s)
+  // returns into the break (50 % = 100 W), so 150 W there is above the plan.
+  const brk = s10report({ starts: [510, 730, 1030, 1330, 1630], over: { 545: { applied_target_w: 150 } } });
+  assert.match(cs.overdriveProblems('x', brk).join('\n'), /150 W at 545 s is above the planned 100 W/);
+});
+
+test('S10 fails an unramped return: the first row above min(3 s power, plan) + one row of slew', () => {
+  // 3 s power 150 W but straight to 224 W: not the ramped switch.
+  const jump = s10report({ opts: { simPower: 150 } });
+  assert.match(cs.overdriveProblems('x', jump).join('\n'), /at 224 W, above min\(3 s power 150 W, planned 224 W\) \+ 30 W of slew: not a ramped switch/);
+  // The floor is the lowest the governor goes: a 20 W 3 s power returns at max(30 % FTP, 50 W) = 60 W.
+  const floor = s10report({ opts: { simPower: 20, ret: (planned, k) => Math.min(60 + 30 * k, planned) } });
+  assert.deepEqual(cs.overdriveProblems('x', floor), []);
+});
+
+test('S10 wants the plan reached at the slew rate', () => {
+  const slow = s10report({ opts: { simPower: 150, ret: (planned, k) => Math.min(150 + 10 * k, planned) } });
+  const d = cs.overdriveProblems('x', slow).join('\n');
+  assert.match(d, /never got back to the planned ERG target \(224 W\) within 4\.47 s/);
+  // The deadline is (224 - 150) / 30 + 2 = 4.47 s after the first row: 4 s later is in time, 5 s is not.
+  const ok = s10report({ opts: { simPower: 150, ret: (planned, k) => (k < 4 ? 150 + 20 * k : planned) } });
+  assert.deepEqual(cs.overdriveProblems('x', ok), []);
+  const late = s10report({ opts: { simPower: 150, ret: (planned, k) => (k < 5 ? 150 + 20 * k : planned) } });
+  assert.match(cs.overdriveProblems('x', late).join('\n'), /never got back to the planned ERG target/);
   const stuck = s10report();
-  for (let t = 460; t < 520; t++) stuck.trace[1][t] = { ...stuck.trace[1][t], applied_pct: 70 };
+  for (let t = 460; t < 520; t++) stuck.trace[1][t] = { ...stuck.trace[1][t], applied_target_w: 140, applied_pct: 70 };
   assert.match(cs.overdriveProblems('x', stuck).join('\n'), /never got back to the planned ERG target/);
+  // An unverified FTP plans 0.85 x the target: 224 -> 198.9 W, so 224 W is above it.
+  const unv = s10report();
+  unv.slots[0].ftp_verified = false;
+  assert.match(cs.overdriveProblems('x', unv).join('\n'), /is above the planned 190\.4 W/);
+});
+
+test('S10 reads the return from the trace: a trace without applied_target_w is a problem, not a pass', () => {
+  const r = s10report();
+  for (const row of r.trace[1]) delete row.applied_target_w;
+  assert.match(cs.overdriveProblems('x', r).join('\n'), /no applied_target_w/);
+  const mode = s10report();
+  mode.trace[1][460] = { ...mode.trace[1][460], mode: 'OFF' };
+  assert.match(cs.overdriveProblems('x', mode).join('\n'), /left SIM at 460 s into OFF, not ERG/);
 });
 
 test('S10 wants 30 s between the return to ERG and the next switch to SIM', () => {
