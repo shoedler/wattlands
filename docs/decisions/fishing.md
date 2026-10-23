@@ -270,3 +270,12 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 - Decision: the trip check needs the host's phase_started for phase 4 (the cool-down) within 135 s + 2 s of phase 0, per rider peer. That allows 2 s of wall-clock slack because e2e runs at --sim-speed=1 and stamps events in real time. A restarted client may hold an empty tail when it came back after the last Fishing event.
 - Reason: the e2e report carries no plans or game times. Siege's tail rule, adapted to a trip that may end before the victim is back.
 
+## 2026-10-23 Generated art (supersedes "[fish-art-qa] Placeholder art")
+
+- Decision: real sprites from the art pipeline. WATTLANDS_ALLOW_ART was not set in this environment; asked, the user told the lead to set it, so it was set inline on the `generate.mjs` invocations only (never in the env scripts, never for a test, never printed with FAL_KEY). Spend $3.557 of $10 (53 paid requests). Flare drafts kept for boat and the four rig parts (each but the angler after one re-prompted draft) and fish_marlin; one sunburst pass for the rest, with one re-roll for 15 sprites (the first pass invented mascots in strips; "seamless strip, no animals or characters" fixed it) and two for the sun (the second result selected).
+- Deviation: reef_front took three re-rolls, one over the brief's two-re-roll cap: after the mascot fix its pink coral quantised onto the PaletteSwap red key ramp (635 pixels, which the palette test forbids); two more "no red" prompts brought it to zero. Spend stayed far under the budget.
+- Accepted flaws: small gulls, a weak mackerel silhouette, a few fringe pixels on the tuna, plain crank and reel discs. The fallback drawer (`FishingFallbackSprites`) stays as the documented fallback.
+
+## 2026-10-23 G3 review and G4 round
+
+- G3: three fresh reviewers (safety on Opus; rules, network and zero input; presentation, boundaries and code quality) found 17 issues: no blocker, 6 majors (all confirmed by independent verifiers; SAF-1 and RULES-1 are the same stagger bug), 11 minors. One G4 round with two fixers (rules and safety; view, HUD and docs) fixed them with tests; minors were fixed where cheap. Findings that need a trainer are in `src/games/fishing/HARDWARE_TEST.md`.
