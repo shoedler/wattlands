@@ -14,19 +14,19 @@ static func _quiet(index: int, props: Dictionary = {"encounters": [], "obstacles
 		(files["mission"]["segments"][index] as Dictionary).merge(props, true)
 
 
-func _rig(crew: int = 1, index: int = ADVANCE, seed_v: int = 7) -> TankRig:
-	var rig := TankRig.new(crew, "ashfall_road", true, seed_v, _quiet(index))
+func _rig(crew: int = 1, index: int = ADVANCE, seed_v: int = 7) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew, "ashfall_road", true, seed_v, _quiet(index))
 	rig.no_fire = true
 	rig.enter(index, 5.0)
 	return rig
 
 
 ## Spawns `type` as the enemy list's only member the way an encounter does (rolled hold).
-func _enter(rig: TankRig, type: String, side: int = 1) -> TankEnemyState:
+func _enter(rig: TankRulesRig, type: String, side: int = 1) -> TankEnemyState:
 	return TankEnemies.spawn(rig.state, TankAux.of(rig.state), type, side, -1.0, false, false, 0)
 
 
-func _dist(rig: TankRig, e: TankEnemyState) -> float:
+func _dist(rig: TankRulesRig, e: TankEnemyState) -> float:
 	return TankEnemies.distance(rig.state, e)
 
 
@@ -212,7 +212,7 @@ func test_a_dug_in_tank_can_only_be_hit_on_its_turret() -> void:
 
 
 func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.no_fire = true
 	rig.enter(GUN_LINE, 1.0)
 	var guns := rig.state.enemies
@@ -230,8 +230,8 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	assert_eq(guns.map(func(e: TankEnemyState) -> float: return e.x_px), x0, "fixed in world space")
 
 
-func _heavy_rig(crew: int = 1) -> TankRig:
-	var rig := TankRig.new(crew)
+func _heavy_rig(crew: int = 1) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew)
 	rig.no_fire = true
 	rig.enter(5, 1.0)
 	return rig
@@ -295,7 +295,7 @@ func test_no_enemy_moves_into_the_hull_or_off_the_cap() -> void:
 # --- Hit rolls and where shells land ---------------------------------------------------------------
 
 
-func _fire_from(rig: TankRig, hit_chance: float) -> TankShellState:
+func _fire_from(rig: TankRulesRig, hit_chance: float) -> TankShellState:
 	var aux := TankAux.of(rig.state)
 	rig.state.shells.clear()
 	TankEnemies.launch(

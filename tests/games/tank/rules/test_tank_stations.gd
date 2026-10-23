@@ -15,8 +15,8 @@ static func _patch(index: int, props: Dictionary) -> Callable:
 		(files["mission"]["segments"][index] as Dictionary).merge(props, true)
 
 
-func _quiet(crew: int, index: int = ADVANCE, into_s: float = 5.0) -> TankRig:
-	var rig := TankRig.new(
+func _quiet(crew: int, index: int = ADVANCE, into_s: float = 5.0) -> TankRulesRig:
+	var rig := TankRulesRig.new(
 		crew, "ashfall_road", true, 7, _patch(index, {"encounters": [], "obstacles": []})
 	)
 	rig.enter(index, into_s)
@@ -163,7 +163,7 @@ func test_the_hoist_waits_for_the_breech_cycle() -> void:
 
 
 func test_the_depot_fills_the_bank_on_a_script() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(DEPOT, 5.0)
 	rig.dynamo().bank = 10.0
 	rig.run(0.2)
@@ -307,7 +307,7 @@ func test_a_latch_inside_the_window_is_a_heavy_shell_now() -> void:
 
 
 func test_checkpoints_hold_pressure_it_neither_builds_nor_bleeds() -> void:
-	var rig := TankRig.new(3)
+	var rig := TankRulesRig.new(3)
 	rig.enter(CHECKPOINT, 2.0)
 	var st := rig.steam()
 	st.pressure_pct = 50.0
@@ -315,7 +315,7 @@ func test_checkpoints_hold_pressure_it_neither_builds_nor_bleeds() -> void:
 	assert_eq(st.pressure_pct, 50.0)
 
 
-func _over_rig() -> TankRig:
+func _over_rig() -> TankRulesRig:
 	var rig := _quiet(3)
 	rig.plan_t = 400.0
 	rig.steam().pressure_pct = 99.9
@@ -427,7 +427,7 @@ func test_steam_on_reserve_builds_at_60_watts_and_all_afk_freezes_it() -> void:
 # --- Bulwark gearbox -------------------------------------------------------------------------------
 
 
-func _bulwark(index: int = ADVANCE, into_s: float = 5.0) -> TankRig:
+func _bulwark(index: int = ADVANCE, into_s: float = 5.0) -> TankRulesRig:
 	var rig := _quiet(1, index, into_s)
 	var g := rig.gearbox()
 	g.auto = false
@@ -436,7 +436,7 @@ func _bulwark(index: int = ADVANCE, into_s: float = 5.0) -> TankRig:
 
 
 ## Moves the lever by hand to `to` ("hoist", "turret", "drive") and keeps the auto-lever off.
-func _lever(rig: TankRig, to: String) -> void:
+func _lever(rig: TankRulesRig, to: String) -> void:
 	rig.send(1, {"k": "lever", "to": to})
 	rig.run(1.2)
 	rig.gearbox().auto = false

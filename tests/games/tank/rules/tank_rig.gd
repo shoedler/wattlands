@@ -1,4 +1,4 @@
-class_name TankRig
+class_name TankRulesRig
 extends RefCounted
 ## A tiny driver for the pure Tank rules in tests: real content, real plans, a state, a tick counter
 ## and a segment clock. It builds TankInputs by hand (no platform runtime): the group's phase is

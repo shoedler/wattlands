@@ -16,7 +16,7 @@ static func _patch(index: int, props: Dictionary) -> Callable:
 
 
 func test_each_new_segment_raises_a_segment_event_with_its_stage() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(DEPOT, 0.0)
 	rig.enter(ADVANCE, 0.0)
 	rig.enter(GUN_LINE, 0.0)
@@ -44,7 +44,7 @@ func test_each_new_segment_raises_a_segment_event_with_its_stage() -> void:
 
 
 func test_the_hull_hp_at_each_segment_end_is_recorded() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(ADVANCE, 0.0)
 	rig.hull().hp = 77.0
 	rig.enter(GUN_LINE, 0.0)
@@ -54,7 +54,7 @@ func test_the_hull_hp_at_each_segment_end_is_recorded() -> void:
 
 
 func test_a_checkpoint_adds_20_hp_to_the_maximum_and_heals_20() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	var base := rig.hull().hp_max
 	rig.enter(GUN_LINE, 0.0)
 	rig.hull().hp = 60.0
@@ -71,7 +71,7 @@ func test_a_checkpoint_adds_20_hp_to_the_maximum_and_heals_20() -> void:
 
 
 func test_a_rotation_event_lists_every_riders_new_engine_at_the_checkpoint() -> void:
-	var rig := TankRig.new(3)
+	var rig := TankRulesRig.new(3)
 	rig.enter(GUN_LINE, 1.0)
 	rig.events.clear()
 	rig.enter(CHECKPOINT, 0.0)
@@ -92,7 +92,7 @@ func test_a_rotation_event_lists_every_riders_new_engine_at_the_checkpoint() -> 
 
 
 func test_rotation_off_never_moves_anyone() -> void:
-	var rig := TankRig.new(3, "ashfall_road", false)
+	var rig := TankRulesRig.new(3, "ashfall_road", false)
 	for index in [ADVANCE, CHECKPOINT, STAGE2_ADVANCE, BOSS]:
 		rig.enter(index, 1.0)
 	assert_eq(rig.of_type("rotation").size(), 0)
@@ -103,7 +103,7 @@ func test_rotation_off_never_moves_anyone() -> void:
 
 
 func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
-	var rig := TankRig.new(
+	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
 		true,
@@ -125,7 +125,7 @@ func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
 
 
 func test_a_gun_line_is_done_when_every_gun_has_fallen() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(GUN_LINE, 1.0)
 	var aux := TankAux.of(rig.state)
 	assert_false(rig.state.seg.objective_done)
@@ -147,7 +147,7 @@ func test_a_gun_line_is_done_when_every_gun_has_fallen() -> void:
 
 
 func test_the_boss_objective_is_the_behemoth_dead() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(BOSS, 1.0)
 	rig.run(1.0)
 	assert_false(rig.state.seg.objective_done)
@@ -158,7 +158,7 @@ func test_the_boss_objective_is_the_behemoth_dead() -> void:
 
 func test_fixed_phases_never_complete() -> void:
 	for index in [DEPOT, CHECKPOINT]:
-		var rig := TankRig.new(1)
+		var rig := TankRulesRig.new(1)
 		rig.enter(index, 20.0)
 		rig.run(30.0)
 		assert_false(rig.state.seg.objective_done)
@@ -169,7 +169,7 @@ func test_fixed_phases_never_complete() -> void:
 
 
 func test_an_overrun_counts_flags_the_stage_and_costs_the_clean_stage_credit() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(ADVANCE, 0.0)
 	rig.enter(GUN_LINE, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.score.overruns, 1)
@@ -179,7 +179,7 @@ func test_an_overrun_counts_flags_the_stage_and_costs_the_clean_stage_credit() -
 	assert_eq([ev[0]["sg"], ev[0]["st"]], [TankIds.seg_code(TankIds.SEG_ADVANCE), 1])
 	rig.enter(CHECKPOINT, 0.0, Wl.ENDED_END_PHASE)
 	assert_eq(rig.state.score.stages_clean, 0, "a stage with an overrun is not clean")
-	var ok := TankRig.new(1)
+	var ok := TankRulesRig.new(1)
 	ok.enter(ADVANCE, 0.0)
 	ok.enter(GUN_LINE, 0.0, Wl.ENDED_END_PHASE)
 	ok.enter(CHECKPOINT, 0.0, Wl.ENDED_END_PHASE)
@@ -188,7 +188,7 @@ func test_an_overrun_counts_flags_the_stage_and_costs_the_clean_stage_credit() -
 
 
 func test_an_advance_overrun_tows_the_tank_to_the_halt_line() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.no_fire = true
 	rig.enter(ADVANCE, 100.0)
 	rig.run(20.0)
@@ -203,7 +203,7 @@ func test_an_advance_overrun_tows_the_tank_to_the_halt_line() -> void:
 
 
 func test_a_gun_line_overrun_falls_to_a_support_barrage_with_no_kill_credit() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(GUN_LINE, 10.0)
 	var left := rig.state.enemies.size()
 	assert_gt(left, 0)
@@ -225,7 +225,7 @@ func test_a_gun_line_overrun_falls_to_a_support_barrage_with_no_kill_credit() ->
 
 
 func test_a_boss_overrun_is_a_withdrawal_and_the_outcome_follows() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(BOSS, 10.0)
 	rig.enter(11, 0.0, Wl.ENDED_MAX_S)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
@@ -235,7 +235,7 @@ func test_a_boss_overrun_is_a_withdrawal_and_the_outcome_follows() -> void:
 
 
 func test_the_outcome_is_set_once_in_the_cooldown() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(BOSS, 10.0)
 	rig.state.boss.phase = TankIds.BOSS_DEAD
 	rig.state.score.behemoth_killed = true
@@ -244,13 +244,13 @@ func test_the_outcome_is_set_once_in_the_cooldown() -> void:
 	rig.state.score.behemoth_killed = false
 	rig.run(5.0)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY, "not recomputed")
-	var drill := TankRig.new(1, "drill")
+	var drill := TankRulesRig.new(1, "drill")
 	drill.enter(3, 0.0)
 	assert_eq(drill.state.outcome, TankIds.OUTCOME_COMPLETE, "the drill has no boss")
 
 
 func test_the_cooldown_has_no_enemies_and_the_tank_rolls_on_without_score() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(11, 0.0)
 	assert_eq(rig.state.enemies.size(), 0)
 	rig.run(10.0)
@@ -263,7 +263,7 @@ func test_the_cooldown_has_no_enemies_and_the_tank_rolls_on_without_score() -> v
 
 
 func test_the_depot_drives_for_120_s_then_the_tank_halts_for_the_aim_and_fire_drills() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(DEPOT, 10.0)
 	rig.run(20.0)
 	assert_gt(rig.hull().speed_mps, 2.0, "drive drill")
@@ -282,7 +282,7 @@ func test_the_depot_drives_for_120_s_then_the_tank_halts_for_the_aim_and_fire_dr
 
 
 func test_the_aim_drill_stands_two_wrecks_and_the_gun_slews_to_them() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(DEPOT, 125.0)
 	rig.run(1.0)
 	var wrecks := rig.state.obstacles.filter(
@@ -298,7 +298,7 @@ func test_the_aim_drill_stands_two_wrecks_and_the_gun_slews_to_them() -> void:
 
 
 func test_the_fire_drill_shoots_the_drill_wrecks_with_no_damage_and_no_score() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(DEPOT, 125.0)
 	rig.run(1.0)
 	rig.enter(DEPOT, 245.0)
@@ -324,7 +324,7 @@ func test_the_fire_drill_shoots_the_drill_wrecks_with_no_damage_and_no_score() -
 
 
 func test_the_aim_drill_does_not_fire_a_loaded_shell_before_the_fire_drill() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(DEPOT, 125.0)
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	rig.run(20.0)
@@ -335,7 +335,7 @@ func test_the_aim_drill_does_not_fire_a_loaded_shell_before_the_fire_drill() -> 
 
 
 func test_the_drill_skirmish_is_warmup_with_two_lights_and_a_medium() -> void:
-	var rig := TankRig.new(3, "drill")
+	var rig := TankRulesRig.new(3, "drill")
 	rig.enter(1, 0.0)
 	rig.no_fire = true
 	rig.run(2.0)
@@ -353,7 +353,7 @@ func test_the_drill_skirmish_is_warmup_with_two_lights_and_a_medium() -> void:
 
 
 func test_an_advance_encounter_spawns_when_the_tank_has_driven_that_far() -> void:
-	var rig := TankRig.new(3)
+	var rig := TankRulesRig.new(3)
 	rig.no_fire = true
 	rig.enter(ADVANCE, 0.0)
 	assert_eq(rig.state.enemies.size(), 0)

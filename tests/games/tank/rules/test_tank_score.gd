@@ -159,7 +159,7 @@ func test_unlocks_by_finish_grade_and_a_clean_behemoth_kill() -> void:
 
 
 func test_work_time_and_band_time_count_only_in_work_phases() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(0, 10.0)
 	rig.run(20.0)
 	assert_eq(rig.rider().work_s, 0.0, "the depot is a warm-up")
@@ -179,7 +179,7 @@ func test_work_time_and_band_time_count_only_in_work_phases() -> void:
 
 
 func test_time_per_engine_follows_the_rotation() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.no_fire = true
 	rig.enter(1, 0.0)
 	rig.run(10.0)
@@ -189,7 +189,7 @@ func test_time_per_engine_follows_the_rotation() -> void:
 	assert_almost_eq(r0.engine_s[0], 10.05, 0.15, "diesel in stage 1")
 	assert_almost_eq(r0.engine_s[1], 10.05, 0.15, "dynamo in stage 2")
 	assert_eq(r0.engine_s[2], 0.0)
-	var bul := TankRig.new(1)
+	var bul := TankRulesRig.new(1)
 	bul.no_fire = true
 	bul.enter(1, 0.0)
 	bul.run(10.0)
@@ -197,7 +197,7 @@ func test_time_per_engine_follows_the_rotation() -> void:
 
 
 func test_the_per_rider_shell_counters_by_type() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(3, 5.0)
 	var g := rig.peer_of(TankIds.ENGINE_DYNAMO)
 	rig.hull().aim_pause_s = 99.0

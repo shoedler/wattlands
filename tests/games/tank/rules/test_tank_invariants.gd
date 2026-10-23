@@ -18,7 +18,7 @@ func _random_intent(rng: RandomNumberGenerator) -> Dictionary:
 	return d
 
 
-func _check(rig: TankRig, label: String) -> void:
+func _check(rig: TankRulesRig, label: String) -> void:
 	var s := rig.state
 	var h := s.hull
 	assert_true(
@@ -72,8 +72,8 @@ func _check(rig: TankRig, label: String) -> void:
 		assert_true(is_finite(r.work_s) and r.band_s <= r.work_s + 1e-6, "%s band <= work" % label)
 
 
-func _fuzz(crew: int, rng_seed: int) -> TankRig:
-	var rig := TankRig.new(crew, "ashfall_road", true, rng_seed)
+func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew, "ashfall_road", true, rng_seed)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed * 7919
 	rig.auto_phase = true

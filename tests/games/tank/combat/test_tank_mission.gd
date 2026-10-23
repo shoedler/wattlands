@@ -231,7 +231,7 @@ func test_each_tank_meets_the_scaled_gun_line() -> void:
 		3: [3, 3, 4],
 	}
 	for crew: int in expect:
-		var rig := TankRig.new(crew)
+		var rig := TankRulesRig.new(crew)
 		for i in 3:
 			rig.enter([2, 5, 8][i], 0.0)
 			assert_eq(
@@ -243,7 +243,7 @@ func test_each_tank_meets_the_scaled_gun_line() -> void:
 
 
 func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_screen() -> void:
-	var rig := TankRig.new(3)
+	var rig := TankRulesRig.new(3)
 	rig.enter(8, 0.0)
 	var front_screen := 16.0 + rig.hull().hull_w
 	for e in rig.state.enemies:

@@ -1,5 +1,5 @@
 extends GutTest
-## Whole sessions through the rules alone (TankRig): compliant riders with no input play Ashfall
+## Whole sessions through the rules alone (TankRulesRig): compliant riders with no input play Ashfall
 ## Road and the drill to the cool-down for every crew (brief 0.4, 2.5; T1 and T5 in spirit; the
 ## balance gates themselves are the simulation matrix's). Each full session takes a few seconds.
 
@@ -11,7 +11,7 @@ var _done: Dictionary = {}
 
 func before_all() -> void:
 	for crew in ROADS:
-		var rig := TankRig.new(crew, "ashfall_road", true, 1)
+		var rig := TankRulesRig.new(crew, "ashfall_road", true, 1)
 		rig.bank_director = true
 		rig.play()
 		_done[crew] = rig
@@ -24,7 +24,7 @@ func _is_open(type: String) -> bool:
 func test_every_crew_wins_ashfall_road_with_no_overrun_and_every_open_phase_ends_in_its_limits(
 ) -> void:
 	for crew in ROADS:
-		var rig: TankRig = _done[crew]
+		var rig: TankRulesRig = _done[crew]
 		assert_true(rig.in_cooldown(), "crew %d reached the cool-down" % crew)
 		assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY, "crew %d: Foundry Gate taken" % crew)
 		assert_eq(rig.state.score.overruns, 0, "crew %d" % crew)
@@ -46,7 +46,7 @@ func test_every_crew_wins_ashfall_road_with_no_overrun_and_every_open_phase_ends
 
 func test_every_crew_plays_the_drill_to_the_results() -> void:
 	for crew in ROADS:
-		var rig := TankRig.new(crew, "drill", true, 2)
+		var rig := TankRulesRig.new(crew, "drill", true, 2)
 		var t := rig.play()
 		assert_lt(t, 200.0)
 		assert_eq(rig.state.outcome, TankIds.OUTCOME_COMPLETE)
@@ -56,9 +56,9 @@ func test_every_crew_plays_the_drill_to_the_results() -> void:
 
 
 func test_the_score_falls_with_compliance_100_85_70() -> void:
-	var score: Array[float] = [float(TankScore.summary((_done[3] as TankRig).state)["score"])]
+	var score: Array[float] = [float(TankScore.summary((_done[3] as TankRulesRig).state)["score"])]
 	for c in [0.85, 0.7]:
-		var rig := TankRig.new(3, "ashfall_road", true, 1)
+		var rig := TankRulesRig.new(3, "ashfall_road", true, 1)
 		rig.compliance = c
 		rig.bank_director = true
 		rig.play()
@@ -69,7 +69,7 @@ func test_the_score_falls_with_compliance_100_85_70() -> void:
 
 func test_a_bulwark_that_never_pedals_gets_through_on_the_reserve_alone() -> void:
 	# Everyone AFK all session: nothing has power, nothing moves, every open phase is cut at max_s.
-	var rig := TankRig.new(1, "ashfall_road", true, 3)
+	var rig := TankRulesRig.new(1, "ashfall_road", true, 3)
 	rig.afk[1] = true
 	rig.play()
 	assert_true(rig.in_cooldown())
@@ -80,7 +80,7 @@ func test_a_bulwark_that_never_pedals_gets_through_on_the_reserve_alone() -> voi
 
 
 func test_every_event_carries_ints_for_the_fields_the_wire_declares() -> void:
-	var rig: TankRig = _done[3]
+	var rig: TankRulesRig = _done[3]
 	var seen := {}
 	for e in rig.events:
 		var type := str(e["type"])
@@ -100,7 +100,7 @@ func test_every_event_carries_ints_for_the_fields_the_wire_declares() -> void:
 func test_events_stay_inside_ten_a_second() -> void:
 	var worst := 0
 	for crew in ROADS:
-		var counts: Array[int] = (_done[crew] as TankRig).event_counts
+		var counts: Array[int] = (_done[crew] as TankRulesRig).event_counts
 		var window := 0
 		for i in counts.size():
 			window += counts[i]
@@ -111,10 +111,10 @@ func test_events_stay_inside_ten_a_second() -> void:
 
 
 func test_robust_states_step_without_content_or_riders() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.state.content = null
 	assert_eq(TankRules.step(rig.state, rig.inputs(), Wl.SIM_DT), [] as Array[Dictionary])
-	var empty := TankRig.new(1)
+	var empty := TankRulesRig.new(1)
 	var inp := empty.inputs()
 	inp.riders.clear()
 	var ev := TankRules.step(empty.state, inp, Wl.SIM_DT)

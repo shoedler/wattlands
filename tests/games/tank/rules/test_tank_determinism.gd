@@ -2,12 +2,12 @@ extends GutTest
 ## Determinism (BRIEF 6: seeded RNG, fixed steps) and the cost of one step at the caps.
 
 
-func _fingerprint(rig: TankRig) -> String:
+func _fingerprint(rig: TankRulesRig) -> String:
 	return JSON.stringify([rig.state.to_dict(), rig.events])
 
 
-func _play(crew: int, rng_seed: int, seconds: float) -> TankRig:
-	var rig := TankRig.new(crew, "ashfall_road", true, rng_seed)
+func _play(crew: int, rng_seed: int, seconds: float) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew, "ashfall_road", true, rng_seed)
 	rig.auto_phase = true
 	rig.enter(1, 0.0)
 	rig.run(seconds)
@@ -29,8 +29,8 @@ func test_another_seed_changes_the_fight() -> void:
 
 
 func test_the_same_seed_gives_the_same_whole_mission() -> void:
-	var a := TankRig.new(2, "ashfall_road", true, 5)
-	var b := TankRig.new(2, "ashfall_road", true, 5)
+	var a := TankRulesRig.new(2, "ashfall_road", true, 5)
+	var b := TankRulesRig.new(2, "ashfall_road", true, 5)
 	a.play()
 	b.play()
 	assert_eq(a.seg_len, b.seg_len)
@@ -58,14 +58,14 @@ func test_the_rules_never_read_a_clock_or_a_global_random_source() -> void:
 
 
 ## A crew-3 stage-3 advance with 16 enemies and 24 shells in flight.
-func _capped() -> TankRig:
-	var rig := TankRig.new(3)
+func _capped() -> TankRulesRig:
+	var rig := TankRulesRig.new(3)
 	rig.enter(7, 50.0)
 	rig.state.enemies.clear()
 	return rig
 
 
-func _top_up(rig: TankRig) -> void:
+func _top_up(rig: TankRulesRig) -> void:
 	var aux := TankAux.of(rig.state)
 	var i := 0
 	while rig.state.enemies.size() < TankConst.MAX_ENEMIES:

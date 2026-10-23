@@ -16,8 +16,8 @@ static func _quiet(index: int) -> Callable:
 
 ## A rig in a checkpoint: the tank stands still, nothing else is going on, only the gun is under
 ## test.
-func _rig(crew: int = 2, index: int = CHECKPOINT) -> TankRig:
-	var rig := TankRig.new(crew, "ashfall_road", true, 7, _quiet(index))
+func _rig(crew: int = 2, index: int = CHECKPOINT) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew, "ashfall_road", true, 7, _quiet(index))
 	rig.enter(index, 5.0)
 	if rig.dynamo() != null:
 		rig.dynamo().bank = 100.0
@@ -26,17 +26,17 @@ func _rig(crew: int = 2, index: int = CHECKPOINT) -> TankRig:
 
 ## The gunner's peer: whoever works the dynamo (the checkpoint already carries the next stage's
 ## engines, so it is not always peer 2).
-func _g(rig: TankRig) -> int:
+func _g(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DYNAMO)
 
 
-func _gun_shots(rig: TankRig) -> Array:
+func _gun_shots(rig: TankRulesRig) -> Array:
 	return rig.of_type("shot").filter(
 		func(e: Dictionary) -> bool: return e["s"] >= 0 and e["sh"] != TankIds.SHELL_SECONDARY
 	)
 
 
-func _aim(rig: TankRig) -> TankTarget:
+func _aim(rig: TankRulesRig) -> TankTarget:
 	var aux := TankAux.of(rig.state)
 	aux.aim_valid = false
 	TankTargets.build(rig.state, aux)
@@ -99,7 +99,7 @@ func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 
 func test_every_gun_line_enemy_is_reachable_from_every_tank() -> void:
 	for crew in [1, 2, 3]:
-		var rig := TankRig.new(crew)
+		var rig := TankRulesRig.new(crew)
 		for index in [2, 5, 8]:
 			rig.enter(index, 1.0)
 			rig.hull().speed_mps = 0.0
@@ -346,7 +346,7 @@ func test_target_ids_are_the_entity_id_or_the_negative_boss_part() -> void:
 # --- Secondaries ---------------------------------------------------------------------------------
 
 
-func _secondary_shots(rig: TankRig) -> Array:
+func _secondary_shots(rig: TankRulesRig) -> Array:
 	return rig.of_type("shot").filter(
 		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_SECONDARY
 	)

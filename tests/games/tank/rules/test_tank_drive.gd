@@ -17,13 +17,13 @@ static func _empty_advance(grade: float) -> Callable:
 	return _patch(ADVANCE, {"encounters": [], "obstacles": [], "terrain": [[0, grade]]})
 
 
-func _driver_v(rig: TankRig) -> float:
+func _driver_v(rig: TankRulesRig) -> float:
 	return rig.hull().speed_mps
 
 
 func test_speed_follows_the_speed_model_oracle_on_the_drivers_p_eff() -> void:
 	for grade: float in [0.0, 3.0, -2.0, 5.0]:
-		var rig := TankRig.new(1, "ashfall_road", true, 7, _empty_advance(grade))
+		var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(grade))
 		rig.enter(ADVANCE, 1.0)
 		rig.run(60.0)
 		var want := SpeedModel.steady_state_speed(225.0, grade, 75.0 + 8.0, 0.5)
@@ -32,7 +32,7 @@ func test_speed_follows_the_speed_model_oracle_on_the_drivers_p_eff() -> void:
 
 
 func test_80_percent_ftp_on_the_flat_is_8_2_m_s_and_66_px_s() -> void:
-	var rig := TankRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
 	rig.sim_pct = 80.0
 	rig.enter(ADVANCE, 1.0)
 	rig.run(80.0)
@@ -45,18 +45,18 @@ func test_80_percent_ftp_on_the_flat_is_8_2_m_s_and_66_px_s() -> void:
 
 func test_the_world_scrolls_eight_px_per_game_metre() -> void:
 	assert_eq(TankConst.PX_PER_M, 8.0)
-	var rig := TankRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.run(20.0)
 	assert_almost_eq(rig.hull().x_px, rig.hull().distance_m * 8.0, 1e-6)
 
 
 func test_the_drive_uses_the_mass_of_the_rider_on_the_diesel() -> void:
-	var slow := TankRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
+	var slow := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
 	slow.mass_kg = 110.0
 	slow.enter(ADVANCE, 1.0)
 	slow.run(60.0)
-	var fast := TankRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
+	var fast := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
 	fast.mass_kg = 55.0
 	fast.enter(ADVANCE, 1.0)
 	fast.run(60.0)
@@ -65,7 +65,7 @@ func test_the_drive_uses_the_mass_of_the_rider_on_the_diesel() -> void:
 
 
 func test_rotation_puts_the_next_riders_mass_on_the_tracks() -> void:
-	var rig := TankRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	assert_eq(rig.diesel().engine, TankIds.ENGINE_DIESEL)
 	assert_eq(rig.diesel().peer, 1, "slot 0 drives in stage 1")
@@ -74,7 +74,7 @@ func test_rotation_puts_the_next_riders_mass_on_the_tracks() -> void:
 
 
 func test_the_tank_holds_in_gun_lines_checkpoints_and_the_boss_and_in_a_breakdown() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	for index in [2, 3, 10]:
 		rig.enter(index, 3.0)
 		rig.run(5.0)
@@ -84,7 +84,7 @@ func test_the_tank_holds_in_gun_lines_checkpoints_and_the_boss_and_in_a_breakdow
 
 
 func test_a_wire_stops_the_tank_at_its_standoff_until_a_heavy_shell_clears_it() -> void:
-	var rig := TankRig.new(
+	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
 		true,
@@ -118,7 +118,7 @@ func test_a_wire_stops_the_tank_at_its_standoff_until_a_heavy_shell_clears_it() 
 
 
 func test_three_light_shells_clear_an_obstacle_and_two_do_not() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	var o := TankObstacleState.new()
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
@@ -133,7 +133,7 @@ func test_three_light_shells_clear_an_obstacle_and_two_do_not() -> void:
 
 
 func test_the_advance_stops_at_the_halt_line_and_the_objective_is_met() -> void:
-	var rig := TankRig.new(
+	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
 		true,
@@ -153,7 +153,7 @@ func test_the_advance_stops_at_the_halt_line_and_the_objective_is_met() -> void:
 # --- Evasive -------------------------------------------------------------------------------------
 
 
-func _hits_of_shots(rig: TankRig, n: int) -> int:
+func _hits_of_shots(rig: TankRulesRig, n: int) -> int:
 	var aux := TankAux.of(rig.state)
 	var hits := 0
 	var events: Array[Dictionary] = []
@@ -177,7 +177,7 @@ func _hits_of_shots(rig: TankRig, n: int) -> int:
 
 
 func test_evasive_cuts_enemy_hit_chances_to_70_percent_while_the_driver_is_in_band() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(ADVANCE, 1.0)
 	rig.run(1.0)
 	assert_true(rig.hull().evasive, "in band at 90% FTP")
@@ -195,8 +195,8 @@ func test_evasive_cuts_enemy_hit_chances_to_70_percent_while_the_driver_is_in_ba
 # --- Ram -----------------------------------------------------------------------------------------
 
 
-func _ram_rig(crew: int = 1) -> TankRig:
-	var rig := TankRig.new(
+func _ram_rig(crew: int = 1) -> TankRulesRig:
+	var rig := TankRulesRig.new(
 		crew,
 		"ashfall_road",
 		true,
@@ -208,7 +208,7 @@ func _ram_rig(crew: int = 1) -> TankRig:
 	return rig
 
 
-func _sprint(rig: TankRig, seconds: float, mult: float = 1.5) -> void:
+func _sprint(rig: TankRulesRig, seconds: float, mult: float = 1.5) -> void:
 	for p in rig.slots:
 		rig.power_w[p.peer_id] = mult * p.ftp
 	rig.run(seconds)
@@ -303,7 +303,7 @@ func test_ram_cooldown_blocks_a_second_window() -> void:
 
 
 func test_a_ram_charges_the_wire_the_tank_stands_off_from() -> void:
-	var rig := TankRig.new(
+	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
 		true,
@@ -347,7 +347,7 @@ func test_the_ram_reaches_a_light_tank_behind_the_tank_too() -> void:
 
 
 func test_ram_is_sim_only_and_does_nothing_in_a_gun_line() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(GUN_LINE, 5.0)
 	rig.state.enemies.clear()
 	_sprint(rig, 3.5)
@@ -359,7 +359,7 @@ func test_ram_is_sim_only_and_does_nothing_in_a_gun_line() -> void:
 
 func test_ram_does_nothing_in_warmup_phases_or_the_first_300_seconds() -> void:
 	# The depot is WARMUP; the drill's skirmish is WARMUP too.
-	var depot := TankRig.new(1)
+	var depot := TankRulesRig.new(1)
 	depot.enter(0, 100.0)
 	depot.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
 	_sprint(depot, 3.5)
@@ -368,7 +368,7 @@ func test_ram_does_nothing_in_warmup_phases_or_the_first_300_seconds() -> void:
 	assert_eq(depot.diesel().ram_s, 0.0)
 	assert_false(depot.diesel().prompt)
 	assert_eq(depot.state.enemies.size(), 1)
-	var drill := TankRig.new(1, "drill")
+	var drill := TankRulesRig.new(1, "drill")
 	drill.enter(1, 20.0)
 	drill.state.enemies.clear()
 	var light := drill.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
@@ -419,8 +419,8 @@ func test_the_sprint_rule_is_the_trailing_3_second_average_at_1_2_ftp() -> void:
 # --- Dig in -------------------------------------------------------------------------------------
 
 
-func _gun_line_rig(crew: int = 1) -> TankRig:
-	var rig := TankRig.new(crew)
+func _gun_line_rig(crew: int = 1) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew)
 	rig.enter(GUN_LINE, 1.0)
 	# No guns shoot: only the berm is under test.
 	rig.state.enemies.clear()
@@ -549,7 +549,7 @@ func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 
 
 func test_an_afk_driver_runs_on_the_60_w_reserve_and_is_never_in_band() -> void:
-	var rig := TankRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.afk[1] = true
 	rig.run(80.0)
@@ -562,7 +562,7 @@ func test_an_afk_driver_runs_on_the_60_w_reserve_and_is_never_in_band() -> void:
 
 
 func test_a_dropped_rider_counts_as_afk() -> void:
-	var rig := TankRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.connected[1] = false
 	rig.run(1.0)
@@ -572,7 +572,7 @@ func test_a_dropped_rider_counts_as_afk() -> void:
 
 
 func test_when_every_rider_is_afk_nothing_has_power() -> void:
-	var rig := TankRig.new(2)
+	var rig := TankRulesRig.new(2)
 	rig.enter(ADVANCE, 20.0)
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
@@ -596,7 +596,7 @@ func test_when_every_rider_is_afk_nothing_has_power() -> void:
 
 
 func test_when_every_rider_is_afk_the_citadels_secondaries_stay_quiet_too() -> void:
-	var rig := TankRig.new(3)
+	var rig := TankRulesRig.new(3)
 	rig.enter(ADVANCE, 20.0)
 	var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
 	e.hp = 500.0

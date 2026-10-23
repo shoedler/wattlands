@@ -6,18 +6,18 @@ const BOSS := 10
 
 
 ## A rig in the boss segment; `quiet`: the crew's gun stays out of it (nothing loads or fires).
-func _rig(crew: int = 2, quiet: bool = false) -> TankRig:
-	var rig := TankRig.new(crew)
+func _rig(crew: int = 2, quiet: bool = false) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew)
 	rig.no_fire = quiet
 	rig.enter(BOSS, 1.0)
 	return rig
 
 
-func _gap(rig: TankRig) -> float:
+func _gap(rig: TankRulesRig) -> float:
 	return rig.state.boss.x_px - (rig.hull().x_px + rig.hull().hull_w)
 
 
-func _driver(rig: TankRig) -> int:
+func _driver(rig: TankRulesRig) -> int:
 	return rig.peer_of(TankIds.ENGINE_DIESEL)
 
 
@@ -219,7 +219,7 @@ func test_the_main_gun_hits_for_20_and_raises_the_boss_hit_event() -> void:
 	var tries := 0
 	while not hit_seen and tries < 12:
 		tries += 1
-		var r2 := TankRig.new(2, "ashfall_road", true, 100 + tries)
+		var r2 := TankRulesRig.new(2, "ashfall_road", true, 100 + tries)
 		r2.enter(BOSS, 1.0)
 		r2.state.boss.main_s = 0.06
 		for _i in 400:
@@ -241,7 +241,7 @@ func test_the_main_gun_hits_for_20_and_raises_the_boss_hit_event() -> void:
 	)
 
 
-func _sprint(rig: TankRig, peer: int, seconds: float) -> void:
+func _sprint(rig: TankRulesRig, peer: int, seconds: float) -> void:
 	rig.power_w[peer] = 1.5 * rig.slots[peer - 1].ftp
 	rig.run(seconds)
 
@@ -280,7 +280,7 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 	var hits := 0
 	for s in 30:
-		var rig := TankRig.new(2, "ashfall_road", true, 200 + s)
+		var rig := TankRulesRig.new(2, "ashfall_road", true, 200 + s)
 		rig.enter(BOSS, 1.0)
 		rig.hull().hp = 100000.0
 		rig.hull().hp_max = 100000.0

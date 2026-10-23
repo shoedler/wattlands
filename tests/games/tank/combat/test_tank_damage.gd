@@ -5,15 +5,15 @@ extends GutTest
 const ADVANCE := 1
 
 
-func _rig(crew: int = 3) -> TankRig:
-	var rig := TankRig.new(crew)
+func _rig(crew: int = 3) -> TankRulesRig:
+	var rig := TankRulesRig.new(crew)
 	rig.no_fire = true
 	rig.enter(ADVANCE, 5.0)
 	return rig
 
 
 ## Fires a friendly shell of `type` straight into the middle of `e` from its left side.
-func _hit(rig: TankRig, e: TankEnemyState, type: int) -> void:
+func _hit(rig: TankRulesRig, e: TankEnemyState, type: int) -> void:
 	var aux := TankAux.of(rig.state)
 	TankTargets.build(rig.state, aux)
 	var t := TankTargets.by_id(aux, e.id)

@@ -21,7 +21,7 @@ func test_a_shell_flies_the_analytic_arc() -> void:
 
 
 func test_the_per_tick_stepping_reproduces_the_analytic_arc() -> void:
-	var rig := TankRig.new(1)
+	var rig := TankRulesRig.new(1)
 	rig.enter(4)
 	rig.state.enemies.clear()
 	var vel := TankBallistics.velocity(V0, 12.0, TankIds.FACE_RIGHT)
@@ -85,7 +85,7 @@ func test_lead_differs_from_the_unled_solution_for_a_moving_target() -> void:
 
 func test_the_aim_aux_solution_puts_a_real_shell_in_the_box() -> void:
 	for crew in [1, 2, 3]:
-		var rig := TankRig.new(crew)
+		var rig := TankRulesRig.new(crew)
 		rig.enter(4)
 		var aux := TankAux.of(rig.state)
 		var e := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
