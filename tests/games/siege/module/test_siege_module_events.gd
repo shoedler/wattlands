@@ -348,6 +348,49 @@ func test_a_client_shows_its_route_change_at_once_and_the_host_has_the_last_word
 	_free(client)
 
 
+func test_the_hud_route_card_predicts_button_routes_like_control_routes() -> void:
+	# SiegeGame.predict_route(to) is what the route card calls for its buttons (intent via "button"),
+	# so a button routes at once on a client exactly as the controls do.
+	var none: Array[StringName] = []
+	var right: Array[StringName] = [&"right"]
+	var by_controls := _client(2)
+	by_controls.state.role = SiegeIds.ROLE_WAVE
+	by_controls.local_intents(right, none)
+	var want := by_controls.state.rider(2).target
+	assert_eq(want, 3, "the first built pad of the ring")
+	for arg: Variant in [
+		"next", SiegeIntents.route("next", SiegeIds.VIA_BUTTON), SiegeIds.ROUTE_NEXT
+	]:
+		var client := _client(2)
+		client.state.role = SiegeIds.ROLE_WAVE
+		var me := client.state.rider(2)
+		assert_true(client.predict_route(arg), "a prediction was set for %s" % [arg])
+		assert_eq(me.target, want, "the same target as the control")
+		assert_eq(me.reconnect_s, 2.0)
+		# It is held and re-applied like a control route until the host answers.
+		client.apply_event(SiegeEvents.route(1, 4))
+		client.client_predict(0.05, null)
+		assert_eq(me.target, 4, "the host's route event ends it")
+		_free(client)
+	var c := _client(2)
+	c.state.role = SiegeIds.ROLE_WAVE
+	assert_true(c.predict_route(3))
+	assert_true(c.predict_route("gen"))
+	assert_eq(c.state.rider(2).target, SiegeIds.TARGET_GEN)
+	assert_false(c.predict_route("gen"), "nothing changes")
+	assert_false(c.predict_route("sideways"), "junk")
+	assert_false(c.predict_route(SiegeIntents.overdrive("button")), "not a route")
+	assert_false(c.predict_route(null))
+	_free(c)
+	_free(by_controls)
+	# The host and a solo rider never predict: their rules route at once.
+	var host := _host()
+	host.state.role = SiegeIds.ROLE_WAVE
+	assert_false(host.predict_route("next"))
+	assert_eq(host.state.rider(1).target, SiegeIds.TARGET_GEN)
+	_free(host)
+
+
 func test_the_host_does_not_predict_and_breaks_take_the_controls() -> void:
 	var host := _host()
 	var none: Array[StringName] = []
