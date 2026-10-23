@@ -223,19 +223,20 @@ static func _enter(st: FishingState, l: FishingLaneState, zone: int, out: Fishin
 
 
 ## Rescue, AFK and stale telemetry stagger the lane; play resumes 10 s after the cause ends.
+## Every edge goes to the pull scheduler whatever the lane state (its API: "any state"), so a
+## stagger that outlives a Fight never leaves it staggered, and one that ends in the Reel still
+## pauses the next Fight's pull clock until 10 s after it ended.
 static func _update_stagger(st: FishingState, l: FishingLaneState, inp: FishingLaneInput) -> void:
 	var cause := l.rescue_now or l.afk or inp.afk or l.stale
 	if cause and not l.stagger_on:
 		l.stagger_on = true
 		l.staggered = true
 		l.resume_t = 0.0
-		if l.state == FishingConst.ST_FIGHT:
-			FishingPullScheduler.set_staggered(l.pull, true, st.t)
+		FishingPullScheduler.set_staggered(l.pull, true, st.t)
 	elif not cause and l.stagger_on:
 		l.stagger_on = false
 		l.resume_t = st.t + FishingConst.STAGGER_RESUME_S
-		if l.state == FishingConst.ST_FIGHT:
-			FishingPullScheduler.set_staggered(l.pull, false, st.t)
+		FishingPullScheduler.set_staggered(l.pull, false, st.t)
 	if l.staggered and not l.stagger_on and st.t + _EPS >= l.resume_t:
 		l.staggered = false
 		l.resume_t = 0.0
@@ -612,8 +613,8 @@ static func _begin_fight(st: FishingState, l: FishingLaneState, out: FishingStep
 	_band_edges(l)
 	_publish(l, l.band_lo, l.band_hi, out)
 	FishingPullScheduler.begin(l.pull, slot, st.t, l.ftp, l.pull_rng)
-	if l.stagger_on:
-		FishingPullScheduler.set_staggered(l.pull, true, st.t)
+	# Already in step with every stagger edge; re-asserted so the Fight starts from the lane's state.
+	FishingPullScheduler.set_staggered(l.pull, l.stagger_on, st.t)
 	st.fish_started += 1
 	st.expected_points += float(base_points(f.kg))
 	out.events.append(FishingEvents.hookup(l.slot, f.sp, l.fights_started, slot.scheduled))
