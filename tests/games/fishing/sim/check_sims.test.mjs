@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import * as cs from './check_sims.mjs';
 import { expectedLaps, clampProblems, eventErrors, requestShapeProblems, median } from './fishing_sim_lib.mjs';
-import { FAILURES, buildRun, failing, passing } from './fixtures/make_fixtures.mjs';
+import { FAILURES, buildRun, failing, passing, s11Run } from './fixtures/make_fixtures.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const FIX = path.join(here, 'fixtures');
@@ -35,7 +35,7 @@ test('the fixture files on disk are what make_fixtures.mjs builds', () => {
 
 test('every scenario passes on the passing fixtures, FIT included', () => {
   const reports = cs.loadReports(path.join(FIX, 'pass'));
-  assert.equal(Object.keys(reports).length, 16);
+  assert.equal(Object.keys(reports).length, 17);
   const calls = [];
   const runner = (args) => {
     calls.push(args);
@@ -44,9 +44,9 @@ test('every scenario passes on the passing fixtures, FIT included', () => {
   };
   const res = cs.checkAll(reports, null, { fit: true, fitRunner: runner });
   for (const r of res) assert.equal(r.status, 'PASS', `${r.id}: ${r.summary}\n${details(r)}`);
-  assert.deepEqual(res.map((r) => r.id), ['ALL', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S10', 'S9']);
-  // s1 2, s2 1 + 1, s3 4 x 5, s4 2, s5 2, s6 1, s7 1, s8 2 + 2, s10 3 FIT files
-  assert.equal(calls.length, 37);
+  assert.deepEqual(res.map((r) => r.id), ['ALL', 'S1', 'S2', 'S3', 'S4', 'S5', 'S6', 'S7', 'S8', 'S10', 'S11', 'S9']);
+  // s1 2, s2 1 + 1, s3 4 x 5, s4 2, s5 2, s6 1, s7 1, s8 2 + 2, s10 3, s11 2 FIT files
+  assert.equal(calls.length, 39);
   // e2e: ride out + Reel + Fight + cool-down.
   const e2e = calls.find((c) => c[0].includes('s10_e2e_slot0'));
   assert.equal(e2e[1], '--expect-laps=4');
@@ -55,7 +55,7 @@ test('every scenario passes on the passing fixtures, FIT included', () => {
 test('the CLI exits 0 on pass/, 1 on fail/ naming each defect, 2 without reports', () => {
   const ok = sink();
   assert.equal(cs.main([path.join(FIX, 'pass')], ok, sink()), 0, ok.text);
-  assert.match(ok.text, /check_sims: 10 passed, 0 failed/);
+  assert.match(ok.text, /check_sims: 11 passed, 0 failed/);
   const bad = sink();
   assert.equal(cs.main([path.join(FIX, 'fail')], bad, sink()), 1);
   for (const [name, msgs] of Object.entries(FAILURES)) {
@@ -65,6 +65,7 @@ test('the CLI exits 0 on pass/, 1 on fail/ naming each defect, 2 without reports
   assert.match(bad.text, /FAIL S2 /);
   assert.match(bad.text, /FAIL S6 /);
   assert.match(bad.text, /FAIL S10 /);
+  assert.match(bad.text, /FAIL S11 /);
   assert.match(bad.text, /SKIP S3 /);
   const err = sink();
   assert.equal(cs.main([], sink(), err), 2);
@@ -269,4 +270,30 @@ test('S10: a second fish or a late cool-down fails', () => {
   const msgs = details(run({ s10_e2e: r }).S10);
   assert.match(msgs, /lane 1 landed mackerel, mahi/);
   assert.match(msgs, /lane 2 reached the cool-down at 150 s/);
+});
+
+test('S11: unverified factor, FTPs, haptics off and forbidden clamps', () => {
+  const ok = s11Run();
+  assert.equal(run({ s11_threshold_unverified: ok }).S11.status, 'PASS');
+  const r = s11Run();
+  r.args.unverified = false;
+  r.slots[0].ftp = 200;
+  r.slots[1].ftp_verified = true;
+  const e1 = r.directives.find((d) => d.peer === 2 && d.requested.mode === 'ERG');
+  e1.applied.clamped_by = ['unverified', 'long_phase'];
+  r.trace['2'] = r.trace['2'].map((row) => (row.phase === 2 ? { ...row, clamped_by: [] } : row));
+  r.directives = r.directives.filter((d) => !(d.peer === 1 && d.requested.mode === 'SIM'));
+  const msgs = details(run({ s11_threshold_unverified: r }).S11);
+  for (const m of ['args.unverified false, wanted true', 'slot 0 FTP 200, wanted 300', 'slot 1 ftp_verified true', 'clamped_by long_phase (forbidden', 'slot 0 (haptics on) got no Landing haptic', 'Fight trace rows without the unverified clamp']) {
+    assert.ok(msgs.includes(m), `${m} in
+${msgs}`);
+  }
+  // The floor may lift a target above x0.85; nothing else may.
+  const fl = s11Run();
+  const e2 = fl.directives.find((d) => d.peer === 1 && d.requested.mode === 'ERG');
+  e2.applied.applied.target_w = 260;
+  e2.applied.clamped_by = ['unverified', 'floor'];
+  assert.equal(run({ s11_threshold_unverified: fl }).S11.status, 'PASS');
+  e2.applied.clamped_by = ['unverified'];
+  assert.match(details(run({ s11_threshold_unverified: fl }).S11), /applied 260 W for 95% of 300 W/);
 });
