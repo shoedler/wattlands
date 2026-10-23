@@ -157,6 +157,39 @@ test('finished must be complete and present on the host', () => {
   assert.match(errs(none), /host: no finished event/);
 });
 
+test('a recorder without finished events is judged by each peer exit_reason', () => {
+  const r = report();
+  for (const [name, p] of Object.entries(r.peers)) {
+    p.events = p.events.filter((e) => e.type !== 'finished');
+    p.exit_reason = 'complete';
+    assert.ok(name);
+  }
+  assert.deepEqual(ec.checkReport(r).errors, []);
+  r.peers.client1.exit_reason = 'timeout';
+  assert.match(errs(r), /client1: exit_reason "timeout"/);
+  r.peers.client1.exit_reason = 'complete';
+  r.peers.host.exit_reason = 'error';
+  assert.match(errs(r), /host: no finished event/);
+});
+
+test('a Breach running at wave_end may end with gate_restored after it, once', () => {
+  const withBreach = (restore) => {
+    const e = drillEvents();
+    e.splice(6, 0, { type: 'breach', n: 1 });
+    return restore ? [...e, { type: 'gate_restored', hp: 30 }] : e;
+  };
+  const ok = withBreach(true);
+  assert.deepEqual(errs(report({ host: ok, client1: ok, client2: ok.slice(-3) })), '');
+  // Without a Breach before wave_end the same event is a stray.
+  const stray = [...drillEvents(), { type: 'gate_restored', hp: 30 }];
+  assert.match(errs(report({ host: stray, client1: stray })), /gate_restored after wave_end/);
+  // A second restore, or other combat, after wave_end still fails.
+  const twice = [...withBreach(true), { type: 'gate_restored', hp: 30 }];
+  assert.match(errs(report({ host: twice, client1: twice })), /gate_restored after wave_end/);
+  const kill = [...withBreach(true), { type: 'kill', id: 70, et: 1, pad: 3, road: 1, x2: 0 }];
+  assert.match(errs(report({ host: kill, client1: kill })), /kill after wave_end/);
+});
+
 test('the drill has no Overdrive, no Siege directive and no shield wall', () => {
   const od = [...drillEvents().slice(0, 7), { type: 'overdrive', slot: 0, st: 1, scored: 0, why: '' }, drillEvents()[7]];
   assert.match(errs(report({ host: od, client1: od })), /an overdrive event in the drill/);

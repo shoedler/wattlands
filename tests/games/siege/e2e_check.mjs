@@ -12,10 +12,13 @@
 //      it does not know and no int travelled as a float or a string;
 //   2. the drill's wave plays in order on the host and on the client that stayed: exactly one
 //      wave_start (ph 1, n 1, role wave, waves 1) and one wave_end (ph 1, n 1), the start first;
-//      combat events (kill, leak, breach, gate_restored, roads, push, rush) only between them;
+//      combat events (kill, leak, breach, gate_restored, roads, push, rush) only between them (a
+//      gate_restored may follow wave_end when a Breach was still running: the 10 s clock ends
+//      after the wave, in the cool-down);
 //   3. the host and the unrestarted client hold the same Siege events in the same order, and the
 //      restarted client's events are a tail of that sequence that still reaches wave_end;
-//   4. finished arrives with "complete" wherever it was recorded, and on the host;
+//   4. finished arrives with "complete" wherever it was recorded, and on the host (the harness's
+//      recorder keeps no `finished` event, so the peer's own exit_reason "complete" counts too);
 //   5. Overdrive events are well formed (each start closed before the next one, per slot) and, in
 //      the drill (a WARMUP-kind wave: no Overdrive), there are none and no Siege directive was
 //      requested; no shield wall appears in the drill's Raiders-and-Horsemen mix;
@@ -198,10 +201,25 @@ export function waveOrderErrors(events, { tail = false, drill = true } = {}) {
       if (w.ph !== DRILL.ph || w.n !== DRILL.n) errs.push(`wave_end is ph ${w.ph} n ${w.n}, wanted ph ${DRILL.ph} n ${DRILL.n}`);
     }
   }
+  // A Breach still running at wave_end ends with a gate_restored after it (the 10 s clock goes on).
+  // (a restarted client's tail may have missed the breach itself.)
+  let breachOpen = tail;
+  events.forEach((e, i) => {
+    if (en < 0 || i <= en) {
+      if (e.type === 'breach') breachOpen = true;
+      else if (e.type === 'gate_restored') breachOpen = false;
+    }
+  });
   events.forEach((e, i) => {
     if (!COMBAT_TYPES.has(e.type)) return;
     if (s >= 0 && i < s) errs.push(`${e.type} before wave_start`);
-    if (en >= 0 && i > en) errs.push(`${e.type} after wave_end (nothing spawns or fires after the wave)`);
+    if (en >= 0 && i > en) {
+      if (e.type === 'gate_restored' && breachOpen) {
+        breachOpen = false;
+        return;
+      }
+      errs.push(`${e.type} after wave_end (nothing spawns or fires after the wave)`);
+    }
   });
   return errs;
 }
@@ -279,10 +297,13 @@ export function checkReport(report) {
 
   // 4. finished complete.
   const finished = (role) => logs[role].raw.filter((e) => isObj(e) && (e.type === 'finished' || e.type === 'game_finished' || e.type === 'wl.finished'));
-  const hostFin = finished(logs.host ? 'host' : roles[0]);
-  if (hostFin.length === 0) err('host', 'no finished event');
+  const exitReason = (role) => report.peers?.[role]?.exit_reason;
+  const hostRole = logs.host ? 'host' : roles[0];
+  if (finished(hostRole).length === 0 && exitReason(hostRole) !== 'complete') err('host', 'no finished event');
   for (const role of roles) {
     for (const f of finished(role)) if (f.reason !== 'complete') err(role, `finished with reason ${JSON.stringify(f.reason)}, wanted "complete"`);
+    const x = exitReason(role);
+    if (x !== undefined && x !== 'complete') err(role, `exit_reason ${JSON.stringify(x)}, wanted "complete"`);
   }
 
   // 5. the drill has no Overdrive and no Siege directive, and no shield wall.
