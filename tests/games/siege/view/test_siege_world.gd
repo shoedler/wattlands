@@ -66,6 +66,8 @@ func test_facets_are_ochre_with_rock_on_steep_ground() -> void:
 
 func test_the_scatter_counts_and_exclusions() -> void:
 	var mms := SiegeScatter.build(_map, _terrain)
+	for mm in mms:
+		autofree(mm)
 	assert_eq(mms.size(), 3)
 	var names: Array[String] = []
 	for mm in mms:

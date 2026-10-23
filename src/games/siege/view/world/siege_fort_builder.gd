@@ -220,7 +220,7 @@ func _wheel_frame() -> LowPolyMesh:
 		f.add_box(Vector3(0.45, post_h, 0.45), SiegePalette.WOOD, _at(0.6, post_h * 0.5, z))
 		f.add_box(Vector3(1.8, 0.35, 0.6), SiegePalette.BRONZE_DARK, _at(0.0, WHEEL_Y, z))
 	# The pennant mast stands at the back of the platform, clear of the wheel.
-	f.add_cylinder(0.09, 0.09, 5.25, 5, SiegePalette.WOOD_DARK, _at(0.0, 3.075, MAST_Z))
+	f.add_cylinder(0.11, 0.11, 7.6, 5, SiegePalette.WOOD_DARK, _at(0.0, 4.25, MAST_Z))
 	f.darken_near_ground(0.0, 1.0, 0.3)
 	return f
 
