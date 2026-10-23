@@ -11,6 +11,10 @@ func _segments(c: TankContent, type: String) -> Array:
 	return c.segments().filter(func(s: Dictionary) -> bool: return s["type"] == type)
 
 
+static func _is_rear_light(e: Dictionary) -> bool:
+	return e["enemy"] == "light" and e.get("from") == "rear"
+
+
 func _count(list: Array, enemy: String, key: String = "enemy") -> int:
 	var n := 0
 	for e: Dictionary in list:
@@ -112,17 +116,7 @@ func test_the_brief_enemy_lists_per_stage() -> void:
 	assert_eq(adv[1]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wreck"])
 	var s3: Array = adv[2]["encounters"]
 	assert_eq([_count(s3, "medium"), _count(s3, "destroyer"), _count(s3, "light")], [2, 1, 2])
-	assert_eq(
-		(
-			s3
-			. filter(
-				func(e: Dictionary) -> bool:
-					return e["enemy"] == "light" and e.get("from") == "rear"
-			)
-			. size()
-		),
-		1
-	)
+	assert_eq(s3.filter(_is_rear_light).size(), 1)
 	assert_eq(adv[2]["obstacles"].size(), 0)
 
 

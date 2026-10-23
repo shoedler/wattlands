@@ -292,13 +292,8 @@ func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 		for e in rig.events:
 			if e["type"] == "hit" and TankEvents.is_boss_main_hit(e):
 				hits += 1
-	var chance := float(
-		(
-			TankContent
-			. from_dicts(TankContent.read_files("ashfall_road"), "ashfall_road")
-			. boss_def()["main"]["hit"]
-		)
-	)
+	var content := TankContent.from_dicts(TankContent.read_files("ashfall_road"), "ashfall_road")
+	var chance := float(content.boss_def()["main"]["hit"])
 	assert_between(
 		float(hits) / 30.0,
 		chance - 0.2,
