@@ -108,7 +108,8 @@ func test_the_view_and_hud_build_headless_from_the_fixture() -> void:
 	var g := F.make_game(ctx)
 	var spec := g.hud_spec()
 	assert_true(spec.has_widget(HudSpec.TIMELINE))
-	assert_true(spec.has_widget(HudSpec.TEAMMATES))
+	# Siege draws the single teammate strip itself (ADR 2026-10-23 One teammate strip).
+	assert_false(spec.has_widget(HudSpec.TEAMMATES))
 	var v: Node = g.make_view()
 	assert_is(v, Node3D)
 	v.free()

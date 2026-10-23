@@ -3,7 +3,7 @@ SIEGE_CONTENT_SHORT,Short shift: 3 waves (31 min)
 SIEGE_CONTENT_VO2,VO2 shift: 6 hard waves (37 min)
 SIEGE_CONTENT_SWEETSPOT,Sweet spot shift: 2 long waves (45 min)
 SIEGE_CONTENT_ENDURANCE,Endurance shift: one long siege with rushes (55 min)
-SIEGE_CONTENT_DRILL,Drill: one short wave (5 min)
+SIEGE_CONTENT_DRILL,Drill: one short wave (2 min)
 SIEGE_OPT_WAVE_OFFSET,Wave offset (% FTP)
 SIEGE_MAP_ROTAE,Castellum Rotae
 SIEGE_PHASE_WARMUP_WAVE,Warm-up wave

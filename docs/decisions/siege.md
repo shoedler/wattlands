@@ -171,3 +171,36 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-23 G4: dead code removed
 
 - Decision: `SiegePhaseInfo.is_break()` and `SiegeIds.perk_code()` deleted (no caller in src, tests or tools; `is_wave` / `is_cooldown` and `tower_code` / `enemy_code` stay, which are used).
+
+## 2026-10-22 Snapshot roads and rush (additive keys)
+- Decision: the snapshot gains optional `ro` (active road ids, only when not all three; `[]` in a break) and `ru` (`[1, rush index, ms left]`, only while a rush is on); a client without them has all roads active and no rush. Both are `int_fields` paths.
+- Alternatives: clients learn roads and rushes only from events (a rejoining client would miss them until the next event).
+- Reason: the HUD, horns and view need the road rotation and rush on clients without growing the common snapshot.
+
+## 2026-10-22 Push event
+- Decision: an additive `push` event (roads that got a ram) at the ram push.
+- Alternatives: derive the push from spawned rams in snapshots.
+- Reason: the push toast and ram warning need the moment, and T4 counts rams spawned from it.
+
+## 2026-10-23 G4 camera framing (brief numbers in conflict)
+- Decision: camera pitch 41, FOV 35, target z 38, distance fitted (`SiegeFraming`, pure 16:9 pinhole) so the fort with its corner towers spans 55.5 % of the width in the upper half. About 47 m of the Valley road shows below the gate; the West and East roads show beyond 60 m.
+- Alternatives: pitch about 36, or a fort share under 50 %, to show 60-80 m of the Valley road.
+- Reason: brief section 3's pitch about 42, fort share 55-60 % and 60-80 m of road below cannot all hold for the Valley road with this map; the pitch and the fort share carry the miniature look, so they win. The projection test in `tests/games/siege/view/test_siege_view_build.gd` pins the result. The far hill and haze stay out of frame at this pitch.
+
+## 2026-10-23 One teammate strip
+- Decision: Siege's own strip (colour and pattern chip, raw W, %FTP, target icon, markers; numbers from the snapshot on clients) replaces the kit `teammates` widget in the HudSpec.
+- Alternatives: the kit strip plus a Siege overlay (showed every rider's W and %FTP twice in a 1070 x 350 px block over the gate plaza).
+- Reason: G3 finding P3; one row about 93 px tall keeps the roads and the centre clear.
+
+## 2026-10-23 Shop and banner placement
+- Decision: the break shop sits below the fort's front wall (Rect2i 660,458 600x490 at 1080p, text >= 32 px); the kit banners go to the top-left stack under the wave info.
+- Alternatives: the shop at the centre (covered the generator, drum and wheels).
+- Reason: G3 finding P4: the centre and the drum stay readable during breaks and rescue.
+
+## 2026-10-23 Road-change horn
+- Decision: the audio plays the horn when a road change is announced (`wave.horn_s` rising), as well as at a wave start.
+- Reason: brief 2.4's 5 s horn; the docs pass found only the toast fired.
+
+## 2026-10-23 Shop model rounding (minor, kept)
+- Decision: `SiegeShopModel` reads the unrounded gate HP and per-road damage; only a gate between max-1 and max HP, or a damage tie closer than 0.05 HP, can show a different non-recommended entry on a client. The recommendation itself uses the replicated values.
+- Reason: cosmetic; not worth a change this round.

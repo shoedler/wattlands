@@ -41,6 +41,7 @@ var _seen: Dictionary = {}
 var _gate_hp: float = -1.0
 var _breach_was: bool = false
 var _phase_was: int = -2
+var _horn_was: bool = false
 var _hoof_t: float = 0.0
 var _ram_t: float = 0.0
 var _coin_t: float = 0.0
@@ -175,6 +176,11 @@ func _phase(state: SiegeState) -> void:
 		_phase_was = state.phase_index
 		if not first and state.in_wave():
 			_play("siege_horn", -8.0)
+	# The 5 s horn that announces a road change (brief 2.4).
+	var horn := state.wave != null and state.wave.horn_s > 0.0
+	if horn and not _horn_was:
+		_play("siege_horn", -6.0)
+	_horn_was = horn
 
 
 func _hooves_and_ram(state: SiegeState, dt: float) -> void:
