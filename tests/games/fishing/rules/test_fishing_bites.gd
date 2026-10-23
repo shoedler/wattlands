@@ -145,8 +145,8 @@ func test_a_hookup_starts_a_frenzy_for_the_other_riders() -> void:
 	var hk := h.events_of(FishingEvents.HOOKUP)[0] as Dictionary
 	var first := int(hk["l"])
 	var other := h.lane(1 - first)
-	assert_almost_eq(other.frenzy_until_t, h.state.t + 60.0, 0.001)
 	if other.state >= FishingConst.ST_PICK and other.state <= FishingConst.ST_REEL:
+		assert_almost_eq(other.frenzy_until_t, h.state.t + 60.0, 0.001)
 		var fr := h.events_of(FishingEvents.FRENZY)
 		assert_eq(fr.size(), 1)
 		assert_eq(fr[0], FishingEvents.frenzy(first))
@@ -155,6 +155,7 @@ func test_a_hookup_starts_a_frenzy_for_the_other_riders() -> void:
 		assert_almost_eq(doubled, 2.0 * FishingRules.bite_hazard(h.state, other), 1e-9)
 	else:
 		assert_eq(other.state, FishingConst.ST_STRIKE, "the other lane had a bite of its own")
+		assert_eq(other.frenzy_until_t, 0.0, "no Frenzy for a lane that cannot bite")
 
 
 func test_scheduled_trips_and_solo_rides_have_no_frenzy() -> void:

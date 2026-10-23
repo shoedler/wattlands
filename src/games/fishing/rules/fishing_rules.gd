@@ -619,13 +619,12 @@ static func _begin_fight(st: FishingState, l: FishingLaneState, out: FishingStep
 	out.events.append(FishingEvents.hookup(l.slot, f.sp, l.fights_started, slot.scheduled))
 	if st.scheduled or st.lanes.size() < 2:
 		return
-	# Frenzy: every other rider's hazard doubles for 60 s (it counts once they pass R_min).
+	# Frenzy: every other reeling rider's hazard doubles for 60 s (it counts once they pass
+	# R_min). Lanes in a fight, a strike or idle could not bite within it anyway.
 	var reeling := false
 	for o in st.lanes:
-		if o == l:
-			continue
-		o.frenzy_until_t = st.t + FishingConst.FRENZY_S
-		if o.state >= FishingConst.ST_PICK and o.state <= FishingConst.ST_REEL:
+		if o != l and o.state >= FishingConst.ST_PICK and o.state <= FishingConst.ST_REEL:
+			o.frenzy_until_t = st.t + FishingConst.FRENZY_S
 			reeling = true
 	if reeling:
 		out.events.append(FishingEvents.frenzy(l.slot))
