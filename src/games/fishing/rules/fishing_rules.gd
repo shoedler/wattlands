@@ -873,12 +873,15 @@ static func gaff_rate(p_w: float, ftp: float) -> float:
 	return maxf(0.0, p_w - ftp) / (FishingConst.GAFF_CP_FRAC * ftp * FishingConst.GAFF_S)
 
 
-## The last-run haptic (brief 2.7): never in the plan's first 300 s, in rescue, or to a rider who
-## opted out.
+## The last-run haptic (brief 2.7, 2.3): never in the plan's first 300 s, to a rider who opted
+## out, or in a stagger cause: rescue, AFK, or stale telemetry (a dropped client counts as AFK).
 static func haptic_allowed(l: FishingLaneState, inp: FishingLaneInput) -> bool:
 	return (
 		l.haptics_on
 		and not l.rescue_now
+		and not l.afk
+		and not inp.afk
+		and not l.stale
 		and inp.plan_elapsed_s + _EPS >= FishingConst.HAPTIC_PLAN_MIN_S
 	)
 

@@ -165,6 +165,33 @@ func test_no_haptic_when_opted_out_in_rescue_or_in_the_first_300_s() -> void:
 	assert_true(FishingRules.haptic_allowed(lane, inp))
 
 
+## Brief 2.3: "No request is sent during rescue or AFK"; a dropped client (stale) counts as AFK.
+func test_no_haptic_to_an_afk_or_dropped_rider() -> void:
+	var afk := _free("mackerel", 90.0)
+	_to_landing(afk)
+	afk.afk[0] = true
+	afk.run(30.0)
+	assert_eq(_haptics(afk).size(), 0, "no haptic while AFK")
+	var gone := _free("mackerel", 90.0)
+	_to_landing(gone)
+	gone.connected[0] = false
+	gone.age_s[0] = 4.0
+	gone.run(30.0)
+	assert_eq(_haptics(gone).size(), 0, "no haptic to a dropped (stale) rider")
+	var lane := FishingLaneState.new()
+	var inp := FishingLaneInput.new()
+	inp.plan_elapsed_s = 400.0
+	assert_true(FishingRules.haptic_allowed(lane, inp), "control")
+	lane.afk = true
+	assert_false(FishingRules.haptic_allowed(lane, inp), "on_afk")
+	lane.afk = false
+	inp.afk = true
+	assert_false(FishingRules.haptic_allowed(lane, inp), "telemetry AFK")
+	inp.afk = false
+	lane.stale = true
+	assert_false(FishingRules.haptic_allowed(lane, inp), "stale telemetry")
+
+
 func test_points_are_round_20_sqrt_kg_times_grade_times_hookup() -> void:
 	var h := _free("mahi", 150.0)
 	h.landing_w[0] = 1.4 * h.players[0].ftp
