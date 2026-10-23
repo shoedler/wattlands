@@ -63,7 +63,7 @@
 			"name": "TANK_PLACE_FARM_WALL",
 			"backdrop": "bg_fields_near",
 			"enemies": [
-				{"enemy": "dugin", "count": 3, "at_px": [120, 190, 260]}
+				{"enemy": "dugin", "count": 3, "at_px": [214, 234, 254]}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -115,7 +115,7 @@
 			"backdrop": "bg_village_near",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "at_px": [300]},
-				{"enemy": "dugin", "count": 2, "at_px": [150, 230]}
+				{"enemy": "dugin", "count": 2, "at_px": [222, 248]}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -166,7 +166,7 @@
 			"backdrop": "bg_quarry_near",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "at_px": [300]},
-				{"enemy": "dugin", "count": 2, "at_px": [150, 230]},
+				{"enemy": "dugin", "count": 2, "at_px": [222, 248]},
 				{"enemy": "destroyer", "count": 1, "at_px": ["edge"]}
 			],
 			"props": [

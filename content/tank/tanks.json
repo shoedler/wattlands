@@ -52,7 +52,8 @@
 		"fail_damage": 10,
 		"fail_stall_s": 5,
 		"boss_lunge_px": 24,
-		"boss_dodge_hold_s": 3
+		"boss_dodge_hold_s": 3,
+		"prompt_px": 300
 	},
 	"berm": {
 		"j_per_hp": 250,
@@ -129,5 +130,16 @@
 	"caps": {
 		"enemies": 16,
 		"shells": 24
+	},
+	"props": {
+		"wire": {"w": 64, "h": 20},
+		"wreck": {"w": 72, "h": 32},
+		"drill_wreck": {"w": 72, "h": 32},
+		"tank_traps": {"w": 64, "h": 24},
+		"light_hits_to_clear": 3,
+		"standoff_px": 260
+	},
+	"drill": {
+		"wreck_px": [220, 330]
 	}
 }

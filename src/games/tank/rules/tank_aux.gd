@@ -1,0 +1,57 @@
+class_name TankAux
+extends RefCounted
+## Host-only bookkeeping the rules need beyond TankState (brief 2.4; owner: rules). It is never
+## serialized, never sent and never read by the director, the view or the HUD: a snapshot carries
+## everything a client needs, and clients never simulate. It rides on the state as object metadata
+## (TankAux.of), so the frozen TankState contract stays as it is. Everything here is a pure
+## function of the seed and the inputs, so two runs with the same seed agree.
+
+const META := &"tank_aux"
+
+## rigs.json through TankGeometry (muzzles, hit boxes), loaded once per state.
+var geo: TankGeometry = null
+## The target list of this tick (TankTargets.build), nearest-first order is not implied.
+var targets: Array[TankTarget] = []
+## Enemy id -> its world velocity in px/s this tick (the lead solver and keep-station read it).
+var enemy_vx: Dictionary = {}
+## Enemy id -> shots fired (a destroyer alternates the side it shifts to).
+var enemy_shots: Dictionary = {}
+## Enemy shell id -> seconds until it lands (the arrival resolves the hit rolled at fire time).
+var shell_left: Dictionary = {}
+## The auto-aim's choice this tick (TankAim.current): target, elevation and facing; reset to
+## stale at the start of every step.
+var aim_valid: bool = false
+var aim_target: TankTarget = null
+var aim_elev: float = 0.0
+var aim_facing: int = TankIds.FACE_RIGHT
+## The depot's drills of the current segment ([{from_s, to_s, drill, targets?}]).
+var drills: Array = []
+## The target the rider cycled to by hand stays the auto-aim's target until it falls.
+var manual_target: bool = false
+## A target stood within a Ram's reach during the open window (a Ram that never gets the sprint
+## rule to hold while one does fails when the window closes).
+var ram_contact: bool = false
+## An enemy stands on screen (the dynamo's stabilizer drain, this tick).
+var enemy_in_range: bool = false
+## Some shootable target stands on screen (the Rampart's hoist and the Bulwark's auto-lever).
+var any_target: bool = false
+## Joules counted toward Overpressure while the sprint rule held.
+var over_j: float = 0.0
+## The Bulwark's turret speed factor this tick (min(1, P_eff / turret_full_w); 0 off Turret).
+var turret_factor: float = 0.0
+## Depot drills already started (the aim drill's wrecks stand).
+var drill_wrecks: bool = false
+## The Behemoth's telegraph length at its start (for the dodge's "inside the telegraph" clock).
+var boss_tele_total: float = 0.0
+## Seconds since the last Advance enemy was spawned (spawns of one encounter stagger).
+var last_spawn_t: float = -100.0
+
+
+## The state's aux, created on first use.
+static func of(state: TankState) -> TankAux:
+	if state.has_meta(META):
+		return state.get_meta(META) as TankAux
+	var a := TankAux.new()
+	a.geo = TankGeometry.load_default()
+	state.set_meta(META, a)
+	return a

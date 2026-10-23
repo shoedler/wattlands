@@ -1,11 +1,11 @@
 {
-	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry.",
+	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Light tanks hold 120-140 px (the brief's 90-140 with the closest 30 px cut: below about 115 px the gun cannot depress onto them; a Ram still reaches them, 120 + 24 px lunge). Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry.",
 	"types": {
 		"light": {
 			"code": 1,
 			"hp": 30,
 			"size_px": [80, 40],
-			"hold_px": [90, 140],
+			"hold_px": [120, 140],
 			"speed_px_s": 60,
 			"weave_px": 8,
 			"weave_s": 3,
@@ -73,9 +73,10 @@
 		"stop_px": 120,
 		"pushback_px": 24,
 		"light_mult": 0.25,
-		"main": {"damage": 20, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
+		"main": {"damage": 20, "hit": 0.85, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
 		"secondary": {"damage": 3, "every_s": 5, "hit": 0.6}
 	},
+	"shell_speed_px_s": 300,
 	"miss_px": [20, 40],
 	"clamp": {"ahead_max_right_px": 632, "behind_min_show_px": 24},
 	"spawn_margin_px": 16
