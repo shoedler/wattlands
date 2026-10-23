@@ -21,8 +21,9 @@ extends CanvasLayer
 ## - Rect2i positions are art pixels mapped through PixelViewport.art_rect_to_screen()
 ##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
 ##   resizes, or the PixelViewport emits `layout_changed`. Kit widgets in a rect shrink to
-##   fit it (several in one rect stack and share it); key numbers stay >= 48 px, so a rect
-##   below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without
+##   fit it (several in one rect stack and share it; a teammate strip prefers one row scaled
+##   to the rect's width and height, wrapping only below its minimum scale); key numbers
+##   stay >= 48 px, so a rect below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without
 ##   a PixelViewport (3D games) a Rect2i is taken as 1080p pixels.
 ## - The CanvasLayer `layer` is LAYER (10): a game view's own CanvasLayer with a lower
 ##   layer draws under the HUD (vignettes), a higher one above it.
@@ -707,7 +708,9 @@ func _fit_slot(node: VBoxContainer, avail: Vector2) -> void:
 			s = minf(1.0, minf(avail.x / max_w, maxf(avail.y - sep, 1.0) / total_h))
 		for w in kit:
 			if w is HudTeammates:
-				(w as HudTeammates).set_max_width(avail.x)
+				# The strip's share of the slot's height (all of it when it is alone).
+				var share := maxf(avail.y - sep, 1.0) * w.base_size().y / maxf(total_h, 1.0)
+				(w as HudTeammates).set_max_size(Vector2(avail.x, share))
 			else:
 				w.set_ui_scale(maxf(s, 0.25))
 			w.size_flags_horizontal = Control.SIZE_FILL

@@ -11,6 +11,10 @@ extends HudWidget
 ## (or one column). set_max_width() (HudLayer calls it for the top and bottom anchors, which
 ## must not run under the corner stacks) wraps the cards into two rows and then scales them
 ## down, never below MIN_SCALE. min_rect() is one card at MIN_SCALE.
+## A Rect2i slot is fitted with set_max_size() instead (HudLayer calls it): one row scaled
+## down to fit the slot's width and height, never below MIN_SCALE; only when that would go
+## below MIN_SCALE does the strip wrap into two rows (scaled to the width and the height,
+## again never below MIN_SCALE; a slot smaller than that overflows).
 
 const CARD := Vector2(260, 124)
 const GAP := 10.0
@@ -33,6 +37,9 @@ var _raw: Dictionary = {}
 ## for that peer changes, so the latest call or roster update shows.
 var _local_status: Dictionary = {}
 var _max_width: float = INF
+var _max_height: float = INF
+## True after set_max_size() (a Rect2i slot): prefer one row, scaled to the width and height.
+var _slot_fit: bool = false
 
 
 func _init() -> void:
@@ -72,6 +79,18 @@ func min_rect() -> Vector2:
 ## Fit the strip into `w` pixels: one row if it fits, else two rows, scaled down as needed.
 func set_max_width(w: float) -> void:
 	_max_width = maxf(w, 1.0)
+	_max_height = INF
+	_slot_fit = false
+	_relayout_cards()
+
+
+## Fit the strip into a Rect2i slot of `avail` pixels (1080p): one row scaled down to fit the
+## width and the height, never below MIN_SCALE; if one row would need less than MIN_SCALE, two
+## rows scaled to the width and the height, again never below MIN_SCALE.
+func set_max_size(avail: Vector2) -> void:
+	_max_width = maxf(avail.x, 1.0)
+	_max_height = maxf(avail.y, 1.0)
+	_slot_fit = true
 	_relayout_cards()
 
 
@@ -157,6 +176,9 @@ func _relayout_cards() -> void:
 	if vertical:
 		_grid.columns = 1
 		return
+	if _slot_fit:
+		_relayout_slot(n)
+		return
 	var cols := n
 	var row_w := n * CARD.x + (n - 1) * GAP
 	if row_w > _max_width and n > 1:
@@ -168,6 +190,21 @@ func _relayout_cards() -> void:
 	if row_w > _max_width:
 		s = maxf(MIN_SCALE, _max_width / row_w)
 	set_ui_scale(s)
+
+
+## Rect2i slot: one row if it fits at MIN_SCALE or more, else two rows.
+func _relayout_slot(n: int) -> void:
+	var row_w := n * CARD.x + (n - 1) * GAP
+	var s := minf(1.0, minf(_max_width / row_w, _max_height / CARD.y))
+	var cols := n
+	if s < MIN_SCALE and n > 1:
+		cols = ceili(n / 2.0)
+		var wrap_w := cols * CARD.x + (cols - 1) * GAP
+		var wrap_h := 2.0 * CARD.y + GAP
+		s = minf(1.0, minf(_max_width / wrap_w, _max_height / wrap_h))
+	if _grid.columns != cols:
+		_grid.columns = cols
+	set_ui_scale(maxf(MIN_SCALE, s))
 
 
 static func _same(a: Variant, b: Variant) -> bool:
