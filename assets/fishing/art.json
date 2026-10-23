@@ -45,7 +45,7 @@
 				80,
 				32
 			],
-			"prompt": "small white sport-fishing boat in exact side view, bow pointing right, outboard motor at the left stern, empty flat aft deck, a small canopy roof on two thin posts over the middle; bright red only on the hull trim stripe and the canopy roof, everything else white and grey"
+			"prompt": "small white sport-fishing boat shown alone as an isolated cutout on a fully transparent background: exact side view, bow pointing right, outboard motor at the left stern, empty flat aft deck, a small canopy roof on two thin posts over the middle; bright red only on the hull trim stripe and the canopy roof, everything else white and grey; no sea, no water, no waves, no sky, no clouds, no islands, no scenery, no glow, no shadow"
 		},
 		{
 			"id": "rig_bike",
@@ -53,7 +53,7 @@
 				24,
 				16
 			],
-			"prompt": "stationary exercise bike frame bolted to a boat deck, side view facing right, saddle, handlebar and heavy flywheel stand, grey and white metal, no crank arms and no pedals"
+			"prompt": "stationary exercise bike frame shown alone as an isolated cutout on a fully transparent background: exact side view facing right, saddle at the left, handlebar at the right, heavy round flywheel at the front, two small feet at the bottom, grey and white metal, no crank arms and no pedals, no rider; no glow, no halo, no shadow, no sea, no sky, no deck, no scenery"
 		},
 		{
 			"id": "rig_angler",
@@ -69,7 +69,7 @@
 				10,
 				10
 			],
-			"prompt": "bicycle chainring with two crank arms and two pedals, side view, grey metal with dark navy outline",
+			"prompt": "a bicycle chainring seen exactly face-on as a flat solid grey disc with a dark hub in the centre and two thick crank arms pointing in opposite directions, a small square pedal block at each arm tip, chunky bold simple shapes filling the whole square, grey metal with dark navy outline; no glow, no halo, no shadow, no sea, no sky, no deck, no scenery",
 			"align": "center"
 		},
 		{
@@ -78,7 +78,7 @@
 				10,
 				10
 			],
-			"prompt": "big-game fishing reel drum seen from the side: a circle with a hub and four bold spokes and a small chain sprocket, gold and grey",
+			"prompt": "big-game fishing reel seen exactly face-on as one bold gold circle with a dark hub in the centre and four thick gold spokes, chunky simple shapes filling the whole square, gold and grey; no glow, no halo, no shadow, no sea, no sky, no deck, no scenery",
 			"align": "center"
 		},
 		{
@@ -87,7 +87,7 @@
 				24,
 				8
 			],
-			"prompt": "striped mackerel fish in exact profile facing left, tail at the right edge, blue-green back with dark wavy stripes, silver belly",
+			"prompt": "a slim striped mackerel fish in exact profile facing left, clearly forked tail fin at the right edge, blue-green back with dark wavy stripes, silver belly, bold simple shape; shown alone on a fully transparent background: no water, no bubbles, no glow, no shadow",
 			"align": "center",
 			"parts": {
 				"body": [
@@ -110,7 +110,7 @@
 				40,
 				16
 			],
-			"prompt": "mahi-mahi dolphinfish in exact profile facing left, tail at the right edge, blunt high forehead, bright green-yellow body with blue speckles, long dorsal fin",
+			"prompt": "mahi-mahi dolphinfish in exact profile facing left, tail at the right edge, blunt high forehead, bright green-yellow body with blue speckles, long dorsal fin; shown alone on a fully transparent background, no sea, no water, no sky, no glow, no halo, no shadow",
 			"align": "center",
 			"parts": {
 				"body": [
@@ -133,7 +133,7 @@
 				44,
 				16
 			],
-			"prompt": "yellowfin tuna in exact profile facing left, tail at the right edge, torpedo body, navy back, silver belly, a row of small bright yellow finlets near the tail",
+			"prompt": "a long slender yellowfin tuna in exact profile facing left, torpedo body stretched wide so the nose touches the left edge of the picture and the tail fin tips touch the right edge of the picture, navy back, silver belly, a row of small bright yellow finlets near the tail; shown alone on a fully transparent background: no water, no bubbles, no glow, no shadow",
 			"align": "center",
 			"parts": {
 				"body": [
@@ -179,7 +179,7 @@
 				10,
 				8
 			],
-			"prompt": "white seagull flying, side view, wings raised up, grey wing tips, yellow beak",
+			"prompt": "one small white seagull flying, side view, both wings raised high above the body in a V shape, grey wing tips, yellow beak, no feet; shown alone on a fully transparent background: no sea, no sky, no glow, no shadow",
 			"align": "center"
 		},
 		{
@@ -188,7 +188,7 @@
 				10,
 				8
 			],
-			"prompt": "white seagull flying, side view, wings lowered down, grey wing tips, yellow beak",
+			"prompt": "one small white seagull flying, side view, both wings swept down below the body, grey wing tips, yellow beak, no feet; shown alone on a fully transparent background: no sea, no sky, no glow, no shadow",
 			"align": "center"
 		},
 		{
@@ -197,7 +197,7 @@
 				32,
 				12
 			],
-			"prompt": "tight round school of tiny silver bait fish swirling underwater, flat oval shape",
+			"prompt": "tight round school of tiny silver bait fish swirling underwater, flat oval shape; shown alone on a fully transparent background, no sea, no water, no sky, no glow, no halo, no shadow",
 			"align": "center"
 		},
 		{
@@ -206,7 +206,7 @@
 				8,
 				5
 			],
-			"prompt": "single bright green fish-finder sonar arch echo, a small curved arc",
+			"prompt": "single bright green fish-finder sonar arch echo, a small curved arc; shown alone on a fully transparent background, no sea, no water, no sky, no glow, no halo, no shadow",
 			"align": "center"
 		},
 		{
@@ -215,7 +215,7 @@
 				48,
 				4
 			],
-			"prompt": "long thin streak of white sea foam on the water surface",
+			"prompt": "a seamless wide horizontal strip made only of a thin white sea foam streak with a few small foam flecks, on a fully transparent background; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no objects",
 			"tile": true
 		},
 		{
@@ -224,7 +224,7 @@
 				20,
 				12
 			],
-			"prompt": "small water splash with droplets, white and light blue",
+			"prompt": "a small crown of white and light-blue water splash droplets, nothing else: no animal, no character, no person, no boat, no scenery, no background",
 			"align": "center"
 		},
 		{
@@ -233,7 +233,7 @@
 				32,
 				24
 			],
-			"prompt": "big burst of white sea spray with droplets fanning up",
+			"prompt": "a big burst of white sea spray droplets fanning upward, nothing else: no person, no character, no animal, no scenery, no background",
 			"align": "center"
 		},
 		{
@@ -242,7 +242,7 @@
 				24,
 				24
 			],
-			"prompt": "golden sparkle burst, four-pointed star glints",
+			"prompt": "a golden four-pointed sparkle star burst with a few tiny gold glints around it, nothing else: no person, no character, no treasure, no sword, no scenery, no background",
 			"align": "center"
 		},
 		{
@@ -251,7 +251,7 @@
 				16,
 				16
 			],
-			"prompt": "golden trophy badge shaped like a leaping fish on a small round plaque",
+			"prompt": "golden trophy badge shaped like a leaping fish on a small round plaque; shown alone on a fully transparent background, no sea, no water, no sky, no glow, no halo, no shadow",
 			"align": "center"
 		},
 		{
@@ -260,7 +260,7 @@
 				320,
 				24
 			],
-			"prompt": "row of fluffy white cumulus clouds with soft grey undersides",
+			"prompt": "a seamless wide horizontal strip made only of fluffy white cumulus clouds with soft grey undersides, filling the picture edge to edge on a fully transparent background; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no land, no sea, no trees",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
@@ -271,7 +271,7 @@
 				256,
 				12
 			],
-			"prompt": "hazy pale blue distant tropical island silhouettes on the horizon",
+			"prompt": "a seamless wide horizontal strip made only of hazy pale blue distant tropical island silhouettes along a flat horizon line, a misty far-away view on a fully transparent sky; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no close-up trees, no beach",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
@@ -282,7 +282,7 @@
 				80,
 				24
 			],
-			"prompt": "tiny sandy islet with two leaning palm trees and green bushes",
+			"prompt": "one tiny sandy islet with two leaning palm trees and green bushes, shown alone on a fully transparent background; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no clouds, no sea, no water, no sky",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
@@ -293,7 +293,7 @@
 				12,
 				12
 			],
-			"prompt": "round bright yellow sun with a pale glow edge",
+			"prompt": "a plain round bright yellow sun disc with a thin pale yellow glow ring, nothing else: no character, no person, no face, no palm tree, no sky, no landscape",
 			"align": "center"
 		},
 		{
@@ -302,7 +302,7 @@
 				32,
 				6
 			],
-			"prompt": "white foamy boat wake trail on blue water",
+			"prompt": "a seamless wide horizontal strip made only of white foamy boat wake foam streaks and bubbles on blue water, filling the picture edge to edge; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no boat, no objects",
 			"tile": true,
 			"align": "center_left"
 		},
@@ -323,7 +323,7 @@
 				128,
 				64
 			],
-			"prompt": "soft diagonal underwater light shafts in pale aqua, fading downward",
+			"prompt": "abstract soft diagonal shafts of pale aqua light fading downward, light beams only, on a fully transparent background; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no coral, no fish, no plants, no objects",
 			"align": "top_left"
 		},
 		{
@@ -332,7 +332,7 @@
 				416,
 				28
 			],
-			"prompt": "dark blue-green distant coral reef silhouette on the sea floor, low rounded shapes",
+			"prompt": "a seamless wide horizontal strip made only of dark blue-green distant low coral mounds and rock silhouettes along the bottom edge, hazy and low contrast, empty water above on a fully transparent background; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no crabs, no fish",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
@@ -343,7 +343,7 @@
 				416,
 				18
 			],
-			"prompt": "colorful coral and rocks on the sea floor: pink branching coral, orange fan coral, green sea grass, grey rocks",
+			"prompt": "a seamless wide horizontal strip of sea-floor decoration made only of very pale pastel pink and lilac-purple branching coral, yellow and orange fan coral, green sea grass tufts and a few small grey rocks standing on a flat sandy edge, filling the picture edge to edge on a transparent background above; strictly no red, no crimson, no scarlet and no deep pink anywhere; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no crabs, no fish",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
@@ -354,7 +354,7 @@
 				64,
 				8
 			],
-			"prompt": "pale sandy sea floor with small ripples and tiny shells",
+			"prompt": "a seamless wide horizontal strip made only of pale sandy sea floor with soft ripples and a few tiny shells, filling the picture edge to edge; this is a repeating border strip, not a single subject; absolutely no animals, no birds, no turtles, no parrots, no people, no characters, no mascot, no crabs, no fish, no plants, no rocks",
 			"tile": true,
 			"mirror": true,
 			"align": "bottom_left"
