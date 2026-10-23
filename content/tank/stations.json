@@ -84,9 +84,11 @@
 		"min_interval_s": 1
 	},
 	"hoist": {
+		"_doc": "Pattern 3 (the Bulwark): rise_pct_s per second in whole step_s steps counted from reaching Hoist, up to grade_pct (warmup_grade_pct in WARMUP kinds), only in SIM phases; 0 in one step on leaving Hoist.",
 		"grade_pct": 4,
 		"warmup_grade_pct": 1,
-		"rise_pct_s": 1
+		"rise_pct_s": 1,
+		"step_s": 1
 	},
 	"cadence_band": {
 		"default": [60, 120],
