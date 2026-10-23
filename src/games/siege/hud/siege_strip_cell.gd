@@ -1,8 +1,9 @@
 class_name SiegeStripCell
 extends PanelContainer
-## One rider's cell in Siege's own strip (bottom centre, above the kit's teammate strip): the
-## slot's chip, the routing target as an icon with its name, the rider's raw watts and %FTP
-## from the snapshot, and markers: Overdrive on or recharging, rescue, AFK. The raw W and %FTP
+## One rider's cell in Siege's own teammate strip (bottom centre, the only one: the kit's card
+## strip is not in Siege's HudSpec): the slot's chip, the routing target as an icon with its name,
+## the rider's raw watts and %FTP from the snapshot, and markers: Overdrive on or recharging,
+## rescue, AFK. The local rider's cell has an accent border. The raw W and %FTP
 ## come from the state's rider row (the host's own values, the snapshot's on a client), so a
 ## client's strip is as fresh as the 10 Hz snapshot.
 
@@ -16,6 +17,7 @@ var target_label: Label = null
 var od_label: Label = null
 var status_label: Label = null
 var watts_label: Label = null
+var is_local: bool = false
 
 
 func _init(p_slot: int = 0) -> void:
@@ -65,6 +67,15 @@ static func _spacer() -> Control:
 ## Sets the chip's look (the session's color and pattern for the slot).
 func set_look(look: Dictionary) -> void:
 	chip.set_look(look)
+
+
+## Marks the cell as the local rider's (an accent border instead of the plain one).
+func set_local(on: bool) -> void:
+	if on == is_local:
+		return
+	is_local = on
+	var border := WlTheme.ACCENT if on else WlTheme.PANEL_BORDER
+	add_theme_stylebox_override("panel", WlTheme.panel_style(WlTheme.PANEL, border, 4 if on else 2))
 
 
 ## Fills the cell from `rider` (null: an empty wheel, the cell shows nothing).

@@ -9,23 +9,27 @@ extends RefCounted
 ##   top right     the gate HP big readout and the rider's own denarii (>= 48 px, fed by the
 ##                 module through ctx.hud.readout: READOUT_GATE and READOUT_DENARII);
 ##   bottom left   power gauge (watts >= 48 px), cadence, W' bar;
-##   bottom centre the kit's teammate strip with Siege's own strip above it (target icon, markers,
-##                 raw W and %FTP from the snapshot);
+##   bottom centre Siege's own teammate strip, one low row of four cells (slot chip, target icon,
+##                 raw W and %FTP from the snapshot, Overdrive and rescue markers). The kit's
+##                 teammate card strip is left out: it showed the same W and %FTP a second time
+##                 in a 1070 x 350 block that covered the roads;
 ##   bottom right  the gear widget (the kit shows it while the trainer is in SIM, i.e. Overdrive),
 ##                 the routing card and the Overdrive button. The app reserves at least 380 x 100
 ##                 above the screen corner for its PANIC button; anchored entries stack above it
 ##                 by themselves. Nothing of Siege's sits in that reserve.
-##   centre        the break shop (text >= 32 px) in a Rect2i that is only visible in breaks;
-##                 the centre stays clear during waves.
-## Toasts show under the denarii readout (top right, clear of the shop); banners at the top
-## centre; the kit's warm-up and rescue banners stay on (show_safety_banners is true: Siege has
-## no banners of its own to replace them).
+##   below the fort the break shop (text >= 32 px) in a Rect2i between the fort's front wall and
+##                 the strip, only visible in breaks: the generator, the drum, the wheels and the
+##                 towers stay in view; the centre stays clear during waves.
+## Toasts show under the denarii readout (top right); banners go to the top left stack, below the
+## wave info, so the kit's warm-up and rescue banners (show_safety_banners stays true: Siege has
+## no banners of its own to replace them) never cover the generator and the drum.
 
 const READOUT_GATE := "siege_gate"
 const READOUT_DENARII := "siege_denarii"
-## Where the shop sits (1080p pixels): between the corner stacks, below the top-centre banners and
-## above the bottom-centre strip, clear of the PANIC corner.
-const SHOP_RECT := Rect2i(690, 100, 640, 600)
+## Where the shop sits (1080p pixels): on the ground below the fort's front wall (the camera
+## frames the wall's foot at about y 455) and above the bottom-centre strip (from about y 950),
+## between the corner stacks, clear of the PANIC corner.
+const SHOP_RECT := Rect2i(660, 458, 600, 490)
 
 
 static func spec(game: SiegeGame) -> HudSpec:
@@ -60,12 +64,11 @@ static func spec(game: SiegeGame) -> HudSpec:
 		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
 		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
 		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
 		. add_control(strip, HudSpec.BOTTOM)
 		. add(HudSpec.GEAR, HudSpec.BOTTOM_RIGHT)
 		. add_control(od, HudSpec.BOTTOM_RIGHT)
 		. add_control(route, HudSpec.BOTTOM_RIGHT)
 		. add_control(shop, SHOP_RECT)
 		. toasts_at(HudSpec.TOP_RIGHT)
-		. banners_at(HudSpec.TOP)
+		. banners_at(HudSpec.TOP_LEFT)
 	)

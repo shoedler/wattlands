@@ -1,9 +1,10 @@
 class_name SiegeStripOverlay
 extends HBoxContainer
-## Siege's own Control beside the kit's teammate strip (brief 3 HUD): one SiegeStripCell per
-## slot, in slot order, each 232 px wide (four fit between the corner stacks without wrapping).
-## Shows every rider's routing target icon and markers, and (from the state, so from the snapshot
-## on a client) raw W and %FTP.
+## Siege's teammate strip (brief 3 HUD): one SiegeStripCell per slot, in slot order, each 232 px
+## wide (four fit between the corner stacks without wrapping) in one low row. It is the only
+## teammate strip: the kit's card strip is not in the spec, so each rider's W and %FTP show once.
+## Shows every rider's slot chip, routing target icon and markers, and (from the state, so from
+## the snapshot on a client) raw W and %FTP.
 
 var game: SiegeGame = null
 var cells: Array[SiegeStripCell] = []
@@ -31,10 +32,12 @@ func refresh() -> void:
 		return
 	visible = true
 	var tx := SiegeHudModel.strings_of(game)
+	var own := SiegeHudModel.own_rider(game)
 	for slot in cells.size():
 		var rider := s.rider_at(slot)
 		var look := _look_of(slot)
 		cells[slot].set_look(look)
+		cells[slot].set_local(rider != null and rider == own)
 		cells[slot].show_rider(rider, tx, look["color"])
 
 
