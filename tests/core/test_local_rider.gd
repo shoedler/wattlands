@@ -660,6 +660,16 @@ func test_ride_pause_after_5_s_and_resume_after_1_s_in_solo() -> void:
 	assert_false(r.telemetry().paused)
 
 
+## Timed from the first sample, like the governor: no sample yet counts for nothing.
+func test_no_ride_pause_before_the_first_sample() -> void:
+	var d := _fake_device()
+	var r := _rider(d)
+	_run(r, 6.0)
+	assert_false(r.is_ride_paused())
+	_ride(r, d, 5.1, 0.0, 0.0)
+	assert_true(r.is_ride_paused(), "5 s after the first sample")
+
+
 func test_a_pedaling_sample_restarts_the_5_s() -> void:
 	var d := _fake_device()
 	var r := _rider(d)

@@ -39,7 +39,8 @@ extends Node
 ##   (bool), reason, dropped ([{channel, reason}], W2)}; apply_directive() acks exactly once
 ##   whether or not the governor emits.
 ## - Pause on not pedaling (BRIEF 3.5, RidePause): a human rider who meets not_pedaling for
-##   5 s is ride-paused until 1 s of pedaling at >= 30 rpm. Ride-paused or game-paused stops
+##   5 s (timed from the first sample that meets it; a stale stream counts as not pedaling) is
+##   ride-paused until 1 s of pedaling at >= 30 rpm. Ride-paused or game-paused stops
 ##   the recorder's timer (FIT timer events, moving time). In a solo session the pause also
 ##   emits pause_requested("stop_5s") (the GameHost pauses the game clock and resumes it on
 ##   ride_paused_changed(false)); in multiplayer it pauses only this rider's ride timer. The
@@ -621,7 +622,9 @@ func tick(dt: float) -> void:
 	governor.tick(dt)
 	if gen != _setup_gen:
 		return
-	if not is_bot and _ride_pause.update(t, p, _cadence(t)):
+	# Timed from the first sample like the governor's rules: before any sample nothing counts;
+	# a stream that went stale (STALE_S) reads 0 W, 0 rpm and counts as not pedaling.
+	if not is_bot and _last != null and _ride_pause.update(t, p, _cadence(t)):
 		_on_ride_pause_changed()
 		if gen != _setup_gen:
 			return
