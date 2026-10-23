@@ -1,6 +1,6 @@
 # Trainer stack
 
-How Wattlands talks to a Wahoo KICKR CORE over Bluetooth LE FTMS, and how the safety governor shapes every command. For developers. "BRIEF x.y" is a section of `docs/BRIEF.md`; the design rationale is in `docs/decisions/trainer-core.md`, `trainer-control.md`, `ble.md`, `platform.md` and `app-shell.md`. Every constant below is quoted from the code on `main`.
+How WATTLANDS talks to a Wahoo KICKR CORE over Bluetooth LE FTMS, and how the safety governor shapes every command. For developers. "BRIEF x.y" is a section of `docs/BRIEF.md`; the design rationale is in `docs/decisions/trainer-core.md`, `trainer-control.md`, `ble.md`, `platform.md` and `app-shell.md`. Every constant below is quoted from the code on `main`.
 
 **Hardware status:** none of this has run against a real trainer. Every automated run had the hardware lock on and used MockTrainer or a fake KICKR transport. See [section 8](#8-never-tested-on-hardware) and `docs/HARDWARE_TEST_PLAN.md`.
 

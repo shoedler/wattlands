@@ -1,4 +1,4 @@
-# Wattlands network protocol
+# WATTLANDS network protocol
 
 Multiplayer is a star through a relay (BRIEF 5.1). The host's GameHost is authoritative and simulates at 20 Hz; clients send telemetry and intents; the host sends snapshots, events, plans, phases and directives. Every frame is one JSON text object. The relay (`server/relay`, Node) routes frames between the peers of a room and never looks inside a game message.
 

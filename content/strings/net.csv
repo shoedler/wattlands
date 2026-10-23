@@ -11,7 +11,7 @@ NET_HOST_DROPPED,The host lost the connection. Waiting for them to come back…
 NET_REFUSED_SESSION_IN_PROGRESS,That session has already started. Ask the host to open a new room.
 NET_REFUSED_ROOM_NOT_FOUND,No room with that code. Check the code and try again.
 NET_REFUSED_ROOM_FULL,That room is full.
-NET_REFUSED_VERSION_MISMATCH,This version of Wattlands can't play with the host's. Update both to the same version.
+NET_REFUSED_VERSION_MISMATCH,This version of WATTLANDS can't play with the host's. Update both to the same version.
 NET_REFUSED_RATE_LIMITED,Too many attempts. Wait a minute and try again.
 NET_REFUSED_BAD_REQUEST,The relay rejected the request.
 NET_REFUSED_HOST_LEFT,The host ended the session.
