@@ -1,0 +1,23 @@
+{
+	"id": "free_90",
+	"kind": "free",
+	"label": "FISHING_CONTENT_FREE_90",
+	"area": "coral_bank",
+	"total_min": 90,
+	"ride_out": {
+		"duration_s": 300,
+		"target_pct": 50,
+		"ramp_to_pct": 65
+	},
+	"fishing_s": 4920,
+	"species_weights": {
+		"mackerel": 45,
+		"mahi": 30,
+		"tuna": 25
+	},
+	"marlin_slot": 2,
+	"marlin_p": 0.3,
+	"fight_cap_frac": 0.4,
+	"top_pct": 0,
+	"k_rmin": 1.5
+}

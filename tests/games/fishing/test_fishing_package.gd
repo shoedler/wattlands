@@ -1,5 +1,5 @@
 extends GutTest
-## The template's files as a package: game.json (BRIEF 3.6 fields and the option entry format),
+## The fishing game's files as a package: game.json (BRIEF 3.6 fields and the option entry format),
 ## content files, string keys, and the static rules every game keeps (no wall clock or global RNG
 ## in rules, no trainer path but ctx.directives, BRIEF 4.6.11).
 
@@ -83,13 +83,10 @@ func test_entry_is_an_instantiable_game_module() -> void:
 
 func test_every_content_file_loads_and_validates() -> void:
 	for content_id: String in F.manifest()["contents"]:
-		var path := F.CONTENT_DIR.path_join(content_id + ".json")
-		assert_true(FileAccess.file_exists(path), path)
-		assert_eq(
-			FishingRules.content_error(JSON.parse_string(FileAccess.get_file_as_string(path))),
-			"",
-			path
-		)
+		var ctx := F.make_ctx(1, 0, content_id)
+		var c := FishingContent.load_for(ctx)
+		assert_true(c.ok, "%s: %s" % [content_id, c.errors])
+		assert_eq(c.trip.id, content_id, "the trip id matches its file name")
 
 
 func test_option_entries_use_the_sdk_entry_format() -> void:
@@ -126,7 +123,8 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 	var sources := _files(F.GAME_DIR, ["gd", "json"]) + _files(F.CONTENT_DIR, ["json"])
 	for path in sources:
 		for m in re.search_all(FileAccess.get_file_as_string(path)):
-			used[m.get_string()] = path
+			if not m.get_string().ends_with("_"):  # a format prefix ("FISHING_PHASE_REEL_%d")
+				used[m.get_string()] = path
 	var man := F.manifest()
 	for e: Dictionary in man.get("options", []) + man.get("player_options", []):
 		used[str(e.get("label", "%sOPT_%s" % [_prefix(), str(e["id"]).to_upper()]))] = "game.json option label"
@@ -137,22 +135,16 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 		assert_has(keys, k, "%s (used in %s) is in strings.csv" % [k, used[k]])
 
 
-## W4r2 R31 (GAME_SDK 15): the results screen names an unlock by the key <ID>_UNLOCK_<UNLOCK ID>
-## (upper case) and shows the raw id without it; every unlock the game hands out has that string.
+## GAME_SDK 15: the results screen names an unlock by <ID>_UNLOCK_<UNLOCK ID>; every cosmetic
+## the game can unlock has that string.
 func test_every_unlock_id_has_its_results_screen_name() -> void:
 	var keys := _csv_keys()
-	var ctx := F.make_ctx(1)
-	var g: FishingGame = autofree(F.make_game(ctx))
-	(ctx.stats as F.Stats).rows = {1: {"kj": 100.0, "time_in_band_pct": 90.0}}
-	FishingRules.rider(g.state, 1)["laps"] = 3
-	var unlocks: Array = g.results().row(1)["unlocks"]
-	assert_gt(unlocks.size(), 0, "3 laps unlock something")
-	for id: Variant in unlocks:
-		assert_has(
-			keys,
-			"%sUNLOCK_%s" % [_prefix(), str(id).to_upper()],
-			"unlock %s has its name string" % id
-		)
+	var co: Dictionary = JSON.parse_string(
+		FileAccess.get_file_as_string(F.CONTENT_DIR.path_join("cosmetics.json"))
+	)
+	assert_gt((co["items"] as Array).size(), 0)
+	for it: Dictionary in co["items"]:
+		assert_has(keys, "%sUNLOCK_%s" % [_prefix(), str(it["id"]).to_upper()], str(it["id"]))
 
 
 ## Views are exempt: they only read state and may seed their own cosmetic RNG from ctx.seed.

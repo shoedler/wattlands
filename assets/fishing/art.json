@@ -1,0 +1,372 @@
+{
+	"palette": [
+		"#1a1f3a",
+		"#23305c",
+		"#0f2a4a",
+		"#1f4e8c",
+		"#2a74b8",
+		"#3fa0d8",
+		"#8fd6f5",
+		"#c6ecfa",
+		"#f7f9fb",
+		"#e8f7fb",
+		"#c9d1d9",
+		"#b8c7d6",
+		"#8a96a3",
+		"#4b5563",
+		"#f4e4b0",
+		"#e3c27a",
+		"#9a6236",
+		"#5a3820",
+		"#f2665a",
+		"#f28c28",
+		"#f6d33c",
+		"#e8b730",
+		"#9bd23c",
+		"#3fae4a",
+		"#23743a",
+		"#2bb3a3",
+		"#9b6be0",
+		"#ef6fa6",
+		"#f1c29a",
+		"#c98e63",
+		"#e0413a",
+		"#9e2228"
+	],
+	"style": "Clean 16-bit pixel art game sprite, side view, bright cheerful tropical colors, flat colors, dark navy outline, chunky readable shapes, no fine detail, single subject centered and filling the frame, no text, letters, numbers, logos, emblems or flags.",
+	"endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+	"quality": "high",
+	"dither": "none",
+	"notes": "PaletteSwap key: the red ramp #e0413a / #9e2228, only on the boat's trim and canopy and the angler's cap and shirt (brief 3.3).",
+	"sprites": [
+		{
+			"id": "boat",
+			"size": [
+				80,
+				32
+			],
+			"prompt": "small white sport-fishing boat in exact side view, bow pointing right, outboard motor at the left stern, empty flat aft deck, a small canopy roof on two thin posts over the middle; bright red only on the hull trim stripe and the canopy roof, everything else white and grey"
+		},
+		{
+			"id": "rig_bike",
+			"size": [
+				24,
+				16
+			],
+			"prompt": "stationary exercise bike frame bolted to a boat deck, side view facing right, saddle, handlebar and heavy flywheel stand, grey and white metal, no crank arms and no pedals"
+		},
+		{
+			"id": "rig_angler",
+			"size": [
+				14,
+				12
+			],
+			"prompt": "cheerful angler upper body seated on a saddle, side view facing right, bright red cap and bright red shirt, tanned arms stretched forward holding a rod handle, no rod, no legs"
+		},
+		{
+			"id": "rig_crank",
+			"size": [
+				10,
+				10
+			],
+			"prompt": "bicycle chainring with two crank arms and two pedals, side view, grey metal with dark navy outline",
+			"align": "center"
+		},
+		{
+			"id": "rig_reel",
+			"size": [
+				10,
+				10
+			],
+			"prompt": "big-game fishing reel drum seen from the side: a circle with a hub and four bold spokes and a small chain sprocket, gold and grey",
+			"align": "center"
+		},
+		{
+			"id": "fish_mackerel",
+			"size": [
+				24,
+				8
+			],
+			"prompt": "striped mackerel fish in exact profile facing left, tail at the right edge, blue-green back with dark wavy stripes, silver belly",
+			"align": "center",
+			"parts": {
+				"body": [
+					0,
+					0,
+					18,
+					8
+				],
+				"tail": [
+					18,
+					0,
+					6,
+					8
+				]
+			}
+		},
+		{
+			"id": "fish_mahi",
+			"size": [
+				40,
+				16
+			],
+			"prompt": "mahi-mahi dolphinfish in exact profile facing left, tail at the right edge, blunt high forehead, bright green-yellow body with blue speckles, long dorsal fin",
+			"align": "center",
+			"parts": {
+				"body": [
+					0,
+					0,
+					30,
+					16
+				],
+				"tail": [
+					30,
+					0,
+					10,
+					16
+				]
+			}
+		},
+		{
+			"id": "fish_tuna",
+			"size": [
+				44,
+				16
+			],
+			"prompt": "yellowfin tuna in exact profile facing left, tail at the right edge, torpedo body, navy back, silver belly, a row of small bright yellow finlets near the tail",
+			"align": "center",
+			"parts": {
+				"body": [
+					0,
+					0,
+					33,
+					16
+				],
+				"tail": [
+					33,
+					0,
+					11,
+					16
+				]
+			}
+		},
+		{
+			"id": "fish_marlin",
+			"size": [
+				64,
+				22
+			],
+			"prompt": "blue marlin in exact profile facing left, long pointed bill at the left, tall sail-like dorsal fin, tail at the right edge, cobalt blue back, silver belly with faint stripes",
+			"align": "center",
+			"parts": {
+				"body": [
+					0,
+					0,
+					48,
+					22
+				],
+				"tail": [
+					48,
+					0,
+					16,
+					22
+				]
+			}
+		},
+		{
+			"id": "gull_up",
+			"size": [
+				10,
+				8
+			],
+			"prompt": "white seagull flying, side view, wings raised up, grey wing tips, yellow beak",
+			"align": "center"
+		},
+		{
+			"id": "gull_down",
+			"size": [
+				10,
+				8
+			],
+			"prompt": "white seagull flying, side view, wings lowered down, grey wing tips, yellow beak",
+			"align": "center"
+		},
+		{
+			"id": "bait_ball",
+			"size": [
+				32,
+				12
+			],
+			"prompt": "tight round school of tiny silver bait fish swirling underwater, flat oval shape",
+			"align": "center"
+		},
+		{
+			"id": "sonar_mark",
+			"size": [
+				8,
+				5
+			],
+			"prompt": "single bright green fish-finder sonar arch echo, a small curved arc",
+			"align": "center"
+		},
+		{
+			"id": "current_seam",
+			"size": [
+				48,
+				4
+			],
+			"prompt": "long thin streak of white sea foam on the water surface",
+			"tile": true
+		},
+		{
+			"id": "splash",
+			"size": [
+				20,
+				12
+			],
+			"prompt": "small water splash with droplets, white and light blue",
+			"align": "center"
+		},
+		{
+			"id": "spray",
+			"size": [
+				32,
+				24
+			],
+			"prompt": "big burst of white sea spray with droplets fanning up",
+			"align": "center"
+		},
+		{
+			"id": "catch_flash",
+			"size": [
+				24,
+				24
+			],
+			"prompt": "golden sparkle burst, four-pointed star glints",
+			"align": "center"
+		},
+		{
+			"id": "trophy_badge",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "golden trophy badge shaped like a leaping fish on a small round plaque",
+			"align": "center"
+		},
+		{
+			"id": "clouds",
+			"size": [
+				320,
+				24
+			],
+			"prompt": "row of fluffy white cumulus clouds with soft grey undersides",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "islands_far",
+			"size": [
+				256,
+				12
+			],
+			"prompt": "hazy pale blue distant tropical island silhouettes on the horizon",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "island_palm",
+			"size": [
+				80,
+				24
+			],
+			"prompt": "tiny sandy islet with two leaning palm trees and green bushes",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "sun",
+			"size": [
+				12,
+				12
+			],
+			"prompt": "round bright yellow sun with a pale glow edge",
+			"align": "center"
+		},
+		{
+			"id": "wake",
+			"size": [
+				32,
+				6
+			],
+			"prompt": "white foamy boat wake trail on blue water",
+			"tile": true,
+			"align": "center_left"
+		},
+		{
+			"id": "surface_strip",
+			"size": [
+				64,
+				6
+			],
+			"prompt": "sea surface wave crest band with white foam caps on light blue water",
+			"tile": true,
+			"mirror": true,
+			"align": "top_left"
+		},
+		{
+			"id": "light_rays",
+			"size": [
+				128,
+				64
+			],
+			"prompt": "soft diagonal underwater light shafts in pale aqua, fading downward",
+			"align": "top_left"
+		},
+		{
+			"id": "reef_back",
+			"size": [
+				416,
+				28
+			],
+			"prompt": "dark blue-green distant coral reef silhouette on the sea floor, low rounded shapes",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "reef_front",
+			"size": [
+				416,
+				18
+			],
+			"prompt": "colorful coral and rocks on the sea floor: pink branching coral, orange fan coral, green sea grass, grey rocks",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "sand_strip",
+			"size": [
+				64,
+				8
+			],
+			"prompt": "pale sandy sea floor with small ripples and tiny shells",
+			"tile": true,
+			"mirror": true,
+			"align": "bottom_left"
+		},
+		{
+			"id": "picker_card",
+			"size": [
+				160,
+				90
+			],
+			"background": "opaque",
+			"prompt": "one lane of a side-view fishing scene: on the left a small white sport-fishing boat with an angler in a red cap pedaling a stationary exercise bike on deck, the bike chain visibly turning a big fishing reel, a fishing line arcing to a yellowfin tuna leaping out of the blue sea in the middle, bright sky with clouds, reef and sand at the bottom, the right third of the picture open water and sky"
+		}
+	]
+}

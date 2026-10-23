@@ -1,6 +1,6 @@
 class_name FishingFakes
 extends RefCounted
-## Test doubles for the template game's unit tests: a GameContext whose sinks record every call,
+## Test doubles for the fishing game's unit tests: a GameContext whose sinks record every call,
 ## plus a tiny stand-in for the GameHost's phase clock (fixed phases only), so the module can be
 ## driven with synthetic InputFrames without the platform runtime.
 
@@ -101,7 +101,7 @@ static func option_defaults(entries: Variant) -> Dictionary:
 static func make_ctx(
 	humans: int = 1,
 	bots: int = 0,
-	content_id: String = "default",
+	content_id: String = "e2e_2min",
 	role: String = Wl.SOLO,
 	local_peer: int = 1,
 	rng_seed: int = 7

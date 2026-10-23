@@ -1,0 +1,23 @@
+{
+	"id": "threshold",
+	"kind": "threshold",
+	"label": "FISHING_CONTENT_THRESHOLD",
+	"area": "coral_bank",
+	"total_min": 55,
+	"ride_out": {
+		"duration_s": 300,
+		"target_pct": 50,
+		"ramp_to_pct": 65
+	},
+	"schedule": {
+		"first_reel_s": 240,
+		"reel_s": 360,
+		"fights": 4,
+		"species": "tuna",
+		"base_pct": 95,
+		"change_pct": 8,
+		"t_nom_s": 345,
+		"max_s": 420,
+		"runs": 3
+	}
+}
