@@ -232,3 +232,20 @@ func test_the_same_state_gives_the_same_intents() -> void:
 	_rear(b)
 	for r in a.riders:
 		assert_eq(TankAutopilot.intents(a, r.peer), TankAutopilot.intents(b, r.peer))
+
+
+func test_a_traverse_or_a_shot_is_asked_for_twice_a_second_at_most() -> void:
+	var s := _quiet(1)
+	_rear(s)
+	var asked := 0
+	for tick in 40:
+		s.tick = 6000 + tick
+		asked += TankAutopilot.intents(s, 1).size()
+	assert_eq(asked, 4, "every tenth tick of 40")
+	var t := _quiet(1)
+	t.hull.target_id = _wreck(t).id
+	asked = 0
+	for tick in 40:
+		t.tick = 6000 + tick
+		asked += TankAutopilot.intents(t, 1).size()
+	assert_eq(asked, 4, "the same for the shot")

@@ -9,7 +9,7 @@ extends RefCounted
 ##   - rear traverses: the main turret faces right or left, and a traverse flips it. It flips when
 ##     nothing is in range on the side it faces and something is on the other side, and flips
 ##     back to the front once the rear is clear (no flip while the current side still has a
-##     target, so a mixed fight never makes it flip-flop);
+##     target, so a mixed fight never makes it flip-flop); asked for twice a second at most;
 ##   - obstacle shots: with no enemy in range anywhere, the turret facing front and the gun
 ##     loaded, a wire or wreck barricade that blocks the road is targeted (a target cycle, at most
 ##     once a second) and shot once the gun points at it.
@@ -23,6 +23,9 @@ extends RefCounted
 const EDGE_MARGIN_PX := 4.0
 ## A target cycle toward a blocking obstacle at most once in this many ticks.
 const RETARGET_TICKS := 20
+## A traverse or a shot is asked for at most once in this many ticks (2 a second), so a request
+## the rules decline (a lever elsewhere, a breech still closing) never eats the 5-a-second budget.
+const ASK_EVERY_TICKS := 10
 ## The aim tolerance used when the content does not give gun.aim_tol_deg.
 const DEFAULT_AIM_TOL_DEG := 0.5
 ## Obstacle types the Autopilot clears: they stop the tank. Tank traps are shoved aside by the
@@ -43,7 +46,7 @@ static func intents(state: TankState, peer: int) -> Array:
 		return []
 	var turn := _traverse(state)
 	if not turn.is_empty():
-		return turn
+		return turn if state.tick % ASK_EVERY_TICKS == 0 else []
 	return _obstacle_shot(state)
 
 
@@ -108,7 +111,11 @@ static func _obstacle_shot(state: TankState) -> Array:
 	var tol := DEFAULT_AIM_TOL_DEG
 	if state.content != null:
 		tol = state.content.num("tanks", "gun.aim_tol_deg", DEFAULT_AIM_TOL_DEG)
-	if hull.loaded != TankIds.SHELL_NONE and hull.breech_s <= 0.0:
+	if (
+		hull.loaded != TankIds.SHELL_NONE
+		and hull.breech_s <= 0.0
+		and state.tick % ASK_EVERY_TICKS == 0
+	):
 		if absf(hull.elev_deg - hull.elev_target_deg) <= tol:
 			return [TankIntents.auto(TankIds.INTENT_FIRE)]
 	return []

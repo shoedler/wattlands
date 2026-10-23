@@ -233,6 +233,23 @@ func test_a_malformed_snapshot_changes_nothing() -> void:
 	assert_eq(JSON.stringify(client.snapshot()), before)
 
 
+func test_rows_over_the_caps_are_well_formed_and_still_applied() -> void:
+	var host := _host(3)
+	host.state = TankFixtures.cap()
+	host.state.content = host.content
+	host.state.enemies.append(TankFixtures._enemy(5000, TankIds.ENEMY_LIGHT, 10.0, 30.0, 1))
+	var snap := _wire(host)
+	assert_eq((snap["e"] as Array).size(), TankConst.MAX_ENEMIES + 1)
+	var client := _client(3)
+	client.apply_snapshot(snap)
+	assert_eq(
+		client.state.enemies.size(),
+		TankConst.MAX_ENEMIES + 1,
+		"a layout problem is skipped, a count is not"
+	)
+	assert_eq(client.state.tick, host.state.tick)
+
+
 func test_apply_announces_each_snapshot_with_its_tick() -> void:
 	var host := _host(1)
 	var client := _client(1)

@@ -276,8 +276,10 @@ func apply_snapshot(snap: Dictionary) -> void:
 		return
 	var problem := TankSnapshotSchema.check(snap)
 	if problem != "":
-		push_warning("tank: snapshot ignored: %s" % problem)
-		return
+		push_warning("tank: snapshot: %s" % problem)
+		# A broken layout would index past a row: skip it. Rows over the caps are well formed.
+		if not problem.contains("more than"):
+			return
 	TankSnapshot.apply(state, snap)
 	_feed_hull()
 	_cues.on_state(state)
