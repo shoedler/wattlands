@@ -25,7 +25,7 @@ const GROUPS := {
 		"boiler",
 		"firebox",
 		"firebox_flame",
-		"governor",
+		"flyball",
 		"steam_puff",
 		"shell_rack"
 	],

@@ -181,8 +181,8 @@ static func _draw(c: Canvas, id: String) -> bool:
 			_firebox(c)
 		"firebox_flame", "fire_small":
 			_flame(c)
-		"governor":
-			_governor(c)
+		"flyball":
+			_flyball(c)
 		"steam_puff":
 			_puff(c, G11, G10, G9, 3)
 		"shell_rack":
@@ -699,7 +699,7 @@ static func _flame_layer(
 
 
 ## A flyball governor: spindle, collar, two arms and balls, a base.
-static func _governor(c: Canvas) -> void:
+static func _flyball(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
 	c.rect(7, 2, 2, h - 5, G8)
