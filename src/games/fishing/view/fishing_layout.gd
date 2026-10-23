@@ -111,6 +111,18 @@ static func deck_gear_rect() -> Rect2i:
 	return Rect2i(306, 0, 54, 24)
 
 
+## The deck bar's own Controls, left and right of the kit's gear and W' rects: FishingDeckBar
+## (trip clock, phase chip, fish row or gaff meter) and FishingCatchBoard (team points, fish,
+## hookup level, last catches).
+static func deck_left_rect() -> Rect2i:
+	return Rect2i(0, 0, deck_gear_rect().position.x - 2, FishingConst.DECK_H)
+
+
+static func deck_right_rect() -> Rect2i:
+	var x := deck_wbal_rect().end.x + 2
+	return Rect2i(x, 0, FishingConst.PIXEL_W - x, FishingConst.DECK_H)
+
+
 ## The local lane's HUD rects: {"timeline" (Rect2i(), size 0, when left out), "power", "strain",
 ## "cadence", "slack"}.
 static func local_hud(i: int, n: int) -> Dictionary:
