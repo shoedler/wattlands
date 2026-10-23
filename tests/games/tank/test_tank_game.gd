@@ -188,10 +188,18 @@ func test_bands_at_each_segment_start() -> void:
 				var p_rows := _rows_in(pb, p.peer_id, t0, t1)
 				assert_gt(c_rows.size(), 0, "%s: a cadence band" % at)
 				assert_gt(p_rows.size(), 0, "%s: a power band" % at)
-				for r: Array in c_rows:
-					assert_eq([r[2], r[3]], [60.0, 120.0], at)
-				var want := TankDirector.power_band_pct(g.content, plan.phase(i))
 				var ph := plan.phase(i)
+				var loader := str(ph.meta["engine"]) == "steam" and ph.kind == Wl.WORK
+				assert_eq(
+					[c_rows[0][2], c_rows[0][3]], [60.0, 120.0], "%s: (60, 120) at the start" % at
+				)
+				for r: Array in c_rows:
+					# Brief 2.3 pattern 5: (50, 120) only for the loader's loaded or cycling shell.
+					if loader and r[2] == 50.0:
+						assert_eq([r[2], r[3]], [50.0, 120.0], at)
+					else:
+						assert_eq([r[2], r[3]], [60.0, 120.0], at)
+				var want := TankDirector.power_band_pct(g.content, plan.phase(i))
 				var drives := ["diesel", "bulwark"].has(str(ph.meta["engine"]))
 				if ph.kind != Wl.WORK or ph.mode != Wl.SIM or not drives:
 					assert_eq(want, [0.0, 0.0] as Array[float], "%s: cleared" % at)
