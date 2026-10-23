@@ -38,7 +38,7 @@ tools/godot.sh --path . -- --game=fishing --content=free_30 --mock-trainer=erg+b
 | `net/` | Snapshots (<= 2 KB at 4 lanes) and events |
 | `results/` | Grades, rows, XP, unlocks |
 | `view/`, `hud/` | The 640 x 360 view (one lane per rider), the HUD, synthesized audio |
-| `tools/` | `FishingFallbackSprites` (placeholder art drawn in code) and the tool that writes it |
+| `tools/` | `FishingFallbackSprites` (brief 3.4's code-drawn fallback art) and the tool that writes it |
 | `HARDWARE_TEST.md` | The real-trainer checklist |
 | `BACKLOG.md` | P1 and P2 items not in v0.1 |
 | `content/fishing/` | `species.json`, `areas/coral_bank.json`, `trips/*.json`, `cosmetics.json`, `strings.csv` (keys `FISHING_*`) |
@@ -77,4 +77,6 @@ node tools/e2e/run.mjs --games=fishing                                          
 
 ## Art
 
-v0.1 ships placeholder art drawn in code (`tools/fishing_fallback_sprites.gd`), because the art pipeline could not make paid calls. `assets/fishing/README.md` has the commands to rewrite the placeholders and to generate the real sprites with `tools/art/generate.mjs` (budget $10) and `tools/art/pixelate.gd`.
+v0.1 ships generated art: every sprite in `assets/fishing/art.json`, `picker_card` included, made with GPT Image 2.5 through fal and pixelated to the 32-colour palette (53 paid requests, $3.56 of the $10 budget; `assets/fishing/art_manifest.json`, credits in `docs/credits.d/fishing.md`). `FishingFallbackSprites` (`tools/fishing_fallback_sprites.gd`) stays as brief 3.4's fallback: `FishingSprites` draws a sprite from it only when its PNG is missing. `assets/fishing/README.md` has the commands to regenerate or re-roll a sprite with `tools/art/generate.mjs` and `tools/art/pixelate.gd`.
+
+The boat's rig is fitted to the generated `boat.png` in `view/fishing_rig.gd` (its header lists the measured parts), and `tests/games/fishing/view/test_fishing_rig_art.gd` checks the mount points against the PNGs, so a re-rolled boat, bike or angler fails there until the numbers are retuned. The hull's PaletteSwap maps the key ramp plus the trim's coral, pink and peach shades (`FishingPalette.HULL_KEYS`).
