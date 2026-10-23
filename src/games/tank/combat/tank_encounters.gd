@@ -27,6 +27,9 @@ static func begin(
 	state.shells.clear()
 	state.obstacles.clear()
 	aux.enemy_vx.clear()
+	aux.enemy_dist.clear()
+	aux.enemy_age.clear()
+	aux.enemy_leaving.clear()
 	aux.enemy_shots.clear()
 	aux.shell_left.clear()
 	aux.manual_target = false
@@ -40,6 +43,8 @@ static func begin(
 	var d := TankHullRules.driver(state)
 	if d != null:
 		d.ram_s = 0.0
+		if d is TankGearboxState:
+			(d as TankGearboxState).drive_s = 0.0
 	var c := state.content
 	var seg := c.segment(state.seg.segment_index)
 	aux.drills = seg.get("drills", [])

@@ -131,7 +131,8 @@ static func _impact(
 				damage_boss(state, aux, hit.part, dmg, s.source, events)
 			TankTarget.KIND_OBSTACLE:
 				on = TankEvents.ON_OBSTACLE
-				damage_obstacle(hit.obstacle, s.type, c)
+				if not hit.drill:
+					damage_obstacle(hit.obstacle, s.type, c)
 				dmg = TankDamage.shell_damage(c, s.type)
 		events.append(TankEvents.hit(on, hit.id, dmg, s.type, 0.0, point.x))
 		if not hit.drill and s.type != TankIds.SHELL_SECONDARY:
@@ -185,8 +186,7 @@ static func kill_enemy(
 	state: TankState, aux: TankAux, e: TankEnemyState, by: int, slot: int, events: Array[Dictionary]
 ) -> void:
 	state.enemies.erase(e)
-	aux.enemy_vx.erase(e.id)
-	aux.enemy_shots.erase(e.id)
+	TankEnemies.forget(aux, e.id)
 	events.append(TankEvents.kill(e.id, e.code, by, slot))
 	if by != TankEvents.BY_BARRAGE:
 		state.score.kills[e.code] += 1

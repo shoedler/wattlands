@@ -50,12 +50,15 @@ static func solve(
 
 
 ## The aim points tried for a target, best first: the box centre, then its far upper part (a shell
-## on a flat arc can reach the part of a low box it descends into).
+## on a flat arc can reach the part of a low box it descends into), then its near lower corner (a
+## tall box too far for a lob at its centre, such as the Behemoth's turret).
 static func aim_points(t: TankTarget, facing: int) -> Array[Vector2]:
 	var r := t.rect
 	var out: Array[Vector2] = [r.get_center()]
 	var far_x := r.end.x - 3.0 if facing > 0 else r.position.x + 3.0
 	out.append(Vector2(far_x, r.position.y + minf(4.0, r.size.y * 0.5)))
+	var near_x := r.position.x + 3.0 if facing > 0 else r.end.x - 3.0
+	out.append(Vector2(near_x, r.end.y - minf(4.0, r.size.y * 0.5)))
 	return out
 
 
@@ -130,7 +133,7 @@ static func pick(
 		for t in aux.targets:
 			if skip.has(t.id) or (t.drill and not drill_ok):
 				continue
-			if not TankTargets.on_screen(t.rect, cam):
+			if not TankTargets.engageable(t, cam):
 				continue
 			var key := float(t.tier) * 100000.0 + absf(t.center().x - muzzle.x)
 			if key < best_key:

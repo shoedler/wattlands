@@ -233,7 +233,7 @@ func test_a_ram_with_the_sprint_held_destroys_a_light_tank_in_reach() -> void:
 	assert_eq(rig.state.score.crew_kills, 1)
 	assert_almost_eq(rig.diesel().ram_cd_s, 30.0, 0.2, "30 s cooldown")
 	assert_eq(rig.diesel().ram_s, 0.0)
-	assert_eq(rig.hull().hp, 100.0)
+	assert_eq(rig.hull().hp, rig.hull().hp_max)
 
 
 func test_a_ram_reaches_120_px_plus_the_lunge_and_no_farther() -> void:
@@ -262,7 +262,7 @@ func test_a_ram_window_lasts_10_seconds() -> void:
 	assert_eq(rig.diesel().ram_s, 0.0, "closed")
 	assert_gt(rig.diesel().ram_cd_s, 25.0, "the cooldown started")
 	assert_eq(rig.of_type("ram").size(), 0, "no target ever came: no penalty")
-	assert_eq(rig.hull().hp, 100.0)
+	assert_eq(rig.hull().hp, rig.hull().hp_max)
 
 
 func test_a_ram_without_the_sprint_fails_for_10_hp_and_a_5_second_stall() -> void:
@@ -275,7 +275,7 @@ func test_a_ram_without_the_sprint_fails_for_10_hp_and_a_5_second_stall() -> voi
 	assert_eq([ram[0]["ok"], ram[0]["id"]], [0, 0], "a failed Ram emits only ram ok 0")
 	assert_true(rig.state.enemies.has(light), "the light tank lives")
 	assert_eq(rig.of_type("hit").size(), 0, "its 10 HP raise no hit event")
-	assert_lte(rig.hull().hp, 90.0)
+	assert_lte(rig.hull().hp, rig.hull().hp_max - 10.0)
 	assert_gt(rig.hull().stall_s, 3.0, "5 s stall")
 	var d := rig.hull().distance_m
 	rig.run(2.0)
@@ -465,11 +465,11 @@ func test_the_berm_absorbs_hits_before_the_hull() -> void:
 	var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_eq(lost, 0.0)
 	assert_eq(rig.hull().berm_hp, 6.0)
-	assert_eq(rig.hull().hp, 100.0)
+	assert_eq(rig.hull().hp, rig.hull().hp_max)
 	lost = TankHullRules.hit(rig.state, 10.0, TankIds.SHELL_ENEMY, 300.0, events)
 	assert_eq(lost, 4.0, "6 absorbed, 4 through")
 	assert_eq(rig.hull().berm_hp, 0.0)
-	assert_eq(rig.hull().hp, 96.0)
+	assert_eq(rig.hull().hp, rig.hull().hp_max - 4.0)
 	assert_eq(
 		[events[1]["dmg"], events[1]["b"]],
 		[10, 6],

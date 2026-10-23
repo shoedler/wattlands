@@ -9,9 +9,10 @@
 			"speed_px_s": 60,
 			"weave_px": 8,
 			"weave_s": 3,
+			"linger_s": 45,
 			"rammable": true,
 			"light_mult": 1.0,
-			"gun": {"damage": 4, "every_s": 4, "hit": 0.6},
+			"gun": {"damage": 2.5, "every_s": 4, "hit": 0.5},
 			"sprite": "enemy_light"
 		},
 		"medium": {
@@ -22,7 +23,7 @@
 			"speed_px_s": 40,
 			"rammable": false,
 			"light_mult": 0.5,
-			"gun": {"damage": 8, "every_s": 6, "hit": 0.7},
+			"gun": {"damage": 5, "every_s": 6, "hit": 0.6},
 			"sprite": "enemy_medium"
 		},
 		"destroyer": {
@@ -35,7 +36,7 @@
 			"move_after_shot_px": 40,
 			"rammable": false,
 			"light_mult": 0.25,
-			"gun": {"damage": 15, "every_s": 8, "hit": 0.9},
+			"gun": {"damage": 11, "every_s": 9, "hit": 0.75},
 			"sprite": "enemy_destroyer"
 		},
 		"dugin": {
@@ -45,12 +46,12 @@
 			"hitbox": "turret",
 			"rammable": false,
 			"light_mult": 1.0,
-			"gun": {"damage": 10, "every_s": 7, "hit": 0.75},
+			"gun": {"damage": 7, "every_s": 7, "hit": 0.6},
 			"sprite": "enemy_dugin"
 		},
 		"heavy": {
 			"code": 5,
-			"hp": 160,
+			"hp": 100,
 			"size_px": [136, 60],
 			"hold_px": [300, 380],
 			"speed_px_s": 25,
@@ -59,22 +60,22 @@
 			"backoff_every_damage": 50,
 			"rammable": false,
 			"light_mult": 0.25,
-			"gun": {"damage": 12, "every_s": 7, "hit": 0.75},
+			"gun": {"damage": 9, "every_s": 7, "hit": 0.6},
 			"sprite": "enemy_heavy"
 		}
 	},
 	"boss": {
 		"code": 6,
 		"bogies": 3,
-		"bogie_hp": 100,
-		"turret_hp": 300,
+		"bogie_hp": 50,
+		"turret_hp": 200,
 		"hull_px": [320, 100],
 		"creep_px_s": 2,
-		"stop_px": 120,
+		"stop_px": 150,
 		"pushback_px": 24,
 		"light_mult": 0.25,
-		"main": {"damage": 20, "hit": 0.85, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
-		"secondary": {"damage": 3, "every_s": 5, "hit": 0.6}
+		"main": {"damage": 16, "hit": 0.75, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
+		"secondary": {"damage": 2, "every_s": 5, "hit": 0.5}
 	},
 	"shell_speed_px_s": 300,
 	"miss_px": [20, 40],

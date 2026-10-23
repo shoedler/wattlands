@@ -35,6 +35,12 @@ var rescue: Dictionary = {}
 var afk: Dictionary = {}
 var connected: Dictionary = {}
 var mass_kg: float = 75.0
+## How closely the mock riders follow their targets (the erg mock's compliance): ERG riders ride
+## `compliance` x the applied target, SIM riders `compliance` x `sim_pct`.
+var compliance: float = 1.0
+## The dynamo's ERG target follows its bank like the director's pattern 1 does:
+## 55 + 45 x (1 - bank / 100), clamped to the phase's range (instantly here, not in sub-steps).
+var bank_director: bool = false
 ## The breech never opens (nothing loads, nothing fires) and the Bulwark's lever stays where it is
 ## (Drive): the gun is out of the picture (tests of the drive and the Ram).
 var no_fire: bool = false
@@ -213,11 +219,13 @@ func _rider_input(p: PlayerSlot) -> TankRiderInput:
 		ri.mode = ph.mode
 		if ph.mode == Wl.ERG:
 			var pct: float = float(target_pct.get(p.peer_id, ph.planned_pct_at(seg_t)))
+			if bank_director and ri.engine == TankIds.ENGINE_DYNAMO and ph.range_pct.size() == 2:
+				pct = TankDirector.bank_target_pct(content, dynamo().bank, ph)
 			ri.applied_target_w = roundf(pct / 100.0 * p.ftp)
 	if ri.mode == Wl.ERG:
-		ri.power_w = float(power_w.get(p.peer_id, ri.applied_target_w))
+		ri.power_w = float(power_w.get(p.peer_id, ri.applied_target_w * compliance))
 	else:
-		ri.power_w = float(power_w.get(p.peer_id, sim_pct / 100.0 * p.ftp))
+		ri.power_w = float(power_w.get(p.peer_id, sim_pct / 100.0 * p.ftp * compliance))
 	ri.p_eff_w = float(p_eff.get(p.peer_id, ri.power_w * 250.0 / p.ftp))
 	ri.cadence_rpm = float(cadence.get(p.peer_id, 90.0))
 	ri.ftp_pct = ri.power_w / p.ftp * 100.0
@@ -284,7 +292,7 @@ func spawn(type: String, side: int = 1, dist: float = 200.0, fixed: bool = false
 	var e := TankEnemies.spawn(state, aux, type, side, dist, fixed, false, -1)
 	e.mode = TankIds.EM_HOLD
 	e.hold_px = TankEnemies.clamp_hold(state, e.w, side, dist)
-	TankEnemies.place(state, e, e.hold_px)
+	TankEnemies.place(state, aux, e, e.hold_px)
 	return e
 
 

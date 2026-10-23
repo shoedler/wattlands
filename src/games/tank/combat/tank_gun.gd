@@ -122,7 +122,7 @@ static func _cycle_target(state: TankState, aux: TankAux, d: int) -> void:
 	var drill := TankSegments.drill_targets(state)
 	var list: Array[TankTarget] = []
 	for t in aux.targets:
-		if (t.drill and not drill) or not TankTargets.on_screen(t.rect, cam):
+		if (t.drill and not drill) or (not TankTargets.engageable(t, cam)):
 			continue
 		list.append(t)
 	if list.is_empty():
@@ -259,7 +259,7 @@ static func _nearest(
 	for t in aux.targets:
 		if t.kind == TankTarget.KIND_OBSTACLE or not collidable_enemy(t):
 			continue
-		if not TankTargets.on_screen(t.rect, cam):
+		if not TankTargets.engageable(t, cam):
 			continue
 		var d := t.rect.position.x - mx if face > 0 else mx - t.rect.end.x
 		if face > 0 and t.rect.end.x < mx or face < 0 and t.rect.position.x > mx:

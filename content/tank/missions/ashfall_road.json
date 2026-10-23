@@ -40,15 +40,15 @@
 			"label": "TANK_PHASE_ADVANCE_1",
 			"name": "TANK_PLACE_POPLAR_ROAD",
 			"backdrop": "bg_fields_near",
-			"length_m": 1300,
-			"terrain": [[0, 0], [150, 1.5], [300, 3], [450, 1], [600, -2], [750, 0], [900, 2.5], [1050, 1], [1200, -1], [1300, 0]],
+			"length_m": 1100,
+			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
-				{"at_m": 150, "enemy": "light", "count": 1, "from": "front"},
-				{"at_m": 420, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 980, "enemy": "light", "count": 1, "from": "front"}
+				{"at_m": 130, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 360, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 830, "enemy": "light", "count": 1, "from": "front"}
 			],
 			"obstacles": [
-				{"at_m": 760, "type": "wire"}
+				{"at_m": 640, "type": "wire"}
 			]
 		},
 		{
@@ -90,16 +90,16 @@
 			"label": "TANK_PHASE_ADVANCE_2",
 			"name": "TANK_PLACE_KETTLE_FORD",
 			"backdrop": "bg_village_near",
-			"length_m": 1300,
-			"terrain": [[0, 0], [150, -2], [300, -3], [450, -1], [550, 0], [650, 0], [800, 3], [950, 5], [1100, 4], [1200, 2], [1300, 0]],
+			"length_m": 1100,
+			"terrain": [[0, 0], [130, -2], [250, -3], [380, -1], [470, 0], [550, 0], [680, 3], [800, 5], [930, 4], [1020, 2], [1100, 0]],
 			"encounters": [
-				{"at_m": 120, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 380, "enemy": "light", "count": 1, "from": "rear"},
-				{"at_m": 640, "enemy": "destroyer", "count": 1, "from": "front"},
-				{"at_m": 900, "enemy": "medium", "count": 1, "from": "front"}
+				{"at_m": 100, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 320, "enemy": "light", "count": 1, "from": "rear"},
+				{"at_m": 540, "enemy": "destroyer", "count": 1, "from": "front"},
+				{"at_m": 760, "enemy": "medium", "count": 1, "from": "front"}
 			],
 			"obstacles": [
-				{"at_m": 1050, "type": "wreck"}
+				{"at_m": 890, "type": "wreck"}
 			]
 		},
 		{
@@ -142,14 +142,14 @@
 			"label": "TANK_PHASE_ADVANCE_3",
 			"name": "TANK_PLACE_QUARRY_RIDGE",
 			"backdrop": "bg_quarry_near",
-			"length_m": 1400,
-			"terrain": [[0, 1], [200, 3], [350, 6], [500, 4], [650, -1], [800, -3], [950, 0], [1100, 5], [1250, 6], [1400, 2]],
+			"length_m": 1000,
+			"terrain": [[0, 1], [140, 3], [250, 6], [360, 4], [470, -1], [580, -3], [680, 0], [780, 5], [890, 6], [1000, 2]],
 			"encounters": [
-				{"at_m": 140, "enemy": "light", "count": 1, "from": "front"},
-				{"at_m": 400, "enemy": "medium", "count": 1, "from": "front"},
-				{"at_m": 700, "enemy": "destroyer", "count": 1, "from": "front"},
-				{"at_m": 900, "enemy": "light", "count": 1, "from": "rear"},
-				{"at_m": 1100, "enemy": "medium", "count": 1, "from": "front"}
+				{"at_m": 100, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 280, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 500, "enemy": "destroyer", "count": 1, "from": "front"},
+				{"at_m": 640, "enemy": "light", "count": 1, "from": "rear"},
+				{"at_m": 780, "enemy": "medium", "count": 1, "from": "front"}
 			],
 			"obstacles": []
 		},
@@ -194,7 +194,7 @@
 			"label": "TANK_PHASE_BOSS",
 			"name": "TANK_PLACE_FOUNDRY_GATE",
 			"backdrop": "bg_town_near",
-			"boss": {"start_left_px": 440}
+			"boss": {"start_left_px": 470}
 		}
 	],
 	"cooldown": {

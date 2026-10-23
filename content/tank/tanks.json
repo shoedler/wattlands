@@ -30,7 +30,7 @@
 		}
 	},
 	"hull": {
-		"hp": 100,
+		"hp": 120,
 		"checkpoint_hp": 20,
 		"repair_j": 5000,
 		"repair_hp": 40
@@ -84,7 +84,7 @@
 		"hoist_s": [20, 10]
 	},
 	"steam": {
-		"full_j": 6000,
+		"full_j": 4500,
 		"window_s": 5,
 		"over_j": 3000,
 		"over_max_pct": 150,

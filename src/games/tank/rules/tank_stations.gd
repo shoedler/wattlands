@@ -253,6 +253,8 @@ static func _gearbox(
 		if g.suspend_s == 0.0:
 			g.auto = true
 	var slot := ri.slot if ri != null else -1
+	if state.seg.seg == TankIds.SEG_ADVANCE and g.lever == TankIds.LEVER_DRIVE and g.move_s == 0.0:
+		g.drive_s += dt
 	if ri != null and not hull.breakdown:
 		for n in ri.intents:
 			match str(n.get("k", "")):
@@ -344,7 +346,7 @@ static func _target_within(state: TankState, aux: TankAux, px: float) -> bool:
 	var front := hull.x_px + hull.hull_w
 	var cam := state.camera_x()
 	for t in aux.targets:
-		if t.drill or not TankTargets.on_screen(t.rect, cam):
+		if t.drill or (not TankTargets.engageable(t, cam)):
 			continue
 		var d := t.rect.position.x - front
 		if t.rect.end.x <= hull.x_px + hull.hull_w * 0.5:

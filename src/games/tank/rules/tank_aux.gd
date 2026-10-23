@@ -14,6 +14,14 @@ var geo: TankGeometry = null
 var targets: Array[TankTarget] = []
 ## Enemy id -> its world velocity in px/s this tick (the lead solver and keep-station read it).
 var enemy_vx: Dictionary = {}
+## Enemy id -> its logical distance from the hull's nearer end (kept apart from x so that the
+## hull moving first in a tick does not eat into an enemy keeping station).
+var enemy_dist: Dictionary = {}
+## Enemy id -> seconds it has held its station (a raider with linger_s leaves after that long).
+var enemy_age: Dictionary = {}
+## Enemy id -> true once it broke off and is rolling away (it fires no more and is removed, with no
+## kill credit, when it is off screen).
+var enemy_leaving: Dictionary = {}
 ## Enemy id -> shots fired (a destroyer alternates the side it shifts to).
 var enemy_shots: Dictionary = {}
 ## Enemy shell id -> seconds until it lands (the arrival resolves the hit rolled at fire time).

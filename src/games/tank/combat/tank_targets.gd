@@ -98,9 +98,8 @@ static func build(state: TankState, aux: TankAux) -> void:
 			)
 			t.rect = boss_rect(state, aux, i)
 			aux.targets.append(t)
-			if on_screen(t.rect, cam):
-				aux.enemy_in_range = true
-				aux.any_target = true
+			aux.enemy_in_range = true
+			aux.any_target = true
 	for o in state.obstacles:
 		if o.cleared:
 			continue
@@ -122,6 +121,12 @@ static func build(state: TankState, aux: TankAux) -> void:
 ## Whether a box is at least partly on the 640-wide screen.
 static func on_screen(r: Rect2, camera_x: float) -> bool:
 	return r.end.x > camera_x and r.position.x < camera_x + float(TankConst.SCREEN_W)
+
+
+## Whether the gun may engage `t`: on screen, except for the Behemoth's parts (the rear bogie of a
+## 320 px hull can stand past the right edge and still be in range).
+static func engageable(t: TankTarget, camera_x: float) -> bool:
+	return t.kind == TankTarget.KIND_BOSS or on_screen(t.rect, camera_x)
 
 
 ## The target with entity id `id` (boss parts negative), or null.

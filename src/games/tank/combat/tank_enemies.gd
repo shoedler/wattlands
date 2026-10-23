@@ -34,7 +34,8 @@ static func distance(state: TankState, e: TankEnemyState) -> float:
 
 
 ## Places `e` at distance `dist` from the hull's nearer end.
-static func place(state: TankState, e: TankEnemyState, dist: float) -> void:
+static func place(state: TankState, aux: TankAux, e: TankEnemyState, dist: float) -> void:
+	aux.enemy_dist[e.id] = dist
 	var hull := state.hull
 	if e.side > 0:
 		e.x_px = hull.x_px + hull.hull_w + dist
@@ -98,7 +99,9 @@ static func spawn(
 	else:
 		e.mode = TankIds.EM_HOLD
 	if not enters:
-		place(state, e, e.hold_px)
+		place(state, aux, e, e.hold_px)
+	else:
+		aux.enemy_dist[e.id] = distance(state, e)
 	state.enemies.append(e)
 	aux.enemy_vx[e.id] = 0.0
 	return e
@@ -115,6 +118,7 @@ static func back_off(state: TankState, e: TankEnemyState) -> void:
 
 ## Moves every enemy one tick (after the hull moved): entering, keeping station, weaving, shifting.
 static func move(state: TankState, aux: TankAux, dt: float) -> void:
+	var gone: Array[TankEnemyState] = []
 	for e in state.enemies:
 		var def := def_of(state, e)
 		var speed := float(def.get("speed_px_s", 0.0))
@@ -122,8 +126,47 @@ static func move(state: TankState, aux: TankAux, dt: float) -> void:
 		if e.fixed:
 			_move_fixed(state, e, speed, dt)
 		else:
-			_move_station(state, e, def, speed, dt)
+			_move_station(state, aux, e, def, speed, dt)
+			if _linger(state, aux, e, def, dt):
+				gone.append(e)
 		aux.enemy_vx[e.id] = (e.x_px - old_x) / dt
+	for e in gone:
+		state.enemies.erase(e)
+		forget(aux, e.id)
+
+
+## Forgets everything the aux keeps about enemy `id`.
+static func forget(aux: TankAux, id: int) -> void:
+	aux.enemy_vx.erase(id)
+	aux.enemy_dist.erase(id)
+	aux.enemy_age.erase(id)
+	aux.enemy_leaving.erase(id)
+	aux.enemy_shots.erase(id)
+
+
+## A raider (linger_s in its definition) harasses the tank for that long and then breaks off: it
+## rolls away and is gone once off screen, with no kill and no score. Returns true when it left.
+static func _linger(
+	state: TankState, aux: TankAux, e: TankEnemyState, def: Dictionary, dt: float
+) -> bool:
+	var linger := float(def.get("linger_s", 0.0))
+	if linger <= 0.0:
+		return false
+	if bool(aux.enemy_leaving.get(e.id, false)):
+		var cam := state.camera_x()
+		if e.side > 0:
+			return e.x_px >= cam + float(TankConst.SCREEN_W) + 16.0
+		return e.x_px + e.w <= cam - 16.0
+	if e.mode != TankIds.EM_HOLD:
+		return false
+	var age := float(aux.enemy_age.get(e.id, 0.0)) + dt
+	aux.enemy_age[e.id] = age
+	if age >= linger:
+		aux.enemy_leaving[e.id] = true
+		e.mode = TankIds.EM_MOVE
+		e.hold_px = 1.0e9 if e.side > 0 else 400.0
+		e.telegraph_s = 0.0
+	return false
 
 
 static func _move_fixed(state: TankState, e: TankEnemyState, speed: float, dt: float) -> void:
@@ -141,9 +184,9 @@ static func _move_fixed(state: TankState, e: TankEnemyState, speed: float, dt: f
 
 
 static func _move_station(
-	state: TankState, e: TankEnemyState, def: Dictionary, speed: float, dt: float
+	state: TankState, aux: TankAux, e: TankEnemyState, def: Dictionary, speed: float, dt: float
 ) -> void:
-	var dist := distance(state, e)
+	var dist: float = aux.enemy_dist.get(e.id, distance(state, e))
 	match e.mode:
 		TankIds.EM_ENTER:
 			dist -= speed * dt
@@ -162,19 +205,23 @@ static func _move_station(
 			else:
 				dist = e.hold_px
 			dist = clamp_hold(state, e.w, e.side, dist)
-	place(state, e, dist)
+	place(state, aux, e, dist)
 
 
 ## Counts every enemy's gun down and fires the ones whose time came (a telegraph shows for the last
-## telegraph_s seconds of a destroyer's or heavy tank's countdown and the enemy holds still).
+## telegraph_s seconds of a destroyer's or heavy tank's countdown and the enemy holds still). The
+## countdown runs while a destroyer shifts, but it only fires once it holds again; nothing counts
+## while an enemy is still rolling in or backing off.
 static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictionary]) -> void:
 	for e in state.enemies.duplicate():
-		if e.mode != TankIds.EM_HOLD and e.mode != TankIds.EM_TELEGRAPH:
+		if e.mode == TankIds.EM_ENTER or e.mode == TankIds.EM_BACKOFF:
 			continue
 		var def := def_of(state, e)
 		var gun: Dictionary = def.get("gun", {})
 		var tele := float(def.get("telegraph_s", 0.0))
-		e.gun_s -= dt
+		e.gun_s = maxf(e.gun_s - dt, 0.0)
+		if e.mode == TankIds.EM_MOVE:
+			continue
 		if tele > 0.0 and e.gun_s > 0.0 and e.gun_s <= tele:
 			e.mode = TankIds.EM_TELEGRAPH
 			e.telegraph_s = e.gun_s

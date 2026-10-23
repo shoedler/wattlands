@@ -212,13 +212,15 @@ func test_the_citadel_secondaries_cost_2_units_and_stop_below_10() -> void:
 # --- Steam ---------------------------------------------------------------------------------------
 
 
-func test_pressure_is_6_kj_of_p_eff_per_100_percent() -> void:
+func test_pressure_is_the_boilers_energy_in_joules_of_p_eff_per_100_percent() -> void:
 	var rig := _quiet(3)
 	var st := rig.steam()
 	assert_eq(st.peer, 3)
+	var full_j := rig.content.num("tanks", "steam.full_j")
+	assert_eq(full_j, 4500.0, "6 kJ in the brief, tuned to 4.5 kJ (ADR in the rules report)")
 	st.pressure_pct = 0.0
-	rig.run(13.3)
-	# Slot 2: FTP 240 W, 90% = 216 W raw, P_eff 225 W: 3000 J at 13.33 s.
+	rig.run(full_j / 225.0 / 2.0)
+	# Slot 2: FTP 240 W, 90% = 216 W raw, P_eff 225 W: half the energy in half the time.
 	assert_almost_eq(st.pressure_pct, 50.0, 1.5)
 
 
@@ -410,7 +412,8 @@ func test_steam_on_reserve_builds_at_60_watts_and_all_afk_freezes_it() -> void:
 	var st := rig.steam()
 	rig.afk[3] = true
 	rig.run(10.0)
-	assert_almost_eq(st.pressure_pct, 10.0, 0.5, "60 W x 10 s = 600 J = 10%")
+	var want := 600.0 / rig.content.num("tanks", "steam.full_j") * 100.0
+	assert_almost_eq(st.pressure_pct, want, 0.6, "60 W x 10 s = 600 J")
 	assert_false(st.in_band)
 	rig.afk[1] = true
 	rig.afk[2] = true
