@@ -146,15 +146,15 @@ FISHING_TIP_3,Too slow strains the line; too fast throws the hook
 FISHING_TIP_4,Surge when a fish bites to set the hook
 FISHING_TIP_5,"In the Landing, sprint hard for 15 s to gaff a trophy"
 FISHING_TIP_6,Fish at the same time as your crew for a Double Hookup
-FISHING_TOAST_LANDED,"{0} landed a {1}: {2} kg, {3} points"
-FISHING_TOAST_TROPHY,"Trophy! {0} gaffed a {1}: {2} kg, {3} points"
-FISHING_TOAST_DOUBLE_HOOKUP,"Double hookup! {0} fish on at once: points x{1}"
-FISHING_TOAST_FRENZY,"Frenzy! {0} hooked up, so bites come faster for 60 s"
-FISHING_TOAST_HOOKUP,"{0} on! Keep your cadence in the band"
-FISHING_TOAST_STRIKE_MISS,"Missed the strike! The {0} will bite again"
+FISHING_TOAST_LANDED,"{name} landed a {species}: {kg} kg, {points} points"
+FISHING_TOAST_TROPHY,"Trophy! {name} gaffed a {species}: {kg} kg, {points} points"
+FISHING_TOAST_DOUBLE_HOOKUP,"Double Hookup! {count} fish on at once: points x{mult}"
+FISHING_TOAST_FRENZY,"Frenzy! {name} hooked up, so bites come faster for 60 s"
+FISHING_TOAST_HOOKUP,{species} on! Keep your cadence in the band
+FISHING_TOAST_STRIKE_MISS,Missed the strike! The {species} will bite again
 FISHING_TOAST_SNAP,"The line snapped! Spin a little faster to ease the strain"
 FISHING_TOAST_THROWN,"The hook pulled free! Spin a little slower to keep the line tight"
-FISHING_TOAST_REPLACEMENT,"Another {0} is on the line!"
+FISHING_TOAST_REPLACEMENT,Another {species} is on the line!
 FISHING_STATUS_RIDE_OUT,Riding out
 FISHING_STATUS_PICK,Picking a spot
 FISHING_STATUS_REEL,Reeling in at {0} m

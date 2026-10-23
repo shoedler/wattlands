@@ -193,7 +193,8 @@ func _fill_input(inp: FishingLaneInput, frame: InputFrame) -> void:
 
 
 ## This tick's normalized intents of one rider, at most INTENTS_PER_S in any one-second window
-## (the excess is dropped). A summary always passes (and sets the lane's records, XP and look).
+## (the excess is dropped). A summary is applied to the lane here (records, XP, the look clamped
+## to cosmetics.json) and never reaches the rules.
 func _admit(inp: FishingLaneInput, intents: Array, tick: int) -> Array:
 	var i := inp.slot
 	if i < 0 or i >= _rate_start.size():
@@ -204,8 +205,9 @@ func _admit(inp: FishingLaneInput, intents: Array, tick: int) -> Array:
 	var out: Array = []
 	for n: Dictionary in intents:
 		if n["k"] == FishingIntents.SUMMARY:
-			_apply_summary(state.lane(i), n)
-		elif _rate_count[i] >= FishingConst.INTENTS_PER_S:
+			_apply_summary(state.lane(i), n)  # consumed here: the module clamps the look
+			continue
+		if _rate_count[i] >= FishingConst.INTENTS_PER_S:
 			continue
 		else:
 			_rate_count[i] += 1
@@ -286,22 +288,32 @@ func toast_for(e: Dictionary) -> Array:
 			)
 			var kg := "%.1f" % (int(e.get("kg", 0)) / 10.0)
 			var pts := int(e.get("points", 0))
-			return [key, [_rider_name(l), _species(int(e.get("sp", -1))), kg, pts]]
+			return [
+				key,
+				{
+					"name": _rider_name(l),
+					"species": _species(int(e.get("sp", -1))),
+					"kg": kg,
+					"points": pts
+				}
+			]
 		FishingEvents.DOUBLE_HOOKUP:
 			var lvl := int(e.get("lvl", 2))
-			return [TOAST_DOUBLE_HOOKUP, [lvl, "%.1f" % FishingConst.hookup_mult(lvl)]]
+			return [
+				TOAST_DOUBLE_HOOKUP, {"count": lvl, "mult": "%.1f" % FishingConst.hookup_mult(lvl)}
+			]
 		FishingEvents.FRENZY:
-			return [TOAST_FRENZY, [_rider_name(l)]]
+			return [TOAST_FRENZY, {"name": _rider_name(l)}]
 		FishingEvents.HOOKUP:
-			return [TOAST_HOOKUP, [_species(int(e.get("sp", -1)))]]
+			return [TOAST_HOOKUP, {"species": _species(int(e.get("sp", -1)))}]
 		FishingEvents.STRIKE_MISS:
-			return [TOAST_STRIKE_MISS, [_species(int(e.get("sp", -1)))]]
+			return [TOAST_STRIKE_MISS, {"species": _species(int(e.get("sp", -1)))}]
 		FishingEvents.SNAP:
 			return [TOAST_SNAP, []]
 		FishingEvents.THROWN:
 			return [TOAST_THROWN, []]
 		FishingEvents.REPLACEMENT:
-			return [TOAST_REPLACEMENT, [_species(int(e.get("sp", -1)))]]
+			return [TOAST_REPLACEMENT, {"species": _species(int(e.get("sp", -1)))}]
 	return []
 
 

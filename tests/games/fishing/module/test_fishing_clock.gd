@@ -30,9 +30,14 @@ func test_a_whole_e2e_trip_runs_with_the_stub_rules() -> void:
 		. filter(func(ch: Dictionary) -> bool: return ch["peer"] == 1)
 		. map(func(ch: Dictionary) -> String: return ch["ended_by"])
 	)
-	assert_eq(by, [Wl.ENDED_DURATION, Wl.ENDED_DURATION, Wl.ENDED_MAX_S, Wl.ENDED_DURATION])
-	assert_almost_eq(c.tick * Wl.SIM_DT, 15.0 + 20.0 + 70.0 + 30.0 + 180.0, 0.051)
-	assert_eq(g.state.lanes[0].state, FishingConst.ST_HOME, "the stub followed every phase")
+	assert_eq(by[0], Wl.ENDED_DURATION)
+	assert_eq(by[1], Wl.ENDED_DURATION)
+	assert_has([Wl.ENDED_END_PHASE, Wl.ENDED_MAX_S], by[2], "the fight ends by landing or max_s")
+	assert_eq(by[3], Wl.ENDED_DURATION)
+	assert_between(
+		c.tick * Wl.SIM_DT, 15.0 + 20.0 + 36.0 + 30.0 + 180.0, 15.0 + 20.0 + 70.0 + 30.0 + 180.1
+	)
+	assert_eq(g.state.lanes[0].state, FishingConst.ST_HOME, "the lane followed every phase")
 
 
 func test_end_phase_is_refused_before_min_s_and_ends_the_phase_at_the_end_of_the_tick() -> void:

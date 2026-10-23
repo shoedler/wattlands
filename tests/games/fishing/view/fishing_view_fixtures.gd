@@ -88,7 +88,13 @@ static func set_home(l: FishingLaneState) -> void:
 
 
 ## A view for `game`, in the tree under `parent`.
-static func make_view(game: FishingGame, parent: Node) -> FishingView:
+## The view in the tree. By default it is cut off from the module's fx_event, so the tests that
+## edit the state by hand see the cues of its state-edge path (a module without the signal);
+## pass `events` true to keep the signal.
+static func make_view(game: FishingGame, parent: Node, events: bool = false) -> FishingView:
 	var v := game.make_view() as FishingView
 	parent.add_child(v)
+	if not events and v.events_connected:
+		game.disconnect("fx_event", v.on_fx_event)
+		v.events_connected = false
 	return v

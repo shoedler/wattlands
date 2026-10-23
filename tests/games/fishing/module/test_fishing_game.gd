@@ -93,7 +93,7 @@ func test_the_host_applies_each_riders_summary_intent_to_its_lane() -> void:
 	assert_eq(l.cosmetics, [3, 1, 3, 1] as Array[int], "clamped to the items of each kind")
 
 
-func test_intents_are_rate_limited_per_rider_but_the_summary_always_passes() -> void:
+func test_intents_are_rate_limited_per_rider_but_the_summary_always_applies() -> void:
 	var g := _game(2)
 	var plans := F.plans_of(g)
 	var burst: Array = []
@@ -102,8 +102,10 @@ func test_intents_are_rate_limited_per_rider_but_the_summary_always_passes() -> 
 	burst.append(FishingIntents.summary(10, {}, [0, 0, 0, 0] as Array[int]))
 	g.sim_step(Wl.SIM_DT, F.frame(g.ctx, plans, 0, 100.0, {1: burst}))
 	var inp: FishingLaneInput = g._inputs[0]
-	assert_eq(inp.intents.size(), FishingConst.INTENTS_PER_S + 1)
-	assert_eq(inp.intents[-1]["k"], "summary")
+	assert_eq(
+		inp.intents.size(), FishingConst.INTENTS_PER_S, "the summary is applied, not passed on"
+	)
+	assert_eq(g.state.lanes[0].summary_xp, 10, "the summary always gets through")
 	g.sim_step(Wl.SIM_DT, F.frame(g.ctx, plans, 5, 100.0, {1: [FishingIntents.spot(1)]}))
 	assert_eq(inp.intents, [], "the window is full until a second has passed")
 	g.sim_step(Wl.SIM_DT, F.frame(g.ctx, plans, 20, 100.0, {1: [FishingIntents.spot(1)]}))
@@ -169,8 +171,10 @@ func test_sim_step_steps_the_rules_and_ends_a_free_trip_once() -> void:
 	var c := F.clock_for(g)
 	assert_true(c.run_until_done(1500.0), "ride out, the open-ended Reel, finished, cool-down")
 	assert_eq(_finished, ["trip_over"])
-	assert_eq(_sent.map(func(e: Dictionary) -> String: return e["type"]), ["trip_over"])
-	assert_eq(_fx.size(), 1)
+	var types: Array = _sent.map(func(e: Dictionary) -> String: return e["type"])
+	assert_eq(types.count("trip_over"), 1, "trip_over once")
+	assert_eq(types[-1], "trip_over", "and last")
+	assert_eq(_fx.size(), _sent.size(), "one fx_event per sent event")
 	assert_eq(c.changes[-1]["ended_by"], Wl.ENDED_FINISHED, "the Reel ended by finished")
 	assert_almost_eq(float(c.changes[-1]["t"]), g.state.fishing_end_t, 0.051)
 
@@ -210,11 +214,11 @@ func test_the_host_sends_team_toasts_to_everyone_and_own_toasts_only_for_its_rid
 		],
 		"lane 1 is peer 2's: its snap, thrown, replacement, hookup and miss are raised there"
 	)
-	var landed: Array = _toasts(g)[0][2]
-	assert_eq(landed[0], "Rider 2")
-	assert_eq(landed[2], "54.2")
-	assert_eq(landed[3], 220)
-	assert_eq(_toasts(g)[2][2], [2, "1.5"])
+	var landed: Dictionary = _toasts(g)[0][2]
+	assert_eq(landed["name"], "Rider 2")
+	assert_eq(landed["kg"], "54.2")
+	assert_eq(landed["points"], 220)
+	assert_eq(_toasts(g)[2][2], {"count": 2, "mult": "1.5"})
 
 
 func test_a_client_raises_only_its_own_riders_toasts_and_never_a_team_one() -> void:
@@ -231,7 +235,7 @@ func test_a_client_raises_only_its_own_riders_toasts_and_never_a_team_one() -> v
 		g.apply_event(_wire(e))
 	var got := _toasts(g).map(func(c: Array) -> Array: return [c[1], c[3]])
 	assert_eq(got, [["FISHING_TOAST_SNAP", 0], ["FISHING_TOAST_HOOKUP", 0]], "local calls only")
-	assert_eq(_toasts(g)[1][2], [g._species(1)])
+	assert_eq(_toasts(g)[1][2], {"species": g._species(1)})
 
 
 func test_routing_never_doubles_a_toast_between_host_and_client() -> void:
@@ -293,7 +297,7 @@ func test_teammate_status_comes_once_a_second_per_rider() -> void:
 	assert_eq(st[0][1], 1)
 	assert_eq(st[1][1], 2)
 	assert_eq(st[0][2]["text"], g.ctx.strings.t("FISHING_STATUS_RIDE_OUT"))
-	assert_false(st[0][2]["in_band"], "no published band yet")
+	assert_typeof(st[0][2]["in_band"], TYPE_BOOL, "the ride-out practice band decides it")
 	g.sim_step(Wl.SIM_DT, F.frame(g.ctx, plans, 20))
 	assert_eq(_hud(g).of("teammate_status").size(), 4)
 

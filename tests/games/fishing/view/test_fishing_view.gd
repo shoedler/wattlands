@@ -7,11 +7,6 @@ extends GutTest
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 
 
-class FxGame:
-	extends FishingGame
-	signal fx_event(event: Dictionary)
-
-
 func _view(n: int, local_slot: int = 0) -> FishingView:
 	var game: FishingGame = autofree(FX.make_game(n, local_slot))
 	var v := FX.make_view(game, self)
@@ -210,7 +205,7 @@ func test_double_hookup_links_the_lanes() -> void:
 
 func test_fx_event_is_used_when_the_module_has_it() -> void:
 	var ctx := FishingFakes.make_ctx(2, 0, "e2e_2min")
-	var game: FxGame = autofree(FxGame.new())
+	var game: FishingGame = autofree(FishingGame.new())
 	game.configure(ctx)
 	var v := game.make_view() as FishingView
 	add_child_autofree(v)
