@@ -181,9 +181,5 @@ static func enemy_code(name: String) -> int:
 	return maxi(ENEMY_NAMES.find(name), 0)
 
 
-static func perk_code(name: String) -> int:
-	return maxi(PERK_NAMES.find(name), 0)
-
-
 static func is_pad(target: int) -> bool:
 	return target >= 1 and target <= PAD_COUNT
