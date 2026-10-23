@@ -139,3 +139,29 @@ FISHING_UNLOCK_TRIM_CORAL,Coral hull trim
 FISHING_UNLOCK_LINE_VIOLET,Violet line
 FISHING_UNLOCK_PENNANT_TROPHY,Trophy pennant
 FISHING_RESULTS,Back at the dock
+FISHING_TOAST_LANDED,"{0} landed a {1}: {2} kg, {3} points"
+FISHING_TOAST_TROPHY,"Trophy! {0} gaffed a {1}: {2} kg, {3} points"
+FISHING_TOAST_DOUBLE_HOOKUP,"Double hookup! {0} fish on at once: points x{1}"
+FISHING_TOAST_FRENZY,"Frenzy! {0} hooked up, so bites come faster for 60 s"
+FISHING_TOAST_HOOKUP,"{0} on! Keep your cadence in the band"
+FISHING_TOAST_STRIKE_MISS,"Missed the strike! The {0} will bite again"
+FISHING_TOAST_SNAP,"The line snapped! Spin a little faster to ease the strain"
+FISHING_TOAST_THROWN,"The hook pulled free! Spin a little slower to keep the line tight"
+FISHING_TOAST_REPLACEMENT,"Another {0} is on the line!"
+FISHING_STATUS_RIDE_OUT,Riding out
+FISHING_STATUS_PICK,Picking a spot
+FISHING_STATUS_REEL,Reeling in at {0} m
+FISHING_STATUS_STRIKE,{0} biting!
+FISHING_STATUS_FIGHT,{0} at {1} m
+FISHING_STATUS_LANDING,Gaffing a {0}
+FISHING_STATUS_IDLE,Reeling in
+FISHING_STATUS_HOME,Heading home
+FISHING_STAT_FISH,Fish landed
+FISHING_STAT_TROPHIES,Trophies
+FISHING_STAT_LOST,Lost lines
+FISHING_STAT_BIGGEST,Biggest fish
+FISHING_STAT_LONGEST,Longest fight
+FISHING_STAT_POINTS,Points
+FISHING_STAT_TEAM_POINTS,Team points
+FISHING_STAT_TEAM_FISH,Fish landed
+FISHING_STAT_TEAM_TROPHIES,Trophies
