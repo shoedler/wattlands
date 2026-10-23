@@ -21,6 +21,11 @@ var grade: String = "D"
 var score: float = 0.0
 ## Game-defined title or summary string key for the results screen.
 var summary_key: String = ""
+## The short tag in the Strava title "WATTLANDS: <game> - <ride_tag>" (for example
+## "Free Roam 30 min" or a plan name). "" falls back to the content title.
+var ride_tag: String = ""
+## Game stat lines for the Strava description, above the platform's averages (no heart rate).
+var ride_lines: Array[String] = []
 var rows: Array[Dictionary] = []
 ## Team-wide custom stats.
 var team: Dictionary = {}
@@ -74,6 +79,8 @@ func to_dict() -> Dictionary:
 		"grade": grade,
 		"score": score,
 		"summary_key": summary_key,
+		"ride_tag": ride_tag,
+		"ride_lines": ride_lines.duplicate(),
 		"rows": rows.duplicate(true),
 		"team": team.duplicate(true),
 		"session_id": session_id,
@@ -85,6 +92,9 @@ static func from_dict(d: Dictionary) -> GameResults:
 	r.grade = str(d.get("grade", "D"))
 	r.score = float(d.get("score", 0.0))
 	r.summary_key = str(d.get("summary_key", ""))
+	r.ride_tag = str(d.get("ride_tag", ""))
+	for line: Variant in d.get("ride_lines", []):
+		r.ride_lines.append(str(line))
 	var arr: Variant = d.get("rows", [])
 	if arr is Array:
 		for rw: Variant in arr:

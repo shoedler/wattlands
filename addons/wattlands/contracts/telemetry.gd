@@ -60,6 +60,9 @@ var age_s: float = 0.0
 var cadence_age_s: float = 0.0
 ## Applied haptic grade in % right now (after intensity and bounds), 0 when none.
 var haptic_pct: float = 0.0
+## Heart rate from the rider's paired heart rate sensor in bpm, 0 when none (local only:
+## the GameHost never shows it to other riders).
+var heart_rate_bpm: int = 0
 
 
 func to_dict() -> Dictionary:
@@ -93,6 +96,7 @@ func to_dict() -> Dictionary:
 		"age_s": age_s,
 		"cadence_age_s": cadence_age_s,
 		"haptic_pct": haptic_pct,
+		"heart_rate_bpm": heart_rate_bpm,
 	}
 
 
@@ -133,6 +137,7 @@ static func from_dict(d: Dictionary) -> Telemetry:
 	m.age_s = float(d.get("age_s", 0.0))
 	m.cadence_age_s = float(d.get("cadence_age_s", 0.0))
 	m.haptic_pct = float(d.get("haptic_pct", 0.0))
+	m.heart_rate_bpm = int(d.get("heart_rate_bpm", 0))
 	return m
 
 
