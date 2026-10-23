@@ -253,6 +253,23 @@ static func _publish(l: FishingLaneState, lo: float, hi: float, out: FishingStep
 	out.bands.append([l.peer, ilo, ihi])
 
 
+## A band's low edge (brief 2.3, 4.6.3 check): never under 65 rpm, above the 45 rpm rescue
+## trigger, whatever the rider's preferred cadence (a profile allows 30-160 rpm).
+static func band_low(centre: float, half: float) -> float:
+	return maxf(FishingConst.BAND_LOW_MIN, centre - half)
+
+
+## Publishes a fixed-width band around `centre` (ride out practice, lure, idle): low edge
+## max(65, centre - half), high edge low + 2 x half; in band = the EMA cadence inside it.
+static func _publish_fixed(
+	l: FishingLaneState, centre: float, half: float, out: FishingStepOut
+) -> void:
+	var lo := band_low(centre, half)
+	var hi := lo + 2.0 * half
+	_publish(l, lo, hi, out)
+	l.in_band = l.cadence_ema >= lo and l.cadence_ema <= hi
+
+
 static func _toast(l: FishingLaneState, key: String, out: FishingStepOut) -> void:
 	if not l.is_bot:
 		out.toasts.append([key, [], l.peer])
@@ -262,9 +279,7 @@ static func _toast(l: FishingLaneState, key: String, out: FishingStepOut) -> voi
 
 
 static func _tick_ride_out(l: FishingLaneState, out: FishingStepOut) -> void:
-	var c := l.preferred_rpm
-	_publish(l, c - FishingConst.PRACTICE_HALF, c + FishingConst.PRACTICE_HALF, out)
-	l.in_band = absf(l.cadence_ema - c) <= FishingConst.PRACTICE_HALF
+	_publish_fixed(l, l.preferred_rpm, FishingConst.PRACTICE_HALF, out)
 	if l.state_t + _EPS >= FishingConst.TIP_EVERY_S * float(l.tip_n + 1):
 		_toast(l, TIP_PREFIX + str(l.tip_n % TIP_KEYS + 1), out)
 		l.tip_n += 1
@@ -360,9 +375,7 @@ static func _tick_reel(
 		_go_idle(l)
 		_tick_idle(l, dt, out)
 		return
-	var c := l.preferred_rpm + slot.band_offset
-	_publish(l, c - FishingConst.LURE_HALF, c + FishingConst.LURE_HALF, out)
-	l.in_band = absf(l.cadence_ema - c) <= FishingConst.LURE_HALF
+	_publish_fixed(l, l.preferred_rpm + slot.band_offset, FishingConst.LURE_HALF, out)
 	if st.scheduled and not l.sched_bit and not inp.phase_open_ended:
 		if inp.phase_remaining_s <= FishingConst.SCHEDULED_BITE_LEAD_S + _EPS:
 			_scheduled_bite(l, slot, out)
@@ -382,9 +395,7 @@ static func _tick_reel(
 
 
 static func _tick_idle(l: FishingLaneState, dt: float, out: FishingStepOut) -> void:
-	var c := l.preferred_rpm
-	_publish(l, c - FishingConst.PRACTICE_HALF, c + FishingConst.PRACTICE_HALF, out)
-	l.in_band = absf(l.cadence_ema - c) <= FishingConst.PRACTICE_HALF
+	_publish_fixed(l, l.preferred_rpm, FishingConst.PRACTICE_HALF, out)
 	if l.lure_d > 0.0:
 		l.lure_d = maxf(0.0, l.lure_d - _lure_speed(l) * dt)
 
@@ -647,7 +658,7 @@ static func _band_target(l: FishingLaneState, slot: FishingPlanSlot) -> float:
 ## Low edge max(65, centre - 8); width 16 (22 relaxed).
 static func _band_edges(l: FishingLaneState) -> void:
 	var w := FishingConst.BAND_WIDTH_RELAXED if l.relaxed_band else FishingConst.BAND_WIDTH
-	l.band_lo = maxf(FishingConst.BAND_LOW_MIN, l.band_center - FishingConst.BAND_LOW_HALF)
+	l.band_lo = band_low(l.band_center, FishingConst.BAND_LOW_HALF)
 	l.band_hi = l.band_lo + w
 
 
