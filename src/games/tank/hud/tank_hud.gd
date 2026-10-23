@@ -4,8 +4,8 @@ extends RefCounted
 ##
 ## Every widget sits at an explicit Rect2i in art px of 640 x 360 (ADR "HUD layout"): the HUD
 ## covers only y 0-60 and 300-360, the app's PANIC button owns x >= 503 and y >= 316, and every
-## kit widget gets at least its 1080p min_rect() / 3. Tank Controls (station card, objective
-## line, boss bars) are the hud builder's; G0 places empty Controls at their rects.
+## kit widget gets at least its 1080p min_rect() / 3. The Tank Controls (TankStationCard,
+## TankObjectiveLine, TankBossBars) read TankGame.state themselves and sit at their rects.
 
 ## Name -> Rect2i (art px). The widths and heights are checked in tests against the kit minimums.
 const RECTS := {
@@ -27,14 +27,15 @@ const RECTS := {
 const READOUT_HULL := "hull_hp"
 
 
-## The HudSpec: kit widgets and Tank Controls at RECTS; safety banners on.
-static func spec(_game: TankGame) -> HudSpec:
-	var card := Control.new()
-	card.name = "TankStationCard"
-	var objective := Control.new()
-	objective.name = "TankObjectiveLine"
-	var boss := Control.new()
-	boss.name = "TankBossBars"
+## The HudSpec: kit widgets and Tank Controls at RECTS; safety banners on. The prompts ("Surge to
+## ram", "Surge to dodge", "Surge to overpressure") are kit toasts the module raises.
+static func spec(game: TankGame) -> HudSpec:
+	var card := TankStationCard.new()
+	card.game = game
+	var objective := TankObjectiveLine.new()
+	objective.game = game
+	var boss := TankBossBars.new()
+	boss.game = game
 	return (
 		HudSpec
 		. new()
