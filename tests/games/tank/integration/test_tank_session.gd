@@ -100,3 +100,106 @@ func test_a_solo_bulwark_plays_ashfall_road_to_the_results_with_zero_input() -> 
 			assert_has([Wl.ENDED_END_PHASE, Wl.ENDED_MAX_S], ph["ended_by"], at)
 		elif str(ph["kind"]) != Wl.COOLDOWN:
 			assert_eq(ph["ended_by"], Wl.ENDED_DURATION, at)
+
+
+## The Tank game events of a report entry list, in order.
+func _tank_events(entries: Array) -> Array:
+	var out: Array = []
+	for e: Variant in entries:
+		if e is Dictionary and str(e.get("type", "")) == "game_event":
+			out.append((e as Dictionary)["event"])
+	return out
+
+
+func _all_whole_numbers(node: Variant) -> bool:
+	if node is Array:
+		for x: Variant in node:
+			if not _all_whole_numbers(x):
+				return false
+	elif node is Dictionary:
+		for k: Variant in node:
+			if str(k) != "type" and not _all_whole_numbers(node[k]):
+				return false
+	elif node is float:
+		return is_equal_approx(float(node), roundf(float(node)))
+	return true
+
+
+## The e2e story in process: a host and two loopback clients play the drill as the Citadel. Every
+## client applies the same Tank events in the same order as the host sent them, whole numbers all,
+## the snapshots stay small, and every peer's apply_progress ran.
+func test_a_host_drill_with_three_humans_keeps_every_client_in_step() -> void:
+	var r := _run(["--content=drill", "--players=3", "--rider=erg", "--seed=2"])
+	assert_eq(r["_end"], "complete")
+	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
+	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
+	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
+	assert_gt(int(r.get("max_snapshot_bytes", 0)), 100, "a real snapshot, not an empty one")
+	var host_events := _tank_events(r["events"])
+	assert_gte(host_events.size(), 3, "the segments at least")
+	var segs: Array = host_events.filter(func(e: Dictionary) -> bool: return e["type"] == "segment")
+	assert_eq(segs.map(func(e: Dictionary) -> int: return int(e["i"])), [0, 1, 2, 3])
+	var clients: Array = r["clients"]
+	assert_eq(clients.size(), 2)
+	for c: Dictionary in clients:
+		var seen := _tank_events(c["events"])
+		assert_eq(seen.size(), host_events.size(), "client %d" % int(c["peer"]))
+		for i in seen.size():
+			assert_eq(
+				JSON.stringify(seen[i], "", true),
+				JSON.stringify(host_events[i], "", true),
+				"event %d" % i
+			)
+		assert_true(
+			_all_whole_numbers(seen), "client %d: the numbers arrive as ints" % int(c["peer"])
+		)
+		assert_eq(c["results_grade"], r["results"]["grade"], "the results reach every client")
+	for peer in ["1", "2", "3"]:
+		assert_true((r["unlocks"] as Dictionary).has(peer), "apply_progress ran on peer %s" % peer)
+		assert_has(r["unlocks"][peer], "soot", "a finished drill")
+
+
+## Prompts and banners go to one peer, the host's own rider (ctx.local_peer), never to everyone.
+func test_the_hosts_toasts_and_banners_are_for_the_host_only() -> void:
+	var r := _run(["--content=drill", "--players=3", "--rider=erg", "--seed=4"])
+	var seen := 0
+	for e: Dictionary in r["events"]:
+		if str(e.get("type", "")) == "hud" and ["toast", "banner"].has(str(e.get("kind", ""))):
+			seen += 1
+			assert_eq(int(e["peer"]), 1, "%s %s" % [e["kind"], e["key"]])
+	assert_gt(seen, 0, "the segment banners at least")
+
+
+## A human without the Autopilot flag is on the module's fallback: it plays the drill to the end.
+func test_a_solo_drill_with_autopilot_off_still_completes() -> void:
+	var r := _run(["--content=drill", "--players=1", "--autopilot=none", "--rider=erg", "--seed=6"])
+	assert_eq(r["_end"], "complete")
+	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
+
+
+func test_the_same_seed_gives_the_same_report_hash() -> void:
+	var a := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=9"])
+	var path_a := str(a["_path"])
+	assert_ne(path_a, "")
+	var hash_a := str(a["deterministic_hash"])
+	for run: GameSimRunner in _runners:
+		run.cleanup()
+	_runners.clear()
+	var b := _run(["--content=drill", "--players=2", "--rider=erg", "--seed=9"])
+	assert_eq(str(b["deterministic_hash"]), hash_a, "events and snapshots repeat")
+
+
+## Zero input: the Ashfall Road report's segment events come once each in order, the snapshots stay
+## under the budget all the way, and the platform wrote the ride.
+func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_order() -> void:
+	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=2"])
+	assert_eq(r["_end"], "complete")
+	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
+	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
+	var idx: Array = []
+	for e: Dictionary in _tank_events(r["events"]):
+		if e["type"] == "segment":
+			idx.append(int(e["i"]))
+	assert_eq(idx.slice(0, 11), range(11), "the eleven segments, once each, in order")
+	assert_eq((r.get("fit_paths", []) as Array).size(), 1)
+	assert_true(FileAccess.file_exists(str((r["fit_paths"] as Array)[0])), "the ride was written")

@@ -346,3 +346,38 @@ func test_a_full_session_never_broadcasts_a_toast_or_banner() -> void:
 	assert_eq(
 		banner_keys.filter(func(k: String) -> bool: return k == "TANK_BANNER_SEGMENT").size(), 11
 	)
+
+
+func test_a_rider_going_to_reserve_is_said_once_and_the_first_call_only_records() -> void:
+	var s := TankFixtures.state(3)
+	s.rider(3).afk = true
+	var ctx := _ctx(3, 1)
+	var cues := TankCues.new(ctx)
+	cues.on_state(s)
+	assert_eq(_toasts(ctx), [], "already on reserve when we joined: not news")
+	s.rider(2).afk = true
+	cues.on_state(s)
+	cues.on_state(s)
+	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_RESERVE"])
+	assert_eq(_toasts(ctx)[0][2], [ctx.player(2).name])
+	s.rider(2).afk = false
+	cues.on_state(s)
+	s.rider(2).connected = false
+	cues.on_state(s)
+	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_RESERVE", "TANK_TOAST_RESERVE"], "a drop too")
+
+
+func test_no_power_is_said_when_every_rider_is_away() -> void:
+	var s := TankFixtures.state(2)
+	var ctx := _ctx(2, 1)
+	var cues := TankCues.new(ctx)
+	cues.on_state(s)
+	for r in s.riders:
+		r.afk = true
+	s.all_afk = true
+	cues.on_state(s)
+	assert_has(_keys(_toasts(ctx)), "TANK_TOAST_ALL_AFK")
+	assert_eq(_keys(_toasts(ctx)).count("TANK_TOAST_RESERVE"), 2)
+	var n := _toasts(ctx).size()
+	cues.on_state(s)
+	assert_eq(_toasts(ctx).size(), n, "once")

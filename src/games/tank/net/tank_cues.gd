@@ -34,6 +34,9 @@ var _prompt: String = PROMPT_NONE
 var _stalled: bool = false
 var _rescue: bool = false
 var _regroup: bool = false
+var _all_afk: bool = false
+## peer -> was on reserve at the last call; empty until the first call, which only records.
+var _reserve: Dictionary = {}
 
 
 func _init(p_ctx: GameContext) -> void:
@@ -86,6 +89,22 @@ func on_state(state: TankState) -> void:
 	if regroup and not _regroup:
 		_toast("TANK_TOAST_REGROUP")
 	_regroup = regroup
+	_reserve_cues(state)
+
+
+## "<name> on reserve" when a rider goes AFK or drops, and "No power" when every rider has. The
+## first call only records who is on reserve (a rejoining client's first snapshot, for one).
+func _reserve_cues(state: TankState) -> void:
+	var primed := not _reserve.is_empty()
+	for r in state.riders:
+		var away := r.afk or not r.connected
+		if primed and away and not bool(_reserve.get(r.peer, false)):
+			var slot := ctx.player(r.peer)
+			_toast("TANK_TOAST_RESERVE", [slot.name if slot != null else str(r.peer)])
+		_reserve[r.peer] = away
+	if primed and state.all_afk and not _all_afk:
+		_toast("TANK_TOAST_ALL_AFK")
+	_all_afk = state.all_afk
 
 
 ## The cues of one event (ints cast), for the local rider.
