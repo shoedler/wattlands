@@ -11,6 +11,8 @@ var _runners: Array[GameSimRunner] = []
 var _runner: GameSimRunner = null
 ## Event types each peer's fx_event raised in the last run, by local peer (connected after setup).
 var _fx: Dictionary = {}
+## snapshot_applied calls each client's module made in the last run, by local peer.
+var _snaps: Dictionary = {}
 
 
 func before_each() -> void:
@@ -99,7 +101,9 @@ func _run(flags: Array[String], name: String = "report") -> Dictionary:
 		assert_not_null(g, "every peer runs FishingGame")
 		if g != null:
 			_fx[gh.ctx.local_peer] = []
+			_snaps[gh.ctx.local_peer] = 0
 			g.fx_event.connect(_on_fx.bind(gh.ctx.local_peer))
+			g.snapshot_applied.connect(_on_snap.bind(gh.ctx.local_peer))
 	var reason := runner.run_to_end()
 	var out := runner.build_report()
 	out["_end"] = reason
@@ -113,6 +117,10 @@ func _no_game(gh: GameHost) -> bool:
 
 func _on_fx(e: Dictionary, peer: int) -> void:
 	(_fx[peer] as Array).append(str(e.get("type", "")))
+
+
+func _on_snap(_tick: int, peer: int) -> void:
+	_snaps[peer] = int(_snaps[peer]) + 1
 
 
 func test_a_solo_e2e_run_completes_and_writes_one_fit() -> void:
@@ -145,15 +153,39 @@ func test_the_client_follows_the_host_through_snapshots_and_events() -> void:
 	var host := _runner.host.game as FishingGame
 	var client := _runner.clients[0].game as FishingGame
 	assert_gt(client.state.tick, 0, "snapshots were applied")
-	assert_false(client.history.is_empty(), "and pushed to the interpolation history")
+	assert_gt(int(_snaps.get(2, 0)), 0, "and announced to the view (snapshot_applied)")
 	assert_lte(host.state.tick - client.state.tick, 2 * Wl.SIM_HZ, "close behind the host")
-	for i in host.state.lanes.size():
-		assert_eq(client.state.lanes[i].phase_index, host.state.lanes[i].phase_index)
-		assert_eq(client.state.lanes[i].state, host.state.lanes[i].state)
+	for i in host.state.riders.size():
+		assert_eq(client.state.riders[i].action, host.state.riders[i].action)
+		assert_almost_eq(client.state.riders[i].x_m, host.state.riders[i].x_m, 20.0)
 	assert_eq(client.state.team_points, host.state.team_points)
 	assert_eq(_fx[2], _fx[1], "the client raised every event the host sent, in order")
 	var c: Dictionary = (r["clients"] as Array)[0]
 	assert_eq(c["results_grade"], r["results"]["grade"], "the client got the host's results")
+
+
+func test_a_solo_free_roam_run_with_bots_fishes_and_completes() -> void:
+	var r := _run(
+		["--content=roam_10", "--players=1", "--bots=2", "--rider=erg:compliance=1.0", "--seed=4"]
+	)
+	assert_eq(r["_end"], "complete")
+	assert_eq(r.get("finished_reason"), "trip_over")
+	assert_eq((r.get("fit_paths", []) as Array).size(), 1, "no FIT for bots")
+	for peer: String in ["1", "-1", "-2"]:
+		assert_eq(r.get("plan_warnings", {}).get(peer, []), [], "no plan warnings (%s)" % peer)
+	var types: Array = []
+	for e: Dictionary in r.get("events", []):
+		if e["type"] == "game_event":
+			types.append(str(e["event"]["type"]))
+	assert_gt(types.count("landed"), 0, "the riders landed fish")
+	assert_eq(types.count("trip_over"), 1)
+	for d: Dictionary in r.get("directives", []):
+		assert_true(bool(d["accepted"]), "accepted: %s" % JSON.stringify(d))
+	assert_gt(
+		r["directives"].filter(func(d: Dictionary) -> bool: return d["kind"] == "replan").size(), 0
+	)
+	assert_lte(int(r["max_snapshot_bytes"]), FishingConst.SNAPSHOT_MAX_BYTES)
+	assert_eq(int(r["oversize_snapshots"]), 0)
 
 
 func test_the_same_seed_gives_the_same_deterministic_hash() -> void:

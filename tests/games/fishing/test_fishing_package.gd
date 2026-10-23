@@ -89,6 +89,39 @@ func test_every_content_file_loads_and_validates() -> void:
 		assert_eq(c.trip.id, content_id, "the trip id matches its file name")
 
 
+func test_free_roam_comes_first_and_is_the_default() -> void:
+	var m := F.manifest()
+	assert_eq(m["contents"][0], "roam_30", "the headline mode is listed first")
+	assert_eq(m["default_content"], "roam_30")
+	assert_eq(m["zero_input_content"], "roam_30")
+	assert_true(bool(m["bots"]), "bots may fill Free Roam slots")
+	for c: String in ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]:
+		assert_has(m["contents"], c)
+	for c: String in m["contents"]:
+		assert_false(c.begins_with("free_"), "the free trips are gone: %s" % c)
+
+
+func test_the_map_and_the_species_table_cover_every_species_and_zone() -> void:
+	var map: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string(F.CONTENT_DIR.path_join("map.json"))
+	)
+	assert_eq(FishingWorld.errors(map), [])
+	var world := FishingWorld.from_map(map)
+	var ctx := F.make_ctx(1, 0, "roam_30")
+	var c := FishingContent.load_for(ctx)
+	var zones_with_fish := {}
+	for id: String in FishingConst.SPECIES:
+		assert_true(c.species.has(id), "species.json has %s" % id)
+		var def: FishingSpeciesDef = c.species[id]
+		assert_eq(def.sprite, "fish_" + id)
+		for z: String in def.zones:
+			zones_with_fish[z] = true
+	for z: Dictionary in world.zones():
+		if z["id"] != "dock":
+			assert_true(zones_with_fish.has(z["id"]), "fish live in the %s" % z["id"])
+	assert_true(is_inf(world.floor_depth_m(world.length_m() - 1.0)), "the abyss has no floor")
+
+
 func test_option_entries_use_the_sdk_entry_format() -> void:
 	var m := F.manifest()
 	var entries: Array = m.get("options", []) + m.get("player_options", [])
@@ -119,12 +152,13 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 	for k in keys:
 		assert_true(k.begins_with(_prefix()), "%s starts with %s" % [k, _prefix()])
 	var used := {}
-	var re := RegEx.create_from_string(_prefix() + "[A-Z0-9_]+")
+	# Quoted literals only: a constant named FISHING_... is code, not a string key.
+	var re := RegEx.create_from_string('"(' + _prefix() + '[A-Z0-9_]+)"')
 	var sources := _files(F.GAME_DIR, ["gd", "json"]) + _files(F.CONTENT_DIR, ["json"])
 	for path in sources:
 		for m in re.search_all(FileAccess.get_file_as_string(path)):
-			if not m.get_string().ends_with("_"):  # a format prefix ("FISHING_PHASE_REEL_%d")
-				used[m.get_string()] = path
+			if not m.get_string(1).ends_with("_"):  # a format prefix ("FISHING_TIP_" + n)
+				used[m.get_string(1)] = path
 	var man := F.manifest()
 	for e: Dictionary in man.get("options", []) + man.get("player_options", []):
 		used[str(e.get("label", "%sOPT_%s" % [_prefix(), str(e["id"]).to_upper()]))] = "game.json option label"
