@@ -19,7 +19,9 @@ extends Node
 ## description, external_id), then GET <api base>/uploads/{id} every poll_interval_s for up
 ## to poll_timeout_s until activity_id or error. A duplicate counts as uploaded. A 401 is
 ## retried once after a refresh; a 429 backs off (Retry-After, else backoff_s doubling) up to
-## max_rate_retries times.
+## max_rate_retries times. A request that fails with an HTTP status logs Strava's whole error
+## ({message, errors}, or the start of a body that isn't JSON), with any secret or token in it
+## replaced by "<redacted>".
 ## Network lock (BRIEF 1): while Locks.network_locked() every request goes through
 ## Locks.network_allows() (loopback only; a refusal logs "network integrations locked"),
 ## the browser is never opened, and Connect fetches the authorize URL itself with
@@ -46,6 +48,8 @@ const ACCESS_LIFETIME_S := 21600
 ## Refresh when the access token has less than this left.
 const REFRESH_MARGIN_S := 600
 const STORE_VERSION := 1
+## The most of a non-JSON error body (a proxy's HTML page, say) that goes into the log.
+const ERROR_LOG_MAX_CHARS := 500
 
 ## Bases (WlRides sets them from --strava-base or Settings).
 var api_base: String = "https://www.strava.com/api/v3"
@@ -792,6 +796,7 @@ func _upload_failure(r: Dictionary, upload_id: int) -> Dictionary:
 			"upload_id": upload_id,
 			"permanent": false
 		}
+	_log_failure(r, upload_id)
 	if code == 401:
 		return {
 			"state": "failed", "detail": "unauthorized", "upload_id": upload_id, "permanent": false
@@ -813,6 +818,25 @@ func _upload_failure(r: Dictionary, upload_id: int) -> Dictionary:
 		"upload_id": upload_id,
 		"permanent": true
 	}
+
+
+## Logs Strava's whole error for a failed upload request: {message, errors} from a JSON body,
+## else the start of the body. Only the response is read, never the request, and the stored
+## secret and tokens are redacted should the body ever echo one.
+func _log_failure(r: Dictionary, upload_id: int) -> void:
+	var text := (r.get("body", PackedByteArray()) as PackedByteArray).get_string_from_utf8()
+	var j: Variant = parse_json(text)
+	if j is Dictionary:
+		var d: Dictionary = j
+		text = JSON.stringify({"message": d.get("message", null), "errors": d.get("errors", null)})
+	else:
+		text = text.strip_edges().left(ERROR_LOG_MAX_CHARS)
+	for key: String in ["client_secret", "access_token", "refresh_token"]:
+		var secret := str(_creds.get(key, ""))
+		if secret != "":
+			text = text.replace(secret, "<redacted>")
+	var where := "upload %d" % upload_id if upload_id > 0 else "upload"
+	print("Strava: %s failed: HTTP %d: %s" % [where, int(r["code"]), text])
 
 
 ## The activity id in a duplicate message ("... duplicate of activity 123"), or 0.

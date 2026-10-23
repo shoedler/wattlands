@@ -351,6 +351,21 @@ func test_server_error_is_retryable() -> void:
 	assert_false(bool(res["permanent"]))
 
 
+func test_a_rejected_upload_logs_the_whole_error() -> void:
+	var c: StravaClient = await _connected_client()
+	var cap := Util.LogCapture.new()
+	OS.add_logger(cap)
+	await _mock.fault("upload", 403)
+	var ride := _ride()
+	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")
+	OS.remove_logger(cap)
+	assert_eq(res["detail"], "Error (403)")
+	assert_true(bool(res["permanent"]))
+	assert_string_contains(
+		cap.text(), 'Strava: upload failed: HTTP 403: {"errors":[],"message":"Error"}'
+	)
+
+
 # --- Tokens --------------------------------------------------------------------------------
 
 
