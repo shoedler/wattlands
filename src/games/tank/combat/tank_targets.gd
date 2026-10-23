@@ -2,7 +2,7 @@ class_name TankTargets
 extends RefCounted
 ## The things the main gun can hit this tick, and the geometry that places them (brief 2.4;
 ## owner: rules). Rebuilt once a tick after the enemies and the Behemoth moved, in a fixed order:
-## enemies by id, the boss parts rear to front, obstacles by id.
+## enemies by id, the boss parts (bogie 0 nearest the tank first), obstacles by id.
 
 ## The hull sprite's bottom sits this far above the ground line (rigs.json screen.skirt_gap_px).
 const SKIRT_GAP := 10

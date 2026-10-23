@@ -71,7 +71,9 @@ func validate() -> Array[String]:
 	if secondary_muzzles(TankIds.TANK_CITADEL).size() != 2:
 		errors.append("rigs.json tanks.citadel.secondaries: fore and aft, each with a muzzle")
 	if (TankContentSchema.dig(data, "boss.bogies") as Array).size() != 3:
-		errors.append("rigs.json boss.bogies: three [x, y, w, h] boxes rear to front")
+		errors.append(
+			"rigs.json boss.bogies: three [x, y, w, h] boxes, lowest x (nearest the tank) first"
+		)
 	return errors
 
 
@@ -121,7 +123,7 @@ func enemy_hitbox(sprite: String) -> Rect2:
 	return _rect("enemies.%s.hitbox" % sprite)
 
 
-## The hit box of boss part `index` (0..2 bogies rear to front, 3 the turret), boss_hull frame.
+## The hit box of boss part `index` (0..2 bogies, index 0 nearest the tank, 3 the turret), boss_hull frame.
 func boss_part_rect(index: int) -> Rect2:
 	if index == TankBossState.TURRET_PART:
 		return _rect("boss.turret.rect")

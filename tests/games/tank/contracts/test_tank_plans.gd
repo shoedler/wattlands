@@ -231,6 +231,7 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "hoist.grade_pct", 4.5, "hoist.grade_pct: must be <= 4"],
 		["stations", "hoist.warmup_grade_pct", 1.5, "hoist.warmup_grade_pct: must be <="],
 		["stations", "hoist.rise_pct_s", 2.0, "hoist.rise_pct_s"],
+		["stations", "hoist.step_s", 0, "hoist.step_s"],
 		["stations", "terrain.warmup_grade_pct.1", 2.5, "terrain.warmup_grade_pct.1"],
 		["stations", "terrain.warmup_grade_pct.0", -1.0, "terrain.warmup_grade_pct.0"],
 		["stations", "terrain.send_every_s", 0.25, "terrain.send_every_s"],

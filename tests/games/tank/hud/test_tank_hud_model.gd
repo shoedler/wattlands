@@ -111,7 +111,11 @@ func test_the_bulwark_card_shows_the_lever_the_auto_marker_and_the_hoist() -> vo
 	assert_eq(c["kind"], TankIds.ENGINE_BULWARK)
 	assert_eq(c["lever"], TankIds.LEVER_TURRET)
 	assert_true(c["auto"], "the auto-lever is on by default")
-	assert_almost_eq(float(c["hoist_frac"]), 1500.0 / 4000.0, 1e-6)
+	assert_almost_eq(
+		float(c["hoist_frac"]),
+		1500.0 / TankFixtures.content().num("tanks", "gearbox.hoist_j", 4000.0),
+		1e-6
+	)
 	assert_almost_eq(float(c["speed_kmh"]), 7.4 * 3.6, 1e-3, "the Bulwark drives too")
 	var g := s.station(TankIds.ENGINE_BULWARK) as TankGearboxState
 	g.auto = false
@@ -188,12 +192,15 @@ func test_boss_bars_show_the_fractions_scaled_by_the_tank() -> void:
 	assert_eq(b["turret"], 1.0)
 	assert_true(b["telegraph"])
 	var small := TankFixtures.boss(1)
-	small.boss.bogie_hp = [60.0, 30.0, 0.0]
-	small.boss.turret_hp = 90.0
+	var def := TankFixtures.content().boss_def()
+	var bogie_max := float(def["bogie_hp"]) * 0.6
+	var turret_max := float(def["turret_hp"]) * 0.6
+	small.boss.bogie_hp = [bogie_max, bogie_max * 0.5, 0.0]
+	small.boss.turret_hp = turret_max * 0.5
 	var bb := TankHudModel.boss_bars(small)
-	assert_almost_eq(bb["bogies"][0], 1.0, 1e-6, "100 x 0.6 for the Bulwark")
+	assert_almost_eq(bb["bogies"][0], 1.0, 1e-6, "the boss HP x 0.6 for the Bulwark")
 	assert_almost_eq(bb["bogies"][1], 0.5, 1e-6)
-	assert_almost_eq(bb["turret"], 0.5, 1e-6, "300 x 0.6")
+	assert_almost_eq(bb["turret"], 0.5, 1e-6, "the turret HP x 0.6")
 
 
 func test_no_boss_bars_before_the_behemoth() -> void:

@@ -60,7 +60,10 @@ func test_damaged_enemies_show_an_hp_bar_scaled_by_the_tank() -> void:
 	var v1 := U.view_of(self, small)
 	assert_almost_eq(v1.enemy_max_hp(small, "medium"), 48.0, 1e-4, "x 0.6 for the Bulwark")
 	small.enemy(11).hp = small.enemy(11).hp_max
-	assert_almost_eq(v1.enemy_max_hp(small, "heavy"), 96.0, 1e-4)
+	var heavy_hp := float(TankFixtures.content().enemy_def("heavy")["hp"])
+	assert_almost_eq(
+		v1.enemy_max_hp(small, "heavy"), heavy_hp * 0.6, 1e-4, "the content's heavy HP"
+	)
 
 
 func test_a_telegraphing_enemy_glows_at_its_muzzle() -> void:

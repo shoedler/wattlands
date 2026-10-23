@@ -11,8 +11,8 @@ extends RefCounted
 ##   64, pressure at 72%, the Bulwark's lever on Turret.
 ## gun_line(crew): Stage 2 gun line (phase 5) 40 s in: a heavy tank in its telegraph and 2 dug-in
 ##   tanks, the berm at 18 HP, the turret loaded with a heavy shell.
-## boss(crew): the boss (phase 10) 150 s in: phase 1, the front bogie broken, the main gun in its
-##   telegraph, the diesel sprinting with a dodge prompt.
+## boss(crew): the boss (phase 10) 150 s in: phase 1, the last bogie (index 2, farthest from the
+##   tank) broken, the main gun in its telegraph, the diesel sprinting with a dodge prompt.
 ## cap(): the Citadel's state(3) with 16 enemies and 24 shells at large coordinates (the 4 KB test).
 ## frame(crew): an InputFrame for state(crew) (every rider compliant at 90% FTP in SIM, on target
 ##   in ERG); frames.json holds the same frames as dictionaries for view and HUD tests.
@@ -126,8 +126,11 @@ static func boss(crew: int) -> TankState:
 	s.hull.hp_max = 160.0
 	s.boss.phase = TankIds.BOSS_PHASE_1
 	s.boss.x_px = s.hull.x_px + s.hull.hull_w + 180.0
-	s.boss.bogie_hp = [100.0, 40.0, 0.0]
-	s.boss.turret_hp = 300.0
+	var def := c.boss_def()
+	var scale := c.enemy_scale(s.hull.tank)
+	var bogie_max := float(def["bogie_hp"]) * scale
+	s.boss.bogie_hp = [bogie_max, bogie_max * 0.4, 0.0]
+	s.boss.turret_hp = float(def["turret_hp"]) * scale
 	s.boss.telegraph_s = 4.0
 	s.boss.main_s = 4.0
 	for st in s.stations:

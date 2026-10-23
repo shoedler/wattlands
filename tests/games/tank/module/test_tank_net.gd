@@ -150,22 +150,30 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	assert_eq(c.seg.kind, Wl.WORK)
 	assert_eq(c.seg.segment_index, 4)
 	assert_true(c.seg.open_ended)
-	assert_eq([c.seg.min_s, c.seg.max_s, c.seg.length_m], [90.0, 300.0, 1300.0])
+	var seg_def := c.content.segment(4)
+	assert_eq(
+		[c.seg.min_s, c.seg.max_s, c.seg.length_m],
+		[90.0, 300.0, float(seg_def["length_m"])],
+		"the stage 2 Advance, its length from the content"
+	)
 	assert_almost_eq(c.hull.distance_m, host.state.hull.x_px / TankConst.PX_PER_M, 0.01)
 	assert_eq(c.outcome, "")
 	assert_false(c.all_afk)
 	for st in c.stations:
 		assert_eq(st.peer, c.rider_at(st.slot).peer, "%s: who works the room" % st.engine)
-	assert_eq(c.boss.bogie_max, 100.0)
-	assert_eq(c.boss.turret_max, 300.0)
+	var boss_def := c.content.boss_def()
+	assert_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]))
+	assert_eq(c.boss.turret_max, float(boss_def["turret_hp"]))
 	assert_eq(c.enemy(11).hp_max, 80.0, "a medium's full HP at scale 1.0")
 	assert_eq([c.enemy(11).w, c.enemy(11).h], [104, 52])
 	var solo_host := _host(1)
 	solo_host.state.enemy(11).hp = 40.0
 	var solo := _client(1)
 	solo.apply_snapshot(_wire(solo_host))
-	assert_almost_eq(solo.state.boss.bogie_max, 60.0, 0.001, "the Bulwark's enemy scale 0.6")
-	assert_almost_eq(solo.state.boss.turret_max, 180.0, 0.001)
+	assert_almost_eq(
+		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * 0.6, 0.001, "enemy scale 0.6"
+	)
+	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * 0.6, 0.001)
 	assert_almost_eq(solo.state.enemy(11).hp_max, 48.0, 0.001)
 
 

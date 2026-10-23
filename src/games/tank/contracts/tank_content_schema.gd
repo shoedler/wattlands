@@ -126,6 +126,7 @@ const STATIONS_SPEC := {
 	"hoist.grade_pct": "nonneg",
 	"hoist.warmup_grade_pct": "nonneg",
 	"hoist.rise_pct_s": "pos",
+	"hoist.step_s": "pos",
 	"cadence_band.default": "pair",
 	"cadence_band.loader": "pair",
 	"haptics.hit.min_damage": "nonneg",

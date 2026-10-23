@@ -9,7 +9,8 @@ extends TankRecord
 ## snapshot: clients compute them the same way from content (TankContent.boss_def, enemy_scale).
 
 ## Auto-aim target ids of the parts are negative, so they never collide with TankState.take_id()
-## (always > 0): bogies -1..-3 (rear to front), the turret -4.
+## (always > 0): bogies -1..-3 (rigs.json order: index 0 is the bogie nearest the tank, the lowest x in the
+## boss_hull frame, as the Behemoth faces left; index 2 the farthest), the turret -4.
 const PART_COUNT := 4
 const TURRET_PART := 3
 
@@ -17,7 +18,7 @@ const TURRET_PART := 3
 var phase: int = TankIds.BOSS_NONE
 ## [snap] World x of the hull's left edge in art px.
 var x_px: float = 0.0
-## [snap] HP per bogie (rear to front).
+## [snap] HP per bogie (rigs.json order: index 0 nearest the tank, the first one the auto-aim takes).
 var bogie_hp: Array[float] = [100.0, 100.0, 100.0]
 ## [snap]
 var turret_hp: float = 300.0
@@ -33,7 +34,7 @@ var secondary_s: float = 0.0
 var dodged: bool = false
 
 
-## The target id of part `index` (0..2 bogies rear to front, 3 the turret).
+## The target id of part `index` (0..2 bogies, index 0 nearest the tank, 3 the turret).
 static func part_id(index: int) -> int:
 	return -(index + 1)
 
