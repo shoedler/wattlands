@@ -1,6 +1,6 @@
 class_name SiegeState
 extends SiegeRecord
-## The whole Generator Siege game state (G0 contract). The rules (B1, SiegeRules.step) mutate
+## The whole Castellum Rotae game state (G0 contract). The rules (B1, SiegeRules.step) mutate
 ## it on the host; the module (B2) encodes it into snapshots (SiegeSnapshot) and clients rebuild
 ## the snapshot part from them; the view and HUD (B3) only read it; the headless sim (B4) drives
 ## it directly. Deterministic: every random draw goes through `rng` (ctx.rng on the host), and

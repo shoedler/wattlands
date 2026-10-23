@@ -1,138 +1,76 @@
 # Wattlands
 
-Wattlands is a multiplayer fitness party app for the Wahoo KICKR CORE and KICKR CORE 2 smart trainers. Your pedaling is the controller and the trainer pushes back: games use ERG mode for steady work and simulation mode for sprints. One app hosts several games; a host shares a short room code and friends type it to join. There are no accounts. Every ride is saved as a FIT file and can go to your own Strava account.
+Wattlands is a multiplayer fitness party app for the Wahoo KICKR CORE (and KICKR CORE 2). Your pedaling is the controller and the trainer pushes back: games use ERG for steady work and simulation mode for sprints. A host shares a short room code and friends join with it; there are no accounts. Every ride is saved as a FIT file and can go to your own Strava account.
 
-This is version 0.1.0: the platform and the reference game, Workout (interval sessions, sprints, a rolling road and `.zwo` import). Generator Siege, Tank Crew and Big Game Fishing are built later from their briefs in `docs/games/`.
+## Games
 
-> Status: built in one autonomous run without a real trainer and without contacting the real Strava API. Follow `docs/HARDWARE_TEST_PLAN.md` before riding hard on it.
+| Game | Players | What it is |
+| --- | --- | --- |
+| **Turbo Reel** | 1-4 | Co-op sport fishing. Your bike turns the big-game reel; the trainer holds the fish's pull, and keeping your cadence in the band tires it. The first-run game. |
+| **Castellum Rotae** | 1-4 | Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator. |
+| **Workout** | 1-8 | Group interval rides, sprints, a rolling road and `.zwo` import. |
+| Diesel Domestiques | 1-3 | Coming next: crew a pedal-powered super-heavy tank, one engine per rider (brief in `docs/games/tank.md`). |
 
-## Get the app
+> Status: built and tested with mock trainers only, without a real KICKR and without the real Strava API. Follow `docs/HARDWARE_TEST_PLAN.md` and each game's `src/games/<id>/HARDWARE_TEST.md` before riding hard on it.
 
-Wattlands runs on Windows 10/11 (x86_64). Build it once from this repository (the build is not committed):
+## Quick start
 
-1. Install Godot 4.7.2 (the standard editor, or the .NET editor as on this PC) and its Windows export templates (Editor, Manage Export Templates, or the `.tpz` from godotengine.org), and Node.js 22.12 or newer.
-2. Put the path of Godot's console executable in `tools/godot_bin.local` (one line), or set `GODOT`.
-3. Run:
-
-```bash
-node tools/export_windows.mjs --smoke
-```
-
-The build lands in `build/windows/`: `Wattlands.exe`, `Wattlands.pck`, the Bluetooth library `libgdble.windows.x86_64.dll`, `LICENSE.txt`, `CREDITS.md` and `THIRD_PARTY_NOTICES.txt`. Copy the whole folder. With the .NET editor the tool points the export at the installed standard template; `--template=<path to windows_release_x86_64.exe>` picks another one. `--with-vcruntime` also copies the Visual C++ runtime next to the exe (see Troubleshooting). `--relay-url=<ws:// or wss:// url>` writes `override.cfg` next to the exe, which makes that relay the build's default (see Playing together); `--smoke` then also checks that the exported app reports it. The built-in `ws://localhost:8787/v1` needs no `override.cfg`, so `--relay-url` with exactly that value writes none.
-
-## Quick start (players)
-
-1. Update your trainer's firmware with the Wahoo app (current firmware is needed for FTMS control and safe mode switches), then close every other app that might connect to it (Zwift, the Wahoo app).
-2. Start `Wattlands.exe`. It connects to your last trainer on its own; the first time, pick it in Settings, Trainer.
-3. Pedal. With no input at all, 20 seconds of pedaling on the title screen creates a profile called Rider (FTP 200 W, marked unverified) and starts an easy Workout. Holding a steady pedal for 5 seconds on the title screen starts your last game solo.
+1. Download the latest Windows zip from the [releases](https://github.com/shoedler/wattlands/releases), unzip the whole folder and run `Wattlands.exe` (Windows 10/11, x86_64).
+2. Update the trainer's firmware with the Wahoo app, then close every other app that might connect to it (Zwift, the Wahoo app).
+3. Pedal. With no input at all, 20 seconds of pedaling on the title screen creates a profile and starts a ride. Every menu and game works with no input: the focus moves every 1.6 s, a short surge picks, coasting for 3 s goes back (outside ERG).
 4. Set your FTP in the profile, or run the FTP test in Settings. Until it is verified, every ERG target is lowered by 15%.
 
-Every menu, game, shop and results screen works with no input: focus moves through the options every 1.6 seconds, a short surge in effort picks the highlighted option, and coasting for 3 seconds goes back (outside ERG).
+## Playing together
 
-### Playing together
+Multiplayer goes through a small relay that every rider's PC can reach.
 
-Multiplayer goes through a small relay server that every PC can reach. A build's default relay is the URL it was exported with: `node tools/export_windows.mjs --relay-url=ws://<relay PC's address>:8787/v1` (or `--relay-url=wss://<hosted relay>/v1`) writes `override.cfg` next to the exe. Without `--relay-url` the default is `ws://localhost:8787/v1`, which only works on the PC that runs the relay.
+1. One PC runs the relay: `node server/relay/src/main.ts` from this repository (port 8787), or `docker build -t wattlands-relay server/relay` and `docker run -p 8787:8787 wattlands-relay`. Allow port 8787 through the firewall.
+2. Every rider sets Settings > Network > Relay URL to `ws://<relay PC's address>:8787/v1`. A build exported with `--relay-url=<url>` has that relay as its default, so its riders change nothing.
+3. The host picks a game, chooses Host and reads out the room code; friends choose Join and type it. A rider who drops can rejoin with the same code within two minutes.
 
-1. One PC (or a hosted server) runs the relay. With Node.js: `node server/relay/src/main.ts` (it listens on port 8787 and prints its URL; on Node 22.12 to 22.17 add `--experimental-strip-types` after `node`). With Docker: `docker build -t wattlands-relay server/relay`, then `docker run -p 8787:8787 wattlands-relay`. Allow port 8787 through the firewall.
-2. Give the riders a build exported with `--relay-url=ws://<that PC's address>:8787/v1` (copy the whole folder, `override.cfg` included); they change nothing in Settings and only type the room code. With a build exported without it, every rider sets Settings, Network, Relay URL to `ws://<that PC's address>:8787/v1` (the relay PC itself can keep `ws://localhost:8787/v1`). A Relay URL set in Settings wins over the build's default, and clearing the field goes back to it.
-3. The host picks a game, chooses Host, and reads the room code (like `K7Q-X2M`) to the friends. They choose Join and type the code; dashes, spaces and case don't matter. Joining needs only the code.
-
-A rider who drops can restart the app and join again with the same code within two minutes: they get their place back.
+Friends in another place: the relay must be reachable from their PC. The simplest way is Tailscale: share only the relay PC with your friend (they use their own Tailscale account) and use its Tailscale address (`tailscale ip -4`) in the Relay URL. A hosted relay works too (`server/relay/fly.toml`, `render.yaml`, then `wss://<host>/v1`). Everyone must run the same release.
 
 ## Controls
 
 | Action | Keyboard | Xbox controller |
 | --- | --- | --- |
 | Move | Arrows or WASD | Left stick or D-pad |
-| Confirm | Enter or Space | A |
-| Back | Esc | B |
-| Ability 1 / 2 | 1 / 2 | X / Y |
-| Item | F | RB |
-| Swap | R | LB |
-| Shift down / up (virtual gears) | Q / E | LT / RT |
+| Confirm / Back | Enter or Space / Esc | A / B |
+| Ability 1 / 2, Item, Swap | 1 / 2, F, R | X / Y, RB, LB |
+| Virtual gears down / up | Q / E | LT / RT |
 | Pause | P | Start |
-| Panic (trainer to safe at once) | Hold Backspace 1 s | View + Menu together |
+| Panic (trainer to safe at once) | Hold Backspace 1 s | View + Menu |
 
-Every binding can be changed in Settings, Controls and is saved to `input.cfg` in your profile folder. Esc or B cancels a change, and Reset to defaults at the top of that page puts every key and button back. The session screen also has an on-screen PANIC button.
-
-Pedal gestures: pedaling for 3 seconds starts things; a surge (about 30% above your recent power for a second and a half, or a burst of flywheel speed in ERG) confirms; coasting for 3 seconds goes back outside ERG. Stopping for 5 seconds pauses a solo ride outside ERG; in ERG the trainer drops to its floor after 3 seconds and the ride pauses after 10.
-
-### Zwift Click and Zwift Play buttons
-
-Wattlands reads keyboard and controller input, so you can map Zwift Click or Zwift Play buttons to its keys with BikeControl (open source): map the buttons to Q and E for virtual gears, Enter for confirm and Esc for back. Zwift's own virtual shifting only works inside Zwift; Wattlands has its own 24 virtual gears.
+Bindings can be changed in Settings > Controls. The session screen also has an on-screen PANIC button. Zwift Click or Play buttons can be mapped to these keys with BikeControl.
 
 ## Strava
 
-Uploads go to your own Strava account through your own Strava API application, so your client secret stays on your PC.
-
-1. Go to https://www.strava.com/settings/api and create an application. Set the Authorization Callback Domain to `localhost`.
-2. In Wattlands, open Settings, Strava, and enter the application's Client ID and Client Secret. Choose Connect and approve in the browser.
-3. After a ride, choose Upload to Strava on the results screen, or turn on auto-upload in your profile. Rides appear as virtual rides with power, cadence and a lap per interval. Failed or offline uploads wait in a queue and retry on the next launch.
-
-New Strava API applications serve a single athlete at first (up to 10 without review), so each rider who wants uploads should create their own application. Rides are always saved as FIT files under your profile folder (`rides/`) whether or not you use Strava.
+Uploads use your own Strava API application: create one at https://www.strava.com/settings/api (callback domain `localhost`), enter its Client ID and Secret in Settings > Strava and choose Connect. Then upload from the results screen or turn on auto-upload. Rides are always saved as FIT files in your profile's `rides/` folder.
 
 ## Troubleshooting
 
 - "Another app may hold control": close Zwift, the Wahoo app and any other trainer app, then reconnect.
-- The trainer is not found or won't connect: remove any Windows-level Bluetooth pairing of the trainer (Settings, Bluetooth & devices), keep it within a few metres, and make sure no other app is connected. If it still doesn't show up, update the trainer firmware with the Wahoo app: Wattlands talks to the trainer over the Bluetooth fitness machine service (FTMS), which older firmware doesn't offer.
-- No Bluetooth trainers at all on a fresh PC: the Bluetooth library needs the Microsoft Visual C++ 2015-2022 x64 runtime. Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe, or build with `node tools/export_windows.mjs --with-vcruntime`.
-- Host fails or friends can't join: check that the relay runs and that everyone's Settings, Network, Relay URL points at it (see Playing together).
-- Mode switches feel abrupt or power spikes: update the trainer firmware. Wattlands ramps every switch between ERG and simulation, but firmware before 1.5.5 could spike on switches.
-- Panic: hold Backspace for one second (or View + Menu, or the on-screen PANIC button): ERG turns off and the grade goes flat at once.
+- The trainer won't connect: remove any Windows-level Bluetooth pairing of it, keep it close, and update its firmware (Wattlands needs FTMS).
+- No Bluetooth trainers at all on a fresh PC: install the Microsoft Visual C++ 2015-2022 x64 runtime (https://aka.ms/vs/17/release/vc_redist.x64.exe).
+- Host fails or friends can't join: check that the relay runs and that every Relay URL points at it.
 
 ## For developers
 
-Read `CLAUDE.md` first, then `docs/ARCHITECTURE.md` and `docs/GAME_SDK.md`. Every Godot run goes through `tools/godot.sh` (Git Bash) or `tools/godot.ps1` (PowerShell). The wrappers set the hardware and network locks (`WATTLANDS_NO_HW_CONTROL=1`, `WATTLANDS_NO_NETWORK_INTEGRATIONS=1`) and hold a machine-wide lock on concurrent Godot processes. Only a human following `docs/HARDWARE_TEST_PLAN.md` passes `--allow-hw` or `--allow-network`.
-
-Run the app from source with a mock trainer (no Bluetooth, no real Strava):
+Read `CLAUDE.md`, then `docs/ARCHITECTURE.md` and `docs/GAME_SDK.md`. Godot 4.7.2 runs only through `tools/godot.sh` (or `tools/godot.ps1`), which sets the hardware and network locks.
 
 ```bash
 tools/godot.sh --path . -- --mock-trainer=erg
 ```
 
-Run it from source with a real trainer and the real Strava API (hardware test plan only; the wrappers stop a run after 20 minutes unless `--timeout` says otherwise):
-
-```bash
-tools/godot.sh --allow-hw --allow-network --timeout=14400 --path .
-```
-
-Run every gate (GUT unit, contract, integration and scenario tests, the scaffold check, the script check, Workout simulations with FIT checks, the Node suites and the 3-peer end-to-end test):
-
 ```bash
 tools/run_tests
 ```
 
-Start the relay locally (on Node 22.12 to 22.17: `node --experimental-strip-types server/relay/src/main.ts`):
-
 ```bash
-node server/relay/src/main.ts
+node tools/export_windows.mjs --smoke
 ```
 
-Start the mock Strava server (tests only; point the app at it with `--strava-base=http://127.0.0.1:<port>`):
-
-```bash
-node server/mock_strava/server.mjs --port=8790
-```
-
-Simulate a game headless with mock riders and write a report and FIT files:
-
-```bash
-tools/run_game_sim --game=workout --content=e2e --players=1 --bots=1 --rider=erg --sim-speed=200 --seed=1 --report=build/sims/demo.json
-```
-
-Plan an art pipeline run without contacting fal (no key needed):
-
-```bash
-node tools/art/generate.mjs --game=demo --root=tools/art/examples --dry-run
-```
-
-Play the end-to-end test (relay, mock Strava, one host and two clients) for Workout:
-
-```bash
-node tools/e2e/run.mjs --games=workout
-```
-
-PowerShell twins exist for every tool (`tools/godot.ps1`, `tools/run_tests.ps1`, `tools/run_game_sim.ps1`, `tools/new_game.ps1`, `tools/screenshot.ps1`). New games start with `tools/new_game <id>`; `CLAUDE.md` explains the rest.
+The first runs the app with a mock trainer, the second runs every gate, the third builds `build/windows/` (with a standard Godot 4.7.2 editor and its export templates; see `docs/deps.d/godot.md`). New games start with `tools/new_game <id>`; game briefs live in `docs/games/`.
 
 ## License
 

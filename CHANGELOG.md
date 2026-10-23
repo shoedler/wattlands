@@ -2,6 +2,12 @@
 
 Platform entries are merged here from `docs/changelog.d/` fragments by the lead. Games added after v0.1.0 keep their entries in `docs/changelog.d/<id>.md`.
 
+## v0.1.1 (2026-10-23)
+
+- Renamed the games (display titles only; the ids `siege`, `fishing` and `tank`, save files and string keys are unchanged): Generator Siege is now **Castellum Rotae**, and its map, formerly Castellum Rotae, is now **Collis Rotarum**; Big Game Fishing is now **Turbo Reel**; the upcoming Tank Crew is **Diesel Domestiques**.
+- The Diesel Domestiques brief (`docs/games/tank.md`) now asks for a dark, desaturated 2.5D look with depth of field and cold and warm glowing lights; its pixel-art concept images were removed from `docs/concept/`.
+- README rewritten and shortened: the games, downloads, playing with friends in other places (Tailscale or a hosted relay).
+
 ## v0.1.0 (2026-10-21)
 
 The first release: the Wattlands platform and the reference game Workout, built in one autonomous run (W0 foundation, W1 sixteen parallel builders, W2 integration, W3 review, W4 fixes).

@@ -1,6 +1,6 @@
 class_name FishingSprites
 extends RefCounted
-## Loads Big Game Fishing's sprites (brief 3.3, docs/ART_PIPELINE.md) and caches the textures:
+## Loads Turbo Reel's sprites (brief 3.3, docs/ART_PIPELINE.md) and caches the textures:
 ##  1. res://assets/fishing/sprites/<id>.png (and <id>__<part>.png): the generated art (GPT Image
 ##     2.5 via fal, pixelated), with sizes and anchors from sprites.json;
 ##  2. else brief 3.4's code-drawn fallback, FishingFallbackSprites (asked by path):

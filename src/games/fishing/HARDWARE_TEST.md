@@ -1,4 +1,4 @@
-# Big Game Fishing: real-trainer checklist
+# Turbo Reel: real-trainer checklist
 
 The game's own checklist for a real KICKR CORE (BRIEF 4.7). `docs/HARDWARE_TEST_PLAN.md` holds the setup, the safety notes and the log template, and links here: work through its sections 1-8 first. Nothing here ran during the autonomous build (every automated run used MockTrainer with the hardware lock on). Start the app as that plan says (the exported build, or `tools/godot.ps1 --allow-hw --timeout=14400 --path .`), never from an automated run. Stop at the first failed safety check, and hold Backspace for 1 s (panic) whenever something feels wrong.
 

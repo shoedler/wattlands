@@ -1,6 +1,6 @@
 # world2d: the 2D pixel-art kit
 
-Helpers for 2D games (BRIEF 3.9, 3.10): Tank Crew and Big Game Fishing build their views with them. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
+Helpers for 2D games (BRIEF 3.9, 3.10): Diesel Domestiques and Turbo Reel build their views with them. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world2d/demo.tscn` to see all of them at once.
 
 ## PixelViewport
 

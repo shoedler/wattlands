@@ -1,4 +1,4 @@
-# Big Game Fishing backlog
+# Turbo Reel backlog
 
 What v0.1 does not ship, from docs/games/fishing.md 2.9, 3.3 and 4.3 (P1 ships once P0 is green; P2 stays a note here).
 

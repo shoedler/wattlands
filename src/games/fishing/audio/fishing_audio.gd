@@ -1,6 +1,6 @@
 class_name FishingAudio
 extends Node
-## Big Game Fishing's sound (brief 3.5 "Audio"), all synthesized with Sfx.synth (no files, no
+## Turbo Reel's sound (brief 3.5 "Audio"), all synthesized with Sfx.synth (no files, no
 ## downloads): reel clicks at a rate set by the local line speed, a drag scream while the local
 ## fish runs, gulls over bird piles and in a frenzy, splashes, the strike bell, the snap twang, a
 ## three-note landing fanfare and a looping surf bed. A child of FishingView: cue() plays what a

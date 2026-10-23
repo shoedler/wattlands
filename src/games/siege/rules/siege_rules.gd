@@ -1,6 +1,6 @@
 class_name SiegeRules
 extends RefCounted
-## Generator Siege's pure rules (brief 2.4): step(state, inputs, dt) at dt 0.05 s, reading only
+## Castellum Rotae's pure rules (brief 2.4): step(state, inputs, dt) at dt 0.05 s, reading only
 ## its arguments (state.rng is the only randomness; no clock). Owner: B1 "rules".
 ##
 ## step() order (SiegeOverdrive and the module rely on 2 and 4):

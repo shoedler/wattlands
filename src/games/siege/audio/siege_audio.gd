@@ -1,6 +1,6 @@
 class_name SiegeAudio
 extends Node
-## Generator Siege's sound (brief 3 "Audio"), all synthesized with Sfx.synth (no files, no
+## Castellum Rotae's sound (brief 3 "Audio"), all synthesized with Sfx.synth (no files, no
 ## downloads; credited in docs/credits.d/siege.md): a wheel creak and a generator hum, both
 ## looping and pitched by watts; tower shots, hooves, the ram, the gate, horns and coins. It
 ## reads the state like the view does (a child of SiegeView), so a client hears what the host

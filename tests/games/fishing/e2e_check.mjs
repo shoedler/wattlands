@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// tests/games/fishing/e2e_check.mjs: Big Game Fishing's own check of an e2e report (BRIEF 3.6,
+// tests/games/fishing/e2e_check.mjs: Turbo Reel's own check of an e2e report (BRIEF 3.6,
 // 7.7; brief 4.3).
 //
 //   node tests/games/fishing/e2e_check.mjs build/e2e/fishing/report.json

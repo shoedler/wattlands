@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tests/games/fishing/sim/run_sims.sh: brief 4.2's simulation matrix for Big Game Fishing, then
+# tests/games/fishing/sim/run_sims.sh: brief 4.2's simulation matrix for Turbo Reel, then
 # node tests/games/fishing/sim/check_sims.mjs over the reports (with fit_check on every FIT).
 #
 #   bash tests/games/fishing/sim/run_sims.sh [--quick|--full] [scenario ...]

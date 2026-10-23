@@ -1,6 +1,6 @@
 class_name SiegeGame
 extends GameModule
-## Generator Siege's GameModule (docs/games/siege.md; GAME_SDK 4). Owner: B2 "module".
+## Castellum Rotae's GameModule (docs/games/siege.md; GAME_SDK 4). Owner: B2 "module".
 ##
 ## Host / SOLO: sim_step validates and rate-limits intents (SiegeIntentLimiter, 5 a second per
 ## peer, only peers in ctx.players), runs SiegeRules.step, sends the Overdrive directive round

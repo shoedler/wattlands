@@ -1,6 +1,6 @@
 # world3d: the low-poly miniature kit
 
-Helpers for 3D games on the Compatibility renderer (BRIEF 3.9). Generator Siege builds its tabletop fort with them. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world3d/demo.tscn` to see them together.
+Helpers for 3D games on the Compatibility renderer (BRIEF 3.9). Castellum Rotae builds its tabletop fort with them. Every class is documented in its script; this page is the overview. Run `addons/wattlands/world3d/demo.tscn` to see them together.
 
 ## LowPolyMesh
 

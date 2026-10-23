@@ -1,6 +1,6 @@
-# Generator Siege
+# Castellum Rotae
 
-Co-op tower defense for 1-4 riders on Castellum Rotae, a Roman hill fort that runs on treadwheels (brief: `docs/games/siege.md`). Each rider turns one wheel; their watts go to one target at a time, a tower (defense now) or the central generator (denarii for the breaks). Waves are ERG intervals, breaks are recovery and shopping, and Overdrive is a 30 s SIM sprint block. Bots fill empty wheels, and every phase, the shop and the results work with zero input. Presentation `3d` (a procedural low-poly miniature on the Compatibility renderer), version 0.1.0. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
+Co-op tower defense for 1-4 riders on Collis Rotarum, a Roman hill fort that runs on treadwheels (brief: `docs/games/siege.md`). Each rider turns one wheel; their watts go to one target at a time, a tower (defense now) or the central generator (denarii for the breaks). Waves are ERG intervals, breaks are recovery and shopping, and Overdrive is a 30 s SIM sprint block. Bots fill empty wheels, and every phase, the shop and the results work with zero input. Presentation `3d` (a procedural low-poly miniature on the Compatibility renderer), version 0.1.0. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
 
 ## How to play
 
@@ -166,7 +166,7 @@ The G2 pass touched only these files. Never loosen a BRIEF 4.6 limit to fit a de
 Run Godot only through `tools/godot.sh` or `tools/godot.ps1` (they set the hardware and network locks); source `tools/env.sh` first.
 
 ```bash
-# Play with a mock trainer, then pick Generator Siege in the picker (add bots in the lobby)
+# Play with a mock trainer, then pick Castellum Rotae in the picker (add bots in the lobby)
 tools/godot.sh --path . -- --mock-trainer=erg
 ```
 

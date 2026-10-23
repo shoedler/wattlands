@@ -404,8 +404,8 @@ func test_startup_connects_from_the_command_line() -> void:
 func test_activity_name_and_description() -> void:
 	assert_eq(WlRides.activity_name({"game_id": "workout"}), "Wattlands: Workout")
 	assert_eq(
-		WlRides.activity_name({"game_id": "siege", "game_title": "Generator Siege"}),
-		"Wattlands: Generator Siege"
+		WlRides.activity_name({"game_id": "siege", "game_title": "Castellum Rotae"}),
+		"Wattlands: Castellum Rotae"
 	)
 	var d := WlRides.activity_description(
 		{"content_id": "easy30", "kj": 360.4, "avg_power_w": 199.6}

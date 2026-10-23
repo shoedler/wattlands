@@ -90,9 +90,9 @@ How to start the app for these tests: the exported build (`node tools/export_win
 Each game keeps its own real-trainer checklist; this plan only links to it.
 
 - Workout: `src/games/workout/HARDWARE_TEST.md` (its game checks; the platform checks in sections 4-9 above ride Workout too).
-- Generator Siege: `src/games/siege/HARDWARE_TEST.md` (written by the Siege session).
-- Tank Crew: `src/games/tank/HARDWARE_TEST.md` (written by the Tank Crew session).
-- Big Game Fishing: `src/games/fishing/HARDWARE_TEST.md` (written by the Fishing session).
+- Castellum Rotae: `src/games/siege/HARDWARE_TEST.md` (written by the Siege session).
+- Diesel Domestiques: `src/games/tank/HARDWARE_TEST.md` (written by the Diesel Domestiques session).
+- Turbo Reel: `src/games/fishing/HARDWARE_TEST.md` (written by the Fishing session).
 
 ## Checks only a real trainer can confirm (from the build)
 

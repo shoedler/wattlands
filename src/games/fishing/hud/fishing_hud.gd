@@ -1,6 +1,6 @@
 class_name FishingHud
 extends RefCounted
-## hud_spec() for Big Game Fishing (brief 3.5, G0 decision "HUD layout"; FishingLayout holds the
+## hud_spec() for Turbo Reel (brief 3.5, G0 decision "HUD layout"; FishingLayout holds the
 ## rects, all in art pixels of the 640 x 360 view):
 ##  - the local lane's HUD zone: the kit timeline (left out where the row would reach PANIC),
 ##    then one row: power gauge, the strain meter (red, zigzag), cadence (with the band published

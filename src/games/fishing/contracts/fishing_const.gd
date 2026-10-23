@@ -1,6 +1,6 @@
 class_name FishingConst
 extends RefCounted
-## Every number of Big Game Fishing's rules, in one place (brief docs/games/fishing.md 2.3-2.8;
+## Every number of Turbo Reel's rules, in one place (brief docs/games/fishing.md 2.3-2.8;
 ## G0 contract, changed only through the lead). Rules, plans, tests and the view read these names
 ## instead of repeating literals. Times are game seconds, cadences rpm, distances metres,
 ## percentages % of the rider's own FTP.

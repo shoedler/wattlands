@@ -7,7 +7,7 @@ Round 2 follows Simon's new direction after round 1, which has since been remove
 - **Tank Crew:** 2D pixel art of brutalist super-heavy tanks in an alternate 1940s, with no people.
 - **Big Game Fishing:** 2D pixel art in a split screen with one lane per player.
 
-All seven images come from OpenAI's GPT Image 2.5 Sunburst on fal, at 1536 × 864 and high quality. The estimated cost is $0.49, based on fal's historical average of $0.07 an image; this key can't read actual usage. With round 1's $1.68, about $2.17 of the $5 budget is spent. `manifest.json` records each image's full request, so any image can be regenerated.
+The seven round-2 images (four remain after the tank images were removed) come from OpenAI's GPT Image 2.5 Sunburst on fal, at 1536 × 864 and high quality. The estimated cost is $0.49, based on fal's historical average of $0.07 an image; this key can't read actual usage. With round 1's $1.68, about $2.17 of the $5 budget is spent. `manifest.json` records each image's full request, so any image can be regenerated.
 
 ## Generator Siege
 
@@ -20,22 +20,9 @@ All seven images come from OpenAI's GPT Image 2.5 Sunburst on fal, at 1536 × 86
 
 **Readout:** GPT Image 2.5 drew a legible readout both times: "1250 W" on a flat plaque and "1250W" on the drum counter. In round 1, Nano Banana 2 painted words such as "SCRAP ROCKET" despite the no-text rule, while FLUX 3 drew no legible text.
 
-## Tank Crew
+## Tank Crew (now Diesel Domestiques)
 
-| Image | What works | What doesn't |
-| --- | --- | --- |
-| [tank_crew1_diesel](tank_crew1_diesel.jpg): 1 crew | A slab-sided tank with a boxy turret and a long gun faces right, against a burning gothic city, smoke, craters and barbed wire. The cutaway shows one engine room: an inline diesel with glowing cylinders, a big flywheel and gear trains. A chain runs forward to the front track sprocket, a vertical shaft and a chain loop rise to the turret ring, and there's a shell rack. Enemy tanks fire from the right. There are no people. | The pixel art is dense and painterly, with many colors and tiny parts, so animating it by hand would be heavy. The enemy tanks look like generic WW2 tanks. |
-| [tank_crew2_diesel_electric](tank_crew2_diesel_electric.jpg): 2 crew | Two power sources share one open compartment, with no wall between them. At the rear, a diesel with a flywheel drives a chain to the rear sprocket. In the middle, an electric dynamo has copper coils and a blue spark. The turret is cut open too, showing its gears. The diesel's orange-glowing cylinders and the dynamo's blue arc tell the two apart at a glance. | The link from the dynamo to the turret is less obvious than the diesel's chain to the tracks. The tank is no bigger than the 1-crew one: it has one turret and a slightly shorter hull. |
-| [tank_crew3_diesel_electric_steam](tank_crew3_diesel_electric_steam.jpg): 3 crew | A land battleship with a main turret and two small secondary turrets. Three walled-off engine rooms run from rear to front: a diesel with three big grey cylinders, a crankshaft and a giant flywheel; an electric dynamo with copper coils, a blue spark and a control panel; and a steam engine with a riveted boiler, a firebox with open flames, a spoked flywheel and steam. A frame of four tall shells sits at the front. The dynamo's blue arc and the firebox's flames mark two of the engines. The diesel has no glow of its own, because yellow lamps light every room, so it reads by shape. | Nothing visibly lifts shells to the breech: a rod runs from the steam engine to the base of the shell rack and stops there. The dynamo's link to the turret barely shows either. The image shows that there are three engines more clearly than what each one drives. |
-
-**What the set suggests for the game:**
-- **The cutaway is the player's display.** Each engine room is one player's station, and its machinery visibly speeds up with that player's watts and cadence.
-- **The engines match the seats in BRIEF 3.8:**
-  - the diesel is the driver (sustained tempo);
-  - the electric dynamo is the gunner (repeated efforts to traverse and elevate);
-  - the steam engine is the loader. Steam pressure building in the boiler could replace the wind-up spring as the loader's charge meter, and a full boiler fires a heavy shell.
-- **Crew size could show as a bigger tank:** one engine drives everything for a solo rider, and more engines mean a longer hull and more turrets. This set only half shows that. The 3-crew tank adds two secondary turrets, but the 2-crew tank is no bigger than the 1-crew one. The size steps need to go into the prompt and the brief.
-- **2D side view simplifies the game:** the tank rolls left to right, enemy tanks come from the right, and aiming becomes gun elevation on a single plane.
+The three pixel-art tank images were removed on 23 Oct 2026: the game's look changed to a dark, desaturated 2.5D diorama with depth of field and glowing lights. `docs/games/tank.md` section 3 holds the new direction; there are no reference images for it.
 
 ## Big Game Fishing
 

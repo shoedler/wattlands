@@ -1,6 +1,6 @@
 # Art pipeline
 
-2D games make their pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. Generator Siege needs none of this; Tank Crew and Big Game Fishing use it.
+2D games make their pixel art with `tools/art` (BRIEF 3.10): `generate.mjs` asks fal.ai's GPT Image 2.5 for one picture per sprite, and `pixelate.gd` turns each picture into a small sprite in the game's palette. The art is animated by parts in the `world2d` kit, not by drawn frames. Castellum Rotae needs none of this; Diesel Domestiques and Turbo Reel use it.
 
 ```
 assets/<id>/art.json ──► node tools/art/generate.mjs ──► .art_cache/<id>/<request id>.png   (raw, gitignored)

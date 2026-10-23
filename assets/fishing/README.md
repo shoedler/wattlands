@@ -1,4 +1,4 @@
-# Big Game Fishing assets
+# Turbo Reel assets
 
 - `art.json`: the art pipeline's description of every sprite (palette of 32 colours, shared style, sizes, parts, tiling); brief 3.3, `docs/ART_PIPELINE.md`.
 - `art_manifest.json`: every fal request and the art spend (`spend.total_usd`, budget $10): the generated art cost $3.56 (6 flare drafts kept, the rest sunburst, a few re-rolls).

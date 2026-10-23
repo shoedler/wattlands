@@ -1,4 +1,4 @@
-# Big Game Fishing (docs/games/fishing.md section 4): the game's own GUT tests (BRIEF 7 strict
+# Turbo Reel (docs/games/fishing.md section 4): the game's own GUT tests (BRIEF 7 strict
 # rules: unit, art palette and integration tests under tests/games/fishing), its Node tests (the
 # sim checker and the e2e report checker, against fixture reports), the script check; a second
 # job runs the quick subset of the simulation matrix (tests/games/fishing/sim/run_sims.sh --quick:

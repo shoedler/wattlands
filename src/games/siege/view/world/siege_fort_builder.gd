@@ -1,6 +1,6 @@
 class_name SiegeFortBuilder
 extends RefCounted
-## The static fort of Castellum Rotae as merged LowPolyMeshes (brief 3 "Scene", docs/concept
+## The static fort of Collis Rotarum as merged LowPolyMeshes (brief 3 "Scene", docs/concept
 ## notes): plain block walls without masonry or crenellations, corner platforms, terracotta
 ## houses, marble pad plinths, the wheel frames, the bronze generator body and the shafts that
 ## join them. Everything here is built once; the moving parts (wheels, flywheel, gate, towers)
