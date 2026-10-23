@@ -3,18 +3,13 @@ extends RefCounted
 ## Pure, deterministic rules (BRIEF 3.6; brief 2.4): step(state, inputs, dt) reads only its
 ## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
 ##
-## G0 shipped the skeleton the module and the other builders rely on: segment tracking from the
-## group's phase (segment, rotation and overrun events), station assignment from each rider's
-## plan meta, reserve and all-AFK, the in-band rule of brief 2.3, WORK / in-band time, hull HP at
-## each segment end, and a placeholder drive and objective (the tank rolls at a fixed speed and an
-## objective is met at 90% of the segment's nominal length) so a session plays end to end. G1 (rules)
-## replaces the placeholder with the speed model, Ram, berm, obstacles, the station energy models,
-## the gun, enemies, encounters, the boss, damage, breakdown and overrun, keeping these signatures.
-
-## G0 placeholder speed (m/s) until the drive uses SpeedModel.
-const PLACEHOLDER_SPEED_MPS := 8.0
-## G0 placeholder: an open-ended segment's objective is met at max(min_s, this x nominal length).
-const PLACEHOLDER_OBJECTIVE_FRAC := 0.9
+## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), assign
+## stations and read the riders, count the breech down, spawn the Advance's encounters, drive
+## (TankDrive: speed model, obstacles, Ram, dodge), move the enemies and the Behemoth, rebuild the
+## target list, run the stations (TankStations), the gun (TankGun), the enemies' guns, the shells
+## in flight (TankShells), the repair and the berm (TankHullRules) and the objectives. Events come
+## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
+## (new_state, step, in_band) are the module's contract.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
@@ -33,10 +28,27 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	var events: Array[Dictionary] = []
 	state.tick = inputs.tick
 	state.t = inputs.t
-	_track_segment(state, inputs, events)
+	if state.content == null:
+		return events
+	var aux := TankAux.of(state)
+	aux.aim_valid = false
+	TankSegments.track(state, inputs, aux, events)
 	_assign_stations(state, inputs, events)
 	_update_riders(state, inputs, dt)
-	_placeholder_drive(state, dt)
+	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
+	TankEncounters.advance(state, aux)
+	TankEncounters.depot_wrecks(state, aux)
+	TankDrive.step(state, inputs, dt, events)
+	TankEnemies.move(state, aux, dt)
+	TankBoss.step(state, aux, dt, events)
+	TankTargets.build(state, aux)
+	TankStations.step(state, inputs, dt, events)
+	TankGun.step(state, inputs, dt, events)
+	TankEnemies.fire(state, aux, dt, events)
+	TankShells.step(state, aux, dt, events)
+	TankHullRules.repair(state, dt, events)
+	TankHullRules.dig(state, inputs, dt)
+	TankSegments.objectives(state)
 	return events
 
 
@@ -71,82 +83,6 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 	return r.ftp_pct >= float(band[0]) and r.ftp_pct <= float(band[1])
 
 
-static func _track_segment(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> void:
-	var ph := inputs.phase
-	var sg := state.seg
-	if ph.index != sg.phase_index and ph.index >= 0:
-		if sg.phase_index >= 0 and sg.phase_index >= state.score.hp_by_segment.size():
-			state.score.hp_by_segment.append(ceili(state.hull.hp))
-		sg.phase_index = ph.index
-		sg.segment_index = ph.segment
-		sg.seg = ph.seg
-		sg.stage = ph.stage
-		sg.kind = ph.kind
-		sg.objective_done = false
-		sg.regroup = false
-		sg.overrun = ph.overran_previous()
-		sg.next_encounter = 0
-		state.hull.distance_m = 0.0
-		state.hull.x_px = 0.0
-		var s: Dictionary = state.content.segment(ph.segment) if state.content != null else {}
-		sg.length_m = float(s.get("length_m", 0.0))
-		if sg.overrun:
-			var prev_stage := _prev_stage(state, ph.segment)
-			state.score.overruns += 1
-			if prev_stage >= 1 and prev_stage <= 3:
-				state.score.stage_overrun[prev_stage - 1] = true
-			events.append(TankEvents.overrun(_prev_seg(state, ph.segment), prev_stage))
-		if (
-			sg.seg == TankIds.SEG_CHECKPOINT
-			and sg.stage >= 1
-			and sg.stage <= 3
-			and not state.score.stage_overrun[sg.stage - 1]
-		):
-			state.score.stages_clean += 1
-		if sg.seg == TankIds.SEG_COOLDOWN and state.outcome == "":
-			state.outcome = _outcome(state)
-		if sg.seg == TankIds.SEG_CHECKPOINT:
-			var bonus := state.content.num("tanks", "hull.checkpoint_hp", 20.0)
-			state.hull.hp_max += bonus
-			state.hull.hp = minf(state.hull.hp + bonus, state.hull.hp_max)
-		state.gun_line.active = sg.seg == TankIds.SEG_GUN_LINE
-		events.append(TankEvents.segment(ph.index, sg.seg, sg.stage))
-	sg.elapsed_s = ph.elapsed_s
-	sg.min_s = ph.min_s
-	sg.max_s = ph.max_s
-	sg.open_ended = ph.open_ended
-	sg.plan_elapsed_s = ph.plan_elapsed_s
-
-
-## The mission's result once the plan's last segment ended: victory when the Behemoth died,
-## withdrawn when a mission with a boss ended without its death, complete without a boss (drill).
-static func _outcome(state: TankState) -> String:
-	if state.score.behemoth_killed:
-		return TankIds.OUTCOME_VICTORY
-	if state.content != null:
-		for s: Variant in state.content.segments():
-			if str(s.get("type", "")) == TankIds.SEG_BOSS:
-				return TankIds.OUTCOME_WITHDRAWN
-	return TankIds.OUTCOME_COMPLETE
-
-
-## The segment before mission segment `segment` (the cool-down's is the mission's last).
-static func _prev(state: TankState, segment: int) -> Dictionary:
-	if state.content == null:
-		return {}
-	var n := state.content.segments().size()
-	var i: int = (n - 1) if segment < 0 else (segment - 1)
-	return state.content.segment(i)
-
-
-static func _prev_seg(state: TankState, segment: int) -> String:
-	return str(_prev(state, segment).get("type", ""))
-
-
-static func _prev_stage(state: TankState, segment: int) -> int:
-	return int(_prev(state, segment).get("stage", 0))
-
-
 ## Rooms follow each rider's plan meta (rotation is in the plans); a rotation event when they move.
 static func _assign_stations(
 	state: TankState, inputs: TankInputs, events: Array[Dictionary]
@@ -157,6 +93,7 @@ static func _assign_stations(
 		if r == null or ri.engine == "" or ri.engine == r.engine:
 			continue
 		r.engine = ri.engine
+		r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0)).reset()
 		moved = true
 	if not moved:
 		return
@@ -193,6 +130,8 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 		r.afk = ri.afk
 		r.connected = ri.connected
 		r.in_band = in_band(state, ri, st)
+		var rule := r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+		rule.update(state.t, ri.power_w)
 		if not r.is_bot and not r.autopilot:
 			for n in ri.intents:
 				if TankIntents.is_deliberate(n):
@@ -207,27 +146,3 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 			r.work_s += dt
 			if r.in_band:
 				r.band_s += dt
-
-
-## G0 placeholder: the tank rolls at a fixed speed in drive segments and every objective is met at
-## 90% of the segment's nominal length (the rules builder replaces this with brief 2.4).
-static func _placeholder_drive(state: TankState, dt: float) -> void:
-	var sg := state.seg
-	var moving := (
-		[TankIds.SEG_DEPOT, TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH].has(sg.seg)
-		and not state.all_afk
-	)
-	state.hull.speed_mps = PLACEHOLDER_SPEED_MPS if moving else 0.0
-	state.hull.distance_m += state.hull.speed_mps * dt
-	state.hull.x_px += TankConst.m_to_px(state.hull.speed_mps * dt)
-	if sg.open_ended and not sg.objective_done:
-		var s: Dictionary = state.content.segment(sg.segment_index) if state.content != null else {}
-		if (
-			sg.elapsed_s
-			>= maxf(sg.min_s, PLACEHOLDER_OBJECTIVE_FRAC * float(s.get("duration_s", 0.0)))
-		):
-			sg.objective_done = true
-			if sg.seg == TankIds.SEG_BOSS:
-				state.boss.phase = TankIds.BOSS_DEAD
-				state.score.behemoth_killed = true
-	sg.regroup = sg.objective_done and sg.elapsed_s < sg.min_s

@@ -1,17 +1,18 @@
 {
-	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry.",
+	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Light tanks hold 120-140 px (the brief's 90-140 with the closest 30 px cut: below about 115 px the gun cannot depress onto them; a Ram still reaches them, 120 + 24 px lunge). Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry. G1 tuning against the brief (details in docs/decisions/tank.md): guns light 2.5 at 50% (4 at 60%), medium 5 at 60% (8 at 70%), destroyer 11 every 9 s at 75% (15 / 8 s / 90%), dug-in 7 at 60% (10 at 75%), heavy 9 at 60% and 100 HP (12 at 75%, 160 HP), Behemoth bogies 50 HP and turret 200 HP (100 / 300), stop_px 150 (120), main gun 16 at 75%, secondary 2 at 50% (3 at 60%). Added keys: linger_s (a raider breaks off after this long on station and is gone with no credit), shell_speed_px_s (enemy shells fly straight at this speed), boss.main.hit.",
 	"types": {
 		"light": {
 			"code": 1,
 			"hp": 30,
 			"size_px": [80, 40],
-			"hold_px": [90, 140],
+			"hold_px": [120, 140],
 			"speed_px_s": 60,
 			"weave_px": 8,
 			"weave_s": 3,
+			"linger_s": 45,
 			"rammable": true,
 			"light_mult": 1.0,
-			"gun": {"damage": 4, "every_s": 4, "hit": 0.6},
+			"gun": {"damage": 2.5, "every_s": 4, "hit": 0.5},
 			"sprite": "enemy_light"
 		},
 		"medium": {
@@ -22,7 +23,7 @@
 			"speed_px_s": 40,
 			"rammable": false,
 			"light_mult": 0.5,
-			"gun": {"damage": 8, "every_s": 6, "hit": 0.7},
+			"gun": {"damage": 5, "every_s": 6, "hit": 0.6},
 			"sprite": "enemy_medium"
 		},
 		"destroyer": {
@@ -35,7 +36,7 @@
 			"move_after_shot_px": 40,
 			"rammable": false,
 			"light_mult": 0.25,
-			"gun": {"damage": 15, "every_s": 8, "hit": 0.9},
+			"gun": {"damage": 11, "every_s": 9, "hit": 0.75},
 			"sprite": "enemy_destroyer"
 		},
 		"dugin": {
@@ -45,12 +46,12 @@
 			"hitbox": "turret",
 			"rammable": false,
 			"light_mult": 1.0,
-			"gun": {"damage": 10, "every_s": 7, "hit": 0.75},
+			"gun": {"damage": 7, "every_s": 7, "hit": 0.6},
 			"sprite": "enemy_dugin"
 		},
 		"heavy": {
 			"code": 5,
-			"hp": 160,
+			"hp": 100,
 			"size_px": [136, 60],
 			"hold_px": [300, 380],
 			"speed_px_s": 25,
@@ -59,23 +60,24 @@
 			"backoff_every_damage": 50,
 			"rammable": false,
 			"light_mult": 0.25,
-			"gun": {"damage": 12, "every_s": 7, "hit": 0.75},
+			"gun": {"damage": 9, "every_s": 7, "hit": 0.6},
 			"sprite": "enemy_heavy"
 		}
 	},
 	"boss": {
 		"code": 6,
 		"bogies": 3,
-		"bogie_hp": 100,
-		"turret_hp": 300,
+		"bogie_hp": 50,
+		"turret_hp": 200,
 		"hull_px": [320, 100],
 		"creep_px_s": 2,
-		"stop_px": 120,
+		"stop_px": 150,
 		"pushback_px": 24,
 		"light_mult": 0.25,
-		"main": {"damage": 20, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
-		"secondary": {"damage": 3, "every_s": 5, "hit": 0.6}
+		"main": {"damage": 16, "hit": 0.75, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
+		"secondary": {"damage": 2, "every_s": 5, "hit": 0.5}
 	},
+	"shell_speed_px_s": 300,
 	"miss_px": [20, 40],
 	"clamp": {"ahead_max_right_px": 632, "behind_min_show_px": 24},
 	"spawn_margin_px": 16
