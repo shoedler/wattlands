@@ -336,3 +336,7 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 - Decision: FishingPlaceholderArt is deleted. FishingSprites uses the PNG, else FishingFallbackSprites, else (an export without the script) a blank image with a warning.
 - Reason: the fallback script is always present, so the placeholder branch was unreachable. Brief 3.4 names one fallback.
 
+## 2026-10-23 Final screenshots (brief 4.3 P1)
+
+- Taken with `tools/screenshot` at 1, 2 and 4 lanes: the ride out (threshold 100 s), a tuna run (threshold 628 s), a Landing (threshold 887 s), a marlin fight with jumps (free_120 seed 4 at 1743 s, 1 and 4 lanes), e2e_2min at 10-95 s, and the client session screen with the PANIC corner. Skipped: a spot pick, because every sim rider plays as Autopilot or the zero-input fallback, which casts at once (brief 2.5); the pick view is covered by the view tests.
+- Platform note, not changed: the kit's warm-up banner says "easy for 5 minutes" even in e2e_2min, whose ride out is 15 s.
