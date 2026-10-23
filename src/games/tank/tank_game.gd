@@ -1,248 +1,236 @@
 class_name TankGame
 extends GameModule
-## The template game (BRIEF 3.6; tools/new_game copies it, docs/GAME_SDK.md walks through it).
-## Each rider pushes a marker along a lane: a 5-minute warm-up ramp (50 -> 65% FTP), one 3-minute WORK
-## phase at 75% FTP with a +5% "hill", a lap marker, results; "short" adds course_grade, replan, end_phase.
+## Diesel Domestiques' GameModule (docs/games/tank.md; GAME_SDK 4). Owner: module.
+##
+## Host / SOLO, every tick (sim_step): intents are normalized, ownership-filtered and rate-limited
+## (TankIntentLimiter, 5 a second per peer, only peers in ctx.players) -> TankInputs.from_frame ->
+## TankRules.step (the events) -> TankDirector.step (every ctx.directives call and the power band)
+## -> send_event for each event -> phase_changed with the group's phase (the lowest index any
+## rider is in) -> finished(outcome) once every rider is in the cool-down. Clients: apply_snapshot
+## and apply_event rebuild the state; client_predict moves the local rider's own room.
+##
+## G0 wrote this working skeleton; G1 (module) adds Autopilot, prompts per peer, toasts, Tank
+## Controls wiring, interpolation history and e2e_check.mjs, keeping the flow above.
 
-var state: Dictionary = {}
-var content: Dictionary = {}
-var _last_index: Dictionary = {}
-var _done: Dictionary = {}
+## Every event, raised like its effects: the host where it sends the event, clients in
+## apply_event. The view and audio listen here.
+signal cue(kind: String, data: Dictionary)
+
+## The host refreshes the teammate strip this often (ticks; 2 Hz).
+const STATUS_EVERY_TICKS := 10
+## Session ids kept in the progress file (a restarted client sees the same results twice).
+const PROGRESS_SESSIONS_KEPT := 32
+
+var content: TankContent = null
+var state: TankState = null
+## peer -> EffortPlan built here (host / SOLO).
+var plans: Dictionary = {}
+var director: TankDirector = null
+
+var _limiter := TankIntentLimiter.new()
+var _rescue: Dictionary = {}
+var _afk: Dictionary = {}
+var _group_phase: int = -1
+var _finished: bool = false
 
 
-## Every peer, first. Content goes through ctx.load_content_json so run_game_sim --override works.
 func configure(p_ctx: GameContext) -> void:
 	super.configure(p_ctx)
-	var c: Variant = ctx.load_content_json("%s.json" % ctx.content_id)
-	var err := TankRules.content_error(c)
-	if err != "":
-		push_error("tank: content %s: %s" % [ctx.content_id, err])
+	content = TankContent.load_for(ctx)
+	if not content.ok():
+		var msg := "tank: content %s: %s" % [ctx.content_id, "; ".join(content.errors)]
+		if ctx.is_authority():
+			push_error(msg)
+		else:
+			push_warning(msg)
 		return
-	content = c
-	state = TankRules.new_state(content, ctx.peers(), float(ctx.options.get("track", 400)))
-	for rd: Dictionary in state["riders"]:
-		rd["dist_m"] = ctx.rng.randf_range(0.0, 2.0)  # ctx.rng is the only randomness
+	var rotation := bool(ctx.options.get("rotation", true)) and content.mission_rotates()
+	var rng: RandomNumberGenerator = ctx.rng if ctx.is_authority() else null
+	state = TankRules.new_state(content, ctx.players, ctx.content_id, rotation, rng)
 
 
-## Host/SOLO: one plan per slot, bots included (WORK targets take the rider's work_offset; "sim": true is
-## a SIM phase the game feeds with course_grade). The PlanValidator checks each and appends the cool-down.
 func build_effort_plans() -> Dictionary:
-	var plans := {}
-	if content.is_empty():
-		return plans  # invalid content: no plans, so the session does not start
-	for p in ctx.players:
-		var plan := EffortPlan.new()
-		for d: Dictionary in content["phases"]:
-			var ph := (
-				PlanPhase
-				. erg(
-					str(d["kind"]),
-					float(d.get("target_pct", 0)),
-					float(d["duration_s"]),
-					str(d["label"])
-				)
-				. with_ramp(float(d.get("ramp_to_pct", PlanPhase.NONE)))
-				. with_lap()
-			)
-			if d.get("sim", false):
-				ph = PlanPhase.sim(ph.kind, Wl.GRADE_GAME, ph.duration_s, ph.label).with_lap()
-			if ph.kind == Wl.WORK:
-				ph.target_pct += clampf(float(p.options.get("work_offset", 0)), -10.0, 5.0)
-				ph.with_range(ph.target_pct, ph.target_pct + float(content["nudge_pct"]))
-			plan.add(ph)
-		plans[p.peer_id] = plan
+	if state == null:
+		return {}
+	plans = TankPlanBuilder.build_all(content, ctx.players, state.rotation)
+	director = TankDirector.new(ctx, content, plans)
 	return plans
 
 
-## Host/SOLO, every 0.05 s of game time, through the cool-down too.
+# --- Host / SOLO ----------------------------------------------------------------------------
+
+
 func sim_step(dt: float, frame: InputFrame) -> void:
-	var inputs := {}
-	for p in ctx.players:
-		var tm := frame.telemetry(p.peer_id)
-		var boost := (
-			tm != null and bool(ctx.options.get("boosts", true)) and tm.intents.any(_is_boost)
-		)
-		inputs[p.peer_id] = {"p_eff_w": tm.p_eff_w if tm != null else 0.0, "boost": boost}
-		_phase_rules(p, frame.phase_of(p.peer_id), tm)
-	for e: Dictionary in TankRules.step(state, inputs, dt):
-		send_event(e)  # clients raise their own toasts in apply_event; the host does it here
-		if (
-			e["type"] == "lap"
-			and TankRules.rider(state, null, int(e["slot"])).get("peer") == ctx.local_peer
-		):
-			ctx.hud.toast("TANK_LAP_DONE", [e["laps"]], ctx.local_peer)
-	ctx.hud.readout("laps", str(TankRules.rider(state, ctx.local_peer).get("laps", 0)))
-
-
-func _phase_rules(p: PlayerSlot, ph: PhaseState, tm: Telemetry) -> void:
-	if ph == null:
+	if state == null:
 		return
-	var peer := p.peer_id
-	var in_band := (
-		tm != null and absf(tm.power_w - tm.applied_target_w) <= 0.05 * tm.applied_target_w
+	var inp := TankInputs.from_frame(
+		frame, ctx.players, plans, _collect_intents(frame), _rescue, _afk
 	)
-	if ph.index != int(_last_index.get(peer, -1)):
-		_last_index[peer] = ph.index  # the group's phase is the lowest: phase_changed once every rider reached it
-		if (
-			_last_index.size() == ctx.players.size()
-			and _first("group%d" % _last_index.values().min())
-		):
-			phase_changed.emit(_last_index.values().min())
-		if ph.kind == Wl.WORK:  # the gauge's band (drawn while in SIM) and a cadence band
-			ctx.hud.power_band(peer, 0.70 * p.ftp, 0.80 * p.ftp)
-			ctx.directives.cadence_band(peer, 80.0, 100.0)
-		if not p.is_bot:
-			ctx.hud.banner("TANK_BANNER_PHASE", [ctx.strings.t(ph.label)], 3.0, peer)  # its own phase only
-		if ph.index == int(content.get("replan_at", -1)):  # the rest of the plan, validated like the first
-			ctx.directives.replan(
-				peer,
-				EffortPlan.of(
-					[
-						(
-							PlanPhase
-							. erg(Wl.WORK, 55, 40, "TANK_PHASE_FINISH")
-							. with_range(55, 60)
-							. with_open(30, 50)
-							. with_lap()
-						)
-					]
-				)
-			)
-	if ph.mode == Wl.SIM and int(state["tick"]) % 10 == 0:  # grade_source "game": gentle rollers at 2 Hz
-		ctx.directives.course_grade(peer, 1.5 * sin(ph.elapsed_s / 5.0))
-	if (
-		ph.open_ended
-		and ph.elapsed_s >= ph.min_s
-		and in_band
-		and _first("end%d_%d" % [peer, ph.index])
-	):
-		ctx.directives.end_phase(peer)  # in band after min_s ends it; the platform ends it at max_s
-	if (
-		ph.kind == Wl.WORK
-		and ph.elapsed_s >= float(content["nudge_at_s"])
-		and _first("nudge%d_%d" % [peer, ph.index])
-	):
-		ctx.directives.request(
-			peer,
-			EffortDirective.from_dict(
-				{
-					"target_pct": ph.planned_pct + float(content["nudge_pct"]),
-					"duration_s": float(content["nudge_s"]),
-					"reason": "hill",
-					"source": "tank"
-				}
-			)
-		)
-	if (
-		ph.kind == Wl.WORK
-		and ph.elapsed_s >= float(content["lap_marker_at_s"])
-		and _first("lap_marker%d" % ph.index)
-	):
-		lap_marker.emit("TANK_LAP_HALFWAY")
-	if (
-		ph.kind == Wl.COOLDOWN
-		and _first("cool%d" % peer)
-		and (
-			_done.keys().filter(func(k: Variant) -> bool: return str(k).begins_with("cool")).size()
-			== ctx.players.size()
-		)
-	):
-		finished.emit("complete")  # once every rider is in the cool-down (earlier it would end open phases)
-	if int(state["tick"]) % Wl.SIM_HZ == 0 and tm != null:
-		var laps: int = TankRules.rider(state, peer).get("laps", 0)
-		ctx.hud.teammate_status(
-			peer,
-			{"in_band": in_band, "icon": "", "text": ctx.strings.t("TANK_STATUS_LAPS", [laps])}
-		)
+	var events := TankRules.step(state, inp, dt)
+	if director != null:
+		director.step(state, inp, events)
+	for e in events:
+		send_event(e)
+		cue.emit(str(e["type"]), e)
+	if inp.phase.index >= 0 and inp.phase.index != _group_phase:
+		_group_phase = inp.phase.index
+		phase_changed.emit(_group_phase)
+	if not _finished and _all_in_cooldown(frame):
+		_finished = true
+		finished.emit(state.outcome if state.outcome != "" else TankIds.OUTCOME_COMPLETE)
+	if frame.tick % STATUS_EVERY_TICKS == 0:
+		_feed_status()
 
 
-func _first(key: String) -> bool:
-	var first := not _done.has(key)
-	_done[key] = true
-	return first
+func autopilot_intents(peer_id: int) -> Array:
+	return TankAutopilot.intents(state, peer_id) if state != null else []
 
 
-func _is_boost(intent: Variant) -> bool:
-	return intent is Dictionary and str(intent.get("k", "")) == "boost"
-
-
-## Host/SOLO: a bot's or Autopilot rider's game choices; never effort (BRIEF 3.5).
-func autopilot_intents(_peer_id: int) -> Array:
-	return [{"k": "boost", "auto": 1}] if int(state.get("tick", 0)) % 600 == 300 else []
-
-
-## Host/SOLO: rescue is a stagger (the marker waits), never a wipe.
 func on_rescue(peer_id: int, active: bool) -> void:
-	TankRules.rider(state, peer_id)["rescue"] = active
-	if active and ctx.player(peer_id) != null and not ctx.player(peer_id).is_bot:
-		ctx.hud.toast("TANK_STAGGER", [], peer_id)  # only that rider's peer shows it
+	_rescue[peer_id] = active
 
 
 func on_afk(peer_id: int, afk: bool) -> void:
-	TankRules.rider(state, peer_id)["afk"] = afk
+	_afk[peer_id] = afk
 
 
-## Every peer: the local rider's actions and gestures become intents, tagged by source.
+## Every rider's intents this tick, normalized, filtered to its engine's and rate-limited.
+func _collect_intents(frame: InputFrame) -> Dictionary:
+	var out := {}
+	for p in ctx.players:
+		var tm := frame.telemetry(p.peer_id)
+		var ps := frame.phase_of(p.peer_id)
+		if tm == null or ps == null or tm.intents.is_empty():
+			continue
+		var engine := str(TankInputs.meta_of(plans.get(p.peer_id), ps.index).get("engine", ""))
+		out[p.peer_id] = _limiter.filter(p.peer_id, frame.tick, tm.intents, engine)
+	return out
+
+
+func _all_in_cooldown(frame: InputFrame) -> bool:
+	for p in ctx.players:
+		var ps := frame.phase_of(p.peer_id)
+		if ps == null or not ps.is_cooldown():
+			return false
+	return not ctx.players.is_empty()
+
+
+## The teammate strip (engine icon, engine name, in band) and the hull readout, 2 Hz.
+func _feed_status() -> void:
+	for r in state.riders:
+		if r.engine == "":
+			continue
+		var status := {
+			"in_band": r.in_band,
+			"icon": str(TankIds.ENGINE_ICONS.get(r.engine, "")),
+			"text": ctx.strings.t(str(TankIds.ENGINE_LABELS.get(r.engine, "")))
+		}
+		ctx.hud.teammate_status(r.peer, status)
+	ctx.hud.readout(TankHud.READOUT_HULL, str(ceili(state.hull.hp)))
+
+
+# --- Every peer: input ------------------------------------------------------------------------
+
+
+## The local rider's actions and gestures as intents for its current engine (brief 2.5, 2.6): a
+## surge becomes only ram or over, never fire or latch.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
-	if gestures.has(Wl.G_SURGE):
-		return [{"k": "boost", "via": "surge"}]
-	return [{"k": "boost", "via": "action"}] if actions.has(&"confirm") else []
+	if state == null:
+		return []
+	var r := state.rider(ctx.local_peer)
+	if r == null:
+		return []
+	var out: Array = []
+	var engine := r.engine
+	var surge := gestures.has(Wl.G_SURGE)
+	if surge or actions.has(&"ability_1"):
+		var via := TankIds.VIA_SURGE if surge else TankIds.VIA_ACTION
+		if engine == TankIds.ENGINE_STEAM:
+			out.append(TankIntents.make(TankIds.INTENT_OVER, via))
+		elif engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK:
+			out.append(TankIntents.make(TankIds.INTENT_RAM, via))
+	if engine == TankIds.ENGINE_DYNAMO or engine == TankIds.ENGINE_BULWARK:
+		out.append_array(_gunner_intents(actions))
+	if engine == TankIds.ENGINE_DYNAMO:
+		if actions.has(&"left"):
+			out.append(TankIntents.target(TankIds.TARGET_PREV))
+		if actions.has(&"right"):
+			out.append(TankIntents.target(TankIds.TARGET_NEXT))
+	if engine == TankIds.ENGINE_BULWARK:
+		out.append_array(_lever_intents(actions))
+	if actions.has(&"confirm") and not surge:
+		match engine:
+			TankIds.ENGINE_DYNAMO:
+				out.append(TankIntents.make(TankIds.INTENT_FIRE))
+			TankIds.ENGINE_STEAM:
+				out.append(TankIntents.make(TankIds.INTENT_LATCH))
+			TankIds.ENGINE_BULWARK:
+				var loaded := state.hull.loaded != TankIds.SHELL_NONE
+				var kind := TankIds.INTENT_FIRE if loaded else TankIds.INTENT_LATCH
+				out.append(TankIntents.make(kind))
+	return out
 
 
-## Host, 10 Hz: the full state as integer arrays (declared in int_fields).
+func _gunner_intents(actions: Array[StringName]) -> Array:
+	var out: Array = []
+	if actions.has(&"up"):
+		out.append(TankIntents.aim(TankIds.AIM_UP))
+	if actions.has(&"down"):
+		out.append(TankIntents.aim(TankIds.AIM_DOWN))
+	if actions.has(&"ability_2"):
+		out.append(TankIntents.make(TankIds.INTENT_TRAVERSE))
+	return out
+
+
+func _lever_intents(actions: Array[StringName]) -> Array:
+	var out: Array = []
+	if actions.has(&"item"):
+		out.append(TankIntents.target(TankIds.TARGET_NEXT))
+	if actions.has(&"swap"):
+		out.append(TankIntents.lever(TankIds.LEVER_TO_NEXT))
+	if actions.has(&"left"):
+		out.append(TankIntents.lever(TankIds.LEVER_TO_LEFT))
+	if actions.has(&"right"):
+		out.append(TankIntents.lever(TankIds.LEVER_TO_RIGHT))
+	return out
+
+
+# --- Net ---------------------------------------------------------------------------------------
+
+
 func snapshot() -> Dictionary:
-	var r: Array = []
-	for rd: Dictionary in state.get("riders", []):
-		r.append(
-			[
-				rd["slot"],
-				roundi(float(rd["dist_m"]) * 10.0),
-				rd["laps"],
-				roundi(float(rd["boost_s"]) * 1000.0),
-				int(rd["rescue"]),
-				int(rd["afk"])
-			]
-		)
-	return {"v": 1, "tick": state.get("tick", 0), "r": r}
+	return TankSnapshot.encode(state) if state != null else {}
 
 
 func apply_snapshot(snap: Dictionary) -> void:
-	state["tick"] = int(snap.get("tick", 0))
-	for row: Variant in snap.get("r", []):
-		TankRules.rider(state, null, int(row[0])).merge(
-			{
-				"dist_m": int(row[1]) / 10.0,
-				"laps": int(row[2]),
-				"boost_s": int(row[3]) / 1000.0,
-				"rescue": int(row[4]) != 0,
-				"afk": int(row[5]) != 0
-			},
-			true
-		)
-	ctx.hud.readout("laps", str(TankRules.rider(state, ctx.local_peer).get("laps", 0)))
+	if state == null:
+		return
+	TankSnapshot.apply(state, snap)
+	ctx.hud.readout(TankHud.READOUT_HULL, str(ceili(state.hull.hp)))
 
 
 func apply_event(event: Dictionary) -> void:
-	var rd := TankRules.rider(state, null, int(event.get("slot", -1)))
-	if not rd.is_empty() and event.get("type") == "boost":
-		rd["boost_s"] = state["boost_s"]
-	elif not rd.is_empty() and event.get("type") == "lap":
-		rd["laps"] = int(event["laps"])
-		if rd["peer"] == ctx.local_peer:
-			ctx.hud.toast("TANK_LAP_DONE", [rd["laps"]])
+	cue.emit(str(event.get("type", "")), event)
 
 
-func client_predict(dt: float, local: Telemetry) -> void:
-	var rd := TankRules.rider(state, ctx.local_peer)
-	if local != null and not rd.is_empty() and not (rd["rescue"] or rd["afk"]):
-		rd["dist_m"] = (
-			float(rd["dist_m"])
-			+ TankRules.speed(state, local.p_eff_w, float(rd["boost_s"]) > 0.0) * dt
-		)
+func client_predict(_dt: float, local: Telemetry) -> void:
+	if state == null or local == null:
+		return
+	var r := state.rider(ctx.local_peer)
+	if r != null:
+		r.raw_w = local.power_w
+		r.cadence_rpm = local.cadence_rpm
+		r.ftp_pct = local.ftp_pct
 
 
 func int_fields() -> Dictionary:
-	return {"snapshot": ["v", "tick", "r[][]"], "boost": ["slot"], "lap": ["slot", "laps"]}
+	var out := {"snapshot": TankSnapshotSchema.INT_PATHS.duplicate()}
+	for k: String in TankEvents.INT_FIELDS:
+		out[k] = (TankEvents.INT_FIELDS[k] as Array).duplicate()
+	return out
+
+
+# --- Presentation --------------------------------------------------------------------------------
 
 
 func make_view() -> Node:
@@ -252,59 +240,81 @@ func make_view() -> Node:
 
 
 func hud_spec() -> HudSpec:
-	var boost := Button.new()  # the game's own Control sends intents through ctx.intents
-	boost.text = ctx.strings.t("TANK_BOOST")
-	boost.pressed.connect(func() -> void: ctx.intents.send({"k": "boost", "via": "button"}))
-	return (
-		HudSpec
-		. new()
-		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
-		. add(HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT)
-		. add(
-			HudSpec.READOUT,
-			HudSpec.TOP_RIGHT,
-			{"source": "custom", "id": "laps", "label": "TANK_LAPS"}
-		)
-		. add(HudSpec.CADENCE, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.WBAL, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.GEAR, HudSpec.BOTTOM_LEFT)
-		. add(HudSpec.TEAMMATES, HudSpec.BOTTOM)
-		. add_control(boost, Rect2i(528, 300, 104, 48))
-		. toasts_at(HudSpec.TOP)
-		. banners_at(HudSpec.TOP)
-	)
+	return TankHud.spec(self)
 
 
-## Host/SOLO, once: the platform's rows (kJ, %FTP, time in band) plus the game's own.
+# --- Results and progress ---------------------------------------------------------------------------
+
+
+## Grade, score, per-rider stats, XP and unlocks (brief 2.8).
 func results() -> GameResults:
 	var res := GameResults.from_stats(ctx.stats, ctx.players)
-	var band := 0.0
+	if state == null:
+		res.grade = "D"
+		return res
+	var sum := TankScore.summary(state)
+	var grade := str(sum["grade"])
+	var done := state.in_cooldown()
 	for row in res.rows:
-		var laps: int = TankRules.rider(state, row["peer_id"]).get("laps", 0)
-		row["stats"]["laps"] = laps
-		row["xp"] = roundi(float(row.get("kj", 0.0)) / 10.0) + 5 * laps
-		row["unlocks"] = ["gold_marker"] if laps >= 3 else []
-		band += float(row.get("time_in_band_pct", 0.0)) / 100.0 / res.rows.size()
-		res.score += laps
-	res.grade = GameResults.grade_from_fraction(band)
-	res.team = {"laps": int(res.score)}
-	res.summary_key = "TANK_RESULTS"
+		var r := state.rider(int(row["peer_id"]))
+		if r == null:
+			continue
+		row["time_in_band_s"] = r.band_s
+		row["time_in_band_pct"] = 100.0 * r.band_s / r.work_s if r.work_s > 0.0 else 0.0
+		row["stats"].merge(_rider_stats(r), true)
+		row["xp"] = TankScore.xp(content, float(row.get("kj", 0.0)), grade)
+		row["unlocks"] = TankScore.unlocks(state, grade, done)
+	res.grade = grade
+	res.score = float(sum["score"])
+	res.team = {
+		"TANK_TEAM_OUTCOME": state.outcome,
+		"TANK_TEAM_HP": state.score.hp_by_segment.duplicate(),
+		"TANK_TEAM_BREAKDOWNS": state.score.breakdowns,
+		"TANK_TEAM_OVERRUNS": state.score.overruns,
+		"TANK_TEAM_KILLS": state.score.kills.duplicate(),
+	}
+	match state.outcome:
+		TankIds.OUTCOME_VICTORY:
+			res.summary_key = "TANK_RESULT_VICTORY"
+		TankIds.OUTCOME_WITHDRAWN:
+			res.summary_key = "TANK_RESULT_WITHDRAWN"
+		_:
+			res.summary_key = "TANK_RESULT_DRILL"
 	return res
 
 
-## Every peer, once per session: the local rider's XP and new unlocks into `progress` (ctx.progress).
+## One rider's results stats, keyed by their strings (the results screen's order).
+static func _rider_stats(r: TankRiderState) -> Dictionary:
+	return {
+		"TANK_STAT_DIESEL_S": roundi(r.engine_s[0]),
+		"TANK_STAT_DYNAMO_S": roundi(r.engine_s[1]),
+		"TANK_STAT_STEAM_S": roundi(r.engine_s[2]),
+		"TANK_STAT_BULWARK_S": roundi(r.engine_s[3]),
+		"TANK_STAT_RAMS": r.rams,
+		"TANK_STAT_BERM": roundi(r.berm_absorbed),
+		"TANK_STAT_SHOTS": r.shots,
+		"TANK_STAT_HITS": r.hits,
+		"TANK_STAT_ACCURACY": roundi(100.0 * r.hits / r.shots) if r.shots > 0 else 0,
+		"TANK_STAT_SHELLS": r.shells_by_type.duplicate(),
+	}
+
+
+## Every peer, once per session: the local rider's XP and new unlocks into `progress`.
 func apply_progress(res: GameResults, progress: ProgressStore) -> Array:
 	var row := res.row(ctx.local_peer)
-	if (
-		row.is_empty()
-		or (res.session_id != "" and progress.get_value("last_session", "") == res.session_id)
-	):
+	if row.is_empty():
 		return []
-	progress.set_value("last_session", res.session_id)
+	var seen: Array = progress.get_value("sessions", [])
+	if res.session_id != "" and seen.has(res.session_id):
+		return []
+	if res.session_id != "":
+		seen.append(res.session_id)
+		progress.set_value("sessions", seen.slice(maxi(0, seen.size() - PROGRESS_SESSIONS_KEPT)))
 	progress.add("xp", float(row.get("xp", 0)))
 	var held: Array = progress.get_value("unlocks", [])
-	var fresh: Array = row.get("unlocks", []).filter(
-		func(u: Variant) -> bool: return not held.has(u)
-	)
+	var fresh: Array = []
+	for u: Variant in row.get("unlocks", []):
+		if not held.has(u) and not fresh.has(u):
+			fresh.append(u)
 	progress.set_value("unlocks", held + fresh)
 	return fresh
