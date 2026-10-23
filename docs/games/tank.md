@@ -29,7 +29,7 @@ You are the lead engineer and orchestrator for Diesel Domestiques, one game modu
 
 ### 2.1 Fantasy and pillars
 
-Dark, oily alternate-history 1940s. A colossal brutalist super-heavy tank grinds through a burning ruined city toward an enemy super-heavy. The hull is an x-ray cutaway: each engine room is one rider's station, its machinery runs visibly on that rider's cadence and watts, and chains and shafts link it to its job (diesel to tracks, dynamo to turret ring, steam engine to shell hoist). No people are drawn; the machines are the crew.
+Dark, oily alternate-history 1940s. A colossal brutalist super-heavy tank grinds through a landscape and sometimes a village or city toward an enemy super-heavy. The hull is an x-ray cutaway: each engine room is one rider's station, its machinery runs visibly on that rider's cadence and watts, and chains and shafts link it to its job (diesel to tracks, dynamo to turret ring, steam engine to shell hoist). No people are drawn; the machines are the crew.
 
 - The cutaway is the display: you watch your engine work, and its room glows when you are in band.
 - Each engine feels different: the diesel is road tempo with sprints and ERG 90% while dug in, the dynamo is ERG that climbs as its capacitor bank drains, the steam engine is a grade that rises with boiler pressure and resets with every shell.
@@ -90,6 +90,8 @@ Nominal 300 + 3 × (180 + 120 + 60) + 240 + 180 = 1800 s (30 min); at most 2460 
 
 Terrain is `grade_source: game`, not `course` (which follows the platform's speed model), because the tank stops for obstacles, stalls, breakdowns and the Bulwark's other lever positions; pattern 4 pushes the grade under it. Grades are before difficulty; the governor applies 4.6.6 stacking and the 4.6.8 clamp (its clamp wins if warm-up outlasts the depot). Virtual gears work in every SIM phase (BRIEF 4.5). Every crew size, solo included, rides three blocks of about 3 min tempo plus 2 min at 90%, a climbing ERG or boiler work, 60 s recoveries, then a sprint-heavy boss.
 
+**Enemies of every size shape the workout, not only the super-heavy at the end.** Each stage is a mix of ordinary enemies, and their size tells the rider what effort comes: light tanks are short sprints (a Ram on "Surge to ram", 10 s window), mediums are sustained tempo in the Advance (hold the 76-105% band while they keep station), heavy tanks are a threshold block (the stage's gun line becomes a heavy-tank duel at ERG 90%, 90-180 s), and the Behemoth is the sprint-heavy finale. This changes no mechanic and no safety rule, as long as three things hold: (1) the encounter list is fixed in the mission file, so `effort/plan_builder.gd` knows every segment before the ride starts and the PlanValidator checks the whole plan (enemies never add, lengthen or harden a phase at run time; Tank calls no `replan`); (2) every effort an enemy asks for is one the segment table above already allows: sprints are the rider's own in the SIM Advance, tempo is the Advance band, the heavy duel is the existing 90% gun line, so all targets stay 50-100% FTP, nothing exceeds 105% and no duration counter runs; (3) the segment order and the >= 60 s ERG/SIM spacing stay as they are. A mission that wants more blocks adds whole stages (Advance, gun line, checkpoint), not mid-phase effort changes, and keeps the total within 41 min.
+
 In band (glow, score, bank charging): diesel and Bulwark in SIM 76–105% FTP (Ram sprints count); dynamo in stages and boss, and every 90% gun line: power ≥ 95% of the applied target and cadence ≥ 60; steam building: ≥ 90% FTP, loaded or cycling: cadence ≥ 50; depot and checkpoints: cadence ≥ 60.
 
 Checks (each tested in section 4):
@@ -137,7 +139,7 @@ Bulwark gearbox (solo):
 Gun:
 - The main turret faces right or left; traverse flips it. Elevation −5 … +30°. Shells are projectiles from the muzzle anchor in `assets/tank/rigs.json`, 360 art px/s, gravity 300 px/s²; tune v0 so the 30° range is ≥ 1.1 × each tank's muzzle-to-edge distance.
 - Auto-aim (default on): priority tank destroyer in telegraph, dug-in, medium, light, obstacle, nearer first; lower arc with lead; slews and fires when loaded and within 0.5°. Manual: up/down nudge (auto-aim pauses 5 s), left/right cycle targets (`item` in the Bulwark), ability_2 traverses, confirm fires.
-- Damage: light 20, heavy 50, Overpressure 100; splash 16 px at 50%. Mediums take 50% from light shells and secondaries; tank destroyers and the Behemoth take 25% from them. Heavy and Overpressure shells deal full damage to every target. Citadel secondaries (fore right, aft left): 5 every 3 s at the nearest enemy within 240 px.
+- Damage: light 20, heavy 50, Overpressure 100; splash 16 px at 50%. Mediums take 50% from light shells and secondaries; heavy tanks, tank destroyers and the Behemoth take 25% from them. Heavy and Overpressure shells deal full damage to every target. Citadel secondaries (fore right, aft left): 5 every 3 s at the nearest enemy within 240 px.
 
 Enemies, tanks only; HP and counts × 0.6 (Bulwark), 0.8 (Rampart), 1.0 (Citadel), counts rounded, at least 1:
 
@@ -147,6 +149,7 @@ Enemies, tanks only; HP and counts × 0.6 (Bulwark), 0.8 (Rampart), 1.0 (Citadel
 | Medium tank | 80 | holds 260–340 px | 8 every 6 s, 70% |
 | Tank destroyer | 50 | stops at the screen edge, 4 s glint telegraph, moves after each shot | 15 every 8 s, each shot after the 4 s telegraph, 90% |
 | Dug-in tank | 50 | gun line; only the turret above concrete is a hitbox | 10 every 7 s, 75% |
+| Heavy tank | 160 | gun line duel: rolls in to 300-380 px and halts, a 3 s muzzle-glow telegraph before each shot, backs off 30 px after taking 50 damage | 12 every 7 s, 75% |
 | Behemoth (boss) | 3 bogies × 100, turret 300 | see the mission | main 20; secondary 3 every 5 s, 60% |
 
 - Distances run from the hull's nearer end (its front for enemies ahead, its rear for enemies behind) to the enemy's near edge. A held distance is clamped so an enemy ahead ends at x ≤ 632 and at least 24 px of an enemy behind shows at the left edge (the Behemoth excepted).
@@ -157,8 +160,8 @@ Enemies, tanks only; HP and counts × 0.6 (Bulwark), 0.8 (Rampart), 1.0 (Citadel
 Mission P0, Ashfall Road (`content/tank/missions/ashfall_road.json`; terrain as [distance_m, grade_pct] points, the `course_profile` format):
 - Depot roll-out: from a brutalist depot onto the burning outskirts, no enemies; drive (0–120 s), traverse and elevation drills on two wrecks (120–240 s), load and fire (240–300 s); one teaching toast per station.
 - Stage 1, Outskirts: 1300 m on −2 … +3%; 2 light rushes, 1 medium, 1 wire barricade. Gun line: 3 dug-in.
-- Stage 2, Market Square: 1300 m on −3 … +5%; 2 mediums, 1 tank destroyer, 1 light from the rear, 1 wreck barricade. Gun line: 4 dug-in.
-- Stage 3, Rail Yards: 1400 m on −3 … +6%; 2 mediums, 1 tank destroyer, 2 lights (one from the rear). Gun line: 3 dug-in and a tank destroyer.
+- Stage 2, Market Square: 1300 m on −3 … +5%; 2 mediums, 1 tank destroyer, 1 light from the rear, 1 wreck barricade. Gun line: a heavy tank and 2 dug-in.
+- Stage 3, Rail Yards: 1400 m on −3 … +6%; 2 mediums, 1 tank destroyer, 2 lights (one from the rear). Gun line: a heavy tank, 2 dug-in and a tank destroyer.
 - Boss, Foundry Gate (flat): the Behemoth, its 320 px hull partly past the right edge. Phase 1: while a bogie stands it creeps toward the tank at 2 px/s until 120 px away; each broken bogie pushes it back 24 px. Phase 2: immobile; shoot the turret. Main gun every 35–45 s (25–35 s in phase 2) after a 6 s telegraph (muzzle glow, "Surge to dodge").
 - Cool-down (kind COOLDOWN, 180 s): the view stays; the tank rolls through the broken gate (or back, if the Behemoth withdrew), no enemies, machinery on each rider's cadence; no score, nothing sent.
 
@@ -168,6 +171,7 @@ Tuning targets:
 - T3: a compliant loader builds each heavy shell in 18–35 s (the 5 s window included) and gets ≥ 6 s at grade 0 per shell.
 - T4: a compliant solo rider spends ≥ 60% of each Advance on Drive.
 - T5: mean score falls strictly from 100% to 85% to 70% compliance.
+- T6: every stage has at least one light-tank sprint prompt and one medium during its Advance; stages 2 and 3 end in a heavy-tank duel at the gun line lasting 90-180 s for a compliant crew.
 
 ### 2.5 Autopilot and zero input
 
@@ -210,14 +214,14 @@ Art direction (there are no reference images; this text is the direction): dark,
 
 - **Depth of field:** only the tank's plane is sharp. Planes behind it blur and fade into haze and smoke the farther they are; the foreground debris blurs strongly and darkens. The Compatibility renderer has no depth-of-field post effect (`addons/wattlands/world3d/README.md`), so fake it cheaply: blur each plane once at load (a separable blur into a cached texture per plane) and tint it toward the haze colour; no per-frame full-screen blur. Record the blur radii in an ADR.
 - **Light:** lamps, the diesel cylinders, the dynamo's arc, the open firebox, muzzle flashes, burning ruins and each rider's wall lamp glow through the dark with soft halos (additive glow sprites, or `PointLight2D` if it holds 60 fps on Compatibility: measure it). Some lights are cold (blue-white arc light, moonlit steel), some warm (amber lamps, fire). Everything else stays low in saturation; lights are the only near-saturated pixels. Flooded craters and wet steel catch the lamps' reflections.
-- **Keep:** slab-sided riveted hulls and boxy turrets in grey-black, rust and soot; a ruined gothic skyline with fires, black smoke, mud, flooded craters and wire on stakes; the cutaway engine rooms with walls between them, dark, so each engine's own light marks it; the rider's wall lamp glowing in their colour when in band; visible links (diesel chain to the drive sprocket, a dynamo shaft to the turret ring, a hoist rail from the steam engine to the breech); each tank longer than the last; enemies with their own silhouettes (low wedge lights, tall slab mediums, turretless casemate destroyers).
+- **Keep:** slab-sided riveted hulls and boxy turrets in grey-black, rust and soot; a ruined gothic skyline with fires, black smoke, mud, flooded craters and wire on stakes; the cutaway engine rooms with walls between them, dark, so each engine's own light marks it; the rider's wall lamp glowing in their colour when in band; visible links (diesel chain to the drive sprocket, a dynamo shaft to the turret ring, a hoist rail from the steam engine to the breech); each tank longer than the last; enemies with their own silhouettes and sizes (low wedge lights, tall slab mediums, long twin-bogie heavies, turretless casemate destroyers).
 - **Not chunky pixel art:** sprites stay low-resolution art pixels at 640 x 360 with nearest filtering, so shapes read at a glance, but with soft, muted shading instead of a flat 16-bit look; the runtime blur, haze and glow add the in-between tones.
 
 Layout: `view/tank_view.gd` returns the PixelViewport's Node2D and only reads state. Ground line y 296, the tank's rear at x 16, enemies entering right (rear rushers left). The HUD covers only y 0–60 and 300–360.
 
 Cutaway: rooms are opaque backdrops at rects from `assets/tank/rigs.json` with code-drawn riveted frames; machinery sprites sit on them. `SpinningPart`/`SlidingPart` speed = cadence / 120 (0–1), brightness by %FTP. Diesel: pistons, crankshaft, flywheel, cylinder glow and exhaust by watts, the track chain at tank speed. Dynamo: armature, sparks by watts, capacitor jars showing the bank, the turret-ring shaft while slewing. Steam: flame by watts, gauge needle, a puff per pedal stroke, the shell cradle climbing the hoist rail with pressure to reach the breech at 100%. Bulwark: the lever points at its position; only the active output shaft spins. In band, the room brightens and a wall lamp in the rider's color lights with the rider's shape badge (BRIEF 3.9), pulsing at cadence (white sprites tinted at runtime). Wheels spin with tank speed under a code-drawn track belt; wrecks darken and smoke; the berm is a growing mud polygon; the trajectory arc is dots in the gunner's color. `ParallaxStrip` factors (each plane with its blur and haze from the art direction above): sky 0.05, far city 0.2, near city 0.5, ground 1.0, debris 1.3, alternating normal and flipped copies so edges match (if the kit's `ParallaxStrip` has no mirror option, the view tiles flipped copies itself).
 
-`assets/tank/art.json`: `endpoint` `openai/gpt-image-2.5/sunburst/text-to-image`; `style` "Side-view 2D game sprite, orthographic, low resolution with soft muted shading, desaturated colours and deep shadows. Dark brutalist alternate-history 1940s: riveted steel, soot, rust, mud, wet surfaces. Light sources are bright glowing shapes, warm amber or cold blue-white. Single object, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos."; `palette` (32, desaturated; adjust after the style check, never more) `#07080a #0e1013 #161a1e #1f2429 #2a3036 #363d44 #444b52 #565c62 #6c7176 #878b8f #a7aaac #cfd0cf #17130f #241d17 #33291f #443628 #574634 #6b5842 #2b2a24 #3d3c33 #545246 #3a2a24 #5a3a2e #7d4f3a #e8743a #ffb35c #ffd99a #fff3d6 #2f4a5e #5d86a3 #9fc4dd #e6f3fb` (greys, muted browns and olives, rust, and the only bright ones: fire and warm lamp light, cold arc light). 59 sprites, transparent unless opaque; tanks face right, enemies left; one object per sprite except the picker card, wheels and gears face-on:
+`assets/tank/art.json`: `endpoint` `openai/gpt-image-2.5/sunburst/text-to-image`; `style` "Side-view 2D game sprite, orthographic, low resolution with soft muted shading, desaturated colours and deep shadows. Dark brutalist alternate-history 1940s: riveted steel, soot, rust, mud, wet surfaces. Light sources are bright glowing shapes, warm amber or cold blue-white. Single object, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos."; `palette` (32, desaturated; adjust after the style check, never more) `#07080a #0e1013 #161a1e #1f2429 #2a3036 #363d44 #444b52 #565c62 #6c7176 #878b8f #a7aaac #cfd0cf #17130f #241d17 #33291f #443628 #574634 #6b5842 #2b2a24 #3d3c33 #545246 #3a2a24 #5a3a2e #7d4f3a #e8743a #ffb35c #ffd99a #fff3d6 #2f4a5e #5d86a3 #9fc4dd #e6f3fb` (greys, muted browns and olives, rust, and the only bright ones: fire and warm lamp light, cold arc light). 60 sprites, transparent unless opaque; tanks face right, enemies left; one object per sprite except the picker card, wheels and gears face-on:
 
 | Group | ids and sizes (art px) |
 | --- | --- |
@@ -226,7 +230,7 @@ Cutaway: rooms are opaque backdrops at rects from `assets/tank/rigs.json` with c
 | Rooms (opaque back walls, empty middle) | `room_bulwark` 128×48, `room_diesel` 96×48, `room_dynamo` 80×48, `room_steam` 88×48 |
 | Machinery | `diesel_block` 56×32 (empty cylinder windows), `flywheel_large` 36×36, `flywheel_small` 20×20, `gear_large` 24×24, `gear_medium` 16×16, `gearbox` 32×28, `dynamo_housing` 40×28, `dynamo_armature` 20×20, `spark` 16×16, `boiler` 40×32, `firebox` 20×16, `firebox_flame` 16×16, `governor` 16×20, `steam_puff` 16×16, `shell_rack` 32×40 |
 | Running gear | `road_wheel` 18×18, `drive_sprocket` 22×22, `idler_wheel` 20×20 |
-| Enemies | `enemy_light` 80×40, `enemy_medium` 104×52, `enemy_destroyer` 112×44, `enemy_dugin` 72×36 (behind a concrete revetment) |
+| Enemies | `enemy_light` 80×40, `enemy_medium` 104×52, `enemy_heavy` 136×60, `enemy_destroyer` 112×44, `enemy_dugin` 72×36 (behind a concrete revetment) |
 | Boss | `boss_hull` 320×100, `boss_turret`, `boss_turret_broken` 152×56, `boss_bogie`, `boss_bogie_broken` 64×32 |
 | Props | `prop_tank_traps` 64×24, `prop_wire` 64×20, `prop_wreck_barricade` 72×32, `prop_crater` 48×16, `prop_rubble` 40×16, `depot_gate` 160×120 |
 | Backdrops | `bg_sky` 640×200 (opaque), `bg_city_far` 960×120, `bg_city_near`, `bg_railyard_near`, `bg_foundry_near`, `bg_depot_near` 960×140, `bg_ground` 960×80 (opaque), `fg_debris` 960×48 |
@@ -239,7 +243,7 @@ Cutaway: rooms are opaque backdrops at rects from `assets/tank/rigs.json` with c
 
 HUD (`hud_spec()`): kit widgets (BRIEF 3.9) bottom left: power gauge with the target band (ERG: applied target; SIM: the engine's band), cadence with the band from `cadence_band`, W′, gear in SIM, big watts. Top: phase timeline with preview, hull HP, teammate strip (color and shape chip, engine icon, %FTP, in band, rescue, AFK, reconnect), boss bars. Kit toasts and banners carry the prompts "Surge to ram", "Surge to dodge", "Surge to overpressure". Tank widgets bottom right: the station card (diesel speed, distance to halt line, berm; dynamo bank and target; steam dial with 40/100/150% marks and the loaded shell; Bulwark lever with auto marker and hoist progress) and the objective line ("Gun line 2/4"). Hull HP, own watts and the station's key number ≥ 48 px at 1080p. Each peer sets its own diesel or Bulwark rider's SIM band, 76–105% FTP, with `ctx.hud.power_band` (BRIEF 3.6). The steam engine's open-ended band shows on the station card only, so the `erg` mock keeps riding 90% FTP there. Where the kit can't show a Tank value (such as an engine icon that `teammate_status` can't carry), the hud agent draws it in a Tank Control widget instead.
 
-Audio: diesel rumble by cadence, dynamo whine by armature speed, steam chuff per stroke and latch hiss, cannon boom, shell whistle, explosions, track clank, lever clunk, hoist ratchet; your own station loudest. Strings in `content/tank/strings.csv`.
+Audio: diesel rumble by cadence, dynamo whine by armature speed, steam chuff per stroke and latch hiss, cannon boom, shell whistle, spent casing/brass, explosions, track clank, lever clunk, hoist ratchet; your own station loudest. Strings in `content/tank/strings.csv`.
 
 ## 4. Testing and gates
 
@@ -305,7 +309,7 @@ G4 fix (parallel fixers by area, then you), at most two rounds: fix confirmed fi
 - A solo rider plays Ashfall Road in the Bulwark to the results with zero input; a host plus one friend plays the Rampart and plus two the Citadel, joining by code, with rotation; the e2e run passes.
 - Every plan passes the PlanValidator; every directive is clamped and matches 2.3 or 2.7; no Tank code reaches the trainer except through `ctx.directives`.
 - Rides carry a lap per segment and pass `tools/fit_check`.
-- All 59 sprites are generated and reviewed within $15, or the rest are placeholders with the reason recorded; none shows people, text, insignia or flags.
+- All 60 sprites are generated and reviewed within $15, or the rest are placeholders with the reason recorded; none shows people, text, insignia or flags.
 - The platform suite is green; Workout and other merged games are unaffected.
 - `src/games/tank/README.md`, `src/games/tank/HARDWARE_TEST.md`, `docs/decisions/tank.md`, `docs/credits.d/tank.md` and `docs/changelog.d/tank.md` are complete.
 - `game/tank` is merged into `main` and tagged `tank-v0.1.0`; nothing is pushed.
