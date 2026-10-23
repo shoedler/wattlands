@@ -1,0 +1,9 @@
+{
+  "raiders": {"code": 1, "hp": 20, "armor": 0, "speed_mps": 2.2, "gate_hp": 2, "bounty": 1, "threat": 1},
+  "shield_wall": {"code": 2, "hp": 160, "armor": 8, "speed_mps": 0.9, "gate_hp": 8, "bounty": 6, "threat": 6},
+  "horsemen": {"code": 3, "hp": 35, "armor": 0, "speed_mps": 4.5, "gate_hp": 3, "bounty": 2, "threat": 2.5},
+  "ram": {"code": 4, "hp": 600, "armor": 4, "speed_mps": 0.75, "gate_hp_per_s": 3, "bounty": 15, "threat": 20, "crew": 6, "crew_type": "raiders"},
+  "lateral_m": 1.5,
+  "cap": 150,
+  "retreat_s": 3
+}

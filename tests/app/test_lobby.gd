@@ -117,7 +117,9 @@ func test_long_int_player_option_uses_a_stepper() -> void:
 	assert_eq(info["player_options"]["wave_offset"], -9, "player_options travel in player_info")
 	assert_eq(
 		menu(s).text_of("popt:wave_offset"),
-		AppScreen.t("APP_LOBBY_MY_OPTION").format(["wave_offset", "-9"])
+		# the option's label is Siege's own string (SIEGE_OPT_WAVE_OFFSET), no longer the bare id;
+		# read through the translation so the test follows content/siege/strings.csv
+		AppScreen.t("APP_LOBBY_MY_OPTION").format([AppScreen.t("SIEGE_OPT_WAVE_OFFSET"), "-9"])
 	)
 
 

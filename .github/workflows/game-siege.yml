@@ -1,0 +1,112 @@
+# Generator Siege (docs/games/siege.md): the game's own GUT tests (strict gate), its Node tests
+# (the sim checker and the e2e report checker) and the script check; a second job runs a short
+# subset of the simulation matrix (tests/games/siege/sim/run_sims.sh: S2, S5) through
+# tools/run_game_sim with the check_sims.mjs assertions and fit_check. The full matrix (S1-S10),
+# the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
+# Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
+name: game-siege
+
+on:
+  push:
+    paths:
+      - "src/games/siege/**"
+      - "content/siege/**"
+      - "assets/siege/**"
+      - "tests/games/siege/**"
+      - ".github/workflows/game-siege.yml"
+  pull_request:
+    paths:
+      - "src/games/siege/**"
+      - "content/siege/**"
+      - "assets/siege/**"
+      - "tests/games/siege/**"
+      - ".github/workflows/game-siege.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Godot (standard Linux build)
+        run: |
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$url"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+
+      - name: Siege unit, static, sim and perf tests (GUT, BRIEF 7 strict rules)
+        run: tools/run_tests --only=gut --gdir=res://tests/games/siege
+
+      - name: Siege Node tests (sim checker, e2e report checker)
+        working-directory: tests/games/siege
+        run: node --test
+
+      - name: Script check
+        run: tools/godot.sh --headless --path . -s tools/check_scripts.gd
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: siege-test-logs
+          path: |
+            build/*.log
+            build/junit.xml
+          if-no-files-found: ignore
+
+  sims:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: test
+    env:
+      GODOT_VERSION: "4.7.2"
+      WATTLANDS_NO_HW_CONTROL: "1"
+      WATTLANDS_NO_NETWORK_INTEGRATIONS: "1"
+      SIEGE_SEEDS: "1"
+      SIEGE_GODOT_TIMEOUT: "900"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Godot (standard Linux build)
+        run: |
+          set -euo pipefail
+          url="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/godot.zip" "$url"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP/godot"
+          echo "GODOT=$RUNNER_TEMP/godot/Godot_v${GODOT_VERSION}-stable_linux.x86_64" >> "$GITHUB_ENV"
+
+      - name: Import
+        run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
+
+      - name: Simulation subset (S2 and S5 at seed 1), fit_check and check_sims
+        run: bash tests/games/siege/sim/run_sims.sh s2 s5
+
+      - name: Keep the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: siege-sim-reports
+          path: build/siege/sims/*.json
+          if-no-files-found: ignore

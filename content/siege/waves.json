@@ -1,0 +1,12 @@
+{
+  "group_every_s": [6, 12],
+  "stop_before_end_s": 60,
+  "mix": {
+    "standard": [[0.7, 0.1, 0.2], [0.5, 0.25, 0.25], [0.4, 0.3, 0.3]],
+    "raiders_horsemen": [[0.8, 0.0, 0.2], [0.7, 0.0, 0.3], [0.6, 0.0, 0.4]]
+  },
+  "ram_push": {"at_left_s": 60, "enter_from_gate_m": 40, "escort_threat_per_slot": 10},
+  "roads": {"rotate_s": [30, 60], "horn_s": 5},
+  "warmup": {"budget_frac": 0.4, "raiders_only_s": 180, "ram_hp_frac": 0.5, "ram_escort": false, "gate_floor_hp": 50, "toast_every_s": 60},
+  "rush": {"types": ["raiders", "horsemen"]}
+}

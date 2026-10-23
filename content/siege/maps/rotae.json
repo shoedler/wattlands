@@ -1,0 +1,61 @@
+{
+  "id": "rotae",
+  "name": "SIEGE_MAP_ROTAE",
+  "fort": {"size": [64, 52], "wall_h_m": 6, "wall_t_m": 2.5, "corner_towers": [[-32, -26], [32, -26], [32, 26], [-32, 26]]},
+  "generator": {"pos": [0, 0], "radius_m": 3},
+  "gate": {"pos": [0, 26], "width_m": 6},
+  "plaza": {"center": [0, 34], "radius_m": 12},
+  "wheels": [
+    {"slot": 0, "name": "nw", "pos": [-12, -10]},
+    {"slot": 1, "name": "ne", "pos": [12, -10]},
+    {"slot": 2, "name": "sw", "pos": [-12, 10]},
+    {"slot": 3, "name": "se", "pos": [12, 10]}
+  ],
+  "pads": [
+    {"pad": 1, "pos": [32, 0], "wall": "east"},
+    {"pad": 2, "pos": [32, 26], "wall": "se_corner"},
+    {"pad": 3, "pos": [8, 26], "wall": "gate_east"},
+    {"pad": 4, "pos": [-8, 26], "wall": "gate_west"},
+    {"pad": 5, "pos": [-32, 26], "wall": "sw_corner"},
+    {"pad": 6, "pos": [-32, 0], "wall": "west"},
+    {"pad": 7, "pos": [-32, -26], "wall": "nw_corner"},
+    {"pad": 8, "pos": [32, -26], "wall": "ne_corner"}
+  ],
+  "ring": [1, 2, 3, 4, 5, 6, 7, 8],
+  "roads": [
+    {"id": 0, "name": "west", "points": [[-80, -20], [-60, -8], [-50, 12], [-44, 32], [-26, 42], [-10, 36], [0, 29]]},
+    {"id": 1, "name": "valley", "points": [[6, 128], [-2, 104], [6, 80], [-4, 58], [2, 42], [0, 29]]},
+    {"id": 2, "name": "east", "points": [[82, -14], [62, -2], [52, 18], [44, 38], [26, 46], [10, 37], [0, 29]]}
+  ],
+  "wall_walk": {
+    "nodes": {
+      "w0": [-12, -10], "w1": [12, -10], "w2": [-12, 10], "w3": [12, 10],
+      "c_nw": [-32, -26], "n_w": [-12, -26], "n_e": [12, -26], "c_ne": [32, -26],
+      "e_n": [32, -10], "p1": [32, 0], "e_s": [32, 10], "c_se": [32, 26],
+      "s_e": [12, 26], "p3": [8, 26], "gate": [0, 26], "p4": [-8, 26], "s_w": [-12, 26], "c_sw": [-32, 26],
+      "w_s": [-32, 10], "p6": [-32, 0], "w_n": [-32, -10]
+    },
+    "edges": [
+      ["w0", "w_n"], ["w0", "n_w"], ["w1", "e_n"], ["w1", "n_e"],
+      ["w2", "w_s"], ["w2", "s_w"], ["w3", "e_s"], ["w3", "s_e"],
+      ["c_nw", "n_w"], ["n_w", "n_e"], ["n_e", "c_ne"],
+      ["c_ne", "e_n"], ["e_n", "p1"], ["p1", "e_s"], ["e_s", "c_se"],
+      ["c_se", "s_e"], ["s_e", "p3"], ["p3", "gate"], ["gate", "p4"], ["p4", "s_w"], ["s_w", "c_sw"],
+      ["c_sw", "w_s"], ["w_s", "p6"], ["p6", "w_n"], ["w_n", "c_nw"]
+    ],
+    "wheel_nodes": {"0": "w0", "1": "w1", "2": "w2", "3": "w3"},
+    "pad_nodes": {"1": "p1", "2": "c_se", "3": "p3", "4": "p4", "5": "c_sw", "6": "p6", "7": "c_nw", "8": "c_ne"}
+  },
+  "terrain": {"plateau_y": 0, "plateau_radius_m": 46, "hill_drop_m": 18, "hill_radius_m": 150, "facet_m": 8, "seed": 41},
+  "scatter": {
+    "seed": 7331,
+    "area": [-220, -200, 440, 400],
+    "counts": {"cypress": 600, "olive": 400, "rocks": 300},
+    "road_clear_m": 5,
+    "exclude_circles": [[0, 34, 14], [-140, -120, 44]],
+    "exclude_rects": [[-40, -34, 80, 68]]
+  },
+  "lake": {"center": [-140, -120], "radius_m": 40},
+  "aqueduct": {"from": [-200, -160], "to": [60, -190], "arches": 18},
+  "camera": {"target": [0, 0, 38], "pitch_deg": 41, "fov_deg": 35, "yaw_deg": 0, "push_in_s": 4}
+}
