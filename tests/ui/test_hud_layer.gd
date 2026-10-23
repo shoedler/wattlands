@@ -731,16 +731,18 @@ func test_bus_rescue_pause_and_warmup_banners() -> void:
 	_bus.rescue_changed.emit(LOCAL, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
 	_bus.paused_changed.emit(true, "coasting")
-	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "pause has its own symbol")
+	assert_true(_hud.pause_badge().visible, "the pause symbol")
 	_bus.paused_changed.emit(false, "")
+	assert_false(_hud.pause_badge().visible)
 	_bus.rescue_changed.emit(LOCAL, false)
 	_bus.governor_status.emit(LOCAL, {"warmup": false})
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
 
 
-## BRIEF 4.6.3 says show "rescue": show_safety_banners = false hides only the warm-up and
-## pause banners; the local rider's rescue banner still shows, from every source.
-func test_show_safety_banners_off_hides_only_warmup_and_pause() -> void:
+## BRIEF 4.6.3 says show "rescue": show_safety_banners = false hides only the warm-up banner;
+## the local rider's rescue banner and the pause symbol still show, from every source.
+func test_show_safety_banners_off_hides_only_warmup() -> void:
 	assert_true(HudSpec.new().show_safety_banners, "on by default")
 	var spec := _spec()
 	spec.show_safety_banners = false
@@ -751,13 +753,14 @@ func test_show_safety_banners_off_hides_only_warmup_and_pause() -> void:
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up hidden")
 	assert_eq(b.safety_text(), "")
 	_hud.set_safety_state(false, false, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "pause hidden")
+	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "no pause banner")
+	assert_true(_hud.pause_badge().visible, "the pause symbol shows whatever the spec says")
 	_hud.set_safety_state(true, true, false)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue still shows")
 	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"))
 	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "full size")
 	_hud.set_safety_state(true, true, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue while the pause is hidden")
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue while paused")
 	_hud.set_safety_state(false, false, false)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
 	var t := _tele(Wl.ERG, 100.0, 125)
@@ -777,8 +780,8 @@ func test_show_safety_banners_off_hides_only_warmup_and_pause() -> void:
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "another rider's rescue changes nothing")
 
 
-## The default spec still shows warm-up and pause, with pause over rescue over warm-up.
-func test_default_spec_shows_warmup_pause_and_rescue() -> void:
+## The default spec shows warm-up and rescue (rescue over warm-up) and the pause symbol.
+func test_default_spec_shows_warmup_rescue_and_pause() -> void:
 	_hud.build(_spec(), _ctx)
 	var b := _hud.banner()
 	assert_true(b.show_safety)
@@ -788,8 +791,24 @@ func test_default_spec_shows_warmup_pause_and_rescue() -> void:
 	_hud.set_safety_state(true, true, false)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
 	_hud.set_safety_state(true, true, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
-	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"))
+	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
+	assert_true(_hud.pause_badge().visible)
+
+
+## Telemetry.paused (the rider's own pause on not pedaling, also in multiplayer) shows the
+## pause symbol above every game (BRIEF 3.5).
+func test_telemetry_paused_shows_pause_symbol() -> void:
+	_hud.build(_spec(), _ctx)
+	var t := _tele(Wl.ERG, 0.0, 125)
+	_hud.update(t, null, null)
+	assert_false(_hud.pause_badge().visible)
+	t.paused = true
+	_hud.update(t, null, null)
+	assert_true(_hud.pause_badge().visible)
+	assert_eq(_hud.pause_badge().get_index(), _hud.pause_badge().get_parent().get_child_count() - 1)
+	t.paused = false
+	_hud.update(t, null, null)
+	assert_false(_hud.pause_badge().visible)
 
 
 func test_set_safety_state_and_telemetry_rescue() -> void:

@@ -283,7 +283,9 @@ func test_pause_overlay_and_resume() -> void:
 	assert_false(s.overlay.visible)
 
 
-func test_coasting_pause_resumes_on_pedal_start() -> void:
+## The GameHost ends a pause on not pedaling (1 s at >= 30 rpm, BRIEF 3.5); the screen follows
+## its state and never resumes on a gesture itself.
+func test_a_pause_on_not_pedaling_ends_with_the_game_host() -> void:
 	fx.give_profile()
 	var s := (
 		open_screen(
@@ -293,15 +295,18 @@ func test_coasting_pause_resumes_on_pedal_start() -> void:
 		as AppSessionScreen
 	)
 	var h := s.host as FakeHost
-	fx.bus.paused_changed.emit(true, "coasting")
-	h.paused_flag = true
+	h.pause("stop_5s")
+	fx.bus.paused_changed.emit(true, "stop_5s")
 	assert_true(s.overlay.visible)
 	s.feed_gesture(Wl.G_PEDAL_START)
-	assert_eq(h.resumes, 1)
+	assert_eq(h.resumes, 0, "no resume from the screen")
+	h.resume()
+	fx.bus.paused_changed.emit(false, "resume")
+	assert_false(s.overlay.visible, "the overlay follows the GameHost")
 
 
 func test_coasting_pause_holds_resume_so_a_surge_resumes() -> void:
-	# From rest a surge fires before pedal_start: it must resume, never pick End ride or Panic.
+	# A surge from rest must resume, never pick End ride or Panic.
 	fx.give_profile()
 	var s := (
 		open_screen(

@@ -877,6 +877,8 @@ static func _summarize(s: Dictionary, messages: Array[Dictionary], opts: Diction
 			"max_power_w": _scaled(sf, 21, 1.0),
 			"avg_cadence_rpm": _scaled(sf, 18, 1.0),
 			"max_cadence_rpm": _scaled(sf, 19, 1.0),
+			"avg_heart_rate_bpm": _opt_value(sf, 16),
+			"max_heart_rate_bpm": _opt_value(sf, 17),
 			"avg_speed_mps": _scaled(sf, 14, 1000.0),
 			"max_speed_mps": _scaled(sf, 15, 1000.0),
 			"normalized_power_w": _scaled(sf, 34, 1.0),
@@ -1030,6 +1032,8 @@ static func rides_contract(s: Dictionary) -> Dictionary:
 			"max_power": ses["max_power_w"],
 			"avg_cadence": ses["avg_cadence_rpm"],
 			"max_cadence": ses["max_cadence_rpm"],
+			"avg_heart_rate": ses["avg_heart_rate_bpm"],
+			"max_heart_rate": ses["max_heart_rate_bpm"],
 			"num_laps": ses["num_laps"],
 		}
 	return out
@@ -1050,6 +1054,14 @@ static func _dev_string(fields: Dictionary, key: String) -> String:
 	if end >= 0:
 		raw = raw.slice(0, end)
 	return raw.get_string_from_utf8()
+
+
+## A field's value, or null when absent or invalid (heart rate: a ride without one).
+static func _opt_value(fields: Dictionary, num: int) -> Variant:
+	var v: Variant = fields.get(num, null)
+	if v is Array:
+		v = (v as Array)[0] if not (v as Array).is_empty() else null
+	return float(v) if v != null else null
 
 
 static func _scaled(fields: Dictionary, num: int, scale: float) -> float:

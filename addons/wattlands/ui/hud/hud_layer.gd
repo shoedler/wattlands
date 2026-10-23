@@ -29,10 +29,17 @@ extends CanvasLayer
 ## - Raw W and %FTP always show: if the spec has no power gauge (and not both a power_w and
 ##   an ftp_pct readout), a power gauge is added at bottom_left (ensure_power_visible).
 ##   W/kg shows only if the rider opted in (profile `show_wkg`; or wkg_weight_kg).
-## - Safety banners: rescue (4.6.3), warm-up (4.6.8) and pause, from set_safety_state(),
-##   update()'s telemetry (rescue, paused) and the bus (rescue_changed, paused_changed,
-##   governor_status {warmup, rescue, paused}) for the local rider. The rescue banner always
-##   shows; spec.show_safety_banners = false hides only the warm-up and pause banners (W4).
+## - Safety banners: rescue (4.6.3) and warm-up (4.6.8), from set_safety_state(), update()'s
+##   telemetry (rescue) and the bus (rescue_changed, governor_status {warmup, rescue}) for the
+##   local rider. The rescue banner always shows; spec.show_safety_banners = false hides only
+##   the warm-up banner (W4).
+## - Pause (BRIEF 3.5): the HudPauseBadge (two bars, UI_PAUSE_TITLE and the resume hint) shows
+##   above the game, centred near the top, whenever the local rider is paused:
+##   set_safety_state(paused), update()'s Telemetry.paused (the rider's own pause on not
+##   pedaling, also in multiplayer), paused_changed and governor_status {paused}. No HudSpec
+##   hides it.
+## - Heart rate: the power gauge shows Telemetry.heart_rate_bpm while it is above 0 (a paired
+##   sensor or a MockTrainer `hr` profile) and hides it otherwise.
 ## - Trainer control lost (BRIEF 4.4, W4): EventBus.trainer_control_lost (Request Control
 ##   0x05 or Machine Status 0xFF on this machine's trainer) puts up the trainer notice
 ##   TRAINER_ANOTHER_APP_CONTROL in the banner area, with the "warning" sound, once per loss;
@@ -84,6 +91,7 @@ var _game_controls: Array[Control] = []
 var _toasts: HudToasts = null
 var _banner: HudBanner = null
 var _feed: HudLocalFeed = null
+var _pause_badge: HudPauseBadge = null
 var _local_peer: int = 0
 var _readouts: Dictionary = {}
 ## The latest power and cadence bands per peer (Vector2(lo, hi)) and the local teammate
@@ -126,6 +134,8 @@ func _init() -> void:
 	_toasts = HudToasts.new()
 	_banner = HudBanner.new()
 	_feed = HudLocalFeed.new(self)
+	_pause_badge = HudPauseBadge.new()
+	_root.add_child(_pause_badge)
 
 
 func _ready() -> void:
@@ -233,6 +243,11 @@ func _advance_messages(t: float) -> void:
 		_tel_clocked = true
 		_frames_since_tel = 0.0
 	_tel_t = t
+
+
+## The pause symbol (shown while the local rider is paused).
+func pause_badge() -> HudPauseBadge:
+	return _pause_badge
 
 
 ## A HudFeed that draws on this layer only (the GameHost wraps it with network routing).
@@ -382,6 +397,8 @@ func relayout() -> void:
 	var ss := screen_size()
 	_root.position = Vector2.ZERO
 	_root.size = ss
+	_pause_badge.layout(ss)
+	_root.move_child(_pause_badge, -1)
 	_fit_centers(ss)
 	for anchor: String in _boxes.keys():
 		var box: VBoxContainer = _boxes[anchor]
@@ -821,7 +838,8 @@ func _refresh_safety() -> void:
 	if rescue and not _rescue_shown:
 		_play("rescue")
 	_rescue_shown = rescue
-	_banner.set_safety(_ext_warmup, rescue, _ext_paused or _tele_paused)
+	_banner.set_safety(_ext_warmup, rescue)
+	_pause_badge.set_paused(_ext_paused or _tele_paused)
 
 
 func _play(sound: String) -> void:

@@ -30,6 +30,9 @@ var rescue: bool = false
 var afk: bool = false
 var coasting: bool = false
 var haptic_pct: float = 0.0
+## The rider's own pause on not pedaling (LocalRider.is_ride_paused) and heart rate, scripted.
+var ride_paused: bool = false
+var heart_rate: int = 0
 ## Where finish_ride writes its file ("" = no recorder: returns "").
 var ride_dir: String = ""
 var refuse_reason: String = ""
@@ -150,6 +153,10 @@ func tick(dt: float) -> void:
 			pause_requested.emit("coasting")
 
 
+func is_ride_paused() -> bool:
+	return ride_paused
+
+
 func telemetry() -> Telemetry:
 	var tm := Telemetry.new()
 	tm.peer_id = peer_id
@@ -173,7 +180,9 @@ func telemetry() -> Telemetry:
 	tm.rescue = rescue
 	tm.afk = afk
 	tm.coasting = coasting
-	tm.paused = game_paused
+	# Like LocalRider: in multiplayer only the rider's own pause, in solo the game pause too.
+	tm.paused = ride_paused or (game_paused and not is_multiplayer)
+	tm.heart_rate_bpm = heart_rate
 	tm.phase_index = _fake_phase
 	tm.haptic_pct = haptic_pct
 	return tm

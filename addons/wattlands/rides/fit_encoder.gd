@@ -4,8 +4,9 @@ extends RefCounted
 ## with its CRC, definition and data messages, and the file CRC (FitCrc, the FIT SDK's
 ## CRC-16). Messages: file_id (type activity, manufacturer development), developer_data_id and
 ## field_description (one developer field, the lap name), device_info, event (timer start
-## and stop), record (timestamp, power, cadence, speed, distance; no GPS), lap, session
-## (sport cycling, sub_sport virtual_activity, totals) and activity.
+## and stop), record (timestamp, power, cadence, speed, distance, and heart rate when the ride
+## has one; no GPS), lap, session (sport cycling, sub_sport virtual_activity, totals, and
+## average and maximum heart rate when the ride has one) and activity.
 ##
 ## Field numbers, base types and scales follow the FIT SDK profile (checked against
 ## @garmin/fitsdk 21.218.0, see docs/deps.d/garmin-fitsdk.md). Timestamps are FIT times:
@@ -147,6 +148,15 @@ const DEF_RECORD: Array = [
 	[6, 2, BT_UINT16],
 	[5, 4, BT_UINT32],
 ]
+## The record definition of a ride with heart rate: DEF_RECORD plus heart_rate (3, bpm).
+const DEF_RECORD_HR: Array = [
+	[253, 4, BT_UINT32],
+	[7, 2, BT_UINT16],
+	[4, 1, BT_UINT8],
+	[6, 2, BT_UINT16],
+	[5, 4, BT_UINT32],
+	[3, 1, BT_UINT8],
+]
 const DEF_LAP: Array = [
 	[254, 2, BT_UINT16],
 	[253, 4, BT_UINT32],
@@ -167,6 +177,10 @@ const DEF_LAP: Array = [
 	[25, 1, BT_ENUM],
 	[39, 1, BT_ENUM],
 ]
+## Lap fields added for a ride with heart rate: avg_heart_rate (15), max_heart_rate (16).
+const HR_LAP_FIELDS: Array = [[15, 1, BT_UINT8], [16, 1, BT_UINT8]]
+## Session fields added for a ride with heart rate: avg_heart_rate (16), max_heart_rate (17).
+const HR_SESSION_FIELDS: Array = [[16, 1, BT_UINT8], [17, 1, BT_UINT8]]
 ## Developer fields of the lap message: [field number, size, developer data index].
 const DEV_DEF_LAP: Array = [[DEV_FIELD_LAP_NAME, LAP_NAME_SIZE, DEV_INDEX]]
 const DEF_SESSION: Array = [
@@ -205,6 +219,8 @@ var _data: StreamPeerBuffer = StreamPeerBuffer.new()
 ## Local types whose definition was written.
 var _defined: Dictionary = {}
 var _lap_name_declared: bool = false
+## Write the heart rate fields (set before the first record, lap or session).
+var heart_rate: bool = false
 
 
 func _init() -> void:
@@ -298,33 +314,39 @@ func timer_event(ts_unix: int, running: bool) -> void:
 	)
 
 
-## One record. Negative cadence or speed are written as invalid (absent).
+## One record. Negative cadence or speed are written as invalid (absent), and so is a heart
+## rate of 0 or less (written only with `heart_rate` on).
 func record(
-	ts_unix: int, power_w: float, cadence_rpm: float, speed_mps: float, distance_m: float
+	ts_unix: int,
+	power_w: float,
+	cadence_rpm: float,
+	speed_mps: float,
+	distance_m: float,
+	heart_rate_bpm: float = 0.0
 ) -> void:
-	_ensure_def(LOCAL_RECORD, MESG_RECORD, DEF_RECORD)
-	_data_mesg(
-		LOCAL_RECORD,
-		DEF_RECORD,
-		[
-			fit_time(ts_unix),
-			_u16(power_w),
-			_opt_u8(cadence_rpm),
-			_opt_scaled_u16(speed_mps, 1000.0),
-			_u32(distance_m * 100.0),
-		]
-	)
+	var def := DEF_RECORD_HR if heart_rate else DEF_RECORD
+	_ensure_def(LOCAL_RECORD, MESG_RECORD, def)
+	var values := [
+		fit_time(ts_unix),
+		_u16(power_w),
+		_opt_u8(cadence_rpm),
+		_opt_scaled_u16(speed_mps, 1000.0),
+		_u32(distance_m * 100.0),
+	]
+	if heart_rate:
+		values.append(_opt_hr(heart_rate_bpm))
+	_data_mesg(LOCAL_RECORD, def, values)
 
 
 ## A lap. Keys: index, end_unix, start_unix, elapsed_s, timer_s, distance_m, avg_speed_mps,
 ## max_speed_mps, avg_power_w, max_power_w, avg_cadence_rpm, max_cadence_rpm (-1 = absent),
-## work_j, trigger (LAP_TRIGGER_*), name.
+## work_j, trigger (LAP_TRIGGER_*), name; with `heart_rate` on also avg_heart_rate_bpm and
+## max_heart_rate_bpm (<= 0 = absent).
 func lap(d: Dictionary) -> void:
 	declare_lap_name_field()
-	_ensure_def(LOCAL_LAP, MESG_LAP, DEF_LAP, DEV_DEF_LAP)
-	_data_mesg(
-		LOCAL_LAP,
-		DEF_LAP,
+	var def := DEF_LAP + HR_LAP_FIELDS if heart_rate else DEF_LAP
+	_ensure_def(LOCAL_LAP, MESG_LAP, def, DEV_DEF_LAP)
+	var values := (
 		[
 			int(d.get("index", 0)),
 			fit_time(int(d.get("end_unix", 0))),
@@ -344,17 +366,17 @@ func lap(d: Dictionary) -> void:
 			int(d.get("trigger", LAP_TRIGGER_MANUAL)),
 			SPORT_CYCLING,
 			SUB_SPORT_VIRTUAL_ACTIVITY,
-		],
-		[_fixed_string(str(d.get("name", "")), LAP_NAME_SIZE)]
+		]
+		+ _hr_values(d)
 	)
+	_data_mesg(LOCAL_LAP, def, values, [_fixed_string(str(d.get("name", "")), LAP_NAME_SIZE)])
 
 
 ## The session. Keys as lap() plus first_lap_index and num_laps.
 func session(d: Dictionary) -> void:
-	_ensure_def(LOCAL_SESSION, MESG_SESSION, DEF_SESSION)
-	_data_mesg(
-		LOCAL_SESSION,
-		DEF_SESSION,
+	var def := DEF_SESSION + HR_SESSION_FIELDS if heart_rate else DEF_SESSION
+	_ensure_def(LOCAL_SESSION, MESG_SESSION, def)
+	var values := (
 		[
 			0,
 			fit_time(int(d.get("end_unix", 0))),
@@ -377,7 +399,9 @@ func session(d: Dictionary) -> void:
 			int(d.get("num_laps", 0)),
 			SESSION_TRIGGER_ACTIVITY_END,
 		]
+		+ _hr_values(d)
 	)
+	_data_mesg(LOCAL_SESSION, def, values)
 
 
 ## The activity (one session). `local_offset_s`: the local time zone's offset from UTC in
@@ -426,13 +450,14 @@ func finish() -> PackedByteArray:
 
 ## Encodes a ride as RideRecorder.fit_data() returns it:
 ## {utc_start_unix, serial, software_version_x100, local_offset_s (or null),
-##  records: [{t (Unix s), power_w, cadence_rpm, speed_mps, distance_m}],
+##  records: [{t (Unix s), power_w, cadence_rpm, speed_mps, distance_m, heart_rate_bpm}],
 ##  events: [{t, running}], laps: [lap() dictionaries], session: {session() keys},
-##  end_unix, timer_s}.
+##  end_unix, timer_s, heart_rate (bool: write the heart rate fields)}.
 ## Messages are written in time order: laps before the timer events and records of the same
 ## second, then the last timer stop, the last lap, the session and the activity.
 static func encode_ride(ride: Dictionary) -> PackedByteArray:
 	var enc := FitEncoder.new()
+	enc.heart_rate = bool(ride.get("heart_rate", false))
 	var start_unix := int(ride.get("utc_start_unix", 0))
 	var serial := int(ride.get("serial", 1))
 	enc.file_id(start_unix, serial)
@@ -480,7 +505,8 @@ static func encode_ride(ride: Dictionary) -> PackedByteArray:
 					float(d.get("power_w", 0.0)),
 					float(d.get("cadence_rpm", -1.0)),
 					float(d.get("speed_mps", -1.0)),
-					float(d.get("distance_m", 0.0))
+					float(d.get("distance_m", 0.0)),
+					float(d.get("heart_rate_bpm", 0.0))
 				)
 	if last_stop != null:
 		enc.timer_event(int((last_stop as Dictionary).get("t", 0)), false)
@@ -587,6 +613,21 @@ static func _opt_u8(v: float) -> Variant:
 	if v < 0.0:
 		return null
 	return clampi(roundi(v), 0, 0xFE)
+
+
+## A heart rate in bpm (<= 0 = absent).
+static func _opt_hr(v: float) -> Variant:
+	return _opt_u8(v) if v > 0.0 else null
+
+
+## The lap or session heart rate values (avg, max) when `heart_rate` is on, else none.
+func _hr_values(d: Dictionary) -> Array:
+	if not heart_rate:
+		return []
+	return [
+		_opt_hr(float(d.get("avg_heart_rate_bpm", -1.0))),
+		_opt_hr(float(d.get("max_heart_rate_bpm", -1.0))),
+	]
 
 
 static func _opt_scaled_u16(v: float, scale: float) -> Variant:

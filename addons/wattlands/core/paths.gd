@@ -47,6 +47,11 @@ static func last_device_path() -> String:
 	return user_dir().path_join("last_device.json")
 
 
+## The remembered heart rate sensor {address, name} (HrSensorManager).
+static func last_hr_sensor_path() -> String:
+	return user_dir().path_join("last_hr_sensor.json")
+
+
 static func recent_rooms_path() -> String:
 	return user_dir().path_join("recent_rooms.json")
 

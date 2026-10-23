@@ -622,32 +622,56 @@ func test_banner_safety_priority() -> void:
 	var b: HudBanner = _add(HudBanner.new())
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE)
 	assert_eq(b.safety_text(), "")
-	b.set_safety(true, false, false)
+	b.set_safety(true, false)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_WARMUP)
 	assert_eq(b.safety_text(), tr("UI_BANNER_WARMUP"))
-	b.set_safety(true, true, false)
+	b.set_safety(true, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue over warm-up")
 	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"))
-	b.set_safety(true, true, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_PAUSED)
 	b.show_safety = false
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE, "rescue always shows (4.6.3)")
-	assert_eq(b.safety_text(), tr("UI_BANNER_RESCUE"), "the pause banner hidden at once")
-	b.set_safety(true, false, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up and pause hidden when off")
-	assert_eq(b.safety_text(), "")
-	b.set_safety(true, false, false)
+	b.set_safety(true, false)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "warm-up hidden when off")
-	b.set_safety(false, false, true)
-	assert_eq(b.safety_state(), HudBanner.SAFETY_NONE, "pause hidden when off")
-	b.set_safety(false, true, false)
+	assert_eq(b.safety_text(), "")
+	b.set_safety(false, true)
 	assert_eq(b.safety_state(), HudBanner.SAFETY_RESCUE)
 	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "rescue at full size")
-	b.set_safety(true, true, true)
+	b.set_safety(true, false)
 	b.show_safety = true
-	assert_eq(b.safety_text(), tr("UI_BANNER_PAUSED"), "and back when turned on")
-	b.set_safety(false, false, false)
+	assert_eq(b.safety_text(), tr("UI_BANNER_WARMUP"), "and back when turned on")
+	b.set_safety(false, false)
 	assert_eq(b.safety_text(), "")
+
+
+## The pause symbol (BRIEF 3.5): two bars, the title and the resume hint, hidden until paused.
+func test_pause_badge() -> void:
+	var p: HudPauseBadge = _add(HudPauseBadge.new())
+	assert_false(p.visible)
+	assert_eq(p.title_label().text, tr("UI_PAUSE_TITLE"))
+	assert_eq(p.hint_label().text, tr("UI_PAUSE_HINT"))
+	p.set_paused(true)
+	assert_true(p.visible)
+	p.layout(Vector2(1920, 1080))
+	assert_eq(p.position.y, roundf(1080.0 * HudPauseBadge.TOP_FRACTION), "near the top")
+	assert_eq(p.size.x, 1920.0, "centred across the screen")
+	p.set_paused(false)
+	assert_false(p.visible)
+
+
+## The power gauge shows the heart rate only while one is known (BRIEF 3.9; local only).
+func test_power_gauge_heart_rate() -> void:
+	var g: HudPowerGauge = _add(HudPowerGauge.new())
+	var t := Telemetry.new()
+	t.power_w = 180.0
+	g.set_telemetry(t)
+	assert_false(g.heart_rate_label().visible, "hidden without a sensor")
+	t.heart_rate_bpm = 142
+	g.set_telemetry(t)
+	assert_true(g.heart_rate_label().visible)
+	assert_eq(g.heart_rate_label().text, tr("UI_HUD_HR").format([142]))
+	t.heart_rate_bpm = 0
+	g.set_telemetry(t)
+	assert_false(g.heart_rate_label().visible, "hidden again when the sensor goes quiet")
 
 
 ## The trainer notice (BRIEF 4.4) sits between the safety and the game banner, in the
@@ -666,7 +690,7 @@ func test_banner_trainer_notice() -> void:
 	assert_eq(HudWidget.font_px(b.trainer_label()), 34, "0.6 x the 56 px banner size")
 	assert_eq(WlTheme.BANNER_PX, 56)
 	b.show_safety = false
-	assert_true(panel.visible, "not a warm-up or pause banner")
+	assert_true(panel.visible, "not a warm-up banner")
 	b.tick(60.0)
 	assert_eq(b.trainer_text(), "Another app may hold control", "no timeout")
 	b.fit_to(Vector2(640, 60))
@@ -682,15 +706,15 @@ func test_banner_trainer_notice() -> void:
 func test_banners_in_a_small_rect_stay_readable() -> void:
 	var b: HudBanner = _add(HudBanner.new())
 	b.fit_to(Vector2(640, 60))
-	b.set_safety(false, true, false)
+	b.set_safety(false, true)
 	assert_gte(HudWidget.font_px(b.safety_label()), HudBanner.MIN_FONT_PX, "rescue")
 	assert_gte(HudBanner.MIN_FONT_PX, 32)
-	b.set_safety(true, false, false)
+	b.set_safety(true, false)
 	assert_gte(HudWidget.font_px(b.safety_label()), HudBanner.MIN_WARMUP_PX, "warm-up")
 	b.show_game_banner("Strike!", 2.0)
 	assert_gte(HudWidget.font_px(b.game_label()), HudBanner.MIN_FONT_PX, "game banner")
 	b.fit_to(Vector2(1280, 400))
-	b.set_safety(false, true, false)
+	b.set_safety(false, true)
 	assert_eq(HudWidget.font_px(b.safety_label()), WlTheme.BANNER_PX, "full size in a tall rect")
 
 

@@ -31,6 +31,9 @@ extends TrainerDevice
 ##     SURGE_MIN_SAMPLES notifications carried it, so the ERG surge gesture (flywheel speed
 ##     >= 1.12 x its 10 s average for two consecutive ~1 Hz samples) fires on every surge;
 ##     with sim_pct it rides sim_pct% FTP whenever the trainer is in SIM.
+##   hr (rest_bpm 60, max_bpm 185): a mock heart rate sensor; heart_rate_bpm() follows the
+##     rider's power (rest_bpm when stopped, 20% of the reserve plus up to 80% more at 120%
+##     FTP) with a 20 s first-order lag. Without `hr`, heart_rate_bpm() is 0 (no sensor).
 ## Precedence (docs/OWNERSHIP.md MR1, C31). Power: the first scripted profile (zero, const,
 ## ramp, intervals) > surge sim_pct in SIM > the erg follower (ERG: compliance x the commanded
 ## target, limited to max_power_w; otherwise compliance x the power band's centre, or 90% FTP).
@@ -93,6 +96,7 @@ const PROFILE_KEYS: Dictionary = {
 	"band": ["offset_rpm"],
 	"cadence_drop": ["rpm", "at_s", "at_phase", "after_s", "at_target_pct", "for_s"],
 	"surge": ["every_s", "for_s", "lift", "sim_pct"],
+	"hr": ["rest_bpm", "max_bpm"],
 }
 const REQUIRED_KEYS: Dictionary = {
 	"const": ["w"],
@@ -160,6 +164,10 @@ const CADENCE_LAG_TAU_S := 1.5
 const DROPOUT_CHANCE := 0.03
 const DROPOUT_MIN_S := 1.5
 const DROPOUT_MAX_S := 4.0
+## `hr` profile defaults and its lag.
+const HR_REST_BPM := 60.0
+const HR_MAX_BPM := 185.0
+const HR_TAU_S := 20.0
 ## Keyboard steps.
 const KEY_POWER_STEP_W := 10.0
 const KEY_CADENCE_STEP_RPM := 5.0
@@ -249,6 +257,10 @@ var _noise_rng: RandomNumberGenerator = null
 var _drops: Array[DropState] = []
 var _surges: Array[SurgeState] = []
 var _sim_pct: float = -1.0
+var _has_hr: bool = false
+var _hr_rest: float = HR_REST_BPM
+var _hr_max: float = HR_MAX_BPM
+var _hr: float = HR_REST_BPM
 # Fatigue, sprints, speed, dropouts, keyboard.
 var _wbal: WBalance = null
 var _exhausted: bool = false
@@ -477,6 +489,7 @@ static func describe_profiles() -> Dictionary:
 			"every every_s, cadence and speed x (1 + lift) for for_s and at least two "
 			+ "notifications (fires the ERG surge gesture); sim_pct: rides that % FTP in SIM"
 		),
+		"hr": "a mock heart rate sensor following power (rest_bpm .. max_bpm, 20 s lag)",
 	}
 	var defaults := {
 		"erg": {"compliance": 1.0},
@@ -487,6 +500,7 @@ static func describe_profiles() -> Dictionary:
 		"band": {"offset_rpm": 0.0},
 		"cadence_drop": {"after_s": 0.0, "for_s": INF},
 		"surge": {"every_s": SURGE_EVERY_S, "for_s": SURGE_FOR_S, "lift": SURGE_LIFT},
+		"hr": {"rest_bpm": HR_REST_BPM, "max_bpm": HR_MAX_BPM},
 	}
 	var out := {}
 	for pname: String in PROFILE_KEYS.keys():
@@ -583,6 +597,21 @@ func profile_time_s() -> float:
 	return _t - _run_start_t
 
 
+## The `hr` profile's heart rate in whole bpm (0 without `hr`: no sensor).
+func heart_rate_bpm() -> int:
+	return roundi(_hr) if _has_hr else 0
+
+
+func _update_heart_rate(h: float) -> void:
+	if not _has_hr:
+		return
+	var target := _hr_rest
+	if _power_w > 0.0:
+		var frac := clampf(_power_w / (SPRINT_FTP_FRACTION * _ftp_w), 0.0, 1.0)
+		target = _hr_rest + (_hr_max - _hr_rest) * (0.2 + 0.8 * frac)
+	_hr += (target - _hr) * minf(h / HR_TAU_S, 1.0)
+
+
 ## Restart the profile from now (for example at session start, after the mock rode through
 ## menus): profile time returns to 0, every cadence_drop re-arms and every surge is next due
 ## every_s from now. The rider (power, W' balance, cadence, speed), the commanded state, the
@@ -619,6 +648,7 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 	_drops = []
 	_surges = []
 	_sim_pct = -1.0
+	_has_hr = false
 	var found_erg := false
 	for c: Dictionary in _components:
 		var cname := str(c["name"])
@@ -657,6 +687,12 @@ func _configure(p_spec: String, comps: Array, p_ftp_w: float, options: Dictionar
 				_surges.append(s)
 				if _sim_pct < 0.0 and p.has("sim_pct"):
 					_sim_pct = float(p["sim_pct"])
+			"hr":
+				if not _has_hr:
+					_has_hr = true
+					_hr_rest = float(p.get("rest_bpm", HR_REST_BPM))
+					_hr_max = maxf(float(p.get("max_bpm", HR_MAX_BPM)), _hr_rest)
+	_hr = _hr_rest
 	var cp := float(options.get("cp_w", _ftp_w))
 	_wbal = WBalance.create(
 		maxf(cp, 1.0), maxf(float(options.get("wprime_j", DEFAULT_WPRIME_J)), 1.0)
@@ -711,6 +747,7 @@ func _step(h: float) -> void:
 		_power_w = goal
 		_power_rate = 0.0
 	_update_fatigue(h)
+	_update_heart_rate(h)
 	_sprinting = follower and commanded_mode != Wl.ERG and _power_w >= SPRINT_FTP_FRACTION * _ftp_w
 	_since_sprint_s = 0.0 if _sprinting else _since_sprint_s + h
 	var pedaling := goal > 0.0

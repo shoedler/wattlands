@@ -162,6 +162,8 @@ function normalizedSession(s, sport, subSport) {
     max_power_w: s.maxPower ?? s.max_power ?? null,
     avg_cadence_rpm: s.avgCadence ?? s.avg_cadence ?? null,
     max_cadence_rpm: s.maxCadence ?? s.max_cadence ?? null,
+    avg_heart_rate_bpm: s.avgHeartRate ?? s.avg_heart_rate ?? null,
+    max_heart_rate_bpm: s.maxHeartRate ?? s.max_heart_rate ?? null,
     num_laps: s.numLaps ?? s.num_laps ?? null,
   };
 }
@@ -322,6 +324,12 @@ function compareSummary(model) {
   diff('max power W', s.max_power_w, sum.max_power_w, 0.51);
   if (Number(sum.avg_cadence_rpm) >= 0) diff('avg cadence rpm', s.avg_cadence_rpm, sum.avg_cadence_rpm, 0.51);
   if (Number(sum.max_cadence_rpm) >= 0) diff('max cadence rpm', s.max_cadence_rpm, sum.max_cadence_rpm, 0.51);
+  if (Number(sum.avg_heart_rate_bpm) > 0) {
+    diff('avg heart rate bpm', s.avg_heart_rate_bpm, sum.avg_heart_rate_bpm, 0.51);
+    diff('max heart rate bpm', s.max_heart_rate_bpm, sum.max_heart_rate_bpm, 0.51);
+  } else if (s.avg_heart_rate_bpm !== null && s.avg_heart_rate_bpm !== undefined) {
+    e.push(`summary mismatch: FIT has avg heart rate ${s.avg_heart_rate_bpm}, the summary none`);
+  }
 }
 
 // --- Output ---------------------------------------------------------------------------------
@@ -350,7 +358,8 @@ export function resultJson(model) {
         sport: s.sport, sub_sport: s.sub_sport, start: iso(s.start_unix), elapsed_s: s.elapsed_s, timer_s: s.timer_s,
         distance_m: s.distance_m, work_j: s.work_j, kj: s.work_j === null ? null : s.work_j / 1000,
         avg_power_w: s.avg_power_w, max_power_w: s.max_power_w, avg_cadence_rpm: s.avg_cadence_rpm,
-        max_cadence_rpm: s.max_cadence_rpm, num_laps: s.num_laps,
+        max_cadence_rpm: s.max_cadence_rpm, avg_heart_rate_bpm: s.avg_heart_rate_bpm ?? null,
+        max_heart_rate_bpm: s.max_heart_rate_bpm ?? null, num_laps: s.num_laps,
       }
       : null,
     summary_checked: Boolean(model.summary_checked),
@@ -365,6 +374,9 @@ function printText(results, out) {
     out.write(`     records ${r.records}, laps ${r.laps.length}`);
     if (s) {
       out.write(`, ${s.sport}/${s.sub_sport}, elapsed ${s.elapsed_s} s, timer ${s.timer_s} s, distance ${s.distance_m} m, work ${s.kj} kJ, power avg ${s.avg_power_w} W max ${s.max_power_w} W, cadence avg ${s.avg_cadence_rpm} max ${s.max_cadence_rpm} rpm`);
+      if (s.avg_heart_rate_bpm !== null && s.avg_heart_rate_bpm !== undefined) {
+        out.write(`, heart rate avg ${s.avg_heart_rate_bpm} max ${s.max_heart_rate_bpm} bpm`);
+      }
     }
     out.write(`${r.summary_checked ? ', matches its summary' : ''} [${r.decoder}]\n`);
     r.laps.forEach((l, i) => {

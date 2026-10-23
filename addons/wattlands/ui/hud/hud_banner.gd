@@ -1,12 +1,12 @@
 class_name HudBanner
 extends VBoxContainer
 ## The banner area (BRIEF 3.9, 4.4, 4.6.3, 4.6.8): the kit's safety banner, the trainer
-## notice and the latest game banner. The safety banner shows the most urgent of paused,
-## rescue (4.6.3) and warm-up (4.6.8), each with its own text and color (paused grey, rescue
-## orange, warm-up purple, all with text so color is never the only cue); the warm-up banner
-## is smaller. `show_safety` off (HudSpec.show_safety_banners false) hides only the warm-up
-## and pause banners: the rescue banner always shows (W4: 4.6.3 says show "rescue", and no
-## game may hide it). The trainer notice (set_trainer_notice, 4.4: another app may hold
+## notice and the latest game banner. The safety banner shows the more urgent of rescue
+## (4.6.3) and warm-up (4.6.8), each with its own text and color (rescue orange, warm-up
+## purple, both with text so color is never the only cue); the warm-up banner is smaller.
+## `show_safety` off (HudSpec.show_safety_banners false) hides only the warm-up banner: the
+## rescue banner always shows (W4: 4.6.3 says show "rescue", and no game may hide it). Pause
+## has its own symbol (HudPauseBadge). The trainer notice (set_trainer_notice, 4.4: another app may hold
 ## control) stays up until cleared, in the smaller size, dark with an orange border. Game
 ## banners (ctx.hud.banner) show for their `seconds` of the session's platform time (HudLayer
 ## ticks them); a new one replaces the old. Banners line up on `side` (HudLayer sets it from
@@ -15,7 +15,6 @@ extends VBoxContainer
 const SAFETY_NONE := ""
 const SAFETY_WARMUP := "warmup"
 const SAFETY_RESCUE := "rescue"
-const SAFETY_PAUSED := "paused"
 ## Panel margins and border around a banner label.
 const PANEL_PAD := 44.0
 ## Banner text never shrinks below this in a small rect: the rescue banner must read from
@@ -24,8 +23,8 @@ const MIN_FONT_PX := 32
 ## The smaller warm-up banner's floor.
 const MIN_WARMUP_PX := 28
 
-## Show the kit's warm-up and pause banners (HudSpec.show_safety_banners). The rescue banner
-## shows either way.
+## Show the kit's warm-up banner (HudSpec.show_safety_banners). The rescue banner shows either
+## way.
 var show_safety: bool = true:
 	set(value):
 		show_safety = value
@@ -40,7 +39,6 @@ var side: int = 0
 
 var _warmup: bool = false
 var _rescue: bool = false
-var _paused: bool = false
 var _game_left: float = 0.0
 var _game_text: String = ""
 var _trainer_text: String = ""
@@ -73,20 +71,16 @@ func _init() -> void:
 	_refresh()
 
 
-func set_safety(warmup_active: bool, rescue: bool, paused: bool) -> void:
-	if warmup_active == _warmup and rescue == _rescue and paused == _paused:
+func set_safety(warmup_active: bool, rescue: bool) -> void:
+	if warmup_active == _warmup and rescue == _rescue:
 		return
 	_warmup = warmup_active
 	_rescue = rescue
-	_paused = paused
 	_refresh()
 
 
-## The banner state shown: "", "warmup", "rescue" or "paused". Rescue shows even with
-## show_safety off.
+## The banner state shown: "", "warmup" or "rescue". Rescue shows even with show_safety off.
 func safety_state() -> String:
-	if _paused and show_safety:
-		return SAFETY_PAUSED
 	if _rescue:
 		return SAFETY_RESCUE
 	if _warmup and show_safety:
@@ -185,13 +179,10 @@ func _panel(panel_name: String) -> PanelContainer:
 func _refresh() -> void:
 	var state := safety_state()
 	_safety_panel.visible = state != SAFETY_NONE
-	var bg := WlTheme.PAUSED
+	var bg := WlTheme.WARN
 	var key := ""
 	var px := font_px
 	match state:
-		SAFETY_PAUSED:
-			bg = WlTheme.PAUSED
-			key = "UI_BANNER_PAUSED"
 		SAFETY_RESCUE:
 			bg = WlTheme.WARN
 			key = "UI_BANNER_RESCUE"

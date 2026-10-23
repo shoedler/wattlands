@@ -22,6 +22,8 @@ const ADDR := "C4:9D:A1:00:2B:7E"
 const OTHER := "11:22:33:44:55:66"
 const FLAT := "write 2ad9 11000000002833"
 const STOP := "write 2ad9 0801"
+const HR_ADDR := "E8:11:22:33:44:55"
+const FakeHrTransport := preload("res://tests/ble/fake_hr_transport.gd")
 
 
 ## The emulated KICKR plus what FtmsConnectionManager needs from a backend (as in
@@ -72,7 +74,8 @@ func after_each() -> void:
 
 
 ## The real TrainerService, in control of the emulated KICKR at ADDR, as the services' trainer.
-func _real_trainer() -> WlTrainerService:
+## `hr_factory` (optional) makes its HrSensorManager.
+func _real_trainer(hr_factory: Callable = Callable()) -> WlTrainerService:
 	var p := fx.give_profile(200.0)
 	p.skip_warmup = true
 	_link = KickrLink.new()
@@ -89,6 +92,7 @@ func _real_trainer() -> WlTrainerService:
 		_manager = m
 		return m
 	_svc.rider_options_factory = func() -> Dictionary: return {"bus": fx.bus}
+	_svc.hr_factory = hr_factory
 	add_child(_svc)
 	_svc.start()
 	_svc.connect_trainer(ADDR)
@@ -510,7 +514,9 @@ func test_focus_moves_keep_the_controls_row_on_a_1080p_screen() -> void:
 func test_every_settings_row_is_on_a_1080p_screen_when_highlighted() -> void:
 	var s: AppSettingsScreen = await _settings_at_1080p()
 	var off: Array[String] = []
-	for page: String in ["", "trainer", "strava", "haptics", "audio", "network", "pedal_nav"]:
+	for page: String in [
+		"", "trainer", "sensors", "strava", "haptics", "audio", "network", "pedal_nav"
+	]:
 		if page != "":
 			s.open_section(page)
 		await wait_process_frames(2)
@@ -524,7 +530,7 @@ func test_every_settings_row_is_on_a_1080p_screen_when_highlighted() -> void:
 ## every row and the scan hint on screen, whichever row is highlighted.
 func test_settings_pages_that_fit_do_not_scroll() -> void:
 	var s: AppSettingsScreen = await _settings_at_1080p()
-	for page: String in ["", "trainer", "haptics", "audio", "network", "pedal_nav"]:
+	for page: String in ["", "trainer", "sensors", "haptics", "audio", "network", "pedal_nav"]:
 		if page != "":
 			s.open_section(page)
 		await wait_process_frames(2)
@@ -779,3 +785,39 @@ func test_keep_back_or_a_coast_leave_the_bindings_alone() -> void:
 	assert_eq(inp.saves, 1, "and saves input.cfg")
 	assert_eq(_all_bindings(), _default_bindings())
 	assert_eq(menu(s).ids()[1], "bind:confirm")
+
+
+# --- Sensors -----------------------------------------------------------------------------------
+
+
+## Settings > Sensors: scan lists heart rate sensors, pairing subscribes (never writes), the page
+## shows the live heart rate, and Forget drops the remembered sensor. The service's rider reads
+## the same heart rate.
+func test_sensors_page_pairs_shows_bpm_and_forgets() -> void:
+	var hr_link := FakeHrTransport.new()
+	var hr := HrSensorManager.new()
+	hr.manual_clock = true
+	hr.make_transport = func() -> BleTransport: return hr_link
+	_real_trainer(func() -> HrSensorManager: return hr)
+	assert_eq(_svc.hr_manager(), hr)
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "trainer")
+	confirm_pick(s, "sensors")
+	assert_eq(s.status_label.text, AppScreen.t("APP_SET_SENSORS_HELP"))
+	assert_eq(s.sensor_status_text(), AppScreen.t("APP_SET_SENSORS_NONE"))
+	confirm_pick(s, "hr_scan")
+	hr_link.advertise(HR_ADDR, "Polar H10", ["180d"])
+	hr_link.advertise(OTHER, "KICKR CORE", ["1826"])
+	assert_true(menu(s).index_of_id("hr:" + HR_ADDR) >= 0, "the sensor is listed")
+	assert_eq(menu(s).index_of_id("hr:" + OTHER), -1, "the trainer is not")
+	confirm_pick(s, "hr:" + HR_ADDR)
+	assert_true(hr.is_ready())
+	assert_eq(hr_link.count("write_characteristic"), 0, "never written to")
+	hr_link.measure(PackedByteArray([0x00, 132]))
+	assert_eq(s.heart_rate_text(), AppScreen.t("APP_SET_SENSORS_BPM_VALUE").format([132]))
+	assert_eq(_svc.heart_rate_bpm(), 132)
+	assert_eq(_svc.local_rider().heart_rate_source.call(), 132, "the rider reads it")
+	confirm_pick(s, "hr_forget")
+	assert_false(hr.is_ready())
+	assert_true(HrSensorManager.read_last_sensor().is_empty())
+	assert_eq(_svc.heart_rate_bpm(), 0)
