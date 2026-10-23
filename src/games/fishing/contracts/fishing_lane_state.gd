@@ -125,6 +125,35 @@ var catches: Array = []
 # --- Randomness --------------------------------------------------------------------------
 var rng: FishingRandom = FishingRandom.new()
 
+# --- Rules bookkeeping (fish-rules, additive) ----------------------------------------------
+## The pull scheduler's stream, (seed, slot, STREAM_PULL), passed to begin() and step().
+var pull_rng: FishingRandom = FishingRandom.new()
+## The cadence EMA has taken its first sample (it starts at the first value, not at 0).
+var ema_ready: bool = false
+## A rescue, AFK or stale telemetry is on right now (staggered also covers the 10 s after).
+var stagger_on: bool = false
+## Effective rescue now: the module's on_rescue flag or the telemetry's (haptic rule).
+var rescue_now: bool = false
+## The hook is set in this Reel (end_phase requested or, in scheduled trips, the fish hooked
+## itself); the Fight starts with the next phase.
+var hook_set: bool = false
+## end_phase was requested in the current phase (it is sent once).
+var end_sent: bool = false
+## The scheduled bite of this Reel came.
+var sched_bit: bool = false
+## Ride-out tips shown so far.
+var tip_n: int = 0
+## Cadence (EMA) inside the current published tension band (fights) or lure band (reels).
+var in_band: bool = false
+## Seconds this fight overlapped >= n fights (index n = 2..4).
+var overlap_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+## The Landing's catch was scored.
+var resolved: bool = false
+## The first summary intent was stored (later ones are ignored).
+var summary_received: bool = false
+## Species (FishingConst.SPECIES indexes) whose record this session beat (new_records counts them).
+var record_species: Array[int] = []
+
 
 ## True while the lane plays the fish for the rider (Autopilot or the zero-input fallback).
 func auto_plays() -> bool:
