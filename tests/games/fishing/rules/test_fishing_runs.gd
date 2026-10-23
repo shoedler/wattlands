@@ -1,8 +1,7 @@
 extends GutTest
 ## Runs and jumps (brief 2.4): run k of n comes due at S = 1 - k / (n + 1), waits while a run is
 ## on (jumps also for their gap), is skipped in a stagger, and shifts the band and the fish. The
-## directives themselves are FishingPullScheduler's (fish-plan); FishingRulesPull bridges the two
-## functions fish-plan adds in G1.
+## directives themselves are FishingPullScheduler's (fish-plan); FishingRules calls it directly.
 
 const H := preload("res://tests/games/fishing/rules/fishing_rules_harness.gd")
 
@@ -77,21 +76,19 @@ func test_jumps_break_the_surface() -> void:
 	assert_lt(l.fish.z, 0.1, "a jump heads for the surface")
 
 
-func test_jump_gap_bridge() -> void:
+func test_jumps_wait_for_the_gap_and_runs_for_the_active_run() -> void:
 	var slot := FishingPlanSlot.new()
 	slot.run_kind = FishingSpeciesDef.RUN_JUMP
 	slot.run_min_gap_s = 90.0
-	var f := FishingFishState.new()
-	f.last_jump_t = 100.0
 	var ps := FishingPullState.new()
-	var script: Script = FishingPullScheduler
-	if script.has_method("run_blocked_by_gap"):
-		assert_typeof(FishingRulesPull.run_blocked_by_gap(ps, slot, 150.0, f), TYPE_BOOL)
-	else:
-		assert_true(FishingRulesPull.run_blocked_by_gap(ps, slot, 150.0, f), "50 s < 90 s")
-		assert_false(FishingRulesPull.run_blocked_by_gap(ps, slot, 190.0, f), "90 s passed")
-		slot.run_min_gap_s = 0.0
-		assert_false(FishingRulesPull.run_blocked_by_gap(ps, slot, 101.0, f), "runs: no gap")
+	ps.last_run_start_t = 100.0
+	assert_true(FishingPullScheduler.run_blocked_by_gap(ps, slot, 150.0), "50 s < 90 s")
+	assert_false(FishingPullScheduler.run_blocked_by_gap(ps, slot, 190.0), "90 s passed")
+	slot.run_min_gap_s = 0.0
+	assert_false(FishingPullScheduler.run_blocked_by_gap(ps, slot, 101.0), "runs: no gap")
+	ps.run_active = true
+	ps.run_end_t = 120.0
+	assert_true(FishingPullScheduler.run_blocked_by_gap(ps, slot, 110.0), "one run at a time")
 
 
 func test_pull_directives_go_out_per_peer_and_never_during_a_stagger() -> void:

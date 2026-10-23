@@ -61,7 +61,7 @@ static func new_state(
 		l.phase_index = -1
 		l.rng = FishingRandom.derive(seed, p.slot_index, FishingRandom.STREAM_LANE)
 		l.pull_rng = FishingRandom.derive(seed, p.slot_index, FishingRandom.STREAM_PULL)
-		FishingRulesPull.init_lane(l.pull, seed, p.slot_index)
+		FishingPullScheduler.init_lane(l.pull, seed, p.slot_index)
 		if p.slot_index < slots.size():
 			l.slots.assign(slots[p.slot_index])
 		st.lanes.append(l)
@@ -191,7 +191,7 @@ static func _set_state(l: FishingLaneState, s: int) -> void:
 static func _leave(st: FishingState, l: FishingLaneState, out: FishingStepOut) -> void:
 	match l.state:
 		FishingConst.ST_FIGHT:
-			FishingRulesPull.end(l.pull)
+			FishingPullScheduler.end(l.pull)
 			l.fish.run_active = false
 			l.longest_fight_s = maxf(l.longest_fight_s, l.fight_t)
 		FishingConst.ST_LANDING:
@@ -230,12 +230,12 @@ static func _update_stagger(st: FishingState, l: FishingLaneState, inp: FishingL
 		l.staggered = true
 		l.resume_t = 0.0
 		if l.state == FishingConst.ST_FIGHT:
-			FishingRulesPull.set_staggered(l.pull, true, st.t)
+			FishingPullScheduler.set_staggered(l.pull, true, st.t)
 	elif not cause and l.stagger_on:
 		l.stagger_on = false
 		l.resume_t = st.t + FishingConst.STAGGER_RESUME_S
 		if l.state == FishingConst.ST_FIGHT:
-			FishingRulesPull.set_staggered(l.pull, false, st.t)
+			FishingPullScheduler.set_staggered(l.pull, false, st.t)
 	if l.staggered and not l.stagger_on and st.t + _EPS >= l.resume_t:
 		l.staggered = false
 		l.resume_t = 0.0
@@ -611,9 +611,9 @@ static func _begin_fight(st: FishingState, l: FishingLaneState, out: FishingStep
 	l.band_center = _band_target(l, slot)
 	_band_edges(l)
 	_publish(l, l.band_lo, l.band_hi, out)
-	FishingRulesPull.begin(l.pull, slot, st.t, l)
+	FishingPullScheduler.begin(l.pull, slot, st.t, l.ftp, l.pull_rng)
 	if l.stagger_on:
-		FishingRulesPull.set_staggered(l.pull, true, st.t)
+		FishingPullScheduler.set_staggered(l.pull, true, st.t)
 	st.fish_started += 1
 	st.expected_points += float(base_points(f.kg))
 	out.events.append(FishingEvents.hookup(l.slot, f.sp, l.fights_started, slot.scheduled))
@@ -689,7 +689,7 @@ static func _tick_fight(
 		if not f.off_line:
 			_move_fish(f, slot, dt)
 			_runs(st, l, slot, out)
-	var dirs := FishingRulesPull.step(l.pull, slot, st.t, l)
+	var dirs := FishingPullScheduler.step(l.pull, slot, st.t, l.ftp, l.pull_rng)
 	if not l.stagger_on:
 		for d: Variant in dirs:
 			out.directives.append([l.peer, d])
@@ -767,12 +767,12 @@ static func _runs(
 	if f.run_active or not run_due(f, slot):
 		return
 	var jump := slot.run_kind == FishingSpeciesDef.RUN_JUMP
-	if jump and FishingRulesPull.run_blocked_by_gap(l.pull, slot, st.t, f):
+	if jump and FishingPullScheduler.run_blocked_by_gap(l.pull, slot, st.t):
 		return
 	var k := f.runs_fired
 	var n := slot.run_count()
 	f.runs_fired += 1
-	if not FishingRulesPull.start_run(l.pull, slot, k, st.t, l.ftp):
+	if not FishingPullScheduler.start_run(l.pull, slot, k, st.t, l.ftp):
 		return
 	var dur := slot.run_dur_s(k)
 	f.run_active = true
