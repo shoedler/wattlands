@@ -2,7 +2,6 @@
 	"id": "threshold",
 	"kind": "threshold",
 	"label": "FISHING_CONTENT_THRESHOLD",
-	"area": "coral_bank",
 	"total_min": 55,
 	"ride_out": {
 		"duration_s": 300,

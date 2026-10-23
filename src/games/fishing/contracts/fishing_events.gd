@@ -1,34 +1,30 @@
 class_name FishingEvents
 extends RefCounted
-## The event schema (brief 2.6; G0 contract). FishingRules returns these dictionaries in
+## The event schema (contract v2). FishingRules returns these dictionaries in
 ## FishingStepOut.events; the module sends each with send_event() (batched, in order, to every
-## client) and raises the host's own effects for its local rider; clients raise theirs in
-## apply_event(). Every number is an int on the wire (declared in int_fields()). `l` is the lane
-## (= slot index); `sp` a FishingConst.SPECIES index.
+## client) and raises the host's own effects; clients raise theirs in apply_event(). Every number
+## is an int on the wire (declared in int_fields()). `l` is the rider's slot index; `sp` a
+## FishingConst.SPECIES index; distances and depths in dm.
 ##
 ## type           fields
-## cast           l, spot (hint index 0..2), st (spot type), d (distance, dm)
-## bite           l, sp
-## strike_ok      l, sp
-## strike_miss    l, sp
-## hookup         l, sp, n (the lane's fight number, 1-based), sch (1 scheduled fish)
+## cast           l, sp (the fish cast at), dx (the wobbler's dx), z (its target depth)
+## bite           l, sp (the fish took the wobbler; the hook sets itself)
+## hookup         l, sp, n (the rider's fight number, 1-based), sch (1 scheduled fish)
 ## run            l, k (1-based run number), n (runs in this fight), ms (scheduled length)
-## jump           l, k, n, ms, leaps (2-3)
+## jump           l, k, n, ms, leaps (1-3)
 ## snap           l
 ## thrown         l
 ## replacement    l, sp
 ## landing        l, sp
 ## landed         l, sp, grade (FishingConst.GRADE_TROPHY 1 / GRADE_LANDED 0), kg (x10),
-##                points, hk (hookup multiplier x10: 10, 15, 20, 25)
-## double_hookup  lanes [lane, ...] (every fight on now, slot order; at least lvl of them),
-##                lvl (the hookup level just reached, 2..4)
-## frenzy         l (the lane that hooked up), ms (60000)
-## trip_over      (no fields)
+##                points, hk (hookup multiplier x10: 10 in Free Roam; workouts 10, 15, 20, 25)
+## double_hookup  lanes [slot, ...] (every fight on now, slot order), lvl (2..4; workouts only)
+## turn           l, h (the new heading, +1 / -1)
+## time_up        (no fields) play time is over: no new bites, fights may finish (<= 5 min)
+## trip_over      (no fields) the session ends (everyone heads into the cool-down)
 
 const CAST := "cast"
 const BITE := "bite"
-const STRIKE_OK := "strike_ok"
-const STRIKE_MISS := "strike_miss"
 const HOOKUP := "hookup"
 const RUN := "run"
 const JUMP := "jump"
@@ -38,14 +34,13 @@ const REPLACEMENT := "replacement"
 const LANDING := "landing"
 const LANDED := "landed"
 const DOUBLE_HOOKUP := "double_hookup"
-const FRENZY := "frenzy"
+const TURN := "turn"
+const TIME_UP := "time_up"
 const TRIP_OVER := "trip_over"
 
 const INT_FIELDS := {
-	CAST: ["l", "spot", "st", "d"],
+	CAST: ["l", "sp", "dx", "z"],
 	BITE: ["l", "sp"],
-	STRIKE_OK: ["l", "sp"],
-	STRIKE_MISS: ["l", "sp"],
 	HOOKUP: ["l", "sp", "n", "sch"],
 	RUN: ["l", "k", "n", "ms"],
 	JUMP: ["l", "k", "n", "ms", "leaps"],
@@ -55,7 +50,8 @@ const INT_FIELDS := {
 	LANDING: ["l", "sp"],
 	LANDED: ["l", "sp", "grade", "kg", "points", "hk"],
 	DOUBLE_HOOKUP: ["lanes[]", "lvl"],
-	FRENZY: ["l", "ms"],
+	TURN: ["l", "h"],
+	TIME_UP: [],
 	TRIP_OVER: [],
 }
 
@@ -94,20 +90,12 @@ static func check(event: Dictionary) -> String:
 	return ""
 
 
-static func cast(l: int, spot: int, st: int, d_m: float) -> Dictionary:
-	return {"type": CAST, "l": l, "spot": spot, "st": st, "d": roundi(d_m * 10.0)}
+static func cast(l: int, sp: int, dx_m: float, depth_m: float) -> Dictionary:
+	return {"type": CAST, "l": l, "sp": sp, "dx": roundi(dx_m * 10.0), "z": roundi(depth_m * 10.0)}
 
 
 static func bite(l: int, sp: int) -> Dictionary:
 	return {"type": BITE, "l": l, "sp": sp}
-
-
-static func strike_ok(l: int, sp: int) -> Dictionary:
-	return {"type": STRIKE_OK, "l": l, "sp": sp}
-
-
-static func strike_miss(l: int, sp: int) -> Dictionary:
-	return {"type": STRIKE_MISS, "l": l, "sp": sp}
 
 
 static func hookup(l: int, sp: int, n: int, scheduled: bool) -> Dictionary:
@@ -154,8 +142,12 @@ static func double_hookup(lanes: Array[int], lvl: int) -> Dictionary:
 	return {"type": DOUBLE_HOOKUP, "lanes": lanes.duplicate(), "lvl": lvl}
 
 
-static func frenzy(l: int) -> Dictionary:
-	return {"type": FRENZY, "l": l, "ms": roundi(FishingConst.FRENZY_S * 1000.0)}
+static func turn(l: int, heading: int) -> Dictionary:
+	return {"type": TURN, "l": l, "h": heading}
+
+
+static func time_up() -> Dictionary:
+	return {"type": TIME_UP}
 
 
 static func trip_over() -> Dictionary:

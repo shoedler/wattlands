@@ -1,6 +1,6 @@
-class_name FishingLaneInput
+class_name FishingRiderInput
 extends RefCounted
-## One rider's inputs for one FishingRules.step (G0 contract). FishingGame fills one per slot, in
+## One rider's inputs for one FishingRules.step (contract v2). FishingGame fills one per slot, in
 ## slot order, from the InputFrame's Telemetry and PhaseState, so the rules never touch platform
 ## objects and tests build inputs directly.
 
@@ -10,6 +10,8 @@ var has_phase: bool = false
 
 # --- Telemetry -----------------------------------------------------------------------------
 var power_w: float = 0.0
+## Effective power in the session's scaling mode (the boat's thrust).
+var p_eff_w: float = 0.0
 var cadence_rpm: float = 0.0
 ## Seconds since the last fresh cadence value, and since the rider's latest telemetry arrived
 ## (0 for local riders and bots).
@@ -21,6 +23,7 @@ var applied_target_w: float = 0.0
 var mode: String = "ERG"
 var rescue: bool = false
 var afk: bool = false
+var paused: bool = false
 
 # --- Phase (frame.phase_of(peer)) ---------------------------------------------------------
 var phase_index: int = -1
