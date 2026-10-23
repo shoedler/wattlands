@@ -61,10 +61,8 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	)
 	if ri != null:
 		sm.rider_mass_kg = ri.rider_mass_kg
-	var seg_def := c.segment(state.seg.segment_index)
-	var terrain: Array = seg_def.get("terrain", [])
-	hull.grade_pct = (
-		TankTerrain.grade_at(terrain, hull.distance_m) if not terrain.is_empty() else 0.0
+	hull.grade_pct = TankTerrain.for_segment(
+		c, state.seg.segment_index, hull.distance_m, state.seg.kind == Wl.WARMUP
 	)
 	var power := 0.0
 	if d != null:

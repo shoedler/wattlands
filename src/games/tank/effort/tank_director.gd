@@ -308,38 +308,12 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 	ctx.directives.course_grade(ri.peer, g)
 
 
-## Pattern 4: the grade under the tank `distance_m` into mission segment `segment`, linear between
-## the segment's terrain points ([distance_m, grade_pct], the course_profile format), held past
-## either end, clamped to the warm-up terrain range in WARMUP kinds and to -3..+6% otherwise.
+## Pattern 4: the grade under the tank `distance_m` into mission segment `segment`: the shared
+## sampler `TankTerrain.for_segment`, the same function the rules roll the hull on.
 static func terrain_grade_pct(
 	c: TankContent, segment: int, distance_m: float, warmup: bool
 ) -> float:
-	var pts: Variant = c.segment(segment).get("terrain", [])
-	var g := profile_grade(pts if pts is Array else [], distance_m)
-	if warmup:
-		var w: Array = c.value("stations", "terrain.warmup_grade_pct", [0, 2])
-		return clampf(g, float(w[0]), float(w[1]))
-	return clampf(g, TankContentSchema.TERRAIN_MIN_PCT, TankContentSchema.TERRAIN_MAX_PCT)
-
-
-## Linear interpolation of a [[distance_m, grade_pct], ...] profile (distance ascending).
-static func profile_grade(points: Array, distance_m: float) -> float:
-	if points.is_empty():
-		return 0.0
-	var first: Array = points[0]
-	if distance_m <= float(first[0]):
-		return float(first[1])
-	for i in range(1, points.size()):
-		var a: Array = points[i - 1]
-		var b: Array = points[i]
-		var da := float(a[0])
-		var db := float(b[0])
-		if distance_m <= db:
-			if db - da <= EPS:
-				return float(b[1])
-			return lerpf(float(a[1]), float(b[1]), (distance_m - da) / (db - da))
-	var last: Array = points[points.size() - 1]
-	return float(last[1])
+	return TankTerrain.for_segment(c, segment, distance_m, warmup)
 
 
 # --- Pattern 5: the loader's cadence band --------------------------------------------------------

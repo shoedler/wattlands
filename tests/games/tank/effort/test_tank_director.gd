@@ -374,12 +374,14 @@ func test_hoist_grade_math() -> void:
 ## to 0..+2%), never the flat boss, the ERG gun line, the dynamo or the steam engine.
 func test_terrain_at_2_hz_in_game_phases() -> void:
 	var h := _h()
-	h.state.hull.distance_m = 225.0
+	h.state.hull.distance_m = 190.0
 	h.run_s(ADV1, 2.0)
 	var want: Array = []
 	for k in 4:
 		want.append([k * 10, 2.25])
-	assert_eq(h.grades_of(1), want, "lerp(1.5, 3.0, 0.5) every 0.5 s")
+	assert_eq(
+		h.grades_of(1), want, "lerp(1.5, 3.0, 0.5) every 0.5 s (stage 1 points 130 m and 250 m)"
+	)
 	assert_eq(h.grades_of(2), [])
 	assert_eq(h.grades_of(3), [])
 	h.clear()
@@ -390,7 +392,7 @@ func test_terrain_at_2_hz_in_game_phases() -> void:
 	h.run_s(DEPOT, 1.0)
 	assert_eq(h.grades_of(1), [[h.tick - 20, 2.0], [h.tick - 10, 2.0]], "depot")
 	var b := _h(1)
-	b.state.hull.distance_m = 1300.0
+	b.state.hull.distance_m = 1000.0
 	b.run_s(ADV1, 1.0)
 	assert_eq(b.grades_of(1).size(), 2, "the Bulwark's Advance")
 
@@ -398,18 +400,19 @@ func test_terrain_at_2_hz_in_game_phases() -> void:
 func test_terrain_grade_math() -> void:
 	var c := TankFixtures.content()
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 0.0, false), 0.0, 1e-9)
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 300.0, false), 3.0, 1e-9)
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 525.0, false), -0.5, 1e-9)
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, false), 3.0, 1e-9)
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 510.0, false), -2.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 9999.0, false), 0.0, 1e-9)
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, 7, 350.0, false), 6.0, 1e-9)
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 300.0, true), 2.0, 1e-9, "warm-up")
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, 7, 250.0, false), 6.0, 1e-9)
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, true), 2.0, 1e-9, "warm-up")
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, GUN1, 50.0, false), 0.0, 1e-9, "no terrain")
-	assert_eq(TankDirector.profile_grade([], 10.0), 0.0)
-	assert_eq(TankDirector.profile_grade([[0, -9], [10, 20]], 5.0), 5.5)
+	assert_eq(TankTerrain.grade_at([], 10.0), 0.0)
+	assert_eq(TankTerrain.grade_at([[0, -9], [10, 20]], 5.0), 5.5)
 	for seg in [0, 1, 4, 7]:
 		for m in range(0, 1600, 25):
 			var g := TankDirector.terrain_grade_pct(c, seg, float(m), seg == 0)
 			assert_between(g, 0.0 if seg == 0 else -3.0, 2.0 if seg == 0 else 6.0)
+			assert_eq(g, TankTerrain.for_segment(c, seg, float(m), seg == 0), "one sampler")
 
 
 # --- Pattern 5: cadence bands; the power band ----------------------------------------------------
