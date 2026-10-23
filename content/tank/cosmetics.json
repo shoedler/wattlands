@@ -1,0 +1,10 @@
+{
+	"_doc": "Hull finishes unlocked by a session (brief 2.8). Owner: rules. Schema: TankContentSchema.validate_cosmetics. rule: finish (the session reached the results), grade (min_grade or better), behemoth_no_breakdown (the Behemoth died and the crew had no breakdown). The results screen names each id by TANK_UNLOCK_<ID>.",
+	"unlocks": [
+		{"id": "soot", "kind": "hull_finish", "rule": "finish"},
+		{"id": "rust", "kind": "hull_finish", "rule": "grade", "min_grade": "B"},
+		{"id": "ash", "kind": "hull_finish", "rule": "grade", "min_grade": "A"},
+		{"id": "mud_stripe", "kind": "hull_finish", "rule": "grade", "min_grade": "S"},
+		{"id": "brass_machinery", "kind": "machinery_finish", "rule": "behemoth_no_breakdown"}
+	]
+}

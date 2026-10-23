@@ -1,11 +1,18 @@
 {
-  "id": "tank", "title": "Tank", "version": "0.1.0",
-  "summary": "Each rider pushes a marker along a track: a warm-up ramp, one work block with a hill, a lap marker.",
-  "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [640, 360],
-  "entry": "res://src/games/tank/tank_game.gd", "contents": ["default", "short"],
-  "default_content": "default", "e2e_content": "short", "zero_input_content": "default", "first_run_priority": -1,
-  "options": [{"id": "boosts", "type": "toggle", "default": true},
-    {"id": "track", "type": "choice", "default": 400, "label": "TANK_OPT_TRACK",
-     "choices": [{"value": 400, "label": "TANK_TRACK_400"}, {"value": 800, "label": "TANK_TRACK_800"}]}],
-  "player_options": [{"id": "work_offset", "type": "int", "min": -10, "max": 5, "step": 5, "default": 0}]
+  "id": "tank",
+  "title": "Diesel Domestiques",
+  "summary": "Crew a pedal-powered super-heavy tank through burning countryside and villages. One engine per rider: diesel, dynamo, steam.",
+  "version": "0.1.0",
+  "min_players": 1,
+  "max_players": 3,
+  "bots": false,
+  "presentation": "2d",
+  "pixel_base": [640, 360],
+  "entry": "res://src/games/tank/tank_game.gd",
+  "contents": ["ashfall_road", "drill"],
+  "default_content": "ashfall_road",
+  "e2e_content": "drill",
+  "zero_input_content": "ashfall_road",
+  "first_run_priority": -1,
+  "options": [{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
 }

@@ -1,0 +1,204 @@
+{
+	"_doc": "Ashfall Road (brief 2.4, P0). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance; obstacles stand at at_m in world space; gun-line and boss enemies are fixed in world space; a gun-line at_px is the distance from the halted hull's front to the enemy's near edge (\"edge\": at the screen edge), clamped like a held distance (enemies.json clamp). Enemy counts scale by the tank's enemy_scale (rounded, at least 1).",
+	"id": "ashfall_road",
+	"label": "TANK_CONTENT_ASHFALL_ROAD",
+	"rotation": true,
+	"plan_table": "plans",
+	"segments": [
+		{
+			"id": "depot",
+			"type": "depot",
+			"stage": 0,
+			"kind": "WARMUP",
+			"duration_s": 300,
+			"label": "TANK_PHASE_DEPOT",
+			"name": "TANK_PLACE_DEPOT",
+			"backdrop": "bg_depot_near",
+			"terrain": [[0, 0], [200, 1], [400, 2], [600, 1], [800, 0], [1000, 1.5], [1200, 0.5], [1500, 0]],
+			"drills": [
+				{"from_s": 0, "to_s": 120, "drill": "drive"},
+				{"from_s": 120, "to_s": 240, "drill": "aim", "targets": 2},
+				{"from_s": 240, "to_s": 300, "drill": "fire"}
+			],
+			"teach": [
+				{"at_s": 8, "engine": "diesel", "key": "TANK_TEACH_DIESEL"},
+				{"at_s": 8, "engine": "bulwark", "key": "TANK_TEACH_BULWARK"},
+				{"at_s": 14, "engine": "dynamo", "key": "TANK_TEACH_DYNAMO"},
+				{"at_s": 20, "engine": "steam", "key": "TANK_TEACH_STEAM"},
+				{"at_s": 125, "engine": "all", "key": "TANK_TEACH_AIM"},
+				{"at_s": 245, "engine": "all", "key": "TANK_TEACH_FIRE"}
+			]
+		},
+		{
+			"id": "stage1_advance",
+			"type": "advance",
+			"stage": 1,
+			"kind": "WORK",
+			"duration_s": 180,
+			"min_s": 90,
+			"max_s": 300,
+			"label": "TANK_PHASE_ADVANCE_1",
+			"name": "TANK_PLACE_POPLAR_ROAD",
+			"backdrop": "bg_fields_near",
+			"length_m": 1300,
+			"terrain": [[0, 0], [150, 1.5], [300, 3], [450, 1], [600, -2], [750, 0], [900, 2.5], [1050, 1], [1200, -1], [1300, 0]],
+			"encounters": [
+				{"at_m": 150, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 420, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 980, "enemy": "light", "count": 1, "from": "front"}
+			],
+			"obstacles": [
+				{"at_m": 760, "type": "wire"}
+			]
+		},
+		{
+			"id": "stage1_gun_line",
+			"type": "gun_line",
+			"stage": 1,
+			"kind": "WORK",
+			"duration_s": 120,
+			"min_s": 60,
+			"max_s": 180,
+			"label": "TANK_PHASE_GUN_LINE_1",
+			"name": "TANK_PLACE_FARM_WALL",
+			"backdrop": "bg_fields_near",
+			"enemies": [
+				{"enemy": "dugin", "count": 3, "at_px": [120, 190, 260]}
+			],
+			"props": [
+				{"type": "tank_traps", "at_px": 40}
+			]
+		},
+		{
+			"id": "checkpoint1",
+			"type": "checkpoint",
+			"stage": 1,
+			"kind": "RECOVERY",
+			"duration_s": 60,
+			"label": "TANK_PHASE_CHECKPOINT_1",
+			"name": "TANK_PLACE_CHECKPOINT",
+			"backdrop": "bg_fields_near"
+		},
+		{
+			"id": "stage2_advance",
+			"type": "advance",
+			"stage": 2,
+			"kind": "WORK",
+			"duration_s": 180,
+			"min_s": 90,
+			"max_s": 300,
+			"label": "TANK_PHASE_ADVANCE_2",
+			"name": "TANK_PLACE_KETTLE_FORD",
+			"backdrop": "bg_village_near",
+			"length_m": 1300,
+			"terrain": [[0, 0], [150, -2], [300, -3], [450, -1], [550, 0], [650, 0], [800, 3], [950, 5], [1100, 4], [1200, 2], [1300, 0]],
+			"encounters": [
+				{"at_m": 120, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 380, "enemy": "light", "count": 1, "from": "rear"},
+				{"at_m": 640, "enemy": "destroyer", "count": 1, "from": "front"},
+				{"at_m": 900, "enemy": "medium", "count": 1, "from": "front"}
+			],
+			"obstacles": [
+				{"at_m": 1050, "type": "wreck"}
+			]
+		},
+		{
+			"id": "stage2_gun_line",
+			"type": "gun_line",
+			"stage": 2,
+			"kind": "WORK",
+			"duration_s": 120,
+			"min_s": 60,
+			"max_s": 180,
+			"label": "TANK_PHASE_GUN_LINE_2",
+			"name": "TANK_PLACE_VILLAGE_SQUARE",
+			"backdrop": "bg_village_near",
+			"enemies": [
+				{"enemy": "heavy", "count": 1, "at_px": [300]},
+				{"enemy": "dugin", "count": 2, "at_px": [150, 230]}
+			],
+			"props": [
+				{"type": "tank_traps", "at_px": 40}
+			]
+		},
+		{
+			"id": "checkpoint2",
+			"type": "checkpoint",
+			"stage": 2,
+			"kind": "RECOVERY",
+			"duration_s": 60,
+			"label": "TANK_PHASE_CHECKPOINT_2",
+			"name": "TANK_PLACE_CHECKPOINT",
+			"backdrop": "bg_village_near"
+		},
+		{
+			"id": "stage3_advance",
+			"type": "advance",
+			"stage": 3,
+			"kind": "WORK",
+			"duration_s": 180,
+			"min_s": 90,
+			"max_s": 300,
+			"label": "TANK_PHASE_ADVANCE_3",
+			"name": "TANK_PLACE_QUARRY_RIDGE",
+			"backdrop": "bg_quarry_near",
+			"length_m": 1400,
+			"terrain": [[0, 1], [200, 3], [350, 6], [500, 4], [650, -1], [800, -3], [950, 0], [1100, 5], [1250, 6], [1400, 2]],
+			"encounters": [
+				{"at_m": 140, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 400, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 700, "enemy": "destroyer", "count": 1, "from": "front"},
+				{"at_m": 900, "enemy": "light", "count": 1, "from": "rear"},
+				{"at_m": 1100, "enemy": "medium", "count": 1, "from": "front"}
+			],
+			"obstacles": []
+		},
+		{
+			"id": "stage3_gun_line",
+			"type": "gun_line",
+			"stage": 3,
+			"kind": "WORK",
+			"duration_s": 120,
+			"min_s": 60,
+			"max_s": 180,
+			"label": "TANK_PHASE_GUN_LINE_3",
+			"name": "TANK_PLACE_RIDGE",
+			"backdrop": "bg_quarry_near",
+			"enemies": [
+				{"enemy": "heavy", "count": 1, "at_px": [300]},
+				{"enemy": "dugin", "count": 2, "at_px": [150, 230]},
+				{"enemy": "destroyer", "count": 1, "at_px": ["edge"]}
+			],
+			"props": [
+				{"type": "tank_traps", "at_px": 40}
+			]
+		},
+		{
+			"id": "checkpoint3",
+			"type": "checkpoint",
+			"stage": 3,
+			"kind": "RECOVERY",
+			"duration_s": 60,
+			"label": "TANK_PHASE_CHECKPOINT_3",
+			"name": "TANK_PLACE_CHECKPOINT",
+			"backdrop": "bg_quarry_near"
+		},
+		{
+			"id": "boss",
+			"type": "boss",
+			"stage": 4,
+			"kind": "WORK",
+			"duration_s": 240,
+			"min_s": 120,
+			"max_s": 360,
+			"label": "TANK_PHASE_BOSS",
+			"name": "TANK_PLACE_FOUNDRY_GATE",
+			"backdrop": "bg_town_near",
+			"boss": {"start_left_px": 440}
+		}
+	],
+	"cooldown": {
+		"backdrop_victory": "bg_town_near",
+		"backdrop_withdrawn": "bg_fields_near"
+	}
+}

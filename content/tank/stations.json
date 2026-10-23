@@ -1,0 +1,101 @@
+{
+	"_doc": "Effort per engine (brief 2.3, 2.7). Owner: effort. Schema: TankContentSchema.validate_stations. Plans: per engine and segment type, the PlanPhase mode and its numbers; the mission file gives each segment's kind and length. WARMUP-kind segments (the depot, the drill's skirmish) use the depot entries.",
+	"engines": ["diesel", "dynamo", "steam", "bulwark"],
+	"start_engines": {
+		"bulwark": ["bulwark"],
+		"rampart": ["diesel", "dynamo"],
+		"citadel": ["diesel", "dynamo", "steam"]
+	},
+	"rotation": {
+		"rampart": [
+			["diesel", "dynamo", "diesel", "dynamo"],
+			["dynamo", "diesel", "dynamo", "diesel"]
+		],
+		"citadel": [
+			["diesel", "dynamo", "steam", "diesel"],
+			["dynamo", "steam", "diesel", "dynamo"],
+			["steam", "diesel", "dynamo", "steam"]
+		]
+	},
+	"plans": {
+		"diesel": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"advance": {"mode": "SIM", "grade_source": "game"},
+			"gun_line": {"mode": "ERG", "target_pct": 90},
+			"boss": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"dynamo": {
+			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
+			"advance": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 100]},
+			"gun_line": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 100]},
+			"boss": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 100]}
+		},
+		"steam": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"advance": {"mode": "SIM", "grade_source": "flat"},
+			"gun_line": {"mode": "SIM", "grade_source": "flat"},
+			"boss": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"bulwark": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"advance": {"mode": "SIM", "grade_source": "game"},
+			"gun_line": {"mode": "ERG", "target_pct": 90},
+			"boss": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"checkpoint": {"mode": "ERG", "target_pct": 50}
+	},
+	"drill_plans": {
+		"diesel": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"skirmish": {"mode": "SIM", "grade_source": "game"}
+		},
+		"dynamo": {
+			"depot": {"mode": "ERG", "target_pct": 50},
+			"skirmish": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 65]}
+		},
+		"steam": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"skirmish": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"bulwark": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"skirmish": {"mode": "SIM", "grade_source": "game"}
+		},
+		"checkpoint": {"mode": "ERG", "target_pct": 50}
+	},
+	"terrain": {
+		"send_every_s": 0.5,
+		"warmup_grade_pct": [0, 2]
+	},
+	"bank": {
+		"base_pct": 55,
+		"span_pct": 45,
+		"every_s": 5,
+		"substeps": 3,
+		"substep_s": 1,
+		"max_step_pts": 10
+	},
+	"boiler": {
+		"grade_pct": 8,
+		"warmup_grade_pct": 3,
+		"max_rise_pct": 0.5,
+		"min_interval_s": 1
+	},
+	"hoist": {
+		"grade_pct": 4,
+		"warmup_grade_pct": 1,
+		"rise_pct_s": 1
+	},
+	"cadence_band": {
+		"default": [60, 120],
+		"loader": [50, 120]
+	},
+	"power_band_pct": [76, 105],
+	"haptics": {
+		"hit": {"min_damage": 8, "haptic": 2.0, "duration_s": 1.5},
+		"boss_hit": {"haptic": 3.0, "duration_s": 2.0},
+		"ram": {"haptic": 3.0, "duration_s": 1.0},
+		"cooldown_s": 15,
+		"none_before_s": 300
+	}
+}

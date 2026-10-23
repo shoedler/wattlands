@@ -1,0 +1,61 @@
+{
+	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s depot, a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. Rotation is ignored; no haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
+	"id": "drill",
+	"label": "TANK_CONTENT_DRILL",
+	"rotation": false,
+	"plan_table": "drill_plans",
+	"segments": [
+		{
+			"id": "depot",
+			"type": "depot",
+			"stage": 0,
+			"kind": "WARMUP",
+			"duration_s": 30,
+			"label": "TANK_PHASE_DEPOT",
+			"name": "TANK_PLACE_DEPOT",
+			"backdrop": "bg_depot_near",
+			"terrain": [[0, 0], [100, 1], [200, 2], [300, 0.5]],
+			"drills": [
+				{"from_s": 0, "to_s": 30, "drill": "drive"}
+			],
+			"teach": [
+				{"at_s": 2, "engine": "diesel", "key": "TANK_TEACH_DIESEL"},
+				{"at_s": 2, "engine": "bulwark", "key": "TANK_TEACH_BULWARK"},
+				{"at_s": 6, "engine": "dynamo", "key": "TANK_TEACH_DYNAMO"},
+				{"at_s": 10, "engine": "steam", "key": "TANK_TEACH_STEAM"}
+			]
+		},
+		{
+			"id": "skirmish",
+			"type": "skirmish",
+			"stage": 1,
+			"kind": "WARMUP",
+			"duration_s": 70,
+			"label": "TANK_PHASE_SKIRMISH",
+			"name": "TANK_PLACE_POPLAR_ROAD",
+			"backdrop": "bg_fields_near",
+			"length_m": 500,
+			"terrain": [[0, 0.5], [150, 2], [300, 1], [450, 0], [500, 0]],
+			"encounters": [
+				{"at_m": 0, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 60, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 160, "enemy": "light", "count": 1, "from": "front"}
+			],
+			"obstacles": []
+		},
+		{
+			"id": "checkpoint1",
+			"type": "checkpoint",
+			"stage": 1,
+			"kind": "RECOVERY",
+			"duration_s": 30,
+			"label": "TANK_PHASE_CHECKPOINT_1",
+			"name": "TANK_PLACE_CHECKPOINT",
+			"backdrop": "bg_fields_near"
+		}
+	],
+	"cooldown": {
+		"backdrop_victory": "bg_fields_near",
+		"backdrop_withdrawn": "bg_fields_near"
+	}
+}
