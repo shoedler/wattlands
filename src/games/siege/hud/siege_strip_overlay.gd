@@ -1,6 +1,6 @@
 class_name SiegeStripOverlay
 extends HBoxContainer
-## Siege's teammate strip (brief 3 HUD): one SiegeStripCell per slot, in slot order, each 232 px
+## Siege's teammate strip (brief 3 HUD): one SiegeStripCell per slot, in slot order, each 240 px
 ## wide (four fit between the corner stacks without wrapping) in one low row. It is the only
 ## teammate strip: the kit's card strip is not in the spec, so each rider's W and %FTP show once.
 ## Shows every rider's slot chip, routing target icon and markers, and (from the state, so from

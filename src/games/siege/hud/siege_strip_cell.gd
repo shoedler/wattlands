@@ -7,7 +7,11 @@ extends PanelContainer
 ## come from the state's rider row (the host's own values, the snapshot's on a client), so a
 ## client's strip is as fresh as the 10 Hz snapshot.
 
-const SIZE := Vector2(232, 0)
+## Four cells and their gaps are 984 px: the room between the corner stacks is about 992 px.
+const SIZE := Vector2(240, 0)
+## Text sizes that keep "Rescue AFK" and a rider's "250 W  96%" inside the cell.
+const WATTS_PX := 24
+const STATUS_PX := 20
 
 var slot: int = 0
 var chip: SlotChip = null
@@ -25,7 +29,7 @@ func _init(p_slot: int = 0) -> void:
 	name = "Cell%d" % slot
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	theme = WlTheme.get_theme()
-	add_theme_stylebox_override("panel", WlTheme.panel_style())
+	add_theme_stylebox_override("panel", _style(false))
 	custom_minimum_size = SIZE
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", 2)
@@ -50,10 +54,10 @@ func _init(p_slot: int = 0) -> void:
 	bottom.add_theme_constant_override("separation", 6)
 	bottom.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(bottom)
-	watts_label = SiegeHudPanel.make_label(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
+	watts_label = SiegeHudPanel.make_label(WATTS_PX, WlTheme.TEXT_DIM)
 	bottom.add_child(watts_label)
 	bottom.add_child(_spacer())
-	status_label = SiegeHudPanel.make_label(WlTheme.SMALL_PX, WlTheme.WARN, true)
+	status_label = SiegeHudPanel.make_label(STATUS_PX, WlTheme.WARN, true)
 	bottom.add_child(status_label)
 
 
@@ -74,8 +78,17 @@ func set_local(on: bool) -> void:
 	if on == is_local:
 		return
 	is_local = on
-	var border := WlTheme.ACCENT if on else WlTheme.PANEL_BORDER
-	add_theme_stylebox_override("panel", WlTheme.panel_style(WlTheme.PANEL, border, 4 if on else 2))
+	add_theme_stylebox_override("panel", _style(on))
+
+
+## The cell's card: the kit's panel with tighter side margins, and an accent border for the local
+## rider.
+static func _style(local: bool) -> StyleBoxFlat:
+	var border := WlTheme.ACCENT if local else WlTheme.PANEL_BORDER
+	var sb := WlTheme.panel_style(WlTheme.PANEL, border, 4 if local else 2)
+	sb.content_margin_left = 10.0
+	sb.content_margin_right = 10.0
+	return sb
 
 
 ## Fills the cell from `rider` (null: an empty wheel, the cell shows nothing).
