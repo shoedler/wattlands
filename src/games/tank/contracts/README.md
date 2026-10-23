@@ -17,14 +17,34 @@ InputFrame (frame.players[peer] Telemetry, frame.phase[peer] PhaseState)
 snapshot() at 10 Hz -> TankSnapshot.encode(state) (TankSnapshotSchema, ints, <= 4 KB at 16 enemies / 24 shells)
 ```
 
-Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)`; `apply_event` raises local effects (toasts, sound); `client_predict` moves only the local rider's own room. The view (`TankView`) and HUD only read `TankGame.state`.
+Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)` -> `snapshot_applied(state.tick)`; `apply_event` raises local effects (toasts, sound) through `cue`; `client_predict` moves only the local rider's own room. The view (`TankView`) and HUD only read `TankGame.state`.
+
+## Module and view
+
+- The module (`TankGame`) owns the tick flow above, intents from `local_intents`, the Autopilot, prompts per peer, results and progress. It emits `cue(kind, data)` for every event and, on clients, `snapshot_applied(tick)` after each snapshot.
+- The view (`TankView`) owns snapshot interpolation: a `WorkoutSnapHistory`-style buffer keyed by `state.tick`, fed from `snapshot_applied`, the render clock behind the newest snapshot by the mean spacing (notes). It creates `TankAudio` as its child and connects `game.cue` to `TankAudio.on_cue`. Tank Controls (station card, trajectory dots, boss bars, objective line) send their intents themselves with `game.ctx.intents.send(TankIntents.*)`.
+
+## TankContent surface (frozen)
+
+`TankState.create` and effort's `TankPlanBuilder` depend on these `TankContent` methods, so their names, arguments and meanings are contract: `ok`, `num(file, path, default)`, `value(file, path, default)`, `mission`, `segments`, `segment(i)`, `mission_rotates`, `plan_table`, `plan_entry(engine, seg_type)` (checkpoints: the table's `checkpoint` entry), `tank_def`, `engines_of`, `start_engines`, `rotation_row(tank, slot)` (the start engine x4 for a slot without a row), `enemy_def`, `boss_def`, `enemy_scale`, `scaled_count`, `unlocks`. The rules builder owns the file and may add methods and change internals, never these.
+
+## Geometry (frozen keys of `assets/tank/rigs.json`)
+
+`TankGeometry` (`tank_geometry.gd`) is the only way code reads gameplay geometry: the tank's `turret.ring`, `turret.trunnion`, `turret.barrel_px` and `muzzle`, the Citadel's `secondaries[]` (`muzzle`, `facing`), every enemy's `muzzle`, the dug-in's `hitbox`, the Behemoth's `bogies`, `turret.rect`, `turret.muzzle` and `secondary_muzzle`. Frames: tank points in the hull frame (the hull sprite's top-left, y down, facing right; facing left mirrors x about the ring); enemy points in their sprite's frame facing left; boss points in `boss_hull`'s frame. At elevation a the muzzle is `trunnion + barrel_px x (cos a, -sin a)`; `validate()` checks the keys and that the file's muzzle equals `trunnion + [barrel_px, 0]`. artqa re-measures values, never names or frames; rules tests read the file through `TankGeometry`, never hard-coded numbers.
+
+## Drive, sprint and ids
+
+- The drive is `TankHullState.speed_model(cda, offset)` (`SpeedModel`, host only), with `rider_mass_kg` set each tick from the `TankRiderInput` of the rider on the diesel or bulwark station; `speed_mps` is its v.
+- The sprint rule is `TankRiderState.sprint_rule(ram.sprint_window_s)` (`SprintRule`, host only): "held" means the trailing 3 s average >= 1.2 x FTP; `sprinting` mirrors `holds()`, `sprint_s` and `dodge_s` count `held_s()`.
+- Entity ids (`TankState.take_id`) are > 0; boss part ids are negative (`TankBossState.part_id`); 0 is "none".
+- Per-rider gates (SIM-only patterns, haptics, warm-up numbers, the first 300 s, the in-band kind) read the receiver's own `TankRiderInput` phase fields, never the group's `TankPhaseInfo`.
 
 ## Who implements what
 
 | Class | File | Builder | G0 state |
 | --- | --- | --- | --- |
 | `TankPlanBuilder` | `effort/tank_plan_builder.gd` | effort | complete first version (segment table, engines, rotation, drill, meta) |
-| `TankDirector` | `effort/tank_director.gd` | effort | end_phase rule, cadence band (60, 120) at segment start, driver power band; adds patterns 1-4, the loader band and haptics |
+| `TankDirector` | `effort/tank_director.gd` | effort | end_phase rule, cadence band (60, 120) at segment start, driver power band in WORK SIM phases only, the pure helpers `power_band_pct`, `bank_target_pct`, `boiler_grade_pct`, `crew_haptic`; adds patterns 1-4, the loader band and haptics |
 | `TankContent` | `content/tank_content.gd` | rules | working loader + validation through `TankContentSchema` |
 | `TankRules` | `rules/tank_rules.gd` | rules | segment tracking, rotation and overrun events, stations, reserve, all-AFK, in-band, WORK time; placeholder drive and objective (replace) |
 | `TankScore` | `rules/tank_score.gd` | rules | score, grade, XP, unlocks (brief 2.8) |
@@ -34,10 +54,10 @@ Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)`; `apply_event` ra
 | `TankSnapshot` | `net/tank_snapshot.gd` | module | complete encode / apply |
 | `TankView` | `view/tank_view.gd` | view | flat placeholder drawing |
 | `TankHud` | `hud/tank_hud.gd` | view | the ADR's `Rect2i`s with kit widgets and empty Tank Controls |
-| `TankAudio` | `audio/tank_audio.gd` | view | silent stub |
+| `TankAudio` | `audio/tank_audio.gd` | view | silent stub (`on_cue`), created by `TankView` |
 | `TankPlaceholderArt` | `view/placeholder_art.gd` | artqa | a flat palette block per sprite id at its art.json size |
 
-Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tests/games/tank/effort/`; rules `src/games/tank/{rules,combat,content}/`, `content/tank/{tanks,scoring,cosmetics,enemies}.json`, `content/tank/missions/`, `tests/games/tank/{rules,combat}/`; module `src/games/tank/tank_game.gd`, `src/games/tank/{autopilot,net}/`, `tests/games/tank/{module,integration}/`, `tests/games/tank/e2e_check.mjs`; view `src/games/tank/view/` (not `placeholder_art.gd`), `src/games/tank/{hud,audio}/`, `assets/tank/audio/`, `tests/games/tank/{view,hud}/`; artqa `assets/tank/` (not `audio/`), `src/games/tank/view/placeholder_art.gd`, `tests/games/tank/{art,sim,static,perf}/`, `.github/workflows/game-tank.yml`, `src/games/tank/HARDWARE_TEST.md`, `docs/credits.d/tank.md`. The lead keeps `contracts/`, `game.json`, `content/tank/strings.csv` (request keys), `docs/decisions/tank.md`, `docs/changelog.d/tank.md`, `src/games/tank/README.md`, `tests/games/tank/{contracts,fixtures}/`, `tank_fakes.gd`, `test_tank_game.gd` and `test_tank_package.gd`.
+Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tests/games/tank/effort/`; rules `src/games/tank/{rules,combat,content}/`, `content/tank/{tanks,scoring,cosmetics,enemies}.json`, `content/tank/missions/`, `tests/games/tank/{rules,combat}/`; module `src/games/tank/tank_game.gd`, `src/games/tank/{autopilot,net}/`, `tests/games/tank/{module,integration}/`, `tests/games/tank/e2e_check.mjs`; view `src/games/tank/view/` (not `placeholder_art.gd`), `src/games/tank/{hud,audio}/`, `assets/tank/audio/`, `tests/games/tank/{view,hud}/`; artqa `assets/tank/` (not `audio/`), `src/games/tank/view/placeholder_art.gd`, `tests/games/tank/{art,sim,static,perf}/`, `.github/workflows/game-tank.yml`, `src/games/tank/HARDWARE_TEST.md`, `docs/credits.d/tank.md`. The lead keeps `contracts/`, `game.json`, `content/tank/strings.csv` (request keys), `docs/decisions/tank.md`, `docs/changelog.d/tank.md`, `src/games/tank/README.md`, `tests/games/tank/{contracts,fixtures}/` (the plan and safety checks in `contracts/test_tank_plans.gd` included), `tank_fakes.gd`, `test_tank_game.gd` and `test_tank_package.gd`.
 
 ## Contract files
 
@@ -52,7 +72,8 @@ Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tes
 | `tank_intents.gd`, `tank_intent_limiter.gd` | Intent wire and normalized forms, ownership by engine, the 5/s limit |
 | `tank_events.gd` | Event types, fields, builders, `INT_FIELDS` |
 | `tank_snapshot_schema.gd` | Snapshot keys, columns, flag bits, `INT_PATHS`, `check()`, `byte_size()` |
-| `tank_content_schema.gd` | Validators for tanks, stations, enemies, missions, scoring and cosmetics |
+| `tank_content_schema.gd` | Validators for tanks, stations, enemies, missions, scoring and cosmetics, the brief's safety envelope (bounds a G2 retune cannot pass) and `validate_cross` |
+| `tank_geometry.gd` | The frozen gameplay geometry of `assets/tank/rigs.json` |
 
 ## Units and constants
 
