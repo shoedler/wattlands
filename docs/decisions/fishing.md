@@ -142,7 +142,7 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 - Alternatives: no z rate given in the brief; jumps sounding like runs.
 - Reason: brief 2.4 leaves the depth rate and jump depth open; jumps are leaps at the surface (view).
 
-## 2026-10-23 [fish-rules] Staggers read both module flags and telemetry
+## 2026-10-23 [fish-rules] Staggers read both module flags and telemetry (scheduler edges superseded: "[fix-rules] The rules forward every stagger edge")
 - Decision: a stagger is on while any of these is true: lane.rescue (on_rescue) or inp.rescue; lane.afk (on_afk) or inp.afk; or stale telemetry (age_s > 3 s or connected false). S, meters and band freeze, and hazards are 0, until 10 s after the cause ends. Runs coming due are skipped, FishingPullScheduler.set_staggered brackets it in a fight, and directives are dropped only while the cause is on. Stale cadence (cadence_age_s > 3 s) freezes only the meters.
 - Alternatives: module flags only.
 - Reason: the brief and the orchestrator say either counts. Tests and sims drive telemetry directly.
@@ -152,7 +152,7 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 - Alternatives: a symmetric 22 rpm band around the centre.
 - Reason: brief 2.4 and the frozen constants. Changing it would move the e2e mackerel's band.
 
-## 2026-10-23 [fish-rules] FishingRulesPull bridges fish-plan's G1 functions
+## 2026-10-23 [fish-rules] FishingRulesPull bridges fish-plan's G1 functions (superseded: "[fix-rules] FishingRulesPull removed")
 - Decision: FishingRulesPull checks FishingPullScheduler once (Script.has_method, cached in static vars) for init_lane and run_blocked_by_gap and calls them through Script.call when present. Before the merge, init_lane does nothing (the lane keeps FishingLaneState.pull_rng = (seed, slot, STREAM_PULL), passed to begin() and step()). run_blocked_by_gap falls back to slot.run_min_gap_s since fish.last_jump_t. A run that start_run() refuses counts as fired, with no event.
 - Alternatives: wait for the merge; edit plan/.
 - Reason: the rules parse and play on both sides of fish-plan's merge without touching plan/.
@@ -239,7 +239,7 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 - Decision: FishingLaneView's builder is configure_lane(), not setup().
 - Reason: tests/arch/test_no_bypass.gd flags .setup( on a receiver that has any untyped declaration in the file (FishingView loops over lanes with an untyped `for lv in lanes`).
 
-## 2026-10-23 [fish-art-qa] Placeholder art (art fallback)
+## 2026-10-23 [fish-art-qa] Placeholder art (art fallback) (superseded: "Generated art")
 - Decision: WATTLANDS_ALLOW_ART was not set (FAL_KEY was set; only presence was checked), so brief 3.4's fallback applies. FishingFallbackSprites (src/games/fishing/tools/fishing_fallback_sprites.gd, the orchestrator's name for the brief's fallback_sprites.gd) draws every art.json sprite but picker_card from the palette. fishing_write_fallback_sprites.gd writes the PNGs, the parts and a pipeline-format sprites.json marked "art_mode": "placeholder". picker_card keeps its G0 placeholder. The spend is $0.00, recorded in an empty art_manifest.json.
 - Alternatives: generate anyway (refused by the art lock); leave the sprites missing so the view draws everything at runtime.
 - Reason: the brief's fallback. Committed PNGs make the view, the screenshots and the palette test identical to the generated case, and the view can still call image(id) for any missing PNG.
@@ -279,3 +279,60 @@ Short ADRs for Big Game Fishing: date, decision, alternatives, reason. Game sess
 ## 2026-10-23 G3 review and G4 round
 
 - G3: three fresh reviewers (safety on Opus; rules, network and zero input; presentation, boundaries and code quality) found 17 issues: no blocker, 6 majors (all confirmed by independent verifiers; SAF-1 and RULES-1 are the same stagger bug), 11 minors. One G4 round with two fixers (rules and safety; view, HUD and docs) fixed them with tests; minors were fixed where cheap. Findings that need a trainer are in `src/games/fishing/HARDWARE_TEST.md`.
+
+## 2026-10-23 [fix-rules] The rules forward every stagger edge to the pull scheduler
+- Decision: FishingRules._update_stagger calls FishingPullScheduler.set_staggered(ps, true/false, t) on every rescue/AFK/stale start and end, whatever the lane state, and _begin_fight re-asserts set_staggered(ps, l.stagger_on, t) after begin(). FishingPullScheduler is unchanged. This supersedes the note that set_staggered only brackets a stagger inside a fight.
+- Reason: a stagger that outlived its Fight left FishingPullState.staggered true, so every later Fight had no pull changes and every run was refused (SAF-1/RULES-1). One that ended in the Reel never set the 10 s pull pause (SAF-4/RULES-2). The scheduler's API already says 'any state', so fixing the caller keeps the plan sweep's results valid.
+
+## 2026-10-23 [fix-rules] Every published band has a 65 rpm floor and keeps its width
+- Decision: the ride-out practice band, the lure band and the idle band use the tension band's rule: low edge max(65, centre - half), high edge low + 2 x half (16 rpm). in_band means the EMA cadence is inside the published band. FishingRules.band_low() is shared by all four bands.
+- Reason: brief 2.3's 4.6.3 check ('the band is always >= 65 rpm, above the 45 rpm trigger') outranks the 2.4 text 'preferred +- 8'. A preferred cadence below 73 rpm (30-160 is allowed) otherwise coached riders toward the rescue trigger in ERG phases where rescue is armed. Riders at 73 rpm or more see no change.
+
+## 2026-10-23 [fix-rules] No Landing haptic to an AFK or stale rider
+- Decision: haptic_allowed() also refuses on_afk, telemetry AFK and stale telemetry (a dropped client), as well as rescue, opt-out and the first 300 s.
+- Reason: brief 2.3 says 'No request is sent during rescue or AFK', and the lane already treats AFK and stale as a stagger.
+
+## 2026-10-23 [fix-rules] FishingRulesPull removed; the rules call FishingPullScheduler directly
+- Decision: fishing_rules_pull.gd is deleted, together with its has_method probe and pre-merge fallbacks. FishingRules calls init_lane, begin, step, run_blocked_by_gap(ps, slot, t), start_run, set_staggered and end directly. The lane still passes FishingLaneState.pull_rng, which comes from the same (seed, slot, STREAM_PULL) derivation as ps.rng, so every stream and run is unchanged. This supersedes '[fish-rules] FishingRulesPull bridges fish-plan's G1 functions'.
+- Reason: since the G1 merge the probe was always true, so the fallback branch and its extra fish parameter could never run (P11).
+
+## 2026-10-23 [fix-rules] Sim scenario s11: unverified FTP, two FTPs, haptics off
+- Decision: run_sims.sh s11 rides threshold with 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1. check_sims S11 asserts that each Fishing ERG request is applied with the 'unverified' clamp, using only S1's clamp set (slew, floor, unverified, haptic_intensity). It reads the applied record's target_w, which equals 0.85 x target_pct x FTP within 1 W unless the floor lifted it; the record's target_pct echoes the request. It also asserts that every non-rescue Fight trace row shows 'unverified', that the haptics-off rider gets no haptic request, and that the other rider gets at least one.
+- Reason: before this, every integrated run was verified at 200 W with haptics on (SAF-5), so the governor's unverified path and the haptic opt-out were checked only in pure tests.
+
+## 2026-10-23 Lane HUD status reads like the teammate chip
+- Decision: FishingHudModel.status_text uses the module's keys and positional args: a cast reads as the reel with the lure's distance, the fallback chip's next label uses keys without placeholders, and species names come from FishingResults.species_name. strings.csv stays positional. FISHING_STATUS_CAST is dropped. With no species, a strike, fight or Landing reads 'Fish on!'.
+- Reason: the module passes positional arrays and fishing_game.gd is not view-owned. One formatter's args per key keeps the kit chip and the lane HUD identical, and a test pins that.
+
+## 2026-10-23 No dead string keys
+- Decision: every key in content/fishing/strings.csv must be read by Fishing's code or content, or be built from a prefix (FISHING_TIP_, FISHING_PHASE_). 17 unused keys were removed. The YOU tag draws FISHING_HUD_YOU in a 3x5 A-Z pixel font.
+- Reason: brief 3.5 puts every string in strings.csv, and keys nothing reads make the strings test meaningless. A future toast for runs or jumps re-adds its key together with its caller.
+
+## 2026-10-23 Boat trim reds mapped in code, not in the PNG
+- Decision: the hull's PaletteSwap keys the key ramp plus the trim's coral (#f2665a), pink (#ef6fa6) and peach (#f1c29a), FishingPalette.HULL_KEYS. They swap to the slot colour lightened 0.3, 0.3 and 0.5. The trim cosmetic recolours the trim pixels read from boat.png instead of a fixed row.
+- Reason: the generated art stays byte-identical (re-rolls keep working), PaletteSwap allows up to 8 keys, and the trim keeps its two-tone shading in every slot colour with no red left.
+
+## 2026-10-23 Rig fitted to the generated boat
+- Decision: the bike stands on the aft deck with its feet on the gunwale, and the angler sits on its saddle holding the rod butt. The reel sits on the bike's front, where the flywheel is, fed by the chain, with the line running up to the rod's first guide. The rod goes over the canopy to lane x 88, and the pennant stands on the roof's aft end with its flag streaming aft. DRAFT is 9 instead of 6. test_fishing_rig_art checks the mount points against the PNGs.
+- Reason: a 10x10 reel at the hands hid the angler and the bike. On the bike's front the crank, chain, legs and reel all show (brief 3.1 'chain turns the reel'). DRAFT 9 keeps the angler's cap below a 4-lane local border and seats the hull in the water band.
+
+## 2026-10-23 Waterline and HUD-zone backdrop
+- Decision: the sky runs one row past sky_h (the surface strip's crest rows) and the water starts at sky_h+1. The HUD-zone cover is drawn after the surface strip and holds the sky plus the first water rows, cut from the same water gradient.
+- Reason: no clear colour shows anywhere, the strip's holes show sky above the crests and water below, and the zone keeps only sky gradient, open water and sand (brief 3.2).
+
+## 2026-10-23 Ride-out wake on open water
+- Decision: on the ride out the boat sits 56 px right of BOAT_X0 and eases back (0.8 s time constant) by the first pick. The wake shows as the wake tiles plus a code-drawn foam trail behind the stern. The ride's easing follows the game clock as well as frames.
+- Reason: at BOAT_X0 only 5 px of water lay behind the stern (brief 3.5 'shows the wake'). The game-clock step keeps fast-forwarded screenshots and late joins true to the sim.
+
+## 2026-10-23 Double Hookup flash
+- Decision: a 2 px gold beam between the linked rod tips (at their mean x) plus a burst at each tip, clipped to its lane, fading by ordered dither over LINK_S. The link clock follows the game clock too.
+- Reason: brief 2.4 asks for 'a gold flash linking the lanes'. The per-boat boxes crossed the lane border at 4 lanes and looked persistent in fast-forwarded screenshots.
+
+## 2026-10-23 Distant palm islet and two different ray sets
+- Decision: draw order is clouds, then far islands, then the palm islet, which is drawn at half size by a palette-exact 2x2 mode downsample. The second light-ray set is mirrored, 70% tall, and sways at another speed, out of step with the first.
+- Reason: brief 3.5 layer order. The islet was boat-sized with no distance cue, and the two ray sets were identical copies moving in lockstep.
+
+## 2026-10-23 One art fallback
+- Decision: FishingPlaceholderArt is deleted. FishingSprites uses the PNG, else FishingFallbackSprites, else (an export without the script) a blank image with a warning.
+- Reason: the fallback script is always present, so the placeholder branch was unreachable. Brief 3.4 names one fallback.
+
