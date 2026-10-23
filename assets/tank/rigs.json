@@ -1,5 +1,5 @@
 {
-	"_doc": "Estimated anchors (G0) for the cutaway rigs, measured in art px on the placeholder geometry; artqa re-measures them on the pixelated sprites. Coordinates are relative to the hull sprite's top-left unless a key ends in _screen (art px of the 640 x 360 view with the hull's rear at x 16 and its bottom 10 px above the ground line y 296). y grows downward; negative y is above the hull's roof. muzzle is the barrel tip at 0 degrees facing right (mirror x about the turret ring when facing left). machinery anchors are inside each sprite.",
+	"_doc": "Cutaway rig anchors and gameplay geometry in art px (G0 estimates on the placeholder geometry; artqa re-measures the values on the pixelated sprites). Frames: every point under tanks.<id> (turret.ring, turret.trunnion, muzzle, secondaries[].muzzle, rooms, wheels) is in the hull frame: relative to the hull sprite's top-left, y down, negative y above the roof; turret.rect is the turret sprite's rect in the hull frame and turret.pivot_in_sprite is inside that sprite. Keys ending in _screen are art px of the 640 x 360 view with the hull's rear at x 16 and its bottom 10 px above the ground line y 296. Gun: the barrel pivots at turret.trunnion; at elevation a (degrees, facing right) the muzzle is trunnion + barrel_px x (cos a, -sin a), so muzzle == trunnion + [barrel_px, 0] at 0 degrees (tested); facing left mirrors x about turret.ring.x. enemies.<sprite>: relative to that sprite's top-left facing left (toward the tank); hitbox [x, y, w, h] is the only hit area where present (enemy_dugin: the turret above the concrete). boss: relative to boss_hull's top-left, facing left; bogies [x, y, w, h] rear to front are the hit boxes of parts 0..2 and turret.rect that of part 3 (TankBossState.part_id). Frozen contract (contracts/README.md 'Geometry'): TankGeometry reads tanks.*.turret.ring, tanks.*.turret.trunnion, tanks.*.turret.barrel_px, tanks.*.muzzle, tanks.citadel.secondaries[].muzzle and .facing, enemies.*.muzzle, enemies.enemy_dugin.hitbox, boss.bogies, boss.turret.rect, boss.turret.muzzle and boss.secondary_muzzle. artqa may change their values, never their names or frames; rules code and tests read them through TankGeometry, never hard-coded.",
 	"screen": {
 		"ground_y": 296,
 		"rear_x": 16,
@@ -31,8 +31,8 @@
 					32
 				],
 				"trunnion": [
-					82,
-					-14
+					152,
+					-18
 				],
 				"barrel_px": 40
 			},
@@ -143,8 +143,8 @@
 					36
 				],
 				"trunnion": [
-					98,
-					-16
+					188,
+					-20
 				],
 				"barrel_px": 44
 			},
@@ -278,8 +278,8 @@
 					40
 				],
 				"trunnion": [
-					114,
-					-18
+					224,
+					-22
 				],
 				"barrel_px": 48
 			},

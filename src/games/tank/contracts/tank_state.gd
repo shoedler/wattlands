@@ -80,6 +80,7 @@ static func create(
 		r.ftp = p.ftp
 		r.ftp_verified = p.ftp_verified
 		r.haptics_on = p.haptics_on
+		r.rider_mass_kg = p.rider_mass_kg
 		r.engine = starts[p.slot_index] if p.slot_index < starts.size() else ""
 		s.riders.append(r)
 	for engine: String in p_content.engines_of(tank):
@@ -143,7 +144,7 @@ func obstacle(id: int) -> TankObstacleState:
 	return null
 
 
-## A fresh id for an enemy, shell or obstacle.
+## A fresh id for an enemy, shell or obstacle: always > 0, so never a boss part's (negative) id.
 func take_id() -> int:
 	next_id += 1
 	return next_id - 1

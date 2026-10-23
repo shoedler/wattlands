@@ -69,6 +69,9 @@ static func phase_for(content: TankContent, s: Dictionary, engine: String, index
 	var duration := float(s.get("duration_s", 0.0))
 	var label := str(s.get("label", ""))
 	var entry := content.plan_entry(engine, type)
+	if entry.is_empty():
+		# The schema requires every entry (TankContentSchema.TABLE_SEGMENTS); never guess one.
+		push_error("tank: no stations.json plan entry for %s in %s" % [engine, type])
 	var ph: PlanPhase
 	if str(entry.get("mode", Wl.ERG)) == Wl.SIM:
 		ph = PlanPhase.sim(kind, str(entry.get("grade_source", Wl.GRADE_FLAT)), duration, label)

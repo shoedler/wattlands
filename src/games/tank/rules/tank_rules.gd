@@ -41,7 +41,9 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 
 
 ## The rider's in-band rule (brief 2.3 "In band"), on this tick's input. `station` is the room the
-## rider works (null treated as none: never in band). Never in band on reserve or in rescue.
+## rider works (null treated as none: never in band). Never in band on reserve or in rescue. The
+## rule follows the rider's own phase kind (ADR "Plan shape details"): every WARMUP and RECOVERY
+## kind (the depot, the drill's skirmish, checkpoints) is cadence >= 60 only, never a power rule.
 static func in_band(state: TankState, r: TankRiderInput, station: TankStationState) -> bool:
 	if station == null or r.on_reserve() or r.rescue or state.content == null:
 		return false
@@ -49,7 +51,10 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 	var seg := state.seg.seg
 	if seg == TankIds.SEG_COOLDOWN or seg == TankIds.SEG_NONE:
 		return false
-	if seg == TankIds.SEG_CHECKPOINT or seg == TankIds.SEG_DEPOT:
+	var kind := r.phase_kind if r.phase_kind != "" else state.seg.kind
+	if kind == Wl.COOLDOWN:
+		return false
+	if kind == Wl.WARMUP or kind == Wl.RECOVERY:
 		return r.cadence_rpm >= c.num("tanks", "in_band.recovery_cadence_rpm", 60.0)
 	if r.mode == Wl.ERG:
 		return (

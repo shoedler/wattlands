@@ -3,6 +3,12 @@ extends RefCounted
 ## Every Tank content file, loaded and validated together (brief 2.9; BRIEF 6). Owner: rules
 ## (G0 wrote a working loader; the schemas live in contracts/tank_content_schema.gd).
 ##
+## Frozen accessors (contracts/README.md "TankContent surface"): TankState.create and effort's
+## TankPlanBuilder call ok, num, value, mission, segments, segment, mission_rotates, plan_table,
+## plan_entry, tank_def, engines_of, start_engines, rotation_row, enemy_def, boss_def,
+## enemy_scale, scaled_count and unlocks. Their names, arguments and meanings never change; the
+## rules builder may add methods and change the internals only.
+##
 ## Load in the module with load_for(ctx) (through ctx.load_content_json, so run_game_sim
 ## --override reaches every file); tests and the rules-level harness use read_files() +
 ## from_dicts(). The mission is content/tank/missions/<content id>.json.
@@ -58,11 +64,7 @@ static func from_dicts(files: Dictionary, p_mission_id: String) -> TankContent:
 	c.errors.append_array(TankContentSchema.validate_cosmetics(files.get("cosmetics")))
 	c.errors.append_array(TankContentSchema.validate_mission(files.get("mission"), p_mission_id))
 	if c.errors.is_empty():
-		var table := c.plan_table()
-		if not (c.data["stations"] as Dictionary).has(table):
-			c.errors.append(
-				"missions/%s.json plan_table: %s not in stations.json" % [p_mission_id, table]
-			)
+		c.errors.append_array(TankContentSchema.validate_cross(c.data))
 	return c
 
 

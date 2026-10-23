@@ -31,6 +31,8 @@ var fallback: bool = true
 var ftp: float = 200.0
 var ftp_verified: bool = true
 var haptics_on: bool = true
+## Host only: PlayerSlot.rider_mass_kg (the drive's mass while this rider drives).
+var rider_mass_kg: float = 75.0
 
 ## [snap] (engine code) TankIds.ENGINE_* this rider works in the current segment (plan meta).
 var engine: String = ""
@@ -61,3 +63,17 @@ var berm_absorbed: float = 0.0
 var shots: int = 0
 var hits: int = 0
 var shells_by_type: Array[int] = [0, 0, 0, 0]
+
+# --- Host-only helpers (never serialized: "_" names and Objects are skipped by TankRecord) -----------
+## The sprint rule for Ram, dodge and Overpressure: SprintRule.create(ftp, ram.sprint_window_s),
+## the trailing 3 s average >= 1.2 x FTP (BRIEF 3.5, brief 2.4). The rules feed it every tick with
+## (state.t, raw watts) through sprint_rule(); the station's `sprinting` mirrors holds() and
+## `sprint_s` / `dodge_s` count held_s(). Reset it when the rider changes station.
+var _sprint: SprintRule = null
+
+
+## This rider's sprint rule, created on first use with a `window_s` trailing window.
+func sprint_rule(window_s: float) -> SprintRule:
+	if _sprint == null:
+		_sprint = SprintRule.create(ftp, window_s)
+	return _sprint

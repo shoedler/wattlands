@@ -14,9 +14,11 @@ var hull_h: int = 72
 # --- Drive (brief 2.4 Drive) -------------------------------------------------------------------------
 ## [snap] World x of the hull's rear edge in art px (the camera follows it).
 var x_px: float = 0.0
-## Game metres driven in the current segment (terrain and encounters key on it).
+## Game metres driven in the current segment (terrain and encounters key on it). Not in the
+## snapshot: during an Advance x_px == TankConst.m_to_px(distance_m) (a tow snaps both), so a
+## client's "distance to the halt line" is (m_to_px(segment length_m) - x_px) / PX_PER_M.
 var distance_m: float = 0.0
-## [snap] Game speed in m/s (SpeedModel on the driver's P_eff; 0 while stopped).
+## [snap] Game speed in m/s: the SpeedModel's v between ticks (speed_model(); 0 while stopped).
 var speed_mps: float = 0.0
 ## [snap] The terrain grade under the tank in % before difficulty (the director pushes it with
 ## course_grade at 2 Hz in grade_source "game" phases).
@@ -62,9 +64,21 @@ var loaded: int = TankIds.SHELL_NONE
 ## [snap] Seconds of the breech cycle left after a shot (nothing loads before it ends).
 var breech_s: float = 0.0
 ## [snap] The id of the enemy, obstacle or boss part auto-aim (or the rider) targets; 0 none.
-## Boss parts: TankBossState.PART_ID_BASE + part index.
+## Boss parts have negative ids (TankBossState.part_id), entities positive ones (TankState.take_id).
 var target_id: int = 0
 ## Seconds left of auto-aim's pause after a manual nudge.
 var aim_pause_s: float = 0.0
 ## Citadel secondaries: seconds to the next shot (fore, aft).
 var secondary_cd_s: Array[float] = [0.0, 0.0]
+
+## Host only (never serialized): the drive's SpeedModel (BRIEF 3.11), created on first use with
+## tanks.json drive.cda_m2 and drive.mass_offset_kg; the rules set its rider_mass_kg each tick to
+## the mass of the rider on the diesel or bulwark station (TankRiderInput.rider_mass_kg) and keep
+## speed_mps == its v_mps.
+var _speed: SpeedModel = null
+
+
+func speed_model(cda_m2: float, mass_offset_kg: float) -> SpeedModel:
+	if _speed == null:
+		_speed = SpeedModel.create(75.0, cda_m2, mass_offset_kg)
+	return _speed

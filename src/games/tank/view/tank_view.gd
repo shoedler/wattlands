@@ -7,10 +7,23 @@ extends Node2D
 ## Layout (TankConst): ground line y 296, the hull's rear at screen x 16, enemies entering from the
 ## right (rear rushers from the left); the HUD covers only y 0-60 and 300-360.
 ##
+## The view owns snapshot interpolation (a WorkoutSnapHistory-style buffer keyed by state.tick,
+## fed from TankGame.snapshot_applied), the Tank Controls (which send intents themselves through
+## game.ctx.intents.send) and TankAudio (created here as a child, connected to TankGame.cue).
+##
 ## G0 stub: draws the ground, the hull, its rooms and the enemies as flat palette shapes so the
 ## game is visible end to end. G1 (view) replaces it, keeping `game` and make_view()'s contract.
 
 var game: TankGame = null
+var audio: TankAudio = null
+
+
+func _ready() -> void:
+	audio = TankAudio.new()
+	audio.game = game
+	add_child(audio)
+	if game != null:
+		game.cue.connect(audio.on_cue)
 
 
 func _process(_delta: float) -> void:

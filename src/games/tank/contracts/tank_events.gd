@@ -20,6 +20,18 @@ extends RefCounted
 ##   overrun    {sg: seg code, st: stage}                                 the previous segment hit max_s
 ##   boss_phase {p: TankIds.BOSS_*}
 ## Additive (G0): latch {s, sh: shell type}, lever {s, lv: TankIds.LEVER_*} for sound and view.
+##
+## Semantics the haptics depend on (brief 2.7; the director reads them this way):
+## - A failed Ram emits only `ram ok:0` (its 10 HP is applied without a `hit` event), so the driver
+##   gets the ram haptic and never a second `hit` haptic for it. "Ram impact" covers ok 1 and 0.
+## - During a breakdown (damage ignored) a round that lands still emits `hit` with dmg 0: no haptic.
+## - A hit the berm absorbs keeps its pre-berm dmg (b says how much the berm took): it still
+##   counts as a "Hit of >= 8 damage".
+## - A Behemoth main-gun hit is `hit` with sh SHELL_BOSS_MAIN: is_boss_main_hit, never is_tank_hit,
+##   so it sends the boss_hit haptic (3.0 for 2 s) and not the 2.0 one.
+## - At most one haptic per receiver per tick, by precedence boss_hit, then hit (crew-wide), with
+##   ram for the driver ahead of both (TankDirector.crew_haptic picks the crew-wide one); a haptic
+##   inside the receiver's 15 s cooldown is dropped, never queued.
 
 const SEGMENT := "segment"
 const ROTATION := "rotation"
@@ -147,11 +159,13 @@ static func lever(slot: int, position: int) -> Dictionary:
 
 
 ## True for a hit on the tank that the brief's "Hit of >= 8 damage" haptic covers (brief 2.7):
-## the round's damage, before the berm absorbed any.
+## the round's damage, before the berm absorbed any. A Behemoth main-gun hit is excluded: it is
+## is_boss_main_hit (its own, larger haptic).
 static func is_tank_hit(e: Dictionary, min_damage: float) -> bool:
 	return (
 		str(e.get("type", "")) == HIT
 		and int(e.get("on", -1)) == ON_TANK
+		and int(e.get("sh", 0)) != TankIds.SHELL_BOSS_MAIN
 		and float(e.get("dmg", 0)) >= min_damage
 	)
 

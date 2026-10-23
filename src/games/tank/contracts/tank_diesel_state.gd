@@ -7,7 +7,9 @@ extends TankStationState
 var ram_s: float = 0.0
 ## [snap] Seconds of the Ram cooldown left (30 s).
 var ram_cd_s: float = 0.0
-## Seconds the sprint rule (>= 1.2 x FTP over the last 3 s, SprintRule) has held without a break.
+## Seconds the sprint rule has held without a break: held_s() of the rider's SprintRule
+## (TankRiderState.sprint_rule(3 s): the trailing 3 s average >= 1.2 x FTP, not "every tick
+## >= 1.2 x FTP for 3 s"). A Ram needs holds() at contact; a dodge needs dodge_s >= 3 s.
 var sprint_s: float = 0.0
 ## [snap] The sprint rule holds now.
 var sprinting: bool = false

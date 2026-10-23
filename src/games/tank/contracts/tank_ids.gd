@@ -26,8 +26,10 @@ const ENGINE_LABELS := {
 	ENGINE_STEAM: "TANK_ENGINE_STEAM",
 	ENGINE_BULWARK: "TANK_ENGINE_BULWARK",
 }
-## The engine icon the teammate strip shows (teammate_status "icon", a res:// texture path; the
-## kit skips a missing file). artqa ships these PNGs.
+## The engine icon the teammate strip shows (teammate_status "icon", a res:// texture path). artqa
+## may ship them (14 x 14 art px palette icons with their .import files, not art.json sprites);
+## until then the kit skips the missing file and the engine name in "text" carries the meaning, which
+## is an accepted state, not a bug.
 const ENGINE_ICONS := {
 	ENGINE_DIESEL: "res://assets/tank/icons/engine_diesel.png",
 	ENGINE_DYNAMO: "res://assets/tank/icons/engine_dynamo.png",

@@ -52,8 +52,7 @@
 		"fail_damage": 10,
 		"fail_stall_s": 5,
 		"boss_lunge_px": 24,
-		"boss_dodge_hold_s": 3,
-		"no_ability_first_s": 300
+		"boss_dodge_hold_s": 3
 	},
 	"berm": {
 		"j_per_hp": 250,
@@ -63,9 +62,6 @@
 		"sim_ftp_pct": [76, 105],
 		"erg_power_frac": 0.95,
 		"erg_cadence_rpm": 60,
-		"steam_build_ftp_pct": 90,
-		"steam_build_tol_pct": 0.5,
-		"steam_build_tol_w": 1.0,
 		"steam_cycle_cadence_rpm": 50,
 		"recovery_cadence_rpm": 60,
 		"reserve_p_eff_w": 60

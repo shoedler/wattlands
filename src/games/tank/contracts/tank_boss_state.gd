@@ -3,9 +3,14 @@ extends TankRecord
 ## The Behemoth (G0 contract; brief 2.4 Boss and Foundry Gate). Phase 1: while a bogie stands it
 ## creeps toward the tank at 2 px/s until 120 px away; each broken bogie pushes it back 24 px.
 ## Phase 2: immobile; shoot the turret. Main gun after a 6 s telegraph ("Surge to dodge").
+##
+## Maximum HP: enemies.json boss.bogie_hp and boss.turret_hp x the tank's enemy_scale (brief 2.4:
+## "HP and counts x 0.6 / 0.8 / 1.0" covers the Behemoth). bogie_max and turret_max are not in the
+## snapshot: clients compute them the same way from content (TankContent.boss_def, enemy_scale).
 
-## Auto-aim target ids of the parts: PART_ID_BASE + 0..2 bogies (rear to front), + 3 the turret.
-const PART_ID_BASE := 1000
+## Auto-aim target ids of the parts are negative, so they never collide with TankState.take_id()
+## (always > 0): bogies -1..-3 (rear to front), the turret -4.
+const PART_COUNT := 4
 const TURRET_PART := 3
 
 ## [snap] TankIds.BOSS_*.
@@ -26,6 +31,20 @@ var telegraph_s: float = 0.0
 var secondary_s: float = 0.0
 ## The current telegraph's shot will miss (a dodge: the sprint rule held >= 3 s inside it).
 var dodged: bool = false
+
+
+## The target id of part `index` (0..2 bogies rear to front, 3 the turret).
+static func part_id(index: int) -> int:
+	return -(index + 1)
+
+
+## The part index of target id `id`, or -1 when `id` is not a boss part.
+static func part_of(id: int) -> int:
+	return -id - 1 if id < 0 and id >= -PART_COUNT else -1
+
+
+static func is_part_id(id: int) -> bool:
+	return part_of(id) >= 0
 
 
 func bogies_left() -> int:

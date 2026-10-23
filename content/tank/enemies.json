@@ -1,5 +1,5 @@
 {
-	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries.",
+	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry.",
 	"types": {
 		"light": {
 			"code": 1,
@@ -43,7 +43,6 @@
 			"hp": 50,
 			"size_px": [72, 36],
 			"hitbox": "turret",
-			"turret_px": [32, 14],
 			"rammable": false,
 			"light_mult": 1.0,
 			"gun": {"damage": 10, "every_s": 7, "hit": 0.75},

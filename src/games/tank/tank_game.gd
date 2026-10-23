@@ -9,12 +9,18 @@ extends GameModule
 ## rider is in) -> finished(outcome) once every rider is in the cool-down. Clients: apply_snapshot
 ## and apply_event rebuild the state; client_predict moves the local rider's own room.
 ##
-## G0 wrote this working skeleton; G1 (module) adds Autopilot, prompts per peer, toasts, Tank
-## Controls wiring, interpolation history and e2e_check.mjs, keeping the flow above.
+## G0 wrote this working skeleton; G1 (module) adds the Autopilot, prompts per peer, toasts and
+## e2e_check.mjs, keeping the flow above. Not the module's (contracts/README.md "Module and
+## view"): snapshot interpolation (TankView keeps a WorkoutSnapHistory-style buffer keyed by
+## state.tick, fed from snapshot_applied), Tank Controls (they send their own intents through
+## game.ctx.intents.send(TankIntents.*)) and TankAudio (TankView creates it and connects it to cue).
 
 ## Every event, raised like its effects: the host where it sends the event, clients in
 ## apply_event. The view and audio listen here.
 signal cue(kind: String, data: Dictionary)
+## A client applied a snapshot (state now holds the host's tick `tick`): the view records it in
+## its interpolation history. Clients only; the host's view reads the live state.
+signal snapshot_applied(tick: int)
 
 ## The host refreshes the teammate strip this often (ticks; 2 Hz).
 const STATUS_EVERY_TICKS := 10
@@ -207,6 +213,7 @@ func apply_snapshot(snap: Dictionary) -> void:
 		return
 	TankSnapshot.apply(state, snap)
 	ctx.hud.readout(TankHud.READOUT_HULL, str(ceili(state.hull.hp)))
+	snapshot_applied.emit(state.tick)
 
 
 func apply_event(event: Dictionary) -> void:

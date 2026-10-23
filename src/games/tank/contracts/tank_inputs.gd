@@ -46,11 +46,16 @@ static func from_frame(
 		ri.slot = p.slot_index
 		ri.ftp = p.ftp
 		ri.ftp_verified = p.ftp_verified
+		ri.rider_mass_kg = p.rider_mass_kg
 		ri.autopilot = p.autopilot or p.is_bot
 		var ps := frame.phase_of(p.peer_id)
 		if ps != null:
 			ri.phase_index = ps.index
+			ri.phase_kind = ps.kind
+			ri.phase_mode = ps.mode
+			ri.plan_elapsed_s = ps.plan_elapsed_s
 			ri.engine = str(meta_of(plans.get(p.peer_id), ps.index).get("engine", ""))
+			ri.grade_source = grade_source_of(plans.get(p.peer_id), ps.index)
 		var tm := frame.telemetry(p.peer_id)
 		if tm != null:
 			ri.power_w = tm.power_w
@@ -78,6 +83,16 @@ static func meta_of(plan: Variant, index: int) -> Dictionary:
 	if index < 0 or index >= ep.size():
 		return {}
 	return ep.phase(index).meta
+
+
+## The grade_source of SIM phase `index` of `plan` ("" for ERG, past its end, or no plan).
+static func grade_source_of(plan: Variant, index: int) -> String:
+	if not (plan is EffortPlan):
+		return ""
+	var ep: EffortPlan = plan
+	if index < 0 or index >= ep.size() or ep.phase(index).mode != Wl.SIM:
+		return ""
+	return ep.phase(index).grade_source
 
 
 ## The input of `peer`, or null.

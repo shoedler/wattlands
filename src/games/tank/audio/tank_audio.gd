@@ -5,11 +5,12 @@ extends Node
 ## clank, lever clunk, hoist ratchet; the local station loudest. Owner: view. It only reads state
 ## and the module's events; silent and error-free headless.
 ##
-## G0 stub: plays nothing. G1 (view) fills it, keeping these entry points.
+## TankView creates it as a child and connects TankGame.cue to on_cue (the module never creates
+## it). G0 stub: plays nothing. G1 (view) fills it, keeping these entry points.
 
 var game: TankGame = null
 
 
-## Called by the module for every event (host where it sends it, clients in apply_event).
-func on_event(_event: Dictionary) -> void:
+## Every game event (TankGame.cue: the host where it sends it, clients in apply_event).
+func on_cue(_kind: String, _data: Dictionary) -> void:
 	pass

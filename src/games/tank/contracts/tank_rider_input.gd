@@ -8,8 +8,25 @@ var peer: int = 0
 var slot: int = 0
 ## TankIds.ENGINE_* this rider works in its current phase (its plan meta; "" in the cool-down).
 var engine: String = ""
-## This rider's own phase index (normally the group's; it can lag one tick at a boundary).
+## This rider's own phase (frame.phase_of(peer) and its PlanPhase): normally the group's, but it
+## can lag one tick at a boundary. Every per-rider gate uses these, never the group's TankPhaseInfo:
+## the SIM-only patterns (boiler, hoist, terrain), haptics (SIM phases only, never WARMUP kinds,
+## never in this rider's first 300 s: TankConst.in_first_window(plan_elapsed_s)), the warm-up
+## numbers (WARMUP kinds) and the in-band rule's kind.
 var phase_index: int = -1
+## Wl.WARMUP / WORK / RECOVERY / COOLDOWN ("" without a phase).
+var phase_kind: String = ""
+## The plan's mode for this phase (Wl.ERG / Wl.SIM; the cool-down is ERG). `mode` below is what
+## the governor applies now (rescue can differ).
+var phase_mode: String = ""
+## PlanPhase.grade_source (Wl.GRADE_FLAT / GRADE_GAME) of a SIM phase; "" for ERG and the cool-down.
+var grade_source: String = ""
+## Game seconds since this rider's plan started (PhaseState.plan_elapsed_s).
+var plan_elapsed_s: float = 0.0
+## PlayerSlot.rider_mass_kg (scaling-mode mass; real on the host, 75 for others on a client). The
+## drive (SpeedModel.create(mass, 0.5, 8.0), GAME_SDK) uses the mass of the rider whose station is
+## diesel or bulwark this tick, so it changes with rotation.
+var rider_mass_kg: float = 75.0
 ## Raw watts (the sprint rule, steam "building" >= 90% FTP and ERG in-band compare raw watts).
 var power_w: float = 0.0
 ## Effective power (BRIEF 3.3): what drives the engines (energy, speed, berm, repair).
@@ -46,3 +63,13 @@ func applied_pct() -> float:
 ## On reserve: dropped or AFK (the station runs as if P_eff 60 W, never in band, brief 2.2).
 func on_reserve() -> bool:
 	return afk or not connected
+
+
+## In this rider's own first 300 s (no Ram, dodge, Overpressure, sprint prompt or haptic).
+func in_first_window() -> bool:
+	return TankConst.in_first_window(plan_elapsed_s)
+
+
+## This rider's phase is a WARMUP kind (the depot, the drill's skirmish): warm-up numbers apply.
+func in_warmup() -> bool:
+	return phase_kind == Wl.WARMUP
