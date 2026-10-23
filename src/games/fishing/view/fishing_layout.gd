@@ -14,7 +14,7 @@ extends RefCounted
 ##    3 and 4 lanes) the timeline is left out (the deck bar's phase chip stands in) and the row
 ##    moves to the zone's top;
 ##  - every other lane: one compact FishingLaneHud (213 x <= 36) at its zone's top, clear of PANIC;
-##  - toasts below the deck bar; banners over the local lane's left two-thirds.
+##  - toasts below the deck bar, left of the HUD zone; banners over the local lane's left two-thirds.
 
 const ROW_H := 36
 const TIMELINE_H := 36
@@ -22,6 +22,7 @@ const GAP := 2
 const POWER_W := 100
 const METER_W := 5
 const CADENCE_W := 97
+const TOAST_X := 8
 
 
 static func lane_h(n: int) -> int:
@@ -151,8 +152,10 @@ static func lane_hud(i: int, n: int) -> Rect2i:
 	return Rect2i(zone.position.x, zone.position.y, FishingConst.HUD_W, mini(ROW_H, zone.size.y))
 
 
+## Toasts: below the deck bar, inside the lanes' left part (x 8-424), so a long toast never
+## covers the local lane's HUD zone (the timeline at x >= 427).
 static func toast_rect() -> Rect2i:
-	return Rect2i(160, FishingConst.DECK_H + 2, 320, 22)
+	return Rect2i(TOAST_X, FishingConst.DECK_H + 2, FishingConst.HUD_X - 3 - TOAST_X, 22)
 
 
 ## Banners (warm-up, rescue) cover the local lane's left two-thirds.

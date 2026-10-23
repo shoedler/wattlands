@@ -3,9 +3,11 @@ extends Node2D
 ## One rider's lane (brief 3.5), in lane-local art pixels (origin at the lane's top-left), drawn
 ## back to front:
 ##  1. sky bands (ordered dither; the day cycle's three variants with a 2 s dithered wipe), the
-##     sun, far islands and clouds (ParallaxStrip, mirror_alternate), the palm islet and the
-##     gulls over Bird Pile hints (4 Hz); a dithered sky cover keeps the HUD zone pure gradient;
-##  2. water bands, light rays (SpriteWobble) and the surface strip;
+##     sun, clouds, then far islands (ParallaxStrip, mirror_alternate), the palm islet at half
+##     size (a distant islet) and the gulls over Bird Pile hints (4 Hz);
+##  2. water bands, two light-ray sets (SpriteWobble; the second mirrored, shorter and out of
+##     step) and the surface strip; then a dithered cover keeps the HUD zone pure sky gradient
+##     and open water (FishingPalette.zone_cover_texture);
 ##  3. reef_back;
 ##  4. hints at hint_x(d): bait balls, sonar marks (1-4 by strength), current seams, the selected
 ##     one bracketed (the pedal-scan highlight from the state);
@@ -23,6 +25,13 @@ const LEAP_GAP_S := 0.35
 const LEAP_PX := 14.0
 const RIDE_PX_PER_SQRT_W := 1.6
 const RIDE_MAX_PX_S := 40.0
+## On the ride out the boat motors this far right of BOAT_X0, so its wake has open water behind
+## the stern (brief 3.5 "shows the wake"); it eases in and back with this time constant and is
+## back at BOAT_X0 when the first pick opens.
+const RIDE_OUT_SHIFT_PX := 56.0
+const RIDE_OUT_EASE_S := 0.8
+## The longest ride step one frame takes when the game clock ran ahead of the frames.
+const RIDE_CATCHUP_MAX_S := 10.0
 const MOVING_PX_S := 2.0
 const LANDING_ABOARD_S := 15.0
 const LANDING_GONE_S := 25.0
@@ -36,16 +45,55 @@ const REEF_W := 416
 const CAP_W := 8
 const SAND_H := 8
 const RAY_XS: Array[int] = [112, 252]
-## The "YOU" tag's 3 x 5 glyphs (rows top to bottom, bit 2 = left column).
+## The second ray set's look: mirrored, shorter, its sway at another speed and out of step with
+## the first, so the two never read as one tile repeated.
+const RAY_B_HEIGHT := 0.7
+const RAY_B_TIME_OFFSET_S := 2.3
+## The surface strip's crest rows (its rows 0-1, mostly see-through) stand against the sky: the
+## sky runs this many rows past sky_h and the water starts under them, so the holes in the
+## strip's lower rows show water.
+const SKY_UNDER := 1
+## The palm islet is a distant prop: drawn at half size, its base on the horizon.
+const PALM_PERIOD_PX := 900.0
+## The local lane's tag text when FISHING_HUD_YOU has no translation.
+const TAG_DEFAULT := "YOU"
+const TAG_MAX_GLYPHS := 8
+## The tag's 3 x 5 pixel font, A-Z (rows top to bottom, bit 2 = left column). The tag text comes
+## from FISHING_HUD_YOU, upper-cased; a letter outside the font is left out.
 const GLYPHS := {
-	"Y": [5, 5, 2, 2, 2],
+	"A": [2, 5, 7, 5, 5],
+	"B": [6, 5, 6, 5, 6],
+	"C": [3, 4, 4, 4, 3],
+	"D": [6, 5, 5, 5, 6],
+	"E": [7, 4, 6, 4, 7],
+	"F": [7, 4, 6, 4, 4],
+	"G": [3, 4, 5, 5, 3],
+	"H": [5, 5, 7, 5, 5],
+	"I": [7, 2, 2, 2, 7],
+	"J": [1, 1, 1, 5, 2],
+	"K": [5, 5, 6, 5, 5],
+	"L": [4, 4, 4, 4, 7],
+	"M": [5, 7, 7, 5, 5],
+	"N": [6, 5, 5, 5, 5],
 	"O": [7, 5, 5, 5, 7],
+	"P": [6, 5, 6, 4, 4],
+	"Q": [2, 5, 5, 6, 3],
+	"R": [6, 5, 6, 5, 5],
+	"S": [3, 4, 2, 1, 6],
+	"T": [7, 2, 2, 2, 2],
 	"U": [5, 5, 5, 5, 7],
+	"V": [5, 5, 5, 5, 2],
+	"W": [5, 5, 7, 7, 5],
+	"X": [5, 5, 2, 5, 5],
+	"Y": [5, 5, 2, 2, 2],
+	"Z": [7, 1, 2, 4, 7],
 }
 
 var slot: int = 0
 var n: int = 1
 var local: bool = false
+## The local lane's tag (FishingView sets it from FISHING_HUD_YOU).
+var tag_text: String = TAG_DEFAULT
 var look: Dictionary = {}
 var content: FishingContent = null
 var cosmetic_values: Dictionary = {}
@@ -75,7 +123,7 @@ var sun: Sprite2D = null
 var islands_far: ParallaxStrip = null
 var clouds: ParallaxStrip = null
 var palm: Sprite2D = null
-var sky_cover: Sprite2D = null
+var zone_cover: Sprite2D = null
 var water: Sprite2D = null
 var rays: Array[Sprite2D] = []
 var surface: ParallaxStrip = null
@@ -101,6 +149,8 @@ var _snap_t: float = -1.0
 var _frenzy_t: float = -1.0
 var _palm_x0: float = 0.0
 var _boat_base: Vector2 = Vector2.ZERO
+var _ride_shift: float = 0.0
+var _ride_game_t: float = 0.0
 
 
 ## Builds the lane for slot `p_slot` of `p_n`. `p_look` is the slot's {color, shape, pattern}.
@@ -202,7 +252,11 @@ func on_cue(cue: Dictionary) -> void:
 func advance(dt: float) -> void:
 	_anim_t += dt
 	var st := lane.state if lane != null else FishingConst.ST_IDLE
-	_ride(dt, st)
+	# The ride follows the game clock as well as the frames, so a sim run ahead of the frames
+	# (tools/screenshot, a late join) shows the speed, wake and boat place it has reached.
+	var ride_dt := clampf(maxf(dt, game_t - _ride_game_t), 0.0, RIDE_CATCHUP_MAX_S)
+	_ride_game_t = game_t
+	_ride(ride_dt, st)
 	_sky()
 	_line_speed(dt, st)
 	boat.tension = rod_tension()
@@ -216,8 +270,8 @@ func advance(dt: float) -> void:
 	if _frenzy_t >= 0.0:
 		_frenzy_t = _frenzy_t + dt if _frenzy_t + dt < FRENZY_ANIM_S else -1.0
 	effects.tick(dt)
-	for m in _ray_mats:
-		SpriteWobble.set_time(m, _anim_t)
+	for k in _ray_mats.size():
+		SpriteWobble.set_time(_ray_mats[k], _anim_t + RAY_B_TIME_OFFSET_S * float(k % 2))
 	for layer in _layers:
 		layer.queue_redraw()
 	model["state"] = st
@@ -229,6 +283,23 @@ func advance(dt: float) -> void:
 	model["tension"] = boat.tension
 	model["jumping"] = _jump_t >= 0.0
 	model["flipped"] = boat.flipped
+	model["boat_x"] = boat.position.x
+	model["wake_rect"] = wake_rect()
+
+
+## The wake's visible water behind the stern in lane px (size 0 when no wake shows): from inside
+## the lane border to the stern (flipped: from the stern to the lane's right edge of open water).
+func wake_rect() -> Rect2:
+	if not boat.wake_on:
+		return Rect2()
+	var tex := FishingSprites.texture("wake")
+	var y := boat.position.y + FishingRig.STERN.y
+	if boat.flipped:
+		var stern := boat.position.x - FishingRig.STERN.x
+		return Rect2(stern, y, maxf(float(FishingConst.HUD_X) - stern, 0.0), tex.get_height())
+	var x0 := 3.0
+	var stern_x := boat.position.x + FishingRig.STERN.x
+	return Rect2(x0, y, maxf(stern_x - x0, 0.0), tex.get_height())
 
 
 ## Rod tension 0..1: a fight's strain (all of it on a run), the gaff sprint, a light retrieve.
@@ -284,24 +355,32 @@ func _build() -> void:
 	sky_b.visible = false
 	sun = _sprite("Sun", Vector2.ZERO, FishingSprites.texture("sun"))
 	sun.centered = true
-	islands_far = _strip("IslandsFar", "islands_far", 0.05, float(sky_h))
-	islands_far.align_bottom = true
-	palm = _sprite("Palm", Vector2.ZERO, FishingSprites.texture("island_palm"))
 	clouds = _strip("Clouds", "clouds", 0.02, 0.0)
 	clouds.drift_px_s = 1.5
-	sky_cover = _sprite("SkyCover", Vector2(FishingConst.HUD_X - FishingPalette.COVER_EDGE, 0))
+	islands_far = _strip("IslandsFar", "islands_far", 0.05, float(sky_h))
+	islands_far.align_bottom = true
+	var palm_tex := FishingSprites.texture("island_palm")
+	palm = _sprite("Palm", Vector2.ZERO, FishingPalette.half_size("island_palm", palm_tex))
 	_layer("SkyHints", _paint_sky_hints)
-	water = _sprite("Water", Vector2(0, water_y), FishingPalette.water_texture(lane_h - water_y))
-	for x in RAY_XS:
+	var water_top := sky_h + SKY_UNDER
+	water = _sprite(
+		"Water", Vector2(0, water_top), FishingPalette.water_texture(lane_h - water_top)
+	)
+	for k in RAY_XS.size():
+		var x := RAY_XS[k]
 		var ray := _sprite("Rays%d" % x, Vector2(x, water_y), FishingSprites.texture("light_rays"))
 		ray.region_enabled = true
-		var tex_h := ray.texture.get_height()
-		ray.region_rect = Rect2(0, 0, ray.texture.get_width(), mini(tex_h, water_h))
-		_ray_mats.append(SpriteWobble.water(ray, 1.0, 0.4))
+		var tex_h := mini(ray.texture.get_height(), water_h)
+		if k % 2 == 1:
+			tex_h = roundi(float(tex_h) * RAY_B_HEIGHT)
+			ray.flip_h = true
+		ray.region_rect = Rect2(0, 0, ray.texture.get_width(), tex_h)
+		_ray_mats.append(SpriteWobble.water(ray, 1.0, 0.4 if k % 2 == 0 else 0.29))
 		rays.append(ray)
 	surface = _strip("Surface", "surface_strip", 1.0, float(sky_h - 1))
 	surface.mirror_alternate = true
 	surface.drift_px_s = 4.0
+	zone_cover = _sprite("ZoneCover", Vector2(FishingConst.HUD_X - FishingPalette.COVER_EDGE, 0))
 	var back_tex := FishingSprites.texture("reef_back")
 	reef_back = _sprite(
 		"ReefBack", Vector2(0, lane_h - SAND_H + 2 - back_tex.get_height()), back_tex
@@ -366,17 +445,21 @@ func _ride(dt: float, st: int) -> void:
 	for s: ParallaxStrip in [islands_far, clouds, surface]:
 		s.world_x = world_x
 		s.tick(dt)
-	var period := 900.0
+	var pw := float(palm.texture.get_width())
 	palm.position = Vector2(
-		roundf(fposmod(_palm_x0 - world_x * 0.15, period) - 80.0),
+		roundf(fposmod(_palm_x0 - world_x * 0.15, PALM_PERIOD_PX) - pw),
 		float(sky_h - palm.texture.get_height() + 1)
 	)
 	boat.flipped = st == FishingConst.ST_HOME
-	var bob := 1.0 if sin(_anim_t * 1.7 + float(slot)) > 0.55 else 0.0
-	boat.position = (
-		_boat_base
-		+ Vector2(FishingConst.BOAT_X1 - FishingConst.BOAT_X0 if boat.flipped else 0, bob)
+	var shift_to := RIDE_OUT_SHIFT_PX if st == FishingConst.ST_RIDE_OUT else 0.0
+	_ride_shift += (
+		(shift_to - _ride_shift) * (1.0 - exp(-dt / RIDE_OUT_EASE_S)) if dt > 0.0 else 0.0
 	)
+	if absf(_ride_shift - shift_to) < 0.5:
+		_ride_shift = shift_to
+	var bob := 1.0 if sin(_anim_t * 1.7 + float(slot)) > 0.55 else 0.0
+	var dx := FishingConst.BOAT_X1 - FishingConst.BOAT_X0 if boat.flipped else 0
+	boat.position = _boat_base + Vector2(float(dx) + roundf(_ride_shift), bob)
 	boat.wake_on = _speed > MOVING_PX_S
 	boat.wake_x += _speed * dt
 
@@ -384,21 +467,32 @@ func _ride(dt: float, st: int) -> void:
 func _sky() -> void:
 	var v := FishingPalette.day_variant(game_t, total_s)
 	var p := FishingPalette.wipe_progress(game_t, total_s)
+	var rows := sky_h + SKY_UNDER
 	if p < 1.0 and v > 0:
-		sky_a.texture = FishingPalette.sky_texture(sky_h, v - 1)
-		sky_b.texture = FishingPalette.sky_texture(sky_h, v)
+		sky_a.texture = FishingPalette.sky_texture(rows, v - 1)
+		sky_b.texture = FishingPalette.sky_texture(rows, v)
 		sky_b.visible = true
 		DitherDissolve.set_amount(_wipe_mat, 1.0 - p)
 	else:
-		sky_a.texture = FishingPalette.sky_texture(sky_h, v)
+		sky_a.texture = FishingPalette.sky_texture(rows, v)
 		sky_b.visible = false
-	sky_cover.texture = FishingPalette.sky_cover_texture(sky_h, v if p >= 0.5 else maxi(v - 1, 0))
+	zone_cover.texture = FishingPalette.zone_cover_texture(
+		rows, zone_water_rows(), lane_h - rows, v if p >= 0.5 else maxi(v - 1, 0)
+	)
 	var f := FishingPalette.sun_fraction(game_t, total_s)
 	var x := 110.0 + f * 260.0
 	var y := float(sky_h) * 0.8 - sin(PI * f) * float(sky_h) * 0.55
 	sun.position = Vector2(roundf(x), roundf(maxf(y, 7.0)))
 	model["variant"] = v
 	model["wipe"] = p
+
+
+## Water rows the HUD zone cover paints: from the water's top to the surface strip's bottom.
+func zone_water_rows() -> int:
+	var strip_h := 6
+	if surface != null and surface.texture != null:
+		strip_h = surface.texture.get_height()
+	return maxi(sky_h - 1 + strip_h - (sky_h + SKY_UNDER), 0)
 
 
 func _line_speed(dt: float, st: int) -> void:
@@ -626,14 +720,32 @@ func _paint_border(c: CanvasItem) -> void:
 		return
 	var col: Color = look.get("color", Wl.slot_look(slot)["color"])
 	FishingView.draw_pattern_frame(c, r, col, str(look.get("pattern", "solid")), 3)
-	var tag := Rect2(4, lane_h - 13, 17, 9)
+	var glyphs := tag_glyphs(tag_text)
+	var tag := tag_rect(glyphs.size())
 	c.draw_rect(tag, col)
 	c.draw_rect(tag, FishingPalette.NAVY, false, 1.0)
 	var text_col := FishingView.text_on(col)
-	var x := 6.0
-	for ch in "YOU":
-		_glyph(c, Vector2(x, tag.position.y + 2.0), GLYPHS[ch], text_col)
+	var x := tag.position.x + 2.0
+	for rows: Array in glyphs:
+		_glyph(c, Vector2(x, tag.position.y + 2.0), rows, text_col)
 		x += 4.0
+
+
+## The tag's glyph rows for `text` (upper-cased; letters outside GLYPHS are left out; at most
+## TAG_MAX_GLYPHS; the default "YOU" when nothing is left).
+static func tag_glyphs(text: String) -> Array:
+	var out: Array = []
+	for ch in text.to_upper():
+		if GLYPHS.has(ch) and out.size() < TAG_MAX_GLYPHS:
+			out.append(GLYPHS[ch])
+	if out.is_empty() and text != TAG_DEFAULT:
+		return tag_glyphs(TAG_DEFAULT)
+	return out
+
+
+## The tag's rect in lane px for `count` glyphs (bottom-left, inside the 3 px border).
+func tag_rect(count: int) -> Rect2:
+	return Rect2(4, lane_h - 13, 4 * count + 3, 9)
 
 
 func _glyph(c: CanvasItem, at: Vector2, rows: Array, col: Color) -> void:

@@ -6,7 +6,7 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 
 ## 1. Ride out (warm-up)
 
-- [ ] Start `free_30` solo and pedal. Expected: ERG ramps from 50% to 65% over 5 minutes, no SIM, no haptics, no bites; the practice band (preferred cadence +- 8 rpm) shows without meters; the boat motors right with the wake.
+- [ ] Start `free_30` solo and pedal. Expected: ERG ramps from 50% to 65% over 5 minutes, no SIM, no haptics, no bites; the practice band (preferred cadence +- 8 rpm) shows without meters; the boat motors forward (it sits a little right of its fishing spot on the ride out) with a foam wake trailing behind the stern, and eases back to the left edge when the first pick opens.
 - [ ] Panic once during the ride out, then resume. Expected: ERG off at once; the trip goes on after resume.
 
 ## 2. Picking, casting, reeling
@@ -53,7 +53,7 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 ## 9. Multiplayer
 
 - [ ] Two PCs (the relay as in `docs/HARDWARE_TEST_PLAN.md` section 10): host `free_30`, join with the room code. Expected: equal lanes in slot order on both screens, your lane highlighted with your colour, pattern and "YOU"; each rider's pull is a share of their own FTP.
-- [ ] Two fights overlapping for 10 s or more. Expected: a Double Hookup toast and a gold flash linking the lanes; the landed fish scores x 1.5.
+- [ ] Two fights overlapping for 10 s or more. Expected: a Double Hookup toast (left of the HUD panels, never over your timeline) and a short gold flash linking the lanes' rod tips that fades out within 2 s; the landed fish scores x 1.5.
 - [ ] Kill the client mid-fight and restart it. Expected: its lane goes AFK (the fish waits, no snap, no pulls), it rejoins and the fight continues; its trainer only ever took commands from its own governor.
 
 Log: date, trainer firmware, FTP (verified or not), preferred cadence, haptic intensity, and each step's result in the plan's template.

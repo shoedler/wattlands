@@ -8,7 +8,6 @@ What v0.1 does not ship, from docs/games/fishing.md 2.9, 3.3 and 4.3 (P1 ships o
 - **`marlin_hunt`** (75 min): a marlin bites 15-20 minutes in, T_nom 900 s, 6 jumps at 104%.
 - **`.zwo` bite scheduling** through the platform's workout parser (BRIEF 3.7): work blocks >= 60 s become fights at the block's target and length, blocks above 105% lasting <= 30 s become runs, recoveries become Reels; the PlanValidator decides.
 - **A legendary fish for two rods**: 2+ riders only, 88-92% +-8%, 8-12 min; it tires 1.5x while both riders are in band and 0.5x while one is. Sprite `fish_legend` 96x30.
-- **Generated art**: v0.1 ships placeholder sprites (`FishingFallbackSprites`). Generate the art.json set with the pipeline once `FAL_KEY` and `WATTLANDS_ALLOW_ART=1` are set (assets/fishing/README.md, $10 budget), including a generated `picker_card` to replace the G0 placeholder.
 - **Screenshots** (brief 4.3): `tools/screenshot` at 1, 2 and 4 lanes during the ride out, a pick, a tuna run, a marlin jump and a Landing.
 
 ## P2 notes

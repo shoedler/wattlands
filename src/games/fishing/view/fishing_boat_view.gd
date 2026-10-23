@@ -2,13 +2,22 @@ class_name FishingBoatView
 extends Node2D
 ## One lane's boat and rig (brief 3.3, 3.5 layer 7), in boat-local art pixels (FishingRig): the
 ## shared boat sprite recoloured to the slot's colour with PaletteSwap (the red key ramp on trim
-## and canopy), the bike, the angler (cap and shirt recoloured too), the crank as a SpinningPart
-## driven by cadence, the reel as a SpinningPart driven by line speed (reversed on runs), the
-## chain as a ScrollingChain loop between them, code-drawn legs solved hip to pedal, the rod
-## bending with tension, the cosmetics (canopy pattern, hull trim, pennant) and the wake. The lane
-## view sets position (sprite top-left), `flipped` (motoring home, bow left) and calls advance().
+## and canopy, plus the trim's coral, pink and peach shades: FishingPalette.HULL_KEYS), the bike,
+## the angler (cap and shirt recoloured too), the crank as a SpinningPart driven by cadence, the
+## reel on the bike's front as a SpinningPart driven by line speed (reversed on runs) with the
+## line running up to the rod, the chain as a ScrollingChain loop between crank and reel,
+## code-drawn legs solved hip to pedal, the rod bending with tension, the cosmetics (canopy
+## pattern, the trim recoloured pixel by pixel, pennant) and the wake (tiles plus a foam trail).
+## The lane view sets position (sprite top-left), `flipped` (motoring home, bow left) and calls
+## advance().
 
 const WAKE_SCROLL_PX_PER_PX := 1.0
+## How far behind the stern the wake tiles reach (boat-local px; the lane border clips nothing,
+## so this covers the ride out's shift plus the lane's left edge).
+const WAKE_REACH_PX := 96.0
+## The foam trail's length behind the stern and the lower arm's spread (px down per px back).
+const WAKE_TRAIL_PX := 56
+const WAKE_SPREAD := 0.14
 const LEG_NEAR := Color("#c98e63")
 const LEG_FAR := Color("#9a6236")
 const SHORTS := Color("#23305c")
@@ -18,6 +27,7 @@ var look: Dictionary = {}
 ## Cosmetic values: "canopy" pattern id ("" plain), "trim" colour, "pennant" ("" slot shape).
 var canopy_pattern: String = ""
 var trim_color: Color = Color(0, 0, 0, 0)
+var line_color: Color = FishingPalette.LINE
 var trophy_pennant: bool = false
 var flipped: bool = false
 ## Rod tension 0..1 and the unit direction toward the line (boat-local).
@@ -26,6 +36,9 @@ var pull_dir: Vector2 = Vector2.DOWN
 ## Wake: shown while moving, scrolled by `wake_x` (art px travelled).
 var wake_on: bool = false
 var wake_x: float = 0.0
+## The trim cosmetic's pixels and their art colours (FishingRig.trim_pixels of the hull).
+var trim_points: PackedVector2Array = PackedVector2Array()
+var trim_art: PackedColorArray = PackedColorArray()
 
 var hull: Sprite2D = null
 var bike: Sprite2D = null
@@ -45,6 +58,9 @@ func _init() -> void:
 	_wake_layer = FishingDrawLayer.make("Wake", _paint_wake)
 	add_child(_wake_layer)
 	hull = _sprite("boat", Vector2.ZERO)
+	var trim := FishingRig.trim_pixels(hull.texture.get_image() if hull.texture != null else null)
+	trim_points = trim[0]
+	trim_art = trim[1]
 	_deco_layer = FishingDrawLayer.make("Deco", _paint_deco)
 	add_child(_deco_layer)
 	bike = _sprite("rig_bike", FishingRig.BIKE_POS)
@@ -90,12 +106,13 @@ func _init() -> void:
 func set_look(p_slot: int, p_look: Dictionary, cosmetics: Dictionary) -> void:
 	slot = p_slot
 	look = p_look
-	PaletteSwap.apply_slot(hull, FishingPalette.keys(), slot)
+	PaletteSwap.apply(hull, FishingPalette.hull_keys(), FishingPalette.hull_swaps(slot))
 	PaletteSwap.apply_slot(angler, FishingPalette.keys(), slot)
 	canopy_pattern = str(cosmetics.get("canopy", ""))
 	var trim := str(cosmetics.get("trim", ""))
 	trim_color = FishingPalette.color_of(trim, Color(0, 0, 0, 0))
 	trophy_pennant = str(cosmetics.get("pennant", "")) == "trophy"
+	line_color = FishingPalette.color_of(str(cosmetics.get("line", "")), FishingPalette.LINE)
 	_deco_layer.queue_redraw()
 
 
@@ -143,11 +160,37 @@ func _paint_wake(c: CanvasItem) -> void:
 	var w := float(tex.get_width())
 	var off := fposmod(wake_x * WAKE_SCROLL_PX_PER_PX, w)
 	var y := FishingRig.STERN.y
-	var x := -off
-	while x > -3.0 * w:
+	var x := w - off
+	while x > -WAKE_REACH_PX:
 		c.draw_texture(tex, Vector2(roundf(x - w), y))
 		x -= w
-	c.draw_texture(tex, Vector2(roundf(-off), y))
+	for p in wake_foam():
+		c.draw_rect(
+			Rect2(Vector2(p.x, p.y), Vector2.ONE),
+			FishingPalette.WHITE if p.z < 0.5 else FishingPalette.FOAM
+		)
+
+
+## The wake's foam this frame (boat-local, [x, y, fade 0..1] per pixel): churn at the propeller
+## and two arms trailing behind the stern, one along the waterline and one spreading down, in
+## dashes that scroll with the boat's travel and thin out by an ordered dither with distance.
+func wake_foam() -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	if not wake_on:
+		return out
+	var y0 := FishingRig.STERN.y - 1
+	var scroll := floori(wake_x)
+	for k in 6:
+		out.append(Vector3(-1 - (k % 3), y0 + k / 3 + ((k + scroll) % 2), 0.0))
+	for i in range(3, WAKE_TRAIL_PX):
+		var fade := pow(float(i) / float(WAKE_TRAIL_PX), 1.6)
+		for arm in 2:
+			var yy := y0 + (0 if arm == 0 else floori(float(i) * WAKE_SPREAD))
+			if posmod(i + scroll + arm * 2, 5) >= 4:
+				continue
+			if DitherDissolve.visible_at(i, yy, fade):
+				out.append(Vector3(-i, yy, fade))
+	return out
 
 
 func _paint_deco(c: CanvasItem) -> void:
@@ -162,28 +205,34 @@ func _paint_deco(c: CanvasItem) -> void:
 				c.draw_rect(Rect2(x, r.position.y + (x % 2), 1, 1), light)
 		"waves":
 			for x in range(r.position.x, r.end.x):
-				var yy := r.position.y + 1 + roundi(sin(float(x) * 0.8))
+				var u := (sin(float(x) * 0.8) + 1.0) * 0.5
+				var yy := r.position.y + roundi(u * float(r.size.y - 1))
 				c.draw_rect(Rect2(x, yy, 1, 1), light)
 	if trim_color.a > 0.0:
-		c.draw_rect(Rect2(8, FishingRig.TRIM_Y, 64, 1), trim_color)
+		for i in trim_points.size():
+			var tc := trim_color
+			if not FishingRig.same_colour(trim_art[i], FishingPalette.KEY_LIGHT):
+				tc = trim_color.lightened(0.3)
+			c.draw_rect(Rect2(trim_points[i], Vector2.ONE), tc)
 	var m := FishingRig.PENNANT_AT
-	c.draw_line(m, Vector2(m.x, FishingRig.CANOPY_RECT.position.y), FishingPalette.GREY_3, 1.0)
+	var foot := Vector2(m.x, FishingRig.CANOPY_RECT.position.y)
+	c.draw_line(m + Vector2(0.5, 0), foot + Vector2(0.5, 0), FishingPalette.GREY_3, 1.0)
 	var col: Color = look.get("color", Wl.slot_look(slot)["color"])
 	if trophy_pennant:
 		var fish := PackedVector2Array(
 			[
-				m + Vector2(1, 0),
-				m + Vector2(6, 1),
-				m + Vector2(4, 2),
-				m + Vector2(6, 3),
-				m + Vector2(1, 2)
+				m + Vector2(0, 0),
+				m + Vector2(-5, 1),
+				m + Vector2(-3, 2),
+				m + Vector2(-5, 3),
+				m + Vector2(0, 2)
 			]
 		)
 		c.draw_colored_polygon(fish, FishingPalette.GOLD)
-		c.draw_rect(Rect2(m + Vector2(2, 1), Vector2(1, 1)), FishingPalette.NAVY)
+		c.draw_rect(Rect2(m + Vector2(-2, 1), Vector2(1, 1)), FishingPalette.NAVY)
 		return
 	var flag := FishingView.shape_points(
-		str(look.get("shape", "circle")), m + Vector2(3.5, 1.5), 2.5
+		str(look.get("shape", "circle")), m + Vector2(-3.0, 1.5), 2.5
 	)
 	c.draw_colored_polygon(flag, col)
 	flag.append(flag[0])
@@ -204,7 +253,14 @@ func _paint_leg(c: CanvasItem, pts: PackedVector2Array, col: Color) -> void:
 	c.draw_rect(Rect2(pts[2] - Vector2(1, 0), Vector2(2, 1)), FishingPalette.NAVY)
 
 
+## The line's run from the reel's top up to the rod's first guide (boat-local px).
+func reel_line() -> PackedVector2Array:
+	var top := FishingRig.REEL_HUB - Vector2(0, FishingRig.REEL_R + 2.0)
+	return PackedVector2Array([top, rod_points()[FishingRig.ROD_GUIDE]])
+
+
 func _paint_rod(c: CanvasItem) -> void:
+	c.draw_polyline(FishingRig.snapped(reel_line()), line_color, 1.0)
 	var pts := FishingRig.snapped(rod_points())
 	c.draw_polyline(pts.slice(0, 3), FishingPalette.NAVY, 2.0)
 	c.draw_polyline(pts.slice(2), FishingPalette.GREY_4, 1.0)

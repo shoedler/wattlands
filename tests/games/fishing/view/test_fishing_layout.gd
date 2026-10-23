@@ -73,3 +73,26 @@ func test_strength_steps_run_one_to_four() -> void:
 	assert_eq(FishingLaneView.strength_steps(0.26), 2)
 	assert_eq(FishingLaneView.strength_steps(0.7), 3)
 	assert_eq(FishingLaneView.strength_steps(1.0), 4)
+
+
+## Toasts sit below the deck bar and left of the HUD zone: clear of every local HUD rect (the
+## timeline, power, meters and cadence) for every lane count and local slot.
+func test_toasts_stay_clear_of_the_local_hud_zone() -> void:
+	var toast := FishingLayout.toast_rect()
+	assert_gte(toast.position.y, FishingConst.DECK_H)
+	assert_lte(toast.end.x, FishingConst.HUD_X, "toasts end left of the HUD zone")
+	assert_gte(toast.size.x, 400, "room for the longest toast")
+	for n in range(1, 5):
+		for local in n:
+			var r := FishingLayout.local_hud(local, n)
+			for k: String in r:
+				var w: Rect2i = r[k]
+				if w.size == Vector2i.ZERO:
+					continue
+				assert_false(
+					toast.intersects(w), "toast %s overlaps %s %s (n %d)" % [toast, k, w, n]
+				)
+			for i in n:
+				assert_false(
+					toast.intersects(FishingLayout.hud_zone(i, n)), "zone %d of %d" % [i, n]
+				)
