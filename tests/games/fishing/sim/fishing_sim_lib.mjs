@@ -102,7 +102,7 @@ export function eventErrors(e) {
   if ('sp' in e && (e.sp < 0 || e.sp >= SPECIES.length)) errs.push(`${type}: species ${e.sp} outside 0..3`);
   if (type === 'landed' && e.grade !== GRADE_TROPHY && e.grade !== GRADE_LANDED) errs.push(`landed: grade ${e.grade}`);
   if (type === 'landed' && ![10, 15, 20, 25].includes(e.hk)) errs.push(`landed: hk ${e.hk} (10, 15, 20 or 25)`);
-  if (type === 'double_hookup' && (e.lvl < 2 || e.lvl > 4 || e.lanes.length !== e.lvl)) errs.push(`double_hookup: lvl ${e.lvl} with lanes ${JSON.stringify(e.lanes)}`);
+  if (type === 'double_hookup' && (e.lvl < 2 || e.lvl > 4 || e.lanes.length < e.lvl || e.lanes.length > 4)) errs.push(`double_hookup: lvl ${e.lvl} with lanes ${JSON.stringify(e.lanes)}`);
   return errs;
 }
 

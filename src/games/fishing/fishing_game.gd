@@ -299,9 +299,9 @@ func toast_for(e: Dictionary) -> Array:
 			]
 		FishingEvents.DOUBLE_HOOKUP:
 			var lvl := int(e.get("lvl", 2))
-			return [
-				TOAST_DOUBLE_HOOKUP, {"count": lvl, "mult": "%.1f" % FishingConst.hookup_mult(lvl)}
-			]
+			var on := maxi((e.get("lanes", []) as Array).size(), lvl)
+			var mult := "%.1f" % FishingConst.hookup_mult(lvl)
+			return [TOAST_DOUBLE_HOOKUP, {"count": on, "mult": mult}]
 		FishingEvents.FRENZY:
 			return [TOAST_FRENZY, {"name": _rider_name(l)}]
 		FishingEvents.HOOKUP:

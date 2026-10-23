@@ -20,7 +20,8 @@ extends RefCounted
 ## landing        l, sp
 ## landed         l, sp, grade (FishingConst.GRADE_TROPHY 1 / GRADE_LANDED 0), kg (x10),
 ##                points, hk (hookup multiplier x10: 10, 15, 20, 25)
-## double_hookup  lanes [lane, ...] (the overlapping fights, slot order), lvl (2..4)
+## double_hookup  lanes [lane, ...] (every fight on now, slot order; at least lvl of them),
+##                lvl (the hookup level just reached, 2..4)
 ## frenzy         l (the lane that hooked up), ms (60000)
 ## trip_over      (no fields)
 

@@ -152,7 +152,8 @@ test('ALL: incomplete runs, plan warnings, bad events, big snapshots and missing
 
 test('event schema: types, ints, ranges', () => {
   assert.deepEqual(eventErrors({ type: 'double_hookup', lanes: [0, 2], lvl: 2 }), []);
-  assert.match(eventErrors({ type: 'double_hookup', lanes: [0, 2, 3], lvl: 2 })[0], /lvl 2/);
+  assert.deepEqual(eventErrors({ type: 'double_hookup', lanes: [0, 2, 3], lvl: 2 }), [], 'every fight on, level just reached');
+  assert.match(eventErrors({ type: 'double_hookup', lanes: [0], lvl: 2 })[0], /lvl 2/);
   assert.match(eventErrors({ type: 'whale' })[0], /unknown event type/);
   assert.match(eventErrors({ type: 'bite', l: 5, sp: 0 })[0], /lane 5/);
   assert.match(eventErrors({ type: 'landed', l: 0, sp: 1, grade: 0, kg: 10, points: 1, hk: 12 })[0], /hk 12/);
