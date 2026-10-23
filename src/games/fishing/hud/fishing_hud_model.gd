@@ -5,10 +5,14 @@ extends RefCounted
 ## own plan, else from the lane state), the fish row, the gaff meter, the catch board and each
 ## lane's status text. Every key used here is in content/fishing/strings.csv.
 
+## Status text per lane state (FishingConst.ST_*), the same keys as FishingGame.STATUS_KEYS (a
+## cast reads as the reel, with the lure's distance), so a rider's status reads the same in the
+## kit's teammate chip and in the lane HUD. The texts are positional: REEL takes [lure m],
+## STRIKE and LANDING [species], FIGHT [species, m].
 const STATUS_KEYS: Array[String] = [
 	"FISHING_STATUS_RIDE_OUT",
 	"FISHING_STATUS_PICK",
-	"FISHING_STATUS_CAST",
+	"FISHING_STATUS_REEL",
 	"FISHING_STATUS_REEL",
 	"FISHING_STATUS_STRIKE",
 	"FISHING_STATUS_FIGHT",
@@ -16,19 +20,12 @@ const STATUS_KEYS: Array[String] = [
 	"FISHING_STATUS_IDLE",
 	"FISHING_STATUS_HOME",
 ]
-const SPECIES_KEYS: Array[String] = [
-	"FISHING_SPECIES_MACKEREL",
-	"FISHING_SPECIES_MAHI",
-	"FISHING_SPECIES_TUNA",
-	"FISHING_SPECIES_MARLIN"
-]
 const KEY_RESCUE := "FISHING_STATUS_RESCUE"
 const KEY_AFK := "FISHING_STATUS_AFK"
 const KEY_COOLDOWN := "FISHING_HUD_COOLDOWN"
 const KEY_LEFT := "FISHING_HUD_LEFT"
 const KEY_NEXT := "FISHING_HUD_NEXT"
 const KEY_DISTANCE := "FISHING_HUD_DISTANCE"
-const KEY_GAFF := "FISHING_HUD_GAFF"
 const KEY_SPRINT := "FISHING_HUD_SPRINT"
 const KEY_SPIN := "FISHING_HUD_SPIN"
 const KEY_TROPHY := "FISHING_HUD_TROPHY"
@@ -36,13 +33,12 @@ const KEY_POINTS := "FISHING_HUD_POINTS"
 const KEY_FISH := "FISHING_HUD_FISH"
 const KEY_HOOKUP := "FISHING_HUD_HOOKUP"
 const KEY_ENDS_IN := "FISHING_HUD_FISHING_LEFT"
-const KEY_STRAIN := "FISHING_HUD_STRAIN"
-const KEY_SLACK := "FISHING_HUD_SLACK"
 const KEY_RPM := "FISHING_HUD_RPM"
 const KEY_WATTS := "FISHING_HUD_WATTS"
-const KEY_PICK := "FISHING_HUD_PICK"
 const KEY_YOU := "FISHING_HUD_YOU"
 const KEY_FISH_ON := "FISHING_HUD_FISH_ON"
+## The fallback chip's "next" label after a fight (the plan's own Landing label).
+const KEY_LANDING := "FISHING_PHASE_LANDING"
 ## Every key the HUD uses (the HUD test checks each is in strings.csv).
 const KEYS: Array[String] = [
 	KEY_RESCUE,
@@ -51,7 +47,6 @@ const KEYS: Array[String] = [
 	KEY_LEFT,
 	KEY_NEXT,
 	KEY_DISTANCE,
-	KEY_GAFF,
 	KEY_SPRINT,
 	KEY_SPIN,
 	KEY_TROPHY,
@@ -59,13 +54,11 @@ const KEYS: Array[String] = [
 	KEY_FISH,
 	KEY_HOOKUP,
 	KEY_ENDS_IN,
-	KEY_STRAIN,
-	KEY_SLACK,
 	KEY_RPM,
 	KEY_WATTS,
-	KEY_PICK,
 	KEY_YOU,
 	KEY_FISH_ON,
+	KEY_LANDING,
 ]
 ## Brief 3.5: W and rpm >= 48 px in the local lane (kit widgets), >= 32 px in a FishingLaneHud.
 const LANE_NUMBER_PX := 34
@@ -140,22 +133,22 @@ static func phase_chip(
 	return out
 
 
+## The fallback chip's next label: keys without placeholders (the status texts need values).
 static func _next_key(st: int) -> String:
 	match st:
 		FishingConst.ST_RIDE_OUT, FishingConst.ST_LANDING:
-			return STATUS_KEYS[FishingConst.ST_REEL]
+			return STATUS_KEYS[FishingConst.ST_IDLE]
 		FishingConst.ST_PICK, FishingConst.ST_CAST, FishingConst.ST_REEL, FishingConst.ST_STRIKE:
-			return STATUS_KEYS[FishingConst.ST_FIGHT]
+			return KEY_FISH_ON
 		FishingConst.ST_FIGHT:
-			return STATUS_KEYS[FishingConst.ST_LANDING]
+			return KEY_LANDING
 	return KEY_COOLDOWN
 
 
-## The species' display name ("" for none).
+## The species' display name ("" for none), the module's own (FishingResults.species_name).
 static func species_name(game: FishingGame, sp: int) -> String:
-	if sp < 0 or sp >= SPECIES_KEYS.size():
-		return ""
-	return strings_of(game).t(SPECIES_KEYS[sp])
+	var c := game.content if game != null else null
+	return FishingResults.species_name(sp, c, strings_of(game))
 
 
 ## The fish row: {"visible", "sp", "name", "d_m", "stamina"} (visible only with a fish on).
@@ -206,7 +199,9 @@ static func hookup_text(level: int) -> String:
 	return "x%s" % (str(int(m)) if is_equal_approx(m, roundf(m)) else "%.1f" % m)
 
 
-## A lane's one-line status: rescue, AFK, else its lane state (fight: the species).
+## A lane's one-line status: rescue, AFK, else its lane state with the same positional args as
+## FishingGame.status_text (fight: species and distance; strike, Landing: species; cast, reel:
+## the lure's distance). Without a species a strike, fight or Landing reads "Fish on!".
 static func status_text(game: FishingGame, l: FishingLaneState) -> String:
 	var tx := strings_of(game)
 	if l == null:
@@ -216,9 +211,18 @@ static func status_text(game: FishingGame, l: FishingLaneState) -> String:
 	if l.afk or l.stale:
 		return tx.t(KEY_AFK)
 	var st := clampi(l.state, 0, STATUS_KEYS.size() - 1)
-	if st == FishingConst.ST_FIGHT and l.fish.sp < 0:
-		return tx.t(KEY_FISH_ON)
-	return tx.t(STATUS_KEYS[st], {"species": species_name(game, l.fish.sp)})
+	var key := STATUS_KEYS[st]
+	match st:
+		FishingConst.ST_FIGHT, FishingConst.ST_STRIKE, FishingConst.ST_LANDING:
+			var sp := species_name(game, l.fish.sp)
+			if sp == "":
+				return tx.t(KEY_FISH_ON)
+			if st == FishingConst.ST_FIGHT:
+				return tx.t(key, [sp, roundi(l.fish.d)])
+			return tx.t(key, [sp])
+		FishingConst.ST_CAST, FishingConst.ST_REEL:
+			return tx.t(key, [roundi(l.lure_d)])
+	return tx.t(key)
 
 
 ## The slot look of `slot` from ctx.players (Wl.slot_look without one).

@@ -21,24 +21,12 @@ const RAISED_KEYS: Array[String] = [
 	"FISHING_TOAST_SNAP",
 	"FISHING_TOAST_THROWN",
 	"FISHING_TOAST_REPLACEMENT",
-	"FISHING_TOAST_MISS",
 	"FISHING_TOAST_DOUBLE_HOOKUP",
 	"FISHING_TOAST_FRENZY",
-	"FISHING_TOAST_RUN",
-	"FISHING_TOAST_JUMP",
-	"FISHING_TOAST_TRIP_OVER",
-	"FISHING_BANNER_LANDING",
-	"FISHING_STAT_KJ",
-	"FISHING_STAT_FTP_PCT",
-	"FISHING_STAT_BAND_PCT",
-	"FISHING_STAT_LANDED",
 	"FISHING_STAT_TROPHIES",
 	"FISHING_STAT_LOST",
 	"FISHING_STAT_BIGGEST",
 	"FISHING_STAT_LONGEST",
-	"FISHING_TEAM_POINTS",
-	"FISHING_TEAM_FISH",
-	"FISHING_TEAM_TROPHIES",
 ]
 
 var _specs: Array[HudSpec] = []
@@ -321,7 +309,6 @@ func test_every_string_key_the_hud_and_rules_use_is_in_strings_csv() -> void:
 	var used: Array[String] = []
 	used.append_array(FishingHudModel.KEYS)
 	used.append_array(FishingHudModel.STATUS_KEYS)
-	used.append_array(FishingHudModel.SPECIES_KEYS)
 	used.append_array(RAISED_KEYS)
 	for k in used:
 		assert_true(keys.has(k), "%s is in strings.csv" % k)

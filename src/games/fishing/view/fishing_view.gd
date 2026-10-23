@@ -138,6 +138,7 @@ func _build() -> void:
 		lv.configure_lane(
 			l.slot, n, l.slot == _local_slot, _look(l.slot), game.content, game.ctx.seed
 		)
+		lv.tag_text = tag_text(game)
 		lanes.append(lv)
 		_applied_cos.append(PackedInt32Array([0, 0, 0, 0]))
 		add_child(lv)
@@ -145,6 +146,14 @@ func _build() -> void:
 	add_child(_overlay)
 	audio = FishingAudio.new()
 	add_child(audio)
+
+
+## The local lane's tag: FISHING_HUD_YOU from ctx.strings ("YOU" without a translation).
+static func tag_text(p_game: FishingGame) -> String:
+	var tx := FishingHudModel.strings_of(p_game)
+	if not tx.has(FishingHudModel.KEY_YOU):
+		return FishingLaneView.TAG_DEFAULT
+	return tx.t(FishingHudModel.KEY_YOU)
 
 
 func _look(slot: int) -> Dictionary:

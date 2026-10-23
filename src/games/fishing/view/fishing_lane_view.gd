@@ -36,16 +36,45 @@ const REEF_W := 416
 const CAP_W := 8
 const SAND_H := 8
 const RAY_XS: Array[int] = [112, 252]
-## The "YOU" tag's 3 x 5 glyphs (rows top to bottom, bit 2 = left column).
+## The local lane's tag text when FISHING_HUD_YOU has no translation.
+const TAG_DEFAULT := "YOU"
+const TAG_MAX_GLYPHS := 8
+## The tag's 3 x 5 pixel font, A-Z (rows top to bottom, bit 2 = left column). The tag text comes
+## from FISHING_HUD_YOU, upper-cased; a letter outside the font is left out.
 const GLYPHS := {
-	"Y": [5, 5, 2, 2, 2],
+	"A": [2, 5, 7, 5, 5],
+	"B": [6, 5, 6, 5, 6],
+	"C": [3, 4, 4, 4, 3],
+	"D": [6, 5, 5, 5, 6],
+	"E": [7, 4, 6, 4, 7],
+	"F": [7, 4, 6, 4, 4],
+	"G": [3, 4, 5, 5, 3],
+	"H": [5, 5, 7, 5, 5],
+	"I": [7, 2, 2, 2, 7],
+	"J": [1, 1, 1, 5, 2],
+	"K": [5, 5, 6, 5, 5],
+	"L": [4, 4, 4, 4, 7],
+	"M": [5, 7, 7, 5, 5],
+	"N": [6, 5, 5, 5, 5],
 	"O": [7, 5, 5, 5, 7],
+	"P": [6, 5, 6, 4, 4],
+	"Q": [2, 5, 5, 6, 3],
+	"R": [6, 5, 6, 5, 5],
+	"S": [3, 4, 2, 1, 6],
+	"T": [7, 2, 2, 2, 2],
 	"U": [5, 5, 5, 5, 7],
+	"V": [5, 5, 5, 5, 2],
+	"W": [5, 5, 7, 7, 5],
+	"X": [5, 5, 2, 5, 5],
+	"Y": [5, 5, 2, 2, 2],
+	"Z": [7, 1, 2, 4, 7],
 }
 
 var slot: int = 0
 var n: int = 1
 var local: bool = false
+## The local lane's tag (FishingView sets it from FISHING_HUD_YOU).
+var tag_text: String = TAG_DEFAULT
 var look: Dictionary = {}
 var content: FishingContent = null
 var cosmetic_values: Dictionary = {}
@@ -626,14 +655,32 @@ func _paint_border(c: CanvasItem) -> void:
 		return
 	var col: Color = look.get("color", Wl.slot_look(slot)["color"])
 	FishingView.draw_pattern_frame(c, r, col, str(look.get("pattern", "solid")), 3)
-	var tag := Rect2(4, lane_h - 13, 17, 9)
+	var glyphs := tag_glyphs(tag_text)
+	var tag := tag_rect(glyphs.size())
 	c.draw_rect(tag, col)
 	c.draw_rect(tag, FishingPalette.NAVY, false, 1.0)
 	var text_col := FishingView.text_on(col)
-	var x := 6.0
-	for ch in "YOU":
-		_glyph(c, Vector2(x, tag.position.y + 2.0), GLYPHS[ch], text_col)
+	var x := tag.position.x + 2.0
+	for rows: Array in glyphs:
+		_glyph(c, Vector2(x, tag.position.y + 2.0), rows, text_col)
 		x += 4.0
+
+
+## The tag's glyph rows for `text` (upper-cased; letters outside GLYPHS are left out; at most
+## TAG_MAX_GLYPHS; the default "YOU" when nothing is left).
+static func tag_glyphs(text: String) -> Array:
+	var out: Array = []
+	for ch in text.to_upper():
+		if GLYPHS.has(ch) and out.size() < TAG_MAX_GLYPHS:
+			out.append(GLYPHS[ch])
+	if out.is_empty() and text != TAG_DEFAULT:
+		return tag_glyphs(TAG_DEFAULT)
+	return out
+
+
+## The tag's rect in lane px for `count` glyphs (bottom-left, inside the 3 px border).
+func tag_rect(count: int) -> Rect2:
+	return Rect2(4, lane_h - 13, 4 * count + 3, 9)
 
 
 func _glyph(c: CanvasItem, at: Vector2, rows: Array, col: Color) -> void:
