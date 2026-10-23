@@ -26,6 +26,8 @@ extends VBoxContainer
 ##   (set_process(false) or real_time false) the list moves only through feed_action(),
 ##   feed_gesture() and tick(dt). A pick (confirm, surge, auto-confirm) emits item_chosen and
 ##   then item_picked synchronously, inside that call.
+## - Item text and detail lines are WlMarqueeLabels: a line wider than the row scrolls to its
+##   end and back instead of widening the list past its container.
 ## - set_items() highlights the first enabled item and restarts the scan and auto-confirm
 ##   counts; a caller refreshing a menu in place restores the highlighted index with
 ##   set_highlight() afterwards (AppScreen.refresh_menu does).
@@ -428,23 +430,38 @@ func _rebuild_rows() -> void:
 		var vb := VBoxContainer.new()
 		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		hb.add_child(vb)
-		var text := Label.new()
-		text.name = "Text"
-		text.text = str(it.get("text", str(it.get("id", ""))))
-		text.label_settings = WlTheme.label_settings(item_font_px)
-		vb.add_child(text)
+		vb.add_child(
+			_marquee(
+				"Text",
+				str(it.get("text", str(it.get("id", "")))),
+				WlTheme.label_settings(item_font_px)
+			)
+		)
 		var detail := str(it.get("detail", ""))
 		if not detail.is_empty():
-			var d := Label.new()
-			d.name = "Detail"
-			d.text = detail
-			d.label_settings = WlTheme.label_settings(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
-			vb.add_child(d)
+			vb.add_child(
+				_marquee(
+					"Detail", detail, WlTheme.label_settings(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
+				)
+			)
 		add_child(panel)
 		move_child(panel, i)
 		_rows.append(panel)
 		_markers.append(marker)
 		_style_row(i)
+
+
+## A row line that scrolls back and forth when it is wider than the row (WlMarqueeLabel); the
+## Label inside carries `label_name` ("Text", "Detail").
+func _marquee(label_name: String, text: String, settings: LabelSettings) -> WlMarqueeLabel:
+	var m := WlMarqueeLabel.new()
+	m.name = label_name + "Marquee"
+	m.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	m.real_time = real_time
+	m.label.name = label_name
+	m.label.label_settings = settings
+	m.text = text
+	return m
 
 
 func _style_row(i: int) -> void:

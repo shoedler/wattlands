@@ -494,6 +494,24 @@ func test_rows_are_big_and_readable() -> void:
 	assert_null(_list.row(5))
 
 
+func test_a_long_row_scrolls_instead_of_widening_the_list() -> void:
+	var long_text := "2026-10-23T20:04:28Z  fishing  20:08  Upload failed: Forbidden (403)"
+	_list.set_items([{"id": 0, "text": "Short"}, {"id": 1, "text": long_text, "detail": long_text}])
+	var plain := Label.new()
+	plain.label_settings = WlTheme.label_settings(_list.item_font_px)
+	plain.text = long_text
+	add_child_autofree(plain)
+	assert_lt(
+		_list.get_combined_minimum_size().x,
+		plain.get_combined_minimum_size().x,
+		"the list is narrower than the whole text"
+	)
+	var text := _list.row(1).find_child("Text", true, false) as Label
+	assert_eq(text.text, long_text)
+	assert_true(text.get_parent() is WlMarqueeLabel)
+	assert_true(_list.row(1).find_child("Detail", true, false).get_parent() is WlMarqueeLabel)
+
+
 func test_highlight_has_a_marker_not_only_a_color() -> void:
 	_list.set_items(_items(2))
 	var m0 := _list.row(0).find_child("Marker", true, false) as Label
