@@ -18,6 +18,7 @@
 //   s7_threshold_drop          1 rider, erg+band+cadence_drop:rpm=40,at_s=600,for_s=20
 //   s8_<x>_a, s8_<x>_b         the same run twice (x: free30 in the full matrix, e2e in --quick)
 //   s10_e2e                    e2e_2min, 3 band-trackers
+//   s11_threshold_unverified   threshold, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
 // Scenario 9 (FIT) runs tools/fit_check on every FIT of every report with --fit.
 //
 // Every run (ALL): the run completed; the plans carry no validator warnings; each request is
@@ -65,6 +66,8 @@ export const S3 = { endMaxS: 35 * 60, medianFish: 2, doubleHookups: 1 };
 export const S6 = { jumpsMin: 4, jumpsMax: 8, jumpMsMin: 20000, jumpMsMax: 30000, jumpPct: 104, capPct: 105 };
 export const S7 = { at: 600, forS: 20, rescueBy: 625, calmAfterS: 10 };
 export const S10 = { lanes: 3, cooldownByS: 135 };
+/** Scenario 11: unverified FTPs (x0.85, BRIEF 4.6.1) at 300 W and 200 W, haptics off for slot 1. */
+export const S11 = { name: 's11_threshold_unverified', ftp: [300, 200], hapticsOff: [1], factor: 0.85, tolW: 1, fights: 4 };
 export const TOL_S = 0.051;
 
 // --- reading reports ---------------------------------------------------------------------------
@@ -517,6 +520,62 @@ export function checkS10(reports) {
   return result('S10', title, probs, parts.join('; '));
 }
 
+// --- S11: unverified FTP, two FTPs, haptics off for one rider ------------------------------------------
+
+/** Problems of one S11 fishing request: 'unverified' applied, only S1's clamps, and the governed
+ *  target_w = 0.85 x target_pct x FTP (within 1 W of rounding) unless the floor lifted it. The
+ *  applied record's target_pct echoes the request; its target_w carries the factor. */
+export function unverifiedRequestProblems(name, d, ftp) {
+  const at = `${name}: directive ${d.id} (peer ${d.peer}, t ${fmt(Number(d.t))})`;
+  const rec = d.applied;
+  if (!isObj(rec)) return [`${at}: no applied record`];
+  const clamps = Array.isArray(rec.clamped_by) ? rec.clamped_by : [];
+  const probs = clampProblems(clamps, S1_CLAMPS).map((p) => `${at}: ${p}`);
+  if (!clamps.includes('unverified')) probs.push(`${at}: no unverified clamp (clamped_by ${JSON.stringify(clamps)})`);
+  const req = Number(d.requested?.target_pct);
+  const got = Number(rec.applied?.target_w);
+  if (!clamps.includes('floor')) {
+    const want = (S11.factor * req * ftp) / 100;
+    if (!(Math.abs(got - want) <= S11.tolW + EPS)) probs.push(`${at}: applied ${fmt(got)} W for ${fmt(req)}% of ${ftp} W (x${S11.factor} is ${fmt(want)} W)`);
+  }
+  return probs;
+}
+
+export function checkS11(reports) {
+  const title = 'threshold, unverified FTP 300 W and 200 W, haptics off for slot 1: ERG targets x0.85 via unverified only, no haptic to the opted-out rider';
+  const name = S11.name;
+  const r = reports[name];
+  if (!r) return skip('S11', title, `no ${name} report`);
+  const probs = [...argsProblems(name, r, { content: 'threshold', players: S11.ftp.length }), ...completeProblems(name, r)];
+  const a = r.args ?? {};
+  if (a.unverified !== true) probs.push(`${name}: args.unverified ${JSON.stringify(a.unverified)}, wanted true`);
+  if (JSON.stringify(a.haptics_off ?? []) !== JSON.stringify(S11.hapticsOff)) probs.push(`${name}: args.haptics_off ${JSON.stringify(a.haptics_off)}, wanted ${JSON.stringify(S11.hapticsOff)}`);
+  const parts = [];
+  for (const { lane, peer } of lanes(r)) {
+    const slot = (r.slots ?? []).find((s) => Number(s.slot) === lane) ?? {};
+    const ftp = Number(slot.ftp);
+    const off = S11.hapticsOff.includes(lane);
+    if (ftp !== S11.ftp[lane]) probs.push(`${name}: slot ${lane} FTP ${slot.ftp}, wanted ${S11.ftp[lane]}`);
+    if (slot.ftp_verified !== false) probs.push(`${name}: slot ${lane} ftp_verified ${slot.ftp_verified}, wanted false`);
+    if (slot.haptics_on !== !off) probs.push(`${name}: slot ${lane} haptics_on ${slot.haptics_on}, wanted ${!off}`);
+    const mine = (r.directives ?? []).filter((d) => d.kind === 'request' && String(d.peer) === peer);
+    const erg = mine.filter((d) => d.requested?.mode === 'ERG');
+    const haptics = mine.filter((d) => d.requested?.mode === 'SIM');
+    if (erg.length === 0) probs.push(`${name}: slot ${lane} sent no ERG directive`);
+    for (const d of erg) probs.push(...unverifiedRequestProblems(name, d, ftp));
+    if (off && haptics.length) probs.push(`${name}: ${haptics.length} haptic request(s) for haptics-off slot ${lane}, first at ${fmt(Number(haptics[0].t))} s`);
+    if (!off && haptics.length === 0) probs.push(`${name}: slot ${lane} (haptics on) got no Landing haptic`);
+    const fightIdx = new Set(fights(r, peer).map((p) => p.index));
+    if (fightIdx.size !== S11.fights) probs.push(`${name}: slot ${lane} ran ${fightIdx.size} fights (wanted ${S11.fights})`);
+    const rows = (r.trace?.[peer] ?? []).filter((row) => row.mode === 'ERG' && fightIdx.has(Number(row.phase)) && row.rescue !== true);
+    const plain = rows.filter((row) => !(row.clamped_by ?? []).includes('unverified'));
+    if (rows.length === 0) probs.push(`${name}: slot ${lane} has no Fight trace rows`);
+    if (plain.length) probs.push(`${name}: slot ${lane}: ${plain.length} Fight trace rows without the unverified clamp, first at ${fmt(Number(plain[0].game_t ?? plain[0].t))} s`);
+    parts.push(`slot ${lane} ${ftp} W: ${erg.length} ERG requests, ${haptics.length} haptics`);
+  }
+  return result('S11', title, probs, parts.join('; '));
+}
+
 // --- driver -------------------------------------------------------------------------------------------------
 
 export const SCENARIOS = [
@@ -530,6 +589,7 @@ export const SCENARIOS = [
   ['S7', checkS7],
   ['S8', checkS8],
   ['S10', checkS10],
+  ['S11', checkS11],
 ];
 
 /** Runs the scenarios (`only`: ids, or null for all; ALL always runs). */

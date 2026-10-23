@@ -30,6 +30,8 @@ const round3 = (x) => Math.round(x * 1000) / 1000;
 
 /**
  * One run report. o: {content, players, seed, autopilot, rideOutS, rideOutPct, cooldownAt,
+ * ftp: [W per lane] (default FTP), unverified (x0.85 on every ERG target, 'unverified' clamp),
+ * hapticsOff: [lanes] (haptics_on false), haptics (a Landing haptic 4 s in for every other lane),
  * lanes: [{fights: [{species, reel, len, endedBy, landed, events: [{dt, ...event}], directives:
  * [{dt, target, reason, duration}]}]}], events: [extra report events], clamps, trace: {peer: rows}}.
  * Times in each lane run: ride out, then per fight its Reel, Fight and 30 s Landing; the last Reel
@@ -64,9 +66,12 @@ export function buildRun(o) {
   const latest = Math.max(rideOutS, ...timelines.map((x) => x.end));
   const cooldownAt = o.cooldownAt ?? (o.scheduled ? latest : Math.max(latest, rideOutS + (o.fishingS ?? 0)));
   const end = cooldownAt + 180;
+  const factor = o.unverified ? 0.85 : 1;
+  const hapticsOff = o.hapticsOff ?? [];
   lanes.forEach((ln, lane) => {
     const peer = String(lane + 1);
-    slots.push({ slot: lane, peer: lane + 1, name: `Rider ${lane + 1}`, is_bot: false, ftp: FTP, ftp_verified: true, rider: o.rider ?? 'erg+band', autopilot: o.autopilot ?? true, haptics_on: true, options: { reel_pct: 60, relaxed_band: false } });
+    const ftp = o.ftp?.[lane] ?? FTP;
+    slots.push({ slot: lane, peer: lane + 1, name: `Rider ${lane + 1}`, is_bot: false, ftp, ftp_verified: !o.unverified, rider: o.rider ?? 'erg+band', autopilot: o.autopilot ?? true, haptics_on: !hapticsOff.includes(lane), options: { reel_pct: 60, relaxed_band: false } });
     const plan = [{ kind: 'WARMUP', mode: 'ERG', label: 'FISHING_PHASE_RIDE_OUT', lap: true, duration_s: rideOutS, target_pct: o.rideOutPct ?? 50 }];
     const spans = [{ index: 0, kind: 'WARMUP', mode: 'ERG', label: 'FISHING_PHASE_RIDE_OUT', start: 0, end: rideOutS, ended_by: 'duration' }];
     const rows = [{ t: 1, game_t: 1, phase: 0, kind: 'WARMUP', mode: 'ERG', applied_target_w: 100, applied_pct: 50, applied_grade_pct: 0, clamped_by: o.warmupClamps ?? [], rescue: false, afk: false, paused: false, haptic: 0, power_w: 100, cadence_rpm: 90, connected: true }];
@@ -97,8 +102,17 @@ export function buildRun(o) {
         const id = dirId++;
         const requested = { mode: 'ERG', target_pct: d.target, duration_s: d.duration ?? 0, reason: d.reason ?? 'pull', source: 'fishing', id };
         const tt = round3(s.fightStart + d.dt);
-        directives.push({ id, peer: lane + 1, t: tt, kind: 'request', requested, accepted: true, reason: '', applied: { id, kind: 'request', requested, applied: { target_pct: d.target }, clamped_by: d.clamps ?? o.clamps ?? ['slew'], refused: false, reason: '', t: tt, game_t: tt, phase_index: fIdx } });
-        rows.push({ t: tt + 1, game_t: tt + 1, phase: fIdx, kind: 'WORK', mode: 'ERG', applied_target_w: (d.target * FTP) / 100, applied_pct: d.target, applied_grade_pct: 0, clamped_by: [], rescue: false, afk: false, paused: false, haptic: 0, power_w: (d.target * FTP) / 100, cadence_rpm: 90, connected: true });
+        const applied = o.unverified ? { mode: 'ERG', target_pct: d.target, target_w: Math.round((factor * d.target * ftp) / 100) } : { target_pct: d.target };
+        directives.push({ id, peer: lane + 1, t: tt, kind: 'request', requested, accepted: true, reason: '', applied: { id, kind: 'request', requested, applied, clamped_by: d.clamps ?? o.clamps ?? ['slew'], refused: false, reason: '', t: tt, game_t: tt, phase_index: fIdx } });
+        const w = (factor * d.target * ftp) / 100;
+        rows.push({ t: tt + 1, game_t: tt + 1, phase: fIdx, kind: 'WORK', mode: 'ERG', applied_target_w: w, applied_pct: factor * d.target, applied_grade_pct: 0, clamped_by: o.unverified ? ['unverified'] : [], rescue: false, afk: false, paused: false, haptic: 0, power_w: w, cadence_rpm: 90, connected: true });
+      }
+      if (o.haptics && !hapticsOff.includes(lane) && s.f.landed !== false) {
+        const id = dirId++;
+        const requested = { mode: 'SIM', haptic: 3.0, duration_s: 5, reason: 'last_run', source: 'fishing', id };
+        const tt = round3(s.fightEnd + 4);
+        const applied = { mode: 'SIM', grade_pct: 2.1, haptic_pct: 2.1, haptic_s: 5, haptic_wind_mps: 0 };
+        directives.push({ id, peer: lane + 1, t: tt, kind: 'request', requested, accepted: true, reason: '', applied: { id, kind: 'request', requested, applied, clamped_by: ['haptic_intensity'], refused: false, reason: '', t: tt, game_t: tt, phase_index: fIdx + 1 } });
       }
     });
     if (!o.scheduled) {
@@ -123,7 +137,7 @@ export function buildRun(o) {
   const events = [{ t: 0, pt: 0, type: 'session_start', role: players > 1 ? 'HOST' : 'SOLO', players }, ...all, { t: end, pt: end, type: 'session_end', reason: 'complete' }];
   const report = {
     schema: 1,
-    args: { game: 'fishing', content: o.content, players, bots: 0, riders: [o.rider ?? 'erg+band'], seed: o.seed ?? 1, autopilot: o.autopilot === false ? 'none' : 'all' },
+    args: { game: 'fishing', content: o.content, players, bots: 0, riders: [o.rider ?? 'erg+band'], seed: o.seed ?? 1, autopilot: o.autopilot === false ? 'none' : 'all', ...(o.unverified || o.ftp || o.hapticsOff ? { ftp: o.ftp ?? [], unverified: !!o.unverified, haptics_off: hapticsOff } : {}) },
     game_id: 'fishing',
     content_id: o.content,
     role: players > 1 ? 'HOST' : 'SOLO',
@@ -200,7 +214,15 @@ export function passing() {
   out.s8_free30_b = det();
   const e2eLane = { fights: [{ species: 'mackerel', reel: 20, len: 45, hk: 20, shape: { base: 62, lo: 59.52, hi: 64.48, minS: 36, maxS: 70 } }] };
   out.s10_e2e = buildRun({ name: 's10_e2e', content: 'e2e_2min', scheduled: true, rideOutS: 15, warmupClamps: ['warmup'], clamps: ['warmup'], lanes: [e2eLane, e2eLane, e2eLane] });
+  out.s11_threshold_unverified = s11Run();
   return out;
+}
+
+/** Scenario 11: threshold, FTP 300 W and 200 W, both unverified, haptics off for slot 1. */
+export function s11Run(extra = {}) {
+  const pulls = [{ dt: 10, target: 95, clamps: ['unverified'] }, { dt: 20, target: 98, clamps: ['unverified', 'slew'] }];
+  const lane = () => thresholdLane([0, 1, 2, 3].map(() => tunaThreshold(330, { directives: pulls })));
+  return buildRun({ name: 's11_threshold_unverified', content: 'threshold', scheduled: true, ftp: [300, 200], unverified: true, hapticsOff: [1], haptics: true, lanes: [lane(), lane()], ...extra });
 }
 
 /** A passing tools/e2e report of e2e_2min (GAME_SDK 19.4 layout): host and client1 saw every
@@ -256,6 +278,7 @@ export const FAILURES = {
   s10_e2e: ['lane 2 landed nothing', 'reached the cool-down at 140'],
   s6_free120_marlin: ['a jump directive above 104%', 'outside phase'],
   s2_low: ['no snap within 8 s'],
+  s11_threshold_unverified: ['haptic request(s) for haptics-off slot 1', 'no unverified clamp', 'applied 285 W for 95% of 300 W'],
 };
 
 /** Broken copies of some passing reports. */
@@ -283,6 +306,15 @@ export function failing() {
   first.t += 6;
   first.pt += 6;
   out.s2_low = s2;
+  // s11: the opted-out rider gets a haptic, one pull lost its unverified clamp and another is
+  // applied at the full 95 % (285 W at 300 W).
+  const s11 = s11Run({ hapticsOff: [] });
+  s11.slots[1].haptics_on = false;
+  s11.args.haptics_off = [1];
+  const p1 = s11.directives.filter((d) => d.peer === 1 && d.requested.mode === 'ERG');
+  p1[0].applied.clamped_by = ['slew'];
+  p1[2].applied.applied.target_w = 285;
+  out.s11_threshold_unverified = s11;
   return out;
 }
 

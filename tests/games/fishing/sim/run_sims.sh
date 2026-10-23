@@ -5,7 +5,7 @@
 #   bash tests/games/fishing/sim/run_sims.sh [--quick|--full] [scenario ...]
 #   FISHING_SIMS="s10 s8" bash tests/games/fishing/sim/run_sims.sh
 #
-# Scenarios (default: all ten; one report per run in build/fishing/sims/, FISHING_SIMS_OUT):
+# Scenarios (default: all eleven; one report per run in build/fishing/sims/, FISHING_SIMS_OUT):
 #   s1   threshold, 2 band-trackers (erg+band)
 #   s2   threshold, 1 rider at erg+band:offset_rpm=-18 (s2_low) and =18 (s2_high)
 #   s3   free_30, 4 band-trackers, seeds 1-5 (--full or FISHING_SEEDS: 1-20)
@@ -17,6 +17,8 @@
 #   s8   free_30, 2 band-trackers, seed 7, twice (--quick: e2e_2min, 3 riders, twice)
 #   s9   fit_check on every FIT of the runs (check_sims --fit: laps per rider from the report)
 #   s10  e2e_2min, 3 band-trackers
+#   s11  threshold, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1 (BRIEF 4.6.1's
+#        x0.85, an FTP other than 200 W, and no haptic to an opted-out rider)
 # --quick (CI) runs s10, s8 on e2e_2min and s9. The matrix stays out of tools/run_tests.
 #
 # Riders send no intents, so they play as Autopilot (brief 2.5). Every run goes through
@@ -39,7 +41,7 @@ for a in "$@"; do
     --quick) mode=quick ;;
     --full) mode=full ;;
     -h | --help)
-      sed -n '2,25p' "$0"
+      sed -n '2,28p' "$0"
       exit 0
       ;;
     -*)
@@ -54,7 +56,7 @@ if [ "$mode" = full ]; then
 else
   seeds="${FISHING_SEEDS:-1 2 3 4 5}"
 fi
-order="s1 s2 s3 s4 s5 s6 s7 s8 s9 s10"
+order="s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11"
 if [ -z "${wanted// /}" ]; then
   if [ "$mode" = quick ]; then
     wanted="s10 s8 s9"
@@ -145,6 +147,10 @@ scenario_s8() {
 scenario_s9() { :; } # FIT: check_sims --fit below
 
 scenario_s10() { run s10_e2e --content=e2e_2min --players=3 "--rider=$band" --seed=1; }
+
+scenario_s11() {
+  run s11_threshold_unverified --content=threshold --players=2 "--rider=$band" --ftp=300,200     --unverified --haptics-off=1 --seed=1
+}
 
 for sc in $order; do
   case " $wanted " in *" $sc "*) "scenario_$sc" ;; esac
