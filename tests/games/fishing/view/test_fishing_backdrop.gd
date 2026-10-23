@@ -33,7 +33,7 @@ func test_every_row_of_every_lane_is_painted_from_sky_to_water() -> void:
 			assert_eq(_bottom(lv.water), float(lv.lane_h), "n %d: water to the lane bottom" % n)
 			assert_lte(lv.water.position.y, float(lv.water_y), "the water backs the surface rows")
 			var strip_bottom := lv.surface.position.y + float(lv.surface.texture.get_height())
-			assert_gte(lv.water.position.y, lv.surface.position.y + 3.0, "crest rows on the sky")
+			assert_eq(lv.water.position.y, lv.surface.position.y + 2.0, "crest rows on the sky")
 			assert_lte(lv.water.position.y, strip_bottom, "the strip's opaque rows on the water")
 
 

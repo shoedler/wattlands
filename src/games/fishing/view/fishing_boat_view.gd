@@ -2,11 +2,14 @@ class_name FishingBoatView
 extends Node2D
 ## One lane's boat and rig (brief 3.3, 3.5 layer 7), in boat-local art pixels (FishingRig): the
 ## shared boat sprite recoloured to the slot's colour with PaletteSwap (the red key ramp on trim
-## and canopy, plus the trim's coral, pink and peach shades: FishingPalette.HULL_KEYS), the bike, the angler (cap and shirt recoloured too), the crank as a SpinningPart
-## driven by cadence, the reel as a SpinningPart driven by line speed (reversed on runs), the
-## chain as a ScrollingChain loop between them, code-drawn legs solved hip to pedal, the rod
-## bending with tension, the cosmetics (canopy pattern, hull trim, pennant) and the wake. The lane
-## view sets position (sprite top-left), `flipped` (motoring home, bow left) and calls advance().
+## and canopy, plus the trim's coral, pink and peach shades: FishingPalette.HULL_KEYS), the bike,
+## the angler (cap and shirt recoloured too), the crank as a SpinningPart driven by cadence, the
+## reel on the bike's front as a SpinningPart driven by line speed (reversed on runs) with the
+## line running up to the rod, the chain as a ScrollingChain loop between crank and reel,
+## code-drawn legs solved hip to pedal, the rod bending with tension, the cosmetics (canopy
+## pattern, the trim recoloured pixel by pixel, pennant) and the wake (tiles plus a foam trail).
+## The lane view sets position (sprite top-left), `flipped` (motoring home, bow left) and calls
+## advance().
 
 const WAKE_SCROLL_PX_PER_PX := 1.0
 ## How far behind the stern the wake tiles reach (boat-local px; the lane border clips nothing,

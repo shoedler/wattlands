@@ -49,9 +49,10 @@ const RAY_XS: Array[int] = [112, 252]
 ## the first, so the two never read as one tile repeated.
 const RAY_B_HEIGHT := 0.7
 const RAY_B_TIME_OFFSET_S := 2.3
-## The surface strip's crest rows (its rows 1-2) stand against the sky: the sky runs this many
-## rows past sky_h and the water starts under them, where the strip is opaque.
-const SKY_UNDER := 2
+## The surface strip's crest rows (its rows 0-1, mostly see-through) stand against the sky: the
+## sky runs this many rows past sky_h and the water starts under them, so the holes in the
+## strip's lower rows show water.
+const SKY_UNDER := 1
 ## The palm islet is a distant prop: drawn at half size, its base on the horizon.
 const PALM_PERIOD_PX := 900.0
 ## The local lane's tag text when FISHING_HUD_YOU has no translation.
