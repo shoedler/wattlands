@@ -1,15 +1,17 @@
 extends "res://tests/scenarios/lib/scenario_test.gd"
 ## BRIEF 7.4, coasting (4.6.4): a 0 W rider's applied target reaches the ERG floor
 ## max(30 % FTP, 50 W) no later than 3 s (plus one 0.05 s tick) after the first sample that meets
-## not_pedaling (power < 15 W and cadence < 20 rpm), and the rider is paused (solo) or AFK (with
-## others) no later than 10 s (plus one tick) after that sample. Neither happens a tick early.
+## not_pedaling (power < 15 W and cadence < 20 rpm); the rider is paused (solo) 5 s (BRIEF 3.5,
+## the pause on not pedaling) or AFK (with others) 10 s (plus one tick) after that sample. None
+## happens a tick early.
 ## Owned by qa; a W2 gate (needs GameSimRunner, Workout, LocalRider and the governor). Riders:
 ## `zero` (0 W from the start) and `ramp` to 0 W (pedals for 60 s, then stops), on the host's own
 ## rider, which is SOLO with one human slot and HOST (multiplayer) with two.
 
 const TICK := 0.05
 const FLOOR_S := 3.0
-const PAUSE_S := 10.0
+const SOLO_PAUSE_S := RidePause.ENTER_S
+const AFK_S := 10.0
 const STOP_AFTER_PEDALING := "ramp:from_w=130,to_w=0,over_s=60,rpm=85"
 
 
@@ -98,7 +100,7 @@ func test_zero_rider_solo_floors_then_pauses() -> void:
 	if obs.is_empty():
 		return
 	_assert_timing("the coasting floor", float(obs["first_np"]), float(obs["t_floor"]), FLOOR_S)
-	_assert_timing("the solo pause", float(obs["first_np"]), float(obs["t_pause"]), PAUSE_S)
+	_assert_timing("the solo pause", float(obs["first_np"]), float(obs["t_pause"]), SOLO_PAUSE_S)
 	assert_lt(float(obs["t_afk"]), 0.0, "a solo rider pauses instead of going AFK")
 	var runner: GameSimRunner = obs["runner"]
 	assert_eq(runner.run_to_end(), "paused", "a SOLO run that stays paused 120 s ends as paused")
@@ -110,7 +112,7 @@ func test_rider_who_stops_pedaling_solo() -> void:
 		return
 	assert_gte(float(obs["first_np"]), 59.0, "not_pedaling starts once the ramp reaches 0 W")
 	_assert_timing("the coasting floor", float(obs["first_np"]), float(obs["t_floor"]), FLOOR_S)
-	_assert_timing("the solo pause", float(obs["first_np"]), float(obs["t_pause"]), PAUSE_S)
+	_assert_timing("the solo pause", float(obs["first_np"]), float(obs["t_pause"]), SOLO_PAUSE_S)
 
 
 func test_zero_rider_with_others_floors_then_goes_afk() -> void:
@@ -118,7 +120,7 @@ func test_zero_rider_with_others_floors_then_goes_afk() -> void:
 	if obs.is_empty():
 		return
 	_assert_timing("the coasting floor", float(obs["first_np"]), float(obs["t_floor"]), FLOOR_S)
-	_assert_timing("AFK", float(obs["first_np"]), float(obs["t_afk"]), PAUSE_S)
+	_assert_timing("AFK", float(obs["first_np"]), float(obs["t_afk"]), AFK_S)
 	var runner: GameSimRunner = obs["runner"]
 	assert_false(
 		runner.host.is_paused(), "a multiplayer session never pauses for one coasting rider"
@@ -130,4 +132,4 @@ func test_rider_who_stops_pedaling_with_others() -> void:
 	if obs.is_empty():
 		return
 	_assert_timing("the coasting floor", float(obs["first_np"]), float(obs["t_floor"]), FLOOR_S)
-	_assert_timing("AFK", float(obs["first_np"]), float(obs["t_afk"]), PAUSE_S)
+	_assert_timing("AFK", float(obs["first_np"]), float(obs["t_afk"]), AFK_S)

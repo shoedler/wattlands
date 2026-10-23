@@ -463,3 +463,51 @@ func test_a_reused_recorder_gets_a_new_ride_id_unless_one_is_set() -> void:
 	rec.ride_id = "fixed-id"
 	rec.start("g", "c", START + 20, 0.0)
 	assert_eq(rec.ride_id, "fixed-id", "an id set before start() is kept")
+
+
+## Heart rate (BRIEF 3.8): recorded per second, averaged over the time it was known and maxed
+## per lap and ride; the FIT carries record, lap and session heart rate only when known.
+func test_heart_rate_records_summary_and_fit() -> void:
+	var rec := RideRecorder.new()
+	rec.start("workout", "e2e", START, 0.0)
+	for i in 201:
+		var t := float(i) * DT
+		rec.set_heart_rate(120 if t < 5.0 else 160)
+		rec.record(t, 200.0, 90.0, 30.0)
+	rec.lap("two", 10.0)
+	for i in range(201, 301):
+		var t := float(i) * DT
+		rec.set_heart_rate(0)
+		rec.record(t, 200.0, 90.0, 30.0)
+	rec.stop(15.0)
+	var recs := rec.records()
+	assert_eq(int(recs[3]["heart_rate_bpm"]), 120)
+	assert_eq(int(recs[7]["heart_rate_bpm"]), 160)
+	assert_eq(int(recs[12]["heart_rate_bpm"]), 0, "no heart rate: none recorded")
+	var s := rec.summary()
+	assert_almost_eq(float(s["avg_heart_rate_bpm"]), 140.0, 0.6, "time-weighted while known")
+	assert_eq(float(s["max_heart_rate_bpm"]), 160.0)
+	var laps: Array = s["laps"]
+	assert_almost_eq(float((laps[0] as Dictionary)["avg_heart_rate_bpm"]), 140.0, 0.01)
+	var d := Reader.read(rec.fit_bytes())
+	assert_true(d["ok"], str(d["errors"]))
+	var frecs := Reader.of(d, 20)
+	assert_eq(int(frecs[3]["fields"][3]), 120, "record heart_rate (field 3)")
+	assert_eq(int(frecs[12]["fields"][3]), 0xFF, "absent heart rate is invalid")
+	var sess: Dictionary = Reader.of(d, 18)[0]["fields"]
+	assert_eq(int(sess[16]), 140, "session avg_heart_rate (16)")
+	assert_eq(int(sess[17]), 160, "session max_heart_rate (17)")
+	var lap0: Dictionary = Reader.of(d, 19)[0]["fields"]
+	assert_eq(int(lap0[15]), 140, "lap avg_heart_rate (15)")
+	assert_eq(int(lap0[16]), 160, "lap max_heart_rate (16)")
+
+
+func test_a_ride_without_heart_rate_writes_no_heart_rate_fields() -> void:
+	var rec := RideRecorder.new()
+	rec.start("workout", "e2e", START, 0.0)
+	_ride_20hz(rec, 0.0, 5.0, 150.0, 85.0, 28.0)
+	rec.stop(5.0)
+	assert_eq(float(rec.summary()["avg_heart_rate_bpm"]), -1.0)
+	var d := Reader.read(rec.fit_bytes())
+	assert_false((Reader.of(d, 20)[0]["fields"] as Dictionary).has(3))
+	assert_false((Reader.of(d, 18)[0]["fields"] as Dictionary).has(16))

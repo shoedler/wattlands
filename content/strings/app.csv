@@ -239,6 +239,7 @@ APP_STRAVA_IMPORT_NONE,"Strava sent no FTP or weight. Connect with profile acces
 APP_STRAVA_IMPORT_FTP_DONE,FTP {0} W imported (verified)
 APP_STRAVA_IMPORT_WEIGHT_DONE,weight {0} imported
 APP_RESULTS_WKG,{0} W/kg average
+APP_RESULTS_HR,Heart rate {0} bpm average · {1} max
 APP_CONTENT_ZWO,Your .zwo: {0}
 APP_LOBBY_ZWO_HINT,"Your own .zwo workouts: put them in {0}, then pick them under Ride."
 APP_SET_CONTROLS_HELP,Esc or B cancels a new binding. Reset to defaults puts them back on Back.
@@ -246,3 +247,15 @@ APP_SET_CONTROLS_RESET,Reset to defaults
 APP_SET_CONTROLS_RESET_ASK,"Put every key and button back to the defaults? Your own bindings are lost."
 APP_SET_CONTROLS_RESET_KEEP,Keep my bindings
 APP_SET_CONTROLS_RESET_YES,"Yes, reset to defaults"
+APP_SET_SENSORS,Sensors
+APP_SET_SENSORS_STATUS,Heart rate sensor
+APP_SET_SENSORS_BPM,Heart rate
+APP_SET_SENSORS_BPM_VALUE,{0} bpm
+APP_SET_SENSORS_NO_CONTACT,No skin contact
+APP_SET_SENSORS_SCAN,Scan for heart rate sensors
+APP_SET_SENSORS_PAIR,Pair {0} ({1} dBm)
+APP_SET_SENSORS_FORGET,Forget the sensor
+APP_SET_SENSORS_NONE,No sensor paired
+APP_SET_SENSORS_REMEMBERED,"Looking for {0}"
+APP_SET_SENSORS_NONE_AVAILABLE,Sensors need Bluetooth (not available with the mock trainer)
+APP_SET_SENSORS_HELP,"Pair a chest strap, or a watch that broadcasts heart rate (Garmin: Broadcast Heart Rate). It reconnects by itself next time. Heart rate shows next to your watts and goes into your ride file; it is never shown to other riders."

@@ -253,7 +253,7 @@ func test_timed_gestures_fire_between_samples() -> void:
 	assert_almost_eq(ges.advance_calls[1], 2 * DT, 1e-9, "at the tick's platform time")
 	assert_eq(r.take_gestures(), [Wl.G_STOP_5S] as Array[StringName])
 	assert_signal_emitted_with_parameters(r, "gesture_detected", [Wl.G_STOP_5S])
-	assert_signal_emitted_with_parameters(r, "pause_requested", ["stop_5s"])
+	assert_signal_not_emitted(r, "pause_requested", "the gesture alone pauses nothing")
 
 
 ## W2: Telemetry.acks carry refused as a bool and the governor's dropped channels.
@@ -622,26 +622,103 @@ func test_gesture_queue() -> void:
 	assert_signal_not_emitted(r, "pause_requested")
 
 
-func test_stop_5s_in_solo_requests_a_pause() -> void:
-	var d := _fake_device()
-	var solo := _rider(d)
-	_ges(solo).fire_at = {1: [Wl.G_STOP_5S]}
-	watch_signals(solo)
-	d.emit_sample(0.0, 0.0)
-	solo.tick(DT)
-	assert_signal_emitted_with_parameters(solo, "pause_requested", ["stop_5s"])
-	assert_eq(solo.take_gestures(), [Wl.G_STOP_5S] as Array[StringName])
+## Feed one sample a second (power, cadence) for `seconds`.
+func _ride(r: LocalRider, d: Fakes.FakeDevice, seconds: float, power: float, rpm: float) -> void:
+	var steps := roundi(seconds / DT)
+	for i in steps:
+		if i % 20 == 0:
+			d.emit_sample(power, rpm, rpm * 0.4)
+		r.tick(DT)
 
 
-func test_stop_5s_in_multiplayer_does_not_pause() -> void:
+## BRIEF 3.5: 5 s of not_pedaling ride-pauses the rider (FIT timer stop), 1 s of pedaling at
+## >= 30 rpm resumes; in solo the pause also asks the GameHost to pause the game clock.
+func test_ride_pause_after_5_s_and_resume_after_1_s_in_solo() -> void:
 	var d := _fake_device()
-	var mp := _rider(d, {"multiplayer": true})
-	_ges(mp).fire_at = {1: [Wl.G_STOP_5S]}
+	var rec := Fakes.FakeRecorder.new()
+	var r := _rider(d, {"recorder": rec})
+	watch_signals(r)
+	_ride(r, d, 2.0, 200.0, 90.0)
+	_ride(r, d, 4.9, 0.0, 0.0)
+	assert_false(r.is_ride_paused(), "not yet: 4.9 s")
+	_ride(r, d, 0.2, 0.0, 0.0)
+	assert_true(r.is_ride_paused(), "5 s after the first not_pedaling sample")
+	assert_signal_emitted_with_parameters(r, "ride_paused_changed", [true])
+	assert_signal_emitted_with_parameters(r, "pause_requested", ["stop_5s"])
+	assert_eq(rec.timer.size(), 1)
+	assert_eq(rec.timer[0][0], false, "the ride timer stops")
+	assert_almost_eq(float(rec.timer[0][1]), 7.0, 0.051)
+	assert_true(r.telemetry().paused)
+	_ride(r, d, 3.0, 20.0, 25.0)
+	assert_true(r.is_ride_paused(), "25 rpm is not enough to resume")
+	_ride(r, d, 0.95, 120.0, 35.0)
+	assert_true(r.is_ride_paused(), "not yet: under 1 s at >= 30 rpm")
+	_ride(r, d, 0.1, 120.0, 35.0)
+	assert_false(r.is_ride_paused(), "1 s at >= 30 rpm resumes")
+	assert_signal_emitted_with_parameters(r, "ride_paused_changed", [false])
+	assert_eq(rec.timer.back()[0], true, "the ride timer runs again")
+	assert_false(r.telemetry().paused)
+
+
+func test_a_pedaling_sample_restarts_the_5_s() -> void:
+	var d := _fake_device()
+	var r := _rider(d)
+	_ride(r, d, 4.0, 0.0, 0.0)
+	_ride(r, d, 1.0, 100.0, 80.0)
+	_ride(r, d, 4.0, 0.0, 0.0)
+	assert_false(r.is_ride_paused())
+	_ride(r, d, 1.1, 0.0, 0.0)
+	assert_true(r.is_ride_paused())
+
+
+## In multiplayer the pause stops only this rider's ride timer and shows in Telemetry.paused;
+## the shared game pause does not count as the rider's own (the host decides on it).
+func test_ride_pause_in_multiplayer() -> void:
+	var d := _fake_device()
+	var rec := Fakes.FakeRecorder.new()
+	var mp := _rider(d, {"multiplayer": true, "recorder": rec})
 	watch_signals(mp)
-	d.emit_sample(0.0, 0.0)
-	mp.tick(DT)
+	_ride(mp, d, 5.1, 0.0, 0.0)
+	assert_true(mp.is_ride_paused())
+	assert_signal_emitted_with_parameters(mp, "ride_paused_changed", [true])
 	assert_signal_not_emitted(mp, "pause_requested")
-	assert_eq(mp.take_gestures().size(), 1)
+	assert_true(mp.telemetry().paused)
+	assert_eq(rec.timer.back()[0], false)
+	_ride(mp, d, 1.1, 150.0, 85.0)
+	assert_false(mp.telemetry().paused)
+	mp.set_game_paused(true)
+	assert_false(mp.telemetry().paused, "the shared game pause is not the rider's own")
+	assert_eq(rec.timer.back()[0], false, "but the ride timer stops with it")
+
+
+func test_bots_never_ride_pause() -> void:
+	var d := _fake_device()
+	var slot := Bots.make_slot(1, 1, 200.0)
+	var bot := _rider(d, {}, null, slot)
+	watch_signals(bot)
+	_ride(bot, d, 6.0, 0.0, 0.0)
+	assert_false(bot.is_ride_paused())
+	assert_signal_not_emitted(bot, "pause_requested")
+
+
+## Heart rate: the paired sensor's bpm (heart_rate_source), else a MockTrainer `hr` profile,
+## reaches Telemetry and the recorder; 0 means none.
+func test_heart_rate_from_the_source_or_the_mock() -> void:
+	var rec := RideRecorder.new()
+	var r := _rider(_mock("const:w=200,rpm=90"), {"recorder": rec})
+	_run(r, 1.0)
+	assert_eq(r.telemetry().heart_rate_bpm, 0, "no sensor")
+	r.heart_rate_source = func() -> int: return 133
+	_run(r, 2.0)
+	assert_eq(r.telemetry().heart_rate_bpm, 133)
+	var recs := rec.records()
+	assert_eq(int(recs.back()["heart_rate_bpm"]), 133, "recorded each second")
+	var m := _rider(_mock("const:w=200,rpm=90+hr:rest_bpm=60,max_bpm=180"))
+	_run(m, 120.0)
+	var bpm := m.telemetry().heart_rate_bpm
+	assert_between(bpm, 120, 180, "the mock's heart rate follows power")
+	m.heart_rate_source = func() -> int: return 0
+	assert_eq(m.telemetry().heart_rate_bpm, bpm, "a quiet sensor falls back to the mock")
 
 
 func test_gesture_queue_is_bounded() -> void:

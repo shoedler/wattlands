@@ -38,8 +38,19 @@ extends Node
 ##   is re-emitted and queued for take_acks() as {id, kind, applied, clamped_by, refused
 ##   (bool), reason, dropped ([{channel, reason}], W2)}; apply_directive() acks exactly once
 ##   whether or not the governor emits.
-## - A stop_5s gesture in a solo session also emits pause_requested("stop_5s"); the
-##   governor's own pause_requested (coasting 10 s) is forwarded as is.
+## - Pause on not pedaling (BRIEF 3.5, RidePause): a human rider who meets not_pedaling for
+##   5 s is ride-paused until 1 s of pedaling at >= 30 rpm. Ride-paused or game-paused stops
+##   the recorder's timer (FIT timer events, moving time). In a solo session the pause also
+##   emits pause_requested("stop_5s") (the GameHost pauses the game clock and resumes it on
+##   ride_paused_changed(false)); in multiplayer it pauses only this rider's ride timer. The
+##   governor's own pause_requested (coasting 10 s, 4.6.4) is forwarded as is. Bots never
+##   ride-pause.
+## - Telemetry.paused: ride-paused, or (solo only) the game or governor paused. In multiplayer
+##   it is the rider's own pause only, so the host can pause the shared clock while every human
+##   rider is paused without the pause holding itself.
+## - Heart rate: heart_rate_source (a Callable returning bpm, 0 = none; WlTrainerService sets
+##   it from the paired HR sensor), else a MockTrainer's `hr` profile, fills
+##   Telemetry.heart_rate_bpm and the recorder's heart rate every tick.
 ## - Bands: set_cadence_band/set_power_band forward to a MockTrainer device and emit
 ##   cadence_band_changed/power_band_changed on the rider's bus when the band changes. The
 ##   cool-down clears both.
@@ -89,8 +100,11 @@ signal telemetry_updated(telemetry: Telemetry)
 signal gesture_detected(gesture_name: StringName)
 signal rescue_changed(active: bool)
 signal afk_changed(afk: bool)
-## Coasting 10 s in SOLO (4.6.4) or a stop_5s gesture: the GameHost pauses the game clock.
+## Coasting 10 s in SOLO (4.6.4) or 5 s of not pedaling (RidePause): the GameHost pauses
+## the game clock.
 signal pause_requested(reason: String)
+## The rider's own pause on not pedaling started (true) or ended (false); see RidePause.
+signal ride_paused_changed(paused: bool)
 signal directive_applied(record: Dictionary)
 
 ## Seconds after which the latest trainer sample no longer counts (power, cadence, speed 0).
@@ -116,12 +130,15 @@ var recorder: RideRecorderApi = null
 var is_bot: bool = false
 ## The cadence estimator every sample passes through (BRIEF 4.5).
 var cadence: CadenceEstimator = null
-## True in a multiplayer session (coasting marks AFK, stop_5s is off).
+## True in a multiplayer session (coasting marks AFK; a pause on not pedaling stops only
+## this rider's ride timer).
 var is_multiplayer: bool = false
 ## The session's scaling mode (Wl.FAIR_FTP, Wl.WKG or Wl.RAW) for effort.
 var scaling_mode: String = Wl.FAIR_FTP
 ## The bus for band changes, governor status and saved rides; null means the autoload.
 var bus: WlEventBus = null
+## The paired heart rate sensor's bpm (Callable() -> int, 0 = none); kept across setup().
+var heart_rate_source: Callable = Callable()
 
 static var _live: Array[WeakRef] = []
 
@@ -140,6 +157,7 @@ var _gesture_queue: Array[StringName] = []
 var _intents: Array = []
 var _acks: Array = []
 var _game_paused: bool = false
+var _ride_pause: RidePause = RidePause.new()
 var _cadence_band: Vector2 = Vector2.ZERO
 var _power_band: Vector2 = Vector2.ZERO
 var _gear: int = 12
@@ -459,8 +477,27 @@ func set_game_paused(paused: bool) -> void:
 	_game_paused = paused
 	if governor != null:
 		governor.set_game_paused(paused)
+	_update_timer()
+
+
+## True while the rider is paused for not pedaling (RidePause).
+func is_ride_paused() -> bool:
+	return _ride_pause.paused
+
+
+## The rider's heart rate in bpm (0 when unknown).
+func heart_rate_bpm() -> int:
+	var bpm := 0
+	if heart_rate_source.is_valid():
+		bpm = int(heart_rate_source.call())
+	if bpm <= 0 and device is MockTrainer and is_instance_valid(device):
+		bpm = (device as MockTrainer).heart_rate_bpm()
+	return maxi(bpm, 0)
+
+
+func _update_timer() -> void:
 	if _recording():
-		recorder.set_timer_running(not paused, platform_time())
+		recorder.set_timer_running(not (_game_paused or _ride_pause.paused), platform_time())
 
 
 ## Virtual gear shift (+1/-1) through the governor.
@@ -584,7 +621,13 @@ func tick(dt: float) -> void:
 	governor.tick(dt)
 	if gen != _setup_gen:
 		return
+	if not is_bot and _ride_pause.update(t, p, _cadence(t)):
+		_on_ride_pause_changed()
+		if gen != _setup_gen:
+			return
 	if _recording() and not _shut_down:
+		if recorder is RideRecorder:
+			(recorder as RideRecorder).set_heart_rate(heart_rate_bpm())
 		recorder.record(t, p, _recorded_cadence(t), _recorded_speed(t))
 	telemetry_updated.emit(_build_telemetry())
 
@@ -670,6 +713,7 @@ func _reset_state() -> void:
 	_intents = []
 	_acks = []
 	_game_paused = false
+	_ride_pause.reset()
 	_cadence_band = Vector2.ZERO
 	_power_band = Vector2.ZERO
 	_gear = 12
@@ -828,8 +872,6 @@ func _queue_gestures(fired: Array[StringName]) -> void:
 		gesture_detected.emit(g)
 		if gen != _setup_gen:
 			return
-		if g == Wl.G_STOP_5S and not is_multiplayer:
-			pause_requested.emit("stop_5s")
 
 
 func _fresh(t: float) -> bool:
@@ -890,7 +932,10 @@ func _build_telemetry() -> Telemetry:
 	tel.rescue = bool(st.get("rescue", false))
 	tel.coasting = bool(st.get("coasting", false))
 	tel.afk = bool(st.get("afk", false))
-	tel.paused = bool(st.get("paused", false)) or _game_paused
+	tel.paused = _ride_pause.paused
+	if not is_multiplayer:
+		tel.paused = tel.paused or bool(st.get("paused", false)) or _game_paused
+	tel.heart_rate_bpm = heart_rate_bpm()
 	tel.s_left_105 = float(st.get("s_left_105", 300.0))
 	tel.s_left_120 = float(st.get("s_left_120", 60.0))
 	tel.haptic_pct = float(st.get("haptic_pct", 0.0))
@@ -954,6 +999,17 @@ func _on_afk_changed(afk: bool) -> void:
 
 func _on_pause_requested(reason: String) -> void:
 	pause_requested.emit(reason)
+
+
+func _on_ride_pause_changed() -> void:
+	var paused := _ride_pause.paused
+	_update_timer()
+	var gen := _setup_gen
+	ride_paused_changed.emit(paused)
+	if gen != _setup_gen:
+		return
+	if paused and not is_multiplayer:
+		pause_requested.emit("stop_5s")
 
 
 func _on_governor_status(st: Dictionary) -> void:

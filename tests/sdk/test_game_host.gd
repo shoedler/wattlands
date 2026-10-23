@@ -194,7 +194,7 @@ func test_phases_per_rider_with_differing_plans() -> void:
 	assert_eq(hist[2]["kind"], Wl.COOLDOWN)
 
 
-func test_pause_stops_sim_step_and_resumes_on_pedal_start() -> void:
+func test_pause_stops_sim_step_and_resumes_when_the_ride_pause_ends() -> void:
 	var b := _solo("tiny")
 	var host := _host(b)
 	var paused: Array = []
@@ -215,6 +215,10 @@ func test_pause_stops_sim_step_and_resumes_on_pedal_start() -> void:
 	assert_eq(host.clock.platform_tick, game_tick + 50, "platform time runs")
 	assert_eq(int(_rider(b).get("ticks")), 60, "the trainer stack keeps ticking")
 	(_rider(b).get("gesture_queue") as Array).append(Wl.G_PEDAL_START)
+	Kit.step(b, 1)
+	assert_true(host.is_paused(), "pedal_start alone does not resume (BRIEF 3.5: 1 s at 30 rpm)")
+	steps_before = _game(b).get("steps")
+	_rider(b).ride_paused_changed.emit(false)
 	Kit.step(b, 1)
 	assert_false(host.is_paused())
 	assert_eq(_rider(b).get("game_paused"), false)
@@ -817,9 +821,9 @@ func test_the_input_routers_pause_and_confirm_belong_to_the_session_screen() -> 
 	assert_false(host.is_paused())
 	_rider(b).pause_requested.emit("coasting")
 	assert_true(host.is_paused())
-	router.gestures.append(Wl.G_PEDAL_START)
+	_rider(b).ride_paused_changed.emit(false)
 	Kit.step(b, 1)
-	assert_false(host.is_paused(), "pedalling again ends a coasting pause")
+	assert_false(host.is_paused(), "the end of the rider's ride pause ends a coasting pause")
 	host.end_session("timeout")
 
 
@@ -858,9 +862,9 @@ func test_platform_pause_off_leaves_pausing_to_the_app() -> void:
 	assert_true(host.is_paused(), "the coasting pause (4.6.4) still pauses")
 	(_rider(b).get("gesture_queue") as Array).append(Wl.G_PEDAL_START)
 	Kit.step(b, 3)
-	assert_true(host.is_paused(), "pedal_start does not resume: the app does")
-	host.resume()
-	assert_false(host.is_paused())
+	assert_true(host.is_paused(), "pedal_start does not resume")
+	_rider(b).ride_paused_changed.emit(false)
+	assert_false(host.is_paused(), "the end of the ride pause resumes in either mode")
 	host.end_session("timeout")
 
 
@@ -878,7 +882,7 @@ func test_platform_pause_defaults_on() -> void:
 		Kit.step(b, 1)
 		assert_false(host.is_paused(), str(extra))
 		_rider(b).pause_requested.emit("coasting")
-		(_rider(b).get("gesture_queue") as Array).append(Wl.G_PEDAL_START)
+		_rider(b).ride_paused_changed.emit(false)
 		Kit.step(b, 1)
 		assert_false(host.is_paused(), str(extra))
 		host.end_session("timeout")
