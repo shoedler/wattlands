@@ -10,8 +10,9 @@ extends Control
 ## The size the layout was designed for (1080p px); the control scales by size / design_size.
 var design_size: Vector2 = Vector2(696, 168)
 var game: TankGame = null
-## The latest model (tests read it).
+## The latest model and how many times it changed (a redraw each; tests read both).
 var model: Dictionary = {}
+var model_changes: int = 0
 
 
 func _init() -> void:
@@ -31,6 +32,7 @@ func refresh() -> void:
 	var m := compute(game.state)
 	if m != model:
 		model = m
+		model_changes += 1
 		queue_redraw()
 
 

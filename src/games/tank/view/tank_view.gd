@@ -33,6 +33,8 @@ const HALO_RADIUS := {
 	TankIds.SHELL_ENEMY: 11.0,
 	TankIds.SHELL_BOSS_MAIN: 26.0,
 }
+## A falling shell that vanishes this close to the ground landed in it.
+const SHELL_LANDING_PX := 22.0
 const WITHDRAW_PX_S := 46.0
 const FADE_S := 1.5
 
@@ -509,7 +511,8 @@ func _add_wreck(info: Dictionary) -> void:
 		fx.forget(str(old["key"]))
 
 
-## Shells that vanish near the ground threw up dirt.
+## Shells that vanish while falling near the ground threw up dirt (judged on the state's latest
+## position, not the delayed drawn one, so a shell that lands between two frames still counts).
 func _track_shells(state: TankState) -> void:
 	var now := {}
 	for s in state.shells:
@@ -520,10 +523,10 @@ func _track_shells(state: TankState) -> void:
 		var info: Dictionary = _seen_shells[id]
 		_seen_shells.erase(id)
 		var p: Vector2 = info["pos"]
-		if p.y >= float(TankConst.GROUND_Y) - 10.0:
+		if p.y >= float(TankConst.GROUND_Y) - SHELL_LANDING_PX and float(info["vy"]) > 0.0:
 			fx.dirt_spray(Vector2(p.x - cam_x, float(TankConst.GROUND_Y)))
 	for s in state.shells:
-		_seen_shells[s.id] = {"pos": shell_pos(s), "type": s.type}
+		_seen_shells[s.id] = {"pos": Vector2(s.x, s.y), "vy": s.vy, "type": s.type}
 
 
 # --- Rows ----------------------------------------------------------------------------------------------------

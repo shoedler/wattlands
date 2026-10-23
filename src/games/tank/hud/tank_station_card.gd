@@ -53,7 +53,7 @@ static func cell_rect(i: int) -> Rect2:
 ## The click rect of lever position `i` in the Bulwark's lever cell, in design px.
 static func lever_rect(i: int) -> Rect2:
 	var c := cell_rect(0)
-	var w := (c.size.x - 2.0 * 6.0) / 3.0
+	var w := floorf((c.size.x - 2.0 * 6.0) / 3.0)
 	return Rect2(
 		Vector2(c.position.x + float(i) * (w + 6.0), c.position.y + 46.0), Vector2(w, 56.0)
 	)
@@ -155,23 +155,22 @@ func _speed_cells(m: Dictionary) -> void:
 	)
 
 
-## The Ram: the open window counts down, the cooldown recharges, else ready.
+## The Ram: the open window counts down, the cooldown recharges, and a full bar with a check mark
+## means it is ready. The label is the prompt's own words, so no extra strings are needed.
 func _ram_cell(i: int) -> void:
 	var m := model
-	var label := tr_key("TANK_CARD_RAM")
+	var label := tr_key("TANK_PROMPT_RAM")
 	if float(m.get("ram_s", 0.0)) > 0.0:
 		_cell(i, label, "%d" % ceili(float(m["ram_s"])), float(m["ram_frac"]), WlTheme.GLOW, "s")
 	elif float(m.get("ram_cd_s", 0.0)) > 0.0:
-		_cell(
-			i,
-			label,
-			"%d" % ceili(float(m["ram_cd_s"])),
-			1.0 - float(m["ram_cd_frac"]),
-			WlTheme.ACCENT,
-			"s"
-		)
+		var recharge := 1.0 - float(m["ram_cd_frac"])
+		_cell(i, label, "%d" % ceili(float(m["ram_cd_s"])), recharge, WlTheme.ACCENT, "s")
 	else:
-		_cell(i, label, tr_key("TANK_CARD_READY"), 1.0, WlTheme.GLOW)
+		_cell(i, label, "", 1.0, WlTheme.GLOW)
+		var c := cell_rect(i)
+		var mid := Vector2(c.position.x + c.size.x * 0.5, c.position.y + 62.0)
+		line(mid + Vector2(-22, 0), mid + Vector2(-6, 18), WlTheme.GLOW, 9.0)
+		line(mid + Vector2(-6, 18), mid + Vector2(26, -22), WlTheme.GLOW, 9.0)
 
 
 func _dynamo() -> void:

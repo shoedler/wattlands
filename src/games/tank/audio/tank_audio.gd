@@ -72,8 +72,9 @@ const CLANK_MAX_S := 0.5
 const RATCHET_EVERY_S := 0.16
 
 var game: TankGame = null
-## Every sound asked for, newest last (tests read and clear it).
+## Every sound asked for, newest last, and its volume in dB (tests read and clear them).
 var played: Array[String] = []
+var played_db: Array[float] = []
 var silent: bool = true
 ## engine -> the loop's last volume (dB), pitch scale and whether it runs (tests read them).
 var loop_db: Dictionary = {}
@@ -350,8 +351,10 @@ func _run_delayed(dt: float) -> void:
 
 func _play(sound: String, db: float = -6.0, pitch: float = 1.0) -> void:
 	played.append(sound)
+	played_db.append(db)
 	if played.size() > PLAYED_MAX:
 		played = played.slice(played.size() - PLAYED_MAX)
+		played_db = played_db.slice(played_db.size() - PLAYED_MAX)
 	if _plays_this_frame >= MAX_PLAYS_PER_FRAME:
 		return
 	_plays_this_frame += 1
