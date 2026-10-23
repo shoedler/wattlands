@@ -57,9 +57,11 @@ func test_water_darkens_with_depth_in_flat_steps() -> void:
 func test_the_floor_is_sand_in_the_shallows_and_dark_in_the_deep() -> void:
 	assert_eq(FishingScenery.floor_at(4.0), FishingPalette.SAND_1)
 	assert_eq(FishingScenery.floor_at(15.0), FishingPalette.SAND_2)
-	var deep := FishingScenery.floor_at(500.0)
-	assert_true(FishingPalette.SEA.has(deep))
-	assert_ne(deep, FishingPalette.VOID, "a deep floor still reads against the void")
+	for d: float in [30.0, 60.0, 150.0, 250.0, 400.0]:
+		assert_ne(FishingScenery.floor_at(d), FishingScenery.water_at(d), "floor at %s m reads" % d)
+		var ridge := FishingScenery.floor_at(d, true)
+		assert_ne(ridge, FishingScenery.floor_at(d), "the ridge differs from the floor")
+		assert_ne(ridge, FishingScenery.water_at(d), "and from the water")
 
 
 func test_the_tint_grows_with_depth_but_never_hides_a_fish() -> void:

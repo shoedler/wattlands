@@ -34,6 +34,9 @@ const DRAW_MARGIN_PX := 120.0
 ## Leaps: one arc's length (s) and height (px).
 const LEAP_S := 1.0
 const LEAP_PX := 18.0
+## Landing: inside ABOARD_M the fish hangs from the rod tip, ABOARD_DROP_PX under it.
+const ABOARD_M := 6.0
+const ABOARD_DROP_PX := 3.0
 ## Wake: the foam's longest reach behind the stern (px) and the spray's particles at full wake.
 const WAKE_REACH_PX := 150.0
 const SPRAY_N := 7
@@ -393,6 +396,13 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	var id2 := FishingSprites.fish_id(r.fish.sp)
 	var depth := float(v["fz"])
 	var mouth := to_screen(float(v["x"]) + float(v["fdx"]), depth)
+	var b: FishingBoatView = boats.get(r.slot)
+	var aboard := (
+		r.action == FishingConst.A_LAND and r.fish.d < ABOARD_M and b != null and b.visible
+	)
+	if aboard:
+		mouth = b.rod_tip().round() + Vector2(0, ABOARD_DROP_PX)
+		depth = 0.0
 	var leap: Dictionary = _leap.get(r.slot, {})
 	if not leap.is_empty():
 		leap["t"] = float(leap["t"]) + delta
@@ -408,7 +418,7 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	var size := FishingSprites.size_of(id2)
 	fish.texture = FishingSprites.frame(id2, floori(_t * (8.0 if r.fish.run_active else 4.0)))
 	var boat_x := FishingScenery.screen_x(float(v["x"]), cam_m)
-	fish.flip_h = mouth.x < boat_x
+	fish.flip_h = mouth.x < boat_x if not aboard else r.heading > 0
 	var a := Vector2(FishingSprites.anchor(id2))
 	var top_left := mouth - a
 	if fish.flip_h:
@@ -533,16 +543,18 @@ func _draw_line(c: CanvasItem, tip: Vector2, end: Vector2, r: FishingRiderState)
 	if end.y <= surf:
 		c.draw_polyline(FishingRig.snapped(FishingRig.line(tip, end, slack, strain)), col, 1.0)
 		return
-	var k := clampf(0.3 + 0.25 * (1.0 - strain), 0.2, 0.6)
+	var k := clampf(0.1 + 0.15 * (1.0 - strain), 0.1, 0.3)
 	var entry := Vector2(lerpf(tip.x, end.x, k), surf)
 	c.draw_line(tip.floor() + Vector2(0.5, 0.5), entry.floor() + Vector2(0.5, 0.5), col, 1.0)
 	var under := FishingRig.snapped(FishingRig.line(entry, end, slack, strain))
 	for i in under.size() - 1:
-		var depth := scenery.depth_of_y(under[i].y)
-		var lc := FishingPalette.darker(FishingScenery.water_at(depth), -2)
-		if FishingScenery.water_at(depth) == FishingPalette.SEA_1:
-			lc = FishingPalette.HAZE_1
-		c.draw_line(under[i], under[i + 1], lc, 1.0)
+		c.draw_line(under[i], under[i + 1], under_line(scenery.depth_of_y(under[i].y)), 1.0)
+
+
+## The line's colour under water at `depth_m`: one step lighter than the water around it.
+static func under_line(depth_m: float) -> Color:
+	var i := FishingPalette.SEA.find(FishingScenery.water_at(depth_m))
+	return FishingPalette.HAZE_2 if i <= 0 else FishingPalette.SEA[i - 1]
 
 
 func _paint_front(c: CanvasItem) -> void:

@@ -23,6 +23,9 @@ var zones: Array[Dictionary] = []
 ## [{slot, x (0..1 along the strip), icon, local}]
 var icons: Array[Dictionary] = []
 var edge: bool = false
+## The local view's window along the strip (0..1, from the view's camera; -1 without a view).
+var window_a: float = -1.0
+var window_b: float = -1.0
 var _t: float = 0.0
 
 
@@ -61,6 +64,14 @@ func refresh() -> void:
 	var mm := w.minimap(SAMPLES, x0, x1)
 	floor_m = mm["floor"]
 	zones.assign(mm["zones"])
+	window_a = -1.0
+	window_b = -1.0
+	if game.has_meta(FishingView.META) and game.get_meta(FishingView.META) is FishingView:
+		var cam: float = (game.get_meta(FishingView.META) as FishingView).cam_m
+		var span := maxf(x1 - x0, 1.0)
+		window_a = clampf((cam - x0) / span, 0.0, 1.0)
+		var view_m := float(FishingScenery.W) / FishingScenery.PX_PER_M
+		window_b = clampf((cam + view_m - x0) / span, 0.0, 1.0)
 	icons.clear()
 	var me := FishingHudModel.local_rider(game)
 	for r in st.riders:
@@ -86,7 +97,7 @@ func _draw() -> void:
 	var h := float(ART.size.y) - top - CARET_ROWS
 	var strip := Rect2(0, top * s, w * s, h * s)
 	draw_rect(strip.grow(s), Color(FishingPalette.VOID, 0.55))
-	draw_rect(strip, FishingPalette.SEA_2)
+	draw_rect(strip, FishingPalette.SEA_1)
 	var deepest := 1.0
 	for d in floor_m:
 		if not is_inf(d):
@@ -97,10 +108,12 @@ func _draw() -> void:
 		var d := floor_m[mini(roundi(u * float(n - 1)), n - 1)]
 		var depth_rows := h - 2.0
 		if is_inf(d):
-			draw_rect(Rect2(i * s, (top + 2.0) * s, s, depth_rows * s), FishingPalette.SEA_6)
+			draw_rect(
+				Rect2(i * s, (top + 3.0) * s, s, (depth_rows - 1.0) * s), FishingPalette.SEA_6
+			)
 			continue
-		var fy := 2.0 + roundf(sqrt(d / deepest) * (depth_rows - 1.0))
-		draw_rect(Rect2(i * s, (top + fy) * s, s, (h - fy) * s), FishingPalette.SEA_5)
+		var fy := 3.0 + roundf(sqrt(d / deepest) * (depth_rows - 2.0))
+		draw_rect(Rect2(i * s, (top + fy) * s, s, (h - fy) * s), FishingPalette.SEA_4)
 	for z in zones:
 		var a := clampf((float(z["x0"]) - x0) / (x1 - x0), 0.0, 1.0)
 		var b := clampf((float(z["x1"]) - x0) / (x1 - x0), 0.0, 1.0)
@@ -108,7 +121,12 @@ func _draw() -> void:
 		var col := FishingHudDraw.ZONE_COLOURS[clampi(
 			zi, 0, FishingHudDraw.ZONE_COLOURS.size() - 1
 		)]
-		draw_rect(Rect2(roundf(a * w) * s, top * s, roundf((b - a) * w) * s, 2.0 * s), col)
+		draw_rect(Rect2(roundf(a * w) * s, top * s, roundf((b - a) * w) * s, 3.0 * s), col)
+	if window_b > window_a:
+		var wa := roundf(window_a * w)
+		var wb := maxf(roundf(window_b * w), wa + 1.0)
+		var frame := Rect2(wa * s, top * s, (wb - wa) * s, h * s)
+		draw_rect(frame, Color(FishingPalette.CLOUD, 0.8), false, maxf(s * 0.67, 1.0))
 	if x0 <= 0.0:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:

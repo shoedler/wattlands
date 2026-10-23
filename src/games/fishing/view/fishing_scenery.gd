@@ -24,6 +24,29 @@ const VIEW_DEPTH_MIN_M := 3.0
 const ABYSS_M := 700.0
 ## Water band tops (m), one SEA colour each.
 const WATER_STEPS_M: Array[float] = [0.0, 6.0, 18.0, 40.0, 90.0, 170.0, 300.0, 470.0]
+## Floor and ridge colours per water band (WATER_STEPS_M): sand in the two shallowest bands,
+## then a step or two darker than the water of the band; the ridge behind sits between the
+## floor and the water in the shallow bands and a step lighter than the water in the deep ones.
+const FLOOR_BANDS: Array[Color] = [
+	FishingPalette.SAND_1,
+	FishingPalette.SAND_2,
+	FishingPalette.SEA_5,
+	FishingPalette.SEA_6,
+	FishingPalette.SEA_6,
+	FishingPalette.SEA_7,
+	FishingPalette.VOID,
+	FishingPalette.VOID,
+]
+const RIDGE_BANDS: Array[Color] = [
+	FishingPalette.SAND_2,
+	FishingPalette.SEA_3,
+	FishingPalette.SEA_4,
+	FishingPalette.SEA_5,
+	FishingPalette.SEA_4,
+	FishingPalette.SEA_5,
+	FishingPalette.SEA_6,
+	FishingPalette.SEA_7,
+]
 ## Sky band tops (rows): SKY_0 from 0, SKY_1, SKY_2 down to the horizon.
 const SKY_ROWS: Array[int] = [0, 40, 80]
 ## Cloud layers: parallax factor, drift (px/s), bank spacing (px), rows (top, bottom), colour.
@@ -32,6 +55,8 @@ const CLOUD_LAYERS: Array = [
 	[0.05, 1.1, 300.0, 30, 70, 0],
 	[0.1, 1.8, 380.0, 50, 92, 0],
 ]
+## Ambient schools: at most one per this many metres.
+const LIFE_CELL_M := 70.0
 ## Haze islands on the horizon: [factor, spacing px, max height, colour index (HAZE_1 / HAZE_2)].
 const ISLAND_LAYERS: Array = [[0.06, 520.0, 6, 0], [0.16, 760.0, 10, 1]]
 ## The town sits this far right of the dock at camera 0, scrolling at TOWN_FACTOR.
@@ -97,14 +122,10 @@ static func fog_at(depth_m: float) -> float:
 	return clampf(0.1 + sqrt(maxf(depth_m, 0.0)) / 60.0, 0.1, 0.45)
 
 
-## The floor colour at `depth_m`: sand in the shallows, then two steps darker than the water.
-static func floor_at(depth_m: float) -> Color:
-	if depth_m < 9.0:
-		return FishingPalette.SAND_1
-	if depth_m < 24.0:
-		return FishingPalette.SAND_2
-	var c := FishingPalette.darker(water_at(depth_m), 2)
-	return FishingPalette.SEA_6 if c == FishingPalette.VOID or c == FishingPalette.SEA_7 else c
+## The floor colour at `depth_m` (the colour of the band that depth falls in).
+static func floor_at(depth_m: float, ridge: bool = false) -> Color:
+	var cols: Array = RIDGE_BANDS if ridge else FLOOR_BANDS
+	return cols[FishingPalette.SEA.find(water_at(depth_m))]
 
 
 ## The surface's crest height at world pixel `wx` and time `t`: 1 on a crest, else 0.
@@ -128,6 +149,7 @@ func paint_back(c: CanvasItem, cam_m: float, t: float) -> void:
 	_paint_floor(c, cam_m, 0.75, 0.82, true)
 	_paint_floor(c, cam_m, 1.0, 1.0, false)
 	_paint_kelp(c, cam_m, t)
+	_paint_life(c, cam_m, t)
 	_paint_dock(c, cam_m)
 	_paint_edge(c, cam_m, t)
 
@@ -280,7 +302,10 @@ func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
 
 
 ## The floor silhouette (or a hazier ridge behind it: `ridge`) from the world's profile; the
-## ridge samples at `factor` parallax and `depth_scale` of the depth.
+## The floor silhouette (or a hazier ridge behind it: `ridge`) from the world's profile; the
+## ridge samples at `factor` parallax and `depth_scale` of the depth. Each column is split at
+## the water bands' rows and takes that band's floor colour (FLOOR_BANDS / RIDGE_BANDS), so the
+## colour changes along horizontal lines, like the water: flat haze layers, never a seam.
 func _paint_floor(
 	c: CanvasItem, cam_m: float, factor: float, depth_scale: float, ridge: bool
 ) -> void:
@@ -291,6 +316,11 @@ func _paint_floor(
 	var n := W / 4 + 1
 	var depths := world.sample_floor(x0, x1, n)
 	var edge := edge_m()
+	var bands := PackedFloat32Array()
+	for k in WATER_STEPS_M.size():
+		bands.append(roundf(y_of_depth(WATER_STEPS_M[k])))
+	bands.append(float(H))
+	var cols: Array = RIDGE_BANDS if ridge else FLOOR_BANDS
 	for sx in W:
 		var f := float(sx) / 4.0
 		var i := mini(floori(f), n - 2)
@@ -304,14 +334,32 @@ func _paint_floor(
 			continue
 		if not ridge and cam_m + float(sx) / PX_PER_M >= edge:
 			continue
-		var col := floor_at(d)
+		var top_col := Color.TRANSPARENT
+		for k in WATER_STEPS_M.size():
+			var y0 := maxf(y, bands[k])
+			var y1 := bands[k + 1]
+			if y1 <= y0:
+				continue
+			var col: Color = cols[k]
+			if top_col.a == 0.0:
+				top_col = col
+			c.draw_rect(Rect2(sx, y0, 1, y1 - y0), col)
 		if ridge:
-			col = FishingPalette.darker(water_at(d), 1)
-			if col == FishingPalette.VOID:
-				col = FishingPalette.SEA_7
-		c.draw_rect(Rect2(sx, y, 1, float(H) - y), col)
-		if not ridge and d >= 24.0:
-			c.draw_rect(Rect2(sx, y, 1, 1), FishingPalette.darker(col, -1))
+			continue
+		if top_col == FishingPalette.SAND_1:
+			_ripples(c, sx, y, cam_m)
+		elif top_col != FishingPalette.SAND_2:
+			var edge_col := FishingPalette.darker(top_col, -1)
+			c.draw_rect(Rect2(sx, y, 1, 1), edge_col)
+
+
+## Sand ripples: short darker dashes in the shallows' sand, fixed to the world.
+func _ripples(c: CanvasItem, sx: int, y: float, cam_m: float) -> void:
+	var wx := floori(cam_m * PX_PER_M) + sx
+	for row in range(int(y) + 4, H, 7):
+		var h := hash2(floori(float(wx) / 9.0), row)
+		if h % 3 == 0 and posmod(wx, 9) < 4 + h % 3:
+			c.draw_rect(Rect2(sx, row + h % 3, 1, 1), FishingPalette.SAND_2)
 
 
 ## Kelp stalks in the shallows and on the reef: thin swaying lines in the floor's colour.
@@ -340,19 +388,57 @@ func _paint_kelp(c: CanvasItem, cam_m: float, t: float) -> void:
 			c.draw_rect(Rect2(base.x + sway, base.y - float(j), 1, 1), col)
 
 
+## Ambient life: small schools of tiny fish drifting at mid-water (one per LIFE_CELL_M cell at
+## most), and in the abyss a few slow glowing specks. Drawn a step darker than the water
+## (the glow in GLOW), never in the way of the hooked fish's readability.
+func _paint_life(c: CanvasItem, cam_m: float, t: float) -> void:
+	if world == null:
+		return
+	var c0 := floori(cam_m / LIFE_CELL_M) - 1
+	for cell in range(c0, c0 + ceili(float(W) / PX_PER_M / LIFE_CELL_M) + 2):
+		var h := hash2(cell, 211)
+		if h % 3 == 0:
+			continue
+		var x_m := (float(cell) + 0.5) * LIFE_CELL_M
+		var fl := world.floor_depth_m(x_m)
+		var abyss := is_inf(fl)
+		var top := 6.0 if not abyss else 150.0
+		var depth := lerpf(top, (fl if not abyss else ABYSS_M) * 0.8, float((h >> 4) % 100) / 100.0)
+		var base := Vector2(screen_x(x_m, cam_m), y_of_depth(depth))
+		var n := 4 + (h >> 9) % 6
+		for k in n:
+			var ph := t * 0.4 + float(k) * 0.9 + float(h % 50)
+			var p := (
+				base
+				+ Vector2(sin(ph) * 14.0 + float(k * 5), cos(ph * 1.3) * 4.0 + float(k % 3) * 3.0)
+			)
+			if abyss:
+				if (floori(t * 1.5) + k + h) % 5 != 0:
+					c.draw_rect(Rect2(p.round(), Vector2.ONE), FishingPalette.GLOW)
+			else:
+				var col := FishingPalette.darker(water_at(depth), 1)
+				var dir := 1.0 if (h >> 3) % 2 == 0 else -1.0
+				c.draw_rect(Rect2(p.round(), Vector2(2, 1)), col)
+				c.draw_rect(
+					Rect2(p.round() + Vector2(2.0 if dir > 0.0 else -1.0, 0), Vector2.ONE), col
+				)
+
+
 ## The quay left of the dock and the pier, both near and dark against the haze.
 func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 	var qx := screen_x(0.0, cam_m)
 	if qx > 0.0:
 		var top := float(SURF_Y - QUAY_TOP)
-		c.draw_rect(Rect2(0, top, qx, float(H) - top), FishingPalette.HAZE_2)
+		c.draw_rect(Rect2(0, top, qx, float(H) - top), FishingPalette.SEA_3)
 		c.draw_rect(Rect2(0, top, qx, 1), FishingPalette.CLOUD)
-		c.draw_rect(Rect2(0, top + 1, qx, 1), FishingPalette.SKY_0)
-		for y in range(int(top) + 6, H, 6):
-			c.draw_rect(Rect2(0, y, qx, 1), FishingPalette.HAZE_1)
+		c.draw_rect(Rect2(0, top + 1, qx, 1), FishingPalette.HAZE_2)
+		for y in range(int(top) + 10, H, 10):
+			c.draw_rect(Rect2(0, y, qx, 1), FishingPalette.SEA_4)
+			var x0 := int(qx) - (7 if (y / 10) % 2 == 0 else 19)
+			for x in range(x0, -1, -24):
+				c.draw_rect(Rect2(x, y - 9, 1, 9), FishingPalette.SEA_4)
 		for x in range(int(qx) - 14, -1, -40):
 			c.draw_rect(Rect2(x, top - 3, 3, 3), FishingPalette.WOOD_3)
-		c.draw_rect(Rect2(qx - 1, top, 1, float(H) - top), FishingPalette.SEA_3)
 	var pier := FishingSprites.frame("scenery_pier")
 	if pier == null:
 		return

@@ -82,8 +82,8 @@ const FLYWHEEL_RING: Array[String] = [
 	"...nnn...",
 ]
 const GEARS: Array = [
-	[".y.y..", "yyYyYy", ".YuYnY", "yyyy.n"],
-	["y.y...", ".yYyyY", "yYuYYn", ".y.y.n"],
+	["uYuyuy", "YnYunu", "uYuyuy", "uuuuuu"],
+	["YuYuyu", "unuyny", "YuYuyu", "uuuuuu"],
 ]
 const WINCH: Array[String] = ["nYYn", ".WW.", ".qq.", ".WW.", "nyyn"]
 const PROP: Array = [
@@ -514,18 +514,28 @@ static func card(kind: int) -> Image:
 	out.fill_rect(Rect2i(0, surf, CARD.x, 1), FishingPalette.CLOUD)
 	var fish := "fish_marlin" if kind == 0 else ("fish_grouper" if kind == 1 else "fish_tuna")
 	var fimg := swim(img(fish_grid(fish)), 1, 1, false)
-	var fat := Vector2i(78, 62) if kind != 1 else Vector2i(96, 56)
-	blit(out, fimg, fat)
 	var b := boat(kind != 1, 1)
-	var bat := Vector2i(10 if kind != 1 else 40, surf - FishingRig.WATERLINE)
-	blit(out, b, bat)
-	if kind != 1:
-		var tip := Vector2i(FishingRig.rod(1.0, 0.0, Vector2.DOWN)[-1]) + bat
-		plot_line(out, tip, fat + Vector2i(0, fimg.get_height() / 2), FishingPalette.CLOUD)
-	else:
+	if kind == 1:
+		blit(out, fimg, Vector2i(96, 56))
+		var at := Vector2i(40, surf - FishingRig.WATERLINE)
+		blit(out, b, at)
 		for i in 22:
 			if i % 4 != 3:
-				out.set_pixel(bat.x + 4 - i, surf + (i / 8), FishingPalette.CLOUD)
+				out.set_pixel(at.x + 4 - i, surf + (i / 8), FishingPalette.CLOUD)
+		return out
+	fimg.flip_x()
+	var fat := Vector2i(4, 64 if kind == 0 else 66)
+	blit(out, fimg, fat)
+	var bat := Vector2i(58, surf - FishingRig.WATERLINE)
+	blit(out, b, bat)
+	var rod := FishingRig.rod(1.0, 0.0, Vector2.DOWN)
+	for i in rod.size() - 1:
+		plot_line(out, Vector2i(rod[i]) + bat, Vector2i(rod[i + 1]) + bat, FishingPalette.WOOD_2)
+	var tip := Vector2i(FishingRig.rod(1.0, 0.0, Vector2.DOWN)[-1]) + bat
+	var mouth := fat + Vector2i(fimg.get_width() - 1, fimg.get_height() / 2)
+	var entry := Vector2i(roundi(lerpf(tip.x, mouth.x, 0.15)), surf)
+	plot_line(out, tip, entry, FishingPalette.CLOUD)
+	plot_line(out, entry, mouth, FishingPalette.HAZE_2)
 	return out
 
 
