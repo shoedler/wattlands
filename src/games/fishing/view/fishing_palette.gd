@@ -38,6 +38,11 @@ const SKIN_2 := Color("#c98e63")
 ## The PaletteSwap key ramp (light, dark): boat trim and canopy, the angler's cap and shirt.
 const KEY_LIGHT := Color("#e0413a")
 const KEY_DARK := Color("#9e2228")
+## The generated boat.png shades its trim with three more reds the key ramp leaves out (a coral
+## row under the stripe, peach and a pink pixel where it meets the white hull); the hull's
+## PaletteSwap maps them too, lighter than the slot colour, so no slot shows a red stripe.
+const HULL_KEYS: Array[Color] = [SKIN_1, PINK, CORAL, KEY_LIGHT, KEY_DARK]
+const HULL_TINT := [0.5, 0.3, 0.3, 0.0]
 
 ## Default line colour (cosmetic index 0) and the fishing line under strain.
 const LINE := Color("#f7f9fb")
@@ -84,15 +89,69 @@ static func sky_texture(h: int, variant: int) -> Texture2D:
 	return _cache[key]
 
 
-## The HUD zone's sky cover: the same gradient from x HUD_X - COVER_EDGE to the right edge, its
-## first COVER_EDGE columns dithered out, so clouds and islands fade before the zone.
-static func sky_cover_texture(h: int, variant: int) -> Texture2D:
-	var key := "cover_%d_%d" % [h, variant]
+## The HUD zone's cover (brief 3.2: the zone holds only sky gradient, open water and sand),
+## drawn over the clouds, islands and the surface strip from x HUD_X - COVER_EDGE to the right
+## edge: `sky_rows` of the lane's sky gradient, then the first `water_rows` of the lane's water
+## (a water texture `water_total` rows tall, cut at the same columns, so it meets the water
+## below without a seam). Its first COVER_EDGE columns are dithered out, so the backdrops fade
+## before the zone.
+static func zone_cover_texture(
+	sky_rows: int, water_rows: int, water_total: int, variant: int
+) -> Texture2D:
+	var key := "zone_%d_%d_%d_%d" % [sky_rows, water_rows, water_total, variant]
 	if not _cache.has(key):
 		var stops: Array = SKY_VARIANTS[clampi(variant, 0, SKY_VARIANTS.size() - 1)]
-		var w := FishingConst.PIXEL_W - FishingConst.HUD_X + COVER_EDGE
-		_cache[key] = ImageTexture.create_from_image(gradient(w, h, stops, COVER_EDGE))
+		var x0 := FishingConst.HUD_X - COVER_EDGE
+		var w := FishingConst.PIXEL_W - x0
+		var img := Image.create_empty(w, sky_rows + water_rows, false, Image.FORMAT_RGBA8)
+		img.blit_rect(gradient(w, sky_rows, stops), Rect2i(0, 0, w, sky_rows), Vector2i.ZERO)
+		if water_rows > 0:
+			var water := gradient(FishingConst.PIXEL_W, maxi(water_total, water_rows), WATER)
+			img.blit_rect(water, Rect2i(x0, 0, w, water_rows), Vector2i(0, sky_rows))
+		for y in img.get_height():
+			for x in COVER_EDGE:
+				if (x * 16) / COVER_EDGE <= BAYER4[(y & 3) * 4 + (x & 3)]:
+					img.set_pixel(x, y, Color(0, 0, 0, 0))
+		_cache[key] = ImageTexture.create_from_image(img)
 	return _cache[key]
+
+
+## `tex` at half size for a distant prop: each 2 x 2 block becomes its most common opaque colour
+## (opaque when at least two of the four are), so the palette stays exact. Cached by `id`.
+static func half_size(id: String, tex: Texture2D) -> Texture2D:
+	var key := "half_" + id
+	if not _cache.has(key):
+		var src := tex.get_image()
+		src.decompress()
+		var w := maxi(src.get_width() / 2, 1)
+		var h := maxi(src.get_height() / 2, 1)
+		var img := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+		for y in h:
+			for x in w:
+				img.set_pixel(x, y, _block_colour(src, 2 * x, 2 * y))
+		_cache[key] = ImageTexture.create_from_image(img)
+	return _cache[key]
+
+
+static func _block_colour(src: Image, x0: int, y0: int) -> Color:
+	var counts := {}
+	var best := Color(0, 0, 0, 0)
+	var best_n := 0
+	var opaque := 0
+	for dy in 2:
+		for dx in 2:
+			var x := mini(x0 + dx, src.get_width() - 1)
+			var y := mini(y0 + dy, src.get_height() - 1)
+			var c := src.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			opaque += 1
+			var k := c.to_html(false)
+			counts[k] = int(counts.get(k, 0)) + 1
+			if int(counts[k]) > best_n:
+				best_n = int(counts[k])
+				best = Color(c, 1.0)
+	return best if opaque >= 2 else Color(0, 0, 0, 0)
 
 
 ## Water and reef rows of a lane: `h` rows from the surface strip's bottom to the lane bottom.
@@ -157,6 +216,27 @@ static func color_of(value: String, fallback: Color) -> Color:
 ## The key ramp as PaletteSwap takes it.
 static func keys() -> PackedColorArray:
 	return PackedColorArray([KEY_LIGHT, KEY_DARK])
+
+
+## The hull's key colours (HULL_KEYS) as PaletteSwap takes them.
+static func hull_keys() -> PackedColorArray:
+	return PackedColorArray(HULL_KEYS)
+
+
+## The hull's swap ramp for `slot`: the slot ramp (light, dark) for the two key colours and the
+## light colour tinted toward white for the trim's coral, pink and peach.
+static func hull_swaps(slot: int) -> PackedColorArray:
+	var ramp := PaletteSwap.slot_ramp(slot, 2)
+	var out := PackedColorArray()
+	for k in HULL_TINT.size():
+		out.append(ramp[0].lightened(float(HULL_TINT[k])))
+	out.append(ramp[1])
+	return out
+
+
+## The colours the trim is drawn in (FishingRig.trim_pixels; the trim cosmetic paints them).
+static func trim_colours() -> PackedColorArray:
+	return PackedColorArray([KEY_LIGHT, CORAL, PINK, SKIN_1])
 
 
 static func clear_cache() -> void:

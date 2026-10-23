@@ -229,8 +229,11 @@ func test_boat_and_angler_are_recoloured_to_the_slot() -> void:
 		var hull := v.lane_view(i).boat.hull
 		var mat := hull.material as ShaderMaterial
 		assert_not_null(mat, "lane %d hull has PaletteSwap" % i)
-		assert_eq(PaletteSwap.keys_of(mat)[0], FishingPalette.KEY_LIGHT)
-		assert_eq(PaletteSwap.swaps_of(mat)[0], PaletteSwap.slot_ramp(i, 2)[0])
+		var k := Array(PaletteSwap.keys_of(mat)).find(FishingPalette.KEY_LIGHT)
+		assert_gte(k, 0, "the key colour is swapped")
+		assert_eq(PaletteSwap.swaps_of(mat)[k], PaletteSwap.slot_ramp(i, 2)[0])
+		var dark := Array(PaletteSwap.keys_of(mat)).find(FishingPalette.KEY_DARK)
+		assert_eq(PaletteSwap.swaps_of(mat)[dark], PaletteSwap.slot_ramp(i, 2)[1])
 		assert_not_null(v.lane_view(i).boat.angler.material)
 
 
@@ -303,10 +306,7 @@ func test_every_sprite_loads_at_its_art_json_size() -> void:
 	for id in FishingSprites.ids():
 		var tex := FishingSprites.texture(id)
 		assert_not_null(tex, id)
-		assert_has(
-			[FishingSprites.SRC_PNG, FishingSprites.SRC_FALLBACK, FishingSprites.SRC_PLACEHOLDER],
-			FishingSprites.source(id)
-		)
+		assert_eq(FishingSprites.source(id), FishingSprites.SRC_PNG, "%s is generated art" % id)
 		assert_eq(FishingSprites.size_of(id), Vector2i(tex.get_size()), id)
 	var tail := FishingSprites.part("fish_marlin", "tail")
 	assert_eq(tail.get_width(), FishingSprites.part_rect("fish_marlin", "tail").size.x)

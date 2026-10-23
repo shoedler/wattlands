@@ -14,6 +14,9 @@ const CLOCK_RESYNC_S := 1.5
 const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
 const CLOCK_CATCHUP_TAU_S := 0.25
 const LINK_S := 1.6
+## The link's beam width and the burst radius at each rod tip (art px).
+const LINK_BEAM_W := 2
+const LINK_BURST_R := 3
 
 var game: FishingGame = null
 var lanes: Array[FishingLaneView] = []
@@ -34,6 +37,8 @@ var _local_slot: int = -1
 var _applied_cos: Array[PackedInt32Array] = []
 var _link_lanes: Array = []
 var _link_t: float = -1.0
+var _link_game_t: float = 0.0
+var _link_x: float = float(FishingConst.ROD_TIP_X)
 
 
 func _ready() -> void:
@@ -81,7 +86,10 @@ func advance(delta: float) -> void:
 		_handle(c)
 	_pending.clear()
 	if _link_t >= 0.0:
-		_link_t = _link_t + delta if _link_t + delta < LINK_S else -1.0
+		# The link's clock follows the game clock too, so a fast-forwarded sim never leaves it on.
+		var step := maxf(delta, st.t - _link_game_t)
+		_link_t = _link_t + step if _link_t + step < LINK_S else -1.0
+	_link_game_t = st.t
 	_overlay.queue_redraw()
 	if audio != null:
 		var local := st.lane(_local_slot)
@@ -211,6 +219,7 @@ func _handle(c: Dictionary) -> void:
 	if str(c.get("k", "")) == FishingCues.CUE_DOUBLE_HOOKUP:
 		_link_lanes = (c.get("lanes", []) as Array).duplicate()
 		_link_t = 0.0
+		_link_game_t = game.state.t if game != null and game.state != null else 0.0
 	if audio != null:
 		audio.cue(c, l == _local_slot)
 
@@ -219,32 +228,66 @@ func _draw() -> void:
 	draw_texture(FishingPalette.deck_texture(), Vector2.ZERO)
 
 
-## The gold Double Hookup link: a dashed gold line joining the linked lanes' rod tips and a
-## gold box round each boat, blinking for LINK_S.
+## The gold Double Hookup flash (brief 2.4 "a gold flash linking the lanes"): a 2 px gold beam
+## from the first linked rod tip to the last and a small burst at each tip, fading out by an
+## ordered dither over LINK_S. Burst pixels stay inside their own lane.
 func _paint_overlay(c: CanvasItem) -> void:
-	if _link_t < 0.0 or _link_lanes.size() < 2 or floori(_link_t * 6.0) % 2 == 1:
-		return
-	var ys: Array[float] = []
+	var px := link_pixels()
+	for p in px:
+		c.draw_rect(
+			Rect2(p, Vector2.ONE), FishingPalette.YELLOW if p.x == link_x() else FishingPalette.GOLD
+		)
+
+
+## The beam's left column (view px): the linked rod tips' mean x, set by link_pixels().
+func link_x() -> float:
+	return _link_x
+
+
+## The flash's pixels this frame (view px, top-left of each); empty when no link shows.
+func link_pixels() -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if _link_t < 0.0 or _link_lanes.size() < 2:
+		return out
+	var keep := 1.0 - _link_t / LINK_S
+	var tips: Array[Vector2] = []
+	var rects: Array[Rect2] = []
 	for s: Variant in _link_lanes:
 		var lv := lane_view(int(s))
 		if lv == null:
 			continue
-		var tip: Vector2 = lv.position + lv.boat.position + FishingRig.ROD_TIP
-		ys.append(tip.y)
-		c.draw_rect(
-			Rect2(lv.position + lv.boat.position - Vector2(2, 6), Vector2(84, 40)),
-			FishingPalette.GOLD,
-			false,
-			1.0
-		)
-	if ys.size() < 2:
-		return
-	ys.sort()
-	var x := float(FishingConst.ROD_TIP_X) + 0.5
-	var y := ys[0]
-	while y < ys[-1]:
-		c.draw_line(Vector2(x, y), Vector2(x, minf(y + 3.0, ys[-1])), FishingPalette.GOLD, 1.0)
-		y += 5.0
+		var tip := (lv.position + lv.boat.position + lv.boat.rod_points()[-1]).floor()
+		tips.append(tip)
+		rects.append(Rect2(lv.position, Vector2(FishingConst.PIXEL_W, lv.lane_h)))
+	if tips.size() < 2:
+		return out
+	var y0 := tips[0].y
+	var y1 := tips[0].y
+	for t in tips:
+		y0 = minf(y0, t.y)
+		y1 = maxf(y1, t.y)
+	var sum_x := 0.0
+	for t in tips:
+		sum_x += t.x
+	_link_x = floorf(sum_x / float(tips.size()))
+	var x := _link_x
+	for y in range(int(y0), int(y1) + 1):
+		for k in LINK_BEAM_W:
+			if DitherDissolve.visible_at(int(x) + k, y, 1.0 - keep):
+				out.append(Vector2(x + float(k), y))
+	for i in tips.size():
+		var r := LINK_BURST_R
+		for dy in range(-r, r + 1):
+			for dx in range(-r, r + 1):
+				if dx != 0 and dy != 0:
+					continue
+				var p := tips[i] + Vector2(dx, dy)
+				if (
+					rects[i].has_point(p)
+					and DitherDissolve.visible_at(int(p.x), int(p.y), 1.0 - keep)
+				):
+					out.append(p)
+	return out
 
 
 ## Polygon of a slot shape (circle, triangle, square, diamond) round `center`, radius `r`.

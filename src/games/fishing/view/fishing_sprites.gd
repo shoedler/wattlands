@@ -1,11 +1,11 @@
 class_name FishingSprites
 extends RefCounted
 ## Loads Big Game Fishing's sprites (brief 3.3, docs/ART_PIPELINE.md) and caches the textures:
-##  1. res://assets/fishing/sprites/<id>.png (and <id>__<part>.png) when the art pipeline wrote it,
-##     with sizes and anchors from sprites.json;
-##  2. else the art builder's fallback script, asked by path (its class may not exist in every
-##     branch): load(FALLBACK_SCRIPT).call("image", id) -> Image at the sprite's art.json size;
-##  3. else FishingPlaceholderArt's palette shapes at the art.json size.
+##  1. res://assets/fishing/sprites/<id>.png (and <id>__<part>.png): the generated art (GPT Image
+##     2.5 via fal, pixelated), with sizes and anchors from sprites.json;
+##  2. else brief 3.4's code-drawn fallback, FishingFallbackSprites (asked by path):
+##     load(FALLBACK_SCRIPT).call("image", id) -> Image at the sprite's art.json size;
+##  3. else (no fallback script in an export) a transparent image at that size, with a warning.
 ## A part missing as a file is cut from the whole sprite by its art.json rect.
 
 const SPRITE_DIR := "res://assets/fishing/sprites"
@@ -14,7 +14,7 @@ const SPRITES_JSON := "res://assets/fishing/sprites/sprites.json"
 const FALLBACK_SCRIPT := "res://src/games/fishing/tools/fishing_fallback_sprites.gd"
 const SRC_PNG := "png"
 const SRC_FALLBACK := "fallback"
-const SRC_PLACEHOLDER := "placeholder"
+const SRC_MISSING := "missing"
 ## Brief 3.3's sizes, used when art.json can't be read (an export without the JSON).
 const SIZES := {
 	"boat": [80, 32],
@@ -109,7 +109,7 @@ static func part(id: String, part_name: String) -> Texture2D:
 	return tex
 
 
-## The Image a sprite falls back to when it has no PNG: the art builder's fallback, else ours.
+## The Image a sprite falls back to when it has no PNG: FishingFallbackSprites' drawing.
 static func image(id: String) -> Image:
 	var size := size_of(id)
 	if ResourceLoader.exists(FALLBACK_SCRIPT):
@@ -119,11 +119,13 @@ static func image(id: String) -> Image:
 			if img is Image and not (img as Image).is_empty():
 				_sources[id] = SRC_FALLBACK
 				return img
-	_sources[id] = SRC_PLACEHOLDER
-	return FishingPlaceholderArt.image(id, size)
+	_sources[id] = SRC_MISSING
+	push_warning("FishingSprites: no art for '%s'" % id)
+	var blank := Image.create_empty(maxi(size.x, 1), maxi(size.y, 1), false, Image.FORMAT_RGBA8)
+	return blank
 
 
-## Where a sprite came from: "png", "fallback" or "placeholder" ("" before it loaded).
+## Where a sprite came from: "png", "fallback" or "missing" ("" before it loaded).
 static func source(id: String) -> String:
 	return str(_sources.get(id, ""))
 
