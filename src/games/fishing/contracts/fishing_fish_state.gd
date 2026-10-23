@@ -31,3 +31,6 @@ var hooked_t: float = 0.0
 var replace_at_t: float = -1.0
 ## True while no fish is on the line between a loss and its replacement.
 var off_line: bool = false
+## This fish's weight: slot kg x (1 + 0.15 x strength), x 0.75 for a replacement (fish-rules,
+## additive).
+var kg: float = 0.0

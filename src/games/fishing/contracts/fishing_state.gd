@@ -33,6 +33,19 @@ var fish_started: int = 0
 ## finished("trip_over") was emitted.
 var trip_over: bool = false
 
+# --- Trip constants the rules read every tick (fish-rules, additive) ----------------------
+## Threshold or e2e: one shared schedule, fixed Reels, self-hooking fish, no finished.
+var scheduled: bool = false
+## R_min = max(120 s, k_rmin x the previous fight's length incl. landing) (Free 1.5, Base 3).
+var k_rmin: float = 1.5
+## The area's spot types (FishingConst.SPOTS indexes, file order) and their affinities, flat:
+## area_affinity[4 x spot position + species index].
+var area_spots: Array[int] = []
+var area_affinity: Array[float] = []
+## Hint distances are drawn in [spot_d_lo, spot_d_hi] metres.
+var spot_d_lo: float = FishingConst.SPOT_D_MIN
+var spot_d_hi: float = FishingConst.SPOT_D_MAX
+
 
 func lane_of_peer(peer: int) -> FishingLaneState:
 	for l in lanes:
