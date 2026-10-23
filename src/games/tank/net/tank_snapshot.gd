@@ -1,10 +1,19 @@
 class_name TankSnapshot
 extends RefCounted
 ## Encodes TankState into the 10 Hz snapshot (TankSnapshotSchema) and applies one to a client's
-## state. Owner: module (G0 wrote this complete first version against the schema). Every number
-## is an int; apply() casts with int() again (GAME_SDK 12).
+## state. Owner: module. Every number is an int; apply() casts with int() again (GAME_SDK 12).
+## apply() ends with derive(): the fields the snapshot leaves out that every peer can compute from
+## the content and the rows it just got (the segment's kind and length, the distance driven, the
+## outcome, the boss and enemy maximum HP, which rider works each room, nothing has power).
 
 const S := preload("res://src/games/tank/contracts/tank_snapshot_schema.gd")
+## Obstacle widths in art px by type (art.json sprite sizes), for the obstacles a client creates.
+const OBSTACLE_WIDTHS := {
+	TankIds.OBST_WIRE: 64,
+	TankIds.OBST_WRECK: 72,
+	TankIds.OBST_DRILL_WRECK: 72,
+	TankIds.OBST_TANK_TRAPS: 64
+}
 
 
 static func encode(state: TankState) -> Dictionary:
@@ -206,6 +215,67 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 		state.score.overruns = int(sc[S.SC_OVERRUNS])
 		state.score.behemoth_killed = int(sc[S.SC_BEHEMOTH]) != 0
 		state.score.crew_kills = int(sc[S.SC_CREW_KILLS])
+	derive(state)
+
+
+## The state a snapshot does not carry, from the content and the rows applied: safe to call on any
+## state (the host's too; it only fills fields the host's rules keep up to date anyway).
+static func derive(state: TankState) -> void:
+	for st in state.stations:
+		var holder := state.rider_at(st.slot)
+		st.peer = holder.peer if holder != null else 0
+	var all_afk := not state.riders.is_empty()
+	for r in state.riders:
+		if not (r.afk or not r.connected):
+			all_afk = false
+	state.all_afk = all_afk
+	state.hull.distance_m = state.hull.x_px / TankConst.PX_PER_M
+	var c := state.content
+	if c == null:
+		return
+	_derive_segment(state, c)
+	_derive_maxima(state, c)
+
+
+static func _derive_segment(state: TankState, c: TankContent) -> void:
+	var sg := state.seg
+	var def: Dictionary = {}
+	if sg.seg == TankIds.SEG_COOLDOWN:
+		sg.segment_index = -1
+		sg.kind = Wl.COOLDOWN
+	elif sg.seg != TankIds.SEG_NONE:
+		sg.segment_index = sg.phase_index
+		def = c.segment(sg.segment_index)
+		sg.kind = str(def.get("kind", ""))
+	sg.open_ended = def.has("min_s")
+	sg.min_s = float(def.get("min_s", 0.0))
+	sg.max_s = float(def.get("max_s", 0.0))
+	sg.length_m = float(def.get("length_m", 0.0))
+	if sg.seg == TankIds.SEG_COOLDOWN:
+		state.outcome = _outcome(state, c)
+	else:
+		state.outcome = ""
+
+
+## The mission's result once the plan's last segment ended (the rules' rule): victory when the
+## Behemoth died, withdrawn when a mission with a boss ended without it, complete without a boss.
+static func _outcome(state: TankState, c: TankContent) -> String:
+	if state.score.behemoth_killed:
+		return TankIds.OUTCOME_VICTORY
+	for s: Variant in c.segments():
+		if str((s as Dictionary).get("type", "")) == TankIds.SEG_BOSS:
+			return TankIds.OUTCOME_WITHDRAWN
+	return TankIds.OUTCOME_COMPLETE
+
+
+static func _derive_maxima(state: TankState, c: TankContent) -> void:
+	var scale := c.enemy_scale(state.hull.tank)
+	var boss := c.boss_def()
+	state.boss.bogie_max = float(boss.get("bogie_hp", state.boss.bogie_max)) * scale
+	state.boss.turret_max = float(boss.get("turret_hp", state.boss.turret_max)) * scale
+	for en in state.enemies:
+		if en.hp_max < en.hp:
+			en.hp_max = en.hp
 
 
 static func _apply_hull(hl: TankHullState, tk: Array) -> void:
@@ -294,11 +364,13 @@ static func _apply_enemies(state: TankState, rows: Array) -> void:
 		en.side = int(row[S.E_SIDE])
 		en.telegraph_s = int(row[S.E_TELEGRAPH_MS]) / 1000.0
 		if state.content != null and en.w == 0:
-			var size: Array = state.content.enemy_def(TankIds.enemy_of(en.code)).get(
-				"size_px", [0, 0]
-			)
+			var def := state.content.enemy_def(TankIds.enemy_of(en.code))
+			var size: Array = def.get("size_px", [0, 0])
 			en.w = int(size[0])
 			en.h = int(size[1])
+			en.hp_max = ceilf(
+				float(def.get("hp", 0.0)) * state.content.enemy_scale(state.hull.tank)
+			)
 		out.append(en)
 	state.enemies = out
 
@@ -324,6 +396,7 @@ static func _apply_obstacles(state: TankState, rows: Array) -> void:
 		var ob := TankObstacleState.new()
 		ob.id = int(row[S.O_ID])
 		ob.code = int(row[S.O_CODE])
+		ob.w = int(OBSTACLE_WIDTHS.get(TankIds.obstacle_of(ob.code), ob.w))
 		ob.x_px = int(row[S.O_X])
 		ob.light_hits = int(row[S.O_LIGHT_HITS])
 		ob.cleared = int(row[S.O_CLEARED]) != 0
