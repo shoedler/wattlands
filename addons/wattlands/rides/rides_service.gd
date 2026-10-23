@@ -39,6 +39,9 @@ const IMPORT_FTP_MAX_W := 600.0
 const IMPORT_WEIGHT_MIN_KG := 30.0
 const IMPORT_WEIGHT_MAX_KG := 200.0
 
+## The summary keys the Strava name and description read besides the recorder's totals.
+const RIDE_TEXT_KEYS: Array[String] = ["game_title", "content_title", "ride_tag", "ride_lines"]
+
 ## The Strava client (a child node).
 var client: StravaClient = null
 ## The upload queue (rides/upload_queue.json).
@@ -51,6 +54,9 @@ var auto_start: bool = true
 var auto_upload_override: Variant = null
 
 var _bases_pinned: bool = false
+## The session's results until its ride is saved (the GameHost emits results_ready, then
+## ride_saved): the game's ride_tag and ride_lines go into that ride's summary.
+var _results: GameResults = null
 var _in_flight: Dictionary = {}
 var _queue_running: bool = false
 
@@ -71,6 +77,8 @@ func _ready() -> void:
 		client.upload_created.connect(_on_upload_created)
 	if events != null and not events.ride_saved.is_connected(on_ride_saved):
 		events.ride_saved.connect(on_ride_saved)
+	if events != null and not events.results_ready.is_connected(_on_results_ready):
+		events.results_ready.connect(_on_results_ready)
 	reload()
 	if auto_start:
 		_startup.call_deferred()
@@ -204,9 +212,10 @@ func save_ride(recorder: RideRecorderApi, dir: String = "") -> String:
 
 ## EventBus.ride_saved handler: auto-upload (queued until connected) when enabled.
 func on_ride_saved(fit_path: String, summary: Dictionary) -> void:
+	var sum := _stamp_ride_text(fit_path, summary)
 	if not auto_upload_enabled():
 		return
-	await upload(fit_path, summary)
+	await upload(fit_path, sum)
 
 
 ## Re-upload a ride from the history by id (P1), even if it was marked uploaded (Strava
@@ -311,33 +320,99 @@ func set_bases(api_base: String, oauth_base: String) -> void:
 	_bases_pinned = true
 
 
-## The activity name for a ride summary ("Wattlands: Workout").
+## The Strava activity name for a ride summary: "WATTLANDS: <game title> - <ride tag>". The tag
+## is the game's own (GameResults.ride_tag), else the content title; with neither, no " - ".
 static func activity_name(summary: Dictionary) -> String:
 	var game := str(summary.get("game_title", ""))
 	if game == "":
 		game = str(summary.get("game_id", "ride")).capitalize()
-	return _tr_or("RIDES_ACTIVITY_NAME", "Wattlands: {game}").format({"game": game})
+	var tag := str(summary.get("ride_tag", ""))
+	if tag == "":
+		tag = str(summary.get("content_title", ""))
+	if tag == "":
+		return _t("RIDES_ACTIVITY_NAME").format({"game": game})
+	return _t("RIDES_ACTIVITY_NAME_TAG").format({"game": game, "tag": tag})
 
 
-## The activity description for a ride summary.
+## The Strava description: the game's stat lines (GameResults.ride_lines), then moving time,
+## distance, average and normalized power, average cadence and work, and "Recorded with
+## WATTLANDS" last. No heart rate.
 static func activity_description(summary: Dictionary) -> String:
-	var content := str(summary.get("content_title", summary.get("content_id", "")))
-	return (
-		_tr_or(
-			"RIDES_ACTIVITY_DESCRIPTION",
-			"{content}: {kj} kJ, {avg_w} W average. Recorded with Wattlands on a smart trainer."
-		)
-		. format(
-			{
-				"content": content,
-				"kj": "%d" % roundi(float(summary.get("kj", 0.0))),
-				"avg_w": "%d" % roundi(float(summary.get("avg_power_w", 0.0))),
-			}
-		)
+	var lines: Array[String] = []
+	var game_lines: Variant = summary.get("ride_lines", [])
+	if game_lines is Array:
+		for l: Variant in game_lines:
+			if str(l) != "":
+				lines.append(str(l))
+	var timer_s := float(summary.get("timer_s", summary.get("duration_s", 0.0)))
+	lines.append(_t("RIDES_DESC_MOVING").format([_clock_text(timer_s)]))
+	var dist_m := float(summary.get("distance_m", 0.0))
+	if dist_m > 0.0:
+		lines.append(_t("RIDES_DESC_DISTANCE").format(["%.1f" % (dist_m / 1000.0)]))
+	lines.append(
+		_t("RIDES_DESC_AVG_POWER").format([roundi(float(summary.get("avg_power_w", 0.0)))])
 	)
+	var np_w := float(summary.get("np_w", 0.0))
+	if np_w > 0.0:
+		lines.append(_t("RIDES_DESC_NP").format([roundi(np_w)]))
+	var cad := float(summary.get("avg_cadence_rpm", -1.0))
+	if cad > 0.0:
+		lines.append(_t("RIDES_DESC_CADENCE").format([roundi(cad)]))
+	lines.append(_t("RIDES_DESC_KJ").format([roundi(float(summary.get("kj", 0.0)))]))
+	lines.append(_t("RIDES_DESC_FOOTER"))
+	return "\n".join(lines)
 
 
 # --- Internals -------------------------------------------------------------------------
+
+
+func _on_results_ready(r: GameResults) -> void:
+	_results = r
+
+
+## Adds what the Strava text needs to the saved ride's summary and its JSON (so a later
+## re-upload from the history reads it): the game's title, the content title, and the session's
+## ride_tag and ride_lines (GameResults). Returns the summary with them.
+func _stamp_ride_text(fit_path: String, summary: Dictionary) -> Dictionary:
+	var out := summary.duplicate(true)
+	var game_id := str(out.get("game_id", ""))
+	var content_id := str(out.get("content_id", ""))
+	var registry := get_node_or_null("/root/GameRegistry") as WlGameRegistry
+	if registry != null and registry.has_game(game_id):
+		out["game_title"] = str(registry.manifest(game_id).get("title", ""))
+	out["content_title"] = content_title(game_id, content_id)
+	if _results != null:
+		out["ride_tag"] = _results.ride_tag
+		out["ride_lines"] = _results.ride_lines.duplicate()
+		_results = null
+	_merge_summary(fit_path, out)
+	return out
+
+
+## The content's display title: its "<GAME>_CONTENT_<ID>" string when one exists, a rider's own
+## .zwo file's name, else "" (a bare content id is no title).
+static func content_title(game_id: String, content_id: String) -> String:
+	if content_id.begins_with("zwo:"):
+		return content_id.substr(4).replace("\\", "/").get_file().get_basename()
+	var key := "%s_CONTENT_%s" % [game_id.to_upper(), content_id.to_upper()]
+	var t := String(TranslationServer.translate(key))
+	return "" if t == key else t
+
+
+## Writes `fields` into the saved summary JSON next to `fit_path` (keeps its other keys).
+func _merge_summary(fit_path: String, fields: Dictionary) -> void:
+	var s := _read_summary(fit_path)
+	if s.is_empty():
+		return
+	for k: String in RIDE_TEXT_KEYS:
+		if fields.has(k):
+			s[k] = fields[k]
+	var f := FileAccess.open(fit_path.get_basename() + ".json", FileAccess.WRITE)
+	if f == null:
+		push_warning("Rides: can't update %s" % fit_path.get_basename())
+		return
+	f.store_string(JSON.stringify(s, "  "))
+	f.close()
 
 
 func _startup() -> void:
@@ -365,6 +440,11 @@ func _upload(fit_path: String, summary: Dictionary, force: bool) -> void:
 	if ride_id == "":
 		push_warning("Rides: a ride summary without ride_id can't be uploaded")
 		return
+	sum = sum.duplicate(true)
+	var saved := _read_summary(fit_path)
+	for k: String in RIDE_TEXT_KEYS:
+		if saved.has(k):
+			sum[k] = saved[k]
 	if _in_flight.has(ride_id):
 		# Already uploading (auto-upload and the results screen, say): wait for that one, so a
 		# caller that awaits upload() still returns only once the ride is settled.
@@ -532,6 +612,14 @@ func _emit_upload(ride_id: String, state: String, detail: String) -> void:
 		events.upload_state_changed.emit(ride_id, state, detail)
 
 
-static func _tr_or(key: String, fallback: String) -> String:
-	var t := String(TranslationServer.translate(key))
-	return fallback if t == key or t == "" else t
+static func _t(key: String) -> String:
+	return String(TranslationServer.translate(key))
+
+
+## h:mm:ss, or m:ss under an hour.
+static func _clock_text(seconds: float) -> String:
+	var total := maxi(roundi(seconds), 0)
+	var h := total / 3600
+	var m := (total % 3600) / 60
+	var sec := total % 60
+	return "%d:%02d:%02d" % [h, m, sec] if h > 0 else "%d:%02d" % [m, sec]

@@ -28,6 +28,8 @@ extends RideRecorderApi
 const EPS := 1e-4
 ## Summary format version.
 const SUMMARY_VERSION := 1
+## The normalized-power rolling window in seconds (the platform's SessionStatsTracker uses 30 too).
+const NP_WINDOW_S := 30
 ## Default hold_limit_s.
 const DEFAULT_HOLD_LIMIT_S := 3.0
 
@@ -240,6 +242,7 @@ func summary() -> Dictionary:
 		"laps": laps,
 		"kj": tot["kj"],
 		"avg_power_w": tot["avg_power_w"],
+		"np_w": _r1(_normalized_power(tot["avg_power_w"])),
 		"max_power_w": tot["max_power_w"],
 		"avg_cadence_rpm": tot["avg_cadence_rpm"],
 		"max_cadence_rpm": tot["max_cadence_rpm"],
@@ -470,6 +473,24 @@ func _emit_record() -> void:
 	_laps[_laps.size() - 1]["records"] = int(_laps[_laps.size() - 1]["records"]) + 1
 	_total["records"] = int(_total["records"]) + 1
 	_next_k += 1
+
+
+## Normalized power of the 1 Hz records: the 30 s rolling mean, to the 4th power, averaged, and
+## the 4th root; `fallback_w` (the average) for a ride under 30 s.
+func _normalized_power(fallback_w: float) -> float:
+	var n := _rp.size()
+	if n < NP_WINDOW_S:
+		return fallback_w
+	var sum := 0.0
+	for i in NP_WINDOW_S:
+		sum += _rp[i]
+	var acc := pow(sum / NP_WINDOW_S, 4.0)
+	var count := 1
+	for i in range(NP_WINDOW_S, n):
+		sum += _rp[i] - _rp[i - NP_WINDOW_S]
+		acc += pow(sum / NP_WINDOW_S, 4.0)
+		count += 1
+	return pow(acc / count, 0.25)
 
 
 func _lap_summary(acc: Dictionary, index: int) -> Dictionary:

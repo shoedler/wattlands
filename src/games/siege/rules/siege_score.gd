@@ -40,6 +40,28 @@ static func compute(state: SiegeState) -> Dictionary:
 	}
 
 
+## The Strava title tag (GameResults.ride_tag): "<mission> - won" when the gate stood all shift
+## (no breach, the "stands" result), "<mission> - lost" when it fell. The mission is the shift.
+static func ride_tag(state: SiegeState, content_id: String, strings: GameStrings) -> String:
+	var key := "SIEGE_MISSION_" + content_id.to_upper()
+	var mission := strings.t(key) if strings.has(key) else content_id
+	return strings.t("SIEGE_RIDE_LOST" if state.breaches > 0 else "SIEGE_RIDE_WON", [mission])
+
+
+## The Strava description lines (GameResults.ride_lines): score and grade, breaches, rams
+## stopped and the team's kills.
+static func ride_lines(state: SiegeState, res: GameResults, strings: GameStrings) -> Array[String]:
+	var kills := 0
+	for row in res.rows:
+		kills += int((row.get("stats", {}) as Dictionary).get("SIEGE_STAT_KILLS", 0))
+	return [
+		strings.t("SIEGE_RIDE_SCORE", [roundi(res.score), res.grade]),
+		strings.t("SIEGE_RIDE_BREACHES", [state.breaches]),
+		strings.t("SIEGE_RIDE_RAMS", [state.rams_stopped, state.rams_total]),
+		strings.t("SIEGE_RIDE_KILLS", [kills]),
+	]
+
+
 ## The grade for `score` (band edges inclusive: 90 is S, 89.99 is A).
 static func grade(c: SiegeContent, score: float) -> String:
 	for g: String in ["S", "A", "B", "C"]:

@@ -17,6 +17,8 @@ const POWER_KEYS: Array[String] = [
 	"kj", "avg_power_w", "avg_ftp_pct", "np_w", "best_1m_w", "best_5m_w", "best_20m_w", "ride_s"
 ]
 const XP_PER_SPRINT := 10
+## A work interval counts as ridden once the rider spent this much of its length in it.
+const INTERVAL_DONE_FRACTION := 0.95
 const STAT_GRADE := "WORKOUT_STAT_GRADE"
 const STAT_TIB := "WORKOUT_STAT_TIB_PCT"
 const STAT_INTERVALS := "WORKOUT_STAT_INTERVALS"
@@ -113,6 +115,50 @@ static func build(
 	res.summary_key = "WORKOUT_RESULT_" + res.grade
 	res.team = {TEAM_TIB: res.score, TEAM_RIDERS: fractions.size(), TEAM_SPRINTS: team_hits}
 	return res
+
+
+## The Strava title tag (GameResults.ride_tag): the workout's name, or an imported .zwo's own.
+static func ride_tag(session: WorkoutSession, strings: GameStrings) -> String:
+	if session == null:
+		return ""
+	if session.label == "WORKOUT_CONTENT_ZWO" and session.zwo_name != "":
+		return session.zwo_name
+	return strings.t(session.label)
+
+
+## The Strava description lines (GameResults.ride_lines): the group's time in band, how many
+## of the plan's work intervals were ridden (the most any rider rode), and the sprints hit.
+static func ride_lines(
+	state: WorkoutState, res: GameResults, strings: GameStrings
+) -> Array[String]:
+	var lines: Array[String] = []
+	lines.append(strings.t("WORKOUT_RIDE_TIB", [roundi(res.score)]))
+	var work: Array[int] = []
+	for i in state.phases.size():
+		if state.phases[i].kind == Wl.WORK:
+			work.append(i)
+	if not work.is_empty():
+		var done := 0
+		for r: WorkoutRiderState in state.riders.values():
+			var n := 0
+			for i in work:
+				var iv: Array = r.intervals.get(i, [0.0, 0.0])
+				if float(iv[1]) >= INTERVAL_DONE_FRACTION * state.phases[i].duration_s:
+					n += 1
+			done = maxi(done, n)
+		lines.append(strings.t("WORKOUT_RIDE_INTERVALS", [done, work.size()]))
+	var sprints := 0
+	var hits := 0
+	for r: WorkoutRiderState in state.riders.values():
+		var hit := 0
+		for sp in r.sprints:
+			if bool(sp["hit"]):
+				hit += 1
+		sprints = maxi(sprints, r.sprints.size())
+		hits = maxi(hits, hit)
+	if sprints > 0:
+		lines.append(strings.t("WORKOUT_RIDE_SPRINTS", [hits, sprints]))
+	return lines
 
 
 ## XP: one per kJ, plus the session time in band in percent, plus 10 per sprint hit.
