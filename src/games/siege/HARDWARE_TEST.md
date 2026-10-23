@@ -1,4 +1,4 @@
-# Generator Siege: real-trainer checklist
+# Castellum Rotae: real-trainer checklist
 
 The game's own checklist for a real KICKR CORE (BRIEF 4.7). `docs/HARDWARE_TEST_PLAN.md` holds the firmware notes, the panic and stop advice and the log format, and links here. Nothing here ran during the build: every automated run used MockTrainer with the hardware lock set. Work through the platform plan's "Before you start", probe, connect, SIM flat, ERG, slew, rescue, coasting and panic, and mode-switch steps first, and stop at the first failed safety check.
 

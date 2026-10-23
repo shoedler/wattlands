@@ -1,4 +1,4 @@
-# Generator Siege (docs/games/siege.md): the game's own GUT tests (strict gate), its Node tests
+# Castellum Rotae (docs/games/siege.md): the game's own GUT tests (strict gate), its Node tests
 # (the sim checker and the e2e report checker) and the script check; a second job runs a short
 # subset of the simulation matrix (tests/games/siege/sim/run_sims.sh: S2, S5) through
 # tools/run_game_sim with the check_sims.mjs assertions and fit_check. The full matrix (S1-S10),

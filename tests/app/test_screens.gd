@@ -176,7 +176,7 @@ func test_picker_cards_and_generated_title_card() -> void:
 	var workout := s.cards["workout"] as AppGameCard
 	assert_not_null(workout.generated, "no picker_image: generated card")
 	assert_eq(workout.players_label.text, "1–8 riders")
-	assert_eq(menu(s).ids(), ["fishing", "siege", "tank", "workout", "back"], "sorted by title")
+	assert_eq(menu(s).ids(), ["siege", "tank", "fishing", "workout", "back"], "sorted by title")
 
 
 func test_lobby_solo_host_join_open() -> void:

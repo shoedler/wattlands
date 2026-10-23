@@ -1,4 +1,4 @@
-// tests/games/fishing/sim/fishing_sim_lib.mjs: shared pieces of Big Game Fishing's report checkers
+// tests/games/fishing/sim/fishing_sim_lib.mjs: shared pieces of Turbo Reel's report checkers
 // (check_sims.mjs over tools/run_game_sim reports, ../e2e_check.mjs over tools/e2e reports).
 // Zero dependencies, so `node --test` in tests/games/fishing runs anywhere.
 //

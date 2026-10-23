@@ -7,7 +7,7 @@ extends GutTest
 const F := preload("res://tests/games/siege/siege_fakes.gd")
 const MANIFEST := {
 	"id": "siege",
-	"title": "Generator Siege",
+	"title": "Castellum Rotae",
 	"summary":
 	"Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator.",
 	"version": "0.1.0",

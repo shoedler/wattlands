@@ -1,4 +1,4 @@
-{"id": "siege", "title": "Generator Siege",
+{"id": "siege", "title": "Castellum Rotae",
  "summary": "Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator.",
  "version": "0.1.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "3d",
  "entry": "res://src/games/siege/siege_game.gd",

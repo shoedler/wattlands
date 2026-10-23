@@ -1,6 +1,6 @@
 class_name FishingPalette
 extends RefCounted
-## Big Game Fishing's palette (assets/fishing/art.json, at most 32 colours) and the code-drawn
+## Turbo Reel's palette (assets/fishing/art.json, at most 32 colours) and the code-drawn
 ## backdrops built from it (brief 3.3 "code draws"): sky and water as bands with a 4 x 4 ordered
 ## dither, the three day-cycle sky variants, and the dithered cover that keeps the HUD zone pure
 ## sky gradient. Images are built once per size and variant and cached; the view only draws them.

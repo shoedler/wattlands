@@ -1,6 +1,6 @@
 class_name SiegeTerrain
 extends RefCounted
-## The hill under Castellum Rotae: a flat plateau under the fort that falls away in faceted
+## The hill under Collis Rotarum: a flat plateau under the fort that falls away in faceted
 ## ground, with rock faces on the steep facets and dust roads laid on top (brief 3 "Scene").
 ## Deterministic from the map's terrain seed. height_at() answers with the faceted mesh's own
 ## surface (triangle interpolation over the same grid), so roads, enemies and trees sit exactly

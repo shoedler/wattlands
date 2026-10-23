@@ -1,6 +1,6 @@
 class_name FishingRules
 extends RefCounted
-## Big Game Fishing's pure rules (brief 2.4, 2.5): step(state, inputs, dt) at 0.05 s. Each
+## Turbo Reel's pure rules (brief 2.4, 2.5): step(state, inputs, dt) at 0.05 s. Each
 ## rider's phase comes from frame.phase (FishingLaneInput); randomness only from each lane's
 ## FishingRandom streams (derived from ctx.seed); every trainer change, band, phase end, event and
 ## toast goes out in a FishingStepOut for the module to apply. No ctx, no Nodes, no clock.

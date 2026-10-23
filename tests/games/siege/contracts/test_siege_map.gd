@@ -1,5 +1,5 @@
 extends GutTest
-## Castellum Rotae (content/siege/maps/rotae.json; brief 2.9, 3 "Scene"): the geometry the rules,
+## Collis Rotarum (content/siege/maps/rotae.json; brief 2.9, 3 "Scene"): the geometry the rules,
 ## Autopilot and the view share.
 
 const F := preload("res://tests/games/siege/siege_fakes.gd")

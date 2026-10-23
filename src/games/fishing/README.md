@@ -1,4 +1,4 @@
-# Big Game Fishing
+# Turbo Reel
 
 A co-op sport-fishing game for 1-4 riders (docs/games/fishing.md). You skipper a small boat in a tropical bay; a stationary bike bolted to the deck turns the big-game reel. Ride out, pick one of three spots, cast and reel at an easy spin; when a fish bites, the fight is the interval. In ERG the trainer holds the fish's pull, so cadence is the skill: keep it inside the tension band, low cadence strains the line (snap), high cadence lets it go slack (thrown hook). The fish tires while you are in band; at the boat a 30 s Landing in SIM gives a 15 s gaff sprint (a full gaff meter makes a Trophy). Pulls are shares of each rider's FTP and fish tire by compliance, so every FTP plays fair. A shared catch board, Double Hookups (overlapping fights score more) and Frenzies make it co-op.
 
@@ -21,7 +21,7 @@ Zero input works: a rider who only pedals plays as Autopilot (it picks the stron
 
 ```bash
 . tools/env.sh
-tools/godot.sh --path .                 # the app: pick Big Game Fishing
+tools/godot.sh --path .                 # the app: pick Turbo Reel
 tools/godot.sh --path . -- --game=fishing --content=free_30 --mock-trainer=erg+band --autopilot
 ```
 

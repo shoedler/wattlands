@@ -1,6 +1,6 @@
 class_name FishingGame
 extends GameModule
-## Big Game Fishing (docs/games/fishing.md): co-op sport fishing for 1-4 riders, where the trainer
+## Turbo Reel (docs/games/fishing.md): co-op sport fishing for 1-4 riders, where the trainer
 ## is the rod. This module wires the pure parts to the platform: FishingContent (content),
 ## FishingPreroll and FishingPlanBuilder (plans), FishingRules (simulation, with
 ## FishingPullScheduler inside), FishingSnapshot (network), FishingResults (results, progress),

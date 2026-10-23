@@ -1,6 +1,6 @@
 class_name SiegeIds
 extends RefCounted
-## Generator Siege's shared ids and integer codes (G0 contract, docs/games/siege.md 2.4-2.6).
+## Castellum Rotae's shared ids and integer codes (G0 contract, docs/games/siege.md 2.4-2.6).
 ## Every builder uses these names; snapshots and events carry the integer codes, intents the
 ## string ids. Contract: additive changes only, through the G0 architect / lead.
 

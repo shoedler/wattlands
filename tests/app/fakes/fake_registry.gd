@@ -126,7 +126,7 @@ static func workout() -> Dictionary:
 static func siege() -> Dictionary:
 	return {
 		"id": "siege",
-		"title": "Generator Siege",
+		"title": "Castellum Rotae",
 		"summary": "Hold the fort",
 		"version": "0.3.0",
 		"min_players": 1,
@@ -148,7 +148,7 @@ static func siege() -> Dictionary:
 static func tank() -> Dictionary:
 	return {
 		"id": "tank",
-		"title": "Tank Crew",
+		"title": "Diesel Domestiques",
 		"summary": "Crew the beast",
 		"version": "0.2.0",
 		"min_players": 1,
@@ -171,7 +171,7 @@ static func tank() -> Dictionary:
 static func fishing() -> Dictionary:
 	return {
 		"id": "fishing",
-		"title": "Big Game Fishing",
+		"title": "Turbo Reel",
 		"summary": "Reel them in",
 		"version": "0.1.0",
 		"min_players": 1,
