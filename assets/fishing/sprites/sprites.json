@@ -1,0 +1,580 @@
+{
+  "art_mode": "placeholder",
+  "game": "fishing",
+  "palette": [
+    "#1a1f3a",
+    "#23305c",
+    "#0f2a4a",
+    "#1f4e8c",
+    "#2a74b8",
+    "#3fa0d8",
+    "#8fd6f5",
+    "#c6ecfa",
+    "#f7f9fb",
+    "#e8f7fb",
+    "#c9d1d9",
+    "#b8c7d6",
+    "#8a96a3",
+    "#4b5563",
+    "#f4e4b0",
+    "#e3c27a",
+    "#9a6236",
+    "#5a3820",
+    "#f2665a",
+    "#f28c28",
+    "#f6d33c",
+    "#e8b730",
+    "#9bd23c",
+    "#3fae4a",
+    "#23743a",
+    "#2bb3a3",
+    "#9b6be0",
+    "#ef6fa6",
+    "#f1c29a",
+    "#c98e63",
+    "#e0413a",
+    "#9e2228"
+  ],
+  "sprites": {
+    "bait_ball": {
+      "align": "center",
+      "anchor": [
+        16,
+        6
+      ],
+      "background": "transparent",
+      "file": "bait_ball.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        32,
+        12
+      ],
+      "tile": false
+    },
+    "boat": {
+      "align": "bottom_center",
+      "anchor": [
+        40,
+        32
+      ],
+      "background": "transparent",
+      "file": "boat.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        80,
+        32
+      ],
+      "tile": false
+    },
+    "catch_flash": {
+      "align": "center",
+      "anchor": [
+        12,
+        12
+      ],
+      "background": "transparent",
+      "file": "catch_flash.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        24,
+        24
+      ],
+      "tile": false
+    },
+    "clouds": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        24
+      ],
+      "background": "transparent",
+      "file": "clouds.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        320,
+        24
+      ],
+      "tile": true
+    },
+    "current_seam": {
+      "align": "bottom_center",
+      "anchor": [
+        24,
+        4
+      ],
+      "background": "transparent",
+      "file": "current_seam.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        48,
+        4
+      ],
+      "tile": true
+    },
+    "fish_mackerel": {
+      "align": "center",
+      "anchor": [
+        12,
+        4
+      ],
+      "background": "transparent",
+      "file": "fish_mackerel.png",
+      "mirror": false,
+      "parts": {
+        "body": {
+          "file": "fish_mackerel__body.png",
+          "rect": [
+            0,
+            0,
+            18,
+            8
+          ]
+        },
+        "tail": {
+          "file": "fish_mackerel__tail.png",
+          "rect": [
+            18,
+            0,
+            6,
+            8
+          ]
+        }
+      },
+      "size": [
+        24,
+        8
+      ],
+      "tile": false
+    },
+    "fish_mahi": {
+      "align": "center",
+      "anchor": [
+        20,
+        8
+      ],
+      "background": "transparent",
+      "file": "fish_mahi.png",
+      "mirror": false,
+      "parts": {
+        "body": {
+          "file": "fish_mahi__body.png",
+          "rect": [
+            0,
+            0,
+            30,
+            16
+          ]
+        },
+        "tail": {
+          "file": "fish_mahi__tail.png",
+          "rect": [
+            30,
+            0,
+            10,
+            16
+          ]
+        }
+      },
+      "size": [
+        40,
+        16
+      ],
+      "tile": false
+    },
+    "fish_marlin": {
+      "align": "center",
+      "anchor": [
+        32,
+        11
+      ],
+      "background": "transparent",
+      "file": "fish_marlin.png",
+      "mirror": false,
+      "parts": {
+        "body": {
+          "file": "fish_marlin__body.png",
+          "rect": [
+            0,
+            0,
+            48,
+            22
+          ]
+        },
+        "tail": {
+          "file": "fish_marlin__tail.png",
+          "rect": [
+            48,
+            0,
+            16,
+            22
+          ]
+        }
+      },
+      "size": [
+        64,
+        22
+      ],
+      "tile": false
+    },
+    "fish_tuna": {
+      "align": "center",
+      "anchor": [
+        22,
+        8
+      ],
+      "background": "transparent",
+      "file": "fish_tuna.png",
+      "mirror": false,
+      "parts": {
+        "body": {
+          "file": "fish_tuna__body.png",
+          "rect": [
+            0,
+            0,
+            33,
+            16
+          ]
+        },
+        "tail": {
+          "file": "fish_tuna__tail.png",
+          "rect": [
+            33,
+            0,
+            11,
+            16
+          ]
+        }
+      },
+      "size": [
+        44,
+        16
+      ],
+      "tile": false
+    },
+    "gull_down": {
+      "align": "center",
+      "anchor": [
+        5,
+        4
+      ],
+      "background": "transparent",
+      "file": "gull_down.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        10,
+        8
+      ],
+      "tile": false
+    },
+    "gull_up": {
+      "align": "center",
+      "anchor": [
+        5,
+        4
+      ],
+      "background": "transparent",
+      "file": "gull_up.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        10,
+        8
+      ],
+      "tile": false
+    },
+    "island_palm": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        24
+      ],
+      "background": "transparent",
+      "file": "island_palm.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        80,
+        24
+      ],
+      "tile": true
+    },
+    "islands_far": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        12
+      ],
+      "background": "transparent",
+      "file": "islands_far.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        256,
+        12
+      ],
+      "tile": true
+    },
+    "light_rays": {
+      "align": "top_left",
+      "anchor": [
+        0,
+        0
+      ],
+      "background": "transparent",
+      "file": "light_rays.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        128,
+        64
+      ],
+      "tile": false
+    },
+    "picker_card": {
+      "align": "bottom_center",
+      "anchor": [
+        80,
+        90
+      ],
+      "background": "opaque",
+      "file": "picker_card.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        160,
+        90
+      ],
+      "tile": false
+    },
+    "reef_back": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        28
+      ],
+      "background": "transparent",
+      "file": "reef_back.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        416,
+        28
+      ],
+      "tile": true
+    },
+    "reef_front": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        18
+      ],
+      "background": "transparent",
+      "file": "reef_front.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        416,
+        18
+      ],
+      "tile": true
+    },
+    "rig_angler": {
+      "align": "bottom_center",
+      "anchor": [
+        7,
+        12
+      ],
+      "background": "transparent",
+      "file": "rig_angler.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        14,
+        12
+      ],
+      "tile": false
+    },
+    "rig_bike": {
+      "align": "bottom_center",
+      "anchor": [
+        12,
+        16
+      ],
+      "background": "transparent",
+      "file": "rig_bike.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        24,
+        16
+      ],
+      "tile": false
+    },
+    "rig_crank": {
+      "align": "center",
+      "anchor": [
+        5,
+        5
+      ],
+      "background": "transparent",
+      "file": "rig_crank.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        10,
+        10
+      ],
+      "tile": false
+    },
+    "rig_reel": {
+      "align": "center",
+      "anchor": [
+        5,
+        5
+      ],
+      "background": "transparent",
+      "file": "rig_reel.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        10,
+        10
+      ],
+      "tile": false
+    },
+    "sand_strip": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        8
+      ],
+      "background": "transparent",
+      "file": "sand_strip.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        64,
+        8
+      ],
+      "tile": true
+    },
+    "sonar_mark": {
+      "align": "center",
+      "anchor": [
+        4,
+        2.5
+      ],
+      "background": "transparent",
+      "file": "sonar_mark.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        8,
+        5
+      ],
+      "tile": false
+    },
+    "splash": {
+      "align": "center",
+      "anchor": [
+        10,
+        6
+      ],
+      "background": "transparent",
+      "file": "splash.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        20,
+        12
+      ],
+      "tile": false
+    },
+    "spray": {
+      "align": "center",
+      "anchor": [
+        16,
+        12
+      ],
+      "background": "transparent",
+      "file": "spray.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        32,
+        24
+      ],
+      "tile": false
+    },
+    "sun": {
+      "align": "center",
+      "anchor": [
+        6,
+        6
+      ],
+      "background": "transparent",
+      "file": "sun.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        12,
+        12
+      ],
+      "tile": false
+    },
+    "surface_strip": {
+      "align": "top_left",
+      "anchor": [
+        0,
+        0
+      ],
+      "background": "transparent",
+      "file": "surface_strip.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        64,
+        6
+      ],
+      "tile": true
+    },
+    "trophy_badge": {
+      "align": "center",
+      "anchor": [
+        8,
+        8
+      ],
+      "background": "transparent",
+      "file": "trophy_badge.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        16,
+        16
+      ],
+      "tile": false
+    },
+    "wake": {
+      "align": "center_left",
+      "anchor": [
+        0,
+        3
+      ],
+      "background": "transparent",
+      "file": "wake.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        32,
+        6
+      ],
+      "tile": true
+    }
+  }
+}
