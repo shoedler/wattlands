@@ -6,6 +6,7 @@ extends GutTest
 ## runs 420 s to 720 s.
 
 const K := preload("res://tests/games/siege/module/siege_module_kit.gd")
+const F := preload("res://tests/games/siege/siege_fakes.gd")
 const FORBIDDEN: Array[String] = [
 	"mode_grade", "haptic", "haptic_wind", "target_pct", "target_w", "target_wkg", "crr", "cw"
 ]
@@ -85,6 +86,32 @@ func test_an_accepted_overdrive_sends_the_exact_directive_and_shows_the_band() -
 	K.directives(g).requests.clear()
 	K.step(g, tick, {1: [SiegeIntents.overdrive("action")]})
 	assert_eq(K.directives(g).requests.size(), 0, "the cool-down blocks a second one")
+	_free(g)
+
+
+func test_a_coasting_host_rider_sends_no_request_and_gets_no_refusal_or_retry() -> void:
+	# The governor would refuse the SIM block (sim_block_unsafe) once the rider has coasted 3 s;
+	# the rules never ask: no request, no refusal toast, no 30 s retry, the rider stays READY.
+	var r := _in_wave()
+	var g: SiegeGame = r[0]
+	var tick: int = r[1]
+	var me := g.state.rider_at(0)
+	for via: String in ["action", "button", "surge"]:
+		var f := F.frame(g.ctx, g.plans, tick, 100.0, {1: [SiegeIntents.overdrive(via)]})
+		var tm: Telemetry = f.players[1]
+		tm.power_w = 4.0
+		tm.p_eff_w = 4.0
+		tm.cadence_rpm = 6.0
+		g.sim_step(Wl.SIM_DT, f)
+		tick += 1
+		assert_eq(K.directives(g).requests.size(), 0, "%s while coasting: no request" % via)
+		assert_eq(me.od_state, SiegeIds.OD_READY, "%s: still READY, no 30 s retry" % via)
+	assert_eq(_overdrive_events().size(), 0, "no refused event")
+	assert_false(K.toasts(g).has(["SIEGE_TOAST_OVERDRIVE_REFUSED", [], 1]), "no refusal toast")
+	# Pedaling again: the same press goes through.
+	K.step(g, tick, {1: [SiegeIntents.overdrive("action")]})
+	assert_eq(K.directives(g).requests.size(), 1)
+	assert_eq(me.od_state, SiegeIds.OD_ACTIVE)
 	_free(g)
 
 
