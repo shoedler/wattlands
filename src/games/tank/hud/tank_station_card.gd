@@ -11,6 +11,8 @@ extends TankHudPanel
 const KEY_PX := 56.0
 const LABEL_PX := 24.0
 const SMALL_PX := 22.0
+## The lever's position labels: small enough for "Turret" in a 70 px box at 1080p.
+const LEVER_PX := 20.0
 const MARGIN := 12.0
 const GAP := 8.0
 const LOW_FRAC := 0.2
@@ -379,13 +381,16 @@ func _lever_cell(m: Dictionary) -> void:
 			if (pos == TankIds.LEVER_DRIVE and bool(m.get("dig", false)))
 			else TankIds.LEVER_LABELS[pos]
 		)
+		var label_color := Color(0.05, 0.06, 0.08) if on else WlTheme.TEXT
+		var label_at := r.position + Vector2(0, 10)
 		text(
-			r.position,
+			label_at,
 			tr_key(key),
-			SMALL_PX,
-			Color(0.05, 0.06, 0.08) if on else WlTheme.TEXT,
+			LEVER_PX,
+			label_color,
 			r.size.x,
-			HORIZONTAL_ALIGNMENT_CENTER
+			HORIZONTAL_ALIGNMENT_CENTER,
+			not on
 		)
 		# The rack's tick under the box: a filled triangle under the current position.
 		if on:

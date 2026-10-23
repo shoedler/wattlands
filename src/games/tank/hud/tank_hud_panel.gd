@@ -62,14 +62,16 @@ func _font() -> Font:
 	return get_theme_default_font()
 
 
-## Draws `s` with its top-left corner at `at` (design px), `px` design font px, in the kit style.
+## Draws `s` with its top-left corner at `at` (design px), `px` design font px, in the kit style
+## (a dark outline unless `outlined` is false, for dark text on a light box).
 func text(
 	at: Vector2,
 	s: String,
 	px: float,
 	color: Color = WlTheme.TEXT,
 	width: float = -1.0,
-	align: int = HORIZONTAL_ALIGNMENT_LEFT
+	align: int = HORIZONTAL_ALIGNMENT_LEFT,
+	outlined: bool = true
 ) -> void:
 	var f := _font()
 	var kk := k()
@@ -77,7 +79,8 @@ func text(
 	var base := Vector2(at.x * kk, at.y * kk + f.get_ascent(fs))
 	var w := width * kk if width > 0.0 else -1.0
 	var outline := maxi(2, roundi(float(WlTheme.OUTLINE_PX) * float(fs) / 64.0))
-	draw_string_outline(f, base, s, align, w, fs, outline, WlTheme.OUTLINE)
+	if outlined:
+		draw_string_outline(f, base, s, align, w, fs, outline, WlTheme.OUTLINE)
 	draw_string(f, base, s, align, w, fs, color)
 
 
