@@ -2,7 +2,7 @@ class_name FishingPlanBuilder
 extends RefCounted
 ## One EffortPlan per rider from the trip and the rider's pre-rolled slots (brief 2.3). The
 ## PlanValidator appends the cool-down. Fishing never calls replan: open-ended Reels and Fights
-## absorb the variation. G0 version; fish-plan owns this file.
+## absorb the variation. fish-plan owns this file (reviewed against brief 2.3 in G1).
 ##
 ##   Ride out  WARMUP ERG 50 % ramp_to 65, 300 s, lap        "FISHING_PHASE_RIDE_OUT"
 ##   Reel n    RECOVERY ERG reel_pct, lap: Free/Base open-ended (min_s 120, max_s = the trip
@@ -12,6 +12,9 @@ extends RefCounted
 ##   Landing   WORK SIM flat 30 s, no lap                     "FISHING_PHASE_LANDING"
 ## Free and Base end with a trailing fight-less Reel, so a rider whose slots ran out keeps
 ## reeling until finished("trip_over"); scheduled trips end at the last Landing.
+## A Reel's max_s (the trip's nominal length, N min) outlasts fishing time plus the 5 min overrun
+## and a Landing from the earliest Reel start (the ride out's end): N min >= (N - 8) min + 330 s.
+## The 30 s Landing keeps ERG/SIM switches exactly 30 s apart (no BRIEF 4.5 warning).
 
 const LABEL_RIDE_OUT := "FISHING_PHASE_RIDE_OUT"
 const LABEL_LANDING := "FISHING_PHASE_LANDING"
