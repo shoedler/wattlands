@@ -66,12 +66,13 @@ func test_the_shop_is_closed_in_waves_and_the_cooldown() -> void:
 		assert_eq(_rig.rider(1).denarii, 1000.0)
 
 
-func test_building_costs_50_40_and_35() -> void:
+## Brief 2.4: 50 / 40 / 35; G2 tuned them to 65 / 52 / 45 (docs/decisions/siege.md, "G2 tuning").
+func test_building_costs_65_52_and_45() -> void:
 	_shop()
 	var want := {
-		SiegeIds.ITEM_BUILD_BALLISTA: [SiegeIds.TOWER_BALLISTA, 50],
-		SiegeIds.ITEM_BUILD_SCORPION: [SiegeIds.TOWER_SCORPION, 40],
-		SiegeIds.ITEM_BUILD_CALTROP: [SiegeIds.TOWER_CALTROP, 35],
+		SiegeIds.ITEM_BUILD_BALLISTA: [SiegeIds.TOWER_BALLISTA, 65],
+		SiegeIds.ITEM_BUILD_SCORPION: [SiegeIds.TOWER_SCORPION, 52],
+		SiegeIds.ITEM_BUILD_CALTROP: [SiegeIds.TOWER_CALTROP, 45],
 	}
 	var pads: Array[int] = [1, 2, 5]
 	var n := 0
@@ -98,13 +99,13 @@ func test_a_built_pad_is_refused() -> void:
 
 
 func test_not_enough_denarii_is_refused_with_the_buyers_slot() -> void:
-	_shop(1, 2, 39.0)
+	_shop(1, 2, 51.0)
 	var ev := _buy(2, SiegeIds.ITEM_BUILD_SCORPION, 1)
 	assert_eq([ev["ok"], ev["why"], ev["slot"]], [0, SiegeIds.BUY_FUNDS, 1])
 	assert_eq(_rig.state.pad(1).type, SiegeIds.TOWER_NONE)
-	assert_eq(_rig.rider(2).denarii, 39.0)
-	_rig.rider(2).denarii = 40.0
-	assert_eq(_buy(2, SiegeIds.ITEM_BUILD_SCORPION, 1)["ok"], 1, "exactly 40 is enough")
+	assert_eq(_rig.rider(2).denarii, 51.0)
+	_rig.rider(2).denarii = 52.0
+	assert_eq(_buy(2, SiegeIds.ITEM_BUILD_SCORPION, 1)["ok"], 1, "exactly 52 is enough")
 	assert_eq(_rig.rider(2).denarii, 0.0)
 
 
@@ -114,7 +115,7 @@ func test_denarii_are_personal_but_anyone_may_buy_anything() -> void:
 	var ev := _buy(2, SiegeIds.ITEM_BUILD_BALLISTA, 5)
 	assert_eq(ev["ok"], 1)
 	assert_eq(_rig.rider(1).denarii, 10.0)
-	assert_eq(_rig.rider(2).denarii, 950.0)
+	assert_eq(_rig.rider(2).denarii, 935.0)
 	assert_eq(_rig.state.pad(5).built_by, 1)
 
 
@@ -150,16 +151,16 @@ func test_iron_bands_add_25_to_max_and_current_hp_twice() -> void:
 	_rig.state.gate_hp = 60.0
 	var ev := _buy(1, SiegeIds.ITEM_IRON_BANDS)
 	assert_eq([ev["ok"], ev["lvl"]], [1, 1])
-	assert_eq(_rig.state.gate_max, 125.0)
+	assert_eq(_rig.state.gate_max, 155.0, "130 (G2) + 25")
 	assert_eq(_rig.state.gate_hp, 85.0)
 	assert_eq(_rig.state.iron_bands, 1)
 	assert_eq(_rig.rider(1).denarii, 1000.0 - 45.0)
 	_buy(1, SiegeIds.ITEM_IRON_BANDS)
-	assert_eq(_rig.state.gate_max, 150.0)
+	assert_eq(_rig.state.gate_max, 180.0)
 	assert_eq(_rig.state.gate_hp, 110.0)
 	var third := _buy(1, SiegeIds.ITEM_IRON_BANDS)
 	assert_eq([third["ok"], third["why"]], [0, SiegeIds.BUY_LIMIT])
-	assert_eq(_rig.state.gate_max, 150.0)
+	assert_eq(_rig.state.gate_max, 180.0)
 
 
 func test_repair_adds_20_up_to_the_max() -> void:
@@ -169,9 +170,9 @@ func test_repair_adds_20_up_to_the_max() -> void:
 	assert_eq(ev["ok"], 1)
 	assert_eq(_rig.state.gate_hp, 70.0)
 	assert_eq(_rig.rider(1).denarii, 980.0)
-	_rig.state.gate_hp = 95.0
+	_rig.state.gate_hp = 125.0
 	_buy(1, SiegeIds.ITEM_REPAIR)
-	assert_eq(_rig.state.gate_hp, 100.0, "not above the max")
+	assert_eq(_rig.state.gate_hp, 130.0, "not above the max")
 	var full := _buy(1, SiegeIds.ITEM_REPAIR)
 	assert_eq([full["ok"], full["why"]], [0, SiegeIds.BUY_GATE_FULL])
 	assert_eq(_rig.rider(1).denarii, 960.0, "a refused repair costs nothing")

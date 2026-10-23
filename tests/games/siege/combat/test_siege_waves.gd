@@ -50,11 +50,20 @@ func _start(shift: String, phase: int, humans: int, into_s: float = 0.0) -> Sieg
 # --- the budget B ------------------------------------------------------------------------------
 
 
+## balance.json c_budget (brief 2.4 "start 10"; G2 tuned it, docs/decisions/siege.md).
+func _c() -> float:
+	return _rig.content.num("c_budget")
+
+
 func test_b_follows_planned_p_eff_in_fair_ftp() -> void:
 	_start("vo2", 2, 4)
-	# 10 x sum(112 % x 250 / 250) x (120 - 60) / 60, four verified riders
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 4.0 * 1.12, 1e-6)
-	assert_eq(_rig.of_type(SiegeIds.EV_WAVE_START)[0]["b"], 45, "the event carries it rounded")
+	# c_budget x sum(112 % x 250 / 250) x (120 - 60) / 60, four verified riders
+	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 1.12, 1e-6)
+	assert_eq(
+		_rig.of_type(SiegeIds.EV_WAVE_START)[0]["b"],
+		roundi(_c() * 4.0 * 1.12),
+		"the event carries it rounded"
+	)
 
 
 func test_b_with_unverified_ftp_uses_085() -> void:
@@ -62,19 +71,19 @@ func test_b_with_unverified_ftp_uses_085() -> void:
 	for r in _rig.state.riders:
 		r.ftp_verified = false
 	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 4.0 * 1.12 * 0.85, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 1.12 * 0.85, 1e-6)
 
 
 func test_b_in_raw_uses_the_ftp_itself() -> void:
 	_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.RAW)
 	_rig.enter(2, 0.0)
 	var ftps := 200.0 + 220.0 + 240.0 + 260.0
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * ftps / 250.0, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps / 250.0, 1e-6)
 	_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.RAW)
 	for r in _rig.state.riders:
 		r.ftp_verified = false
 	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * ftps / 250.0 * 0.85, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps / 250.0 * 0.85, 1e-6)
 
 
 func test_b_in_wkg_uses_the_latest_p_eff_over_power() -> void:
@@ -88,7 +97,7 @@ func test_b_in_wkg_uses_the_latest_p_eff_over_power() -> void:
 		_rig.enter(2, 0.0)
 		var ftps := 200.0 + 220.0 + 240.0 + 260.0
 		var u := 1.0 if verified else 0.85
-		assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * ftps * 0.8 * u / 250.0, 1e-6)
+		assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps * 0.8 * u / 250.0, 1e-6)
 		assert_almost_eq(_rig.rider(1).r_wkg, 0.8, 1e-9)
 
 
@@ -98,15 +107,15 @@ func test_wkg_r_is_one_before_telemetry_with_power_of_50_w() -> void:
 	_rig.p_eff[1] = 30.0
 	_rig.enter(2, 0.0)
 	assert_eq(_rig.rider(1).r_wkg, 1.0, "below 50 W: no r yet")
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12 * 200.0 / 250.0, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * 200.0 / 250.0, 1e-6)
 
 
 func test_b_scales_with_wave_length_and_team_size() -> void:
 	_start("sweetspot", 2, 2)
-	# 900 s wave at 90 %: 10 x 2 x 0.9 x (900 - 60) / 60
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 2.0 * 0.9 * 14.0, 1e-6)
+	# 900 s wave at 90 %: c_budget x 2 x 0.9 x (900 - 60) / 60
+	assert_almost_eq(_rig.state.wave.budget, _c() * 2.0 * 0.9 * 14.0, 1e-6)
 	_start("vo2", 2, 1)
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.12, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12, 1e-6)
 
 
 func test_b_follows_the_waves_offset_through_the_plan() -> void:
@@ -116,20 +125,20 @@ func test_b_follows_the_waves_offset_through_the_plan() -> void:
 		SiegePlanBuilder.build(_rig.content.shift, _rig.slots[0], "vo2")
 	)
 	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 1.17, 1e-6, "112 + 5 = 117 % in a 120 s wave")
+	assert_almost_eq(_rig.state.wave.budget, _c() * 1.17, 1e-6, "112 + 5 = 117 % in a 120 s wave")
 
 
 func test_the_warm_up_wave_is_04_of_b_at_its_mean_target() -> void:
 	_start("short", 0, 4)
 	assert_eq(_rig.state.role, SiegeIds.ROLE_WARMUP_WAVE)
-	# mean of the 50 -> 65 % ramp = 57.5 %; 0.4 x 10 x 4 x 0.575 x (300 - 60) / 60
-	assert_almost_eq(_rig.state.wave.budget, 0.4 * 10.0 * 4.0 * 0.575 * 4.0, 1e-6)
+	# mean of the 50 -> 65 % ramp = 57.5 %; 0.4 x c_budget x 4 x 0.575 x (300 - 60) / 60
+	assert_almost_eq(_rig.state.wave.budget, 0.4 * _c() * 4.0 * 0.575 * 4.0, 1e-6)
 
 
 func test_the_drill_budget_comes_from_its_60_percent_target() -> void:
 	_start("drill", 1, 4)
 	assert_eq(_rig.state.role, SiegeIds.ROLE_WAVE)
-	assert_almost_eq(_rig.state.wave.budget, 10.0 * 4.0 * 0.6 * 40.0 / 60.0, 1e-6)
+	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 0.6 * 40.0 / 60.0, 1e-6)
 
 
 func test_par_follows_planned_p_eff_in_every_scaling_mode() -> void:
@@ -360,7 +369,11 @@ func test_the_ram_push_sends_one_ram_per_active_road_with_an_escort() -> void:
 	assert_eq(_rig.of_type(SiegeIds.EV_PUSH).size(), 1, "once")
 
 
-func test_an_unopposed_ram_batters_about_twenty_seconds_for_60_hp() -> void:
+## Brief 2.4: "an unopposed ram batters the gate for about 20 s (60 HP)" at 1.0 m/s; G2 slowed it to
+## 0.75 m/s (docs/decisions/siege.md, "G2 tuning"), so it now walks 40 m / 0.75 m/s = 53.3 s and
+## batters the wave's last ~6.7 s (~20 HP). The rule tested: it walks at its speed, then batters
+## 3 HP/s until the wave ends.
+func test_an_unopposed_ram_walks_in_then_batters_until_the_wave_ends() -> void:
 	_start("short", 2, 1)
 	_rig.state.wave.budget_left = 0.0
 	_rig.goto(_rig.phase_start(2) + 239.0)
@@ -371,7 +384,12 @@ func test_an_unopposed_ram_batters_about_twenty_seconds_for_60_hp() -> void:
 	assert_eq(_rig.state.enemies.size(), 1)
 	_rig.run(58.4)
 	assert_eq(_rig.state.enemies[0].st, SiegeIds.EN_BATTER, "the ram reached the gate")
-	assert_between(_rig.state.gate_hp, 100.0 - 62.0, 100.0 - 54.0, "about 20 s x 3 HP/s")
+	var walk := 40.0 / float(_rig.content.enemy_def(SiegeIds.ENEMY_RAM)["speed_mps"])
+	var batter := (239.0 + 1.5 + 58.4) - (240.0 + walk)
+	var hp := _rig.content.num("gate.hp")
+	assert_between(
+		_rig.state.gate_hp, hp - 3.0 * batter - 2.0, hp - 3.0 * batter + 2.0, "3 HP/s at the gate"
+	)
 
 
 func test_the_warm_up_push_is_one_half_hp_ram_without_escort() -> void:

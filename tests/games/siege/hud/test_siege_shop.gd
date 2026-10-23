@@ -85,7 +85,7 @@ func test_costs_and_text() -> void:
 	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_RESERVE, 0), 80)
 	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_AQUEDUCT, 0), 100)
 	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_UPGRADE, 4), 40, "pad 4 is level 0")
-	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_BUILD_CALTROP, 1), 35)
+	assert_eq(SiegeShopModel.cost_of(_state, SiegeIds.ITEM_BUILD_CALTROP, 1), 45, "G2: 45")
 
 
 func test_entries_are_disabled_when_the_rider_cannot_afford_them() -> void:
@@ -200,6 +200,7 @@ func test_the_panel_is_visible_only_in_a_break() -> void:
 
 
 func test_the_panel_lists_the_entries_with_text_of_at_least_32_px() -> void:
+	_state.rider_at(0).denarii = 80.0  # a Ballista costs 65 (G2), more than the fixture's 57
 	var p := _panel([_rec(SiegeIds.ITEM_BUILD_BALLISTA, 5)])
 	assert_gte(p.list.item_font_px, 32)
 	assert_eq(p.list.item_count(), p.entries.size())
@@ -209,7 +210,7 @@ func test_the_panel_lists_the_entries_with_text_of_at_least_32_px() -> void:
 	var text: Label = p.list.row(0).find_child("Text", true, false)
 	assert_gte(text.label_settings.font_size, 32)
 	assert_eq(p.list.highlighted(), 0, "the recommendation is highlighted first")
-	assert_eq(p.title_label.text, "Shop: 57 denarii")
+	assert_eq(p.title_label.text, "Shop: 80 denarii")
 
 
 func test_the_panel_follows_the_local_trainer_mode() -> void:
@@ -219,6 +220,7 @@ func test_the_panel_follows_the_local_trainer_mode() -> void:
 
 
 func test_a_pick_sends_a_buy_intent_with_the_pad() -> void:
+	_state.rider_at(0).denarii = 80.0
 	var p := _panel([_rec(SiegeIds.ITEM_BUILD_BALLISTA, 5)])
 	p.list.feed_gesture(Wl.G_SURGE)
 	var sent := SiegeHudUtil.intents_sent(_game)
@@ -231,6 +233,7 @@ func test_a_pick_sends_a_buy_intent_with_the_pad() -> void:
 
 
 func test_an_erg_auto_confirm_is_tagged_auto() -> void:
+	_state.rider_at(0).denarii = 80.0
 	var p := _panel([_rec(SiegeIds.ITEM_BUILD_BALLISTA, 5)])
 	p.list.erg_auto_confirm = true
 	var after := p.list.auto_confirm_after_s()
@@ -264,6 +267,7 @@ func test_a_pick_by_action_is_tagged_action_not_auto() -> void:
 
 
 func test_the_list_is_rebuilt_only_when_its_content_changes() -> void:
+	_state.rider_at(0).denarii = 80.0
 	var p := _panel([_rec(SiegeIds.ITEM_REPAIR)])
 	p.list.set_highlight(2)
 	for i in 3:

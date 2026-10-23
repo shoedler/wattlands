@@ -32,8 +32,8 @@ func test_wave_start_and_end_events_follow_the_phases() -> void:
 	assert_eq(starts[1]["waves"], 3)
 	assert_eq(ends.map(func(e: Dictionary) -> int: return e["ph"]), [0, 2, 4, 6])
 	assert_eq(ends[3]["n"], 3)
-	assert_eq(ends[3]["hp"], 100)
-	assert_eq(ends[3]["max"], 100)
+	assert_eq(ends[3]["hp"], 130, "the gate's 130 HP (G2)")
+	assert_eq(ends[3]["max"], 130)
 	assert_true(_rig.state.done, "after the last wave")
 	assert_eq(_rig.state.wave_gate_hp.size(), 3, "the warm-up wave is not scored")
 	assert_eq(_rig.state.wave_gate_frac.size(), 3)
@@ -57,9 +57,9 @@ func test_wave_end_reports_the_gate_and_leaks() -> void:
 	_rig.step()
 	_rig.enter(3, 0.0)
 	var end := _rig.of_type(SiegeIds.EV_WAVE_END)[0]
-	assert_eq([end["hp"], end["max"], end["leaks"], end["n"]], [92, 100, 1, 1])
-	assert_eq(_rig.state.wave_gate_hp, [92] as Array[int])
-	assert_almost_eq(_rig.state.wave_gate_frac[0], 0.92, 1e-9)
+	assert_eq([end["hp"], end["max"], end["leaks"], end["n"]], [122, 130, 1, 1])
+	assert_eq(_rig.state.wave_gate_hp, [122] as Array[int])
+	assert_almost_eq(_rig.state.wave_gate_frac[0], 122.0 / 130.0, 1e-9)
 	assert_eq(_rig.state.leaks_by_road, [0, 1, 0] as Array[int])
 
 

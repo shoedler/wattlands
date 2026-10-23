@@ -18,7 +18,7 @@ func test_the_starting_state() -> void:
 	assert_eq(s.built_pads(), [3, 4] as Array[int])
 	assert_eq(s.pad(3).type, SiegeIds.TOWER_BALLISTA)
 	assert_eq(s.pad(4).type, SiegeIds.TOWER_SCORPION)
-	assert_eq([s.gate_hp, s.gate_max, s.breaches, s.gen_level], [100.0, 100.0, 0, 0])
+	assert_eq([s.gate_hp, s.gate_max, s.breaches, s.gen_level], [130.0, 130.0, 0, 0], "G2: 130 HP")
 	assert_eq(s.waves_total, 3)
 	assert_eq(s.phase_index, -1)
 

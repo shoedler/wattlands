@@ -186,7 +186,8 @@ func test_fire_interval_is_the_base_interval_over_m() -> void:
 		_powered(1, 3, 250.0 * m)
 		_rig.run(20.0)
 		var shots := roundi(tw.damage / 26.0)
-		assert_between(shots, int(10 * m), int(10 * m) + 1, "ballista at m = %s: 2 s / m" % m)
+		var want := int(20.0 * m / 2.2)
+		assert_between(shots, want, want + 1, "ballista at m = %s: 2.2 s / m" % m)
 
 
 func test_ballista_hits_the_enemy_nearest_the_gate() -> void:
@@ -291,13 +292,15 @@ func test_scorpion_hits_the_three_nearest_the_gate_and_five_with_upgrade_three()
 	_rig.state.pad(4).cd_s = 0.0
 	_rig.step()
 	for i in 7:
-		var want := 160.0 - 2.0 if i < 3 else 160.0
-		assert_almost_eq(list[i].hp, want, 1e-3, "enemy %d: 10 - 8 armor = 2 on the 3 nearest" % i)
+		var want := 160.0 - 1.0 if i < 3 else 160.0
+		assert_almost_eq(
+			list[i].hp, want, 1e-3, "enemy %d: max(1, 7 - 8 armor) = 1 on the 3 nearest" % i
+		)
 	_rig.state.pad(4).level = 3
 	_rig.state.pad(4).cd_s = 0.0
 	_rig.step()
 	for i in 7:
-		var want := 160.0 - (4.0 if i < 3 else (2.0 if i < 5 else 0.0))
+		var want := 160.0 - (2.0 if i < 3 else (1.0 if i < 5 else 0.0))
 		assert_almost_eq(list[i].hp, want, 1e-3, "enemy %d: 5 nearest with upgrade 3" % i)
 
 
@@ -405,7 +408,7 @@ func test_caltrop_upgrade_three_makes_enemies_take_25_percent_more() -> void:
 	e.hp = 1000.0
 	_rig.state.pad(4).cd_s = 0.0
 	_rig.step()
-	assert_almost_eq(e.hp, 1000.0 - 10.0 * 1.25, 1e-3, "the Scorpion's 10 becomes 12.5")
+	assert_almost_eq(e.hp, 1000.0 - 7.0 * 1.25, 1e-3, "the Scorpion's 7 becomes 8.75")
 
 
 func test_a_kill_pays_the_bounty_split_by_p_eff_share() -> void:
@@ -417,16 +420,17 @@ func test_a_kill_pays_the_bounty_split_by_p_eff_share() -> void:
 	var d1 := a.denarii
 	var d2 := b.denarii
 	var team := _rig.state.team_earned
+	var k := _rig.state.bounty_scale
 	_rig.spawn(SiegeIds.ENEMY_SHIELD_WALL, VALLEY, _rig.road_end(VALLEY) - 10.0, 0.0, 10.0)
 	_rig.state.pad(3).cd_s = 0.0
 	_rig.step()
 	var kills := _rig.of_type(SiegeIds.EV_KILL)
 	assert_eq(kills.size(), 1)
 	assert_eq([kills[0]["et"], kills[0]["pad"], kills[0]["x2"]], [2, 3, 0])
-	assert_almost_eq(a.denarii - d1, 6.0 * 0.25, 1e-6, "6 x 100/400")
-	assert_almost_eq(b.denarii - d2, 6.0 * 0.75, 1e-6, "6 x 300/400")
-	assert_almost_eq(a.bounty_denarii + b.bounty_denarii, 6.0, 1e-6)
-	assert_almost_eq(_rig.state.team_earned - team, 6.0, 1e-6, "bounties count as earned")
+	assert_almost_eq(a.denarii - d1, 6.0 * k * 0.25, 1e-6, "6 x bounty_scale x 100/400")
+	assert_almost_eq(b.denarii - d2, 6.0 * k * 0.75, 1e-6, "6 x bounty_scale x 300/400")
+	assert_almost_eq(a.bounty_denarii + b.bounty_denarii, 6.0 * k, 1e-6)
+	assert_almost_eq(_rig.state.team_earned - team, 6.0 * k, 1e-6, "bounties count as earned")
 	assert_eq(b.kills, 1, "the kill goes to the biggest share")
 	assert_eq(a.kills, 0)
 	assert_eq(_rig.state.pad(3).kills, 1)
@@ -464,19 +468,20 @@ func test_rush_kills_pay_double_to_riders_in_overdrive_only() -> void:
 	_rig.rider(1).od_s = 20.0
 	var d1 := _rig.rider(1).denarii
 	var d2 := _rig.rider(2).denarii
+	var k := _rig.state.bounty_scale
 	var e := _rig.spawn(SiegeIds.ENEMY_HORSEMEN, VALLEY, _rig.road_end(VALLEY) - 10.0, 0.0, 5.0)
 	e.rush = true
 	_rig.state.pad(3).cd_s = 0.0
 	_rig.step()
-	assert_almost_eq(_rig.rider(1).denarii - d1, 2.0 * 0.5 * 2.0, 1e-6, "double for Overdrive")
-	assert_almost_eq(_rig.rider(2).denarii - d2, 2.0 * 0.5, 1e-6)
+	assert_almost_eq(_rig.rider(1).denarii - d1, 2.0 * k * 0.5 * 2.0, 1e-6, "double for Overdrive")
+	assert_almost_eq(_rig.rider(2).denarii - d2, 2.0 * k * 0.5, 1e-6)
 	assert_eq(_rig.of_type(SiegeIds.EV_KILL)[0]["x2"], 1)
 	var plain := _rig.spawn(SiegeIds.ENEMY_HORSEMEN, VALLEY, _rig.road_end(VALLEY) - 10.0, 0.0, 5.0)
 	var d1b := _rig.rider(1).denarii
 	_rig.state.pad(3).cd_s = 0.0
 	_rig.step()
 	assert_eq(plain.hp, 0.0)
-	assert_almost_eq(_rig.rider(1).denarii - d1b, 2.0 * 0.5, 1e-6, "no rush: no double")
+	assert_almost_eq(_rig.rider(1).denarii - d1b, 2.0 * k * 0.5, 1e-6, "no rush: no double")
 
 
 func test_killing_a_ram_scatters_six_raiders_and_counts_it_stopped() -> void:

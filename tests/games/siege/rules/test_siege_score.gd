@@ -31,7 +31,7 @@ func test_the_gate_part_is_40_times_the_mean_of_hp_over_max_at_each_wave_end() -
 
 func test_with_no_wave_ended_yet_the_gate_now_counts() -> void:
 	var s := _state([])
-	s.gate_hp = 50.0
+	s.gate_hp = s.gate_max * 0.5
 	assert_almost_eq(float(SiegeScore.compute(s)["gate"]), 20.0, 1e-9)
 
 

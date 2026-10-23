@@ -22,7 +22,7 @@ func test_enemies_walk_their_road_at_their_speed() -> void:
 		SiegeIds.ENEMY_RAIDERS: 2.2,
 		SiegeIds.ENEMY_SHIELD_WALL: 0.9,
 		SiegeIds.ENEMY_HORSEMEN: 4.5,
-		SiegeIds.ENEMY_RAM: 1.0,
+		SiegeIds.ENEMY_RAM: 0.75,
 	}
 	var list := {}
 	for t: int in speeds:
@@ -40,7 +40,7 @@ func test_enemy_numbers_are_the_briefs() -> void:
 		SiegeIds.ENEMY_RAIDERS: [20, 0, 2.2, 2, 1, 1],
 		SiegeIds.ENEMY_SHIELD_WALL: [160, 8, 0.9, 8, 6, 6],
 		SiegeIds.ENEMY_HORSEMEN: [35, 0, 4.5, 3, 2, 2.5],
-		SiegeIds.ENEMY_RAM: [600, 4, 1.0, 0, 15, 20],
+		SiegeIds.ENEMY_RAM: [600, 4, 0.75, 0, 15, 20],
 	}
 	for t: int in want:
 		var d := c.enemy_def(t)
@@ -96,7 +96,7 @@ func test_a_walker_that_reaches_the_gate_damages_it_and_is_gone() -> void:
 		_wave()
 		var e := _rig.spawn(t, VALLEY, _rig.road_end(VALLEY) - 0.01)
 		_rig.step()
-		assert_eq(_rig.state.gate_hp, 100.0 - float(want[t]), "type %d" % t)
+		assert_eq(_rig.state.gate_hp, 130.0 - float(want[t]), "type %d" % t)
 		assert_false(_rig.state.enemies.has(e), "gone")
 		var leaks := _rig.of_type(SiegeIds.EV_LEAK)
 		assert_eq(leaks.size(), 1)
@@ -129,7 +129,7 @@ func test_a_ram_stops_battering_when_destroyed() -> void:
 	ram.st = SiegeIds.EN_BATTER
 	_rig.run(2.0)
 	var hp := _rig.state.gate_hp
-	assert_lt(hp, 100.0, "battering")
+	assert_lt(hp, 130.0, "battering")
 	_rig.put(1, 3)
 	_rig.p_eff[1] = 250.0
 	_rig.state.pad(3).cd_s = 0.0

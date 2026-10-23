@@ -22,10 +22,11 @@ func _breach(hp: float = 3.0) -> void:
 	_rig.step()
 
 
-func test_the_gate_starts_at_100_hp() -> void:
+## Brief 2.4 says 100 HP; G2 tuned it to 130 (docs/decisions/siege.md, "G2 tuning").
+func test_the_gate_starts_at_130_hp() -> void:
 	_wave()
-	assert_eq(_rig.state.gate_hp, 100.0)
-	assert_eq(_rig.state.gate_max, 100.0)
+	assert_eq(_rig.state.gate_hp, 130.0)
+	assert_eq(_rig.state.gate_max, 130.0)
 
 
 func test_a_breach_happens_at_zero_hp() -> void:

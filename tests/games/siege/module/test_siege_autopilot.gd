@@ -152,12 +152,13 @@ func _items(picks: Array[Dictionary]) -> Array:
 
 func test_a_failing_gate_is_repaired_first_then_the_shop_goes_on() -> void:
 	var st := _shop(200.0)
-	st.gate_hp = 40.0
+	# 40% of the gate's 130 HP (G2) is 52; one repair gives 72 HP, 55%: whole enough.
+	st.gate_hp = 0.4 * st.gate_max
 	var picks := SiegeAutopilot.shop_picks(st, st.rider_at(0))
 	assert_eq(picks.size(), 2)
 	assert_eq(picks[0]["item"], SiegeIds.ITEM_REPAIR)
-	assert_ne(picks[1]["item"], SiegeIds.ITEM_REPAIR, "40 + 20 is 60%: whole enough")
-	st.gate_hp = 50.0
+	assert_ne(picks[1]["item"], SiegeIds.ITEM_REPAIR, "52 + 20 is 55%: whole enough")
+	st.gate_hp = 0.5 * st.gate_max
 	assert_ne(SiegeAutopilot.shop_picks(st, st.rider_at(0), 1)[0]["item"], SiegeIds.ITEM_REPAIR)
 
 

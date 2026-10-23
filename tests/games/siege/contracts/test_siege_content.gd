@@ -43,14 +43,18 @@ func test_load_for_reads_through_the_context_with_overrides() -> void:
 	F.free_ctx(ctx)
 
 
+## The brief's numbers, with G2's tuned values where docs/decisions/siege.md records the change
+## ("G2 tuning"): c_budget 13, gate 130 HP, tower costs 65 / 52 / 45, Ballista 2.2 s, Scorpion 7
+## damage, ram 0.75 m/s, bounty_scale 0.3.
 func test_the_brief_s_numbers() -> void:
 	var c := SiegeContent.from_dicts(_files, "short")
 	assert_eq(c.num("start_denarii"), 40.0)
 	assert_eq(c.num("reconnect_s"), 2.0)
 	assert_eq(c.num("tower_ref_w"), 250.0)
 	assert_eq(c.num("m_cap"), 4.0)
-	assert_eq(c.num("c_budget"), 10.0)
-	assert_eq(c.num("gate.hp"), 100.0)
+	assert_eq(c.num("c_budget"), 13.0)
+	assert_eq(c.num("bounty_scale"), 0.3)
+	assert_eq(c.num("gate.hp"), 130.0)
 	assert_eq(c.num("gate.breach_s"), 10.0)
 	assert_eq(c.num("gate.restore_hp"), 30.0)
 	assert_eq(c.num("gate.breach_loss"), 0.3)
@@ -59,9 +63,9 @@ func test_the_brief_s_numbers() -> void:
 	assert_eq(c.num("overdrive.cooldown_s"), 90.0)
 	assert_eq(c.num("rush.budget_frac"), 0.08)
 	var t := {
-		SiegeIds.TOWER_BALLISTA: [50, 40, 2.0, 30],
-		SiegeIds.TOWER_SCORPION: [40, 18, 0.8, 10],
-		SiegeIds.TOWER_CALTROP: [35, 25, 4.0, 0],
+		SiegeIds.TOWER_BALLISTA: [65, 40, 2.2, 30],
+		SiegeIds.TOWER_SCORPION: [52, 18, 0.8, 7],
+		SiegeIds.TOWER_CALTROP: [45, 25, 4.0, 0],
 	}
 	for code: int in t:
 		var d := c.tower_def(code)
@@ -77,7 +81,7 @@ func test_the_brief_s_numbers() -> void:
 		SiegeIds.ENEMY_RAIDERS: [20, 0, 2.2, 1, 1.0],
 		SiegeIds.ENEMY_SHIELD_WALL: [160, 8, 0.9, 6, 6.0],
 		SiegeIds.ENEMY_HORSEMEN: [35, 0, 4.5, 2, 2.5],
-		SiegeIds.ENEMY_RAM: [600, 4, 1.0, 15, 20.0],
+		SiegeIds.ENEMY_RAM: [600, 4, 0.75, 15, 20.0],
 	}
 	for code: int in e:
 		var d := c.enemy_def(code)
