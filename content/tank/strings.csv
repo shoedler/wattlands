@@ -119,7 +119,7 @@ TANK_TEAM_OUTCOME,Mission
 TANK_TEAM_HP,Hull HP per segment
 TANK_TEAM_BREAKDOWNS,Breakdowns
 TANK_TEAM_OVERRUNS,Overruns
-TANK_TEAM_KILLS,Kills by type
+TANK_TEAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy/Behemoth)
 TANK_UNLOCK_SOOT,Soot hull finish
 TANK_UNLOCK_RUST,Rust hull finish
 TANK_UNLOCK_ASH,Ash hull finish

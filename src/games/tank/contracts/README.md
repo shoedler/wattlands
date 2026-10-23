@@ -6,7 +6,8 @@ The shared types every Diesel Domestiques builder codes against. The lead owns t
 
 ```
 InputFrame (frame.players[peer] Telemetry, frame.phase[peer] PhaseState)
-  -> TankGame._collect_intents: TankIntents.normalize -> owned by the rider's engine -> TankIntentLimiter (5/s/peer)
+  -> TankGame._collect_intents: TankIntents.normalize -> owned by the rider's engine -> TankIntentLimiter (5/s/peer);
+     the module also adds TankAutopilot output for an unflagged human on the fallback or on reserve (see below)
   -> TankInputs.from_frame: the rider input digest (TankRiderInput per slot) + the group's phase (TankPhaseInfo:
      the lowest phase index any rider is in, with its PlanPhase.meta {seg, stage, segment, engine, mission})
   -> TankRules.step(state, inputs, dt) -> Array[Dictionary] events (TankEvents)        [pure; state.rng only]
@@ -74,6 +75,7 @@ Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tes
 | `tank_snapshot_schema.gd` | Snapshot keys, columns, flag bits, `INT_PATHS`, `check()`, `byte_size()` |
 | `tank_content_schema.gd` | Validators for tanks, stations, enemies, missions, scoring and cosmetics, the brief's safety envelope (bounds a G2 retune cannot pass) and `validate_cross` |
 | `tank_geometry.gd` | The frozen gameplay geometry of `assets/tank/rigs.json` |
+| `tank_terrain.gd` | The one terrain sampler (`grade_at`, `for_segment`): the rules roll the hull on it and the director pushes `course_grade` from it |
 
 ## Units and constants
 
@@ -85,3 +87,15 @@ Art px of the 640 x 360 view (world x in art px along the segment, 8 px per game
 - `rules/`, `effort/`, `combat/` and the module use no `Time.*`, `OS.get_ticks*`, global `randi`/`randf` or `RandomNumberGenerator.new()`; randomness is `state.rng` (ctx.rng).
 - Iterate in slot order; ids never reused; lists keep a fixed order.
 - New string keys are requested from the lead (`TANK_` prefix); new contract fields are requested, never edited here.
+
+## G2 additions (integration)
+
+- **One terrain sampler.** `TankTerrain.for_segment(content, segment, distance_m, warmup)` (`tank_terrain.gd`, here in `contracts/`) is the only place a mission segment's `terrain` points become a grade: linear between points, held past either end, clamped to `stations.json` `terrain.warmup_grade_pct` (0..+2%) in WARMUP kinds and to -3..+6% otherwise. `TankDrive` writes `TankHullState.grade_pct` with it for the speed model (warm-up when the segment kind is WARMUP) and `TankDirector.terrain_grade_pct` is a thin wrapper that the director pushes with `course_grade` (warm-up from the receiver's own phase kind), so the tank speeds up and slows down on exactly the hill the rider feels. Never sample `terrain` anywhere else.
+- **`TankIds.EM_LEAVE` (6).** A raider (light tank with `linger_s`) that breaks off: it rolls away, fires no more and is removed off screen with no kill credit. `EM_MOVE` stays a destroyer's shift after a shot. The snapshot carries `mode`, so clients and the view tell them apart.
+- **`stations.json` `hoist.step_s`** (positive, default 1): the hoist grade rises `rise_pct_s x step_s` per whole `step_s` counted from reaching Hoist, so it is never above `rise_pct_s x time`. It is in `STATIONS_SPEC`.
+- **Boss bogie order.** Bogie index 0 is the one nearest the tank (the lowest x in the `boss_hull` frame, rigs.json order; the Behemoth faces left); index 2 is the farthest. Auto-aim takes the lowest standing index. Part ids -1..-3 follow the index.
+- **`TankAux`** (`rules/tank_aux.gd`): host-only bookkeeping on the state as object metadata (`TankAux.of(state)`), so the frozen `TankState` is unchanged. It holds the loaded geometry, this tick's target list (`aux.targets`, valid after `TankRules.step` for the Autopilot and the view's trajectory dots), the auto-aim choice, enemy velocities, distances, ages and shots, shell arrival times and the Ram contact flag. Never serialized; clients never need it.
+- **Engagement rules** (rules builder; numbers in `tanks.json`, `enemies.json` and the mission): the main gun depresses to -5 degrees, so it cannot reach anything nearer than about 230 px from the muzzle (lights nearer than about 115 px, rear lights, anything inside 230 px are Ram or secondary prey); gun-line `at_px` values (214 / 234 / 254 dug-in, 222 / 248 in stages 2 and 3, 300 heavy) keep every gun inside that reach for all three tanks (tested); a barricade stops the tank `props.standoff_px` (260) short of it, where the gun can reach; the Behemoth stops at `stop_px` 150 (brief 120: the front bogie would sit inside the gun's minimum range) and starts 470 px from the left edge. Raiders with `linger_s` (light: 45 s) break off, so a compliant crew that never rams is not worn down by rear lights.
+- **Autopilot for unflagged humans.** The platform merges `autopilot_intents()` only for flagged riders and bots. `TankGame._collect_intents` adds `TankAutopilot` output, through the same engine ownership and 5/s filter, for a human who has not yet sent a deliberate intent (the fallback) whether or not the lobby Autopilot flag is set, and always for a station on reserve (AFK or dropped). `_end_fallback` ends the fallback of any human on a deliberate intent. The Autopilot is a stateless function of `TankState`.
+- **Cadence band.** (60, 120) at every segment start for every rider; (50, 120) only while the steam rider's shell is loaded or cycling in a WORK phase (brief 2.3 pattern 5), then back to (60, 120).
+- **Sprite id `flyball`** (was `governor`; the no-bypass scan forbids that literal in game code). `TankSprites.flyball_id()` returns it.
