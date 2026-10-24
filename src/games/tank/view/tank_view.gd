@@ -590,14 +590,16 @@ func _build_props(state: TankState) -> void:
 		var pos := wreck_pos(w, sz)
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
 		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, WRECK_TINT))
-		var hatch := pos + Vector2(sz.x * 0.5, sz.y * 0.28)
+		var wh := TankBackdrop.cell_hash(int(w["x"]), 61)
+		var hatch := pos + Vector2(sz.x * (0.3 + 0.4 * float(wh % 7) / 6.0), sz.y * 0.3)
 		if burn > 0.2:
 			var halo := 20.0 + 10.0 * burn
 			lights.add(hatch, halo, TankPalette.FIRE, 0.5 * burn)
-		# Embers keep glowing in the open hatch after the flames die.
-		var glow := 0.16 + 0.06 * sin(_time * 3.1 + float(int(w["x"]) % 17))
-		lights.add(hatch, 7.0, TankPalette.FIRE, glow)
-		lights.add(hatch, 2.5, TankPalette.AMBER, glow * 1.6)
+		# Embers glow in the open hatch for a while after the flames: one slit at its own place
+		# on each wreck (never a row of matching lamps, never a round eye), then they die.
+		if burn > 0.0 or float(w["age"]) < WRECK_BURN_S * 2.0:
+			var glow := 0.3 + 0.1 * sin(_time * 3.1 + float(wh % 17))
+			port_light(rows, hatch + Vector2(0, float(wh % 5)), 3.0 + float(wh % 3), glow)
 	props_layer.set_rows(rows)
 
 
@@ -703,19 +705,7 @@ func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
 		var x := float(cell) * PROP_CELL_PX + float(h % 120) - cam_x
 		match h % 8:
 			0:
-				var cs := TankSprites.size("prop_crater")
-				rows.append(
-					_sprite_row(
-						"prop_crater", Vector2(x, ground - 9.0), cs, false, Color(0.7, 0.72, 0.78)
-					)
-				)
-				# Flooded craters catch the nearby lamps.
-				var mid := Vector2(x + cs.x * 0.5, ground)
-				var wet := lights.intensity_near(mid, 60.0)
-				if wet > 0.05:
-					lights.add(
-						mid + Vector2(0, 1), 22.0, TankPalette.COLD_LIGHT, minf(0.35, wet * 0.3)
-					)
+				_flooded_crater(rows, x, ground)
 			1, 7:
 				var rs := TankSprites.size("prop_rubble")
 				rows.append(
@@ -733,6 +723,53 @@ func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
 				_fence(rows, x, ground, h)
 			6:
 				_puddle(rows, x, ground, h)
+
+
+## A shell crater full of rainwater: the crater's rim, a flat sheet of dark water in it whose far
+## edge catches the cold sky, and on its surface the reflection of the lamps and fires near it (the
+## tank's room glow as it passes, a burning farm behind): a soft streak in their colour.
+func _flooded_crater(rows: Array[Dictionary], x: float, ground: float) -> void:
+	var cs := TankSprites.size("prop_crater")
+	rows.append(
+		_sprite_row("prop_crater", Vector2(x, ground - 9.0), cs, false, Color(0.7, 0.72, 0.78))
+	)
+	var mid := Vector2(roundf(x + cs.x * 0.5), ground - 2.0)
+	var half := roundf(cs.x * 0.34)
+	var pts := PackedVector2Array()
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(mid + Vector2(-cos(a) * half, -sin(a) * 1.5))
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(mid + Vector2(cos(a) * half, sin(a) * 2.0))
+	rows.append({"t": "poly", "pts": pts, "c": Color("#121519")})
+	rows.append(
+		{
+			"t": "line",
+			"a": mid + Vector2(-half + 3.0, -1.0),
+			"b": mid + Vector2(half - 3.0, -1.0),
+			"w": 1.0,
+			"c": TankPalette.with_alpha(TankPalette.SLATE, 0.9)
+		}
+	)
+	_water_glint(mid, half)
+
+
+## The reflection on a sheet of water centred at `mid`, `half` px either side: the colour of the
+## halos near it (this frame's world lights and the scenery's fires), as a flat additive streak and
+## a soft glow under it, stronger the nearer and brighter they are.
+func _water_glint(mid: Vector2, half: float) -> void:
+	var wet := lights.intensity_near(mid + Vector2(0, -30), 90.0)
+	var col := lights.near_color()
+	var far := backdrop.scenery_lights.intensity_near(mid + Vector2(0, -60), 160.0)
+	if far > wet:
+		wet = far * 0.8
+		col = backdrop.scenery_lights.near_color()
+	if wet < 0.04:
+		return
+	var k := minf(0.55, wet * 0.6)
+	lights.add_line(mid + Vector2(-half * 0.7, 0), mid + Vector2(half * 0.7, 0), col, k)
+	lights.add(mid + Vector2(0, 1), half * 0.8, col, k * 0.35)
 
 
 ## Two telegraph poles 60-80 px apart, the far one leaning after a near miss, each with a short
@@ -1027,9 +1064,14 @@ func _build_enemies(state: TankState, t: float) -> void:
 		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, tint))
 		enemy_rects[e.id] = Rect2(pos.round(), sz)
 		if max_hp > 0.0 and e.hp < max_hp * DAMAGE_SMOKE_FRAC:
-			var burn := 0.35 if e.hp < max_hp * DAMAGE_FIRE_FRAC else 0.0
 			var vent := pos + Vector2(sz.x * (0.45 if e.side > 0 else 0.55), sz.y * 0.35)
-			fx.fire_and_smoke("e%d_dmg" % e.id, vent, burn, 0.7, _dt)
+			fx.fire_and_smoke("e%d_dmg" % e.id, vent, 0.0, 0.7, _dt)
+			if e.hp < max_hp * DAMAGE_FIRE_FRAC:
+				# Fire inside: one hatch slit glowing amber, flickering (never a pair of round orbs,
+				# which read as eyes).
+				var k := 0.45 + 0.15 * sin(_time * 7.0 + float(e.id % 11))
+				var slit := pos + Vector2(sz.x * (0.62 if e.side > 0 else 0.38), sz.y * 0.42)
+				port_light(rows, slit.round(), 5.0, k)
 		_seen_enemies[e.id] = {
 			"id": e.id,
 			"x": enemy_x(e),
@@ -1059,6 +1101,21 @@ func hit_flash(e: TankEnemyState, max_hp: float) -> float:
 		left = HIT_FLASH_S
 	_hp_seen[e.id] = [e.hp, left]
 	return clampf(left / HIT_FLASH_S, 0.0, 1.0)
+
+
+## A glowing hatch or port slit centred at `at`, `w` px wide and 1 px high (an amber core in a fire
+## rim, palette colours) with a flat additive glow along it, at `k` 0..1: the light of a fire inside
+## a hull, never round.
+func port_light(rows: Array[Dictionary], at: Vector2, w: float, k: float) -> void:
+	var p := (at - Vector2(w * 0.5, 0.0)).round()
+	rows.append(
+		{"t": "rect", "r": Rect2(p + Vector2(-1, 0), Vector2(w + 2.0, 1)), "c": TankPalette.FIRE}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(p + Vector2(1, 0), Vector2(w - 2.0, 1)), "c": TankPalette.AMBER}
+	)
+	lights.add_line(p + Vector2(-1, 0.5), p + Vector2(w + 1.0, 0.5), TankPalette.AMBER, 0.5 * k)
+	lights.add_line(p + Vector2(0, -0.5), p + Vector2(w, -0.5), TankPalette.FIRE, 0.25 * k)
 
 
 ## The road lane of every enemy that is not dug in, enemy id -> 0 (front) or 1 (back): left to right,
@@ -1105,8 +1162,13 @@ func _telegraph_light(state: TankState, e: TankEnemyState, type: String, r: Rect
 	var k := 1.0 - clampf(e.telegraph_s / maxf(total, 0.1), 0.0, 1.0)
 	var blink := 0.55 + 0.45 * sin(_time * (6.0 + 14.0 * k))
 	var cold := type == TankIds.ENEMY_DESTROYER
-	var col := TankPalette.COLD_LIGHT if cold else TankPalette.FIRE
-	lights.add(_enemy_muzzle(e, r), 10.0 + 14.0 * k, col, (0.25 + 0.7 * k) * blink)
+	var col := TankPalette.COLD_LIGHT if cold else TankPalette.AMBER
+	# A glint along the barrel's end and a small halo (never a big round orb on the hull).
+	var m := _enemy_muzzle(e, r)
+	var dir := -1.0 if e.side > 0 else 1.0
+	var glint := (0.3 + 0.6 * k) * blink
+	lights.add_line(m + Vector2(-dir * 3.0, 0), m + Vector2(dir * (2.0 + 5.0 * k), 0), col, glint)
+	lights.add(m, 5.0 + 6.0 * k, col, glint * 0.6)
 
 
 func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
@@ -1405,7 +1467,7 @@ func _ambient(state: TankState, dt: float) -> void:
 			float(w["x"]) - cam_x + float(w["w"]) * 0.5,
 			float(TankConst.GROUND_Y) - WRECK_LIFT_PX - float(w["h"]) * WRECK_SCALE * 0.8
 		)
-		fx.fire_and_smoke(str(w["key"]), at, burn, 1.0 if burn > 0.0 else 0.5, dt)
+		fx.fire_and_smoke(str(w["key"]), at, burn * 0.6, 1.0 if burn > 0.0 else 0.5, dt)
 	if state.hull.traps_cleared and not _traps_were_cleared:
 		var tp := Vector2(
 			rig.base_pos.x + float(rig.hull_w) + 30.0, float(TankConst.GROUND_Y) - 8.0
@@ -1421,6 +1483,10 @@ func _ambient(state: TankState, dt: float) -> void:
 func _reflections() -> void:
 	var ground := float(TankConst.GROUND_Y)
 	lights.add_reflections(ground - 1.0, ground - 70.0, 0.3)
+	var style := TankBackdrop.road_style(backdrop.near_id)
+	for p in TankBackdrop.road_puddles(style, cam_x, float(TankConst.SCREEN_W)):
+		var half := (p.y - p.x) * 0.5
+		_water_glint(Vector2(p.x + half, p.z), half)
 	var roof := rig.hull_roof()
 	if roof.size.x <= 0.0:
 		return

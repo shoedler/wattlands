@@ -1,16 +1,17 @@
 class_name TankBackdrop
 extends Node2D
 ## The diorama's planes in depth (brief 3 "Layout", "Depth of field"), back to front: the sky 0.05
-## with a far smoke bank drifting over it, searchlights and the horizon fires, the distant smoke
-## columns 0.12 rising into the smoke ceiling and a nearer bank whose undersides the fires light, a
-## far ridge 0.14, drifting smoke sheets, the hills 0.2, the haze, the near plane 0.5 (fields,
-## village, quarry, foundry town or depot, by segment; composed once without mirroring, NearPlane),
-## the ground 1.0 (the tank's plane) and, in front of everything, the foreground wreckage 1.3: dark,
-## strongly blurred rubble, stakes, weeds and wrecks breaking the frame's lower edge. Every plane
-## but the ground is pre-blurred once (TankBlur) and hazed; `front` holds the foreground and is added
-## by the view above the tank. Scenery lights (burning farms, lit windows, foundry lamps,
-## floodlights) are computed here as plain data from the plane's scroll. Nothing here creates a
-## texture after load.
+## with a cold moonlight behind its far smoke bank, a smoke ceiling and a nearer bank whose
+## undersides the fires light, a far ridge 0.14, drifting smoke sheets, the hills 0.2 with fires
+## burning on their crests, each sending up a billowing smoke column that widens into the clouds,
+## the haze, the near plane 0.5 (fields, village, quarry, foundry town or depot, by segment; composed
+## once without mirroring, NearPlane), the ground 1.0 (the tank's plane) with its road (wet ruts,
+## puddles, cobbles in the village) and, in front of everything, the foreground 1.3: a dark,
+## strongly blurred rubble bank under the bottom HUD band with sparse wreckage (stakes and wire, a
+## shattered stump, a broken wall) rising out of it at the frame's edges. Every plane but the ground
+## is pre-blurred once (TankBlur) and hazed; `front` holds the foreground and is added by the view
+## above the tank. Scenery lights (burning farms, lit windows, foundry lamps, floodlights) are
+## computed here as plain data from the plane's scroll. Nothing here creates a texture after load.
 
 const SKY_FACTOR := 0.05
 const HILLS_FACTOR := 0.2
@@ -23,11 +24,12 @@ const SKY_TOP_Y := 10.0
 const HILLS_BOTTOM_Y := 252.0
 const NEAR_BOTTOM_Y := 292.0
 const GROUND_TOP_Y := 290.0
-## Distant smoke columns rising off the horizon fires (a plane between the sky and the hills). Each
-## column has its own height, width and lean downwind (smoke_columns), so no two read alike.
-const SMOKE_FACTOR := 0.12
-const SMOKE_CELL_PX := 170.0
-const SMOKE_BASE_Y := 214.0
+## Fires burning on the hills' crests (HILL_FIRES per hills tile, on its highest summits), each
+## sending up a smoke column that billows and widens as it climbs into the smoke banks (polish round
+## 5: the columns were thin hard-edged rods ending in mid-air with no fire under them). The columns
+## scroll with the hills, so each stays on its fire.
+const HILL_FIRES := 4
+const SMOKE_FACTOR := HILLS_FACTOR
 const SMOKE_PUFFS := 30
 const ASH_FLECKS := 40
 ## The smoke ceiling: a dark, lumpy pall hanging over the upper sky (lit warm on its underside by the
@@ -52,9 +54,10 @@ const FAR_RIDGE_BOTTOM_Y := 200.0
 const SHEET_FACTOR := 0.22
 const SHEET_PERIOD_PX := 1180.0
 const SHEETS := 6
-## Searchlights sweeping slowly beyond the hills (cold light, additive), on the hills' plane.
-const BEAM_CELL_PX := 760.0
-const BEAM_LEN_PX := 250.0
+## The moon behind the far smoke bank: a cold glow at MOON_POS on the sky's plane whose light the
+## bank's thin edges let through (a moonlit cloud edge, never a disc).
+const MOON_POS := Vector2(520.0, 46.0)
+const MOON_PERIOD_PX := 1500.0
 ## The near plane's landmark (its strip's centre) stands at this screen x when a location starts.
 const LANDMARK_X := 470.0
 ## The columns' smoke: dense soot at the base (silhouetted on the horizon's fire glow, which lights
@@ -63,13 +66,21 @@ const SMOKE_TONE := Color("#0f1012")
 const SMOKE_TOP := Color("#35373b")
 ## Ash flecks: two-pixel grey flakes, never near-white specks.
 const ASH_COLOR := Color("#525456")
-## The foreground plane: FRONT_W x FRONT_H px whose bottom sits at FRONT_BOTTOM_Y, so its rubble
-## tops reach y 286-300 (just above the bottom HUD) and its tallest wrecks rise to y ~250. Built
-## once, then blurred (FRONT_BLUR, about 5 art px) and darkened: an out-of-focus layer.
+## The foreground plane: FRONT_W x FRONT_H px whose bottom sits at FRONT_BOTTOM_Y. Its rubble bank
+## stays under the bottom HUD band (its lumpy top at y FRONT_BANK_Y and below, polish round 5: a
+## continuous bank at y 286-300 laid a black blanket over the ground line, the skirts, the enemies'
+## hulls and the Behemoth's bogies); only a few wrecks spaced far apart rise out of it, to y ~250 at
+## most. Built once, then blurred (FRONT_BLUR, about 5 art px) and darkened: an out-of-focus layer.
 const FRONT_W := 2880
 const FRONT_H := 96
 const FRONT_BOTTOM_Y := 340.0
-const FRONT_BLUR := {"down": 2, "box_r": 1, "passes": 2, "haze": 0.0, "darken": 0.2}
+const FRONT_BANK_Y := 303.0
+const FRONT_BLUR := {"down": 2, "box_r": 1, "passes": 2, "haze": 0.0, "darken": 0.25}
+## The road on the ground plane: a ROAD_W x ROAD_H strip (tiling unmirrored) whose top is at
+## ROAD_TOP_Y, so the ground line y 296 runs along its wet ruts.
+const ROAD_TOP_Y := 286.0
+const ROAD_W := 1280
+const ROAD_H := 17
 ## In front of the tank's hull (hull_span), the foreground above FRONT_CUT_Y fades to FRONT_FADE so
 ## a wreck passing (or stopping) there never hides the engine rooms; the fade ramps over 12 px.
 const FRONT_CUT_Y := 280.0
@@ -86,6 +97,9 @@ static var _ceiling: Texture2D = null
 static var _ridge: Texture2D = null
 static var _banks: Dictionary = {}
 static var _strip_lights: Dictionary = {}
+static var _crest: PackedInt32Array = PackedInt32Array()
+static var _fire_sites: Array[int] = []
+static var _roads: Dictionary = {}
 
 var sky: ParallaxStrip = null
 var hills: ParallaxStrip = null
@@ -109,16 +123,19 @@ var near_id: String = ""
 ## The near strip's extra scroll (ParallaxStrip.offset_x) that put its landmark at LANDMARK_X when
 ## the location started; the scenery lights use the same offset.
 var near_offset: float = 0.0
-## The smoke ceiling strip and the searchlights painter.
+## The smoke ceiling strip.
 var ceiling: ParallaxStrip = null
 ## Seconds of animation (the smoke columns, ash and embers drift with it; cosmetic only).
 var time: float = 0.0
-## The horizon fires' halos and embers (additive), drawn over the sky, under the smoke and hills.
+## The hill fires' halos and embers (additive), over their columns, under the near plane.
 var horizon_lights: TankLights = null
+## The moon's cold light behind the far smoke bank (additive).
+var moon_light: TankLights = null
+## The road painter on the ground plane (ruts, puddles, cobbles).
+var road: TankPainter = null
 ## Times a near strip was swapped (tests).
 var swaps: int = 0
 
-var _beams: TankPainter = null
 var _near_placed: bool = false
 var _smoke: TankPainter = null
 var _sheets: TankPainter = null
@@ -133,23 +150,19 @@ func _init() -> void:
 	for id in NEAR_IDS:
 		NearPlane.texture(id)
 		strip_lights(id)
+	for style: String in ["mud", "cobbles", "slabs"]:
+		road_texture(style)
 	var sky_top := TankPainter.new()
 	sky_top.name = "SkyTop"
 	sky_top.painter = _paint_sky_top
 	add_child(sky_top)
 	sky = _strip("Sky", "bg_sky", "sky", SKY_FACTOR, SKY_TOP_Y, false)
 	add_child(sky)
+	moon_light = TankLights.new()
+	moon_light.name = "MoonLight"
+	add_child(moon_light)
 	banks.append(_bank_strip(0))
 	add_child(banks[0])
-	_beams = TankPainter.new()
-	_beams.name = "Searchlights"
-	_beams.painter = _paint_beams
-	var add := CanvasItemMaterial.new()
-	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	_beams.material = add
-	add_child(_beams)
-	# The far ridge stands in front of the far bank and the searchlights' feet; the columns rise in
-	# front of it from behind the hills.
 	far_ridge = ParallaxStrip.new()
 	far_ridge.name = "FarRidge"
 	far_ridge.texture = far_ridge_texture()
@@ -159,14 +172,7 @@ func _init() -> void:
 	far_ridge.cover_width = float(TankConst.SCREEN_W)
 	far_ridge.auto_process = false
 	add_child(far_ridge)
-	horizon_lights = TankLights.new()
-	horizon_lights.name = "HorizonLights"
-	add_child(horizon_lights)
-	_smoke = TankPainter.new()
-	_smoke.name = "SkySmoke"
-	_smoke.painter = _paint_smoke
-	add_child(_smoke)
-	# The pall over the upper sky, in front of the columns that rise into it.
+	# The pall over the upper sky and the nearer bank under it.
 	ceiling = ParallaxStrip.new()
 	ceiling.name = "SmokeCeiling"
 	ceiling.texture = smoke_ceiling()
@@ -181,6 +187,14 @@ func _init() -> void:
 	cloud_glow = TankLights.new()
 	cloud_glow.name = "CloudGlow"
 	add_child(cloud_glow)
+	# The horizon glowing with the fires beyond it, so the hills stand dark against it.
+	var horizon := TankPainter.new()
+	horizon.name = "HorizonGlow"
+	horizon.painter = _paint_horizon
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	horizon.material = add
+	add_child(horizon)
 	hills = _strip("Hills", "bg_hills_far", "hills", HILLS_FACTOR, HILLS_BOTTOM_Y, true)
 	add_child(hills)
 	_sheets = TankPainter.new()
@@ -192,6 +206,15 @@ func _init() -> void:
 	haze.name = "HazeBand"
 	haze.painter = _paint_haze
 	add_child(haze)
+	# The hill fires and their columns stand in front of the haze, so each fire is seen burning
+	# under its smoke.
+	_smoke = TankPainter.new()
+	_smoke.name = "SkySmoke"
+	_smoke.painter = _paint_smoke
+	add_child(_smoke)
+	horizon_lights = TankLights.new()
+	horizon_lights.name = "HorizonLights"
+	add_child(horizon_lights)
 	near = _strip("Near", FALLBACK_NEAR, "near", NEAR_FACTOR, NEAR_BOTTOM_Y, true)
 	near.texture = NearPlane.texture(FALLBACK_NEAR)
 	near.mirror_alternate = false
@@ -202,6 +225,10 @@ func _init() -> void:
 	add_child(scenery_lights)
 	ground = _strip("Ground", "bg_ground", "ground", GROUND_FACTOR, GROUND_TOP_Y, false)
 	add_child(ground)
+	road = TankPainter.new()
+	road.name = "Road"
+	road.painter = _paint_road
+	add_child(road)
 	front = Node2D.new()
 	front.name = "Front"
 	front_plane = TankPainter.new()
@@ -234,59 +261,120 @@ static func landmark_offset(tex_w: float, cam_x: float) -> float:
 	return fposmod(tex_w * 0.5 - LANDMARK_X - roundf(cam_x * NEAR_FACTOR), tex_w)
 
 
-## Advances the distant smoke, ash, embers and the fires' light on the clouds by `dt` seconds
-## (cosmetic, view time).
+## Advances the hill fires' smoke, ash, embers, the fires' light on the clouds and the moonlight by
+## `dt` seconds (cosmetic, view time).
 func advance(dt: float) -> void:
 	time += dt
 	ceiling.tick(dt)
 	for b in banks:
 		b.tick(dt)
-	_beams.queue_redraw()
+	moon_light.begin()
+	var mx := fposmod(MOON_POS.x - _scroll_x * SKY_FACTOR + 300.0, MOON_PERIOD_PX) - 300.0
+	moon_light.add(Vector2(mx, MOON_POS.y), 170.0, TankPalette.COLD, 0.16)
+	moon_light.add(Vector2(mx, MOON_POS.y), 80.0, TankPalette.COLD_LIGHT, 0.14)
+	moon_light.add(Vector2(mx + 4.0, MOON_POS.y + 2.0), 30.0, TankPalette.WHITE_COLD, 0.1)
+	moon_light.end()
 	horizon_lights.begin()
 	cloud_glow.begin()
 	for col in smoke_columns(_scroll_x):
 		var at: Vector2 = col["pos"]
 		var sd := int(col["seed"])
 		var flick := 0.85 + 0.15 * sin(time * 2.3 + float(sd % 17))
-		horizon_lights.add(at + Vector2(0, 4), 70.0, TankPalette.FIRE, 0.2 * flick)
-		horizon_lights.add(at + Vector2(0, 6), 24.0, TankPalette.AMBER, 0.28 * flick)
+		horizon_lights.add(at + Vector2(0, -3), 40.0, TankPalette.FIRE, 0.3 * flick)
+		horizon_lights.add(at + Vector2(0, -2), 14.0, TankPalette.AMBER, 0.42 * flick)
 		for k in 3:
 			var u := fposmod(time * 0.11 + float(k) / 3.0 + float(sd % 7) * 0.1, 1.0)
-			var e := at + Vector2(sin(u * 9.0 + float(k)) * 6.0 + u * 18.0, -u * 90.0)
+			var e := at + Vector2(sin(u * 9.0 + float(k)) * 5.0 + u * 14.0, -4.0 - u * 60.0)
 			horizon_lights.add(e, 2.0, TankPalette.AMBER, 0.7 * (1.0 - u))
-		# The fire's light caught on the banks' undersides above it (and the column's lee side).
+		# The fire's light on the banks' undersides above it, where its column spreads into them.
 		var lean: float = col["lean"]
-		cloud_glow.add(at + Vector2(lean * 0.55, -118.0), 92.0, TankPalette.FIRE, 0.13 * flick)
-		cloud_glow.add(at + Vector2(lean * 0.3, -82.0), 54.0, TankPalette.RUST_LIGHT, 0.16 * flick)
+		var rise: float = col["rise"]
+		var top := at + Vector2(lean, -rise)
+		cloud_glow.add(top + Vector2(-lean * 0.2, 34.0), 110.0, TankPalette.FIRE, 0.12 * flick)
+		cloud_glow.add(top + Vector2(-lean * 0.4, 58.0), 60.0, TankPalette.RUST_LIGHT, 0.14 * flick)
 	horizon_lights.end()
 	cloud_glow.end()
 	_smoke.queue_redraw()
 	_sheets.queue_redraw()
 
 
-## The distant smoke columns for camera x `cam_x`: [{"pos": Vector2 (base, screen), "seed": int,
-## "rise": float (px), "width": float (scale), "lean": float (px downwind at the top)}], one in most
-## cells of SMOKE_CELL_PX on the SMOKE_FACTOR plane, by hash (no RNG): some tall and thin, some
-## short and broad, each bending its own way downwind.
+## The hill fires' smoke columns for camera x `cam_x`: [{"pos": Vector2 (the fire on the hills'
+## crest, screen), "seed": int, "rise": float (px), "width": float (scale), "lean": float (px
+## downwind at the top)}]: one per fire site (hill_fire_sites) on every hills tile in view, placed
+## as the mirrored hills strip draws that tile, with height, width and lean by hash (no RNG): some
+## tall and thin, some short and broad, each bending its own way.
 static func smoke_columns(cam_x: float, width: float = 640.0) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	var scroll := cam_x * SMOKE_FACTOR
-	var first := int(floor(scroll / SMOKE_CELL_PX)) - 1
-	var last := int(floor((scroll + width) / SMOKE_CELL_PX)) + 1
-	for cell in range(first, last + 1):
-		var h := cell_hash(cell, 4517)
-		if h % 3 == 0:
-			continue
-		var x := float(cell) * SMOKE_CELL_PX + float(h % 120) - scroll + 25.0
-		var col := {
-			"pos": Vector2(x, SMOKE_BASE_Y + float(h % 9)),
-			"seed": h,
-			"rise": 130.0 + float((h >> 5) % 110),
-			"width": 0.75 + float((h >> 9) % 8) * 0.09,
-			"lean": 15.0 + float((h >> 13) % 90),
-		}
-		out.append(col)
+	var crest := hill_crest()
+	var sites := hill_fire_sites()
+	var w := float(crest.size())
+	if w <= 0.0:
+		return out
+	var top := HILLS_BOTTOM_Y - float(TankBlur.plane("bg_hills_far", "hills").get_height())
+	var scroll := roundf(cam_x * HILLS_FACTOR)
+	var i := int(floor(scroll / w)) - 1
+	var x0 := float(i) * w - scroll
+	while x0 < width + 160.0:
+		var flipped := posmod(i, 2) == 1
+		for k in sites.size():
+			var sx: int = sites[k]
+			var x := x0 + (w - 1.0 - float(sx) if flipped else float(sx))
+			if x < -160.0 or x > width + 160.0:
+				continue
+			var h := cell_hash(i * 16 + k, 4517)
+			var col := {
+				"pos": Vector2(x, top + float(crest[sx]) + 4.0 + float((h >> 17) % 12)),
+				"seed": h,
+				"rise": 95.0 + float((h >> 5) % 90),
+				"width": 0.8 + float((h >> 9) % 8) * 0.08,
+				"lean": 10.0 + float((h >> 13) % 80),
+			}
+			out.append(col)
+		x0 += w
+		i += 1
 	return out
+
+
+## The hills plane's crest: per column of its (blurred) texture, the first row that is mostly
+## opaque. Found once.
+static func hill_crest() -> PackedInt32Array:
+	if not _crest.is_empty():
+		return _crest
+	var img := TankBlur.plane("bg_hills_far", "hills").get_image()
+	var out := PackedInt32Array()
+	out.resize(img.get_width())
+	for x in img.get_width():
+		var y := 0
+		while y < img.get_height() - 1 and img.get_pixel(x, y).a < 0.6:
+			y += 1
+		out[x] = y
+	_crest = out
+	return out
+
+
+## Where the hill fires burn on a hills tile (texture x): in each of HILL_FIRES equal stretches
+## (away from the stretch's ends, so a mirrored pair never burns side by side), a point on a slope
+## a little below its highest summit (a farm on the hillside, never a fire crowning a peak).
+static func hill_fire_sites() -> Array[int]:
+	if not _fire_sites.is_empty():
+		return _fire_sites
+	var crest := hill_crest()
+	var span := crest.size() / HILL_FIRES
+	for k in HILL_FIRES:
+		var lo := k * span + 40
+		var hi := (k + 1) * span - 40
+		var top := crest[lo]
+		var bottom := crest[lo]
+		for x in range(lo, hi):
+			top = mini(top, crest[x])
+			bottom = maxi(bottom, crest[x])
+		var want := float(top) + 0.4 * float(bottom - top)
+		var best := lo
+		for x in range(lo, hi):
+			if absf(float(crest[x]) - want) < absf(float(crest[best]) - want):
+				best = x
+		_fire_sites.append(best)
+	return _fire_sites
 
 
 ## Scrolls every plane to the camera x (world art px).
@@ -295,6 +383,7 @@ func set_world_x(x: float) -> void:
 	for s: ParallaxStrip in [sky, ceiling, far_ridge, hills, near, ground, banks[0], banks[1]]:
 		if s.world_x != x:
 			s.world_x = x
+	road.queue_redraw()
 	front_plane.queue_redraw()
 
 
@@ -465,8 +554,10 @@ func _bank_strip(index: int) -> ParallaxStrip:
 	return s
 
 
-## The smoke columns (soft puffs rising, widening and drifting downwind, warm at the base where the
-## fire lights them, fading into the cloud) and fine ash flecks falling through the sky.
+## The hill fires' smoke columns: soft puffs rising from each fire, billowing side to side and
+## widening steadily as they climb, soot lit warm at the foot and thinning into the clouds (no hard
+## edge anywhere: two overlapping lobes per step, low alpha), the fire's flames on the crest under
+## them, and fine ash flecks falling through the sky.
 func _paint_smoke(item: Node2D) -> void:
 	var puff := TankProcTex.puff()
 	for col in smoke_columns(_scroll_x):
@@ -477,21 +568,22 @@ func _paint_smoke(item: Node2D) -> void:
 		var lean: float = col["lean"]
 		for k in SMOKE_PUFFS:
 			var u := fposmod(
-				time * 0.035 + float(k) / float(SMOKE_PUFFS) + float(sd % 11) * 0.09, 1.0
+				time * 0.03 + float(k) / float(SMOKE_PUFFS) + float(sd % 11) * 0.09, 1.0
 			)
-			# Narrow where it clears the hills, widening as it climbs: a pillar, not a hanging blot.
-			var size := (9.0 + 78.0 * pow(u, 1.5)) * wk
-			var bend := u * u * lean + sin(u * 5.0 + float(sd % 5)) * 5.0
-			var c := at + Vector2(bend, -u * rise)
-			# A black pillar: opaque soot at the base, lit from below by its fire, thinning near the
-			# top into the smoke banks. Two puffs per step, the inner one denser, keep the column's
-			# edge crisp instead of a soft smudge.
-			var tone := SMOKE_TONE.lerp(SMOKE_TOP, u * u)
-			var a := 0.98 * smoothstep(0.0, 0.05, u) * (1.0 - smoothstep(0.5, 1.0, u) * 0.75)
+			var size := (5.0 + 86.0 * pow(u, 1.25)) * wk
+			var billow := sin(u * 7.0 + float(sd % 5) + time * 0.35) * (1.5 + 11.0 * u)
+			var c := at + Vector2(pow(u, 1.7) * lean + billow, -u * rise)
+			var tone := SMOKE_TONE.lerp(SMOKE_TOP, smoothstep(0.1, 1.0, u))
+			tone = tone.lerp(TankPalette.RUST, 0.5 * (1.0 - smoothstep(0.0, 0.25, u)))
+			var a := 0.5 * smoothstep(0.0, 0.07, u) * (1.0 - smoothstep(0.4, 1.0, u))
 			var r := Rect2(c - Vector2(size, size) * 0.5, Vector2(size, size))
-			item.draw_texture_rect(puff, r, false, Color(tone.r, tone.g, tone.b, a * 0.8))
-			var core := r.grow(-size * 0.22)
-			item.draw_texture_rect(puff, core, false, Color(tone.r, tone.g, tone.b, a))
+			item.draw_texture_rect(puff, r, false, TankPalette.with_alpha(tone, a))
+			var side := 1.0 if k % 2 == 0 else -1.0
+			var lobe := size * 0.62
+			var lc := c + Vector2(side * size * 0.3, size * 0.08)
+			var lr := Rect2(lc - Vector2(lobe, lobe) * 0.5, Vector2(lobe, lobe))
+			item.draw_texture_rect(puff, lr, false, TankPalette.with_alpha(tone, a * 0.85))
+		_flames(item, at, sd)
 	for i in ASH_FLECKS:
 		var h := cell_hash(i, 911)
 		var x := (
@@ -503,6 +595,46 @@ func _paint_smoke(item: Node2D) -> void:
 		item.draw_rect(
 			Rect2(floorf(x), floorf(y), flake.x, flake.y), TankPalette.with_alpha(ASH_COLOR, a)
 		)
+
+
+## A distant farm burning on the hills' slope: the farm's dark silhouette (a long barn and a poplar
+## beside it, standing in the hill), its roof's glowing bed and three flickering tongues.
+func _flames(item: Node2D, at: Vector2, sd: int) -> void:
+	var foot := at.y + 5.0
+	var dark := Color("#1d1f23")
+	var side := 1.0 if sd % 2 == 0 else -1.0
+	var barn := PackedVector2Array(
+		[
+			Vector2(at.x - 9.0, foot + 2.0),
+			Vector2(at.x - 9.0, foot - 4.0),
+			Vector2(at.x - 5.0, foot - 7.0),
+			Vector2(at.x + 6.0, foot - 7.0),
+			Vector2(at.x + 10.0, foot - 4.0),
+			Vector2(at.x + 10.0, foot + 2.0),
+		]
+	)
+	item.draw_colored_polygon(barn, dark)
+	var tx := at.x + side * 14.0
+	var poplar := PackedVector2Array(
+		[Vector2(tx - 2.5, foot + 2.0), Vector2(tx + 2.5, foot + 2.0), Vector2(tx, foot - 13.0)]
+	)
+	item.draw_colored_polygon(poplar, dark)
+	at = Vector2(at.x, foot - 6.0)
+	var bed := TankPalette.with_alpha(TankPalette.FIRE, 0.8)
+	item.draw_rect(Rect2(at.x - 5.0, at.y - 1.0, 10.0, 2.0), bed)
+	for t in 3:
+		var fx := at.x - 4.0 + float(t) * 4.0 + sin(time * 6.0 + float(t + sd % 5)) * 0.8
+		var fh := 2.5 + 3.0 * absf(sin(time * 4.3 + float(t) * 1.7 + float(sd % 13)))
+		if t == 1:
+			fh += 2.0
+		var outer := PackedVector2Array(
+			[Vector2(fx - 2.0, at.y), Vector2(fx + 2.0, at.y), Vector2(fx + 0.5, at.y - fh)]
+		)
+		item.draw_colored_polygon(outer, TankPalette.with_alpha(TankPalette.FIRE, 0.85))
+		var inner := PackedVector2Array(
+			[Vector2(fx - 1.0, at.y), Vector2(fx + 1.0, at.y), Vector2(fx + 0.3, at.y - fh * 0.55)]
+		)
+		item.draw_colored_polygon(inner, TankPalette.with_alpha(TankPalette.AMBER, 0.9))
 
 
 ## Smoke sheets lying low over the hills: long, thin, soft streaks drifting downwind, cool grey high
@@ -533,6 +665,22 @@ func _paint_sheets(item: Node2D) -> void:
 				false,
 				TankPalette.with_alpha(tone, a * 0.8)
 			)
+
+
+## The fire-lit band of sky along the horizon (additive, under the hills): clear at y 96, warmest
+## at y 150 just under the hills' crest, so their silhouette reads dark against it.
+func _paint_horizon(item: Node2D) -> void:
+	var warm := TankPalette.RUST_LIGHT
+	var clear := Color(warm.r, warm.g, warm.b, 0.0)
+	var hot := Color(warm.r, warm.g, warm.b, 0.2)
+	var low := Color(warm.r, warm.g, warm.b, 0.12)
+	var w := float(TankConst.SCREEN_W)
+	var pts := PackedVector2Array(
+		[Vector2(0, 96), Vector2(w, 96), Vector2(w, 150), Vector2(0, 150)]
+	)
+	item.draw_polygon(pts, PackedColorArray([clear, clear, hot, hot]))
+	pts = PackedVector2Array([Vector2(0, 150), Vector2(w, 150), Vector2(w, 200), Vector2(0, 200)])
+	item.draw_polygon(pts, PackedColorArray([hot, hot, low, low]))
 
 
 ## Above the sky sprite: the mean colour of its top row, so the sky has no edge under the HUD.
@@ -733,44 +881,143 @@ static func far_ridge_texture() -> Texture2D:
 	return _ridge
 
 
-## The searchlight beams for camera x `cam_x`: [{"base": Vector2, "angle": float (radians, -PI/2 is
-## straight up)}], one in every other cell of BEAM_CELL_PX on the hills' plane, by hash, sweeping
-## slowly with `t` seconds.
-static func beams(cam_x: float, t: float, width: float = 640.0) -> Array[Dictionary]:
-	var out: Array[Dictionary] = []
-	var scroll := cam_x * HILLS_FACTOR
-	var first := int(floor(scroll / BEAM_CELL_PX)) - 1
-	var last := int(floor((scroll + width) / BEAM_CELL_PX)) + 1
-	for cell in range(first, last + 1):
-		var h := cell_hash(cell, 7741)
-		if h % 2 == 1:
-			continue
-		var x := float(cell) * BEAM_CELL_PX + float(h % 400) + 120.0 - scroll
-		var sweep := sin(t * (0.11 + float(h % 5) * 0.02) + float(h % 13))
-		var ang := -PI * 0.5 + deg_to_rad(28.0) * sweep + deg_to_rad(float(h % 21) - 10.0)
-		out.append({"base": Vector2(x, HILLS_BOTTOM_Y - 46.0 - float(h % 9)), "angle": ang})
+## The road for the current scroll and location (road_style), tiled unmirrored on the ground plane.
+func _paint_road(item: Node2D) -> void:
+	var tex := road_texture(road_style(near_id))
+	var tw := float(ROAD_W)
+	var scroll := roundf(_scroll_x * GROUND_FACTOR)
+	var x := float(int(floor(scroll / tw))) * tw - scroll
+	while x < float(TankConst.SCREEN_W):
+		item.draw_texture(tex, Vector2(x, ROAD_TOP_Y))
+		x += tw
+
+
+## The road's look at near plane `id`: "cobbles" through the village, "slabs" on the depot's apron,
+## else "mud".
+static func road_style(id: String) -> String:
+	match id:
+		"bg_village_near":
+			return "cobbles"
+		"bg_depot_near":
+			return "slabs"
+	return "mud"
+
+
+## The puddles on the road of `style` on screen for camera x `cam_x`: [Vector3(x0, x1, y)] (screen
+## px, the water's surface row), for the view's reflections of the lamps and fires.
+static func road_puddles(style: String, cam_x: float, width: float = 640.0) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	road_texture(style)
+	var spans: Array = (_roads[style] as Array)[1]
+	var tw := float(ROAD_W)
+	var scroll := roundf(cam_x * GROUND_FACTOR)
+	var i := int(floor(scroll / tw))
+	var x := float(i) * tw - scroll
+	while x < width:
+		for sp: Vector3i in spans:
+			var x0 := x + float(sp.x)
+			var x1 := x + float(sp.y)
+			if x1 > 0.0 and x0 < width:
+				out.append(Vector3(x0, x1, ROAD_TOP_Y + float(sp.z)))
+		x += tw
 	return out
 
 
-## Cold searchlight beams: a narrow wedge from behind the hills fading out into the smoke ceiling.
-func _paint_beams(item: Node2D) -> void:
-	var col := TankPalette.COLD_LIGHT
-	for b in beams(_scroll_x, time):
-		var base: Vector2 = b["base"]
-		var d := Vector2.from_angle(float(b["angle"]))
-		var n := Vector2(-d.y, d.x)
-		var tip := base + d * BEAM_LEN_PX
-		var pts := PackedVector2Array(
-			[base - n * 1.5, base + n * 1.5, tip + n * 17.0, tip - n * 17.0]
+## The road strip of `style`, built once (ROAD_W x ROAD_H, tiling unmirrored: periodic noise): a
+## ragged verge on top (no straight edge), then mud with two wet ruts along the ground line (their
+## edges catching the cold sky), stones, and flooded stretches in the ruts; cobbles in rows with dark
+## joints for "cobbles"; cracked concrete slabs with oil stains for "slabs". Its lowest rows fade
+## into the ground plane under it.
+static func road_texture(style: String) -> Texture2D:
+	if _roads.has(style):
+		return (_roads[style] as Array)[0]
+	var w := ROAD_W
+	var h := ROAD_H
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var salt := 900 + style.length() * 7
+	var k1 := Color("#0f1012")
+	var k2 := Color("#17181b")
+	var k3 := Color("#202124")
+	var k4 := Color("#2a2b2e")
+	var k5 := Color("#353739")
+	var k6 := Color("#424446")
+	var water := Color("#121519")
+	var sky := TankPalette.COLD_DARK
+	var sheen := TankPalette.SLATE
+	var ruts: Array[int] = [9, 13]
+	for x in w:
+		var fx := float(x)
+		var edge := int(
+			3.0 * pnoise(fx, 0.0, 7.0, w / 7, salt) + 1.5 * pnoise(fx, 1.0, 2.0, w / 2, salt)
 		)
-		var near_c := Color(col.r, col.g, col.b, 0.1)
-		var far_c := Color(col.r, col.g, col.b, 0.0)
-		item.draw_polygon(pts, PackedColorArray([near_c, near_c, far_c, far_c]))
-		var core := PackedVector2Array(
-			[base - n * 0.5, base + n * 0.5, base + d * 120.0 + n * 4.0, base + d * 120.0 - n * 4.0]
-		)
-		var hot := Color(col.r, col.g, col.b, 0.1)
-		item.draw_polygon(core, PackedColorArray([hot, hot, far_c, far_c]))
+		for y in range(edge, h):
+			var n := pnoise(fx, float(y), 3.0, w / 3, salt + 1)
+			var c := TankPalette.MUD if n > 0.42 else TankPalette.MUD_DARK
+			if n > 0.8:
+				c = TankPalette.MUD_LIGHT
+			if y <= edge + 1:
+				c = TankPalette.OLIVE if Pen.bayer(x, y) < 0.5 else TankPalette.MUD_DARK
+			match style:
+				"cobbles":
+					if y >= 5:
+						var row := (y - 5) / 3
+						var bx := (x + (row % 2) * 2) % 5
+						var ry := (y - 5) % 3
+						c = k5 if n > 0.5 else k4
+						if ry == 0 and bx < 3:
+							c = k6
+						if bx == 4 or ry == 2:
+							c = k2
+				"slabs":
+					if y >= 5:
+						c = k4 if n > 0.35 else k3
+						if y == 5:
+							c = k5
+						if (x + 7) % 26 == 0 or (x + 7) % 26 == 1 and y > 5:
+							c = k2
+						if pnoise(fx, float(y), 9.0, w / 9, salt + 5) > 0.78:
+							c = k2
+			var a := 1.0 if y < h - 4 else float(h - y) / 5.0
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, a))
+		# The ruts: a dark wet groove each, its far edge catching the cold sky now and then.
+		if style != "slabs":
+			for ry: int in ruts:
+				var wob := int(pnoise(fx, float(ry), 40.0, w / 40, salt + 2) * 1.6)
+				var y := ry + wob
+				img.set_pixel(x, y, TankPalette.MUD_DARK if style == "mud" else k1)
+				if pnoise(fx, float(ry), 4.0, w / 4, salt + 3) > 0.55:
+					img.set_pixel(x, y - 1, sheen if style == "mud" else k5)
+				if pnoise(fx, float(ry) + 2.0, 5.0, w / 5, salt + 4) > 0.6:
+					img.set_pixel(x, y + 1, TankPalette.MUD_LIGHT if style == "mud" else k3)
+	# Stones on the mud.
+	if style == "mud":
+		for i in w / 9:
+			var sx := (i * 9 + cell_hash(i, salt) % 7) % w
+			var sy := 4 + cell_hash(i, salt + 1) % (h - 8)
+			img.set_pixel(sx, sy, k6)
+			img.set_pixel(sx, sy + 1, k2)
+	# Flooded stretches: in the ruts on mud and cobbles, oil-dark pools on the slabs.
+	var spans: Array[Vector3i] = []
+	var px := 30
+	var j := 0
+	while px < w - 60:
+		var hsh := cell_hash(j, salt + 9)
+		var pw := 14 + hsh % 30
+		var row: int = ruts[hsh % 2] if style != "slabs" else 8 + hsh % 4
+		for x in range(px, px + pw):
+			var t := (float(x - px) + 0.5) / float(pw)
+			var depth := 1 + int(2.0 * sin(t * PI))
+			for d in depth:
+				var c := water
+				if d == 0:
+					c = sky if Pen.bayer(x, row) < 0.75 else sheen
+				img.set_pixel(x, row - 1 + d, c)
+		spans.append(Vector3i(px, px + pw, row - 1))
+		px += pw + 70 + (hsh >> 6) % 150
+		j += 1
+	var tex := ImageTexture.create_from_image(img)
+	_roads[style] = [tex, spans]
+	return tex
 
 
 ## The foreground's tiles for the current scroll, drawn as column bands: in front of the hull
@@ -819,13 +1066,13 @@ static func front_bands(span: Vector2) -> Array[Vector3]:
 	]
 
 
-## The foreground, built once (FRONT_W x FRONT_H, tiling unmirrored): a continuous rubble bank whose
-## lumpy top runs along y 286-300 on screen with weeds standing out of it, the generated debris strip
-## (stakes and broken bricks) along it, and four different wrecks spaced unevenly: a burnt-out
-## vehicle body on its side, girders leaning out of rubble with stakes and wire strung between them
-## (every wire tied at both ends), a broken masonry wall corner and a shattered tree stump.
-## Near-black, then blurred hard and darkened (FRONT_BLUR): an out-of-focus layer, never a sharp
-## silhouette. Nothing in it is a pole with a free wire, a cross or a figure.
+## The foreground, built once (FRONT_W x FRONT_H, tiling unmirrored): a rubble bank whose lumpy
+## top runs at y FRONT_BANK_Y and below on screen (under the HUD band), with weeds and the generated
+## debris strip's broken bricks along it, and three wrecks far apart rising out of it at the frame's
+## lower edge: stakes strung with wire (every strand tied at both ends), a shattered tree stump and a
+## broken masonry wall corner. Between them the ground line stays clear. Near-black, then blurred
+## hard and darkened (FRONT_BLUR): an out-of-focus layer, never a sharp silhouette. Nothing in it
+## is a pole with a free wire, a cross or a figure.
 static func front_texture() -> Texture2D:
 	if _front != null:
 		return _front
@@ -834,16 +1081,15 @@ static func front_texture() -> Texture2D:
 	var ink := TankPalette.BLACK
 	var ink2 := TankPalette.SOOT
 	var lit := TankPalette.COAL
-	var mound := 44
-	# The generated debris strip's broken bricks and stake stubs along the bank (its lower rows, three
-	# plain copies; it tiles), not its tall stakes, which read as a far skyline once blurred.
+	var mound := int(FRONT_BANK_Y - (FRONT_BOTTOM_Y - float(FRONT_H)))
+	# The generated debris strip's broken bricks along the bank (its lowest rows, three plain copies;
+	# it tiles), not its tall stakes.
 	var deb := TankPlaceholderArt.texture("fg_debris").get_image()
 	if deb.is_compressed():
 		deb.decompress()
 	deb.convert(Image.FORMAT_RGBA8)
-	var keep := mini(22, deb.get_height())
+	var keep := mini(16, deb.get_height())
 	deb = deb.get_region(Rect2i(0, deb.get_height() - keep, deb.get_width(), keep))
-	var dy := mound + 10 - keep
 	for y in keep:
 		for x in deb.get_width():
 			var c := deb.get_pixel(x, y)
@@ -851,73 +1097,46 @@ static func front_texture() -> Texture2D:
 				deb.set_pixel(x, y, Color(c.r * 0.35, c.g * 0.35, c.b * 0.35, c.a))
 	var dx := 0
 	while dx < FRONT_W:
-		pen.blend(deb, dx, dy)
+		pen.blend(deb, dx, mound + 2)
 		dx += deb.get_width()
-	# The rubble bank: a lumpy top with gaps, solid below.
+	# The rubble bank: a lumpy top, solid below.
 	for x in FRONT_W:
 		var fx := float(x)
 		var n := pnoise(fx, 0.0, 36.0, FRONT_W / 36, 811) * 0.65
 		n += pnoise(fx, 0.0, 9.0, FRONT_W / 9, 812) * 0.35
-		var dip := smoothstep(0.62, 0.8, pnoise(fx, 3.0, 90.0, FRONT_W / 90, 813)) * 10.0
-		var ty := int(float(mound - 2) + 12.0 * (1.0 - n) + dip)
+		var ty := mound + int(6.0 * (1.0 - n))
 		pen.col(x, ty, FRONT_H, ink)
 		pen.px(x, ty, lit if Pen.bayer(x, 0) < 0.5 else ink2)
 		pen.col(x, ty + 1, ty + 3, ink2)
 		# Weeds out of the bank: clumps of thin blades, leaning.
-		if pnoise(fx, 7.0, 5.0, FRONT_W / 5, 814) > 0.72 and x % 2 == 0:
-			var bh := 3 + int(pnoise(fx, 8.0, 2.0, FRONT_W / 2, 815) * 7.0)
+		if pnoise(fx, 7.0, 5.0, FRONT_W / 5, 814) > 0.74 and x % 2 == 0:
+			var bh := 2 + int(pnoise(fx, 8.0, 2.0, FRONT_W / 2, 815) * 6.0)
 			var lean := 1 if pnoise(fx, 9.0, 3.0, FRONT_W / 3, 816) > 0.5 else -1
 			for k in bh:
 				pen.px(x + (lean * k) / 3, ty - 1 - k, ink2)
-	_hulk(pen, 260, mound + 4, ink, lit)
-	_girders(pen, 980, mound + 6, ink, lit)
-	_wall_corner(pen, 1690, mound + 6, ink, lit)
-	_stump(pen, 2330, mound + 6, ink, lit)
+	_stakes(pen, 330, mound + 4, ink, lit)
+	_stump(pen, 1260, mound + 6, ink, lit)
+	_wall_corner(pen, 2120, mound + 6, ink, lit)
 	var blurred := TankBlur.blurred_image(img, FRONT_BLUR, TankPalette.HAZE)
 	_front = ImageTexture.create_from_image(blurred)
 	return _front
 
 
-## A burnt-out vehicle body lying on its side: a long rounded box with a hollow wheel arch and a
-## torn opening, half sunk in the rubble.
-static func _hulk(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
-	var w := 74
-	var ht := 26
-	for i in w:
-		var t := float(i) / float(w - 1)
-		var round_k := 1.0 - pow(absf(t * 2.0 - 1.0), 6.0)
-		var top := base - int(float(ht) * (0.55 + 0.45 * round_k))
-		pen.col(x + i, top, base + 2, ink)
-		pen.px(x + i, top, lit)
-	for i in 14:
-		for j in 9:
-			if Vector2(i - 7, j).length() < 7.5:
-				pen.px(x + 18 + i, base - 9 + j, TankPalette.SOOT)
-	pen.rect(x + 40, base - 20, 16, 7, TankPalette.SOOT)
-	for k in 6:
-		pen.px(x + 40 + k * 3, base - 21 - (k % 2), ink)
-
-
-## Girders leaning out of the rubble side by side (never crossing) and stakes with two strands of
-## wire strung between them, each strand tied to a stake at both ends.
-static func _girders(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
-	for g in 2:
-		var a := Vector2(x + g * 16, base + 2)
-		var b := Vector2(x + 26 + g * 18, base - 40 + g * 12)
-		for k in 4:
-			pen.line(a + Vector2(k, 0), b + Vector2(k, 0), ink)
-		pen.line(b + Vector2(0, -1), b + Vector2(3, -1), lit)
+## Five stakes of uneven height leaning out of the rubble, two strands of wire strung between them,
+## each strand tied to a stake at both ends.
+static func _stakes(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
 	var tops: Array[Vector2] = []
-	for k in 4:
-		var sx := x + 70 + k * 21 + (k * k) % 5
-		var top := Vector2(sx + (k % 2), base - 26 - (k * 7) % 9)
-		pen.line(Vector2(sx, base + 2), top, ink)
-		pen.line(Vector2(sx + 1, base + 2), top + Vector2(1, 0), ink)
+	for k in 5:
+		var sx := x + k * 19 + (k * k * 7) % 6
+		var top := Vector2(sx + (k % 3) - 1, base - 28 - (k * 11) % 13)
+		for t in 3:
+			pen.line(Vector2(sx + t, base + 2), top + Vector2(t, 0), ink)
+		pen.px(int(top.x) + 1, int(top.y), lit)
 		tops.append(top)
 	for strand in 2:
 		for k in range(1, tops.size()):
-			var off := Vector2(0, 4.0 + 8.0 * float(strand))
-			pen.wire(tops[k - 1] + off, tops[k] + off, 4.0, ink)
+			var off := Vector2(1, 5.0 + 9.0 * float(strand))
+			pen.wire(tops[k - 1] + off, tops[k] + off, 3.0, ink)
 
 
 ## A broken masonry wall corner: a stepped, jagged top with a window gap, rubble at its foot.
@@ -934,16 +1153,26 @@ static func _wall_corner(pen: Pen, x: int, base: int, ink: Color, lit: Color) ->
 
 ## A shattered tree stump: a thick trunk with a splintered top, one broken branch stub and roots.
 static func _stump(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
-	for i in 10:
-		var splinter := int(absf(sin(float(i) * 2.3)) * 9.0)
-		var top := base - 44 + splinter
+	# A broad trunk flaring into roots, snapped off in three splinters of different heights.
+	for i in 22:
+		var t := (float(i) + 0.5) / 22.0
+		var flare := int(6.0 * pow(absf(t * 2.0 - 1.0), 3.0))
+		var spike := 0
+		if i >= 4 and i <= 6:
+			spike = 14 - absi(i - 5) * 5
+		elif i >= 11 and i <= 12:
+			spike = 9 - (i - 11) * 4
+		elif i >= 16 and i <= 17:
+			spike = 5
+		var top := base - 22 - spike + int(absf(sin(float(i) * 2.3)) * 3.0) + flare * 3
 		pen.col(x + i, top, base + 2, ink)
 		pen.px(x + i, top, lit)
-	pen.line(Vector2(x + 9, base - 28), Vector2(x + 20, base - 37), ink)
-	pen.line(Vector2(x + 9, base - 27), Vector2(x + 20, base - 36), ink)
+	pen.line(Vector2(x + 15, base - 16), Vector2(x + 27, base - 22), ink)
+	pen.line(Vector2(x + 15, base - 15), Vector2(x + 27, base - 21), ink)
 	for r: int in [-1, 1]:
-		pen.line(Vector2(x + 5, base - 3), Vector2(x + 5 + r * 12, base + 2), ink)
-		pen.line(Vector2(x + 5, base - 2), Vector2(x + 5 + r * 12, base + 3), ink)
+		var o := Vector2(x + 11 + r * 8, base - 3)
+		pen.line(o, o + Vector2(r * 10, 5), ink)
+		pen.line(o + Vector2(0, 1), o + Vector2(r * 10, 6), ink)
 
 
 # --- Composed planes --------------------------------------------------------------------------------
@@ -1054,12 +1283,12 @@ class Pen:
 ##   has no mirror axis and nothing repeats within a screen;
 ## - on the flanks the location again, every silhouette shaded in three tones (Pen.shape) and placed
 ##   from a seeded RNG with jittered gaps: poplar rows, oak and pine clumps and farmsteads (one
-##   burning) on Poplar Road; cottages, orchards and a burning cottage at Kettle Ford; terraced rock
-##   faces, spoil heaps, pines, lattice pylons with their wires sagging from pylon to pylon along the
-##   whole flank and a burning timber shed at Quarry Ridge; brick works with irregular lit window
-##   groups, chimney stacks and a slag heap by the foundry town; hangars, concrete bunkers, fuel
-##   tanks, a long-span gantry crane (trolley and hook high under the girder, nothing hanging) and
-##   floodlight masts with cold lamps at the depot.
+##   burning) on Poplar Road; cottages, orchards and a burning cottage at Kettle Ford; quarry benches
+##   stepping down like a stair with a conveyor, spoil heaps, pines, lattice pylons with their wires
+##   sagging from pylon to pylon along the whole flank and a burning sawmill at Quarry Ridge; brick
+##   works with odd-sized windows, chimney stacks and a slag heap by the foundry town; hangars,
+##   concrete bunkers, fuel tanks and floodlight masts with cold lamps at the depot (no gantry crane:
+##   polish round 5, its crossbar on two legs read as a gallows).
 ## Lit windows, lamps and fires use the palette's light colours, so TankBackdrop.strip_lights gives
 ## them halos (and the fires flames and smoke). Deterministic: a fixed seed per id.
 class NearPlane:
@@ -1247,17 +1476,16 @@ class NearPlane:
 						c.a *= k
 						img.set_pixel(x, y, c)
 
-	## Per-landmark repairs: the foundry's gantry crane loses its hanging cable and bucket (a
-	## crossbar with a block hanging on a line reads as a gallows) and gets a trolley tight under the
-	## girder; Poplar Road's wire stakes along the field (thin dark uprights that read as tiny figures
+	## Per-landmark repairs: the foundry's gantry crane goes (a crossbar on two legs with a block
+	## under it reads as a gallows; polish round 5) and chimney stacks stand in its place; Poplar
+	## Road's wire stakes along the field (thin dark uprights that read as tiny figures
 	## at a distance) are smoothed into the field by a horizontal median.
 	static func _fix_landmark(id: String, lm: Image, hz: int) -> void:
 		var h := lm.get_height()
-		if id == "bg_town_near" and lm.get_width() > 320 and h > 92:
-			lm.fill_rect(Rect2i(300, 69, 17, 19), Color(0, 0, 0, 0))
-			lm.fill_rect(Rect2i(302, 68, 13, 3), K2)
-			lm.fill_rect(Rect2i(302, 68, 13, 1), K4)
-			lm.fill_rect(Rect2i(307, 71, 2, 1), K1)
+		if id == "bg_town_near" and lm.get_width() > 352 and h > 92:
+			lm.fill_rect(Rect2i(272, 52, 25, 18), Color(0, 0, 0, 0))
+			lm.fill_rect(Rect2i(297, 52, 52, 37), Color(0, 0, 0, 0))
+			_casting_shed(Pen.new(lm), 317, 90)
 		elif id == "bg_fields_near":
 			var src := lm.duplicate() as Image
 			var lights := TankPlaceholderArt.light_colours()
@@ -1270,6 +1498,29 @@ class NearPlane:
 						row.append(src.get_pixel(x + dx, y))
 					row.sort_custom(_darker)
 					lm.set_pixel(x, y, row[3])
+
+	## The foundry's casting shed where its gantry stood: a gabled brick shed `x`..x+31 on `base`
+	## with two windows, one lit, and two tapering stacks of different heights rising off its roof.
+	static func _casting_shed(pen: Pen, x: int, base: int) -> void:
+		var top := base - 13
+		pen.rect(x, top, 31, 13, B2)
+		pen.col(x, top, base, K2)
+		pen.col(x + 30, top, base, R1)
+		for r in 6:
+			pen.rect(x - 1 + r * 2, top - 1 - r, 33 - r * 4, 1, K2)
+			pen.px(x - 1 + r * 2, top - 1 - r, S0)
+		pen.rect(x + 5, top + 4, 3, 3, GLOW)
+		pen.px(x + 5, top + 6, AMBER)
+		pen.rect(x + 20, top + 5, 4, 3, K1)
+		for st: Vector3i in [Vector3i(x + 9, 52, 5), Vector3i(x + 23, 38, 4)]:
+			for r in st.y:
+				var y := top - 3 - r
+				var w := st.z + (1 if r < st.y / 3 else 0)
+				pen.rect(st.x, y, w, 1, R0)
+				pen.px(st.x, y, K2)
+				pen.px(st.x + w - 1, y, R1)
+			pen.rect(st.x - 1, top - 2 - st.y, st.z + 2, 2, K3)
+			pen.rect(st.x - 1, top - 2 - st.y, st.z + 2, 1, K4)
 
 	static func _darker(a: Color, b: Color) -> bool:
 		return a.v < b.v
@@ -1310,9 +1561,9 @@ class NearPlane:
 		var bags := {
 			"fields": ["farm", "poplars", "oaks", "burning_farm", "pines", "poplars", "poplars"],
 			"village": ["cottages", "orchard", "burning_cottage", "cottages", "oaks", "poplars"],
-			"quarry": ["terraces", "pines", "sawmill", "spoil", "terraces", "pines"],
+			"quarry": ["terraces", "sawmill", "pines", "terraces", "spoil", "sawmill"],
 			"town": ["works", "chimneys", "slag", "works", "sheds", "chimneys"],
-			"depot": ["hangar", "tanks", "crane", "bunker", "mast", "block", "pines", "tanks"],
+			"depot": ["hangar", "parked", "tanks", "mast", "bunker", "parked", "block", "hangar"],
 		}
 		var bag: Array = bags.get(style, bags["fields"])
 		var order: Array = []
@@ -1374,10 +1625,10 @@ class NearPlane:
 				return block(pen, rng, x, base) if room >= 70 else 0
 			"tanks":
 				return fuel_tanks(pen, rng, x, base) if room >= 70 else 0
-			"crane":
-				return gantry_crane(pen, rng, x, base) if room >= 124 else 0
 			"bunker":
 				return bunker(pen, rng, x, base) if room >= 58 else 0
+			"parked":
+				return parked_tanks(pen, rng, x, base) if room >= 90 else 0
 			"mast":
 				return floodlight_mast(pen, rng, x, base) if room >= 20 else 0
 		return 0
@@ -1574,22 +1825,22 @@ class NearPlane:
 	## tallest in the middle, with charred rafters across it, in the palette's fire colours
 	## (TankBackdrop.strip_lights makes it a burning building).
 	static func fire_in_roof(pen: Pen, rng: RandomNumberGenerator, x: int, y: int, wd: int) -> void:
-		var salt := rng.randi_range(0, 999)
 		for i in wd:
 			var t := (float(i) + 0.5) / float(wd)
 			var bed := 1 + int(2.0 * sin(t * PI))
 			pen.col(x + i, y - bed + 1, y + 2, FIRE)
-			var tall := 2.0 + 7.0 * sin(t * PI)
-			var fh := int(tall * (0.4 + 0.6 * TankMaterial.smooth_noise(x + i, 0, 1.7, salt)))
+			# Ragged tongues: each column its own height, every few a tall licking spike leaning
+			# downwind, so the fire never reads as a smooth glowing dome.
+			var tall := 2.0 + 8.0 * sin(t * PI)
+			var fh := int(tall * rng.randf_range(0.2, 0.75))
+			if rng.randf() < 0.3:
+				fh = int(tall * rng.randf_range(0.9, 1.3)) + 1
 			for k in fh:
 				var yy := y - bed - k
-				if k == fh - 1 and Pen.bayer(x + i, yy) < 0.5:
-					continue
-				var core := k < fh / 2 and t > 0.25 and t < 0.75
-				pen.px(x + i, yy, AMBER if core else FIRE)
-		pen.rect(x + wd / 2 - 1, y, 3, 1, GLOW)
-		pen.px(x + wd / 3, y - 1, K1)
-		pen.px(x + wd * 2 / 3, y - 2, K1)
+				var lean := k / 4
+				var core := k < fh / 3 and t > 0.2 and t < 0.8
+				pen.px(x + i + lean, yy, AMBER if core else FIRE)
+		pen.px(x + wd / 2 + rng.randi_range(-2, 2), y, GLOW)
 
 	## Poplar Road's farmstead: a farmhouse, a barn (its roof burning when `burning`) and a tree.
 	static func farmstead(
@@ -1632,20 +1883,21 @@ class NearPlane:
 		return cx - x
 
 	## The quarry's terraced face cut into a dark hill: the hill's natural slope with pines on the
-	## left, and on the right the rock stepped down in benches, each band of rock lit along its ledge
-	## and shadowed under the ledge above, mottled and cracked, with a chute from the top to the foot
-	## and a hut with a lit window on a bench.
+	## left, and on the right the rock cut in three or four tall benches stepping down like a stair,
+	## each bench's ledge pale and lit, its riser a lit vertical face, the rock between mottled with
+	## vertical joints (never horizontal stripes, which blur into a banded smear), scree at every
+	## riser's foot, a conveyor on legs running down from the top bench to a hopper at the foot and a
+	## hut with a lit window on a bench.
 	static func terraces(
 		pen: Pen, rng: RandomNumberGenerator, x: int, base: int, width: int
 	) -> int:
-		var ht := rng.randi_range(32, 48)
-		var benches := rng.randi_range(4, 6)
-		var bh := maxi(ht / benches, 5)
-		ht = bh * benches
-		var slope_w := int(float(width) * rng.randf_range(0.2, 0.28))
+		var benches := rng.randi_range(3, 4)
+		var bh := rng.randi_range(10, 13)
+		var ht := bh * benches
+		var slope_w := int(float(width) * rng.randf_range(0.2, 0.26))
 		var cut0 := x + slope_w
-		var bd := maxi((width - slope_w) / (benches + 1), 7)
 		var x_end := x + width
+		var tread := maxi(int(float(x_end - cut0) / (float(benches) + 0.4)), 12)
 		var salt := rng.randi_range(0, 999)
 		for i in slope_w + 3:
 			var t := minf(float(i) / float(slope_w), 1.0)
@@ -1654,50 +1906,71 @@ class NearPlane:
 			pen.col(x + i, ty, base, B1)
 			pen.px(x + i, ty, S0)
 			pen.col(x + i, ty + 1, ty + 3, K3)
+		var risers: Array[Vector2i] = []
 		for cx in range(cut0, x_end):
-			var k_top := mini(benches - 1, ceili(float(x_end - cx) / float(bd)) - 1)
-			var top := base - (k_top + 1) * bh
-			top += int(TankMaterial.smooth_noise(cx, k_top, 2.5, salt + 3) * 2.2)
+			var step := mini((cx - cut0) / tread, benches - 1)
+			var top := base - (benches - step) * bh
+			var into := (cx - cut0) - step * tread
 			for y in range(top, base):
-				var ry := (base - 1 - y) % bh
+				var depth := y - top
 				var c := K4
-				if y == top:
-					c = K7 if Pen.bayer(cx, y) < 0.5 else K6
-				elif ry == bh - 1:
-					c = K6
-				elif ry >= bh - 3:
+				var n := TankMaterial.smooth_noise(cx, y, 2.5, salt + 7)
+				if n > 0.68:
 					c = K5
-				elif ry <= 1:
-					c = K2
-				var n := TankMaterial.smooth_noise(cx, y, 3.0, salt + 7)
-				if n > 0.7 and y != top:
+				elif n < 0.22:
 					c = K3
-				elif n < 0.18 and ry > 1 and y != top:
-					c = K5
+				# Vertical joints in the face, a few px apart, fading out downward.
+				var joint := TankMaterial.smooth_noise(cx, 0, 1.3, salt + 11)
+				if joint > 0.8 and depth > 2 and depth < 9:
+					c = K2
+				if y > base - 5:
+					c = K3 if Pen.bayer(cx, y) < 0.5 else K2
+				if depth == 0:
+					c = K8 if Pen.bayer(cx, y) < 0.55 else K7
+				elif depth == 1:
+					c = K6
+				elif depth == 2:
+					c = K5 if Pen.bayer(cx, y) < 0.5 else K4
 				pen.px(cx, y, c)
-			# A riser where the bench above ends, lit by the fires ahead, its foot in shadow.
-			if (x_end - cx) % bd == 0 and k_top < benches - 1:
-				pen.col(cx, top, top + bh, K5)
-				pen.col(cx - 1, top + 1, top + bh, K3)
-		for _c in width / 12:
-			var kx := rng.randi_range(cut0 + 2, x_end - 4)
-			var ky := rng.randi_range(base - ht + 3, base - 4)
-			pen.col(kx, ky, ky + rng.randi_range(2, 4), K3)
+			# The riser at the end of this bench: a lit vertical face, its foot in scree.
+			if into == tread - 1 and step < benches - 1:
+				risers.append(Vector2i(cx, top))
+		for r in risers:
+			pen.col(r.x, r.y, r.y + bh + 1, K7)
+			pen.col(r.x - 1, r.y + 1, r.y + bh + 1, K6)
+			# Scree heaped against the foot of the riser, on the bench below.
+			var foot := r.y + bh
+			for k in 6:
+				pen.col(r.x + 1 + k, foot - (5 - k) / 2, foot, B2 if (k + r.x) % 3 else K5)
+				pen.px(r.x + 1 + k, foot - (5 - k) / 2, B4)
+		# The conveyor: a belt on legs from the top bench down to a hopper past the last riser.
+		var c0 := Vector2(cut0 + tread / 2, base - ht - 3)
+		var c1 := Vector2(x_end - 6, base - 13)
+		pen.line(c0, c1, K1)
+		pen.line(c0 + Vector2(0, 1), c1 + Vector2(0, 1), K3)
+		var legs := int((c1.x - c0.x) / 11.0)
+		for k in range(1, legs + 1):
+			var lp := c0.lerp(c1, float(k) / float(legs + 1))
+			var ground_y := base
+			var ly := int(lp.y) + 2
+			while ly < ground_y and pen.get_px(int(lp.x), ly).a < 0.5:
+				ly += 1
+			pen.col(int(lp.x), int(lp.y) + 2, ly, K1)
+		pen.rect(int(c1.x) - 4, int(c1.y) + 1, 9, 6, K2)
+		pen.rect(int(c1.x) - 4, int(c1.y) + 1, 9, 1, K5)
+		pen.rect(int(c1.x) - 2, int(c1.y) + 7, 5, base - int(c1.y) - 7, K1)
+		# A hut on the second bench with one lit window.
+		var hx := cut0 + tread + 3
+		var hy := base - (benches - 1) * bh
+		pen.rect(hx, hy - 7, 11, 7, B1)
+		pen.rect(hx - 1, hy - 8, 13, 1, K2)
+		pen.rect(hx + 3, hy - 5, 2, 2, AMBER)
 		var px := x + 2
-		while px < cut0 + bd - 2:
+		while px < cut0 + 4:
 			var t := minf(float(px - x) / float(slope_w), 1.0)
 			var ty := base - int(float(ht) * smoothstep(0.0, 1.0, t))
 			pine(pen, px, ty + 2, rng.randi_range(12, 22), NEAR_TREE)
 			px += rng.randi_range(4, 8)
-		var c0 := Vector2(x_end - (benches - 1) * bd - 4, base - ht + 2)
-		var c1 := Vector2(x_end - 3, base - 2)
-		pen.line(c0, c1, K2)
-		pen.line(c0 + Vector2(0, 1), c1 + Vector2(0, 1), K3)
-		var hx := x_end - 2 * bd + 2
-		var hy := base - 2 * bh
-		pen.rect(hx, hy - 7, 11, 7, B1)
-		pen.rect(hx - 1, hy - 8, 13, 1, K2)
-		pen.rect(hx + 4, hy - 5, 2, 2, AMBER)
 		return width
 
 	## A timber sawmill burning: a long plank shed, its roof fallen in over a third of its length and
@@ -1755,26 +2028,31 @@ class NearPlane:
 			cx += bw + rng.randi_range(0, 4)
 		return cx - x
 
-	## Two or three groups of window panes of different widths along a wall, some panes dark.
+	## Two or three windows of different sizes along a wall at uneven gaps and heights, some dark and
+	## some lit only in their upper half (never an evenly spaced row of lit dots, which reads as a
+	## dashed line or an LED strip).
 	static func _window_groups(
 		pen: Pen, rng: RandomNumberGenerator, x: int, y: int, width: int
 	) -> void:
-		var gx := x + rng.randi_range(0, 4)
+		var gx := x + rng.randi_range(0, 5)
 		var groups := rng.randi_range(2, 3)
 		for _g in groups:
-			var panes := rng.randi_range(1, 4)
-			if gx + panes * 3 > x + width:
+			var ww := rng.randi_range(2, 5)
+			var wh := rng.randi_range(2, 4)
+			if gx + ww > x + width:
 				break
-			var gy := y + rng.randi_range(0, 2)
-			for p in panes:
-				var c := K1
-				var roll := rng.randf()
-				if roll < 0.55:
-					c = AMBER
-				elif roll < 0.7:
-					c = GLOW
-				pen.rect(gx + p * 3, gy, 2, 2 + rng.randi_range(0, 1), c)
-			gx += panes * 3 + rng.randi_range(4, 9)
+			var gy := y + rng.randi_range(-1, 3)
+			# Lit panes are warm white with one amber corner (so a window is never read as a fire).
+			var roll := rng.randf()
+			if roll < 0.4:
+				pen.rect(gx, gy, ww, wh, K1)
+			elif roll < 0.75:
+				pen.rect(gx, gy, ww, wh, GLOW)
+				pen.px(gx, gy + wh - 1, AMBER)
+			else:
+				pen.rect(gx, gy, ww, wh, K1)
+				pen.rect(gx, gy, ww, (wh + 1) / 2, GLOW)
+			gx += ww + rng.randi_range(5, 13)
 
 	## Low sheds and a rail wagon by the works.
 	static func sheds(pen: Pen, rng: RandomNumberGenerator, x: int, base: int) -> int:
@@ -1868,42 +2146,42 @@ class NearPlane:
 		pen.rect(x, base - 2, cx - x, 1, K4)
 		return cx - x
 
-	## A long-span gantry crane: an A-frame of two splayed legs at each end, a trussed girder over
-	## them, a trolley riding under the girder with its hook drawn up tight beneath it (nothing hangs
-	## below), a cab with a lit window at one end, rails and crates on the ground.
-	static func gantry_crane(pen: Pen, rng: RandomNumberGenerator, x: int, base: int) -> int:
-		var span := rng.randi_range(84, 108)
-		var ht := rng.randi_range(42, 54)
-		var gy := base - ht
-		for ex: int in [x + 7, x + 7 + span]:
-			for side: int in [-1, 1]:
-				var foot := Vector2(ex + side * 7, base)
-				var head := Vector2(ex + side, gy + 5)
-				pen.line(foot, head, K3)
-				pen.line(foot + Vector2(1, 0), head + Vector2(1, 0), K4 if side > 0 else K3)
-			pen.rect(ex - 4, base - ht / 2, 9, 1, K3)
-		pen.rect(x, gy, span + 15, 5, K3)
-		pen.rect(x, gy, span + 15, 1, K5)
-		pen.rect(x, gy + 4, span + 15, 1, K2)
-		var zx := x + 1
-		var up := true
-		while zx < x + span + 12:
-			pen.line(Vector2(zx, gy + (1 if up else 3)), Vector2(zx + 3, gy + (3 if up else 1)), K2)
-			zx += 3
-			up = not up
-		var tx := x + 7 + int(float(span) * rng.randf_range(0.25, 0.7))
-		pen.rect(tx, gy + 5, 8, 4, K2)
-		pen.rect(tx, gy + 5, 8, 1, K4)
-		pen.rect(tx + 3, gy + 9, 2, 1, K1)
-		pen.px(tx + 5, gy + 10, K1)
-		pen.rect(x + span + 3, gy + 5, 7, 6, K3)
-		pen.rect(x + span + 5, gy + 7, 2, 2, AMBER)
-		pen.rect(x - 2, base - 1, span + 20, 1, K4)
-		var bx := tx - rng.randi_range(4, 12)
-		pen.rect(bx, base - 6, 8, 6, B2)
-		pen.rect(bx + 9, base - 5, 7, 5, B1)
-		pen.rect(bx, base - 6, 8, 1, B3)
-		return span + 16
+	## Two or three tanks parked in a row on the apron, facing right like the player's: slab hulls
+	## with a sloped glacis, a boxy turret, a short barrel, the running gear dark under a skirt, a
+	## tarpaulin over the last one, and a lamp on a post throwing cold light over them.
+	static func parked_tanks(pen: Pen, rng: RandomNumberGenerator, x: int, base: int) -> int:
+		var cx := x
+		var n := rng.randi_range(2, 3)
+		for k in n:
+			var hw := rng.randi_range(24, 32)
+			var hh := rng.randi_range(6, 8)
+			var top := base - hh - 3
+			pen.rect(cx, base - 3, hw, 3, K1)
+			for wx in range(cx + 2, cx + hw - 2, 4):
+				pen.px(wx, base - 2, K3)
+			for r in hh:
+				var slope := maxi(0, r - hh + 4)
+				pen.rect(cx, top + r, hw - 4 + slope, 1, K3 if r > 1 else K4)
+			pen.rect(cx, top, hw - 4, 1, K5)
+			if k == n - 1 and n > 2:
+				# Under a tarpaulin: a soft rounded hump, no gun.
+				for i in hw - 4:
+					var t := (float(i) + 0.5) / float(hw - 4) * 2.0 - 1.0
+					var bump := int(6.0 * sqrt(maxf(1.0 - t * t, 0.0)))
+					pen.col(cx + i, top - bump, top, O1)
+					pen.px(cx + i, top - bump, K5)
+			else:
+				var tw := rng.randi_range(10, 13)
+				var tx := cx + hw / 2 - tw / 2 - 2
+				pen.rect(tx, top - 5, tw, 5, K3)
+				pen.rect(tx, top - 5, tw, 1, K5)
+				pen.rect(tx + tw, top - 3, rng.randi_range(8, 12), 1, K2)
+			cx += hw + rng.randi_range(5, 9)
+		var lx := cx + 2
+		pen.rect(lx, base - 22, 1, 22, K3)
+		pen.rect(lx - 2, base - 23, 5, 1, K4)
+		pen.rect(lx - 1, base - 22, 3, 1, COLD_LIGHT)
+		return lx + 4 - x
 
 	## A concrete bunker: a low chamfered block half buried in earth, a dark firing slit with a lit
 	## lip under it.
