@@ -3,7 +3,7 @@
 	"endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
 	"quality": "high",
 	"dither": "none",
-	"style": "Side-view 2D game asset in strict orthographic side elevation, painted as a moody matte concept-art diorama: big simple readable shapes, soft smooth shading with gentle gradients, no outlines, not pixel art, no fine noise, no grain, no tiny clutter. Low-key and desaturated: cold blue-black gunmetal, soot-black and charcoal grey, wet mud, with deep soft shadows; the only saturated colours are lights, which glow softly: warm amber fire and lamp light, or cold blue-white arc light. Dark brutalist alternate-history 1940s: massive flat riveted armour slabs bolted together, boxy stepped shapes, hardly any curves. Show only what the description names, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos.",
+	"style": "Side-view 2D game asset in strict orthographic side elevation, painted as a moody matte concept-art diorama: big simple readable shapes, soft smooth shading with gentle gradients, no outlines, not pixel art, no fine noise, no grain, no tiny clutter. Low-key and desaturated: cold blue-black gunmetal, soot-black and charcoal grey, wet mud, with deep soft shadows; the only saturated colours are lights, which glow softly: warm amber fire and lamp light, or cold blue-white arc light. Dark brutalist alternate-history 1940s: massive flat riveted armour slabs bolted together, boxy stepped shapes, hardly any curves. Evenly weathered surfaces, no camouflage patterns, no blotchy patches. Show only what the description names, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos.",
 	"palette": [
 		"#07080a",
 		"#0f1012",
@@ -64,7 +64,7 @@
 				288,
 				80
 			],
-			"prompt": "the hull of a colossal brutalist alternate-history super-heavy tank in exact side elevation facing right, one long solid armoured mass filling the whole width of the image from the left edge to the right edge: on the right end a pronounced angled front glacis wedge sloping down and forward; on the left end a stepped rear engine deck one step lower than the flat roof; a flat roof line; along the bottom a layered armour slab skirt, its lower edge cut perfectly flat and straight; the side face is closed solid flat steel with no openings and no holes, divided into big rectangular riveted armour plates with weld seams and evenly spaced rows of huge rivets; cold blue-black gunmetal and soot-black steel, mostly grey-black, rust only as thin dark streaks running down from rivet seams, a little dried mud low down, a faint cold sheen along the top edges; no wheels, no tracks, no turret, no gun barrel; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"prompt": "the hull of a colossal brutalist alternate-history super-heavy tank in exact side elevation facing right, one long solid armoured mass filling the whole width of the image from the left edge to the right edge: on the right end a pronounced angled front glacis wedge sloping down and forward; on the left end a stepped rear engine deck one step lower than the flat roof; a flat roof line; along the bottom the skirts as plain flat plates, their lower edge cut perfectly flat and straight; the side face is closed solid flat steel with no openings and no holes, divided into big rectangular riveted armour plates with weld seams and evenly spaced rows of huge rivets; evenly sooted dark gunmetal and soot-black steel with uniform weathering, no camouflage, no patches, no blotches, soft vertical rain streaks only, a faint cold sheen along the top edges; no wheels, no tracks, no turret, no gun barrel; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
 			"align": "bottom_left"
 		},
 		{
@@ -89,7 +89,7 @@
 				120,
 				44
 			],
-			"prompt": "the turret of a colossal brutalist alternate-history super-heavy tank in exact side view facing right, without a gun barrel: a big flat-roofed armoured box made of thick vertical slabs, a short angled front plate on the right with a square armoured gun block at two thirds of its height, a long rear bustle on the left, a low ring skirt at the bottom, rows of huge rivets, a small boxy hatch on the roof; cold blue-black gunmetal and soot-black steel, mostly grey-black, rust only as thin dark streaks running down from rivet seams, a little dried mud low down, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "the turret of a colossal brutalist alternate-history super-heavy tank in exact side view facing right, without a gun barrel: a single stepped monolithic turret casting, one solid flat-roofed armoured block of thick vertical slabs, the rear bustle on the left flush with the main block and the same height with no gap and no separate box, a short angled front plate on the right with a square armoured gun block at two thirds of its height, a low ring skirt at the bottom, rows of huge rivets, a small boxy hatch on the roof; evenly sooted dark gunmetal and soot-black steel with uniform weathering, no camouflage, no patches, no blotches, soft vertical rain streaks only, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "turret_secondary",
@@ -141,7 +141,7 @@
 				56,
 				32
 			],
-			"prompt": "a heavy inline four-cylinder diesel engine block in exact side view, blocky blackened gunmetal cast iron, four tall rectangular cylinder windows along the upper half that are empty and pitch black inside, an oil sump below, an exhaust manifold and injector pipes along the top, a faint warm glint on the upper edges; cold grey-black, oily; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "an inline four-cylinder diesel engine block in exact side view, wide and low, a plain flat cast top with four low rocker covers and no ornament, no crown, no crenellations, four dark square cylinder windows evenly spaced along the upper half that are empty and pitch black inside, a heavy rectangular crankcase below with a flat sump, an exhaust manifold pipe along the top; plain blackened gunmetal cast iron, oily, a faint warm glint on the upper edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "flywheel_large",
@@ -197,7 +197,7 @@
 				40,
 				28
 			],
-			"prompt": "a heavy industrial dynamo housing on a cast base, side view, an open round window in the middle, copper bands; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a heavy industrial dynamo housing in exact side view: a squat dark cast-iron drum on a flat cast base with cooling fins on top and bottom, a round open dark window in the middle where the rotor shows, heavy bolted end caps, a small terminal box on top; blackened gunmetal, dull, a faint cold blue-white glint on the edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "dynamo_armature",
@@ -225,7 +225,7 @@
 				40,
 				32
 			],
-			"prompt": "a squat riveted vertical steam boiler with a round pressure gauge face and pipes, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a squat riveted horizontal steam boiler drum in exact side view: dark sooted iron with heavy riveted straps, a steam dome and a short chimney stub on top, a round boss on the side where a gauge sits, dull dark grey-brown lagging, a faint warm firelight glint along its lower edge; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "firebox",
@@ -338,7 +338,7 @@
 				72,
 				36
 			],
-			"prompt": "an enemy tank dug into the ground in exact side view facing LEFT: only its low boxy flat-roofed turret with a short straight gun pointing left shows above a low thick plain concrete revetment block with a chamfered top edge, packed dark earth heaped behind it on the right; the concrete is plain, smooth, unmarked cold grey; the turret cold blue-black gunmetal and soot-black steel, mostly grey-black, rust only as thin dark streaks running down from rivet seams, a little dried mud low down, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "an enemy tank dug in, in exact side view facing LEFT: a low boxy flat-roofed turret with a short straight gun pointing left peeking over a flat chamfered concrete wall, the wall standing in front and covering the whole hull, a plain straight-sided slab with a flat sloped top edge and square corners, no rounded shapes; dark wet concrete in deep grey, darker than the steel, packed dark earth heaped behind it on the right; the turret evenly sooted dark gunmetal and soot-black steel with uniform weathering, no camouflage, no patches, no blotches, soft vertical rain streaks only, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "boss_hull",
@@ -370,7 +370,7 @@
 				64,
 				32
 			],
-			"prompt": "a massive tracked bogie unit of a super-heavy tank in exact side view, as wide as the image: a flat riveted armour frame on top over three big road wheels with a heavy dark track run looping around them; cold blue-black gunmetal and soot-black steel, mostly grey-black, rust only as thin dark streaks running down from rivet seams, a little dried mud low down, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a low armoured wheel bogie frame of a colossal tank in exact side view, as wide as the image: one long flat riveted armour side plate across the top half, under it four large plain solid road wheels in a row, dark disc wheels with a small hub, a dark heavy track run along the bottom; no turret, no gun, no hull, no superstructure, not a vehicle, only the wheel frame; evenly sooted dark gunmetal and soot-black steel with uniform weathering, no camouflage, no patches, no blotches, soft vertical rain streaks only, a faint cold sheen along the top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "boss_bogie_broken",
@@ -455,7 +455,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless strip of near countryside at dusk in strictly flat side-on view without perspective: every feature runs in horizontal layers parallel to the bottom edge, no road receding into the distance, no converging lines; flat at both ends, the sky above completely empty and fully transparent: muddy ploughed fields in horizontal bands, dark hedgerows, an irregular row of tall poplars of uneven heights with gaps, a dark pine wood clump, wire on wooden stakes, a flooded shell crater reflecting firelight, one farmstead burning with bright orange flames and black smoke; everything else dark grey-brown and desaturated; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless strip of near countryside at dusk in strictly flat side-on view without perspective: every feature runs in horizontal layers parallel to the bottom edge, no road receding into the distance, no converging lines; flat at both ends, the sky above completely empty and fully transparent, no smoke plumes and no smoke columns: muddy ploughed fields in horizontal bands, dark hedgerows in clear silhouette, an irregular row of tall dark poplars of uneven heights with gaps, a dark pine wood clump, wire on wooden stakes, a flooded shell crater reflecting firelight, two small farmsteads with burning roofs glowing orange; everything else dark grey-brown and desaturated; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},
@@ -486,7 +486,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: the gate and lamp-lit streets of a small foundry town with chimneys and warm amber lamps",
+			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view, flat at both ends, the sky above the rooftops completely empty and fully transparent: the outskirts of a small grim foundry town under smoke, a row of dark brick sheds and workshops with tall brick chimneys, the glowing orange mouth of a furnace, a few small windows glowing warm amber, steel gantries and a travelling crane over a yard, a few lamp posts with soft amber lamps; everything else dark grey-brown and desaturated; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},

@@ -51,7 +51,7 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d29-6eec-7653-943b-8d9706d03258"
+        "request_id": "01a16d39-d074-79a2-a535-57e0963af51e"
       },
       "tile": true
     },
@@ -115,6 +115,26 @@
       },
       "tile": false
     },
+    "bg_town_near": {
+      "align": "bottom_center",
+      "anchor": [
+        480,
+        140
+      ],
+      "background": "transparent",
+      "file": "bg_town_near.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        960,
+        140
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d3a-0e91-79d2-91fc-eb2503ae3e39"
+      },
+      "tile": true
+    },
     "bg_village_near": {
       "align": "bottom_center",
       "anchor": [
@@ -135,6 +155,26 @@
       },
       "tile": true
     },
+    "boiler": {
+      "align": "bottom_center",
+      "anchor": [
+        20,
+        32
+      ],
+      "background": "transparent",
+      "file": "boiler.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        40,
+        32
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d39-bc54-7872-800c-77c286e99bfc"
+      },
+      "tile": false
+    },
     "boss_bogie": {
       "align": "bottom_center",
       "anchor": [
@@ -151,7 +191,7 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d29-62a7-7882-9547-6d898ab9d567"
+        "request_id": "01a16d39-d059-7311-99bd-5e4e1c4456b6"
       },
       "tile": false
     },
@@ -211,7 +251,27 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d25-664e-7c82-9330-bc3e3967a34f"
+        "request_id": "01a16d39-8495-73c1-a1ae-7672f6ef2b62"
+      },
+      "tile": false
+    },
+    "dynamo_housing": {
+      "align": "bottom_center",
+      "anchor": [
+        20,
+        28
+      ],
+      "background": "transparent",
+      "file": "dynamo_housing.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        40,
+        28
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d39-8495-7633-ba15-fb961ccc3bc7"
       },
       "tile": false
     },
@@ -251,7 +311,7 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d29-1d6b-7ea1-b93c-8d426a3d8748"
+        "request_id": "01a16d39-c2ee-7403-8321-a23313fc2c50"
       },
       "tile": false
     },
@@ -391,7 +451,7 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d25-2646-7840-86b5-3f3f424cff95"
+        "request_id": "01a16d39-841d-7c50-a022-3af18fcba85c"
       },
       "tile": false
     },
@@ -451,7 +511,7 @@
       ],
       "source": {
         "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
-        "request_id": "01a16d25-26bd-7f73-ba19-91fa67e1d685"
+        "request_id": "01a16d39-8496-7401-9d65-e4019c22d9cc"
       },
       "tile": false
     },

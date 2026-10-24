@@ -118,24 +118,28 @@ func engine_lights() -> void:
 			)
 
 
+## Capacitor jars as dark glass (#2e3944) in a dull steel cage; only the charge column glows, a
+## soft cold blue at about half alpha with a brighter meniscus, so the jars read as lights and not
+## as saturated blue surfaces (brief 3: lights are the only near-saturated pixels).
 func paint_machinery_front(item: Node2D) -> void:
 	for i in jars.size():
 		var jar := jars[i]
-		item.draw_rect(
-			jar,
-			Color(TankPalette.COLD_DARK.r, TankPalette.COLD_DARK.g, TankPalette.COLD_DARK.b, 0.55)
-		)
+		item.draw_rect(jar, TankPalette.COLD_DARK)
 		var lv := jar_level(i)
 		var h := roundf(jar.size.y * lv)
 		if h > 0.0:
-			var fill := Rect2(jar.position.x, jar.end.y - h, jar.size.x, h)
+			var fill := Rect2(jar.position.x + 1.0, jar.end.y - h, jar.size.x - 2.0, h)
+			var col := TankPalette.COLD
+			var a := 0.2 if stalled() else 0.5
+			item.draw_rect(fill, TankPalette.with_alpha(col, a))
 			item.draw_rect(
-				fill,
-				TankPalette.darkened(TankPalette.COLD, 0.35) if stalled() else TankPalette.COLD
+				Rect2(fill.position, Vector2(fill.size.x, 1)),
+				TankPalette.with_alpha(TankPalette.COLD_LIGHT, a + 0.15)
 			)
-			item.draw_rect(Rect2(fill.position, Vector2(fill.size.x, 1)), TankPalette.WHITE_COLD)
-		item.draw_rect(jar, TankPalette.STEEL_LIGHT, false, 1.0)
+		item.draw_rect(jar, TankPalette.IRON, false, 1.0)
 		item.draw_rect(
-			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 2),
-			TankPalette.STEEL_BRIGHT
+			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 2), TankPalette.STEEL_DARK
+		)
+		item.draw_rect(
+			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 1), TankPalette.STEEL
 		)

@@ -21,6 +21,7 @@ extends RefCounted
 
 const ART_JSON := "res://assets/tank/art.json"
 const SPRITES_DIR := "res://assets/tank/sprites"
+const RIGS_JSON := "res://assets/tank/rigs.json"
 
 # The 32 colours of art.json by role (tested to be exactly the palette).
 const G0 := Color("#07080a")
@@ -75,8 +76,17 @@ static func texture(id: String) -> Texture2D:
 			if fills_rect(id):
 				img = filled_image(img, size_of(id))
 			if is_steel(id):
-				img = graded_steel(img)
+				var darker := 2 if id == "boss_hull" or id.begins_with("boss_turret") else 0
+				img = graded_steel(img, darker, is_plated(id))
+				img = machinery_fixed(id, img)
 			tex = ImageTexture.create_from_image(img)
+	elif (
+		id == "boss_bogie_broken" and ResourceLoader.exists(SPRITES_DIR.path_join("boss_bogie.png"))
+	):
+		# No drawn wreck yet: break the generated bogie (a missing wheel, a torn belt, char), so
+		# the broken part matches the whole one instead of falling back to a different style.
+		var whole := texture("boss_bogie").get_image()
+		tex = ImageTexture.create_from_image(broken_bogie(whole))
 	if tex == null:
 		tex = ImageTexture.create_from_image(placeholder_image(id))
 		if not _logged.has(id):
@@ -186,10 +196,17 @@ static func is_steel(id: String) -> bool:
 ## The art direction in the pipeline, not only in the prompts (brief 3: steel grey-black, lights
 ## the only near-saturated pixels): every opaque pixel of a steel sprite loses its saturation
 ## (HSV s <= 0.15 above value 0.25, so dark rust and mud survive as accents) and may not use a
-## light colour (fire, lamp or arc); it snaps to the nearest remaining palette colour. Then one
-## pass flattens low-contrast mottling: a pixel within one ramp step of its 3 x 3 median takes the
-## median's colour, while rivets, seams and edges (higher contrast) stay.
-static func graded_steel(src: Image) -> Image:
+## light colour (fire, lamp or arc); it snaps to the nearest remaining palette colour.
+##
+## Then the tone pass (_tone_smooth): grey steel collapses to four body tones (#17181b .. #353739,
+## `darker` steps lower for a sprite that must sit darker, the Behemoth's hull) smoothed by a
+## median over 5 x 5 (large sprites) or 3 x 3, so weathering blotches become soft fields instead of
+## camouflage; rivets and lit rims (two tones above the median) stay as highlights no brighter than
+## #666869, seams (two below) stay as dark lines, and rust survives only where it forms a patch
+## (an isolated rust pixel is speckle and becomes steel). With `plates`, every body field within one
+## tone of the sprite's commonest tone becomes that one plate tone with a lit top edge and a darker
+## foot, so a hull reads as evenly sooted gunmetal (brief 3), not as camouflage.
+static func graded_steel(src: Image, darker: int = 0, plates: bool = false) -> Image:
 	var img := src.duplicate() as Image
 	if img.is_compressed():
 		img.decompress()
@@ -211,7 +228,205 @@ static func graded_steel(src: Image) -> Image:
 			if not remap.has(key):
 				remap[key] = _steel_colour(c, lights.has(key), keep)
 			img.set_pixel(x, y, remap[key])
-	return _flatten_mottling(img)
+	return _tone_smooth(img, darker, plates)
+
+
+## True for the armour sprites whose body is graded as even plates (graded_steel `plates`): the
+## hulls, the turrets, the enemies and the Behemoth's hull and turret.
+static func is_plated(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_hull", "boss_turret"]:
+		if id.begins_with(prefix):
+			return true
+	return false
+
+
+## The grey ramp the tone pass uses, G0 .. G8 (index = tone).
+static func steel_ramp() -> Array[Color]:
+	return [G0, G1, G2, G3, G4, G5, G6, G7, G8]
+
+
+static func _tone_smooth(img: Image, darker: int, plates: bool) -> Image:
+	var w := img.get_width()
+	var h := img.get_height()
+	var ramp := steel_ramp()
+	var lums: Array[float] = []
+	for c in ramp:
+		lums.append(c.get_luminance())
+	var tone := PackedInt32Array()
+	tone.resize(w * h)
+	var rusty := PackedByteArray()
+	rusty.resize(w * h)
+	var cache := {}
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			var i := y * w + x
+			if c.a < 0.5:
+				tone[i] = -1
+				continue
+			var key := c.to_rgba32()
+			if not cache.has(key):
+				var best := 0
+				var lum := c.get_luminance()
+				for k in lums.size():
+					if absf(lums[k] - lum) < absf(lums[best] - lum):
+						best = k
+				cache[key] = best | (256 if c.s > 0.14 and c.v > 0.08 else 0)
+			var v: int = cache[key]
+			tone[i] = v & 255
+			rusty[i] = 1 if v >= 256 else 0
+	var rad := 2 if w * h >= 12000 else 1
+	var med_of := PackedInt32Array()
+	med_of.resize(w * h)
+	var rust_ok := PackedByteArray()
+	rust_ok.resize(w * h)
+	var hist := PackedInt32Array()
+	hist.resize(ramp.size())
+	var body_hist := PackedInt32Array()
+	body_hist.resize(ramp.size())
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if tone[i] < 0:
+				continue
+			hist.fill(0)
+			var n := 0
+			var rn := 0
+			for dy in range(-rad, rad + 1):
+				var yy := y + dy
+				if yy < 0 or yy >= h:
+					continue
+				for dx in range(-rad, rad + 1):
+					var xx := x + dx
+					if xx < 0 or xx >= w:
+						continue
+					var j := yy * w + xx
+					if tone[j] < 0:
+						continue
+					hist[tone[j]] += 1
+					n += 1
+					rn += rusty[j]
+			var med := 0
+			var acc := 0
+			for k in hist.size():
+				acc += hist[k]
+				if acc * 2 >= n:
+					med = k
+					break
+			med_of[i] = med
+			rust_ok[i] = 1 if rusty[i] == 1 and rn * 2 >= n else 0
+			if absi(tone[i] - med) < 2:
+				body_hist[med] += 1
+	# Even plates: the most common body tone is the plate tone; a field within one tone of it is
+	# plate (no blotches), lit one tone up in its top three rows and one down in its lowest fifth.
+	var base := 0
+	for k in body_hist.size():
+		if body_hist[k] > body_hist[base]:
+			base = k
+	var tops := PackedInt32Array()
+	tops.resize(w)
+	var bottoms := PackedInt32Array()
+	bottoms.resize(w)
+	for x in w:
+		tops[x] = -1
+		for y in h:
+			if tone[y * w + x] >= 0:
+				if tops[x] < 0:
+					tops[x] = y
+				bottoms[x] = y
+	var out := img.duplicate() as Image
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var t := tone[i]
+			if t < 0:
+				continue
+			var med := med_of[i]
+			var d := t - med
+			var col: Color
+			if d >= 2:
+				col = ramp[mini(t, 8)]
+			elif d <= -2:
+				col = ramp[maxi(med - 2, 1)]
+			elif plates and absi(med - base) <= 1:
+				var shift := 0
+				var span := maxi(bottoms[x] - tops[x], 1)
+				if y - tops[x] < 3:
+					shift = 1
+				elif float(y - tops[x]) / float(span) > 0.8:
+					shift = -1
+				col = ramp[clampi(base + shift - darker, 2, 6)]
+			else:
+				col = ramp[clampi(med - darker, 2, 5)]
+			if rust_ok[i] == 1:
+				col = img.get_pixel(x, y)
+			out.set_pixel(x, y, col)
+	return out
+
+
+## Machinery whose code-drawn parts need their openings exactly where rigs.json says: the diesel
+## block's four cylinder windows (dark recesses the pistons run in) and the dynamo's armature window.
+## The generated casting keeps its own silhouette and weathering; other ids come back unchanged.
+static func machinery_fixed(id: String, img: Image) -> Image:
+	if id != "diesel_block" and id != "dynamo_housing":
+		return img
+	var c := Canvas.new(img.get_width(), img.get_height())
+	c.img = img
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var mach: Dictionary = (rigs as Dictionary).get("machinery", {}) if rigs is Dictionary else {}
+	if id == "diesel_block":
+		var wins: Array = (mach.get("diesel_block", {}) as Dictionary).get("cylinder_windows", [])
+		for wv: Variant in wins:
+			var r: Array = wv
+			var x := int(r[0])
+			var y := int(r[1])
+			c.rect(x - 1, y - 1, int(r[2]) + 2, int(r[3]) + 2, G3)
+			c.rect(x, y, int(r[2]), int(r[3]), G0)
+			c.rect(x, y, int(r[2]), 1, G1)
+			c.rect(x - 1, y - 1, int(r[2]) + 2, 1, G5)
+	else:
+		var aw: Array = (mach.get("dynamo_housing", {}) as Dictionary).get(
+			"armature_window", [20, 14, 9]
+		)
+		var cx := float(aw[0])
+		var cy := float(aw[1])
+		var r := float(aw[2])
+		c.disc(cx, cy, r + 1.6, G3)
+		c.ring(cx, cy, r + 1.6, r + 0.6, G5)
+		c.disc(cx, cy, r, G0)
+	return c.img
+
+
+## The whole bogie broken: the third wheel and its belt torn away, everything a step darker and
+## charred toward the break. Deterministic, palette colours only.
+static func broken_bogie(whole: Image) -> Image:
+	var img := whole.duplicate() as Image
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var ramp := steel_ramp()
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			var lum := c.get_luminance()
+			var best := 0
+			for k in ramp.size():
+				if absf(ramp[k].get_luminance() - lum) < absf(ramp[best].get_luminance() - lum):
+					best = k
+			var near_break := absf(float(x) - w * 0.62) < w * 0.22
+			img.set_pixel(x, y, ramp[maxi(best - (2 if near_break else 1), 0)])
+	var c2 := Canvas.new(w, h)
+	c2.img = img
+	var gx := int(w * 0.55)
+	c2.poly(
+		[gx, int(h * 0.45), gx + 6, int(h * 0.38), gx + 14, int(h * 0.5), gx + 12, h, gx - 2, h],
+		CLEAR
+	)
+	c2.thick_line(gx + 14.0, h * 0.55, gx + 20.0, h - 1.0, 2.0, G1)
+	c2.thick_line(gx - 2.0, h * 0.6, gx - 6.0, h - 1.0, 2.0, G1)
+	return c2.img
 
 
 ## The seven light colours of the palette (warm fire and lamp, cold arc) as RGBA32 keys.
@@ -229,38 +444,6 @@ static func _steel_colour(c: Color, is_light: bool, keep: Array[Color]) -> Color
 		s = minf(s, 0.15)
 	var g := Color.from_hsv(c.h, s, v)
 	return _nearest(g, keep)
-
-
-static func _flatten_mottling(src: Image) -> Image:
-	var w := src.get_width()
-	var h := src.get_height()
-	var out := src.duplicate() as Image
-	for y in range(1, h - 1):
-		for x in range(1, w - 1):
-			var c := src.get_pixel(x, y)
-			if c.a < 0.5:
-				continue
-			var lums: Array[float] = []
-			var cols: Array[Color] = []
-			var full := true
-			for dy in range(-1, 2):
-				for dx in range(-1, 2):
-					var n := src.get_pixel(x + dx, y + dy)
-					if n.a < 0.5:
-						full = false
-						break
-					lums.append(n.get_luminance())
-					cols.append(n)
-				if not full:
-					break
-			if not full:
-				continue
-			var sorted := lums.duplicate()
-			sorted.sort()
-			var med := lums.find(sorted[4])
-			if absf(c.get_luminance() - lums[med]) < 0.055:
-				out.set_pixel(x, y, cols[med])
-	return out
 
 
 static func _nearest(c: Color, pal: Array[Color]) -> Color:
@@ -561,12 +744,12 @@ static func _wheel(
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
 	c.disc(cx, cy, r_out, rim)
-	c.disc(cx, cy, r_in, G2)
+	c.disc(cx, cy, r_in, G1)
 	for i in spokes:
 		var a := TAU * i / spokes + 0.3
-		c.thick_line(cx, cy, cx + cos(a) * (r_in + 1.0), cy + sin(a) * (r_in + 1.0), 1.6, spoke)
-	c.disc(cx, cy, maxf(r_out * 0.22, 2.0), G8)
-	c.disc(cx, cy, maxf(r_out * 0.1, 1.0), G2)
+		c.thick_line(cx, cy, cx + cos(a) * (r_in + 1.0), cy + sin(a) * (r_in + 1.0), 1.8, spoke)
+	c.disc(cx, cy, maxf(r_out * 0.22, 2.0), G4)
+	c.disc(cx, cy, maxf(r_out * 0.1, 1.0), G1)
 
 
 # --- Hulls and turrets -----------------------------------------------------------------------------
@@ -607,10 +790,6 @@ static func _hull(c: Canvas, mounts: bool) -> void:
 	_rivets(c, 8, w - 10, bot + 5, 8, G8, G2)
 	_streaks(c, 14, w - 24, top - 3, 5, R0)
 	_streaks(c, 8, w - 10, bot + 7, 4, R0)
-	# Soot on the roof, rust low down.
-	c.speckle(0, 0, w, top, G3, 0.06, 1, true)
-	c.speckle(0, bot, w, h - bot, R1, 0.08, 2, true)
-	c.speckle(0, bot, w, h - bot, R0, 0.08, 3, true)
 	# Rear: tow lugs and an exhaust grille on the roof.
 	c.rect(1, 18, 4, 6, G4)
 	c.rect(3, 19, 2, 4, G2)
@@ -667,8 +846,6 @@ static func _turret(c: Canvas) -> void:
 	c.rect(w - 4, my - 3, 4, 6, G2)
 	c.frame(w - 11, my - 8, 11, 16, G4)
 	c.line(w - 11, my - 8, w - 2, my - 8, G9)
-	c.speckle(0, 0, w, h, G3, 0.1, 1, true)
-	c.speckle(0, 4, w, h - 8, R1, 0.05, 2, true)
 	_streaks(c, 10, w - 14, 9, 4, R0)
 
 
@@ -685,7 +862,6 @@ static func _turret_secondary(c: Canvas) -> void:
 	c.rect(w - 4, my - 2, 4, 4, G2)
 	c.frame(w - 9, my - 5, 9, 10, G4)
 	c.rect((w >> 1) - 5, 0, 8, 2, G8)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
 
 
 # --- Rooms (opaque back walls with an empty middle) -----------------------------------------------
@@ -695,53 +871,48 @@ static func _room(c: Canvas, kind: String) -> void:
 	var w := c.w
 	var h := c.h
 	c.fill(G2)
-	# Wall panels: a seam every 16 px, a darker middle band for the machinery.
+	# Wall panels: a seam every 16 px, a darker middle band for the machinery. No speckle and no
+	# coloured trim: the engine's own light is the only colour in the room (brief 3).
 	_seams(c, 7, w - 8, 6, h - 8, 16, G1, G3)
-	c.rect(4, 12, w - 8, h - 24, G1 if kind != "steam" else B0)
-	c.speckle(0, 0, w, h, G3, 0.06, 4, false)
+	c.rect(4, 12, w - 8, h - 24, G1)
 	# Floor plate with a grating pattern, ceiling girder with a pipe.
-	c.rect(0, h - 8, w, 8, G4)
-	c.rect(0, h - 8, w, 1, G8)
-	c.rect(0, h - 7, w, 1, G2)
+	c.rect(0, h - 8, w, 8, G3)
+	c.rect(0, h - 8, w, 1, G5)
+	c.rect(0, h - 7, w, 1, G1)
 	var x := 2
 	while x < w - 2:
-		c.rect(x, h - 5, 2, 3, G2)
+		c.rect(x, h - 5, 2, 3, G1)
 		x += 5
 	c.rect(0, 0, w, 6, G3)
 	c.rect(0, 5, w, 1, G1)
-	c.rect(2, 1, w - 4, 3, G6)
-	c.rect(2, 1, w - 4, 1, G9)
+	c.rect(2, 1, w - 4, 3, G4)
+	c.rect(2, 1, w - 4, 1, G5)
 	for i in range(8, w - 6, 18):
-		c.rect(i, 0, 2, 6, G4)
-	# Kind marks (each engine's own look at the edges, the middle stays empty).
+		c.rect(i, 0, 2, 6, G2)
+	# Kind marks at the edges (pipes, cable trunks, a steam main), the middle stays empty.
 	match kind:
 		"diesel":
-			c.rect(w - 9, 8, 5, h - 18, B2)
-			c.rect(w - 9, 8, 1, h - 18, B4)
-			c.speckle(4, 14, 20, 24, B1, 0.18, 6, false)
-			c.speckle(4, h - 14, w - 8, 6, B2, 0.2, 7, false)
-			c.rect(3, 9, 2, h - 20, R1)
+			c.rect(w - 9, 8, 5, h - 18, B1)
+			c.rect(w - 9, 8, 1, h - 18, B2)
+			c.rect(3, 9, 2, h - 20, R0)
 		"dynamo":
 			c.rect(w - 8, 8, 3, h - 18, C0)
-			c.rect(w - 8, 8, 1, h - 18, C1)
+			c.rect(w - 8, 8, 1, h - 18, G4)
 			for i in 3:
-				c.rect(w - 11, 10 + i * 3, 9, 1, C1)
+				c.rect(w - 11, 10 + i * 3, 9, 1, G3)
 			c.rect(4, 8, 3, h - 18, C0)
-			c.rect(4, 8, 1, h - 18, C1)
-			c.speckle(8, 10, w - 20, 10, G4, 0.1, 8, false)
+			c.rect(4, 8, 1, h - 18, G4)
 		"steam":
-			c.rect(w - 10, 8, 6, h - 18, R1)
-			c.rect(w - 10, 8, 2, h - 18, R2)
-			c.rect(5, 7, w - 20, 2, R0)
-			c.disc(w - 7, 14, 3.0, R2)
-			c.disc(w - 7, 14, 1.5, R0)
-			c.speckle(0, 6, w, h - 12, R0, 0.12, 9, false)
+			c.rect(w - 10, 8, 6, h - 18, R0)
+			c.rect(w - 10, 8, 2, h - 18, B2)
+			c.rect(5, 7, w - 20, 2, B1)
+			c.disc(w - 7, 14, 3.0, B2)
+			c.disc(w - 7, 14, 1.5, G1)
 		_:
-			c.rect(w - 10, 8, 6, h - 18, B2)
-			c.rect(w - 10, 8, 1, h - 18, B4)
-			c.rect(4, 8, 6, h - 18, G4)
-			c.rect(4, 8, 1, h - 18, G7)
-			c.speckle(10, 12, w - 22, h - 24, B1, 0.12, 10, false)
+			c.rect(w - 10, 8, 6, h - 18, B1)
+			c.rect(w - 10, 8, 1, h - 18, B2)
+			c.rect(4, 8, 6, h - 18, G3)
+			c.rect(4, 8, 1, h - 18, G4)
 	c.frame(0, 0, w, h, G1)
 	c.frame(1, 1, w - 2, h - 2, G3)
 
@@ -774,31 +945,32 @@ static func _diesel_block(c: Canvas) -> void:
 	_rivets(c, 4, w - 6, 21, 6, G9, G3)
 	c.rect(w - 6, 8, 4, 12, G4)
 	c.rect(0, 9, 3, 10, G5)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
-	c.speckle(0, 0, w, h, B2, 0.07, 2, true)
 
 
+## A dark cast flywheel: a heavy rim one tone above its spokes, a lit pixel on the rim so the spin
+## reads, a crank pin; no outline and nothing pale (brief 3: lit only by the cylinders and the lamp).
 static func _flywheel(c: Canvas, spokes: int) -> void:
-	_wheel(c, c.w * 0.5 - 0.5, c.w * 0.5 - 4.0, spokes, G7, G9)
+	_wheel(c, c.w * 0.5 - 0.5, c.w * 0.5 - 4.0, spokes, G4, G3)
 	var cx := c.w * 0.5
-	c.disc(cx + c.w * 0.27, c.h * 0.5 - 1.0, 1.4, G2)
-	c.ring(cx, c.h * 0.5, c.w * 0.5 - 0.5, c.w * 0.5 - 1.8, G9)
+	c.ring(cx, c.h * 0.5, c.w * 0.5 - 0.5, c.w * 0.5 - 1.5, G5)
+	c.disc(cx + c.w * 0.27, c.h * 0.5 - 1.0, 1.4, G1)
+	c.px(int(cx), 1, G7)
 
 
 static func _gear(c: Canvas, teeth: int, tooth: int) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
 	var r := c.w * 0.5 - float(tooth) * 0.5
-	c.disc(cx, cy, r, G7)
+	c.disc(cx, cy, r, G4)
 	for i in teeth:
 		var a := TAU * i / teeth
 		var tx := cx + cos(a) * (r + float(tooth) * 0.25)
 		var ty := cy + sin(a) * (r + float(tooth) * 0.25)
-		c.disc(tx, ty, float(tooth) * 0.5, G8)
-	c.disc(cx, cy, r - 2.0, G6)
-	c.ring(cx, cy, r - 2.0, r - 3.0, G9)
-	c.disc(cx, cy, maxf(r * 0.3, 1.5), G2)
-	c.px(int(cx - 1.0), int(cy - r * 0.55), G10)
+		c.disc(tx, ty, float(tooth) * 0.5, G4)
+	c.disc(cx, cy, r - 2.0, G3)
+	c.ring(cx, cy, r - 2.0, r - 3.0, G5)
+	c.disc(cx, cy, maxf(r * 0.3, 1.5), G1)
+	c.px(int(cx - 1.0), int(cy - r * 0.55), G7)
 
 
 ## The Bulwark's three-way gearbox: a case with a lever window and three output stubs at
@@ -806,20 +978,19 @@ static func _gear(c: Canvas, teeth: int, tooth: int) -> void:
 static func _gearbox(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(3, 4, w - 8, h - 6, G6)
-	c.rect(3, 4, w - 8, 2, G8)
-	c.rect(3, 4, w - 8, 1, G10)
+	c.rect(3, 4, w - 8, h - 6, G4)
+	c.rect(3, 4, w - 8, 2, G5)
+	c.rect(3, 4, w - 8, 1, G6)
 	c.rect(5, 9, w - 12, 9, G1)
-	c.frame(5, 9, w - 12, 9, G4)
-	c.rect(8, 12, w - 18, 2, G3)
-	_rivets(c, 6, w - 8, h - 6, 6, G9, G3)
-	c.rect(0, 22, 5, 5, G8)
-	c.rect(0, 23, 5, 2, G10)
-	c.rect(13, 0, 6, 5, G8)
-	c.rect(14, 0, 4, 2, G10)
-	c.rect(w - 5, 11, 5, 6, G8)
-	c.rect(w - 5, 12, 5, 2, G10)
-	c.speckle(0, 0, w, h, G3, 0.12, 2, true)
+	c.frame(5, 9, w - 12, 9, G3)
+	c.rect(8, 12, w - 18, 2, G2)
+	_rivets(c, 6, w - 8, h - 6, 6, G6, G2)
+	c.rect(0, 22, 5, 5, G5)
+	c.rect(0, 23, 5, 2, G6)
+	c.rect(13, 0, 6, 5, G5)
+	c.rect(14, 0, 4, 2, G6)
+	c.rect(w - 5, 11, 5, 6, G5)
+	c.rect(w - 5, 12, 5, 2, G6)
 
 
 ## The dynamo's casing: a barrel with cooling fins, end caps, a terminal box, and a round window
@@ -827,39 +998,36 @@ static func _gearbox(c: Canvas) -> void:
 static func _dynamo_housing(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(2, 3, w - 4, h - 5, G6)
-	c.rect(2, 3, w - 4, 2, G8)
-	c.rect(2, 3, w - 4, 1, G10)
-	c.rect(0, 6, 4, h - 10, G7)
-	c.rect(w - 4, 6, 4, h - 10, G7)
+	c.rect(2, 3, w - 4, h - 5, G4)
+	c.rect(2, 3, w - 4, 2, G5)
+	c.rect(2, 3, w - 4, 1, G6)
+	c.rect(0, 6, 4, h - 10, G5)
+	c.rect(w - 4, 6, 4, h - 10, G5)
 	for i in 6:
-		c.rect(7 + i * 5, 4, 2, 3, G4)
-		c.rect(7 + i * 5, h - 5, 2, 3, G4)
-	c.rect(w - 14, 0, 9, 4, G5)
-	c.rect(w - 13, 0, 7, 1, C2)
+		c.rect(7 + i * 5, 4, 2, 3, G2)
+		c.rect(7 + i * 5, h - 5, 2, 3, G2)
+	c.rect(w - 14, 0, 9, 4, G3)
 	c.disc(20.0, 14.0, 11.0, G3)
 	c.disc(20.0, 14.0, 9.0, G0)
-	c.ring(20.0, 14.0, 11.0, 9.5, C1)
+	c.ring(20.0, 14.0, 11.0, 9.5, G5)
 	c.rect(4, 22, 6, 3, C0)
-	c.rect(4, 22, 6, 1, C1)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
 
 
 ## The rotor face-on: a disc with eight coil slots and a hub; the slots differ so it reads spinning.
 static func _dynamo_armature(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 9.5, G7)
-	c.ring(cx, cy, 9.5, 8.5, G9)
+	c.disc(cx, cy, 9.5, G3)
+	c.ring(cx, cy, 9.5, 8.5, G4)
 	for i in 8:
 		var a := TAU * i / 8.0
-		var col := R2 if i % 2 == 0 else R1
+		var col := B2 if i % 2 == 0 else R0
 		c.thick_line(
 			cx + cos(a) * 3.0, cy + sin(a) * 3.0, cx + cos(a) * 7.5, cy + sin(a) * 7.5, 2.2, col
 		)
-	c.disc(cx, cy, 3.0, G9)
-	c.disc(cx, cy, 1.4, G2)
-	c.px(int(cx) + 4, int(cy) - 6, C2)
+	c.disc(cx, cy, 3.0, G5)
+	c.disc(cx, cy, 1.4, G1)
+	c.px(int(cx) + 4, int(cy) - 6, G7)
 
 
 ## A burst of cold arc light: a bright core, jagged arms.
@@ -884,43 +1052,35 @@ static func _spark(c: Canvas) -> void:
 static func _boiler(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	# Desaturated lagging (brief 3: the only orange in the room is the flame).
-	c.rect(2, 6, w - 4, h - 8, B3)
-	c.rect(0, 9, w, h - 14, B3)
-	c.rect(2, 6, w - 4, 3, B4)
-	c.rect(2, 6, w - 4, 1, G8)
-	c.rect(2, h - 4, w - 4, 3, B2)
+	# Sooted iron (brief 3: the only orange in the room is the flame).
+	c.rect(2, 6, w - 4, h - 8, G3)
+	c.rect(0, 9, w, h - 14, G3)
+	c.rect(2, 6, w - 4, 3, G4)
+	c.rect(2, 6, w - 4, 1, G5)
+	c.rect(2, h - 4, w - 4, 3, B1)
 	for x: int in [8, 18, 28, 36]:
-		c.rect(x, 6, 2, h - 8, G4)
-		c.rect(x + 2, 6, 1, h - 8, G8)
-	_rivets(c, 4, w - 4, 13, 5, G8, B2)
-	c.rect(28, 0, 5, 7, G5)
-	c.rect(28, 0, 5, 1, G9)
-	c.rect(8, 2, 9, 5, B4)
-	c.rect(8, 2, 9, 1, G9)
+		c.rect(x, 6, 2, h - 8, G2)
+		c.rect(x + 2, 6, 1, h - 8, G4)
+	_rivets(c, 4, w - 4, 13, 5, G5, G1)
+	c.rect(28, 0, 5, 7, G4)
+	c.rect(28, 0, 5, 1, G6)
+	c.rect(8, 2, 9, 5, G4)
+	c.rect(8, 2, 9, 1, G6)
 	c.disc(20.0, 11.0, 6.0, G4)
-	c.disc(20.0, 11.0, 5.0, G11)
-	c.disc(20.0, 11.0, 3.4, G2)
-	c.px(20, 8, G10)
-	c.px(21, 10, F0)
-	c.speckle(0, 0, w, h, B2, 0.12, 3, true)
+	c.disc(20.0, 11.0, 5.0, G2)
 
 
 ## The firebox door: an iron box with an open hatch; the flame sprite sits in the opening.
 static func _firebox(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(0, 0, w, h, G5)
-	c.rect(0, 0, w, 2, G8)
+	c.rect(0, 0, w, h, G4)
+	c.rect(0, 0, w, 2, G5)
 	c.rect(3, 4, w - 6, h - 7, G0)
-	c.frame(3, 4, w - 6, h - 7, G7)
-	c.rect(4, h - 5, w - 8, 2, R1)
-	c.px(6, h - 4, F0)
-	c.px(w - 8, h - 4, F0)
-	c.px(9, h - 5, F1)
-	c.rect(0, h - 3, w, 3, G3)
-	_rivets(c, 2, w - 3, 2, 5, G9, G3)
-	c.speckle(0, 0, w, h, R1, 0.1, 2, true)
+	c.frame(3, 4, w - 6, h - 7, G3)
+	c.rect(4, h - 5, w - 8, 2, R0)
+	c.rect(0, h - 3, w, 3, G2)
+	_rivets(c, 2, w - 3, 2, 5, G6, G2)
 
 
 ## A flame: teardrop layers from orange to a white-hot core, standing on the sprite's bottom.
@@ -944,18 +1104,18 @@ static func _flame_layer(
 static func _flyball(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(7, 2, 2, h - 5, G8)
-	c.rect(7, 2, 1, h - 5, G10)
-	c.disc(8.0, 3.0, 2.0, G6)
-	c.thick_line(8.0, 4.0, 3.0, 10.0, 1.0, G9)
-	c.thick_line(8.0, 4.0, 13.0, 10.0, 1.0, G9)
-	c.disc(3.0, 11.0, 2.6, G10)
-	c.disc(13.0, 11.0, 2.6, G10)
-	c.px(2, 10, G11)
-	c.px(12, 10, G11)
-	c.rect(6, 12, 4, 3, G5)
-	c.rect(2, h - 4, w - 4, 4, G6)
-	c.rect(2, h - 4, w - 4, 1, G9)
+	c.rect(7, 2, 2, h - 5, G5)
+	c.rect(7, 2, 1, h - 5, G6)
+	c.disc(8.0, 3.0, 2.0, G4)
+	c.thick_line(8.0, 4.0, 3.0, 10.0, 1.0, G5)
+	c.thick_line(8.0, 4.0, 13.0, 10.0, 1.0, G5)
+	c.disc(3.0, 11.0, 2.6, G5)
+	c.disc(13.0, 11.0, 2.6, G5)
+	c.px(2, 10, G7)
+	c.px(12, 10, G7)
+	c.rect(6, 12, 4, 3, G3)
+	c.rect(2, h - 4, w - 4, 4, G4)
+	c.rect(2, h - 4, w - 4, 1, G5)
 
 
 ## A round, lumpy cloud of three shades (smoke or steam).
@@ -977,40 +1137,37 @@ static func _puff(c: Canvas, light: Color, mid: Color, dark: Color, lumps: int) 
 static func _shell_rack(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(0, 0, w, h, G4)
-	c.rect(1, 1, w - 2, h - 2, G2)
-	c.frame(0, 0, w, h, G6)
-	c.rect(0, h - 5, w, 5, G5)
-	c.rect(0, h - 5, w, 1, G8)
-	c.rect(0, 3, w, 2, G6)
+	c.rect(0, 0, w, h, G3)
+	c.rect(1, 1, w - 2, h - 2, G1)
+	c.frame(0, 0, w, h, G4)
+	c.rect(0, h - 5, w, 5, G3)
+	c.rect(0, h - 5, w, 1, G5)
+	c.rect(0, 3, w, 2, G4)
 	for i in 3:
 		var x := 4 + i * 9
-		c.rect(x, 12, 7, 24, B4)
-		c.poly([x, 12, x + 1, 7, x + 3, 5, x + 4, 5, x + 6, 7, x + 7, 12], G9)
-		c.rect(x + 1, 12, 1, 24, B5)
-		c.rect(x, 17, 7, 2, R2)
-		c.rect(x, 30, 7, 2, G7)
-		c.px(x + 2, 8, G11)
-	c.rect(0, 8, 2, h - 14, G7)
-	c.rect(w - 2, 8, 2, h - 14, G7)
-	_rivets(c, 3, w - 4, 1, 6, G9, G3)
+		c.rect(x, 12, 7, 24, B2)
+		c.poly([x, 12, x + 1, 7, x + 3, 5, x + 4, 5, x + 6, 7, x + 7, 12], G4)
+		c.rect(x + 1, 12, 1, 24, B3)
+		c.rect(x, 30, 7, 2, B1)
+	c.rect(0, 8, 2, h - 14, G4)
+	c.rect(w - 2, 8, 2, h - 14, G4)
+	_rivets(c, 3, w - 4, 1, 6, G5, G1)
 
 
 # --- Running gear (face-on) -----------------------------------------------------------------------
 
 
+## A road wheel face-on: a dark disc with a soft rim, a solid hub and one lit pixel on top (no ring
+## around a square hub, which reads as a "0" at 1080p), one dark lightening hole so the spin shows.
 static func _road_wheel(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 8.8, G2)
-	c.disc(cx, cy, 7.0, G6)
-	c.ring(cx, cy, 7.0, 6.0, G8)
-	for i in 6:
-		var a := TAU * i / 6.0 + 0.2
-		c.disc(cx + cos(a) * 4.4, cy + sin(a) * 4.4, 1.2, G2)
-	c.disc(cx, cy, 2.4, G9)
-	c.disc(cx, cy, 1.0, G2)
-	c.px(int(cx) + 5, int(cy) - 5, G11)
+	c.disc(cx, cy, 8.8, G1)
+	c.disc(cx, cy, 7.4, G3)
+	c.ring(cx, cy, 7.4, 6.4, G4)
+	c.disc(cx, cy, 2.6, G2)
+	c.disc(cx + 4.0, cy + 1.5, 1.3, G2)
+	c.px(int(cx), int(cy) - 7, G6)
 
 
 static func _sprocket(c: Canvas) -> void:
@@ -1018,29 +1175,27 @@ static func _sprocket(c: Canvas) -> void:
 	var cy := c.h * 0.5
 	for i in 10:
 		var a := TAU * i / 10.0
-		c.disc(cx + cos(a) * 9.6, cy + sin(a) * 9.6, 1.9, G7)
-	c.disc(cx, cy, 9.0, G6)
-	c.ring(cx, cy, 9.0, 8.0, G8)
+		c.disc(cx + cos(a) * 9.6, cy + sin(a) * 9.6, 1.9, G3)
+	c.disc(cx, cy, 9.0, G3)
+	c.ring(cx, cy, 9.0, 8.0, G4)
 	for i in 5:
 		var a := TAU * (i + 0.5) / 5.0
-		c.disc(cx + cos(a) * 5.4, cy + sin(a) * 5.4, 1.9, G2)
-	c.disc(cx, cy, 3.0, G9)
-	c.disc(cx, cy, 1.3, G2)
-	c.px(int(cx) + 6, int(cy) - 4, G10)
+		c.disc(cx + cos(a) * 5.4, cy + sin(a) * 5.4, 1.9, G1)
+	c.disc(cx, cy, 2.6, G2)
+	c.px(int(cx), int(cy) - 9, G6)
 
 
 static func _idler(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 9.6, G3)
-	c.disc(cx, cy, 8.0, G6)
-	c.ring(cx, cy, 8.0, 7.0, G9)
+	c.disc(cx, cy, 9.6, G1)
+	c.disc(cx, cy, 8.0, G3)
+	c.ring(cx, cy, 8.0, 7.0, G4)
 	for i in 4:
 		var a := TAU * i / 4.0 + 0.5
-		c.thick_line(cx, cy, cx + cos(a) * 6.5, cy + sin(a) * 6.5, 1.8, G4)
-	c.disc(cx, cy, 3.4, G8)
-	c.disc(cx, cy, 1.4, G2)
-	c.px(int(cx) - 4, int(cy) - 5, G11)
+		c.thick_line(cx, cy, cx + cos(a) * 6.5, cy + sin(a) * 6.5, 1.8, G2)
+	c.disc(cx, cy, 2.8, G2)
+	c.px(int(cx), int(cy) - 8, G6)
 
 
 # --- Enemies (facing left, the gun at the left edge) -----------------------------------------------
@@ -1275,10 +1430,10 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 	c.rect(6, 6, w - 12, 2, G4)
 	var x := 14
 	while x < w - 10:
-		c.disc(x + 0.5, 21.0, 6.0, G5)
-		c.ring(x + 0.5, 21.0, 6.0, 5.0, G8)
-		c.disc(x + 0.5, 21.0, 2.0, G9)
-		c.disc(x + 0.5, 21.0, 0.8, G2)
+		c.disc(x + 0.5, 21.0, 6.0, G3)
+		c.ring(x + 0.5, 21.0, 6.0, 5.0, G4)
+		c.disc(x + 0.5, 21.0, 2.0, G2)
+		c.px(x, 15, G6)
 		x += 12
 	c.rect(6, h - 3, w - 12, 3, G1)
 	if broken:
@@ -1287,11 +1442,6 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 		c.poly([18, 12, 24, 14, 22, 24, 16, 26], CLEAR)
 		c.line(36, 12, 44, 30, G1)
 		c.line(22, 14, 18, 30, G1)
-		c.speckle(0, 0, w, h, G0, 0.35, 4, true)
-		c.speckle(0, 0, w, h, R0, 0.15, 5, true)
-		c.px(30, 18, F1)
-		c.px(29, 19, F0)
-		c.px(31, 19, F0)
 		c.poly([40, 22, 54, 26, 58, 32, 40, 32], G3)
 
 
@@ -1299,33 +1449,35 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 
 
 ## Three angle-iron hedgehogs, each three crossed beams.
+## Three hedgehogs of heavy angle iron: thick dark beams lit only along their upper edges, no
+## outline and no speckle, so they read as steel on the tank's plane, not as vector lines.
 static func _tank_traps(c: Canvas) -> void:
 	for i in 3:
 		var cx := 11.0 + i * 21.0
 		var cy := 13.0
-		c.thick_line(cx - 8.0, cy + 9.0, cx + 8.0, cy - 9.0, 2.6, G6)
-		c.thick_line(cx - 8.0, cy - 9.0, cx + 8.0, cy + 9.0, 2.6, G5)
-		c.thick_line(cx - 10.0, cy, cx + 10.0, cy, 2.6, G7)
-		c.thick_line(cx - 8.0, cy + 8.0, cx + 8.0, cy - 8.0, 1.0, G9)
-		c.disc(cx, cy, 2.0, G4)
-	c.speckle(0, 0, 64, 24, R1, 0.15, 1, true)
-	c.speckle(0, 0, 64, 24, R2, 0.05, 2, true)
+		c.thick_line(cx - 8.0, cy + 9.0, cx + 8.0, cy - 9.0, 3.4, G3)
+		c.thick_line(cx - 8.0, cy - 9.0, cx + 8.0, cy + 9.0, 3.4, G2)
+		c.thick_line(cx - 10.0, cy, cx + 10.0, cy, 3.4, G4)
+		c.thick_line(cx - 7.0, cy + 7.0, cx + 7.0, cy - 9.0, 1.0, G5)
+		c.hline(int(cx) - 9, int(cx) + 9, int(cy) - 2, G5)
+		c.disc(cx, cy, 2.2, G2)
 
 
 ## Barbed wire: leaning stakes with coiled strands between them.
+## Barbed wire on stakes: dark leaning posts and heavy sagging strands, the barbs as small dark
+## knots; one dim highlight row per strand.
 static func _wire(c: Canvas) -> void:
 	for x: int in [4, 20, 36, 52, 60]:
-		c.rect(x, 2, 2, 18, B3)
-		c.rect(x, 2, 1, 18, B5)
+		c.rect(x, 2, 3, 18, B1)
+		c.rect(x, 2, 1, 18, B3)
 	for k in 3:
 		var y0 := 5 + k * 5
 		for x in range(4, 60):
 			var yy := y0 + int(round(sin(x * 0.9 + k) * 2.0))
-			c.px(x, yy, G8)
-			c.px(x + 1, yy + 1, G6)
+			c.px(x, yy, G4)
+			c.px(x, yy + 1, G2)
 		for t in range(8, 58, 8):
-			c.px(t, y0 - 2 + (k % 2), G10)
-			c.px(t + 1, y0 + 3, G10)
+			c.rect(t, y0 - 1 + (k % 2), 2, 2, G3)
 	c.rect(0, 18, 64, 2, B1)
 
 

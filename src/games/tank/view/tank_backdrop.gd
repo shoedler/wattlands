@@ -19,8 +19,19 @@ const SKY_TOP_Y := 10.0
 const HILLS_BOTTOM_Y := 252.0
 const NEAR_BOTTOM_Y := 292.0
 const GROUND_TOP_Y := 290.0
-## Below the ground line, in the HUD band: the debris frames the bottom edge and never covers the tracks.
-const DEBRIS_BOTTOM_Y := 358.0
+## The debris plane's bottom: its silhouette tops reach y 286-300, just above the bottom HUD panels,
+## so the blurred, darkened foreground reads as its own depth layer in front of the road.
+const DEBRIS_BOTTOM_Y := 324.0
+## Distant smoke columns rising off the horizon fires (a plane between the sky and the hills).
+const SMOKE_FACTOR := 0.12
+const SMOKE_CELL_PX := 210.0
+const SMOKE_BASE_Y := 214.0
+const SMOKE_RISE_PX := 175.0
+const SMOKE_PUFFS := 10
+const ASH_FLECKS := 48
+## The columns' smoke: warm umber at the base (fire-lit), grey at the top.
+const SMOKE_TONE := Color("#43362e")
+const SMOKE_TOP := Color("#3f4246")
 ## Scenery lights repeat every cell of this many plane px.
 const CELL_PX := 150.0
 const FALLBACK_NEAR := "bg_fields_near"
@@ -41,6 +52,12 @@ var near_id: String = ""
 ## Times a near strip was swapped (tests).
 var swaps: int = 0
 
+## Seconds of animation (the smoke columns, ash and embers drift with it; cosmetic only).
+var time: float = 0.0
+## The horizon fires' halos and embers (additive), drawn over the sky, under the smoke and hills.
+var horizon_lights: TankLights = null
+var _smoke: TankPainter = null
+var _scroll_x: float = 0.0
 var _sky_top_color: Color = Color(0, 0, 0, 0)
 
 
@@ -55,6 +72,13 @@ func _init() -> void:
 	add_child(sky_top)
 	sky = _strip("Sky", "bg_sky", "sky", SKY_FACTOR, SKY_TOP_Y, false)
 	add_child(sky)
+	horizon_lights = TankLights.new()
+	horizon_lights.name = "HorizonLights"
+	add_child(horizon_lights)
+	_smoke = TankPainter.new()
+	_smoke.name = "SkySmoke"
+	_smoke.painter = _paint_smoke
+	add_child(_smoke)
 	hills = _strip("Hills", "bg_hills_far", "hills", HILLS_FACTOR, HILLS_BOTTOM_Y, true)
 	add_child(hills)
 	# The haze band lies over the hills and under the near plane: aerial perspective in smoke.
@@ -87,8 +111,42 @@ func set_near(id: String) -> void:
 	swaps += 1
 
 
+## Advances the distant smoke, ash and horizon embers by `dt` seconds (cosmetic, view time).
+func advance(dt: float) -> void:
+	time += dt
+	horizon_lights.begin()
+	for col in smoke_columns(_scroll_x):
+		var at: Vector2 = col["pos"]
+		var flick := 0.85 + 0.15 * sin(time * 2.3 + float(int(col["seed"]) % 17))
+		horizon_lights.add(at + Vector2(0, 4), 70.0, TankPalette.FIRE, 0.2 * flick)
+		horizon_lights.add(at + Vector2(0, 6), 24.0, TankPalette.AMBER, 0.28 * flick)
+		for k in 3:
+			var u := fposmod(time * 0.11 + float(k) / 3.0 + float(int(col["seed"]) % 7) * 0.1, 1.0)
+			var e := at + Vector2(sin(u * 9.0 + float(k)) * 6.0 + u * 18.0, -u * 90.0)
+			horizon_lights.add(e, 2.0, TankPalette.AMBER, 0.7 * (1.0 - u))
+	horizon_lights.end()
+	_smoke.queue_redraw()
+
+
+## The distant smoke columns for camera x `cam_x`: [{"pos": Vector2 (base, screen), "seed": int}],
+## one in every other cell of SMOKE_CELL_PX on the SMOKE_FACTOR plane, by hash (no RNG).
+static func smoke_columns(cam_x: float, width: float = 640.0) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var scroll := cam_x * SMOKE_FACTOR
+	var first := int(floor(scroll / SMOKE_CELL_PX)) - 1
+	var last := int(floor((scroll + width) / SMOKE_CELL_PX)) + 1
+	for cell in range(first, last + 1):
+		var h := cell_hash(cell, 4517)
+		if h % 3 == 0:
+			continue
+		var x := float(cell) * SMOKE_CELL_PX + float(h % 140) - scroll + 30.0
+		out.append({"pos": Vector2(x, SMOKE_BASE_Y + float(h % 9)), "seed": h})
+	return out
+
+
 ## Scrolls every plane to the camera x (world art px).
 func set_world_x(x: float) -> void:
+	_scroll_x = x
 	for s: ParallaxStrip in [sky, hills, near, ground, debris]:
 		if s.world_x != x:
 			s.world_x = x
@@ -201,6 +259,37 @@ func _strip(
 	s.cover_width = float(TankConst.SCREEN_W)
 	s.auto_process = false
 	return s
+
+
+## The smoke columns (soft puffs rising, widening and drifting downwind, warm at the base where the
+## fire lights them, fading into the cloud) and fine ash flecks falling through the sky.
+func _paint_smoke(item: Node2D) -> void:
+	var puff := TankProcTex.puff()
+	for col in smoke_columns(_scroll_x):
+		var at: Vector2 = col["pos"]
+		var sd := int(col["seed"])
+		for k in SMOKE_PUFFS:
+			var u := fposmod(
+				time * 0.035 + float(k) / float(SMOKE_PUFFS) + float(sd % 11) * 0.09, 1.0
+			)
+			var size := 14.0 + u * 80.0
+			var c := (
+				at + Vector2(u * u * 60.0 + sin(u * 5.0 + float(sd % 5)) * 5.0, -u * SMOKE_RISE_PX)
+			)
+			# Smoke lit from below by its fire: warm umber low down, cooling to grey as it climbs and
+			# thins; a step lighter than the cloud so the columns read against the dusk sky.
+			var tone := SMOKE_TONE.lerp(SMOKE_TOP, u)
+			var a := 0.9 * smoothstep(0.0, 0.08, u) * (1.0 - u * 0.55)
+			var r := Rect2(c - Vector2(size, size) * 0.5, Vector2(size, size))
+			item.draw_texture_rect(puff, r, false, Color(tone.r, tone.g, tone.b, a))
+	for i in ASH_FLECKS:
+		var h := cell_hash(i, 911)
+		var x := (
+			fposmod(float(h % 640) - time * (6.0 + float(h % 5)) - _scroll_x * 0.3, 660.0) - 10.0
+		)
+		var y := fposmod(float((h >> 9) % 240) + time * (4.0 + float((h >> 3) % 4)), 230.0) + 40.0
+		var a := 0.25 + 0.25 * float(h % 3) / 2.0
+		item.draw_rect(Rect2(floorf(x), floorf(y), 1, 1), Color(0.42, 0.42, 0.43, a))
 
 
 ## Above the sky sprite: the mean colour of its top row, so the sky has no edge under the HUD.

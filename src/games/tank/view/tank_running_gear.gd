@@ -30,11 +30,17 @@ func assemble(def: Dictionary) -> void:
 	_add_wheel(idl, IDLER_R, "idler_wheel", centers, rs)
 	for x: Variant in def.get("road_wheels_x", []):
 		_add_wheel(Vector2(float(x), line_y), ROAD_R, "road_wheel", centers, rs)
+	# The belt: a solid coal-dark band of links (the bed) with one dim row of moving link plates
+	# on it, so it reads as heavy track, not as dotted speckle.
+	var bed := TankPainter.new()
+	bed.name = "TrackBed"
+	bed.painter = _paint_bed
+	add_child(bed)
 	belt = ScrollingChain.new()
 	belt.name = "TrackBelt"
 	belt.pitch_px = TRACK_PITCH_PX
-	belt.link_px = 3.0
-	belt.width_px = 2.0
+	belt.link_px = 2.0
+	belt.width_px = 1.0
 	belt.color_a = TankPalette.STEEL_DARK
 	belt.color_b = TankPalette.IRON
 	belt.max_px_s = BELT_MAX_PX_S
@@ -63,6 +69,20 @@ func _add_wheel(
 	radii.append(r)
 	centers.append(c)
 	rs.append(r)
+
+
+func _paint_bed(item: Node2D) -> void:
+	paint_bed(item, belt, 3.0, TankPalette.COAL)
+
+
+## The solid body under a ScrollingChain's moving links: its path as one polyline of `width` px.
+static func paint_bed(item: CanvasItem, chain: ScrollingChain, width: float, col: Color) -> void:
+	if chain == null or chain.points.size() < 2:
+		return
+	var pts := chain.points.duplicate()
+	if chain.closed:
+		pts.append(pts[0])
+	item.draw_polyline(pts, col, width)
 
 
 ## Ground speed in art px per second (positive drives right).

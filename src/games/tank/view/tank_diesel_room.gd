@@ -97,7 +97,10 @@ func engine_lights() -> void:
 func paint_machinery_front(item: Node2D) -> void:
 	var y := block_pos.y + crank_y
 	item.draw_line(
-		Vector2(block_pos.x + 4, y), Vector2(block_pos.x + 52, y), TankPalette.STEEL_PALE, 2.0
+		Vector2(block_pos.x + 4, y), Vector2(block_pos.x + 52, y), TankPalette.STEEL_DARK, 2.0
+	)
+	item.draw_line(
+		Vector2(block_pos.x + 4, y - 1), Vector2(block_pos.x + 52, y - 1), TankPalette.STEEL, 1.0
 	)
 	var ang := flywheel.angle()
 	for i in windows.size():
@@ -108,19 +111,11 @@ func paint_machinery_front(item: Node2D) -> void:
 		var base := Vector2(
 			cx, block_pos.y + windows[i].position.y + 1.0 + pistons[i].offset() + 4.0
 		)
-		item.draw_line(base, throw, TankPalette.STEEL_LIGHT, 1.0)
-		item.draw_circle(throw, 1.5, TankPalette.STEEL_BRIGHT)
+		item.draw_line(base, throw, TankPalette.STEEL, 1.0)
+		item.draw_circle(throw, 1.5, TankPalette.STEEL_LIGHT)
 		var wr := Rect2(block_pos + windows[i].position, windows[i].size)
 		var stroke := 1.0 - clampf(pistons[i].offset() / maxf(travel, 1.0), 0.0, 1.0)
-		item.draw_rect(
-			wr,
-			Color(
-				TankPalette.FIRE.r,
-				TankPalette.FIRE.g,
-				TankPalette.FIRE.b,
-				glow * (0.12 + 0.4 * stroke)
-			)
-		)
+		_window_glow(item, wr, glow * (0.1 + 0.32 * stroke))
 	paint_more(item)
 
 
@@ -128,7 +123,22 @@ func paint_more(_item: Node2D) -> void:
 	pass
 
 
+## The combustion glow in a cylinder window: hottest at the bottom (the piston crown), fading up
+## the bore in rows, so the window reads as a lit chamber rather than a flat orange square.
+static func _window_glow(item: Node2D, wr: Rect2, a: float) -> void:
+	if a <= 0.005:
+		return
+	var rows := int(wr.size.y)
+	for k in rows:
+		var t := float(k) / maxf(float(rows - 1), 1.0)
+		var col := TankPalette.FIRE.lerp(TankPalette.AMBER, t * t)
+		item.draw_rect(
+			Rect2(wr.position.x, wr.position.y + float(k), wr.size.x, 1.0),
+			TankPalette.with_alpha(col, a * (0.25 + 0.75 * t * t))
+		)
+
+
 func _paint_piston(item: Node2D) -> void:
 	var w := float(item.get_meta("w", 6.0))
-	item.draw_rect(Rect2(0, 0, w, 4), TankPalette.STEEL_BRIGHT)
-	item.draw_rect(Rect2(0, 0, w, 1), TankPalette.SILVER)
+	item.draw_rect(Rect2(0, 0, w, 4), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(0, 0, w, 1), TankPalette.STEEL_LIGHT)

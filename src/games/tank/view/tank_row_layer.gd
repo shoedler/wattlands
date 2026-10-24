@@ -47,6 +47,7 @@ func _bar(row: Dictionary) -> void:
 	var pos: Vector2 = row["pos"]
 	var w := float(row["w"])
 	var frac := clampf(float(row["frac"]), 0.0, 1.0)
-	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.COAL)
-	var col := TankPalette.SILVER if frac > 0.34 else TankPalette.FIRE
+	# Dim and short: a dark slot with a muted steel fill (rust when low), no white.
+	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.with_alpha(TankPalette.SOOT, 0.7))
+	var col := TankPalette.STEEL_LIGHT if frac > 0.34 else TankPalette.RUST_LIGHT
 	draw_rect(Rect2(pos + Vector2(1, 1), Vector2(maxf(roundf((w - 2.0) * frac), 0.0), 1)), col)

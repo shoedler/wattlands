@@ -148,7 +148,7 @@ func engine_lights() -> void:
 
 func paint_machinery_front(item: Node2D) -> void:
 	var c := gauge_pos
-	item.draw_circle(c, GAUGE_RADIUS + 1.0, TankPalette.STEEL_LIGHT)
+	item.draw_circle(c, GAUGE_RADIUS + 1.0, TankPalette.STEEL)
 	item.draw_circle(c, GAUGE_RADIUS, TankPalette.COAL)
 	for mark in GAUGE_MARKS:
 		var a := gauge_angle(mark)
@@ -174,11 +174,15 @@ func paint_machinery_front(item: Node2D) -> void:
 		_shell(item, r)
 
 
-## A shell standing in the rack: steel body, brass base, nose.
+## A shell standing in the rack: a dull brass casing (no yellow: only lights are saturated), a lit
+## left edge, a darker base rim and a dark steel nose.
 static func _shell(item: Node2D, r: Rect2) -> void:
 	var body := Rect2(r.position + Vector2(0, 7), Vector2(r.size.x, r.size.y - 7))
-	item.draw_rect(body, TankPalette.SLATE)
-	item.draw_rect(Rect2(body.position.x, body.end.y - 4, body.size.x, 4), TankPalette.BRASS)
+	item.draw_rect(body, TankPalette.MUD_LIGHT)
+	item.draw_rect(
+		Rect2(body.position.x + 1.0, body.position.y, 1, body.size.y), TankPalette.MUD_PALE
+	)
+	item.draw_rect(Rect2(body.position.x, body.end.y - 3, body.size.x, 3), TankPalette.MUD)
 	item.draw_colored_polygon(
 		PackedVector2Array(
 			[
@@ -187,5 +191,5 @@ static func _shell(item: Node2D, r: Rect2) -> void:
 				Vector2(r.end.x, r.position.y + 7)
 			]
 		),
-		TankPalette.STEEL_PALE
+		TankPalette.STEEL
 	)

@@ -19,6 +19,10 @@ const CUE_QUEUE_MAX := 64
 const MAX_WRECKS := 6
 const WRECK_TTL_S := 40.0
 const WRECK_BURN_S := 12.0
+## Wrecks sit on the back lane: scaled down, lifted and darkened toward the haze.
+const WRECK_SCALE := 0.8
+const WRECK_LIFT_PX := 9.0
+const WRECK_TINT := Color(0.3, 0.3, 0.31)
 ## The depot gate stands behind the start (world x of its left edge).
 const DEPOT_GATE_X := -90.0
 ## Crater and rubble props every this many world px, by hash.
@@ -181,6 +185,7 @@ func advance(delta: float) -> void:
 	_on_segment(state)
 	lights.begin()
 	backdrop.set_world_x(cam_x)
+	backdrop.advance(delta)
 	var feed := rider_feed(state, t)
 	rig.update(state, feed, delta)
 	_process_cues(state)
@@ -193,6 +198,7 @@ func advance(delta: float) -> void:
 	_ambient(state, delta)
 	_scenery(delta)
 	fx.step(delta, scroll)
+	_reflections()
 	lights.wash = fx.flash
 	lights.wash_color = fx.flash_color
 	lights.end()
@@ -513,6 +519,13 @@ func _add_wreck(info: Dictionary) -> void:
 		fx.forget(str(old["key"]))
 
 
+## The screen top-left of wreck `w` drawn at size `sz` on the back lane.
+func wreck_pos(w: Dictionary, sz: Vector2) -> Vector2:
+	var full := float(w["w"])
+	var x := float(w["x"]) - cam_x + (full - sz.x) * 0.5
+	return Vector2(x, float(TankConst.GROUND_Y) - sz.y + 2.0 - WRECK_LIFT_PX)
+
+
 ## Shells that vanish while falling near the ground threw up dirt (judged on the state's latest
 ## position, not the delayed drawn one, so a shell that lands between two frames still counts).
 func _track_shells(state: TankState) -> void:
@@ -550,9 +563,12 @@ func _build_props(state: TankState) -> void:
 		var sz := Vector2(float(w["w"]), float(w["h"]))
 		if sz.x <= 0.0:
 			sz = TankSprites.size(sprite)
-		var pos := Vector2(float(w["x"]) - cam_x, ground - sz.y + 3.0)
+		# Wrecks lie on the back lane (smaller, higher, hazed and dark), so a live enemy keeping
+		# station over one keeps its own silhouette; their fires stay on the wreck.
+		sz = (sz * WRECK_SCALE).round()
+		var pos := wreck_pos(w, sz)
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
-		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, Color(0.32, 0.31, 0.3)))
+		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, WRECK_TINT))
 		if burn > 0.2:
 			var halo := 20.0 + 10.0 * burn
 			lights.add(pos + Vector2(sz.x * 0.5, sz.y * 0.3), halo, TankPalette.FIRE, 0.5 * burn)
@@ -651,6 +667,7 @@ func _build_enemies(state: TankState, t: float) -> void:
 	var rows: Array[Dictionary] = []
 	enemy_rects.clear()
 	var row_i := 0
+	var dug_i := 0
 	var ground := float(TankConst.GROUND_Y)
 	# Dug-in guns are drawn first, on a lane behind the road, so a tank passing in front of a
 	# revetment keeps its own silhouette; the rest alternate between two depth rows.
@@ -670,8 +687,10 @@ func _build_enemies(state: TankState, t: float) -> void:
 		var lift := 0.0
 		var dim := 1.0
 		if type == TankIds.ENEMY_DUGIN:
-			lift = 7.0
-			dim = 0.72
+			# Dug-ins alternate between two lanes behind the road so neighbours never merge.
+			lift = 7.0 if dug_i % 2 == 0 else 13.0
+			dim = 0.72 if dug_i % 2 == 0 else 0.6
+			dug_i += 1
 		else:
 			# Overlapping enemies stand on two depth rows: every second one higher and dimmer.
 			if row_i % 2 == 1:
@@ -686,8 +705,8 @@ func _build_enemies(state: TankState, t: float) -> void:
 			rows.append(
 				{
 					"t": "bar",
-					"pos": (pos + Vector2(sz.x * 0.5 - 12.0, -5.0)).round(),
-					"w": 24.0,
+					"pos": (pos + Vector2(sz.x * 0.5 - 8.0, -4.0)).round(),
+					"w": 16.0,
 					"frac": e.hp / max_hp
 				}
 			)
@@ -756,32 +775,38 @@ func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
 	var turret := geometry.boss_part_rect(TankBossState.TURRET_PART)
 	var muzzle := origin + geometry.boss_muzzle()
 	var base := origin + turret.position + Vector2(8.0, turret.size.y * 0.5)
-	# The main gun: a soft-shaded tube (dark underside, steel body, lit top edge) so it reads as
-	# one with the turret against the smoke, and a collar where it leaves the gun block.
-	rows.append({"t": "line", "a": base, "b": muzzle, "w": 6.0, "c": TankPalette.IRON})
+	# The main gun: a 4 px tube with a dark underside, a steel body and one lit top row, a collar
+	# where it leaves the gun block and a muzzle brake block, so it reads as a gun and not a rule.
+	rows.append({"t": "line", "a": base, "b": muzzle, "w": 5.0, "c": TankPalette.IRON_DARK})
 	rows.append(
 		{
 			"t": "line",
 			"a": base + Vector2(0, -1),
 			"b": muzzle + Vector2(0, -1),
-			"w": 3.0,
-			"c": TankPalette.STEEL
+			"w": 2.0,
+			"c": TankPalette.IRON
 		}
 	)
 	rows.append(
 		{
 			"t": "line",
-			"a": base + Vector2(0, -3),
-			"b": muzzle + Vector2(0, -3),
+			"a": base + Vector2(0, -2),
+			"b": muzzle + Vector2(0, -2),
 			"w": 1.0,
-			"c": TankPalette.STEEL_PALE
+			"c": TankPalette.STEEL_DARK
 		}
 	)
 	rows.append(
-		{"t": "line", "a": base, "b": base + Vector2(-10, 0), "w": 10.0, "c": TankPalette.IRON}
+		{"t": "line", "a": base, "b": base + Vector2(-12, 0), "w": 9.0, "c": TankPalette.IRON}
 	)
 	rows.append(
-		{"t": "line", "a": muzzle + Vector2(8, 0), "b": muzzle, "w": 9.0, "c": TankPalette.STEEL}
+		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 9)), "c": TankPalette.IRON}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 1)), "c": TankPalette.STEEL}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(muzzle + Vector2(2, -4), Vector2(2, 7)), "c": TankPalette.SOOT}
 	)
 	rows.append(_sprite_row("boss_hull", origin, TankSprites.size("boss_hull"), false, tint))
 	var tur_broken := b.turret_hp <= 0.0
@@ -889,7 +914,7 @@ func _ambient(state: TankState, dt: float) -> void:
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
 		var at := Vector2(
 			float(w["x"]) - cam_x + float(w["w"]) * 0.5,
-			float(TankConst.GROUND_Y) - float(w["h"]) * 0.8
+			float(TankConst.GROUND_Y) - WRECK_LIFT_PX - float(w["h"]) * WRECK_SCALE * 0.8
 		)
 		fx.fire_and_smoke(str(w["key"]), at, burn, 1.0 if burn > 0.0 else 0.5, dt)
 	if state.hull.traps_cleared and not _traps_were_cleared:
@@ -899,6 +924,23 @@ func _ambient(state: TankState, dt: float) -> void:
 		fx.dirt_spray(tp)
 		fx.explosion(tp, false)
 	_traps_were_cleared = state.hull.traps_cleared
+
+
+## Wet ground and wet steel (brief 3 "Light"): every bright halo near the ground drops a soft
+## vertical streak of its colour onto the wet road below it, and when a muzzle flash or a fire is
+## close the hull's and the turret's top edges catch a faint specular line.
+func _reflections() -> void:
+	var ground := float(TankConst.GROUND_Y)
+	lights.add_reflections(ground - 1.0, ground - 70.0, 0.3)
+	var roof := rig.hull_roof()
+	if roof.size.x <= 0.0:
+		return
+	var mid := roof.position + Vector2(roof.size.x * 0.5, 0)
+	var wet := lights.intensity_near(mid, roof.size.x * 0.5 + 40.0) + fx.flash * 1.5
+	if wet > 0.08:
+		var k := minf(0.3, wet * 0.16)
+		var a := roof.position + rig.shake_offset * 0.6
+		lights.add_line(a, a + Vector2(roof.size.x, 0), lights.near_color(), k)
 
 
 ## Lights and fires of the near plane (scenery), with flames on the far plane.
@@ -913,6 +955,7 @@ func _scenery(dt: float) -> void:
 				"sc%d" % int(l["seed"]), l["pos"], 0.6, 0.5, dt, TankParticles.PLANE_BACK
 			)
 		sl.add(l["pos"], float(l["radius"]), l["color"], float(l["intensity"]) * flick)
+	sl.add_reflections(TankBackdrop.NEAR_BOTTOM_Y - 22.0, 200.0, 0.22)
 	sl.end()
 
 

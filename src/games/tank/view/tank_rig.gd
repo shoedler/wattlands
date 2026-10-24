@@ -23,6 +23,8 @@ var geometry: TankGeometry = null
 var hull_w: int = 192
 var hull_h: int = 72
 var base_pos: Vector2 = Vector2.ZERO
+var _roof: Rect2 = Rect2()
+var _roof_done: bool = false
 var gear: TankRunningGear = null
 var hull_sprite: Sprite2D = null
 var rooms: Array[TankRoomView] = []
@@ -146,9 +148,12 @@ func _build_links() -> void:
 		if diesel_room is TankBulwarkRoom:
 			from = diesel_room.rect.position + (diesel_room as TankBulwarkRoom).outputs[0]
 			r_from = 5.0
-		drive_chain = _chain("DriveChain", 70.0, TankPalette.STEEL_PALE, TankPalette.STEEL)
+		# A heavy 2 px dark chain with a bright link every 6 px running at tank speed.
+		drive_chain = _chain("DriveChain", 70.0, TankPalette.STEEL_LIGHT, TankPalette.IRON)
+		drive_chain.pitch_px = 3.0
+		drive_chain.link_px = 2.0
+		drive_chain.width_px = 2.0
 		drive_chain.set_loop(from, r_from, sprocket, 8.0)
-		links.add_child(drive_chain)
 	var ring := TankRigs.vec((def.get("turret", {}) as Dictionary).get("ring"))
 	var shaft_from := Vector2.ZERO
 	var has_shaft := false
@@ -163,18 +168,21 @@ func _build_links() -> void:
 			(dynamo_room.rect.position.y if dynamo_room != null else diesel_room.rect.position.y)
 			+ 3.0
 		)
-		slew_shaft = _chain("TurretShaft", 60.0, TankPalette.STEEL_BRIGHT, TankPalette.STEEL_LIGHT)
-		slew_shaft.pitch_px = 3.0
+		# A solid 2 px steel rod (the bed) with a highlight stripe turning along it while slewing.
+		slew_shaft = _chain("TurretShaft", 60.0, TankPalette.STEEL_PALE, TankPalette.STEEL_DARK)
+		slew_shaft.pitch_px = 7.0
+		slew_shaft.link_px = 2.0
 		slew_shaft.closed = false
 		slew_shaft.points = PackedVector2Array(
 			[shaft_from, Vector2(shaft_from.x, top_y), Vector2(ring.x, top_y), ring]
 		)
-		links.add_child(slew_shaft)
 	if dynamo_room != null and steam_room == null:
 		dynamo_room.has_hoist = true
 		var rail := _rail_points()
-		hoist_chain = _chain("HoistChain", 50.0, TankPalette.STEEL_BRIGHT, TankPalette.STEEL_LIGHT)
+		hoist_chain = _chain("HoistChain", 50.0, TankPalette.STEEL_LIGHT, TankPalette.IRON)
 		hoist_chain.pitch_px = 3.0
+		hoist_chain.link_px = 2.0
+		hoist_chain.width_px = 2.0
 		hoist_chain.closed = false
 		var foot_y := dynamo_room.rect.end.y - 3.0
 		hoist_chain.points = PackedVector2Array(
@@ -185,12 +193,33 @@ func _build_links() -> void:
 				rail[0]
 			]
 		)
-		links.add_child(hoist_chain)
+	var beds := TankPainter.new()
+	beds.name = "LinkBeds"
+	beds.painter = _paint_link_beds
+	links.add_child(beds)
+	for ch: ScrollingChain in [drive_chain, slew_shaft, hoist_chain]:
+		if ch != null:
+			links.add_child(ch)
 	if steam_room != null or hoist_chain != null:
 		rails = TankPainter.new()
 		rails.name = "HoistRail"
 		rails.painter = _paint_rails
 		links.add_child(rails)
+
+
+## The solid bodies under the moving links: the drive chain coal-dark, the turret shaft a steel rod
+## with a lit upper pixel, the hoist chain dark.
+func _paint_link_beds(item: Node2D) -> void:
+	TankRunningGear.paint_bed(item, drive_chain, 2.0, TankPalette.IRON_DARK)
+	TankRunningGear.paint_bed(item, hoist_chain, 2.0, TankPalette.IRON_DARK)
+	if slew_shaft != null:
+		TankRunningGear.paint_bed(item, slew_shaft, 2.0, TankPalette.STEEL_DARK)
+		var pts := slew_shaft.points
+		for i in range(pts.size() - 1):
+			if absf(pts[i].y - pts[i + 1].y) < 0.5:
+				item.draw_line(
+					pts[i] + Vector2(0, -1), pts[i + 1] + Vector2(0, -1), TankPalette.STEEL, 1.0
+				)
 
 
 func _chain(chain_name: String, px_s: float, a: Color, b: Color) -> ScrollingChain:
@@ -430,7 +459,7 @@ func hull_point(p: Vector2) -> Vector2:
 func _paint_stack(item: Node2D) -> void:
 	var p := _stack_pos
 	item.draw_rect(Rect2(p.x - 3, p.y - 9, 6, 10), TankPalette.STEEL_DARK)
-	item.draw_rect(Rect2(p.x - 3, p.y - 9, 6, 1), TankPalette.STEEL_BRIGHT)
+	item.draw_rect(Rect2(p.x - 3, p.y - 9, 6, 1), TankPalette.STEEL_LIGHT)
 	item.draw_rect(Rect2(p.x - 4, p.y - 11, 8, 2), TankPalette.STEEL)
 	item.draw_rect(Rect2(p.x - 3, p.y - 4, 6, 1), TankPalette.RUST)
 
@@ -460,19 +489,65 @@ func _paint_rails(item: Node2D) -> void:
 	var ring := TankRigs.vec((def.get("turret", {}) as Dictionary).get("ring"))
 	var feed_to := Vector2(ring.x + 16.0, b.y)
 	for dx in [-2.0, 2.0]:
-		item.draw_line(a + Vector2(dx, 0), b + Vector2(dx, 0), TankPalette.STEEL_LIGHT, 1.0)
+		item.draw_line(a + Vector2(dx, 0), b + Vector2(dx, 0), TankPalette.STEEL, 1.0)
 	var y := a.y
 	while y > b.y:
-		item.draw_line(Vector2(a.x - 2, y), Vector2(a.x + 2, y), TankPalette.STEEL_DARK, 1.0)
+		item.draw_line(Vector2(a.x - 2, y), Vector2(a.x + 2, y), TankPalette.IRON, 1.0)
 		y -= 6.0
-	item.draw_line(b, feed_to, TankPalette.STEEL_LIGHT, 1.0)
-	item.draw_line(feed_to, Vector2(feed_to.x, 0.0), TankPalette.STEEL_LIGHT, 1.0)
+	item.draw_line(b, feed_to, TankPalette.STEEL_DARK, 2.0)
+	item.draw_line(feed_to, Vector2(feed_to.x, 0.0), TankPalette.STEEL_DARK, 2.0)
 	var t := cradle_t()
 	var at := a.lerp(b, t)
-	item.draw_rect(Rect2(at.x - 3, at.y - 2, 6, 3), TankPalette.STEEL_BRIGHT)
-	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.SLATE)
-	item.draw_rect(Rect2(at.x - 2, at.y - 4, 4, 2), TankPalette.BRASS)
-	item.draw_rect(Rect2(at.x - 1, at.y - 12, 2, 2), TankPalette.STEEL_PALE)
+	item.draw_rect(Rect2(at.x - 3, at.y - 2, 6, 3), TankPalette.STEEL)
+	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.MUD_PALE)
+	item.draw_rect(Rect2(at.x - 2, at.y - 10, 1, 8), TankPalette.CLAY)
+	item.draw_rect(Rect2(at.x - 2, at.y - 4, 4, 2), TankPalette.MUD_LIGHT)
+	item.draw_rect(Rect2(at.x - 1, at.y - 12, 2, 2), TankPalette.STEEL)
+
+
+## The hull's flat roof in layer coordinates (x, y, width; height 0) for the wet-steel specular:
+## the longest run of columns whose first opaque row is the sprite's topmost, measured once from
+## the hull texture the view draws (so the line sits on the steel, never above a lower deck).
+func hull_roof() -> Rect2:
+	if _roof.size.x > 0.0 or _roof_done:
+		return _roof
+	_roof_done = true
+	var img := TankSprites.tex(TankSprites.hull_id(tank)).get_image()
+	if img == null or img.is_empty():
+		return _roof
+	if img.is_compressed():
+		img.decompress()
+	var w := img.get_width()
+	var tops := PackedInt32Array()
+	tops.resize(w)
+	var min_top := img.get_height()
+	for x in w:
+		tops[x] = img.get_height()
+		for y in img.get_height():
+			if img.get_pixel(x, y).a > 0.5:
+				tops[x] = y
+				break
+		min_top = mini(min_top, tops[x])
+	var best_x := 0
+	var best_n := 0
+	var run_x := 0
+	var run_n := 0
+	for x in w:
+		if tops[x] <= min_top + 1:
+			if run_n == 0:
+				run_x = x
+			run_n += 1
+			if run_n > best_n:
+				best_n = run_n
+				best_x = run_x
+		else:
+			run_n = 0
+	var sx := float(hull_w) / float(maxi(w, 1))
+	_roof = Rect2(
+		base_pos + Vector2(float(best_x + 2) * sx, float(min_top)),
+		Vector2(maxf(float(best_n - 4) * sx, 0.0), 0.0)
+	)
+	return _roof
 
 
 ## The shell cradle on the hoist rail, 0 (foot) .. 1 (breech): the steam engine's or the Rampart's.
@@ -489,12 +564,16 @@ func _paint_dozer(item: Node2D) -> void:
 	var lift := 14.0 * (1.0 - blade)
 	var bx := x0 + 8.0
 	var by := ground - 16.0 - lift
-	item.draw_line(
-		Vector2(x0 - 8.0, ground - 22.0), Vector2(bx, by + 6.0), TankPalette.STEEL_DARK, 2.0
-	)
-	item.draw_rect(Rect2(bx, by, 4, 16), TankPalette.STEEL)
-	item.draw_rect(Rect2(bx, by, 1, 16), TankPalette.STEEL_BRIGHT)
-	item.draw_rect(Rect2(bx + 3, by + 14, 3, 2), TankPalette.IRON)
+	# Hull steel grade (no bright edge): the push arm runs from the glacis foot to the blade's back,
+	# a curved blade face of three tones, a dark cutting edge.
+	var foot := Vector2(x0 - 4.0, ground - 14.0)
+	item.draw_line(foot, Vector2(bx, by + 8.0), TankPalette.IRON_DARK, 3.0)
+	item.draw_line(foot + Vector2(0, -1), Vector2(bx, by + 7.0), TankPalette.IRON, 1.0)
+	item.draw_rect(Rect2(x0 - 6.0, ground - 17.0, 4, 6), TankPalette.IRON)
+	item.draw_rect(Rect2(bx, by, 5, 16), TankPalette.IRON)
+	item.draw_rect(Rect2(bx + 1, by + 1, 3, 14), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(bx, by, 5, 1), TankPalette.STEEL)
+	item.draw_rect(Rect2(bx + 4, by + 13, 3, 3), TankPalette.COAL)
 	if berm_hp > 0.5:
 		var h := 3.0 + (BERM_MAX_H - 3.0) * clampf(berm_hp / 40.0, 0.0, 1.0)
 		var pts := PackedVector2Array(

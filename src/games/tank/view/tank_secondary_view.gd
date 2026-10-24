@@ -54,5 +54,5 @@ func _paint_barrel(item: Node2D) -> void:
 	var from := Vector2(rect.size.x - 6.0 if facing > 0 else 6.0, rect.size.y * 0.5)
 	var to := muzzle - rect.position - Vector2(recoil * float(facing), 0.0)
 	item.draw_line(from, to, TankPalette.STEEL_DARK, 2.0)
-	item.draw_line(from - Vector2(0, 1), to - Vector2(0, 1), TankPalette.STEEL_LIGHT, 1.0)
-	item.draw_line(to - Vector2(3.0 * float(facing), 0), to, TankPalette.STEEL_BRIGHT, 3.0)
+	item.draw_line(from - Vector2(0, 1), to - Vector2(0, 1), TankPalette.STEEL, 1.0)
+	item.draw_line(to - Vector2(3.0 * float(facing), 0), to, TankPalette.STEEL, 3.0)

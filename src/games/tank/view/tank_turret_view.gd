@@ -95,8 +95,8 @@ func _paint_barrel(item: Node2D) -> void:
 	var tip := d * (barrel_px - recoil)
 	# Barrel body, a lighter top edge and a muzzle brake.
 	item.draw_line(base, tip, TankPalette.STEEL_DARK, BARREL_W)
-	item.draw_line(base - n, tip - n, TankPalette.STEEL_LIGHT, 1.0)
+	item.draw_line(base - n, tip - n, TankPalette.STEEL, 1.0)
 	item.draw_line(tip - d * 5.0, tip, TankPalette.STEEL, BARREL_W + 2.0)
-	item.draw_line(tip - d * 5.0 - n * 2.5, tip - n * 2.5, TankPalette.STEEL_BRIGHT, 1.0)
+	item.draw_line(tip - d * 5.0 - n * 2.5, tip - n * 2.5, TankPalette.STEEL_LIGHT, 1.0)
 	# Recoil sleeve at the breech end.
 	item.draw_line(base, base + d * 9.0, TankPalette.STEEL, BARREL_W + 2.0)
