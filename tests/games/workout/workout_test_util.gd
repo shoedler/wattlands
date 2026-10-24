@@ -49,8 +49,11 @@ class FixedStats:
 
 
 ## Registers Workout's strings with the TranslationServer, as the GameRegistry does at
-## startup. Returns the Translation to pass to unregister_strings().
+## startup. Returns the Translation to pass to unregister_strings(), or null when the strings
+## are already registered (the GameRegistry's copy is the same cached resource and must stay).
 static func register_strings() -> Translation:
+	if String(TranslationServer.translate("WORKOUT_CONTENT_EASY_30")) != "WORKOUT_CONTENT_EASY_30":
+		return null
 	var tr := load("res://content/workout/strings.en.translation") as Translation
 	if tr != null:
 		TranslationServer.add_translation(tr)
