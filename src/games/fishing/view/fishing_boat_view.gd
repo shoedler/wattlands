@@ -1,29 +1,30 @@
 class_name FishingBoatView
 extends Node2D
-## One rider's boat (FishingRig's points, boat-local art px): the hull with its brass long-tail
-## (stripe in the slot colour by PaletteSwap), the gear train, flywheel, winch drum and screw prop
-## as frame-animated sprites, the chain (ScrollingChain), legs solved hip to pedal, the rider (cap
-## and jersey in the slot colour), arms to the tiller or the winch brake, the clutch lever, the
-## rod (stowed or raised, bending toward the line) and the slot-coloured pennant. The view sets
-## position (the stern's waterline point on the surface), the shown values and calls advance().
-## Driving vs fishing (`fishing` eased 0..1): the clutch flips aft, the prop spins down while the
-## winch drum turns, the rod tips up, the hands move from the tiller to the winch brake.
+## One rider's boat (FishingRig's points, boat-local art px): the slate hull with its long-tail
+## shaft, the crew sprite (clutch lever, tiller, rider, legs, the brass pedal wheel and its crank;
+## four crank frames per pose), the winch drum and the screw prop as frame-animated sprites, the
+## rod (stowed or raised, its tip bending toward the line), the rider's cap and the bow pennant
+## in the player's colour. The view sets position (the stern's waterline point on the surface),
+## the shown values and calls advance(). Nothing is ever rotated: the bow lifts by whole pixels.
+## Driving vs fishing (`fishing` eased 0..1, shown as a pose from 0.5): the clutch leans aft,
+## the tiller is let go, the prop stops while the winch drum turns, the rod tips up.
+## Every part carries a palette map (FishingPaletteMap): rows under the surface take one water
+## tone; a farther boat (another rider's) is a step lighter and cut at its waterline.
 
-## The boat pivots (bob and pitch) round the hull's waterline midpoint.
+## The boat's waterline midpoint: its position is this point of the hull.
 const PIVOT := Vector2(58, FishingRig.WATERLINE)
 const FISHING_EASE_S := 0.6
-## Prop and flywheel frame rates at full cadence (frames per second at 90 rpm).
+## Prop frame rate at full drive and the winch's frames per metre of line.
 const PROP_FPS_FULL := 14.0
-const FLY_FPS_PER_RPM := 0.12
 const WINCH_FPS_PER_MPS := 6.0
-const FAR_SHADER := "res://src/games/fishing/view/fishing_far_boat.gdshader"
-## How far toward the sky a boat on the farther row is tinted.
-const FAR_HAZE := 0.22
-
-static var _far_shader: Shader = null
+## Bow pitch (degrees) per pixel the boat lifts, and the most it lifts.
+const LIFT_DEG_PER_PX := 3.0
+const LIFT_MAX_PX := 3
+## A farther boat: each slate one step lighter.
+const FAR_FROM: Array[Color] = [FishingPalette.SLATE, FishingPalette.WOOD]
+const FAR_TO: Array[Color] = [FishingPalette.WOOD, FishingPalette.UPPER]
 
 var slot: int = 0
-var look: Dictionary = {}
 var line_color: Color = FishingPalette.LINE
 ## Shown values (the view writes them every frame).
 var heading: int = 1
@@ -44,19 +45,14 @@ var pull_dir: Vector2 = Vector2.DOWN
 var far: bool = false
 var body: Node2D = null
 var hull: Sprite2D = null
-var gears: Sprite2D = null
-var flywheel: Sprite2D = null
+var crew: Sprite2D = null
 var winch: Sprite2D = null
 var prop: Sprite2D = null
-var rider: Sprite2D = null
-var chain: ScrollingChain = null
-var _far: FishingDrawLayer = null
 var _near: FishingDrawLayer = null
 var _crank: float = 0.0
 var _prop_t: float = 0.0
-var _fly_t: float = 0.0
 var _winch_t: float = 0.0
-var _far_mats: Array[ShaderMaterial] = []
+var _mats: Array[ShaderMaterial] = []
 
 
 func _init() -> void:
@@ -65,115 +61,88 @@ func _init() -> void:
 	body.name = "Body"
 	body.position = -PIVOT
 	add_child(body)
-	_far = FishingDrawLayer.make("FarLeg", _paint_far)
-	body.add_child(_far)
 	hull = _sprite("boat_hull", Vector2.ZERO)
-	gears = _sprite("boat_gears", FishingRig.GEARS_AT)
-	flywheel = _sprite("boat_flywheel", FishingRig.FLYWHEEL_AT)
 	winch = _sprite("boat_winch", FishingRig.WINCH_AT)
 	prop = _sprite("boat_prop", FishingRig.PROP_AT)
-	chain = ScrollingChain.new()
-	chain.name = "Chain"
-	chain.auto_process = false
-	chain.max_px_s = TAU * FishingRig.CHAINRING_R * 2.0
-	chain.pitch_px = 2.0
-	chain.link_px = 1.0
-	chain.color_a = FishingPalette.STEEL
-	chain.color_b = FishingPalette.WOOD_3
-	chain.set_loop(
-		FishingRig.SPROCKET, FishingRig.SPROCKET_R, FishingRig.BB, FishingRig.CHAINRING_R, 8
-	)
-	body.add_child(chain)
-	rider = _sprite("rider", FishingRig.RIDER_AT)
+	crew = _sprite("boat_crew", FishingRig.CREW_AT)
 	_near = FishingDrawLayer.make("Near", _paint_near)
 	body.add_child(_near)
+	for item: CanvasItem in [hull, winch, prop, crew, _near]:
+		_mats.append(FishingPaletteMap.apply(item))
 
 
-## The slot's look: the hull stripe and the rider's cap and jersey take the slot colour.
-func set_look(p_slot: int, p_look: Dictionary, p_line: Color) -> void:
+## The rider's slot (the cap and pennant take its player colour) and the line colour.
+func set_slot(p_slot: int, p_line: Color) -> void:
 	slot = p_slot
-	look = p_look
 	line_color = p_line
-	for s: Sprite2D in [hull, rider]:
-		PaletteSwap.apply_slot(s, FishingPalette.keys(), slot)
 
 
-## Another rider's boat on the farther row: every part gets the far-boat material (the slot
-## colour on the key reds, a touch of haze, nothing drawn below the boat's own waterline).
+## Another rider's boat on the farther row: a step lighter and nothing drawn below its own
+## waterline (the nearer water covers it).
 func set_far(on: bool) -> void:
 	far = on
-	_far_mats.clear()
-	if not on:
-		set_look(slot, look, line_color)
-		return
-	var ramp := PaletteSwap.slot_ramp(slot, 2)
-	var items: Array[CanvasItem] = [hull, gears, flywheel, winch, prop, chain, rider, _far, _near]
-	for item in items:
-		var m := ShaderMaterial.new()
-		m.shader = far_shader()
-		m.set_shader_parameter("key0", FishingPalette.KEY_LIGHT)
-		m.set_shader_parameter("key1", FishingPalette.KEY_DARK)
-		m.set_shader_parameter("swap0", ramp[0])
-		m.set_shader_parameter("swap1", ramp[1])
-		m.set_shader_parameter("swap_keys", item == hull or item == rider)
-		m.set_shader_parameter("haze", FishingPalette.SKY_1)
-		m.set_shader_parameter("haze_amount", FAR_HAZE)
-		item.material = m
-		_far_mats.append(m)
+	var none: Array[Color] = []
+	for m in _mats:
+		FishingPaletteMap.set_pairs(m, FAR_FROM if on else none, FAR_TO if on else none)
 
 
-static func far_shader() -> Shader:
-	if _far_shader == null:
-		_far_shader = load(FAR_SHADER) as Shader
-	return _far_shader
+## The player colour of this boat's cap and pennant.
+func player_color() -> Color:
+	return FishingPalette.player(slot)
 
 
-## One frame of `dt` seconds: eases the clutch, turns the parts, places the pivot.
+## Whole pixels the boat rises for the bow pitch shown (0 .. LIFT_MAX_PX).
+func lift_px() -> int:
+	return clampi(floori(maxf(pitch_deg, 0.0) / LIFT_DEG_PER_PX), 0, LIFT_MAX_PX)
+
+
+## The crew frame shown: the pose's block, then the crank's quarter turn.
+func crew_frame() -> int:
+	var pose := 1 if fishing >= 0.5 else 0
+	var k := posmod(floori(_crank / (TAU / float(FishingArtGrids.CREW_FRAMES))), 4)
+	return pose * FishingArtGrids.CREW_FRAMES + k
+
+
+## One frame of `dt` seconds: eases the clutch, turns the parts, places the body.
 func advance(dt: float) -> void:
 	fishing = move_toward(fishing, fishing_target, dt / FISHING_EASE_S)
 	_crank = fmod(_crank + cadence / 60.0 * TAU * dt, TAU)
-	chain.drive(cadence, 120.0)
-	chain.tick(dt)
-	_fly_t += cadence * FLY_FPS_PER_RPM * dt
 	_prop_t += PROP_FPS_FULL * prop_drive * (1.0 - fishing) * dt
 	_winch_t += absf(winch_mps) * WINCH_FPS_PER_MPS * fishing * dt
-	flywheel.texture = FishingSprites.frame("boat_flywheel", floori(_fly_t))
-	gears.texture = FishingSprites.frame("boat_gears", floori(_fly_t * 0.5))
+	crew.texture = FishingSprites.frame("boat_crew", crew_frame())
 	prop.texture = FishingSprites.frame("boat_prop", floori(_prop_t))
 	winch.texture = FishingSprites.frame("boat_winch", floori(_winch_t))
 	scale.x = float(heading) if heading != 0 else 1.0
-	rotation = -deg_to_rad(pitch_deg) * scale.x
-	body.position = -PIVOT + Vector2(0, roundf(bob_px))
-	for m in _far_mats:
-		m.set_shader_parameter("clip_y", position.y + 1.0)
-	_far.queue_redraw()
+	body.position = -PIVOT + Vector2(0, roundf(bob_px) - float(lift_px()))
+	var surface := float(FishingScenery.SURF_Y)
+	for m in _mats:
+		if far:
+			FishingPaletteMap.set_under(m, FishingPaletteMap.NO_ROW, FishingPalette.UPPER)
+			FishingPaletteMap.set_clip(m, position.y + 1.0)
+		else:
+			FishingPaletteMap.set_under(m, surface, FishingPalette.UPPER)
+			FishingPaletteMap.set_clip(m, FishingPaletteMap.NO_ROW)
 	_near.queue_redraw()
 
 
-## The rod's points (boat-local, unflipped).
+## The rod's points (boat-local, unflipped): [base, joint, tip].
 func rod_points() -> PackedVector2Array:
 	return FishingRig.rod(fishing, tension, pull_dir)
 
 
-## The rod tip in the parent's (the view's) coordinates.
+## The rod tip's pixel in the parent's (the view's) coordinates.
 func rod_tip() -> Vector2:
-	return transform * (body.transform * rod_points()[-1])
+	return pixel_of(Vector2i(rod_points()[-1]))
+
+
+## The view pixel (top-left corner) of boat-local pixel `p`.
+func pixel_of(p: Vector2i) -> Vector2:
+	return to_view(Vector2(p) + Vector2(0.5, 0.5)).floor()
 
 
 ## A boat-local point in the parent's coordinates.
 func to_view(p: Vector2) -> Vector2:
 	return transform * (body.transform * p)
-
-
-## The two legs [near, far], each [hip, knee, foot], at the crank's angle.
-func legs() -> Array[PackedVector2Array]:
-	var p := FishingRig.pedals(_crank)
-	return [FishingRig.leg(FishingRig.HIP, p[0]), FishingRig.leg(FishingRig.HIP, p[1])]
-
-
-## The hand's grip: the tiller while driving, the winch brake while fishing.
-func hand() -> Vector2:
-	return FishingRig.BRAKE_KNOB if fishing >= 0.5 else FishingRig.TILLER_GRIP
 
 
 func _sprite(id: String, at: Vector2) -> Sprite2D:
@@ -186,40 +155,17 @@ func _sprite(id: String, at: Vector2) -> Sprite2D:
 	return s
 
 
-func _paint_far(c: CanvasItem) -> void:
-	var l := legs()[1]
-	_seg(c, l[0], l[1], FishingPalette.WOOD_2)
-	_seg(c, l[1], l[2], FishingPalette.SKIN_2)
-	var pd := FishingRig.pedals(_crank)
-	_seg(c, FishingRig.BB, pd[1], FishingPalette.STEEL)
+## The line's colour above the water: the cosmetic, else the rod's slate (wood on a farther
+## boat, like its rod).
+func line_above() -> Color:
+	if far and line_color == FishingPalette.LINE:
+		return FAR_TO[0]
+	return line_color
 
 
 func _paint_near(c: CanvasItem) -> void:
-	var pd := FishingRig.pedals(_crank)
-	_seg(c, FishingRig.BB, pd[0], FishingPalette.STEEL)
-	c.draw_rect(Rect2(FishingRig.BB, Vector2.ONE), FishingPalette.BRASS_1)
-	var l := legs()[0]
-	_seg(c, l[0], l[1], FishingPalette.WOOD_3)
-	_seg(c, l[1], l[2], FishingPalette.SKIN_1)
-	c.draw_rect(Rect2(l[2].floor() + Vector2(1, 0), Vector2.ONE), FishingPalette.WOOD_3)
-	var a := FishingRig.arm(hand())
-	_seg(c, a[0], a[1], FishingPalette.SKIN_1)
-	_seg(c, a[1], a[2], FishingPalette.SKIN_1)
-	_seg(c, FishingRig.CLUTCH_PIVOT, FishingRig.clutch_tip(fishing), FishingPalette.WOOD_3)
-	c.draw_rect(
-		Rect2(FishingRig.clutch_tip(fishing).floor(), Vector2.ONE), FishingPalette.KEY_LIGHT
-	)
-	var rod := FishingRig.snapped(rod_points())
-	c.draw_polyline(rod.slice(0, 3), FishingPalette.WOOD_3, 1.0)
-	c.draw_polyline(rod.slice(2), FishingPalette.WOOD_2, 1.0)
-	if fishing > 0.5:
-		c.draw_line(FishingRig.WINCH_HUB + Vector2(0.5, -1.5), rod[1], Color(line_color, 0.9), 1.0)
-	var col: Color = look.get("color", Wl.slot_look(slot)["color"])
-	_seg(c, FishingRig.MAST_FOOT, FishingRig.MAST_TOP, FishingPalette.WOOD_3)
-	var m := FishingRig.MAST_TOP
-	var flag := PackedVector2Array([m + Vector2(0, 0), m + Vector2(-6, 1.5), m + Vector2(0, 3)])
-	c.draw_colored_polygon(flag, col)
-
-
-func _seg(c: CanvasItem, a: Vector2, b: Vector2, col: Color) -> void:
-	c.draw_line(a.floor() + Vector2(0.5, 0.5), b.floor() + Vector2(0.5, 0.5), col, 1.0)
+	for p in FishingRig.rod_pixels(rod_points()):
+		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), FishingPalette.SLATE)
+	var col := player_color()
+	c.draw_rect(Rect2(FishingRig.CAP), col)
+	c.draw_rect(Rect2(FishingRig.FLAG), col)

@@ -1,8 +1,8 @@
 class_name FishingFightPanel
 extends FishingHudControl
-## Beside the local rider's meters: in a fight the species, the line out and the fish's stamina;
-## in the Landing the gaff meter (Sprint! then Easy spin, a star for a trophy); otherwise the
-## zone under the boat and the depth to the floor.
+## Beside the local rider's meters, on an abyss-teal panel: in a fight the species, the line out
+## and the fish's stamina; in the Landing the gaff meter (Sprint! then Easy spin, a star for a
+## trophy); otherwise the zone under the boat and the depth to the floor.
 
 const ART := Rect2i(222, 322, 200, 34)
 
@@ -39,19 +39,23 @@ func _draw() -> void:
 	var s := k()
 	var big := px(WlTheme.LABEL_PX)
 	var small := px(WlTheme.SMALL_PX)
+	if bool(gaff.get("visible", false)) or bool(fish.get("visible", false)):
+		FishingHudDraw.panel(self, Rect2(Vector2.ZERO, Vector2(size.x - 6.0 * s, 80.0 * s)))
 	if bool(gaff.get("visible", false)):
 		var label := FishingHudModel.tr_key(game, str(gaff["phase"]))
 		FishingHudDraw.text(self, Vector2(6, 30) * s, label, big, FishingHudDraw.GAFF, true)
 		var bar := Rect2(Vector2(6, 46) * s, Vector2(size.x - 18.0 * s, 26.0 * s))
 		FishingHudDraw.bar(self, bar, float(gaff["fill"]), FishingHudDraw.GAFF)
 		var star_at := Vector2(bar.end.x - 14.0 * s, bar.get_center().y)
-		FishingHudDraw.star(self, star_at, 10.0 * s, FishingPalette.BRASS_1)
+		FishingHudDraw.star(self, star_at, 10.0 * s, FishingPalette.FOAM)
 		return
 	if bool(fish.get("visible", false)):
 		var dist := FishingHudModel.tr_key(game, FishingHudModel.KEY_DISTANCE, [str(fish["d_m"])])
 		var line := "%s  %s" % [fish["name"], dist]
-		FishingHudDraw.text(self, Vector2(6, 30) * s, line, big, WlTheme.TEXT, true)
+		FishingHudDraw.text(self, Vector2(6, 30) * s, line, big, FishingPalette.HUD_TEXT, true)
 		var bar2 := Rect2(Vector2(6, 48) * s, Vector2(size.x - 18.0 * s, 20.0 * s))
 		FishingHudDraw.bar(self, bar2, float(fish["stamina"]), FishingHudDraw.STAMINA)
 		return
-	FishingHudDraw.text(self, Vector2(6, 64) * s, place, small, WlTheme.TEXT_DIM)
+	var pw := FishingHudDraw.text_w(place, small) + 16.0 * s
+	FishingHudDraw.panel(self, Rect2(Vector2(0, 40) * s, Vector2(pw, 34.0 * s)))
+	FishingHudDraw.text(self, Vector2(8, 64) * s, place, small, FishingPalette.HUD_DIM)

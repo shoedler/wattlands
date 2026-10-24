@@ -1,44 +1,27 @@
 {
 	"notes": "Written by src/games/fishing/tools/fishing_write_sprites.gd; edit the grids.",
 	"palette": [
-		"#eef2ea",
-		"#e0eae1",
-		"#d0dfd8",
-		"#c0d4cf",
-		"#a7c5c2",
-		"#8bb0b1",
-		"#72a4a8",
-		"#5b8f96",
-		"#4a7b84",
-		"#3b6773",
-		"#2f5562",
-		"#254452",
-		"#1b3441",
-		"#121f29",
-		"#b2b796",
-		"#8da38e",
-		"#a37f5a",
-		"#735a42",
-		"#4b3d31",
-		"#c9c3ae",
-		"#e6c47a",
-		"#c09a50",
-		"#8a6c38",
-		"#c8573f",
-		"#8f3b30",
-		"#deb08f",
-		"#ad7f62",
-		"#8e9a9a",
-		"#2f4a6a",
-		"#7e9fc4",
-		"#8ea85c",
-		"#d8f0c0"
+		"#ebf2e7",
+		"#cedfd2",
+		"#b6d7cf",
+		"#90c1c1",
+		"#6fa3a6",
+		"#4b858f",
+		"#2c6778",
+		"#1c4d65",
+		"#a7bfb3",
+		"#627179",
+		"#4e5c67",
+		"#c98a5e",
+		"#7f9cbf",
+		"#9fb07a",
+		"#a68aa8"
 	],
 	"sprites": [
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "boat_hull",
-			"prompt": "pedal boat hull, brass long-tail",
+			"prompt": "pedal boat hull, long-tail shaft",
 			"size": [
 				96,
 				40
@@ -46,20 +29,11 @@
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
-			"id": "boat_flywheel",
-			"prompt": "brass flywheel, three spokes",
+			"id": "boat_crew",
+			"prompt": "rider, pedal wheel, clutch",
 			"size": [
-				9,
-				9
-			]
-		},
-		{
-			"_source": "hand-authored grid, FishingArtGrids",
-			"id": "boat_gears",
-			"prompt": "gear train in the gearbox",
-			"size": [
-				6,
-				4
+				30,
+				18
 			]
 		},
 		{
@@ -68,25 +42,16 @@
 			"prompt": "winch drum with wound line",
 			"size": [
 				4,
-				5
+				4
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "boat_prop",
-			"prompt": "exposed screw propeller",
+			"prompt": "screw propeller",
 			"size": [
 				3,
-				7
-			]
-		},
-		{
-			"_source": "hand-authored grid, FishingArtGrids",
-			"id": "rider",
-			"prompt": "seated rider in the key reds",
-			"size": [
-				7,
-				11
+				5
 			]
 		},
 		{
@@ -94,7 +59,7 @@
 			"id": "lure",
 			"prompt": "diving wobbler lure",
 			"size": [
-				7,
+				6,
 				3
 			]
 		},
@@ -103,8 +68,8 @@
 			"id": "gull",
 			"prompt": "gull, two wingbeats",
 			"size": [
-				5,
-				3
+				7,
+				2
 			]
 		},
 		{
@@ -121,14 +86,14 @@
 			"id": "fx_sparkle",
 			"prompt": "catch sparkle",
 			"size": [
-				7,
+				5,
 				5
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_mackerel",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				15,
 				7
@@ -137,7 +102,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_sea_bream",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				14,
 				9
@@ -146,7 +111,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_snapper",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				18,
 				10
@@ -155,7 +120,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_mahi",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				28,
 				11
@@ -164,7 +129,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_tuna",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				30,
 				12
@@ -173,7 +138,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_wahoo",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				34,
 				8
@@ -182,37 +147,37 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_swordfish",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				46,
-				13
+				12
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_marlin",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				59,
-				18
+				14
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_grouper",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				46,
-				23
+				22
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_oarfish",
-			"prompt": "fish facing left, mouth at the anchor",
+			"prompt": "fish facing left, mouth at anchor",
 			"size": [
 				62,
-				11
+				8
 			]
 		},
 		{
@@ -284,13 +249,13 @@
 			"prompt": "harbour town in the haze",
 			"size": [
 				168,
-				34
+				30
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "scenery_pier",
-			"prompt": "wooden pier, deck on row 8",
+			"prompt": "pier, deck top on row 6",
 			"size": [
 				72,
 				22
@@ -327,5 +292,5 @@
 			]
 		}
 	],
-	"style": "muted limited palette, no outlines, flat haze layers, small crisp pixel art"
+	"style": "one cool hue family, one warm accent, flat top-lit planes, no outlines, no dither"
 }

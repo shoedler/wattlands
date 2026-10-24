@@ -1,11 +1,12 @@
 class_name FishingMinimap
 extends FishingHudControl
-## The minimap strip along the top: the ocean in profile (zone colours along the surface, the
-## water and the sea floor from FishingWorld.minimap, the harbour at the left, the world's edge
-## at the right on the roam map; a window round the boats on the endless workout map) and one
-## icon per rider at its x, in its slot colour, showing what it is doing (FishingHudModel.icon_of:
-## driving, sprinting, waiting, fighting, landing, paused, away). The local rider's icon has a
-## caret under it. Drawn in art pixels scaled to the rect (`ap` HUD px per art px).
+## The minimap strip along the top, on an abyss-teal panel: the ocean in profile (the sea floor
+## from FishingWorld.minimap as one flat silhouette, ticks where the zones change, the harbour
+## at the left, the world's edge at the right on the roam map; a window round the boats on the
+## endless workout map), the view's window framed, and one icon per rider at its x, in its player
+## colour, showing what it is doing (FishingHudModel.icon_of: driving, sprinting, waiting,
+## fighting, landing, paused, away). The local rider's icon has a caret under it. Drawn in art
+## pixels scaled to the rect (`ap` HUD px per art px).
 
 ## The rect in art px (FishingHud places it); rows: icons 0-9, the strip below.
 const ART := Rect2i(4, 2, 412, 30)
@@ -98,8 +99,8 @@ func _draw() -> void:
 	var top := float(ICON_ROWS + 1)
 	var h := float(ART.size.y) - top - CARET_ROWS
 	var strip := Rect2(0, top * s, w * s, h * s)
-	draw_rect(strip.grow(s), Color(FishingPalette.VOID, 0.55))
-	draw_rect(strip, FishingPalette.SEA_1)
+	FishingHudDraw.panel(self, strip.grow(s))
+	draw_rect(strip, FishingPalette.DEEP)
 	var deepest := 1.0
 	for d in floor_m:
 		if not is_inf(d):
@@ -108,27 +109,19 @@ func _draw() -> void:
 	for i in int(w):
 		var u := float(i) / maxf(w - 1.0, 1.0)
 		var d := floor_m[mini(roundi(u * float(n - 1)), n - 1)]
-		var depth_rows := h - 2.0
 		if is_inf(d):
-			draw_rect(
-				Rect2(i * s, (top + 3.0) * s, s, (depth_rows - 1.0) * s), FishingPalette.SEA_6
-			)
 			continue
-		var fy := 3.0 + roundf(sqrt(d / deepest) * (depth_rows - 2.0))
-		draw_rect(Rect2(i * s, (top + fy) * s, s, (h - fy) * s), FishingPalette.SEA_4)
+		var fy := 2.0 + roundf(sqrt(d / deepest) * (h - 4.0))
+		draw_rect(Rect2(i * s, (top + fy) * s, s, (h - fy) * s), FishingPalette.UPPER)
 	for z in zones:
 		var a := clampf((float(z["x0"]) - x0) / (x1 - x0), 0.0, 1.0)
-		var b := clampf((float(z["x1"]) - x0) / (x1 - x0), 0.0, 1.0)
-		var zi := FishingWorld.ZONES.find(str(z["id"]))
-		var col := FishingHudDraw.ZONE_COLOURS[clampi(
-			zi, 0, FishingHudDraw.ZONE_COLOURS.size() - 1
-		)]
-		draw_rect(Rect2(roundf(a * w) * s, top * s, roundf((b - a) * w) * s, 3.0 * s), col)
+		if a > 0.0 and a < 1.0:
+			draw_rect(Rect2(roundf(a * w) * s, top * s, s, 2.0 * s), FishingPalette.HAZE)
 	if window_b > window_a:
 		var wa := roundf(window_a * w)
 		var wb := maxf(roundf(window_b * w), wa + 1.0)
 		var frame := Rect2(wa * s, top * s, (wb - wa) * s, h * s)
-		draw_rect(frame, Color(FishingPalette.CLOUD, 0.8), false, maxf(s * 0.67, 1.0))
+		draw_rect(frame, FishingPalette.FOAM, false, maxf(s * 0.67, 1.0))
 	if x0 <= 0.0:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:
@@ -139,26 +132,18 @@ func _draw() -> void:
 
 ## The harbour: a little lighthouse at the strip's left end.
 func _dock(at: Vector2, s: float) -> void:
-	draw_rect(Rect2(at + Vector2(1, -5) * s, Vector2(2, 5) * s), FishingPalette.CLOUD)
-	draw_rect(Rect2(at + Vector2(1, -6) * s, Vector2(2, 1) * s), FishingPalette.KEY_LIGHT)
+	draw_rect(Rect2(at + Vector2(1, -5) * s, Vector2(2, 5) * s), FishingPalette.FOAM)
+	draw_rect(Rect2(at + Vector2(1, -6) * s, Vector2(2, 1) * s), FishingPalette.ACCENT)
 
 
-## The edge as in the view: past the map's end only the starry void, the ocean pouring over
-## its lip in a falling streak.
+## The edge as in the view: past the map's end the void, the ocean pouring over its lip.
 func _edge(at: Vector2, s: float, h: float) -> void:
-	draw_rect(Rect2(at, Vector2(EDGE_W, h) * s), FishingPalette.VOID)
-	for k in 2:
-		var star := Vector2(2.0 + float(k), 3.0 + float(k) * 5.0)
-		draw_rect(Rect2(at + star * s, Vector2.ONE * s), FishingPalette.STEEL)
-	draw_rect(Rect2(at, Vector2(1, h) * s), FishingPalette.SEA_2)
-	for k in 3:
-		var y := fposmod(_t * 8.0 + float(k) * 5.0, h - 1.0)
-		draw_rect(Rect2(at + Vector2(0, y) * s, Vector2(1, 2) * s), FishingPalette.CLOUD)
+	draw_rect(Rect2(at, Vector2(EDGE_W, h) * s), FishingPalette.ABYSS)
+	draw_rect(Rect2(at, Vector2(2, h) * s), FishingPalette.SURFACE)
 
 
 func _icon(e: Dictionary, s: float, w: float) -> void:
-	var look := FishingHudModel.look(game, int(e["slot"]))
-	var col: Color = look["color"]
+	var col := FishingPalette.player(int(e["slot"]))
 	var size := FishingSprites.size_of(str(e["icon"]))
 	var cx := clampf(roundf(float(e["x"]) * w), float(size.x) * 0.5, w - float(size.x) * 0.5)
 	var at := Vector2(cx - float(size.x / 2), 0.0) * s
@@ -170,4 +155,4 @@ func _icon(e: Dictionary, s: float, w: float) -> void:
 		var tri := PackedVector2Array(
 			[Vector2(cx - 2, y + 2) * s, Vector2(cx + 2, y + 2) * s, Vector2(cx, y) * s]
 		)
-		draw_colored_polygon(tri, WlTheme.TEXT)
+		draw_colored_polygon(tri, FishingPalette.HUD_TEXT)

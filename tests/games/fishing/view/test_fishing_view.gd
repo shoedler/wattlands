@@ -66,14 +66,20 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X, 3.0)
 
 
-func test_bow_pitch_lifts_the_bow() -> void:
+func test_bow_pitch_lifts_the_boat_by_whole_pixels_never_rotating_it() -> void:
 	var g := FX.make_game(1)
 	var r := g.state.rider(0)
 	FX.set_drive(r, 3000.0, 7.0)
 	r.pitch_deg = 10.0
 	var v := _view(g)
 	_run(v, 10)
-	assert_lt(v.boat_view(0).rotation, -0.1, "nose up (counter-clockwise) heading right")
+	var b := v.boat_view(0)
+	assert_eq(b.rotation, 0.0, "sprites are never rotated")
+	assert_gte(b.lift_px(), 1, "the boat rides up")
+	assert_eq(b.body.position.y, roundf(b.body.position.y), "by whole pixels")
+	r.pitch_deg = 0.0
+	_run(v, 2)
+	assert_eq(b.lift_px(), 0)
 
 
 func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -> void:
@@ -90,10 +96,12 @@ func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -
 	assert_eq(other.position.y, float(FishingScenery.SURF_Y - FishingView.FAR_ROW_PX))
 	assert_gt(other.position.y, float(FishingScenery.HORIZON_Y), "still on the water")
 	var m := other.hull.material as ShaderMaterial
-	assert_eq(m.shader, FishingBoatView.far_shader())
-	assert_eq(float(m.get_shader_parameter("clip_y")), other.position.y + 1.0)
-	assert_true(bool(m.get_shader_parameter("swap_keys")), "the far hull keeps its slot colour")
-	assert_gt(float(m.get_shader_parameter("haze_amount")), 0.0)
+	assert_eq(m.shader, FishingPaletteMap.shader())
+	assert_eq(FishingPaletteMap.clip_of(m), other.position.y + 1.0)
+	assert_eq(int(m.get_shader_parameter("count")), FishingBoatView.FAR_FROM.size(), "lighter")
+	var mine := me.hull.material as ShaderMaterial
+	assert_eq(int(mine.get_shader_parameter("count")), 0)
+	assert_eq(float(mine.get_shader_parameter("under_y")), float(FishingScenery.SURF_Y))
 
 
 func test_other_boats_far_away_are_not_drawn() -> void:
@@ -114,7 +122,7 @@ func test_driving_spins_the_prop_and_keeps_the_rod_stowed() -> void:
 	var b := v.boat_view(0)
 	assert_eq(b.fishing, 0.0)
 	assert_gt(b.prop_drive, 1.0)
-	assert_eq(b.hand(), FishingRig.TILLER_GRIP)
+	assert_lt(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "the driving pose: hand on the tiller")
 
 
 func test_fishing_flips_the_clutch_raises_the_rod_and_moves_the_hands() -> void:
@@ -124,7 +132,7 @@ func test_fishing_flips_the_clutch_raises_the_rod_and_moves_the_hands() -> void:
 	_run(v, 40)
 	var b := v.boat_view(0)
 	assert_eq(b.fishing, 1.0)
-	assert_eq(b.hand(), FishingRig.BRAKE_KNOB)
+	assert_gte(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "the fishing pose: clutch aft")
 	assert_lt(b.rod_points()[-1].y, FishingRig.ROD_BASE.y - 10.0, "the rod tips up")
 
 
@@ -149,7 +157,8 @@ func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> voi
 	assert_lt(fish.position.x, boat.x, "behind the stern heading out")
 	var spr := v.get_node("Underwater/Fish0") as Sprite2D
 	assert_true(spr.flip_h, "mouth on the right, toward the boat")
-	assert_gt(FishingDepthTint.amount_of(spr.material as ShaderMaterial), 0.1)
+	var m := spr.material as ShaderMaterial
+	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.LIT_SHIFT, "lit in the deep")
 
 
 func test_no_fish_shows_outside_a_fight() -> void:
@@ -185,7 +194,8 @@ func test_menu_hints_show_as_silhouettes_and_the_picked_one_is_lit() -> void:
 	assert_true(bool(hints[1]["selected"]))
 	var m0 := v.get_node("Underwater/Hint0").material as ShaderMaterial
 	var m1 := v.get_node("Underwater/Hint1").material as ShaderMaterial
-	assert_gt(FishingDepthTint.amount_of(m0), FishingDepthTint.amount_of(m1))
+	assert_true(FishingPaletteMap.is_flat(m0), "a flat silhouette")
+	assert_false(FishingPaletteMap.is_flat(m1), "the picked fish shows itself")
 
 
 func test_hints_stay_above_the_floor() -> void:
@@ -292,7 +302,7 @@ func test_the_view_draws_the_whole_width() -> void:
 	var v := _view(g)
 	_run(v, 1)
 	assert_eq(FishingScenery.W, FishingConst.PIXEL_W)
-	assert_eq(FishingScenery.sky_texture().get_width(), FishingConst.PIXEL_W)
+	assert_eq(FishingScenery.H, FishingConst.PIXEL_H)
 
 
 func test_a_client_draws_boats_between_snapshots() -> void:

@@ -18,7 +18,6 @@ class Painter:
 
 	func _draw() -> void:
 		scenery.paint_back(self, cam, t)
-		scenery.paint_front(self, cam, t)
 
 
 func _ready() -> void:

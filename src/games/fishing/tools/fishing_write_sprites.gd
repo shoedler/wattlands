@@ -72,7 +72,8 @@ static func art_json(sprites: Dictionary) -> Dictionary:
 		list.append(entry)
 	return {
 		"palette": pal,
-		"style": "muted limited palette, no outlines, flat haze layers, small crisp pixel art",
+		"style":
+		"one cool hue family, one warm accent, flat top-lit planes, no outlines, no dither",
 		"notes": "Written by src/games/fishing/tools/fishing_write_sprites.gd; edit the grids.",
 		"sprites": list,
 	}
@@ -93,7 +94,7 @@ static func sheet(sprites: Dictionary) -> Image:
 		w = maxi(w, r.get_width())
 		h += r.get_height() + 2
 	var out := Image.create_empty(w + 4, h + 2, false, Image.FORMAT_RGBA8)
-	out.fill(FishingPalette.SKY_1)
+	out.fill(FishingPalette.SKY)
 	var y := 2
 	for r in rows:
 		FishingArtGrids.blit(out, r, Vector2i(2, y))

@@ -7,50 +7,59 @@ const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 func _boat() -> FishingBoatView:
 	var b := FishingBoatView.new()
 	add_child_autofree(b)
-	b.set_look(2, Wl.slot_look(2), FishingPalette.LINE)
+	b.set_slot(2, FishingPalette.LINE)
 	return b
 
 
-func test_the_hull_and_rider_take_the_slot_colour() -> void:
+func test_the_cap_and_pennant_take_the_player_colour_and_every_part_a_palette_map() -> void:
 	var b := _boat()
-	for s: Sprite2D in [b.hull, b.rider]:
+	assert_eq(b.player_color(), FishingPalette.player(2))
+	for s: Sprite2D in [b.hull, b.crew, b.winch, b.prop]:
 		var m := s.material as ShaderMaterial
-		assert_not_null(m)
-		assert_eq(PaletteSwap.keys_of(m), FishingPalette.keys())
-		assert_eq(PaletteSwap.swaps_of(m)[0], PaletteSwap.slot_ramp(2, 2)[0])
+		assert_not_null(m, s.name)
+		assert_eq(m.shader, FishingPaletteMap.shader())
 
 
 func test_every_part_has_its_sprite_at_its_rig_point() -> void:
 	var b := _boat()
-	assert_eq(b.flywheel.position, FishingRig.FLYWHEEL_AT)
+	assert_eq(b.crew.position, FishingRig.CREW_AT)
 	assert_eq(b.prop.position, FishingRig.PROP_AT)
 	assert_eq(b.winch.position, FishingRig.WINCH_AT)
-	assert_eq(b.rider.position, FishingRig.RIDER_AT)
-	for s: Sprite2D in [b.hull, b.gears, b.flywheel, b.winch, b.prop, b.rider]:
+	for s: Sprite2D in [b.hull, b.crew, b.winch, b.prop]:
 		assert_not_null(s.texture, s.name)
 
 
-func test_cadence_turns_the_flywheel_and_the_pedals() -> void:
+func test_cadence_turns_the_crank_frames() -> void:
 	var b := _boat()
 	b.cadence = 90.0
-	var legs0 := b.legs()
-	var tex0 := b.flywheel.texture
-	for i in 5:
+	var seen := {}
+	for i in 20:
 		b.advance(0.05)
-	assert_ne(b.legs()[0][2], legs0[0][2], "the feet go round")
-	assert_ne(b.flywheel.texture, tex0, "the flywheel turns")
+		seen[b.crew_frame()] = true
+	assert_eq(seen.size(), FishingArtGrids.CREW_FRAMES, "the pedals go round")
 
 
 func test_a_still_rider_leaves_the_drivetrain_still() -> void:
 	var b := _boat()
 	b.cadence = 0.0
 	b.prop_drive = 0.0
+	b.advance(0.05)
 	var tex := b.prop.texture
-	var fly := b.flywheel.texture
+	var crew := b.crew.texture
 	for i in 20:
 		b.advance(0.05)
 	assert_eq(b.prop.texture, tex)
-	assert_eq(b.flywheel.texture, fly)
+	assert_eq(b.crew.texture, crew)
+
+
+func test_fishing_switches_the_crew_to_the_fishing_pose() -> void:
+	var b := _boat()
+	b.advance(0.05)
+	assert_lt(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "driving pose")
+	b.fishing_target = 1.0
+	for i in 20:
+		b.advance(0.05)
+	assert_gte(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "fishing pose")
 
 
 func test_the_rod_bends_toward_the_line_under_tension() -> void:
@@ -77,8 +86,9 @@ func test_the_rod_tip_follows_the_boat() -> void:
 
 
 func test_sprites_load_with_their_frames_and_wrap() -> void:
-	assert_eq(FishingSprites.count("boat_flywheel"), 4)
-	assert_eq(FishingSprites.frame("boat_flywheel", 5), FishingSprites.frame("boat_flywheel", 1))
+	var n := 2 * FishingArtGrids.CREW_FRAMES
+	assert_eq(FishingSprites.count("boat_crew"), n)
+	assert_eq(FishingSprites.frame("boat_crew", n + 1), FishingSprites.frame("boat_crew", 1))
 	assert_eq(FishingSprites.size_of("boat_hull"), FishingRig.HULL_SIZE)
 	assert_eq(FishingSprites.anchor("fish_tuna").x, 0)
 	assert_has(FishingSprites.ids(), "fish_oarfish")
@@ -91,13 +101,13 @@ func test_species_map_to_their_fish_sprites() -> void:
 	assert_eq(FishingSprites.fish_id(-1), "fish_mackerel")
 
 
-func test_the_line_under_water_is_lighter_than_the_water_around_it() -> void:
-	for d: float in [1.0, 20.0, 60.0, 200.0, 500.0]:
+func test_the_line_under_water_reads_against_the_water_where_it_ends() -> void:
+	for d: float in [1.0, 20.0, 60.0, 200.0, 500.0, 680.0]:
 		var water := FishingScenery.water_at(d)
 		var line := FishingView.under_line(d)
-		assert_ne(line, water)
-		assert_gt(line.get_luminance(), water.get_luminance())
-	assert_eq(FishingPalette.LINE, FishingPalette.CLOUD, "bright above the water")
+		assert_gt(absf(line.v - water.v), 0.15, "%s m" % d)
+		assert_has(FishingPalette.ALL, line)
+	assert_eq(FishingPalette.LINE, FishingPalette.SLATE, "the rod's slate above the water")
 
 
 func test_the_default_line_cosmetic_is_the_bright_line() -> void:

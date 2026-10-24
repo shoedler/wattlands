@@ -2,7 +2,8 @@ extends Node
 ## Art review of the view and HUD from hand-made riders (no rules run), one scene per scenario:
 ## tools/screenshot --scene=res://tests/games/fishing/view/preview/fishing_view_<name>.tscn
 ## (dock: four boats at the harbour, one stopped at its menu; fast: driving hard mid-ocean;
-## grouper: a fight in the deep; edge: stopped by the world's edge).
+## fight: a fight on the reef; grouper: a fight in the deep; edge: stopped by the world's edge;
+## workout: two boats on the endless workout map, one fighting).
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 
@@ -13,7 +14,7 @@ var game: FishingGame = null
 
 func _ready() -> void:
 	var n := 4 if scenario == "dock" else 2
-	game = FX.make_game(n, 0)
+	game = FX.make_game(n, 0, Wl.SOLO, "base_60" if scenario == "workout" else "roam_30")
 	add_child(game)
 	var st := game.state
 	st.t = 600.0
@@ -21,10 +22,10 @@ func _ready() -> void:
 	var other := st.rider(1)
 	match scenario:
 		"dock":
-			FX.set_menu(me, 120.0, 0)
-			FX.set_drive(other, 150.0, 4.0)
-			FX.set_wait(st.rider(2), 60.0, 1, 10.0, 4.0)
-			FX.set_drive(st.rider(3), 40.0, 2.0)
+			FX.set_menu(me, 130.0, 0)
+			FX.set_drive(other, 190.0, 4.0)
+			FX.set_wait(st.rider(2), 70.0, 1, 10.0, 4.0)
+			FX.set_drive(st.rider(3), 250.0, 2.0)
 			st.rider(3).paused = true
 			me.points = 120
 			other.points = 340
@@ -34,6 +35,12 @@ func _ready() -> void:
 			me.wake = 1.0
 			me.p_eff_w = 330.0
 			FX.set_fight(other, 3080.0, 3, 25.0, 12.0)
+		"fight":
+			FX.set_fight(me, 2950.0, 3, 28.0, 22.0, 0.5, 0.05)
+			FX.set_drive(other, 2840.0, 3.0)
+		"workout":
+			FX.set_fight(me, 1200.0, 0, 22.0, 6.0, 0.35, 0.1)
+			FX.set_drive(other, 1140.0, 2.5)
 		"grouper":
 			FX.set_fight(me, 7100.0, 8, 30.0, 420.0, 0.55, 0.05)
 			FX.set_wait(other, 6960.0, 6, 14.0, 120.0)

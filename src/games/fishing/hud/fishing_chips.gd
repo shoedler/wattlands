@@ -2,7 +2,8 @@ class_name FishingChips
 extends FishingHudControl
 ## The light stopped menu as small chips in the world, next to what they act on: "Cast: <fish>"
 ## above each fish hint's silhouette, "Drive on" ahead of the bow and "Turn around" behind the
-## stern (FishingHudModel.chips). The highlighted chip is lit with an accent frame and a caret.
+## stern (FishingHudModel.chips), on abyss-teal panels. The highlighted chip is lit with a foam
+## frame and a caret.
 ## Positions come from the view's model (FishingView, through the game's "fishing_view" meta),
 ## in art px mapped onto this Control, which covers the view down to the meters.
 
@@ -83,14 +84,14 @@ func _draw() -> void:
 		center = r.get_center()
 		placed.append(r)
 		var lit := bool(c["selected"])
-		draw_rect(r, Color(WlTheme.PANEL, 0.92 if lit else 0.7))
+		FishingHudDraw.panel(self, r)
 		if lit:
-			draw_rect(r.grow(2.0), WlTheme.ACCENT, false, 3.0)
+			draw_rect(r.grow(2.0), FishingPalette.HUD_TEXT, false, 3.0)
 			var bob := roundf(sin(_t * 6.0) * 2.0)
 			var y0 := r.end.y + 4.0 + bob
 			var tri := PackedVector2Array(
 				[Vector2(center.x - 8, y0), Vector2(center.x + 8, y0), Vector2(center.x, y0 + 8)]
 			)
-			draw_colored_polygon(tri, WlTheme.ACCENT)
-		var col := WlTheme.TEXT if lit else WlTheme.TEXT_DIM
+			draw_colored_polygon(tri, FishingPalette.HUD_TEXT)
+		var col := FishingPalette.HUD_TEXT if lit else FishingPalette.HUD_DIM
 		FishingHudDraw.text(self, Vector2(r.position.x + 10.0, r.end.y - 9.0), text, fpx, col, lit)
