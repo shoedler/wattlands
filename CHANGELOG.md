@@ -1,6 +1,25 @@
 # Changelog
 
-Platform entries are merged here from `docs/changelog.d/` fragments by the lead. Games added after v0.1.0 keep their entries in `docs/changelog.d/<id>.md`.
+Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
+
+## v0.2.0 (2026-10-24)
+
+### Turbo Reel
+
+- Free Roam (`roam_10` to `roam_60`, default `roam_30`): one shared ocean from the harbour to the edge of the world. Pedal your boat out (power sets the speed, SIM adds a gentle water drag), stop, and a light menu offers Cast at a fish you can see, Drive on and Turn around. Fights are ERG phases built at the bite; ten species from mackerel to a giant grouper and a legendary abyss fish; points by weight, most points wins. The first 5 minutes are a bite-free drive-out, and a fight on at time-up may finish (up to 5 more minutes).
+- Bots fill empty seats with one of four strategies (vibe, small, mixed, big). Workouts (`base_60`, `threshold`, `e2e_2min`) troll across an endless map and keep their plans and co-op scoring.
+- New look: hand-drawn muted pixel art, a brass pedal drivetrain boat, a full-width camera on your boat, a minimap with each rider's action and a leaderboard, and a waterfall at the edge of the world. The picker shows a card per mode with Free Roam featured.
+- Strava gets "Free Roam N min" or the workout name, plus lines per rider (fish, biggest catch, points, rank, farthest out).
+
+### Platform and app
+
+- A rider who stops pedaling for 5 s is paused: the ride timer and, solo, the game clock stop and a pause symbol shows. In multiplayer the shared clock pauses only when every human rider is paused. The safety governor's rules are unchanged.
+- Heart rate: connect a Bluetooth heart rate sensor in Settings > Trainer > Sensors. It shows in the power gauge, goes into the FIT file (record, lap and session) and the results screen, and is never sent to other riders.
+- Pedal navigation is now opt-in (Settings, off by default): without it menus use the keyboard and controller only. With it on, a small graph shows the surge threshold.
+- Profile, Settings and other long form pages scroll to their last entries.
+- Strava activities are titled `WATTLANDS: <game> - <workout or mode>` and describe the game's stats, then moving time, distance, average and normalized power, average cadence and work.
+- The product name shown to players is WATTLANDS.
+- Game SDK (additive): `Telemetry.heart_rate_bpm`, `PlayerSlot.pedal_nav`, `GameResults.ride_tag` and `ride_lines`, and the `content_cards` manifest key.
 
 ## v0.1.1 (2026-10-23)
 
