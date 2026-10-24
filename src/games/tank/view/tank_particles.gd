@@ -20,6 +20,7 @@ enum Kind {
 	EXPLOSION,
 	FLASH,
 	MUZZLE,
+	EXHAUST,
 }
 
 ## Hard cap on live particles.
@@ -29,12 +30,17 @@ const ADDITIVE: Array[int] = [
 	Kind.SPARK, Kind.EMBER, Kind.FIRE, Kind.EXPLOSION, Kind.FLASH, Kind.MUZZLE
 ]
 ## Kinds that may be dropped when the pool is full (the rest evict the oldest particle).
-const DROPPABLE: Array[int] = [Kind.SMOKE, Kind.DUST, Kind.STEAM, Kind.HEAT, Kind.DIRT, Kind.EMBER]
+const DROPPABLE: Array[int] = [
+	Kind.SMOKE, Kind.DUST, Kind.STEAM, Kind.HEAT, Kind.DIRT, Kind.EMBER, Kind.EXHAUST
+]
 ## Depth planes: 0 on the tank's plane (sharp), 1 behind it (soft and hazy), -1 in front of it.
 const PLANE_BACK := 1
 const PLANE_FRONT := -1
+## On the hull: inside an engine room, carried along with the tank (the camera follows the hull, so
+## these never scroll). Drawn like plane 0.
+const PLANE_HULL := 2
 ## Camera scroll factor per plane (see ParallaxStrip factors).
-const PLANE_SCROLL := {0: 1.0, 1: 0.5, -1: 1.3}
+const PLANE_SCROLL := {0: 1.0, 1: 0.5, -1: 1.3, 2: 0.0}
 
 ## The live particles (indexes 0 .. count - 1).
 var count: int = 0
@@ -134,7 +140,7 @@ func tumble(p_rot: float, p_spin: float) -> void:
 
 ## Advances every particle by `dt` seconds and removes the dead. `scroll_px` is how far the camera
 ## moved right this step: particles in the world (plane 0) slide left by it, those on the far plane
-## by half and those in front by 1.3 x, like the planes' parallax.
+## by half and those in front by 1.3 x, like the planes' parallax; those on the hull stay put.
 func step(dt: float, ground_y: float, scroll_px: float = 0.0) -> void:
 	var i := 0
 	while i < count:

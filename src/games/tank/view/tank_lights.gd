@@ -119,6 +119,15 @@ func _draw() -> void:
 		var core := big * 0.4
 		wc.a = wash * 0.5
 		draw_texture_rect(_glow, Rect2(wash_pos - core, core * 2.0), false, wc)
+		# The road under and ahead of the gun catches the flash: a flat bounce on the ground line.
+		var gy := float(TankConst.GROUND_Y)
+		if wash_pos.y < gy and gy - wash_pos.y < WASH_RADIUS:
+			var near := 1.0 - (gy - wash_pos.y) / WASH_RADIUS
+			var g := Vector2(WASH_RADIUS * 0.7, 9.0)
+			wc.a = wash * 0.45 * near
+			draw_texture_rect(
+				_glow, Rect2(Vector2(wash_pos.x + 18.0, gy - 3.0) - g, g * 2.0), false, wc
+			)
 	for i in count:
 		var r := _radius[i]
 		draw_texture_rect(

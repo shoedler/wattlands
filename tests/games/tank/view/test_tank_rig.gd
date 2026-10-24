@@ -514,8 +514,8 @@ func test_exhaust_smoke_follows_the_diesels_watts() -> void:
 		low.update(s, U.feed_of(s, 60.0, 60.0), 1.0 / 60.0)
 		high.update(s, U.feed_of(s, 280.0, 100.0), 1.0 / 60.0)
 	assert_gt(
-		high.hub.fx.particles.count_kind(TankParticles.Kind.SMOKE),
-		low.hub.fx.particles.count_kind(TankParticles.Kind.SMOKE)
+		high.hub.fx.particles.count_kind(TankParticles.Kind.EXHAUST),
+		low.hub.fx.particles.count_kind(TankParticles.Kind.EXHAUST)
 	)
 
 
