@@ -22,12 +22,12 @@ func _driver(rig: TankRulesRig) -> int:
 
 
 func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void:
-	for row: Array in [[1, 0.6], [2, 0.8], [3, 1.0]]:
-		var rig := _rig(int(row[0]))
+	for crew in [1, 2, 3]:
+		var rig := _rig(crew)
 		var b := rig.state.boss
 		assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 		var def := rig.content.boss_def()
-		var scale: float = row[1]
+		var scale := rig.content.enemy_scale(TankIds.tank_for_crew(crew))
 		assert_almost_eq(b.bogie_max, float(def["bogie_hp"]) * scale, 0.001)
 		assert_almost_eq(b.turret_max, float(def["turret_hp"]) * scale, 0.001)
 		for hp in b.bogie_hp:
@@ -49,18 +49,19 @@ func test_the_boss_stands_partly_past_the_right_edge() -> void:
 func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
 	var rig := _rig(1, true)
 	var gap := _gap(rig)
-	assert_almost_eq(gap, 262.0, 1.0)
+	var start := float(rig.content.segment(BOSS)["boss"]["start_left_px"])
+	assert_almost_eq(gap, start - float(TankConst.REAR_SCREEN_X) - rig.hull().hull_w, 1.0)
 	rig.run(10.0)
 	assert_almost_eq(gap - _gap(rig), 20.0, 0.2, "2 px/s")
 	var stop := float(rig.content.boss_def()["stop_px"])
-	rig.run(80.0)
+	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
 	assert_almost_eq(
 		_gap(rig), stop, 0.01, "it stops stop_px from the hull's front (120 in the brief)"
 	)
 	rig.run(5.0)
 	assert_almost_eq(_gap(rig), stop, 0.01)
 	var cit := _rig(3, true)
-	cit.run(40.0)
+	cit.run(ceilf((_gap(cit) - stop) / 2.0) + 1.0)
 	assert_almost_eq(_gap(cit), stop, 0.01)
 
 

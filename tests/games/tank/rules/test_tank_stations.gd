@@ -63,7 +63,9 @@ func test_the_stabilizer_drains_1_5_units_a_second_while_an_enemy_is_in_range() 
 	rig.run(10.0)
 	assert_true(dy.stabilizing)
 	var drain := rig.content.num("tanks", "dynamo.stabilizer_per_s")
-	assert_eq(drain, 2.0, "1.5 in the brief, tuned to 2.0")
+	assert_between(
+		drain, 0.75, 2.25, "1.5 in the brief, +-50% (a long fight must not empty the bank)"
+	)
 	assert_almost_eq(dy.bank, 60.0 - drain * 10.0, 0.1)
 
 
@@ -119,8 +121,12 @@ func test_a_traverse_costs_15_units_and_takes_2_5_s_at_a_full_bank_8_s_at_empty(
 	assert_almost_eq(mid.hull().traverse_s, 5.25 - 0.05, 0.06, "linear between 0 and 50 units")
 
 
-func test_the_rampart_hoist_takes_10_s_at_50_units_20_s_at_0_and_costs_25() -> void:
-	for row: Array in [[100.0, 10.0], [50.0, 10.0], [0.0, 20.0], [25.0, 15.0]]:
+func test_the_rampart_hoist_time_follows_the_bank_and_it_costs_25() -> void:
+	var hs: Array = _quiet(2).content.value("tanks", "dynamo.hoist_s", [20, 10])
+	assert_between(float(hs[1]), 5.0, 15.0, "10 s in the brief, +-50%")
+	assert_between(float(hs[0]), 10.0, 30.0, "20 s in the brief, +-50%")
+	var mid := (float(hs[0]) + float(hs[1])) / 2.0
+	for row: Array in [[100.0, hs[1]], [50.0, hs[1]], [0.0, hs[0]], [25.0, mid]]:
 		var rig := _quiet(2)
 		rig.power_w[2] = 50.0
 		rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
@@ -145,8 +151,9 @@ func test_the_hoist_lifts_a_heavy_shell_and_never_starts_without_a_target() -> v
 	assert_eq(rig.dynamo().hoist_s, 0.0, "no target, no hoist")
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 	rig.dynamo().bank = 100.0
-	rig.run(10.5)
-	assert_ne(rig.hull().loaded, TankIds.SHELL_NONE, "a shell is up after 10 s")
+	var fast := float(rig.content.value("tanks", "dynamo.hoist_s", [20, 10])[1])
+	rig.run(fast + 0.5)
+	assert_ne(rig.hull().loaded, TankIds.SHELL_NONE, "a shell is up after the fast hoist time")
 	assert_eq(rig.of_type("latch").size() + rig.of_type("shot").size() > 0, true)
 
 
@@ -313,6 +320,17 @@ func test_checkpoints_hold_pressure_it_neither_builds_nor_bleeds() -> void:
 	st.pressure_pct = 50.0
 	rig.run(20.0)
 	assert_eq(st.pressure_pct, 50.0)
+
+
+func test_the_cooldown_holds_pressure_too_no_shell_is_built_with_nothing_to_shoot() -> void:
+	var rig := TankRulesRig.new(3)
+	rig.enter(rig.segs().size(), 2.0)
+	assert_true(rig.in_cooldown())
+	var st := rig.steam()
+	st.pressure_pct = 50.0
+	rig.run(60.0)
+	assert_eq(st.pressure_pct, 50.0)
+	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
 
 
 func _over_rig() -> TankRulesRig:
@@ -503,7 +521,7 @@ func test_hoist_lifts_a_heavy_shell_on_the_hoist_energy() -> void:
 	var rig := _bulwark()
 	var g := rig.gearbox()
 	var full := rig.content.num("tanks", "gearbox.hoist_j")
-	assert_eq(full, 3500.0, "4 kJ in the brief, tuned to 3.5 kJ")
+	assert_between(full, 2000.0, 6000.0, "4 kJ in the brief, +-50%")
 	_lever(rig, "hoist")
 	g.hoist_j = 0.0
 	var secs := full / 225.0

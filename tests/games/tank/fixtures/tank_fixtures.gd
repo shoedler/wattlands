@@ -64,7 +64,9 @@ static func state(crew: int) -> TankState:
 	s.hull.evasive = true
 	s.hull.elev_deg = 6.5
 	s.hull.target_id = 11
-	s.enemies.append(_enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, 64.0, 1))
+	s.enemies.append(
+		_enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, _medium_hp(), 1)
+	)
 	s.enemies.append(_enemy(12, TankIds.ENEMY_LIGHT, s.hull.x_px - 140.0 - 80.0, 24.0, -1))
 	var td := _enemy(13, TankIds.ENEMY_DESTROYER, s.camera_x() + 640.0 - 112.0, 50.0, 1)
 	td.mode = TankIds.EM_TELEGRAPH
@@ -284,6 +286,11 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 	s.score.overruns = 1
 	s.score.crew_kills = 5
 	return s
+
+
+## The fixture medium's HP: damaged (below any tank's full medium HP), so it shows a bar.
+static func _medium_hp() -> float:
+	return 40.0
 
 
 static func _enemy(id: int, type: String, x: float, hp: float, side: int) -> TankEnemyState:

@@ -100,6 +100,8 @@ func test_stages_2_and_3_end_in_a_heavy_tank_duel_at_the_gun_line() -> void:
 		assert_eq(float(g["min_s"]), 60.0)
 
 
+## The brief's lists, except one medium fewer in stages 2 and 3 (2 -> 1, the -50% bound; ADR "Balance
+## iteration 1"): every Advance still has a light and a medium (T6).
 func test_the_brief_enemy_lists_per_stage() -> void:
 	var c := _load("ashfall_road")
 	var adv := _segments(c, "advance")
@@ -107,7 +109,7 @@ func test_the_brief_enemy_lists_per_stage() -> void:
 	assert_eq([_count(s1, "light"), _count(s1, "medium")], [2, 1])
 	assert_eq(adv[0]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wire"])
 	var s2: Array = adv[1]["encounters"]
-	assert_eq([_count(s2, "medium"), _count(s2, "destroyer"), _count(s2, "light")], [2, 1, 1])
+	assert_eq([_count(s2, "medium"), _count(s2, "destroyer"), _count(s2, "light")], [1, 1, 1])
 	assert_eq(
 		s2.filter(func(e: Dictionary) -> bool: return e.get("from") == "rear").size(),
 		1,
@@ -115,7 +117,7 @@ func test_the_brief_enemy_lists_per_stage() -> void:
 	)
 	assert_eq(adv[1]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wreck"])
 	var s3: Array = adv[2]["encounters"]
-	assert_eq([_count(s3, "medium"), _count(s3, "destroyer"), _count(s3, "light")], [2, 1, 2])
+	assert_eq([_count(s3, "medium"), _count(s3, "destroyer"), _count(s3, "light")], [1, 1, 2])
 	assert_eq(s3.filter(_is_rear_light).size(), 1)
 	assert_eq(adv[2]["obstacles"].size(), 0)
 
@@ -181,11 +183,13 @@ func test_the_boss_segment_and_the_cooldown_backdrops() -> void:
 	var boss := c.segment(10)
 	assert_eq(boss["type"], "boss")
 	assert_eq([int(boss["duration_s"]), int(boss["min_s"]), int(boss["max_s"])], [240, 120, 360])
-	assert_eq(
-		int(boss["boss"]["start_left_px"]),
-		470,
+	var citadel_stop := float(TankConst.REAR_SCREEN_X) + 288.0 + float(c.boss_def()["stop_px"])
+	assert_gt(
+		float(boss["boss"]["start_left_px"]),
+		citadel_stop,
 		"the Behemoth starts past the longest tank's stop line"
 	)
+	assert_gt(float(boss.get("end_hold_s", 0.0)), 0.0, "a death beat before the boss phase ends")
 	assert_eq(boss["backdrop"], "bg_town_near", "the foundry town")
 	assert_eq(c.mission()["cooldown"]["backdrop_victory"], "bg_town_near")
 	assert_true(c.mission()["cooldown"].has("backdrop_withdrawn"))
@@ -225,21 +229,18 @@ func test_the_citadel_never_meets_more_than_16_enemies_at_once_even_if_none_dies
 
 
 func test_each_tank_meets_the_scaled_gun_line() -> void:
-	var expect := {
-		1: [2, 2, 3],
-		2: [2, 3, 4],
-		3: [3, 3, 4],
-	}
-	for crew: int in expect:
+	for crew in [1, 2, 3]:
 		var rig := TankRulesRig.new(crew)
+		var tank := TankIds.tank_for_crew(crew)
 		for i in 3:
-			rig.enter([2, 5, 8][i], 0.0)
-			assert_eq(
-				rig.state.gun_line.guns_total,
-				expect[crew][i],
-				"crew %d gun line %d" % [crew, i + 1]
-			)
-			assert_eq(rig.state.enemies.size(), expect[crew][i])
+			var index: int = [2, 5, 8][i]
+			var want := 0
+			for spec: Dictionary in rig.content.segment(index)["enemies"]:
+				want += rig.content.scaled_count(int(spec["count"]), tank)
+			rig.enter(index, 0.0)
+			assert_eq(rig.state.gun_line.guns_total, want, "crew %d gun line %d" % [crew, i + 1])
+			assert_eq(rig.state.enemies.size(), want)
+			assert_gte(want, 3, "a gun line is never a walkover")
 
 
 func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_screen() -> void:

@@ -57,6 +57,8 @@ var plans: Dictionary = {}
 
 ## Phase indexes this director already ended (end_phase once per phase).
 var _ended: Dictionary = {}
+## Phase index -> the phase's elapsed seconds when its objective was first seen done.
+var _done_at: Dictionary = {}
 ## peer -> the phase index whose start this director handled.
 var _started: Dictionary = {}
 ## peer -> the tick that phase started on.
@@ -415,13 +417,21 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 	return [float(b[0]), float(b[1])]
 
 
-## end_phase for every rider of the group's phase in one step, once the objective is done and
-## min_s has passed (until then the tank holds: "Regroup").
+## end_phase for every rider of the group's phase in one step, once the objective is done, min_s
+## has passed (until then the tank holds: "Regroup") and the segment's `end_hold_s` (mission file,
+## default 0; the boss uses it for the Behemoth's death beat) has run since the objective was done.
 func _maybe_end_phase(state: TankState, inputs: TankInputs) -> void:
 	var ph := inputs.phase
 	if not ph.open_ended or ph.is_cooldown() or _ended.has(ph.index):
 		return
-	if not state.seg.objective_done or ph.elapsed_s < ph.min_s:
+	if not state.seg.objective_done:
+		return
+	if not _done_at.has(ph.index):
+		_done_at[ph.index] = ph.elapsed_s
+	if ph.elapsed_s < ph.min_s:
+		return
+	var hold := float(content.segment(ph.segment).get("end_hold_s", 0.0))
+	if ph.elapsed_s - float(_done_at[ph.index]) < hold - EPS:
 		return
 	_ended[ph.index] = true
 	for ri in inputs.riders:

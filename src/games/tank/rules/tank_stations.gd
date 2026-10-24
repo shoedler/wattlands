@@ -141,7 +141,8 @@ static func _steam(
 					aux.over_j = 0.0
 	if state.all_afk or st.loaded or st.cycling:
 		return
-	if state.seg.seg == TankIds.SEG_CHECKPOINT:
+	# Pressure holds in checkpoints and in the cool-down (no boiler grade there, brief 2.3).
+	if state.seg.seg == TankIds.SEG_CHECKPOINT or state.seg.seg == TankIds.SEG_COOLDOWN:
 		return
 	var full_j := c.num("tanks", "steam.full_j", 6000.0)
 	if st.over:

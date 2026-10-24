@@ -403,7 +403,9 @@ func test_terrain_grade_math() -> void:
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, false), 3.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 510.0, false), -2.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 9999.0, false), 0.0, 1e-9)
-	assert_almost_eq(TankDirector.terrain_grade_pct(c, 7, 250.0, false), 6.0, 1e-9)
+	var peak: Array = c.segment(7)["terrain"][2]
+	assert_eq(float(peak[1]), 6.0, "stage 3's steepest point, +6%")
+	assert_almost_eq(TankDirector.terrain_grade_pct(c, 7, float(peak[0]), false), 6.0, 1e-9)
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, ADV1, 250.0, true), 2.0, 1e-9, "warm-up")
 	assert_almost_eq(TankDirector.terrain_grade_pct(c, GUN1, 50.0, false), 0.0, 1e-9, "no terrain")
 	assert_eq(TankTerrain.grade_at([], 10.0), 0.0)
@@ -587,6 +589,21 @@ func test_end_phase_all_riders_once_after_min_s() -> void:
 	h.state.seg.objective_done = true
 	h.run_s(DEPOT, 5.0)
 	assert_eq(h.ended.size(), 3, "a fixed phase never ends early")
+
+
+## The boss waits its `end_hold_s` (the Behemoth's death beat) after the objective is done, so the
+## loader's last shell keeps its breech cycle (T3: >= 6 s at grade 0 per shell).
+func test_the_boss_holds_a_death_beat_before_end_phase() -> void:
+	var h := _h()
+	var hold := float(h.content.segment(BOSS).get("end_hold_s", 0.0))
+	assert_gte(hold, 6.0, "at least the 6 s breech cycle")
+	h.run_s(BOSS, 130.0)
+	assert_eq(h.ended, [], "the objective is not done")
+	h.state.seg.objective_done = true
+	h.run_s(BOSS, hold - 0.5)
+	assert_eq(h.ended, [], "the death beat")
+	h.run_s(BOSS, 1.0)
+	assert_eq(h.ended.size(), 3, "then all three riders in one step")
 
 
 ## Nothing in the cool-down: no request, course grade, band or end_phase, whatever happens.

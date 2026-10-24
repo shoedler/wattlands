@@ -55,14 +55,19 @@ func test_damaged_enemies_show_an_hp_bar_scaled_by_the_tank() -> void:
 	var bars := _rows(v.enemies_layer, "bar")
 	assert_gt(bars.size(), 0)
 	var medium_bar := bars[0]
-	assert_almost_eq(float(medium_bar["frac"]), 64.0 / 80.0, 1e-4, "80 HP at 1.0 for the Citadel")
+	var medium_full := float(TankFixtures.content().enemy_def("medium")["hp"])
+	assert_almost_eq(float(medium_bar["frac"]), 40.0 / medium_full, 1e-4, "of the Citadel's medium")
 	var small := TankFixtures.state(1)
 	var v1 := U.view_of(self, small)
-	assert_almost_eq(v1.enemy_max_hp(small, "medium"), 48.0, 1e-4, "x 0.6 for the Bulwark")
+	var scale := TankFixtures.content().enemy_scale(TankIds.TANK_BULWARK)
+	var medium_hp := float(TankFixtures.content().enemy_def("medium")["hp"])
+	assert_almost_eq(
+		v1.enemy_max_hp(small, "medium"), medium_hp * scale, 1e-4, "x the Bulwark's scale"
+	)
 	small.enemy(11).hp = small.enemy(11).hp_max
 	var heavy_hp := float(TankFixtures.content().enemy_def("heavy")["hp"])
 	assert_almost_eq(
-		v1.enemy_max_hp(small, "heavy"), heavy_hp * 0.6, 1e-4, "the content's heavy HP"
+		v1.enemy_max_hp(small, "heavy"), heavy_hp * scale, 1e-4, "the content's heavy HP"
 	)
 
 

@@ -176,14 +176,16 @@ func _hits_of_shots(rig: TankRulesRig, n: int) -> int:
 	return hits
 
 
-func test_evasive_cuts_enemy_hit_chances_to_70_percent_while_the_driver_is_in_band() -> void:
+func test_evasive_cuts_enemy_hit_chances_by_the_content_factor_while_the_driver_is_in_band(
+) -> void:
 	var rig := TankRulesRig.new(1)
 	rig.enter(ADVANCE, 1.0)
 	rig.run(1.0)
 	assert_true(rig.hull().evasive, "in band at 90% FTP")
 	var n := 4000
 	var evasive := _hits_of_shots(rig, n)
-	assert_almost_eq(float(evasive) / n, 0.6 * 0.7, 0.03)
+	var mult := rig.content.num("tanks", "drive.evasive_hit_mult", 0.7)
+	assert_almost_eq(float(evasive) / n, 0.6 * mult, 0.03)
 	rig.hull().evasive = false
 	var plain := _hits_of_shots(rig, n)
 	assert_almost_eq(float(plain) / n, 0.6, 0.03)

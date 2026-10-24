@@ -244,3 +244,44 @@ Short ADRs for the tank game: date, decision, alternatives, reason. Game session
 - Declined: `x` / `y` on `kill` and `hit` events and `rooms[].flyball` / `halt_line` anchors in `rigs.json` (view; derivable from state and optional, nothing blocked); dropping the `fallback` guard in `TankRules._update_riders` (module; idempotent with the module's clearing, kept so the rules stand alone).
 - Test calls (the code was right in each case, the tests pinned numbers the retune moved; none weakened): the effort terrain tests read the retuned stage profiles (points at 130 / 250 m, not 150 / 300); the Bulwark card's hoist fraction reads `gearbox.hoist_j` from content; the boss fixture, the boss-bar test, the net test's boss maxima and segment length, and the view's heavy HP read `enemies.json` x `enemy_scale` and the mission from the content instead of hard-coded 100 / 300 / 96 / 1300; `test_bands_at_each_segment_start` requires (60, 120) as the first row of every segment and accepts (50, 120) rows only for a steam rider in a WORK phase (brief 2.3 pattern 5). The boss fixture's comment now says index 2 (the farthest bogie) is the broken one.
 - Strings: every `TANK_` key used in code, content and `game.json` exists in `content/tank/strings.csv` (checked by script); `TANK_TEAM_KILLS` now reads "Kills (light/medium/destroyer/dug-in/heavy/Behemoth)", the order of its "/"-joined value.
+
+## 2026-10-24 Balance iteration 1 (G2 tuner, 1 of 3)
+
+- Decision: content, one director rule and one rules rule, all inside the BRIEF 4.6 / 4.5 envelope (no plan, directive pattern, governor behaviour, S-check or T-target changed; `TankContentSchema.validate_stations` still bounds every effort number). The numbers, brief -> G1 -> now (percent is the change against the brief, never beyond +-50%):
+
+| Number | Brief | G1 | Now | vs brief |
+| --- | --- | --- | --- | --- |
+| Bulwark `enemy_scale` (HP and counts) | 0.6 | 0.6 | 0.75 | +25% |
+| `hull.hp` | 100 | 120 | 140 | +40% |
+| `hull.checkpoint_hp` | 20 | 20 | 30 | +50% |
+| `drive.evasive_hit_mult` | 0.7 | 0.7 | 0.5 | -29% |
+| `dynamo.stabilizer_per_s` | 1.5 | 2.0 | 1.5 | 0% (G1's 2.0 reverted) |
+| `dynamo.hoist_s` (empty, full bank) | 20 / 10 | 20 / 10 | 22 / 11 | +10% |
+| `gearbox.hoist_j` | 4000 | 3500 | 4000 | 0% (G1's 3500 reverted) |
+| medium tank HP | 80 | 80 | 64 | -20% |
+| dug-in gun damage | 10 | 7 | 5 | -50% (the bound) |
+| medium gun damage | 8 | 5 | 4 | -50% (the bound) |
+| tank destroyer gun damage | 15 | 11 | 9 | -40% |
+| heavy gun damage | 12 | 9 | 7 | -42% |
+| Behemoth main gun damage | 20 | 16 | 13 | -35% |
+| Behemoth turret HP | 300 | 200 | 270 | -10% |
+| Advance 2 / 3 length (profiles and trigger points scaled) | 1300 / 1400 m | 1100 / 1000 | 1200 / 950 | -8% / -32% |
+| Advance 2 and 3 mediums | 2 each | 2 each | 1 each | -50% (the bound; every Advance still has a light and a medium, T6) |
+| gun line 1 | 3 dug-in | 3 dug-in | 4 dug-in (+33%) and 1 medium at 300 px | new element |
+| gun line 2 | 1 heavy, 2 dug-in | same | + a third dug-in (own entry, count 1) | +50% on the dug-in |
+| boss `start_left_px` (not a brief number) | - | 470 | 560 | the Behemoth's first minutes are out of reach |
+| boss `end_hold_s` (new mission key) | - | - | 6.5 s | see below |
+
+- Why each (measured with the rules-level harness, then the real `tools/run_game_sim` matrix; G1's open results were: gun line 1 at the 60 s floor for every crew, gun lines 2 and 3 and the Bulwark's and Rampart's boss short, the Bulwark's Advance 3 over 240 s, 2-3 breakdowns, the Citadel's dynamo never above 80% in stage 1, the loader's last boss shell cut off):
+  1. Gun lines and bosses ended early because each kill is one heavy shell and a count only scales by 0.6 / 0.8 / 1.0. A count-1 entry stays 1 for every crew, so gun line 2's third dug-in and gun line 1's medium give the Bulwark the shell count it needs (4-5 shells at about 22-26 s each is 95-125 s). The Bulwark's scale 0.75 is the smallest that gives it 5 turret shells on the boss with the turret at 270; a medium at 64 HP is 48 HP for the Bulwark (one shell: the Advance stays quick) and 51 HP for the Rampart (two), the Citadel's 64 (two).
+  2. The Citadel boss lasted 224-319 s with G1's stabilizer 2.0: at 100% FTP the bank charges 1.67 units/s, so 2.0/s can never hold; the bank sat at 0 for the whole fight, dispersion went to +-1.5 degrees and shells missed (seed 3 overran at 360 s). The brief's 1.5 holds the bank near 20 units; the Citadel boss is now a steady 285 s and T2 still passes (stage 1: 35 s, stage 2: 90, stage 3: 49, boss: 224 s above 80%).
+  3. G1's gun damage cuts made the Bulwark survive only because its fights were short. With longer fights it took 330 damage against a budget of 140 + 3 x 30 + 40 (repair) and broke down 3-9 times. Evasive 0.5, the damage trims above, hull 140 and checkpoints +30 bring it to 0-1 breakdowns; the Rampart and the Citadel have 0. The diesel being in band now halves the hits it takes, so a rider out of band (T5's 85% and 70%) takes twice as many.
+  4. Hoist 4000 J and the Rampart's hoist time +10% slow the Bulwark's and Rampart's shells just enough for gun line 2 (>= 90 s) and the Rampart's gun line 1 (>= 80 s). 4500 J was tried and rejected (Bulwark: 4-8 breakdowns, Advance 3 over 240 s).
+  5. Fewer mediums and longer stage 2 and 3 Advances: with the longer fights the Bulwark's Advance 3 was 248 s and the Rampart's and Citadel's 156-173 s (T1 wants 150-240); now Bulwark 217-225 s, Rampart 165-190 s, Citadel 165-172 s.
+  6. `end_hold_s`: T3 wants 6 s at boiler grade 0 after every heavy shell, and the last shell of the boss killed the Behemoth 0.9 s after it latched, so the phase ended with 0.9 s of rest. The director now waits `end_hold_s` after the Behemoth's turret falls before `end_phase` (never before `min_s`); the boss ends 6.5 s later, the platform's `max_s` 360 still cuts it. A victory beat for the view; no effort number moves.
+  7. The steam rider no longer builds pressure in the cool-down (`TankStations._steam`, like checkpoints; brief 2.3: no boiler there): the cool-down's 180 s of SIM at 90% latched a heavy shell nobody could fire, 41 s after the boss and with no boiler grade to rest at, which T3 counted.
+- Harness fixes (`tests/games/tank/sim/`): the synthetic ERG rider ignored bank directives (they carry no `mode`), so the harness saw the dynamo at 55% for the whole run (T2 read 0 s); it now treats a directive without a mode as ERG. Shell build time starts at the later of the last cycle's end and the segment start, and the first shell of a segment is only held to the maximum, like `check_sims.mjs`. `TankBalanceHarness.events_t` keeps the event times. The harness now agrees with the real sims to about a second.
+- Evidence (compliant, seeds 1-3, crews 1-3): harness T1-T5 met; real `run_sims.sh` S1 PASS (T1, T2, T3, T4, T6), S2 PASS, S3 PASS (Citadel mean 994.6 / 642.7 / 428.7 at 100 / 85 / 70%), S6, S7 and fit_check (58 files) PASS. T5 in the harness: Bulwark 982 / 620 / 375, Rampart 989 / 474 / 372, Citadel 997 / 598 / 475.
+- Not caused by balance, not changed here: S4 and S5 fail on the unbalanced baseline too. (a) `check_sims.classify` wants `mode: "ERG"` on a bank directive (brief 2.3 pattern 1 writes it so) while `TankDirector` sends `{target_pct, reason, source}` and its tests pin exactly those keys and "no `mode` key in an ERG phase". (b) `cleanProblems` counts every `course_grade` record (the 2 Hz terrain pattern, 600-700 per Citadel run) as an "unmatched applied record". Both need a decision by the lead (director or checker); neither was touched.
+- Thin margins to watch in iteration 2: Citadel dynamo stage 1 35 s (>= 30), Citadel gun line 3 95 s (>= 90), Rampart gun line 1 90 s (>= 80), Bulwark gun line 2 97 s (>= 90), Citadel boss 285 s (<= 330; 317 before with one missed shell), Rampart and Citadel Advance 3 165 s (>= 150).
+- Alternatives: Bulwark scale 0.8-0.9 (a medium then needs two shells: Advance 3 over 300 s); `gearbox.hoist_j` 4500; a bigger turret (the Citadel boss passes 330 s) or `start_left_px` alone; per-crew content keys (code); removing the `end_phase` hold and judging the last boss shell out of T3 (weakens T3).

@@ -53,21 +53,23 @@ func test_the_hull_hp_at_each_segment_end_is_recorded() -> void:
 	assert_eq(rig.state.score.hp_by_segment, [77, 55] as Array[int])
 
 
-func test_a_checkpoint_adds_20_hp_to_the_maximum_and_heals_20() -> void:
+func test_a_checkpoint_adds_its_hp_to_the_maximum_and_heals_that_much() -> void:
 	var rig := TankRulesRig.new(1)
 	var base := rig.hull().hp_max
+	var bonus := rig.content.num("tanks", "hull.checkpoint_hp", 20.0)
+	assert_between(bonus, 10.0, 30.0, "20 HP in the brief, +-50%")
 	rig.enter(GUN_LINE, 0.0)
 	rig.hull().hp = 60.0
 	rig.enter(CHECKPOINT, 0.0)
-	assert_eq(rig.hull().hp_max, base + 20.0)
-	assert_eq(rig.hull().hp, 80.0)
+	assert_eq(rig.hull().hp_max, base + bonus)
+	assert_eq(rig.hull().hp, 60.0 + bonus)
 	rig.hull().hp = base + 15.0
 	rig.enter(6, 0.0)
-	assert_eq(rig.hull().hp_max, base + 40.0)
-	assert_eq(rig.hull().hp, base + 35.0)
+	assert_eq(rig.hull().hp_max, base + 2.0 * bonus)
+	assert_eq(rig.hull().hp, minf(base + 15.0 + bonus, base + 2.0 * bonus))
 	rig.enter(STAGE2_ADVANCE, 0.0)
 	rig.enter(9, 0.0)
-	assert_eq(rig.hull().hp_max, base + 60.0, "the third checkpoint")
+	assert_eq(rig.hull().hp_max, base + 3.0 * bonus, "the third checkpoint")
 
 
 func test_a_rotation_event_lists_every_riders_new_engine_at_the_checkpoint() -> void:
@@ -130,13 +132,14 @@ func test_a_gun_line_is_done_when_every_gun_has_fallen() -> void:
 	var aux := TankAux.of(rig.state)
 	assert_false(rig.state.seg.objective_done)
 	var guns: Array = rig.state.enemies.duplicate()
-	assert_eq(guns.size(), 2)
+	assert_gte(guns.size(), 2)
 	TankShells.kill_enemy(rig.state, aux, guns[0], TankEvents.BY_SHELL, 0, rig.events)
 	rig.run(0.1)
 	assert_false(rig.state.seg.objective_done)
-	assert_eq(rig.state.gun_line.guns_left, 1)
+	assert_eq(rig.state.gun_line.guns_left, guns.size() - 1)
 	assert_false(rig.hull().traps_cleared)
-	TankShells.kill_enemy(rig.state, aux, guns[1], TankEvents.BY_SHELL, 0, rig.events)
+	for i in range(1, guns.size()):
+		TankShells.kill_enemy(rig.state, aux, guns[i], TankEvents.BY_SHELL, 0, rig.events)
 	rig.run(0.1)
 	assert_true(rig.state.seg.objective_done)
 	assert_true(rig.hull().traps_cleared, "the blade shoves the tank traps aside")

@@ -87,13 +87,17 @@ func test_a_shell_hit_applies_the_table_to_a_real_enemy() -> void:
 
 func test_enemy_hp_and_counts_scale_with_the_tank() -> void:
 	var c := TankContent.from_dicts(TankContent.read_files("ashfall_road"), "ashfall_road")
-	var scale := {TankIds.TANK_BULWARK: 0.6, TankIds.TANK_RAMPART: 0.8, TankIds.TANK_CITADEL: 1.0}
+	# The scales are content (tanks.json): the brief's 0.6 / 0.8 / 1.0, each within +-50%.
+	var scale := {}
+	for tank: String in [TankIds.TANK_BULWARK, TankIds.TANK_RAMPART, TankIds.TANK_CITADEL]:
+		scale[tank] = c.enemy_scale(tank)
+	assert_between(scale[TankIds.TANK_BULWARK], 0.3, 0.9, "Bulwark: 0.6 +-50%")
+	assert_between(scale[TankIds.TANK_RAMPART], 0.4, 1.2, "Rampart: 0.8 +-50%")
+	assert_between(scale[TankIds.TANK_CITADEL], 0.5, 1.5, "Citadel: 1.0 +-50%")
 	for tank: String in scale:
-		assert_eq(c.enemy_scale(tank), scale[tank])
 		assert_eq(c.scaled_count(1, tank), 1, "at least one")
 		assert_eq(c.scaled_count(3, tank), maxi(1, roundi(3.0 * scale[tank])))
-	assert_eq(c.scaled_count(3, TankIds.TANK_BULWARK), 2)
-	assert_eq(c.scaled_count(2, TankIds.TANK_RAMPART), 2)
+		assert_eq(c.scaled_count(4, tank), maxi(1, roundi(4.0 * scale[tank])))
 	for crew in [1, 2, 3]:
 		var rig := _rig(crew)
 		var tank := TankIds.tank_for_crew(crew)

@@ -164,17 +164,24 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	var boss_def := c.content.boss_def()
 	assert_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]))
 	assert_eq(c.boss.turret_max, float(boss_def["turret_hp"]))
-	assert_eq(c.enemy(11).hp_max, 80.0, "a medium's full HP at scale 1.0")
+	assert_eq(
+		c.enemy(11).hp_max,
+		float(c.content.enemy_def("medium")["hp"]),
+		"a medium's full HP at scale 1.0"
+	)
 	assert_eq([c.enemy(11).w, c.enemy(11).h], [104, 52])
 	var solo_host := _host(1)
 	solo_host.state.enemy(11).hp = 40.0
 	var solo := _client(1)
 	solo.apply_snapshot(_wire(solo_host))
+	var scale := c.content.enemy_scale(TankIds.TANK_BULWARK)
 	assert_almost_eq(
-		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * 0.6, 0.001, "enemy scale 0.6"
+		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * scale, 0.001, "enemy scale"
 	)
-	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * 0.6, 0.001)
-	assert_almost_eq(solo.state.enemy(11).hp_max, 48.0, 0.001)
+	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale, 0.001)
+	assert_almost_eq(
+		solo.state.enemy(11).hp_max, float(c.content.enemy_def("medium")["hp"]) * scale, 0.001
+	)
 
 
 func test_a_rotation_moves_the_rooms_to_the_riders_on_the_client() -> void:

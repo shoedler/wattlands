@@ -216,18 +216,29 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	rig.no_fire = true
 	rig.enter(GUN_LINE, 1.0)
 	var guns := rig.state.enemies
-	assert_eq(guns.size(), 2, "3 dug-in x 0.6 = 2 for the Bulwark")
+	var want := 0
+	for spec: Dictionary in rig.content.segment(GUN_LINE)["enemies"]:
+		want += rig.content.scaled_count(int(spec["count"]), TankIds.TANK_BULWARK)
+	assert_eq(guns.size(), want, "the mission's gun line x the Bulwark's scale")
+	assert_gt(want, 0)
+	var holding := 0
 	for e in guns:
 		assert_true(e.fixed)
 		assert_true(e.gun_line)
-		assert_eq(e.mode, TankIds.EM_HOLD)
-	assert_eq(rig.state.gun_line.guns_total, 2)
-	assert_eq(rig.state.gun_line.guns_left, 2)
+		if e.code == TankIds.enemy_code(TankIds.ENEMY_DUGIN):
+			assert_eq(e.mode, TankIds.EM_HOLD)
+			holding += 1
+	assert_gt(holding, 0, "dug-in tanks stand there from the start")
+	assert_eq(rig.state.gun_line.guns_total, want)
+	assert_eq(rig.state.gun_line.guns_left, want)
 	assert_true(rig.state.gun_line.active)
-	var x0: Array = guns.map(func(e: TankEnemyState) -> float: return e.x_px)
+	var digs: Array = guns.filter(
+		func(e: TankEnemyState) -> bool: return e.code == TankIds.enemy_code(TankIds.ENEMY_DUGIN)
+	)
+	var x0: Array = digs.map(func(e: TankEnemyState) -> float: return e.x_px)
 	rig.hull().holding = true
 	rig.run(10.0)
-	assert_eq(guns.map(func(e: TankEnemyState) -> float: return e.x_px), x0, "fixed in world space")
+	assert_eq(digs.map(func(e: TankEnemyState) -> float: return e.x_px), x0, "fixed in world space")
 
 
 func _heavy_rig(crew: int = 1) -> TankRulesRig:
