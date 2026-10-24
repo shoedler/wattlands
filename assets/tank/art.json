@@ -105,7 +105,7 @@
 				128,
 				48
 			],
-			"prompt": "the back wall of one wide engine and gearbox room inside a small tank, a long drive shaft tunnel and pipe brackets along the top edge, a dark floor grating along the bottom edge, oil stains and soot, lit only by a faint low warm amber glow pooling in the lower middle; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
+			"prompt": "the back wall of one wide engine and gearbox room inside a small tank, a long drive shaft tunnel and pipe brackets along the top edge, a plain flat near-black floor plate along the bottom edge, smooth, no grating, no slots, no bars, no vents, no rivet rows on the floor, oil stains and soot, lit only by a faint low warm amber glow pooling in the lower middle; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
 			"background": "opaque"
 		},
 		{
@@ -114,7 +114,7 @@
 				96,
 				48
 			],
-			"prompt": "the back wall of a cramped diesel engine room inside a tank, a big exhaust duct and two oily pipes running along the top edge, a dark floor grating along the bottom edge, oil stains and soot, lit only by a faint low warm amber glow pooling in the lower middle; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
+			"prompt": "the back wall of a cramped diesel engine room inside a tank, a big exhaust duct and two oily pipes running along the top edge, a plain flat near-black floor plate along the bottom edge, smooth, no grating, no slots, no bars, no vents, no rivet rows on the floor, oil stains and soot, lit only by a faint low warm amber glow pooling in the lower middle; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
 			"background": "opaque"
 		},
 		{
@@ -132,7 +132,7 @@
 				88,
 				48
 			],
-			"prompt": "the back wall of a cramped boiler room inside a tank, soot-blackened plates, a lagged steam pipe on pipe brackets along the top edge, a coal-dusted floor grating along the bottom edge, lit only by a faint warm orange firelight glow pooling in the lower middle; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
+			"prompt": "the back wall of a cramped boiler room inside a tank, soot-blackened plates, a lagged steam pipe on pipe brackets along the top edge, a plain flat near-black floor plate along the bottom edge, smooth, no grating, no slots, no bars, no vents, no rivet rows on the floor, lit only by a very faint, dim, broad reddish-brown glow low in the middle, no bright spot, no flame; seen straight on, filling the whole frame edge to edge; the wall is near-black riveted steel plates in deep darkness with faint plate seams, the corners and edges falling off into pitch black, the middle of the wall plain, empty and very dark; no lamps, no light fixtures, no machinery in the middle, no openings",
 			"background": "opaque"
 		},
 		{
@@ -159,7 +159,7 @@
 				20,
 				20
 			],
-			"prompt": "a small flywheel seen exactly face-on, perfectly round, a thick plain rim, four thick straight spokes and a solid round hub with no hole in it; all near-black blackened oily cast iron and dark gunmetal, dull, no shine, evenly dark all the way round, no bright rim, no highlights; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"prompt": "a small cast-iron flywheel seen exactly face-on, perfectly round, a solid dark disc with a thick rim and six small round lightening holes evenly spaced, a solid hub, nothing sticking out past the rim; all near-black blackened oily cast iron and dark gunmetal, dull, no shine, evenly dark all the way round, no bright rim, no highlights; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
 			"anchor": "center",
 			"align": "center"
 		},
@@ -306,7 +306,7 @@
 				80,
 				40
 			],
-			"prompt": "a low wedge-shaped alternate-history light enemy tank in exact side view facing LEFT, the gun pointing left and the rear on the right: a long low hull with a sharp sloping wedge front on the left, a small flat boxy turret toward the rear with a short straight gun, flat riveted slab side skirts, along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from hatches and vents, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "an extremely low, flat, wedge-shaped alternate-history light enemy tank in exact side view facing LEFT, the gun pointing left and the rear on the right, the whole vehicle under half the frame height: the front third of the hull is one long sharp sloping wedge rising from the ground at the left to a low flat deck; no turret, only a tiny flat low cupola near the rear with a short thin gun pointing left over the deck; it reads like a doorstop wedge on tracks; along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; no hatches on the sides, no round shapes on the plates; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from the roof edge, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "enemy_medium",
@@ -314,7 +314,7 @@
 				104,
 				52
 			],
-			"prompt": "a tall slab-sided alternate-history enemy medium tank in exact side view facing LEFT, the gun barrel pointing left and the rear on the right: a tall boxy casemate turret with a flat roof and vertical flat armour slab sides set on a stepped rectangular superstructure, a long straight gun barrel out of a square armour block, flat vertical side skirts, along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; no curves, no rounded mantlet, no sloped plates; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from hatches and vents, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a very TALL, SHORT alternate-history enemy medium tank in exact side view facing LEFT, the gun pointing left and the rear on the right, the body almost as tall as half its length: one huge upright rectangular armour block sitting directly on the tracks, with no separate turret and no turret ring; a long straight gun sticks straight out of the upper front of the block on the left; vertical flat slab sides from the flat roof almost down to the wheels; the block fills most of the frame height; along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; no hatches on the sides, no round shapes on the plates, no curves, no sloped plates; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from the roof edge, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "enemy_heavy",
@@ -330,7 +330,7 @@
 				112,
 				44
 			],
-			"prompt": "a turretless casemate alternate-history tank destroyer in exact side view facing LEFT, the fixed long gun pointing left out of the casemate front and the rear on the right: a long low hull carrying a fixed boxy armoured casemate with a flat roof and vertical slab sides, the gun in a square armour block at the casemate front, flat riveted side skirts, along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; no turret; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from hatches and vents, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a turretless casemate alternate-history tank destroyer in exact side view facing LEFT, the fixed long gun pointing left out of the casemate front and the rear on the right: a long low hull carrying a fixed boxy armoured casemate with a flat roof and vertical slab sides, the gun in a square armour block at the casemate front, flat riveted side skirts, along the lower edge a dark track belt with a row of small solid road wheels and wet mud packed between them; no turret; no hatches on the sides, no round shapes or curls on the plates; cold blue-black gunmetal and soot-black steel, mostly grey-black and evenly weathered; clearly visible plate seams and weld lines between the big flat armour plates, straight rows of heavy rivets along every seam, dark vertical soot streaks running down from the roof edge, rust only as a few thin dark brown streaks bleeding down from the rivet lines, a band of caked wet mud along the lower edge, a faint wet sheen, and a thin cold moonlit blue-grey rim light along the top edge and the rear edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "enemy_dugin",
@@ -338,7 +338,7 @@
 				72,
 				36
 			],
-			"prompt": "an enemy tank dug in, in exact side view facing LEFT: only a low boxy flat-roofed turret with a short straight gun pointing left shows above a thick concrete revetment wall that stands in front and hides the whole hull; the wall is a flat chamfered slab of weathered mid-grey concrete, clearly lighter than the dark steel turret, with a lit flat top edge, square corners, a few chipped edges and dark rain stains; a slope of dark wet earth heaped against the foot of the wall on the left; the turret cold blue-black gunmetal, mostly grey-black, with rivet rows and a thin cold rim light along its top edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "an enemy tank dug in, in exact side view facing LEFT: only a low boxy flat-roofed turret with a short straight gun pointing left shows above a thick concrete revetment wall that stands in front and hides the whole hull; the wall is a flat chamfered slab of weathered mid-grey concrete, clearly lighter than the dark steel turret, with a lit flat top edge, square corners, a few chipped edges and dark rain stains; the whole revetment with both ends visible inside the frame, the wall ending in a squared concrete end on the right; plain grey concrete, no blue tint, no blue speckles; a slope of dark wet earth heaped against the foot of the wall on the left; the turret cold blue-black gunmetal, mostly grey-black, with rivet rows and a thin cold rim light along its top edge; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "boss_hull",
@@ -362,7 +362,7 @@
 				152,
 				56
 			],
-			"prompt": "the same huge boxy turret of a colossal super-heavy enemy tank in exact side view facing LEFT, wrecked and without a gun barrel: a tall flat-roofed armoured box of thick vertical slabs, torn and buckled armour plates, a jagged blast hole in the side, scorched soot-black steel, sprung rivets, a few small glowing orange embers in the cracks, thin smoke stains; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "the same huge boxy turret of a colossal super-heavy enemy tank in exact side view facing LEFT, wrecked and without a gun barrel: a tall flat-roofed armoured box of thick vertical slabs, the front armour plate blown off flat, leaving a jagged angular edge of straight broken shards bent outward; no curls, no rolled metal, no rings, no round holes, no circular shapes anywhere, a jagged irregular blast hole in the side, not star-shaped, scorched soot-black steel, sprung rivets, a few small glowing orange embers in the cracks, thin smoke stains; no camouflage; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "boss_bogie",
@@ -410,7 +410,7 @@
 				48,
 				16
 			],
-			"prompt": "a shallow shell crater in side view: a low raised lip of churned dark wet mud on both sides of a wide dip, a flat dark puddle of water in the dip reflecting a faint warm orange glow, low and wide; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a shell crater seen from a low angle slightly above, so the flat dark water surface shows as a wide thin ellipse lying between two low lips of churned dark wet mud; the water is the largest part, darker than the mud, with a soft orange reflection streak across it; low and wide, concave, a dip and not a mound; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "prop_rubble",
@@ -455,7 +455,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once, the sky above completely empty and fully transparent, no smoke plumes and no smoke columns: every feature runs in horizontal layers parallel to the bottom edge, no road receding into the distance, no converging lines; muddy ploughed fields in horizontal bands, dark hedgerows in clear silhouette, an irregular row of tall dark poplars of uneven heights with gaps, one dark pine wood clump, wire on wooden stakes, one flooded shell crater reflecting firelight, two small farmsteads of different shapes far apart with burning roofs glowing orange; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once, the sky above completely empty and fully transparent, no smoke plumes and no smoke columns: every feature runs in horizontal layers parallel to the bottom edge, no road receding into the distance, no converging lines; muddy ploughed fields in horizontal bands, dark hedgerows in clear silhouette, an irregular row of tall dark poplars of uneven heights with gaps, one dark pine wood clump, wire on wooden stakes, one flooded shell crater reflecting firelight, exactly one small farmstead with a burning roof glowing orange, standing exactly in the middle of the strip; the left fifth and the right fifth of the strip hold only flat ploughed fields and low hedges, no buildings, no poplars, no trees, nothing tall near either end; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},
@@ -465,7 +465,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip at dusk, flat at both ends: a small war-torn village of stone houses with steep slate roofs, a church spire, a stone arched bridge over a dark stream that reflects the light, bare orchard trees and hedgerows, a few windows glowing warm amber, one farmhouse roof on fire with bright flames; everything else dark grey-brown and desaturated; the sky above the rooftops completely empty and fully transparent, no clouds and no smoke in the sky; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless horizontal landscape strip at dusk, flat at both ends: a small war-torn village of stone houses with steep slate roofs, a church spire, a stone arched bridge over a dark stream that reflects the light, bare orchard trees and hedgerows, a few windows glowing warm amber, one farmhouse roof on fire with bright flames; the main landmark and every tall building, chimney, spire and tree group stand in the centre half of the strip; the outer quarter at both ends holds only low flat fields and low hedges, nothing tall near either end; everything else dark grey-brown and desaturated; the sky above the rooftops completely empty and fully transparent, no clouds and no smoke in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true,
 			"dither": "none"
@@ -476,7 +476,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: a dark pine wood, a terraced grey stone quarry face cut into a hillside with ledges, a few wooden power poles with sagging lines, a timber sawmill shed burning with bright orange flames and a dark grey smoke base, two small amber lit windows; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: a dark pine wood, a terraced grey stone quarry face cut into a hillside with ledges, a few wooden power poles with sagging lines, a timber sawmill shed burning with bright orange flames and a dark grey smoke base, two small amber lit windows; the main landmark and every tall building, chimney, spire and tree group stand in the centre half of the strip; the outer quarter at both ends holds only low flat fields and low hedges, nothing tall near either end; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},
@@ -486,7 +486,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: the outskirts of a small grim foundry town, a row of dark brick sheds and workshops each of a different shape and height, tall brick chimneys trailing only short dark grey wisps of smoke, no white smoke, the glowing orange mouth of one furnace, a few small windows glowing warm amber, steel gantries and one travelling crane over a yard, a few lamp posts with soft amber lamps; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: the outskirts of a small grim foundry town, a row of dark brick sheds and workshops each of a different shape and height, tall brick chimneys trailing only short dark grey wisps of smoke, no white smoke, the glowing orange mouth of one furnace, a few small windows glowing warm amber, steel gantries and one travelling crane over a yard, a few lamp posts with soft amber lamps; the main landmark and every tall building, chimney, spire and tree group stand in the centre half of the strip; the outer quarter at both ends holds only low flat fields and low hedges, nothing tall near either end; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},
@@ -496,7 +496,7 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: a brutalist concrete depot of massive grey blocks and a long low hangar at the edge of a dark pine forest clearing, a few caged amber lamps glowing on the walls, a muddy yard with puddles reflecting the lamps, a low concrete bunker with a dark slit; no letters or numbers on the walls; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
+			"prompt": "a wide seamless horizontal landscape strip at dusk in strictly flat side-on view without perspective, flat at both ends, one single continuous panorama in which nothing is repeated: every building, crater and tree group appears only once: a brutalist concrete depot of massive grey blocks and a long low hangar at the edge of a dark pine forest clearing, a few caged amber lamps glowing on the walls, a muddy yard with puddles reflecting the lamps, a low concrete bunker with a dark slit; no letters or numbers on the walls; the main landmark and every tall building, chimney, spire and tree group stand in the centre half of the strip; the outer quarter at both ends holds only low flat fields and low hedges, nothing tall near either end; everything else dark grey-brown and desaturated; the sky above completely empty and fully transparent, no clouds and no smoke plumes in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
 			"mirror": true
 		},
@@ -517,7 +517,7 @@
 				960,
 				48
 			],
-			"prompt": "a seamless strip of foreground battlefield debris in near-black silhouette, one continuous strip with nothing repeated: low heaps of rubble and broken bricks along the bottom, a few tall splintered fence stakes and one twisted bent steel girder leaning at different angles and reaching up to the top edge, sagging barbed wire between two of the stakes, wet weeds; all very dark charcoal, flat at both ends, the rest of the upper part empty and fully transparent",
+			"prompt": "a seamless strip of foreground battlefield debris in near-black silhouette, one continuous strip with nothing repeated: low heaps of rubble and broken bricks along the bottom, a few short splintered fence stakes of different heights standing upright, the tallest at most half the height, wet weeds; no girders, no beams, nothing crossed, nothing leaning, no wire; all very dark charcoal, flat at both ends, the tallest stakes stand in the middle third of the strip; the outer quarter at both ends holds only low flat rubble, nothing taller than a quarter of the height and nothing leaning toward the edge, the rest of the upper part empty and fully transparent",
 			"tile": true,
 			"mirror": true
 		},
@@ -527,7 +527,7 @@
 				320,
 				180
 			],
-			"prompt": "a wide cinematic dusk scene in exact side view: a colossal brutalist riveted super-heavy tank facing right, rolling right along a muddy country road; its long grey-black slab hull is shown as an x-ray cutaway with three dark engine rooms side by side, each marked by its own glowing light: a diesel engine with amber glowing cylinders at the rear, a dynamo lit by a blue-white electric arc in the middle, a steam boiler with an open orange firebox at the front; a big boxy main turret with a long gun pointing right and small secondary turrets fore and aft; behind it a village of stone houses with a church spire and a stone bridge, roofs on fire, a few windows glowing amber, under a heavy smoke-filled sky; wet road reflecting the fire; cold gunmetal steel, desaturated except the lights; fills the whole frame",
+			"prompt": "a wide cinematic dusk scene in exact side view: a colossal brutalist riveted super-heavy tank facing right, rolling right along a muddy country road; its long grey-black slab hull is shown as an x-ray cutaway with three dark engine rooms side by side, each marked by its own glowing light: a diesel engine with amber glowing cylinders at the rear, a dynamo lit by a blue-white electric arc in the middle, a steam boiler at the front whose open firebox shows a soft round orange glow, no flame tongues, no shapes inside it; a big boxy main turret with a long gun pointing right and small secondary turrets fore and aft; behind it a village of stone houses with a church spire and a stone bridge, roofs on fire, a few windows glowing amber, under a heavy smoke-filled sky; wet road reflecting the fire; cold gunmetal steel, desaturated except the lights; fills the whole frame",
 			"background": "opaque"
 		},
 		{
@@ -536,7 +536,7 @@
 				32,
 				20
 			],
-			"prompt": "a bright warm muzzle flash burst seen from the side, pointing right: a hot white-yellow core at the left edge, a short cone of orange fire spraying to the right with two small side jets, soft glowing edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"prompt": "a bright warm muzzle flash seen from the side, pointing right: an irregular ragged star-burst of fire, widest in the middle, a white-hot core near the left edge spreading into an uneven rounded orange fan to the right, no fins, no jets, no arrow shape, soft glowing edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
 			"anchor": "center",
 			"align": "center"
 		},
