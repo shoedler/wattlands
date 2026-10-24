@@ -86,7 +86,7 @@ static func dig(state: TankState, inputs: TankInputs, dt: float) -> void:
 	if d == null or d.slot < 0 or not d.in_band:
 		return
 	var ri := inputs.rider(d.peer)
-	if ri != null and ri.rescue:
+	if TankStations.in_rescue(ri):
 		return
 	if d is TankGearboxState:
 		var g := d as TankGearboxState

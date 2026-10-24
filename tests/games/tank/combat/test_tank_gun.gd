@@ -174,6 +174,29 @@ func test_a_shell_inherits_the_hulls_velocity() -> void:
 	assert_almost_eq(s.vx - hull_px, V0 * cos(deg_to_rad(5.0)), 2.0)
 
 
+func test_an_afk_gunner_in_rescue_does_not_stall_the_gun_which_runs_on_reserve() -> void:
+	# Brief 2.2: an AFK station runs on reserve, so a rescue left over from before the rider
+	# stopped pedaling must not freeze the dynamo for the whole absence (RN-1).
+	var rig := _rig(2)
+	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	rig.load_shell(TankIds.SHELL_HEAVY)
+	rig.rescue[_g(rig)] = true
+	rig.afk[_g(rig)] = true
+	rig.run(20.0)
+	assert_false(rig.dynamo().stalled, "a rider on reserve is not in rescue")
+	assert_gt(_gun_shots(rig).size(), 0, "the gun keeps firing on reserve")
+
+
+func test_a_present_gunner_in_rescue_still_stalls_the_gun() -> void:
+	var rig := _rig(2)
+	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	rig.load_shell(TankIds.SHELL_HEAVY)
+	rig.rescue[_g(rig)] = true
+	rig.run(20.0)
+	assert_true(rig.dynamo().stalled)
+	assert_eq(_gun_shots(rig).size(), 0)
+
+
 func test_a_loaded_gun_fires_nothing_with_no_target() -> void:
 	var rig := _rig(2)
 	rig.load_shell(TankIds.SHELL_HEAVY)
