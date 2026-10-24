@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7; S8 is the
-// GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports tools/run_game_sim wrote.
+// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7, plus S9 the sprint
+// half of the workout and S10 the network paths; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports
+// tools/run_game_sim wrote.
 //
 //   node tests/games/tank/sim/check_sims.mjs build/tank/sims [--only=S1,S4] [--seeds=1,2,3] [--fit]
 //                                           [--require-prompts]
@@ -21,6 +22,10 @@
 //   s5_c3_dynamo_drop, s5_c3_gunline_drop  cadence to 30 rpm in a dynamo stage / a 90% gun line
 //   s6_c3_haptics_off      crew 3, slot 0 opted out of haptics
 //   s7_c3_seed1            s1_c3_seed1 again
+//   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: Ram, ram haptic,
+//                          the gun line entered straight after a sprint (S8 is the GUT test test_tank_s8.gd)
+//   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Rams arrive as telemetry intents
+//   s10_c3_dynamo_stop     crew 3, slot 1 stops pedaling for 60 s in the stage 1 gun line (rescue, AFK, reserve, back)
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
 //   segment       a plan phase with its span in `phases[peer]` (game seconds) and how it ended
@@ -33,14 +38,22 @@
 //   T3 (crew 3)   each heavy shell (latch event, shell code 2) is built in 18-35 s: from the later of
 //                 the previous main-gun shot + the 6 s breech cycle and the segment start, to the
 //                 latch (the 5 s window included); a shell that is the first of its segment is only
-//                 held to 35 s (pressure holds across a checkpoint). After the latch the boiler's
-//                 grade stays 0 for >= 6 s (the breech cycle).
+//                 held to 35 s (pressure holds across a checkpoint). After the latch the latching
+//                 rider's own boiler grade (the event's slot, not any other steam rider's) stays 0
+//                 for >= 6 s (the breech cycle), unless that rider leaves SIM first (a checkpoint).
 //   T4 (crew 1)   the Bulwark's lever is on Drive for >= 60% of each Advance (lever events; the
 //                 lever starts on Drive).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
 //   T6            every Advance has a light and a medium tank in it (enemy `shot` or `kill`
-//                 events; with --require-prompts also a "Surge to ram" toast); stages 2 and 3 end in a
-//                 heavy-tank duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
+//                 events; also a "Surge to ram" toast for crew 1, whose host rider drives, or for every
+//                 crew with --require-prompts); stages 2 and 3 end in a heavy-tank duel: the gun line
+//                 lasts 90-180 s and a heavy tank fired or died in it.
+//   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): a successful Ram in every
+//                 Advance, each Ram's haptic sent and accepted (S4 holds it to SIM riders), and a gun line
+//                 entered while still sprinting starts at its planned target, not at the sprint power.
+//   S10 (crew 3)  every rider a sprinter: a client's Ram (an intent over Telemetry.intents, owned by the diesel) destroys
+//                 something; and a dynamo rider who stops in a gun line is rescued, goes AFK within 10 s, is announced
+//                 as on reserve, comes back, with nobody else affected and the plan completing.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -64,6 +77,12 @@ export const BREECH_CYCLE_S = 6;
 export const T4_MIN_SHARE = 0.6;
 export const SWITCH_SPACING_S = 60;
 export const FIRST_S = 300;
+/** BRIEF 4.6: the first 300 s are ERG at 65% FTP at most or SIM at -2..+3% grade; the stacked grade is -10..+16% in total (range clamp +10% before the haptic). */
+export const FIRST_ERG_MAX_PCT = 65;
+export const FIRST_GRADE_MIN_PCT = -2;
+export const FIRST_GRADE_MAX_PCT = 3;
+export const TOTAL_GRADE_MAX_PCT = 16;
+export const RANGE_GRADE_MAX_PCT = 10;
 export const MAX_SNAPSHOT_BYTES = 4096;
 export const PAUSE_AFTER_S = 10;
 export const TICK_S = 0.05;
@@ -195,14 +214,25 @@ export function completeProblems(name, r, outcomes = ['victory', 'withdrawn', 'c
   return probs;
 }
 
-/** A remote rider's governor acks each terrain `course_grade` it applies with id 0 (the platform keeps no id for it). */
-export const COURSE_GRADE_ACK_WINDOW_S = 0.2;
+/**
+ * A remote rider's governor acks each terrain `course_grade` it applies with id 0 (the platform keeps no id for it).
+ * An ack is paired with a request by peer, order and value, not by a fixed time window; this only bounds how stale
+ * a pairing may be (the measured lag is 0.05-0.2 s, the terrain period 0.5 s), so a change in loopback latency or
+ * sim speed cannot turn the acks into false failures while an ack from far away still counts as a stray.
+ */
+export const COURSE_GRADE_ACK_MAX_LAG_S = 2;
+/** Two grade values (% grade) are the same value below this difference. */
+export const GRADE_VALUE_EPS = 1e-6;
 
 /**
  * The applied records that match no request, minus the remote governors' course-grade acks: those
- * carry id 0 and belong to pattern 4 (terrain, 2 Hz). One is accepted only when a still unclaimed
- * `course_grade` request of the same peer was logged within COURSE_GRADE_ACK_WINDOW_S before it, so
- * an ack without a request (or a second ack for one request) stays a problem.
+ * carry id 0 and belong to pattern 4 (terrain, 2 Hz). In time order each ack takes the first still
+ * unclaimed `course_grade` request of the same peer, logged no later than the ack and at most
+ * COURSE_GRADE_ACK_MAX_LAG_S before it, whose `grade_pct` equals the ack's `course_grade_pct` (older
+ * requests the governor never acked are passed over). An ack without such a request, a second ack for
+ * one request and an ack that applied another grade than the one requested all stay problems. The request
+ * it pairs with is checked on its own (directiveProblems: a grade_source game SIM phase only), so an ack
+ * is always one the director was allowed to ask for.
  */
 export function unmatchedAcks(r) {
   const pool = new Map();
@@ -210,18 +240,21 @@ export function unmatchedAcks(r) {
     if (d.kind !== 'course_grade') continue;
     const k = String(d.peer);
     if (!pool.has(k)) pool.set(k, []);
-    pool.get(k).push(num(d.t));
+    pool.get(k).push({ t: num(d.t), grade: num(d.requested?.grade_pct, NaN) });
   }
+  for (const list of pool.values()) list.sort((a, b) => a.t - b.t);
   const stray = [];
-  for (const rec of r.directives_unmatched ?? []) {
-    const times = pool.get(String(rec.peer)) ?? [];
+  const acks = (r.directives_unmatched ?? []).map((rec, i) => ({ rec, i })).sort((a, b) => num(a.rec.t) - num(b.rec.t) || a.i - b.i);
+  for (const { rec } of acks) {
+    const list = pool.get(String(rec.peer)) ?? [];
     const t = num(rec.t);
+    const grade = num(rec.applied?.course_grade_pct, NaN);
     const at =
-      rec.kind === 'course_grade' && num(rec.id) === 0 && rec.refused !== true
-        ? times.findIndex((q) => t - q >= -EPS && t - q <= COURSE_GRADE_ACK_WINDOW_S + EPS)
+      rec.kind === 'course_grade' && num(rec.id) === 0 && rec.refused !== true && Number.isFinite(grade)
+        ? list.findIndex((q) => t - q.t >= -EPS && t - q.t <= COURSE_GRADE_ACK_MAX_LAG_S + EPS && Math.abs(q.grade - grade) <= GRADE_VALUE_EPS)
         : -1;
     if (at < 0) stray.push(rec);
-    else times.splice(at, 1);
+    else list.splice(0, at + 1);
   }
   return stray;
 }
@@ -304,6 +337,12 @@ export function t2Problems(name, r) {
   return probs;
 }
 
+/** The peer (string) of the human in slot `slot`, or null. */
+export function peerOfSlot(report, slot) {
+  const s = (report.slots ?? []).find((x) => num(x.slot, -1) === num(slot, -2));
+  return s ? String(s.peer) : null;
+}
+
 /** Heavy shells of a crew 3 run: [{t, buildS, first, grade0S}] from latch / shot events and boiler directives. */
 export function heavyShells(r) {
   const events = gameEvents(r);
@@ -321,18 +360,24 @@ export function heavyShells(r) {
     if (!seg || seg.seg === 'depot') continue;
     const ready = Math.max(lastShot + BREECH_CYCLE_S, seg.start);
     const first = lastShot + BREECH_CYCLE_S <= seg.start + EPS;
-    // The loader's boiler grade after the latch: the time at grade 0 until the next grade > 0.
-    const peers = new Set(boiler.map((b) => b.peer));
+    // The latching rider's own boiler grade after the latch: the time at grade 0 until their next grade > 0. With rotation
+    // every stage has another steam rider, so no other peer's requests count. The rest also ends when that rider leaves SIM
+    // (a checkpoint's ERG carries no mode grade): then the 6 s breech cycle runs out with nothing to hold at 0 (`cut`).
+    const peer = peerOfSlot(r, e.s);
+    const leaves = peer === null ? undefined : segmentsOf(r, peer).find((s) => s.start > e._t + EPS && s.mode !== 'SIM');
+    const leaveT = leaves ? leaves.start : Infinity;
+    const mine = boiler.filter((b) => b.peer === peer && b.t >= e._t - EPS && b.t < leaveT - EPS);
+    const zero = mine.find((b) => b.grade === 0);
     let grade0S = null;
-    for (const peer of peers) {
-      const mine = boiler.filter((b) => b.peer === peer && b.t >= e._t - EPS);
-      const zero = mine.find((b) => b.grade === 0);
-      if (!zero) continue;
+    let cut = false;
+    if (zero) {
       const next = mine.find((b) => b.t > zero.t && b.grade > 0);
-      const stop = next ? next.t : Number.isFinite(seg.end) ? seg.end : zero.t;
-      grade0S = Math.max(grade0S ?? 0, stop - e._t);
+      const nextT = next ? next.t : Infinity;
+      cut = leaveT <= nextT;
+      const stop = Math.min(nextT, leaveT);
+      grade0S = (Number.isFinite(stop) ? stop : Number.isFinite(seg.end) ? seg.end : zero.t) - e._t;
     }
-    out.push({ t: e._t, buildS: e._t - ready, first, grade0S, seg: seg.seg });
+    out.push({ t: e._t, buildS: e._t - ready, first, grade0S, cut, seg: seg.seg });
   }
   return out;
 }
@@ -346,7 +391,7 @@ export function t3Problems(name, r) {
     const at = `${name}: heavy shell at ${fmt(s.t)} s`;
     if (s.buildS > T3_BUILD_RANGE[1] + EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (max ${T3_BUILD_RANGE[1]})`);
     if (!s.first && s.buildS < T3_BUILD_RANGE[0] - EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (min ${T3_BUILD_RANGE[0]})`);
-    if (s.grade0S !== null && s.grade0S < T3_GRADE0_MIN_S - EPS) probs.push(`${at}: boiler grade 0 for only ${fmt(s.grade0S)} s`);
+    if (s.grade0S !== null && !s.cut && s.grade0S < T3_GRADE0_MIN_S - EPS) probs.push(`${at}: boiler grade 0 for only ${fmt(s.grade0S)} s`);
     if (s.grade0S === null) probs.push(`${at}: no boiler grade 0 after the latch`);
   }
   return probs;
@@ -430,7 +475,9 @@ export function checkS1(reports, opts = {}) {
     if (crew >= 2) probs.push(...t2Problems(name, r));
     if (crew === 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));
-    probs.push(...t6Problems(name, r, opts));
+    // The sim report's HUD log holds only the host rider's own toasts: the "Surge to ram" prompt is the host rider's
+    // only when that rider drives, which is the Bulwark of crew 1 (crews 2-3 rotate the driver away from slot 0).
+    probs.push(...t6Problems(name, r, { ...opts, requirePrompts: opts.requirePrompts || crew === 1 }));
     lines.push(`c${crew}s${seedS} ${fmt(scoreOf(r))}/${gradeOf(r)}`);
   }
   return result('S1', title, probs, `${found.length} runs: ${lines.join(', ')}`);
@@ -583,6 +630,7 @@ export function directiveProblems(name, r, d) {
       }
       if (num(q.duration_s) !== 0 && kind !== 'haptic') probs.push(`${at}: ${kind} with duration_s ${q.duration_s} (held until superseded)`);
       if (!isObj(d.applied) || !Array.isArray(d.applied.clamped_by)) probs.push(`${at}: no governor record with clamped_by (not clamped)`);
+      probs.push(...appliedProblems(at, kind, q, d));
       const warm = isWarmupKind(ph);
       if (kind === 'bank') {
         const t = num(q.target_pct);
@@ -613,6 +661,25 @@ export function directiveProblems(name, r, d) {
     default:
       probs.push(`${at}: unexpected directive kind`);
   }
+  return probs;
+}
+
+/**
+ * The governor may only lower what Tank asked for: the applied boiler / hoist mode grade, bank ERG target and
+ * haptic never exceed the requested value (a refused request applies nothing and is judged elsewhere).
+ */
+export function appliedProblems(at, kind, q, d) {
+  const probs = [];
+  const rec = d.applied;
+  if (!isObj(rec) || rec.refused === true || d.accepted === false) return probs;
+  const got = rec.applied;
+  if (!isObj(got)) return [`${at}: governor record has no applied values`];
+  const over = (what, applied, asked) => {
+    if (applied !== undefined && !(num(applied, NaN) <= num(asked, NaN) + EPS)) probs.push(`${at}: applied ${what} ${fmt(num(applied, NaN))} above the requested ${fmt(num(asked, NaN))}`);
+  };
+  if (kind === 'bank') over('ERG target %', got.target_pct, q.target_pct);
+  else if (kind === 'boiler' || kind === 'hoist') over('mode grade %', got.mode_grade, q.mode_grade);
+  else if (kind === 'haptic') over('haptic %', got.haptic_pct, q.haptic);
   return probs;
 }
 
@@ -658,6 +725,18 @@ export function traceProblems(name, r) {
     for (const row of rows) {
       const gt = num(row.game_t, num(row.t));
       if (row.mode === 'ERG' && num(row.applied_pct) > 100 + oneW) add(`${name}: peer ${peer} applied ERG ${fmt(num(row.applied_pct))}% FTP at ${fmt(gt)} s (max 100%)`);
+      if (gt < FIRST_S - EPS) {
+        // BRIEF 4.6.8: the first 300 s are ERG at no more than 65% or SIM at -2..+3% grade.
+        if (row.mode === 'ERG' && num(row.applied_pct) > FIRST_ERG_MAX_PCT + oneW) add(`${name}: peer ${peer} applied ERG ${fmt(num(row.applied_pct))}% FTP at ${fmt(gt)} s (max ${FIRST_ERG_MAX_PCT}% in the first ${FIRST_S} s)`);
+        const g = num(row.applied_grade_pct);
+        if (row.mode === 'SIM' && (g > FIRST_GRADE_MAX_PCT + EPS || g < FIRST_GRADE_MIN_PCT - EPS)) add(`${name}: peer ${peer} applied grade ${fmt(g)}% at ${fmt(gt)} s (${FIRST_GRADE_MIN_PCT} to +${FIRST_GRADE_MAX_PCT}% in the first ${FIRST_S} s)`);
+      }
+      if (row.mode === 'SIM') {
+        // BRIEF 4.6: the stacked grade is at most the range clamp (+10%) plus the haptic, never above +16% in total.
+        const g = num(row.applied_grade_pct);
+        if (g > TOTAL_GRADE_MAX_PCT + EPS) add(`${name}: peer ${peer} applied grade ${fmt(g)}% at ${fmt(gt)} s (max +${TOTAL_GRADE_MAX_PCT}% in total)`);
+        if (g - num(row.haptic) > RANGE_GRADE_MAX_PCT + EPS) add(`${name}: peer ${peer} applied grade ${fmt(g)}% less haptic ${fmt(num(row.haptic))}% at ${fmt(gt)} s (max +${RANGE_GRADE_MAX_PCT}% before the haptic)`);
+      }
       if (num(row.haptic) !== 0) {
         if (gt < FIRST_S - EPS) add(`${name}: peer ${peer} haptic ${row.haptic} applied at ${fmt(gt)} s (none in the first ${FIRST_S} s)`);
         if (row.mode !== 'SIM') add(`${name}: peer ${peer} haptic applied in ${row.mode} at ${fmt(gt)} s`);
@@ -831,6 +910,130 @@ export function checkS7(reports) {
   return result('S7', title, probs, `${gameEvents(a).length} events, ${sa.length} snapshots`);
 }
 
+// --- S9: the sprint half of the workout ---------------------------------------------------------------------------
+
+/** A trailing mean power at or above this share of FTP is a sprint (tanks.json ram.sprint_ftp 1.2). The S9 rider (run_sims.sh) rides 12 s at 1.5 x FTP every 40 s. */
+export const S9_SPRINT_SIM_FTP_PCT = 120;
+
+/** The Ram events that destroyed something (`ok` 1). */
+export const successfulRams = (r) => eventsOf(r, 'ram').filter((e) => num(e.ok) === 1);
+
+/** SIM -> ERG switches of `peer` with the trailing mean raw power (last `n` rows before the switch). */
+export function switchesIntoErg(r, peer, n = 3) {
+  const rows = traceOf(r, peer);
+  const out = [];
+  for (let i = 1; i < rows.length; i += 1) {
+    if (rows[i - 1].mode !== 'SIM' || rows[i].mode !== 'ERG') continue;
+    const before = rows.slice(Math.max(0, i - n), i).map((row) => num(row.power_w));
+    out.push({ t: num(rows[i].game_t, num(rows[i].t)), phase: num(rows[i].phase), trailingW: mean(before), ftp: num(slotOf(r, peer).ftp, 200) });
+  }
+  return out;
+}
+
+export function checkS9(reports) {
+  const title = 'a sprinting solo rider: a Ram in every Advance, a ram haptic only in SIM, gun lines entered after a sprint at or below their target';
+  const n = 's9_c1_sprint';
+  const r = reports[n];
+  if (!r) return skip('S9', title, `no ${n} report`);
+  const probs = [...argsProblems(n, r, { content: 'ashfall_road', players: 1, bots: 0, role: 'SOLO' }), ...completeProblems(n, r)];
+  probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
+  const rams = successfulRams(r);
+  for (const s of segmentsOf(r)) {
+    if (s.seg !== 'advance' || !Number.isFinite(s.end)) continue;
+    if (!rams.some((e) => e._t >= s.start - EPS && e._t <= s.end + EPS)) probs.push(`${n}: stage ${s.stage} Advance has no successful Ram (the sprint rider should destroy a light tank)`);
+  }
+  const hap = (r.directives ?? []).filter((d) => d.kind === 'request' && d.requested?.reason === 'ram');
+  if (hap.length === 0) probs.push(`${n}: a Ram never sent its haptic`);
+  for (const d of hap) {
+    if (d.accepted === false || d.applied?.refused === true) probs.push(`${n}: ram haptic ${d.id} at ${fmt(num(d.t))} s refused: ${d.reason || d.applied?.reason}`);
+  }
+  // A gun line (ERG) entered while the rider is still sprinting: the trainer must start at the planned target, not at the sprint power.
+  const host = hostPeer(r);
+  const ftp = num(slotOf(r, host).ftp, 200);
+  const entries = switchesIntoErg(r, host).filter((sw) => sw.trailingW >= (S9_SPRINT_SIM_FTP_PCT / 100) * ftp - EPS && planOf(r, host)[sw.phase]?.kind === 'WORK');
+  if (entries.length === 0) probs.push(`${n}: no gun line was entered straight after a sprint (the profile should sprint at one of the Advance ends)`);
+  for (const sw of entries) {
+    const bound = enteredTargetW(r, host, sw.phase) + 1;
+    const first = traceOf(r, host).filter((row) => num(row.phase) === sw.phase && row.mode === 'ERG' && num(row.game_t, num(row.t)) <= sw.t + 5);
+    const worst = Math.max(0, ...first.map((row) => num(row.applied_target_w)));
+    if (worst > bound + EPS) probs.push(`${n}: gun line at ${fmt(sw.t)} s entered after a ${fmt(sw.trailingW)} W sprint with a ${worst} W target (planned ${Math.round(bound - 1)} W)`);
+  }
+  return result('S9', title, probs, `${rams.length} Rams, ${hap.length} ram haptics, ${entries.length} gun line entries after a sprint`);
+}
+
+// --- S10: clients sending intents, a client that stops ---------------------------------------------------------------
+
+/** AFK comes 10 s after the first not-pedaling sample (BRIEF 4.6.4); the trace is sampled once a second. */
+export const AFK_AFTER_S = 10;
+/** The engine of `peer`'s plan phase at report time t, or ''. */
+const engineAt = (r, peer, t) => planOf(r, peer)[phaseIndexAt(r, peer, t)]?.meta?.engine ?? '';
+
+/** Ram and dodge events whose slot was not on a driving engine at that time (a client's intent must be owned by its engine). */
+export function intentOwnershipProblems(name, r) {
+  const probs = [];
+  for (const e of gameEvents(r)) {
+    if (e.type !== 'ram' && e.type !== 'dodge') continue;
+    const peer = peerOfSlot(r, e.s);
+    const engine = peer === null ? '' : engineAt(r, peer, e._t);
+    if (engine !== 'diesel' && engine !== 'bulwark') probs.push(`${name}: ${e.type} by slot ${e.s} at ${fmt(e._t)} s, who was on "${engine}", not a driving engine`);
+  }
+  return probs;
+}
+
+export function checkS10(reports) {
+  const title = 'crew 3 where the clients send the intents and one stops: client Rams, a station on reserve through a rescue';
+  const cases = ['s10_c3_clients_sprint', 's10_c3_dynamo_stop'];
+  const { found, missing } = pick(reports, cases);
+  if (found.length === 0) return skip('S10', title, 'no s10_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const notes = [];
+  const hygiene = (n, r) => {
+    probs.push(...argsProblems(n, r, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }), ...completeProblems(n, r));
+    probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
+  };
+
+  // Every rider sprints: the Ram of slot 1 or 2 reaches the host as a client's Telemetry.intents and only counts on the diesel.
+  const sprint = reports.s10_c3_clients_sprint;
+  if (sprint) {
+    const n = 's10_c3_clients_sprint';
+    hygiene(n, sprint);
+    probs.push(...intentOwnershipProblems(n, sprint));
+    const clientRams = successfulRams(sprint).filter((e) => num(e.s) >= 1);
+    if (clientRams.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) destroyed anything with a Ram: their intents never reached the host`);
+    notes.push(`${n} ${clientRams.length} client Rams`);
+  }
+
+  // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.
+  const stop = reports.s10_c3_dynamo_stop;
+  if (stop) {
+    const n = 's10_c3_dynamo_stop';
+    hygiene(n, stop);
+    const peer = '2';
+    const rows = traceOf(stop, peer);
+    const span = segmentsOf(stop, peer).find((x) => x.index === 2);
+    const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
+    const afk = rows.filter((row) => row.afk === true);
+    if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
+    else if (afk.length === 0) probs.push(`${n}: peer ${peer} never went AFK`);
+    else {
+      const lag = num(afk[0].game_t) - num(zero.game_t);
+      if (lag > AFK_AFTER_S + 1 + EPS) probs.push(`${n}: peer ${peer} went AFK ${fmt(lag)} s after it stopped (max ${AFK_AFTER_S} s, one sample of slack)`);
+      if (!rows.some((row) => num(row.game_t) > num(afk[afk.length - 1].game_t) && row.afk !== true && num(row.power_w) > 0)) probs.push(`${n}: peer ${peer} never came back from AFK`);
+      if (!(stop.events ?? []).some((e) => e && e.type === 'hud' && /RESERVE/.test(String(e.key ?? '')))) probs.push(`${n}: no "on reserve" toast`);
+    }
+    const st = rescueStats(stop, peer);
+    if (st.rows === 0) probs.push(`${n}: peer ${peer} never entered rescue`);
+    else if (!(st.maxPct <= 50 + 100 / Math.max(num(slotOf(stop, peer).ftp, 200), 1) + EPS)) probs.push(`${n}: rescue applied ${fmt(st.maxPct)}% FTP (wanted 50% or less)`);
+    for (const other of humanPeers(stop)) {
+      if (other === peer) continue;
+      if (traceOf(stop, other).some((row) => row.rescue === true || row.afk === true)) probs.push(`${n}: peer ${other} (not the rider who stopped) was in rescue or AFK`);
+    }
+    if (segmentsOf(stop, peer).length !== planOf(stop, peer).length) probs.push(`${n}: the plan did not continue to its last phase`);
+    notes.push(`${n} ${afk.length} s AFK, ${st.rows} s in rescue`);
+  }
+  return result('S10', title, probs, notes.join(', '));
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -869,7 +1072,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };

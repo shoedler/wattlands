@@ -1,9 +1,9 @@
 # Diesel Domestiques (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, art,
 # rules-level balance harness, S8 stress, rules-step perf), its Node tests (the sim checker, the art
 # checks and the module's e2e report checker) and the script check; a second job runs a short subset of
-# the simulation matrix (tests/games/tank/sim/run_sims.sh: S2 zero riders, S5 rescue, S6 haptics off)
+# the simulation matrix (tests/games/tank/sim/run_sims.sh: S2 zero riders, S5 rescue, S6 haptics off, S9 the sprinting rider, S10 client intents and a stopped rider)
 # through tools/run_game_sim with the check_sims.mjs assertions and fit_check on every FIT. The full
-# matrix (S1-S7), the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
+# matrix (S1-S7, S9 and S10), the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
 # No fal call can happen here: FAL_KEY and WATTLANDS_ALLOW_ART are never set, and the art tests only
 # run generate.mjs with --dry-run.
 # Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
@@ -106,8 +106,8 @@ jobs:
       - name: FIT decoder dependencies (fit_check falls back to its GDScript decoder without them)
         run: npm ci --prefix tools/fit_check || echo "npm ci failed (fit_check uses its GDScript decoder)"
 
-      - name: Simulation subset (S2, S5, S6 at seed 1), fit_check and check_sims
-        run: bash tests/games/tank/sim/run_sims.sh s2 s5 s6
+      - name: Simulation subset (S2, S5, S6, S9, S10 at seed 1), fit_check and check_sims
+        run: bash tests/games/tank/sim/run_sims.sh s2 s5 s6 s9 s10
 
       - name: Keep the reports
         if: always()
