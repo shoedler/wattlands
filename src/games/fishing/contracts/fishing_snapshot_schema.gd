@@ -16,7 +16,10 @@ extends RefCounted
 ##  R_X_DM          boat x
 ##  R_HEADING       +1 out to sea, -1 back toward the dock (the bow's direction)
 ##  R_SPEED_CMS     boat speed in cm/s, signed (+ = seaward)
-##  R_PITCH_DD      bow lift in 0.1 degrees (0..140): hammering the pedals lifts the bow
+##  R_PITCH_DD      signed trim in 0.1 degrees (FishingConst.TRIM_MIN_DEG..TRIM_MAX_DEG: -60..140):
+##                  + bow up (thrust and speed; a surge kicks it higher, then it settles),
+##                  - bow down (braking: the power is cut or drops hard, the bow digs in and the
+##                  stern lifts; back to 0 as the boat slows)
 ##  R_WAKE          wake and spray intensity 0..255 (speed and thrust)
 ##  R_THROTTLE      P_eff as % of FTP-equivalent (250 W of P_eff = 100), 0..255
 ##  R_ACTION        FishingConst.A_DRIVE .. A_HOME (display_action() adds A_PAUSED / A_AFK)
@@ -40,6 +43,8 @@ extends RefCounted
 ##                  the fish this spot offers (size = the hint's w: 0 smallest .. 255 largest)
 ##  R_STATE_DS      seconds in the current action x 10
 ##  R_FURTHEST_DM   the farthest x this rider reached
+##  R_BRAKE         braking intensity 0..255 (the boat's deceleration, 255 at
+##                  FishingConst.BRAKE_FULL_MPS2 or more): bow foam, collapsing wake
 ##
 ## T columns: T_MODE (0 Free Roam, 1 workout), T_TIME_LEFT_S (seconds of play left, ceil; 0 in
 ## overtime), T_OVER (1 once time is up: no new bites, fights may finish), T_POINTS, T_FISH (team
@@ -79,7 +84,8 @@ const R_COSMETICS := 27
 const R_HINTS := 28
 const R_STATE_DS := 29
 const R_FURTHEST_DM := 30
-const R_COLUMNS := 31
+const R_BRAKE := 31
+const R_COLUMNS := 32
 
 ## Hint entry columns (R_HINTS rows).
 const H_SPECIES := 0

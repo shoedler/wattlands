@@ -64,6 +64,10 @@ const PITCH_PER_THROTTLE := 2.5  ## degrees of bow lift per 100 % throttle
 const PITCH_PER_ACCEL := 20.0  ## degrees per m/s^2 of forward acceleration
 const PITCH_MAX_DEG := 14.0
 const PITCH_TAU_S := 0.6
+## The signed trim's range (R_PITCH_DD): bow up to +14 deg, bow down to -6 deg while braking.
+const TRIM_MAX_DEG := 14.0
+const TRIM_MIN_DEG := -6.0
+const BRAKE_FULL_MPS2 := 8.0  ## brake = deceleration / 8 m/s^2, 0..1 (R_BRAKE)
 const WAKE_SPEED := 0.6  ## wake = 0.6 x |v| / WAKE_V_FULL + 0.4 x throttle (0..1)
 const WAKE_V_FULL := 7.0
 

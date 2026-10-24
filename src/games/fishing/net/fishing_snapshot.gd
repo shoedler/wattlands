@@ -82,6 +82,7 @@ static func _row(st: FishingState, r: FishingRiderState) -> Array:
 	row[S.R_HINTS] = hints
 	row[S.R_STATE_DS] = roundi(r.state_t * 10.0)
 	row[S.R_FURTHEST_DM] = roundi(r.furthest_x_m * 10.0)
+	row[S.R_BRAKE] = S.u8(r.brake)
 	return row
 
 
@@ -206,6 +207,7 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 		r.hints.append(S.unit(h[S.H_SIZE]))
 	r.state_t = int(row[S.R_STATE_DS]) / 10.0
 	r.furthest_x_m = int(row[S.R_FURTHEST_DM]) / 10.0
+	r.brake = S.unit(row[S.R_BRAKE])
 
 
 ## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 riders).

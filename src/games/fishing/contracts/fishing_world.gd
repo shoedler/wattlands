@@ -5,21 +5,26 @@ extends RefCounted
 ## - Roam (Free Roam contents): the fixed map from content/fishing/map.json. x runs from the dock
 ##   (x 0) out to sea; the boats stop at edge_x_m(); past length_m() the ocean pours off the
 ##   flat-earth edge into the void. map.json:
-##     {"id": "roam", "label": key, "length_m": 9000, "edge_x_m": 8950,
-##      "zones": [{"id": "dock", "x_m": [0, 300], "colour": "#c9b48a", "label": key}, ...],
-##      "floor_m": [[x_m, depth_m], ...]}
+##     {"id": "roam", "label": key, "length_m": 18000, "edge_x_m": 17900,
+##      "zones": [{"id": "dock", "x_m": [0, 600], "colour": "#c9b48a", "label": key}, ...],
+##      "floor_m": [[x_m, depth_m], ...],
+##      "landmarks": [{"id": "harbour_light", "kind": "lighthouse", "x_m": 240}, ...]}
 ##   zones tile [0, length_m] left to right without gaps, ids from ZONES. floor_m is a piecewise
 ##   linear sea-floor profile, x ascending from 0; a depth of -1 means "no floor" from that x on
-##   (the abyss: floor_depth_m() returns INF there).
+##   (the abyss: floor_depth_m() returns INF there). landmarks (optional) are decorative set
+##   pieces at fixed x in [0, length_m]: unique ids, kinds from LANDMARK_KINDS.
 ## - Endless (workouts): generated from the session seed so nobody has to turn around. The dock
 ##   sits at [0, DOCK_M]; after it the zones follow ENDLESS_TOUR again and again, each segment
 ##   SEG_MIN_M..SEG_MAX_M long (seeded), with no abyss and no edge (length_m() and edge_x_m() are
-##   INF). The view shows a window around the boats.
+##   INF). The view shows a window around the boats. Landmarks: the harbour light on the dock,
+##   then one set piece per reef, shelf or deep segment (LANDMARK_FOR_ZONE) at a seeded spot in
+##   its middle half.
 ##
 ## The floor everywhere: the profile (roam) or each zone's base depth eased across segment
 ## borders (endless), plus a small seeded relief (+-RELIEF_FRAC of the depth, two octaves of value
 ## noise), so the minimap and the scenery agree. For the view: sample_floor(x0, x1, n) and
-## minimap(n) are cheap batch samplers; zone colours are "#rrggbb" defaults the view may restyle.
+## minimap(n) are cheap batch samplers; zone colours are "#rrggbb" defaults the view may restyle;
+## landmarks(x0, x1) lists the set pieces to draw (rules never read them).
 
 const ZONES: Array[String] = ["dock", "shallows", "reef", "shelf", "deep", "abyss"]
 ## Zone base depth (m) for the endless map, by ZONES index (the abyss never occurs there).
@@ -28,11 +33,20 @@ const ZONE_COLOURS: Array[String] = [
 	"#c9b48a", "#7fc4b8", "#4f9c94", "#357a86", "#22546e", "#13304a"
 ]
 const ENDLESS_TOUR: Array[String] = ["shallows", "reef", "shelf", "deep", "shelf", "reef"]
-const DOCK_M := 300.0
-const SEG_MIN_M := 1200.0
-const SEG_MAX_M := 2200.0
+## Decorative set pieces (view only): the harbour lighthouse and breakwater, a big rock arch on
+## the reef, whale bones on the shelf edge, a sunken wreck in the deep.
+const LANDMARK_KINDS: Array[String] = ["lighthouse", "reef_arch", "whale_bones", "wreck"]
+## Endless map: the landmark kind each zone's segments carry, by ZONES index ("" none).
+const LANDMARK_FOR_ZONE: Array[String] = ["", "", "reef_arch", "whale_bones", "wreck", ""]
+## Endless map: the harbour light's x, and where in a segment its landmark sits (fraction).
+const ENDLESS_LIGHT_X_M := 240.0
+const LANDMARK_SEG_LO := 0.25
+const LANDMARK_SEG_HI := 0.75
+const DOCK_M := 600.0
+const SEG_MIN_M := 2400.0
+const SEG_MAX_M := 4400.0
 ## Endless floors ease between zone depths over this many metres at each segment border.
-const EASE_M := 400.0
+const EASE_M := 800.0
 const RELIEF_FRAC := 0.06
 ## Relief noise wavelengths (m).
 const RELIEF_L1 := 230.0
@@ -49,6 +63,8 @@ var _edge_x_m: float = INF
 var _zones: Array[Dictionary] = []
 ## Roam profile, flat: [x, depth, x, depth, ...]; depth < 0 = no floor from there on.
 var _floor: PackedFloat64Array = PackedFloat64Array()
+## Roam landmarks [{id, kind, x_m}] in x order.
+var _landmarks: Array[Dictionary] = []
 ## Seeded salt for the relief noise.
 var _salt: int = 0
 
@@ -83,6 +99,9 @@ static func from_map(d: Variant, p_seed: int = 0) -> FishingWorld:
 	for p: Array in m["floor_m"]:
 		w._floor.append(float(p[0]))
 		w._floor.append(float(p[1]))
+	for lm: Dictionary in m.get("landmarks", []):
+		w._landmarks.append(_landmark(str(lm["id"]), str(lm["kind"]), float(lm["x_m"])))
+	w._landmarks.sort_custom(_by_x)
 	return w
 
 
@@ -95,6 +114,14 @@ static func endless_for(p_seed: int) -> FishingWorld:
 	w._salt = FishingRandom.mix32((p_seed & 0xFFFFFFFF) ^ 0x0E0D1E55)
 	w._zones.append(_zone("dock", 0.0, DOCK_M))
 	return w
+
+
+static func _by_x(a: Dictionary, b: Dictionary) -> bool:
+	return float(a["x_m"]) < float(b["x_m"])
+
+
+static func _landmark(lid: String, kind: String, x_m: float) -> Dictionary:
+	return {"id": lid, "kind": kind, "x_m": x_m}
 
 
 static func _zone(zid: String, x0: float, x1: float) -> Dictionary:
@@ -137,6 +164,34 @@ func zones(x0: float = 0.0, x1: float = -1.0) -> Array[Dictionary]:
 	for z in _zones:
 		if float(z["x1"]) > x0 and float(z["x0"]) <= x1:
 			out.append(z.duplicate())
+	return out
+
+
+## The landmarks with x in [x0, x1] (default: the whole roam map, or the endless map's first
+## 20 km), each {id, kind, x_m}, in x order. Copies: safe to keep.
+func landmarks(x0: float = 0.0, x1: float = -1.0) -> Array[Dictionary]:
+	if x1 < x0:
+		x1 = _length_m if not endless else 20000.0
+	var out: Array[Dictionary] = []
+	if not endless:
+		for lm in _landmarks:
+			if float(lm["x_m"]) >= x0 and float(lm["x_m"]) <= x1:
+				out.append(lm.duplicate())
+		return out
+	if ENDLESS_LIGHT_X_M >= x0 and ENDLESS_LIGHT_X_M <= x1:
+		out.append(_landmark("harbour_light", "lighthouse", ENDLESS_LIGHT_X_M))
+	_extend_to(x1)
+	for k in range(1, _zones.size()):
+		var z := _zones[k]
+		if float(z["x0"]) > x1:
+			break
+		var kind := LANDMARK_FOR_ZONE[ZONES.find(str(z["id"]))]
+		if kind == "" or float(z["x1"]) < x0:
+			continue
+		var r := FishingRandom.derive(map_seed, k, 0x1A)
+		var x := lerpf(float(z["x0"]), float(z["x1"]), r.range_f(LANDMARK_SEG_LO, LANDMARK_SEG_HI))
+		if x >= x0 and x <= x1:
+			out.append(_landmark("%s_%d" % [kind, k], kind, x))
 	return out
 
 
@@ -222,6 +277,29 @@ static func errors(d: Variant) -> Array[String]:
 			px = float(p[0])
 		if (fl as Array).size() >= 2 and absf(float(fl[0][0])) > 1e-6:
 			out.append("map.json: floor_m must start at x 0")
+	out.append_array(_landmark_errors(m.get("landmarks", []), length))
+	return out
+
+
+static func _landmark_errors(lms: Variant, length: float) -> Array[String]:
+	var out: Array[String] = []
+	if not lms is Array:
+		out.append("map.json: landmarks must be an array")
+		return out
+	var ids := {}
+	for lm: Variant in lms:
+		if not lm is Dictionary:
+			out.append("map.json: a landmark is not an object")
+			continue
+		var lid := str((lm as Dictionary).get("id", ""))
+		if lid == "" or ids.has(lid):
+			out.append("map.json: landmark id %s is missing or repeated" % lid)
+		ids[lid] = true
+		if not LANDMARK_KINDS.has(str(lm.get("kind", ""))):
+			out.append("map.json: landmark %s needs a kind from %s" % [lid, LANDMARK_KINDS])
+		var x: Variant = lm.get("x_m")
+		if not (x is float or x is int) or float(x) < 0.0 or float(x) > length:
+			out.append("map.json: landmark %s needs x_m in [0, length_m]" % lid)
 	return out
 
 

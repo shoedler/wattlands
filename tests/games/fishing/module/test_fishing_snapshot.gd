@@ -41,10 +41,11 @@ func _worst_case(g: FishingGame) -> void:
 	for r in st.riders:
 		r.action = FishingConst.A_MENU
 		r.phase_kind = Wl.FREE
-		r.x_m = 8949.9
+		r.x_m = 17899.9
 		r.heading = -1
 		r.v_mps = -0.29
-		r.pitch_deg = 13.9
+		r.pitch_deg = -5.9 if r.slot == 2 else 13.9
+		r.brake = 0.999 if r.slot == 2 else 0.0
 		r.wake = 0.999
 		r.p_eff_w = 400.0
 		r.hints.assign([9.0, -39.9, 399.9, 0.999, 8.0, 12.3, 612.4, 0.5, 7.0, 39.9, 55.5, 0.123])
@@ -69,7 +70,7 @@ func _worst_case(g: FishingGame) -> void:
 		r.state_t = 9999.94
 		r.points = 999999
 		r.fish_landed = 99
-		r.furthest_x_m = 8949.9
+		r.furthest_x_m = 17899.9
 
 
 func test_the_worst_case_fits_2_kb_of_json() -> void:
@@ -99,10 +100,12 @@ func test_a_json_round_trip_restores_every_carried_field() -> void:
 	)
 	var b := client.state.riders[0]
 	assert_eq(b.action, FishingConst.A_MENU)
-	assert_almost_eq(b.x_m, 8949.9, 0.051)
+	assert_almost_eq(b.x_m, 17899.9, 0.051)
 	assert_eq(b.heading, -1)
 	assert_almost_eq(b.v_mps, -0.29, 0.0051)
 	assert_almost_eq(b.pitch_deg, 13.9, 0.051)
+	assert_almost_eq(client.state.riders[2].pitch_deg, -5.9, 0.051, "signed trim: bow down")
+	assert_almost_eq(client.state.riders[2].brake, 0.999, 0.003)
 	assert_eq(b.menu, [0, 1, 2, FishingConst.M_DRIVE_ON, FishingConst.M_TURN] as Array[int])
 	assert_eq(b.selected, 4)
 	assert_eq(b.hint_count(), 3)
@@ -122,7 +125,7 @@ func test_a_json_round_trip_restores_every_carried_field() -> void:
 	assert_almost_eq(b.state_t, 9999.9, 0.001)
 	assert_eq(b.points, 999999)
 	assert_eq(b.fish_landed, 99)
-	assert_almost_eq(b.furthest_x_m, 8949.9, 0.051)
+	assert_almost_eq(b.furthest_x_m, 17899.9, 0.051)
 	assert_true(client.state.roam)
 	assert_eq(client.state.team_points, 9999999)
 	assert_eq(client.state.team_fish, 999)

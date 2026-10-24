@@ -26,8 +26,11 @@ var x_m: float = 0.0
 var v_mps: float = 0.0
 ## +1 out to sea, -1 toward the dock (the bow's direction).
 var heading: int = 1
-## Bow lift (degrees) and wake intensity (0..1).
+## Signed trim (degrees, + bow up, - bow down while braking), its rate (deg/s, the spring-damper),
+## braking intensity (0..1) and wake intensity (0..1).
 var pitch_deg: float = 0.0
+var pitch_rate: float = 0.0
+var brake: float = 0.0
 var wake: float = 0.0
 ## Effective power now (Telemetry.p_eff_w) and the last step's acceleration (m/s^2, signed).
 var p_eff_w: float = 0.0
