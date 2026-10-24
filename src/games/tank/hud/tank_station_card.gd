@@ -157,20 +157,33 @@ func _speed_cells(m: Dictionary) -> void:
 	)
 
 
-## The Ram: the open window counts down, the cooldown recharges, and a full bar with a check mark
-## means it is ready. The label is the prompt's own words, so no extra strings are needed.
+## The Ram (the dodge at the boss): the open window counts down, the cooldown recharges, and a full
+## bar with a check mark means it is ready. The label is the prompt's own words, so no extra strings
+## are needed. Where the ability does not work (the depot, a gun line, a checkpoint, the first 300 s:
+## brief 2.3) the cell shows its label dimmed over a dash, never a ready mark.
 func _ram_cell(i: int) -> void:
 	var m := model
-	var label := tr_key("TANK_PROMPT_RAM")
-	if float(m.get("ram_s", 0.0)) > 0.0:
+	var label := tr_key("TANK_PROMPT_DODGE" if bool(m.get("dodge", false)) else "TANK_PROMPT_RAM")
+	if not bool(m.get("ram_ok", false)):
+		var c := cell_rect(i)
+		text(c.position + Vector2(4, 0), label, LABEL_PX, WlTheme.TEXT_DIM, c.size.x - 8.0)
+		text(
+			Vector2(c.position.x, c.position.y + 30.0),
+			"-",
+			KEY_PX,
+			WlTheme.TEXT_DIM,
+			c.size.x,
+			HORIZONTAL_ALIGNMENT_CENTER
+		)
+	elif float(m.get("ram_s", 0.0)) > 0.0:
 		_cell(i, label, "%d" % ceili(float(m["ram_s"])), float(m["ram_frac"]), WlTheme.GLOW, "s")
 	elif float(m.get("ram_cd_s", 0.0)) > 0.0:
 		var recharge := 1.0 - float(m["ram_cd_frac"])
 		_cell(i, label, "%d" % ceili(float(m["ram_cd_s"])), recharge, WlTheme.ACCENT, "s")
 	else:
 		_cell(i, label, "", 1.0, WlTheme.GLOW)
-		var c := cell_rect(i)
-		var mid := Vector2(c.position.x + c.size.x * 0.5, c.position.y + 62.0)
+		var c2 := cell_rect(i)
+		var mid := Vector2(c2.position.x + c2.size.x * 0.5, c2.position.y + 62.0)
 		line(mid + Vector2(-22, 0), mid + Vector2(-6, 18), WlTheme.GLOW, 9.0)
 		line(mid + Vector2(-6, 18), mid + Vector2(26, -22), WlTheme.GLOW, 9.0)
 
