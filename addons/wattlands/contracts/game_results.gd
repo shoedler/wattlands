@@ -25,6 +25,7 @@ var summary_key: String = ""
 ## "Free Roam 30 min" or a plan name). "" falls back to the content title.
 var ride_tag: String = ""
 ## Game stat lines for the Strava description, above the platform's averages (no heart rate).
+## A row may carry its own "ride_lines" (Array of String); each peer then uses its own row's.
 var ride_lines: Array[String] = []
 var rows: Array[Dictionary] = []
 ## Team-wide custom stats.

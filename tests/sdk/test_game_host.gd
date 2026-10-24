@@ -1058,3 +1058,17 @@ func test_session_ids_are_unique_per_session_even_with_the_same_seed() -> void:
 	assert_eq(_host(c).session_id, "fx_solo/tiny/7", "no nonce: the deterministic id")
 	var d := _solo("tiny", {"session_nonce": "room-K7QX2M-3"})
 	assert_eq(_host(d).session_id, "fx_solo/tiny/7/room-K7QX2M-3")
+
+
+func test_each_peer_uses_its_own_rows_ride_lines() -> void:
+	var host := _host(_solo("tiny", {}, 1))
+	var r := GameResults.new()
+	r.ride_lines.append("host line")
+	r.rows.append({"peer_id": host.local_peer(), "ride_lines": ["mine 1", "mine 2"]})
+	host._use_own_ride_lines(r)
+	assert_eq(r.ride_lines, ["mine 1", "mine 2"] as Array[String])
+	var shared := GameResults.new()
+	shared.ride_lines.append("shared")
+	shared.rows.append({"peer_id": host.local_peer()})
+	host._use_own_ride_lines(shared)
+	assert_eq(shared.ride_lines, ["shared"] as Array[String], "no row lines: the shared ones stay")
