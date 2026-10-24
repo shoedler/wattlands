@@ -48,6 +48,15 @@ func test_the_session_starts_with_a_drive_out_and_every_boat_at_the_dock() -> vo
 	assert_eq(h.state.overtime_end_t, 2100.0)
 
 
+func test_every_slot_has_its_own_berth_at_the_dock() -> void:
+	for i in 4:
+		assert_eq(FishingRules.start_x(i), FishingRules.start_x(i), "deterministic")
+		assert_lt(FishingRules.start_x(i), 300.0, "inside the harbour")
+		if i > 0:
+			var gap := FishingRules.start_x(i) - FishingRules.start_x(i - 1)
+			assert_between(gap, 12.0, 15.0, "a berth apart")
+
+
 func test_pedaling_drives_and_easing_off_drifts_to_the_menu() -> void:
 	var h := _human()
 	h.run(150.0)

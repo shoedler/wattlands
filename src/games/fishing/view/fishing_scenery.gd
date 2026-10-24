@@ -17,6 +17,10 @@ const H := 360
 ## The sea surface row and the scales: PX_PER_M across; the deepest floor in sight lands
 ## FLOOR_ROWS under the surface (y = SURF_Y + FLOOR_ROWS x sqrt(depth / view_depth_m)).
 const SURF_Y := 118
+## The far water: a FAR_ROWS band above the surface row, up to the horizon. Other riders' boats
+## float on it (FishingView.FAR_ROW_PX), so boats at the same x read as side by side.
+const FAR_ROWS := 4
+const HORIZON_Y := SURF_Y - FAR_ROWS
 const PX_PER_M := 2.0
 const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
@@ -205,7 +209,8 @@ static func checker_texture() -> Texture2D:
 ## The water column: one flat band per WATER_STEPS_M step (by true depth), each top edge a
 ## 2-row checker into the band above.
 func _paint_water(c: CanvasItem) -> void:
-	c.draw_rect(Rect2(0, SURF_Y, W, H - SURF_Y), FishingPalette.SEA[0])
+	c.draw_rect(Rect2(0, HORIZON_Y, W, H - HORIZON_Y), FishingPalette.SEA[0])
+	c.draw_rect(Rect2(0, HORIZON_Y, W, 1), FishingPalette.HAZE_2)
 	for k in range(1, WATER_STEPS_M.size()):
 		var y := roundf(y_of_depth(WATER_STEPS_M[k]))
 		if y >= float(H):
@@ -279,7 +284,9 @@ func _paint_islands(c: CanvasItem, cam_m: float) -> void:
 				var u := float(i) / float(iw)
 				var hh := roundi(float(ih) * sqrt(maxf(sin(PI * u), 0.0)))
 				if hh > 0:
-					c.draw_rect(Rect2(roundf(x0) + i, SURF_Y - hh, 1, hh), col)
+					var ix := roundf(x0) + float(i)
+					if ix < screen_x(edge_m(), cam_m):
+						c.draw_rect(Rect2(ix, HORIZON_Y - hh, 1, hh), col)
 
 
 func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
@@ -289,7 +296,7 @@ func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
 	var x := roundf(TOWN_X0 - cam_m * PX_PER_M * TOWN_FACTOR)
 	if x > float(W) or x + town.get_width() < 0.0:
 		return
-	c.draw_texture(town, Vector2(x, SURF_Y - town.get_height()))
+	c.draw_texture(town, Vector2(x, HORIZON_Y - town.get_height()))
 	var gull := FishingSprites.frames("gull")
 	if gull.is_empty():
 		return
@@ -454,28 +461,17 @@ func _paint_edge(c: CanvasItem, cam_m: float, t: float) -> void:
 	if ex >= float(W):
 		return
 	var x0 := maxf(roundf(ex), 0.0)
-	var ramp: Array[Color] = [
-		FishingPalette.SKY_2,
-		FishingPalette.HAZE_1,
-		FishingPalette.HAZE_2,
-		FishingPalette.SEA_3,
-		FishingPalette.SEA_5,
-		FishingPalette.SEA_7,
-		FishingPalette.VOID,
-	]
-	var rows: Array[int] = [0, 6, 14, 26, 44, 70, 100]
-	for i in ramp.size():
-		var y := SURF_Y + rows[i]
-		c.draw_rect(Rect2(x0, y, float(W) - x0, H - y), ramp[i])
-	for k in 40:
+	c.draw_rect(Rect2(x0, HORIZON_Y, float(W) - x0, H - HORIZON_Y), FishingPalette.VOID)
+	for k in 60:
 		var h := hash2(k, 5)
 		var sx := x0 + float(h % 640)
-		var sy := float(SURF_Y + 60 + (h >> 10) % (H - SURF_Y - 60))
+		var sy := float(HORIZON_Y + 4 + (h >> 10) % (H - HORIZON_Y - 4))
 		if sx < float(W) and (floori(t * 0.7) + k) % 9 != 0:
-			c.draw_rect(Rect2(sx, sy, 1, 1), FishingPalette.STEEL)
-	# The falling sheet: from the lip (ex, SURF_Y) its front edge throws out with the fall.
-	for y in range(SURF_Y, H):
-		var fall := float(y - SURF_Y)
+			var star := FishingPalette.STEEL if k % 4 != 0 else FishingPalette.HAZE_1
+			c.draw_rect(Rect2(sx, sy, 1, 1), star)
+	# The falling sheet: from the lip (ex, the horizon) its front edge throws out with the fall.
+	for y in range(HORIZON_Y, H):
+		var fall := float(y - HORIZON_Y)
 		var front := ex + 4.0 + minf(sqrt(fall) * 5.0, FALL_THROW)
 		var back := ex + minf(sqrt(fall) * 2.6, FALL_THROW * 0.6)
 		if front <= 0.0 or back >= float(W):
@@ -505,7 +501,7 @@ func _paint_mist(c: CanvasItem, ex: float, t: float) -> void:
 	for k in 12:
 		var h := hash2(k, 77)
 		var cx := ex - 10.0 + float(h % 70) + sin(t * 0.5 + float(k)) * 4.0
-		var cy := float(SURF_Y - 4 + (h >> 6) % 120) - fmod(t * 3.0 + float(k) * 7.0, 20.0)
+		var cy := float(HORIZON_Y - 6 + (h >> 6) % 40) - fmod(t * 3.0 + float(k) * 7.0, 12.0)
 		var r := 3 + (h >> 12) % 6
 		for dy in range(-r / 2, r / 2 + 1):
 			var half := roundi(sqrt(maxf(float(r * r) - float(4 * dy * dy), 0.0)))

@@ -16,6 +16,11 @@ const FISHING_EASE_S := 0.6
 const PROP_FPS_FULL := 14.0
 const FLY_FPS_PER_RPM := 0.12
 const WINCH_FPS_PER_MPS := 6.0
+const FAR_SHADER := "res://src/games/fishing/view/fishing_far_boat.gdshader"
+## How far toward the sky a boat on the farther row is tinted.
+const FAR_HAZE := 0.22
+
+static var _far_shader: Shader = null
 
 var slot: int = 0
 var look: Dictionary = {}
@@ -35,6 +40,8 @@ var winch_mps: float = 0.0
 var tension: float = 0.0
 var pull_dir: Vector2 = Vector2.DOWN
 
+## True on the farther row (another rider's boat): see set_far().
+var far: bool = false
 var body: Node2D = null
 var hull: Sprite2D = null
 var gears: Sprite2D = null
@@ -49,6 +56,7 @@ var _crank: float = 0.0
 var _prop_t: float = 0.0
 var _fly_t: float = 0.0
 var _winch_t: float = 0.0
+var _far_mats: Array[ShaderMaterial] = []
 
 
 func _init() -> void:
@@ -90,6 +98,36 @@ func set_look(p_slot: int, p_look: Dictionary, p_line: Color) -> void:
 		PaletteSwap.apply_slot(s, FishingPalette.keys(), slot)
 
 
+## Another rider's boat on the farther row: every part gets the far-boat material (the slot
+## colour on the key reds, a touch of haze, nothing drawn below the boat's own waterline).
+func set_far(on: bool) -> void:
+	far = on
+	_far_mats.clear()
+	if not on:
+		set_look(slot, look, line_color)
+		return
+	var ramp := PaletteSwap.slot_ramp(slot, 2)
+	var items: Array[CanvasItem] = [hull, gears, flywheel, winch, prop, chain, rider, _far, _near]
+	for item in items:
+		var m := ShaderMaterial.new()
+		m.shader = far_shader()
+		m.set_shader_parameter("key0", FishingPalette.KEY_LIGHT)
+		m.set_shader_parameter("key1", FishingPalette.KEY_DARK)
+		m.set_shader_parameter("swap0", ramp[0])
+		m.set_shader_parameter("swap1", ramp[1])
+		m.set_shader_parameter("swap_keys", item == hull or item == rider)
+		m.set_shader_parameter("haze", FishingPalette.SKY_1)
+		m.set_shader_parameter("haze_amount", FAR_HAZE)
+		item.material = m
+		_far_mats.append(m)
+
+
+static func far_shader() -> Shader:
+	if _far_shader == null:
+		_far_shader = load(FAR_SHADER) as Shader
+	return _far_shader
+
+
 ## One frame of `dt` seconds: eases the clutch, turns the parts, places the pivot.
 func advance(dt: float) -> void:
 	fishing = move_toward(fishing, fishing_target, dt / FISHING_EASE_S)
@@ -106,6 +144,8 @@ func advance(dt: float) -> void:
 	scale.x = float(heading) if heading != 0 else 1.0
 	rotation = -deg_to_rad(pitch_deg) * scale.x
 	body.position = -PIVOT + Vector2(0, roundf(bob_px))
+	for m in _far_mats:
+		m.set_shader_parameter("clip_y", position.y + 1.0)
 	_far.queue_redraw()
 	_near.queue_redraw()
 

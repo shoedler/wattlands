@@ -11,6 +11,8 @@ extends FishingHudControl
 const ART := Rect2i(4, 2, 412, 30)
 const ICON_ROWS := 10
 const CARET_ROWS := 3
+## The void block at the roam map's right end (art px).
+const EDGE_W := 5.0
 ## Endless map: the window's width (m) round the boats.
 const WINDOW_M := 2400.0
 const SAMPLES := 103
@@ -130,7 +132,7 @@ func _draw() -> void:
 	if x0 <= 0.0:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:
-		_edge(Vector2(w - 3.0, top) * s, s, h)
+		_edge(Vector2(w - EDGE_W, top) * s, s, h)
 	for e in icons:
 		_icon(e, s, w)
 
@@ -141,12 +143,17 @@ func _dock(at: Vector2, s: float) -> void:
 	draw_rect(Rect2(at + Vector2(1, -6) * s, Vector2(2, 1) * s), FishingPalette.KEY_LIGHT)
 
 
-## The edge: falling water streaks at the strip's right end.
+## The edge as in the view: past the map's end only the starry void, the ocean pouring over
+## its lip in a falling streak.
 func _edge(at: Vector2, s: float, h: float) -> void:
-	draw_rect(Rect2(at, Vector2(3, h) * s), FishingPalette.VOID)
+	draw_rect(Rect2(at, Vector2(EDGE_W, h) * s), FishingPalette.VOID)
+	for k in 2:
+		var star := Vector2(2.0 + float(k), 3.0 + float(k) * 5.0)
+		draw_rect(Rect2(at + star * s, Vector2.ONE * s), FishingPalette.STEEL)
+	draw_rect(Rect2(at, Vector2(1, h) * s), FishingPalette.SEA_2)
 	for k in 3:
-		var y := fposmod(_t * 8.0 + float(k) * 5.0, h)
-		draw_rect(Rect2(at + Vector2(float(k % 2), y) * s, Vector2(1, 2) * s), FishingPalette.SEA_1)
+		var y := fposmod(_t * 8.0 + float(k) * 5.0, h - 1.0)
+		draw_rect(Rect2(at + Vector2(0, y) * s, Vector2(1, 2) * s), FishingPalette.CLOUD)
 
 
 func _icon(e: Dictionary, s: float, w: float) -> void:

@@ -34,6 +34,9 @@ extends RefCounted
 ## Cool-down: HOME (Free Roam: heading for the dock). Rescue, AFK, pause and stale telemetry
 ## stagger the rider (FishingFight); a paused boat drifts.
 
+## The dock berths: slot 0 at BERTH_X0_M, each next slot BERTH_M further out.
+const BERTH_X0_M := 10.0
+const BERTH_M := 15.0
 const TIP_PREFIX := "FISHING_TIP_"
 const D_MAX_DEFAULT := 60.0
 const EPS := 1e-6
@@ -95,9 +98,9 @@ static func new_state(
 	return st
 
 
-## Every boat starts at the dock, a boat length apart.
+## Every boat starts at the dock in its own berth, BERTH_M apart in slot order.
 static func start_x(slot: int) -> float:
-	return 10.0 + 12.0 * float(slot)
+	return BERTH_X0_M + BERTH_M * float(slot)
 
 
 static func step(state: FishingState, inputs: Array, dt: float) -> FishingStepOut:
