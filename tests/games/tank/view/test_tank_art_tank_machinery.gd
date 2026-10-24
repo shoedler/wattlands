@@ -2,7 +2,7 @@ extends GutTest
 ## The cutaway machinery reads at a glance (the round 3 scene critic): the steam engine has a
 ## cylinder, a crosshead driven by a connecting rod from a crank turning once per stroke and a steam
 ## puff at its drain; the gauge sits on the boiler's boss; the hoist rails end at the main gun's
-## breech under the main turret; the diesel chain runs below the rooms onto the drive sprocket; the
+## breech under the main turret; the diesel chain runs under the room floor onto the drive sprocket; the
 ## Bulwark's lever leans to show its position on a quadrant.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
@@ -96,13 +96,15 @@ func test_the_diesel_chain_runs_below_the_rooms_onto_the_drive_sprocket() -> voi
 		var sprocket := TankRigs.vec(rig.def.get("drive_sprocket"))
 		var last := pts[pts.size() - 1]
 		assert_almost_eq(
-			last.distance_to(sprocket), TankRunningGear.SPROCKET_R, 1.0, "%s: on the teeth" % tank
+			last.distance_to(sprocket), rig.gear.sprocket_r, 1.0, "%s: on the teeth" % tank
 		)
 		var floor_y := 0.0
 		for room in rig.rooms:
 			floor_y = maxf(floor_y, room.rect.end.y)
-		assert_gt(pts[1].y, floor_y + 3.0, "%s: the run is below the rooms and their band" % tank)
-		assert_lt(pts[1].y, float(rig.hull_h), "%s: and on the skirt" % tank)
+		# Round 5: the run lies in the dark band under the room floor (the wheels and the belt now
+		# show below it, in front of the skirt).
+		assert_gt(pts[1].y, floor_y, "%s: the run is below the room floor" % tank)
+		assert_lt(pts[1].y, floor_y + 3.0, "%s: inside the dark band, above the belt" % tank)
 
 
 func test_the_bulwark_lever_leans_to_its_position_on_the_quadrant() -> void:

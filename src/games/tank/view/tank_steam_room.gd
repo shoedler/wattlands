@@ -11,7 +11,9 @@ const GAUGE_START_DEG := 135.0
 const GAUGE_SWEEP_DEG := 270.0
 const GAUGE_MAX_PCT := 150.0
 const GAUGE_MARKS: Array[float] = [40.0, 100.0, 150.0]
-const GAUGE_RADIUS := 6.0
+const GAUGE_RADIUS := 6.5
+## The gauge's ticks: every 37.5% of its 0 .. 150% sweep (five, the open quarter at the bottom).
+const GAUGE_TICK_PCT := 37.5
 ## The cradle climbs / falls this fast (rail lengths per second).
 const CRADLE_UP_PER_S := 0.7
 const CRADLE_DOWN_PER_S := 1.6
@@ -22,9 +24,10 @@ const CYL_SIZE := Vector2(12, 6)
 const WHEEL_R := 6.0
 const CRANK_R := 2.5
 const CONROD_PX := 9.0
-## The gauge's dial face (a warm grey, lit by the fire), the fire's darkest ember, the brass case
-## ramp and the projectile's steel.
-const DIAL_FACE := Color("#4a463d")
+## The gauge's dial face (pale, so the dark needle and ticks read), the fire's darkest ember, the
+## brass case ramp and the projectile's steel.
+const DIAL_FACE := Color("#6c7176")
+const DIAL_LIT := Color("#878b8f")
 const EMBER_DARK := Color("#3a1a10")
 const BRASS_DARK := Color("#6b5842")
 const BRASS_MID := Color("#a8864f")
@@ -77,6 +80,9 @@ func build() -> void:
 	boiler.texture = TankSprites.tex("boiler")
 	boiler.centered = false
 	boiler.position = boiler_pos
+	# The boiler is drawn in code as a banded, riveted drum (paint_machinery_front): the generated
+	# sprite washed into orange noise under the fire's light (round 5 scene critic).
+	boiler.self_modulate = Color(1, 1, 1, 0)
 	add_child(boiler)
 	var box := Sprite2D.new()
 	box.name = "Firebox"
@@ -156,6 +162,12 @@ static func gauge_angle(pct: float) -> float:
 	return deg_to_rad(GAUGE_START_DEG + GAUGE_SWEEP_DEG * clampf(pct / GAUGE_MAX_PCT, 0.0, 1.0))
 
 
+## The rider's lamp washes only part of the room, so the fire's own light keeps the gauge, boiler
+## and engine readable (a full wash in a yellow rider's colour turned the dial into a pale disc).
+func lamp_reach() -> float:
+	return 0.6
+
+
 ## The open firebox lights the steam room.
 func light_source() -> Vector2:
 	return mouth_rect().get_center()
@@ -172,6 +184,7 @@ func engine_lights() -> void:
 
 func paint_machinery_front(item: Node2D) -> void:
 	var power := 0.0 if input.unpowered else clampf(input.frac, 0.0, 1.4)
+	_boiler(item, power)
 	_firebox_mouth(item, power)
 	_gauge(item)
 	_engine(item, power)
@@ -181,41 +194,104 @@ func paint_machinery_front(item: Node2D) -> void:
 		_shell(item, r, power)
 
 
-## The pressure gauge on the boiler's gauge boss (the boss's own marks hidden under it): a dark
-## mask, a brass bezel, a warm grey dial face, its rim banded in three zones (cold below 40%, amber
-## to 100%, fire to 150%: colour on the rim only) and one dark needle from a filled brass hub. No
-## second line ever crosses the centre.
+## The pressure gauge on the boiler's gauge boss (round 5 critic: it read as a face, then as a
+## clock): a dark brass bezel with a lit upper arc on a short siphon stem, a grey dial face, five
+## dark ticks on its 270 degree scale (open at the bottom, as a pressure gauge is), the red zone from
+## 100% to 150% as a 2 px arc at the edge, and one long dark needle from the centre over a small
+## brass hub. Nothing else crosses the face.
 func _gauge(item: Node2D) -> void:
 	var c := gauge_pos
-	item.draw_circle(c, GAUGE_RADIUS + 1.5, TankPalette.BLACK)
-	item.draw_circle(c, GAUGE_RADIUS + 0.5, TankPalette.with_alpha(TankPalette.AMBER, 0.5))
+	var r := GAUGE_RADIUS
+	item.draw_rect(Rect2(c.x - 1.0, c.y + r, 3.0, 3.0), TankPalette.IRON_DARK)
+	item.draw_rect(Rect2(c.x - 1.0, c.y + r, 1.0, 3.0), BRASS_DARK)
+	item.draw_circle(c, r + 1.5, TankPalette.BLACK)
+	item.draw_circle(c, r + 0.5, BRASS_DARK)
+	item.draw_arc(c, r + 0.5, PI * 1.05, PI * 1.6, 8, BRASS_MID, 1.0)
+	item.draw_circle(c, r - 0.5, DIAL_FACE)
+	item.draw_arc(c, r - 1.5, PI * 1.1, PI * 1.45, 6, DIAL_LIT, 1.0)
 	item.draw_arc(
 		c,
-		GAUGE_RADIUS + 0.5,
-		PI * 1.05,
-		PI * 1.6,
+		r - 1.0,
+		gauge_angle(GAUGE_MARKS[1]),
+		gauge_angle(GAUGE_MARKS[2]),
 		8,
-		TankPalette.with_alpha(TankPalette.GLOW_WARM, 0.6),
-		1.0
+		TankPalette.FIRE,
+		2.0
 	)
-	item.draw_circle(c, GAUGE_RADIUS - 0.5, DIAL_FACE)
-	var r := GAUGE_RADIUS - 1.2
-	var zones := [
-		[0.0, GAUGE_MARKS[0], TankPalette.COLD],
-		[GAUGE_MARKS[0], GAUGE_MARKS[1], TankPalette.AMBER],
-		[GAUGE_MARKS[1], GAUGE_MARKS[2], TankPalette.FIRE],
-	]
-	for z: Array in zones:
-		item.draw_arc(
-			c, r, gauge_angle(float(z[0])), gauge_angle(float(z[1])), 8, z[2] as Color, 1.2
-		)
+	var pct_t := 0.0
+	while pct_t <= GAUGE_MAX_PCT + 0.1:
+		var d := Vector2.from_angle(gauge_angle(pct_t))
+		item.draw_line(c + d * (r - 2.5), c + d * (r - 0.5), TankPalette.BLACK, 1.0)
+		pct_t += GAUGE_TICK_PCT
 	var s := station as TankSteamState
 	var pct := s.pressure_pct if s != null else 0.0
 	var nd := Vector2.from_angle(gauge_angle(pct))
-	item.draw_line(c, c + nd * (GAUGE_RADIUS - 1.0), TankPalette.BLACK, 1.5)
-	item.draw_line(c, c + nd * (GAUGE_RADIUS - 1.5), TankPalette.WHITE_WARM, 1.0)
-	item.draw_circle(c, 1.4, TankPalette.BLACK)
+	item.draw_line(c, c + nd * (r - 1.0), TankPalette.BLACK, 1.0)
+	item.draw_circle(c, 1.2, TankPalette.BLACK)
 	item.draw_rect(Rect2(c.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.BRASS)
+
+
+## The boiler as a riveted horizontal drum on two saddles: shaded round from a lit top edge to a
+## dark belly (the fire's light warming its lowest rows), dark rounded end caps, three riveted
+## straps round it (clear of the gauge boss), a steam dome under the chimney and the chimney stub.
+func _boiler(item: Node2D, power: float) -> void:
+	var bp := boiler_pos
+	var x0 := bp.x + 1.0
+	var x1 := bp.x + TankSprites.size("boiler").x - 1.0
+	var y0 := bp.y + 2.0
+	var y1 := bp.y + 20.0
+	var feet_y := bp.y + TankSprites.size("boiler").y - 2.0
+	for fx: float in [x0 + 3.0, x1 - 7.0]:
+		item.draw_rect(Rect2(fx, y1, 4.0, feet_y - y1), TankPalette.IRON_DARK)
+		item.draw_rect(Rect2(fx, y1, 1.0, feet_y - y1), TankPalette.STEEL_DARK)
+		item.draw_rect(Rect2(fx - 1.0, feet_y - 1.0, 6.0, 1.0), TankPalette.IRON)
+	var ramp: Array[Color] = [
+		TankPalette.STEEL_LIGHT,
+		TankPalette.STEEL,
+		TankPalette.STEEL_DARK,
+		TankPalette.STEEL_DARK,
+		TankPalette.IRON,
+		TankPalette.IRON,
+		TankPalette.IRON_DARK,
+		TankPalette.IRON_DARK,
+		TankPalette.COAL,
+	]
+	var rows := int(y1 - y0)
+	for k in rows:
+		var t := float(k) / maxf(float(rows - 1), 1.0)
+		var col := ramp[mini(int(t * float(ramp.size())), ramp.size() - 1)]
+		var inset := 1.0 if k == 0 or k == rows - 1 else 0.0
+		item.draw_rect(Rect2(x0 + inset, y0 + float(k), x1 - x0 - inset * 2.0, 1.0), col)
+	item.draw_rect(Rect2(x0 - 1.0, y0 + 1.0, 1.0, float(rows) - 2.0), TankPalette.BLACK)
+	item.draw_rect(Rect2(x1, y0 + 1.0, 1.0, float(rows) - 2.0), TankPalette.BLACK)
+	item.draw_rect(Rect2(x0 + 1.0, y0 - 1.0, x1 - x0 - 2.0, 1.0), TankPalette.BLACK)
+	item.draw_rect(Rect2(x0 + 1.0, y1, x1 - x0 - 2.0, 1.0), TankPalette.BLACK)
+	# End caps: a darker 2 px rim at each end with a lit upper corner.
+	for ex: float in [x0, x1 - 2.0]:
+		item.draw_rect(Rect2(ex, y0 + 1.0, 2.0, float(rows) - 2.0), TankPalette.IRON_DARK)
+		item.draw_rect(Rect2(ex, y0 + 1.0, 2.0, 1.0), TankPalette.STEEL)
+	# Straps with rivets, clear of the gauge boss.
+	for sx: float in [x0 + 7.0, gauge_pos.x - GAUGE_RADIUS - 4.0, gauge_pos.x + GAUGE_RADIUS + 4.0]:
+		item.draw_rect(Rect2(sx, y0, 1.0, float(rows)), TankPalette.COAL)
+		item.draw_rect(Rect2(sx + 1.0, y0, 1.0, float(rows)), TankPalette.STEEL_DARK)
+		var ry := y0 + 2.0
+		while ry < y1 - 1.0:
+			item.draw_rect(Rect2(sx + 1.0, ry, 1.0, 1.0), TankPalette.STEEL_PALE)
+			ry += 4.0
+	if power > 0.05:
+		item.draw_rect(
+			Rect2(x0 + 1.0, y1 - 2.0, x1 - x0 - 2.0, 2.0),
+			TankPalette.with_alpha(TankPalette.FIRE, 0.3 * clampf(power, 0.0, 1.0))
+		)
+	# The steam dome and the chimney stub where the puffs leave.
+	var cm := chimney_hull() - rect.position
+	item.draw_rect(Rect2(cm.x - 1.0, cm.y, 3.0, y0 - cm.y), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(cm.x - 1.0, cm.y, 1.0, y0 - cm.y), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(cm.x - 2.0, cm.y, 5.0, 1.0), TankPalette.STEEL)
+	var dx := x0 + 9.0
+	item.draw_rect(Rect2(dx, y0 - 3.0, 5.0, 3.0), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(dx + 1.0, y0 - 4.0, 3.0, 1.0), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(dx, y0 - 3.0, 1.0, 3.0), TankPalette.STEEL)
 
 
 ## The firebox door open on a wide fire: the mouth glowing from a dark top to a hot bottom, a bed of

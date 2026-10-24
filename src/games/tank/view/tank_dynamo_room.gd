@@ -105,6 +105,11 @@ func armature_hull_pos() -> Vector2:
 	return rect.position + armature_pos
 
 
+## The rider's lamp lights only its own corner: the room's colour is the arc's cold blue-white.
+func lamp_reach() -> float:
+	return 0.32
+
+
 ## The armature's arc lights the dynamo room.
 func light_source() -> Vector2:
 	return armature_pos
@@ -225,33 +230,41 @@ static func _jar(item: Node2D, jar: Rect2, lv: float, dim: bool) -> void:
 	item.draw_rect(Rect2(x + floorf(w * 0.5) - 1, y - 3, 2, 2), TankPalette.STEEL)
 
 
-## The armature as a crisp rotor on the tank's plane: a laminated iron ring with eight winding slots
-## turning with the machine, a dull copper commutator with its bars, a steel shaft end, and a cold
-## catch-light on the rim under the brushes while it arcs.
+## The armature as a crisp rotor on the tank's plane (round 5 critic: a grey blob): a black rim, a
+## laminated iron core carrying eight copper winding coils (a dull bar with a lit edge each, dark
+## slots between them) turning with the machine, then a steel commutator ring whose six bright bars
+## turn with it, and a steel shaft end. Copper on dark iron makes the rotation read at a glance; a
+## cold catch-light runs round the rim under the brushes while it arcs.
 func _rotor(item: Node2D) -> void:
 	var c := armature_pos
 	var ang := armature.angle()
 	var r := TankSprites.size("dynamo_armature").x * 0.5 - 1.5
 	item.draw_circle(c, r + 0.5, TankPalette.BLACK)
-	item.draw_circle(c, r - 0.5, TankPalette.IRON)
-	item.draw_arc(c, r - 1.0, 0.0, TAU, 20, TankPalette.STEEL_DARK, 1.0)
+	item.draw_circle(c, r - 0.5, TankPalette.IRON_DARK)
 	for k in 8:
-		var d := Vector2.from_angle(ang + TAU * float(k) / 8.0)
-		item.draw_line(c + d * 3.5, c + d * (r - 0.5), TankPalette.COAL, 1.0)
-	item.draw_circle(c, 3.0, TankPalette.MUD)
+		var a := ang + TAU * float(k) / 8.0
+		var d := Vector2.from_angle(a)
+		var side := Vector2.from_angle(a + PI * 0.5)
+		item.draw_line(c + d * 3.5, c + d * (r - 1.0), COPPER_DARK, 2.0)
+		item.draw_line(c + d * 3.5 - side * 0.5, c + d * (r - 1.0) - side * 0.5, COPPER, 1.0)
+		var slot := Vector2.from_angle(a + TAU / 16.0)
+		item.draw_line(c + slot * 3.5, c + slot * (r - 0.5), TankPalette.BLACK, 1.0)
+	item.draw_arc(c, r - 0.5, 0.0, TAU, 20, TankPalette.STEEL_DARK, 1.0)
+	item.draw_circle(c, 3.2, TankPalette.BLACK)
+	item.draw_circle(c, 2.6, TankPalette.STEEL_DARK)
 	for k in 6:
 		var d := Vector2.from_angle(ang * 1.0 + TAU * float(k) / 6.0 + 0.3)
-		item.draw_line(c + d * 1.2, c + d * 3.0, TankPalette.MUD_DARK, 1.0)
+		item.draw_line(c + d * 1.2, c + d * 2.8, TankPalette.SILVER, 1.0)
 	item.draw_rect(Rect2(c.round() - Vector2(1, 1), Vector2(2, 2)), TankPalette.STEEL_LIGHT)
 	var arc := arc_power()
 	if arc > 0.02:
 		item.draw_arc(
 			c,
-			r - 1.0,
+			r,
 			deg_to_rad(-150.0),
 			deg_to_rad(-30.0),
 			10,
-			TankPalette.with_alpha(TankPalette.COLD, clampf(0.35 + 0.4 * arc, 0.0, 0.8)),
+			TankPalette.with_alpha(TankPalette.COLD_LIGHT, clampf(0.4 + 0.4 * arc, 0.0, 0.85)),
 			1.0
 		)
 

@@ -101,6 +101,10 @@ func _paint_barrel(item: Node2D) -> void:
 	item.draw_rect(Rect2(x0, -2.0, length, 3.0), TankPalette.STEEL)
 	item.draw_rect(Rect2(x0, -2.0, length, 1.0), TankPalette.STEEL_BRIGHT)
 	item.draw_rect(Rect2(x0, 0.0, length, 1.0), TankPalette.IRON_DARK)
+	# A black edge under the tube parts it from the turret face and the dark sky behind it.
+	item.draw_rect(
+		Rect2(x0 + 10.0, 1.0, length - 14.0, 1.0), TankPalette.with_alpha(TankPalette.BLACK, 0.8)
+	)
 	# The recoil sleeve.
 	item.draw_rect(Rect2(x0, -3.0, 10.0, 5.0), TankPalette.STEEL_DARK)
 	item.draw_rect(Rect2(x0, -3.0, 10.0, 1.0), TankPalette.STEEL_LIGHT)

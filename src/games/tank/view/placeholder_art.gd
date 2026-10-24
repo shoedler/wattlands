@@ -138,6 +138,8 @@ static func prepared_image(id: String, src: Image) -> Image:
 			img = armour_details(img, id)
 		elif id.begins_with("hull_") or id.begins_with("turret_"):
 			img = crew_details(img, id)
+		if is_plated(id):
+			img = TankMaterial.weathered(img, id)
 	if STRIP_SEGMENTS.has(id):
 		img = composed_strip(id, img)
 		img = TankStripArt.filled(id, img, STRIP_SEGMENTS.get(id, []))
