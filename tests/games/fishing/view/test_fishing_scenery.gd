@@ -51,29 +51,29 @@ func test_the_deepest_floor_in_sight_stays_above_the_hud() -> void:
 
 
 func test_water_darkens_with_depth_in_flat_steps() -> void:
-	assert_eq(FishingScenery.water_at(0.0), FishingPalette.FOAM, "a crisp light field on top")
+	assert_eq(FishingScenery.water_at(0.0), FishingPalette.HAZE, "haze under the foam line")
 	assert_lte(FishingPalette.SEA.size(), 5, "at most five flat water fields")
 	var prev := -1
 	for d: float in [0.0, 10.0, 30.0, 60.0, 120.0, 250.0, 400.0, 600.0]:
 		var i := FishingPalette.SEA.find(FishingScenery.water_at(d))
 		assert_gte(i, prev)
 		prev = i
-	assert_eq(FishingScenery.water_at(700.0), FishingPalette.UPPER)
-	assert_eq(FishingScenery.water_at(100.0), FishingPalette.HAZE, "the shelf stays light")
+	assert_eq(FishingScenery.water_at(700.0), FishingPalette.MID)
+	assert_eq(FishingScenery.water_at(30.0), FishingPalette.SURFACE, "the same metres everywhere")
 
 
 func test_the_floor_is_sage_in_the_shallows_and_deep_teal_in_the_deep() -> void:
 	assert_eq(FishingScenery.floor_at(4.0), FishingPalette.SAGE)
-	assert_eq(FishingScenery.floor_at(15.0), FishingPalette.SAGE)
+	assert_eq(FishingScenery.floor_at(10.0), FishingPalette.SAGE)
 	for d: float in [4.0, 15.0, 60.0, 150.0, 400.0, 600.0]:
 		var water := FishingScenery.water_at(d)
 		assert_ne(FishingScenery.floor_at(d), water, "floor at %s m reads" % d)
 		var rim := FishingScenery.floor_at(d, true)
 		assert_ne(rim, FishingScenery.floor_at(d), "the top line differs from the floor")
 		assert_ne(rim, water, "and from the water")
-	assert_eq(FishingScenery.floor_at(300.0), FishingPalette.UPPER, "a step under the water")
-	assert_eq(FishingScenery.floor_at(300.0, true), FishingPalette.HAZE, "under a lit rim")
-	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.MID)
+	assert_eq(FishingScenery.floor_at(300.0), FishingPalette.MID, "a step under the water")
+	assert_eq(FishingScenery.floor_at(300.0, true), FishingPalette.SURFACE, "under a lit rim")
+	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.DEEP)
 
 
 func test_the_floor_in_sight_is_one_even_staircase() -> void:

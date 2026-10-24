@@ -112,6 +112,16 @@ test('a popup rect is masked only when something foreign shows in it', () => {
   assert.equal(shown.cells.filter((c) => c === null).length, 25);
 });
 
+test('a large abyss region is an opaque HUD panel and is masked', () => {
+  const rows = field(20, 20, SKY);
+  for (let y = 2; y < 12; y++) for (let x = 2; x < 14; x++) rows[y][x] = '1c4d65';
+  rows[16][3] = '1c4d65';
+  rows[16][4] = '1c4d65';
+  const g = sc.artGrid(sc.decodePng(png(rows)), 3, [], []);
+  assert.equal(g.masked, 120);
+  assert.equal(g.cells.filter((c) => c === '1c4d65').length, 2, 'small abyss marks stay');
+});
+
 test('hsv reads the palette', () => {
   const abyss = sc.hsv('1c4d65');
   assert.ok(abyss.h > 190 && abyss.h < 210);

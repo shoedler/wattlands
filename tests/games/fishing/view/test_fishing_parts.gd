@@ -102,8 +102,8 @@ func test_species_map_to_their_fish_sprites() -> void:
 
 
 func test_the_line_under_water_reads_against_every_band_it_crosses() -> void:
-	var line := FishingView.line_under()
 	for band in FishingPalette.SEA.size():
+		var line := FishingView.line_under(band)
 		assert_gt(absf(line.v - FishingPalette.SEA[band].v), 0.15, "band %d" % band)
 		assert_has(FishingPalette.ALL, line)
 	assert_eq(FishingPalette.LINE, FishingPalette.SLATE, "the rod's slate above the water")
@@ -157,6 +157,18 @@ func test_the_sprite_writer_lays_frames_side_by_side() -> void:
 	for e: Dictionary in art["sprites"]:
 		cards += 1 if str(e.get("background", "")) == "opaque" else 0
 	assert_eq(cards, 3)
+
+
+func test_minimap_icons_never_overlap() -> void:
+	var m := FishingMinimap.new()
+	m.icons.assign([{"x": 0.5}, {"x": 0.5}, {"x": 0.51}, {"x": 0.99}])
+	var spots := m.icon_spots(400.0)
+	var sorted := spots.duplicate()
+	sorted.sort()
+	for i in range(1, sorted.size()):
+		assert_gte(sorted[i] - sorted[i - 1], FishingMinimap.ICON_GAP)
+	assert_lte(sorted[-1], 400.0 - FishingMinimap.ICON_GAP * 0.5)
+	m.free()
 
 
 func test_the_minimap_draws_in_a_frame() -> void:

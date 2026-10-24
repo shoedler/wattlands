@@ -43,15 +43,15 @@ const ALL: Array[Color] = [
 ]
 ## Light to dark: the sky and the water in one ramp. Fish and hints shift along it with depth.
 const LADDER: Array[Color] = [FOAM, SKY, HAZE, SURFACE, UPPER, MID, DEEP, ABYSS]
-## The water from the surface down (one flat band each): foam, haze, then the teals in the deep;
-## the darker teals are kept for the deep floor and the subjects.
-const SEA: Array[Color] = [FOAM, HAZE, SURFACE, UPPER]
+## The water from the surface down (one flat band each): haze, then the teals; the deep teal and
+## the abyss are kept for the deep floor and the subjects.
+const SEA: Array[Color] = [HAZE, SURFACE, UPPER, MID]
 ## Player colours by slot: the cap and the pennant, nothing else.
 const PLAYERS: Array[Color] = [ACCENT, PLAYER_SLATE, PLAYER_MOSS, PLAYER_PLUM]
 ## The line above the water (the rod's colour; under water FishingView.line_under()).
 const LINE := SLATE
 ## HUD: panels, text, secondary text, bars on their track; colour only for alerts.
-const HUD_PANEL := Color(0.10980392, 0.30196078, 0.39607843, 0.85)
+const HUD_PANEL := ABYSS
 const HUD_TEXT := FOAM
 const HUD_DIM := HAZE
 const HUD_BAR := SURFACE

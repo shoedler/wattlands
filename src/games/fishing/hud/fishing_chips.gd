@@ -77,8 +77,9 @@ func refresh() -> void:
 
 func _draw() -> void:
 	var s := ap()
-	var fpx := FishingHudDraw.snap_px(px(WlTheme.SMALL_PX))
-	var pad := float(FishingHudDraw.snap_px(1)) / 2.0
+	var u := float(FishingHudDraw.unit(k()))
+	var pad := 3.0 * u
+	var line_h := float(FishingHudDraw.LINE_ROWS) * u
 	var placed: Array[Rect2] = []
 	if boat_box.size != Vector2.ZERO:
 		placed.append(Rect2(boat_box.position * s, boat_box.size * s))
@@ -86,8 +87,8 @@ func _draw() -> void:
 		placed.append(Rect2(f.position * s, f.size * s))
 	for c in chips:
 		var text := str(c["text"])
-		var w := FishingHudDraw.text_w(text, fpx, true) + 2.0 * pad
-		var h := float(fpx) + 2.0 * pad
+		var w := FishingHudDraw.text_w(text, k()) + 2.0 * pad
+		var h := line_h + 2.0 * pad
 		var center := (c["at"] as Vector2) * s
 		center.x = clampf(center.x, w * 0.5 + 4.0, size.x - w * 0.5 - 4.0)
 		var r := _free_spot(Rect2(center - Vector2(w, h) * 0.5, Vector2(w, h)), placed)
@@ -104,8 +105,7 @@ func _draw() -> void:
 			)
 			draw_colored_polygon(tri, FishingPalette.HUD_TEXT)
 		var col := FishingPalette.HUD_TEXT if lit else FishingPalette.HUD_DIM
-		var base := r.position.y + pad + float(fpx) * 7.0 / 9.0
-		FishingHudDraw.text(self, Vector2(r.position.x + pad, base), text, fpx, col, lit)
+		FishingHudDraw.text_line(self, r.position.x + pad, r.position.y + pad, text, k(), col)
 
 
 ## The first of `r`, then `r` moved up and down by a chip's height (nearest first), that

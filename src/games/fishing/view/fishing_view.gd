@@ -564,8 +564,8 @@ func _paint_lines(c: CanvasItem) -> void:
 
 
 ## The line: one straight run from the rod tip to the fish or wobbler (two when it sags), the
-## rod's slate (or the line cosmetic) above the water and deep teal under it, which reads
-## against every water band.
+## rod's slate (or the line cosmetic) above the water and, under it, a colour per water band
+## that reads against it (line_under()).
 func _draw_line(c: CanvasItem, tip: Vector2i, end: Vector2i, r: FishingRiderState) -> void:
 	var b: FishingBoatView = boats[r.slot]
 	var surf := FishingScenery.SURF_Y
@@ -576,8 +576,15 @@ func _draw_line(c: CanvasItem, tip: Vector2i, end: Vector2i, r: FishingRiderStat
 	var points := FishingRig.line(start, end, slack, strain)
 	if start != tip:
 		points.push_front(tip)
+	var tops: Array[float] = []
+	for m in FishingScenery.WATER_STEPS_M:
+		tops.append(roundf(scenery.y_of_depth(m)))
 	for p in FishingRig.raster_path(points):
-		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), above if p.y < surf else line_under())
+		var band := 0
+		for i in tops.size():
+			if float(p.y) >= tops[i]:
+				band = i
+		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), above if p.y < surf else line_under(band))
 
 
 ## Where the line leaves the boat's side: a line toward the bow (it would cross the hull) first
@@ -588,9 +595,10 @@ static func line_start(b: FishingBoatView, tip: Vector2i, end: Vector2i) -> Vect
 	return tip
 
 
-## The line's colour under the water.
-static func line_under() -> Color:
-	return FishingPalette.DEEP
+## The line's colour under the water in band `band`: deep teal over the lighter bands, haze over
+## the darkest.
+static func line_under(band: int = 0) -> Color:
+	return FishingPalette.HAZE if band >= FishingPalette.SEA.size() - 1 else FishingPalette.DEEP
 
 
 ## A hint's silhouette at `depth_m`: one step darker than the water.
@@ -637,6 +645,6 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 		c.draw_rect(Rect2(left, y_surf - float(k), w, 1), foam_on(y_surf - float(k)))
 
 
-## Foam on row `y`: white on the haze far band, its haze shadow on the foam-white near water.
-static func foam_on(y: float) -> Color:
-	return FishingPalette.FOAM if y < float(FishingScenery.SURF_Y) else FishingPalette.HAZE
+## Foam on row `y` (white; kept as a hook for the rows a wake can touch).
+static func foam_on(_y: float) -> Color:
+	return FishingPalette.FOAM

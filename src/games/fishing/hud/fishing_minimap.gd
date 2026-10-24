@@ -15,8 +15,9 @@ const ICON_ROWS := 10
 const CARET_ROWS := 3
 ## The void block at the roam map's right end (art px).
 const EDGE_W := 5.0
-## The strip's height (art px) under the icons.
+## The strip's height (art px) under the icons, and the icons' least spacing (centre to centre).
 const STRIP_ROWS := 10.0
+const ICON_GAP := 14.0
 ## Endless map: the window's width (m) round the boats.
 const WINDOW_M := 2400.0
 const SAMPLES := 103
@@ -128,8 +129,9 @@ func _draw() -> void:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:
 		_edge(Vector2(w - EDGE_W, top) * s, s, h)
-	for e in icons:
-		_icon(e, s, w)
+	var spots := icon_spots(w)
+	for i in icons.size():
+		_icon(icons[i], s, w, spots[i])
 
 
 ## The harbour: a little lighthouse at the strip's left end.
@@ -144,14 +146,38 @@ func _edge(at: Vector2, s: float, h: float) -> void:
 	draw_rect(Rect2(at, Vector2(2, h) * s), FishingPalette.FOAM)
 
 
-func _icon(e: Dictionary, s: float, w: float) -> void:
+## Each icon's centre (art px along the strip): at its rider's x, nudged apart so no two icons
+## overlap (ICON_GAP), kept inside the strip.
+func icon_spots(w: float) -> Array[float]:
+	var order: Array[int] = []
+	for i in icons.size():
+		order.append(i)
+	order.sort_custom(func(a: int, b: int) -> bool: return icons[a]["x"] < icons[b]["x"])
+	var spots: Array[float] = []
+	spots.resize(icons.size())
+	var half := ICON_GAP * 0.5
+	var prev := -INF
+	for i in order:
+		var cx := maxf(roundf(float(icons[i]["x"]) * w), prev + ICON_GAP)
+		spots[i] = cx
+		prev = cx
+	var over := prev - (w - half)
+	if over > 0.0:
+		for i in order:
+			spots[i] -= over
+	for i in order:
+		spots[i] = maxf(spots[i], half)
+	return spots
+
+
+func _icon(e: Dictionary, s: float, w: float, cx: float) -> void:
 	var col := FishingPalette.player(int(e["slot"]))
 	var size := FishingSprites.size_of(str(e["icon"]))
-	var cx := clampf(roundf(float(e["x"]) * w), float(size.x) * 0.5, w - float(size.x) * 0.5)
 	var at := Vector2(cx - float(size.x / 2), 0.0) * s
 	var k := floori(_t * 4.0)
-	FishingHudDraw.sprite(self, str(e["icon"]), k, at, s, col)
-	draw_rect(Rect2(Vector2(cx, float(ICON_ROWS)) * s, Vector2(1, 1) * s), col)
+	FishingHudDraw.icon(self, str(e["icon"]), k, at, roundi(s), col)
+	var stem := clampf(roundf(float(e["x"]) * w), 0.0, w - 1.0)
+	draw_rect(Rect2(Vector2(stem, float(ICON_ROWS)) * s, Vector2(1, 1) * s), col)
 	if bool(e["local"]):
 		var y := float(ICON_ROWS + 1) + STRIP_ROWS + 0.5
 		var tri := PackedVector2Array(

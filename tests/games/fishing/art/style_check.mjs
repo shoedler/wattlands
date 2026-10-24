@@ -29,7 +29,7 @@ export const PLAYERS = ['7f9cbf', '9fb07a', 'a68aa8'];
 // bottom-left stack (power, cadence, meters, gear, timeline), the fight panel, the PANIC corner.
 export const HUD_RECTS = [
   [2, 0, 418, 34],
-  [422, 0, 218, 52],
+  [422, 0, 218, 62],
   [0, 258, 220, 102],
   [218, 318, 210, 42],
   [500, 312, 140, 48],
@@ -161,7 +161,44 @@ export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS, popups = POPUP
       }
     }
   }
+  g.masked += maskPanels(g.cells, g.w, g.h);
   return { w: g.w, h: g.h, cells: g.cells, masked: g.masked, offPalette: g.offPalette };
+}
+
+// Opaque HUD panels are the abyss teal, which the world uses only in small marks: an abyss
+// region larger than PANEL_MIN_PX art pixels (with its text, masked already) is a panel.
+export const PANEL_COLOUR = '1c4d65';
+export const PANEL_MIN_PX = 60;
+export function maskPanels(cells, w, h) {
+  const seen = new Uint8Array(w * h);
+  let masked = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (seen[i] || cells[i] !== PANEL_COLOUR) continue;
+    const region = [];
+    const stack = [i];
+    seen[i] = 1;
+    while (stack.length) {
+      const j = stack.pop();
+      region.push(j);
+      const x = j % w;
+      const y = (j - x) / w;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = x + dx;
+        const ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const k = ny * w + nx;
+        if (!seen[k] && cells[k] === PANEL_COLOUR) {
+          seen[k] = 1;
+          stack.push(k);
+        }
+      }
+    }
+    if (region.length > PANEL_MIN_PX) {
+      for (const j of region) cells[j] = null;
+      masked += region.length;
+    }
+  }
+  return masked;
 }
 
 function artCells(img, scale, hudRects) {

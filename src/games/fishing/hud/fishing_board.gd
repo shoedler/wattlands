@@ -5,8 +5,13 @@ extends FishingHudControl
 ## and the points (Free Roam competes; in workouts the rows still show who is doing what).
 
 const ART := Rect2i(424, 2, 212, 42)
-const ROW_H := 24.0
-const HEAD_H := 34.0
+## Padding (glyph pixels) round the rows, the row pitch (glyph pixels: the line boxes' leading
+## overlaps the row above), the icon's width and where the status column starts (a fraction
+## of the width).
+const PAD_ROWS := 3.0
+const PITCH_ROWS := 10.0
+const ICON_COLS := 11.0
+const STATUS_AT := 0.55
 
 var time_text: String = ""
 var rows: Array[Dictionary] = []
@@ -31,26 +36,25 @@ func _draw() -> void:
 	if game == null or game.state == null:
 		return
 	var s := k()
-	var h := (HEAD_H + ROW_H * float(rows.size()) + 6.0) * s
+	var u := float(FishingHudDraw.unit(s))
+	var pad := PAD_ROWS * u
+	var pitch := PITCH_ROWS * u
+	var h := 2.0 * pad + pitch * float(rows.size()) + float(FishingHudDraw.LINE_ROWS) * u
 	FishingHudDraw.panel(self, Rect2(Vector2.ZERO, Vector2(size.x, h)))
-	var label := px(WlTheme.LABEL_PX)
-	FishingHudDraw.text(self, Vector2(12, 27) * s, time_text, label, FishingPalette.HUD_TEXT, true)
-	var y := HEAD_H * s
-	var small := px(WlTheme.SMALL_PX)
-	var tiny := px(WlTheme.MIN_TEXT_PX + 4)
+	FishingHudDraw.text_line(self, pad, pad, time_text, s, FishingPalette.HUD_TEXT)
+	var status_x := roundf(size.x * STATUS_AT / u) * u
+	var y := pad + pitch
 	for row in rows:
 		var col := FishingPalette.player(int(row["slot"]))
 		var icon := FishingHudModel.icon_of(int(row["action"]))
-		var at := Vector2(10 * s, y + s)
-		FishingHudDraw.sprite(self, icon, floori(_t * 4.0), at, 2.0 * s, col)
+		FishingHudDraw.icon(self, icon, floori(_t * 4.0), Vector2(pad, y + u), int(u), col)
 		var me := bool(row["local"])
-		var base := y + 18.0 * s
 		var name_col := FishingPalette.HUD_TEXT if me else FishingPalette.HUD_DIM
-		FishingHudDraw.text(self, Vector2(40 * s, base), str(row["name"]), small, name_col, me)
+		var name_x := pad + (ICON_COLS + 2.0) * u
+		FishingHudDraw.text_line(self, name_x, y, str(row["name"]), s, name_col)
 		var act := FishingHudModel.action_text(game, int(row["action"]))
-		FishingHudDraw.text(self, Vector2(250 * s, base), act, tiny, FishingPalette.HUD_DIM)
+		FishingHudDraw.text_line(self, status_x, y, act, s, FishingPalette.HUD_DIM)
 		var pts := str(row["points"])
-		var pw := FishingHudDraw.text_w(pts, small, true)
-		var px_at := Vector2(size.x - pw - 12.0 * s, base)
-		FishingHudDraw.text(self, px_at, pts, small, FishingPalette.HUD_TEXT, true)
-		y += ROW_H * s
+		var pw := FishingHudDraw.text_w(pts, s)
+		FishingHudDraw.text_line(self, size.x - pad - pw, y, pts, s, FishingPalette.HUD_TEXT)
+		y += pitch

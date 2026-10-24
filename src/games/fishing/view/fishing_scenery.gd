@@ -28,22 +28,25 @@ const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
 const VIEW_DEPTH_MIN_M := 3.0
 const ABYSS_M := 700.0
-## Water band tops (m), one FishingPalette.SEA colour each: foam-white shallows (a crisp light
-## field under the sky, like snow), haze on the reef and the shelf, the teals only in the deep.
-const WATER_STEPS_M: Array[float] = [0.0, 25.0, 120.0, 400.0]
-## The floor's colour and its lit 2-row top rim per water band (WATER_STEPS_M): sage under haze
-## in the light water, one water step darker under a surface-teal rim in the deep.
+## Water band tops (m), one FishingPalette.SEA colour each, the same in every zone: haze just
+## under the surface, then the teals stepping darker with depth. The surface itself is a 2-row
+## foam line (SURFACE_ROWS), the only white band.
+const WATER_STEPS_M: Array[float] = [0.0, 15.0, 120.0, 500.0]
+const SURFACE_ROWS := 2
+## The floor's colour and its lit 2-row top rim per water band (WATER_STEPS_M): sage under a
+## foam rim in the shallows, one water step darker than the water above (under a lighter rim)
+## deeper down.
 const FLOOR_BANDS: Array[Color] = [
-	FishingPalette.SAGE,
 	FishingPalette.SAGE,
 	FishingPalette.UPPER,
 	FishingPalette.MID,
+	FishingPalette.DEEP,
 ]
 const RIM_BANDS: Array[Color] = [
-	FishingPalette.HAZE,
 	FishingPalette.FOAM,
 	FishingPalette.HAZE,
 	FishingPalette.SURFACE,
+	FishingPalette.UPPER,
 ]
 ## The floor in sight is fitted with one staircase: treads of a whole number of STEP_PX columns,
 ## risers of FLOOR_RISERS px, the pair whose slope matches best; when the staircase strays more
@@ -165,7 +168,7 @@ static func hash2(a: int, b: int) -> int:
 
 
 ## The water bands from the horizon (the far water is the top band), each a flat field with a
-## straight top; `steps` darker past the edge.
+## straight top, and the foam surface line; `steps` darker past the edge.
 func _paint_water(c: CanvasItem, x0: float = 0.0, steps: int = 0) -> void:
 	var w := float(W) - x0
 	c.draw_rect(Rect2(x0, HORIZON_Y, w, H - HORIZON_Y), FishingPalette.SEA[0])
@@ -176,6 +179,8 @@ func _paint_water(c: CanvasItem, x0: float = 0.0, steps: int = 0) -> void:
 		c.draw_rect(
 			Rect2(x0, y, w, float(H) - y), FishingPalette.darker(FishingPalette.SEA[k], steps)
 		)
+	if steps == 0:
+		c.draw_rect(Rect2(x0, SURF_Y, w, SURFACE_ROWS), FishingPalette.FOAM)
 
 
 func _paint_clouds(c: CanvasItem, cam_px: float, t: float) -> void:
@@ -356,13 +361,17 @@ static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
 	return rows
 
 
-## The quay left of the dock (a foam cap and a wood face on the water, bollards) and the pier.
+## The quay left of the dock (a foam cap and a wood face on posts going into the water, bollards
+## on the cap) and the pier.
 func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 	var qx := roundf(screen_x(0.0, cam_m))
 	if qx > 0.0:
 		var top := float(SURF_Y - QUAY_TOP)
 		c.draw_rect(Rect2(0, top, qx, 2), FishingPalette.FOAM)
-		c.draw_rect(Rect2(0, top + 2, qx, float(QUAY_TOP) - 2.0), FishingPalette.WOOD)
+		c.draw_rect(Rect2(0, top + 2, qx, 2), FishingPalette.WOOD)
+		for x in range(int(qx) - 6, -1, -16):
+			c.draw_rect(Rect2(x, top + 4, 2, 2), FishingPalette.SLATE)
+			c.draw_rect(Rect2(x, SURF_Y + SURFACE_ROWS, 2, 8), FishingPalette.UPPER)
 		for x in range(int(qx) - 14, -1, -40):
 			c.draw_rect(Rect2(x, top - 2, 2, 2), FishingPalette.SLATE)
 	var pier := FishingSprites.frame("scenery_pier")

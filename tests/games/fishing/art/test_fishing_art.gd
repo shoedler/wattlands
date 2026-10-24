@@ -287,10 +287,28 @@ func test_the_pixel_font_png_is_the_glyph_grid_and_imports_as_a_font() -> void:
 	png.convert(Image.FORMAT_RGBA8)
 	assert_eq(png.get_size(), want.get_size())
 	assert_eq(png.get_data(), want.get_data(), "run fishing_write_sprites.gd")
-	var cells := FishingFontGrids.COLUMNS * FishingFontGrids.ROWS
-	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), cells, "one glyph per cell")
-	var font := load(path) as Font
-	assert_not_null(font)
+	var grid := FishingFontGrids.COLUMNS * FishingFontGrids.ROWS
+	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), grid, "one glyph per cell")
+	assert_not_null(load(path) as Font)
+	var font := FishingHudDraw.font()
 	var px := FishingHudDraw.FONT_PX * 3
 	var w := font.get_string_size("20:00 Rider 1 85%", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
-	assert_eq(w, float(17 * FishingFontGrids.CELL.x * 3), "fixed width, whole-pixel scale")
+	var cells := 14 * FishingFontGrids.CELL.x + 3 * FishingHudDraw.SPACE_ADVANCE
+	assert_eq(w, float(cells * 3), "fixed width, a narrow space, whole-pixel scale")
+
+
+func test_the_pixel_font_hangs_its_caps_from_the_line_box_top() -> void:
+	var ff := FishingHudDraw.font() as FontFile
+	assert_not_null(ff)
+	var sz := Vector2i(FishingHudDraw.FONT_PX, 0)
+	for ch in ["A", "g", "0"]:
+		var gi := ff.get_glyph_index(sz.x, ch.unicode_at(0), 0)
+		var off := ff.get_glyph_offset(0, sz, gi)
+		assert_eq(off, Vector2(0, -FishingHudDraw.CAP_ROWS), "%s: cap top on the ascent" % ch)
+	assert_eq(ff.get_ascent(27), float(FishingFontGrids.ASCENT * 3))
+	var line := FishingHudDraw.LEAD_ROWS + FishingHudDraw.CAP_ROWS + FishingFontGrids.DESCENT
+	assert_eq(FishingHudDraw.LINE_ROWS, line, "leading, cap, descender")
+	var zero: Array = FishingFontGrids.FONT_GLYPHS["0".unicode_at(0) - FishingFontGrids.FIRST]
+	var oh: Array = FishingFontGrids.FONT_GLYPHS["O".unicode_at(0) - FishingFontGrids.FIRST]
+	assert_eq(str(zero[3]), "#.#.#", "a dotted zero")
+	assert_ne(zero, oh, "the zero differs from O")
