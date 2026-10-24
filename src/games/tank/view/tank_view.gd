@@ -652,17 +652,33 @@ func _build_enemies(state: TankState, t: float) -> void:
 	enemy_rects.clear()
 	var row_i := 0
 	var ground := float(TankConst.GROUND_Y)
+	# Dug-in guns are drawn first, on a lane behind the road, so a tank passing in front of a
+	# revetment keeps its own silhouette; the rest alternate between two depth rows.
+	var order: Array[TankEnemyState] = []
 	for e in state.enemies:
+		if TankIds.enemy_of(e.code) == TankIds.ENEMY_DUGIN:
+			order.append(e)
+	for e in state.enemies:
+		if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
+			order.append(e)
+	for e in order:
 		var type := TankIds.enemy_of(e.code)
 		var sprite := TankSprites.enemy_id(type)
 		var sz := Vector2(float(e.w), float(e.h))
 		if sz.x <= 0.0:
 			sz = TankSprites.size(sprite)
-		# Overlapping enemies stand on two depth rows: every second one a little higher and dimmer.
-		var back_row := row_i % 2 == 1
-		row_i += 1
-		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - (3.0 if back_row else 0.0))
-		var dim := 0.9 if back_row else 1.0
+		var lift := 0.0
+		var dim := 1.0
+		if type == TankIds.ENEMY_DUGIN:
+			lift = 7.0
+			dim = 0.72
+		else:
+			# Overlapping enemies stand on two depth rows: every second one higher and dimmer.
+			if row_i % 2 == 1:
+				lift = 5.0
+				dim = 0.8
+			row_i += 1
+		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - lift)
 		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, Color(dim, dim, dim)))
 		enemy_rects[e.id] = Rect2(pos.round(), sz)
 		var max_hp := enemy_max_hp(state, type)
@@ -740,15 +756,29 @@ func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
 	var turret := geometry.boss_part_rect(TankBossState.TURRET_PART)
 	var muzzle := origin + geometry.boss_muzzle()
 	var base := origin + turret.position + Vector2(8.0, turret.size.y * 0.5)
-	rows.append({"t": "line", "a": base, "b": muzzle, "w": 6.0, "c": TankPalette.STEEL_DARK})
+	# The main gun: a soft-shaded tube (dark underside, steel body, lit top edge) so it reads as
+	# one with the turret against the smoke, and a collar where it leaves the gun block.
+	rows.append({"t": "line", "a": base, "b": muzzle, "w": 6.0, "c": TankPalette.IRON})
 	rows.append(
 		{
 			"t": "line",
-			"a": base + Vector2(0, -2),
-			"b": muzzle + Vector2(0, -2),
-			"w": 1.0,
-			"c": TankPalette.STEEL_LIGHT
+			"a": base + Vector2(0, -1),
+			"b": muzzle + Vector2(0, -1),
+			"w": 3.0,
+			"c": TankPalette.STEEL
 		}
+	)
+	rows.append(
+		{
+			"t": "line",
+			"a": base + Vector2(0, -3),
+			"b": muzzle + Vector2(0, -3),
+			"w": 1.0,
+			"c": TankPalette.STEEL_PALE
+		}
+	)
+	rows.append(
+		{"t": "line", "a": base, "b": base + Vector2(-10, 0), "w": 10.0, "c": TankPalette.IRON}
 	)
 	rows.append(
 		{"t": "line", "a": muzzle + Vector2(8, 0), "b": muzzle, "w": 9.0, "c": TankPalette.STEEL}

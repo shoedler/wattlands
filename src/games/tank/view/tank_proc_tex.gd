@@ -13,7 +13,8 @@ static func glow() -> Texture2D:
 	return _make("glow", 64, _glow_px)
 
 
-## A soft grey-white round puff, 32 x 32, slightly noisy edge: smoke, steam, dust.
+## A soft grey-white round puff, 32 x 32, a smooth falloff with no pattern in it (a striped puff
+## stacked into a column reads as a coil): smoke, steam, dust.
 static func puff() -> Texture2D:
 	return _make("puff", 32, _puff_px)
 
@@ -58,10 +59,9 @@ static func _glow_px(d: float, _x: int, _y: int) -> Color:
 	return Color(1, 1, 1, a * a)
 
 
-static func _puff_px(d: float, x: int, y: int) -> Color:
-	var n := 0.85 + 0.15 * sin(float(x) * 2.3 + float(y) * 1.7)
-	var a := clampf((1.0 - d) / 0.45, 0.0, 1.0) * n
-	return Color(0.92, 0.93, 0.95, a)
+static func _puff_px(d: float, _x: int, _y: int) -> Color:
+	var k := clampf(1.0 - d, 0.0, 1.0)
+	return Color(0.92, 0.93, 0.95, k * k * (3.0 - 2.0 * k))
 
 
 static func _fire_px(d: float, _x: int, _y: int) -> Color:

@@ -43,7 +43,7 @@ func test_enemies_behind_the_tank_are_flipped_and_overlaps_use_two_depth_rows() 
 	var r0: Rect2 = v.enemy_rects[11]
 	var r1: Rect2 = v.enemy_rects[12]
 	var r2: Rect2 = v.enemy_rects[13]
-	assert_almost_eq(r0.end.y - r1.end.y, 3.0, 0.6, "the second enemy stands a little higher")
+	assert_almost_eq(r0.end.y - r1.end.y, 5.0, 0.6, "the second enemy stands a little higher")
 	assert_almost_eq(r2.end.y, r0.end.y, 0.6, "the third is back on the first row")
 	var dim: Color = light["tint"]
 	assert_lt(dim.r, 1.0, "and dimmer")

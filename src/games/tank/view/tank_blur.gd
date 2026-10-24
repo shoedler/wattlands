@@ -11,14 +11,16 @@ extends RefCounted
 ## effective blur is about `down` x (1 + box_r) x 1.2 art px, see PRESETS.
 
 ## Per-plane presets: down (resample factor), box_r (extra box radius at the small size, 0 for none),
-## passes (box passes per axis), haze (0..1 toward the haze colour), darken (0..1 toward black).
+## passes (box passes per axis), haze (0..1 toward the haze colour), darken (0..1 toward black),
+## fade_top (rows over which alpha ramps in from the top edge, so a summit or tree the trimmed sprite
+## lets touch row 0 never leaves a ruler-straight cut across the sky; 0 for none).
 ## The blur radii are recorded in docs/decisions/tank.md by the lead (view report).
 const PRESETS := {
 	"sky": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.12, "darken": 0.0},
-	"hills": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.40, "darken": 0.0},
-	"near": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.18, "darken": 0.0},
-	"ground": {"down": 1, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.08},
-	"debris": {"down": 4, "box_r": 2, "passes": 2, "haze": 0.0, "darken": 0.55},
+	"hills": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.40, "darken": 0.0, "fade_top": 20},
+	"near": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.18, "darken": 0.0, "fade_top": 10},
+	"ground": {"down": 1, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.15},
+	"debris": {"down": 4, "box_r": 1, "passes": 1, "haze": 0.0, "darken": 0.45},
 	"soft": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.0},
 }
 
@@ -73,7 +75,22 @@ static func blurred_image(src: Image, preset: Dictionary, haze: Color) -> Image:
 		_tint(img, haze, haze_k, dark_k)
 	if down > 1:
 		img.resize(w, h, Image.INTERPOLATE_CUBIC)
+	var fade := mini(int(preset.get("fade_top", 0)), h)
+	if fade > 0:
+		_fade_top(img, fade)
 	return img
+
+
+## Ramps alpha in over the top `rows` rows (smoothstep), in place.
+static func _fade_top(img: Image, rows: int) -> void:
+	for y in rows:
+		var t := (float(y) + 0.5) / float(rows)
+		var k := t * t * (3.0 - 2.0 * t)
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a > 0.0:
+				c.a *= k
+				img.set_pixel(x, y, c)
 
 
 ## Separable box blur (horizontal then vertical, `passes` times) in place on a small image. Edges

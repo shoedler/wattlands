@@ -131,19 +131,19 @@ static func scenery(id: String, cam_x: float, width: float = 640.0) -> Array[Dic
 					out.append(_light(x, 262.0, 46.0, TankPalette.FIRE, 0.55, true, h))
 					out.append(_light(x, 258.0, 16.0, TankPalette.GLOW_WARM, 0.5, false, h))
 				elif h % 4 == 1:
-					out.append(_light(x, 256.0, 10.0, TankPalette.AMBER, 0.4, false, h))
+					out.append(_light(x, 256.0, 28.0, TankPalette.AMBER, 0.32, false, h))
 			"bg_village_near":
 				if h % 3 != 0:
 					out.append(
-						_light(x, 244.0 + float(h % 18), 11.0, TankPalette.AMBER, 0.55, false, h)
+						_light(x, 244.0 + float(h % 18), 30.0, TankPalette.AMBER, 0.38, false, h)
 					)
 					out.append(
 						_light(
 							x + 22.0,
 							250.0 + float(h % 11),
-							9.0,
+							24.0,
 							TankPalette.GLOW_WARM,
-							0.45,
+							0.32,
 							false,
 							h
 						)
@@ -160,14 +160,14 @@ static func scenery(id: String, cam_x: float, width: float = 640.0) -> Array[Dic
 				if h % 6 == 1:
 					out.append(_light(x, 268.0, 50.0, TankPalette.FIRE, 0.5, true, h))
 			"bg_town_near":
-				out.append(_light(x, 252.0, 18.0, TankPalette.AMBER, 0.55, false, h))
-				out.append(_light(x + 55.0, 256.0, 14.0, TankPalette.GLOW_WARM, 0.45, false, h))
+				out.append(_light(x, 252.0, 40.0, TankPalette.AMBER, 0.4, false, h))
+				out.append(_light(x + 55.0, 256.0, 32.0, TankPalette.GLOW_WARM, 0.32, false, h))
 				if h % 5 == 0:
 					out.append(_light(x + 20.0, 240.0, 64.0, TankPalette.FIRE, 0.35, true, h))
 			"bg_depot_near":
 				if h % 3 == 0:
 					out.append(_light(x, 232.0, 36.0, TankPalette.COLD_LIGHT, 0.5, false, h))
-				out.append(_light(x + 30.0, 258.0, 12.0, TankPalette.AMBER, 0.45, false, h))
+				out.append(_light(x + 30.0, 258.0, 30.0, TankPalette.AMBER, 0.32, false, h))
 	return out
 
 

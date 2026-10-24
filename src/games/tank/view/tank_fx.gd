@@ -448,17 +448,21 @@ func dynamo_sparks(key: String, at: Vector2, frac: float, dt: float) -> void:
 func fire_and_smoke(
 	key: String, at: Vector2, burn: float, smoke: float, dt: float, plane: int = 0
 ) -> void:
-	for _i in rate(key + "_s", 4.0 * smoke, dt):
+	# Pooled soft puffs, dark soot lit warm from below over a fire, drifting downwind: each grows
+	# 2-3x and fades as it rises (never a regular stack, which reads as a coil).
+	var soot := Color(0.13, 0.135, 0.145).lerp(TankPalette.RUST, 0.35 * clampf(burn, 0.0, 1.0))
+	for _i in rate(key + "_s", 5.0 * smoke, dt):
+		var s0 := r(7.0, 12.0)
 		particles.spawn(
 			TankParticles.Kind.SMOKE,
-			at + Vector2(r(-4.0, 4.0), 0.0),
-			Vector2(r(-4.0, 10.0), -r(14.0, 26.0)),
-			r(2.6, 4.2),
-			7.0,
-			r(26.0, 40.0),
-			Color(0.28, 0.29, 0.31, 0.5 * smoke),
-			-3.0,
-			0.35,
+			at + Vector2(r(-6.0, 6.0), r(-3.0, 1.0)),
+			Vector2(r(2.0, 13.0), -r(12.0, 24.0)),
+			r(2.8, 4.6),
+			s0,
+			s0 * r(2.0, 3.0),
+			Color(soot.r, soot.g, soot.b, r(0.45, 0.65) * smoke),
+			-2.0,
+			0.3,
 			plane
 		)
 	if burn <= 0.0:

@@ -142,8 +142,8 @@ func engine_lights() -> void:
 	var power := 0.0 if input.unpowered else clampf(input.frac, 0.0, 1.4)
 	if power > 0.02:
 		var fb := origin + anchor_local("firebox") + TankSprites.size("firebox") * 0.5
-		hub.lights.add(fb, 13.0 + 11.0 * power, TankPalette.FIRE, 0.35 + 0.45 * power)
-		hub.lights.add(fb, 7.0, TankPalette.GLOW_WARM, 0.4 * power)
+		hub.lights.add(fb, 34.0 + 26.0 * power, TankPalette.FIRE, 0.3 + 0.35 * power)
+		hub.lights.add(fb, 12.0, TankPalette.GLOW_WARM, 0.45 * power)
 
 
 func paint_machinery_front(item: Node2D) -> void:

@@ -41,7 +41,7 @@ const B2 := Color("#33291f")
 const B3 := Color("#443628")
 const B4 := Color("#574634")
 const B5 := Color("#6b5842")
-const O0 := Color("#2b2a24")
+const O0 := Color("#59636c")
 const O1 := Color("#3d3c33")
 const O2 := Color("#4b5561")
 const R0 := Color("#3a2a24")
@@ -70,8 +70,13 @@ static func texture(id: String) -> Texture2D:
 	var tex: Texture2D = null
 	if ResourceLoader.exists(path):
 		tex = load(path) as Texture2D
-		if tex != null and fills_rect(id):
-			tex = ImageTexture.create_from_image(filled_image(tex.get_image(), size_of(id)))
+		if tex != null and (fills_rect(id) or is_steel(id)):
+			var img := tex.get_image()
+			if fills_rect(id):
+				img = filled_image(img, size_of(id))
+			if is_steel(id):
+				img = graded_steel(img)
+			tex = ImageTexture.create_from_image(img)
 	if tex == null:
 		tex = ImageTexture.create_from_image(placeholder_image(id))
 		if not _logged.has(id):
@@ -89,10 +94,13 @@ static func fills_rect(id: String) -> bool:
 	return id.begins_with("hull_") or id == "boss_hull"
 
 
-## `src` cropped to its opaque bounds and resampled (Lanczos) to `size`, then put back on the
-## palette: alpha thresholded at 0.5 and every opaque pixel snapped to the nearest palette colour,
-## so the result passes the same checks as a pixelated sprite. A sprite that already fills its
-## rect comes back unchanged.
+## `src` cropped to its opaque bounds and fitted to `size` without stretching its plates: scaled
+## (Lanczos) to the rect's height keeping its aspect, then widened by repeating a band of armour
+## columns from the middle (the image model holds 3:1 at most, the hulls are 3.6:1), so rivet
+## spacing stays true. Only a too-wide result is squeezed. Then put back on the palette: alpha
+## thresholded at 0.5 and every opaque pixel snapped to the nearest palette colour, so the result
+## passes the same checks as a pixelated sprite. A sprite that already fills its rect comes back
+## unchanged.
 static func filled_image(src: Image, size: Vector2i) -> Image:
 	var img := src.duplicate() as Image
 	if img.is_compressed():
@@ -102,7 +110,13 @@ static func filled_image(src: Image, size: Vector2i) -> Image:
 	if used.size == Vector2i.ZERO or (used.position == Vector2i.ZERO and used.size == size):
 		return img
 	img = img.get_region(used)
-	img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+	var fit_w := maxi(1, roundi(float(used.size.x) * float(size.y) / float(used.size.y)))
+	if fit_w != used.size.x or size.y != used.size.y:
+		img.resize(fit_w, size.y, Image.INTERPOLATE_LANCZOS)
+	if fit_w < size.x:
+		img = widened(img, size.x)
+	elif fit_w > size.x:
+		img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
 	var pal := palette()
 	var seen := {}
 	for y in size.y:
@@ -116,6 +130,137 @@ static func filled_image(src: Image, size: Vector2i) -> Image:
 				seen[key] = _nearest(c, pal)
 			img.set_pixel(x, y, seen[key])
 	return img
+
+
+## `img` widened to `width` by repeating the band of columns just left of its middle (a hull's plain
+## armour panels), so the ends (rear deck, glacis) keep their shape and nothing is stretched.
+static func widened(img: Image, width: int) -> Image:
+	var w := img.get_width()
+	var h := img.get_height()
+	var extra := width - w
+	if extra <= 0:
+		return img
+	var mid := w / 2
+	var band := clampi(mini(extra, mid), 1, maxi(mid, 1))
+	var out := Image.create(width, h, false, Image.FORMAT_RGBA8)
+	out.blit_rect(img, Rect2i(0, 0, mid, h), Vector2i.ZERO)
+	var x := mid
+	var left := extra
+	while left > 0:
+		var n := mini(band, left)
+		out.blit_rect(img, Rect2i(mid - band, 0, n, h), Vector2i(x, 0))
+		x += n
+		left -= n
+	out.blit_rect(img, Rect2i(mid, 0, w - mid, h), Vector2i(x, 0))
+	return out
+
+
+## True for the generated sprites whose steel is regraded at load (graded_steel): hulls, turrets,
+## enemies, the Behemoth, rooms, props and the machinery bodies. Backdrops, flames, sparks, puffs
+## and explosions keep their colours.
+static func is_steel(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_", "room_", "prop_"]:
+		if id.begins_with(prefix):
+			return true
+	return (
+		id
+		in [
+			"diesel_block",
+			"gearbox",
+			"dynamo_housing",
+			"boiler",
+			"firebox",
+			"flywheel_large",
+			"flywheel_small",
+			"gear_large",
+			"gear_medium",
+			"road_wheel",
+			"drive_sprocket",
+			"idler_wheel",
+			"shell_rack",
+			"depot_gate",
+		]
+	)
+
+
+## The art direction in the pipeline, not only in the prompts (brief 3: steel grey-black, lights
+## the only near-saturated pixels): every opaque pixel of a steel sprite loses its saturation
+## (HSV s <= 0.15 above value 0.25, so dark rust and mud survive as accents) and may not use a
+## light colour (fire, lamp or arc); it snaps to the nearest remaining palette colour. Then one
+## pass flattens low-contrast mottling: a pixel within one ramp step of its 3 x 3 median takes the
+## median's colour, while rivets, seams and edges (higher contrast) stay.
+static func graded_steel(src: Image) -> Image:
+	var img := src.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var lights := light_colours()
+	var keep: Array[Color] = []
+	for p in palette():
+		if not lights.has(p.to_rgba32()):
+			keep.append(p)
+	var remap := {}
+	var w := img.get_width()
+	var h := img.get_height()
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			var key := c.to_rgba32()
+			if not remap.has(key):
+				remap[key] = _steel_colour(c, lights.has(key), keep)
+			img.set_pixel(x, y, remap[key])
+	return _flatten_mottling(img)
+
+
+## The seven light colours of the palette (warm fire and lamp, cold arc) as RGBA32 keys.
+static func light_colours() -> Dictionary:
+	var out := {}
+	for c: Color in [F0, F1, F2, F3, C1, C2, C3]:
+		out[c.to_rgba32()] = true
+	return out
+
+
+static func _steel_colour(c: Color, is_light: bool, keep: Array[Color]) -> Color:
+	var v := minf(c.v, 0.55) if is_light else c.v
+	var s := c.s
+	if v > 0.25 or is_light:
+		s = minf(s, 0.15)
+	var g := Color.from_hsv(c.h, s, v)
+	return _nearest(g, keep)
+
+
+static func _flatten_mottling(src: Image) -> Image:
+	var w := src.get_width()
+	var h := src.get_height()
+	var out := src.duplicate() as Image
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var c := src.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			var lums: Array[float] = []
+			var cols: Array[Color] = []
+			var full := true
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					var n := src.get_pixel(x + dx, y + dy)
+					if n.a < 0.5:
+						full = false
+						break
+					lums.append(n.get_luminance())
+					cols.append(n)
+				if not full:
+					break
+			if not full:
+				continue
+			var sorted := lums.duplicate()
+			sorted.sort()
+			var med := lums.find(sorted[4])
+			if absf(c.get_luminance() - lums[med]) < 0.055:
+				out.set_pixel(x, y, cols[med])
+	return out
 
 
 static func _nearest(c: Color, pal: Array[Color]) -> Color:
@@ -314,8 +459,51 @@ static func _draw(c: Canvas, id: String) -> bool:
 	if not is_opaque(id) and not is_strip(id):
 		if id == "firebox" or id == "shell_rack":
 			c.round_corners()
-		c.outline(G1)
+	if is_slab(id):
+		_slab_grade(c)
 	return true
+
+
+## True for the steel and concrete sprites that get the soft top-lit slab shading (_slab_grade).
+static func is_slab(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_"]:
+		if id.begins_with(prefix):
+			return true
+	return (
+		id
+		in [
+			"prop_tank_traps",
+			"prop_wreck_barricade",
+			"prop_rubble",
+			"depot_gate",
+			"diesel_block",
+			"gearbox",
+			"dynamo_housing",
+			"shell_rack",
+		]
+	)
+
+
+## Soft top-lit shading without noise or outlines: every grey-ramp pixel steps along the ramp by its
+## height in the sprite (top quarter one step lighter, then one, two and three steps darker), so
+## plates read as a 4-step gradient from a lit top edge to a near-black bottom while seams and
+## rivets keep their contrast. Black, the two brightest greys and every non-grey colour stay.
+static func _slab_grade(c: Canvas) -> void:
+	var ramp: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
+	var index := {}
+	for i in ramp.size():
+		index[ramp[i].to_rgba32()] = i
+	var shifts: Array[int] = [1, -1, -2, -3]
+	for y in c.h:
+		var shift: int = shifts[clampi(4 * y / maxi(c.h, 1), 0, 3)]
+		for x in c.w:
+			var col := c.img.get_pixel(x, y)
+			if col.a < 0.5:
+				continue
+			var k: int = index.get(col.to_rgba32(), -1)
+			if k < 1 or k > 9:
+				continue
+			c.img.set_pixel(x, y, ramp[clampi(k + shift, 1, 9)])
 
 
 ## An id art.json does not list: a flat block with a frame (an unknown id never crashes).
@@ -417,7 +605,7 @@ static func _hull(c: Canvas, mounts: bool) -> void:
 	# Rivets above and below the band.
 	_rivets(c, 14, w - 24, top - 5, 7, G9, G3)
 	_rivets(c, 8, w - 10, bot + 5, 8, G8, G2)
-	_streaks(c, 14, w - 24, top - 3, 5, R1)
+	_streaks(c, 14, w - 24, top - 3, 5, R0)
 	_streaks(c, 8, w - 10, bot + 7, 4, R0)
 	# Soot on the roof, rust low down.
 	c.speckle(0, 0, w, top, G3, 0.06, 1, true)
@@ -481,7 +669,7 @@ static func _turret(c: Canvas) -> void:
 	c.line(w - 11, my - 8, w - 2, my - 8, G9)
 	c.speckle(0, 0, w, h, G3, 0.1, 1, true)
 	c.speckle(0, 4, w, h - 8, R1, 0.05, 2, true)
-	_streaks(c, 10, w - 14, 9, 4, R1)
+	_streaks(c, 10, w - 14, 9, 4, R0)
 
 
 static func _turret_secondary(c: Canvas) -> void:
@@ -696,26 +884,26 @@ static func _spark(c: Canvas) -> void:
 static func _boiler(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(2, 6, w - 4, h - 8, R1)
-	c.rect(0, 9, w, h - 14, R1)
-	c.rect(2, 6, w - 4, 3, R2)
-	c.rect(2, 6, w - 4, 1, G9)
-	c.rect(2, h - 4, w - 4, 3, R0)
+	# Desaturated lagging (brief 3: the only orange in the room is the flame).
+	c.rect(2, 6, w - 4, h - 8, B3)
+	c.rect(0, 9, w, h - 14, B3)
+	c.rect(2, 6, w - 4, 3, B4)
+	c.rect(2, 6, w - 4, 1, G8)
+	c.rect(2, h - 4, w - 4, 3, B2)
 	for x: int in [8, 18, 28, 36]:
 		c.rect(x, 6, 2, h - 8, G4)
 		c.rect(x + 2, 6, 1, h - 8, G8)
-	_rivets(c, 4, w - 4, 13, 5, G9, R0)
+	_rivets(c, 4, w - 4, 13, 5, G8, B2)
 	c.rect(28, 0, 5, 7, G5)
 	c.rect(28, 0, 5, 1, G9)
-	c.rect(8, 2, 9, 5, R2)
+	c.rect(8, 2, 9, 5, B4)
 	c.rect(8, 2, 9, 1, G9)
 	c.disc(20.0, 11.0, 6.0, G4)
 	c.disc(20.0, 11.0, 5.0, G11)
 	c.disc(20.0, 11.0, 3.4, G2)
 	c.px(20, 8, G10)
 	c.px(21, 10, F0)
-	c.speckle(0, 0, w, h, R0, 0.12, 3, true)
-	c.speckle(0, 0, w, h, G3, 0.06, 5, true)
+	c.speckle(0, 0, w, h, B2, 0.12, 3, true)
 
 
 ## The firebox door: an iron box with an open hatch; the flame sprite sits in the opening.
@@ -985,20 +1173,14 @@ static func _enemy_dugin(c: Canvas) -> void:
 	c.rect(2, 7, 14, 3, G4)
 	c.rect(2, 7, 14, 1, G8)
 	c.rect(0, 6, 4, 5, G3)
-	# The concrete revetment with a firing slit and a stepped top.
-	c.rect(0, 14, 56, 22, G7)
-	c.rect(0, 14, 56, 2, G9)
-	c.rect(0, 16, 56, 1, G5)
-	c.rect(6, 19, 30, 3, G1)
-	c.rect(0, 28, 56, 8, G6)
-	_seams(c, 14, 50, 22, 36, 14, G4, G8)
-	c.speckle(0, 14, 56, 22, G5, 0.2, 2, true)
-	c.speckle(0, 14, 56, 22, G9, 0.08, 3, true)
-	c.rect(0, 35, 72, 1, G3)
-	# Sandbag course along the ground.
-	for i in 6:
-		c.rect(2 + i * 9, 32, 8, 4, B4)
-		c.rect(2 + i * 9, 32, 8, 1, B5)
+	# The concrete revetment: two flat tones, a chamfered top edge, a couple of chips; no marks.
+	c.poly([0, 18, 4, 14, 56, 14, 56, 36, 0, 36], G6)
+	c.poly([0, 18, 4, 14, 56, 14, 56, 17, 4, 17, 0, 21], G7)
+	c.rect(0, 28, 56, 8, G5)
+	c.poly([20, 14, 24, 14, 22, 16], CLEAR)
+	c.poly([46, 14, 52, 14, 50, 17, 47, 16], G5)
+	# Packed earth heaped in front along the ground.
+	c.poly([0, 36, 6, 31, 30, 30, 50, 32, 60, 36], B1)
 
 
 # --- The Behemoth --------------------------------------------------------------------------------------
@@ -1020,7 +1202,7 @@ static func _boss_hull(c: Canvas) -> void:
 	for y: int in [22, 48, 72]:
 		c.rect(4, y, w - 8, 1, G3)
 		_rivets(c, 8, w - 10, y + 2, 8, G8, G2)
-	_streaks(c, 8, w - 10, 25, 7, R1)
+	_streaks(c, 8, w - 10, 25, 7, R0)
 	_streaks(c, 8, w - 10, 51, 6, R0)
 	# The turret seat and its ring.
 	c.rect(96, 4, 160, 4, G7)
@@ -1314,7 +1496,7 @@ static func _glow(c: Canvas, cx: float, cy: float, r: float) -> void:
 			if d >= 1.0:
 				continue
 			var level := (1.0 - d) * (1.0 - d)
-			if c.bayer(x, y) < level * 0.9 and c.solid(x, y):
+			if level > 0.08 and c.solid(x, y):
 				var col := R0
 				if level > 0.55:
 					col = R2
@@ -1331,8 +1513,8 @@ static func _cold_glow(c: Canvas, cx: float, cy: float, r: float) -> void:
 			if d >= 1.0:
 				continue
 			var level := (1.0 - d) * (1.0 - d)
-			if c.bayer(x, y) < level * 0.8 and c.solid(x, y):
-				c.px(x, y, C0 if level < 0.35 else C1)
+			if level > 0.1 and c.solid(x, y):
+				c.px(x, y, C0 if level < 0.45 else C1)
 
 
 ## A fire: flame tongues on a base, hot colours.
@@ -1403,9 +1585,9 @@ static func _fields(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
 	# Fields in receding strips, furrows, and a hedgerow along the front.
-	c.rect(0, 92, w, h - 92, O0)
+	c.rect(0, 92, w, h - 92, B1)
 	for i in 6:
-		c.rect(0, 92 + i * 8, w, 4, O1 if i % 2 == 0 else O0)
+		c.rect(0, 92 + i * 8, w, 4, O1 if i % 2 == 0 else B1)
 	for x in range(0, w, 3):
 		c.px(x, 100 + (x * 7) % 31, O2)
 	# Hedgerow: bumpy dark band with leaf speckle.
@@ -1413,20 +1595,20 @@ static func _fields(c: Canvas) -> void:
 		var top := 80 + int(_ridge(x, w, 4.0, 3.0, 1.1) + c.noise(x / 3, 1, 33) * 4.0)
 		c.rect(x, top, 1, 96 - top, G2)
 		if c.noise(x, 2, 33) < 0.18:
-			c.px(x, top + 2, O0)
+			c.px(x, top + 2, O1)
 	c.rect(0, 94, w, 3, B1)
 	# Poplars along the road, left half; a lone row right.
 	for x in range(20, 500, 29):
-		_poplar(c, x, 94, 58 + int(c.noise(x, 3, 34) * 24.0), G2, O0)
+		_poplar(c, x, 94, 58 + int(c.noise(x, 3, 34) * 24.0), G2, O1)
 	for x in range(700, 940, 34):
-		_poplar(c, x, 94, 54 + int(c.noise(x, 3, 34) * 20.0), G3, O0)
+		_poplar(c, x, 94, 54 + int(c.noise(x, 3, 34) * 20.0), G3, O1)
 	# Fence posts.
 	for x in range(0, w, 17):
 		c.rect(x, 96, 2, 7, B3)
 	c.rect(0, 98, w, 1, B3)
 	# The burning farmstead.
 	_glow(c, 600.0, 60.0, 56.0)
-	_house(c, 575, 96, 44, 22, 14, O0, B1, 0.2)
+	_house(c, 575, 96, 44, 22, 14, G3, B1, 0.2)
 	c.rect(618, 80, 24, 16, O1)
 	c.poly([616, 80, 630, 70, 644, 80], B1)
 	_fire(c, 592, 70, 1.5)
@@ -1445,9 +1627,9 @@ static func _village(c: Canvas) -> void:
 	# Orchard trees on the left.
 	for x in range(10, 220, 24):
 		c.rect(x, 86, 2, 14, B1)
-		c.disc(x + 1.0, 80.0, 9.0, O0)
+		c.disc(x + 1.0, 80.0, 9.0, O1)
 		c.disc(x - 3.0, 83.0, 6.0, O1)
-		c.disc(x + 5.0, 82.0, 6.0, O0)
+		c.disc(x + 5.0, 82.0, 6.0, G3)
 	# Houses along the street.
 	var hx := 230
 	var i := 0
@@ -1648,7 +1830,7 @@ static func _ground(c: Canvas) -> void:
 	var h := c.h
 	c.fill(B2)
 	# Layers from the grass verge at the top to the mud of the road.
-	c.rect(0, 0, w, 6, O0)
+	c.rect(0, 0, w, 6, B1)
 	for x in w:
 		if c.noise(x, 1, 81) < 0.6:
 			c.px(x, 5 + int(c.noise(x, 2, 81) * 2.0), O1)
@@ -1722,7 +1904,7 @@ static func _picker(c: Canvas) -> void:
 	_smoke_column(c, 246, 60, 44, G4, G5)
 	# The road.
 	c.rect(0, 150, w, h - 150, B2)
-	c.rect(0, 150, w, 4, O0)
+	c.rect(0, 150, w, 4, B1)
 	c.rect(0, 160, w, 20, B1)
 	c.ellipse(60.0, 172.0, 24.0, 3.0, C0)
 	c.hline(48, 64, 171, C1)
@@ -1951,7 +2133,7 @@ class Canvas:
 				var dx := (x + 0.5 - cx) / rx
 				var dy := (y + 0.5 - cy) / ry
 				var d2 := dx * dx + dy * dy
-				if d2 <= 1.0 and bayer(x, y) < (1.0 - d2) * 1.1:
+				if d2 <= 0.6:
 					img.set_pixel(x, y, col)
 
 	func ring(cx: float, cy: float, r_out: float, r_in: float, col: Color) -> void:
@@ -2016,16 +2198,28 @@ class Canvas:
 					rect(xa, y, xb - xa, 1, col)
 				k += 2
 
-	## Random pixels of `col` in the rect at `density`; on_solid keeps them off transparent pixels.
+	## Weathering without per-pixel noise: sparse soft streaks of `col` running down in the rect
+	## (soot, rust or damp), 2 px wide and 2-7 px long, on about `density` / 2 of the column pairs;
+	## on_solid keeps them off transparent pixels.
 	func speckle(
 		x: int, y: int, rw: int, rh: int, col: Color, density: float, salt: int, on_solid: bool
 	) -> void:
-		for yy in range(maxi(y, 0), mini(y + rh, h)):
-			for xx in range(maxi(x, 0), mini(x + rw, w)):
-				if noise(xx, yy, salt) < density and (not on_solid or solid(xx, yy)):
-					img.set_pixel(xx, yy, col)
+		var y_end := mini(y + rh, h)
+		var xx := maxi(x, 0)
+		while xx < mini(x + rw, w):
+			if noise(xx, 0, salt) < density * 0.5:
+				var y0 := y + int(noise(xx, 1, salt) * float(rh) * 0.8)
+				var n := 2 + int(noise(xx, 2, salt) * 6.0)
+				for k in n:
+					var yy := y0 + k
+					if yy < 0 or yy >= y_end:
+						break
+					for dx in 2:
+						if xx + dx < w and (not on_solid or solid(xx + dx, yy)):
+							img.set_pixel(xx + dx, yy, col)
+			xx += 2
 
-	## A vertical ordered-dither gradient through `cols` over the rect.
+	## A vertical banded gradient through `cols` over the rect (flat steps, no dither).
 	func gradient_v(x: int, y: int, rw: int, rh: int, cols: Array[Color]) -> void:
 		var n := cols.size()
 		if n < 2 or rh < 1:
@@ -2034,10 +2228,8 @@ class Canvas:
 			return
 		for yy in rh:
 			var f := float(yy) / maxf(rh - 1, 1) * (n - 1)
-			var i := mini(int(floor(f)), n - 2)
-			var frac := f - i
+			var col: Color = cols[clampi(int(round(f)), 0, n - 1)]
 			for xx in rw:
-				var col: Color = cols[i + 1] if bayer(x + xx, y + yy) < frac else cols[i]
 				px(x + xx, y + yy, col)
 
 	## Darkens the rim: every solid pixel with a transparent 4-neighbour inside the image becomes

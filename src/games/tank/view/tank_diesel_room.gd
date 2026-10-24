@@ -89,7 +89,9 @@ func engine_lights() -> void:
 	for i in windows.size():
 		var stroke := 1.0 - clampf(pistons[i].offset() / maxf(travel, 1.0), 0.0, 1.0)
 		var c := origin + windows[i].position + windows[i].size * 0.5
-		hub.lights.add(c, 9.0 + 7.0 * glow, TankPalette.FIRE, glow * 0.55 * (0.45 + 0.55 * stroke))
+		hub.lights.add(
+			c, 22.0 + 16.0 * glow, TankPalette.FIRE, glow * 0.42 * (0.45 + 0.55 * stroke)
+		)
 
 
 func paint_machinery_front(item: Node2D) -> void:

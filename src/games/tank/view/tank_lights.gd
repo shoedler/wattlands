@@ -67,7 +67,7 @@ func _draw() -> void:
 	if wash > 0.004:
 		draw_rect(
 			Rect2(0, 0, TankConst.SCREEN_W, TankConst.SCREEN_H),
-			Color(wash_color.r, wash_color.g, wash_color.b, wash * 0.16)
+			Color(wash_color.r, wash_color.g, wash_color.b, wash * wash * 0.3)
 		)
 	for i in count:
 		var r := _radius[i]

@@ -74,6 +74,10 @@ func assemble(p_tank: String, p_hub: TankRigHub) -> void:
 	hull_sprite.texture = TankSprites.tex(TankSprites.hull_id(tank))
 	hull_sprite.centered = false
 	add_child(hull_sprite)
+	var cutaway := TankPainter.new()
+	cutaway.name = "Cutaway"
+	cutaway.painter = _paint_cutaway
+	add_child(cutaway)
 	_build_rooms()
 	_build_links()
 	_build_stack()
@@ -82,6 +86,27 @@ func assemble(p_tank: String, p_hub: TankRigHub) -> void:
 	dozer.name = "Dozer"
 	dozer.painter = _paint_dozer
 	add_child(dozer)
+
+
+## The x-ray cut behind the rooms: one near-black recess spanning every room rect (grown by the
+## bulkhead width), with a bevel (a lit lower lip, a shadowed upper edge), so the walls between
+## rooms are dark and each room is marked only by its own light.
+func _paint_cutaway(item: Node2D) -> void:
+	var band := Rect2()
+	var first := true
+	for rd: Variant in def.get("rooms", []):
+		var r := TankRigs.rect((rd as Dictionary).get("rect", [0, 0, 96, 48]))
+		band = r if first else band.merge(r)
+		first = false
+	if first:
+		return
+	band = band.grow(3.0)
+	item.draw_rect(band.grow(1.0), TankPalette.IRON_DARK)
+	item.draw_rect(band, TankPalette.SOOT)
+	item.draw_rect(Rect2(band.position, Vector2(band.size.x, 1.0)), TankPalette.BLACK)
+	item.draw_rect(
+		Rect2(Vector2(band.position.x, band.end.y), Vector2(band.size.x, 1.0)), TankPalette.STEEL
+	)
 
 
 func _build_rooms() -> void:

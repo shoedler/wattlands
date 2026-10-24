@@ -128,11 +128,13 @@ func _draw() -> void:
 	_frame(self, Rect2(Vector2.ZERO, rect.size))
 
 
-## The riveted frame: a two-pixel steel border, an inner shadow line, corner plates and rivets.
+## The riveted frame, dark like the bulkheads (brief 3: the rooms are dark boxes marked by their own
+## light): a two-pixel coal border with a black inner bevel, iron corner plates and dim rivets.
 static func _frame(item: CanvasItem, r: Rect2) -> void:
-	item.draw_rect(r, TankPalette.STEEL_DARK, false, 2.0)
-	item.draw_rect(r.grow(-2.0), TankPalette.COAL, false, 1.0)
-	var plate := TankPalette.STEEL
+	item.draw_rect(r, TankPalette.COAL, false, 2.0)
+	item.draw_rect(r.grow(-2.0), TankPalette.BLACK, false, 1.0)
+	item.draw_rect(Rect2(r.position.x + 2.0, r.end.y - 3.0, r.size.x - 4.0, 1.0), TankPalette.IRON)
+	var plate := TankPalette.IRON
 	for corner: Vector2 in [
 		r.position,
 		Vector2(r.end.x - 6.0, r.position.y),
@@ -140,17 +142,17 @@ static func _frame(item: CanvasItem, r: Rect2) -> void:
 		r.end - Vector2(6, 6)
 	]:
 		item.draw_rect(Rect2(corner, Vector2(6, 6)), plate)
-		item.draw_rect(Rect2(corner + Vector2(2, 2), Vector2(1, 1)), TankPalette.STEEL_BRIGHT)
+		item.draw_rect(Rect2(corner + Vector2(2, 2), Vector2(1, 1)), TankPalette.STEEL)
 	var x := r.position.x + 12.0
 	while x < r.end.x - 10.0:
-		item.draw_rect(Rect2(x, r.position.y + 1.0, 1, 1), TankPalette.STEEL_BRIGHT)
-		item.draw_rect(Rect2(x, r.end.y - 2.0, 1, 1), TankPalette.STEEL_BRIGHT)
-		x += 10.0
+		item.draw_rect(Rect2(x, r.position.y + 1.0, 1, 1), TankPalette.STEEL_DARK)
+		item.draw_rect(Rect2(x, r.end.y - 2.0, 1, 1), TankPalette.STEEL_DARK)
+		x += 8.0
 	var y := r.position.y + 12.0
 	while y < r.end.y - 10.0:
-		item.draw_rect(Rect2(r.position.x + 1.0, y, 1, 1), TankPalette.STEEL_BRIGHT)
-		item.draw_rect(Rect2(r.end.x - 2.0, y, 1, 1), TankPalette.STEEL_BRIGHT)
-		y += 10.0
+		item.draw_rect(Rect2(r.position.x + 1.0, y, 1, 1), TankPalette.STEEL_DARK)
+		item.draw_rect(Rect2(r.end.x - 2.0, y, 1, 1), TankPalette.STEEL_DARK)
+		y += 8.0
 
 
 func _paint_front(item: Node2D) -> void:
@@ -195,7 +197,11 @@ func _lights() -> void:
 		var look := input.look if not input.look.is_empty() else Wl.slot_look(maxi(input.slot, 0))
 		var col: Color = look.get("color", Color.WHITE)
 		var p := pulse()
-		hub.lights.add(origin + anchor_local("lamp"), 17.0 + 7.0 * p, col, 0.5 + 0.4 * p)
+		# A wide soft halo washing the dark room in the rider's colour, and a tight hot core.
+		hub.lights.add(origin + anchor_local("lamp"), 50.0 + 18.0 * p, col, 0.3 + 0.25 * p)
+		hub.lights.add(
+			origin + anchor_local("lamp"), 9.0 + 3.0 * p, col.lerp(Color.WHITE, 0.4), 0.8
+		)
 		hub.lights.add(
 			origin + rect.size * 0.5,
 			rect.size.x * 0.7,
@@ -208,5 +214,5 @@ func _lights() -> void:
 		)
 		var k := flare_s / FLARE_S
 		var flare_color: Color = flare_look.get("color", Color.WHITE)
-		hub.lights.add(origin + anchor_local("lamp"), 26.0 + 14.0 * k, flare_color, 0.9 * k)
+		hub.lights.add(origin + anchor_local("lamp"), 60.0 + 30.0 * k, flare_color, 0.7 * k)
 	engine_lights()

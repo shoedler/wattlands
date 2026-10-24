@@ -105,7 +105,7 @@ func engine_lights() -> void:
 	if arc > 0.02:
 		var flicker := 0.8 + 0.2 * sin(lamp_phase * TAU * 3.0 + armature.revolutions() * 9.0)
 		hub.lights.add(
-			origin + armature_pos, 14.0 + 12.0 * arc, TankPalette.COLD_LIGHT, 0.45 * arc * flicker
+			origin + armature_pos, 36.0 + 26.0 * arc, TankPalette.COLD_LIGHT, 0.4 * arc * flicker
 		)
 	for i in jars.size():
 		var lv := jar_level(i)
