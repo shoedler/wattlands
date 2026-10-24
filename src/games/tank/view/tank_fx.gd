@@ -16,18 +16,40 @@ const FLASH_S := 0.13
 ## Heat shimmer quads drawn at once (stack mouths); the strongest requests of a frame win.
 const SHIMMER_MAX := 3
 ## A shimmer quad's size (art px): it stands on the stack mouth.
-const SHIMMER_SIZE := Vector2(14.0, 26.0)
+const SHIMMER_SIZE := Vector2(16.0, 32.0)
 ## The fastest a source can move (art px/s; the hull tops out near 120): a camera jump (a fast
 ## forward, a new stage) is not motion, so faster readings are ignored.
 const MAX_SOURCE_V := 160.0
 ## How much of a source's own motion its smoke keeps as it leaves (the rest it loses to drag).
-const SMOKE_CARRY := 0.85
+const SMOKE_CARRY := 0.6
 ## Diesel exhaust colours (the lit underside; the top of each puff is about half as bright, see
-## TankFxLayer.billow): a pale wisp at idle, iron grey at tempo, black in a sprint, so a train of
-## puffs reads against both the dark sky and the haze band.
+## TankFxLayer.billow): a pale wisp at idle, dark iron at tempo (its shaded tops darker than the
+## night sky, so the column reads as smoke against it rather than matching it), black in a sprint.
 const EXHAUST_IDLE := Color("#62676d")
-const EXHAUST_TEMPO := Color("#3a3f45")
+const EXHAUST_TEMPO := Color("#2c3035")
 const EXHAUST_SPRINT := Color(0.07, 0.072, 0.08)
+## Brass casings fall under this gravity (art px/s^2): a slow enough arc to follow.
+const BRASS_GRAVITY := 300.0
+## The road dust a gun blast kicks up, and the dust and mud the tracks throw (lit a little by the
+## rooms and fires above, so it reads against the dark road).
+const MUZZLE_DUST := Color(0.52, 0.46, 0.36, 0.75)
+const TRACK_DUST := Color(0.55, 0.48, 0.38, 0.72)
+const TRACK_MUD := Color(0.3, 0.24, 0.17, 1.0)
+## The fastest a dynamo spark climbs (art px/s): under its gravity it rises at most about 3 px.
+const SPARK_MAX_RISE_V := 28.0
+## Hull speed (m/s) where the tracks start to throw dust, and where it is in full (about 20 km/h).
+const DUST_MIN_MPS := 0.8
+const DUST_FULL_MPS := 5.6
+## How far ahead of the rear sprocket (art px) the lower track run raises dust.
+const DUST_RUN_PX := 70.0
+## The deck vent's plume: each stroke feeds the column for PLUME_S at PLUME_RATE puffs/s, small
+## grey-white puffs that swell, rise about 30 px and drift back, never brighter than PLUME_CORE (below
+## the lamps).
+const PLUME_S := 0.4
+const PLUME_RATE := 18.0
+const PLUME_CORE := Color("#cfd0cf")
+## The air's drift (art px/s, toward the rear): a standing tank's plumes still lean back.
+const PLUME_WIND := 6.0
 const SHIMMER_SHADER := """
 shader_type canvas_item;
 uniform sampler2D screen_tex : hint_screen_texture, filter_nearest;
@@ -39,8 +61,12 @@ void fragment() {
 	float fade = smoothstep(0.0, 0.12, up) * (1.0 - smoothstep(0.4, 1.0, up)) * side;
 	float wob = sin(UV.y * 13.0 + TIME * 10.0 + phase);
 	wob += 0.6 * sin(UV.y * 29.0 - TIME * 16.0 + phase * 1.7);
-	vec2 off = vec2(wob * SCREEN_PIXEL_SIZE.x * 1.4 * strength, 0.0);
+	vec2 off = vec2(wob * SCREEN_PIXEL_SIZE.x * 2.2 * strength, 0.0);
 	vec4 c = texture(screen_tex, SCREEN_UV + off);
+	// Hot air also bends the light: soft bands a shade lighter and darker that ride up with the
+	// wobble over a faint warm lift, so the shimmer shows over flat sky too, not only over edges.
+	float band = sin(UV.y * 20.0 - TIME * 9.0 + phase * 0.7 + wob * 0.8);
+	c.rgb = c.rgb * (1.0 + 0.22 * band * strength) + vec3(0.035, 0.026, 0.014) * strength;
 	COLOR = vec4(c.rgb, fade * clamp(strength, 0.0, 1.0));
 }
 """
@@ -72,12 +98,20 @@ var _src: Dictionary = {}
 var _heat: Array[Array] = []
 var _shimmer: Array[ColorRect] = []
 var _back_copy: BackBufferCopy = null
+## The deck vent's column: where its mouth is and how long the last stroke still feeds it (s).
+var _plume_at: Vector2 = Vector2.ZERO
+var _plume_left: float = 0.0
 
 
 func _init() -> void:
-	# The heat shimmer re-reads what is already drawn (the rig and the planes) and shifts it by a
-	# pixel in waves just above the stack mouth: a fresh back-buffer copy, then up to SHIMMER_MAX
-	# small quads, all under the smoke. Built once; no frame creates a texture or a node.
+	alpha_layer = TankFxLayer.new(false)
+	alpha_layer.name = "SmokeLayer"
+	alpha_layer.particles = particles
+	add_child(alpha_layer)
+	# The heat shimmer re-reads what is already drawn (the planes, the rig and the young smoke
+	# leaving the mouth) and shifts it by a pixel or two in waves just above the stack mouth, so
+	# the stack's cap and the first puffs waver: a fresh back-buffer copy, then up to SHIMMER_MAX
+	# small quads, under the fire and sparks. Built once; no frame creates a texture or a node.
 	_back_copy = BackBufferCopy.new()
 	_back_copy.name = "ShimmerCopy"
 	_back_copy.copy_mode = BackBufferCopy.COPY_MODE_VIEWPORT
@@ -97,10 +131,6 @@ func _init() -> void:
 		q.visible = false
 		add_child(q)
 		_shimmer.append(q)
-	alpha_layer = TankFxLayer.new(false)
-	alpha_layer.name = "SmokeLayer"
-	alpha_layer.particles = particles
-	add_child(alpha_layer)
 	add_layer = TankFxLayer.new(true)
 	add_layer.name = "FireLayer"
 	add_layer.particles = particles
@@ -134,6 +164,7 @@ func step(dt: float, scroll_px: float = 0.0) -> void:
 		var v := scroll_px / dt
 		scroll_v = lerpf(scroll_v, v if absf(v) <= MAX_SOURCE_V else scroll_v, 0.3)
 	flash = maxf(0.0, flash - dt / FLASH_S)
+	_feed_plume(dt)
 	_place_shimmer()
 	alpha_layer.queue_redraw()
 	add_layer.queue_redraw()
@@ -187,7 +218,8 @@ func _place_shimmer() -> void:
 		q.visible = i < shimmer_live
 		if q.visible:
 			var h: Array = _heat[i]
-			q.position = ((h[0] as Vector2) - Vector2(SHIMMER_SIZE.x * 0.5, SHIMMER_SIZE.y)).round()
+			var foot := Vector2(SHIMMER_SIZE.x * 0.5, SHIMMER_SIZE.y - 3.0)
+			q.position = ((h[0] as Vector2) - foot).round()
 			(q.material as ShaderMaterial).set_shader_parameter("strength", float(h[1]))
 	_back_copy.visible = shimmer_live > 0
 	_heat.clear()
@@ -282,29 +314,34 @@ func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bo
 		)
 	if ground_dust:
 		var gy := float(TankConst.GROUND_Y) - 2.0
-		# The blast kicks the dust up off the road below and ahead of the muzzle.
-		for _i in _count(8):
+		# The blast kicks the dust up off the road below and ahead of the muzzle: a low, wide
+		# burst that rolls out along the ground and climbs clear of the road's dark edge.
+		for k in _count(12):
+			var side := -1.0 if k % 3 == 0 else 1.0
 			particles.spawn(
 				TankParticles.Kind.DUST,
-				Vector2(at.x + r(-6.0, 34.0), gy),
-				Vector2(r(-30.0, 70.0), r(-30.0, -8.0)),
-				r(0.9, 1.6),
-				8.0,
-				r(24.0, 36.0),
-				Color(0.4, 0.33, 0.25, 0.6),
-				0.0,
-				1.4
+				Vector2(at.x + r(-8.0, 36.0), gy - r(0.0, 3.0)),
+				Vector2(side * r(20.0, 85.0), -r(22.0, 60.0)),
+				r(1.1, 1.9),
+				r(6.0, 10.0),
+				r(28.0, 44.0),
+				MUZZLE_DUST,
+				-8.0,
+				1.5
 			)
 
 
 ## A spent casing leaves the breech at `at` (dir: roughly up and back).
 func brass(at: Vector2, dir: Vector2) -> void:
 	# It leaves the moving hull at the hull's speed, then lies where it lands on the road.
-	var v := dir.rotated(r(-0.3, 0.3)) * r(45.0, 80.0) + Vector2(scroll_v, r(-80.0, -50.0))
+	# A short visible arc: up 8-15 px, then down past the hull's side, tumbling (16-26 rad/s, so it
+	# glints about once per half turn; see TankFxLayer._draw_brass).
+	var v := dir.rotated(r(-0.25, 0.25)) * r(40.0, 60.0) + Vector2(scroll_v, -r(42.0, 58.0))
 	if particles.spawn(
-		TankParticles.Kind.BRASS, at, v, 2.4, 3.0, 3.0, TankPalette.BRASS, 380.0, 0.2
+		TankParticles.Kind.BRASS, at, v, 2.4, 3.0, 3.0, TankPalette.BRASS, BRASS_GRAVITY, 0.2
 	):
-		particles.tumble(r(0.0, TAU), r(-22.0, 22.0))
+		var sp := r(16.0, 26.0)
+		particles.tumble(r(0.0, TAU), sp if rng.randf() < 0.5 else -sp)
 
 
 ## A small gun (a secondary or an enemy's) fires at `at`.
@@ -557,21 +594,40 @@ func steam_puff(at: Vector2) -> void:
 		)
 
 
-## A white plume out of a deck vent at `at`, one per stroke: a short column that rises well clear of
-## the deck and spreads before it fades (the steam engine's contrast to the diesel's dark smoke).
+## A white plume out of a deck vent at `at` (the pipe's mouth), one per stroke: the stroke feeds a
+## column of small puffs for PLUME_S that leave the mouth, swell, rise about 30 px and drift back
+## (the steam engine's contrast to the diesel's dark smoke). Many small puffs, never one or two big
+## round discs, and no brighter than PLUME_CORE, so the lamps stay the brightest things.
 func steam_plume(at: Vector2) -> void:
-	for i in _count(3):
-		particles.spawn(
-			TankParticles.Kind.STEAM,
-			at + Vector2(r(-1.0, 1.0), -float(i) * 3.0),
-			Vector2(scroll_v * SMOKE_CARRY + r(-6.0, 6.0), -r(42.0, 60.0)),
-			r(0.9, 1.3),
-			10.0,
-			r(32.0, 44.0),
-			Color(TankPalette.WHITE_COLD, 0.85),
-			16.0,
-			0.9
-		)
+	for _i in 2:
+		_plume_puff(at)
+	_plume_at = at
+	_plume_left = PLUME_S
+
+
+func _plume_puff(at: Vector2) -> void:
+	var c := PLUME_CORE.lerp(TankPalette.STEEL_LIGHT, r(0.0, 0.35))
+	c.a = r(0.5, 0.66)
+	particles.spawn(
+		TankParticles.Kind.STEAM,
+		at + Vector2(r(-1.0, 1.0), r(0.5, 2.0)),
+		Vector2(scroll_v * 0.35 - PLUME_WIND + r(-4.0, 4.0), -r(42.0, 54.0)),
+		r(0.95, 1.35),
+		r(4.5, 6.5),
+		r(13.0, 19.0),
+		c,
+		-8.0,
+		1.6
+	)
+
+
+## Feeds the deck vent's column while the last stroke's PLUME_S lasts.
+func _feed_plume(dt: float) -> void:
+	if _plume_left <= 0.0:
+		return
+	for _n in rate("plume", PLUME_RATE, dt):
+		_plume_puff(_plume_at)
+	_plume_left -= dt
 
 
 ## The hiss cloud when a shell latches: a white burst that jets sideways off the valve, hangs in the
@@ -598,21 +654,30 @@ func steam_burst(at: Vector2) -> void:
 		)
 
 
-## The dynamo throws cold sparks around its armature (`frac` of FTP); they stay inside the room
-## (carried with the hull, dying within about 16 px of the arc).
+## The dynamo throws cold sparks off its brushes (`frac` of FTP): fixed blue-white whatever the
+## rider's colour (drawn blended, see TankParticles.is_additive), flung along the rim and falling,
+## so they stay low in the room around the armature (carried with the hull, never climbing more
+## than a few px, so they never reach the wall lamp and its badge up by the ceiling).
 func dynamo_sparks(key: String, at: Vector2, frac: float, dt: float) -> void:
-	var per_s := lerpf(0.0, 16.0, clampf(frac, 0.0, 1.2))
+	if frac <= 0.0:
+		return
+	var per_s := lerpf(3.0, 26.0, clampf(frac, 0.0, 1.2))
 	for _i in rate(key, per_s, dt):
-		var a := r(0.0, TAU)
+		# The brushes ride the rim at upper left and upper right (see TankDynamoRoom.brush_tip).
+		var a := deg_to_rad(-140.0 if rng.randf() < 0.5 else -40.0) + r(-0.25, 0.25)
+		var rim := Vector2(cos(a), sin(a))
+		var v := rim.rotated(PI * 0.5 * (1.0 if rng.randf() < 0.5 else -1.0)) * r(18.0, 40.0)
+		v += rim * r(4.0, 12.0)
+		v.y = maxf(v.y, -SPARK_MAX_RISE_V)
 		particles.spawn(
 			TankParticles.Kind.SPARK,
-			at + Vector2(cos(a), sin(a)) * 6.0,
-			Vector2(cos(a), sin(a)) * r(15.0, 40.0),
-			r(0.18, 0.4),
+			at + rim * r(7.0, 9.5),
+			v,
+			r(0.2, 0.42),
 			1.0,
 			1.0,
-			TankPalette.COLD_LIGHT if rng.randf() < 0.7 else TankPalette.WHITE_COLD,
-			110.0,
+			TankPalette.COLD_LIGHT if rng.randf() < 0.6 else TankPalette.WHITE_COLD,
+			140.0,
 			0.5,
 			TankParticles.PLANE_HULL
 		)
@@ -671,33 +736,43 @@ func fire_and_smoke(
 		)
 
 
-## Dust and mud flicked off the tracks at `at` for a hull speed of `speed_mps`.
+## Dust and mud flicked off the tracks for a hull speed of `speed_mps`; `at` is just behind the rear
+## sprocket on the ground. Faint from a walk, full from about 20 km/h (DUST_FULL_MPS): dust rolls up
+## off the lower track run under the rear half of the hull and off the sprocket, and clods of mud
+## are flung up and back off the turning links. Each keeps part of the hull's motion as it leaves,
+## so it hangs behind the wheels for a moment before the road carries it away.
 func track_dust(key: String, at: Vector2, speed_mps: float, dt: float) -> void:
-	if speed_mps < 0.8:
+	if speed_mps < DUST_MIN_MPS:
 		return
-	# Behind the rear sprocket: a dust cloud rolling up off the track (rate and lift by speed) and
-	# clods of mud flicked up and back off the turning links.
-	for _i in rate(key + "_d", speed_mps * 2.6, dt):
+	var k := smoothstep(DUST_MIN_MPS, DUST_FULL_MPS, speed_mps)
+	var src := source_velocity(key, at, dt)
+	for _i in rate(key + "_d", 4.0 + 16.0 * k, dt):
+		var along := r(0.0, 1.0)
+		along *= along
+		var c := TRACK_DUST
+		c.a *= 0.45 + 0.55 * k
 		particles.spawn(
 			TankParticles.Kind.DUST,
-			at + Vector2(r(-4.0, 4.0), r(-3.0, 0.0)),
-			Vector2(-speed_mps * r(1.5, 4.0), -r(10.0, 18.0) - speed_mps * 2.0),
-			r(0.7, 1.2),
-			5.0,
-			r(16.0, 28.0),
-			Color(0.4, 0.35, 0.28, 0.42),
-			0.0,
-			1.0
+			at + Vector2(4.0 + along * DUST_RUN_PX + r(-3.0, 3.0), r(-2.0, 1.0)),
+			Vector2(src.x * r(0.55, 0.8) - r(4.0, 14.0), -r(8.0, 16.0) - 12.0 * k),
+			r(0.8, 1.4),
+			r(5.0, 8.0),
+			r(14.0, 22.0) + 10.0 * k,
+			c,
+			-3.0,
+			1.2
 		)
-	for _i in rate(key + "_m", speed_mps * 1.0, dt):
+	for _i in rate(key + "_m", 1.0 + 8.0 * k, dt):
+		var m := TRACK_MUD.lerp(TRACK_DUST, r(0.0, 0.4))
+		m.a = 1.0
 		particles.spawn(
 			TankParticles.Kind.DIRT,
-			at + Vector2(r(-2.0, 2.0), -r(0.0, 6.0)),
-			Vector2(-r(30.0, 80.0), -r(40.0, 90.0)),
-			r(0.5, 0.9),
-			r(1.5, 2.5),
+			at + Vector2(r(2.0, 8.0), -r(4.0, 10.0)),
+			Vector2(src.x * 0.9 - r(20.0, 55.0), -r(50.0, 95.0)),
+			r(0.6, 1.0),
+			r(1.6, 2.6),
 			2.0,
-			Color(0.2, 0.16, 0.12, 1.0),
+			m,
 			320.0,
 			0.0
 		)
