@@ -95,7 +95,7 @@
 		"loader": [50, 120]
 	},
 	"haptics": {
-		"hit": {"min_damage": 8, "haptic": 2.0, "duration_s": 1.5},
+		"hit": {"min_damage": 4, "haptic": 2.0, "duration_s": 1.5},
 		"boss_hit": {"haptic": 3.0, "duration_s": 2.0},
 		"ram": {"haptic": 3.0, "duration_s": 1.0},
 		"cooldown_s": 15

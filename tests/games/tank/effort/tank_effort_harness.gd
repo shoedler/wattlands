@@ -30,6 +30,10 @@ var plan_start_s: float = -1.0
 var applied_mode: Dictionary = {}
 ## peer -> true for riders on reserve (AFK).
 var afk: Dictionary = {}
+## peer -> false for a dropped rider (default connected).
+var connected: Dictionary = {}
+## peer -> the ERG target in % FTP the rider's governor holds (default: none reported, 0 W).
+var held_pct: Dictionary = {}
 
 var _index: int = -1
 var _index_tick: int = 0
@@ -140,7 +144,11 @@ func inputs(index: int, elapsed: float, at_plan_s: float) -> TankInputs:
 		ri.mode = str(applied_mode.get(p.peer_id, rps.mode))
 		ri.power_w = 0.9 * p.ftp
 		ri.cadence_rpm = 90.0
-		ri.afk = bool(afk.get(p.peer_id, false))
+		ri.connected = bool(connected.get(p.peer_id, true))
+		ri.afk = bool(afk.get(p.peer_id, false)) or not ri.connected
+		if held_pct.has(p.peer_id):
+			var f := 1.0 if p.ftp_verified else 0.85
+			ri.applied_target_w = float(held_pct[p.peer_id]) / 100.0 * p.ftp * f
 		inp.riders.append(ri)
 	return inp
 
