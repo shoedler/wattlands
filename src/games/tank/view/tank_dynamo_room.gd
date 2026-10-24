@@ -11,6 +11,9 @@ const BANK_MAX := 100.0
 ## The cradle falls back down the rail this fast (rail lengths per second) once the shot is fired.
 const HOIST_DOWN_PER_S := 1.5
 const HOIST_UP_PER_S := 1.0
+## The bus bar's copper (dull, lit edge).
+const COPPER := Color("#a8714a")
+const COPPER_DARK := Color("#5a3a2e")
 
 var armature: SpinningPart = null
 var jars: Array[Rect2] = []
@@ -162,6 +165,33 @@ func paint_machinery_front(item: Node2D) -> void:
 	_paint_brushes(item)
 	for i in jars.size():
 		_jar(item, jars[i], jar_level(i), stalled())
+	_wiring(item)
+
+
+## The bank wired to the machine: a copper bus bar across the jars' terminal posts, a strap down to
+## every post, and a heavy insulated cable sagging from the bar to the upper brush's holder on the
+## armature, its copper lugs bright where it bolts on.
+func _wiring(item: Node2D) -> void:
+	if jars.is_empty():
+		return
+	var bar_y := jars[0].position.y - 5.0
+	var x0 := jars[0].position.x + floorf(jars[0].size.x * 0.5) - 1.0
+	var last := jars[jars.size() - 1]
+	var x1 := last.position.x + floorf(last.size.x * 0.5) + 1.0
+	for j in jars:
+		var tx := j.position.x + floorf(j.size.x * 0.5) - 1.0
+		item.draw_rect(Rect2(tx, bar_y, 2.0, 2.0), COPPER_DARK)
+	item.draw_rect(Rect2(x0 - 1.0, bar_y - 1.0, x1 - x0 + 2.0, 2.0), COPPER_DARK)
+	item.draw_rect(Rect2(x0 - 1.0, bar_y - 1.0, x1 - x0 + 2.0, 1.0), COPPER)
+	var holder := brush_tip(1) + (brush_tip(1) - armature_pos).normalized() * 5.0
+	var from := Vector2(x0 - 1.0, bar_y)
+	var mid := (from + holder) * 0.5 + Vector2(0, 3)
+	var cable := PackedVector2Array([from, mid.lerp(from, 0.4) + Vector2(0, 1), mid, holder])
+	item.draw_polyline(cable, TankPalette.BLACK, 3.0)
+	item.draw_polyline(cable, COPPER_DARK, 2.0)
+	item.draw_polyline(cable, COPPER, 1.0)
+	for lug: Vector2 in [from, holder]:
+		item.draw_rect(Rect2(lug.round() - Vector2(1, 1), Vector2(2, 2)), COPPER)
 
 
 static func _jar(item: Node2D, jar: Rect2, lv: float, dim: bool) -> void:

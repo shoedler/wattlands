@@ -134,7 +134,7 @@ static func prepared_image(id: String, src: Image) -> Image:
 	if is_steel(id):
 		img = material_grade(img, id)
 		img = machinery_fixed(id, img)
-		if id.begins_with("enemy_") or id == "boss_hull":
+		if id.begins_with("enemy_") or id == "boss_hull" or id.begins_with("boss_turret"):
 			img = armour_details(img, id)
 		elif id.begins_with("hull_") or id.begins_with("turret_"):
 			img = crew_details(img, id)
@@ -438,11 +438,12 @@ static func _rivet_row(lum: PackedFloat32Array, w: int, h: int, x: int, y: int) 
 
 
 ## Enemy and Behemoth armour read as riveted plate at 640 x 360 (the scene critic): the dug-in's
-## concrete aside, every enemy gets two or three vertical plate seams (a dark joint with a lit edge
-## and a rivet every 4 px) over its body above the tracks, rust and mud crumbs are cleared and a few
-## large mud splashes sit on the lower hull. The medium's slab gets a low boxy turret on its roof and
-## a mantlet where the gun leaves the slab; the Behemoth's lower hull darkens smoothly toward the
-## ground. Deterministic and palette-only.
+## concrete aside, every enemy gets a vertical plate seam (a dark joint with a lit edge and a rivet
+## every 4 px) on each plate boundary TankMaterial chose, so every tonal edge is a seam; rust and mud
+## crumbs are cleared, the tracked enemies get a code-drawn side skirt over the tops of their road
+## wheels (no per-pixel mud speckle on the tank plane) and the dug-in's mud foot is cleaned. The
+## medium's slab gets a low boxy turret on its roof and a mantlet where the gun leaves the slab; the
+## Behemoth's lower hull darkens smoothly toward the ground. Deterministic.
 static func armour_details(src: Image, id: String) -> Image:
 	var img := src.duplicate() as Image
 	var w := img.get_width()
@@ -457,38 +458,42 @@ static func armour_details(src: Image, id: String) -> Image:
 		else {}
 	)
 	var boss := id == "boss_hull"
-	var body_bottom := int(en.get("track_y", h)) - 2 if not boss else int(h * 0.82)
+	var track_y := int(en.get("track_y", h))
+	var body_bottom := track_y - 2 if not boss else int(h * 0.82)
+	if id.begins_with("boss_turret"):
+		body_bottom = h - 1
 	_clear_crumbs(img, 3 if not boss else 5)
 	if boss:
 		_clear_crumbs(img, 5)
-	if boss:
 		_lower_gradient(img, int(h * 0.55))
+	var tops := _column_tops(img)
 	if id != "enemy_dugin":
-		var tops := PackedInt32Array()
-		tops.resize(w)
-		for x in w:
-			tops[x] = h
-			for y in h:
-				if img.get_pixel(x, y).a > 0.5:
-					tops[x] = y
-					break
-		var spacing := maxi(22, w / 4) if not boss else 40
-		var x := spacing / 2 + int(c.noise(1, 1) * 6.0)
-		while x < w - 6:
-			if body_bottom - tops[x] >= 12:
-				_seam(c, x, tops[x] + 2, body_bottom)
-			x += spacing + int(c.noise(x, 3) * 6.0) - 3
+		for x in TankMaterial.seams_x(id):
+			if body_bottom - tops[x] >= 8:
+				_seam(c, x, tops[x] + 1, body_bottom)
+		for y in TankMaterial.seams_y(id):
+			if y < body_bottom - 3:
+				_hseam(c, y)
 	if id == "enemy_dugin":
 		_concrete_courses(c)
-	_mud_splashes(c, body_bottom, 5 if not boss else 12)
+		_clean_band(c, int(h * 0.55), h)
+	elif not boss and en.has("track_y"):
+		# The side skirt: from the hull's bottom over the top half of the road wheels.
+		_clean_band(c, body_bottom - 5, h)
+		_skirt(c, body_bottom - 5, mini(track_y, h - 3), 24)
+	if boss:
+		_mud_splashes(c, body_bottom, 8)
 	if id == "enemy_medium":
 		_medium_turret(c, en)
 	return c.img
 
 
-## The crew's hull and turrets keep crisp detail over their soft plates (the same language as the
-## enemies'): vertical plate seams with a rivet every 4 rows, and a rivet row 3 px under the deck edge
-## wherever the deck runs level. Deterministic and palette-only.
+## The crew's hull and turrets keep crisp detail over their flat plates (the same language as the
+## enemies'): a vertical plate seam with a rivet every 4 rows on every plate boundary TankMaterial
+## chose, a horizontal seam on its row boundaries, and a rivet row 3 px under the deck edge wherever
+## the deck runs level. A hull's bottom band below the cutaway (the skirt over the running gear) is
+## a code-drawn skirt plate: flat dark steel with a lit top edge, a bolt every 8 px and two or three
+## soft rust runs, so no generated mud speckle shows along the tank. Deterministic.
 static func crew_details(src: Image, id: String) -> Image:
 	var img := src.duplicate() as Image
 	var w := img.get_width()
@@ -496,6 +501,47 @@ static func crew_details(src: Image, id: String) -> Image:
 	var c := Canvas.new(w, h)
 	c.img = img
 	c.seed_value = absi(id.hash()) % 9973
+	var tops := _column_tops(img)
+	var hull := id.begins_with("hull_")
+	var skirt_top := skirt_row(id) if hull else h
+	for x in TankMaterial.seams_x(id):
+		if skirt_top - tops[x] >= 6:
+			_seam(c, x, tops[x] + 1, skirt_top)
+	for y in TankMaterial.seams_y(id):
+		if y < skirt_top - 3:
+			_hseam(c, y)
+	for rx in range(3, w - 3, 4):
+		if absi(tops[rx - 2] - tops[rx + 2]) > 1 or tops[rx] >= h - 6:
+			continue
+		var ry := tops[rx] + 3
+		if c.solid(rx, ry) and c.solid(rx + 1, ry + 1):
+			c.px(rx, ry, G7)
+			c.px(rx + 1, ry + 1, G1)
+	if hull:
+		_clean_band(c, skirt_top, h)
+		_skirt(c, skirt_top, h, 48)
+	return c.img
+
+
+## The first row of a crew hull's skirt: 5 px under its lowest room (below the rig's cutaway band and
+## its lit lip), and never more than 12 rows above the hull's bottom.
+static func skirt_row(id: String) -> int:
+	var h := size_of(id).y
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var tank := id.trim_prefix("hull_")
+	var lowest := 0
+	if rigs is Dictionary:
+		var t: Dictionary = ((rigs as Dictionary).get("tanks", {}) as Dictionary).get(tank, {})
+		for rd: Variant in t.get("rooms", []):
+			var r: Array = (rd as Dictionary).get("rect", [0, 0, 0, 0])
+			lowest = maxi(lowest, int(r[1]) + int(r[3]))
+	return clampi(lowest + 5, h - 12, h - 3)
+
+
+## Every column's first opaque row (the image height for an empty column).
+static func _column_tops(img: Image) -> PackedInt32Array:
+	var w := img.get_width()
+	var h := img.get_height()
 	var tops := PackedInt32Array()
 	tops.resize(w)
 	for x in w:
@@ -504,22 +550,93 @@ static func crew_details(src: Image, id: String) -> Image:
 			if img.get_pixel(x, y).a > 0.5:
 				tops[x] = y
 				break
-	var hull := id.begins_with("hull_")
-	var bottom := int(h * 0.82) if hull else h - 3
-	var spacing := 34 if hull else 26
-	var x := spacing / 2 + int(c.noise(1, 1) * 6.0)
-	while x < w - 8:
-		if bottom - tops[x] >= 10 and absi(tops[x - 2] - tops[x + 2]) <= 1:
-			_seam(c, x, tops[x] + 3, bottom)
-		x += spacing + int(c.noise(x, 3) * 8.0) - 4
-	for rx in range(3, w - 3, 4):
-		if absi(tops[rx - 2] - tops[rx + 2]) > 1 or tops[rx] >= h - 6:
+	return tops
+
+
+## A horizontal plate seam along row y (where the plate runs on both sides): a #0f1012 joint and a
+## rivet every 5 px two rows under it.
+static func _hseam(c: Canvas, y: int) -> void:
+	for x in c.w:
+		if not (c.solid(x, y - 1) and c.solid(x, y) and c.solid(x, y + 1)):
 			continue
-		var ry := tops[rx] + 3
-		if c.solid(rx, ry) and c.solid(rx + 1, ry + 1):
-			c.px(rx, ry, G7)
-			c.px(rx + 1, ry + 1, G1)
-	return c.img
+		c.px(x, y, G1)
+		if x % 5 == 2 and c.solid(x + 1, y + 3):
+			c.px(x, y + 2, G7)
+			c.px(x + 1, y + 3, G1)
+
+
+## Rows y0 .. y1-1 cleared of mud and rust speckle: every earth or rust pixel becomes a dark steel
+## grey, so the band reads as metal under the skirt drawn over it.
+static func _clean_band(c: Canvas, y0: int, y1: int) -> void:
+	var earth := {}
+	for col: Color in [R0, R1, R2, B0, B1, B2, B3, B4, B5]:
+		earth[col.to_rgba32()] = true
+	for y in range(maxi(y0, 0), mini(y1, c.h)):
+		for x in c.w:
+			var cc := c.img.get_pixel(x, y)
+			if cc.a > 0.5 and earth.has(cc.to_rgba32()):
+				c.px(x, y, G2 if cc.get_luminance() < 0.1 else G3)
+
+
+## A code-drawn skirt plate over rows y0 .. y1-1 (opaque pixels only; the silhouette keeps a dark
+## outline): flat #1f2429 steel, a 1 px #444b52 top edge over a shadow row, a dark bottom row, a
+## joint every `joint` px, a bolt every 8 px on the third row, and two or three soft rust runs
+## (#5a3a2e blended with a 2 px falloff either side, fading downward) from under bolts.
+static func _skirt(c: Canvas, y0: int, y1: int, joint: int) -> void:
+	if y1 - y0 < 3:
+		return
+	var plate := Color("#1f2429")
+	var edge := Color("#444b52")
+	var bolt := Color("#6a7178")
+	for y in range(y0, y1):
+		for x in c.w:
+			if not c.solid(x, y):
+				continue
+			var col := plate
+			if not (c.solid(x - 1, y) and c.solid(x + 1, y)):
+				col = G0
+			elif y == y0:
+				col = edge
+			elif y == y0 + 1:
+				col = plate.darkened(0.25)
+			elif y == y1 - 1:
+				col = G1
+			c.px(x, y, col)
+	# Plate joints: a dark line with a lit left lip, from under the top edge to the bottom.
+	var x := joint / 2 + int(c.noise(5, 5) * 8.0)
+	while x < c.w - 4:
+		for y in range(y0 + 1, y1 - 1):
+			if c.solid(x - 1, y) and c.solid(x + 1, y):
+				c.px(x, y, G0)
+				c.px(x - 1, y, plate.lightened(0.12))
+		x += joint
+	# Bolts: a lit head with a dark shadow under-right.
+	var by := y0 + 3 if y1 - y0 >= 6 else y0 + 2
+	var bolts: Array[int] = []
+	for bx in range(4, c.w - 4, 8):
+		if by + 1 < y1 - 1 and c.solid(bx - 1, by) and c.solid(bx + 2, by + 1):
+			c.px(bx, by, bolt)
+			c.px(bx + 1, by + 1, G0)
+			bolts.append(bx)
+	if bolts.is_empty():
+		return
+	# Rust runs from under two or three of the bolts.
+	var runs := 2 + int(c.noise(9, 9) * 2.0)
+	for k in runs:
+		var bx: int = bolts[int(c.noise(k, 31) * float(bolts.size())) % bolts.size()]
+		var top := by + 2
+		var length := maxi(y1 - 1 - top, 1)
+		for y in range(top, y1 - 1):
+			var fade := 1.0 - float(y - top) / float(length)
+			for dx in range(-2, 3):
+				var xx := bx + dx
+				if not (c.solid(xx - 1, y) and c.solid(xx + 1, y)):
+					continue
+				var a := 0.55 * fade * exp(-float(dx * dx) / 2.0)
+				var cc := c.img.get_pixel(xx, y)
+				if a < 0.04 or cc == bolt or cc == G0:
+					continue
+				c.px(xx, y, cc.lerp(R1, a))
 
 
 ## The dug-in's revetment reads as cast concrete, not a flat slab: grey pixels below its top row get
@@ -593,24 +710,18 @@ static func _clear_crumbs(img: Image, need: int) -> void:
 				img.set_pixel(x, y, steel)
 
 
-## Greys below row `from_y` step down toward the ground: one tone darker past the middle of the
-## band, two in its last fifth (a smooth grime gradient instead of speckle).
+## Steel below row `from_y` darkens smoothly toward the ground (up to 35% darker on the last row):
+## a grime gradient instead of speckle. Earth pixels keep their colour.
 static func _lower_gradient(img: Image, from_y: int) -> void:
 	var w := img.get_width()
 	var h := img.get_height()
-	var greys: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
 	for y in range(from_y, h):
-		var t := float(y - from_y) / maxf(float(h - from_y), 1.0)
-		var step := 0 if t < 0.35 else (1 if t < 0.8 else 2)
-		if step == 0:
-			continue
+		var k := 0.35 * float(y - from_y) / maxf(float(h - 1 - from_y), 1.0)
 		for x in w:
 			var cc := img.get_pixel(x, y)
-			if cc.a < 0.5:
+			if cc.a < 0.5 or cc.r > cc.b + 0.02:
 				continue
-			var gi := greys.find(Color(cc.r, cc.g, cc.b, 1.0))
-			if gi > 0:
-				img.set_pixel(x, y, greys[maxi(gi - step, 1)])
+			img.set_pixel(x, y, cc.darkened(k))
 
 
 ## A few large mud splashes (4-8 px wide) on the lower hull just above `bottom`, with a lit rim on top.
