@@ -7,6 +7,9 @@ extends Control
 ## ui-hud. A palette's strip_low, strip_mid and strip_high draw the blocks in flat intensity
 ## colours instead of the kind colours (HudPalette).
 
+## On the grid, SIM blocks narrower than this many game pixels are not hatched.
+const HATCH_MIN_PX := 4.0
+
 ## [{"len": float, "kind": String, "mode": String, "pct": float}]
 var blocks: Array[Dictionary] = []
 var current: int = -1
@@ -171,7 +174,8 @@ func _draw_grid(g: int, total: float) -> void:
 		elif not flat and i > current:
 			c = Color(c, 0.7)
 		draw_rect(rect, c)
-		if sim:
+		# A block too narrow for whole diagonals stays solid (no per-pixel zigzag).
+		if sim and rect.size.x >= HATCH_MIN_PX * gf:
 			var hatch := palette.pick(HudPalette.PANEL, bg) if flat else Color(0, 0, 0, 0.45)
 			for cy in int(bh / gf):
 				for cx in int(rect.size.x / gf):
