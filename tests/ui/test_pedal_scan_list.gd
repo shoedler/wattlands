@@ -536,6 +536,25 @@ func test_rows_are_big_and_readable() -> void:
 	assert_null(_list.row(5))
 
 
+func test_icon_side_defaults_to_one_and_a_half_fonts_and_icon_px_overrides() -> void:
+	var tex := GradientTexture2D.new()
+	_list.set_items(
+		[
+			{"id": 0, "text": "Plain", "icon": tex},
+			{"id": 1, "text": "Big", "icon": tex, "icon_px": 200.0}
+		]
+	)
+	var side := _list.item_font_px * 1.5
+	assert_eq(_icon_of(0).custom_minimum_size, Vector2(side, side))
+	assert_eq(_icon_of(1).custom_minimum_size, Vector2(200, 200))
+
+
+func _icon_of(index: int) -> TextureRect:
+	for n in _list.row(index).find_children("*", "TextureRect", true, false):
+		return n as TextureRect
+	return null
+
+
 func test_a_long_row_scrolls_instead_of_widening_the_list() -> void:
 	var long_text := "2026-10-23T20:04:28Z  fishing  20:08  Upload failed: Forbidden (403)"
 	_list.set_items([{"id": 0, "text": "Short"}, {"id": 1, "text": long_text, "detail": long_text}])

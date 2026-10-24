@@ -70,6 +70,7 @@ What `tools/new_game <id>` produces (section 19.2): `src/games/<id>/` with `game
 | `zero_input_content` | String | yes | What a solo 5 s `pedal_start` on the title screen, or the first run, plays |
 | `first_run_priority` | int | no, default 0 | The first run plays the registered game with the highest value; ties go to `workout`, then to the lowest id. Any integer is valid, negative included (Siege and Tank use −1; Fishing uses 10; Workout is 0) |
 | `picker_image` | res path | no | A 16:9 picker card. A missing or unreadable file logs a warning and the picker draws a generated card; the game stays listed |
+| `content_cards` | Object | no, default `{}` | Gives a content its own card in the lobby's content picker: `{"<content id>": {"image": "res://...png", "detail": "<STRING KEY>", "featured": true}}`, every key optional, ids from `contents`. `image` is the icon, `detail` a `strings.csv` key shown under the label, `featured` (default false) lists the content first and draws its icon about 3x larger. A missing or unreadable image logs a warning and the card has no icon; wrong types or an unknown content id invalidate the game |
 | `options` | Array of option entries | no | Session-wide options set by the host in the lobby; values in `ctx.options` |
 | `player_options` | Array of option entries | no | Per-rider options set on each rider's lobby card; values in `PlayerSlot.options` |
 

@@ -102,6 +102,37 @@ func test_choice_option_with_labels() -> void:
 	assert_eq(menu(s).text_of("no_label"), "no_label", "bare id when the key is missing")
 
 
+func test_content_menu_shows_cards_with_featured_first() -> void:
+	_translation = Translation.new()
+	_translation.locale = TranslationServer.get_locale()
+	_translation.add_message("TANK_DETAIL_DRILL", "The headline ride")
+	TranslationServer.add_translation(_translation)
+	fx.fake_registry().manifests["tank"]["content_cards"] = {
+		"drill":
+		{"image": "res://src/app/icon.svg", "detail": "TANK_DETAIL_DRILL", "featured": true},
+		"ashfall_road": {"image": "res://src/app/icon.svg"},
+	}
+	var s := _host_lobby("tank")
+	confirm_pick(s, "content")
+	assert_eq(menu(s).ids(), ["drill", "ashfall_road"], "featured first")
+	var items := menu(s).items()
+	var featured: Dictionary = items[0]
+	var plain: Dictionary = items[1]
+	assert_true(featured["icon"] is Texture2D)
+	assert_eq(featured["detail"], "The headline ride")
+	assert_eq(featured["icon_px"], WlTheme.MENU_PX * 3.0)
+	assert_true(plain["icon"] is Texture2D)
+	assert_false(plain.has("icon_px"), "an ordinary card keeps the default icon size")
+	assert_false(plain.has("detail"))
+
+
+func test_content_menu_without_cards_keeps_the_contents_order() -> void:
+	var s := _host_lobby("tank")
+	confirm_pick(s, "content")
+	assert_eq(menu(s).ids(), ["ashfall_road", "drill"])
+	assert_false((menu(s).items()[0] as Dictionary).has("icon"))
+
+
 func test_long_int_player_option_uses_a_stepper() -> void:
 	var s := _host_lobby("siege")
 	assert_true(menu(s).ids().has("popt:wave_offset"))
