@@ -148,12 +148,22 @@ func _build_links() -> void:
 		if diesel_room is TankBulwarkRoom:
 			from = diesel_room.rect.position + (diesel_room as TankBulwarkRoom).outputs[0]
 			r_from = 5.0
-		# A heavy 2 px dark chain with a bright link every 6 px running at tank speed.
+		# A heavy 2 px dark chain with moving links, routed like a real drive: down from the
+		# flywheel's sprocket to the room floor, along the floor to the rear, then straight down
+		# through the belly to the drive sprocket (never a diagonal across the room).
 		drive_chain = _chain("DriveChain", 70.0, TankPalette.STEEL_LIGHT, TankPalette.IRON)
 		drive_chain.pitch_px = 3.0
 		drive_chain.link_px = 2.0
 		drive_chain.width_px = 2.0
-		drive_chain.set_loop(from, r_from, sprocket, 8.0)
+		drive_chain.closed = false
+		var floor_y := maxf(from.y + r_from, diesel_room.rect.end.y - 3.0)
+		var route := PackedVector2Array([from + Vector2(0, r_from)])
+		for p: Vector2 in [
+			Vector2(from.x, floor_y), Vector2(sprocket.x, floor_y), sprocket + Vector2(0, -8.0)
+		]:
+			if p.distance_to(route[route.size() - 1]) > 0.5:
+				route.append(p)
+		drive_chain.points = route
 	var ring := TankRigs.vec((def.get("turret", {}) as Dictionary).get("ring"))
 	var shaft_from := Vector2.ZERO
 	var has_shaft := false
@@ -564,16 +574,36 @@ func _paint_dozer(item: Node2D) -> void:
 	var lift := 14.0 * (1.0 - blade)
 	var bx := x0 + 8.0
 	var by := ground - 16.0 - lift
-	# Hull steel grade (no bright edge): the push arm runs from the glacis foot to the blade's back,
-	# a curved blade face of three tones, a dark cutting edge.
+	# Hull steel: a heavy push arm from the glacis foot to the blade's back, and the blade as one
+	# solid curved slab (concave face forward, 16 px tall, 4-6 px thick) with a lit top edge, a dark
+	# cutting edge and a lip of mud packed on it.
 	var foot := Vector2(x0 - 4.0, ground - 14.0)
-	item.draw_line(foot, Vector2(bx, by + 8.0), TankPalette.IRON_DARK, 3.0)
-	item.draw_line(foot + Vector2(0, -1), Vector2(bx, by + 7.0), TankPalette.IRON, 1.0)
-	item.draw_rect(Rect2(x0 - 6.0, ground - 17.0, 4, 6), TankPalette.IRON)
-	item.draw_rect(Rect2(bx, by, 5, 16), TankPalette.IRON)
-	item.draw_rect(Rect2(bx + 1, by + 1, 3, 14), TankPalette.STEEL_DARK)
-	item.draw_rect(Rect2(bx, by, 5, 1), TankPalette.STEEL)
-	item.draw_rect(Rect2(bx + 4, by + 13, 3, 3), TankPalette.COAL)
+	item.draw_line(foot, Vector2(bx + 1.0, by + 9.0), TankPalette.IRON_DARK, 4.0)
+	item.draw_line(foot + Vector2(0, -2), Vector2(bx + 1.0, by + 7.0), TankPalette.IRON, 1.0)
+	item.draw_rect(Rect2(x0 - 7.0, ground - 18.0, 5, 7), TankPalette.IRON)
+	item.draw_rect(Rect2(x0 - 7.0, ground - 18.0, 5, 1), TankPalette.STEEL_DARK)
+	var face := PackedVector2Array(
+		[
+			Vector2(bx, by),
+			Vector2(bx + 6.0, by - 1.0),
+			Vector2(bx + 4.0, by + 4.0),
+			Vector2(bx + 3.0, by + 9.0),
+			Vector2(bx + 4.0, by + 13.0),
+			Vector2(bx + 7.0, by + 16.0),
+			Vector2(bx, by + 16.0),
+			Vector2(bx - 1.0, by + 8.0),
+		]
+	)
+	item.draw_colored_polygon(face, TankPalette.IRON)
+	item.draw_polyline(
+		PackedVector2Array([face[1], face[2], face[3], face[4], face[5]]),
+		TankPalette.STEEL_DARK,
+		1.0
+	)
+	item.draw_line(face[0], face[1], TankPalette.SLATE, 1.0)
+	item.draw_line(Vector2(bx, by + 15.0), Vector2(bx + 7.0, by + 15.0), TankPalette.COAL, 1.0)
+	item.draw_rect(Rect2(bx + 3.0, by + 12.0, 4, 3), TankPalette.MUD)
+	item.draw_rect(Rect2(bx + 4.0, by + 11.0, 2, 1), TankPalette.MUD_LIGHT)
 	if berm_hp > 0.5:
 		var h := 3.0 + (BERM_MAX_H - 3.0) * clampf(berm_hp / 40.0, 0.0, 1.0)
 		var pts := PackedVector2Array(

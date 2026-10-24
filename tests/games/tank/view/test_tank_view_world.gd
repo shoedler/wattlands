@@ -22,13 +22,25 @@ func _sprites(layer: TankRowLayer, id: String) -> Array[Dictionary]:
 	return out
 
 
+## The rows a code-drawn obstacle stands in for sprite `id` with ("of" tag).
+func _drawn(layer: TankRowLayer, id: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for r in layer.rows:
+		if str(r.get("of", "")) == id:
+			out.append(r)
+	return out
+
+
 func test_enemies_stand_on_the_ground_at_their_world_position() -> void:
 	var s := TankFixtures.state(3)
 	var v := U.view_of(self, s)
 	var medium := s.enemy(11)
 	var rect: Rect2 = v.enemy_rects[11]
 	assert_almost_eq(rect.position.x, roundf(medium.x_px - s.camera_x()), 1.0)
-	assert_almost_eq(rect.end.y, float(TankConst.GROUND_Y) + 2.0, 0.6, "sunk 2 px into the ground")
+	var lift := 6.0 if int(v.enemy_lanes(s).get(11, 0)) == 1 else 0.0
+	assert_almost_eq(
+		rect.end.y, float(TankConst.GROUND_Y) + 2.0 - lift, 0.6, "sunk 2 px into the ground"
+	)
 	assert_eq(rect.size, Vector2(medium.w, medium.h))
 	var rows := _sprites(v.enemies_layer, "enemy_medium")
 	assert_eq(rows.size(), 1)
@@ -40,13 +52,20 @@ func test_enemies_behind_the_tank_are_flipped_and_overlaps_use_two_depth_rows() 
 	var v := U.view_of(self, s)
 	var light := _sprites(v.enemies_layer, "enemy_light")[0]
 	assert_true(light["flip"], "the rear rusher faces the tank")
-	var r0: Rect2 = v.enemy_rects[11]
-	var r1: Rect2 = v.enemy_rects[12]
-	var r2: Rect2 = v.enemy_rects[13]
-	assert_almost_eq(r0.end.y - r1.end.y, 5.0, 0.6, "the second enemy stands a little higher")
-	assert_almost_eq(r2.end.y, r0.end.y, 0.6, "the third is back on the first row")
-	var dim: Color = light["tint"]
-	assert_lt(dim.r, 1.0, "and dimmer")
+	# The destroyer (13) and the medium (11) overlap on the road: one steps back a lane, a little
+	# higher and dimmer; the light (12) has the road to itself and stays on the front lane.
+	var lanes := v.enemy_lanes(s)
+	assert_ne(int(lanes[11]), int(lanes[13]), "overlapping enemies take different lanes")
+	assert_eq(int(lanes[12]), 0, "a lone enemy keeps the front lane")
+	var back := 11 if int(lanes[11]) == 1 else 13
+	var front := 13 if back == 11 else 11
+	var rb: Rect2 = v.enemy_rects[back]
+	var rf: Rect2 = v.enemy_rects[front]
+	assert_almost_eq(rf.end.y - rb.end.y, 6.0, 0.6, "the back lane stands a little higher")
+	assert_almost_eq((v.enemy_rects[12] as Rect2).end.y, rf.end.y, 0.6, "the light is on the road")
+	var back_row := _sprites(v.enemies_layer, "enemy_medium" if back == 11 else "enemy_destroyer")[0]
+	assert_lt((back_row["tint"] as Color).r, 1.0, "and dimmer")
+	assert_eq((light["tint"] as Color).r, 1.0, "the front lane is not dimmed")
 
 
 func test_damaged_enemies_show_an_hp_bar_scaled_by_the_tank() -> void:
@@ -164,10 +183,11 @@ func test_obstacles_wrecks_and_traps_are_props_and_cleared_ones_vanish() -> void
 	tr.x_px = g.hull.x_px + g.hull.hull_w + 40.0
 	g.obstacles.append(tr)
 	var v2 := U.view_of(self, g)
-	assert_eq(_sprites(v2.props_layer, "prop_tank_traps").size(), 1)
+	# The hedgehogs are code-drawn line work (TankObstacleArt), every row tagged with the sprite id.
+	assert_gt(_drawn(v2.props_layer, "prop_tank_traps").size(), 3, "two hedgehogs of beams")
 	g.hull.traps_cleared = true
 	v2.advance(0.016)
-	assert_eq(_sprites(v2.props_layer, "prop_tank_traps").size(), 0, "shoved aside")
+	assert_eq(_drawn(v2.props_layer, "prop_tank_traps").size(), 0, "shoved aside")
 
 
 func test_the_depot_gate_stands_behind_the_start_only() -> void:

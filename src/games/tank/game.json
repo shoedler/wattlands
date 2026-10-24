@@ -9,6 +9,7 @@
   "presentation": "2d",
   "pixel_base": [640, 360],
   "entry": "res://src/games/tank/tank_game.gd",
+  "picker_image": "res://assets/tank/sprites/picker_card.png",
   "contents": ["ashfall_road", "drill"],
   "default_content": "ashfall_road",
   "e2e_content": "drill",

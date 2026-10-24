@@ -16,7 +16,7 @@ extends RefCounted
 ## lets touch row 0 never leaves a ruler-straight cut across the sky; 0 for none).
 ## The blur radii are recorded in docs/decisions/tank.md by the lead (view report).
 const PRESETS := {
-	"sky": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.12, "darken": 0.0},
+	"sky": {"down": 4, "box_r": 2, "passes": 2, "haze": 0.12, "darken": 0.0},
 	"hills": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.40, "darken": 0.0, "fade_top": 20},
 	"near": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.12, "darken": 0.0, "fade_top": 10},
 	"ground": {"down": 1, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.15},

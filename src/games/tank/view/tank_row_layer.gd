@@ -9,6 +9,8 @@ extends Node2D
 ##       {"t": "line", "a": Vector2, "b": Vector2, "w": float, "c": Color}
 ##       {"t": "rect", "r": Rect2, "c": Color}
 ##       {"t": "bar", "pos": Vector2, "w": float, "frac": float}
+##       {"t": "poly", "pts": PackedVector2Array, "c": Color} (a filled polygon)
+##       {"t": "polyline", "pts": PackedVector2Array, "w": float, "c": Color}
 
 var rows: Array[Dictionary] = []
 
@@ -30,6 +32,10 @@ func _draw() -> void:
 				draw_rect(row["r"], row["c"])
 			"bar":
 				_bar(row)
+			"poly":
+				draw_colored_polygon(row["pts"], row["c"])
+			"polyline":
+				draw_polyline(row["pts"], row["c"], float(row.get("w", 1.0)))
 
 
 func _sprite(row: Dictionary) -> void:

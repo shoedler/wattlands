@@ -19,6 +19,16 @@ static func puff() -> Texture2D:
 	return _make("puff", 32, _puff_px)
 
 
+## How dark a room's wall is outside the reach of its light (the shade texture's edge alpha).
+const SHADE_EDGE := 0.82
+
+
+## A room's darkness around its light source, 48 x 48: clear in the middle, black at SHADE_EDGE
+## alpha from about half the radius out (drawn normally over the wall, under the machinery).
+static func shade() -> Texture2D:
+	return _make("shade", 48, _shade_px)
+
+
 ## A hot disc: white-yellow core, orange rim, 32 x 32.
 static func fireball() -> Texture2D:
 	return _make("fireball", 32, _fire_px)
@@ -62,6 +72,11 @@ static func _glow_px(d: float, _x: int, _y: int) -> Color:
 static func _puff_px(d: float, _x: int, _y: int) -> Color:
 	var k := clampf(1.0 - d, 0.0, 1.0)
 	return Color(0.92, 0.93, 0.95, k * k * (3.0 - 2.0 * k))
+
+
+static func _shade_px(d: float, _x: int, _y: int) -> Color:
+	var k := clampf((d - 0.18) / 0.62, 0.0, 1.0)
+	return Color(0.027, 0.031, 0.039, SHADE_EDGE * k * k * (3.0 - 2.0 * k))
 
 
 static func _fire_px(d: float, _x: int, _y: int) -> Color:

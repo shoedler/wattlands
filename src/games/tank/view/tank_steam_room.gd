@@ -137,6 +137,11 @@ static func gauge_angle(pct: float) -> float:
 	return deg_to_rad(GAUGE_START_DEG + GAUGE_SWEEP_DEG * clampf(pct / GAUGE_MAX_PCT, 0.0, 1.0))
 
 
+## The open firebox lights the steam room.
+func light_source() -> Vector2:
+	return anchor_local("firebox") + TankSprites.size("firebox") * 0.5
+
+
 func engine_lights() -> void:
 	var origin := hub.to_layer(rect.position)
 	var power := 0.0 if input.unpowered else clampf(input.frac, 0.0, 1.4)

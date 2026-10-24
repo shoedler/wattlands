@@ -37,6 +37,8 @@ const HALO_RADIUS := {
 	TankIds.SHELL_ENEMY: 11.0,
 	TankIds.SHELL_BOSS_MAIN: 26.0,
 }
+## Enemies on one lane keep at least this gap between them (else the next one steps back a lane).
+const ENEMY_GAP_PX := 8.0
 ## A falling shell that vanishes this close to the ground landed in it.
 const SHELL_LANDING_PX := 22.0
 const WITHDRAW_PX_S := 46.0
@@ -638,6 +640,13 @@ func _obstacle_row(rows: Array[Dictionary], ob: TankObstacleState, state: TankSt
 	if ob.cleared:
 		return
 	var kind := TankIds.obstacle_of(ob.code)
+	if kind == TankIds.OBST_TANK_TRAPS:
+		if not state.hull.traps_cleared:
+			TankObstacleArt.traps(rows, ob.x_px - cam_x, float(ob.w), ob.id)
+		return
+	if kind != TankIds.OBST_WRECK and kind != TankIds.OBST_DRILL_WRECK:
+		TankObstacleArt.wire(rows, ob.x_px - cam_x, float(ob.w), ob.id)
+		return
 	var sprite := "prop_wire"
 	var tint := Color.WHITE
 	match kind:
@@ -666,18 +675,20 @@ func _enemy_sprite(code: int) -> String:
 func _build_enemies(state: TankState, t: float) -> void:
 	var rows: Array[Dictionary] = []
 	enemy_rects.clear()
-	var row_i := 0
 	var dug_i := 0
 	var ground := float(TankConst.GROUND_Y)
-	# Dug-in guns are drawn first, on a lane behind the road, so a tank passing in front of a
-	# revetment keeps its own silhouette; the rest alternate between two depth rows.
+	# Dug-in guns are drawn first, on lanes behind the road, so a tank passing in front of a
+	# revetment keeps its own silhouette; the rest share the road and step back to a second lane
+	# only where they would overlap (a gap of ENEMY_GAP_PX at least), back lane drawn first.
 	var order: Array[TankEnemyState] = []
 	for e in state.enemies:
 		if TankIds.enemy_of(e.code) == TankIds.ENEMY_DUGIN:
 			order.append(e)
-	for e in state.enemies:
-		if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
-			order.append(e)
+	var lanes := enemy_lanes(state)
+	for want in [1, 0]:
+		for e in state.enemies:
+			if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN and int(lanes.get(e.id, 0)) == want:
+				order.append(e)
 	for e in order:
 		var type := TankIds.enemy_of(e.code)
 		var sprite := TankSprites.enemy_id(type)
@@ -691,12 +702,10 @@ func _build_enemies(state: TankState, t: float) -> void:
 			lift = 7.0 if dug_i % 2 == 0 else 13.0
 			dim = 0.72 if dug_i % 2 == 0 else 0.6
 			dug_i += 1
-		else:
-			# Overlapping enemies stand on two depth rows: every second one higher and dimmer.
-			if row_i % 2 == 1:
-				lift = 5.0
-				dim = 0.8
-			row_i += 1
+		elif int(lanes.get(e.id, 0)) == 1:
+			# The back lane: higher and dimmer, toward the haze.
+			lift = 6.0
+			dim = 0.72
 		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - lift)
 		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, Color(dim, dim, dim)))
 		enemy_rects[e.id] = Rect2(pos.round(), sz)
@@ -726,6 +735,32 @@ func _build_enemies(state: TankState, t: float) -> void:
 			fx.exhaust("e%d" % e.id, stack, 0.4, _dt)
 	_boss_rows(state, t, rows)
 	enemies_layer.set_rows(rows)
+
+
+## The road lane of every enemy that is not dug in, enemy id -> 0 (front) or 1 (back): left to right,
+## an enemy takes the front lane unless it would come within ENEMY_GAP_PX of the last one there, then
+## the back lane on the same rule, else whichever lane's last enemy ends farther left.
+func enemy_lanes(state: TankState) -> Dictionary:
+	var road: Array[TankEnemyState] = []
+	for e in state.enemies:
+		if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
+			road.append(e)
+	road.sort_custom(_drawn_left_of)
+	var ends: Array[float] = [-INF, -INF]
+	var out := {}
+	for e in road:
+		var x := enemy_x(e)
+		var w := float(e.w) if e.w > 0 else TankSprites.size(_enemy_sprite(e.code)).x
+		var lane := 0
+		if x < ends[0] + ENEMY_GAP_PX:
+			lane = 1 if (x >= ends[1] + ENEMY_GAP_PX or ends[1] < ends[0]) else 0
+		ends[lane] = maxf(ends[lane], x + w)
+		out[e.id] = lane
+	return out
+
+
+func _drawn_left_of(a: TankEnemyState, b: TankEnemyState) -> bool:
+	return enemy_x(a) < enemy_x(b)
 
 
 ## Maximum HP of an enemy type after the tank's scale (clients never get it in the snapshot).
@@ -948,6 +983,9 @@ func _scenery(dt: float) -> void:
 	var sl := backdrop.scenery_lights
 	sl.begin()
 	for l: Dictionary in TankBackdrop.scenery(backdrop.near_id, cam_x):
+		var lp: Vector2 = l["pos"]
+		if lp.x < -50.0 or lp.x > float(TankConst.SCREEN_W) + 50.0:
+			continue
 		var flick := 1.0
 		if bool(l["fire"]):
 			flick = 0.8 + 0.2 * sin(_time * 9.0 + float(int(l["seed"]) % 13))

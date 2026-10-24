@@ -431,16 +431,20 @@ func dynamo_sparks(key: String, at: Vector2, frac: float, dt: float) -> void:
 	var per_s := lerpf(0.0, 16.0, clampf(frac, 0.0, 1.2))
 	for _i in rate(key, per_s, dt):
 		var a := r(0.0, TAU)
-		particles.spawn(
-			TankParticles.Kind.SPARK,
-			at + Vector2(cos(a), sin(a)) * 6.0,
-			Vector2(cos(a), sin(a)) * r(35.0, 110.0),
-			r(0.15, 0.4),
-			1.0,
-			1.0,
-			TankPalette.COLD_LIGHT if rng.randf() < 0.7 else TankPalette.WHITE_COLD,
-			180.0,
-			0.5
+		(
+			particles
+			. spawn(
+				TankParticles.Kind.SPARK,
+				at + Vector2(cos(a), sin(a)) * 6.0,
+				# Short hops off the armature: they die within about 24 px of the dynamo room's arc.
+				Vector2(cos(a), sin(a)) * r(15.0, 42.0),
+				r(0.3, 0.5),
+				1.0,
+				1.0,
+				TankPalette.COLD_LIGHT if rng.randf() < 0.7 else TankPalette.WHITE_COLD,
+				110.0,
+				0.5
+			)
 		)
 
 

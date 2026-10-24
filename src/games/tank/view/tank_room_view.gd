@@ -120,12 +120,37 @@ func engine_lights() -> void:
 	pass
 
 
+## Where the room's own light comes from (room coordinates): its glow is centred there, falling to
+## black in the corners. Subclasses return their cylinders, arc or firebox.
+func light_source() -> Vector2:
+	return rect.size * 0.5
+
+
 # --- Drawing ---------------------------------------------------------------------------------
 
 
 func _draw() -> void:
-	draw_texture_rect(_wall, Rect2(Vector2.ZERO, rect.size), false)
-	_frame(self, Rect2(Vector2.ZERO, rect.size))
+	var r := Rect2(Vector2.ZERO, rect.size)
+	draw_texture_rect(_wall, r, false)
+	# The wall darkens toward its corners around the room's own light source, so the machine's glow
+	# (an additive halo at light_source) is the only thing that lights it.
+	var src := light_source()
+	var reach := maxf(rect.size.x, rect.size.y) * 0.75
+	var box := Rect2(src - Vector2(reach, reach), Vector2(reach, reach) * 2.0)
+	var shade := TankProcTex.shade()
+	var seen := box.intersection(r)
+	if seen.has_area():
+		var k := shade.get_size() / box.size
+		var region := Rect2((seen.position - box.position) * k, seen.size * k)
+		draw_texture_rect_region(shade, seen, region)
+	var outside := TankPalette.with_alpha(TankPalette.BLACK, TankProcTex.SHADE_EDGE)
+	if box.position.x > 0.0:
+		draw_rect(Rect2(0, 0, minf(box.position.x, r.size.x), r.size.y), outside)
+	if box.end.x < r.size.x:
+		draw_rect(
+			Rect2(maxf(box.end.x, 0.0), 0, r.size.x - maxf(box.end.x, 0.0), r.size.y), outside
+		)
+	_frame(self, r)
 
 
 ## The riveted frame, dark like the bulkheads (brief 3: the rooms are dark boxes marked by their own
@@ -165,28 +190,40 @@ func paint_machinery_front(_item: Node2D) -> void:
 	pass
 
 
+## The rider's wall lamp and shape badge (BRIEF 3.9) as backlit glass in a dark bezel on the lamp
+## housing: tinted at 70% with a one-pixel hot centre and an additive halo (_lights) while in band,
+## dimmed to a quarter when not, so the badge is a light in the diorama, not a UI chip pasted on it.
 func _paint_lamp(item: Node2D) -> void:
 	var lp := anchor_local("lamp")
 	var look := input.look if not input.look.is_empty() else Wl.slot_look(maxi(input.slot, 0))
 	var col: Color = look.get("color", Color.WHITE)
 	var on := lit()
-	item.draw_line(lp + Vector2(0, -6), lp + Vector2(0, -3), TankPalette.STEEL, 1.0)
-	item.draw_circle(
-		lp, 3.0, col.lerp(Color.WHITE, 0.35) if on else TankPalette.darkened(col, 0.72)
-	)
-	var c := lp + Vector2(10, 0)
-	var k := (1.0 + 0.32 * pulse()) if on else 0.75
-	var pts := SlotChip.shape_points(
-		str(look.get("shape", "circle")), Rect2(c - Vector2(4, 4) * k, Vector2(8, 8) * k)
-	)
-	var closed := pts.duplicate()
-	closed.append(pts[0])
+	item.draw_line(lp + Vector2(0, -6), lp + Vector2(0, -4), TankPalette.STEEL_DARK, 1.0)
+	item.draw_circle(lp, 3.5, TankPalette.IRON_DARK)
+	var glass := col if on else TankPalette.darkened(col, 0.75)
+	item.draw_circle(lp, 2.5, TankPalette.with_alpha(glass, 0.75 if on else 0.6))
+	if on:
+		item.draw_rect(Rect2(lp.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.WHITE_WARM)
+	var c := badge_pos()
+	var k := (1.0 + 0.2 * pulse()) if on else 1.0
+	var shape := str(look.get("shape", "circle"))
+	var bezel := SlotChip.shape_points(shape, Rect2(c - Vector2(5, 5) * k, Vector2(10, 10) * k))
+	item.draw_colored_polygon(bezel, TankPalette.IRON_DARK)
+	var pts := SlotChip.shape_points(shape, Rect2(c - Vector2(4, 4) * k, Vector2(8, 8) * k))
 	if bool(look.get("hollow", false)):
-		item.draw_colored_polygon(pts, Color(0.05, 0.06, 0.08, 0.85))
-		item.draw_polyline(closed, col if on else TankPalette.darkened(col, 0.6), 1.0)
+		var closed := pts.duplicate()
+		closed.append(pts[0])
+		item.draw_colored_polygon(pts, Color(0.05, 0.06, 0.08, 0.9))
+		item.draw_polyline(closed, TankPalette.with_alpha(glass, 0.85 if on else 0.6), 1.0)
 	else:
-		item.draw_colored_polygon(pts, col if on else TankPalette.darkened(col, 0.65))
-		item.draw_polyline(closed, Color(0, 0, 0, 0.75), 1.0)
+		item.draw_colored_polygon(pts, TankPalette.with_alpha(glass, 0.7 if on else 0.55))
+	if on:
+		item.draw_rect(Rect2(c.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.WHITE_WARM)
+
+
+## The shape badge's centre beside the lamp (room coordinates).
+func badge_pos() -> Vector2:
+	return anchor_local("lamp") + Vector2(10, 0)
 
 
 func _lights() -> void:
@@ -202,11 +239,15 @@ func _lights() -> void:
 		hub.lights.add(
 			origin + anchor_local("lamp"), 9.0 + 3.0 * p, col.lerp(Color.WHITE, 0.4), 0.8
 		)
+		hub.lights.add(origin + badge_pos(), 7.0 + 2.0 * p, col, 0.45)
+	# The engine's own light fills the room from its source and falls off before the corners.
+	var power := 0.0 if input.unpowered else clampf(input.frac, 0.0, 1.2)
+	if power > 0.02:
 		hub.lights.add(
-			origin + rect.size * 0.5,
-			rect.size.x * 0.7,
+			origin + light_source(),
+			rect.size.x * (0.42 if lit() else 0.34),
 			tint(),
-			0.1 + 0.2 * clampf(input.frac, 0.0, 1.2)
+			(0.08 + 0.16 * power) * (1.25 if lit() else 1.0)
 		)
 	if flare_s > 0.0:
 		var flare_look := (

@@ -99,14 +99,43 @@ func armature_hull_pos() -> Vector2:
 	return rect.position + armature_pos
 
 
+## The armature's arc lights the dynamo room.
+func light_source() -> Vector2:
+	return armature_pos
+
+
+## How strongly the brushes arc this frame, 0 .. 1.3 (0 without power or stalled).
+func arc_power() -> float:
+	return 0.0 if input.unpowered or stalled() else clampf(input.frac, 0.0, 1.3)
+
+
+## Which brush arcs now (0 upper left, 1 upper right) and how bright, 0.3 .. 1: a cheap hash of the
+## armature's turn, so the flicker follows the machine and needs no random numbers.
+func arc_flicker() -> Vector2:
+	var n := int(armature.revolutions() * 23.0 + lamp_phase * 7.0)
+	var h := (n * 73856093) & 0x7fffffff
+	return Vector2(float(h % 2), 0.3 + 0.7 * float((h >> 4) % 8) / 7.0)
+
+
+## The tip of brush `i` (room coordinates): on the armature's rim, upper left or upper right.
+func brush_tip(i: int) -> Vector2:
+	var a := deg_to_rad(-140.0 if i == 0 else -40.0)
+	var r := TankSprites.size("dynamo_armature").x * 0.5 - 0.5
+	return armature_pos + Vector2(cos(a), sin(a)) * r
+
+
 func engine_lights() -> void:
 	var origin := hub.to_layer(rect.position)
-	var arc := 0.0 if input.unpowered or stalled() else clampf(input.frac, 0.0, 1.3)
+	var arc := arc_power()
 	if arc > 0.02:
-		var flicker := 0.8 + 0.2 * sin(lamp_phase * TAU * 3.0 + armature.revolutions() * 9.0)
+		var fl := arc_flicker()
 		hub.lights.add(
-			origin + armature_pos, 36.0 + 26.0 * arc, TankPalette.COLD_LIGHT, 0.4 * arc * flicker
+			origin + armature_pos, 30.0 + 18.0 * arc, TankPalette.COLD_LIGHT, 0.3 * arc * fl.y
 		)
+		# The brush arc is the room's hot cold light: a tight white-blue core on the sparking brush.
+		var tip := brush_tip(int(fl.x))
+		hub.lights.add(origin + tip, 18.0 + 6.0 * arc, TankPalette.COLD_LIGHT, 0.55 * arc * fl.y)
+		hub.lights.add(origin + tip, 5.0, TankPalette.WHITE_COLD, 0.7 * fl.y)
 	for i in jars.size():
 		var lv := jar_level(i)
 		if lv > 0.05:
@@ -122,6 +151,7 @@ func engine_lights() -> void:
 ## soft cold blue at about half alpha with a brighter meniscus, so the jars read as lights and not
 ## as saturated blue surfaces (brief 3: lights are the only near-saturated pixels).
 func paint_machinery_front(item: Node2D) -> void:
+	_paint_brushes(item)
 	for i in jars.size():
 		var jar := jars[i]
 		item.draw_rect(jar, TankPalette.COLD_DARK)
@@ -143,3 +173,33 @@ func paint_machinery_front(item: Node2D) -> void:
 		item.draw_rect(
 			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 1), TankPalette.STEEL
 		)
+
+
+## The brush gear: two dark brush arms bearing on the armature's rim, and a flickering 1-3 px arc
+## from one brush to the armature while the dynamo is powered (the room's main cold light).
+func _paint_brushes(item: Node2D) -> void:
+	for i in 2:
+		var tip := brush_tip(i)
+		var out := (tip - armature_pos).normalized()
+		var root := tip + out * 5.0
+		item.draw_line(root, tip + out * 1.0, TankPalette.IRON_DARK, 2.0)
+		item.draw_line(
+			root + Vector2(0, -1), tip + out * 1.0 + Vector2(0, -1), TankPalette.STEEL_DARK, 1.0
+		)
+		item.draw_rect(Rect2(root - Vector2(1.5, 1.5), Vector2(3, 3)), TankPalette.IRON)
+	var arc := arc_power()
+	if arc <= 0.02:
+		return
+	var fl := arc_flicker()
+	var tip := brush_tip(int(fl.x))
+	var inward := (armature_pos - tip).normalized()
+	var side := Vector2(-inward.y, inward.x)
+	var len_px := 1.0 + 2.0 * fl.y
+	var mid := tip + inward * len_px * 0.5 + side * (1.0 if fl.y > 0.6 else -1.0)
+	var pts := PackedVector2Array([tip, mid, tip + inward * len_px])
+	var a := clampf(0.5 + 0.5 * arc, 0.0, 1.0) * fl.y
+	item.draw_polyline(pts, TankPalette.with_alpha(TankPalette.COLD_LIGHT, a), 1.0)
+	item.draw_rect(
+		Rect2(tip.round() - Vector2(1, 1), Vector2(1, 1)),
+		TankPalette.with_alpha(TankPalette.WHITE_COLD, a)
+	)

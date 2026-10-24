@@ -62,24 +62,44 @@ static var _art: Dictionary = {}
 static var _cache: Dictionary = {}
 static var _logged: Dictionary = {}
 
+## Sprites the view always draws in code, whatever PNG exists (brief 3: lines are code-drawn; the
+## production critic): the mud band under the road, the wire on stakes and the Czech hedgehogs (line
+## work the image model turns into glyph-like strokes; the view draws both per obstacle), the small
+## gear (a generated 16 px gear wobbles when it spins) and the two puffs (soft radial particles,
+## TankProcTex). Their placeholder is their art, so they are never logged as missing.
+const CODE_DRAWN: Array[String] = [
+	"bg_ground", "prop_wire", "prop_tank_traps", "gear_medium", "steam_puff", "smoke_puff"
+]
 
-## The sprite's texture: the generated PNG when present, else a placeholder of its size.
+## The near strips are one generated segment mirrored (pixelate tiles a 3:1 image with flips), so
+## each landmark met its own mirror image at the seam (twin spires, twin chimneys). Measured on the
+## pixelated strips: [segment end (the mirror axis, px), width of the plain fields band that ends
+## there, width of the plain band the segment starts with]. composed_strip keeps the segment once,
+## centred, and fills both sides with those plain bands (alternately flipped, so every join is
+## seamless, the strip's own edges included): one landmark per strip, about every two screens.
+const STRIP_SEGMENTS := {
+	"bg_fields_near": [660, 110, 100],
+	"bg_village_near": [542, 80, 60],
+	"bg_quarry_near": [626, 80, 80],
+	"bg_town_near": [508, 50, 50],
+	"bg_depot_near": [557, 80, 80],
+}
+
+
+## The sprite's texture: the generated PNG when present (prepared at load: fitted, graded, its
+## openings cut, a near strip composed), else a placeholder of its size. CODE_DRAWN ids always
+## use their drawing.
 static func texture(id: String) -> Texture2D:
 	if _cache.has(id):
 		return _cache[id]
 	var path := SPRITES_DIR.path_join(id + ".png")
 	var tex: Texture2D = null
-	if ResourceLoader.exists(path):
+	if not is_code_drawn(id) and ResourceLoader.exists(path):
 		tex = load(path) as Texture2D
-		if tex != null and (fills_rect(id) or is_steel(id)):
-			var img := tex.get_image()
-			if fills_rect(id):
-				img = filled_image(img, size_of(id))
-			if is_steel(id):
-				var darker := 2 if id == "boss_hull" or id.begins_with("boss_turret") else 0
-				img = graded_steel(img, darker, is_plated(id))
-				img = machinery_fixed(id, img)
-			tex = ImageTexture.create_from_image(img)
+		if tex != null:
+			var img := prepared_image(id, tex.get_image())
+			if img != null:
+				tex = ImageTexture.create_from_image(img)
 	elif (
 		id == "boss_bogie_broken" and ResourceLoader.exists(SPRITES_DIR.path_join("boss_bogie.png"))
 	):
@@ -89,11 +109,77 @@ static func texture(id: String) -> Texture2D:
 		tex = ImageTexture.create_from_image(broken_bogie(whole))
 	if tex == null:
 		tex = ImageTexture.create_from_image(placeholder_image(id))
-		if not _logged.has(id):
+		if not _logged.has(id) and not is_code_drawn(id):
 			_logged[id] = true
 			print("tank: placeholder art for %s" % id)
 	_cache[id] = tex
 	return tex
+
+
+## True for the ids the view draws in code whatever PNG exists (CODE_DRAWN).
+static func is_code_drawn(id: String) -> bool:
+	return CODE_DRAWN.has(id)
+
+
+## The generated image of `id` as the view draws it, or null when it needs no change.
+static func prepared_image(id: String, src: Image) -> Image:
+	if not (fills_rect(id) or is_steel(id) or STRIP_SEGMENTS.has(id)):
+		return null
+	var img := src
+	if img.is_compressed():
+		img = img.duplicate() as Image
+		img.decompress()
+	if fills_rect(id):
+		img = filled_image(img, size_of(id))
+	if is_steel(id):
+		img = material_grade(img, id)
+		img = machinery_fixed(id, img)
+	if STRIP_SEGMENTS.has(id):
+		img = composed_strip(id, img)
+	return img
+
+
+## A near strip with its landmark once (STRIP_SEGMENTS): the generated segment in the middle, its
+## plain end bands repeated outward on both sides, alternately flipped and straight, to the strip's
+## width. Other sizes come back unchanged.
+static func composed_strip(id: String, src: Image) -> Image:
+	var seg: Array = STRIP_SEGMENTS.get(id, [])
+	var w := src.get_width()
+	var h := src.get_height()
+	if seg.size() < 3 or w != size_of(id).x:
+		return src
+	var m := int(seg[0])
+	var qr := int(seg[1])
+	var ql := int(seg[2])
+	var flat := src.duplicate() as Image
+	flat.convert(Image.FORMAT_RGBA8)
+	var left_pad := (w - m) / 2
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.blit_rect(flat, Rect2i(0, 0, m, h), Vector2i(left_pad, 0))
+	# Right of the segment: its last band flipped (so the join mirrors), straight, flipped...
+	var band := flat.get_region(Rect2i(m - qr, 0, qr, h))
+	var band_f := band.duplicate() as Image
+	band_f.flip_x()
+	var x := left_pad + m
+	var flip := true
+	while x < w:
+		var n := mini(qr, w - x)
+		img.blit_rect(band_f if flip else band, Rect2i(0, 0, n, h), Vector2i(x, 0))
+		x += n
+		flip = not flip
+	# Left of it: its first band flipped, then straight, outward to the strip's left edge.
+	var lead := flat.get_region(Rect2i(0, 0, ql, h))
+	var lead_f := lead.duplicate() as Image
+	lead_f.flip_x()
+	x = left_pad
+	flip = true
+	while x > 0:
+		var n := mini(ql, x)
+		var piece := lead_f if flip else lead
+		img.blit_rect(piece, Rect2i(ql - n, 0, n, h), Vector2i(x - n, 0))
+		x -= n
+		flip = not flip
+	return img
 
 
 ## True for the sprites whose silhouette must fill their whole art.json rect because rigs.json
@@ -193,46 +279,156 @@ static func is_steel(id: String) -> bool:
 	)
 
 
-## The art direction in the pipeline, not only in the prompts (brief 3: steel grey-black, lights
-## the only near-saturated pixels): every opaque pixel of a steel sprite loses its saturation
-## (HSV s <= 0.15 above value 0.25, so dark rust and mud survive as accents) and may not use a
-## light colour (fire, lamp or arc); it snaps to the nearest remaining palette colour.
-##
-## Then the tone pass (_tone_smooth): grey steel collapses to four body tones (#17181b .. #353739,
-## `darker` steps lower for a sprite that must sit darker, the Behemoth's hull) smoothed by a
-## median over 5 x 5 (large sprites) or 3 x 3, so weathering blotches become soft fields instead of
-## camouflage; rivets and lit rims (two tones above the median) stay as highlights no brighter than
-## #666869, seams (two below) stay as dark lines, and rust survives only where it forms a patch
-## (an isolated rust pixel is speckle and becomes steel). With `plates`, every body field within one
-## tone of the sprite's commonest tone becomes that one plate tone with a lit top edge and a darker
-## foot, so a hull reads as evenly sooted gunmetal (brief 3), not as camouflage.
-static func graded_steel(src: Image, darker: int = 0, plates: bool = false) -> Image:
+## The art direction in the pipeline, not only in the prompts (brief 3: riveted steel, soot, rust,
+## mud; lights the only near-saturated pixels). The generated armour already carries its plate
+## seams, rivet rows, soot streaks and mud band (the production prompts share one material clause),
+## so the grade keeps that texture and only disciplines it:
+## - a light colour (fire, lamp, arc) on steel becomes a grey of its value, no brighter than #424446
+##   (props and the depot gate keep theirs: a crater's reflection, a gate lamp);
+## - rust and mud stay in their dark tones (#7d4f3a becomes #5a3a2e, #574634 and #6b5842 become
+##   #443628) and an isolated rust pixel (fewer than two rust or mud neighbours) becomes the steel
+##   beside it, so nothing sparkles orange;
+## - greys keep their tone (the Behemoth and the flywheels one step darker), capped at #666869;
+## - armour gets a cool rim: the top pixel of every column (#59636c on the crew's tank, #4b5561 on
+##   enemies and the Behemoth) and the rear edge of the upper hull (#4b5561), as if back-lit by
+##   moonlit haze, so the dark silhouettes part from the dark sky.
+## Rooms keep their generated walls (near-black, lit by the code-drawn glows).
+static func material_grade(src: Image, id: String) -> Image:
 	var img := src.duplicate() as Image
 	if img.is_compressed():
 		img.decompress()
 	img.convert(Image.FORMAT_RGBA8)
-	var lights := light_colours()
-	var keep: Array[Color] = []
-	for p in palette():
-		if not lights.has(p.to_rgba32()):
-			keep.append(p)
-	var remap := {}
+	if id.begins_with("room_"):
+		return img
+	var darker := 0
+	if id == "boss_hull" or id.begins_with("boss_turret") or id.begins_with("flywheel"):
+		darker = 1
+	var keep_lights := id.begins_with("prop_") or id == "depot_gate"
+	# Enemies and the Behemoth stay a step duller than the crew's tank: no slate highlights on their
+	# plates (the raw sprites catch blue-grey glints that read as camouflage blotches), greys capped.
+	var dull := id.begins_with("enemy_") or id.begins_with("boss_")
 	var w := img.get_width()
 	var h := img.get_height()
+	var cache := {}
+	var earthy := PackedByteArray()
+	earthy.resize(w * h)
+	var rusty := PackedByteArray()
+	rusty.resize(w * h)
+	var rust_keys := {R0.to_rgba32(): true, R1.to_rgba32(): true}
+	var earth_keys := {
+		R0.to_rgba32(): true,
+		R1.to_rgba32(): true,
+		B0.to_rgba32(): true,
+		B1.to_rgba32(): true,
+		B2.to_rgba32(): true,
+		B3.to_rgba32(): true,
+	}
 	for y in h:
 		for x in w:
 			var c := img.get_pixel(x, y)
 			if c.a < 0.5:
+				img.set_pixel(x, y, CLEAR)
 				continue
 			var key := c.to_rgba32()
-			if not remap.has(key):
-				remap[key] = _steel_colour(c, lights.has(key), keep)
-			img.set_pixel(x, y, remap[key])
-	return _tone_smooth(img, darker, plates)
+			if not cache.has(key):
+				cache[key] = _material_colour(c, darker, keep_lights, dull)
+			var col: Color = cache[key]
+			img.set_pixel(x, y, col)
+			var k := col.to_rgba32()
+			earthy[y * w + x] = 1 if earth_keys.has(k) else 0
+			rusty[y * w + x] = 1 if rust_keys.has(k) else 0
+	# Isolated rust is speckle: it becomes the steel next to it.
+	for y in h:
+		for x in w:
+			if rusty[y * w + x] == 0:
+				continue
+			var n := 0
+			var steel := G3
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if dx == 0 and dy == 0:
+						continue
+					var xx := x + dx
+					var yy := y + dy
+					if xx < 0 or yy < 0 or xx >= w or yy >= h:
+						continue
+					if earthy[yy * w + xx] == 1:
+						n += 1
+					else:
+						var nc := img.get_pixel(xx, yy)
+						if nc.a > 0.5:
+							steel = nc
+			if n < 2:
+				img.set_pixel(x, y, steel)
+	if is_plated(id):
+		_rim(img, id)
+	return img
 
 
-## True for the armour sprites whose body is graded as even plates (graded_steel `plates`): the
-## hulls, the turrets, the enemies and the Behemoth's hull and turret.
+static func _material_colour(c: Color, darker: int, keep_lights: bool, dull: bool) -> Color:
+	var p := _nearest(c, palette())
+	if dull and (p == O0 or p == O2 or p == C0):
+		p = G5
+	# Their rust and mud stay in the darkest tones, so a foot of crumbs never sparkles orange.
+	if dull and (p == R1 or p == R2):
+		return R0
+	if dull and (p == B3 or p == B4 or p == B5):
+		return B2
+	var key := p.to_rgba32()
+	if light_colours().has(key):
+		if keep_lights:
+			return p
+		var ramp := steel_ramp()
+		var best := 0
+		for k in ramp.size():
+			if (
+				absf(ramp[k].get_luminance() - p.get_luminance())
+				< absf(ramp[best].get_luminance() - p.get_luminance())
+			):
+				best = k
+		return ramp[clampi(mini(best, 6) - darker, 1, 6)]
+	if p == R2:
+		return R1
+	if p == B4 or p == B5:
+		return B3
+	var greys: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
+	var gi := greys.find(p)
+	if gi >= 0:
+		return greys[clampi(gi - darker, 0, 6 if dull else 8)] if gi > 0 else G0
+	return p
+
+
+## The cool rim of an armour sprite, in place (see material_grade).
+static func _rim(img: Image, id: String) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var crew := not (id.begins_with("enemy_") or id.begins_with("boss_"))
+	var top_col := O0 if crew else O2
+	for x in w:
+		for y in h:
+			if img.get_pixel(x, y).a > 0.5:
+				img.set_pixel(x, y, top_col)
+				if crew and y + 1 < h and img.get_pixel(x, y + 1).a > 0.5:
+					var below := img.get_pixel(x, y + 1)
+					if below.get_luminance() < O2.get_luminance():
+						img.set_pixel(x, y + 1, O2)
+				break
+	# The rear edge (the crew's tank faces right, so its rear is the left side) over the upper 60%.
+	for y in int(h * 0.6):
+		if crew:
+			for x in w:
+				if img.get_pixel(x, y).a > 0.5:
+					img.set_pixel(x, y, O2)
+					break
+		else:
+			for x in range(w - 1, -1, -1):
+				if img.get_pixel(x, y).a > 0.5:
+					img.set_pixel(x, y, O2)
+					break
+
+
+## True for the armour sprites that get the cool rim (material_grade): the hulls, the turrets, the
+## enemies and the Behemoth's hull and turret.
 static func is_plated(id: String) -> bool:
 	for prefix: String in ["hull_", "turret_", "enemy_", "boss_hull", "boss_turret"]:
 		if id.begins_with(prefix):
@@ -240,128 +436,9 @@ static func is_plated(id: String) -> bool:
 	return false
 
 
-## The grey ramp the tone pass uses, G0 .. G8 (index = tone).
+## The grey ramp the grade uses, G0 .. G8 (index = tone).
 static func steel_ramp() -> Array[Color]:
 	return [G0, G1, G2, G3, G4, G5, G6, G7, G8]
-
-
-static func _tone_smooth(img: Image, darker: int, plates: bool) -> Image:
-	var w := img.get_width()
-	var h := img.get_height()
-	var ramp := steel_ramp()
-	var lums: Array[float] = []
-	for c in ramp:
-		lums.append(c.get_luminance())
-	var tone := PackedInt32Array()
-	tone.resize(w * h)
-	var rusty := PackedByteArray()
-	rusty.resize(w * h)
-	var cache := {}
-	for y in h:
-		for x in w:
-			var c := img.get_pixel(x, y)
-			var i := y * w + x
-			if c.a < 0.5:
-				tone[i] = -1
-				continue
-			var key := c.to_rgba32()
-			if not cache.has(key):
-				var best := 0
-				var lum := c.get_luminance()
-				for k in lums.size():
-					if absf(lums[k] - lum) < absf(lums[best] - lum):
-						best = k
-				cache[key] = best | (256 if c.s > 0.14 and c.v > 0.08 else 0)
-			var v: int = cache[key]
-			tone[i] = v & 255
-			rusty[i] = 1 if v >= 256 else 0
-	var rad := 2 if w * h >= 12000 else 1
-	var med_of := PackedInt32Array()
-	med_of.resize(w * h)
-	var rust_ok := PackedByteArray()
-	rust_ok.resize(w * h)
-	var hist := PackedInt32Array()
-	hist.resize(ramp.size())
-	var body_hist := PackedInt32Array()
-	body_hist.resize(ramp.size())
-	for y in h:
-		for x in w:
-			var i := y * w + x
-			if tone[i] < 0:
-				continue
-			hist.fill(0)
-			var n := 0
-			var rn := 0
-			for dy in range(-rad, rad + 1):
-				var yy := y + dy
-				if yy < 0 or yy >= h:
-					continue
-				for dx in range(-rad, rad + 1):
-					var xx := x + dx
-					if xx < 0 or xx >= w:
-						continue
-					var j := yy * w + xx
-					if tone[j] < 0:
-						continue
-					hist[tone[j]] += 1
-					n += 1
-					rn += rusty[j]
-			var med := 0
-			var acc := 0
-			for k in hist.size():
-				acc += hist[k]
-				if acc * 2 >= n:
-					med = k
-					break
-			med_of[i] = med
-			rust_ok[i] = 1 if rusty[i] == 1 and rn * 2 >= n else 0
-			if absi(tone[i] - med) < 2:
-				body_hist[med] += 1
-	# Even plates: the most common body tone is the plate tone; a field within one tone of it is
-	# plate (no blotches), lit one tone up in its top three rows and one down in its lowest fifth.
-	var base := 0
-	for k in body_hist.size():
-		if body_hist[k] > body_hist[base]:
-			base = k
-	var tops := PackedInt32Array()
-	tops.resize(w)
-	var bottoms := PackedInt32Array()
-	bottoms.resize(w)
-	for x in w:
-		tops[x] = -1
-		for y in h:
-			if tone[y * w + x] >= 0:
-				if tops[x] < 0:
-					tops[x] = y
-				bottoms[x] = y
-	var out := img.duplicate() as Image
-	for y in h:
-		for x in w:
-			var i := y * w + x
-			var t := tone[i]
-			if t < 0:
-				continue
-			var med := med_of[i]
-			var d := t - med
-			var col: Color
-			if d >= 2:
-				col = ramp[mini(t, 8)]
-			elif d <= -2:
-				col = ramp[maxi(med - 2, 1)]
-			elif plates and absi(med - base) <= 1:
-				var shift := 0
-				var span := maxi(bottoms[x] - tops[x], 1)
-				if y - tops[x] < 3:
-					shift = 1
-				elif float(y - tops[x]) / float(span) > 0.8:
-					shift = -1
-				col = ramp[clampi(base + shift - darker, 2, 6)]
-			else:
-				col = ramp[clampi(med - darker, 2, 5)]
-			if rust_ok[i] == 1:
-				col = img.get_pixel(x, y)
-			out.set_pixel(x, y, col)
-	return out
 
 
 ## Machinery whose code-drawn parts need their openings exactly where rigs.json says: the diesel
@@ -435,15 +512,6 @@ static func light_colours() -> Dictionary:
 	for c: Color in [F0, F1, F2, F3, C1, C2, C3]:
 		out[c.to_rgba32()] = true
 	return out
-
-
-static func _steel_colour(c: Color, is_light: bool, keep: Array[Color]) -> Color:
-	var v := minf(c.v, 0.55) if is_light else c.v
-	var s := c.s
-	if v > 0.25 or is_light:
-		s = minf(s, 0.15)
-	var g := Color.from_hsv(c.h, s, v)
-	return _nearest(g, keep)
 
 
 static func _nearest(c: Color, pal: Array[Color]) -> Color:
@@ -930,16 +998,10 @@ static func _diesel_block(c: Canvas) -> void:
 	c.rect(0, h - 7, w, 7, G5)
 	c.rect(4, h - 3, w - 8, 3, G3)
 	c.rect(0, h - 7, w, 1, G8)
-	for i in 4:
-		var x := 6 + i * 12
-		c.rect(x - 1, 5, 10, 12, G3)
-		c.rect(x, 6, 8, 10, G0)
-		c.rect(x, 6, 8, 1, G2)
-		c.rect(x + 1, 15, 6, 1, G4)
-		c.px(x - 2, 6, G9)
-		c.px(x + 9, 6, G9)
-		c.px(x - 2, 15, G9)
-		c.px(x + 9, 15, G9)
+	for x: int in [13, 23, 32, 42]:
+		c.rect(x - 1, 8, 9, 8, G3)
+		c.rect(x, 9, 7, 6, G0)
+		c.rect(x, 9, 7, 1, G2)
 	c.rect(2, 17, w - 4, 1, G3)
 	c.rect(2, 18, w - 4, 1, G7)
 	_rivets(c, 4, w - 6, 21, 6, G9, G3)
@@ -1219,19 +1281,17 @@ static func _tracks(c: Canvas, x0: int, x1: int, y0: int, y1: int) -> void:
 ## A low wedge light tank: sloped front, a small turret, a thin long barrel at y 10.
 static func _enemy_light(c: Canvas) -> void:
 	_tracks(c, 6, 76, 33, 40)
-	c.poly([4, 33, 14, 21, 70, 21, 76, 33], G5)
-	c.line(14, 21, 70, 21, G9)
-	c.line(4, 33, 14, 21, G7)
-	c.rect(8, 28, 62, 3, G3)
-	_rivets(c, 18, 66, 25, 7, G8, G3)
-	# Turret and barrel.
-	c.poly([32, 21, 36, 8, 56, 8, 62, 21], G6)
-	c.line(36, 8, 56, 8, G10)
-	c.rect(35, 11, 22, 6, G5)
-	c.rect(2, 9, 34, 3, G4)
-	c.rect(2, 9, 34, 1, G8)
-	c.rect(0, 8, 4, 5, G3)
-	c.rect(46, 4, 6, 4, G7)
+	# A very low wedge: the nose rises from the ground to a flat deck, no turret.
+	c.poly([0, 34, 30, 22, 72, 20, 78, 26, 76, 34], G5)
+	c.line(0, 34, 30, 22, G7)
+	c.line(30, 22, 72, 20, G9)
+	c.rect(8, 29, 64, 3, G3)
+	_rivets(c, 34, 70, 25, 7, G8, G3)
+	# A tiny cupola near the rear with a short thin gun, muzzle at (52, 20).
+	c.poly([60, 21, 62, 15, 72, 15, 74, 20], G6)
+	c.line(62, 15, 72, 15, G10)
+	c.rect(52, 18, 10, 2, G4)
+	c.rect(52, 18, 10, 1, G8)
 	c.speckle(0, 0, 80, 40, R1, 0.1, 1, true)
 	c.speckle(0, 0, 80, 40, G3, 0.08, 2, true)
 
@@ -1253,7 +1313,7 @@ static func _enemy_medium(c: Canvas) -> void:
 	_seams(c, 54, 80, 9, 27, 14, G3, G7)
 	c.rect(60, 2, 12, 4, G7)
 	c.rect(63, 3, 6, 1, G2)
-	# The gun: a thick barrel and a mantlet, muzzle at (2, 14).
+	# The gun: a thick barrel and a mantlet, muzzle at (0, 15).
 	c.rect(2, 12, 40, 4, G4)
 	c.rect(2, 12, 40, 1, G8)
 	c.rect(0, 11, 5, 6, G3)
@@ -1273,23 +1333,23 @@ static func _enemy_heavy(c: Canvas) -> void:
 	c.rect(8, 46, 120, 3, G3)
 	_seams(c, 22, 118, 36, 46, 22, G3, G6)
 	_rivets(c, 14, 122, 40, 7, G9, G3)
-	# A wide turret with a heavy mantlet and a long barrel to (0, 16).
+	# A wide turret with a heavy mantlet low in its front and a long barrel to (0, 29).
 	c.poly([40, 34, 46, 12, 98, 12, 106, 34], G6)
 	c.line(46, 12, 98, 12, G10)
 	c.rect(48, 17, 52, 15, G5)
 	_seams(c, 60, 92, 14, 33, 16, G3, G7)
 	c.rect(70, 8, 14, 4, G7)
 	c.rect(72, 9, 10, 1, G2)
-	c.rect(0, 14, 50, 5, G4)
-	c.rect(0, 14, 50, 1, G8)
-	c.rect(0, 13, 6, 7, G3)
-	c.rect(38, 10, 10, 14, G7)
-	c.rect(38, 10, 10, 1, G9)
+	c.rect(0, 27, 46, 4, G4)
+	c.rect(0, 27, 46, 1, G8)
+	c.rect(0, 26, 6, 7, G3)
+	c.rect(38, 22, 10, 12, G7)
+	c.rect(38, 22, 10, 1, G9)
 	c.speckle(0, 0, 136, 60, R1, 0.1, 1, true)
 	c.speckle(0, 0, 136, 60, G3, 0.08, 2, true)
 
 
-## A turretless casemate destroyer: a long sloped casemate, a fixed gun to (0, 18), engine deck.
+## A turretless casemate destroyer: a long sloped casemate, a fixed gun to (0, 17), engine deck.
 static func _enemy_destroyer(c: Canvas) -> void:
 	_tracks(c, 6, 106, 37, 44)
 	c.poly([4, 37, 8, 26, 108, 26, 108, 37], G5)
@@ -1316,7 +1376,7 @@ static func _enemy_destroyer(c: Canvas) -> void:
 
 
 ## A dug-in gun behind a concrete revetment: a low turret ([8,0,32,14] is its hit box), the
-## muzzle at (2, 8), concrete and an earth mound below and behind.
+## muzzle at (23, 16) on the generated sprite (here on the wall's top), concrete and an earth mound below and behind.
 static func _enemy_dugin(c: Canvas) -> void:
 	# The earth mound behind and the turret.
 	c.poly([38, 14, 48, 12, 62, 18, 72, 24, 72, 36, 38, 36], B2)
@@ -1977,33 +2037,40 @@ static func _depot_backdrop(c: Canvas) -> void:
 	c.rect(0, h - 8, w, 8, G3)
 
 
+## The road's mud in cross-section (code-drawn: the image model kept drawing a landscape into this
+## band): soft horizontal layers of brown-black mud, darker with depth, two ruts, and flat puddles of
+## dark water with one dim cold sheen row (the lamps' reflections are added by the view).
 static func _ground(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.fill(B2)
-	# Layers from the grass verge at the top to the mud of the road.
-	c.rect(0, 0, w, 6, B1)
+	var layers: Array[Color] = [B2, B1, B2, B1, B0, B1, B0, G1]
+	for y in h:
+		for x in w:
+			# Two octaves of smooth noise bend the layer boundaries, so the bands never rule straight.
+			var wob := (
+				sin(TAU * x / w * 3.0 + y * 0.21) * 1.6
+				+ sin(TAU * x / w * 11.0 + y * 0.53) * 0.8
+				+ (c.noise(x / 6, y / 3, 83) - 0.5) * 2.0
+			)
+			var t := clampf((y + wob) / float(h), 0.0, 0.999)
+			c.px(x, y, layers[int(t * layers.size())])
+	c.rect(0, 0, w, 2, B1)
 	for x in w:
-		if c.noise(x, 1, 81) < 0.6:
-			c.px(x, 5 + int(c.noise(x, 2, 81) * 2.0), O1)
-	c.rect(0, 6, w, 14, B3)
-	c.rect(0, 20, w, 30, B2)
-	c.rect(0, 50, w, h - 50, B1)
-	# Ruts along the road and puddles that catch the lamps.
-	for x in w:
-		var rut := 24 + int(round(sin(TAU * x / w * 6.0) * 1.5))
-		c.px(x, rut, B1)
-		c.px(x, rut + 1, B0)
-		c.px(x, rut + 12, B1)
-		c.px(x, rut + 13, B3)
-	for p in range(0, w, 130):
-		var py := 30 + int(c.noise(p, 3, 82) * 14.0)
-		var pw := 22.0 + c.noise(p, 4, 82) * 14.0
-		c.ellipse(p + 40.0, py, pw, 3.0, C0)
-		c.hline(p + 30, p + 46, py - 1, C1)
-		c.px(p + 38, py, C2)
-	c.speckle(0, 0, w, h, B4, 0.12, 5, false)
-	c.speckle(0, 0, w, h, B0, 0.1, 6, false)
+		if c.noise(x / 2, 1, 81) < 0.45:
+			c.px(x, 2, B3)
+		var rut := 9 + int(round(sin(TAU * x / w * 4.0) * 1.2))
+		c.px(x, rut, B0)
+		c.px(x, rut + 1, G1)
+		c.px(x, rut + 2, B3)
+		c.px(x, rut + 14, B0)
+		c.px(x, rut + 15, B3)
+	for p in range(0, w, 120):
+		var px := p + 20 + int(c.noise(p, 3, 82) * 70.0)
+		var py := 5 + int(c.noise(p, 4, 82) * 18.0)
+		var pw := 10.0 + c.noise(p, 5, 82) * 12.0
+		c.ellipse(px, py, pw, 1.6, G1)
+		c.ellipse(px, py, pw - 2.0, 1.0, C0)
+		c.hline(int(px - pw * 0.4), int(px + pw * 0.2), py - 1, O2)
 
 
 static func _debris(c: Canvas) -> void:
