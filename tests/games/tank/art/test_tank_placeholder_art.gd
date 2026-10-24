@@ -381,7 +381,8 @@ func test_lights_are_the_only_bright_saturated_colours() -> void:
 
 
 func test_texture_is_cached_per_id_and_logs_once() -> void:
-	var id := "prop_rubble"
+	# An id with no PNG: after the production art pass every art.json id has one.
+	var id := "no_such_sprite_cached"
 	var t1 := TankPlaceholderArt.texture(id)
 	var logged_before: int = TankPlaceholderArt._logged.size()
 	var t2 := TankPlaceholderArt.texture(id)
