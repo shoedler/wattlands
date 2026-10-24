@@ -6,11 +6,13 @@ extends Control
 ## same thing headless.
 ## Options (user args or the TANK_FIXTURE environment variable, ";"-separated):
 ##   crew=<1..3>        the tank (default 3)
-##   kind=state|gun_line|boss   the fixture (default state)
+##   kind=state|gun_line|boss|cap   the fixture (default state); cap is the Citadel at the snapshot caps,
+##                      16 enemies and 24 shells always in view, the gun firing every 0.4 s
 ##   peer=<n>           the local rider's peer (default 1)
 ##   fire=<s>           seconds between shots (default 2.5, 0 for none)
 ##   still              the hull holds still
-##   stats              print frame times after 300 frames, then quit
+##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
+##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
 
@@ -26,6 +28,7 @@ var _fire_in: float = 1.0
 var _next_shell_id: int = 900
 var _times: Array[float] = []
 var _frames: int = 0
+var _elapsed: float = 0.0
 
 
 func _ready() -> void:
@@ -36,6 +39,10 @@ func _ready() -> void:
 			state = TankFixtures.gun_line(crew)
 		"boss":
 			state = TankFixtures.boss(crew)
+		"cap":
+			state = _cap_state()
+			if not _opts.has("fire"):
+				_opts["fire"] = "0.4"
 		_:
 			state = TankFixtures.state(crew)
 	var peer := int(_opts.get("peer", 1))
@@ -56,7 +63,9 @@ func _process(delta: float) -> void:
 	_frames += 1
 	if _opts.has("stats"):
 		_times.append(delta)
-		if _frames == 300:
+		_elapsed += delta
+		var seconds := float(_opts.get("seconds", 0.0))
+		if (seconds > 0.0 and _elapsed >= seconds) or (seconds <= 0.0 and _frames == 300):
 			_print_stats()
 			get_tree().quit()
 	_acc += delta
@@ -108,6 +117,40 @@ func _tick() -> void:
 		):
 			keep.append(s)
 	state.shells = keep
+	if str(_opts.get("kind", "state")) == "cap":
+		_top_up_cap()
+
+
+## The Citadel at the caps (TankConst.MAX_ENEMIES enemies, MAX_SHELLS shells), placed where the camera
+## sees them: enemies on both sides of the hull, shells arcing over the field.
+func _cap_state() -> TankState:
+	var s := TankFixtures.cap()
+	s.hull.x_px = 5000.0
+	for i in s.enemies.size():
+		var e := s.enemies[i]
+		var side := 1 if i % 2 == 0 else -1
+		e.x_px = s.hull.x_px + float(side) * (150.0 + 55.0 * floorf(float(i) * 0.5))
+		e.mode = TankIds.EM_TELEGRAPH
+		e.telegraph_s = 3.0
+	return s
+
+
+## Keeps every cap slot busy: shells reborn in the air above the hull, enemies held in telegraph.
+func _top_up_cap() -> void:
+	for e in state.enemies:
+		e.telegraph_s = 3.0
+	while state.shells.size() < TankConst.MAX_SHELLS:
+		var i := _next_shell_id
+		_next_shell_id += 1
+		var s := TankShellState.new()
+		s.id = i
+		s.type = TankIds.SHELL_HEAVY
+		s.x = state.hull.x_px - 300.0 + float((i * 97) % 900)
+		s.y = float(TankConst.GROUND_Y) - 260.0 - float((i * 31) % 120)
+		s.vx = 220.0 * (1.0 if i % 2 == 0 else -1.0)
+		s.vy = -80.0
+		s.friendly = i % 2 != 0
+		state.shells.append(s)
 
 
 func _fire() -> void:
@@ -153,9 +196,24 @@ func _print_stats() -> void:
 	var low: float = 0.0
 	if not sorted.is_empty():
 		low = sorted[int(float(sorted.size()) * 0.99)]
+	var over := 0
+	for t in _times:
+		if t > 1.0 / 60.0 + 0.0005:
+			over += 1
+	var worst: float = 0.0 if sorted.is_empty() else sorted.back()
+	var fmt := "tank view fixture: mean %.2f ms, p99 %.2f ms, worst %.2f ms, "
+	fmt += "%d of %d frames over 16.7 ms, %d enemies, %d shells"
 	print(
 		(
-			"tank view fixture: mean %.2f ms, 99th percentile %.2f ms over %d frames"
-			% [mean * 1000.0, low * 1000.0, _times.size()]
+			fmt
+			% [
+				mean * 1000.0,
+				low * 1000.0,
+				worst * 1000.0,
+				over,
+				_times.size(),
+				state.enemies.size(),
+				state.shells.size()
+			]
 		)
 	)
