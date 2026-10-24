@@ -71,7 +71,7 @@ func build() -> void:
 	flyball.travel_px = 2.0
 	flyball.max_cps = 2.0
 	flyball.auto_process = false
-	flyball.position = anchor_local("governor")
+	flyball.position = anchor_local("flyball")
 	# The regulator is drawn in code from this part's offset (paint_machinery_front): two balls on
 	# arms over a vertical spindle standing on the engine (the generated sprite read as scales).
 	add_child(flyball)
