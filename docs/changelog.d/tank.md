@@ -13,4 +13,4 @@
 ### Known gaps (Diesel Domestiques)
 
 - Not tested on a real trainer or against the real Strava API: the real-trainer checklist ends with the items only a human can judge (sprint gestures, audio mix, frame pacing on integrated graphics, network loss).
-- Placeholder art and synthesized audio only. P1 content is not built: the garage and the hull finish picker, Viaduct Crossing, and two tanks in one lobby.
+- Synthesized audio only. P1 content is not built: the garage and the hull finish picker, Viaduct Crossing, and two tanks in one lobby.
