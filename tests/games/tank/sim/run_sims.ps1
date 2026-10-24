@@ -1,5 +1,5 @@
 # tests/games/tank/sim/run_sims.ps1: the PowerShell twin of run_sims.sh (Windows PowerShell 5.1). Same
-# scenarios (s1-s7), same report names in build/tank/sims, same checker.
+# scenarios (s1-s7 and s9), same report names in build/tank/sims, same checker.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/games/tank/sim/run_sims.ps1 [s1 s2 ...]
 #
@@ -21,6 +21,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 
 $Erg = 'erg:compliance=1.0'
 $DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+$Sprinter = 'intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 $GunlineDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 
 function Invoke-Sim([string]$Name, [string[]]$SimArgs) {
@@ -67,7 +68,11 @@ function Invoke-S7 {
     Invoke-Sim 's7_c3_seed1' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", '--seed=1')
 }
 
-$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7')
+function Invoke-S9 {
+    Invoke-Sim 's9_c1_sprint' @('--content=ashfall_road', '--players=1', '--bots=0', "--rider=$Sprinter", '--seed=1')
+}
+
+$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9')
 $wanted = if ($Scenarios -and $Scenarios.Count -gt 0) { $Scenarios } elseif ($env:TANK_SIMS) { $env:TANK_SIMS -split '[,\s]+' } else { $order }
 foreach ($sc in $wanted) {
     if ($order -notcontains $sc) { Write-Error "run_sims: unknown scenario $sc (one of: $($order -join ' '))"; exit 2 }

@@ -140,6 +140,12 @@ function makeRun(crew, opts = {}) {
       }
     });
   }
+  // Crew 1's host rider drives the Bulwark: its "Surge to ram" prompt shows in every Advance (the report's hud log is the host rider's).
+  if (crew === 1 && table === SEG_TABLE) {
+    SEG_TABLE.forEach((row, i) => {
+      if (row[0] === 'advance') events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_RAM', peer: 1, t: starts[i] + 5 });
+    });
+  }
   events.push(...(opts.events ?? []));
   const report = {
     schema: 1,
@@ -668,6 +674,73 @@ test('S7 compares the deterministic hash, the game events and the snapshot hashe
   assert.match(ids(C.checkS7({ s1_c3_seed1: a, s7_c3_seed1: other }).details), /not started with the same arguments/);
 });
 
+// --- S9 ---------------------------------------------------------------------------------------------------------------
+
+/** A clean sprinting solo run: a Ram in each Advance with its haptic, power 300 W at the end of the stage 1 Advance (gun line at 500 s). */
+function sprintRun(over = {}) {
+  const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
+  const starts = [300, 660, 1020];
+  const events = starts.map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 1, id: 10 + i }));
+  const directives = starts.map((a, i) => req(1, a + 40, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' }, { id: 40 + i }));
+  const r = makeRun(1, {
+    events: over.events ?? events,
+    directives: over.directives ?? directives,
+    extraRows: (row) => {
+      let out = row;
+      if (row.t >= 494 && row.t < 500) out = { ...out, power_w: 300 };
+      if (over.rows) out = over.rows(out) ?? out;
+      return out;
+    },
+  });
+  return r;
+}
+
+test('S9 passes on a sprinter that rams in every Advance and enters the gun line at its target', () => {
+  const r = C.checkS9({ s9_c1_sprint: sprintRun() });
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /3 Rams, 3 ram haptics, 1 gun line entries/);
+  assert.equal(C.checkS9({}).status, 'SKIP');
+  assert.deepEqual(C.successfulRams(sprintRun()).map((e) => e.id), [10, 11, 12]);
+  const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 2);
+  assert.equal(sw.length, 1);
+  assert.ok(sw[0].trailingW >= 300 - 1e-6, 'the 3 s before the gun line are the sprint');
+});
+
+test('S9 fails without a Ram in an Advance, without the haptic, with a refused one, or with no sprint into the gun line', () => {
+  const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
+  const noRam2 = [300, 1020].map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 1, id: 10 + i }));
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: noRam2 }) }).details), /stage 2 Advance has no successful Ram/);
+  const failedOnly = [300, 660, 1020].map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 0, id: 0 }));
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: failedOnly }) }).details), /stage 1 Advance has no successful Ram/);
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: [] }) }).details), /a Ram never sent its haptic/);
+  const refused = [req(1, 340, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' }, { accepted: false, reason: 'cooldown' })];
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: refused }) }).details), /ram haptic .* refused: cooldown/);
+  const calm = sprintRun({ rows: (row) => (row.t >= 494 && row.t < 500 ? { ...row, power_w: 150 } : row) });
+  assert.match(ids(C.checkS9({ s9_c1_sprint: calm }).details), /no gun line was entered straight after a sprint/);
+});
+
+test('S9 fails when the gun line is entered at the sprint power, or a Ram haptic goes to an ERG rider', () => {
+  const spike = sprintRun({ rows: (row) => (row.phase === 2 && row.t <= 502 ? { ...row, applied_target_w: 300 } : row) });
+  assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /entered after a 300 W sprint with a 300 W target \(planned 180 W\)/);
+  const erg = [req(1, 560, { mode: "SIM", haptic: 3.0, duration_s: 1.0, reason: "ram" })];
+  const r = sprintRun({ directives: erg });
+  assert.match(ids(C.checkS9({ s9_c1_sprint: r }).details), /haptic to an ERG rider|SIM-mode\) in an ERG/);
+  const wrongRun = sprintRun();
+  wrongRun.args.players = 3;
+  assert.match(ids(C.checkS9({ s9_c1_sprint: wrongRun }).details), /players 3, wanted 1/);
+});
+
+test('S1 holds crew 1 to the "Surge to ram" prompt in every Advance, other crews only with --require-prompts', () => {
+  assert.equal(C.checkS1(goodSet(), { seeds: [1] }).status, 'PASS');
+  const set = goodSet();
+  set.s1_c1_seed1.events = set.s1_c1_seed1.events.filter((e) => e.type !== 'hud');
+  const r = C.checkS1(set, { seeds: [1] });
+  assert.equal(r.status, 'FAIL');
+  assert.match(ids(r.details), /s1_c1_seed1: stage 1 Advance raised no "Surge to ram" prompt/);
+  assert.doesNotMatch(ids(r.details), /s1_c3_seed1: .*prompt/, 'crews 2-3 are not asked (their host rider is not the driver)');
+  assert.match(ids(C.checkS1(goodSet(), { seeds: [1], requirePrompts: true }).details), /s1_c3_seed1: stage 1 Advance raised no/);
+});
+
 // --- FIT, arguments, main ----------------------------------------------------------------------------------------------
 
 test('fitGroups groups existing FIT files by expected laps and skips what is not there', () => {
@@ -685,7 +758,7 @@ test('fitGroups groups existing FIT files by expected laps and skips what is not
 test('parseArgs and runChecks', () => {
   assert.throws(() => C.parseArgs([]), /usage/);
   assert.throws(() => C.parseArgs(['d', '--nope']), /unknown option/);
-  assert.throws(() => C.parseArgs(['d', '--only=S9']), /unknown scenario/);
+  assert.throws(() => C.parseArgs(['d', '--only=S8']), /unknown scenario/);
   const o = C.parseArgs(['d', '--only=s1,S7', '--seeds=1,2', '--fit', '--require-prompts']);
   assert.deepEqual(o.only, ['S1', 'S7']);
   assert.deepEqual(o.seeds, [1, 2]);

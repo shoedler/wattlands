@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7; S8 is the
-// GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports tools/run_game_sim wrote.
+// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7, plus S9 the sprint
+// half of the workout; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports
+// tools/run_game_sim wrote.
 //
 //   node tests/games/tank/sim/check_sims.mjs build/tank/sims [--only=S1,S4] [--seeds=1,2,3] [--fit]
 //                                           [--require-prompts]
@@ -21,6 +22,8 @@
 //   s5_c3_dynamo_drop, s5_c3_gunline_drop  cadence to 30 rpm in a dynamo stage / a 90% gun line
 //   s6_c3_haptics_off      crew 3, slot 0 opted out of haptics
 //   s7_c3_seed1            s1_c3_seed1 again
+//   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: Ram, ram haptic,
+//                          the gun line entered straight after a sprint (S8 is the GUT test test_tank_s8.gd)
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
 //   segment       a plan phase with its span in `phases[peer]` (game seconds) and how it ended
@@ -40,8 +43,12 @@
 //                 lever starts on Drive).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
 //   T6            every Advance has a light and a medium tank in it (enemy `shot` or `kill`
-//                 events; with --require-prompts also a "Surge to ram" toast); stages 2 and 3 end in a
-//                 heavy-tank duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
+//                 events; also a "Surge to ram" toast for crew 1, whose host rider drives, or for every
+//                 crew with --require-prompts); stages 2 and 3 end in a heavy-tank duel: the gun line
+//                 lasts 90-180 s and a heavy tank fired or died in it.
+//   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): a successful Ram in every
+//                 Advance, each Ram's haptic sent and accepted (S4 holds it to SIM riders), and a gun line
+//                 entered while still sprinting starts at its planned target, not at the sprint power.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -463,7 +470,9 @@ export function checkS1(reports, opts = {}) {
     if (crew >= 2) probs.push(...t2Problems(name, r));
     if (crew === 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));
-    probs.push(...t6Problems(name, r, opts));
+    // The sim report's HUD log holds only the host rider's own toasts: the "Surge to ram" prompt is the host rider's
+    // only when that rider drives, which is the Bulwark of crew 1 (crews 2-3 rotate the driver away from slot 0).
+    probs.push(...t6Problems(name, r, { ...opts, requirePrompts: opts.requirePrompts || crew === 1 }));
     lines.push(`c${crew}s${seedS} ${fmt(scoreOf(r))}/${gradeOf(r)}`);
   }
   return result('S1', title, probs, `${found.length} runs: ${lines.join(', ')}`);
@@ -896,6 +905,57 @@ export function checkS7(reports) {
   return result('S7', title, probs, `${gameEvents(a).length} events, ${sa.length} snapshots`);
 }
 
+// --- S9: the sprint half of the workout ---------------------------------------------------------------------------
+
+/** A trailing mean power at or above this share of FTP is a sprint (tanks.json ram.sprint_ftp 1.2). The S9 rider (run_sims.sh) rides 12 s at 1.5 x FTP every 40 s. */
+export const S9_SPRINT_SIM_FTP_PCT = 120;
+
+/** The Ram events that destroyed something (`ok` 1). */
+export const successfulRams = (r) => eventsOf(r, 'ram').filter((e) => num(e.ok) === 1);
+
+/** SIM -> ERG switches of `peer` with the trailing mean raw power (last `n` rows before the switch). */
+export function switchesIntoErg(r, peer, n = 3) {
+  const rows = traceOf(r, peer);
+  const out = [];
+  for (let i = 1; i < rows.length; i += 1) {
+    if (rows[i - 1].mode !== 'SIM' || rows[i].mode !== 'ERG') continue;
+    const before = rows.slice(Math.max(0, i - n), i).map((row) => num(row.power_w));
+    out.push({ t: num(rows[i].game_t, num(rows[i].t)), phase: num(rows[i].phase), trailingW: mean(before), ftp: num(slotOf(r, peer).ftp, 200) });
+  }
+  return out;
+}
+
+export function checkS9(reports) {
+  const title = 'a sprinting solo rider: a Ram in every Advance, a ram haptic only in SIM, gun lines entered after a sprint at or below their target';
+  const n = 's9_c1_sprint';
+  const r = reports[n];
+  if (!r) return skip('S9', title, `no ${n} report`);
+  const probs = [...argsProblems(n, r, { content: 'ashfall_road', players: 1, bots: 0, role: 'SOLO' }), ...completeProblems(n, r)];
+  probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
+  const rams = successfulRams(r);
+  for (const s of segmentsOf(r)) {
+    if (s.seg !== 'advance' || !Number.isFinite(s.end)) continue;
+    if (!rams.some((e) => e._t >= s.start - EPS && e._t <= s.end + EPS)) probs.push(`${n}: stage ${s.stage} Advance has no successful Ram (the sprint rider should destroy a light tank)`);
+  }
+  const hap = (r.directives ?? []).filter((d) => d.kind === 'request' && d.requested?.reason === 'ram');
+  if (hap.length === 0) probs.push(`${n}: a Ram never sent its haptic`);
+  for (const d of hap) {
+    if (d.accepted === false || d.applied?.refused === true) probs.push(`${n}: ram haptic ${d.id} at ${fmt(num(d.t))} s refused: ${d.reason || d.applied?.reason}`);
+  }
+  // A gun line (ERG) entered while the rider is still sprinting: the trainer must start at the planned target, not at the sprint power.
+  const host = hostPeer(r);
+  const ftp = num(slotOf(r, host).ftp, 200);
+  const entries = switchesIntoErg(r, host).filter((sw) => sw.trailingW >= (S9_SPRINT_SIM_FTP_PCT / 100) * ftp - EPS && planOf(r, host)[sw.phase]?.kind === 'WORK');
+  if (entries.length === 0) probs.push(`${n}: no gun line was entered straight after a sprint (the profile should sprint at one of the Advance ends)`);
+  for (const sw of entries) {
+    const bound = enteredTargetW(r, host, sw.phase) + 1;
+    const first = traceOf(r, host).filter((row) => num(row.phase) === sw.phase && row.mode === 'ERG' && num(row.game_t, num(row.t)) <= sw.t + 5);
+    const worst = Math.max(0, ...first.map((row) => num(row.applied_target_w)));
+    if (worst > bound + EPS) probs.push(`${n}: gun line at ${fmt(sw.t)} s entered after a ${fmt(sw.trailingW)} W sprint with a ${worst} W target (planned ${Math.round(bound - 1)} W)`);
+  }
+  return result('S9', title, probs, `${rams.length} Rams, ${hap.length} ram haptics, ${entries.length} gun line entries after a sprint`);
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -934,7 +994,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };
