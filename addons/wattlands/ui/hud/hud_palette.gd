@@ -9,7 +9,11 @@ extends RefCounted
 ## banner), font_scale_px (int > 0: label sizes snap to its nearest multiple, for a pixel font;
 ## key numbers never below WlTheme.KEY_NUMBER_MIN_PX),
 ## corner_radius (int >= 0: panel corners; 0 = square, without anti-aliasing) and text_outline
-## (bool: false drops the label outlines).
+## (bool: false drops the label outlines), text_px and key_px (int: one size for every label and
+## one for the key numbers, which stay at least WlTheme.KEY_NUMBER_MIN_PX) and grid_px (int: the
+## game's art pixel in screen px; panels pad 3 of them on every side, the gaps inside a widget
+## snap to whole pixels, and the gear ticks become cells one pixel wide with one pixel between,
+## four tall, the current gear in the text colour).
 ## Safety and warning colors (the rescue, warm-up, pause and trainer banners, WlTheme.WARN) are
 ## not palette keys: a game cannot recolor a safety signal, and the safety banners keep the kit
 ## font too.
@@ -45,7 +49,14 @@ const FONT := "font"
 const FONT_SCALE_PX := "font_scale_px"
 const CORNER_RADIUS := "corner_radius"
 const TEXT_OUTLINE := "text_outline"
-const STYLE_KEYS: Array[String] = [FONT, FONT_SCALE_PX, CORNER_RADIUS, TEXT_OUTLINE]
+const TEXT_PX := "text_px"
+const KEY_PX := "key_px"
+const GRID_PX := "grid_px"
+const STYLE_KEYS: Array[String] = [
+	FONT, FONT_SCALE_PX, CORNER_RADIUS, TEXT_OUTLINE, TEXT_PX, KEY_PX, GRID_PX
+]
+## The fewest whole-number style keys may hold (text_px, key_px, grid_px: 1; corner_radius: 0).
+const INT_MIN := {FONT_SCALE_PX: 1, CORNER_RADIUS: 0, TEXT_PX: 1, KEY_PX: 1, GRID_PX: 1}
 
 ## key -> Color, only the colour keys the game set.
 var colors: Dictionary = {}
@@ -70,8 +81,8 @@ static func from_dict(d: Dictionary) -> HudPalette:
 				p.style[key] = v
 			else:
 				push_warning("HudPalette: key 'font' is not a Font")
-		elif key == FONT_SCALE_PX or key == CORNER_RADIUS:
-			if v is int and int(v) >= (1 if key == FONT_SCALE_PX else 0):
+		elif INT_MIN.has(key):
+			if v is int and int(v) >= int(INT_MIN[key]):
 				p.style[key] = v
 			else:
 				push_warning("HudPalette: key '%s' needs a whole number" % key)
@@ -121,13 +132,30 @@ func text_outline() -> bool:
 	return bool(style.get(TEXT_OUTLINE, true))
 
 
-## Style a label the kit made at `px` (font, snapped size never under `min_px`, outline); `bold`
-## picks the kit's bold font when the game sets none.
-func style_label(ls: LabelSettings, px: int, bold: bool = false, min_px: int = 0) -> void:
+## The size a label the kit would draw at `px` takes: text_px or key_px when set, else `px`
+## snapped (never under `min_px`).
+func label_px(px: int, key: bool = false, min_px: int = 0) -> int:
+	if key and style.has(KEY_PX):
+		return maxi(int(style[KEY_PX]), min_px)
+	if not key and style.has(TEXT_PX):
+		return int(style[TEXT_PX])
+	return snap_px(px, min_px)
+
+
+## The game's art pixel in screen px (0 without grid_px).
+func grid_px() -> int:
+	return int(style.get(GRID_PX, 0))
+
+
+## Style a label the kit made at `px` (font, size from label_px(), outline); `bold` picks the
+## kit's bold font when the game sets none; `key` marks a key number.
+func style_label(
+	ls: LabelSettings, px: int, bold: bool = false, min_px: int = 0, key: bool = false
+) -> void:
 	if ls == null:
 		return
 	ls.font = font_or(WlTheme.bold_font() if bold else WlTheme.font())
-	ls.font_size = snap_px(px, min_px)
+	ls.font_size = label_px(px, key, min_px)
 	if text_outline():
 		ls.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * ls.font_size / 64.0))
 		ls.outline_color = WlTheme.OUTLINE

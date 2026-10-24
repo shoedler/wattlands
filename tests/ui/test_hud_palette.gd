@@ -187,3 +187,47 @@ func test_band_glow_and_glow_text_keys_recolor_the_in_band_look() -> void:
 	plain.set_cadence_band(80.0, 100.0)
 	plain.set_telemetry(t)
 	assert_eq(plain.rpm_label().label_settings.font_color, WlTheme.GLOW, "the kit glow by default")
+
+
+func test_size_and_grid_keys_set_one_scale_pixel_gaps_and_gear_cells() -> void:
+	var p := HudPalette.from_dict(
+		{"font": ThemeDB.fallback_font, "text_px": 27, "key_px": 54, "grid_px": 3}
+	)
+	var g := autofree(HudPowerGauge.new()) as HudPowerGauge
+	g.set_palette(p)
+	g.fit_to(Vector2(300, 102))
+	for l: Label in [g._unit, g._pct, g._target]:
+		assert_eq(l.label_settings.font_size, 27, "%s takes text_px at any scale" % l.name)
+	assert_eq(g._watts.label_settings.font_size, 54, "key numbers take key_px")
+	assert_eq(_panel_of(g).content_margin_left, 9.0, "panels pad three game pixels")
+	assert_eq(_panel_of(g).content_margin_bottom, 9.0)
+	var top := g._content.get_child(0) as BoxContainer
+	assert_eq(top.get_theme_constant("separation"), 9, "a 10 px gap snaps to 3 game pixels")
+	assert_eq(g._content.get_theme_constant("separation"), 3, "a 4 px gap snaps to one")
+	var small := HudPalette.from_dict({"key_px": 30})
+	var g2 := autofree(HudPowerGauge.new()) as HudPowerGauge
+	g2.set_palette(small)
+	assert_eq(g2._watts.label_settings.font_size, WlTheme.KEY_NUMBER_MIN_PX, "never under 48 px")
+	var gear := autofree(HudGear.new()) as HudGear
+	gear.set_palette(p)
+	var cells_w := gear._bar.get_combined_minimum_size().x
+	assert_eq(cells_w, float((2 * HudGear.GEARS - 1) * 3), "one cell per gear, one pixel apart")
+	var bad := HudPalette.from_dict({"text_px": 0, "key_px": "54", "grid_px": 1.5})
+	assert_eq(bad.style.size(), 0, "size keys need whole numbers above 0")
+
+
+func test_without_grid_px_the_kit_gaps_margins_and_sizes_stay() -> void:
+	var g := autofree(HudPowerGauge.new()) as HudPowerGauge
+	var plain := autofree(HudPowerGauge.new()) as HudPowerGauge
+	var top := g._content.get_child(0) as BoxContainer
+	assert_eq(top.get_theme_constant("separation"), 10)
+	g.set_palette(HudPalette.from_dict({"grid_px": 3}))
+	assert_eq(top.get_theme_constant("separation"), 9)
+	g.set_palette(HudPalette.from_dict({}))
+	assert_eq(top.get_theme_constant("separation"), 10, "a palette without grid_px restores it")
+	assert_eq(g._content.get_theme_constant("separation"), 4)
+	assert_eq(_panel_of(g).content_margin_left, _panel_of(plain).content_margin_left)
+	assert_eq(g._watts.label_settings.font_size, plain._watts.label_settings.font_size)
+	assert_eq(g._unit.label_settings.font_size, plain._unit.label_settings.font_size)
+	var gear := autofree(HudGear.new()) as HudGear
+	assert_eq(gear._bar.get_combined_minimum_size().y, 14.0, "the kit gear bar keeps its size")

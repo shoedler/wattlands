@@ -219,6 +219,8 @@ func _refresh() -> void:
 		palette.pick(HudPalette.BANNER_BG, Color(0.08, 0.1, 0.13, 0.94)), game_text_color, 3
 	)
 	palette.style_panel(game_sb)
+	if palette.grid_px() > 0:
+		game_sb.set_content_margin_all(3.0 * palette.grid_px())
 	_game_panel.add_theme_stylebox_override("panel", game_sb)
 	HudWidget.wrap_label(_safety_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_trainer_label, max_width - PANEL_PAD)

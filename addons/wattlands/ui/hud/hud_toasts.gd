@@ -73,6 +73,9 @@ func set_palette(p: HudPalette) -> void:
 		ls.font_color = palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
 		if not palette.style.is_empty():
 			palette.style_label(ls, font_px)
+	if palette.grid_px() > 0:
+		for it2 in _items:
+			_style_panel(it2["panel"] as PanelContainer)
 
 
 func tick(dt: float) -> void:
@@ -161,6 +164,8 @@ func _style_panel(panel: PanelContainer) -> void:
 		2
 	)
 	palette.style_panel(sb)
+	if palette.grid_px() > 0:
+		sb.set_content_margin_all(3.0 * palette.grid_px())
 	panel.add_theme_stylebox_override("panel", sb)
 
 

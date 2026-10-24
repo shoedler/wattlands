@@ -130,7 +130,7 @@ func set_ui_scale(s: float) -> void:
 			else:
 				var floor_px := WlTheme.KEY_NUMBER_MIN_PX if e["key"] else 0
 				palette.style_label(
-					lbl.label_settings, size_px, bool(e.get("bold", false)), floor_px
+					lbl.label_settings, size_px, bool(e.get("bold", false)), floor_px, e["key"]
 				)
 	for e in _scaled_boxes:
 		var n: Control = e["node"]
@@ -236,11 +236,30 @@ func _apply_panel() -> void:
 
 func _fit_panel_margins() -> void:
 	var sb := get_theme_stylebox("panel") as StyleBoxFlat
-	if sb != null and has_theme_stylebox_override("panel"):
+	if sb != null and has_theme_stylebox_override("panel") and palette.grid_px() > 0:
+		sb.set_content_margin_all(3.0 * palette.grid_px())
+	elif sb != null and has_theme_stylebox_override("panel"):
 		sb.content_margin_left = 12.0 * ui_scale
 		sb.content_margin_right = 12.0 * ui_scale
 		sb.content_margin_top = 4.0 * ui_scale
 		sb.content_margin_bottom = 6.0 * ui_scale
+	if _content != null:
+		_snap_gaps(_content, palette.grid_px())
+
+
+## With grid_px, the gap of every box in the widget snaps to whole game pixels (a gap above 0
+## keeps at least one); the kit's own gap is kept so a palette without grid_px restores it.
+func _snap_gaps(node: Node, grid: int) -> void:
+	var box := node as BoxContainer
+	if box != null and (grid > 0 or box.has_meta("kit_gap")):
+		if not box.has_meta("kit_gap"):
+			box.set_meta("kit_gap", box.get_theme_constant("separation"))
+		var gap := int(box.get_meta("kit_gap"))
+		if grid > 0 and gap > 0:
+			gap = maxi(grid, roundi(gap / float(grid)) * grid)
+		box.add_theme_constant_override("separation", gap)
+	for child in node.get_children():
+		_snap_gaps(child, grid)
 
 
 ## Translated text for a platform or game key; plain text passes through.

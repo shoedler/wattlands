@@ -4,7 +4,8 @@ extends Control
 ## fill, an optional target marker, and a glow (bright outline and band) while the value is
 ## in the band. The glow is a brightness change plus an outline, so it reads without color.
 ## A palette's band, glow and bar_fg keys recolor the band (flat, without edge lines), the glow
-## outline and the lit gear ticks (unlit ticks then take bar_bg on the panel). Owned by ui-hud.
+## outline and the lit gear ticks (unlit ticks then take bar_bg on the panel); with grid_px the
+## ticks are whole-pixel cells (HudPalette). Owned by ui-hud.
 
 var max_value: float = 1.0
 var value: float = 0.0
@@ -31,7 +32,16 @@ func _init() -> void:
 func set_palette(p: HudPalette) -> void:
 	palette = p if p != null else HudPalette.new()
 	fill_color = palette.pick(HudPalette.BAR_FG, WlTheme.BAR_FILL)
+	update_minimum_size()
 	queue_redraw()
+
+
+## Whole-pixel gear cells need their full width (grid_px).
+func _get_minimum_size() -> Vector2:
+	var grid := palette.grid_px()
+	if segments > 0 and grid > 0:
+		return Vector2(float((2 * segments - 1) * grid), 4.0 * grid)
+	return Vector2.ZERO
 
 
 func set_state(
@@ -67,6 +77,19 @@ func _draw() -> void:
 	var bg := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
 	var accent := palette.pick(HudPalette.ACCENT, WlTheme.ACCENT)
 	var tick_colors := palette.has_key(HudPalette.BAR_FG)
+	var grid := palette.grid_px()
+	if segments > 0 and grid > 0:
+		var lit_n := roundi(frac(value) * segments)
+		var top := roundf((r.size.y - 4.0 * grid) / 2.0)
+		for i in segments:
+			var cell := Rect2(float(2 * grid * i), top, grid, 4 * grid)
+			var cc := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
+			if i == lit_n - 1:
+				cc = palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+			elif i < lit_n:
+				cc = palette.pick(HudPalette.BAR_FG, accent)
+			draw_rect(cell, Color(cc, cc.a * a))
+		return
 	if segments == 0 or not tick_colors:
 		draw_rect(r, Color(bg, bg.a * a))
 	if segments > 0:
