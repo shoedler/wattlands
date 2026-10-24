@@ -1,0 +1,145 @@
+{
+	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. Added keys: ram.prompt_px (a light tank this near shows the Surge to ram prompt), props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull).",
+	"tanks": {
+		"bulwark": {
+			"code": 1,
+			"crew": 1,
+			"hull_px": [192, 72],
+			"engines": ["bulwark"],
+			"turrets": ["main"],
+			"enemy_scale": 0.75,
+			"label": "TANK_TANK_BULWARK"
+		},
+		"rampart": {
+			"code": 2,
+			"crew": 2,
+			"hull_px": [240, 76],
+			"engines": ["diesel", "dynamo"],
+			"turrets": ["main"],
+			"enemy_scale": 0.8,
+			"label": "TANK_TANK_RAMPART"
+		},
+		"citadel": {
+			"code": 3,
+			"crew": 3,
+			"hull_px": [288, 80],
+			"engines": ["diesel", "dynamo", "steam"],
+			"turrets": ["main", "secondary_fore", "secondary_aft"],
+			"enemy_scale": 1.0,
+			"label": "TANK_TANK_CITADEL"
+		}
+	},
+	"hull": {
+		"hp": 140,
+		"checkpoint_hp": 30,
+		"repair_j": 5000,
+		"repair_hp": 40
+	},
+	"drive": {
+		"cda_m2": 0.5,
+		"mass_offset_kg": 8,
+		"world_scroll": 0.4,
+		"px_per_visual_m": 20,
+		"evasive_hit_mult": 0.5,
+		"halt_line_px": 300
+	},
+	"ram": {
+		"window_s": 10,
+		"cooldown_s": 30,
+		"reach_px": 120,
+		"sprint_ftp": 1.2,
+		"sprint_window_s": 3,
+		"fail_damage": 10,
+		"fail_stall_s": 5,
+		"boss_lunge_px": 24,
+		"boss_dodge_hold_s": 3,
+		"prompt_px": 300
+	},
+	"berm": {
+		"j_per_hp": 250,
+		"max_hp": 40
+	},
+	"in_band": {
+		"sim_ftp_pct": [76, 105],
+		"erg_power_frac": 0.95,
+		"erg_cadence_rpm": 60,
+		"steam_cycle_cadence_rpm": 50,
+		"recovery_cadence_rpm": 60,
+		"reserve_p_eff_w": 60
+	},
+	"dynamo": {
+		"bank_max": 100,
+		"j_per_unit": 150,
+		"stabilizer_per_s": 1.5,
+		"per_degree": 0.5,
+		"per_traverse": 15,
+		"per_hoist": 25,
+		"per_secondary": 2,
+		"secondary_min_bank": 10,
+		"elev_deg_s": [2, 8],
+		"traverse_s": [8, 2.5],
+		"full_at": 50,
+		"dispersion_deg": [0.5, 1.5],
+		"low_bank": 20,
+		"hoist_s": [22, 11]
+	},
+	"steam": {
+		"full_j": 4500,
+		"window_s": 5,
+		"over_j": 3000,
+		"over_max_pct": 150,
+		"over_bleed_pct_s": 2,
+		"over_max_s": 30,
+		"breech_cycle_s": 6,
+		"light_latch_pct": 40
+	},
+	"gearbox": {
+		"positions": ["drive", "turret", "hoist"],
+		"move_s": 1,
+		"turret_full_w": 200,
+		"hoist_j": 4000,
+		"light_latch_pct": 40,
+		"breech_cycle_s": 6,
+		"auto_dwell_s": 3,
+		"auto_drive_clear_px": 340,
+		"manual_suspend_s": 15
+	},
+	"gun": {
+		"elev_min_deg": -5,
+		"elev_max_deg": 30,
+		"shell_speed_px_s": 360,
+		"gravity_px_s2": 300,
+		"aim_tol_deg": 0.5,
+		"manual_pause_s": 5,
+		"nudge_deg": 1
+	},
+	"damage": {
+		"light": 20,
+		"heavy": 50,
+		"over": 100,
+		"splash_px": 16,
+		"splash_frac": 0.5,
+		"medium_light_mult": 0.5,
+		"armored_light_mult": 0.25
+	},
+	"secondary": {
+		"damage": 5,
+		"every_s": 3,
+		"range_px": 240
+	},
+	"caps": {
+		"enemies": 16,
+		"shells": 24
+	},
+	"props": {
+		"wire": {"w": 64, "h": 20},
+		"wreck": {"w": 72, "h": 32},
+		"drill_wreck": {"w": 72, "h": 32},
+		"tank_traps": {"w": 64, "h": 24},
+		"light_hits_to_clear": 3,
+		"standoff_px": 260
+	},
+	"drill": {
+		"wreck_px": [220, 330]
+	}
+}

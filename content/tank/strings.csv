@@ -1,0 +1,139 @@
+keys,en
+TANK_OPT_ROTATION,Rotate engines at checkpoints
+TANK_CONTENT_ASHFALL_ROAD,Ashfall Road (30-41 min)
+TANK_CONTENT_DRILL,Depot drill (2 min)
+TANK_PHASE_DEPOT,Depot roll-out
+TANK_PHASE_ADVANCE_1,Stage 1: Advance
+TANK_PHASE_GUN_LINE_1,Stage 1: Gun line
+TANK_PHASE_CHECKPOINT_1,Checkpoint 1
+TANK_PHASE_ADVANCE_2,Stage 2: Advance
+TANK_PHASE_GUN_LINE_2,Stage 2: Gun line
+TANK_PHASE_CHECKPOINT_2,Checkpoint 2
+TANK_PHASE_ADVANCE_3,Stage 3: Advance
+TANK_PHASE_GUN_LINE_3,Stage 3: Gun line
+TANK_PHASE_CHECKPOINT_3,Checkpoint 3
+TANK_PHASE_BOSS,Foundry Gate: the Behemoth
+TANK_PHASE_SKIRMISH,Skirmish
+TANK_PLACE_DEPOT,The depot
+TANK_PLACE_POPLAR_ROAD,Poplar Road
+TANK_PLACE_FARM_WALL,The farm wall
+TANK_PLACE_CHECKPOINT,Checkpoint
+TANK_PLACE_KETTLE_FORD,Kettle Ford
+TANK_PLACE_VILLAGE_SQUARE,The village square
+TANK_PLACE_QUARRY_RIDGE,Quarry Ridge
+TANK_PLACE_RIDGE,The ridge
+TANK_PLACE_FOUNDRY_GATE,Foundry Gate
+TANK_TANK_BULWARK,Bulwark
+TANK_TANK_RAMPART,Rampart
+TANK_TANK_CITADEL,Citadel
+TANK_ENGINE_DIESEL,Diesel
+TANK_ENGINE_DYNAMO,Dynamo
+TANK_ENGINE_STEAM,Steam
+TANK_ENGINE_BULWARK,Diesel and gearbox
+TANK_LEVER_DRIVE,Drive
+TANK_LEVER_DIG,Dig
+TANK_LEVER_TURRET,Turret
+TANK_LEVER_HOIST,Hoist
+TANK_LEVER_AUTO,Auto lever
+TANK_PROMPT_RAM,Surge to ram
+TANK_PROMPT_DODGE,Surge to dodge
+TANK_PROMPT_OVER,Surge to overpressure
+TANK_TOAST_DYNAMO_STALLED,Dynamo stalled
+TANK_TOAST_STAGGER,Catch your breath: the tank holds
+TANK_TOAST_REGROUP,Regroup
+TANK_TOAST_BREAKDOWN,Breakdown! Pedal the diesel to repair
+TANK_TOAST_REPAIRED,Repaired: {0} HP
+TANK_TOAST_OVERRUN_ADVANCE,Towed to the halt line
+TANK_TOAST_OVERRUN_GUN_LINE,Support barrage called in
+TANK_TOAST_BEHEMOTH_WITHDRAWS,The Behemoth withdraws
+TANK_TOAST_ROTATION,Change stations: {0}
+TANK_TOAST_RAM_HIT,Rammed!
+TANK_TOAST_RAM_MISS,Ram failed: stalled
+TANK_TOAST_DODGED,Dodged!
+TANK_TOAST_LOADED_HEAVY,Heavy shell loaded
+TANK_TOAST_LOADED_LIGHT,Light shell loaded
+TANK_TOAST_OVERPRESSURE,Overpressure shell loaded
+TANK_TOAST_RESERVE,{0} on reserve
+TANK_TOAST_ALL_AFK,No power: pedal to restart the engines
+TANK_TOAST_BLOCKED,Obstacle ahead
+TANK_TOAST_TRAPS_CLEARED,Tank traps shoved aside
+TANK_BANNER_SEGMENT,{0}
+TANK_BANNER_BOSS,The Behemoth
+TANK_BANNER_BOSS_PHASE2,The bogies are broken: hit the turret
+TANK_BANNER_VICTORY,Foundry Gate taken
+TANK_BANNER_WITHDRAWN,The Behemoth got away
+TANK_TEACH_DIESEL,Diesel: your watts drive the tracks. Hold 76-105% FTP to glow.
+TANK_TEACH_BULWARK,"One engine does it all: the lever moves itself between Drive, Turret and Hoist."
+TANK_TEACH_DYNAMO,Dynamo: steady cadence charges the bank that turns the turret.
+TANK_TEACH_STEAM,Steam: build pressure to load a heavy shell.
+TANK_TEACH_AIM,Aim drill: the turret lines up on the wrecks.
+TANK_TEACH_FIRE,Load and fire!
+TANK_CARD_SPEED,Speed
+TANK_CARD_TO_HALT,To halt line
+TANK_CARD_BERM,Berm
+TANK_CARD_BANK,Bank
+TANK_CARD_TARGET,Target
+TANK_CARD_PRESSURE,Pressure
+TANK_CARD_SHELL,Shell
+TANK_CARD_LEVER,Lever
+TANK_CARD_HOIST,Hoist
+TANK_CARD_RESERVE,Reserve
+TANK_SHELL_LIGHT,Light
+TANK_SHELL_HEAVY,Heavy
+TANK_SHELL_OVER,Overpressure
+TANK_SHELL_SECONDARY,Secondary
+TANK_OBJ_DEPOT,Depot drill
+TANK_OBJ_ADVANCE,Halt line: {0} m
+TANK_OBJ_GUN_LINE,Gun line {0}/{1}
+TANK_OBJ_CHECKPOINT,Checkpoint
+TANK_OBJ_BOSS,Behemoth
+TANK_OBJ_SKIRMISH,Skirmish
+TANK_OBJ_REGROUP,Regroup
+TANK_HUD_HULL,Hull
+TANK_HUD_WATTS,Watts
+TANK_HUD_BOGIES,Bogies
+TANK_HUD_TURRET,Turret
+TANK_ENEMY_LIGHT,Light tank
+TANK_ENEMY_MEDIUM,Medium tank
+TANK_ENEMY_DESTROYER,Tank destroyer
+TANK_ENEMY_DUGIN,Dug-in tank
+TANK_ENEMY_HEAVY,Heavy tank
+TANK_ENEMY_BEHEMOTH,Behemoth
+TANK_RESULT_VICTORY,Foundry Gate taken
+TANK_RESULT_WITHDRAWN,The Behemoth got away
+TANK_RESULT_DRILL,Drill complete
+TANK_RESULT_ABANDONED,Ride ended early
+TANK_OUTCOME_VICTORY,Won
+TANK_OUTCOME_WITHDRAWN,Lost
+TANK_MISSION_ASHFALL_ROAD,Ashfall Road
+TANK_MISSION_DRILL,Depot drill
+TANK_RIDE_WON,{0} - won
+TANK_RIDE_LOST,{0} - lost
+TANK_RIDE_DRILL,{0} - complete
+TANK_RIDE_EARLY,{0} - ended early
+TANK_RIDE_SCORE,Score: {0} (grade {1})
+TANK_RIDE_KILLS,Enemies destroyed: {0}
+TANK_RIDE_BREAKDOWNS,Breakdowns: {0}
+TANK_RIDE_GUNNERY,Shots: {0}; hits: {1}
+TANK_RIDE_RAMS,Rams: {0}; dodges: {1}
+TANK_STAT_DIESEL_S,Diesel (s)
+TANK_STAT_DYNAMO_S,Dynamo (s)
+TANK_STAT_STEAM_S,Steam (s)
+TANK_STAT_BULWARK_S,Gearbox diesel (s)
+TANK_STAT_RAMS,Rams
+TANK_STAT_DODGES,Dodges
+TANK_STAT_BERM,Berm absorbed
+TANK_STAT_SHOTS,Shots
+TANK_STAT_HITS,Hits
+TANK_STAT_ACCURACY,Accuracy %
+TANK_STAT_SHELLS,Shells light/heavy/over/secondary
+TANK_TEAM_OUTCOME,Mission
+TANK_TEAM_HP,Hull HP per segment
+TANK_TEAM_BREAKDOWNS,Breakdowns
+TANK_TEAM_OVERRUNS,Overruns
+TANK_TEAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy/Behemoth)
+TANK_UNLOCK_SOOT,Soot hull finish
+TANK_UNLOCK_RUST,Rust hull finish
+TANK_UNLOCK_ASH,Ash hull finish
+TANK_UNLOCK_MUD_STRIPE,Mud stripe hull finish
+TANK_UNLOCK_BRASS_MACHINERY,Brass machinery

@@ -272,6 +272,36 @@ func test_rect_positions_at_scale_3_and_on_resize() -> void:
 	assert_eq(_hud.slot_screen_rect(card), Rect2(320, 200, 200, 40))
 
 
+## Tank's teammate strip (art 268, 2, 140 x 22 at scale 3 = 420 x 66) stays one row inside
+## its slot; a slot too small keeps the minimum scale and wraps.
+func test_rect_teammates_strip_stays_one_row_inside_its_slot() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 3
+	pv.fake_offset = Vector2.ZERO
+	var rect := Rect2i(268, 2, 140, 22)
+	_hud.build(HudSpec.new().add(HudSpec.TEAMMATES, rect), _ctx, pv)
+	var roster := {}
+	for i in 3:
+		roster[i + 1] = {"name": "R%d" % i, "slot_index": i}
+	_bus.roster_changed.emit(roster)
+	_hud.relayout()
+	await wait_process_frames(3)
+	var tm := _hud.widget(HudSpec.TEAMMATES) as HudTeammates
+	var slot := _hud.slot_screen_rect(tm)
+	assert_eq(slot.size, Vector2(420, 66))
+	assert_eq(tm.columns(), 3, "one row")
+	assert_gte(tm.ui_scale, HudTeammates.MIN_SCALE)
+	assert_lte(tm.custom_minimum_size.x, slot.size.x + 0.5)
+	assert_lte(tm.custom_minimum_size.y, slot.size.y + 0.5, "does not grow below the slot")
+	for i in 4:
+		roster[i + 1] = {"name": "R%d" % i, "slot_index": i}
+	_bus.roster_changed.emit(roster)
+	_hud.relayout()
+	await wait_process_frames(3)
+	assert_eq(tm.columns(), 2, "too small for one row at the minimum scale: wraps")
+	assert_eq(tm.ui_scale, HudTeammates.MIN_SCALE)
+
+
 ## The app shell keeps its on-screen panic button clear of the HUD: a reserved corner moves
 ## that corner's stack inward and narrows the centre stack of that edge.
 func test_reserve_corner_keeps_the_corner_clear() -> void:

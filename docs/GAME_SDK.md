@@ -365,7 +365,7 @@ func hud_spec() -> HudSpec:
 | `cadence` | 360 × 124 | 290 × 98 |
 | `wbal` | 380 × 56 | 240 × 40 |
 | `timeline` | 640 × 162 | 380 × 108 |
-| `teammates` | one card 260 × 124 per rider in a row (10 px gaps) | one card at half scale, 130 × 62 (the strip wraps into two rows, then scales down) |
+| `teammates` | one card 260 × 124 per rider in a row (10 px gaps) | one card at half scale, 130 × 62 (at an anchor the strip wraps into two rows, then scales down; in a `Rect2i` it stays one row scaled to the rect's width and height, wrapping only when that would go below half scale) |
 | `readout` | 240 × 150 | 170 × 108 |
 | `gear` | 300 × 80 | 150 × 42 (not a key number: it shrinks with its rect) |
 
@@ -386,7 +386,7 @@ Kit widgets (BRIEF 3.9):
 | `readout` | A big number (≥ 48 px) | `{"source": "power_w" \| "cadence_rpm" \| "ftp_pct" \| "wkg" \| "custom", "id": String, "label": key}`; custom readouts are fed by `ctx.hud.readout(id, text)` |
 | `gear` | The virtual gear, shown whenever the local trainer is in SIM (SIM phases and SIM blocks), hidden in ERG | |
 
-The teammate strip is roster-driven (2 Hz, host values). What it can't show (Siege's target icon, Tank's engine icon beyond `icon`), draw in your own Control beside it.
+In a `Rect2i`, three cards fit one row in 420 × 66 (art 140 × 22 at scale 3) at about 0.52 scale; four need two rows at half scale and overflow that rect. The teammate strip is roster-driven (2 Hz, host values). What it can't show (Siege's target icon, Tank's engine icon beyond `icon`), draw in your own Control beside it.
 
 ### 10.2 ctx.hud routing
 

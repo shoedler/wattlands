@@ -1,0 +1,591 @@
+{
+	"_doc": "Diesel Domestiques sprites (brief 3; docs/ART_PIPELINE.md), 61 ids. Strips wider than 3:1 are tile + mirror segments; the hulls and boss_hull beyond 3:1 are requested at 3:1 with the subject filling the width, so the trimmed result keeps the sprite's aspect (ADR 'Art sizes beyond 3:1'). Placeholders from src/games/tank/view/placeholder_art.gd stand in for every id until an art pass with WATTLANDS_ALLOW_ART.",
+	"endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+	"quality": "high",
+	"dither": "none",
+	"style": "Side-view 2D game sprite, orthographic, low resolution with soft muted shading, desaturated colours and deep shadows. Dark brutalist alternate-history 1940s: riveted steel, soot, rust, mud, wet surfaces. Light sources are bright glowing shapes, warm amber or cold blue-white. Single object, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos.",
+	"palette": [
+		"#07080a",
+		"#0e1013",
+		"#161a1e",
+		"#1f2429",
+		"#2a3036",
+		"#363d44",
+		"#444b52",
+		"#565c62",
+		"#6c7176",
+		"#878b8f",
+		"#a7aaac",
+		"#cfd0cf",
+		"#17130f",
+		"#241d17",
+		"#33291f",
+		"#443628",
+		"#574634",
+		"#6b5842",
+		"#2b2a24",
+		"#3d3c33",
+		"#545246",
+		"#3a2a24",
+		"#5a3a2e",
+		"#7d4f3a",
+		"#e8743a",
+		"#ffb35c",
+		"#ffd99a",
+		"#fff3d6",
+		"#2f4a5e",
+		"#5d86a3",
+		"#9fc4dd",
+		"#e6f3fb"
+	],
+	"notes": "Lights are the only near-saturated colours (warm #e8743a #ffb35c #ffd99a #fff3d6; cold #5d86a3 #9fc4dd #e6f3fb). Wall lamps and shape badges are white sprites tinted at runtime in the rider's colour.",
+	"sprites": [
+		{
+			"id": "hull_bulwark",
+			"size": [
+				192,
+				72
+			],
+			"prompt": "a very long, low slab-sided super-heavy tank hull filling the whole width of the image edge to edge with empty space above and below, exact side view facing right, the front on the right, shorter and stubby, one engine room; riveted grey-black armour plates with rust streaks and soot, an x-ray cutaway band along the middle showing dark empty compartments, the side skirts cut flat at the bottom; no wheels, no tracks, no turret, no gun; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"align": "bottom_left"
+		},
+		{
+			"id": "hull_rampart",
+			"size": [
+				240,
+				76
+			],
+			"prompt": "a very long, low slab-sided super-heavy tank hull filling the whole width of the image edge to edge with empty space above and below, exact side view facing right, the front on the right, medium length, two engine rooms; riveted grey-black armour plates with rust streaks and soot, an x-ray cutaway band along the middle showing dark empty compartments, the side skirts cut flat at the bottom; no wheels, no tracks, no turret, no gun; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"align": "bottom_left"
+		},
+		{
+			"id": "hull_citadel",
+			"size": [
+				288,
+				80
+			],
+			"prompt": "a very long, low slab-sided super-heavy tank hull filling the whole width of the image edge to edge with empty space above and below, exact side view facing right, the front on the right, the longest, three engine rooms, small turret mounts fore and aft; riveted grey-black armour plates with rust streaks and soot, an x-ray cutaway band along the middle showing dark empty compartments, the side skirts cut flat at the bottom; no wheels, no tracks, no turret, no gun; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"align": "bottom_left"
+		},
+		{
+			"id": "turret_bulwark",
+			"size": [
+				88,
+				36
+			],
+			"prompt": "boxy riveted tank turret, compact, exact side view facing right, flat roof, a round gun mantlet on the right with no barrel, grey-black steel with soot and rust; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "turret_rampart",
+			"size": [
+				104,
+				40
+			],
+			"prompt": "boxy riveted tank turret, wider, exact side view facing right, flat roof, a round gun mantlet on the right with no barrel, grey-black steel with soot and rust; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "turret_citadel",
+			"size": [
+				120,
+				44
+			],
+			"prompt": "boxy riveted tank turret, the largest, thick front mantlet, exact side view facing right, flat roof, a round gun mantlet on the right with no barrel, grey-black steel with soot and rust; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "turret_secondary",
+			"size": [
+				44,
+				22
+			],
+			"prompt": "small boxy secondary gun turret, exact side view facing right, a small mantlet with no barrel, riveted grey steel; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "room_bulwark",
+			"size": [
+				128,
+				48
+			],
+			"prompt": "the back wall of one wide engine room with a gearbox corner inside a tank, seen straight on, riveted dark steel plates, bolts and brackets, dim and empty in the middle, a small dark wall lamp fixture at the top; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "room_diesel",
+			"size": [
+				96,
+				48
+			],
+			"prompt": "the back wall of an engine room with oil stains and an exhaust duct inside a tank, seen straight on, riveted dark steel plates, bolts and brackets, dim and empty in the middle, a small dark wall lamp fixture at the top; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "room_dynamo",
+			"size": [
+				80,
+				48
+			],
+			"prompt": "the back wall of an electrical room with cable runs and porcelain insulators inside a tank, seen straight on, riveted dark steel plates, bolts and brackets, dim and empty in the middle, a small dark wall lamp fixture at the top; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "room_steam",
+			"size": [
+				88,
+				48
+			],
+			"prompt": "the back wall of a boiler room with soot-blackened tiles and pipe brackets inside a tank, seen straight on, riveted dark steel plates, bolts and brackets, dim and empty in the middle, a small dark wall lamp fixture at the top; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "diesel_block",
+			"size": [
+				56,
+				32
+			],
+			"prompt": "an inline four-cylinder diesel engine block seen from the side, four empty dark rectangular cylinder windows along the top, cast iron with oil grime; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "flywheel_large",
+			"size": [
+				36,
+				36
+			],
+			"prompt": "a heavy cast-iron flywheel seen exactly face-on, round with six spokes and a hub, dark steel with a worn bright rim; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "flywheel_small",
+			"size": [
+				20,
+				20
+			],
+			"prompt": "a small cast-iron flywheel seen exactly face-on, round with four spokes and a hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "gear_large",
+			"size": [
+				24,
+				24
+			],
+			"prompt": "a large steel spur gear seen exactly face-on with even teeth and a hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "gear_medium",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a medium steel spur gear seen exactly face-on with even teeth and a hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "gearbox",
+			"size": [
+				32,
+				28
+			],
+			"prompt": "a squat riveted three-way gearbox housing with three output shaft stubs, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "dynamo_housing",
+			"size": [
+				40,
+				28
+			],
+			"prompt": "a heavy industrial dynamo housing on a cast base, side view, an open round window in the middle, copper bands; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "dynamo_armature",
+			"size": [
+				20,
+				20
+			],
+			"prompt": "a dynamo armature seen exactly face-on, round copper windings around a hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "spark",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a single bright blue-white electric spark burst glowing; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "boiler",
+			"size": [
+				40,
+				32
+			],
+			"prompt": "a squat riveted vertical steam boiler with a round pressure gauge face and pipes, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "firebox",
+			"size": [
+				20,
+				16
+			],
+			"prompt": "an open firebox door frame of a steam boiler, cast iron, the opening dark; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "firebox_flame",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a single bright warm orange flame glowing; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "bottom_center"
+		},
+		{
+			"id": "flyball",
+			"size": [
+				16,
+				20
+			],
+			"prompt": "a centrifugal flyball governor with two steel balls on arms, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "steam_puff",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a single soft round white puff of steam; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "shell_rack",
+			"size": [
+				32,
+				40
+			],
+			"prompt": "a vertical steel rack holding three brass artillery shells upright, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "road_wheel",
+			"size": [
+				18,
+				18
+			],
+			"prompt": "a steel tank road wheel seen exactly face-on with a rubber rim and bolted hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "drive_sprocket",
+			"size": [
+				22,
+				22
+			],
+			"prompt": "a toothed tank drive sprocket seen exactly face-on; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "idler_wheel",
+			"size": [
+				20,
+				20
+			],
+			"prompt": "a plain steel tank idler wheel seen exactly face-on with a hub; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "enemy_light",
+			"size": [
+				80,
+				40
+			],
+			"prompt": "a low wedge-shaped light enemy tank, small turret, short gun, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "enemy_medium",
+			"size": [
+				104,
+				52
+			],
+			"prompt": "a tall slab-sided medium enemy tank, boxy turret, medium gun, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "enemy_heavy",
+			"size": [
+				136,
+				60
+			],
+			"prompt": "a long heavy enemy tank on two bogies, big turret, long gun, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "enemy_destroyer",
+			"size": [
+				112,
+				44
+			],
+			"prompt": "a turretless casemate tank destroyer, long gun from a sloped front plate, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "enemy_dugin",
+			"size": [
+				72,
+				36
+			],
+			"prompt": "the turret and upper hull of a tank dug in behind a low cracked concrete revetment, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "boss_hull",
+			"size": [
+				320,
+				100
+			],
+			"prompt": "the hull of a colossal brutalist super-heavy enemy tank, very long and tall, filling the whole width with empty space above and below, exact side view facing LEFT, riveted concrete-grey armour slabs, small glowing amber vision slits; no wheels, no bogies, no turret; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "boss_turret",
+			"size": [
+				152,
+				56
+			],
+			"prompt": "a huge boxy turret of a super-heavy tank, exact side view facing LEFT, a thick mantlet with no barrel, riveted grey slabs; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "boss_turret_broken",
+			"size": [
+				152,
+				56
+			],
+			"prompt": "a huge boxy tank turret wrecked and blackened, exact side view facing LEFT, torn plates, smoke stains, glowing embers in cracks; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "boss_bogie",
+			"size": [
+				64,
+				32
+			],
+			"prompt": "a heavy tank bogie unit with three road wheels and a track run, exact side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "boss_bogie_broken",
+			"size": [
+				64,
+				32
+			],
+			"prompt": "a heavy tank bogie unit wrecked, a wheel missing, broken track hanging, scorched; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "prop_tank_traps",
+			"size": [
+				64,
+				24
+			],
+			"prompt": "a row of three steel tank trap hedgehogs of crossed beams; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "prop_wire",
+			"size": [
+				64,
+				20
+			],
+			"prompt": "a barbed wire entanglement on wooden stakes; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "prop_wreck_barricade",
+			"size": [
+				72,
+				32
+			],
+			"prompt": "a barricade of burnt-out vehicle wreckage and timber; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "prop_crater",
+			"size": [
+				48,
+				16
+			],
+			"prompt": "a shallow shell crater in mud with a puddle reflecting a faint warm light, side view; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "prop_rubble",
+			"size": [
+				40,
+				16
+			],
+			"prompt": "a low heap of broken masonry and bricks; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "depot_gate",
+			"size": [
+				160,
+				120
+			],
+			"prompt": "a brutalist concrete depot gateway with a tall square opening, stained concrete, one warm amber lamp over the opening; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+		},
+		{
+			"id": "bg_sky",
+			"size": [
+				640,
+				200
+			],
+			"prompt": "a wide dusk sky over a burning countryside: low smoke clouds lit warm orange from below, cold blue-grey above, a faint moon; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "bg_hills_far",
+			"size": [
+				960,
+				120
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: distant rolling hills and pine woods under drifting smoke, desaturated blue-grey, a faint fire glow on one hill",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_fields_near",
+			"size": [
+				960,
+				140
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: muddy fields, hedgerows and a row of poplars along a country road, a burning farmstead far off",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_village_near",
+			"size": [
+				960,
+				140
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: a small village with a stone bridge over a stream, orchards, a church spire and a few warmly lit windows",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_quarry_near",
+			"size": [
+				960,
+				140
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: pine woods and a terraced stone quarry under power pylons, a sawmill burning below",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_town_near",
+			"size": [
+				960,
+				140
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: the gate and lamp-lit streets of a small foundry town with chimneys and warm amber lamps",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_depot_near",
+			"size": [
+				960,
+				140
+			],
+			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: a brutalist concrete depot in a dark forest clearing at dusk, a muddy country road leading away",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "bg_ground",
+			"size": [
+				960,
+				80
+			],
+			"prompt": "a seamless horizontal strip of churned muddy road ground seen from the side, ruts, puddles catching faint warm light, flat at both ends; fills the whole frame",
+			"background": "opaque",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "fg_debris",
+			"size": [
+				960,
+				48
+			],
+			"prompt": "a seamless horizontal strip of foreground debris: broken fence posts, rubble, wet weeds and wire, very dark, flat at both ends, transparent above",
+			"tile": true,
+			"mirror": true
+		},
+		{
+			"id": "picker_card",
+			"size": [
+				320,
+				180
+			],
+			"prompt": "a wide scene: a colossal riveted super-heavy tank in cutaway, its three glowing engine rooms visible, rolling right along a muddy country road past a burning village at dusk, smoke and warm firelight; fills the whole frame",
+			"background": "opaque"
+		},
+		{
+			"id": "muzzle_flash",
+			"size": [
+				32,
+				20
+			],
+			"prompt": "a bright warm muzzle flash burst pointing right with a hot white core; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "explosion_large",
+			"size": [
+				64,
+				64
+			],
+			"prompt": "a large fiery explosion with a dark smoke cloud; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "explosion_small",
+			"size": [
+				32,
+				32
+			],
+			"prompt": "a small fiery explosion burst; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "smoke_puff",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a single soft round dark grey smoke puff; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "fire_small",
+			"size": [
+				16,
+				16
+			],
+			"prompt": "a small flickering fire of warm orange flames; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		},
+		{
+			"id": "dirt_spray",
+			"size": [
+				32,
+				24
+			],
+			"prompt": "a spray of mud and dirt clods thrown upward; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"anchor": "center",
+			"align": "center"
+		}
+	]
+}

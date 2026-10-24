@@ -1,0 +1,635 @@
+{
+	"_doc": "Cutaway rig anchors and gameplay geometry in art px (G0 estimates on the placeholder geometry; artqa re-measures the values on the pixelated sprites). Frames: every point under tanks.<id> (turret.ring, turret.trunnion, muzzle, secondaries[].muzzle, rooms, wheels) is in the hull frame: relative to the hull sprite's top-left, y down, negative y above the roof; turret.rect is the turret sprite's rect in the hull frame and turret.pivot_in_sprite is inside that sprite. Keys ending in _screen are art px of the 640 x 360 view with the hull's rear at x 16 and its bottom 10 px above the ground line y 296. Gun: the barrel pivots at turret.trunnion; at elevation a (degrees, facing right) the muzzle is trunnion + barrel_px x (cos a, -sin a), so muzzle == trunnion + [barrel_px, 0] at 0 degrees (tested); facing left mirrors x about turret.ring.x. enemies.<sprite>: relative to that sprite's top-left facing left (toward the tank); hitbox [x, y, w, h] is the only hit area where present (enemy_dugin: the turret above the concrete). boss: relative to boss_hull's top-left, facing left; bogies [x, y, w, h] rear to front are the hit boxes of parts 0..2 and turret.rect that of part 3 (TankBossState.part_id). Frozen contract (contracts/README.md 'Geometry'): TankGeometry reads tanks.*.turret.ring, tanks.*.turret.trunnion, tanks.*.turret.barrel_px, tanks.*.muzzle, tanks.citadel.secondaries[].muzzle and .facing, enemies.*.muzzle, enemies.enemy_dugin.hitbox, boss.bogies, boss.turret.rect, boss.turret.muzzle and boss.secondary_muzzle. artqa may change their values, never their names or frames; rules code and tests read them through TankGeometry, never hard-coded.",
+	"screen": {
+		"ground_y": 296,
+		"rear_x": 16,
+		"skirt_gap_px": 10
+	},
+	"tanks": {
+		"bulwark": {
+			"hull_px": [
+				192,
+				72
+			],
+			"hull_screen_top_left": [
+				16,
+				214
+			],
+			"turret": {
+				"rect": [
+					64,
+					-32,
+					88,
+					36
+				],
+				"ring": [
+					108,
+					0
+				],
+				"pivot_in_sprite": [
+					44,
+					32
+				],
+				"trunnion": [
+					152,
+					-18
+				],
+				"barrel_px": 40
+			},
+			"muzzle": [
+				192,
+				-18
+			],
+			"muzzle_screen": [
+				208,
+				196
+			],
+			"wheel_line_y": 73,
+			"road_wheels_x": [
+				22,
+				52,
+				81,
+				111,
+				140,
+				170
+			],
+			"drive_sprocket": [
+				10,
+				70
+			],
+			"idler": [
+				182,
+				70
+			],
+			"track_belt": [
+				4,
+				62,
+				184,
+				22
+			],
+			"exhaust": [
+				44,
+				-2
+			],
+			"rooms": [
+				{
+					"engine": "bulwark",
+					"rect": [
+						32,
+						14,
+						128,
+						48
+					],
+					"lamp": [
+						96,
+						18
+					],
+					"diesel_block": [
+						40,
+						26
+					],
+					"flywheel": [
+						138,
+						40
+					],
+					"chain_to": "drive_sprocket",
+					"gearbox": [
+						104,
+						30
+					],
+					"lever_pivot": [
+						136,
+						54
+					],
+					"outputs": {
+						"drive": [
+							112,
+							58
+						],
+						"turret": [
+							128,
+							28
+						],
+						"hoist": [
+							142,
+							44
+						]
+					}
+				}
+			]
+		},
+		"rampart": {
+			"hull_px": [
+				240,
+				76
+			],
+			"hull_screen_top_left": [
+				16,
+				210
+			],
+			"turret": {
+				"rect": [
+					84,
+					-36,
+					104,
+					40
+				],
+				"ring": [
+					136,
+					0
+				],
+				"pivot_in_sprite": [
+					52,
+					36
+				],
+				"trunnion": [
+					188,
+					-20
+				],
+				"barrel_px": 44
+			},
+			"muzzle": [
+				232,
+				-20
+			],
+			"muzzle_screen": [
+				248,
+				190
+			],
+			"wheel_line_y": 77,
+			"road_wheels_x": [
+				22,
+				46,
+				71,
+				96,
+				120,
+				144,
+				169,
+				194,
+				218
+			],
+			"drive_sprocket": [
+				10,
+				74
+			],
+			"idler": [
+				230,
+				74
+			],
+			"track_belt": [
+				4,
+				66,
+				232,
+				22
+			],
+			"exhaust": [
+				28,
+				-2
+			],
+			"rooms": [
+				{
+					"engine": "diesel",
+					"rect": [
+						16,
+						16,
+						96,
+						48
+					],
+					"lamp": [
+						64,
+						20
+					],
+					"diesel_block": [
+						24,
+						28
+					],
+					"flywheel": [
+						90,
+						42
+					],
+					"chain_to": "drive_sprocket"
+				},
+				{
+					"engine": "dynamo",
+					"rect": [
+						120,
+						16,
+						80,
+						48
+					],
+					"lamp": [
+						160,
+						20
+					],
+					"dynamo_housing": [
+						128,
+						32
+					],
+					"armature": [
+						148,
+						46
+					],
+					"capacitor_jars": [
+						[
+							176,
+							38,
+							5,
+							20
+						],
+						[
+							183,
+							38,
+							5,
+							20
+						],
+						[
+							190,
+							38,
+							5,
+							20
+						]
+					],
+					"shaft_to": "turret_ring"
+				}
+			]
+		},
+		"citadel": {
+			"hull_px": [
+				288,
+				80
+			],
+			"hull_screen_top_left": [
+				16,
+				206
+			],
+			"turret": {
+				"rect": [
+					104,
+					-40,
+					120,
+					44
+				],
+				"ring": [
+					164,
+					0
+				],
+				"pivot_in_sprite": [
+					60,
+					40
+				],
+				"trunnion": [
+					224,
+					-22
+				],
+				"barrel_px": 48
+			},
+			"muzzle": [
+				272,
+				-22
+			],
+			"muzzle_screen": [
+				288,
+				184
+			],
+			"wheel_line_y": 81,
+			"road_wheels_x": [
+				22,
+				46,
+				71,
+				95,
+				120,
+				144,
+				168,
+				193,
+				217,
+				242,
+				266
+			],
+			"drive_sprocket": [
+				10,
+				78
+			],
+			"idler": [
+				278,
+				78
+			],
+			"track_belt": [
+				4,
+				70,
+				280,
+				22
+			],
+			"exhaust": [
+				24,
+				-2
+			],
+			"rooms": [
+				{
+					"engine": "diesel",
+					"rect": [
+						12,
+						18,
+						96,
+						48
+					],
+					"lamp": [
+						60,
+						22
+					],
+					"diesel_block": [
+						20,
+						30
+					],
+					"flywheel": [
+						86,
+						44
+					],
+					"chain_to": "drive_sprocket"
+				},
+				{
+					"engine": "dynamo",
+					"rect": [
+						112,
+						18,
+						80,
+						48
+					],
+					"lamp": [
+						152,
+						22
+					],
+					"dynamo_housing": [
+						120,
+						34
+					],
+					"armature": [
+						140,
+						48
+					],
+					"capacitor_jars": [
+						[
+							168,
+							40,
+							5,
+							20
+						],
+						[
+							175,
+							40,
+							5,
+							20
+						],
+						[
+							182,
+							40,
+							5,
+							20
+						]
+					],
+					"shaft_to": "turret_ring"
+				},
+				{
+					"engine": "steam",
+					"rect": [
+						196,
+						18,
+						88,
+						48
+					],
+					"lamp": [
+						240,
+						22
+					],
+					"boiler": [
+						202,
+						32
+					],
+					"firebox": [
+						212,
+						50
+					],
+					"gauge": [
+						222,
+						38
+					],
+					"hoist_rail": [
+						[
+							256,
+							62
+						],
+						[
+							256,
+							10
+						]
+					],
+					"shell_rack": [
+						248,
+						24
+					]
+				}
+			],
+			"secondaries": [
+				{
+					"id": "fore",
+					"facing": 1,
+					"rect": [
+						236,
+						-18,
+						44,
+						22
+					],
+					"muzzle": [
+						300,
+						-10
+					]
+				},
+				{
+					"id": "aft",
+					"facing": -1,
+					"rect": [
+						8,
+						-18,
+						44,
+						22
+					],
+					"muzzle": [
+						-12,
+						-10
+					]
+				}
+			]
+		}
+	},
+	"machinery": {
+		"diesel_block": {
+			"cylinder_windows": [
+				[
+					6,
+					6,
+					8,
+					10
+				],
+				[
+					18,
+					6,
+					8,
+					10
+				],
+				[
+					30,
+					6,
+					8,
+					10
+				],
+				[
+					42,
+					6,
+					8,
+					10
+				]
+			],
+			"crank_y": 26,
+			"piston_travel_px": 6
+		},
+		"dynamo_housing": {
+			"armature_window": [
+				20,
+				14,
+				9
+			]
+		},
+		"boiler": {
+			"gauge_center": [
+				20,
+				10
+			],
+			"gauge_radius": 5,
+			"chimney": [
+				30,
+				0
+			]
+		},
+		"gearbox": {
+			"outputs": [
+				[
+					4,
+					24
+				],
+				[
+					16,
+					2
+				],
+				[
+					30,
+					14
+				]
+			]
+		},
+		"shell_rack": {
+			"slots": [
+				[
+					4,
+					6,
+					7,
+					30
+				],
+				[
+					13,
+					6,
+					7,
+					30
+				],
+				[
+					22,
+					6,
+					7,
+					30
+				]
+			]
+		}
+	},
+	"enemies": {
+		"enemy_light": {
+			"muzzle": [
+				2,
+				10
+			],
+			"track_y": 34
+		},
+		"enemy_medium": {
+			"muzzle": [
+				2,
+				14
+			],
+			"track_y": 46
+		},
+		"enemy_heavy": {
+			"muzzle": [
+				0,
+				16
+			],
+			"track_y": 54
+		},
+		"enemy_destroyer": {
+			"muzzle": [
+				0,
+				18
+			],
+			"track_y": 38
+		},
+		"enemy_dugin": {
+			"muzzle": [
+				2,
+				8
+			],
+			"hitbox": [
+				8,
+				0,
+				32,
+				14
+			]
+		}
+	},
+	"boss": {
+		"hull_px": [
+			320,
+			100
+		],
+		"turret": {
+			"rect": [
+				100,
+				-52,
+				152,
+				56
+			],
+			"muzzle": [
+				-60,
+				-30
+			]
+		},
+		"bogies": [
+			[
+				20,
+				84,
+				64,
+				32
+			],
+			[
+				128,
+				84,
+				64,
+				32
+			],
+			[
+				236,
+				84,
+				64,
+				32
+			]
+		],
+		"secondary_muzzle": [
+			10,
+			30
+		]
+	}
+}

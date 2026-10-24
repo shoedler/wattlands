@@ -1,0 +1,148 @@
+class_name TankRules
+extends RefCounted
+## Pure, deterministic rules (BRIEF 3.6; brief 2.4): step(state, inputs, dt) reads only its
+## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
+##
+## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), assign
+## stations and read the riders, count the breech down, spawn the Advance's encounters, drive
+## (TankDrive: speed model, obstacles, Ram, dodge), move the enemies and the Behemoth, rebuild the
+## target list, run the stations (TankStations), the gun (TankGun), the enemies' guns, the shells
+## in flight (TankShells), the repair and the berm (TankHullRules) and the objectives. Events come
+## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
+## (new_state, step, in_band) are the module's contract.
+
+
+## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
+static func new_state(
+	content: TankContent,
+	players: Array[PlayerSlot],
+	mission: String,
+	rotation: bool,
+	rng: RandomNumberGenerator
+) -> TankState:
+	return TankState.create(content, players, mission, rotation, rng)
+
+
+## Advances the state by dt (always Wl.SIM_DT); returns the events raised (TankEvents), in order.
+static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dictionary]:
+	var events: Array[Dictionary] = []
+	state.tick = inputs.tick
+	state.t = inputs.t
+	if state.content == null:
+		return events
+	var aux := TankAux.of(state)
+	aux.aim_valid = false
+	TankSegments.track(state, inputs, aux, events)
+	_assign_stations(state, inputs, events)
+	_update_riders(state, inputs, dt)
+	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
+	TankEncounters.advance(state, aux)
+	TankEncounters.depot_wrecks(state, aux)
+	TankDrive.step(state, inputs, dt, events)
+	TankEnemies.move(state, aux, dt)
+	TankBoss.step(state, aux, dt, events)
+	TankTargets.build(state, aux)
+	TankStations.step(state, inputs, dt, events)
+	TankGun.step(state, inputs, dt, events)
+	TankEnemies.fire(state, aux, dt, events)
+	TankShells.step(state, aux, dt, events)
+	TankHullRules.repair(state, dt, events)
+	TankHullRules.dig(state, inputs, dt)
+	TankSegments.objectives(state)
+	return events
+
+
+## The rider's in-band rule (brief 2.3 "In band"), on this tick's input. `station` is the room the
+## rider works (null treated as none: never in band). Never in band on reserve or in rescue. The
+## rule follows the rider's own phase kind (ADR "Plan shape details"): every WARMUP and RECOVERY
+## kind (the depot, the drill's skirmish, checkpoints) is cadence >= 60 only, never a power rule.
+static func in_band(state: TankState, r: TankRiderInput, station: TankStationState) -> bool:
+	if station == null or r.on_reserve() or r.rescue or state.content == null:
+		return false
+	var c := state.content
+	var seg := state.seg.seg
+	if seg == TankIds.SEG_COOLDOWN or seg == TankIds.SEG_NONE:
+		return false
+	var kind := r.phase_kind if r.phase_kind != "" else state.seg.kind
+	if kind == Wl.COOLDOWN:
+		return false
+	if kind == Wl.WARMUP or kind == Wl.RECOVERY:
+		return r.cadence_rpm >= c.num("tanks", "in_band.recovery_cadence_rpm", 60.0)
+	if r.mode == Wl.ERG:
+		return (
+			r.applied_target_w > 0.0
+			and r.power_w >= c.num("tanks", "in_band.erg_power_frac", 0.95) * r.applied_target_w
+			and r.cadence_rpm >= c.num("tanks", "in_band.erg_cadence_rpm", 60.0)
+		)
+	if station is TankSteamState:
+		var steam := station as TankSteamState
+		if steam.loaded or steam.cycling:
+			return r.cadence_rpm >= c.num("tanks", "in_band.steam_cycle_cadence_rpm", 50.0)
+		return TankConst.steam_building(r.power_w, r.ftp)
+	var band: Array = c.value("tanks", "in_band.sim_ftp_pct", [76, 105])
+	return r.ftp_pct >= float(band[0]) and r.ftp_pct <= float(band[1])
+
+
+## Rooms follow each rider's plan meta (rotation is in the plans); a rotation event when they move.
+static func _assign_stations(
+	state: TankState, inputs: TankInputs, events: Array[Dictionary]
+) -> void:
+	var moved := false
+	for ri in inputs.riders:
+		var r := state.rider(ri.peer)
+		if r == null or ri.engine == "" or ri.engine == r.engine:
+			continue
+		r.engine = ri.engine
+		r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0)).reset()
+		moved = true
+	if not moved:
+		return
+	for st in state.stations:
+		st.slot = -1
+		st.peer = 0
+	var pairs: Array = []
+	for r in state.riders:
+		var st := state.station(r.engine)
+		if st != null:
+			st.slot = r.slot
+			st.peer = r.peer
+		pairs.append([r.slot, r.engine])
+	events.append(TankEvents.rotation(pairs))
+
+
+static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> void:
+	var reserve_w := 60.0
+	if state.content != null:
+		reserve_w = state.content.num("tanks", "in_band.reserve_p_eff_w", 60.0)
+	state.all_afk = not inputs.riders.is_empty()
+	for ri in inputs.riders:
+		if not ri.on_reserve():
+			state.all_afk = false
+	for ri in inputs.riders:
+		var r := state.rider(ri.peer)
+		if r == null:
+			continue
+		var st := state.station_of(r.slot)
+		r.raw_w = ri.power_w
+		r.cadence_rpm = ri.cadence_rpm
+		r.ftp_pct = ri.ftp_pct
+		r.rescue = ri.rescue
+		r.afk = ri.afk
+		r.connected = ri.connected
+		r.in_band = in_band(state, ri, st)
+		var rule := r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+		rule.update(state.t, ri.power_w)
+		if not r.is_bot and not r.autopilot:
+			for n in ri.intents:
+				if TankIntents.is_deliberate(n):
+					r.fallback = false
+		if st != null:
+			st.reserve = ri.on_reserve()
+			st.in_band = r.in_band
+			st.unpowered = state.all_afk
+			st.p_eff_w = 0.0 if state.all_afk else (reserve_w if st.reserve else ri.p_eff_w)
+			r.engine_s[TankRiderState.ENGINE_INDEX.get(st.engine, 0)] += dt
+		if state.seg.kind == Wl.WORK:
+			r.work_s += dt
+			if r.in_band:
+				r.band_s += dt

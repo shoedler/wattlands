@@ -1,0 +1,8 @@
+# Credits: tank
+
+Third-party assets (art, audio, fonts) the tank game ships, with their licenses and sources.
+
+- Art (this version): no generated or downloaded art ships. Every one of the 61 sprite ids of `assets/tank/art.json` is a procedural placeholder drawn at runtime by `src/games/tank/view/placeholder_art.gd` from the 32 palette colours: original silhouettes (slab hulls, boxy turrets, machinery, enemies, the Behemoth, props, backdrops, effects), no people, text, insignia or flags. The fal run was not made (`WATTLANDS_ALLOW_ART` was not set), so `assets/tank/sprites/` does not exist and no `assets/tank/art_manifest.json` is written, because no fal run was made ($0 of the $15 budget).
+- Art (planned, not used this run): when the art pass runs, the sprites come from OpenAI's GPT Image 2.5 through fal (fal.ai) via the art pipeline (`tools/art/generate.mjs`, endpoint `openai/gpt-image-2.5/sunburst/text-to-image`, style-check drafts on `openai/gpt-image-2.5/flare/text-to-image`), from the original prompts in `assets/tank/art.json`, pixelated to the palette by `tools/art/pixelate.gd`. Credit it here with the spend from `assets/tank/art_manifest.json` when it lands. A dry run estimates about $4.27 for the 61 requests.
+- Audio: no sound files and no third-party samples. Every sound (diesel rumble, dynamo whine, steam chuff and latch hiss, cannon boom, shell whistle, spent casing, explosions, track clank, lever clunk, hoist ratchet) is synthesized at runtime with the platform's `Sfx.synth` (`src/games/tank/audio/tank_audio.gd`). No CC0 downloads.
+- Fonts, UI kit and 2D kit: the platform's (`addons/wattlands/ui`, `addons/wattlands/world2d`), credited in the platform's credits. Tank adds none.
