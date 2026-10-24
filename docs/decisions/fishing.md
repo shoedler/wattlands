@@ -66,8 +66,9 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 
 ## 2026-10-24 Strava lines per rider
 
-- Decision: results() sets ride_tag ("Free Roam N min" or the workout's name) and each row's ride_lines (fish caught, biggest fish with kg, points, rank in Free Roam with 2+ riders, furthest out in km); res.ride_lines holds the host rider's, and apply_progress replaces them with the local rider's on every peer.
-- Reason: GameResults carries one ride_lines list but every peer uploads its own ride.
+- Decision: results() sets ride_tag ("Free Roam N min" or the workout's name) and each row's "ride_lines" (fish caught, biggest fish with kg, points, rank in Free Roam with 2+ riders, furthest out in km); res.ride_lines holds the host rider's. Results are never changed per peer.
+- Alternatives: apply_progress replacing res.ride_lines with the local rider's (the e2e harness requires identical results on every peer).
+- Reason: GameResults carries one ride_lines list but every peer uploads its own ride; the platform can read the local row's "ride_lines".
 
 ## 2026-10-23 Fight model kept from v0.1
 

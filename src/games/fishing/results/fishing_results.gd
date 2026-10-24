@@ -11,12 +11,12 @@ extends RefCounted
 ## Rows: GameResults.from_stats (kJ, average %FTP and the rest are in the grid), time in band
 ## overridden as % of fight time, then the FISHING_STAT_* stats in reading order (Free Roam adds
 ## the rank by points). Each row also carries "catches" (this session's landed fish), "records"
-## (new species records) and "ride_lines" (its Strava lines), which apply_progress uses for the
-## local rider (a client has no rider catch log).
+## (new species records) and "ride_lines" (its Strava lines); apply_progress writes catches and
+## records into the local rider's store (a client has no rider catch log).
 ## Strava: ride_tag = "Free Roam <n> min" or the workout's name; ride_lines = fish caught, the
 ## biggest fish with kg, points, rank (Free Roam with more than one rider) and the furthest
-## distance out (km). build() fills them for the host's rider; apply_progress() replaces them
-## with each peer's own rider's lines.
+## distance out (km). res.ride_lines holds the host rider's lines (results stay identical on every
+## peer); each row's "ride_lines" holds that rider's own.
 ## XP: 1 per kJ, 10 per fish, 25 per trophy, 50 per new species record. Every unlock_every_xp
 ## (500) XP of the rider's running total unlocks the next cosmetics.json item; each kind's newest
 ## unlock is equipped.
@@ -357,8 +357,6 @@ static func apply_progress(
 	trip_id: String
 ) -> Array:
 	var row := res.row(local_peer)
-	if not row.is_empty() and row.get("ride_lines") is Array:
-		res.ride_lines.assign(row["ride_lines"])
 	if row.is_empty() or progress == null:
 		return []
 	var seen: Array = _array(progress.get_value("sessions", []))

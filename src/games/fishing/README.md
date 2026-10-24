@@ -41,7 +41,8 @@ tools/godot.sh --path . -- --game=fishing --content=roam_30 --mock-trainer=erg+b
 | `plan/` | `FishingPlanBuilder` (the roam plan and its fight tails, workout plans), `FishingPreroll` (roam slots at the bite, workout slots), `FishingPullScheduler` |
 | `autopilot/` | `FishingAutopilot`: Autopilot's and the bots' choices and strategies |
 | `net/`, `results/` | Snapshots; results, Strava tag and lines, XP, unlocks, progress |
-| `view/`, `hud/`, `audio/`, `tools/` | Presentation (see their own headers) |
+| `view/`, `hud/`, `audio/` | The one-ocean view, the minimap HUD and synthesized audio |
+| `tools/` | `FishingArtGrids` and `fishing_write_sprites.gd`: the hand-authored art (see `assets/fishing/README.md`) |
 | `content/fishing/` | `species.json`, `map.json`, `trips/*.json`, `cosmetics.json`, `strings.csv` |
 
 ## Testing

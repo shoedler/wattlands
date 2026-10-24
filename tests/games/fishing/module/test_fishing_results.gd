@@ -177,7 +177,7 @@ func test_ride_lines_tell_fish_biggest_points_rank_and_furthest() -> void:
 	assert_false(" ".join(wres.ride_lines).contains("Rank"), "workouts are co-op: no rank")
 
 
-func test_apply_progress_gives_each_peer_its_own_ride_lines() -> void:
+func test_every_row_keeps_its_own_ride_lines_and_apply_progress_leaves_results_alone() -> void:
 	var g := _game(2, "roam_10")
 	_fill(g)
 	var res := FishingResults.build(g.state, _stats({}), g.ctx.players, g.content, g.ctx.strings)
@@ -185,10 +185,13 @@ func test_apply_progress_gives_each_peer_its_own_ride_lines() -> void:
 	res = GameResults.from_dict(JSON.parse_string(JSON.stringify(res.to_dict())))
 	assert_string_starts_with(res.ride_lines[0], "Fish caught: 2")
 	var p := ProgressStore.open("fishing", "")
+	var before := JSON.stringify(res.to_dict())
 	FishingResults.apply_progress(res, p, 2, g.content, "roam_10")
-	assert_eq(res.ride_lines.size(), 4)
-	assert_eq(res.ride_lines[0], "Fish caught: 0", "peer 2's own lines")
-	assert_eq(res.ride_lines[3], "Furthest out: 0.0 km")
+	assert_eq(JSON.stringify(res.to_dict()), before, "results stay identical on every peer")
+	var own: Array = res.row(2)["ride_lines"]
+	assert_eq(own.size(), 4)
+	assert_eq(own[0], "Fish caught: 0", "peer 2's own lines")
+	assert_eq(own[3], "Furthest out: 0.0 km")
 
 
 func test_xp_counts_kj_fish_trophies_and_new_records() -> void:
@@ -340,4 +343,4 @@ func test_the_module_builds_results_from_its_state() -> void:
 	assert_eq(res.row(1)["xp"], 10 + 20 + 25 + 50)
 	assert_eq(g.apply_progress(res, g.ctx.progress), [])
 	assert_eq(int(g.ctx.progress.get_value("xp")), 105)
-	assert_eq(res.ride_lines[0], "Fish caught: 2", "the local rider's lines")
+	assert_eq(res.ride_lines[0], "Fish caught: 2", "the host rider's lines")

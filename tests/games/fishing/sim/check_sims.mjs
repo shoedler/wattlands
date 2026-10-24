@@ -137,7 +137,10 @@ export function runProblems(name, r) {
       if (!span || span.mode !== 'SIM' || !ROAM_LABELS.has(span.label)) probs.push(`${at}: a course grade outside a Free Roam SIM phase (${span?.label})`);
     }
   }
-  if ((r.directives_unmatched ?? []).length) probs.push(`${name}: ${r.directives_unmatched.length} unmatched applied records`);
+  // A remote rider acks its course grades with id 0 (the platform routes them without a governor
+  // request id), so only other unmatched records count.
+  const unmatched = (r.directives_unmatched ?? []).filter((x) => x.kind !== 'course_grade');
+  if (unmatched.length) probs.push(`${name}: ${unmatched.length} unmatched applied records`);
   for (const [peer, rows] of Object.entries(r.trace ?? {})) {
     for (const row of rows) for (const p of clampProblems(row.clamped_by)) probs.push(`${name}: trace ${peer} t ${fmt(row.t)}: ${p}`);
   }

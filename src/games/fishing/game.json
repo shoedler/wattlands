@@ -43,5 +43,47 @@
 			"default": false,
 			"label": "FISHING_OPT_RELAXED_BAND"
 		}
-	]
+	],
+	"content_cards": {
+		"roam_30": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"roam_10": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"roam_20": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"roam_45": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"roam_60": {
+			"image": "res://assets/fishing/sprites/card_roam.png",
+			"detail": "FISHING_CARD_ROAM",
+			"featured": true
+		},
+		"base_60": {
+			"image": "res://assets/fishing/sprites/card_workout.png",
+			"detail": "FISHING_CARD_WORKOUT",
+			"featured": false
+		},
+		"threshold": {
+			"image": "res://assets/fishing/sprites/card_workout.png",
+			"detail": "FISHING_CARD_WORKOUT",
+			"featured": false
+		},
+		"e2e_2min": {
+			"image": "res://assets/fishing/sprites/card_workout.png",
+			"detail": "FISHING_CARD_WORKOUT",
+			"featured": false
+		}
+	}
 }
