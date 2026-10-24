@@ -1,4 +1,4 @@
-# Tank contracts (G0)
+# Tank contracts
 
 The shared types every Diesel Domestiques builder codes against. The lead owns this folder after G0: builders adapt inside their own paths and request changes (additive where possible) in their report under `contract_change_requests`. Brief: `docs/games/tank.md`; decisions: `docs/decisions/tank.md`; platform: `docs/GAME_SDK.md`.
 
@@ -42,21 +42,21 @@ Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)` -> `snapshot_appl
 
 ## Who implements what
 
-| Class | File | Builder | G0 state |
+| Class | File | Builder | State (G4) |
 | --- | --- | --- | --- |
-| `TankPlanBuilder` | `effort/tank_plan_builder.gd` | effort | complete first version (segment table, engines, rotation, drill, meta) |
-| `TankDirector` | `effort/tank_director.gd` | effort | end_phase rule, cadence band (60, 120) at segment start, driver power band in WORK SIM phases only, the pure helpers `power_band_pct`, `bank_target_pct`, `boiler_grade_pct`, `crew_haptic`; adds patterns 1-4, the loader band and haptics |
-| `TankContent` | `content/tank_content.gd` | rules | working loader + validation through `TankContentSchema` |
-| `TankRules` | `rules/tank_rules.gd` | rules | segment tracking, rotation and overrun events, stations, reserve, all-AFK, in-band, WORK time; placeholder drive and objective (replace) |
-| `TankScore` | `rules/tank_score.gd` | rules | score, grade, XP, unlocks (brief 2.8) |
-| `TankBallistics` | `combat/tank_ballistics.gd` | rules | analytic arc, lower-arc solver, range; adds lead and dispersion |
-| `TankGame` | `tank_game.gd` | module | working skeleton (see the flow above) |
-| `TankAutopilot` | `autopilot/tank_autopilot.gd` | module | stub (returns no intents) |
+| `TankPlanBuilder` | `effort/tank_plan_builder.gd` | effort | complete (segment table, engines, rotation, drill, meta) |
+| `TankDirector` | `effort/tank_director.gd` | effort | complete: every directive pattern (bank sub-steps, boiler, hoist, terrain, cadence and power bands, haptics, `end_phase` with the boss `end_hold_s`) and the pure helpers `power_band_pct`, `bank_target_pct`, `boiler_grade_pct`, `crew_haptic` |
+| `TankContent` | `content/tank_content.gd` | rules | complete: loader and validation through `TankContentSchema` |
+| `TankRules` | `rules/tank_rules.gd` | rules | complete: segments, rotation, overruns, stations, the drive, Ram and dodge, hull and breakdown, reserve, all-AFK, in-band, WORK time (parts in `rules/` and `combat/`) |
+| `TankScore` | `rules/tank_score.gd` | rules | complete: score, grade, XP, unlocks (brief 2.8) |
+| `TankBallistics` | `combat/tank_ballistics.gd` | rules | complete: analytic arc, lower-arc solver, range, lead and dispersion |
+| `TankGame` | `tank_game.gd` | module | complete: the flow above, the Autopilot merge, prompts, the teammate strip and hull HP feeds, snapshot, results, progress |
+| `TankAutopilot` | `autopilot/tank_autopilot.gd` | module | complete: rear traverses and obstacle shots (never a Ram, dodge, Overpressure, early latch or manual lever) |
 | `TankSnapshot` | `net/tank_snapshot.gd` | module | complete encode / apply |
-| `TankView` | `view/tank_view.gd` | view | flat placeholder drawing |
-| `TankHud` | `hud/tank_hud.gd` | view | the ADR's `Rect2i`s with kit widgets and empty Tank Controls |
-| `TankAudio` | `audio/tank_audio.gd` | view | silent stub (`on_cue`), created by `TankView` |
-| `TankPlaceholderArt` | `view/placeholder_art.gd` | artqa | a flat palette block per sprite id at its art.json size |
+| `TankView` | `view/tank_view.gd` | view | complete: the cutaway diorama (parallax planes with blur and haze, rigs and rooms, additive lights, pooled particles, snapshot interpolation); works with the placeholder art for every id |
+| `TankHud` | `hud/tank_hud.gd` | view | complete: the ADR's `Rect2i`s with kit widgets, the station card, the objective line and the boss bars |
+| `TankAudio` | `audio/tank_audio.gd` | view | complete: synthesized sounds (`Sfx.synth`) on `cue`, created by `TankView` |
+| `TankPlaceholderArt` | `view/placeholder_art.gd` | artqa | complete: a procedural palette-colour drawing per sprite id at its art.json size (silhouettes, in memory only) |
 
 Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tests/games/tank/effort/`; rules `src/games/tank/{rules,combat,content}/`, `content/tank/{tanks,scoring,cosmetics,enemies}.json`, `content/tank/missions/`, `tests/games/tank/{rules,combat}/`; module `src/games/tank/tank_game.gd`, `src/games/tank/{autopilot,net}/`, `tests/games/tank/{module,integration}/`, `tests/games/tank/e2e_check.mjs`; view `src/games/tank/view/` (not `placeholder_art.gd`), `src/games/tank/{hud,audio}/`, `assets/tank/audio/`, `tests/games/tank/{view,hud}/`; artqa `assets/tank/` (not `audio/`), `src/games/tank/view/placeholder_art.gd`, `tests/games/tank/{art,sim,static,perf}/`, `.github/workflows/game-tank.yml`, `src/games/tank/HARDWARE_TEST.md`, `docs/credits.d/tank.md`. The lead keeps `contracts/`, `game.json`, `content/tank/strings.csv` (request keys), `docs/decisions/tank.md`, `docs/changelog.d/tank.md`, `src/games/tank/README.md`, `tests/games/tank/{contracts,fixtures}/` (the plan and safety checks in `contracts/test_tank_plans.gd` included), `tank_fakes.gd`, `test_tank_game.gd` and `test_tank_package.gd`.
 
