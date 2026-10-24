@@ -23,22 +23,26 @@ const PROP_HUB := Vector2(21, 32)
 ## The rider's cap (player colour) on the head, and the pennant on the bow mast.
 const CAP := Rect2i(40, 7, 3, 1)
 const FLAG := Rect2i(83, 11, 4, 2)
-## The bow-up poses (nothing is ever rotated): the boat is cut into bands along x and each band
-## moves by whole pixels, the stern squatting 1 px and the bow rising 2 px (pose 1) or 4 px
-## (pose 2) in steps at least 8 px long. Per pose, Vector2i(x_end, dy): columns left of x_end
-## (and right of the previous band) move dy. The hull frames and every part follow them.
-const TILT: Array = [
-	[Vector2i(HULL_SIZE.x, 0)],
-	[Vector2i(32, 1), Vector2i(64, 0), Vector2i(76, -1), Vector2i(HULL_SIZE.x, -2)],
-	[
-		Vector2i(32, 1),
-		Vector2i(50, 0),
-		Vector2i(60, -1),
-		Vector2i(70, -2),
-		Vector2i(80, -3),
-		Vector2i(HULL_SIZE.x, -4),
-	],
-]
+## The hull's poses (nothing is ever rotated): the boat is cut into bands along x between
+## POSE_X0 and POSE_X1 and each band moves by whole pixels in 1 px steps of equal length, from
+## the stern's offset to the bow's. Per pose, [stern dy, bow dy] (y grows down): the bow-up
+## poses 1..5 squat the stern up to 2 px and lift the bow up to 8 px; the braking poses -1 and
+## -2 dig the bow in 2 and 4 px and lift the stern 1 and 2 px. The hull frames and every part
+## follow tilt_dy().
+const POSE_LEVELS := {
+	-2: [-2, 4],
+	-1: [-1, 2],
+	0: [0, 0],
+	1: [1, -2],
+	2: [1, -3],
+	3: [1, -5],
+	4: [2, -6],
+	5: [2, -8],
+}
+const POSE_MIN := -2
+const POSE_MAX := 5
+const POSE_X0 := 30
+const POSE_X1 := 86
 ## The rod in its holder on the winch, as runs from the base toward the tip: a positive run
 ## climbs that many pixels, then steps one aft and up; a negative run goes that many pixels aft,
 ## then steps one aft and down (stowed, with no climb, it steps up instead). Raised the rod
@@ -51,22 +55,29 @@ const ROD_HARD: Array[int] = [3, 3, 2, 2, -2, -2, -3, -4]
 ## Tension from which the raised rod shows the bent and the hard-bent frame.
 const ROD_BENT_AT := 0.35
 const ROD_HARD_AT := 0.7
-## Even slopes for a run (|dx| per |dy|): a line snaps its end to the nearest one.
-const SLOPES: Array[float] = [0.0, 0.125, 0.25, 1.0 / 3.0, 0.5, 1.0, 2.0, 3.0, 4.0, 8.0]
-## How far (px) a snapped line may move its end.
-const SNAP_MAX_PX := 24
 ## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
 const WAKE_AT := Vector2i(19, WATERLINE)
 const SPRAY_AT := Vector2i(87, WATERLINE)
 
 
-## How far boat-local column `x` moves in bow-up pose `pose` (TILT).
+## How far boat-local column `x` moves in pose `pose` (POSE_LEVELS).
 static func tilt_dy(pose: int, x: int) -> int:
-	var bands: Array = TILT[clampi(pose, 0, TILT.size() - 1)]
-	for b: Vector2i in bands:
-		if x < b.x:
-			return b.y
-	return (bands[-1] as Vector2i).y
+	var lv: Array = POSE_LEVELS[clampi(pose, POSE_MIN, POSE_MAX)]
+	var stern := int(lv[0])
+	var bow := int(lv[1])
+	var steps := absi(bow - stern)
+	if steps == 0:
+		return stern
+	var u := clampi(x - POSE_X0, 0, POSE_X1 - POSE_X0)
+	var k := mini(u * (steps + 1) / (POSE_X1 - POSE_X0 + 1), steps)
+	return stern + k * signi(bow - stern)
+
+
+## The boat_hull frame of pose `pose`: the level hull first, then the bow-up poses 1..5, then
+## the braking poses -1 and -2.
+static func hull_frame(pose: int) -> int:
+	var p := clampi(pose, POSE_MIN, POSE_MAX)
+	return p if p >= 0 else POSE_MAX - p
 
 
 ## The rod frame for `raise` (0 stowed .. 1 raised, shown from 0.5) and `tension`.
@@ -97,44 +108,6 @@ static func rod(raise: float, tension: float) -> Array[Vector2i]:
 		else:
 			p = last + Vector2i(-1, 1 if climbs else -1)
 	return out
-
-
-## The x the line's end (a fish's lip, a wobbler) should take so the line from `tip` to `end`
-## runs in uniform runs of an even slope (SLOPES); end.x itself when that would move it more
-## than SNAP_MAX_PX.
-static func even_end(tip: Vector2i, end: Vector2i) -> int:
-	var dy := absi(end.y - tip.y)
-	if dy == 0:
-		return end.x
-	var dx := end.x - tip.x
-	var want := absf(float(dx)) / float(dy)
-	var best := SLOPES[0]
-	for s in SLOPES:
-		if absf(atan(s) - atan(want)) < absf(atan(best) - atan(want)):
-			best = s
-	var w := 0
-	if best >= 1.0:
-		w = (dy + 1) * roundi(best) - 1
-	elif best > 0.0:
-		w = dy / roundi(1.0 / best)
-	var x := tip.x + int(signf(float(dx))) * w
-	return x if absi(x - end.x) <= SNAP_MAX_PX else end.x
-
-
-## Sag in art px of a line `length` long: deep with slack, none under strain.
-static func line_sag(length: float, slack: float, strain: float) -> float:
-	var k := clampf(slack - 0.4 - strain, 0.0, 1.0)
-	return roundf(length * 0.15 * k)
-
-
-## The line from `a` to `b` as one straight run, or two when it sags: [a, (low point), b], all
-## whole pixels.
-static func line(a: Vector2i, b: Vector2i, slack: float, strain: float) -> Array[Vector2i]:
-	var sag := int(line_sag(Vector2(a).distance_to(Vector2(b)), slack, strain))
-	if sag <= 0:
-		return [a, b]
-	var mid := Vector2i((a.x + b.x) / 2, (a.y + b.y) / 2 + sag)
-	return [a, mid, b]
 
 
 ## Every pixel of the straight run from `a` to `b`, both ends included: runs of one length along

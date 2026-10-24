@@ -41,6 +41,11 @@ const SWIM_BEAT: Array[int] = [0, -1, 0, 1]
 const TAIL := 0.22
 ## Crank frames per pose in boat_crew (driving frames first, then fishing).
 const CREW_FRAMES := 4
+## Crew poses after CREW's two: leaning into a sprint, sat back braking ([last row, dx] bands
+## from the top; rows past the last band stay).
+const CREW_POSES := 4
+const CREW_LEAN_FWD: Array[Vector2i] = [Vector2i(3, 2), Vector2i(7, 1)]
+const CREW_LEAN_BACK: Array[Vector2i] = [Vector2i(5, -1)]
 ## The minimap and leaderboard action icons, in FishingActions order.
 const ICONS: Array[String] = [
 	"icon_drive",
@@ -266,9 +271,19 @@ const ICON_GRIDS := {
 static func build() -> Dictionary:
 	var out := {}
 	_add(
-		out, "boat_hull", hull_poses(), Vector2i.ZERO, "pedal boat hull, level and two bow-up poses"
+		out,
+		"boat_hull",
+		hull_poses(),
+		Vector2i.ZERO,
+		"pedal boat hull: level, five bow-up and two braking poses"
 	)
-	_add(out, "boat_crew", frames_of(CREW), Vector2i.ZERO, "seated cyclist, flywheel, clutch")
+	_add(
+		out,
+		"boat_crew",
+		crew_frames(),
+		Vector2i.ZERO,
+		"seated cyclist: drive, fish, lean in, sit back"
+	)
 	_add(out, "boat_winch", frames_of(WINCH), Vector2i(2, 2), "winch drum with wound line")
 	_add(out, "boat_prop", frames_of(PROP), Vector2i(1, 2), "screw propeller")
 	_add(out, "lure", frames_of(LURE), Vector2i(0, 1), "diving wobbler lure")
@@ -356,24 +371,55 @@ static func hjoin(a: Array[String], b: Array[String]) -> Array[String]:
 	return out
 
 
-## The hull level and in each bow-up pose (FishingRig.TILT): every column of the level grid
-## moved by its band's whole pixels, so the planes stay flat with clean 1 px steps between bands.
+## The hull in every pose, in FishingRig.hull_frame() order: each column of the level grid
+## moved by its band's whole pixels (FishingRig.tilt_dy), so the planes stay flat with clean
+## 1 px steps between bands.
 static func hull_poses() -> Array[Image]:
 	var level := img(BOAT_HULL[0])
-	var out: Array[Image] = [level]
-	for pose in range(1, FishingRig.TILT.size()):
-		var f := Image.create_empty(
-			level.get_width(), level.get_height(), false, level.get_format()
-		)
-		f.fill(Color(0, 0, 0, 0))
-		for x in level.get_width():
-			var dy := FishingRig.tilt_dy(pose, x)
-			for y in level.get_height():
-				var c := level.get_pixel(x, y)
-				if c.a > 0.5 and y + dy >= 0 and y + dy < level.get_height():
-					f.set_pixel(x, y + dy, c)
-		out.append(f)
+	var out: Array[Image] = []
+	out.resize(FishingRig.POSE_MAX - FishingRig.POSE_MIN + 1)
+	for pose in range(FishingRig.POSE_MIN, FishingRig.POSE_MAX + 1):
+		out[FishingRig.hull_frame(pose)] = _sheared(level, pose)
 	return out
+
+
+static func _sheared(level: Image, pose: int) -> Image:
+	var f := Image.create_empty(level.get_width(), level.get_height(), false, level.get_format())
+	f.fill(Color(0, 0, 0, 0))
+	for x in level.get_width():
+		var dy := FishingRig.tilt_dy(pose, x)
+		for y in level.get_height():
+			var c := level.get_pixel(x, y)
+			if c.a > 0.5 and y + dy >= 0 and y + dy < level.get_height():
+				f.set_pixel(x, y + dy, c)
+	return f
+
+
+## The crew sheet: driving and fishing (CREW), then driving leaning forward (a sprint) and sat
+## back (braking), each CREW_FRAMES crank frames: the head and torso rows moved whole pixels
+## (CREW_LEAN_FWD, CREW_LEAN_BACK: [last row, dx] from the top).
+static func crew_frames() -> Array[Image]:
+	var out := frames_of(CREW)
+	for lean: Array in [CREW_LEAN_FWD, CREW_LEAN_BACK]:
+		for k in CREW_FRAMES:
+			out.append(_leaned(img(CREW[k]), lean))
+	return out
+
+
+static func _leaned(base: Image, lean: Array) -> Image:
+	var f := Image.create_empty(base.get_width(), base.get_height(), false, base.get_format())
+	f.fill(Color(0, 0, 0, 0))
+	for y in base.get_height():
+		var dx := 0
+		for band: Vector2i in lean:
+			if y <= band.x:
+				dx = band.y
+				break
+		for x in base.get_width():
+			var c := base.get_pixel(x, y)
+			if c.a > 0.5 and x + dx >= 0 and x + dx < base.get_width():
+				f.set_pixel(x + dx, y, c)
+	return f
 
 
 static func frames_of(grids: Array) -> Array[Image]:
@@ -507,7 +553,7 @@ static func _shift(image: Image, steps: int) -> void:
 				image.set_pixel(x, y, to[c.to_html(false)])
 
 
-## The hull, level (hull_poses() derives the bow-up frames from it).
+## The hull, level (hull_poses() derives the other poses from it).
 const BOAT_HULL: Array = [
 	[
 		"................................................................................................",

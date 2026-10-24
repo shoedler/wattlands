@@ -41,7 +41,9 @@ func test_the_camera_keeps_a_driving_boat_left_of_centre_looking_ahead() -> void
 	var v := _view(g)
 	_run(v, 80)
 	var p: Vector2 = v.model["boats"][0]
-	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X, 3.0)
+	var lead := FishingView.lead_px(5.0)
+	assert_gt(lead, 0.0, "the camera leads ahead with speed")
+	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X - lead, 3.0)
 	assert_eq(p.y, float(FishingScenery.SURF_Y))
 
 
@@ -51,7 +53,8 @@ func test_heading_home_mirrors_the_camera_and_flips_the_boat() -> void:
 	var v := _view(g)
 	_run(v, 80)
 	var p: Vector2 = v.model["boats"][0]
-	assert_almost_eq(p.x, float(FishingScenery.W) - FishingView.CAM_DRIVE_X, 3.0)
+	var x := FishingView.CAM_DRIVE_X - FishingView.lead_px(5.0)
+	assert_almost_eq(p.x, float(FishingScenery.W) - x, 3.0)
 	assert_eq(v.boat_view(0).scale.x, -1.0)
 
 
@@ -63,45 +66,63 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 	g.state.rider(0).x_m = 6000.0
 	_run(v, 1)
 	var p: Vector2 = v.model["boats"][0]
-	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X, 3.0)
+	var lead := FishingView.lead_px(g.state.rider(0).v_mps)
+	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X - lead, 3.0)
 
 
-func test_bow_pitch_picks_a_bow_up_pose_by_whole_pixels_never_rotating_it() -> void:
+func test_signed_trim_picks_bow_up_and_braking_poses_by_whole_pixels_never_rotating() -> void:
 	var g := FX.make_game(1)
 	var r := g.state.rider(0)
 	FX.set_drive(r, 3000.0, 7.0)
-	r.pitch_deg = 10.0
+	r.pitch_deg = 14.0
 	var v := _view(g)
 	_run(v, 10)
 	var b := v.boat_view(0)
 	assert_eq(b.rotation, 0.0, "sprites are never rotated")
-	assert_eq(b.pose(), 2, "a hard effort lifts the bow 4 px")
-	assert_eq(b.hull.texture, FishingSprites.frame("boat_hull", 2))
+	assert_eq(b.pose(), FishingRig.POSE_MAX, "a hard surge lifts the bow 8 px")
+	assert_eq(b.hull.texture, FishingSprites.frame("boat_hull", FishingRig.POSE_MAX))
+	assert_gte(b.crew_frame(), 2 * FishingArtGrids.CREW_FRAMES, "the rider leans in")
 	var flag_up := b.pixel_of(FishingRig.FLAG.position)
-	var stern := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	var stern_up := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
 	r.pitch_deg = 0.0
 	_run(v, 2)
 	assert_eq(b.pose(), 0)
-	assert_eq(b.pixel_of(FishingRig.FLAG.position).y - flag_up.y, 4.0, "the bow came down 4 px")
-	var stern_level := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
-	assert_eq(stern.y - stern_level.y, 1.0, "the stern squatted 1 px")
+	var flag := b.pixel_of(FishingRig.FLAG.position)
+	var stern := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	assert_eq(flag.y - flag_up.y, 8.0, "the bow came down 8 px")
+	assert_eq(stern_up.y - stern.y, 2.0, "the stern had squatted 2 px")
+	r.pitch_deg = -6.0
+	_run(v, 2)
+	assert_eq(b.pose(), FishingRig.POSE_MIN, "a power cut digs the bow in")
+	assert_eq(b.pixel_of(FishingRig.FLAG.position).y - flag.y, 4.0, "bow down 4 px")
+	var lifted := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	assert_eq(stern.y - lifted.y, 2.0, "stern up 2 px")
+	assert_eq(b.crew_frame() / FishingArtGrids.CREW_FRAMES, 3, "the rider sits back")
 
 
-func test_tilt_bands_step_by_one_pixel_at_least_eight_apart() -> void:
-	for pose in range(1, FishingRig.TILT.size()):
-		var bands: Array = FishingRig.TILT[pose]
-		var prev_x := 0
-		var prev_dy := 1
-		for i in bands.size():
-			var band: Vector2i = bands[i]
-			if i > 0:
-				assert_eq(prev_dy - band.y, 1, "pose %d steps one pixel" % pose)
-				assert_gte(band.x - prev_x, 8, "pose %d steps are at least 8 px long" % pose)
-			prev_x = band.x
-			prev_dy = band.y
-		assert_eq(FishingRig.tilt_dy(pose, 0), 1, "the stern squats")
-	assert_eq(FishingRig.tilt_dy(2, FishingRig.BOW_X), -4)
-	assert_eq(FishingRig.tilt_dy(1, FishingRig.BOW_X), -2)
+func test_poses_step_one_pixel_at_a_time_from_stern_to_bow() -> void:
+	for pose in range(FishingRig.POSE_MIN, FishingRig.POSE_MAX + 1):
+		var prev := FishingRig.tilt_dy(pose, 0)
+		var run := 0
+		for x in range(1, FishingRig.HULL_SIZE.x):
+			var dy := FishingRig.tilt_dy(pose, x)
+			assert_lte(absi(dy - prev), 1, "pose %d steps 1 px at x %d" % [pose, x])
+			if dy != prev:
+				assert_gte(run, 4, "pose %d steps are at least 5 px long" % pose)
+				run = 0
+			else:
+				run += 1
+			prev = dy
+	assert_eq(FishingRig.tilt_dy(FishingRig.POSE_MAX, FishingRig.BOW_X), -8)
+	assert_eq(FishingRig.tilt_dy(FishingRig.POSE_MIN, FishingRig.BOW_X), 4)
+	assert_eq(FishingRig.hull_frame(0), 0, "the level hull is the first frame")
+	var seen := {}
+	for pose in range(FishingRig.POSE_MIN, FishingRig.POSE_MAX + 1):
+		seen[FishingRig.hull_frame(pose)] = true
+	assert_eq(seen.size(), FishingRig.POSE_MAX - FishingRig.POSE_MIN + 1, "one frame per pose")
+	assert_eq(FishingSprites.count("boat_hull"), seen.size())
+	assert_eq(FishingBoatView.pose_for(0.5), 0)
+	assert_eq(FishingBoatView.pose_for(-6.0), FishingRig.POSE_MIN)
 
 
 func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -> void:
@@ -166,7 +187,7 @@ func test_a_wobbler_shows_at_its_depth_while_waiting() -> void:
 	var p: Vector2 = v.model["lure"][0]
 	assert_gt(p.y, float(FishingScenery.SURF_Y) + 10.0)
 	var x := v.to_screen(3000.0 - 12.0, 20.0).x
-	assert_almost_eq(p.x, x, float(FishingRig.SNAP_MAX_PX), "snapped for an even line")
+	assert_almost_eq(p.x, x, 1.0, "at its x")
 
 
 func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> void:

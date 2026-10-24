@@ -152,11 +152,14 @@ func test_the_minimap_places_every_rider_with_its_action_icon() -> void:
 	assert_eq(m.x0, 0.0)
 	assert_eq(m.x1, g.state.world.length_m())
 	assert_eq(m.icons.size(), 2)
-	assert_almost_eq(float(m.icons[0]["x"]), 0.1, 0.001)
+	assert_almost_eq(float(m.icons[0]["x"]), 900.0 / g.state.world.length_m(), 0.001)
 	assert_eq(str(m.icons[1]["icon"]), "icon_fight")
 	assert_true(bool(m.icons[0]["local"]))
 	assert_eq(m.floor_m.size(), FishingMinimap.SAMPLES)
 	assert_gt(m.zones.size(), 4)
+	assert_eq(m.marks.size(), g.state.world.landmarks().size(), "every landmark on the strip")
+	for mk in m.marks:
+		assert_true(FishingMinimap.MARKS.has(str(mk["kind"])), "a mark for %s" % mk["kind"])
 
 
 func test_the_workout_minimap_is_a_moving_window_round_the_boats() -> void:

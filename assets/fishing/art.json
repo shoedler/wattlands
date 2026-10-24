@@ -21,7 +21,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "boat_hull",
-			"prompt": "pedal boat hull, level and two bow-up poses",
+			"prompt": "pedal boat hull: level, five bow-up and two braking poses",
 			"size": [
 				96,
 				40
@@ -30,7 +30,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "boat_crew",
-			"prompt": "seated cyclist, flywheel, clutch",
+			"prompt": "seated cyclist: drive, fish, lean in, sit back",
 			"size": [
 				30,
 				18

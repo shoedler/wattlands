@@ -196,7 +196,7 @@ func test_no_sprite_uses_a_player_colour_and_the_crew_frames_all_differ() -> voi
 	var seen := {}
 	for f: Image in _built["boat_crew"]["frames"]:
 		seen[f.get_data()] = true
-	assert_eq(seen.size(), 2 * FishingArtGrids.CREW_FRAMES)
+	assert_eq(seen.size(), FishingArtGrids.CREW_POSES * FishingArtGrids.CREW_FRAMES)
 
 
 func test_fish_have_no_outline_and_no_isolated_specks() -> void:

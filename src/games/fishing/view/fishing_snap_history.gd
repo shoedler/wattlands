@@ -8,9 +8,9 @@ extends RefCounted
 const CAPACITY := 8
 ## A snapshot more than this after the newest (a rejoin, a long stall) starts the history over.
 const MAX_GAP_S := 1.5
-## The values kept per rider: boat x (m), bow pitch (deg), wake, the fish's dx and depth (m), the
-## wobbler's dx and depth (m), EMA cadence (rpm).
-const KEYS: Array[String] = ["x", "pitch", "wake", "fdx", "fz", "ldx", "lz", "cad"]
+## The values kept per rider: boat x (m), signed trim (deg, bow up positive), wake, braking
+## (0..1), the fish's dx and depth (m), the wobbler's dx and depth (m), EMA cadence (rpm).
+const KEYS: Array[String] = ["x", "pitch", "wake", "brake", "fdx", "fz", "ldx", "lz", "cad"]
 
 ## Oldest first: [{"t": host seconds, "r": {slot: {key: value}}}].
 var entries: Array[Dictionary] = []
@@ -34,6 +34,7 @@ static func values_of(r: FishingRiderState) -> Dictionary:
 		"x": r.x_m,
 		"pitch": r.pitch_deg,
 		"wake": r.wake,
+		"brake": r.brake,
 		"fdx": r.fish_dx(),
 		"fz": r.fish.depth_m(),
 		"ldx": r.lure_dx,

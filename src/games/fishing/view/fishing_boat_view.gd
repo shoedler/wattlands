@@ -1,13 +1,14 @@
 class_name FishingBoatView
 extends Node2D
-## One rider's boat (FishingRig's points, boat-local art px): the slate hull (level, or planing
-## with the bow section raised) with its outboard leg, the crew sprite (clutch lever, a seated
-## cyclist, the flywheel with its brass hub and the bar; four crank frames per pose), the winch
-## drum and the prop as frame-animated sprites, the rod (stowed, raised, bent back under
-## tension), the rider's cap and the bow pennant in the player's colour. The view sets position
+## One rider's boat (FishingRig's points, boat-local art px): the slate hull in its pose with
+## its outboard leg, the crew sprite (clutch lever, a seated cyclist, the flywheel with its brass
+## hub and the bar; four crank frames per pose), the winch drum and the prop as frame-animated
+## sprites, the brass rod with a wood tip (stowed, raised, bent back under tension), the
+## rider's cap and the bow pennant in the player's colour. The view sets position
 ## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
-## is ever rotated: the bow pitch picks a bow-up pose (FishingRig.TILT), a hull frame cut in
-## bands moved by whole pixels, and every part moves with the band it sits on.
+## is ever rotated: the signed trim picks a pose (FishingRig.POSE_LEVELS: five bow up, two
+## braking bow down), a hull frame cut in bands moved by whole pixels, every part moving with
+## the band it sits on; the rider leans into a sprint and sits back to brake.
 ## Driving vs fishing (`fishing` eased 0..1, shown as a pose from 0.5): the rider sits up from
 ## the bar with a hand on the clutch, which leans aft; the prop stops while the winch drum turns;
 ## the rod tips up. Every part carries a palette map (FishingPaletteMap): rows under the boat's
@@ -19,9 +20,20 @@ const FISHING_EASE_S := 0.6
 ## Prop frame rate at full drive and the winch's frames per metre of line.
 const PROP_FPS_FULL := 14.0
 const WINCH_FPS_PER_MPS := 6.0
-## Bow pitch (degrees) from which each bow-up pose shows (pose 1, pose 2): a hard effort or a
-## sprint's surge lifts the bow, steady riding at FTP stays level.
-const POSE_DEG: Array[float] = [3.0, 5.0]
+## The signed trim (degrees, bow up positive) from which each bow-up pose 1..5 shows, and the
+## braking poses -1 and -2 (bow down); a pose changes only once the trim is POSE_HOLD_DEG past
+## its edge, so the hull does not flicker between two.
+const POSE_UP_DEG: Array[float] = [1.5, 3.5, 6.0, 9.0, 12.0]
+const POSE_DOWN_DEG: Array[float] = [-1.0, -3.0]
+const POSE_HOLD_DEG := 0.4
+## The rod is brass for this share of its length from the butt, then a wood tip (the line stays
+## slate above the water, so the two read as different things).
+const ROD_BRASS := 0.6
+## Braking water from this deceleration share, hard braking from the second.
+const BRAKE_AT := 0.3
+const BRAKE_HARD_AT := 0.65
+## The crew leans into a sprint from this pose up and sits back in the braking poses.
+const LEAN_POSE := 3
 ## A farther boat: each slate one step lighter.
 const FAR_FROM: Array[Color] = [FishingPalette.SLATE, FishingPalette.WOOD]
 const FAR_TO: Array[Color] = [FishingPalette.WOOD, FishingPalette.UPPER]
@@ -31,6 +43,8 @@ var line_color: Color = FishingPalette.LINE
 ## Shown values (the view writes them every frame).
 var heading: int = 1
 var pitch_deg: float = 0.0
+## Braking 0..1 (the boat's deceleration, FishingRiderState.brake).
+var brake: float = 0.0
 var bob_px: float = 0.0
 var cadence: float = 0.0
 ## 0 driving .. 1 fishing (eased toward `fishing_target`).
@@ -54,6 +68,7 @@ var _crank: float = 0.0
 var _prop_t: float = 0.0
 var _winch_t: float = 0.0
 var _mats: Array[ShaderMaterial] = []
+var _pose: int = 0
 
 
 func _init() -> void:
@@ -91,13 +106,41 @@ func player_color() -> Color:
 	return FishingPalette.player(slot)
 
 
-## The bow-up pose for the pitch shown: 0 level, 1 bow up 2 px, 2 bow up 4 px (FishingRig.TILT).
+## The pose shown (FishingRig.POSE_LEVELS): 1..5 bow up, -1 and -2 braking, 0 level.
 func pose() -> int:
+	return _pose
+
+
+## How hard the boat brakes, for its water effects: 0 none, 1 braking, 2 hard (a braking pose or
+## the deceleration past BRAKE_AT / BRAKE_HARD_AT).
+func braking() -> int:
+	if _pose <= -2 or brake >= BRAKE_HARD_AT:
+		return 2
+	if _pose < 0 or brake >= BRAKE_AT:
+		return 1
+	return 0
+
+
+## The pose the signed trim `deg` asks for, without hysteresis.
+static func pose_for(deg: float) -> int:
 	var k := 0
-	for i in POSE_DEG.size():
-		if pitch_deg >= POSE_DEG[i]:
+	for i in POSE_UP_DEG.size():
+		if deg >= POSE_UP_DEG[i]:
 			k = i + 1
+	for i in POSE_DOWN_DEG.size():
+		if deg <= POSE_DOWN_DEG[i]:
+			k = -(i + 1)
 	return k
+
+
+func _update_pose() -> void:
+	var want := pose_for(pitch_deg)
+	if want == _pose:
+		return
+	var step := signi(want - _pose)
+	var nudge := pose_for(pitch_deg - float(step) * POSE_HOLD_DEG)
+	if nudge != _pose:
+		_pose = nudge
 
 
 ## How far boat-local column `x` moves in the pose shown.
@@ -105,11 +148,18 @@ func tilt_at(x: float) -> float:
 	return float(FishingRig.tilt_dy(pose(), floori(x)))
 
 
-## The crew frame shown: the pose's block, then the crank's quarter turn.
+## The crew frame shown: the pose's block (driving, fishing, leaning into a sprint, sat back
+## braking), then the crank's quarter turn.
 func crew_frame() -> int:
-	var pose := 1 if fishing >= 0.5 else 0
+	var block := 0
+	if fishing >= 0.5:
+		block = 1
+	elif _pose >= LEAN_POSE:
+		block = 2
+	elif _pose < 0:
+		block = 3
 	var k := posmod(floori(_crank / (TAU / float(FishingArtGrids.CREW_FRAMES))), 4)
-	return pose * FishingArtGrids.CREW_FRAMES + k
+	return block * FishingArtGrids.CREW_FRAMES + k
 
 
 ## One frame of `dt` seconds: eases the clutch, turns the parts, places the body.
@@ -118,8 +168,9 @@ func advance(dt: float) -> void:
 	_crank = fmod(_crank + cadence / 60.0 * TAU * dt, TAU)
 	_prop_t += PROP_FPS_FULL * prop_drive * (1.0 - fishing) * dt
 	_winch_t += absf(winch_mps) * WINCH_FPS_PER_MPS * fishing * dt
+	_update_pose()
 	crew.texture = FishingSprites.frame("boat_crew", crew_frame())
-	hull.texture = FishingSprites.frame("boat_hull", pose())
+	hull.texture = FishingSprites.frame("boat_hull", FishingRig.hull_frame(_pose))
 	prop.texture = FishingSprites.frame("boat_prop", floori(_prop_t))
 	winch.texture = FishingSprites.frame("boat_winch", floori(_winch_t))
 	scale.x = float(heading) if heading != 0 else 1.0
@@ -175,8 +226,11 @@ func line_above() -> Color:
 
 
 func _paint_near(c: CanvasItem) -> void:
-	for p in rod_points():
-		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), FishingPalette.SLATE)
+	var rod := rod_points()
+	var brass := ceili(float(rod.size()) * ROD_BRASS)
+	for i in rod.size():
+		var col := FishingPalette.ACCENT if i < brass else FishingPalette.WOOD
+		c.draw_rect(Rect2(Vector2(rod[i]), Vector2.ONE), col)
 	var col := player_color()
 	var cap := Vector2(FishingRig.CAP.position) + Vector2(0, tilt_at(FishingRig.CAP.position.x))
 	c.draw_rect(Rect2(cap, FishingRig.CAP.size), col)

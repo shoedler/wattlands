@@ -1,6 +1,6 @@
 extends GutTest
-## The code-drawn ocean, the boat's rig geometry and pixel runs, and the client's snapshot
-## history.
+## The code-drawn ocean and its floor, the boat's rig geometry and pixel runs, the rope line
+## and the client's snapshot history.
 
 var _world: FishingWorld = null
 
@@ -36,9 +36,10 @@ func test_depth_maps_down_from_the_surface_and_back() -> void:
 
 func test_the_view_depth_follows_the_floor_in_sight() -> void:
 	var s := _scenery()
-	assert_almost_eq(s.target_view_depth(-20.0), maxf(_world.floor_depth_m(300.0), 3.0), 2.0)
-	assert_gt(s.target_view_depth(6500.0), 250.0)
-	assert_eq(s.target_view_depth(8500.0), FishingScenery.ABYSS_M, "no floor: the abyss")
+	var dock := _world.floor_depth_m(300.0) * FishingScenery.VIEW_MARGIN
+	assert_almost_eq(s.target_view_depth(-20.0), maxf(dock, 3.0), 2.5)
+	assert_gt(s.target_view_depth(13600.0), 250.0)
+	assert_eq(s.target_view_depth(17000.0), FishingScenery.ABYSS_M, "no floor: the abyss")
 
 
 func test_the_far_water_band_lies_between_the_horizon_and_the_surface() -> void:
@@ -62,7 +63,7 @@ func test_water_darkens_with_depth_in_flat_steps() -> void:
 	assert_eq(FishingScenery.water_at(30.0), FishingPalette.SURFACE, "the same metres everywhere")
 
 
-func test_the_floor_is_sage_in_the_shallows_and_deep_teal_in_the_deep() -> void:
+func test_the_floor_is_sage_in_the_shallows_and_two_steps_under_the_water_in_the_deep() -> void:
 	assert_eq(FishingScenery.floor_at(4.0), FishingPalette.SAGE)
 	assert_eq(FishingScenery.floor_at(10.0), FishingPalette.SAGE)
 	for d: float in [4.0, 15.0, 60.0, 150.0, 400.0, 600.0]:
@@ -71,31 +72,41 @@ func test_the_floor_is_sage_in_the_shallows_and_deep_teal_in_the_deep() -> void:
 		var rim := FishingScenery.floor_at(d, true)
 		assert_ne(rim, FishingScenery.floor_at(d), "the top line differs from the floor")
 		assert_ne(rim, water, "and from the water")
-	assert_eq(FishingScenery.floor_at(300.0), FishingPalette.MID, "a step under the water")
+	assert_eq(FishingScenery.floor_at(300.0), FishingPalette.DEEP, "two steps under the water")
 	assert_eq(FishingScenery.floor_at(300.0, true), FishingPalette.SURFACE, "under a lit rim")
-	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.DEEP)
+	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.ABYSS)
+	for band in FishingPalette.SEA.size():
+		var ridge := FishingFloor.RIDGE_BANDS[band]
+		assert_ne(ridge, FishingPalette.SEA[band], "the back ridge reads against the water")
+		assert_ne(ridge, FishingFloor.FLOOR_BANDS[band], "and against the floor in front")
 
 
-func test_the_floor_in_sight_is_one_even_staircase() -> void:
-	var s := _scenery()
-	for cam: float in [400.0, 1200.0, 4700.0]:
-		s.view_depth_m = s.target_view_depth(cam)
-		var cols := s.floor_rows(roundf(cam * FishingScenery.PX_PER_M))
-		var treads: Array[int] = []
-		var risers := {}
-		var run := 1
-		for i in range(1, cols.size()):
-			var dy := int(cols[i].y - cols[i - 1].y)
-			if dy == 0:
-				run += 1
-			else:
-				treads.append(run)
-				risers[absi(dy)] = true
-				run = 1
-		assert_lte(risers.size(), 1, "one riser height at %s m" % cam)
-		if treads.size() > 2:
-			for t in treads.slice(1):
-				assert_eq(t, treads[1], "one tread length at %s m: %s" % [cam, treads])
+func test_the_floor_is_flat_terraces_with_drops_seeded_by_world_cell() -> void:
+	var f := FishingFloor.new()
+	f.set_world(_world)
+	var g := FishingFloor.new()
+	g.set_world(_world)
+	for x_m: float in [400.0, 2400.0, 6000.0, 10000.0, 14000.0]:
+		var px := x_m * FishingScenery.PX_PER_M
+		var a := f.terraces_in(px, px + 640.0)
+		assert_eq(a, g.terraces_in(px, px + 640.0), "deterministic at %s m" % x_m)
+		var long := 0
+		for i in a.size():
+			var t: Dictionary = a[i]
+			var w := int(t["x1"]) - int(t["x0"])
+			assert_eq(w % FishingFloor.CELL_PX, 0, "whole cells")
+			if i > 0:
+				assert_eq(t["x0"], a[i - 1]["x1"], "terraces tile the floor at %s m" % x_m)
+			if w >= 4 * FishingFloor.CELL_PX:
+				long += 1
+		assert_gt(long, 0, "long flat terraces at %s m, not a fine staircase" % x_m)
+	for zone in FishingWorld.ZONES.size():
+		for kind: String in FishingFloor.BIOME[zone]:
+			var known := FishingFloor.PROPS.has(kind) or kind in FishingFloor.DRAWN_PROPS
+			assert_true(known, "zone %d prop %s has a shape" % [zone, kind])
+	assert_eq(FishingFloor.BIOME.size(), FishingWorld.ZONES.size(), "a biome per zone")
+	var shallows := f.terraces_in(2400.0, 3040.0)
+	assert_lte(shallows.size(), 640 / (2 * FishingFloor.CELL_PX), "gentle slopes merge")
 
 
 func test_fish_stay_the_darkest_subject_in_every_band() -> void:
@@ -158,24 +169,61 @@ func test_the_rod_frames_are_stowed_raised_and_bent_without_gaps_or_corners() ->
 		for i in frame.size() - 1:
 			var d: Vector2i = frame[i + 1] - frame[i]
 			assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "the rod has no gaps")
-	assert_eq(FishingRig.even_end(Vector2i(100, 118), Vector2i(103, 218)), 100, "near-vertical")
-	assert_eq(FishingRig.even_end(Vector2i(60, 118), Vector2i(111, 218)), 110, "near 1:2")
-	var run := FishingRig.raster(Vector2i(60, 118), Vector2i(110, 218))
-	var rows := {}
-	for p in run:
-		rows[p.x] = int(rows.get(p.x, 0)) + 1
-	for x: int in rows:
-		if x != 110:
-			assert_eq(rows[x], 2, "every column but the last holds two pixels")
 	var diag := FishingRig.raster(Vector2i.ZERO, Vector2i(9, 9))
 	assert_eq(diag.size(), 10, "a 1:1 run is one pixel per step, no corners")
 
 
-func test_the_line_sags_only_with_slack_and_runs_without_gaps() -> void:
-	assert_gt(FishingRig.line_sag(100.0, 1.0, 0.0), FishingRig.line_sag(100.0, 0.0, 0.0))
-	assert_eq(FishingRig.line_sag(100.0, 0.0, 1.0), 0.0)
-	assert_eq(FishingRig.line(Vector2i.ZERO, Vector2i(100, 40), 0.0, 1.0).size(), 2)
-	assert_eq(FishingRig.line(Vector2i.ZERO, Vector2i(100, 40), 1.0, 0.0).size(), 3)
+func test_the_rope_sags_with_slack_straightens_under_strain_and_draws_clean() -> void:
+	var a := Vector2(100, 100)
+	var b := Vector2(220, 200)
+	var loose := FishingRope.new()
+	var taut := FishingRope.new()
+	loose.reset(a, b)
+	taut.reset(a, b)
+	for _i in 180:
+		loose.step(a, b, 1.0, 0.0, 1.0 / 60.0, 118.0)
+		taut.step(a, b, 0.0, 1.0, 1.0 / 60.0, 118.0)
+	var mid := a.lerp(b, 0.5)
+	var half := FishingRope.SEGMENTS / 2
+	assert_gt(loose.points[half].y - mid.y, 4.0, "slack lets the line bow")
+	assert_lt(absf(taut.points[half].y - mid.y), 2.0, "strain pulls it straight")
+	assert_eq(loose.points[0], a, "pinned at the rod")
+	assert_eq(loose.points[FishingRope.SEGMENTS], b, "and at the fish")
+	var px := loose.pixels()
+	assert_eq(px[0], Vector2i(a), "drawn from the rod end")
+	assert_eq(px[-1], Vector2i(b))
+	for i in px.size() - 1:
+		var d := px[i + 1] - px[i]
+		assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "no gaps")
+	for i in range(1, px.size() - 1):
+		var p := px[i - 1]
+		var q := px[i + 1]
+		assert_false(absi(q.x - p.x) == 1 and absi(q.y - p.y) == 1, "no L-corner at %s" % px[i])
+	assert_eq(FishingRope.length(100.0, 0.0, 1.0), 100.0, "a taut line is the straight distance")
+	var spike: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 1), Vector2i(3, 0)]
+	assert_eq(
+		FishingRope.pixel_perfect(spike),
+		[Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)] as Array[Vector2i],
+		"a one-pixel spike flattens"
+	)
+
+
+func test_the_rope_holds_its_pixels_against_sub_pixel_jitter() -> void:
+	var r := FishingRope.new()
+	r.reset(Vector2(10, 10), Vector2(90, 70))
+	for _i in 120:
+		r.step(Vector2(10, 10), Vector2(90, 70), 0.5, 0.2, 1.0 / 60.0, 118.0)
+	var before := r.pixels()
+	r.step(Vector2(10.3, 10.2), Vector2(90.3, 70.2), 0.5, 0.2, 1.0 / 60.0, 118.0)
+	var after := r.pixels()
+	var moved := 0
+	for i in mini(before.size(), after.size()):
+		if before[i] != after[i]:
+			moved += 1
+	assert_lte(moved, 2, "a third of a pixel barely moves the line")
+
+
+func test_raster_runs_without_gaps_in_uniform_runs() -> void:
 	var run := FishingRig.raster(Vector2i(3, 2), Vector2i(-40, 97))
 	assert_eq(run[0], Vector2i(3, 2))
 	assert_eq(run[-1], Vector2i(-40, 97))

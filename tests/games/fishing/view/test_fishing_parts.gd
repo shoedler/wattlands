@@ -86,7 +86,7 @@ func test_the_rod_tip_follows_the_boat() -> void:
 
 
 func test_sprites_load_with_their_frames_and_wrap() -> void:
-	var n := 2 * FishingArtGrids.CREW_FRAMES
+	var n := FishingArtGrids.CREW_POSES * FishingArtGrids.CREW_FRAMES
 	assert_eq(FishingSprites.count("boat_crew"), n)
 	assert_eq(FishingSprites.frame("boat_crew", n + 1), FishingSprites.frame("boat_crew", 1))
 	assert_eq(FishingSprites.size_of("boat_hull"), FishingRig.HULL_SIZE)

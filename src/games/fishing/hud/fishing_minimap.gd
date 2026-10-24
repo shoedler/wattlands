@@ -23,8 +23,16 @@ const DOCK_COLS := 4.0
 ## The local rider's caret under the strip (pixels).
 const CARET: Array[String] = [".#.", "###"]
 ## Endless map: the window's width (m) round the boats.
-const WINDOW_M := 2400.0
+const WINDOW_M := 4800.0
 const SAMPLES := 103
+## The map's landmarks on the strip, by FishingWorld landmark kind (pixels, bottom row on the
+## strip's floor line; s slate, a accent, b sky).
+const MARKS := {
+	"lighthouse": [".a.", ".b.", ".b.", "sss"],
+	"reef_arch": ["sss", "s.s"],
+	"whale_bones": ["bb.bb", "bbbbb"],
+	"wreck": ["..s..", "sssss", ".sss."],
+}
 
 ## The model of the last refresh (tests read it): the window, floor samples and the icons.
 var x0: float = 0.0
@@ -33,6 +41,8 @@ var floor_m: PackedFloat32Array = PackedFloat32Array()
 var zones: Array[Dictionary] = []
 ## [{slot, x (0..1 along the strip), icon, local}]
 var icons: Array[Dictionary] = []
+## [{kind, x (0..1 along the strip)}]
+var marks: Array[Dictionary] = []
 var edge: bool = false
 ## The local view's window along the strip (0..1, from the view's camera; -1 without a view).
 var window_a: float = -1.0
@@ -72,6 +82,11 @@ func refresh() -> void:
 	else:
 		x0 = 0.0
 		x1 = w.length_m()
+	marks.clear()
+	if w.has_method("landmarks"):
+		for lm: Dictionary in w.call("landmarks", x0, x1):
+			var u := (float(lm["x_m"]) - x0) / maxf(x1 - x0, 1.0)
+			marks.append({"kind": str(lm["kind"]), "x": clampf(u, 0.0, 1.0)})
 	var mm := w.minimap(SAMPLES, x0, x1)
 	floor_m = mm["floor"]
 	zones.assign(mm["zones"])
@@ -129,6 +144,14 @@ func _draw() -> void:
 		var wb := maxf(roundf(window_b * w), wa + 1.0)
 		var frame := Rect2(wa * s, top * s, (wb - wa) * s, h * s)
 		FishingHudDraw.frame(self, frame, s, FishingPalette.SLATE)
+	for mk in marks:
+		var rows: Array = MARKS.get(str(mk["kind"]), [])
+		if rows.is_empty() or (x0 <= 0.0 and str(mk["kind"]) == "lighthouse"):
+			continue
+		var mw := float((rows[0] as String).length())
+		var mx := clampf(roundf(float(mk["x"]) * w - mw * 0.5), 0.0, w - mw)
+		var my := top + h - float(rows.size()) - 1.0
+		_mark(rows, Vector2(mx, my) * s, s)
 	if x0 <= 0.0:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:
@@ -144,6 +167,16 @@ func _draw() -> void:
 			stems.append(stem)
 			var col := FishingPalette.player(int(icons[i]["slot"]))
 			draw_rect(Rect2(Vector2(stem, float(ICON_ROWS)) * s, Vector2(2, 1) * s), col)
+
+
+## A landmark's pixels (MARKS) at `at` (HUD px), each pixel `s` HUD px.
+func _mark(rows: Array, at: Vector2, s: float) -> void:
+	var lg := {"s": FishingPalette.SLATE, "a": FishingPalette.ACCENT, "b": FishingPalette.SKY}
+	for y in rows.size():
+		var row: String = rows[y]
+		for x in row.length():
+			if lg.has(row[x]):
+				draw_rect(Rect2(at + Vector2(x, y) * s, Vector2(s, s)), lg[row[x]])
 
 
 ## The harbour: a little lighthouse at the strip's left end.

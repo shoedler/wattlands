@@ -4,11 +4,11 @@ extends RefCounted
 ## fields with hard straight edges: one sky colour with a few flat cloud slabs drifting in
 ## parallax, haze islands and the harbour town on the horizon, the water column in four flat
 ## bands that step darker only in the deep (haze at the top, surface teal, then upper and mid
-## teal far out), the sea floor from FishingWorld's profile in even 24 px runs (sage under a
-## foam rim in the light water; under the dark water a deep-teal floor below an abyss line), the
-## quay and the pier at the dock and, past the roam map's end, the flat-earth edge: the ocean
-## pours over a square lip in a straight foam-edged column into a void one step darker than the
-## sea, landing in a foam bank. paint_back() draws everything behind the fish and boats.
+## teal far out), the sea floor (FishingFloor: terraces, drops, boulders, a back ridge, each
+## zone's props and the map's landmarks), the quay and the pier at the dock and, past the roam
+## map's end, the flat-earth edge: the ocean pours over a square lip in a straight foam-edged
+## column into a void one step darker than the sea, landing in a foam bank. paint_back() draws
+## everything behind the fish and boats.
 ## The camera is a world x (m) at the view's left edge. Depth maps to y with a square root over
 ## view_depth_m, the deepest floor in sight (the view eases it as the boat moves), so the floor
 ## always sits near the bottom: the shallows get the whole water column, and the colours, which
@@ -27,52 +27,29 @@ const PX_PER_M := 2.0
 const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
 const VIEW_DEPTH_MIN_M := 3.0
+## The deepest floor in sight stands for this much more depth than it is (it lands higher).
+const VIEW_MARGIN := 1.1
 const ABYSS_M := 700.0
 ## Water band tops (m), one FishingPalette.SEA colour each, the same in every zone: haze just
 ## under the surface, then the teals stepping darker with depth. The surface itself is a 2-row
 ## foam line (SURFACE_ROWS), the only white band.
 const WATER_STEPS_M: Array[float] = [0.0, 15.0, 120.0, 500.0]
 const SURFACE_ROWS := 2
-## The floor's colour and its lit 2-row top rim per band of the water just above its top row
-## (WATER_STEPS_M), so every step shows its rim: the floor a step darker than that water (sage
-## in the shallows), the rim a step lighter (sky over the shallows' haze, never the surface's
-## foam).
-const FLOOR_BANDS: Array[Color] = [
-	FishingPalette.SAGE,
-	FishingPalette.UPPER,
-	FishingPalette.MID,
-	FishingPalette.DEEP,
-]
-const RIM_BANDS: Array[Color] = [
-	FishingPalette.SKY,
-	FishingPalette.HAZE,
-	FishingPalette.SURFACE,
-	FishingPalette.UPPER,
-]
-## The floor in sight is fitted with one staircase: treads of a whole number of STEP_PX columns,
-## risers of FLOOR_RISERS px, the pair whose slope matches best; when the staircase strays more
-## than FLOOR_FIT_PX from the true floor (a shelf break in sight) each column takes its own row.
-const FLOOR_RISERS: Array[int] = [2, 4, 6]
-const FLOOR_TREADS: Array[int] = [1, 2, 3, 4, 5, 6, 8, 10, 12]
-const FLOOR_FIT_PX := 6.0
-## The floor is drawn in world-fixed runs this wide, each flat, its top on an even row.
-const STEP_PX := 24
-const RIM_ROWS := 2
-## A water band edge this close above a floor top would leave a sliver of the next band: the
-## water just above every floor top takes the band above it instead (and the floor its colour).
-const SLIVER_ROWS := 2
+## The floor's colour and its rim per water band (FishingFloor draws the floor).
+const FLOOR_BANDS: Array[Color] = FishingFloor.FLOOR_BANDS
+const RIM_BANDS: Array[Color] = FishingFloor.RIM_BANDS
 ## The islands' sage tiers (the rest are haze).
 const ISLAND_BASE_TIERS := 2
 ## Cloud layers: parallax factor, drift (px/s), spacing (px), rows (top, bottom); all below the
 ## HUD's top panels.
 const CLOUD_LAYERS: Array = [
-	[0.02, 0.6, 340.0, 74, 78],
-	[0.05, 1.1, 420.0, 84, 90],
+	[0.06, 0.6, 340.0, 74, 78],
+	[0.12, 1.1, 420.0, 84, 90],
 ]
 ## Haze islands on the horizon: [factor, spacing px].
-const ISLAND_LAYERS: Array = [[0.06, 460.0], [0.16, 700.0]]
+const ISLAND_LAYERS: Array = [[0.18, 460.0], [0.32, 700.0]]
 ## The town sits this far right of the dock at camera 0, scrolling at TOWN_FACTOR.
-const TOWN_FACTOR := 0.3
+const TOWN_FACTOR := 0.4
 const TOWN_X0 := -130.0
 ## The pier (world m, its left end) and the quay's top row above the surface.
 const PIER_X_M := 6.0
@@ -89,7 +66,12 @@ const FALL_EDGE_W := 3
 const FALL_LIP: Array[int] = [6, 2]
 const FALL_BANK: Array[int] = [6, 14, 24]
 
-var world: FishingWorld = null
+## The sea floor's terraces, ridge, props and landmarks.
+var floor_art: FishingFloor = FishingFloor.new()
+var world: FishingWorld = null:
+	set(w):
+		world = w
+		floor_art.set_world(w)
 ## The depth the floor rows stand for (m): see the class comment and target_view_depth().
 var view_depth_m: float = 40.0
 ## Screen x spans (Vector2(left, right)) the islands keep clear of: the boats (the view sets
@@ -110,15 +92,20 @@ func depth_of_y(y: float) -> float:
 	return u * u * view_depth_m
 
 
-## The view depth to ease toward for camera `cam_m`: the deepest floor in sight (ABYSS_M where
-## the floor drops away), at least VIEW_DEPTH_MIN_M.
+## The view depth to ease toward for camera `cam_m`: the deepest drawn floor in sight
+## (FishingFloor's terraces; ABYSS_M where the floor drops away) times VIEW_MARGIN, so the floor
+## stands clear of the bottom HUD, at least VIEW_DEPTH_MIN_M.
 func target_view_depth(cam_m: float) -> float:
 	if world == null:
 		return view_depth_m
-	var deepest := VIEW_DEPTH_MIN_M
-	for d in world.sample_floor(cam_m, cam_m + float(W) / PX_PER_M, 17):
-		deepest = maxf(deepest, ABYSS_M if is_inf(d) else d)
-	return minf(deepest, ABYSS_M)
+	var px := cam_m * PX_PER_M
+	var deepest := floor_art.deepest_in(px, px + float(W))
+	return clampf(deepest * VIEW_MARGIN, VIEW_DEPTH_MIN_M, ABYSS_M)
+
+
+## The drawn floor's top row at world x (INF where the floor drops away).
+func floor_y(x_m: float) -> float:
+	return y_of_depth(floor_art.depth_at(x_m))
 
 
 ## Screen x of world `x_m` for camera `cam_m` (the world x at the left edge).
@@ -174,7 +161,7 @@ func paint_back(c: CanvasItem, cam_m: float, t: float) -> void:
 	_paint_islands(c, cam_m)
 	_paint_town(c, cam_m, t)
 	_paint_water(c)
-	_paint_floor(c, cam_m, cam_px)
+	floor_art.paint(c, self, cam_m, t, screen_x(edge_m(), cam_m))
 	_paint_dock(c, cam_m)
 	_paint_edge(c, cam_m)
 
@@ -294,126 +281,6 @@ func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
 		var gy := 58.0 + float(k) * 10.0 + sin(a * 1.7) * 4.0
 		var f := gull[floori(t * 2.5 + float(k)) % gull.size()]
 		c.draw_texture(f, Vector2(roundf(gx), roundf(gy)))
-
-
-## The floor in world-fixed STEP_PX columns from the world's profile, as one even staircase
-## (floor_rows()): a RIM_ROWS top line, then the floor colour of its band down to the bottom.
-func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
-	if world == null:
-		return
-	var edge_px := screen_x(edge_m(), cam_m)
-	var cols := floor_rows(cam_px)
-	for col: Vector3 in cols:
-		var sx := col.x
-		var y := col.y
-		if sx >= edge_px or y >= float(H):
-			continue
-		var right := minf(sx + float(STEP_PX), edge_px)
-		var band := int(col.z)
-		c.draw_rect(Rect2(sx, y - SLIVER_ROWS, right - sx, SLIVER_ROWS), FishingPalette.SEA[band])
-		c.draw_rect(Rect2(sx, y, right - sx, float(H) - y), FLOOR_BANDS[band])
-		c.draw_rect(Rect2(sx, y, right - sx, RIM_ROWS), RIM_BANDS[band])
-
-
-## The floor columns in sight as (screen x, top row, band): staircases fitted to the true floor
-## (in each, every tread the same whole number of columns and every riser the same height), the
-## longest that stays within FLOOR_FIT_PX first, so a shelf break is a flat shelf and a drop.
-func floor_rows(cam_px: float) -> Array[Vector3]:
-	var out: Array[Vector3] = []
-	var wx: Array[float] = []
-	var ys: Array[float] = []
-	var j0 := floori(cam_px / float(STEP_PX))
-	for j in range(j0, j0 + W / STEP_PX + 2):
-		var x_m := (float(j * STEP_PX) + float(STEP_PX) * 0.5) / PX_PER_M
-		var d := world.floor_depth_m(x_m)
-		if is_inf(d):
-			continue
-		out.append(Vector3(float(j * STEP_PX) - cam_px, y_of_depth(d), band_at(d)))
-		wx.append(float(j * STEP_PX))
-		ys.append(out[-1].y)
-	var i0 := 0
-	var rhythm: Array[int] = []
-	while i0 < out.size():
-		var rows: Array[float] = []
-		var i1 := out.size()
-		for treads: Array[int] in [rhythm, FLOOR_TREADS]:
-			if treads.is_empty():
-				continue
-			i1 = out.size()
-			while i1 - i0 >= 3:
-				var fit := _fit(wx.slice(i0, i1), ys.slice(i0, i1), treads)
-				if not fit.is_empty():
-					rows.assign(fit["rows"])
-					if rhythm.is_empty() and int(fit["tread"]) > 0:
-						rhythm = [int(fit["tread"])]
-					break
-				i1 -= 1
-			if not rows.is_empty():
-				break
-		if rows.is_empty():
-			i1 = i0 + 1
-			rows = [2.0 * floorf(ys[i0] / 2.0)]
-		for k in rows.size():
-			out[i0 + k].y = rows[k]
-		i0 = i1
-	for k in out.size():
-		out[k].z = band_at(depth_of_y(out[k].y - 1.0 - float(SLIVER_ROWS)))
-	return out
-
-
-## The staircase rows for columns at world px `wx` (left edges) with true rows `ys`, or [] when
-## none fits.
-static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
-	var fit := _fit(wx, ys, FLOOR_TREADS)
-	var rows: Array[float] = []
-	if not fit.is_empty():
-		rows.assign(fit["rows"])
-	return rows
-
-
-## _fit_stairs() with the treads (in STEP_PX columns) it may pick: {"rows", "tread"} (tread 0
-## for a flat run) or {}.
-## floor_rows() keeps the first staircase's tread for the rest of the view where it fits, so the
-## floor keeps one rhythm.
-static func _fit(wx: Array[float], ys: Array[float], treads: Array[int]) -> Dictionary:
-	var n := wx.size()
-	if n < 3 or wx[-1] - wx[0] != float((n - 1) * STEP_PX):
-		return {}
-	var mx := 0.0
-	var my := 0.0
-	for i in n:
-		mx += wx[i]
-		my += ys[i]
-	mx /= float(n)
-	my /= float(n)
-	var sxy := 0.0
-	var sxx := 0.0
-	for i in n:
-		sxy += (wx[i] - mx) * (ys[i] - my)
-		sxx += (wx[i] - mx) * (wx[i] - mx)
-	var slope := sxy / sxx if sxx > 0.0 else 0.0
-	var best_r := 0
-	var best_l := treads[0]
-	var best_err := absf(slope)
-	for r in FLOOR_RISERS:
-		for t in treads:
-			var err := absf(float(r) / float(t * STEP_PX) - absf(slope))
-			if err < best_err:
-				best_err = err
-				best_r = r
-				best_l = t
-	var tread := float(best_l * STEP_PX)
-	var dir := signf(slope)
-	var k0 := floori(wx[0] / tread)
-	var y0 := 2.0 * roundf((my + slope * ((float(k0) + 0.5) * tread - mx)) / 2.0)
-	var rows: Array[float] = []
-	for i in n:
-		var k := floori(wx[i] / tread)
-		var y := y0 + dir * float(best_r * (k - k0))
-		if absf(y - ys[i]) > FLOOR_FIT_PX:
-			return {}
-		rows.append(y)
-	return {"rows": rows, "tread": best_l if best_r > 0 else 0}
 
 
 ## The quay left of the dock (a foam cap and a wood face on posts going into the water, bollards

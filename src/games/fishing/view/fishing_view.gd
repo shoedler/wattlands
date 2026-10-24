@@ -8,8 +8,8 @@ extends Node2D
 ##  2. the local rider's menu hints (flat species silhouettes at their depth, the picked one
 ##     drawn) and every fish and wobbler, shifted along the palette ladder by the water around
 ##     them (FishingPaletteMap);
-##  3. the prop wash and the lines (behind the hulls): uniform pixel runs (FishingRig.raster),
-##     the rod's slate above the water and a colour per water band under it;
+##  3. the prop wash and the lines (behind the hulls): each a FishingRope drawn as a clean 1 px
+##     curve, the rod's slate above the water and a colour per water band under it;
 ##  4. the boats (others first, the local boat last; FishingBoatView);
 ##  5. wakes (foam slabs in a fixed rhythm) and the bow wave, then the effects (splashes, catch
 ##     sparkles).
@@ -67,9 +67,32 @@ const WAKE_LOW_TAIL: Array[int] = [4, 2]
 const WAKE_CREST: Array[int] = [6, 4, 3, 2]
 const SURFACE_UNDER := FishingScenery.SURFACE_ROWS
 const BOW_SPRAY: Array = [
-	[Vector2i(-2, 4), Vector2i(0, 2), Vector2i(-4, 2)],
-	[Vector2i(-1, 3), Vector2i(-3, 2), Vector2i(1, 2)],
+	[Vector2i(-2, 4), Vector2i(0, 2), Vector2i(-4, 2), Vector2i(-1, 3), Vector2i(-5, 2)],
+	[Vector2i(-1, 3), Vector2i(-3, 2), Vector2i(1, 2), Vector2i(-4, 3), Vector2i(0, 2)],
 ]
+## Braking (a braking pose): the bow pushes a foam mound ahead of it (rows going up, [ahead of
+## the bow, width]) and throws a spray sheet forward (two patterns swapped with the gait); the
+## wake collapses into a churned patch behind the stern ([behind the stern, width] per row
+## under the surface line) and the old trail detaches, drifting BRAKE_TRAIL_PX_S behind.
+const BRAKE_MOUND: Array[Vector2i] = [
+	Vector2i(-4, 18), Vector2i(-2, 15), Vector2i(1, 11), Vector2i(3, 7), Vector2i(5, 3)
+]
+const BRAKE_SHEET: Array = [
+	[Vector2i(6, 6), Vector2i(12, 4), Vector2i(17, 4), Vector2i(23, 2)],
+	[Vector2i(8, 5), Vector2i(13, 5), Vector2i(19, 3), Vector2i(25, 2)],
+]
+const BRAKE_CHURN: Array = [
+	[Vector2i(2, 5), Vector2i(10, 4), Vector2i(17, 3)],
+	[Vector2i(4, 3), Vector2i(9, 5)],
+	[Vector2i(3, 4), Vector2i(11, 2)],
+]
+const BRAKE_TRAIL_PX_S := 30.0
+const BRAKE_TRAIL_MAX_PX := 140.0
+## The camera leads ahead of a driving boat by LEAD_S seconds of its speed (at most LEAD_MAX_PX),
+## eased over LEAD_TAU_S.
+const LEAD_S := 2.2
+const LEAD_MAX_PX := 150.0
+const LEAD_TAU_S := 1.5
 const META := "fishing_view"
 
 var game: FishingGame = null
@@ -109,6 +132,12 @@ var _leap: Dictionary = {}
 var _boat_layer: Node2D = null
 var _layers: Array[FishingDrawLayer] = []
 var _pending: Array[Dictionary] = []
+## slot -> FishingRope: each rider's line, stepped every frame.
+var _ropes: Dictionary = {}
+## slot -> seconds the boat has been in a braking pose (0 when not braking).
+var _brake_t: Dictionary = {}
+## The camera's eased lead (px).
+var _lead: float = 0.0
 
 
 func _ready() -> void:
@@ -150,6 +179,8 @@ func advance(delta: float) -> void:
 	for r in st.riders:
 		_place_catch(r, delta)
 	_place_hints(st.rider(_local_slot))
+	for r in st.riders:
+		_step_rope(r, delta)
 	if not events_connected:
 		for c in cues.diff(st):
 			_pending.append(c)
@@ -326,9 +357,14 @@ func _camera(delta: float, st: FishingState) -> void:
 		return
 	var v: Dictionary = _shown[r.slot]
 	var sx := float(FishingScenery.W) * 0.5
+	var lead := lead_px(r.v_mps)
+	var centre_m := cam_m + float(FishingScenery.W) * 0.5 / FishingScenery.PX_PER_M
+	var snap := not _cam_set or absf(float(v["x"]) - centre_m) > CAM_SNAP_M
+	_lead = lead if snap else _lead + (lead - _lead) * (1.0 - exp(-delta / LEAD_TAU_S))
 	match r.action:
 		FishingConst.A_DRIVE, FishingConst.A_DRIFT, FishingConst.A_HOME:
-			sx = CAM_DRIVE_X if r.heading > 0 else float(FishingScenery.W) - CAM_DRIVE_X
+			var x := CAM_DRIVE_X - _lead
+			sx = x if r.heading > 0 else float(FishingScenery.W) - x
 		FishingConst.A_FIGHT, FishingConst.A_LAND:
 			var half := clampf(absf(float(v["fdx"])) * FishingScenery.PX_PER_M * 0.5, 0.0, 200.0)
 			sx += half * signf(-float(v["fdx"])) if absf(float(v["fdx"])) > 0.1 else 0.0
@@ -338,6 +374,11 @@ func _camera(delta: float, st: FishingState) -> void:
 		_cam_set = true
 	else:
 		cam_m += (goal - cam_m) * (1.0 - exp(-delta / CAM_TAU_S))
+
+
+## How far (px) the camera leads ahead of a boat driving at `v_mps`.
+static func lead_px(v_mps: float) -> float:
+	return clampf(absf(v_mps) * LEAD_S * FishingScenery.PX_PER_M, 0.0, LEAD_MAX_PX)
 
 
 func _place_boat(r: FishingRiderState, delta: float) -> void:
@@ -350,6 +391,7 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	var wx := float(v["x"]) * FishingScenery.PX_PER_M
 	b.heading = r.heading
 	b.pitch_deg = float(v["pitch"])
+	b.brake = float(v["brake"])
 	b.bob_px = -float(FishingScenery.wave(wx, _t))
 	b.cadence = float(v["cad"])
 	var line := r.line_m()
@@ -368,6 +410,7 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	b.tension = _tension(r)
 	b.position = Vector2(roundf(sx), float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0)))
 	b.advance(delta)
+	_brake_t[r.slot] = float(_brake_t.get(r.slot, 0.0)) + delta if b.braking() > 0 else 0.0
 	(model["boats"] as Dictionary)[r.slot] = b.position
 
 
@@ -399,11 +442,13 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	lure.visible = r.action == FishingConst.A_CAST or r.action == FishingConst.A_WAIT
 	if lure.visible:
 		var p := to_screen(float(v["x"]) + float(v["ldx"]), float(v["lz"]))
+		var lfy := scenery.floor_y(float(v["x"]) + float(v["ldx"]))
+		if not is_inf(lfy):
+			p.y = minf(p.y, lfy - 3.0)
 		var id := "lure"
 		lure.texture = FishingSprites.frame(id, floori(_t * 6.0))
 		lure.flip_h = r.heading < 0
 		p = p.floor()
-		p.x = float(_even_end(r, Vector2i(p)))
 		lure.position = (p - Vector2(FishingSprites.anchor(id))).round()
 		_map_depth(_lure_mat[r.slot], float(v["lz"]))
 		(model["lure"] as Dictionary)[r.slot] = p
@@ -433,17 +478,15 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 				leap["k"] = int(u)
 				effects.spawn("fx_splash", float(v["x"]) + float(v["fdx"]), FishingScenery.SURF_Y)
 	var size := FishingSprites.size_of(id2)
-	var floor_m := scenery.world.floor_depth_m(float(v["x"]) + float(v["fdx"]))
-	if not aboard and not is_inf(floor_m):
+	var floor_y := scenery.floor_y(float(v["x"]) + float(v["fdx"]))
+	if not aboard and not is_inf(floor_y):
 		var below := float(size.y - FishingSprites.anchor(id2).y) + FISH_FLOOR_GAP_PX
-		mouth.y = minf(mouth.y, floorf(scenery.y_of_depth(floor_m)) - below)
+		mouth.y = minf(mouth.y, floorf(floor_y) - below)
 	fish.texture = FishingSprites.frame(id2, floori(_t * (8.0 if r.fish.run_active else 4.0)))
 	var boat_x := FishingScenery.screen_x(float(v["x"]), cam_m)
 	fish.flip_h = mouth.x < boat_x if not aboard else r.heading > 0
 	if not aboard:
 		mouth = mouth.round()
-		var lip := Vector2i(mouth) - Vector2i(1 if fish.flip_h else 0, 0)
-		mouth.x = float(_even_end(r, lip) + (1 if fish.flip_h else 0))
 	var a := Vector2(FishingSprites.anchor(id2))
 	var top_left := mouth - a
 	if fish.flip_h:
@@ -451,20 +494,6 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	fish.position = top_left.round()
 	_map_depth(_fish_mat[r.slot], depth if mouth.y > float(FishingScenery.SURF_Y) else 0.0)
 	(model["fish"] as Dictionary)[r.slot] = Rect2(fish.position, Vector2(size))
-
-
-## The x the line's end should take so the line from `r`'s rod tip to `end` runs in uniform
-## pixel runs (FishingRig.even_end), unless the line sags.
-func _even_end(r: FishingRiderState, end: Vector2i) -> int:
-	var b: FishingBoatView = boats.get(r.slot)
-	if b == null:
-		return end.x
-	var tip := line_start(b, Vector2i(b.rod_tip()), end)
-	var slack := r.slack if r.action == FishingConst.A_FIGHT else 0.3
-	var strain := r.strain if r.action == FishingConst.A_FIGHT else 0.2
-	if FishingRig.line(tip, end, slack, strain).size() > 2:
-		return end.x
-	return FishingRig.even_end(tip, end)
 
 
 ## A fish or wobbler at `depth_m`: dark on the light water bands, darker on the teals.
@@ -486,9 +515,11 @@ func _place_hints(r: FishingRiderState) -> void:
 		var id := FishingSprites.fish_id(sp)
 		var x := float(_shown[r.slot]["x"]) + float(r.hints[4 * i + 1])
 		var depth := float(r.hints[4 * i + 2])
-		var fl := scenery.world.floor_depth_m(x) if scenery.world != null else INF
-		depth = minf(depth, maxf(fl - 1.0, 0.5))
 		var sz := Vector2(FishingSprites.size_of(id))
+		var fy := scenery.floor_y(x)
+		if not is_inf(fy):
+			depth = minf(depth, scenery.depth_of_y(fy - sz.y * 0.5 - FISH_FLOOR_GAP_PX))
+		depth = maxf(depth, 0.5)
 		var band := FishingScenery.band_at(depth)
 		var p := hint_inside_band(to_screen(x, depth), sz, scenery.band_rows(band))
 		s.texture = FishingSprites.frame(id, floori(_t * 3.0) + i)
@@ -564,7 +595,7 @@ func _paint_wash(c: CanvasItem) -> void:
 		var r := game.state.rider(slot)
 		var v: Dictionary = _shown.get(slot, {})
 		if b.visible and b.far and not v.is_empty() and float(v["wake"]) > 0.04:
-			_paint_wake(c, b, float(v["wake"]))
+			_paint_wake(c, b, float(v["wake"]), slot)
 		if not b.visible or b.far or r == null or absf(r.v_mps) < 0.3:
 			continue
 		var hub := b.pixel_of(Vector2i(FishingRig.PROP_HUB))
@@ -576,38 +607,60 @@ func _paint_wash(c: CanvasItem) -> void:
 			c.draw_rect(Rect2(x, hub.y + float(k), w, 1), FishingPalette.HAZE)
 
 
+## Steps rider `r`'s rope toward this frame's rod end and line end (none without a line out).
+func _step_rope(r: FishingRiderState, delta: float) -> void:
+	var b: FishingBoatView = boats.get(r.slot)
+	var end := _line_end(r)
+	if b == null or end == Vector2.INF:
+		_ropes.erase(r.slot)
+		return
+	var tip := Vector2i(b.rod_tip())
+	var start := line_start(b, tip, Vector2i(end.floor()))
+	var rope: FishingRope = _ropes.get(r.slot)
+	if rope == null:
+		rope = FishingRope.new()
+		_ropes[r.slot] = rope
+	var fight := r.action == FishingConst.A_FIGHT
+	var slack := r.slack if fight else 0.35
+	var strain := r.strain if fight else 0.1
+	if fight and r.fish.run_active:
+		strain = 1.0
+	rope.step(Vector2(start), end, slack, strain, delta, float(FishingScenery.SURF_Y))
+
+
+## Rider `slot`'s rope (null without a line out).
+func rope_of(slot: int) -> FishingRope:
+	return _ropes.get(slot)
+
+
 func _paint_lines(c: CanvasItem) -> void:
-	for slot: int in boats:
-		var b: FishingBoatView = boats[slot]
-		var r := game.state.rider(slot)
-		if r == null:
+	for slot: int in _ropes:
+		var b: FishingBoatView = boats.get(slot)
+		var rope: FishingRope = _ropes[slot]
+		if b == null or rope.points.is_empty():
 			continue
-		var end := _line_end(r)
-		if end == Vector2.INF:
+		var first := rope.points[0]
+		var last := rope.points[rope.points.size() - 1]
+		if not b.visible and (last.x < 0.0 or last.x > float(FishingScenery.W)):
 			continue
-		var tip := b.rod_tip()
-		if not b.visible and (end.x < 0.0 or end.x > float(FishingScenery.W)):
-			continue
-		_draw_line(c, Vector2i(tip), Vector2i(end.floor()), r)
+		var path: Array[Vector2i] = []
+		var tip := Vector2i(b.rod_tip())
+		if Vector2i(first.round()) != tip:
+			path = FishingRig.raster(tip, Vector2i(first.round()))
+			path.pop_back()
+		path.append_array(rope.pixels())
+		_draw_line(c, path, b)
 
 
-## The line: one straight run from the rod tip to the fish or wobbler (two when it sags), the
-## rod's slate (or the line cosmetic) above the water and, under it, a colour per water band
-## that reads against it (line_under()).
-func _draw_line(c: CanvasItem, tip: Vector2i, end: Vector2i, r: FishingRiderState) -> void:
-	var b: FishingBoatView = boats[r.slot]
+## The line's pixels: the rod's slate (or the line cosmetic) above the water and, under it, a
+## colour per water band that reads against it (line_under()).
+func _draw_line(c: CanvasItem, path: Array[Vector2i], b: FishingBoatView) -> void:
 	var surf := FishingScenery.SURF_Y
-	var strain := r.strain if r.action == FishingConst.A_FIGHT else 0.2
-	var slack := r.slack if r.action == FishingConst.A_FIGHT else 0.3
 	var above := b.line_above()
-	var start := line_start(b, tip, end)
-	var points := FishingRig.line(start, end, slack, strain)
-	if start != tip:
-		points.push_front(tip)
 	var tops: Array[float] = []
 	for m in FishingScenery.WATER_STEPS_M:
 		tops.append(roundf(scenery.y_of_depth(m)))
-	for p in FishingRig.raster_path(points):
+	for p in path:
 		var band := 0
 		for i in tops.size():
 			if float(p.y) >= tops[i]:
@@ -652,7 +705,7 @@ func _paint_front(c: CanvasItem) -> void:
 		if b.visible and b.far:
 			_paint_far_waterline(c, b)
 		if b.visible and not b.far and not v.is_empty() and float(v["wake"]) > 0.04:
-			_paint_wake(c, b, float(v["wake"]))
+			_paint_wake(c, b, float(v["wake"]), slot)
 
 
 ## A farther boat's own surface: a FAR_WATERLINE_ROWS foam slab on its waterline, a little
@@ -667,12 +720,15 @@ func _paint_far_waterline(c: CanvasItem, b: FishingBoatView) -> void:
 
 ## The wake: foam slabs just under the surface line behind the stern (and a shorter row two rows
 ## under it, and at speed a crest above the line), each WAKE_GAP_PX apart, their lengths scaled
-## by the wake; at higher wake a bow wave, and spray when the bow is up.
-func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
+## by the wake; at higher wake a bow wave, and spray when the bow is up. Braking, the bow pushes
+## a foam mound and a spray sheet ahead, the wake churns into a short patch behind the stern
+## and the old trail drifts off behind it.
+func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float, slot: int) -> void:
 	var dir := -b.heading
 	var stern := b.pixel_of(FishingRig.WAKE_AT)
 	var y0 := b.position.y
 	var gait := (floori(_t / GAIT_S) % 2) * GAIT_PX
+	var braking := b.braking() > 0
 	var fast := wake >= WAKE_FAST_AT
 	var top: Array[int] = WAKE_SLABS.duplicate()
 	var low: Array[int] = WAKE_LOW.duplicate()
@@ -682,10 +738,14 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 	# The surface line is foam already: the wake streams just under it, a shorter row under that
 	# and, at speed, a broken crest just above it.
 	var rows: Array = [[top, SURFACE_UNDER, 0], [low, SURFACE_UNDER + 2, 4 + gait]]
-	if fast:
+	if fast and not braking:
 		rows.append([WAKE_CREST, -1, 2 + gait])
+	var gap := 0.0
+	if braking:
+		var bt := float(_brake_t.get(slot, 0.0))
+		gap = 22.0 + minf(bt * BRAKE_TRAIL_PX_S, BRAKE_TRAIL_MAX_PX)
 	for row: Array in rows:
-		var x := stern.x + float(dir * int(row[2]))
+		var x := stern.x + float(dir) * (float(row[2]) + gap)
 		for len_full: int in row[0]:
 			var w := roundi(float(len_full) * clampf(wake, 0.0, 1.0))
 			if w < 2:
@@ -694,11 +754,14 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 			var y := y0 + float(row[1])
 			c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
 			x += float(dir * (w + WAKE_GAP_PX))
-	if wake < 0.3:
-		return
 	var bow := b.pixel_of(FishingRig.SPRAY_AT)
 	var h := b.heading
 	var y_surf := float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0))
+	if braking:
+		_paint_brake(c, b, stern, bow, y0, y_surf)
+		return
+	if wake < 0.3:
+		return
 	var up := b.pose()
 	for k in BOW_WAVE.size():
 		var row: Vector2i = BOW_WAVE[k]
@@ -707,7 +770,7 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 		var left := x0 if h > 0 else x0 - float(w - 1)
 		var y := y_surf - 1.0 - float(k)
 		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-	if up == 0:
+	if up <= 0:
 		return
 	var spray: Array = BOW_SPRAY[floori(_t / GAIT_S) % BOW_SPRAY.size()]
 	for k in mini(spray.size(), up + 1):
@@ -716,6 +779,39 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 		var left := x0 if h > 0 else x0 - float(slab.y - 1)
 		var y := y_surf - 1.0 - float(BOW_WAVE.size() + k)
 		c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
+
+
+## Braking water: the foam mound and spray sheet ahead of the bow (bigger in the harder pose)
+## and the churned patch behind the stern.
+func _paint_brake(
+	c: CanvasItem, b: FishingBoatView, stern: Vector2, bow: Vector2, y0: float, y_surf: float
+) -> void:
+	var h := b.heading
+	var hard := b.braking() >= 2
+	var gait := floori(_t / GAIT_S) % 2
+	for k in BRAKE_MOUND.size() if hard else BRAKE_MOUND.size() - 2:
+		var row: Vector2i = BRAKE_MOUND[k]
+		var w := row.y if hard else row.y - 4
+		if w < 2:
+			continue
+		var x0 := bow.x + float(row.x * h)
+		var left := x0 if h > 0 else x0 - float(w - 1)
+		var y := y_surf - 1.0 - float(k)
+		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
+	var sheet: Array = BRAKE_SHEET[gait]
+	for k in sheet.size() if hard else 2:
+		var slab: Vector2i = sheet[k]
+		var x0 := bow.x + float(slab.x * h)
+		var left := x0 if h > 0 else x0 - float(slab.y - 1)
+		var y := y_surf - float(BRAKE_MOUND.size() + 1 + 2 * k)
+		c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
+	var dir := -h
+	for k in BRAKE_CHURN.size():
+		for slab: Vector2i in BRAKE_CHURN[k]:
+			var x0 := stern.x + float(dir * (slab.x + gait))
+			var left := x0 if dir > 0 else x0 - float(slab.y - 1)
+			var y := y0 + float(SURFACE_UNDER + 2 * k) - (3.0 if k == 0 else 0.0)
+			c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
 
 
 ## Foam on row `y` (white; kept as a hook for the rows a wake can touch).
