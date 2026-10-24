@@ -342,4 +342,4 @@ Judgment calls and gaps that are still true on `main`:
    - The app can't host a LAN room: the join page lists and joins `LanTransport` rooms, but hosting always uses the relay.
    - The app doesn't launch the trainer bridge itself; start `trainer_bridge serve` first.
 7. **Fallbacks taken.** No Atkinson Hyperlegible font and no CC0 audio pack were downloaded; BRIEF 3.9's fallbacks (Godot's font, synthesized sound) are in use.
-8. **Stored but unused.** `drivetrain` changes nothing. MockTrainer's keyboard control (W/S ±10 W, A/D ∓/±5 rpm, BRIEF 4.2) needs `--mock-keyboard`, and its keys then also move menu focus.
+8. **Stored but unused.** `drivetrain` changes nothing. MockTrainer's keyboard control (T/G, Y/H, presets, N, Shift; `docs/TRAINER.md`) needs `--mock-keyboard` or the Settings > Trainer toggle.

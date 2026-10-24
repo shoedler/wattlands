@@ -39,6 +39,9 @@ extends CanvasLayer
 ##   set_safety_state(paused), update()'s Telemetry.paused (the rider's own pause on not
 ##   pedaling, also in multiplayer), paused_changed and governor_status {paused}. No HudSpec
 ##   hides it.
+## - Mock keyboard readout: while the TrainerService's device is a MockTrainer with keyboard
+##   control on, a small HudMockKeys line (power, cadence, keys) sits in the bottom-right corner,
+##   in the game's palette; no HudSpec hides it.
 ## - Heart rate: the power gauge shows Telemetry.heart_rate_bpm while it is above 0 (a paired
 ##   sensor or a MockTrainer `hr` profile) and hides it otherwise.
 ## - Trainer control lost (BRIEF 4.4, W4): EventBus.trainer_control_lost (Request Control
@@ -95,6 +98,7 @@ var _toasts: HudToasts = null
 var _banner: HudBanner = null
 var _feed: HudLocalFeed = null
 var _pause_badge: HudPauseBadge = null
+var _mock_keys: HudMockKeys = null
 var _local_peer: int = 0
 var _readouts: Dictionary = {}
 ## The latest power and cadence bands per peer (Vector2(lo, hi)) and the local teammate
@@ -139,6 +143,8 @@ func _init() -> void:
 	_feed = HudLocalFeed.new(self)
 	_pause_badge = HudPauseBadge.new()
 	_root.add_child(_pause_badge)
+	_mock_keys = HudMockKeys.new()
+	_root.add_child(_mock_keys)
 
 
 func _ready() -> void:
@@ -149,6 +155,7 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_mock_keys.refresh()
 	_frames_since_tel += delta
 	if not _tel_clocked or _frames_since_tel > FRAME_FALLBACK_S:
 		tick(delta)
@@ -177,6 +184,7 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	_palette = HudPalette.from_dict(_spec.palette)
 	_banner.set_palette(_palette)
 	_toasts.set_palette(_palette)
+	_mock_keys.set_palette(_palette)
 	for entry: Dictionary in _spec.widgets:
 		var id := str(entry.get("widget", ""))
 		var at: Variant = entry.get("at", null)
@@ -254,6 +262,11 @@ func _advance_messages(t: float) -> void:
 ## The pause symbol (shown while the local rider is paused).
 func pause_badge() -> HudPauseBadge:
 	return _pause_badge
+
+
+## The mock-trainer keyboard readout (hidden unless a MockTrainer's keyboard control is on).
+func mock_keys() -> HudMockKeys:
+	return _mock_keys
 
 
 ## A HudFeed that draws on this layer only (the GameHost wraps it with network routing).
@@ -406,6 +419,7 @@ func relayout() -> void:
 	_root.size = ss
 	_pause_badge.layout(ss)
 	_root.move_child(_pause_badge, -1)
+	_mock_keys.layout(ss)
 	_fit_centers(ss)
 	for anchor: String in _boxes.keys():
 		var box: VBoxContainer = _boxes[anchor]

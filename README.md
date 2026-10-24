@@ -19,7 +19,8 @@ WATTLANDS is a multiplayer fitness party app for the Wahoo KICKR CORE (and KICKR
 2. Update the trainer's firmware with the Wahoo app, then close every other app that might connect to it (Zwift, the Wahoo app).
 3. Pedal. With no input at all, 20 seconds of pedaling on the title screen creates a profile and starts a ride. Every game plays to the end with no input. For menus, switch on Settings > Pedal navigation (off by default): the focus then moves every 1.6 s, a short surge picks, coasting for 3 s goes back (outside ERG), and a small graph shows how hard to surge. Without it menus use the keyboard or a controller.
 4. Set your FTP in the profile, or run the FTP test in Settings. Until it is verified, every ERG target is lowered by 15%.
-5. Optional: connect a Bluetooth heart rate sensor in Settings > Trainer > Sensors. Your heart rate shows next to your power, goes into the FIT file and the results, and is never shared with other riders. Stop pedaling for 5 seconds and your ride pauses.
+5. No trainer, or a play test? `--mock-trainer` (or Settings > Trainer > Use the mock trainer) rides a simulated rider; add `--mock-keyboard` (or the "Keyboard controls the mock trainer" toggle) to steer it: T/G power, Y/H cadence, M , . J K L U I O set 50 to 250 % of FTP, N stops, Shift sprints (`docs/TRAINER.md`).
+6. Optional: connect a Bluetooth heart rate sensor in Settings > Trainer > Sensors. Your heart rate shows next to your power, goes into the FIT file and the results, and is never shared with other riders. Stop pedaling for 5 seconds and your ride pauses.
 
 ## Playing together
 

@@ -245,9 +245,8 @@ func test_use_mock_is_refused_during_a_session() -> void:
 	assert_eq(svc.device(), m)
 
 
-## W2r2 (BRIEF 4.2): MockTrainer's W/S/A/D keyboard control is on only with the explicit
-## --mock-keyboard flag (the keys are also the movement bindings). No key is read here: the
-## service is never ticked.
+## MockTrainer's keyboard control is on only with the explicit --mock-keyboard flag or the
+## Settings key mock_keyboard. No key is read here: the service is never ticked.
 func test_mock_keyboard_is_off_without_its_flag() -> void:
 	_args(["--mock-trainer=erg"])
 	var svc := _make()
@@ -273,6 +272,36 @@ func test_mock_keyboard_flag_enables_it_on_every_mock() -> void:
 	assert_true(
 		(svc.device() as MockTrainer).is_keyboard_enabled(), "and a mock picked in Settings"
 	)
+
+
+func test_the_mock_keyboard_setting_enables_it_without_the_flag() -> void:
+	_args(["--mock-trainer=erg"])
+	_settings.set_value("mock_keyboard", true)
+	var svc := _make()
+	svc.start()
+	assert_true(svc.mock_keyboard_wanted())
+	assert_true((svc.device() as MockTrainer).is_keyboard_enabled(), "from Settings mock_keyboard")
+
+
+func test_changing_the_mock_keyboard_setting_reaches_the_live_mock() -> void:
+	_args(["--mock-trainer=erg"])
+	var svc := _make()
+	svc.start()
+	var m := svc.device() as MockTrainer
+	assert_false(m.is_keyboard_enabled())
+	_settings.set_value("mock_keyboard", true)
+	assert_true(m.is_keyboard_enabled(), "at once, the same mock")
+	assert_eq(svc.device(), m)
+	_settings.set_value("mock_keyboard", false)
+	assert_false(m.is_keyboard_enabled())
+
+
+func test_the_flag_wins_over_the_setting() -> void:
+	_args(["--mock-trainer=erg", "--mock-keyboard"])
+	var svc := _make()
+	svc.start()
+	_settings.set_value("mock_keyboard", false)
+	assert_true((svc.device() as MockTrainer).is_keyboard_enabled())
 
 
 # --- ticking ----------------------------------------------------------------------------------

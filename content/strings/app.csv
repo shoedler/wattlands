@@ -171,6 +171,7 @@ APP_SET_TRAINER_STATUS,Status
 APP_SET_TRAINER_SCAN,Scan for trainers
 APP_SET_TRAINER_CONNECT,Connect {0} ({1} dBm)
 APP_SET_TRAINER_MOCK,Use the mock trainer
+APP_SET_TRAINER_MOCK_KEYS,Keyboard controls the mock trainer
 APP_SET_TRAINER_DISCONNECT,Disconnect
 APP_SET_TRAINER_HELP,"Current trainer: {0}. If connecting fails, close other apps that hold the trainer and remove any Windows pairing."
 APP_SET_STRAVA_STATUS,Status

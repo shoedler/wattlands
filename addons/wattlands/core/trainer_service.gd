@@ -15,9 +15,10 @@ extends Node
 ##   an FtmsConnectionManager at all.
 ## - start() is idempotent. The mock is MockTrainer.from_spec(spec, profile FTP, {seed
 ##   (--seed), preferred_cadence_rpm, cp_w, wprime_j, weight_kg, keyboard}); a bare
-##   --mock-trainer means "erg". keyboard (BRIEF 4.2: W/S +-10 W, A/D cadence, read only while
-##   the app window has focus) is on only with --mock-keyboard (W2r2); W/S/A/D then also move
-##   menu focus, since they are the InputRouter's movement bindings too. The FTMS path adds
+##   --mock-trainer means "erg". keyboard (the mock's keyboard control, read only while the app
+##   window has focus; docs/TRAINER.md) is on with --mock-keyboard or the Settings key
+##   mock_keyboard (mock_keyboard_wanted()); a change of that setting reaches the live mock at
+##   once. Its keys are free of every InputRouter binding. The FTMS path adds
 ##   an FtmsConnectionManager child and calls start(true); its trainer_ready device becomes
 ##   device() and its last_device() is saved
 ##   in Settings. Tests pass connection_factory so nothing touches Bluetooth.
@@ -170,6 +171,15 @@ func is_mock() -> bool:
 	return _device is MockTrainer
 
 
+## True when the mock's keyboard control should be on: --mock-keyboard or the Settings key
+## mock_keyboard (Settings > Trainer).
+func mock_keyboard_wanted() -> bool:
+	if CmdLine.get_bool("mock-keyboard", false):
+		return true
+	var s := _settings()
+	return s != null and bool(s.get_value("mock_keyboard", false))
+
+
 ## The FTMS connection manager (null when mocked).
 func connection() -> FtmsConnectionManager:
 	return _manager
@@ -223,9 +233,7 @@ func use_mock(spec: String) -> void:
 				"cp_w": p.cp_w,
 				"wprime_j": p.wprime_j,
 				"weight_kg": p.weight_kg,
-				# BRIEF 4.2 keyboard control (W/S power, A/D cadence), only with the explicit flag:
-				# the keys are also the menus' up/down/left/right bindings (W2r2).
-				"keyboard": CmdLine.get_bool("mock-keyboard", false),
+				"keyboard": mock_keyboard_wanted(),
 			}
 		)
 	)
@@ -604,6 +612,8 @@ func _connect_services() -> void:
 
 
 func _on_settings_changed(key: String) -> void:
+	if (key == "" or key == "mock_keyboard") and _device is MockTrainer:
+		(_device as MockTrainer).set_keyboard_enabled(mock_keyboard_wanted())
 	if key != "" and key != "profile" and key != "scaling_mode":
 		return
 	if _held or _external_tick or _menu_reset_due:
