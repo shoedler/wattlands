@@ -6,7 +6,7 @@ WATTLANDS is a multiplayer fitness party app for the Wahoo KICKR CORE (and KICKR
 
 | Game | Players | What it is |
 | --- | --- | --- |
-| **Turbo Reel** | 1-4 | Co-op sport fishing. Your bike turns the big-game reel; the trainer holds the fish's pull, and keeping your cadence in the band tires it. The first-run game. |
+| **Turbo Reel** | 1-4 + bots | Sport fishing on one shared ocean. Pedal your boat out, stop, cast at the fish you see and fight them: the trainer holds the fish's pull and keeping your cadence in the band tires it. Free Roam is competitive (most points in 10 to 60 minutes wins, bots fill empty seats); workouts keep a plan and score together. The first-run game. |
 | **Castellum Rotae** | 1-4 | Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator. |
 | **Workout** | 1-8 | Group interval rides, sprints, a rolling road and `.zwo` import. |
 | Diesel Domestiques | 1-3 | Coming next: crew a pedal-powered super-heavy tank, one engine per rider (brief in `docs/games/tank.md`). |
@@ -19,6 +19,7 @@ WATTLANDS is a multiplayer fitness party app for the Wahoo KICKR CORE (and KICKR
 2. Update the trainer's firmware with the Wahoo app, then close every other app that might connect to it (Zwift, the Wahoo app).
 3. Pedal. With no input at all, 20 seconds of pedaling on the title screen creates a profile and starts a ride. Every game plays to the end with no input. For menus, switch on Settings > Pedal navigation (off by default): the focus then moves every 1.6 s, a short surge picks, coasting for 3 s goes back (outside ERG), and a small graph shows how hard to surge. Without it menus use the keyboard or a controller.
 4. Set your FTP in the profile, or run the FTP test in Settings. Until it is verified, every ERG target is lowered by 15%.
+5. Optional: connect a Bluetooth heart rate sensor in Settings > Trainer > Sensors. Your heart rate shows next to your power, goes into the FIT file and the results, and is never shared with other riders. Stop pedaling for 5 seconds and your ride pauses.
 
 ## Playing together
 
