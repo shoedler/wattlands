@@ -4,7 +4,7 @@ extends RefCounted
 ## encode() runs on the host at 10 Hz; apply() overwrites a client's state with everything the
 ## schema carries, so one snapshot fully restores a rejoining client (its peers, world and
 ## content come from its own configure). Every number is cast with int() whatever
-## Protocol.decode() did. The client's fish has no slot: its run kind comes from the jump flag.
+## Protocol.decode() did. The client's fish has no slot: the jump flag sets fish.jumping.
 
 const S = preload("res://src/games/fishing/contracts/fishing_snapshot_schema.gd")
 
@@ -89,7 +89,7 @@ static func flags(st: FishingState, r: FishingRiderState) -> int:
 	var fl := 0
 	if r.rescue or r.rescue_now:
 		fl |= S.F_RESCUE
-	if r.afk or r.stale:
+	if r.is_afk():
 		fl |= S.F_AFK
 	if r.cadence_stale or r.stale:
 		fl |= S.F_STALE
@@ -100,9 +100,8 @@ static func flags(st: FishingState, r: FishingRiderState) -> int:
 	var f := r.fish
 	if r.in_fight() and f.run_active:
 		fl |= S.F_RUN
-		if r.fight_slot >= 0 and r.fight_slot < r.slots.size():
-			if r.slots[r.fight_slot].run_kind == FishingSpeciesDef.RUN_JUMP:
-				fl |= S.F_JUMP
+		if f.jumping:
+			fl |= S.F_JUMP
 	if r.gaff >= 1.0:
 		fl |= S.F_TROPHY
 	if r.in_fight() and f.replacement:
@@ -186,6 +185,7 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 	r.cadence_stale = fl & S.F_STALE != 0
 	r.paused = fl & S.F_PAUSED != 0
 	f.run_active = fl & S.F_RUN != 0
+	f.jumping = fl & S.F_JUMP != 0
 	f.replacement = fl & S.F_REPLACEMENT != 0
 	f.off_line = fl & S.F_OFF_LINE != 0
 	r.pedal_nav = fl & S.F_PEDAL_NAV != 0
@@ -206,11 +206,6 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 		r.hints.append(S.unit(h[S.H_SIZE]))
 	r.state_t = int(row[S.R_STATE_DS]) / 10.0
 	r.furthest_x_m = int(row[S.R_FURTHEST_DM]) / 10.0
-
-
-## True when the row's active run is a jump (the client has no slot to ask).
-static func row_jumping(row: Array) -> bool:
-	return int(row[S.R_FLAGS]) & S.F_JUMP != 0
 
 
 ## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 riders).

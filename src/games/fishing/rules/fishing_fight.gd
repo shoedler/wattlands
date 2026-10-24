@@ -210,6 +210,7 @@ static func _runs(
 		return
 	var dur := slot.run_dur_s(k)
 	f.run_active = true
+	f.jumping = jump
 	f.run_end_t = st.t + dur
 	if r.pull.run_active and r.pull.run_end_t > st.t:
 		f.run_end_t = r.pull.run_end_t
@@ -303,10 +304,9 @@ static func haptic_allowed(r: FishingRiderState, inp: FishingRiderInput) -> bool
 	return (
 		r.haptics_on
 		and not r.rescue_now
-		and not r.afk
+		and not r.is_afk()
 		and not inp.afk
 		and not r.paused
-		and not r.stale
 		and inp.plan_elapsed_s + EPS >= FishingConst.HAPTIC_PLAN_MIN_S
 	)
 

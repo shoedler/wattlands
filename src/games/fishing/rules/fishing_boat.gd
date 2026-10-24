@@ -24,8 +24,8 @@ static func step(
 	var drag := FishingConst.DRAG_QUAD * v * absf(v) + lin * v
 	var a := (thrust - drag) / FishingConst.BOAT_MASS_KG
 	var nv := v + a * dt
-	# Drag alone never reverses the boat.
-	if p <= 0.0 and signf(nv) != signf(v):
+	# Drag alone never reverses the boat; a crawl under 1 cm/s stops it.
+	if p <= 0.0 and (signf(nv) != signf(v) or absf(nv) < 0.01):
 		nv = 0.0
 	r.accel = (nv - v) / dt
 	r.v_mps = nv

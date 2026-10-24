@@ -1,5 +1,10 @@
 # Changelog: fishing
 
+### Changed (Turbo Reel) v0.2.0
+
+- Free Roam (`roam_10` to `roam_60`, default `roam_30`): one shared ocean from the harbour to the edge of the world, a pedal-driven boat (P_eff thrust, gentle SIM load rising with speed), a light stop menu (cast at the fish you see, drive on, turn around), fights built on the fly as ERG phases, ten species from mackerel to the giant grouper and a legendary abyss fish, points by weight, most points wins; bots with four strategies; up to 5 min overtime for a fight on at time-up.
+- Workouts (`base_60`, `threshold`, `e2e_2min`) troll across an endless map; the free trips, the area and the lanes are gone. Strava tags and stat lines per rider.
+
 ### Added (Big Game Fishing) v0.1.0
 
 - Big Game Fishing, a co-op sport-fishing game for 1-4 riders (BRIEF 3.6, `docs/games/fishing.md`): each rider skippers a boat whose stationary bike turns the big-game reel. The trainer is the rod: ERG holds the fish's pull, cadence is the skill (keep it in the tension band), runs and jumps are surges, and the 30 s Landing is a SIM gaff sprint.
@@ -11,7 +16,3 @@
 - 2D pixel art from the art pipeline (GPT Image 2.5 through fal), one equal lane per rider with the local lane highlighted, a deck bar, compact HUD controls around the kit widgets clear of the PANIC corner, and synthesized audio.
 - Host-authoritative multiplayer: 10 Hz integer snapshots under 2 KB at 4 lanes, events in order, interpolated lanes, rejoin by snapshot.
 - Tests: GUT unit and property tests (plans, the pull scheduler, rules, module, view, HUD, art), an opt-in 200-seed plan sweep, the brief 4.2 simulation matrix (`tests/games/fishing/sim/run_sims.sh`) with its checker, an e2e report check, CI (`.github/workflows/game-fishing.yml`) and a real-trainer checklist (`src/games/fishing/HARDWARE_TEST.md`).
-
-### Known gaps (Big Game Fishing)
-
-- Not tested on a real trainer or against the real Strava API. P1 content (Deep Blue Trench, `marlin_hunt`, `.zwo` bite scheduling, the legendary two-rod fish) is not built: see `src/games/fishing/BACKLOG.md`.

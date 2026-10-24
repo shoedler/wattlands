@@ -24,6 +24,8 @@ var scheduled: bool = false
 var runs_fired: int = 0
 ## True from a run's first ramp step to its scheduled end.
 var run_active: bool = false
+## The active (or last) run is a jump: the fish leaps at the surface.
+var jumping: bool = false
 var run_end_t: float = 0.0
 var last_jump_t: float = -1000.0
 var hooked_t: float = 0.0

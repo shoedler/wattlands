@@ -336,7 +336,7 @@ func _feed_status() -> void:
 
 ## True while the rider's EMA cadence is inside its published band and play is on.
 static func rider_in_band(r: FishingRiderState) -> bool:
-	if r.rescue or r.afk or r.stale or r.cadence_stale or r.pub_hi <= 0:
+	if r.rescue or r.is_afk() or r.cadence_stale or r.pub_hi <= 0:
 		return false
 	return r.cadence_ema >= r.pub_lo and r.cadence_ema <= r.pub_hi
 
@@ -390,6 +390,9 @@ func snapshot() -> Dictionary:
 
 func apply_snapshot(snap: Dictionary) -> void:
 	if state == null:
+		return
+	if FishingSnapshotSchema.check(snap) != "":
+		push_warning("fishing: snapshot ignored: %s" % FishingSnapshotSchema.check(snap))
 		return
 	FishingSnapshot.apply(state, snap)
 	snapshot_applied.emit(state.tick)

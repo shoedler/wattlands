@@ -116,6 +116,8 @@ var applied_target_w: float = 0.0
 var rescue: bool = false
 var afk: bool = false
 var paused: bool = false
+## The telemetry's own AFK flag this tick (afk is the module's on_afk).
+var afk_tm: bool = false
 ## Telemetry older than 3 s (a dropped client): AFK whether or not on_afk fired.
 var stale: bool = false
 var rescue_now: bool = false
@@ -169,6 +171,11 @@ var tip_n: int = 0
 # --- Randomness ------------------------------------------------------------------------------
 var rng: FishingRandom = FishingRandom.new()
 var pull_rng: FishingRandom = FishingRandom.new()
+
+
+## AFK by any source: on_afk, the telemetry, or stale telemetry (a dropped client).
+func is_afk() -> bool:
+	return afk or afk_tm or stale
 
 
 ## True while the rules make this rider's choices (Autopilot on, or a bot).

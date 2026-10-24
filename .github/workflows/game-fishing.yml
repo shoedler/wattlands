@@ -1,8 +1,8 @@
-# Turbo Reel (docs/games/fishing.md section 4): the game's own GUT tests (BRIEF 7 strict
-# rules: unit, art palette and integration tests under tests/games/fishing), its Node tests (the
-# sim checker and the e2e report checker, against fixture reports), the script check; a second
-# job runs the quick subset of the simulation matrix (tests/games/fishing/sim/run_sims.sh --quick:
-# e2e_2min with 3 riders, the determinism pair and fit_check on every FIT) through
+# Turbo Reel: the game's own GUT tests (BRIEF 7 strict rules: unit, art palette and integration
+# tests under tests/games/fishing), its Node tests (the sim checker and the e2e report checker),
+# the script check; a second job runs the quick subset of the simulation matrix
+# (tests/games/fishing/sim/run_sims.sh --quick: e2e_2min with 3 riders, the Free Roam
+# determinism pair with bots and fit_check on every FIT) through
 # tools/run_game_sim with the check_sims.mjs assertions. The full matrix (run_sims.sh), the e2e run
 # (node tools/e2e/run.mjs --games=fishing) and tools/run_tests belong to the lead's suite.
 # Linux, the standard Godot 4.7.2 build, both locks on, FAL_KEY and WATTLANDS_ALLOW_ART never set.
@@ -102,7 +102,7 @@ jobs:
       - name: Import
         run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
 
-      - name: Simulation subset (S10, S8 on e2e_2min, S9 fit_check) and check_sims
+      - name: Simulation subset (W3, D, FIT) and check_sims
         run: bash tests/games/fishing/sim/run_sims.sh --quick
 
       - name: Keep the reports

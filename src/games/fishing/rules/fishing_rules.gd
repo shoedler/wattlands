@@ -177,8 +177,7 @@ static func _read_inputs(r: FishingRiderState, inp: FishingRiderInput, dt: float
 	r.cadence_stale = inp.cadence_age_s > FishingConst.STALE_S
 	r.stale = inp.age_s > FishingConst.STALE_S or not inp.connected
 	r.rescue_now = r.rescue or inp.rescue
-	if inp.afk:
-		r.afk = true
+	r.afk_tm = inp.afk
 	r.paused = inp.paused
 
 
@@ -208,7 +207,7 @@ static func set_action(r: FishingRiderState, a: int) -> void:
 ## The prop is engaged: driving, trolling (workouts) and heading home; never while paused, AFK
 ## or stale.
 static func _thrust_on(st: FishingState, r: FishingRiderState) -> bool:
-	if r.paused or r.afk or r.stale:
+	if r.paused or r.is_afk():
 		return false
 	match r.action:
 		FishingConst.A_DRIVE, FishingConst.A_HOME:
@@ -273,7 +272,7 @@ static func _enter(
 ## Rescue, AFK, pause and stale telemetry stagger the rider; play resumes 10 s after the cause
 ## ends. Every edge goes to the pull scheduler whatever the action.
 static func _update_stagger(st: FishingState, r: FishingRiderState) -> void:
-	var cause := r.rescue_now or r.afk or r.stale or r.paused
+	var cause := r.rescue_now or r.is_afk() or r.paused
 	if cause and not r.stagger_on:
 		r.stagger_on = true
 		r.staggered = true
@@ -288,10 +287,11 @@ static func _update_stagger(st: FishingState, r: FishingRiderState) -> void:
 		r.resume_t = 0.0
 
 
-## Publishes a band when its rounded edges change ([0, 0] clears it).
+## Publishes a band when its rounded edges change ([0, 0] clears it); the width is rounded on its
+## own so a published band keeps it.
 static func publish(r: FishingRiderState, lo: float, hi: float, out: FishingStepOut) -> void:
 	var ilo := roundi(lo)
-	var ihi := roundi(hi)
+	var ihi := ilo + roundi(hi - lo)
 	if ilo == r.pub_lo and ihi == r.pub_hi:
 		return
 	r.pub_lo = ilo
@@ -380,7 +380,7 @@ static func _tick_roam(
 				FishingAutopilot.plan_stop(st, r)
 			if _blocked(st, r):
 				_enter_menu(st, r, false)
-			elif _weak(r) or (r.auto_plays() and FishingAutopilot.wants_stop(r)):
+			elif _drifts(r):
 				set_action(r, FishingConst.A_DRIFT)
 		FishingConst.A_DRIFT:
 			if FishingBoat.stopped(r):
@@ -404,11 +404,16 @@ static func _tick_roam(
 ## Under 20 % FTP-equivalent, or paused, AFK or stale: the prop disengages.
 static func _weak(r: FishingRiderState) -> bool:
 	return (
-		r.p_eff_w < FishingConst.DRIFT_P_FRAC * FishingConst.P_EFF_REF_W
-		or r.paused
-		or r.afk
-		or r.stale
+		r.p_eff_w < FishingConst.DRIFT_P_FRAC * FishingConst.P_EFF_REF_W or r.paused or r.is_afk()
 	)
+
+
+## A human's prop disengages under 20 % FTP-equivalent; Autopilot frees it at its stop (its power
+## only sets the speed). Pause, AFK and stale telemetry free it for everyone.
+static func _drifts(r: FishingRiderState) -> bool:
+	if r.auto_plays():
+		return FishingAutopilot.wants_stop(r) or r.paused or r.is_afk()
+	return _weak(r)
 
 
 ## Driving into the edge (seaward) or the dock wall stops the boat.
