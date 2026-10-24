@@ -893,9 +893,3 @@ func _paint_overlay(item: Node2D) -> void:
 	var f := fade_amount()
 	if f > 0.01:
 		item.draw_rect(Rect2(0, 0, TankConst.SCREEN_W, TankConst.SCREEN_H), Color(0, 0, 0, f))
-
-
-## Draws `count` frames of `dt` seconds without waiting for _process (tests, screenshots).
-func settle(count: int = 1, dt: float = 1.0 / 60.0) -> void:
-	for _i in count:
-		advance(dt)

@@ -438,6 +438,16 @@ func test_only_the_citadel_has_secondaries() -> void:
 		assert_eq(_secondary_shots(rig).size(), 0, "crew %d" % crew)
 
 
+func test_an_autopilot_traverse_does_not_pause_the_auto_aim() -> void:
+	var rig := _rig(2)
+	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	m.gun_s = 999.0
+	rig.send(_g(rig), {"k": "traverse", "auto": 1})
+	rig.run(0.1)
+	assert_gt(rig.hull().traverse_s, 0.0, "the Autopilot's traverse still turns the turret")
+	assert_almost_eq(rig.hull().aim_pause_s, 0.0, 0.01, "and leaves the aim running")
+
+
 func test_a_traverse_by_hand_pauses_the_auto_aim_so_it_is_not_undone() -> void:
 	var rig := _rig(2)
 	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)

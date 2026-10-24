@@ -109,8 +109,10 @@ static func _intent(
 		TankIds.INTENT_TRAVERSE:
 			if hull.traverse_s <= 0.0 and trav_rate > 0.0:
 				_start_traverse(state, gs)
-				# A turret turned by hand stays where it was sent for a while, like a nudge.
-				hull.aim_pause_s = c.num("tanks", "gun.manual_pause_s", 5.0)
+				# A turret turned by hand stays where it was sent for a while, like a nudge. The
+				# Autopilot's own traverse ("auto") is not a rider's choice and never blinds the aim.
+				if not bool(n.get("auto", false)):
+					hull.aim_pause_s = c.num("tanks", "gun.manual_pause_s", 5.0)
 		TankIds.INTENT_FIRE:
 			if can_fire(hull):
 				var tgt := TankTargets.by_id(aux, hull.target_id)
@@ -195,10 +197,6 @@ static func fire(
 			r.shots += 1
 			r.shells_by_type[int(TankRiderState.SHELL_INDEX[shell])] += 1
 	return true
-
-
-static func tick_breech(state: TankState, dt: float) -> void:
-	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
 
 
 # --- Citadel secondaries -------------------------------------------------------------------------
