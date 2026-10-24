@@ -134,8 +134,16 @@ func _draw() -> void:
 	if edge:
 		_edge(Vector2(w - EDGE_W, top) * s, s, h)
 	var spots := icon_spots(w)
+	var stems: Array[float] = []
 	for i in icons.size():
-		_icon(icons[i], s, w, spots[i])
+		_icon(icons[i], s, spots[i])
+		var stem := clampf(roundf(float(icons[i]["x"]) * w), 0.0, w - 2.0)
+		var by_dock := x0 <= 0.0 and stem < 2.0 * DOCK_COLS
+		var taken := stems.any(func(o: float) -> bool: return absf(o - stem) < 3.0)
+		if not by_dock and not taken:
+			stems.append(stem)
+			var col := FishingPalette.player(int(icons[i]["slot"]))
+			draw_rect(Rect2(Vector2(stem, float(ICON_ROWS)) * s, Vector2(2, 1) * s), col)
 
 
 ## The harbour: a little lighthouse at the strip's left end.
@@ -172,14 +180,12 @@ func icon_spots(w: float) -> Array[float]:
 	return spots
 
 
-func _icon(e: Dictionary, s: float, w: float, cx: float) -> void:
+func _icon(e: Dictionary, s: float, cx: float) -> void:
 	var col := FishingPalette.player(int(e["slot"]))
 	var size := FishingSprites.size_of(str(e["icon"]))
 	var at := Vector2(cx - float(size.x / 2), 0.0) * s
 	var k := floori(_t * 4.0)
 	FishingHudDraw.icon(self, str(e["icon"]), k, at, roundi(s), col)
-	var stem := clampf(roundf(float(e["x"]) * w), 0.0, w - 1.0)
-	draw_rect(Rect2(Vector2(stem, float(ICON_ROWS)) * s, Vector2(1, 1) * s), col)
 	if bool(e["local"]):
 		var y := float(ICON_ROWS + 1) + STRIP_ROWS + 1.0
 		FishingHudDraw.pixels(self, CARET, Vector2(cx - 1.0, y) * s, s, FishingPalette.SLATE)

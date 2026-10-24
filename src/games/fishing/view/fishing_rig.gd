@@ -23,8 +23,22 @@ const PROP_HUB := Vector2(21, 32)
 ## The rider's cap (player colour) on the head, and the pennant on the bow mast.
 const CAP := Rect2i(40, 7, 3, 1)
 const FLAG := Rect2i(83, 11, 4, 2)
-## The planing hull frame raises the bow section (the mast, pennant and bow wave with it).
-const PLANE_BOW_PX := 2
+## The bow-up poses (nothing is ever rotated): the boat is cut into bands along x and each band
+## moves by whole pixels, the stern squatting 1 px and the bow rising 2 px (pose 1) or 4 px
+## (pose 2) in steps at least 8 px long. Per pose, Vector2i(x_end, dy): columns left of x_end
+## (and right of the previous band) move dy. The hull frames and every part follow them.
+const TILT: Array = [
+	[Vector2i(HULL_SIZE.x, 0)],
+	[Vector2i(32, 1), Vector2i(64, 0), Vector2i(76, -1), Vector2i(HULL_SIZE.x, -2)],
+	[
+		Vector2i(32, 1),
+		Vector2i(50, 0),
+		Vector2i(60, -1),
+		Vector2i(70, -2),
+		Vector2i(80, -3),
+		Vector2i(HULL_SIZE.x, -4),
+	],
+]
 ## The rod in its holder on the winch, as runs from the base toward the tip: a positive run
 ## climbs that many pixels, then steps one aft and up; a negative run goes that many pixels aft,
 ## then steps one aft and down (stowed, with no climb, it steps up instead). Raised the rod
@@ -44,6 +58,15 @@ const SNAP_MAX_PX := 24
 ## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
 const WAKE_AT := Vector2i(19, WATERLINE)
 const SPRAY_AT := Vector2i(87, WATERLINE)
+
+
+## How far boat-local column `x` moves in bow-up pose `pose` (TILT).
+static func tilt_dy(pose: int, x: int) -> int:
+	var bands: Array = TILT[clampi(pose, 0, TILT.size() - 1)]
+	for b: Vector2i in bands:
+		if x < b.x:
+			return b.y
+	return (bands[-1] as Vector2i).y
 
 
 ## The rod frame for `raise` (0 stowed .. 1 raised, shown from 0.5) and `tension`.

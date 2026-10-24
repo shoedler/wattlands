@@ -66,7 +66,7 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X, 3.0)
 
 
-func test_bow_pitch_lifts_the_boat_by_whole_pixels_never_rotating_it() -> void:
+func test_bow_pitch_picks_a_bow_up_pose_by_whole_pixels_never_rotating_it() -> void:
 	var g := FX.make_game(1)
 	var r := g.state.rider(0)
 	FX.set_drive(r, 3000.0, 7.0)
@@ -75,11 +75,33 @@ func test_bow_pitch_lifts_the_boat_by_whole_pixels_never_rotating_it() -> void:
 	_run(v, 10)
 	var b := v.boat_view(0)
 	assert_eq(b.rotation, 0.0, "sprites are never rotated")
-	assert_gte(b.lift_px(), 1, "the boat rides up")
-	assert_eq(b.body.position.y, roundf(b.body.position.y), "by whole pixels")
+	assert_eq(b.pose(), 2, "a hard effort lifts the bow 4 px")
+	assert_eq(b.hull.texture, FishingSprites.frame("boat_hull", 2))
+	var flag_up := b.pixel_of(FishingRig.FLAG.position)
+	var stern := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
 	r.pitch_deg = 0.0
 	_run(v, 2)
-	assert_eq(b.lift_px(), 0)
+	assert_eq(b.pose(), 0)
+	assert_eq(b.pixel_of(FishingRig.FLAG.position).y - flag_up.y, 4.0, "the bow came down 4 px")
+	var stern_level := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	assert_eq(stern.y - stern_level.y, 1.0, "the stern squatted 1 px")
+
+
+func test_tilt_bands_step_by_one_pixel_at_least_eight_apart() -> void:
+	for pose in range(1, FishingRig.TILT.size()):
+		var bands: Array = FishingRig.TILT[pose]
+		var prev_x := 0
+		var prev_dy := 1
+		for i in bands.size():
+			var band: Vector2i = bands[i]
+			if i > 0:
+				assert_eq(prev_dy - band.y, 1, "pose %d steps one pixel" % pose)
+				assert_gte(band.x - prev_x, 8, "pose %d steps are at least 8 px long" % pose)
+			prev_x = band.x
+			prev_dy = band.y
+		assert_eq(FishingRig.tilt_dy(pose, 0), 1, "the stern squats")
+	assert_eq(FishingRig.tilt_dy(2, FishingRig.BOW_X), -4)
+	assert_eq(FishingRig.tilt_dy(1, FishingRig.BOW_X), -2)
 
 
 func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -> void:

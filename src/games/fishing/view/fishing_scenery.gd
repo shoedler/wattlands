@@ -58,6 +58,9 @@ const FLOOR_FIT_PX := 6.0
 ## The floor is drawn in world-fixed runs this wide, each flat, its top on an even row.
 const STEP_PX := 24
 const RIM_ROWS := 2
+## A water band edge this close above a floor top would leave a sliver of the next band: the
+## water just above every floor top takes the band above it instead (and the floor its colour).
+const SLIVER_ROWS := 2
 ## The islands' sage tiers (the rest are haze).
 const ISLAND_BASE_TIERS := 2
 ## Cloud layers: parallax factor, drift (px/s), spacing (px), rows (top, bottom); all below the
@@ -89,6 +92,9 @@ const FALL_BANK: Array[int] = [6, 14, 24]
 var world: FishingWorld = null
 ## The depth the floor rows stand for (m): see the class comment and target_view_depth().
 var view_depth_m: float = 40.0
+## Screen x spans (Vector2(left, right)) the islands keep clear of: the boats (the view sets
+## it every frame), so no island stands behind a hull or a rider.
+var clear_x: Array[Vector2] = []
 
 
 ## Screen y of `depth_m` below the surface (INF stays INF).
@@ -245,6 +251,8 @@ func _paint_islands(c: CanvasItem, cam_m: float) -> void:
 				continue
 			var x := float(k) * spacing + float((h >> 9) % 200) - off
 			var w := 24.0 + 8.0 * float(h % 9)
+			if _behind_boat(x, x + w):
+				continue
 			for j in 1 + (h >> 5) % (3 + li):
 				if w < 6.0:
 					break
@@ -259,6 +267,14 @@ func _paint_islands(c: CanvasItem, cam_m: float) -> void:
 				var cut := 2.0 * float(1 + hash2(h, j) % 3)
 				x += cut
 				w -= cut + 2.0 * float(1 + hash2(h, j + 7) % 3)
+
+
+## True when screen span `x0`..`x1` overlaps a span in clear_x.
+func _behind_boat(x0: float, x1: float) -> bool:
+	for span in clear_x:
+		if x1 > span.x and x0 < span.y:
+			return true
+	return false
 
 
 func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
@@ -294,6 +310,7 @@ func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
 			continue
 		var right := minf(sx + float(STEP_PX), edge_px)
 		var band := int(col.z)
+		c.draw_rect(Rect2(sx, y - SLIVER_ROWS, right - sx, SLIVER_ROWS), FishingPalette.SEA[band])
 		c.draw_rect(Rect2(sx, y, right - sx, float(H) - y), FLOOR_BANDS[band])
 		c.draw_rect(Rect2(sx, y, right - sx, RIM_ROWS), RIM_BANDS[band])
 
@@ -338,8 +355,9 @@ func floor_rows(cam_px: float) -> Array[Vector3]:
 			rows = [2.0 * floorf(ys[i0] / 2.0)]
 		for k in rows.size():
 			out[i0 + k].y = rows[k]
-			out[i0 + k].z = band_at(depth_of_y(rows[k] - 1.0))
 		i0 = i1
+	for k in out.size():
+		out[k].z = band_at(depth_of_y(out[k].y - 1.0 - float(SLIVER_ROWS)))
 	return out
 
 

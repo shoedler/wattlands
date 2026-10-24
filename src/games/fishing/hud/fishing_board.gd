@@ -56,7 +56,8 @@ func _draw() -> void:
 	for row in rows:
 		var col := FishingPalette.player(int(row["slot"]))
 		var icon := FishingHudModel.icon_of(int(row["action"]))
-		FishingHudDraw.icon(self, icon, floori(_t * 4.0), Vector2(x0 + pad, y + u), int(u), col)
+		var at := Vector2(x0 + pad, y + u)
+		FishingHudDraw.icon(self, icon, floori(_t * 4.0), at, int(u), col, FishingPalette.HUD_DIM)
 		var me := bool(row["local"])
 		var name_col := FishingPalette.HUD_TEXT if me else FishingPalette.HUD_DIM
 		FishingHudDraw.text_line(self, x0 + name_x, y, str(row["name"]), s, name_col)

@@ -6,7 +6,8 @@ extends Node2D
 ## drum and the prop as frame-animated sprites, the rod (stowed, raised, bent back under
 ## tension), the rider's cap and the bow pennant in the player's colour. The view sets position
 ## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
-## is ever rotated: pitch lifts the boat by whole pixels and switches to the planing hull.
+## is ever rotated: the bow pitch picks a bow-up pose (FishingRig.TILT), a hull frame cut in
+## bands moved by whole pixels, and every part moves with the band it sits on.
 ## Driving vs fishing (`fishing` eased 0..1, shown as a pose from 0.5): the rider sits up from
 ## the bar with a hand on the clutch, which leans aft; the prop stops while the winch drum turns;
 ## the rod tips up. Every part carries a palette map (FishingPaletteMap): rows under the boat's
@@ -18,11 +19,9 @@ const FISHING_EASE_S := 0.6
 ## Prop frame rate at full drive and the winch's frames per metre of line.
 const PROP_FPS_FULL := 14.0
 const WINCH_FPS_PER_MPS := 6.0
-## Bow pitch (degrees) per pixel the boat lifts, and the most it lifts.
-const LIFT_DEG_PER_PX := 3.0
-const LIFT_MAX_PX := 3
-## Lift (px) from which the planing hull frame shows.
-const PLANE_LIFT_PX := 2
+## Bow pitch (degrees) from which each bow-up pose shows (pose 1, pose 2): a hard effort or a
+## sprint's surge lifts the bow, steady riding at FTP stays level.
+const POSE_DEG: Array[float] = [3.0, 5.0]
 ## A farther boat: each slate one step lighter.
 const FAR_FROM: Array[Color] = [FishingPalette.SLATE, FishingPalette.WOOD]
 const FAR_TO: Array[Color] = [FishingPalette.WOOD, FishingPalette.UPPER]
@@ -92,9 +91,18 @@ func player_color() -> Color:
 	return FishingPalette.player(slot)
 
 
-## Whole pixels the boat rises for the bow pitch shown (0 .. LIFT_MAX_PX).
-func lift_px() -> int:
-	return clampi(floori(maxf(pitch_deg, 0.0) / LIFT_DEG_PER_PX), 0, LIFT_MAX_PX)
+## The bow-up pose for the pitch shown: 0 level, 1 bow up 2 px, 2 bow up 4 px (FishingRig.TILT).
+func pose() -> int:
+	var k := 0
+	for i in POSE_DEG.size():
+		if pitch_deg >= POSE_DEG[i]:
+			k = i + 1
+	return k
+
+
+## How far boat-local column `x` moves in the pose shown.
+func tilt_at(x: float) -> float:
+	return float(FishingRig.tilt_dy(pose(), floori(x)))
 
 
 ## The crew frame shown: the pose's block, then the crank's quarter turn.
@@ -111,34 +119,36 @@ func advance(dt: float) -> void:
 	_prop_t += PROP_FPS_FULL * prop_drive * (1.0 - fishing) * dt
 	_winch_t += absf(winch_mps) * WINCH_FPS_PER_MPS * fishing * dt
 	crew.texture = FishingSprites.frame("boat_crew", crew_frame())
-	hull.texture = FishingSprites.frame("boat_hull", 1 if planing() else 0)
+	hull.texture = FishingSprites.frame("boat_hull", pose())
 	prop.texture = FishingSprites.frame("boat_prop", floori(_prop_t))
 	winch.texture = FishingSprites.frame("boat_winch", floori(_winch_t))
 	scale.x = float(heading) if heading != 0 else 1.0
-	body.position = -PIVOT + Vector2(0, roundf(bob_px) - float(lift_px()))
+	body.position = -PIVOT + Vector2(0, roundf(bob_px))
+	winch.position = FishingRig.WINCH_AT + Vector2(0, tilt_at(FishingRig.WINCH_AT.x))
+	prop.position = FishingRig.PROP_AT + Vector2(0, tilt_at(FishingRig.PROP_AT.x))
+	crew.position = FishingRig.CREW_AT + Vector2(0, tilt_at(FishingRig.CAP.position.x))
 	for m in _mats:
 		FishingPaletteMap.set_under(m, position.y, FishingPalette.UPPER)
 	_near.queue_redraw()
 
 
-## True while the planing hull shows (the bow section raised).
-func planing() -> bool:
-	return lift_px() >= PLANE_LIFT_PX
-
-
-## The rod's pixels (boat-local, unflipped), the tip last.
+## The rod's pixels (boat-local, unflipped, moved with the winch it stands on), the tip last.
 func rod_points() -> Array[Vector2i]:
-	return FishingRig.rod(fishing, tension)
+	var dy := FishingRig.tilt_dy(pose(), FishingRig.ROD_BASE.x)
+	var out: Array[Vector2i] = []
+	for p in FishingRig.rod(fishing, tension):
+		out.append(p + Vector2i(0, dy))
+	return out
 
 
 ## The rod tip's pixel in the parent's (the view's) coordinates.
 func rod_tip() -> Vector2:
-	return pixel_of(rod_points()[-1])
+	return to_view(Vector2(rod_points()[-1]) + Vector2(0.5, 0.5)).floor()
 
 
-## The view pixel (top-left corner) of boat-local pixel `p`.
+## The view pixel (top-left corner) of boat-local pixel `p` (as posed: see tilt_at()).
 func pixel_of(p: Vector2i) -> Vector2:
-	return to_view(Vector2(p) + Vector2(0.5, 0.5)).floor()
+	return to_view(Vector2(p) + Vector2(0.5, 0.5 + tilt_at(p.x))).floor()
 
 
 ## A boat-local point in the parent's coordinates.
@@ -168,6 +178,7 @@ func _paint_near(c: CanvasItem) -> void:
 	for p in rod_points():
 		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), FishingPalette.SLATE)
 	var col := player_color()
-	c.draw_rect(Rect2(FishingRig.CAP), col)
-	var bow := Vector2(0, -FishingRig.PLANE_BOW_PX if planing() else 0)
+	var cap := Vector2(FishingRig.CAP.position) + Vector2(0, tilt_at(FishingRig.CAP.position.x))
+	c.draw_rect(Rect2(cap, FishingRig.CAP.size), col)
+	var bow := Vector2(0, tilt_at(FishingRig.FLAG.position.x))
 	c.draw_rect(Rect2(Vector2(FishingRig.FLAG.position) + bow, FishingRig.FLAG.size), col)

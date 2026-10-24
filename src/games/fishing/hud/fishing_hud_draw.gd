@@ -82,22 +82,37 @@ static func text_line(
 	return text(c, Vector2(x, top + float(u * (LEAD_ROWS + CAP_ROWS))), s, scale, col)
 
 
-## Sprite `id` frame `k` recoloured to the palette (foam pixels take `col`, every other pixel
-## keeps its palette colour), each art pixel `px` HUD px, top-left at `pos`.
-static func icon(c: CanvasItem, id: String, k: int, pos: Vector2, px: int, col: Color) -> void:
+## Sprite `id` frame `k` recoloured to the palette (foam pixels take `col`; with `body` set the
+## abyss strokes take it, for an icon on a panel; every other pixel keeps its palette colour),
+## each art pixel `px` HUD px, top-left at `pos`.
+static func icon(
+	c: CanvasItem,
+	id: String,
+	k: int,
+	pos: Vector2,
+	px: int,
+	col: Color,
+	body: Color = Color(0, 0, 0, 0)
+) -> void:
 	var tex := FishingSprites.frame(id, k)
 	if tex == null:
 		return
-	var key := "%s:%d:%s" % [id, posmod(k, maxi(FishingSprites.count(id), 1)), col.to_html()]
+	var n := maxi(FishingSprites.count(id), 1)
+	var key := "%s:%d:%s:%s" % [id, posmod(k, n), col.to_html(), body.to_html()]
 	if not _icons.has(key):
 		var img := tex.get_image()
 		img.convert(Image.FORMAT_RGBA8)
 		var foam := FishingPalette.FOAM.to_html(false)
+		var abyss := FishingPalette.ABYSS.to_html(false)
 		for y in img.get_height():
 			for x in img.get_width():
 				var p := img.get_pixel(x, y)
-				if p.a > 0.5 and p.to_html(false) == foam:
+				if p.a <= 0.5:
+					continue
+				if p.to_html(false) == foam:
 					img.set_pixel(x, y, col)
+				elif body.a > 0.0 and p.to_html(false) == abyss:
+					img.set_pixel(x, y, body)
 		_icons[key] = ImageTexture.create_from_image(img)
 	var t: Texture2D = _icons[key]
 	c.draw_texture_rect(t, Rect2(pos.round(), Vector2(t.get_size()) * float(px)), false)

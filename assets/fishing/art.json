@@ -21,7 +21,7 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "boat_hull",
-			"prompt": "pedal boat hull, level, planing",
+			"prompt": "pedal boat hull, level and two bow-up poses",
 			"size": [
 				96,
 				40

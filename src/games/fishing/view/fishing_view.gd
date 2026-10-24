@@ -57,6 +57,19 @@ const GAIT_PX := 2
 const GAIT_S := 0.2
 ## The bow wave, bottom row first: [offset ahead of the bow, width] per row (px).
 const BOW_WAVE: Array[Vector2i] = [Vector2i(-3, 9), Vector2i(-1, 5)]
+## At high speed (wake from WAKE_FAST_AT) the wake runs longer (these slabs after WAKE_SLABS and
+## WAKE_LOW) and a bow that is up (FishingBoatView.pose() 1 or 2) throws spray: foam slabs above
+## the bow wave, [x from the bow, length] per row going up, two patterns swapped with the gait.
+const WAKE_FAST_AT := 0.8
+const WAKE_TAIL: Array[int] = [8, 6, 4]
+const WAKE_LOW_TAIL: Array[int] = [4, 2]
+## The broken crest above the surface line at speed, and the wake rows' offset under the line.
+const WAKE_CREST: Array[int] = [6, 4, 3, 2]
+const SURFACE_UNDER := FishingScenery.SURFACE_ROWS
+const BOW_SPRAY: Array = [
+	[Vector2i(-2, 4), Vector2i(0, 2), Vector2i(-4, 2)],
+	[Vector2i(-1, 3), Vector2i(-3, 2), Vector2i(1, 2)],
+]
 const META := "fishing_view"
 
 var game: FishingGame = null
@@ -530,6 +543,14 @@ func _handle(c: Dictionary) -> void:
 
 
 func _paint_back(c: CanvasItem) -> void:
+	var spans: Array[Vector2] = []
+	for slot: int in boats:
+		var b: FishingBoatView = boats[slot]
+		if b.visible:
+			var a := b.pixel_of(Vector2i(0, 0)).x
+			var z := b.pixel_of(Vector2i(FishingRig.HULL_SIZE.x, 0)).x
+			spans.append(Vector2(minf(a, z), maxf(a, z)))
+	scenery.clear_x = spans
 	scenery.paint_back(c, cam_m, _t)
 
 
@@ -644,14 +665,25 @@ func _paint_far_waterline(c: CanvasItem, b: FishingBoatView) -> void:
 	c.draw_rect(Rect2(x0, b.position.y, w, FAR_WATERLINE_ROWS), FishingPalette.FOAM)
 
 
-## The wake: foam slabs on the surface row behind the stern (and a shorter row two rows under
-## it), each WAKE_GAP_PX apart, their lengths scaled by the wake; at higher wake a bow wave.
+## The wake: foam slabs just under the surface line behind the stern (and a shorter row two rows
+## under it, and at speed a crest above the line), each WAKE_GAP_PX apart, their lengths scaled
+## by the wake; at higher wake a bow wave, and spray when the bow is up.
 func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 	var dir := -b.heading
 	var stern := b.pixel_of(FishingRig.WAKE_AT)
 	var y0 := b.position.y
 	var gait := (floori(_t / GAIT_S) % 2) * GAIT_PX
-	var rows: Array = [[WAKE_SLABS, 0, 0], [WAKE_LOW, 2, 4 + gait]]
+	var fast := wake >= WAKE_FAST_AT
+	var top: Array[int] = WAKE_SLABS.duplicate()
+	var low: Array[int] = WAKE_LOW.duplicate()
+	if fast:
+		top.append_array(WAKE_TAIL)
+		low.append_array(WAKE_LOW_TAIL)
+	# The surface line is foam already: the wake streams just under it, a shorter row under that
+	# and, at speed, a broken crest just above it.
+	var rows: Array = [[top, SURFACE_UNDER, 0], [low, SURFACE_UNDER + 2, 4 + gait]]
+	if fast:
+		rows.append([WAKE_CREST, -1, 2 + gait])
 	for row: Array in rows:
 		var x := stern.x + float(dir * int(row[2]))
 		for len_full: int in row[0]:
@@ -667,12 +699,23 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 	var bow := b.pixel_of(FishingRig.SPRAY_AT)
 	var h := b.heading
 	var y_surf := float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0))
+	var up := b.pose()
 	for k in BOW_WAVE.size():
 		var row: Vector2i = BOW_WAVE[k]
-		var w := row.y if wake >= 0.7 else row.y / 2 + 1
+		var w := row.y if wake >= 0.7 or up > 0 else row.y / 2 + 1
 		var x0 := bow.x + float(row.x * h)
 		var left := x0 if h > 0 else x0 - float(w - 1)
-		c.draw_rect(Rect2(left, y_surf - float(k), w, 1), foam_on(y_surf - float(k)))
+		var y := y_surf - 1.0 - float(k)
+		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
+	if up == 0:
+		return
+	var spray: Array = BOW_SPRAY[floori(_t / GAIT_S) % BOW_SPRAY.size()]
+	for k in mini(spray.size(), up + 1):
+		var slab: Vector2i = spray[k]
+		var x0 := bow.x + float(slab.x * h)
+		var left := x0 if h > 0 else x0 - float(slab.y - 1)
+		var y := y_surf - 1.0 - float(BOW_WAVE.size() + k)
+		c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
 
 
 ## Foam on row `y` (white; kept as a hook for the rows a wake can touch).

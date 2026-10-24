@@ -265,7 +265,9 @@ const ICON_GRIDS := {
 ## Every sprite: {id: {"frames": Array[Image], "anchor": Vector2i, "desc": String}}.
 static func build() -> Dictionary:
 	var out := {}
-	_add(out, "boat_hull", frames_of(BOAT_HULL), Vector2i.ZERO, "pedal boat hull, level, planing")
+	_add(
+		out, "boat_hull", hull_poses(), Vector2i.ZERO, "pedal boat hull, level and two bow-up poses"
+	)
 	_add(out, "boat_crew", frames_of(CREW), Vector2i.ZERO, "seated cyclist, flywheel, clutch")
 	_add(out, "boat_winch", frames_of(WINCH), Vector2i(2, 2), "winch drum with wound line")
 	_add(out, "boat_prop", frames_of(PROP), Vector2i(1, 2), "screw propeller")
@@ -351,6 +353,26 @@ static func hjoin(a: Array[String], b: Array[String]) -> Array[String]:
 	var out: Array[String] = []
 	for i in a.size():
 		out.append(a[i] + b[i])
+	return out
+
+
+## The hull level and in each bow-up pose (FishingRig.TILT): every column of the level grid
+## moved by its band's whole pixels, so the planes stay flat with clean 1 px steps between bands.
+static func hull_poses() -> Array[Image]:
+	var level := img(BOAT_HULL[0])
+	var out: Array[Image] = [level]
+	for pose in range(1, FishingRig.TILT.size()):
+		var f := Image.create_empty(
+			level.get_width(), level.get_height(), false, level.get_format()
+		)
+		f.fill(Color(0, 0, 0, 0))
+		for x in level.get_width():
+			var dy := FishingRig.tilt_dy(pose, x)
+			for y in level.get_height():
+				var c := level.get_pixel(x, y)
+				if c.a > 0.5 and y + dy >= 0 and y + dy < level.get_height():
+					f.set_pixel(x, y + dy, c)
+		out.append(f)
 	return out
 
 
@@ -485,6 +507,7 @@ static func _shift(image: Image, steps: int) -> void:
 				image.set_pixel(x, y, to[c.to_html(false)])
 
 
+## The hull, level (hull_poses() derives the bow-up frames from it).
 const BOAT_HULL: Array = [
 	[
 		"................................................................................................",
@@ -521,48 +544,6 @@ const BOAT_HULL: Array = [
 		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu..........",
 		".........................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu............",
 		"...........................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu...............",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-	],
-	[
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		"................................................................................................",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		".......................................................................................u........",
-		"...................wwwww..wwwwwwww..............................................WWWWWWWWW.......",
-		"...................uuuuu..uuuuuuuu..........................................WWWWWWWWWWWWWW......",
-		"...................uuuuu..uuuuuuuu..........................................WWWWwwwwwwwwwww.....",
-		".....................uu...uuuuuuuu..................................WWWWWWWWwwwwwwwwwwwwwww.....",
-		".....................uu.WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWwwwwuuuuuuuuuuu.....",
-		".....................uu.WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWwwwwwwwwuuuuuuuuuuuuuu......",
-		".....................uu.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwuuuuuuuuuuuuuu......",
-		".....................uu.wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwuuuuuuuuuuuuuuuuuuuuu.......",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu.......",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu........",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu........",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu.........",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu..........",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu............",
-		".....................uu.uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu...............",
-		".........................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu................",
-		"...........................uuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuuu............................",
 		"................................................................................................",
 		"................................................................................................",
 		"................................................................................................",
