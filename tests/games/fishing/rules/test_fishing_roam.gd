@@ -115,7 +115,7 @@ func test_confirm_while_waiting_reels_in_to_the_menu() -> void:
 
 func test_no_bite_in_the_drive_out() -> void:
 	var h := _human()
-	_stop_at(h, 400.0)
+	_stop_at(h, 800.0)
 	_pick(h, 0)
 	h.run(300.0 - h.state.t - 5.0)
 	assert_lt(h.state.t, FishingConst.WARMUP_S)

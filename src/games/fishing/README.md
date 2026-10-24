@@ -7,7 +7,7 @@ Sport fishing for 1-4 riders (plus bots) on one shared ocean (docs/games/fishing
 
 The fight (both modes): in ERG the trainer holds the fish's pull, so cadence is the skill: keep it inside the tension band; too slow strains the line (snap), too fast throws the hook. The fish tires while you are in band; runs and jumps are surges. At the boat a 30 s Landing in SIM gives a 15 s gaff sprint (a full gaff meter is a Trophy, x1.5 points).
 
-Safety first (BRIEF 4.6): the game changes trainer load only through `ctx.directives`. Driving is SIM with a course grade of 0.5 % + 0.08 v^2 (at most 3 %); each fight is its own ERG phase, validated by the PlanValidator when it is replanned in; pull changes ramp at <= 25 W/s inside the phase's `range_pct`; phases longer than 300 s stay <= 105 %; only the giant grouper (105-110 % for 3-4.5 min, max 300 s) and the oarfish's runs pass 105 %, and a rider's plan never accrues more than 300 s above 105 % (a later giant caps at 105 %). The first 5 minutes are a SIM drive-out with no fights.
+Safety first (BRIEF 4.6): the game changes trainer load only through `ctx.directives`. Driving is SIM with a course grade of 0.5 % + 2 (v / 15 m/s)^2 (at most 3 %); each fight is its own ERG phase, validated by the PlanValidator when it is replanned in; pull changes ramp at <= 25 W/s inside the phase's `range_pct`; phases longer than 300 s stay <= 105 %; only the giant grouper (105-110 % for 3-4.5 min, max 300 s) and the oarfish's runs pass 105 %, and a rider's plan never accrues more than 300 s above 105 % (a later giant caps at 105 %). The first 5 minutes are a SIM drive-out with no fights.
 
 ## Contents
 

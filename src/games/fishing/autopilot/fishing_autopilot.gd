@@ -64,6 +64,11 @@ const STRATEGY_TABLE := {
 const REST_EFFORT := 0.45
 ## The landing's gaff sprint for bots (FTP fraction; "vibe" bots do not sprint).
 const SPRINT_EFFORT := 1.3
+## Moving on inside a zone hops 200-800 m (15-55 s at cruise); with less room left than
+## MOVE_ON_ROOM_M the rider plans a new stop (or turns around).
+const MOVE_ON_MIN_M := 200.0
+const MOVE_ON_MAX_M := 800.0
+const MOVE_ON_ROOM_M := 300.0
 
 
 static func row(r: FishingRiderState) -> Dictionary:
@@ -166,13 +171,14 @@ static func _move_on(st: FishingState, r: FishingRiderState) -> int:
 	var room := (
 		float(z.get("x1", r.x_m)) - r.x_m if r.heading > 0 else r.x_m - float(z.get("x0", 0))
 	)
-	if room < 150.0:
+	if room < MOVE_ON_ROOM_M:
 		r.stop_x = NAN
 		plan_stop(st, r)
 		if absf(r.stop_x - r.x_m) < 100.0:
 			return r.menu.find(FishingConst.M_TURN)
 	else:
-		r.stop_x = r.x_m + float(r.heading) * r.rng.range_f(100.0, minf(400.0, room - 20.0))
+		var hop := r.rng.range_f(MOVE_ON_MIN_M, minf(MOVE_ON_MAX_M, room - 20.0))
+		r.stop_x = r.x_m + float(r.heading) * hop
 	return r.menu.find(FishingConst.M_DRIVE_ON)
 
 

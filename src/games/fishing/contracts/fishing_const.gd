@@ -50,30 +50,39 @@ const TRIP_E2E := "e2e"  ## the 2-minute end-to-end workout
 
 # --- Boat physics (FishingBoat; 0.05 s steps) -----------------------------------------------
 const P_EFF_REF_W := 250.0  ## 100 % FTP-equivalent
-const BOAT_MASS_KG := 400.0
-const THRUST_V0 := 1.0  ## thrust = P_eff / max(|v|, V0) N
-const DRAG_QUAD := 1.6  ## N per (m/s)^2: 250 W holds 5 m/s, crossing 9 km in 30 min
-const DRAG_LIN := 2.0  ## N per m/s
-const DRIFT_DRAG_LIN := 80.0  ## with the prop free the hull brakes hard: ~5 s time constant
+const V_FTP_MPS := 15.0  ## steady speed at 100 %: the 18 km map in 20 min
+const SPEED_EXP := 0.6  ## steady speed = V_FTP x (P_eff / 250 W)^0.6
+const SPEED_P_MAX_FRAC := 3.0  ## P_eff counts up to 300 % (29 m/s)
+const ACCEL_TAU_S := 0.9  ## speeding up: 95 % of the new steady speed in under 3 s
+const DECEL_TAU_S := 0.6  ## less power, prop still engaged: water drag slows it faster
+const DRIFT_TAU_S := 1.2  ## prop free: dv/dt = -(|v| / 1.2 s + 0.6 m/s^2), 15 m/s to 0 in ~3 s
+const DRIFT_BRAKE_MPS2 := 0.6
 const DRIFT_P_FRAC := 0.2  ## under 20 % FTP-equivalent the prop disengages
 const STOP_SPEED := 0.3  ## a drifting boat counts as stopped below this
 const DRIVE_ON_P_FRAC := 0.8  ## pedaling >= 80 % for DRIVE_ON_S in the menu drives on
 const DRIVE_ON_S := 2.0
 const SPRINT_P_FRAC := 1.05  ## the sprint flag (wake icon): P_eff > 105 % FTP-equivalent
-const PITCH_PER_THROTTLE := 2.5  ## degrees of bow lift per 100 % throttle
-const PITCH_PER_ACCEL := 20.0  ## degrees per m/s^2 of forward acceleration
-const PITCH_MAX_DEG := 14.0
-const PITCH_TAU_S := 0.6
-## The signed trim's range (R_PITCH_DD): bow up to +14 deg, bow down to -6 deg while braking.
+## Signed trim (R_PITCH_DD): its target is 3 deg per V_FTP of the steady speed the power holds
+## while the prop drives, plus 0.5 deg per m/s^2 of forward acceleration (a surge kicks the bow
+## up) or 0.8 deg per m/s^2 of deceleration (braking digs it in), followed by a spring-damper
+## (about 1.4 s period, damping 0.55: a small overshoot).
+const TRIM_PER_SPEED := 3.0
+const TRIM_SPEED_MAX := 2.0  ## the speed part counts up to 2 x V_FTP
+const TRIM_PER_ACCEL := 0.5
+const TRIM_PER_DECEL := 0.8
+const TRIM_OMEGA := 4.5  ## rad/s
+const TRIM_ZETA := 0.55
+## The signed trim's range: bow up to +14 deg, bow down to -6 deg while braking.
 const TRIM_MAX_DEG := 14.0
 const TRIM_MIN_DEG := -6.0
-const BRAKE_FULL_MPS2 := 8.0  ## brake = deceleration / 8 m/s^2, 0..1 (R_BRAKE)
+const BRAKE_FULL_MPS2 := 10.0  ## brake = deceleration / 10 m/s^2, 0..1 (R_BRAKE)
+const BRAKE_TAU_S := 0.15
 const WAKE_SPEED := 0.6  ## wake = 0.6 x |v| / WAKE_V_FULL + 0.4 x throttle (0..1)
-const WAKE_V_FULL := 7.0
+const WAKE_V_FULL := 21.0
 
 # --- Trainer load while driving (SIM, grade_source "game") ------------------------------------
-const GRADE_BASE_PCT := 0.5  ## water drag: 0.5 % + 0.08 x v^2, at most 3 %
-const GRADE_PER_V2 := 0.08
+const GRADE_BASE_PCT := 0.5  ## water drag: 0.5 % + 2 x (v / V_FTP)^2, at most 3 %
+const GRADE_PER_VN2 := 2.0
 const GRADE_MAX_PCT := 3.0  ## inside the governor's warm-up range (-2 .. +3 %)
 const GRADE_STEP_PCT := 0.1  ## a new grade goes out when it moved this much
 const GRADE_EVERY_TICKS := 10  ## and at most twice a second

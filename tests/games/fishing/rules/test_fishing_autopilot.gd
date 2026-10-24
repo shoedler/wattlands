@@ -72,10 +72,10 @@ func test_menu_picks_turn_at_the_edge_and_drive_on_short_of_the_stop() -> void:
 	r.x_m = st.world.edge_x_m()
 	r.stop_x = 1000.0
 	assert_eq(FishingAutopilot.menu_pick(st, r, false), 2, "turn at the edge")
-	r.x_m = 500.0
-	r.stop_x = 1500.0
+	r.x_m = 1000.0
+	r.stop_x = 2000.0
 	assert_eq(FishingAutopilot.menu_pick(st, r, false), 1, "drive on to the stop")
-	r.stop_x = 520.0
+	r.stop_x = 1020.0
 	assert_eq(FishingAutopilot.menu_pick(st, r, false), 0, "cast here")
 	st.time_up = true
 	assert_eq(FishingAutopilot.menu_pick(st, r, false), -1, "time is up: wait")

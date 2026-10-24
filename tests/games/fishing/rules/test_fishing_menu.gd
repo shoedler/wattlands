@@ -27,7 +27,7 @@ func _species_of(h: H) -> Array:
 
 
 func test_hints_come_from_the_zone_and_sit_in_order_of_dx() -> void:
-	var h := _at_menu(2600.0)
+	var h := _at_menu(5200.0)
 	var r := h.rider()
 	assert_eq(h.state.world.zone_at(r.x_m), "reef")
 	for id: String in _species_of(h):
@@ -54,7 +54,7 @@ func test_grouper_hints_hold_just_above_the_floor_in_the_deep() -> void:
 	var h := H.new()
 	h.setup("roam_60", 1, 1)
 	var r := h.rider()
-	r.x_m = 7200.0
+	r.x_m = 14400.0
 	var grouper := FishingConst.species_index("grouper")
 	var found := 0
 	for k in 60:
@@ -73,7 +73,7 @@ func test_the_abyss_offers_the_legendary_fish() -> void:
 	var h := H.new()
 	h.setup("roam_60", 1, 1)
 	var r := h.rider()
-	r.x_m = 8600.0
+	r.x_m = 17200.0
 	FishingRules.new_hints(h.state, r)
 	assert_eq(_species_of(h), ["oarfish", "oarfish", "oarfish"])
 

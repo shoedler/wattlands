@@ -7,11 +7,11 @@ extends RefCounted
 ##
 ## Free Roam, per rider (phases from FishingPlanBuilder.roam):
 ##   DRIVE  the prop is engaged: P_eff drives the boat (FishingBoat); the trainer is in SIM with
-##          the course grade 0.5 % + 0.08 v^2 (<= 3 %). P_eff under 20 % FTP-equivalent (or
+##          the course grade 0.5 % + 2 (v / 15 m/s)^2 (<= 3 %). P_eff under 20 % FTP-equivalent (or
 ##          Autopilot reaching its stop) frees the prop: DRIFT. Driving into the edge or the dock
 ##          wall stops the boat: MENU.
-##   DRIFT  the boat slows; P_eff >= 20 % engages the prop again (not for Autopilot); stopped
-##          (|v| < 0.15 m/s): MENU.
+##   DRIFT  the boat brakes (about 3 s from cruise); P_eff >= 20 % engages the prop again (not
+##          for Autopilot); stopped (|v| < 0.3 m/s): MENU.
 ##   MENU   the light menu: cast at one of the fish on offer here (hints drawn from the zone's
 ##          species), drive on, turn around. Left/right + confirm; pedal_nav riders also scan, pick
 ##          with a surge, and auto-confirm after two scan cycles; Autopilot picks after 1 s.
