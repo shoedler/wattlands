@@ -20,7 +20,7 @@ static func _verdict(id: String, problems: Array[String], runs: int) -> Dictiona
 		return {"id": id, "ok": true, "text": "%s skipped (no applicable run)" % id}
 	var text := "%s %s (%d runs)" % [id, "met" if problems.is_empty() else "MISSED", runs]
 	if not problems.is_empty():
-		text += ": " + "; ".join(problems.slice(0, 6))
+		text += ": " + "; ".join(problems.slice(0, 40))
 	return {"id": id, "ok": problems.is_empty(), "text": text}
 
 
@@ -103,7 +103,10 @@ static func t3(results: Array) -> Dictionary:
 				continue
 			heavy += 1
 			var at := "crew 3 seed %d t=%.0f" % [r["seed"], s["t"]]
-			if float(s["build_s"]) < 18.0 or float(s["build_s"]) > 35.0:
+			# Like check_sims.mjs: the first shell of a segment is only held to the maximum
+			# (pressure holds across a checkpoint).
+			var too_fast := float(s["build_s"]) < 18.0 and not bool(s.get("first", false))
+			if too_fast or float(s["build_s"]) > 35.0:
 				problems.append("%s: built in %.1f s" % [at, s["build_s"]])
 			if float(s["grade0_s"]) < 6.0:
 				problems.append("%s: %.1f s at grade 0" % [at, s["grade0_s"]])

@@ -144,7 +144,8 @@ func _absorb() -> void:
 		var s: Dictionary = _st.get(peer, {})
 		if s.is_empty():
 			continue
-		if str(d.get("mode", "")) == Wl.ERG and d.has("target_pct"):
+		# A bank directive carries only target_pct (no mode): it applies in the rider's ERG phase.
+		if str(d.get("mode", Wl.ERG)) == Wl.ERG and d.has("target_pct"):
 			s["directed_pct"] = float(d["target_pct"])
 		if d.has("mode_grade"):
 			(s["grades"] as Dictionary)[str(d.get("reason", ""))] = float(d["mode_grade"])

@@ -40,6 +40,9 @@ var dirs: TankFakes.Directives = null
 var hud: TankFakes.Hud = null
 
 var events: Array[Dictionary] = []
+## The events with the game time `_t` of their tick (for probes and debugging).
+var events_t: Array[Dictionary] = []
+var _now: float = 0.0
 var event_counts: Dictionary = {}
 var max_enemies: int = 0
 var max_shells: int = 0
@@ -52,6 +55,8 @@ var _shells: Array[Dictionary] = []
 var _ready_since: float = 0.0
 var _was_busy: bool = false
 var _g0_ticks: int = 0
+var _phase_seen: int = -1
+var _phase_t: float = 0.0
 var _drive: Dictionary = {}
 var _kills: Array[int] = [0, 0, 0, 0, 0, 0, 0]
 
@@ -140,6 +145,7 @@ func execute(config: Dictionary) -> Dictionary:
 
 
 func _step(tick: int, t: float) -> void:
+	_now = t
 	var raw := {}
 	for p in ctx.players:
 		raw[p.peer_id] = TankAutopilot.intents(state, p.peer_id)
@@ -179,6 +185,9 @@ func _on_cue(_kind: String, data: Dictionary) -> void:
 
 func _on_event(e: Dictionary) -> void:
 	events.append(e)
+	var et := e.duplicate()
+	et["_t"] = _now
+	events_t.append(et)
 	var type := str(e.get("type", ""))
 	event_counts[type] = int(event_counts.get(type, 0)) + 1
 	if type == TankEvents.KILL:
@@ -189,6 +198,9 @@ func _on_event(e: Dictionary) -> void:
 func _observe(t: float, evs: Array[Dictionary]) -> void:
 	_drain = []
 	var sg := state.seg
+	if sg.phase_index != _phase_seen:
+		_phase_seen = sg.phase_index
+		_phase_t = t
 	var dyn := state.station(TankIds.ENGINE_DYNAMO)
 	if dyn != null and dyn.peer != 0 and FIGHT_SEGS.has(sg.seg):
 		var pct := riders.applied_pct(dyn.peer)
@@ -224,7 +236,10 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 							"index": sg.phase_index,
 							"seg": sg.seg,
 							"shell": int(e.get("sh", 0)),
-							"build_s": t - _ready_since,
+							# Like check_sims.mjs: pressure holds across a checkpoint, so a shell is
+							# timed from the later of the last cycle's end and the segment start.
+							"build_s": t - maxf(_ready_since, _phase_t),
+							"first": _ready_since <= _phase_t,
 							"grade0_s": 0.0,
 						}
 					)
