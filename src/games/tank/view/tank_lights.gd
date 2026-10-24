@@ -8,12 +8,16 @@ extends Node2D
 
 ## Most halos drawn in a frame; extra adds are ignored (the cap keeps the layer at one cheap quad batch).
 const MAX_LIGHTS := 96
+## The muzzle flash's light radius (art px).
+const WASH_RADIUS := 150.0
 
 ## Halo count this frame.
 var count: int = 0
-## A whole-view additive wash (the muzzle flash lighting the scene), 0 .. 1 and its colour.
+## The muzzle flash lighting the scene around the gun, 0 .. 1, its colour and centre: a radial
+## additive light of WASH_RADIUS px falling off fast (never a full-screen grade).
 var wash: float = 0.0
 var wash_color: Color = TankPalette.AMBER
+var wash_pos: Vector2 = Vector2.ZERO
 
 var _pos: PackedVector2Array = PackedVector2Array()
 ## Reflection streaks and specular lines this frame: [a, b, colour, width].
@@ -108,10 +112,13 @@ func intensity_near(at: Vector2, radius: float) -> float:
 
 func _draw() -> void:
 	if wash > 0.004:
-		draw_rect(
-			Rect2(0, 0, TankConst.SCREEN_W, TankConst.SCREEN_H),
-			Color(wash_color.r, wash_color.g, wash_color.b, wash * wash * 0.3)
-		)
+		# Two stacked radial glows: a wide soft throw and a hot core, so the light falls off fast.
+		var big := Vector2(WASH_RADIUS, WASH_RADIUS)
+		var wc := Color(wash_color.r, wash_color.g, wash_color.b, wash * 0.55)
+		draw_texture_rect(_glow, Rect2(wash_pos - big, big * 2.0), false, wc)
+		var core := big * 0.4
+		wc.a = wash * 0.5
+		draw_texture_rect(_glow, Rect2(wash_pos - core, core * 2.0), false, wc)
 	for i in count:
 		var r := _radius[i]
 		draw_texture_rect(

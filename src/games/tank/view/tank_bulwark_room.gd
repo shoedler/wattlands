@@ -89,31 +89,64 @@ func paint_more(item: Node2D) -> void:
 	var active := active_output()
 	for i in outputs.size():
 		_gear(item, outputs[i], gears[i].angle() if i < gears.size() else 0.0, i == active)
-	var tip := lever_tip()
-	item.draw_line(pivot, tip, TankPalette.IRON_DARK, 2.0)
-	item.draw_line(pivot + Vector2(0, -1), tip + Vector2(0, -1), TankPalette.STEEL, 1.0)
-	item.draw_circle(pivot, 2.5, TankPalette.IRON)
-	item.draw_rect(Rect2(pivot.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.STEEL_PALE)
-	item.draw_circle(tip, 1.5, TankPalette.STEEL_LIGHT)
+	_lever(item, active)
+
+
+## The lever: a riveted pivot plate with three detent notches (one toward each output, the engaged
+## one lit amber), a 2 px rod with a lit top edge from the pivot to the output it points at, and a
+## knob with a lit pixel at its tip.
+func _lever(item: Node2D, active: int) -> void:
+	# The drawn rod stops short of the output it points at, so its knob stands clear of the gear.
+	var full := lever_tip() - pivot
+	var tip := pivot + full.normalized() * clampf(full.length() - 3.0, 6.0, 11.0)
+	item.draw_circle(pivot, 4.5, TankPalette.BLACK)
+	item.draw_arc(pivot, 4.0, 0.0, TAU, 16, TankPalette.STEEL_DARK, 1.0)
+	for i in outputs.size():
+		var dir := (outputs[i] - pivot).normalized()
+		var notch := (pivot + dir * 4.0).round()
+		var col := TankPalette.AMBER if i == active else TankPalette.STEEL_DARK
+		item.draw_rect(Rect2(notch - Vector2(0.5, 0.5), Vector2(1, 1)), col)
+	var d := tip - pivot
+	var n := Vector2(-d.y, d.x).normalized()
+	if n.y > 0.0:
+		n = -n
+	item.draw_line(pivot, tip, TankPalette.STEEL, 2.0)
+	item.draw_line(pivot + n, tip + n, TankPalette.STEEL_BRIGHT, 1.0)
+	item.draw_rect(Rect2(pivot.round() - Vector2(1, 1), Vector2(3, 3)), TankPalette.STEEL)
+	item.draw_rect(Rect2(pivot.round(), Vector2(1, 1)), TankPalette.COAL)
+	var k := tip.round()
+	item.draw_rect(Rect2(k - Vector2(2, 2), Vector2(4, 4)), TankPalette.BLACK)
+	item.draw_rect(Rect2(k - Vector2(1, 1), Vector2(3, 3)), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(k - Vector2(1, 1), Vector2(2, 1)), TankPalette.SILVER)
 	if active >= 0:
-		item.draw_rect(Rect2(tip.round(), Vector2(1, 1)), TankPalette.AMBER)
+		item.draw_rect(Rect2(k, Vector2(1, 1)), TankPalette.AMBER)
 
 
-## One output gear at `c` turned by `ang`: a dark disc, teeth whose diesel-side (left, upper) edges
-## catch the amber light, a hub; the active gear's teeth and hub lit brighter.
+## One output gear at `c` turned by `ang`. Only the engaged gear is lit: a warm rim, amber teeth and
+## a lit hub; the idle ones stay dark iron with no amber anywhere, so the active output reads at once.
 func _gear(item: Node2D, c: Vector2, ang: float, on: bool) -> void:
-	var body := TankPalette.STEEL_DARK if on else TankPalette.IRON
-	var tooth := TankPalette.STEEL_LIGHT if on else TankPalette.STEEL_DARK
+	var body := TankPalette.STEEL_DARK if on else TankPalette.IRON_DARK
+	var tooth := TankPalette.AMBER if on else TankPalette.IRON
 	item.draw_circle(c, GEAR_R + 1.5, TankPalette.BLACK)
 	item.draw_circle(c, GEAR_R - 0.5, body)
 	for k in GEAR_TEETH:
 		var d := Vector2.from_angle(ang + TAU * float(k) / float(GEAR_TEETH))
-		var lit := d.x < 0.2 and d.y < 0.4
-		var col := tooth if not lit else (TankPalette.CLAY if on else TankPalette.MUD_LIGHT)
-		item.draw_line(c + d * (GEAR_R - 1.0), c + d * (GEAR_R + 1.5), col, 2.0)
+		item.draw_line(c + d * (GEAR_R - 1.0), c + d * (GEAR_R + 1.5), tooth, 2.0)
+	if on:
+		item.draw_arc(c, GEAR_R - 0.5, PI * 0.7, PI * 1.5, 10, TankPalette.FIRE, 1.0)
 	item.draw_arc(c, GEAR_R - 2.0, 0.0, TAU, 16, TankPalette.COAL, 1.0)
-	item.draw_circle(c, 2.0, TankPalette.STEEL if on else TankPalette.IRON_DARK)
+	item.draw_circle(c, 2.0, TankPalette.STEEL if on else TankPalette.IRON)
 	var spoke := Vector2.from_angle(ang) * 3.5
 	item.draw_line(c - spoke, c + spoke, TankPalette.COAL, 1.0)
 	if on:
-		item.draw_rect(Rect2(c.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.CLAY)
+		item.draw_rect(Rect2(c.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.GLOW_WARM)
+
+
+## The engaged gear glows warm (on top of the diesel's cylinder light).
+func engine_lights() -> void:
+	super.engine_lights()
+	var active := active_output()
+	if active < 0 or active >= outputs.size():
+		return
+	var at := hub.to_layer(rect.position + outputs[active])
+	hub.lights.add(at, 14.0, TankPalette.AMBER, 0.35 + 0.25 * clampf(glow, 0.0, 1.0))

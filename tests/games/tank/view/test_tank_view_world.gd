@@ -68,14 +68,18 @@ func test_enemies_behind_the_tank_are_flipped_and_overlaps_use_two_depth_rows() 
 	assert_eq((light["tint"] as Color).r, 1.0, "the front lane is not dimmed")
 
 
-func test_damaged_enemies_show_an_hp_bar_scaled_by_the_tank() -> void:
+func test_damage_shows_on_the_enemy_not_as_a_floating_bar() -> void:
 	var s := TankFixtures.state(3)
 	var v := U.view_of(self, s)
-	var bars := _rows(v.enemies_layer, "bar")
-	assert_gt(bars.size(), 0)
-	var medium_bar := bars[0]
-	var medium_full := float(TankFixtures.content().enemy_def("medium")["hp"])
-	assert_almost_eq(float(medium_bar["frac"]), 40.0 / medium_full, 1e-4, "of the Citadel's medium")
+	assert_eq(_rows(v.enemies_layer, "bar").size(), 0, "no HP bar on the tank's plane")
+	var before := (_sprites(v.enemies_layer, "enemy_medium")[0]["tint"] as Color).r
+	s.enemy(11).hp -= 5.0
+	v.advance(0.016)
+	var hit := (_sprites(v.enemies_layer, "enemy_medium")[0]["tint"] as Color).r
+	assert_gt(hit, before, "a hit flashes the enemy")
+	U.run(v, 30)
+	var after := (_sprites(v.enemies_layer, "enemy_medium")[0]["tint"] as Color).r
+	assert_almost_eq(after, before, 0.001, "and the flash fades")
 	var small := TankFixtures.state(1)
 	var v1 := U.view_of(self, small)
 	var scale := TankFixtures.content().enemy_scale(TankIds.TANK_BULWARK)
@@ -227,7 +231,7 @@ func test_shells_get_tracers_and_halos_by_type() -> void:
 	var s := TankFixtures.state(3)
 	var v := U.view_of(self, s)
 	var lines := _rows(v.shots_layer, "line")
-	assert_eq(lines.size(), 6, "two tracer segments per shell")
+	assert_eq(lines.size(), 9, "two tracer segments and a hot core per shell")
 	var rects := _rows(v.shots_layer, "rect")
 	var hot := 0
 	for r in rects:
@@ -368,7 +372,8 @@ func test_a_shot_kicks_the_gun_flashes_and_smokes() -> void:
 	assert_gt(v.fx.flash, 0.5, "the muzzle flash lights the scene")
 	assert_gt(v.fx.particles.count_kind(TankParticles.Kind.RING), 0, "a smoke ring")
 	assert_gt(v.fx.particles.count_kind(TankParticles.Kind.BRASS), 0, "brass")
-	assert_gt(v.lights.wash, 0.0, "the whole scene is lit for a moment")
+	assert_gt(v.lights.wash, 0.0, "the scene around the muzzle is lit for a moment")
+	assert_almost_eq(v.lights.wash_pos, v.rig.muzzle_layer(), Vector2(8, 8), "centred on the gun")
 	U.run(v, 12)
 	assert_eq(v.lights.wash, 0.0)
 
@@ -566,27 +571,48 @@ func test_the_halt_line_stands_where_the_road_ends() -> void:
 	var length_m := float(s.content.segment(s.seg.phase_index)["length_m"])
 	s.hull.x_px = TankConst.m_to_px(length_m) - 300.0
 	var v := U.view_of(self, s)
-	var posts: Array[Dictionary] = []
-	for r in _rows(v.props_layer, "rect"):
-		if (r["r"] as Rect2).size == Vector2(3, 46):
-			posts.append(r)
-	assert_eq(posts.size(), 1, "one post with its banner")
+	var posts := _halt_posts(v)
+	assert_eq(posts.size(), 1, "one lamp post at the line")
 	var want := TankConst.m_to_px(length_m) + float(s.hull.hull_w) - s.camera_x()
 	assert_almost_eq((posts[0]["r"] as Rect2).position.x, want, 0.01)
 	s.hull.x_px = 0.0
 	s.tick += 1
 	U.run(v, 90)
-	var far := 0
-	for r in _rows(v.props_layer, "rect"):
-		far += 1 if (r["r"] as Rect2).size == Vector2(3, 46) else 0
+	var far := _halt_posts(v).size()
 	assert_eq(far, 0, "off screen far from the end")
 	var g := TankFixtures.gun_line(1)
 	g.hull.x_px = TankConst.m_to_px(length_m) - 300.0
 	var vg := U.view_of(self, g)
-	var at_gun_line := 0
-	for r in _rows(vg.props_layer, "rect"):
-		at_gun_line += 1 if (r["r"] as Rect2).size == Vector2(3, 46) else 0
+	var at_gun_line := _halt_posts(vg).size()
 	assert_eq(at_gun_line, 0, "only an Advance has a halt line")
+
+
+func test_the_halt_line_is_no_flag() -> void:
+	var s := TankFixtures.state(1)
+	var length_m := float(s.content.segment(s.seg.phase_index)["length_m"])
+	s.hull.x_px = TankConst.m_to_px(length_m) - 300.0
+	var v := U.view_of(self, s)
+	var post: Rect2 = _halt_posts(v)[0]["r"]
+	for r in _rows(v.props_layer, "rect"):
+		var rr: Rect2 = r["r"]
+		if absf(rr.position.x - post.position.x) > 30.0:
+			continue
+		var c: Color = r["c"]
+		if c == TankPalette.AMBER:
+			continue
+		assert_false(
+			rr.size.x >= 10.0 and rr.size.y >= 2.0 and rr.position.y < post.end.y - 8.0,
+			"no banner hangs off the post"
+		)
+		assert_lt(c.get_luminance(), TankPalette.STEEL_LIGHT.get_luminance() + 0.001, "dark steel")
+
+
+func _halt_posts(v: TankView) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for r in _rows(v.props_layer, "rect"):
+		if str(r.get("of", "")) == "halt_line":
+			out.append(r)
+	return out
 
 
 func test_a_station_change_flares_every_lamp() -> void:

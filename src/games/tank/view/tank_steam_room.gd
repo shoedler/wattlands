@@ -13,6 +13,8 @@ const GAUGE_RADIUS := 6.0
 ## The cradle climbs / falls this fast (rail lengths per second).
 const CRADLE_UP_PER_S := 0.7
 const CRADLE_DOWN_PER_S := 1.6
+## The regulator's spindle height (art px).
+const GOV_H := 18.0
 
 var boiler_pos: Vector2 = Vector2.ZERO
 var gauge_pos: Vector2 = Vector2.ZERO
@@ -45,10 +47,8 @@ func build() -> void:
 	flyball.max_cps = 2.0
 	flyball.auto_process = false
 	flyball.position = Vector2(3, 3)
-	var gov := Sprite2D.new()
-	gov.texture = TankSprites.tex(TankSprites.flyball_id())
-	gov.centered = false
-	flyball.add_child(gov)
+	# The regulator is drawn in code from this part's offset (paint_machinery_front): two balls on
+	# arms over a vertical spindle (the generated sprite read as a pair of scales).
 	add_child(flyball)
 	var boiler := Sprite2D.new()
 	boiler.name = "Boiler"
@@ -56,12 +56,6 @@ func build() -> void:
 	boiler.centered = false
 	boiler.position = boiler_pos
 	add_child(boiler)
-	var rack := Sprite2D.new()
-	rack.name = "ShellRack"
-	rack.texture = TankSprites.tex("shell_rack")
-	rack.centered = false
-	rack.position = rack_pos
-	add_child(rack)
 	var box := Sprite2D.new()
 	box.name = "Firebox"
 	box.texture = TankSprites.tex("firebox")
@@ -175,26 +169,76 @@ func paint_machinery_front(item: Node2D) -> void:
 		1.0
 	)
 	item.draw_circle(c, 1.0, TankPalette.STEEL_BRIGHT)
+	_governor(item)
+	_rack(item)
 	for r in rack_slots:
 		_shell(item, r)
 
 
-## A shell standing in the rack: a dull brass casing (no yellow: only lights are saturated), a lit
-## left edge, a darker base rim and a dark steel nose.
+## The flyball regulator: a vertical spindle on a base plate, a cap, two arms hinged at the top whose
+## balls swing out with the engine's speed and bob with the stroke, and a collar the lower links
+## pull up the spindle. No crossbar.
+func _governor(item: Node2D) -> void:
+	var top := flyball.position + Vector2(8, 2)
+	var bob := flyball.offset()
+	var spread := deg_to_rad(22.0 + 34.0 * clampf(input.speed(), 0.0, 1.0))
+	var base_y := top.y + GOV_H
+	item.draw_rect(Rect2(top.x - 3, base_y, 7, 2), TankPalette.IRON)
+	item.draw_rect(Rect2(top.x - 3, base_y, 7, 1), TankPalette.STEEL_DARK)
+	item.draw_line(top, Vector2(top.x, base_y), TankPalette.STEEL_DARK, 1.0)
+	item.draw_rect(Rect2(top.x, top.y - 2, 1, 2), TankPalette.STEEL)
+	var arm := 8.0
+	var hinge := top + Vector2(0, 1)
+	var collar_y := hinge.y + cos(spread) * arm * 1.4 - bob
+	for side: float in [-1.0, 1.0]:
+		var ball := hinge + Vector2(side * sin(spread), cos(spread)) * arm + Vector2(0, -bob * 0.5)
+		item.draw_line(hinge, ball, TankPalette.STEEL_DARK, 1.0)
+		item.draw_line(ball, Vector2(top.x, collar_y), TankPalette.IRON_DARK, 1.0)
+		item.draw_circle(ball, 2.6, TankPalette.STEEL)
+		item.draw_circle(ball + Vector2(0.4, 0.4), 1.6, TankPalette.STEEL_DARK)
+		item.draw_rect(
+			Rect2(ball.round() + Vector2(-1, -2), Vector2(1, 1)), TankPalette.STEEL_BRIGHT
+		)
+	item.draw_rect(Rect2(top.x - 1, collar_y - 1, 3, 2), TankPalette.STEEL)
+
+
+## The shell rack: two dark posts and two straps holding the shells upright.
+func _rack(item: Node2D) -> void:
+	var r := Rect2(rack_pos, TankSprites.size("shell_rack"))
+	for x: float in [r.position.x + 1.0, r.end.x - 3.0]:
+		item.draw_rect(Rect2(x, r.position.y + 4.0, 2, r.size.y - 4.0), TankPalette.IRON_DARK)
+		item.draw_rect(Rect2(x, r.position.y + 4.0, 1, r.size.y - 4.0), TankPalette.IRON)
+	for y: float in [r.position.y + 16.0, r.end.y - 6.0]:
+		item.draw_rect(Rect2(r.position.x + 1.0, y, r.size.x - 2.0, 2), TankPalette.IRON_DARK)
+		item.draw_rect(Rect2(r.position.x + 1.0, y, r.size.x - 2.0, 1), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(r.position.x, r.end.y - 2.0, r.size.x, 2), TankPalette.IRON)
+
+
+## A shell standing in the rack: a dull brass casing (no yellow: only lights are saturated) with a
+## lit left edge and a darker base rim, a driving band, and a steel projectile with an ogive nose
+## (a rounded 5 px taper, not a spike).
 static func _shell(item: Node2D, r: Rect2) -> void:
-	var body := Rect2(r.position + Vector2(0, 7), Vector2(r.size.x, r.size.y - 7))
+	var x := r.position.x
+	var w := r.size.x
+	var body := Rect2(x, r.position.y + 12.0, w, r.size.y - 12.0)
 	item.draw_rect(body, TankPalette.MUD_LIGHT)
-	item.draw_rect(
-		Rect2(body.position.x + 1.0, body.position.y, 1, body.size.y), TankPalette.MUD_PALE
+	item.draw_rect(Rect2(x + 1.0, body.position.y, 1, body.size.y), TankPalette.MUD_PALE)
+	item.draw_rect(Rect2(x, body.end.y - 3, w, 3), TankPalette.MUD)
+	var proj := Rect2(x, r.position.y + 7.0, w, 5.0)
+	item.draw_rect(proj, TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(x + 1.0, proj.position.y, 1, proj.size.y), TankPalette.STEEL)
+	item.draw_rect(Rect2(x, proj.end.y - 1.0, w, 1), TankPalette.CLAY)
+	var y := proj.position.y
+	var nose := PackedVector2Array(
+		[
+			Vector2(x, y),
+			Vector2(x + 0.5, y - 2.0),
+			Vector2(x + w * 0.3, y - 4.0),
+			Vector2(x + w * 0.5, y - 5.0),
+			Vector2(x + w * 0.7, y - 4.0),
+			Vector2(x + w - 0.5, y - 2.0),
+			Vector2(x + w, y),
+		]
 	)
-	item.draw_rect(Rect2(body.position.x, body.end.y - 3, body.size.x, 3), TankPalette.MUD)
-	item.draw_colored_polygon(
-		PackedVector2Array(
-			[
-				Vector2(r.position.x, r.position.y + 7),
-				Vector2(r.position.x + r.size.x * 0.5, r.position.y),
-				Vector2(r.end.x, r.position.y + 7)
-			]
-		),
-		TankPalette.STEEL
-	)
+	item.draw_colored_polygon(nose, TankPalette.STEEL_DARK)
+	item.draw_line(Vector2(x + 1.0, y - 1.0), Vector2(x + w * 0.4, y - 4.0), TankPalette.STEEL, 1.0)

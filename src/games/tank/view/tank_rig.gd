@@ -15,6 +15,8 @@ const BLADE_EASE_PER_S := 3.0
 const BERM_MAX_H := 24.0
 const BERM_W := 30.0
 const SLEW_HOLD_S := 0.4
+## Barbette width under the secondary turrets (art px).
+const BARBETTE_W := 12.0
 
 var tank: String = ""
 var def: Dictionary = {}
@@ -159,8 +161,8 @@ func _build_links() -> void:
 		# drive: down from the flywheel through the room floor into the x-ray belly below the rooms,
 		# along it to the rear, then down onto the drive sprocket's teeth. It runs below the room's
 		# frame, never along the frame's rivet line.
-		drive_chain = _chain("DriveChain", 70.0, TankPalette.CLAY, TankPalette.IRON_DARK)
-		drive_chain.pitch_px = 3.0
+		drive_chain = _chain("DriveChain", 70.0, TankPalette.STEEL_PALE, TankPalette.COAL)
+		drive_chain.pitch_px = 4.0
 		drive_chain.link_px = 2.0
 		drive_chain.width_px = 2.0
 		drive_chain.closed = false
@@ -281,6 +283,11 @@ func _build_stack() -> void:
 
 
 func _build_guns() -> void:
+	if not (def.get("secondaries", []) as Array).is_empty():
+		var bb := TankPainter.new()
+		bb.name = "Barbettes"
+		bb.painter = _paint_barbettes
+		add_child(bb)
 	for sd: Variant in def.get("secondaries", []):
 		var s := TankSecondaryView.new()
 		s.assemble(sd)
@@ -408,6 +415,9 @@ func _effects(state: TankState, dt: float) -> void:
 			else dynamo_room.input.frac
 		)
 		fx.dynamo_sparks("arc", hub.to_layer(dynamo_room.armature_hull_pos()), frac, dt)
+	if rails != null and hub.lights != null:
+		var lamp := hub.to_layer(cradle_pos().round() + Vector2(2.5, 0.5))
+		hub.lights.add(lamp, 6.0, TankPalette.AMBER, 0.55)
 	if steam_room != null:
 		if steam_room.take_stroke():
 			fx.steam_puff(hub.to_layer(steam_room.chimney_hull()))
@@ -445,8 +455,19 @@ func fire_main(strength: float = 0.6) -> void:
 	if hub == null or hub.fx == null:
 		return
 	hub.fx.muzzle_blast(muzzle_layer(), muzzle_dir(), strength)
-	var back := Vector2(-signf(turret.scale.x) * 0.6, -1.0).normalized()
-	hub.fx.brass(hub.to_layer(turret.ring + Vector2(-14.0 * signf(turret.scale.x), -22.0)), back)
+	# The spent casing leaves through the turret's rear hatch, up and back, tumbling.
+	var back := Vector2(-signf(turret.scale.x) * 0.8, -1.0).normalized()
+	hub.fx.brass(hub.to_layer(turret_rear()), back)
+
+
+## The turret's rear hatch in the hull frame for the shown facing (where casings are ejected).
+func turret_rear() -> Vector2:
+	var tr := TankRigs.rect((def.get("turret", {}) as Dictionary).get("rect", [0, -30, 80, 30]))
+	var x := tr.position.x + 5.0
+	var y := tr.position.y + tr.size.y * 0.4
+	if turret.scale.x < 0.0:
+		x = turret.ring.x * 2.0 - x
+	return Vector2(x, y)
 
 
 ## Secondary `index` (0 fore, 1 aft) fired.
@@ -541,23 +562,76 @@ func _paint_stack(item: Node2D) -> void:
 	item.draw_rect(Rect2(p.x - 3, p.y - 14, 6, 2), TankPalette.SOOT)
 
 
-## The drive sprocket in x-ray where the diesel's chain ends: ten square teeth on a dark rim, turning
-## with the running gear, a lighter hub with the chain's amber catch-light, unlike the road wheels.
+## The barbette under every secondary turret, so none floats over the sloped glacis or the low rear
+## deck: a riveted steel cylinder BARBETTE_W px wide from the turret's underside down into the hull
+## (the lowest deck row under it, measured on the sprite), shaded round (a lit left edge, a dark
+## right one), with a collar under the turret and a rivet row.
+func _paint_barbettes(item: Node2D) -> void:
+	for sd: Variant in def.get("secondaries", []):
+		var sdd: Dictionary = sd
+		var r := barbette_rect(TankRigs.rect(sdd.get("rect")), int(sdd.get("facing", 1)))
+		if r.size.y < 1.0:
+			continue
+		var shades: Array[Color] = [
+			TankPalette.STEEL,
+			TankPalette.STEEL_DARK,
+			TankPalette.IRON,
+			TankPalette.IRON,
+			TankPalette.IRON_DARK,
+			TankPalette.COAL,
+		]
+		var w := int(r.size.x)
+		for i in w:
+			var k := int(float(i) / float(w) * float(shades.size()))
+			item.draw_rect(
+				Rect2(r.position.x + float(i), r.position.y, 1, r.size.y), shades[mini(k, 5)]
+			)
+		item.draw_rect(
+			Rect2(r.position.x - 1.0, r.position.y, r.size.x + 2.0, 2.0), TankPalette.IRON
+		)
+		item.draw_rect(
+			Rect2(r.position.x - 1.0, r.position.y, r.size.x + 2.0, 1.0), TankPalette.STEEL
+		)
+		item.draw_rect(
+			Rect2(r.position.x - 1.0, r.position.y + 2.0, r.size.x + 2.0, 1.0), TankPalette.COAL
+		)
+		var x := r.position.x + 2.0
+		while x < r.end.x - 1.0:
+			item.draw_rect(Rect2(x, r.position.y + 4.0, 1, 1), TankPalette.STEEL_PALE)
+			x += 3.0
+
+
+## The barbette rect (hull frame) under a secondary turret drawn at `tr` facing `facing`: under its
+## rear half (toward the deck, away from the gun), from 3 px above its bottom down to 2 px below the
+## lowest deck row under the barbette (height 0 when the turret already sits on the deck).
+func barbette_rect(tr: Rect2, facing: int = 1) -> Rect2:
+	var cx := roundf(tr.position.x + tr.size.x * (0.38 if facing > 0 else 0.62))
+	var x0 := int(cx - BARBETTE_W * 0.5)
+	var top := tr.end.y - 3.0
+	var deck := -1
+	for x in range(x0, x0 + int(BARBETTE_W)):
+		if x >= 0 and x < _col_top.size() and _col_top[x] >= 0:
+			deck = maxi(deck, _col_top[x])
+	if deck < 0:
+		deck = int(top)
+	var bottom := float(deck) + 2.0
+	return Rect2(float(x0), top, BARBETTE_W, maxf(bottom - top, 0.0))
+
+
+## The drive sprocket in x-ray where the diesel's chain ends: a lighter toothed ring whose ten teeth
+## are cut by 1 px dark notches, turning with the running gear, on a dark disc with a lit hub and the
+## chain's amber catch-light, unlike the road wheels.
 func _paint_sprocket(item: Node2D) -> void:
 	var c := TankRigs.vec(def.get("drive_sprocket"))
 	var ang := gear.wheels[0].angle() if not gear.wheels.is_empty() else 0.0
 	var r := TankRunningGear.SPROCKET_R
-	item.draw_circle(c, r - 1.5, TankPalette.IRON_DARK)
+	item.draw_circle(c, r + 0.5, TankPalette.BLACK)
+	item.draw_circle(c, r - 0.5, TankPalette.STEEL)
+	item.draw_arc(c, r - 0.5, PI * 1.1, PI * 1.8, 10, TankPalette.STEEL_PALE, 1.0)
+	item.draw_circle(c, r - 3.0, TankPalette.IRON_DARK)
 	for i in 10:
 		var d := Vector2.from_angle(ang + TAU * float(i) / 10.0)
-		var lit := d.y < -0.3 and d.x > -0.2
-		item.draw_line(
-			c + d * (r - 2.5),
-			c + d * (r + 0.5),
-			TankPalette.STEEL if lit else TankPalette.IRON,
-			2.0
-		)
-	item.draw_arc(c, r - 2.5, 0.0, TAU, 20, TankPalette.COAL, 1.0)
+		item.draw_line(c + d * (r - 3.0), c + d * (r + 0.5), TankPalette.COAL, 1.0)
 	item.draw_circle(c, 3.5, TankPalette.STEEL_DARK)
 	item.draw_circle(c, 2.0, TankPalette.STEEL_LIGHT)
 	item.draw_rect(Rect2(c.round() + Vector2(-1, -2), Vector2(1, 1)), TankPalette.CLAY)
@@ -624,9 +698,9 @@ func _paint_rails(item: Node2D) -> void:
 		return
 	var a := path[0]
 	var b := path[1]
-	# The x-ray slot the hoist runs in, dark, so the rails read against the hull's steel.
-	var slot := PackedVector2Array(path)
-	item.draw_polyline(slot, TankPalette.SOOT, 5.0)
+	# The x-ray slot the hoist climbs in, dark, so the rails read against the hull's steel; along the
+	# deck to the breech the feed is only a 1 px recessed line with a lit lip (no dark bar).
+	item.draw_line(a, b, TankPalette.SOOT, 5.0)
 	for dx in [-2.0, 2.0]:
 		item.draw_line(a + Vector2(dx, 0), b + Vector2(dx, 0), TankPalette.STEEL_LIGHT, 1.0)
 	var y := a.y
@@ -634,9 +708,9 @@ func _paint_rails(item: Node2D) -> void:
 		item.draw_line(Vector2(a.x - 2, y), Vector2(a.x + 2, y), TankPalette.IRON, 1.0)
 		y -= 6.0
 	for i in range(2, path.size()):
-		item.draw_line(path[i - 1], path[i], TankPalette.IRON_DARK, 3.0)
+		item.draw_line(path[i - 1], path[i], TankPalette.COAL, 1.0)
 		item.draw_line(
-			path[i - 1] + Vector2(0, -1), path[i] + Vector2(0, -1), TankPalette.STEEL, 1.0
+			path[i - 1] + Vector2(0, -1), path[i] + Vector2(0, -1), TankPalette.STEEL_DARK, 1.0
 		)
 	if diesel_room is TankBulwarkRoom:
 		var bw := diesel_room as TankBulwarkRoom
@@ -644,12 +718,22 @@ func _paint_rails(item: Node2D) -> void:
 		var lit := TankPalette.CLAY if bw.active_output() == 2 else TankPalette.STEEL_DARK
 		item.draw_line(out, a, TankPalette.IRON_DARK, 3.0)
 		item.draw_line(out + Vector2(0, -1), a + Vector2(0, -1), lit, 1.0)
-	var at := along(path, cradle_t())
-	item.draw_rect(Rect2(at.x - 3, at.y - 2, 6, 3), TankPalette.STEEL)
-	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.MUD_PALE)
-	item.draw_rect(Rect2(at.x - 2, at.y - 10, 1, 8), TankPalette.CLAY)
-	item.draw_rect(Rect2(at.x - 2, at.y - 4, 4, 2), TankPalette.MUD_LIGHT)
-	item.draw_rect(Rect2(at.x - 1, at.y - 12, 2, 2), TankPalette.STEEL)
+	var at := cradle_pos().round()
+	# The cradle: a 6 x 4 steel block on the rails holding a shell upright, a small amber lamp on it.
+	item.draw_rect(Rect2(at.x - 3, at.y - 1, 6, 4), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(at.x - 3, at.y - 1, 6, 1), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(at.x - 3, at.y + 2, 6, 1), TankPalette.COAL)
+	item.draw_rect(Rect2(at.x - 1, at.y - 8, 3, 7), TankPalette.MUD_LIGHT)
+	item.draw_rect(Rect2(at.x - 1, at.y - 8, 1, 7), TankPalette.MUD_PALE)
+	item.draw_rect(Rect2(at.x - 1, at.y - 3, 3, 1), TankPalette.MUD)
+	item.draw_rect(Rect2(at.x - 1, at.y - 10, 3, 2), TankPalette.STEEL)
+	item.draw_rect(Rect2(at.x, at.y - 11, 1, 1), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(at.x + 2, at.y, 1, 1), TankPalette.AMBER)
+
+
+## The shell cradle's position on the hoist path (hull frame).
+func cradle_pos() -> Vector2:
+	return along(rail_path(), cradle_t())
 
 
 ## The hull's flat roof in layer coordinates (x, y, width; height 0) for the wet-steel specular:
@@ -737,16 +821,23 @@ func _paint_dozer(item: Node2D) -> void:
 			Vector2(bx - 1.0, by + 8.0),
 		]
 	)
+	# Shaded like the hull: a dark iron slab, a steel concave face, a 1 px lit lip on top, a rust
+	# streak down the face, a dark bottom edge and mud packed on the cutting edge.
 	item.draw_colored_polygon(face, TankPalette.IRON)
 	item.draw_polyline(
 		PackedVector2Array([face[1], face[2], face[3], face[4], face[5]]),
 		TankPalette.STEEL_DARK,
 		1.0
 	)
-	item.draw_line(face[0], face[1], TankPalette.SLATE, 1.0)
-	item.draw_line(Vector2(bx, by + 15.0), Vector2(bx + 7.0, by + 15.0), TankPalette.COAL, 1.0)
-	item.draw_rect(Rect2(bx + 3.0, by + 12.0, 4, 3), TankPalette.MUD)
-	item.draw_rect(Rect2(bx + 4.0, by + 11.0, 2, 1), TankPalette.MUD_LIGHT)
+	item.draw_line(face[0], face[1], TankPalette.STEEL_LIGHT, 1.0)
+	item.draw_line(
+		Vector2(bx + 3.0, by + 2.0), Vector2(bx + 2.0, by + 9.0), TankPalette.RUST_DARK, 1.0
+	)
+	item.draw_line(
+		Vector2(bx - 1.0, by + 15.0), Vector2(bx + 7.0, by + 15.0), TankPalette.COAL, 1.0
+	)
+	item.draw_rect(Rect2(bx + 2.0, by + 12.0, 5, 3), TankPalette.MUD)
+	item.draw_rect(Rect2(bx + 3.0, by + 11.0, 3, 1), TankPalette.MUD_LIGHT)
 	if berm_hp > 0.5:
 		var h := 3.0 + (BERM_MAX_H - 3.0) * clampf(berm_hp / 40.0, 0.0, 1.0)
 		var pts := PackedVector2Array(

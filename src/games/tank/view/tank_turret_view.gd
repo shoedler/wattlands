@@ -87,16 +87,27 @@ func muzzle_hull() -> Vector2:
 	return ring + Vector2(local.x * scale.x, local.y)
 
 
+## The main gun: a 3 px tube (a 1 px lit top in STEEL_BRIGHT, a steel middle, a 1 px dark underside)
+## along the elevation, a recoil sleeve at the breech and a plain cylindrical muzzle brake (a 4 x 5
+## block with a dark baffle slot), drawn on the barrel's own axis so it stays a clean tube at any
+## elevation (no chevron at the tip).
 func _paint_barrel(item: Node2D) -> void:
 	var a := deg_to_rad(elev)
-	var d := Vector2(cos(a), -sin(a))
-	var n := Vector2(-d.y, d.x)
-	var base := -d * recoil
-	var tip := d * (barrel_px - recoil)
-	# Barrel body, a lighter top edge and a muzzle brake.
-	item.draw_line(base, tip, TankPalette.STEEL_DARK, BARREL_W)
-	item.draw_line(base - n, tip - n, TankPalette.STEEL, 1.0)
-	item.draw_line(tip - d * 5.0, tip, TankPalette.STEEL, BARREL_W + 2.0)
-	item.draw_line(tip - d * 5.0 - n * 2.5, tip - n * 2.5, TankPalette.STEEL_LIGHT, 1.0)
-	# Recoil sleeve at the breech end.
-	item.draw_line(base, base + d * 9.0, TankPalette.STEEL, BARREL_W + 2.0)
+	item.draw_set_transform(Vector2.ZERO, -a, Vector2.ONE)
+	var x0 := -recoil
+	var x1 := barrel_px - recoil
+	var length := x1 - x0
+	# Whole-pixel rows (the trunnion sits on a pixel corner): -2..1 is three rows.
+	item.draw_rect(Rect2(x0, -2.0, length, 3.0), TankPalette.STEEL)
+	item.draw_rect(Rect2(x0, -2.0, length, 1.0), TankPalette.STEEL_BRIGHT)
+	item.draw_rect(Rect2(x0, 0.0, length, 1.0), TankPalette.IRON_DARK)
+	# The recoil sleeve.
+	item.draw_rect(Rect2(x0, -3.0, 10.0, 5.0), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(x0, -3.0, 10.0, 1.0), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(x0, 1.0, 10.0, 1.0), TankPalette.COAL)
+	# The muzzle brake.
+	item.draw_rect(Rect2(x1 - 4.0, -3.0, 4.0, 5.0), TankPalette.IRON)
+	item.draw_rect(Rect2(x1 - 4.0, -3.0, 4.0, 1.0), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(x1 - 4.0, 1.0, 4.0, 1.0), TankPalette.COAL)
+	item.draw_rect(Rect2(x1 - 2.0, -2.0, 1.0, 3.0), TankPalette.SOOT)
+	item.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

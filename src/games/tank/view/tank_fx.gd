@@ -12,7 +12,7 @@ const SLOW_FRAME_S := 0.0185
 const SLOWEST_FRAME_S := 0.032
 const MIN_QUALITY := 0.3
 ## The scene-lighting flash of a gun lasts about this long.
-const FLASH_S := 0.11
+const FLASH_S := 0.13
 
 var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var particles: TankParticles = TankParticles.new()
@@ -23,6 +23,8 @@ var quality: float = 1.0
 ## The gun's lighting flash, 1 at the shot fading to 0 over FLASH_S.
 var flash: float = 0.0
 var flash_color: Color = TankPalette.AMBER
+## Where the last gun flash is (layer coordinates): the scene is lit around it.
+var flash_pos: Vector2 = Vector2.ZERO
 ## Smoothed frame time (s).
 var frame_time: float = 0.0
 
@@ -102,6 +104,7 @@ func _count(n: int) -> int:
 func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bool = true) -> void:
 	flash = 1.0
 	flash_color = TankPalette.AMBER
+	flash_pos = at
 	var big := 1.0 + heavy * 0.6
 	particles.spawn(
 		TankParticles.Kind.FLASH,
@@ -135,29 +138,31 @@ func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bo
 			0.0,
 			6.0
 		)
+	# The smoke ring: a thick grey torus rolling out along the barrel, growing and thinning.
 	particles.spawn(
 		TankParticles.Kind.RING,
-		at + dir * 8.0,
-		dir * 34.0,
-		0.7,
-		8.0,
-		46.0 * big,
-		Color(0.65, 0.66, 0.68, 0.55),
+		at + dir * 10.0,
+		dir * 30.0 + Vector2(0, -4.0),
+		1.1,
+		10.0,
+		44.0 * big,
+		Color(0.62, 0.62, 0.62, 0.8),
 		0.0,
-		2.0
+		1.6
 	)
-	for _i in _count(6):
-		var v := dir.rotated(r(-0.45, 0.45)) * r(25.0, 120.0)
+	# Powder smoke: a lingering bank of puffs off the muzzle, drifting up and downwind slowly.
+	for _i in _count(9):
+		var v := dir.rotated(r(-0.6, 0.6)) * r(10.0, 70.0) + Vector2(r(-4.0, 4.0), r(-10.0, -2.0))
 		particles.spawn(
 			TankParticles.Kind.SMOKE,
-			at + dir * r(2.0, 12.0),
+			at + dir * r(4.0, 22.0) + Vector2(0, r(-4.0, 4.0)),
 			v,
-			r(1.3, 2.3),
-			9.0,
-			r(26.0, 38.0) * big,
-			Color(0.55, 0.56, 0.58, 0.5),
-			-10.0,
-			1.4
+			r(2.2, 3.6),
+			r(8.0, 12.0),
+			r(28.0, 44.0) * big,
+			Color(0.46, 0.46, 0.46, 0.7),
+			-6.0,
+			1.2
 		)
 	for _i in _count(8):
 		var v := dir.rotated(r(-0.45, 0.45)) * r(110.0, 260.0)
@@ -166,25 +171,26 @@ func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bo
 		)
 	if ground_dust:
 		var gy := float(TankConst.GROUND_Y) - 2.0
-		for _i in _count(5):
+		# The blast kicks the dust up off the road below and ahead of the muzzle.
+		for _i in _count(8):
 			particles.spawn(
 				TankParticles.Kind.DUST,
-				Vector2(at.x + r(-10.0, 10.0), gy),
-				Vector2(r(-45.0, 45.0), r(-26.0, -8.0)),
-				r(0.6, 1.0),
-				7.0,
-				r(22.0, 30.0),
-				Color(0.42, 0.36, 0.28, 0.5),
+				Vector2(at.x + r(-6.0, 34.0), gy),
+				Vector2(r(-30.0, 70.0), r(-30.0, -8.0)),
+				r(0.9, 1.6),
+				8.0,
+				r(24.0, 36.0),
+				Color(0.4, 0.33, 0.25, 0.6),
 				0.0,
-				1.8
+				1.4
 			)
 
 
 ## A spent casing leaves the breech at `at` (dir: roughly up and back).
 func brass(at: Vector2, dir: Vector2) -> void:
-	var v := dir.rotated(r(-0.4, 0.4)) * r(35.0, 75.0) + Vector2(0.0, r(-70.0, -35.0))
+	var v := dir.rotated(r(-0.3, 0.3)) * r(45.0, 80.0) + Vector2(0.0, r(-80.0, -50.0))
 	if particles.spawn(
-		TankParticles.Kind.BRASS, at, v, 1.6, 2.0, 2.0, TankPalette.BRASS, 420.0, 0.2
+		TankParticles.Kind.BRASS, at, v, 2.4, 3.0, 3.0, TankPalette.BRASS, 380.0, 0.2
 	):
 		particles.tumble(r(0.0, TAU), r(-22.0, 22.0))
 
@@ -292,19 +298,19 @@ func impact_sparks(at: Vector2, away: Vector2 = Vector2.UP) -> void:
 	particles.spawn(
 		TankParticles.Kind.FLASH, at, Vector2.ZERO, 0.12, 16.0, 44.0, TankPalette.GLOW_WARM
 	)
-	for _i in _count(9):
+	for _i in _count(16):
 		particles.spawn(
 			TankParticles.Kind.SPARK,
 			at,
-			away.rotated(r(-1.1, 1.1)) * r(70.0, 230.0),
-			r(0.2, 0.55),
+			away.rotated(r(-1.3, 1.3)) * r(70.0, 260.0),
+			r(0.25, 0.6),
 			1.0,
 			1.0,
-			TankPalette.GLOW_WARM,
+			TankPalette.GLOW_WARM if rng.randf() < 0.6 else TankPalette.WHITE_WARM,
 			340.0,
 			0.3
 		)
-	for _i in _count(3):
+	for _i in _count(5):
 		particles.spawn(
 			TankParticles.Kind.EMBER,
 			at,
@@ -316,30 +322,33 @@ func impact_sparks(at: Vector2, away: Vector2 = Vector2.UP) -> void:
 			300.0,
 			0.2
 		)
-	particles.spawn(
-		TankParticles.Kind.SMOKE,
-		at,
-		away * 18.0,
-		r(0.8, 1.3),
-		5.0,
-		18.0,
-		Color(0.4, 0.4, 0.42, 0.4),
-		-10.0,
-		1.2
-	)
+	# A dark smoke column off the struck armour, rising and spreading.
+	for k in _count(5):
+		particles.spawn(
+			TankParticles.Kind.SMOKE,
+			at + Vector2(r(-3.0, 3.0), -float(k) * 3.0),
+			Vector2(r(-4.0, 8.0), -r(16.0, 30.0)),
+			r(1.4, 2.4),
+			6.0,
+			r(18.0, 26.0),
+			Color(0.13, 0.13, 0.14, 0.7),
+			-4.0,
+			0.6
+		)
 
 
 ## A shell lands in the ground at `at`: a spray of dirt and clods and a dust cloud.
 func dirt_spray(at: Vector2) -> void:
-	for _i in _count(9):
+	for _i in _count(14):
+		var clod := Color(0.27, 0.21, 0.15, 1.0).lerp(Color(0.2, 0.16, 0.12, 1.0), rng.randf())
 		particles.spawn(
 			TankParticles.Kind.DIRT,
 			at,
-			Vector2(r(-70.0, 70.0), r(-170.0, -60.0)),
-			r(0.6, 1.2),
-			r(1.5, 3.5),
+			Vector2(r(-80.0, 80.0), r(-190.0, -60.0)),
+			r(0.7, 1.3),
+			r(2.0, 4.0),
 			2.0,
-			Color(0.25, 0.2, 0.15, 1.0),
+			clod,
 			380.0,
 			0.1
 		)
@@ -365,23 +374,24 @@ func dirt_spray(at: Vector2) -> void:
 func exhaust(key: String, at: Vector2, frac: float, dt: float) -> void:
 	var f := clampf(frac, 0.0, 1.5)
 	var sprint := f >= 1.15
-	# At tempo (about 90% FTP) the puffs overlap into one continuous grey-brown plume lit from below;
-	# a sprint is a dense black plume.
-	var per_s := lerpf(3.0, 28.0, clampf(f, 0.0, 1.0)) * (1.5 if sprint else 1.0)
+	# Diesel smoke is dark: iron-grey puffs that grow to 10-16 px and hang, intermittent at idle,
+	# a steady train at tempo and a continuous black column in a sprint (the steam engine's white,
+	# short-lived plume is the contrast).
+	var per_s := lerpf(1.6, 12.0, clampf(f, 0.0, 1.0)) * (2.2 if sprint else 1.0)
 	for _i in rate(key, per_s, dt):
 		var thick := clampf(f, 0.0, 1.2)
-		var col := Color(0.42, 0.4, 0.39, 0.25 + 0.5 * thick).lerp(
-			Color(0.05, 0.05, 0.06, 0.88), 1.0 if sprint else 0.0
+		var col := Color(0.11, 0.115, 0.125, 0.55 + 0.25 * thick).lerp(
+			Color(0.05, 0.05, 0.06, 0.85), 1.0 if sprint else 0.0
 		)
 		particles.spawn(
 			TankParticles.Kind.SMOKE,
-			at + Vector2(r(-1.5, 1.5), 0.0),
-			Vector2(r(-6.0, 6.0) - 6.0 * f, -r(18.0, 32.0) - 22.0 * f),
-			r(1.2, 2.2),
-			4.0 + 3.0 * thick,
-			(22.0 if not sprint else 32.0) * r(0.8, 1.2),
+			at + Vector2(r(-1.0, 1.0), 0.0),
+			Vector2(r(-5.0, 3.0) - 6.0 * f, -r(16.0, 26.0) - 16.0 * f),
+			r(1.6, 2.6) if not sprint else r(2.2, 3.2),
+			4.0 + 2.0 * thick,
+			(10.0 + 5.0 * thick) * r(0.9, 1.1) if not sprint else r(16.0, 22.0),
 			col,
-			-4.0,
+			-3.0,
 			0.6
 		)
 	for _i in rate(key + "_heat", 5.0, dt):
@@ -403,12 +413,12 @@ func steam_puff(at: Vector2) -> void:
 			TankParticles.Kind.STEAM,
 			at + Vector2(r(-1.5, 1.5), 0.0),
 			Vector2(r(-8.0, 8.0), r(-46.0, -26.0)),
-			r(0.7, 1.1),
-			5.0,
-			r(16.0, 24.0),
-			Color(0.88, 0.9, 0.92, 0.6),
+			r(0.45, 0.7),
+			4.0,
+			r(12.0, 18.0),
+			Color(0.93, 0.93, 0.92, 0.75),
 			-8.0,
-			0.9
+			1.4
 		)
 
 

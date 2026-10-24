@@ -82,12 +82,31 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
 		TankParticles.Kind.BRASS:
 			draw_set_transform(at, p.rot[i], Vector2.ONE)
-			draw_rect(Rect2(-1.5, -1.0, 3.0, 2.0), col)
-			if sin(p.life[i] * 47.0 + float(i)) > 0.92:
-				draw_rect(Rect2(-0.5, -0.5, 1.0, 1.0), Color(1, 1, 1, 0.9))
+			# A casing: a brass body with a dark base rim, and one glint pixel as it tumbles.
+			draw_rect(Rect2(-2.0, -1.0, 4.0, 2.0), col)
+			draw_rect(
+				Rect2(-2.0, -1.0, 1.0, 2.0), Color(col.r * 0.55, col.g * 0.5, col.b * 0.45, col.a)
+			)
+			if sin(p.life[i] * 23.0 + float(i)) > 0.55:
+				draw_rect(Rect2(0.0, -1.0, 1.0, 1.0), Color(1.0, 0.95, 0.84, 0.95 * col.a))
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 		TankParticles.Kind.RING:
-			draw_arc(at, maxf(size * 0.5, 1.0), 0.0, TAU, 24, col, 1.5)
+			# A rolling torus of smoke, not an outline: soft puffs around an upright ellipse (seen from
+			# the side, the ring blown along the barrel), thick while young, thinning as it grows, so it
+			# never reads as a drawn "0".
+			var rr := maxf(size * 0.5, 1.5)
+			var puff := clampf(9.0 - size * 0.08, 4.0, 8.0)
+			var v := p.vel[i]
+			var ang := v.angle() if v.length() > 1.0 else 0.0
+			var axis := Vector2.from_angle(ang)
+			var up := Vector2(-axis.y, axis.x)
+			var pc := Color(col.r, col.g, col.b, col.a * 0.55)
+			for n in 12:
+				var u := TAU * float(n) / 12.0
+				var c := at + axis * cos(u) * rr * 0.45 + up * sin(u) * rr
+				draw_texture_rect(
+					_puff, Rect2(c - Vector2(puff, puff) * 0.5, Vector2(puff, puff)), false, pc
+				)
 		TankParticles.Kind.SPARK:
 			var v := p.vel[i]
 			var tail := at - v.normalized() * clampf(v.length() * 0.035, 1.5, 6.0)

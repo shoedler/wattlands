@@ -123,10 +123,9 @@ static func _hedgehog(
 		# Nearer beams are lighter; the one pointing most at the viewer is foreshortened by the
 		# projection and drawn last, its cut end square on to the eye.
 		var depth_k := float(n) / 2.0
-		var face := TankPalette.darkened(TankPalette.IRON.lerp(TankPalette.STEEL_DARK, depth_k), k)
-		var lit := TankPalette.darkened(
-			TankPalette.STEEL_DARK.lerp(TankPalette.STEEL_LIGHT, depth_k), k
-		)
+		# Dark sooty iron (never paler than the hull): only the upper edge of each beam catches light.
+		var face := TankPalette.darkened(TankPalette.IRON_DARK.lerp(TankPalette.IRON, depth_k), k)
+		var lit := TankPalette.darkened(TankPalette.IRON.lerp(TankPalette.STEEL_DARK, depth_k), k)
 		var dark := TankPalette.darkened(TankPalette.COAL, k)
 		_beam(rows, pa, pb, w, face, lit, dark)
 		var end := pb.round()
@@ -213,13 +212,11 @@ static func _bank(rows: Array[Dictionary], at: Vector2, half_w: float, h: int) -
 		pts.append(at + Vector2(-half_w + 2.0 * half_w * t, -bump * sin(t * PI) - 0.5))
 	pts.append(at + Vector2(half_w, 2.0))
 	pts.append(at + Vector2(-half_w, 2.0))
-	rows.append({"t": "poly", "pts": pts, "c": TankPalette.MUD, "of": OF_TRAPS})
+	rows.append({"t": "poly", "pts": pts, "c": TankPalette.MUD_DARK, "of": OF_TRAPS})
 	var crest := PackedVector2Array()
 	for i in range(1, 8):
 		crest.append(pts[i])
-	rows.append(
-		{"t": "polyline", "pts": crest, "w": 1.0, "c": TankPalette.MUD_LIGHT, "of": OF_TRAPS}
-	)
+	rows.append({"t": "polyline", "pts": crest, "w": 1.0, "c": TankPalette.MUD, "of": OF_TRAPS})
 	for k in 3:
 		var cx := at.x - half_w * 0.6 + half_w * 0.6 * float(k) + float((h >> k) % 5)
 		rows.append(

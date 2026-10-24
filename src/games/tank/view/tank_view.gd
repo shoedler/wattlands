@@ -34,8 +34,12 @@ const PROP_CELL_PX := 210.0
 ## dotted arc in the gunner's colour, every third with a faint halo, not as stray pixels.
 const TRAJECTORY_STEP_S := 0.045
 const TRAJECTORY_DOTS := 34
-## An enemy's HP bar shows for this long after it is hit (or first seen damaged), then fades.
-const HP_BAR_S := 3.0
+## No HP bar floats on the tank's plane (the scene critic): damage shows on the sprite. A hit flashes
+## the enemy warm for HIT_FLASH_S; below DAMAGE_SMOKE_FRAC of its HP its hull smokes, and below
+## DAMAGE_FIRE_FRAC a small fire burns in it.
+const HIT_FLASH_S := 0.16
+const DAMAGE_SMOKE_FRAC := 0.5
+const DAMAGE_FIRE_FRAC := 0.25
 const HALO_RADIUS := {
 	TankIds.SHELL_LIGHT: 9.0,
 	TankIds.SHELL_HEAVY: 13.0,
@@ -97,7 +101,7 @@ var _prev_cam: float = 0.0
 var _cam_primed: bool = false
 var _traps_were_cleared: bool = false
 var _boss_death_done: bool = false
-## Enemy id -> [last hp seen, seconds its HP bar still shows].
+## Enemy id -> [last hp seen, seconds its hit flash still shows].
 var _hp_seen: Dictionary = {}
 
 
@@ -212,6 +216,7 @@ func advance(delta: float) -> void:
 	_reflections()
 	lights.wash = fx.flash
 	lights.wash_color = fx.flash_color
+	lights.wash_pos = fx.flash_pos
 	lights.end()
 	world.position = (rig.shake_offset * 0.6).round()
 	_update_fade(delta)
@@ -592,28 +597,89 @@ func _build_props(state: TankState) -> void:
 	props_layer.set_rows(rows)
 
 
-## The halt line of an Advance: a post with a striped banner and a lamp, standing where the hull's
-## front is when its rear reaches the end of the road (TankHudModel.halt_distance_m is zero there).
+## The size of the halt line's lamp post (tests find the line by it).
+const HALT_POST := Vector2(2, 24)
+
+
+## The halt line of an Advance, standing where the hull's front is when its rear reaches the end of
+## the road (TankHudModel.halt_distance_m is zero there): a row of concrete dragon's teeth across
+## the road (three blunt pyramids, the nearest largest, lit on their upper-left faces, mud banked at
+## their feet) and a short post at the line with a hooded amber lamp throwing its light down. No
+## banner, nothing striped and nothing brighter than the concrete but the lamp (no flag).
 func _halt_line(rows: Array[Dictionary], state: TankState) -> void:
 	if state.seg.seg != TankIds.SEG_ADVANCE or state.content == null:
 		return
 	var length_m := float(state.content.segment(state.seg.phase_index).get("length_m", 0.0))
 	if length_m <= 0.0:
 		return
-	var x := TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x
-	if x < -30.0 or x > float(TankConst.SCREEN_W) + 30.0:
+	var x := roundf(TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x)
+	if x < -40.0 or x > float(TankConst.SCREEN_W) + 40.0:
 		return
 	var ground := float(TankConst.GROUND_Y)
-	rows.append({"t": "rect", "r": Rect2(x, ground - 46.0, 3, 46), "c": TankPalette.STEEL})
+	# Far to near: each tooth a little lower (nearer) and larger.
+	var teeth: Array[Vector3] = [Vector3(12, -4, 9), Vector3(26, -2, 11), Vector3(5, 1, 13)]
+	for t in teeth:
+		_tooth(rows, Vector2(x + t.x, ground + t.y), t.z)
+	var post := Rect2(Vector2(x, ground - HALT_POST.y), HALT_POST)
+	rows.append({"t": "rect", "r": post, "c": TankPalette.IRON, "of": "halt_line"})
 	rows.append(
-		{"t": "rect", "r": Rect2(x - 1.0, ground - 48.0, 5, 3), "c": TankPalette.STEEL_BRIGHT}
+		{
+			"t": "rect",
+			"r": Rect2(post.position, Vector2(1, post.size.y)),
+			"c": TankPalette.STEEL_DARK
+		}
 	)
-	for i in 5:
-		var col := TankPalette.PEARL if i % 2 == 0 else TankPalette.IRON
-		rows.append(
-			{"t": "rect", "r": Rect2(x + 3.0, ground - 44.0 + float(i) * 3.0, 20, 3), "c": col}
-		)
-	lights.add(Vector2(x + 1.5, ground - 50.0), 16.0, TankPalette.AMBER, 0.55)
+	# The hood: a dark cowl over the lamp so its light falls on the road, not up into the sky.
+	var hood := post.position + Vector2(-3, -3)
+	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 3)), "c": TankPalette.IRON_DARK})
+	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 1)), "c": TankPalette.STEEL_DARK})
+	rows.append(
+		{"t": "rect", "r": Rect2(hood + Vector2(2, 3), Vector2(3, 1)), "c": TankPalette.AMBER}
+	)
+	var lamp := hood + Vector2(3.5, 4.0)
+	lights.add(lamp, 6.0, TankPalette.GLOW_WARM, 0.6)
+	lights.add(lamp + Vector2(0, 10), 26.0, TankPalette.AMBER, 0.32)
+
+
+## One concrete dragon's tooth (a blunt pyramid seen from the side) standing on `foot` (its base's
+## middle), `s` px tall: a lit upper-left face, a darker right face, a flat cap and a mud foot.
+func _tooth(rows: Array[Dictionary], foot: Vector2, s: float) -> void:
+	var half := s * 0.62
+	var cap := s * 0.18
+	var top := foot + Vector2(-s * 0.08, -s)
+	var left_face := PackedVector2Array(
+		[foot + Vector2(-half, 0), top + Vector2(-cap, 0), top + Vector2(cap * 0.3, 0), foot]
+	)
+	var right_face := PackedVector2Array(
+		[foot, top + Vector2(cap * 0.3, 0), top + Vector2(cap, 0), foot + Vector2(half, 0)]
+	)
+	rows.append({"t": "poly", "pts": left_face, "c": TankPalette.STEEL_DARK})
+	rows.append({"t": "poly", "pts": right_face, "c": TankPalette.IRON})
+	rows.append(
+		{
+			"t": "line",
+			"a": foot + Vector2(-half, -0.5),
+			"b": top + Vector2(-cap, 0.5),
+			"w": 1.0,
+			"c": TankPalette.STEEL
+		}
+	)
+	rows.append(
+		{
+			"t": "line",
+			"a": top + Vector2(-cap, 0),
+			"b": top + Vector2(cap, 0),
+			"w": 1.0,
+			"c": TankPalette.STEEL
+		}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2((foot + Vector2(-half - 1.0, -2.0)).round(), Vector2(half * 2.0 + 2.0, 3)),
+			"c": TankPalette.MUD_DARK
+		}
+	)
 
 
 ## Props on the tank's plane, placed by a hash of the world cell (no RNG), so the road ahead is never
@@ -860,23 +926,15 @@ func _build_enemies(state: TankState, t: float) -> void:
 			lift = 6.0
 			dim = 0.72
 		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - lift)
-		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, Color(dim, dim, dim)))
-		enemy_rects[e.id] = Rect2(pos.round(), sz)
 		var max_hp := enemy_max_hp(state, type)
-		var bar_s := _hp_bar_time(e, max_hp)
-		if bar_s > 0.0:
-			(
-				rows
-				. append(
-					{
-						"t": "bar",
-						"pos": (pos + Vector2(sz.x * 0.5 - 8.0, _bar_y(sprite, sz))).round(),
-						"w": 16.0,
-						"frac": e.hp / max_hp,
-						"a": clampf(bar_s / 0.5, 0.0, 1.0),
-					}
-				)
-			)
+		var hit := hit_flash(e, max_hp)
+		var tint := Color(dim + 0.75 * hit, dim + 0.55 * hit, dim + 0.4 * hit)
+		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, tint))
+		enemy_rects[e.id] = Rect2(pos.round(), sz)
+		if max_hp > 0.0 and e.hp < max_hp * DAMAGE_SMOKE_FRAC:
+			var burn := 0.35 if e.hp < max_hp * DAMAGE_FIRE_FRAC else 0.0
+			var vent := pos + Vector2(sz.x * (0.45 if e.side > 0 else 0.55), sz.y * 0.35)
+			fx.fire_and_smoke("e%d_dmg" % e.id, vent, burn, 0.7, _dt)
 		_seen_enemies[e.id] = {
 			"id": e.id,
 			"x": enemy_x(e),
@@ -895,24 +953,17 @@ func _build_enemies(state: TankState, t: float) -> void:
 	enemies_layer.set_rows(rows)
 
 
-## The HP bar's y over a sprite drawn `sz` tall: just above its silhouette's top, not its empty rect.
-func _bar_y(sprite: String, sz: Vector2) -> float:
-	var full := TankSprites.size(sprite).y
-	return float(TankSprites.top_pad(sprite)) * sz.y / maxf(full, 1.0) - 4.0
-
-
-## Seconds the HP bar of `e` still shows: HP_BAR_S after its HP last dropped (or it was first seen
-## damaged), so a bar appears with a hit and fades, never an orphan dash over every damaged hull.
-func _hp_bar_time(e: TankEnemyState, max_hp: float) -> float:
-	if max_hp <= 0.0 or e.hp >= max_hp - 0.5:
-		_hp_seen.erase(e.id)
+## The hit flash of `e`, 1 at a hit fading to 0 over HIT_FLASH_S: its HP dropped since the last
+## frame (an enemy first seen damaged does not flash).
+func hit_flash(e: TankEnemyState, max_hp: float) -> float:
+	if max_hp <= 0.0:
 		return 0.0
-	var seen: Array = _hp_seen.get(e.id, [INF, 0.0])
-	var left := float(seen[1]) - _dt
+	var seen: Array = _hp_seen.get(e.id, [e.hp, 0.0])
+	var left := maxf(float(seen[1]) - _dt, 0.0)
 	if e.hp < float(seen[0]) - 0.01:
-		left = HP_BAR_S
+		left = HIT_FLASH_S
 	_hp_seen[e.id] = [e.hp, left]
-	return left
+	return clampf(left / HIT_FLASH_S, 0.0, 1.0)
 
 
 ## The road lane of every enemy that is not dug in, enemy id -> 0 (front) or 1 (back): left to right,
@@ -1194,18 +1245,24 @@ func _build_shots(state: TankState) -> void:
 		var v := Vector2(s.vx, s.vy)
 		var dir := v.normalized() if v.length() > 1.0 else Vector2.RIGHT
 		var core: Color = TankPalette.TRACER.get(s.type, TankPalette.AMBER)
-		var tail := 8.0
+		# A glowing tracer: a 3 px streak (2 px for secondaries) fading back from a white-hot head,
+		# a 1 px hot core along its front half and a halo, unlike the 2 px trajectory dots.
+		var tail := 16.0
 		if s.type == TankIds.SHELL_BOSS_MAIN:
-			tail = 22.0
+			tail = 26.0
 		elif s.type == TankIds.SHELL_OVER:
-			tail = 14.0
-		var w := 1.0 if s.type == TankIds.SHELL_SECONDARY else 2.0
+			tail = 20.0
+		elif s.type == TankIds.SHELL_SECONDARY:
+			tail = 10.0
+		var w := 2.0 if s.type == TankIds.SHELL_SECONDARY else 3.0
 		var a := p - dir * tail
-		var m := p - dir * tail * 0.4
-		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.25)})
-		rows.append({"t": "line", "a": m, "b": p, "w": w, "c": TankPalette.with_alpha(core, 0.7)})
-		rows.append({"t": "rect", "r": Rect2(p - Vector2(1, 1), Vector2(3, 2)), "c": Color.WHITE})
-		lights.add(p, float(HALO_RADIUS.get(s.type, 9.0)), core, 0.7)
+		var m := p - dir * tail * 0.45
+		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.3)})
+		rows.append({"t": "line", "a": m, "b": p, "w": w, "c": TankPalette.with_alpha(core, 0.9)})
+		rows.append({"t": "line", "a": m, "b": p, "w": 1.0, "c": TankPalette.WHITE_WARM})
+		rows.append({"t": "rect", "r": Rect2(p - Vector2(1, 1), Vector2(3, 3)), "c": Color.WHITE})
+		lights.add(p, float(HALO_RADIUS.get(s.type, 9.0)) * 1.4, core, 0.9)
+		lights.add(m, 8.0, core, 0.5)
 	_trajectory(state, rows)
 	shots_layer.set_rows(rows)
 

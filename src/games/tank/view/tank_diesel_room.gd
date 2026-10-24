@@ -48,8 +48,9 @@ func build() -> void:
 	flywheel = SpinningPart.new()
 	flywheel.name = "Flywheel"
 	flywheel.texture = TankSprites.tex("flywheel_large")
-	# Dark cast iron: lit only by the cylinders' catch-light (paint_machinery_front), never pale.
-	flywheel.self_modulate = Color(0.72, 0.72, 0.75)
+	# The flywheel is drawn in code from this part's angle (paint_machinery_front): a heavy cast disc,
+	# not the generated spoked wheel (which read as a ship's helm).
+	flywheel.self_modulate = Color(1, 1, 1, 0)
 	flywheel.position = anchor_local("flywheel")
 	flywheel.max_rpm = 120.0
 	flywheel.inertia_s = 0.35
@@ -118,8 +119,32 @@ func paint_machinery_front(item: Node2D) -> void:
 		var wr := Rect2(block_pos + windows[i].position, windows[i].size)
 		var stroke := 1.0 - clampf(pistons[i].offset() / maxf(travel, 1.0), 0.0, 1.0)
 		_window_glow(item, wr, glow * (0.1 + 0.32 * stroke))
+	_flywheel(item)
 	_catch_light(item)
 	paint_more(item)
+
+
+## The flywheel: a heavy cast-iron disc with a thick rim, a dark web pierced by five lightening holes
+## that turn with it, a balance weight on the rim and a lit hub (the cylinders' warm light catches
+## the rim, _catch_light).
+func _flywheel(item: Node2D) -> void:
+	var c := flywheel.position
+	var r := TankSprites.size("flywheel_large").x * 0.5 - 0.5
+	var ang := flywheel.angle()
+	item.draw_circle(c, r + 0.5, TankPalette.BLACK)
+	item.draw_circle(c, r - 0.5, TankPalette.IRON)
+	item.draw_arc(c, r - 1.0, PI * 1.1, PI * 1.9, 12, TankPalette.STEEL_DARK, 1.0)
+	item.draw_circle(c, r - 3.5, TankPalette.COAL)
+	item.draw_arc(c, r - 3.5, 0.0, TAU, 28, TankPalette.IRON_DARK, 1.0)
+	for k in 5:
+		var d := Vector2.from_angle(ang + TAU * float(k) / 5.0)
+		item.draw_circle(c + d * (r * 0.52), maxf(r * 0.16, 1.5), TankPalette.BLACK)
+	var weight := Vector2.from_angle(ang + PI / 5.0)
+	item.draw_line(c + weight * (r - 3.0), c + weight * (r - 1.0), TankPalette.STEEL_DARK, 3.0)
+	item.draw_circle(c, 4.5, TankPalette.IRON)
+	item.draw_arc(c, 4.5, PI, TAU, 8, TankPalette.STEEL, 1.0)
+	item.draw_circle(c, 2.0, TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(c.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.STEEL_PALE)
 
 
 ## The cylinders' amber light catching the flywheel's rim on the side that faces them: a soft arc
@@ -129,10 +154,10 @@ func _catch_light(item: Node2D) -> void:
 		return
 	var c := flywheel.position
 	var r := TankSprites.size("flywheel_large").x * 0.5 - 1.5
-	var a := 0.12 + 0.22 * clampf(glow, 0.0, 1.0)
-	item.draw_arc(c, r, PI * 0.62, PI * 1.38, 14, TankPalette.with_alpha(TankPalette.FIRE, a), 1.0)
+	var a := 0.22 + 0.36 * clampf(glow, 0.0, 1.0)
+	item.draw_arc(c, r, PI * 0.62, PI * 1.38, 16, TankPalette.with_alpha(TankPalette.FIRE, a), 1.0)
 	item.draw_arc(
-		c, r - 1.0, PI * 0.8, PI * 1.2, 8, TankPalette.with_alpha(TankPalette.AMBER, a * 0.6), 1.0
+		c, r - 1.0, PI * 0.8, PI * 1.2, 8, TankPalette.with_alpha(TankPalette.AMBER, a * 0.8), 1.0
 	)
 
 
