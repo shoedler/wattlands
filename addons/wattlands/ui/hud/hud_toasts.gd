@@ -52,6 +52,8 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 	l.label_settings = WlTheme.label_settings(
 		font_px, palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
 	)
+	if not palette.style.is_empty():
+		palette.style_label(l.label_settings, font_px)
 	l.horizontal_alignment = side_alignment(side)
 	l.text = text
 	HudWidget.wrap_label(l, max_width - PANEL_PAD)
@@ -64,11 +66,13 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 ## Use `p` for the toast panels and text (null = the kit look).
 func set_palette(p: HudPalette) -> void:
 	palette = p if p != null else HudPalette.new()
+	palette.style_item(self)
 	for it in _items:
 		_style_panel(it["panel"] as PanelContainer)
-		(it["label"] as Label).label_settings.font_color = palette.pick(
-			HudPalette.BANNER_TEXT, WlTheme.TEXT
-		)
+		var ls := (it["label"] as Label).label_settings
+		ls.font_color = palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
+		if not palette.style.is_empty():
+			palette.style_label(ls, font_px)
 
 
 func tick(dt: float) -> void:
@@ -141,21 +145,23 @@ func fit_to(avail: Vector2) -> void:
 	max_visible = n
 	for it in _items:
 		var ls := (it["label"] as Label).label_settings
-		ls.font_size = px
-		ls.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * px / 64.0))
+		if palette.style.is_empty():
+			ls.font_size = px
+			ls.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * px / 64.0))
+		else:
+			palette.style_label(ls, px)
 	_trim()
 	set_max_width(avail.x if avail.x > 0.0 else INF)
 
 
 func _style_panel(panel: PanelContainer) -> void:
-	panel.add_theme_stylebox_override(
-		"panel",
-		WlTheme.panel_style(
-			palette.pick(HudPalette.BANNER_BG, Color(0.08, 0.1, 0.13, 0.92)),
-			palette.pick(HudPalette.ACCENT, WlTheme.ACCENT),
-			2
-		)
+	var sb := WlTheme.panel_style(
+		palette.pick(HudPalette.BANNER_BG, Color(0.08, 0.1, 0.13, 0.92)),
+		palette.pick(HudPalette.ACCENT, WlTheme.ACCENT),
+		2
 	)
+	palette.style_panel(sb)
+	panel.add_theme_stylebox_override("panel", sb)
 
 
 func _trim() -> void:

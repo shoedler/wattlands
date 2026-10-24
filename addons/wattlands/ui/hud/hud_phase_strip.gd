@@ -96,5 +96,7 @@ func _draw() -> void:
 		if i == current:
 			draw_rect(rect.grow(1.0), palette.pick(HudPalette.TEXT, WlTheme.TEXT), false, 3.0)
 			var mx := rect.position.x + rect.size.x * progress
-			draw_line(Vector2(mx, 0.0), Vector2(mx, h), WlTheme.GLOW, 3.0)
+			draw_line(
+				Vector2(mx, 0.0), Vector2(mx, h), palette.pick(HudPalette.GLOW, WlTheme.GLOW), 3.0
+			)
 		x += bw

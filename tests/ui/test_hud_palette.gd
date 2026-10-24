@@ -135,3 +135,55 @@ func test_layer_passes_the_spec_palette_to_every_widget() -> void:
 	hud.build(HudSpec.new(), null)
 	assert_eq(_panel_of(hud.widget(HudSpec.POWER_GAUGE)).bg_color, Color(0.055, 0.067, 0.086, 0.74))
 	assert_true(hud.toasts().palette.is_default())
+
+
+func test_default_palette_keeps_the_kit_type_and_corners() -> void:
+	var g := autofree(HudPowerGauge.new()) as HudPowerGauge
+	g.set_palette(HudPalette.from_dict({}))
+	assert_gt(g._unit.label_settings.outline_size, 0)
+	assert_eq(g._unit.label_settings.font, WlTheme.font())
+	assert_eq(_panel_of(g).corner_radius_top_left, WlTheme.CORNER_PX)
+	var plain := autofree(HudPowerGauge.new()) as HudPowerGauge
+	assert_eq(g._watts.label_settings.font_size, plain._watts.label_settings.font_size)
+
+
+func test_style_keys_set_the_font_sizes_outline_and_corners() -> void:
+	var font: Font = ThemeDB.fallback_font
+	var p := HudPalette.from_dict(
+		{"font": font, "font_scale_px": 9, "corner_radius": 0, "text_outline": false}
+	)
+	var g := autofree(HudPowerGauge.new()) as HudPowerGauge
+	g.set_palette(p)
+	for l: Label in [g._unit, g._watts]:
+		assert_eq(l.label_settings.font, font)
+		assert_eq(l.label_settings.font_size % 9, 0, "%s snaps to the font's cell" % l.name)
+		assert_eq(l.label_settings.outline_size, 0)
+	assert_gte(g._watts.label_settings.font_size, WlTheme.KEY_NUMBER_MIN_PX, "key numbers stay big")
+	assert_eq(_panel_of(g).corner_radius_top_left, 0)
+	assert_false(_panel_of(g).anti_aliasing)
+	var t := autofree(HudToasts.new()) as HudToasts
+	t.set_palette(p)
+	t.push("hi")
+	var ls := (t._items[0]["label"] as Label).label_settings
+	assert_eq(ls.font, font)
+	assert_eq(ls.outline_size, 0)
+	assert_eq(HudPalette.from_dict({"font": 3, "corner_radius": -1}).style.size(), 0, "bad types")
+
+
+func test_band_glow_and_glow_text_keys_recolor_the_in_band_look() -> void:
+	var p := HudPalette.from_dict(
+		{"band": BAR_BG, "glow": BAR_FG, "glow_text": TEXT, "bar_fg": BAR_FG, "bar_bg": BAR_BG}
+	)
+	var c := autofree(HudCadence.new()) as HudCadence
+	c.set_palette(p)
+	c.set_cadence_band(80.0, 100.0)
+	var t := Telemetry.new()
+	t.cadence_rpm = 90.0
+	c.set_telemetry(t)
+	assert_true(c.in_band())
+	assert_eq(c.rpm_label().label_settings.font_color, TEXT)
+	assert_eq(c.bar().palette.pick("band", Color.BLACK), BAR_BG)
+	var plain := autofree(HudCadence.new()) as HudCadence
+	plain.set_cadence_band(80.0, 100.0)
+	plain.set_telemetry(t)
+	assert_eq(plain.rpm_label().label_settings.font_color, WlTheme.GLOW, "the kit glow by default")

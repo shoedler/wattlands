@@ -11,7 +11,9 @@ extends PanelContainer
 ## and the timeline's clock (time left in the phase) are 48 px at full size and shrink with
 ## their rect.
 ## Options (HudSpec.add(..., options)): "panel": false drops the dark background panel.
-## set_palette() recolors the neutral chrome (HudSpec.palette).
+## set_palette() recolors the neutral chrome and, with its style keys, sets the type (a game
+## font, sizes snapped to its pixel multiple, no outlines) and the panel corners
+## (HudSpec.palette).
 
 ## The kit widget id (HudSpec.POWER_GAUGE, ...).
 var widget_id: String = ""
@@ -67,7 +69,12 @@ func configure(p_options: Dictionary) -> void:
 ## with HudSpec.palette; safety and warning colors never follow it.
 func set_palette(p: HudPalette) -> void:
 	palette = p if p != null else HudPalette.new()
+	palette.style_item(self)
 	_apply_panel()
+	if not palette.style.is_empty():
+		var s := ui_scale
+		_applied_scale = -1.0
+		set_ui_scale(s)
 	for e in _scaled:
 		var role: String = e["role"]
 		if not role.is_empty():
@@ -110,14 +117,21 @@ func set_ui_scale(s: float) -> void:
 		var lbl: Label = e["label"]
 		var px: int = e["px"]
 		if lbl.label_settings != null:
-			lbl.label_settings.font_size = (
+			var size_px := (
 				WlTheme.key_px(ui_scale * px / float(WlTheme.KEY_NUMBER_PX))
 				if e["key"]
 				else WlTheme.scaled_px(px, ui_scale)
 			)
-			lbl.label_settings.outline_size = maxi(
-				2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0)
-			)
+			if palette.style.is_empty():
+				lbl.label_settings.font_size = size_px
+				lbl.label_settings.outline_size = maxi(
+					2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0)
+				)
+			else:
+				var floor_px := WlTheme.KEY_NUMBER_MIN_PX if e["key"] else 0
+				palette.style_label(
+					lbl.label_settings, size_px, bool(e.get("bold", false)), floor_px
+				)
 	for e in _scaled_boxes:
 		var n: Control = e["node"]
 		n.custom_minimum_size = Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
@@ -181,7 +195,7 @@ func _make_label(
 	l.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	l.label_settings = WlTheme.label_settings(px, palette.pick(role, color), bold or key)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_scaled.append({"label": l, "px": px, "key": key, "role": role})
+	_scaled.append({"label": l, "px": px, "key": key, "role": role, "bold": bold or key})
 	return l
 
 
@@ -210,14 +224,13 @@ func _on_palette_changed() -> void:
 func _apply_panel() -> void:
 	if not _panel_visible:
 		return
-	add_theme_stylebox_override(
-		"panel",
-		WlTheme.panel_style(
-			palette.pick(HudPalette.PANEL, Color(0.055, 0.067, 0.086, 0.74)),
-			palette.pick(HudPalette.PANEL_BORDER, Color(0.227, 0.271, 0.322, 0.9)),
-			2
-		)
+	var sb := WlTheme.panel_style(
+		palette.pick(HudPalette.PANEL, Color(0.055, 0.067, 0.086, 0.74)),
+		palette.pick(HudPalette.PANEL_BORDER, Color(0.227, 0.271, 0.322, 0.9)),
+		2
 	)
+	palette.style_panel(sb)
+	add_theme_stylebox_override("panel", sb)
 	_fit_panel_margins()
 
 

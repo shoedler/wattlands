@@ -174,7 +174,9 @@ func _refresh() -> void:
 		_power_w, top, b.x, b.y, _target_w if _mode == Wl.ERG and _target_w > 0.0 else -1.0, glowing
 	)
 	_watts.label_settings.font_color = (
-		WlTheme.GLOW if glowing else palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+		palette.pick(HudPalette.GLOW_TEXT, WlTheme.GLOW)
+		if glowing
+		else palette.pick(HudPalette.TEXT, WlTheme.TEXT)
 	)
 	if _mode == Wl.ERG and _target_w > 0.0:
 		_target.text = _t("UI_HUD_TARGET", [roundi(_target_w)])
