@@ -2,6 +2,17 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.2.1 (2026-10-24)
+
+### Turbo Reel
+
+- New art direction after an adversarial art review against the Nemk reference: one cool 12-colour palette with a single brass accent, flat top-lit planes, no outlines, no dither or speckle, no rotated sprites, clean pixel-stepped lines, a light sea that steps darker with depth, a seated cyclist at the drivetrain, bow-up hull poses and a wake when you push hard, a waterfall that drops through air at the edge of the world.
+- The HUD matches: a hand-made 5x7 pixel font, square borderless panels on the art's pixel grid, palette-only colours.
+
+### Platform
+
+- `HudSpec.palette` lets a game restyle the HUD kit's neutral chrome (colours, font and sizes, corners, outline, pixel grid, phase-strip colours). Defaults are unchanged; safety banners keep their colours.
+
 ## v0.2.0 (2026-10-24)
 
 ### Turbo Reel
