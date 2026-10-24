@@ -56,11 +56,18 @@ extends TrainerDevice
 ## 0.01 km/h); with options.dropouts some are skipped (seeded gaps of 1.5-4 s that never
 ## chain and never touch a surge or the 10 s before it). Control responses arrive on the next
 ## tick with response_result (success by default).
-## Keyboard control when enabled: W/S +-10 W, A/D cadence -+5 rpm (Input is read only then).
-## W2r2: the app enables it only with --mock-keyboard (WlTrainerService passes
-## options.keyboard), and keys are read (Input.is_physical_key_pressed) only while the app
-## window has focus. W/S/A/D are also the InputRouter's up/down/left/right bindings, so with
-## the flag they move menu focus too (docs/decisions/trainer-core.md).
+## Keyboard control when enabled (Input is read only then, only while the app window has
+## focus; the app enables it with --mock-keyboard or Settings > Trainer, and the keys avoid
+## every InputRouter binding): T/G power and Y/H cadence step +-10 W / +-5 rpm on a tap and,
+## held past KEY_HOLD_DELAY_S, ramp (20 W/s growing to 200 W/s over KEY_RAMP_UP_S; 5 rpm/s to
+## 50 rpm/s). The presets (KEYBOARD_PRESET_KEYS, a numpad block on the right hand, M , . /
+## J K L / U I O or the numpad itself) set the power at 50% .. 250% of FTP in steps of 25%
+## FTP (50, 75, 100, 125, 150, 175, 200, 225, 250) and the cadence at 85 .. 105 rpm; N (numpad
+## 0) stops pedaling (0 W, 0 rpm). Shift held sprints (300% FTP at 110 rpm) and its release
+## returns to the setting before. A preset or the sprint puts the power on its value at once
+## (no follower lag, no fatigue cap, no sprint cadence lift); T/G and Y/H then move that
+## value. Turning the keyboard off clears it all. The mock only produces telemetry: the
+## governor still applies its rules to it.
 ## Everything time-based advances only in tick(dt) (platform time, fixed steps of at most
 ## Wl.SIM_DT); every random stream derives from options.seed, so a run is reproducible.
 ## Profile time (at_s, surges, ramp, intervals) starts at creation; restart_profile() restarts
@@ -171,8 +178,49 @@ const HR_TAU_S := 20.0
 ## Keyboard steps.
 const KEY_POWER_STEP_W := 10.0
 const KEY_CADENCE_STEP_RPM := 5.0
-## The keyboard-control keys (BRIEF 4.2): W and S power, A and D cadence.
-const KEYBOARD_KEYS: Array[Key] = [KEY_W, KEY_S, KEY_A, KEY_D]
+## A key held longer than this starts to ramp; a shorter press is a tap (one step).
+const KEY_HOLD_DELAY_S := 0.3
+## The ramp speed grows exponentially from the first to the second value over KEY_RAMP_UP_S.
+const KEY_RAMP_UP_S := 3.0
+const KEY_POWER_RAMP_W_PER_S: Vector2 = Vector2(20.0, 200.0)
+const KEY_CADENCE_RAMP_RPM_PER_S: Vector2 = Vector2(5.0, 50.0)
+## Presets 1..9: % of FTP = 25 x (index + 1), cadence KEY_PRESET_RPM_MIN + step x (index - 1).
+const KEY_PRESET_FTP_PCT_MIN := 50.0
+const KEY_PRESET_FTP_PCT_STEP := 25.0
+const KEY_PRESET_RPM_MIN := 85.0
+const KEY_PRESET_RPM_STEP := 2.5
+const KEY_SPRINT_FTP_FRACTION := 3.0
+const KEY_SPRINT_RPM := 110.0
+const KEY_CADENCE_MAX_RPM := 220.0
+## The keyboard-control keys (physical): power up/down, cadence up/down, the sprint (Shift),
+## stop (N). None is bound in the input map (W/A/S/D, 1 and 2, Space are).
+const KEY_POWER_UP := KEY_T
+const KEY_POWER_DOWN := KEY_G
+const KEY_CADENCE_UP := KEY_Y
+const KEY_CADENCE_DOWN := KEY_H
+const KEY_SPRINT := KEY_SHIFT
+const KEY_STOP := KEY_N
+## Key -> preset 1..9 (like a numpad: 1 bottom left, 9 top right); the numpad keys too.
+const KEYBOARD_PRESET_KEYS: Dictionary = {
+	KEY_M: 1,
+	KEY_COMMA: 2,
+	KEY_PERIOD: 3,
+	KEY_J: 4,
+	KEY_K: 5,
+	KEY_L: 6,
+	KEY_U: 7,
+	KEY_I: 8,
+	KEY_O: 9,
+	KEY_KP_1: 1,
+	KEY_KP_2: 2,
+	KEY_KP_3: 3,
+	KEY_KP_4: 4,
+	KEY_KP_5: 5,
+	KEY_KP_6: 6,
+	KEY_KP_7: 7,
+	KEY_KP_8: 8,
+	KEY_KP_9: 9,
+}
 
 const _DROP_WAITING := 0
 const _DROP_COUNTING := 1
@@ -278,6 +326,14 @@ var _samples_emitted: int = 0
 var _kb_power_offset_w: float = 0.0
 var _kb_cadence_offset_rpm: float = 0.0
 var _kb_down: Dictionary = {}
+## key -> true from the press (seen going down) until the release: only such keys ramp.
+var _kb_armed: Dictionary = {}
+## key -> seconds held since the press.
+var _kb_held_s: Dictionary = {}
+## A preset's power and cadence (-1: none); T/G and Y/H move them while set.
+var _kb_override_w: float = -1.0
+var _kb_override_rpm: float = -1.0
+var _kb_sprint: bool = false
 ## The next focused poll only notes the held keys (after enabling or regaining focus).
 var _kb_baseline: bool = true
 
@@ -373,10 +429,12 @@ func set_phase(index: int) -> void:
 func set_keyboard_enabled(on: bool) -> void:
 	if on and not _keyboard:
 		_kb_baseline = true
+	if not on and _keyboard:
+		_kb_clear()
 	_keyboard = on
 
 
-## True while keyboard control reads W/S/A/D (options.keyboard or set_keyboard_enabled). W2r2.
+## True while keyboard control reads its keys (options.keyboard or set_keyboard_enabled).
 func is_keyboard_enabled() -> bool:
 	return _keyboard
 
@@ -389,6 +447,11 @@ func last_sample() -> TrainerSample:
 ## The rider's true instantaneous power right now (between notifications).
 func instantaneous_power_w() -> float:
 	return _power_w
+
+
+## The rider's true instantaneous cadence right now (between notifications).
+func instantaneous_cadence_rpm() -> float:
+	return _cadence_rpm
 
 
 ## The parsed profile components in use ([{"name", "params"}], a copy).
@@ -451,7 +514,7 @@ func request_stop() -> void:
 func tick(dt: float) -> void:
 	_flush_responses()
 	if _keyboard and dt > 0.0:
-		_poll_keyboard()
+		_poll_keyboard(dt)
 	var remaining := maxf(dt, 0.0)
 	while remaining > 1e-9:
 		var h := minf(remaining, Wl.SIM_DT)
@@ -513,19 +576,58 @@ static func describe_profiles() -> Dictionary:
 	return out
 
 
-## Keyboard control without the keyboard: add delta_w to the rider's power goal.
+## Keyboard control without the keyboard: add delta_w to the rider's power goal (to the
+## preset's power while one is set).
 func nudge_power(delta_w: float) -> void:
-	_kb_power_offset_w += delta_w
+	if _kb_override_w >= 0.0:
+		_kb_override_w = clampf(_kb_override_w + delta_w, 0.0, float(_max_power_w))
+	else:
+		_kb_power_offset_w += delta_w
 
 
-## Keyboard control without the keyboard: add delta_rpm to the rider's cadence.
+## Keyboard control without the keyboard: add delta_rpm to the rider's cadence (to the
+## preset's cadence while one is set).
 func nudge_cadence(delta_rpm: float) -> void:
-	_kb_cadence_offset_rpm += delta_rpm
+	if _kb_override_rpm >= 0.0:
+		_kb_override_rpm = clampf(_kb_override_rpm + delta_rpm, 0.0, KEY_CADENCE_MAX_RPM)
+	else:
+		_kb_cadence_offset_rpm += delta_rpm
+
+
+## Keyboard preset 1..9 without the keyboard: power at 25 x (index + 1)% of FTP, cadence at
+## KEY_PRESET_RPM_MIN + KEY_PRESET_RPM_STEP x (index - 1). Out-of-range indexes are ignored.
+func keyboard_preset(index: int) -> void:
+	if index < 1 or index > 9:
+		return
+	var pct := KEY_PRESET_FTP_PCT_MIN + KEY_PRESET_FTP_PCT_STEP * float(index - 1)
+	_kb_override_w = clampf(pct * _ftp_w / 100.0, 0.0, float(_max_power_w))
+	_kb_override_rpm = KEY_PRESET_RPM_MIN + KEY_PRESET_RPM_STEP * float(index - 1)
+	_kb_power_offset_w = 0.0
+	_kb_cadence_offset_rpm = 0.0
+
+
+## Keyboard stop without the keyboard: the rider stops pedaling (0 W, 0 rpm) until the power
+## is raised again.
+func keyboard_stop() -> void:
+	_kb_override_w = 0.0
+	_kb_override_rpm = -1.0
+	_kb_power_offset_w = 0.0
+	_kb_cadence_offset_rpm = 0.0
+
+
+## Keyboard sprint without the keyboard: on while true, the previous setting returns after.
+func keyboard_sprint(on: bool) -> void:
+	_kb_sprint = on
 
 
 ## {"power_w", "cadence_rpm"}: the keyboard offsets in use.
 func keyboard_offsets() -> Dictionary:
 	return {"power_w": _kb_power_offset_w, "cadence_rpm": _kb_cadence_offset_rpm}
+
+
+## {"power_w", "cadence_rpm" (-1: none), "sprint"}: the preset or stop and the sprint in use.
+func keyboard_override() -> Dictionary:
+	return {"power_w": _kb_override_w, "cadence_rpm": _kb_override_rpm, "sprint": _kb_sprint}
 
 
 ## The rider's W' balance in joules (fatigue model).
@@ -728,15 +830,14 @@ func _step(h: float) -> void:
 	var goal := (
 		_follower_goal_w() if follower else _scripted_power_w(_scripted_power, profile_time_s())
 	)
-	if _kb_power_offset_w != 0.0:
-		goal = maxf(goal + _kb_power_offset_w, 0.0)
+	goal = _keyboard_goal_w(goal)
 	if drop_rpm >= 0.0 and drop_rpm < 1.0:
 		goal = 0.0
 	if goal <= 0.0:
 		goal = 0.0
 		_power_w = 0.0
 		_power_rate = 0.0
-	elif follower:
+	elif follower and not _kb_direct():
 		var g := minf(goal, _fatigue_cap_w())
 		var accel := (
 			ERG_OMEGA * ERG_OMEGA * (g - _power_w) - 2.0 * ERG_DAMPING * ERG_OMEGA * _power_rate
@@ -844,9 +945,13 @@ func _cadence_now(pedaling: bool, drop_rpm: float, h: float) -> float:
 		c = _band_cadence + _band_noise
 	else:
 		c = _base_cadence_rpm()
-	c += _kb_cadence_offset_rpm
-	if _sprinting and not _has_band:
-		c *= 1.0 + SPRINT_CADENCE_LIFT
+	var kb_rpm := _keyboard_cadence_rpm()
+	if kb_rpm >= 0.0:
+		c = kb_rpm
+	else:
+		c = _clamped_cadence_offset(c)
+		if _sprinting and not _has_band:
+			c *= 1.0 + SPRINT_CADENCE_LIFT
 	var lift := _surge_lift()
 	if lift > 0.0:
 		c *= 1.0 + lift
@@ -986,31 +1091,141 @@ func _sample_interval() -> float:
 
 
 ## Keyboard control (BRIEF 4.2), only while enabled and while the app window has focus: a
-## key counts when it goes down. W2r2: keys are read only while focused, and the first poll
-## after enabling or after the window regains focus only notes which keys are held, so a key
-## pressed in another window never nudges the rider.
-func _poll_keyboard() -> void:
+## key counts when it goes down. Keys are read only while focused, and the first poll after
+## enabling or after the window regains focus only notes which keys are held, so a key pressed
+## in another window never nudges the rider and a key held through a focus change never ramps.
+## Held ramp keys integrate over the polled dt (platform time).
+func _poll_keyboard(dt: float) -> void:
 	var focused: bool = bool(focus_reader.call()) if focus_reader.is_valid() else _window_focused()
 	if not focused:
 		_kb_baseline = true
+		_kb_sprint = false
+		_kb_armed.clear()
+		_kb_held_s.clear()
 		return
 	var baseline := _kb_baseline
 	_kb_baseline = false
-	for k: Key in KEYBOARD_KEYS:
-		var down: bool = (
-			bool(key_reader.call(k)) if key_reader.is_valid() else Input.is_physical_key_pressed(k)
-		)
-		if down and not baseline and not bool(_kb_down.get(k, false)):
-			match k:
-				KEY_W:
-					nudge_power(KEY_POWER_STEP_W)
-				KEY_S:
-					nudge_power(-KEY_POWER_STEP_W)
-				KEY_A:
-					nudge_cadence(-KEY_CADENCE_STEP_RPM)
-				KEY_D:
-					nudge_cadence(KEY_CADENCE_STEP_RPM)
+	for k: Key in _keyboard_keys():
+		var down := _key_down(k)
+		var was := bool(_kb_down.get(k, false))
 		_kb_down[k] = down
+		if not down:
+			_kb_armed.erase(k)
+			_kb_held_s.erase(k)
+			continue
+		if not baseline and not was:
+			_kb_armed[k] = true
+			_kb_held_s[k] = 0.0
+			_on_key_pressed(k)
+		elif bool(_kb_armed.get(k, false)):
+			_kb_held_s[k] = float(_kb_held_s.get(k, 0.0)) + dt
+			_ramp_key(k, dt)
+	_kb_sprint = bool(_kb_armed.get(KEY_SPRINT, false))
+
+
+func _keyboard_keys() -> Array:
+	var keys: Array = [
+		KEY_POWER_UP,
+		KEY_POWER_DOWN,
+		KEY_CADENCE_UP,
+		KEY_CADENCE_DOWN,
+		KEY_SPRINT,
+		KEY_STOP,
+		KEY_KP_0
+	]
+	keys.append_array(KEYBOARD_PRESET_KEYS.keys())
+	return keys
+
+
+func _key_down(k: Key) -> bool:
+	return bool(key_reader.call(k)) if key_reader.is_valid() else Input.is_physical_key_pressed(k)
+
+
+## A key went down (the sprint key only arms: _poll_keyboard reads its hold).
+func _on_key_pressed(k: Key) -> void:
+	if KEYBOARD_PRESET_KEYS.has(k):
+		keyboard_preset(int(KEYBOARD_PRESET_KEYS[k]))
+		return
+	match k:
+		KEY_POWER_UP:
+			nudge_power(KEY_POWER_STEP_W)
+		KEY_POWER_DOWN:
+			nudge_power(-KEY_POWER_STEP_W)
+		KEY_CADENCE_UP:
+			nudge_cadence(KEY_CADENCE_STEP_RPM)
+		KEY_CADENCE_DOWN:
+			nudge_cadence(-KEY_CADENCE_STEP_RPM)
+		KEY_STOP, KEY_KP_0:
+			keyboard_stop()
+
+
+## A held T/G/Y/H key past KEY_HOLD_DELAY_S ramps: the speed grows exponentially from the first
+## to the second value of its range over KEY_RAMP_UP_S.
+func _ramp_key(k: Key, dt: float) -> void:
+	var held := float(_kb_held_s.get(k, 0.0))
+	var active := clampf(held - KEY_HOLD_DELAY_S, 0.0, dt)
+	if active <= 0.0:
+		return
+	var u := clampf((held - KEY_HOLD_DELAY_S) / KEY_RAMP_UP_S, 0.0, 1.0)
+	match k:
+		KEY_POWER_UP, KEY_POWER_DOWN:
+			var w := _ramp_speed(KEY_POWER_RAMP_W_PER_S, u) * active
+			nudge_power(w if k == KEY_POWER_UP else -w)
+		KEY_CADENCE_UP, KEY_CADENCE_DOWN:
+			var rpm := _ramp_speed(KEY_CADENCE_RAMP_RPM_PER_S, u) * active
+			nudge_cadence(rpm if k == KEY_CADENCE_UP else -rpm)
+
+
+static func _ramp_speed(speeds: Vector2, u: float) -> float:
+	return speeds.x * pow(speeds.y / speeds.x, u)
+
+
+## True while a preset, a stop or the sprint holds the power: it then follows at once.
+func _kb_direct() -> bool:
+	return _kb_sprint or _kb_override_w >= 0.0
+
+
+## The power goal with the keyboard applied: the sprint, else the preset, else `goal` plus the
+## offset (kept inside 0 .. max_power_w by moving the offset back).
+func _keyboard_goal_w(goal: float) -> float:
+	var max_w := float(_max_power_w)
+	if _kb_sprint:
+		return minf(KEY_SPRINT_FTP_FRACTION * _ftp_w, max_w)
+	if _kb_override_w >= 0.0:
+		return minf(_kb_override_w, max_w)
+	if _kb_power_offset_w == 0.0:
+		return goal
+	var g := clampf(goal + _kb_power_offset_w, 0.0, max_w)
+	_kb_power_offset_w = g - goal
+	return g
+
+
+## The cadence the sprint or a preset sets, -1 without either.
+func _keyboard_cadence_rpm() -> float:
+	if _kb_sprint:
+		return KEY_SPRINT_RPM
+	return _kb_override_rpm
+
+
+## `base` plus the cadence offset, kept inside 0 .. KEY_CADENCE_MAX_RPM by moving the offset.
+func _clamped_cadence_offset(base: float) -> float:
+	if _kb_cadence_offset_rpm == 0.0:
+		return base
+	var c := clampf(base + _kb_cadence_offset_rpm, 0.0, KEY_CADENCE_MAX_RPM)
+	_kb_cadence_offset_rpm = c - base
+	return c
+
+
+## Back to the rider's own power and cadence (the keyboard was switched off).
+func _kb_clear() -> void:
+	_kb_override_w = -1.0
+	_kb_override_rpm = -1.0
+	_kb_sprint = false
+	_kb_power_offset_w = 0.0
+	_kb_cadence_offset_rpm = 0.0
+	_kb_down.clear()
+	_kb_armed.clear()
+	_kb_held_s.clear()
 
 
 ## True while this mock's window (the app's) has focus; false outside the tree.

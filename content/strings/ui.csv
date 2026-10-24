@@ -34,6 +34,7 @@ UI_BANNER_RESCUE,"Rescue: easy spin, lift your cadence above 70 rpm"
 UI_BANNER_WARMUP,Warm-up: easy for 5 minutes
 UI_PAUSE_TITLE,PAUSED
 UI_PAUSE_HINT,Start pedaling to ride on
+UI_MOCK_KEYS,"MOCK {0} W {1} rpm [T/G Y/H M,.JKLUIO N Shift]"
 UI_SCAN_HINT,Surge to pick · stop pedaling to go back
 UI_SCAN_HINT_ERG,Surge to pick · keep pedaling
 UI_SCAN_AUTO_IN,Picks itself in {0} s · surge to pick now

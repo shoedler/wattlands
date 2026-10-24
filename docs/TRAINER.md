@@ -245,7 +245,17 @@ Examples: `erg:compliance=0.85+band`; `erg+band:offset_rpm=-18`; `erg+cadence_dr
 ### 5.2 Options and rider model
 
 - **Options**: `cp_w` (FTP), `wprime_j` (20000), `preferred_cadence_rpm` (90), `weight_kg` (75), `max_power_w` (1800), `seed`, `dropouts` (bool, or a chance per notification; 0.03 when true), `keyboard`.
-- **Keyboard control**: W/S ±10 W, A/D −/+5 rpm, read only while enabled and while the app window has focus. The app enables it only with `--mock-keyboard` (`WlTrainerService.use_mock()` passes it to every mock it builds); W/S/A/D then also move menu focus, since they are the InputRouter's movement bindings.
+- **Keyboard control** (a play-test aid; the mock still only produces telemetry, so the governor applies its rules to whatever it pedals). On with `--mock-keyboard` or Settings > Trainer > "Keyboard controls the mock trainer" (shown only while the mock is the backend, saved as the Settings key `mock_keyboard`; the flag wins). Keys are read only while enabled and while the app window has focus, and a key held when the window gains focus does nothing until released. None of them is bound in the input map (W/A/S/D, 1, 2 and Space are, so they are not used):
+
+  | Keys | Effect |
+  | --- | --- |
+  | T / G | power +/−: a tap steps 10 W; held past 0.3 s it ramps from 20 W/s, growing to 200 W/s over 3 s |
+  | Y / H | cadence +/−: a tap steps 5 rpm; held it ramps from 5 rpm/s to 50 rpm/s |
+  | M , . / J K L / U I O (a numpad block; the numpad keys 1-9 too) | power at 50, 75, 100 / 125, 150, 175 / 200, 225, 250 % of the rider's FTP, cadence 85 to 105 rpm in steps of 2.5 |
+  | N (numpad 0) | stop pedaling: 0 W, 0 rpm, until T raises the power again |
+  | Shift (held) | sprint: 300 % FTP at 110 rpm; on release the previous setting returns |
+
+  A preset or the sprint sets the power at once (no follower lag, no W′ fatigue cap, no sprint cadence lift), and T/G and Y/H then move it. Keys are physical positions (layout independent). While it is on, the session HUD shows `MOCK 270 W 92 rpm [keys]` in the bottom-right corner (`HudMockKeys`, in the game's HUD palette). Turning it off drops every keyboard setting.
 - **ERG follower**: second order (ω = 0.9 rad/s, damping 0.75). That is 63 % of a step after about 2 s (`ERG_TAU_S`), about 2.5 % overshoot, and within 2 % after about 6 s.
 - **Fatigue**: a Skiba W′ balance on the mock's own power. When W′ hits 0 the follower gives only 0.95 × CP until 10 % of W′ is back, so time to failure is W′ / (P − CP): 150 % FTP fails after about 160 s at the defaults, and sub-CP targets never fail. Scripted profiles ignore fatigue.
 - **Sprints**: outside ERG at ≥ 120 % FTP the follower's cadence rises 10 % (not for `band` riders). The reported cadence then lags its fall for 5 s (τ 1.5 s), like a trainer's estimate.
@@ -472,4 +482,4 @@ Everything below ran only against MockTrainer, `fake_kickr_transport.gd`, the br
 4. **The host's switch bookkeeping doesn't see the menus' SIM flat.** `PhaseTracker` starts every rider at `NO_SWITCH`, while the governor counts the menus' SIM flat → first ERG phase as a switch. In the first 30 s of a session's first ERG phase the host can accept a SIM block that the rider's governor then refuses (`switch_spacing`); the host takes it back. Workout sends no directives.
 5. **A restarted client resumes its phase at the host's elapsed time** (`LocalRider.resume_phase()` → `SafetyGovernor.resume_phase()`), so a ramp continues at the host's point of it; the 4.6 counts keep their state (the warm-up is the trainer connection's, so a restarted client's new connection starts its own). For a `course` phase a new rider's distance into the phase is estimated (75 % FTP on the speed model, `LocalRider.RESUME_ESTIMATE_PCT`), not known.
 6. **The unlink wait is bounded.** Settings → Trainer's Connect, Disconnect and the mock go through `WlTrainerService.connect_trainer()`, `disconnect_trainer()` and `use_mock()`, which wait until the control point is idle (SIM flat, then Stop sent) before the link drops, but 3 s at most (`SAFE_UNLINK_TIMEOUT_S`): a trainer that answers neither write within that time loses the link without a confirmed Stop (`push_warning`). Re-picking the trainer that is already linked sends nothing.
-7. **P1 gaps.** The app doesn't launch the bridge; RESISTANCE mode is implemented in the controller but nothing commands it; MockTrainer's keyboard control (BRIEF 4.2) needs `--mock-keyboard`.
+7. **P1 gaps.** The app doesn't launch the bridge; RESISTANCE mode is implemented in the controller but nothing commands it; MockTrainer's keyboard control needs `--mock-keyboard` or its Settings toggle.

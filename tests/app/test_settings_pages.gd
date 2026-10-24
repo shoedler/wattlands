@@ -274,6 +274,42 @@ func test_a_mock_trainer_disconnects_at_once() -> void:
 	)
 
 
+func _trainer_field(s: AppSettingsScreen, id: String) -> Dictionary:
+	for f: Dictionary in s.trainer_fields():
+		if str(f["id"]) == id:
+			return f
+	return {}
+
+
+## The keyboard toggle exists only while the mock trainer is the active backend; it persists the
+## Settings key mock_keyboard.
+func test_the_mock_keyboard_toggle_shows_only_with_the_mock_trainer() -> void:
+	fx.give_profile()
+	fx.fake_trainer().dev = null
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	assert_true(_trainer_field(s, "mock_keyboard").is_empty(), "no trainer")
+	s.use_mock()
+	assert_true(fx.trainer.is_mock(), "precondition: the mock is active")
+	var f := _trainer_field(s, "mock_keyboard")
+	assert_false(f.is_empty(), "the mock is active")
+	assert_eq(f["type"], "toggle")
+	assert_eq(f["label"], "Keyboard controls the mock trainer")
+	assert_false(bool((f["get"] as Callable).call()), "off by default")
+	var saves := int(fx.settings.get("settings_saves"))
+	(f["set"] as Callable).call(true)
+	assert_eq(fx.settings.get_value("mock_keyboard"), true)
+	assert_gt(int(fx.settings.get("settings_saves")), saves, "persisted")
+	assert_true(bool((_trainer_field(s, "mock_keyboard")["get"] as Callable).call()))
+
+
+func test_the_mock_keyboard_toggle_is_hidden_with_a_real_trainer() -> void:
+	fx.give_profile()
+	fx.fake_trainer().dev = TrainerDevice.new()
+	autofree(fx.fake_trainer().dev)
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	assert_true(_trainer_field(s, "mock_keyboard").is_empty())
+
+
 # --- controls ----------------------------------------------------------------------------------
 
 

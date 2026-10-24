@@ -1,7 +1,8 @@
 class_name AppSettingsScreen
 extends AppFormScreen
 ## Settings (BRIEF 3.2, 3.5, 3.8, 3.9), every page on pedal-scan:
-##   Trainer   status, scan (FtmsConnectionManager), connect, use the mock trainer, disconnect.
+##   Trainer   status, scan (FtmsConnectionManager), connect, use the mock trainer, disconnect;
+##             with the mock active also "Keyboard controls the mock trainer" (Settings mock_keyboard).
 ##             Connect, Disconnect and the mock go through TrainerService.connect_trainer(),
 ##             disconnect_trainer() and use_mock(): before a link drops (Disconnect, another
 ##             trainer, the mock) the rider's governor goes SIM flat, then Stop, and the link
@@ -264,6 +265,16 @@ func trainer_fields() -> Array:
 	fields.append(
 		{"id": "mock", "label": t("APP_SET_TRAINER_MOCK"), "type": "action", "run": use_mock}
 	)
+	if services.trainer != null and services.trainer.is_mock():
+		fields.append(
+			{
+				"id": "mock_keyboard",
+				"label": t("APP_SET_TRAINER_MOCK_KEYS"),
+				"type": "toggle",
+				"get": mock_keyboard_on,
+				"set": func(v: Variant) -> void: set_setting("mock_keyboard", bool(v))
+			}
+		)
 	fields.append(
 		{
 			"id": "sensors",
@@ -282,6 +293,13 @@ func trainer_fields() -> Array:
 		}
 	)
 	return fields
+
+
+## The Settings key mock_keyboard (or --mock-keyboard): the keyboard drives the mock trainer.
+func mock_keyboard_on() -> bool:
+	if CmdLine.get_bool("mock-keyboard", false):
+		return true
+	return services.settings != null and bool(services.settings.get_value("mock_keyboard", false))
 
 
 func trainer_status_text() -> String:

@@ -1,7 +1,7 @@
 class_name CmdLine
 extends RefCounted
 ## Command-line flags after `--`, read with OS.get_cmdline_user_args() (BRIEF 6):
-## --mock-trainer=<profile> (plus --mock-keyboard: its BRIEF 4.2 W/S/A/D keyboard control),
+## --mock-trainer=<profile> (plus --mock-keyboard: its keyboard control),
 ## --autopilot, --host, --join=<code>, --relay=<url>,
 ## --game=<id>, --content=<id>, --seed=<n>, --sim-speed=<x>, --run-seconds=<n>,
 ## --report=<path>, --screenshot-dir=<dir>, --profile-dir=<abs path>, --strava-base=<url>.

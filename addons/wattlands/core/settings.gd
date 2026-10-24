@@ -8,7 +8,8 @@ extends Node
 ##   relay_url default_relay_url(), strava_api_base "https://www.strava.com/api/v3",
 ##   strava_oauth_base "https://www.strava.com/oauth", scaling_mode "FAIR_FTP",
 ##   last_game "", last_content "", last_device {}, recent_rooms [], locale "en",
-##   master_volume_db 0.0, fullscreen false.
+##   master_volume_db 0.0, fullscreen false, mock_keyboard false (MockTrainer keyboard control;
+##   --mock-keyboard turns it on for a run).
 ## --relay=<url> and --strava-base=<url> override the stored values for this run.
 ##
 ## The default relay URL (W4fin, additive) is the project setting
@@ -53,6 +54,7 @@ const DEFAULTS: Dictionary = {
 	"locale": "en",
 	"master_volume_db": 0.0,
 	"fullscreen": false,
+	"mock_keyboard": false,
 }
 ## The project setting that holds this build's default relay URL (see above).
 const DEFAULT_RELAY_SETTING := "wattlands/net/default_relay_url"
