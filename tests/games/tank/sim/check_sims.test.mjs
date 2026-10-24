@@ -253,6 +253,50 @@ test('T3 judges heavy shells: build time, the first-of-segment allowance, the gr
   assert.match(ids(C.t3Problems('x', none)), /no heavy shell/);
 });
 
+test('T3 reads the rest of the rider who latched, not the longest rest of any steam rider (rotation)', () => {
+  const r = makeRun(3);
+  const first = C.heavyShells(r).find((x) => x.seg === 'gun_line');
+  const latch = r.events.find((e) => e.event?.type === 'latch' && Math.abs(e.t - first.t) < 1e-6);
+  const peer = C.peerOfSlot(r, latch.event.s);
+  const peers = new Set(r.directives.filter((d) => d.requested?.reason === 'boiler').map((d) => String(d.peer)));
+  assert.ok(peers.size >= 3, 'every rider is the steam rider in some stage');
+  assert.ok(peers.has(peer));
+  // The latching rider's next grade comes 2 s after the latch while the other steam riders still rest for long.
+  const short = makeRun(3);
+  const nextUp = short.directives.find((d) => String(d.peer) === peer && d.requested.mode_grade === 3 && d.t > first.t);
+  nextUp.t = first.t + 2;
+  assert.ok(C.heavyShells(short).some((x) => x.t === first.t && Math.abs(x.grade0S - 2) < 1e-6), "grade0S is the latching rider's 2 s");
+  assert.match(ids(C.t3Problems('x', short)), /boiler grade 0 for only 2 s/);
+  // Another rider's request at that time changes nothing for this latch.
+  const other = makeRun(3);
+  const foreign = other.directives.find((d) => String(d.peer) !== peer && d.requested.mode_grade === 3 && d.t > first.t + 200);
+  foreign.t = first.t + 2;
+  assert.ok(C.heavyShells(other).some((x) => x.t === first.t && x.grade0S > 6));
+  // A latch whose slot has no human cannot be judged.
+  const lost = makeRun(3);
+  lost.slots = lost.slots.filter((x) => x.slot !== latch.event.s);
+  assert.match(ids(C.t3Problems('x', lost)), /no boiler grade 0 after the latch/);
+});
+
+test('T3 accepts a short rest only when the rider left SIM (a checkpoint carries no mode grade)', () => {
+  const r = makeRun(3);
+  const gun = C.segmentsOf(r).filter((x) => x.seg === 'gun_line' && x.stage === 1)[0];
+  const latch = r.events.filter((e) => e.event?.type === 'latch' && e.t >= gun.start && e.t < gun.end).pop();
+  const peer = C.peerOfSlot(r, latch.event.s);
+  const end = C.segmentsOf(r, peer).find((x) => x.seg === 'gun_line' && x.stage === 1).end;
+  // The last latch of the gun line, 2 s before the checkpoint: its zero is the rider's last request.
+  latch.t = end - 2;
+  r.directives = r.directives.filter((d) => !(String(d.peer) === peer && d.t > end - 60 && d.t < end));
+  r.directives.push({ id: 999, peer: Number(peer), t: end - 2, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: 0, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
+  const sh = C.heavyShells(r).find((x) => x.t === end - 2);
+  assert.equal(sh.cut, true, 'the rest ended at the ERG checkpoint');
+  assert.ok(Math.abs(sh.grade0S - 2) < 1e-6);
+  assert.doesNotMatch(ids(C.t3Problems("x", r)), /boiler grade 0 for only/);
+  // The same 2 s inside a SIM phase (a later request while still in SIM) is a real failure.
+  r.directives.push({ id: 1000, peer: Number(peer), t: end - 1, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: 3, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
+  assert.match(ids(C.t3Problems('x', r)), new RegExp(`heavy shell at ${end - 2} s: boiler grade 0 for only 1 s`));
+});
+
 test('T4 reads the Bulwark lever share per Advance', () => {
   assert.deepEqual(C.t4Problems('x', makeRun(1)), []);
   const ge = (t, lv) => ({ type: 'game_event', t, event: { type: 'lever', s: 0, lv } });
@@ -451,6 +495,40 @@ test('S4 plan, trace, switch and lap rules', () => {
   assert.deepEqual(C.lapProblems('x', { ...makeRun(1), content_id: 'other' }), []);
 });
 
+test('S4 trace: warm-up grade -2..+3%, warm-up ERG <= 65%, +16% total, +10% before the haptic', () => {
+  const at = (peer, t, patch) => (row, p) => (p === peer && row.t === t ? { ...row, ...patch } : row);
+  const probs = (peer, t, patch) => ids(C.traceProblems('x', makeRun(3, { extraRows: at(peer, t, patch) })));
+  // Peer 1 (diesel) is in the SIM depot at 100 s; peer 2 (dynamo) is in an ERG depot.
+  assert.match(probs('1', 100, { applied_grade_pct: 3.5 }), /applied grade 3.5% at 100 s \(-2 to \+3% in the first 300 s\)/);
+  assert.match(probs('1', 100, { applied_grade_pct: -2.5 }), /applied grade -2.5% at 100 s/);
+  assert.equal(probs('1', 100, { applied_grade_pct: 3 }), '');
+  assert.equal(probs('1', 100, { applied_grade_pct: -2 }), '');
+  assert.match(probs('2', 100, { applied_pct: 70, applied_target_w: 140 }), /applied ERG 70% FTP at 100 s \(max 65% in the first 300 s\)/);
+  assert.equal(probs('2', 100, { applied_pct: 65, applied_target_w: 130 }), '');
+  // After 300 s the warm-up bounds no longer apply; the total and the pre-haptic bounds always do.
+  assert.equal(probs('1', 350, { applied_grade_pct: 8 }), '');
+  assert.match(probs('1', 350, { applied_grade_pct: 16.5, haptic: 3 }), /max \+16% in total/);
+  assert.match(probs('1', 350, { applied_grade_pct: 12, haptic: 1 }), /less haptic 1% at 350 s \(max \+10% before the haptic\)/);
+  assert.equal(probs('1', 350, { applied_grade_pct: 12, haptic: 2.1 }), '');
+});
+
+test('S4 applied values never exceed what was requested', () => {
+  const withApplied = (requested, applied, t = 310, peer = 2) => req(peer, t, requested, { applied: { clamped_by: ['slew'], refused: false, applied } });
+  const run = (d, crew = 3) => ids(dirOf([d], crew));
+  assert.equal(run(withApplied({ mode: 'ERG', target_pct: 70, reason: 'bank' }, { mode: 'ERG', target_pct: 65, target_w: 130 })), '');
+  assert.match(run(withApplied({ mode: 'ERG', target_pct: 70, reason: 'bank' }, { mode: 'ERG', target_pct: 80, target_w: 160 })), /applied ERG target % 80 above the requested 70/);
+  assert.equal(run(withApplied({ mode: 'SIM', mode_grade: 6, reason: 'boiler' }, { mode: 'SIM', mode_grade: 6, grade_pct: 3 }, 700, 3)), '');
+  assert.match(run(withApplied({ mode: 'SIM', mode_grade: 6, reason: 'boiler' }, { mode: 'SIM', mode_grade: 7.5, grade_pct: 3 }, 700, 3)), /applied mode grade % 7.5 above the requested 6/);
+  assert.match(run(withApplied({ mode: 'SIM', mode_grade: 4, reason: 'hoist' }, { mode: 'SIM', mode_grade: 5 }, 450, 1), 1), /applied mode grade % 5 above the requested 4/);
+  assert.equal(run(withApplied({ mode: 'SIM', haptic: 3, duration_s: 2, reason: 'boss_hit' }, { mode: 'SIM', haptic_pct: 2.1, haptic_s: 2 }, 1400, 1)), '');
+  assert.match(run(withApplied({ mode: 'SIM', haptic: 2, duration_s: 1.5, reason: 'hit' }, { mode: 'SIM', haptic_pct: 3.4, haptic_s: 1.5 }, 400, 1)), /applied haptic % 3.4 above the requested 2/);
+  // A refused request applies nothing and is judged by the refusal check.
+  const refused = withApplied({ mode: 'SIM', haptic: 2, duration_s: 1.5, reason: 'hit' }, { mode: 'SIM', haptic_pct: 9 }, 400, 1);
+  refused.applied.refused = true;
+  assert.equal(run(refused), '');
+  assert.match(run(withApplied({ mode: 'SIM', mode_grade: 6, reason: 'boiler' }, undefined, 700, 3)), /no applied values/);
+});
+
 test('S4 on the drill: at most one mode switch per rider, 4 laps', () => {
   const drill = makeRun(1, { content: 'drill' });
   assert.equal(C.planLaps(drill), 4);
@@ -485,7 +563,20 @@ test('unmatchedAcks accepts only the remote governors course-grade acks of a log
   const base = { directives: [cg(10), cg(10.5)], directives_unmatched: [ack(10.05), ack(10.55)] };
   assert.deepEqual(C.unmatchedAcks(base), []);
   assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05), ack(10.07)] }).length, 1, 'a second ack of one request');
-  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(11)] }).length, 1, 'no request before it');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(13)] }).length, 1, 'no request within the lag bound before it');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(9.9)] }).length, 1, 'an ack before its request');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { applied: { course_grade_pct: 9 } }), ack(10.55)] }).length, 1, 'an ack that applied another grade than requested');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { applied: {} })] }).length, 1, 'an ack without a value');
+  // The pairing follows peer, order and value, not a latency: acks 0.05 s, 0.3 s or 1 s late are still paired.
+  for (const late of [0.05, 0.3, 1]) {
+    const slow = { ...base, directives_unmatched: base.directives_unmatched.map((a) => ({ ...a, t: a.t + late })) };
+    assert.deepEqual(C.unmatchedAcks(slow), [], `${late} s later`);
+  }
+  // A request the governor never acked is passed over; the ack of the next one with the same value pairs with it.
+  const varied = [1, 2, 3].map((g, i) => ({ ...cg(30 + 0.5 * i), requested: { grade_pct: g } }));
+  const acks = (vals) => vals.map(([t, v]) => ack(t, 2, { applied: { course_grade_pct: v } }));
+  assert.deepEqual(C.unmatchedAcks({ directives: varied, directives_unmatched: acks([[30.1, 1], [31.1, 3]]) }), [], 'the 2% request was dropped');
+  assert.equal(C.unmatchedAcks({ directives: varied, directives_unmatched: acks([[31.1, 3], [31.2, 1]]) }).length, 1, 'order matters: 1% cannot follow 3%');
   assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 1)] }).length, 1, 'another peer');
   assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { kind: 'request' })] }).length, 1, 'another kind');
   assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { id: 9 })] }).length, 1, 'an id that matched nothing');

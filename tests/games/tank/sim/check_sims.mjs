@@ -33,8 +33,9 @@
 //   T3 (crew 3)   each heavy shell (latch event, shell code 2) is built in 18-35 s: from the later of
 //                 the previous main-gun shot + the 6 s breech cycle and the segment start, to the
 //                 latch (the 5 s window included); a shell that is the first of its segment is only
-//                 held to 35 s (pressure holds across a checkpoint). After the latch the boiler's
-//                 grade stays 0 for >= 6 s (the breech cycle).
+//                 held to 35 s (pressure holds across a checkpoint). After the latch the latching
+//                 rider's own boiler grade (the event's slot, not any other steam rider's) stays 0
+//                 for >= 6 s (the breech cycle), unless that rider leaves SIM first (a checkpoint).
 //   T4 (crew 1)   the Bulwark's lever is on Drive for >= 60% of each Advance (lever events; the
 //                 lever starts on Drive).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
@@ -64,6 +65,12 @@ export const BREECH_CYCLE_S = 6;
 export const T4_MIN_SHARE = 0.6;
 export const SWITCH_SPACING_S = 60;
 export const FIRST_S = 300;
+/** BRIEF 4.6: the first 300 s are ERG at 65% FTP at most or SIM at -2..+3% grade; the stacked grade is -10..+16% in total (range clamp +10% before the haptic). */
+export const FIRST_ERG_MAX_PCT = 65;
+export const FIRST_GRADE_MIN_PCT = -2;
+export const FIRST_GRADE_MAX_PCT = 3;
+export const TOTAL_GRADE_MAX_PCT = 16;
+export const RANGE_GRADE_MAX_PCT = 10;
 export const MAX_SNAPSHOT_BYTES = 4096;
 export const PAUSE_AFTER_S = 10;
 export const TICK_S = 0.05;
@@ -195,14 +202,25 @@ export function completeProblems(name, r, outcomes = ['victory', 'withdrawn', 'c
   return probs;
 }
 
-/** A remote rider's governor acks each terrain `course_grade` it applies with id 0 (the platform keeps no id for it). */
-export const COURSE_GRADE_ACK_WINDOW_S = 0.2;
+/**
+ * A remote rider's governor acks each terrain `course_grade` it applies with id 0 (the platform keeps no id for it).
+ * An ack is paired with a request by peer, order and value, not by a fixed time window; this only bounds how stale
+ * a pairing may be (the measured lag is 0.05-0.2 s, the terrain period 0.5 s), so a change in loopback latency or
+ * sim speed cannot turn the acks into false failures while an ack from far away still counts as a stray.
+ */
+export const COURSE_GRADE_ACK_MAX_LAG_S = 2;
+/** Two grade values (% grade) are the same value below this difference. */
+export const GRADE_VALUE_EPS = 1e-6;
 
 /**
  * The applied records that match no request, minus the remote governors' course-grade acks: those
- * carry id 0 and belong to pattern 4 (terrain, 2 Hz). One is accepted only when a still unclaimed
- * `course_grade` request of the same peer was logged within COURSE_GRADE_ACK_WINDOW_S before it, so
- * an ack without a request (or a second ack for one request) stays a problem.
+ * carry id 0 and belong to pattern 4 (terrain, 2 Hz). In time order each ack takes the first still
+ * unclaimed `course_grade` request of the same peer, logged no later than the ack and at most
+ * COURSE_GRADE_ACK_MAX_LAG_S before it, whose `grade_pct` equals the ack's `course_grade_pct` (older
+ * requests the governor never acked are passed over). An ack without such a request, a second ack for
+ * one request and an ack that applied another grade than the one requested all stay problems. The request
+ * it pairs with is checked on its own (directiveProblems: a grade_source game SIM phase only), so an ack
+ * is always one the director was allowed to ask for.
  */
 export function unmatchedAcks(r) {
   const pool = new Map();
@@ -210,18 +228,21 @@ export function unmatchedAcks(r) {
     if (d.kind !== 'course_grade') continue;
     const k = String(d.peer);
     if (!pool.has(k)) pool.set(k, []);
-    pool.get(k).push(num(d.t));
+    pool.get(k).push({ t: num(d.t), grade: num(d.requested?.grade_pct, NaN) });
   }
+  for (const list of pool.values()) list.sort((a, b) => a.t - b.t);
   const stray = [];
-  for (const rec of r.directives_unmatched ?? []) {
-    const times = pool.get(String(rec.peer)) ?? [];
+  const acks = (r.directives_unmatched ?? []).map((rec, i) => ({ rec, i })).sort((a, b) => num(a.rec.t) - num(b.rec.t) || a.i - b.i);
+  for (const { rec } of acks) {
+    const list = pool.get(String(rec.peer)) ?? [];
     const t = num(rec.t);
+    const grade = num(rec.applied?.course_grade_pct, NaN);
     const at =
-      rec.kind === 'course_grade' && num(rec.id) === 0 && rec.refused !== true
-        ? times.findIndex((q) => t - q >= -EPS && t - q <= COURSE_GRADE_ACK_WINDOW_S + EPS)
+      rec.kind === 'course_grade' && num(rec.id) === 0 && rec.refused !== true && Number.isFinite(grade)
+        ? list.findIndex((q) => t - q.t >= -EPS && t - q.t <= COURSE_GRADE_ACK_MAX_LAG_S + EPS && Math.abs(q.grade - grade) <= GRADE_VALUE_EPS)
         : -1;
     if (at < 0) stray.push(rec);
-    else times.splice(at, 1);
+    else list.splice(0, at + 1);
   }
   return stray;
 }
@@ -304,6 +325,12 @@ export function t2Problems(name, r) {
   return probs;
 }
 
+/** The peer (string) of the human in slot `slot`, or null. */
+export function peerOfSlot(report, slot) {
+  const s = (report.slots ?? []).find((x) => num(x.slot, -1) === num(slot, -2));
+  return s ? String(s.peer) : null;
+}
+
 /** Heavy shells of a crew 3 run: [{t, buildS, first, grade0S}] from latch / shot events and boiler directives. */
 export function heavyShells(r) {
   const events = gameEvents(r);
@@ -321,18 +348,24 @@ export function heavyShells(r) {
     if (!seg || seg.seg === 'depot') continue;
     const ready = Math.max(lastShot + BREECH_CYCLE_S, seg.start);
     const first = lastShot + BREECH_CYCLE_S <= seg.start + EPS;
-    // The loader's boiler grade after the latch: the time at grade 0 until the next grade > 0.
-    const peers = new Set(boiler.map((b) => b.peer));
+    // The latching rider's own boiler grade after the latch: the time at grade 0 until their next grade > 0. With rotation
+    // every stage has another steam rider, so no other peer's requests count. The rest also ends when that rider leaves SIM
+    // (a checkpoint's ERG carries no mode grade): then the 6 s breech cycle runs out with nothing to hold at 0 (`cut`).
+    const peer = peerOfSlot(r, e.s);
+    const leaves = peer === null ? undefined : segmentsOf(r, peer).find((s) => s.start > e._t + EPS && s.mode !== 'SIM');
+    const leaveT = leaves ? leaves.start : Infinity;
+    const mine = boiler.filter((b) => b.peer === peer && b.t >= e._t - EPS && b.t < leaveT - EPS);
+    const zero = mine.find((b) => b.grade === 0);
     let grade0S = null;
-    for (const peer of peers) {
-      const mine = boiler.filter((b) => b.peer === peer && b.t >= e._t - EPS);
-      const zero = mine.find((b) => b.grade === 0);
-      if (!zero) continue;
+    let cut = false;
+    if (zero) {
       const next = mine.find((b) => b.t > zero.t && b.grade > 0);
-      const stop = next ? next.t : Number.isFinite(seg.end) ? seg.end : zero.t;
-      grade0S = Math.max(grade0S ?? 0, stop - e._t);
+      const nextT = next ? next.t : Infinity;
+      cut = leaveT <= nextT;
+      const stop = Math.min(nextT, leaveT);
+      grade0S = (Number.isFinite(stop) ? stop : Number.isFinite(seg.end) ? seg.end : zero.t) - e._t;
     }
-    out.push({ t: e._t, buildS: e._t - ready, first, grade0S, seg: seg.seg });
+    out.push({ t: e._t, buildS: e._t - ready, first, grade0S, cut, seg: seg.seg });
   }
   return out;
 }
@@ -346,7 +379,7 @@ export function t3Problems(name, r) {
     const at = `${name}: heavy shell at ${fmt(s.t)} s`;
     if (s.buildS > T3_BUILD_RANGE[1] + EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (max ${T3_BUILD_RANGE[1]})`);
     if (!s.first && s.buildS < T3_BUILD_RANGE[0] - EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (min ${T3_BUILD_RANGE[0]})`);
-    if (s.grade0S !== null && s.grade0S < T3_GRADE0_MIN_S - EPS) probs.push(`${at}: boiler grade 0 for only ${fmt(s.grade0S)} s`);
+    if (s.grade0S !== null && !s.cut && s.grade0S < T3_GRADE0_MIN_S - EPS) probs.push(`${at}: boiler grade 0 for only ${fmt(s.grade0S)} s`);
     if (s.grade0S === null) probs.push(`${at}: no boiler grade 0 after the latch`);
   }
   return probs;
@@ -583,6 +616,7 @@ export function directiveProblems(name, r, d) {
       }
       if (num(q.duration_s) !== 0 && kind !== 'haptic') probs.push(`${at}: ${kind} with duration_s ${q.duration_s} (held until superseded)`);
       if (!isObj(d.applied) || !Array.isArray(d.applied.clamped_by)) probs.push(`${at}: no governor record with clamped_by (not clamped)`);
+      probs.push(...appliedProblems(at, kind, q, d));
       const warm = isWarmupKind(ph);
       if (kind === 'bank') {
         const t = num(q.target_pct);
@@ -613,6 +647,25 @@ export function directiveProblems(name, r, d) {
     default:
       probs.push(`${at}: unexpected directive kind`);
   }
+  return probs;
+}
+
+/**
+ * The governor may only lower what Tank asked for: the applied boiler / hoist mode grade, bank ERG target and
+ * haptic never exceed the requested value (a refused request applies nothing and is judged elsewhere).
+ */
+export function appliedProblems(at, kind, q, d) {
+  const probs = [];
+  const rec = d.applied;
+  if (!isObj(rec) || rec.refused === true || d.accepted === false) return probs;
+  const got = rec.applied;
+  if (!isObj(got)) return [`${at}: governor record has no applied values`];
+  const over = (what, applied, asked) => {
+    if (applied !== undefined && !(num(applied, NaN) <= num(asked, NaN) + EPS)) probs.push(`${at}: applied ${what} ${fmt(num(applied, NaN))} above the requested ${fmt(num(asked, NaN))}`);
+  };
+  if (kind === 'bank') over('ERG target %', got.target_pct, q.target_pct);
+  else if (kind === 'boiler' || kind === 'hoist') over('mode grade %', got.mode_grade, q.mode_grade);
+  else if (kind === 'haptic') over('haptic %', got.haptic_pct, q.haptic);
   return probs;
 }
 
@@ -658,6 +711,18 @@ export function traceProblems(name, r) {
     for (const row of rows) {
       const gt = num(row.game_t, num(row.t));
       if (row.mode === 'ERG' && num(row.applied_pct) > 100 + oneW) add(`${name}: peer ${peer} applied ERG ${fmt(num(row.applied_pct))}% FTP at ${fmt(gt)} s (max 100%)`);
+      if (gt < FIRST_S - EPS) {
+        // BRIEF 4.6.8: the first 300 s are ERG at no more than 65% or SIM at -2..+3% grade.
+        if (row.mode === 'ERG' && num(row.applied_pct) > FIRST_ERG_MAX_PCT + oneW) add(`${name}: peer ${peer} applied ERG ${fmt(num(row.applied_pct))}% FTP at ${fmt(gt)} s (max ${FIRST_ERG_MAX_PCT}% in the first ${FIRST_S} s)`);
+        const g = num(row.applied_grade_pct);
+        if (row.mode === 'SIM' && (g > FIRST_GRADE_MAX_PCT + EPS || g < FIRST_GRADE_MIN_PCT - EPS)) add(`${name}: peer ${peer} applied grade ${fmt(g)}% at ${fmt(gt)} s (${FIRST_GRADE_MIN_PCT} to +${FIRST_GRADE_MAX_PCT}% in the first ${FIRST_S} s)`);
+      }
+      if (row.mode === 'SIM') {
+        // BRIEF 4.6: the stacked grade is at most the range clamp (+10%) plus the haptic, never above +16% in total.
+        const g = num(row.applied_grade_pct);
+        if (g > TOTAL_GRADE_MAX_PCT + EPS) add(`${name}: peer ${peer} applied grade ${fmt(g)}% at ${fmt(gt)} s (max +${TOTAL_GRADE_MAX_PCT}% in total)`);
+        if (g - num(row.haptic) > RANGE_GRADE_MAX_PCT + EPS) add(`${name}: peer ${peer} applied grade ${fmt(g)}% less haptic ${fmt(num(row.haptic))}% at ${fmt(gt)} s (max +${RANGE_GRADE_MAX_PCT}% before the haptic)`);
+      }
       if (num(row.haptic) !== 0) {
         if (gt < FIRST_S - EPS) add(`${name}: peer ${peer} haptic ${row.haptic} applied at ${fmt(gt)} s (none in the first ${FIRST_S} s)`);
         if (row.mode !== 'SIM') add(`${name}: peer ${peer} haptic applied in ${row.mode} at ${fmt(gt)} s`);
