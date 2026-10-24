@@ -1,6 +1,6 @@
 class_name TankProcTex
 extends RefCounted
-## Small procedural textures the effects share (soft glow, smoke puff, fireball, vignette). They
+## Small procedural textures the effects share (soft glow, smoke puff, fireball, flame, vignette). They
 ## are generated once, on first use, and cached, so no frame creates a texture. The generated art
 ## sprites (muzzle_flash, explosion_*, smoke_puff, ...) replace the fireball and puff when a real
 ## PNG exists (TankSprites.has_real); lights and halos are always procedural.
@@ -13,14 +13,49 @@ static func glow() -> Texture2D:
 	return _make("glow", 64, _glow_px)
 
 
-## A soft grey-white round puff, 32 x 32, slightly noisy edge: smoke, steam, dust.
+## A soft grey-white round puff, 32 x 32, a smooth falloff with no pattern in it (a striped puff
+## stacked into a column reads as a coil): smoke, steam, dust.
 static func puff() -> Texture2D:
 	return _make("puff", 32, _puff_px)
+
+
+## How dark a room's wall is outside the reach of its light (the shade texture's edge alpha).
+const SHADE_EDGE := 0.82
+
+
+## A room's darkness around its light source, 48 x 48: clear in the middle, black at SHADE_EDGE
+## alpha from about half the radius out (drawn normally over the wall, under the machinery).
+static func shade() -> Texture2D:
+	return _make("shade", 48, _shade_px)
 
 
 ## A hot disc: white-yellow core, orange rim, 32 x 32.
 static func fireball() -> Texture2D:
 	return _make("fireball", 32, _fire_px)
+
+
+## A flame tongue, 16 x 32, tip up: a rounded base that tapers to a leaning point, amber (AMBER) in
+## its heart and orange (FIRE) at its rim and tip, its alpha thinning toward the tip. Fire particles
+## draw it additively along their motion, so fire reads as licking tongues, never as round discs.
+static func flame() -> Texture2D:
+	if _tex.has("flame"):
+		return _tex["flame"]
+	var img := Image.create(16, 32, false, Image.FORMAT_RGBA8)
+	for y in 32:
+		# v: 0 at the base (bottom row) .. 1 at the tip (top row).
+		var v := 1.0 - (float(y) + 0.5) / 32.0
+		var hw := 0.95 * pow(1.0 - v, 0.75) * smoothstep(-0.05, 0.22, v)
+		var cx := 0.14 * sin(v * 5.5) * v
+		for x in 16:
+			var u := (float(x) + 0.5) / 8.0 - 1.0
+			var d := absf(u - cx) / maxf(hw, 0.001)
+			var edge := clampf((1.0 - d) / 0.35, 0.0, 1.0)
+			var heart := clampf(1.0 - d / 0.6, 0.0, 1.0) * clampf(1.0 - v / 0.7, 0.0, 1.0)
+			var c := TankPalette.FIRE.lerp(TankPalette.AMBER, heart)
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, edge * clampf(1.15 - v, 0.0, 1.0)))
+	var tex := ImageTexture.create_from_image(img)
+	_tex["flame"] = tex
+	return tex
 
 
 ## A 80 x 45 darkening toward the screen edges (alpha), drawn scaled over the whole view.
@@ -58,10 +93,14 @@ static func _glow_px(d: float, _x: int, _y: int) -> Color:
 	return Color(1, 1, 1, a * a)
 
 
-static func _puff_px(d: float, x: int, y: int) -> Color:
-	var n := 0.85 + 0.15 * sin(float(x) * 2.3 + float(y) * 1.7)
-	var a := clampf((1.0 - d) / 0.45, 0.0, 1.0) * n
-	return Color(0.92, 0.93, 0.95, a)
+static func _puff_px(d: float, _x: int, _y: int) -> Color:
+	var k := clampf(1.0 - d, 0.0, 1.0)
+	return Color(0.92, 0.93, 0.95, k * k * (3.0 - 2.0 * k))
+
+
+static func _shade_px(d: float, _x: int, _y: int) -> Color:
+	var k := clampf((d - 0.18) / 0.62, 0.0, 1.0)
+	return Color(0.027, 0.031, 0.039, SHADE_EDGE * k * k * (3.0 - 2.0 * k))
 
 
 static func _fire_px(d: float, _x: int, _y: int) -> Color:

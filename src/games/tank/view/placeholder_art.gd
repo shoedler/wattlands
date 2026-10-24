@@ -21,19 +21,20 @@ extends RefCounted
 
 const ART_JSON := "res://assets/tank/art.json"
 const SPRITES_DIR := "res://assets/tank/sprites"
+const RIGS_JSON := "res://assets/tank/rigs.json"
 
 # The 32 colours of art.json by role (tested to be exactly the palette).
 const G0 := Color("#07080a")
-const G1 := Color("#0e1013")
-const G2 := Color("#161a1e")
-const G3 := Color("#1f2429")
-const G4 := Color("#2a3036")
-const G5 := Color("#363d44")
-const G6 := Color("#444b52")
-const G7 := Color("#565c62")
-const G8 := Color("#6c7176")
-const G9 := Color("#878b8f")
-const G10 := Color("#a7aaac")
+const G1 := Color("#0f1012")
+const G2 := Color("#17181b")
+const G3 := Color("#202124")
+const G4 := Color("#2a2b2e")
+const G5 := Color("#353739")
+const G6 := Color("#424446")
+const G7 := Color("#525456")
+const G8 := Color("#666869")
+const G9 := Color("#808182")
+const G10 := Color("#a3a4a4")
 const G11 := Color("#cfd0cf")
 const B0 := Color("#17130f")
 const B1 := Color("#241d17")
@@ -41,9 +42,9 @@ const B2 := Color("#33291f")
 const B3 := Color("#443628")
 const B4 := Color("#574634")
 const B5 := Color("#6b5842")
-const O0 := Color("#2b2a24")
+const O0 := Color("#59636c")
 const O1 := Color("#3d3c33")
-const O2 := Color("#545246")
+const O2 := Color("#4b5561")
 const R0 := Color("#3a2a24")
 const R1 := Color("#5a3a2e")
 const R2 := Color("#7d4f3a")
@@ -51,7 +52,7 @@ const F0 := Color("#e8743a")
 const F1 := Color("#ffb35c")
 const F2 := Color("#ffd99a")
 const F3 := Color("#fff3d6")
-const C0 := Color("#2f4a5e")
+const C0 := Color("#2e3944")
 const C1 := Color("#5d86a3")
 const C2 := Color("#9fc4dd")
 const C3 := Color("#e6f3fb")
@@ -61,22 +62,892 @@ static var _art: Dictionary = {}
 static var _cache: Dictionary = {}
 static var _logged: Dictionary = {}
 
+## Sprites the view always draws in code, whatever PNG exists (brief 3: lines are code-drawn; the
+## production critic): the mud band under the road, the wire on stakes and the Czech hedgehogs (line
+## work the image model turns into glyph-like strokes; the view draws both per obstacle), the small
+## gear (a generated 16 px gear wobbles when it spins) and the two puffs (soft radial particles,
+## TankProcTex). Their placeholder is their art, so they are never logged as missing.
+const CODE_DRAWN: Array[String] = [
+	"bg_ground", "prop_wire", "prop_tank_traps", "gear_medium", "steam_puff", "smoke_puff"
+]
 
-## The sprite's texture: the generated PNG when present, else a placeholder of its size.
+## The near strips are one generated segment mirrored (pixelate tiles a 3:1 image with flips), so
+## each landmark met its own mirror image at the seam (twin spires, twin chimneys). Measured on the
+## pixelated strips: [segment end (the mirror axis, px), width of the plain fields band that ends
+## there, width of the plain band the segment starts with]. composed_strip keeps the segment once,
+## centred, and fills both sides with those plain bands (alternately flipped, so every join is
+## seamless, the strip's own edges included): one landmark per strip, about every two screens.
+const STRIP_SEGMENTS := {
+	"bg_fields_near": [660, 110, 100],
+	"bg_village_near": [542, 80, 60],
+	"bg_quarry_near": [626, 80, 80],
+	"bg_town_near": [508, 50, 50],
+	"bg_depot_near": [557, 80, 80],
+}
+
+
+## The sprite's texture: the generated PNG when present (prepared at load: fitted, graded, its
+## openings cut, a near strip composed), else a placeholder of its size. CODE_DRAWN ids always
+## use their drawing.
 static func texture(id: String) -> Texture2D:
 	if _cache.has(id):
 		return _cache[id]
 	var path := SPRITES_DIR.path_join(id + ".png")
 	var tex: Texture2D = null
-	if ResourceLoader.exists(path):
+	if not is_code_drawn(id) and ResourceLoader.exists(path):
 		tex = load(path) as Texture2D
+		if tex != null:
+			var img := prepared_image(id, tex.get_image())
+			if img != null:
+				tex = ImageTexture.create_from_image(img)
+	elif (
+		id == "boss_bogie_broken" and ResourceLoader.exists(SPRITES_DIR.path_join("boss_bogie.png"))
+	):
+		# No drawn wreck yet: break the generated bogie (a missing wheel, a torn belt, char), so
+		# the broken part matches the whole one instead of falling back to a different style.
+		var whole := texture("boss_bogie").get_image()
+		tex = ImageTexture.create_from_image(broken_bogie(whole))
 	if tex == null:
 		tex = ImageTexture.create_from_image(placeholder_image(id))
-		if not _logged.has(id):
+		if not _logged.has(id) and not is_code_drawn(id):
 			_logged[id] = true
 			print("tank: placeholder art for %s" % id)
 	_cache[id] = tex
 	return tex
+
+
+## True for the ids the view draws in code whatever PNG exists (CODE_DRAWN).
+static func is_code_drawn(id: String) -> bool:
+	return CODE_DRAWN.has(id)
+
+
+## The generated image of `id` as the view draws it, or null when it needs no change.
+static func prepared_image(id: String, src: Image) -> Image:
+	if not (fills_rect(id) or is_steel(id) or STRIP_SEGMENTS.has(id)):
+		return null
+	var img := src
+	if img.is_compressed():
+		img = img.duplicate() as Image
+		img.decompress()
+	if fills_rect(id):
+		img = filled_image(img, size_of(id))
+	if is_steel(id):
+		img = material_grade(img, id)
+		img = machinery_fixed(id, img)
+		if id.begins_with("enemy_") or id == "boss_hull" or id.begins_with("boss_turret"):
+			img = armour_details(img, id)
+		elif id.begins_with("hull_") or id.begins_with("turret_"):
+			img = crew_details(img, id)
+		if is_plated(id):
+			img = TankMaterial.weathered(img, id)
+	if STRIP_SEGMENTS.has(id):
+		img = composed_strip(id, img)
+		img = TankStripArt.filled(id, img, STRIP_SEGMENTS.get(id, []))
+	return img
+
+
+## A near strip with its landmark once (STRIP_SEGMENTS): the generated segment in the middle, its
+## plain end bands repeated outward on both sides, alternately flipped and straight, to the strip's
+## width. Other sizes come back unchanged.
+static func composed_strip(id: String, src: Image) -> Image:
+	var seg: Array = STRIP_SEGMENTS.get(id, [])
+	var w := src.get_width()
+	var h := src.get_height()
+	if seg.size() < 3 or w != size_of(id).x:
+		return src
+	var m := int(seg[0])
+	var qr := int(seg[1])
+	var ql := int(seg[2])
+	var flat := src.duplicate() as Image
+	flat.convert(Image.FORMAT_RGBA8)
+	var left_pad := (w - m) / 2
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	img.blit_rect(flat, Rect2i(0, 0, m, h), Vector2i(left_pad, 0))
+	# Right of the segment: its last band flipped (so the join mirrors), straight, flipped...
+	var band := flat.get_region(Rect2i(m - qr, 0, qr, h))
+	var band_f := band.duplicate() as Image
+	band_f.flip_x()
+	var x := left_pad + m
+	var flip := true
+	while x < w:
+		var n := mini(qr, w - x)
+		img.blit_rect(band_f if flip else band, Rect2i(0, 0, n, h), Vector2i(x, 0))
+		x += n
+		flip = not flip
+	# Left of it: its first band flipped, then straight, outward to the strip's left edge.
+	var lead := flat.get_region(Rect2i(0, 0, ql, h))
+	var lead_f := lead.duplicate() as Image
+	lead_f.flip_x()
+	x = left_pad
+	flip = true
+	while x > 0:
+		var n := mini(ql, x)
+		var piece := lead_f if flip else lead
+		img.blit_rect(piece, Rect2i(ql - n, 0, n, h), Vector2i(x - n, 0))
+		x -= n
+		flip = not flip
+	return img
+
+
+## True for the sprites whose silhouette must fill their whole art.json rect because rigs.json
+## places rooms, wheels and the turret on it: the hulls and the Behemoth's hull. The image model
+## does not hold a 3.6:1 box exactly, so a generated hull is fitted to its rect at load
+## (filled_image), never left short with a transparent gap.
+static func fills_rect(id: String) -> bool:
+	return id.begins_with("hull_") or id == "boss_hull"
+
+
+## `src` cropped to its opaque bounds and fitted to `size` without stretching its plates: scaled
+## (Lanczos) to the rect's height keeping its aspect, then widened by repeating a band of armour
+## columns from the middle (the image model holds 3:1 at most, the hulls are 3.6:1), so rivet
+## spacing stays true. Only a too-wide result is squeezed. Then put back on the palette: alpha
+## thresholded at 0.5 and every opaque pixel snapped to the nearest palette colour, so the result
+## passes the same checks as a pixelated sprite. A sprite that already fills its rect comes back
+## unchanged.
+static func filled_image(src: Image, size: Vector2i) -> Image:
+	var img := src.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var used := img.get_used_rect()
+	if used.size == Vector2i.ZERO or (used.position == Vector2i.ZERO and used.size == size):
+		return img
+	img = img.get_region(used)
+	var fit_w := maxi(1, roundi(float(used.size.x) * float(size.y) / float(used.size.y)))
+	if fit_w != used.size.x or size.y != used.size.y:
+		img.resize(fit_w, size.y, Image.INTERPOLATE_LANCZOS)
+	if fit_w < size.x:
+		img = widened(img, size.x)
+	elif fit_w > size.x:
+		img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+	var pal := palette()
+	var seen := {}
+	for y in size.y:
+		for x in size.x:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				img.set_pixel(x, y, CLEAR)
+				continue
+			var key := c.to_rgba32() | 0xff
+			if not seen.has(key):
+				seen[key] = _nearest(c, pal)
+			img.set_pixel(x, y, seen[key])
+	return img
+
+
+## `img` widened to `width` by repeating the band of columns just left of its middle (a hull's plain
+## armour panels), so the ends (rear deck, glacis) keep their shape and nothing is stretched.
+static func widened(img: Image, width: int) -> Image:
+	var w := img.get_width()
+	var h := img.get_height()
+	var extra := width - w
+	if extra <= 0:
+		return img
+	var mid := w / 2
+	var band := clampi(mini(extra, mid), 1, maxi(mid, 1))
+	var out := Image.create(width, h, false, Image.FORMAT_RGBA8)
+	out.blit_rect(img, Rect2i(0, 0, mid, h), Vector2i.ZERO)
+	var x := mid
+	var left := extra
+	while left > 0:
+		var n := mini(band, left)
+		out.blit_rect(img, Rect2i(mid - band, 0, n, h), Vector2i(x, 0))
+		x += n
+		left -= n
+	out.blit_rect(img, Rect2i(mid, 0, w - mid, h), Vector2i(x, 0))
+	return out
+
+
+## True for the generated sprites whose steel is regraded at load (graded_steel): hulls, turrets,
+## enemies, the Behemoth, rooms, props and the machinery bodies. Backdrops, flames, sparks, puffs
+## and explosions keep their colours.
+static func is_steel(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_", "room_", "prop_"]:
+		if id.begins_with(prefix):
+			return true
+	return (
+		id
+		in [
+			"diesel_block",
+			"gearbox",
+			"dynamo_housing",
+			"boiler",
+			"firebox",
+			"flywheel_large",
+			"flywheel_small",
+			"gear_large",
+			"gear_medium",
+			"road_wheel",
+			"drive_sprocket",
+			"idler_wheel",
+			"shell_rack",
+			"depot_gate",
+		]
+	)
+
+
+## The art direction in the pipeline, not only in the prompts (brief 3: riveted steel, soot, rust,
+## mud; lights the only near-saturated pixels). The generated armour already carries its plate
+## seams, rivet rows, soot streaks and mud band (the production prompts share one material clause),
+## so the grade keeps that texture and only disciplines it:
+## - a light colour (fire, lamp, arc) on steel becomes a grey of its value, no brighter than #424446
+##   (props and the depot gate keep theirs: a crater's reflection, a gate lamp);
+## - rust and mud stay in their dark tones (#7d4f3a becomes #5a3a2e, #574634 and #6b5842 become
+##   #443628) and an isolated rust pixel (fewer than two rust or mud neighbours) becomes the steel
+##   beside it, so nothing sparkles orange;
+## - greys keep their tone (the Behemoth and the flywheels one step darker), capped at #666869;
+## - armour gets a cool rim: the top pixel of every column (#59636c on the crew's tank, #4b5561 on
+##   enemies and the Behemoth) and the rear edge of the upper hull (#4b5561), as if back-lit by
+##   moonlit haze, so the dark silhouettes part from the dark sky.
+## Rooms keep their generated walls (near-black, lit by the code-drawn glows).
+static func material_grade(src: Image, id: String) -> Image:
+	var img := src.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	if id.begins_with("room_"):
+		return img
+	var darker := 0
+	if id == "boss_hull" or id.begins_with("boss_turret") or id.begins_with("flywheel"):
+		darker = 1
+	var keep_lights := id.begins_with("prop_") or id == "depot_gate"
+	# Enemies and the Behemoth stay a step duller than the crew's tank: no slate highlights on their
+	# plates (the raw sprites catch blue-grey glints that read as camouflage blotches), greys capped.
+	var dull := id.begins_with("enemy_") or id.begins_with("boss_")
+	var w := img.get_width()
+	var h := img.get_height()
+	var cache := {}
+	var earthy := PackedByteArray()
+	earthy.resize(w * h)
+	var rusty := PackedByteArray()
+	rusty.resize(w * h)
+	var rust_keys := {R0.to_rgba32(): true, R1.to_rgba32(): true}
+	var earth_keys := {
+		R0.to_rgba32(): true,
+		R1.to_rgba32(): true,
+		B0.to_rgba32(): true,
+		B1.to_rgba32(): true,
+		B2.to_rgba32(): true,
+		B3.to_rgba32(): true,
+	}
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				img.set_pixel(x, y, CLEAR)
+				continue
+			var key := c.to_rgba32()
+			if not cache.has(key):
+				cache[key] = _material_colour(c, darker, keep_lights, dull)
+			var col: Color = cache[key]
+			img.set_pixel(x, y, col)
+			var k := col.to_rgba32()
+			earthy[y * w + x] = 1 if earth_keys.has(k) else 0
+			rusty[y * w + x] = 1 if rust_keys.has(k) else 0
+	# Isolated rust is speckle: it becomes the steel next to it.
+	for y in h:
+		for x in w:
+			if rusty[y * w + x] == 0:
+				continue
+			var n := 0
+			var steel := G3
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if dx == 0 and dy == 0:
+						continue
+					var xx := x + dx
+					var yy := y + dy
+					if xx < 0 or yy < 0 or xx >= w or yy >= h:
+						continue
+					if earthy[yy * w + xx] == 1:
+						n += 1
+					else:
+						var nc := img.get_pixel(xx, yy)
+						if nc.a > 0.5:
+							steel = nc
+			if n < 2:
+				img.set_pixel(x, y, steel)
+	if is_plated(id):
+		despeckle(img)
+		TankMaterial.tonal_patches(img, id)
+		_rim(img, id)
+	return img
+
+
+## Luminance gap (about 1.5 grey steps) above which a lone pixel is speckle (despeckle).
+const SPECKLE_LUM := 0.065
+
+
+## Removes per-pixel dust noise from armour in place (soft muted shading, not salt and pepper): a
+## pixel whose luminance is more than SPECKLE_LUM from the median of itself and its four neighbours
+## takes the neighbour at that median. A plus-shaped median keeps one-pixel plate seams (a line has
+## two neighbours of its own along it) and rivet rows are kept (a like pixel 2-5 px away on both
+## sides along a row or a column); a lone dot of dust is not.
+static func despeckle(img: Image) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var src := img.duplicate() as Image
+	var lum := PackedFloat32Array()
+	lum.resize(w * h)
+	for y in h:
+		for x in w:
+			var c := src.get_pixel(x, y)
+			lum[y * w + x] = c.get_luminance() if c.a > 0.5 else -1.0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var i := y * w + x
+			var l := lum[i]
+			if l < 0.0:
+				continue
+			var idx: Array[int] = [i, i - 1, i + 1, i - w, i + w]
+			var vals: Array[float] = []
+			var ok := true
+			for k in idx:
+				if lum[k] < 0.0:
+					ok = false
+					break
+				vals.append(lum[k])
+			if not ok:
+				continue
+			var sorted := vals.duplicate()
+			sorted.sort()
+			var m: float = sorted[2]
+			if absf(l - m) < SPECKLE_LUM or _rivet_row(lum, w, h, x, y):
+				continue
+			var pick := idx[vals.find(m)]
+			img.set_pixel(x, y, src.get_pixel(pick % w, pick / w))
+
+
+## True when the pixel at (x, y) has a like pixel (luminance within 0.02) 2-5 px away on both sides
+## along its row or along its column: a rivet in a row of rivets, not a lone speck.
+static func _rivet_row(lum: PackedFloat32Array, w: int, h: int, x: int, y: int) -> bool:
+	var l := lum[y * w + x]
+	for axis in 2:
+		var hits := 0
+		for side: int in [-1, 1]:
+			for d in range(2, 6):
+				var xx := x + side * d * (1 - axis)
+				var yy := y + side * d * axis
+				if xx < 0 or yy < 0 or xx >= w or yy >= h:
+					break
+				var v := lum[yy * w + xx]
+				if v >= 0.0 and absf(v - l) < 0.02:
+					hits += 1
+					break
+		if hits == 2:
+			return true
+	return false
+
+
+## Enemy and Behemoth armour read as riveted plate at 640 x 360 (the scene critic): the dug-in's
+## concrete aside, every enemy gets a vertical plate seam (a dark joint with a lit edge and a rivet
+## every 4 px) on each plate boundary TankMaterial chose, so every tonal edge is a seam; rust and mud
+## crumbs are cleared, the tracked enemies get a code-drawn side skirt over the tops of their road
+## wheels (no per-pixel mud speckle on the tank plane) and the dug-in's mud foot is cleaned. The
+## medium's slab gets a low boxy turret on its roof and a mantlet where the gun leaves the slab; the
+## Behemoth's lower hull darkens smoothly toward the ground. Deterministic.
+static func armour_details(src: Image, id: String) -> Image:
+	var img := src.duplicate() as Image
+	var w := img.get_width()
+	var h := img.get_height()
+	var c := Canvas.new(w, h)
+	c.img = img
+	c.seed_value = absi(id.hash()) % 9973
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var en: Dictionary = (
+		((rigs as Dictionary).get("enemies", {}) as Dictionary).get(id, {})
+		if rigs is Dictionary
+		else {}
+	)
+	var boss := id == "boss_hull"
+	var track_y := int(en.get("track_y", h))
+	var body_bottom := track_y - 2 if not boss else int(h * 0.82)
+	if id.begins_with("boss_turret"):
+		body_bottom = h - 1
+	_clear_crumbs(img, 3 if not boss else 5)
+	if boss:
+		_clear_crumbs(img, 5)
+		_lower_gradient(img, int(h * 0.55))
+	var tops := _column_tops(img)
+	if id != "enemy_dugin":
+		for x in TankMaterial.seams_x(id):
+			if body_bottom - tops[x] >= 8:
+				_seam(c, x, tops[x] + 1, body_bottom)
+		for y in TankMaterial.seams_y(id):
+			if y < body_bottom - 3:
+				_hseam(c, y)
+	if id == "enemy_dugin":
+		_concrete_courses(c)
+		_clean_band(c, int(h * 0.55), h)
+	elif not boss and en.has("track_y"):
+		# The side skirt: from the hull's bottom over the top half of the road wheels.
+		_clean_band(c, body_bottom - 5, h)
+		_skirt(c, body_bottom - 5, mini(track_y, h - 3), 24)
+	if boss:
+		_mud_splashes(c, body_bottom, 8)
+	if id == "enemy_medium":
+		_medium_turret(c, en)
+	return c.img
+
+
+## The crew's hull and turrets keep crisp detail over their flat plates (the same language as the
+## enemies'): a vertical plate seam with a rivet every 4 rows on every plate boundary TankMaterial
+## chose, a horizontal seam on its row boundaries, and a rivet row 3 px under the deck edge wherever
+## the deck runs level. A hull's bottom band below the cutaway (the skirt over the running gear) is
+## a code-drawn skirt plate: flat dark steel with a lit top edge, a bolt every 8 px and two or three
+## soft rust runs, so no generated mud speckle shows along the tank. Deterministic.
+static func crew_details(src: Image, id: String) -> Image:
+	var img := src.duplicate() as Image
+	var w := img.get_width()
+	var h := img.get_height()
+	var c := Canvas.new(w, h)
+	c.img = img
+	c.seed_value = absi(id.hash()) % 9973
+	var tops := _column_tops(img)
+	var hull := id.begins_with("hull_")
+	var skirt_top := skirt_row(id) if hull else h
+	for x in TankMaterial.seams_x(id):
+		if skirt_top - tops[x] >= 6:
+			_seam(c, x, tops[x] + 1, skirt_top)
+	for y in TankMaterial.seams_y(id):
+		if y < skirt_top - 3:
+			_hseam(c, y)
+	for rx in range(3, w - 3, 4):
+		if absi(tops[rx - 2] - tops[rx + 2]) > 1 or tops[rx] >= h - 6:
+			continue
+		var ry := tops[rx] + 3
+		if c.solid(rx, ry) and c.solid(rx + 1, ry + 1):
+			c.px(rx, ry, G7)
+			c.px(rx + 1, ry + 1, G1)
+	if hull:
+		_clean_band(c, skirt_top, h)
+		_skirt(c, skirt_top, h, 48)
+	return c.img
+
+
+## The first row of a crew hull's skirt: 5 px under its lowest room (below the rig's cutaway band and
+## its lit lip), and never more than 12 rows above the hull's bottom.
+static func skirt_row(id: String) -> int:
+	var h := size_of(id).y
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var tank := id.trim_prefix("hull_")
+	var lowest := 0
+	if rigs is Dictionary:
+		var t: Dictionary = ((rigs as Dictionary).get("tanks", {}) as Dictionary).get(tank, {})
+		for rd: Variant in t.get("rooms", []):
+			var r: Array = (rd as Dictionary).get("rect", [0, 0, 0, 0])
+			lowest = maxi(lowest, int(r[1]) + int(r[3]))
+	return clampi(lowest + 5, h - 12, h - 3)
+
+
+## Every column's first opaque row (the image height for an empty column).
+static func _column_tops(img: Image) -> PackedInt32Array:
+	var w := img.get_width()
+	var h := img.get_height()
+	var tops := PackedInt32Array()
+	tops.resize(w)
+	for x in w:
+		tops[x] = h
+		for y in h:
+			if img.get_pixel(x, y).a > 0.5:
+				tops[x] = y
+				break
+	return tops
+
+
+## A horizontal plate seam along row y (where the plate runs on both sides): a #0f1012 joint and a
+## rivet every 5 px two rows under it.
+static func _hseam(c: Canvas, y: int) -> void:
+	for x in c.w:
+		if not (c.solid(x, y - 1) and c.solid(x, y) and c.solid(x, y + 1)):
+			continue
+		c.px(x, y, G1)
+		if x % 5 == 2 and c.solid(x + 1, y + 3):
+			c.px(x, y + 2, G7)
+			c.px(x + 1, y + 3, G1)
+
+
+## Rows y0 .. y1-1 cleared of mud and rust speckle: every earth or rust pixel becomes a dark steel
+## grey, so the band reads as metal under the skirt drawn over it.
+static func _clean_band(c: Canvas, y0: int, y1: int) -> void:
+	var earth := {}
+	for col: Color in [R0, R1, R2, B0, B1, B2, B3, B4, B5]:
+		earth[col.to_rgba32()] = true
+	for y in range(maxi(y0, 0), mini(y1, c.h)):
+		for x in c.w:
+			var cc := c.img.get_pixel(x, y)
+			if cc.a > 0.5 and earth.has(cc.to_rgba32()):
+				c.px(x, y, G2 if cc.get_luminance() < 0.1 else G3)
+
+
+## A code-drawn skirt plate over rows y0 .. y1-1 (opaque pixels only; the silhouette keeps a dark
+## outline): flat #1f2429 steel, a 1 px #444b52 top edge over a shadow row, a dark bottom row, a
+## joint every `joint` px, a bolt every 8 px on the third row, and two or three soft rust runs
+## (#5a3a2e blended with a 2 px falloff either side, fading downward) from under bolts.
+static func _skirt(c: Canvas, y0: int, y1: int, joint: int) -> void:
+	if y1 - y0 < 3:
+		return
+	var plate := Color("#1f2429")
+	var edge := Color("#444b52")
+	var bolt := Color("#6a7178")
+	for y in range(y0, y1):
+		for x in c.w:
+			if not c.solid(x, y):
+				continue
+			var col := plate
+			if not (c.solid(x - 1, y) and c.solid(x + 1, y)):
+				col = G0
+			elif y == y0:
+				col = edge
+			elif y == y0 + 1:
+				col = plate.darkened(0.25)
+			elif y == y1 - 1:
+				col = G1
+			c.px(x, y, col)
+	# Plate joints: a dark line with a lit left lip, from under the top edge to the bottom.
+	var x := joint / 2 + int(c.noise(5, 5) * 8.0)
+	while x < c.w - 4:
+		for y in range(y0 + 1, y1 - 1):
+			if c.solid(x - 1, y) and c.solid(x + 1, y):
+				c.px(x, y, G0)
+				c.px(x - 1, y, plate.lightened(0.12))
+		x += joint
+	# Bolts: a lit head with a dark shadow under-right.
+	var by := y0 + 3 if y1 - y0 >= 6 else y0 + 2
+	var bolts: Array[int] = []
+	for bx in range(4, c.w - 4, 8):
+		if by + 1 < y1 - 1 and c.solid(bx - 1, by) and c.solid(bx + 2, by + 1):
+			c.px(bx, by, bolt)
+			c.px(bx + 1, by + 1, G0)
+			bolts.append(bx)
+	if bolts.is_empty():
+		return
+	# Rust runs from under two or three of the bolts.
+	var runs := 2 + int(c.noise(9, 9) * 2.0)
+	for k in runs:
+		var bx: int = bolts[int(c.noise(k, 31) * float(bolts.size())) % bolts.size()]
+		var top := by + 2
+		var length := maxi(y1 - 1 - top, 1)
+		for y in range(top, y1 - 1):
+			var fade := 1.0 - float(y - top) / float(length)
+			for dx in range(-2, 3):
+				var xx := bx + dx
+				if not (c.solid(xx - 1, y) and c.solid(xx + 1, y)):
+					continue
+				var a := 0.55 * fade * exp(-float(dx * dx) / 2.0)
+				var cc := c.img.get_pixel(xx, y)
+				if a < 0.04 or cc == bolt or cc == G0:
+					continue
+				c.px(xx, y, cc.lerp(R1, a))
+
+
+## The dug-in's revetment reads as cast concrete, not a flat slab: grey pixels below its top row get
+## a darker course line every 5 rows and staggered joints every 12 px, the course above each line lit.
+static func _concrete_courses(c: Canvas) -> void:
+	var greys: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8]
+	for x in c.w:
+		var top := -1
+		for y in c.h:
+			if not c.solid(x, y):
+				continue
+			if top < 0:
+				top = y
+				continue
+			var col := c.img.get_pixel(x, y)
+			var gi := greys.find(Color(col.r, col.g, col.b, 1.0))
+			if gi < 1 or y - top < 2:
+				continue
+			var course := (y - top) % 5 == 0
+			var joint := (x + (((y - top) / 5) % 2) * 6) % 12 == 0
+			if course or joint:
+				c.px(x, y, greys[maxi(gi - 1, 1)])
+			elif (y - top) % 5 == 1:
+				c.px(x, y, greys[mini(gi + 1, 6)])
+
+
+## One vertical plate seam from row y0 to y1 at column x (opaque pixels only): a #0f1012 joint, the
+## plate edge left of it lit #424446, and a rivet (#666869 over a #0f1012 shadow) every 4 rows.
+static func _seam(c: Canvas, x: int, y0: int, y1: int) -> void:
+	for y in range(y0, y1):
+		if not (c.solid(x, y) and c.solid(x - 1, y) and c.solid(x + 2, y)):
+			continue
+		c.px(x, y, G1)
+		if c.img.get_pixel(x - 1, y).get_luminance() < G6.get_luminance():
+			c.px(x - 1, y, G5)
+		if (y - y0) % 4 == 1 and c.solid(x + 3, y + 1):
+			c.px(x + 2, y, G7)
+			c.px(x + 3, y + 1, G1)
+
+
+## Rust and mud pixels with fewer than `need` earth neighbours become the steel next to them.
+static func _clear_crumbs(img: Image, need: int) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var earth := {}
+	for col: Color in [R0, R1, R2, B0, B1, B2, B3, B4, B5]:
+		earth[col.to_rgba32()] = true
+	var src := img.duplicate() as Image
+	for y in h:
+		for x in w:
+			var cc := src.get_pixel(x, y)
+			if cc.a < 0.5 or not earth.has(cc.to_rgba32()):
+				continue
+			var n := 0
+			var steel := G3
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if (
+						(dx == 0 and dy == 0)
+						or not Rect2i(0, 0, w, h).has_point(Vector2i(x + dx, y + dy))
+					):
+						continue
+					var nc := src.get_pixel(x + dx, y + dy)
+					if nc.a < 0.5:
+						continue
+					if earth.has(nc.to_rgba32()):
+						n += 1
+					else:
+						steel = nc
+			if n < need:
+				img.set_pixel(x, y, steel)
+
+
+## Steel below row `from_y` darkens smoothly toward the ground (up to 35% darker on the last row):
+## a grime gradient instead of speckle. Earth pixels keep their colour.
+static func _lower_gradient(img: Image, from_y: int) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	for y in range(from_y, h):
+		var k := 0.35 * float(y - from_y) / maxf(float(h - 1 - from_y), 1.0)
+		for x in w:
+			var cc := img.get_pixel(x, y)
+			if cc.a < 0.5 or cc.r > cc.b + 0.02:
+				continue
+			img.set_pixel(x, y, cc.darkened(k))
+
+
+## A few large mud splashes (4-8 px wide) on the lower hull just above `bottom`, with a lit rim on top.
+static func _mud_splashes(c: Canvas, bottom: int, n: int) -> void:
+	for k in n:
+		var cx := int(c.noise(k, 11) * float(c.w - 12)) + 6
+		var cy := bottom - 2 - int(c.noise(k, 12) * 5.0)
+		var rx := 2.0 + c.noise(k, 13) * 2.5
+		var ry := 1.0 + c.noise(k, 14) * 1.2
+		for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+			for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+				var dx := (float(x) - float(cx)) / rx
+				var dy := (float(y) - float(cy)) / ry
+				if dx * dx + dy * dy > 1.0 or not c.solid(x, y):
+					continue
+				c.px(x, y, B2 if dy < -0.4 else B1)
+
+
+## The medium's tall slab gets a low boxy turret on its roof (a sloped front, a lit top and rear, a
+## dark ring shadow) and a mantlet block where its gun meets the slab's face.
+static func _medium_turret(c: Canvas, en: Dictionary) -> void:
+	var w := c.w
+	var gy := int((en.get("muzzle", [0, 15]) as Array)[1])
+	# The slab: the first column, left to right, at least 12 px tall.
+	var root := -1
+	for x in w:
+		var n := 0
+		for y in c.h:
+			if c.solid(x, y):
+				n += 1
+		if n >= 12:
+			root = x
+			break
+	if root < 0:
+		return
+	var top := c.h
+	var mid := int(w * 0.6)
+	for y in c.h:
+		if c.solid(mid, y):
+			top = y
+			break
+	var x0 := root + 10
+	var x1 := root + 38
+	var th := mini(6, top)
+	if th >= 3:
+		for r in th:
+			var y := top - th + r
+			var left := x0 + (th - 1 - r)
+			c.rect(left, y, x1 - left, 1, G4 if r > 0 else O2)
+			c.px(x1 - 1, y, O2)
+			c.px(left, y, G5)
+		c.rect(x0 + th + 2, top - th + 2, 3, 1, G1)
+		c.rect(x0 + 4, top, x1 - x0 - 4, 1, G1)
+		c.rect(x1 - 9, top - th - 1, 5, 1, G3)
+	# The mantlet: a cast block around the gun's root on the slab face.
+	c.rect(root - 4, gy - 4, 6, 9, G4)
+	c.rect(root - 4, gy - 4, 6, 1, G6)
+	c.rect(root - 4, gy - 4, 1, 9, G5)
+	c.rect(root - 4, gy + 4, 6, 1, G1)
+	c.rect(root + 2, gy - 4, 1, 9, G2)
+
+
+static func _material_colour(c: Color, darker: int, keep_lights: bool, dull: bool) -> Color:
+	var p := _nearest(c, palette())
+	if dull and (p == O0 or p == O2 or p == C0):
+		p = G5
+	# Their rust and mud stay in the darkest tones, so a foot of crumbs never sparkles orange.
+	if dull and (p == R1 or p == R2):
+		return R0
+	if dull and (p == B3 or p == B4 or p == B5):
+		return B2
+	var key := p.to_rgba32()
+	if light_colours().has(key):
+		if keep_lights:
+			return p
+		var ramp := steel_ramp()
+		var best := 0
+		for k in ramp.size():
+			if (
+				absf(ramp[k].get_luminance() - p.get_luminance())
+				< absf(ramp[best].get_luminance() - p.get_luminance())
+			):
+				best = k
+		return ramp[clampi(mini(best, 6) - darker, 1, 6)]
+	if p == R2:
+		return R1
+	if p == B4 or p == B5:
+		return B3
+	var greys: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
+	var gi := greys.find(p)
+	if gi >= 0:
+		return greys[clampi(gi - darker, 0, 6 if dull else 8)] if gi > 0 else G0
+	return p
+
+
+## The cool rim of an armour sprite, in place (see material_grade).
+static func _rim(img: Image, id: String) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var crew := not (id.begins_with("enemy_") or id.begins_with("boss_"))
+	var top_col := O0 if crew else O2
+	for x in w:
+		for y in h:
+			if img.get_pixel(x, y).a > 0.5:
+				img.set_pixel(x, y, top_col)
+				if crew and y + 1 < h and img.get_pixel(x, y + 1).a > 0.5:
+					var below := img.get_pixel(x, y + 1)
+					if below.get_luminance() < O2.get_luminance():
+						img.set_pixel(x, y + 1, O2)
+				break
+	# The rear edge (the crew's tank faces right, so its rear is the left side) over the upper 60%.
+	for y in int(h * 0.6):
+		if crew:
+			for x in w:
+				if img.get_pixel(x, y).a > 0.5:
+					img.set_pixel(x, y, O2)
+					break
+		else:
+			for x in range(w - 1, -1, -1):
+				if img.get_pixel(x, y).a > 0.5:
+					img.set_pixel(x, y, O2)
+					break
+
+
+## True for the armour sprites that get the cool rim (material_grade): the hulls, the turrets, the
+## enemies and the Behemoth's hull and turret.
+static func is_plated(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_hull", "boss_turret"]:
+		if id.begins_with(prefix):
+			return true
+	return false
+
+
+## The grey ramp the grade uses, G0 .. G8 (index = tone).
+static func steel_ramp() -> Array[Color]:
+	return [G0, G1, G2, G3, G4, G5, G6, G7, G8]
+
+
+## Machinery whose code-drawn parts need their openings exactly where rigs.json says: the diesel
+## block's four cylinder windows (dark recesses the pistons run in) and the dynamo's armature window.
+## The generated casting keeps its own silhouette and weathering; other ids come back unchanged.
+static func machinery_fixed(id: String, img: Image) -> Image:
+	if id != "diesel_block" and id != "dynamo_housing":
+		return img
+	var c := Canvas.new(img.get_width(), img.get_height())
+	c.img = img
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var mach: Dictionary = (rigs as Dictionary).get("machinery", {}) if rigs is Dictionary else {}
+	if id == "diesel_block":
+		var wins: Array = (mach.get("diesel_block", {}) as Dictionary).get("cylinder_windows", [])
+		for wv: Variant in wins:
+			var r: Array = wv
+			var x := int(r[0])
+			var y := int(r[1])
+			c.rect(x - 1, y - 1, int(r[2]) + 2, int(r[3]) + 2, G3)
+			c.rect(x, y, int(r[2]), int(r[3]), G0)
+			c.rect(x, y, int(r[2]), 1, G1)
+			c.rect(x - 1, y - 1, int(r[2]) + 2, 1, G5)
+	else:
+		var aw: Array = (mach.get("dynamo_housing", {}) as Dictionary).get(
+			"armature_window", [20, 14, 9]
+		)
+		var cx := float(aw[0])
+		var cy := float(aw[1])
+		var r := float(aw[2])
+		c.disc(cx, cy, r + 1.6, G3)
+		c.ring(cx, cy, r + 1.6, r + 0.6, G5)
+		c.disc(cx, cy, r, G0)
+	return c.img
+
+
+## The whole bogie broken: the third wheel and its belt torn away, everything a step darker and
+## charred toward the break. Deterministic, palette colours only.
+static func broken_bogie(whole: Image) -> Image:
+	var img := whole.duplicate() as Image
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var ramp := steel_ramp()
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			var lum := c.get_luminance()
+			var best := 0
+			for k in ramp.size():
+				if absf(ramp[k].get_luminance() - lum) < absf(ramp[best].get_luminance() - lum):
+					best = k
+			var near_break := absf(float(x) - w * 0.62) < w * 0.22
+			img.set_pixel(x, y, ramp[maxi(best - (2 if near_break else 1), 0)])
+	var c2 := Canvas.new(w, h)
+	c2.img = img
+	var gx := int(w * 0.55)
+	c2.poly(
+		[gx, int(h * 0.45), gx + 6, int(h * 0.38), gx + 14, int(h * 0.5), gx + 12, h, gx - 2, h],
+		CLEAR
+	)
+	c2.thick_line(gx + 14.0, h * 0.55, gx + 20.0, h - 1.0, 2.0, G1)
+	c2.thick_line(gx - 2.0, h * 0.6, gx - 6.0, h - 1.0, 2.0, G1)
+	return c2.img
+
+
+## The seven light colours of the palette (warm fire and lamp, cold arc) as RGBA32 keys.
+static func light_colours() -> Dictionary:
+	var out := {}
+	for c: Color in [F0, F1, F2, F3, C1, C2, C3]:
+		out[c.to_rgba32()] = true
+	return out
+
+
+static func _nearest(c: Color, pal: Array[Color]) -> Color:
+	var best := pal[0]
+	var best_d := INF
+	for p in pal:
+		var d := (
+			(p.r - c.r) * (p.r - c.r) * 0.3
+			+ (p.g - c.g) * (p.g - c.g) * 0.59
+			+ (p.b - c.b) * (p.b - c.b) * 0.11
+		)
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
 
 
 ## The sprite's size in art px from art.json (16 x 16 for an unknown id).
@@ -260,8 +1131,51 @@ static func _draw(c: Canvas, id: String) -> bool:
 	if not is_opaque(id) and not is_strip(id):
 		if id == "firebox" or id == "shell_rack":
 			c.round_corners()
-		c.outline(G1)
+	if is_slab(id):
+		_slab_grade(c)
 	return true
+
+
+## True for the steel and concrete sprites that get the soft top-lit slab shading (_slab_grade).
+static func is_slab(id: String) -> bool:
+	for prefix: String in ["hull_", "turret_", "enemy_", "boss_"]:
+		if id.begins_with(prefix):
+			return true
+	return (
+		id
+		in [
+			"prop_tank_traps",
+			"prop_wreck_barricade",
+			"prop_rubble",
+			"depot_gate",
+			"diesel_block",
+			"gearbox",
+			"dynamo_housing",
+			"shell_rack",
+		]
+	)
+
+
+## Soft top-lit shading without noise or outlines: every grey-ramp pixel steps along the ramp by its
+## height in the sprite (top quarter one step lighter, then one, two and three steps darker), so
+## plates read as a 4-step gradient from a lit top edge to a near-black bottom while seams and
+## rivets keep their contrast. Black, the two brightest greys and every non-grey colour stay.
+static func _slab_grade(c: Canvas) -> void:
+	var ramp: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
+	var index := {}
+	for i in ramp.size():
+		index[ramp[i].to_rgba32()] = i
+	var shifts: Array[int] = [1, -1, -2, -3]
+	for y in c.h:
+		var shift: int = shifts[clampi(4 * y / maxi(c.h, 1), 0, 3)]
+		for x in c.w:
+			var col := c.img.get_pixel(x, y)
+			if col.a < 0.5:
+				continue
+			var k: int = index.get(col.to_rgba32(), -1)
+			if k < 1 or k > 9:
+				continue
+			c.img.set_pixel(x, y, ramp[clampi(k + shift, 1, 9)])
 
 
 ## An id art.json does not list: a flat block with a frame (an unknown id never crashes).
@@ -319,12 +1233,12 @@ static func _wheel(
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
 	c.disc(cx, cy, r_out, rim)
-	c.disc(cx, cy, r_in, G2)
+	c.disc(cx, cy, r_in, G1)
 	for i in spokes:
 		var a := TAU * i / spokes + 0.3
-		c.thick_line(cx, cy, cx + cos(a) * (r_in + 1.0), cy + sin(a) * (r_in + 1.0), 1.6, spoke)
-	c.disc(cx, cy, maxf(r_out * 0.22, 2.0), G8)
-	c.disc(cx, cy, maxf(r_out * 0.1, 1.0), G2)
+		c.thick_line(cx, cy, cx + cos(a) * (r_in + 1.0), cy + sin(a) * (r_in + 1.0), 1.8, spoke)
+	c.disc(cx, cy, maxf(r_out * 0.22, 2.0), G4)
+	c.disc(cx, cy, maxf(r_out * 0.1, 1.0), G1)
 
 
 # --- Hulls and turrets -----------------------------------------------------------------------------
@@ -363,12 +1277,8 @@ static func _hull(c: Canvas, mounts: bool) -> void:
 	# Rivets above and below the band.
 	_rivets(c, 14, w - 24, top - 5, 7, G9, G3)
 	_rivets(c, 8, w - 10, bot + 5, 8, G8, G2)
-	_streaks(c, 14, w - 24, top - 3, 5, R1)
+	_streaks(c, 14, w - 24, top - 3, 5, R0)
 	_streaks(c, 8, w - 10, bot + 7, 4, R0)
-	# Soot on the roof, rust low down.
-	c.speckle(0, 0, w, top, G3, 0.06, 1, true)
-	c.speckle(0, bot, w, h - bot, R1, 0.08, 2, true)
-	c.speckle(0, bot, w, h - bot, R0, 0.08, 3, true)
 	# Rear: tow lugs and an exhaust grille on the roof.
 	c.rect(1, 18, 4, 6, G4)
 	c.rect(3, 19, 2, 4, G2)
@@ -425,9 +1335,7 @@ static func _turret(c: Canvas) -> void:
 	c.rect(w - 4, my - 3, 4, 6, G2)
 	c.frame(w - 11, my - 8, 11, 16, G4)
 	c.line(w - 11, my - 8, w - 2, my - 8, G9)
-	c.speckle(0, 0, w, h, G3, 0.1, 1, true)
-	c.speckle(0, 4, w, h - 8, R1, 0.05, 2, true)
-	_streaks(c, 10, w - 14, 9, 4, R1)
+	_streaks(c, 10, w - 14, 9, 4, R0)
 
 
 static func _turret_secondary(c: Canvas) -> void:
@@ -443,7 +1351,6 @@ static func _turret_secondary(c: Canvas) -> void:
 	c.rect(w - 4, my - 2, 4, 4, G2)
 	c.frame(w - 9, my - 5, 9, 10, G4)
 	c.rect((w >> 1) - 5, 0, 8, 2, G8)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
 
 
 # --- Rooms (opaque back walls with an empty middle) -----------------------------------------------
@@ -453,53 +1360,48 @@ static func _room(c: Canvas, kind: String) -> void:
 	var w := c.w
 	var h := c.h
 	c.fill(G2)
-	# Wall panels: a seam every 16 px, a darker middle band for the machinery.
+	# Wall panels: a seam every 16 px, a darker middle band for the machinery. No speckle and no
+	# coloured trim: the engine's own light is the only colour in the room (brief 3).
 	_seams(c, 7, w - 8, 6, h - 8, 16, G1, G3)
-	c.rect(4, 12, w - 8, h - 24, G1 if kind != "steam" else B0)
-	c.speckle(0, 0, w, h, G3, 0.06, 4, false)
+	c.rect(4, 12, w - 8, h - 24, G1)
 	# Floor plate with a grating pattern, ceiling girder with a pipe.
-	c.rect(0, h - 8, w, 8, G4)
-	c.rect(0, h - 8, w, 1, G8)
-	c.rect(0, h - 7, w, 1, G2)
+	c.rect(0, h - 8, w, 8, G3)
+	c.rect(0, h - 8, w, 1, G5)
+	c.rect(0, h - 7, w, 1, G1)
 	var x := 2
 	while x < w - 2:
-		c.rect(x, h - 5, 2, 3, G2)
+		c.rect(x, h - 5, 2, 3, G1)
 		x += 5
 	c.rect(0, 0, w, 6, G3)
 	c.rect(0, 5, w, 1, G1)
-	c.rect(2, 1, w - 4, 3, G6)
-	c.rect(2, 1, w - 4, 1, G9)
+	c.rect(2, 1, w - 4, 3, G4)
+	c.rect(2, 1, w - 4, 1, G5)
 	for i in range(8, w - 6, 18):
-		c.rect(i, 0, 2, 6, G4)
-	# Kind marks (each engine's own look at the edges, the middle stays empty).
+		c.rect(i, 0, 2, 6, G2)
+	# Kind marks at the edges (pipes, cable trunks, a steam main), the middle stays empty.
 	match kind:
 		"diesel":
-			c.rect(w - 9, 8, 5, h - 18, B2)
-			c.rect(w - 9, 8, 1, h - 18, B4)
-			c.speckle(4, 14, 20, 24, B1, 0.18, 6, false)
-			c.speckle(4, h - 14, w - 8, 6, B2, 0.2, 7, false)
-			c.rect(3, 9, 2, h - 20, R1)
+			c.rect(w - 9, 8, 5, h - 18, B1)
+			c.rect(w - 9, 8, 1, h - 18, B2)
+			c.rect(3, 9, 2, h - 20, R0)
 		"dynamo":
 			c.rect(w - 8, 8, 3, h - 18, C0)
-			c.rect(w - 8, 8, 1, h - 18, C1)
+			c.rect(w - 8, 8, 1, h - 18, G4)
 			for i in 3:
-				c.rect(w - 11, 10 + i * 3, 9, 1, C1)
+				c.rect(w - 11, 10 + i * 3, 9, 1, G3)
 			c.rect(4, 8, 3, h - 18, C0)
-			c.rect(4, 8, 1, h - 18, C1)
-			c.speckle(8, 10, w - 20, 10, G4, 0.1, 8, false)
+			c.rect(4, 8, 1, h - 18, G4)
 		"steam":
-			c.rect(w - 10, 8, 6, h - 18, R1)
-			c.rect(w - 10, 8, 2, h - 18, R2)
-			c.rect(5, 7, w - 20, 2, R0)
-			c.disc(w - 7, 14, 3.0, R2)
-			c.disc(w - 7, 14, 1.5, R0)
-			c.speckle(0, 6, w, h - 12, R0, 0.12, 9, false)
+			c.rect(w - 10, 8, 6, h - 18, R0)
+			c.rect(w - 10, 8, 2, h - 18, B2)
+			c.rect(5, 7, w - 20, 2, B1)
+			c.disc(w - 7, 14, 3.0, B2)
+			c.disc(w - 7, 14, 1.5, G1)
 		_:
-			c.rect(w - 10, 8, 6, h - 18, B2)
-			c.rect(w - 10, 8, 1, h - 18, B4)
-			c.rect(4, 8, 6, h - 18, G4)
-			c.rect(4, 8, 1, h - 18, G7)
-			c.speckle(10, 12, w - 22, h - 24, B1, 0.12, 10, false)
+			c.rect(w - 10, 8, 6, h - 18, B1)
+			c.rect(w - 10, 8, 1, h - 18, B2)
+			c.rect(4, 8, 6, h - 18, G3)
+			c.rect(4, 8, 1, h - 18, G4)
 	c.frame(0, 0, w, h, G1)
 	c.frame(1, 1, w - 2, h - 2, G3)
 
@@ -517,46 +1419,41 @@ static func _diesel_block(c: Canvas) -> void:
 	c.rect(0, h - 7, w, 7, G5)
 	c.rect(4, h - 3, w - 8, 3, G3)
 	c.rect(0, h - 7, w, 1, G8)
-	for i in 4:
-		var x := 6 + i * 12
-		c.rect(x - 1, 5, 10, 12, G3)
-		c.rect(x, 6, 8, 10, G0)
-		c.rect(x, 6, 8, 1, G2)
-		c.rect(x + 1, 15, 6, 1, G4)
-		c.px(x - 2, 6, G9)
-		c.px(x + 9, 6, G9)
-		c.px(x - 2, 15, G9)
-		c.px(x + 9, 15, G9)
+	for x: int in [13, 23, 32, 42]:
+		c.rect(x - 1, 8, 9, 8, G3)
+		c.rect(x, 9, 7, 6, G0)
+		c.rect(x, 9, 7, 1, G2)
 	c.rect(2, 17, w - 4, 1, G3)
 	c.rect(2, 18, w - 4, 1, G7)
 	_rivets(c, 4, w - 6, 21, 6, G9, G3)
 	c.rect(w - 6, 8, 4, 12, G4)
 	c.rect(0, 9, 3, 10, G5)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
-	c.speckle(0, 0, w, h, B2, 0.07, 2, true)
 
 
+## A dark cast flywheel: a heavy rim one tone above its spokes, a lit pixel on the rim so the spin
+## reads, a crank pin; no outline and nothing pale (brief 3: lit only by the cylinders and the lamp).
 static func _flywheel(c: Canvas, spokes: int) -> void:
-	_wheel(c, c.w * 0.5 - 0.5, c.w * 0.5 - 4.0, spokes, G7, G9)
+	_wheel(c, c.w * 0.5 - 0.5, c.w * 0.5 - 4.0, spokes, G4, G3)
 	var cx := c.w * 0.5
-	c.disc(cx + c.w * 0.27, c.h * 0.5 - 1.0, 1.4, G2)
-	c.ring(cx, c.h * 0.5, c.w * 0.5 - 0.5, c.w * 0.5 - 1.8, G9)
+	c.ring(cx, c.h * 0.5, c.w * 0.5 - 0.5, c.w * 0.5 - 1.5, G5)
+	c.disc(cx + c.w * 0.27, c.h * 0.5 - 1.0, 1.4, G1)
+	c.px(int(cx), 1, G7)
 
 
 static func _gear(c: Canvas, teeth: int, tooth: int) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
 	var r := c.w * 0.5 - float(tooth) * 0.5
-	c.disc(cx, cy, r, G7)
+	c.disc(cx, cy, r, G4)
 	for i in teeth:
 		var a := TAU * i / teeth
 		var tx := cx + cos(a) * (r + float(tooth) * 0.25)
 		var ty := cy + sin(a) * (r + float(tooth) * 0.25)
-		c.disc(tx, ty, float(tooth) * 0.5, G8)
-	c.disc(cx, cy, r - 2.0, G6)
-	c.ring(cx, cy, r - 2.0, r - 3.0, G9)
-	c.disc(cx, cy, maxf(r * 0.3, 1.5), G2)
-	c.px(int(cx - 1.0), int(cy - r * 0.55), G10)
+		c.disc(tx, ty, float(tooth) * 0.5, G4)
+	c.disc(cx, cy, r - 2.0, G3)
+	c.ring(cx, cy, r - 2.0, r - 3.0, G5)
+	c.disc(cx, cy, maxf(r * 0.3, 1.5), G1)
+	c.px(int(cx - 1.0), int(cy - r * 0.55), G7)
 
 
 ## The Bulwark's three-way gearbox: a case with a lever window and three output stubs at
@@ -564,20 +1461,19 @@ static func _gear(c: Canvas, teeth: int, tooth: int) -> void:
 static func _gearbox(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(3, 4, w - 8, h - 6, G6)
-	c.rect(3, 4, w - 8, 2, G8)
-	c.rect(3, 4, w - 8, 1, G10)
+	c.rect(3, 4, w - 8, h - 6, G4)
+	c.rect(3, 4, w - 8, 2, G5)
+	c.rect(3, 4, w - 8, 1, G6)
 	c.rect(5, 9, w - 12, 9, G1)
-	c.frame(5, 9, w - 12, 9, G4)
-	c.rect(8, 12, w - 18, 2, G3)
-	_rivets(c, 6, w - 8, h - 6, 6, G9, G3)
-	c.rect(0, 22, 5, 5, G8)
-	c.rect(0, 23, 5, 2, G10)
-	c.rect(13, 0, 6, 5, G8)
-	c.rect(14, 0, 4, 2, G10)
-	c.rect(w - 5, 11, 5, 6, G8)
-	c.rect(w - 5, 12, 5, 2, G10)
-	c.speckle(0, 0, w, h, G3, 0.12, 2, true)
+	c.frame(5, 9, w - 12, 9, G3)
+	c.rect(8, 12, w - 18, 2, G2)
+	_rivets(c, 6, w - 8, h - 6, 6, G6, G2)
+	c.rect(0, 22, 5, 5, G5)
+	c.rect(0, 23, 5, 2, G6)
+	c.rect(13, 0, 6, 5, G5)
+	c.rect(14, 0, 4, 2, G6)
+	c.rect(w - 5, 11, 5, 6, G5)
+	c.rect(w - 5, 12, 5, 2, G6)
 
 
 ## The dynamo's casing: a barrel with cooling fins, end caps, a terminal box, and a round window
@@ -585,39 +1481,36 @@ static func _gearbox(c: Canvas) -> void:
 static func _dynamo_housing(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(2, 3, w - 4, h - 5, G6)
-	c.rect(2, 3, w - 4, 2, G8)
-	c.rect(2, 3, w - 4, 1, G10)
-	c.rect(0, 6, 4, h - 10, G7)
-	c.rect(w - 4, 6, 4, h - 10, G7)
+	c.rect(2, 3, w - 4, h - 5, G4)
+	c.rect(2, 3, w - 4, 2, G5)
+	c.rect(2, 3, w - 4, 1, G6)
+	c.rect(0, 6, 4, h - 10, G5)
+	c.rect(w - 4, 6, 4, h - 10, G5)
 	for i in 6:
-		c.rect(7 + i * 5, 4, 2, 3, G4)
-		c.rect(7 + i * 5, h - 5, 2, 3, G4)
-	c.rect(w - 14, 0, 9, 4, G5)
-	c.rect(w - 13, 0, 7, 1, C2)
+		c.rect(7 + i * 5, 4, 2, 3, G2)
+		c.rect(7 + i * 5, h - 5, 2, 3, G2)
+	c.rect(w - 14, 0, 9, 4, G3)
 	c.disc(20.0, 14.0, 11.0, G3)
 	c.disc(20.0, 14.0, 9.0, G0)
-	c.ring(20.0, 14.0, 11.0, 9.5, C1)
+	c.ring(20.0, 14.0, 11.0, 9.5, G5)
 	c.rect(4, 22, 6, 3, C0)
-	c.rect(4, 22, 6, 1, C1)
-	c.speckle(0, 0, w, h, G3, 0.12, 1, true)
 
 
 ## The rotor face-on: a disc with eight coil slots and a hub; the slots differ so it reads spinning.
 static func _dynamo_armature(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 9.5, G7)
-	c.ring(cx, cy, 9.5, 8.5, G9)
+	c.disc(cx, cy, 9.5, G3)
+	c.ring(cx, cy, 9.5, 8.5, G4)
 	for i in 8:
 		var a := TAU * i / 8.0
-		var col := R2 if i % 2 == 0 else R1
+		var col := B2 if i % 2 == 0 else R0
 		c.thick_line(
 			cx + cos(a) * 3.0, cy + sin(a) * 3.0, cx + cos(a) * 7.5, cy + sin(a) * 7.5, 2.2, col
 		)
-	c.disc(cx, cy, 3.0, G9)
-	c.disc(cx, cy, 1.4, G2)
-	c.px(int(cx) + 4, int(cy) - 6, C2)
+	c.disc(cx, cy, 3.0, G5)
+	c.disc(cx, cy, 1.4, G1)
+	c.px(int(cx) + 4, int(cy) - 6, G7)
 
 
 ## A burst of cold arc light: a bright core, jagged arms.
@@ -642,43 +1535,35 @@ static func _spark(c: Canvas) -> void:
 static func _boiler(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(2, 6, w - 4, h - 8, R1)
-	c.rect(0, 9, w, h - 14, R1)
-	c.rect(2, 6, w - 4, 3, R2)
-	c.rect(2, 6, w - 4, 1, G9)
-	c.rect(2, h - 4, w - 4, 3, R0)
+	# Sooted iron (brief 3: the only orange in the room is the flame).
+	c.rect(2, 6, w - 4, h - 8, G3)
+	c.rect(0, 9, w, h - 14, G3)
+	c.rect(2, 6, w - 4, 3, G4)
+	c.rect(2, 6, w - 4, 1, G5)
+	c.rect(2, h - 4, w - 4, 3, B1)
 	for x: int in [8, 18, 28, 36]:
-		c.rect(x, 6, 2, h - 8, G4)
-		c.rect(x + 2, 6, 1, h - 8, G8)
-	_rivets(c, 4, w - 4, 13, 5, G9, R0)
-	c.rect(28, 0, 5, 7, G5)
-	c.rect(28, 0, 5, 1, G9)
-	c.rect(8, 2, 9, 5, R2)
-	c.rect(8, 2, 9, 1, G9)
+		c.rect(x, 6, 2, h - 8, G2)
+		c.rect(x + 2, 6, 1, h - 8, G4)
+	_rivets(c, 4, w - 4, 13, 5, G5, G1)
+	c.rect(28, 0, 5, 7, G4)
+	c.rect(28, 0, 5, 1, G6)
+	c.rect(8, 2, 9, 5, G4)
+	c.rect(8, 2, 9, 1, G6)
 	c.disc(20.0, 11.0, 6.0, G4)
-	c.disc(20.0, 11.0, 5.0, G11)
-	c.disc(20.0, 11.0, 3.4, G2)
-	c.px(20, 8, G10)
-	c.px(21, 10, F0)
-	c.speckle(0, 0, w, h, R0, 0.12, 3, true)
-	c.speckle(0, 0, w, h, G3, 0.06, 5, true)
+	c.disc(20.0, 11.0, 5.0, G2)
 
 
 ## The firebox door: an iron box with an open hatch; the flame sprite sits in the opening.
 static func _firebox(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(0, 0, w, h, G5)
-	c.rect(0, 0, w, 2, G8)
+	c.rect(0, 0, w, h, G4)
+	c.rect(0, 0, w, 2, G5)
 	c.rect(3, 4, w - 6, h - 7, G0)
-	c.frame(3, 4, w - 6, h - 7, G7)
-	c.rect(4, h - 5, w - 8, 2, R1)
-	c.px(6, h - 4, F0)
-	c.px(w - 8, h - 4, F0)
-	c.px(9, h - 5, F1)
-	c.rect(0, h - 3, w, 3, G3)
-	_rivets(c, 2, w - 3, 2, 5, G9, G3)
-	c.speckle(0, 0, w, h, R1, 0.1, 2, true)
+	c.frame(3, 4, w - 6, h - 7, G3)
+	c.rect(4, h - 5, w - 8, 2, R0)
+	c.rect(0, h - 3, w, 3, G2)
+	_rivets(c, 2, w - 3, 2, 5, G6, G2)
 
 
 ## A flame: teardrop layers from orange to a white-hot core, standing on the sprite's bottom.
@@ -702,18 +1587,18 @@ static func _flame_layer(
 static func _flyball(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(7, 2, 2, h - 5, G8)
-	c.rect(7, 2, 1, h - 5, G10)
-	c.disc(8.0, 3.0, 2.0, G6)
-	c.thick_line(8.0, 4.0, 3.0, 10.0, 1.0, G9)
-	c.thick_line(8.0, 4.0, 13.0, 10.0, 1.0, G9)
-	c.disc(3.0, 11.0, 2.6, G10)
-	c.disc(13.0, 11.0, 2.6, G10)
-	c.px(2, 10, G11)
-	c.px(12, 10, G11)
-	c.rect(6, 12, 4, 3, G5)
-	c.rect(2, h - 4, w - 4, 4, G6)
-	c.rect(2, h - 4, w - 4, 1, G9)
+	c.rect(7, 2, 2, h - 5, G5)
+	c.rect(7, 2, 1, h - 5, G6)
+	c.disc(8.0, 3.0, 2.0, G4)
+	c.thick_line(8.0, 4.0, 3.0, 10.0, 1.0, G5)
+	c.thick_line(8.0, 4.0, 13.0, 10.0, 1.0, G5)
+	c.disc(3.0, 11.0, 2.6, G5)
+	c.disc(13.0, 11.0, 2.6, G5)
+	c.px(2, 10, G7)
+	c.px(12, 10, G7)
+	c.rect(6, 12, 4, 3, G3)
+	c.rect(2, h - 4, w - 4, 4, G4)
+	c.rect(2, h - 4, w - 4, 1, G5)
 
 
 ## A round, lumpy cloud of three shades (smoke or steam).
@@ -735,40 +1620,37 @@ static func _puff(c: Canvas, light: Color, mid: Color, dark: Color, lumps: int) 
 static func _shell_rack(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.rect(0, 0, w, h, G4)
-	c.rect(1, 1, w - 2, h - 2, G2)
-	c.frame(0, 0, w, h, G6)
-	c.rect(0, h - 5, w, 5, G5)
-	c.rect(0, h - 5, w, 1, G8)
-	c.rect(0, 3, w, 2, G6)
+	c.rect(0, 0, w, h, G3)
+	c.rect(1, 1, w - 2, h - 2, G1)
+	c.frame(0, 0, w, h, G4)
+	c.rect(0, h - 5, w, 5, G3)
+	c.rect(0, h - 5, w, 1, G5)
+	c.rect(0, 3, w, 2, G4)
 	for i in 3:
 		var x := 4 + i * 9
-		c.rect(x, 12, 7, 24, B4)
-		c.poly([x, 12, x + 1, 7, x + 3, 5, x + 4, 5, x + 6, 7, x + 7, 12], G9)
-		c.rect(x + 1, 12, 1, 24, B5)
-		c.rect(x, 17, 7, 2, R2)
-		c.rect(x, 30, 7, 2, G7)
-		c.px(x + 2, 8, G11)
-	c.rect(0, 8, 2, h - 14, G7)
-	c.rect(w - 2, 8, 2, h - 14, G7)
-	_rivets(c, 3, w - 4, 1, 6, G9, G3)
+		c.rect(x, 12, 7, 24, B2)
+		c.poly([x, 12, x + 1, 7, x + 3, 5, x + 4, 5, x + 6, 7, x + 7, 12], G4)
+		c.rect(x + 1, 12, 1, 24, B3)
+		c.rect(x, 30, 7, 2, B1)
+	c.rect(0, 8, 2, h - 14, G4)
+	c.rect(w - 2, 8, 2, h - 14, G4)
+	_rivets(c, 3, w - 4, 1, 6, G5, G1)
 
 
 # --- Running gear (face-on) -----------------------------------------------------------------------
 
 
+## A road wheel face-on: a dark disc with a soft rim, a solid hub and one lit pixel on top (no ring
+## around a square hub, which reads as a "0" at 1080p), one dark lightening hole so the spin shows.
 static func _road_wheel(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 8.8, G2)
-	c.disc(cx, cy, 7.0, G6)
-	c.ring(cx, cy, 7.0, 6.0, G8)
-	for i in 6:
-		var a := TAU * i / 6.0 + 0.2
-		c.disc(cx + cos(a) * 4.4, cy + sin(a) * 4.4, 1.2, G2)
-	c.disc(cx, cy, 2.4, G9)
-	c.disc(cx, cy, 1.0, G2)
-	c.px(int(cx) + 5, int(cy) - 5, G11)
+	c.disc(cx, cy, 8.8, G1)
+	c.disc(cx, cy, 7.4, G3)
+	c.ring(cx, cy, 7.4, 6.4, G4)
+	c.disc(cx, cy, 2.6, G2)
+	c.disc(cx + 4.0, cy + 1.5, 1.3, G2)
+	c.px(int(cx), int(cy) - 7, G6)
 
 
 static func _sprocket(c: Canvas) -> void:
@@ -776,29 +1658,27 @@ static func _sprocket(c: Canvas) -> void:
 	var cy := c.h * 0.5
 	for i in 10:
 		var a := TAU * i / 10.0
-		c.disc(cx + cos(a) * 9.6, cy + sin(a) * 9.6, 1.9, G7)
-	c.disc(cx, cy, 9.0, G6)
-	c.ring(cx, cy, 9.0, 8.0, G8)
+		c.disc(cx + cos(a) * 9.6, cy + sin(a) * 9.6, 1.9, G3)
+	c.disc(cx, cy, 9.0, G3)
+	c.ring(cx, cy, 9.0, 8.0, G4)
 	for i in 5:
 		var a := TAU * (i + 0.5) / 5.0
-		c.disc(cx + cos(a) * 5.4, cy + sin(a) * 5.4, 1.9, G2)
-	c.disc(cx, cy, 3.0, G9)
-	c.disc(cx, cy, 1.3, G2)
-	c.px(int(cx) + 6, int(cy) - 4, G10)
+		c.disc(cx + cos(a) * 5.4, cy + sin(a) * 5.4, 1.9, G1)
+	c.disc(cx, cy, 2.6, G2)
+	c.px(int(cx), int(cy) - 9, G6)
 
 
 static func _idler(c: Canvas) -> void:
 	var cx := c.w * 0.5
 	var cy := c.h * 0.5
-	c.disc(cx, cy, 9.6, G3)
-	c.disc(cx, cy, 8.0, G6)
-	c.ring(cx, cy, 8.0, 7.0, G9)
+	c.disc(cx, cy, 9.6, G1)
+	c.disc(cx, cy, 8.0, G3)
+	c.ring(cx, cy, 8.0, 7.0, G4)
 	for i in 4:
 		var a := TAU * i / 4.0 + 0.5
-		c.thick_line(cx, cy, cx + cos(a) * 6.5, cy + sin(a) * 6.5, 1.8, G4)
-	c.disc(cx, cy, 3.4, G8)
-	c.disc(cx, cy, 1.4, G2)
-	c.px(int(cx) - 4, int(cy) - 5, G11)
+		c.thick_line(cx, cy, cx + cos(a) * 6.5, cy + sin(a) * 6.5, 1.8, G2)
+	c.disc(cx, cy, 2.8, G2)
+	c.px(int(cx), int(cy) - 8, G6)
 
 
 # --- Enemies (facing left, the gun at the left edge) -----------------------------------------------
@@ -822,19 +1702,17 @@ static func _tracks(c: Canvas, x0: int, x1: int, y0: int, y1: int) -> void:
 ## A low wedge light tank: sloped front, a small turret, a thin long barrel at y 10.
 static func _enemy_light(c: Canvas) -> void:
 	_tracks(c, 6, 76, 33, 40)
-	c.poly([4, 33, 14, 21, 70, 21, 76, 33], G5)
-	c.line(14, 21, 70, 21, G9)
-	c.line(4, 33, 14, 21, G7)
-	c.rect(8, 28, 62, 3, G3)
-	_rivets(c, 18, 66, 25, 7, G8, G3)
-	# Turret and barrel.
-	c.poly([32, 21, 36, 8, 56, 8, 62, 21], G6)
-	c.line(36, 8, 56, 8, G10)
-	c.rect(35, 11, 22, 6, G5)
-	c.rect(2, 9, 34, 3, G4)
-	c.rect(2, 9, 34, 1, G8)
-	c.rect(0, 8, 4, 5, G3)
-	c.rect(46, 4, 6, 4, G7)
+	# A very low wedge: the nose rises from the ground to a flat deck, no turret.
+	c.poly([0, 34, 30, 22, 72, 20, 78, 26, 76, 34], G5)
+	c.line(0, 34, 30, 22, G7)
+	c.line(30, 22, 72, 20, G9)
+	c.rect(8, 29, 64, 3, G3)
+	_rivets(c, 34, 70, 25, 7, G8, G3)
+	# A tiny cupola near the rear with a short thin gun, muzzle at (52, 20).
+	c.poly([60, 21, 62, 15, 72, 15, 74, 20], G6)
+	c.line(62, 15, 72, 15, G10)
+	c.rect(52, 18, 10, 2, G4)
+	c.rect(52, 18, 10, 1, G8)
 	c.speckle(0, 0, 80, 40, R1, 0.1, 1, true)
 	c.speckle(0, 0, 80, 40, G3, 0.08, 2, true)
 
@@ -856,7 +1734,7 @@ static func _enemy_medium(c: Canvas) -> void:
 	_seams(c, 54, 80, 9, 27, 14, G3, G7)
 	c.rect(60, 2, 12, 4, G7)
 	c.rect(63, 3, 6, 1, G2)
-	# The gun: a thick barrel and a mantlet, muzzle at (2, 14).
+	# The gun: a thick barrel and a mantlet, muzzle at (0, 15).
 	c.rect(2, 12, 40, 4, G4)
 	c.rect(2, 12, 40, 1, G8)
 	c.rect(0, 11, 5, 6, G3)
@@ -876,23 +1754,23 @@ static func _enemy_heavy(c: Canvas) -> void:
 	c.rect(8, 46, 120, 3, G3)
 	_seams(c, 22, 118, 36, 46, 22, G3, G6)
 	_rivets(c, 14, 122, 40, 7, G9, G3)
-	# A wide turret with a heavy mantlet and a long barrel to (0, 16).
+	# A wide turret with a heavy mantlet low in its front and a long barrel to (0, 29).
 	c.poly([40, 34, 46, 12, 98, 12, 106, 34], G6)
 	c.line(46, 12, 98, 12, G10)
 	c.rect(48, 17, 52, 15, G5)
 	_seams(c, 60, 92, 14, 33, 16, G3, G7)
 	c.rect(70, 8, 14, 4, G7)
 	c.rect(72, 9, 10, 1, G2)
-	c.rect(0, 14, 50, 5, G4)
-	c.rect(0, 14, 50, 1, G8)
-	c.rect(0, 13, 6, 7, G3)
-	c.rect(38, 10, 10, 14, G7)
-	c.rect(38, 10, 10, 1, G9)
+	c.rect(0, 27, 46, 4, G4)
+	c.rect(0, 27, 46, 1, G8)
+	c.rect(0, 26, 6, 7, G3)
+	c.rect(38, 22, 10, 12, G7)
+	c.rect(38, 22, 10, 1, G9)
 	c.speckle(0, 0, 136, 60, R1, 0.1, 1, true)
 	c.speckle(0, 0, 136, 60, G3, 0.08, 2, true)
 
 
-## A turretless casemate destroyer: a long sloped casemate, a fixed gun to (0, 18), engine deck.
+## A turretless casemate destroyer: a long sloped casemate, a fixed gun to (0, 17), engine deck.
 static func _enemy_destroyer(c: Canvas) -> void:
 	_tracks(c, 6, 106, 37, 44)
 	c.poly([4, 37, 8, 26, 108, 26, 108, 37], G5)
@@ -919,7 +1797,7 @@ static func _enemy_destroyer(c: Canvas) -> void:
 
 
 ## A dug-in gun behind a concrete revetment: a low turret ([8,0,32,14] is its hit box), the
-## muzzle at (2, 8), concrete and an earth mound below and behind.
+## muzzle at (23, 16) on the generated sprite (here on the wall's top), concrete and an earth mound below and behind.
 static func _enemy_dugin(c: Canvas) -> void:
 	# The earth mound behind and the turret.
 	c.poly([38, 14, 48, 12, 62, 18, 72, 24, 72, 36, 38, 36], B2)
@@ -931,20 +1809,14 @@ static func _enemy_dugin(c: Canvas) -> void:
 	c.rect(2, 7, 14, 3, G4)
 	c.rect(2, 7, 14, 1, G8)
 	c.rect(0, 6, 4, 5, G3)
-	# The concrete revetment with a firing slit and a stepped top.
-	c.rect(0, 14, 56, 22, G7)
-	c.rect(0, 14, 56, 2, G9)
-	c.rect(0, 16, 56, 1, G5)
-	c.rect(6, 19, 30, 3, G1)
-	c.rect(0, 28, 56, 8, G6)
-	_seams(c, 14, 50, 22, 36, 14, G4, G8)
-	c.speckle(0, 14, 56, 22, G5, 0.2, 2, true)
-	c.speckle(0, 14, 56, 22, G9, 0.08, 3, true)
-	c.rect(0, 35, 72, 1, G3)
-	# Sandbag course along the ground.
-	for i in 6:
-		c.rect(2 + i * 9, 32, 8, 4, B4)
-		c.rect(2 + i * 9, 32, 8, 1, B5)
+	# The concrete revetment: two flat tones, a chamfered top edge, a couple of chips; no marks.
+	c.poly([0, 18, 4, 14, 56, 14, 56, 36, 0, 36], G6)
+	c.poly([0, 18, 4, 14, 56, 14, 56, 17, 4, 17, 0, 21], G7)
+	c.rect(0, 28, 56, 8, G5)
+	c.poly([20, 14, 24, 14, 22, 16], CLEAR)
+	c.poly([46, 14, 52, 14, 50, 17, 47, 16], G5)
+	# Packed earth heaped in front along the ground.
+	c.poly([0, 36, 6, 31, 30, 30, 50, 32, 60, 36], B1)
 
 
 # --- The Behemoth --------------------------------------------------------------------------------------
@@ -966,7 +1838,7 @@ static func _boss_hull(c: Canvas) -> void:
 	for y: int in [22, 48, 72]:
 		c.rect(4, y, w - 8, 1, G3)
 		_rivets(c, 8, w - 10, y + 2, 8, G8, G2)
-	_streaks(c, 8, w - 10, 25, 7, R1)
+	_streaks(c, 8, w - 10, 25, 7, R0)
 	_streaks(c, 8, w - 10, 51, 6, R0)
 	# The turret seat and its ring.
 	c.rect(96, 4, 160, 4, G7)
@@ -1039,10 +1911,10 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 	c.rect(6, 6, w - 12, 2, G4)
 	var x := 14
 	while x < w - 10:
-		c.disc(x + 0.5, 21.0, 6.0, G5)
-		c.ring(x + 0.5, 21.0, 6.0, 5.0, G8)
-		c.disc(x + 0.5, 21.0, 2.0, G9)
-		c.disc(x + 0.5, 21.0, 0.8, G2)
+		c.disc(x + 0.5, 21.0, 6.0, G3)
+		c.ring(x + 0.5, 21.0, 6.0, 5.0, G4)
+		c.disc(x + 0.5, 21.0, 2.0, G2)
+		c.px(x, 15, G6)
 		x += 12
 	c.rect(6, h - 3, w - 12, 3, G1)
 	if broken:
@@ -1051,11 +1923,6 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 		c.poly([18, 12, 24, 14, 22, 24, 16, 26], CLEAR)
 		c.line(36, 12, 44, 30, G1)
 		c.line(22, 14, 18, 30, G1)
-		c.speckle(0, 0, w, h, G0, 0.35, 4, true)
-		c.speckle(0, 0, w, h, R0, 0.15, 5, true)
-		c.px(30, 18, F1)
-		c.px(29, 19, F0)
-		c.px(31, 19, F0)
 		c.poly([40, 22, 54, 26, 58, 32, 40, 32], G3)
 
 
@@ -1063,33 +1930,35 @@ static func _boss_bogie(c: Canvas, broken: bool) -> void:
 
 
 ## Three angle-iron hedgehogs, each three crossed beams.
+## Three hedgehogs of heavy angle iron: thick dark beams lit only along their upper edges, no
+## outline and no speckle, so they read as steel on the tank's plane, not as vector lines.
 static func _tank_traps(c: Canvas) -> void:
 	for i in 3:
 		var cx := 11.0 + i * 21.0
 		var cy := 13.0
-		c.thick_line(cx - 8.0, cy + 9.0, cx + 8.0, cy - 9.0, 2.6, G6)
-		c.thick_line(cx - 8.0, cy - 9.0, cx + 8.0, cy + 9.0, 2.6, G5)
-		c.thick_line(cx - 10.0, cy, cx + 10.0, cy, 2.6, G7)
-		c.thick_line(cx - 8.0, cy + 8.0, cx + 8.0, cy - 8.0, 1.0, G9)
-		c.disc(cx, cy, 2.0, G4)
-	c.speckle(0, 0, 64, 24, R1, 0.15, 1, true)
-	c.speckle(0, 0, 64, 24, R2, 0.05, 2, true)
+		c.thick_line(cx - 8.0, cy + 9.0, cx + 8.0, cy - 9.0, 3.4, G3)
+		c.thick_line(cx - 8.0, cy - 9.0, cx + 8.0, cy + 9.0, 3.4, G2)
+		c.thick_line(cx - 10.0, cy, cx + 10.0, cy, 3.4, G4)
+		c.thick_line(cx - 7.0, cy + 7.0, cx + 7.0, cy - 9.0, 1.0, G5)
+		c.hline(int(cx) - 9, int(cx) + 9, int(cy) - 2, G5)
+		c.disc(cx, cy, 2.2, G2)
 
 
 ## Barbed wire: leaning stakes with coiled strands between them.
+## Barbed wire on stakes: dark leaning posts and heavy sagging strands, the barbs as small dark
+## knots; one dim highlight row per strand.
 static func _wire(c: Canvas) -> void:
 	for x: int in [4, 20, 36, 52, 60]:
-		c.rect(x, 2, 2, 18, B3)
-		c.rect(x, 2, 1, 18, B5)
+		c.rect(x, 2, 3, 18, B1)
+		c.rect(x, 2, 1, 18, B3)
 	for k in 3:
 		var y0 := 5 + k * 5
 		for x in range(4, 60):
 			var yy := y0 + int(round(sin(x * 0.9 + k) * 2.0))
-			c.px(x, yy, G8)
-			c.px(x + 1, yy + 1, G6)
+			c.px(x, yy, G4)
+			c.px(x, yy + 1, G2)
 		for t in range(8, 58, 8):
-			c.px(t, y0 - 2 + (k % 2), G10)
-			c.px(t + 1, y0 + 3, G10)
+			c.rect(t, y0 - 1 + (k % 2), 2, 2, G3)
 	c.rect(0, 18, 64, 2, B1)
 
 
@@ -1260,7 +2129,7 @@ static func _glow(c: Canvas, cx: float, cy: float, r: float) -> void:
 			if d >= 1.0:
 				continue
 			var level := (1.0 - d) * (1.0 - d)
-			if c.bayer(x, y) < level * 0.9 and c.solid(x, y):
+			if level > 0.08 and c.solid(x, y):
 				var col := R0
 				if level > 0.55:
 					col = R2
@@ -1277,8 +2146,8 @@ static func _cold_glow(c: Canvas, cx: float, cy: float, r: float) -> void:
 			if d >= 1.0:
 				continue
 			var level := (1.0 - d) * (1.0 - d)
-			if c.bayer(x, y) < level * 0.8 and c.solid(x, y):
-				c.px(x, y, C0 if level < 0.35 else C1)
+			if level > 0.1 and c.solid(x, y):
+				c.px(x, y, C0 if level < 0.45 else C1)
 
 
 ## A fire: flame tongues on a base, hot colours.
@@ -1349,9 +2218,9 @@ static func _fields(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
 	# Fields in receding strips, furrows, and a hedgerow along the front.
-	c.rect(0, 92, w, h - 92, O0)
+	c.rect(0, 92, w, h - 92, B1)
 	for i in 6:
-		c.rect(0, 92 + i * 8, w, 4, O1 if i % 2 == 0 else O0)
+		c.rect(0, 92 + i * 8, w, 4, O1 if i % 2 == 0 else B1)
 	for x in range(0, w, 3):
 		c.px(x, 100 + (x * 7) % 31, O2)
 	# Hedgerow: bumpy dark band with leaf speckle.
@@ -1359,20 +2228,20 @@ static func _fields(c: Canvas) -> void:
 		var top := 80 + int(_ridge(x, w, 4.0, 3.0, 1.1) + c.noise(x / 3, 1, 33) * 4.0)
 		c.rect(x, top, 1, 96 - top, G2)
 		if c.noise(x, 2, 33) < 0.18:
-			c.px(x, top + 2, O0)
+			c.px(x, top + 2, O1)
 	c.rect(0, 94, w, 3, B1)
 	# Poplars along the road, left half; a lone row right.
 	for x in range(20, 500, 29):
-		_poplar(c, x, 94, 58 + int(c.noise(x, 3, 34) * 24.0), G2, O0)
+		_poplar(c, x, 94, 58 + int(c.noise(x, 3, 34) * 24.0), G2, O1)
 	for x in range(700, 940, 34):
-		_poplar(c, x, 94, 54 + int(c.noise(x, 3, 34) * 20.0), G3, O0)
+		_poplar(c, x, 94, 54 + int(c.noise(x, 3, 34) * 20.0), G3, O1)
 	# Fence posts.
 	for x in range(0, w, 17):
 		c.rect(x, 96, 2, 7, B3)
 	c.rect(0, 98, w, 1, B3)
 	# The burning farmstead.
 	_glow(c, 600.0, 60.0, 56.0)
-	_house(c, 575, 96, 44, 22, 14, O0, B1, 0.2)
+	_house(c, 575, 96, 44, 22, 14, G3, B1, 0.2)
 	c.rect(618, 80, 24, 16, O1)
 	c.poly([616, 80, 630, 70, 644, 80], B1)
 	_fire(c, 592, 70, 1.5)
@@ -1391,9 +2260,9 @@ static func _village(c: Canvas) -> void:
 	# Orchard trees on the left.
 	for x in range(10, 220, 24):
 		c.rect(x, 86, 2, 14, B1)
-		c.disc(x + 1.0, 80.0, 9.0, O0)
+		c.disc(x + 1.0, 80.0, 9.0, O1)
 		c.disc(x - 3.0, 83.0, 6.0, O1)
-		c.disc(x + 5.0, 82.0, 6.0, O0)
+		c.disc(x + 5.0, 82.0, 6.0, G3)
 	# Houses along the street.
 	var hx := 230
 	var i := 0
@@ -1589,33 +2458,40 @@ static func _depot_backdrop(c: Canvas) -> void:
 	c.rect(0, h - 8, w, 8, G3)
 
 
+## The road's mud in cross-section (code-drawn: the image model kept drawing a landscape into this
+## band): soft horizontal layers of brown-black mud, darker with depth, two ruts, and flat puddles of
+## dark water with one dim cold sheen row (the lamps' reflections are added by the view).
 static func _ground(c: Canvas) -> void:
 	var w := c.w
 	var h := c.h
-	c.fill(B2)
-	# Layers from the grass verge at the top to the mud of the road.
-	c.rect(0, 0, w, 6, O0)
+	var layers: Array[Color] = [B2, B1, B2, B1, B0, B1, B0, G1]
+	for y in h:
+		for x in w:
+			# Two octaves of smooth noise bend the layer boundaries, so the bands never rule straight.
+			var wob := (
+				sin(TAU * x / w * 3.0 + y * 0.21) * 1.6
+				+ sin(TAU * x / w * 11.0 + y * 0.53) * 0.8
+				+ (c.noise(x / 6, y / 3, 83) - 0.5) * 2.0
+			)
+			var t := clampf((y + wob) / float(h), 0.0, 0.999)
+			c.px(x, y, layers[int(t * layers.size())])
+	c.rect(0, 0, w, 2, B1)
 	for x in w:
-		if c.noise(x, 1, 81) < 0.6:
-			c.px(x, 5 + int(c.noise(x, 2, 81) * 2.0), O1)
-	c.rect(0, 6, w, 14, B3)
-	c.rect(0, 20, w, 30, B2)
-	c.rect(0, 50, w, h - 50, B1)
-	# Ruts along the road and puddles that catch the lamps.
-	for x in w:
-		var rut := 24 + int(round(sin(TAU * x / w * 6.0) * 1.5))
-		c.px(x, rut, B1)
-		c.px(x, rut + 1, B0)
-		c.px(x, rut + 12, B1)
-		c.px(x, rut + 13, B3)
-	for p in range(0, w, 130):
-		var py := 30 + int(c.noise(p, 3, 82) * 14.0)
-		var pw := 22.0 + c.noise(p, 4, 82) * 14.0
-		c.ellipse(p + 40.0, py, pw, 3.0, C0)
-		c.hline(p + 30, p + 46, py - 1, C1)
-		c.px(p + 38, py, C2)
-	c.speckle(0, 0, w, h, B4, 0.12, 5, false)
-	c.speckle(0, 0, w, h, B0, 0.1, 6, false)
+		if c.noise(x / 2, 1, 81) < 0.45:
+			c.px(x, 2, B3)
+		var rut := 9 + int(round(sin(TAU * x / w * 4.0) * 1.2))
+		c.px(x, rut, B0)
+		c.px(x, rut + 1, G1)
+		c.px(x, rut + 2, B3)
+		c.px(x, rut + 14, B0)
+		c.px(x, rut + 15, B3)
+	for p in range(0, w, 120):
+		var px := p + 20 + int(c.noise(p, 3, 82) * 70.0)
+		var py := 5 + int(c.noise(p, 4, 82) * 18.0)
+		var pw := 10.0 + c.noise(p, 5, 82) * 12.0
+		c.ellipse(px, py, pw, 1.6, G1)
+		c.ellipse(px, py, pw - 2.0, 1.0, C0)
+		c.hline(int(px - pw * 0.4), int(px + pw * 0.2), py - 1, O2)
 
 
 static func _debris(c: Canvas) -> void:
@@ -1668,7 +2544,7 @@ static func _picker(c: Canvas) -> void:
 	_smoke_column(c, 246, 60, 44, G4, G5)
 	# The road.
 	c.rect(0, 150, w, h - 150, B2)
-	c.rect(0, 150, w, 4, O0)
+	c.rect(0, 150, w, 4, B1)
 	c.rect(0, 160, w, 20, B1)
 	c.ellipse(60.0, 172.0, 24.0, 3.0, C0)
 	c.hline(48, 64, 171, C1)
@@ -1897,7 +2773,7 @@ class Canvas:
 				var dx := (x + 0.5 - cx) / rx
 				var dy := (y + 0.5 - cy) / ry
 				var d2 := dx * dx + dy * dy
-				if d2 <= 1.0 and bayer(x, y) < (1.0 - d2) * 1.1:
+				if d2 <= 0.6:
 					img.set_pixel(x, y, col)
 
 	func ring(cx: float, cy: float, r_out: float, r_in: float, col: Color) -> void:
@@ -1962,16 +2838,28 @@ class Canvas:
 					rect(xa, y, xb - xa, 1, col)
 				k += 2
 
-	## Random pixels of `col` in the rect at `density`; on_solid keeps them off transparent pixels.
+	## Weathering without per-pixel noise: sparse soft streaks of `col` running down in the rect
+	## (soot, rust or damp), 2 px wide and 2-7 px long, on about `density` / 2 of the column pairs;
+	## on_solid keeps them off transparent pixels.
 	func speckle(
 		x: int, y: int, rw: int, rh: int, col: Color, density: float, salt: int, on_solid: bool
 	) -> void:
-		for yy in range(maxi(y, 0), mini(y + rh, h)):
-			for xx in range(maxi(x, 0), mini(x + rw, w)):
-				if noise(xx, yy, salt) < density and (not on_solid or solid(xx, yy)):
-					img.set_pixel(xx, yy, col)
+		var y_end := mini(y + rh, h)
+		var xx := maxi(x, 0)
+		while xx < mini(x + rw, w):
+			if noise(xx, 0, salt) < density * 0.5:
+				var y0 := y + int(noise(xx, 1, salt) * float(rh) * 0.8)
+				var n := 2 + int(noise(xx, 2, salt) * 6.0)
+				for k in n:
+					var yy := y0 + k
+					if yy < 0 or yy >= y_end:
+						break
+					for dx in 2:
+						if xx + dx < w and (not on_solid or solid(xx + dx, yy)):
+							img.set_pixel(xx + dx, yy, col)
+			xx += 2
 
-	## A vertical ordered-dither gradient through `cols` over the rect.
+	## A vertical banded gradient through `cols` over the rect (flat steps, no dither).
 	func gradient_v(x: int, y: int, rw: int, rh: int, cols: Array[Color]) -> void:
 		var n := cols.size()
 		if n < 2 or rh < 1:
@@ -1980,10 +2868,8 @@ class Canvas:
 			return
 		for yy in rh:
 			var f := float(yy) / maxf(rh - 1, 1) * (n - 1)
-			var i := mini(int(floor(f)), n - 2)
-			var frac := f - i
+			var col: Color = cols[clampi(int(round(f)), 0, n - 1)]
 			for xx in rw:
-				var col: Color = cols[i + 1] if bayer(x + xx, y + yy) < frac else cols[i]
 				px(x + xx, y + yy, col)
 
 	## Darkens the rim: every solid pixel with a transparent 4-neighbour inside the image becomes

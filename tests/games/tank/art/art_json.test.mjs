@@ -1,6 +1,6 @@
 // tests/games/tank/art/art_json.test.mjs: assets/tank/art.json stays valid for tools/art/generate.mjs.
 // Runs the generator with --dry-run only, with FAL_KEY and WATTLANDS_ALLOW_ART removed from its
-// environment, so no fal call can happen; it writes nothing (no manifest, no sprites).
+// environment, so no fal call can happen; it writes nothing (the manifest and the sprites stay as they are).
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -47,6 +47,13 @@ test('generate.mjs --dry-run accepts art.json and plans within the $15 budget (n
   const env = { ...process.env };
   delete env.FAL_KEY;
   delete env.WATTLANDS_ALLOW_ART;
+  const manifest = path.join(repo, 'assets', 'tank', 'art_manifest.json');
+  const sprites = path.join(repo, 'assets', 'tank', 'sprites');
+  const snap = () => ({
+    manifest: fs.existsSync(manifest) ? fs.readFileSync(manifest, 'utf8') : null,
+    sprites: fs.existsSync(sprites) ? fs.readdirSync(sprites).sort().join(',') : null,
+  });
+  const before = snap();
   const r = spawnSync(process.execPath, [path.join(repo, 'tools', 'art', 'generate.mjs'), '--game=tank', '--dry-run'], {
     cwd: repo,
     env,
@@ -55,6 +62,5 @@ test('generate.mjs --dry-run accepts art.json and plans within the $15 budget (n
   });
   assert.equal(r.status, 0, r.stderr + r.stdout);
   assert.match(r.stdout, /budget: the plan fits/);
-  assert.equal(fs.existsSync(path.join(repo, 'assets', 'tank', 'art_manifest.json')), false, 'a dry run writes no manifest');
-  assert.equal(fs.existsSync(path.join(repo, 'assets', 'tank', 'sprites')), false, 'no sprites from placeholders');
+  assert.deepEqual(snap(), before, 'a dry run changes neither the manifest nor the sprites');
 });

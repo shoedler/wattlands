@@ -20,6 +20,7 @@ enum Kind {
 	EXPLOSION,
 	FLASH,
 	MUZZLE,
+	EXHAUST,
 }
 
 ## Hard cap on live particles.
@@ -29,12 +30,17 @@ const ADDITIVE: Array[int] = [
 	Kind.SPARK, Kind.EMBER, Kind.FIRE, Kind.EXPLOSION, Kind.FLASH, Kind.MUZZLE
 ]
 ## Kinds that may be dropped when the pool is full (the rest evict the oldest particle).
-const DROPPABLE: Array[int] = [Kind.SMOKE, Kind.DUST, Kind.STEAM, Kind.HEAT, Kind.DIRT, Kind.EMBER]
+const DROPPABLE: Array[int] = [
+	Kind.SMOKE, Kind.DUST, Kind.STEAM, Kind.HEAT, Kind.DIRT, Kind.EMBER, Kind.EXHAUST
+]
 ## Depth planes: 0 on the tank's plane (sharp), 1 behind it (soft and hazy), -1 in front of it.
 const PLANE_BACK := 1
 const PLANE_FRONT := -1
+## On the hull: inside an engine room, carried along with the tank (the camera follows the hull, so
+## these never scroll). Drawn like plane 0.
+const PLANE_HULL := 2
 ## Camera scroll factor per plane (see ParallaxStrip factors).
-const PLANE_SCROLL := {0: 1.0, 1: 0.5, -1: 1.3}
+const PLANE_SCROLL := {0: 1.0, 1: 0.5, -1: 1.3, 2: 0.0}
 
 ## The live particles (indexes 0 .. count - 1).
 var count: int = 0
@@ -53,6 +59,9 @@ var drag: PackedFloat32Array = PackedFloat32Array()
 var kind: PackedInt32Array = PackedInt32Array()
 var plane: PackedInt32Array = PackedInt32Array()
 var color: PackedColorArray = PackedColorArray()
+## The lowest a particle may go (layer y; INF for none): a spark struck off the deck dies when it
+## falls back past the armour it came off, so it never streaks down into the rooms under it.
+var floor_y: PackedFloat32Array = PackedFloat32Array()
 ## Spawns dropped because the pool was full (tests).
 var dropped: int = 0
 ## Spawns ever accepted (tests).
@@ -76,6 +85,7 @@ func _init() -> void:
 	kind.resize(CAP)
 	plane.resize(CAP)
 	color.resize(CAP)
+	floor_y.resize(CAP)
 
 
 func clear() -> void:
@@ -120,6 +130,7 @@ func spawn(
 	kind[i] = p_kind
 	plane[i] = p_plane
 	color[i] = p_color
+	floor_y[i] = INF
 	_last = i
 	spawned += 1
 	return true
@@ -132,9 +143,15 @@ func tumble(p_rot: float, p_spin: float) -> void:
 		spin[_last] = p_spin
 
 
+## Sets the floor (layer y) of the particle spawned last: it dies when it falls below it.
+func set_floor(y: float) -> void:
+	if _last >= 0 and _last < count:
+		floor_y[_last] = y
+
+
 ## Advances every particle by `dt` seconds and removes the dead. `scroll_px` is how far the camera
 ## moved right this step: particles in the world (plane 0) slide left by it, those on the far plane
-## by half and those in front by 1.3 x, like the planes' parallax.
+## by half and those in front by 1.3 x, like the planes' parallax; those on the hull stay put.
 func step(dt: float, ground_y: float, scroll_px: float = 0.0) -> void:
 	var i := 0
 	while i < count:
@@ -149,6 +166,9 @@ func step(dt: float, ground_y: float, scroll_px: float = 0.0) -> void:
 		var p := pos[i] + v * dt
 		if scroll_px != 0.0:
 			p.x -= scroll_px * PLANE_SCROLL.get(plane[i], 1.0)
+		if p.y > floor_y[i]:
+			_remove(i)
+			continue
 		var k := kind[i]
 		if (k == Kind.BRASS or k == Kind.DIRT or k == Kind.EMBER) and p.y > ground_y:
 			p.y = ground_y
@@ -167,6 +187,16 @@ func step(dt: float, ground_y: float, scroll_px: float = 0.0) -> void:
 ## Progress 0 (born) .. 1 (dead) of particle `i`.
 func age(i: int) -> float:
 	return clampf(1.0 - life[i] / ttl[i], 0.0, 1.0)
+
+
+## True when particle `i` is drawn on the additive layer. Cold sparks (a spark whose colour is bluer
+## than red: the dynamo's) are blended instead: added over a room lit amber by a rider's lamp, a
+## blue-white stroke clips to cream and reads as a warm spark, so they keep their own colour.
+func is_additive(i: int) -> bool:
+	var k := kind[i]
+	if k == Kind.SPARK:
+		return color[i].b <= color[i].r
+	return ADDITIVE.has(k)
 
 
 ## How many live particles are of `p_kind` (tests).
@@ -194,6 +224,7 @@ func _remove(i: int) -> void:
 		kind[i] = kind[last]
 		plane[i] = plane[last]
 		color[i] = color[last]
+		floor_y[i] = floor_y[last]
 	count -= 1
 
 

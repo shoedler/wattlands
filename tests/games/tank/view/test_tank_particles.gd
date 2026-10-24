@@ -212,7 +212,7 @@ func _smoke_after(fx: TankFx, frac: float) -> Array:
 	var alpha := 0.0
 	var n := 0
 	for i in fx.particles.count:
-		if fx.particles.kind[i] == TankParticles.Kind.SMOKE:
+		if fx.particles.kind[i] == TankParticles.Kind.EXHAUST:
 			alpha += fx.particles.color[i].a
 			n += 1
 	return [n, alpha / maxf(float(n), 1.0)]
@@ -230,7 +230,7 @@ func test_exhaust_follows_watts_and_a_sprint_is_a_black_plume() -> void:
 		fx.exhaust("p", Vector2(100, 200), 1.35, 1.0 / 60.0)
 	var darkest := 1.0
 	for i in fx.particles.count:
-		if fx.particles.kind[i] == TankParticles.Kind.SMOKE:
+		if fx.particles.kind[i] == TankParticles.Kind.EXHAUST:
 			darkest = minf(darkest, fx.particles.color[i].r)
 	assert_lt(darkest, 0.1, "black, not grey")
 	assert_gt(fx.particles.count_kind(TankParticles.Kind.HEAT), 0, "a faint heat shimmer")

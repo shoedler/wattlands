@@ -8,7 +8,9 @@ extends Node2D
 ## Rows: {"t": "sprite", "id": String, "pos": Vector2, "size": Vector2, "flip": bool, "tint": Color}
 ##       {"t": "line", "a": Vector2, "b": Vector2, "w": float, "c": Color}
 ##       {"t": "rect", "r": Rect2, "c": Color}
-##       {"t": "bar", "pos": Vector2, "w": float, "frac": float}
+##       {"t": "bar", "pos": Vector2, "w": float, "frac": float, "a": float (optional alpha)}
+##       {"t": "poly", "pts": PackedVector2Array, "c": Color} (a filled polygon)
+##       {"t": "polyline", "pts": PackedVector2Array, "w": float, "c": Color}
 
 var rows: Array[Dictionary] = []
 
@@ -30,6 +32,10 @@ func _draw() -> void:
 				draw_rect(row["r"], row["c"])
 			"bar":
 				_bar(row)
+			"poly":
+				draw_colored_polygon(row["pts"], row["c"])
+			"polyline":
+				draw_polyline(row["pts"], row["c"], float(row.get("w", 1.0)))
 
 
 func _sprite(row: Dictionary) -> void:
@@ -38,7 +44,11 @@ func _sprite(row: Dictionary) -> void:
 	var tint: Color = row.get("tint", Color.WHITE)
 	var tex := TankSprites.tex(str(row["id"]))
 	if bool(row.get("flip", false)):
-		draw_texture_rect(tex, Rect2(pos.x + size.x, pos.y, -size.x, size.y), false, tint)
+		# Mirrored about its own middle: a negative rect width flips the texture but keeps the
+		# rect's x, so the sprite would land one width to the right of `pos` (polish round 6).
+		draw_set_transform(Vector2(pos.x + size.x, pos.y), 0.0, Vector2(-1.0, 1.0))
+		draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, tint)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
 		draw_texture_rect(tex, Rect2(pos, size), false, tint)
 
@@ -47,6 +57,9 @@ func _bar(row: Dictionary) -> void:
 	var pos: Vector2 = row["pos"]
 	var w := float(row["w"])
 	var frac := clampf(float(row["frac"]), 0.0, 1.0)
-	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.COAL)
-	var col := TankPalette.SILVER if frac > 0.34 else TankPalette.FIRE
+	var k := clampf(float(row.get("a", 1.0)), 0.0, 1.0)
+	# Dim and short: a dark slot with a muted steel fill (rust when low), no white; it fades out.
+	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.with_alpha(TankPalette.SOOT, 0.7 * k))
+	var col := TankPalette.STEEL_LIGHT if frac > 0.34 else TankPalette.RUST_LIGHT
+	col.a = k
 	draw_rect(Rect2(pos + Vector2(1, 1), Vector2(maxf(roundf((w - 2.0) * frac), 0.0), 1)), col)

@@ -20,6 +20,23 @@ static func has_real(id: String) -> bool:
 	return ResourceLoader.exists(TankPlaceholderArt.SPRITES_DIR.path_join(id + ".png"))
 
 
+static var _top_pad: Dictionary = {}
+
+
+## The first opaque row of sprite `id` (its empty band above the silhouette), measured once.
+static func top_pad(id: String) -> int:
+	if _top_pad.has(id):
+		return _top_pad[id]
+	var pad := 0
+	var img := tex(id).get_image()
+	if img != null and not img.is_empty():
+		if img.is_compressed():
+			img.decompress()
+		pad = img.get_used_rect().position.y
+	_top_pad[id] = pad
+	return pad
+
+
 ## The enemy sprite id of a TankIds.ENEMY_* type ("enemy_light", ...).
 static func enemy_id(type: String) -> String:
 	return "enemy_" + type

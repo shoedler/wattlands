@@ -381,7 +381,8 @@ func test_lights_are_the_only_bright_saturated_colours() -> void:
 
 
 func test_texture_is_cached_per_id_and_logs_once() -> void:
-	var id := "prop_rubble"
+	# An id with no PNG: after the production art pass every art.json id has one.
+	var id := "no_such_sprite_cached"
 	var t1 := TankPlaceholderArt.texture(id)
 	var logged_before: int = TankPlaceholderArt._logged.size()
 	var t2 := TankPlaceholderArt.texture(id)
@@ -423,7 +424,7 @@ func test_placeholders_are_never_saved_as_sprite_files() -> void:
 		var id := f.get_basename()
 		if TankPlaceholderArt.sprite_def(id).is_empty():
 			continue
-		var on_disk := Image.load_from_file("res://assets/tank/sprites/" + f)
+		var on_disk := (load("res://assets/tank/sprites/" + f) as Texture2D).get_image()
 		assert_ne(
 			on_disk.get_data(), _img(id).get_data(), "%s on disk is not a saved placeholder" % f
 		)

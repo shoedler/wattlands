@@ -172,9 +172,11 @@ func test_picker_cards_and_generated_title_card() -> void:
 	fx.fake_registry().add_fixture(FakeRegistry.fishing())
 	var s := open_screen(AppPickerScreen.new(), {"mode": "host"}) as AppPickerScreen
 	assert_eq(s.cards.size(), 4)
+	var siege := s.cards["siege"] as AppGameCard
+	assert_null(siege.image, "a missing picker_image draws a generated card")
+	assert_not_null(siege.generated)
 	var tank := s.cards["tank"] as AppGameCard
-	assert_null(tank.image, "a missing picker_image draws a generated card")
-	assert_not_null(tank.generated)
+	assert_not_null(tank.image, "Tank's picker_image is shown")
 	var fishing := s.cards["fishing"] as AppGameCard
 	assert_not_null(fishing.image, "an existing picker_image is shown")
 	var workout := s.cards["workout"] as AppGameCard

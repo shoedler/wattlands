@@ -50,9 +50,15 @@ func muzzle_hull() -> Vector2:
 	return muzzle - Vector2(recoil * float(facing), 0.0)
 
 
+## A 2 px barrel (a lit top row in STEEL_BRIGHT, a dark underside) and a plain 3 x 4 muzzle block.
 func _paint_barrel(item: Node2D) -> void:
-	var from := Vector2(rect.size.x - 6.0 if facing > 0 else 6.0, rect.size.y * 0.5)
 	var to := muzzle - rect.position - Vector2(recoil * float(facing), 0.0)
-	item.draw_line(from, to, TankPalette.STEEL_DARK, 2.0)
-	item.draw_line(from - Vector2(0, 1), to - Vector2(0, 1), TankPalette.STEEL_LIGHT, 1.0)
-	item.draw_line(to - Vector2(3.0 * float(facing), 0), to, TankPalette.STEEL_BRIGHT, 3.0)
+	to.y = roundf(to.y)
+	var from := Vector2(rect.size.x - 6.0 if facing > 0 else 6.0, to.y)
+	var x0 := minf(from.x, to.x)
+	var length := absf(to.x - from.x)
+	item.draw_rect(Rect2(x0, from.y - 1.0, length, 1.0), TankPalette.STEEL_BRIGHT)
+	item.draw_rect(Rect2(x0, from.y, length, 1.0), TankPalette.STEEL_DARK)
+	var bx := to.x - (3.0 if facing > 0 else 0.0)
+	item.draw_rect(Rect2(bx, from.y - 2.0, 3.0, 4.0), TankPalette.IRON)
+	item.draw_rect(Rect2(bx, from.y - 2.0, 3.0, 1.0), TankPalette.STEEL_LIGHT)

@@ -19,12 +19,46 @@ const CUE_QUEUE_MAX := 64
 const MAX_WRECKS := 6
 const WRECK_TTL_S := 40.0
 const WRECK_BURN_S := 12.0
+## Wrecks sit on the back lane: scaled down, lifted and darkened toward the haze.
+const WRECK_SCALE := 0.8
+const WRECK_LIFT_PX := 9.0
+## Charred dark grey, not black: the plate seams and the cool rim still read at half strength, so a
+## wreck keeps its type's silhouette and detail.
+const WRECK_TINT := Color(0.48, 0.46, 0.45)
+## Where a live enemy stands in front of a wreck, the wreck recedes into the haze (half see-through,
+## so the hazy backdrop shows through it, its fire dimmer) over WRECK_VEIL_S, so the two never
+## merge into one dark blob and the live one's barrel and silhouette read against it (polish round
+## 6).
+const WRECK_VEIL_TINT := Color(0.46, 0.47, 0.5, 0.42)
+const WRECK_VEIL_S := 0.4
 ## The depot gate stands behind the start (world x of its left edge).
 const DEPOT_GATE_X := -90.0
-## Crater and rubble props every this many world px, by hash.
-const PROP_CELL_PX := 380.0
-const TRAJECTORY_STEP_S := 0.14
-const TRAJECTORY_DOTS := 12
+## Ground props (craters, rubble, pairs of telegraph poles with their wires, fence posts and wire,
+## flooded ruts; at the depot drums, barriers, crates and floodlights) every this many world px, by
+## hash.
+const PROP_CELL_PX := 210.0
+## The depot yard's props on the tank's plane, every this many world px.
+const DEPOT_PROP_CELL_PX := 150.0
+## The depot's yards along the roll-out, DEPOT_BAY_PX world px each: every third bay opens with a
+## yard gate (the depot gate's sprite, a little smaller and set back, the tank rolling past its
+## piers), the others hold a workshop: a brick shed with a sawtooth roof, lit windows and a stack.
+## So the depot reads as a depot for the whole warm-up, not only at the start (polish round 6: at
+## 60 s the yard was an empty brown band with two lamp posts).
+const DEPOT_BAY_PX := 340.0
+## The compound wall behind the yard: its height and the spacing of its piers (world px).
+const DEPOT_WALL_H := 16.0
+const DEPOT_PIER_PX := 96.0
+const DEPOT_YARD_TINT := Color(0.66, 0.68, 0.72)
+## The aimed arc: a dot every TRAJECTORY_STEP_S of flight (about 16 px), so the dots read as one
+## dotted arc in the gunner's colour, every third with a faint halo, not as stray pixels.
+const TRAJECTORY_STEP_S := 0.045
+const TRAJECTORY_DOTS := 34
+## No HP bar floats on the tank's plane (the scene critic): damage shows on the sprite. A hit flashes
+## the enemy warm for HIT_FLASH_S; below DAMAGE_SMOKE_FRAC of its HP its hull smokes, and below
+## DAMAGE_FIRE_FRAC a small fire burns in it.
+const HIT_FLASH_S := 0.16
+const DAMAGE_SMOKE_FRAC := 0.5
+const DAMAGE_FIRE_FRAC := 0.25
 const HALO_RADIUS := {
 	TankIds.SHELL_LIGHT: 9.0,
 	TankIds.SHELL_HEAVY: 13.0,
@@ -33,6 +67,8 @@ const HALO_RADIUS := {
 	TankIds.SHELL_ENEMY: 11.0,
 	TankIds.SHELL_BOSS_MAIN: 26.0,
 }
+## Enemies on one lane keep at least this gap between them (else the next one steps back a lane).
+const ENEMY_GAP_PX := 8.0
 ## A falling shell that vanishes this close to the ground landed in it.
 const SHELL_LANDING_PX := 22.0
 const WITHDRAW_PX_S := 46.0
@@ -84,6 +120,8 @@ var _prev_cam: float = 0.0
 var _cam_primed: bool = false
 var _traps_were_cleared: bool = false
 var _boss_death_done: bool = false
+## Enemy id -> [last hp seen, seconds its hit flash still shows].
+var _hp_seen: Dictionary = {}
 
 
 func _ready() -> void:
@@ -181,8 +219,10 @@ func advance(delta: float) -> void:
 	_on_segment(state)
 	lights.begin()
 	backdrop.set_world_x(cam_x)
+	backdrop.advance(delta)
 	var feed := rider_feed(state, t)
 	rig.update(state, feed, delta)
+	backdrop.hull_span = Vector2(rig.base_pos.x - 2.0, rig.base_pos.x + float(rig.hull_w) + 2.0)
 	_process_cues(state)
 	_process_timers(delta)
 	_track_enemies(state, delta)
@@ -193,8 +233,10 @@ func advance(delta: float) -> void:
 	_ambient(state, delta)
 	_scenery(delta)
 	fx.step(delta, scroll)
+	_reflections()
 	lights.wash = fx.flash
 	lights.wash_color = fx.flash_color
+	lights.wash_pos = fx.flash_pos
 	lights.end()
 	world.position = (rig.shake_offset * 0.6).round()
 	_update_fade(delta)
@@ -255,7 +297,8 @@ func rider_feed(state: TankState, t: float) -> Dictionary:
 
 func _on_segment(state: TankState) -> void:
 	var idx := state.seg.phase_index
-	backdrop.set_near(TankBackdrop.backdrop_id(state))
+	backdrop.set_segment(idx)
+	backdrop.set_near(TankBackdrop.backdrop_id(state), cam_x)
 	if idx == _seg_index:
 		return
 	_seg_index = idx
@@ -300,8 +343,10 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 			for i in 3:
 				fx.explosion(at + Vector2(float(i) * 14.0 - 14.0, 4.0), false)
 		TankEvents.REPAIRED:
+			# Welding sparks on the armour's top band (the deck), never inside the cutaway rooms.
 			for i in 6:
-				fx.impact_sparks(rig.hull_point(Vector2(30.0 + float(i) * 12.0, 8.0)), Vector2.UP)
+				var hx := 30.0 + float(i) * 12.0
+				fx.impact_sparks(rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0)), Vector2.UP)
 		TankEvents.ROTATION:
 			rig.flash_rooms()
 		TankEvents.OVERRUN:
@@ -356,8 +401,11 @@ func _cue_hit(state: TankState, data: Dictionary) -> void:
 	var wx := float(data.get("x", 0)) - cam_x
 	match int(data.get("on", -1)):
 		TankEvents.ON_TANK:
+			# The shell strikes the armour's top band (the deck line), never the cutaway rooms: sparks
+			# over a room's lamp read as that room's own sparks.
 			var x := clampf(wx, rig.base_pos.x + 6.0, rig.base_pos.x + float(rig.hull_w) - 6.0)
-			var at := Vector2(x, rig.base_pos.y + float(rig.hull_h) * 0.45)
+			var hx := x - rig.base_pos.x
+			var at := rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0))
 			fx.impact_sparks(at, Vector2(1.0, -0.6).normalized())
 			rig.hit(clampf(dmg / 20.0, 0.1, 1.0))
 			if int(data.get("sh", 0)) == TankIds.SHELL_BOSS_MAIN:
@@ -478,6 +526,7 @@ func _track_enemies(state: TankState, dt: float) -> void:
 			continue
 		var info: Dictionary = _seen_enemies[id]
 		_seen_enemies.erase(id)
+		_hp_seen.erase(id)
 		fx.forget("e%d" % id)
 		var center: Vector2 = info["center"]
 		fx.explosion(center, int(info["code"]) >= TankIds.enemy_code(TankIds.ENEMY_MEDIUM))
@@ -513,6 +562,26 @@ func _add_wreck(info: Dictionary) -> void:
 		fx.forget(str(old["key"]))
 
 
+## Wreck `w`'s haze veil 0..1 at screen rect `r`: it eases (WRECK_VEIL_S) toward 1 while a live
+## enemy (last frame's enemy_rects) overlaps it and back to 0 when none does.
+func wreck_veil(w: Dictionary, r: Rect2) -> float:
+	var want := 0.0
+	for er: Rect2 in enemy_rects.values():
+		if er.grow(3.0).intersects(r):
+			want = 1.0
+			break
+	var v := move_toward(float(w.get("veil", 0.0)), want, _dt / WRECK_VEIL_S)
+	w["veil"] = v
+	return v
+
+
+## The screen top-left of wreck `w` drawn at size `sz` on the back lane.
+func wreck_pos(w: Dictionary, sz: Vector2) -> Vector2:
+	var full := float(w["w"])
+	var x := float(w["x"]) - cam_x + (full - sz.x) * 0.5
+	return Vector2(x, float(TankConst.GROUND_Y) - sz.y + 2.0 - WRECK_LIFT_PX)
+
+
 ## Shells that vanish while falling near the ground threw up dirt (judged on the state's latest
 ## position, not the delayed drawn one, so a shell that lands between two frames still counts).
 func _track_shells(state: TankState) -> void:
@@ -537,6 +606,8 @@ func _track_shells(state: TankState) -> void:
 func _build_props(state: TankState) -> void:
 	var rows: Array[Dictionary] = []
 	var ground := float(TankConst.GROUND_Y)
+	if state.seg.seg == TankIds.SEG_DEPOT:
+		_compound_wall(rows, ground)
 	if state.seg.seg == TankIds.SEG_DEPOT or state.seg.phase_index == 0:
 		var gs := TankSprites.size("depot_gate")
 		var gate_pos := Vector2(DEPOT_GATE_X - cam_x, ground - gs.y + 2.0)
@@ -550,78 +621,583 @@ func _build_props(state: TankState) -> void:
 		var sz := Vector2(float(w["w"]), float(w["h"]))
 		if sz.x <= 0.0:
 			sz = TankSprites.size(sprite)
-		var pos := Vector2(float(w["x"]) - cam_x, ground - sz.y + 3.0)
+		# Wrecks lie on the back lane (smaller, higher, hazed and dark), so a live enemy keeping
+		# station over one keeps its own silhouette; their fires stay on the wreck.
+		sz = (sz * WRECK_SCALE).round()
+		var pos := wreck_pos(w, sz)
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
-		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, Color(0.32, 0.31, 0.3)))
+		var veil := wreck_veil(w, Rect2(pos, sz))
+		var tint := WRECK_TINT.lerp(WRECK_VEIL_TINT, veil)
+		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, tint))
+		var wh := TankBackdrop.cell_hash(int(w["x"]), 61)
+		var hatch := pos + Vector2(sz.x * (0.3 + 0.4 * float(wh % 7) / 6.0), sz.y * 0.3)
 		if burn > 0.2:
 			var halo := 20.0 + 10.0 * burn
-			lights.add(pos + Vector2(sz.x * 0.5, sz.y * 0.3), halo, TankPalette.FIRE, 0.5 * burn)
+			lights.add(hatch, halo, TankPalette.FIRE, 0.5 * burn * (1.0 - 0.5 * veil))
+		# Embers glow in the open hatch for a while after the flames: one slit at its own place
+		# on each wreck (never a row of matching lamps, never a round eye), then they die.
+		if burn > 0.0 or float(w["age"]) < WRECK_BURN_S * 2.0:
+			var glow := 0.3 + 0.1 * sin(_time * 3.1 + float(wh % 17))
+			port_light(rows, hatch + Vector2(0, float(wh % 5)), 3.0 + float(wh % 3), glow)
 	props_layer.set_rows(rows)
 
 
-## The halt line of an Advance: a post with a striped banner and a lamp, standing where the hull's
-## front is when its rear reaches the end of the road (TankHudModel.halt_distance_m is zero there).
+## The size of the halt line's lamp post (tests find the line by it).
+const HALT_POST := Vector2(2, 24)
+
+
+## The halt line of an Advance, standing where the hull's front is when its rear reaches the end of
+## the road (TankHudModel.halt_distance_m is zero there): a row of concrete dragon's teeth across
+## the road (three blunt pyramids, the nearest largest, lit on their upper-left faces, mud banked at
+## their feet) and a short post at the line with a hooded amber lamp throwing its light down. No
+## banner, nothing striped and nothing brighter than the concrete but the lamp (no flag).
 func _halt_line(rows: Array[Dictionary], state: TankState) -> void:
 	if state.seg.seg != TankIds.SEG_ADVANCE or state.content == null:
 		return
 	var length_m := float(state.content.segment(state.seg.phase_index).get("length_m", 0.0))
 	if length_m <= 0.0:
 		return
-	var x := TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x
-	if x < -30.0 or x > float(TankConst.SCREEN_W) + 30.0:
+	var x := roundf(TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x)
+	if x < -40.0 or x > float(TankConst.SCREEN_W) + 40.0:
 		return
 	var ground := float(TankConst.GROUND_Y)
-	rows.append({"t": "rect", "r": Rect2(x, ground - 46.0, 3, 46), "c": TankPalette.STEEL})
+	# Far to near: each tooth a little lower (nearer) and larger.
+	var teeth: Array[Vector3] = [Vector3(12, -4, 9), Vector3(26, -2, 11), Vector3(5, 1, 13)]
+	for t in teeth:
+		_tooth(rows, Vector2(x + t.x, ground + t.y), t.z)
+	var post := Rect2(Vector2(x, ground - HALT_POST.y), HALT_POST)
+	rows.append({"t": "rect", "r": post, "c": TankPalette.IRON, "of": "halt_line"})
 	rows.append(
-		{"t": "rect", "r": Rect2(x - 1.0, ground - 48.0, 5, 3), "c": TankPalette.STEEL_BRIGHT}
+		{
+			"t": "rect",
+			"r": Rect2(post.position, Vector2(1, post.size.y)),
+			"c": TankPalette.STEEL_DARK
+		}
 	)
-	for i in 5:
-		var col := TankPalette.PEARL if i % 2 == 0 else TankPalette.IRON
-		rows.append(
-			{"t": "rect", "r": Rect2(x + 3.0, ground - 44.0 + float(i) * 3.0, 20, 3), "c": col}
-		)
-	lights.add(Vector2(x + 1.5, ground - 50.0), 16.0, TankPalette.AMBER, 0.55)
+	# The hood: a dark cowl over the lamp so its light falls on the road, not up into the sky.
+	var hood := post.position + Vector2(-3, -3)
+	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 3)), "c": TankPalette.IRON_DARK})
+	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 1)), "c": TankPalette.STEEL_DARK})
+	rows.append(
+		{"t": "rect", "r": Rect2(hood + Vector2(2, 3), Vector2(3, 1)), "c": TankPalette.AMBER}
+	)
+	var lamp := hood + Vector2(3.5, 4.0)
+	lights.add(lamp, 6.0, TankPalette.GLOW_WARM, 0.6)
+	lights.add(lamp + Vector2(0, 10), 26.0, TankPalette.AMBER, 0.32)
 
 
-## Craters and rubble on the ground plane, placed by a hash of the world cell (no RNG).
+## One concrete dragon's tooth (a blunt pyramid seen from the side) standing on `foot` (its base's
+## middle), `s` px tall: a lit upper-left face, a darker right face, a flat cap and a mud foot.
+func _tooth(rows: Array[Dictionary], foot: Vector2, s: float) -> void:
+	var half := s * 0.62
+	var cap := s * 0.18
+	var top := foot + Vector2(-s * 0.08, -s)
+	var left_face := PackedVector2Array(
+		[foot + Vector2(-half, 0), top + Vector2(-cap, 0), top + Vector2(cap * 0.3, 0), foot]
+	)
+	var right_face := PackedVector2Array(
+		[foot, top + Vector2(cap * 0.3, 0), top + Vector2(cap, 0), foot + Vector2(half, 0)]
+	)
+	rows.append({"t": "poly", "pts": left_face, "c": TankPalette.STEEL_DARK})
+	rows.append({"t": "poly", "pts": right_face, "c": TankPalette.IRON})
+	rows.append(
+		{
+			"t": "line",
+			"a": foot + Vector2(-half, -0.5),
+			"b": top + Vector2(-cap, 0.5),
+			"w": 1.0,
+			"c": TankPalette.STEEL
+		}
+	)
+	rows.append(
+		{
+			"t": "line",
+			"a": top + Vector2(-cap, 0),
+			"b": top + Vector2(cap, 0),
+			"w": 1.0,
+			"c": TankPalette.STEEL
+		}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2((foot + Vector2(-half - 1.0, -2.0)).round(), Vector2(half * 2.0 + 2.0, 3)),
+			"c": TankPalette.MUD_DARK
+		}
+	)
+
+
+## Props on the tank's plane, placed by a hash of the world cell (no RNG), so the road ahead is never
+## empty: flooded craters that catch the lamps, rubble, a pair of telegraph poles with two wires
+## sagging from one to the other (never a single pole with a wire ending in the air), fence posts
+## strung with sagging wire, and flooded ruts (a dark sheet of water with a cold sky line and the
+## near lights' reflection). The depot yard has its own (_depot_props).
 func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
-	if state.seg.seg == TankIds.SEG_DEPOT:
-		return
 	var ground := float(TankConst.GROUND_Y)
+	if state.seg.seg == TankIds.SEG_DEPOT:
+		_depot_props(rows, ground)
+		return
 	var first := int(floor(cam_x / PROP_CELL_PX)) - 1
 	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / PROP_CELL_PX)) + 1
 	for cell in range(first, last + 1):
 		var h := TankBackdrop.cell_hash(cell, state.seg.phase_index + 17)
-		var x := float(cell) * PROP_CELL_PX + float(h % 200) - cam_x
+		var x := float(cell) * PROP_CELL_PX + float(h % 120) - cam_x
+		match h % 8:
+			0, 6:
+				_flooded_crater(rows, x, ground)
+			1, 7:
+				var rs := TankSprites.size("prop_rubble")
+				rows.append(
+					_sprite_row(
+						"prop_rubble",
+						Vector2(x, ground - rs.y + 3.0),
+						rs,
+						h % 2 == 0,
+						Color(0.8, 0.8, 0.82)
+					)
+				)
+			2:
+				_poles(rows, x, ground, h)
+			3, 4:
+				_fence(rows, x, ground, h)
+			5:
+				_puddle(rows, x, ground, h)
+				_fence(rows, x + 40.0, ground, h >> 2)
+
+
+## A shell crater full of rainwater: the crater's rim, a flat sheet of dark water in it whose far
+## edge catches the cold sky, and on its surface the reflection of the lamps and fires near it (the
+## tank's room glow as it passes, a burning farm behind): a soft streak in their colour.
+func _flooded_crater(rows: Array[Dictionary], x: float, ground: float) -> void:
+	var cs := TankSprites.size("prop_crater")
+	rows.append(
+		_sprite_row("prop_crater", Vector2(x, ground - 9.0), cs, false, Color(0.7, 0.72, 0.78))
+	)
+	var mid := Vector2(roundf(x + cs.x * 0.5), ground - 2.0)
+	var half := roundf(cs.x * 0.34)
+	var pts := PackedVector2Array()
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(mid + Vector2(-cos(a) * half, -sin(a) * 1.5))
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(mid + Vector2(cos(a) * half, sin(a) * 2.0))
+	rows.append({"t": "poly", "pts": pts, "c": Color("#121519")})
+	rows.append(
+		{
+			"t": "line",
+			"a": mid + Vector2(-half + 3.0, -1.0),
+			"b": mid + Vector2(half - 3.0, -1.0),
+			"w": 1.0,
+			"c": TankPalette.with_alpha(TankPalette.SLATE, 0.9)
+		}
+	)
+	_water_glint(mid, half)
+
+
+## The reflection on a sheet of water centred at `mid`, `half` px either side: the colour of the
+## halos near it (this frame's world lights and the scenery's fires), as a flat additive streak and
+## a soft glow under it, stronger the nearer and brighter they are; with no light near, a faint cold
+## sheen of the sky.
+func _water_glint(mid: Vector2, half: float) -> void:
+	var wet := lights.intensity_near(mid + Vector2(0, -30), 90.0)
+	var col := lights.near_color()
+	var far := backdrop.scenery_lights.intensity_near(mid + Vector2(0, -60), 160.0)
+	if far > wet:
+		wet = far * 0.8
+		col = backdrop.scenery_lights.near_color()
+	var k := minf(0.55, wet * 0.6)
+	if wet < 0.06:
+		# No lamp near: the water still holds the cold night sky (a faint sheen, always there, so
+		# a flooded crater reads in the dark and its glint never blinks on and off).
+		col = TankPalette.COLD
+		k = 0.08
+	lights.add_line(mid + Vector2(-half * 0.7, 0), mid + Vector2(half * 0.7, 0), col, k)
+	lights.add(mid + Vector2(0, 1), half * 0.8, col, k * 0.35)
+
+
+## Two telegraph poles 60-80 px apart, the far one leaning after a near miss, each with a short
+## bracket and two insulators, and two wires sagging from the near pole's insulators to the far
+## pole's: a stretch of line that ends on poles at both ends, on small mud heaps.
+func _poles(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var gap := 60.0 + float(h % 21)
+	var tips: Array[Array] = []
+	for k in 2:
+		var px := x + gap * float(k)
+		var ht := 44.0 + float((h >> (3 + k * 4)) % 10)
+		var lean := 0.0 if k == 0 else float((h >> 9) % 7) - 3.0
+		var top := Vector2(px + lean, ground - ht)
+		var foot := Vector2(px, ground + 1.0)
+		rows.append({"t": "line", "a": foot, "b": top, "w": 3.0, "c": TankPalette.IRON_DARK})
+		rows.append(
+			{
+				"t": "line",
+				"a": foot + Vector2(-1, 0),
+				"b": top + Vector2(-1, 0),
+				"w": 1.0,
+				"c": TankPalette.STEEL_DARK
+			}
+		)
+		var bar := top.lerp(foot, 0.07)
+		var l := bar + Vector2(-4, 0.5)
+		var r := bar + Vector2(4, -0.5)
+		rows.append({"t": "line", "a": l, "b": r, "w": 2.0, "c": TankPalette.IRON})
+		for ins: Vector2 in [l, r]:
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2((ins + Vector2(0, -1)).round(), Vector2(1, 1)),
+					"c": TankPalette.STEEL_PALE
+				}
+			)
+		tips.append([l, r])
+		_mud_heap(rows, foot)
+	for side in 2:
+		var a: Vector2 = tips[0][side]
+		var b: Vector2 = tips[1][side]
+		var sag := 7.0 + float((h >> (5 + side)) % 4)
+		var wire := PackedVector2Array()
+		for k in 11:
+			var t := float(k) / 10.0
+			wire.append(a.lerp(b, t) + Vector2(0, 4.0 * sag * t * (1.0 - t)))
+		rows.append({"t": "polyline", "pts": wire, "w": 1.0, "c": TankPalette.STEEL_DARK})
+
+
+func _mud_heap(rows: Array[Dictionary], foot: Vector2) -> void:
+	rows.append(
+		{
+			"t": "poly",
+			"pts":
+			PackedVector2Array(
+				[
+					foot + Vector2(-8, 1),
+					foot + Vector2(-3, -3),
+					foot + Vector2(4, -2),
+					foot + Vector2(9, 1)
+				]
+			),
+			"c": TankPalette.MUD_DARK
+		}
+	)
+
+
+## The depot yard on the tank's plane, by a hash of the world cell: groups of fuel drums, concrete
+## barrier blocks, stacked crates and floodlight posts throwing a cold light down on the apron.
+func _depot_props(rows: Array[Dictionary], ground: float) -> void:
+	_depot_yards(rows, ground)
+	var first := int(floor(cam_x / DEPOT_PROP_CELL_PX)) - 1
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PROP_CELL_PX)) + 1
+	for cell in range(first, last + 1):
+		var h := TankBackdrop.cell_hash(cell, 977)
+		var x := roundf(float(cell) * DEPOT_PROP_CELL_PX + float(h % 90) - cam_x)
+		match h % 5:
+			0, 1:
+				_drums(rows, x, ground, h)
+			2:
+				_barriers(rows, x, ground, h)
+			3:
+				_crates(rows, x, ground, h)
+			4:
+				_floodlight(rows, x, ground, h)
+
+
+## The depot's yard gates and workshops (DEPOT_BAY_PX) on screen, behind the road's props. The
+## first bays are the depot gate's own (DEPOT_GATE_X, drawn by _build_props, alone in view as the
+## roll-out starts), so the yards start at bay 2.
+func _depot_yards(rows: Array[Dictionary], ground: float) -> void:
+	var first := int(floor((cam_x - 200.0) / DEPOT_BAY_PX))
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_BAY_PX))
+	for bay in range(maxi(first, 2), last + 1):
+		var h := TankBackdrop.cell_hash(bay, 4211)
+		var x := roundf(float(bay) * DEPOT_BAY_PX + 30.0 + float(h % 60) - cam_x)
+		if bay % 3 == 1:
+			var gs := (TankSprites.size("depot_gate") * 0.86).round()
+			var pos := Vector2(x, ground - gs.y - 2.0)
+			var row := _sprite_row("depot_gate", pos, gs, false, DEPOT_YARD_TINT)
+			row["of"] = "yard_gate"
+			rows.append(row)
+			lights.add(pos + Vector2(gs.x * 0.5, gs.y * 0.17), 22.0, TankPalette.AMBER, 0.3)
+		else:
+			_workshop(rows, x, ground - 3.0, h)
+
+
+## The depot's compound wall along the back of the yard for the whole roll-out: a low concrete
+## wall with a lit coping, piers every DEPOT_PIER_PX world px (some carrying a hooded lamp that
+## throws a cold pool down the wall), behind the gates and workshops.
+func _compound_wall(rows: Array[Dictionary], ground: float) -> void:
+	var base := ground - 6.0
+	var top := base - DEPOT_WALL_H
+	var wall := Rect2(-2.0, top, float(TankConst.SCREEN_W) + 4.0, DEPOT_WALL_H)
+	rows.append({"t": "rect", "r": wall, "c": Color("#23262a"), "of": "compound_wall"})
+	rows.append({"t": "rect", "r": Rect2(-2.0, top, wall.size.x, 1), "c": TankPalette.STEEL_DARK})
+	rows.append({"t": "rect", "r": Rect2(-2.0, top + 1.0, wall.size.x, 1), "c": TankPalette.IRON})
+	var first := int(floor(cam_x / DEPOT_PIER_PX)) - 1
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PIER_PX)) + 1
+	for k in range(first, last + 1):
+		var x := roundf(float(k) * DEPOT_PIER_PX - cam_x)
+		var h := TankBackdrop.cell_hash(k, 4271)
+		rows.append(
+			{"t": "rect", "r": Rect2(x, top - 3.0, 6, DEPOT_WALL_H + 3.0), "c": Color("#2e3135")}
+		)
+		rows.append({"t": "rect", "r": Rect2(x, top - 3.0, 6, 1), "c": TankPalette.STEEL_LIGHT})
+		rows.append(
+			{
+				"t": "rect",
+				"r": Rect2(x + 5.0, top - 2.0, 1, DEPOT_WALL_H + 2.0),
+				"c": TankPalette.IRON
+			}
+		)
+		# Water stains running down from the coping.
+		rows.append(
+			{
+				"t": "rect",
+				"r": Rect2(x + 14.0 + float(h % 30), top + 2.0, 1, 4.0 + float(h % 5)),
+				"c": TankPalette.IRON
+			}
+		)
 		if h % 3 == 0:
-			var cs := TankSprites.size("prop_crater")
+			var lamp := Vector2(x + 3.0, top - 5.0)
 			rows.append(
-				_sprite_row(
-					"prop_crater", Vector2(x, ground - 9.0), cs, false, Color(0.7, 0.72, 0.78)
-				)
+				{
+					"t": "rect",
+					"r": Rect2(lamp + Vector2(-3, -1), Vector2(7, 2)),
+					"c": TankPalette.IRON_DARK
+				}
 			)
-			# Flooded craters catch the nearby lamps.
-			var mid := Vector2(x + cs.x * 0.5, ground)
-			var wet := lights.intensity_near(mid, 60.0)
-			if wet > 0.05:
-				lights.add(mid + Vector2(0, 1), 22.0, TankPalette.COLD_LIGHT, minf(0.35, wet * 0.3))
-		elif h % 3 == 1:
-			var rs := TankSprites.size("prop_rubble")
 			rows.append(
-				_sprite_row(
-					"prop_rubble",
-					Vector2(x, ground - rs.y + 3.0),
-					rs,
-					h % 2 == 0,
-					Color(0.8, 0.8, 0.82)
-				)
+				{
+					"t": "rect",
+					"r": Rect2(lamp + Vector2(-2, 1), Vector2(5, 1)),
+					"c": TankPalette.COLD_LIGHT
+				}
 			)
+			lights.add(lamp + Vector2(0.5, 2.0), 5.0, TankPalette.WHITE_COLD, 0.45)
+			lights.add(lamp + Vector2(0.5, 10.0), 18.0, TankPalette.COLD_LIGHT, 0.16)
+
+
+## A depot workshop standing on `base` from x: a long brick shed (its width by hash) under a
+## sawtooth roof, two or three window groups of different sizes, some lit warm, a roller door, and
+## a tapering brick stack rising from one end (no bar, no beam).
+func _workshop(rows: Array[Dictionary], x: float, base: float, h: int) -> void:
+	var w := 96.0 + float(h % 40)
+	var ht := 34.0 + float((h >> 6) % 10)
+	var top := base - ht
+	var body := Rect2(x, top, w, ht)
+	rows.append({"t": "rect", "r": body, "c": Color("#3a2e26"), "of": "workshop"})
+	# Brick courses catching the yard lamps now and then.
+	for cy in range(int(top) + 4, int(base) - 4, 5):
+		var cw := 10.0 + float((h >> (cy % 9)) % 20)
+		var cx := x + 4.0 + float((h >> (cy % 7)) % int(maxf(w - cw - 8.0, 1.0)))
+		rows.append({"t": "rect", "r": Rect2(cx, cy, cw, 1), "c": Color("#4a3a2e")})
+	rows.append({"t": "rect", "r": Rect2(x, top, 2, ht), "c": TankPalette.MUD_DARK})
+	rows.append({"t": "rect", "r": Rect2(x + w - 2.0, top, 2, ht), "c": TankPalette.RUST_DARK})
+	rows.append({"t": "rect", "r": Rect2(x, base - 3.0, w, 3), "c": TankPalette.COAL})
+	# The sawtooth roof: teeth rising to the right, their steep faces glazed and dark.
+	var teeth := int(w / 16.0)
+	for t in teeth:
+		var tx := x + float(t) * 16.0
+		var tooth := PackedVector2Array(
+			[Vector2(tx, top), Vector2(tx + 13.0, top - 9.0), Vector2(tx + 16.0, top)]
+		)
+		rows.append({"t": "poly", "pts": tooth, "c": TankPalette.IRON_DARK})
+		rows.append(
+			{
+				"t": "line",
+				"a": Vector2(tx, top - 0.5),
+				"b": Vector2(tx + 13.0, top - 9.5),
+				"w": 1.0,
+				"c": TankPalette.STEEL_DARK
+			}
+		)
+	# The roller door, half up, a dark mouth under it.
+	var dx := x + 8.0 + float((h >> 3) % 12)
+	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 18), "c": TankPalette.BLACK})
+	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 7), "c": TankPalette.IRON})
+	rows.append({"t": "rect", "r": Rect2(dx, base - 12.0, 18, 1), "c": TankPalette.STEEL_DARK})
+	# Window groups along the wall, irregular, some lit.
+	var wx := dx + 26.0
+	var k := 0
+	while wx < x + w - 10.0:
+		var ww := 4.0 + float((h >> (k + 2)) % 4)
+		var wy := top + 8.0 + float((h >> (k + 5)) % 4)
+		var lit := (h >> (k + 9)) % 3 != 0
+		var col := TankPalette.GLOW_WARM if lit else TankPalette.SOOT
+		rows.append({"t": "rect", "r": Rect2(wx, wy, ww, 5), "c": col})
+		if lit:
+			rows.append({"t": "rect", "r": Rect2(wx, wy + 3.0, ww, 2), "c": TankPalette.AMBER})
+			lights.add(Vector2(wx + ww * 0.5, wy + 2.0), 12.0 + ww, TankPalette.AMBER, 0.28)
+		wx += ww + 9.0 + float((h >> (k + 4)) % 9)
+		k += 1
+	# The stack at one end.
+	var sx := x + w - 14.0 if h % 2 == 0 else x + 6.0
+	var sh := 30.0 + float((h >> 11) % 14)
+	var stack := PackedVector2Array(
+		[
+			Vector2(sx, top),
+			Vector2(sx + 1.0, top - sh),
+			Vector2(sx + 6.0, top - sh),
+			Vector2(sx + 7.0, top),
+		]
+	)
+	rows.append({"t": "poly", "pts": stack, "c": TankPalette.RUST_DARK})
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(sx + 5.0, top - sh, 1, sh),
+			"c": TankPalette.with_alpha(TankPalette.RUST, 0.8)
+		}
+	)
+
+
+## Two to four upright fuel drums, rust-dark with two rim bands and a lit edge.
+func _drums(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var n := 2 + h % 3
+	for k in n:
+		var dx := x + float(k) * 7.0 + float((h >> k) % 2)
+		var body := TankPalette.RUST_DARK if k % 2 == 0 else TankPalette.IRON
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 9), "c": body})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 1), "c": TankPalette.STEEL_DARK})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 6.0, 6, 1), "c": TankPalette.COAL})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 3.0, 6, 1), "c": TankPalette.COAL})
+		rows.append({"t": "rect", "r": Rect2(dx + 5.0, ground - 8.0, 1, 7), "c": TankPalette.RUST})
+
+
+## A row of two or three concrete barrier blocks (wide feet, sloped faces, a lit top).
+func _barriers(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var n := 2 + h % 2
+	for k in n:
+		var bx := x + float(k) * 17.0
+		var pts := PackedVector2Array(
+			[
+				Vector2(bx, ground + 1.0),
+				Vector2(bx + 3.0, ground - 4.0),
+				Vector2(bx + 4.0, ground - 9.0),
+				Vector2(bx + 11.0, ground - 9.0),
+				Vector2(bx + 12.0, ground - 4.0),
+				Vector2(bx + 15.0, ground + 1.0)
+			]
+		)
+		rows.append({"t": "poly", "pts": pts, "c": TankPalette.STEEL_DARK})
+		rows.append({"t": "rect", "r": Rect2(bx + 4.0, ground - 9.0, 7, 1), "c": TankPalette.STEEL})
+
+
+## Stacked wooden crates: two below, one on top.
+func _crates(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var boxes: Array[Rect2] = [Rect2(x, ground - 9.0, 10, 9), Rect2(x + 11.0, ground - 8.0, 9, 8)]
+	if h % 2 == 0:
+		boxes.append(Rect2(x + 4.0, ground - 17.0, 10, 8))
+	for b in boxes:
+		rows.append({"t": "rect", "r": b, "c": TankPalette.MUD})
+		var lid := Rect2(b.position, Vector2(b.size.x, 1))
+		rows.append({"t": "rect", "r": lid, "c": TankPalette.MUD_PALE})
+		var side := Rect2(b.position + Vector2(b.size.x - 1.0, 1.0), Vector2(1, b.size.y - 1.0))
+		rows.append({"t": "rect", "r": side, "c": TankPalette.MUD_DARK})
+
+
+## A floodlight post: a steel post with a hooded lamp head throwing a cold light onto the apron.
+func _floodlight(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var ht := 40.0 + float(h % 9)
+	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 2, ht), "c": TankPalette.IRON})
+	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 1, ht), "c": TankPalette.STEEL_DARK})
+	var head := Vector2(x - 3.0, ground - ht - 2.0)
+	rows.append({"t": "rect", "r": Rect2(head, Vector2(8, 2)), "c": TankPalette.IRON_DARK})
+	var lens := Rect2(head + Vector2(1, 2), Vector2(6, 1))
+	rows.append({"t": "rect", "r": lens, "c": TankPalette.COLD_LIGHT})
+	var lamp := head + Vector2(4, 3)
+	lights.add(lamp, 6.0, TankPalette.WHITE_COLD, 0.5)
+	lights.add(lamp + Vector2(0, 14), 30.0, TankPalette.COLD_LIGHT, 0.2)
+	_mud_heap(rows, Vector2(x + 1.0, ground + 1.0))
+
+
+## Wire on stakes: 3-5 leaning timber stakes (their tops catching the cold sky) strung with two
+## strands of sagging barbed wire, its barbs glinting every few px; every strand is tied to a stake
+## at both ends. Lighter than the mud behind it, so the wire reads (polish round 6: it was lost).
+func _fence(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var n := 3 + h % 3
+	var tops: Array[Vector2] = []
+	for k in n:
+		var px := roundf(x + float(k) * (13.0 + float((h >> k) % 6)))
+		var ht := 14.0 + float((h >> (k + 3)) % 8)
+		var top := Vector2(px + float((h >> (k + 1)) % 3) - 1.0, ground - ht).round()
+		tops.append(top)
+		var foot := Vector2(px, ground + 1.0)
+		rows.append({"t": "line", "a": foot, "b": top, "w": 2.0, "c": TankPalette.MUD})
+		rows.append(
+			{
+				"t": "line",
+				"a": foot + Vector2(1, 0),
+				"b": top + Vector2(1, 0),
+				"w": 1.0,
+				"c": TankPalette.MUD_PALE
+			}
+		)
+		rows.append(
+			{"t": "rect", "r": Rect2(top + Vector2(0, -1), Vector2(2, 1)), "c": TankPalette.SLATE}
+		)
+	for strand in 2:
+		var pts := PackedVector2Array()
+		for k in range(tops.size() - 1):
+			for q in 6:
+				var t := float(q) / 6.0
+				var sag := sin(t * PI) * (2.0 + float(strand))
+				pts.append(
+					tops[k].lerp(tops[k + 1], t) + Vector2(0, 2.0 + 5.0 * float(strand) + sag)
+				)
+		pts.append(tops[tops.size() - 1] + Vector2(0, 2.0 + 5.0 * float(strand)))
+		rows.append({"t": "polyline", "pts": pts, "w": 1.0, "c": TankPalette.STEEL_LIGHT})
+		for q in range(2, pts.size() - 1, 3):
+			var b := pts[q].round()
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2(b + Vector2(0, -1), Vector2(1, 1)),
+					"c": TankPalette.STEEL_PALE
+				}
+			)
+
+
+## A flooded rut: a flat dark sheet of water on the road, its far edge catching the cold sky and its
+## surface the near lights' colour.
+func _puddle(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var w := 22.0 + float(h % 18)
+	var y := ground - 2.0
+	var pts := PackedVector2Array()
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(Vector2(x + w * 0.5 - cos(a) * w * 0.5, y + 1.0 - sin(a) * 2.0))
+	for k in 13:
+		var a := PI * float(k) / 12.0
+		pts.append(Vector2(x + w * 0.5 + cos(a) * w * 0.5, y + 1.0 + sin(a) * 1.0))
+	rows.append({"t": "poly", "pts": pts, "c": TankPalette.COAL})
+	rows.append(
+		{
+			"t": "line",
+			"a": Vector2(x + 3.0, y - 0.5),
+			"b": Vector2(x + w - 3.0, y - 0.5),
+			"w": 1.0,
+			"c": TankPalette.with_alpha(TankPalette.SLATE, 0.8)
+		}
+	)
+	var mid := Vector2(x + w * 0.5, y)
+	var wet := lights.intensity_near(mid, 80.0)
+	if wet > 0.04:
+		var k := minf(0.5, wet * 0.5)
+		lights.add_line(
+			mid + Vector2(-w * 0.3, 1), mid + Vector2(w * 0.3, 1), lights.near_color(), k
+		)
 
 
 func _obstacle_row(rows: Array[Dictionary], ob: TankObstacleState, state: TankState) -> void:
 	if ob.cleared:
 		return
 	var kind := TankIds.obstacle_of(ob.code)
+	if kind == TankIds.OBST_TANK_TRAPS:
+		if not state.hull.traps_cleared:
+			TankObstacleArt.traps(rows, ob.x_px - cam_x, float(ob.w), ob.id)
+		return
+	if kind != TankIds.OBST_WRECK and kind != TankIds.OBST_DRILL_WRECK:
+		TankObstacleArt.wire(rows, ob.x_px - cam_x, float(ob.w), ob.id)
+		return
 	var sprite := "prop_wire"
 	var tint := Color.WHITE
 	match kind:
@@ -650,31 +1226,52 @@ func _enemy_sprite(code: int) -> String:
 func _build_enemies(state: TankState, t: float) -> void:
 	var rows: Array[Dictionary] = []
 	enemy_rects.clear()
-	var row_i := 0
+	var dug_i := 0
 	var ground := float(TankConst.GROUND_Y)
+	# Dug-in guns are drawn first, on lanes behind the road, so a tank passing in front of a
+	# revetment keeps its own silhouette; the rest share the road and step back to a second lane
+	# only where they would overlap (a gap of ENEMY_GAP_PX at least), back lane drawn first.
+	var order: Array[TankEnemyState] = []
 	for e in state.enemies:
+		if TankIds.enemy_of(e.code) == TankIds.ENEMY_DUGIN:
+			order.append(e)
+	var lanes := enemy_lanes(state)
+	for want in [1, 0]:
+		for e in state.enemies:
+			if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN and int(lanes.get(e.id, 0)) == want:
+				order.append(e)
+	for e in order:
 		var type := TankIds.enemy_of(e.code)
 		var sprite := TankSprites.enemy_id(type)
 		var sz := Vector2(float(e.w), float(e.h))
 		if sz.x <= 0.0:
 			sz = TankSprites.size(sprite)
-		# Overlapping enemies stand on two depth rows: every second one a little higher and dimmer.
-		var back_row := row_i % 2 == 1
-		row_i += 1
-		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - (3.0 if back_row else 0.0))
-		var dim := 0.9 if back_row else 1.0
-		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, Color(dim, dim, dim)))
-		enemy_rects[e.id] = Rect2(pos.round(), sz)
+		var lift := 0.0
+		var dim := 1.0
+		if type == TankIds.ENEMY_DUGIN:
+			# Dug-ins alternate between two lanes behind the road so neighbours never merge.
+			lift = 7.0 if dug_i % 2 == 0 else 13.0
+			dim = 0.72 if dug_i % 2 == 0 else 0.6
+			dug_i += 1
+		elif int(lanes.get(e.id, 0)) == 1:
+			# The back lane: higher and dimmer, toward the haze.
+			lift = 6.0
+			dim = 0.72
+		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - lift)
 		var max_hp := enemy_max_hp(state, type)
-		if max_hp > 0.0 and e.hp < max_hp - 0.5:
-			rows.append(
-				{
-					"t": "bar",
-					"pos": (pos + Vector2(sz.x * 0.5 - 12.0, -5.0)).round(),
-					"w": 24.0,
-					"frac": e.hp / max_hp
-				}
-			)
+		var hit := hit_flash(e, max_hp)
+		var tint := Color(dim + 0.75 * hit, dim + 0.55 * hit, dim + 0.4 * hit)
+		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, tint))
+		enemy_rects[e.id] = Rect2(pos.round(), sz)
+		if max_hp > 0.0 and e.hp < max_hp * DAMAGE_SMOKE_FRAC:
+			var vent := pos + Vector2(sz.x * (0.45 if e.side > 0 else 0.55), sz.y * 0.35)
+			fx.fire_and_smoke("e%d_dmg" % e.id, vent, 0.0, 0.7, _dt)
+			if e.hp < max_hp * DAMAGE_FIRE_FRAC:
+				# Fire inside: one hatch slit glowing amber, flickering (never a pair of round orbs,
+				# which read as eyes).
+				var k := 0.45 + 0.15 * sin(_time * 7.0 + float(e.id % 11))
+				var slit := pos + Vector2(sz.x * (0.62 if e.side > 0 else 0.38), sz.y * 0.42)
+				port_light(rows, slit.round(), 5.0, k)
 		_seen_enemies[e.id] = {
 			"id": e.id,
 			"x": enemy_x(e),
@@ -691,6 +1288,60 @@ func _build_enemies(state: TankState, t: float) -> void:
 			fx.exhaust("e%d" % e.id, stack, 0.4, _dt)
 	_boss_rows(state, t, rows)
 	enemies_layer.set_rows(rows)
+
+
+## The hit flash of `e`, 1 at a hit fading to 0 over HIT_FLASH_S: its HP dropped since the last
+## frame (an enemy first seen damaged does not flash).
+func hit_flash(e: TankEnemyState, max_hp: float) -> float:
+	if max_hp <= 0.0:
+		return 0.0
+	var seen: Array = _hp_seen.get(e.id, [e.hp, 0.0])
+	var left := maxf(float(seen[1]) - _dt, 0.0)
+	if e.hp < float(seen[0]) - 0.01:
+		left = HIT_FLASH_S
+	_hp_seen[e.id] = [e.hp, left]
+	return clampf(left / HIT_FLASH_S, 0.0, 1.0)
+
+
+## A glowing hatch or port slit centred at `at`, `w` px wide and 1 px high (an amber core in a fire
+## rim, palette colours) with a flat additive glow along it, at `k` 0..1: the light of a fire inside
+## a hull, never round.
+func port_light(rows: Array[Dictionary], at: Vector2, w: float, k: float) -> void:
+	var p := (at - Vector2(w * 0.5, 0.0)).round()
+	rows.append(
+		{"t": "rect", "r": Rect2(p + Vector2(-1, 0), Vector2(w + 2.0, 1)), "c": TankPalette.FIRE}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(p + Vector2(1, 0), Vector2(w - 2.0, 1)), "c": TankPalette.AMBER}
+	)
+	lights.add_line(p + Vector2(-1, 0.5), p + Vector2(w + 1.0, 0.5), TankPalette.AMBER, 0.5 * k)
+	lights.add_line(p + Vector2(0, -0.5), p + Vector2(w, -0.5), TankPalette.FIRE, 0.25 * k)
+
+
+## The road lane of every enemy that is not dug in, enemy id -> 0 (front) or 1 (back): left to right,
+## an enemy takes the front lane unless it would come within ENEMY_GAP_PX of the last one there, then
+## the back lane on the same rule, else whichever lane's last enemy ends farther left.
+func enemy_lanes(state: TankState) -> Dictionary:
+	var road: Array[TankEnemyState] = []
+	for e in state.enemies:
+		if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
+			road.append(e)
+	road.sort_custom(_drawn_left_of)
+	var ends: Array[float] = [-INF, -INF]
+	var out := {}
+	for e in road:
+		var x := enemy_x(e)
+		var w := float(e.w) if e.w > 0 else TankSprites.size(_enemy_sprite(e.code)).x
+		var lane := 0
+		if x < ends[0] + ENEMY_GAP_PX:
+			lane = 1 if (x >= ends[1] + ENEMY_GAP_PX or ends[1] < ends[0]) else 0
+		ends[lane] = maxf(ends[lane], x + w)
+		out[e.id] = lane
+	return out
+
+
+func _drawn_left_of(a: TankEnemyState, b: TankEnemyState) -> bool:
+	return enemy_x(a) < enemy_x(b)
 
 
 ## Maximum HP of an enemy type after the tank's scale (clients never get it in the snapshot).
@@ -711,8 +1362,13 @@ func _telegraph_light(state: TankState, e: TankEnemyState, type: String, r: Rect
 	var k := 1.0 - clampf(e.telegraph_s / maxf(total, 0.1), 0.0, 1.0)
 	var blink := 0.55 + 0.45 * sin(_time * (6.0 + 14.0 * k))
 	var cold := type == TankIds.ENEMY_DESTROYER
-	var col := TankPalette.COLD_LIGHT if cold else TankPalette.FIRE
-	lights.add(_enemy_muzzle(e, r), 10.0 + 14.0 * k, col, (0.25 + 0.7 * k) * blink)
+	var col := TankPalette.COLD_LIGHT if cold else TankPalette.AMBER
+	# A glint along the barrel's end and a small halo (never a big round orb on the hull).
+	var m := _enemy_muzzle(e, r)
+	var dir := -1.0 if e.side > 0 else 1.0
+	var glint := (0.3 + 0.6 * k) * blink
+	lights.add_line(m + Vector2(-dir * 3.0, 0), m + Vector2(dir * (2.0 + 5.0 * k), 0), col, glint)
+	lights.add(m, 5.0 + 6.0 * k, col, glint * 0.6)
 
 
 func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
@@ -737,26 +1393,51 @@ func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
 		if broken:
 			var at := origin + rr.position + Vector2(rr.size.x * 0.5, 4.0)
 			fx.fire_and_smoke("boss%d" % i, at, 0.0 if dead else 0.4, 0.9, _dt)
+	_boss_running_gear(b, origin, rows)
 	var turret := geometry.boss_part_rect(TankBossState.TURRET_PART)
 	var muzzle := origin + geometry.boss_muzzle()
-	var base := origin + turret.position + Vector2(8.0, turret.size.y * 0.5)
-	rows.append({"t": "line", "a": base, "b": muzzle, "w": 6.0, "c": TankPalette.STEEL_DARK})
+	# The barrel runs level from the gun block to the muzzle (no stair-stepped slope).
+	var base := Vector2(origin.x + turret.position.x + 8.0, muzzle.y)
+	# The main gun: a 4 px tube with a dark underside, a steel body and one lit top row, a collar
+	# where it leaves the gun block and a muzzle brake block, so it reads as a gun and not a rule.
+	rows.append({"t": "line", "a": base, "b": muzzle, "w": 5.0, "c": TankPalette.IRON_DARK})
+	rows.append(
+		{
+			"t": "line",
+			"a": base + Vector2(0, -1),
+			"b": muzzle + Vector2(0, -1),
+			"w": 2.0,
+			"c": TankPalette.IRON
+		}
+	)
 	rows.append(
 		{
 			"t": "line",
 			"a": base + Vector2(0, -2),
 			"b": muzzle + Vector2(0, -2),
 			"w": 1.0,
-			"c": TankPalette.STEEL_LIGHT
+			"c": TankPalette.STEEL_DARK
 		}
 	)
 	rows.append(
-		{"t": "line", "a": muzzle + Vector2(8, 0), "b": muzzle, "w": 9.0, "c": TankPalette.STEEL}
+		{"t": "line", "a": base, "b": base + Vector2(-12, 0), "w": 9.0, "c": TankPalette.IRON}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 9)), "c": TankPalette.IRON}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 1)), "c": TankPalette.STEEL}
+	)
+	rows.append(
+		{"t": "rect", "r": Rect2(muzzle + Vector2(2, -4), Vector2(2, 7)), "c": TankPalette.SOOT}
 	)
 	rows.append(_sprite_row("boss_hull", origin, TankSprites.size("boss_hull"), false, tint))
+	_boss_skirt(origin, rows, dead)
 	var tur_broken := b.turret_hp <= 0.0
 	var tur_sprite := "boss_turret_broken" if tur_broken else "boss_turret"
 	rows.append(_sprite_row(tur_sprite, origin + turret.position, turret.size, false, tint))
+	if not tur_broken:
+		_boss_mantlet(Vector2(origin.x + turret.position.x, muzzle.y), rows)
 	if tur_broken:
 		var at := origin + turret.position + turret.size * 0.5
 		fx.fire_and_smoke("boss_t", at, 0.0 if dead else 0.6, 1.1, _dt)
@@ -767,6 +1448,123 @@ func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
 		lights.add(muzzle, 10.0 + 10.0 * k, TankPalette.GLOW_WARM, 0.5 * k * blink)
 	if dead:
 		_boss_death()
+
+
+## The Behemoth's track run between its three bogies: a belt top and bottom joining each pair of
+## neighbouring bogies and two road wheels in each gap, so the running gear reads as one long
+## tracked run under the hull, not as three railcar trucks (a broken bogie breaks its joins).
+func _boss_running_gear(b: TankBossState, origin: Vector2, rows: Array[Dictionary]) -> void:
+	for i in 2:
+		if b.bogie_hp[i] <= 0.0 or b.bogie_hp[i + 1] <= 0.0:
+			continue
+		var ra := geometry.boss_part_rect(i)
+		var rb := geometry.boss_part_rect(i + 1)
+		var x0 := origin.x + ra.end.x - 4.0
+		var x1 := origin.x + rb.position.x + 4.0
+		var y_top := origin.y + ra.position.y + ra.size.y * 0.42
+		var y_bot := origin.y + ra.end.y - 2.0
+		for k in 2:
+			var cx := lerpf(x0, x1, 0.3 + 0.4 * float(k))
+			var c := Vector2(cx, y_bot - 7.0)
+			rows.append({"t": "poly", "pts": _circle_pts(c, 6.0, 12), "c": TankPalette.IRON_DARK})
+			rows.append({"t": "poly", "pts": _circle_pts(c, 2.0, 8), "c": TankPalette.STEEL_DARK})
+		for y: float in [y_top, y_bot]:
+			rows.append(
+				{
+					"t": "line",
+					"a": Vector2(x0, y),
+					"b": Vector2(x1, y),
+					"w": 3.0,
+					"c": TankPalette.COAL
+				}
+			)
+			rows.append(
+				{
+					"t": "line",
+					"a": Vector2(x0, y - 1.0),
+					"b": Vector2(x1, y - 1.0),
+					"w": 1.0,
+					"c": TankPalette.IRON
+				}
+			)
+
+
+## Skirt plates along the Behemoth's foot over the dark wheel arches: a riveted band with a lit top
+## edge and a mud-dark bottom, the bogies' wheels showing below it.
+func _boss_skirt(origin: Vector2, rows: Array[Dictionary], dead: bool) -> void:
+	var first := geometry.boss_part_rect(0)
+	var last := geometry.boss_part_rect(2)
+	var x0 := origin.x + first.position.x - 4.0
+	var x1 := origin.x + last.end.x - 2.0
+	var y := origin.y + first.position.y + 1.0
+	var k := 0.55 if dead else 1.0
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(x0, y, x1 - x0, 11),
+			"c": TankPalette.darkened(TankPalette.IRON, 1.0 - k)
+		}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(x0, y, x1 - x0, 1),
+			"c": TankPalette.darkened(TankPalette.STEEL, 1.0 - k)
+		}
+	)
+	rows.append({"t": "rect", "r": Rect2(x0, y + 9.0, x1 - x0, 2), "c": TankPalette.MUD_DARK})
+	var px := x0 + 3.0
+	var plate := 0
+	while px < x1 - 2.0:
+		rows.append(
+			{
+				"t": "rect",
+				"r": Rect2(px, y + 3.0, 1, 1),
+				"c": TankPalette.darkened(TankPalette.STEEL_LIGHT, 1.0 - k)
+			}
+		)
+		plate += 1
+		if plate % 8 == 0:
+			rows.append({"t": "rect", "r": Rect2(px + 2.0, y + 1.0, 1, 8), "c": TankPalette.COAL})
+		px += 6.0
+
+
+## A cast mantlet where the Behemoth's gun leaves its turret (centred on the barrel's line).
+func _boss_mantlet(at: Vector2, rows: Array[Dictionary]) -> void:
+	var r := Rect2(at + Vector2(-9, -8), Vector2(14, 16))
+	rows.append({"t": "rect", "r": r, "c": TankPalette.IRON})
+	rows.append({"t": "rect", "r": Rect2(r.position, Vector2(r.size.x, 1)), "c": TankPalette.STEEL})
+	rows.append(
+		{"t": "rect", "r": Rect2(r.position, Vector2(1, r.size.y)), "c": TankPalette.STEEL_DARK}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(r.position + Vector2(0, r.size.y - 2), Vector2(r.size.x, 2)),
+			"c": TankPalette.COAL
+		}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(r.position + Vector2(3, 4), Vector2(1, 1)),
+			"c": TankPalette.STEEL_PALE
+		}
+	)
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(r.position + Vector2(3, 11), Vector2(1, 1)),
+			"c": TankPalette.STEEL_PALE
+		}
+	)
+
+
+static func _circle_pts(c: Vector2, r: float, n: int) -> PackedVector2Array:
+	var pts := PackedVector2Array()
+	for i in n:
+		pts.append(c + Vector2.from_angle(TAU * float(i) / float(n)) * r)
+	return pts
 
 
 func _boss_height() -> float:
@@ -804,18 +1602,24 @@ func _build_shots(state: TankState) -> void:
 		var v := Vector2(s.vx, s.vy)
 		var dir := v.normalized() if v.length() > 1.0 else Vector2.RIGHT
 		var core: Color = TankPalette.TRACER.get(s.type, TankPalette.AMBER)
-		var tail := 8.0
+		# A glowing tracer: a 3 px streak (2 px for secondaries) fading back from a white-hot head,
+		# a 1 px hot core along its front half and a halo, unlike the 2 px trajectory dots.
+		var tail := 16.0
 		if s.type == TankIds.SHELL_BOSS_MAIN:
-			tail = 22.0
+			tail = 26.0
 		elif s.type == TankIds.SHELL_OVER:
-			tail = 14.0
-		var w := 1.0 if s.type == TankIds.SHELL_SECONDARY else 2.0
+			tail = 20.0
+		elif s.type == TankIds.SHELL_SECONDARY:
+			tail = 10.0
+		var w := 2.0 if s.type == TankIds.SHELL_SECONDARY else 3.0
 		var a := p - dir * tail
-		var m := p - dir * tail * 0.4
-		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.25)})
-		rows.append({"t": "line", "a": m, "b": p, "w": w, "c": TankPalette.with_alpha(core, 0.7)})
-		rows.append({"t": "rect", "r": Rect2(p - Vector2(1, 1), Vector2(3, 2)), "c": Color.WHITE})
-		lights.add(p, float(HALO_RADIUS.get(s.type, 9.0)), core, 0.7)
+		var m := p - dir * tail * 0.45
+		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.3)})
+		rows.append({"t": "line", "a": m, "b": p, "w": w, "c": TankPalette.with_alpha(core, 0.9)})
+		rows.append({"t": "line", "a": m, "b": p, "w": 1.0, "c": TankPalette.WHITE_WARM})
+		rows.append({"t": "rect", "r": Rect2(p - Vector2(1, 1), Vector2(3, 3)), "c": Color.WHITE})
+		lights.add(p, float(HALO_RADIUS.get(s.type, 9.0)) * 1.4, core, 0.9)
+		lights.add(m, 8.0, core, 0.5)
 	_trajectory(state, rows)
 	shots_layer.set_rows(rows)
 
@@ -830,16 +1634,18 @@ func _trajectory(state: TankState, rows: Array[Dictionary]) -> void:
 	var facing := 1 if rig.turret.scale.x >= 0.0 else -1
 	var vel := TankBallistics.velocity(v0, rig.turret.elev, facing)
 	var from := rig.muzzle_layer()
-	var base_alpha := 0.9 if hl.loaded != TankIds.SHELL_NONE else 0.4
+	var base_alpha := 0.9 if hl.loaded != TankIds.SHELL_NONE else 0.55
 	var col := gunner_color(state)
 	for i in range(1, TRAJECTORY_DOTS + 1):
 		var p := TankBallistics.position(from, vel, g, float(i) * TRAJECTORY_STEP_S)
 		if p.y > float(TankConst.GROUND_Y) or p.x < 0.0 or p.x > float(TankConst.SCREEN_W):
 			break
-		var a := base_alpha * (1.0 - float(i) / float(TRAJECTORY_DOTS + 2))
+		var a := base_alpha * (1.0 - 0.75 * float(i) / float(TRAJECTORY_DOTS + 1))
 		rows.append(
 			{"t": "rect", "r": Rect2(p.floor(), Vector2(2, 2)), "c": TankPalette.with_alpha(col, a)}
 		)
+		if i % 3 == 0:
+			lights.add(p + Vector2(1, 1), 5.0, col, 0.3 * a)
 
 
 ## The slot colour of the gunner (the dynamo's or the Bulwark's rider).
@@ -859,9 +1665,9 @@ func _ambient(state: TankState, dt: float) -> void:
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
 		var at := Vector2(
 			float(w["x"]) - cam_x + float(w["w"]) * 0.5,
-			float(TankConst.GROUND_Y) - float(w["h"]) * 0.8
+			float(TankConst.GROUND_Y) - WRECK_LIFT_PX - float(w["h"]) * WRECK_SCALE * 0.8
 		)
-		fx.fire_and_smoke(str(w["key"]), at, burn, 1.0 if burn > 0.0 else 0.5, dt)
+		fx.fire_and_smoke(str(w["key"]), at, burn * 0.6, 1.0 if burn > 0.0 else 0.5, dt)
 	if state.hull.traps_cleared and not _traps_were_cleared:
 		var tp := Vector2(
 			rig.base_pos.x + float(rig.hull_w) + 30.0, float(TankConst.GROUND_Y) - 8.0
@@ -871,19 +1677,62 @@ func _ambient(state: TankState, dt: float) -> void:
 	_traps_were_cleared = state.hull.traps_cleared
 
 
+## Wet ground and wet steel (brief 3 "Light"): every bright halo near the ground drops a soft
+## vertical streak of its colour onto the wet road below it, and when a muzzle flash or a fire is
+## close the hull's and the turret's top edges catch a faint specular line.
+func _reflections() -> void:
+	var ground := float(TankConst.GROUND_Y)
+	lights.add_reflections(ground - 1.0, ground - 70.0, 0.3)
+	var style := TankBackdrop.road_style(backdrop.near_id)
+	for p in TankBackdrop.road_puddles(style, cam_x, float(TankConst.SCREEN_W)):
+		var half := (p.y - p.x) * 0.5
+		_water_glint(Vector2(p.x + half, p.z), half)
+	var roof := rig.hull_roof()
+	if roof.size.x <= 0.0:
+		return
+	var mid := roof.position + Vector2(roof.size.x * 0.5, 0)
+	var wet := lights.intensity_near(mid, roof.size.x * 0.5 + 40.0) + fx.flash * 1.5
+	if wet > 0.08:
+		var k := minf(0.3, wet * 0.16)
+		var a := roof.position + rig.shake_offset * 0.6
+		lights.add_line(a, a + Vector2(roof.size.x, 0), lights.near_color(), k)
+
+
 ## Lights and fires of the near plane (scenery), with flames on the far plane.
 func _scenery(dt: float) -> void:
 	var sl := backdrop.scenery_lights
 	sl.begin()
-	for l: Dictionary in TankBackdrop.scenery(backdrop.near_id, cam_x):
+	var near_lights := TankBackdrop.scenery(
+		backdrop.near_id, cam_x, float(TankConst.SCREEN_W), backdrop.near_offset
+	)
+	for l: Dictionary in near_lights:
+		var lp: Vector2 = l["pos"]
+		if lp.x < -50.0 or lp.x > float(TankConst.SCREEN_W) + 50.0:
+			continue
 		var flick := 1.0
-		if bool(l["fire"]):
+		var radius := float(l["radius"])
+		var k := 1.0
+		# A fire behind the hull would throw its back-plane flames over the cutaway and its halo
+		# would bloom over the deck, reading as the hull burning: no flames there, and its halo
+		# stays small and faint (polish round 6: the Rampart's rear deck glowed amber).
+		var behind := _behind_hull(lp)
+		if behind:
+			radius = minf(radius, 12.0)
+			k = 0.3
+		elif bool(l["fire"]):
 			flick = 0.8 + 0.2 * sin(_time * 9.0 + float(int(l["seed"]) % 13))
 			fx.fire_and_smoke(
 				"sc%d" % int(l["seed"]), l["pos"], 0.6, 0.5, dt, TankParticles.PLANE_BACK
 			)
-		sl.add(l["pos"], float(l["radius"]), l["color"], float(l["intensity"]) * flick)
+		sl.add(l["pos"], radius, l["color"], float(l["intensity"]) * flick * k)
+	sl.add_reflections(TankBackdrop.NEAR_BOTTOM_Y - 22.0, 200.0, 0.22)
 	sl.end()
+
+
+## True when screen point `p` lies behind the tank's hull and turret (with a margin).
+func _behind_hull(p: Vector2) -> bool:
+	var r := Rect2(rig.base_pos + Vector2(-24, -84), Vector2(rig.hull_w + 48, rig.hull_h + 94))
+	return r.has_point(p)
 
 
 func _paint_overlay(item: Node2D) -> void:

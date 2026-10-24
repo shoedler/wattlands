@@ -97,7 +97,10 @@ func test_game_json_is_exactly_the_brief() -> void:
 		[{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
 	)
 	assert_false(m.has("player_options"))
-	assert_false(m.has("picker_image"), "G2 adds it once the PNG exists")
+	# G2 adds the picker card once its PNG exists, and only then.
+	var picker := str(m.get("picker_image", ""))
+	if picker != "":
+		assert_true(ResourceLoader.exists(picker), "the picker card's PNG exists")
 
 
 func test_every_content_file_loads_and_validates() -> void:
