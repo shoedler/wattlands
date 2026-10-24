@@ -17,6 +17,8 @@ var _status: Label = null
 var _icon: TextureRect = null
 var _icon_path: String = ""
 var _scale: float = 1.0
+## The game's colors (HudWidget.set_palette): panel, panel_border, text, text_dim.
+var palette: HudPalette = HudPalette.new()
 
 
 func _init() -> void:
@@ -56,6 +58,16 @@ func _init() -> void:
 	_icon.visible = false
 	hb.add_child(_icon)
 	set_card_scale(1.0)
+
+
+## Use `p` for the panel, border and text (null = the kit look). The in-band glow and the
+## rescue color stay.
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
+	for l: Label in [_name, _pct]:
+		l.label_settings.font_color = palette.pick(HudPalette.TEXT_DIM, WlTheme.TEXT_DIM)
+	_watts.label_settings.font_color = palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+	_style()
 
 
 func set_card_scale(s: float) -> void:
@@ -156,7 +168,7 @@ func _label(label_name: String, px: int, color: Color, bold: bool = false) -> La
 
 
 func _style() -> void:
-	var border := WlTheme.PANEL_BORDER
+	var border := palette.pick(HudPalette.PANEL_BORDER, WlTheme.PANEL_BORDER)
 	var width := 2
 	if in_band():
 		border = WlTheme.GLOW
@@ -167,7 +179,9 @@ func _style() -> void:
 	if is_local:
 		width = maxi(width, 3)
 	var sb := WlTheme.panel_style(
-		Color(0.055, 0.067, 0.086, 0.8), border, roundi(width * maxf(_scale, 0.5))
+		palette.pick(HudPalette.PANEL, Color(0.055, 0.067, 0.086, 0.8)),
+		border,
+		roundi(width * maxf(_scale, 0.5))
 	)
 	sb.content_margin_left = 10.0 * _scale
 	sb.content_margin_right = 10.0 * _scale
@@ -175,5 +189,7 @@ func _style() -> void:
 	sb.content_margin_bottom = 6.0 * _scale
 	add_theme_stylebox_override("panel", sb)
 	_status.label_settings.font_color = (
-		WlTheme.WARN if is_rescue() else (WlTheme.GLOW if in_band() else WlTheme.TEXT)
+		WlTheme.WARN
+		if is_rescue()
+		else (WlTheme.GLOW if in_band() else palette.pick(HudPalette.TEXT, WlTheme.TEXT))
 	)

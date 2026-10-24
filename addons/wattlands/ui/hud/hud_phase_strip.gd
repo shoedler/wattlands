@@ -9,10 +9,19 @@ var blocks: Array[Dictionary] = []
 var current: int = -1
 ## 0..1 through the current block.
 var progress: float = 0.0
+## The game's colors (HudWidget.set_palette): bar_bg, accent (work blocks), text.
+var palette: HudPalette = HudPalette.new()
 
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Use `p` for the background, the work blocks and the current-block outline (null = the kit
+## look). Warm-up, free and recovery colors stay.
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
+	queue_redraw()
 
 
 func set_blocks(p_blocks: Array[Dictionary], p_current: int, p_progress: float) -> void:
@@ -51,7 +60,7 @@ func _draw() -> void:
 	var total := total_length()
 	if w <= 0.0 or h <= 0.0 or total <= 0.0:
 		return
-	draw_rect(Rect2(0, 0, w, h), WlTheme.BAR_BG)
+	draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
 	var x := 0.0
 	for i in blocks.size():
 		var b := blocks[i]
@@ -62,7 +71,10 @@ func _draw() -> void:
 			pct = 75.0
 		var bh := clampf(pct / 150.0, 0.2, 1.0) * h
 		var rect := Rect2(x + 1.0, h - bh, maxf(1.0, bw - 2.0), bh)
-		var c := kind_color(str(b.get("kind", "")))
+		var kind := str(b.get("kind", ""))
+		var c := kind_color(kind)
+		if kind == Wl.WORK:
+			c = palette.pick(HudPalette.ACCENT, c)
 		if i < current:
 			c = Color(c, 0.35)
 		elif i > current:
@@ -82,7 +94,7 @@ func _draw() -> void:
 					draw_line(a, bpt, Color(0, 0, 0, 0.45), 2.0)
 				sx += step
 		if i == current:
-			draw_rect(rect.grow(1.0), WlTheme.TEXT, false, 3.0)
+			draw_rect(rect.grow(1.0), palette.pick(HudPalette.TEXT, WlTheme.TEXT), false, 3.0)
 			var mx := rect.position.x + rect.size.x * progress
 			draw_line(Vector2(mx, 0.0), Vector2(mx, h), WlTheme.GLOW, 3.0)
 		x += bw

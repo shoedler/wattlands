@@ -61,6 +61,11 @@ var banner_area: Variant = TOP
 ## and the trainer notice (4.4, another app may hold control) always show: false hides only
 ## the warm-up and pause banners.
 var show_safety_banners: bool = true
+## Optional colors for the kit's neutral chrome so the widgets match a game's art (default {}
+## = the kit look). Keys (Color values, any may be left out): panel, panel_border, text,
+## text_dim, bar_bg, bar_fg, accent, banner_bg, banner_text. Safety and warning colors (rescue,
+## warm-up, pause and trainer banners, WlTheme.WARN, the in-band glow) ignore it.
+var palette: Dictionary = {}
 
 
 func add(widget: String, at: Variant, options: Dictionary = {}) -> HudSpec:

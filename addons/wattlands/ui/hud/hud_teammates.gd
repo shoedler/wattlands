@@ -45,6 +45,7 @@ var _slot_fit: bool = false
 func _init() -> void:
 	_ensure_base()
 	widget_id = HudSpec.TEAMMATES
+	_panel_visible = false
 	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	_grid = GridContainer.new()
 	_grid.name = "Cards"
@@ -58,6 +59,7 @@ func _init() -> void:
 
 func configure(p_options: Dictionary) -> void:
 	super.configure(p_options)
+	_panel_visible = false
 	add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	include_local = bool(p_options.get("include_local", true))
 	vertical = bool(p_options.get("vertical", false))
@@ -171,6 +173,14 @@ func _on_scale_changed() -> void:
 			(c as HudTeammateCard).set_card_scale(ui_scale)
 
 
+func _on_palette_changed() -> void:
+	if _grid == null:
+		return
+	for c in _grid.get_children():
+		if c is HudTeammateCard:
+			(c as HudTeammateCard).set_palette(palette)
+
+
 func _relayout_cards() -> void:
 	var n := maxi(1, _cards.size())
 	if vertical:
@@ -261,6 +271,7 @@ func _sync() -> void:
 			c = HudTeammateCard.new()
 			c.name = "Card_%d" % p if p >= 0 else "Card_bot%d" % -p
 			c.set_card_scale(ui_scale)
+			c.set_palette(palette)
 			_grid.add_child(c)
 			_cards[p] = c
 		_grid.move_child(c, i)

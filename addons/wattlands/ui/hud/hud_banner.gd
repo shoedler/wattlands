@@ -36,6 +36,9 @@ var font_px: int = WlTheme.BANNER_PX
 var max_width: float = INF
 ## Which side the banners line up on: -1 left, 0 centre, 1 right.
 var side: int = 0
+## The game's colors (HudWidget.set_palette): banner_bg, banner_text. Only the game banner
+## follows it: the rescue, warm-up and trainer banners keep their safety colors.
+var palette: HudPalette = HudPalette.new()
 
 var _warmup: bool = false
 var _rescue: bool = false
@@ -65,9 +68,12 @@ func _init() -> void:
 	)
 	_game_panel = _panel("Game")
 	_game_label = _game_panel.get_child(0) as Label
-	_game_panel.add_theme_stylebox_override(
-		"panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.94), WlTheme.TEXT, 3)
-	)
+	_refresh()
+
+
+## Use `p` for the game banner (null = the kit look).
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
 	_refresh()
 
 
@@ -204,6 +210,14 @@ func _refresh() -> void:
 	_game_panel.visible = not _game_text.is_empty()
 	_game_label.text = _game_text
 	_game_label.label_settings.font_size = font_px
+	var game_text_color := palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
+	_game_label.label_settings.font_color = game_text_color
+	_game_panel.add_theme_stylebox_override(
+		"panel",
+		WlTheme.panel_style(
+			palette.pick(HudPalette.BANNER_BG, Color(0.08, 0.1, 0.13, 0.94)), game_text_color, 3
+		)
+	)
 	HudWidget.wrap_label(_safety_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_trainer_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_game_label, max_width - PANEL_PAD)
