@@ -217,15 +217,17 @@ func test_the_first_run_never_picks_tank() -> void:
 	assert_eq(WlGameRegistry.pick_first_run([m, other]), "aaa_game", "a tie at 0 never goes to -1")
 
 
-func test_a_run_cut_short_has_no_drill_title() -> void:
+func test_a_run_cut_short_says_the_ride_ended_early() -> void:
 	var ctx := F.make_ctx(1)
 	var g: TankGame = autofree(F.make_game(ctx))
 	F.run(g, F.plans_of(g), 0, 20.0)
 	assert_eq(g.state.outcome, "", "no cool-down yet")
 	var res := g.results()
 	assert_ne(res.summary_key, "TANK_RESULT_DRILL", "Ashfall Road is no drill")
-	assert_eq(res.summary_key, "")
+	assert_eq(res.summary_key, "TANK_RESULT_ABANDONED")
 	assert_ne(res.team["TANK_TEAM_OUTCOME"], g.ctx.strings.t("TANK_RESULT_DRILL"))
+	assert_eq(res.team["TANK_TEAM_OUTCOME"], g.ctx.strings.t("TANK_RESULT_ABANDONED"))
+	assert_eq(g.ctx.strings.t("TANK_RESULT_ABANDONED"), "Ride ended early", "a real string")
 
 
 func test_the_drill_title_is_for_a_completed_drill_only() -> void:
