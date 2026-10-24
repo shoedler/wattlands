@@ -33,9 +33,9 @@ static func card(state: TankState, peer: int) -> Dictionary:
 	var out := {"kind": r.engine, "reserve": st.reserve, "unpowered": st.unpowered or state.all_afk}
 	match r.engine:
 		TankIds.ENGINE_DIESEL:
-			out.merge(_drive(state, st as TankDieselState))
+			out.merge(_drive(state, st as TankDieselState, r))
 		TankIds.ENGINE_BULWARK:
-			out.merge(_drive(state, st as TankDieselState))
+			out.merge(_drive(state, st as TankDieselState, r))
 			out.merge(_gearbox(state, st as TankGearboxState))
 		TankIds.ENGINE_DYNAMO:
 			out.merge(_dynamo(state, st as TankDynamoState))
@@ -45,7 +45,7 @@ static func card(state: TankState, peer: int) -> Dictionary:
 
 
 ## Speed, distance to the halt line, berm and Ram of the driver (diesel and Bulwark).
-static func _drive(state: TankState, st: TankDieselState) -> Dictionary:
+static func _drive(state: TankState, st: TankDieselState, r: TankRiderState) -> Dictionary:
 	var hl := state.hull
 	var berm_max := (
 		state.content.num("tanks", "berm.max_hp", DEFAULT_BERM_MAX)
@@ -58,6 +58,8 @@ static func _drive(state: TankState, st: TankDieselState) -> Dictionary:
 		"berm": hl.berm_hp,
 		"berm_max": berm_max,
 		"show_berm": state.gun_line.active,
+		"ram_ok": ability_ok(state, r),
+		"dodge": state.seg.seg == TankIds.SEG_BOSS,
 		"ram_s": st.ram_s,
 		"ram_cd_s": st.ram_cd_s,
 		"ram_frac": clampf(st.ram_s / RAM_WINDOW_S, 0.0, 1.0),
@@ -66,6 +68,23 @@ static func _drive(state: TankState, st: TankDieselState) -> Dictionary:
 		"stalled": hl.stall_s > 0.0,
 		"holding": hl.holding,
 	}
+
+
+## Whether the Ram (the dodge at the boss) can work for `r` now, from the replicated state only:
+## a WORK phase that is an Advance or the boss (the SIM phases; a gun line, a checkpoint and the
+## depot are ERG or WARMUP), past the first 300 s of the plan, the tank running and the rider
+## pedalling. This is TankDrive.ability_ok as far as a client can see it: PhaseState lives on the
+## host, so a client reads the plan clock as the game clock when the host's value is not in the
+## state (they differ only when a plan starts late).
+static func ability_ok(state: TankState, r: TankRiderState) -> bool:
+	if state == null or r == null or state.seg.kind != Wl.WORK:
+		return false
+	if state.seg.seg != TankIds.SEG_ADVANCE and state.seg.seg != TankIds.SEG_BOSS:
+		return false
+	if state.hull.breakdown or state.all_afk or r.afk or r.rescue or not r.connected:
+		return false
+	var plan_s := state.seg.plan_elapsed_s if state.seg.plan_elapsed_s > 0.0 else state.t
+	return not TankConst.in_first_window(plan_s)
 
 
 ## The Bulwark's lever, its auto marker and the hoist's progress toward a heavy shell.

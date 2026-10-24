@@ -71,6 +71,63 @@ func test_controls_draw_headless_for_every_engine_and_fixture() -> void:
 	assert_true(true, "no errors while drawing every card")
 
 
+## A station card that records what the Ram cell draws instead of drawing it.
+class SpyCard:
+	extends TankStationCard
+	var labels: Array[String] = []
+	var lines: int = 0
+
+	func text(
+		_at: Vector2,
+		s: String,
+		_px: float,
+		_color: Color = WlTheme.TEXT,
+		_width: float = -1.0,
+		_align: int = HORIZONTAL_ALIGNMENT_LEFT,
+		_outlined: bool = true
+	) -> void:
+		labels.append(s)
+
+	func line(_a: Vector2, _b: Vector2, _color: Color, _width: float = 3.0) -> void:
+		lines += 1
+
+	func bar(_r: Rect2, _frac: float, _fill: Color) -> void:
+		labels.append("<bar>")
+
+
+func _spy_for(state: TankState, peer: int) -> SpyCard:
+	var m := _make(state, peer)
+	var spy := SpyCard.new()
+	spy.game = m["game"]
+	add_child_autofree(spy)
+	spy.refresh()
+	spy.call("_ram_cell", 2)
+	return spy
+
+
+func test_the_ram_cell_shows_a_ready_mark_only_when_the_ram_works() -> void:
+	var s := TankFixtures.state(2)
+	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
+	var ready := _spy_for(s, peer)
+	assert_eq(ready.lines, 2, "an Advance past 300 s: the check mark")
+	assert_true(ready.labels.has("Surge to ram"))
+	for pair: Array in [[TankIds.SEG_DEPOT, Wl.WARMUP], [TankIds.SEG_CHECKPOINT, Wl.RECOVERY]]:
+		var q := TankFixtures.state(2)
+		q.seg.seg = pair[0]
+		q.seg.kind = pair[1]
+		var idle := _spy_for(q, peer)
+		assert_eq(idle.lines, 0, "%s: no check mark" % pair[0])
+		assert_false(idle.labels.has("<bar>"), "%s: no full bar" % pair[0])
+		assert_true(idle.labels.has("-"), "%s: a dash" % pair[0])
+	var early := TankFixtures.state(2)
+	early.t = 120.0
+	assert_eq(_spy_for(early, peer).lines, 0, "the first 300 s: no check mark")
+	var bs := TankFixtures.boss(2)
+	var boss := _spy_for(bs, bs.rider_at(bs.station(TankIds.ENGINE_DIESEL).slot).peer)
+	assert_false(boss.labels.has("Surge to ram"), "the boss asks for a dodge")
+	assert_true(boss.labels.has("Surge to dodge"))
+
+
 func test_the_objective_line_and_boss_bars_model() -> void:
 	var m := _make(TankFixtures.boss(1), 1)
 	var obj := m["controls"]["TankObjectiveLine"] as TankObjectiveLine

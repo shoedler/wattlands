@@ -27,6 +27,59 @@ func test_the_diesel_card_shows_speed_halt_distance_and_the_ram() -> void:
 	assert_almost_eq(float(_card(s, peer)["ram_cd_frac"]), 0.5, 1e-6, "a 30 s cooldown")
 
 
+## The diesel rider's card in segment type `seg` / phase kind `kind` at plan time `plan_s`.
+func _drive_card(seg: String, kind: String, plan_s: float) -> Dictionary:
+	var s := TankFixtures.state(2)
+	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
+	s.seg.seg = seg
+	s.seg.kind = kind
+	s.t = plan_s
+	s.seg.plan_elapsed_s = plan_s
+	return _card(s, peer)
+
+
+func test_the_ram_is_ready_only_where_the_rules_let_it_work() -> void:
+	assert_true(_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 400.0)["ram_ok"], "an Advance past 300 s")
+	assert_true(_drive_card(TankIds.SEG_BOSS, Wl.WORK, 2000.0)["ram_ok"], "the boss (the dodge)")
+	assert_true(_drive_card(TankIds.SEG_BOSS, Wl.WORK, 2000.0)["dodge"])
+	assert_false(_drive_card(TankIds.SEG_DEPOT, Wl.WARMUP, 60.0)["ram_ok"], "no Ram in the depot")
+	assert_false(_drive_card(TankIds.SEG_SKIRMISH, Wl.WARMUP, 60.0)["ram_ok"], "nor the drill")
+	assert_false(
+		_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 299.0)["ram_ok"], "nor in the first 300 s"
+	)
+	assert_true(_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 300.0)["ram_ok"])
+	assert_false(_drive_card(TankIds.SEG_GUN_LINE, Wl.WORK, 900.0)["ram_ok"], "a gun line is ERG")
+	assert_false(
+		_drive_card(TankIds.SEG_CHECKPOINT, Wl.RECOVERY, 900.0)["ram_ok"], "a checkpoint is ERG"
+	)
+	assert_false(_drive_card(TankIds.SEG_COOLDOWN, Wl.COOLDOWN, 2400.0)["ram_ok"])
+
+
+func test_a_client_reads_the_plan_clock_as_the_game_clock() -> void:
+	# plan_elapsed_s is a host-side value (not in the snapshot): a client's state carries 0.
+	var s := TankFixtures.state(2)
+	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
+	s.seg.plan_elapsed_s = 0.0
+	s.t = 200.0
+	assert_false(_card(s, peer)["ram_ok"], "the first 300 s")
+	s.t = 700.0
+	assert_true(_card(s, peer)["ram_ok"])
+
+
+func test_the_ram_is_not_ready_on_a_broken_down_tank_or_for_an_absent_rider() -> void:
+	var s := TankFixtures.state(2)
+	var r := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
+	assert_true(_card(s, r.peer)["ram_ok"])
+	s.hull.breakdown = true
+	assert_false(_card(s, r.peer)["ram_ok"], "a breakdown")
+	s.hull.breakdown = false
+	r.rescue = true
+	assert_false(_card(s, r.peer)["ram_ok"], "a rescue hold")
+	r.rescue = false
+	r.afk = true
+	assert_false(_card(s, r.peer)["ram_ok"], "AFK")
+
+
 func test_the_halt_distance_comes_from_the_mission_and_clamps_at_zero() -> void:
 	var s := TankFixtures.state(1)
 	var length_m := float(s.content.segment(s.seg.phase_index)["length_m"])
