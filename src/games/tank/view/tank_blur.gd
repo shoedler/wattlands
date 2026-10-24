@@ -17,7 +17,7 @@ extends RefCounted
 ## The blur radii are recorded in docs/decisions/tank.md by the lead (view report).
 const PRESETS := {
 	"sky": {"down": 4, "box_r": 2, "passes": 2, "haze": 0.12, "darken": 0.0},
-	"hills": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.2, "darken": 0.45, "fade_top": 8},
+	"hills": {"down": 4, "box_r": 0, "passes": 1, "haze": 0.2, "darken": 0.32, "fade_top": 8},
 	"near": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.12, "darken": 0.0, "fade_top": 10},
 	"ground": {"down": 1, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.15},
 	"debris": {"down": 3, "box_r": 2, "passes": 2, "haze": 0.0, "darken": 0.5},

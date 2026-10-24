@@ -24,11 +24,25 @@ const SKY_TOP_Y := 10.0
 const HILLS_BOTTOM_Y := 252.0
 const NEAR_BOTTOM_Y := 292.0
 const GROUND_TOP_Y := 290.0
-## Fires burning on the hills' crests (HILL_FIRES per hills tile, on its highest summits), each
-## sending up a smoke column that billows and widens as it climbs into the smoke banks (polish round
-## 5: the columns were thin hard-edged rods ending in mid-air with no fire under them). The columns
-## scroll with the hills, so each stays on its fire.
-const HILL_FIRES := 4
+## Fire sites on the hills' slopes: HILL_FIRES candidate sites per hills tile, one per equal
+## stretch. Each segment (set_segment) lights a seeded subset: one in every three neighbouring sites
+## burns, some of the rest only smoulder and the others stay dark, so a screen shows one or two
+## fires and no two gun lines put them at the same screen spots (polish round 6: the same three
+## fires stood at the same x in every scene). Each sends up smoke that widens into the banks.
+const HILL_FIRES := 6
+## The hill fires' pictures, baked once: FIRE_VARIANTS irregular, asymmetric burning ruins (a
+## broken gable, a collapsed barn, a hedge, a copse: each its own width, lean, height and ragged
+## flame profile, never evenly spaced prongs on a bar), FIRE_FRAMES flicker frames each, plus one
+## smouldering ember bed per variant; FIRE_W x FIRE_H px with the burning bed at FIRE_BED_Y.
+## Blurred and hazed like the hills (FIRE_BLUR: the hills' own blur and haze, without darkening),
+## so a fire is a soft glow on its ridge, never a pixel-sharp stamp on a blurred plane (polish
+## round 6: a crisp three-prong stamp read as a crown).
+const FIRE_VARIANTS := 8
+const FIRE_FRAMES := 3
+const FIRE_W := 44
+const FIRE_H := 36
+const FIRE_BED_Y := 29
+const FIRE_BLUR := {"down": 4, "box_r": 0, "passes": 1, "haze": 0.2, "darken": 0.0}
 const SMOKE_FACTOR := HILLS_FACTOR
 const SMOKE_PUFFS := 30
 const ASH_FLECKS := 40
@@ -58,6 +72,8 @@ const SHEETS := 6
 ## bank's thin edges let through (a moonlit cloud edge, never a disc).
 const MOON_POS := Vector2(520.0, 46.0)
 const MOON_PERIOD_PX := 1500.0
+## Distant fires' glow on the near bank's undersides: one chance per this many bank px.
+const GLOW_CELL_PX := 360.0
 ## The near plane's landmark (its strip's centre) stands at this screen x when a location starts.
 const LANDMARK_X := 470.0
 ## The columns' smoke: dense soot at the base (silhouetted on the horizon's fire glow, which lights
@@ -99,6 +115,7 @@ static var _banks: Dictionary = {}
 static var _strip_lights: Dictionary = {}
 static var _crest: PackedInt32Array = PackedInt32Array()
 static var _fire_sites: Array[int] = []
+static var _fire_tex: Array[Texture2D] = []
 static var _roads: Dictionary = {}
 
 var sky: ParallaxStrip = null
@@ -135,6 +152,11 @@ var moon_light: TankLights = null
 var road: TankPainter = null
 ## Times a near strip was swapped (tests).
 var swaps: int = 0
+## The segment the far planes are laid out for (set_segment), its salt for the hill fires, and the
+## hills plane's extra scroll for it: each segment opens on its own stretch of hills, sky and smoke.
+var segment_index: int = -999
+var segment_salt: int = 0
+var hills_offset: float = 0.0
 
 var _near_placed: bool = false
 var _smoke: TankPainter = null
@@ -255,6 +277,26 @@ func set_near(id: String, cam_x: float = NAN) -> void:
 		near.offset_x = near_offset
 
 
+## Lays the far planes out for segment `index` (the view calls it every frame; only a change does
+## anything): a seeded salt picks which hill sites burn and how their smoke rises, and the sky, the
+## smoke ceiling and banks, the far ridge and the hills each start at a seeded scroll, so the hull's
+## x restarting at 0 in every segment never brings back the same picture (polish round 6: the gun
+## lines all showed the same fires and columns at the same screen x).
+func set_segment(index: int) -> void:
+	if index == segment_index:
+		return
+	segment_index = index
+	var k := index + 7
+	segment_salt = cell_hash(k, 7411) % 65521
+	hills_offset = float(cell_hash(k, 5023) % int(hills.period()))
+	hills.offset_x = hills_offset
+	far_ridge.offset_x = float(cell_hash(k, 5039) % FAR_RIDGE_W)
+	sky.offset_x = float(cell_hash(k, 5051) % int(sky.period()))
+	ceiling.offset_x = float(cell_hash(k, 5077) % int(ceiling.period()))
+	for i in banks.size():
+		banks[i].offset_x = float(cell_hash(k, 5101 + i) % BANK_W)
+
+
 ## The near strip's offset_x that puts a tile's centre (its landmark) at LANDMARK_X for camera x
 ## `cam_x` (0 .. tex_w).
 static func landmark_offset(tex_w: float, cam_x: float) -> float:
@@ -269,70 +311,281 @@ func advance(dt: float) -> void:
 	for b in banks:
 		b.tick(dt)
 	moon_light.begin()
-	var mx := fposmod(MOON_POS.x - _scroll_x * SKY_FACTOR + 300.0, MOON_PERIOD_PX) - 300.0
+	var sky_scroll := _scroll_x * SKY_FACTOR + sky.offset_x
+	var mx := fposmod(MOON_POS.x - sky_scroll + 300.0, MOON_PERIOD_PX) - 300.0
 	moon_light.add(Vector2(mx, MOON_POS.y), 170.0, TankPalette.COLD, 0.16)
 	moon_light.add(Vector2(mx, MOON_POS.y), 80.0, TankPalette.COLD_LIGHT, 0.14)
 	moon_light.add(Vector2(mx + 4.0, MOON_POS.y + 2.0), 30.0, TankPalette.WHITE_COLD, 0.1)
 	moon_light.end()
 	horizon_lights.begin()
 	cloud_glow.begin()
-	for col in smoke_columns(_scroll_x):
+	for col in columns():
 		var at: Vector2 = col["pos"]
 		var sd := int(col["seed"])
 		var flick := 0.85 + 0.15 * sin(time * 2.3 + float(sd % 17))
-		horizon_lights.add(at + Vector2(0, -3), 40.0, TankPalette.FIRE, 0.3 * flick)
-		horizon_lights.add(at + Vector2(0, -2), 14.0, TankPalette.AMBER, 0.42 * flick)
+		var lean: float = col["lean"]
+		if not bool(col["burning"]):
+			# A smouldering ruin: a dull red glow under its thin smoke.
+			horizon_lights.add(at + Vector2(0, -2), 16.0, TankPalette.RUST_LIGHT, 0.2 * flick)
+			continue
+		horizon_lights.add(at + Vector2(0, -4), 40.0, TankPalette.FIRE, 0.3 * flick)
+		horizon_lights.add(at + Vector2(0, -3), 13.0, TankPalette.AMBER, 0.3 * flick)
+		# The fire lights the underside of its own smoke above it.
+		var lift := at + Vector2(lean * 0.06, -20.0)
+		horizon_lights.add(lift, 22.0, TankPalette.RUST_LIGHT, 0.22 * flick)
+		horizon_lights.add(at + Vector2(lean * 0.15, -38.0), 30.0, TankPalette.FIRE, 0.08 * flick)
 		for k in 3:
 			var u := fposmod(time * 0.11 + float(k) / 3.0 + float(sd % 7) * 0.1, 1.0)
-			var e := at + Vector2(sin(u * 9.0 + float(k)) * 5.0 + u * 14.0, -4.0 - u * 60.0)
-			horizon_lights.add(e, 2.0, TankPalette.AMBER, 0.7 * (1.0 - u))
+			var e := at + Vector2(sin(u * 9.0 + float(k)) * 5.0 + u * 14.0, -6.0 - u * 60.0)
+			horizon_lights.add(e, 2.0, TankPalette.AMBER, 0.6 * (1.0 - u))
 		# The fire's light on the banks' undersides above it, where its column spreads into them.
-		var lean: float = col["lean"]
 		var rise: float = col["rise"]
 		var top := at + Vector2(lean, -rise)
 		cloud_glow.add(top + Vector2(-lean * 0.2, 34.0), 110.0, TankPalette.FIRE, 0.12 * flick)
 		cloud_glow.add(top + Vector2(-lean * 0.4, 58.0), 60.0, TankPalette.RUST_LIGHT, 0.14 * flick)
+	_distant_glows()
 	horizon_lights.end()
 	cloud_glow.end()
 	_smoke.queue_redraw()
 	_sheets.queue_redraw()
 
 
-## The hill fires' smoke columns for camera x `cam_x`: [{"pos": Vector2 (the fire on the hills'
-## crest, screen), "seed": int, "rise": float (px), "width": float (scale), "lean": float (px
-## downwind at the top)}]: one per fire site (hill_fire_sites) on every hills tile in view, placed
-## as the mirrored hills strip draws that tile, with height, width and lean by hash (no RNG): some
-## tall and thin, some short and broad, each bending its own way.
-static func smoke_columns(cam_x: float, width: float = 640.0) -> Array[Dictionary]:
+## Fires beyond the hills light the near smoke bank's undersides here and there: a broad, faint warm
+## glow low in the bank every GLOW_CELL_PX or so (some cells dark), drifting with the bank and
+## seeded per segment, so the upper sky has lit cloud undersides even where no hill fire burns in
+## view (polish round 6: the top 40% of the frame was empty dark sky).
+func _distant_glows() -> void:
+	var scroll := banks[1].scroll()
+	var first := int(floor((scroll - 240.0) / GLOW_CELL_PX))
+	var last := int(floor((scroll + float(TankConst.SCREEN_W) + 240.0) / GLOW_CELL_PX))
+	for c in range(first, last + 1):
+		var h := cell_hash(c + segment_salt * 3, 6007)
+		if h % 3 == 0:
+			continue
+		var at := Vector2(
+			float(c) * GLOW_CELL_PX + float(h % 220) - scroll, 84.0 + float((h >> 8) % 44)
+		)
+		var k := 0.85 + 0.15 * sin(time * 0.7 + float(h % 23))
+		cloud_glow.add(
+			at, 120.0 + float((h >> 4) % 70), TankPalette.FIRE, (0.1 + 0.03 * float(h % 3)) * k
+		)
+		var under := at + Vector2(float((h >> 12) % 60) - 30.0, 16.0)
+		cloud_glow.add(under, 54.0 + float((h >> 15) % 30), TankPalette.RUST_LIGHT, 0.14 * k)
+
+
+## This frame's hill fire columns (smoke_columns for the camera and the segment's layout).
+func columns() -> Array[Dictionary]:
+	return smoke_columns(_scroll_x, float(TankConst.SCREEN_W), segment_salt, hills_offset)
+
+
+## The hill fires' smoke columns for camera x `cam_x`, segment salt `salt` and hills offset `offset`
+## (set_segment): [{"pos": Vector2 (the fire on the hills' slope, screen), "seed": int, "burning":
+## bool (else it only smoulders), "variant": int (its picture, hill_fire_textures), "rise": float
+## (px), "width": float (scale), "lean": float (px downwind at the top; now and then a little
+## upwind)}]: one per lit fire site (hill_fire_sites, site_state) on every hills tile in view,
+## placed as the mirrored hills strip draws that tile, with height, width and lean by hash (no RNG):
+## some tall and thin, some short and broad, each bending its own way; a smouldering site sends up
+## a thinner, shorter wisp.
+static func smoke_columns(
+	cam_x: float, width: float = 640.0, salt: int = 0, offset: float = 0.0
+) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var crest := hill_crest()
 	var sites := hill_fire_sites()
 	var w := float(crest.size())
 	if w <= 0.0:
 		return out
+	var n := sites.size()
 	var top := HILLS_BOTTOM_Y - float(TankBlur.plane("bg_hills_far", "hills").get_height())
-	var scroll := roundf(cam_x * HILLS_FACTOR)
+	var scroll := roundf(cam_x * HILLS_FACTOR + offset)
 	var i := int(floor(scroll / w)) - 1
 	var x0 := float(i) * w - scroll
 	while x0 < width + 160.0:
 		var flipped := posmod(i, 2) == 1
-		for k in sites.size():
+		for k in n:
 			var sx: int = sites[k]
 			var x := x0 + (w - 1.0 - float(sx) if flipped else float(sx))
 			if x < -160.0 or x > width + 160.0:
 				continue
-			var h := cell_hash(i * 16 + k, 4517)
+			var g := i * n + (n - 1 - k if flipped else k)
+			var lit := site_state(g, salt)
+			if lit == 0:
+				continue
+			var h := cell_hash(g * 31 + salt, 4517)
+			var burning := lit == 2
+			var lean := 8.0 + float((h >> 13) % 86)
+			if (h >> 3) % 5 == 0:
+				lean = -0.3 * lean
 			var col := {
-				"pos": Vector2(x, top + float(crest[sx]) + 4.0 + float((h >> 17) % 12)),
+				"pos": Vector2(x, top + float(crest[sx]) + 3.0 + float((h >> 17) % 9)),
 				"seed": h,
-				"rise": 95.0 + float((h >> 5) % 90),
-				"width": 0.8 + float((h >> 9) % 8) * 0.08,
-				"lean": 10.0 + float((h >> 13) % 80),
+				"burning": burning,
+				"variant": (h >> 21) % FIRE_VARIANTS,
+				"rise": (95.0 + float((h >> 5) % 90)) * (1.0 if burning else 0.6),
+				"width": (0.75 + float((h >> 9) % 8) * 0.09) * (1.0 if burning else 0.55),
+				"lean": lean,
 			}
 			out.append(col)
 		x0 += w
 		i += 1
 	return out
+
+
+## Whether hill site `g` (its index along the hills, left to right) burns (2), smoulders (1) or is
+## dark (0) for segment salt `salt`: of every three neighbouring sites one burns, at a place in the
+## three picked by hash (so fires stand 160 to 800 hills px apart, one or two on a screen), and a
+## third of the rest smoulder.
+static func site_state(g: int, salt: int) -> int:
+	var group := int(floor(float(g) / 3.0))
+	if posmod(g, 3) == cell_hash(group + salt * 7, 3359) % 3:
+		return 2
+	return 1 if cell_hash(g + salt * 13, 3371) % 3 == 0 else 0
+
+
+## The hill fires' pictures (FIRE_VARIANTS), baked and blurred once: index v * FIRE_FRAMES + f is
+## variant v's flicker frame f, FIRE_VARIANTS * FIRE_FRAMES + v its smouldering bed.
+static func hill_fire_textures() -> Array[Texture2D]:
+	if not _fire_tex.is_empty():
+		return _fire_tex
+	var shapes: Array[Dictionary] = []
+	for v in FIRE_VARIANTS:
+		shapes.append(fire_shape(v))
+	for v in FIRE_VARIANTS:
+		for f in FIRE_FRAMES:
+			_fire_tex.append(_baked_fire(shapes[v], f, false))
+	for v in FIRE_VARIANTS:
+		_fire_tex.append(_baked_fire(shapes[v], 0, true))
+	return _fire_tex
+
+
+static func _baked_fire(shape: Dictionary, frame: int, smoulder: bool) -> Texture2D:
+	var img := hill_fire_image(shape, frame, smoulder)
+	return ImageTexture.create_from_image(TankBlur.blurred_image(img, FIRE_BLUR, TankPalette.HAZE))
+
+
+## Hill fire variant `v`'s shape: what burns ("gable": a house with one gable end standing, "barn":
+## a long barn with its roof fallen in, "hedge": a hedgerow, "copse": a clump of trees beside a
+## shed), the burning bed's width and place, where along it the flames stand tallest (never the
+## middle: the mass is lopsided), their height, lean (px per px of height, downwind) and the salt
+## of their ragged top.
+static func fire_shape(v: int) -> Dictionary:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7919 * (v + 3)
+	var kinds: Array[String] = ["gable", "barn", "hedge", "copse"]
+	var peak := rng.randf_range(0.16, 0.36)
+	if v % 2 == 1:
+		peak = 1.0 - peak
+	return {
+		"ruin": kinds[v % kinds.size()],
+		"bed": rng.randi_range(9, 19),
+		"cx": rng.randi_range(-4, 4),
+		"peak": peak,
+		"tall": rng.randi_range(7, 16),
+		"lean": rng.randf_range(0.1, 0.55),
+		"salt": rng.randi_range(1, 9999),
+		"ruin_w": rng.randi_range(13, 22),
+		"ruin_h": rng.randi_range(4, 8),
+	}
+
+
+## Variant `shape`'s picture before the blur (FIRE_W x FIRE_H): the burning ruin's silhouette
+## standing on the hills (they are its ridge; the picture adds no ground of its own), and the fire, an
+## irregular, lopsided mass: per column of its bed a height from a skewed envelope times a coarse
+## noise (frame `frame` shifts the noise: the flicker), each row shifted downwind by the lean, amber
+## low in its heart and orange above, with a loose lick here and there over the tips. Smouldering:
+## a lumpy, unbroken bed of dull embers heaped off-centre, with no flames (never two separate
+## dots, which read as eyes, nor an even bar).
+static func hill_fire_image(shape: Dictionary, frame: int, smoulder: bool) -> Image:
+	var img := Image.create(FIRE_W, FIRE_H, false, Image.FORMAT_RGBA8)
+	var by := FIRE_BED_Y
+	var salt := int(shape["salt"])
+	var tall := float(shape["tall"])
+	var lean := float(shape["lean"])
+	var cx := FIRE_W / 2 + int(shape["cx"]) - int(lean * tall * 0.4)
+	_ruin(img, str(shape["ruin"]), cx, int(shape["ruin_w"]), int(shape["ruin_h"]), salt)
+	var bed := int(shape["bed"]) + (4 if smoulder else 0)
+	var x0 := cx - bed / 2
+	var peak := float(shape["peak"])
+	var ph := float(frame) * 5.3
+	for i in bed:
+		var t := (float(i) + 0.5) / float(bed)
+		var tp := t / peak * 0.5 if t < peak else 0.5 + (t - peak) / (1.0 - peak) * 0.5
+		var env := pow(sin(PI * tp), 0.8)
+		var nz := pnoise(float(i) + ph, float(frame) * 3.0, 2.3, 4096, salt)
+		if smoulder:
+			# A low, lumpy ember bed: unbroken along the bed row, heaped up off-centre where it is
+			# hottest (never a flat bar of even height), mostly dull red, a hot pixel here and there.
+			var heap := int(roundf(3.0 * env * nz))
+			_put(img, x0 + i, by, TankPalette.with_alpha(TankPalette.RUST_LIGHT, 0.85))
+			_put(img, x0 + i, by + 1, TankPalette.with_alpha(TankPalette.RUST, 0.6))
+			for y in heap:
+				var hot := nz > 0.62 and y == 0
+				var c := TankPalette.FIRE if hot else TankPalette.RUST_LIGHT
+				_put(img, x0 + i, by - 1 - y, TankPalette.with_alpha(c, 0.75 - 0.15 * float(y)))
+			continue
+		_put(img, x0 + i, by, TankPalette.FIRE)
+		_put(img, x0 + i, by + 1, TankPalette.with_alpha(TankPalette.RUST, 0.85))
+		var hh := tall * env * (0.3 + 0.7 * nz)
+		hh += 2.5 * pnoise(float(i), ph, 1.1, 4096, salt + 1)
+		var rows := int(roundf(hh))
+		for y in rows:
+			var k := float(y) / maxf(hh, 1.0)
+			var wob := 0.7 * sin(float(y) * 0.8 + ph + float(i) * 1.7)
+			var x := x0 + i + int(roundf(lean * float(y) + wob))
+			var c := TankPalette.FIRE
+			if k < 0.5 and t > 0.12 and t < 0.88:
+				c = TankPalette.AMBER
+			if k < 0.2 and absf(t - peak) < 0.14:
+				c = TankPalette.GLOW_WARM
+			var fade := 1.0 - 0.45 * smoothstep(0.6, 1.0, k)
+			_put(img, x, by - 1 - y, TankPalette.with_alpha(c, fade))
+		# Now and then a loose lick of flame over a tip.
+		if rows > 3 and cell_hash(i * 5 + frame, salt) % 4 == 0:
+			var lx := x0 + i + int(roundf(lean * float(rows + 2)))
+			var ly := by - 2 - rows - cell_hash(i, salt + 3) % 2
+			_put(img, lx, ly, TankPalette.with_alpha(TankPalette.FIRE, 0.7))
+	return img
+
+
+## The burning ruin's dark silhouette standing on the bed row FIRE_BED_Y around `cx`, `rw` x `rh`
+## px, by `kind` (fire_shape); its upper edge catches the fire (rust). Ragged everywhere: no post,
+## no bar, nothing symmetric.
+static func _ruin(img: Image, kind: String, cx: int, rw: int, rh: int, salt: int) -> void:
+	var by := FIRE_BED_Y
+	var dark := Color("#17191c")
+	var x0 := cx - rw / 2
+	for i in rw:
+		var t := (float(i) + 0.5) / float(rw)
+		var jag := int(2.0 * pnoise(float(i), 1.0, 2.0, 512, salt + 7))
+		var top := by - rh + jag
+		match kind:
+			"gable":
+				# One gable end still standing at the left, the rest of the roof gone: broken walls.
+				if t < 0.3:
+					top = by - rh - int(5.0 * (1.0 - absf(t - 0.15) / 0.15)) + jag / 2
+				else:
+					top = by - rh + 2 + jag
+			"barn":
+				# A long barn, its roof sagging into the middle where it fell in.
+				top = by - rh + int(3.5 * sin(t * PI)) + jag / 2
+			"hedge":
+				top = by - 2 - int(3.0 * pnoise(float(i), 2.0, 3.0, 512, salt + 9))
+			"copse":
+				# A low shed at the fire and a lumpy clump of tree crowns behind it to one side.
+				top = by - rh + 2 + jag
+				if t > 0.55:
+					var u := (t - 0.55) / 0.45
+					var crown := 7.0 * sin(u * PI) + 2.0 * pnoise(float(i), 3.0, 2.0, 512, salt)
+					top = by - rh - int(crown)
+		for y in range(top, by + 1):
+			_put(img, x0 + i, y, dark)
+		_put(img, x0 + i, top, TankPalette.RUST_DARK)
+
+
+## Sets a pixel if it lies inside the image.
+static func _put(img: Image, x: int, y: int, c: Color) -> void:
+	if x >= 0 and y >= 0 and x < img.get_width() and y < img.get_height():
+		img.set_pixel(x, y, c)
 
 
 ## The hills plane's crest: per column of its (blurred) texture, the first row that is mostly
@@ -556,34 +809,39 @@ func _bank_strip(index: int) -> ParallaxStrip:
 
 ## The hill fires' smoke columns: soft puffs rising from each fire, billowing side to side and
 ## widening steadily as they climb, soot lit warm at the foot and thinning into the clouds (no hard
-## edge anywhere: two overlapping lobes per step, low alpha), the fire's flames on the crest under
-## them, and fine ash flecks falling through the sky.
+## edge anywhere: two overlapping lobes per step, low alpha), the fire's blurred picture on its
+## ridge under them (or a smouldering ruin under a thin grey wisp), and fine ash flecks falling
+## through the sky.
 func _paint_smoke(item: Node2D) -> void:
 	var puff := TankProcTex.puff()
-	for col in smoke_columns(_scroll_x):
+	for col in columns():
 		var at: Vector2 = col["pos"]
 		var sd := int(col["seed"])
 		var rise: float = col["rise"]
 		var wk: float = col["width"]
 		var lean: float = col["lean"]
+		var burning := bool(col["burning"])
+		var dense := 1.0 if burning else 0.55
+		var base := SMOKE_TONE if burning else TankPalette.darkened(TankPalette.SMOKE, 0.3)
 		for k in SMOKE_PUFFS:
 			var u := fposmod(
 				time * 0.03 + float(k) / float(SMOKE_PUFFS) + float(sd % 11) * 0.09, 1.0
 			)
 			var size := (5.0 + 86.0 * pow(u, 1.25)) * wk
 			var billow := sin(u * 7.0 + float(sd % 5) + time * 0.35) * (1.5 + 11.0 * u)
-			var c := at + Vector2(pow(u, 1.7) * lean + billow, -u * rise)
-			var tone := SMOKE_TONE.lerp(SMOKE_TOP, smoothstep(0.1, 1.0, u))
-			tone = tone.lerp(TankPalette.RUST, 0.5 * (1.0 - smoothstep(0.0, 0.25, u)))
-			var a := 0.5 * smoothstep(0.0, 0.07, u) * (1.0 - smoothstep(0.4, 1.0, u))
+			var c := at + Vector2(pow(u, 1.7) * lean + billow, -4.0 - u * rise)
+			var tone := base.lerp(SMOKE_TOP, smoothstep(0.1, 1.0, u))
+			if burning:
+				tone = tone.lerp(TankPalette.RUST, 0.55 * (1.0 - smoothstep(0.0, 0.3, u)))
+			var a := 0.5 * dense * smoothstep(0.0, 0.07, u) * (1.0 - smoothstep(0.4, 1.0, u))
 			var r := Rect2(c - Vector2(size, size) * 0.5, Vector2(size, size))
 			item.draw_texture_rect(puff, r, false, TankPalette.with_alpha(tone, a))
-			var side := 1.0 if k % 2 == 0 else -1.0
-			var lobe := size * 0.62
+			var side := 1.0 if (k * 7 + sd) % 3 != 0 else -1.0
+			var lobe := size * (0.5 + 0.03 * float((sd + k) % 5))
 			var lc := c + Vector2(side * size * 0.3, size * 0.08)
 			var lr := Rect2(lc - Vector2(lobe, lobe) * 0.5, Vector2(lobe, lobe))
 			item.draw_texture_rect(puff, lr, false, TankPalette.with_alpha(tone, a * 0.85))
-		_flames(item, at, sd)
+		_hill_fire(item, col)
 	for i in ASH_FLECKS:
 		var h := cell_hash(i, 911)
 		var x := (
@@ -597,44 +855,28 @@ func _paint_smoke(item: Node2D) -> void:
 		)
 
 
-## A distant farm burning on the hills' slope: the farm's dark silhouette (a long barn and a poplar
-## beside it, standing in the hill), its roof's glowing bed and three flickering tongues.
-func _flames(item: Node2D, at: Vector2, sd: int) -> void:
-	var foot := at.y + 5.0
-	var dark := Color("#1d1f23")
-	var side := 1.0 if sd % 2 == 0 else -1.0
-	var barn := PackedVector2Array(
-		[
-			Vector2(at.x - 9.0, foot + 2.0),
-			Vector2(at.x - 9.0, foot - 4.0),
-			Vector2(at.x - 5.0, foot - 7.0),
-			Vector2(at.x + 6.0, foot - 7.0),
-			Vector2(at.x + 10.0, foot - 4.0),
-			Vector2(at.x + 10.0, foot + 2.0),
-		]
-	)
-	item.draw_colored_polygon(barn, dark)
-	var tx := at.x + side * 14.0
-	var poplar := PackedVector2Array(
-		[Vector2(tx - 2.5, foot + 2.0), Vector2(tx + 2.5, foot + 2.0), Vector2(tx, foot - 13.0)]
-	)
-	item.draw_colored_polygon(poplar, dark)
-	at = Vector2(at.x, foot - 6.0)
-	var bed := TankPalette.with_alpha(TankPalette.FIRE, 0.8)
-	item.draw_rect(Rect2(at.x - 5.0, at.y - 1.0, 10.0, 2.0), bed)
-	for t in 3:
-		var fx := at.x - 4.0 + float(t) * 4.0 + sin(time * 6.0 + float(t + sd % 5)) * 0.8
-		var fh := 2.5 + 3.0 * absf(sin(time * 4.3 + float(t) * 1.7 + float(sd % 13)))
-		if t == 1:
-			fh += 2.0
-		var outer := PackedVector2Array(
-			[Vector2(fx - 2.0, at.y), Vector2(fx + 2.0, at.y), Vector2(fx + 0.5, at.y - fh)]
-		)
-		item.draw_colored_polygon(outer, TankPalette.with_alpha(TankPalette.FIRE, 0.85))
-		var inner := PackedVector2Array(
-			[Vector2(fx - 1.0, at.y), Vector2(fx + 1.0, at.y), Vector2(fx + 0.3, at.y - fh * 0.55)]
-		)
-		item.draw_colored_polygon(inner, TankPalette.with_alpha(TankPalette.AMBER, 0.9))
+## Draws column `col`'s fire: its variant's blurred picture with the burning bed on the column's
+## foot, a flicker frame at the site's own rate, scaled a little per site and mirrored when its
+## smoke leans upwind (the flames lean with the smoke); a smouldering site shows its ember bed.
+func _hill_fire(item: Node2D, col: Dictionary) -> void:
+	var tex := hill_fire_textures()
+	var sd := int(col["seed"])
+	var v := int(col["variant"])
+	var idx := FIRE_VARIANTS * FIRE_FRAMES + v
+	if bool(col["burning"]):
+		var rate := 4.0 + float(sd % 5)
+		idx = v * FIRE_FRAMES + posmod(int(time * rate) + sd % 7, FIRE_FRAMES)
+	var s := 0.8 + 0.1 * float((sd >> 7) % 4)
+	var size := Vector2(FIRE_W, FIRE_H) * s
+	var at: Vector2 = col["pos"]
+	var pos := (at - Vector2(size.x * 0.5, float(FIRE_BED_Y) * s)).round()
+	if float(col["lean"]) < 0.0:
+		# Mirrored about its own middle (a negative rect width would draw it shifted).
+		item.draw_set_transform(Vector2(pos.x + size.x, pos.y), 0.0, Vector2(-1.0, 1.0))
+		item.draw_texture_rect(tex[idx], Rect2(Vector2.ZERO, size), false)
+		item.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	else:
+		item.draw_texture_rect(tex[idx], Rect2(pos, size), false)
 
 
 ## Smoke sheets lying low over the hills: long, thin, soft streaks drifting downwind, cool grey high
@@ -799,8 +1041,8 @@ static func smoke_bank(index: int) -> Texture2D:
 	var img := Image.create(lw, lh, false, Image.FORMAT_RGBA8)
 	var top_col := Color("#1d1e21") if far else Color("#121315")
 	var mid_col := Color("#2a2c30") if far else Color("#1d1e21")
-	var under_col := Color("#4a3429") if far else Color("#5a3a2c")
-	var crown_col := Color("#3c434c") if far else Color("#2e3439")
+	var under_col := Color("#563b2d") if far else Color("#64402f")
+	var crown_col := Color("#48515b") if far else Color("#323a40")
 	var max_a := 0.78 if far else 0.9
 	for x in lw:
 		var fx := float(x)
@@ -871,11 +1113,20 @@ static func far_ridge_texture() -> Texture2D:
 		while fy < h - 1 and img.get_pixel(fx, fy).a < 0.5:
 			fy += 1
 		fy = mini(fy + 6 + f * 3, h - 3)
-		for dy in range(-1, 2):
-			for dx in range(-2, 3):
-				img.set_pixel(fx + dx, fy + dy, TankPalette.FIRE)
-		img.set_pixel(fx, fy, TankPalette.AMBER)
-		img.set_pixel(fx + 1, fy, TankPalette.AMBER)
+		# A long, ragged smear of fire along the slope (a distant burning hedge or farm), never a
+		# round dot: each its own length, hottest off-centre.
+		var fw := 7 + (f * 5) % 6
+		var peak := fw / 4 + (f * 3) % (fw / 2)
+		for dx in fw:
+			var hot := cell_hash(dx + f * 31, 307)
+			var t := 1.0 - absf(float(dx - peak)) / float(fw)
+			img.set_pixel(fx + dx, fy, TankPalette.with_alpha(TankPalette.FIRE, 0.55 + 0.45 * t))
+			var up := int(2.4 * t * t) + (1 if hot % 3 == 0 else 0)
+			for k in up:
+				var c := TankPalette.with_alpha(TankPalette.RUST_LIGHT, 0.8 - 0.2 * float(k))
+				img.set_pixel(fx + dx, fy - 1 - k, c)
+			if dx == peak:
+				img.set_pixel(fx + dx, fy, TankPalette.AMBER)
 	var blurred := TankBlur.blurred_image(img, TankBlur.PRESETS["hills"], TankPalette.HAZE)
 	_ridge = ImageTexture.create_from_image(blurred)
 	return _ridge
@@ -1068,11 +1319,12 @@ static func front_bands(span: Vector2) -> Array[Vector3]:
 
 ## The foreground, built once (FRONT_W x FRONT_H, tiling unmirrored): a rubble bank whose lumpy
 ## top runs at y FRONT_BANK_Y and below on screen (under the HUD band), with weeds and the generated
-## debris strip's broken bricks along it, and three wrecks far apart rising out of it at the frame's
-## lower edge: stakes strung with wire (every strand tied at both ends), a shattered tree stump and a
-## broken masonry wall corner. Between them the ground line stays clear. Near-black, then blurred
-## hard and darkened (FRONT_BLUR): an out-of-focus layer, never a sharp silhouette. Nothing in it
-## is a pole with a free wire, a cross or a figure.
+## debris strip's broken bricks along it, and six wrecks apart from each other rising out of it at
+## the frame's lower edge: stakes strung with wire (every strand tied at both ends), two rubble
+## heaps with a bent girder, a shattered tree stump, sandbags and a broken masonry wall corner.
+## Between them the ground line stays clear. Near-black, then blurred hard and darkened
+## (FRONT_BLUR): an out-of-focus layer, never a sharp silhouette. Nothing in it is a pole with a
+## free wire, a cross or a figure.
 static func front_texture() -> Texture2D:
 	if _front != null:
 		return _front
@@ -1115,8 +1367,11 @@ static func front_texture() -> Texture2D:
 			for k in bh:
 				pen.px(x + (lean * k) / 3, ty - 1 - k, ink2)
 	_stakes(pen, 330, mound + 4, ink, lit)
+	_girder_heap(pen, 790, mound + 3, ink, lit)
 	_stump(pen, 1260, mound + 6, ink, lit)
+	_sandbags(pen, 1700, mound + 3, ink, lit)
 	_wall_corner(pen, 2120, mound + 6, ink, lit)
+	_girder_heap(pen, 2560, mound + 4, ink, lit)
 	var blurred := TankBlur.blurred_image(img, FRONT_BLUR, TankPalette.HAZE)
 	_front = ImageTexture.create_from_image(blurred)
 	return _front
@@ -1137,6 +1392,44 @@ static func _stakes(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void
 		for k in range(1, tops.size()):
 			var off := Vector2(1, 5.0 + 9.0 * float(strand))
 			pen.wire(tops[k - 1] + off, tops[k] + off, 3.0, ink)
+
+
+## A heap of rubble and broken brick humped over the bank, a bent steel girder jutting out of it
+## at a slant (thick, its upper edge lit), a few loose blocks at its foot.
+static func _girder_heap(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
+	var w := 58
+	for i in w:
+		var t := (float(i) + 0.5) / float(w)
+		var hump := 14.0 * pow(sin(t * PI), 0.7) + 3.0 * pnoise(float(x + i), 3.0, 4.0, 4096, 821)
+		var top := base - int(hump)
+		pen.col(x + i, top, base + 2, ink)
+		pen.px(x + i, top, lit if Pen.bayer(x + i, top) < 0.5 else ink)
+	var a := Vector2(x + 18, base - 10)
+	var b := Vector2(x + 44, base - 27)
+	for k in 3:
+		pen.line(a + Vector2(0, k), b + Vector2(0, k), ink)
+	pen.line(a + Vector2(0, -1), b + Vector2(0, -1), lit)
+	# The girder's torn end bends down a little.
+	pen.line(b, b + Vector2(5, 3), ink)
+	pen.line(b + Vector2(0, 1), b + Vector2(5, 4), ink)
+	for k in 3:
+		pen.rect(x - 4 + k * 23, base - 2 - k % 2, 4, 3, ink)
+
+
+## Sandbags in three uneven courses, the top course half fallen, each bag a lumpy pillow.
+static func _sandbags(pen: Pen, x: int, base: int, ink: Color, lit: Color) -> void:
+	var courses: Array[Vector2i] = [Vector2i(0, 8), Vector2i(3, 7), Vector2i(9, 3)]
+	for c in courses.size():
+		var y := base - 5 * (c + 1)
+		var n := courses[c].y
+		for k in n:
+			var bx := x + courses[c].x + k * 7 + (c % 2) * 3
+			var bw := 7 + int(pnoise(float(bx), float(c), 2.0, 4096, 833) * 2.0)
+			for i in bw:
+				var t := (float(i) + 0.5) / float(bw)
+				var hh := 3 + int(2.0 * sin(t * PI))
+				pen.col(bx + i, y + 5 - hh, base + 2, ink)
+				pen.px(bx + i, y + 5 - hh, lit if t > 0.3 and t < 0.7 else ink)
 
 
 ## A broken masonry wall corner: a stepped, jagged top with a window gap, rubble at its foot.
@@ -1416,6 +1709,8 @@ class NearPlane:
 		_far_layer(pen, rng, style, lo, hi, hz)
 		_ground(pen, rng, src, seg, l1 - FEATHER - PATCH_BLEND, l0 + W + FEATHER + PATCH_BLEND)
 		_near_layer(pen, rng, style, lo, hi, hz)
+		if style == "fields" or style == "village":
+			field_bounds(pen, rng, lo, hi, hz, h)
 		var lm := src.get_region(Rect2i(0, 0, m, h))
 		_fix_landmark(id, lm, hz)
 		_feather(lm, FEATHER)
@@ -1580,6 +1875,65 @@ class NearPlane:
 			var kind := str(order.pop_back())
 			var used := _scene(pen, rng, kind, x, base + rng.randi_range(-1, 2), hi - x)
 			x += used + rng.randi_range(14, 56)
+
+	## The fields between the horizon and the plane's foot on the flanks (lo..hi): rows of hedgerows
+	## at three depths (the far ones thin, low and paler, the near ones taller and dark), each broken
+	## by field gates, with an oak or a poplar row standing in it now and then, and the fields
+	## between them told apart by tone (stubble, plough, grass) instead of one ploughed stripe
+	## pattern (polish round 6: the fields read as flat grey stripes).
+	static func field_bounds(
+		pen: Pen, rng: RandomNumberGenerator, lo: int, hi: int, hz: int, h: int
+	) -> void:
+		var rows: Array[int] = [hz + 9, hz + 9 + (h - hz) / 4, hz + 6 + (h - hz) / 2]
+		var tones: Array[Color] = [B2, K3, O1, B3, K4]
+		# The fields' tones: long patches between the hedgerow rows, faded in at their ends.
+		for r in range(rows.size()):
+			var y0 := rows[r] + 1
+			var y1 := rows[r + 1] - 2 if r + 1 < rows.size() else h - 8
+			var x := lo
+			while x < hi:
+				var fw := rng.randi_range(60, 170)
+				var tone: Color = tones[rng.randi_range(0, tones.size() - 1)]
+				var a := rng.randf_range(0.12, 0.3)
+				for fx in range(x, mini(x + fw, hi)):
+					var edge := minf(float(fx - x), float(x + fw - fx)) / 10.0
+					var k := clampf(edge, 0.0, 1.0) * a
+					for fy in range(y0, y1):
+						if Pen.bayer(fx, fy) < k * 2.0:
+							pen.px(fx, fy, tone)
+				x += fw
+		for r in rows.size():
+			var base := rows[r]
+			var near := float(r) / float(rows.size() - 1)
+			var top_h := 2 + r
+			var body := K3 if r == 0 else (K2 if r == 1 else K1)
+			var rim := S0 if r == 0 else K3
+			var x := lo + rng.randi_range(0, 30)
+			while x < hi - 8:
+				var run := rng.randi_range(50, 150)
+				var x1 := mini(x + run, hi)
+				for hx in range(x, x1):
+					var n := TankMaterial.smooth_noise(hx, r * 7, 3.0 + near * 2.0, 41 + r)
+					var hh := top_h + int(n * float(2 + r))
+					pen.col(hx, base - hh, base + 1, body)
+					pen.px(hx, base - hh, rim if Pen.bayer(hx, r) < 0.6 else body)
+				# A hedgerow tree now and then: an oak, or a short row of poplars on the far rows.
+				if rng.randf() < 0.55:
+					var tx := rng.randi_range(x + 6, maxi(x + 7, x1 - 6))
+					var tree_tones: Array[Color] = FAR_TREE if r == 0 else MID_TREE
+					if r < 2 and rng.randf() < 0.5:
+						for k in rng.randi_range(2, 4):
+							poplar(
+								pen,
+								tx + k * 6,
+								base,
+								rng.randi_range(14, 22) + r * 4,
+								5,
+								tree_tones
+							)
+					else:
+						oak(pen, rng, tx, base, rng.randi_range(6, 9) + r * 2, tree_tones)
+				x = x1 + rng.randi_range(6, 18)
 
 	## Draws one scene of `kind` from x on `base` within `room` px; returns its width (0 if it did
 	## not fit).

@@ -44,7 +44,11 @@ func _sprite(row: Dictionary) -> void:
 	var tint: Color = row.get("tint", Color.WHITE)
 	var tex := TankSprites.tex(str(row["id"]))
 	if bool(row.get("flip", false)):
-		draw_texture_rect(tex, Rect2(pos.x + size.x, pos.y, -size.x, size.y), false, tint)
+		# Mirrored about its own middle: a negative rect width flips the texture but keeps the
+		# rect's x, so the sprite would land one width to the right of `pos` (polish round 6).
+		draw_set_transform(Vector2(pos.x + size.x, pos.y), 0.0, Vector2(-1.0, 1.0))
+		draw_texture_rect(tex, Rect2(Vector2.ZERO, size), false, tint)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	else:
 		draw_texture_rect(tex, Rect2(pos, size), false, tint)
 
