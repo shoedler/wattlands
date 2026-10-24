@@ -383,7 +383,7 @@ func _stamp_ride_text(fit_path: String, summary: Dictionary) -> Dictionary:
 	out["content_title"] = content_title(game_id, content_id)
 	if _results != null:
 		out["ride_tag"] = _results.ride_tag
-		out["ride_lines"] = _results.ride_lines.duplicate()
+		out["ride_lines"] = _results.own_ride_lines()
 		_results = null
 	_merge_summary(fit_path, out)
 	return out

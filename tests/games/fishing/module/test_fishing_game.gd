@@ -102,9 +102,9 @@ func test_configure_sends_one_summary_from_the_local_store() -> void:
 		sent[0],
 		{"k": "summary", "xp": 1210, "rec": {"mahi": 123}, "cos": [2, 0, 1, 0] as Array[int]}
 	)
-	assert_eq(g.local_rider().peer, 2)
+	assert_eq(g.own_rider().peer, 2)
 	assert_eq(
-		g.local_rider().cosmetics, [2, 0, 1, 0] as Array[int], "the local rider wears it at once"
+		g.own_rider().cosmetics, [2, 0, 1, 0] as Array[int], "the local rider wears it at once"
 	)
 	assert_eq(g.state.riders[0].cosmetics, [0, 0, 0, 0] as Array[int])
 
@@ -119,7 +119,7 @@ func test_bad_content_builds_nothing_and_sends_no_summary() -> void:
 	assert_null(g.state)
 	assert_eq(g.build_effort_plans(), {})
 	assert_eq((ctx.intents as F.Intents).sent, [])
-	assert_null(g.local_rider())
+	assert_null(g.own_rider())
 
 
 func test_the_host_applies_each_riders_summary_intent_to_its_rider() -> void:
@@ -519,7 +519,7 @@ func test_client_predict_moves_only_the_local_cadence_marker() -> void:
 	var before: Array = g.state.riders.map(
 		func(r: FishingRiderState) -> Dictionary: return r.to_dict()
 	)
-	var fish_before := g.local_rider().fish.to_dict()
+	var fish_before := g.own_rider().fish.to_dict()
 	var tm := Telemetry.new()
 	tm.cadence_rpm = 100.0
 	tm.power_w = 400.0
@@ -537,17 +537,17 @@ func test_client_predict_moves_only_the_local_cadence_marker() -> void:
 	after[1].erase("cadence_ema")
 	before[1].erase("cadence_ema")
 	assert_eq(after[1], before[1], "nothing else in the local rider: no boat prediction")
-	assert_eq(g.local_rider().fish.to_dict(), fish_before)
+	assert_eq(g.own_rider().fish.to_dict(), fish_before)
 	g.client_predict(Wl.SIM_DT, null)
 	assert_eq(g.state.tick, 0)
 
 
 func test_local_rider_is_the_local_peers() -> void:
 	var g := _game(3, Wl.CLIENT, 3)
-	assert_eq(g.local_rider(), g.state.riders[2])
+	assert_eq(g.own_rider(), g.state.riders[2])
 	var lonely := FishingGame.new()
 	autofree(lonely)
-	assert_null(lonely.local_rider())
+	assert_null(lonely.own_rider())
 	lonely.apply_event({"type": "snap", "l": 0})
 	lonely.apply_snapshot({})
 	assert_eq(lonely.snapshot(), {})

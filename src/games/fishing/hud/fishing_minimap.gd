@@ -73,7 +73,7 @@ func refresh() -> void:
 		var view_m := float(FishingScenery.W) / FishingScenery.PX_PER_M
 		window_b = clampf((cam + view_m - x0) / span, 0.0, 1.0)
 	icons.clear()
-	var me := FishingHudModel.local_rider(game)
+	var me := FishingHudModel.own_rider(game)
 	for r in st.riders:
 		(
 			icons

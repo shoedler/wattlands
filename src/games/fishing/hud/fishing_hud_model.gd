@@ -74,7 +74,7 @@ static func tr_key(game: FishingGame, key: String, args: Variant = []) -> String
 
 
 ## The local rider (null without a state or a boat).
-static func local_rider(game: FishingGame) -> FishingRiderState:
+static func own_rider(game: FishingGame) -> FishingRiderState:
 	if game == null or game.state == null or game.ctx == null:
 		return null
 	return game.state.rider_of_peer(game.ctx.local_peer)
@@ -150,7 +150,7 @@ static func board(game: FishingGame) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if game == null or game.state == null:
 		return out
-	var me := local_rider(game)
+	var me := own_rider(game)
 	for r in game.state.riders:
 		(
 			out

@@ -117,7 +117,7 @@ func _send_summary() -> void:
 	var cos: Array[int] = []
 	cos.assign(s["cosmetics"])
 	var intent := FishingIntents.summary(int(s["xp"]), s["records"], cos)
-	var me := local_rider()
+	var me := own_rider()
 	if me != null:
 		_apply_summary(me, FishingIntents.normalize(intent))
 	if ctx.intents != null:
@@ -125,7 +125,7 @@ func _send_summary() -> void:
 
 
 ## The local rider (null before configure or for a peer outside the session).
-func local_rider() -> FishingRiderState:
+func own_rider() -> FishingRiderState:
 	if state == null or ctx == null:
 		return null
 	return state.rider_of_peer(ctx.local_peer)
@@ -263,13 +263,13 @@ func _host_toast(e: Dictionary) -> void:
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1], Wl.ALL_PEERS)
-	elif OWN_EVENTS.has(type) and _is_local_rider(e):
+	elif OWN_EVENTS.has(type) and _is_own_rider(e):
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1], ctx.local_peer)
 
 
-func _is_local_rider(e: Dictionary) -> bool:
+func _is_own_rider(e: Dictionary) -> bool:
 	var r := state.rider(int(e.get("l", -1))) if state != null else null
 	return r != null and r.peer == ctx.local_peer
 
@@ -406,7 +406,7 @@ func apply_event(event: Dictionary) -> void:
 	fx_event.emit(e)
 	if state == null or ctx.hud == null:
 		return
-	if OWN_EVENTS.has(str(e.get("type", ""))) and _is_local_rider(e):
+	if OWN_EVENTS.has(str(e.get("type", ""))) and _is_own_rider(e):
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1])
@@ -415,7 +415,7 @@ func apply_event(event: Dictionary) -> void:
 ## Clients: only the local cadence marker moves ahead of the next snapshot; the host owns the
 ## boat, the meters and everything else.
 func client_predict(dt: float, local: Telemetry) -> void:
-	var r := local_rider()
+	var r := own_rider()
 	if r != null and local != null:
 		var k := 1.0 - exp(-dt / FishingConst.CADENCE_TAU_S)
 		r.cadence_ema += (local.cadence_rpm - r.cadence_ema) * k

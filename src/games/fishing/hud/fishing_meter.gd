@@ -23,7 +23,7 @@ static func make(p_game: FishingGame, p_kind: String) -> FishingMeter:
 
 
 func refresh() -> void:
-	var r := FishingHudModel.local_rider(game)
+	var r := FishingHudModel.own_rider(game)
 	shown = r != null and r.action == FishingConst.A_FIGHT
 	fill = (r.strain if kind == STRAIN else r.slack) if shown else 0.0
 

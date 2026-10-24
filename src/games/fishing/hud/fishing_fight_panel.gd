@@ -20,7 +20,7 @@ static func make(p_game: FishingGame) -> FishingFightPanel:
 
 
 func refresh() -> void:
-	var r := FishingHudModel.local_rider(game)
+	var r := FishingHudModel.own_rider(game)
 	fish = FishingHudModel.fish_row(game, r)
 	gaff = FishingHudModel.gaff(r)
 	place = ""

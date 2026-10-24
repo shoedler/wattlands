@@ -32,7 +32,7 @@ func ap() -> float:
 func refresh() -> void:
 	_t += get_process_delta_time()
 	chips.clear()
-	var r := FishingHudModel.local_rider(game)
+	var r := FishingHudModel.own_rider(game)
 	var list := FishingHudModel.chips(game, r)
 	if list.is_empty() or not game.has_meta(FishingView.META):
 		return

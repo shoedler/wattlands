@@ -1061,14 +1061,12 @@ func test_session_ids_are_unique_per_session_even_with_the_same_seed() -> void:
 
 
 func test_each_peer_uses_its_own_rows_ride_lines() -> void:
-	var host := _host(_solo("tiny", {}, 1))
 	var r := GameResults.new()
+	r.own_peer = 2
 	r.ride_lines.append("host line")
-	r.rows.append({"peer_id": host.local_peer(), "ride_lines": ["mine 1", "mine 2"]})
-	host._use_own_ride_lines(r)
-	assert_eq(r.ride_lines, ["mine 1", "mine 2"] as Array[String])
-	var shared := GameResults.new()
-	shared.ride_lines.append("shared")
-	shared.rows.append({"peer_id": host.local_peer()})
-	host._use_own_ride_lines(shared)
-	assert_eq(shared.ride_lines, ["shared"] as Array[String], "no row lines: the shared ones stay")
+	r.rows.append({"peer_id": 1, "ride_lines": ["host 1"]})
+	r.rows.append({"peer_id": 2, "ride_lines": ["mine 1", "mine 2"]})
+	assert_eq(r.own_ride_lines(), ["mine 1", "mine 2"] as Array[String])
+	assert_false(r.to_dict().has("own_peer"), "never serialized: results match on every peer")
+	r.own_peer = 3
+	assert_eq(r.own_ride_lines(), ["host line"] as Array[String], "no own row: the shared lines")

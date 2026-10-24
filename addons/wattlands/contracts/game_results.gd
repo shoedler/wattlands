@@ -25,7 +25,8 @@ var summary_key: String = ""
 ## "Free Roam 30 min" or a plan name). "" falls back to the content title.
 var ride_tag: String = ""
 ## Game stat lines for the Strava description, above the platform's averages (no heart rate).
-## A row may carry its own "ride_lines" (Array of String); each peer then uses its own row's.
+## A row may carry its own "ride_lines" (Array of String); each peer then uses its own row's
+## (own_ride_lines()).
 var ride_lines: Array[String] = []
 var rows: Array[Dictionary] = []
 ## Team-wide custom stats.
@@ -33,6 +34,9 @@ var team: Dictionary = {}
 ## Unique per session (set by the GameHost) so a peer that receives results twice applies
 ## progress once.
 var session_id: String = ""
+## This peer's id, set locally by the GameHost before results_ready (never serialized, so every
+## peer's results stay identical).
+var own_peer: int = 0
 
 
 static func from_stats(stats: SessionStats, players: Array[PlayerSlot]) -> GameResults:
@@ -73,6 +77,18 @@ static func grade_from_fraction(f: float) -> String:
 	if f >= 0.65:
 		return "C"
 	return "D"
+
+
+## The Strava lines for this peer: its own row's "ride_lines" when the game set them, else
+## ride_lines.
+func own_ride_lines() -> Array[String]:
+	var out: Array[String] = []
+	var own: Variant = row(own_peer).get("ride_lines", null)
+	if own is Array and not (own as Array).is_empty():
+		for line: Variant in own:
+			out.append(str(line))
+		return out
+	return ride_lines.duplicate()
 
 
 func to_dict() -> Dictionary:

@@ -1241,16 +1241,6 @@ func complete_rows(r: GameResults) -> void:
 				row[k] = brow[k]
 
 
-## A game whose riders' Strava lines differ puts each rider's lines in its row ("ride_lines");
-## this peer's own row then replaces the shared GameResults.ride_lines.
-func _use_own_ride_lines(r: GameResults) -> void:
-	var own: Variant = r.row(local_peer()).get("ride_lines", null)
-	if own is Array and not (own as Array).is_empty():
-		r.ride_lines.clear()
-		for line: Variant in own:
-			r.ride_lines.append(str(line))
-
-
 func _apply_results(r: GameResults) -> void:
 	if _progress_done.has(r.session_id):
 		return
@@ -1260,7 +1250,7 @@ func _apply_results(r: GameResults) -> void:
 		u = game.apply_progress(r, ctx.progress)
 		ctx.progress.save()
 	unlocks = (u as Array).duplicate(true) if u is Array else []
-	_use_own_ride_lines(r)
+	r.own_peer = local_peer()
 	bus.results_ready.emit(r)
 	bus.unlocks_ready.emit(unlocks)
 
