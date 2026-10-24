@@ -123,7 +123,8 @@ func _process(delta: float) -> void:
 
 
 ## items: [{"id": Variant, "text": String (key or text), "disabled": bool (optional),
-## "icon": Texture2D (optional), "detail": String (optional)}].
+## "icon": Texture2D (optional), "icon_px": float (optional icon side, default item_font_px * 1.5),
+## "detail": String (optional)}].
 func set_items(items: Array) -> void:
 	_items.clear()
 	for it: Variant in items:
@@ -436,7 +437,8 @@ func _rebuild_rows() -> void:
 			tex.texture = icon
 			tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex.custom_minimum_size = Vector2(item_font_px * 1.5, item_font_px * 1.5)
+			var side := float(it.get("icon_px", item_font_px * 1.5))
+			tex.custom_minimum_size = Vector2(side, side)
 			hb.add_child(tex)
 		var vb := VBoxContainer.new()
 		vb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
