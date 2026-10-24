@@ -237,3 +237,36 @@ func test_the_drill_title_is_for_a_completed_drill_only() -> void:
 	var res := g.results()
 	assert_eq(res.summary_key, "TANK_RESULT_DRILL")
 	assert_eq(res.team["TANK_TEAM_OUTCOME"], g.ctx.strings.t("TANK_RESULT_DRILL"))
+
+
+## GAME_SDK 15 (Strava text): the title tag names the mission and how it ended; the crew's lines
+## open every rider's own lines (row["ride_lines"]), which add that rider's gunnery and rams.
+func test_the_strava_tag_and_lines() -> void:
+	var perfect := _perfect(3)
+	perfect.state.riders[1].shots = 7
+	perfect.state.riders[1].hits = 5
+	perfect.state.riders[1].rams = 2
+	var res := perfect.results()
+	assert_eq(res.ride_tag, "Ashfall Road - won")
+	assert_eq(res.ride_lines.size(), 3)
+	assert_eq(res.ride_lines[0], "Score: %d (grade S)" % roundi(res.score))
+	assert_eq(res.ride_lines[2], "Breakdowns: 0")
+	for row in res.rows:
+		var own: Array = row["ride_lines"]
+		assert_eq(own.size(), 5, "the crew's 3 lines, then the rider's 2")
+		assert_eq(JSON.stringify(own.slice(0, 3)), JSON.stringify(res.ride_lines))
+	assert_eq(res.row(2)["ride_lines"][3], "Shots: 7; hits: 5")
+	assert_eq(res.row(2)["ride_lines"][4], "Rams: 2; dodges: 0")
+	res.own_peer = 2
+	assert_eq(res.own_ride_lines()[3], "Shots: 7; hits: 5", "each peer uploads its own row's lines")
+	var back := GameResults.from_dict(JSON.parse_string(JSON.stringify(res.to_dict())))
+	assert_eq(back.ride_tag, res.ride_tag, "JSON safe")
+	assert_eq(JSON.stringify(back.row(2)["ride_lines"]), JSON.stringify(res.row(2)["ride_lines"]))
+	perfect.state.outcome = TankIds.OUTCOME_WITHDRAWN
+	assert_eq(perfect.results().ride_tag, "Ashfall Road - lost")
+	perfect.state.outcome = ""
+	assert_eq(perfect.results().ride_tag, "Ashfall Road - ended early")
+	var drill: TankGame = autofree(F.make_game(F.make_ctx(1, 0, "drill")))
+	drill.state.seg.seg = TankIds.SEG_COOLDOWN
+	drill.state.outcome = TankIds.OUTCOME_COMPLETE
+	assert_eq(drill.results().ride_tag, "Depot drill - complete")

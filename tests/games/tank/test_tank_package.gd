@@ -150,6 +150,7 @@ func test_every_string_key_has_the_game_prefix_and_every_used_key_exists() -> vo
 		used[str(e.get("label", "%sOPT_%s" % [_prefix(), str(e["id"]).to_upper()]))] = "game.json option label"
 	for c: String in man["contents"]:
 		used["%sCONTENT_%s" % [_prefix(), c.to_upper()]] = "game.json content label"
+		used["%sMISSION_%s" % [_prefix(), c.to_upper()]] = "the Strava ride tag's mission"
 	for t: String in TankIds.ENEMY_TYPES:
 		used["%sENEMY_%s" % [_prefix(), t.to_upper()]] = "enemy name"
 	for engine: String in TankIds.ENGINES:

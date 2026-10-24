@@ -105,6 +105,17 @@ TANK_RESULT_DRILL,Drill complete
 TANK_RESULT_ABANDONED,Ride ended early
 TANK_OUTCOME_VICTORY,Won
 TANK_OUTCOME_WITHDRAWN,Lost
+TANK_MISSION_ASHFALL_ROAD,Ashfall Road
+TANK_MISSION_DRILL,Depot drill
+TANK_RIDE_WON,{0} - won
+TANK_RIDE_LOST,{0} - lost
+TANK_RIDE_DRILL,{0} - complete
+TANK_RIDE_EARLY,{0} - ended early
+TANK_RIDE_SCORE,Score: {0} (grade {1})
+TANK_RIDE_KILLS,Enemies destroyed: {0}
+TANK_RIDE_BREAKDOWNS,Breakdowns: {0}
+TANK_RIDE_GUNNERY,Shots: {0}; hits: {1}
+TANK_RIDE_RAMS,Rams: {0}; dodges: {1}
 TANK_STAT_DIESEL_S,Diesel (s)
 TANK_STAT_DYNAMO_S,Dynamo (s)
 TANK_STAT_STEAM_S,Steam (s)

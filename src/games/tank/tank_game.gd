@@ -397,7 +397,57 @@ func results() -> GameResults:
 		_:
 			# A ride cut short (paused, timed out, left early) has no outcome yet.
 			res.summary_key = "TANK_RESULT_ABANDONED"
+	res.ride_tag = _ride_tag()
+	res.ride_lines = _team_ride_lines(res)
+	for row in res.rows:
+		var r := state.rider(int(row["peer_id"]))
+		if r != null:
+			var own := res.ride_lines.duplicate()
+			own.append_array(_rider_ride_lines(r))
+			row["ride_lines"] = own
 	return res
+
+
+## The Strava title tag (GameResults.ride_tag): the mission and how it ended.
+func _ride_tag() -> String:
+	var tx := ctx.strings
+	var key := "TANK_MISSION_" + ctx.content_id.to_upper()
+	var mission := tx.t(key) if tx.has(key) else ctx.content_id
+	var tag_key: String
+	match state.outcome:
+		TankIds.OUTCOME_VICTORY:
+			tag_key = "TANK_RIDE_WON"
+		TankIds.OUTCOME_WITHDRAWN:
+			tag_key = "TANK_RIDE_LOST"
+		TankIds.OUTCOME_COMPLETE:
+			tag_key = "TANK_RIDE_DRILL"
+		_:
+			tag_key = "TANK_RIDE_EARLY"
+	return tx.t(tag_key, [mission])
+
+
+## The crew's Strava description lines (GameResults.ride_lines): score and grade, kills and
+## breakdowns.
+func _team_ride_lines(res: GameResults) -> Array[String]:
+	var sc := state.score
+	var kills := 0
+	for code in range(1, sc.kills.size()):
+		kills += int(sc.kills[code])
+	var tx := ctx.strings
+	return [
+		tx.t("TANK_RIDE_SCORE", [roundi(res.score), res.grade]),
+		tx.t("TANK_RIDE_KILLS", [kills]),
+		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
+	]
+
+
+## One rider's own Strava lines (row["ride_lines"] after the crew's): gunnery, rams and dodges.
+func _rider_ride_lines(r: TankRiderState) -> Array[String]:
+	var tx := ctx.strings
+	return [
+		tx.t("TANK_RIDE_GUNNERY", [r.shots, r.hits]),
+		tx.t("TANK_RIDE_RAMS", [r.rams, r.dodges]),
+	]
 
 
 ## The crew's values in the results screen's order: the mission, hull HP at the end of each
