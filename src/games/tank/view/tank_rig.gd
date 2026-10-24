@@ -59,6 +59,12 @@ var _col_top: PackedInt32Array = PackedInt32Array()
 var _row_right: PackedInt32Array = PackedInt32Array()
 ## The x-ray drive sprocket the diesel chain ends on (drawn over the hull, toothed, turning).
 var sprocket_paint: TankPainter = null
+## Where the drive chain leaves its engine (the flywheel shaft's small sprocket or the gearbox's
+## drive output) and that sprocket's radius.
+var _chain_from: Vector2 = Vector2.ZERO
+var _chain_r: float = 3.0
+## The steam engine's deck vent (hull frame, its mouth): white steam on every stroke.
+var _vent: Vector2 = Vector2(-1, -1)
 var _flash_s: float = 0.0
 var _slew_hold: float = 0.0
 var _elev_prev: float = 0.0
@@ -153,25 +159,31 @@ func _build_links() -> void:
 	var sprocket := TankRigs.vec(def.get("drive_sprocket"))
 	if diesel_room != null:
 		var from := diesel_room.rect.position + diesel_room.anchor_local("flywheel")
-		var r_from := 7.0
+		var r_from := 3.0
 		if diesel_room is TankBulwarkRoom:
 			from = diesel_room.rect.position + (diesel_room as TankBulwarkRoom).outputs[0]
-			r_from = 5.0
-		# A heavy 2 px chain with link plates catching the diesel's amber light, routed like a real
-		# drive: down from the flywheel through the room floor into the x-ray belly below the rooms,
-		# along it to the rear, then down onto the drive sprocket's teeth. It runs below the room's
-		# frame, never along the frame's rivet line.
-		drive_chain = _chain("DriveChain", 70.0, TankPalette.STEEL_PALE, TankPalette.COAL)
+			r_from = TankBulwarkRoom.GEAR_R
+		# A heavy 2 px chain with alternating link tones, routed like a real final drive: down from a
+		# small sprocket on the flywheel shaft (or the gearbox's drive output) through the room floor
+		# onto the skirt, then back along the skirt, sloping onto the drive sprocket's teeth at the
+		# rear. It runs over the plain skirt plate, so it reads end to end.
+		drive_chain = _chain("DriveChain", 70.0, TankPalette.SILVER, TankPalette.COAL)
 		drive_chain.pitch_px = 4.0
 		drive_chain.link_px = 2.0
 		drive_chain.width_px = 2.0
 		drive_chain.closed = false
-		var floor_y := diesel_room.rect.end.y + 5.0
+		var run_y := minf(
+			float(TankPlaceholderArt.skirt_row(TankSprites.hull_id(tank))) + 6.0,
+			float(hull_h) - 3.0
+		)
+		var r_spr := TankRunningGear.SPROCKET_R
+		_chain_from = from
+		_chain_r = r_from
 		var route := PackedVector2Array([from + Vector2(0, r_from)])
 		for p: Vector2 in [
-			Vector2(from.x, floor_y),
-			Vector2(sprocket.x + TankRunningGear.SPROCKET_R, floor_y),
-			sprocket + Vector2(TankRunningGear.SPROCKET_R * 0.7, -TankRunningGear.SPROCKET_R * 0.7)
+			Vector2(from.x, run_y),
+			Vector2(sprocket.x + r_spr + 10.0, run_y),
+			sprocket + Vector2(r_spr * 0.8, -r_spr * 0.6)
 		]:
 			if p.distance_to(route[route.size() - 1]) > 0.5:
 				route.append(p)
@@ -245,12 +257,17 @@ func _paint_link_beds(item: Node2D) -> void:
 	TankRunningGear.paint_bed(item, hoist_chain, 2.0, TankPalette.IRON_DARK)
 	if slew_shaft != null:
 		TankRunningGear.paint_bed(item, slew_shaft, 2.0, TankPalette.STEEL_DARK)
+		# The Bulwark's turret shaft catches a warm rim light while the lever drives it.
+		var lit := (
+			diesel_room is TankBulwarkRoom and (diesel_room as TankBulwarkRoom).active_output() == 1
+		)
+		var rim := TankPalette.with_alpha(TankPalette.AMBER, 0.7) if lit else TankPalette.STEEL
 		var pts := slew_shaft.points
 		for i in range(pts.size() - 1):
 			if absf(pts[i].y - pts[i + 1].y) < 0.5:
-				item.draw_line(
-					pts[i] + Vector2(0, -1), pts[i + 1] + Vector2(0, -1), TankPalette.STEEL, 1.0
-				)
+				item.draw_line(pts[i] + Vector2(0, -1), pts[i + 1] + Vector2(0, -1), rim, 1.0)
+			elif lit:
+				item.draw_line(pts[i] + Vector2(-1, 0), pts[i + 1] + Vector2(-1, 0), rim, 1.0)
 
 
 func _chain(chain_name: String, px_s: float, a: Color, b: Color) -> ScrollingChain:
@@ -276,6 +293,15 @@ func _build_stack() -> void:
 			deck = maxi(deck, _col_top[x])
 	if deck >= 0:
 		_stack_pos.y = float(deck)
+	if steam_room != null:
+		# The steam engine's exhaust vent stands on the deck above its room, clear of the turrets.
+		var vx := int(steam_room.rect.position.x + 36.0)
+		var vdeck := -1
+		for x in range(vx - 2, vx + 3):
+			if x >= 0 and x < _col_top.size() and _col_top[x] >= 0:
+				vdeck = maxi(vdeck, _col_top[x])
+		if vdeck >= 0:
+			_vent = Vector2(float(vx), float(vdeck) - 7.0)
 	stack = TankPainter.new()
 	stack.name = "Stack"
 	stack.painter = _paint_stack
@@ -420,7 +446,22 @@ func _effects(state: TankState, dt: float) -> void:
 		hub.lights.add(lamp, 6.0, TankPalette.AMBER, 0.55)
 	if steam_room != null:
 		if steam_room.take_stroke():
-			fx.steam_puff(hub.to_layer(steam_room.chimney_hull()))
+			# Every stroke: a white plume from the deck vent and a short wisp from the drain cock.
+			var vent := _vent if _vent.x >= 0.0 else steam_room.chimney_hull()
+			fx.steam_puff(hub.to_layer(vent))
+			var drain := hub.to_layer(steam_room.drain_hull())
+			for _i in 2:
+				fx.particles.spawn(
+					TankParticles.Kind.STEAM,
+					drain + Vector2(fx.r(-1.0, 1.0), 0.0),
+					Vector2(fx.r(-6.0, 6.0), fx.r(-20.0, -12.0)),
+					fx.r(0.3, 0.45),
+					1.5,
+					fx.r(4.0, 6.0),
+					Color(0.9, 0.95, 0.98, 0.6),
+					-4.0,
+					1.6
+				)
 		if steam_room.latched_now:
 			fx.steam_burst(hub.to_layer(steam_room.chimney_hull()))
 	if hl.breakdown:
@@ -560,6 +601,16 @@ func _paint_stack(item: Node2D) -> void:
 	item.draw_rect(Rect2(p.x - 3, p.y - 7, 6, 1), TankPalette.RUST_DARK)
 	item.draw_rect(Rect2(p.x - 4, p.y - 16, 8, 2), TankPalette.STEEL)
 	item.draw_rect(Rect2(p.x - 3, p.y - 14, 6, 2), TankPalette.SOOT)
+	if _vent.x < 0.0:
+		return
+	# The steam vent: a slim pipe on a flange with a flared, soot-free mouth.
+	var v := _vent
+	item.draw_rect(Rect2(v.x - 3, v.y + 6, 7, 2), TankPalette.IRON)
+	item.draw_rect(Rect2(v.x - 3, v.y + 6, 7, 1), TankPalette.STEEL)
+	item.draw_rect(Rect2(v.x - 1, v.y + 1, 3, 6), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(v.x - 1, v.y + 1, 1, 6), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(v.x - 2, v.y, 5, 2), TankPalette.STEEL)
+	item.draw_rect(Rect2(v.x - 1, v.y, 3, 1), TankPalette.SOOT)
 
 
 ## The barbette under every secondary turret, so none floats over the sloped glacis or the low rear
@@ -635,6 +686,29 @@ func _paint_sprocket(item: Node2D) -> void:
 	item.draw_circle(c, 3.5, TankPalette.STEEL_DARK)
 	item.draw_circle(c, 2.0, TankPalette.STEEL_LIGHT)
 	item.draw_rect(Rect2(c.round() + Vector2(-1, -2), Vector2(1, 1)), TankPalette.CLAY)
+	if diesel_room == null:
+		return
+	# The chain's warm catch-light where it drops out of the lit room.
+	var glow := clampf(diesel_room.glow, 0.0, 1.0)
+	var pts := drive_chain.points if drive_chain != null else PackedVector2Array()
+	if glow > 0.05 and pts.size() >= 2:
+		item.draw_line(
+			pts[0] + Vector2(-1, 0),
+			pts[1] + Vector2(-1, 0),
+			TankPalette.with_alpha(TankPalette.FIRE, 0.45 * glow),
+			1.0
+		)
+	if diesel_room is TankBulwarkRoom:
+		return
+	# The small drive sprocket on the flywheel's shaft the chain leaves from, turning with it.
+	var f := _chain_from
+	var fa := diesel_room.flywheel.angle()
+	item.draw_circle(f, _chain_r + 1.0, TankPalette.BLACK)
+	item.draw_circle(f, _chain_r, TankPalette.STEEL_LIGHT)
+	for i in 6:
+		var d := Vector2.from_angle(fa + TAU * float(i) / 6.0)
+		item.draw_line(f + d * (_chain_r - 1.0), f + d * (_chain_r + 0.5), TankPalette.COAL, 1.0)
+	item.draw_circle(f, 1.2, TankPalette.STEEL_DARK)
 
 
 ## The hoist rail's foot and top in the hull frame: the Citadel's from rigs.json (its steam room),
@@ -689,45 +763,64 @@ static func along(pts: Array[Vector2], t: float) -> Vector2:
 	return pts[0]
 
 
-## The hoist rail (two steel rails with rungs from the foot to the top, then a feed track to the
-## breech) and the shell cradle riding it; in the Bulwark a short shaft joins the gearbox's hoist
-## output to the rail's foot, lit while the lever drives it.
+## The hoist rail: a dark x-ray slot with two steel rails and rungs every 6 px along its whole path,
+## from the foot up and on to the main gun's breech, where a breech receiver (a cast block with a
+## dark loading slot, lit amber while a shell waits in it) sits under the main turret, so the rail
+## plainly feeds the main gun. In the Bulwark a shaft runs straight right from the gearbox's hoist
+## gear to the rail, warm-lit and turning while the lever drives it. The cradle rides on top.
 func _paint_rails(item: Node2D) -> void:
 	var path := rail_path()
 	if path.size() < 2:
 		return
-	var a := path[0]
-	var b := path[1]
-	# The x-ray slot the hoist climbs in, dark, so the rails read against the hull's steel; along the
-	# deck to the breech the feed is only a 1 px recessed line with a lit lip (no dark bar).
-	item.draw_line(a, b, TankPalette.SOOT, 5.0)
-	for dx in [-2.0, 2.0]:
-		item.draw_line(a + Vector2(dx, 0), b + Vector2(dx, 0), TankPalette.STEEL_LIGHT, 1.0)
-	var y := a.y
-	while y > b.y:
-		item.draw_line(Vector2(a.x - 2, y), Vector2(a.x + 2, y), TankPalette.IRON, 1.0)
-		y -= 6.0
-	for i in range(2, path.size()):
-		item.draw_line(path[i - 1], path[i], TankPalette.COAL, 1.0)
-		item.draw_line(
-			path[i - 1] + Vector2(0, -1), path[i] + Vector2(0, -1), TankPalette.STEEL_DARK, 1.0
-		)
+	for i in range(1, path.size()):
+		item.draw_line(path[i - 1], path[i], TankPalette.SOOT, 5.0)
+	for i in range(1, path.size()):
+		var a := path[i - 1]
+		var b := path[i]
+		var d := (b - a).normalized()
+		var n := Vector2(-d.y, d.x)
+		for side: float in [-2.0, 2.0]:
+			item.draw_line(a + n * side, b + n * side, TankPalette.STEEL_LIGHT, 1.0)
+		var seg := a.distance_to(b)
+		var k := 3.0
+		while k < seg:
+			var p := a + d * k
+			item.draw_line(p - n * 2.0, p + n * 2.0, TankPalette.IRON, 1.0)
+			k += 6.0
+	var br := path[path.size() - 1].round()
+	var loaded := cradle_t() >= 0.98
+	item.draw_rect(Rect2(br.x - 4, br.y - 2, 8, 5), TankPalette.BLACK)
+	item.draw_rect(Rect2(br.x - 3, br.y - 1, 6, 3), TankPalette.IRON)
+	item.draw_rect(Rect2(br.x - 3, br.y - 1, 6, 1), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(br.x - 1, br.y, 2, 2), TankPalette.AMBER if loaded else TankPalette.SOOT)
 	if diesel_room is TankBulwarkRoom:
 		var bw := diesel_room as TankBulwarkRoom
 		var out := bw.rect.position + bw.outputs[2]
-		var lit := TankPalette.CLAY if bw.active_output() == 2 else TankPalette.STEEL_DARK
-		item.draw_line(out, a, TankPalette.IRON_DARK, 3.0)
-		item.draw_line(out + Vector2(0, -1), a + Vector2(0, -1), lit, 1.0)
+		var on := bw.active_output() == 2
+		var to := Vector2(path[0].x, out.y)
+		item.draw_line(out, to, TankPalette.BLACK, 4.0)
+		item.draw_line(out, to, TankPalette.STEEL_DARK, 2.0)
+		item.draw_line(
+			out + Vector2(0, -1),
+			to + Vector2(0, -1),
+			TankPalette.with_alpha(TankPalette.AMBER, 0.75) if on else TankPalette.STEEL,
+			1.0
+		)
+		# Turning: a dark stripe running along the shaft with the hoist gear.
+		var ang := bw.gears[2].angle() if bw.gears.size() > 2 else 0.0
+		var span := maxf(to.x - out.x, 1.0)
+		var sx := out.x + fposmod(ang * 3.0, span)
+		item.draw_rect(Rect2(sx, out.y - 1.0, 1.0, 2.0), TankPalette.COAL)
 	var at := cradle_pos().round()
 	# The cradle: a 6 x 4 steel block on the rails holding a shell upright, a small amber lamp on it.
 	item.draw_rect(Rect2(at.x - 3, at.y - 1, 6, 4), TankPalette.STEEL_DARK)
 	item.draw_rect(Rect2(at.x - 3, at.y - 1, 6, 1), TankPalette.STEEL_LIGHT)
 	item.draw_rect(Rect2(at.x - 3, at.y + 2, 6, 1), TankPalette.COAL)
-	item.draw_rect(Rect2(at.x - 1, at.y - 8, 3, 7), TankPalette.MUD_LIGHT)
-	item.draw_rect(Rect2(at.x - 1, at.y - 8, 1, 7), TankPalette.MUD_PALE)
-	item.draw_rect(Rect2(at.x - 1, at.y - 3, 3, 1), TankPalette.MUD)
-	item.draw_rect(Rect2(at.x - 1, at.y - 10, 3, 2), TankPalette.STEEL)
-	item.draw_rect(Rect2(at.x, at.y - 11, 1, 1), TankPalette.STEEL_LIGHT)
+	item.draw_rect(Rect2(at.x - 1, at.y - 8, 3, 7), TankSteamRoom.BRASS_MID)
+	item.draw_rect(Rect2(at.x - 1, at.y - 8, 1, 7), TankSteamRoom.BRASS_PALE)
+	item.draw_rect(Rect2(at.x - 1, at.y - 3, 3, 1), TankSteamRoom.BRASS_DARK)
+	item.draw_rect(Rect2(at.x - 1, at.y - 10, 3, 2), TankSteamRoom.OGIVE)
+	item.draw_rect(Rect2(at.x, at.y - 11, 1, 1), TankSteamRoom.OGIVE)
 	item.draw_rect(Rect2(at.x + 2, at.y, 1, 1), TankPalette.AMBER)
 
 
