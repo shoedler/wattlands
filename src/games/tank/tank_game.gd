@@ -392,8 +392,11 @@ func results() -> GameResults:
 			res.summary_key = "TANK_RESULT_VICTORY"
 		TankIds.OUTCOME_WITHDRAWN:
 			res.summary_key = "TANK_RESULT_WITHDRAWN"
-		_:
+		TankIds.OUTCOME_COMPLETE:
 			res.summary_key = "TANK_RESULT_DRILL"
+		_:
+			# A ride cut short (paused, timed out, left early) has no outcome yet: no title.
+			res.summary_key = ""
 	return res
 
 
@@ -401,11 +404,14 @@ func results() -> GameResults:
 ## segment, breakdowns, overruns and kills (light/medium/destroyer/dug-in/heavy/Behemoth).
 func _team_stats() -> Dictionary:
 	var sc := state.score
-	var outcome_key := "TANK_RESULT_DRILL"
-	if state.outcome == TankIds.OUTCOME_VICTORY:
-		outcome_key = "TANK_OUTCOME_VICTORY"
-	elif state.outcome == TankIds.OUTCOME_WITHDRAWN:
-		outcome_key = "TANK_OUTCOME_WITHDRAWN"
+	var outcome_key := ""
+	match state.outcome:
+		TankIds.OUTCOME_VICTORY:
+			outcome_key = "TANK_OUTCOME_VICTORY"
+		TankIds.OUTCOME_WITHDRAWN:
+			outcome_key = "TANK_OUTCOME_WITHDRAWN"
+		TankIds.OUTCOME_COMPLETE:
+			outcome_key = "TANK_RESULT_DRILL"
 	var hp: PackedStringArray = []
 	for v in sc.hp_by_segment:
 		hp.append(str(v))
@@ -413,7 +419,7 @@ func _team_stats() -> Dictionary:
 	for code in range(1, sc.kills.size()):
 		kills.append(str(sc.kills[code]))
 	return {
-		"TANK_TEAM_OUTCOME": ctx.strings.t(outcome_key),
+		"TANK_TEAM_OUTCOME": ctx.strings.t(outcome_key) if outcome_key != "" else "-",
 		"TANK_TEAM_HP": "/".join(hp),
 		"TANK_TEAM_BREAKDOWNS": sc.breakdowns,
 		"TANK_TEAM_OVERRUNS": sc.overruns,

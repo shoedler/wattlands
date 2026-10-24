@@ -26,14 +26,16 @@ func _quiet(crew: int) -> TankState:
 	return s
 
 
-func _enemy(s: TankState, id: int, side: int, x: float) -> TankEnemyState:
-	var e := TankFixtures._enemy(id, TankIds.ENEMY_LIGHT, x, 30.0, side)
+func _enemy(
+	s: TankState, id: int, side: int, x: float, type: String = TankIds.ENEMY_LIGHT
+) -> TankEnemyState:
+	var e := TankFixtures._enemy(id, type, x, 30.0, side)
 	s.enemies.append(e)
 	return e
 
 
 func _rear(s: TankState, id: int = 90) -> TankEnemyState:
-	return _enemy(s, id, -1, s.camera_x() + 10.0)
+	return _enemy(s, id, -1, s.camera_x() + 10.0, TankIds.ENEMY_MEDIUM)
 
 
 func _front(s: TankState, id: int = 91) -> TankEnemyState:
@@ -249,3 +251,19 @@ func test_a_traverse_or_a_shot_is_asked_for_twice_a_second_at_most() -> void:
 		t.tick = 6000 + tick
 		asked += TankAutopilot.intents(t, 1).size()
 	assert_eq(asked, 4, "the same for the shot")
+
+
+func test_a_rear_light_is_left_to_the_secondary_and_the_ram() -> void:
+	var s := _quiet(1)
+	_enemy(s, 90, -1, s.camera_x() + 10.0)
+	assert_eq(TankAutopilot.enemies_in_range(s)["behind"], 0, "the main gun cannot reach it")
+	assert_eq(TankAutopilot.intents(s, 1), [], "no traverse, no bank spent, no aim pause")
+	s.hull.facing = TankIds.FACE_LEFT
+	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "back to the front")
+
+
+func test_a_rear_enemy_the_main_gun_can_reach_still_flips_the_turret() -> void:
+	var s := _quiet(1)
+	_rear(s)
+	assert_eq(TankAutopilot.enemies_in_range(s)["behind"], 1)
+	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"])

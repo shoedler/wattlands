@@ -6,7 +6,8 @@ extends RefCounted
 ## The defaults already play every station with no input (the diesel drives on watts and digs in,
 ## auto-aim aims and fires, the boiler latches a heavy shell at 100%, the auto-lever runs the
 ## Bulwark); intents() adds only the gunner's two extra jobs:
-##   - rear traverses: the main turret faces right or left, and a traverse flips it. It flips when
+##   - rear traverses (for rear enemies the main gun can reach; rear lights are left to the
+##     secondary and the Ram): the main turret faces right or left, and a traverse flips it. It flips when
 ##     nothing is in range on the side it faces and something is on the other side, and flips
 ##     back to the front once the rear is clear (no flip while the current side still has a
 ##     target, so a mixed fight never makes it flip-flop); asked for twice a second at most;
@@ -56,7 +57,7 @@ static func is_gunner(engine: String) -> bool:
 
 
 ## {ahead, behind}: the live enemies in range on each side (the Behemoth counts ahead while a
-## part of it stands).
+## part of it stands). Rear lights are left to the secondary and the Ram: not counted.
 static func enemies_in_range(state: TankState) -> Dictionary:
 	var cam := state.camera_x()
 	var lo := cam + EDGE_MARGIN_PX
@@ -69,7 +70,10 @@ static func enemies_in_range(state: TankState) -> Dictionary:
 		if e.x_px + maxf(float(e.w), 1.0) < lo or e.x_px > hi:
 			continue
 		if e.side < 0:
-			behind += 1
+			# The main gun cannot reach a rear light (24 px show over the hull's rear; ADR G1
+			# rules engines 11): a traverse for it only burns bank and pauses the auto-aim.
+			if TankIds.enemy_of(e.code) != TankIds.ENEMY_LIGHT:
+				behind += 1
 		else:
 			ahead += 1
 	if (

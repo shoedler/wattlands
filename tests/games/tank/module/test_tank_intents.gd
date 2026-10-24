@@ -39,7 +39,7 @@ func _kinds(list: Array) -> Array:
 
 func _rear_enemy(g: TankGame) -> void:
 	g.state.enemies.append(
-		TankFixtures._enemy(90, TankIds.ENEMY_LIGHT, g.state.camera_x() + 10.0, 30.0, -1)
+		TankFixtures._enemy(90, TankIds.ENEMY_MEDIUM, g.state.camera_x() + 10.0, 30.0, -1)
 	)
 
 
