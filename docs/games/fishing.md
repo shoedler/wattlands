@@ -24,9 +24,11 @@ Free Roam is shown first and large in the content picker (`content_cards` in `ga
 
 Every rider has a boat on the same map. Each screen's camera follows the local boat across the full 640x360 art width; other boats show when in view. A minimap strip on top shows the floor profile, the zones, the dock and the edge (Free Roam) or a moving window (workouts), one icon per rider in their slot colour for the current action (driving, sprinting, casting or waiting, fighting, landed, paused, AFK), and a leaderboard with name, points and action.
 
-`FishingBoat` (pure, 0.05 s steps): thrust = `P_eff / max(|v|, 1 m/s)`, drag 1.6 v^2 + 2 v, mass 400 kg. 250 W of `P_eff` (100 % FTP-equivalent in every scaling mode) holds 5 m/s and crosses the 9 km map in about 30 minutes. Under 20 % FTP-equivalent the prop disengages and the hull brakes hard. Heading is +1 (out to sea) or -1 (back to the dock). The bow pitches with thrust and acceleration (at most 14 degrees), and the wake follows speed and throttle. Pause, AFK and stale telemetry free the prop, so a paused boat drifts.
+`FishingBoat` (pure, 0.05 s steps): the effective power sets a steady speed of 15 m/s x (`P_eff` / 250 W)^0.6. 250 W (100 % FTP-equivalent in every scaling mode) holds 15 m/s and crosses the 18 km map in 20 minutes; 150 % holds 19 m/s (16 minutes). The boat closes on its new speed in under 3 s (time constant 0.9 s speeding up, 0.6 s slowing), so a surge visibly accelerates. Under 20 % FTP-equivalent the prop disengages and water drag stops the boat from cruise in about 3.3 s (15 m). Heading is +1 (out to sea) or -1 (back to the dock). Pause, AFK and stale telemetry free the prop, so a paused boat brakes to a stop.
 
-While driving the trainer is in SIM with a gentle water drag: course grade 0.5 % + 0.08 v^2, at most 3 % (inside the governor's warm-up range), sent when it moved 0.1 % and at most twice a second, 0 % while stopped, casting or waiting.
+Trim is signed, -6 to +14 degrees (+ bow up): a spring-damper (about 1.4 s period) toward 3 degrees per 15 m/s of the power's steady speed, plus 0.5 degrees per m/s^2 of acceleration or 0.8 per m/s^2 of deceleration. A surge kicks the bow above its steady trim and it settles in 1-2 s; a power cut or a hard drop digs the bow in, level again once slow. The view also gets a brake intensity (deceleration / 10 m/s^2) and the wake (speed and throttle).
+
+While driving the trainer is in SIM with a gentle water drag: course grade 0.5 % + 2 (v / 15 m/s)^2, at most 3 % (inside the governor's warm-up range), the same feel at the same share of cruise speed; sent when it moved 0.1 % and at most twice a second, 0 % while stopped, casting or waiting.
 
 ## 4. Free Roam flow (per rider)
 
@@ -46,7 +48,7 @@ Input: left / right and confirm (keyboard, gamepad). With pedal navigation on (`
 
 ## 5. Map and species
 
-`content/fishing/map.json` (9000 m, validated at load): dock 0-300 m, shallows 300-2000, reef 2000-4000, shelf 4000-6000, deep 6000-8200, abyss 8200-9000, with a floor profile from 3 m at the dock to 620 m, dropping away at 8400 m. The ocean pours off a waterfall at the edge (x 8950); boats stop before it.
+`content/fishing/map.json` (18 000 m, validated at load): dock 0-600 m, shallows 600-4000, reef 4000-8000, shelf 8000-12000, deep 12000-16400, abyss 16400-18000, with a floor profile from 3 m at the dock to 620 m, dropping away at 16 800 m. The ocean pours off a waterfall at the edge; boats stop at 17 900 m. At 100 % the reef is 4.5 minutes out, the shelf 9 and the deep 13. Decorative landmarks (`landmarks`, drawn by the view and on the minimap): the harbour lighthouse (240 m), a reef arch (6 km), whale bones on the shelf edge (11.6 km) and a sunken wreck in the deep (14.2 km).
 
 | Species | Zone | kg | Pull % FTP | T_nom s | max_s | Runs / jumps (peak %) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -86,7 +88,7 @@ Rules are pure `step(state, inputs, dt)` at 0.05 s with seeded streams (`Fishing
 
 ## 8. Workouts
 
-They keep a plan: a ride out (ERG 50-65 %, 300 s), then Trolls (ERG at `reel_pct`) and Fights with Landings. Base rolls each rider's fights from the seed (fight budget 25 % of fishing time, nothing above 100 %); Threshold and e2e share one schedule. The boat still drives from the rider's real power. It trolls across an endless map generated from the seed (scenery follows distance), so nobody turns around. The plan's fish bite on their own and the hook sets itself: Base after R_min with a hazard, forced at R_min + 240 s, none if the fight would end more than 5 minutes after fishing ends; scheduled trips 4 s before the Troll ends. Bots may join as co-op riders.
+They keep a plan: a ride out (ERG 50-65 %, 300 s), then Trolls (ERG at `reel_pct`) and Fights with Landings. Base rolls each rider's fights from the seed (fight budget 25 % of fishing time, nothing above 100 %); Threshold and e2e share one schedule. The boat still drives from the rider's real power. It trolls across an endless map generated from the seed (segments of 2.4-4.4 km; each reef, shelf or deep segment carries its landmark at a seeded spot), so nobody turns around. The plan's fish bite on their own and the hook sets itself: Base after R_min with a hazard, forced at R_min + 240 s, none if the fight would end more than 5 minutes after fishing ends; scheduled trips 4 s before the Troll ends. Bots may join as co-op riders.
 
 ## 9. Bots, Autopilot, zero input
 
@@ -102,7 +104,7 @@ Bots are platform riders at their slot FTP. Each draws one strategy per session 
 
 ## 11. Multiplayer
 
-The host simulates every rider at 20 Hz and sends 10 Hz snapshots (schema v2, at most 2 KB for 4 riders): one row of 31 integer columns per rider (boat, menu, lure, fish, meters, flags, hints), a team row and the last five catches. Events (v2) go to every peer in order: `cast`, `bite`, `hookup`, `run`, `jump`, `snap`, `thrown`, `replacement`, `landing`, `landed`, `double_hookup`, `turn`, `time_up`, `trip_over`. Clients interpolate other boats 100 ms behind and the host owns the meters.
+The host simulates every rider at 20 Hz and sends 10 Hz snapshots (schema v2, at most 2 KB for 4 riders): one row of 32 integer columns per rider (boat with signed trim and brake, menu, lure, fish, meters, flags, hints), a team row and the last five catches. Events (v2) go to every peer in order: `cast`, `bite`, `hookup`, `run`, `jump`, `snap`, `thrown`, `replacement`, `landing`, `landed`, `double_hookup`, `turn`, `time_up`, `trip_over`. Clients interpolate other boats 100 ms behind and the host owns the meters.
 
 ## 12. Look and sound
 
