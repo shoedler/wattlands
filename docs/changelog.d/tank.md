@@ -1,5 +1,17 @@
 # Changelog: tank
 
+### Changed (Diesel Domestiques) v0.1.1
+
+- New art in the brief's dark 2.5D diorama style, replacing the procedural placeholders:
+  - All 61 sprites are generated with OpenAI GPT Image 2.5 through fal ($8.04 of a $10 cap) and pixelated into the 32-colour palette.
+  - Load-time grading gives seamed, riveted grey-black steel, and the depth-of-field blur and haze is applied per plane.
+  - The near planes are composed without mirroring: Poplar Road, Kettle Ford, Quarry Ridge, the depot yard and the foundry town.
+  - Smoke banks are lit by distant fires.
+  - The cutaway machinery is readable: steam cylinder and crosshead, pressure dial, brass shells, the Bulwark's lever and lit output, and a bus bar to the dynamo.
+  - Seeded flame masses, ragged smoke rings, brass casings with a glint, and hit sparks that stay on the armour.
+  - The picker card is the generated Citadel cutaway.
+- An adversarial art critic reviewed every round against the brief's art direction: 3 style rounds and 6 scene rounds, ending with every criterion at 7 or more and no people, text, flags or icon-like marks.
+
 ### Added (Diesel Domestiques) v0.1.0
 
 - Diesel Domestiques, a co-op tank game for 1-3 riders (BRIEF 3.6, `docs/games/tank.md`): the crew size picks the tank (Bulwark, Rampart, Citadel) and every rider pedals one engine of a pedal-powered super-heavy tank. The diesel drives (SIM, Ram sprints, ERG 90% while dug in at a gun line), the dynamo aims (ERG that climbs as its capacitor bank drains) and the steam engine loads (a SIM boiler grade that rises with pressure and drops to 0 at every latch). A solo rider gets the Bulwark, whose diesel does everything through a three-way gearbox with a Hoist.
