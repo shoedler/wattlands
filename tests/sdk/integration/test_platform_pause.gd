@@ -1,12 +1,10 @@
 extends GutTest
-## lead W2 round 2, GameHost config.platform_pause with the real LocalRider, SafetyGovernor and
-## MockTrainer: a SOLO rider who stops pedalling in ERG is paused by the governor's coasting
-## rule (BRIEF 4.6.4: not_pedaling for 3 s drops ERG to its floor, after 10 s the session
-## pauses; stop_5s is outside ERG only) whoever owns pausing. Pedalling again ends that pause
-## only while the GameHost owns it (platform_pause on, the default); with platform_pause off
-## the app resumes it. The stop falls in the ERG cool-down of "tiny" (from ~41 s), where the
-## flywheel stops with the rider (in SIM the coasting flywheel feeds the cadence estimate; see
-## the sdk round-2 report).
+## GameHost pausing with the real LocalRider, SafetyGovernor and MockTrainer: a SOLO rider who
+## stops pedalling pauses after 5 s of not_pedaling in every mode, ERG included (BRIEF 3.5,
+## RidePause), whoever owns pausing (config.platform_pause), and the session resumes after
+## 1 s of pedalling at >= 30 rpm. The governor's own rules are unchanged (4.6.4: the coasting
+## floor at 3 s, its 10 s pause request lands in the pause already running). The stop falls
+## in the ERG cool-down of "tiny" (from ~41 s), where the flywheel stops with the rider.
 
 const Kit := preload("res://tests/sdk/helpers/session_kit.gd")
 ## The rider stops at 45 s of profile time for 25 s, then rides again.
@@ -78,8 +76,7 @@ func _step_until_paused(host: GameHost, max_s: float) -> float:
 	return host.clock.platform_time()
 
 
-func test_the_coasting_pause_works_with_either_owner_and_only_the_platform_resumes_on_pedalling(
-) -> void:
+func test_the_rider_pauses_after_5_s_and_resumes_after_1_s_of_pedalling_with_either_owner() -> void:
 	for platform_pause: bool in [true, false]:
 		var s := _session(platform_pause)
 		assert_eq(s["err"], "")
@@ -89,23 +86,42 @@ func test_the_coasting_pause_works_with_either_owner_and_only_the_platform_resum
 		host.start()
 		var t := _step_until_paused(host, 65.0)
 		assert_true(
-			host.is_paused(),
-			"platform_pause %s: the coasting rider pauses (4.6.4)" % platform_pause
+			host.is_paused(), "platform_pause %s: the stopped rider pauses" % platform_pause
 		)
 		assert_eq(host.tracker.phase_of(1).kind, Wl.COOLDOWN, "in the ERG cool-down")
-		assert_between(t, 55.0, 57.0, "10 s after the first not_pedaling sample at ~45.5 s")
-		assert_eq(log[0].slice(0, 2), [true, "coasting"])
-		# The rider rides again from 70 s: pedal_start fires a few seconds later.
-		while host.clock.platform_time() < 85.0:
+		assert_between(t, 50.0, 51.6, "5 s after the first not_pedaling sample at ~45.5 s")
+		assert_eq(log[0].slice(0, 2), [true, "stop_5s"])
+		assert_true(rider.is_ride_paused())
+		assert_true(rider.telemetry().paused)
+		assert_true(rider.telemetry().coasting, "the 4.6.4 coasting floor since 3 s")
+		# The governor's 10 s pause request changes nothing: the session is already paused.
+		while host.clock.platform_time() < 69.5:
 			host.step()
-		assert_gt(rider.telemetry().power_w, 50.0, "the rider pedals again")
-		if platform_pause:
-			assert_false(host.is_paused(), "the GameHost resumes on pedal_start")
-			assert_eq(log[1].slice(0, 2), [false, "resume"])
-		else:
-			assert_true(host.is_paused(), "platform_pause off: still paused until the app resumes")
-			assert_eq(log.size(), 1)
-			host.resume()
-			assert_false(host.is_paused())
+		assert_eq(log.size(), 1, "one pause")
+		# The rider rides again from 70 s: 1 s at >= 30 rpm resumes, in either mode.
+		while host.is_paused() and host.clock.platform_time() < 80.0:
+			host.step()
+		assert_false(host.is_paused(), "resumed")
+		assert_between(host.clock.platform_time(), 71.0, 72.6, "1 s after the first pedal sample")
+		assert_eq(log[1].slice(0, 2), [false, "resume"])
+		assert_false(rider.is_ride_paused())
 		host.end_session("timeout")
 		rider.shutdown()
+
+
+## A pause the rider asked for is not ended by pedalling.
+func test_a_user_pause_stays_when_the_rider_pedals() -> void:
+	var s := _session(true)
+	var host: GameHost = s["host"]
+	var rider: LocalRider = s["rider"]
+	host.start()
+	while host.clock.platform_time() < 10.0:
+		host.step()
+	host.pause("user")
+	while host.clock.platform_time() < 20.0:
+		host.step()
+	assert_true(host.is_paused(), "still paused")
+	assert_false(rider.is_ride_paused(), "the rider pedals")
+	host.resume()
+	host.end_session("timeout")
+	rider.shutdown()

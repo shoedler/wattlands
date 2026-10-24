@@ -52,7 +52,7 @@ func test_file_id_fields() -> void:
 	assert_eq(f[2], FitEncoder.PRODUCT_ID)
 	assert_eq(f[3], 0xABCDEF01, "serial")
 	assert_eq(f[4], START - 631065600, "time_created in FIT seconds")
-	assert_eq(f[8], "Wattlands")
+	assert_eq(f[8], "WATTLANDS")
 
 
 func test_serial_zero_becomes_one() -> void:
@@ -262,7 +262,7 @@ func test_device_info() -> void:
 	assert_eq(f[2], 255)
 	assert_eq(f[4], FitEncoder.PRODUCT_ID)
 	assert_eq(f[5], 10, "software_version x100")
-	assert_eq(f[27], "Wattlands")
+	assert_eq(f[27], "WATTLANDS")
 
 
 func test_encode_ride_message_order() -> void:

@@ -3,10 +3,12 @@ extends LocalRider
 ## Emit gesture_detected by hand to simulate the GestureRecognizer.
 
 var fake_mode: String = Wl.OFF
+var fake_power_w: float = 0.0
 
 
 func telemetry() -> Telemetry:
 	var t := Telemetry.new()
 	t.peer_id = peer_id
 	t.mode = fake_mode
+	t.power_w = fake_power_w
 	return t

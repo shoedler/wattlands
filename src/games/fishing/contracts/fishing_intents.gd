@@ -1,18 +1,17 @@
 class_name FishingIntents
 extends RefCounted
-## The intent schema (brief 2.5, 2.6, 2.8; G0 contract). Clients and the host's own rider send
-## them from FishingGame.local_intents() and the HUD; the host normalizes each before the rules
-## see it. Intents are never int-converted by the platform: cast here.
+## The intent schema (contract v2). Clients and the host's own rider send them from
+## FishingGame.local_intents() and the HUD; the host normalizes each before the rules see it.
+## Intents are never int-converted by the platform: cast here.
 ##
-##   {"k": "spot", "dir": -1 | 1, "via": "action"}     move the highlighted hint left / right
+##   {"k": "spot", "dir": -1 | 1, "via": "action"}     move the menu highlight left / right
 ##   {"k": "confirm", "via": "action" | "button" | "surge"}
-##       cast the highlighted hint while picking, set the hook during a strike prompt
+##       pick the highlighted menu entry (cast, drive on, turn around); while the wobbler is out
+##       in Free Roam, reel it in (back to the menu). A surge counts only for pedal_nav riders.
 ##   {"k": "summary", "xp": total XP, "rec": {species id: kg x 10}, "cos": [line, canopy, trim, pennant]}
-##       sent once from configure on every peer (the automatic summary, brief 2.8)
-## Zero input (2.5): only "spot" and "confirm" with via "action" or "button" are deliberate and
-## end the lane's Autopilot fallback; a surge and the summary never do, and the host's own
-## pedal-scan auto-confirm makes no intent at all. A surge that arrives with a confirm in the same
-## tick counts as the surge (the confirm is dropped).
+##       sent once from configure on every peer (the automatic summary)
+## A surge that arrives with a confirm in the same tick counts as the surge (the confirm is
+## dropped).
 
 const SPOT := "spot"
 const CONFIRM := "confirm"
@@ -65,13 +64,6 @@ static func normalize(raw: Variant) -> Dictionary:
 					cos[i] = maxi(int(raw_cos[i]), 0)
 			return {"k": SUMMARY, "xp": maxi(int(d.get("xp", 0)), 0), "rec": rec, "cos": cos}
 	return {}
-
-
-## True for an intent that ends the zero-input fallback (a button or key action).
-static func is_deliberate(intent: Dictionary) -> bool:
-	var k := str(intent.get("k", ""))
-	var via := str(intent.get("via", ""))
-	return (k == SPOT or k == CONFIRM) and (via == VIA_ACTION or via == VIA_BUTTON)
 
 
 ## One tick's raw intents, normalized, junk dropped, and a confirm dropped when a surge confirm

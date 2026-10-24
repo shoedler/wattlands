@@ -31,6 +31,9 @@ var haptics_on: bool = true
 var haptic_intensity: float = 0.7
 var autopilot: bool = false
 var is_bot: bool = false
+## The rider opted into pedal navigation (Settings): pick lists scan, surge picks and picks
+## auto-confirm. Off (the default): keyboard and gamepad only.
+var pedal_nav: bool = false
 ## This rider's player_options values (game.json `player_options`, defaults filled in).
 var options: Dictionary = {}
 
@@ -63,6 +66,7 @@ func to_dict() -> Dictionary:
 		"haptic_intensity": haptic_intensity,
 		"autopilot": autopilot,
 		"is_bot": is_bot,
+		"pedal_nav": pedal_nav,
 		"options": options.duplicate(true),
 	}
 
@@ -86,6 +90,7 @@ static func from_dict(d: Dictionary) -> PlayerSlot:
 	s.haptic_intensity = float(d.get("haptic_intensity", 0.7))
 	s.autopilot = bool(d.get("autopilot", false))
 	s.is_bot = bool(d.get("is_bot", false))
+	s.pedal_nav = bool(d.get("pedal_nav", false))
 	var o: Variant = d.get("options", {})
 	if o is Dictionary:
 		s.options = (o as Dictionary).duplicate(true)

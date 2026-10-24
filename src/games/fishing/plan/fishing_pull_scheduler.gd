@@ -14,7 +14,8 @@ extends RefCounted
 ## Every directive is {"mode": "ERG", "target_pct", "duration_s", "reason": "pull" | "run" |
 ## "jump", "source": "fishing"}, with target_pct inside [slot.range_lo, slot.range_hi] and
 ## <= 110 %. Rules (brief 2.3):
-## - Pull change: every 8-16 s a new multiplier m in [-a, +a]: target = base x (1 + m) (<= 105 %),
+## - Pull change: every 8-16 s a new multiplier m in [-a, +a]: target = base x (1 + m) (<= 105 %,
+##   or the range top for a slot with hold_above_105: the giant grouper's 105-110 % pull),
 ##   ramped as >= 6 steps 0.5 s apart, each with duration_s 0 (held until replaced). The ramp is
 ##   stretched so no step raises the target by more than 25 W/s x 0.5 s at the rider's FTP.
 ## - Run or jump: the same ramp up to the run's peak, but every step carries duration_s = the
@@ -23,13 +24,13 @@ extends RefCounted
 ##   at once, even when a rescue or AFK cut the ramp short. The next pull change starts from base.
 ## - At most one write every 0.5 s (BRIEF 4.5: 2 writes/s), whatever its source.
 ## - Above 105 %: a run whose peak is above 105 % reserves its whole length (ramp included); a run
-##   that would pass 30 s, or push the fight past 90 s, is held to 105 %. Only mahi runs pass 105.
+##   that would pass 30 s, or push the fight past 90 s, is held to 105 %.
 ## - Pauses: the pull-change clock is stopped from a run's start to its scheduled end, and from a
 ##   stagger's start until 10 s after its end; it then restarts with a fresh 8-16 s interval. A
 ##   pull ramp in progress is dropped when a run or a stagger starts, so no pull change lands
 ##   inside a run, a rescue or AFK. No request at all is sent while staggered.
 ## - One run at a time: run_blocked_by_gap() is true while a run is active and, for jumps, until
-##   run_min_gap_s after the previous jump's start (marlin 90 s); the rules retry on later ticks.
+##   run_min_gap_s after the previous jump's start (90 s); the rules retry on later ticks.
 
 const EPS := 1.0e-6
 const SOURCE := "fishing"
@@ -224,7 +225,9 @@ static func _pull_change(
 ) -> void:
 	var a := slot.change_pct / 100.0
 	var m := rng.range_f(-a, a)
-	var hi := minf(_range_hi(slot), FishingConst.LONG_PHASE_CAP_PCT)
+	var hi := _range_hi(slot)
+	if not slot.hold_above_105:
+		hi = minf(hi, FishingConst.LONG_PHASE_CAP_PCT)
 	var to := clampf(ps.base_pct * (1.0 + m), slot.range_lo, maxf(hi, slot.range_lo))
 	var n := ramp_steps(ps.target_pct, to, ftp_w)
 	var t0 := maxf(t, ps.last_send_t + FishingConst.RAMP_STEP_S)

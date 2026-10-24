@@ -4,6 +4,17 @@ SIEGE_CONTENT_VO2,VO2 shift: 6 hard waves (37 min)
 SIEGE_CONTENT_SWEETSPOT,Sweet spot shift: 2 long waves (45 min)
 SIEGE_CONTENT_ENDURANCE,Endurance shift: one long siege with rushes (55 min)
 SIEGE_CONTENT_DRILL,Drill: one short wave (2 min)
+SIEGE_MISSION_SHORT,Short shift
+SIEGE_MISSION_VO2,VO2 shift
+SIEGE_MISSION_SWEETSPOT,Sweet spot shift
+SIEGE_MISSION_ENDURANCE,Endurance shift
+SIEGE_MISSION_DRILL,Drill
+SIEGE_RIDE_WON,{0} - won
+SIEGE_RIDE_LOST,{0} - lost
+SIEGE_RIDE_SCORE,Score: {0} (grade {1})
+SIEGE_RIDE_BREACHES,Gate breaches: {0}
+SIEGE_RIDE_RAMS,Rams stopped: {0} of {1}
+SIEGE_RIDE_KILLS,Enemies defeated: {0}
 SIEGE_OPT_WAVE_OFFSET,Wave offset (% FTP)
 SIEGE_MAP_ROTAE,Collis Rotarum
 SIEGE_PHASE_WARMUP_WAVE,Warm-up wave

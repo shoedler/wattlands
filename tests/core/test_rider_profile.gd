@@ -23,6 +23,7 @@ func test_defaults_match_brief_3_2() -> void:
 	assert_eq(p.haptic_intensity_pct, 70.0, "haptics at 70%")
 	assert_eq(p.units, "metric")
 	assert_false(p.autopilot_default, "Autopilot off")
+	assert_false(p.pedal_nav, "pedal navigation is opt-in")
 	assert_false(p.strava_auto_upload, "auto-upload off")
 	assert_eq(p.drivetrain, "cassette")
 	assert_eq(p.grade_min_pct, -5.0, "user grade range -5%")
@@ -52,7 +53,7 @@ func _custom() -> RiderProfile:
 	p.grade_max_pct = 8.0
 	p.skip_warmup = true
 	p.autopilot_default = true
-	p.pedal_ui = false
+	p.pedal_nav = true
 	p.scan_interval_s = 2.0
 	p.strava_auto_upload = true
 	p.metronome = true
@@ -138,7 +139,7 @@ func test_to_dict_has_every_field() -> void:
 		"grade_max_pct",
 		"skip_warmup",
 		"autopilot_default",
-		"pedal_ui",
+		"pedal_nav",
 		"scan_interval_s",
 		"strava_auto_upload",
 		"metronome",

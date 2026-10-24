@@ -1,9 +1,13 @@
 """The GATT proxy: a WebSocket server on ws://127.0.0.1:8765 for BridgeTransport.
 
-One client at a time (the app). Requests run in order; a scan runs in the background and
-streams ``device`` events, then ``scan_stopped``. Notifications arrive as ``notify``
-events, and every link loss (requested or not) as one ``disconnected`` event. When the
-client goes away the bridge stops scanning and releases the trainer.
+One device per client: the app opens one socket for the trainer and may open a second one
+for a heart rate sensor (at most MAX_CLIENTS at once). Each client gets its own
+BridgeServer and backend (the first the backend passed to serve(), each further one from
+``backend_factory``; without a factory a second client is refused as busy). Requests run in
+order; a scan runs in the background and streams ``device`` events, then ``scan_stopped``.
+Notifications arrive as ``notify`` events, and every link loss (requested or not) as one
+``disconnected`` event. When a client goes away the bridge stops its scan and releases its
+device.
 
 Hardware lock (BRIEF 1): when the bridge's own environment has WATTLANDS_NO_HW_CONTROL=1,
 every ``write`` is refused with "hardware control locked" (scan, read and subscribe still
@@ -36,6 +40,8 @@ HOST = "127.0.0.1"
 DEFAULT_PORT = 8765
 HW_ENV = "WATTLANDS_NO_HW_CONTROL"
 HW_MESSAGE = "hardware control locked"
+# The trainer and one heart rate sensor.
+MAX_CLIENTS = 2
 
 
 def hw_locked(env: Optional[dict] = None) -> bool:
@@ -270,12 +276,42 @@ def _in_loop_thread(loop: asyncio.AbstractEventLoop) -> bool:
         return False
 
 
+class BridgeHub:
+    """Hands each client socket its own BridgeServer and backend (at most ``max_clients``)."""
+
+    def __init__(self, backend: GattBackend, backend_factory: Optional[Callable[[], GattBackend]] = None,
+                 allow_writes: Optional[bool] = None, max_clients: int = MAX_CLIENTS) -> None:
+        self.allow_writes = (not hw_locked()) if allow_writes is None else allow_writes
+        self._free: list = [backend]
+        self._factory = backend_factory
+        self._max = max_clients
+        self._active = 0
+
+    async def handler(self, ws) -> None:
+        backend = None
+        if self._active < self._max:
+            if self._free:
+                backend = self._free.pop()
+            elif self._factory is not None:
+                backend = self._factory()
+        if backend is None:
+            await ws.close(1013, "busy: the bridge serves %d clients at a time" % self._max)
+            return
+        self._active += 1
+        try:
+            await BridgeServer(backend, allow_writes=self.allow_writes).handler(ws)
+        finally:
+            self._active -= 1
+            self._free.append(backend)
+
+
 async def serve(backend: GattBackend, port: int = DEFAULT_PORT, ready: Optional[asyncio.Future] = None,
-                allow_writes: Optional[bool] = None) -> None:
+                allow_writes: Optional[bool] = None,
+                backend_factory: Optional[Callable[[], GattBackend]] = None) -> None:
     """Run the bridge until cancelled. ``ready`` (optional) receives the bound port."""
     from websockets.asyncio.server import serve as ws_serve
 
-    bridge = BridgeServer(backend, allow_writes=allow_writes)
+    bridge = BridgeHub(backend, backend_factory=backend_factory, allow_writes=allow_writes)
     async with ws_serve(bridge.handler, HOST, port, max_size=1 << 20) as server:
         bound = server.sockets[0].getsockname()[1] if server.sockets else port
         if ready is not None and not ready.done():

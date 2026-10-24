@@ -90,6 +90,8 @@ const ROSTER_EVERY := 10
 ## Platform ticks between report trace rows (1 Hz).
 const TRACE_EVERY := 20
 const PLATFORM_EVENT_PREFIX := "wl."
+## Pause reason while every human rider is ride-paused (multiplayer; roster `paused`).
+const SHARED_PAUSE_REASON := "all_stopped"
 ## A client asks for a resync at most this often (platform seconds); the host answers one
 ## peer's requests at most this often.
 const RESYNC_EVERY_S := 2.0
@@ -164,8 +166,11 @@ var _snapshot_seq: int = 0
 var _last_snapshot_msg: Dictionary = {}
 var _last_snapshot_state: Dictionary = {}
 var _state_before_pause: String = "running"
-## Why the session is paused ("user", "coasting", "stop_5s", ...; "" while running).
+## Why the session is paused ("user", "coasting", "stop_5s", SHARED_PAUSE_REASON; "" while
+## running).
 var _pause_reason: String = ""
+## HOST: every human rider was ride-paused at the last check (_update_shared_pause).
+var _all_paused: bool = false
 var _progress_done: Dictionary = {}
 var _fit_paths: Dictionary = {}
 var _view_root: Node = null
@@ -230,11 +235,12 @@ func _process(delta: float) -> void:
 ##   realtime (bool: _process drives the clock with the wall-clock delta; default true,
 ##   headless or not: GameSimRunner and tests pass false and call step()), poll_net
 ##   (bool, default true: step() polls the net session), platform_pause (bool, default
-##   true: an injected `pause` toggles the pause, and a `confirm`, or `pedal_start` after a
-##   pause that was not the rider's own, resumes it; false: the GameHost never pauses or
-##   resumes on actions or gestures and the app calls pause()/resume() itself; either way
-##   the SOLO coasting and stop_5s pause, LocalRider.pause_requested, still pauses, BRIEF
-##   4.6.4), session_nonce (String appended to results.session_id as
+##   true: an injected `pause` toggles the pause and a `confirm` resumes it; false: the
+##   GameHost never pauses or resumes on actions and the app calls pause()/resume() itself;
+##   either way the SOLO pause on not pedaling (LocalRider.pause_requested: 5 s of
+##   not_pedaling, or the governor's 10 s coasting rule, BRIEF 3.5, 4.6.4) still pauses, and
+##   ends when the rider's ride pause ends (LocalRider.ride_paused_changed: 1 s of pedaling
+##   at >= 30 rpm) unless the rider paused it), session_nonce (String appended to results.session_id as
 ##   "<game>/<content>/<seed>/<nonce>"; default a fresh UTC-millisecond nonce, so every
 ##   session's id is unique; "" keeps "<game>/<content>/<seed>", which GameSimRunner passes
 ##   for deterministic reports). A CLIENT's game, players, options and seed come from the host's session_start:
@@ -359,6 +365,11 @@ func pause(reason: String = "user") -> void:
 	if role != Wl.SOLO:
 		push_warning("GameHost: pause works in SOLO only (multiplayer riders go AFK instead)")
 		return
+	_pause_session(reason)
+
+
+## Stop the game clock (SOLO pause, or HOST while every human rider is ride-paused).
+func _pause_session(reason: String) -> void:
 	if state != "running" and state != "cooldown":
 		return
 	_state_before_pause = state
@@ -807,6 +818,8 @@ func _connect_riders() -> void:
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	if rider != null and not rider.pause_requested.is_connected(_on_pause_requested):
 		rider.pause_requested.connect(_on_pause_requested)
+	if rider != null and not rider.ride_paused_changed.is_connected(_on_ride_paused_changed):
+		rider.ride_paused_changed.connect(_on_ride_paused_changed)
 
 
 func _build_presentation() -> void:
@@ -859,7 +872,9 @@ func _authority_step() -> void:
 		return
 	var my_gestures: Array[StringName] = []
 	my_gestures.assign(gestures.get(_local_peer, []))
-	actions = _platform_actions(actions, my_gestures)
+	if role == Wl.HOST:
+		_update_shared_pause()
+	actions = _platform_actions(actions)
 	if _local_riders.has(_local_peer):
 		_call_local_intents(actions, my_gestures)
 	var tick := clock.game_tick
@@ -903,6 +918,7 @@ func _build_frame(tick: int, gestures: Dictionary) -> InputFrame:
 			var r: LocalRider = _local_riders[peer]
 			tm = r.telemetry()
 			tm.peer_id = peer
+			tm.heart_rate_bpm = 0
 			tm.connected = true
 			tm.age_s = 0.0
 			tm.gestures.assign(gestures.get(peer, []))
@@ -929,6 +945,7 @@ func _remote_frame_telemetry(peer: int, pt: float) -> Telemetry:
 		(r["tm"] as Telemetry).duplicate_telemetry() if r["tm"] != null else Telemetry.new()
 	)
 	tm.peer_id = peer
+	tm.heart_rate_bpm = 0
 	tm.gestures.assign(r["gestures"])
 	tm.intents = (r["intents"] as Array).duplicate(true)
 	tm.acks = []
@@ -984,9 +1001,7 @@ func _feed_stats(frame: InputFrame) -> void:
 		)
 
 
-func _platform_actions(
-	actions: Array[StringName], my_gestures: Array[StringName]
-) -> Array[StringName]:
+func _platform_actions(actions: Array[StringName]) -> Array[StringName]:
 	var out: Array[StringName] = []
 	var rider: LocalRider = _local_riders.get(_local_peer)
 	var resume_now := false
@@ -1009,13 +1024,12 @@ func _platform_actions(
 				out.append(a)
 			_:
 				out.append(a)
-	# A user pause ends by resume(), an injected pause or confirm; a coasting or stop_5s pause
-	# also ends when the rider pedals again (the session screen follows the same rule). With
-	# platform_pause false only resume() ends a pause, and confirm stays an ordinary action.
+	# A pause ends by resume(), an injected pause or confirm; a pause on not pedaling also ends
+	# with the rider's ride pause (_on_ride_paused_changed). With platform_pause false only
+	# resume() ends a pause, and confirm stays an ordinary action.
 	if not _platform_pause:
 		return out
-	var pedal_resume := my_gestures.has(Wl.G_PEDAL_START) and _pause_reason != "user"
-	if state == "paused" and (resume_now or out.has(&"confirm") or pedal_resume):
+	if state == "paused" and (resume_now or out.has(&"confirm")):
 		if not resume_now and out.has(&"confirm"):
 			# The confirm that resumed the session is the platform's, never also a game confirm.
 			out.erase(&"confirm")
@@ -1145,7 +1159,7 @@ func _send_roster() -> void:
 	ctx.roster = riders
 	bus.roster_changed.emit(riders)
 	if net != null:
-		_broadcast(Protocol.game_msg("roster", {"riders": riders}))
+		_broadcast(Protocol.game_msg("roster", {"riders": riders, "paused": state == "paused"}))
 
 
 func _trace_authority() -> void:
@@ -1236,6 +1250,7 @@ func _apply_results(r: GameResults) -> void:
 		u = game.apply_progress(r, ctx.progress)
 		ctx.progress.save()
 	unlocks = (u as Array).duplicate(true) if u is Array else []
+	r.own_peer = local_peer()
 	bus.results_ready.emit(r)
 	bus.unlocks_ready.emit(unlocks)
 
@@ -1314,7 +1329,7 @@ func _client_step() -> void:
 		_call_local_intents(filtered, gestures)
 		if rider != null:
 			game.client_predict(DT, rider.telemetry())
-	if _client_phase >= 0:
+	if _client_phase >= 0 and state != "paused":
 		_client_phase_ticks += 1
 	if _net_lost != "" and state != "ended" and _local_cooldown_over():
 		_end_after_net_loss()
@@ -1341,6 +1356,8 @@ func _send_telemetry() -> void:
 		return
 	var tm := rider.telemetry()
 	tm.peer_id = _local_peer
+	# Heart rate is local only (the rider's own HUD and FIT); it never leaves this machine.
+	tm.heart_rate_bpm = 0
 	tm.gestures.assign(_pending_gestures)
 	_pending_gestures.clear()
 	var ints: Array = rider.take_intents()
@@ -2007,6 +2024,8 @@ func _on_roster(data: Dictionary) -> void:
 		ctx.roster = roster
 	bus.roster_changed.emit(roster)
 	_check_roster_phase(roster.get(_local_peer))
+	if data.has("paused") and _configured:
+		_apply_shared_pause(bool(data["paused"]))
 
 
 ## The host's phase index for this rider (roster `phase`) against the one it rides: twice in a
@@ -2187,6 +2206,66 @@ func _sfx() -> Node:
 func _on_pause_requested(reason: String) -> void:
 	if role == Wl.SOLO:
 		pause(reason)
+
+
+## SOLO: a pause on not pedaling ends with the rider's ride pause (1 s of pedaling at >= 30 rpm);
+## a pause the rider asked for does not.
+func _on_ride_paused_changed(paused: bool) -> void:
+	if role == Wl.SOLO and not paused and state == "paused" and _pause_reason != "user":
+		resume()
+
+
+## HOST: the shared game clock pauses when every human rider has become ride-paused (bots
+## ignored, a dropped rider counts as paused) and resumes when one of them rides again. Each
+## rider's own ride timer pauses on its own (LocalRider). Edge-triggered, so a resume from the
+## pause menu holds until the riders stop again.
+func _update_shared_pause() -> void:
+	var all := _humans_all_paused()
+	if all == _all_paused:
+		return
+	_all_paused = all
+	if all:
+		_pause_session(SHARED_PAUSE_REASON)
+	elif state == "paused" and _pause_reason == SHARED_PAUSE_REASON:
+		resume()
+
+
+func _humans_all_paused() -> bool:
+	var humans := 0
+	for peer in _order:
+		if (_slots[peer] as PlayerSlot).is_bot:
+			continue
+		humans += 1
+		if _local_riders.has(peer):
+			if not (_local_riders[peer] as LocalRider).is_ride_paused():
+				return false
+		elif _remote.has(peer):
+			var r: Dictionary = _remote[peer]
+			var tm: Telemetry = r["tm"]
+			if not bool(r["dropped"]) and (tm == null or not tm.paused):
+				return false
+		else:
+			return false
+	return humans > 0
+
+
+## CLIENT: follow the host's shared pause (roster `paused`): the game clock, this rider's
+## governor (4.1 pause) and ride timer, and the session state.
+func _apply_shared_pause(p: bool) -> void:
+	if p == (state == "paused"):
+		return
+	if p and state != "running" and state != "cooldown":
+		return
+	if p:
+		_state_before_pause = state
+	_pause_reason = SHARED_PAUSE_REASON if p else ""
+	clock.set_game_paused(p)
+	var rider: LocalRider = _local_riders.get(_local_peer)
+	if rider != null:
+		rider.set_game_paused(p)
+	_set_state("paused" if p else _state_before_pause)
+	bus.paused_changed.emit(p, SHARED_PAUSE_REASON if p else "resume")
+	_event("paused", {"paused": p, "reason": SHARED_PAUSE_REASON if p else "resume"})
 
 
 func _on_panic() -> void:

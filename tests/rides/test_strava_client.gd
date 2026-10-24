@@ -245,7 +245,7 @@ func test_upload_and_polling() -> void:
 	var progress: Array = []
 	c.upload_progress.connect(func(_id: String, s: String, _d: String) -> void: progress.append(s))
 	var res: Dictionary = await c.upload_fit(
-		str(ride[1]["ride_id"]), str(ride[0]), "Wattlands: Workout", "desc"
+		str(ride[1]["ride_id"]), str(ride[0]), "WATTLANDS: Workout", "desc"
 	)
 	assert_eq(res["state"], "uploaded")
 	assert_gt(int(res["activity_id"]), 0)
@@ -257,7 +257,7 @@ func test_upload_and_polling() -> void:
 	assert_true(bool(u["fit_valid"]), "the mock's FIT header and CRC check passed")
 	assert_eq(u["data_type"], "fit")
 	assert_eq(u["trainer"], "1")
-	assert_eq(u["name"], "Wattlands: Workout")
+	assert_eq(u["name"], "WATTLANDS: Workout")
 	assert_eq(u["description"], "desc")
 	assert_eq(u["external_id"], ride[1]["ride_id"], "external_id is the ride UUID")
 	assert_eq(u["filename"], str(ride[0]).get_file())
@@ -349,6 +349,21 @@ func test_server_error_is_retryable() -> void:
 	assert_eq(res["state"], "failed")
 	assert_eq(res["detail"], "server_error_500")
 	assert_false(bool(res["permanent"]))
+
+
+func test_a_rejected_upload_logs_the_whole_error() -> void:
+	var c: StravaClient = await _connected_client()
+	var cap := Util.LogCapture.new()
+	OS.add_logger(cap)
+	await _mock.fault("upload", 403)
+	var ride := _ride()
+	var res: Dictionary = await c.upload_fit(str(ride[1]["ride_id"]), str(ride[0]), "n", "d")
+	OS.remove_logger(cap)
+	assert_eq(res["detail"], "Error (403)")
+	assert_true(bool(res["permanent"]))
+	assert_string_contains(
+		cap.text(), 'Strava: upload failed: HTTP 403: {"errors":[],"message":"Error"}'
+	)
 
 
 # --- Tokens --------------------------------------------------------------------------------

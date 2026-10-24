@@ -44,7 +44,7 @@ test('a lane without its mackerel, or with another fish, fails', () => {
   for (const role of ['host', 'client1', 'client2']) r.peers[role].events = r.peers[role].events.filter((e) => !(e.event?.type === 'landed' && e.event.l === 2));
   assert.match(errs(r), /lane 2 landed nothing \(wanted one mackerel\)/);
   const t = e2eReport();
-  for (const role of ['host', 'client1', 'client2']) for (const e of gameEvents(t.peers[role].events)) if (e.event.type === 'landed' && e.event.l === 1) e.event.sp = 2;
+  for (const role of ['host', 'client1', 'client2']) for (const e of gameEvents(t.peers[role].events)) if (e.event.type === 'landed' && e.event.l === 1) e.event.sp = 4;
   assert.match(errs(t), /lane 1 landed tuna/);
 });
 

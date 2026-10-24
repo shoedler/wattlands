@@ -1,4 +1,4 @@
-# Wattlands network protocol
+# WATTLANDS network protocol
 
 Multiplayer is a star through a relay (BRIEF 5.1). The host's GameHost is authoritative and simulates at 20 Hz; clients send telemetry and intents; the host sends snapshots, events, plans, phases and directives. Every frame is one JSON text object. The relay (`server/relay`, Node) routes frames between the peers of a room and never looks inside a game message.
 
@@ -71,7 +71,7 @@ Every game message has `"type"` and `"v"` (`NetMessages.VERSION`, 1). Build them
 | `session_start` | **`game_id`**, **`game_version`**, **`content_id`**, **`seed`**, **`players`** (`PlayerSlot.to_dict()` in slot order), **`options`**, **`scaling`**, **`start_tick`**; `session_id` (`<game>/<content>/<seed>/<nonce>`, unique per session), `content_overrides`, `game`, `content`, `session` | Sent by the GameHost: one broadcast in FAIR_FTP, else one per client in which only that client's own entry keeps its `rider_mass_kg` and, in WKG, its `p_eff_per_w` (the other humans carry 75 and 1.0; bots keep theirs). Clients clear their snapshot buffer. |
 | `snapshot` | **`game_id`**, **`seq`**, **`state`** (the game's `snapshot()`); `tick`, `t` (host time, s) | 10 Hz. Clients drop a `seq` at or below the newest one (`stats.stale_snapshots`). |
 | `event` | **`seq`**, **`events`** (game events, each with `"type"`) | At most 10 per second, sent before the same tick's snapshot (OWNERSHIP C12). Phase changes travel here too. |
-| `roster` | **`riders`**: {peer: `NetRoster.entry()`} | 2 Hz: `peer_id`, `name`, `slot_index`, `is_bot`, `raw_w`, `cadence_rpm`, `ftp_pct`, `rescue`, `afk`, `connected`, `status` (the latest `teammate_status`); the GameHost's roster adds `phase` (the host's phase index for that rider, -1 before the start), which each client checks against its own. Build with `NetRoster.build()`, send with `WlNetSession.send_roster()`. |
+| `roster` | **`riders`**: {peer: `NetRoster.entry()`} | 2 Hz: `peer_id`, `name`, `slot_index`, `is_bot`, `raw_w`, `cadence_rpm`, `ftp_pct`, `rescue`, `afk`, `connected`, `status` (the latest `teammate_status`); the GameHost's roster adds `phase` (the host's phase index for that rider, -1 before the start), which each client checks against its own, and a top-level `paused` (true while every human rider is paused and the shared game clock stands; clients pause with it). Build with `NetRoster.build()`, send with `WlNetSession.send_roster()`. |
 | `results` | **`results`**: `GameResults.to_dict()` | Ints: `results.rows[].xp`, `results.rows[].slot_index`. |
 | `session_end` | **`reason`** | |
 | `refused` | **`reason`**; `scope` (`"ready"` for a refused ready-up), `game_id`, `game_version` | `session_in_progress`, `room_full`, `version_mismatch` end the client's session; with `scope: "ready"` (`missing_game`, `version_mismatch`) only the ready-up is refused. Accepted on every schema version. |

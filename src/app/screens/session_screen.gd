@@ -228,10 +228,10 @@ func session_autopilot() -> bool:
 	return false
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this session's Autopilot counts as
-## well as InputRouter.pedal_ui_active(). An auto-pause still holds Resume without scanning.
-func scanning_enabled() -> bool:
-	return session_autopilot() or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): this session's Autopilot counts as well as
+## InputRouter.pedal_nav_active(). An auto-pause still holds Resume without scanning.
+func pedal_nav_enabled() -> bool:
+	return session_autopilot() or super.pedal_nav_enabled()
 
 
 ## The session's own rider's trainer mode (the overlay menu's hint and coast follow it).
@@ -454,22 +454,22 @@ func _show_overlay(force_menu: bool = false) -> void:
 	_hold_resume_on_auto_pause()
 
 
-## What the pause overlay says: a pause the rider asked for resumes from the menu; a platform
-## pause (coasting 4.6.4, stop_5s) resumes as soon as the rider pedals again.
+## What the pause overlay says: a pause the rider asked for resumes from the menu; a pause on
+## not pedaling (BRIEF 3.5) resumes as soon as the rider pedals again.
 static func pause_text(reason: String) -> String:
 	if reason == "" or reason == "user":
 		return AppScreen.t("APP_SESSION_PAUSED_USER")
 	return AppScreen.t("APP_SESSION_PAUSED_DETAIL")
 
 
-## True while the session is paused by the platform (coasting 4.6.4, stop_5s), not by the rider.
+## True while the session is paused for not pedaling (BRIEF 3.5), not by the rider.
 func auto_paused() -> bool:
 	return paused and pause_reason != "" and pause_reason != "user" and not panicked and error == ""
 
 
-## A rider who coasted into a pause starts pedaling again to resume. From rest a surge (1.5 s)
-## fires before pedal_start (3 s), so a scanning overlay could pick End ride or Panic by accident:
-## while auto-paused the menu holds Resume and does not scan, so that surge resumes too.
+## A rider who stopped into a pause starts pedaling again to resume (the GameHost resumes after
+## 1 s at >= 30 rpm). A surge from rest could still pick End ride or Panic on a scanning overlay
+## by accident: while auto-paused the menu holds Resume and does not scan, so a surge resumes.
 func _hold_resume_on_auto_pause() -> void:
 	if menus.is_empty():
 		return
@@ -574,16 +574,8 @@ func _handle_action(action: StringName) -> bool:
 	return true
 
 
-func _handle_gesture(gesture: StringName) -> bool:
-	if (
-		gesture == Wl.G_PEDAL_START
-		and paused
-		and host != null
-		and role != Wl.CLIENT
-		and pause_reason != "user"
-	):
-		host.resume()
-		return true
+## A pause on not pedaling ends in the GameHost (1 s of pedaling at >= 30 rpm, BRIEF 3.5).
+func _handle_gesture(_gesture: StringName) -> bool:
 	return not overlay.visible
 
 
@@ -641,17 +633,30 @@ func _on_host_state(state: String) -> void:
 				pause_reason = "user"
 			_show_overlay()
 		"running", "cooldown":
-			paused = false
-			pause_reason = ""
-			_show_overlay()
+			_pause_ended()
 		"results", "ended":
 			if not finished and host != null and host.final_results() != null:
 				_finish(host.final_results())
 
 
 func _on_paused_changed(p: bool, reason: String) -> void:
-	paused = p
-	pause_reason = reason if p else ""
+	if not p:
+		_pause_ended()
+		return
+	paused = true
+	pause_reason = reason
+	_show_overlay()
+
+
+## The session runs again (the menu's Resume, or the GameHost ending a pause on not pedaling):
+## the pause menu closes with it.
+func _pause_ended() -> void:
+	var was_paused := paused
+	paused = false
+	pause_reason = ""
+	if was_paused and _overlay_menu_open and not panicked and error == "":
+		_overlay_menu_open = false
+		clear_menus()
 	_show_overlay()
 
 

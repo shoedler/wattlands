@@ -3,8 +3,13 @@ extends HudWidget
 ## Kit widget `power_gauge` (BRIEF 3.9; HudSpec.POWER_GAUGE): the rider's raw watts as a key
 ## number, %FTP and (if opted in) W/kg, and a bar with the target band that glows while the
 ## power is in band. ERG: the band is the applied target +-5%; SIM: the band published with
-## ctx.hud.power_band (none until one is set). Options: {"peer": int} (default: the local
-## rider). base_size 420 x 136; min_rect 300 x 106.
+## ctx.hud.power_band (none until one is set). The rider's heart rate (Telemetry.heart_rate_bpm)
+## shows next to the watts while it is above 0 (local only: a paired HR sensor or a MockTrainer
+## `hr` profile). Options: {"peer": int} (default: the local rider). base_size 420 x 136;
+## min_rect 300 x 106.
+
+## Heart rate text color.
+const HR_COLOR := Color("#F07C82")
 
 ## Half-width of the ERG band around the applied target (fraction).
 const ERG_BAND := 0.05
@@ -18,11 +23,13 @@ var _mode: String = Wl.OFF
 var _target_w: float = 0.0
 var _pub_lo: float = 0.0
 var _pub_hi: float = 0.0
+var _hr_bpm: int = 0
 
 var _watts: Label = null
 var _unit: Label = null
 var _pct: Label = null
 var _wkg: Label = null
+var _hr: Label = null
 var _target: Label = null
 var _bar: HudBar = null
 
@@ -39,6 +46,10 @@ func _init() -> void:
 	_unit.text = _t("UI_HUD_W")
 	_unit.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	top.add_child(_unit)
+	_hr = _make_label("HeartRate", WlTheme.BODY_PX, HR_COLOR)
+	_hr.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	_hr.visible = false
+	top.add_child(_hr)
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	spacer.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -85,6 +96,7 @@ func set_telemetry(t: Telemetry) -> void:
 		_ftp_pct = _power_w / ftp_w * 100.0
 	_mode = t.mode
 	_target_w = float(t.applied_target_w)
+	_hr_bpm = t.heart_rate_bpm
 	_refresh()
 
 
@@ -131,6 +143,11 @@ func wkg_label() -> Label:
 	return _wkg
 
 
+## The heart rate label (hidden while Telemetry.heart_rate_bpm is 0).
+func heart_rate_label() -> Label:
+	return _hr
+
+
 func bar() -> HudBar:
 	return _bar
 
@@ -141,6 +158,9 @@ func _refresh() -> void:
 	_watts.text = "%d" % roundi(_power_w)
 	_pct.text = _t("UI_HUD_PCT_FTP", [roundi(_ftp_pct)])
 	_wkg.visible = weight_kg > 0.0
+	_hr.visible = _hr_bpm > 0
+	if _hr_bpm > 0:
+		_hr.text = _t("UI_HUD_HR", [_hr_bpm])
 	if weight_kg > 0.0:
 		_wkg.text = _t("UI_HUD_WKG", ["%.1f" % (_power_w / weight_kg)])
 	var b := band()

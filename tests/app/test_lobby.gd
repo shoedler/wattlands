@@ -102,6 +102,37 @@ func test_choice_option_with_labels() -> void:
 	assert_eq(menu(s).text_of("no_label"), "no_label", "bare id when the key is missing")
 
 
+func test_content_menu_shows_cards_with_featured_first() -> void:
+	_translation = Translation.new()
+	_translation.locale = TranslationServer.get_locale()
+	_translation.add_message("TANK_DETAIL_DRILL", "The headline ride")
+	TranslationServer.add_translation(_translation)
+	fx.fake_registry().manifests["tank"]["content_cards"] = {
+		"drill":
+		{"image": "res://src/app/icon.svg", "detail": "TANK_DETAIL_DRILL", "featured": true},
+		"ashfall_road": {"image": "res://src/app/icon.svg"},
+	}
+	var s := _host_lobby("tank")
+	confirm_pick(s, "content")
+	assert_eq(menu(s).ids(), ["drill", "ashfall_road"], "featured first")
+	var items := menu(s).items()
+	var featured: Dictionary = items[0]
+	var plain: Dictionary = items[1]
+	assert_true(featured["icon"] is Texture2D)
+	assert_eq(featured["detail"], "The headline ride")
+	assert_eq(featured["icon_px"], WlTheme.MENU_PX * 3.0)
+	assert_true(plain["icon"] is Texture2D)
+	assert_false(plain.has("icon_px"), "an ordinary card keeps the default icon size")
+	assert_false(plain.has("detail"))
+
+
+func test_content_menu_without_cards_keeps_the_contents_order() -> void:
+	var s := _host_lobby("tank")
+	confirm_pick(s, "content")
+	assert_eq(menu(s).ids(), ["ashfall_road", "drill"])
+	assert_false((menu(s).items()[0] as Dictionary).has("icon"))
+
+
 func test_long_int_player_option_uses_a_stepper() -> void:
 	var s := _host_lobby("siege")
 	assert_true(menu(s).ids().has("popt:wave_offset"))
@@ -162,9 +193,9 @@ func test_autopilot_starts_from_the_profile_and_clients_toggle_it_too() -> void:
 
 ## BRIEF 3.5 "with Autopilot or pedal UI on": switching Autopilot on in the lobby turns pedal-scan
 ## on, also for a rider the InputRouter would not scan for (pedal UI off and a device used, which
-## the fake router's pedal_ui = false stands for); switching it off hands back to the router.
+## the fake router's pedal_nav = false stands for); switching it off hands back to the router.
 func test_lobby_autopilot_turns_pedal_scan_on() -> void:
-	fx.input.set("pedal_ui", false)
+	fx.input.set("pedal_nav", false)
 	var s := _host_lobby()
 	assert_false(menu(s).scanning, "precondition: the router says no")
 	assert_false(s.scanning_enabled())
@@ -182,7 +213,7 @@ func test_lobby_autopilot_turns_pedal_scan_on() -> void:
 
 
 func test_lobby_starts_scanning_with_the_profile_autopilot() -> void:
-	fx.input.set("pedal_ui", false)
+	fx.input.set("pedal_nav", false)
 	fx.give_profile(250.0).autopilot_default = true
 	fx.fake_net().add_human(1, "Ada", 250.0)
 	var s := (

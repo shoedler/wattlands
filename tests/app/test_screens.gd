@@ -91,7 +91,7 @@ func test_settings_screen_pages() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	for section: String in [
-		"trainer", "strava", "haptics", "controls", "audio", "network", "pedal_ui"
+		"trainer", "strava", "haptics", "controls", "audio", "network", "pedal_nav"
 	]:
 		confirm_pick(s, section)
 		assert_eq(s.menus.size(), 2, "%s page open" % section)
@@ -99,7 +99,7 @@ func test_settings_screen_pages() -> void:
 		assert_eq(s.menus.size(), 1, "%s page closed" % section)
 
 
-func test_settings_haptics_and_pedal_ui() -> void:
+func test_settings_haptics_and_pedal_nav() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
 	confirm_pick(s, "haptics")
@@ -112,7 +112,11 @@ func test_settings_haptics_and_pedal_ui() -> void:
 	assert_eq(fx.settings.profile.haptic_intensity_pct, 60.0)
 	confirm_pick(s, "done")
 	confirm_pick(s, "back")
-	confirm_pick(s, "pedal_ui")
+	confirm_pick(s, "pedal_nav")
+	assert_false(fx.settings.profile.pedal_nav, "pedal navigation is off until chosen")
+	assert_true(menu(s).is_disabled_id("scan_interval"), "the interval needs pedal navigation")
+	confirm_pick(s, "pedal_nav")
+	assert_true(fx.settings.profile.pedal_nav)
 	confirm_pick(s, "scan_interval")
 	confirm_pick(s, "inc")
 	assert_almost_eq(fx.settings.profile.scan_interval_s, 1.8, 1e-6)

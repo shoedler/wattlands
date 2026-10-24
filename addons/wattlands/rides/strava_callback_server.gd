@@ -138,7 +138,7 @@ func _service(i: int) -> bool:
 	if params.has("error"):
 		var denied := tr_or(
 			"RIDES_CALLBACK_DENIED",
-			"Strava did not connect ({error}). You can close this window and return to Wattlands."
+			"Strava did not connect ({error}). You can close this window and return to WATTLANDS."
 		)
 		_respond(c, 200, denied.xml_escape().format({"error": str(params["error"]).xml_escape()}))
 	else:
@@ -148,7 +148,7 @@ func _service(i: int) -> bool:
 			(
 				tr_or(
 					"RIDES_CALLBACK_CONNECTING",
-					"Wattlands is connecting to Strava. You can close this window and return to the game."
+					"WATTLANDS is connecting to Strava. You can close this window and return to the game."
 				)
 				. xml_escape()
 			)
@@ -166,7 +166,7 @@ func _respond(c: StreamPeerTCP, code: int, message: String) -> void:
 	}
 	var body := (
 		(
-			'<!doctype html><html><head><meta charset="utf-8"><title>Wattlands</title></head>'
+			'<!doctype html><html><head><meta charset="utf-8"><title>WATTLANDS</title></head>'
 			+ '<body style="font-family:sans-serif"><p>%s</p></body></html>' % message
 		)
 		. to_utf8_buffer()

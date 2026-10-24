@@ -1,6 +1,6 @@
 # Trainer stack
 
-How Wattlands talks to a Wahoo KICKR CORE over Bluetooth LE FTMS, and how the safety governor shapes every command. For developers. "BRIEF x.y" is a section of `docs/BRIEF.md`; the design rationale is in `docs/decisions/trainer-core.md`, `trainer-control.md`, `ble.md`, `platform.md` and `app-shell.md`. Every constant below is quoted from the code on `main`.
+How WATTLANDS talks to a Wahoo KICKR CORE over Bluetooth LE FTMS, and how the safety governor shapes every command. For developers. "BRIEF x.y" is a section of `docs/BRIEF.md`; the design rationale is in `docs/decisions/trainer-core.md`, `trainer-control.md`, `ble.md`, `platform.md` and `app-shell.md`. Every constant below is quoted from the code on `main`.
 
 **Hardware status:** none of this has run against a real trainer. Every automated run had the hardware lock on and used MockTrainer or a fake KICKR transport. See [section 8](#8-never-tested-on-hardware) and `docs/HARDWARE_TEST_PLAN.md`.
 
@@ -181,7 +181,7 @@ One `FtmsTrainer` is kept per trainer address, so a reconnect hands back the sam
 
 ### 3.2 Bridge and probe (BRIEF 4.2, P1; `tools/trainer_bridge/`)
 
-- **Bridge.** Python 3.12+, bleak and websockets. A thin GATT proxy on `ws://127.0.0.1:8765`, loopback only and one client at a time. Requests run in order (scans in the background), and the bridge releases the trainer when the app disconnects.
+- **Bridge.** Python 3.12+, bleak and websockets. A thin GATT proxy on `ws://127.0.0.1:8765`, loopback only, one device per client and at most two clients (the trainer and a heart rate sensor). Requests run in order (scans in the background), and the bridge releases a client's device when it disconnects.
 - **Protocol.** JSON text frames. Requests `{id, op, …}`, responses `{id, ok, result, error}`, events `{event, …}`; payloads are lower-case hex, UUIDs expanded and lower case.
   - Ops: `hello`, `init`, `scan`, `stop_scan`, `connect`, `disconnect`, `discover`, `read`, `write`, `subscribe`.
   - Events: `device`, `scan_stopped`, `notify`, `disconnected`, `adapter`.
@@ -195,6 +195,13 @@ One `FtmsTrainer` is kept per trainer address, so a reconnect hands back the sam
 - **Exe.** `trainer_bridge.spec` builds a PyInstaller one-file exe.
 - **Python status.** bleak could not be installed in the build environment (Python 3.15.0 only, and no `winrt-*` wheels for it), so the bleak backend, the probe on hardware and the PyInstaller exe with bleak are untested (`docs/HARDWARE_TEST_PLAN.md` runs the probe through `uv` with Python 3.12–3.14). websockets 17.3 and PyInstaller 6.22.3 worked; the proxy, protocol and probe are tested against a fake backend.
 - **Not launched by the app.** A user starts `trainer_bridge serve`, and the manager finds it on its next `start()`.
+
+### 3.3 Heart rate sensor (`HrSensorManager`, `HeartRateParser`)
+
+- **Profile.** Heart Rate service `0x180D`, measurement `0x2A37`; chest straps and watches broadcasting heart rate (Garmin "Broadcast Heart Rate") are the same profile. `HeartRateParser` reads the flags, a uint8 or uint16 bpm, the sensor contact bits and the energy expended; RR intervals are ignored.
+- **Subscribe only.** `HrSensorManager` scans (advertised `0x180D` or a heart-rate-like name), connects, discovers, subscribes to `0x2A37` and never writes, so the hardware lock does not concern it and `tests/arch/test_no_bypass.gd` is unchanged. It remembers the sensor in `last_hr_sensor.json`, reconnects with the trainer's backoff (1, 2, 4, 8, 15 s) and `start(true)` looks for the remembered sensor in 30 s scan windows. `current_bpm()` is 0 when not ready, after 5 s without a measurement, or without skin contact.
+- **Second device.** `WlTrainerService` starts it with the FTMS path (never with `--mock-trainer`). Its transport rides the trainer's backend: a `GdbleTransport` that `share_manager_of()` the trainer's transport (one `BluetoothManager`, two `BleDevice` handles; the sharer never initializes the adapter again, one scan serves both, and it loses the adapter with its primary), or a second `BridgeTransport` (the bridge serves two clients, each with its own bleak backend).
+- **Where it goes.** `TrainerService.heart_rate_bpm()` feeds the app rider through `LocalRider.heart_rate_source` (`Telemetry.heart_rate_bpm`, local only). Settings > Trainer > Sensors scans, pairs, forgets and shows the live bpm.
 
 ## 4. The hardware lock (BRIEF 1, 4.6.10)
 

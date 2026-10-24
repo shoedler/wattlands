@@ -8,6 +8,10 @@ extends AppFormScreen
 ##             waits until the control point sent both (BRIEF 4.6.9; W4 SAF-8, W4r2 R6). Picking
 ##             the trainer that is already linked changes nothing (W4r2 R7). Leaving the page never
 ##             cuts that wait short.
+##   Sensors   opened from the Trainer page (the root menu fills a 1080p screen): the heart rate
+##             sensor (TrainerService.hr_manager(), HrSensorManager): status, live bpm, scan
+##             (0x180D or a heart-rate-like name), pair, forget. The paired sensor is remembered
+##             and reconnects by itself.
 ##   Strava    the player's own API app client ID and secret, connect (loopback OAuth), disconnect,
 ##             auto-upload (off by default), and the opt-in FTP and weight import (P1, BRIEF 3.8:
 ##             connect with profile:read_all, pick FTP and/or weight, import). The secret is only
@@ -23,7 +27,7 @@ extends AppFormScreen
 ##             row in view (AppScreen.scroll_menu_column).
 ##   Audio     master volume, cadence metronome
 ##   Network   relay URL
-##   Pedal UI  pedal-scan menus on/off, scan interval
+##   Pedal navigation  on/off (default off: keyboard and controller only), scan interval
 ##   FTP test (P1) and Rides history (P1) open their own pages.
 
 const MOCK_SPEC := "erg"
@@ -42,6 +46,12 @@ var _trainer_menu: PedalScanList = null
 ## The Reset to defaults confirm menu while it is open.
 var _reset_menu: PedalScanList = null
 var _connection: FtmsConnectionManager = null
+## Settings > Sensors: the heart rate sensors the last scan found, the page's menu, and the
+## TrainerService's HrSensorManager (null with a mock trainer).
+var found_sensors: Array[Dictionary] = []
+var _sensors_menu: PedalScanList = null
+var _hr: HrSensorManager = null
+var _shown_bpm: int = -1
 ## True while this page waits for TrainerService's safe unlink (its status line says so).
 var _unlink_shown: bool = false
 ## The FTP and weight import (P1): what to import, and the last result line.
@@ -52,12 +62,7 @@ var importing: bool = false
 
 
 func _build() -> void:
-	var page := make_form_page(t("APP_SETTINGS_TITLE"))
-	# The Controls page (a row per action) is taller than a 1080p screen: its menu scrolls and
-	# keeps the highlighted row in view. Settings has no footer line, so the menu column reaches
-	# the bottom margin and the pages that fit look as they did.
-	(page["footer"] as Control).visible = false
-	scroll_menu_column(page["right"] as Control)
+	make_form_page(t("APP_SETTINGS_TITLE"))
 	controls_help_label = AppStyle.paragraph(
 		t("APP_SET_CONTROLS_HELP"), AppStyle.FONT_SMALL, AppStyle.TEXT_DIM
 	)
@@ -72,6 +77,7 @@ func _build() -> void:
 	if services.trainer != null:
 		services.trainer.status_changed.connect(_on_trainer_status)
 		_sync_connection()
+		_sync_hr()
 	open_fields(root_fields(), _back)
 	var start_page := str(params.get("section", ""))
 	if start_page != "":
@@ -94,6 +100,7 @@ func _on_leave() -> void:
 		and _connection.device_found.is_connected(_on_device_found)
 	):
 		_connection.device_found.disconnect(_on_device_found)
+	_link_hr(false)
 	strava_client_secret = ""
 
 
@@ -159,10 +166,10 @@ func root_fields() -> Array:
 			"run": open_section.bind("network")
 		},
 		{
-			"id": "pedal_ui",
-			"label": t("APP_SET_PEDAL_UI"),
+			"id": "pedal_nav",
+			"label": t("APP_SET_PEDAL_NAV"),
 			"type": "action",
-			"run": open_section.bind("pedal_ui")
+			"run": open_section.bind("pedal_nav")
 		},
 		{
 			"id": "ftp_test",
@@ -181,12 +188,14 @@ func root_fields() -> Array:
 
 
 ## Open a settings page by id ("trainer", "strava", "haptics", "controls", "audio", "network",
-## "pedal_ui").
+## "pedal_nav").
 func open_section(section: String) -> void:
 	var fields: Array = []
 	match section:
 		"trainer":
 			fields = trainer_fields()
+		"sensors":
+			fields = sensors_fields()
 		"strava":
 			fields = strava_fields()
 		"haptics":
@@ -197,7 +206,7 @@ func open_section(section: String) -> void:
 			fields = audio_fields()
 		"network":
 			fields = network_fields()
-		"pedal_ui":
+		"pedal_nav":
 			fields = pedal_fields()
 	if fields.is_empty():
 		return
@@ -206,6 +215,8 @@ func open_section(section: String) -> void:
 	var list := open_fields(fields, _pop_section)
 	if section == "trainer":
 		_trainer_menu = list
+	if section == "sensors":
+		_sensors_menu = list
 	_refresh_status(section)
 
 
@@ -214,6 +225,7 @@ func _pop_section() -> void:
 	if menus.size() > 1:
 		pop_menu()
 	_trainer_menu = null
+	_sensors_menu = null
 	_refresh_status("")
 
 
@@ -251,6 +263,14 @@ func trainer_fields() -> Array:
 		)
 	fields.append(
 		{"id": "mock", "label": t("APP_SET_TRAINER_MOCK"), "type": "action", "run": use_mock}
+	)
+	fields.append(
+		{
+			"id": "sensors",
+			"label": t("APP_SET_SENSORS"),
+			"type": "action",
+			"run": open_section.bind("sensors")
+		}
 	)
 	fields.append(
 		{
@@ -342,6 +362,7 @@ func _rebuild_trainer_page() -> void:
 
 func _on_trainer_status(_status: String, _detail: String) -> void:
 	_sync_connection()
+	_sync_hr()
 	refresh_fields()
 
 
@@ -360,6 +381,158 @@ func _sync_connection() -> void:
 	_connection = now
 	if _connection != null:
 		_connection.device_found.connect(_on_device_found)
+
+
+# --- sensors ---------------------------------------------------------------------------------
+
+
+func sensors_fields() -> Array:
+	var fields: Array = [
+		{
+			"id": "hr_status",
+			"label": t("APP_SET_SENSORS_STATUS"),
+			"type": "info",
+			"get": sensor_status_text
+		},
+		{"id": "hr_bpm", "label": t("APP_SET_SENSORS_BPM"), "type": "info", "get": heart_rate_text},
+		{
+			"id": "hr_scan",
+			"label": t("APP_SET_SENSORS_SCAN"),
+			"type": "action",
+			"run": scan_sensors,
+			"enabled": func() -> bool: return _hr != null
+		},
+	]
+	for d: Dictionary in found_sensors:
+		var addr := str(d.get("address", ""))
+		var label := str(d.get("name", ""))
+		fields.append(
+			{
+				"id": "hr:" + addr,
+				"label":
+				t("APP_SET_SENSORS_PAIR").format(
+					[label if label != "" else addr, int(d.get("rssi", 0))]
+				),
+				"type": "action",
+				"run": pair_sensor.bind(addr, label)
+			}
+		)
+	fields.append(
+		{
+			"id": "hr_forget",
+			"label": t("APP_SET_SENSORS_FORGET"),
+			"type": "action",
+			"run": forget_sensor,
+			"enabled": _has_sensor
+		}
+	)
+	return fields
+
+
+## "Ready (Polar H10)", "Connecting to ..." or "No sensor": the manager's status and detail.
+func sensor_status_text() -> String:
+	if _hr == null:
+		return t("APP_SET_SENSORS_NONE_AVAILABLE")
+	var detail := _hr.status_detail()
+	if _hr.status() == TrainerDevice.STATUS_DISCONNECTED and detail == "":
+		var last := _hr.last_sensor()
+		return (
+			t("APP_SET_SENSORS_NONE")
+			if last.is_empty()
+			else t("APP_SET_SENSORS_REMEMBERED").format([str(last.get("name", last["address"]))])
+		)
+	return detail if detail != "" else _hr.status()
+
+
+func heart_rate_text() -> String:
+	if _hr == null or not _hr.is_ready():
+		return "—"
+	if _hr.no_contact():
+		return t("APP_SET_SENSORS_NO_CONTACT")
+	var bpm := _hr.current_bpm()
+	return t("APP_SET_SENSORS_BPM_VALUE").format([bpm]) if bpm > 0 else "—"
+
+
+func scan_sensors() -> void:
+	found_sensors.clear()
+	if _hr != null:
+		_hr.scan(10.0)
+	_rebuild_sensors_page()
+
+
+func pair_sensor(address: String, sensor_name: String) -> void:
+	if _hr != null:
+		_hr.connect_to(address, sensor_name)
+	_rebuild_sensors_page()
+
+
+func forget_sensor() -> void:
+	if _hr != null:
+		_hr.forget()
+	_rebuild_sensors_page()
+
+
+func _has_sensor() -> bool:
+	return _hr != null and (not _hr.sensor().is_empty() or not _hr.last_sensor().is_empty())
+
+
+func _rebuild_sensors_page() -> void:
+	if (
+		_sensors_menu == null
+		or not is_instance_valid(_sensors_menu)
+		or not menus.has(_sensors_menu)
+	):
+		return
+	var fields := sensors_fields()
+	fields.append({"id": "back", "label": t("APP_BACK"), "type": "action", "run": _pop_section})
+	_fields_by_menu[_sensors_menu.get_instance_id()] = fields
+	refresh_menu(items_for(fields), _sensors_menu)
+
+
+## Follow TrainerService's heart rate sensor manager (created with the FTMS path).
+func _sync_hr() -> void:
+	var now: HrSensorManager = services.trainer.hr_manager() if services.trainer != null else null
+	if _hr != null and not is_instance_valid(_hr):
+		_hr = null
+	if now == _hr:
+		return
+	_link_hr(false)
+	_hr = now
+	_link_hr(true)
+
+
+func _link_hr(on: bool) -> void:
+	if _hr == null or not is_instance_valid(_hr):
+		return
+	for pair: Array in [
+		[_hr.device_found, _on_sensor_found],
+		[_hr.status_changed, _on_sensor_status],
+		[_hr.heart_rate, _on_heart_rate],
+	]:
+		var sig: Signal = pair[0]
+		if on and not sig.is_connected(pair[1]):
+			sig.connect(pair[1])
+		elif not on and sig.is_connected(pair[1]):
+			sig.disconnect(pair[1])
+
+
+func _on_sensor_found(info: Dictionary) -> void:
+	var addr := str(info.get("address", ""))
+	for d: Dictionary in found_sensors:
+		if str(d.get("address", "")) == addr:
+			return
+	found_sensors.append(info.duplicate(true))
+	_rebuild_sensors_page()
+
+
+func _on_sensor_status(_status: String, _detail: String) -> void:
+	_rebuild_sensors_page()
+
+
+func _on_heart_rate(bpm: int) -> void:
+	if bpm != _shown_bpm:
+		_shown_bpm = bpm
+		_rebuild_sensors_page()
 
 
 # --- strava ----------------------------------------------------------------------------------
@@ -673,11 +846,11 @@ func current_relay_url() -> String:
 func pedal_fields() -> Array:
 	return [
 		{
-			"id": "pedal_ui",
-			"label": t("APP_SET_PEDAL_UI_ON"),
+			"id": "pedal_nav",
+			"label": t("APP_SET_PEDAL_NAV_ON"),
 			"type": "toggle",
-			"get": func() -> Variant: return p().pedal_ui,
-			"set": set_pedal_ui
+			"get": func() -> Variant: return p().pedal_nav,
+			"set": set_pedal_nav
 		},
 		{
 			"id": "scan_interval",
@@ -688,14 +861,15 @@ func pedal_fields() -> Array:
 			"step": 0.2,
 			"unit": "s",
 			"decimals": 1,
+			"enabled": func() -> bool: return p().pedal_nav,
 			"get": func() -> Variant: return p().scan_interval_s,
 			"set": set_scan_interval
 		},
 	]
 
 
-func set_pedal_ui(v: Variant) -> void:
-	_set_profile("pedal_ui", bool(v))
+func set_pedal_nav(v: Variant) -> void:
+	_set_profile("pedal_nav", bool(v))
 	set_scanning(scanning_enabled())
 
 
@@ -939,6 +1113,8 @@ func _refresh_status(section: String) -> void:
 			)
 			if is_making_trainer_safe():
 				status_label.text += "\n" + t("APP_SET_TRAINER_SAFE")
+		"sensors":
+			status_label.text = t("APP_SET_SENSORS_HELP")
 		"controls":
 			status_label.text = all_bindings_text()
 		"controls_reset":

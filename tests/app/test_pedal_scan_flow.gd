@@ -83,20 +83,68 @@ func test_scan_interval_follows_the_profile() -> void:
 	assert_ne(menu(s).highlighted(), before, "focus moved after one interval")
 
 
-func test_menus_follow_the_input_router_pedal_ui() -> void:
+func test_menus_follow_the_input_router_pedal_nav() -> void:
 	fx.give_profile()
-	fx.input.set("pedal_ui", false)
+	fx.input.set("pedal_nav", false)
 	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
 	assert_false(menu(s).scanning, "a controller rider with pedal UI off")
-	fx.input.set("pedal_ui", true)
+	fx.input.set("pedal_nav", true)
 	var s2 := open_screen(AppPickerScreen.new(), {"mode": "solo"})
 	assert_true(menu(s2).scanning)
+
+
+## Pedal navigation is opt-in: with it off no menu scans, and surge and coast pick and back out
+## nothing; keyboard and controller actions work as always.
+func test_without_pedal_navigation_surge_and_coast_do_nothing() -> void:
+	fx.give_profile()
+	fx.input.set("pedal_nav", false)
+	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
+	var m := menu(s)
+	assert_false(m.pedal_nav)
+	var left: Array = []
+	s.leaving.connect(func(state: String) -> void: left.append(state))
+	s.tick(30.0)
+	assert_eq(m.highlighted(), 0, "no scan highlight cycling")
+	s.feed_gesture(Wl.G_SURGE)
+	s.feed_gesture(Wl.G_COAST)
+	assert_eq(left, [], "a surge picks nothing and a coast backs out of nothing")
+	s.feed_action(&"down")
+	assert_eq(m.highlighted(), 1)
+	s.feed_action(&"confirm")
+	assert_eq(left.size(), 1, "confirm still picks")
+
+
+func test_pedal_navigation_on_scans_picks_and_shows_the_surge_graph() -> void:
+	fx.give_profile()
+	fx.input.set("pedal_nav", true)
+	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
+	assert_true(menu(s).pedal_nav)
+	assert_true(s.surge_graph.enabled)
+	var left: Array = []
+	s.leaving.connect(func(state: String) -> void: left.append(state))
+	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(left.size(), 1, "a surge picks")
+	fx.input.set("pedal_nav", false)
+	var off := open_screen(AppPickerScreen.new(), {"mode": "solo"})
+	assert_false(off.surge_graph.enabled, "no graph without pedal navigation")
+
+
+func test_the_pedal_navigation_setting_reaches_open_menus_at_once() -> void:
+	fx.give_profile()
+	fx.input.set("pedal_nav", false)
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	assert_false(menu(s).pedal_nav)
+	fx.input.set("pedal_nav", true)
+	s.set_pedal_nav(true)
+	assert_true(menu(s).pedal_nav)
+	assert_true(menu(s).scanning)
+	assert_true(s.surge_graph.enabled)
 
 
 func test_without_a_router_the_profile_decides() -> void:
 	var p := fx.give_profile()
 	fx.services.input = null
-	p.pedal_ui = false
+	p.pedal_nav = false
 	p.autopilot_default = false
 	var s := open_screen(AppPickerScreen.new(), {"mode": "solo"})
 	assert_false(menu(s).scanning)

@@ -47,6 +47,8 @@ var results: GameResults = null
 var has_results: bool = false
 var fit_path: String = ""
 var summary: Dictionary = {}
+## The local rider's average and maximum heart rate (only when the ride has a heart rate).
+var hr_label: Label = null
 var unlocks: Array = []
 var upload_state: String = ""
 var upload_detail: String = ""
@@ -140,6 +142,11 @@ func _build() -> void:
 			wkg_label = AppStyle.label(wkg, AppStyle.FONT_HEADING, AppStyle.ACCENT)
 			wkg_label.name = "Wkg"
 			_side.add_child(wkg_label)
+	var hr := hr_text(summary)
+	if hr != "":
+		hr_label = AppStyle.label(hr, AppStyle.FONT_HEADING, AppStyle.TEXT)
+		hr_label.name = "HeartRate"
+		_side.add_child(hr_label)
 	unlocks_label = AppStyle.paragraph("", AppStyle.FONT_BODY, AppStyle.GOOD)
 	unlocks_label.name = "Unlocks"
 	_side.add_child(unlocks_label)
@@ -203,10 +210,10 @@ func _on_leave() -> void:
 			services.bus.ride_saved.disconnect(_on_ride_saved)
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): the session's Autopilot
-## (params.autopilot, from the session screen) counts as well as InputRouter.pedal_ui_active().
-func scanning_enabled() -> bool:
-	return bool(params.get("autopilot", false)) or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): the session's Autopilot (params.autopilot, from the session
+## screen) counts as well as InputRouter.pedal_nav_active().
+func pedal_nav_enabled() -> bool:
+	return bool(params.get("autopilot", false)) or super.pedal_nav_enabled()
 
 
 static func grade_color(grade: String) -> Color:
@@ -403,6 +410,15 @@ static func unlock_names(game_id: String, ids: Array) -> PackedStringArray:
 		var named := String(TranslationServer.translate(key)) if game_id != "" else key
 		out.append(named if named != key else AppScreen.t(id))
 	return out
+
+
+## "Heart rate 142 bpm average · 171 max" from the ride summary, or "" without a heart rate.
+static func hr_text(ride: Dictionary) -> String:
+	var avg := float(ride.get("avg_heart_rate_bpm", -1.0))
+	var mx := float(ride.get("max_heart_rate_bpm", -1.0))
+	if avg <= 0.0 or mx <= 0.0:
+		return ""
+	return AppScreen.t("APP_RESULTS_HR").format(["%.0f" % avg, "%.0f" % mx])
 
 
 ## Custom stats as "key: value · key: value" in the game's order (keys are string-table keys

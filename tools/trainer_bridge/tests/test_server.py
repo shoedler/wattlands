@@ -203,6 +203,63 @@ class UnlockedServerTest(ServerTest):
         self.assertTrue(hello["result"]["writes_allowed"])
 
 
+@unittest.skipUnless(HAVE_WEBSOCKETS, "websockets is not installed")
+class TwoClientTest(unittest.IsolatedAsyncioTestCase):
+    """A trainer and a heart rate sensor: two sockets, each with its own backend."""
+
+    async def start(self, factory) -> int:
+        self.first = FakeBackend()
+        ready = asyncio.get_running_loop().create_future()
+        self.task = asyncio.create_task(server.serve(
+            self.first, port=0, ready=ready, allow_writes=False, backend_factory=factory))
+        return await asyncio.wait_for(ready, 5)
+
+    async def asyncTearDown(self) -> None:
+        self.task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await self.task
+
+    async def call(self, ws, req_id: int, op: str, **fields) -> dict:
+        msg = {"id": req_id, "op": op}
+        msg.update(fields)
+        await ws.send(json.dumps(msg))
+        while True:
+            reply = json.loads(await asyncio.wait_for(ws.recv(), 5))
+            if "event" not in reply:
+                return reply
+
+    async def test_second_client_gets_its_own_backend(self) -> None:
+        made: list = []
+
+        def factory():
+            made.append(FakeBackend())
+            return made[-1]
+
+        port = await self.start(factory)
+        url = "ws://127.0.0.1:%d" % port
+        async with connect(url) as trainer, connect(url) as hr:
+            self.assertTrue((await self.call(trainer, 1, "connect", address="AA"))["ok"])
+            self.assertTrue((await self.call(hr, 1, "connect", address="BB"))["ok"])
+            self.assertEqual(len(made), 1)
+            self.assertIn(("connect", "AA"), self.first.calls)
+            self.assertIn(("connect", "BB"), made[0].calls)
+            write = await self.call(hr, 2, "write", service="180d", char="2a37", data="00")
+            self.assertFalse(write["ok"])
+            self.assertEqual(write["error"], server.HW_MESSAGE)
+            third = await connect(url)
+            with self.assertRaises(ConnectionClosed):
+                await asyncio.wait_for(third.recv(), 5)
+
+    async def test_without_a_factory_a_second_client_is_busy(self) -> None:
+        port = await self.start(None)
+        url = "ws://127.0.0.1:%d" % port
+        async with connect(url) as first:
+            self.assertTrue((await self.call(first, 1, "hello"))["ok"])
+            second = await connect(url)
+            with self.assertRaises(ConnectionClosed):
+                await asyncio.wait_for(second.recv(), 5)
+
+
 class LockTest(unittest.TestCase):
     def test_default_follows_the_environment(self) -> None:
         bridge = server.BridgeServer(FakeBackend())

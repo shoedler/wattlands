@@ -35,6 +35,7 @@ How to start the app for these tests: the exported build (`node tools/export_win
 ## 2. Connect and read-only data in the app
 
 - [ ] Start the app as above (exported build, or from source with `--allow-hw`). Expected: auto-connect (or connect from Settings), status "ready", live power and cadence on the title screen within 2 s of pedaling.
+- [ ] Heart rate sensor: wear a chest strap, or set a Garmin watch to Broadcast Heart Rate, and pair it in Settings > Trainer > Sensors (Scan, then the sensor). Expected: status "ready" and a live bpm that matches the strap or watch. Switch the sensor off and on (or walk out of range and back). Expected: it reconnects by itself, also after an app restart. In a session the HUD shows the bpm next to the watts, and the saved FIT has heart rate in its records and avg/max heart rate in its laps and session.
 - [ ] Another app holding control (start the Wahoo app first, connected): Expected: "another app may hold control" message, no crash.
 - [ ] Mid-ride, start Zwift or the Wahoo app and let it take control. Expected: the session HUD shows "Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect." in the banner area, with one warning sound, until the trainer is ready again.
 - [ ] Let the Wahoo app hold control, then start a session from the lobby without regaining it. Expected: the session HUD shows the same notice from its first frame, with one warning sound, until the trainer is ready again (Settings, connect the same trainer).
@@ -57,7 +58,8 @@ How to start the app for these tests: the exported build (`node tools/export_win
 
 ## 7. Coasting and panic
 
-- [ ] Stop pedaling in ERG. Expected: after 3 s the target falls to the floor (max(30% FTP, 50 W)); after 10 s a solo session pauses.
+- [ ] Stop pedaling in ERG. Expected: after 3 s the target falls to the floor (max(30% FTP, 50 W)); after 5 s a solo session pauses and the pause symbol shows; 1 s of pedaling at 30 rpm or more resumes it, and the target ramps back from the floor at 30 W/s.
+- [ ] In a multiplayer session, stop pedaling on one machine only. Expected: that rider sees the pause symbol after 5 s and the others ride on; once every human rider has stopped, the session pauses on every machine; it resumes when one rider pedals again.
 - [ ] Hold Backspace for 1 s during an ERG interval. Expected: ERG off and SIM 0% immediately; the trainer stays safe until you resume.
 - [ ] During a SIM sprint, trigger panic. Expected: grade 0 and wind 0 at once.
 

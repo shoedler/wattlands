@@ -6,23 +6,23 @@ extends GutTest
 const H := preload("res://tests/games/fishing/rules/fishing_rules_harness.gd")
 
 
-func _fight(species: String, t_nom: float, runs: int, trip: String = "free_30") -> H:
+func _fight(species: String, t_nom: float, runs: int, trip: String = "base_60") -> H:
 	var probe := H.new()
 	probe.content = H.load_content(trip)
 	var one: Array[FishingPlanSlot] = [H.make_slot(probe.content, species, 0, t_nom, runs)]
 	var h := H.new()
 	h.setup(trip, 1, 5, [one])
 	h.follow_band[0] = true
-	assert_true(h.run_to_state(0, FishingConst.ST_FIGHT, 1200.0), "the fight starts")
+	assert_true(h.run_to_action(0, FishingConst.A_FIGHT, 1200.0), "the fight starts")
 	return h
 
 
 func test_run_k_of_n_comes_due_at_s_1_minus_k_over_n_plus_1() -> void:
-	var h := _fight("tuna", 300.0, 3)
-	var l := h.lane()
+	var h := _fight("tuna", 220.0, 3)
+	var l := h.rider()
 	var due_s: Array[float] = []
 	var fired := 0
-	while l.state == FishingConst.ST_FIGHT and h.state.t < 2000.0:
+	while l.action == FishingConst.A_FIGHT and h.state.t < 2000.0:
 		h.step()
 		if l.fish.runs_fired > fired:
 			fired = l.fish.runs_fired
@@ -39,8 +39,8 @@ func test_run_k_of_n_comes_due_at_s_1_minus_k_over_n_plus_1() -> void:
 
 
 func test_runs_coming_due_in_a_stagger_are_skipped() -> void:
-	var h := _fight("tuna", 300.0, 3)
-	var l := h.lane()
+	var h := _fight("tuna", 220.0, 3)
+	var l := h.rider()
 	h.rescue[0] = true
 	h.run(1.0)
 	l.fish.s = 0.45  # runs 1 and 2 (0.75, 0.5) are due now
@@ -51,8 +51,8 @@ func test_runs_coming_due_in_a_stagger_are_skipped() -> void:
 
 
 func test_a_run_shifts_the_band_and_takes_the_fish_out_and_deep() -> void:
-	var h := _fight("tuna", 300.0, 0)
-	var l := h.lane()
+	var h := _fight("tuna", 220.0, 0)
+	var l := h.rider()
 	h.run(2.0)
 	var c0 := l.band_center
 	var d0 := l.fish.d
@@ -60,15 +60,15 @@ func test_a_run_shifts_the_band_and_takes_the_fish_out_and_deep() -> void:
 	l.fish.run_end_t = h.state.t + 20.0
 	h.run(2.0)
 	assert_almost_eq(l.band_center, c0 + 6.0, 0.15, "+10 rpm shift, sliding 3 rpm/s")
-	assert_almost_eq(l.fish.d, minf(d0 + 8.0, 120.0), 0.06, "out at 4 m/s toward d_max")
+	assert_almost_eq(l.fish.d, minf(d0 + 8.0, 100.0), 0.06, "out at 4 m/s toward d_max")
 	assert_gt(l.fish.z, 0.9, "sounding deep")
 	h.run(19.0)
 	assert_false(l.fish.run_active, "the run ends at its scheduled end")
 
 
 func test_jumps_break_the_surface() -> void:
-	var h := _fight("marlin", 640.0, 0, "free_120")
-	var l := h.lane()
+	var h := _fight("marlin", 320.0, 0, "base_60")
+	var l := h.rider()
 	l.fish.run_active = true
 	l.fish.run_end_t = h.state.t + 25.0
 	l.slots[0].run_kind = FishingSpeciesDef.RUN_JUMP

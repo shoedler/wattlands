@@ -55,7 +55,15 @@ const GAME: Dictionary = {
 	"telemetry":
 	{
 		"req": ["tm"],
-		"ints": ["tm.peer", "tm.applied_target_w", "tm.gear", "tm.phase_index", "tm.acks[].id"]
+		"ints":
+		[
+			"tm.peer",
+			"tm.applied_target_w",
+			"tm.gear",
+			"tm.phase_index",
+			"tm.acks[].id",
+			"tm.heart_rate_bpm"
+		]
 	},
 	"clock_ping": {"req": ["t0"], "ints": []},
 	# host -> all

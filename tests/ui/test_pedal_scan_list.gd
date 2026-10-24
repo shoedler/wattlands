@@ -228,6 +228,46 @@ func test_auto_confirm_without_scanning() -> void:
 	assert_eq(get_signal_parameters(_list, "item_chosen"), [1, "item1", true])
 
 
+# --- pedal navigation off (opt-in, BRIEF 3.5) -------------------------------------------------
+
+
+func test_without_pedal_navigation_nothing_scans_or_auto_confirms() -> void:
+	_list.pedal_nav = false
+	_list.erg_auto_confirm = true
+	_list.set_items(_items(3))
+	_run(30.0)
+	assert_eq(_list.highlighted(), 0, "no scan highlight cycling")
+	assert_signal_not_emitted(_list, "item_chosen")
+	assert_eq(_list.auto_confirm_left_s(), INF, "no auto-confirm countdown")
+
+
+func test_without_pedal_navigation_surge_and_coast_do_nothing() -> void:
+	_list.pedal_nav = false
+	_list.set_items(_items(3))
+	_list.feed_gesture(Wl.G_SURGE)
+	_list.feed_gesture(Wl.G_COAST)
+	assert_signal_not_emitted(_list, "item_chosen")
+	assert_signal_not_emitted(_list, "backed_out")
+	_list.feed_action(&"down")
+	assert_eq(_list.highlighted(), 1, "up and down still move")
+	_list.feed_action(&"confirm")
+	assert_eq(get_signal_parameters(_list, "item_picked"), [1, "item1", "action"])
+	_list.feed_action(&"back")
+	assert_signal_emit_count(_list, "backed_out", 1)
+
+
+func test_the_hint_names_the_keyboard_without_pedal_navigation() -> void:
+	_list.set_items(_items(2))
+	var hint := _list.get_node("Hint") as Label
+	_list.tick(0.05)
+	assert_eq(hint.text, tr("UI_SCAN_HINT"))
+	_list.pedal_nav = false
+	assert_eq(hint.text, tr("UI_NAV_HINT"))
+	_list.pedal_nav = true
+	_list.tick(0.05)
+	assert_eq(hint.text, tr("UI_SCAN_HINT"))
+
+
 func test_auto_confirm_counts_enabled_items_only() -> void:
 	_list.erg_auto_confirm = true
 	_list.set_items(
@@ -363,6 +403,8 @@ func test_listens_to_the_router_menu_input() -> void:
 	var router := WlInputRouter.new()
 	router.bus = bus
 	router.load_on_ready = false
+	router.profile = RiderProfile.new()
+	router.profile.pedal_nav = true
 	add_child_autofree(router)
 	var list := PedalScanList.new()
 	list.router = router
@@ -492,6 +534,43 @@ func test_rows_are_big_and_readable() -> void:
 	assert_not_null(_list.row(0).find_child("Detail", true, false))
 	assert_null(_list.row(1).find_child("Detail", true, false))
 	assert_null(_list.row(5))
+
+
+func test_icon_side_defaults_to_one_and_a_half_fonts_and_icon_px_overrides() -> void:
+	var tex := GradientTexture2D.new()
+	_list.set_items(
+		[
+			{"id": 0, "text": "Plain", "icon": tex},
+			{"id": 1, "text": "Big", "icon": tex, "icon_px": 200.0}
+		]
+	)
+	var side := _list.item_font_px * 1.5
+	assert_eq(_icon_of(0).custom_minimum_size, Vector2(side, side))
+	assert_eq(_icon_of(1).custom_minimum_size, Vector2(200, 200))
+
+
+func _icon_of(index: int) -> TextureRect:
+	for n in _list.row(index).find_children("*", "TextureRect", true, false):
+		return n as TextureRect
+	return null
+
+
+func test_a_long_row_scrolls_instead_of_widening_the_list() -> void:
+	var long_text := "2026-10-23T20:04:28Z  fishing  20:08  Upload failed: Forbidden (403)"
+	_list.set_items([{"id": 0, "text": "Short"}, {"id": 1, "text": long_text, "detail": long_text}])
+	var plain := Label.new()
+	plain.label_settings = WlTheme.label_settings(_list.item_font_px)
+	plain.text = long_text
+	add_child_autofree(plain)
+	assert_lt(
+		_list.get_combined_minimum_size().x,
+		plain.get_combined_minimum_size().x,
+		"the list is narrower than the whole text"
+	)
+	var text := _list.row(1).find_child("Text", true, false) as Label
+	assert_eq(text.text, long_text)
+	assert_true(text.get_parent() is WlMarqueeLabel)
+	assert_true(_list.row(1).find_child("Detail", true, false).get_parent() is WlMarqueeLabel)
 
 
 func test_highlight_has_a_marker_not_only_a_color() -> void:

@@ -1,28 +1,31 @@
 class_name FishingTripDef
 extends FishingRecord
-## One trip from content/fishing/trips/<content id>.json (brief 2.3 trip table; G0 contract).
+## One content from content/fishing/trips/<content id>.json (contract v2).
 ##
-## Free and Base trips (pre-rolled per rider):
-##   {"id": "free_30", "kind": "free", "label": "FISHING_CONTENT_FREE_30", "area": "coral_bank",
-##    "total_min": 30, "ride_out": {"duration_s": 300, "target_pct": 50, "ramp_to_pct": 65},
-##    "fishing_s": 1320, "species_weights": {"mackerel": 45, "mahi": 30, "tuna": 25},
-##    "marlin_slot": 0, "marlin_p": 0.0, "fight_cap_frac": 0.4, "top_pct": 0, "k_rmin": 1.5}
-##   fishing_s = (N - 8) min; marlin_slot is the 1-based fight slot that is a marlin with
-##   probability marlin_p (free_90 and free_120: 2 and 0.3; 0 = none); top_pct 100 caps every
-##   target and range at 100 % (base_60; 0 = no extra cap).
-## Threshold and e2e trips (one shared schedule):
+## Free Roam (kind "roam"): {"id": "roam_30", "kind": "roam", "label": "FISHING_CONTENT_ROAM_30",
+##   "minutes": 30}: play time in minutes from the start (the first 5 min are the drive-out
+##   warm-up); the fixed map is content/fishing/map.json.
+## Workouts, on the endless map:
+##   Base (pre-rolled per rider):
+##   {"id": "base_60", "kind": "base", "label": "FISHING_CONTENT_BASE_60", "total_min": 60,
+##    "ride_out": {"duration_s": 300, "target_pct": 50, "ramp_to_pct": 65}, "fishing_s": 3120,
+##    "species_weights": {"mackerel": 60, "mahi": 40}, "fight_cap_frac": 0.25, "top_pct": 100,
+##    "k_rmin": 3}
+##   top_pct 100 caps every target and range at 100 % (0 = no extra cap).
+##   Threshold and e2e (one shared schedule):
 ##   {"id": "e2e_2min", "kind": "e2e", ..., "ride_out": {"duration_s": 15, "target_pct": 50},
 ##    "reel_pct": 55, "schedule": {"first_reel_s": 20, "reel_s": 0, "fights": 1,
 ##    "species": "mackerel", "base_pct": 62, "change_pct": 4, "band_offset": 3, "t_nom_s": 45,
 ##    "max_s": 70, "runs": 0}}
 ##   Reels are fixed: first_reel_s, then reel_s between fights. band_offset (optional) overrides
-##   the species' offset; runs n draws its dur_s and peak like the species table (threshold: 3).
+##   the species' offset; runs n draws its dur_s and peak like the species table.
 ##   reel_pct (optional) fixes the Reel target and ignores the rider's reel_pct option.
 
 var id: String = ""
 var kind: String = ""
 var label: String = ""
-var area: String = "coral_bank"
+## Free Roam: play minutes.
+var minutes: float = 0.0
 var total_min: float = 0.0
 var ride_out_s: float = 0.0
 var ride_out_pct: float = 0.0
@@ -31,8 +34,6 @@ var ride_out_ramp_to: float = -1.0
 var fishing_s: float = 0.0
 ## species id -> weight (Free and Base).
 var species_weights: Dictionary = {}
-var marlin_slot: int = 0
-var marlin_p: float = 0.0
 var fight_cap_frac: float = 0.4
 var top_pct: float = 0.0
 var k_rmin: float = 1.5
@@ -47,7 +48,7 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 	t.id = str(d.get("id", ""))
 	t.kind = str(d.get("kind", ""))
 	t.label = str(d.get("label", "FISHING_CONTENT_%s" % t.id.to_upper()))
-	t.area = str(d.get("area", "coral_bank"))
+	t.minutes = float(d.get("minutes", 0))
 	t.total_min = float(d.get("total_min", 0))
 	var ro: Dictionary = d.get("ride_out", {})
 	t.ride_out_s = float(ro.get("duration_s", FishingConst.RIDE_OUT_S))
@@ -55,14 +56,16 @@ static func from_dict(d: Dictionary) -> FishingTripDef:
 	t.ride_out_ramp_to = float(ro.get("ramp_to_pct", -1))
 	t.fishing_s = float(d.get("fishing_s", 0))
 	t.species_weights = (d.get("species_weights", {}) as Dictionary).duplicate()
-	t.marlin_slot = int(d.get("marlin_slot", 0))
-	t.marlin_p = float(d.get("marlin_p", 0))
 	t.fight_cap_frac = float(d.get("fight_cap_frac", 0.4))
 	t.top_pct = float(d.get("top_pct", 0))
 	t.k_rmin = float(d.get("k_rmin", 1.5))
 	t.reel_pct = int(d.get("reel_pct", -1))
 	t.schedule = (d.get("schedule", {}) as Dictionary).duplicate(true)
 	return t
+
+
+func is_roam() -> bool:
+	return kind == FishingConst.TRIP_ROAM
 
 
 func is_scheduled() -> bool:
@@ -83,7 +86,7 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 	var e: Dictionary = d
 	var trip_kind := str(e.get("kind", ""))
 	var kinds := [
-		FishingConst.TRIP_FREE,
+		FishingConst.TRIP_ROAM,
 		FishingConst.TRIP_BASE,
 		FishingConst.TRIP_THRESHOLD,
 		FishingConst.TRIP_E2E
@@ -93,6 +96,11 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 		return out
 	if str(e.get("id", "")) == "":
 		out.append("id missing")
+	if trip_kind == FishingConst.TRIP_ROAM:
+		var m := float(e.get("minutes", 0))
+		if m < 10.0 or m > 120.0:
+			out.append("minutes must be 10..120")
+		return out
 	var ro: Variant = e.get("ride_out", {})
 	if not ro is Dictionary or float((ro as Dictionary).get("duration_s", 0)) <= 0.0:
 		out.append("ride_out.duration_s must be positive")
@@ -102,7 +110,7 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 		var rp := int(e["reel_pct"])
 		if rp < FishingConst.REEL_PCT_MIN or rp > FishingConst.REEL_PCT_MAX:
 			out.append("reel_pct must be 50..70")
-	if trip_kind in [FishingConst.TRIP_FREE, FishingConst.TRIP_BASE]:
+	if trip_kind == FishingConst.TRIP_BASE:
 		if float(e.get("fishing_s", 0)) <= 0.0:
 			out.append("fishing_s must be positive")
 		var w: Variant = e.get("species_weights", {})
@@ -119,11 +127,6 @@ static func errors(d: Variant, species_ids: Array) -> Array[String]:
 			out.append("fight_cap_frac must be in (0, 0.4]")
 		if float(e.get("k_rmin", 1.5)) < 1.0:
 			out.append("k_rmin must be >= 1")
-		var mp := float(e.get("marlin_p", 0))
-		if mp < 0.0 or mp > 1.0:
-			out.append("marlin_p must be 0..1")
-		if int(e.get("marlin_slot", 0)) > 0 and not species_ids.has("marlin"):
-			out.append("marlin_slot needs the marlin species")
 	else:
 		var s: Variant = e.get("schedule", null)
 		if not s is Dictionary:

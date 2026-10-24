@@ -1,27 +1,45 @@
 extends Node
-## A still life of the Fishing view and HUD for art review (tools/screenshot
-## --scene=res://tests/games/fishing/view/preview/fishing_view_preview.tscn): four lanes in a
-## reel, a marlin fight, a pick and a Landing, from hand-made state (no rules run).
+## Art review of the view and HUD from hand-made riders (no rules run), one scene per scenario:
+## tools/screenshot --scene=res://tests/games/fishing/view/preview/fishing_view_<name>.tscn
+## (dock: four boats at the harbour, one stopped at its menu; fast: driving hard mid-ocean;
+## grouper: a fight in the deep; edge: stopped by the world's edge).
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
+
+@export var scenario: String = "dock"
 
 var game: FishingGame = null
 
 
 func _ready() -> void:
-	game = FX.make_game(4, 0)
+	var n := 4 if scenario == "dock" else 2
+	game = FX.make_game(n, 0)
 	add_child(game)
 	var st := game.state
-	st.t = 200.0
-	FX.set_reel(st.lane(0), 55.0)
-	FX.set_fight(st.lane(1), 3, 120.0, 0.6, 0.55, 0.1)
-	st.lane(1).cosmetics.assign([1, 1, 1, 1])
-	FX.set_pick(st.lane(2), 1)
-	FX.set_landing(st.lane(3), 6.0, 0.7)
-	st.hookup_level = 2
-	st.team_points = 345
-	st.team_fish = 4
-	st.catches.assign([0, 0, 0, 1, 1, 1, 2, 2, 0, 3, 0, 0])
+	st.t = 600.0
+	var me := st.rider(0)
+	var other := st.rider(1)
+	match scenario:
+		"dock":
+			FX.set_menu(me, 120.0, 0)
+			FX.set_drive(other, 150.0, 4.0)
+			FX.set_wait(st.rider(2), 60.0, 1, 10.0, 4.0)
+			FX.set_drive(st.rider(3), 40.0, 2.0)
+			st.rider(3).paused = true
+			me.points = 120
+			other.points = 340
+		"fast":
+			FX.set_drive(me, 3000.0, 7.5)
+			me.pitch_deg = 9.0
+			me.wake = 1.0
+			me.p_eff_w = 330.0
+			FX.set_fight(other, 3080.0, 3, 25.0, 12.0)
+		"grouper":
+			FX.set_fight(me, 7100.0, 8, 30.0, 420.0, 0.55, 0.05)
+			FX.set_wait(other, 6960.0, 6, 14.0, 120.0)
+		"edge":
+			FX.set_menu(me, 8930.0, 3)
+			FX.set_drive(other, 8700.0, 5.0)
 	var pv := PixelViewport.new()
 	pv.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(pv)

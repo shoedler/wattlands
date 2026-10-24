@@ -19,6 +19,10 @@ extends Node
 ## content id "<scheme>:<value>" with a listed scheme is accepted although it is not in
 ## `contents` (Workout's "zwo:<absolute path>" imports any .zwo file); the platform passes it
 ## to ctx.content_id unchanged and the game validates the value (content_allowed()).
+## content_cards (optional, default {}): {"<content id>": {image?: res path of a png, detail?:
+## string key, featured?: bool}} gives a content its own card in the lobby's content picker
+## (icon, a second line of text, featured ones listed first and drawn larger). A missing or
+## unreadable image logs a warning and the card has no icon.
 ##
 ## Validation (validate_manifest) names the failing field first: "<field>: <reason>", for
 ## example "presentation: must be \"2d\" or \"3d\"" or "options[1].default: 7 is outside
@@ -27,8 +31,10 @@ extends Node
 ## pixel_base [w, h] (positive whole numbers) for 2d; entry loads and extends GameModule;
 ## contents a non-empty list of unique ids containing default/e2e/zero_input_content;
 ## first_run_priority any whole number; picker_image a String (the file is only checked
-## for a warning); option entries as above, an int default inside min..max and on the
-## min + n * step grid, a choice default among the choice values, unknown types invalid.
+## for a warning); content_cards a Dictionary keyed by ids from `contents` whose values are
+## Dictionaries with only image (String), detail (String) and featured (bool); option entries as
+## above, an int default inside min..max and on the min + n * step grid, a choice default
+## among the choice values, unknown types invalid.
 ##
 ## Translations: each valid game's content/<id>/strings.csv is imported by Godot into
 ## strings.<locale>.translation next to it (read from strings.csv.import); the registry adds
@@ -236,12 +242,37 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 			seen_schemes[str(sv)] = true
 	if m.has("picker_image") and not (m["picker_image"] is String):
 		return "picker_image: must be a res:// path string"
+	if m.has("content_cards"):
+		var cards_err := _check_content_cards(m["content_cards"], seen)
+		if cards_err != "":
+			return cards_err
 	for f: String in ["options", "player_options"]:
 		if not m.has(f):
 			continue
 		var err := validate_option_entries(m[f], f)
 		if err != "":
 			return err
+	return ""
+
+
+## "" or "content_cards...: reason" for a content_cards value; `known` holds the content ids.
+func _check_content_cards(cards: Variant, known: Dictionary) -> String:
+	if not (cards is Dictionary):
+		return "content_cards: must be an object keyed by content id"
+	var types := {"image": TYPE_STRING, "detail": TYPE_STRING, "featured": TYPE_BOOL}
+	for key: Variant in (cards as Dictionary).keys():
+		var cid := str(key)
+		if not (key is String) or not known.has(cid):
+			return 'content_cards: "%s" is not one of contents' % cid
+		var card: Variant = cards[key]
+		if not (card is Dictionary):
+			return 'content_cards["%s"]: must be an object' % cid
+		for f: Variant in (card as Dictionary).keys():
+			if not types.has(f):
+				return 'content_cards["%s"].%s: unknown key (image, detail, featured)' % [cid, f]
+			if typeof(card[f]) != int(types[f]):
+				var want := "a bool" if types[f] == TYPE_BOOL else "a string"
+				return 'content_cards["%s"].%s: must be %s' % [cid, f, want]
 	return ""
 
 
@@ -481,6 +512,12 @@ func add_game(m: Dictionary, folder: String, allow_template: bool = false) -> St
 	if pw != "":
 		warns.append(pw)
 		push_warning("GameRegistry: %s: %s (the picker draws a generated title card)" % [id, pw])
+	var cards: Dictionary = norm["content_cards"]
+	for cid: String in cards.keys():
+		var cw := content_card_warning(cid, cards[cid])
+		if cw != "":
+			warns.append(cw)
+			push_warning("GameRegistry: %s: %s (the content card has no icon)" % [id, cw])
 	_warnings[id] = warns
 	_load_translations(id)
 	return ""
@@ -549,11 +586,13 @@ static func content_allowed(m: Dictionary, content_id: String) -> bool:
 
 
 ## A copy with whole numbers as int and optional fields filled (first_run_priority 0,
-## picker_image "", options [], player_options [], content_schemes []).
+## picker_image "", options [], player_options [], content_schemes [], content_cards {}).
 static func normalized(m: Dictionary) -> Dictionary:
 	var out := m.duplicate(true)
 	if not out.has("content_schemes"):
 		out["content_schemes"] = []
+	if not out.has("content_cards"):
+		out["content_cards"] = {}
 	for f: String in ["min_players", "max_players"]:
 		out[f] = int(out[f])
 	out["first_run_priority"] = int(out.get("first_run_priority", 0))
@@ -584,6 +623,19 @@ static func picker_image_warning(m: Dictionary) -> String:
 	var res: Resource = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_REUSE)
 	if not (res is Texture2D):
 		return "picker_image %s is unreadable" % p
+	return ""
+
+
+## "" or why the image of content `cid`'s card cannot be used (missing or unreadable).
+static func content_card_warning(cid: String, card: Dictionary) -> String:
+	var p := str(card.get("image", ""))
+	if p == "":
+		return ""
+	if not ResourceLoader.exists(p):
+		return 'content_cards["%s"].image %s is missing' % [cid, p]
+	var res: Resource = ResourceLoader.load(p, "", ResourceLoader.CACHE_MODE_REUSE)
+	if not (res is Texture2D):
+		return 'content_cards["%s"].image %s is unreadable' % [cid, p]
 	return ""
 
 

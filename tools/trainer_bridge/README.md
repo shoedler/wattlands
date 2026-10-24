@@ -23,7 +23,7 @@ bleak needs prebuilt `winrt-*` wheels on Windows. Use a Python version they exis
 
 | Command | What it does |
 | --- | --- |
-| `python -m trainer_bridge serve [--port 8765]` | Runs the GATT proxy on `ws://127.0.0.1:<port>` for the app. Loopback only, one client at a time. |
+| `python -m trainer_bridge serve [--port 8765]` | Runs the GATT proxy on `ws://127.0.0.1:<port>` for the app. Loopback only, at most two clients at a time (the trainer and a heart rate sensor), each with its own device. |
 | `python -m trainer_bridge probe [--seconds 30] [--address AA:BB:...] [--scan-seconds 10]` | Scans for FTMS trainers (service 0x1826 or a name containing KICKR), connects to `--address` or the first one found, reads Device Information, Fitness Machine Feature, Supported Power Range and Supported Resistance Level Range, then prints parsed Indoor Bike Data and Machine Status for 30 s. Read-only. |
 | `python -m trainer_bridge probe --allow-control` | The same, plus Request Control and SIM flat (grade 0), after you type the confirmation phrase `I AM ON THE TRAINER`. Refused outright while `WATTLANDS_NO_HW_CONTROL=1` is set. |
 
@@ -36,7 +36,7 @@ Step 1 of `docs/HARDWARE_TEST_PLAN.md` uses the read-only probe. Close Zwift and
 - The probe never writes unless `--allow-control` is given and the phrase is typed. Even then it only sends Request Control and SIM flat, the trainer's gentlest state.
 - Hardware lock (BRIEF 1): while the bridge's environment has `WATTLANDS_NO_HW_CONTROL=1` (every automated run in this repo sets it through `tools/env.sh`), `serve` refuses every `write` with `hardware control locked`, and `probe --allow-control` refuses to start. Scanning, reading and subscribing still work. `BridgeTransport` refuses writes under the same lock on the app side, and `FtmsClient` refuses control writes before either.
 - `serve` binds to 127.0.0.1 only, and `BridgeTransport` only connects to loopback URLs.
-- When the app disconnects, the bridge stops scanning and releases the trainer.
+- When a client disconnects, the bridge stops its scan and releases its device.
 
 ## Protocol
 

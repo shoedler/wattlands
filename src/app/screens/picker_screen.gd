@@ -16,8 +16,11 @@ func _build() -> void:
 	var page := make_page(
 		t("APP_PICKER_TITLE_HOST") if mode == "host" else t("APP_PICKER_TITLE_SOLO")
 	)
+	(page["footer"] as Control).visible = false
+	scroll_menu_column(page["right"] as Control)
 	var left: VBoxContainer = page["left"]
 	_scroll = ScrollContainer.new()
+
 	_scroll.name = "CardScroll"
 	_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED

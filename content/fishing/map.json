@@ -1,0 +1,120 @@
+{
+	"id": "roam",
+	"label": "FISHING_MAP_ROAM",
+	"length_m": 9000,
+	"edge_x_m": 8950,
+	"zones": [
+		{
+			"id": "dock",
+			"x_m": [
+				0,
+				300
+			],
+			"colour": "#c9b48a",
+			"label": "FISHING_ZONE_DOCK"
+		},
+		{
+			"id": "shallows",
+			"x_m": [
+				300,
+				2000
+			],
+			"colour": "#7fc4b8",
+			"label": "FISHING_ZONE_SHALLOWS"
+		},
+		{
+			"id": "reef",
+			"x_m": [
+				2000,
+				4000
+			],
+			"colour": "#4f9c94",
+			"label": "FISHING_ZONE_REEF"
+		},
+		{
+			"id": "shelf",
+			"x_m": [
+				4000,
+				6000
+			],
+			"colour": "#357a86",
+			"label": "FISHING_ZONE_SHELF"
+		},
+		{
+			"id": "deep",
+			"x_m": [
+				6000,
+				8200
+			],
+			"colour": "#22546e",
+			"label": "FISHING_ZONE_DEEP"
+		},
+		{
+			"id": "abyss",
+			"x_m": [
+				8200,
+				9000
+			],
+			"colour": "#13304a",
+			"label": "FISHING_ZONE_ABYSS"
+		}
+	],
+	"floor_m": [
+		[
+			0,
+			3
+		],
+		[
+			300,
+			6
+		],
+		[
+			1000,
+			12
+		],
+		[
+			2000,
+			20
+		],
+		[
+			2600,
+			34
+		],
+		[
+			3200,
+			26
+		],
+		[
+			4000,
+			45
+		],
+		[
+			4600,
+			90
+		],
+		[
+			5300,
+			140
+		],
+		[
+			6000,
+			260
+		],
+		[
+			6800,
+			420
+		],
+		[
+			7600,
+			560
+		],
+		[
+			8200,
+			620
+		],
+		[
+			8400,
+			-1
+		]
+	]
+}

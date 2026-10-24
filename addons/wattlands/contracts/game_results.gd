@@ -21,12 +21,22 @@ var grade: String = "D"
 var score: float = 0.0
 ## Game-defined title or summary string key for the results screen.
 var summary_key: String = ""
+## The short tag in the Strava title "WATTLANDS: <game> - <ride_tag>" (for example
+## "Free Roam 30 min" or a plan name). "" falls back to the content title.
+var ride_tag: String = ""
+## Game stat lines for the Strava description, above the platform's averages (no heart rate).
+## A row may carry its own "ride_lines" (Array of String); each peer then uses its own row's
+## (own_ride_lines()).
+var ride_lines: Array[String] = []
 var rows: Array[Dictionary] = []
 ## Team-wide custom stats.
 var team: Dictionary = {}
 ## Unique per session (set by the GameHost) so a peer that receives results twice applies
 ## progress once.
 var session_id: String = ""
+## This peer's id, set locally by the GameHost before results_ready (never serialized, so every
+## peer's results stay identical).
+var own_peer: int = 0
 
 
 static func from_stats(stats: SessionStats, players: Array[PlayerSlot]) -> GameResults:
@@ -69,11 +79,25 @@ static func grade_from_fraction(f: float) -> String:
 	return "D"
 
 
+## The Strava lines for this peer: its own row's "ride_lines" when the game set them, else
+## ride_lines.
+func own_ride_lines() -> Array[String]:
+	var out: Array[String] = []
+	var own: Variant = row(own_peer).get("ride_lines", null)
+	if own is Array and not (own as Array).is_empty():
+		for line: Variant in own:
+			out.append(str(line))
+		return out
+	return ride_lines.duplicate()
+
+
 func to_dict() -> Dictionary:
 	return {
 		"grade": grade,
 		"score": score,
 		"summary_key": summary_key,
+		"ride_tag": ride_tag,
+		"ride_lines": ride_lines.duplicate(),
 		"rows": rows.duplicate(true),
 		"team": team.duplicate(true),
 		"session_id": session_id,
@@ -85,6 +109,9 @@ static func from_dict(d: Dictionary) -> GameResults:
 	r.grade = str(d.get("grade", "D"))
 	r.score = float(d.get("score", 0.0))
 	r.summary_key = str(d.get("summary_key", ""))
+	r.ride_tag = str(d.get("ride_tag", ""))
+	for line: Variant in d.get("ride_lines", []):
+		r.ride_lines.append(str(line))
 	var arr: Variant = d.get("rows", [])
 	if arr is Array:
 		for rw: Variant in arr:

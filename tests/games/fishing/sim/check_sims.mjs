@@ -1,35 +1,32 @@
 #!/usr/bin/env node
-// tests/games/fishing/sim/check_sims.mjs: asserts brief section 4.2's simulation matrix over the
-// reports tools/run_game_sim wrote (run_sims.sh names them).
+// tests/games/fishing/sim/check_sims.mjs: asserts Turbo Reel's simulation matrix over the reports
+// tools/run_game_sim wrote (run_sims.sh names them).
 //
-//   node tests/games/fishing/sim/check_sims.mjs build/fishing/sims [--only=S1,S10] [--fit] [--seeds=1,2,3]
+//   node tests/games/fishing/sim/check_sims.mjs build/fishing/sims [--only=ALL,R1,W3] [--fit]
 //
 // One PASS / FAIL / SKIP line per scenario (details of a failure indented below it); exit 1 when
-// any scenario failed, 2 on usage or I/O errors. A scenario whose reports are all missing is SKIP
-// (a subset run); one with some but not all of them is FAIL. ALL (every run) always runs.
+// any scenario failed, 2 on usage or I/O errors. A scenario without its reports is SKIP.
 //
-// Report names:
-//   s1_threshold               2 band-trackers
-//   s2_low, s2_high            threshold, 1 rider at erg+band:offset_rpm=-18 / +18
-//   s3_free30_seed<n>          4 band-trackers, seeds 1-5 (--full: 1-20)
-//   s4_ap_none, s4_ap_all      free_30 solo, erg:compliance=1.0, --autopilot=none / all
-//   s5_base60                  2 band-trackers
-//   s6_free120_marlin          1 band-tracker on the seed fishing_marlin_seed.gd found
-//   s7_threshold_drop          1 rider, erg+band+cadence_drop:rpm=40,at_s=600,for_s=20
-//   s8_<x>_a, s8_<x>_b         the same run twice (x: free30 in the full matrix, e2e in --quick)
-//   s10_e2e                    e2e_2min, 3 band-trackers
-//   s11_threshold_unverified   threshold, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
-// Scenario 9 (FIT) runs tools/fit_check on every FIT of every report with --fit.
+// Report names (run_sims.sh):
+//   r1_roam30_solo            roam_30, 1 band-tracker, Autopilot
+//   r2_roam30_four            roam_30, 4 band-trackers
+//   r3_roam30_bots_seed<n>    roam_30, 1 band-tracker + 3 bots, seeds 1-5
+//   r4_roam10_autopilot       roam_10, 1 rider at erg:compliance=1.0 (no band), Autopilot
+//   r5_roam30_unverified      roam_30, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
+//   r6_roam30_paused          roam_30, 2 band-trackers, slot 1 stops pedaling at 900 s for 60 s
+//   w1_threshold              threshold, 2 band-trackers
+//   w2_base60                 base_60, 2 band-trackers
+//   w3_e2e                    e2e_2min, 3 band-trackers
+//   d_roam_a, d_roam_b        roam_10, 2 band-trackers + 2 bots, seed 7, twice
+// FIT (--fit): tools/fit_check on every FIT with each rider's expected laps.
 //
-// Every run (ALL): the run completed; the plans carry no validator warnings; each request is
-// {mode ERG, target_pct, duration_s, reason pull|run|jump, source fishing} (or the Landing's
-// haptic), accepted, and its ERG target lies inside the range_pct of the rider's phase; each
-// applied record and each 1 Hz trace row is clamped only by the allowed rules (fishing_sim_lib
-// ALLOWED_CLAMPS; never ceiling, long_phase, limit_105 or limit_120); no applied record is left
-// unmatched; snapshots stay <= 2 KB; one FIT per human slot. Fight phases are the plan's WORK ERG
-// phases whose meta names a species.
+// Every run (ALL): completed; no plan warnings; every directive accepted; each request is a
+// Fishing ERG pull/run/jump inside its phase's range_pct (or the Landing's haptic) and is applied
+// clamped only by the allowed rules (never ceiling, long_phase, limit_105, limit_120); every trace
+// row likewise; every course grade 0..3 % and only in a Free Roam SIM game phase; every ERG phase
+// of the final plans obeys BRIEF 4.6.1 (longer than 300 s: <= 105 %); events valid; snapshots
+// <= 2 KB; one FIT per human slot.
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -37,8 +34,8 @@ import { fileURLToPath } from 'node:url';
 
 import {
   EPS,
+  GRADE_MAX_PCT,
   MAX_SNAPSHOT_BYTES,
-  S1_CLAMPS,
   SP,
   SPECIES,
   appliedProblems,
@@ -47,6 +44,7 @@ import {
   expectedLaps,
   fishingEvents,
   fmt,
+  gradeOf,
   isObj,
   median,
   requestShapeProblems,
@@ -56,19 +54,14 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const REPO = path.resolve(here, '..', '..', '..', '..');
 export const DEFAULT_SEEDS = [1, 2, 3, 4, 5];
-/** Fishing time per Free/Base trip (content/fishing/trips/<id>.json fishing_s), the fallback when
- *  the file can't be read. */
-export const FISHING_S = { free_20: 720, free_30: 1320, free_45: 2220, free_60: 3120, free_90: 4920, free_120: 6720, base_60: 3120 };
-export const FIGHT_CAP = { free: 0.4, base: 0.25 };
-export const S1 = { tuna: 4, fightMin: 240, fightMax: 420 };
-export const S2_WINDOW_S = 8;
-export const S3 = { endMaxS: 35 * 60, medianFish: 2, doubleHookups: 1 };
-export const S6 = { jumpsMin: 4, jumpsMax: 8, jumpMsMin: 20000, jumpMsMax: 30000, jumpPct: 104, capPct: 105 };
-export const S7 = { at: 600, forS: 20, rescueBy: 625, calmAfterS: 10 };
-export const S10 = { lanes: 3, cooldownByS: 135 };
-/** Scenario 11: unverified FTPs (x0.85, BRIEF 4.6.1) at 300 W and 200 W, haptics off for slot 1. */
-export const S11 = { name: 's11_threshold_unverified', ftp: [300, 200], hapticsOff: [1], factor: 0.85, tolW: 1, fights: 4 };
+/** Bot strategy efforts (FishingAutopilot.STRATEGY_TABLE): the driving power band / FTP. */
+export const STRATEGY_EFFORT = { vibe: 0.55, small: 0.75, mixed: 0.85, big: 1.0 };
+export const W1 = { tuna: 4, fightMin: 240, fightMax: 420 };
+export const W3 = { riders: 3, cooldownByS: 135 };
+export const R5 = { ftp: [300, 200], factor: 0.85, tolW: 1.5, hapticsOffPeer: 2 };
+export const R6 = { peer: 2, at: 900, forS: 60 };
 export const TOL_S = 0.051;
+const ROAM_LABELS = new Set(['FISHING_PHASE_DRIVE_OUT', 'FISHING_PHASE_ROAM']);
 
 // --- reading reports ---------------------------------------------------------------------------
 
@@ -80,419 +73,307 @@ export function loadReports(dir) {
     let r;
     try {
       r = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
-    } catch (err) {
-      throw new Error(`cannot read ${path.join(dir, f)}: ${err.message}`);
+    } catch {
+      continue;
     }
-    if (isObj(r) && r.schema === 1 && r.game_id === 'fishing') out[f.slice(0, -5)] = r;
+    if (isObj(r) && r.game_id === 'fishing' && r.schema === 1) out[f.slice(0, -5)] = r;
   }
   return out;
 }
 
-/** fishing_s of a trip: its content file, else FISHING_S. */
-export function fishingSeconds(contentId) {
-  try {
-    const t = JSON.parse(fs.readFileSync(path.join(REPO, 'content', 'fishing', 'trips', `${contentId}.json`), 'utf8'));
-    if (Number(t.fishing_s) > 0) return Number(t.fishing_s);
-  } catch {
-    // fall through to the table
-  }
-  return FISHING_S[contentId] ?? NaN;
-}
-
-export const gameEvents = (r) => fishingEvents(r.events);
-export const eventsOf = (r, type, lane = null) => gameEvents(r).filter((e) => e.type === type && (lane === null || e.l === lane));
-
-/** [{lane, peer}] of the human slots in slot order (the lane is the slot index). */
+/** [{lane, peer, ftp, bot}] in slot order. */
 export function lanes(r) {
-  return (r.slots ?? []).filter((s) => !s.is_bot).map((s) => ({ lane: Number(s.slot), peer: String(s.peer) }));
+  return (r.slots ?? []).map((s) => ({ lane: s.slot, peer: String(s.peer), ftp: Number(s.ftp), bot: s.is_bot === true }));
 }
 
-/** One rider's phases joined with the plan: [{index, kind, mode, label, start, end, ended_by, plan}]. */
-export function riderPhases(r, peer) {
-  const plan = r.plans?.[String(peer)]?.phases ?? [];
-  return (r.phases?.[String(peer)] ?? []).map((s) => ({ ...s, plan: plan[s.index] ?? {} }));
-}
+export const eventsOf = (r, type, lane = -1) => fishingEvents(r.events).filter((e) => e.type === type && (lane < 0 || e.l === lane));
 
-export const isFight = (p) => p.kind === 'WORK' && p.mode === 'ERG' && typeof p.plan?.meta?.species === 'string';
-export const fights = (r, peer) => riderPhases(r, peer).filter(isFight);
-const spanEnd = (p, r) => (p.end >= 0 ? Number(p.end) : Number(r.game_seconds ?? Infinity));
-export const fightSeconds = (r, peer) => sum(fights(r, peer).map((p) => spanEnd(p, r) - Number(p.start)));
-
-/** The rider's phase at game time t (the last one started at or before t). */
-export function phaseAt(r, peer, t) {
-  let at = null;
-  for (const p of riderPhases(r, peer)) if (Number(p.start) <= t + EPS) at = p;
-  return at;
+/** The phase span of `peer` running at game time t (null when none). */
+export function spanAt(r, peer, t) {
+  for (const s of r.phases?.[peer] ?? []) if (t + EPS >= s.start && (s.end < 0 || t < s.end - EPS)) return s;
+  return null;
 }
 
 export function cooldownStart(r, peer) {
-  const cd = riderPhases(r, peer).find((p) => p.kind === 'COOLDOWN');
-  return cd ? Number(cd.start) : NaN;
+  const s = (r.phases?.[peer] ?? []).find((x) => x.kind === 'COOLDOWN');
+  return s ? s.start : NaN;
 }
 
-// --- result helpers ------------------------------------------------------------------------------
+const result = (id, title, probs, info = '') => ({ id, title, ok: probs.length === 0, skip: false, probs, info });
+const skip = (id, title, why) => ({ id, title, ok: true, skip: true, probs: [], info: why });
 
-function result(id, title, problems, extra = '') {
-  return { id, status: problems.length === 0 ? 'PASS' : 'FAIL', summary: `${title}${extra ? `: ${extra}` : ''}`, details: problems };
-}
-const skip = (id, title, why) => ({ id, status: 'SKIP', summary: `${title}: ${why}`, details: [] });
+// --- ALL ------------------------------------------------------------------------------------------
 
-function pick(reports, names) {
-  const found = [];
-  const missing = [];
-  for (const n of names) (reports[n] ? found : missing).push(n);
-  return { found: found.map((n) => [n, reports[n]]), missing };
-}
-
-function argsProblems(name, r, want) {
-  const probs = [];
-  const a = r.args ?? {};
-  if (want.content && r.content_id !== want.content) probs.push(`${name}: content ${r.content_id}, wanted ${want.content}`);
-  if (want.players !== undefined && Number(a.players) !== want.players) probs.push(`${name}: players ${a.players}, wanted ${want.players}`);
-  if (want.seed !== undefined && Number(r.seed) !== want.seed) probs.push(`${name}: seed ${r.seed}, wanted ${want.seed}`);
-  return probs;
-}
-
-const completeProblems = (name, r) => (r.end_reason === 'complete' ? [] : [`${name}: end_reason ${r.end_reason}`]);
-
-// --- ALL: every run ------------------------------------------------------------------------------
-
-/** Problems with one directive entry (brief 2.3, 2.7, 6). `allowed` narrows the clamp rules. */
-export function directiveProblems(name, r, d, allowed = undefined) {
-  if (d.kind !== 'request') return [];
-  const at = `${name}: directive ${d.id} (peer ${d.peer}, t ${fmt(Number(d.t))})`;
-  const probs = requestShapeProblems(d.requested).map((p) => `${at}: ${p}`);
-  if (d.accepted !== true) probs.push(`${at}: not accepted (${d.reason})`);
-  probs.push(...appliedProblems(d.applied, allowed).map((p) => `${at}: ${p}`));
-  const req = d.requested ?? {};
-  if (req.mode === 'ERG' && typeof req.target_pct === 'number') {
-    const idx = isObj(d.applied) && Number.isInteger(d.applied.phase_index) ? d.applied.phase_index : phaseAt(r, d.peer, Number(d.t))?.index;
-    const ph = r.plans?.[String(d.peer)]?.phases?.[idx];
-    const range = ph?.range_pct;
-    if (!Array.isArray(range) || range.length !== 2) probs.push(`${at}: ERG ${req.target_pct}% in phase ${idx} (${ph?.label}), which has no range_pct`);
-    else if (req.target_pct < range[0] - EPS || req.target_pct > range[1] + EPS) probs.push(`${at}: ERG ${req.target_pct}% outside phase ${idx}'s range_pct [${range.join(', ')}]`);
-  }
-  return probs;
-}
-
-/** Problems of one run that every scenario shares. */
 export function runProblems(name, r) {
-  const probs = [...completeProblems(name, r)];
-  for (const [peer, w] of Object.entries(r.plan_warnings ?? {})) if (Array.isArray(w) && w.length) probs.push(`${name}: peer ${peer} plan warnings ${JSON.stringify(w)}`);
-  for (const d of r.directives ?? []) probs.push(...directiveProblems(name, r, d));
-  if ((r.directives_unmatched ?? []).length) probs.push(`${name}: ${r.directives_unmatched.length} applied records match no request`);
+  const probs = [];
+  if (r.end_reason !== 'complete') probs.push(`${name}: end_reason ${r.end_reason}`);
+  for (const [peer, w] of Object.entries(r.plan_warnings ?? {})) if (w.length) probs.push(`${name}: plan warnings for ${peer}: ${w.join('; ')}`);
+  const plans = r.plans ?? {};
+  for (const [peer, plan] of Object.entries(plans)) {
+    for (const [i, ph] of (plan.phases ?? []).entries()) {
+      if (ph.mode !== 'ERG' || ph.kind === 'COOLDOWN') continue;
+      const top = Math.max(ph.target_pct ?? 0, ...(ph.range_pct ?? []));
+      const len = ph.open_ended ? ph.max_s : ph.duration_s;
+      if (len > 300 + EPS && top > 105 + EPS) probs.push(`${name}: ${peer} phase ${i} ${ph.label}: ${fmt(top)} % in a ${fmt(len)} s phase`);
+      if (top > 110 + EPS) probs.push(`${name}: ${peer} phase ${i} above 110 %`);
+    }
+  }
+  for (const d of r.directives ?? []) {
+    const at = `${name}: ${d.kind} #${d.id} peer ${d.peer} t ${fmt(d.t)}`;
+    if (d.accepted !== true) probs.push(`${at}: refused (${d.reason})`);
+    if (d.kind === 'request') {
+      for (const p of requestShapeProblems(d.requested)) probs.push(`${at}: ${p}`);
+      for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
+      const req = d.requested ?? {};
+      if (req.mode === 'ERG' && isObj(d.applied)) {
+        const ph = plans[String(d.peer)]?.phases?.[d.applied.phase_index];
+        const range = ph?.range_pct ?? [ph?.target_pct, ph?.target_pct];
+        if (!ph || req.target_pct < range[0] - EPS || req.target_pct > range[1] + EPS) probs.push(`${at}: target ${fmt(req.target_pct)} outside phase ${d.applied.phase_index} ${JSON.stringify(range)}`);
+      }
+    } else if (d.kind === 'course_grade') {
+      const g = gradeOf(d);
+      if (!(g >= -EPS && g <= GRADE_MAX_PCT + EPS)) probs.push(`${at}: grade ${g}`);
+      const span = spanAt(r, String(d.peer), d.t);
+      if (!span || span.mode !== 'SIM' || !ROAM_LABELS.has(span.label)) probs.push(`${at}: a course grade outside a Free Roam SIM phase (${span?.label})`);
+    }
+  }
+  // A remote rider acks its course grades with id 0 (the platform routes them without a governor
+  // request id), so only other unmatched records count.
+  const unmatched = (r.directives_unmatched ?? []).filter((x) => x.kind !== 'course_grade');
+  if (unmatched.length) probs.push(`${name}: ${unmatched.length} unmatched applied records`);
   for (const [peer, rows] of Object.entries(r.trace ?? {})) {
-    let n = 0;
-    for (const row of rows) {
-      const p = clampProblems(row.clamped_by);
-      if (p.length && n < 3) probs.push(`${name}: peer ${peer} at ${fmt(Number(row.game_t ?? row.t))} s: ${p.join('; ')}`);
-      if (p.length) n += 1;
-    }
-    if (n > 3) probs.push(`${name}: peer ${peer}: ${n} trace rows with clamps that are not allowed`);
+    for (const row of rows) for (const p of clampProblems(row.clamped_by)) probs.push(`${name}: trace ${peer} t ${fmt(row.t)}: ${p}`);
   }
-  const seen = new Set();
-  for (const e of gameEvents(r)) {
-    for (const m of eventErrors(e)) {
-      if (!seen.has(m)) probs.push(`${name}: event ${m}`);
-      seen.add(m);
-    }
-  }
-  if (Number(r.max_snapshot_bytes ?? 0) > MAX_SNAPSHOT_BYTES) probs.push(`${name}: largest snapshot ${r.max_snapshot_bytes} B (limit ${MAX_SNAPSHOT_BYTES})`);
-  const humans = lanes(r).length;
-  if (!Array.isArray(r.fit_paths) || r.fit_paths.length !== humans) probs.push(`${name}: fit_paths ${JSON.stringify(r.fit_paths)} (one per human slot)`);
+  for (const e of fishingEvents(r.events)) for (const p of eventErrors(e)) probs.push(`${name}: event at ${fmt(e._t)}: ${p}`);
+  if ((r.max_snapshot_bytes ?? 0) > MAX_SNAPSHOT_BYTES) probs.push(`${name}: a snapshot of ${r.max_snapshot_bytes} bytes`);
+  const humans = lanes(r).filter((l) => !l.bot).length;
+  if ((r.fit_paths ?? []).length !== humans) probs.push(`${name}: ${(r.fit_paths ?? []).length} FITs for ${humans} humans`);
+  return probs.slice(0, 40);
+}
+
+export function checkAll(reports) {
+  const title = 'every run: completed, valid plans and replans, directives, grades, clamps, events, snapshots, FITs';
+  const names = Object.keys(reports);
+  if (!names.length) return skip('ALL', title, 'no reports');
+  const probs = names.flatMap((n) => runProblems(n, reports[n]));
+  return result('ALL', title, probs, `${names.length} runs`);
+}
+
+// --- scenarios ---------------------------------------------------------------------------------
+
+export function landedBy(r) {
+  const out = {};
+  for (const { lane } of lanes(r)) out[lane] = eventsOf(r, 'landed', lane);
+  return out;
+}
+
+export function roamBasics(name, r, content) {
+  const probs = [];
+  if (r.content_id !== content) probs.push(`${name}: content ${r.content_id}, wanted ${content}`);
+  if (r.finished_reason !== 'trip_over') probs.push(`${name}: finished ${JSON.stringify(r.finished_reason)}`);
+  if (eventsOf(r, 'time_up').length !== 1) probs.push(`${name}: time_up ${eventsOf(r, 'time_up').length} times`);
+  const replans = (r.directives ?? []).filter((d) => d.kind === 'replan');
+  const bites = eventsOf(r, 'bite').length;
+  if (replans.length !== bites) probs.push(`${name}: ${replans.length} replans for ${bites} bites`);
   return probs;
 }
 
-export function checkAllRuns(reports) {
-  const title = 'every run: complete, directives exact and in range, clamps allowed, events well formed, snapshots <= 2 KB';
-  const names = Object.keys(reports);
-  if (names.length === 0) return skip('ALL', title, 'no reports');
-  const probs = [];
-  let requests = 0;
-  const noted = new Set();
-  for (const n of names) {
-    probs.push(...runProblems(n, reports[n]));
-    for (const d of reports[n].directives ?? []) {
-      if (d.kind !== 'request') continue;
-      requests += 1;
-      for (const c of d.applied?.clamped_by ?? []) if (c === 'switch_ramp' || c === 'paused') noted.add(c);
-    }
-  }
-  const extra = `${names.length} runs, ${requests} requests${noted.size ? `, noted clamps: ${[...noted].join(', ')}` : ''}`;
-  return result('ALL', title, probs, extra);
+export function checkR1(reports) {
+  const title = 'roam_30 solo Autopilot band-tracker: drives out, casts, hooks, lands fish, time-up, trip over';
+  const name = 'r1_roam30_solo';
+  const r = reports[name];
+  if (!r) return skip('R1', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'roam_30');
+  const landed = landedBy(r)[0] ?? [];
+  if (landed.length < 2) probs.push(`${name}: ${landed.length} fish landed (>= 2)`);
+  if (eventsOf(r, 'cast').length < landed.length) probs.push(`${name}: fewer casts than catches`);
+  const firstBite = eventsOf(r, 'bite')[0]?._t ?? NaN;
+  if (!(firstBite >= 300 - TOL_S)) probs.push(`${name}: a bite at ${fmt(firstBite)} s, in the drive-out`);
+  return result('R1', title, probs, `${landed.length} fish, ${sum(landed.map((e) => e.points))} points`);
 }
 
-// --- S1: threshold, band-tracking riders -----------------------------------------------------------
-
-export function checkS1(reports) {
-  const title = 'threshold, band-trackers: 4 tuna landed per rider, fights 240-420 s, no snaps, clamps only slew/floor/unverified/haptic';
-  const name = 's1_threshold';
+export function checkR2(reports) {
+  const title = 'roam_30, 4 riders on one ocean: everyone fishes, snapshots stay small';
+  const name = 'r2_roam30_four';
   const r = reports[name];
-  if (!r) return skip('S1', title, `no ${name} report`);
-  const probs = [...argsProblems(name, r, { content: 'threshold' }), ...completeProblems(name, r)];
-  const parts = [];
-  for (const { lane, peer } of lanes(r)) {
-    const tuna = eventsOf(r, 'landed', lane).filter((e) => e.sp === SP.tuna).length;
-    if (tuna !== S1.tuna) probs.push(`${name}: lane ${lane} landed ${tuna} tuna (wanted ${S1.tuna})`);
-    const fs4 = fights(r, peer);
-    if (fs4.length !== S1.tuna) probs.push(`${name}: lane ${lane} ran ${fs4.length} fights (wanted ${S1.tuna})`);
-    for (const f of fs4) {
-      const len = spanEnd(f, r) - Number(f.start);
-      if (len < S1.fightMin - TOL_S || len > S1.fightMax + TOL_S) probs.push(`${name}: lane ${lane} ${f.label} lasted ${fmt(len)} s (${S1.fightMin}-${S1.fightMax})`);
-    }
-    const snaps = eventsOf(r, 'snap', lane).length;
-    if (snaps) probs.push(`${name}: lane ${lane} snapped ${snaps} lines`);
-    parts.push(`lane ${lane}: ${tuna} tuna, fights ${fs4.map((f) => fmt(spanEnd(f, r) - f.start)).join('/')} s`);
+  if (!r) return skip('R2', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'roam_30');
+  const by = landedBy(r);
+  for (const [lane, l] of Object.entries(by)) if (l.length < 1) probs.push(`${name}: rider ${lane} landed nothing`);
+  if (lanes(r).length !== 4) probs.push(`${name}: ${lanes(r).length} riders`);
+  return result('R2', title, probs, `fish ${Object.values(by).map((l) => l.length).join('/')}, max snapshot ${r.max_snapshot_bytes} B`);
+}
+
+/** Each bot's strategy, from the highest power band it rode while driving (W / FTP). */
+export function botStrategies(r) {
+  const out = {};
+  for (const { lane, peer, ftp, bot } of lanes(r)) {
+    if (!bot) continue;
+    const bands = (r.events ?? []).filter((e) => e.type === 'hud' && e.kind === 'power_band' && String(e.peer) === peer);
+    const efforts = bands.map((e) => (e.lo_w + e.hi_w) / 2 / ftp).filter((x) => x < 1.2);
+    const top = efforts.length ? Math.max(...efforts) : NaN;
+    let best = '';
+    for (const [id, eff] of Object.entries(STRATEGY_EFFORT)) if (Math.abs(top - eff) < 0.02) best = id;
+    out[lane] = best;
   }
+  return out;
+}
+
+export function checkR3(reports, seeds = DEFAULT_SEEDS) {
+  const title = 'roam_30 with 3 bots: every bot fishes, all four strategies show up, both small and big pay';
+  const names = seeds.map((s) => `r3_roam30_bots_seed${s}`).filter((n) => reports[n]);
+  if (!names.length) return skip('R3', title, 'no r3 reports');
+  const probs = [];
+  const seen = {};
+  for (const name of names) {
+    const r = reports[name];
+    probs.push(...roamBasics(name, r, 'roam_30'));
+    const by = landedBy(r);
+    const strat = botStrategies(r);
+    for (const [lane, id] of Object.entries(strat)) {
+      if (!id) probs.push(`${name}: bot ${lane} rode no strategy's power band`);
+      const pts = sum((by[lane] ?? []).map((e) => e.points));
+      if ((by[lane] ?? []).length < 1) probs.push(`${name}: bot ${lane} (${id}) landed nothing`);
+      (seen[id] ??= []).push(pts);
+    }
+  }
+  if (names.length >= 4) for (const id of Object.keys(STRATEGY_EFFORT)) if (!seen[id]) probs.push(`no bot played ${id} in ${names.length} seeds`);
+  const med = Object.fromEntries(Object.entries(seen).map(([k, v]) => [k, median(v)]));
+  if (med.small > 0 && med.big > 0) {
+    const ratio = Math.max(med.small, med.big) / Math.min(med.small, med.big);
+    if (ratio > 2.5) probs.push(`small (${med.small}) and big (${med.big}) are not both viable (ratio ${fmt(ratio)})`);
+  }
+  const info = Object.entries(med).map(([k, v]) => `${k} ${fmt(v)}`).join(', ');
+  return result('R3', title, probs, `median points: ${info}`);
+}
+
+export function checkR4(reports) {
+  const title = 'roam_10 Autopilot without a band (zero input): the session plays through';
+  const name = 'r4_roam10_autopilot';
+  const r = reports[name];
+  if (!r) return skip('R4', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'roam_10');
+  const landed = landedBy(r)[0] ?? [];
+  if (landed.length < 1) probs.push(`${name}: landed nothing`);
+  return result('R4', title, probs, `${landed.length} fish`);
+}
+
+export function checkR5(reports) {
+  const title = 'roam_30 unverified FTPs (x0.85) at 300 and 200 W, no haptic to the opted-out rider';
+  const name = 'r5_roam30_unverified';
+  const r = reports[name];
+  if (!r) return skip('R5', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'roam_30');
+  let n = 0;
   for (const d of r.directives ?? []) {
-    if (d.kind !== 'request' || !isObj(d.applied)) continue;
-    const bad = clampProblems(d.applied.clamped_by, S1_CLAMPS);
-    if (bad.length) probs.push(`${name}: directive ${d.id}: ${bad.join('; ')}`);
+    if (d.kind !== 'request') continue;
+    const req = d.requested ?? {};
+    if (req.mode === 'SIM' && String(d.peer) === String(R5.hapticsOffPeer)) probs.push(`${name}: a haptic for the opted-out rider at ${fmt(d.t)}`);
+    if (req.mode !== 'ERG' || !isObj(d.applied)) continue;
+    const clamps = d.applied.clamped_by ?? [];
+    if (!clamps.includes('unverified')) probs.push(`${name}: #${d.id} has no unverified clamp`);
+    const ftp = R5.ftp[Number(d.peer) - 1];
+    const want = Math.floor((req.target_pct / 100) * ftp * R5.factor);
+    const got = Number(d.applied.applied?.target_w ?? NaN);
+    if (clamps.length === 1 && Math.abs(got - want) > R5.tolW) probs.push(`${name}: #${d.id} applied ${got} W for ${fmt(req.target_pct)} % of ${ftp} W (want ${want})`);
+    n += 1;
   }
-  return result('S1', title, probs, parts.join('; '));
+  if (n === 0) probs.push(`${name}: no ERG request`);
+  return result('R5', title, probs.slice(0, 20), `${n} ERG requests`);
 }
 
-// --- S2: off the band ----------------------------------------------------------------------------------
-
-/** Losses of `type` within S2_WINDOW_S after each hookup of `lane`, and fights never shortened. */
-export function offBandProblems(name, r, type) {
-  const probs = [];
-  const { lane, peer } = lanes(r)[0] ?? { lane: 0, peer: '1' };
-  const hookups = eventsOf(r, 'hookup', lane);
-  const losses = eventsOf(r, type, lane);
-  if (hookups.length === 0) probs.push(`${name}: no hookup on lane ${lane}`);
-  const delays = [];
-  for (const h of hookups) {
-    const loss = losses.find((e) => e._t > h._t - EPS && e._t <= h._t + S2_WINDOW_S + EPS);
-    if (!loss) probs.push(`${name}: hookup at ${fmt(h._t)} s: no ${type} within ${S2_WINDOW_S} s`);
-    else delays.push(loss._t - h._t);
-  }
-  const other = type === 'snap' ? 'thrown' : 'snap';
-  if (eventsOf(r, other, lane).length) probs.push(`${name}: ${eventsOf(r, other, lane).length} ${other} events (wanted only ${type})`);
-  for (const f of fights(r, peer)) {
-    const len = spanEnd(f, r) - Number(f.start);
-    const minS = Number(f.plan?.min_s ?? 0);
-    if (len < minS - TOL_S) probs.push(`${name}: ${f.label} lasted ${fmt(len)} s, shorter than its min_s ${minS}`);
-    if (f.ended_by === 'end_phase' && losses.some((e) => Math.abs(e._t - spanEnd(f, r)) < 1)) probs.push(`${name}: ${f.label} ended at a ${type}`);
-  }
-  return { probs, delays };
-}
-
-export function checkS2(reports) {
-  const title = 'threshold off the band: 10 rpm low snaps, 10 rpm high throws, within 8 s; phases not shortened';
-  const { found, missing } = pick(reports, ['s2_low', 's2_high']);
-  if (found.length === 0) return skip('S2', title, 'no s2_low / s2_high reports');
-  const probs = missing.map((m) => `missing report ${m}`);
-  const parts = [];
-  for (const [name, r] of found) {
-    probs.push(...argsProblems(name, r, { content: 'threshold' }), ...completeProblems(name, r));
-    const type = name === 's2_low' ? 'snap' : 'thrown';
-    const o = offBandProblems(name, r, type);
-    probs.push(...o.probs);
-    parts.push(`${name}: ${type} after ${o.delays.map(fmt).join('/') || '-'} s`);
-  }
-  return result('S2', title, probs, parts.join('; '));
-}
-
-// --- S3: free_30 x 4 band-trackers -----------------------------------------------------------------------
-
-export function checkS3(reports, opts = {}) {
-  const seeds = opts.seeds ?? DEFAULT_SEEDS;
-  const title = 'free_30, 4 band-trackers: trip <= 35 min, fights <= 40%, median >= 2 fish, a Double Hookup';
-  const { found, missing } = pick(reports, seeds.map((n) => `s3_free30_seed${n}`));
-  if (found.length === 0) return skip('S3', title, 'no s3_free30_seed* reports');
-  const probs = missing.map((m) => `missing report ${m}`);
-  const fish = [];
-  let doubles = 0;
-  const cap = FIGHT_CAP.free * fishingSeconds('free_30');
-  for (const [name, r] of found) {
-    probs.push(...argsProblems(name, r, { content: 'free_30', players: 4, seed: Number(name.match(/seed(\d+)/)[1]) }));
-    probs.push(...completeProblems(name, r));
-    if (Number(r.game_seconds) > S3.endMaxS + TOL_S) probs.push(`${name}: the trip took ${fmt(r.game_seconds)} s (<= ${S3.endMaxS})`);
-    for (const { lane, peer } of lanes(r)) {
-      fish.push(eventsOf(r, 'landed', lane).length);
-      const fsec = fightSeconds(r, peer);
-      if (fsec > cap + TOL_S) probs.push(`${name}: lane ${lane} fought ${fmt(fsec)} s (40% of fishing is ${fmt(cap)})`);
-    }
-    doubles += eventsOf(r, 'double_hookup').length;
-  }
-  const med = median(fish);
-  if (!(med >= S3.medianFish)) probs.push(`median ${fmt(med)} fish per rider (>= ${S3.medianFish})`);
-  if (doubles < S3.doubleHookups) probs.push('no Double Hookup in any run');
-  return result('S3', title, probs, `${found.length} runs, median ${fmt(med)} fish per rider, ${doubles} Double Hookups`);
-}
-
-// --- S4: free_30 solo with no input -------------------------------------------------------------------
-
-export function checkS4(reports) {
-  const title = 'free_30 solo with no input, Autopilot off and on: >= 1 fish landed in each run';
-  const { found, missing } = pick(reports, ['s4_ap_none', 's4_ap_all']);
-  if (found.length === 0) return skip('S4', title, 'no s4_ap_* reports');
-  const probs = missing.map((m) => `missing report ${m}`);
-  const parts = [];
-  for (const [name, r] of found) {
-    probs.push(...argsProblems(name, r, { content: 'free_30', players: 1 }), ...completeProblems(name, r));
-    const want = name === 's4_ap_all';
-    if (r.slots?.[0]?.autopilot !== want) probs.push(`${name}: slot 0 autopilot ${r.slots?.[0]?.autopilot}, wanted ${want}`);
-    const n = eventsOf(r, 'landed', 0).length;
-    if (n < 1) probs.push(`${name}: no fish landed`);
-    parts.push(`${name} ${n} fish`);
-  }
-  return result('S4', title, probs, parts.join(', '));
-}
-
-// --- S5: base_60 --------------------------------------------------------------------------------------
-
-export function checkS5(reports) {
-  const title = 'base_60: nothing above 100% applied or requested, fights <= 25%';
-  const name = 's5_base60';
+export function checkR6(reports) {
+  const title = 'roam_30, a rider stops pedaling for 60 s: staggered (paused or AFK), no load sent meanwhile, fishes again';
+  const name = 'r6_roam30_paused';
   const r = reports[name];
-  if (!r) return skip('S5', title, `no ${name} report`);
-  const probs = [...argsProblems(name, r, { content: 'base_60' }), ...completeProblems(name, r)];
-  let top = 0;
-  for (const [peer, rows] of Object.entries(r.trace ?? {})) {
-    const slot = (r.slots ?? []).find((s) => String(s.peer) === peer);
-    const oneW = 100 / Math.max(Number(slot?.ftp ?? 200), 1);
-    const over = rows.filter((row) => row.mode === 'ERG' && Number(row.applied_pct) > 100 + oneW + EPS);
-    for (const row of rows) if (row.mode === 'ERG') top = Math.max(top, Number(row.applied_pct));
-    if (over.length) probs.push(`${name}: peer ${peer} applied ${fmt(Number(over[0].applied_pct))}% at ${fmt(Number(over[0].game_t ?? over[0].t))} s (${over.length} rows above 100%)`);
+  if (!r) return skip('R6', title, `no ${name} report`);
+  const probs = roamBasics(name, r, 'roam_30');
+  const peer = String(R6.peer);
+  const rows = (r.trace?.[peer] ?? []).filter((x) => x.game_t >= R6.at && x.game_t <= R6.at + R6.forS + 5);
+  const out = rows.filter((x) => x.paused || x.afk);
+  if (!out.length) probs.push(`${name}: rider ${peer} never paused or AFK`);
+  else {
+    const t0 = Math.min(...out.map((x) => x.game_t));
+    const t1 = Math.max(...out.map((x) => x.game_t));
+    const sent = (r.directives ?? []).filter((d) => d.kind === 'request' && String(d.peer) === peer && d.requested?.mode === 'ERG' && d.t > t0 + 1 && d.t < t1);
+    if (sent.length) probs.push(`${name}: ${sent.length} ERG requests to the stopped rider between ${fmt(t0)} and ${fmt(t1)} s`);
   }
-  for (const d of r.directives ?? []) {
-    if (d.kind === 'request' && d.requested?.mode === 'ERG' && Number(d.requested.target_pct) > 100 + EPS) probs.push(`${name}: directive ${d.id} requests ${d.requested.target_pct}%`);
-  }
-  const cap = FIGHT_CAP.base * fishingSeconds('base_60');
-  const parts = [];
+  const landed = landedBy(r)[1] ?? [];
+  if (landed.length < 1) probs.push(`${name}: rider ${peer} landed nothing`);
+  return result('R6', title, probs, `${out.length} stopped trace rows, rider 2 landed ${landed.length}`);
+}
+
+export function checkW1(reports) {
+  const title = 'threshold, 2 riders: 4 tuna each, every fight 240-420 s';
+  const name = 'w1_threshold';
+  const r = reports[name];
+  if (!r) return skip('W1', title, `no ${name} report`);
+  const probs = [];
   for (const { lane, peer } of lanes(r)) {
-    const fsec = fightSeconds(r, peer);
-    if (fsec > cap + TOL_S) probs.push(`${name}: lane ${lane} fought ${fmt(fsec)} s (25% of fishing is ${fmt(cap)})`);
-    parts.push(`lane ${lane} ${fmt(fsec)} s`);
-  }
-  return result('S5', title, probs, `top ${fmt(top)}%, fights ${parts.join(', ')}`);
-}
-
-// --- S6: free_120 marlin -----------------------------------------------------------------------------
-
-export function checkS6(reports) {
-  const title = 'free_120 marlin: 4-8 jumps of 20-30 s at 104%, 0 s above 105%';
-  const name = 's6_free120_marlin';
-  const r = reports[name];
-  if (!r) return skip('S6', title, `no ${name} report (fishing_marlin_seed.gd found no seed?)`);
-  const probs = [...argsProblems(name, r, { content: 'free_120' }), ...completeProblems(name, r)];
-  const hook = eventsOf(r, 'hookup').find((e) => e.sp === SP.marlin);
-  if (!hook) return result('S6', title, [...probs, `${name}: no marlin was hooked`]);
-  const lane = hook.l;
-  const peer = lanes(r).find((x) => x.lane === lane)?.peer ?? '1';
-  const jumps = eventsOf(r, 'jump', lane);
-  if (jumps.length < S6.jumpsMin || jumps.length > S6.jumpsMax) probs.push(`${name}: ${jumps.length} jumps (${S6.jumpsMin}-${S6.jumpsMax})`);
-  for (const j of jumps) if (j.ms < S6.jumpMsMin || j.ms > S6.jumpMsMax) probs.push(`${name}: jump ${j.k} lasts ${j.ms} ms (20-30 s)`);
-  const jd = (r.directives ?? []).filter((d) => d.kind === 'request' && String(d.peer) === peer && d.requested?.reason === 'jump');
-  const peak = Math.max(0, ...jd.map((d) => Number(d.requested.target_pct)));
-  if (jd.some((d) => Number(d.requested.target_pct) > S6.jumpPct + EPS)) probs.push(`${name}: a jump directive above ${S6.jumpPct}% (${fmt(peak)}%)`);
-  if (jumps.length && Math.abs(peak - S6.jumpPct) > 0.5) probs.push(`${name}: jumps peak at ${fmt(peak)}%, wanted ${S6.jumpPct}%`);
-  let above = 0;
-  for (const [p, rows] of Object.entries(r.trace ?? {})) {
-    const slot = (r.slots ?? []).find((s) => String(s.peer) === p);
-    const oneW = 100 / Math.max(Number(slot?.ftp ?? 200), 1);
-    above += rows.filter((row) => row.mode === 'ERG' && Number(row.applied_pct) > S6.capPct + oneW + EPS).length;
-  }
-  if (above) probs.push(`${name}: ${above} s applied above ${S6.capPct}%`);
-  if (!eventsOf(r, 'landed', lane).some((e) => e.sp === SP.marlin)) probs.push(`${name}: the marlin was not landed`);
-  return result('S6', title, probs, `seed ${r.seed}, lane ${lane}: ${jumps.length} jumps (${jumps.map((j) => fmt(j.ms / 1000)).join('/')} s), peak ${fmt(peak)}%, ${above} s above 105%`);
-}
-
-// --- S7: cadence collapse mid-tuna ----------------------------------------------------------------------
-
-export function checkS7(reports) {
-  const title = 'threshold, 40 rpm for 20 s from 600 s: rescue, a stagger with no snap, the fight resumes';
-  const name = 's7_threshold_drop';
-  const r = reports[name];
-  if (!r) return skip('S7', title, `no ${name} report`);
-  const probs = [...argsProblems(name, r, { content: 'threshold' }), ...completeProblems(name, r)];
-  const { lane, peer } = lanes(r)[0] ?? { lane: 0, peer: '1' };
-  const resc = (r.events ?? []).filter((e) => e.type === 'rescue' && String(e.peer) === peer);
-  const on = resc.find((e) => e.active === true && Number(e.t) >= S7.at - EPS);
-  if (!on) return result('S7', title, [...probs, `${name}: rescue never started after ${S7.at} s`]);
-  const t0 = Number(on.t);
-  const offEv = resc.find((e) => e.active === false && Number(e.t) > t0);
-  const t1 = offEv ? Number(offEv.t) : NaN;
-  if (t0 > S7.rescueBy + EPS) probs.push(`${name}: rescue started at ${fmt(t0)} s (by ${S7.rescueBy})`);
-  if (!offEv) probs.push(`${name}: rescue never ended`);
-  const fight = phaseAt(r, peer, t0);
-  if (!fight || !isFight(fight)) probs.push(`${name}: the rescue at ${fmt(t0)} s fell in ${fight?.label ?? 'no phase'}, not a Fight`);
-  const calmTo = (offEv ? t1 : t0) + S7.calmAfterS;
-  const losses = gameEvents(r).filter((e) => (e.type === 'snap' || e.type === 'thrown') && e.l === lane && e._t >= t0 - 1 && e._t <= calmTo);
-  if (losses.length) probs.push(`${name}: ${losses[0].type} at ${fmt(losses[0]._t)} s during the stagger`);
-  if (fight && isFight(fight) && offEv) {
-    if (spanEnd(fight, r) <= t1 + EPS) probs.push(`${name}: ${fight.label} ended at ${fmt(spanEnd(fight, r))} s, before the rescue was over`);
-    const landed = eventsOf(r, 'landed', lane).find((e) => e._t > t1 && e._t <= spanEnd(fight, r) + 31);
-    if (!landed) probs.push(`${name}: the fish of ${fight.label} was not landed after the rescue`);
-  }
-  return result('S7', title, probs, `rescue ${fmt(t0)}-${fmt(t1)} s in ${fight?.label ?? '?'}`);
-}
-
-// --- S8: determinism ----------------------------------------------------------------------------------
-
-/** SHA-256 of the canonical JSON (sorted keys) of a run's events, phases, applied directives and results. */
-export function runHash(r) {
-  const canon = (v) => {
-    if (Array.isArray(v)) return v.map(canon);
-    if (isObj(v)) return Object.fromEntries(Object.keys(v).sort().map((k) => [k, canon(v[k])]));
-    return v;
-  };
-  const body = { events: r.events ?? [], phases: r.phases ?? {}, applied: (r.directives ?? []).map((d) => d.applied ?? null), results: r.results ?? {} };
-  return crypto.createHash('sha256').update(JSON.stringify(canon(body))).digest('hex');
-}
-
-export function checkS8(reports) {
-  const title = 'the same seed and inputs twice: identical events, phases, applied directives, results and deterministic_hash';
-  const pairs = new Set(Object.keys(reports).filter((n) => /^s8_.+_[ab]$/.test(n)).map((n) => n.slice(0, -2)));
-  if (pairs.size === 0) return skip('S8', title, 'no s8_*_a / s8_*_b reports');
-  const probs = [];
-  const parts = [];
-  for (const base of [...pairs].sort()) {
-    const a = reports[`${base}_a`];
-    const b = reports[`${base}_b`];
-    if (!a || !b) {
-      probs.push(`missing report ${base}_${a ? 'b' : 'a'}`);
-      continue;
+    const tuna = eventsOf(r, 'landed', lane).filter((e) => e.sp === SP.tuna);
+    if (tuna.length !== W1.tuna) probs.push(`${name}: rider ${lane} landed ${tuna.length} tuna`);
+    for (const s of (r.phases?.[peer] ?? []).filter((x) => x.mode === 'ERG' && x.kind === 'WORK')) {
+      const len = s.end - s.start;
+      if (len < W1.fightMin - TOL_S || len > W1.fightMax + TOL_S) probs.push(`${name}: rider ${lane} fight of ${fmt(len)} s`);
     }
-    if (JSON.stringify(a.args?.riders) !== JSON.stringify(b.args?.riders) || a.seed !== b.seed || a.content_id !== b.content_id) probs.push(`${base}: the two runs differ in content, seed or riders`);
-    if (a.deterministic_hash !== b.deterministic_hash) probs.push(`${base}: deterministic_hash differs`);
-    const ha = runHash(a);
-    if (ha !== runHash(b)) probs.push(`${base}: events, phases, applied directives or results differ`);
-    if (gameEvents(a).length === 0) probs.push(`${base}: no Fishing game events to compare`);
-    parts.push(`${base} ${gameEvents(a).length} game events, ${ha.slice(0, 12)}`);
   }
-  return result('S8', title, probs, parts.join('; '));
+  return result('W1', title, probs);
 }
 
-// --- S9: FIT --------------------------------------------------------------------------------------------
+export function checkW2(reports) {
+  const title = "base_60, 2 riders: the plan's fish bite and land, trip over";
+  const name = 'w2_base60';
+  const r = reports[name];
+  if (!r) return skip('W2', title, `no ${name} report`);
+  const probs = [];
+  if (r.finished_reason !== 'trip_over') probs.push(`${name}: finished ${JSON.stringify(r.finished_reason)}`);
+  for (const [lane, l] of Object.entries(landedBy(r))) if (l.length < 2) probs.push(`${name}: rider ${lane} landed ${l.length}`);
+  for (const e of eventsOf(r, 'landed')) if (![SP.mackerel, SP.mahi].includes(e.sp)) probs.push(`${name}: a ${SPECIES[e.sp]} in base_60`);
+  return result('W2', title, probs);
+}
+
+export function checkW3(reports) {
+  const title = 'e2e_2min, 3 riders: one mackerel each, the cool-down by 135 s';
+  const name = 'w3_e2e';
+  const r = reports[name];
+  if (!r) return skip('W3', title, `no ${name} report`);
+  const probs = [];
+  for (const { lane, peer } of lanes(r)) {
+    const landed = eventsOf(r, 'landed', lane);
+    if (landed.length !== 1 || landed[0].sp !== SP.mackerel) probs.push(`${name}: rider ${lane} landed ${landed.map((e) => SPECIES[e.sp]).join(', ') || 'nothing'}`);
+    const cd = cooldownStart(r, peer);
+    if (!(cd <= W3.cooldownByS + TOL_S)) probs.push(`${name}: rider ${lane} reached the cool-down at ${fmt(cd)} s`);
+  }
+  return result('W3', title, probs);
+}
+
+export function checkD(reports) {
+  const title = 'the same roam run twice gives the same report hash';
+  const a = reports.d_roam_a;
+  const b = reports.d_roam_b;
+  if (!a || !b) return skip('D', title, 'no d_roam_a/b reports');
+  const probs = [];
+  if (!a.deterministic_hash || a.deterministic_hash !== b.deterministic_hash) probs.push(`hashes differ: ${a.deterministic_hash} vs ${b.deterministic_hash}`);
+  return result('D', title, probs);
+}
 
 /** tools/fit_check on every FIT with each rider's expected laps (`runner(args) -> {status, stdout}`). */
-export function checkFit(reports, runner) {
-  const title = 'FIT: every file passes fit_check with one lap per ride out, Reel and Fight that ran, plus the cool-down';
+export function checkFit(reports, runner = defaultFitRunner) {
+  const title = 'FIT: every file passes fit_check with one lap per lap phase that ran, plus the cool-down';
   const probs = [];
   let n = 0;
   for (const [name, r] of Object.entries(reports)) {
-    const ls = lanes(r);
+    const humans = lanes(r).filter((l) => !l.bot);
     (r.fit_paths ?? []).forEach((f, i) => {
-      const peer = ls[i]?.peer ?? String(i + 1);
+      const peer = humans[i]?.peer ?? String(i + 1);
       const laps = expectedLaps(r, peer);
       n += 1;
       const res = runner([f, `--expect-laps=${laps}`, '--json']);
-      let got = '?';
-      try {
-        const j = JSON.parse(res.stdout);
-        got = (j.files ?? []).map((x) => (x.laps ?? []).length).join(',');
-        for (const file of j.files ?? []) for (const e of file.errors ?? []) probs.push(`${name}: ${path.basename(f)}: ${e}`);
-      } catch {
-        // reported below
-      }
-      if (res.status !== 0) probs.push(`${name}: fit_check exit ${res.status} for ${path.basename(f)} (expected ${laps} laps, got ${got})`);
+      if (res.status !== 0) probs.push(`${name}: fit_check exit ${res.status} for ${path.basename(f)} (expected ${laps} laps): ${res.stdout.slice(0, 200)}`);
     });
   }
-  if (n === 0) return skip('S9', title, 'no FIT files in the reports');
-  return result('S9', title, probs, `${n} files`);
+  if (n === 0) return skip('FIT', title, 'no FIT files in the reports');
+  return result('FIT', title, probs, `${n} files`);
 }
 
 function defaultFitRunner(args) {
@@ -500,127 +381,12 @@ function defaultFitRunner(args) {
   return { status: r.status ?? 1, stdout: r.stdout ?? '' };
 }
 
-// --- S10: e2e_2min, 3 riders -------------------------------------------------------------------------------
-
-export function checkS10(reports) {
-  const title = 'e2e_2min, 3 riders: one mackerel landed per rider, the trip ends <= 135 s before the cool-down';
-  const name = 's10_e2e';
-  const r = reports[name];
-  if (!r) return skip('S10', title, `no ${name} report`);
-  const probs = [...argsProblems(name, r, { content: 'e2e_2min', players: S10.lanes }), ...completeProblems(name, r)];
-  const parts = [];
-  for (const { lane, peer } of lanes(r)) {
-    const landed = eventsOf(r, 'landed', lane);
-    const mack = landed.filter((e) => e.sp === SP.mackerel).length;
-    if (mack !== 1 || landed.length !== 1) probs.push(`${name}: lane ${lane} landed ${landed.map((e) => SPECIES[e.sp]).join(', ') || 'nothing'} (wanted one mackerel)`);
-    const cd = cooldownStart(r, peer);
-    if (!(cd <= S10.cooldownByS + TOL_S)) probs.push(`${name}: lane ${lane} reached the cool-down at ${fmt(cd)} s (<= ${S10.cooldownByS})`);
-    parts.push(`lane ${lane} ${mack} mackerel, cool-down at ${fmt(cd)} s`);
-  }
-  return result('S10', title, probs, parts.join('; '));
-}
-
-// --- S11: unverified FTP, two FTPs, haptics off for one rider ------------------------------------------
-
-/** Problems of one S11 fishing request: 'unverified' applied, only S1's clamps, and the governed
- *  target_w = 0.85 x target_pct x FTP (within 1 W of rounding) unless the floor lifted it. The
- *  applied record's target_pct echoes the request; its target_w carries the factor. */
-export function unverifiedRequestProblems(name, d, ftp) {
-  const at = `${name}: directive ${d.id} (peer ${d.peer}, t ${fmt(Number(d.t))})`;
-  const rec = d.applied;
-  if (!isObj(rec)) return [`${at}: no applied record`];
-  const clamps = Array.isArray(rec.clamped_by) ? rec.clamped_by : [];
-  const probs = clampProblems(clamps, S1_CLAMPS).map((p) => `${at}: ${p}`);
-  if (!clamps.includes('unverified')) probs.push(`${at}: no unverified clamp (clamped_by ${JSON.stringify(clamps)})`);
-  const req = Number(d.requested?.target_pct);
-  const got = Number(rec.applied?.target_w);
-  if (!clamps.includes('floor')) {
-    const want = (S11.factor * req * ftp) / 100;
-    if (!(Math.abs(got - want) <= S11.tolW + EPS)) probs.push(`${at}: applied ${fmt(got)} W for ${fmt(req)}% of ${ftp} W (x${S11.factor} is ${fmt(want)} W)`);
-  }
-  return probs;
-}
-
-export function checkS11(reports) {
-  const title = 'threshold, unverified FTP 300 W and 200 W, haptics off for slot 1: ERG targets x0.85 via unverified only, no haptic to the opted-out rider';
-  const name = S11.name;
-  const r = reports[name];
-  if (!r) return skip('S11', title, `no ${name} report`);
-  const probs = [...argsProblems(name, r, { content: 'threshold', players: S11.ftp.length }), ...completeProblems(name, r)];
-  const a = r.args ?? {};
-  if (a.unverified !== true) probs.push(`${name}: args.unverified ${JSON.stringify(a.unverified)}, wanted true`);
-  if (JSON.stringify(a.haptics_off ?? []) !== JSON.stringify(S11.hapticsOff)) probs.push(`${name}: args.haptics_off ${JSON.stringify(a.haptics_off)}, wanted ${JSON.stringify(S11.hapticsOff)}`);
-  const parts = [];
-  for (const { lane, peer } of lanes(r)) {
-    const slot = (r.slots ?? []).find((s) => Number(s.slot) === lane) ?? {};
-    const ftp = Number(slot.ftp);
-    const off = S11.hapticsOff.includes(lane);
-    if (ftp !== S11.ftp[lane]) probs.push(`${name}: slot ${lane} FTP ${slot.ftp}, wanted ${S11.ftp[lane]}`);
-    if (slot.ftp_verified !== false) probs.push(`${name}: slot ${lane} ftp_verified ${slot.ftp_verified}, wanted false`);
-    if (slot.haptics_on !== !off) probs.push(`${name}: slot ${lane} haptics_on ${slot.haptics_on}, wanted ${!off}`);
-    const mine = (r.directives ?? []).filter((d) => d.kind === 'request' && String(d.peer) === peer);
-    const erg = mine.filter((d) => d.requested?.mode === 'ERG');
-    const haptics = mine.filter((d) => d.requested?.mode === 'SIM');
-    if (erg.length === 0) probs.push(`${name}: slot ${lane} sent no ERG directive`);
-    for (const d of erg) probs.push(...unverifiedRequestProblems(name, d, ftp));
-    if (off && haptics.length) probs.push(`${name}: ${haptics.length} haptic request(s) for haptics-off slot ${lane}, first at ${fmt(Number(haptics[0].t))} s`);
-    if (!off && haptics.length === 0) probs.push(`${name}: slot ${lane} (haptics on) got no Landing haptic`);
-    const fightIdx = new Set(fights(r, peer).map((p) => p.index));
-    if (fightIdx.size !== S11.fights) probs.push(`${name}: slot ${lane} ran ${fightIdx.size} fights (wanted ${S11.fights})`);
-    const rows = (r.trace?.[peer] ?? []).filter((row) => row.mode === 'ERG' && fightIdx.has(Number(row.phase)) && row.rescue !== true);
-    const plain = rows.filter((row) => !(row.clamped_by ?? []).includes('unverified'));
-    if (rows.length === 0) probs.push(`${name}: slot ${lane} has no Fight trace rows`);
-    if (plain.length) probs.push(`${name}: slot ${lane}: ${plain.length} Fight trace rows without the unverified clamp, first at ${fmt(Number(plain[0].game_t ?? plain[0].t))} s`);
-    parts.push(`slot ${lane} ${ftp} W: ${erg.length} ERG requests, ${haptics.length} haptics`);
-  }
-  return result('S11', title, probs, parts.join('; '));
-}
-
-// --- driver -------------------------------------------------------------------------------------------------
-
-export const SCENARIOS = [
-  ['ALL', checkAllRuns],
-  ['S1', checkS1],
-  ['S2', checkS2],
-  ['S3', checkS3],
-  ['S4', checkS4],
-  ['S5', checkS5],
-  ['S6', checkS6],
-  ['S7', checkS7],
-  ['S8', checkS8],
-  ['S10', checkS10],
-  ['S11', checkS11],
-];
-
-/** Runs the scenarios (`only`: ids, or null for all; ALL always runs). */
-export function checkAll(reports, only = null, opts = {}) {
-  const out = [];
-  for (const [id, fn] of SCENARIOS) {
-    if (only && id !== 'ALL' && !only.includes(id)) continue;
-    out.push(fn(reports, opts));
-  }
-  if (opts.fit && (!only || only.includes('S9'))) out.push(checkFit(reports, opts.fitRunner ?? defaultFitRunner));
-  return out;
-}
-
-export function format(results) {
-  const lines = [];
-  for (const r of results) {
-    lines.push(`${r.status} ${r.id}  ${r.summary}`);
-    for (const d of r.details.slice(0, 40)) lines.push(`    - ${d}`);
-    if (r.details.length > 40) lines.push(`    - ... ${r.details.length - 40} more`);
-  }
-  return lines.join('\n');
-}
+export const CHECKS = { ALL: checkAll, R1: checkR1, R2: checkR2, R3: checkR3, R4: checkR4, R5: checkR5, R6: checkR6, W1: checkW1, W2: checkW2, W3: checkW3, D: checkD };
 
 export function main(argv, out = process.stdout, err = process.stderr) {
-  const args = argv.filter((a) => !a.startsWith('--'));
-  const seedArg = argv.find((a) => a.startsWith('--seeds='));
-  const seeds = seedArg ? seedArg.slice(8).split(',').map(Number).filter(Number.isInteger) : null;
-  const only = argv.find((a) => a.startsWith('--only='))?.slice(7).split(',').map((s) => s.trim().toUpperCase()) ?? null;
-  const dir = args[0];
+  const dir = argv.find((a) => !a.startsWith('--'));
   if (!dir) {
-    err.write('usage: node tests/games/fishing/sim/check_sims.mjs <reports dir> [--only=S1,S10] [--fit] [--seeds=1,2]\n');
+    err.write('usage: check_sims.mjs <report dir> [--only=ALL,R1] [--fit] [--seeds=1,2,3]\n');
     return 2;
   }
   let reports;
@@ -630,19 +396,21 @@ export function main(argv, out = process.stdout, err = process.stderr) {
     err.write(`check_sims: ${e.message}\n`);
     return 2;
   }
-  if (Object.keys(reports).length === 0) {
-    err.write(`check_sims: no Fishing reports in ${dir}\n`);
-    return 2;
+  const only = argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
+  const seedsArg = argv.find((a) => a.startsWith('--seeds='));
+  const seeds = seedsArg ? seedsArg.slice(8).split(',').map(Number) : DEFAULT_SEEDS;
+  const results = [];
+  for (const [id, fn] of Object.entries(CHECKS)) if (!only || only.includes(id) || id === 'ALL') results.push(id === 'R3' ? fn(reports, seeds) : fn(reports));
+  if (argv.includes('--fit')) results.push(checkFit(reports));
+  let failed = 0;
+  for (const res of results) {
+    const tag = res.skip ? 'SKIP' : res.ok ? 'PASS' : 'FAIL';
+    if (!res.ok) failed += 1;
+    out.write(`${tag} ${res.id.padEnd(4)} ${res.title}${res.info ? ` (${res.info})` : ''}\n`);
+    for (const p of res.probs.slice(0, 15)) out.write(`       ${p}\n`);
   }
-  const results = checkAll(reports, only, { fit: argv.includes('--fit'), ...(seeds && seeds.length ? { seeds } : {}) });
-  out.write(`${format(results)}\n`);
-  const failed = results.filter((r) => r.status === 'FAIL').length;
-  const passed = results.filter((r) => r.status === 'PASS').length;
-  out.write(`check_sims: ${passed} passed, ${failed} failed, ${results.length - passed - failed} skipped (${Object.keys(reports).length} reports)\n`);
-  return failed === 0 ? 0 : 1;
+  return failed ? 1 : 0;
 }
 
 const self = fileURLToPath(import.meta.url);
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(self)) {
-  process.exitCode = main(process.argv.slice(2));
-}
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(self)) process.exit(main(process.argv.slice(2)));

@@ -1,42 +1,66 @@
 class_name FishingHud
 extends RefCounted
-## hud_spec() for Turbo Reel (brief 3.5, G0 decision "HUD layout"; FishingLayout holds the
-## rects, all in art pixels of the 640 x 360 view):
-##  - the local lane's HUD zone: the kit timeline (left out where the row would reach PANIC),
-##    then one row: power gauge, the strain meter (red, zigzag), cadence (with the band published
-##    by cadence_band), the slack meter (yellow, loop);
-##  - the deck bar: FishingDeckBar (trip clock, phase chip, fish row or gaff meter), the kit gear
-##    and W' widgets in their rects, FishingCatchBoard (points, fish, hookup level, catches);
-##  - one FishingLaneHud at the top of every other lane's zone;
-##  - toasts below the deck bar, banners over the local lane's left two-thirds.
-## Nothing reaches into the PANIC corner (art x >= 503 and y >= 316) at any lane count.
+## hud_spec() for Turbo Reel, in art pixels of the 640 x 360 view (the ocean runs under it all):
+##  - top: FishingMinimap (the ocean in profile, every rider's action icon) and FishingBoard
+##    (time left, the leaderboard);
+##  - bottom left: the kit power gauge and cadence with the local fight meters either side of
+##    the cadence, FishingFightPanel beside them, the kit gear above (shown in SIM), and in a
+##    workout the kit timeline above that;
+##  - FishingChips over the view: the stopped menu as chips next to the boat;
+##  - toasts under the minimap, banners over the middle of the view.
+## Nothing reaches into the PANIC corner (art x >= 503 and y >= 316).
+
+const POWER := Rect2i(4, 320, 100, 36)
+const STRAIN := Rect2i(106, 320, 5, 36)
+const CADENCE := Rect2i(113, 320, 97, 36)
+const SLACK := Rect2i(212, 320, 5, 36)
+const GEAR := Rect2i(4, 300, 60, 18)
+const TIMELINE := Rect2i(4, 262, 213, 36)
+const TOASTS := Rect2i(120, 38, 296, 22)
+const BANNERS := Rect2i(120, 150, 400, 60)
 
 
 static func spec(game: FishingGame) -> HudSpec:
-	var ctx := game.ctx
-	var n := clampi(ctx.players.size(), 1, 4)
-	var local := ctx.local_player()
-	var i := local.slot_index if local != null else 0
-	var r := FishingLayout.local_hud(i, n)
 	var spec := HudSpec.new()
-	if (r["timeline"] as Rect2i).size != Vector2i.ZERO:
-		spec.add(HudSpec.TIMELINE, r["timeline"])
 	(
 		spec
-		. add(HudSpec.POWER_GAUGE, r["power"])
-		. add_control(FishingMeter.make(game, FishingMeter.STRAIN), r["strain"])
-		. add(HudSpec.CADENCE, r["cadence"])
-		. add_control(FishingMeter.make(game, FishingMeter.SLACK), r["slack"])
-		. add_control(FishingDeckBar.make(game), FishingLayout.deck_left_rect())
-		. add(HudSpec.GEAR, FishingLayout.deck_gear_rect())
-		. add(HudSpec.WBAL, FishingLayout.deck_wbal_rect())
-		. add_control(FishingCatchBoard.make(game), FishingLayout.deck_right_rect())
+		. add_control(FishingMinimap.make(game), FishingMinimap.ART)
+		. add_control(FishingBoard.make(game), FishingBoard.ART)
+		. add_control(FishingChips.make(game), FishingChips.ART)
+		. add(HudSpec.POWER_GAUGE, POWER)
+		. add_control(FishingMeter.make(game, FishingMeter.STRAIN), STRAIN)
+		. add(HudSpec.CADENCE, CADENCE)
+		. add_control(FishingMeter.make(game, FishingMeter.SLACK), SLACK)
+		. add_control(FishingFightPanel.make(game), FishingFightPanel.ART)
+		. add(HudSpec.GEAR, GEAR)
 	)
-	for p in ctx.players:
-		if p.slot_index != i and p.slot_index < n:
-			spec.add_control(
-				FishingLaneHud.make(game, p.slot_index), FishingLayout.lane_hud(p.slot_index, n)
-			)
-	spec.toasts_at(FishingLayout.toast_rect())
-	spec.banners_at(FishingLayout.banner_rect(i, n))
+	if not roam(game):
+		spec.add(HudSpec.TIMELINE, TIMELINE)
+	spec.toasts_at(TOASTS)
+	spec.banners_at(BANNERS)
 	return spec
+
+
+## Free Roam (no timeline): the state says so, else the content id does.
+static func roam(game: FishingGame) -> bool:
+	if game != null and game.state != null:
+		return game.state.roam
+	return game != null and game.ctx != null and game.ctx.content_id.begins_with("roam")
+
+
+## Every rect the spec can place (tests check them against PANIC).
+static func rects() -> Array[Rect2i]:
+	return [
+		FishingMinimap.ART,
+		FishingBoard.ART,
+		FishingChips.ART,
+		POWER,
+		STRAIN,
+		CADENCE,
+		SLACK,
+		FishingFightPanel.ART,
+		GEAR,
+		TIMELINE,
+		TOASTS,
+		BANNERS,
+	]

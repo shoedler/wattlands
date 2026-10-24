@@ -127,6 +127,7 @@ static func multi(
 	var riders := {}
 	for p in players:
 		riders[p.peer_id] = rider(parent, p)
+		(riders[p.peer_id] as LocalRider).is_multiplayer = true
 		if not p.is_bot:
 			(riders[p.peer_id] as LocalRider).set("ride_dir", tmp.path_join("rides%d" % p.peer_id))
 	var buses: Array[WlEventBus] = [new_bus(parent, "HostBus")]

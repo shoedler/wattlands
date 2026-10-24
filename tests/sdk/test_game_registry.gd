@@ -167,6 +167,44 @@ func test_validate_manifest_names_each_failing_field() -> void:
 		assert_true(err.begins_with(str(c[1])), "%s -> %s" % [JSON.stringify(c[0]), err])
 
 
+func test_content_cards_validate_and_normalize() -> void:
+	var cards := {
+		"a": {"image": ENTRY, "detail": "FX_A_DETAIL", "featured": true},
+		"b": {"detail": "FX_B_DETAIL"},
+	}
+	assert_eq(_reg.validate_manifest(_with({"content_cards": cards})), "")
+	assert_eq(_reg.validate_manifest(_with({"content_cards": {}})), "")
+	assert_eq(WlGameRegistry.normalized(_valid())["content_cards"], {}, "default is empty")
+	assert_eq(WlGameRegistry.normalized(_with({"content_cards": cards}))["content_cards"], cards)
+
+
+func test_content_cards_name_the_failing_field() -> void:
+	var cases := [
+		[{"content_cards": []}, "content_cards:"],
+		[{"content_cards": {"zzz": {}}}, 'content_cards: "zzz"'],
+		[{"content_cards": {"a": "x"}}, 'content_cards["a"]:'],
+		[{"content_cards": {"a": {"image": 5}}}, 'content_cards["a"].image:'],
+		[{"content_cards": {"a": {"detail": true}}}, 'content_cards["a"].detail:'],
+		[{"content_cards": {"a": {"featured": "yes"}}}, 'content_cards["a"].featured:'],
+		[{"content_cards": {"a": {"color": "red"}}}, 'content_cards["a"].color:'],
+	]
+	for c: Array in cases:
+		var err := _reg.validate_manifest(_with(c[0]))
+		assert_true(err.begins_with(str(c[1])), "%s -> %s" % [JSON.stringify(c[0]), err])
+
+
+func test_content_card_image_only_warns() -> void:
+	assert_string_contains(WlGameRegistry.content_card_warning("a", {"image": ENTRY}), "unreadable")
+	assert_string_contains(
+		WlGameRegistry.content_card_warning("a", {"image": "res://nope.png"}), "missing"
+	)
+	assert_eq(WlGameRegistry.content_card_warning("a", {"detail": "K"}), "")
+	var m := _with({"content_cards": {"a": {"image": "res://nope.png"}}})
+	assert_eq(_reg.add_game(m, ""), "", "the game stays listed")
+	assert_eq(_reg.warnings("fx_valid").size(), 1)
+	assert_push_warning("content card has no icon")
+
+
 func test_folder_must_match_id() -> void:
 	assert_eq(_reg.validate_manifest(_valid(), "res://x/fx_valid/game.json"), "")
 	assert_string_starts_with(_reg.validate_manifest(_valid(), "res://x/other/game.json"), "id:")

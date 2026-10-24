@@ -24,6 +24,8 @@ const PAGE_LOBBY := "lobby"
 const RECENT_MAX := 8
 const BOT_FTP_MIN := 50.0
 const BOT_FTP_MAX := 600.0
+## A featured content card's icon side, in menu font sizes.
+const FEATURED_ICON_SCALE := 3.0
 
 var mode: String = "solo"
 var role: String = Wl.SOLO
@@ -70,7 +72,10 @@ func _build() -> void:
 	role = Wl.SOLO if mode == "solo" else (Wl.HOST if mode == "host" else Wl.CLIENT)
 	my_autopilot = services.profile().autopilot_default
 	var ui := make_page("")
+	(ui["footer"] as Control).visible = false
+	scroll_menu_column(ui["right"] as Control)
 	title_label = ui["title"]
+
 	_left = ui["left"]
 	code_label = AppStyle.label("", AppStyle.FONT_CODE, AppStyle.ACCENT)
 	code_label.name = "RoomCode"
@@ -298,11 +303,11 @@ func set_autopilot(on: bool) -> void:
 	_refresh_all()
 
 
-## Pedal-scan on (BRIEF 3.5 "with Autopilot or pedal UI on"): this rider's Autopilot for the
-## session (the lobby toggle) counts as well as everything InputRouter.pedal_ui_active() checks
-## (pedal UI, the profile's Autopilot default, no input device used yet).
-func scanning_enabled() -> bool:
-	return my_autopilot or super.scanning_enabled()
+## Pedal navigation on (BRIEF 3.5): this rider's Autopilot for the session (the lobby toggle)
+## counts as well as everything InputRouter.pedal_nav_active() checks (the pedal navigation
+## setting, the profile's Autopilot default).
+func pedal_nav_enabled() -> bool:
+	return my_autopilot or super.pedal_nav_enabled()
 
 
 ## Send player_info only when it differs from the last one sent: the host's lobby_state echo of
@@ -712,13 +717,16 @@ func _refresh_root_menu() -> void:
 # --- sub-menus -------------------------------------------------------------------------------
 
 
-## The content picker: the game's contents, then the rider's own .zwo files (pedal-scan
-## selectable like the rest). The session preview below follows the highlighted pick once chosen.
+## The content picker: the game's contents (featured cards first, each group in `contents`
+## order), then the rider's own .zwo files (pedal-scan selectable like the rest). The session
+## preview below follows the highlighted pick once chosen.
 func content_choices() -> Array[String]:
 	var m := manifest()
 	var out: Array[String] = []
-	for c: Variant in m.get("contents", []):
-		out.append(str(c))
+	for featured: bool in [true, false]:
+		for c: Variant in m.get("contents", []):
+			if _content_card(str(c)).get("featured", false) == featured:
+				out.append(str(c))
 	out.append_array(AppLobbyModel.user_zwo_contents(m))
 	return out
 
@@ -731,9 +739,32 @@ func _open_content() -> void:
 		var c := choices[i]
 		if c == content_id:
 			hl = i
-		items.append({"id": c, "text": AppLobbyModel.content_label(game_id, c)})
+		items.append(_content_item(c))
 	push_menu(items, _on_content_pick, Callable(), hl)
 	_refresh_zwo_hint()
+
+
+## The game.json `content_cards` entry of a content ({} for none, and for a .zwo).
+func _content_card(cid: String) -> Dictionary:
+	var cards: Variant = manifest().get("content_cards", {})
+	var card: Variant = (cards as Dictionary).get(cid, {}) if cards is Dictionary else {}
+	return card if card is Dictionary else {}
+
+
+## A content picker item: its label plus, from its card, an icon (larger when featured) and a
+## detail line.
+func _content_item(cid: String) -> Dictionary:
+	var item := {"id": cid, "text": AppLobbyModel.content_label(game_id, cid)}
+	var card := _content_card(cid)
+	var icon := AppGameCard.load_picker_image(str(card.get("image", "")))
+	if icon != null:
+		item["icon"] = icon
+		if bool(card.get("featured", false)):
+			item["icon_px"] = WlTheme.MENU_PX * FEATURED_ICON_SCALE
+	var detail := str(card.get("detail", ""))
+	if detail != "":
+		item["detail"] = String(TranslationServer.translate(detail))
+	return item
 
 
 func _on_content_pick(_index: int, id: Variant, _auto: bool) -> void:

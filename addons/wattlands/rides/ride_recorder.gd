@@ -11,6 +11,10 @@ extends RideRecorderApi
 ## dropout): after that power counts as 0 W and cadence and speed as absent (no distance)
 ## until the next record(), so a dropout never credits work the rider may not have done.
 ## Non-finite inputs count as 0 W (power) or absent (cadence, speed).
+## Heart rate (additive): set_heart_rate(bpm) before record() hands in the rider's heart rate
+## (0 = none); it is held and expires like the other values, recorded per second, and averaged
+## (time-weighted over the time it was known) and maxed per lap and ride. The FIT gets the
+## record, lap and session heart rate fields only when the ride has a heart rate.
 ## Totals: work, distance (from the reported speed), time-weighted cadence and speed are
 ## integrated over platform time between record() calls with the held values, so they don't
 ## depend on the feed rate. Averages are time-weighted over the elapsed time; maxima are the
@@ -28,6 +32,8 @@ extends RideRecorderApi
 const EPS := 1e-4
 ## Summary format version.
 const SUMMARY_VERSION := 1
+## The normalized-power rolling window in seconds (the platform's SessionStatsTracker uses 30 too).
+const NP_WINDOW_S := 30
 ## Default hold_limit_s.
 const DEFAULT_HOLD_LIMIT_S := 3.0
 
@@ -57,6 +63,10 @@ var _p: float = 0.0
 var _c: float = -1.0
 var _s: float = -1.0
 var _dist: float = 0.0
+## Held heart rate (bpm, 0 = none) and the value set_heart_rate() handed in for the next
+## record() call.
+var _hr: int = 0
+var _hr_in: int = 0
 var _next_k: int = 0
 ## Platform time of the last record() call (the held values' age).
 var _fresh_t: float = 0.0
@@ -68,6 +78,7 @@ var _rp: PackedFloat32Array = PackedFloat32Array()
 var _rc: PackedFloat32Array = PackedFloat32Array()
 var _rs: PackedFloat32Array = PackedFloat32Array()
 var _rd: PackedFloat64Array = PackedFloat64Array()
+var _rh: PackedInt32Array = PackedInt32Array()
 
 ## Timer events: [{rel, running}].
 var _events: Array[Dictionary] = []
@@ -97,6 +108,8 @@ func start(game_id: String, content_id: String, utc_start_unix: int, t: float) -
 	_c = -1.0
 	_s = -1.0
 	_dist = 0.0
+	_hr = 0
+	_hr_in = 0
 	_next_k = 0
 	_fresh_t = t
 	_rk = PackedInt32Array()
@@ -104,6 +117,7 @@ func start(game_id: String, content_id: String, utc_start_unix: int, t: float) -
 	_rc = PackedFloat32Array()
 	_rs = PackedFloat32Array()
 	_rd = PackedFloat64Array()
+	_rh = PackedInt32Array()
 	_events = [{"rel": 0.0, "running": true}]
 	_laps = [_new_lap("", 0.0)]
 	_total = _new_lap("", 0.0)
@@ -126,6 +140,7 @@ func record(t: float, power_w: float, cadence_rpm: float, speed_kmh: float) -> v
 	_p = maxf(power_w, 0.0) if is_finite(power_w) else 0.0
 	_c = cadence_rpm if is_finite(cadence_rpm) and cadence_rpm >= 0.0 else -1.0
 	_s = speed_kmh if is_finite(speed_kmh) and speed_kmh >= 0.0 else -1.0
+	_hr = _hr_in
 	_fresh_t = maxf(t, _last_t)
 	_note_max(_laps[_laps.size() - 1])
 	_note_max(_total)
@@ -174,6 +189,11 @@ func stop(t: float) -> void:
 
 func is_recording() -> bool:
 	return _recording
+
+
+## The rider's heart rate (bpm, 0 = none) for the next record() call.
+func set_heart_rate(bpm: int) -> void:
+	_hr_in = maxi(bpm, 0)
 
 
 func save(dir: String = "") -> String:
@@ -240,9 +260,12 @@ func summary() -> Dictionary:
 		"laps": laps,
 		"kj": tot["kj"],
 		"avg_power_w": tot["avg_power_w"],
+		"np_w": _r1(_normalized_power(tot["avg_power_w"])),
 		"max_power_w": tot["max_power_w"],
 		"avg_cadence_rpm": tot["avg_cadence_rpm"],
 		"max_cadence_rpm": tot["max_cadence_rpm"],
+		"avg_heart_rate_bpm": tot["avg_heart_rate_bpm"],
+		"max_heart_rate_bpm": tot["max_heart_rate_bpm"],
 		"avg_speed_kmh": tot["avg_speed_kmh"],
 		"max_speed_kmh": tot["max_speed_kmh"],
 		"fit_path": _saved_fit_path,
@@ -266,18 +289,22 @@ func fit_bytes() -> PackedByteArray:
 	return FitEncoder.encode_ride(fit_data())
 
 
-## Records so far: [{t_rel (s), power_w, cadence_rpm, speed_kmh, distance_m}].
+## Records so far: [{t_rel (s), power_w, cadence_rpm, speed_kmh, distance_m, heart_rate_bpm}].
 func records() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	for i in _rk.size():
-		out.append(
-			{
-				"t_rel": _rk[i],
-				"power_w": _rp[i],
-				"cadence_rpm": _rc[i],
-				"speed_kmh": _rs[i],
-				"distance_m": _rd[i]
-			}
+		(
+			out
+			. append(
+				{
+					"t_rel": _rk[i],
+					"power_w": _rp[i],
+					"cadence_rpm": _rc[i],
+					"speed_kmh": _rs[i],
+					"distance_m": _rd[i],
+					"heart_rate_bpm": _rh[i],
+				}
+			)
 		)
 	return out
 
@@ -312,6 +339,7 @@ func fit_data() -> Dictionary:
 					"cadence_rpm": _rc[i],
 					"speed_mps": _rs[i] / 3.6 if _rs[i] >= 0.0 else -1.0,
 					"distance_m": _rd[i],
+					"heart_rate_bpm": _rh[i],
 				}
 			)
 		)
@@ -335,6 +363,7 @@ func fit_data() -> Dictionary:
 		"session": sess,
 		"end_unix": _utc_start + roundi(end_rel),
 		"timer_s": float(sess["timer_s"]),
+		"heart_rate": float(_total["max_hr"]) > 0.0,
 	}
 
 
@@ -392,6 +421,9 @@ func _new_lap(label: String, start_rel: float) -> Dictionary:
 		"max_p": 0.0,
 		"max_c": -1.0,
 		"max_s": -1.0,
+		"hr_sum": 0.0,
+		"hr_time": 0.0,
+		"max_hr": 0.0,
 		"records": 0,
 		"trigger": FitEncoder.LAP_TRIGGER_MANUAL,
 	}
@@ -415,7 +447,7 @@ func _advance_to(t: float) -> void:
 ## Integrates the held values from _last_t to b; values older than hold_limit_s expire on
 ## the way (power 0, cadence and speed absent).
 func _integrate_to(b: float) -> void:
-	if hold_limit_s > 0.0 and (_p > 0.0 or _c >= 0.0 or _s >= 0.0):
+	if hold_limit_s > 0.0 and (_p > 0.0 or _c >= 0.0 or _s >= 0.0 or _hr > 0):
 		var stale_at := _fresh_t + hold_limit_s
 		if stale_at < b:
 			if stale_at > _last_t:
@@ -424,6 +456,7 @@ func _integrate_to(b: float) -> void:
 			_p = 0.0
 			_c = -1.0
 			_s = -1.0
+			_hr = 0
 	_integrate(b - _last_t)
 	_last_t = maxf(b, _last_t)
 
@@ -445,6 +478,9 @@ func _integrate(dt: float) -> void:
 		if _s >= 0.0:
 			acc["spd_sum"] = float(acc["spd_sum"]) + _s * dt
 			acc["spd_time"] = float(acc["spd_time"]) + dt
+		if _hr > 0:
+			acc["hr_sum"] = float(acc["hr_sum"]) + float(_hr) * dt
+			acc["hr_time"] = float(acc["hr_time"]) + dt
 
 
 func _note_max(acc: Dictionary) -> void:
@@ -453,6 +489,7 @@ func _note_max(acc: Dictionary) -> void:
 		acc["max_c"] = maxf(float(acc["max_c"]), _c)
 	if _s >= 0.0:
 		acc["max_s"] = maxf(float(acc["max_s"]), _s)
+	acc["max_hr"] = maxf(float(acc["max_hr"]), float(_hr))
 
 
 ## Emits the record due at `t` if t is (within EPS) its whole second.
@@ -467,9 +504,28 @@ func _emit_record() -> void:
 	_rc.append(roundf(_c) if _c >= 0.0 else -1.0)
 	_rs.append(_s)
 	_rd.append(_dist)
+	_rh.append(_hr)
 	_laps[_laps.size() - 1]["records"] = int(_laps[_laps.size() - 1]["records"]) + 1
 	_total["records"] = int(_total["records"]) + 1
 	_next_k += 1
+
+
+## Normalized power of the 1 Hz records: the 30 s rolling mean, to the 4th power, averaged, and
+## the 4th root; `fallback_w` (the average) for a ride under 30 s.
+func _normalized_power(fallback_w: float) -> float:
+	var n := _rp.size()
+	if n < NP_WINDOW_S:
+		return fallback_w
+	var sum := 0.0
+	for i in NP_WINDOW_S:
+		sum += _rp[i]
+	var acc := pow(sum / NP_WINDOW_S, 4.0)
+	var count := 1
+	for i in range(NP_WINDOW_S, n):
+		sum += _rp[i] - _rp[i - NP_WINDOW_S]
+		acc += pow(sum / NP_WINDOW_S, 4.0)
+		count += 1
+	return pow(acc / count, 0.25)
 
 
 func _lap_summary(acc: Dictionary, index: int) -> Dictionary:
@@ -496,6 +552,9 @@ func _lap_summary(acc: Dictionary, index: int) -> Dictionary:
 			else -1.0
 		),
 		"max_speed_kmh": _r2(float(acc["max_s"])),
+		"avg_heart_rate_bpm":
+		_r1(float(acc["hr_sum"]) / float(acc["hr_time"])) if float(acc["hr_time"]) > 0.0 else -1.0,
+		"max_heart_rate_bpm": float(acc["max_hr"]) if float(acc["max_hr"]) > 0.0 else -1.0,
 		"records": int(acc["records"]),
 	}
 	if index >= 0:
@@ -524,6 +583,8 @@ func _lap_fit(acc: Dictionary, index: int, end_rel: float) -> Dictionary:
 		"max_power_w": float(s["max_power_w"]),
 		"avg_cadence_rpm": float(s["avg_cadence_rpm"]),
 		"max_cadence_rpm": float(s["max_cadence_rpm"]),
+		"avg_heart_rate_bpm": float(s["avg_heart_rate_bpm"]),
+		"max_heart_rate_bpm": float(s["max_heart_rate_bpm"]),
 		"work_j": float(roundi(float(acc["work"]))),
 		"trigger": int(acc["trigger"]),
 	}

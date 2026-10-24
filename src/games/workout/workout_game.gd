@@ -147,7 +147,11 @@ func results() -> GameResults:
 	if ctx != null:
 		players = ctx.players
 		stats = ctx.stats
-	return WorkoutResults.build(state, stats, players)
+	var res := WorkoutResults.build(state, stats, players)
+	var tx := ctx.strings if ctx != null and ctx.strings != null else GameStrings.new()
+	res.ride_tag = WorkoutResults.ride_tag(session, tx)
+	res.ride_lines = WorkoutResults.ride_lines(state, res, tx)
+	return res
 
 
 func apply_progress(p_results: GameResults, progress: ProgressStore) -> Array:

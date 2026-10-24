@@ -14,19 +14,19 @@ func _fight(preferred: float = 90.0, relaxed: bool = false) -> H:
 		h.players[0].options["relaxed_band"] = relaxed
 		h.rebuild()
 	h.follow_band[0] = true
-	assert_true(h.run_to_state(0, FishingConst.ST_FIGHT, 60.0), "the fight starts")
+	assert_true(h.run_to_action(0, FishingConst.A_FIGHT, 60.0), "the fight starts")
 	return h
 
 
 ## A Free mackerel fight under way (a fish that could be a trophy).
 func _free_fight() -> H:
 	var probe := H.new()
-	probe.content = H.load_content("free_30")
+	probe.content = H.load_content("base_60")
 	var ls: Array[FishingPlanSlot] = [H.make_slot(probe.content, "mackerel", 0, 100.0, 0, 1.6)]
 	var h := H.new()
-	h.setup("free_30", 1, 3, [ls])
+	h.setup("base_60", 1, 3, [ls])
 	h.follow_band[0] = true
-	assert_true(h.run_to_state(0, FishingConst.ST_FIGHT, 900.0), "the fight starts")
+	assert_true(h.run_to_action(0, FishingConst.A_FIGHT, 900.0), "the fight starts")
 	return h
 
 
@@ -34,12 +34,12 @@ func _free_fight() -> H:
 func _hold(h: H, rpm: float) -> void:
 	h.follow_band[0] = false
 	h.cadence[0] = rpm
-	h.lane().cadence_ema = rpm
+	h.rider().cadence_ema = rpm
 
 
 func test_band_is_16_wide_with_its_low_edge_8_under_the_centre() -> void:
 	var h := _fight()
-	var l := h.lane()
+	var l := h.rider()
 	assert_almost_eq(l.band_center, 93.0, 0.01, "preferred 90 + offset 3 at S = 1")
 	assert_almost_eq(l.band_lo, 85.0, 0.01)
 	assert_almost_eq(l.band_hi - l.band_lo, FishingConst.BAND_WIDTH, 0.001)
@@ -49,23 +49,23 @@ func test_band_is_16_wide_with_its_low_edge_8_under_the_centre() -> void:
 
 func test_relaxed_band_is_22_wide() -> void:
 	var h := _fight(90.0, true)
-	assert_almost_eq(h.lane().band_hi - h.lane().band_lo, FishingConst.BAND_WIDTH_RELAXED, 0.001)
-	assert_eq([h.lane().pub_lo, h.lane().pub_hi], [85, 107])
+	assert_almost_eq(h.rider().band_hi - h.rider().band_lo, FishingConst.BAND_WIDTH_RELAXED, 0.001)
+	assert_eq([h.rider().pub_lo, h.rider().pub_hi], [85, 107])
 
 
 func test_low_edge_never_drops_below_65() -> void:
 	var h := _fight(70.0)
-	assert_almost_eq(h.lane().band_lo, 65.0, 0.001, "max(65, 73 - 8)")
-	h.lane().fish.s = 0.2
+	assert_almost_eq(h.rider().band_lo, 65.0, 0.001, "max(65, 73 - 8)")
+	h.rider().fish.s = 0.2
 	h.run(10.0)
-	assert_almost_eq(h.lane().band_lo, 65.0, 0.001, "the centre fell, the low edge holds")
-	assert_almost_eq(h.lane().band_hi, 81.0, 0.001)
+	assert_almost_eq(h.rider().band_lo, 65.0, 0.001, "the centre fell, the low edge holds")
+	assert_almost_eq(h.rider().band_hi, 81.0, 0.001)
 
 
 func test_band_centre_slides_at_most_3_rpm_per_second() -> void:
 	var h := _fight()
 	_hold(h, 90.0)
-	var l := h.lane()
+	var l := h.rider()
 	var c0 := l.band_center
 	l.fish.s = 0.0  # target centre 10 rpm lower
 	h.run(1.0)
@@ -94,7 +94,7 @@ func test_strain_fills_in_6_s_below_the_band_and_snaps() -> void:
 	_hold(h, 60.0)
 	var t0 := h.state.t
 	h.run(3.0)
-	assert_almost_eq(h.lane().strain, 0.5, 0.001, "1/6 per second")
+	assert_almost_eq(h.rider().strain, 0.5, 0.001, "1/6 per second")
 	assert_eq(h.events_of(FishingEvents.SNAP).size(), 0)
 	h.run(3.0)
 	assert_eq(h.events_of(FishingEvents.SNAP).size(), 1)
@@ -115,22 +115,22 @@ func test_slack_fills_in_6_s_above_the_band_and_throws_the_hook() -> void:
 func test_meters_drain_in_12_s() -> void:
 	var h := _fight()
 	_hold(h, 93.0)
-	h.lane().strain = 0.5
+	h.rider().strain = 0.5
 	h.run(3.0)
-	assert_almost_eq(h.lane().strain, 0.25, 0.001, "1/12 per second in band")
+	assert_almost_eq(h.rider().strain, 0.25, 0.001, "1/12 per second in band")
 	h.run(3.0)
-	assert_almost_eq(h.lane().strain, 0.0, 0.001)
-	h.lane().slack = 0.5
+	assert_almost_eq(h.rider().strain, 0.0, 0.001)
+	h.rider().slack = 0.5
 	_hold(h, 60.0)
 	h.run(3.0)
-	assert_almost_eq(h.lane().slack, 0.25, 0.001, "slack drains while strain fills")
-	assert_almost_eq(h.lane().strain, 0.5, 0.001)
+	assert_almost_eq(h.rider().slack, 0.25, 0.001, "slack drains while strain fills")
+	assert_almost_eq(h.rider().strain, 0.5, 0.001)
 
 
 func test_a_snap_costs_the_fish_and_a_lighter_replacement_hooks_itself_5_s_later() -> void:
 	var h := _fight()
 	h.run(5.0)
-	var l := h.lane()
+	var l := h.rider()
 	var kg0 := l.fish.kg
 	_hold(h, 60.0)
 	assert_true(h.run_until(func() -> bool: return l.fish.off_line, 7.0), "snapped")
@@ -147,10 +147,10 @@ func test_a_snap_costs_the_fish_and_a_lighter_replacement_hooks_itself_5_s_later
 	assert_true(l.fish.replacement)
 	assert_almost_eq(l.fish.s, s0, 0.0012, "the replacement keeps S (one tick of tiring)")
 	assert_almost_eq(l.fish.kg, kg0 * FishingConst.REPLACEMENT_KG, 0.0001, "x 0.75 kg")
-	assert_eq(l.state, FishingConst.ST_FIGHT, "the same phase")
+	assert_eq(l.action, FishingConst.A_FIGHT, "the same phase")
 	var rep := h.events_of(FishingEvents.REPLACEMENT)[0] as Dictionary
 	assert_eq(int(rep["sp"]), 0, "same species")
-	assert_true(h.run_to_state(0, FishingConst.ST_LANDING, 120.0), "the replacement is landed")
+	assert_true(h.run_to_action(0, FishingConst.A_LAND, 120.0), "the replacement is landed")
 	h.run(16.0)
 	var landed := h.events_of(FishingEvents.LANDED)[0] as Dictionary
 	assert_eq(int(landed["kg"]), roundi(kg0 * 0.75 * 10.0))
@@ -158,12 +158,12 @@ func test_a_snap_costs_the_fish_and_a_lighter_replacement_hooks_itself_5_s_later
 
 func test_a_replacement_is_never_a_trophy() -> void:
 	var h := _free_fight()
-	var l := h.lane()
+	var l := h.rider()
 	_hold(h, 50.0)
 	assert_true(h.run_until(func() -> bool: return l.fish.off_line, 7.0))
 	h.follow_band[0] = true
 	h.landing_w[0] = 1.4 * h.players[0].ftp
-	assert_true(h.run_to_state(0, FishingConst.ST_LANDING, 200.0))
+	assert_true(h.run_to_action(0, FishingConst.A_LAND, 200.0))
 	h.run(16.0)
 	assert_almost_eq(l.gaff, 1.0, 0.001, "the gaff meter filled")
 	var landed := h.events_of(FishingEvents.LANDED)[0] as Dictionary
@@ -174,7 +174,7 @@ func test_a_replacement_is_never_a_trophy() -> void:
 func test_rescue_freezes_s_meters_and_band_and_the_fish_swims_out() -> void:
 	var h := _fight()
 	h.run(5.0)
-	var l := h.lane()
+	var l := h.rider()
 	l.strain = 0.3
 	var s0 := l.fish.s
 	var c0 := l.band_center
@@ -203,7 +203,7 @@ func test_rescue_freezes_s_meters_and_band_and_the_fish_swims_out() -> void:
 func test_module_rescue_flag_counts_too() -> void:
 	var h := _fight()
 	h.run(3.0)
-	var l := h.lane()
+	var l := h.rider()
 	var s0 := l.fish.s
 	l.rescue = true
 	h.run(2.0)
@@ -215,7 +215,7 @@ func test_afk_flags_and_stale_telemetry_stagger_the_lane() -> void:
 	for how: String in ["telemetry_afk", "module_afk", "stale", "disconnected"]:
 		var h := _fight()
 		h.run(3.0)
-		var l := h.lane()
+		var l := h.rider()
 		var s0 := l.fish.s
 		match how:
 			"telemetry_afk":
@@ -229,20 +229,20 @@ func test_afk_flags_and_stale_telemetry_stagger_the_lane() -> void:
 		h.run(2.0)
 		assert_true(l.staggered, how)
 		assert_almost_eq(l.fish.s, s0, 0.0001, how)
-		assert_eq(h.lane().stale, how in ["stale", "disconnected"], how)
+		assert_eq(h.rider().stale, how in ["stale", "disconnected"], how)
 
 
 func test_fresh_telemetry_under_3_s_is_no_stagger() -> void:
 	var h := _fight()
 	h.age_s[0] = 2.9
 	h.run(2.0)
-	assert_false(h.lane().staggered)
+	assert_false(h.rider().staggered)
 
 
 func test_stale_cadence_freezes_only_the_meters() -> void:
 	var h := _fight()
 	h.run(3.0)
-	var l := h.lane()
+	var l := h.rider()
 	_hold(h, 60.0)
 	h.cadence_age_s[0] = 3.5
 	l.strain = 0.2

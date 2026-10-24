@@ -1,6 +1,7 @@
 keys,en
 UI_MODULE_NAME,Interface
 UI_HUD_W,W
+UI_HUD_HR,{0} bpm
 UI_HUD_WATTS,{0} W
 UI_HUD_RPM,rpm
 UI_HUD_FTP,% FTP
@@ -31,10 +32,14 @@ UI_KIND_FREE,Free ride
 UI_KIND_COOLDOWN,Cool-down
 UI_BANNER_RESCUE,"Rescue: easy spin, lift your cadence above 70 rpm"
 UI_BANNER_WARMUP,Warm-up: easy for 5 minutes
-UI_BANNER_PAUSED,Paused
+UI_PAUSE_TITLE,PAUSED
+UI_PAUSE_HINT,Start pedaling to ride on
 UI_SCAN_HINT,Surge to pick · stop pedaling to go back
 UI_SCAN_HINT_ERG,Surge to pick · keep pedaling
 UI_SCAN_AUTO_IN,Picks itself in {0} s · surge to pick now
+UI_NAV_HINT,Up and down to move · confirm to pick · back to return
+UI_SURGE_GRAPH_NOW,Surge above {0} W to pick
+UI_SURGE_GRAPH_WAIT,Keep pedaling steadily to arm the surge
 UI_ACTION_CONFIRM,Confirm
 UI_ACTION_BACK,Back
 UI_ACTION_UP,Up

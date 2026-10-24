@@ -401,18 +401,103 @@ func test_startup_connects_from_the_command_line() -> void:
 	assert_true(r.strava_connected(), "scripted peers connect at start")
 
 
-func test_activity_name_and_description() -> void:
-	assert_eq(WlRides.activity_name({"game_id": "workout"}), "Wattlands: Workout")
+func test_activity_name() -> void:
+	assert_eq(WlRides.activity_name({"game_id": "workout"}), "WATTLANDS: Workout")
 	assert_eq(
 		WlRides.activity_name({"game_id": "siege", "game_title": "Castellum Rotae"}),
-		"Wattlands: Castellum Rotae"
+		"WATTLANDS: Castellum Rotae"
 	)
-	var d := WlRides.activity_description(
-		{"content_id": "easy30", "kj": 360.4, "avg_power_w": 199.6}
+	var tagged := {"game_title": "Workout", "ride_tag": "Sweet spot 2x20", "content_title": "Easy"}
+	assert_eq(WlRides.activity_name(tagged), "WATTLANDS: Workout - Sweet spot 2x20")
+	tagged["ride_tag"] = ""
+	assert_eq(WlRides.activity_name(tagged), "WATTLANDS: Workout - Easy", "the content title")
+	tagged["content_title"] = ""
+	assert_eq(WlRides.activity_name(tagged), "WATTLANDS: Workout", "no ' - ' without a tag")
+
+
+func test_activity_description_lists_game_lines_then_the_platform_stats() -> void:
+	var d := (
+		WlRides
+		. activity_description(
+			{
+				"ride_lines": ["Intervals: 4 of 4", "Time in band: 18:12"],
+				"timer_s": 1798.4,
+				"duration_s": 1830.0,
+				"distance_m": 14320.0,
+				"avg_power_w": 181.6,
+				"np_w": 190.2,
+				"avg_cadence_rpm": 88.4,
+				"kj": 327.9,
+				"avg_heart_rate": 150,
+			}
+		)
 	)
-	assert_string_contains(d, "easy30")
-	assert_string_contains(d, "360 kJ")
-	assert_string_contains(d, "200 W")
+	assert_eq(
+		d.split("\n"),
+		PackedStringArray(
+			[
+				"Intervals: 4 of 4",
+				"Time in band: 18:12",
+				"Moving time: 29:58",
+				"Distance: 14.3 km",
+				"Average power: 182 W",
+				"Normalized power: 190 W",
+				"Average cadence: 88 rpm",
+				"Work: 328 kJ",
+				"Recorded with WATTLANDS",
+			]
+		)
+	)
+	assert_false(d.to_lower().contains("heart"), "no heart rate in the text")
+
+
+func test_activity_description_leaves_out_what_the_ride_lacks() -> void:
+	var d := WlRides.activity_description({"timer_s": 3725.0, "avg_power_w": 100.0, "kj": 10.0})
+	assert_eq(
+		d.split("\n"),
+		PackedStringArray(
+			[
+				"Moving time: 1:02:05",
+				"Average power: 100 W",
+				"Work: 10 kJ",
+				"Recorded with WATTLANDS",
+			]
+		)
+	)
+
+
+func test_summary_has_normalized_power() -> void:
+	var r := _rides()
+	var steady := _record(r)
+	assert_almost_eq(float(steady.summary()["np_w"]), 200.0, 0.2, "steady power: NP = average")
+	var rec := r.new_recorder() as RideRecorder
+	rec.start("workout", "e2e", NOW, 0.0)
+	for i in 120:
+		rec.record(float(i), 100.0 if i < 60 else 300.0, 90.0, 32.0)
+	rec.stop(120.0)
+	var sm := rec.summary()
+	assert_gt(float(sm["np_w"]), float(sm["avg_power_w"]), "NP rises above the average")
+
+
+func test_the_games_ride_tag_and_lines_go_into_the_saved_summary_and_the_upload() -> void:
+	var r: WlRides = await _connected()
+	var res := GameResults.new()
+	res.ride_tag = "Sweet spot"
+	res.ride_lines = ["Intervals: 2 of 2"]
+	_bus.results_ready.emit(res)
+	var rec := _record(r)
+	var path := r.save_ride(rec)
+	var saved := r._read_summary(path)
+	assert_eq(saved["ride_tag"], "Sweet spot")
+	assert_eq(saved["ride_lines"], ["Intervals: 2 of 2"])
+	await r.upload(path, rec.summary())
+	var up: Dictionary = (await _mock.uploads())[0]
+	assert_eq(up["name"], "WATTLANDS: Workout - Sweet spot")
+	assert_string_contains(str(up["description"]), "Intervals: 2 of 2")
+	assert_true(str(up["description"]).ends_with("Recorded with WATTLANDS"))
+	var rec2 := _record(r, "workout", NOW + 100)
+	var path2 := r.save_ride(rec2)
+	assert_eq(r._read_summary(path2).get("ride_tag", ""), "", "results apply to one ride only")
 
 
 func test_upload_with_an_empty_summary_uses_the_saved_one() -> void:
@@ -428,7 +513,11 @@ func test_upload_with_an_empty_summary_uses_the_saved_one() -> void:
 	var ups: Array = await _mock.uploads()
 	assert_eq(ups.size(), 1)
 	assert_eq((ups[0] as Dictionary)["external_id"], rec.ride_id)
-	assert_eq((ups[0] as Dictionary)["name"], "Wattlands: Workout", "named from the saved summary")
+	assert_eq(
+		(ups[0] as Dictionary)["name"],
+		"WATTLANDS: Workout - E2E (2 minutes)",
+		"named from the saved summary: the game, then the content's title"
+	)
 	await r.upload(_dir.path_join("no_such.fit"), {})
 	assert_push_warning("without ride_id")
 

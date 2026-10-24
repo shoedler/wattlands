@@ -1,12 +1,13 @@
 extends GutTest
-## FishingResults (brief 2.8, GAME_SDK 15): grade bands, rows and stats, XP, unlocks, the summary
-## from the store and apply_progress, on hand-built FishingState data.
+## FishingResults (GAME_SDK 15): grade bands, rows and stats, rank and furthest out, XP, unlocks,
+## the Strava ride tag and lines, the summary from the store and apply_progress, on hand-built
+## FishingState data.
 
 const F := preload("res://tests/games/fishing/fishing_fakes.gd")
 
 
-func _game(humans: int = 2) -> FishingGame:
-	return autofree(F.make_game(F.make_ctx(humans, 0, "e2e_2min")))
+func _game(humans: int = 2, content: String = "e2e_2min") -> FishingGame:
+	return autofree(F.make_game(F.make_ctx(humans, 0, content)))
 
 
 func _catch(sp: String, kg: float, grade: int, fight_s: float, points: int) -> Dictionary:
@@ -19,10 +20,10 @@ func _catch(sp: String, kg: float, grade: int, fight_s: float, points: int) -> D
 	}
 
 
-## Lane 0: a trophy tuna and a mackerel, one lost line; lane 1: nothing.
+## Rider 0: a trophy tuna and a mackerel, one lost line, 4.2 km out; rider 1: nothing.
 func _fill(g: FishingGame) -> void:
 	var st := g.state
-	var a := st.lanes[0]
+	var a := st.riders[0]
 	a.catches = [
 		_catch("tuna", 54.24, FishingConst.GRADE_TROPHY, 372.4, 220),
 		_catch("mackerel", 1.5, FishingConst.GRADE_LANDED, 75.0, 24),
@@ -37,6 +38,9 @@ func _fill(g: FishingGame) -> void:
 	a.band_s = 300.0
 	a.fight_total_s = 400.0
 	a.records = {"tuna": 60.0}
+	a.furthest_x_m = 4249.0
+	if st.riders.size() > 1:
+		st.riders[1].furthest_x_m = 22.0
 	st.team_points = 244
 	st.team_fish = 2
 	st.fish_started = 3
@@ -95,8 +99,10 @@ func test_rows_carry_band_stats_in_reading_order_and_team_values() -> void:
 			FishingResults.STAT_LOST,
 			FishingResults.STAT_BIGGEST,
 			FishingResults.STAT_LONGEST,
-			FishingResults.STAT_POINTS
-		]
+			FishingResults.STAT_POINTS,
+			FishingResults.STAT_FURTHEST
+		],
+		"a workout has no rank"
 	)
 	assert_eq(row["stats"][FishingResults.STAT_FISH], 2)
 	assert_eq(row["stats"][FishingResults.STAT_TROPHIES], 1)
@@ -104,6 +110,7 @@ func test_rows_carry_band_stats_in_reading_order_and_team_values() -> void:
 	assert_string_ends_with(str(row["stats"][FishingResults.STAT_BIGGEST]), " 54.2 kg")
 	assert_eq(row["stats"][FishingResults.STAT_LONGEST], "6:12")
 	assert_eq(row["stats"][FishingResults.STAT_POINTS], 244)
+	assert_eq(row["stats"][FishingResults.STAT_FURTHEST], "4.2 km")
 	var other := res.row(2)
 	assert_eq(other["time_in_band_pct"], 0.0, "no fight time: 0 %")
 	assert_eq(other["stats"][FishingResults.STAT_BIGGEST], FishingResults.NONE_TEXT)
@@ -116,6 +123,75 @@ func test_rows_carry_band_stats_in_reading_order_and_team_values() -> void:
 			FishingResults.TEAM_TROPHIES: 1
 		}
 	)
+
+
+func test_free_roam_rows_rank_the_riders_by_points() -> void:
+	var g := _game(3, "roam_10")
+	g.state.riders[0].points = 120
+	g.state.riders[1].points = 300
+	g.state.riders[2].points = 120
+	assert_eq(FishingResults.rank_of(g.state), {0: 2, 1: 1, 2: 2}, "ties share the better rank")
+	var res := FishingResults.build(g.state, _stats({}), g.ctx.players, g.content, g.ctx.strings)
+	assert_eq(res.row(2)["stats"][FishingResults.STAT_RANK], 1)
+	assert_eq(res.row(3)["stats"][FishingResults.STAT_RANK], 2)
+	var solo := _game(1, "roam_10")
+	var one := FishingResults.build(solo.state, _stats({}), solo.ctx.players, solo.content)
+	assert_false(
+		(one.row(1)["stats"] as Dictionary).has(FishingResults.STAT_RANK), "alone: no rank"
+	)
+
+
+func test_the_ride_tag_names_free_roam_or_the_workout() -> void:
+	var g := _game(1, "roam_10")
+	var res := FishingResults.build(g.state, _stats({}), g.ctx.players, g.content, g.ctx.strings)
+	assert_eq(res.ride_tag, "Free Roam 10 min")
+	var w := _game(1, "threshold")
+	var wres := FishingResults.build(w.state, _stats({}), w.ctx.players, w.content, w.ctx.strings)
+	assert_eq(wres.ride_tag, w.ctx.strings.t(w.content.trip.label))
+	assert_ne(wres.ride_tag, w.content.trip.label, "the workout's name, not its key")
+
+
+func test_ride_lines_tell_fish_biggest_points_rank_and_furthest() -> void:
+	var g := _game(2, "roam_10")
+	_fill(g)
+	g.state.riders[1].points = 400
+	var res := FishingResults.build(g.state, _stats({}), g.ctx.players, g.content, g.ctx.strings)
+	var tuna := FishingResults.species_name(
+		FishingConst.species_index("tuna"), g.content, g.ctx.strings
+	)
+	var want: Array[String] = [
+		"Fish caught: 2",
+		"Biggest fish: %s, 54.2 kg" % tuna,
+		"Points: 244",
+		"Rank: 2 of 2",
+		"Furthest out: 4.2 km"
+	]
+	assert_eq(res.row(1)["ride_lines"], want)
+	assert_eq(res.ride_lines, want, "the host's rider by default")
+	var lines: Array = res.row(2)["ride_lines"]
+	assert_eq(lines.size(), 4, "no biggest fish without a catch")
+	assert_eq(lines[2], "Rank: 1 of 2")
+	var w := _game(1)
+	_fill(w)
+	var wres := FishingResults.build(w.state, _stats({}), w.ctx.players, w.content, w.ctx.strings)
+	assert_false(" ".join(wres.ride_lines).contains("Rank"), "workouts are co-op: no rank")
+
+
+func test_every_row_keeps_its_own_ride_lines_and_apply_progress_leaves_results_alone() -> void:
+	var g := _game(2, "roam_10")
+	_fill(g)
+	var res := FishingResults.build(g.state, _stats({}), g.ctx.players, g.content, g.ctx.strings)
+	res.session_id = "fishing/roam_10/7"
+	res = GameResults.from_dict(JSON.parse_string(JSON.stringify(res.to_dict())))
+	assert_string_starts_with(res.ride_lines[0], "Fish caught: 2")
+	var p := ProgressStore.open("fishing", "")
+	var before := JSON.stringify(res.to_dict())
+	FishingResults.apply_progress(res, p, 2, g.content, "roam_10")
+	assert_eq(JSON.stringify(res.to_dict()), before, "results stay identical on every peer")
+	var own: Array = res.row(2)["ride_lines"]
+	assert_eq(own.size(), 4)
+	assert_eq(own[0], "Fish caught: 0", "peer 2's own lines")
+	assert_eq(own[3], "Furthest out: 0.0 km")
 
 
 func test_xp_counts_kj_fish_trophies_and_new_records() -> void:
@@ -157,7 +233,7 @@ func test_unlocks_come_every_500_xp_of_the_running_total() -> void:
 		["line_orange", "canopy_stripes", "trim_teal"]
 	)
 	assert_eq(FishingResults.unlocked_ids(items, 500, 1000000).size(), items.size(), "capped")
-	g.state.lanes[0].summary_xp = 480
+	g.state.riders[0].summary_xp = 480
 	var res := FishingResults.build(g.state, _stats({1: {"kj": 30.0}}), g.ctx.players, g.content)
 	assert_eq(res.row(1)["xp"], 30)
 	assert_eq(res.row(1)["unlocks"], ["line_orange"], "480 + 30 crosses 500")
@@ -178,11 +254,11 @@ func test_summary_reads_xp_records_and_the_equipped_look() -> void:
 		{"xp": 0, "records": {}, "cosmetics": [0, 0, 0, 0] as Array[int]}
 	)
 	p.set_value("xp", 1234.0)
-	p.set_value("records", {"tuna": 61.5, "bogus": 3.0})
+	p.set_value("records", {"tuna": 61.5, "grouper": 210.0, "bogus": 3.0})
 	p.set_value("unlocks", ["line_orange", "canopy_stripes", "trim_teal", "line_lime"])
 	var s := FishingResults.summary_from(p, g.content)
 	assert_eq(s["xp"], 1234)
-	assert_eq(s["records"], {"tuna": 61.5})
+	assert_eq(s["records"], {"tuna": 61.5, "grouper": 210.0}, "every v2 species, nothing else")
 	assert_eq(s["cosmetics"], [2, 1, 1, 0] as Array[int], "newest per kind without 'equipped'")
 	p.set_value("equipped", {"line": "line_orange"})
 	assert_eq(FishingResults.summary_from(p, g.content)["cosmetics"], [1, 0, 0, 0] as Array[int])
@@ -191,7 +267,7 @@ func test_summary_reads_xp_records_and_the_equipped_look() -> void:
 func test_apply_progress_updates_the_local_rider_once_per_session() -> void:
 	var g := _game()
 	_fill(g)
-	g.state.lanes[0].summary_xp = 400
+	g.state.riders[0].summary_xp = 400
 	var res := FishingResults.build(
 		g.state, _stats({1: {"kj": 150.4}, 2: {"kj": 80.0}}), g.ctx.players, g.content
 	)
@@ -247,12 +323,12 @@ func test_apply_progress_survives_a_json_round_trip_and_equips_each_kinds_newest
 
 
 func test_dates_come_from_the_session_nonce_never_a_clock() -> void:
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7/1a168a1da00-1"), "2026-10-23")
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7/dd9aa6e000-2"), "2000-02-29")
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7/1941f297818-a"), "2024-12-31")
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7/0-1"), "1970-01-01")
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7"), "", "run_game_sim: none")
-	assert_eq(FishingResults.date_from_session_id("fishing/free_30/7/zz-1"), "")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7/1a168a1da00-1"), "2026-10-23")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7/dd9aa6e000-2"), "2000-02-29")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7/1941f297818-a"), "2024-12-31")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7/0-1"), "1970-01-01")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7"), "", "run_game_sim: none")
+	assert_eq(FishingResults.date_from_session_id("fishing/roam_30/7/zz-1"), "")
 	assert_eq(FishingResults.date_from_session_id(""), "")
 	assert_eq(FishingResults.clock_text(372.4), "6:12")
 	assert_eq(FishingResults.clock_text(59.6), "1:00")
@@ -267,3 +343,4 @@ func test_the_module_builds_results_from_its_state() -> void:
 	assert_eq(res.row(1)["xp"], 10 + 20 + 25 + 50)
 	assert_eq(g.apply_progress(res, g.ctx.progress), [])
 	assert_eq(int(g.ctx.progress.get_value("xp")), 105)
+	assert_eq(res.ride_lines[0], "Fish caught: 2", "the host rider's lines")
