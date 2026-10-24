@@ -18,10 +18,19 @@ var dim: bool = false
 var fill_color: Color = WlTheme.BAR_FILL
 ## Draw tick segments (the gear indicator); 0 = none.
 var segments: int = 0
+## The game's colors (HudWidget.set_palette): bar_bg, bar_fg, accent, text.
+var palette: HudPalette = HudPalette.new()
 
 
 func _init() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+
+## Use `p` for the background, fill, band and marker colors (null = the kit look).
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
+	fill_color = palette.pick(HudPalette.BAR_FG, WlTheme.BAR_FILL)
+	queue_redraw()
 
 
 func set_state(
@@ -54,7 +63,9 @@ func _draw() -> void:
 	if r.size.x <= 0.0 or r.size.y <= 0.0:
 		return
 	var a := 0.45 if dim else 1.0
-	draw_rect(r, Color(WlTheme.BAR_BG, WlTheme.BAR_BG.a * a))
+	var bg := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
+	var accent := palette.pick(HudPalette.ACCENT, WlTheme.ACCENT)
+	draw_rect(r, Color(bg, bg.a * a))
 	if segments > 0:
 		var seg_w := r.size.x / float(segments)
 		var lit := roundi(frac(value) * segments)
@@ -62,21 +73,28 @@ func _draw() -> void:
 			var sr := Rect2(
 				r.position.x + i * seg_w + 1.0, r.position.y, maxf(1.0, seg_w - 2.0), r.size.y
 			)
-			var c := WlTheme.ACCENT if i < lit else Color(1, 1, 1, 0.18)
+			var c := accent if i < lit else Color(1, 1, 1, 0.18)
 			draw_rect(sr, Color(c, c.a * a))
 		return
 	if has_band():
 		var x0 := frac(band_lo) * r.size.x
 		var x1 := frac(band_hi) * r.size.x
 		var bc := WlTheme.BAND_IN if glow else WlTheme.BAND
+		if palette.has_key(HudPalette.ACCENT):
+			bc = Color(accent.lightened(0.5) if glow else accent, bc.a)
 		draw_rect(Rect2(x0, 0.0, maxf(2.0, x1 - x0), r.size.y), Color(bc, bc.a * a))
-		draw_line(Vector2(x0, 0.0), Vector2(x0, r.size.y), Color(WlTheme.ACCENT, a), 2.0)
-		draw_line(Vector2(x1, 0.0), Vector2(x1, r.size.y), Color(WlTheme.ACCENT, a), 2.0)
+		draw_line(Vector2(x0, 0.0), Vector2(x0, r.size.y), Color(accent, a), 2.0)
+		draw_line(Vector2(x1, 0.0), Vector2(x1, r.size.y), Color(accent, a), 2.0)
 	var fw := frac(value) * r.size.x
 	var inset := r.size.y * 0.25
 	draw_rect(Rect2(0.0, inset, fw, r.size.y - 2.0 * inset), Color(fill_color, fill_color.a * a))
 	if marker >= 0.0:
 		var mx := frac(marker) * r.size.x
-		draw_line(Vector2(mx, -2.0), Vector2(mx, r.size.y + 2.0), Color(WlTheme.TEXT, a), 4.0)
+		draw_line(
+			Vector2(mx, -2.0),
+			Vector2(mx, r.size.y + 2.0),
+			Color(palette.pick(HudPalette.TEXT, WlTheme.TEXT), a),
+			4.0
+		)
 	if glow:
 		draw_rect(r.grow(2.0), WlTheme.GLOW, false, 4.0)
