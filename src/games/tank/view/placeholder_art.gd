@@ -134,8 +134,11 @@ static func prepared_image(id: String, src: Image) -> Image:
 	if is_steel(id):
 		img = material_grade(img, id)
 		img = machinery_fixed(id, img)
+		if id.begins_with("enemy_") or id == "boss_hull":
+			img = armour_details(img, id)
 	if STRIP_SEGMENTS.has(id):
 		img = composed_strip(id, img)
+		img = strip_filler(id, img)
 	return img
 
 
@@ -361,8 +364,500 @@ static func material_grade(src: Image, id: String) -> Image:
 			if n < 2:
 				img.set_pixel(x, y, steel)
 	if is_plated(id):
+		despeckle(img)
 		_rim(img, id)
 	return img
+
+
+## Luminance gap (about 1.5 grey steps) above which a lone pixel is speckle (despeckle).
+const SPECKLE_LUM := 0.065
+
+
+## Removes per-pixel dust noise from armour in place (soft muted shading, not salt and pepper): a
+## pixel whose luminance is more than SPECKLE_LUM from the median of itself and its four neighbours
+## takes the neighbour at that median. A plus-shaped median keeps one-pixel plate seams (a line has
+## two neighbours of its own along it) and rivet rows are kept (a like pixel 2-5 px away on both
+## sides along a row or a column); a lone dot of dust is not.
+static func despeckle(img: Image) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var src := img.duplicate() as Image
+	var lum := PackedFloat32Array()
+	lum.resize(w * h)
+	for y in h:
+		for x in w:
+			var c := src.get_pixel(x, y)
+			lum[y * w + x] = c.get_luminance() if c.a > 0.5 else -1.0
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var i := y * w + x
+			var l := lum[i]
+			if l < 0.0:
+				continue
+			var idx: Array[int] = [i, i - 1, i + 1, i - w, i + w]
+			var vals: Array[float] = []
+			var ok := true
+			for k in idx:
+				if lum[k] < 0.0:
+					ok = false
+					break
+				vals.append(lum[k])
+			if not ok:
+				continue
+			var sorted := vals.duplicate()
+			sorted.sort()
+			var m: float = sorted[2]
+			if absf(l - m) < SPECKLE_LUM or _rivet_row(lum, w, h, x, y):
+				continue
+			var pick := idx[vals.find(m)]
+			img.set_pixel(x, y, src.get_pixel(pick % w, pick / w))
+
+
+## True when the pixel at (x, y) has a like pixel (luminance within 0.02) 2-5 px away on both sides
+## along its row or along its column: a rivet in a row of rivets, not a lone speck.
+static func _rivet_row(lum: PackedFloat32Array, w: int, h: int, x: int, y: int) -> bool:
+	var l := lum[y * w + x]
+	for axis in 2:
+		var hits := 0
+		for side: int in [-1, 1]:
+			for d in range(2, 6):
+				var xx := x + side * d * (1 - axis)
+				var yy := y + side * d * axis
+				if xx < 0 or yy < 0 or xx >= w or yy >= h:
+					break
+				var v := lum[yy * w + xx]
+				if v >= 0.0 and absf(v - l) < 0.02:
+					hits += 1
+					break
+		if hits == 2:
+			return true
+	return false
+
+
+## Enemy and Behemoth armour read as riveted plate at 640 x 360 (the scene critic): the dug-in's
+## concrete aside, every enemy gets two or three vertical plate seams (a dark joint with a lit edge
+## and a rivet every 4 px) over its body above the tracks, rust and mud crumbs are cleared and a few
+## large mud splashes sit on the lower hull. The medium's slab gets a low boxy turret on its roof and
+## a mantlet where the gun leaves the slab; the Behemoth's lower hull darkens smoothly toward the
+## ground. Deterministic and palette-only.
+static func armour_details(src: Image, id: String) -> Image:
+	var img := src.duplicate() as Image
+	var w := img.get_width()
+	var h := img.get_height()
+	var c := Canvas.new(w, h)
+	c.img = img
+	c.seed_value = absi(id.hash()) % 9973
+	var rigs: Variant = JSON.parse_string(FileAccess.get_file_as_string(RIGS_JSON))
+	var en: Dictionary = (
+		((rigs as Dictionary).get("enemies", {}) as Dictionary).get(id, {})
+		if rigs is Dictionary
+		else {}
+	)
+	var boss := id == "boss_hull"
+	var body_bottom := int(en.get("track_y", h)) - 2 if not boss else int(h * 0.82)
+	_clear_crumbs(img, 3 if not boss else 5)
+	if boss:
+		_clear_crumbs(img, 5)
+	if boss:
+		_lower_gradient(img, int(h * 0.55))
+	if id != "enemy_dugin":
+		var tops := PackedInt32Array()
+		tops.resize(w)
+		for x in w:
+			tops[x] = h
+			for y in h:
+				if img.get_pixel(x, y).a > 0.5:
+					tops[x] = y
+					break
+		var spacing := maxi(22, w / 4) if not boss else 40
+		var x := spacing / 2 + int(c.noise(1, 1) * 6.0)
+		while x < w - 6:
+			if body_bottom - tops[x] >= 12:
+				_seam(c, x, tops[x] + 2, body_bottom)
+			x += spacing + int(c.noise(x, 3) * 6.0) - 3
+	_mud_splashes(c, body_bottom, 5 if not boss else 12)
+	if id == "enemy_medium":
+		_medium_turret(c, en)
+	return c.img
+
+
+## One vertical plate seam from row y0 to y1 at column x (opaque pixels only): a #0f1012 joint, the
+## plate edge left of it lit #424446, and a rivet (#666869 over a #0f1012 shadow) every 4 rows.
+static func _seam(c: Canvas, x: int, y0: int, y1: int) -> void:
+	for y in range(y0, y1):
+		if not (c.solid(x, y) and c.solid(x - 1, y) and c.solid(x + 2, y)):
+			continue
+		c.px(x, y, G1)
+		if c.img.get_pixel(x - 1, y).get_luminance() < G6.get_luminance():
+			c.px(x - 1, y, G5)
+		if (y - y0) % 4 == 1 and c.solid(x + 3, y + 1):
+			c.px(x + 2, y, G7)
+			c.px(x + 3, y + 1, G1)
+
+
+## Rust and mud pixels with fewer than `need` earth neighbours become the steel next to them.
+static func _clear_crumbs(img: Image, need: int) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var earth := {}
+	for col: Color in [R0, R1, R2, B0, B1, B2, B3, B4, B5]:
+		earth[col.to_rgba32()] = true
+	var src := img.duplicate() as Image
+	for y in h:
+		for x in w:
+			var cc := src.get_pixel(x, y)
+			if cc.a < 0.5 or not earth.has(cc.to_rgba32()):
+				continue
+			var n := 0
+			var steel := G3
+			for dy in range(-1, 2):
+				for dx in range(-1, 2):
+					if (
+						(dx == 0 and dy == 0)
+						or not Rect2i(0, 0, w, h).has_point(Vector2i(x + dx, y + dy))
+					):
+						continue
+					var nc := src.get_pixel(x + dx, y + dy)
+					if nc.a < 0.5:
+						continue
+					if earth.has(nc.to_rgba32()):
+						n += 1
+					else:
+						steel = nc
+			if n < need:
+				img.set_pixel(x, y, steel)
+
+
+## Greys below row `from_y` step down toward the ground: one tone darker past the middle of the
+## band, two in its last fifth (a smooth grime gradient instead of speckle).
+static func _lower_gradient(img: Image, from_y: int) -> void:
+	var w := img.get_width()
+	var h := img.get_height()
+	var greys: Array[Color] = [G0, G1, G2, G3, G4, G5, G6, G7, G8, G9, G10, G11]
+	for y in range(from_y, h):
+		var t := float(y - from_y) / maxf(float(h - from_y), 1.0)
+		var step := 0 if t < 0.35 else (1 if t < 0.8 else 2)
+		if step == 0:
+			continue
+		for x in w:
+			var cc := img.get_pixel(x, y)
+			if cc.a < 0.5:
+				continue
+			var gi := greys.find(Color(cc.r, cc.g, cc.b, 1.0))
+			if gi > 0:
+				img.set_pixel(x, y, greys[maxi(gi - step, 1)])
+
+
+## A few large mud splashes (4-8 px wide) on the lower hull just above `bottom`, with a lit rim on top.
+static func _mud_splashes(c: Canvas, bottom: int, n: int) -> void:
+	for k in n:
+		var cx := int(c.noise(k, 11) * float(c.w - 12)) + 6
+		var cy := bottom - 2 - int(c.noise(k, 12) * 5.0)
+		var rx := 2.0 + c.noise(k, 13) * 2.5
+		var ry := 1.0 + c.noise(k, 14) * 1.2
+		for y in range(int(cy - ry) - 1, int(cy + ry) + 2):
+			for x in range(int(cx - rx) - 1, int(cx + rx) + 2):
+				var dx := (float(x) - float(cx)) / rx
+				var dy := (float(y) - float(cy)) / ry
+				if dx * dx + dy * dy > 1.0 or not c.solid(x, y):
+					continue
+				c.px(x, y, B2 if dy < -0.4 else B1)
+
+
+## The medium's tall slab gets a low boxy turret on its roof (a sloped front, a lit top and rear, a
+## dark ring shadow) and a mantlet block where its gun meets the slab's face.
+static func _medium_turret(c: Canvas, en: Dictionary) -> void:
+	var w := c.w
+	var gy := int((en.get("muzzle", [0, 15]) as Array)[1])
+	# The slab: the first column, left to right, at least 12 px tall.
+	var root := -1
+	for x in w:
+		var n := 0
+		for y in c.h:
+			if c.solid(x, y):
+				n += 1
+		if n >= 12:
+			root = x
+			break
+	if root < 0:
+		return
+	var top := c.h
+	var mid := int(w * 0.6)
+	for y in c.h:
+		if c.solid(mid, y):
+			top = y
+			break
+	var x0 := root + 10
+	var x1 := root + 38
+	var th := mini(6, top)
+	if th >= 3:
+		for r in th:
+			var y := top - th + r
+			var left := x0 + (th - 1 - r)
+			c.rect(left, y, x1 - left, 1, G4 if r > 0 else O2)
+			c.px(x1 - 1, y, O2)
+			c.px(left, y, G5)
+		c.rect(x0 + th + 2, top - th + 2, 3, 1, G1)
+		c.rect(x0 + 4, top, x1 - x0 - 4, 1, G1)
+		c.rect(x1 - 9, top - th - 1, 5, 1, G3)
+	# The mantlet: a cast block around the gun's root on the slab face.
+	c.rect(root - 4, gy - 4, 6, 9, G4)
+	c.rect(root - 4, gy - 4, 6, 1, G6)
+	c.rect(root - 4, gy - 4, 1, 9, G5)
+	c.rect(root - 4, gy + 4, 6, 1, G1)
+	c.rect(root + 2, gy - 4, 1, 9, G2)
+
+
+## The plain fields of a near strip (every column with nothing above the horizon) are not left as flat
+## streaks under a ruler-straight horizon (the scene critic): the horizon rolls (a low-frequency rise
+## of the field, tapering to nothing at the landmark), a dark scalloped hedgerow runs along it with
+## gaps, and rows of trees stand on it at two depths, the far row lighter and hazier: Lombardy
+## poplars on Poplar Road and by the village, pines at the quarry and the depot, sparse poplars and
+## hedges by the foundry town; spoil heaps flank the quarry. Deterministic (a fixed seed per strip),
+## palette-only, and never within 10 px of the strip's edges (the mirror seams).
+const FILLER_STYLE := {
+	"bg_fields_near": "poplar",
+	"bg_village_near": "poplar",
+	"bg_quarry_near": "pine",
+	"bg_town_near": "hedge",
+	"bg_depot_near": "pine",
+}
+
+
+static func strip_filler(id: String, src: Image) -> Image:
+	var seg: Array = STRIP_SEGMENTS.get(id, [])
+	var w := src.get_width()
+	var h := src.get_height()
+	if seg.size() < 3 or w != size_of(id).x:
+		return src
+	var c := Canvas.new(w, h)
+	c.img = src.duplicate() as Image
+	c.img.convert(Image.FORMAT_RGBA8)
+	var lm0 := (w - int(seg[0])) / 2
+	var lm1 := lm0 + int(seg[0])
+	var tops: Array[int] = []
+	var top_of := PackedInt32Array()
+	top_of.resize(w)
+	for x in w:
+		top_of[x] = h
+		for y in h:
+			if c.solid(x, y):
+				top_of[x] = y
+				break
+		if (x < lm0 or x >= lm1) and top_of[x] < h:
+			tops.append(top_of[x])
+	if tops.is_empty():
+		return c.img
+	tops.sort()
+	var hz: int = tops[tops.size() / 2]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = absi(id.hash())
+	var style := str(FILLER_STYLE.get(id, "hedge"))
+	var p1 := rng.randf() * TAU
+	var p2 := rng.randf() * TAU
+	# Plain columns: nothing rises above the horizon within 24 px (no building, tree or landmark);
+	# the weight ramps from 0 at such content (and at the strip's edges) to 1 over 24 px.
+	var weight := PackedFloat32Array()
+	weight.resize(w)
+	for x in w:
+		if x < 10 or x >= w - 10:
+			continue
+		var d := 24
+		for dx in range(-24, 25):
+			var xx := x + dx
+			if xx >= 0 and xx < w and top_of[xx] < hz - 2:
+				d = mini(d, absi(dx))
+		weight[x] = float(d) / 24.0
+	var rise := PackedInt32Array()
+	rise.resize(w)
+	for x in w:
+		var k := weight[x]
+		var r := (
+			3.0 + 2.5 * sin(float(x) * TAU / 173.0 + p1) + 1.5 * sin(float(x) * TAU / 61.0 + p2)
+		)
+		rise[x] = int(round(maxf(r, 0.0) * k))
+	# The plain fields lose their light furrow streaks: each row of the band takes the darkest-but-
+	# one tone of its own seven-row neighbourhood (the row medians over the plain columns), so the band
+	# reads as dark ploughland graded by distance; a few darker furrows with gaps and some dark patches
+	# keep it from being flat.
+	var row_col: Array[Color] = []
+	for y in h:
+		var cols: Array[Color] = []
+		for x in range(0, w, 3):
+			if weight[x] > 0.0 and c.solid(x, y):
+				cols.append(c.img.get_pixel(x, y))
+		cols.sort_custom(_darker)
+		row_col.append(cols[cols.size() / 2] if not cols.is_empty() else CLEAR)
+	var row_target: Array[Color] = []
+	for y in h:
+		var win: Array[Color] = []
+		for dy in range(-3, 4):
+			var rc: Color = row_col[clampi(y + dy, 0, h - 1)]
+			if rc.a > 0.5:
+				win.append(rc)
+		win.sort_custom(_darker)
+		row_target.append(win[maxi(win.size() / 2 - 1, 0)] if not win.is_empty() else CLEAR)
+	for x in w:
+		var k := weight[x]
+		if k <= 0.0:
+			continue
+		for y in range(hz + 2, h):
+			var col: Color = row_target[y]
+			if col.a < 0.5 or not c.solid(x, y) or (k < 1.0 and c.noise(x, y, 5) > k):
+				continue
+			c.px(x, y, col)
+		# Darker furrows every 5-7 rows, broken.
+		var fy := hz + 6
+		while fy < h - 2:
+			if sin(float(x) * 0.07 + float(fy)) > -0.2 and k >= 1.0:
+				c.px(x, fy, G1 if fy > hz + 20 else G2)
+			fy += 5 + (fy % 3)
+	for k in 6:
+		var px := rng.randi_range(20, w - 20)
+		if weight[px] < 1.0:
+			continue
+		var py := rng.randi_range(hz + 8, h - 8)
+		var rx := rng.randf_range(10.0, 24.0)
+		for y in range(py - 2, py + 3):
+			for x in range(int(px - rx), int(px + rx)):
+				var dx := (float(x) - float(px)) / rx
+				var dy := float(y - py) / 2.5
+				if dx * dx + dy * dy <= 1.0 and c.solid(x, y):
+					c.px(x, y, B0 if (x + y) % 5 != 0 else G1)
+	# The far tree row first (behind the rolling field), hazier and shorter.
+	var far_base := PackedInt32Array()
+	far_base.resize(w)
+	for x in w:
+		far_base[x] = hz - rise[x] - 2
+	_tree_row(c, rng, style, far_base, weight, false)
+	# The field rises: each column's horizon pixel colour carried up by its rise.
+	for x in w:
+		if rise[x] <= 0 or top_of[x] >= h:
+			continue
+		var col := c.img.get_pixel(x, mini(hz + 1, h - 1))
+		for y in range(hz - rise[x], hz):
+			c.px(x, y, col)
+	# The hedgerow: a scalloped band 1-4 px high along the new horizon, with gaps.
+	for x in range(10, w - 10):
+		if weight[x] < 0.99:
+			continue
+		if sin(float(x) * 0.045 + p2) < -0.55:
+			continue
+		var hh := 1 + int(absf(sin(float(x) * 0.42 + p1)) * 2.4 + c.noise(x, 7) * 1.2)
+		var base := hz - rise[x]
+		c.rect(x, base - hh, 1, hh, G2)
+		if c.noise(x, 9) > 0.8:
+			c.px(x, base - hh, G3)
+	# The near row stands in the field band, nearer, taller and darker, each windbreak on its own
+	# low hedge.
+	var near_base := PackedInt32Array()
+	near_base.resize(w)
+	for x in w:
+		near_base[x] = mini(hz + 15 + int(round(2.0 * sin(float(x) * 0.021 + p1))), h - 6)
+	_tree_row(c, rng, style, near_base, weight, true)
+	if id == "bg_quarry_near":
+		for side in 2:
+			var cx := (
+				lm0 - 26 - rng.randi_range(0, 30)
+				if side == 0
+				else lm1 + 26 + rng.randi_range(0, 30)
+			)
+			if cx < 40 or cx > w - 40:
+				continue
+			var rx := 18.0 + rng.randf() * 14.0
+			var ry := 7.0 + rng.randf() * 6.0
+			for y in range(int(hz - ry), hz + 1):
+				for x in range(int(cx - rx), int(cx + rx) + 1):
+					var dx := (float(x) - float(cx)) / rx
+					var dy := (float(y) - float(hz)) / ry
+					if dx * dx + dy * dy <= 1.0:
+						c.px(x, y, G2 if dy > -0.75 else B1)
+	return c.img
+
+
+## 1 in the plain fields, falling to 0 within 24 px of the landmark segment and 10 px of the strip's
+## edges, and 0 in any column whose content starts well above the horizon (a building, a tree).
+## One row of trees standing on `base` (a row per column): windbreaks 30-90 px long with gaps of
+## 25-80 px (longer for the sparse "hedge" style), the trees 3-6 px apart so their crowns overlap
+## into one serrated mass, never a row of separate strokes. Only on fully plain columns (`weight` 1)
+## and never within 44 px of the strip's edges (no mirrored twin at the seams).
+static func _tree_row(
+	c: Canvas,
+	rng: RandomNumberGenerator,
+	style: String,
+	base: PackedInt32Array,
+	weight: PackedFloat32Array,
+	near: bool
+) -> void:
+	var w := c.w
+	var sparse := style == "hedge"
+	var x := 44 + rng.randi_range(0, 30)
+	while x < w - 44:
+		var seg_len := rng.randi_range(30, 90) if not sparse else rng.randi_range(14, 30)
+		var tx := x
+		var first := true
+		while tx < mini(x + seg_len, w - 44):
+			if weight[tx] >= 1.0:
+				var b := base[tx]
+				if near and first:
+					# The windbreak's own low hedge: a scalloped band 1-4 px high.
+					for hx in range(tx - 4, mini(tx + seg_len + 4, w - 10)):
+						var hh := 1 + int(absf(sin(float(hx) * 0.5)) * 2.0 + c.noise(hx, b) * 1.5)
+						c.rect(hx, b - hh, 1, hh, G2)
+				if style == "pine":
+					var ht := rng.randi_range(18, 30) if near else rng.randi_range(10, 18)
+					_pine_tree(c, tx, b, ht, G1 if near else G3, G2 if near else G4)
+				else:
+					var ht := (
+						int(rng.randf_range(0.5, 1.0) * 42.0) if near else rng.randi_range(10, 20)
+					)
+					var wd := rng.randi_range(5, 7) if near else rng.randi_range(3, 5)
+					_poplar_tree(c, tx, b, ht, wd, G2 if near else G3, G4 if near else G4)
+				first = false
+			var gap := rng.randi_range(7, 13) if near else rng.randi_range(4, 8)
+			tx += gap if style != "pine" else rng.randi_range(6, 11)
+		x += seg_len + (rng.randi_range(25, 80) if not sparse else rng.randi_range(60, 140))
+
+
+static func _darker(a: Color, b: Color) -> bool:
+	return a.get_luminance() < b.get_luminance()
+
+
+## A Lombardy poplar: a narrow spindle widest at a third of its height with a pointed top, a 1 px lit
+## edge on its right (the fires) and a stub of trunk.
+static func _poplar_tree(
+	c: Canvas, x: int, base: int, ht: int, wd: int, col: Color, lit: Color
+) -> void:
+	for r in ht:
+		var t := float(r) / float(ht)
+		# A spindle: widest at 30% of the height, tapering to a point at the top.
+		var hw := (
+			float(wd) * 0.5 * (0.65 + 0.35 * t / 0.3)
+			if t < 0.3
+			else float(wd) * 0.5 * pow(1.0 - (t - 0.3) / 0.7, 0.85)
+		)
+		var y := base - 2 - r
+		var x0 := int(round(float(x) - hw))
+		var x1 := int(round(float(x) + hw))
+		if x1 < x0:
+			x1 = x0
+		c.rect(x0, y, x1 - x0 + 1, 1, col)
+		if x1 > x0:
+			c.px(x1, y, lit)
+	c.rect(x, base - 2, 1, 2, B0)
+
+
+## A pine: three stacked tiers narrowing to a point, a lit pixel here and there on the tiers' edges.
+static func _pine_tree(c: Canvas, x: int, base: int, ht: int, col: Color, lit: Color) -> void:
+	var half := maxf(3.0, float(ht) * 0.24)
+	for r in ht:
+		var t := float(r) / float(ht)
+		var tier := fposmod(t * 3.0, 1.0)
+		var hw := half * (1.0 - t * 0.75) * (0.55 + 0.45 * (1.0 - tier))
+		var y := base - 1 - r
+		c.rect(int(round(float(x) - hw)), y, int(round(hw * 2.0)) + 1, 1, col)
+		c.px(int(round(float(x) + hw)), y, lit)
+	c.rect(x, base - 1, 1, 1, B0)
 
 
 static func _material_colour(c: Color, darker: int, keep_lights: bool, dull: bool) -> Color:

@@ -1,9 +1,16 @@
 class_name TankBulwarkRoom
 extends TankDieselRoom
-## The Bulwark's one room (brief 3 "Cutaway"): the diesel machinery plus the three-way gearbox. A
-## lever points at its position (Drive, Turret or Hoist; Drive is "Dig" at a gun line) and moves
-## across during a one-second shift; only the active output shaft spins, and a hoist bar shows the
-## kilojoules lifted toward the next heavy shell.
+## The Bulwark's one room (brief 3 "Cutaway"): the diesel machinery plus the three-way gearbox, laid
+## out block | flywheel | gearbox so the three read apart. The gearbox is a dark casing behind three
+## large output gears drawn in code, well apart, their teeth on the diesel's side catching its amber
+## light; only the active output spins and its teeth and hub are lit, the idle ones stay dark. A
+## steel lever with a small lit tip points at its position (Drive, Turret or Hoist; Drive is "Dig" at
+## a gun line) and moves across during a one-second shift. The hoist's progress toward the next heavy
+## shell is the cradle climbing the hoist rail to the breech (the rig draws it from hoist_fill()).
+
+## The output gears: radius, teeth.
+const GEAR_R := 6.5
+const GEAR_TEETH := 9
 
 const OUTPUT_KEYS: Array[String] = ["drive", "turret", "hoist"]
 ## The kilojoules a heavy shell needs (content: tanks.json gearbox.hoist_j; the card shows it too).
@@ -24,6 +31,8 @@ func build_more() -> void:
 	box.texture = TankSprites.tex("gearbox")
 	box.centered = false
 	box.position = gearbox_pos
+	# The casing sits back in the dark, so the gears in front of it separate.
+	box.self_modulate = Color(0.45, 0.45, 0.48)
 	add_child(box)
 	var outs: Dictionary = def.get("outputs", {})
 	for i in OUTPUT_KEYS.size():
@@ -38,6 +47,8 @@ func build_more() -> void:
 		g.inertia_s = 0.2
 		g.snap_steps = 16
 		g.auto_process = false
+		# The gear itself is drawn in code (paint_more) from this part's angle.
+		g.self_modulate = Color(1, 1, 1, 0)
 		add_child(g)
 		gears.append(g)
 
@@ -77,18 +88,32 @@ func hoist_fill() -> float:
 func paint_more(item: Node2D) -> void:
 	var active := active_output()
 	for i in outputs.size():
-		var on := i == active
-		item.draw_rect(
-			Rect2(outputs[i] + Vector2(-1, 9), Vector2(3, 2)),
-			TankPalette.AMBER if on else TankPalette.STEEL_DARK
-		)
+		_gear(item, outputs[i], gears[i].angle() if i < gears.size() else 0.0, i == active)
 	var tip := lever_tip()
-	item.draw_line(pivot, tip, TankPalette.STEEL_BRIGHT, 2.0)
-	item.draw_circle(pivot, 2.5, TankPalette.STEEL_LIGHT)
-	item.draw_circle(tip, 2.0, TankPalette.AMBER if active >= 0 else TankPalette.STEEL_PALE)
-	if outputs.size() >= 3:
-		var bar := Rect2(outputs[2] + Vector2(9, -9), Vector2(3, 18))
-		item.draw_rect(bar, TankPalette.COAL)
-		var h := bar.size.y * hoist_fill()
-		item.draw_rect(Rect2(bar.position.x, bar.end.y - h, bar.size.x, h), TankPalette.AMBER)
-		item.draw_rect(bar, TankPalette.STEEL, false, 1.0)
+	item.draw_line(pivot, tip, TankPalette.IRON_DARK, 2.0)
+	item.draw_line(pivot + Vector2(0, -1), tip + Vector2(0, -1), TankPalette.STEEL, 1.0)
+	item.draw_circle(pivot, 2.5, TankPalette.IRON)
+	item.draw_rect(Rect2(pivot.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.STEEL_PALE)
+	item.draw_circle(tip, 1.5, TankPalette.STEEL_LIGHT)
+	if active >= 0:
+		item.draw_rect(Rect2(tip.round(), Vector2(1, 1)), TankPalette.AMBER)
+
+
+## One output gear at `c` turned by `ang`: a dark disc, teeth whose diesel-side (left, upper) edges
+## catch the amber light, a hub; the active gear's teeth and hub lit brighter.
+func _gear(item: Node2D, c: Vector2, ang: float, on: bool) -> void:
+	var body := TankPalette.STEEL_DARK if on else TankPalette.IRON
+	var tooth := TankPalette.STEEL_LIGHT if on else TankPalette.STEEL_DARK
+	item.draw_circle(c, GEAR_R + 1.5, TankPalette.BLACK)
+	item.draw_circle(c, GEAR_R - 0.5, body)
+	for k in GEAR_TEETH:
+		var d := Vector2.from_angle(ang + TAU * float(k) / float(GEAR_TEETH))
+		var lit := d.x < 0.2 and d.y < 0.4
+		var col := tooth if not lit else (TankPalette.CLAY if on else TankPalette.MUD_LIGHT)
+		item.draw_line(c + d * (GEAR_R - 1.0), c + d * (GEAR_R + 1.5), col, 2.0)
+	item.draw_arc(c, GEAR_R - 2.0, 0.0, TAU, 16, TankPalette.COAL, 1.0)
+	item.draw_circle(c, 2.0, TankPalette.STEEL if on else TankPalette.IRON_DARK)
+	var spoke := Vector2.from_angle(ang) * 3.5
+	item.draw_line(c - spoke, c + spoke, TankPalette.COAL, 1.0)
+	if on:
+		item.draw_rect(Rect2(c.round() + Vector2(-1, -1), Vector2(1, 1)), TankPalette.CLAY)

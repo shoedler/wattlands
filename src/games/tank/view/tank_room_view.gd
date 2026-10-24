@@ -190,35 +190,57 @@ func paint_machinery_front(_item: Node2D) -> void:
 	pass
 
 
-## The rider's wall lamp and shape badge (BRIEF 3.9) as backlit glass in a dark bezel on the lamp
-## housing: tinted at 70% with a one-pixel hot centre and an additive halo (_lights) while in band,
-## dimmed to a quarter when not, so the badge is a light in the diorama, not a UI chip pasted on it.
+## The rider's wall lamp and shape badge (BRIEF 3.9) as glass lenses in the diorama, not UI chips: a
+## dark iron bezel ring, then the glass graded from a desaturated, darker rim (60% toward the bezel's
+## iron) to a bright centre in the rider's colour, and one warm specular pixel at the upper left. The
+## colour shows most through the additive halo (_lights) while in band; when not, the glass is dim.
 func _paint_lamp(item: Node2D) -> void:
 	var lp := anchor_local("lamp")
 	var look := input.look if not input.look.is_empty() else Wl.slot_look(maxi(input.slot, 0))
 	var col: Color = look.get("color", Color.WHITE)
 	var on := lit()
 	item.draw_line(lp + Vector2(0, -6), lp + Vector2(0, -4), TankPalette.STEEL_DARK, 1.0)
-	item.draw_circle(lp, 3.5, TankPalette.IRON_DARK)
-	var glass := col if on else TankPalette.darkened(col, 0.75)
-	item.draw_circle(lp, 2.5, TankPalette.with_alpha(glass, 0.75 if on else 0.6))
+	item.draw_circle(lp, 3.5, TankPalette.BLACK)
+	item.draw_arc(lp, 3.0, 0.0, TAU, 12, TankPalette.IRON, 1.0)
+	item.draw_circle(lp, 2.5, _glass(col, on, 0.6))
+	item.draw_circle(lp, 1.4, _glass(col, on, 0.0))
 	if on:
 		item.draw_rect(Rect2(lp.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.WHITE_WARM)
 	var c := badge_pos()
-	var k := (1.0 + 0.2 * pulse()) if on else 1.0
+	var k := (1.0 + 0.15 * pulse()) if on else 1.0
 	var shape := str(look.get("shape", "circle"))
 	var bezel := SlotChip.shape_points(shape, Rect2(c - Vector2(5, 5) * k, Vector2(10, 10) * k))
-	item.draw_colored_polygon(bezel, TankPalette.IRON_DARK)
-	var pts := SlotChip.shape_points(shape, Rect2(c - Vector2(4, 4) * k, Vector2(8, 8) * k))
+	item.draw_colored_polygon(bezel, TankPalette.BLACK)
+	var ring := bezel.duplicate()
+	ring.append(bezel[0])
+	item.draw_polyline(ring, TankPalette.IRON, 1.0)
+	var rim := SlotChip.shape_points(shape, Rect2(c - Vector2(4, 4) * k, Vector2(8, 8) * k))
+	var core := SlotChip.shape_points(
+		shape, Rect2(c - Vector2(2.3, 2.3) * k, Vector2(4.6, 4.6) * k)
+	)
 	if bool(look.get("hollow", false)):
-		var closed := pts.duplicate()
-		closed.append(pts[0])
-		item.draw_colored_polygon(pts, Color(0.05, 0.06, 0.08, 0.9))
-		item.draw_polyline(closed, TankPalette.with_alpha(glass, 0.85 if on else 0.6), 1.0)
+		var closed := rim.duplicate()
+		closed.append(rim[0])
+		item.draw_colored_polygon(rim, Color(0.05, 0.06, 0.08, 0.9))
+		item.draw_polyline(closed, _glass(col, on, 0.3), 1.0)
 	else:
-		item.draw_colored_polygon(pts, TankPalette.with_alpha(glass, 0.7 if on else 0.55))
+		item.draw_colored_polygon(rim, _glass(col, on, 0.6))
+		item.draw_colored_polygon(core, _glass(col, on, 0.0))
 	if on:
-		item.draw_rect(Rect2(c.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.WHITE_WARM)
+		var spec := (c - Vector2(2, 2) * k).round()
+		item.draw_rect(
+			Rect2(spec, Vector2(1, 1)), TankPalette.with_alpha(TankPalette.WHITE_WARM, 0.85)
+		)
+
+
+## Glass of colour `col`: toward the bezel's iron by `edge` (0 the centre .. 0.6 the rim), its
+## saturation held down, dim when the lamp is off.
+static func _glass(col: Color, on: bool, edge: float) -> Color:
+	var g := Color.from_hsv(col.h, minf(col.s, 0.75), col.v)
+	g = g.lerp(TankPalette.IRON, edge)
+	if not on:
+		g = TankPalette.darkened(g, 0.7)
+	return TankPalette.with_alpha(g, 0.92 if on else 0.75)
 
 
 ## The shape badge's centre beside the lamp (room coordinates).

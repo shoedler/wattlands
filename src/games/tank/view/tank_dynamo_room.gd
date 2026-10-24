@@ -40,6 +40,9 @@ func build() -> void:
 	armature.inertia_s = 0.25
 	armature.snap_steps = 16
 	armature.auto_process = false
+	# The rotor is drawn crisp in code (paint_machinery_front) from this part's angle: the generated
+	# 20 px armature read as a blurry blob under its own glow.
+	armature.self_modulate = Color(1, 1, 1, 0)
 	add_child(armature)
 	for j: Variant in def.get("capacitor_jars", []):
 		var r := TankRigs.rect(j)
@@ -129,49 +132,97 @@ func engine_lights() -> void:
 	var arc := arc_power()
 	if arc > 0.02:
 		var fl := arc_flicker()
+		var tip := brush_tip(int(fl.x))
+		# The room's cold fill comes from above the rotor (the brushes), wide and soft, so the rotor
+		# itself stays crisp and dark instead of washing out into a white blob.
 		hub.lights.add(
-			origin + armature_pos, 30.0 + 18.0 * arc, TankPalette.COLD_LIGHT, 0.3 * arc * fl.y
+			origin + armature_pos + Vector2(0, -12), 34.0 + 14.0 * arc, TankPalette.COLD, 0.2 * arc
 		)
 		# The brush arc is the room's hot cold light: a tight white-blue core on the sparking brush.
-		var tip := brush_tip(int(fl.x))
-		hub.lights.add(origin + tip, 18.0 + 6.0 * arc, TankPalette.COLD_LIGHT, 0.55 * arc * fl.y)
-		hub.lights.add(origin + tip, 5.0, TankPalette.WHITE_COLD, 0.7 * fl.y)
+		var out := (tip - armature_pos).normalized()
+		hub.lights.add(
+			origin + tip + out * 2.0, 12.0 + 5.0 * arc, TankPalette.COLD_LIGHT, 0.45 * arc * fl.y
+		)
+		hub.lights.add(origin + tip + out, 3.5, TankPalette.WHITE_COLD, 0.6 * fl.y)
 	for i in jars.size():
 		var lv := jar_level(i)
 		if lv > 0.05:
+			var lvl_y := jars[i].end.y - jars[i].size.y * lv + 1.0
 			hub.lights.add(
-				origin + jars[i].position + Vector2(jars[i].size.x * 0.5, 4.0),
-				8.0,
-				TankPalette.COLD,
-				0.3 * lv
+				origin + Vector2(jars[i].get_center().x, lvl_y), 7.0, TankPalette.COLD, 0.28 * lv
 			)
 
 
-## Capacitor jars as dark glass (#2e3944) in a dull steel cage; only the charge column glows, a
-## soft cold blue at about half alpha with a brighter meniscus, so the jars read as lights and not
-## as saturated blue surfaces (brief 3: lights are the only near-saturated pixels).
+## Capacitor jars as glass cylinders (brief 3: the bank): a dark cap with a terminal post, a rounded
+## glass shoulder, a lit glass edge and a dark one, and inside the charge glowing a soft cold blue up
+## to the bank's level with a brighter meniscus and a highlight streak, so the three read as lit
+## jars of a battery and not as flat bars.
 func paint_machinery_front(item: Node2D) -> void:
+	_rotor(item)
 	_paint_brushes(item)
 	for i in jars.size():
-		var jar := jars[i]
-		item.draw_rect(jar, TankPalette.COLD_DARK)
-		var lv := jar_level(i)
-		var h := roundf(jar.size.y * lv)
-		if h > 0.0:
-			var fill := Rect2(jar.position.x + 1.0, jar.end.y - h, jar.size.x - 2.0, h)
-			var col := TankPalette.COLD
-			var a := 0.2 if stalled() else 0.5
-			item.draw_rect(fill, TankPalette.with_alpha(col, a))
-			item.draw_rect(
-				Rect2(fill.position, Vector2(fill.size.x, 1)),
-				TankPalette.with_alpha(TankPalette.COLD_LIGHT, a + 0.15)
-			)
-		item.draw_rect(jar, TankPalette.IRON, false, 1.0)
+		_jar(item, jars[i], jar_level(i), stalled())
+
+
+static func _jar(item: Node2D, jar: Rect2, lv: float, dim: bool) -> void:
+	var x := jar.position.x
+	var y := jar.position.y
+	var w := jar.size.x
+	var h := jar.size.y
+	# Glass body with a rounded shoulder (its top corners cut).
+	item.draw_rect(Rect2(x, y + 2, w, h - 2), TankPalette.COLD_DARK)
+	item.draw_rect(Rect2(x + 1, y + 1, w - 2, 1), TankPalette.COLD_DARK)
+	var fill_h := roundf((h - 3.0) * lv)
+	if fill_h > 0.0:
+		var a := 0.22 if dim else 0.55
+		var fr := Rect2(x + 1, y + h - 1 - fill_h, w - 2, fill_h)
+		item.draw_rect(fr, TankPalette.with_alpha(TankPalette.COLD, a))
 		item.draw_rect(
-			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 2), TankPalette.STEEL_DARK
+			Rect2(fr.position, Vector2(fr.size.x, 1)),
+			TankPalette.with_alpha(TankPalette.COLD_LIGHT, a + 0.2)
 		)
 		item.draw_rect(
-			Rect2(jar.position.x - 1, jar.position.y - 2, jar.size.x + 2, 1), TankPalette.STEEL
+			Rect2(x + 1, fr.position.y + 1, 1, maxf(fill_h - 2.0, 0.0)),
+			TankPalette.with_alpha(TankPalette.WHITE_COLD, a * 0.45)
+		)
+	# Glass edges: lit on the left, dark on the right; a dark foot.
+	item.draw_rect(Rect2(x, y + 2, 1, h - 3), TankPalette.with_alpha(TankPalette.SLATE, 0.9))
+	item.draw_rect(Rect2(x + w - 1, y + 2, 1, h - 3), TankPalette.COAL)
+	item.draw_rect(Rect2(x, y + h - 1, w, 1), TankPalette.IRON_DARK)
+	# The cap and its terminal.
+	item.draw_rect(Rect2(x, y - 1, w, 2), TankPalette.IRON)
+	item.draw_rect(Rect2(x, y - 1, w, 1), TankPalette.STEEL_DARK)
+	item.draw_rect(Rect2(x + floorf(w * 0.5) - 1, y - 3, 2, 2), TankPalette.STEEL)
+
+
+## The armature as a crisp rotor on the tank's plane: a laminated iron ring with eight winding slots
+## turning with the machine, a dull copper commutator with its bars, a steel shaft end, and a cold
+## catch-light on the rim under the brushes while it arcs.
+func _rotor(item: Node2D) -> void:
+	var c := armature_pos
+	var ang := armature.angle()
+	var r := TankSprites.size("dynamo_armature").x * 0.5 - 1.5
+	item.draw_circle(c, r + 0.5, TankPalette.BLACK)
+	item.draw_circle(c, r - 0.5, TankPalette.IRON)
+	item.draw_arc(c, r - 1.0, 0.0, TAU, 20, TankPalette.STEEL_DARK, 1.0)
+	for k in 8:
+		var d := Vector2.from_angle(ang + TAU * float(k) / 8.0)
+		item.draw_line(c + d * 3.5, c + d * (r - 0.5), TankPalette.COAL, 1.0)
+	item.draw_circle(c, 3.0, TankPalette.MUD)
+	for k in 6:
+		var d := Vector2.from_angle(ang * 1.0 + TAU * float(k) / 6.0 + 0.3)
+		item.draw_line(c + d * 1.2, c + d * 3.0, TankPalette.MUD_DARK, 1.0)
+	item.draw_rect(Rect2(c.round() - Vector2(1, 1), Vector2(2, 2)), TankPalette.STEEL_LIGHT)
+	var arc := arc_power()
+	if arc > 0.02:
+		item.draw_arc(
+			c,
+			r - 1.0,
+			deg_to_rad(-150.0),
+			deg_to_rad(-30.0),
+			10,
+			TankPalette.with_alpha(TankPalette.COLD, clampf(0.35 + 0.4 * arc, 0.0, 0.8)),
+			1.0
 		)
 
 

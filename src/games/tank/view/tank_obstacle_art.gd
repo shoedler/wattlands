@@ -4,27 +4,37 @@ extends RefCounted
 ## model turned both into glyph-like strokes (bare stakes reading "| . / . |", hedgehogs reading
 ## "Xx"), so the view draws them as line work in palette colours, varied per obstacle by a hash of
 ## its id (no RNG, the same obstacle always looks the same):
-## - tank traps: two Czech hedgehogs at different depths (the back one smaller, higher and darker),
-##   each three thick beams of which one points at the viewer and is drawn short and dark, so the
-##   shape is never a clean X; scale 80-120%, tilt up to 10 degrees, on a small mud heap, rust-streaked;
+## - tank traps: one cluster of Czech hedgehogs seen in 3/4 from a little above. Each hedgehog is three
+##   mutually square beams through one point, stood on three feet (the cube's diagonal upright), turned
+##   by its own yaw and projected, so its six arms differ in angle and apparent length; the beams are
+##   drawn far to near, the near ones lighter with a lit top face and a dark underside, the upper arms
+##   cut to unequal lengths. Base plates sit on the ground under a cast shadow and a mud mound. The
+##   rear one stands 4 px higher at 70% scale and overlaps the front one, so the pair is one heap, never
+##   two characters side by side on one baseline;
 ## - wire: four dark leaning stakes with a sagging concertina coil of overlapping loops between them.
 ## Every row carries "of": the sprite id it stands in for (tests, effects).
 
-const BEAM_PX := 20.0
+const BEAM_PX := 22.0
+const OF_TRAPS := "prop_tank_traps"
 
 
-## Appends the rows of a tank-trap obstacle whose left edge is at screen x `x0`, `w` px wide.
+## Appends the rows of a tank-trap obstacle whose left edge is at screen x `x0`, `w` px wide: three
+## hedgehogs at three depths (70%, 85% and full size, each a few px lower and nearer), overlapping
+## into one heap, with mud banked up in front over their feet.
 static func traps(rows: Array[Dictionary], x0: float, w: float, id: int) -> void:
 	var ground := float(TankConst.GROUND_Y)
 	var span := maxf(w, 40.0)
 	var h := _hash(id, 31)
-	# The back hedgehog first (smaller, higher, darker), then the front one.
-	var back_x := x0 + span * (0.62 + 0.1 * _u(h, 1))
-	var front_x := x0 + span * (0.3 + 0.1 * _u(h, 2))
-	_hedgehog(rows, Vector2(back_x, ground - 15.0), 0.95 + 0.15 * _u(h, 3), h >> 3, 0.55)
-	_heap(rows, Vector2(back_x, ground - 3.0), 10.0 + 3.0 * _u(h, 6))
-	_hedgehog(rows, Vector2(front_x, ground - 10.0), 1.15 + 0.25 * _u(h, 5), h >> 7, 1.0)
-	_heap(rows, Vector2(front_x + 2.0, ground + 2.0), 14.0 + 4.0 * _u(h, 4))
+	var s0 := 1.0 + 0.15 * _u(h, 5)
+	var fx := x0 + span * (0.3 + 0.1 * _u(h, 2))
+	var step := BEAM_PX * s0 * (0.38 + 0.1 * _u(h, 1))
+	var dirn := 1.0 if _u(h, 9) > 0.5 else -1.0
+	_heap(rows, Vector2(fx + dirn * step, ground + 2.0), step * 1.4 + 16.0)
+	_hedgehog(rows, Vector2(fx + dirn * step * 1.9, ground - 5.0), s0 * 0.7, h >> 3, 0.55)
+	_hedgehog(rows, Vector2(fx + dirn * step, ground - 2.0), s0 * 0.85, h >> 11, 0.75)
+	_hedgehog(rows, Vector2(fx, ground + 1.0), s0, h >> 7, 1.0)
+	# Mud banked up in front of the feet (drawn over them): the heap is one mass, not three glyphs.
+	_bank(rows, Vector2(fx + dirn * step * 0.8, ground + 3.0), step * 1.3 + 12.0, h)
 
 
 ## Appends the rows of a wire obstacle (stakes and a concertina coil).
@@ -72,39 +82,84 @@ static func wire(rows: Array[Dictionary], x0: float, w: float, id: int) -> void:
 		)
 
 
+## One hedgehog standing on the ground at `foot` (the middle of its three feet): see the header.
 static func _hedgehog(
-	rows: Array[Dictionary], c: Vector2, scale: float, h: int, light: float
+	rows: Array[Dictionary], foot: Vector2, scale: float, h: int, light: float
 ) -> void:
 	var len_px := BEAM_PX * scale
-	var tilt := deg_to_rad((_u(h, 1) - 0.5) * 36.0)
+	var yaw := deg_to_rad(15.0 + 70.0 * _u(h, 1))
+	var pitch := deg_to_rad(34.0)
 	var k := 1.0 - light
-	var face := TankPalette.darkened(TankPalette.IRON, k)
-	var lit := TankPalette.darkened(TankPalette.STEEL_DARK, k)
-	var shadow := TankPalette.darkened(TankPalette.COAL, k)
-	var rust := TankPalette.darkened(TankPalette.RUST_DARK, k)
-	var w := 4.0 if scale >= 0.9 else 3.0
-	# The beam pointing at the viewer: short and darkest, its cut end square on to the eye.
-	# It splays the silhouette into three legs, so the hedgehog never reads as a letter X.
-	var fore := Vector2(0.34, -0.42).rotated(tilt) * len_px
-	_beam(rows, c - fore * 0.75, c + fore * 0.8, w + 1.0, shadow, face, shadow)
-	var end := (c + fore * 0.8).round()
-	rows.append(_rect(Rect2(end - Vector2(2, 2), Vector2(5, 5)), shadow))
-	rows.append(_rect(Rect2(end - Vector2(1, 1), Vector2(3, 3)), face))
-	rows.append(_rect(Rect2(end - Vector2(1, 1), Vector2(3, 1)), lit))
-	# The two beams across the picture plane: heavy angle-iron with a lit top flange and a dark web,
-	# crossing off centre with unequal reaches and flanged ends (chunky, never thin strokes).
-	var a := Vector2.from_angle(deg_to_rad(-62.0) + tilt)
-	var b := Vector2.from_angle(deg_to_rad(-128.0) + tilt)
-	var ra := len_px * (0.5 + 0.1 * _u(h, 2))
-	var rb := len_px * (0.36 + 0.1 * _u(h, 3))
-	for beam: Array in [[b, rb, 0.75], [a, ra, 0.9]]:
-		var d: Vector2 = beam[0]
-		var r: float = beam[1]
-		var p0 := c - d * r * float(beam[2])
-		var p1 := c + d * r
-		_beam(rows, p0, p1, w, face, lit, shadow)
-		rows.append(_line(c + d * 3.0, c + d * 3.0 + Vector2(0, 4.0), 1.0, rust))
-	rows.append(_rect(Rect2((c - Vector2(2, 1)).round(), Vector2(4, 3)), shadow))
+	# The three beam directions: square to each other, each rising at 35.3 degrees (cube axes stood
+	# on a corner), 120 degrees apart around the vertical. y up, z away from the viewer.
+	var beams: Array[Dictionary] = []
+	var centre_h := len_px * 0.5 * 0.577
+	for i in 3:
+		var az := yaw + TAU * float(i) / 3.0
+		var d := Vector3(0.816 * cos(az), 0.577, 0.816 * sin(az))
+		var up_len := len_px * (0.38 + 0.2 * _u(h, 2 + i))
+		var a3 := Vector3(0, centre_h, 0) - d * len_px * 0.5
+		var b3 := Vector3(0, centre_h, 0) + d * up_len
+		beams.append({"a": a3, "b": b3, "z": (a3.z + b3.z) * 0.5, "d": d})
+	beams.sort_custom(_far_first)
+	# The cast shadow: a flat dark ellipse under the feet, offset away from the fires.
+	var sh := PackedVector2Array()
+	for i in 12:
+		var a := TAU * float(i) / 12.0
+		sh.append(foot + Vector2(2.0 + cos(a) * len_px * 0.62, 1.0 + sin(a) * 2.0))
+	rows.append(
+		{
+			"t": "poly",
+			"pts": sh,
+			"c": TankPalette.with_alpha(TankPalette.BLACK, 0.55),
+			"of": OF_TRAPS
+		}
+	)
+	var w := 5.0 if scale >= 0.95 else (4.0 if scale >= 0.8 else 3.0)
+	for n in beams.size():
+		var bm: Dictionary = beams[n]
+		var pa := _project(bm["a"], foot, pitch)
+		var pb := _project(bm["b"], foot, pitch)
+		# Nearer beams are lighter; the one pointing most at the viewer is foreshortened by the
+		# projection and drawn last, its cut end square on to the eye.
+		var depth_k := float(n) / 2.0
+		var face := TankPalette.darkened(TankPalette.IRON.lerp(TankPalette.STEEL_DARK, depth_k), k)
+		var lit := TankPalette.darkened(
+			TankPalette.STEEL_DARK.lerp(TankPalette.STEEL_LIGHT, depth_k), k
+		)
+		var dark := TankPalette.darkened(TankPalette.COAL, k)
+		_beam(rows, pa, pb, w, face, lit, dark)
+		var end := pb.round()
+		rows.append(_rect(Rect2(end - Vector2(1, 1), Vector2(3, 3)), dark))
+		rows.append(_rect(Rect2(end - Vector2(1, 1), Vector2(2, 1)), lit))
+		# A base plate on the ground under each foot.
+		var fp := pa.round()
+		rows.append(_rect(Rect2(fp + Vector2(-2, 0), Vector2(5, 1)), dark))
+		var rust := TankPalette.darkened(TankPalette.RUST_DARK, k)
+		var mid := pa.lerp(pb, 0.55)
+		rows.append(_line(mid, mid + Vector2(0, 3.0), 1.0, rust))
+	# The riveted gusset plate where the beams cross hides the crossing point.
+	var hub := _project(Vector3(0, centre_h, 0), foot, pitch).round()
+	var g := maxf(3.0, roundf(5.0 * scale))
+	var gr := Rect2(hub - Vector2(g, g) * 0.5, Vector2(g, g)).abs()
+	rows.append(_rect(gr, TankPalette.darkened(TankPalette.IRON, k)))
+	rows.append(
+		_rect(Rect2(gr.position, Vector2(g, 1)), TankPalette.darkened(TankPalette.STEEL, k))
+	)
+	rows.append(
+		_rect(
+			Rect2(gr.end - Vector2(1, 1), Vector2(1, 1)), TankPalette.darkened(TankPalette.BLACK, k)
+		)
+	)
+
+
+static func _far_first(p: Dictionary, q: Dictionary) -> bool:
+	return float(p["z"]) > float(q["z"])
+
+
+## Screen position of hedgehog point `p` (y up, z away) standing at `foot`, seen `pitch` from above.
+static func _project(p: Vector3, foot: Vector2, pitch: float) -> Vector2:
+	return foot + Vector2(p.x, -p.y * cos(pitch) - p.z * sin(pitch))
 
 
 ## One thick beam from `a` to `b`: a dark web, a face, a lit top edge and flanged ends.
@@ -123,7 +178,7 @@ static func _beam(
 
 
 static func _rect(r: Rect2, c: Color) -> Dictionary:
-	return {"t": "rect", "r": r, "c": c, "of": "prop_tank_traps"}
+	return {"t": "rect", "r": r, "c": c, "of": OF_TRAPS}
 
 
 static func _heap(rows: Array[Dictionary], at: Vector2, half_w: float) -> void:
@@ -146,6 +201,30 @@ static func _heap(rows: Array[Dictionary], at: Vector2, half_w: float) -> void:
 			"of": "prop_tank_traps"
 		}
 	)
+
+
+## Mud banked up in front of the hedgehogs' feet: a lumpy wet bank 5-7 px high with a lit crest and
+## a few clods, drawn over the feet.
+static func _bank(rows: Array[Dictionary], at: Vector2, half_w: float, h: int) -> void:
+	var pts := PackedVector2Array()
+	for i in 9:
+		var t := float(i) / 8.0
+		var bump := 4.0 + 2.5 * sin(t * PI) + 1.5 * sin(t * 11.0 + float(h % 7))
+		pts.append(at + Vector2(-half_w + 2.0 * half_w * t, -bump * sin(t * PI) - 0.5))
+	pts.append(at + Vector2(half_w, 2.0))
+	pts.append(at + Vector2(-half_w, 2.0))
+	rows.append({"t": "poly", "pts": pts, "c": TankPalette.MUD, "of": OF_TRAPS})
+	var crest := PackedVector2Array()
+	for i in range(1, 8):
+		crest.append(pts[i])
+	rows.append(
+		{"t": "polyline", "pts": crest, "w": 1.0, "c": TankPalette.MUD_LIGHT, "of": OF_TRAPS}
+	)
+	for k in 3:
+		var cx := at.x - half_w * 0.6 + half_w * 0.6 * float(k) + float((h >> k) % 5)
+		rows.append(
+			_rect(Rect2(Vector2(cx, at.y - 2.0).round(), Vector2(2, 1)), TankPalette.MUD_DARK)
+		)
 
 
 static func _line(

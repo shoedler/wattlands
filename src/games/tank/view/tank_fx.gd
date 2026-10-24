@@ -365,22 +365,24 @@ func dirt_spray(at: Vector2) -> void:
 func exhaust(key: String, at: Vector2, frac: float, dt: float) -> void:
 	var f := clampf(frac, 0.0, 1.5)
 	var sprint := f >= 1.15
-	var per_s := lerpf(2.5, 14.0, clampf(f, 0.0, 1.0)) * (1.6 if sprint else 1.0)
+	# At tempo (about 90% FTP) the puffs overlap into one continuous grey-brown plume lit from below;
+	# a sprint is a dense black plume.
+	var per_s := lerpf(3.0, 28.0, clampf(f, 0.0, 1.0)) * (1.5 if sprint else 1.0)
 	for _i in rate(key, per_s, dt):
 		var thick := clampf(f, 0.0, 1.2)
-		var col := Color(0.3, 0.31, 0.33, 0.2 + 0.35 * thick).lerp(
-			Color(0.05, 0.05, 0.06, 0.8), 1.0 if sprint else 0.0
+		var col := Color(0.42, 0.4, 0.39, 0.25 + 0.5 * thick).lerp(
+			Color(0.05, 0.05, 0.06, 0.88), 1.0 if sprint else 0.0
 		)
 		particles.spawn(
 			TankParticles.Kind.SMOKE,
 			at + Vector2(r(-1.5, 1.5), 0.0),
-			Vector2(r(-5.0, 9.0), -r(18.0, 34.0) - 24.0 * f),
-			r(0.9, 1.7),
+			Vector2(r(-6.0, 6.0) - 6.0 * f, -r(18.0, 32.0) - 22.0 * f),
+			r(1.2, 2.2),
 			4.0 + 3.0 * thick,
-			(14.0 if not sprint else 26.0) * r(0.8, 1.2),
+			(22.0 if not sprint else 32.0) * r(0.8, 1.2),
 			col,
 			-4.0,
-			0.5
+			0.6
 		)
 	for _i in rate(key + "_heat", 5.0, dt):
 		particles.spawn(
@@ -436,9 +438,9 @@ func dynamo_sparks(key: String, at: Vector2, frac: float, dt: float) -> void:
 			. spawn(
 				TankParticles.Kind.SPARK,
 				at + Vector2(cos(a), sin(a)) * 6.0,
-				# Short hops off the armature: they die within about 24 px of the dynamo room's arc.
-				Vector2(cos(a), sin(a)) * r(15.0, 42.0),
-				r(0.3, 0.5),
+				# Short hops off the armature: they die within 0.4 s and about 16 px of the arc.
+				Vector2(cos(a), sin(a)) * r(15.0, 40.0),
+				r(0.18, 0.4),
 				1.0,
 				1.0,
 				TankPalette.COLD_LIGHT if rng.randf() < 0.7 else TankPalette.WHITE_COLD,
@@ -503,27 +505,29 @@ func fire_and_smoke(
 func track_dust(key: String, at: Vector2, speed_mps: float, dt: float) -> void:
 	if speed_mps < 0.8:
 		return
-	for _i in rate(key + "_d", speed_mps * 1.7, dt):
+	# Behind the rear sprocket: a dust cloud rolling up off the track (rate and lift by speed) and
+	# clods of mud flicked up and back off the turning links.
+	for _i in rate(key + "_d", speed_mps * 2.6, dt):
 		particles.spawn(
 			TankParticles.Kind.DUST,
 			at + Vector2(r(-4.0, 4.0), r(-3.0, 0.0)),
-			Vector2(-speed_mps * r(1.0, 3.0), -r(6.0, 20.0)),
-			r(0.5, 0.9),
-			4.0,
-			r(12.0, 20.0),
-			Color(0.42, 0.36, 0.28, 0.32),
+			Vector2(-speed_mps * r(1.5, 4.0), -r(10.0, 18.0) - speed_mps * 2.0),
+			r(0.7, 1.2),
+			5.0,
+			r(16.0, 28.0),
+			Color(0.4, 0.35, 0.28, 0.42),
 			0.0,
-			1.2
+			1.0
 		)
-	for _i in rate(key + "_m", speed_mps * 0.45, dt):
+	for _i in rate(key + "_m", speed_mps * 1.0, dt):
 		particles.spawn(
 			TankParticles.Kind.DIRT,
-			at,
-			Vector2(-r(25.0, 70.0), -r(25.0, 60.0)),
+			at + Vector2(r(-2.0, 2.0), -r(0.0, 6.0)),
+			Vector2(-r(30.0, 80.0), -r(40.0, 90.0)),
 			r(0.5, 0.9),
-			2.0,
+			r(1.5, 2.5),
 			2.0,
 			Color(0.2, 0.16, 0.12, 1.0),
-			300.0,
+			320.0,
 			0.0
 		)

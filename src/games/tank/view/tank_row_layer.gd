@@ -8,7 +8,7 @@ extends Node2D
 ## Rows: {"t": "sprite", "id": String, "pos": Vector2, "size": Vector2, "flip": bool, "tint": Color}
 ##       {"t": "line", "a": Vector2, "b": Vector2, "w": float, "c": Color}
 ##       {"t": "rect", "r": Rect2, "c": Color}
-##       {"t": "bar", "pos": Vector2, "w": float, "frac": float}
+##       {"t": "bar", "pos": Vector2, "w": float, "frac": float, "a": float (optional alpha)}
 ##       {"t": "poly", "pts": PackedVector2Array, "c": Color} (a filled polygon)
 ##       {"t": "polyline", "pts": PackedVector2Array, "w": float, "c": Color}
 
@@ -53,7 +53,9 @@ func _bar(row: Dictionary) -> void:
 	var pos: Vector2 = row["pos"]
 	var w := float(row["w"])
 	var frac := clampf(float(row["frac"]), 0.0, 1.0)
-	# Dim and short: a dark slot with a muted steel fill (rust when low), no white.
-	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.with_alpha(TankPalette.SOOT, 0.7))
+	var k := clampf(float(row.get("a", 1.0)), 0.0, 1.0)
+	# Dim and short: a dark slot with a muted steel fill (rust when low), no white; it fades out.
+	draw_rect(Rect2(pos, Vector2(w, 3)), TankPalette.with_alpha(TankPalette.SOOT, 0.7 * k))
 	var col := TankPalette.STEEL_LIGHT if frac > 0.34 else TankPalette.RUST_LIGHT
+	col.a = k
 	draw_rect(Rect2(pos + Vector2(1, 1), Vector2(maxf(roundf((w - 2.0) * frac), 0.0), 1)), col)
