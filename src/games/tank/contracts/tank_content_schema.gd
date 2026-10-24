@@ -239,6 +239,10 @@ const STACK_MAX_PCT := 10.0
 ## Pattern 1 (4.6.2): <= 10 points per update, sub-steps >= 1 s apart, targets inside 50..100%.
 const BANK_MAX_STEP_PTS := 10.0
 const BANK_MIN_SUBSTEP_S := 1.0
+## 4.6.2: one bank update's largest sub-step, 10 points over the 3 s the rule spreads it across (3.3%/s).
+const BANK_MAX_SUBSTEP_PTS := 10.0 / 3.0
+## Pattern 3: the largest single hoist step (rise_pct_s x step_s), the +1%/s rule.
+const HOIST_MAX_STEP_PCT := 1.0
 ## 2.7: the largest haptic +3% for at most 8 s; the game's own cooldown at least 15 s.
 const HAPTIC_MAX := 3.0
 const HAPTIC_MAX_S := 8.0
@@ -410,6 +414,14 @@ static func _check_station_bounds(d: Dictionary, errors: Array[String]) -> void:
 		var ok := float(v) >= float(c[2]) if c[1] == ">=" else float(v) <= float(c[2])
 		if not ok:
 			errors.append("stations.json %s: must be %s %s (%s)" % [c[0], c[1], c[2], c[3]])
+	var sub_pts := float(d["bank"]["max_step_pts"]) / maxf(float(d["bank"]["substeps"]), 1.0)
+	if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
+		var why := "bank.max_step_pts / bank.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
+		errors.append("stations.json " + why % sub_pts)
+	var hoist_step := float(d["hoist"]["rise_pct_s"]) * float(d["hoist"]["step_s"])
+	if hoist_step > HOIST_MAX_STEP_PCT + 1e-9:
+		var why := "hoist.rise_pct_s x hoist.step_s: must be <= 1, got %s (+1%%/s, 4.6.6)"
+		errors.append("stations.json " + why % hoist_step)
 	if float(d["bank"]["base_pct"]) + float(d["bank"]["span_pct"]) > ERG_MAX_PCT:
 		errors.append("stations.json bank: base_pct + span_pct must be <= 100 (4.6.1)")
 	if not bool(d["bank"]["clamp_to_range"]):
