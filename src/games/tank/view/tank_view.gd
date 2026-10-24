@@ -25,6 +25,12 @@ const WRECK_LIFT_PX := 9.0
 ## Charred dark grey, not black: the plate seams and the cool rim still read at half strength, so a
 ## wreck keeps its type's silhouette and detail.
 const WRECK_TINT := Color(0.48, 0.46, 0.45)
+## Where a live enemy stands in front of a wreck, the wreck recedes into the haze (half see-through,
+## so the hazy backdrop shows through it, its fire dimmer) over WRECK_VEIL_S, so the two never
+## merge into one dark blob and the live one's barrel and silhouette read against it (polish round
+## 6).
+const WRECK_VEIL_TINT := Color(0.46, 0.47, 0.5, 0.42)
+const WRECK_VEIL_S := 0.4
 ## The depot gate stands behind the start (world x of its left edge).
 const DEPOT_GATE_X := -90.0
 ## Ground props (craters, rubble, pairs of telegraph poles with their wires, fence posts and wire,
@@ -33,6 +39,16 @@ const DEPOT_GATE_X := -90.0
 const PROP_CELL_PX := 210.0
 ## The depot yard's props on the tank's plane, every this many world px.
 const DEPOT_PROP_CELL_PX := 150.0
+## The depot's yards along the roll-out, DEPOT_BAY_PX world px each: every third bay opens with a
+## yard gate (the depot gate's sprite, a little smaller and set back, the tank rolling past its
+## piers), the others hold a workshop: a brick shed with a sawtooth roof, lit windows and a stack.
+## So the depot reads as a depot for the whole warm-up, not only at the start (polish round 6: at
+## 60 s the yard was an empty brown band with two lamp posts).
+const DEPOT_BAY_PX := 340.0
+## The compound wall behind the yard: its height and the spacing of its piers (world px).
+const DEPOT_WALL_H := 16.0
+const DEPOT_PIER_PX := 96.0
+const DEPOT_YARD_TINT := Color(0.66, 0.68, 0.72)
 ## The aimed arc: a dot every TRAJECTORY_STEP_S of flight (about 16 px), so the dots read as one
 ## dotted arc in the gunner's colour, every third with a faint halo, not as stray pixels.
 const TRAJECTORY_STEP_S := 0.045
@@ -281,6 +297,7 @@ func rider_feed(state: TankState, t: float) -> Dictionary:
 
 func _on_segment(state: TankState) -> void:
 	var idx := state.seg.phase_index
+	backdrop.set_segment(idx)
 	backdrop.set_near(TankBackdrop.backdrop_id(state), cam_x)
 	if idx == _seg_index:
 		return
@@ -545,6 +562,19 @@ func _add_wreck(info: Dictionary) -> void:
 		fx.forget(str(old["key"]))
 
 
+## Wreck `w`'s haze veil 0..1 at screen rect `r`: it eases (WRECK_VEIL_S) toward 1 while a live
+## enemy (last frame's enemy_rects) overlaps it and back to 0 when none does.
+func wreck_veil(w: Dictionary, r: Rect2) -> float:
+	var want := 0.0
+	for er: Rect2 in enemy_rects.values():
+		if er.grow(3.0).intersects(r):
+			want = 1.0
+			break
+	var v := move_toward(float(w.get("veil", 0.0)), want, _dt / WRECK_VEIL_S)
+	w["veil"] = v
+	return v
+
+
 ## The screen top-left of wreck `w` drawn at size `sz` on the back lane.
 func wreck_pos(w: Dictionary, sz: Vector2) -> Vector2:
 	var full := float(w["w"])
@@ -576,6 +606,8 @@ func _track_shells(state: TankState) -> void:
 func _build_props(state: TankState) -> void:
 	var rows: Array[Dictionary] = []
 	var ground := float(TankConst.GROUND_Y)
+	if state.seg.seg == TankIds.SEG_DEPOT:
+		_compound_wall(rows, ground)
 	if state.seg.seg == TankIds.SEG_DEPOT or state.seg.phase_index == 0:
 		var gs := TankSprites.size("depot_gate")
 		var gate_pos := Vector2(DEPOT_GATE_X - cam_x, ground - gs.y + 2.0)
@@ -594,12 +626,14 @@ func _build_props(state: TankState) -> void:
 		sz = (sz * WRECK_SCALE).round()
 		var pos := wreck_pos(w, sz)
 		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
-		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, WRECK_TINT))
+		var veil := wreck_veil(w, Rect2(pos, sz))
+		var tint := WRECK_TINT.lerp(WRECK_VEIL_TINT, veil)
+		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, tint))
 		var wh := TankBackdrop.cell_hash(int(w["x"]), 61)
 		var hatch := pos + Vector2(sz.x * (0.3 + 0.4 * float(wh % 7) / 6.0), sz.y * 0.3)
 		if burn > 0.2:
 			var halo := 20.0 + 10.0 * burn
-			lights.add(hatch, halo, TankPalette.FIRE, 0.5 * burn)
+			lights.add(hatch, halo, TankPalette.FIRE, 0.5 * burn * (1.0 - 0.5 * veil))
 		# Embers glow in the open hatch for a while after the flames: one slit at its own place
 		# on each wreck (never a row of matching lamps, never a round eye), then they die.
 		if burn > 0.0 or float(w["age"]) < WRECK_BURN_S * 2.0:
@@ -709,7 +743,7 @@ func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
 		var h := TankBackdrop.cell_hash(cell, state.seg.phase_index + 17)
 		var x := float(cell) * PROP_CELL_PX + float(h % 120) - cam_x
 		match h % 8:
-			0:
+			0, 6:
 				_flooded_crater(rows, x, ground)
 			1, 7:
 				var rs := TankSprites.size("prop_rubble")
@@ -724,10 +758,11 @@ func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
 				)
 			2:
 				_poles(rows, x, ground, h)
-			3, 4, 5:
+			3, 4:
 				_fence(rows, x, ground, h)
-			6:
+			5:
 				_puddle(rows, x, ground, h)
+				_fence(rows, x + 40.0, ground, h >> 2)
 
 
 ## A shell crater full of rainwater: the crater's rim, a flat sheet of dark water in it whose far
@@ -762,7 +797,8 @@ func _flooded_crater(rows: Array[Dictionary], x: float, ground: float) -> void:
 
 ## The reflection on a sheet of water centred at `mid`, `half` px either side: the colour of the
 ## halos near it (this frame's world lights and the scenery's fires), as a flat additive streak and
-## a soft glow under it, stronger the nearer and brighter they are.
+## a soft glow under it, stronger the nearer and brighter they are; with no light near, a faint cold
+## sheen of the sky.
 func _water_glint(mid: Vector2, half: float) -> void:
 	var wet := lights.intensity_near(mid + Vector2(0, -30), 90.0)
 	var col := lights.near_color()
@@ -770,9 +806,12 @@ func _water_glint(mid: Vector2, half: float) -> void:
 	if far > wet:
 		wet = far * 0.8
 		col = backdrop.scenery_lights.near_color()
-	if wet < 0.04:
-		return
 	var k := minf(0.55, wet * 0.6)
+	if wet < 0.06:
+		# No lamp near: the water still holds the cold night sky (a faint sheen, always there, so
+		# a flooded crater reads in the dark and its glint never blinks on and off).
+		col = TankPalette.COLD
+		k = 0.08
 	lights.add_line(mid + Vector2(-half * 0.7, 0), mid + Vector2(half * 0.7, 0), col, k)
 	lights.add(mid + Vector2(0, 1), half * 0.8, col, k * 0.35)
 
@@ -845,6 +884,7 @@ func _mud_heap(rows: Array[Dictionary], foot: Vector2) -> void:
 ## The depot yard on the tank's plane, by a hash of the world cell: groups of fuel drums, concrete
 ## barrier blocks, stacked crates and floodlight posts throwing a cold light down on the apron.
 func _depot_props(rows: Array[Dictionary], ground: float) -> void:
+	_depot_yards(rows, ground)
 	var first := int(floor(cam_x / DEPOT_PROP_CELL_PX)) - 1
 	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PROP_CELL_PX)) + 1
 	for cell in range(first, last + 1):
@@ -859,6 +899,154 @@ func _depot_props(rows: Array[Dictionary], ground: float) -> void:
 				_crates(rows, x, ground, h)
 			4:
 				_floodlight(rows, x, ground, h)
+
+
+## The depot's yard gates and workshops (DEPOT_BAY_PX) on screen, behind the road's props. The
+## first bays are the depot gate's own (DEPOT_GATE_X, drawn by _build_props, alone in view as the
+## roll-out starts), so the yards start at bay 2.
+func _depot_yards(rows: Array[Dictionary], ground: float) -> void:
+	var first := int(floor((cam_x - 200.0) / DEPOT_BAY_PX))
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_BAY_PX))
+	for bay in range(maxi(first, 2), last + 1):
+		var h := TankBackdrop.cell_hash(bay, 4211)
+		var x := roundf(float(bay) * DEPOT_BAY_PX + 30.0 + float(h % 60) - cam_x)
+		if bay % 3 == 1:
+			var gs := (TankSprites.size("depot_gate") * 0.86).round()
+			var pos := Vector2(x, ground - gs.y - 2.0)
+			var row := _sprite_row("depot_gate", pos, gs, false, DEPOT_YARD_TINT)
+			row["of"] = "yard_gate"
+			rows.append(row)
+			lights.add(pos + Vector2(gs.x * 0.5, gs.y * 0.17), 22.0, TankPalette.AMBER, 0.3)
+		else:
+			_workshop(rows, x, ground - 3.0, h)
+
+
+## The depot's compound wall along the back of the yard for the whole roll-out: a low concrete
+## wall with a lit coping, piers every DEPOT_PIER_PX world px (some carrying a hooded lamp that
+## throws a cold pool down the wall), behind the gates and workshops.
+func _compound_wall(rows: Array[Dictionary], ground: float) -> void:
+	var base := ground - 6.0
+	var top := base - DEPOT_WALL_H
+	var wall := Rect2(-2.0, top, float(TankConst.SCREEN_W) + 4.0, DEPOT_WALL_H)
+	rows.append({"t": "rect", "r": wall, "c": Color("#23262a"), "of": "compound_wall"})
+	rows.append({"t": "rect", "r": Rect2(-2.0, top, wall.size.x, 1), "c": TankPalette.STEEL_DARK})
+	rows.append({"t": "rect", "r": Rect2(-2.0, top + 1.0, wall.size.x, 1), "c": TankPalette.IRON})
+	var first := int(floor(cam_x / DEPOT_PIER_PX)) - 1
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PIER_PX)) + 1
+	for k in range(first, last + 1):
+		var x := roundf(float(k) * DEPOT_PIER_PX - cam_x)
+		var h := TankBackdrop.cell_hash(k, 4271)
+		rows.append(
+			{"t": "rect", "r": Rect2(x, top - 3.0, 6, DEPOT_WALL_H + 3.0), "c": Color("#2e3135")}
+		)
+		rows.append({"t": "rect", "r": Rect2(x, top - 3.0, 6, 1), "c": TankPalette.STEEL_LIGHT})
+		rows.append(
+			{
+				"t": "rect",
+				"r": Rect2(x + 5.0, top - 2.0, 1, DEPOT_WALL_H + 2.0),
+				"c": TankPalette.IRON
+			}
+		)
+		# Water stains running down from the coping.
+		rows.append(
+			{
+				"t": "rect",
+				"r": Rect2(x + 14.0 + float(h % 30), top + 2.0, 1, 4.0 + float(h % 5)),
+				"c": TankPalette.IRON
+			}
+		)
+		if h % 3 == 0:
+			var lamp := Vector2(x + 3.0, top - 5.0)
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2(lamp + Vector2(-3, -1), Vector2(7, 2)),
+					"c": TankPalette.IRON_DARK
+				}
+			)
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2(lamp + Vector2(-2, 1), Vector2(5, 1)),
+					"c": TankPalette.COLD_LIGHT
+				}
+			)
+			lights.add(lamp + Vector2(0.5, 2.0), 5.0, TankPalette.WHITE_COLD, 0.45)
+			lights.add(lamp + Vector2(0.5, 10.0), 18.0, TankPalette.COLD_LIGHT, 0.16)
+
+
+## A depot workshop standing on `base` from x: a long brick shed (its width by hash) under a
+## sawtooth roof, two or three window groups of different sizes, some lit warm, a roller door, and
+## a tapering brick stack rising from one end (no bar, no beam).
+func _workshop(rows: Array[Dictionary], x: float, base: float, h: int) -> void:
+	var w := 96.0 + float(h % 40)
+	var ht := 34.0 + float((h >> 6) % 10)
+	var top := base - ht
+	var body := Rect2(x, top, w, ht)
+	rows.append({"t": "rect", "r": body, "c": Color("#3a2e26"), "of": "workshop"})
+	# Brick courses catching the yard lamps now and then.
+	for cy in range(int(top) + 4, int(base) - 4, 5):
+		var cw := 10.0 + float((h >> (cy % 9)) % 20)
+		var cx := x + 4.0 + float((h >> (cy % 7)) % int(maxf(w - cw - 8.0, 1.0)))
+		rows.append({"t": "rect", "r": Rect2(cx, cy, cw, 1), "c": Color("#4a3a2e")})
+	rows.append({"t": "rect", "r": Rect2(x, top, 2, ht), "c": TankPalette.MUD_DARK})
+	rows.append({"t": "rect", "r": Rect2(x + w - 2.0, top, 2, ht), "c": TankPalette.RUST_DARK})
+	rows.append({"t": "rect", "r": Rect2(x, base - 3.0, w, 3), "c": TankPalette.COAL})
+	# The sawtooth roof: teeth rising to the right, their steep faces glazed and dark.
+	var teeth := int(w / 16.0)
+	for t in teeth:
+		var tx := x + float(t) * 16.0
+		var tooth := PackedVector2Array(
+			[Vector2(tx, top), Vector2(tx + 13.0, top - 9.0), Vector2(tx + 16.0, top)]
+		)
+		rows.append({"t": "poly", "pts": tooth, "c": TankPalette.IRON_DARK})
+		rows.append(
+			{
+				"t": "line",
+				"a": Vector2(tx, top - 0.5),
+				"b": Vector2(tx + 13.0, top - 9.5),
+				"w": 1.0,
+				"c": TankPalette.STEEL_DARK
+			}
+		)
+	# The roller door, half up, a dark mouth under it.
+	var dx := x + 8.0 + float((h >> 3) % 12)
+	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 18), "c": TankPalette.BLACK})
+	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 7), "c": TankPalette.IRON})
+	rows.append({"t": "rect", "r": Rect2(dx, base - 12.0, 18, 1), "c": TankPalette.STEEL_DARK})
+	# Window groups along the wall, irregular, some lit.
+	var wx := dx + 26.0
+	var k := 0
+	while wx < x + w - 10.0:
+		var ww := 4.0 + float((h >> (k + 2)) % 4)
+		var wy := top + 8.0 + float((h >> (k + 5)) % 4)
+		var lit := (h >> (k + 9)) % 3 != 0
+		var col := TankPalette.GLOW_WARM if lit else TankPalette.SOOT
+		rows.append({"t": "rect", "r": Rect2(wx, wy, ww, 5), "c": col})
+		if lit:
+			rows.append({"t": "rect", "r": Rect2(wx, wy + 3.0, ww, 2), "c": TankPalette.AMBER})
+			lights.add(Vector2(wx + ww * 0.5, wy + 2.0), 12.0 + ww, TankPalette.AMBER, 0.28)
+		wx += ww + 9.0 + float((h >> (k + 4)) % 9)
+		k += 1
+	# The stack at one end.
+	var sx := x + w - 14.0 if h % 2 == 0 else x + 6.0
+	var sh := 30.0 + float((h >> 11) % 14)
+	var stack := PackedVector2Array(
+		[
+			Vector2(sx, top),
+			Vector2(sx + 1.0, top - sh),
+			Vector2(sx + 6.0, top - sh),
+			Vector2(sx + 7.0, top),
+		]
+	)
+	rows.append({"t": "poly", "pts": stack, "c": TankPalette.RUST_DARK})
+	rows.append(
+		{
+			"t": "rect",
+			"r": Rect2(sx + 5.0, top - sh, 1, sh),
+			"c": TankPalette.with_alpha(TankPalette.RUST, 0.8)
+		}
+	)
 
 
 ## Two to four upright fuel drums, rust-dark with two rim bands and a lit edge.
@@ -921,44 +1109,51 @@ func _floodlight(rows: Array[Dictionary], x: float, ground: float, h: int) -> vo
 	_mud_heap(rows, Vector2(x + 1.0, ground + 1.0))
 
 
-## Fence posts (3-5, leaning) strung with two strands of sagging wire.
+## Wire on stakes: 3-5 leaning timber stakes (their tops catching the cold sky) strung with two
+## strands of sagging barbed wire, its barbs glinting every few px; every strand is tied to a stake
+## at both ends. Lighter than the mud behind it, so the wire reads (polish round 6: it was lost).
 func _fence(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
 	var n := 3 + h % 3
 	var tops: Array[Vector2] = []
 	for k in n:
-		var px := x + float(k) * (11.0 + float((h >> k) % 5))
-		var ht := 11.0 + float((h >> (k + 3)) % 6)
-		var top := Vector2(px + float((h >> (k + 1)) % 3) - 1.0, ground - ht)
+		var px := roundf(x + float(k) * (13.0 + float((h >> k) % 6)))
+		var ht := 14.0 + float((h >> (k + 3)) % 8)
+		var top := Vector2(px + float((h >> (k + 1)) % 3) - 1.0, ground - ht).round()
 		tops.append(top)
+		var foot := Vector2(px, ground + 1.0)
+		rows.append({"t": "line", "a": foot, "b": top, "w": 2.0, "c": TankPalette.MUD})
 		rows.append(
 			{
 				"t": "line",
-				"a": Vector2(px, ground + 1.0),
-				"b": top,
-				"w": 2.0,
-				"c": TankPalette.MUD_DARK
+				"a": foot + Vector2(1, 0),
+				"b": top + Vector2(1, 0),
+				"w": 1.0,
+				"c": TankPalette.MUD_PALE
 			}
 		)
 		rows.append(
-			{
-				"t": "rect",
-				"r": Rect2(top.round() + Vector2(-1, 0), Vector2(1, 3)),
-				"c": TankPalette.MUD_LIGHT
-			}
+			{"t": "rect", "r": Rect2(top + Vector2(0, -1), Vector2(2, 1)), "c": TankPalette.SLATE}
 		)
 	for strand in 2:
 		var pts := PackedVector2Array()
 		for k in range(tops.size() - 1):
-			for q in 5:
-				var t := float(q) / 5.0
+			for q in 6:
+				var t := float(q) / 6.0
+				var sag := sin(t * PI) * (2.0 + float(strand))
 				pts.append(
-					(
-						tops[k].lerp(tops[k + 1], t)
-						+ Vector2(0, 2.0 + 4.0 * float(strand) + sin(t * PI) * 2.0)
-					)
+					tops[k].lerp(tops[k + 1], t) + Vector2(0, 2.0 + 5.0 * float(strand) + sag)
 				)
-		pts.append(tops[tops.size() - 1] + Vector2(0, 2.0 + 4.0 * float(strand)))
-		rows.append({"t": "polyline", "pts": pts, "w": 1.0, "c": TankPalette.STEEL_DARK})
+		pts.append(tops[tops.size() - 1] + Vector2(0, 2.0 + 5.0 * float(strand)))
+		rows.append({"t": "polyline", "pts": pts, "w": 1.0, "c": TankPalette.STEEL_LIGHT})
+		for q in range(2, pts.size() - 1, 3):
+			var b := pts[q].round()
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2(b + Vector2(0, -1), Vector2(1, 1)),
+					"c": TankPalette.STEEL_PALE
+				}
+			)
 
 
 ## A flooded rut: a flat dark sheet of water on the road, its far edge catching the cold sky and its
@@ -1515,20 +1710,28 @@ func _scenery(dt: float) -> void:
 		if lp.x < -50.0 or lp.x > float(TankConst.SCREEN_W) + 50.0:
 			continue
 		var flick := 1.0
-		# A fire behind the hull would throw its back-plane flames over the cutaway: none there.
-		if bool(l["fire"]) and not _behind_hull(lp):
+		var radius := float(l["radius"])
+		var k := 1.0
+		# A fire behind the hull would throw its back-plane flames over the cutaway and its halo
+		# would bloom over the deck, reading as the hull burning: no flames there, and its halo
+		# stays small and faint (polish round 6: the Rampart's rear deck glowed amber).
+		var behind := _behind_hull(lp)
+		if behind:
+			radius = minf(radius, 12.0)
+			k = 0.3
+		elif bool(l["fire"]):
 			flick = 0.8 + 0.2 * sin(_time * 9.0 + float(int(l["seed"]) % 13))
 			fx.fire_and_smoke(
 				"sc%d" % int(l["seed"]), l["pos"], 0.6, 0.5, dt, TankParticles.PLANE_BACK
 			)
-		sl.add(l["pos"], float(l["radius"]), l["color"], float(l["intensity"]) * flick)
+		sl.add(l["pos"], radius, l["color"], float(l["intensity"]) * flick * k)
 	sl.add_reflections(TankBackdrop.NEAR_BOTTOM_Y - 22.0, 200.0, 0.22)
 	sl.end()
 
 
 ## True when screen point `p` lies behind the tank's hull and turret (with a margin).
 func _behind_hull(p: Vector2) -> bool:
-	var r := Rect2(rig.base_pos + Vector2(-12, -50), Vector2(rig.hull_w + 30, rig.hull_h + 60))
+	var r := Rect2(rig.base_pos + Vector2(-24, -84), Vector2(rig.hull_w + 48, rig.hull_h + 94))
 	return r.has_point(p)
 
 
