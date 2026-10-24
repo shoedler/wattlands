@@ -126,14 +126,14 @@ func planing() -> bool:
 	return lift_px() >= PLANE_LIFT_PX
 
 
-## The rod's points (boat-local, unflipped): [base, butt, tip].
-func rod_points() -> PackedVector2Array:
+## The rod's pixels (boat-local, unflipped), the tip last.
+func rod_points() -> Array[Vector2i]:
 	return FishingRig.rod(fishing, tension)
 
 
 ## The rod tip's pixel in the parent's (the view's) coordinates.
 func rod_tip() -> Vector2:
-	return pixel_of(Vector2i(rod_points()[-1]))
+	return pixel_of(rod_points()[-1])
 
 
 ## The view pixel (top-left corner) of boat-local pixel `p`.
@@ -165,9 +165,9 @@ func line_above() -> Color:
 
 
 func _paint_near(c: CanvasItem) -> void:
-	for p in FishingRig.rod_pixels(rod_points()):
+	for p in rod_points():
 		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), FishingPalette.SLATE)
 	var col := player_color()
-	c.draw_rect(Rect2(FishingRig.cap(fishing)), col)
+	c.draw_rect(Rect2(FishingRig.CAP), col)
 	var bow := Vector2(0, -FishingRig.PLANE_BOW_PX if planing() else 0)
 	c.draw_rect(Rect2(Vector2(FishingRig.FLAG.position) + bow, FishingRig.FLAG.size), col)

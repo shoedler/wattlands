@@ -9,7 +9,7 @@ extends RefCounted
 const FOAM := Color("#ebf2e7")
 const SKY := Color("#cedfd2")
 const HAZE := Color("#b6d7cf")
-const SURFACE := Color("#90c1c1")
+const SURFACE := Color("#91c2c2")
 const UPPER := Color("#6fa3a6")
 const MID := Color("#4b858f")
 const DEEP := Color("#2c6778")

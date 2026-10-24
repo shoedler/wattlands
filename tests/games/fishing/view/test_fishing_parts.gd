@@ -68,7 +68,7 @@ func test_the_rod_bends_toward_the_line_under_tension() -> void:
 	for i in 20:
 		b.advance(0.05)
 	var straight := b.rod_points()[-1]
-	b.tension = 1.0
+	b.tension = 0.5
 	assert_gt(b.rod_points()[-1].y, straight.y, "the tip bends down")
 	assert_lt(b.rod_points()[-1].x, straight.x, "and back toward the line")
 

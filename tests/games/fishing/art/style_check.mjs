@@ -9,7 +9,7 @@
 // masked, and world colours outside the palette are counted as off-palette.
 // Per screenshot: unique world colours, off-family share (non-accent pixels outside hue 140-215
 // unless near-neutral, or above 75 % saturation), the lowest value, checker cells (3x2 windows alternating both ways; a 1:1 line is not one), isolated pixels (differing
-// from all four neighbours), the accent and player-colour shares, and the flat share (pixels
+// from all eight neighbours, so a 1:1 line is not a speck), the accent and player-colour shares, and the flat share (pixels
 // whose eight neighbours, where they are world, are the same colour) and the light share (value
 // at least LIGHT_V). Zero dependencies (node:zlib).
 import fs from 'node:fs';
@@ -18,7 +18,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 export const PALETTE = {
-  ebf2e7: 'foam', cedfd2: 'sky', b6d7cf: 'haze', '90c1c1': 'surface', '6fa3a6': 'upper',
+  ebf2e7: 'foam', cedfd2: 'sky', b6d7cf: 'haze', '91c2c2': 'surface', '6fa3a6': 'upper',
   '4b858f': 'mid', '2c6778': 'deep', '1c4d65': 'abyss', a7bfb3: 'sage', '627179': 'wood',
   '4e5c67': 'slate', c98a5e: 'accent', '7f9cbf': 'player_slate', '9fb07a': 'player_moss',
   a68aa8: 'player_plum',
@@ -234,7 +234,9 @@ export function measure(grid) {
       else if (PLAYERS.includes(c)) players++;
       else if ((s >= NEUTRAL_S && (hue < 140 || hue > 215)) || s > 0.75) offFamily++;
       const n4 = [at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)];
-      if (n4.every((n) => n !== null) && n4.every((n) => n !== c)) isolated++;
+      const d4 = [at(x - 1, y - 1), at(x + 1, y - 1), at(x - 1, y + 1), at(x + 1, y + 1)];
+      const lone = n4.every((n) => n !== null && n !== c) && d4.every((n) => n !== c);
+      if (lone) isolated++;
       let same = true;
       for (let dy = -1; dy <= 1 && same; dy++) {
         for (let dx = -1; dx <= 1; dx++) {

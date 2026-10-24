@@ -4,7 +4,7 @@
 		"#ebf2e7",
 		"#cedfd2",
 		"#b6d7cf",
-		"#90c1c1",
+		"#91c2c2",
 		"#6fa3a6",
 		"#4b858f",
 		"#2c6778",
@@ -122,8 +122,8 @@
 			"id": "fish_mahi",
 			"prompt": "fish facing left, mouth at anchor",
 			"size": [
-				30,
-				13
+				31,
+				14
 			]
 		},
 		{
@@ -167,7 +167,7 @@
 			"id": "fish_grouper",
 			"prompt": "fish facing left, mouth at anchor",
 			"size": [
-				44,
+				46,
 				22
 			]
 		},
@@ -258,7 +258,7 @@
 			"prompt": "pier, deck top on row 6",
 			"size": [
 				72,
-				22
+				10
 			]
 		},
 		{

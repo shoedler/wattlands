@@ -2,8 +2,9 @@ class_name FishingChips
 extends FishingHudControl
 ## The light stopped menu as small chips in the world, next to what they act on: "Cast: <fish>"
 ## above each fish hint's silhouette, "Drive on" ahead of the bow and "Turn around" behind the
-## stern (FishingHudModel.chips), on abyss-teal panels. The highlighted chip is lit with a foam
-## frame and a caret.
+## stern (FishingHudModel.chips), on abyss-teal panels, kept clear of the boat and of each other
+## (a chip that would overlap moves above or below what it hits). The highlighted chip is lit with
+## a foam frame and a caret.
 ## Positions come from the view's model (FishingView, through the game's "fishing_view" meta),
 ## in art px mapped onto this Control, which covers the view down to the meters.
 
@@ -12,9 +13,13 @@ const ART := Rect2i(0, 0, 640, 300)
 const HINT_LIFT := 12.0
 const SIDE_DX := 64.0
 const SIDE_Y := 24.0
+## The boat's box round its pivot (art px): chips keep clear of it.
+const BOAT_BOX := Rect2(-46, -36, 92, 44)
 
 ## The chips of the last refresh with their art positions ("at"; tests read them).
 var chips: Array[Dictionary] = []
+## The local boat's box (art px; empty without a boat).
+var boat_box: Rect2 = Rect2()
 var _t: float = 0.0
 
 
@@ -33,6 +38,7 @@ func ap() -> float:
 func refresh() -> void:
 	_t += get_process_delta_time()
 	chips.clear()
+	boat_box = Rect2()
 	var r := FishingHudModel.own_rider(game)
 	var list := FishingHudModel.chips(game, r)
 	if list.is_empty() or not game.has_meta(FishingView.META):
@@ -44,6 +50,7 @@ func refresh() -> void:
 	var boat: Variant = (m.get("boats", {}) as Dictionary).get(r.slot)
 	if not boat is Vector2:
 		return
+	boat_box = Rect2((boat as Vector2) + BOAT_BOX.position, BOAT_BOX.size)
 	var hints: Array = m.get("hints", [])
 	var dir := float(r.heading)
 	for e in list:
@@ -66,6 +73,8 @@ func _draw() -> void:
 	var s := ap()
 	var fpx := px(WlTheme.SMALL_PX)
 	var placed: Array[Rect2] = []
+	if boat_box.size != Vector2.ZERO:
+		placed.append(Rect2(boat_box.position * s, boat_box.size * s))
 	for c in chips:
 		var text := str(c["text"])
 		var w := FishingHudDraw.text_w(text, fpx, true) + 20.0
@@ -73,14 +82,17 @@ func _draw() -> void:
 		var center := (c["at"] as Vector2) * s
 		center.x = clampf(center.x, w * 0.5 + 4.0, size.x - w * 0.5 - 4.0)
 		var r := Rect2(center - Vector2(w, h) * 0.5, Vector2(w, h))
-		for k in 4:
-			var hit := false
+		for k in 8:
+			var hit := Rect2()
 			for o in placed:
 				if o.grow(4.0).intersects(r):
-					hit = true
-			if not hit:
+					hit = o
+			if hit.size == Vector2.ZERO:
 				break
-			r.position.y -= h + 6.0
+			if r.get_center().y < hit.get_center().y:
+				r.position.y = hit.position.y - h - 8.0
+			else:
+				r.position.y = hit.end.y + 8.0
 		center = r.get_center()
 		placed.append(r)
 		var lit := bool(c["selected"])

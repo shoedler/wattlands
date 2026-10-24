@@ -8,9 +8,9 @@ extends Node2D
 ##  2. the local rider's menu hints (flat species silhouettes at their depth, the picked one
 ##     drawn) and every fish and wobbler, shifted along the palette ladder by the water around
 ##     them (FishingPaletteMap);
-##  3. the prop wash, then the boats (others first, the local boat last; FishingBoatView);
-##  4. the lines: straight even pixel runs (FishingRig.raster), the rod's slate above the water
-##     and one colour under it that reads against the water where the line ends;
+##  3. the prop wash and the lines (behind the hulls): uniform pixel runs (FishingRig.raster),
+##     the rod's slate above the water and a colour per water band under it;
+##  4. the boats (others first, the local boat last; FishingBoatView);
 ##  5. wakes (foam slabs in a fixed rhythm) and the bow wave, then the effects (splashes, catch
 ##     sparkles).
 ## It only reads `game.state`. On a client the boats are drawn between snapshots from a
@@ -32,7 +32,7 @@ const CAM_SNAP_M := 150.0
 const DEPTH_TAU_S := 1.6
 ## Other riders' boats float this many px higher, on the far water (FishingScenery.FAR_ROWS),
 ## hazier and behind the local boat, so boats at the same x read as side by side.
-const FAR_ROW_PX := 3
+const FAR_ROW_PX := 6
 ## A boat is drawn when its pivot is within this many px of the view.
 const DRAW_MARGIN_PX := 120.0
 ## Leaps: one arc's length (s) and height (px).
@@ -216,6 +216,7 @@ func _build() -> void:
 		_lure[r.slot] = _sprite(under, "Lure%d" % r.slot)
 		_lure_mat[r.slot] = FishingPaletteMap.apply(_lure[r.slot])
 	_layer("Wash", _paint_wash)
+	_layer("Lines", _paint_lines)
 	_boat_layer = Node2D.new()
 	_boat_layer.name = "Boats"
 	add_child(_boat_layer)
@@ -233,7 +234,6 @@ func _build() -> void:
 		b.set_far(r.slot != _local_slot)
 		boats[r.slot] = b
 		_boat_layer.add_child(b)
-	_layer("Lines", _paint_lines)
 	_layer("Front", _paint_front)
 	effects = FishingEffects.new()
 	add_child(effects)

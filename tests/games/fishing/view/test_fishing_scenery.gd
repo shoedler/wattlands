@@ -71,8 +71,9 @@ func test_the_floor_is_sage_in_the_shallows_and_deep_teal_in_the_deep() -> void:
 		var rim := FishingScenery.floor_at(d, true)
 		assert_ne(rim, FishingScenery.floor_at(d), "the top line differs from the floor")
 		assert_ne(rim, water, "and from the water")
+	assert_eq(FishingScenery.floor_at(300.0), FishingPalette.MID, "a step under the upper teal")
+	assert_eq(FishingScenery.floor_at(300.0, true), FishingPalette.SURFACE, "under a lit rim")
 	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.DEEP)
-	assert_eq(FishingScenery.floor_at(600.0, true), FishingPalette.ABYSS)
 
 
 func test_fish_are_dark_on_light_water_and_lit_on_the_darkest() -> void:
@@ -119,27 +120,34 @@ func test_painting_every_region_draws_without_errors() -> void:
 	assert_eq(s.view_depth_m, s.target_view_depth(8800.0))
 
 
-func test_the_rod_is_stowed_low_and_raised_to_fish_in_even_runs() -> void:
-	var base := Vector2(FishingRig.ROD_BASE)
-	var steps := FishingRig.ROD_BUTT_STEPS + FishingRig.ROD_TIP_STEPS
+func test_the_rod_frames_are_stowed_raised_and_bent_without_gaps_or_corners() -> void:
+	var base := FishingRig.ROD_BASE
 	var stowed := FishingRig.rod(0.0, 0.0)
 	var raised := FishingRig.rod(1.0, 0.0)
-	assert_eq(stowed[-1], base + Vector2(FishingRig.ROD_STOW_STEP * steps))
-	assert_eq(raised[-1], base + Vector2(FishingRig.ROD_FISH_STEP * steps))
-	assert_lt(raised[-1].y, base.y - 8.0, "raised it stands up")
-	var bent := FishingRig.rod(1.0, 1.0)
-	assert_gt(bent[-1].y, raised[-1].y, "tension bends the tip down")
-	assert_lt(bent[-1].x, raised[-1].x, "and back")
-	for p in bent:
-		assert_eq(p, p.floor(), "whole pixels")
-	var px := FishingRig.rod_pixels(bent)
-	assert_eq(px[0], FishingRig.ROD_BASE)
-	assert_eq(px[-1], Vector2i(bent[-1]))
-	for i in px.size() - 1:
-		var d := px[i + 1] - px[i]
-		assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "the rod has no gaps")
+	assert_lt(stowed[-1].x, base.x - 6, "stowed it lies back over the stern")
+	assert_gt(stowed[-1].y, raised[-1].y, "low")
+	assert_lt(raised[-1].y, base.y - 8, "raised it stands up")
+	for t: float in [0.5, 1.0]:
+		var bent := FishingRig.rod(1.0, t)
+		assert_gt(bent[-1].y, raised[-1].y, "tension %s bends the tip down" % t)
+		assert_lt(bent[-1].x, raised[-1].x, "and back")
+	for frame in [stowed, raised, FishingRig.rod(1.0, 0.5), FishingRig.rod(1.0, 1.0)]:
+		assert_eq(frame[0], base)
+		for i in frame.size() - 1:
+			var d: Vector2i = frame[i + 1] - frame[i]
+			assert_true(absi(d.x) <= 1 and absi(d.y) <= 1, "the rod has no gaps")
+
 	assert_eq(FishingRig.even_entry(100, Vector2i(103, 218), 118), 103, "near-vertical: straight")
-	assert_eq(FishingRig.even_entry(60, Vector2i(111, 218), 118), 61, "near 1:2: exactly 1:2")
+	assert_eq(FishingRig.even_entry(60, Vector2i(111, 218), 118), 61, "near 1:2: runs of 2")
+	var run := FishingRig.raster(Vector2i(61, 118), Vector2i(111, 218))
+	var rows := {}
+	for p in run:
+		rows[p.x] = int(rows.get(p.x, 0)) + 1
+	for x: int in rows:
+		if x != 111:
+			assert_eq(rows[x], 2, "every column but the last holds two pixels")
+	var diag := FishingRig.raster(Vector2i.ZERO, Vector2i(9, 9))
+	assert_eq(diag.size(), 10, "a 1:1 run is one pixel per step, no corners")
 
 
 func test_the_line_sags_only_with_slack_and_runs_without_gaps() -> void:
@@ -163,8 +171,8 @@ func test_the_line_sags_only_with_slack_and_runs_without_gaps() -> void:
 			runs.append(n)
 			n = 1
 	runs.append(n)
-	for r in runs:
-		assert_true(r >= 2 and r <= 4, "an even rhythm (3:1 slope): %s" % [runs])
+	for i in runs.size() - 1:
+		assert_eq(runs[i], 3, "uniform runs (3:1 slope), the last what is left: %s" % [runs])
 
 
 func test_history_interpolates_between_snapshots_and_never_extrapolates() -> void:

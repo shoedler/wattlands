@@ -53,7 +53,7 @@ function png(rows) {
 }
 
 const SKY = 'cedfd2';
-const SEA = '90c1c1';
+const SEA = '91c2c2';
 const field = (w, h, c) => Array.from({ length: h }, () => Array(w).fill(c));
 const grid = (rows) => sc.artGrid(sc.decodePng(png(rows)), 3, [], []);
 
