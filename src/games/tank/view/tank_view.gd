@@ -27,9 +27,12 @@ const WRECK_LIFT_PX := 9.0
 const WRECK_TINT := Color(0.48, 0.46, 0.45)
 ## The depot gate stands behind the start (world x of its left edge).
 const DEPOT_GATE_X := -90.0
-## Ground props (craters, rubble, telegraph poles, fence posts and wire, flooded ruts) every this many
-## world px, by hash.
+## Ground props (craters, rubble, pairs of telegraph poles with their wires, fence posts and wire,
+## flooded ruts; at the depot drums, barriers, crates and floodlights) every this many world px, by
+## hash.
 const PROP_CELL_PX := 210.0
+## The depot yard's props on the tank's plane, every this many world px.
+const DEPOT_PROP_CELL_PX := 150.0
 ## The aimed arc: a dot every TRAJECTORY_STEP_S of flight (about 16 px), so the dots read as one
 ## dotted arc in the gunner's colour, every third with a faint halo, not as stray pixels.
 const TRAJECTORY_STEP_S := 0.045
@@ -203,6 +206,7 @@ func advance(delta: float) -> void:
 	backdrop.advance(delta)
 	var feed := rider_feed(state, t)
 	rig.update(state, feed, delta)
+	backdrop.hull_span = Vector2(rig.base_pos.x - 2.0, rig.base_pos.x + float(rig.hull_w) + 2.0)
 	_process_cues(state)
 	_process_timers(delta)
 	_track_enemies(state, delta)
@@ -683,13 +687,15 @@ func _tooth(rows: Array[Dictionary], foot: Vector2, s: float) -> void:
 
 
 ## Props on the tank's plane, placed by a hash of the world cell (no RNG), so the road ahead is never
-## empty: flooded craters that catch the lamps, rubble, shell-broken telegraph poles with a dangling
-## wire, fence posts strung with sagging wire, and flooded ruts (a dark sheet of water with a cold
-## sky line and the near lights' reflection).
+## empty: flooded craters that catch the lamps, rubble, a pair of telegraph poles with two wires
+## sagging from one to the other (never a single pole with a wire ending in the air), fence posts
+## strung with sagging wire, and flooded ruts (a dark sheet of water with a cold sky line and the
+## near lights' reflection). The depot yard has its own (_depot_props).
 func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
-	if state.seg.seg == TankIds.SEG_DEPOT:
-		return
 	var ground := float(TankConst.GROUND_Y)
+	if state.seg.seg == TankIds.SEG_DEPOT:
+		_depot_props(rows, ground)
+		return
 	var first := int(floor(cam_x / PROP_CELL_PX)) - 1
 	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / PROP_CELL_PX)) + 1
 	for cell in range(first, last + 1):
@@ -721,52 +727,62 @@ func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
 						Color(0.8, 0.8, 0.82)
 					)
 				)
-			2, 3:
-				_pole(rows, x, ground, h)
-			4, 5:
+			2:
+				_poles(rows, x, ground, h)
+			3, 4, 5:
 				_fence(rows, x, ground, h)
 			6:
 				_puddle(rows, x, ground, h)
 
 
-## A telegraph pole leaning after a near miss: a 3 px post with a lit edge, a crossbar with two
-## insulators and one wire hanging from it in a sag, on a small mud heap.
-func _pole(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var ht := 50.0 + float(h % 13)
-	var lean := float((h >> 4) % 9) - 4.0
-	var top := Vector2(x + lean, ground - ht)
-	var foot := Vector2(x, ground + 1.0)
-	rows.append({"t": "line", "a": foot, "b": top, "w": 3.0, "c": TankPalette.IRON_DARK})
-	rows.append(
-		{
-			"t": "line",
-			"a": foot + Vector2(-1, 0),
-			"b": top + Vector2(-1, 0),
-			"w": 1.0,
-			"c": TankPalette.STEEL_DARK
-		}
-	)
-	var bar := top.lerp(foot, 0.06)
-	rows.append(
-		{
-			"t": "line",
-			"a": bar + Vector2(-7, 1),
-			"b": bar + Vector2(7, -1),
-			"w": 2.0,
-			"c": TankPalette.IRON
-		}
-	)
+## Two telegraph poles 60-80 px apart, the far one leaning after a near miss, each with a short
+## bracket and two insulators, and two wires sagging from the near pole's insulators to the far
+## pole's: a stretch of line that ends on poles at both ends, on small mud heaps.
+func _poles(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var gap := 60.0 + float(h % 21)
+	var tips: Array[Array] = []
 	for k in 2:
-		var ins := bar + Vector2(-6.0 + 12.0 * float(k), -1.0 - float(k) * 0.0)
+		var px := x + gap * float(k)
+		var ht := 44.0 + float((h >> (3 + k * 4)) % 10)
+		var lean := 0.0 if k == 0 else float((h >> 9) % 7) - 3.0
+		var top := Vector2(px + lean, ground - ht)
+		var foot := Vector2(px, ground + 1.0)
+		rows.append({"t": "line", "a": foot, "b": top, "w": 3.0, "c": TankPalette.IRON_DARK})
 		rows.append(
-			{"t": "rect", "r": Rect2(ins.round(), Vector2(1, 1)), "c": TankPalette.STEEL_PALE}
+			{
+				"t": "line",
+				"a": foot + Vector2(-1, 0),
+				"b": top + Vector2(-1, 0),
+				"w": 1.0,
+				"c": TankPalette.STEEL_DARK
+			}
 		)
-	var wire := PackedVector2Array()
-	var side := 1.0 if (h >> 2) % 2 == 0 else -1.0
-	for k in 9:
-		var t := float(k) / 8.0
-		wire.append(bar + Vector2(side * (7.0 + t * 26.0), t * t * 30.0 + sin(t * PI) * 4.0))
-	rows.append({"t": "polyline", "pts": wire, "w": 1.0, "c": TankPalette.STEEL_DARK})
+		var bar := top.lerp(foot, 0.07)
+		var l := bar + Vector2(-4, 0.5)
+		var r := bar + Vector2(4, -0.5)
+		rows.append({"t": "line", "a": l, "b": r, "w": 2.0, "c": TankPalette.IRON})
+		for ins: Vector2 in [l, r]:
+			rows.append(
+				{
+					"t": "rect",
+					"r": Rect2((ins + Vector2(0, -1)).round(), Vector2(1, 1)),
+					"c": TankPalette.STEEL_PALE
+				}
+			)
+		tips.append([l, r])
+		_mud_heap(rows, foot)
+	for side in 2:
+		var a: Vector2 = tips[0][side]
+		var b: Vector2 = tips[1][side]
+		var sag := 7.0 + float((h >> (5 + side)) % 4)
+		var wire := PackedVector2Array()
+		for k in 11:
+			var t := float(k) / 10.0
+			wire.append(a.lerp(b, t) + Vector2(0, 4.0 * sag * t * (1.0 - t)))
+		rows.append({"t": "polyline", "pts": wire, "w": 1.0, "c": TankPalette.STEEL_DARK})
+
+
+func _mud_heap(rows: Array[Dictionary], foot: Vector2) -> void:
 	rows.append(
 		{
 			"t": "poly",
@@ -782,6 +798,85 @@ func _pole(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
 			"c": TankPalette.MUD_DARK
 		}
 	)
+
+
+## The depot yard on the tank's plane, by a hash of the world cell: groups of fuel drums, concrete
+## barrier blocks, stacked crates and floodlight posts throwing a cold light down on the apron.
+func _depot_props(rows: Array[Dictionary], ground: float) -> void:
+	var first := int(floor(cam_x / DEPOT_PROP_CELL_PX)) - 1
+	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PROP_CELL_PX)) + 1
+	for cell in range(first, last + 1):
+		var h := TankBackdrop.cell_hash(cell, 977)
+		var x := roundf(float(cell) * DEPOT_PROP_CELL_PX + float(h % 90) - cam_x)
+		match h % 5:
+			0, 1:
+				_drums(rows, x, ground, h)
+			2:
+				_barriers(rows, x, ground, h)
+			3:
+				_crates(rows, x, ground, h)
+			4:
+				_floodlight(rows, x, ground, h)
+
+
+## Two to four upright fuel drums, rust-dark with two rim bands and a lit edge.
+func _drums(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var n := 2 + h % 3
+	for k in n:
+		var dx := x + float(k) * 7.0 + float((h >> k) % 2)
+		var body := TankPalette.RUST_DARK if k % 2 == 0 else TankPalette.IRON
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 9), "c": body})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 1), "c": TankPalette.STEEL_DARK})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 6.0, 6, 1), "c": TankPalette.COAL})
+		rows.append({"t": "rect", "r": Rect2(dx, ground - 3.0, 6, 1), "c": TankPalette.COAL})
+		rows.append({"t": "rect", "r": Rect2(dx + 5.0, ground - 8.0, 1, 7), "c": TankPalette.RUST})
+
+
+## A row of two or three concrete barrier blocks (wide feet, sloped faces, a lit top).
+func _barriers(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var n := 2 + h % 2
+	for k in n:
+		var bx := x + float(k) * 17.0
+		var pts := PackedVector2Array(
+			[
+				Vector2(bx, ground + 1.0),
+				Vector2(bx + 3.0, ground - 4.0),
+				Vector2(bx + 4.0, ground - 9.0),
+				Vector2(bx + 11.0, ground - 9.0),
+				Vector2(bx + 12.0, ground - 4.0),
+				Vector2(bx + 15.0, ground + 1.0)
+			]
+		)
+		rows.append({"t": "poly", "pts": pts, "c": TankPalette.STEEL_DARK})
+		rows.append({"t": "rect", "r": Rect2(bx + 4.0, ground - 9.0, 7, 1), "c": TankPalette.STEEL})
+
+
+## Stacked wooden crates: two below, one on top.
+func _crates(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var boxes: Array[Rect2] = [Rect2(x, ground - 9.0, 10, 9), Rect2(x + 11.0, ground - 8.0, 9, 8)]
+	if h % 2 == 0:
+		boxes.append(Rect2(x + 4.0, ground - 17.0, 10, 8))
+	for b in boxes:
+		rows.append({"t": "rect", "r": b, "c": TankPalette.MUD})
+		var lid := Rect2(b.position, Vector2(b.size.x, 1))
+		rows.append({"t": "rect", "r": lid, "c": TankPalette.MUD_PALE})
+		var side := Rect2(b.position + Vector2(b.size.x - 1.0, 1.0), Vector2(1, b.size.y - 1.0))
+		rows.append({"t": "rect", "r": side, "c": TankPalette.MUD_DARK})
+
+
+## A floodlight post: a steel post with a hooded lamp head throwing a cold light onto the apron.
+func _floodlight(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
+	var ht := 40.0 + float(h % 9)
+	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 2, ht), "c": TankPalette.IRON})
+	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 1, ht), "c": TankPalette.STEEL_DARK})
+	var head := Vector2(x - 3.0, ground - ht - 2.0)
+	rows.append({"t": "rect", "r": Rect2(head, Vector2(8, 2)), "c": TankPalette.IRON_DARK})
+	var lens := Rect2(head + Vector2(1, 2), Vector2(6, 1))
+	rows.append({"t": "rect", "r": lens, "c": TankPalette.COLD_LIGHT})
+	var lamp := head + Vector2(4, 3)
+	lights.add(lamp, 6.0, TankPalette.WHITE_COLD, 0.5)
+	lights.add(lamp + Vector2(0, 14), 30.0, TankPalette.COLD_LIGHT, 0.2)
+	_mud_heap(rows, Vector2(x + 1.0, ground + 1.0))
 
 
 ## Fence posts (3-5, leaning) strung with two strands of sagging wire.

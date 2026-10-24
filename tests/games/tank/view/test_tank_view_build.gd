@@ -35,11 +35,14 @@ func test_planes_are_the_brief_s_parallax_factors_and_mirror_alternate() -> void
 	assert_almost_eq(b.hills.factor, 0.2, 1e-6)
 	assert_almost_eq(b.near.factor, 0.5, 1e-6)
 	assert_almost_eq(b.ground.factor, 1.0, 1e-6)
-	assert_almost_eq(b.debris.factor, 1.3, 1e-6)
-	for s: ParallaxStrip in [b.sky, b.hills, b.near, b.ground, b.debris]:
+	assert_almost_eq(TankBackdrop.DEBRIS_FACTOR, 1.3, 1e-6)
+	for s: ParallaxStrip in [b.sky, b.hills, b.ground]:
 		assert_true(s.mirror_alternate, s.name)
 		assert_false(s.auto_process, s.name)
-	assert_eq(b.front.get_parent(), v, "the debris draws above the world")
+	# The near plane is composed without a mirror axis (polish round 4) and tiles plainly.
+	assert_false(b.near.mirror_alternate)
+	assert_false(b.near.auto_process)
+	assert_eq(b.front.get_parent(), v, "the foreground draws above the world")
 
 
 func test_the_hull_stands_on_the_ground_line_with_its_rear_at_x_16() -> void:
