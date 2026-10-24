@@ -222,6 +222,7 @@ func _refresh() -> void:
 	if palette.grid_px() > 0:
 		game_sb.set_content_margin_all(3.0 * palette.grid_px())
 	_game_panel.add_theme_stylebox_override("panel", game_sb)
+	HudPalette.snap_tree(self, palette.grid_px())
 	HudWidget.wrap_label(_safety_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_trainer_label, max_width - PANEL_PAD)
 	HudWidget.wrap_label(_game_label, max_width - PANEL_PAD)

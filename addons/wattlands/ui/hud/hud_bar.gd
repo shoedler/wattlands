@@ -5,7 +5,8 @@ extends Control
 ## in the band. The glow is a brightness change plus an outline, so it reads without color.
 ## A palette's band, glow and bar_fg keys recolor the band (flat, without edge lines), the glow
 ## outline and the lit gear ticks (unlit ticks then take bar_bg on the panel); with grid_px the
-## ticks are whole-pixel cells (HudPalette). Owned by ui-hud.
+## whole bar is drawn in the game's pixels and the ticks are whole-pixel cells (HudPalette).
+## Owned by ui-hud.
 
 var max_value: float = 1.0
 var value: float = 0.0
@@ -78,9 +79,12 @@ func _draw() -> void:
 	var accent := palette.pick(HudPalette.ACCENT, WlTheme.ACCENT)
 	var tick_colors := palette.has_key(HudPalette.BAR_FG)
 	var grid := palette.grid_px()
+	if grid > 0 and segments == 0:
+		_draw_grid(grid, a)
+		return
 	if segments > 0 and grid > 0:
 		var lit_n := roundi(frac(value) * segments)
-		var top := roundf((r.size.y - 4.0 * grid) / 2.0)
+		var top := floorf((r.size.y - 4.0 * grid) / 2.0 / grid) * grid
 		for i in segments:
 			var cell := Rect2(float(2 * grid * i), top, grid, 4 * grid)
 			var cc := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
@@ -129,3 +133,37 @@ func _draw() -> void:
 		)
 	if glow:
 		draw_rect(r.grow(2.0), palette.pick(HudPalette.GLOW, WlTheme.GLOW), false, 4.0)
+
+
+## The bar on the game's pixel grid (grid_px): a track whole pixels tall, the band and the fill
+## in whole pixels (the fill one pixel in from the track's top and bottom when it is at least
+## four tall), a one-pixel target marker and, in band, a one-pixel glow frame on the track.
+func _draw_grid(g: int, a: float) -> void:
+	var gf := float(g)
+	var w := floorf(size.x / gf) * gf
+	var h := floorf(size.y / gf) * gf
+	if w <= 0.0 or h <= 0.0:
+		return
+	var bg := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
+	draw_rect(Rect2(0.0, 0.0, w, h), Color(bg, bg.a * a))
+	if has_band():
+		var x0 := HudPalette.snap(frac(band_lo) * w, g)
+		var x1 := maxf(x0 + gf, HudPalette.snap(frac(band_hi) * w, g))
+		var bc := palette.pick(HudPalette.BAND, palette.pick(HudPalette.ACCENT, WlTheme.BAND))
+		draw_rect(Rect2(x0, 0.0, x1 - x0, h), Color(bc, bc.a * a))
+	var inset := gf if h >= 4.0 * gf else 0.0
+	var fw := HudPalette.snap(frac(value) * w, g)
+	draw_rect(Rect2(0.0, inset, fw, h - 2.0 * inset), Color(fill_color, fill_color.a * a))
+	if marker >= 0.0:
+		var mx := minf(HudPalette.snap(frac(marker) * w, g), w - gf)
+		var mc := palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+		draw_rect(Rect2(mx, 0.0, gf, h), Color(mc, mc.a * a))
+	if glow:
+		var gc := palette.pick(HudPalette.GLOW, WlTheme.GLOW)
+		for edge in [
+			Rect2(0.0, 0.0, w, gf),
+			Rect2(0.0, h - gf, w, gf),
+			Rect2(0.0, 0.0, gf, h),
+			Rect2(w - gf, 0.0, gf, h)
+		]:
+			draw_rect(edge, gc)

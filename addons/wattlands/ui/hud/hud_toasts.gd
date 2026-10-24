@@ -59,6 +59,7 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 	HudWidget.wrap_label(l, max_width - PANEL_PAD)
 	panel.add_child(l)
 	add_child(panel)
+	HudPalette.snap_tree(self, palette.grid_px())
 	_items.append({"panel": panel, "label": l, "left": maxf(seconds, 0.1), "text": text})
 	_trim()
 
@@ -76,6 +77,7 @@ func set_palette(p: HudPalette) -> void:
 	if palette.grid_px() > 0:
 		for it2 in _items:
 			_style_panel(it2["panel"] as PanelContainer)
+	HudPalette.snap_tree(self, palette.grid_px())
 
 
 func tick(dt: float) -> void:

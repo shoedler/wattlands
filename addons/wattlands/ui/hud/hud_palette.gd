@@ -11,9 +11,9 @@ extends RefCounted
 ## corner_radius (int >= 0: panel corners; 0 = square, without anti-aliasing) and text_outline
 ## (bool: false drops the label outlines), text_px and key_px (int: one size for every label and
 ## one for the key numbers, which stay at least WlTheme.KEY_NUMBER_MIN_PX) and grid_px (int: the
-## game's art pixel in screen px; panels pad 3 of them on every side, the gaps inside a widget
-## snap to whole pixels, and the gear ticks become cells one pixel wide with one pixel between,
-## four tall, the current gear in the text colour).
+## game's art pixel in screen px: the kit draws on the game's grid, panels borderless and padded
+## 3 pixels, children placed on whole pixels (snap_tree), gaps, bars, the phase strip and the
+## gear cells, one pixel wide with one between and four tall, in whole pixels).
 ## Safety and warning colors (the rescue, warm-up, pause and trainer banners, WlTheme.WARN) are
 ## not palette keys: a game cannot recolor a safety signal, and the safety banners keep the kit
 ## font too.
@@ -55,6 +55,9 @@ const GRID_PX := "grid_px"
 const STYLE_KEYS: Array[String] = [
 	FONT, FONT_SCALE_PX, CORNER_RADIUS, TEXT_OUTLINE, TEXT_PX, KEY_PX, GRID_PX
 ]
+## snap_tree()'s metadata on a container: its grid and whether its hook is connected.
+const GRID_META := "hud_grid_px"
+const GRID_HOOK := "hud_grid_hooked"
 ## The fewest whole-number style keys may hold (text_px, key_px, grid_px: 1; corner_radius: 0).
 const INT_MIN := {FONT_SCALE_PX: 1, CORNER_RADIUS: 0, TEXT_PX: 1, KEY_PX: 1, GRID_PX: 1}
 
@@ -170,10 +173,65 @@ func style_item(item: CanvasItem) -> void:
 		item.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
-## Apply the game's corners to a panel style (nothing without corner_radius).
+## Apply the game's corners to a panel style (nothing without corner_radius); with grid_px the
+## panel has no border (a border thinner than the game's pixel would leave its grid).
 func style_panel(sb: StyleBoxFlat) -> void:
-	if sb == null or not style.has(CORNER_RADIUS):
+	if sb == null:
+		return
+	if grid_px() > 0:
+		sb.set_border_width_all(0)
+	if not style.has(CORNER_RADIUS):
 		return
 	var r := int(style[CORNER_RADIUS])
 	sb.set_corner_radius_all(r)
 	sb.anti_aliasing = r > 0
+
+
+## `v` rounded to whole multiples of `grid` (`v` itself while grid is 0).
+static func snap(v: float, grid: int) -> float:
+	return roundf(v / float(grid)) * float(grid) if grid > 0 else v
+
+
+## With `grid` > 0, `root` and every container under it place their children on whole game
+## pixels: after each sort, child positions round to the grid, and in a row the smaller labels
+## sit on the baseline of its biggest label (a unit next to a key number). 0 stops it. The
+## root itself must sit on the grid; call it again after adding children.
+static func snap_tree(root: Node, grid: int) -> void:
+	var box := root as Container
+	if box != null and (grid > 0 or box.has_meta(GRID_META)):
+		box.set_meta(GRID_META, grid)
+		if not box.has_meta(GRID_HOOK):
+			box.set_meta(GRID_HOOK, true)
+			box.sort_children.connect(snap_sorted.bind(box))
+		box.queue_sort()
+	for child in root.get_children():
+		snap_tree(child, grid)
+
+
+## The sort_children hook of snap_tree().
+static func snap_sorted(box: Container) -> void:
+	var grid := int(box.get_meta(GRID_META, 0))
+	if grid <= 0:
+		return
+	var big: Label = null
+	for child in box.get_children():
+		var c := child as Control
+		if c == null or c.top_level:
+			continue
+		c.position = Vector2(snap(c.position.x, grid), snap(c.position.y, grid))
+		var l := c as Label
+		if l != null and l.visible and l.label_settings != null:
+			if big == null or l.label_settings.font_size > big.label_settings.font_size:
+				big = l
+	if big == null or not box is HBoxContainer:
+		return
+	var font: Font = big.label_settings.font
+	if font == null:
+		return
+	var base := big.position.y + font.get_ascent(big.label_settings.font_size)
+	for child in box.get_children():
+		var l := child as Label
+		if l == null or l == big or l.label_settings == null or l.label_settings.font != font:
+			continue
+		var y := base - font.get_ascent(l.label_settings.font_size)
+		l.position.y = snap(y, grid)

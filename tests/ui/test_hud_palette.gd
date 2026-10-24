@@ -231,3 +231,50 @@ func test_without_grid_px_the_kit_gaps_margins_and_sizes_stay() -> void:
 	assert_eq(g._unit.label_settings.font_size, plain._unit.label_settings.font_size)
 	var gear := autofree(HudGear.new()) as HudGear
 	assert_eq(gear._bar.get_combined_minimum_size().y, 14.0, "the kit gear bar keeps its size")
+
+
+func _off_grid(root: Control, g: int) -> Array[String]:
+	var bad: Array[String] = []
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		stack.append_array(n.get_children())
+		var c := n as Control
+		if c == null or not c.is_visible_in_tree():
+			continue
+		var p := c.global_position - root.global_position
+		if fmod(p.x, g) != 0.0 or fmod(p.y, g) != 0.0:
+			bad.append("%s at %s" % [c.name, p])
+	return bad
+
+
+func test_grid_px_puts_widget_parts_on_the_game_pixels_without_borders() -> void:
+	var font: Font = ThemeDB.fallback_font
+	var p := HudPalette.from_dict({"font": font, "text_px": 27, "key_px": 54, "grid_px": 3})
+	var g := HudPowerGauge.new()
+	add_child_autofree(g)
+	g.set_palette(p)
+	g.fit_to(Vector2(300, 102))
+	var t := Telemetry.new()
+	t.power_w = 170.0
+	g.set_telemetry(t)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(_panel_of(g).border_width_top, 0, "no border thinner than a game pixel")
+	assert_eq(fmod(g.custom_minimum_size.y, 3.0), 0.0, "the panel is whole game pixels tall")
+	assert_eq(_off_grid(g, 3), [] as Array[String], "every part on the grid")
+	var watts := g.watts_label()
+	var unit := g._unit
+	var base_gap := (
+		(unit.position.y + font.get_ascent(27)) - (watts.position.y + font.get_ascent(54))
+	)
+	assert_lte(absf(base_gap), 1.5, "the unit sits on the key number's baseline (to the grid)")
+	var plain := autofree(HudPowerGauge.new()) as HudPowerGauge
+	plain.set_palette(HudPalette.from_dict({"panel": Color.BLACK}))
+	assert_gt(_panel_of(plain).border_width_top, 0, "the kit border stays without grid_px")
+
+
+func test_snap_rounds_to_the_grid_and_passes_through_without_one() -> void:
+	assert_eq(HudPalette.snap(13.5, 3), 15.0)
+	assert_eq(HudPalette.snap(13.4, 3), 12.0)
+	assert_eq(HudPalette.snap(13.5, 0), 13.5)

@@ -2,7 +2,9 @@ class_name HudPhaseStrip
 extends Control
 ## The block strip of the phase timeline: one block per plan phase, width by length, height
 ## by intensity (ERG peak %FTP; SIM phases at 75% with diagonal hatching, so mode reads
-## without color), the current block outlined and a progress marker. Owned by ui-hud.
+## without color), the current block outlined and a progress marker. With a palette's grid_px
+## everything is drawn in the game's whole pixels (the hatching as pixel diagonals). Owned by
+## ui-hud.
 
 ## [{"len": float, "kind": String, "mode": String, "pct": float}]
 var blocks: Array[Dictionary] = []
@@ -60,6 +62,9 @@ func _draw() -> void:
 	var total := total_length()
 	if w <= 0.0 or h <= 0.0 or total <= 0.0:
 		return
+	if palette.grid_px() > 0:
+		_draw_grid(palette.grid_px(), total)
+		return
 	draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
 	var x := 0.0
 	for i in blocks.size():
@@ -100,3 +105,52 @@ func _draw() -> void:
 				Vector2(mx, 0.0), Vector2(mx, h), palette.pick(HudPalette.GLOW, WlTheme.GLOW), 3.0
 			)
 		x += bw
+
+
+## The strip on the game's pixel grid: block edges, heights, the hatching, the outline and the
+## marker in whole pixels of `g`.
+func _draw_grid(g: int, total: float) -> void:
+	var gf := float(g)
+	var w := floorf(size.x / gf) * gf
+	var h := floorf(size.y / gf) * gf
+	draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
+	var at := 0.0
+	for i in blocks.size():
+		var b := blocks[i]
+		var x0 := HudPalette.snap(at / total * w, g)
+		at += float(b.get("len", 0.0))
+		var x1 := HudPalette.snap(at / total * w, g)
+		if x1 - x0 >= 2.0 * gf:
+			x1 -= gf
+		if x1 <= x0:
+			continue
+		var sim := str(b.get("mode", Wl.ERG)) == Wl.SIM
+		var pct := 75.0 if sim else float(b.get("pct", 50.0))
+		var bh := maxf(gf, HudPalette.snap(clampf(pct / 150.0, 0.2, 1.0) * h, g))
+		var rect := Rect2(x0, h - bh, x1 - x0, bh)
+		var kind := str(b.get("kind", ""))
+		var c := kind_color(kind)
+		if kind == Wl.WORK:
+			c = palette.pick(HudPalette.ACCENT, c)
+		if i < current:
+			c = Color(c, 0.35)
+		elif i > current:
+			c = Color(c, 0.7)
+		draw_rect(rect, c)
+		if sim:
+			for cy in int(bh / gf):
+				for cx in int(rect.size.x / gf):
+					if (cx + cy) % 3 == 0:
+						var cell := Rect2(x0 + cx * gf, h - bh + cy * gf, gf, gf)
+						draw_rect(cell, Color(0, 0, 0, 0.45))
+		if i == current:
+			var tc := palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+			for edge in [
+				Rect2(x0, h - bh, rect.size.x, gf),
+				Rect2(x0, h - gf, rect.size.x, gf),
+				Rect2(x0, h - bh, gf, bh),
+				Rect2(x1 - gf, h - bh, gf, bh)
+			]:
+				draw_rect(edge, tc)
+			var mx := minf(HudPalette.snap(x0 + (x1 - x0) * progress, g), w - gf)
+			draw_rect(Rect2(mx, 0.0, gf, h), palette.pick(HudPalette.GLOW, WlTheme.GLOW))

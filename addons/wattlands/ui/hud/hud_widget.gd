@@ -84,6 +84,7 @@ func set_palette(p: HudPalette) -> void:
 	for e in _scaled_boxes:
 		if (e["node"] as Control).has_method("set_palette"):
 			(e["node"] as Control).call("set_palette", palette)
+	HudPalette.snap_tree(self, palette.grid_px())
 	_on_palette_changed()
 
 
@@ -113,6 +114,9 @@ func set_ui_scale(s: float) -> void:
 	_applied_scale = clamped
 	ui_scale = clamped
 	custom_minimum_size = base_size() * ui_scale
+	var grid_unit := float(palette.grid_px())
+	if grid_unit > 0.0:
+		custom_minimum_size = (custom_minimum_size / grid_unit).ceil() * grid_unit
 	for e in _scaled:
 		var lbl: Label = e["label"]
 		var px: int = e["px"]
@@ -132,9 +136,13 @@ func set_ui_scale(s: float) -> void:
 				palette.style_label(
 					lbl.label_settings, size_px, bool(e.get("bold", false)), floor_px, e["key"]
 				)
+	var grid := palette.grid_px()
 	for e in _scaled_boxes:
 		var n: Control = e["node"]
-		n.custom_minimum_size = Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
+		var box := Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
+		if grid > 0:
+			box = Vector2(HudPalette.snap(box.x, grid), maxf(grid, HudPalette.snap(box.y, grid)))
+		n.custom_minimum_size = box
 	_fit_panel_margins()
 	_on_scale_changed()
 
