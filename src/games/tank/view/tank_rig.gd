@@ -446,13 +446,27 @@ func _effects(state: TankState, dt: float) -> void:
 		hub.lights.add(lamp, 6.0, TankPalette.AMBER, 0.55)
 	if steam_room != null:
 		if steam_room.take_stroke():
-			# Every stroke: a white plume out of the deck vent, clear of the deck (world plane), and a
-			# white puff from the cylinder's drain cock that stays in the room with the hull.
+			# Every stroke: a white plume out of the deck vent, clear of the deck (world plane), and
+			# two small wisps from the cylinder's drain cock that stay in the room with the hull (a
+			# full puff there would hide the crosshead and the shell rack).
 			if _vent.x >= 0.0:
 				fx.steam_plume(hub.to_layer(_vent))
-				fx.steam_puff(hub.to_layer(steam_room.drain_hull()))
 			else:
 				fx.steam_puff(hub.to_layer(steam_room.chimney_hull()))
+			var drain := hub.to_layer(steam_room.drain_hull())
+			for _i in 2:
+				fx.particles.spawn(
+					TankParticles.Kind.STEAM,
+					drain + Vector2(fx.r(-1.0, 1.0), 0.0),
+					Vector2(fx.r(-6.0, 6.0), fx.r(-20.0, -12.0)),
+					fx.r(0.3, 0.45),
+					1.5,
+					fx.r(4.0, 6.0),
+					Color(TankPalette.WHITE_COLD, 0.6),
+					-4.0,
+					1.6,
+					TankParticles.PLANE_HULL
+				)
 		if steam_room.latched_now:
 			fx.steam_burst(hub.to_layer(steam_room.chimney_hull()))
 	if hl.breakdown:
