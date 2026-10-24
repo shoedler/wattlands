@@ -1,31 +1,28 @@
 #!/usr/bin/env bash
-# tests/games/fishing/sim/run_sims.sh: brief 4.2's simulation matrix for Turbo Reel, then
-# node tests/games/fishing/sim/check_sims.mjs over the reports (with fit_check on every FIT).
+# tests/games/fishing/sim/run_sims.sh: Turbo Reel's simulation matrix through tools/run_game_sim,
+# then node tests/games/fishing/sim/check_sims.mjs over the reports (with fit_check on every FIT).
 #
-#   bash tests/games/fishing/sim/run_sims.sh [--quick|--full] [scenario ...]
-#   FISHING_SIMS="s10 s8" bash tests/games/fishing/sim/run_sims.sh
+#   bash tests/games/fishing/sim/run_sims.sh [--quick] [scenario ...]
+#   FISHING_SIMS="r1 w3" bash tests/games/fishing/sim/run_sims.sh
 #
-# Scenarios (default: all eleven; one report per run in build/fishing/sims/, FISHING_SIMS_OUT):
-#   s1   threshold, 2 band-trackers (erg+band)
-#   s2   threshold, 1 rider at erg+band:offset_rpm=-18 (s2_low) and =18 (s2_high)
-#   s3   free_30, 4 band-trackers, seeds 1-5 (--full or FISHING_SEEDS: 1-20)
-#   s4   free_30 solo, erg:compliance=1.0, --autopilot=none and =all
-#   s5   base_60, 2 band-trackers
-#   s6   free_120, 1 band-tracker, on the first seed in 1-500 whose pre-roll holds a marlin
-#        (tests/games/fishing/sim/fishing_marlin_seed.gd; the pure pre-roll, never a sim search)
-#   s7   threshold, 1 rider, erg+band+cadence_drop:rpm=40,at_s=600,for_s=20
-#   s8   free_30, 2 band-trackers, seed 7, twice (--quick: e2e_2min, 3 riders, twice)
-#   s9   fit_check on every FIT of the runs (check_sims --fit: laps per rider from the report)
-#   s10  e2e_2min, 3 band-trackers
-#   s11  threshold, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1 (BRIEF 4.6.1's
-#        x0.85, an FTP other than 200 W, and no haptic to an opted-out rider)
-# --quick (CI) runs s10, s8 on e2e_2min and s9. The matrix stays out of tools/run_tests.
+# Scenarios (default: all; one report per run in build/fishing/sims/, FISHING_SIMS_OUT):
+#   r1   roam_30, 1 band-tracker (erg+band), Autopilot
+#   r2   roam_30, 4 band-trackers
+#   r3   roam_30, 1 band-tracker + 3 bots, seeds 1-5 (FISHING_SEEDS)
+#   r4   roam_10, 1 rider at erg:compliance=1.0 (no band: the zero-input default), Autopilot
+#   r5   roam_30, 2 band-trackers, --ftp=300,200 --unverified --haptics-off=1
+#   r6   roam_30, 2 band-trackers, slot 1 stops pedaling at 900 s for 60 s (paused or AFK)
+#   w1   threshold, 2 band-trackers
+#   w2   base_60, 2 band-trackers
+#   w3   e2e_2min, 3 band-trackers
+#   d    roam_10, 2 band-trackers + 2 bots, seed 7, twice (the same hash)
+#   fit  fit_check on every FIT of the runs (check_sims --fit)
+# --quick (CI) runs w3, d and fit.
 #
-# Riders send no intents, so they play as Autopilot (brief 2.5). Every run goes through
-# tools/run_game_sim at --sim-speed=200; a run that exits non-zero stops the script (75: the Godot
-# lock wait timed out, rerun). A missing marlin seed skips s6's run and fails S6 at the end.
-# Environment: FISHING_SIMS_OUT, FISHING_SEEDS, FISHING_SKIP_CHECK=1 (runs only),
-# FISHING_GODOT_TIMEOUT (seconds per run, default 1800). tools/run_game_sim sets the locks.
+# Every run goes through tools/run_game_sim at --sim-speed=200; a run that exits non-zero stops
+# the script (75: the Godot lock wait timed out, rerun). Environment: FISHING_SIMS_OUT,
+# FISHING_SEEDS, FISHING_SKIP_CHECK=1 (runs only), FISHING_GODOT_TIMEOUT (seconds per run, default
+# 1800). tools/run_game_sim sets the locks.
 set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,15 +30,15 @@ repo="$(cd "$here/../../../.." && pwd)"
 cd "$repo"
 out="${FISHING_SIMS_OUT:-build/fishing/sims}"
 timeout_s="${FISHING_GODOT_TIMEOUT:-1800}"
+seeds="${FISHING_SEEDS:-1 2 3 4 5}"
 
 mode=default
 wanted=""
 for a in "$@"; do
   case "$a" in
     --quick) mode=quick ;;
-    --full) mode=full ;;
     -h | --help)
-      sed -n '2,28p' "$0"
+      sed -n '2,27p' "$0"
       exit 0
       ;;
     -*)
@@ -51,15 +48,10 @@ for a in "$@"; do
     *) wanted="$wanted $a" ;;
   esac
 done
-if [ "$mode" = full ]; then
-  seeds="${FISHING_SEEDS:-$(seq -s ' ' 1 20)}"
-else
-  seeds="${FISHING_SEEDS:-1 2 3 4 5}"
-fi
-order="s1 s2 s3 s4 s5 s6 s7 s8 s9 s10 s11"
+order="r1 r2 r3 r4 r5 r6 w1 w2 w3 d fit"
 if [ -z "${wanted// /}" ]; then
   if [ "$mode" = quick ]; then
-    wanted="s10 s8 s9"
+    wanted="w3 d fit"
   else
     wanted="${FISHING_SIMS:-$order}"
   fi
@@ -77,7 +69,6 @@ done
 mkdir -p "$out"
 
 band='erg+band'
-s6_missing=0
 
 # run <name> <run_game_sim flags...>: one run; stops the script when it fails.
 run() {
@@ -85,7 +76,7 @@ run() {
   shift
   printf '== %s\n' "$name"
   local code=0
-  tools/run_game_sim --game=fishing --bots=0 --sim-speed=200 "--godot-timeout=$timeout_s" \
+  tools/run_game_sim --game=fishing --sim-speed=200 "--godot-timeout=$timeout_s" \
     "--report=$out/$name.json" "$@" || code=$?
   if [ "$code" -ne 0 ]; then
     printf 'run_sims: %s failed with exit %s\n' "$name" "$code" >&2
@@ -93,64 +84,33 @@ run() {
   fi
 }
 
-scenario_s1() { run s1_threshold --content=threshold --players=2 "--rider=$band" --seed=1; }
-
-scenario_s2() {
-  run s2_low --content=threshold --players=1 --rider=erg+band:offset_rpm=-18 --seed=1
-  run s2_high --content=threshold --players=1 --rider=erg+band:offset_rpm=18 --seed=1
-}
-
-scenario_s3() {
+scenario_r1() { run r1_roam30_solo --content=roam_30 --players=1 "--rider=$band" --seed=1; }
+scenario_r2() { run r2_roam30_four --content=roam_30 --players=4 "--rider=$band" --seed=2; }
+scenario_r3() {
   local s
   for s in $seeds; do
-    run "s3_free30_seed${s}" --content=free_30 --players=4 "--rider=$band" --seed="$s"
+    run "r3_roam30_bots_seed${s}" --content=roam_30 --players=1 --bots=3 "--rider=$band" --seed="$s"
   done
 }
-
-scenario_s4() {
-  run s4_ap_none --content=free_30 --players=1 --rider=erg:compliance=1.0 --autopilot=none --seed=1
-  run s4_ap_all --content=free_30 --players=1 --rider=erg:compliance=1.0 --autopilot=all --seed=1
+scenario_r4() {
+  run r4_roam10_autopilot --content=roam_10 --players=1 --rider=erg:compliance=1.0 --autopilot=all --seed=1
 }
-
-scenario_s5() { run s5_base60 --content=base_60 --players=2 "--rider=$band" --seed=1; }
-
-scenario_s6() {
-  local line seed=""
-  line="$(tools/godot.sh --headless --path . -s tests/games/fishing/sim/fishing_marlin_seed.gd \
-    -- --trip=free_120 --from=1 --to=500 2>/dev/null | grep -E '^marlin_seed=' | tail -1)" || true
-  seed="${line#marlin_seed=}"
-  if ! [[ "$seed" =~ ^[0-9]+$ ]]; then
-    printf 'run_sims: s6 skipped: no free_120 seed in 1-500 pre-rolls a marlin (%s)\n' "${line:-no output}" >&2
-    rm -f "$out/s6_free120_marlin.json"
-    s6_missing=1
-    return 0
-  fi
-  printf '== s6: marlin seed %s\n' "$seed"
-  run s6_free120_marlin --content=free_120 --players=1 "--rider=$band" --seed="$seed"
+scenario_r5() {
+  run r5_roam30_unverified --content=roam_30 --players=2 "--rider=$band" --ftp=300,200 \
+    --unverified --haptics-off=1 --seed=3
 }
-
-scenario_s7() {
-  run s7_threshold_drop --content=threshold --players=1 \
-    --rider=erg+band+cadence_drop:rpm=40,at_s=600,for_s=20 --seed=1
+scenario_r6() {
+  run r6_roam30_paused --content=roam_30 --players=2 "--rider=$band" \
+    "--rider=erg+band+cadence_drop:rpm=0,at_s=900,for_s=60" --seed=4
 }
-
-scenario_s8() {
-  if [ "$mode" = quick ]; then
-    run s8_e2e_a --content=e2e_2min --players=3 "--rider=$band" --seed=3
-    run s8_e2e_b --content=e2e_2min --players=3 "--rider=$band" --seed=3
-  else
-    run s8_free30_a --content=free_30 --players=2 "--rider=$band" --seed=7
-    run s8_free30_b --content=free_30 --players=2 "--rider=$band" --seed=7
-  fi
+scenario_w1() { run w1_threshold --content=threshold --players=2 "--rider=$band" --seed=1; }
+scenario_w2() { run w2_base60 --content=base_60 --players=2 "--rider=$band" --seed=1; }
+scenario_w3() { run w3_e2e --content=e2e_2min --players=3 "--rider=$band" --seed=1; }
+scenario_d() {
+  run d_roam_a --content=roam_10 --players=2 --bots=2 "--rider=$band" --seed=7
+  run d_roam_b --content=roam_10 --players=2 --bots=2 "--rider=$band" --seed=7
 }
-
-scenario_s9() { :; } # FIT: check_sims --fit below
-
-scenario_s10() { run s10_e2e --content=e2e_2min --players=3 "--rider=$band" --seed=1; }
-
-scenario_s11() {
-  run s11_threshold_unverified --content=threshold --players=2 "--rider=$band" --ftp=300,200     --unverified --haptics-off=1 --seed=1
-}
+scenario_fit() { :; } # check_sims --fit below
 
 for sc in $order; do
   case " $wanted " in *" $sc "*) "scenario_$sc" ;; esac
@@ -159,24 +119,17 @@ done
 if [ "${FISHING_SKIP_CHECK:-0}" = "1" ]; then
   exit 0
 fi
+args=("$out" "--seeds=${seeds// /,}")
 only="ALL"
 fit=""
 for sc in $wanted; do
   case "$sc" in
-    s9) fit="--fit" only="$only,S9" ;;
-    *) only="$only,S${sc#s}" ;;
+    fit) fit="--fit" ;;
+    *) only="$only,$(printf '%s' "$sc" | tr '[:lower:]' '[:upper:]')" ;;
   esac
 done
-args=("$out" "--seeds=${seeds// /,}")
 if [ "$mode" = quick ] || [ -n "${*:-}" ] || [ -n "${FISHING_SIMS:-}" ]; then
   args+=("--only=$only")
 fi
 [ -n "$fit" ] && args+=("$fit")
-code=0
-node tests/games/fishing/sim/check_sims.mjs "${args[@]}" || code=$?
-if [ "$s6_missing" = "1" ]; then
-  printf 'FAIL S6  no free_120 seed in 1-500 pre-rolls a marlin, so scenario 6 did not run
-'
-  [ "$code" -eq 0 ] && code=1
-fi
-exit "$code"
+node tests/games/fishing/sim/check_sims.mjs "${args[@]}"

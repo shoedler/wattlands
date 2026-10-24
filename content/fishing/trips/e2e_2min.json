@@ -2,7 +2,6 @@
 	"id": "e2e_2min",
 	"kind": "e2e",
 	"label": "FISHING_CONTENT_E2E_2MIN",
-	"area": "coral_bank",
 	"total_min": 2.25,
 	"ride_out": {
 		"duration_s": 15,

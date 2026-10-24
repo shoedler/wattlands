@@ -1,32 +1,86 @@
 class_name FishingPlanBuilder
 extends RefCounted
-## One EffortPlan per rider from the trip and the rider's pre-rolled slots (brief 2.3). The
-## PlanValidator appends the cool-down. Fishing never calls replan: open-ended Reels and Fights
-## absorb the variation. fish-plan owns this file (reviewed against brief 2.3 in G1).
+## Every rider's EffortPlan (contract v2). The PlanValidator appends the cool-down.
 ##
+## Free Roam: the plan grows fight by fight. It starts as
+##   Drive out  WARMUP SIM game, WARMUP_S (300 s) fixed, lap   "FISHING_PHASE_DRIVE_OUT"
+##   Roam       FREE SIM game, open-ended (min_s 5, max_s = play time left + overtime + 60 s), lap
+## and at each bite the rules replan the rest as fight_tail(): the Fight, its Landing and a new
+## Roam, then end the current Roam (ctx.directives.replan, then end_phase, in the same tick).
+## The fixed drive-out keeps every ERG phase out of the first 300 s (BRIEF 4.6.8). The driving
+## load is the game's course grade (FishingBoat.grade_for). Switch spacing: a Fight's min_s is
+## >= 30 s and every Roam follows a 30 s Landing, so ERG/SIM switches are >= 30 s apart.
+##
+## Workouts:
 ##   Ride out  WARMUP ERG 50 % ramp_to 65, 300 s, lap        "FISHING_PHASE_RIDE_OUT"
-##   Reel n    RECOVERY ERG reel_pct, lap: Free/Base open-ended (min_s 120, max_s = the trip
-##             length, duration_s nominal 240); Threshold/e2e fixed (the slot's reel_s)
-##   <Sp> n    WORK ERG base pull, range_pct, open-ended (min_s floor(0.8 T_nom), species max_s),
-##             duration_s = T_nom, lap
+##   Troll     RECOVERY ERG reel_pct, lap: Base open-ended (min_s 120, max_s = the trip length,
+##             duration_s nominal 240); Threshold/e2e fixed (the slot's reel_s)  "FISHING_PHASE_TROLL"
+##   <Sp>      WORK ERG base pull, range_pct, open-ended (min_s floor(0.8 T_nom), species max_s),
+##             duration_s = T_nom, lap, label = the species' name key
 ##   Landing   WORK SIM flat 30 s, no lap                     "FISHING_PHASE_LANDING"
-## Free and Base end with a trailing fight-less Reel, so a rider whose slots ran out keeps
-## reeling until finished("trip_over"); scheduled trips end at the last Landing.
-## A Reel's max_s (the trip's nominal length, N min) outlasts fishing time plus the 5 min overrun
-## and a Landing from the earliest Reel start (the ride out's end): N min >= (N - 8) min + 330 s.
-## The 30 s Landing keeps ERG/SIM switches exactly 30 s apart (no BRIEF 4.5 warning).
+## Base ends with a trailing fight-less Troll, so a rider whose slots ran out keeps going until
+## finished("trip_over"); scheduled trips end at the last Landing.
 
+const LABEL_DRIVE_OUT := "FISHING_PHASE_DRIVE_OUT"
+const LABEL_ROAM := "FISHING_PHASE_ROAM"
 const LABEL_RIDE_OUT := "FISHING_PHASE_RIDE_OUT"
+const LABEL_TROLL := "FISHING_PHASE_TROLL"
 const LABEL_LANDING := "FISHING_PHASE_LANDING"
-## Per-number label keys exist in strings.csv up to these counts; beyond them the plain text
-## ("Reel 41") passes through ctx.strings.t unchanged.
-const REEL_KEYS := 40
-const SPECIES_KEYS := {"mackerel": 30, "mahi": 20, "tuna": 12, "marlin": 4}
-const PLAIN := {
-	"mackerel": "Mackerel", "mahi": "Mahi-mahi", "tuna": "Yellowfin tuna", "marlin": "Blue marlin"
-}
 
 
+## Free Roam's starting plan for a session of `play_s` seconds.
+static func roam(play_s: float) -> EffortPlan:
+	var plan := EffortPlan.new()
+	plan.add(
+		PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, FishingConst.WARMUP_S, LABEL_DRIVE_OUT).with_lap()
+	)
+	plan.add(roam_phase(roam_max_s(play_s, FishingConst.WARMUP_S)))
+	return plan
+
+
+## A Roam phase's max_s when it starts at game time `at_t` in a session of `play_s` seconds: the
+## rest of play, the overtime and a margin (the game always finishes first).
+static func roam_max_s(play_s: float, at_t: float) -> float:
+	return maxf(
+		play_s - at_t + FishingConst.OVERTIME_S + FishingConst.ROAM_MARGIN_S,
+		FishingConst.ROAM_MIN_S + FishingConst.ROAM_MARGIN_S
+	)
+
+
+static func roam_phase(max_s: float) -> PlanPhase:
+	return (
+		PlanPhase
+		. sim(Wl.FREE, Wl.GRADE_GAME, 0.0, LABEL_ROAM)
+		. with_open(FishingConst.ROAM_MIN_S, max_s)
+		. with_lap()
+	)
+
+
+## The rest of a Free Roam plan after a bite: the Fight, its Landing and a new Roam.
+static func fight_tail(slot: FishingPlanSlot, roam_max: float) -> EffortPlan:
+	var plan := EffortPlan.new()
+	plan.add(fight_phase(slot))
+	plan.add(landing_phase())
+	plan.add(roam_phase(roam_max))
+	return plan
+
+
+static func fight_phase(slot: FishingPlanSlot) -> PlanPhase:
+	return (
+		PlanPhase
+		. erg(Wl.WORK, slot.base_pct, slot.t_nom_s, fight_label(slot.species))
+		. with_range(slot.range_lo, slot.range_hi)
+		. with_open(slot.min_s, slot.max_s)
+		. with_lap()
+		. with_meta({"slot": slot.index, "species": slot.species})
+	)
+
+
+static func landing_phase() -> PlanPhase:
+	return PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, FishingConst.LANDING_S, LABEL_LANDING)
+
+
+## A workout plan from the trip and the rider's pre-rolled slots.
 static func build(trip: FishingTripDef, slots: Array[FishingPlanSlot], reel_pct: int) -> EffortPlan:
 	var plan := EffortPlan.new()
 	var ride := PlanPhase.erg(Wl.WARMUP, trip.ride_out_pct, trip.ride_out_s, LABEL_RIDE_OUT)
@@ -35,46 +89,31 @@ static func build(trip: FishingTripDef, slots: Array[FishingPlanSlot], reel_pct:
 	plan.add(ride.with_lap())
 	var reel := float(trip.reel_target(reel_pct))
 	var max_reel := trip_length_s(trip)
-	var counts := {}
 	for s in slots:
-		plan.add(_reel(reel, s.reel_s, max_reel, s.index + 1))
-		counts[s.species] = int(counts.get(s.species, 0)) + 1
-		var fight := (
-			PlanPhase
-			. erg(Wl.WORK, s.base_pct, s.t_nom_s, fight_label(s.species, counts[s.species]))
-			. with_range(s.range_lo, s.range_hi)
-			. with_open(s.min_s, s.max_s)
-			. with_lap()
-			. with_meta({"slot": s.index, "species": s.species})
-		)
-		plan.add(fight)
-		plan.add(PlanPhase.sim(Wl.WORK, Wl.GRADE_FLAT, FishingConst.LANDING_S, LABEL_LANDING))
+		plan.add(_troll(reel, s.reel_s, max_reel))
+		plan.add(fight_phase(s))
+		plan.add(landing_phase())
 	if not trip.is_scheduled():
-		plan.add(_reel(reel, 0.0, max_reel, slots.size() + 1))
+		plan.add(_troll(reel, 0.0, max_reel))
 	return plan
 
 
-## The trip's nominal length in seconds (an open-ended Reel's max_s).
+## A workout's nominal length in seconds (an open-ended Troll's max_s).
 static func trip_length_s(trip: FishingTripDef) -> float:
 	return maxf(trip.total_min * 60.0, trip.ride_out_s + trip.fishing_s + FishingConst.REEL_MIN_S)
 
 
-static func reel_label(n: int) -> String:
-	return "FISHING_PHASE_REEL_%d" % n if n <= REEL_KEYS else "Reel %d" % n
+## The Fight phase label: the species' name key (FISHING_SPECIES_<ID>).
+static func fight_label(species: String) -> String:
+	return "FISHING_SPECIES_%s" % species.to_upper()
 
 
-static func fight_label(species: String, n: int) -> String:
-	if n <= int(SPECIES_KEYS.get(species, 0)):
-		return "FISHING_PHASE_%s_%d" % [species.to_upper(), n]
-	return "%s %d" % [PLAIN.get(species, species), n]
-
-
-static func _reel(pct: float, fixed_s: float, max_s: float, n: int) -> PlanPhase:
+static func _troll(pct: float, fixed_s: float, max_s: float) -> PlanPhase:
 	if fixed_s > 0.0:
-		return PlanPhase.erg(Wl.RECOVERY, pct, fixed_s, reel_label(n)).with_lap()
+		return PlanPhase.erg(Wl.RECOVERY, pct, fixed_s, LABEL_TROLL).with_lap()
 	return (
 		PlanPhase
-		. erg(Wl.RECOVERY, pct, FishingConst.REEL_NOMINAL_S, reel_label(n))
+		. erg(Wl.RECOVERY, pct, FishingConst.REEL_NOMINAL_S, LABEL_TROLL)
 		. with_open(FishingConst.REEL_MIN_S, max_s)
 		. with_lap()
 	)

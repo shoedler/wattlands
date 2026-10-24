@@ -4,13 +4,13 @@
 //
 //   node tests/games/fishing/e2e_check.mjs build/e2e/fishing/report.json
 //
-// tools/e2e/run.mjs runs it after playing e2e_2min (ride out 15 s, Reel 20 s, one scheduled
+// tools/e2e/run.mjs runs it after playing e2e_2min (ride out 15 s, Troll 20 s, one scheduled
 // mackerel per rider, Landing 30 s, then the cool-down) with a host and two clients, one of which
 // is killed and restarted. The harness checks the shared events, warm-up limits and FIT files
 // itself; this checks Fishing's:
 //   1. every Fishing game event on every peer is a known type with every declared int field an int
 //      (contracts/fishing_events.gd), so no client applied an event it doesn't know;
-//   2. the host landed exactly one mackerel per rider (lanes 0..n-1, one lane per rider peer);
+//   2. the host landed exactly one mackerel per rider (slots 0..n-1, one per rider peer);
 //   3. the host and the client that stayed hold the same Fishing events in the same order; the
 //      restarted client's events are a tail of the host's (it misses what came while it was down);
 //   4. each rider's trip reaches the cool-down (phase 4) <= 135 s after its ride out started;
@@ -19,7 +19,7 @@
 //      and is a Fishing ERG request {mode, target_pct, duration_s, reason pull|run|jump, source};
 //      every trace row carries only allowed clamps;
 //   6. every peer that reports an exit_reason ended "complete";
-//   7. when fit_check's JSON is in the report, every FIT has 4 laps (ride out, Reel, Fight, cool-down).
+//   7. when fit_check's JSON is in the report, every FIT has 4 laps (ride out, Troll, Fight, cool-down).
 // Exit 0 on pass, 1 on a failed check, 2 on usage or I/O errors.
 
 import fs from 'node:fs';
@@ -39,7 +39,7 @@ import {
 } from './sim/fishing_sim_lib.mjs';
 
 export const ROLES = ['host', 'client1', 'client2'];
-/** e2e_2min: ride out (0), Reel (1), Fight (2), Landing (3), cool-down (4). */
+/** e2e_2min: ride out (0), Troll (1), Fight (2), Landing (3), cool-down (4). */
 export const COOLDOWN_INDEX = 4;
 export const TRIP_MAX_S = 135;
 /** Wall-clock slack: e2e runs at --sim-speed=1 and stamps events in each peer's real time. */
@@ -175,7 +175,7 @@ export function checkReport(report) {
   for (const role of roles) {
     const files = report.fit_check?.[role]?.json?.files;
     if (!Array.isArray(files)) continue;
-    for (const f of files) if (Array.isArray(f.laps) && f.laps.length !== E2E_LAPS) err(role, `${f.laps.length} FIT laps, wanted ${E2E_LAPS} (ride out, Reel, Fight, cool-down)`);
+    for (const f of files) if (Array.isArray(f.laps) && f.laps.length !== E2E_LAPS) err(role, `${f.laps.length} FIT laps, wanted ${E2E_LAPS} (ride out, Troll, Fight, cool-down)`);
   }
   return { ok: errors.length === 0, errors, info };
 }

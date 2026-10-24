@@ -1,100 +1,91 @@
 class_name FishingViewFixtures
 extends RefCounted
-## Hand-made FishingState for the view and HUD tests: a configured FishingGame (FishingFakes
-## context, e2e_2min content) whose lanes are then set to a pick, a fight, a Landing or the ride
-## home, so the presentation is checked without the rules.
+## Hand-made riders for the view and HUD tests and the art preview: a configured FishingGame
+## (FishingFakes context) whose riders are then put driving, stopped at a menu, waiting, in a
+## fight or a Landing, so the presentation is checked without running the rules.
 
 const F := preload("res://tests/games/fishing/fishing_fakes.gd")
 
 
 ## A configured game with `n` riders; the local rider sits in `local_slot`.
 static func make_game(
-	n: int, local_slot: int = 0, role: String = Wl.SOLO, content_id: String = "e2e_2min"
+	n: int, local_slot: int = 0, role: String = Wl.SOLO, content_id: String = "roam_30"
 ) -> FishingGame:
 	var ctx := F.make_ctx(n, 0, content_id, role, local_slot + 1)
 	return F.make_game(ctx)
 
 
-## A pick with three hints: bird pile 50 m (strength 0.9), current seam 65 m (0.5), drop-off
-## 80 m (0.2); `selected` highlighted.
-static func set_pick(l: FishingLaneState, selected: int = 1) -> void:
-	l.state = FishingConst.ST_PICK
-	l.phase_kind = Wl.RECOVERY
-	(
-		l
-		. hints
-		. assign(
-			[
-				float(FishingConst.SPOT_BIRD_PILE),
-				50.0,
-				0.9,
-				float(FishingConst.SPOT_CURRENT_SEAM),
-				65.0,
-				0.5,
-				float(FishingConst.SPOT_DROP_OFF),
-				80.0,
-				0.2,
-			]
-		)
-	)
-	l.selected = selected
-	l.fish.sp = FishingConst.SP_NONE
+static func set_drive(
+	r: FishingRiderState, x_m: float, v_mps: float = 5.0, heading: int = 1
+) -> void:
+	r.action = FishingConst.A_DRIVE
+	r.x_m = x_m
+	r.heading = heading
+	r.v_mps = v_mps * float(heading)
+	r.pitch_deg = clampf(v_mps * 0.8, 0.0, 8.0)
+	r.wake = clampf(v_mps / 7.0, 0.0, 1.0)
+	r.p_eff_w = 240.0
+	r.cadence_ema = 90.0
+	r.hints.clear()
+	r.menu.clear()
+	r.fish.sp = FishingConst.SP_NONE
 
 
-static func set_reel(l: FishingLaneState, lure_d: float = 60.0) -> void:
-	l.state = FishingConst.ST_REEL
-	l.hints.clear()
-	l.lure_d = lure_d
-	l.cadence_ema = 88.0
+## Stopped with three fish on offer (mackerel shallow ahead, bream deeper behind, a snapper),
+## the menu [cast 0, cast 1, cast 2, drive on, turn] with `selected` lit.
+static func set_menu(r: FishingRiderState, x_m: float, selected: int = 0) -> void:
+	set_drive(r, x_m, 0.0)
+	r.action = FishingConst.A_MENU
+	r.wake = 0.0
+	r.pitch_deg = 0.0
+	r.cadence_ema = 0.0
+	r.hints.assign([0.0, 22.0, 4.0, 0.4, 1.0, -18.0, 9.0, 0.7, 2.0, 34.0, 14.0, 0.9])
+	r.menu.assign([0, 1, 2, FishingConst.M_DRIVE_ON, FishingConst.M_TURN])
+	r.selected = selected
 
 
-## A fight with species `sp` at distance `d` (m), depth `z`, the given meters.
+static func set_wait(
+	r: FishingRiderState, x_m: float, sp: int = 4, lure_dx: float = -12.0, depth: float = 30.0
+) -> void:
+	set_drive(r, x_m, 0.0)
+	r.action = FishingConst.A_WAIT
+	r.wake = 0.0
+	r.pitch_deg = 0.0
+	r.target_sp = sp
+	r.lure_dx = lure_dx
+	r.lure_depth = depth
+	r.cadence_ema = 70.0
+
+
+## A fight with species `sp`, `d` m behind the stern at `depth` m, the given meters.
 static func set_fight(
-	l: FishingLaneState,
-	sp: int = 1,
-	d: float = 60.0,
-	z: float = 0.5,
-	strain: float = 0.3,
+	r: FishingRiderState,
+	x_m: float,
+	sp: int = 8,
+	d: float = 40.0,
+	depth: float = 200.0,
+	strain: float = 0.4,
 	slack: float = 0.1
 ) -> void:
-	l.state = FishingConst.ST_FIGHT
-	l.phase_kind = Wl.WORK
-	l.hints.clear()
-	l.fish.sp = sp
-	l.fish.d = d
-	l.fish.z = z
-	l.fish.s = 0.7
-	l.fish.off_line = false
-	l.fish.run_active = false
-	l.strain = strain
-	l.slack = slack
-	l.pub_lo = 82
-	l.pub_hi = 98
-	l.cadence_ema = 90.0
-	l.power_w = 210.0
+	set_drive(r, x_m, 0.0)
+	r.action = FishingConst.A_FIGHT
+	r.wake = 0.0
+	r.pitch_deg = 0.0
+	r.fish.sp = sp
+	r.fish.d = d
+	r.fish.hook_depth_m = depth
+	r.fish.z = 1.0
+	r.fish.s = 0.6
+	r.fish.off_line = false
+	r.fish.run_active = false
+	r.strain = strain
+	r.slack = slack
+	r.cadence_ema = 92.0
+	r.power_w = 260.0
 
 
-static func set_landing(l: FishingLaneState, t: float = 5.0, gaff: float = 0.4) -> void:
-	set_fight(l, 0, 8.0, 0.3, 0.0, 0.0)
-	l.state = FishingConst.ST_LANDING
-	l.state_t = t
-	l.gaff = gaff
-
-
-static func set_home(l: FishingLaneState) -> void:
-	l.state = FishingConst.ST_HOME
-	l.fish.sp = FishingConst.SP_NONE
-	l.power_w = 120.0
-
-
-## A view for `game`, in the tree under `parent`.
-## The view in the tree. By default it is cut off from the module's fx_event, so the tests that
-## edit the state by hand see the cues of its state-edge path (a module without the signal);
-## pass `events` true to keep the signal.
-static func make_view(game: FishingGame, parent: Node, events: bool = false) -> FishingView:
-	var v := game.make_view() as FishingView
-	parent.add_child(v)
-	if not events and v.events_connected:
-		game.disconnect("fx_event", v.on_fx_event)
-		v.events_connected = false
-	return v
+static func set_land(r: FishingRiderState, x_m: float, sp: int = 3, t: float = 5.0) -> void:
+	set_fight(r, x_m, sp, 4.0, 1.0, 0.0, 0.0)
+	r.action = FishingConst.A_LAND
+	r.state_t = t
+	r.gaff = 0.4

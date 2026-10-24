@@ -1,17 +1,27 @@
 class_name FishingSpeciesDef
 extends FishingRecord
-## One species from content/fishing/species.json (brief 2.3 species table; G0 contract).
+## One species from content/fishing/species.json (the species table; contract v2).
 ##
-## species.json: {"species": [entry, ...]}, entry:
+## species.json: {"species": [entry, ...]}, one entry per FishingConst.SPECIES id, e.g.
 ##   {"id": "mahi", "label": "FISHING_SPECIES_MAHI", "sprite": "fish_mahi",
-##    "t_nom_s": [120, 240], "max_s": 270, "pull_pct": [88, 95], "change_pct": 8,
-##    "runs": {"kind": "run", "count": [2, 3], "dur_s": [15, 30], "peak_pct": [105, 110],
-##             "peak_factor": 0, "band_shift": 8, "min_gap_s": 0, "leaps": [0, 0],
+##    "zones": ["reef"], "rarity": 45, "depth_m": [3, 15], "near_floor": false, "kg": [7, 20],
+##    "t_nom_s": [100, 170], "max_s": 210, "pull_pct": [82, 88], "change_pct": 8,
+##    "runs": {"kind": "run", "count": [2, 3], "dur_s": [15, 25], "peak_pct": [0, 0],
+##             "peak_factor": 1.1, "band_shift": 8, "min_gap_s": 0, "leaps": [0, 0],
 ##             "sounding": false},
-##    "band_offset": 8, "kg": [7, 20], "d_max": 80}
-## runs.kind is "none" (count [0, 0]), "run" or "jump". A run's peak is either absolute
-## (peak_pct [lo, hi], drawn per run) or relative (peak_factor x the slot's base pull, with
-## peak_pct [0, 0]). Jumps carry leaps [lo, hi] and min_gap_s (marlin: 90 s apart).
+##    "band_offset": 8, "d_max": 70}
+## zones: FishingWorld.ZONES ids where the species shows in Free Roam (never "dock"); rarity:
+## its relative weight among the zone's species when hints are drawn; depth_m: the swimming
+## depth range in metres (near_floor true: the fish holds 3-10 m above the sea floor instead,
+## the giant grouper); kg: the weight range (a hint's size w in [0, 1] sets kg = lerp(lo, hi, w)
+## and the fight's base pull and T_nom). sprite: the view's sprite id, fish_<id>.
+## The fight model: T_nom window, max_s (the Fight phase's max_s; above 300 s every target caps at
+## 105 %, BRIEF 4.6.1), pull_pct (base pull window, 50..110), change_pct, runs, band_offset and
+## d_max (the farthest the fish swims from the boat in a fight, m). runs.kind is "none" (count
+## [0, 0]), "run" or "jump". A run's peak is either absolute (peak_pct [lo, hi], drawn per run) or
+## relative (peak_factor x the base pull, with peak_pct [0, 0]). Jumps carry leaps [lo, hi] and
+## min_gap_s (90 s apart). floor(0.8 x the T_nom low end) must be >= 30 s, so every Fight lasts at
+## least 30 s (BRIEF 4.5 switch spacing between its ERG and the SIM phases around it).
 
 const RUN_NONE := "none"
 const RUN_RUN := "run"
@@ -20,6 +30,12 @@ const RUN_JUMP := "jump"
 var id: String = ""
 var label: String = ""
 var sprite: String = ""
+## FishingWorld.ZONES ids where the species bites in Free Roam.
+var zones: Array[String] = []
+var rarity: float = 1.0
+var depth_lo: float = 0.0
+var depth_hi: float = 0.0
+var near_floor: bool = false
 var t_nom_lo: float = 0.0
 var t_nom_hi: float = 0.0
 var max_s: float = 0.0
@@ -51,6 +67,13 @@ static func from_dict(d: Dictionary) -> FishingSpeciesDef:
 	s.id = str(d.get("id", ""))
 	s.label = str(d.get("label", "FISHING_SPECIES_%s" % s.id.to_upper()))
 	s.sprite = str(d.get("sprite", "fish_%s" % s.id))
+	for z: Variant in d.get("zones", []):
+		s.zones.append(str(z))
+	s.rarity = float(d.get("rarity", 1))
+	var dp: Array = d.get("depth_m", [0, 0])
+	s.depth_lo = float(dp[0])
+	s.depth_hi = float(dp[1])
+	s.near_floor = bool(d.get("near_floor", false))
 	var t: Array = d.get("t_nom_s", [0, 0])
 	s.t_nom_lo = float(t[0])
 	s.t_nom_hi = float(t[1])
@@ -83,6 +106,11 @@ static func from_dict(d: Dictionary) -> FishingSpeciesDef:
 	s.kg_hi = float(kg[1])
 	s.d_max = float(d.get("d_max", 0))
 	return s
+
+
+## kg for a hint size w in [0, 1].
+func kg_at(w: float) -> float:
+	return lerpf(kg_lo, kg_hi, clampf(w, 0.0, 1.0))
 
 
 ## The run peak for a slot with base pull `base_pct` and a draw u in [0, 1]; 0 without runs.
@@ -122,6 +150,34 @@ static func errors(d: Variant) -> Array[String]:
 			out.append("%s: %s must be a positive number" % [at, key])
 	if _pair_ok(e.get("t_nom_s")) and float(e.get("max_s", 0)) < float(e["t_nom_s"][1]):
 		out.append("%s: max_s must be >= the T_nom window's high end" % at)
+	if (
+		_pair_ok(e.get("t_nom_s"))
+		and floorf(FishingConst.FIGHT_MIN_FRAC * float(e["t_nom_s"][0])) < FishingConst.FIGHT_MIN_S
+	):
+		out.append("%s: floor(0.8 x the T_nom low end) must be >= 30 s" % at)
+	var zs: Variant = e.get("zones", [])
+	if not zs is Array or (zs as Array).is_empty():
+		out.append("%s: zones must be a non-empty array" % at)
+	else:
+		for z: Variant in zs:
+			if not FishingWorld.ZONES.has(str(z)) or str(z) == "dock":
+				out.append("%s: unknown zone %s" % [at, z])
+	if (
+		not (e.get("rarity", 0) is float or e.get("rarity", 0) is int)
+		or float(e.get("rarity", 0)) <= 0.0
+	):
+		out.append("%s: rarity must be positive" % at)
+	var dp: Variant = e.get("depth_m", [0, 0])
+	if (
+		not dp is Array
+		or (dp as Array).size() != 2
+		or float(dp[0]) < 0.0
+		or float(dp[1]) < float(dp[0])
+		or (float(dp[1]) <= 0.0 and not bool(e.get("near_floor", false)))
+	):
+		out.append(
+			"%s: depth_m must be [lo, hi] with 0 <= lo <= hi (hi > 0 unless near_floor)" % at
+		)
 	if _pair_ok(e.get("pull_pct")):
 		if float(e["pull_pct"][0]) < 50.0 or float(e["pull_pct"][1]) > FishingConst.SELF_CAP_PCT:
 			out.append("%s: pull_pct must lie in 50..110" % at)

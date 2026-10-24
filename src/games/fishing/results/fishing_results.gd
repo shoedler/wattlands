@@ -1,17 +1,22 @@
 class_name FishingResults
 extends RefCounted
-## Results and progression (brief 2.8; GAME_SDK 15). fish-module owns this file.
+## Results and progression (contract v2; GAME_SDK 15).
 ##   build(state, stats, players, content[, strings]) -> GameResults   host/SOLO, once
 ##   apply_progress(results, progress, local_peer, content, trip_id) -> Array   every peer, once
 ##   summary_from(progress, content) -> {xp, records, cosmetics}   every peer, at configure
 ##
-## Grade: team points / expected points (FishingState.expected_points, which the rules keep:
-## every started fish Landed with no bonuses; scheduled trips include each fish's Double Hookup
-## multiplier), S >= 1.25, A >= 1.0, B >= 0.8, C >= 0.6, else D; no started fish: D.
+## Grade: team points / expected points (FishingState.expected_points: every started fish Landed
+## with no bonuses; scheduled workouts include each fish's Double Hookup multiplier), S >= 1.25,
+## A >= 1.0, B >= 0.8, C >= 0.6, else D; no started fish: D.
 ## Rows: GameResults.from_stats (kJ, average %FTP and the rest are in the grid), time in band
-## overridden as % of fight time, then the FISHING_STAT_* stats in reading order. Each row also
-## carries "catches" (this session's landed fish) and "records" (new species records), which
-## apply_progress writes into the rider's own store (a client has no lane catch log).
+## overridden as % of fight time, then the FISHING_STAT_* stats in reading order (Free Roam adds
+## the rank by points). Each row also carries "catches" (this session's landed fish), "records"
+## (new species records) and "ride_lines" (its Strava lines); apply_progress writes catches and
+## records into the local rider's store (a client has no rider catch log).
+## Strava: ride_tag = "Free Roam <n> min" or the workout's name; ride_lines = fish caught, the
+## biggest fish with kg, points, rank (Free Roam with more than one rider) and the furthest
+## distance out (km). res.ride_lines holds the host rider's lines (results stay identical on every
+## peer); each row's "ride_lines" holds that rider's own.
 ## XP: 1 per kJ, 10 per fish, 25 per trophy, 50 per new species record. Every unlock_every_xp
 ## (500) XP of the rider's running total unlocks the next cosmetics.json item; each kind's newest
 ## unlock is equipped.
@@ -29,6 +34,14 @@ const STAT_LOST := "FISHING_STAT_LOST"
 const STAT_BIGGEST := "FISHING_STAT_BIGGEST"
 const STAT_LONGEST := "FISHING_STAT_LONGEST"
 const STAT_POINTS := "FISHING_STAT_POINTS"
+const STAT_RANK := "FISHING_STAT_RANK"
+const STAT_FURTHEST := "FISHING_STAT_FURTHEST"
+const RIDE_TAG_ROAM := "FISHING_RIDE_TAG_ROAM"
+const LINE_FISH := "FISHING_LINE_FISH"
+const LINE_BIGGEST := "FISHING_LINE_BIGGEST"
+const LINE_POINTS := "FISHING_LINE_POINTS"
+const LINE_RANK := "FISHING_LINE_RANK"
+const LINE_FURTHEST := "FISHING_LINE_FURTHEST"
 const TEAM_POINTS := "FISHING_STAT_TEAM_POINTS"
 const TEAM_FISH := "FISHING_STAT_TEAM_FISH"
 const TEAM_TROPHIES := "FISHING_STAT_TEAM_TROPHIES"
@@ -57,29 +70,79 @@ static func build(
 	var every := unlock_every(content)
 	var items := unlock_items(content)
 	var team_trophies := 0
+	var ranks := rank_of(st)
 	for row in res.rows:
-		var l := st.lane_of_peer(int(row["peer_id"]))
+		var l := st.rider_of_peer(int(row["peer_id"]))
 		if l == null:
 			continue
+		var rank := int(ranks.get(l.slot, 1))
 		row["time_in_band_s"] = l.band_s
 		row["time_in_band_pct"] = band_pct(l)
 		var recs := new_records(l)
 		var xp := xp_for(float(row.get("kj", 0.0)), l.fish_landed, l.trophies, recs.size())
 		row["xp"] = xp
 		row["unlocks"] = unlocks_between(items, every, l.summary_xp, l.summary_xp + xp)
-		row["stats"] = _row_stats(l, content, strings)
+		row["stats"] = _row_stats(st, l, rank, content, strings)
 		row["catches"] = catch_rows(l)
 		row["records"] = recs
+		row["ride_lines"] = ride_lines(st, l, rank, content, strings)
 		team_trophies += l.trophies
 	res.team = {TEAM_POINTS: st.team_points, TEAM_FISH: st.team_fish, TEAM_TROPHIES: team_trophies}
 	res.score = st.team_points
 	res.grade = grade_for(st)
+	res.ride_tag = ride_tag(st, content, strings)
+	if not res.rows.is_empty():
+		res.ride_lines.assign(res.rows[0].get("ride_lines", []))
 	return res
+
+
+## "Free Roam <n> min" or the workout's name.
+static func ride_tag(st: FishingState, content: FishingContent, strings: GameStrings) -> String:
+	if content == null or content.trip == null:
+		return ""
+	if st.roam:
+		return _t(strings, RIDE_TAG_ROAM, {"min": roundi(content.trip.minutes)})
+	return _t(strings, content.trip.label, [])
+
+
+## A rider's Strava lines.
+static func ride_lines(
+	st: FishingState, l: FishingRiderState, rank: int, content: FishingContent, strings: GameStrings
+) -> Array[String]:
+	var out: Array[String] = []
+	out.append(_t(strings, LINE_FISH, {"n": l.fish_landed}))
+	var biggest := _biggest(l)
+	if int(biggest[0]) >= 0:
+		var name := species_name(int(biggest[0]), content, strings)
+		out.append(_t(strings, LINE_BIGGEST, {"species": name, "kg": "%.1f" % float(biggest[1])}))
+	out.append(_t(strings, LINE_POINTS, {"points": l.points}))
+	if st.roam and st.riders.size() > 1:
+		out.append(_t(strings, LINE_RANK, {"rank": rank, "of": st.riders.size()}))
+	out.append(_t(strings, LINE_FURTHEST, {"km": "%.1f" % (l.furthest_x_m / 1000.0)}))
+	return out
+
+
+## slot -> rank by points (1 = most; ties share the better rank).
+static func rank_of(st: FishingState) -> Dictionary:
+	var out := {}
+	for l in st.riders:
+		var better := 0
+		for o in st.riders:
+			if o.points > l.points:
+				better += 1
+		out[l.slot] = better + 1
+	return out
+
+
+static func _t(strings: GameStrings, key: String, args: Variant) -> String:
+	if strings != null:
+		return strings.t(key, args)
+	return str(TranslationServer.translate(key)).format(args) if args is Dictionary else key
 
 
 ## A row's custom stats in reading order (the grid already shows kJ, %FTP and time in band).
 static func _row_stats(
-	l: FishingLaneState, content: FishingContent, strings: GameStrings
+	st: FishingState, l: FishingRiderState, rank: int, content: FishingContent, strings: GameStrings
 ) -> Dictionary:
 	var biggest := _biggest(l)
 	var s := {}
@@ -93,6 +156,9 @@ static func _row_stats(
 		)
 	s[STAT_LONGEST] = clock_text(l.longest_fight_s) if l.longest_fight_s > 0.0 else NONE_TEXT
 	s[STAT_POINTS] = l.points
+	if st.roam and st.riders.size() > 1:
+		s[STAT_RANK] = rank
+	s[STAT_FURTHEST] = "%.1f km" % (l.furthest_x_m / 1000.0)
 	return s
 
 
@@ -103,7 +169,7 @@ static func grade_for(st: FishingState) -> String:
 
 
 ## Time in the tension band as % of fight time (0 without a fight).
-static func band_pct(l: FishingLaneState) -> float:
+static func band_pct(l: FishingRiderState) -> float:
 	if l.fight_total_s <= 0.0:
 		return 0.0
 	return clampf(100.0 * l.band_s / l.fight_total_s, 0.0, 100.0)
@@ -120,7 +186,7 @@ static func xp_for(kj: float, fish: int, trophies: int, records: int) -> int:
 
 ## Species whose best catch this session beats the rider's record from their summary (no record
 ## yet counts as 0): {species id: kg}, in FishingConst.SPECIES order.
-static func new_records(l: FishingLaneState) -> Dictionary:
+static func new_records(l: FishingRiderState) -> Dictionary:
 	var best := {}
 	for c: Variant in l.catches:
 		if not c is Dictionary:
@@ -138,7 +204,7 @@ static func new_records(l: FishingLaneState) -> Dictionary:
 
 
 ## This session's landed fish as JSON-safe rows: {sp (species id), kg, grade, fight_s}.
-static func catch_rows(l: FishingLaneState) -> Array:
+static func catch_rows(l: FishingRiderState) -> Array:
 	var out: Array = []
 	for c: Variant in l.catches:
 		if not c is Dictionary:
@@ -156,8 +222,8 @@ static func catch_rows(l: FishingLaneState) -> Array:
 	return out
 
 
-## [species index, kg] of the biggest fish (the lane's own fields, else its catch log); -1 none.
-static func _biggest(l: FishingLaneState) -> Array:
+## [species index, kg] of the biggest fish (the rider's own fields, else its catch log); -1 none.
+static func _biggest(l: FishingRiderState) -> Array:
 	if l.biggest_sp >= 0 and l.biggest_kg > 0.0:
 		return [l.biggest_sp, l.biggest_kg]
 	var out: Array = [FishingConst.SP_NONE, 0.0]
@@ -234,7 +300,7 @@ static func equipped_for(items: Array, held: Array) -> Dictionary:
 	return out
 
 
-## The lane look [line, canopy, trim, pennant]: each kind's equipped item as its 1-based index
+## The rider's look [line, canopy, trim, pennant]: each kind's equipped item as its 1-based index
 ## among that kind's items in cosmetics.json (0 = the default look).
 static func cosmetic_indexes(content: FishingContent, equipped: Dictionary) -> Array[int]:
 	var out: Array[int] = [0, 0, 0, 0]

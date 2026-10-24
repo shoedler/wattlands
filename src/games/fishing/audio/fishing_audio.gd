@@ -1,12 +1,13 @@
 class_name FishingAudio
 extends Node
-## Turbo Reel's sound (brief 3.5 "Audio"), all synthesized with Sfx.synth (no files, no
-## downloads): reel clicks at a rate set by the local line speed, a drag scream while the local
-## fish runs, gulls over bird piles and in a frenzy, splashes, the strike bell, the snap twang, a
-## three-note landing fanfare and a looping surf bed. A child of FishingView: cue() plays what a
-## FishingCues cue calls for (other lanes' cues quieter), update() keeps the loops and the clicks
-## going. Headless runs create no players and play nothing; `played` still records every sound
-## asked for (tests read and clear it). The metronome is the platform's (GAME_SDK 18).
+## Turbo Reel's sound, all synthesized with Sfx.synth (no files, no downloads): the brass
+## drivetrain's hum pitched by the local rider's cadence, winch clicks at a rate set by the line
+## coming in, a drag scream while the local fish runs, splashes, the bite bell, the snap twang,
+## a three-note landing fanfare, gulls near the harbour and a looping surf bed. A child of
+## FishingView: cue() plays what a FishingCues cue calls for (other riders' cues quieter),
+## update() keeps the loops and the clicks going. Headless runs create no players and play
+## nothing; `played` still records every sound asked for (tests read and clear it). The
+## metronome is the platform's (GAME_SDK 18).
 
 const SOUNDS := {
 	"fishing_click": ["square", 1900.0, 0.018, 0.001, 0.012],
@@ -16,6 +17,7 @@ const SOUNDS := {
 	"fishing_twang": ["saw", 196.0, 0.45, 0.001, 0.4],
 	"fishing_gull": ["triangle", 1450.0, 0.22, 0.03, 0.15],
 	"fishing_zip": ["saw", 520.0, 0.25, 0.005, 0.18],
+	"fishing_clunk": ["square", 140.0, 0.08, 0.001, 0.06],
 	"fishing_note_1": ["triangle", 523.25, 0.18, 0.005, 0.1],
 	"fishing_note_2": ["triangle", 659.25, 0.18, 0.005, 0.1],
 	"fishing_note_3": ["triangle", 783.99, 0.5, 0.005, 0.35],
@@ -23,20 +25,30 @@ const SOUNDS := {
 }
 const LOOP_SURF := "fishing_surf"
 const LOOP_DRAG := "fishing_drag"
+const LOOP_HUM := "fishing_hum"
 const FANFARE: Array = [[0.0, "fishing_note_1"], [0.16, "fishing_note_2"], [0.32, "fishing_note_3"]]
-## Reel clicks: one per this many metres of line; never faster than CLICK_MIN_S apart.
-const CLICK_PER_M := 0.08
+## Winch clicks: one per this many metres of line; never faster than CLICK_MIN_S apart.
+const CLICK_PER_M := 0.25
 const CLICK_MIN_S := 0.03
-const GULL_EVERY_S := 2.4
-const OTHER_LANE_DB := -10.0
+## The hum: silent under HUM_MIN_RPM, pitch 1 at HUM_REF_RPM.
+const HUM_MIN_RPM := 20.0
+const HUM_REF_RPM := 90.0
+const HUM_DB := -26.0
+const GULL_EVERY_S := 5.0
+## Gulls call while the local boat is within this far of the dock (m).
+const GULL_RANGE_M := 250.0
+const OTHER_DB := -10.0
 
 ## Every sound the last calls asked for, newest last (tests).
 var played: Array[String] = []
 var silent: bool = true
 var surf: AudioStreamPlayer = null
 var drag: AudioStreamPlayer = null
-## The drag loop's state (tests read it headless too).
+var hum: AudioStreamPlayer = null
+## The loops' state (tests read it headless too).
 var drag_on: bool = false
+var hum_on: bool = false
+var hum_pitch: float = 1.0
 
 var _sfx: WlSfx = null
 var _click_m: float = 0.0
@@ -54,6 +66,7 @@ func _ready() -> void:
 	if not silent:
 		surf = _loop_player(LOOP_SURF, "noise", 0.0, -30.0)
 		drag = _loop_player(LOOP_DRAG, "saw", 1250.0, -24.0)
+		hum = _loop_player(LOOP_HUM, "saw", 55.0, HUM_DB)
 		surf.play()
 
 
@@ -62,23 +75,23 @@ static func sound_names() -> Array[String]:
 	var out: Array[String] = []
 	for k: String in SOUNDS:
 		out.append(k)
-	out.append(LOOP_SURF)
-	out.append(LOOP_DRAG)
+	out.append_array([LOOP_SURF, LOOP_DRAG, LOOP_HUM])
 	return out
 
 
-## The sounds of one cue; `local` is true for the local rider's lane (full volume).
+## The sounds of one cue; `local` is true for the local rider (full volume).
 func cue(c: Dictionary, local: bool) -> void:
-	var db := 0.0 if local else OTHER_LANE_DB
+	var db := 0.0 if local else OTHER_DB
 	match str(c.get("k", "")):
 		FishingCues.CUE_CAST:
+			_play("fishing_clunk", -10.0 + db)
 			_play("fishing_plop", -8.0 + db)
 		FishingCues.CUE_BITE:
 			_play("fishing_bell", -4.0 + db)
 		FishingCues.CUE_HOOKUP:
 			_play("fishing_zip", -8.0 + db)
 			_play("fishing_splash", -10.0 + db)
-		FishingCues.CUE_MISS, FishingCues.CUE_THROWN:
+		FishingCues.CUE_THROWN:
 			_play("fishing_splash", -8.0 + db)
 		FishingCues.CUE_RUN:
 			_play("fishing_zip", -6.0 + db, 1.3)
@@ -86,27 +99,32 @@ func cue(c: Dictionary, local: bool) -> void:
 			_play("fishing_splash", -5.0 + db)
 		FishingCues.CUE_SNAP:
 			_play("fishing_twang", -4.0 + db)
+		FishingCues.CUE_TURN:
+			_play("fishing_clunk", -12.0 + db, 0.8)
 		FishingCues.CUE_LANDED:
 			_play("fishing_splash", -10.0 + db)
 			for note: Array in FANFARE:
 				_queue.append([_clock + float(note[0]), str(note[1]), -6.0 + db])
 		FishingCues.CUE_DOUBLE_HOOKUP:
 			_play("fishing_bell", -6.0, 1.5)
-		FishingCues.CUE_FRENZY:
-			_play("fishing_gull", -8.0 + db)
+		FishingCues.CUE_TIME_UP:
+			_play("fishing_horn", -10.0, 1.2)
 		FishingCues.CUE_TRIP_OVER:
 			_play("fishing_horn", -6.0)
 
 
-## Loops and clicks for one frame: the local lane `l` (null without one) and its reel's line
-## speed `line_mps` (positive retrieving, negative running out).
-func update(dt: float, l: FishingLaneState, line_mps: float) -> void:
+## Loops and clicks for one frame: the local rider `r` (null without one) and its winch's line
+## speed `winch_mps` (positive reeling in).
+func update(dt: float, r: FishingRiderState, winch_mps: float) -> void:
 	_clock += dt
 	_flush_queue()
-	var running := l != null and l.state == FishingConst.ST_FIGHT and l.fish.run_active
+	var running := r != null and r.action == FishingConst.A_FIGHT and r.fish.run_active
 	_set_drag(running)
+	var cad := r.cadence_ema if r != null else 0.0
+	_set_hum(cad >= HUM_MIN_RPM, clampf(cad / HUM_REF_RPM, 0.5, 1.6))
 	_click_wait -= dt
-	_click_m += absf(line_mps) * dt
+	if winch_mps > 0.0:
+		_click_m += winch_mps * dt
 	if not running and _click_m >= CLICK_PER_M and _click_wait <= 0.0:
 		_click_m = 0.0
 		_click_wait = CLICK_MIN_S
@@ -114,16 +132,25 @@ func update(dt: float, l: FishingLaneState, line_mps: float) -> void:
 	elif _click_m > CLICK_PER_M * 4.0:
 		_click_m = CLICK_PER_M
 	_gull_t -= dt
-	if l != null and l.state == FishingConst.ST_PICK and _gull_t <= 0.0 and _has_bird_pile(l):
+	if r != null and r.x_m < GULL_RANGE_M and _gull_t <= 0.0:
 		_gull_t = GULL_EVERY_S
-		_play("fishing_gull", -16.0, 0.9 + 0.2 * float(int(_clock * 7.0) % 3))
+		_play("fishing_gull", -18.0, 0.9 + 0.2 * float(int(_clock * 7.0) % 3))
 
 
-func _has_bird_pile(l: FishingLaneState) -> bool:
-	for i in l.hint_count():
-		if int(l.hints[3 * i]) == FishingConst.SPOT_BIRD_PILE:
-			return true
-	return false
+func _set_hum(on: bool, pitch: float) -> void:
+	hum_pitch = pitch
+	if hum != null:
+		hum.pitch_scale = pitch
+	if on == hum_on:
+		return
+	hum_on = on
+	if on:
+		played.append(LOOP_HUM)
+	if hum != null:
+		if on:
+			hum.play()
+		else:
+			hum.stop()
 
 
 func _set_drag(on: bool) -> void:

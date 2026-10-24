@@ -8,10 +8,12 @@ extends RefCounted
 ##   - Clock (clock_for()): the platform's own PhaseTracker, as the GameHost drives it. Open-ended
 ##     phases end at max_s; ctx.directives.end_phase() after min_s ends the phase at the end of
 ##     that tick (the next frame shows the next phase; before min_s it is refused and returns
-##     false); finished() moves every rider to the cool-down at the end of the tick; the
-##     cool-down's end marks the rider done. Telemetry follows the latest ERG request of the
-##     current phase (else the planned target), so whole trips run with the stub rules or the
-##     real ones.
+##     false); ctx.directives.replan() is validated like the DirectiveRouter does it (the kept
+##     phases plus the new rest through PlanValidator) and swaps in at the next phase change;
+##     finished() moves every rider to the cool-down at the end of the tick; the cool-down's end
+##     marks the rider done. Telemetry follows the latest ERG request of the current phase (else
+##     the planned target); in SIM phases riders ride sim_power_pct of FTP; p_eff_w is
+##     power x 250 / FTP (FAIR_FTP), so whole sessions run with the real rules.
 
 const GAME_ID := "fishing"
 const GAME_DIR := "res://src/games/fishing"
@@ -25,9 +27,14 @@ class Directives:
 	## [[peer, lo_rpm, hi_rpm]]
 	var cadence_bands: Array = []
 	var course_grades: Array = []
+	## With a Clock: [kind, mode, grade_source] of the rider's phase at each course_grade call.
+	var course_grade_phases: Array = []
 	var ended: Array = []
-	## [[peer, EffortPlan]]
+	## [[peer, EffortPlan]] of accepted replans.
 	var replans: Array = []
+	## [[peer, errors]] of replans the validator refused, and every accepted replan's warnings.
+	var refused_replans: Array = []
+	var replan_warnings: Array = []
 	## [[peer, refusal]] of end_phase calls a Clock refused.
 	var refused_ends: Array = []
 	## Set by a Clock: end_phase goes through its PhaseTracker (min_s, open-ended only).
@@ -39,6 +46,9 @@ class Directives:
 
 	func course_grade(peer: int, grade_pct: float) -> void:
 		course_grades.append([peer, grade_pct])
+		if tracker != null:
+			var ph := tracker.plan_of(peer).phase(tracker.index_of(peer))
+			course_grade_phases.append([ph.kind, ph.mode, ph.grade_source])
 
 	func end_phase(peer: int) -> bool:
 		if tracker != null:
@@ -53,6 +63,14 @@ class Directives:
 		cadence_bands.append([peer, lo_rpm, hi_rpm])
 
 	func replan(peer: int, plan: EffortPlan) -> bool:
+		if tracker != null:
+			var whole := PlanValidator.spliced(tracker.plan_of(peer), tracker.index_of(peer), plan)
+			var res := PlanValidator.validate(whole)
+			if not bool(res["ok"]):
+				refused_replans.append([peer, res["errors"]])
+				return false
+			replan_warnings.append(res["warnings"])
+			tracker.set_pending_plan(peer, PlanValidator.finalize(whole))
 		replans.append([peer, plan])
 		return true
 
@@ -270,6 +288,8 @@ class Clock:
 	var sim_power_pct: float = 100.0
 	## peer -> cadence (default 90 rpm).
 	var cadence: Dictionary = {}
+	## peer -> true while the platform has the rider paused (Telemetry.paused).
+	var paused: Dictionary = {}
 	## peer -> % FTP of the latest ERG request in the current phase.
 	var applied_pct: Dictionary = {}
 	## [{peer, index, ended_by, t}] for every phase change after the start.
@@ -311,6 +331,7 @@ class Clock:
 			tm.p_eff_w = tm.power_w * p.p_eff_per_w
 			tm.ftp_pct = tm.power_w / p.ftp * 100.0
 			tm.cadence_rpm = float(cadence.get(p.peer_id, 90.0))
+			tm.paused = bool(paused.get(p.peer_id, false))
 			tm.phase_index = ph.index
 			tm.intents = (intents.get(p.peer_id, []) as Array).duplicate(true)
 			f.players[p.peer_id] = tm

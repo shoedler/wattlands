@@ -1,34 +1,21 @@
 # Turbo Reel assets
 
-- `art.json`: the art pipeline's description of every sprite (palette of 32 colours, shared style, sizes, parts, tiling); brief 3.3, `docs/ART_PIPELINE.md`.
-- `art_manifest.json`: every fal request and the art spend (`spend.total_usd`, budget $10): the generated art cost $3.56 (6 flare drafts kept, the rest sunburst, a few re-rolls).
-- `sprites/`: one PNG per sprite (`<id>.png`), one per part (`<id>__<part>.png`: the fish's `body` and `tail`), `sprites.json` (size, anchor, align, tile, mirror, parts per sprite) and the `.import` files Godot writes.
+- `sprites/`: one PNG per sprite (`<id>.png`, its animation frames side by side), `sprites.json` (frame size, frame count, anchor per sprite) and the `.import` files Godot writes.
+- `art.json`: the palette (32 colours, `FishingPalette.ALL`) and the sprite list in the art pipeline's format, written by the same tool.
+- `art_manifest.json`: the art pipeline's spend record ($3.56 of the $10 budget, all from v0.1; v0.2 made no fal calls).
 
-## Generated art, with a placeholder fallback
+## Hand-authored pixel art
 
-The sprites in `sprites/` are real generated art (GPT Image 2.5 through fal, pixelated to the palette; credits in `docs/credits.d/fishing.md`). The placeholder drawer stays as brief 3.4's fallback: `src/games/fishing/tools/fishing_fallback_sprites.gd` (`FishingFallbackSprites.image(id)`) draws every sprite except `picker_card` from the palette, and the view calls it when a PNG is missing. Rewriting the placeholders overwrites the generated PNGs, so only do it on purpose (`git checkout` restores them):
-
-```bash
-tools/godot.sh --headless --path . -s src/games/fishing/tools/fishing_write_fallback_sprites.gd
-tools/godot.sh --headless --path . --import
-```
-
-## Generating the real art
-
-Needs `FAL_KEY` and `WATTLANDS_ALLOW_ART=1` (set only on the `generate.mjs` call); the budget is $10 minus `spend.total_usd`, so about $6.44 is left. Raw results live in the gitignored `.art_cache/`; a fresh clone fetches the selected ones again for free when `generate.mjs` runs with the sprite in `--only`, and `pixelate.gd` is byte-identical on re-runs.
+Every sprite is a palette-indexed text grid in `src/games/fishing/tools/fishing_art_grids.gd` (`FishingArtGrids`: one character per palette colour, `.` clear), plus a few frames derived in code (fish swim waves, flywheel spokes, the cards composed from other sprites). Edit the grids, then write the PNGs and re-import:
 
 ```bash
 . tools/env.sh
-node tools/art/generate.mjs --game=fishing --dry-run
-# drafts on flare: set "endpoint" to openai/gpt-image-2.5/flare/text-to-image, then
-node tools/art/generate.mjs --game=fishing --only=rig_bike,rig_angler,rig_crank,rig_reel,boat,fish_marlin --budget=<10 - spent>
-tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=fishing
-# review at 4x, fix prompts, set "endpoint" back to openai/gpt-image-2.5/sunburst/text-to-image, then
-node tools/art/generate.mjs --game=fishing --only=<every other sprite and failed drafts> --budget=<10 - spent>
-tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=fishing
+tools/godot.sh --headless --path . -s src/games/fishing/tools/fishing_write_sprites.gd -- --sheet=/abs/path/sheet.png
 tools/godot.sh --headless --path . --import
 ```
 
-Review criteria (brief 3.4): fish face left with the tail at the right edge, the boat's bow points right, the red key ramp (`#e0413a`, `#9e2228`) only on the boat's trim and canopy and the angler's cap and shirt, clear silhouettes, no rocks in the HUD zone. At most two re-rolls per sprite, each with a sharpened prompt and `--only=<id>`. `tests/games/fishing/art/` checks every PNG (palette colours or full transparency, sizes, parts, the key ramp, fish facing).
+`--sheet` also writes a 4x preview of every sprite and the assembled boat (driving and fishing). PNGs no sprite owns are deleted. `tests/games/fishing/art/` fails when a PNG differs from the grids, uses a colour outside the palette, or breaks the shapes the view relies on (fish face left with the mouth at the anchor, boat parts inside the hull canvas, key reds on the hull and rider for the slot colour).
 
-Lessons from the v0.1 run: the shared style ("single subject centered") makes the model invent a mascot for strips and effects, so strip and effect prompts say "seamless wide horizontal strip made only of ..., no animals, no characters"; `reef_front` needs "no red" (the pink coral otherwise quantizes onto the key ramp, which `tests/games/fishing/art` forbids); `fish_tuna` needs "nose touches the left edge, tail tips touch the right edge" so the fitted fish reaches the right edge.
+Style: the muted, limited palette in a few ramps, no outlines, flat haze layers, calm negative space, tiny crisp sprites with a few precise details. The sky, water, floor, clouds, coast, waves and the world-edge waterfall are code-drawn from the same palette (`src/games/fishing/view/fishing_scenery.gd`).
+
+Sprites: `boat_hull` (96 x 40, the stern long-tail shaft included; boat-local points in `view/fishing_rig.gd`), `boat_flywheel`, `boat_gears`, `boat_winch`, `boat_prop`, `rider`, `lure`, ten `fish_<species>` with four swim frames, seven `icon_*` minimap and leaderboard icons (white pixels take the slot colour), `scenery_town`, `scenery_pier`, `gull`, `fx_splash`, `fx_sparkle`, and the cards `picker_card` (the game's picker image), `card_roam` and `card_workout` (160 x 90).

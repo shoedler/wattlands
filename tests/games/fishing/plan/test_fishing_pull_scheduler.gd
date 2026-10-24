@@ -2,7 +2,7 @@ extends GutTest
 ## FishingPullScheduler (brief 2.3 "Load changes", 4.1 Directives): the pure scheduler driven by a
 ## fake fight loop against a model of the governor's ERG channel (replace on request, expire to the
 ## planned target). Every species x 25 seeds x FTP 100, 200, 300, 400 and 500 W; rescue and AFK at
-## every ramp step of a mahi run and of a marlin jump. The opt-in sweep runs them at 500 seeds.
+## every ramp step of a tuna run and of a marlin jump. The opt-in sweep runs them at 500 seeds.
 
 const H := preload("res://tests/games/fishing/plan/fishing_plan_harness.gd")
 const SEEDS := 25
@@ -31,24 +31,39 @@ func _sweep(trip_id: String, species: Array, seeds: int) -> void:
 	assert_gt(pulls, 0, "%s: pull changes were sent" % trip_id)
 	if species.has("mahi") or species.has("tuna") or species.has("marlin"):
 		assert_gt(runs, 0, "%s: runs fired" % trip_id)
-	if species.has("mahi") and trip_id != "base_60":
-		assert_gt(above, 0.0, "mahi runs pass 105 %")
+	if species.has("oarfish") or species.has("grouper"):
+		assert_gt(above, 0.0, "the giants pass 105 %")
 
 
-func test_mackerel_directives() -> void:
-	_sweep("free_30", ["mackerel"], SEEDS)
+func test_shallows_directives() -> void:
+	_sweep("roam_30", ["mackerel", "sea_bream"], SEEDS)
 
 
-func test_mahi_directives() -> void:
-	_sweep("free_30", ["mahi"], SEEDS)
+func test_reef_directives() -> void:
+	_sweep("roam_30", ["snapper", "mahi"], SEEDS)
 
 
-func test_tuna_directives() -> void:
-	_sweep("free_30", ["tuna"], SEEDS)
+func test_shelf_directives() -> void:
+	_sweep("roam_30", ["tuna", "wahoo"], SEEDS)
 
 
-func test_marlin_directives() -> void:
-	_sweep("free_120", ["marlin"], SEEDS)
+func test_deep_directives() -> void:
+	_sweep("roam_30", ["swordfish", "marlin"], SEEDS)
+
+
+func test_giant_directives() -> void:
+	_sweep("roam_30", ["grouper", "oarfish"], SEEDS)
+
+
+func test_grouper_pull_changes_hold_above_105_inside_its_range() -> void:
+	var c := H.content("roam_30")
+	var slot := H.species_slot(c, "grouper", 4)
+	assert_true(slot.hold_above_105)
+	var res := H.run_fight(slot, 4, 250.0)
+	assert_eq(res["fails"], [] as Array[String])
+	assert_gt(int(res["pulls"]), 3)
+	assert_gt(float(res["above105"]), slot.min_s * 0.5, "most of the fight above 105 %")
+	assert_lte(float(res["above105"]), PlanValidator.LIMIT_105_S + 0.05)
 
 
 func test_base_60_directives_stay_at_or_below_100() -> void:
@@ -93,12 +108,12 @@ func _stagger_steps(species: String, trip_id: String) -> void:
 	assert_gt(cases, 40, "%d cases" % cases)
 
 
-func test_rescue_and_afk_at_each_ramp_step_of_a_mahi_run() -> void:
-	_stagger_steps("mahi", "free_30")
+func test_rescue_and_afk_at_each_ramp_step_of_a_tuna_run() -> void:
+	_stagger_steps("tuna", "roam_30")
 
 
 func test_rescue_and_afk_at_each_ramp_step_of_a_marlin_jump() -> void:
-	_stagger_steps("marlin", "free_120")
+	_stagger_steps("marlin", "roam_30")
 
 
 func test_init_lane_seeds_the_pull_stream() -> void:
@@ -117,7 +132,7 @@ func test_ramp_steps_stretch_to_25_w_per_s() -> void:
 
 
 func test_a_pull_change_ramps_in_six_held_steps_half_a_second_apart() -> void:
-	var c := H.content("free_30")
+	var c := H.content("roam_30")
 	var slot := H.species_slot(c, "mahi", 4)
 	var ps := FishingPullState.new()
 	FishingPullScheduler.init_lane(ps, 4, 0)
@@ -138,7 +153,7 @@ func test_a_pull_change_ramps_in_six_held_steps_half_a_second_apart() -> void:
 
 
 func test_runs_count_down_to_one_expiry_and_skip_while_staggered() -> void:
-	var c := H.content("free_30")
+	var c := H.content("roam_30")
 	var slot := H.species_slot(c, "mahi", 8)
 	var ps := FishingPullState.new()
 	FishingPullScheduler.init_lane(ps, 8, 0)
@@ -172,7 +187,7 @@ func test_runs_count_down_to_one_expiry_and_skip_while_staggered() -> void:
 
 
 func test_marlin_jumps_wait_90_s_between_starts() -> void:
-	var c := H.content("free_120")
+	var c := H.content("roam_30")
 	var slot := H.species_slot(c, "marlin", 2)
 	var ps := FishingPullState.new()
 	FishingPullScheduler.init_lane(ps, 2, 0)
@@ -216,14 +231,14 @@ func test_above_105_is_held_to_30_s_per_run_and_90_s_per_fight() -> void:
 
 
 func test_the_scheduler_is_deterministic() -> void:
-	var c := H.content("free_30")
+	var c := H.content("roam_30")
 	var slot := H.species_slot(c, "tuna", 12)
 	assert_eq(_trace(slot, 12), _trace(slot, 12), "same seed, same directives")
 	assert_ne(_trace(slot, 12), _trace(slot, 13), "another seed, another schedule")
 
 
 func test_end_stops_everything() -> void:
-	var c := H.content("free_30")
+	var c := H.content("roam_30")
 	var slot := H.species_slot(c, "mahi", 1)
 	var ps := FishingPullState.new()
 	FishingPullScheduler.begin(ps, slot, 0.0, 200.0, ps.rng)

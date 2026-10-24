@@ -1,14 +1,22 @@
 class_name FishingHudDraw
 extends RefCounted
-## Drawing helpers for Fishing's HUD Controls, in HUD canvas pixels (1080p units): outlined text
-## in the kit's font, meter bars, and the icons that pair every colour with a shape (BRIEF 3.9):
-## the strain zigzag, the slack loop, slot shapes, a fish silhouette and the trophy star.
+## Drawing helpers for Turbo Reel's HUD Controls, in HUD canvas pixels (1080p units): outlined
+## text in the kit's font, meter bars, the pixel sprites at a whole-number scale, and the meter
+## icons that pair every colour with a shape (BRIEF 3.9): the strain zigzag and the slack loop.
 
 const STRAIN := Color("#e0413a")
 const SLACK := Color("#f6d33c")
 const GAFF := Color("#e8b730")
 const STAMINA := Color("#56B4E9")
-const BAND_IN := Color(0.741, 0.922, 1.0, 0.55)
+## Minimap zone colours, from the game palette (FishingWorld.ZONES order).
+const ZONE_COLOURS: Array[Color] = [
+	FishingPalette.SAND_1,
+	FishingPalette.HAZE_1,
+	FishingPalette.SAND_2,
+	FishingPalette.SEA_2,
+	FishingPalette.SEA_4,
+	FishingPalette.SEA_6,
+]
 
 
 ## Text with the kit's dark outline; `pos` is the baseline's left end. Returns its width.
@@ -25,6 +33,12 @@ static func text(
 	return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 
 
+## The width `s` takes at `px`.
+static func text_w(s: String, px: int, bold: bool = false) -> float:
+	var font := WlTheme.bold_font() if bold else WlTheme.font()
+	return font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(px, WlTheme.MIN_TEXT_PX)).x
+
+
 ## A bar filled `frac` (0..1) of the way (bottom-up when vertical), outlined.
 static func bar(c: CanvasItem, r: Rect2, frac: float, col: Color, vertical: bool = false) -> void:
 	c.draw_rect(r, WlTheme.BAR_BG)
@@ -37,14 +51,22 @@ static func bar(c: CanvasItem, r: Rect2, frac: float, col: Color, vertical: bool
 	c.draw_rect(r, WlTheme.OUTLINE, false, 2.0)
 
 
+## Sprite `id` frame `k` with its top-left at `pos`, each art pixel `scale` HUD px, modulated.
+static func sprite(
+	c: CanvasItem, id: String, k: int, pos: Vector2, scale: float, col: Color = Color.WHITE
+) -> void:
+	var tex := FishingSprites.frame(id, k)
+	if tex == null:
+		return
+	c.draw_texture_rect(tex, Rect2(pos.round(), Vector2(tex.get_size()) * scale), false, col)
+
+
 ## The strain icon: a zigzag (a taut, jagged line).
 static func zigzag(c: CanvasItem, r: Rect2, col: Color) -> void:
 	var pts := PackedVector2Array()
-	var steps := 4
-	for i in steps + 1:
-		var x := r.position.x + r.size.x * float(i) / float(steps)
-		var y := r.position.y + (r.size.y if i % 2 == 1 else 0.0)
-		pts.append(Vector2(x, y))
+	for i in 5:
+		var x := r.position.x + r.size.x * float(i) / 4.0
+		pts.append(Vector2(x, r.position.y + (r.size.y if i % 2 == 1 else 0.0)))
 	c.draw_polyline(pts, WlTheme.OUTLINE, maxf(r.size.y * 0.3, 3.0) + 2.0)
 	c.draw_polyline(pts, col, maxf(r.size.y * 0.3, 3.0))
 
@@ -63,37 +85,6 @@ static func loop(c: CanvasItem, r: Rect2, col: Color) -> void:
 	c.draw_polyline(pts, col, 3.0)
 
 
-## A slot shape (circle, triangle, square, diamond) filled in `col`, hollow when `hollow`.
-static func shape(
-	c: CanvasItem, kind: String, center: Vector2, r: float, col: Color, hollow: bool = false
-) -> void:
-	var pts := FishingView.shape_points(kind, center, r)
-	if not hollow:
-		c.draw_colored_polygon(pts, col)
-	pts.append(pts[0])
-	c.draw_polyline(pts, WlTheme.OUTLINE if not hollow else col, 3.0)
-
-
-## A fish silhouette facing left, `w` wide, centred at `center`.
-static func fish_icon(c: CanvasItem, center: Vector2, w: float, col: Color) -> void:
-	var h := w * 0.42
-	var pts := PackedVector2Array(
-		[
-			center + Vector2(-w * 0.5, 0),
-			center + Vector2(-w * 0.2, -h * 0.5),
-			center + Vector2(w * 0.25, -h * 0.35),
-			center + Vector2(w * 0.5, -h * 0.55),
-			center + Vector2(w * 0.38, 0),
-			center + Vector2(w * 0.5, h * 0.55),
-			center + Vector2(w * 0.25, h * 0.35),
-			center + Vector2(-w * 0.2, h * 0.5),
-		]
-	)
-	c.draw_colored_polygon(pts, col)
-	pts.append(pts[0])
-	c.draw_polyline(pts, WlTheme.OUTLINE, 2.0)
-
-
 ## A four-pointed star (the trophy mark).
 static func star(c: CanvasItem, center: Vector2, r: float, col: Color) -> void:
 	var pts := PackedVector2Array()
@@ -104,3 +95,8 @@ static func star(c: CanvasItem, center: Vector2, r: float, col: Color) -> void:
 	c.draw_colored_polygon(pts, col)
 	pts.append(pts[0])
 	c.draw_polyline(pts, WlTheme.OUTLINE, 2.0)
+
+
+## A rounded panel in the kit's colours.
+static func panel(c: CanvasItem, r: Rect2, col: Color = WlTheme.PANEL) -> void:
+	c.draw_rect(r, col)

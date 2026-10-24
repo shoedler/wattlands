@@ -4,14 +4,27 @@
 			"id": "mackerel",
 			"label": "FISHING_SPECIES_MACKEREL",
 			"sprite": "fish_mackerel",
-			"t_nom_s": [
-				60,
-				120
+			"zones": [
+				"shallows"
 			],
-			"max_s": 150,
-			"pull_pct": [
-				70,
+			"rarity": 60,
+			"depth_m": [
+				2,
+				8
+			],
+			"near_floor": false,
+			"kg": [
+				0.5,
+				2
+			],
+			"t_nom_s": [
+				50,
 				80
+			],
+			"max_s": 120,
+			"pull_pct": [
+				60,
+				66
 			],
 			"change_pct": 4,
 			"runs": {
@@ -38,24 +51,139 @@
 				"sounding": false
 			},
 			"band_offset": 10,
-			"kg": [
-				0.5,
-				2
+			"d_max": 30
+		},
+		{
+			"id": "sea_bream",
+			"label": "FISHING_SPECIES_SEA_BREAM",
+			"sprite": "fish_sea_bream",
+			"zones": [
+				"shallows"
 			],
-			"d_max": 40
+			"rarity": 40,
+			"depth_m": [
+				4,
+				15
+			],
+			"near_floor": false,
+			"kg": [
+				1,
+				4
+			],
+			"t_nom_s": [
+				60,
+				100
+			],
+			"max_s": 140,
+			"pull_pct": [
+				64,
+				72
+			],
+			"change_pct": 4,
+			"runs": {
+				"kind": "run",
+				"count": [
+					1,
+					1
+				],
+				"dur_s": [
+					10,
+					15
+				],
+				"peak_pct": [
+					0,
+					0
+				],
+				"peak_factor": 1.06,
+				"band_shift": 4,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": 8,
+			"d_max": 35
+		},
+		{
+			"id": "snapper",
+			"label": "FISHING_SPECIES_SNAPPER",
+			"sprite": "fish_snapper",
+			"zones": [
+				"reef"
+			],
+			"rarity": 55,
+			"depth_m": [
+				10,
+				35
+			],
+			"near_floor": false,
+			"kg": [
+				3,
+				12
+			],
+			"t_nom_s": [
+				80,
+				140
+			],
+			"max_s": 180,
+			"pull_pct": [
+				74,
+				82
+			],
+			"change_pct": 6,
+			"runs": {
+				"kind": "run",
+				"count": [
+					1,
+					2
+				],
+				"dur_s": [
+					10,
+					20
+				],
+				"peak_pct": [
+					0,
+					0
+				],
+				"peak_factor": 1.08,
+				"band_shift": 6,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": 8,
+			"d_max": 50
 		},
 		{
 			"id": "mahi",
 			"label": "FISHING_SPECIES_MAHI",
 			"sprite": "fish_mahi",
-			"t_nom_s": [
-				120,
-				240
+			"zones": [
+				"reef"
 			],
-			"max_s": 270,
+			"rarity": 45,
+			"depth_m": [
+				3,
+				15
+			],
+			"near_floor": false,
+			"kg": [
+				7,
+				20
+			],
+			"t_nom_s": [
+				100,
+				170
+			],
+			"max_s": 210,
 			"pull_pct": [
-				88,
-				95
+				82,
+				88
 			],
 			"change_pct": 8,
 			"runs": {
@@ -66,13 +194,13 @@
 				],
 				"dur_s": [
 					15,
-					30
+					25
 				],
 				"peak_pct": [
-					105,
-					110
+					0,
+					0
 				],
-				"peak_factor": 0,
+				"peak_factor": 1.1,
 				"band_shift": 8,
 				"min_gap_s": 0,
 				"leaps": [
@@ -82,31 +210,40 @@
 				"sounding": false
 			},
 			"band_offset": 8,
-			"kg": [
-				7,
-				20
-			],
-			"d_max": 80
+			"d_max": 70
 		},
 		{
 			"id": "tuna",
 			"label": "FISHING_SPECIES_TUNA",
 			"sprite": "fish_tuna",
-			"t_nom_s": [
-				240,
-				480
+			"zones": [
+				"shelf"
 			],
-			"max_s": 540,
+			"rarity": 55,
+			"depth_m": [
+				15,
+				60
+			],
+			"near_floor": false,
+			"kg": [
+				30,
+				90
+			],
+			"t_nom_s": [
+				150,
+				230
+			],
+			"max_s": 270,
 			"pull_pct": [
-				93,
-				97
+				88,
+				94
 			],
 			"change_pct": 8,
 			"runs": {
 				"kind": "run",
 				"count": [
 					2,
-					4
+					3
 				],
 				"dur_s": [
 					20,
@@ -126,31 +263,146 @@
 				"sounding": true
 			},
 			"band_offset": 5,
-			"kg": [
-				30,
-				90
+			"d_max": 100
+		},
+		{
+			"id": "wahoo",
+			"label": "FISHING_SPECIES_WAHOO",
+			"sprite": "fish_wahoo",
+			"zones": [
+				"shelf"
 			],
-			"d_max": 120
+			"rarity": 45,
+			"depth_m": [
+				5,
+				30
+			],
+			"near_floor": false,
+			"kg": [
+				15,
+				50
+			],
+			"t_nom_s": [
+				120,
+				190
+			],
+			"max_s": 230,
+			"pull_pct": [
+				90,
+				97
+			],
+			"change_pct": 8,
+			"runs": {
+				"kind": "run",
+				"count": [
+					2,
+					3
+				],
+				"dur_s": [
+					10,
+					20
+				],
+				"peak_pct": [
+					100,
+					104
+				],
+				"peak_factor": 0,
+				"band_shift": 12,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": 6,
+			"d_max": 110
+		},
+		{
+			"id": "swordfish",
+			"label": "FISHING_SPECIES_SWORDFISH",
+			"sprite": "fish_swordfish",
+			"zones": [
+				"deep"
+			],
+			"rarity": 35,
+			"depth_m": [
+				40,
+				150
+			],
+			"near_floor": false,
+			"kg": [
+				80,
+				250
+			],
+			"t_nom_s": [
+				180,
+				280
+			],
+			"max_s": 330,
+			"pull_pct": [
+				93,
+				99
+			],
+			"change_pct": 6,
+			"runs": {
+				"kind": "jump",
+				"count": [
+					1,
+					2
+				],
+				"dur_s": [
+					15,
+					25
+				],
+				"peak_pct": [
+					104,
+					104
+				],
+				"peak_factor": 0,
+				"band_shift": 12,
+				"min_gap_s": 90,
+				"leaps": [
+					1,
+					2
+				],
+				"sounding": false
+			},
+			"band_offset": 0,
+			"d_max": 150
 		},
 		{
 			"id": "marlin",
 			"label": "FISHING_SPECIES_MARLIN",
 			"sprite": "fish_marlin",
-			"t_nom_s": [
-				600,
-				1200
+			"zones": [
+				"deep"
 			],
-			"max_s": 1320,
+			"rarity": 30,
+			"depth_m": [
+				10,
+				60
+			],
+			"near_floor": false,
+			"kg": [
+				150,
+				400
+			],
+			"t_nom_s": [
+				240,
+				340
+			],
+			"max_s": 420,
 			"pull_pct": [
-				85,
-				90
+				90,
+				97
 			],
 			"change_pct": 8,
 			"runs": {
 				"kind": "jump",
 				"count": [
-					4,
-					8
+					2,
+					3
 				],
 				"dur_s": [
 					20,
@@ -170,11 +422,113 @@
 				"sounding": false
 			},
 			"band_offset": -2,
+			"d_max": 200
+		},
+		{
+			"id": "grouper",
+			"label": "FISHING_SPECIES_GROUPER",
+			"sprite": "fish_grouper",
+			"zones": [
+				"deep"
+			],
+			"rarity": 35,
+			"depth_m": [
+				0,
+				0
+			],
+			"near_floor": true,
 			"kg": [
+				120,
+				300
+			],
+			"t_nom_s": [
+				180,
+				270
+			],
+			"max_s": 300,
+			"pull_pct": [
+				105,
+				110
+			],
+			"change_pct": 3,
+			"runs": {
+				"kind": "none",
+				"count": [
+					0,
+					0
+				],
+				"dur_s": [
+					0,
+					0
+				],
+				"peak_pct": [
+					0,
+					0
+				],
+				"peak_factor": 0,
+				"band_shift": 0,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": false
+			},
+			"band_offset": -4,
+			"d_max": 60
+		},
+		{
+			"id": "oarfish",
+			"label": "FISHING_SPECIES_OARFISH",
+			"sprite": "fish_oarfish",
+			"zones": [
+				"abyss"
+			],
+			"rarity": 100,
+			"depth_m": [
 				150,
 				400
 			],
-			"d_max": 200
+			"near_floor": false,
+			"kg": [
+				200,
+				500
+			],
+			"t_nom_s": [
+				220,
+				280
+			],
+			"max_s": 300,
+			"pull_pct": [
+				100,
+				104
+			],
+			"change_pct": 5,
+			"runs": {
+				"kind": "run",
+				"count": [
+					2,
+					3
+				],
+				"dur_s": [
+					20,
+					30
+				],
+				"peak_pct": [
+					108,
+					110
+				],
+				"peak_factor": 0,
+				"band_shift": 10,
+				"min_gap_s": 0,
+				"leaps": [
+					0,
+					0
+				],
+				"sounding": true
+			},
+			"band_offset": 0,
+			"d_max": 150
 		}
 	]
 }

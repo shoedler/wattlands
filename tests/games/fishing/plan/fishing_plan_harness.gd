@@ -6,17 +6,9 @@ extends RefCounted
 ## no global RNG.
 
 const CONTENT := "res://content/fishing"
-const TRIPS := [
-	"free_20",
-	"free_30",
-	"free_45",
-	"free_60",
-	"free_90",
-	"free_120",
-	"base_60",
-	"threshold",
-	"e2e_2min",
-]
+## Workouts (pre-rolled plans); Free Roam plans grow at each bite (roam_failures).
+const TRIPS := ["base_60", "threshold", "e2e_2min"]
+const ROAM_TRIPS := ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]
 const REEL_PCTS := [50, 55, 60, 65, 70]
 const FTPS := [100.0, 200.0, 300.0, 400.0, 500.0]
 const DT := 0.05
@@ -61,7 +53,7 @@ static func content(trip_id: String) -> FishingContent:
 	c.parse(
 		_json("species.json"),
 		_json("trips/%s.json" % trip_id),
-		_json("areas/coral_bank.json"),
+		_json("map.json"),
 		_json("cosmetics.json")
 	)
 	return c
@@ -101,8 +93,7 @@ static func plan_failures(
 		if first.budget_s() > cap + EPS:
 			f.append("%s: first slot over the fight budget" % at)
 		for s in slots:
-			var ok_marlin := s.species == "marlin" and trip.marlin_slot == s.index + 1
-			if not trip.species_weights.has(s.species) and not ok_marlin:
+			if not trip.species_weights.has(s.species):
 				f.append("%s: slot %d species %s not in the trip" % [at, s.index, s.species])
 	for reel in reel_pcts:
 		f.append_array(_plan_shape_failures(trip, slots, int(reel), "%s reel %d" % [at, reel]))
@@ -130,8 +121,9 @@ static func slot_failures(
 			f.append("%s: range narrower than base +- a" % at)
 	if s.max_s > PlanValidator.LONG_PHASE_S and s.range_hi > FishingConst.LONG_PHASE_CAP_PCT + EPS:
 		f.append("%s: range top %.2f > 105 in a phase over 300 s" % [at, s.range_hi])
-	if absf(s.min_s - floorf(FishingConst.FIGHT_MIN_FRAC * s.t_nom_s)) > EPS:
-		f.append("%s: min_s %.1f != floor(0.8 T_nom)" % [at, s.min_s])
+	var want_min := maxf(floorf(FishingConst.FIGHT_MIN_FRAC * s.t_nom_s), FishingConst.FIGHT_MIN_S)
+	if absf(s.min_s - want_min) > EPS:
+		f.append("%s: min_s %.1f != max(floor(0.8 T_nom), 30)" % [at, s.min_s])
 	if s.min_s > s.t_nom_s / FishingConst.TIRE_MAX_RATIO + EPS or s.min_s <= 0.0:
 		f.append("%s: min_s %.1f above the fastest landing" % [at, s.min_s])
 	if s.max_s < s.t_nom_s - EPS:
@@ -146,7 +138,7 @@ static func slot_failures(
 			f.append("%s: run %d peak %.2f above the range" % [at, k, peak])
 		if peak > FishingConst.LONG_PHASE_CAP_PCT + EPS:
 			runs_above += dur
-			if s.species != "mahi":
+			if def.max_run_peak(s.base_pct) <= FishingConst.LONG_PHASE_CAP_PCT + EPS:
 				f.append("%s: %s run above 105 %%" % [at, s.species])
 	if runs_above > FishingConst.FIGHT_MAX_ABOVE_105_S + EPS:
 		f.append("%s: %.1f s above 105 %% in one fight" % [at, runs_above])
@@ -157,7 +149,8 @@ static func slot_failures(
 	var t_nom := def.t_nom_lo + 0.8 * s.w * (def.t_nom_hi - def.t_nom_lo)
 	if absf(s.t_nom_s - t_nom) > EPS:
 		f.append("%s: T_nom %.2f != lo + 0.8 w (hi - lo)" % [at, s.t_nom_s])
-	if absf(s.base_pct - minf(lerpf(def.pull_lo, def.pull_hi, s.w), top)) > EPS:
+	var want_base := minf(lerpf(def.pull_lo, def.pull_hi, s.w), top)
+	if absf(s.base_pct - want_base) > EPS and not s.hold_above_105:
 		f.append("%s: base %.2f != lo + w (hi - lo)" % [at, s.base_pct])
 	if absf(s.max_s - def.max_s) > EPS:
 		f.append("%s: max_s %.0f != species max_s" % [at, s.max_s])
@@ -165,43 +158,39 @@ static func slot_failures(
 	return f
 
 
+## Runs against the species table: count, kind, peaks (absolute or base x factor, capped) and
+## lengths; jumps also leaps, the 115 s spacing cap and the gap.
 static func _run_failures(
 	def: FishingSpeciesDef, s: FishingPlanSlot, top: float, at: String
 ) -> Array[String]:
 	var f: Array[String] = []
 	var n := s.run_count()
-	match s.species:
-		"mackerel":
-			if n != 0:
-				f.append("%s: mackerel with runs" % at)
-		"mahi":
-			if n < 2 or n > 3 or s.run_kind != FishingSpeciesDef.RUN_RUN:
-				f.append("%s: mahi runs %d" % [at, n])
-			for k in n:
-				var pk := s.run_peak_pct(k)
-				if pk < minf(105.0, top) - EPS or pk > minf(110.0, top) + EPS:
-					f.append("%s: mahi peak %.2f" % [at, pk])
-		"tuna":
-			if n < 2 or n > 4 or s.run_kind != FishingSpeciesDef.RUN_RUN:
-				f.append("%s: tuna runs %d" % [at, n])
-			for k in n:
-				var pk := s.run_peak_pct(k)
-				if pk > 105.0 + EPS or absf(pk - minf(s.base_pct * 1.08, top)) > EPS:
-					f.append("%s: tuna peak %.2f" % [at, pk])
-		"marlin":
-			var cap := floori(s.t_nom_s / FishingConst.JUMP_SPACING_S)
-			if n < 4 or n > 8 or n > cap or s.run_kind != FishingSpeciesDef.RUN_JUMP:
-				f.append("%s: marlin jumps %d (cap %d)" % [at, n, cap])
-			if s.leaps.size() != n or absf(s.run_min_gap_s - 90.0) > EPS:
-				f.append("%s: marlin leaps or gap" % at)
-			for k in n:
-				if absf(s.run_peak_pct(k) - minf(FishingConst.MARLIN_JUMP_PCT, top)) > EPS:
-					f.append("%s: marlin jump peak %.2f" % [at, s.run_peak_pct(k)])
-				if s.leaps[k] < 2 or s.leaps[k] > 3:
-					f.append("%s: marlin leaps %d" % [at, s.leaps[k]])
+	var hi := def.runs_hi
+	if def.run_kind == FishingSpeciesDef.RUN_JUMP:
+		hi = mini(hi, floori(s.t_nom_s / FishingConst.JUMP_SPACING_S))
+	if def.run_kind == FishingSpeciesDef.RUN_NONE and n != 0:
+		f.append("%s: %s with runs" % [at, s.species])
+	if n > hi or (n > 0 and s.run_kind != def.run_kind):
+		f.append("%s: %s runs %d (max %d)" % [at, s.species, n, hi])
+	if n == 0 and def.run_kind == FishingSpeciesDef.RUN_RUN and def.runs_lo > 0:
+		f.append("%s: %s rolled no runs" % [at, s.species])
+	var cap := top
+	if s.max_s > PlanValidator.LONG_PHASE_S:
+		cap = minf(cap, FishingConst.LONG_PHASE_CAP_PCT)
 	for k in n:
+		var pk := s.run_peak_pct(k)
+		var lo := minf(def.run_peak(s.base_pct, 0.0), cap)
+		var hi_pk := minf(def.max_run_peak(s.base_pct), cap)
+		if pk < lo - EPS or pk > hi_pk + EPS:
+			f.append("%s: %s peak %.2f outside [%.2f, %.2f]" % [at, s.species, pk, lo, hi_pk])
 		if s.run_dur_s(k) < def.run_s_lo - 0.05 - EPS or s.run_dur_s(k) > def.run_s_hi + EPS:
 			f.append("%s: run %d length %.2f outside the species range" % [at, k, s.run_dur_s(k)])
+	if s.run_kind == FishingSpeciesDef.RUN_JUMP:
+		if s.leaps.size() != n or absf(s.run_min_gap_s - def.run_min_gap_s) > EPS:
+			f.append("%s: leaps or gap" % at)
+		for k in s.leaps.size():
+			if s.leaps[k] < def.leaps_lo or s.leaps[k] > def.leaps_hi:
+				f.append("%s: leaps %d" % [at, s.leaps[k]])
 	return f
 
 
@@ -223,15 +212,13 @@ static func _plan_shape_failures(
 	if ride.kind != Wl.WARMUP or not ride.lap or absf(ride.duration_s - trip.ride_out_s) > EPS:
 		f.append("%s: ride out phase" % at)
 	var reel_target := float(trip.reel_target(reel_pct))
-	var counts := {}
 	for i in slots.size():
 		var s := slots[i]
 		var reel := plan.phases[1 + 3 * i]
 		var fight := plan.phases[2 + 3 * i]
 		var land := plan.phases[3 + 3 * i]
 		f.append_array(_reel_failures(trip, reel, reel_target, s.reel_s, "%s reel %d" % [at, i]))
-		counts[s.species] = int(counts.get(s.species, 0)) + 1
-		var label := FishingPlanBuilder.fight_label(s.species, counts[s.species])
+		var label := FishingPlanBuilder.fight_label(s.species)
 		var fight_ok := (
 			fight.kind == Wl.WORK
 			and fight.mode == Wl.ERG
@@ -284,11 +271,56 @@ static func _reel_failures(
 	return f
 
 
-## A slot for `species` drawn like the pre-roll (Free trip rules, the whole budget free).
+## A slot for `species` drawn like a Free Roam bite (nothing accrued above 105 %) or, on a trip
+## with a top_pct, like the Base pre-roll.
 static func species_slot(c: FishingContent, species: String, seed: int) -> FishingPlanSlot:
 	var rng := FishingRandom.derive(seed, 7, FishingRandom.STREAM_PREROLL)
 	var def: FishingSpeciesDef = c.species[species]
-	return FishingPreroll._slot(def, 0, rng, 1.0e6, c.trip.top_pct)
+	if c.trip.top_pct > 0.0:
+		var top := FishingPreroll._top(def, c.trip.top_pct)
+		return FishingPreroll._build(def, 0, rng.unit(), rng, top)
+	return FishingPreroll.roam_slot(def, rng.unit(), 0, rng, 0.0)
+
+
+## A Free Roam rider's plan grown over `bites` random bites (species drawn from `species`, sizes
+## from the seed), exactly like FishingRules: roam_slot with the rider's accrual, then the
+## spliced fight_tail. Every step must validate with no warnings, and no fight phase longer than
+## 300 s may pass 105 % (BRIEF 4.6.1).
+static func roam_failures(
+	c: FishingContent, seed: int, species: Array, bites: int = 8
+) -> Array[String]:
+	var f: Array[String] = []
+	var play := c.trip.minutes * 60.0
+	var plan := PlanValidator.finalize(FishingPlanBuilder.roam(play))
+	if plan == null:
+		f.append("%s: the starting plan is rejected" % c.trip.id)
+		return f
+	var rng := FishingRandom.derive(seed, 3, 9)
+	var acc := 0.0
+	var index := 1
+	var t := FishingConst.WARMUP_S
+	for b in bites:
+		var id: String = species[rng.range_i(0, species.size() - 1)]
+		var def: FishingSpeciesDef = c.species[id]
+		var slot := FishingPreroll.roam_slot(def, rng.unit(), b, rng, acc)
+		if slot.range_hi > FishingConst.LONG_PHASE_CAP_PCT + 1.0e-6:
+			acc += slot.max_s
+		var at := "%s seed %d bite %d %s" % [c.trip.id, seed, b, id]
+		if slot.max_s > PlanValidator.LONG_PHASE_S and slot.range_hi > 105.0 + EPS:
+			f.append("%s: above 105 %% in a phase over 300 s" % at)
+		t += rng.range_f(5.0, 200.0)
+		var tail := FishingPlanBuilder.fight_tail(slot, FishingPlanBuilder.roam_max_s(play, t))
+		var whole := PlanValidator.spliced(plan, index, tail)
+		var res := PlanValidator.validate(whole)
+		if not bool(res["ok"]):
+			f.append("%s: rejected: %s" % [at, "; ".join(res["errors"])])
+			return f
+		if not (res["warnings"] as Array).is_empty():
+			f.append("%s: warnings: %s" % [at, "; ".join(res["warnings"])])
+		plan = PlanValidator.finalize(whole)
+		index += 3
+		t += slot.max_s + FishingConst.LANDING_S
+	return f
 
 
 ## One Fight of `slot` through the pure scheduler with a fake fight loop (brief 2.4 tiring: S
@@ -395,7 +427,9 @@ static func run_fight(
 				f.append("%s: a %s step outside its run" % [at, reason])
 			gov.request(t, d)
 			last_send = t
-		if gov.value > FishingConst.LONG_PHASE_CAP_PCT + 1.0e-6:
+		if gov.value > FishingConst.LONG_PHASE_CAP_PCT + 1.0e-6 and slot.hold_above_105:
+			fight_above += DT
+		elif gov.value > FishingConst.LONG_PHASE_CAP_PCT + 1.0e-6:
 			fight_above += DT
 			if in_run:
 				run_above += DT
@@ -406,8 +440,10 @@ static func run_fight(
 	FishingPullScheduler.end(ps)
 	if run_above > FishingConst.RUN_MAX_ABOVE_105_S + DT:
 		f.append("%s: %.2f s above 105 %% in one run" % [at, run_above])
-	if fight_above > FishingConst.FIGHT_MAX_ABOVE_105_S + DT:
+	if fight_above > FishingConst.FIGHT_MAX_ABOVE_105_S + DT and not slot.hold_above_105:
 		f.append("%s: %.2f s above 105 %% in the fight" % [at, fight_above])
+	if fight_above > PlanValidator.LIMIT_105_S + DT:
+		f.append("%s: %.2f s above 105 %%, more than BRIEF 4.6.1 allows" % [at, fight_above])
 	return {"fails": f, "sent": sent, "runs": runs, "pulls": pulls, "above105": fight_above}
 
 

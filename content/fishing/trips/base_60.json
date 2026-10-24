@@ -2,7 +2,6 @@
 	"id": "base_60",
 	"kind": "base",
 	"label": "FISHING_CONTENT_BASE_60",
-	"area": "coral_bank",
 	"total_min": 60,
 	"ride_out": {
 		"duration_s": 300,
@@ -14,8 +13,6 @@
 		"mackerel": 60,
 		"mahi": 40
 	},
-	"marlin_slot": 0,
-	"marlin_p": 0.0,
 	"fight_cap_frac": 0.25,
 	"top_pct": 100,
 	"k_rmin": 3

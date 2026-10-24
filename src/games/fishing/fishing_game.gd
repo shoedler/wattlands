@@ -1,76 +1,65 @@
 class_name FishingGame
 extends GameModule
-## Turbo Reel (docs/games/fishing.md): co-op sport fishing for 1-4 riders, where the trainer
-## is the rod. This module wires the pure parts to the platform: FishingContent (content),
-## FishingPreroll and FishingPlanBuilder (plans), FishingRules (simulation, with
-## FishingPullScheduler inside), FishingSnapshot (network), FishingResults (results, progress),
-## FishingView and FishingHud (presentation). It never reaches the trainer except through
-## ctx.directives. fish-module owns this file.
+## Turbo Reel: sport fishing for 1-4 riders (plus bots) on one shared ocean, where the trainer is
+## the rod and the pedals drive the boat. Free Roam (roam_*) is competitive: drive out, cast at
+## the fish you see, fight them, most points wins. Workouts (base_60, threshold, e2e_2min) keep a
+## plan on an endless map, co-op. This module wires the pure parts to the platform:
+## FishingContent (content), FishingPreroll and FishingPlanBuilder (plans), FishingRules
+## (simulation: FishingBoat, FishingFight, FishingAutopilot, FishingPullScheduler),
+## FishingSnapshot (network), FishingResults (results, progress) and the view and HUD (loaded by
+## path: VIEW_SCRIPT, HUD_SCRIPT). It never reaches the trainer except through ctx.directives.
 ##
-## Host / SOLO, every tick: one reused FishingLaneInput per slot from the frame (intents
-## normalized and rate-limited to INTENTS_PER_S per rider; the summary intent sets the lane's
+## Host / SOLO, every tick: one reused FishingRiderInput per slot from the frame (intents
+## normalized and rate-limited to INTENTS_PER_S per rider; the summary intent sets the rider's
 ## records, XP and look), FishingRules.step, then the FishingStepOut in its documented order:
-## directives, bands (also kept as the lane's published band), end_phase, events (send_event,
-## fx_event, event toasts), the rules' own toasts, finished (once). 1 Hz: teammate_status.
-## Clients: apply_snapshot (and the interpolation history), apply_event (ints cast, fx_event,
-## the rider's own toasts), client_predict (only the local cadence marker).
+## replans, directives, grades, bands (also kept as the rider's published band), power bands,
+## end_phase, events (send_event, fx_event, event toasts), the rules' own toasts, finished (once).
+## 1 Hz: teammate_status. Clients: apply_snapshot (then snapshot_applied for the view's
+## interpolation), apply_event (ints cast, fx_event, the rider's own toasts), client_predict (only
+## the local cadence marker).
 ##
-## Event toasts follow one rule (docs/decisions/fishing.md "Event toasts"): team-wide ones
-## (landed or trophy, double hookup, frenzy) go out from the host with peer 0 and reach every peer,
-## so clients never raise them; a rider's own ones (hookup, strike miss, snap, thrown,
-## replacement) are raised only by the peer whose lane it is: the host with ctx.local_peer, a
-## client in apply_event. The host never sends a rider's own toast to another peer, so nothing is
-## shown twice. Toasts the rules return under an event toast key are dropped (the module owns
-## those).
+## Event toasts: catches (landed or trophy) and double hookups go out from the host with peer 0
+## and reach every peer; a rider's own ones (hookup, snap, thrown, replacement) are raised only by
+## the peer whose rider it is: the host with ctx.local_peer, a client in apply_event.
 
 ## Every game event, on every rendering peer: the host and SOLO right where the event is sent,
 ## clients in apply_event (after FishingEvents.cast_ints). The view's effects and audio listen.
 signal fx_event(event: Dictionary)
+## Clients: a snapshot was applied to `state` (the view keeps its interpolation history).
+signal snapshot_applied(tick: int)
+
+const VIEW_SCRIPT := "res://src/games/fishing/view/fishing_view.gd"
+const HUD_SCRIPT := "res://src/games/fishing/hud/fishing_hud.gd"
 
 const TOAST_LANDED := "FISHING_TOAST_LANDED"
 const TOAST_TROPHY := "FISHING_TOAST_TROPHY"
 const TOAST_DOUBLE_HOOKUP := "FISHING_TOAST_DOUBLE_HOOKUP"
-const TOAST_FRENZY := "FISHING_TOAST_FRENZY"
 const TOAST_HOOKUP := "FISHING_TOAST_HOOKUP"
-const TOAST_STRIKE_MISS := "FISHING_TOAST_STRIKE_MISS"
 const TOAST_SNAP := "FISHING_TOAST_SNAP"
 const TOAST_THROWN := "FISHING_TOAST_THROWN"
 const TOAST_REPLACEMENT := "FISHING_TOAST_REPLACEMENT"
-## Every key the module raises from events (the rules' toasts under these keys are dropped).
-const EVENT_TOAST_KEYS: Array[String] = [
-	TOAST_LANDED,
-	TOAST_TROPHY,
-	TOAST_DOUBLE_HOOKUP,
-	TOAST_FRENZY,
-	TOAST_HOOKUP,
-	TOAST_STRIKE_MISS,
-	TOAST_SNAP,
-	TOAST_THROWN,
-	TOAST_REPLACEMENT,
-]
+const TOAST_TIME_UP := "FISHING_TOAST_TIME_UP"
 ## Team-wide event toasts: the host sends them with peer 0.
 const TEAM_EVENTS: Array[String] = [
-	FishingEvents.LANDED, FishingEvents.DOUBLE_HOOKUP, FishingEvents.FRENZY
+	FishingEvents.LANDED, FishingEvents.DOUBLE_HOOKUP, FishingEvents.TIME_UP
 ]
 ## A rider's own event toasts: raised on that rider's peer only.
 const OWN_EVENTS: Array[String] = [
 	FishingEvents.HOOKUP,
-	FishingEvents.STRIKE_MISS,
 	FishingEvents.SNAP,
 	FishingEvents.THROWN,
 	FishingEvents.REPLACEMENT,
 ]
 
-## teammate_status text per lane state (FishingConst.ST_*).
+## teammate_status text per action (FishingConst.A_*).
 const STATUS_KEYS: Array[String] = [
-	"FISHING_STATUS_RIDE_OUT",
-	"FISHING_STATUS_PICK",
-	"FISHING_STATUS_REEL",
-	"FISHING_STATUS_REEL",
-	"FISHING_STATUS_STRIKE",
+	"FISHING_STATUS_DRIVE",
+	"FISHING_STATUS_DRIFT",
+	"FISHING_STATUS_MENU",
+	"FISHING_STATUS_CAST",
+	"FISHING_STATUS_WAIT",
 	"FISHING_STATUS_FIGHT",
-	"FISHING_STATUS_LANDING",
-	"FISHING_STATUS_IDLE",
+	"FISHING_STATUS_LAND",
 	"FISHING_STATUS_HOME",
 ]
 ## The host refreshes the teammate chips once a second.
@@ -78,11 +67,10 @@ const STATUS_EVERY_TICKS := Wl.SIM_HZ
 
 var content: FishingContent = null
 var state: FishingState = null
-## Client interpolation of the other lanes (the view reads it).
-var history: FishingSnapHistory = FishingSnapHistory.new()
-## Each lane's pre-rolled slots, in slot order (Array[FishingPlanSlot] each).
+## Each rider's pre-rolled workout slots, in slot order (Array[FishingPlanSlot] each; [] in
+## Free Roam).
 var slots: Array = []
-## One reusable FishingLaneInput per slot, refilled every tick (no allocations per tick).
+## One reusable FishingRiderInput per slot, refilled every tick (no allocations per tick).
 var _inputs: Array = []
 ## Per slot: the tick the intent rate window opened and the intents admitted in it.
 var _rate_start: PackedInt32Array = PackedInt32Array()
@@ -99,12 +87,17 @@ func configure(p_ctx: GameContext) -> void:
 	if not content.ok:
 		return
 	slots = []
+	var strategies: Array[int] = []
 	for p in ctx.players:
 		slots.append(FishingPreroll.roll(content.trip, content.species, ctx.seed, p.slot_index))
-	state = FishingRules.new_state(content, ctx.players, ctx.seed, slots)
+		var strat := -1
+		if p.is_bot and content.trip.is_roam():
+			strat = ctx.rng.randi_range(0, FishingAutopilot.STRATEGIES.size() - 1)
+		strategies.append(strat)
+	state = FishingRules.new_state(content, ctx.players, ctx.seed, slots, strategies)
 	_inputs = []
 	for p in ctx.players:
-		var inp := FishingLaneInput.new()
+		var inp := FishingRiderInput.new()
 		inp.peer = p.peer_id
 		inp.slot = p.slot_index
 		_inputs.append(inp)
@@ -116,36 +109,39 @@ func configure(p_ctx: GameContext) -> void:
 	_send_summary()
 
 
-## The local rider's summary (brief 2.8), once per peer: total XP, species records and the
-## equipped look go to the host for record XP, unlocks and the lane's look. The local lane wears
-## its look at once; the host's copy arrives with the intent.
+## The local rider's summary, once per peer: total XP, species records and the equipped look go
+## to the host for record XP, unlocks and the rider's look. The local rider wears its look at
+## once; the host's copy arrives with the intent.
 func _send_summary() -> void:
 	var s := FishingResults.summary_from(ctx.progress, content)
 	var cos: Array[int] = []
 	cos.assign(s["cosmetics"])
 	var intent := FishingIntents.summary(int(s["xp"]), s["records"], cos)
-	var me := local_lane()
+	var me := local_rider()
 	if me != null:
 		_apply_summary(me, FishingIntents.normalize(intent))
 	if ctx.intents != null:
 		ctx.intents.send(intent)
 
 
-## The local rider's lane (null before configure or for a peer outside the session).
-func local_lane() -> FishingLaneState:
+## The local rider (null before configure or for a peer outside the session).
+func local_rider() -> FishingRiderState:
 	if state == null or ctx == null:
 		return null
-	return state.lane_of_peer(ctx.local_peer)
+	return state.rider_of_peer(ctx.local_peer)
 
 
-## Host/SOLO: one plan per slot (no bots: game.json bots is false).
+## Host/SOLO: one plan per slot, bots included.
 func build_effort_plans() -> Dictionary:
 	var plans := {}
 	if content == null or not content.ok:
 		return plans
 	for p in ctx.players:
-		var reel := int(p.options.get("reel_pct", FishingConst.REEL_PCT_DEFAULT))
-		plans[p.peer_id] = FishingPlanBuilder.build(content.trip, slots[p.slot_index], reel)
+		if content.trip.is_roam():
+			plans[p.peer_id] = FishingPlanBuilder.roam(state.play_end_t)
+		else:
+			var reel := int(p.options.get("reel_pct", FishingConst.REEL_PCT_DEFAULT))
+			plans[p.peer_id] = FishingPlanBuilder.build(content.trip, slots[p.slot_index], reel)
 	return plans
 
 
@@ -153,19 +149,20 @@ func build_effort_plans() -> Dictionary:
 func sim_step(dt: float, frame: InputFrame) -> void:
 	if state == null:
 		return
-	for inp: FishingLaneInput in _inputs:
+	for inp: FishingRiderInput in _inputs:
 		_fill_input(inp, frame)
 	_apply(FishingRules.step(state, _inputs, dt))
 	if frame.tick % STATUS_EVERY_TICKS == 0:
 		_feed_status()
 
 
-func _fill_input(inp: FishingLaneInput, frame: InputFrame) -> void:
+func _fill_input(inp: FishingRiderInput, frame: InputFrame) -> void:
 	var tm := frame.telemetry(inp.peer)
 	var ph := frame.phase_of(inp.peer)
 	inp.has_phase = ph != null
 	if tm != null:
 		inp.power_w = tm.power_w
+		inp.p_eff_w = tm.p_eff_w
 		inp.cadence_rpm = tm.cadence_rpm
 		inp.cadence_age_s = tm.cadence_age_s
 		inp.age_s = tm.age_s
@@ -174,6 +171,7 @@ func _fill_input(inp: FishingLaneInput, frame: InputFrame) -> void:
 		inp.mode = tm.mode
 		inp.rescue = tm.rescue
 		inp.afk = tm.afk
+		inp.paused = tm.paused
 	if tm != null and not tm.intents.is_empty():
 		inp.intents = _admit(inp, FishingIntents.normalize_tick(tm.intents), frame.tick)
 	elif not inp.intents.is_empty():
@@ -193,9 +191,8 @@ func _fill_input(inp: FishingLaneInput, frame: InputFrame) -> void:
 
 
 ## This tick's normalized intents of one rider, at most INTENTS_PER_S in any one-second window
-## (the excess is dropped). A summary is applied to the lane here (records, XP, the look clamped
-## to cosmetics.json) and never reaches the rules.
-func _admit(inp: FishingLaneInput, intents: Array, tick: int) -> Array:
+## (the excess is dropped). A summary is applied to the rider here and never reaches the rules.
+func _admit(inp: FishingRiderInput, intents: Array, tick: int) -> Array:
 	var i := inp.slot
 	if i < 0 or i >= _rate_start.size():
 		return []
@@ -205,58 +202,59 @@ func _admit(inp: FishingLaneInput, intents: Array, tick: int) -> Array:
 	var out: Array = []
 	for n: Dictionary in intents:
 		if n["k"] == FishingIntents.SUMMARY:
-			_apply_summary(state.lane(i), n)  # consumed here: the module clamps the look
+			_apply_summary(state.rider(i), n)
 			continue
 		if _rate_count[i] >= FishingConst.INTENTS_PER_S:
 			continue
-		else:
-			_rate_count[i] += 1
+		_rate_count[i] += 1
 		out.append(n)
 	return out
 
 
-## A normalized summary intent into the lane: total XP, records (kg) and the look, clamped to
+## A normalized summary intent into the rider: total XP, records (kg) and the look, clamped to
 ## the items cosmetics.json has.
-func _apply_summary(l: FishingLaneState, n: Dictionary) -> void:
-	if l == null or n.get("k", "") != FishingIntents.SUMMARY:
+func _apply_summary(r: FishingRiderState, n: Dictionary) -> void:
+	if r == null or n.get("k", "") != FishingIntents.SUMMARY:
 		return
-	l.summary_xp = int(n["xp"])
-	l.records.clear()
+	r.summary_xp = int(n["xp"])
+	r.records.clear()
 	var rec: Dictionary = n["rec"]
 	for id: String in rec:
-		l.records[id] = int(rec[id]) / 10.0
+		r.records[id] = int(rec[id]) / 10.0
 	var cos: Array = n["cos"]
-	for k in mini(cos.size(), l.cosmetics.size()):
-		l.cosmetics[k] = clampi(int(cos[k]), 0, _cos_counts[k])
+	for k in mini(cos.size(), r.cosmetics.size()):
+		r.cosmetics[k] = clampi(int(cos[k]), 0, _cos_counts[k])
 
 
 ## Applies one FishingStepOut in the documented order.
 func _apply(out: FishingStepOut) -> void:
+	for rp: Array in out.replans:
+		ctx.directives.replan(int(rp[0]), rp[1])
 	for d: Array in out.directives:
 		ctx.directives.request(int(d[0]), EffortDirective.from_dict(d[1]))
+	for g: Array in out.grades:
+		ctx.directives.course_grade(int(g[0]), float(g[1]))
 	for b: Array in out.bands:
 		ctx.directives.cadence_band(int(b[0]), float(b[1]), float(b[2]))
-		var bl := state.lane_of_peer(int(b[0]))
-		if bl != null:
-			bl.pub_lo = roundi(float(b[1]))
-			bl.pub_hi = roundi(float(b[2]))
+	if ctx.hud != null:
+		for pb: Array in out.power_bands:
+			ctx.hud.power_band(int(pb[0]), float(pb[1]), float(pb[2]))
 	for peer in out.end_phase:
 		ctx.directives.end_phase(peer)
 	for e: Dictionary in out.events:
 		send_event(e)
 		fx_event.emit(e)
 		_host_toast(e)
-	for t: Array in out.toasts:
-		if EVENT_TOAST_KEYS.has(str(t[0])):
-			continue
-		ctx.hud.toast(str(t[0]), t[1], int(t[2]))
+	if ctx.hud != null:
+		for t: Array in out.toasts:
+			ctx.hud.toast(str(t[0]), t[1], int(t[2]))
 	if out.finished != "" and not _finished:
 		_finished = true
 		finished.emit(out.finished)
 
 
 ## Host/SOLO: an event's toast for the right peers (team-wide: every peer; a rider's own: only
-## when the lane is the host's own rider, drawn on the host alone).
+## when the rider is the host's own).
 func _host_toast(e: Dictionary) -> void:
 	if ctx.hud == null:
 		return
@@ -265,15 +263,15 @@ func _host_toast(e: Dictionary) -> void:
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1], Wl.ALL_PEERS)
-	elif OWN_EVENTS.has(type) and _is_local_lane(e):
+	elif OWN_EVENTS.has(type) and _is_local_rider(e):
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1], ctx.local_peer)
 
 
-func _is_local_lane(e: Dictionary) -> bool:
-	var l := state.lane(int(e.get("l", -1))) if state != null else null
-	return l != null and l.peer == ctx.local_peer
+func _is_local_rider(e: Dictionary) -> bool:
+	var r := state.rider(int(e.get("l", -1))) if state != null else null
+	return r != null and r.peer == ctx.local_peer
 
 
 ## [key, args] of an event's toast, or [] for an event without one.
@@ -302,24 +300,22 @@ func toast_for(e: Dictionary) -> Array:
 			var on := maxi((e.get("lanes", []) as Array).size(), lvl)
 			var mult := "%.1f" % FishingConst.hookup_mult(lvl)
 			return [TOAST_DOUBLE_HOOKUP, {"count": on, "mult": mult}]
-		FishingEvents.FRENZY:
-			return [TOAST_FRENZY, {"name": _rider_name(l)}]
 		FishingEvents.HOOKUP:
 			return [TOAST_HOOKUP, {"species": _species(int(e.get("sp", -1)))}]
-		FishingEvents.STRIKE_MISS:
-			return [TOAST_STRIKE_MISS, {"species": _species(int(e.get("sp", -1)))}]
 		FishingEvents.SNAP:
 			return [TOAST_SNAP, []]
 		FishingEvents.THROWN:
 			return [TOAST_THROWN, []]
 		FishingEvents.REPLACEMENT:
 			return [TOAST_REPLACEMENT, {"species": _species(int(e.get("sp", -1)))}]
+		FishingEvents.TIME_UP:
+			return [TOAST_TIME_UP, []]
 	return []
 
 
 func _rider_name(slot: int) -> String:
-	var l := state.lane(slot) if state != null else null
-	var p := ctx.player(l.peer) if l != null else null
+	var r := state.rider(slot) if state != null else null
+	var p := ctx.player(r.peer) if r != null else null
 	return p.name if p != null else ""
 
 
@@ -328,52 +324,50 @@ func _species(sp: int) -> String:
 
 
 ## Host, 1 Hz: every rider's chip (in band = EMA cadence inside the published band; the text says
-## what the lane is doing).
+## what the rider is doing).
 func _feed_status() -> void:
 	if ctx.hud == null:
 		return
-	for l in state.lanes:
+	for r in state.riders:
 		ctx.hud.teammate_status(
-			l.peer, {"in_band": lane_in_band(l), "icon": "", "text": status_text(l)}
+			r.peer, {"in_band": rider_in_band(r), "icon": "", "text": status_text(r)}
 		)
 
 
-## True while the lane's EMA cadence is inside its published band and play is on.
-static func lane_in_band(l: FishingLaneState) -> bool:
-	if l.rescue or l.afk or l.stale or l.cadence_stale or l.pub_hi <= 0:
+## True while the rider's EMA cadence is inside its published band and play is on.
+static func rider_in_band(r: FishingRiderState) -> bool:
+	if r.rescue or r.is_afk() or r.cadence_stale or r.pub_hi <= 0:
 		return false
-	return l.cadence_ema >= l.pub_lo and l.cadence_ema <= l.pub_hi
+	return r.cadence_ema >= r.pub_lo and r.cadence_ema <= r.pub_hi
 
 
-## The chip text for a lane: species and distance in a fight, the lure in a reel, else the state.
-func status_text(l: FishingLaneState) -> String:
-	var key: String = STATUS_KEYS[clampi(l.state, 0, STATUS_KEYS.size() - 1)]
-	match l.state:
-		FishingConst.ST_FIGHT:
-			return ctx.strings.t(key, [_species(l.fish.sp), roundi(l.fish.d)])
-		FishingConst.ST_LANDING, FishingConst.ST_STRIKE:
-			return ctx.strings.t(key, [_species(l.fish.sp)])
-		FishingConst.ST_CAST, FishingConst.ST_REEL:
-			return ctx.strings.t(key, [roundi(l.lure_d)])
+## The chip text for a rider: the species in a fight or wait, else the action.
+func status_text(r: FishingRiderState) -> String:
+	var key: String = STATUS_KEYS[clampi(r.action, 0, STATUS_KEYS.size() - 1)]
+	match r.action:
+		FishingConst.A_FIGHT:
+			return ctx.strings.t(key, [_species(r.fish.sp), roundi(r.fish.d)])
+		FishingConst.A_LAND, FishingConst.A_CAST, FishingConst.A_WAIT:
+			return ctx.strings.t(key, [_species(r.target_sp)])
 	return ctx.strings.t(key)
 
 
-## Autopilot runs inside the rules for every lane that plays as Autopilot (bots, Autopilot on,
-## and the zero-input fallback), so nothing is returned here (docs/decisions/fishing.md).
+## Autopilot runs inside the rules for every rider that plays as Autopilot (bots and Autopilot
+## on), so nothing is returned here.
 func autopilot_intents(_peer_id: int) -> Array:
 	return []
 
 
 func on_rescue(peer_id: int, active: bool) -> void:
-	var l := state.lane_of_peer(peer_id) if state != null else null
-	if l != null:
-		l.rescue = active
+	var r := state.rider_of_peer(peer_id) if state != null else null
+	if r != null:
+		r.rescue = active
 
 
 func on_afk(peer_id: int, afk: bool) -> void:
-	var l := state.lane_of_peer(peer_id) if state != null else null
-	if l != null:
-		l.afk = afk
+	var r := state.rider_of_peer(peer_id) if state != null else null
+	if r != null:
+		r.afk = afk
 
 
 ## Every peer: the local rider's actions and gestures become intents, tagged by source.
@@ -397,8 +391,11 @@ func snapshot() -> Dictionary:
 func apply_snapshot(snap: Dictionary) -> void:
 	if state == null:
 		return
+	if FishingSnapshotSchema.check(snap) != "":
+		push_warning("fishing: snapshot ignored: %s" % FishingSnapshotSchema.check(snap))
+		return
 	FishingSnapshot.apply(state, snap)
-	history.push(state.t, state)
+	snapshot_applied.emit(state.tick)
 
 
 ## Clients: every event once, in the host's order, before that tick's snapshot.
@@ -409,19 +406,19 @@ func apply_event(event: Dictionary) -> void:
 	fx_event.emit(e)
 	if state == null or ctx.hud == null:
 		return
-	if OWN_EVENTS.has(str(e.get("type", ""))) and _is_local_lane(e):
+	if OWN_EVENTS.has(str(e.get("type", ""))) and _is_local_rider(e):
 		var tt := toast_for(e)
 		if not tt.is_empty():
 			ctx.hud.toast(str(tt[0]), tt[1])
 
 
 ## Clients: only the local cadence marker moves ahead of the next snapshot; the host owns the
-## meters and everything else.
+## boat, the meters and everything else.
 func client_predict(dt: float, local: Telemetry) -> void:
-	var l := local_lane()
-	if l != null and local != null:
+	var r := local_rider()
+	if r != null and local != null:
 		var k := 1.0 - exp(-dt / FishingConst.CADENCE_TAU_S)
-		l.cadence_ema += (local.cadence_rpm - l.cadence_ema) * k
+		r.cadence_ema += (local.cadence_rpm - r.cadence_ema) * k
 
 
 func int_fields() -> Dictionary:
@@ -429,13 +426,19 @@ func int_fields() -> Dictionary:
 
 
 func make_view() -> Node:
-	var view := FishingView.new()
-	view.game = self
+	var script: GDScript = load(VIEW_SCRIPT)
+	if script == null:
+		return Node2D.new()
+	var view: Node = script.new()
+	view.set("game", self)
 	return view
 
 
 func hud_spec() -> HudSpec:
-	return FishingHud.spec(self)
+	var script: GDScript = load(HUD_SCRIPT)
+	if script == null:
+		return HudSpec.new()
+	return script.call("spec", self)
 
 
 func results() -> GameResults:

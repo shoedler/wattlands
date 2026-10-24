@@ -17,7 +17,7 @@ func test_double_hookup_multipliers_by_overlapping_fights() -> void:
 	for c: Array in [[2, 15], [3, 20], [4, 25]]:
 		var n: int = c[0]
 		var h := _e2e(n)
-		assert_true(h.run_to_state(0, FishingConst.ST_FIGHT, 60.0))
+		assert_true(h.run_to_action(0, FishingConst.A_FIGHT, 60.0))
 		var hook_t := h.state.t
 		assert_eq(h.state.hookup_level, n, "every fight is on")
 		h.run(9.9)
@@ -37,7 +37,7 @@ func test_double_hookup_multipliers_by_overlapping_fights() -> void:
 		for e: Dictionary in landed:
 			assert_eq(int(e["hk"]), int(c[1]), "x%.1f" % (c[1] / 10.0))
 			var kg := int(e["kg"]) / 10.0
-			var want := roundi(20.0 * sqrt(kg)) * float(c[1]) / 10.0
+			var want := FishingConst.base_points(kg) * float(c[1]) / 10.0
 			assert_almost_eq(float(int(e["points"])), want, 1.01)
 			sum += int(e["points"])
 		assert_eq(h.state.team_points, sum)
@@ -59,33 +59,33 @@ func test_a_solo_fight_scores_no_bonus() -> void:
 
 func test_the_catch_board_keeps_the_last_5_and_a_long_trip_runs_through() -> void:
 	var probe := H.new()
-	probe.content = H.load_content("free_60")
+	probe.content = H.load_content("base_60")
 	var one: Array[FishingPlanSlot] = []
 	for k in 7:
 		one.append(H.make_slot(probe.content, "mackerel", k, 60.0))
 	var h := H.new()
-	h.setup("free_60", 1, 9, [one])
+	h.setup("base_60", 1, 9, [one])
 	h.follow_band[0] = true
 	assert_true(h.run_until(func() -> bool: return h.finished != "", 3600.0 + 400.0))
 	h.step()
-	var l := h.lane()
+	var l := h.rider()
 	assert_eq(l.fish_landed, 7, "every slot caught")
 	assert_eq(h.state.team_fish, 7)
-	assert_eq(h.state.catches.size(), 15, "the last 5 catches")
-	assert_eq(h.state.catches.slice(0, 3), [0, 0, 0] as Array[int])
+	assert_eq(h.state.catches.size(), 20, "the last 5 catches")
+	assert_eq(h.state.catches.slice(0, 2), [0, 0] as Array[int])
 	assert_eq(l.catches.size(), 7, "the lane's log keeps every catch")
-	assert_eq(l.state, FishingConst.ST_HOME)
+	assert_eq(l.action, FishingConst.A_HOME)
 	assert_eq(h.violations, [] as Array[String])
-	assert_lte(l.fight_budget_used_s, h.state.fight_budget_s, "inside the 40 % cap")
+	assert_lte(l.fight_budget_used_s, h.state.fight_budget_s, "inside the fight budget")
 
 
 func test_hookup_overlap_needs_10_s() -> void:
 	var h := _e2e(2)
-	assert_true(h.run_to_state(0, FishingConst.ST_FIGHT, 60.0))
+	assert_true(h.run_to_action(0, FishingConst.A_FIGHT, 60.0))
 	h.run(5.0)
 	# Lane 1's fight is cut short: lane 0's fish overlapped only 5 s.
-	h.lane(1).fish.sp = FishingConst.SP_NONE
+	h.rider(1).fish.sp = FishingConst.SP_NONE
 	h.run(10.0)
-	assert_eq(h.lane(0).hookup_count, 1)
+	assert_eq(h.rider(0).hookup_count, 1)
 	assert_eq(h.events_of(FishingEvents.DOUBLE_HOOKUP).size(), 0)
 	assert_eq(h.state.hookup_level, 1)
