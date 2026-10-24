@@ -339,20 +339,33 @@ test('T6 needs a light and a medium per Advance and a 90-180 s heavy duel in gun
 
 // --- S2 --------------------------------------------------------------------------------------------------------------
 
+/** Crew 3 at 0 W: the shared pause (all_stopped) holds the depot until max_sim_seconds. */
 function zeroCrew3() {
-  const ended = {};
+  const r = makeRun(3, { endReason: 'timeout', finished: '', grade: 'D', score: 0 });
+  r.args.riders = ['zero'];
+  for (const peer of ['1', '2', '3']) {
+    r.phases[peer] = [{ index: 0, kind: 'WARMUP', mode: 'SIM', label: 'L0', start: 0, end: -1, ended_by: '' }];
+    r.trace[peer] = r.trace[peer].filter((row) => row.t <= 300).map((row) => ({ ...row, power_w: 0, cadence_rpm: 0, paused: row.t >= 6 }));
+  }
+  r.events = [{ type: 'paused', paused: true, reason: 'all_stopped', t: 6.25, pt: 6.25 }];
+  return r;
+}
+
+/** Crew 3 spinning at 10 W: every stage overruns, withdrawn, grade D, never paused. */
+function idleCrew3() {
   const r = makeRun(3, {
     durations: { advance: 300, gun_line: 180, boss: 360 },
     finished: 'withdrawn',
     grade: 'D',
     score: 120,
-    extraRows: (row) => (row.t >= 12 ? { ...row, afk: true, power_w: 0, cadence_rpm: 0 } : row),
+    extraRows: (row) => ({ ...row, power_w: 10, cadence_rpm: 25 }),
   });
-  r.args.riders = ['zero'];
-  r.phases['1'].forEach((sp, i) => {
-    if (r.plans['1'].phases[i].open_ended) sp.ended_by = 'max_s';
-  });
-  void ended;
+  r.args.riders = ['const:w=10,rpm=25'];
+  for (const peer of ['1', '2', '3']) {
+    r.phases[peer].forEach((sp, i) => {
+      if (r.plans[peer].phases[i].open_ended) sp.ended_by = 'max_s';
+    });
+  }
   return r;
 }
 
@@ -360,32 +373,56 @@ function zeroCrew1() {
   const r = makeRun(1, { endReason: 'paused', finished: '', grade: 'D', score: 0 });
   r.phases['1'] = [{ index: 0, kind: 'WARMUP', mode: 'SIM', label: 'L0', start: 0, end: -1, ended_by: '' }];
   r.trace['1'] = r.trace['1'].filter((row) => row.t <= 140).map((row) => ({ ...row, power_w: 0, cadence_rpm: 0 }));
-  r.events = [{ type: 'paused', paused: true, reason: 'not_pedaling', t: 10, pt: 10 }];
+  r.events = [{ type: 'paused', paused: true, reason: 'stop_5s', t: 10, pt: 10 }];
   return r;
 }
 
-test('S2 passes on zero riders: crew 3 overruns every stage as AFK, crew 1 pauses in the depot', () => {
-  const r = C.checkS2({ s2_c3_zero: zeroCrew3(), s2_c1_zero: zeroCrew1() });
+const allS2 = (over = {}) => ({ s2_c3_zero: zeroCrew3(), s2_c3_idle: idleCrew3(), s2_c1_zero: zeroCrew1(), ...over });
+
+test('S2 passes on zero riders: crew 3 held in the depot by the shared pause, crew 3 at 10 W overruns, crew 1 pauses', () => {
+  const r = C.checkS2(allS2());
   assert.equal(r.status, 'PASS', ids(r.details));
   assert.equal(C.checkS2({}).status, 'SKIP');
+  assert.match(ids(C.checkS2({ s2_c3_zero: zeroCrew3(), s2_c1_zero: zeroCrew1() }).details), /missing report s2_c3_idle/);
 });
 
-test('S2 fails on a kill by crew fire, a stage that ended on its own, a grade above D and AFK-less riders', () => {
+test('S2 crew 3 at 0 W fails when the run completes, leaves the depot, never pauses for all_stopped, resumes, kills or grades above D', () => {
+  const done = zeroCrew3();
+  done.end_reason = 'complete';
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: done })).details), /s2_c3_zero: end_reason complete, wanted timeout/);
+  const more = zeroCrew3();
+  more.phases['1'].push({ index: 1, kind: 'WORK', mode: 'SIM', label: 'L1', start: 300, end: -1, ended_by: '' });
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: more })).details), /s2_c3_zero: 2 phases started/);
+  const other = zeroCrew3();
+  other.events[0].reason = 'user';
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: other })).details), /never paused for all_stopped/);
+  const late = zeroCrew3();
+  late.events[0].pt = 10.2;
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: late })).details), /paused at 10.2/);
+  const resumed = zeroCrew3();
+  resumed.events.push({ type: 'paused', paused: false, reason: 'resume', t: 50, pt: 50 });
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: resumed })).details), /the shared pause ended/);
   const kill = zeroCrew3();
-  kill.events.push({ type: 'game_event', t: 400, event: { type: 'kill', id: 5, e: 1, by: 0, s: 0 } });
-  assert.match(ids(C.checkS2({ s2_c3_zero: kill, s2_c1_zero: zeroCrew1() }).details), /kills by crew fire/);
-  const barrage = zeroCrew3();
-  barrage.events.push({ type: 'game_event', t: 400, event: { type: 'kill', id: 5, e: 1, by: 2, s: -1 } });
-  assert.equal(C.checkS2({ s2_c3_zero: barrage, s2_c1_zero: zeroCrew1() }).status, 'PASS');
-  const ended = zeroCrew3();
-  ended.phases['1'][1].ended_by = 'end_phase';
-  assert.match(ids(C.checkS2({ s2_c3_zero: ended, s2_c1_zero: zeroCrew1() }).details), /advance 1 ended by end_phase/);
+  kill.events.push({ type: 'game_event', t: 4, event: { type: 'kill', id: 5, e: 1, by: 2, s: -1 } });
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: kill })).details), /s2_c3_zero: kills in a paused run/);
   const graded = zeroCrew3();
   graded.results.grade = 'C';
-  assert.match(ids(C.checkS2({ s2_c3_zero: graded, s2_c1_zero: zeroCrew1() }).details), /grade C/);
-  const awake = zeroCrew3();
-  for (const row of awake.trace['2']) row.afk = false;
-  assert.match(ids(C.checkS2({ s2_c3_zero: awake, s2_c1_zero: zeroCrew1() }).details), /peer 2 never went AFK/);
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: graded })).details), /s2_c3_zero: grade C/);
+});
+
+test('S2 crew 3 at 10 W fails on a stage that ended on its own, a pause, another outcome or a grade above D', () => {
+  const ended = idleCrew3();
+  ended.phases['1'][1].ended_by = 'end_phase';
+  assert.match(ids(C.checkS2(allS2({ s2_c3_idle: ended })).details), /s2_c3_idle: advance 1 ended by end_phase/);
+  const paused = idleCrew3();
+  paused.events.push({ type: 'paused', paused: true, reason: 'all_stopped', t: 400, pt: 400 });
+  assert.match(ids(C.checkS2(allS2({ s2_c3_idle: paused })).details), /s2_c3_idle: paused, but every rider pedals/);
+  const won = idleCrew3();
+  won.finished_reason = 'victory';
+  assert.match(ids(C.checkS2(allS2({ s2_c3_idle: won })).details), /s2_c3_idle: finished_reason "victory"/);
+  const graded = idleCrew3();
+  graded.results.grade = 'C';
+  assert.match(ids(C.checkS2(allS2({ s2_c3_idle: graded })).details), /s2_c3_idle: grade C/);
 });
 
 test('S2 crew 1: paused late, not paused, more than the depot, a kill or a grade fail', () => {
@@ -394,7 +431,7 @@ test('S2 crew 1: paused late, not paused, more than the depot, a kill or a grade
   assert.match(ids(C.checkS2({ s2_c1_zero: late }).details), /paused at 10.2/);
   const edge = zeroCrew1();
   edge.events[0].pt = 10.05;
-  assert.equal(C.checkS2({ s2_c3_zero: zeroCrew3(), s2_c1_zero: edge }).status, 'PASS', 'one tick of slack');
+  assert.equal(C.checkS2(allS2({ s2_c1_zero: edge })).status, 'PASS', 'one tick of slack');
   const never = zeroCrew1();
   never.events = [];
   assert.match(ids(C.checkS2({ s2_c1_zero: never }).details), /never paused/);

@@ -16,7 +16,8 @@
 // Report names (written by run_sims.sh; the scenario is read from the name, the content, players and
 // seed are cross-checked against the report's own `args`):
 //   s1_c<crew>_seed<n>     ashfall_road, compliant `erg` riders (crews 2-3 as HOST)
-//   s2_c3_zero, s2_c1_zero crew 3 at 0 W (HOST: AFK), crew 1 at 0 W (SOLO: paused)
+//   s2_c3_zero, s2_c1_zero crew 3 at 0 W (HOST: the shared pause holds the depot), crew 1 at 0 W (SOLO: paused)
+//   s2_c3_idle             crew 3 spinning at 10 W and 25 rpm (pedaling for every detector, no effort): overruns
 //   s3_c3_c85_seed<n>, s3_c3_c70_seed<n>   crew 3 at compliance 0.85 / 0.70 (100% is s1_c3_seed<n>)
 //   s4_drill_c<crew>       the drill, compliant (S4 also reads every s1 report)
 //   s5_c3_dynamo_drop, s5_c3_gunline_drop  cadence to 30 rpm in a dynamo stage / a 90% gun line
@@ -490,27 +491,54 @@ export function firstNotPedaling(r, peer) {
   return traceOf(r, peer).find((row) => num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0) ?? null;
 }
 
+/** GameHost's shared pause (BRIEF 3.5): every human rider ride-paused for not pedaling. */
+export const SHARED_PAUSE_REASON = 'all_stopped';
+
 export function checkS2(reports) {
-  const title = 'zero riders: crew 3 (AFK, every stage overruns, grade D), crew 1 (paused in the depot)';
-  const { found, missing } = pick(reports, ['s2_c3_zero', 's2_c1_zero']);
+  const title =
+    'zero riders: crew 3 (the shared pause holds the depot), crew 3 spinning at 10 W (every stage overruns, grade D), crew 1 (paused in the depot)';
+  const { found, missing } = pick(reports, ['s2_c3_zero', 's2_c3_idle', 's2_c1_zero']);
   if (found.length === 0) return skip('S2', title, 'no s2_* reports');
   const probs = missing.map((m) => `missing report ${m}`);
+  // Crew 3 at 0 W: since v0.2 (BRIEF 3.5) every rider ride-pauses after 5 s of not pedaling and the
+  // host pauses the shared game clock once all of them are, so the crew never leaves the depot. A
+  // HOST run ends only at max_sim_seconds (`timeout`), still paused.
   const r3 = reports.s2_c3_zero;
   if (r3) {
     const n = 's2_c3_zero';
     probs.push(...argsProblems(n, r3, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }));
-    probs.push(...completeProblems(n, r3, ['withdrawn']));
-    const crewKills = eventsOf(r3, 'kill').filter((e) => e.by !== BY_BARRAGE);
-    if (crewKills.length) probs.push(`${n}: ${crewKills.length} kills by crew fire or a Ram (zero riders fire nothing)`);
-    for (const s of segmentsOf(r3)) {
+    if (r3.end_reason !== 'timeout') probs.push(`${n}: end_reason ${r3.end_reason}, wanted timeout (paused to the end)`);
+    const spans = spansOf(r3, hostPeer(r3));
+    if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the depot`);
+    const pauses = (r3.events ?? []).filter((e) => e && e.type === 'paused');
+    const firsts = humanPeers(r3).map((peer) => firstNotPedaling(r3, peer));
+    if (firsts.some((f) => !f)) probs.push(`${n}: a rider without a not-pedaling sample in the trace`);
+    else if (!pauses.length || pauses[0].paused !== true || pauses[0].reason !== SHARED_PAUSE_REASON) {
+      probs.push(`${n}: never paused for ${SHARED_PAUSE_REASON}`);
+    } else {
+      const last = Math.max(...firsts.map((f) => num(f.t)));
+      if (num(pauses[0].pt) > last + PAUSE_AFTER_S + TICK_S + EPS) {
+        probs.push(`${n}: paused at ${fmt(num(pauses[0].pt))} s, ${fmt(num(pauses[0].pt) - last)} s after the last rider's first not-pedaling sample (max ${PAUSE_AFTER_S} s + 1 tick)`);
+      }
+      if (pauses.some((e) => e.paused === false)) probs.push(`${n}: the shared pause ended, nobody pedaled`);
+    }
+    if (eventsOf(r3, 'kill').length) probs.push(`${n}: kills in a paused run`);
+    if (gradeOf(r3) !== 'D') probs.push(`${n}: grade ${gradeOf(r3)}, wanted D`);
+  }
+  // Crew 3 spinning at 10 W: no detector sees a stopped rider (no pause, no AFK), and the game
+  // must still fail them: every Advance, gun line and the boss ends at max_s, withdrawn, grade D.
+  const ri = reports.s2_c3_idle;
+  if (ri) {
+    const n = 's2_c3_idle';
+    probs.push(...argsProblems(n, ri, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }));
+    probs.push(...completeProblems(n, ri, ['withdrawn']));
+    if ((ri.events ?? []).some((e) => e && e.type === 'paused' && e.paused === true)) probs.push(`${n}: paused, but every rider pedals`);
+    for (const s of segmentsOf(ri)) {
       if (['advance', 'gun_line', 'boss'].includes(s.seg) && !s.overran) {
         probs.push(`${n}: ${s.seg} ${s.stage} ended by ${s.endedBy || 'nothing'}, not at max_s (an overrun)`);
       }
     }
-    if (gradeOf(r3) !== 'D') probs.push(`${n}: grade ${gradeOf(r3)}, wanted D`);
-    for (const peer of humanPeers(r3)) {
-      if (!traceOf(r3, peer).some((row) => row.afk === true)) probs.push(`${n}: peer ${peer} never went AFK`);
-    }
+    if (gradeOf(ri) !== 'D') probs.push(`${n}: grade ${gradeOf(ri)}, wanted D`);
   }
   const r1 = reports.s2_c1_zero;
   if (r1) {
@@ -529,7 +557,9 @@ export function checkS2(reports) {
     if (eventsOf(r1, 'kill').length) probs.push(`${n}: kills in a paused run`);
     if (gradeOf(r1) !== 'D') probs.push(`${n}: grade ${gradeOf(r1)}, wanted D`);
   }
-  return result('S2', title, probs, `crew 3 ${r3 ? `grade ${gradeOf(r3)}` : 'missing'}, crew 1 ${r1 ? r1.end_reason : 'missing'}`);
+  const d3 = r3 ? `${r3.end_reason}, grade ${gradeOf(r3)}` : 'missing';
+  const di = ri ? `grade ${gradeOf(ri)}` : 'missing';
+  return result('S2', title, probs, `crew 3 at 0 W ${d3}, crew 3 at 10 W ${di}, crew 1 ${r1 ? r1.end_reason : 'missing'}`);
 }
 
 // --- S3 (T5) -----------------------------------------------------------------------------------------------

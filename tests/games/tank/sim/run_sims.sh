@@ -9,7 +9,8 @@
 # Scenarios (default: all). One report per run in build/tank/sims/ (TANK_SIMS_OUT):
 #   s1  ashfall_road, compliant `erg` riders, crews 1-3 (crews 2-3 run as HOST) x seeds 1-3
 #       (these runs also serve T1-T4, T6 and, as the 100% leg, S3's T5, S4 and S7's first run)
-#   s2  zero riders: crew 3 (HOST: they go AFK) and crew 1 (SOLO: it pauses)
+#   s2  zero riders: crew 3 (HOST: the shared pause holds the depot) and crew 1 (SOLO: it pauses),
+#       and crew 3 spinning at 10 W and 25 rpm (no pause, no AFK: every stage overruns)
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-3 as the S4 rule checks' other content (s1 is the other)
 #   s5  crew 3: cadence_drop to 30 rpm at at_phase + at_target_pct=60 in a dynamo stage (slot 1,
@@ -51,6 +52,8 @@ SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 GUNLINE_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+# Pedaling for the not_pedaling detector (cadence >= 20 rpm) with no effort to speak of.
+IDLE='const:w=10,rpm=25'
 
 # run <name> <run_game_sim flags...>: one run; stops the script when it fails.
 run() {
@@ -82,7 +85,10 @@ scenario_s1() {
 }
 
 scenario_s2() {
-  run s2_c3_zero --content=ashfall_road --players=3 --bots=0 --rider=zero --seed=1
+  # All three stop: the host's shared pause (BRIEF 3.5) holds the depot, so the run ends at
+  # --max-sim-seconds still paused. The spinning crew pedals for every detector but gives nothing.
+  run s2_c3_zero --content=ashfall_road --players=3 --bots=0 --rider=zero --seed=1 --max-sim-seconds=300
+  run s2_c3_idle --content=ashfall_road --players=3 --bots=0 "--rider=$IDLE" --seed=1
   run s2_c1_zero --content=ashfall_road --players=1 --bots=0 --rider=zero --seed=1
 }
 
