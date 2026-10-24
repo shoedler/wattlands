@@ -10,9 +10,22 @@ extends Node2D
 const MAX_LIGHTS := 96
 ## The muzzle flash's light radius (art px).
 const WASH_RADIUS := 150.0
+## How far outside the tank's shadow (art px) a halo centred near it is still dimmed (at most half
+## its radius): a halo just behind the deck edge would bloom over the hull.
+const SHADOW_FALLOFF := 10.0
+
+## The tank's silhouette (layer px: the hull and the turret) and the frame it was set on, set by the rig every
+## frame. A halo that is not the tank's own (a burning house or wreck, a lamp post, a hill fire)
+## centred behind it is dropped and one near its edge dimmed: a fire halo blooming round the deck
+## reads as the hull itself burning. Honoured only for a frame after it was set, so a freed view
+## leaves no shadow behind.
+static var tank_shadow: Array[Rect2] = []
+static var _shadow_frame: int = -100
 
 ## Halo count this frame.
 var count: int = 0
+## True while the rig adds its own rooms' and guns' lights (they light the tank and stay whole).
+var own: bool = false
 ## The muzzle flash lighting the scene around the gun, 0 .. 1, its colour and centre: a radial
 ## additive light of WASH_RADIUS px falling off fast (never a full-screen grade).
 var wash: float = 0.0
@@ -47,8 +60,37 @@ func begin() -> void:
 	_streaks.clear()
 
 
+## Sets the tank's shadow for this frame (layer px rects; none for no shadow).
+static func set_tank_shadow(rects: Array[Rect2]) -> void:
+	tank_shadow = rects.duplicate()
+	_shadow_frame = Engine.get_process_frames()
+
+
+## How far `at` lies outside rect `r` (0 inside).
+static func outside(r: Rect2, at: Vector2) -> float:
+	return (
+		Vector2(
+			maxf(maxf(r.position.x - at.x, at.x - r.end.x), 0.0),
+			maxf(maxf(r.position.y - at.y, at.y - r.end.y), 0.0)
+		)
+		. length()
+	)
+
+
+## How much of a halo at `at` of `radius` shows past the tank's shadow (0 behind it .. 1 clear of it).
+static func shadow_keep(at: Vector2, radius: float) -> float:
+	if tank_shadow.is_empty() or Engine.get_process_frames() - _shadow_frame > 1:
+		return 1.0
+	var d := INF
+	for r in tank_shadow:
+		d = minf(d, outside(r, at))
+	return smoothstep(0.0, minf(SHADOW_FALLOFF, radius * 0.5), d)
+
+
 ## Adds a halo at `at` (layer coordinates) of `radius` px in `color`, `intensity` 0 .. 1+.
 func add(at: Vector2, radius: float, color: Color, intensity: float) -> void:
+	if not own:
+		intensity *= shadow_keep(at, radius)
 	if count >= MAX_LIGHTS or intensity <= 0.01 or radius < 1.0:
 		return
 	_pos[count] = at

@@ -373,6 +373,14 @@ func update(state: TankState, feed: Dictionary, dt: float) -> void:
 	var hl := state.hull
 	_update_shake(dt)
 	hub.origin = position
+	# The tank's silhouette shadows the scenery's and the wrecks' halos and flames behind it (a fire
+	# glowing round the deck reads as the hull burning); its own lights, added here, stay whole.
+	var shadow := silhouette()
+	TankLights.set_tank_shadow(shadow)
+	if hub.fx != null:
+		hub.fx.shadow = shadow
+	if hub.lights != null:
+		hub.lights.own = true
 	gear.update(hl.speed_mps * TankConst.PX_PER_M, dt)
 	if dynamo_room != null:
 		dynamo_room.breech_loaded = hl.loaded != TankIds.SHELL_NONE
@@ -385,6 +393,8 @@ func update(state: TankState, feed: Dictionary, dt: float) -> void:
 	_update_links(state, dt)
 	_update_blade(state, dt)
 	_effects(state, dt)
+	if hub.lights != null:
+		hub.lights.own = false
 	if _flash_s > 0.0:
 		_flash_s = maxf(0.0, _flash_s - dt)
 		var k := _flash_s / HIT_FLASH_S
@@ -511,9 +521,13 @@ func _effects(state: TankState, dt: float) -> void:
 		if steam_room.latched_now:
 			fx.steam_burst(hub.to_layer(steam_room.chimney_hull()))
 	if hl.breakdown:
-		fx.fire_and_smoke("hull_down", hub.to_layer(Vector2(hull_w * 0.4, 0)), 0.5, 1.2, dt)
+		fx.fire_and_smoke(
+			"hull_down", hub.to_layer(Vector2(hull_w * 0.4, 0)), 0.5, 1.2, dt, 0, true
+		)
 	elif hl.hp_max > 0.0 and hl.hp / hl.hp_max < 0.3:
-		fx.fire_and_smoke("hull_low", hub.to_layer(Vector2(hull_w * 0.55, 0)), 0.0, 0.6, dt)
+		fx.fire_and_smoke(
+			"hull_low", hub.to_layer(Vector2(hull_w * 0.55, 0)), 0.0, 0.6, dt, 0, true
+		)
 
 
 func _update_shake(dt: float) -> void:
@@ -593,6 +607,20 @@ func muzzle_layer() -> Vector2:
 func muzzle_dir() -> Vector2:
 	var a := deg_to_rad(turret.elev)
 	return Vector2(cos(a) * signf(turret.scale.x), -sin(a))
+
+
+## The tank's silhouette in layer coordinates (without the shake): the hull from its highest deck
+## row down, and the main turret (the barrel left out, so the gun's own tracer and flash stay clear).
+func silhouette() -> Array[Rect2]:
+	var top := float(hull_h)
+	for y in _col_top:
+		if y >= 0:
+			top = minf(top, float(y))
+	var tr := TankRigs.rect((def.get("turret", {}) as Dictionary).get("rect", [0, -30, 80, 30]))
+	tr = tr.grow(-2.0)
+	var hull := Rect2(base_pos + Vector2(0.0, top), Vector2(float(hull_w), float(hull_h) - top))
+	var out: Array[Rect2] = [hull, Rect2(base_pos + tr.position, tr.size)]
+	return out
 
 
 ## A point on the hull in layer coordinates.

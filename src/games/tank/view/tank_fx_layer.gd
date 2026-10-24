@@ -4,16 +4,22 @@ extends Node2D
 ## item, so the particles cost two draw calls however many are alive. Soft textures come from
 ## TankProcTex; the explosion uses the generated sprite once a real PNG exists.
 
-## Puffs in a smoke ring.
-const RING_PUFFS := 7
+## Lumps in a smoke ring.
+const RING_PUFFS := 11
+## The share of its life a smoke ring holds together as a ring before it breaks into wisps.
+const RING_HOLD := 0.45
 ## A casing's lit brass and its shaded underside / base rim.
 const BRASS_LIT := Color("#ffb35c")
 const BRASS_SHADE := Color("#6b5842")
-## The share of each half turn (rad) during which a tumbling casing glints: about one frame at its
+## The share of each half turn (rad) during which a tumbling casing glints: one or two frames at its
 ## spin of 16-26 rad/s.
-const GLINT_WINDOW := 0.36
+const GLINT_WINDOW := 0.6
+## A fresh casing catches the muzzle flash: it glints steadily for this long after it leaves (s).
+const BRASS_FLASH_S := 0.16
 ## How far a flame tongue may lean from upright along its particle's motion (rad).
-const FLAME_LEAN := 0.7
+const FLAME_LEAN := 0.4
+## A seeded tongue's own lean (rad, either way), on top of its motion's.
+const FLAME_JITTER := 0.12
 
 ## The billowed puffs (built once): shaded for smoke, near white for steam.
 static var _billow_tex: Dictionary = {}
@@ -75,7 +81,11 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 	var t := p.age(i)
 	var base: Color = p.color[i]
 	var grow := t
-	if k == TankParticles.Kind.EXPLOSION or k == TankParticles.Kind.EXHAUST:
+	if (
+		k == TankParticles.Kind.EXPLOSION
+		or k == TankParticles.Kind.EXHAUST
+		or k == TankParticles.Kind.RING
+	):
 		grow = 1.0 - (1.0 - t) * (1.0 - t)
 	var size := lerpf(p.size0[i], p.size1[i], grow)
 	var a := base.a * _fade(k, t, p, i)
@@ -100,6 +110,8 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			draw_texture_rect(
 				_puff, Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)), false, col
 			)
+		TankParticles.Kind.STEAM when pl == 0 and p.rot[i] != 0.0:
+			_draw_wisp(at, size, col, t, p.vel[i], p.rot[i])
 		TankParticles.Kind.SMOKE, TankParticles.Kind.STEAM:
 			# Smoke and steam billow (lumpy clouds, never smooth balls), mirrored on odd slots so
 			# the lumps of neighbouring puffs differ.
@@ -116,13 +128,16 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			var s := maxf(1.0, roundf(size))
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
 		TankParticles.Kind.BRASS:
-			_draw_brass(at, p.rot[i], col, p.spin[i] != 0.0)
+			var fresh := p.ttl[i] - p.life[i] < BRASS_FLASH_S
+			_draw_brass(at, p.rot[i], col, p.spin[i] != 0.0, fresh)
 		TankParticles.Kind.RING:
 			_draw_ring(at, size, col, t, p.vel[i], p.rot[i])
 		TankParticles.Kind.SPARK:
 			var v := p.vel[i]
 			if additive:
 				var tail := at - v.normalized() * clampf(v.length() * 0.035, 1.5, 6.0)
+				# A spark struck off the deck never draws its tail below the armour it came off.
+				tail.y = minf(tail.y, p.floor_y[i])
 				draw_line(tail, at, col, 1.0)
 			else:
 				# A cold (dynamo) spark, blended: a blue-white streak with a white-hot head.
@@ -133,7 +148,7 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			var s := maxf(1.0, roundf(size))
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
 		TankParticles.Kind.FIRE:
-			_draw_flame(at, size, col, base, p.vel[i], i)
+			_draw_flame(at, size, col, base, p.vel[i], p.rot[i] if p.rot[i] != 0.0 else float(i))
 		TankParticles.Kind.EXPLOSION:
 			var tex := _boom_large if p.size1[i] > 40.0 else _boom_small
 			var s := Vector2(size, size)
@@ -152,28 +167,39 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## A spent casing, 5 x 2 art px: a bright brass body (BRASS_LIT, its lower edge in BRASS_SHADE) with a
-## dark base rim at one end, tumbling by `turn`. While it spins it flashes a white glint for about one
-## frame each half turn, when its side faces the light (a spark is a 1 px amber stroke; a casing is a
-## solid two-tone block, so the two never read alike).
-func _draw_brass(at: Vector2, turn: float, col: Color, spinning: bool) -> void:
+## A spent casing, 7 x 3 art px (a big gun's case): a bright brass body (BRASS_LIT, its lower edge in
+## BRASS_SHADE) with a dark base rim at one end and a dark mouth at the other, tumbling by `turn`.
+## While it spins it flashes a white glint each half turn, when its side faces the light, and for its
+## first BRASS_FLASH_S (`fresh`) it shines in the muzzle flash: a white-hot point with a small soft
+## warm sheen round it (a spark is a 1 px amber stroke; a casing is a solid two-tone block, so the
+## two never read alike).
+func _draw_brass(at: Vector2, turn: float, col: Color, spinning: bool, fresh: bool = false) -> void:
 	var lit := Color(BRASS_LIT, col.a)
 	var shade := Color(BRASS_SHADE, col.a)
 	draw_set_transform(at.round(), turn, Vector2.ONE)
-	draw_rect(Rect2(-2.5, -1.0, 5.0, 1.0), lit)
-	draw_rect(Rect2(-2.5, 0.0, 5.0, 1.0), shade.lerp(lit, 0.45))
-	draw_rect(Rect2(-2.5, -1.0, 1.0, 2.0), shade)
+	draw_rect(Rect2(-3.5, -1.5, 7.0, 1.0), lit.lerp(Color(1, 1, 1, col.a), 0.2))
+	draw_rect(Rect2(-3.5, -0.5, 7.0, 1.0), lit)
+	draw_rect(Rect2(-3.5, 0.5, 7.0, 1.0), shade.lerp(lit, 0.4))
+	draw_rect(Rect2(-3.5, -1.5, 1.0, 3.0), shade)
+	draw_rect(Rect2(2.5, -0.5, 1.0, 1.0), shade.darkened(0.4))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	if spinning and glints(turn):
-		var g := at.round() + Vector2.from_angle(turn) * 0.5
-		draw_rect(Rect2(g.floor(), Vector2.ONE), Color(1.0, 0.98, 0.92, col.a))
+	if spinning and (fresh or glints(turn)):
+		var g := at.round() + Vector2.from_angle(turn) * 1.0
+		var sheen := Vector2(9.0, 9.0)
+		draw_texture_rect(
+			_puff, Rect2(g - sheen * 0.5, sheen), false, Color(1.0, 0.86, 0.6, 0.45 * col.a)
+		)
+		draw_rect(Rect2(g.floor(), Vector2(2.0, 1.0)), Color(1.0, 0.98, 0.92, col.a))
 
 
 ## A fire particle as a flame tongue (TankProcTex.flame, its colours baked in: amber heart, orange
 ## rim): narrower than tall, its base just under `at`, its tip leaning along the particle's motion
-## (at most FLAME_LEAN from upright) and mirrored on odd slots so neighbouring tongues differ. `col`
-## over the particle's own colour `base` carries the plane's dimming and the fade.
-func _draw_flame(at: Vector2, size: float, col: Color, base: Color, v: Vector2, i: int) -> void:
+## (at most FLAME_LEAN from upright). Its seed `seed` gives it its own small lean, slimness, height
+## and curl (mirrored or not), so neighbouring tongues never pair up as mirror images (a V, horns or
+## a hand). `col` over the particle's own colour `base` carries the plane's dimming and the fade.
+func _draw_flame(
+	at: Vector2, size: float, col: Color, base: Color, v: Vector2, seed: float
+) -> void:
 	var m := Color(
 		minf(col.r / maxf(base.r, 0.01), 1.0),
 		minf(col.g / maxf(base.g, 0.01), 1.0),
@@ -181,10 +207,33 @@ func _draw_flame(at: Vector2, size: float, col: Color, base: Color, v: Vector2, 
 		col.a
 	)
 	var lean := clampf(atan2(v.x, -v.y), -FLAME_LEAN, FLAME_LEAN) if v.y < 0.0 else 0.0
-	var w := size * 0.7
-	var h := size * 1.6
-	draw_set_transform(at, lean, Vector2(-1.0 if i % 2 == 1 else 1.0, 1.0))
+	lean = clampf(lean + (_hash(seed, 1) - 0.5) * 2.0 * FLAME_JITTER, -FLAME_LEAN, FLAME_LEAN)
+	var w := size * lerpf(0.65, 0.95, _hash(seed, 2))
+	var h := size * lerpf(1.2, 1.7, _hash(seed, 3))
+	var flip := -1.0 if _hash(seed, 4) < 0.5 else 1.0
+	draw_set_transform(at, lean, Vector2(flip, 1.0))
 	draw_texture_rect(_flame, Rect2(-w * 0.5, -h * 0.75, w, h), false, m)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
+
+## A deck vent's steam wisp (seeded STEAM on the world plane): a soft streak along its motion that
+## starts slim and stretches and widens as it slows and leans back, with a fainter offset lobe from
+## its seed, so the plume reads as one ragged stream of steam and never as a stack of round discs.
+func _draw_wisp(at: Vector2, size: float, col: Color, t: float, v: Vector2, seed: float) -> void:
+	var ang := v.angle() if v.length() > 2.0 else -PI * 0.5
+	var long := size * lerpf(1.0, 1.35, t)
+	var wide := size * lerpf(0.35, 1.0, t)
+	draw_set_transform(at, ang, Vector2.ONE)
+	draw_texture_rect(_puff, Rect2(-long * 0.5, -wide * 0.5, long, wide), false, col)
+	var side := (_hash(seed, 5) - 0.5) * wide * 0.9
+	var back := -long * lerpf(0.15, 0.4, _hash(seed, 6))
+	var lobe := Vector2(long * 0.7, wide * 0.8)
+	draw_texture_rect(
+		_puff,
+		Rect2(Vector2(back, side) - lobe * 0.5, lobe),
+		false,
+		Color(col.r, col.g, col.b, col.a * 0.55)
+	)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -206,38 +255,44 @@ func _draw_exhaust(at: Vector2, size: float, col: Color, t: float, turn: float) 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
-## The muzzle's smoke ring, side on: soft puffs on a squashed ellipse, each with its own jittered
-## angle, radius, size and strength (from the particle's seed `seed`) round a soft core, so it is a
-## ragged roll and never a drawn "O". From a fifth of its life it closes up and swells into a cloud
-## (the ring shrinks while its puffs grow and drift apart), so no late frame shows a "C" either.
+## The muzzle's smoke ring, side on (`v` its motion along the barrel): RING_PUFFS soft lumps round a
+## squashed ellipse, so it reads as a ring of smoke with a dimmer middle while it holds (RING_HOLD of
+## its life), but ragged: each lump has its own angle, radius, size and strength from the particle's
+## seed `seed`, one or two lumps are thin, and the roll is thicker on one side, so it is never a clean
+## drawn ring nor a loose heap of discs. Then it breaks: the lumps drift apart, up and back and swell
+## into wisps while a faint haze fills the middle, so no late frame shows a "C" either.
 func _draw_ring(at: Vector2, size: float, col: Color, t: float, v: Vector2, seed: float) -> void:
 	var rr := maxf(size * 0.5, 1.5)
 	var axis := Vector2.from_angle(v.angle() if v.length() > 1.0 else 0.0)
 	var up := Vector2(-axis.y, axis.x)
-	var br := clampf((t - 0.2) / 0.6, 0.0, 1.0)
+	var br := clampf((t - RING_HOLD) / (1.0 - RING_HOLD), 0.0, 1.0)
+	var thick := 0.5 + 0.12 * _hash(seed, 31)
+	var heavy := TAU * _hash(seed, 37)
 	for n in RING_PUFFS:
 		var h1 := _hash(seed, n)
 		var h2 := _hash(seed + 3.1, n)
 		var h3 := _hash(seed + 7.7, n)
-		var u := TAU * (float(n) + h1 * 0.7) / float(RING_PUFFS)
-		var rad := rr * (0.6 + 0.45 * h2) * (1.0 - 0.6 * br)
-		var drift := Vector2(h2 - 0.45, -0.3 - h3) * br * rr * 0.5
-		var c := at + axis * cos(u) * rad * 0.5 + up * sin(u) * rad + drift
-		var ps := (rr * (1.2 + 0.5 * h3) + 3.0) * (1.0 + 0.5 * br)
-		var pa := col.a * (0.4 + 0.4 * h1) * (1.0 - br * 0.5 * h2)
+		var u := TAU * (float(n) + (h1 - 0.5) * 0.6) / float(RING_PUFFS)
+		var side := 0.75 + 0.5 * (0.5 + 0.5 * cos(u - heavy))
+		var rad := rr * (0.78 + 0.4 * h2) * (1.0 + 0.35 * br)
+		var drift := Vector2(h2 - 0.6, -0.4 - h3) * br * rr * 0.9
+		var c := at + axis * cos(u) * rad * 0.62 + up * sin(u) * rad + drift
+		var ps := rr * thick * (1.05 + 0.85 * h3) * side * (1.0 + 0.9 * br) + 2.0
+		var pa := col.a * (0.5 + 0.45 * h1) * (0.35 if h2 > 0.82 else 1.0)
+		pa *= 1.0 - 0.45 * br * h2
 		draw_texture_rect(
 			_puff,
 			Rect2(c - Vector2(ps, ps) * 0.5, Vector2(ps, ps)),
 			false,
 			Color(col.r, col.g, col.b, pa)
 		)
-	# A soft core keeps the middle from ever reading as a hole, and fills in as it breaks up.
-	var cs := rr * 1.3 + 3.0
+	# The middle stays dim while the ring holds (a faint veil, never a black hole), then hazes over.
+	var cs := rr * 1.2 + 2.0
 	draw_texture_rect(
 		_puff,
 		Rect2(at - Vector2(cs, cs) * 0.5, Vector2(cs, cs)),
 		false,
-		Color(col.r, col.g, col.b, col.a * (0.3 + 0.4 * br))
+		Color(col.r, col.g, col.b, col.a * (0.1 + 0.3 * br))
 	)
 
 
@@ -284,7 +339,7 @@ static func _fade(k: int, t: float, p: TankParticles, i: int) -> float:
 		TankParticles.Kind.EXHAUST:
 			return minf(t / 0.06, 1.0) * pow(1.0 - t, 0.9)
 		TankParticles.Kind.RING:
-			return pow(1.0 - t, 1.3)
+			return minf(t / 0.05, 1.0) * pow(1.0 - t, 1.1)
 		TankParticles.Kind.STEAM:
 			return minf(t / 0.04, 1.0) * pow(1.0 - t, 0.85)
 		TankParticles.Kind.HEAT:

@@ -59,6 +59,9 @@ var drag: PackedFloat32Array = PackedFloat32Array()
 var kind: PackedInt32Array = PackedInt32Array()
 var plane: PackedInt32Array = PackedInt32Array()
 var color: PackedColorArray = PackedColorArray()
+## The lowest a particle may go (layer y; INF for none): a spark struck off the deck dies when it
+## falls back past the armour it came off, so it never streaks down into the rooms under it.
+var floor_y: PackedFloat32Array = PackedFloat32Array()
 ## Spawns dropped because the pool was full (tests).
 var dropped: int = 0
 ## Spawns ever accepted (tests).
@@ -82,6 +85,7 @@ func _init() -> void:
 	kind.resize(CAP)
 	plane.resize(CAP)
 	color.resize(CAP)
+	floor_y.resize(CAP)
 
 
 func clear() -> void:
@@ -126,6 +130,7 @@ func spawn(
 	kind[i] = p_kind
 	plane[i] = p_plane
 	color[i] = p_color
+	floor_y[i] = INF
 	_last = i
 	spawned += 1
 	return true
@@ -136,6 +141,12 @@ func tumble(p_rot: float, p_spin: float) -> void:
 	if _last >= 0 and _last < count:
 		rot[_last] = p_rot
 		spin[_last] = p_spin
+
+
+## Sets the floor (layer y) of the particle spawned last: it dies when it falls below it.
+func set_floor(y: float) -> void:
+	if _last >= 0 and _last < count:
+		floor_y[_last] = y
 
 
 ## Advances every particle by `dt` seconds and removes the dead. `scroll_px` is how far the camera
@@ -155,6 +166,9 @@ func step(dt: float, ground_y: float, scroll_px: float = 0.0) -> void:
 		var p := pos[i] + v * dt
 		if scroll_px != 0.0:
 			p.x -= scroll_px * PLANE_SCROLL.get(plane[i], 1.0)
+		if p.y > floor_y[i]:
+			_remove(i)
+			continue
 		var k := kind[i]
 		if (k == Kind.BRASS or k == Kind.DIRT or k == Kind.EMBER) and p.y > ground_y:
 			p.y = ground_y
@@ -210,6 +224,7 @@ func _remove(i: int) -> void:
 		kind[i] = kind[last]
 		plane[i] = plane[last]
 		color[i] = color[last]
+		floor_y[i] = floor_y[last]
 	count -= 1
 
 
