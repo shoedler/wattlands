@@ -4,7 +4,7 @@ extends FishingHudControl
 ## and the fish's stamina; in the Landing the gaff meter (Sprint! then Easy spin, a star for a
 ## trophy); otherwise the zone under the boat and the depth to the floor.
 
-const ART := Rect2i(239, 322, 200, 34)
+const ART := Rect2i(241, 322, 196, 34)
 ## The bar's height and its gap under the descenders, in glyph pixels.
 const BAR_ROWS := 4.0
 const GAP_ROWS := 1.0

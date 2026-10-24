@@ -11,11 +11,11 @@ extends RefCounted
 ## Nothing reaches into the PANIC corner (art x >= 503 and y >= 316).
 
 const POWER := Rect2i(4, 322, 100, 34)
-const STRAIN := Rect2i(106, 322, 5, 34)
-const CADENCE := Rect2i(113, 322, 115, 34)
-const SLACK := Rect2i(230, 322, 5, 34)
+const STRAIN := Rect2i(106, 322, 7, 34)
+const CADENCE := Rect2i(115, 322, 115, 34)
+const SLACK := Rect2i(232, 322, 7, 34)
 const GEAR := Rect2i(4, 305, 98, 15)
-const TIMELINE := Rect2i(4, 262, 231, 36)
+const TIMELINE := Rect2i(4, 262, 235, 36)
 const TOASTS := Rect2i(120, 38, 296, 22)
 const BANNERS := Rect2i(120, 150, 400, 60)
 ## The kit widgets, toasts and the game banner in the art's sea palette and pixel font, on the
@@ -34,6 +34,9 @@ const PALETTE := {
 	"band": Color("#6fa3a6"),
 	"glow": Color("#ebf2e7"),
 	"glow_text": Color("#ebf2e7"),
+	"strip_low": Color("#4b858f"),
+	"strip_mid": Color("#6fa3a6"),
+	"strip_high": Color("#91c2c2"),
 	"font_scale_px": 9,
 	"text_px": 27,
 	"key_px": 54,

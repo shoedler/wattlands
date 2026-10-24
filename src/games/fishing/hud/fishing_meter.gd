@@ -1,15 +1,15 @@
 class_name FishingMeter
 extends FishingHudControl
-## The local rider's strain meter (surface teal, zigzag icon; left of the cadence widget) or
-## slack meter (sage, loop icon; right of it): a vertical bar filling 0..1 from the rider state
-## the host owns, turning to the alert accent (framed) past ALERT_AT, all in art pixels. Shown
-## only in a fight.
+## The local rider's strain meter (surface teal; left of the cadence widget) or slack meter
+## (sage; right of it): on its own deep-teal panel, a vertical bar filling 0..1 from the rider
+## state the host owns, turning to the alert accent with a frame past ALERT_AT, all in art
+## pixels. Shown only in a fight.
 
 const STRAIN := "strain"
 const SLACK := "slack"
 const ALERT_AT := 0.75
-## The icon's rows above the bar (one pixel between them).
-const ICON_ROWS := 5
+## The bar's inset on its own panel (art px).
+const PAD_PX := 2.0
 
 var kind: String = STRAIN
 ## The fill shown and whether the meter shows (tests read these).
@@ -42,11 +42,9 @@ func _draw() -> void:
 	if not shown:
 		return
 	var u := float(FishingHudDraw.unit(k()))
-	var w := floorf(size.x / u) * u
-	var icon := FishingHudDraw.ZIGZAG if kind == STRAIN else FishingHudDraw.LOOP
-	FishingHudDraw.pixels(self, icon, Vector2.ZERO, u, color())
-	var top := float(ICON_ROWS + 1) * u
-	var bar := Rect2(0.0, top, w, floorf(size.y / u) * u - top)
+	var box := Rect2(Vector2.ZERO, (size / u).floor() * u)
+	FishingHudDraw.panel(self, box)
+	var bar := box.grow(-PAD_PX * u)
 	FishingHudDraw.bar(self, bar, fill, color(), true, u)
 	if fill > ALERT_AT:
 		FishingHudDraw.frame(self, bar, u, FishingHudDraw.ALERT)

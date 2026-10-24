@@ -34,6 +34,8 @@ const DEPTH_TAU_S := 1.6
 ## hazier and behind the local boat, so boats at the same x read as side by side.
 const FAR_ROW_PX := 6
 ## A farther boat's foam waterline: its rows and how far it runs past the hull at each end.
+## A menu hint's least gap to the edges of the water band it swims in (px).
+const HINT_BAND_GAP_PX := 2
 const FAR_WATERLINE_ROWS := 2
 const FAR_WATERLINE_OVER := 3
 ## A boat is drawn when its pivot is within this many px of the view.
@@ -473,9 +475,11 @@ func _place_hints(r: FishingRiderState) -> void:
 		var depth := float(r.hints[4 * i + 2])
 		var fl := scenery.world.floor_depth_m(x) if scenery.world != null else INF
 		depth = minf(depth, maxf(fl - 1.0, 0.5))
-		var p := to_screen(x, depth)
+		var sz := Vector2(FishingSprites.size_of(id))
+		var band := FishingScenery.band_at(depth)
+		var p := hint_inside_band(to_screen(x, depth), sz, scenery.band_rows(band))
 		s.texture = FishingSprites.frame(id, floori(_t * 3.0) + i)
-		s.position = (p - Vector2(FishingSprites.size_of(id)) * 0.5).round()
+		s.position = (p - sz * 0.5).round()
 		var lit := r.selected >= 0 and r.selected < r.menu.size() and r.menu[r.selected] == i
 		_map_depth(_hint_mats[i], depth)
 		if not lit:
@@ -602,6 +606,17 @@ static func line_start(b: FishingBoatView, tip: Vector2i, end: Vector2i) -> Vect
 ## the darkest.
 static func line_under(band: int = 0) -> Color:
 	return FishingPalette.HAZE if band >= FishingPalette.SEA.size() - 1 else FishingPalette.DEEP
+
+
+## A hint's centre `p` moved up or down so its `size` box stays HINT_BAND_GAP_PX inside the
+## band rows `rows` (Vector2(top, bottom)), so the silhouette never touches the next band (which
+## has its colour); unchanged when the band is too thin for it.
+static func hint_inside_band(p: Vector2, size: Vector2, rows: Vector2) -> Vector2:
+	var lo := rows.x + float(HINT_BAND_GAP_PX) + size.y * 0.5
+	var hi := rows.y - float(HINT_BAND_GAP_PX) - size.y * 0.5
+	if hi < lo:
+		return p
+	return Vector2(p.x, clampf(p.y, lo, hi))
 
 
 ## A hint's silhouette at `depth_m`: one step darker than the water.

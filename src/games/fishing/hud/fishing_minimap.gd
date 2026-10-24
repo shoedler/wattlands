@@ -18,6 +18,8 @@ const EDGE_W := 5.0
 ## The strip's height (art px) under the icons, and the icons' least spacing (centre to centre).
 const STRIP_ROWS := 10.0
 const ICON_GAP := 14.0
+## The harbour lighthouse's columns at the strip's left end: icons stay right of it.
+const DOCK_COLS := 4.0
 ## The local rider's caret under the strip (pixels).
 const CARET: Array[String] = [".#.", "###"]
 ## Endless map: the window's width (m) round the boats.
@@ -149,7 +151,7 @@ func _edge(at: Vector2, s: float, h: float) -> void:
 
 
 ## Each icon's centre (art px along the strip): at its rider's x, nudged apart so no two icons
-## overlap (ICON_GAP), kept inside the strip.
+## overlap (ICON_GAP), kept inside the strip and clear of the harbour's lighthouse (DOCK_COLS).
 func icon_spots(w: float) -> Array[float]:
 	var order: Array[int] = []
 	for i in icons.size():
@@ -158,7 +160,7 @@ func icon_spots(w: float) -> Array[float]:
 	var spots: Array[float] = []
 	spots.resize(icons.size())
 	var half := ICON_GAP * 0.5
-	var prev := -INF
+	var prev := half + DOCK_COLS - ICON_GAP
 	for i in order:
 		var cx := maxf(roundf(float(icons[i]["x"]) * w), prev + ICON_GAP)
 		spots[i] = cx
@@ -167,8 +169,6 @@ func icon_spots(w: float) -> Array[float]:
 	if over > 0.0:
 		for i in order:
 			spots[i] -= over
-	for i in order:
-		spots[i] = maxf(spots[i], half)
 	return spots
 
 

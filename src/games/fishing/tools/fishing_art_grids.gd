@@ -51,6 +51,8 @@ const ICONS: Array[String] = [
 	"icon_paused",
 	"icon_afk",
 ]
+## The town's sage ground rows.
+const TOWN_BASE_ROWS := 2
 ## Card size (the game's picker card and the Free Roam and workout cards).
 const CARD := Vector2i(160, 90)
 ## The offset of boat()'s image over the hull's boat-local frame (rows added above for the rod).
@@ -279,13 +281,24 @@ static func build() -> Dictionary:
 		_add(out, id, frames, Vector2i(0, mouth_row(base) + 1), "fish facing left, mouth at anchor")
 	for id: String in ICONS:
 		_add(out, id, frames_of(ICON_GRIDS[id]), Vector2i(5, 4), "action icon")
-	var town := img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R))
+	var town := town_img()
 	_add(out, "scenery_town", [town], Vector2i(0, town.get_height()), "harbour town in the haze")
 	_add(out, "scenery_pier", [img(SCENERY_PIER)], Vector2i(0, 6), "pier, deck top on row 6")
 	_add(out, "picker_card", [card(0)], Vector2i.ZERO, "the game's picker card")
 	_add(out, "card_roam", [card(1)], Vector2i.ZERO, "Free Roam card")
 	_add(out, "card_workout", [card(2)], Vector2i.ZERO, "workout card")
 	return out
+
+
+## The harbour town: its haze houses on a TOWN_BASE_ROWS sage ground strip, so it reads as land
+## and not as a swell of the far water.
+static func town_img() -> Image:
+	var town := img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R))
+	for y in range(town.get_height() - TOWN_BASE_ROWS, town.get_height()):
+		for x in town.get_width():
+			if town.get_pixel(x, y).a > 0.5:
+				town.set_pixel(x, y, FishingPalette.SAGE)
+	return town
 
 
 static func _add(
@@ -426,11 +439,7 @@ static func card(kind: int) -> Image:
 	var surf := 46
 	out.fill(FishingPalette.SKY)
 	if kind != 2:
-		blit(
-			out,
-			img(hjoin(SCENERY_TOWN_L, SCENERY_TOWN_R)),
-			Vector2i(-20 if kind == 0 else -60, surf - 2 - 30)
-		)
+		blit(out, town_img(), Vector2i(-20 if kind == 0 else -60, surf - 2 - 30))
 	out.fill_rect(Rect2i(0, surf - 2, CARD.x, 2), FishingPalette.HAZE)
 	var tops: Array[int] = [surf, surf + 18, surf + 30, surf + 39]
 	for i in tops.size():

@@ -58,11 +58,13 @@ const FLOOR_FIT_PX := 6.0
 ## The floor is drawn in world-fixed runs this wide, each flat, its top on an even row.
 const STEP_PX := 24
 const RIM_ROWS := 2
+## The islands' sage tiers (the rest are haze).
+const ISLAND_BASE_TIERS := 2
 ## Cloud layers: parallax factor, drift (px/s), spacing (px), rows (top, bottom); all below the
 ## HUD's top panels.
 const CLOUD_LAYERS: Array = [
-	[0.02, 0.6, 340.0, 54, 60],
-	[0.05, 1.1, 420.0, 62, 70],
+	[0.02, 0.6, 340.0, 74, 78],
+	[0.05, 1.1, 420.0, 84, 90],
 ]
 ## Haze islands on the horizon: [factor, spacing px].
 const ISLAND_LAYERS: Array = [[0.06, 460.0], [0.16, 700.0]]
@@ -125,6 +127,16 @@ static func band_at(depth_m: float) -> int:
 		if depth_m >= WATER_STEPS_M[k]:
 			i = k
 	return i
+
+
+## The rows water band `k` covers on screen as Vector2(top, bottom) (the top band starts under
+## the foam line; the deepest runs to the bottom).
+func band_rows(k: int) -> Vector2:
+	var top := float(SURF_Y + SURFACE_ROWS) if k == 0 else roundf(y_of_depth(WATER_STEPS_M[k]))
+	var bottom := float(H)
+	if k + 1 < WATER_STEPS_M.size():
+		bottom = minf(bottom, roundf(y_of_depth(WATER_STEPS_M[k + 1])))
+	return Vector2(top, bottom)
 
 
 ## The water colour at `depth_m`.
@@ -216,8 +228,8 @@ func _cloud(c: CanvasItem, x0: float, y0: int, w: int, h: int) -> void:
 		c.draw_rect(Rect2(x, y0 - 3 - 2 * j, ww, 2), FishingPalette.FOAM)
 
 
-## Haze islands: flat-topped tiers stepping in by 2 px per 2 rows, standing on the horizon on a
-## row of foam surf.
+## Islands: flat-topped tiers stepping in by 2 px per 2 rows, standing on the horizon on a row
+## of foam surf; the lowest ISLAND_BASE_TIERS are sage land, the higher ones haze.
 func _paint_islands(c: CanvasItem, cam_m: float) -> void:
 	var ex := screen_x(edge_m(), cam_m)
 	for li in ISLAND_LAYERS.size():
@@ -238,9 +250,10 @@ func _paint_islands(c: CanvasItem, cam_m: float) -> void:
 					break
 				var right := minf(x + w, ex)
 				if right > x:
-					c.draw_rect(
-						Rect2(x, HORIZON_Y - 2 * (j + 1), right - x, 2), FishingPalette.HAZE
+					var land := (
+						FishingPalette.SAGE if j < ISLAND_BASE_TIERS else FishingPalette.HAZE
 					)
+					c.draw_rect(Rect2(x, HORIZON_Y - 2 * (j + 1), right - x, 2), land)
 					if j == 0:
 						c.draw_rect(Rect2(x, HORIZON_Y - 1, right - x, 1), FishingPalette.FOAM)
 				var cut := 2.0 * float(1 + hash2(h, j) % 3)
@@ -302,14 +315,24 @@ func floor_rows(cam_px: float) -> Array[Vector3]:
 		wx.append(float(j * STEP_PX))
 		ys.append(out[-1].y)
 	var i0 := 0
+	var rhythm: Array[int] = []
 	while i0 < out.size():
 		var rows: Array[float] = []
 		var i1 := out.size()
-		while i1 - i0 >= 3:
-			rows = _fit_stairs(wx.slice(i0, i1), ys.slice(i0, i1))
+		for treads: Array[int] in [rhythm, FLOOR_TREADS]:
+			if treads.is_empty():
+				continue
+			i1 = out.size()
+			while i1 - i0 >= 3:
+				var fit := _fit(wx.slice(i0, i1), ys.slice(i0, i1), treads)
+				if not fit.is_empty():
+					rows.assign(fit["rows"])
+					if rhythm.is_empty() and int(fit["tread"]) > 0:
+						rhythm = [int(fit["tread"])]
+					break
+				i1 -= 1
 			if not rows.is_empty():
 				break
-			i1 -= 1
 		if rows.is_empty():
 			i1 = i0 + 1
 			rows = [2.0 * floorf(ys[i0] / 2.0)]
@@ -323,9 +346,21 @@ func floor_rows(cam_px: float) -> Array[Vector3]:
 ## The staircase rows for columns at world px `wx` (left edges) with true rows `ys`, or [] when
 ## none fits.
 static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
+	var fit := _fit(wx, ys, FLOOR_TREADS)
+	var rows: Array[float] = []
+	if not fit.is_empty():
+		rows.assign(fit["rows"])
+	return rows
+
+
+## _fit_stairs() with the treads (in STEP_PX columns) it may pick: {"rows", "tread"} (tread 0
+## for a flat run) or {}.
+## floor_rows() keeps the first staircase's tread for the rest of the view where it fits, so the
+## floor keeps one rhythm.
+static func _fit(wx: Array[float], ys: Array[float], treads: Array[int]) -> Dictionary:
 	var n := wx.size()
 	if n < 3 or wx[-1] - wx[0] != float((n - 1) * STEP_PX):
-		return []
+		return {}
 	var mx := 0.0
 	var my := 0.0
 	for i in n:
@@ -340,10 +375,10 @@ static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
 		sxx += (wx[i] - mx) * (wx[i] - mx)
 	var slope := sxy / sxx if sxx > 0.0 else 0.0
 	var best_r := 0
-	var best_l := 1
+	var best_l := treads[0]
 	var best_err := absf(slope)
 	for r in FLOOR_RISERS:
-		for t in FLOOR_TREADS:
+		for t in treads:
 			var err := absf(float(r) / float(t * STEP_PX) - absf(slope))
 			if err < best_err:
 				best_err = err
@@ -358,9 +393,9 @@ static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
 		var k := floori(wx[i] / tread)
 		var y := y0 + dir * float(best_r * (k - k0))
 		if absf(y - ys[i]) > FLOOR_FIT_PX:
-			return []
+			return {}
 		rows.append(y)
-	return rows
+	return {"rows": rows, "tread": best_l if best_r > 0 else 0}
 
 
 ## The quay left of the dock (a foam cap and a wood face on posts going into the water, bollards

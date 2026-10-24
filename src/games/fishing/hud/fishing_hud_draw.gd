@@ -5,8 +5,7 @@ extends RefCounted
 ## deep-teal panels, foam text in the game's pixel font (FONT; BIG text doubles it), no outline,
 ## centred on the cap height in its line box (text_line()), haze for secondary text, surface
 ## bars on a mid-teal track, the accent only for alerts and the gaff. Also the pixel icons
-## recoloured to the palette (icon()), pixel patterns (pixels()) for the meter icons that pair
-## every colour with a shape (BRIEF 3.9: the strain zigzag, the slack loop) and the trophy star.
+## recoloured to the palette (icon()) and pixel patterns (pixels()) such as the trophy star.
 
 const STRAIN := FishingPalette.SURFACE
 const SLACK := FishingPalette.SAGE
@@ -136,10 +135,7 @@ static func pixels(c: CanvasItem, rows: Array, pos: Vector2, u: float, col: Colo
 				c.draw_rect(Rect2(pos + Vector2(x, y) * u, Vector2(u, u)), col)
 
 
-## The meter icons, 5 pixels wide (BRIEF 3.9 pairs every meter colour with a shape): the strain
-## zigzag (a taut, jagged line) and the slack loop (loose line); and the trophy star.
-const ZIGZAG: Array[String] = ["#...#", "#.#.#", ".#.#."]
-const LOOP: Array[String] = [".###.", "#...#", "#...#", ".##.#", "....#"]
+## The trophy star.
 const STAR: Array[String] = ["..#..", ".###.", "#####", ".###.", "..#.."]
 
 

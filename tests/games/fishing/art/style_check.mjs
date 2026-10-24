@@ -34,8 +34,8 @@ export const PLAYERS = ['7f9cbf', '9fb07a', 'a68aa8'];
 export const HUD_RECTS = [
   [2, 0, 418, 34],
   [422, 0, 218, 62],
-  [0, 258, 238, 102],
-  [236, 318, 206, 42],
+  [0, 258, 242, 102],
+  [239, 318, 202, 42],
   [500, 312, 140, 48],
 ];
 // The kit's toast and banner rects (FishingHud.TOASTS, BANNERS): masked only when something
