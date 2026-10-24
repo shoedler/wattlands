@@ -50,9 +50,7 @@ func test_the_strip_gets_every_rider_with_its_engine_name_icon_and_in_band() -> 
 		assert_eq(s["text"], _label(ctx, engines[peer]), "peer %d: the engine's name" % peer)
 		assert_eq(s["icon"], TankIds.ENGINE_ICONS[engines[peer]], "peer %d: its icon path" % peer)
 		assert_true(s["in_band"] is bool, "peer %d: in_band is a bool" % peer)
-	assert_ne(
-		_label(ctx, "diesel"), _label(ctx, "dynamo"), "the three engines read differently"
-	)
+	assert_ne(_label(ctx, "diesel"), _label(ctx, "dynamo"), "the three engines read differently")
 	assert_ne(_label(ctx, "dynamo"), _label(ctx, "steam"))
 
 
@@ -75,7 +73,9 @@ func test_the_strip_text_follows_the_rotation_through_the_checkpoints() -> void:
 		var want: Array = []
 		for engine: String in rows[peer]:
 			want.append(_label(ctx, engine))
-		assert_eq(_runs(texts), want, "peer %d: the strip follows the engine through the stages" % peer)
+		assert_eq(
+			_runs(texts), want, "peer %d: the strip follows the engine through the stages" % peer
+		)
 
 
 func test_the_strip_text_stays_put_without_rotation() -> void:
