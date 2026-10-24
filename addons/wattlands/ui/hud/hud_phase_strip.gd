@@ -4,7 +4,8 @@ extends Control
 ## by intensity (ERG peak %FTP; SIM phases at 75% with diagonal hatching, so mode reads
 ## without color), the current block outlined and a progress marker. With a palette's grid_px
 ## everything is drawn in the game's whole pixels (the hatching as pixel diagonals). Owned by
-## ui-hud.
+## ui-hud. A palette's strip_low, strip_mid and strip_high draw the blocks in flat intensity
+## colours instead of the kind colours (HudPalette).
 
 ## [{"len": float, "kind": String, "mode": String, "pct": float}]
 var blocks: Array[Dictionary] = []
@@ -40,6 +41,25 @@ func total_length() -> float:
 	return t
 
 
+## True when the palette sets the strip's intensity colours (strip_low, strip_mid, strip_high).
+func has_levels() -> bool:
+	return (
+		palette.has_key(HudPalette.STRIP_LOW)
+		or palette.has_key(HudPalette.STRIP_MID)
+		or palette.has_key(HudPalette.STRIP_HIGH)
+	)
+
+
+## The palette's flat colour for a block at `pct` %FTP: low under 60, mid under 90, else high.
+func level_color(pct: float) -> Color:
+	var mid := palette.pick(HudPalette.STRIP_MID, WlTheme.TEXT_DIM)
+	if pct < 60.0:
+		return palette.pick(HudPalette.STRIP_LOW, mid)
+	if pct < 90.0:
+		return mid
+	return palette.pick(HudPalette.STRIP_HIGH, mid)
+
+
 ## Color per phase kind (always paired with height and hatching).
 static func kind_color(kind: String) -> Color:
 	match kind:
@@ -65,7 +85,9 @@ func _draw() -> void:
 	if palette.grid_px() > 0:
 		_draw_grid(palette.grid_px(), total)
 		return
-	draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
+	var flat := has_levels()
+	if not flat:
+		draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
 	var x := 0.0
 	for i in blocks.size():
 		var b := blocks[i]
@@ -77,12 +99,12 @@ func _draw() -> void:
 		var bh := clampf(pct / 150.0, 0.2, 1.0) * h
 		var rect := Rect2(x + 1.0, h - bh, maxf(1.0, bw - 2.0), bh)
 		var kind := str(b.get("kind", ""))
-		var c := kind_color(kind)
-		if kind == Wl.WORK:
+		var c := level_color(pct) if flat else kind_color(kind)
+		if kind == Wl.WORK and not flat:
 			c = palette.pick(HudPalette.ACCENT, c)
-		if i < current:
+		if not flat and i < current:
 			c = Color(c, 0.35)
-		elif i > current:
+		elif not flat and i > current:
 			c = Color(c, 0.7)
 		draw_rect(rect, c)
 		if sim:
@@ -96,7 +118,16 @@ func _draw() -> void:
 					minf(sx + bh, rect.end.x), rect.end.y - minf(bh, rect.end.x - sx)
 				)
 				if bpt.x > a.x:
-					draw_line(a, bpt, Color(0, 0, 0, 0.45), 2.0)
+					draw_line(
+						a,
+						bpt,
+						(
+							palette.pick(HudPalette.PANEL, Color(0, 0, 0))
+							if flat
+							else Color(0, 0, 0, 0.45)
+						),
+						2.0
+					)
 				sx += step
 		if i == current:
 			draw_rect(rect.grow(1.0), palette.pick(HudPalette.TEXT, WlTheme.TEXT), false, 3.0)
@@ -113,7 +144,10 @@ func _draw_grid(g: int, total: float) -> void:
 	var gf := float(g)
 	var w := floorf(size.x / gf) * gf
 	var h := floorf(size.y / gf) * gf
-	draw_rect(Rect2(0, 0, w, h), palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG))
+	var bg := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
+	var flat := has_levels()
+	if not flat:
+		draw_rect(Rect2(0, 0, w, h), bg)
 	var at := 0.0
 	for i in blocks.size():
 		var b := blocks[i]
@@ -129,20 +163,21 @@ func _draw_grid(g: int, total: float) -> void:
 		var bh := maxf(gf, HudPalette.snap(clampf(pct / 150.0, 0.2, 1.0) * h, g))
 		var rect := Rect2(x0, h - bh, x1 - x0, bh)
 		var kind := str(b.get("kind", ""))
-		var c := kind_color(kind)
-		if kind == Wl.WORK:
+		var c := level_color(pct) if flat else kind_color(kind)
+		if kind == Wl.WORK and not flat:
 			c = palette.pick(HudPalette.ACCENT, c)
-		if i < current:
+		if not flat and i < current:
 			c = Color(c, 0.35)
-		elif i > current:
+		elif not flat and i > current:
 			c = Color(c, 0.7)
 		draw_rect(rect, c)
 		if sim:
+			var hatch := palette.pick(HudPalette.PANEL, bg) if flat else Color(0, 0, 0, 0.45)
 			for cy in int(bh / gf):
 				for cx in int(rect.size.x / gf):
 					if (cx + cy) % 3 == 0:
 						var cell := Rect2(x0 + cx * gf, h - bh + cy * gf, gf, gf)
-						draw_rect(cell, Color(0, 0, 0, 0.45))
+						draw_rect(cell, hatch)
 		if i == current:
 			var tc := palette.pick(HudPalette.TEXT, WlTheme.TEXT)
 			for edge in [

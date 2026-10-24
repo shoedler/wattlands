@@ -5,7 +5,7 @@ extends Control
 ## in the band. The glow is a brightness change plus an outline, so it reads without color.
 ## A palette's band, glow and bar_fg keys recolor the band (flat, without edge lines), the glow
 ## outline and the lit gear ticks (unlit ticks then take bar_bg on the panel); with grid_px the
-## whole bar is drawn in the game's pixels and the ticks are whole-pixel cells (HudPalette).
+## whole bar is drawn in the game's pixels and the gear ticks become one solid fill (HudPalette).
 ## Owned by ui-hud.
 
 var max_value: float = 1.0
@@ -37,11 +37,11 @@ func set_palette(p: HudPalette) -> void:
 	queue_redraw()
 
 
-## Whole-pixel gear cells need their full width (grid_px).
+## The gear bar on the grid shows every gear as at least one whole pixel (grid_px).
 func _get_minimum_size() -> Vector2:
 	var grid := palette.grid_px()
 	if segments > 0 and grid > 0:
-		return Vector2(float((2 * segments - 1) * grid), 4.0 * grid)
+		return Vector2(float(segments * grid), 4.0 * grid)
 	return Vector2.ZERO
 
 
@@ -83,16 +83,12 @@ func _draw() -> void:
 		_draw_grid(grid, a)
 		return
 	if segments > 0 and grid > 0:
-		var lit_n := roundi(frac(value) * segments)
+		var gw := floorf(r.size.x / grid) * grid
 		var top := floorf((r.size.y - 4.0 * grid) / 2.0 / grid) * grid
-		for i in segments:
-			var cell := Rect2(float(2 * grid * i), top, grid, 4 * grid)
-			var cc := palette.pick(HudPalette.BAR_BG, WlTheme.BAR_BG)
-			if i == lit_n - 1:
-				cc = palette.pick(HudPalette.TEXT, WlTheme.TEXT)
-			elif i < lit_n:
-				cc = palette.pick(HudPalette.BAR_FG, accent)
-			draw_rect(cell, Color(cc, cc.a * a))
+		var fw := HudPalette.snap(frac(value) * gw, grid)
+		draw_rect(Rect2(0.0, top, gw, 4.0 * grid), Color(bg, bg.a * a))
+		var on := palette.pick(HudPalette.BAR_FG, accent)
+		draw_rect(Rect2(0.0, top, fw, 4.0 * grid), Color(on, on.a * a))
 		return
 	if segments == 0 or not tick_colors:
 		draw_rect(r, Color(bg, bg.a * a))

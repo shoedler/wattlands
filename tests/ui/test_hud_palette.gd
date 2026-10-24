@@ -189,7 +189,7 @@ func test_band_glow_and_glow_text_keys_recolor_the_in_band_look() -> void:
 	assert_eq(plain.rpm_label().label_settings.font_color, WlTheme.GLOW, "the kit glow by default")
 
 
-func test_size_and_grid_keys_set_one_scale_pixel_gaps_and_gear_cells() -> void:
+func test_size_and_grid_keys_set_one_scale_pixel_gaps_and_gear_bar() -> void:
 	var p := HudPalette.from_dict(
 		{"font": ThemeDB.fallback_font, "text_px": 27, "key_px": 54, "grid_px": 3}
 	)
@@ -211,7 +211,7 @@ func test_size_and_grid_keys_set_one_scale_pixel_gaps_and_gear_cells() -> void:
 	var gear := autofree(HudGear.new()) as HudGear
 	gear.set_palette(p)
 	var cells_w := gear._bar.get_combined_minimum_size().x
-	assert_eq(cells_w, float((2 * HudGear.GEARS - 1) * 3), "one cell per gear, one pixel apart")
+	assert_gte(cells_w, float(HudGear.GEARS * 3), "room for a whole pixel per gear")
 	var bad := HudPalette.from_dict({"text_px": 0, "key_px": "54", "grid_px": 1.5})
 	assert_eq(bad.style.size(), 0, "size keys need whole numbers above 0")
 
@@ -278,3 +278,20 @@ func test_snap_rounds_to_the_grid_and_passes_through_without_one() -> void:
 	assert_eq(HudPalette.snap(13.5, 3), 15.0)
 	assert_eq(HudPalette.snap(13.4, 3), 12.0)
 	assert_eq(HudPalette.snap(13.5, 0), 13.5)
+
+
+func test_strip_level_keys_draw_flat_intensity_colours() -> void:
+	var p := HudPalette.from_dict(
+		{
+			"strip_low": Color("#4b858f"),
+			"strip_mid": Color("#6fa3a6"),
+			"strip_high": Color("#91c2c2")
+		}
+	)
+	var s := autofree(HudPhaseStrip.new()) as HudPhaseStrip
+	assert_false(s.has_levels(), "kind colours by default")
+	s.set_palette(p)
+	assert_true(s.has_levels())
+	assert_eq(s.level_color(40.0), Color("#4b858f"))
+	assert_eq(s.level_color(75.0), Color("#6fa3a6"))
+	assert_eq(s.level_color(110.0), Color("#91c2c2"))

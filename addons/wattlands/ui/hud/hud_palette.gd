@@ -5,7 +5,8 @@ extends RefCounted
 ## default, so an empty palette is today's look.
 ## Colour keys: panel, panel_border, text, text_dim, bar_bg, bar_fg, accent, banner_bg,
 ## banner_text, band (the target band's fill), glow (the in-band bar outline), glow_text (key
-## numbers while in band). Style keys: font (a Font for every kit label, the toasts and the game
+## numbers while in band), strip_low, strip_mid and strip_high (the phase strip's blocks by
+## intensity, flat). Style keys: font (a Font for every kit label, the toasts and the game
 ## banner), font_scale_px (int > 0: label sizes snap to its nearest multiple, for a pixel font;
 ## key numbers never below WlTheme.KEY_NUMBER_MIN_PX),
 ## corner_radius (int >= 0: panel corners; 0 = square, without anti-aliasing) and text_outline
@@ -13,7 +14,7 @@ extends RefCounted
 ## one for the key numbers, which stay at least WlTheme.KEY_NUMBER_MIN_PX) and grid_px (int: the
 ## game's art pixel in screen px: the kit draws on the game's grid, panels borderless and padded
 ## 3 pixels, children placed on whole pixels (snap_tree), gaps, bars, the phase strip and the
-## gear cells, one pixel wide with one between and four tall, in whole pixels).
+## gear bar, one solid fill four pixels tall, in whole pixels).
 ## Safety and warning colors (the rescue, warm-up, pause and trainer banners, WlTheme.WARN) are
 ## not palette keys: a game cannot recolor a safety signal, and the safety banners keep the kit
 ## font too.
@@ -31,6 +32,12 @@ const BANNER_TEXT := "banner_text"
 const BAND := "band"
 const GLOW := "glow"
 const GLOW_TEXT := "glow_text"
+## The phase strip's blocks by intensity (low, mid, high); with any of them set the strip draws
+## every block in these flat colours (no kind colours, no fading) and hatches SIM blocks in the
+## panel colour.
+const STRIP_LOW := "strip_low"
+const STRIP_MID := "strip_mid"
+const STRIP_HIGH := "strip_high"
 const KEYS: Array[String] = [
 	PANEL,
 	PANEL_BORDER,
@@ -44,6 +51,9 @@ const KEYS: Array[String] = [
 	BAND,
 	GLOW,
 	GLOW_TEXT,
+	STRIP_LOW,
+	STRIP_MID,
+	STRIP_HIGH,
 ]
 const FONT := "font"
 const FONT_SCALE_PX := "font_scale_px"
