@@ -21,6 +21,9 @@
 #       is not a compliant rider, so its grade does not matter): the sprint half of the workout that
 #       the compliant Autopilot runs never reach (Ram, the ram haptic, a gun line entered after a
 #       sprint). S8 is the GUT test test_tank_s8.gd.
+#   s10 crew 3 on the network path: every rider the same scripted sprinter (the clients' Rams reach
+#       the host as Telemetry.intents, owned by the diesel), and slot 1 stopping dead for 60 s in the
+#       stage 1 gun line (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
 #
 # A scenario that needs another's report (s3, s4, s7 need s1 crew 3; the checks of s1 reuse
 # them) runs that report first when it is missing. Every run goes through tools/run_game_sim at
@@ -45,6 +48,7 @@ ERG='erg:compliance=1.0'
 # Cadence collapse to 30 rpm for 30 s once the rider's own plan phase is `at_phase` and its
 # applied ERG target is at least 60% FTP (the profile waits for it).
 SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
+STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 GUNLINE_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 
@@ -126,7 +130,13 @@ scenario_s9() {
   run s9_c1_sprint --content=ashfall_road --players=1 --bots=0 "--rider=$SPRINTER" --seed=1
 }
 
-order="s1 s2 s3 s4 s5 s6 s7 s9"
+scenario_s10() {
+  run s10_c3_clients_sprint --content=ashfall_road --players=3 --bots=0 "--rider=$SPRINTER" --seed=1
+  run s10_c3_dynamo_stop --content=ashfall_road --players=3 --bots=0 "--rider=$ERG" "--rider=$STOP" \
+    "--rider=$ERG" --seed=1
+}
+
+order="s1 s2 s3 s4 s5 s6 s7 s9 s10"
 if [ "$#" -gt 0 ]; then
   wanted="$*"
 else

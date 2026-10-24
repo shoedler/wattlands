@@ -741,6 +741,70 @@ test('S1 holds crew 1 to the "Surge to ram" prompt in every Advance, other crews
   assert.match(ids(C.checkS1(goodSet(), { seeds: [1], requirePrompts: true }).details), /s1_c3_seed1: stage 1 Advance raised no/);
 });
 
+// --- S10 --------------------------------------------------------------------------------------------------------------
+
+const ram = (t, slot, ok = 1) => ({ type: 'game_event', t, pt: t, event: { type: 'ram', s: slot, ok, id: ok ? 7 : 0 } });
+
+/** Crew 3 with every rider sprinting: slot 2 drives in stage 2 (660-860 s), slot 1 in stage 3 (1020-1220 s). */
+function clientSprintRun(events) {
+  return makeRun(3, { events: events ?? [ram(700, 2), ram(1100, 1), ram(350, 0)] });
+}
+
+/** Crew 3 where peer 2 (the dynamo of the stage 1 gun line, 500-600 s) stops dead from 520 s to 580 s. */
+function stopRun(patch = {}) {
+  const r = makeRun(3, {
+    extraRows: (row, peer) => {
+      if (peer !== '2' || row.t < 520 || (row.t >= 580 && patch.back !== false)) return row;
+      let out = { ...row, power_w: 0, cadence_rpm: 0, applied_pct: 30, applied_target_w: 60 };
+      if (row.t >= 523) out = { ...out, rescue: true, clamped_by: ['rescue'] };
+      if (row.t >= 530 && patch.afk !== false) out = { ...out, afk: true };
+      if (row.t >= 575 && patch.back !== false) out = { ...out, power_w: 100, cadence_rpm: 90 };
+      return out;
+    },
+  });
+  if (patch.toast !== false) r.events.push({ type: 'hud', kind: 'toast', key: 'TANK_TOAST_RESERVE', peer: 1, t: 531 });
+  return r;
+}
+
+const s10Set = (a, b) => ({ s10_c3_clients_sprint: a, s10_c3_dynamo_stop: b });
+
+test('S10 passes on client Rams owned by the diesel and a dynamo rider who stops and returns', () => {
+  const r = C.checkS10(s10Set(clientSprintRun(), stopRun()));
+  assert.equal(r.status, 'PASS', ids(r.details));
+  assert.match(r.summary, /2 client Rams/);
+  assert.equal(C.checkS10({}).status, 'SKIP');
+  assert.equal(C.peerOfSlot(clientSprintRun(), 2), '3');
+  assert.deepEqual(C.intentOwnershipProblems('x', clientSprintRun()), [], 'slot 0 drives in stage 1, slot 2 in stage 2, slot 1 in stage 3');
+  assert.equal(C.intentOwnershipProblems('x', clientSprintRun([ram(700, 0)])).length, 1, 'slot 0 is the dynamo in stage 2');
+});
+
+test('S10 fails when no client Ram lands or one comes from a rider who is not on the diesel', () => {
+  const none = clientSprintRun([ram(350, 0), ram(700, 2, 0)]);
+  assert.match(ids(C.checkS10(s10Set(none, stopRun())).details), /no client rider .* destroyed anything with a Ram/);
+  const wrong = clientSprintRun([ram(700, 1), ram(1100, 1)]);
+  assert.match(ids(C.checkS10(s10Set(wrong, stopRun())).details), /ram by slot 1 at 700 s, who was on "steam"/);
+  const fine = clientSprintRun([ram(700, 2), ram(1100, 1)]);
+  assert.equal(C.checkS10(s10Set(fine, stopRun())).status, 'PASS');
+});
+
+test('S10 fails when the stopped rider never goes AFK, never returns, has no reserve toast, or drags others in', () => {
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), stopRun({ afk: false }))).details), /never went AFK/);
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), stopRun({ back: false }))).details), /never came back from AFK/);
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), stopRun({ toast: false }))).details), /no "on reserve" toast/);
+  const late = stopRun();
+  for (const row of late.trace['2']) if (row.t >= 530 && row.t < 545) row.afk = false;
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), late)).details), /went AFK 25 s after it stopped/);
+  const drag = stopRun();
+  for (const row of drag.trace['3']) if (row.t === 540) row.rescue = true;
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), drag)).details), /peer 3 \(not the rider who stopped\)/);
+  const calm = makeRun(3);
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), calm)).details), /never stopped pedaling in the gun line/);
+  const stuck = stopRun();
+  stuck.phases['2'] = stuck.phases['2'].slice(0, 5);
+  assert.match(ids(C.checkS10(s10Set(clientSprintRun(), stuck)).details), /plan did not continue/);
+  assert.match(ids(C.checkS10({ s10_c3_clients_sprint: clientSprintRun() }).details), /missing report s10_c3_dynamo_stop/);
+});
+
 // --- FIT, arguments, main ----------------------------------------------------------------------------------------------
 
 test('fitGroups groups existing FIT files by expected laps and skips what is not there', () => {

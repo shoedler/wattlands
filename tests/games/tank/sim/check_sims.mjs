@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7, plus S9 the sprint
-// half of the workout; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports
+// half of the workout and S10 the network paths; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports
 // tools/run_game_sim wrote.
 //
 //   node tests/games/tank/sim/check_sims.mjs build/tank/sims [--only=S1,S4] [--seeds=1,2,3] [--fit]
@@ -24,6 +24,8 @@
 //   s7_c3_seed1            s1_c3_seed1 again
 //   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: Ram, ram haptic,
 //                          the gun line entered straight after a sprint (S8 is the GUT test test_tank_s8.gd)
+//   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Rams arrive as telemetry intents
+//   s10_c3_dynamo_stop     crew 3, slot 1 stops pedaling for 60 s in the stage 1 gun line (rescue, AFK, reserve, back)
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
 //   segment       a plan phase with its span in `phases[peer]` (game seconds) and how it ended
@@ -49,6 +51,9 @@
 //   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): a successful Ram in every
 //                 Advance, each Ram's haptic sent and accepted (S4 holds it to SIM riders), and a gun line
 //                 entered while still sprinting starts at its planned target, not at the sprint power.
+//   S10 (crew 3)  every rider a sprinter: a client's Ram (an intent over Telemetry.intents, owned by the diesel) destroys
+//                 something; and a dynamo rider who stops in a gun line is rescued, goes AFK within 10 s, is announced
+//                 as on reserve, comes back, with nobody else affected and the plan completing.
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -956,6 +961,79 @@ export function checkS9(reports) {
   return result('S9', title, probs, `${rams.length} Rams, ${hap.length} ram haptics, ${entries.length} gun line entries after a sprint`);
 }
 
+// --- S10: clients sending intents, a client that stops ---------------------------------------------------------------
+
+/** AFK comes 10 s after the first not-pedaling sample (BRIEF 4.6.4); the trace is sampled once a second. */
+export const AFK_AFTER_S = 10;
+/** The engine of `peer`'s plan phase at report time t, or ''. */
+const engineAt = (r, peer, t) => planOf(r, peer)[phaseIndexAt(r, peer, t)]?.meta?.engine ?? '';
+
+/** Ram and dodge events whose slot was not on a driving engine at that time (a client's intent must be owned by its engine). */
+export function intentOwnershipProblems(name, r) {
+  const probs = [];
+  for (const e of gameEvents(r)) {
+    if (e.type !== 'ram' && e.type !== 'dodge') continue;
+    const peer = peerOfSlot(r, e.s);
+    const engine = peer === null ? '' : engineAt(r, peer, e._t);
+    if (engine !== 'diesel' && engine !== 'bulwark') probs.push(`${name}: ${e.type} by slot ${e.s} at ${fmt(e._t)} s, who was on "${engine}", not a driving engine`);
+  }
+  return probs;
+}
+
+export function checkS10(reports) {
+  const title = 'crew 3 where the clients send the intents and one stops: client Rams, a station on reserve through a rescue';
+  const cases = ['s10_c3_clients_sprint', 's10_c3_dynamo_stop'];
+  const { found, missing } = pick(reports, cases);
+  if (found.length === 0) return skip('S10', title, 'no s10_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const notes = [];
+  const hygiene = (n, r) => {
+    probs.push(...argsProblems(n, r, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }), ...completeProblems(n, r));
+    probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
+  };
+
+  // Every rider sprints: the Ram of slot 1 or 2 reaches the host as a client's Telemetry.intents and only counts on the diesel.
+  const sprint = reports.s10_c3_clients_sprint;
+  if (sprint) {
+    const n = 's10_c3_clients_sprint';
+    hygiene(n, sprint);
+    probs.push(...intentOwnershipProblems(n, sprint));
+    const clientRams = successfulRams(sprint).filter((e) => num(e.s) >= 1);
+    if (clientRams.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) destroyed anything with a Ram: their intents never reached the host`);
+    notes.push(`${n} ${clientRams.length} client Rams`);
+  }
+
+  // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.
+  const stop = reports.s10_c3_dynamo_stop;
+  if (stop) {
+    const n = 's10_c3_dynamo_stop';
+    hygiene(n, stop);
+    const peer = '2';
+    const rows = traceOf(stop, peer);
+    const span = segmentsOf(stop, peer).find((x) => x.index === 2);
+    const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
+    const afk = rows.filter((row) => row.afk === true);
+    if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
+    else if (afk.length === 0) probs.push(`${n}: peer ${peer} never went AFK`);
+    else {
+      const lag = num(afk[0].game_t) - num(zero.game_t);
+      if (lag > AFK_AFTER_S + 1 + EPS) probs.push(`${n}: peer ${peer} went AFK ${fmt(lag)} s after it stopped (max ${AFK_AFTER_S} s, one sample of slack)`);
+      if (!rows.some((row) => num(row.game_t) > num(afk[afk.length - 1].game_t) && row.afk !== true && num(row.power_w) > 0)) probs.push(`${n}: peer ${peer} never came back from AFK`);
+      if (!(stop.events ?? []).some((e) => e && e.type === 'hud' && /RESERVE/.test(String(e.key ?? '')))) probs.push(`${n}: no "on reserve" toast`);
+    }
+    const st = rescueStats(stop, peer);
+    if (st.rows === 0) probs.push(`${n}: peer ${peer} never entered rescue`);
+    else if (!(st.maxPct <= 50 + 100 / Math.max(num(slotOf(stop, peer).ftp, 200), 1) + EPS)) probs.push(`${n}: rescue applied ${fmt(st.maxPct)}% FTP (wanted 50% or less)`);
+    for (const other of humanPeers(stop)) {
+      if (other === peer) continue;
+      if (traceOf(stop, other).some((row) => row.rescue === true || row.afk === true)) probs.push(`${n}: peer ${other} (not the rider who stopped) was in rescue or AFK`);
+    }
+    if (segmentsOf(stop, peer).length !== planOf(stop, peer).length) probs.push(`${n}: the plan did not continue to its last phase`);
+    notes.push(`${n} ${afk.length} s AFK, ${st.rows} s in rescue`);
+  }
+  return result('S10', title, probs, notes.join(', '));
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -994,7 +1072,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };
