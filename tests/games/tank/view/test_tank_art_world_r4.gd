@@ -119,17 +119,19 @@ func test_the_far_ridge_rises_above_the_hills() -> void:
 	assert_lt(top + float(highest), 140.0, "the land climbs above y 140")
 
 
-func test_the_foreground_reaches_above_the_hud_and_is_dark() -> void:
+func test_the_foreground_bank_lies_under_the_hud_and_is_dark() -> void:
+	# Polish round 5: the bank moved under the HUD band (its rubble along y 296 blanketed the ground
+	# line); test_tank_art_world_r5 checks the ground line stays clear.
 	var img := TankBackdrop.front_texture().get_image()
 	var top := TankBackdrop.FRONT_BOTTOM_Y - float(TankBackdrop.FRONT_H)
-	var row := int(296.0 - top)
+	var row := int(TankBackdrop.FRONT_BANK_Y + 10.0 - top)
 	var solid := 0
 	for x in range(0, img.get_width(), 4):
 		var c := img.get_pixel(x, row)
 		if c.a > 0.5:
 			solid += 1
 			assert_lt(c.get_luminance(), 0.12, "near-black")
-	assert_gt(solid, img.get_width() / 4 / 2, "rubble along most of y 296")
+	assert_gt(solid, img.get_width() / 4 * 9 / 10, "rubble along the bank under the HUD")
 
 
 func test_the_foreground_fades_over_the_hull_only() -> void:
