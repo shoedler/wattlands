@@ -175,6 +175,16 @@ func age(i: int) -> float:
 	return clampf(1.0 - life[i] / ttl[i], 0.0, 1.0)
 
 
+## True when particle `i` is drawn on the additive layer. Cold sparks (a spark whose colour is bluer
+## than red: the dynamo's) are blended instead: added over a room lit amber by a rider's lamp, a
+## blue-white stroke clips to cream and reads as a warm spark, so they keep their own colour.
+func is_additive(i: int) -> bool:
+	var k := kind[i]
+	if k == Kind.SPARK:
+		return color[i].b <= color[i].r
+	return ADDITIVE.has(k)
+
+
 ## How many live particles are of `p_kind` (tests).
 func count_kind(p_kind: int) -> int:
 	var n := 0

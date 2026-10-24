@@ -6,6 +6,12 @@ extends Node2D
 
 ## Puffs in a smoke ring.
 const RING_PUFFS := 7
+## A casing's lit brass and its shaded underside / base rim.
+const BRASS_LIT := Color("#ffb35c")
+const BRASS_SHADE := Color("#6b5842")
+## The share of each half turn (rad) during which a tumbling casing glints: about one frame at its
+## spin of 16-26 rad/s.
+const GLINT_WINDOW := 0.36
 
 ## The billowed puffs (built once): shaded for smoke, near white for steam.
 static var _billow_tex: Dictionary = {}
@@ -55,10 +61,9 @@ func _draw() -> void:
 		return
 	var p := particles
 	for i in p.count:
-		var k := p.kind[i]
-		if TankParticles.ADDITIVE.has(k) != additive:
+		if p.is_additive(i) != additive:
 			continue
-		_draw_one(p, i, k)
+		_draw_one(p, i, p.kind[i])
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -107,21 +112,19 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			var s := maxf(1.0, roundf(size))
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
 		TankParticles.Kind.BRASS:
-			draw_set_transform(at, p.rot[i], Vector2.ONE)
-			# A casing: a brass body with a dark base rim, and one glint pixel as it tumbles.
-			draw_rect(Rect2(-2.0, -1.0, 4.0, 2.0), col)
-			draw_rect(
-				Rect2(-2.0, -1.0, 1.0, 2.0), Color(col.r * 0.55, col.g * 0.5, col.b * 0.45, col.a)
-			)
-			if sin(p.life[i] * 23.0 + float(i)) > 0.55:
-				draw_rect(Rect2(0.0, -1.0, 1.0, 1.0), Color(1.0, 0.95, 0.84, 0.95 * col.a))
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			_draw_brass(at, p.rot[i], col, p.spin[i] != 0.0)
 		TankParticles.Kind.RING:
 			_draw_ring(at, size, col, t, p.vel[i], p.rot[i])
 		TankParticles.Kind.SPARK:
 			var v := p.vel[i]
-			var tail := at - v.normalized() * clampf(v.length() * 0.035, 1.5, 6.0)
-			draw_line(tail, at, col, 1.0)
+			if additive:
+				var tail := at - v.normalized() * clampf(v.length() * 0.035, 1.5, 6.0)
+				draw_line(tail, at, col, 1.0)
+			else:
+				# A cold (dynamo) spark, blended: a blue-white streak with a white-hot head.
+				var tail := at - v.normalized() * clampf(v.length() * 0.09, 2.0, 4.5)
+				draw_line(tail, at, col, 1.0)
+				draw_rect(Rect2(at.floor(), Vector2.ONE), Color(TankPalette.WHITE_COLD, col.a))
 		TankParticles.Kind.EMBER:
 			var s := maxf(1.0, roundf(size))
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
@@ -147,13 +150,35 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
+## A spent casing, 5 x 2 art px: a bright brass body (BRASS_LIT, its lower edge in BRASS_SHADE) with a
+## dark base rim at one end, tumbling by `turn`. While it spins it flashes a white glint for about one
+## frame each half turn, when its side faces the light (a spark is a 1 px amber stroke; a casing is a
+## solid two-tone block, so the two never read alike).
+func _draw_brass(at: Vector2, turn: float, col: Color, spinning: bool) -> void:
+	var lit := Color(BRASS_LIT, col.a)
+	var shade := Color(BRASS_SHADE, col.a)
+	draw_set_transform(at.round(), turn, Vector2.ONE)
+	draw_rect(Rect2(-2.5, -1.0, 5.0, 1.0), lit)
+	draw_rect(Rect2(-2.5, 0.0, 5.0, 1.0), shade.lerp(lit, 0.45))
+	draw_rect(Rect2(-2.5, -1.0, 1.0, 2.0), shade)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	if spinning and glints(turn):
+		var g := at.round() + Vector2.from_angle(turn) * 0.5
+		draw_rect(Rect2(g.floor(), Vector2.ONE), Color(1.0, 0.98, 0.92, col.a))
+
+
+## True when a tumbling casing at rotation `turn` shows its glint.
+static func glints(turn: float) -> bool:
+	return fposmod(turn, PI) < GLINT_WINDOW
+
+
 ## A diesel puff: one billowed lump, darker on top and paler underneath (lit from below; warmed by
 ## the engine room's light while it is young). One smooth gradient, no separate highlight, so no
 ## puff shows a light outline (a ring) or spots.
 func _draw_exhaust(at: Vector2, size: float, col: Color, t: float, turn: float) -> void:
 	var c := col
-	if t < 0.35:
-		c = c.lerp(Color(TankPalette.AMBER, c.a), 0.25 * (1.0 - t / 0.35))
+	if t < 0.3:
+		c = c.lerp(Color(TankPalette.AMBER, c.a), 0.14 * (1.0 - t / 0.3))
 	var s := Vector2(size, size)
 	draw_set_transform(at, turn, Vector2.ONE)
 	draw_texture_rect(_billow, Rect2(-s * 0.5, s), false, c)
@@ -240,7 +265,7 @@ static func _fade(k: int, t: float, p: TankParticles, i: int) -> float:
 		TankParticles.Kind.RING:
 			return pow(1.0 - t, 1.3)
 		TankParticles.Kind.STEAM:
-			return minf(t / 0.08, 1.0) * pow(1.0 - t, 0.85)
+			return minf(t / 0.04, 1.0) * pow(1.0 - t, 0.85)
 		TankParticles.Kind.HEAT:
 			return sin(t * PI)
 		TankParticles.Kind.DIRT:
