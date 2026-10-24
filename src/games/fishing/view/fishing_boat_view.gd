@@ -1,15 +1,16 @@
 class_name FishingBoatView
 extends Node2D
-## One rider's boat (FishingRig's points, boat-local art px): the slate hull with its long-tail
-## shaft, the crew sprite (clutch lever, tiller, rider, legs, the brass pedal wheel and its crank;
-## four crank frames per pose), the winch drum and the screw prop as frame-animated sprites, the
-## rod (stowed or raised, its tip bending toward the line), the rider's cap and the bow pennant
-## in the player's colour. The view sets position (the stern's waterline point on the surface),
-## the shown values and calls advance(). Nothing is ever rotated: the bow lifts by whole pixels.
-## Driving vs fishing (`fishing` eased 0..1, shown as a pose from 0.5): the clutch leans aft,
-## the tiller is let go, the prop stops while the winch drum turns, the rod tips up.
-## Every part carries a palette map (FishingPaletteMap): rows under the surface take one water
-## tone; a farther boat (another rider's) is a step lighter and cut at its waterline.
+## One rider's boat (FishingRig's points, boat-local art px): the slate hull (level, or planing
+## with the bow section raised) with its outboard leg, the crew sprite (clutch lever, a seated
+## cyclist, the flywheel with its brass hub and the bar; four crank frames per pose), the winch
+## drum and the prop as frame-animated sprites, the rod (stowed, raised, bent back under
+## tension), the rider's cap and the bow pennant in the player's colour. The view sets position
+## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
+## is ever rotated: pitch lifts the boat by whole pixels and switches to the planing hull.
+## Driving vs fishing (`fishing` eased 0..1, shown as a pose from 0.5): the rider sits up from
+## the bar with a hand on the clutch, which leans aft; the prop stops while the winch drum turns;
+## the rod tips up. Every part carries a palette map (FishingPaletteMap): rows under the boat's
+## waterline take one flat water tone (the shadow slab); a farther boat is a step lighter.
 
 ## The boat's waterline midpoint: its position is this point of the hull.
 const PIVOT := Vector2(58, FishingRig.WATERLINE)
@@ -20,6 +21,8 @@ const WINCH_FPS_PER_MPS := 6.0
 ## Bow pitch (degrees) per pixel the boat lifts, and the most it lifts.
 const LIFT_DEG_PER_PX := 3.0
 const LIFT_MAX_PX := 3
+## Lift (px) from which the planing hull frame shows.
+const PLANE_LIFT_PX := 2
 ## A farther boat: each slate one step lighter.
 const FAR_FROM: Array[Color] = [FishingPalette.SLATE, FishingPalette.WOOD]
 const FAR_TO: Array[Color] = [FishingPalette.WOOD, FishingPalette.UPPER]
@@ -37,9 +40,8 @@ var fishing_target: float = 0.0
 ## Prop drive 0..1 (throttle while the clutch drives the prop) and the winch's line speed (m/s).
 var prop_drive: float = 0.0
 var winch_mps: float = 0.0
-## Rod tension 0..1 and the unit direction toward the line (boat-local, before the flip).
+## Rod tension 0..1.
 var tension: float = 0.0
-var pull_dir: Vector2 = Vector2.DOWN
 
 ## True on the farther row (another rider's boat): see set_far().
 var far: bool = false
@@ -77,8 +79,7 @@ func set_slot(p_slot: int, p_line: Color) -> void:
 	line_color = p_line
 
 
-## Another rider's boat on the farther row: a step lighter and nothing drawn below its own
-## waterline (the nearer water covers it).
+## Another rider's boat on the farther row: a step lighter.
 func set_far(on: bool) -> void:
 	far = on
 	var none: Array[Color] = []
@@ -110,24 +111,24 @@ func advance(dt: float) -> void:
 	_prop_t += PROP_FPS_FULL * prop_drive * (1.0 - fishing) * dt
 	_winch_t += absf(winch_mps) * WINCH_FPS_PER_MPS * fishing * dt
 	crew.texture = FishingSprites.frame("boat_crew", crew_frame())
+	hull.texture = FishingSprites.frame("boat_hull", 1 if planing() else 0)
 	prop.texture = FishingSprites.frame("boat_prop", floori(_prop_t))
 	winch.texture = FishingSprites.frame("boat_winch", floori(_winch_t))
 	scale.x = float(heading) if heading != 0 else 1.0
 	body.position = -PIVOT + Vector2(0, roundf(bob_px) - float(lift_px()))
-	var surface := float(FishingScenery.SURF_Y)
 	for m in _mats:
-		if far:
-			FishingPaletteMap.set_under(m, FishingPaletteMap.NO_ROW, FishingPalette.UPPER)
-			FishingPaletteMap.set_clip(m, position.y + 1.0)
-		else:
-			FishingPaletteMap.set_under(m, surface, FishingPalette.UPPER)
-			FishingPaletteMap.set_clip(m, FishingPaletteMap.NO_ROW)
+		FishingPaletteMap.set_under(m, position.y, FishingPalette.UPPER)
 	_near.queue_redraw()
 
 
-## The rod's points (boat-local, unflipped): [base, joint, tip].
+## True while the planing hull shows (the bow section raised).
+func planing() -> bool:
+	return lift_px() >= PLANE_LIFT_PX
+
+
+## The rod's points (boat-local, unflipped): [base, butt, tip].
 func rod_points() -> PackedVector2Array:
-	return FishingRig.rod(fishing, tension, pull_dir)
+	return FishingRig.rod(fishing, tension)
 
 
 ## The rod tip's pixel in the parent's (the view's) coordinates.
@@ -167,5 +168,6 @@ func _paint_near(c: CanvasItem) -> void:
 	for p in FishingRig.rod_pixels(rod_points()):
 		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), FishingPalette.SLATE)
 	var col := player_color()
-	c.draw_rect(Rect2(FishingRig.CAP), col)
-	c.draw_rect(Rect2(FishingRig.FLAG), col)
+	c.draw_rect(Rect2(FishingRig.cap(fishing)), col)
+	var bow := Vector2(0, -FishingRig.PLANE_BOW_PX if planing() else 0)
+	c.draw_rect(Rect2(Vector2(FishingRig.FLAG.position) + bow, FishingRig.FLAG.size), col)

@@ -1,14 +1,14 @@
 class_name FishingScenery
 extends RefCounted
-## The code-drawn ocean, side view, in art pixels of the 640 x 360 view, in big flat fields with
-## hard straight edges: one sky colour with a few flat cloud slabs drifting in parallax, haze
-## islands and the harbour town on the horizon, a haze band of far water, the water column in
-## five flat bands that step darker with depth, the sea floor from FishingWorld's profile in
-## even 8 px steps (sage in the shallows, a water step darker below, a lighter rim on top, a few
-## stepped mounds on the reef), the quay and the pier at the dock and, past the roam map's end, the
-## flat-earth edge: the ocean pours over the lip in a clean two-segment fall into a void that
-## steps down through the deep-water colours. paint_back() draws everything behind the fish
-## and boats.
+## The code-drawn ocean, side view, in art pixels of the 640 x 360 view, in big light flat
+## fields with hard straight edges: one sky colour with a few flat cloud slabs drifting in
+## parallax, haze islands and the harbour town on the horizon, the water column in four flat
+## bands that step darker only in the deep (haze at the top, surface teal, then upper and mid
+## teal far out), the sea floor from FishingWorld's profile in even 24 px runs (sage under a
+## foam rim in the light water; under the dark water a deep-teal floor below an abyss line), the
+## quay and the pier at the dock and, past the roam map's end, the flat-earth edge: the ocean
+## pours over a square lip in a straight foam-edged column into a void one step darker than the
+## sea, landing in a foam bank. paint_back() draws everything behind the fish and boats.
 ## The camera is a world x (m) at the view's left edge. Depth maps to y with a square root over
 ## view_depth_m, the deepest floor in sight (the view eases it as the boat moves), so the floor
 ## always sits near the bottom: the shallows get the whole water column, and the colours, which
@@ -28,36 +28,32 @@ const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
 const VIEW_DEPTH_MIN_M := 3.0
 const ABYSS_M := 700.0
-## Water band tops (m), one FishingPalette.SEA colour each.
-const WATER_STEPS_M: Array[float] = [0.0, 8.0, 30.0, 110.0, 640.0]
-## The floor's colour and its 2-row top rim per water band (WATER_STEPS_M): sage under the two
-## light bands, then one step darker than the water; the rim is always lighter than the water.
+## Water band tops (m), one FishingPalette.SEA colour each: the shallows, the reef and the shelf
+## stay in the two light bands; only the deep and the abyss step darker.
+const WATER_STEPS_M: Array[float] = [0.0, 40.0, 200.0, 500.0]
+## The floor's colour and its 2-row top line per water band (WATER_STEPS_M): sage under a foam
+## rim (top-lit) in the light water, a deep-teal floor under an abyss line in the dark water.
 const FLOOR_BANDS: Array[Color] = [
 	FishingPalette.SAGE,
 	FishingPalette.SAGE,
 	FishingPalette.DEEP,
-	FishingPalette.ABYSS,
-	FishingPalette.ABYSS,
-]
-const RIM_BANDS: Array[Color] = [
-	FishingPalette.HAZE,
-	FishingPalette.HAZE,
-	FishingPalette.UPPER,
-	FishingPalette.MID,
 	FishingPalette.DEEP,
 ]
-## The floor is drawn in world-fixed columns this wide, each flat, its top on an even row.
-const STEP_PX := 8
+const RIM_BANDS: Array[Color] = [
+	FishingPalette.FOAM,
+	FishingPalette.FOAM,
+	FishingPalette.ABYSS,
+	FishingPalette.ABYSS,
+]
+## The floor is drawn in world-fixed runs this wide, each flat, its top on an even row.
+const STEP_PX := 24
 const RIM_ROWS := 2
-## Mounds on the reef and the shelf: at most one per MOUND_CELL_PX world cell, three columns
-## stepping up and down by MOUND_LIFT.
-const MOUND_CELL_PX := 96
-const MOUND_LIFT: Array[int] = [2, 4, 2]
-## Cloud layers: parallax factor, drift (px/s), spacing (px), rows (top, bottom).
+## Cloud layers: parallax factor, drift (px/s), spacing (px), rows (top, bottom); all below the
+## HUD's top panels.
 const CLOUD_LAYERS: Array = [
-	[0.02, 0.6, 340.0, 16, 40],
-	[0.05, 1.1, 420.0, 44, 70],
-	[0.1, 1.8, 520.0, 74, 96],
+	[0.02, 0.6, 340.0, 60, 72],
+	[0.05, 1.1, 420.0, 76, 88],
+	[0.1, 1.8, 520.0, 92, 104],
 ]
 ## Haze islands on the horizon: [factor, spacing px].
 const ISLAND_LAYERS: Array = [[0.06, 460.0], [0.16, 700.0]]
@@ -67,16 +63,16 @@ const TOWN_X0 := 24.0
 ## The pier (world m, its left end) and the quay's top row above the surface.
 const PIER_X_M := 6.0
 const QUAY_TOP := 6
-## Past the edge: the void's band tops (rows) and colours, light to dark.
-const VOID_ROWS: Array[int] = [HORIZON_Y, 200, 276]
-const VOID_BANDS: Array[Color] = [FishingPalette.MID, FishingPalette.DEEP, FishingPalette.ABYSS]
-## The waterfall: rows of the curve over the lip (its front throws out a pixel per two rows, its
-## back a pixel per four) and the sheet's width at the lip.
-const FALL_CURVE_ROWS := 24
-const FALL_LIP_W := 10
-## The sheet's lit outer face and its foam edge (px).
-const FALL_FACE_W := 4
-const FALL_EDGE_W := 2
+## The waterfall: the column's width and its lit foam edge (px), the lip's two square steps
+## (width ahead of the edge per step, 2 rows each), and the row where it lands in a foam bank of
+## three slabs spreading out into the void (reach beyond the column, top first).
+const FALL_W := 22
+const FALL_EDGE_W := 4
+## The column's shaded inner side (px), against the sea.
+const FALL_SIDE_W := 2
+const FALL_LIP: Array[int] = [10, 4]
+const FALL_LAND_Y := 298
+const FALL_BANK: Array[int] = [16, 36, 64]
 
 var world: FishingWorld = null
 ## The depth the floor rows stand for (m): see the class comment and target_view_depth().
@@ -162,15 +158,18 @@ static func hash2(a: int, b: int) -> int:
 	return h ^ (h >> 16)
 
 
-## The far water band (haze) and the five water bands, each a flat field with a straight top.
-func _paint_water(c: CanvasItem) -> void:
-	c.draw_rect(Rect2(0, HORIZON_Y, W, FAR_ROWS), FishingPalette.HAZE)
-	c.draw_rect(Rect2(0, SURF_Y, W, H - SURF_Y), FishingPalette.SEA[0])
-	for k in range(1, WATER_STEPS_M.size()):
-		var y := roundf(y_of_depth(WATER_STEPS_M[k]))
+## The water bands from the horizon (the far water is the top band), each a flat field with a
+## straight top; `steps` darker past the edge.
+func _paint_water(c: CanvasItem, x0: float = 0.0, steps: int = 0) -> void:
+	var w := float(W) - x0
+	c.draw_rect(Rect2(x0, HORIZON_Y, w, H - HORIZON_Y), FishingPalette.SEA[0])
+	for k in range(0 if steps > 0 else 1, WATER_STEPS_M.size()):
+		var y := float(SURF_Y) if k == 0 else roundf(y_of_depth(WATER_STEPS_M[k]))
 		if y >= float(H):
 			break
-		c.draw_rect(Rect2(0, y, W, float(H) - y), FishingPalette.SEA[k])
+		c.draw_rect(
+			Rect2(x0, y, w, float(H) - y), FishingPalette.darker(FishingPalette.SEA[k], steps)
+		)
 
 
 func _paint_clouds(c: CanvasItem, cam_px: float, t: float) -> void:
@@ -253,9 +252,8 @@ func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
 		c.draw_texture(f, Vector2(roundf(gx), roundf(gy)))
 
 
-## The floor in world-fixed STEP_PX columns from the world's profile, each flat with its top on
-## an even row: a RIM_ROWS rim lighter than the water, then the floor colour of its top band down
-## to the bottom of the view. Rocks stand on the reef and the shelf.
+## The floor in world-fixed STEP_PX runs from the world's profile, each flat with its top on an
+## even row: a RIM_ROWS top line, then the floor colour of its top band down to the bottom.
 func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
 	if world == null:
 		return
@@ -267,7 +265,7 @@ func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
 		var d := world.floor_depth_m(x_m)
 		if is_inf(d) or sx >= edge_px:
 			continue
-		var y := 2.0 * floorf(y_of_depth(d) / 2.0) - float(_mound(j, world.zone_at(x_m)))
+		var y := 2.0 * floorf(y_of_depth(d) / 2.0)
 		if y >= float(H):
 			continue
 		var right := minf(sx + float(STEP_PX), edge_px)
@@ -276,27 +274,15 @@ func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
 		c.draw_rect(Rect2(sx, y, right - sx, RIM_ROWS), RIM_BANDS[band])
 
 
-## How many rows floor column `j` rises for a mound (reef and shelf only).
-static func _mound(j: int, zone: String) -> int:
-	if zone != "reef" and zone != "shelf":
-		return 0
-	var cell := floori(float(j * STEP_PX) / float(MOUND_CELL_PX))
-	var h := hash2(cell, 313)
-	if h % 2 == 0:
-		return 0
-	var k := (j * STEP_PX - cell * MOUND_CELL_PX) / STEP_PX - h % 6
-	return MOUND_LIFT[k] if k >= 0 and k < MOUND_LIFT.size() else 0
-
-
-## The quay left of the dock (a foam cap, a wood face, its wall under water in one water tone,
-## bollards) and the pier.
+## The quay left of the dock (a foam cap, a wood face, its wall sage under the water, bollards)
+## and the pier.
 func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 	var qx := roundf(screen_x(0.0, cam_m))
 	if qx > 0.0:
 		var top := float(SURF_Y - QUAY_TOP)
 		c.draw_rect(Rect2(0, top, qx, 2), FishingPalette.FOAM)
 		c.draw_rect(Rect2(0, top + 2, qx, float(QUAY_TOP) - 2.0), FishingPalette.WOOD)
-		c.draw_rect(Rect2(0, SURF_Y, qx, H - SURF_Y), FishingPalette.UPPER)
+		c.draw_rect(Rect2(0, SURF_Y, qx, H - SURF_Y), FishingPalette.SAGE)
 		for x in range(int(qx) - 14, -1, -40):
 			c.draw_rect(Rect2(x, top - 2, 2, 2), FishingPalette.SLATE)
 	var pier := FishingSprites.frame("scenery_pier")
@@ -308,23 +294,27 @@ func _paint_dock(c: CanvasItem, cam_m: float) -> void:
 		c.draw_texture(pier, Vector2(px, SURF_Y - QUAY_TOP - deck))
 
 
-## Past the edge: the void below the horizon steps down through the deep-water colours, and the
-## ocean pours over the lip: a short curve throwing out a pixel per two rows, then a straight
-## column; a mid body, a light outer face, a foam edge and a foam cap on the lip.
+## Past the edge: the void below the horizon repeats the sea's bands one step darker (the same
+## haze strip on top, so the horizon runs on), and the ocean pours over a square two-step foam lip
+## in a straight column (a shaded side, a haze face, a foam lit edge) that lands in a bank of foam
+## slabs.
 func _paint_edge(c: CanvasItem, cam_m: float) -> void:
 	var ex := roundf(screen_x(edge_m(), cam_m))
 	if ex >= float(W):
 		return
-	var x0 := maxf(ex, 0.0)
-	for k in VOID_ROWS.size():
-		var y0 := float(VOID_ROWS[k])
-		var y1 := float(VOID_ROWS[k + 1]) if k + 1 < VOID_ROWS.size() else float(H)
-		c.draw_rect(Rect2(x0, y0, float(W) - x0, y1 - y0), VOID_BANDS[k])
-	for y in range(HORIZON_Y, H):
-		var curve := mini((y - HORIZON_Y) / 2, FALL_CURVE_ROWS / 2)
-		var front := ex + float(FALL_LIP_W + curve)
-		var face := float(FALL_FACE_W + FALL_EDGE_W)
-		c.draw_rect(Rect2(ex, y, front - ex, 1), FishingPalette.SURFACE)
-		c.draw_rect(Rect2(front - face, y, FALL_FACE_W, 1), FishingPalette.HAZE)
-		c.draw_rect(Rect2(front - float(FALL_EDGE_W), y, FALL_EDGE_W, 1), FishingPalette.FOAM)
-	c.draw_rect(Rect2(ex - 4.0, HORIZON_Y, float(FALL_LIP_W) + 4.0, 2), FishingPalette.FOAM)
+	_paint_water(c, maxf(ex, 0.0), 1)
+	var top := float(HORIZON_Y + 2 * FALL_LIP.size())
+	var fw := float(FALL_W)
+	c.draw_rect(Rect2(ex, top, fw - float(FALL_EDGE_W), FALL_LAND_Y - top), FishingPalette.HAZE)
+	c.draw_rect(
+		Rect2(ex + fw - float(FALL_EDGE_W), top, FALL_EDGE_W, FALL_LAND_Y - top),
+		FishingPalette.FOAM
+	)
+	c.draw_rect(Rect2(ex, top, FALL_SIDE_W, FALL_LAND_Y - top), FishingPalette.UPPER)
+	for k in FALL_LIP.size():
+		var lead := float(FALL_LIP[k])
+		c.draw_rect(Rect2(ex - lead, HORIZON_Y + 2 * k, lead + fw, 2), FishingPalette.FOAM)
+	for k in FALL_BANK.size():
+		var reach := float(FALL_BANK[k])
+		var col := FishingPalette.FOAM if k < 2 else FishingPalette.HAZE
+		c.draw_rect(Rect2(ex, FALL_LAND_Y + 2 * k, fw + reach, 2), col)

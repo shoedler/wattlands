@@ -43,11 +43,12 @@ const ALL: Array[Color] = [
 ]
 ## Light to dark: the sky and the water in one ramp. Fish and hints shift along it with depth.
 const LADDER: Array[Color] = [FOAM, SKY, HAZE, SURFACE, UPPER, MID, DEEP, ABYSS]
-## The water from the surface down to the abyss (one flat band each).
-const SEA: Array[Color] = [SURFACE, UPPER, MID, DEEP, ABYSS]
+## The water from the surface down (one flat band each); the deep teal and the abyss are kept
+## for the deep floor, its line and the subjects.
+const SEA: Array[Color] = [HAZE, SURFACE, UPPER, MID]
 ## Player colours by slot: the cap and the pennant, nothing else.
 const PLAYERS: Array[Color] = [ACCENT, PLAYER_SLATE, PLAYER_MOSS, PLAYER_PLUM]
-## The line above the water (the rod's colour; under water FishingView.under_line()).
+## The line above the water (the rod's colour; under water FishingView.line_in_band()).
 const LINE := SLATE
 ## HUD: panels, text, secondary text, bars on their track; colour only for alerts.
 const HUD_PANEL := Color(0.10980392, 0.30196078, 0.39607843, 0.85)
@@ -56,12 +57,6 @@ const HUD_DIM := HAZE
 const HUD_BAR := SURFACE
 const HUD_TRACK := DEEP
 const HUD_ALERT := ACCENT
-
-
-## The water colour at `u` (0 at the surface, 1 at the deepest shown water), one flat band.
-static func sea_at(u: float) -> Color:
-	var i := clampi(floori(clampf(u, 0.0, 1.0) * float(SEA.size())), 0, SEA.size() - 1)
-	return SEA[i]
 
 
 ## The colour `steps` LADDER steps darker than `c` (lighter when negative; clamped at the ends;

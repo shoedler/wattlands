@@ -3,13 +3,13 @@ extends RefCounted
 ## The palette map (fishing_palette_map.gdshader) on a CanvasItem: swaps palette colours for
 ## palette colours, so nothing on screen ever leaves the palette. Fish, wobblers and hints shift
 ## along FishingPalette.LADDER with the water around them (shift_for()), a hint not picked is a
-## flat silhouette, a boat's rows under the surface take one flat water tone and a farther boat
-## is cut at its waterline and drawn a step lighter.
+## flat silhouette, a boat's rows under its waterline take one flat water tone and a farther
+## boat is drawn a step lighter.
 
 const SHADER_PATH := "res://src/games/fishing/view/fishing_palette_map.gdshader"
 const SLOTS := 8
-const NO_ROW := 100000.0
-## Fish are drawn dark on the two light water bands and lit (this many steps lighter) below.
+## Fish are drawn dark on the three lighter water bands and lit (this many steps lighter) on the
+## darkest.
 const LIT_SHIFT := -2
 
 static var _shader: Shader = null
@@ -53,10 +53,12 @@ static func shift_of(m: ShaderMaterial) -> int:
 	return int(m.get_meta("shift", 0))
 
 
-## The shift for a sprite in water band `band` (FishingPalette.SEA index): dark fish in the two
-## light bands (one more step dark in the second), lit fish below.
+## The shift for a sprite in water band `band` (FishingPalette.SEA index): dark fish on the haze
+## band, one step darker on the surface and upper bands, lit fish on the mid band.
 static func shift_for(band: int) -> int:
-	return band if band <= 1 else LIT_SHIFT
+	if band >= FishingPalette.SEA.size() - 1:
+		return LIT_SHIFT
+	return mini(band, 1)
 
 
 static func set_flat(m: ShaderMaterial, on: bool, col: Color = Color.BLACK) -> void:
@@ -72,13 +74,3 @@ static func is_flat(m: ShaderMaterial) -> bool:
 static func set_under(m: ShaderMaterial, y: float, col: Color) -> void:
 	m.set_shader_parameter("under_y", y)
 	m.set_shader_parameter("under_col", col)
-
-
-## Rows at or below view row `y` are not drawn.
-static func set_clip(m: ShaderMaterial, y: float) -> void:
-	m.set_shader_parameter("clip_y", y)
-
-
-static func clip_of(m: ShaderMaterial) -> float:
-	var v: Variant = m.get_shader_parameter("clip_y")
-	return float(v) if v != null else NO_ROW

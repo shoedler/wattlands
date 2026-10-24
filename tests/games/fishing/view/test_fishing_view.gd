@@ -97,7 +97,7 @@ func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -
 	assert_gt(other.position.y, float(FishingScenery.HORIZON_Y), "still on the water")
 	var m := other.hull.material as ShaderMaterial
 	assert_eq(m.shader, FishingPaletteMap.shader())
-	assert_eq(FishingPaletteMap.clip_of(m), other.position.y + 1.0)
+	assert_eq(float(m.get_shader_parameter("under_y")), other.position.y, "its own shadow slab")
 	assert_eq(int(m.get_shader_parameter("count")), FishingBoatView.FAR_FROM.size(), "lighter")
 	var mine := me.hull.material as ShaderMaterial
 	assert_eq(int(mine.get_shader_parameter("count")), 0)
@@ -133,7 +133,7 @@ func test_fishing_flips_the_clutch_raises_the_rod_and_moves_the_hands() -> void:
 	var b := v.boat_view(0)
 	assert_eq(b.fishing, 1.0)
 	assert_gte(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "the fishing pose: clutch aft")
-	assert_lt(b.rod_points()[-1].y, FishingRig.ROD_BASE.y - 10.0, "the rod tips up")
+	assert_lt(b.rod_points()[-1].y, FishingRig.ROD_BASE.y - 8.0, "the rod tips up")
 
 
 func test_a_wobbler_shows_at_its_depth_while_waiting() -> void:
@@ -158,7 +158,9 @@ func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> voi
 	var spr := v.get_node("Underwater/Fish0") as Sprite2D
 	assert_true(spr.flip_h, "mouth on the right, toward the boat")
 	var m := spr.material as ShaderMaterial
-	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.LIT_SHIFT, "lit in the deep")
+	var band := FishingScenery.band_at(300.0)
+	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.shift_for(band), "by its band")
+	assert_gt(FishingPaletteMap.shift_of(m), 0, "a dark subject on the deep water")
 
 
 func test_no_fish_shows_outside_a_fight() -> void:

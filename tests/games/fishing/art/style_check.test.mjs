@@ -55,7 +55,7 @@ function png(rows) {
 const SKY = 'cedfd2';
 const SEA = '90c1c1';
 const field = (w, h, c) => Array.from({ length: h }, () => Array(w).fill(c));
-const grid = (rows) => sc.artGrid(sc.decodePng(png(rows)), 3, []);
+const grid = (rows) => sc.artGrid(sc.decodePng(png(rows)), 3, [], []);
 
 test('a flat two-band field is all flat, in family and passes', () => {
   const rows = [...field(20, 10, SKY), ...field(20, 10, SEA)];
@@ -67,6 +67,7 @@ test('a flat two-band field is all flat, in family and passes', () => {
   assert.equal(m.offFamilyPct, 0);
   assert.equal(m.minValuePct, 76);
   assert.ok(m.flatPct > 80);
+  assert.equal(m.lightPct, 100);
   assert.deepEqual(sc.verdict(m), []);
 });
 
@@ -91,13 +92,23 @@ test('a checker row, specks, near-black and a warm hue are each counted', () => 
 test('the accent counts apart, and the HUD rects and mixed blocks are masked', () => {
   const rows = field(30, 20, SKY);
   for (let x = 0; x < 6; x++) rows[10][x] = sc.ACCENT;
-  const g = sc.artGrid(sc.decodePng(png(rows)), 3, [[20, 0, 10, 20]]);
+  const g = sc.artGrid(sc.decodePng(png(rows)), 3, [[20, 0, 10, 20]], []);
   const m = sc.measure(g);
   assert.equal(g.masked, 200);
   assert.equal(m.world, 400);
   assert.equal(m.accentPct, 1.5);
   assert.equal(m.offFamilyPct, 0);
   assert.match(sc.verdict(m).join(' '), /accent/);
+});
+
+test('a popup rect is masked only when something foreign shows in it', () => {
+  const rows = field(20, 10, SKY);
+  const clean = sc.artGrid(sc.decodePng(png(rows)), 3, [], [[0, 0, 5, 5]]);
+  assert.equal(clean.masked, 0);
+  rows[2][2] = 'd55e00';
+  const shown = sc.artGrid(sc.decodePng(png(rows)), 3, [], [[0, 0, 5, 5]]);
+  assert.equal(shown.offPalette, 0);
+  assert.equal(shown.cells.filter((c) => c === null).length, 25);
 });
 
 test('hsv reads the palette', () => {

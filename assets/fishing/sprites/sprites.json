@@ -16,7 +16,7 @@
 				0,
 				0
 			],
-			"frames": 1,
+			"frames": 2,
 			"size": [
 				96,
 				40
@@ -73,7 +73,7 @@
 			],
 			"frames": 4,
 			"size": [
-				46,
+				44,
 				22
 			]
 		},
@@ -84,41 +84,41 @@
 			],
 			"frames": 4,
 			"size": [
-				15,
+				17,
 				7
 			]
 		},
 		"fish_mahi": {
 			"anchor": [
 				0,
-				3
+				5
 			],
 			"frames": 4,
 			"size": [
-				28,
-				11
+				30,
+				13
 			]
 		},
 		"fish_marlin": {
 			"anchor": [
 				0,
-				8
+				9
 			],
 			"frames": 4,
 			"size": [
-				59,
-				14
+				54,
+				15
 			]
 		},
 		"fish_oarfish": {
 			"anchor": [
 				0,
-				3
+				4
 			],
 			"frames": 4,
 			"size": [
-				62,
-				8
+				66,
+				9
 			]
 		},
 		"fish_sea_bream": {
@@ -128,8 +128,8 @@
 			],
 			"frames": 4,
 			"size": [
-				14,
-				9
+				15,
+				10
 			]
 		},
 		"fish_snapper": {
@@ -139,8 +139,8 @@
 			],
 			"frames": 4,
 			"size": [
-				18,
-				10
+				19,
+				11
 			]
 		},
 		"fish_swordfish": {
@@ -157,11 +157,11 @@
 		"fish_tuna": {
 			"anchor": [
 				0,
-				6
+				5
 			],
 			"frames": 4,
 			"size": [
-				30,
+				31,
 				12
 			]
 		},
@@ -172,7 +172,7 @@
 			],
 			"frames": 4,
 			"size": [
-				34,
+				37,
 				8
 			]
 		},

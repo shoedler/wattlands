@@ -3,7 +3,7 @@ shader_type canvas_item;
 // the dst colour at the same index, so every pixel stays a palette colour (fish and hints
 // shift along the ladder with depth, the farther boats one step lighter). flat_on paints every
 // opaque pixel flat_col (a hint's silhouette); rows at or below under_y (view px) take
-// under_col (a hull seen through the water); rows at or below clip_y are not drawn.
+// under_col (a hull seen through the water).
 
 uniform vec4 src_0;
 uniform vec4 src_1;
@@ -26,7 +26,6 @@ uniform bool flat_on = false;
 uniform vec4 flat_col;
 uniform float under_y = 100000.0;
 uniform vec4 under_col;
-uniform float clip_y = 100000.0;
 
 varying vec2 world_pos;
 varying vec4 v_modulate;
@@ -42,9 +41,6 @@ bool near(vec3 a, vec3 b) {
 }
 
 void fragment() {
-	if (world_pos.y >= clip_y) {
-		discard;
-	}
 	vec4 c = texture(TEXTURE, UV) * v_modulate;
 	vec3 o = c.rgb;
 	if (count > 0 && near(o, src_0.rgb)) {

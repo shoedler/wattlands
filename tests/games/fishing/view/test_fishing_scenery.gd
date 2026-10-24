@@ -51,33 +51,35 @@ func test_the_deepest_floor_in_sight_stays_above_the_hud() -> void:
 
 
 func test_water_darkens_with_depth_in_flat_steps() -> void:
-	assert_eq(FishingScenery.water_at(0.0), FishingPalette.SURFACE)
+	assert_eq(FishingScenery.water_at(0.0), FishingPalette.HAZE)
 	assert_lte(FishingPalette.SEA.size(), 5, "at most five flat water fields")
 	var prev := -1
 	for d: float in [0.0, 10.0, 30.0, 60.0, 120.0, 250.0, 400.0, 600.0]:
 		var i := FishingPalette.SEA.find(FishingScenery.water_at(d))
 		assert_gte(i, prev)
 		prev = i
-	assert_eq(FishingScenery.water_at(700.0), FishingPalette.ABYSS)
-	assert_eq(FishingPalette.SEA[-1], FishingPalette.LADDER[-1], "nothing darker than the abyss")
+	assert_eq(FishingScenery.water_at(700.0), FishingPalette.MID)
+	assert_eq(FishingScenery.water_at(100.0), FishingPalette.SURFACE, "the shelf stays light")
 
 
-func test_the_floor_is_sage_in_the_shallows_and_a_step_darker_in_the_deep() -> void:
+func test_the_floor_is_sage_in_the_shallows_and_deep_teal_in_the_deep() -> void:
 	assert_eq(FishingScenery.floor_at(4.0), FishingPalette.SAGE)
 	assert_eq(FishingScenery.floor_at(15.0), FishingPalette.SAGE)
 	for d: float in [4.0, 15.0, 60.0, 150.0, 400.0, 600.0]:
 		var water := FishingScenery.water_at(d)
 		assert_ne(FishingScenery.floor_at(d), water, "floor at %s m reads" % d)
 		var rim := FishingScenery.floor_at(d, true)
-		assert_ne(rim, FishingScenery.floor_at(d), "the rim differs from the floor")
-		assert_gt(rim.v, water.v, "and is lighter than the water (top-lit)")
+		assert_ne(rim, FishingScenery.floor_at(d), "the top line differs from the floor")
+		assert_ne(rim, water, "and from the water")
+	assert_eq(FishingScenery.floor_at(600.0), FishingPalette.DEEP)
+	assert_eq(FishingScenery.floor_at(600.0, true), FishingPalette.ABYSS)
 
 
-func test_fish_are_dark_on_light_water_and_lit_on_deep_water() -> void:
+func test_fish_are_dark_on_light_water_and_lit_on_the_darkest() -> void:
 	assert_eq(FishingPaletteMap.shift_for(0), 0)
 	assert_eq(FishingPaletteMap.shift_for(1), 1)
-	for band in range(2, FishingPalette.SEA.size()):
-		assert_lt(FishingPaletteMap.shift_for(band), 0, "band %d" % band)
+	assert_eq(FishingPaletteMap.shift_for(2), 1)
+	assert_lt(FishingPaletteMap.shift_for(FishingPalette.SEA.size() - 1), 0)
 
 
 func test_waves_are_crests_or_flat() -> void:
@@ -120,13 +122,14 @@ func test_painting_every_region_draws_without_errors() -> void:
 func test_the_rod_is_stowed_low_and_raised_to_fish_in_even_runs() -> void:
 	var base := Vector2(FishingRig.ROD_BASE)
 	var steps := FishingRig.ROD_BUTT_STEPS + FishingRig.ROD_TIP_STEPS
-	var stowed := FishingRig.rod(0.0, 0.0, Vector2.DOWN)
-	var raised := FishingRig.rod(1.0, 0.0, Vector2.DOWN)
+	var stowed := FishingRig.rod(0.0, 0.0)
+	var raised := FishingRig.rod(1.0, 0.0)
 	assert_eq(stowed[-1], base + Vector2(FishingRig.ROD_STOW_STEP * steps))
 	assert_eq(raised[-1], base + Vector2(FishingRig.ROD_FISH_STEP * steps))
-	assert_lt(raised[-1].y, base.y - 10.0, "raised it stands up")
-	var bent := FishingRig.rod(1.0, 1.0, Vector2.DOWN)
-	assert_gt(bent[-1].y, raised[-1].y + 5.0, "full tension bends the tip toward the line")
+	assert_lt(raised[-1].y, base.y - 8.0, "raised it stands up")
+	var bent := FishingRig.rod(1.0, 1.0)
+	assert_gt(bent[-1].y, raised[-1].y, "tension bends the tip down")
+	assert_lt(bent[-1].x, raised[-1].x, "and back")
 	for p in bent:
 		assert_eq(p, p.floor(), "whole pixels")
 	var px := FishingRig.rod_pixels(bent)

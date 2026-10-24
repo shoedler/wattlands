@@ -10,7 +10,8 @@
 // Per screenshot: unique world colours, off-family share (non-accent pixels outside hue 140-215
 // unless near-neutral, or above 75 % saturation), the lowest value, checker cells (3x2 windows alternating both ways; a 1:1 line is not one), isolated pixels (differing
 // from all four neighbours), the accent and player-colour shares, and the flat share (pixels
-// whose eight neighbours, where they are world, are the same colour). Zero dependencies (node:zlib).
+// whose eight neighbours, where they are world, are the same colour) and the light share (value
+// at least LIGHT_V). Zero dependencies (node:zlib).
 import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
@@ -33,7 +34,16 @@ export const HUD_RECTS = [
   [218, 318, 210, 42],
   [500, 312, 140, 48],
 ];
+// The kit's toast and banner rects (FishingHud.TOASTS, BANNERS): masked only when something
+// that is not world (text, off-palette panels) shows inside them.
+export const POPUP_RECTS = [
+  [118, 36, 300, 26],
+  [118, 148, 404, 64],
+];
 export const SCALE = 3;
+// The value mass: world pixels at or above this value (the surface teal and lighter) should
+// cover at least 60 % of the world, like the reference's light field.
+export const LIGHT_V = 0.755;
 // Below this saturation a colour is a near-neutral (foam, sky) whose hue is not meaningful.
 export const NEUTRAL_S = 0.1;
 
@@ -131,12 +141,33 @@ export function isPanel(h6) {
 }
 
 /** The art-pixel grid of a screenshot: {w, h, cells: Array<string|null>} (null: masked). */
-export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS) {
+export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS, popups = POPUP_RECTS) {
+  const g = artCells(img, scale, hudRects);
+  const inside = (x, y, [rx, ry, rw, rh]) => x >= rx && x < rx + rw && y >= ry && y < ry + rh;
+  for (const r of popups) {
+    if (!g.foreign.some(([x, y]) => inside(x, y, r))) continue;
+    for (let y = r[1]; y < Math.min(r[1] + r[3], g.h); y++) {
+      for (let x = r[0]; x < Math.min(r[0] + r[2], g.w); x++) {
+        const c = g.cells[y * g.w + x];
+        if (c !== null && !(c in PALETTE)) g.offPalette--;
+        if (c !== null || g.foreignAt.has(y * g.w + x)) {
+          g.cells[y * g.w + x] = null;
+          if (!g.foreignAt.has(y * g.w + x)) g.masked++;
+        }
+      }
+    }
+  }
+  return { w: g.w, h: g.h, cells: g.cells, masked: g.masked, offPalette: g.offPalette };
+}
+
+function artCells(img, scale, hudRects) {
   const w = Math.floor(img.width / scale);
   const h = Math.floor(img.height / scale);
   const cells = new Array(w * h).fill(null);
   let masked = 0;
   let offPalette = 0;
+  const foreign = [];
+  const foreignAt = new Set();
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       if (hudRects.some(([rx, ry, rw, rh]) => x >= rx && x < rx + rw && y >= ry && y < ry + rh)) {
@@ -158,6 +189,8 @@ export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS) {
       }
       if (!uniform) {
         masked++;
+        foreign.push([x, y]);
+        foreignAt.add(y * w + x);
         continue;
       }
       if (!(first in PALETTE)) {
@@ -166,11 +199,12 @@ export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS) {
           continue;
         }
         offPalette++;
+        foreign.push([x, y]);
       }
       cells[y * w + x] = first;
     }
   }
-  return { w, h, cells, masked, offPalette };
+  return { w, h, cells, masked, offPalette, foreign, foreignAt };
 }
 
 /** The rubric's numbers for an art grid. */
@@ -184,6 +218,7 @@ export function measure(grid) {
   let accent = 0;
   let players = 0;
   let flat = 0;
+  let light = 0;
   let isolated = 0;
   let checker = 0;
   for (let y = 0; y < h; y++) {
@@ -194,6 +229,7 @@ export function measure(grid) {
       counts.set(c, (counts.get(c) || 0) + 1);
       const { h: hue, s, v } = hsv(c);
       minV = Math.min(minV, v);
+      if (v >= LIGHT_V) light++;
       if (c === ACCENT) accent++;
       else if (PLAYERS.includes(c)) players++;
       else if ((s >= NEUTRAL_S && (hue < 140 || hue > 215)) || s > 0.75) offFamily++;
@@ -229,6 +265,7 @@ export function measure(grid) {
     accentPct: pct(accent),
     playerPct: pct(players),
     flatPct: pct(flat),
+    lightPct: pct(light),
     palette: [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
@@ -247,6 +284,7 @@ export function verdict(m) {
   if (m.isolated > 20) fails.push(`isolated pixels ${m.isolated} > 20`);
   if (m.accentPct > 1) fails.push(`accent ${m.accentPct}% > 1%`);
   if (m.flatPct < 60) fails.push(`flat ${m.flatPct}% < 60%`);
+  if (m.lightPct < 60) fails.push(`light ${m.lightPct}% < 60%`);
   return fails;
 }
 
@@ -269,7 +307,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(
       `${r.file}: colours ${r.colours}, off-family ${r.offFamilyPct}%, min V ${r.minValuePct}%, ` +
         `checker ${r.checker}, isolated ${r.isolated}, accent ${r.accentPct}%, players ${r.playerPct}%, ` +
-        `flat ${r.flatPct}%, off-palette ${r.offPalette}, masked ${r.masked} ` +
+        `flat ${r.flatPct}%, light ${r.lightPct}%, off-palette ${r.offPalette}, masked ${r.masked} ` +
         `${r.fails.length ? 'FAIL: ' + r.fails.join('; ') : 'ok'}`,
     );
     console.log(`  ${r.palette.join(' ')}`);

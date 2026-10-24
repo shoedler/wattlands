@@ -69,8 +69,8 @@ func test_the_rod_bends_toward_the_line_under_tension() -> void:
 		b.advance(0.05)
 	var straight := b.rod_points()[-1]
 	b.tension = 1.0
-	b.pull_dir = Vector2.DOWN
-	assert_gt(b.rod_points()[-1].y, straight.y + 5.0)
+	assert_gt(b.rod_points()[-1].y, straight.y, "the tip bends down")
+	assert_lt(b.rod_points()[-1].x, straight.x, "and back toward the line")
 
 
 func test_the_rod_tip_follows_the_boat() -> void:
@@ -101,11 +101,10 @@ func test_species_map_to_their_fish_sprites() -> void:
 	assert_eq(FishingSprites.fish_id(-1), "fish_mackerel")
 
 
-func test_the_line_under_water_reads_against_the_water_where_it_ends() -> void:
-	for d: float in [1.0, 20.0, 60.0, 200.0, 500.0, 680.0]:
-		var water := FishingScenery.water_at(d)
-		var line := FishingView.under_line(d)
-		assert_gt(absf(line.v - water.v), 0.15, "%s m" % d)
+func test_the_line_under_water_reads_against_every_band_it_crosses() -> void:
+	for band in FishingPalette.SEA.size():
+		var line := FishingView.line_in_band(band)
+		assert_gt(absf(line.v - FishingPalette.SEA[band].v), 0.15, "band %d" % band)
 		assert_has(FishingPalette.ALL, line)
 	assert_eq(FishingPalette.LINE, FishingPalette.SLATE, "the rod's slate above the water")
 
