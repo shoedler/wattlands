@@ -157,6 +157,224 @@ static func tonal_patches(img: Image, id: String) -> void:
 					break
 
 
+## Rust under the rivets, soot where smoke and powder blow, and the Behemoth's own lights (the round
+## 5 scene critic: clean, even grey plates with regular rivet dots read as code-drawn). At load,
+## deterministic, on the details pass's result:
+## - a thin rust streak runs down from about a third of the rivets (a rivet head over its shadow, as
+##   the details pass draws them): 1 px wide, 3-8 px long, blending toward #5a3a2e from 45% to
+##   nothing, stopping at a seam, the silhouette's edge or the skirt;
+## - the crew's hull is sooted round its exhaust stack (rigs.json `exhaust`), a soft gradient
+##   blown back along the deck; every turret's face round its gun is powder-sooted;
+## - rain-washed grime: narrow vertical streaks from under the top edge down the plates, soot-dark or
+##   rust-brown, fading out over 8-30 px (strongest on the Behemoth, mildest on the crew's hull);
+## - the Behemoth's upper plates catch a little more light than its lower ones, three lit vision
+##   slits (amber in a dark recess, never round, never side by side) and a glowing engine grille on
+##   its rear deck, and its turret one slit, so it is lit from within.
+static func weathered(src: Image, id: String) -> Image:
+	var img := src.duplicate() as Image
+	var w := img.get_width()
+	var h := img.get_height()
+	var c := TankPlaceholderArt.Canvas.new(w, h)
+	c.img = img
+	c.seed_value = absi(id.hash()) % 9973
+	var stop_y := h
+	if id.begins_with("hull_"):
+		stop_y = TankPlaceholderArt.skirt_row(id)
+	elif id == "boss_hull":
+		stop_y = int(h * 0.8)
+	elif id.begins_with("enemy_"):
+		var rigs: Variant = JSON.parse_string(
+			FileAccess.get_file_as_string(TankPlaceholderArt.RIGS_JSON)
+		)
+		var en: Dictionary = (
+			((rigs as Dictionary).get("enemies", {}) as Dictionary).get(id, {})
+			if rigs is Dictionary
+			else {}
+		)
+		stop_y = int(en.get("track_y", h)) - 7 if en.has("track_y") else int(h * 0.55)
+	if id == "boss_hull":
+		_upper_light(c, int(h * 0.7))
+	var grime := 1.0 if id.begins_with("boss_") else (0.75 if id.begins_with("enemy_") else 0.6)
+	if id != "enemy_dugin":
+		_grime_streaks(c, stop_y, grime)
+	_rust_streaks(c, stop_y)
+	if id.begins_with("hull_"):
+		var def := TankRigs.tank_def(id.trim_prefix("hull_"))
+		if def.has("exhaust"):
+			var ex := TankRigs.vec(def.get("exhaust"))
+			_soot_fan(c, int(ex.x), stop_y)
+	elif id.begins_with("turret_") and id != "turret_secondary":
+		var tdef: Dictionary = TankRigs.tank_def(id.trim_prefix("turret_")).get("turret", {})
+		var tr := TankRigs.rect(tdef.get("rect"))
+		var tn := TankRigs.vec(tdef.get("trunnion")) - tr.position
+		_soot_blot(c, Vector2(minf(tn.x, float(w) - 3.0), tn.y), 8.0, 0.45)
+	elif id.begins_with("boss_turret"):
+		_soot_blot(c, Vector2(4.0, h * 0.45), 9.0, 0.4)
+	if id == "boss_hull":
+		for f: Vector2 in [Vector2(0.19, 0.44), Vector2(0.5, 0.3), Vector2(0.81, 0.5)]:
+			_port(c, int(f.x * float(w)), f.y)
+		_grille(c, int(w * 0.9))
+	elif id == "boss_turret":
+		_port(c, int(w * 0.62), 0.42)
+	return c.img
+
+
+## Rows above `to_y` lifted a little toward #525456 (up to 22% at the top): the upper plates catch
+## the sky's light, the lower ones (with _lower_gradient) sink into grime.
+static func _upper_light(c: TankPlaceholderArt.Canvas, to_y: int) -> void:
+	for y in mini(to_y, c.h):
+		var k := 0.22 * (1.0 - float(y) / float(maxi(to_y, 1)))
+		for x in c.w:
+			var cc := c.img.get_pixel(x, y)
+			if cc.a < 0.5 or cc.get_luminance() > G7.get_luminance() or cc.r > cc.b + 0.04:
+				continue
+			if cc == G0 or cc == G1:
+				continue
+			c.px(x, y, cc.lerp(G7, k))
+
+
+## Rain-washed grime above `stop_y`, `strength` 0 .. 1 (see weathered): every 5-11 px a 1-2 px
+## streak from 2-5 px under the column's top edge, soot (toward #0f1012) or rust (toward #3a2a24),
+## fading to nothing over 8-30 px. Seams, rivets and outlines are left as they are.
+static func _grime_streaks(c: TankPlaceholderArt.Canvas, stop_y: int, strength: float) -> void:
+	var tops := _tops_of(c.img)
+	var x := 3 + int(c.noise(1, 2, 51) * 5.0)
+	var n := 0
+	while x < c.w - 3:
+		n += 1
+		var width := 1 + int(c.noise(x, n, 53) * 2.0)
+		var y0 := tops[x] + 2 + int(c.noise(x, n, 55) * 4.0)
+		var length := 8 + int(c.noise(x, n, 57) * 23.0)
+		var rust := c.noise(x, n, 59) < 0.4
+		var col := R0 if rust else G1
+		var a0 := (0.32 if rust else 0.4) * strength
+		for dx in width:
+			var xx := x + dx
+			for d in length:
+				var yy := y0 + d
+				if yy >= stop_y or not c.solid(xx, yy):
+					break
+				var cc := c.img.get_pixel(xx, yy)
+				if cc == G0 or cc == G1 or cc == G7:
+					continue
+				var k := a0 * (1.0 - float(d) / float(length)) * (0.6 if dx > 0 else 1.0)
+				c.px(xx, yy, cc.lerp(col, k))
+		x += 5 + int(c.noise(x, n, 61) * 7.0)
+
+
+## Rust streaks from about a third of the rivets above `stop_y` (see weathered).
+static func _rust_streaks(c: TankPlaceholderArt.Canvas, stop_y: int) -> void:
+	var heads: Array[Vector2i] = []
+	for y in range(0, mini(stop_y, c.h) - 2):
+		for x in range(0, c.w - 1):
+			if c.img.get_pixel(x, y) == G7 and c.img.get_pixel(x + 1, y + 1) == G1:
+				heads.append(Vector2i(x, y))
+	for hd in heads:
+		if c.noise(hd.x, hd.y, 41) > 0.33:
+			continue
+		var length := 3 + int(c.noise(hd.x, hd.y, 43) * 6.0)
+		for d in length:
+			var yy := hd.y + 2 + d
+			if yy >= stop_y or not c.solid(hd.x, yy):
+				break
+			var cc := c.img.get_pixel(hd.x, yy)
+			if cc.get_luminance() < G2.get_luminance() + 0.005 or cc == G7:
+				break
+			c.px(hd.x, yy, cc.lerp(TankPlaceholderArt.R1, 0.45 * (1.0 - float(d) / float(length))))
+
+
+## Soot round an exhaust stack at column `ex`: a soft gradient over the deck and the plates under it,
+## strongest at the stack's foot and blown back (left) along the deck, fading out within ~26 px.
+static func _soot_fan(c: TankPlaceholderArt.Canvas, ex: int, stop_y: int) -> void:
+	var tops := _tops_of(c.img)
+	if ex < 0 or ex >= c.w:
+		return
+	var deck := tops[ex]
+	for y in range(deck, mini(deck + 16, stop_y)):
+		for x in range(maxi(ex - 28, 0), mini(ex + 8, c.w)):
+			if not c.solid(x, y):
+				continue
+			var back := float(ex + 2 - x) / 26.0
+			var along := 1.0 - absf(back - 0.25) / 0.9
+			var down := 1.0 - float(y - tops[x]) / 14.0
+			var k := clampf(along, 0.0, 1.0) * clampf(down, 0.0, 1.0)
+			if k <= 0.02:
+				continue
+			var cc := c.img.get_pixel(x, y)
+			c.px(x, y, cc.lerp(G0, 0.7 * k * k))
+
+
+## A soft round soot blot of `radius` at `at` (powder smoke round a gun), rising a little.
+static func _soot_blot(c: TankPlaceholderArt.Canvas, at: Vector2, radius: float, a: float) -> void:
+	for y in range(int(at.y - radius * 1.3), int(at.y + radius * 0.8) + 1):
+		for x in range(int(at.x - radius), int(at.x + radius) + 1):
+			if not c.solid(x, y):
+				continue
+			var d := Vector2(float(x) - at.x, (float(y) - at.y) * (0.75 if y < at.y else 1.25))
+			var k := 1.0 - d.length() / radius
+			if k <= 0.0:
+				continue
+			c.px(x, y, c.img.get_pixel(x, y).lerp(G0, a * k * k))
+
+
+## A lit vision slit on the Behemoth at column `x`, `fy` of the way down its column: a dark 11 x 4
+## recess with a lit lip above, a fire-orange slit 9 px wide with an amber core inside, and its warm
+## spill on the two rows of plate below. Skipped where the armour is not solid round it.
+static func _port(c: TankPlaceholderArt.Canvas, x: int, fy: float) -> void:
+	var tops := _tops_of(c.img)
+	if x < 6 or x >= c.w - 6:
+		return
+	var y := tops[x] + int(fy * float(c.h - tops[x]))
+	for yy in range(y - 3, y + 5):
+		for xx in range(x - 6, x + 7):
+			if not c.solid(xx, yy):
+				return
+	c.rect(x - 5, y - 2, 11, 1, G7)
+	c.rect(x - 5, y - 1, 11, 4, G0)
+	c.rect(x - 4, y, 9, 2, TankPlaceholderArt.F0)
+	c.rect(x - 2, y, 5, 1, TankPlaceholderArt.F1)
+	c.px(x, y, TankPlaceholderArt.F2)
+	for k in 2:
+		for xx in range(x - 4, x + 5):
+			c.px(
+				xx,
+				y + 3 + k,
+				c.img.get_pixel(xx, y + 3 + k).lerp(TankPlaceholderArt.R2, 0.45 - 0.2 * float(k))
+			)
+
+
+## A glowing engine grille on the Behemoth's rear deck near column `x`: five vertical bars, dark
+## between, fire-lit from inside under an amber top row.
+static func _grille(c: TankPlaceholderArt.Canvas, x: int) -> void:
+	var tops := _tops_of(c.img)
+	var y0 := tops[clampi(x, 0, c.w - 1)] + 4
+	for xx in range(x - 5, x + 5):
+		for yy in range(y0 - 1, y0 + 6):
+			if not c.solid(xx, yy):
+				return
+	c.rect(x - 5, y0 - 1, 10, 7, G0)
+	for k in 5:
+		var bx := x - 4 + k * 2
+		c.rect(bx, y0, 1, 5, TankPlaceholderArt.F0 if k % 2 == 0 else TankPlaceholderArt.R2)
+		c.px(bx, y0, TankPlaceholderArt.F1)
+	c.rect(x - 5, y0 - 2, 10, 1, G6)
+
+
+## Every column's first opaque row (the image height for an empty column).
+static func _tops_of(img: Image) -> PackedInt32Array:
+	var w := img.get_width()
+	var h := img.get_height()
+	var tops := PackedInt32Array()
+	tops.resize(w)
+	for x in w:
+		tops[x] = h
+		for y in h:
+			if img.get_pixel(x, y).a > 0.5:
+				tops[x] = y
+				break
+	return tops
+
+
 ## For every column (row) 0 .. n-1, how many of the sorted `seams` are at or before it.
 static func _band_index(seams: PackedInt32Array, n: int) -> PackedInt32Array:
 	var out := PackedInt32Array()

@@ -120,6 +120,12 @@ func engine_lights() -> void:
 	pass
 
 
+## How far the rider's lamp washes the room, 0 .. 1 of its full halo. The dynamo keeps its arc
+## blue-white whatever the rider's colour, so only its lamp and badge take that colour.
+func lamp_reach() -> float:
+	return 1.0
+
+
 ## Where the room's own light comes from (room coordinates): its glow is centred there, falling to
 ## black in the corners. Subclasses return their cylinders, arc or firebox.
 func light_source() -> Vector2:
@@ -256,8 +262,12 @@ func _lights() -> void:
 		var look := input.look if not input.look.is_empty() else Wl.slot_look(maxi(input.slot, 0))
 		var col: Color = look.get("color", Color.WHITE)
 		var p := pulse()
-		# A wide soft halo washing the dark room in the rider's colour, and a tight hot core.
-		hub.lights.add(origin + anchor_local("lamp"), 50.0 + 18.0 * p, col, 0.3 + 0.25 * p)
+		# A wide soft halo washing the dark room in the rider's colour (narrower where the engine's
+		# own light must keep its colour: lamp_reach), and a tight hot core.
+		var reach := lamp_reach()
+		hub.lights.add(
+			origin + anchor_local("lamp"), (50.0 + 18.0 * p) * reach, col, (0.3 + 0.25 * p) * reach
+		)
 		hub.lights.add(
 			origin + anchor_local("lamp"), 9.0 + 3.0 * p, col.lerp(Color.WHITE, 0.4), 0.8
 		)
@@ -277,5 +287,7 @@ func _lights() -> void:
 		)
 		var k := flare_s / FLARE_S
 		var flare_color: Color = flare_look.get("color", Color.WHITE)
-		hub.lights.add(origin + anchor_local("lamp"), 60.0 + 30.0 * k, flare_color, 0.7 * k)
+		hub.lights.add(
+			origin + anchor_local("lamp"), (60.0 + 30.0 * k) * lamp_reach(), flare_color, 0.7 * k
+		)
 	engine_lights()

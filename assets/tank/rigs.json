@@ -44,22 +44,27 @@
 				208,
 				196
 			],
-			"wheel_line_y": 73,
+			"wheel_line_y": 75,
+			"road_wheel_r": 7,
+			"sprocket_r": 9,
+			"idler_r": 8,
 			"road_wheels_x": [
-				22,
-				52,
-				81,
-				111,
-				140,
-				170
+				24,
+				45,
+				65,
+				86,
+				106,
+				127,
+				147,
+				167
 			],
 			"drive_sprocket": [
 				10,
-				70
+				72
 			],
 			"idler": [
 				182,
-				70
+				72
 			],
 			"track_belt": [
 				4,
@@ -170,7 +175,10 @@
 				248,
 				190
 			],
-			"wheel_line_y": 77,
+			"wheel_line_y": 78,
+			"road_wheel_r": 8,
+			"sprocket_r": 10,
+			"idler_r": 9,
 			"road_wheels_x": [
 				22,
 				46,
@@ -184,11 +192,11 @@
 			],
 			"drive_sprocket": [
 				10,
-				74
+				75
 			],
 			"idler": [
 				230,
-				74
+				75
 			],
 			"track_belt": [
 				4,
@@ -320,6 +328,9 @@
 				184
 			],
 			"wheel_line_y": 81,
+			"road_wheel_r": 9,
+			"sprocket_r": 11,
+			"idler_r": 10,
 			"road_wheels_x": [
 				22,
 				46,

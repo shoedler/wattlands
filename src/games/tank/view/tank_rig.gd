@@ -28,6 +28,8 @@ var base_pos: Vector2 = Vector2.ZERO
 var _roof: Rect2 = Rect2()
 var _roof_done: bool = false
 var gear: TankRunningGear = null
+## The x-ray recess behind the rooms (redrawn every frame: its lit lip takes each room's glow).
+var cutaway: TankPainter = null
 var hull_sprite: Sprite2D = null
 var rooms: Array[TankRoomView] = []
 var diesel_room: TankDieselRoom = null
@@ -82,16 +84,18 @@ func assemble(p_tank: String, p_hub: TankRigHub) -> void:
 	hull_h = int(size.y)
 	base_pos = Vector2(TankConst.REAR_SCREEN_X, TankConst.GROUND_Y - GROUND_GAP - hull_h)
 	position = base_pos
-	gear = TankRunningGear.new()
-	gear.assemble(def)
-	add_child(gear)
 	hull_sprite = Sprite2D.new()
 	hull_sprite.name = "Hull"
 	hull_sprite.texture = TankSprites.tex(TankSprites.hull_id(tank))
 	hull_sprite.centered = false
 	add_child(hull_sprite)
+	# The running gear in front of the hull's lower band and behind the cutaway: the belt's upper
+	# run tucks under the rooms' band, the wheels show whole down to the ground line.
+	gear = TankRunningGear.new()
+	gear.assemble(def)
+	add_child(gear)
 	_measure_hull()
-	var cutaway := TankPainter.new()
+	cutaway = TankPainter.new()
 	cutaway.name = "Cutaway"
 	cutaway.painter = _paint_cutaway
 	add_child(cutaway)
@@ -124,6 +128,23 @@ func _paint_cutaway(item: Node2D) -> void:
 	item.draw_rect(
 		Rect2(Vector2(band.position.x, band.end.y), Vector2(band.size.x, 1.0)), TankPalette.STEEL
 	)
+	# Wet steel catching each room's own light (round 5 critic): the lip under a room and the
+	# band's top edge over it take the room's glow colour, as strong as the engine runs.
+	for room in rooms:
+		var power := 0.0 if room.input.unpowered else clampf(room.input.frac, 0.0, 1.2)
+		if power < 0.05:
+			continue
+		var col := room.tint()
+		var a := 0.22 + 0.3 * power * (1.25 if room.lit() else 1.0)
+		var x0 := room.rect.position.x + 2.0
+		var span := room.rect.size.x - 4.0
+		item.draw_rect(
+			Rect2(x0, band.end.y, span, 1.0), TankPalette.with_alpha(col, clampf(a, 0.0, 0.75))
+		)
+		item.draw_rect(
+			Rect2(x0 + span * 0.2, band.position.y - 1.0, span * 0.6, 1.0),
+			TankPalette.with_alpha(col, clampf(a * 0.45, 0.0, 0.4))
+		)
 
 
 func _build_rooms() -> void:
@@ -164,19 +185,20 @@ func _build_links() -> void:
 			from = diesel_room.rect.position + (diesel_room as TankBulwarkRoom).outputs[0]
 			r_from = TankBulwarkRoom.GEAR_R
 		# A heavy 2 px chain with alternating link tones, routed like a real final drive: down from a
-		# small sprocket on the flywheel shaft (or the gearbox's drive output) through the room floor
-		# onto the skirt, then back along the skirt, sloping onto the drive sprocket's teeth at the
-		# rear. It runs over the plain skirt plate, so it reads end to end.
+		# small sprocket on the flywheel shaft (or the gearbox's drive output) through the room floor,
+		# back along the dark band under the rooms, then sloping onto the top of the drive sprocket's
+		# teeth at the rear, where the track belt wraps the same sprocket. It runs over the dark band,
+		# so it reads end to end.
 		drive_chain = _chain("DriveChain", 70.0, TankPalette.SILVER, TankPalette.COAL)
 		drive_chain.pitch_px = 4.0
 		drive_chain.link_px = 2.0
 		drive_chain.width_px = 2.0
 		drive_chain.closed = false
-		var run_y := minf(
-			float(TankPlaceholderArt.skirt_row(TankSprites.hull_id(tank))) + 6.0,
-			float(hull_h) - 3.0
-		)
-		var r_spr := TankRunningGear.SPROCKET_R
+		var floor_y := 0.0
+		for room in rooms:
+			floor_y = maxf(floor_y, room.rect.end.y)
+		var run_y := floor_y + 1.5
+		var r_spr := gear.sprocket_r
 		_chain_from = from
 		_chain_r = r_from
 		var route := PackedVector2Array([from + Vector2(0, r_from)])
@@ -256,18 +278,27 @@ func _paint_link_beds(item: Node2D) -> void:
 	TankRunningGear.paint_bed(item, drive_chain, 2.0, TankPalette.IRON_DARK)
 	TankRunningGear.paint_bed(item, hoist_chain, 2.0, TankPalette.IRON_DARK)
 	if slew_shaft != null:
-		TankRunningGear.paint_bed(item, slew_shaft, 2.0, TankPalette.STEEL_DARK)
+		# A 3 px steel rod in a black sleeve (round 5 critic: the 2 px shaft blended into the room
+		# frame), its lit side toward the room's light, with a bearing collar at every bend.
+		TankRunningGear.paint_bed(item, slew_shaft, 4.0, TankPalette.BLACK)
+		TankRunningGear.paint_bed(item, slew_shaft, 2.0, TankPalette.STEEL)
 		# The Bulwark's turret shaft catches a warm rim light while the lever drives it.
 		var lit := (
 			diesel_room is TankBulwarkRoom and (diesel_room as TankBulwarkRoom).active_output() == 1
 		)
-		var rim := TankPalette.with_alpha(TankPalette.AMBER, 0.7) if lit else TankPalette.STEEL
+		var rim := (
+			TankPalette.with_alpha(TankPalette.AMBER, 0.8) if lit else TankPalette.STEEL_BRIGHT
+		)
 		var pts := slew_shaft.points
 		for i in range(pts.size() - 1):
 			if absf(pts[i].y - pts[i + 1].y) < 0.5:
 				item.draw_line(pts[i] + Vector2(0, -1), pts[i + 1] + Vector2(0, -1), rim, 1.0)
-			elif lit:
+			else:
 				item.draw_line(pts[i] + Vector2(-1, 0), pts[i + 1] + Vector2(-1, 0), rim, 1.0)
+		for i in range(1, pts.size() - 1):
+			var b := pts[i].round()
+			item.draw_rect(Rect2(b - Vector2(2, 2), Vector2(4, 4)), TankPalette.IRON)
+			item.draw_rect(Rect2(b - Vector2(2, 2), Vector2(4, 1)), TankPalette.STEEL_LIGHT)
 
 
 func _chain(chain_name: String, px_s: float, a: Color, b: Color) -> ScrollingChain:
@@ -351,6 +382,7 @@ func update(state: TankState, feed: Dictionary, dt: float) -> void:
 		hull_sprite.modulate = Color(1.0 + 0.7 * k, 1.0 + 0.5 * k, 1.0 + 0.3 * k)
 	stack.queue_redraw()
 	dozer.queue_redraw()
+	cutaway.queue_redraw()
 	if sprocket_paint != null:
 		sprocket_paint.queue_redraw()
 	if rails != null:
@@ -590,7 +622,7 @@ func nose_x(y: float) -> float:
 		return float(_row_right[yi])
 	if yi >= hull_h:
 		var idl := TankRigs.vec(def.get("idler"))
-		return idl.x + TankRunningGear.IDLER_R
+		return idl.x + gear.idler_r
 	return float(hull_w)
 
 
@@ -680,16 +712,7 @@ func barbette_rect(tr: Rect2, facing: int = 1) -> Rect2:
 func _paint_sprocket(item: Node2D) -> void:
 	var c := TankRigs.vec(def.get("drive_sprocket"))
 	var ang := gear.wheels[0].angle() if not gear.wheels.is_empty() else 0.0
-	var r := TankRunningGear.SPROCKET_R
-	item.draw_circle(c, r + 0.5, TankPalette.BLACK)
-	item.draw_circle(c, r - 0.5, TankPalette.STEEL)
-	item.draw_arc(c, r - 0.5, PI * 1.1, PI * 1.8, 10, TankPalette.STEEL_PALE, 1.0)
-	item.draw_circle(c, r - 3.0, TankPalette.IRON_DARK)
-	for i in 10:
-		var d := Vector2.from_angle(ang + TAU * float(i) / 10.0)
-		item.draw_line(c + d * (r - 3.0), c + d * (r + 0.5), TankPalette.COAL, 1.0)
-	item.draw_circle(c, 3.5, TankPalette.STEEL_DARK)
-	item.draw_circle(c, 2.0, TankPalette.STEEL_LIGHT)
+	TankRunningGear.paint_sprocket_ring(item, c, gear.sprocket_r, ang)
 	item.draw_rect(Rect2(c.round() + Vector2(-1, -2), Vector2(1, 1)), TankPalette.CLAY)
 	if diesel_room == null:
 		return

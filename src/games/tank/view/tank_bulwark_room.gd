@@ -5,7 +5,7 @@ extends TankDieselRoom
 ## output gears drawn in code as solid toothed wheels, each on its own shaft leaving the box (down
 ## to the drive chain, up to the turret ring, right to the hoist rail; the rig draws the shafts).
 ## Only the engaged gear spins, in lit steel with a warm rim and hub; the idle ones stay dark iron.
-## A 2 px steel lever about 12 px long with an amber knob stands on a quadrant plate with three
+## A 2 px steel lever about 14 px long with an amber knob stands on a quadrant plate with three
 ## notches at the gearbox's front, leaning left for Drive ("Dig" at a gun line), upright for Turret
 ## and right for Hoist, and swings across during a one-second shift. The hoist's progress toward
 ## the next heavy shell is the cradle climbing the hoist rail to the breech (the rig draws it).
@@ -15,7 +15,7 @@ const GEAR_R := 5.5
 const GEAR_TEETH := 8
 const TOOTH_PX := 2.0
 ## The lever: length, and its angle (degrees, 0 = right, -90 = up) at Drive, Turret and Hoist.
-const LEVER_PX := 12.0
+const LEVER_PX := 14.0
 const LEVER_DEG: Array[float] = [-125.0, -90.0, -55.0]
 
 const OUTPUT_KEYS: Array[String] = ["drive", "turret", "hoist"]
@@ -136,14 +136,14 @@ func _lever(item: Node2D, active: int) -> void:
 	if n.x > 0.0:
 		n = -n
 	item.draw_line(pivot, tip, TankPalette.BLACK, 4.0)
-	item.draw_line(pivot, tip, TankPalette.STEEL_LIGHT, 2.0)
-	item.draw_line(pivot + n * 0.5, tip + n * 0.5, TankPalette.SILVER, 1.0)
+	item.draw_line(pivot, tip, TankPalette.STEEL_PALE, 2.0)
+	item.draw_line(pivot + n * 0.5, tip + n * 0.5, TankPalette.PEARL, 1.0)
 	item.draw_rect(Rect2(pivot.round() - Vector2(2, 2), Vector2(4, 4)), TankPalette.IRON)
 	item.draw_rect(Rect2(pivot.round() - Vector2(2, 2), Vector2(4, 1)), TankPalette.STEEL)
 	item.draw_rect(Rect2(pivot.round() - Vector2(1, 1), Vector2(1, 1)), TankPalette.STEEL_PALE)
 	var k := tip.round()
-	item.draw_circle(k, 2.5, TankPalette.BLACK)
-	item.draw_circle(k, 1.8, KNOB if active >= 0 else KNOB.darkened(0.45))
+	item.draw_circle(k, 3.0, TankPalette.BLACK)
+	item.draw_circle(k, 2.2, KNOB if active >= 0 else KNOB.darkened(0.45))
 	item.draw_rect(Rect2(k - Vector2(1, 1), Vector2(1, 1)), TankPalette.GLOW_WARM)
 
 
