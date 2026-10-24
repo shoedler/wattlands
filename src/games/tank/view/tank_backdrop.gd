@@ -13,6 +13,9 @@ const HILLS_FACTOR := 0.2
 const NEAR_FACTOR := 0.5
 const GROUND_FACTOR := 1.0
 const DEBRIS_FACTOR := 1.3
+## The sky sprite hangs this far down so its fire-lit cloud base meets the horizon behind the hills;
+## above it SkyTop continues the sprite's top row up to y 0 (under the HUD band).
+const SKY_TOP_Y := 10.0
 const HILLS_BOTTOM_Y := 252.0
 const NEAR_BOTTOM_Y := 292.0
 const GROUND_TOP_Y := 290.0
@@ -38,21 +41,27 @@ var near_id: String = ""
 ## Times a near strip was swapped (tests).
 var swaps: int = 0
 
+var _sky_top_color: Color = Color(0, 0, 0, 0)
+
 
 func _init() -> void:
 	name = "Backdrop"
 	# Every near plane is blurred now, once, so a segment change later is only a texture swap.
 	for id in NEAR_IDS:
 		TankBlur.plane(id, "near")
-	sky = _strip("Sky", "bg_sky", "sky", SKY_FACTOR, 0.0, false)
+	var sky_top := TankPainter.new()
+	sky_top.name = "SkyTop"
+	sky_top.painter = _paint_sky_top
+	add_child(sky_top)
+	sky = _strip("Sky", "bg_sky", "sky", SKY_FACTOR, SKY_TOP_Y, false)
 	add_child(sky)
-	# The haze band sits between the sky and the hills so the hills' empty top shows smoke.
+	hills = _strip("Hills", "bg_hills_far", "hills", HILLS_FACTOR, HILLS_BOTTOM_Y, true)
+	add_child(hills)
+	# The haze band lies over the hills and under the near plane: aerial perspective in smoke.
 	var haze := TankPainter.new()
 	haze.name = "HazeBand"
 	haze.painter = _paint_haze
 	add_child(haze)
-	hills = _strip("Hills", "bg_hills_far", "hills", HILLS_FACTOR, HILLS_BOTTOM_Y, true)
-	add_child(hills)
 	near = _strip("Near", FALLBACK_NEAR, "near", NEAR_FACTOR, NEAR_BOTTOM_Y, true)
 	near_id = FALLBACK_NEAR
 	add_child(near)
@@ -194,12 +203,37 @@ func _strip(
 	return s
 
 
-## A vertical smoke gradient from clear (y 150) to the haze colour (y 262): fills the empty top of
-## the hills and the gap under the sky.
+## Above the sky sprite: the mean colour of its top row, so the sky has no edge under the HUD.
+func _paint_sky_top(item: Node2D) -> void:
+	if _sky_top_color.a == 0.0:
+		_sky_top_color = top_row_color(TankBlur.plane("bg_sky", "sky").get_image())
+	item.draw_rect(Rect2(0, 0, TankConst.SCREEN_W, SKY_TOP_Y + 1.0), _sky_top_color)
+
+
+## The mean opaque colour of an image's top row (black for an empty one).
+static func top_row_color(img: Image) -> Color:
+	var sum := Color(0, 0, 0, 0)
+	var n := 0
+	for x in img.get_width():
+		var c := img.get_pixel(x, 0)
+		if c.a > 0.5:
+			sum += Color(c.r, c.g, c.b, 1.0)
+			n += 1
+	return Color(sum.r / n, sum.g / n, sum.b / n, 1.0) if n > 0 else Color.BLACK
+
+
+## Smoke lying in the valleys: clear at y 196, a fire-warmed haze at the horizon (y 236), then the
+## cool haze colour toward the ground. Translucent, so the hills show through as distant shapes.
 func _paint_haze(item: Node2D) -> void:
-	var top := Color(TankPalette.HAZE.r, TankPalette.HAZE.g, TankPalette.HAZE.b, 0.0)
-	var bot := TankPalette.HAZE.darkened(0.25)
+	var warm := TankPalette.HAZE.lerp(TankPalette.RUST, 0.35)
+	var clear := Color(warm.r, warm.g, warm.b, 0.0)
+	var mid := Color(warm.r, warm.g, warm.b, 0.32)
+	var bot := Color(TankPalette.HAZE.r, TankPalette.HAZE.g, TankPalette.HAZE.b, 0.45)
 	var pts := PackedVector2Array(
-		[Vector2(0, 150), Vector2(640, 150), Vector2(640, 300), Vector2(0, 300)]
+		[Vector2(0, 196), Vector2(640, 196), Vector2(640, 236), Vector2(0, 236)]
 	)
-	item.draw_polygon(pts, PackedColorArray([top, top, bot, bot]))
+	item.draw_polygon(pts, PackedColorArray([clear, clear, mid, mid]))
+	pts = PackedVector2Array(
+		[Vector2(0, 236), Vector2(640, 236), Vector2(640, 300), Vector2(0, 300)]
+	)
+	item.draw_polygon(pts, PackedColorArray([mid, mid, bot, bot]))

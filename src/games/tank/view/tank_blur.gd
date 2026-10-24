@@ -14,9 +14,9 @@ extends RefCounted
 ## passes (box passes per axis), haze (0..1 toward the haze colour), darken (0..1 toward black).
 ## The blur radii are recorded in docs/decisions/tank.md by the lead (view report).
 const PRESETS := {
-	"sky": {"down": 5, "box_r": 1, "passes": 2, "haze": 0.45, "darken": 0.0},
-	"hills": {"down": 4, "box_r": 1, "passes": 2, "haze": 0.55, "darken": 0.0},
-	"near": {"down": 3, "box_r": 0, "passes": 1, "haze": 0.30, "darken": 0.0},
+	"sky": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.12, "darken": 0.0},
+	"hills": {"down": 3, "box_r": 1, "passes": 1, "haze": 0.40, "darken": 0.0},
+	"near": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.18, "darken": 0.0},
 	"ground": {"down": 1, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.08},
 	"debris": {"down": 4, "box_r": 2, "passes": 2, "haze": 0.0, "darken": 0.55},
 	"soft": {"down": 2, "box_r": 0, "passes": 1, "haze": 0.0, "darken": 0.0},

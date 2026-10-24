@@ -177,7 +177,7 @@ func paint_machinery_front(item: Node2D) -> void:
 ## A shell standing in the rack: steel body, brass base, nose.
 static func _shell(item: Node2D, r: Rect2) -> void:
 	var body := Rect2(r.position + Vector2(0, 7), Vector2(r.size.x, r.size.y - 7))
-	item.draw_rect(body, TankPalette.OLIVE_LIGHT)
+	item.draw_rect(body, TankPalette.SLATE)
 	item.draw_rect(Rect2(body.position.x, body.end.y - 4, body.size.x, 4), TankPalette.BRASS)
 	item.draw_colored_polygon(
 		PackedVector2Array(

@@ -445,7 +445,7 @@ func _paint_rails(item: Node2D) -> void:
 	var t := cradle_t()
 	var at := a.lerp(b, t)
 	item.draw_rect(Rect2(at.x - 3, at.y - 2, 6, 3), TankPalette.STEEL_BRIGHT)
-	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.OLIVE_LIGHT)
+	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.SLATE)
 	item.draw_rect(Rect2(at.x - 2, at.y - 4, 4, 2), TankPalette.BRASS)
 	item.draw_rect(Rect2(at.x - 1, at.y - 12, 2, 2), TankPalette.STEEL_PALE)
 

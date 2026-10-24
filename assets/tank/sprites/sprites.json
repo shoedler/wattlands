@@ -1,0 +1,199 @@
+{
+  "game": "tank",
+  "palette": [
+    "#07080a",
+    "#0f1012",
+    "#17181b",
+    "#202124",
+    "#2a2b2e",
+    "#353739",
+    "#424446",
+    "#525456",
+    "#666869",
+    "#808182",
+    "#a3a4a4",
+    "#cfd0cf",
+    "#17130f",
+    "#241d17",
+    "#33291f",
+    "#443628",
+    "#574634",
+    "#6b5842",
+    "#2b2a24",
+    "#3d3c33",
+    "#4b5561",
+    "#3a2a24",
+    "#5a3a2e",
+    "#7d4f3a",
+    "#e8743a",
+    "#ffb35c",
+    "#ffd99a",
+    "#fff3d6",
+    "#2e3944",
+    "#5d86a3",
+    "#9fc4dd",
+    "#e6f3fb"
+  ],
+  "sprites": {
+    "bg_hills_far": {
+      "align": "bottom_center",
+      "anchor": [
+        480,
+        120
+      ],
+      "background": "transparent",
+      "file": "bg_hills_far.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        960,
+        120
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d10-5075-77b1-af68-671ef7bd1699"
+      },
+      "tile": true
+    },
+    "bg_sky": {
+      "align": "bottom_center",
+      "anchor": [
+        320,
+        200
+      ],
+      "background": "opaque",
+      "file": "bg_sky.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        640,
+        200
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d16-9ee6-7451-80a6-420325acf874"
+      },
+      "tile": false
+    },
+    "bg_village_near": {
+      "align": "bottom_center",
+      "anchor": [
+        480,
+        140
+      ],
+      "background": "transparent",
+      "file": "bg_village_near.png",
+      "mirror": true,
+      "parts": {},
+      "size": [
+        960,
+        140
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d10-5078-7990-a4da-77c52012332e"
+      },
+      "tile": true
+    },
+    "diesel_block": {
+      "align": "bottom_center",
+      "anchor": [
+        28,
+        32
+      ],
+      "background": "transparent",
+      "file": "diesel_block.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        56,
+        32
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d0d-b65b-7c73-be0c-97d91951e1cd"
+      },
+      "tile": false
+    },
+    "enemy_medium": {
+      "align": "bottom_center",
+      "anchor": [
+        52,
+        52
+      ],
+      "background": "transparent",
+      "file": "enemy_medium.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        104,
+        52
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d0d-b65b-7432-9433-49900b517e87"
+      },
+      "tile": false
+    },
+    "explosion_large": {
+      "align": "center",
+      "anchor": [
+        32,
+        32
+      ],
+      "background": "transparent",
+      "file": "explosion_large.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        64,
+        64
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d0e-1bb0-7700-9d1d-3aacdde32490"
+      },
+      "tile": false
+    },
+    "hull_citadel": {
+      "align": "bottom_left",
+      "anchor": [
+        0,
+        80
+      ],
+      "background": "transparent",
+      "file": "hull_citadel.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        288,
+        80
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d11-c840-77e3-b0d4-6d553f214631"
+      },
+      "tile": false
+    },
+    "room_diesel": {
+      "align": "bottom_center",
+      "anchor": [
+        48,
+        48
+      ],
+      "background": "opaque",
+      "file": "room_diesel.png",
+      "mirror": false,
+      "parts": {},
+      "size": [
+        96,
+        48
+      ],
+      "source": {
+        "endpoint": "openai/gpt-image-2.5/flare/text-to-image",
+        "request_id": "01a16d0d-b656-7933-972a-040a518857d7"
+      },
+      "tile": false
+    }
+  }
+}

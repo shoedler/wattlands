@@ -1,21 +1,21 @@
 {
 	"_doc": "Diesel Domestiques sprites (brief 3; docs/ART_PIPELINE.md), 61 ids. Strips wider than 3:1 are tile + mirror segments; the hulls and boss_hull beyond 3:1 are requested at 3:1 with the subject filling the width, so the trimmed result keeps the sprite's aspect (ADR 'Art sizes beyond 3:1'). Placeholders from src/games/tank/view/placeholder_art.gd stand in for every id until an art pass with WATTLANDS_ALLOW_ART.",
-	"endpoint": "openai/gpt-image-2.5/sunburst/text-to-image",
+	"endpoint": "openai/gpt-image-2.5/flare/text-to-image",
 	"quality": "high",
 	"dither": "none",
-	"style": "Side-view 2D game sprite, orthographic, low resolution with soft muted shading, desaturated colours and deep shadows. Dark brutalist alternate-history 1940s: riveted steel, soot, rust, mud, wet surfaces. Light sources are bright glowing shapes, warm amber or cold blue-white. Single object, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos.",
+	"style": "Side-view 2D game asset in strict orthographic side elevation, painted as a moody matte concept-art diorama: big simple readable shapes, soft smooth shading with gentle gradients, no outlines, not pixel art, no fine noise or tiny clutter. Low-key and desaturated: soot grey-black, gunmetal, rust brown and mud with deep shadows; the only saturated colours are lights, which glow softly: warm amber fire and lamp light, or cold blue-white arc light. Dark brutalist alternate-history 1940s: massive riveted steel slabs, soot, rust, mud, wet surfaces catching light. Show only what the description names, centered. No people, figures or faces; no text, letters, numbers, flags, insignia, emblems, markings or logos.",
 	"palette": [
 		"#07080a",
-		"#0e1013",
-		"#161a1e",
-		"#1f2429",
-		"#2a3036",
-		"#363d44",
-		"#444b52",
-		"#565c62",
-		"#6c7176",
-		"#878b8f",
-		"#a7aaac",
+		"#0f1012",
+		"#17181b",
+		"#202124",
+		"#2a2b2e",
+		"#353739",
+		"#424446",
+		"#525456",
+		"#666869",
+		"#808182",
+		"#a3a4a4",
 		"#cfd0cf",
 		"#17130f",
 		"#241d17",
@@ -25,7 +25,7 @@
 		"#6b5842",
 		"#2b2a24",
 		"#3d3c33",
-		"#545246",
+		"#4b5561",
 		"#3a2a24",
 		"#5a3a2e",
 		"#7d4f3a",
@@ -33,7 +33,7 @@
 		"#ffb35c",
 		"#ffd99a",
 		"#fff3d6",
-		"#2f4a5e",
+		"#2e3944",
 		"#5d86a3",
 		"#9fc4dd",
 		"#e6f3fb"
@@ -64,7 +64,7 @@
 				288,
 				80
 			],
-			"prompt": "a very long, low slab-sided super-heavy tank hull filling the whole width of the image edge to edge with empty space above and below, exact side view facing right, the front on the right, the longest, three engine rooms, small turret mounts fore and aft; riveted grey-black armour plates with rust streaks and soot, an x-ray cutaway band along the middle showing dark empty compartments, the side skirts cut flat at the bottom; no wheels, no tracks, no turret, no gun; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"prompt": "the hull of a colossal brutalist super-heavy tank seen in exact side elevation facing right: one massive tall armoured box whose outline touches the left, right, top and bottom edges of the image, so the box fills the whole frame; the front on the right: a vertical front plate with only a short chamfer cut off the top front corner of the roof band; a flat vertical rear plate on the left; a thick riveted roof band of grey-black gunmetal armour across the top quarter of the box; across the middle half a cutaway opening reaching almost to both ends, split into three tall rectangular compartments by thick steel bulkhead walls, the compartments pitch black and empty; a heavy riveted side skirt across the bottom quarter, cut perfectly flat and straight; huge flat plates, weld seams, big rivets, sparse rust runs and soot on cold dark grey steel, a faint cold sheen on the top edge; no turret rings, no wheels, no tracks, no turret, no gun barrel; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
 			"align": "bottom_left"
 		},
 		{
@@ -114,7 +114,7 @@
 				96,
 				48
 			],
-			"prompt": "the back wall of an engine room with oil stains and an exhaust duct inside a tank, seen straight on, riveted dark steel plates, bolts and brackets, dim and empty in the middle, a small dark wall lamp fixture at the top; fills the whole frame",
+			"prompt": "the back wall of a cramped diesel engine room inside a tank, seen straight on, dark riveted steel plates in near darkness, oil stains and soot, a large exhaust duct and pipes along the top, bolted brackets, a small caged wall lamp fixture at the top centre that is switched off, the middle of the wall plain and dark, a faint warm glow from below; fills the whole frame edge to edge",
 			"background": "opaque"
 		},
 		{
@@ -141,7 +141,7 @@
 				56,
 				32
 			],
-			"prompt": "an inline four-cylinder diesel engine block seen from the side, four empty dark rectangular cylinder windows along the top, cast iron with oil grime; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "a heavy inline four-cylinder diesel engine block in exact side view, blackened cast iron with oil grime, four tall rectangular cylinder windows along the top that are empty and pitch black inside, an oil sump below, injector pipes and a manifold, a faint warm glint on the edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "flywheel_large",
@@ -314,7 +314,7 @@
 				104,
 				52
 			],
-			"prompt": "a tall slab-sided medium enemy tank, boxy turret, medium gun, exact side view facing LEFT, the gun on the left, grimy olive-grey armour with rust, tracks and road wheels; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
+			"prompt": "an enemy medium tank, tall and slab-sided, exact side view facing LEFT with the gun barrel pointing left and the rear on the right, a tall boxy riveted turret with a medium gun, flat vertical armour plates in grimy olive-grey with rust and mud, tracks with road wheels under low side skirts, a cold rim light along its top edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow"
 		},
 		{
 			"id": "enemy_heavy",
@@ -434,8 +434,9 @@
 				640,
 				200
 			],
-			"prompt": "a wide dusk sky over a burning countryside: low smoke clouds lit warm orange from below, cold blue-grey above, a faint moon; fills the whole frame",
-			"background": "opaque"
+			"prompt": "nothing but an empty wide night-falling dusk sky full of heavy rolling smoke clouds, no land, no moon, no stars, no vehicles, no machines, no buildings: near black at the very top, cold slate blue-grey smoke through the middle, and the whole lower half of the image glowing a dull smouldering orange-brown where distant unseen fires light the cloud undersides, brightest along the bottom edge; soft, blurry, low contrast; fills the whole frame edge to edge",
+			"background": "opaque",
+			"dither": "ordered"
 		},
 		{
 			"id": "bg_hills_far",
@@ -443,9 +444,10 @@
 				960,
 				120
 			],
-			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: distant rolling hills and pine woods under drifting smoke, desaturated blue-grey, a faint fire glow on one hill",
+			"prompt": "a wide seamless horizontal strip of purely natural distant landscape at dusk, flat at both ends, transparent sky above: low rolling hills, dark pine woods and rows of tall poplars on the ridges, soft silhouettes fading into cold blue-grey smoke haze, very low contrast, one faint orange fire glow on a far hillside; no buildings, no machines, no vehicles, no industry, no towers; the lower half filled with darker fields and hedgerows reaching the bottom edge",
 			"tile": true,
-			"mirror": true
+			"mirror": true,
+			"dither": "ordered"
 		},
 		{
 			"id": "bg_fields_near",
@@ -463,9 +465,10 @@
 				960,
 				140
 			],
-			"prompt": "a wide seamless horizontal landscape strip, flat at both ends, transparent sky above: a small village with a stone bridge over a stream, orchards, a church spire and a few warmly lit windows",
+			"prompt": "a wide seamless horizontal landscape strip at dusk, flat at both ends: a small war-torn village of stone houses with steep slate roofs, a church spire, a stone arched bridge over a dark stream that reflects the light, bare orchard trees and hedgerows, a few windows glowing warm amber, one farmhouse roof on fire with bright flames; everything else dark grey-brown and desaturated; the sky above the rooftops completely empty and fully transparent, no clouds and no smoke in the sky; the bottom edge flat and filled with dark earth",
 			"tile": true,
-			"mirror": true
+			"mirror": true,
+			"dither": "ordered"
 		},
 		{
 			"id": "bg_quarry_near",
@@ -543,7 +546,7 @@
 				64,
 				64
 			],
-			"prompt": "a large fiery explosion with a dark smoke cloud; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
+			"prompt": "a large shell explosion seen from the side: a bright blazing orange-white fireball core with rolling fire, wrapped in thick churning black-grey smoke, a few glowing sparks and dark debris flung out, soft painterly edges; shown alone as an isolated cutout on a fully transparent background, no ground, no sky, no scenery, no shadow",
 			"anchor": "center",
 			"align": "center"
 		},

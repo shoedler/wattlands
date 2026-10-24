@@ -24,16 +24,16 @@ const SPRITES_DIR := "res://assets/tank/sprites"
 
 # The 32 colours of art.json by role (tested to be exactly the palette).
 const G0 := Color("#07080a")
-const G1 := Color("#0e1013")
-const G2 := Color("#161a1e")
-const G3 := Color("#1f2429")
-const G4 := Color("#2a3036")
-const G5 := Color("#363d44")
-const G6 := Color("#444b52")
-const G7 := Color("#565c62")
-const G8 := Color("#6c7176")
-const G9 := Color("#878b8f")
-const G10 := Color("#a7aaac")
+const G1 := Color("#0f1012")
+const G2 := Color("#17181b")
+const G3 := Color("#202124")
+const G4 := Color("#2a2b2e")
+const G5 := Color("#353739")
+const G6 := Color("#424446")
+const G7 := Color("#525456")
+const G8 := Color("#666869")
+const G9 := Color("#808182")
+const G10 := Color("#a3a4a4")
 const G11 := Color("#cfd0cf")
 const B0 := Color("#17130f")
 const B1 := Color("#241d17")
@@ -43,7 +43,7 @@ const B4 := Color("#574634")
 const B5 := Color("#6b5842")
 const O0 := Color("#2b2a24")
 const O1 := Color("#3d3c33")
-const O2 := Color("#545246")
+const O2 := Color("#4b5561")
 const R0 := Color("#3a2a24")
 const R1 := Color("#5a3a2e")
 const R2 := Color("#7d4f3a")
@@ -51,7 +51,7 @@ const F0 := Color("#e8743a")
 const F1 := Color("#ffb35c")
 const F2 := Color("#ffd99a")
 const F3 := Color("#fff3d6")
-const C0 := Color("#2f4a5e")
+const C0 := Color("#2e3944")
 const C1 := Color("#5d86a3")
 const C2 := Color("#9fc4dd")
 const C3 := Color("#e6f3fb")
@@ -70,6 +70,8 @@ static func texture(id: String) -> Texture2D:
 	var tex: Texture2D = null
 	if ResourceLoader.exists(path):
 		tex = load(path) as Texture2D
+		if tex != null and fills_rect(id):
+			tex = ImageTexture.create_from_image(filled_image(tex.get_image(), size_of(id)))
 	if tex == null:
 		tex = ImageTexture.create_from_image(placeholder_image(id))
 		if not _logged.has(id):
@@ -77,6 +79,58 @@ static func texture(id: String) -> Texture2D:
 			print("tank: placeholder art for %s" % id)
 	_cache[id] = tex
 	return tex
+
+
+## True for the sprites whose silhouette must fill their whole art.json rect because rigs.json
+## places rooms, wheels and the turret on it: the hulls and the Behemoth's hull. The image model
+## does not hold a 3.6:1 box exactly, so a generated hull is fitted to its rect at load
+## (filled_image), never left short with a transparent gap.
+static func fills_rect(id: String) -> bool:
+	return id.begins_with("hull_") or id == "boss_hull"
+
+
+## `src` cropped to its opaque bounds and resampled (Lanczos) to `size`, then put back on the
+## palette: alpha thresholded at 0.5 and every opaque pixel snapped to the nearest palette colour,
+## so the result passes the same checks as a pixelated sprite. A sprite that already fills its
+## rect comes back unchanged.
+static func filled_image(src: Image, size: Vector2i) -> Image:
+	var img := src.duplicate() as Image
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var used := img.get_used_rect()
+	if used.size == Vector2i.ZERO or (used.position == Vector2i.ZERO and used.size == size):
+		return img
+	img = img.get_region(used)
+	img.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
+	var pal := palette()
+	var seen := {}
+	for y in size.y:
+		for x in size.x:
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				img.set_pixel(x, y, CLEAR)
+				continue
+			var key := c.to_rgba32() | 0xff
+			if not seen.has(key):
+				seen[key] = _nearest(c, pal)
+			img.set_pixel(x, y, seen[key])
+	return img
+
+
+static func _nearest(c: Color, pal: Array[Color]) -> Color:
+	var best := pal[0]
+	var best_d := INF
+	for p in pal:
+		var d := (
+			(p.r - c.r) * (p.r - c.r) * 0.3
+			+ (p.g - c.g) * (p.g - c.g) * 0.59
+			+ (p.b - c.b) * (p.b - c.b) * 0.11
+		)
+		if d < best_d:
+			best_d = d
+			best = p
+	return best
 
 
 ## The sprite's size in art px from art.json (16 x 16 for an unknown id).

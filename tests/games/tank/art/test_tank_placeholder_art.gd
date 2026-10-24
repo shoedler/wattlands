@@ -423,7 +423,7 @@ func test_placeholders_are_never_saved_as_sprite_files() -> void:
 		var id := f.get_basename()
 		if TankPlaceholderArt.sprite_def(id).is_empty():
 			continue
-		var on_disk := Image.load_from_file("res://assets/tank/sprites/" + f)
+		var on_disk := (load("res://assets/tank/sprites/" + f) as Texture2D).get_image()
 		assert_ne(
 			on_disk.get_data(), _img(id).get_data(), "%s on disk is not a saved placeholder" % f
 		)
