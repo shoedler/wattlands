@@ -73,7 +73,12 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 	var col := Color(base.r, base.g, base.b, a)
 	var pl := p.plane[i]
 	if pl == TankParticles.PLANE_BACK:
-		col = col.lerp(Color(haze.r, haze.g, haze.b, col.a * 0.8), 0.45)
+		if additive:
+			# Light keeps its hue and only dims: a haze-tinted flame added over a warm halo whose
+			# red is already clipped only adds green and blue, and reads as a lime spot.
+			col.a *= 0.55
+		else:
+			col = col.lerp(Color(haze.r, haze.g, haze.b, col.a * 0.8), 0.45)
 		size *= 1.25
 	elif pl == TankParticles.PLANE_FRONT:
 		col = Color(col.r * 0.5, col.g * 0.5, col.b * 0.5, col.a * 0.6)
