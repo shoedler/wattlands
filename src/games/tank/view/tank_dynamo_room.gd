@@ -3,13 +3,25 @@ extends TankRoomView
 ## The dynamo's room (brief 3 "Cutaway"): a housing around a spinning armature that throws cold blue
 ## sparks by watts, and three capacitor jars that show the bank (the first jar fills first). A shaft
 ## from the armature to the turret ring turns while the turret slews (the rig draws it). The
-## armature's light is the cold arc: blue-white, the only cold source inside the tank.
+## armature's light is the cold arc: blue-white, the only cold source inside the tank. In the
+## Rampart (no steam engine) the dynamo also runs the hoist: the rig draws a rail and a cradle in
+## the rear bay and a chain from the armature to its foot; hoist_t is the cradle on that rail.
 
 const BANK_MAX := 100.0
+## The cradle falls back down the rail this fast (rail lengths per second) once the shot is fired.
+const HOIST_DOWN_PER_S := 1.5
+const HOIST_UP_PER_S := 1.0
 
 var armature: SpinningPart = null
 var jars: Array[Rect2] = []
 var armature_pos: Vector2 = Vector2.ZERO
+## The Rampart's hoist (set by the rig): the cradle on the rail, 0 (foot) .. 1 (breech), and whether
+## a shell sits in the breech. The hoist's length is the largest hoist_s seen at its start.
+var has_hoist: bool = false
+var hoist_t: float = 0.0
+var breech_loaded: bool = false
+var _hoist_total: float = 0.001
+var _hoist_prev: float = 0.0
 
 
 func build() -> void:
@@ -37,6 +49,32 @@ func build() -> void:
 func animate(dt: float) -> void:
 	armature.speed = input.speed()
 	armature.tick(dt)
+	if has_hoist:
+		_hoist(dt)
+
+
+func _hoist(dt: float) -> void:
+	var left := hoist_s()
+	if left > _hoist_prev + 1e-6:
+		_hoist_total = maxf(left, 0.001)
+	_hoist_prev = left
+	if left > 0.0:
+		hoist_t = clampf(1.0 - left / _hoist_total, 0.0, 1.0)
+		return
+	var target := 1.0 if breech_loaded else 0.0
+	var rate := HOIST_UP_PER_S if target > hoist_t else HOIST_DOWN_PER_S
+	hoist_t = move_toward(hoist_t, target, rate * dt)
+
+
+## Seconds left of the hoist lifting a heavy shell (0 idle).
+func hoist_s() -> float:
+	var d := station as TankDynamoState
+	return d.hoist_s if d != null else 0.0
+
+
+## The hoist is lifting a shell now (its chain turns).
+func hoisting() -> bool:
+	return has_hoist and hoist_s() > 0.0 and not input.unpowered
 
 
 ## The bank 0 .. 100 (full before the first snapshot).

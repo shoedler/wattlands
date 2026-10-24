@@ -32,6 +32,8 @@ var steam_room: TankSteamRoom = null
 var links: Node2D = null
 var drive_chain: ScrollingChain = null
 var slew_shaft: ScrollingChain = null
+## The Rampart's chain from the dynamo's armature to the foot of its hoist rail.
+var hoist_chain: ScrollingChain = null
 var stack: TankPainter = null
 var rails: TankPainter = null
 var dozer: TankPainter = null
@@ -143,7 +145,23 @@ func _build_links() -> void:
 			[shaft_from, Vector2(shaft_from.x, top_y), Vector2(ring.x, top_y), ring]
 		)
 		links.add_child(slew_shaft)
-	if steam_room != null:
+	if dynamo_room != null and steam_room == null:
+		dynamo_room.has_hoist = true
+		var rail := _rail_points()
+		hoist_chain = _chain("HoistChain", 50.0, TankPalette.STEEL_BRIGHT, TankPalette.STEEL_LIGHT)
+		hoist_chain.pitch_px = 3.0
+		hoist_chain.closed = false
+		var foot_y := dynamo_room.rect.end.y - 3.0
+		hoist_chain.points = PackedVector2Array(
+			[
+				dynamo_room.armature_hull_pos(),
+				Vector2(dynamo_room.armature_hull_pos().x, foot_y),
+				Vector2(rail[0].x, foot_y),
+				rail[0]
+			]
+		)
+		links.add_child(hoist_chain)
+	if steam_room != null or hoist_chain != null:
 		rails = TankPainter.new()
 		rails.name = "HoistRail"
 		rails.painter = _paint_rails
@@ -193,6 +211,8 @@ func update(state: TankState, feed: Dictionary, dt: float) -> void:
 	_update_shake(dt)
 	hub.origin = position
 	gear.update(hl.speed_mps * TankConst.PX_PER_M, dt)
+	if dynamo_room != null:
+		dynamo_room.breech_loaded = hl.loaded != TankIds.SHELL_NONE
 	for room in rooms:
 		room.feed(_room_input(room, state, feed), dt)
 	_update_slew(hl, dt)
@@ -266,6 +286,9 @@ func _update_links(_state: TankState, dt: float) -> void:
 				turn = 1.0 if (diesel_room as TankBulwarkRoom).active_output() == 1 else 0.0
 		slew_shaft.speed = turn
 		slew_shaft.tick(dt)
+	if hoist_chain != null:
+		hoist_chain.speed = 1.0 if dynamo_room.hoisting() else 0.0
+		hoist_chain.tick(dt)
 
 
 func _update_blade(state: TankState, dt: float) -> void:
@@ -387,12 +410,28 @@ func _paint_stack(item: Node2D) -> void:
 	item.draw_rect(Rect2(p.x - 3, p.y - 4, 6, 1), TankPalette.RUST)
 
 
-func _paint_rails(item: Node2D) -> void:
-	var rail: Array = steam_room.def.get("hoist_rail", [])
+## The hoist rail's foot and top in the hull frame: the Citadel's from rigs.json (its steam room),
+## the Rampart's `hoist_rail` of the tank def or else a rail in the rear bay behind the dynamo.
+func _rail_points() -> Array[Vector2]:
+	var rail: Array = []
+	if steam_room != null:
+		rail = steam_room.def.get("hoist_rail", [])
+	elif dynamo_room != null:
+		rail = def.get("hoist_rail", [])
+		if rail.size() < 2:
+			var x := dynamo_room.rect.end.x + 20.0
+			rail = [[x, dynamo_room.rect.end.y - 2.0], [x, 10.0]]
 	if rail.size() < 2:
+		return []
+	return [TankRigs.vec(rail[0]), TankRigs.vec(rail[1])]
+
+
+func _paint_rails(item: Node2D) -> void:
+	var pts := _rail_points()
+	if pts.size() < 2:
 		return
-	var a := TankRigs.vec(rail[0])
-	var b := TankRigs.vec(rail[1])
+	var a := pts[0]
+	var b := pts[1]
 	var ring := TankRigs.vec((def.get("turret", {}) as Dictionary).get("ring"))
 	var feed_to := Vector2(ring.x + 16.0, b.y)
 	for dx in [-2.0, 2.0]:
@@ -403,12 +442,19 @@ func _paint_rails(item: Node2D) -> void:
 		y -= 6.0
 	item.draw_line(b, feed_to, TankPalette.STEEL_LIGHT, 1.0)
 	item.draw_line(feed_to, Vector2(feed_to.x, 0.0), TankPalette.STEEL_LIGHT, 1.0)
-	var t := steam_room.cradle_t
+	var t := cradle_t()
 	var at := a.lerp(b, t)
 	item.draw_rect(Rect2(at.x - 3, at.y - 2, 6, 3), TankPalette.STEEL_BRIGHT)
 	item.draw_rect(Rect2(at.x - 2, at.y - 10, 4, 8), TankPalette.OLIVE_LIGHT)
 	item.draw_rect(Rect2(at.x - 2, at.y - 4, 4, 2), TankPalette.BRASS)
 	item.draw_rect(Rect2(at.x - 1, at.y - 12, 2, 2), TankPalette.STEEL_PALE)
+
+
+## The shell cradle on the hoist rail, 0 (foot) .. 1 (breech): the steam engine's or the Rampart's.
+func cradle_t() -> float:
+	if steam_room != null:
+		return steam_room.cradle_t
+	return dynamo_room.hoist_t if dynamo_room != null else 0.0
 
 
 func _paint_dozer(item: Node2D) -> void:

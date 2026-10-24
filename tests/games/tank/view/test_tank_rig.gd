@@ -233,6 +233,64 @@ func test_the_shell_cradle_climbs_the_rail_with_pressure_and_reaches_the_breech_
 	assert_almost_eq(room.cradle_t, 0.0, 0.02, "and the cradle returns during the breech cycle")
 
 
+func test_the_rampart_has_a_hoist_rail_and_a_chain_from_the_dynamo() -> void:
+	var rig := U.make_rig(self, "rampart")
+	assert_not_null(rig.rails, "a rail in the rear bay")
+	assert_not_null(rig.hoist_chain, "a chain from the armature to its foot")
+	var dynamo := _room(rig, TankIds.ENGINE_DYNAMO) as TankDynamoRoom
+	assert_true(dynamo.has_hoist)
+	var rail := rig._rail_points()
+	assert_eq(rail.size(), 2)
+	assert_gt(rail[0].x, dynamo.rect.end.x, "in the bay right of the dynamo room")
+	assert_lt(rail[0].x, float(rig.hull_w))
+	assert_lt(rail[1].y, rail[0].y, "the top is above the foot")
+	assert_eq(rig.hoist_chain.points[0], dynamo.armature_hull_pos(), "from the armature")
+	assert_eq(rig.hoist_chain.points[rig.hoist_chain.points.size() - 1], rail[0], "to the foot")
+	for tank in ["bulwark", "citadel"]:
+		var other := U.make_rig(self, tank)
+		assert_null(other.hoist_chain, "%s has no dynamo hoist chain" % tank)
+
+
+func test_the_rampart_cradle_rides_the_hoist_and_waits_at_the_breech() -> void:
+	var rig := U.make_rig(self, "rampart")
+	var s := TankFixtures.state(2)
+	var dy := s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
+	var room := _room(rig, TankIds.ENGINE_DYNAMO) as TankDynamoRoom
+	s.hull.loaded = TankIds.SHELL_NONE
+	_update(rig, s, 200.0, 90.0, 10)
+	assert_almost_eq(room.hoist_t, 0.0, 1e-6, "idle at the foot")
+	dy.hoist_s = 10.0
+	_update(rig, s, 200.0, 90.0, 2)
+	assert_almost_eq(room.hoist_t, 0.0, 0.01, "just started")
+	dy.hoist_s = 5.0
+	_update(rig, s, 200.0, 90.0, 2)
+	assert_almost_eq(room.hoist_t, 0.5, 0.01, "halfway after half the time")
+	assert_true(room.hoisting())
+	dy.hoist_s = 1.0
+	_update(rig, s, 200.0, 90.0, 2)
+	assert_almost_eq(room.hoist_t, 0.9, 0.01)
+	dy.hoist_s = 0.0
+	s.hull.loaded = TankIds.SHELL_HEAVY
+	_update(rig, s, 200.0, 90.0, 120)
+	assert_almost_eq(room.hoist_t, 1.0, 0.01, "the loaded shell waits at the breech")
+	assert_false(room.hoisting())
+	s.hull.loaded = TankIds.SHELL_NONE
+	_update(rig, s, 200.0, 90.0, 120)
+	assert_almost_eq(room.hoist_t, 0.0, 0.01, "and the cradle returns once the shot is gone")
+
+
+func test_the_rampart_hoist_chain_turns_only_while_hoisting() -> void:
+	var rig := U.make_rig(self, "rampart")
+	var s := TankFixtures.state(2)
+	var dy := s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
+	dy.hoist_s = 0.0
+	_update(rig, s, 200.0, 90.0, 6)
+	assert_eq(rig.hoist_chain.speed, 0.0)
+	dy.hoist_s = 8.0
+	_update(rig, s, 200.0, 90.0, 6)
+	assert_eq(rig.hoist_chain.speed, 1.0)
+
+
 func test_a_steam_puff_per_pedal_stroke() -> void:
 	var rig := U.make_rig(self, "citadel")
 	var s := TankFixtures.state(3)
