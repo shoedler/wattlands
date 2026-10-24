@@ -61,6 +61,13 @@ static func by_bank(state: TankState, pair: Array) -> float:
 	return lerpf(float(pair[0]), float(pair[1]), bank_frac(state))
 
 
+## True while a present rider is in a rescue hold. A rider on reserve (AFK or dropped) is not: the
+## station runs on reserve under Autopilot and keeps its plan (brief 2.2), whatever rescue flag
+## was left over from before the rider stopped pedaling.
+static func in_rescue(ri: TankRiderInput) -> bool:
+	return ri != null and ri.rescue and not ri.on_reserve()
+
+
 # --- Dynamo --------------------------------------------------------------------------------------
 
 
@@ -69,7 +76,7 @@ static func _dynamo(
 ) -> void:
 	var c := state.content
 	st.stabilizing = aux.enemy_in_range and not state.all_afk
-	st.stalled = ri != null and ri.rescue and not state.all_afk
+	st.stalled = in_rescue(ri) and not state.all_afk
 	if state.all_afk or st.stalled:
 		return
 	if state.seg.seg == TankIds.SEG_DEPOT:
@@ -270,7 +277,7 @@ static func _gearbox(
 				_start_move(state, g, want, slot, events)
 	# Power: nothing during a move, and nothing in a gun line while the rider is in rescue.
 	var power := g.p_eff_w
-	if g.move_s > 0.0 or (state.seg.seg == TankIds.SEG_GUN_LINE and ri != null and ri.rescue):
+	if g.move_s > 0.0 or (state.seg.seg == TankIds.SEG_GUN_LINE and in_rescue(ri)):
 		power = 0.0
 		g.p_eff_w = 0.0
 	if g.lever == TankIds.LEVER_TURRET and g.move_s == 0.0:
