@@ -2,7 +2,7 @@
 
 - `sprites/`: one PNG per sprite (`<id>.png`, its animation frames side by side), `sprites.json` (frame size, frame count, anchor per sprite) and the `.import` files Godot writes.
 - `art.json`: the palette (32 colours, `FishingPalette.ALL`) and the sprite list in the art pipeline's format, written by the same tool.
-- `art_manifest.json`: the art pipeline's spend record ($3.56 of the $10 budget, all from v0.1; v0.2 made no fal calls).
+- `art_manifest.json`: the art pipeline's spend record ($3.56 of the $10 budget).
 
 ## Hand-authored pixel art
 

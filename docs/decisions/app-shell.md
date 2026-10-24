@@ -5,7 +5,7 @@
 - Decision: every screen (`src/app/screens/`) extends `AppScreen` and is built in code, not in `.tscn` files. A screen keeps a stack of `PedalScanList` menus (sub-menus for option values, steppers and the on-screen keyboard) and only the top one is active. Lists get `listen_to_input = false` and `set_process(false)`; the screen feeds InputRouter's actions and gestures to the active list (`feed_action`, `feed_gesture`) and drives its scan timer with `tick(dt)`.
 - Alternatives: one `.tscn` per screen; every list listening to InputRouter itself.
 - Reason: a screen often shows two lists (a field list and a value list); if each listened, one surge would pick in both. Driving time and input from the screen makes every screen testable headless with injected gestures and exact scan timing.
-- Whether a menu scans comes from `InputRouter.pedal_ui_active()` (Autopilot or pedal UI on, or no input device used yet), with the profile's pedal UI or Autopilot flag as the fallback; the title holds its first item while the zero-touch countdown is armed.
+- Whether a menu scans comes from `InputRouter.pedal_nav_active()` (the profile's pedal navigation or Autopilot); the title holds its first item while the zero-touch countdown is armed.
 
 ## 2026-10-21: AppServices instead of autoload names in screens
 
@@ -308,6 +308,6 @@
 
 ## 2026-10-21 (W4fin): The session's Autopilot turns pedal-scan on
 
-- Decision: `scanning_enabled()` in the lobby, the session screen and results also counts this rider's Autopilot for the session. The lobby uses `my_autopilot`, and toggling it re-applies scanning to every open menu at once. The session uses its own slot's `autopilot` in the GameHost config (the lobby toggle, or the profile default for a quick start) and passes it to results as `params.autopilot`. It adds to `InputRouter.pedal_ui_active()` and never removes from it: switching Autopilot off for one session keeps scanning on when the profile default or pedal UI says so. An auto-pause still holds Resume without scanning.
+- Decision: `scanning_enabled()` in the lobby, the session screen and results also counts this rider's Autopilot for the session. The lobby uses `my_autopilot`, and toggling it re-applies scanning to every open menu at once. The session uses its own slot's `autopilot` in the GameHost config (the lobby toggle, or the profile default for a quick start) and passes it to results as `params.autopilot`. It adds to `InputRouter.pedal_nav_active()` and never removes from it: switching Autopilot off for one session keeps scanning on when the profile's pedal navigation says so. An auto-pause still holds Resume without scanning.
 - Alternatives: make the router aware of the session's Autopilot (an API change in ui-hud's frozen router); let the session's Autopilot also switch scanning off (a profile-default Autopilot rider who switched it off with pedals could lose the scan with no device to fall back on).
 - Reason: BRIEF 3.5 says "with Autopilot or pedal UI on", and Autopilot is "toggled in the profile or lobby". Only the profile default reached the router, so a rider with pedal UI off and a device used who switched Autopilot on in the lobby got menus that didn't scan.
