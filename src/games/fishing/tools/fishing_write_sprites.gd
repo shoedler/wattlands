@@ -4,12 +4,15 @@ extends SceneTree
 ##     [-- --sheet=<abs path>]
 ## Each sprite becomes assets/fishing/sprites/<id>.png with its frames side by side; sprites.json
 ## lists {size (one frame), frames, anchor}; art.json records the palette and the sprite list for
-## the art pipeline. PNGs in the folder that no sprite owns are deleted. --sheet also writes a
-## 4x preview of every sprite (and the assembled boat, driving and fishing) for a look.
+## the art pipeline. PNGs in the folder that no sprite owns are deleted. It also writes the pixel
+## font's glyph grid (FONT_PNG). --sheet also writes a 4x preview of every sprite (and the
+## assembled boat, driving and fishing) for a look.
 
 const DIR := "res://assets/fishing/sprites"
 const ART_JSON := "res://assets/fishing/art.json"
 const SHEET_SCALE := 4
+## The pixel font's glyph grid (FishingFontGrids.font_image), read by the Image Font importer.
+const FONT_PNG := "res://assets/fishing/font/turbo_reel_5x7.png"
 
 
 func _init() -> void:
@@ -31,6 +34,11 @@ func _init() -> void:
 			"frames": frames.size(),
 			"anchor": [a.x, a.y],
 		}
+	var font := FishingFontGrids.font_image()
+	if font.save_png(FONT_PNG) != OK:
+		push_error("fishing_write_sprites: could not write %s" % FONT_PNG)
+		quit(1)
+		return
 	_prune(sprites)
 	_write_json(DIR.path_join("sprites.json"), {"sprites": index})
 	_write_json(ART_JSON, art_json(sprites))

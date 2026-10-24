@@ -102,8 +102,8 @@ func test_species_map_to_their_fish_sprites() -> void:
 
 
 func test_the_line_under_water_reads_against_every_band_it_crosses() -> void:
+	var line := FishingView.line_under()
 	for band in FishingPalette.SEA.size():
-		var line := FishingView.line_in_band(band)
 		assert_gt(absf(line.v - FishingPalette.SEA[band].v), 0.15, "band %d" % band)
 		assert_has(FishingPalette.ALL, line)
 	assert_eq(FishingPalette.LINE, FishingPalette.SLATE, "the rod's slate above the water")

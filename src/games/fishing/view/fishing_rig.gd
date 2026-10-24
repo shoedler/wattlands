@@ -32,14 +32,14 @@ const PLANE_BOW_PX := 2
 const ROD_BASE := Vector2i(27, 12)
 const ROD_STOWED: Array[int] = [-2, -2, -2, -2]
 const ROD_RAISED: Array[int] = [2, 2, 2, 2, 2]
-const ROD_BENT: Array[int] = [3, 2, 2, 1, 1, -2, -3]
-const ROD_HARD: Array[int] = [3, 2, 1, 1, -2, -3, -4]
+const ROD_BENT: Array[int] = [3, 3, 2, 2, -2, -3]
+const ROD_HARD: Array[int] = [3, 3, 2, 2, -2, -2, -3, -4]
 ## Tension from which the raised rod shows the bent and the hard-bent frame.
 const ROD_BENT_AT := 0.35
 const ROD_HARD_AT := 0.7
-## Even slopes for a run (|dx| per |dy|): the line under water snaps to the nearest one.
+## Even slopes for a run (|dx| per |dy|): a line snaps its end to the nearest one.
 const SLOPES: Array[float] = [0.0, 0.125, 0.25, 1.0 / 3.0, 0.5, 1.0, 2.0, 3.0, 4.0, 8.0]
-## How far (px) a snapped line may move where it enters the water.
+## How far (px) a snapped line may move its end.
 const SNAP_MAX_PX := 24
 ## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
 const WAKE_AT := Vector2i(19, WATERLINE)
@@ -76,14 +76,14 @@ static func rod(raise: float, tension: float) -> Array[Vector2i]:
 	return out
 
 
-## Where a line should enter the water at row `surface` to reach `end` in uniform runs of an even
-## slope (SLOPES), starting from the natural entry x `natural` (kept when snapping would move it
-## more than SNAP_MAX_PX).
-static func even_entry(natural: int, end: Vector2i, surface: int) -> int:
-	var dy := end.y - surface
-	if dy <= 0:
-		return natural
-	var dx := end.x - natural
+## The x the line's end (a fish's lip, a wobbler) should take so the line from `tip` to `end`
+## runs in uniform runs of an even slope (SLOPES); end.x itself when that would move it more
+## than SNAP_MAX_PX.
+static func even_end(tip: Vector2i, end: Vector2i) -> int:
+	var dy := absi(end.y - tip.y)
+	if dy == 0:
+		return end.x
+	var dx := end.x - tip.x
 	var want := absf(float(dx)) / float(dy)
 	var best := SLOPES[0]
 	for s in SLOPES:
@@ -94,8 +94,8 @@ static func even_entry(natural: int, end: Vector2i, surface: int) -> int:
 		w = (dy + 1) * roundi(best) - 1
 	elif best > 0.0:
 		w = dy / roundi(1.0 / best)
-	var x := end.x - int(signf(float(dx))) * w
-	return x if absi(x - natural) <= SNAP_MAX_PX else natural
+	var x := tip.x + int(signf(float(dx))) * w
+	return x if absi(x - end.x) <= SNAP_MAX_PX else end.x
 
 
 ## Sag in art px of a line `length` long: deep with slack, none under strain.

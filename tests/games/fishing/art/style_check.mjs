@@ -44,6 +44,10 @@ export const SCALE = 3;
 // The value mass: world pixels at or above this value (the surface teal and lighter) should
 // cover at least 60 % of the world, like the reference's light field.
 export const LIGHT_V = 0.755;
+// The crisp white field: the sky and the foam-white water (value 87 and up), which should cover
+// most of a shallow shot, like the reference's sky and snow (reported, not judged: deep shots
+// are darker by design).
+export const WHITE_V = 0.87;
 // Below this saturation a colour is a near-neutral (foam, sky) whose hue is not meaningful.
 export const NEUTRAL_S = 0.1;
 
@@ -219,6 +223,7 @@ export function measure(grid) {
   let players = 0;
   let flat = 0;
   let light = 0;
+  let white = 0;
   let isolated = 0;
   let checker = 0;
   for (let y = 0; y < h; y++) {
@@ -230,6 +235,7 @@ export function measure(grid) {
       const { h: hue, s, v } = hsv(c);
       minV = Math.min(minV, v);
       if (v >= LIGHT_V) light++;
+      if (v >= WHITE_V) white++;
       if (c === ACCENT) accent++;
       else if (PLAYERS.includes(c)) players++;
       else if ((s >= NEUTRAL_S && (hue < 140 || hue > 215)) || s > 0.75) offFamily++;
@@ -268,6 +274,7 @@ export function measure(grid) {
     playerPct: pct(players),
     flatPct: pct(flat),
     lightPct: pct(light),
+    whitePct: pct(white),
     palette: [...counts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
@@ -309,7 +316,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(
       `${r.file}: colours ${r.colours}, off-family ${r.offFamilyPct}%, min V ${r.minValuePct}%, ` +
         `checker ${r.checker}, isolated ${r.isolated}, accent ${r.accentPct}%, players ${r.playerPct}%, ` +
-        `flat ${r.flatPct}%, light ${r.lightPct}%, off-palette ${r.offPalette}, masked ${r.masked} ` +
+        `flat ${r.flatPct}%, light ${r.lightPct}%, white ${r.whitePct}%, off-palette ${r.offPalette}, masked ${r.masked} ` +
         `${r.fails.length ? 'FAIL: ' + r.fails.join('; ') : 'ok'}`,
     );
     console.log(`  ${r.palette.join(' ')}`);

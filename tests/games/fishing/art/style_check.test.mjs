@@ -68,6 +68,7 @@ test('a flat two-band field is all flat, in family and passes', () => {
   assert.equal(m.minValuePct, 76);
   assert.ok(m.flatPct > 80);
   assert.equal(m.lightPct, 100);
+  assert.equal(m.whitePct, 50, 'the sky half is white, the surface teal half is not');
   assert.deepEqual(sc.verdict(m), []);
 });
 

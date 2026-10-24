@@ -143,7 +143,8 @@ func test_a_wobbler_shows_at_its_depth_while_waiting() -> void:
 	_run(v, 20)
 	var p: Vector2 = v.model["lure"][0]
 	assert_gt(p.y, float(FishingScenery.SURF_Y) + 10.0)
-	assert_almost_eq(p.x, v.to_screen(3000.0 - 12.0, 20.0).x, 0.5)
+	var x := v.to_screen(3000.0 - 12.0, 20.0).x
+	assert_almost_eq(p.x, x, float(FishingRig.SNAP_MAX_PX), "snapped for an even line")
 
 
 func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> void:

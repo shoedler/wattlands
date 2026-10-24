@@ -2,6 +2,7 @@
 
 - `sprites/`: one PNG per sprite (`<id>.png`, its animation frames side by side), `sprites.json` (frame size, frame count, anchor per sprite) and the `.import` files Godot writes.
 - `art.json`: the palette (`FishingPalette.ALL`) and the sprite list in the art pipeline's format, written by the same tool.
+- `font/turbo_reel_5x7.png`: the HUD's pixel font, a glyph grid written from `src/games/fishing/tools/fishing_font_grids.gd` (`FishingFontGrids`: 5 x 7 capitals and digits, lower case with 2-row descenders, the HUD's punctuation, the en dash) and imported by Godot's Image Font importer (`turbo_reel_5x7.png.import`: 16 x 6 cells of 6 x 9, ascent 7, descent 2, integer scaling). Turbo Reel's HUD and, through `HudSpec.palette`, the kit widgets draw it at whole multiples of 9 px with no outline.
 - `art_manifest.json`: the art pipeline's spend record ($3.56 of the $10 budget).
 
 ## Hand-authored pixel art

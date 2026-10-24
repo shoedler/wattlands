@@ -21,30 +21,36 @@ const H := 360
 const SURF_Y := 118
 ## The far water: a FAR_ROWS band above the surface row, up to the horizon. Other riders' boats
 ## float on it (FishingView.FAR_ROW_PX), so boats at the same x read as side by side.
-const FAR_ROWS := 8
+const FAR_ROWS := 16
 const HORIZON_Y := SURF_Y - FAR_ROWS
 const PX_PER_M := 2.0
 const FLOOR_ROWS := 186
 ## view_depth_m's range: the shallowest water still gets this much, the abyss counts as ABYSS_M.
 const VIEW_DEPTH_MIN_M := 3.0
 const ABYSS_M := 700.0
-## Water band tops (m), one FishingPalette.SEA colour each: the shallows, the reef and the shelf
-## stay in the two light bands; only the deep and the abyss step darker.
-const WATER_STEPS_M: Array[float] = [0.0, 40.0, 200.0, 500.0]
-## The floor's colour and its lit 2-row top rim per water band (WATER_STEPS_M): sage under foam
-## in the light water, one water step darker under a surface-teal rim in the dark water.
+## Water band tops (m), one FishingPalette.SEA colour each: foam-white shallows (a crisp light
+## field under the sky, like snow), haze on the reef and the shelf, the teals only in the deep.
+const WATER_STEPS_M: Array[float] = [0.0, 25.0, 120.0, 400.0]
+## The floor's colour and its lit 2-row top rim per water band (WATER_STEPS_M): sage under haze
+## in the light water, one water step darker under a surface-teal rim in the deep.
 const FLOOR_BANDS: Array[Color] = [
 	FishingPalette.SAGE,
 	FishingPalette.SAGE,
+	FishingPalette.UPPER,
 	FishingPalette.MID,
-	FishingPalette.DEEP,
 ]
 const RIM_BANDS: Array[Color] = [
+	FishingPalette.HAZE,
 	FishingPalette.FOAM,
-	FishingPalette.FOAM,
+	FishingPalette.HAZE,
 	FishingPalette.SURFACE,
-	FishingPalette.UPPER,
 ]
+## The floor in sight is fitted with one staircase: treads of a whole number of STEP_PX columns,
+## risers of FLOOR_RISERS px, the pair whose slope matches best; when the staircase strays more
+## than FLOOR_FIT_PX from the true floor (a shelf break in sight) each column takes its own row.
+const FLOOR_RISERS: Array[int] = [2, 4, 6]
+const FLOOR_TREADS: Array[int] = [1, 2, 3, 4, 5, 6, 8, 10, 12]
+const FLOOR_FIT_PX := 6.0
 ## The floor is drawn in world-fixed runs this wide, each flat, its top on an even row.
 const STEP_PX := 24
 const RIM_ROWS := 2
@@ -58,7 +64,7 @@ const CLOUD_LAYERS: Array = [
 const ISLAND_LAYERS: Array = [[0.06, 460.0], [0.16, 700.0]]
 ## The town sits this far right of the dock at camera 0, scrolling at TOWN_FACTOR.
 const TOWN_FACTOR := 0.3
-const TOWN_X0 := 24.0
+const TOWN_X0 := -130.0
 ## The pier (world m, its left end) and the quay's top row above the surface.
 const PIER_X_M := 6.0
 const QUAY_TOP := 6
@@ -255,26 +261,99 @@ func _paint_town(c: CanvasItem, cam_m: float, t: float) -> void:
 		c.draw_texture(f, Vector2(roundf(gx), roundf(gy)))
 
 
-## The floor in world-fixed STEP_PX runs from the world's profile, each flat with its top on an
-## even row: a RIM_ROWS top line, then the floor colour of its top band down to the bottom.
+## The floor in world-fixed STEP_PX columns from the world's profile, as one even staircase
+## (floor_rows()): a RIM_ROWS top line, then the floor colour of its band down to the bottom.
 func _paint_floor(c: CanvasItem, cam_m: float, cam_px: float) -> void:
 	if world == null:
 		return
 	var edge_px := screen_x(edge_m(), cam_m)
-	var j0 := floori(cam_px / float(STEP_PX))
-	for j in range(j0, j0 + W / STEP_PX + 2):
-		var sx := float(j * STEP_PX) - cam_px
-		var x_m := (float(j * STEP_PX) + float(STEP_PX) * 0.5) / PX_PER_M
-		var d := world.floor_depth_m(x_m)
-		if is_inf(d) or sx >= edge_px:
-			continue
-		var y := 2.0 * floorf(y_of_depth(d) / 2.0)
-		if y >= float(H):
+	var cols := floor_rows(cam_px)
+	for col: Vector3 in cols:
+		var sx := col.x
+		var y := col.y
+		if sx >= edge_px or y >= float(H):
 			continue
 		var right := minf(sx + float(STEP_PX), edge_px)
-		var band := band_at(d)
+		var band := int(col.z)
 		c.draw_rect(Rect2(sx, y, right - sx, float(H) - y), FLOOR_BANDS[band])
 		c.draw_rect(Rect2(sx, y, right - sx, RIM_ROWS), RIM_BANDS[band])
+
+
+## The floor columns in sight as (screen x, top row, band): staircases fitted to the true floor
+## (in each, every tread the same whole number of columns and every riser the same height), the
+## longest that stays within FLOOR_FIT_PX first, so a shelf break is a flat shelf and a drop.
+func floor_rows(cam_px: float) -> Array[Vector3]:
+	var out: Array[Vector3] = []
+	var wx: Array[float] = []
+	var ys: Array[float] = []
+	var j0 := floori(cam_px / float(STEP_PX))
+	for j in range(j0, j0 + W / STEP_PX + 2):
+		var x_m := (float(j * STEP_PX) + float(STEP_PX) * 0.5) / PX_PER_M
+		var d := world.floor_depth_m(x_m)
+		if is_inf(d):
+			continue
+		out.append(Vector3(float(j * STEP_PX) - cam_px, y_of_depth(d), band_at(d)))
+		wx.append(float(j * STEP_PX))
+		ys.append(out[-1].y)
+	var i0 := 0
+	while i0 < out.size():
+		var rows: Array[float] = []
+		var i1 := out.size()
+		while i1 - i0 >= 3:
+			rows = _fit_stairs(wx.slice(i0, i1), ys.slice(i0, i1))
+			if not rows.is_empty():
+				break
+			i1 -= 1
+		if rows.is_empty():
+			i1 = i0 + 1
+			rows = [2.0 * floorf(ys[i0] / 2.0)]
+		for k in rows.size():
+			out[i0 + k].y = rows[k]
+		i0 = i1
+	return out
+
+
+## The staircase rows for columns at world px `wx` (left edges) with true rows `ys`, or [] when
+## none fits.
+static func _fit_stairs(wx: Array[float], ys: Array[float]) -> Array[float]:
+	var n := wx.size()
+	if n < 3 or wx[-1] - wx[0] != float((n - 1) * STEP_PX):
+		return []
+	var mx := 0.0
+	var my := 0.0
+	for i in n:
+		mx += wx[i]
+		my += ys[i]
+	mx /= float(n)
+	my /= float(n)
+	var sxy := 0.0
+	var sxx := 0.0
+	for i in n:
+		sxy += (wx[i] - mx) * (ys[i] - my)
+		sxx += (wx[i] - mx) * (wx[i] - mx)
+	var slope := sxy / sxx if sxx > 0.0 else 0.0
+	var best_r := 0
+	var best_l := 1
+	var best_err := absf(slope)
+	for r in FLOOR_RISERS:
+		for t in FLOOR_TREADS:
+			var err := absf(float(r) / float(t * STEP_PX) - absf(slope))
+			if err < best_err:
+				best_err = err
+				best_r = r
+				best_l = t
+	var tread := float(best_l * STEP_PX)
+	var dir := signf(slope)
+	var k0 := floori(wx[0] / tread)
+	var y0 := 2.0 * roundf((my + slope * ((float(k0) + 0.5) * tread - mx)) / 2.0)
+	var rows: Array[float] = []
+	for i in n:
+		var k := floori(wx[i] / tread)
+		var y := y0 + dir * float(best_r * (k - k0))
+		if absf(y - ys[i]) > FLOOR_FIT_PX:
+			return []
+		rows.append(y)
+	return rows
 
 
 ## The quay left of the dock (a foam cap and a wood face on the water, bollards) and the pier.

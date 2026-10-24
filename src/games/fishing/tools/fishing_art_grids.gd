@@ -432,7 +432,7 @@ static func card(kind: int) -> Image:
 			Vector2i(-20 if kind == 0 else -60, surf - 2 - 30)
 		)
 	out.fill_rect(Rect2i(0, surf - 2, CARD.x, 2), FishingPalette.HAZE)
-	var tops: Array[int] = [surf, surf + 16, surf + 28, surf + 38]
+	var tops: Array[int] = [surf, surf + 18, surf + 30, surf + 39]
 	for i in tops.size():
 		out.fill_rect(Rect2i(0, tops[i], CARD.x, CARD.y - tops[i]), FishingPalette.SEA[i])
 	var fish := "fish_marlin" if kind == 0 else ("fish_grouper" if kind == 1 else "fish_tuna")
@@ -459,14 +459,8 @@ static func card(kind: int) -> Image:
 	blit(out, b, bat)
 	var tip := FishingRig.rod(1.0, 0.0)[-1] + bat + BOAT_PAD
 	var mouth := fat + Vector2i(fimg.get_width() - 1, mouth_row(img(fish_grid(fish))) + 1)
-	var entry := Vector2i(roundi(lerpf(tip.x, mouth.x, 0.15)), surf)
-	plot(out, [tip, entry], FishingPalette.SLATE)
-	for p in FishingRig.raster(entry, mouth):
-		var under := 0
-		for i in tops.size():
-			if p.y >= tops[i]:
-				under = i
-		out.set_pixelv(p, FishingView.line_in_band(under))
+	for p in FishingRig.raster(tip, mouth):
+		out.set_pixelv(p, FishingPalette.LINE if p.y < surf else FishingView.line_under())
 	return out
 
 
@@ -732,9 +726,9 @@ const CREW: Array = [
 ]
 const FISH_MACKEREL: Array[String] = [
 	"...bbbbbbbbb...cc",
-	".bbxbbbbbbbbbb.c.",
-	"ccccccccccccccc..",
-	".ddddddddddddd.c.",
+	".bbxbbbbbbbbbb.cc",
+	"cccccccccccccccc.",
+	".ddddddddddddd.cc",
 	"...ddddddddd...cc",
 ]
 const FISH_SEA_BREAM: Array[String] = [
@@ -759,18 +753,18 @@ const FISH_SNAPPER: Array[String] = [
 	"....dddddddd.....cc",
 ]
 const FISH_MAHI: Array[String] = [
-	"...bbbbbbbbbbbbbbbbbbb......cc.",
-	".bbbbbbbbbbbbbbbb..........ccc.",
-	".bbbbbbbbbbbbbbbbbb.......ccc..",
-	".bbxbbbbbbbbbbbbbbbbb....ccc...",
-	".ccbbbbbbbbbbbbbbbbbbbb.ccc....",
+	"...bbbbbbbbbbbbbbbbbbb.....ccc.",
+	".bbbbbbbbbbbbbbbb.........cccc.",
+	".bbbbbbbbbbbbbbbbbb......ccccc.",
+	".bbxbbbbbbbbbbbbbbbbb...ccccc..",
+	".ccbbbbbbbbbbbbbbbbbbbb.cccc...",
 	"cccccccccccccccccccccbbbcc.....",
 	"cccccccccccccccccccccccccc.....",
-	"cccccccccccccccccccccdddcc.....",
-	".ddccccccccccccccdddddd.ccc....",
-	".dddddddddddddddddddd....ccc...",
-	".dddddddddddddddddd.......cccc.",
-	"...dddddddddddddd..........ccc.",
+	"cccccccccccccccccccccdddccdd...",
+	".ddccccccccccccccdddddd.ccddd..",
+	".dddddddddddddddddddd....cdddd.",
+	".dddddddddddddddddd.......dddd.",
+	"...dddddddddddddd..........ddd.",
 ]
 const FISH_TUNA: Array[String] = [
 	".......bbbbbbbbbbb..........cc.",

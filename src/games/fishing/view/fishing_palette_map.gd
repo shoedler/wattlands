@@ -8,9 +8,6 @@ extends RefCounted
 
 const SHADER_PATH := "res://src/games/fishing/view/fishing_palette_map.gdshader"
 const SLOTS := 8
-## Fish are drawn dark on the three lighter water bands and lit (this many steps lighter) on the
-## darkest.
-const LIT_SHIFT := -2
 
 static var _shader: Shader = null
 
@@ -53,12 +50,10 @@ static func shift_of(m: ShaderMaterial) -> int:
 	return int(m.get_meta("shift", 0))
 
 
-## The shift for a sprite in water band `band` (FishingPalette.SEA index): dark fish on the haze
-## band, one step darker on the surface and upper bands, lit fish on the mid band.
+## The shift for a sprite in water band `band` (FishingPalette.SEA index): fish as drawn on the
+## foam and haze bands, a step darker on the teal bands, so they stay the darkest subject.
 static func shift_for(band: int) -> int:
-	if band >= FishingPalette.SEA.size() - 1:
-		return LIT_SHIFT
-	return mini(band, 1)
+	return 0 if band <= 1 else 1
 
 
 static func set_flat(m: ShaderMaterial, on: bool, col: Color = Color.BLACK) -> void:

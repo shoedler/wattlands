@@ -277,3 +277,20 @@ func test_cards_are_opaque_160_by_90_and_the_picker_image_exists() -> void:
 		FileAccess.get_file_as_string("res://src/games/fishing/game.json")
 	)
 	assert_true(ResourceLoader.exists(str(m["picker_image"])), "picker_image loads")
+
+
+func test_the_pixel_font_png_is_the_glyph_grid_and_imports_as_a_font() -> void:
+	var path := "res://assets/fishing/font/turbo_reel_5x7.png"
+	var png := Image.new()
+	assert_eq(png.load_png_from_buffer(FileAccess.get_file_as_bytes(path)), OK)
+	var want := FishingFontGrids.font_image()
+	png.convert(Image.FORMAT_RGBA8)
+	assert_eq(png.get_size(), want.get_size())
+	assert_eq(png.get_data(), want.get_data(), "run fishing_write_sprites.gd")
+	var cells := FishingFontGrids.COLUMNS * FishingFontGrids.ROWS
+	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), cells, "one glyph per cell")
+	var font := load(path) as Font
+	assert_not_null(font)
+	var px := FishingHudDraw.FONT_PX * 3
+	var w := font.get_string_size("20:00 Rider 1 85%", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	assert_eq(w, float(17 * FishingFontGrids.CELL.x * 3), "fixed width, whole-pixel scale")

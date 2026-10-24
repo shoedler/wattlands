@@ -14,6 +14,7 @@ func _init() -> void:
 	size_flags_horizontal = Control.SIZE_FILL
 	size_flags_vertical = Control.SIZE_EXPAND_FILL
 	theme = WlTheme.get_theme()
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
 func _process(_delta: float) -> void:

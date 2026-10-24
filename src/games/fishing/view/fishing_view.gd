@@ -39,7 +39,7 @@ const DRAW_MARGIN_PX := 120.0
 const LEAP_S := 1.0
 const LEAP_PX := 18.0
 ## A hooked fish keeps this many px clear of the floor.
-const FISH_FLOOR_GAP_PX := 2.0
+const FISH_FLOOR_GAP_PX := 6.0
 ## Landing: inside ABOARD_M the fish hangs from the rod tip, ABOARD_DROP_PX under it.
 const ABOARD_M := 6.0
 const ABOARD_DROP_PX := 3.0
@@ -128,9 +128,9 @@ func advance(delta: float) -> void:
 	model["fish"] = {}
 	model["lure"] = {}
 	for r in st.riders:
-		_place_catch(r, delta)
-	for r in st.riders:
 		_place_boat(r, delta)
+	for r in st.riders:
+		_place_catch(r, delta)
 	_place_hints(st.rider(_local_slot))
 	if not events_connected:
 		for c in cues.diff(st):
@@ -384,6 +384,8 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 		var id := "lure"
 		lure.texture = FishingSprites.frame(id, floori(_t * 6.0))
 		lure.flip_h = r.heading < 0
+		p = p.floor()
+		p.x = float(_even_end(r, Vector2i(p)))
 		lure.position = (p - Vector2(FishingSprites.anchor(id))).round()
 		_map_depth(_lure_mat[r.slot], float(v["lz"]))
 		(model["lure"] as Dictionary)[r.slot] = p
@@ -420,6 +422,10 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	fish.texture = FishingSprites.frame(id2, floori(_t * (8.0 if r.fish.run_active else 4.0)))
 	var boat_x := FishingScenery.screen_x(float(v["x"]), cam_m)
 	fish.flip_h = mouth.x < boat_x if not aboard else r.heading > 0
+	if not aboard:
+		mouth = mouth.round()
+		var lip := Vector2i(mouth) - Vector2i(1 if fish.flip_h else 0, 0)
+		mouth.x = float(_even_end(r, lip) + (1 if fish.flip_h else 0))
 	var a := Vector2(FishingSprites.anchor(id2))
 	var top_left := mouth - a
 	if fish.flip_h:
@@ -429,7 +435,21 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 	(model["fish"] as Dictionary)[r.slot] = Rect2(fish.position, Vector2(size))
 
 
-## A fish or wobbler at `depth_m`: dark on the light water bands, lit below (palette shift).
+## The x the line's end should take so the line from `r`'s rod tip to `end` runs in uniform
+## pixel runs (FishingRig.even_end), unless the line sags.
+func _even_end(r: FishingRiderState, end: Vector2i) -> int:
+	var b: FishingBoatView = boats.get(r.slot)
+	if b == null:
+		return end.x
+	var tip := line_start(b, Vector2i(b.rod_tip()), end)
+	var slack := r.slack if r.action == FishingConst.A_FIGHT else 0.3
+	var strain := r.strain if r.action == FishingConst.A_FIGHT else 0.2
+	if FishingRig.line(tip, end, slack, strain).size() > 2:
+		return end.x
+	return FishingRig.even_end(tip, end)
+
+
+## A fish or wobbler at `depth_m`: dark on the light water bands, darker on the teals.
 func _map_depth(m: ShaderMaterial, depth_m: float) -> void:
 	FishingPaletteMap.set_flat(m, false)
 	FishingPaletteMap.set_shift(m, FishingPaletteMap.shift_for(FishingScenery.band_at(depth_m)))
@@ -543,41 +563,34 @@ func _paint_lines(c: CanvasItem) -> void:
 		_draw_line(c, Vector2i(tip), Vector2i(end.floor()), r)
 
 
-## The line: one straight run from the rod tip to where it enters the water (the rod's slate,
-## or the line cosmetic), then straight in an even slope (or, slack, in two runs) to the fish in
-## one colour that reads against the water where it ends.
+## The line: one straight run from the rod tip to the fish or wobbler (two when it sags), the
+## rod's slate (or the line cosmetic) above the water and deep teal under it, which reads
+## against every water band.
 func _draw_line(c: CanvasItem, tip: Vector2i, end: Vector2i, r: FishingRiderState) -> void:
 	var b: FishingBoatView = boats[r.slot]
 	var surf := FishingScenery.SURF_Y
 	var strain := r.strain if r.action == FishingConst.A_FIGHT else 0.2
 	var slack := r.slack if r.action == FishingConst.A_FIGHT else 0.3
-	if end.y < surf:
-		_run(c, [tip, end], b.line_above())
-		return
-	var k := clampf(0.1 + 0.15 * (1.0 - strain), 0.1, 0.3)
-	var natural := roundi(lerpf(float(tip.x), float(end.x), k))
-	var entry := Vector2i(FishingRig.even_entry(natural, end, surf), surf)
-	_run(c, [tip, entry - Vector2i(0, 1)], b.line_above())
-	var tops: Array[float] = []
-	for m in FishingScenery.WATER_STEPS_M:
-		tops.append(roundf(scenery.y_of_depth(m)))
-	for p in FishingRig.raster_path(FishingRig.line(entry, end, slack, strain)):
-		var band := 0
-		for i in tops.size():
-			if float(p.y) >= tops[i]:
-				band = i
-		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), line_in_band(band))
-
-
-func _run(c: CanvasItem, points: Array[Vector2i], col: Color) -> void:
+	var above := b.line_above()
+	var start := line_start(b, tip, end)
+	var points := FishingRig.line(start, end, slack, strain)
+	if start != tip:
+		points.push_front(tip)
 	for p in FishingRig.raster_path(points):
-		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), col)
+		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), above if p.y < surf else line_under())
 
 
-## The line's colour where it crosses water band `band`: deep teal over the three lighter bands,
-## haze over the darkest.
-static func line_in_band(band: int) -> Color:
-	return FishingPalette.HAZE if band >= FishingPalette.SEA.size() - 1 else FishingPalette.DEEP
+## Where the line leaves the boat's side: a line toward the bow (it would cross the hull) first
+## drops straight from the rod tip to the surface, outboard of the stern; else the rod tip.
+static func line_start(b: FishingBoatView, tip: Vector2i, end: Vector2i) -> Vector2i:
+	if end.y > FishingScenery.SURF_Y and signi(end.x - tip.x) == b.heading:
+		return Vector2i(tip.x, FishingScenery.SURF_Y)
+	return tip
+
+
+## The line's colour under the water.
+static func line_under() -> Color:
+	return FishingPalette.DEEP
 
 
 ## A hint's silhouette at `depth_m`: one step darker than the water.
@@ -608,7 +621,8 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 			if w < 2:
 				break
 			var left := x if dir > 0 else x - float(w - 1)
-			c.draw_rect(Rect2(left, y0 + float(row[1]), w, 1), FishingPalette.FOAM)
+			var y := y0 + float(row[1])
+			c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
 			x += float(dir * (w + WAKE_GAP_PX))
 	if wake < 0.3:
 		return
@@ -620,4 +634,9 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float) -> void:
 		var w := row.y if wake >= 0.7 else row.y / 2 + 1
 		var x0 := bow.x + float(row.x * h)
 		var left := x0 if h > 0 else x0 - float(w - 1)
-		c.draw_rect(Rect2(left, y_surf - float(k), w, 1), FishingPalette.FOAM)
+		c.draw_rect(Rect2(left, y_surf - float(k), w, 1), foam_on(y_surf - float(k)))
+
+
+## Foam on row `y`: white on the haze far band, its haze shadow on the foam-white near water.
+static func foam_on(y: float) -> Color:
+	return FishingPalette.FOAM if y < float(FishingScenery.SURF_Y) else FishingPalette.HAZE
