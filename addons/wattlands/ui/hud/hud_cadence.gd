@@ -94,6 +94,10 @@ func bar() -> HudBar:
 	return _bar
 
 
+func _on_palette_changed() -> void:
+	_refresh()
+
+
 func _refresh() -> void:
 	if _value == null:
 		return
@@ -101,7 +105,8 @@ func _refresh() -> void:
 	var glowing := in_band()
 	_bar.dim = _stale
 	_bar.set_state(_rpm, maxf(130.0, maxf(_hi * 1.2, _rpm * 1.1)), _lo, _hi, -1.0, glowing)
-	var c := WlTheme.GLOW if glowing else WlTheme.TEXT
+	var glow_c := palette.pick(HudPalette.GLOW_TEXT, WlTheme.GLOW)
+	var c := glow_c if glowing else palette.pick(HudPalette.TEXT, WlTheme.TEXT)
 	_value.label_settings.font_color = Color(c, 0.5) if _stale else c
 	_band.text = _t("UI_HUD_BAND_RPM", [roundi(_lo), roundi(_hi)]) if _hi > 0.0 else ""
 	_band.visible = not _band.text.is_empty()

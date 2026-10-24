@@ -11,6 +11,9 @@ extends PanelContainer
 ## and the timeline's clock (time left in the phase) are 48 px at full size and shrink with
 ## their rect.
 ## Options (HudSpec.add(..., options)): "panel": false drops the dark background panel.
+## set_palette() recolors the neutral chrome and, with its style keys, sets the type (a game
+## font, sizes snapped to its pixel multiple, no outlines) and the panel corners
+## (HudSpec.palette).
 
 ## The kit widget id (HudSpec.POWER_GAUGE, ...).
 var widget_id: String = ""
@@ -22,8 +25,12 @@ var ui_scale: float = 1.0
 var ftp_w: float = 200.0
 ## > 0 when the rider opted in to W/kg: the weight used for it.
 var weight_kg: float = 0.0
+## The game's colors for panel, text and bars (HudSpec.palette; empty = the kit look).
+var palette: HudPalette = HudPalette.new()
 
 var _content: VBoxContainer = null
+## False after options "panel": false (and for the teammate strip, whose cards have panels).
+var _panel_visible: bool = true
 ## Labels that follow ui_scale: {"label": Label, "px": int, "key": bool}.
 var _scaled: Array[Dictionary] = []
 ## Controls whose minimum height follows ui_scale: {"node": Control, "h": float, "w": float}.
@@ -42,14 +49,7 @@ func _ensure_base() -> void:
 		return
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	var sb := WlTheme.panel_style(
-		Color(0.055, 0.067, 0.086, 0.74), Color(0.227, 0.271, 0.322, 0.9), 2
-	)
-	sb.content_margin_left = 12.0
-	sb.content_margin_right = 12.0
-	sb.content_margin_top = 4.0
-	sb.content_margin_bottom = 6.0
-	add_theme_stylebox_override("panel", sb)
+	_apply_panel()
 	_content = VBoxContainer.new()
 	_content.name = "Content"
 	_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -61,7 +61,31 @@ func _ensure_base() -> void:
 func configure(p_options: Dictionary) -> void:
 	options = p_options.duplicate(true)
 	if options.get("panel", true) == false:
+		_panel_visible = false
 		add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+
+
+## Use `p` for the panel, the labels and the bars (null = the kit look). HudLayer calls it
+## with HudSpec.palette; safety and warning colors never follow it.
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
+	palette.style_item(self)
+	_apply_panel()
+	if not palette.style.is_empty():
+		var s := ui_scale
+		_applied_scale = -1.0
+		set_ui_scale(s)
+	for e in _scaled:
+		var role: String = e["role"]
+		if not role.is_empty():
+			(e["label"] as Label).label_settings.font_color = palette.pick(
+				role, WlTheme.TEXT if role == HudPalette.TEXT else WlTheme.TEXT_DIM
+			)
+	for e in _scaled_boxes:
+		if (e["node"] as Control).has_method("set_palette"):
+			(e["node"] as Control).call("set_palette", palette)
+	HudPalette.snap_tree(self, palette.grid_px())
+	_on_palette_changed()
 
 
 ## Natural size at ui_scale 1.0 (1080p pixels).
@@ -90,27 +114,36 @@ func set_ui_scale(s: float) -> void:
 	_applied_scale = clamped
 	ui_scale = clamped
 	custom_minimum_size = base_size() * ui_scale
+	var grid_unit := float(palette.grid_px())
+	if grid_unit > 0.0:
+		custom_minimum_size = (custom_minimum_size / grid_unit).ceil() * grid_unit
 	for e in _scaled:
 		var lbl: Label = e["label"]
 		var px: int = e["px"]
 		if lbl.label_settings != null:
-			lbl.label_settings.font_size = (
+			var size_px := (
 				WlTheme.key_px(ui_scale * px / float(WlTheme.KEY_NUMBER_PX))
 				if e["key"]
 				else WlTheme.scaled_px(px, ui_scale)
 			)
-			lbl.label_settings.outline_size = maxi(
-				2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0)
-			)
+			if palette.style.is_empty():
+				lbl.label_settings.font_size = size_px
+				lbl.label_settings.outline_size = maxi(
+					2, roundi(WlTheme.OUTLINE_PX * lbl.label_settings.font_size / 64.0)
+				)
+			else:
+				var floor_px := WlTheme.KEY_NUMBER_MIN_PX if e["key"] else 0
+				palette.style_label(
+					lbl.label_settings, size_px, bool(e.get("bold", false)), floor_px, e["key"]
+				)
+	var grid := palette.grid_px()
 	for e in _scaled_boxes:
 		var n: Control = e["node"]
-		n.custom_minimum_size = Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
-	var sb := get_theme_stylebox("panel") as StyleBoxFlat
-	if sb != null and has_theme_stylebox_override("panel"):
-		sb.content_margin_left = 12.0 * ui_scale
-		sb.content_margin_right = 12.0 * ui_scale
-		sb.content_margin_top = 4.0 * ui_scale
-		sb.content_margin_bottom = 6.0 * ui_scale
+		var box := Vector2(float(e["w"]) * ui_scale, float(e["h"]) * ui_scale)
+		if grid > 0:
+			box = Vector2(HudPalette.snap(box.x, grid), maxf(grid, HudPalette.snap(box.y, grid)))
+		n.custom_minimum_size = box
+	_fit_panel_margins()
 	_on_scale_changed()
 
 
@@ -159,13 +192,18 @@ static func font_px(label: Label) -> int:
 func _make_label(
 	label_name: String, px: int, color: Color = WlTheme.TEXT, key: bool = false, bold: bool = false
 ) -> Label:
+	var role := ""
+	if color == WlTheme.TEXT:
+		role = HudPalette.TEXT
+	elif color == WlTheme.TEXT_DIM:
+		role = HudPalette.TEXT_DIM
 	var l := Label.new()
 	l.name = label_name
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	l.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
-	l.label_settings = WlTheme.label_settings(px, color, bold or key)
+	l.label_settings = WlTheme.label_settings(px, palette.pick(role, color), bold or key)
 	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_scaled.append({"label": l, "px": px, "key": key})
+	_scaled.append({"label": l, "px": px, "key": key, "role": role, "bold": bold or key})
 	return l
 
 
@@ -184,6 +222,52 @@ func _hbox(box_name: String, separation: int = 8) -> HBoxContainer:
 
 func _on_scale_changed() -> void:
 	pass
+
+
+func _on_palette_changed() -> void:
+	pass
+
+
+## The panel style in the palette's colors (an empty one without the panel).
+func _apply_panel() -> void:
+	if not _panel_visible:
+		return
+	var sb := WlTheme.panel_style(
+		palette.pick(HudPalette.PANEL, Color(0.055, 0.067, 0.086, 0.74)),
+		palette.pick(HudPalette.PANEL_BORDER, Color(0.227, 0.271, 0.322, 0.9)),
+		2
+	)
+	palette.style_panel(sb)
+	add_theme_stylebox_override("panel", sb)
+	_fit_panel_margins()
+
+
+func _fit_panel_margins() -> void:
+	var sb := get_theme_stylebox("panel") as StyleBoxFlat
+	if sb != null and has_theme_stylebox_override("panel") and palette.grid_px() > 0:
+		sb.set_content_margin_all(3.0 * palette.grid_px())
+	elif sb != null and has_theme_stylebox_override("panel"):
+		sb.content_margin_left = 12.0 * ui_scale
+		sb.content_margin_right = 12.0 * ui_scale
+		sb.content_margin_top = 4.0 * ui_scale
+		sb.content_margin_bottom = 6.0 * ui_scale
+	if _content != null:
+		_snap_gaps(_content, palette.grid_px())
+
+
+## With grid_px, the gap of every box in the widget snaps to whole game pixels (a gap above 0
+## keeps at least one); the kit's own gap is kept so a palette without grid_px restores it.
+func _snap_gaps(node: Node, grid: int) -> void:
+	var box := node as BoxContainer
+	if box != null and (grid > 0 or box.has_meta("kit_gap")):
+		if not box.has_meta("kit_gap"):
+			box.set_meta("kit_gap", box.get_theme_constant("separation"))
+		var gap := int(box.get_meta("kit_gap"))
+		if grid > 0 and gap > 0:
+			gap = maxi(grid, roundi(gap / float(grid)) * grid)
+		box.add_theme_constant_override("separation", gap)
+	for child in node.get_children():
+		_snap_gaps(child, grid)
 
 
 ## Translated text for a platform or game key; plain text passes through.

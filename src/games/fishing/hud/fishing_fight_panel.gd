@@ -1,10 +1,13 @@
 class_name FishingFightPanel
 extends FishingHudControl
-## Beside the local rider's meters: in a fight the species, the line out and the fish's stamina;
-## in the Landing the gaff meter (Sprint! then Easy spin, a star for a trophy); otherwise the
-## zone under the boat and the depth to the floor.
+## Beside the local rider's meters, on an abyss-teal panel: in a fight the species, the line out
+## and the fish's stamina; in the Landing the gaff meter (Sprint! then Easy spin, a star for a
+## trophy); otherwise the zone under the boat and the depth to the floor.
 
-const ART := Rect2i(222, 322, 200, 34)
+const ART := Rect2i(241, 322, 196, 34)
+## The bar's height and its gap under the descenders, in glyph pixels.
+const BAR_ROWS := 4.0
+const GAP_ROWS := 1.0
 
 var fish: Dictionary = {}
 var gaff: Dictionary = {}
@@ -32,26 +35,37 @@ func refresh() -> void:
 		var d := w.floor_depth_m(r.x_m)
 		if not is_inf(d):
 			var dist := FishingHudModel.tr_key(game, FishingHudModel.KEY_DISTANCE, [roundi(d)])
-			place += "  " + dist
+			place += " " + dist
 
 
 func _draw() -> void:
 	var s := k()
-	var big := px(WlTheme.LABEL_PX)
-	var small := px(WlTheme.SMALL_PX)
+	var u := float(FishingHudDraw.unit(s))
+	var pad := 3.0 * u
+	var line_h := float(FishingHudDraw.LINE_ROWS) * u
+	# The cap starts at the padding (the line box's leading sits in it), the bar under the
+	# descenders and a gap, then the same padding.
+	var top := pad - float(FishingHudDraw.LEAD_ROWS) * u
+	var text_rows := float(FishingHudDraw.LINE_ROWS - FishingHudDraw.LEAD_ROWS)
+	var bar_y := pad + (text_rows + GAP_ROWS) * u
+	var panel := Rect2(0, 0, floorf(size.x / u) * u - 2.0 * u, bar_y + BAR_ROWS * u + pad)
+	var bar := Rect2(pad, bar_y, panel.size.x - 2.0 * pad, BAR_ROWS * u)
+	if bool(gaff.get("visible", false)) or bool(fish.get("visible", false)):
+		FishingHudDraw.panel(self, panel)
 	if bool(gaff.get("visible", false)):
 		var label := FishingHudModel.tr_key(game, str(gaff["phase"]))
-		FishingHudDraw.text(self, Vector2(6, 30) * s, label, big, FishingHudDraw.GAFF, true)
-		var bar := Rect2(Vector2(6, 46) * s, Vector2(size.x - 18.0 * s, 26.0 * s))
-		FishingHudDraw.bar(self, bar, float(gaff["fill"]), FishingHudDraw.GAFF)
-		var star_at := Vector2(bar.end.x - 14.0 * s, bar.get_center().y)
-		FishingHudDraw.star(self, star_at, 10.0 * s, FishingPalette.BRASS_1)
+		FishingHudDraw.text_line(self, pad, top, label, s, FishingHudDraw.GAFF)
+		FishingHudDraw.bar(self, bar, float(gaff["fill"]), FishingHudDraw.GAFF, false, u)
+		var star_at := Vector2(bar.end.x - 5.0 * u, pad + u)
+		FishingHudDraw.pixels(self, FishingHudDraw.STAR, star_at, u, FishingPalette.FOAM)
 		return
 	if bool(fish.get("visible", false)):
 		var dist := FishingHudModel.tr_key(game, FishingHudModel.KEY_DISTANCE, [str(fish["d_m"])])
-		var line := "%s  %s" % [fish["name"], dist]
-		FishingHudDraw.text(self, Vector2(6, 30) * s, line, big, WlTheme.TEXT, true)
-		var bar2 := Rect2(Vector2(6, 48) * s, Vector2(size.x - 18.0 * s, 20.0 * s))
-		FishingHudDraw.bar(self, bar2, float(fish["stamina"]), FishingHudDraw.STAMINA)
+		var line := "%s %s" % [fish["name"], dist]
+		FishingHudDraw.text_line(self, pad, top, line, s, FishingPalette.HUD_TEXT)
+		FishingHudDraw.bar(self, bar, float(fish["stamina"]), FishingHudDraw.STAMINA, false, u)
 		return
-	FishingHudDraw.text(self, Vector2(6, 64) * s, place, small, WlTheme.TEXT_DIM)
+	var box := Vector2(FishingHudDraw.text_w(place, s) + 2.0 * pad, line_h + 2.0 * pad)
+	var at := Vector2(0, size.y - box.y)
+	FishingHudDraw.panel(self, Rect2(at, box))
+	FishingHudDraw.text_line(self, pad, at.y + pad, place, s, FishingPalette.HUD_DIM)

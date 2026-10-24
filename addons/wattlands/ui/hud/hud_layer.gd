@@ -80,6 +80,8 @@ var sounds: bool = true
 var wkg_weight_kg: float = -1.0
 
 var _spec: HudSpec = null
+## HudSpec.palette for the kit widgets, toasts and game banner.
+var _palette: HudPalette = HudPalette.new()
 var _ctx: GameContext = null
 var _pv: PixelViewport = null
 var _bus: WlEventBus = null
@@ -172,6 +174,9 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	_bus = ctx.events if ctx != null and ctx.events != null else _autoload_bus()
 	_read_rider_data()
 	_banner.show_safety = _spec.show_safety_banners
+	_palette = HudPalette.from_dict(_spec.palette)
+	_banner.set_palette(_palette)
+	_toasts.set_palette(_palette)
 	for entry: Dictionary in _spec.widgets:
 		var id := str(entry.get("widget", ""))
 		var at: Variant = entry.get("at", null)
@@ -381,6 +386,7 @@ func make_widget(id: String, options: Dictionary = {}) -> HudWidget:
 	w.ftp_w = _ftp
 	w.weight_kg = _weight
 	w.configure(options)
+	w.set_palette(_palette)
 	if w is HudPowerGauge and _power_bands.has((w as HudPowerGauge).peer):
 		var pb: Vector2 = _power_bands[(w as HudPowerGauge).peer]
 		(w as HudPowerGauge).set_power_band(pb.x, pb.y)

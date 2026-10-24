@@ -5,7 +5,7 @@ extends RefCounted
 ## Phase kinds, modes, roles, scaling modes and `clamped_by` rule names are plain
 ## Strings so they survive JSON (reports, network, content) unchanged.
 
-const BUILD := "0.2.0"
+const BUILD := "0.2.1"
 ## Network protocol version (BRIEF 5.3 `hello.proto`, 5.5 schemas).
 const PROTO := 1
 const RELAY_GAME := "wattlands"

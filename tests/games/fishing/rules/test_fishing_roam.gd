@@ -54,7 +54,7 @@ func test_every_slot_has_its_own_berth_at_the_dock() -> void:
 		assert_lt(FishingRules.start_x(i), 300.0, "inside the harbour")
 		if i > 0:
 			var gap := FishingRules.start_x(i) - FishingRules.start_x(i - 1)
-			assert_between(gap, 12.0, 15.0, "a berth apart")
+			assert_between(gap, 40.0, 45.0, "a berth apart, clear of the boat ahead")
 
 
 func test_pedaling_drives_and_easing_off_drifts_to_the_menu() -> void:

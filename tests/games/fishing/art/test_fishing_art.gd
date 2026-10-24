@@ -1,8 +1,8 @@
 extends GutTest
 ## Turbo Reel's sprites: every PNG in assets/fishing/sprites/ is what FishingArtGrids draws (the
-## grids are the source), uses only the 32 palette colours or full transparency, matches
-## sprites.json and art.json, and the boat, fish, icons and cards keep the shapes the view and
-## HUD rely on.
+## grids are the source), uses only the palette colours or full transparency, matches
+## sprites.json and art.json, keeps the style rules (one cool hue family, nothing darker than
+## the abyss, no outlines round the fish) and the shapes the view and HUD rely on.
 
 const DIR := "res://assets/fishing/sprites"
 const ART_JSON := "res://assets/fishing/art.json"
@@ -43,9 +43,24 @@ func _frame(id: String, k: int) -> Image:
 	return frames[k]
 
 
-func test_the_palette_has_32_distinct_colours() -> void:
-	assert_eq(FishingPalette.ALL.size(), 32)
-	assert_eq(_palette.size(), 32, "no duplicates")
+func test_the_palette_is_one_cool_family_with_one_accent_and_no_near_black() -> void:
+	assert_lte(FishingPalette.ALL.size(), 16)
+	assert_eq(_palette.size(), FishingPalette.ALL.size(), "no duplicates")
+	for c in FishingPalette.ALL:
+		assert_gte(c.v, FishingPalette.ABYSS.v, "%s is no darker than the abyss" % c.to_html(false))
+		if FishingPalette.PLAYERS.has(c):
+			assert_lte(c.s, 0.55, "player colours are desaturated")
+			continue
+		var hue := c.h * 360.0
+		var cool := c.s < 0.1 or (hue >= 140.0 and hue <= 215.0)
+		assert_true(
+			cool or c == FishingPalette.ACCENT, "%s is in the cool family" % c.to_html(false)
+		)
+		assert_lte(c.s, 0.75)
+	var prev := 2.0
+	for c in FishingPalette.LADDER:
+		assert_lt(c.v, prev, "the ladder steps darker")
+		prev = c.v
 
 
 func test_art_json_lists_the_palette_and_every_sprite() -> void:
@@ -152,26 +167,72 @@ func test_the_big_fish_are_bigger_than_the_shallow_ones() -> void:
 		assert_gt(big.x * big.y, small.x * small.y * 4, id)
 
 
-func test_the_hull_and_rider_carry_the_key_reds_for_the_slot_colour() -> void:
-	for id: String in ["boat_hull", "rider"]:
+func test_the_hull_is_a_slate_mass_under_a_straight_foam_rail() -> void:
+	var f := _frame("boat_hull", 0)
+	var slate := 0
+	for y in f.get_height():
+		for x in f.get_width():
+			slate += 1 if _key(f.get_pixel(x, y)) == _key(FishingPalette.SLATE) else 0
+	assert_gt(slate, 400, "a dark mass that reads against the pale sky")
+	for y in [21, 22]:
+		for x in range(FishingRig.STERN_X, 76):
+			assert_eq(_key(f.get_pixel(x, y)), _key(FishingPalette.FOAM), "rail (%d, %d)" % [x, y])
+
+
+func test_no_sprite_uses_a_player_colour_and_the_crew_frames_all_differ() -> void:
+	var players := {}
+	for c in FishingPalette.PLAYERS.slice(1):
+		players[_key(c)] = true
+	for id: String in _built:
+		if id.begins_with("card") or id.begins_with("picker") or id.begins_with("icon"):
+			continue
+		for f: Image in _built[id]["frames"]:
+			for y in f.get_height():
+				for x in f.get_width():
+					var c := f.get_pixel(x, y)
+					if c.a > 0.5 and players.has(_key(c)):
+						fail_test("%s uses a player colour" % id)
+						return
+	var seen := {}
+	for f: Image in _built["boat_crew"]["frames"]:
+		seen[f.get_data()] = true
+	assert_eq(seen.size(), 2 * FishingArtGrids.CREW_FRAMES)
+
+
+func test_fish_have_no_outline_and_no_isolated_specks() -> void:
+	for id: String in FishingArtGrids.FISH:
 		var f := _frame(id, 0)
-		var keys := 0
+		var edge_dark := 0
+		var edge := 0
+		var specks := 0
 		for y in f.get_height():
 			for x in f.get_width():
 				var c := f.get_pixel(x, y)
-				if c.a > 0.5 and (_key(c) == _key(FishingPalette.KEY_LIGHT)):
-					keys += 1
-		assert_gt(keys, 3, "%s shows the slot colour" % id)
+				if c.a < 0.5:
+					continue
+				var same := 0
+				var border := false
+				for d: Vector2i in [Vector2i.LEFT, Vector2i.RIGHT, Vector2i.UP, Vector2i.DOWN]:
+					var p := Vector2i(x, y) + d
+					var inside := Rect2i(Vector2i.ZERO, f.get_size()).has_point(p)
+					var n := f.get_pixel(p.x, p.y) if inside else Color(0, 0, 0, 0)
+					border = border or n.a < 0.5
+					same += 1 if n.a > 0.5 and _key(n) == _key(c) else 0
+				if border:
+					edge += 1
+					edge_dark += 1 if _key(c) == _key(FishingPalette.ABYSS) else 0
+				if same == 0 and _key(c) != _key(FishingPalette.ABYSS):
+					specks += 1
+		assert_lt(float(edge_dark), float(edge) * 0.1, "%s has no dark contour" % id)
+		assert_eq(specks, 0, "%s has no lone pixels but its eye" % id)
 
 
 func test_boat_parts_sit_inside_the_hull_canvas() -> void:
 	var hull := Rect2(Vector2.ZERO, Vector2(FishingRig.HULL_SIZE))
 	var parts := {
-		"boat_flywheel": FishingRig.FLYWHEEL_AT,
-		"boat_gears": FishingRig.GEARS_AT,
+		"boat_crew": FishingRig.CREW_AT,
 		"boat_winch": FishingRig.WINCH_AT,
 		"boat_prop": FishingRig.PROP_AT,
-		"rider": FishingRig.RIDER_AT,
 	}
 	assert_eq(_frame("boat_hull", 0).get_size(), FishingRig.HULL_SIZE)
 	for id: String in parts:
@@ -198,7 +259,7 @@ func test_every_action_icon_is_11_by_9_with_slot_colour_pixels() -> void:
 		var fill := 0
 		for y in 9:
 			for x in 11:
-				if _key(f.get_pixel(x, y)) == _key(FishingPalette.CLOUD):
+				if _key(f.get_pixel(x, y)) == _key(FishingPalette.FOAM):
 					fill += 1
 		assert_gt(fill, 3, "%s has pixels the slot colour tints" % id)
 
@@ -216,3 +277,43 @@ func test_cards_are_opaque_160_by_90_and_the_picker_image_exists() -> void:
 		FileAccess.get_file_as_string("res://src/games/fishing/game.json")
 	)
 	assert_true(ResourceLoader.exists(str(m["picker_image"])), "picker_image loads")
+
+
+func test_the_pixel_font_png_is_the_glyph_grid_and_imports_as_a_font() -> void:
+	var path := "res://assets/fishing/font/turbo_reel_5x7.png"
+	var png := Image.new()
+	assert_eq(png.load_png_from_buffer(FileAccess.get_file_as_bytes(path)), OK)
+	var want := FishingFontGrids.font_image()
+	png.convert(Image.FORMAT_RGBA8)
+	assert_eq(png.get_size(), want.get_size())
+	assert_eq(png.get_data(), want.get_data(), "run fishing_write_sprites.gd")
+	var grid := FishingFontGrids.COLUMNS * FishingFontGrids.ROWS
+	var chars := FishingFontGrids.LAST - FishingFontGrids.FIRST + 1 + FishingFontGrids.EXTRA.size()
+	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), chars, "one glyph per character")
+	assert_lte(chars, grid, "all in the grid")
+	var ff := FishingHudDraw.font() as FontFile
+	for code: int in FishingFontGrids.EXTRA:
+		assert_true(ff.has_char(code), "the font has U+%04X" % code)
+	assert_not_null(load(path) as Font)
+	var font := FishingHudDraw.font()
+	var px := FishingHudDraw.FONT_PX * 3
+	var w := font.get_string_size("20:00 Rider 1 85%", HORIZONTAL_ALIGNMENT_LEFT, -1, px).x
+	var cells := 14 * FishingFontGrids.CELL.x + 3 * FishingHudDraw.SPACE_ADVANCE
+	assert_eq(w, float(cells * 3), "fixed width, a narrow space, whole-pixel scale")
+
+
+func test_the_pixel_font_hangs_its_caps_from_the_line_box_top() -> void:
+	var ff := FishingHudDraw.font() as FontFile
+	assert_not_null(ff)
+	var sz := Vector2i(FishingHudDraw.FONT_PX, 0)
+	for ch in ["A", "g", "0"]:
+		var gi := ff.get_glyph_index(sz.x, ch.unicode_at(0), 0)
+		var off := ff.get_glyph_offset(0, sz, gi)
+		assert_eq(off, Vector2(0, -FishingHudDraw.CAP_ROWS), "%s: cap top on the ascent" % ch)
+	assert_eq(ff.get_ascent(27), float(FishingFontGrids.ASCENT * 3))
+	var line := FishingHudDraw.LEAD_ROWS + FishingHudDraw.CAP_ROWS + FishingFontGrids.DESCENT
+	assert_eq(FishingHudDraw.LINE_ROWS, line, "leading, cap, descender")
+	var zero: Array = FishingFontGrids.FONT_GLYPHS["0".unicode_at(0) - FishingFontGrids.FIRST]
+	var oh: Array = FishingFontGrids.FONT_GLYPHS["O".unicode_at(0) - FishingFontGrids.FIRST]
+	assert_eq(str(zero[3]), "#.#.#", "a dotted zero")
+	assert_ne(zero, oh, "the zero differs from O")

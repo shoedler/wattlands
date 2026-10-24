@@ -1,136 +1,205 @@
 class_name FishingRig
 extends RefCounted
 ## The boat's geometry in boat-local art pixels (origin = the boat_hull sprite's top-left, bow
-## right, sea surface on WATERLINE) and the code-drawn parts' shapes: legs solved hip to pedal,
-## arms to the tiller or the winch brake, the clutch lever, the rod (stowed or raised, bending
-## with tension) and the line's sag. Pure functions, so tests check the shapes. The sprites in
-## FishingArtGrids are drawn to these points.
+## right, sea surface on WATERLINE), the rod's fixed pixel frames (stowed, raised, bent, hard
+## bent: run lengths that change steadily along the curve) and the pixel rasteriser every line
+## uses: uniform runs along the major axis with one diagonal step between runs (no corner
+## pixels; a 1:1 run is one pixel per step), Bresenham only for slopes no uniform run fits. Pure
+## functions, so tests check the shapes. The sprites in FishingArtGrids are drawn to these points.
 
 const HULL_SIZE := Vector2i(96, 40)
-## The sea surface (boat-local y): everything below it is seen through the water.
-const WATERLINE := 30
-## Hull extent along the waterline (stern .. bow) and the bow's stem head.
+## The sea surface (boat-local y): rows from here down are seen through the water.
+const WATERLINE := 28
+## Hull extent along the deck (stern transom .. bow stem).
 const STERN_X := 24
-const BOW_X := 93
-const BOW_TOP := Vector2(93, 17)
-## Part sprites' top-left corners.
-const FLYWHEEL_AT := Vector2(25, 7)
-const FLYWHEEL_HUB := Vector2(29, 11)
-const GEARS_AT := Vector2(26, 17)
-const WINCH_AT := Vector2(21, 14)
-const WINCH_HUB := Vector2(23, 16)
-const PROP_AT := Vector2(7, 29)
-const PROP_HUB := Vector2(8, 32)
-const RIDER_AT := Vector2(37, 1)
-## Pedalling: hip on the saddle, bottom bracket, crank radius, leg segment lengths.
-const HIP := Vector2(40, 12)
-const BB := Vector2(46, 19)
-const CRANK_R := 3.0
-const THIGH := 5.0
-const SHIN := 7.5
-## The chain runs from the chainring (at BB) to the gearbox's input sprocket.
-const SPROCKET := Vector2(31, 18)
-const SPROCKET_R := 1.0
-const CHAINRING_R := 2.0
-## Arms: from the shoulder to the tiller grip (driving) or the winch brake knob (fishing).
-const SHOULDER := Vector2(40, 7)
-const TILLER_GRIP := Vector2(37, 18)
-const BRAKE_KNOB := Vector2(35, 11)
-## The clutch lever on the gearbox: tilted toward the bow drives the prop, aft the winch.
-const CLUTCH_PIVOT := Vector2(31, 16)
-const CLUTCH_LEN := 4.0
-## The rod in its stern mount: stowed nearly flat over the stern, raised to fish.
-const ROD_BASE := Vector2(23, 12)
-const ROD_STOW_TIP := Vector2(3, 9)
-const ROD_FISH_TIP := Vector2(9, -7)
-## Tip deflection at full tension (art px, toward the line).
-const ROD_BEND_PX := 7.0
-## The pennant mast at the bow.
-const MAST_FOOT := Vector2(87, 18)
-const MAST_TOP := Vector2(87, 11)
-## Where the wake starts (behind the prop) and where the bow throws spray.
-const WAKE_AT := Vector2(6, 30)
-const SPRAY_AT := Vector2(91, 29)
+const BOW_X := 90
+## The crew sprite (clutch lever, seat, rider, leg, flywheel; four crank frames per pose).
+const CREW_AT := Vector2(30, 3)
+const CREW_SIZE := Vector2i(30, 18)
+## Winch drum and outboard prop sprites (top-left) and the prop's hub.
+const WINCH_AT := Vector2(26, 13)
+const PROP_AT := Vector2(20, 30)
+const PROP_HUB := Vector2(21, 32)
+## The rider's cap (player colour) on the head, and the pennant on the bow mast.
+const CAP := Rect2i(40, 7, 3, 1)
+const FLAG := Rect2i(83, 11, 4, 2)
+## The bow-up poses (nothing is ever rotated): the boat is cut into bands along x and each band
+## moves by whole pixels, the stern squatting 1 px and the bow rising 2 px (pose 1) or 4 px
+## (pose 2) in steps at least 8 px long. Per pose, Vector2i(x_end, dy): columns left of x_end
+## (and right of the previous band) move dy. The hull frames and every part follow them.
+const TILT: Array = [
+	[Vector2i(HULL_SIZE.x, 0)],
+	[Vector2i(32, 1), Vector2i(64, 0), Vector2i(76, -1), Vector2i(HULL_SIZE.x, -2)],
+	[
+		Vector2i(32, 1),
+		Vector2i(50, 0),
+		Vector2i(60, -1),
+		Vector2i(70, -2),
+		Vector2i(80, -3),
+		Vector2i(HULL_SIZE.x, -4),
+	],
+]
+## The rod in its holder on the winch, as runs from the base toward the tip: a positive run
+## climbs that many pixels, then steps one aft and up; a negative run goes that many pixels aft,
+## then steps one aft and down (stowed, with no climb, it steps up instead). Raised the rod
+## stands at 1:2; under tension the runs shorten as it climbs and lengthen as it bends back.
+const ROD_BASE := Vector2i(27, 12)
+const ROD_STOWED: Array[int] = [-2, -2, -2, -2]
+const ROD_RAISED: Array[int] = [2, 2, 2, 2, 2]
+const ROD_BENT: Array[int] = [3, 3, 2, 2, -2, -3]
+const ROD_HARD: Array[int] = [3, 3, 2, 2, -2, -2, -3, -4]
+## Tension from which the raised rod shows the bent and the hard-bent frame.
+const ROD_BENT_AT := 0.35
+const ROD_HARD_AT := 0.7
+## Even slopes for a run (|dx| per |dy|): a line snaps its end to the nearest one.
+const SLOPES: Array[float] = [0.0, 0.125, 0.25, 1.0 / 3.0, 0.5, 1.0, 2.0, 3.0, 4.0, 8.0]
+## How far (px) a snapped line may move its end.
+const SNAP_MAX_PX := 24
+## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
+const WAKE_AT := Vector2i(19, WATERLINE)
+const SPRAY_AT := Vector2i(87, WATERLINE)
 
 
-## Two-segment leg from `hip` to `foot` (lengths l1, l2), the knee bent toward +x (forward).
-## Returns [hip, knee, foot]; an out-of-reach foot is pulled in along the hip-foot line.
-static func leg(
-	hip: Vector2, foot: Vector2, l1: float = THIGH, l2: float = SHIN
-) -> PackedVector2Array:
-	var v := foot - hip
-	var d := v.length()
-	var dir := v / d if d > 0.001 else Vector2.DOWN
-	d = clampf(d, absf(l1 - l2) + 0.01, l1 + l2 - 0.01)
-	var end := hip + dir * d
-	var a := (l1 * l1 - l2 * l2 + d * d) / (2.0 * d)
-	var h := sqrt(maxf(l1 * l1 - a * a, 0.0))
-	var perp := Vector2(-dir.y, dir.x)
-	if perp.x < 0.0:
-		perp = -perp
-	return PackedVector2Array([hip, hip + dir * a + perp * h, end])
+## How far boat-local column `x` moves in bow-up pose `pose` (TILT).
+static func tilt_dy(pose: int, x: int) -> int:
+	var bands: Array = TILT[clampi(pose, 0, TILT.size() - 1)]
+	for b: Vector2i in bands:
+		if x < b.x:
+			return b.y
+	return (bands[-1] as Vector2i).y
 
 
-## The pedal positions for crank angle `angle` (radians): [near, far].
-static func pedals(angle: float) -> PackedVector2Array:
-	var p := Vector2(cos(angle), sin(angle)) * CRANK_R
-	return PackedVector2Array([BB + p, BB - p])
+## The rod frame for `raise` (0 stowed .. 1 raised, shown from 0.5) and `tension`.
+static func rod_runs(raise: float, tension: float) -> Array[int]:
+	if raise < 0.5:
+		return ROD_STOWED
+	if tension >= ROD_HARD_AT:
+		return ROD_HARD
+	return ROD_BENT if tension >= ROD_BENT_AT else ROD_RAISED
 
 
-## The arm from the shoulder to `hand` as [shoulder, elbow, hand] (elbow bent down).
-static func arm(hand: Vector2) -> PackedVector2Array:
-	var mid := SHOULDER.lerp(hand, 0.5) + Vector2(0, 1)
-	return PackedVector2Array([SHOULDER, mid, hand])
-
-
-## The clutch lever's tip: `fishing` 0 (toward the bow, driving) .. 1 (aft, winch engaged).
-static func clutch_tip(fishing: float) -> Vector2:
-	var a := lerpf(-0.95, -2.2, clampf(fishing, 0.0, 1.0))
-	return CLUTCH_PIVOT + Vector2(cos(a), sin(a)) * CLUTCH_LEN
-
-
-## The rod as a polyline from ROD_BASE: raised by `raise` 0 (stowed) .. 1 (fishing angle), its
-## tip bent toward `pull_dir` (a unit vector toward the line) by `tension` 0..1. 7 points.
-static func rod(raise: float, tension: float, pull_dir: Vector2) -> PackedVector2Array:
-	var u := clampf(raise, 0.0, 1.0)
-	var a0 := (ROD_STOW_TIP - ROD_BASE).angle()
-	var a1 := (ROD_FISH_TIP - ROD_BASE).angle()
-	var length := lerpf(ROD_BASE.distance_to(ROD_STOW_TIP), ROD_BASE.distance_to(ROD_FISH_TIP), u)
-	var tip := ROD_BASE + Vector2.from_angle(lerp_angle(a0, a1, u)) * length
-	var bent := tip + pull_dir.normalized() * ROD_BEND_PX * clampf(tension, 0.0, 1.0) * u
-	var ctrl := ROD_BASE.lerp(tip, 0.55)
-	var out := PackedVector2Array()
-	for i in 7:
-		out.append(quad(ROD_BASE, ctrl, bent, float(i) / 6.0))
+## The rod's pixels from the base to the tip (the last one).
+static func rod(raise: float, tension: float) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var runs := rod_runs(raise, tension)
+	var climbs := runs[0] > 0
+	var p := ROD_BASE
+	for i in runs.size():
+		var run := runs[i]
+		var along := Vector2i(0, -1) if run > 0 else Vector2i(-1, 0)
+		for k in absi(run):
+			out.append(p + along * k)
+		if i + 1 == runs.size():
+			break
+		var last := out[-1]
+		if run > 0:
+			p = last + (Vector2i(-1, 0) if runs[i + 1] < 0 else Vector2i(-1, -1))
+		else:
+			p = last + Vector2i(-1, 1 if climbs else -1)
 	return out
 
 
-## Sag in art px of a line `length` long: deep with slack, none under full strain.
+## The x the line's end (a fish's lip, a wobbler) should take so the line from `tip` to `end`
+## runs in uniform runs of an even slope (SLOPES); end.x itself when that would move it more
+## than SNAP_MAX_PX.
+static func even_end(tip: Vector2i, end: Vector2i) -> int:
+	var dy := absi(end.y - tip.y)
+	if dy == 0:
+		return end.x
+	var dx := end.x - tip.x
+	var want := absf(float(dx)) / float(dy)
+	var best := SLOPES[0]
+	for s in SLOPES:
+		if absf(atan(s) - atan(want)) < absf(atan(best) - atan(want)):
+			best = s
+	var w := 0
+	if best >= 1.0:
+		w = (dy + 1) * roundi(best) - 1
+	elif best > 0.0:
+		w = dy / roundi(1.0 / best)
+	var x := tip.x + int(signf(float(dx))) * w
+	return x if absi(x - end.x) <= SNAP_MAX_PX else end.x
+
+
+## Sag in art px of a line `length` long: deep with slack, none under strain.
 static func line_sag(length: float, slack: float, strain: float) -> float:
-	var k := clampf(0.3 + slack - 1.3 * strain, 0.0, 1.3)
-	return length * 0.1 * k
+	var k := clampf(slack - 0.4 - strain, 0.0, 1.0)
+	return roundf(length * 0.15 * k)
 
 
-## The line from `a` to `b` sagging by line_sag(): `segments` + 1 points.
-static func line(
-	a: Vector2, b: Vector2, slack: float, strain: float, segments: int = 8
-) -> PackedVector2Array:
-	var sag := line_sag(a.distance_to(b), slack, strain)
-	var ctrl := a.lerp(b, 0.5) + Vector2(0, sag * 2.0)
-	var out := PackedVector2Array()
-	for i in segments + 1:
-		out.append(quad(a, ctrl, b, float(i) / float(segments)))
+## The line from `a` to `b` as one straight run, or two when it sags: [a, (low point), b], all
+## whole pixels.
+static func line(a: Vector2i, b: Vector2i, slack: float, strain: float) -> Array[Vector2i]:
+	var sag := int(line_sag(Vector2(a).distance_to(Vector2(b)), slack, strain))
+	if sag <= 0:
+		return [a, b]
+	var mid := Vector2i((a.x + b.x) / 2, (a.y + b.y) / 2 + sag)
+	return [a, mid, b]
+
+
+## Every pixel of the straight run from `a` to `b`, both ends included: runs of one length along
+## the major axis, a diagonal step between runs, the last run what is left; Bresenham where no
+## uniform run fits the slope.
+static func raster(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var d := b - a
+	var x_major := absi(d.x) >= absi(d.y)
+	var big := absi(d.x) if x_major else absi(d.y)
+	var small := absi(d.y) if x_major else absi(d.x)
+	var major := Vector2i(signi(d.x), 0) if x_major else Vector2i(0, signi(d.y))
+	var minor := Vector2i(0, signi(d.y)) if x_major else Vector2i(signi(d.x), 0)
+	var out: Array[Vector2i] = []
+	if small == 0:
+		for k in big + 1:
+			out.append(a + major * k)
+		return out
+	var run_len := ceili(float(big + 1) / float(small + 1))
+	if run_len * small > big:
+		return _bresenham(a, b)
+	var p := a
+	var run := 0
+	var steps := 0
+	while true:
+		out.append(p)
+		if p == b:
+			break
+		run += 1
+		if run == run_len and steps < small:
+			p += major + minor
+			steps += 1
+			run = 0
+		else:
+			p += major
 	return out
 
 
-## Every point snapped to whole art pixels (crisp 1 px lines).
-static func snapped(points: PackedVector2Array) -> PackedVector2Array:
-	var out := PackedVector2Array()
-	for p in points:
-		out.append(p.floor() + Vector2(0.5, 0.5))
+static func _bresenham(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var dx := absi(b.x - a.x)
+	var dy := -absi(b.y - a.y)
+	var sx := 1 if a.x < b.x else -1
+	var sy := 1 if a.y < b.y else -1
+	var err := dx + dy
+	var p := a
+	for _i in dx - dy + 1:
+		out.append(p)
+		if p == b:
+			break
+		var e2 := 2 * err
+		if e2 >= dy:
+			err += dy
+			p.x += sx
+		if e2 <= dx:
+			err += dx
+			p.y += sy
 	return out
 
 
-static func quad(a: Vector2, b: Vector2, c: Vector2, t: float) -> Vector2:
-	var u := 1.0 - t
-	return a * u * u + b * 2.0 * u * t + c * t * t
+## Every pixel of the runs through `points` (each joint once).
+static func raster_path(points: Array[Vector2i]) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	for i in points.size() - 1:
+		var run := raster(points[i], points[i + 1])
+		if i > 0:
+			run.pop_front()
+		out.append_array(run)
+	return out

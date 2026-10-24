@@ -1,0 +1,25 @@
+[remap]
+
+importer="font_data_image"
+type="FontFile"
+uid="uid://bb88quyg4lmlt"
+path="res://.godot/imported/turbo_reel_5x7.png-ce5af82f52599b3614996121e0ee6cb6.fontdata"
+
+[deps]
+
+source_file="res://assets/fishing/font/turbo_reel_5x7.png"
+dest_files=["res://.godot/imported/turbo_reel_5x7.png-ce5af82f52599b3614996121e0ee6cb6.fontdata"]
+
+[params]
+
+character_ranges=PackedStringArray("32-126", "8211", "183", "8230")
+kerning_pairs=PackedStringArray()
+columns=16
+rows=7
+image_margin=Rect2i(0, 0, 0, 0)
+character_margin=Rect2i(0, 0, 0, 0)
+ascent=7
+descent=2
+fallbacks=[]
+compress=true
+scaling_mode=1

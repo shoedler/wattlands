@@ -1,25 +1,14 @@
 {
 	"sprites": {
-		"boat_flywheel": {
-			"anchor": [
-				4,
-				4
-			],
-			"frames": 4,
-			"size": [
-				9,
-				9
-			]
-		},
-		"boat_gears": {
+		"boat_crew": {
 			"anchor": [
 				0,
 				0
 			],
-			"frames": 2,
+			"frames": 8,
 			"size": [
-				6,
-				4
+				30,
+				18
 			]
 		},
 		"boat_hull": {
@@ -27,7 +16,7 @@
 				0,
 				0
 			],
-			"frames": 1,
+			"frames": 3,
 			"size": [
 				96,
 				40
@@ -36,12 +25,12 @@
 		"boat_prop": {
 			"anchor": [
 				1,
-				3
+				2
 			],
 			"frames": 4,
 			"size": [
 				3,
-				7
+				5
 			]
 		},
 		"boat_winch": {
@@ -52,7 +41,7 @@
 			"frames": 2,
 			"size": [
 				4,
-				5
+				4
 			]
 		},
 		"card_roam": {
@@ -80,12 +69,12 @@
 		"fish_grouper": {
 			"anchor": [
 				0,
-				11
+				8
 			],
 			"frames": 4,
 			"size": [
 				46,
-				23
+				22
 			]
 		},
 		"fish_mackerel": {
@@ -95,19 +84,19 @@
 			],
 			"frames": 4,
 			"size": [
-				15,
+				17,
 				7
 			]
 		},
 		"fish_mahi": {
 			"anchor": [
 				0,
-				5
+				6
 			],
 			"frames": 4,
 			"size": [
-				28,
-				11
+				31,
+				14
 			]
 		},
 		"fish_marlin": {
@@ -117,19 +106,19 @@
 			],
 			"frames": 4,
 			"size": [
-				59,
-				18
+				54,
+				15
 			]
 		},
 		"fish_oarfish": {
 			"anchor": [
 				0,
-				5
+				4
 			],
 			"frames": 4,
 			"size": [
-				62,
-				11
+				66,
+				9
 			]
 		},
 		"fish_sea_bream": {
@@ -139,8 +128,8 @@
 			],
 			"frames": 4,
 			"size": [
-				14,
-				9
+				15,
+				10
 			]
 		},
 		"fish_snapper": {
@@ -150,8 +139,8 @@
 			],
 			"frames": 4,
 			"size": [
-				18,
-				10
+				19,
+				11
 			]
 		},
 		"fish_swordfish": {
@@ -162,39 +151,39 @@
 			"frames": 4,
 			"size": [
 				46,
-				13
+				12
 			]
 		},
 		"fish_tuna": {
 			"anchor": [
 				0,
-				6
+				5
 			],
 			"frames": 4,
 			"size": [
-				30,
+				31,
 				12
 			]
 		},
 		"fish_wahoo": {
 			"anchor": [
 				0,
-				4
+				3
 			],
 			"frames": 4,
 			"size": [
-				34,
+				37,
 				8
 			]
 		},
 		"fx_sparkle": {
 			"anchor": [
-				3,
+				2,
 				2
 			],
 			"frames": 3,
 			"size": [
-				7,
+				5,
 				5
 			]
 		},
@@ -211,13 +200,13 @@
 		},
 		"gull": {
 			"anchor": [
-				2,
+				3,
 				1
 			],
 			"frames": 2,
 			"size": [
-				5,
-				3
+				7,
+				2
 			]
 		},
 		"icon_afk": {
@@ -299,12 +288,12 @@
 		},
 		"lure": {
 			"anchor": [
-				3,
+				0,
 				1
 			],
 			"frames": 2,
 			"size": [
-				7,
+				6,
 				3
 			]
 		},
@@ -319,37 +308,26 @@
 				90
 			]
 		},
-		"rider": {
-			"anchor": [
-				0,
-				0
-			],
-			"frames": 1,
-			"size": [
-				7,
-				11
-			]
-		},
 		"scenery_pier": {
 			"anchor": [
 				0,
-				8
+				6
 			],
 			"frames": 1,
 			"size": [
 				72,
-				22
+				20
 			]
 		},
 		"scenery_town": {
 			"anchor": [
 				0,
-				33
+				30
 			],
 			"frames": 1,
 			"size": [
 				168,
-				34
+				30
 			]
 		}
 	}

@@ -137,14 +137,6 @@ static func name_of(game: FishingGame, slot: int) -> String:
 	return "P%d" % (slot + 1)
 
 
-## The slot look of `slot` from ctx.players (Wl.slot_look without one).
-static func look(game: FishingGame, slot: int) -> Dictionary:
-	if game != null and game.ctx != null and slot >= 0 and slot < game.ctx.players.size():
-		var p := game.ctx.players[slot]
-		return {"color": p.color, "shape": p.shape, "pattern": p.pattern, "hollow": p.hollow}
-	return Wl.slot_look(slot)
-
-
 ## Leaderboard rows, most points first (ties: slot order): [{slot, name, points, action, local}].
 static func board(game: FishingGame) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []

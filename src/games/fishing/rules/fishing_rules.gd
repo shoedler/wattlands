@@ -34,9 +34,10 @@ extends RefCounted
 ## Cool-down: HOME (Free Roam: heading for the dock). Rescue, AFK, pause and stale telemetry
 ## stagger the rider (FishingFight); a paused boat drifts.
 
-## The dock berths: slot 0 at BERTH_X0_M, each next slot BERTH_M further out.
+## The dock berths: slot 0 at BERTH_X0_M, each next slot BERTH_M further out (a boat is about
+## 36 m long in the view, so neighbours keep a clear gap at the start).
 const BERTH_X0_M := 10.0
-const BERTH_M := 15.0
+const BERTH_M := 42.0
 const TIP_PREFIX := "FISHING_TIP_"
 const D_MAX_DEFAULT := 60.0
 const EPS := 1e-6

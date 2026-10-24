@@ -80,13 +80,19 @@ func bar() -> HudBar:
 	return _bar
 
 
+func _on_palette_changed() -> void:
+	_refresh()
+
+
 func _refresh() -> void:
 	if _bar == null:
 		return
 	var f := fraction()
-	_bar.fill_color = WlTheme.WARN if is_low() else WlTheme.ACCENT
+	_bar.fill_color = WlTheme.WARN if is_low() else palette.pick(HudPalette.BAR_FG, WlTheme.ACCENT)
 	_bar.set_state(f, 1.0)
 	_pct.text = (
 		("%d%%" % roundi(f * 100.0)) if not is_low() else _t("UI_HUD_WBAL_LOW", [roundi(f * 100.0)])
 	)
-	_pct.label_settings.font_color = WlTheme.WARN if is_low() else WlTheme.TEXT
+	_pct.label_settings.font_color = (
+		WlTheme.WARN if is_low() else palette.pick(HudPalette.TEXT, WlTheme.TEXT)
+	)

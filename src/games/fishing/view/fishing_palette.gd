@@ -1,105 +1,76 @@
 class_name FishingPalette
 extends RefCounted
-## Turbo Reel's palette: 32 muted colours in a few cohesive ramps (sky and haze, sea by depth,
-## sand, wood, cream, brass, the key reds the slot colour replaces, skin, steel and three fish
-## accents). The hand-authored sprites (FishingArtGrids) use only these; the code-drawn scenery
-## (FishingScenery) draws flat bands from the same ramps, so every scene reads as one style.
+## Turbo Reel's palette: one cool hue family (green-grey to teal-blue) in eight value steps from
+## the foam white down to the abyss teal (LADDER: sky and water in one ramp, nothing darker than
+## ABYSS), the seabed sage, the wood and hull slates, one warm accent (brass, flags) and three
+## more desaturated player colours for the caps and pennants. The sprites (FishingArtGrids), the
+## code-drawn scenery (FishingScenery) and the HUD panels use only these.
 
-const CLOUD := Color("#eef2ea")
-const SKY_2 := Color("#e0eae1")
-const SKY_1 := Color("#d0dfd8")
-const SKY_0 := Color("#c0d4cf")
-const HAZE_1 := Color("#a7c5c2")
-const HAZE_2 := Color("#8bb0b1")
-const SEA_1 := Color("#72a4a8")
-const SEA_2 := Color("#5b8f96")
-const SEA_3 := Color("#4a7b84")
-const SEA_4 := Color("#3b6773")
-const SEA_5 := Color("#2f5562")
-const SEA_6 := Color("#254452")
-const SEA_7 := Color("#1b3441")
-const VOID := Color("#121f29")
-const SAND_1 := Color("#b2b796")
-const SAND_2 := Color("#8da38e")
-const WOOD_1 := Color("#a37f5a")
-const WOOD_2 := Color("#735a42")
-const WOOD_3 := Color("#4b3d31")
-const CREAM := Color("#c9c3ae")
-const BRASS_1 := Color("#e6c47a")
-const BRASS_2 := Color("#c09a50")
-const BRASS_3 := Color("#8a6c38")
-## The key ramp (light, dark): the rider's jersey and the hull stripe; PaletteSwap paints the
-## slot colour over them.
-const KEY_LIGHT := Color("#c8573f")
-const KEY_DARK := Color("#8f3b30")
-const SKIN_1 := Color("#deb08f")
-const SKIN_2 := Color("#ad7f62")
-const STEEL := Color("#8e9a9a")
-const NAVY := Color("#2f4a6a")
-const BLUE := Color("#7e9fc4")
-const GREEN := Color("#8ea85c")
-const GLOW := Color("#d8f0c0")
+const FOAM := Color("#ebf2e7")
+const SKY := Color("#cedfd2")
+const HAZE := Color("#b6d7cf")
+const SURFACE := Color("#91c2c2")
+const UPPER := Color("#6fa3a6")
+const MID := Color("#4b858f")
+const DEEP := Color("#2c6778")
+const ABYSS := Color("#1c4d65")
+const SAGE := Color("#a7bfb3")
+const WOOD := Color("#627179")
+const SLATE := Color("#4e5c67")
+## The single warm accent (brass, the first player's colour).
+const ACCENT := Color("#c98a5e")
+const PLAYER_SLATE := Color("#7f9cbf")
+const PLAYER_MOSS := Color("#9fb07a")
+const PLAYER_PLUM := Color("#a68aa8")
 
-## Every palette colour, in ramp order (the art test checks the sprites against it).
+## Every palette colour (the art test checks the sprites against it).
 const ALL: Array[Color] = [
-	CLOUD,
-	SKY_2,
-	SKY_1,
-	SKY_0,
-	HAZE_1,
-	HAZE_2,
-	SEA_1,
-	SEA_2,
-	SEA_3,
-	SEA_4,
-	SEA_5,
-	SEA_6,
-	SEA_7,
-	VOID,
-	SAND_1,
-	SAND_2,
-	WOOD_1,
-	WOOD_2,
-	WOOD_3,
-	CREAM,
-	BRASS_1,
-	BRASS_2,
-	BRASS_3,
-	KEY_LIGHT,
-	KEY_DARK,
-	SKIN_1,
-	SKIN_2,
-	STEEL,
-	NAVY,
-	BLUE,
-	GREEN,
-	GLOW,
+	FOAM,
+	SKY,
+	HAZE,
+	SURFACE,
+	UPPER,
+	MID,
+	DEEP,
+	ABYSS,
+	SAGE,
+	WOOD,
+	SLATE,
+	ACCENT,
+	PLAYER_SLATE,
+	PLAYER_MOSS,
+	PLAYER_PLUM,
 ]
-## Sky from the top of the view down to the horizon.
-const SKY: Array[Color] = [SKY_0, SKY_1, SKY_2]
-## Water from the surface down to the abyss.
-const SEA: Array[Color] = [SEA_1, SEA_2, SEA_3, SEA_4, SEA_5, SEA_6, SEA_7, VOID]
-## The fishing line above the water.
-const LINE := CLOUD
+## Light to dark: the sky and the water in one ramp. Fish and hints shift along it with depth.
+const LADDER: Array[Color] = [FOAM, SKY, HAZE, SURFACE, UPPER, MID, DEEP, ABYSS]
+## The water from the surface down (one flat band each): haze, then the teals; the deep teal and
+## the abyss are kept for the deep floor and the subjects.
+const SEA: Array[Color] = [HAZE, SURFACE, UPPER, MID]
+## Player colours by slot: the cap and the pennant, nothing else.
+const PLAYERS: Array[Color] = [ACCENT, PLAYER_SLATE, PLAYER_MOSS, PLAYER_PLUM]
+## The line above the water (the rod's colour; under water FishingView.line_under()).
+const LINE := SLATE
+## HUD: panels, text, secondary text, bars on their track; colour only for alerts.
+const HUD_PANEL := DEEP
+const HUD_TEXT := FOAM
+const HUD_DIM := HAZE
+const HUD_BAR := SURFACE
+const HUD_TRACK := MID
+const HUD_ALERT := ACCENT
 
 
-## The water colour at `u` (0 at the surface, 1 at the deepest shown water), one flat ramp step.
-static func sea_at(u: float) -> Color:
-	var i := clampi(floori(clampf(u, 0.0, 1.0) * float(SEA.size())), 0, SEA.size() - 1)
-	return SEA[i]
-
-
-## The colour `steps` ramp steps darker than `c` along SEA (c itself when it is not in SEA).
+## The colour `steps` LADDER steps darker than `c` (lighter when negative; clamped at the ends;
+## c itself when it is not in LADDER).
 static func darker(c: Color, steps: int = 1) -> Color:
-	var i := SEA.find(c)
+	var i := LADDER.find(c)
 	if i < 0:
 		return c
-	return SEA[clampi(i + steps, 0, SEA.size() - 1)]
+	return LADDER[clampi(i + steps, 0, LADDER.size() - 1)]
 
 
-## The key ramp as PaletteSwap takes it.
-static func keys() -> PackedColorArray:
-	return PackedColorArray([KEY_LIGHT, KEY_DARK])
+## The player colour of `slot`.
+static func player(slot: int) -> Color:
+	return PLAYERS[posmod(slot, PLAYERS.size())]
 
 
 ## A "#rrggbb" value as a colour, `fallback` when it is not one.

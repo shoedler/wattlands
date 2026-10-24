@@ -66,14 +66,42 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X, 3.0)
 
 
-func test_bow_pitch_lifts_the_bow() -> void:
+func test_bow_pitch_picks_a_bow_up_pose_by_whole_pixels_never_rotating_it() -> void:
 	var g := FX.make_game(1)
 	var r := g.state.rider(0)
 	FX.set_drive(r, 3000.0, 7.0)
 	r.pitch_deg = 10.0
 	var v := _view(g)
 	_run(v, 10)
-	assert_lt(v.boat_view(0).rotation, -0.1, "nose up (counter-clockwise) heading right")
+	var b := v.boat_view(0)
+	assert_eq(b.rotation, 0.0, "sprites are never rotated")
+	assert_eq(b.pose(), 2, "a hard effort lifts the bow 4 px")
+	assert_eq(b.hull.texture, FishingSprites.frame("boat_hull", 2))
+	var flag_up := b.pixel_of(FishingRig.FLAG.position)
+	var stern := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	r.pitch_deg = 0.0
+	_run(v, 2)
+	assert_eq(b.pose(), 0)
+	assert_eq(b.pixel_of(FishingRig.FLAG.position).y - flag_up.y, 4.0, "the bow came down 4 px")
+	var stern_level := b.pixel_of(Vector2i(FishingRig.STERN_X, FishingRig.WATERLINE))
+	assert_eq(stern.y - stern_level.y, 1.0, "the stern squatted 1 px")
+
+
+func test_tilt_bands_step_by_one_pixel_at_least_eight_apart() -> void:
+	for pose in range(1, FishingRig.TILT.size()):
+		var bands: Array = FishingRig.TILT[pose]
+		var prev_x := 0
+		var prev_dy := 1
+		for i in bands.size():
+			var band: Vector2i = bands[i]
+			if i > 0:
+				assert_eq(prev_dy - band.y, 1, "pose %d steps one pixel" % pose)
+				assert_gte(band.x - prev_x, 8, "pose %d steps are at least 8 px long" % pose)
+			prev_x = band.x
+			prev_dy = band.y
+		assert_eq(FishingRig.tilt_dy(pose, 0), 1, "the stern squats")
+	assert_eq(FishingRig.tilt_dy(2, FishingRig.BOW_X), -4)
+	assert_eq(FishingRig.tilt_dy(1, FishingRig.BOW_X), -2)
 
 
 func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -> void:
@@ -90,10 +118,12 @@ func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -
 	assert_eq(other.position.y, float(FishingScenery.SURF_Y - FishingView.FAR_ROW_PX))
 	assert_gt(other.position.y, float(FishingScenery.HORIZON_Y), "still on the water")
 	var m := other.hull.material as ShaderMaterial
-	assert_eq(m.shader, FishingBoatView.far_shader())
-	assert_eq(float(m.get_shader_parameter("clip_y")), other.position.y + 1.0)
-	assert_true(bool(m.get_shader_parameter("swap_keys")), "the far hull keeps its slot colour")
-	assert_gt(float(m.get_shader_parameter("haze_amount")), 0.0)
+	assert_eq(m.shader, FishingPaletteMap.shader())
+	assert_eq(float(m.get_shader_parameter("under_y")), other.position.y, "its own shadow slab")
+	assert_eq(int(m.get_shader_parameter("count")), FishingBoatView.FAR_FROM.size(), "lighter")
+	var mine := me.hull.material as ShaderMaterial
+	assert_eq(int(mine.get_shader_parameter("count")), 0)
+	assert_eq(float(mine.get_shader_parameter("under_y")), float(FishingScenery.SURF_Y))
 
 
 func test_other_boats_far_away_are_not_drawn() -> void:
@@ -114,7 +144,7 @@ func test_driving_spins_the_prop_and_keeps_the_rod_stowed() -> void:
 	var b := v.boat_view(0)
 	assert_eq(b.fishing, 0.0)
 	assert_gt(b.prop_drive, 1.0)
-	assert_eq(b.hand(), FishingRig.TILLER_GRIP)
+	assert_lt(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "the driving pose: hand on the tiller")
 
 
 func test_fishing_flips_the_clutch_raises_the_rod_and_moves_the_hands() -> void:
@@ -124,8 +154,8 @@ func test_fishing_flips_the_clutch_raises_the_rod_and_moves_the_hands() -> void:
 	_run(v, 40)
 	var b := v.boat_view(0)
 	assert_eq(b.fishing, 1.0)
-	assert_eq(b.hand(), FishingRig.BRAKE_KNOB)
-	assert_lt(b.rod_points()[-1].y, FishingRig.ROD_BASE.y - 10.0, "the rod tips up")
+	assert_gte(b.crew_frame(), FishingArtGrids.CREW_FRAMES, "the fishing pose: clutch aft")
+	assert_lt(b.rod_points()[-1].y, FishingRig.ROD_BASE.y - 8.0, "the rod tips up")
 
 
 func test_a_wobbler_shows_at_its_depth_while_waiting() -> void:
@@ -135,7 +165,8 @@ func test_a_wobbler_shows_at_its_depth_while_waiting() -> void:
 	_run(v, 20)
 	var p: Vector2 = v.model["lure"][0]
 	assert_gt(p.y, float(FishingScenery.SURF_Y) + 10.0)
-	assert_almost_eq(p.x, v.to_screen(3000.0 - 12.0, 20.0).x, 0.5)
+	var x := v.to_screen(3000.0 - 12.0, 20.0).x
+	assert_almost_eq(p.x, x, float(FishingRig.SNAP_MAX_PX), "snapped for an even line")
 
 
 func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> void:
@@ -149,7 +180,10 @@ func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> voi
 	assert_lt(fish.position.x, boat.x, "behind the stern heading out")
 	var spr := v.get_node("Underwater/Fish0") as Sprite2D
 	assert_true(spr.flip_h, "mouth on the right, toward the boat")
-	assert_gt(FishingDepthTint.amount_of(spr.material as ShaderMaterial), 0.1)
+	var m := spr.material as ShaderMaterial
+	var band := FishingScenery.band_at(300.0)
+	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.shift_for(band), "by its band")
+	assert_gt(FishingPaletteMap.shift_of(m), 0, "a dark subject on the deep water")
 
 
 func test_no_fish_shows_outside_a_fight() -> void:
@@ -185,7 +219,8 @@ func test_menu_hints_show_as_silhouettes_and_the_picked_one_is_lit() -> void:
 	assert_true(bool(hints[1]["selected"]))
 	var m0 := v.get_node("Underwater/Hint0").material as ShaderMaterial
 	var m1 := v.get_node("Underwater/Hint1").material as ShaderMaterial
-	assert_gt(FishingDepthTint.amount_of(m0), FishingDepthTint.amount_of(m1))
+	assert_true(FishingPaletteMap.is_flat(m0), "a flat silhouette")
+	assert_false(FishingPaletteMap.is_flat(m1), "the picked fish shows itself")
 
 
 func test_hints_stay_above_the_floor() -> void:
@@ -292,7 +327,7 @@ func test_the_view_draws_the_whole_width() -> void:
 	var v := _view(g)
 	_run(v, 1)
 	assert_eq(FishingScenery.W, FishingConst.PIXEL_W)
-	assert_eq(FishingScenery.sky_texture().get_width(), FishingConst.PIXEL_W)
+	assert_eq(FishingScenery.H, FishingConst.PIXEL_H)
 
 
 func test_a_client_draws_boats_between_snapshots() -> void:

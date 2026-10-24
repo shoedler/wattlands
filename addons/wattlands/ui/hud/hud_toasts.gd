@@ -25,6 +25,8 @@ var max_visible: int = MAX_VISIBLE
 var max_width: float = INF
 ## Which side the toasts line up on: -1 left, 0 centre, 1 right.
 var side: int = 0
+## The game's colors (HudWidget.set_palette): banner_bg, banner_text, accent (the border).
+var palette: HudPalette = HudPalette.new()
 
 ## [{"panel": PanelContainer, "label": Label, "left": float, "text": String}]
 var _items: Array[Dictionary] = []
@@ -43,20 +45,39 @@ func push(text: String, seconds: float = DEFAULT_S) -> void:
 	var panel := PanelContainer.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.size_flags_horizontal = side_flags(side)
-	panel.add_theme_stylebox_override(
-		"panel", WlTheme.panel_style(Color(0.08, 0.1, 0.13, 0.92), WlTheme.ACCENT, 2)
-	)
+	_style_panel(panel)
 	var l := Label.new()
 	l.auto_translate_mode = Node.AUTO_TRANSLATE_MODE_DISABLED
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	l.label_settings = WlTheme.label_settings(font_px)
+	l.label_settings = WlTheme.label_settings(
+		font_px, palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
+	)
+	if not palette.style.is_empty():
+		palette.style_label(l.label_settings, font_px)
 	l.horizontal_alignment = side_alignment(side)
 	l.text = text
 	HudWidget.wrap_label(l, max_width - PANEL_PAD)
 	panel.add_child(l)
 	add_child(panel)
+	HudPalette.snap_tree(self, palette.grid_px())
 	_items.append({"panel": panel, "label": l, "left": maxf(seconds, 0.1), "text": text})
 	_trim()
+
+
+## Use `p` for the toast panels and text (null = the kit look).
+func set_palette(p: HudPalette) -> void:
+	palette = p if p != null else HudPalette.new()
+	palette.style_item(self)
+	for it in _items:
+		_style_panel(it["panel"] as PanelContainer)
+		var ls := (it["label"] as Label).label_settings
+		ls.font_color = palette.pick(HudPalette.BANNER_TEXT, WlTheme.TEXT)
+		if not palette.style.is_empty():
+			palette.style_label(ls, font_px)
+	if palette.grid_px() > 0:
+		for it2 in _items:
+			_style_panel(it2["panel"] as PanelContainer)
+	HudPalette.snap_tree(self, palette.grid_px())
 
 
 func tick(dt: float) -> void:
@@ -129,10 +150,25 @@ func fit_to(avail: Vector2) -> void:
 	max_visible = n
 	for it in _items:
 		var ls := (it["label"] as Label).label_settings
-		ls.font_size = px
-		ls.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * px / 64.0))
+		if palette.style.is_empty():
+			ls.font_size = px
+			ls.outline_size = maxi(2, roundi(WlTheme.OUTLINE_PX * px / 64.0))
+		else:
+			palette.style_label(ls, px)
 	_trim()
 	set_max_width(avail.x if avail.x > 0.0 else INF)
+
+
+func _style_panel(panel: PanelContainer) -> void:
+	var sb := WlTheme.panel_style(
+		palette.pick(HudPalette.BANNER_BG, Color(0.08, 0.1, 0.13, 0.92)),
+		palette.pick(HudPalette.ACCENT, WlTheme.ACCENT),
+		2
+	)
+	palette.style_panel(sb)
+	if palette.grid_px() > 0:
+		sb.set_content_margin_all(3.0 * palette.grid_px())
+	panel.add_theme_stylebox_override("panel", sb)
 
 
 func _trim() -> void:

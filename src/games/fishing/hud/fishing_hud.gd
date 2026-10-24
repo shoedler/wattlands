@@ -10,14 +10,40 @@ extends RefCounted
 ##  - toasts under the minimap, banners over the middle of the view.
 ## Nothing reaches into the PANIC corner (art x >= 503 and y >= 316).
 
-const POWER := Rect2i(4, 320, 100, 36)
-const STRAIN := Rect2i(106, 320, 5, 36)
-const CADENCE := Rect2i(113, 320, 97, 36)
-const SLACK := Rect2i(212, 320, 5, 36)
-const GEAR := Rect2i(4, 300, 60, 18)
-const TIMELINE := Rect2i(4, 262, 213, 36)
+const POWER := Rect2i(4, 322, 100, 34)
+const STRAIN := Rect2i(106, 322, 7, 34)
+const CADENCE := Rect2i(115, 322, 115, 34)
+const SLACK := Rect2i(232, 322, 7, 34)
+const GEAR := Rect2i(4, 305, 98, 15)
+const TIMELINE := Rect2i(4, 262, 235, 36)
 const TOASTS := Rect2i(120, 38, 296, 22)
 const BANNERS := Rect2i(120, 150, 400, 60)
+## The kit widgets, toasts and the game banner in the art's sea palette and pixel font, on the
+## art's pixel grid: square borderless deep-teal panels (one exact colour, lighter than the
+## boats), mid-teal bar tracks, sizes on the font's 9 px cell.
+const PALETTE := {
+	"panel": Color("#2c6778"),
+	"panel_border": Color("#2c6778"),
+	"text": Color("#ebf2e7"),
+	"text_dim": Color("#b6d7cf"),
+	"bar_bg": Color("#4b858f"),
+	"bar_fg": Color("#91c2c2"),
+	"accent": Color("#c98a5e"),
+	"banner_bg": Color("#2c6778"),
+	"banner_text": Color("#ebf2e7"),
+	"band": Color("#6fa3a6"),
+	"glow": Color("#ebf2e7"),
+	"glow_text": Color("#ebf2e7"),
+	"strip_low": Color("#4b858f"),
+	"strip_mid": Color("#6fa3a6"),
+	"strip_high": Color("#91c2c2"),
+	"font_scale_px": 9,
+	"text_px": 27,
+	"key_px": 54,
+	"grid_px": 3,
+	"corner_radius": 0,
+	"text_outline": false,
+}
 
 
 static func spec(game: FishingGame) -> HudSpec:
@@ -38,6 +64,9 @@ static func spec(game: FishingGame) -> HudSpec:
 		spec.add(HudSpec.TIMELINE, TIMELINE)
 	spec.toasts_at(TOASTS)
 	spec.banners_at(BANNERS)
+	var palette := PALETTE.duplicate()
+	palette["font"] = FishingHudDraw.font()
+	spec.palette = palette
 	return spec
 
 
