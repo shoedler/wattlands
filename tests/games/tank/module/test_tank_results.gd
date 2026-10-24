@@ -215,3 +215,23 @@ func test_the_first_run_never_picks_tank() -> void:
 	assert_eq(WlGameRegistry.pick_first_run([workout, m]), "workout", "whatever the order")
 	var other := {"id": "aaa_game", "first_run_priority": 0}
 	assert_eq(WlGameRegistry.pick_first_run([m, other]), "aaa_game", "a tie at 0 never goes to -1")
+
+
+func test_a_run_cut_short_has_no_drill_title() -> void:
+	var ctx := F.make_ctx(1)
+	var g: TankGame = autofree(F.make_game(ctx))
+	F.run(g, F.plans_of(g), 0, 20.0)
+	assert_eq(g.state.outcome, "", "no cool-down yet")
+	var res := g.results()
+	assert_ne(res.summary_key, "TANK_RESULT_DRILL", "Ashfall Road is no drill")
+	assert_eq(res.summary_key, "")
+	assert_ne(res.team["TANK_TEAM_OUTCOME"], g.ctx.strings.t("TANK_RESULT_DRILL"))
+
+
+func test_the_drill_title_is_for_a_completed_drill_only() -> void:
+	var g: TankGame = autofree(F.make_game(F.make_ctx(1, 0, "drill")))
+	g.state.seg.seg = TankIds.SEG_COOLDOWN
+	g.state.outcome = TankIds.OUTCOME_COMPLETE
+	var res := g.results()
+	assert_eq(res.summary_key, "TANK_RESULT_DRILL")
+	assert_eq(res.team["TANK_TEAM_OUTCOME"], g.ctx.strings.t("TANK_RESULT_DRILL"))
