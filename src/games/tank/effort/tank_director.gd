@@ -32,7 +32,12 @@ extends RefCounted
 ##    SIM) and ram (the driver), never in WARMUP kinds, the first 300 s, the cool-down, ERG, to an
 ##    opted-out or reserve rider, nor within haptics.cooldown_s of the end of the last one.
 ## 7. end_phase for every rider of the group's phase in one step once the objective is done and
-##    min_s has passed (ADR "Who calls end_phase").
+##    min_s has passed (ADR "Who calls end_phase"); a refused rider is retried on later ticks.
+## A rider on reserve (dropped or AFK) gets no bank, boiler or hoist request: a dropped peer never
+## receives them, so the director's idea of the held target would run away from the rider's real
+## one. Its bank and grade memory is erased, and on the tick it is back the bank restarts from what
+## the rider's governor holds (applied target), the boiler and hoist from 0, so the first update
+## after a rejoin is again within the 10-point / 0.5% / 1% limits of the rider's real value.
 ## The power band: tanks.json in_band.sim_ftp_pct for diesel and Bulwark riders in WORK SIM
 ## phases, cleared (0, 0) everywhere else, at each segment start.
 
@@ -48,6 +53,12 @@ const REASON_HOIST := "hoist"
 
 ## Changes smaller than this are float noise, not worth a directive.
 const EPS := 1e-6
+## How long before max_s the director ends a phase whose death-beat hold would run into it.
+const END_MARGIN_S := 0.2
+## Spacing of end_phase retries after the first one (a refusal is logged by the router).
+const END_RETRY_S := 1.0
+## BRIEF 4.6.1: the governor applies ERG targets x0.85 while FTP is unverified.
+const UNVERIFIED_FACTOR := 0.85
 ## The tick of "never sent".
 const NEVER := -(1 << 40)
 
@@ -77,6 +88,16 @@ var _hoist_since: Dictionary = {}
 var _loader: Dictionary = {}
 ## peer -> the game time the receiver's last haptic ends.
 var _haptic_end: Dictionary = {}
+## peer -> true while the rider is on reserve (bank, boiler and hoist memory erased).
+var _reserve: Dictionary = {}
+## peer -> true on the tick the rider came back from reserve (the bank reseeds from the governor).
+var _returned: Dictionary = {}
+## Phase index -> the peers whose end_phase was refused and is still to be retried.
+var _end_pending: Dictionary = {}
+## Phase index -> the tick of the next end_phase retry.
+var _end_retry_tick: Dictionary = {}
+## Phase index -> how many retry rounds ran.
+var _end_retries: Dictionary = {}
 
 
 func _init(p_ctx: GameContext, p_content: TankContent, p_plans: Dictionary) -> void:
@@ -98,9 +119,11 @@ func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> vo
 		if ph == null:
 			continue  # the cool-down: nothing is sent
 		var e := inputs.tick - int(_start_tick[ri.peer])
-		_bank_step(state, ri, ph, e)
-		_boiler_step(state, ri, inputs.tick)
-		_hoist_step(state, ri, inputs.tick)
+		if not _reserve_step(ri):
+			# On reserve nothing held is sent (it may never arrive) or remembered as sent.
+			_bank_step(state, ri, ph, e)
+			_boiler_step(state, ri, inputs.tick)
+			_hoist_step(state, ri, inputs.tick)
 		_terrain_step(state, ri, ph, e)
 		_loader_step(state, ri)
 	_haptics(state, inputs, events)
@@ -117,7 +140,25 @@ func _phase(ri: TankRiderInput) -> PlanPhase:
 	return plan.phase(ri.phase_index)
 
 
+## True while `ri` is on reserve. Terrain, the cadence band and the power band carry on (they are
+## resent from the current state or resynced by the host). Erases the bank and grade memory (a
+## restarted client resumes at the plan, an in-process one at what it held, and the director cannot
+## know which) and marks the rider as returned on the first tick it is back.
+func _reserve_step(ri: TankRiderInput) -> bool:
+	if ri.on_reserve():
+		_reserve[ri.peer] = true
+		_bank.erase(ri.peer)
+		_grade[ri.peer] = 0.0
+		_hoist_since.erase(ri.peer)
+		return true
+	if bool(_reserve.get(ri.peer, false)):
+		_reserve[ri.peer] = false
+		_returned[ri.peer] = true
+	return false
+
+
 func _segment_start(ri: TankRiderInput) -> void:
+	_returned.erase(ri.peer)
 	_bank.erase(ri.peer)
 	_grade[ri.peer] = 0.0
 	_hoist_since.erase(ri.peer)
@@ -158,8 +199,11 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	var sub := _ticks(content.num("stations", "bank.substep_s", 1.0))
 	var n := maxi(int(content.num("stations", "bank.substeps", 3.0)), 1)
 	if not _bank.has(ri.peer):
-		var planned := ph.planned_pct_at(float(e) * Wl.SIM_DT)
-		_bank[ri.peer] = {"cur": planned, "from": planned, "goal": planned}
+		var start := ph.planned_pct_at(float(e) * Wl.SIM_DT)
+		if bool(_returned.get(ri.peer, false)):
+			start = held_pct(ri, ph, start)
+		_returned.erase(ri.peer)
+		_bank[ri.peer] = {"cur": start, "from": start, "goal": start}
 	var b: Dictionary = _bank[ri.peer]
 	var u := e % every
 	if u == 0:
@@ -177,6 +221,17 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		ri.peer, {"mode": Wl.ERG, "target_pct": pct, "reason": REASON_BANK, "source": SOURCE}
 	):
 		b["cur"] = pct
+
+
+## The ERG target in % FTP the rider's governor holds now, for reseeding the bank after a rejoin:
+## the applied target (undoing the 0.85 unverified factor of BRIEF 4.6.1) clamped to the phase's
+## effective range, or `fallback_pct` (the plan's value) when it holds no ERG target.
+static func held_pct(ri: TankRiderInput, ph: PlanPhase, fallback_pct: float) -> float:
+	if ri.mode != Wl.ERG or ri.applied_target_w <= 0.0:
+		return fallback_pct
+	var pct := ri.applied_pct() / (1.0 if ri.ftp_verified else UNVERIFIED_FACTOR)
+	var r := ph.effective_range()
+	return clampf(pct, float(r[0]), float(r[1]))
 
 
 ## One bank update's goal: bank_target_pct, moved at most bank.max_step_pts from `cur_pct` (the
@@ -341,7 +396,7 @@ func _loader_step(state: TankState, ri: TankRiderInput) -> void:
 
 
 func _haptics(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> void:
-	var crew := crew_haptic(events, content.num("stations", "haptics.hit.min_damage", 8.0))
+	var crew := crew_haptic(events, content.num("stations", "haptics.hit.min_damage", 4.0))
 	var drivers := {}
 	for e in events:
 		if str(e.get("type", "")) == TankEvents.RAM:
@@ -423,6 +478,9 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 ## end_phase for every rider of the group's phase in one step, once the objective is done, min_s
 ## has passed (until then the tank holds: "Regroup") and the segment's `end_hold_s` (mission file,
 ## default 0; the boss uses it for the Behemoth's death beat) has run since the objective was done.
+## The hold never runs the phase into max_s: it ends END_MARGIN_S before it, so a won mission is
+## not scored as an overrun. A rider whose end_phase is refused is retried (the next tick, then
+## once a second) until it is accepted or the group has moved on.
 func _maybe_end_phase(state: TankState, inputs: TankInputs) -> void:
 	var ph := inputs.phase
 	if not ph.open_ended or ph.is_cooldown() or _ended.has(ph.index):
@@ -433,13 +491,38 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> void:
 		_done_at[ph.index] = ph.elapsed_s
 	if ph.elapsed_s < ph.min_s:
 		return
-	var hold := float(content.segment(ph.segment).get("end_hold_s", 0.0))
-	if ph.elapsed_s - float(_done_at[ph.index]) < hold - EPS:
+	if not _end_pending.has(ph.index):
+		var hold := float(content.segment(ph.segment).get("end_hold_s", 0.0))
+		var held := ph.elapsed_s - float(_done_at[ph.index]) >= hold - EPS
+		var out_of_time := ph.max_s > 0.0 and ph.elapsed_s >= ph.max_s - END_MARGIN_S - EPS
+		if not held and not out_of_time:
+			return
+		var peers: Array = []
+		for ri in inputs.riders:
+			if ri.phase_index == ph.index:
+				peers.append(ri.peer)
+		_end_pending[ph.index] = peers
+		_end_retry_tick[ph.index] = inputs.tick
+		_end_retries[ph.index] = 0
+	elif inputs.tick < int(_end_retry_tick[ph.index]):
 		return
-	_ended[ph.index] = true
+	var here := {}
 	for ri in inputs.riders:
 		if ri.phase_index == ph.index:
-			ctx.directives.end_phase(ri.peer)
+			here[ri.peer] = true
+	var left: Array = []
+	for peer: int in _end_pending[ph.index]:
+		# A rider that already moved on is never asked to end its next phase.
+		if here.has(peer) and not ctx.directives.end_phase(peer):
+			left.append(peer)
+	if left.is_empty():
+		_ended[ph.index] = true
+		_end_pending.erase(ph.index)
+		return
+	_end_pending[ph.index] = left
+	var tries := int(_end_retries[ph.index]) + 1
+	_end_retries[ph.index] = tries
+	_end_retry_tick[ph.index] = inputs.tick + (1 if tries <= 1 else _ticks(END_RETRY_S))
 
 
 # --- Helpers -------------------------------------------------------------------------------------

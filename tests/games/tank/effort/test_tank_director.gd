@@ -232,6 +232,61 @@ func test_a_refused_bank_step_is_not_counted() -> void:
 	assert_almost_eq(float(rows[3][1]["target_pct"]), 55.0 + BANK_RATE, 1e-9, "from 55 again")
 
 
+## S1: a rider on reserve gets no bank update; after it is back the first update is again within
+## 10 / 3 points of what its governor holds (a restarted client resumes at the plan's 55%, an
+## in-process one at what it held), however far the bank target ran while it was away.
+func test_bank_restarts_from_the_held_target_after_a_reserve() -> void:
+	for how in ["dropped", "afk"]:
+		for held in [55.0, 58.0]:
+			var h := _h()
+			_dyn(h).bank = 0.0
+			h.run_s(ADV1, 10.0)
+			h.clear()
+			if how == "dropped":
+				h.connected[2] = false
+			else:
+				h.afk[2] = true
+			h.run_s(ADV1, 30.0)
+			assert_eq(h.sent(2, "bank"), [], "%s: nothing is sent to a rider on reserve" % how)
+			if how == "dropped":
+				h.connected[2] = true
+			else:
+				h.afk[2] = false
+			h.held_pct[2] = held
+			_dyn(h).bank = 50.0  # the goal moves: 77.5%
+			h.run_s(ADV1, 30.0)
+			var rows := h.sent(2, "bank")
+			assert_gt(rows.size(), 3, "%s: the bank follows again" % how)
+			var prev: float = held
+			for r: Array in rows:
+				var pct := float(r[1]["target_pct"])
+				assert_lte(absf(pct - prev), BANK_RATE + 1e-9, "%s/%s: from %s" % [how, held, prev])
+				prev = pct
+			assert_lte(float(rows[0][1]["target_pct"]), held + BANK_RATE + 1e-9)
+			assert_almost_eq(prev, 77.5, 1e-9, "and reaches the bank's target")
+
+
+## The bank restarts from the plan when the returning rider's governor reports no ERG target, and
+## reseeds undoing the 0.85 unverified factor.
+func test_held_pct_falls_back_to_the_plan_and_undoes_the_unverified_factor() -> void:
+	var h := _h()
+	var ph: PlanPhase = h.plan(2).phase(ADV1)
+	var ri := TankRiderInput.new()
+	ri.ftp = 200.0
+	ri.ftp_verified = true
+	ri.mode = Wl.ERG
+	assert_eq(TankDirector.held_pct(ri, ph, 55.0), 55.0, "no target reported: the plan")
+	ri.applied_target_w = 130.0  # 65%
+	assert_almost_eq(TankDirector.held_pct(ri, ph, 55.0), 65.0, 1e-9)
+	ri.ftp_verified = false
+	ri.applied_target_w = 0.85 * 130.0
+	assert_almost_eq(TankDirector.held_pct(ri, ph, 55.0), 65.0, 1e-9, "x0.85 undone")
+	ri.applied_target_w = 100.0  # 50% (rescue): clamped into the phase's range
+	assert_almost_eq(TankDirector.held_pct(ri, ph, 55.0), 58.8, 0.1)
+	ri.mode = Wl.SIM
+	assert_eq(TankDirector.held_pct(ri, ph, 55.0), 55.0, "not in ERG: the plan")
+
+
 # --- Pattern 2: the boiler -----------------------------------------------------------------------
 
 
@@ -261,6 +316,44 @@ func test_boiler_rises_half_a_percent_a_second_and_drops_in_one_step() -> void:
 	var rows := h.sent(3, "boiler")
 	assert_eq(rows.size(), 8, "0.5 .. 4.0")
 	assert_almost_eq(float(rows[-1][1]["mode_grade"]), 4.0, 1e-9)
+
+
+## S1: the boiler and the hoist send nothing to a rider on reserve and restart from 0 when it is
+## back: a restarted client rides mode_grade 0, so the first step is <= 0.5% (hoist <= 1%).
+func test_boiler_and_hoist_restart_from_zero_after_a_reserve() -> void:
+	var h := _h()
+	_steam(h).pressure_pct = 100.0
+	h.run_s(ADV1, 14.0)
+	assert_almost_eq(float(h.sent(3, "boiler")[-1][1]["mode_grade"]), 7.0, 1e-9)
+	h.clear()
+	h.connected[3] = false
+	h.run_s(ADV1, 10.0)
+	assert_eq(h.sent(3, "boiler"), [], "nothing to a dropped steam rider")
+	h.connected[3] = true
+	h.run_s(ADV1, 5.0)
+	var rows := h.sent(3, "boiler")
+	assert_gt(rows.size(), 3)
+	var prev := 0.0
+	for r: Array in rows:
+		var g := float(r[1]["mode_grade"])
+		assert_lte(g - prev, 0.5 + 1e-9, "rise <= 0.5% from the client's 0")
+		prev = g
+	var b := _h(1)
+	_lever(b, TankIds.LEVER_HOIST)
+	b.run_s(ADV1, 6.0)
+	assert_almost_eq(float(b.sent(1, "hoist")[-1][1]["mode_grade"]), 4.0, 1e-9)
+	b.clear()
+	b.afk[1] = true
+	b.run_s(ADV1, 5.0)
+	assert_eq(b.sent(1, "hoist"), [], "nothing to an AFK Bulwark rider")
+	b.afk[1] = false
+	b.run_s(ADV1, 5.0)
+	prev = 0.0
+	for r: Array in b.sent(1, "hoist"):
+		var g := float(r[1]["mode_grade"])
+		assert_lte(g - prev, 1.0 + 1e-9, "the climb restarts at 1% a second")
+		prev = g
+	assert_almost_eq(prev, 4.0, 1e-9)
 
 
 ## Every boiler send is >= 1 s after the previous one and rises <= 0.5%, whatever the pressure.
@@ -472,19 +565,41 @@ func test_power_band_at_each_segment_start() -> void:
 # --- Pattern 6: haptics (brief 2.7) --------------------------------------------------------------
 
 
-## A hit of >= 8 damage: every rider in a SIM phase gets {SIM, 2.0, 1.5 s, "hit"}; the dynamo (ERG)
-## gets none; 7 damage is no haptic.
+## A hit of >= 4 damage (medium and up, stations.json haptics.hit.min_damage): every rider in a SIM
+## phase gets {SIM, 2.0, 1.5 s, "hit"}; the dynamo (ERG) gets none; a light tank's 2.5 is no haptic.
 func test_hit_haptic_reaches_every_sim_rider() -> void:
 	var h := _h()
 	h.run_s(ADV1, 1.0)
 	h.clear()
-	h.step(ADV1, _ev([_hit(7.0)]))
-	assert_eq(h.requests, [], "below 8 damage")
-	h.step(ADV1, _ev([_hit(8.0)]))
+	h.step(ADV1, _ev([_hit(3.0)]))
+	assert_eq(h.requests, [], "below 4 damage")
+	h.step(ADV1, _ev([_hit(4.0)]))
 	var t := h.tick - 1
 	_assert_rows(h.sent(1, "hit"), [[t, _haptic_dict(2.0, 1.5, "hit")]], "diesel")
 	_assert_rows(h.sent(3, "hit"), [[t, _haptic_dict(2.0, 1.5, "hit")]], "steam")
 	assert_eq(h.sent(2, "hit"), [], "the dynamo is in ERG")
+
+
+## ED-3: the hit haptic's threshold follows the balance retune. Every enemy gun above the light tank
+## (medium, dug-in, heavy, destroyer) must reach `haptics.hit.min_damage` so brief 2.7's "medium and
+## up" still fires, and the light tank's gun and the Behemoth's secondary must stay below it.
+func test_every_non_light_gun_reaches_the_hit_haptic_threshold() -> void:
+	var c := TankFixtures.content("ashfall_road")
+	var min_damage := c.num("stations", "haptics.hit.min_damage", -1.0)
+	assert_gt(min_damage, 0.0, "the threshold is in stations.json")
+	var types: Dictionary = c.value("enemies", "types", {})
+	assert_gte(types.size(), 5, "light, medium, destroyer, dug-in and heavy")
+	for id: String in types:
+		# Events carry the damage rounded to a whole number (TankEvents.hit).
+		var dmg := float(roundi(float((types[id] as Dictionary).get("gun", {}).get("damage", 0.0))))
+		if id == "light":
+			assert_lt(dmg, min_damage, "a light tank's shell is no haptic")
+		else:
+			assert_gte(dmg, min_damage, "%s: a hit by its gun must fire the hit haptic" % id)
+	var sec := float(c.value("enemies", "boss.secondary.damage", 0.0))
+	assert_lt(sec, min_damage, "the Behemoth's secondary is no haptic")
+	var main := float(c.value("enemies", "boss.main.damage", 0.0))
+	assert_gt(main, min_damage, "the main gun has boss_hit anyway")
 
 
 ## A Behemoth main-gun hit is boss_hit {3.0, 2.0 s}, never also the hit haptic; a Ram impact is the
@@ -604,6 +719,43 @@ func test_the_boss_holds_a_death_beat_before_end_phase() -> void:
 	assert_eq(h.ended, [], "the death beat")
 	h.run_s(BOSS, 1.0)
 	assert_eq(h.ended.size(), 3, "then all three riders in one step")
+
+
+## S4: the death beat never runs the boss into max_s (an overrun would cost a won mission its
+## score): a boss killed with less than the hold left ends at max_s - 0.2 s at the latest.
+func test_a_late_boss_kill_ends_before_max_s() -> void:
+	var h := _h()
+	var max_s := h.plan(1).phase(BOSS).max_s
+	h.run_s(BOSS, max_s - 4.0)
+	h.state.seg.objective_done = true
+	h.run_s(BOSS, 3.9)
+	assert_eq(h.ended.size(), 3, "all three riders end in one step")
+	var tick_at: int = h.ended[0][0]
+	assert_lt(float(tick_at) * Wl.SIM_DT, max_s - 0.05, "before the platform's max_s")
+	assert_gt(float(tick_at) * Wl.SIM_DT, max_s - 0.35, "the death beat holds as long as it can")
+
+
+## RN-5: a refused end_phase is retried on the next tick, never twice for an accepted rider, and a
+## rider that keeps being refused is retried at a slow pace (no log flood).
+func test_a_refused_end_phase_is_retried() -> void:
+	var h := _h()
+	var dirs := EndRefusingDirectives.new()
+	h.ctx.directives = dirs
+	dirs.refuse = {2: 1}
+	h.state.seg.objective_done = true
+	h.run_s(ADV1, 91.0)
+	assert_eq(h.ended, [[1800, 1], [1800, 3], [1801, 2]], "peer 2 is asked again the next tick")
+	assert_eq(dirs.calls, [1, 2, 3, 2], "nobody is asked twice once accepted")
+	var slow := _h()
+	var stuck := EndRefusingDirectives.new()
+	slow.ctx.directives = stuck
+	stuck.refuse = {2: 1000}
+	slow.state.seg.objective_done = true
+	slow.run_s(ADV1, 95.0)
+	assert_eq(slow.ended.size(), 2, "the others went")
+	var asks := stuck.calls.filter(func(p: int) -> bool: return p == 2).size()
+	assert_between(asks, 4, 9, "about once a second after the first retry")
+	assert_eq(stuck.calls.filter(func(p: int) -> bool: return p == 1).size(), 1)
 
 
 ## Nothing in the cool-down: no request, course grade, band or end_phase, whatever happens.
@@ -767,3 +919,18 @@ class RefusingDirectives:
 			requests.append([peer, directive.to_dict()])
 			return DirectiveResult.refused("test")
 		return super.request(peer, directive)
+
+
+class EndRefusingDirectives:
+	extends "res://tests/games/tank/tank_fakes.gd".Directives
+	## peer -> how many end_phase calls to refuse.
+	var refuse: Dictionary = {}
+	## Every peer end_phase was called for, in order.
+	var calls: Array = []
+
+	func end_phase(peer: int) -> bool:
+		calls.append(peer)
+		if int(refuse.get(peer, 0)) > 0:
+			refuse[peer] = int(refuse[peer]) - 1
+			return false
+		return super.end_phase(peer)
