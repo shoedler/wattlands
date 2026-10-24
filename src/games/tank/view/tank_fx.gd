@@ -30,6 +30,8 @@ const EXHAUST_TEMPO := Color("#2c3035")
 const EXHAUST_SPRINT := Color(0.07, 0.072, 0.08)
 ## Brass casings fall under this gravity (art px/s^2): a slow enough arc to follow.
 const BRASS_GRAVITY := 300.0
+## How far below the breech a spent casing falls before it is gone (art px).
+const BRASS_DROP := 25.0
 ## The road dust a gun blast kicks up, and the dust and mud the tracks throw (lit a little by the
 ## rooms and fires above, so it reads against the dark road).
 const MUZZLE_DUST := Color(0.52, 0.46, 0.36, 0.75)
@@ -333,12 +335,16 @@ func muzzle_blast(at: Vector2, dir: Vector2, heavy: float = 0.6, ground_dust: bo
 
 ## A spent casing leaves the breech at `at` (dir: roughly up and back).
 func brass(at: Vector2, dir: Vector2) -> void:
-	# It leaves the moving hull at the hull's speed, then lies where it lands on the road.
+	# It leaves the moving hull at the hull's speed.
 	# A short visible arc: up 8-15 px, then down past the hull's side, tumbling (16-26 rad/s, so it
 	# glints about once per half turn; see TankFxLayer._draw_brass).
+	# It is gone (its last 15 % a fade) once it has fallen BRASS_DROP px below the breech, so it never
+	# tumbles down across the cutaway rooms, where it would read as a room's own sparks.
 	var v := dir.rotated(r(-0.25, 0.25)) * r(40.0, 60.0) + Vector2(scroll_v, -r(42.0, 58.0))
+	var up := maxf(-v.y, 0.0)
+	var ttl := (up + sqrt(up * up + 2.0 * BRASS_GRAVITY * BRASS_DROP)) / BRASS_GRAVITY
 	if particles.spawn(
-		TankParticles.Kind.BRASS, at, v, 2.4, 3.0, 3.0, TankPalette.BRASS, BRASS_GRAVITY, 0.2
+		TankParticles.Kind.BRASS, at, v, ttl, 3.0, 3.0, TankPalette.BRASS, BRASS_GRAVITY, 0.2
 	):
 		var sp := r(16.0, 26.0)
 		particles.tumble(r(0.0, TAU), sp if rng.randf() < 0.5 else -sp)

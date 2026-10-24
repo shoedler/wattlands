@@ -143,16 +143,27 @@ func test_a_casing_tumbles_on_a_visible_arc_and_glints() -> void:
 	assert_eq(ids.size(), 1)
 	assert_gte(absf(fx.particles.spin[ids[0]]), 16.0, "a fast tumble")
 	var apex := breech.y
+	var last := breech.y
 	var glints := 0
-	for _f in 50:
+	var frames := 0
+	for _f in 120:
 		fx.step(DT)
-		var i := _of(fx, TankParticles.Kind.BRASS)[0]
+		var alive := _of(fx, TankParticles.Kind.BRASS)
+		if alive.is_empty():
+			break
+		var i := alive[0]
+		frames += 1
 		apex = minf(apex, fx.particles.pos[i].y)
+		last = fx.particles.pos[i].y
 		glints += 1 if TankFxLayer.glints(fx.particles.rot[i]) else 0
 	assert_gt(breech.y - apex, 6.0, "it pops up before it falls")
-	assert_gt(fx.particles.pos[_of(fx, TankParticles.Kind.BRASS)[0]].y, breech.y, "then falls")
-	assert_gt(glints, 3, "a glint now and then while it tumbles")
-	assert_lt(glints, 25, "a glint, not a steady shine")
+	assert_gt(last, breech.y + 10.0, "then falls past the breech")
+	# Merge r5: gone once it drops about TankFx.BRASS_DROP below the breech, so it never tumbles
+	# down across the cutaway rooms (where it read as a room's sparks).
+	assert_lt(last, breech.y + TankFx.BRASS_DROP + 2.0, "gone before it reaches the rooms")
+	assert_lt(frames, 120, "it does not linger")
+	assert_gt(glints, 2, "a glint now and then while it tumbles")
+	assert_lt(glints, frames / 2, "a glint, not a steady shine")
 
 
 func test_brass_never_looks_like_a_spark() -> void:

@@ -52,8 +52,12 @@ func test_a_stroke_puffs_steam_at_the_drain_and_the_deck_vent() -> void:
 	_update(rig, s, 200.0, 90.0, 50)
 	var fx := rig.hub.fx
 	var drain := rig.hub.to_layer(room.drain_hull())
-	assert_gt(rig._vent.x, room.rect.position.x, "the vent stands above the steam room")
-	assert_lt(rig._vent.x, room.rect.end.x)
+	# The Citadel's main turret covers the steam room's deck, so the vent stands just behind the
+	# turret's rear face, where its plume (leaning back as it rises) climbs against the sky.
+	var tr := TankRigs.rect((rig.def.get("turret", {}) as Dictionary).get("rect"))
+	assert_lt(rig._vent.x, tr.position.x - 4.0, "the vent stands clear behind the main turret")
+	assert_gt(rig._vent.x, tr.position.x - 16.0, "close behind it")
+	assert_gte(rig.deck_y(rig._vent.x), 0.0)
 	assert_lt(rig._vent.y, room.rect.position.y, "on the deck")
 	var vent := rig.hub.to_layer(rig._vent)
 	var near_drain := 0

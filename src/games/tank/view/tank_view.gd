@@ -326,8 +326,10 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 			for i in 3:
 				fx.explosion(at + Vector2(float(i) * 14.0 - 14.0, 4.0), false)
 		TankEvents.REPAIRED:
+			# Welding sparks on the armour's top band (the deck), never inside the cutaway rooms.
 			for i in 6:
-				fx.impact_sparks(rig.hull_point(Vector2(30.0 + float(i) * 12.0, 8.0)), Vector2.UP)
+				var hx := 30.0 + float(i) * 12.0
+				fx.impact_sparks(rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0)), Vector2.UP)
 		TankEvents.ROTATION:
 			rig.flash_rooms()
 		TankEvents.OVERRUN:
@@ -382,8 +384,11 @@ func _cue_hit(state: TankState, data: Dictionary) -> void:
 	var wx := float(data.get("x", 0)) - cam_x
 	match int(data.get("on", -1)):
 		TankEvents.ON_TANK:
+			# The shell strikes the armour's top band (the deck line), never the cutaway rooms: sparks
+			# over a room's lamp read as that room's own sparks.
 			var x := clampf(wx, rig.base_pos.x + 6.0, rig.base_pos.x + float(rig.hull_w) - 6.0)
-			var at := Vector2(x, rig.base_pos.y + float(rig.hull_h) * 0.45)
+			var hx := x - rig.base_pos.x
+			var at := rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0))
 			fx.impact_sparks(at, Vector2(1.0, -0.6).normalized())
 			rig.hit(clampf(dmg / 20.0, 0.1, 1.0))
 			if int(data.get("sh", 0)) == TankIds.SHELL_BOSS_MAIN:

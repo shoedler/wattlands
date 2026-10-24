@@ -1,6 +1,6 @@
 class_name TankProcTex
 extends RefCounted
-## Small procedural textures the effects share (soft glow, smoke puff, fireball, vignette). They
+## Small procedural textures the effects share (soft glow, smoke puff, fireball, flame, vignette). They
 ## are generated once, on first use, and cached, so no frame creates a texture. The generated art
 ## sprites (muzzle_flash, explosion_*, smoke_puff, ...) replace the fireball and puff when a real
 ## PNG exists (TankSprites.has_real); lights and halos are always procedural.
@@ -32,6 +32,30 @@ static func shade() -> Texture2D:
 ## A hot disc: white-yellow core, orange rim, 32 x 32.
 static func fireball() -> Texture2D:
 	return _make("fireball", 32, _fire_px)
+
+
+## A flame tongue, 16 x 32, tip up: a rounded base that tapers to a leaning point, amber (AMBER) in
+## its heart and orange (FIRE) at its rim and tip, its alpha thinning toward the tip. Fire particles
+## draw it additively along their motion, so fire reads as licking tongues, never as round discs.
+static func flame() -> Texture2D:
+	if _tex.has("flame"):
+		return _tex["flame"]
+	var img := Image.create(16, 32, false, Image.FORMAT_RGBA8)
+	for y in 32:
+		# v: 0 at the base (bottom row) .. 1 at the tip (top row).
+		var v := 1.0 - (float(y) + 0.5) / 32.0
+		var hw := 0.95 * pow(1.0 - v, 0.75) * smoothstep(-0.05, 0.22, v)
+		var cx := 0.14 * sin(v * 5.5) * v
+		for x in 16:
+			var u := (float(x) + 0.5) / 8.0 - 1.0
+			var d := absf(u - cx) / maxf(hw, 0.001)
+			var edge := clampf((1.0 - d) / 0.35, 0.0, 1.0)
+			var heart := clampf(1.0 - d / 0.6, 0.0, 1.0) * clampf(1.0 - v / 0.7, 0.0, 1.0)
+			var c := TankPalette.FIRE.lerp(TankPalette.AMBER, heart)
+			img.set_pixel(x, y, Color(c.r, c.g, c.b, edge * clampf(1.15 - v, 0.0, 1.0)))
+	var tex := ImageTexture.create_from_image(img)
+	_tex["flame"] = tex
+	return tex
 
 
 ## A 80 x 45 darkening toward the screen edges (alpha), drawn scaled over the whole view.

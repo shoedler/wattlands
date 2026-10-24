@@ -17,6 +17,8 @@ const BERM_W := 30.0
 const SLEW_HOLD_S := 0.4
 ## Barbette width under the secondary turrets (art px).
 const BARBETTE_W := 12.0
+## How far the steam vent stands behind the main turret's rear face when the turret covers its room (px).
+const VENT_CLEAR := 8.0
 
 var tank: String = ""
 var def: Dictionary = {}
@@ -325,8 +327,15 @@ func _build_stack() -> void:
 	if deck >= 0:
 		_stack_pos.y = float(deck)
 	if steam_room != null:
-		# The steam engine's exhaust vent stands on the deck above its room, clear of the turrets.
+		# The steam engine's exhaust vent stands on the deck above its room, clear of
+		# the turrets. Where the main turret sits over the room (the Citadel), the pipe stands just
+		# behind the turret's rear face: the plume leans back as it rises, so in front of the turret
+		# it would drift across the turret's face; behind it, it rises against the sky.
 		var vx := int(steam_room.rect.position.x + 36.0)
+		var tr := TankRigs.rect((def.get("turret", {}) as Dictionary).get("rect", [0, -30, 80, 30]))
+		var sr := steam_room.rect
+		if sr.position.x < tr.end.x and sr.end.x > tr.position.x:
+			vx = int(tr.position.x - VENT_CLEAR)
 		var vdeck := -1
 		for x in range(vx - 2, vx + 3):
 			if x >= 0 and x < _col_top.size() and _col_top[x] >= 0:
@@ -589,6 +598,15 @@ func muzzle_dir() -> Vector2:
 ## A point on the hull in layer coordinates.
 func hull_point(p: Vector2) -> Vector2:
 	return base_pos + p
+
+
+## The top of the hull's armour (hull frame y of the first opaque row) at hull-frame column `x`; 0
+## where the sprite was not measured. Hits and repairs strike the armour a few px under it.
+func deck_y(x: float) -> float:
+	var xi := clampi(int(x), 0, maxi(_col_top.size() - 1, 0))
+	if xi < _col_top.size() and _col_top[xi] >= 0:
+		return float(_col_top[xi])
+	return 0.0
 
 
 # --- Drawing -------------------------------------------------------------------------------------------

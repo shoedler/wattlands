@@ -12,6 +12,8 @@ const BRASS_SHADE := Color("#6b5842")
 ## The share of each half turn (rad) during which a tumbling casing glints: about one frame at its
 ## spin of 16-26 rad/s.
 const GLINT_WINDOW := 0.36
+## How far a flame tongue may lean from upright along its particle's motion (rad).
+const FLAME_LEAN := 0.7
 
 ## The billowed puffs (built once): shaded for smoke, near white for steam.
 static var _billow_tex: Dictionary = {}
@@ -28,6 +30,7 @@ var _billow: Texture2D = null
 var _billow_white: Texture2D = null
 var _glow: Texture2D = null
 var _fire: Texture2D = null
+var _flame: Texture2D = null
 var _boom_large: Texture2D = null
 var _boom_small: Texture2D = null
 var _muzzle: Texture2D = null
@@ -46,6 +49,7 @@ func _init(p_additive: bool = false) -> void:
 	_billow_white = billow(0.82)
 	_glow = TankProcTex.glow()
 	_fire = TankProcTex.fireball()
+	_flame = TankProcTex.flame()
 	_boom_large = (
 		TankSprites.tex("explosion_large") if TankSprites.has_real("explosion_large") else _fire
 	)
@@ -129,9 +133,7 @@ func _draw_one(p: TankParticles, i: int, k: int) -> void:
 			var s := maxf(1.0, roundf(size))
 			draw_rect(Rect2(at.floor(), Vector2(s, s)), col)
 		TankParticles.Kind.FIRE:
-			draw_texture_rect(
-				_fire, Rect2(at - Vector2(size, size) * 0.5, Vector2(size, size)), false, col
-			)
+			_draw_flame(at, size, col, base, p.vel[i], i)
 		TankParticles.Kind.EXPLOSION:
 			var tex := _boom_large if p.size1[i] > 40.0 else _boom_small
 			var s := Vector2(size, size)
@@ -165,6 +167,25 @@ func _draw_brass(at: Vector2, turn: float, col: Color, spinning: bool) -> void:
 	if spinning and glints(turn):
 		var g := at.round() + Vector2.from_angle(turn) * 0.5
 		draw_rect(Rect2(g.floor(), Vector2.ONE), Color(1.0, 0.98, 0.92, col.a))
+
+
+## A fire particle as a flame tongue (TankProcTex.flame, its colours baked in: amber heart, orange
+## rim): narrower than tall, its base just under `at`, its tip leaning along the particle's motion
+## (at most FLAME_LEAN from upright) and mirrored on odd slots so neighbouring tongues differ. `col`
+## over the particle's own colour `base` carries the plane's dimming and the fade.
+func _draw_flame(at: Vector2, size: float, col: Color, base: Color, v: Vector2, i: int) -> void:
+	var m := Color(
+		minf(col.r / maxf(base.r, 0.01), 1.0),
+		minf(col.g / maxf(base.g, 0.01), 1.0),
+		minf(col.b / maxf(base.b, 0.01), 1.0),
+		col.a
+	)
+	var lean := clampf(atan2(v.x, -v.y), -FLAME_LEAN, FLAME_LEAN) if v.y < 0.0 else 0.0
+	var w := size * 0.7
+	var h := size * 1.6
+	draw_set_transform(at, lean, Vector2(-1.0 if i % 2 == 1 else 1.0, 1.0))
+	draw_texture_rect(_flame, Rect2(-w * 0.5, -h * 0.75, w, h), false, m)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## True when a tumbling casing at rotation `turn` shows its glint.
