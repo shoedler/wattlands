@@ -76,6 +76,26 @@ func test_bow_pitch_lifts_the_bow() -> void:
 	assert_lt(v.boat_view(0).rotation, -0.1, "nose up (counter-clockwise) heading right")
 
 
+func test_other_boats_float_on_the_far_row_hazier_and_cut_at_their_waterline() -> void:
+	var g := FX.make_game(2)
+	FX.set_drive(g.state.rider(0), 1000.0)
+	FX.set_drive(g.state.rider(1), 1000.0)
+	var v := _view(g)
+	_run(v, 10)
+	var me := v.boat_view(0)
+	var other := v.boat_view(1)
+	assert_false(me.far)
+	assert_true(other.far)
+	assert_eq(me.position.y, float(FishingScenery.SURF_Y))
+	assert_eq(other.position.y, float(FishingScenery.SURF_Y - FishingView.FAR_ROW_PX))
+	assert_gt(other.position.y, float(FishingScenery.HORIZON_Y), "still on the water")
+	var m := other.hull.material as ShaderMaterial
+	assert_eq(m.shader, FishingBoatView.far_shader())
+	assert_eq(float(m.get_shader_parameter("clip_y")), other.position.y + 1.0)
+	assert_true(bool(m.get_shader_parameter("swap_keys")), "the far hull keeps its slot colour")
+	assert_gt(float(m.get_shader_parameter("haze_amount")), 0.0)
+
+
 func test_other_boats_far_away_are_not_drawn() -> void:
 	var g := FX.make_game(2)
 	FX.set_drive(g.state.rider(0), 1000.0)

@@ -29,6 +29,9 @@ const CAM_TAU_S := 1.1
 ## A camera goal this far away (a rejoin, a fast-forward) is jumped to, not eased toward.
 const CAM_SNAP_M := 150.0
 const DEPTH_TAU_S := 1.6
+## Other riders' boats float this many px higher, on the far water (FishingScenery.FAR_ROWS),
+## hazier and behind the local boat, so boats at the same x read as side by side.
+const FAR_ROW_PX := 3
 ## A boat is drawn when its pivot is within this many px of the view.
 const DRAW_MARGIN_PX := 120.0
 ## Leaps: one arc's length (s) and height (px).
@@ -218,6 +221,7 @@ func _build() -> void:
 		var b := FishingBoatView.new()
 		b.name = "Boat%d" % r.slot
 		b.set_look(r.slot, _look(r.slot), _line_colour(r))
+		b.set_far(r.slot != _local_slot)
 		boats[r.slot] = b
 		_boat_layer.add_child(b)
 	_layer("Lines", _paint_lines)
@@ -344,7 +348,7 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	)
 	b.prop_drive = clampf(absf(r.v_mps) / 4.0, 0.0, 1.5)
 	b.tension = _tension(r)
-	b.position = Vector2(roundf(sx), float(FishingScenery.SURF_Y))
+	b.position = Vector2(roundf(sx), float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0)))
 	var end := _line_end(r)
 	var tip := b.rod_tip()
 	if end != Vector2.INF and end.distance_to(tip) > 1.0:
@@ -507,7 +511,7 @@ func _paint_wash(c: CanvasItem) -> void:
 	for slot: int in boats:
 		var b: FishingBoatView = boats[slot]
 		var r := game.state.rider(slot)
-		if not b.visible or r == null or absf(r.v_mps) < 0.3:
+		if not b.visible or b.far or r == null or absf(r.v_mps) < 0.3:
 			continue
 		var hub := b.to_view(FishingRig.PROP_HUB).round()
 		var n := clampi(roundi(absf(r.v_mps) * 2.0), 1, 10)
@@ -572,13 +576,16 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float, x_m: float) -> 
 	var start := b.to_view(FishingRig.WAKE_AT)
 	var dir := -float(b.heading)
 	var reach := WAKE_REACH_PX * clampf(wake, 0.0, 1.0)
-	var y0 := float(FishingScenery.SURF_Y)
+	var y0 := b.position.y
 	var wx := floori(x_m * FishingScenery.PX_PER_M)
 	for i in int(reach):
 		var fade := pow(float(i) / maxf(reach, 1.0), 1.4)
 		var x := roundf(start.x + dir * float(i))
 		for arm in 2:
-			var y := y0 + (0.0 if arm == 0 else floorf(float(i) * 0.06) + 1.0)
+			var spread := (
+				0.0 if arm == 0 else minf(floorf(float(i) * 0.06) + 1.0, 2.0 if b.far else 9.0)
+			)
+			var y := y0 + spread
 			if posmod(i + wx * int(-dir) + arm * 3, 6) >= 4:
 				continue
 			if DitherDissolve.visible_at(int(x), int(y), fade):

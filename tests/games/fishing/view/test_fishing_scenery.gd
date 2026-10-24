@@ -40,6 +40,11 @@ func test_the_view_depth_follows_the_floor_in_sight() -> void:
 	assert_eq(s.target_view_depth(8500.0), FishingScenery.ABYSS_M, "no floor: the abyss")
 
 
+func test_the_far_water_band_lies_between_the_horizon_and_the_surface() -> void:
+	assert_eq(FishingScenery.HORIZON_Y, FishingScenery.SURF_Y - FishingScenery.FAR_ROWS)
+	assert_lt(FishingView.FAR_ROW_PX, FishingScenery.FAR_ROWS, "far boats sit on the band")
+
+
 func test_the_deepest_floor_in_sight_stays_above_the_hud() -> void:
 	assert_lt(FishingScenery.SURF_Y + FishingScenery.FLOOR_ROWS, FishingConst.PANIC_Y)
 
