@@ -51,11 +51,11 @@ const PLAYERS: Array[Color] = [ACCENT, PLAYER_SLATE, PLAYER_MOSS, PLAYER_PLUM]
 ## The line above the water (the rod's colour; under water FishingView.line_under()).
 const LINE := SLATE
 ## HUD: panels, text, secondary text, bars on their track; colour only for alerts.
-const HUD_PANEL := ABYSS
+const HUD_PANEL := DEEP
 const HUD_TEXT := FOAM
 const HUD_DIM := HAZE
 const HUD_BAR := SURFACE
-const HUD_TRACK := DEEP
+const HUD_TRACK := MID
 const HUD_ALERT := ACCENT
 
 

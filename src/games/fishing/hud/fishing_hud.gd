@@ -18,20 +18,21 @@ const GEAR := Rect2i(4, 305, 98, 15)
 const TIMELINE := Rect2i(4, 262, 231, 36)
 const TOASTS := Rect2i(120, 38, 296, 22)
 const BANNERS := Rect2i(120, 150, 400, 60)
-## The kit widgets, toasts and the game banner in the art's sea palette and pixel font: square
-## panels, no outlines, sizes on the font's 9 px cell.
+## The kit widgets, toasts and the game banner in the art's sea palette and pixel font, on the
+## art's pixel grid: square borderless deep-teal panels (one exact colour, lighter than the
+## boats), mid-teal bar tracks, sizes on the font's 9 px cell.
 const PALETTE := {
-	"panel": Color("#1c4d65"),
+	"panel": Color("#2c6778"),
 	"panel_border": Color("#2c6778"),
 	"text": Color("#ebf2e7"),
 	"text_dim": Color("#b6d7cf"),
-	"bar_bg": Color("#2c6778"),
+	"bar_bg": Color("#4b858f"),
 	"bar_fg": Color("#91c2c2"),
 	"accent": Color("#c98a5e"),
-	"banner_bg": Color("#1c4d65"),
+	"banner_bg": Color("#2c6778"),
 	"banner_text": Color("#ebf2e7"),
 	"band": Color("#6fa3a6"),
-	"glow": Color("#91c2c2"),
+	"glow": Color("#ebf2e7"),
 	"glow_text": Color("#ebf2e7"),
 	"font_scale_px": 9,
 	"text_px": 27,

@@ -288,7 +288,12 @@ func test_the_pixel_font_png_is_the_glyph_grid_and_imports_as_a_font() -> void:
 	assert_eq(png.get_size(), want.get_size())
 	assert_eq(png.get_data(), want.get_data(), "run fishing_write_sprites.gd")
 	var grid := FishingFontGrids.COLUMNS * FishingFontGrids.ROWS
-	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), grid, "one glyph per cell")
+	var chars := FishingFontGrids.LAST - FishingFontGrids.FIRST + 1 + FishingFontGrids.EXTRA.size()
+	assert_eq(FishingFontGrids.FONT_GLYPHS.size(), chars, "one glyph per character")
+	assert_lte(chars, grid, "all in the grid")
+	var ff := FishingHudDraw.font() as FontFile
+	for code: int in FishingFontGrids.EXTRA:
+		assert_true(ff.has_char(code), "the font has U+%04X" % code)
 	assert_not_null(load(path) as Font)
 	var font := FishingHudDraw.font()
 	var px := FishingHudDraw.FONT_PX * 3

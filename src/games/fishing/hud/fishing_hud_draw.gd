@@ -1,19 +1,18 @@
 class_name FishingHudDraw
 extends RefCounted
 ## Drawing helpers for Turbo Reel's HUD Controls, in HUD canvas pixels (1080p units), all in the
-## game palette: square opaque abyss-teal panels, foam text in the game's pixel font (FONT) at
-## one scale (a glyph pixel is one art pixel, `unit()` HUD px; BIG text doubles it), no outline,
-## centred on the cap height in its line box (text_line()), haze for secondary text, surface bars in
-## a surface frame on a deep track, the accent only for alerts and the gaff. Also the pixel
-## icons recoloured to the palette (icon()) and the meter icons that pair every colour with a
-## shape (BRIEF 3.9): the strain zigzag and the slack loop.
+## game palette and on its pixel grid (one art pixel is `unit()` HUD px): square opaque
+## deep-teal panels, foam text in the game's pixel font (FONT; BIG text doubles it), no outline,
+## centred on the cap height in its line box (text_line()), haze for secondary text, surface
+## bars on a mid-teal track, the accent only for alerts and the gaff. Also the pixel icons
+## recoloured to the palette (icon()), pixel patterns (pixels()) for the meter icons that pair
+## every colour with a shape (BRIEF 3.9: the strain zigzag, the slack loop) and the trophy star.
 
 const STRAIN := FishingPalette.SURFACE
 const SLACK := FishingPalette.SAGE
 const GAFF := FishingPalette.ACCENT
 const STAMINA := FishingPalette.SURFACE
 const ALERT := FishingPalette.HUD_ALERT
-const OUTLINE := FishingPalette.ABYSS
 ## The pixel font (FishingFontGrids through the Image Font importer) and its cell height.
 const FONT_PATH := "res://assets/fishing/font/turbo_reel_5x7.png"
 const FONT_PX := 9
@@ -105,54 +104,45 @@ static func icon(c: CanvasItem, id: String, k: int, pos: Vector2, px: int, col: 
 	c.draw_texture_rect(t, Rect2(pos.round(), Vector2(t.get_size()) * float(px)), false)
 
 
-## A bar filled `frac` (0..1) of the way (bottom-up when vertical) on its deep track, framed.
-static func bar(c: CanvasItem, r: Rect2, frac: float, col: Color, vertical: bool = false) -> void:
+## A bar filled `frac` (0..1) of the way (bottom-up when vertical) on its track, in whole
+## pixels of `u` (no frame: the track reads on the panel).
+static func bar(
+	c: CanvasItem, r: Rect2, frac: float, col: Color, vertical: bool = false, u: float = 3.0
+) -> void:
 	c.draw_rect(r, FishingPalette.HUD_TRACK)
 	var f := clampf(frac, 0.0, 1.0)
 	if vertical:
-		var h := r.size.y * f
+		var h := roundf(r.size.y * f / u) * u
 		c.draw_rect(Rect2(r.position.x, r.end.y - h, r.size.x, h), col)
 	else:
-		c.draw_rect(Rect2(r.position, Vector2(r.size.x * f, r.size.y)), col)
-	c.draw_rect(r, FishingPalette.HUD_BAR, false, 3.0)
+		var w := roundf(r.size.x * f / u) * u
+		c.draw_rect(Rect2(r.position, Vector2(w, r.size.y)), col)
 
 
-## The strain icon: a zigzag (a taut, jagged line).
-static func zigzag(c: CanvasItem, r: Rect2, col: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 5:
-		var x := r.position.x + r.size.x * float(i) / 4.0
-		pts.append(Vector2(x, r.position.y + (r.size.y if i % 2 == 1 else 0.0)))
-	c.draw_polyline(pts, OUTLINE, maxf(r.size.y * 0.3, 3.0) + 2.0)
-	c.draw_polyline(pts, col, maxf(r.size.y * 0.3, 3.0))
+## A frame one pixel of `u` wide just inside `r`.
+static func frame(c: CanvasItem, r: Rect2, u: float, col: Color) -> void:
+	c.draw_rect(Rect2(r.position, Vector2(r.size.x, u)), col)
+	c.draw_rect(Rect2(r.position.x, r.end.y - u, r.size.x, u), col)
+	c.draw_rect(Rect2(r.position, Vector2(u, r.size.y)), col)
+	c.draw_rect(Rect2(r.end.x - u, r.position.y, u, r.size.y), col)
 
 
-## The slack icon: a loop of loose line.
-static func loop(c: CanvasItem, r: Rect2, col: Color) -> void:
-	var pts := PackedVector2Array()
-	var cx := r.get_center()
-	for i in 17:
-		var a := TAU * float(i) / 16.0
-		pts.append(
-			cx + Vector2(cos(a) * r.size.x * 0.32, sin(a) * r.size.y * 0.32 - r.size.y * 0.1)
-		)
-	pts.append(Vector2(r.position.x, r.end.y))
-	c.draw_polyline(pts, OUTLINE, 5.0)
-	c.draw_polyline(pts, col, 3.0)
+## A pixel pattern ("#" ink, rows top-down), each pixel `u` HUD px, top-left at `pos`.
+static func pixels(c: CanvasItem, rows: Array, pos: Vector2, u: float, col: Color) -> void:
+	for y in rows.size():
+		var row: String = rows[y]
+		for x in row.length():
+			if row[x] == "#":
+				c.draw_rect(Rect2(pos + Vector2(x, y) * u, Vector2(u, u)), col)
 
 
-## A four-pointed star (the trophy mark).
-static func star(c: CanvasItem, center: Vector2, r: float, col: Color) -> void:
-	var pts := PackedVector2Array()
-	for i in 8:
-		var a := TAU * float(i) / 8.0 - PI * 0.5
-		var rr := r if i % 2 == 0 else r * 0.4
-		pts.append(center + Vector2(cos(a), sin(a)) * rr)
-	c.draw_colored_polygon(pts, col)
-	pts.append(pts[0])
-	c.draw_polyline(pts, OUTLINE, 2.0)
+## The meter icons, 5 pixels wide (BRIEF 3.9 pairs every meter colour with a shape): the strain
+## zigzag (a taut, jagged line) and the slack loop (loose line); and the trophy star.
+const ZIGZAG: Array[String] = ["#...#", "#.#.#", ".#.#."]
+const LOOP: Array[String] = [".###.", "#...#", "#...#", ".##.#", "....#"]
+const STAR: Array[String] = ["..#..", ".###.", "#####", ".###.", "..#.."]
 
 
-## A flat panel in the HUD's abyss teal.
+## A flat panel in the HUD's panel teal.
 static func panel(c: CanvasItem, r: Rect2, col: Color = FishingPalette.HUD_PANEL) -> void:
 	c.draw_rect(r, col)

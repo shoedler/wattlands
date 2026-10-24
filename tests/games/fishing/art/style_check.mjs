@@ -5,8 +5,12 @@
 //   node tests/games/fishing/art/style_check.mjs <png>... [--json]
 //
 // The world is every art pixel whose 3x3 screen block is one colour, outside the HUD rects and
-// not a HUD panel (the abyss at 85 % over a palette colour); HUD text and panels are counted as
-// masked, and world colours outside the palette are counted as off-palette.
+// not a HUD panel (a deep-teal box over the view: a chip or the game banner); HUD text and
+// panels are counted as masked, and world colours outside the palette are counted as
+// off-palette. Over the whole frame (HUD included) it also counts the off-grid cells (a 3x3
+// block of palette colours that is not one colour: chrome drawn off the art pixel grid; blocks
+// holding a non-palette colour, the kit's safety banners, are left out) and the HUD panels'
+// share of the frame.
 // Per screenshot: unique world colours, off-family share (non-accent pixels outside hue 140-215
 // unless near-neutral, or above 75 % saturation), the lowest value, checker cells (3x2 windows alternating both ways; a 1:1 line is not one), isolated pixels (differing
 // from all eight neighbours, so a 1:1 line is not a speck), the accent and player-colour shares, and the flat share (pixels
@@ -30,8 +34,8 @@ export const PLAYERS = ['7f9cbf', '9fb07a', 'a68aa8'];
 export const HUD_RECTS = [
   [2, 0, 418, 34],
   [422, 0, 218, 62],
-  [0, 258, 220, 102],
-  [218, 318, 210, 42],
+  [0, 258, 238, 102],
+  [236, 318, 206, 42],
   [500, 312, 140, 48],
 ];
 // The kit's toast and banner rects (FishingHud.TOASTS, BANNERS): masked only when something
@@ -132,18 +136,6 @@ export function hsv(h6) {
   return { h, s: mx > 0 ? d / mx : 0, v: mx };
 }
 
-const rgbOf = (h6) => [0, 2, 4].map((i) => parseInt(h6.slice(i, i + 2), 16));
-// A HUD panel: the abyss at PANEL_ALPHA over a palette colour.
-export const PANEL_ALPHA = 0.85;
-const PANEL_BLENDS = Object.keys(PALETTE).map((p) => {
-  const a = rgbOf('1c4d65');
-  return rgbOf(p).map((v, i) => PANEL_ALPHA * a[i] + (1 - PANEL_ALPHA) * v);
-});
-export function isPanel(h6) {
-  const c = rgbOf(h6);
-  return PANEL_BLENDS.some((b) => b.every((v, i) => Math.abs(v - c[i]) <= 3));
-}
-
 /** The art-pixel grid of a screenshot: {w, h, cells: Array<string|null>} (null: masked). */
 export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS, popups = POPUP_RECTS) {
   const g = artCells(img, scale, hudRects);
@@ -165,10 +157,13 @@ export function artGrid(img, scale = SCALE, hudRects = HUD_RECTS, popups = POPUP
   return { w: g.w, h: g.h, cells: g.cells, masked: g.masked, offPalette: g.offPalette };
 }
 
-// Opaque HUD panels are the abyss teal, which the world uses only in small marks: an abyss
-// region larger than PANEL_MIN_PX art pixels (with its text, masked already) is a panel.
-export const PANEL_COLOUR = '1c4d65';
+// HUD panels are one exact colour, the deep teal (FishingPalette.HUD_PANEL). The world uses it
+// too, in wide bands and big floors that reach the frame's edge; a deep-teal region over
+// PANEL_MIN_PX art pixels that stays off the edges and at most PANEL_MAX_ROWS tall is a panel
+// (a chip, the game banner), masked with its bounding box (its text included).
+export const PANEL_COLOUR = '2c6778';
 export const PANEL_MIN_PX = 60;
+export const PANEL_MAX_ROWS = 24;
 export function maskPanels(cells, w, h) {
   const seen = new Uint8Array(w * h);
   let masked = 0;
@@ -177,11 +172,16 @@ export function maskPanels(cells, w, h) {
     const region = [];
     const stack = [i];
     seen[i] = 1;
+    let [x0, y0, x1, y1] = [w, h, -1, -1];
     while (stack.length) {
       const j = stack.pop();
       region.push(j);
       const x = j % w;
       const y = (j - x) / w;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const nx = x + dx;
         const ny = y + dy;
@@ -193,12 +193,41 @@ export function maskPanels(cells, w, h) {
         }
       }
     }
-    if (region.length > PANEL_MIN_PX) {
-      for (const j of region) cells[j] = null;
-      masked += region.length;
+    const edge = x0 === 0 || y0 === 0 || x1 === w - 1 || y1 === h - 1;
+    if (region.length <= PANEL_MIN_PX || edge || y1 - y0 + 1 > PANEL_MAX_ROWS) continue;
+    for (let y = y0; y <= y1; y++) {
+      for (let x = x0; x <= x1; x++) {
+        if (cells[y * w + x] !== null) {
+          cells[y * w + x] = null;
+          masked++;
+        }
+      }
     }
   }
   return masked;
+}
+
+/** Off-grid cells and the HUD panels' share over a whole screenshot (see the header). */
+export function frameGrid(img, scale = SCALE, hudRects = HUD_RECTS) {
+  const w = Math.floor(img.width / scale);
+  const h = Math.floor(img.height / scale);
+  let offGrid = 0;
+  let panel = 0;
+  const inHud = (x, y) => hudRects.some(([rx, ry, rw, rh]) => x >= rx && x < rx + rw && y >= ry && y < ry + rh);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const seen = new Set();
+      for (let dy = 0; dy < scale; dy++) {
+        for (let dx = 0; dx < scale; dx++) {
+          const i = ((y * scale + dy) * img.width + x * scale + dx) * 4;
+          seen.add(hex(img.data[i], img.data[i + 1], img.data[i + 2]));
+        }
+      }
+      if (seen.size > 1 && [...seen].every((c) => c in PALETTE)) offGrid++;
+      if (seen.size === 1 && seen.has(PANEL_COLOUR) && inHud(x, y)) panel++;
+    }
+  }
+  return { offGrid, panelPct: Math.round((1000 * panel) / (w * h)) / 10 };
 }
 
 function artCells(img, scale, hudRects) {
@@ -235,10 +264,6 @@ function artCells(img, scale, hudRects) {
         continue;
       }
       if (!(first in PALETTE)) {
-        if (isPanel(first)) {
-          masked++;
-          continue;
-        }
         offPalette++;
         foreign.push([x, y]);
       }
@@ -331,11 +356,13 @@ export function verdict(m) {
   if (m.accentPct > 1) fails.push(`accent ${m.accentPct}% > 1%`);
   if (m.flatPct < 60) fails.push(`flat ${m.flatPct}% < 60%`);
   if (m.lightPct < 60) fails.push(`light ${m.lightPct}% < 60%`);
+  if (m.offGrid > 0) fails.push(`off-grid cells ${m.offGrid}`);
   return fails;
 }
 
 export function checkFile(file) {
-  const m = measure(artGrid(decodePng(fs.readFileSync(file))));
+  const img = decodePng(fs.readFileSync(file));
+  const m = { ...measure(artGrid(img)), ...frameGrid(img) };
   return { file: path.basename(file), ...m, fails: verdict(m) };
 }
 
@@ -353,7 +380,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     console.log(
       `${r.file}: colours ${r.colours}, off-family ${r.offFamilyPct}%, min V ${r.minValuePct}%, ` +
         `checker ${r.checker}, isolated ${r.isolated}, accent ${r.accentPct}%, players ${r.playerPct}%, ` +
-        `flat ${r.flatPct}%, light ${r.lightPct}%, white ${r.whitePct}%, off-palette ${r.offPalette}, masked ${r.masked} ` +
+        `flat ${r.flatPct}%, light ${r.lightPct}%, white ${r.whitePct}%, off-palette ${r.offPalette}, masked ${r.masked}, ` +
+        `off-grid ${r.offGrid}, panels ${r.panelPct}% ` +
         `${r.fails.length ? 'FAIL: ' + r.fails.join('; ') : 'ok'}`,
     );
     console.log(`  ${r.palette.join(' ')}`);

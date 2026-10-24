@@ -2,11 +2,14 @@ class_name FishingMeter
 extends FishingHudControl
 ## The local rider's strain meter (surface teal, zigzag icon; left of the cadence widget) or
 ## slack meter (sage, loop icon; right of it): a vertical bar filling 0..1 from the rider state
-## the host owns, turning to the alert accent past ALERT_AT. Shown only in a fight.
+## the host owns, turning to the alert accent (framed) past ALERT_AT, all in art pixels. Shown
+## only in a fight.
 
 const STRAIN := "strain"
 const SLACK := "slack"
 const ALERT_AT := 0.75
+## The icon's rows above the bar (one pixel between them).
+const ICON_ROWS := 5
 
 var kind: String = STRAIN
 ## The fill shown and whether the meter shows (tests read these).
@@ -19,7 +22,7 @@ static func make(p_game: FishingGame, p_kind: String) -> FishingMeter:
 	m.game = p_game
 	m.kind = p_kind
 	m.name = "FishingMeter_" + p_kind
-	m.design_h = 108.0
+	m.design_h = 102.0
 	return m
 
 
@@ -38,13 +41,12 @@ func color() -> Color:
 func _draw() -> void:
 	if not shown:
 		return
-	var w := size.x
-	var icon := Rect2(1.0, 2.0, w - 2.0, w - 2.0)
-	if kind == STRAIN:
-		FishingHudDraw.zigzag(self, icon.grow(-2.0), color())
-	else:
-		FishingHudDraw.loop(self, icon, color())
-	var bar := Rect2(1.0, w + 4.0, w - 2.0, size.y - w - 6.0)
-	FishingHudDraw.bar(self, bar, fill, color(), true)
+	var u := float(FishingHudDraw.unit(k()))
+	var w := floorf(size.x / u) * u
+	var icon := FishingHudDraw.ZIGZAG if kind == STRAIN else FishingHudDraw.LOOP
+	FishingHudDraw.pixels(self, icon, Vector2.ZERO, u, color())
+	var top := float(ICON_ROWS + 1) * u
+	var bar := Rect2(0.0, top, w, floorf(size.y / u) * u - top)
+	FishingHudDraw.bar(self, bar, fill, color(), true, u)
 	if fill > ALERT_AT:
-		draw_rect(bar.grow(1.0), FishingHudDraw.ALERT, false, 2.0)
+		FishingHudDraw.frame(self, bar, u, FishingHudDraw.ALERT)

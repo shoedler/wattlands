@@ -112,14 +112,33 @@ test('a popup rect is masked only when something foreign shows in it', () => {
   assert.equal(shown.cells.filter((c) => c === null).length, 25);
 });
 
-test('a large abyss region is an opaque HUD panel and is masked', () => {
-  const rows = field(20, 20, SKY);
-  for (let y = 2; y < 12; y++) for (let x = 2; x < 14; x++) rows[y][x] = '1c4d65';
-  rows[16][3] = '1c4d65';
-  rows[16][4] = '1c4d65';
+test('a deep-teal box off the edges is a HUD panel (text and all); a deep band is world', () => {
+  const D = sc.PANEL_COLOUR;
+  const rows = field(30, 30, SKY);
+  for (let y = 2; y < 12; y++) for (let x = 2; x < 14; x++) rows[y][x] = D;
+  rows[6][5] = 'ebf2e7';
+  rows[16][3] = D;
+  rows[16][4] = D;
+  for (let y = 24; y < 30; y++) for (let x = 0; x < 30; x++) rows[y][x] = D;
   const g = sc.artGrid(sc.decodePng(png(rows)), 3, [], []);
-  assert.equal(g.masked, 120);
-  assert.equal(g.cells.filter((c) => c === '1c4d65').length, 2, 'small abyss marks stay');
+  assert.equal(g.masked, 120, 'the box with its text');
+  assert.equal(g.cells.filter((c) => c === D).length, 2 + 180, 'small marks and the band stay');
+});
+
+test('chrome off the art grid is counted; a non-palette block (a safety banner) is not', () => {
+  const rows = field(10, 10, SKY);
+  const img = sc.decodePng(png(rows));
+  assert.equal(sc.frameGrid(img, 3, []).offGrid, 0);
+  const at = (x, y) => (y * img.width + x) * 4;
+  img.data[at(4, 4)] = 0x91;
+  img.data[at(4, 4) + 1] = 0xc2;
+  img.data[at(4, 4) + 2] = 0xc2;
+  img.data[at(10, 10)] = 0xd5;
+  img.data[at(10, 10) + 1] = 0x5e;
+  img.data[at(10, 10) + 2] = 0x00;
+  const m = sc.frameGrid(img, 3, []);
+  assert.equal(m.offGrid, 1);
+  assert.match(sc.verdict({ ...sc.measure(sc.artGrid(img, 3, [], [])), ...m }).join(' '), /off-grid/);
 });
 
 test('hsv reads the palette', () => {

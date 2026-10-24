@@ -241,3 +241,11 @@ func test_untranslated_keys_fall_back_to_english_with_args() -> void:
 	var cast := FishingHudModel.tr_key(null, FishingHudModel.KEY_CAST, {"species": "Tuna"})
 	assert_eq(cast, "Cast: Tuna")
 	assert_eq(FishingHudModel.name_of(null, 2), "P3")
+
+
+func test_chips_stay_under_the_minimap_and_clear_of_each_other() -> void:
+	var top := FishingChips.TOP_ROW * 3.0
+	var placed: Array[Rect2] = [Rect2(0, top, 300, 40)]
+	var r := FishingChips._free_spot(Rect2(10, top + 2.0, 100, 51), placed, top)
+	assert_gte(r.position.y, top, "never above the minimap's strip")
+	assert_false(r.grow(-1.0).intersects(placed[0]))

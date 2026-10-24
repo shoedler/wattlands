@@ -33,6 +33,9 @@ const DEPTH_TAU_S := 1.6
 ## Other riders' boats float this many px higher, on the far water (FishingScenery.FAR_ROWS),
 ## hazier and behind the local boat, so boats at the same x read as side by side.
 const FAR_ROW_PX := 6
+## A farther boat's foam waterline: its rows and how far it runs past the hull at each end.
+const FAR_WATERLINE_ROWS := 2
+const FAR_WATERLINE_OVER := 3
 ## A boat is drawn when its pivot is within this many px of the view.
 const DRAW_MARGIN_PX := 120.0
 ## Leaps: one arc's length (s) and height (px).
@@ -610,8 +613,20 @@ func _paint_front(c: CanvasItem) -> void:
 	for slot: int in boats:
 		var b: FishingBoatView = boats[slot]
 		var v: Dictionary = _shown.get(slot, {})
+		if b.visible and b.far:
+			_paint_far_waterline(c, b)
 		if b.visible and not b.far and not v.is_empty() and float(v["wake"]) > 0.04:
 			_paint_wake(c, b, float(v["wake"]))
+
+
+## A farther boat's own surface: a FAR_WATERLINE_ROWS foam slab on its waterline, a little
+## wider than the hull, so it sits in the far water instead of hovering over the near surface.
+func _paint_far_waterline(c: CanvasItem, b: FishingBoatView) -> void:
+	var a := b.pixel_of(Vector2i(FishingRig.STERN_X - FAR_WATERLINE_OVER, FishingRig.WATERLINE))
+	var z := b.pixel_of(Vector2i(FishingRig.BOW_X + FAR_WATERLINE_OVER, FishingRig.WATERLINE))
+	var x0 := minf(a.x, z.x)
+	var w := absf(z.x - a.x) + 1.0
+	c.draw_rect(Rect2(x0, b.position.y, w, FAR_WATERLINE_ROWS), FishingPalette.FOAM)
 
 
 ## The wake: foam slabs on the surface row behind the stern (and a shorter row two rows under

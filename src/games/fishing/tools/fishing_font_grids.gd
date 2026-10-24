@@ -1,21 +1,24 @@
 class_name FishingFontGrids
 extends RefCounted
 ## Turbo Reel's hand-authored pixel font: 5 x 7 capitals and digits, lower case with 2-row
-## descenders, the HUD's punctuation and the en dash, one 5 x 9 grid per character
+## descenders, the HUD's punctuation, the en dash, middle dot and ellipsis, one 5 x 9 grid per
+## character
 ## (FONT_GLYPHS, "#" is ink). font_image() lays them out for Godot's Image Font importer
 ## (assets/fishing/font/turbo_reel_5x7.png and its .import: COLUMNS x ROWS cells of CELL, in
 ## character_ranges order); the HUD draws it at whole multiples of CELL.y.
 
 const COLUMNS := 16
-const ROWS := 6
+const ROWS := 7
 ## One cell: the 5 px glyph and a 1 px gap to the right; 7 rows above the baseline, 2 below.
 const CELL := Vector2i(6, 9)
 const ASCENT := 7
 const DESCENT := 2
-## The characters in grid order: ASCII 32-126, then the en dash (U+2013).
+## The characters in grid order: ASCII 32-126, then the en dash (U+2013), the middle dot (U+00B7,
+## the kit's "Next" separator) and the ellipsis (U+2026, a trimmed label); the last cells stay
+## empty.
 const FIRST := 32
 const LAST := 126
-const EXTRA: Array[int] = [0x2013]
+const EXTRA: Array[int] = [0x2013, 0xB7, 0x2026]
 
 
 ## The glyph grid: white ink on clear, COLUMNS x ROWS cells.
@@ -138,4 +141,6 @@ const FONT_GLYPHS: Array = [
 	["##...", "..#..", "..#..", "...##", "..#..", "..#..", "##...", ".....", "....."],
 	[".....", ".....", ".#...", "#.#.#", "...#.", ".....", ".....", ".....", "....."],
 	[".....", ".....", ".....", "#####", ".....", ".....", ".....", ".....", "....."],
+	[".....", ".....", ".....", "..#..", ".....", ".....", ".....", ".....", "....."],
+	[".....", ".....", ".....", ".....", ".....", ".....", "#.#.#", ".....", "....."],
 ]

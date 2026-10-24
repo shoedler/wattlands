@@ -3,8 +3,9 @@ extends FishingHudControl
 ## The light stopped menu as small chips in the world, next to what they act on: "Cast: <fish>"
 ## above each fish hint's silhouette, "Drive on" ahead of the bow and "Turn around" behind the
 ## stern (FishingHudModel.chips), on abyss-teal panels, kept clear of the boat and of each other
-## (a chip that would overlap moves above or below what it hits). The highlighted chip is lit with
-## a foam frame and a caret.
+## (a chip that would overlap moves above or below what it hits), never above TOP_ROW (under
+## the minimap) and on the art pixel grid. The highlighted chip is lit with a foam frame and a
+## caret.
 ## Positions come from the view's model (FishingView, through the game's "fishing_view" meta),
 ## in art px mapped onto this Control, which covers the view down to the meters.
 
@@ -17,6 +18,10 @@ const SIDE_DX := 64.0
 const SIDE_Y := 24.0
 ## The boat's box round its pivot (art px): chips keep clear of it.
 const BOAT_BOX := Rect2(-46, -36, 92, 44)
+## No chip rises above this row (art px): the minimap's strip ends just above it.
+const TOP_ROW := 30.0
+## The lit chip's caret under it (pixels).
+const CARET: Array[String] = ["#####", ".###.", "..#.."]
 
 ## The chips of the last refresh with their art positions ("at"; tests read them).
 var chips: Array[Dictionary] = []
@@ -90,31 +95,31 @@ func _draw() -> void:
 		var w := FishingHudDraw.text_w(text, k()) + 2.0 * pad
 		var h := line_h + 2.0 * pad
 		var center := (c["at"] as Vector2) * s
-		center.x = clampf(center.x, w * 0.5 + 4.0, size.x - w * 0.5 - 4.0)
-		var r := _free_spot(Rect2(center - Vector2(w, h) * 0.5, Vector2(w, h)), placed)
-		center = r.get_center()
+		center.x = clampf(center.x, w * 0.5 + u, size.x - w * 0.5 - u)
+		center.y = maxf(center.y, TOP_ROW * s + h * 0.5)
+		var r := _free_spot(Rect2(center - Vector2(w, h) * 0.5, Vector2(w, h)), placed, TOP_ROW * s)
+		r.position = (r.position / u).round() * u
 		placed.append(r)
 		var lit := bool(c["selected"])
 		FishingHudDraw.panel(self, r)
 		if lit:
-			draw_rect(r.grow(2.0), FishingPalette.HUD_TEXT, false, 3.0)
-			var bob := roundf(sin(_t * 6.0) * 2.0)
-			var y0 := r.end.y + 4.0 + bob
-			var tri := PackedVector2Array(
-				[Vector2(center.x - 8, y0), Vector2(center.x + 8, y0), Vector2(center.x, y0 + 8)]
-			)
-			draw_colored_polygon(tri, FishingPalette.HUD_TEXT)
+			FishingHudDraw.frame(self, r.grow(u), u, FishingPalette.HUD_TEXT)
+			var bob := roundf(sin(_t * 6.0)) * u
+			var tip := Vector2(roundf(r.get_center().x / u) * u - 2.0 * u, r.end.y + 2.0 * u + bob)
+			FishingHudDraw.pixels(self, CARET, tip, u, FishingPalette.HUD_TEXT)
 		var col := FishingPalette.HUD_TEXT if lit else FishingPalette.HUD_DIM
 		FishingHudDraw.text_line(self, r.position.x + pad, r.position.y + pad, text, k(), col)
 
 
 ## The first of `r`, then `r` moved up and down by a chip's height (nearest first), that
-## touches nothing in `placed`; `r` itself when all are taken.
-static func _free_spot(r: Rect2, placed: Array[Rect2]) -> Rect2:
+## touches nothing in `placed` and stays below `top`; `r` itself when all are taken.
+static func _free_spot(r: Rect2, placed: Array[Rect2], top: float = 0.0) -> Rect2:
 	var step := r.size.y + 8.0
 	for k in 9:
 		var cand := r
 		cand.position.y += step * float((k + 1) / 2) * (-1.0 if k % 2 == 1 else 1.0)
+		if cand.position.y < top:
+			continue
 		var free := true
 		for o in placed:
 			if o.grow(4.0).intersects(cand):

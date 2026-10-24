@@ -33,9 +33,10 @@ const ABYSS_M := 700.0
 ## foam line (SURFACE_ROWS), the only white band.
 const WATER_STEPS_M: Array[float] = [0.0, 15.0, 120.0, 500.0]
 const SURFACE_ROWS := 2
-## The floor's colour and its lit 2-row top rim per water band (WATER_STEPS_M): sage under a
-## foam rim in the shallows, one water step darker than the water above (under a lighter rim)
-## deeper down.
+## The floor's colour and its lit 2-row top rim per band of the water just above its top row
+## (WATER_STEPS_M), so every step shows its rim: the floor a step darker than that water (sage
+## in the shallows), the rim a step lighter (sky over the shallows' haze, never the surface's
+## foam).
 const FLOOR_BANDS: Array[Color] = [
 	FishingPalette.SAGE,
 	FishingPalette.UPPER,
@@ -43,7 +44,7 @@ const FLOOR_BANDS: Array[Color] = [
 	FishingPalette.DEEP,
 ]
 const RIM_BANDS: Array[Color] = [
-	FishingPalette.FOAM,
+	FishingPalette.SKY,
 	FishingPalette.HAZE,
 	FishingPalette.SURFACE,
 	FishingPalette.UPPER,
@@ -314,6 +315,7 @@ func floor_rows(cam_px: float) -> Array[Vector3]:
 			rows = [2.0 * floorf(ys[i0] / 2.0)]
 		for k in rows.size():
 			out[i0 + k].y = rows[k]
+			out[i0 + k].z = band_at(depth_of_y(rows[k] - 1.0))
 		i0 = i1
 	return out
 

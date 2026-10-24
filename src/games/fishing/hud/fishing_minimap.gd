@@ -18,6 +18,8 @@ const EDGE_W := 5.0
 ## The strip's height (art px) under the icons, and the icons' least spacing (centre to centre).
 const STRIP_ROWS := 10.0
 const ICON_GAP := 14.0
+## The local rider's caret under the strip (pixels).
+const CARET: Array[String] = [".#.", "###"]
 ## Endless map: the window's width (m) round the boats.
 const WINDOW_M := 2400.0
 const SAMPLES := 103
@@ -124,7 +126,7 @@ func _draw() -> void:
 		var wa := roundf(window_a * w)
 		var wb := maxf(roundf(window_b * w), wa + 1.0)
 		var frame := Rect2(wa * s, top * s, (wb - wa) * s, h * s)
-		draw_rect(frame, FishingPalette.SLATE, false, maxf(s * 0.67, 1.0))
+		FishingHudDraw.frame(self, frame, s, FishingPalette.SLATE)
 	if x0 <= 0.0:
 		_dock(Vector2(0.0, top) * s, s)
 	if edge:
@@ -179,8 +181,5 @@ func _icon(e: Dictionary, s: float, w: float, cx: float) -> void:
 	var stem := clampf(roundf(float(e["x"]) * w), 0.0, w - 1.0)
 	draw_rect(Rect2(Vector2(stem, float(ICON_ROWS)) * s, Vector2(1, 1) * s), col)
 	if bool(e["local"]):
-		var y := float(ICON_ROWS + 1) + STRIP_ROWS + 0.5
-		var tri := PackedVector2Array(
-			[Vector2(cx - 2, y + 2) * s, Vector2(cx + 2, y + 2) * s, Vector2(cx, y) * s]
-		)
-		draw_colored_polygon(tri, FishingPalette.SLATE)
+		var y := float(ICON_ROWS + 1) + STRIP_ROWS + 1.0
+		FishingHudDraw.pixels(self, CARET, Vector2(cx - 1.0, y) * s, s, FishingPalette.SLATE)
