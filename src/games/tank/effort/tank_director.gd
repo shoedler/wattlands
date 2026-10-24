@@ -15,7 +15,8 @@ extends RefCounted
 ## 1. Bank (dynamo, ERG phases with a range_pct, never the depot or checkpoints): every
 ##    bank.every_s an update toward bank_target_pct (clamped to the phase's range), moving at most
 ##    bank.max_step_pts from the last sent target, sent as bank.substeps sub-steps bank.substep_s
-##    apart: {target_pct, reason "bank"}.
+##    apart: {mode ERG, target_pct, reason "bank"} (brief 2.3 pattern 1; in an ERG phase with no SIM
+##    block running, mode ERG changes nothing but the target).
 ## 2. Boiler (steam, the rider's SIM phases): {mode SIM, mode_grade, reason "boiler"} with
 ##    boiler_grade_pct, at most once per boiler.min_interval_s, rising at most boiler.max_rise_pct
 ##    a step, falling (the latch's drop to 0 included) in one step.
@@ -172,7 +173,9 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	if absf(goal - from) < EPS:
 		return
 	var pct := bank_substep_pct(from, goal, u / sub + 1, n)
-	if _request(ri.peer, {"target_pct": pct, "reason": REASON_BANK, "source": SOURCE}):
+	if _request(
+		ri.peer, {"mode": Wl.ERG, "target_pct": pct, "reason": REASON_BANK, "source": SOURCE}
+	):
 		b["cur"] = pct
 
 

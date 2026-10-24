@@ -59,7 +59,7 @@ func _ev(list: Array) -> Array[Dictionary]:
 
 
 func _bank_dict(pct: float) -> Dictionary:
-	return {"target_pct": pct, "duration_s": 0.0, "reason": "bank", "source": "tank"}
+	return {"mode": "ERG", "target_pct": pct, "duration_s": 0.0, "reason": "bank", "source": "tank"}
 
 
 func _grade_dict(grade: float, reason: String) -> Dictionary:
@@ -677,7 +677,7 @@ func _sweep(h: H) -> void:
 
 func _check_sweep(h: H, at: String) -> void:
 	var keys := {
-		"bank": ["target_pct", "duration_s", "reason", "source"],
+		"bank": ["mode", "target_pct", "duration_s", "reason", "source"],
 		"boiler": ["mode", "mode_grade", "duration_s", "reason", "source"],
 		"hoist": ["mode", "mode_grade", "duration_s", "reason", "source"],
 		"hit": ["mode", "haptic", "duration_s", "reason", "source"],
@@ -706,10 +706,12 @@ func _check_sweep(h: H, at: String) -> void:
 		want_keys = want_keys.duplicate()
 		want_keys.sort()
 		assert_eq(got_keys, want_keys, where)
-		if d.has("mode") or d.has("mode_grade") or d.has("haptic"):
+		if d.has("mode_grade") or d.has("haptic"):
 			assert_eq(ph.mode, Wl.SIM, where + ": SIM-only directive in an ERG phase")
-			assert_eq(str(d["mode"]), Wl.SIM, where)
+		if reason != "bank":
+			assert_eq(str(d["mode"]), Wl.SIM, where + ": mode ERG belongs to the bank only")
 		if d.has("target_pct"):
+			assert_eq(str(d["mode"]), Wl.ERG, where + ": the bank says mode ERG (brief 2.3)")
 			assert_eq(ph.mode, Wl.ERG, where)
 			assert_true(TankDirector.bank_phase(str(ph.meta["engine"]), ph), where)
 			var r2 := ph.effective_range()

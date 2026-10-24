@@ -195,13 +195,45 @@ export function completeProblems(name, r, outcomes = ['victory', 'withdrawn', 'c
   return probs;
 }
 
+/** A remote rider's governor acks each terrain `course_grade` it applies with id 0 (the platform keeps no id for it). */
+export const COURSE_GRADE_ACK_WINDOW_S = 0.2;
+
+/**
+ * The applied records that match no request, minus the remote governors' course-grade acks: those
+ * carry id 0 and belong to pattern 4 (terrain, 2 Hz). One is accepted only when a still unclaimed
+ * `course_grade` request of the same peer was logged within COURSE_GRADE_ACK_WINDOW_S before it, so
+ * an ack without a request (or a second ack for one request) stays a problem.
+ */
+export function unmatchedAcks(r) {
+  const pool = new Map();
+  for (const d of r.directives ?? []) {
+    if (d.kind !== 'course_grade') continue;
+    const k = String(d.peer);
+    if (!pool.has(k)) pool.set(k, []);
+    pool.get(k).push(num(d.t));
+  }
+  const stray = [];
+  for (const rec of r.directives_unmatched ?? []) {
+    const times = pool.get(String(rec.peer)) ?? [];
+    const t = num(rec.t);
+    const at =
+      rec.kind === 'course_grade' && num(rec.id) === 0 && rec.refused !== true
+        ? times.findIndex((q) => t - q >= -EPS && t - q <= COURSE_GRADE_ACK_WINDOW_S + EPS)
+        : -1;
+    if (at < 0) stray.push(rec);
+    else times.splice(at, 1);
+  }
+  return stray;
+}
+
 /** Plan warnings, unmatched or refused directives, oversize snapshots (S4's housekeeping). */
 export function cleanProblems(name, r) {
   const probs = [];
   for (const [peer, w] of Object.entries(r.plan_warnings ?? {})) {
     if (Array.isArray(w) && w.length) probs.push(`${name}: peer ${peer} plan warnings ${JSON.stringify(w)}`);
   }
-  if ((r.directives_unmatched ?? []).length) probs.push(`${name}: ${r.directives_unmatched.length} unmatched applied records`);
+  const stray = unmatchedAcks(r);
+  if (stray.length) probs.push(`${name}: ${stray.length} unmatched applied records (first: ${JSON.stringify(stray[0])})`);
   let refused = 0;
   for (const d of r.directives ?? []) {
     if (d.accepted === false) {

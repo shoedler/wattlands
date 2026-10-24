@@ -479,6 +479,26 @@ test('S4 as a whole: clean runs pass; refused directives, warnings and oversize 
   assert.match(ids(r.details), /refused: cooldown/);
 });
 
+test('unmatchedAcks accepts only the remote governors course-grade acks of a logged request', () => {
+  const cg = (t, peer = 2) => ({ id: 7, peer, t, kind: 'course_grade', requested: { grade_pct: 1 }, accepted: true, applied: null });
+  const ack = (t, peer = 2, extra = {}) => ({ id: 0, peer, t, kind: 'course_grade', applied: { course_grade_pct: 1 }, clamped_by: [], refused: false, requested: {}, ...extra });
+  const base = { directives: [cg(10), cg(10.5)], directives_unmatched: [ack(10.05), ack(10.55)] };
+  assert.deepEqual(C.unmatchedAcks(base), []);
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05), ack(10.07)] }).length, 1, 'a second ack of one request');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(11)] }).length, 1, 'no request before it');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 1)] }).length, 1, 'another peer');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { kind: 'request' })] }).length, 1, 'another kind');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { id: 9 })] }).length, 1, 'an id that matched nothing');
+  assert.equal(C.unmatchedAcks({ ...base, directives_unmatched: [ack(10.05, 2, { refused: true })] }).length, 1, 'a refused one');
+  const full = { ...goodSet() };
+  for (const c of C.CREWS) full['s4_drill_c' + c] = makeRun(c, { content: 'drill' });
+  full.s1_c3_seed1.directives.push(cg(20, 1));
+  full.s1_c3_seed1.directives_unmatched.push(ack(20.05, 1), ack(300, 1));
+  const r = C.checkS4(full, { seeds: [1] });
+  assert.equal(r.status, 'FAIL');
+  assert.match(ids(r.details), /1 unmatched applied records/);
+});
+
 // --- S5 --------------------------------------------------------------------------------------------------------------
 
 /** A run where `peer` is in rescue from `from` to `to` seconds (applied 50% FTP, clamped by rescue). */
