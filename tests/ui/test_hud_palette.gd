@@ -295,3 +295,17 @@ func test_strip_level_keys_draw_flat_intensity_colours() -> void:
 	assert_eq(s.level_color(40.0), Color("#4b858f"))
 	assert_eq(s.level_color(75.0), Color("#6fa3a6"))
 	assert_eq(s.level_color(110.0), Color("#91c2c2"))
+
+
+func test_grid_px_frames_panels_in_panel_border_one_game_pixel_wide() -> void:
+	var p := HudPalette.from_dict({"grid_px": 3, "panel": PANEL, "panel_border": BAR_FG})
+	var g := autofree(HudPowerGauge.new()) as HudPowerGauge
+	g.set_palette(p)
+	assert_eq(_panel_of(g).border_width_left, 3, "one game pixel")
+	assert_eq(_panel_of(g).border_color, BAR_FG)
+	var t := autofree(HudToasts.new()) as HudToasts
+	t.set_palette(p)
+	t.push("hi")
+	var sb := (t._items[0]["panel"] as PanelContainer).get_theme_stylebox("panel") as StyleBoxFlat
+	assert_eq(sb.border_width_top, 3, "toasts too")
+	assert_eq(sb.border_color, BAR_FG)

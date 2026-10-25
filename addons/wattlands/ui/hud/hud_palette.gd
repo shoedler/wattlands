@@ -12,9 +12,10 @@ extends RefCounted
 ## corner_radius (int >= 0: panel corners; 0 = square, without anti-aliasing) and text_outline
 ## (bool: false drops the label outlines), text_px and key_px (int: one size for every label and
 ## one for the key numbers, which stay at least WlTheme.KEY_NUMBER_MIN_PX) and grid_px (int: the
-## game's art pixel in screen px: the kit draws on the game's grid, panels borderless and padded
-## 3 pixels, children placed on whole pixels (snap_tree), gaps, bars, the phase strip and the
-## gear bar, one solid fill four pixels tall, in whole pixels).
+## game's art pixel in screen px: the kit draws on the game's grid, panels padded 3 pixels with a
+## one-pixel panel_border frame (none without that key), children placed on whole pixels
+## (snap_tree), gaps, bars, the phase strip and the gear bar, one solid fill four pixels tall, in
+## whole pixels).
 ## Safety and warning colors (the rescue, warm-up, pause and trainer banners, WlTheme.WARN) are
 ## not palette keys: a game cannot recolor a safety signal, and the safety banners keep the kit
 ## font too.
@@ -184,12 +185,15 @@ func style_item(item: CanvasItem) -> void:
 
 
 ## Apply the game's corners to a panel style (nothing without corner_radius); with grid_px the
-## panel has no border (a border thinner than the game's pixel would leave its grid).
+## panel's border is one game pixel in panel_border, or none without that key (a border thinner
+## than the game's pixel would leave its grid).
 func style_panel(sb: StyleBoxFlat) -> void:
 	if sb == null:
 		return
 	if grid_px() > 0:
-		sb.set_border_width_all(0)
+		sb.set_border_width_all(grid_px() if has_key(PANEL_BORDER) else 0)
+		if has_key(PANEL_BORDER):
+			sb.border_color = pick(PANEL_BORDER, sb.border_color)
 	if not style.has(CORNER_RADIUS):
 		return
 	var r := int(style[CORNER_RADIUS])
