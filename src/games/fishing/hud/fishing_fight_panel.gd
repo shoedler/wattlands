@@ -51,7 +51,7 @@ func _draw() -> void:
 	var panel := Rect2(0, 0, floorf(size.x / u) * u - 2.0 * u, bar_y + BAR_ROWS * u + pad)
 	var bar := Rect2(pad, bar_y, panel.size.x - 2.0 * pad, BAR_ROWS * u)
 	if bool(gaff.get("visible", false)) or bool(fish.get("visible", false)):
-		FishingHudDraw.panel(self, panel)
+		FishingHudDraw.panel(self, panel, u)
 	if bool(gaff.get("visible", false)):
 		var label := FishingHudModel.tr_key(game, str(gaff["phase"]))
 		FishingHudDraw.text_line(self, pad, top, label, s, FishingHudDraw.GAFF)
@@ -67,5 +67,5 @@ func _draw() -> void:
 		return
 	var box := Vector2(FishingHudDraw.text_w(place, s) + 2.0 * pad, line_h + 2.0 * pad)
 	var at := Vector2(0, size.y - box.y)
-	FishingHudDraw.panel(self, Rect2(at, box))
+	FishingHudDraw.panel(self, Rect2(at, box), u)
 	FishingHudDraw.text_line(self, pad, at.y + pad, place, s, FishingPalette.HUD_DIM)

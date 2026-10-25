@@ -58,8 +58,9 @@ const GAIT_S := 0.2
 ## The bow wave, bottom row first: [offset ahead of the bow, width] per row (px).
 const BOW_WAVE: Array[Vector2i] = [Vector2i(-3, 9), Vector2i(-1, 5)]
 ## At high speed (wake from WAKE_FAST_AT) the wake runs longer (these slabs after WAKE_SLABS and
-## WAKE_LOW) and a bow that is up (FishingBoatView.pose() 1 or 2) throws spray: foam slabs above
-## the bow wave, [x from the bow, length] per row going up, two patterns swapped with the gait.
+## WAKE_LOW) and a bow that is up (FishingBoatView.pose() 1 and up) throws spray: foam slabs
+## above the bow wave, [x ahead of the bow, length] per row going up (always ahead of the stem,
+## never on the hull), two patterns swapped with the gait.
 const WAKE_FAST_AT := 0.8
 const WAKE_TAIL: Array[int] = [8, 6, 4]
 const WAKE_LOW_TAIL: Array[int] = [4, 2]
@@ -67,8 +68,8 @@ const WAKE_LOW_TAIL: Array[int] = [4, 2]
 const WAKE_CREST: Array[int] = [6, 4, 3, 2]
 const SURFACE_UNDER := FishingScenery.SURFACE_ROWS
 const BOW_SPRAY: Array = [
-	[Vector2i(-2, 4), Vector2i(0, 2), Vector2i(-4, 2), Vector2i(-1, 3), Vector2i(-5, 2)],
-	[Vector2i(-1, 3), Vector2i(-3, 2), Vector2i(1, 2), Vector2i(-4, 3), Vector2i(0, 2)],
+	[Vector2i(2, 4), Vector2i(3, 3), Vector2i(2, 2), Vector2i(4, 3), Vector2i(3, 2)],
+	[Vector2i(3, 3), Vector2i(2, 4), Vector2i(4, 2), Vector2i(3, 3), Vector2i(5, 2)],
 ]
 ## Braking (a braking pose): the bow pushes a foam mound ahead of it (rows going up, [ahead of
 ## the bow, width]) with a spray sheet standing on it (BRAKE_SHEET); the

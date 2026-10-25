@@ -50,7 +50,7 @@ func _draw() -> void:
 	w = maxf(w, pad + FishingHudDraw.text_w(time_text, s) + pad)
 	var h := 2.0 * pad + pitch * float(rows.size()) + float(FishingHudDraw.LINE_ROWS) * u
 	var x0 := floorf((size.x - w) / u) * u
-	FishingHudDraw.panel(self, Rect2(x0, 0.0, size.x - x0, h))
+	FishingHudDraw.panel(self, Rect2(x0, 0.0, size.x - x0, h), u)
 	FishingHudDraw.text_line(self, x0 + pad, pad, time_text, s, FishingPalette.HUD_TEXT)
 	var y := pad + pitch
 	for row in rows:

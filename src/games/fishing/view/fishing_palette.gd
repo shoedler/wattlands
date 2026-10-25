@@ -52,6 +52,7 @@ const PLAYERS: Array[Color] = [ACCENT, PLAYER_SLATE, PLAYER_MOSS, PLAYER_PLUM]
 const LINE := SLATE
 ## HUD: panels, text, secondary text, bars on their track; colour only for alerts.
 const HUD_PANEL := DEEP
+const HUD_PANEL_FRAME := SURFACE
 const HUD_TEXT := FOAM
 const HUD_DIM := HAZE
 const HUD_BAR := SURFACE

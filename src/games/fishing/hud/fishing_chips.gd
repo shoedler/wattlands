@@ -101,7 +101,7 @@ func _draw() -> void:
 		r.position = (r.position / u).round() * u
 		placed.append(r)
 		var lit := bool(c["selected"])
-		FishingHudDraw.panel(self, r)
+		FishingHudDraw.panel(self, r, u)
 		if lit:
 			FishingHudDraw.frame(self, r.grow(u), u, FishingPalette.HUD_TEXT)
 			var bob := roundf(sin(_t * 6.0)) * u

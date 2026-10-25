@@ -154,6 +154,8 @@ static func pixels(c: CanvasItem, rows: Array, pos: Vector2, u: float, col: Colo
 const STAR: Array[String] = ["..#..", ".###.", "#####", ".###.", "..#.."]
 
 
-## A flat panel in the HUD's panel teal.
-static func panel(c: CanvasItem, r: Rect2, col: Color = FishingPalette.HUD_PANEL) -> void:
-	c.draw_rect(r, col)
+## A flat panel in the HUD's panel teal inside a one-pixel (`u` px) surface-teal frame, so it
+## reads on the deep floors too.
+static func panel(c: CanvasItem, r: Rect2, u: float = 3.0) -> void:
+	c.draw_rect(r, FishingPalette.HUD_PANEL)
+	frame(c, r, u, FishingPalette.HUD_PANEL_FRAME)

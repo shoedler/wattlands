@@ -43,7 +43,7 @@ func _draw() -> void:
 		return
 	var u := float(FishingHudDraw.unit(k()))
 	var box := Rect2(Vector2.ZERO, (size / u).floor() * u)
-	FishingHudDraw.panel(self, box)
+	FishingHudDraw.panel(self, box, u)
 	var bar := box.grow(-PAD_PX * u)
 	FishingHudDraw.bar(self, bar, fill, color(), true, u)
 	if fill > ALERT_AT:

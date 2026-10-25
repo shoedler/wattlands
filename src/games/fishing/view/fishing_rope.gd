@@ -7,8 +7,8 @@ extends RefCounted
 ## line sweeping it back; its length follows the fight: strain pulls it to the straight
 ## distance, slack lets it bow (length()); in a fight no joint hangs below the lower end, and no
 ## joint turns more than BEND_MAX_DEG. The links only resist stretching. pixels() draws it as
-## one clean 1 px curve (Catmull-Rom through the joints, held against sub-pixel jitter, thinned
-## of L-corners and spikes), or one straight line when taut.
+## one clean 1 px curve (a smooth cubic through the rope's ends and its third points, held
+## against sub-pixel jitter, thinned of L-corners and spikes), or one straight line when taut.
 
 const SEGMENTS := 16
 const ITERATIONS := 40
@@ -154,8 +154,9 @@ func _ease_bends() -> void:
 
 
 ## The line's pixels from the rod end to the far end: taut, one straight Bresenham line;
-## otherwise one Catmull-Rom curve through the joints (each held against sub-pixel jitter),
-## sampled finely, rounded and thinned to a clean 1 px curve.
+## otherwise one smooth cubic through both ends and the rope at a third and two thirds of its
+## length (joints held against sub-pixel jitter), sampled finely, rounded and thinned to a clean
+## 1 px curve whose step lengths change only gradually.
 func pixels() -> Array[Vector2i]:
 	if points.size() != SEGMENTS + 1:
 		return []
@@ -165,24 +166,32 @@ func pixels() -> Array[Vector2i]:
 		var last := i == 0 or i == points.size() - 1
 		if last or _held[i].distance_to(points[i]) > HOLD_PX:
 			_held[i] = points[i]
-	var a := Vector2i(_held[0].round())
-	var b := Vector2i(_held[_held.size() - 1].round())
+	var a := _held[0].round()
+	var b := _held[_held.size() - 1].round()
 	if taut:
-		return FishingRig.bresenham(a, b)
-	var out: Array[Vector2i] = [a]
-	var n := _held.size()
-	for i in n - 1:
-		var p0 := _held[maxi(i - 1, 0)]
-		var p1 := _held[i]
-		var p2 := _held[i + 1]
-		var p3 := _held[mini(i + 2, n - 1)]
-		var steps := maxi(ceili(p1.distance_to(p2) / SAMPLE_PX), 1)
-		for k in range(1, steps + 1):
-			var q := Vector2i(catmull_rom(p0, p1, p2, p3, float(k) / float(steps)).round())
-			if q == out[-1]:
-				continue
+		return FishingRig.bresenham(Vector2i(a.round()), Vector2i(b.round()))
+	var q1 := along(_held, 1.0 / 3.0)
+	var q2 := along(_held, 2.0 / 3.0)
+	var c2 := (54.0 * q2 - 27.0 * q1 + 6.0 * a - 15.0 * b) / 18.0
+	var c1 := (27.0 * q1 - 8.0 * a - b - 6.0 * c2) / 12.0
+	var reach := a.distance_to(q1) + q1.distance_to(q2) + q2.distance_to(b)
+	var steps := maxi(ceili(reach / SAMPLE_PX), 2)
+	var out: Array[Vector2i] = [Vector2i(a.round())]
+	for k in range(1, steps + 1):
+		var u := float(k) / float(steps)
+		var v := 1.0 - u
+		var p := v * v * v * a + 3.0 * v * v * u * c1 + 3.0 * v * u * u * c2 + u * u * u * b
+		var q := Vector2i(p.round())
+		if q != out[-1]:
 			_bridge(out, q)
 	return pixel_perfect(out)
+
+
+## The point a share `f` (0..1) along the joints `pts` by index.
+static func along(pts: PackedVector2Array, f: float) -> Vector2:
+	var at := f * float(pts.size() - 1)
+	var i := mini(floori(at), pts.size() - 2)
+	return pts[i].lerp(pts[i + 1], at - float(i))
 
 
 ## Appends `q` to `out`, filling any gap from the last pixel with a straight run.
@@ -194,21 +203,6 @@ static func _bridge(out: Array[Vector2i], q: Vector2i) -> void:
 	var run := FishingRig.bresenham(last, q)
 	run.pop_front()
 	out.append_array(run)
-
-
-## The Catmull-Rom point at `u` (0..1) between p1 and p2.
-static func catmull_rom(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, u: float) -> Vector2:
-	var u2 := u * u
-	var u3 := u2 * u
-	return (
-		0.5
-		* (
-			2.0 * p1
-			+ (p2 - p0) * u
-			+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * u2
-			+ (3.0 * p1 - p0 - 3.0 * p2 + p3) * u3
-		)
-	)
 
 
 ## `path` without its L-corners (a pixel whose neighbours before and after touch diagonally

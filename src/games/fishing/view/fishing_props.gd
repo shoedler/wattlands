@@ -9,16 +9,16 @@ extends RefCounted
 
 ## Each zone's (FishingWorld.ZONES) big pieces and small pieces, picked by seed per cluster.
 const BIG: Array = [
-	["mooring", "crates", "mooring", "anchor", "mooring", "tyre", "crates"],
+	["crates", "anchor", "crates", "tyre"],
 	["grass", "boulder", "grass"],
-	["brain", "fan", "branch", "fan", "brain"],
+	["brain", "tube", "branch", "barrel", "brain", "tube"],
 	["kelp", "ledge", "kelp"],
 	["skeleton", "boulder", "ledge"],
 	["basalt", "basalt", "boulder"],
 ]
 const SMALL: Array = [
-	["chain", "crate", "tyre", "crate"],
-	["shell", "starfish", "ripples", "grass"],
+	["chain", "crate", "crate"],
+	["shell", "starfish", "grass"],
 	["anemone", "nub", "shell"],
 	["kelp_short", "rock"],
 	["rib", "rock"],
@@ -37,9 +37,9 @@ const KINDS: Array[String] = [
 	"boulder",
 	"shell",
 	"starfish",
-	"ripples",
 	"brain",
-	"fan",
+	"tube",
+	"barrel",
 	"branch",
 	"anemone",
 	"nub",
@@ -92,12 +92,12 @@ static func draw(
 			return shell(c, x, top, lg, h)
 		"starfish":
 			return starfish(c, x, top, lg)
-		"ripples":
-			return ripples(c, x, top, lg, h)
 		"brain":
 			return brain(c, x, top, lg, h)
-		"fan":
-			return fan(c, x, top, lg, h)
+		"tube":
+			return tube(c, x, top, lg, h)
+		"barrel":
+			return barrel(c, x, top, lg, h)
 		"branch":
 			return branch(c, x, top, lg, h)
 		"anemone":
@@ -147,20 +147,21 @@ static func crates(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) 
 	return w0 + w1
 
 
-## A concrete mooring block (three planes) with its ring and a chain rising off it.
+## A concrete mooring block (three planes) with its ring and a solid chain rising straight to a
+## buoy on the surface (the surface row is the legend's "surf").
 static func mooring(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
 	var w := 16.0 + 2.0 * float(pick(h, 3, 3))
 	c.draw_rect(Rect2(x, top - 8.0, w, 8.0), lg["d"])
 	c.draw_rect(Rect2(x + w - 3.0, top - 8.0, 3.0, 8.0), lg["s"])
 	c.draw_rect(Rect2(x, top - 8.0, w, 2.0), lg["r"])
-	var rx := x + floorf(w * 0.5) - 3.0
-	c.draw_rect(Rect2(rx, top - 12.0, 6.0, 2.0), lg["s"])
-	c.draw_rect(Rect2(rx, top - 12.0, 2.0, 4.0), lg["s"])
-	c.draw_rect(Rect2(rx + 4.0, top - 12.0, 2.0, 4.0), lg["s"])
-	var cy := top - 14.0
-	for k in 3 + pick(h, 6, 3):
-		c.draw_rect(Rect2(rx + 2.0 + float(k % 2) * 2.0, cy - 3.0, 2.0, 3.0), lg["s"])
-		cy -= 4.0
+	var rx := x + floorf(w * 0.5) - 2.0
+	c.draw_rect(Rect2(rx, top - 11.0, 4.0, 1.0), lg["s"])
+	c.draw_rect(Rect2(rx, top - 11.0, 1.0, 3.0), lg["s"])
+	c.draw_rect(Rect2(rx + 3.0, top - 11.0, 1.0, 3.0), lg["s"])
+	var surf := float(lg.get("surf", top - 40.0))
+	var cx := rx + 2.0
+	c.draw_rect(Rect2(cx, surf + 1.0, 1.0, top - 11.0 - surf - 1.0), lg["s"])
+	c.draw_rect(Rect2(cx - 1.0, surf - 1.0, 3.0, 2.0), lg["a"])
 	return w
 
 
@@ -202,12 +203,11 @@ static func anchor(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) 
 	return 13.0
 
 
-## A chain lying on the floor: solid 3 x 2 links with a 1 px gap, every other one raised.
+## A chain lying on the floor: one solid slate line.
 static func chain(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
-	var n := 4 + pick(h, 3, 4)
-	for k in n:
-		c.draw_rect(Rect2(x + float(k * 4), top - 2.0 - float(k % 2), 3.0, 2.0), lg["s"])
-	return float(n * 4)
+	var n := 8.0 + 2.0 * float(pick(h, 3, 5))
+	c.draw_rect(Rect2(x, top - 1.0, n, 1.0), lg["s"])
+	return n
 
 
 ## An old tyre half sunk in the sand.
@@ -218,12 +218,16 @@ static func tyre(c: CanvasItem, x: float, top: float, lg: Dictionary) -> float:
 	return 10.0
 
 
-## A seagrass patch: three to five 2 px blades of seeded heights, swaying whole pixels.
+## A seagrass tuft: three to five 2 px vertical blades of seeded heights; only each blade's top
+## 3 rows sway, by a whole pixel.
 static func grass(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int, t: float) -> float:
 	var n := 3 + pick(h, 2, 3)
 	for k in n:
-		var tall := 8 + 3 * pick(h, 4 + k, 4)
-		sway_stem(c, x + float(k * 3), top, tall, lg["ps"], h + k, t, 0)
+		var tall := 8.0 + 3.0 * float(pick(h, 4 + k, 4))
+		var bx := x + float(k * 3)
+		c.draw_rect(Rect2(bx, top - tall + 3.0, 2.0, tall - 3.0), lg["ps"])
+		var dx := roundf(sin(t * 1.1 + float((h + k) % 17) * 0.37))
+		c.draw_rect(Rect2(bx + dx, top - tall, 2.0, 3.0), lg["ps"])
 	return float(n * 3)
 
 
@@ -292,15 +296,6 @@ static func starfish(c: CanvasItem, x: float, top: float, lg: Dictionary) -> flo
 	return 5.0
 
 
-## Sand ripples: short lit dashes in two offset rows on the sand under the rim.
-static func ripples(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
-	var n := 3 + pick(h, 2, 3)
-	for k in n:
-		var w := 4.0 + 2.0 * float(pick(h, 4 + k, 2))
-		c.draw_rect(Rect2(x + float(k * 8), top + 4.0 + float(k % 2) * 3.0, w, 1.0), lg["r"])
-	return float(n * 8)
-
-
 ## A brain coral: a dome of tiers, lit on top, a groove ring, a dark underside; `size` 0 picks
 ## a seeded width (14..24 px).
 static func brain(
@@ -322,50 +317,68 @@ static func brain(
 	return w
 
 
-## A sea fan: a flat fan widening up from a short dark stalk into a rounded top, its top rows
-## lit and its lower part darker; seeded width and height, leaning left or right.
-static func fan(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
-	var w := 14.0 + 2.0 * float(pick(h, 2, 5))
-	var tall := 16 + 2 * pick(h, 5, 7)
-	var stalk := 3
-	var cx := x + floorf(w * 0.5)
-	c.draw_rect(Rect2(cx - 1.0, top - float(stalk), 2.0, float(stalk)), lg["d"])
-	var body := tall - stalk
-	var lean := 2.0 * float(pick(h, 8, 3) - 1)
-	for k in body:
-		var u := 1.0 - float(k) / float(body)
-		var half := floorf(lerpf(1.0, w * 0.5, minf(u / 0.7, 1.0)))
-		if u > 0.85:
-			half = floorf(half * (1.0 - (u - 0.85) * 2.5))
-		half = maxf(half, 1.0)
-		var col: Color = lg["pb"]
-		if k < 2:
-			col = lg["r"]
-		elif u < 0.35:
-			col = lg["ps"]
-		var y := top - float(stalk) - float(body - k)
-		c.draw_rect(Rect2(cx - half + roundf(lean * u), y, 2.0 * half, 1.0), col)
+## Tube sponges: two to four upright tubes of seeded widths and heights, each with a lit rim and
+## its dark opening.
+static func tube(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
+	var at := x
+	for k in 2 + pick(h, 2, 3):
+		var w := 4.0 + 2.0 * float(pick(h, 4 + k, 2))
+		var tall := 10.0 + 3.0 * float(pick(h, 7 + 2 * k, 5))
+		c.draw_rect(Rect2(at, top - tall, w, tall), lg["pb"])
+		c.draw_rect(Rect2(at + w - 1.0, top - tall, 1.0, tall), lg["ps"])
+		c.draw_rect(Rect2(at, top - tall, w, 1.0), lg["r"])
+		c.draw_rect(Rect2(at + 1.0, top - tall + 1.0, w - 2.0, 1.0), lg["d"])
+		at += w + 1.0
+	return at - x
+
+
+## A barrel sponge: a broad, bulging barrel with a lit lip around its dark mouth and a darker
+## lower flank.
+static func barrel(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
+	var w := 12.0 + 2.0 * float(pick(h, 2, 3))
+	var tall := 12 + 2 * pick(h, 5, 3)
+	for r in tall:
+		var u := float(r) / float(tall - 1)
+		var inset := 0.0 if u > 0.2 and u < 0.85 else 1.0
+		var col: Color = lg["pb"] if u < 0.65 else lg["ps"]
+		c.draw_rect(Rect2(x + inset, top - float(tall - r), w - 2.0 * inset, 1.0), col)
+	c.draw_rect(Rect2(x + 1.0, top - float(tall), w - 2.0, 1.0), lg["r"])
+	c.draw_rect(Rect2(x + 3.0, top - float(tall) + 1.0, w - 6.0, 2.0), lg["d"])
 	return w
 
 
-## A branching coral: a 2 px trunk with blocky branches stepping up and out to lit tips.
+## A branching coral: a stubby trunk forking twice into thick, asymmetric arms that lean out in
+## 1:2 steps and end in lit, rounded tips; seeded lengths, so no two fork alike.
 static func branch(c: CanvasItem, x: float, top: float, lg: Dictionary, h: int) -> float:
-	var tall := 16 + 2 * pick(h, 2, 8)
-	var cx := x + 8.0
-	c.draw_rect(Rect2(cx, top - float(tall), 2.0, float(tall)), lg["ps"])
-	var n := 3 + pick(h, 6, 2)
-	for k in n:
-		var at := top - float(4 + k * (tall - 4) / n)
-		var left := (k + pick(h, 9, 2)) % 2 == 0
-		var reach := 4.0 + 2.0 * float(pick(h, 10 + k, 3))
-		var bx := cx - reach if left else cx + 2.0
-		c.draw_rect(Rect2(bx, at, reach, 2.0), lg["ps"])
-		var tip_x := bx if left else bx + reach - 2.0
-		var up := 4.0 + 2.0 * float(pick(h, 13 + k, 3))
-		c.draw_rect(Rect2(tip_x, at - up, 2.0, up), lg["ps"])
-		c.draw_rect(Rect2(tip_x, at - up, 2.0, 2.0), lg["c"])
-	c.draw_rect(Rect2(cx, top - float(tall), 2.0, 2.0), lg["c"])
+	_fork(c, x + 8.0, top, 3, 6 + pick(h, 2, 3), 0, lg, h, 2)
 	return 18.0
+
+
+static func _fork(
+	c: CanvasItem,
+	x: float,
+	bottom: float,
+	w: int,
+	tall: int,
+	lean: int,
+	lg: Dictionary,
+	h: int,
+	depth: int
+) -> void:
+	var at := x
+	for r in tall:
+		if lean != 0 and r % 2 == 1:
+			at += float(lean)
+		c.draw_rect(Rect2(at, bottom - float(r + 1), float(w), 1.0), lg["ps"])
+	var tip := bottom - float(tall)
+	if depth <= 0:
+		c.draw_rect(Rect2(at, tip - 1.0, float(w), 2.0), lg["c"])
+		return
+	var cw := maxi(w - 1, 2)
+	var left := 3 + pick(h, 3 + depth, 4)
+	var right := 4 + pick(h, 6 + depth, 5)
+	_fork(c, at - 1.0, tip, cw, left, -1, lg, h >> 2, depth - 1)
+	_fork(c, at + float(w - cw) + 1.0, tip, cw, right, 1, lg, h >> 4, depth - 1)
 
 
 ## An anemone clump: a few short tentacle tufts on a dark foot, a brass one now and then.
@@ -491,7 +504,7 @@ static func arch(c: CanvasItem, cx: float, top: float, lg: Dictionary) -> void:
 			c.draw_rect(Rect2(x + u, top - hole - 2.0, 4.0, 2.0), lg["d"])
 	c.draw_rect(Rect2(x + 12.0, top - ARCH_HOLE[4], 2.0, ARCH_HOLE[4]), lg["d"])
 	c.draw_rect(Rect2(x + 62.0, top - ARCH_TOP[15], 2.0, ARCH_TOP[15]), lg["d"])
-	fan(c, x + 2.0, top - ARCH_TOP[1] + 1.0, lg, 0x1B3)
+	tube(c, x + 2.0, top - ARCH_TOP[1] + 1.0, lg, 0x1B3)
 	brain(c, x + 26.0, top - ARCH_TOP[7] + 1.0, lg, 0x2C5)
 	branch(c, x + 44.0, top - ARCH_TOP[12] + 1.0, lg, 0x3D7)
 	anemone(c, x + 36.0, top - ARCH_TOP[9] + 1.0, lg, 0x0)

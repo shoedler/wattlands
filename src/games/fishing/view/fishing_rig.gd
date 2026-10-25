@@ -46,12 +46,13 @@ const POSE_X1 := 86
 ## The rod in its holder on the winch, as runs from the base toward the tip: a positive run
 ## climbs that many pixels, then steps one aft and up; a negative run goes that many pixels aft,
 ## then steps one aft and down (stowed, with no climb, it steps up instead). Raised the rod
-## stands at 1:2; under tension the runs shorten as it climbs and lengthen as it bends back.
+## leans back at 1:1, its tip behind the outboard; bent it is two clean straight parts, the 1:1
+## butt and a 2:1 tip falling toward the line, longer under more tension.
 const ROD_BASE := Vector2i(27, 12)
 const ROD_STOWED: Array[int] = [-2, -2, -2, -2]
-const ROD_RAISED: Array[int] = [2, 2, 2, 2, 2]
-const ROD_BENT: Array[int] = [3, 3, 2, 2, -2, -3]
-const ROD_HARD: Array[int] = [3, 3, 2, 2, -2, -2, -3, -4]
+const ROD_RAISED: Array[int] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+const ROD_BENT: Array[int] = [1, 1, 1, 1, 1, 1, 1, -2, -2, -2]
+const ROD_HARD: Array[int] = [1, 1, 1, 1, 1, -2, -2, -2, -2, -2]
 ## Tension from which the raised rod shows the bent and the hard-bent frame.
 const ROD_BENT_AT := 0.35
 const ROD_HARD_AT := 0.7

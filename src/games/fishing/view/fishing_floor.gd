@@ -5,9 +5,10 @@ extends RefCounted
 ## regular grid) with sheer drops between them; every terrace longer than a piece is broken into
 ## pieces raised or notched a few pixels (outcrops and notches), and every drop shows a darker
 ## side plane on the higher piece's edge under a lit lip. Behind them a back ridge of flat-topped
-## mesas scrolls at RIDGE_FACTOR; on them each zone's prop clusters (FishingProps: one big piece
-## and small ones per cluster), caves cut into the deep's cliffs, basalt columns stepping down
-## into the abyss and the map's landmarks as set pieces. The harbour is a flat quay shelf with
+## mesas scrolls at RIDGE_FACTOR; some drops are clean 1:2 or 1:4 slopes and some pieces carry
+## low mounds, narrow deep pieces are pits; on them each zone's prop clusters (FishingProps: one
+## big piece and small ones per cluster), caves cut into the deep's cliffs, one tall ledged cliff
+## where the floor drops into the abyss and the map's landmarks as set pieces. The harbour is a flat quay shelf with
 ## one dredged drop. Everything is seeded by world position and deterministic (decoration only,
 ## never game state).
 ## Colours by the water band just above a piece (FishingScenery.WATER_STEPS_M): the floor two
@@ -98,12 +99,26 @@ const RIDGE_SHOULDER := 6
 ## In the deep and the abyss the ridge stands this much lower (the dark water is tall there).
 const RIDGE_DEEP_SCALE := 0.5
 ## Prop clusters: one per CLUSTER_PX of world px (where a piece has room), the big piece and up
-## to two small ones beside it.
+## to two small ones beside it; in the harbour one cluster in MOORING_ONE_IN is a mooring.
 const CLUSTER_PX := 44
+const MOORING_ONE_IN := 5
+## Drops of RAMP_MIN..RAMP_MAX px are, by seed, clean slopes instead (1 px down per RAMP_RUNS
+## px), laid on the lower piece where it has room; pieces at least MOUND_MIN_PX long carry, by
+## seed, a low mound with 1:2 sides.
+const RAMP_MIN := 4.0
+const RAMP_MAX := 14.0
+const RAMP_RUNS: Array[int] = [2, 4]
+const MOUND_MIN_PX := 44.0
+## A piece at most PIT_MAX_PX long and PIT_MIN_PX under both neighbours is a pit: one flat
+## interior a step darker than their floor, no rim, their floor as its walls.
+const PIT_MAX_PX := 64.0
+const PIT_MIN_PX := 8.0
+## The abyss cliff: from the last piece, a ledge ABYSS_LEDGES[0] px wide ABYSS_DROPS[0] px down,
+## a second one, then one tall face to the bottom.
+const ABYSS_LEDGES: Array[float] = [20.0, 5.0]
+const ABYSS_DROPS: Array[float] = [26.0, 40.0]
 ## Deep cliffs at least this high get a cave mouth.
 const CAVE_DROP_PX := 18.0
-## The abyss drop: this many basalt columns stepping down.
-const BASALT_STEPS := 6
 
 var world: FishingWorld = null
 ## block index -> terraces [{"c0", "c1" (cells, end exclusive), "d" (m, INF: none), "zone"}].
@@ -230,9 +245,11 @@ func paint(c: CanvasItem, sc: FishingScenery, cam_m: float, t: float, edge_px: f
 	_paint_ridge(c, sc, cam_px, shown, minf(edge_px, floor_end(shown, cam_px)))
 	for e in shown:
 		_paint_piece(c, e)
-	_paint_drops(c, shown)
+	var taken := _paint_drops(c, shown)
 	for e in shown:
-		_paint_props(c, e, t, cam_px)
+		_paint_mound(c, e, taken)
+	for e in shown:
+		_paint_props(c, e, t, cam_px, taken)
 	_paint_abyss_drop(c, sc, cam_px, shown, edge_px)
 	_paint_landmarks(c, sc, cam_m, shown, edge_px)
 
@@ -265,9 +282,20 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 						"zone": tr["zone"],
 						"x0": p.x,
 						"c0": tr["c0"],
+						"pit": -1,
 					}
 				)
 			)
+	for i in range(1, out.size() - 1):
+		var a := out[i - 1]
+		var e := out[i]
+		var b := out[i + 1]
+		var w := float(e["sx1"]) - float(e["sx0"])
+		var deep_a := float(e["top"]) - float(a["top"]) >= PIT_MIN_PX
+		var deep_b := float(e["top"]) - float(b["top"]) >= PIT_MIN_PX
+		var joined := float(a["sx1"]) == float(e["sx0"]) and float(e["sx1"]) == float(b["sx0"])
+		if joined and deep_a and deep_b and w <= PIT_MAX_PX:
+			e["pit"] = a["band"] if float(a["top"]) <= float(b["top"]) else b["band"]
 	return out
 
 
@@ -298,28 +326,39 @@ func _paint_piece(c: CanvasItem, e: Dictionary) -> void:
 	var top := float(e["top"])
 	var band := int(e["band"])
 	var h := float(FishingScenery.H) - top
+	if int(e["pit"]) >= 0:
+		c.draw_rect(Rect2(sx0, top, w, h), DARK_BANDS[int(e["pit"])])
+		return
 	c.draw_rect(Rect2(sx0, top - SLIVER_ROWS, w, SLIVER_ROWS), FishingPalette.SEA[band])
 	c.draw_rect(Rect2(sx0, top, w, h), FLOOR_BANDS[band])
 	c.draw_rect(Rect2(sx0, top, w, RIM_ROWS), RIM_BANDS[band])
 
 
-## Every drop between neighbouring pieces: a darker side plane down the higher piece's edge (2
-## px, 3 on tall drops) under a 1 px lit lip reaching over it; a cave mouth in the deep's cliffs.
-func _paint_drops(c: CanvasItem, shown: Array[Dictionary]) -> void:
+## Every drop between neighbouring pieces (none into a pit, whose walls are its neighbours'
+## floor): a clean slope by seed where the lower piece has room (ramp()), else a darker side
+## plane down the higher piece's edge (2 px, 3 on tall drops) under a 1 px lit lip reaching over
+## it, and a cave mouth in the deep's tall cliffs. Returns the screen spans the slopes cover.
+func _paint_drops(c: CanvasItem, shown: Array[Dictionary]) -> Array[Vector2]:
+	var taken: Array[Vector2] = []
 	for i in range(1, shown.size()):
 		var a := shown[i - 1]
 		var b := shown[i]
-		if float(b["sx0"]) != float(a["sx1"]):
+		if float(b["sx0"]) != float(a["sx1"]) or int(a["pit"]) >= 0 or int(b["pit"]) >= 0:
 			continue
 		var drop := float(b["top"]) - float(a["top"])
 		if absf(drop) < 2.0:
 			continue
 		var hi := a if drop > 0.0 else b
-		var lo_top := float(b["top"]) if drop > 0.0 else float(a["top"])
+		var lo := b if drop > 0.0 else a
+		var edge := float(a["sx1"])
+		var span := ramp(c, edge, hi, lo, drop > 0.0)
+		if span != Vector2.ZERO:
+			taken.append(span)
+			continue
+		var lo_top := float(lo["top"])
 		var hi_top := float(hi["top"])
 		var band := int(hi["band"])
 		var sw := 3.0 if absf(drop) >= SIDE_WIDE_PX else 2.0
-		var edge := float(a["sx1"])
 		var x := edge - sw if drop > 0.0 else edge
 		var face := lo_top - hi_top - float(RIM_ROWS)
 		if face > 0.0:
@@ -329,6 +368,65 @@ func _paint_drops(c: CanvasItem, shown: Array[Dictionary]) -> void:
 		if int(hi["zone"]) == 4 and absf(drop) >= CAVE_DROP_PX:
 			var cx := edge - sw - 22.0 if drop > 0.0 else edge + sw + 2.0
 			_cave(c, cx, hi_top + 4.0)
+	return taken
+
+
+## The drop at screen x `edge` from piece `hi` down to piece `lo` (on the right when `right`)
+## as a clean slope laid on `lo`, 1 px down per RAMP_RUNS px, with a lit 2-row top: when its seed
+## picks a slope and `lo` has room. Returns the span it covers (Vector2.ZERO: none drawn).
+func ramp(c: CanvasItem, edge: float, hi: Dictionary, lo: Dictionary, right: bool) -> Vector2:
+	var drop := float(lo["top"]) - float(hi["top"])
+	if drop < RAMP_MIN or drop > RAMP_MAX:
+		return Vector2.ZERO
+	var h := FishingScenery.hash2(int(edge + float(hi["x0"])), 61)
+	if h % 2 == 0:
+		return Vector2.ZERO
+	var run := RAMP_RUNS[(h >> 3) % RAMP_RUNS.size()]
+	var length := drop * float(run)
+	if float(lo["sx1"]) - float(lo["sx0"]) < length + 6.0:
+		return Vector2.ZERO
+	var band := int(hi["band"])
+	var hi_top := float(hi["top"])
+	for k in int(length):
+		var x := edge + float(k) if right else edge - 1.0 - float(k)
+		var y := hi_top + floorf(float(k) / float(run))
+		c.draw_rect(Rect2(x, y, 1.0, float(lo["top"]) - y + 2.0), FLOOR_BANDS[band])
+		c.draw_rect(Rect2(x, y, 1.0, RIM_ROWS), RIM_BANDS[band])
+	return Vector2(edge, edge + length) if right else Vector2(edge - length, edge)
+
+
+## A low mound on piece `e` by seed (where no slope lies): a flat top MOUND rows high stepping
+## out 2 px a side per row (1:2 sides), lit on top and along its slopes. Adds its span to
+## `taken`.
+func _paint_mound(c: CanvasItem, e: Dictionary, taken: Array[Vector2]) -> void:
+	var sx0 := float(e["sx0"])
+	var sx1 := float(e["sx1"])
+	if int(e["pit"]) >= 0 or int(e["zone"]) == 0 or sx1 - sx0 < MOUND_MIN_PX:
+		return
+	var h := FishingScenery.hash2(int(float(e["x0"])), 67)
+	if h % 3 != 0:
+		return
+	var rows := 4 + 2 * ((h >> 2) % 2)
+	var top_w := 8.0 + 2.0 * float((h >> 4) % 4)
+	var base_w := top_w + 4.0 * float(rows - 1)
+	if base_w > sx1 - sx0 - 8.0:
+		return
+	var x0 := sx0 + 4.0 + float(((h >> 7) % maxi(int(sx1 - sx0 - 8.0 - base_w), 1)) & ~1)
+	for span in taken:
+		if x0 < span.y and x0 + base_w > span.x:
+			return
+	var band := int(e["band"])
+	var top := float(e["top"])
+	for r in rows:
+		var w := top_w + 4.0 * float(r)
+		var x := x0 + (base_w - w) * 0.5
+		var y := top - float(rows - r)
+		c.draw_rect(Rect2(x, y, w, 1.0), FLOOR_BANDS[band])
+		var lit := 1.0 if r == 0 else 2.0
+		c.draw_rect(Rect2(x, y, lit if r > 0 else w, 1.0), RIM_BANDS[band])
+		if r > 0:
+			c.draw_rect(Rect2(x + w - 2.0, y, 2.0, 1.0), RIM_BANDS[band])
+	taken.append(Vector2(x0, x0 + base_w))
 
 
 ## A cave mouth 20 x 12 px cut into a cliff face, its top left at (x, y).
@@ -414,10 +512,16 @@ static func stamp(c: CanvasItem, rows: Array, x: float, bottom: float, lg: Dicti
 
 
 ## The clusters on piece `e`: one per CLUSTER_PX of world px whose seeded spot falls on it with
-## room to spare, each the zone's big piece (FishingProps.BIG) and up to two small ones.
-func _paint_props(c: CanvasItem, e: Dictionary, t: float, cam_px: float) -> void:
+## room to spare and off the slopes and mounds in `taken`, each the zone's big piece
+## (FishingProps.BIG) and up to two small ones.
+func _paint_props(
+	c: CanvasItem, e: Dictionary, t: float, cam_px: float, taken: Array[Vector2]
+) -> void:
+	if int(e["pit"]) >= 0:
+		return
 	var zone := clampi(int(e["zone"]), 0, FishingProps.BIG.size() - 1)
 	var lg := legend(int(e["band"]))
+	lg["surf"] = float(FishingScenery.SURF_Y)
 	var top := float(e["top"])
 	var wx0 := float(e["sx0"]) + cam_px
 	var wx1 := float(e["sx1"]) + cam_px
@@ -429,9 +533,17 @@ func _paint_props(c: CanvasItem, e: Dictionary, t: float, cam_px: float) -> void
 		if wx < wx0 + 2.0 or wx > wx1 - 8.0:
 			continue
 		var x := wx - cam_px
+		var blocked := false
+		for span in taken:
+			if x < span.y + 2.0 and x + 28.0 > span.x:
+				blocked = true
+		if blocked:
+			continue
 		var bigs: Array = FishingProps.BIG[zone]
 		var smalls: Array = FishingProps.SMALL[zone]
 		var big: String = bigs[(h >> 4) % bigs.size()]
+		if zone == 0 and FishingScenery.hash2(s, 7) % MOORING_ONE_IN == 0:
+			big = "mooring"
 		var w := FishingProps.draw(c, big, x, top, lg, h, t)
 		for k in 1 + (h >> 9) % 2:
 			var hs := FishingScenery.hash2(s * 3 + k, 59)
@@ -442,28 +554,33 @@ func _paint_props(c: CanvasItem, e: Dictionary, t: float, cam_px: float) -> void
 			FishingProps.draw(c, small, sx, top, lg, hs, t)
 
 
-## Where the floor drops away into the abyss: basalt columns stepping down from the last piece
-## to the bottom of the view.
+## Where the floor drops away into the abyss: one tall cliff from the last piece, broken by two
+## ledges of unequal width (ABYSS_LEDGES, lit on top only), its faces in the dark side plane.
 func _paint_abyss_drop(
 	c: CanvasItem, sc: FishingScenery, cam_px: float, shown: Array[Dictionary], edge_px: float
 ) -> void:
 	if shown.is_empty():
 		return
 	var last := shown[-1]
-	var sx := floor_end(shown, cam_px)
-	if sx >= edge_px:
+	var x := floor_end(shown, cam_px)
+	if x >= edge_px:
 		return
 	var y := float(last["top"])
-	var x := sx
-	for k in BASALT_STEPS:
-		var h := FishingScenery.hash2(int(x + cam_px) + k, 83)
-		var w := 6.0 + 2.0 * float(h % 3)
-		y += 8.0 + 2.0 * float((h >> 3) % 4)
-		if y >= float(FishingScenery.H):
-			break
+	var bottom := float(FishingScenery.H)
+	for k in ABYSS_LEDGES.size():
 		var lg := legend(FishingScenery.band_at(sc.depth_of_y(y - 1.0)))
-		FishingProps.column(c, x, float(FishingScenery.H), w, float(FishingScenery.H) - y, lg)
+		var ny := minf(y + ABYSS_DROPS[k], bottom)
+		c.draw_rect(Rect2(x - 2.0, y + RIM_ROWS, 2.0, ny - y - RIM_ROWS), lg["d"])
+		if ny >= bottom:
+			return
+		var w := ABYSS_LEDGES[k]
+		var ll := legend(FishingScenery.band_at(sc.depth_of_y(ny - 1.0)))
+		c.draw_rect(Rect2(x, ny, w, bottom - ny), ll["f"])
+		c.draw_rect(Rect2(x, ny, w, RIM_ROWS), ll["r"])
 		x += w
+		y = ny
+	var lf := legend(FishingScenery.band_at(sc.depth_of_y(y - 1.0)))
+	c.draw_rect(Rect2(x - 2.0, y + RIM_ROWS, 2.0, bottom - y - RIM_ROWS), lf["d"])
 
 
 ## The map's landmarks in sight as set pieces on the floor (the lighthouse on its breakwater at

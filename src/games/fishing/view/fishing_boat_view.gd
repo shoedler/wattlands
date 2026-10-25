@@ -3,8 +3,8 @@ extends Node2D
 ## One rider's boat (FishingRig's points, boat-local art px): the slate hull in its pose with
 ## its outboard leg, the crew sprite (clutch lever, a seated cyclist, the flywheel with its brass
 ## hub and the bar; four crank frames per pose), the winch drum and the prop as frame-animated
-## sprites, the brass rod, thick at the butt (stowed, raised, bent back under tension), the
-## rider's cap and the bow pennant in the player's colour. The view sets position
+## sprites, and in the player's colour the rod (thick at the butt; stowed, raised, bent back
+## under tension), the rider's cap and the bow pennant. The view sets position
 ## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
 ## is ever rotated: the signed trim picks a pose (FishingRig.POSE_LEVELS: five bow up, two
 ## braking bow down), a hull frame cut in bands moved by whole pixels, every part moving with
@@ -26,8 +26,9 @@ const WINCH_FPS_PER_MPS := 6.0
 const POSE_UP_DEG: Array[float] = [1.5, 3.5, 6.0, 9.0, 12.0]
 const POSE_DOWN_DEG: Array[float] = [-1.0, -3.0]
 const POSE_HOLD_DEG := 0.4
-## The rod is solid brass (like the drivetrain; the line stays slate above the water, so the two
-## read as different things), 2 px thick for this many pixels at the butt, 1 px beyond.
+## The rod is solid in the player's colour (like the cap and pennant; the line stays slate above
+## the water, so the two read as different things), 2 px thick for this many pixels at the
+## butt, 1 px beyond.
 const ROD_BUTT_PX := 3
 ## The crew sits on the deck where it is at this boat-local x (between seat and flywheel).
 const CREW_SEAT_X := 44.0
@@ -228,14 +229,14 @@ func line_above() -> Color:
 
 
 func _paint_near(c: CanvasItem) -> void:
+	var col := player_color()
 	var rod := rod_points()
 	for i in rod.size():
-		c.draw_rect(Rect2(Vector2(rod[i]), Vector2.ONE), FishingPalette.ACCENT)
+		c.draw_rect(Rect2(Vector2(rod[i]), Vector2.ONE), col)
 		if i < ROD_BUTT_PX and i + 1 < rod.size():
 			var d := rod[i + 1] - rod[i]
-			var side := Vector2i(1, 0) if d.x == 0 else Vector2i(0, 1)
-			c.draw_rect(Rect2(Vector2(rod[i] + side), Vector2.ONE), FishingPalette.ACCENT)
-	var col := player_color()
+			var side := Vector2i(1, 0) if d.x == 0 or d.y != 0 else Vector2i(0, 1)
+			c.draw_rect(Rect2(Vector2(rod[i] + side), Vector2.ONE), col)
 	var cap := Vector2(FishingRig.CAP.position) + Vector2(0, tilt_at(CREW_SEAT_X))
 	c.draw_rect(Rect2(cap, FishingRig.CAP.size), col)
 	var bow := Vector2(0, tilt_at(FishingRig.FLAG.position.x))
