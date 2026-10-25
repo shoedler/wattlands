@@ -99,6 +99,8 @@ const BRAKE_TRAIL_MAX_PX := 140.0
 const WAIT_SLACK := 0.15
 const WAIT_STRAIN := 0.3
 const FIGHT_STRAIN_MIN := 0.3
+## A rod in a fight is never drawn straight: at least this tension (FishingRig.ROD_BENT_AT and up).
+const FIGHT_BEND_MIN := 0.4
 const FLOW_PER_MPS := 10.0
 ## The camera leads ahead of a driving boat by LEAD_S seconds of its speed (at most LEAD_MAX_PX),
 ## eased over LEAD_TAU_S.
@@ -426,7 +428,8 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	(model["boats"] as Dictionary)[r.slot] = b.position
 
 
-## Rod tension 0..1: a fight's strain (all of it on a run), the landing, a wobbler working.
+## Rod tension 0..1: a fight's strain (all of it on a run, the rod bent at least
+## FIGHT_BEND_MIN), the landing, a wobbler working.
 func _tension(r: FishingRiderState) -> float:
 	match r.action:
 		FishingConst.A_FIGHT:
@@ -434,7 +437,7 @@ func _tension(r: FishingRiderState) -> float:
 				return 0.0
 			if r.fish.run_active:
 				return 1.0
-			return clampf(0.35 + 0.65 * r.strain - 0.3 * r.slack, 0.0, 1.0)
+			return clampf(0.35 + 0.65 * r.strain - 0.3 * r.slack, FIGHT_BEND_MIN, 1.0)
 		FishingConst.A_LAND:
 			return 0.6
 		FishingConst.A_WAIT:
@@ -626,8 +629,7 @@ func _step_rope(r: FishingRiderState, delta: float) -> void:
 	if b == null or end == Vector2.INF:
 		_ropes.erase(r.slot)
 		return
-	var tip := Vector2i(b.rod_tip())
-	var start := line_start(b, tip, Vector2i(end.floor()))
+	var start := Vector2i(b.rod_tip())
 	var rope: FishingRope = _ropes.get(r.slot)
 	if rope == null:
 		rope = FishingRope.new()
@@ -680,14 +682,6 @@ func _draw_line(c: CanvasItem, path: Array[Vector2i], b: FishingBoatView, under:
 	for p in path:
 		if (p.y >= surf) == under:
 			c.draw_rect(Rect2(Vector2(p), Vector2.ONE), line_under() if under else above)
-
-
-## Where the line leaves the boat's side: a line toward the bow (it would cross the hull) first
-## drops straight from the rod tip to the surface, outboard of the stern; else the rod tip.
-static func line_start(b: FishingBoatView, tip: Vector2i, end: Vector2i) -> Vector2i:
-	if end.y > FishingScenery.SURF_Y and signi(end.x - tip.x) == b.heading:
-		return Vector2i(tip.x, FishingScenery.SURF_Y)
-	return tip
 
 
 ## The line's colour under the water: the deep teal, in every band.

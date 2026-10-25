@@ -113,6 +113,11 @@ const MOUND_MIN_PX := 44.0
 ## interior a step darker than their floor, no rim, their floor as its walls.
 const PIT_MAX_PX := 64.0
 const PIT_MIN_PX := 8.0
+## A pit's floor lies at most this far under its lower rim.
+const PIT_DEEPEST_PX := 12.0
+## Neighbouring pieces closer in height than this share the first one's colours (no colour seam
+## on a flat run).
+const SEAM_PX := 6.0
 ## The abyss cliff: from the last piece, a ledge ABYSS_LEDGES[0] px wide ABYSS_DROPS[0] px down,
 ## a second one, then one tall face to the bottom.
 const ABYSS_LEDGES: Array[float] = [20.0, 5.0]
@@ -283,6 +288,7 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 						"x0": p.x,
 						"c0": tr["c0"],
 						"pit": -1,
+						"pit_top": 0.0,
 					}
 				)
 			)
@@ -295,7 +301,14 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 		var deep_b := float(e["top"]) - float(b["top"]) >= PIT_MIN_PX
 		var joined := float(a["sx1"]) == float(e["sx0"]) and float(e["sx1"]) == float(b["sx0"])
 		if joined and deep_a and deep_b and w <= PIT_MAX_PX:
-			e["pit"] = a["band"] if float(a["top"]) <= float(b["top"]) else b["band"]
+			var hi := a if float(a["top"]) <= float(b["top"]) else b
+			e["pit"] = hi["band"]
+			e["pit_top"] = maxf(float(a["top"]), float(b["top"]))
+	for i in range(1, out.size()):
+		var prev := out[i - 1]
+		var e := out[i]
+		if absf(float(e["top"]) - float(prev["top"])) < SEAM_PX:
+			e["band"] = prev["band"]
 	return out
 
 
@@ -327,7 +340,10 @@ func _paint_piece(c: CanvasItem, e: Dictionary) -> void:
 	var band := int(e["band"])
 	var h := float(FishingScenery.H) - top
 	if int(e["pit"]) >= 0:
-		c.draw_rect(Rect2(sx0, top, w, h), DARK_BANDS[int(e["pit"])])
+		var floor_y := minf(top, float(e["pit_top"]) + PIT_DEEPEST_PX)
+		c.draw_rect(
+			Rect2(sx0, floor_y, w, float(FishingScenery.H) - floor_y), DARK_BANDS[int(e["pit"])]
+		)
 		return
 	c.draw_rect(Rect2(sx0, top - SLIVER_ROWS, w, SLIVER_ROWS), FishingPalette.SEA[band])
 	c.draw_rect(Rect2(sx0, top, w, h), FLOOR_BANDS[band])
@@ -401,7 +417,7 @@ func ramp(c: CanvasItem, edge: float, hi: Dictionary, lo: Dictionary, right: boo
 func _paint_mound(c: CanvasItem, e: Dictionary, taken: Array[Vector2]) -> void:
 	var sx0 := float(e["sx0"])
 	var sx1 := float(e["sx1"])
-	if int(e["pit"]) >= 0 or int(e["zone"]) == 0 or sx1 - sx0 < MOUND_MIN_PX:
+	if int(e["pit"]) >= 0 or sx1 - sx0 < MOUND_MIN_PX:
 		return
 	var h := FishingScenery.hash2(int(float(e["x0"])), 67)
 	if h % 3 != 0:
@@ -477,10 +493,11 @@ func _ridge_rect(c: CanvasItem, sc: FishingScenery, sx0: float, sx1: float, top:
 			c.draw_rect(Rect2(sx0, y0, sx1 - sx0, rows.y - y0), RIDGE_BANDS[band])
 
 
-## The prop colours for water band `band` (see FishingProps).
+## The prop colours for water band `band` (see FishingProps); in the darkest band the props'
+## rock is the deep teal, so it reads on the abyss floor.
 static func legend(band: int) -> Dictionary:
 	return {
-		"f": FLOOR_BANDS[band],
+		"f": FLOOR_BANDS[band] if band < 3 else FishingPalette.DEEP,
 		"r": RIM_BANDS[band],
 		"d": DARK_BANDS[band],
 		"ps": STEM_BANDS[band],
