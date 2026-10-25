@@ -2,6 +2,18 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.2.2 (2026-10-25)
+
+### Turbo Reel
+
+- The boat is much faster (15 m/s at FTP, about 20 min end to end on a map twice as long) and reacts to power within seconds: surges kick the bow up to 8 px high with spray and a long wake, and cutting power makes it visibly brake (bow digs in, foam mound, the wake collapses).
+- The sea floor has a look per zone with terraces, drops, slopes and props (moorings and anchors, seagrass and starfish, coral and a reef arch, kelp, whale bones, caves, a wreck, basalt at the edge); landmarks show on the minimap.
+- The fishing line is a little rope that sags and straightens with the fight, drawn as one smooth curve from the rod tip; each rod is in its player's colour.
+
+### Platform
+
+- Play-test with the mock trainer from the keyboard: T/G power, Y/H cadence (hold to ramp), presets for 50 to 250 % FTP on the numpad or M , . J K L U I O, N to stop, Shift to sprint; switch it on in Settings > Trainer. A small readout shows what the mock sends.
+
 ## v0.2.1 (2026-10-24)
 
 ### Turbo Reel
