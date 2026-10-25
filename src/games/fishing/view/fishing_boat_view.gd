@@ -3,7 +3,7 @@ extends Node2D
 ## One rider's boat (FishingRig's points, boat-local art px): the slate hull in its pose with
 ## its outboard leg, the crew sprite (clutch lever, a seated cyclist, the flywheel with its brass
 ## hub and the bar; four crank frames per pose), the winch drum and the prop as frame-animated
-## sprites, the brass rod with a wood tip (stowed, raised, bent back under tension), the
+## sprites, the brass rod, thick at the butt (stowed, raised, bent back under tension), the
 ## rider's cap and the bow pennant in the player's colour. The view sets position
 ## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
 ## is ever rotated: the signed trim picks a pose (FishingRig.POSE_LEVELS: five bow up, two
@@ -26,9 +26,11 @@ const WINCH_FPS_PER_MPS := 6.0
 const POSE_UP_DEG: Array[float] = [1.5, 3.5, 6.0, 9.0, 12.0]
 const POSE_DOWN_DEG: Array[float] = [-1.0, -3.0]
 const POSE_HOLD_DEG := 0.4
-## The rod is brass for this share of its length from the butt, then a wood tip (the line stays
-## slate above the water, so the two read as different things).
-const ROD_BRASS := 0.6
+## The rod is solid brass (like the drivetrain; the line stays slate above the water, so the two
+## read as different things), 2 px thick for this many pixels at the butt, 1 px beyond.
+const ROD_BUTT_PX := 3
+## The crew sits on the deck where it is at this boat-local x (between seat and flywheel).
+const CREW_SEAT_X := 44.0
 ## Braking water from this deceleration share, hard braking from the second.
 const BRAKE_AT := 0.3
 const BRAKE_HARD_AT := 0.65
@@ -177,7 +179,7 @@ func advance(dt: float) -> void:
 	body.position = -PIVOT + Vector2(0, roundf(bob_px))
 	winch.position = FishingRig.WINCH_AT + Vector2(0, tilt_at(FishingRig.WINCH_AT.x))
 	prop.position = FishingRig.PROP_AT + Vector2(0, tilt_at(FishingRig.PROP_AT.x))
-	crew.position = FishingRig.CREW_AT + Vector2(0, tilt_at(FishingRig.CAP.position.x))
+	crew.position = FishingRig.CREW_AT + Vector2(0, tilt_at(CREW_SEAT_X))
 	for m in _mats:
 		FishingPaletteMap.set_under(m, position.y, FishingPalette.UPPER)
 	_near.queue_redraw()
@@ -227,12 +229,14 @@ func line_above() -> Color:
 
 func _paint_near(c: CanvasItem) -> void:
 	var rod := rod_points()
-	var brass := ceili(float(rod.size()) * ROD_BRASS)
 	for i in rod.size():
-		var col := FishingPalette.ACCENT if i < brass else FishingPalette.WOOD
-		c.draw_rect(Rect2(Vector2(rod[i]), Vector2.ONE), col)
+		c.draw_rect(Rect2(Vector2(rod[i]), Vector2.ONE), FishingPalette.ACCENT)
+		if i < ROD_BUTT_PX and i + 1 < rod.size():
+			var d := rod[i + 1] - rod[i]
+			var side := Vector2i(1, 0) if d.x == 0 else Vector2i(0, 1)
+			c.draw_rect(Rect2(Vector2(rod[i] + side), Vector2.ONE), FishingPalette.ACCENT)
 	var col := player_color()
-	var cap := Vector2(FishingRig.CAP.position) + Vector2(0, tilt_at(FishingRig.CAP.position.x))
+	var cap := Vector2(FishingRig.CAP.position) + Vector2(0, tilt_at(CREW_SEAT_X))
 	c.draw_rect(Rect2(cap, FishingRig.CAP.size), col)
 	var bow := Vector2(0, tilt_at(FishingRig.FLAG.position.x))
 	c.draw_rect(Rect2(Vector2(FishingRig.FLAG.position) + bow, FishingRig.FLAG.size), col)

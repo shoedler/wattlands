@@ -4,7 +4,8 @@ extends Node
 ## (dock: four boats at the harbour, one stopped at its menu; fast/sprint: surging mid-ocean,
 ## bow up; brake: just after a power cut, bow down; fight: a fight on the reef; reef: waiting by
 ## the great arch; wreck: a grouper fight by the old wreck, the line taut; kelp: a fish on a slack
-## line on the shelf; grouper: a fight in the deep; edge: stopped by the world's edge; workout:
+## line on the shelf; shallows: waiting over seagrass and sand; abyss: by the basalt where the
+## floor drops away; grouper: a fight in the deep; edge: stopped by the world's edge; workout:
 ## two boats on the endless workout map, one fighting).
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
@@ -56,6 +57,12 @@ func _ready() -> void:
 		"kelp":
 			FX.set_fight(me, 10300.0, 5, -30.0, 70.0, 0.0, 0.9)
 			FX.set_drive(other, 10180.0, 15.0)
+		"shallows":
+			FX.set_wait(me, 2400.0, 1, -24.0, 5.0)
+			FX.set_drive(other, 2300.0, 15.0)
+		"abyss":
+			FX.set_drive(me, 16700.0, 8.0)
+			FX.set_drive(other, 16500.0, 15.0)
 		"workout":
 			FX.set_fight(me, 1200.0, 0, 22.0, 6.0, 0.35, 0.1)
 			FX.set_drive(other, 1140.0, 15.0)

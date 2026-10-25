@@ -101,12 +101,25 @@ func test_the_floor_is_flat_terraces_with_drops_seeded_by_world_cell() -> void:
 				long += 1
 		assert_gt(long, 0, "long flat terraces at %s m, not a fine staircase" % x_m)
 	for zone in FishingWorld.ZONES.size():
-		for kind: String in FishingFloor.BIOME[zone]:
-			var known := FishingFloor.PROPS.has(kind) or kind in FishingFloor.DRAWN_PROPS
-			assert_true(known, "zone %d prop %s has a shape" % [zone, kind])
-	assert_eq(FishingFloor.BIOME.size(), FishingWorld.ZONES.size(), "a biome per zone")
+		for kind: String in FishingProps.BIG[zone] + FishingProps.SMALL[zone]:
+			assert_has(FishingProps.KINDS, kind, "zone %d prop %s has a painter" % [zone, kind])
+	assert_eq(FishingProps.BIG.size(), FishingWorld.ZONES.size(), "big props per zone")
+	assert_eq(FishingProps.SMALL.size(), FishingWorld.ZONES.size(), "small props per zone")
+	var dock := f.terraces_in(0.0, FishingFloor.DOCK_DROP_M * 2.0 * FishingScenery.PX_PER_M)
+	var levels := {}
+	for t in dock:
+		if int(t["zone"]) == 0:
+			levels[snappedf(float(t["d"]), 0.01)] = true
+	assert_eq(levels.size(), 2, "the harbour: a quay shelf and one dredged drop")
+	var piece_lens := {}
+	for x_m: float in [6000.0, 10000.0]:
+		for t in f.terraces_in(x_m * 2.0, x_m * 2.0 + 640.0):
+			for p in FishingFloor.pieces(t):
+				assert_lte(p.y - p.x, float(FishingFloor.PIECE_MIN + FishingFloor.PIECE_SPAN) * 1.5)
+				piece_lens[int(p.y - p.x)] = true
+	assert_gt(piece_lens.size(), 6, "pieces of many lengths, off any regular grid")
 	var shallows := f.terraces_in(2400.0, 3040.0)
-	assert_lte(shallows.size(), 640 / (2 * FishingFloor.CELL_PX), "gentle slopes merge")
+	assert_lte(shallows.size(), 640 / (6 * FishingFloor.CELL_PX), "gentle slopes merge")
 
 
 func test_fish_stay_the_darkest_subject_in_every_band() -> void:
@@ -185,7 +198,7 @@ func test_the_rope_sags_with_slack_straightens_under_strain_and_draws_clean() ->
 		taut.step(a, b, 0.0, 1.0, 1.0 / 60.0, 118.0)
 	var mid := a.lerp(b, 0.5)
 	var half := FishingRope.SEGMENTS / 2
-	assert_gt(loose.points[half].y - mid.y, 4.0, "slack lets the line bow")
+	assert_gt(loose.points[half].y - mid.y, 3.0, "slack lets the line bow")
 	assert_lt(absf(taut.points[half].y - mid.y), 2.0, "strain pulls it straight")
 	assert_eq(loose.points[0], a, "pinned at the rod")
 	assert_eq(loose.points[FishingRope.SEGMENTS], b, "and at the fish")

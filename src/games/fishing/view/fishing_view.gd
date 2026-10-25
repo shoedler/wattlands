@@ -71,16 +71,20 @@ const BOW_SPRAY: Array = [
 	[Vector2i(-1, 3), Vector2i(-3, 2), Vector2i(1, 2), Vector2i(-4, 3), Vector2i(0, 2)],
 ]
 ## Braking (a braking pose): the bow pushes a foam mound ahead of it (rows going up, [ahead of
-## the bow, width]) and throws a spray sheet forward (two patterns swapped with the gait); the
+## the bow, width]) with a spray sheet standing on it (BRAKE_SHEET); the
 ## wake collapses into a churned patch behind the stern ([behind the stern, width] per row
 ## under the surface line) and the old trail detaches, drifting BRAKE_TRAIL_PX_S behind.
 const BRAKE_MOUND: Array[Vector2i] = [
 	Vector2i(-4, 18), Vector2i(-2, 15), Vector2i(1, 11), Vector2i(3, 7), Vector2i(5, 3)
 ]
-const BRAKE_SHEET: Array = [
-	[Vector2i(6, 6), Vector2i(12, 4), Vector2i(17, 4), Vector2i(23, 2)],
-	[Vector2i(8, 5), Vector2i(13, 5), Vector2i(19, 3), Vector2i(25, 2)],
-]
+## The spray sheet on top of the mound: [ahead of the bow, width] per row going up, each row
+## standing on the one under it, so it hangs on the mound in two solid steps.
+const BRAKE_SHEET: Array[Vector2i] = [Vector2i(4, 10), Vector2i(8, 7)]
+## A bow up in pose FOREFOOT_POSE or higher clears the water: a 2-row spray sheet runs under the
+## forefoot, from FOREFOOT_FROM to FOREFOOT_TO px behind the bow.
+const FOREFOOT_POSE := 4
+const FOREFOOT_FROM := 28
+const FOREFOOT_TO := 4
 const BRAKE_CHURN: Array = [
 	[Vector2i(2, 5), Vector2i(10, 4), Vector2i(17, 3)],
 	[Vector2i(4, 3), Vector2i(9, 5)],
@@ -88,6 +92,13 @@ const BRAKE_CHURN: Array = [
 ]
 const BRAKE_TRAIL_PX_S := 30.0
 const BRAKE_TRAIL_MAX_PX := 140.0
+## The rope's slack and strain while a wobbler works (nearly taut, so a trolled line sweeps
+## back), the least strain it shows in a fight, and the water's push on a line per m/s of the
+## boat (px/s^2).
+const WAIT_SLACK := 0.15
+const WAIT_STRAIN := 0.3
+const FIGHT_STRAIN_MIN := 0.3
+const FLOW_PER_MPS := 10.0
 ## The camera leads ahead of a driving boat by LEAD_S seconds of its speed (at most LEAD_MAX_PX),
 ## eased over LEAD_TAU_S.
 const LEAD_S := 2.2
@@ -620,12 +631,14 @@ func _step_rope(r: FishingRiderState, delta: float) -> void:
 	if rope == null:
 		rope = FishingRope.new()
 		_ropes[r.slot] = rope
-	var fight := r.action == FishingConst.A_FIGHT
-	var slack := r.slack if fight else 0.35
-	var strain := r.strain if fight else 0.1
+	var fight := r.action == FishingConst.A_FIGHT or r.action == FishingConst.A_LAND
+	var slack := r.slack if fight else WAIT_SLACK
+	var strain := maxf(r.strain, FIGHT_STRAIN_MIN) if fight else WAIT_STRAIN
 	if fight and r.fish.run_active:
 		strain = 1.0
-	rope.step(Vector2(start), end, slack, strain, delta, float(FishingScenery.SURF_Y))
+	var flow := -float(r.heading) * absf(r.v_mps) * FLOW_PER_MPS
+	var surf := float(FishingScenery.SURF_Y)
+	rope.step(Vector2(start), end, slack, strain, delta, surf, flow, fight)
 
 
 ## Rider `slot`'s rope (null without a line out).
@@ -634,6 +647,12 @@ func rope_of(slot: int) -> FishingRope:
 
 
 func _paint_lines(c: CanvasItem) -> void:
+	_paint_line_parts(c, false)
+
+
+## Each rope's pixels above the water (`under` false: drawn behind the hulls) or under it (`under`
+## true: drawn in front, so a hull's shadow slab never breaks the line).
+func _paint_line_parts(c: CanvasItem, under: bool) -> void:
 	for slot: int in _ropes:
 		var b: FishingBoatView = boats.get(slot)
 		var rope: FishingRope = _ropes[slot]
@@ -646,26 +665,20 @@ func _paint_lines(c: CanvasItem) -> void:
 		var path: Array[Vector2i] = []
 		var tip := Vector2i(b.rod_tip())
 		if Vector2i(first.round()) != tip:
-			path = FishingRig.raster(tip, Vector2i(first.round()))
+			path = FishingRig.bresenham(tip, Vector2i(first.round()))
 			path.pop_back()
 		path.append_array(rope.pixels())
-		_draw_line(c, path, b)
+		_draw_line(c, path, b, under)
 
 
-## The line's pixels: the rod's slate (or the line cosmetic) above the water and, under it, a
-## colour per water band that reads against it (line_under()).
-func _draw_line(c: CanvasItem, path: Array[Vector2i], b: FishingBoatView) -> void:
+## The line's pixels on one side of the surface: the rod's slate (or the line cosmetic) above
+## the water, the deep teal (line_under()) under it.
+func _draw_line(c: CanvasItem, path: Array[Vector2i], b: FishingBoatView, under: bool) -> void:
 	var surf := FishingScenery.SURF_Y
 	var above := b.line_above()
-	var tops: Array[float] = []
-	for m in FishingScenery.WATER_STEPS_M:
-		tops.append(roundf(scenery.y_of_depth(m)))
 	for p in path:
-		var band := 0
-		for i in tops.size():
-			if float(p.y) >= tops[i]:
-				band = i
-		c.draw_rect(Rect2(Vector2(p), Vector2.ONE), above if p.y < surf else line_under(band))
+		if (p.y >= surf) == under:
+			c.draw_rect(Rect2(Vector2(p), Vector2.ONE), line_under() if under else above)
 
 
 ## Where the line leaves the boat's side: a line toward the bow (it would cross the hull) first
@@ -676,10 +689,9 @@ static func line_start(b: FishingBoatView, tip: Vector2i, end: Vector2i) -> Vect
 	return tip
 
 
-## The line's colour under the water in band `band`: deep teal over the lighter bands, haze over
-## the darkest.
-static func line_under(band: int = 0) -> Color:
-	return FishingPalette.HAZE if band >= FishingPalette.SEA.size() - 1 else FishingPalette.DEEP
+## The line's colour under the water: the deep teal, in every band.
+static func line_under() -> Color:
+	return FishingPalette.DEEP
 
 
 ## A hint's centre `p` moved up or down so its `size` box stays HINT_BAND_GAP_PX inside the
@@ -699,6 +711,7 @@ static func silhouette(depth_m: float) -> Color:
 
 
 func _paint_front(c: CanvasItem) -> void:
+	_paint_line_parts(c, true)
 	for slot: int in boats:
 		var b: FishingBoatView = boats[slot]
 		var v: Dictionary = _shown.get(slot, {})
@@ -772,6 +785,12 @@ func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float, slot: int) -> v
 		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
 	if up <= 0:
 		return
+	if up >= FOREFOOT_POSE:
+		for k in 2:
+			var from := bow.x - float((FOREFOOT_FROM - 6 * k) * h)
+			var to := bow.x - float(FOREFOOT_TO * h)
+			var y := y_surf - 1.0 - float(k)
+			c.draw_rect(Rect2(minf(from, to), y, absf(to - from), 1), foam_on(y))
 	var spray: Array = BOW_SPRAY[floori(_t / GAIT_S) % BOW_SPRAY.size()]
 	for k in mini(spray.size(), up + 1):
 		var slab: Vector2i = spray[k]
@@ -789,22 +808,21 @@ func _paint_brake(
 	var h := b.heading
 	var hard := b.braking() >= 2
 	var gait := floori(_t / GAIT_S) % 2
-	for k in BRAKE_MOUND.size() if hard else BRAKE_MOUND.size() - 2:
+	var mound_rows := BRAKE_MOUND.size() if hard else BRAKE_MOUND.size() - 2
+	for k in mound_rows:
 		var row: Vector2i = BRAKE_MOUND[k]
 		var w := row.y if hard else row.y - 4
-		if w < 2:
-			continue
 		var x0 := bow.x + float(row.x * h)
 		var left := x0 if h > 0 else x0 - float(w - 1)
 		var y := y_surf - 1.0 - float(k)
 		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-	var sheet: Array = BRAKE_SHEET[gait]
-	for k in sheet.size() if hard else 2:
-		var slab: Vector2i = sheet[k]
+	for k in BRAKE_SHEET.size():
+		var slab: Vector2i = BRAKE_SHEET[k]
+		var w := slab.y if hard else slab.y - 3
 		var x0 := bow.x + float(slab.x * h)
-		var left := x0 if h > 0 else x0 - float(slab.y - 1)
-		var y := y_surf - float(BRAKE_MOUND.size() + 1 + 2 * k)
-		c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
+		var left := x0 if h > 0 else x0 - float(w - 1)
+		var y := y_surf - 1.0 - float(mound_rows + k)
+		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
 	var dir := -h
 	for k in BRAKE_CHURN.size():
 		for slab: Vector2i in BRAKE_CHURN[k]:
