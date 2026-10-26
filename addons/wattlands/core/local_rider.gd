@@ -39,7 +39,7 @@ extends Node
 ##   (bool), reason, dropped ([{channel, reason}], W2)}; apply_directive() acks exactly once
 ##   whether or not the governor emits.
 ## - Pause on not pedaling (BRIEF 3.5, RidePause): a human rider who meets not_pedaling for
-##   5 s (timed from the first sample that meets it; a stale stream counts as not pedaling) is
+##   10 s (timed from the first sample that meets it; a stale stream counts as not pedaling) is
 ##   ride-paused until 1 s of pedaling at >= 30 rpm. Ride-paused or game-paused stops
 ##   the recorder's timer (FIT timer events, moving time). In a solo session the pause also
 ##   emits pause_requested("stop_5s") (the GameHost pauses the game clock and resumes it on
@@ -101,7 +101,7 @@ signal telemetry_updated(telemetry: Telemetry)
 signal gesture_detected(gesture_name: StringName)
 signal rescue_changed(active: bool)
 signal afk_changed(afk: bool)
-## Coasting 10 s in SOLO (4.6.4) or 5 s of not pedaling (RidePause): the GameHost pauses
+## Coasting 10 s in SOLO (4.6.4) or 10 s of not pedaling (RidePause): the GameHost pauses
 ## the game clock.
 signal pause_requested(reason: String)
 ## The rider's own pause on not pedaling started (true) or ended (false); see RidePause.

@@ -1,9 +1,9 @@
 extends GutTest
 ## GameHost pausing with the real LocalRider, SafetyGovernor and MockTrainer: a SOLO rider who
-## stops pedalling pauses after 5 s of not_pedaling in every mode, ERG included (BRIEF 3.5,
+## stops pedalling pauses after 10 s of not_pedaling in every mode, ERG included (BRIEF 3.5,
 ## RidePause), whoever owns pausing (config.platform_pause), and the session resumes after
 ## 1 s of pedalling at >= 30 rpm. The governor's own rules are unchanged (4.6.4: the coasting
-## floor at 3 s, its 10 s pause request lands in the pause already running). The stop falls
+## floor at 3 s, its 10 s solo pause request comes at the same moment and pauses once). The stop falls
 ## in the ERG cool-down of "tiny" (from ~41 s), where the flywheel stops with the rider.
 
 const Kit := preload("res://tests/sdk/helpers/session_kit.gd")
@@ -76,7 +76,8 @@ func _step_until_paused(host: GameHost, max_s: float) -> float:
 	return host.clock.platform_time()
 
 
-func test_the_rider_pauses_after_5_s_and_resumes_after_1_s_of_pedalling_with_either_owner() -> void:
+func test_the_rider_pauses_after_10_s_and_resumes_after_1_s_of_pedalling_with_either_owner(
+) -> void:
 	for platform_pause: bool in [true, false]:
 		var s := _session(platform_pause)
 		assert_eq(s["err"], "")
@@ -89,12 +90,15 @@ func test_the_rider_pauses_after_5_s_and_resumes_after_1_s_of_pedalling_with_eit
 			host.is_paused(), "platform_pause %s: the stopped rider pauses" % platform_pause
 		)
 		assert_eq(host.tracker.phase_of(1).kind, Wl.COOLDOWN, "in the ERG cool-down")
-		assert_between(t, 50.0, 51.6, "5 s after the first not_pedaling sample at ~45.5 s")
-		assert_eq(log[0].slice(0, 2), [true, "stop_5s"])
+		assert_between(t, 55.0, 56.6, "10 s after the first not_pedaling sample at ~45.5 s")
+		assert_true(log[0][0], "paused")
+		assert_has(["stop_5s", "coasting"], log[0][1], "the pause on not pedaling or 4.6.4's")
+		while not rider.is_ride_paused() and host.clock.platform_time() < 57.0:
+			host.step()
 		assert_true(rider.is_ride_paused())
 		assert_true(rider.telemetry().paused)
 		assert_true(rider.telemetry().coasting, "the 4.6.4 coasting floor since 3 s")
-		# The governor's 10 s pause request changes nothing: the session is already paused.
+		# Both 10 s rules pause once: the second request lands in the pause already running.
 		while host.clock.platform_time() < 69.5:
 			host.step()
 		assert_eq(log.size(), 1, "one pause")

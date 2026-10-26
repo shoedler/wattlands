@@ -1,8 +1,8 @@
 extends "res://tests/scenarios/lib/scenario_test.gd"
 ## BRIEF 7.4, coasting (4.6.4): a 0 W rider's applied target reaches the ERG floor
 ## max(30 % FTP, 50 W) no later than 3 s (plus one 0.05 s tick) after the first sample that meets
-## not_pedaling (power < 15 W and cadence < 20 rpm); the rider is paused (solo) 5 s (BRIEF 3.5,
-## the pause on not pedaling) or AFK (with others) 10 s (plus one tick) after that sample. None
+## not_pedaling (power < 15 W and cadence < 20 rpm); the rider is paused (solo, BRIEF 3.5, the
+## pause on not pedaling) or AFK (with others) 10 s (plus one tick) after that sample. None
 ## happens a tick early.
 ## Owned by qa; a W2 gate (needs GameSimRunner, Workout, LocalRider and the governor). Riders:
 ## `zero` (0 W from the start) and `ramp` to 0 W (pedals for 60 s, then stops), on the host's own

@@ -632,23 +632,23 @@ func _ride(r: LocalRider, d: Fakes.FakeDevice, seconds: float, power: float, rpm
 		r.tick(DT)
 
 
-## BRIEF 3.5: 5 s of not_pedaling ride-pauses the rider (FIT timer stop), 1 s of pedaling at
+## BRIEF 3.5: 10 s of not_pedaling ride-pauses the rider (FIT timer stop), 1 s of pedaling at
 ## >= 30 rpm resumes; in solo the pause also asks the GameHost to pause the game clock.
-func test_ride_pause_after_5_s_and_resume_after_1_s_in_solo() -> void:
+func test_ride_pause_after_10_s_and_resume_after_1_s_in_solo() -> void:
 	var d := _fake_device()
 	var rec := Fakes.FakeRecorder.new()
 	var r := _rider(d, {"recorder": rec})
 	watch_signals(r)
 	_ride(r, d, 2.0, 200.0, 90.0)
-	_ride(r, d, 4.9, 0.0, 0.0)
-	assert_false(r.is_ride_paused(), "not yet: 4.9 s")
+	_ride(r, d, 9.9, 0.0, 0.0)
+	assert_false(r.is_ride_paused(), "not yet: 9.9 s")
 	_ride(r, d, 0.2, 0.0, 0.0)
-	assert_true(r.is_ride_paused(), "5 s after the first not_pedaling sample")
+	assert_true(r.is_ride_paused(), "10 s after the first not_pedaling sample")
 	assert_signal_emitted_with_parameters(r, "ride_paused_changed", [true])
 	assert_signal_emitted_with_parameters(r, "pause_requested", ["stop_5s"])
 	assert_eq(rec.timer.size(), 1)
 	assert_eq(rec.timer[0][0], false, "the ride timer stops")
-	assert_almost_eq(float(rec.timer[0][1]), 7.0, 0.051)
+	assert_almost_eq(float(rec.timer[0][1]), 12.0, 0.051)
 	assert_true(r.telemetry().paused)
 	_ride(r, d, 3.0, 20.0, 25.0)
 	assert_true(r.is_ride_paused(), "25 rpm is not enough to resume")
@@ -665,18 +665,18 @@ func test_ride_pause_after_5_s_and_resume_after_1_s_in_solo() -> void:
 func test_no_ride_pause_before_the_first_sample() -> void:
 	var d := _fake_device()
 	var r := _rider(d)
-	_run(r, 6.0)
+	_run(r, 11.0)
 	assert_false(r.is_ride_paused())
-	_ride(r, d, 5.1, 0.0, 0.0)
-	assert_true(r.is_ride_paused(), "5 s after the first sample")
+	_ride(r, d, 10.1, 0.0, 0.0)
+	assert_true(r.is_ride_paused(), "10 s after the first sample")
 
 
-func test_a_pedaling_sample_restarts_the_5_s() -> void:
+func test_a_pedaling_sample_restarts_the_10_s() -> void:
 	var d := _fake_device()
 	var r := _rider(d)
-	_ride(r, d, 4.0, 0.0, 0.0)
+	_ride(r, d, 9.0, 0.0, 0.0)
 	_ride(r, d, 1.0, 100.0, 80.0)
-	_ride(r, d, 4.0, 0.0, 0.0)
+	_ride(r, d, 9.0, 0.0, 0.0)
 	assert_false(r.is_ride_paused())
 	_ride(r, d, 1.1, 0.0, 0.0)
 	assert_true(r.is_ride_paused())
@@ -689,7 +689,7 @@ func test_ride_pause_in_multiplayer() -> void:
 	var rec := Fakes.FakeRecorder.new()
 	var mp := _rider(d, {"multiplayer": true, "recorder": rec})
 	watch_signals(mp)
-	_ride(mp, d, 5.1, 0.0, 0.0)
+	_ride(mp, d, 10.1, 0.0, 0.0)
 	assert_true(mp.is_ride_paused())
 	assert_signal_emitted_with_parameters(mp, "ride_paused_changed", [true])
 	assert_signal_not_emitted(mp, "pause_requested")
@@ -707,7 +707,7 @@ func test_bots_never_ride_pause() -> void:
 	var slot := Bots.make_slot(1, 1, 200.0)
 	var bot := _rider(d, {}, null, slot)
 	watch_signals(bot)
-	_ride(bot, d, 6.0, 0.0, 0.0)
+	_ride(bot, d, 11.0, 0.0, 0.0)
 	assert_false(bot.is_ride_paused())
 	assert_signal_not_emitted(bot, "pause_requested")
 
