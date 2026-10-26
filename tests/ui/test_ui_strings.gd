@@ -71,7 +71,7 @@ func test_every_ui_key_in_the_code_is_in_ui_csv() -> void:
 
 func test_binding_labels_are_never_raw_keys() -> void:
 	InputBindings.ensure_actions()
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		for e in InputBindings.events_of(a):
 			var label := InputBindings.describe(e)
 			assert_false(label.is_empty(), "%s has a label" % a)

@@ -18,6 +18,8 @@ var on_step: Callable = Callable()
 ## snapshot() carries a string of snapshot_pad characters.
 var results_mode: String = ""
 var snapshot_pad: int = 0
+## Test knob: HudSpec.help entries.
+var help_entries: Array[Dictionary] = []
 ## Recorded calls.
 var configure_count: int = 0
 var steps: int = 0
@@ -196,9 +198,11 @@ func make_view() -> Node:
 
 
 func hud_spec() -> HudSpec:
-	return HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT).add(
+	var spec := HudSpec.new().add(HudSpec.TIMELINE, HudSpec.TOP_LEFT).add(
 		HudSpec.POWER_GAUGE, HudSpec.BOTTOM_LEFT
 	)
+	spec.help = help_entries.duplicate(true)
+	return spec
 
 
 func results() -> GameResults:

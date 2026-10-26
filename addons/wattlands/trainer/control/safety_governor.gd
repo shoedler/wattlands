@@ -68,6 +68,15 @@ extends Node
 ##     It is a stricter governor-only rule layered on the shared detector: its synthetic sample
 ##     goes through the same predicate, but the GestureRecognizer never sees it, so coast and
 ##     stop_5s do not follow a dead stream (ADR in docs/decisions/trainer-control.md).
+##   - Haptic pull (v0.3.0, BRIEF 4.6.6; ADR in docs/decisions/platform.md): `haptic_pull` % FTP
+##     x the haptic intensity, at most +50% FTP (x0.85 while FTP is unverified), on top of the
+##     governed ERG target for at most 3 s. The target with the pull never exceeds the absolute
+##     ceiling or a latched duration-limit band, and its time above 105% / 120% counts toward
+##     the budgets. Exempt from slew (on and off at once, TrainerController) and from the
+##     long-phase 105% cap only. ERG only: dropped in SIM, warm-up, rescue (hold and ramp),
+##     coasting, AFK, pause, panic, the ramp_test profile and for opted-out riders, and ended
+##     at once when any of those begins. The 15 s cooldown is shared with SIM haptics: one
+##     haptic per rider per 15 s, counted from the end of the previous one.
 ##   - Resume (W4r2, NET-2): resume_phase(index, elapsed_s) enters a phase at elapsed_s (a
 ##     client rejoining a running phase); only the phase clock and the course distance differ
 ##     from start_phase(), every 4.6 counter keeps its state.
@@ -130,6 +139,15 @@ const GRADE_TOTAL_MAX := 16.0
 const HAPTIC_MAX_PCT := 3.0
 const HAPTIC_MAX_S := 8.0
 const HAPTIC_COOLDOWN_S := 15.0
+## Haptic pull (4.6.6): at most +50% FTP after the intensity, for at most 3 s.
+const PULL_MAX_PCT := 50.0
+const PULL_MAX_S := 3.0
+## In clamped_by (status, telemetry, the 1 Hz trace) while a haptic pull raises the applied
+## ERG target.
+const CLAMP_PULL := "haptic_pull"
+## Refusal / drop reasons of a haptic pull besides Wl.REFUSE_HAPTIC_OFF, _WARMUP and _COOLDOWN.
+const REFUSE_PULL_SIM := "haptic_pull_in_sim"
+const REFUSE_PULL_UNSAFE := "haptic_pull_unsafe"
 const FACTOR_MIN := 0.5
 const FACTOR_MAX := 1.0
 const SIM_BLOCK_MIN_S := 10.0
@@ -256,6 +274,9 @@ var _ch_block: Dictionary = {}
 var _ch_mode_grade: Dictionary = {}
 var _ch_haptic: Dictionary = {}
 var _ch_factors: Dictionary = {}
+## The haptic pull: {pct, id, expires (game t), end_t (platform t), duration_limited}.
+var _ch_pull: Dictionary = {}
+## End of the rider's previous haptic or haptic pull (the shared 15 s cooldown).
 var _haptic_last_end_t: float = _NEVER
 
 # --- course grade ----------------------------------------------------------------------------
@@ -395,6 +416,7 @@ func configure(params: Dictionary) -> void:
 		if not _haptics_on:
 			# Opting out ends a running haptic at once (4.6.6: haptics are off for opted-out riders).
 			_end_haptic()
+			_end_pull()
 	if params.has("haptic_intensity"):
 		_haptic_intensity = _clamped_param(
 			"haptic_intensity", float(params["haptic_intensity"]), 0.0, 1.0
@@ -421,6 +443,8 @@ func configure(params: Dictionary) -> void:
 			if p != _profile:
 				_test_ended = false
 			_profile = p
+			if p == PROFILE_RAMP_TEST:
+				_end_pull()
 		else:
 			push_error('SafetyGovernor: unknown profile "%s" (normal or ramp_test)' % p)
 	if params.has("weight_kg"):
@@ -543,6 +567,8 @@ func phase_distance_m() -> float:
 ## telemetry, rescue, coasting and panic keep working.
 func set_game_paused(paused: bool) -> void:
 	_game_paused = paused
+	if paused:
+		_end_pull()
 	_recompute_outputs()
 	_update_status()
 
@@ -574,6 +600,7 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 	var sets_haptic := directive.sets_haptic()
 	var sets_mode_grade := directive.is_set("mode_grade")
 	var sets_factors := directive.sets_factors()
+	var sets_pull := directive.is_set("haptic_pull")
 	var opens_block := false
 	var ends_block := false
 	var confirm_sim := false
@@ -633,11 +660,19 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 			haptic_drop = Wl.REFUSE_HAPTIC_OFF
 		elif _warmup_active:
 			haptic_drop = Wl.REFUSE_HAPTIC_WARMUP
-		elif not _ch_haptic.is_empty() or _t - _haptic_last_end_t < HAPTIC_COOLDOWN_S - _EPS:
+		elif _haptic_cooling():
 			haptic_drop = Wl.REFUSE_HAPTIC_COOLDOWN
+	var pull_drop := ""
+	if sets_pull:
+		pull_drop = _pull_drop_reason(phase_sim or block_active or opens_block or ends_block)
 	var other := sets_target or sets_mode_grade or sets_factors or opens_block or ends_block
-	if haptic_drop != "" and not other:
-		return _refuse(rec, haptic_drop, "haptic dropped")
+	var haptic_ok := sets_haptic and haptic_drop == ""
+	var pull_ok := sets_pull and pull_drop == ""
+	if not other and not haptic_ok and not pull_ok:
+		if haptic_drop != "":
+			return _refuse(rec, haptic_drop, "haptic dropped")
+		if pull_drop != "":
+			return _refuse(rec, pull_drop, "haptic pull dropped")
 
 	# --- accepted: write the channels ------------------------------------------------
 	var clamped: Array[String] = []
@@ -686,6 +721,30 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 				"duration_limited": limited,
 			}
 			applied["haptic_s"] = hap_s
+	var pull_limited := false
+	if sets_pull:
+		if pull_drop != "":
+			(rec["dropped"] as Array).append({"channel": "haptic_pull", "reason": pull_drop})
+			push_warning(
+				(
+					"SafetyGovernor: haptic pull of directive %d dropped: %s"
+					% [directive.id, pull_drop]
+				)
+			)
+		else:
+			var pull_s := directive.duration_s
+			if pull_s <= 0.0 or pull_s > PULL_MAX_S + _EPS:
+				pull_s = PULL_MAX_S
+				pull_limited = true
+			pull_s = snappedf(pull_s, Wl.SIM_DT)
+			_ch_pull = {
+				"pct": directive.haptic_pull,
+				"id": directive.id,
+				"expires": _game_t + pull_s,
+				"end_t": _t + pull_s,
+				"duration_limited": pull_limited,
+			}
+			applied["haptic_pull_s"] = pull_s
 	if sets_factors:
 		var crr_f := directive.crr if directive.is_set("crr") else 1.0
 		var cw_f := directive.cw if directive.is_set("cw") else 1.0
@@ -712,13 +771,23 @@ func apply_directive(directive: EffortDirective) -> Dictionary:
 		if (
 			_desired == Wl.ERG
 			and _controller.mode() == Wl.ERG
-			and _controller.applied_target_w() < int(e["w"])
+			and _controller.applied_base_w() < int(e["w"])
 		):
 			if _controller.entry_active():
 				_append_unique(clamped, Wl.CLAMP_SWITCH)
 			_append_unique(clamped, Wl.CLAMP_SLEW)
 		if _panic:
 			_append_unique(clamped, Wl.CLAMP_PANIC)
+	if pull_ok:
+		var ep := _compute_erg()
+		var pull_w := int(ep["pull_w"])
+		applied["haptic_pull_w"] = pull_w
+		applied["haptic_pull_pct"] = GovernorClamps.w_to_pct(float(pull_w), _ftp_w)
+		applied["target_with_pull_w"] = int(ep["w"]) + pull_w
+		for c: String in ep["pull_clamped_by"]:
+			_append_unique(clamped, c)
+		if pull_limited:
+			_append_unique(clamped, Wl.CLAMP_HAPTIC)
 	var sim_channels := (
 		opens_block or confirm_sim or sets_mode_grade or haptic_applied or sets_factors
 	)
@@ -821,6 +890,8 @@ func tick(dt: float) -> void:
 	if _desired == Wl.ERG:
 		_erg_out = _compute_erg()
 	_update_rescue()
+	if not _ch_pull.is_empty() and _pull_drop_reason(_desired != Wl.ERG, false) != "":
+		_end_pull()
 	_recompute_outputs()
 	_command_controller()
 	_controller.tick(dt)
@@ -840,6 +911,7 @@ func emergency_safe() -> void:
 		_panic = true
 		panic_changed.emit(true)
 	_end_haptic()
+	_end_pull()
 	_controller.emergency_safe(_crr, _cw)
 	_update_desired()
 	_recompute_outputs()
@@ -865,6 +937,7 @@ func shutdown() -> void:
 	_controller.shutdown(_crr, _cw)
 	_shut_down = true
 	_end_haptic()
+	_end_pull()
 	_update_status()
 
 
@@ -1192,6 +1265,7 @@ func _update_warmup() -> void:
 		_warmup_active = active
 		if active:
 			_end_haptic()
+			_end_pull()
 		warmup_changed.emit(active)
 
 
@@ -1379,7 +1453,83 @@ func _compute_erg() -> Dictionary:
 	if whole < fl:
 		whole = fl
 		clamped.append(Wl.CLAMP_FLOOR)
-	return {"w": whole, "clamped_by": clamped, "armed_w": armed_w, "pct": pct}
+	var pull := _compute_pull(whole, ceiling)
+	return {
+		"w": whole,
+		"clamped_by": clamped,
+		"armed_w": armed_w,
+		"pct": pct,
+		"pull_w": int(pull["w"]),
+		"pull_clamped_by": pull["clamped_by"],
+	}
+
+
+## The haptic pull on top of the governed target `base_w` (4.6.6): {w (whole watts added),
+## clamped_by}. pull % x intensity, at most +50% FTP, x0.85 while FTP is unverified; the sum
+## never exceeds `ceiling_w` (min(150% FTP, 1000 W, trainer max)) nor a latched duration-limit
+## band. The long-phase 105% cap does not apply (the one exemption besides slew).
+func _compute_pull(base_w: int, ceiling_w: int) -> Dictionary:
+	var clamped: Array[String] = []
+	if _ch_pull.is_empty() or _pull_drop_reason(false, false) != "":
+		return {"w": 0, "clamped_by": clamped}
+	var pct := float(_ch_pull["pct"]) * _haptic_intensity
+	if _haptic_intensity < 1.0:
+		clamped.append(Wl.CLAMP_HAPTIC_INTENSITY)
+	if pct > PULL_MAX_PCT:
+		pct = PULL_MAX_PCT
+		clamped.append(Wl.CLAMP_HAPTIC)
+	var add := GovernorClamps.pct_to_w(pct, _ftp_w)
+	if not _ftp_verified:
+		add *= GovernorClamps.UNVERIFIED_FACTOR
+		clamped.append(Wl.CLAMP_UNVERIFIED)
+	var top := base_w + GovernorClamps.whole_w(add)
+	if top > ceiling_w:
+		top = ceiling_w
+		clamped.append(Wl.CLAMP_CEILING)
+	var cap120 := _cap_w(LIMIT_120_PCT)
+	if _latched_120 and top > cap120:
+		top = cap120
+		clamped.append(Wl.CLAMP_LIMIT_120)
+	var cap105 := _cap_w(LIMIT_105_PCT)
+	if _latched_105 and top > cap105:
+		top = cap105
+		clamped.append(Wl.CLAMP_LIMIT_105)
+	return {"w": maxi(top - base_w, 0), "clamped_by": clamped}
+
+
+## Why a haptic pull can't run now ("" when it can). `sim` is true when the rider rides (or is
+## switching to) SIM; `cooldown` checks the shared 15 s haptic cooldown (a new pull).
+func _pull_drop_reason(sim: bool, cooldown: bool = true) -> String:
+	if _panic:
+		return REFUSE_PULL_UNSAFE
+	if sim or _desired != Wl.ERG or _controller.mode() != Wl.ERG:
+		return REFUSE_PULL_SIM
+	if not _haptics_on:
+		return Wl.REFUSE_HAPTIC_OFF
+	if _warmup_active:
+		return Wl.REFUSE_HAPTIC_WARMUP
+	if (
+		_profile == PROFILE_RAMP_TEST
+		or _test_ended
+		or _rescue_state != _RESCUE_NONE
+		or _coasting
+		or _afk
+		or _game_paused
+		or _shut_down
+	):
+		return REFUSE_PULL_UNSAFE
+	if cooldown and _haptic_cooling():
+		return Wl.REFUSE_HAPTIC_COOLDOWN
+	return ""
+
+
+## A haptic or haptic pull runs, or the previous one ended less than 15 s ago (4.6.6).
+func _haptic_cooling() -> bool:
+	return (
+		not _ch_haptic.is_empty()
+		or not _ch_pull.is_empty()
+		or _t - _haptic_last_end_t < HAPTIC_COOLDOWN_S - _EPS
+	)
 
 
 ## The stacked SIM state (4.6.6): {grade_pct, wind_mps, crr, cw, haptic_pct, base_grade_pct,
@@ -1465,7 +1615,14 @@ func _haptic_wind_max_mps(haptic_grade_pct: float) -> float:
 
 
 func _empty_erg() -> Dictionary:
-	return {"w": 0, "clamped_by": [] as Array[String], "armed_w": 0, "pct": 0.0}
+	return {
+		"w": 0,
+		"clamped_by": [] as Array[String],
+		"armed_w": 0,
+		"pct": 0.0,
+		"pull_w": 0,
+		"pull_clamped_by": [] as Array[String],
+	}
 
 
 func _empty_sim() -> Dictionary:
@@ -1497,7 +1654,9 @@ func _command_controller() -> void:
 	var p3s := power_3s_w()
 	match _desired:
 		Wl.ERG:
-			_controller.command_erg(int(_erg_out["w"]), _floor_w(), p3s)
+			_controller.command_erg(
+				int(_erg_out["w"]), _floor_w(), p3s, int(_erg_out["pull_w"]), _pull_left_s()
+			)
 		Wl.SIM:
 			_controller.command_sim(
 				float(_sim_out["wind_mps"]),
@@ -1526,10 +1685,14 @@ func _update_clamped_by() -> void:
 		var governed := int(_erg_out["w"])
 		if _controller.mode() != Wl.ERG:
 			_append_unique(out, Wl.CLAMP_SWITCH)
-		elif _controller.applied_target_w() < governed:
+		elif _controller.applied_base_w() < governed:
 			if _controller.entry_active():
 				_append_unique(out, Wl.CLAMP_SWITCH)
 			_append_unique(out, Wl.CLAMP_SLEW)
+		if _controller.applied_pull_w() > 0:
+			_append_unique(out, CLAMP_PULL)
+			for c: String in _erg_out["pull_clamped_by"]:
+				_append_unique(out, c)
 	elif _desired == Wl.SIM:
 		for c: String in _sim_out["clamped_by"]:
 			out.append(c)
@@ -1599,6 +1762,8 @@ func _update_desired() -> void:
 		_last_switch_t = _t
 	if next != Wl.SIM and next != MODE_SAFE and not _ch_haptic.is_empty():
 		_end_haptic()
+	if next != Wl.ERG:
+		_end_pull()
 	_desired = next
 
 
@@ -1627,6 +1792,8 @@ func _expire_channels() -> void:
 		and (_expired(_ch_haptic) or _t >= float(_ch_haptic["end_t"]) - _EPS)
 	):
 		_end_haptic()
+	if not _ch_pull.is_empty() and (_expired(_ch_pull) or _t >= float(_ch_pull["end_t"]) - _EPS):
+		_end_pull()
 
 
 ## End the SIM block (expiry or a mode ERG request): its mode grade and haptic go with it.
@@ -1643,12 +1810,29 @@ func _end_haptic() -> void:
 	_haptic_last_end_t = _t
 
 
+## End the haptic pull: the target drops back at once; the shared cooldown starts now.
+func _end_pull() -> void:
+	if _ch_pull.is_empty():
+		return
+	_ch_pull = {}
+	_haptic_last_end_t = _t
+
+
+## Platform seconds until the running pull ends (0 without one).
+func _pull_left_s() -> float:
+	if _ch_pull.is_empty():
+		return 0.0
+	var left := minf(float(_ch_pull["end_t"]) - _t, float(_ch_pull["expires"]) - _game_t)
+	return maxf(0.0, left)
+
+
 func _clear_channels() -> void:
 	_ch_erg = {}
 	_ch_block = {}
 	_ch_mode_grade = {}
 	_ch_factors = {}
 	_end_haptic()
+	_end_pull()
 
 
 func _update_course_grade() -> void:
@@ -1707,10 +1891,16 @@ func _bad_fields(d: EffortDirective) -> String:
 			targets += 1
 	if targets > 1:
 		return "more than one of target_pct, target_wkg, target_w"
+	if d.is_set("haptic_pull") and d.haptic_pull <= 0.0:
+		return "haptic_pull must be > 0"
 	if (
 		d.mode == ""
 		and not (
-			d.sets_erg_target() or d.sets_haptic() or d.is_set("mode_grade") or d.sets_factors()
+			d.sets_erg_target()
+			or d.sets_haptic()
+			or d.is_set("mode_grade")
+			or d.sets_factors()
+			or d.is_set("haptic_pull")
 		)
 	):
 		return "no channel set"
@@ -1781,6 +1971,8 @@ func _update_status() -> void:
 		"crr": crr,
 		"cw": cw,
 		"haptic_active": not _ch_haptic.is_empty(),
+		"haptic_pull_active": not _ch_pull.is_empty(),
+		"haptic_pull_w": _controller.applied_pull_w() if mode == Wl.ERG else 0,
 		"haptic_pct": float(_sim_out.get("haptic_pct", 0.0)) if mode == Wl.SIM else 0.0,
 		"clamped_by": _clamped_by.duplicate(),
 		"rescue": _rescue_state == _RESCUE_HOLD,

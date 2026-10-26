@@ -255,7 +255,7 @@ func hud_spec() -> HudSpec:
 	var boost := Button.new()  # the game's own Control sends intents through ctx.intents
 	boost.text = ctx.strings.t("_TEMPLATE_BOOST")
 	boost.pressed.connect(func() -> void: ctx.intents.send({"k": "boost", "via": "button"}))
-	return (
+	var spec := (
 		HudSpec
 		. new()
 		. add(HudSpec.TIMELINE, HudSpec.TOP_LEFT)
@@ -273,6 +273,12 @@ func hud_spec() -> HudSpec:
 		. toasts_at(HudSpec.TOP)
 		. banners_at(HudSpec.TOP)
 	)
+	# The help overlay (F1, and once on a rider's first session): art pixels in a 2D game.
+	spec.help = [
+		{"text": "_TEMPLATE_HELP_LAPS", "at": Vector2(470, 90), "arrow_to": Vector2(590, 40)},
+		{"text": "_TEMPLATE_HELP_BOOST", "at": Vector2(470, 250), "arrow_to": Vector2(560, 300)},
+	]
+	return spec
 
 
 ## Host/SOLO, once: the platform's rows (kJ, %FTP, time in band) plus the game's own.

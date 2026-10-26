@@ -55,6 +55,9 @@ UI_ACTION_SHIFT_UP,Shift up
 UI_ACTION_SHIFT_DOWN,Shift down
 UI_ACTION_PAUSE,Pause
 UI_ACTION_PANIC,Panic (trainer safe)
+UI_ACTION_HELP,Help
+UI_HELP_TITLE,Help (F1 or Esc closes it)
+UI_HELP_NONE,No help for this game yet
 UI_GESTURE_PEDAL_START,Start pedaling
 UI_GESTURE_SURGE,Surge
 UI_GESTURE_COAST,Coast

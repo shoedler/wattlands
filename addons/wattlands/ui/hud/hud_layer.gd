@@ -43,6 +43,11 @@ extends CanvasLayer
 ##   set_safety_state(paused), update()'s Telemetry.paused (the rider's own pause on not
 ##   pedaling, also in multiplayer), paused_changed and governor_status {paused}. No HudSpec
 ##   hides it.
+## - Help overlay (v0.3.0): HudSpec.help as a HudHelp above the game and the HUD (below the
+##   pause badge): show_help(), hide_help(), toggle_help(); an empty help makes show_help()
+##   and toggle_help() put up the toast UI_HELP_NONE instead. It hides itself after
+##   HudHelp.AUTO_HIDE_S of the time tick() advances. The GameHost drives it from the `help`,
+##   `back` and `confirm` actions and opens it once per profile and game (HelpSeen).
 ## - Mock keyboard readout: while the TrainerService's device is a MockTrainer with keyboard
 ##   control on, a small HudMockKeys line (power, cadence, keys) sits in the bottom-right corner,
 ##   in the game's palette; no HudSpec hides it.
@@ -103,6 +108,7 @@ var _banner: HudBanner = null
 var _feed: HudLocalFeed = null
 var _pause_badge: HudPauseBadge = null
 var _mock_keys: HudMockKeys = null
+var _help: HudHelp = null
 var _local_peer: int = 0
 var _readouts: Dictionary = {}
 ## The latest power and cadence bands per peer (Vector2(lo, hi)) and the local teammate
@@ -145,6 +151,8 @@ func _init() -> void:
 	_toasts = HudToasts.new()
 	_banner = HudBanner.new()
 	_feed = HudLocalFeed.new(self)
+	_help = HudHelp.new()
+	_root.add_child(_help)
 	_pause_badge = HudPauseBadge.new()
 	_root.add_child(_pause_badge)
 	_mock_keys = HudMockKeys.new()
@@ -189,6 +197,8 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	_banner.set_palette(_palette)
 	_toasts.set_palette(_palette)
 	_mock_keys.set_palette(_palette)
+	_help.set_palette(_palette)
+	_help.set_entries(_help_entries(_spec.help))
 	for entry: Dictionary in _spec.widgets:
 		var id := str(entry.get("widget", ""))
 		var at: Variant = entry.get("at", null)
@@ -276,6 +286,44 @@ func pause_badge() -> HudPauseBadge:
 ## The mock-trainer keyboard readout (hidden unless a MockTrainer's keyboard control is on).
 func mock_keys() -> HudMockKeys:
 	return _mock_keys
+
+
+## The help overlay (HudSpec.help).
+func help_overlay() -> HudHelp:
+	return _help
+
+
+## True when the game's HudSpec has help entries.
+func has_help() -> bool:
+	return _help.entry_count() > 0
+
+
+func help_visible() -> bool:
+	return _help.visible
+
+
+## Open the help overlay for `seconds`; without entries, the toast UI_HELP_NONE instead
+## (returns false).
+func show_help(seconds: float = HudHelp.AUTO_HIDE_S) -> bool:
+	if not has_help():
+		show_toast("UI_HELP_NONE")
+		return false
+	_help.open(seconds)
+	_root.move_child(_help, -1)
+	_root.move_child(_pause_badge, -1)
+	return true
+
+
+func hide_help() -> void:
+	_help.close()
+
+
+## F1: open it (or the UI_HELP_NONE toast), or close it when it is open.
+func toggle_help() -> void:
+	if _help.visible:
+		hide_help()
+	else:
+		show_help()
 
 
 ## A HudFeed that draws on this layer only (the GameHost wraps it with network routing).
@@ -371,6 +419,7 @@ func set_readout(id: String, text: String) -> void:
 func tick(dt: float) -> void:
 	_toasts.tick(dt)
 	_banner.tick(dt)
+	_help.tick(dt)
 
 
 ## A kit widget for `id` configured for this layer's rider (null and push_error if unknown).
@@ -426,6 +475,8 @@ func relayout() -> void:
 	var ss := screen_size()
 	_root.position = Vector2.ZERO
 	_root.size = ss
+	_help.layout(ss, _pv if _pv != null and is_instance_valid(_pv) else null)
+	_root.move_child(_help, -1)
 	_pause_badge.layout(ss)
 	_root.move_child(_pause_badge, -1)
 	_mock_keys.layout(ss)
@@ -878,6 +929,29 @@ func _trainer_status() -> String:
 	if ts == null or not ts.has_method("status"):
 		return ""
 	return str(ts.call("status"))
+
+
+## HudSpec.help entries checked and with their text resolved (a string key or plain text);
+## an entry without text or a Vector2 `at`, or with an `arrow_to` that isn't one, is skipped
+## with push_warning.
+func _help_entries(raw: Array[Dictionary]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for e in raw:
+		var text := str(e.get("text", ""))
+		var at: Variant = e.get("at", null)
+		var to: Variant = e.get("arrow_to", null)
+		if at is Vector2i:
+			at = Vector2(at as Vector2i)
+		if to is Vector2i:
+			to = Vector2(to as Vector2i)
+		if text.is_empty() or not (at is Vector2) or not (to == null or to is Vector2):
+			push_warning("HudLayer: help entry %s skipped (needs text, at: Vector2)" % str(e))
+			continue
+		var entry := {"text": _text(text, []), "at": at}
+		if to is Vector2:
+			entry["arrow_to"] = to
+		out.append(entry)
+	return out
 
 
 func _text(key: String, args: Variant) -> String:

@@ -97,7 +97,7 @@ func test_runs_always() -> void:
 
 
 func test_every_action_exists_with_project_defaults() -> void:
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		assert_true(InputMap.has_action(a), String(a))
 		assert_eq(_router.bindings(a).size(), InputBindings.default_events(a).size(), String(a))
 		assert_gt(_router.bindings(a).size(), 0, "%s has a default binding" % a)
@@ -647,3 +647,37 @@ func test_fullscreen_keys_are_never_actions() -> void:
 	_router.handle_event(_key(KEY_ENTER, false))
 	_router.handle_event(_key(KEY_ENTER, true))
 	assert_eq(_router.take_actions(), [&"confirm"], "plain Enter still confirms")
+
+
+# --- help (v0.3.0) -----------------------------------------------------------------------------
+
+
+func test_help_is_f1_and_the_left_stick_click() -> void:
+	assert_true(InputBindings.actions().has(&"help"))
+	assert_true(_router.PLATFORM_ACTIONS.has(&"help"), "never passed to local_intents")
+	assert_true(_has_key(_router.bindings(&"help"), KEY_F1))
+	assert_true(_has_button(_router.bindings(&"help"), JOY_BUTTON_LEFT_STICK))
+	_tap(KEY_F1)
+	assert_eq(_router.take_actions(), [&"help"])
+	_router.handle_event(_joy(JOY_BUTTON_LEFT_STICK, true))
+	_router.handle_event(_joy(JOY_BUTTON_LEFT_STICK, false))
+	assert_eq(_router.take_actions(), [&"help"])
+	_router.inject_action(&"help")
+	assert_eq(_router.take_actions(), [&"help"])
+
+
+func test_left_stick_click_is_no_other_default() -> void:
+	for a: StringName in Wl.ACTIONS:
+		assert_false(_has_button(_router.bindings(a), JOY_BUTTON_LEFT_STICK), String(a))
+		assert_false(_has_key(_router.bindings(a), KEY_F1), String(a))
+
+
+func test_help_rebinds_and_saves() -> void:
+	_router.rebind(&"help", _key(KEY_H, true))
+	assert_true(_router.save_bindings())
+	_router.reset_bindings()
+	assert_true(_has_key(_router.bindings(&"help"), KEY_F1), "defaults back")
+	_router.load_bindings()
+	assert_true(_has_key(_router.bindings(&"help"), KEY_H))
+	assert_false(_has_key(_router.bindings(&"help"), KEY_F1))
+	assert_true(_has_button(_router.bindings(&"help"), JOY_BUTTON_LEFT_STICK), "other family kept")

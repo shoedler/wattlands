@@ -74,6 +74,8 @@ func start() -> AppSessionScreen:
 	var settings := tree.root.get_node_or_null(^"Settings") as WlSettings
 	if settings != null and not settings.has_profile():
 		settings.create_profile(APP_NAME)
+	# Shots show the game, not the help overlay a first session opens.
+	HelpSeen.mark(game_id)
 	_holder = Node.new()
 	_holder.name = "ScreenshotPeer"
 	_holder.process_mode = Node.PROCESS_MODE_ALWAYS

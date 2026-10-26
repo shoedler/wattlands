@@ -7,7 +7,9 @@ extends Node
 ## Defaults: arrows/WASD move, Enter/Space confirm, Esc back, 1/2 abilities, F item, R swap,
 ## Q/E shift down/up, P pause, Backspace held 1 s panic; controller: left stick/D-pad move,
 ## A confirm, B back, X/Y abilities, RB item, LB swap, LT/RT shift down/up, Start pause,
-## View+Menu together panic. Panic emits EventBus.panic_requested immediately.
+## View+Menu together panic; F1 or the left stick click help (the help overlay, a platform
+## action outside Wl.ACTIONS: InputBindings.PLATFORM_EXTRA_ACTIONS). Panic emits
+## EventBus.panic_requested immediately.
 ## Pedal navigation (opt-in, pedal_nav_active()): `surge` acts as confirm and `coast` as back
 ## for menus (pedal-scan); with it off menus take the keyboard and controller only. `stop_5s`
 ## acts as pause (solo, outside ERG) either way.
@@ -32,9 +34,9 @@ extends Node
 ##   Menus (PedalScanList, app screens) listen to `menu_input`, which maps surge -> confirm
 ##   (via "surge") and coast -> back (via "coast", never in ERG) only while
 ##   pedal_nav_active(), and stop_5s -> pause (via "stop_5s", solo and outside ERG only).
-## - The GameHost drains take_actions() and take_gestures() each tick and must filter `pause`
-##   and `panic` out before calling GameModule.local_intents (they are platform actions,
-##   PLATFORM_ACTIONS).
+## - The GameHost drains take_actions() and take_gestures() each tick and must filter `pause`,
+##   `panic` and `help` out before calling GameModule.local_intents (they are platform
+##   actions, PLATFORM_ACTIONS).
 
 signal action(action_name: StringName)
 signal gesture(gesture_name: StringName)
@@ -49,7 +51,7 @@ const PANIC_HOLD_S := 1.0
 ## Queues drop their oldest entries beyond this (nobody drains them in menus).
 const QUEUE_LIMIT := 256
 ## Actions the platform consumes; never passed to GameModule.local_intents.
-const PLATFORM_ACTIONS: Array[StringName] = [&"pause", &"panic"]
+const PLATFORM_ACTIONS: Array[StringName] = [&"pause", &"panic", &"help"]
 
 ## The bus to emit on; null means the EventBus autoload.
 var bus: WlEventBus = null
@@ -107,7 +109,7 @@ func handle_event(event: InputEvent) -> void:
 	var src := _source_id(event)
 	if src.is_empty():
 		return
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		if not InputMap.has_action(a) or not event.is_action(a):
 			continue
 		var key := String(a) + "|" + src
@@ -212,7 +214,7 @@ func text_input_focused() -> bool:
 
 ## Inject an action (on-screen buttons, tests).
 func inject_action(action_name: StringName) -> void:
-	if not Wl.ACTIONS.has(action_name):
+	if not InputBindings.actions().has(action_name):
 		push_error("InputRouter: unknown action %s" % action_name)
 		return
 	if action_name == &"panic":
@@ -280,7 +282,7 @@ func binding_labels(action_name: StringName) -> Array[String]:
 ## Bind the next key, button, trigger or stick press to `action_name` (the controls screen).
 ## That press fires no action; binding_captured follows. Not saved until save_bindings().
 func start_capture(action_name: StringName) -> void:
-	if not Wl.ACTIONS.has(action_name):
+	if not InputBindings.actions().has(action_name):
 		push_error("InputRouter: unknown action %s" % action_name)
 		return
 	_capture_action = action_name

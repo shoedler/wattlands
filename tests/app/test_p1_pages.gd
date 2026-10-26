@@ -61,11 +61,15 @@ func test_rides_history_reupload() -> void:
 		},
 	]
 	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
-	assert_eq(menu(s).ids(), [0, 1, "back"])
+	assert_eq(menu(s).ids(), [0, 1, "copy_folder", "back"])
 	assert_true(menu(s).text_of(0).contains("28:00"))
 	assert_true(menu(s).text_of(0).contains(AppScreen.t("APP_RIDES_UPLOADED")))
 	assert_true(scan_to(s, 0))
 	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).ids(), ["upload", "copy_title", "copy_description", "back"], "its actions")
+	assert_eq(menu(s).text_of("upload"), AppScreen.t("APP_RIDES_REUPLOAD"))
+	surge_pick(s, "upload")
+	assert_eq(menu(s).ids(), [0, 1, "copy_folder", "back"], "back on the list")
 	# W3 RS-3: Rides.upload() would only report the stored state of a ride marked uploaded;
 	# the history re-uploads it (Rides.reupload) so a ride deleted on Strava goes up again.
 	assert_eq(fx.fake_rides().reuploads, ["b"] as Array[String], "re-upload of an uploaded ride")
@@ -76,6 +80,8 @@ func test_rides_history_reupload() -> void:
 	)
 	assert_true(scan_to(s, 1))
 	s.feed_gesture(Wl.G_SURGE)
+	assert_eq(menu(s).text_of("upload"), AppScreen.t("APP_RIDES_UPLOAD"))
+	surge_pick(s, "upload")
 	assert_eq(fx.fake_rides().uploads.size(), 1, "a ride never uploaded goes through upload()")
 	assert_eq(fx.fake_rides().uploads[0]["fit_path"], "C:/rides/a.fit")
 	assert_eq(fx.fake_rides().reuploads.size(), 1)
@@ -124,8 +130,72 @@ func test_rides_need_strava() -> void:
 	fx.give_profile()
 	fx.fake_rides().ride_list = [{"fit_path": "C:/r.fit", "summary": {"ride_id": "r"}}]
 	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
-	assert_true(menu(s).is_disabled_id(0))
+	assert_false(menu(s).is_disabled_id(0), "the ride opens: copying needs no Strava")
 	assert_eq(s.status_label.text, AppScreen.t("APP_RESULTS_STRAVA_OFF"))
+	surge_pick(s, 0)
+	assert_true(menu(s).is_disabled_id("upload"))
+	assert_false(menu(s).is_disabled_id("copy_title"))
+	assert_false(menu(s).is_disabled_id("copy_description"))
+
+
+func _copy_summary() -> Dictionary:
+	return {
+		"ride_id": "c",
+		"utc_start": "2026-10-25T18:00:00Z",
+		"game_id": "fishing",
+		"game_title": "Fishing",
+		"ride_tag": "Marlin Bay",
+		"duration_s": 1500.0,
+		"timer_s": 1440.0,
+		"distance_m": 12345.0,
+		"avg_power_w": 181.0,
+		"np_w": 190.0,
+		"avg_cadence_rpm": 88.0,
+		"ride_lines": ["Landed 3 fish"],
+	}
+
+
+func test_rides_copy_the_strava_title_and_description() -> void:
+	fx.give_profile()
+	fx.fake_rides().ride_list = [{"fit_path": "C:/rides/c.fit", "summary": _copy_summary()}]
+	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
+	var copied: Array[String] = []
+	s.clipboard_set = func(text: String) -> void: copied.append(text)
+	surge_pick(s, 0)
+	surge_pick(s, "copy_title")
+	assert_eq(
+		copied, [WlRides.activity_name(_copy_summary())] as Array[String], "exactly Strava's name"
+	)
+	assert_true(copied[0].contains("Fishing") and copied[0].contains("Marlin Bay"), copied[0])
+	assert_eq(s.copied_label.text, AppScreen.t("APP_RIDES_COPIED_TITLE"), "a confirmation")
+	surge_pick(s, "copy_description")
+	assert_eq(copied.size(), 2)
+	assert_eq(
+		copied[1], WlRides.activity_description(_copy_summary()), "exactly Strava's description"
+	)
+	assert_true(copied[1].contains("Landed 3 fish"))
+	assert_eq(s.copied_label.text, AppScreen.t("APP_RIDES_COPIED_DESCRIPTION"))
+	assert_eq(menu(s).ids()[0], "upload", "the actions stay open for the next copy")
+	s.tick(AppRidesScreen.COPIED_S + 0.1)
+	assert_eq(s.copied_label.text, "", "the confirmation goes away")
+	surge_pick(s, "back")
+	assert_eq(menu(s).ids(), [0, "copy_folder", "back"])
+	assert_eq(menu(s).highlighted(), 0, "the ride stays highlighted")
+
+
+func test_rides_page_shows_and_copies_the_folder() -> void:
+	fx.give_profile()
+	var s := open_screen(AppRidesScreen.new()) as AppRidesScreen
+	var folder := ProjectSettings.globalize_path(Paths.rides_dir())
+	assert_true(folder.is_absolute_path())
+	assert_eq(AppRidesScreen.rides_folder(), folder)
+	assert_eq(s.folder_label.text, AppScreen.t("APP_RIDES_FOLDER").format([folder]))
+	assert_true(s.folder_label.visible)
+	var copied: Array[String] = []
+	s.clipboard_set = func(text: String) -> void: copied.append(text)
+	surge_pick(s, "copy_folder")
+	assert_eq(copied, [folder] as Array[String])
+	assert_eq(s.copied_label.text, AppScreen.t("APP_RIDES_COPIED_FOLDER"))
 
 
 func _with_cooldown(plan: EffortPlan, _opts: Dictionary) -> EffortPlan:

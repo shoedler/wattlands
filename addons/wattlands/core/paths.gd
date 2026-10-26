@@ -85,6 +85,11 @@ static func progress_path(game_id: String) -> String:
 	return game_dir(game_id).path_join("progress.json")
 
 
+## Which games' help overlays this profile has seen (HelpSeen, v0.3.0).
+static func help_seen_path() -> String:
+	return user_dir().path_join("help_seen.json")
+
+
 ## A fresh, empty temp directory for tests (under the OS temp dir).
 static func make_temp_dir(prefix: String = "wattlands_test") -> String:
 	var base := OS.get_temp_dir().replace("\\", "/")
