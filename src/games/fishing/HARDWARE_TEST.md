@@ -6,8 +6,8 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 
 ## 1. Drive-out (warm-up, Free Roam)
 
-- [ ] Start `roam_30` solo and pedal. Expected: SIM for the first 5 minutes, no ERG, no haptics, no bites; the resistance rises gently with boat speed (about 2.5 % grade at cruise, never above 3 %); the boat moves off the dock and speeds up with your power, the bow lifts when you hammer.
-- [ ] Ease off below about 20 % FTP. Expected: the boat drifts to a stop within about 15 s and the resistance drops to flat; the menu chips appear next to the boat.
+- [ ] Start `roam_30` solo and pedal. Expected: SIM for the first 5 minutes, no ERG, no haptics, no bites; the resistance rises gently with boat speed (about 2.5 % grade at cruise, never above 3 %); the boat moves off the dock and speeds up with your power, the bow lifts when you hammer; at about 70 % FTP or more it climbs onto the plane (bow down to a flat ride, a little faster), the prop always in the water.
+- [ ] Ease off below about 20 % FTP. Expected: the boat drifts to a stop within a few seconds and the resistance drops to flat; the menu chips appear next to the boat.
 - [ ] Panic once while driving, then resume. Expected: trainer safe at once; the session goes on after resume.
 
 ## 2. The menu, casting, waiting
@@ -26,6 +26,7 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 
 - [ ] Shelf runs (tuna, wahoo). Expected: up to about 104 %, never above 105 %, for 10-30 s, then straight back to the base pull.
 - [ ] Deep jumps (swordfish, marlin). Expected: 104 % for 15-30 s, at least 90 s apart, never above 105 %.
+- [ ] Surges (a tuna or anything of 30 kg or more starts a run or jump, after 5:00, haptics on). Expected: one short tug, about +50 % x your intensity on top of the ERG target for 2 s, never above 150 % FTP, at most one per 15 s; the rod jerks and the line snaps taut. With haptics off: the cue, no tug. If the platform has no haptic pull yet, no tug and the session goes on.
 - [ ] Giant grouper (deep, near the floor). Expected: 105-110 % for 3-4.5 minutes, never longer than 5 minutes; a second giant in the same session stays at or below 105 %.
 
 ## 5. Tension band readability
@@ -42,7 +43,7 @@ Before you start: set your FTP and preferred cadence in your profile, haptics on
 ## 7. Rescue, pause, AFK
 
 - [ ] In a fight at or above 60 %, drop below 45 rpm for 3 s. Expected: rescue (50 %), the meters freeze, the fish swims out, no pull change during the rescue; pulls resume about 10 s after you hold 70 rpm again.
-- [ ] Stop pedaling while driving. Expected: the boat drifts; after 5 s the platform pauses you and the boat keeps drifting.
+- [ ] Stop pedaling while driving. Expected: the boat drifts; after 10 s the platform pauses you and the boat keeps drifting.
 
 ## 8. Time-up and the ride file
 
