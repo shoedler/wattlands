@@ -5,8 +5,8 @@ extends FishingHudControl
 ## right box has a muted red heart (FishingHudDraw.HEART, the HUD's one off-palette colour) and
 ## the bpm big; without one the left box alone is 1.5 boxes wide. Under both, as wide as the
 ## boxes, a 30 s power graph (FishingPowerTrace, filled). Right of the box at the bottom, the
-## zone under the boat and the depth to the floor in a small tag. Hidden in a fight and the
-## Landing (FishingFightPanel shows them there).
+## zone under the boat and the depth to the floor in a small tag. Hidden while a fish is on in a
+## fight (FishingFightPanel shows the numbers there).
 
 ## One box's width, the gap round everything and the rows (art px): the big line's cap, the
 ## small line under it, the graph.
@@ -46,7 +46,7 @@ func refresh() -> void:
 	var r := FishingHudModel.own_rider(game)
 	numbers = local_numbers(r)
 	trace.add(float(numbers["t"]), float(numbers["power"]), 0.0)
-	shown = r != null and not r.in_fight()
+	shown = r != null and not FishingHudModel.fight_panel_up(game, r)
 	place = ""
 	if r != null and game.state.world != null:
 		var w := game.state.world
@@ -100,7 +100,8 @@ func _draw() -> void:
 	var gy := top + PAD + BIG_CAP + ROW_GAP + SMALL_CAP + ROW_GAP
 	var g := Rect2(Vector2(PAD, gy) * u, Vector2(ps.x - 2 * PAD, GRAPH_ROWS) * u)
 	self.draw_rect(g, FishingPalette.HUD_PANEL)
-	var top_w := maxf(trace.peak() * 1.15, 100.0)
+	var ftp := r_ftp()
+	var top_w := maxf(maxf(trace.peak(), ftp) * 1.5, 100.0)
 	FishingHudDraw.graph(self, g, trace, top_w, u, 0.0, true, FishingPalette.SURFACE)
 	tag_rect = Rect2i()
 	if place != "":
@@ -118,3 +119,9 @@ func _draw() -> void:
 			s,
 			FishingPalette.HUD_DIM
 		)
+
+
+## The local rider's FTP (200 W without a rider).
+func r_ftp() -> float:
+	var r := FishingHudModel.own_rider(game)
+	return r.ftp if r != null else 200.0

@@ -63,7 +63,9 @@ func test_the_spec_has_its_own_power_box_the_gear_and_a_help_overlay() -> void:
 	assert_false(spec.has_widget(HudSpec.TIMELINE), "Free Roam has no plan timeline")
 	var w := FX.make_game(1, 0, Wl.SOLO, "base_60")
 	add_child_autofree(w)
-	assert_true(FishingHud.spec(w).has_widget(HudSpec.TIMELINE), "workouts keep the timeline")
+	var ws := FishingHud.spec(w)
+	assert_true(ws.has_widget(HudSpec.TIMELINE), "workouts keep the timeline")
+	_free_controls(ws)
 	var keys := _keys()
 	assert_between(spec.help.size(), 5, 8)
 	var view := Rect2(Vector2.ZERO, Vector2(FishingConst.PIXEL_W, FishingConst.PIXEL_H))
@@ -71,6 +73,12 @@ func test_the_spec_has_its_own_power_box_the_gear_and_a_help_overlay() -> void:
 		assert_true(keys.has(str(e["text"])), "%s is in strings.csv" % e["text"])
 		assert_true(view.has_point(e["at"] as Vector2), "%s inside the view" % e["text"])
 		assert_true(view.has_point(e["arrow_to"] as Vector2), "%s points inside" % e["text"])
+	_free_controls(spec)
+
+
+func _free_controls(spec: HudSpec) -> void:
+	for e in spec.controls:
+		(e["control"] as Control).free()
 
 
 func test_shown_actions_pick_afk_and_pause_first_then_sprint() -> void:
@@ -281,6 +289,12 @@ func test_the_cruise_box_grows_by_half_without_heart_rate_and_hides_in_a_fight()
 	FX.set_fight(r, 7000.0)
 	c.refresh()
 	assert_false(c.shown, "the fight panel takes over")
+	r.fish.off_line = true
+	c.refresh()
+	assert_true(c.shown, "a lost fish: raw W and %FTP stay on screen")
+	FX.set_land(r, 7000.0)
+	c.refresh()
+	assert_true(c.shown, "the Landing keeps the cruise box beside the gaff meter")
 
 
 func test_the_speed_shows_knots_behind_the_stern_and_the_flat_road_speed() -> void:
@@ -319,8 +333,6 @@ func test_every_hud_string_is_in_the_strings_csv() -> void:
 	var keys := _keys()
 	for k in FishingHudModel.KEYS:
 		assert_true(keys.has(k), k)
-		assert_true(FishingHudModel.FALLBACK.has(k), "%s has an English stand-in" % k)
-	for k in FishingHudModel.KEYS_PENDING:
 		assert_true(FishingHudModel.FALLBACK.has(k), "%s has an English stand-in" % k)
 
 

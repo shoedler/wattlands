@@ -101,7 +101,7 @@ func _draw() -> void:
 	var u := float(FishingHudDraw.unit(s))
 	if bool(gaff.get("visible", false)):
 		_draw_gaff(s, u)
-	elif bool(fish.get("visible", false)):
+	elif FishingHudModel.fight_panel_up(game, FishingHudModel.own_rider(game)):
 		_draw_fight(s, u)
 
 

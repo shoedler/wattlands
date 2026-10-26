@@ -1,8 +1,8 @@
 class_name FishingPowerTrace
 extends RefCounted
 ## The local rider's power for the HUD graphs: one sample (power, target) every STEP_S of
-## telemetry time, the last `window_s` kept, oldest first. A time going backwards (a new session,
-## a rejoin) starts over.
+## telemetry time, the last `window_s` kept, oldest first; a gap longer than a step repeats the
+## new sample across it. A time going backwards (a new session, a rejoin) starts over.
 
 const STEP_S := 0.25
 
@@ -23,8 +23,13 @@ func add(t: float, power_w: float, target_w: float) -> void:
 		_last_t = -INF
 	if t - _last_t < STEP_S:
 		return
+	var s := Vector2(maxf(power_w, 0.0), maxf(target_w, 0.0))
+	# a gap (frames slower than the steps, a fast-forward) holds the value across it
+	var gap := floori((t - _last_t) / STEP_S) - 1 if _last_t > -INF else 0
+	for _k in mini(gap, capacity()):
+		samples.append(s)
 	_last_t = t
-	samples.append(Vector2(maxf(power_w, 0.0), maxf(target_w, 0.0)))
+	samples.append(s)
 	var most := ceili(window_s / STEP_S)
 	while samples.size() > most:
 		samples.pop_front()

@@ -70,9 +70,10 @@ func view() -> FishingView:
 
 
 ## The local rider's power (W), cadence (rpm), %FTP, heart rate (bpm, 0 without a sensor), the
-## applied ERG target (W) and the telemetry time: the telemetry when there is one, else the
-## rider state.
+## applied ERG target (W) (the telemetry when there is one, else the rider state) and the game
+## time (s; the graphs' clock).
 func local_numbers(r: FishingRiderState) -> Dictionary:
+	var t := game.state.t if game != null and game.state != null else 0.0
 	if tm != null:
 		var pct := tm.ftp_pct
 		if pct <= 0.0 and r != null and r.ftp > 0.0:
@@ -86,9 +87,8 @@ func local_numbers(r: FishingRiderState) -> Dictionary:
 			"pct": pct,
 			"hr": tm.heart_rate_bpm,
 			"target": target,
-			"t": tm.t,
+			"t": t,
 		}
-	var t := game.state.t if game != null and game.state != null else 0.0
 	if r == null:
 		return {"power": 0.0, "cadence": 0.0, "pct": 0.0, "hr": 0, "target": 0.0, "t": t}
 	return {

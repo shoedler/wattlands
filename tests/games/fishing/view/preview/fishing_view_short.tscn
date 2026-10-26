@@ -4,6 +4,6 @@
 
 [node name="FishingViewPreview" type="Node"]
 script = ExtResource("1")
-scenario = "wreck"
+scenario = "fight"
 art = Vector2i(640, 340)
 hr_bpm = 0

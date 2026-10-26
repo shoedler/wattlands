@@ -46,9 +46,13 @@ const KEYS: Array[String] = [
 	KEY_SPRINTING,
 	KEY_RPM,
 	KEY_WATTS,
+	KEY_BPM,
+	KEY_FTP,
+	KEY_KNOTS,
+	KEY_KMH,
+	KEY_TARGET,
+	KEY_NOW,
 ]
-## Keys the HUD uses whose strings.csv rows are still to come (the English stand-ins show).
-const KEYS_PENDING: Array[String] = [KEY_BPM, KEY_FTP, KEY_KNOTS, KEY_KMH, KEY_TARGET, KEY_NOW]
 ## English stand-ins when a key has no translation (headless tests without ctx.strings).
 const FALLBACK := {
 	KEY_POINTS: "{0} pts",
@@ -226,6 +230,12 @@ static func fish_row(game: FishingGame, r: FishingRiderState) -> Dictionary:
 		"reel": clampf(r.reel, 0.0, 1.0),
 		"stamina": clampf(r.fish.s, 0.0, 1.0),
 	}
+
+
+## True while the fight panel stands in for the cruise box: a fish on the line in a fight (the
+## Landing and a lost fish keep the cruise box, so raw W and %FTP always show).
+static func fight_panel_up(game: FishingGame, r: FishingRiderState) -> bool:
+	return r != null and r.action == FishingConst.A_FIGHT and bool(fish_row(game, r)["visible"])
 
 
 ## The boat's speed in knots, one decimal ("18.4").

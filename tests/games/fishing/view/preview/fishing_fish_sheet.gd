@@ -1,12 +1,12 @@
 extends Node
 ## Art review of every fish in every pose (tools/screenshot
-## --scene=res://tests/games/fishing/view/preview/fishing_fish_sheet.tscn --size=2070x1176):
+## --scene=res://tests/games/fishing/view/preview/fishing_fish_sheet.tscn --size=1920x1080):
 ## one row per species on the water band it lives in (tinted as the view tints it), the frames
 ## left to right: swim 1-3, pull 15 and 30 degrees with the line leaving the mouth, tired with
 ## the line straight up.
 
-const SHEET := Vector2i(690, 392)
-const COL_W := 100
+const SHEET := Vector2i(640, 360)
+const COL_W := 92
 const LABEL_W := 84
 const TOP := 14
 const LINE := FishingPalette.DEEP
@@ -20,6 +20,7 @@ class Painter:
 	var rows: Array[Dictionary] = []
 
 	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, Vector2(SHEET)), FishingPalette.SEA[3])
 		draw_rect(Rect2(0, 0, SHEET.x, TOP), FishingPalette.SKY)
 		var font := FishingHudDraw.font()
 		for i in LABELS.size():
@@ -59,7 +60,7 @@ func _ready() -> void:
 		var h := 0
 		for k in FishingArtGrids.FISH_POSES.size():
 			h = maxi(h, FishingSprites.bounds(id, k).size.y)
-		var row_h := h + 10
+		var row_h := h + 6
 		var row := {
 			"rect": Rect2(0, y, SHEET.x, row_h),
 			"band": BANDS[i],
@@ -68,7 +69,7 @@ func _ready() -> void:
 		}
 		for k in FishingArtGrids.FISH_POSES.size():
 			var box := FishingSprites.bounds(id, k)
-			var mouth := Vector2i(LABEL_W + COL_W * k + 2 + maxi(0, (COL_W - size.x) / 2), y + 5)
+			var mouth := Vector2i(LABEL_W + COL_W * k + 2 + maxi(0, (COL_W - size.x) / 2), y + 3)
 			mouth.y += a.y - box.position.y
 			var s := Sprite2D.new()
 			s.centered = false
