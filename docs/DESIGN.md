@@ -229,7 +229,7 @@ The rolling course is three seeded sine waves sampled every 250 m, generated and
 - **Movement.** Each rider moves by `SpeedModel` on their P_eff: flat in ERG and FREE phases, and in Rolling road on the trainer's applied SIM grade, so the hill on screen matches the hill under you.
 - **HUD.**
   - Top centre: the phase timeline. Top right: watts and in-band % readouts.
-  - Bottom left: power gauge, cadence, W′ bar. Bottom centre: the teammate strip. Bottom right: the gear indicator (whenever the trainer is in SIM), kept clear of the session screen's panic button.
+  - Bottom left: power gauge, cadence, W′ bar. Bottom centre: the teammate strip. Bottom right: the gear indicator (whenever the trainer is in SIM).
   - Toasts top left, banners top centre.
   - Banners announce each interval (4 s); a sprint gets a 10 s warning. The gauge shows 76–105 % FTP in Rolling road, and 120–160 % FTP in sprints after the first 300 s (none in a warm-up sprint or in longer free riding).
 
@@ -266,8 +266,9 @@ Banner and toast areas sit at any anchor; in a corner they line up with that sid
 - Key numbers 64 px and never below 48 px; big readouts 72 px; banners 56 px (never below 32 px); toasts 36 px (never below 24 px); menus 40 px; body 32 px. Text has an 8 px dark outline so it reads over any art.
 - Corner toasts and banners wrap within a third of the width (610 px).
 - Font: Godot's default (Atkinson Hyperlegible is a drop-in when its files are added). Sound: synthesized effects plus an optional cadence metronome at the preferred cadence (the cadence band's centre while one is published).
-- 2D games render at `pixel_base` with nearest filtering and integer scaling, letterboxed. 3D games use the `world3d` low-poly kit (no SSAO, no depth-of-field).
-- The session screen's pause overlay dims the HUD behind it; the on-screen panic button ("PANIC", white on red, at least 380 × 100) sits in the bottom-right corner, which the HUD keeps clear.
+- 2D games render at `pixel_base` with nearest filtering and integer scaling, letterboxed; a game with `pixel_flex` fills the window instead (the art canvas grows with it, at most k − 1 pixels of border). 3D games use the `world3d` low-poly kit (no SSAO, no depth-of-field).
+- Fullscreen: Settings > Audio and display, or F11 / Alt+Enter anywhere; remembered.
+- The session screen's pause overlay dims the HUD behind it and names the emergency stop: "Hold Backspace (gamepad: View + Menu) for an emergency stop: no resistance". There is no on-screen panic button.
 
 ## 11. Safety from a player's view (BRIEF 4.6)
 
@@ -298,7 +299,7 @@ Solo only, from `pause` or `stop_5s`. The game clock stops; the trainer goes to 
 
 ### 11.5 Panic
 
-- **Triggers**: Backspace held 1 s, View + Menu, or the always-visible on-screen panic button.
+- **Triggers**: Backspace held 1 s, View + Menu, or Panic in the pause overlay (which names the keys).
 - **Effect**: ERG off, SIM grade 0 and wind 0, written at once.
 - **After**: the trainer stays safe until you pick Resume trainer, which re-enters from the floor and slews up. Panic doesn't pause the game. A trainer that reconnects during panic gets SIM flat at once.
 
