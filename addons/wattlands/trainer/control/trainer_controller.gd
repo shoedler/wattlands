@@ -21,6 +21,11 @@ extends Node
 ##   - Coalescing (4.5): at most one write per MIN_WRITE_INTERVAL_S (so at most 2 writes per
 ##     second). Each write is computed from the newest command when its slot opens, so
 ##     superseded commands are dropped and the newest is always sent.
+##   - Haptic pull (4.6.6): command_erg's `pull_w` rides on top of the slewed target and is
+##     exempt from slew: it rises and falls at once. The entry write and its slew-up carry no
+##     pull. While the trainer holds a pull, a write that keeps the pull on waits rather than
+##     close the write slot past the pull's end, so the drop-back is written by that end and
+##     the trainer never holds a pull longer than the governor applies it.
 ##   - Panic and shutdown write at once (safety outranks coalescing; ADR in
 ##     docs/decisions/trainer-control.md): emergency_safe() sends SIM grade 0 and wind 0;
 ##     shutdown() sends SIM flat, then Stop (0x08 0x01).
@@ -65,10 +70,18 @@ var _want_floor_w: int = 0
 var _want_p3s_w: float = 0.0
 var _want_sim: Dictionary = {"wind_mps": 0.0, "grade_pct": 0.0, "crr": 0.004, "cw": 0.51}
 var _want_level: float = 0.0
+## The governed haptic pull on top of the ERG command (whole watts) and its end on this
+## controller's clock (-1: none).
+var _want_pull_w: int = 0
+var _pull_end_t: float = -1.0
 
 # ERG shaping.
 ## The applied ERG target with slew (whole watts are taken by rounding down).
 var _erg_w: float = 0.0
+## The haptic pull applied on top of _erg_w (whole watts; 0 outside ERG and during an entry).
+var _pull_w: int = 0
+## The pull carried by the last ERG write.
+var _written_pull_w: int = 0
 ## The current ERG target started at a SIM -> ERG entry and is still slewing up to the command.
 var _entry_active: bool = false
 ## The ERG -> SIM step-down has been decided for the current switch.
@@ -96,6 +109,8 @@ func setup(device: TrainerDevice) -> void:
 	_written_erg_w = 0
 	_written_level = 0.0
 	_erg_w = 0.0
+	_pull_w = 0
+	_written_pull_w = 0
 	_entry_active = false
 	_stepped_down = false
 	_safe = false
@@ -121,6 +136,8 @@ func resync(crr: float, cw: float) -> void:
 	_written_erg_w = 0
 	_written_level = 0.0
 	_erg_w = 0.0
+	_pull_w = 0
+	_written_pull_w = 0
 	_entry_active = false
 	_stepped_down = false
 	_force_sim_write = true
@@ -146,6 +163,8 @@ func adopt(other: TrainerController) -> void:
 	_written_sim = other._written_sim.duplicate()
 	_written_level = other._written_level
 	_erg_w = other._erg_w if other._mode == Wl.ERG else 0.0
+	_written_pull_w = other._written_pull_w if other._mode == Wl.ERG else 0
+	_pull_w = 0
 	_force_sim_write = other._force_sim_write
 	_resume_floor = other._resume_floor or other._safe
 	_entry_active = false
@@ -160,14 +179,20 @@ func device() -> TrainerDevice:
 
 
 ## ERG with the governed target (every 4.6 rule except slew already applied), the floor and
-## the rider's 3 s power (for the SIM -> ERG entry).
-func command_erg(governed_w: int, floor_w: int, power_3s_w: float) -> void:
+## the rider's 3 s power (for the SIM -> ERG entry). `pull_w` (additive, BRIEF 4.6.6) is a
+## governed haptic pull on top of the slewed target, already bounded by the governor, that
+## ends `pull_left_s` platform seconds from now; it is exempt from slew.
+func command_erg(
+	governed_w: int, floor_w: int, power_3s_w: float, pull_w: int = 0, pull_left_s: float = 0.0
+) -> void:
 	if _want_mode != Wl.ERG:
 		_stepped_down = false
 	_want_mode = Wl.ERG
 	_want_floor_w = floor_w
 	_want_erg_w = maxi(governed_w, floor_w)
 	_want_p3s_w = maxf(power_3s_w, 0.0)
+	_want_pull_w = maxi(pull_w, 0) if pull_left_s > 0.0 else 0
+	_pull_end_t = _t + pull_left_s if _want_pull_w > 0 else -1.0
 
 
 ## SIM with the stacked state; floor and 3 s power shape the ERG -> SIM step-down.
@@ -175,6 +200,7 @@ func command_sim(
 	wind_mps: float, grade_pct: float, crr: float, cw: float, floor_w: int, power_3s_w: float
 ) -> void:
 	_want_mode = Wl.SIM
+	_want_pull_w = 0
 	_want_sim = {"wind_mps": wind_mps, "grade_pct": grade_pct, "crr": crr, "cw": cw}
 	_want_floor_w = floor_w
 	_want_p3s_w = maxf(power_3s_w, 0.0)
@@ -183,18 +209,22 @@ func command_sim(
 ## RESISTANCE (P1 fallback): level in device units.
 func command_resistance(level: float) -> void:
 	_want_mode = Wl.RESISTANCE
+	_want_pull_w = 0
 	_want_level = level
 
 
 ## No command: nothing new is written (the trainer keeps its last state).
 func command_off() -> void:
 	_want_mode = Wl.OFF
+	_want_pull_w = 0
 
 
 ## Panic (BRIEF 4.6.5): SIM grade 0 and wind 0 at once, bypassing coalescing, then hold
 ## until release_safe().
 func emergency_safe(crr: float, cw: float) -> void:
 	_safe = true
+	_want_pull_w = 0
+	_pull_w = 0
 	_stepped_down = false
 	_entry_active = false
 	if _device == null or _stopped:
@@ -240,12 +270,24 @@ func mode() -> String:
 	return _mode
 
 
-## The applied ERG target in whole watts after slew (0 outside ERG). It may run up to one
-## write slot ahead of the last written target.
+## The applied ERG target in whole watts after slew, haptic pull included (0 outside ERG). It
+## may run up to one write slot ahead of the last written target.
 func applied_target_w() -> int:
 	if _mode != Wl.ERG:
 		return 0
+	return int(floor(_erg_w + 1e-9)) + _pull_w
+
+
+## The applied ERG target without the haptic pull (0 outside ERG). Additive (v0.3.0).
+func applied_base_w() -> int:
+	if _mode != Wl.ERG:
+		return 0
 	return int(floor(_erg_w + 1e-9))
+
+
+## The haptic pull applied on top of the ERG target right now (whole watts). Additive (v0.3.0).
+func applied_pull_w() -> int:
+	return _pull_w if _mode == Wl.ERG else 0
 
 
 ## The last ERG target written to the device (0 outside ERG).
@@ -303,6 +345,7 @@ func write_log() -> Array[Dictionary]:
 
 func _update_slew(dt: float) -> void:
 	if _mode != Wl.ERG or _want_mode != Wl.ERG or _safe:
+		_pull_w = 0
 		return
 	var goal := float(_want_erg_w)
 	if goal <= _erg_w + 1e-9:
@@ -312,6 +355,8 @@ func _update_slew(dt: float) -> void:
 		_erg_w = minf(goal, _erg_w + SLEW_UP_W_PER_S * dt)
 		if _erg_w >= goal - 1e-9:
 			_entry_active = false
+	# The haptic pull is exempt from slew (4.6.6): on and off at once, never during an entry.
+	_pull_w = 0 if _entry_active else _want_pull_w
 
 
 func _slot_open() -> bool:
@@ -336,9 +381,13 @@ func _try_write() -> void:
 func _next_erg_write() -> void:
 	if _mode == Wl.ERG:
 		_stepped_down = false
-		var w := int(floor(_erg_w + 1e-9))
-		if w != _written_erg_w:
-			_write_erg(w)
+		var w := int(floor(_erg_w + 1e-9)) + _pull_w
+		if w == _written_erg_w:
+			return
+		if _pull_w > 0 and _written_pull_w > 0 and _t + MIN_WRITE_INTERVAL_S > _pull_end_t + _EPS:
+			# Keep the slot free for the pull's drop-back (the class notes).
+			return
+		_write_erg(w, _pull_w)
 		return
 	if _mode == Wl.SIM and not _is_flat(_written_sim):
 		# SIM -> ERG, step 1: grade 0 and wind 0 first.
@@ -383,10 +432,11 @@ func _next_sim_write() -> void:
 		_write_sim(_want_sim)
 
 
-func _write_erg(w: int) -> void:
+func _write_erg(w: int, pull_w: int = 0) -> void:
 	_device.set_target_power(w)
 	_mode = Wl.ERG
 	_written_erg_w = w
+	_written_pull_w = pull_w
 	_note(OP_ERG, {"w": w})
 
 
@@ -396,6 +446,7 @@ func _write_sim(state: Dictionary) -> void:
 		float(q["wind_mps"]), float(q["grade_pct"]), float(q["crr"]), float(q["cw"])
 	)
 	_mode = Wl.SIM
+	_written_pull_w = 0
 	_written_sim = q
 	_entry_active = false
 	_force_sim_write = false

@@ -253,6 +253,7 @@ Build it with `EffortDirective.from_dict({...})` (or `make`). Unset fields stay 
 | `mode` | SIM block | `"SIM"` in an ERG phase opens a SIM block, or confirms the one running; see below |
 | `mode_grade` | mode grade | A game's own load in % grade (Tank's boiler), only inside a SIM phase or a SIM block |
 | `haptic` (grade %), `haptic_wind` (m/s) | haptic | A short effect before the rider's intensity, at most +3 % (or the same force as wind) for at most 8 s |
+| `haptic_pull` (% FTP) | haptic pull | A short ERG tug a rider feels rather than rides (a hooked fish turning): added on top of the ERG target for at most 3 s; ERG only |
 | `crr`, `cw` | factors | Relative factors in [0.5, 1.0]: they can only lower resistance |
 | `duration_s` | — | Applies to the channels this request sets; 0 (default) means until the phase ends |
 | `reason`, `source` | — | Free strings for the report (`"overdrive"`, `"siege"`); the platform never restricts them |
@@ -263,6 +264,8 @@ Build it with `EffortDirective.from_dict({...})` (or `make`). Unset fields stay 
 **`mode` depends on the phase.** In an ERG phase with no SIM block running, `mode: "SIM"` opens a SIM block: 10 s ≤ `duration_s` ≤ 30 s (inclusive), starting ≥ 30 s after the rider's previous ERG ↔ SIM switch; its two bracketing switches are exempt from the 30 s spacing. Opening one is refused during rescue, coasting, AFK or pause (`sim_block_unsafe`). While a block runs, another `mode: "SIM"` only confirms it, on the host and in the governor alike: it is accepted whatever its `duration_s`, never extends the block or re-checks its length, safety or spacing, and its other channels apply as inside the block, so `{"mode": "SIM", "haptic": 2.0, "duration_s": 1.5}` during a block is a 1.5 s haptic (with no block running the same request asks for a 1.5 s block and is refused with `sim_block_length`). `mode: "ERG"` in an ERG phase ends a running block early, or confirms ERG when none runs. In a SIM phase, `mode: "SIM"` is a no-op confirmation (no channel, no length or spacing rule, no expiry effect), so Tank's 1.5 s hit haptic and Fishing's 5 s last run are fine there; `mode: "ERG"` in a SIM phase is refused (`erg_in_sim_phase`). `EffortDirective.channels_for_phase(phase_mode)` gives the channels a request touches in a phase of that mode.
 
 **Haptics** are a channel of their own: a haptic over a held `mode_grade` changes only the haptic term, and its expiry ends only the haptic (the grade stays). The governor multiplies `haptic` by the rider's `haptic_intensity` and caps +3 % and 8 s. A haptic is never turned into a mode switch. The host refuses the whole request (`DirectiveResult.reason`) for a rider in ERG outside a SIM block (`haptic_in_erg`) or opted out (`haptics_off`). The rider's governor drops the haptic in that rider's warm-up (`haptic_in_warmup`) or within 15 s of the end of that rider's last applied haptic (`haptic_cooldown`): the applied record lists it under `dropped` and the request's other channels still apply; a request whose only effect is the haptic (alone, or with a confirming `mode`) comes back refused with that reason. Every case is logged and recorded.
+
+**Haptic pull** (BRIEF 4.6.6) is the ERG haptic: `{"haptic_pull": 20.0, "duration_s": 2.0}` raises the rider's applied ERG target by 20 % FTP × `haptic_intensity` at once, holds it for `duration_s` (at most 3 s; 0 means 3 s) and drops back at once. Bounds: at most +50 % FTP after the intensity, × 0.85 while FTP is unverified, and the target with the pull never exceeds min(150 % FTP, 1000 W, trainer max) nor a latched 105 % / 120 % band; its time above 105 % and 120 % counts toward the duration limits. It is exempt from slew and from the long-phase 105 % cap, and from nothing else. The rider's governor drops it (listed under `dropped`, or a refusal when it is the request's only effect) in SIM or a SIM block (`haptic_pull_in_sim`), for opted-out riders (`haptics_off`), in warm-up (`haptic_in_warmup`), during rescue and its ramp-back, coasting, AFK, pause or panic (`haptic_pull_unsafe`), and within 15 s of the end of the rider's previous haptic or pull (`haptic_cooldown`; one cooldown for both). A running pull ends at once when any of those begins. `haptic_pull` must be > 0. The applied record holds `haptic_pull_s`, `haptic_pull_w`, `haptic_pull_pct` and `target_with_pull_w`; while a pull raises the target, `clamped_by` in telemetry and the 1 Hz trace holds `haptic_pull` and `applied_target_w` includes it. The host passes it through; each receiver's governor applies it. Use it for moments, not efforts: a turn, a strike, a snag.
 
 ### 8.2 Refusals and clamps
 
@@ -279,11 +282,12 @@ Refusal reasons (`DirectiveResult.reason`, `Wl.REFUSE_*`):
 | `mode_grade_outside_sim` | `mode_grade` outside a SIM phase or block |
 | `erg_in_sim_phase` | `mode: "ERG"` in a SIM phase |
 | `haptic_in_erg`, `haptics_off`, `haptic_in_warmup`, `haptic_cooldown` | See haptics |
+| `haptic_pull_in_sim`, `haptic_pull_unsafe` | See haptic pull (`SafetyGovernor.REFUSE_PULL_SIM`, `REFUSE_PULL_UNSAFE`) |
 | `grade_source_not_game` | `course_grade` outside a `game` phase |
 | `not_open_ended`, `before_min_s` | `end_phase` refusals |
 | `bad_fields`, `unknown_peer`, `plan_invalid`, `not_authority` | Malformed request, a peer not in `ctx.players`, a rejected `replan`, a call on a client |
 
-`clamped_by` names every rule that changed an applied value, in the order applied (`Wl.CLAMP_*`): `unverified` (×0.85), `ceiling` (min(150 % FTP, 1000 W, trainer max)), `long_phase` (105 % in phases > 300 s), `limit_105` and `limit_120` (duration limits), `warmup` (65 %, grade −2…+3, no haptics), `floor` (max(30 % FTP, 50 W)), `rescue` (50 % FTP), `coasting` (floor), `slew` (+30 W/s), `switch_ramp` (ramped ERG ↔ SIM entry), `panic`, `grade_range` (user range, default −5…+10), `grade_limit` (−10…+16), `haptic_intensity` (scaled by the rider's setting), `haptic_limit` (only when the +3 % or 8 s bound bites), `factor_bounds` and `paused`. A target exactly at a cap is neither clamped nor counted.
+`clamped_by` names every rule that changed an applied value, in the order applied (`Wl.CLAMP_*`): `unverified` (×0.85), `ceiling` (min(150 % FTP, 1000 W, trainer max)), `long_phase` (105 % in phases > 300 s), `limit_105` and `limit_120` (duration limits), `warmup` (65 %, grade −2…+3, no haptics), `floor` (max(30 % FTP, 50 W)), `rescue` (50 % FTP), `coasting` (floor), `slew` (+30 W/s), `switch_ramp` (ramped ERG ↔ SIM entry), `panic`, `grade_range` (user range, default −5…+10), `grade_limit` (−10…+16), `haptic_intensity` (scaled by the rider's setting), `haptic_limit` (only when the +3 % or 8 s bound, or the pull's +50 % or 3 s bound, bites), `factor_bounds`, `paused` and `haptic_pull` (a haptic pull raises the applied ERG target; `SafetyGovernor.CLAMP_PULL`). A target exactly at a cap is neither clamped nor counted.
 
 ### 8.3 Examples
 
@@ -298,6 +302,8 @@ ctx.directives.request(peer, EffortDirective.from_dict({"mode": "SIM", "mode_gra
 ctx.directives.request(peer, EffortDirective.from_dict({"mode": "SIM", "haptic": 2.0, "duration_s": 1.5, "reason": "hit", "source": "tank"}))
 # Fishing pull change: six ERG steps 0.5 s apart, each held until the next.
 ctx.directives.request(peer, EffortDirective.from_dict({"mode": "ERG", "target_pct": 93.5, "duration_s": 0, "reason": "pull", "source": "fishing"}))
+# Fishing: the hooked fish turns: a 2 s tug of +25% FTP on top of the ERG target.
+ctx.directives.request(peer, EffortDirective.from_dict({"haptic_pull": 25.0, "duration_s": 2.0, "reason": "turn", "source": "fishing"}))
 # Terrain at 2 Hz in a grade_source "game" phase, a cadence band, and ending an open-ended phase.
 ctx.directives.course_grade(peer, 3.5)
 ctx.directives.cadence_band(peer, 60, 120)
@@ -741,15 +747,16 @@ BRIEF 4.6 outranks every gameplay idea: change your design to fit it, never the 
 A GameModule is its GameHost's child, so `get_parent()` is the GameHost; it keeps its riders private (`_local_riders`), and these rules stop a game from reaching one anyway. What the governor does to your plans and directives, so you can design inside it:
 
 - **Floor and ceiling**: ERG targets never go below max(30 % FTP, 50 W) (rounded up; it wins over every cap and over rescue) or above min(150 % FTP, 1000 W, the trainer's max). Applied targets are whole watts, rounded down.
-- **Long phases**: a phase longer than 300 s (open-ended: `max_s`) caps every target in it, directives included, at 105 %. Fishing's marlin jumps stop at 104 % for this reason.
+- **Long phases**: a phase longer than 300 s (open-ended: `max_s`) caps every target in it, directives included, at 105 % (a haptic pull excepted). Fishing's marlin jumps stop at 104 % for this reason.
 - **Duration limits**: at most 300 s above 105 % and 60 s above 120 %, accrued until ≥ 120 consecutive ERG seconds at ≤ 90 % reset both; time in SIM accrues nothing and restarts the reset count.
 - **Unverified FTP**: every ERG target × 0.85.
-- **Slew**: increases at most 30 W/s; decreases at once. Ramp big steps yourself if your rules read the applied target.
+- **Slew**: increases at most 30 W/s; decreases at once (a haptic pull excepted). Ramp big steps yourself if your rules read the applied target.
 - **Rescue**: section 14. **Coasting**: the floor at 3 s, pause or AFK at 10 s.
 - **Warm-up**: the first 5 minutes of riding: ERG ≤ 65 %, SIM grade −2…+3 %, no haptics. Every game opens with warm-up content.
 - **Mode switches** are ramped: ERG → SIM sets the ERG target to min(applied, 3 s power), then SIM at grade 0, then the stacked grade; SIM → ERG sets grade 0, then ERG at min(3 s power, the planned or directed target), never below the floor, slewing up and never above the target. Keep ERG ↔ SIM switches ≥ 30 s apart (a directive SIM block of 10–30 s is the one exception).
 - **SIM stacking**: (course grade + mode grade) × difficulty (default 50 %) + gear offset, clamped to the user's range (default −5…+10 %); plus haptic × intensity ≤ +3 % for ≤ 8 s with a 15 s cooldown per rider; total −10…+16 %. `crr` and `cw` only lower resistance.
 - **Haptics**: never to ERG riders, in warm-up, or to riders who opted out (`haptics_on`).
+- **Haptic pull** (ERG): + pull % × intensity, ≤ +50 % FTP, ≤ 3 s, at once on and off; within the absolute ceiling and any latched band; counts toward the duration limits; never in SIM, warm-up, rescue, coasting, pause or panic, or for opted-out riders; one 15 s cooldown with the other haptics. Simulations: trace rows with `haptic_pull` in `clamped_by` may sit above 105 % in a long phase.
 - **Panic** (`SafetyGovernor.emergency_safe()`): ERG off, SIM grade 0 and wind 0 at once.
 - **Cool-down**: 180 s at 50 % FTP; your directives are refused.
 - **The network never sends device commands**: each rider's own governor validates and clamps everything locally.
