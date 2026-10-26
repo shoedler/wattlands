@@ -6,7 +6,8 @@ extends Node
 ## the great arch; wreck: a grouper fight by the old wreck, the line taut; kelp: a fish on a slack
 ## line on the shelf; shallows: waiting over seagrass and sand; abyss: by the basalt where the
 ## floor drops away; grouper: a fight in the deep; edge: stopped by the world's edge; workout:
-## two boats on the endless workout map, one fighting; cruise: driving at FTP).
+## two boats on the endless workout map, one fighting; cruise: driving at FTP; hump: about 70 %
+## FTP, the stern squatting; plane: on the plane; towed: a grouper towing the boat stern first).
 ## `art` sets the art size (the flex PixelViewport's; capture at 3 screen px per art px with
 ## --size), `hr_bpm` a heart rate sensor (0: none). The local rider's telemetry comes from its
 ## state every frame (HudLayer.update and FishingGame.local_tm), as in a session.
@@ -56,6 +57,29 @@ func _ready() -> void:
 			me.p_eff_w = 205.0
 			me.cadence_ema = 88.0
 			FX.set_drive(other, 4180.0, 14.0)
+		"hump":
+			FX.set_drive(me, 4300.0, 11.0)
+			me.pitch_deg = 9.5
+			me.heave_m = -0.06
+			me.wake = 0.9
+			me.power_w = 150.0
+			FX.set_drive(other, 4180.0, 9.0)
+		"plane":
+			FX.set_drive(me, 4300.0, 13.5)
+			me.pitch_deg = 3.6
+			me.heave_m = 0.06
+			me.plane = 1.0
+			me.planing = true
+			me.wake = 1.0
+			me.power_w = 210.0
+			FX.set_drive(other, 4180.0, 9.0)
+		"towed":
+			FX.set_fight(me, 14150.0, 8, 34.0, 380.0, 0.85, 0.0)
+			me.tow_n = 420.0
+			me.v_mps = -1.2
+			me.heave_m = -0.07
+			me.pitch_deg = 3.6
+			FX.set_wait(other, 14000.0, 6, 14.0, 120.0)
 		"brake":
 			FX.set_drive(me, 9000.0, 14.0)
 			me.pitch_deg = -6.0

@@ -42,10 +42,12 @@ const SHIN_PX := 5.5
 const DRIVE_COLOURS: Array[Color] = [
 	FishingPalette.SLATE, FishingPalette.ABYSS, FishingPalette.ACCENT
 ]
-## Winch drum and outboard prop sprites (top-left) and the prop's hub.
+## Winch drum and outboard prop sprites (top-left) and the prop's hub: a long-shaft leg, the
+## prop 7 rows under the waterline, so it stays in the water on the plane (the hull heaves up
+## at most FishingView.HEAVE_UP_PX).
 const WINCH_AT := Vector2(26, 13)
-const PROP_AT := Vector2(20, 30)
-const PROP_HUB := Vector2(21, 32)
+const PROP_AT := Vector2(20, 35)
+const PROP_HUB := Vector2(21, 37)
 ## The rider's cap (player colour) on the head, and the pennant on the bow mast.
 const CAP := Rect2i(40, 7, 3, 1)
 const FLAG := Rect2i(83, 11, 4, 2)

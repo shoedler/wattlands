@@ -11,11 +11,13 @@ extends Node2D
 ##     drawn) and every fish (its pose from the line: swimming, pulling at 15 or 30 degrees,
 ##     tired) and wobbler, shifted along the palette ladder by the water around them
 ##     (FishingPaletteMap);
-##  3. the prop wash and the lines (behind the hulls): each a FishingRope drawn as a clean 1 px
-##     curve, the rod's slate above the water and a colour per water band under it;
-##  4. the boats (others first, the local boat last; FishingBoatView);
-##  5. wakes (foam slabs in a fixed rhythm) and the bow wave, then the effects (splashes, catch
-##     sparkles).
+##  3. behind the hulls: each boat's far V arm and prop wash, the farther boats' whitewater
+##     (FishingWhitewater) and the lines: each a FishingRope drawn as a clean 1 px curve, the
+##     rod's slate above the water and a colour per water band under it;
+##  4. the boats (others first, the local boat last; FishingBoatView; the hull heaves by whole
+##     pixels and takes the pose its pitch asks for, the long-shaft prop always under water);
+##  5. the local boat's whitewater (the wake, the stern mound, the rooster tail, the bow water,
+##     towing and braking water), then the effects (splashes, catch sparkles).
 ## It only reads `game.state`. Boats and fish are drawn between states from a FishingSnapHistory
 ## every frame: on a client with a render clock behind the newest snapshot by its mean spacing
 ## (GAME_SDK 12), on the host and in SOLO one sim step behind the newest step (the sim-clock
@@ -44,9 +46,9 @@ const DEPTH_SHALLOWER := 0.3
 const DEPTH_DONE := 0.002
 ## The boat's heave in whole px per m (FishingRiderState.heave_m) and its range (the prop stays
 ## in the water: at most HEAVE_UP_PX up).
-const HEAVE_PX_PER_M := 30.0
-const HEAVE_UP_PX := 2
-const HEAVE_DOWN_PX := 3
+const HEAVE_PX_PER_M := 60.0
+const HEAVE_UP_PX := 4
+const HEAVE_DOWN_PX := 4
 ## Fish poses: tired under TIRED_S stamina (and in the Landing); a pull pose from rod tension
 ## PULL15_AT (the 15 degree pose) or PULL30_AT (up to the 30 degree one), picked by the line's
 ## angle at the mouth (level under PULL15_DEG, steep from PULL30_DEG); the swim cycle at SWIM_FPS
@@ -76,51 +78,6 @@ const FISH_FLOOR_GAP_PX := 6.0
 ## Landing: inside ABOARD_M the fish hangs from the rod tip, ABOARD_DROP_PX under it.
 const ABOARD_M := 6.0
 const ABOARD_DROP_PX := 3.0
-## Wake: foam slab lengths (px, at full wake) and the gap between them, on the surface row and
-## two rows under it; the slabs step back GAIT_PX every GAIT_S so the foam seems to stream.
-const WAKE_SLABS: Array[int] = [24, 16, 10, 6]
-const WAKE_LOW: Array[int] = [12, 8, 4]
-const WAKE_GAP_PX := 5
-const GAIT_PX := 2
-const GAIT_S := 0.2
-## The bow wave, bottom row first: [offset ahead of the bow, width] per row (px).
-const BOW_WAVE: Array[Vector2i] = [Vector2i(-3, 9), Vector2i(-1, 5)]
-## At high speed (wake from WAKE_FAST_AT) the wake runs longer (these slabs after WAKE_SLABS and
-## WAKE_LOW) and a bow that is up (FishingBoatView.pose() 1 and up) throws spray: foam slabs
-## above the bow wave, [x ahead of the bow, length] per row going up (always ahead of the stem,
-## never on the hull), two patterns swapped with the gait.
-const WAKE_FAST_AT := 0.8
-const WAKE_TAIL: Array[int] = [8, 6, 4]
-const WAKE_LOW_TAIL: Array[int] = [4, 2]
-## The broken crest above the surface line at speed, and the wake rows' offset under the line.
-const WAKE_CREST: Array[int] = [6, 4, 3, 2]
-const SURFACE_UNDER := FishingScenery.SURFACE_ROWS
-const BOW_SPRAY: Array = [
-	[Vector2i(2, 4), Vector2i(3, 3), Vector2i(2, 2), Vector2i(4, 3), Vector2i(3, 2)],
-	[Vector2i(3, 3), Vector2i(2, 4), Vector2i(4, 2), Vector2i(3, 3), Vector2i(5, 2)],
-]
-## Braking (a braking pose): the bow pushes a foam mound ahead of it (rows going up, [ahead of
-## the bow, width]) with a spray sheet standing on it (BRAKE_SHEET); the
-## wake collapses into a churned patch behind the stern ([behind the stern, width] per row
-## under the surface line) and the old trail detaches, drifting BRAKE_TRAIL_PX_S behind.
-const BRAKE_MOUND: Array[Vector2i] = [
-	Vector2i(-4, 18), Vector2i(-2, 15), Vector2i(1, 11), Vector2i(3, 7), Vector2i(5, 3)
-]
-## The spray sheet on top of the mound: [ahead of the bow, width] per row going up, each row
-## standing on the one under it, so it hangs on the mound in two solid steps.
-const BRAKE_SHEET: Array[Vector2i] = [Vector2i(4, 10), Vector2i(8, 7)]
-## A bow up in pose FOREFOOT_POSE or higher clears the water: a 2-row spray sheet runs under the
-## forefoot, from FOREFOOT_FROM to FOREFOOT_TO px behind the bow.
-const FOREFOOT_POSE := 4
-const FOREFOOT_FROM := 28
-const FOREFOOT_TO := 4
-const BRAKE_CHURN: Array = [
-	[Vector2i(2, 5), Vector2i(10, 4), Vector2i(17, 3)],
-	[Vector2i(4, 3), Vector2i(9, 5)],
-	[Vector2i(3, 4), Vector2i(11, 2)],
-]
-const BRAKE_TRAIL_PX_S := 30.0
-const BRAKE_TRAIL_MAX_PX := 140.0
 ## The rope's slack and strain while a wobbler works (nearly taut, so a trolled line sweeps
 ## back), the least strain it shows in a fight, and the water's push on a line per m/s of the
 ## boat (px/s^2).
@@ -176,8 +133,10 @@ var _layers: Array[FishingDrawLayer] = []
 var _pending: Array[Dictionary] = []
 ## slot -> FishingRope: each rider's line, stepped every frame.
 var _ropes: Dictionary = {}
-## slot -> seconds the boat has been in a braking pose (0 when not braking).
-var _brake_t: Dictionary = {}
+## The boats' water (FishingWhitewater) and each boat's odometer: px it travelled, shown.
+var whitewater: FishingWhitewater = FishingWhitewater.new()
+var _odo: Dictionary = {}
+var _last_x: Dictionary = {}
 ## The camera's eased lead (px).
 var _lead: float = 0.0
 ## The view depth's goal (m; see DEPTH_DEEPER) and the frame time since the newest state.
@@ -507,7 +466,10 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	b.tension = _tension(r)
 	b.position = Vector2(roundf(sx), float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0)))
 	b.advance(delta)
-	_brake_t[r.slot] = float(_brake_t.get(r.slot, 0.0)) + delta if b.braking() > 0 else 0.0
+	var was_x := float(_last_x.get(r.slot, float(v["x"])))
+	_last_x[r.slot] = float(v["x"])
+	var moved := absf(float(v["x"]) - was_x) * FishingScenery.PX_PER_M
+	_odo[r.slot] = float(_odo.get(r.slot, 0.0)) + (moved if moved < CAM_SNAP_M else 0.0)
 	(model["boats"] as Dictionary)[r.slot] = b.position
 
 
@@ -726,26 +688,35 @@ func _paint_back(c: CanvasItem) -> void:
 	scenery.paint_back(c, cam_m, _t)
 
 
-## Prop wash under the surface behind every driving boat's screw: two short slabs streaming
-## back.
-## The farther boats' wakes are drawn here too, behind every boat.
+## Behind every hull: each boat's far V arm and prop wash, and a farther boat's whole water (a
+## step paler: FishingWhitewater).
 func _paint_wash(c: CanvasItem) -> void:
-	var gait := (floori(_t / GAIT_S) % 2) * GAIT_PX
 	for slot: int in boats:
 		var b: FishingBoatView = boats[slot]
-		var r := game.state.rider(slot)
-		var v: Dictionary = _shown.get(slot, {})
-		if b.visible and b.far and not v.is_empty() and float(v["wake"]) > 0.04:
-			_paint_wake(c, b, float(v["wake"]), slot)
-		if not b.visible or b.far or r == null or absf(r.v_mps) < 0.3:
+		var w := water_state(slot)
+		if not b.visible or w.is_empty():
 			continue
-		var hub := b.pixel_of(Vector2i(FishingRig.PROP_HUB))
-		var dir := -b.heading
-		for k in 2:
-			var w: int = [5, 3][k]
-			var x0 := hub.x + float(dir * (3 + gait + k * 8))
-			var x := x0 if dir > 0 else x0 - float(w - 1)
-			c.draw_rect(Rect2(x, hub.y + float(k), w, 1), FishingPalette.HAZE)
+		whitewater.paint_behind(c, b, w)
+		if b.far:
+			whitewater.paint_front(c, b, w)
+
+
+## What FishingWhitewater draws for `slot`'s boat ({} without a rider): its odometer, the time,
+## speed, planing level, line tow (0..1) and braking.
+func water_state(slot: int) -> Dictionary:
+	var r := game.state.rider(slot)
+	var b: FishingBoatView = boats.get(slot)
+	if r == null or b == null:
+		return {}
+	return {
+		"slot": slot,
+		"odo": float(_odo.get(slot, 0.0)),
+		"t": _t,
+		"v": r.v_mps,
+		"plane": r.plane,
+		"tow": clampf(r.tow_n / FishingConst.TOW_MAX_N, 0.0, 1.0),
+		"brake": b.braking(),
+	}
 
 
 ## Steps rider `r`'s rope toward this frame's rod end and line end (none without a line out).
@@ -835,11 +806,11 @@ func _paint_front(c: CanvasItem) -> void:
 	_paint_line_parts(c, true)
 	for slot: int in boats:
 		var b: FishingBoatView = boats[slot]
-		var v: Dictionary = _shown.get(slot, {})
 		if b.visible and b.far:
 			_paint_far_waterline(c, b)
-		if b.visible and not b.far and not v.is_empty() and float(v["wake"]) > 0.04:
-			_paint_wake(c, b, float(v["wake"]), slot)
+		var w := water_state(slot)
+		if b.visible and not b.far and not w.is_empty():
+			whitewater.paint_front(c, b, w)
 
 
 ## A farther boat's own surface: a FAR_WATERLINE_ROWS foam slab on its waterline, a little
@@ -850,109 +821,3 @@ func _paint_far_waterline(c: CanvasItem, b: FishingBoatView) -> void:
 	var x0 := minf(a.x, z.x)
 	var w := absf(z.x - a.x) + 1.0
 	c.draw_rect(Rect2(x0, b.position.y, w, FAR_WATERLINE_ROWS), FishingPalette.FOAM)
-
-
-## The wake: foam slabs just under the surface line behind the stern (and a shorter row two rows
-## under it, and at speed a crest above the line), each WAKE_GAP_PX apart, their lengths scaled
-## by the wake; at higher wake a bow wave, and spray when the bow is up. Braking, the bow pushes
-## a foam mound and a spray sheet ahead, the wake churns into a short patch behind the stern
-## and the old trail drifts off behind it.
-func _paint_wake(c: CanvasItem, b: FishingBoatView, wake: float, slot: int) -> void:
-	var dir := -b.heading
-	var stern := b.pixel_of(FishingRig.WAKE_AT)
-	var y0 := b.position.y
-	var gait := (floori(_t / GAIT_S) % 2) * GAIT_PX
-	var braking := b.braking() > 0
-	var fast := wake >= WAKE_FAST_AT
-	var top: Array[int] = WAKE_SLABS.duplicate()
-	var low: Array[int] = WAKE_LOW.duplicate()
-	if fast:
-		top.append_array(WAKE_TAIL)
-		low.append_array(WAKE_LOW_TAIL)
-	# The surface line is foam already: the wake streams just under it, a shorter row under that
-	# and, at speed, a broken crest just above it.
-	var rows: Array = [[top, SURFACE_UNDER, 0], [low, SURFACE_UNDER + 2, 4 + gait]]
-	if fast and not braking:
-		rows.append([WAKE_CREST, -1, 2 + gait])
-	var gap := 0.0
-	if braking:
-		var bt := float(_brake_t.get(slot, 0.0))
-		gap = 22.0 + minf(bt * BRAKE_TRAIL_PX_S, BRAKE_TRAIL_MAX_PX)
-	for row: Array in rows:
-		var x := stern.x + float(dir) * (float(row[2]) + gap)
-		for len_full: int in row[0]:
-			var w := roundi(float(len_full) * clampf(wake, 0.0, 1.0))
-			if w < 2:
-				break
-			var left := x if dir > 0 else x - float(w - 1)
-			var y := y0 + float(row[1])
-			c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-			x += float(dir * (w + WAKE_GAP_PX))
-	var bow := b.pixel_of(FishingRig.SPRAY_AT)
-	var h := b.heading
-	var y_surf := float(FishingScenery.SURF_Y - (FAR_ROW_PX if b.far else 0))
-	if braking:
-		_paint_brake(c, b, stern, bow, y0, y_surf)
-		return
-	if wake < 0.3:
-		return
-	var up := b.pose()
-	for k in BOW_WAVE.size():
-		var row: Vector2i = BOW_WAVE[k]
-		var w := row.y if wake >= 0.7 or up > 0 else row.y / 2 + 1
-		var x0 := bow.x + float(row.x * h)
-		var left := x0 if h > 0 else x0 - float(w - 1)
-		var y := y_surf - 1.0 - float(k)
-		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-	if up <= 0:
-		return
-	if up >= FOREFOOT_POSE:
-		for k in 2:
-			var from := bow.x - float((FOREFOOT_FROM - 6 * k) * h)
-			var to := bow.x - float(FOREFOOT_TO * h)
-			var y := y_surf - 1.0 - float(k)
-			c.draw_rect(Rect2(minf(from, to), y, absf(to - from), 1), foam_on(y))
-	var spray: Array = BOW_SPRAY[floori(_t / GAIT_S) % BOW_SPRAY.size()]
-	for k in mini(spray.size(), up + 1):
-		var slab: Vector2i = spray[k]
-		var x0 := bow.x + float(slab.x * h)
-		var left := x0 if h > 0 else x0 - float(slab.y - 1)
-		var y := y_surf - 1.0 - float(BOW_WAVE.size() + k)
-		c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
-
-
-## Braking water: the foam mound and spray sheet ahead of the bow (bigger in the harder pose)
-## and the churned patch behind the stern.
-func _paint_brake(
-	c: CanvasItem, b: FishingBoatView, stern: Vector2, bow: Vector2, y0: float, y_surf: float
-) -> void:
-	var h := b.heading
-	var hard := b.braking() >= 2
-	var gait := floori(_t / GAIT_S) % 2
-	var mound_rows := BRAKE_MOUND.size() if hard else BRAKE_MOUND.size() - 2
-	for k in mound_rows:
-		var row: Vector2i = BRAKE_MOUND[k]
-		var w := row.y if hard else row.y - 4
-		var x0 := bow.x + float(row.x * h)
-		var left := x0 if h > 0 else x0 - float(w - 1)
-		var y := y_surf - 1.0 - float(k)
-		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-	for k in BRAKE_SHEET.size():
-		var slab: Vector2i = BRAKE_SHEET[k]
-		var w := slab.y if hard else slab.y - 3
-		var x0 := bow.x + float(slab.x * h)
-		var left := x0 if h > 0 else x0 - float(w - 1)
-		var y := y_surf - 1.0 - float(mound_rows + k)
-		c.draw_rect(Rect2(left, y, w, 1), foam_on(y))
-	var dir := -h
-	for k in BRAKE_CHURN.size():
-		for slab: Vector2i in BRAKE_CHURN[k]:
-			var x0 := stern.x + float(dir * (slab.x + gait))
-			var left := x0 if dir > 0 else x0 - float(slab.y - 1)
-			var y := y0 + float(SURFACE_UNDER + 2 * k) - (3.0 if k == 0 else 0.0)
-			c.draw_rect(Rect2(left, y, slab.y, 1), foam_on(y))
-
-
-## Foam on row `y` (white; kept as a hook for the rows a wake can touch).
-static func foam_on(_y: float) -> Color:
-	return FishingPalette.FOAM
