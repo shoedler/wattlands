@@ -109,3 +109,15 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 
 - Decision: applied records and trace rows may show only slew, floor, unverified, rescue, coasting, haptic_intensity and warmup; switch_ramp, paused and the SIM grade bounds are noted. ceiling, long_phase, limit_105 and limit_120 fail by name.
 - Reason: the plans must never need the governor's caps; rule names from wl.gd.
+
+## 2026-10-27 The boat is a rigid body on the water
+
+- Decision: FishingBoat simulates surge, heave and pitch with forces (turbo thrust 150 x P_eff / (u + 6 m/s), hull drag tuned to keep 15 m/s x (P_eff / 250 W)^0.6 in displacement, a displacement hump, line tension) and force-driven spring-dampers, plus a planing latch (on at 11.9 m/s, about 70 % FTP-equivalent; off under 11.3 m/s) that cuts drag for a 7 % faster cruise. The prop depth is part of the state and never above 0.2 m.
+- Alternatives: keep the scripted trim spring with kicks; a pose table by speed.
+- Reason: the owner asked for a boat that reacts to pedalling exactly; poses, wake and tow follow from one model the view reads through the snapshot.
+
+## 2026-10-27 Big-fish surges as an ERG haptic pull
+
+- Decision: a run or jump by a fish of 30 kg or more requests haptic_pull +50 % FTP for 2 s (haptics on, not in the first 300 s or a stagger, one per 15 s) and shows F_SURGE for 2 s either way. The sims check its shape and accept a refusal.
+- Alternatives: a SIM haptic grade (not available in an ERG phase); a target change (would be a ride target, not a feel).
+- Reason: owner-approved BRIEF 4.6.6 amendment; the governor bounds and spaces it.

@@ -9,6 +9,7 @@ extends FishingHudControl
 ## Positions come from the view's model (FishingView, through the game's "fishing_view" meta),
 ## in art px mapped onto this Control, which covers the view down to the meters.
 
+## The base rect (FishingHud.layout() gives the one for the art size).
 const ART := Rect2i(0, 0, 640, 300)
 ## Chip offsets (art px): above a hint, and ahead of / behind the boat's pivot.
 const HINT_LIFT := 20.0
@@ -31,16 +32,12 @@ var fish_boxes: Array[Rect2] = []
 var _t: float = 0.0
 
 
-static func make(p_game: FishingGame) -> FishingChips:
+static func make(p_game: FishingGame, rect: Rect2i = ART) -> FishingChips:
 	var c := FishingChips.new()
 	c.game = p_game
 	c.name = "FishingChips"
-	c.design_h = float(ART.size.y * 3)
+	c.place_at(rect)
 	return c
-
-
-func ap() -> float:
-	return size.x / float(ART.size.x) if size.x > 0.0 else 3.0
 
 
 func refresh() -> void:

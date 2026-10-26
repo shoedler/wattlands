@@ -146,3 +146,38 @@ test('hsv reads the palette', () => {
   assert.ok(abyss.h > 190 && abyss.h < 210);
   assert.equal(Math.round(abyss.v * 100), 40);
 });
+
+test('a tall deep-teal box is a panel only inside a surface-teal frame', () => {
+  const D = sc.PANEL_COLOUR;
+  const F = sc.FRAME_COLOUR;
+  const rows = field(60, 60, SKY);
+  for (let y = 4; y < 40; y++) for (let x = 4; x < 30; x++) rows[y][x] = D;
+  for (let y = 3; y < 41; y++) {
+    rows[y][3] = F;
+    rows[y][30] = F;
+  }
+  for (let x = 3; x < 31; x++) {
+    rows[3][x] = F;
+    rows[40][x] = F;
+  }
+  for (let y = 4; y < 40; y++) for (let x = 40; x < 50; x++) rows[y][x] = D;
+  const g = sc.artGrid(sc.decodePng(png(rows)), 3, [], []);
+  assert.equal(g.masked, 28 * 38, 'the framed panel with its frame');
+  assert.equal(g.cells.filter((c) => c === D).length, 360, 'an unframed tall block stays world');
+});
+
+test('the HUD rects follow the art size and the heart is a HUD colour', () => {
+  const [mm, board, stack, panic] = sc.hudRects(860, 340);
+  assert.deepEqual(board, [642, 0, 218, 62]);
+  assert.equal(mm[2], 640);
+  assert.equal(stack[1] + stack[3], 340);
+  assert.deepEqual(panic, [720, 292, 140, 48]);
+  assert.deepEqual(sc.parseRects('1,2,3,4;5,6,7,8'), [[1, 2, 3, 4], [5, 6, 7, 8]]);
+  const rows = field(10, 10, SKY);
+  const img = sc.decodePng(png(rows));
+  const at = (x, y) => (y * img.width + x) * 4;
+  img.data[at(4, 4)] = 0xb5;
+  img.data[at(4, 4) + 1] = 0x67;
+  img.data[at(4, 4) + 2] = 0x5f;
+  assert.equal(sc.frameGrid(img, 3, []).offGrid, 1, 'a heart off the grid is counted');
+});

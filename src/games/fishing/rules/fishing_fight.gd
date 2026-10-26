@@ -15,6 +15,13 @@ extends RefCounted
 ## Landing: the gaff meter fills while P >= 1.2 x FTP during the first 15 s: max(0, P - FTP) /
 ## (0.4 x FTP x 15 s); full = Trophy (x1.5 points). A last-run haptic (+3 % for 5 s, 3-6 s in)
 ## when allowed. Points = FishingConst.base_points(kg) x grade x hookup.
+## Big-fish surges: when a fish of SURGE_KG or more starts a run (or a jump), the rider who
+## allows haptics gets an ERG haptic_pull of +SURGE_PULL_PCT % FTP for SURGE_S (at most one per
+## SURGE_GAP_S; the governor bounds it), and F_SURGE is on for SURGE_S either way.
+## Line tension (tension(), FishingBoat tows the boat with it): TOW_MAX_N x size x pull, size =
+## clamp(sqrt(kg / 200), 0.15, 1); pull = 0.35 + 0.35 S + 0.3 strain (+ 0.3 on a run), x (1 -
+## 0.8 slack); 0.5 while staggered (the fish swims out); 1 in a surge; in the Landing 0.4 easing
+## to 0 as the fish comes aboard; 0 with no fish on the line.
 
 const EPS := 1e-6
 ## The gaff meter counts as full from here.
@@ -59,6 +66,7 @@ static func begin(st: FishingState, r: FishingRiderState, out: FishingStepOut) -
 	r.gaff = 0.0
 	r.resolved = false
 	r.fight_start_t = st.t
+	r.surging = false
 	r.hookup_count = 1
 	for i in r.overlap_s.size():
 		r.overlap_s[i] = 0.0
@@ -123,7 +131,7 @@ static func tick(
 			_lose(st, r, false, out)
 		if not f.off_line:
 			move_fish(f, slot, dt)
-			_runs(st, r, slot, out)
+			_runs(st, r, slot, inp, out)
 	var dirs := FishingPullScheduler.step(r.pull, slot, st.t, r.ftp, r.pull_rng)
 	if not r.stagger_on:
 		for d: Variant in dirs:
@@ -195,7 +203,11 @@ static func _skip_due_runs(f: FishingFishState, slot: FishingPlanSlot) -> void:
 ## Fires the next run when due and no run is on; a jump also waits for its gap. A run the
 ## scheduler refuses counts as fired, with no event.
 static func _runs(
-	st: FishingState, r: FishingRiderState, slot: FishingPlanSlot, out: FishingStepOut
+	st: FishingState,
+	r: FishingRiderState,
+	slot: FishingPlanSlot,
+	inp: FishingRiderInput,
+	out: FishingStepOut
 ) -> void:
 	var f := r.fish
 	if f.run_active or not run_due(f, slot):
@@ -214,12 +226,62 @@ static func _runs(
 	f.run_end_t = st.t + dur
 	if r.pull.run_active and r.pull.run_end_t > st.t:
 		f.run_end_t = r.pull.run_end_t
+	_surge(st, r, inp, out)
 	if jump:
 		f.last_jump_t = st.t
 		var leaps := slot.leaps[k] if k < slot.leaps.size() else 2
 		out.events.append(FishingEvents.jump(r.slot, k + 1, n, dur, leaps))
 	else:
 		out.events.append(FishingEvents.run(r.slot, k + 1, n, dur))
+
+
+## A big fish turns and runs: the surge cue (one per SURGE_GAP_S), and the haptic pull when
+## haptic_allowed() (runs never start while staggered).
+static func _surge(
+	st: FishingState, r: FishingRiderState, inp: FishingRiderInput, out: FishingStepOut
+) -> void:
+	if r.fish.kg + EPS < FishingConst.SURGE_KG:
+		return
+	var last_t := r.surge_end_t - FishingConst.SURGE_S
+	if r.surge_end_t >= 0.0 and st.t + EPS < last_t + FishingConst.SURGE_GAP_S:
+		return
+	r.surge_end_t = st.t + FishingConst.SURGE_S
+	r.surging = true
+	if haptic_allowed(r, inp):
+		out.directives.append([r.peer, surge_directive()])
+
+
+## The surge's ERG haptic pull (% FTP on top of the ERG target, SURGE_S long).
+static func surge_directive() -> Dictionary:
+	return {
+		"haptic_pull": FishingConst.SURGE_PULL_PCT,
+		"duration_s": FishingConst.SURGE_S,
+		"reason": "surge",
+		"source": "fishing"
+	}
+
+
+## The line tension (N) on rider r's line now.
+static func tension(st: FishingState, r: FishingRiderState) -> float:
+	var f := r.fish
+	if not r.in_fight() or f.sp < 0 or r.fight_slot < 0 or f.off_line:
+		return 0.0
+	var size := clampf(sqrt(maxf(f.kg, 0.0) / 200.0), 0.15, 1.0)
+	var pull := 0.0
+	if r.action == FishingConst.A_LAND:
+		if f.d <= 0.0:
+			return 0.0
+		pull = 0.4 * clampf(1.0 - r.landing_t / FishingConst.GAFF_S, 0.25, 1.0)
+	elif r.surging and st.t < r.surge_end_t:
+		pull = 1.0
+	elif r.staggered:
+		pull = 0.5
+	else:
+		pull = 0.35 + 0.35 * f.s + 0.3 * r.strain
+		if f.run_active:
+			pull += 0.3
+		pull *= 1.0 - 0.8 * r.slack
+	return FishingConst.TOW_MAX_N * size * clampf(pull, 0.0, 1.0)
 
 
 static func _lose(st: FishingState, r: FishingRiderState, snap: bool, out: FishingStepOut) -> void:
@@ -245,6 +307,7 @@ static func _hook_replacement(r: FishingRiderState, out: FishingStepOut) -> void
 static func leave(r: FishingRiderState) -> void:
 	FishingPullScheduler.end(r.pull)
 	r.fish.run_active = false
+	r.surging = false
 	r.longest_fight_s = maxf(r.longest_fight_s, r.fight_t)
 
 
@@ -298,8 +361,8 @@ static func gaff_rate(p_w: float, ftp: float) -> float:
 	return maxf(0.0, p_w - ftp) / (FishingConst.GAFF_CP_FRAC * ftp * FishingConst.GAFF_S)
 
 
-## The last-run haptic: never in the plan's first 300 s, to a rider who opted out, or in a
-## stagger cause (rescue, AFK, pause, stale telemetry).
+## The last-run haptic and the surge pull: never in the plan's first 300 s, to a rider who opted
+## out, or in a stagger cause (rescue, AFK, pause, stale telemetry).
 static func haptic_allowed(r: FishingRiderState, inp: FishingRiderInput) -> bool:
 	return (
 		r.haptics_on

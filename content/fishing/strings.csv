@@ -119,3 +119,17 @@ FISHING_HUD_YOU,YOU
 FISHING_HUD_FISH_ON,Fish on!
 FISHING_CARD_ROAM,Race to the most points. Drive out for bigger fish.
 FISHING_CARD_WORKOUT,A structured workout: the plan brings the fish.
+FISHING_HELP_MINIMAP,Minimap: every boat between the dock and open sea
+FISHING_HELP_BOARD,Leaderboard: points and fish landed per rider
+FISHING_HELP_POWER,"Your watts, cadence, %FTP and heart rate; 30 s graph"
+FISHING_HELP_SPEED,Boat speed in knots; faint: your speed on a flat road
+FISHING_HELP_MENU,"Stopped: cast at a fish, drive on or turn around"
+FISHING_HELP_FIGHT,"Fight: hold the target watts, keep cadence in the band"
+FISHING_HELP_GEAR,"Gears (Q/E) change how pedaling feels, not your speed"
+FISHING_HELP_STOP,Idle 10 s: pause. Hold Backspace or View+Menu: stop
+FISHING_HUD_BPM,bpm
+FISHING_HUD_FTP,"{0}% FTP"
+FISHING_HUD_KNOTS,"{0} kn"
+FISHING_HUD_KMH,"{0} km/h"
+FISHING_HUD_TARGET,Target
+FISHING_HUD_NOW,now

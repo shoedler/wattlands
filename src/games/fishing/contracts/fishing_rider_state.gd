@@ -26,10 +26,21 @@ var x_m: float = 0.0
 var v_mps: float = 0.0
 ## +1 out to sea, -1 toward the dock (the bow's direction).
 var heading: int = 1
-## Signed trim (degrees, + bow up, - bow down while braking), its rate (deg/s, the spring-damper),
-## braking intensity (0..1) and wake intensity (0..1).
+## Signed pitch (degrees, + bow up, - bow down while braking) and its rate (deg/s), heave (m,
+## + the hull rides higher) and its rate (m/s): FishingBoat's rigid body on the water.
 var pitch_deg: float = 0.0
 var pitch_rate: float = 0.0
+var heave_m: float = 0.0
+var heave_rate: float = 0.0
+## Planing level 0..1 (displacement .. fully on the plane) and the planing latch (hysteresis:
+## set above FishingConst.PLANE_ON_MPS, cleared under PLANE_OFF_MPS).
+var plane: float = 0.0
+var planing: bool = false
+## The prop's depth below the surface at the transom (m), always >= FishingConst.PROP_MIN_M.
+var prop_depth_m: float = FishingConst.PROP_REST_M
+## Line tension (N, 0 with no fish on): FishingBoat tows the boat along the line with it.
+var tow_n: float = 0.0
+## Braking intensity (0..1) and wake intensity (0..1).
 var brake: float = 0.0
 var wake: float = 0.0
 ## Effective power now (Telemetry.p_eff_w) and the last step's acceleration (m/s^2, signed).
@@ -106,6 +117,12 @@ var landing_t: float = 0.0
 var gaff: float = 0.0
 var haptic_at_s: float = 0.0
 var haptic_sent: bool = false
+## A big fish's surge cue (F_SURGE) is on until this time (s; -1 none); `surging` is the flag
+## (clients get it from the snapshot).
+var surge_end_t: float = -1.0
+var surging: bool = false
+## Reel-in progress 0..1 (reel_progress(), R_REEL).
+var reel: float = 0.0
 ## The Landing's catch was scored.
 var resolved: bool = false
 var pull: FishingPullState = FishingPullState.new()
@@ -197,6 +214,18 @@ func in_fight() -> bool:
 ## The fish on the line's dx from the boat (behind the stern).
 func fish_dx() -> float:
 	return -float(heading) * fish.d
+
+
+## Reel-in progress 0..1 in a fight or landing: 1 - line / full line (hypot(d_max, hook
+## depth)), consistent with line_m(); 0 with no fish on. The host's rules store it in `reel`
+## each step (clients get `reel` from R_REEL: they do not know d_max).
+func reel_progress() -> float:
+	if not in_fight() or fish.sp < 0:
+		return 0.0
+	var full := Vector2(maxf(fish.d_max, fish.d), fish.hook_depth_m).length()
+	if full <= 0.0:
+		return 1.0
+	return clampf(1.0 - line_m() / full, 0.0, 1.0)
 
 
 ## Line paid out (m): to the fish in a fight or landing, to the wobbler otherwise.

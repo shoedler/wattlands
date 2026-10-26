@@ -93,7 +93,7 @@ static func plan_stop(st: FishingState, r: FishingRiderState) -> void:
 	var rw := row(r)
 	var zones: Array = rw["zones"]
 	var left_s := maxf(st.play_end_t - st.t, 1.0)
-	var v := FishingBoat.steady_speed(float(rw["effort"]) * FishingConst.P_EFF_REF_W)
+	var v := FishingBoat.cruise_speed(float(rw["effort"]) * FishingConst.P_EFF_REF_W)
 	var pick: Dictionary = {}
 	for i in range(zones.size() - 1, -1, -1):
 		var z := _zone(st.world, str(zones[i]))

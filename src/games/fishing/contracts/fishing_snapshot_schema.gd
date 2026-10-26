@@ -16,10 +16,11 @@ extends RefCounted
 ##  R_X_DM          boat x
 ##  R_HEADING       +1 out to sea, -1 back toward the dock (the bow's direction)
 ##  R_SPEED_CMS     boat speed in cm/s, signed (+ = seaward)
-##  R_PITCH_DD      signed trim in 0.1 degrees (FishingConst.TRIM_MIN_DEG..TRIM_MAX_DEG: -60..140):
-##                  + bow up (thrust and speed; a surge kicks it higher, then it settles),
-##                  - bow down (braking: the power is cut or drops hard, the bow digs in and the
-##                  stern lifts; back to 0 as the boat slows)
+##  R_PITCH_DD      signed pitch in 0.1 degrees (FishingConst.TRIM_MIN_DEG..TRIM_MAX_DEG: -60..140),
+##                  FishingBoat's rigid-body pitch: + bow up (thrust moment, the displacement
+##                  hump, a fish pulling the stern down; a surge kicks it up, then it settles;
+##                  on the plane the hull flattens), - bow down (braking: drag with no thrust digs
+##                  the bow in and lifts the stern; back to level as the boat slows)
 ##  R_WAKE          wake and spray intensity 0..255 (speed and thrust)
 ##  R_THROTTLE      P_eff as % of FTP-equivalent (250 W of P_eff = 100), 0..255
 ##  R_ACTION        FishingConst.A_DRIVE .. A_HOME (display_action() adds A_PAUSED / A_AFK)
@@ -45,6 +46,22 @@ extends RefCounted
 ##  R_FURTHEST_DM   the farthest x this rider reached
 ##  R_BRAKE         braking intensity 0..255 (the boat's deceleration, 255 at
 ##                  FishingConst.BRAKE_FULL_MPS2 or more): bow foam, collapsing wake
+##  R_HEAVE_CM      the hull's heave in cm, signed (+ the hull rides higher on the water than at
+##                  rest: lifted onto the plane; - lower: squat at the hump, a fish pulling the
+##                  stern down). The view offsets the hull by heave and pitch about the hull's
+##                  centre (FishingConst.STERN_ARM_M from the transom).
+##  R_PLANE         planing level 0..255 (0 displacement, 255 fully on the plane): the hull
+##                  flattens and rides up, drag drops; hysteresis keeps it from flickering
+##  R_TOW           line tension 0..255 (255 = FishingConst.TOW_MAX_N), 0 with no fish on. The
+##                  force acts along the line, from the stern toward the fish (R_FISH_DX_DM,
+##                  R_FISH_DEPTH_DM): its horizontal part tows the boat backward toward the fish,
+##                  its vertical part pulls the stern down
+##  R_PROP_CM       the prop's depth below the surface at the transom in cm, always at least
+##                  FishingConst.PROP_MIN_M x 100 (the prop never leaves the water: the stern
+##                  squats while the bow rises; on the plane the transom stays at the waterline)
+##  R_REEL          reel-in progress 0..255 in a fight or landing: 1 - line / full line, where the
+##                  line is R_LINE_DM (hypot(d, depth), the distance number) and the full line
+##                  hypot(d_max, hook depth); 0 else. Runs pull it down, the landing ends at 255
 ##
 ## T columns: T_MODE (0 Free Roam, 1 workout), T_TIME_LEFT_S (seconds of play left, ceil; 0 in
 ## overtime), T_OVER (1 once time is up: no new bites, fights may finish), T_POINTS, T_FISH (team
@@ -85,7 +102,12 @@ const R_HINTS := 28
 const R_STATE_DS := 29
 const R_FURTHEST_DM := 30
 const R_BRAKE := 31
-const R_COLUMNS := 32
+const R_HEAVE_CM := 32
+const R_PLANE := 33
+const R_TOW := 34
+const R_PROP_CM := 35
+const R_REEL := 36
+const R_COLUMNS := 37
 
 ## Hint entry columns (R_HINTS rows).
 const H_SPECIES := 0
@@ -112,7 +134,7 @@ const C_TROPHY := 3
 const F_RESCUE := 1  ## the governor's rescue hold
 const F_AFK := 2  ## AFK (multiplayer coasting, a dropped peer, or stale telemetry)
 const F_STALE := 4  ## cadence or telemetry is stale
-const F_PAUSED := 8  ## the platform paused this rider (5 s without pedaling): the boat drifts
+const F_PAUSED := 8  ## the platform paused this rider (10 s without pedaling): the boat drifts
 const F_SPRINT := 16  ## P_eff > 105 % FTP-equivalent (wake icon)
 const F_RUN := 32  ## a run or a jump is on
 const F_JUMP := 64  ## the active run is a jump (the fish is at the surface)
@@ -123,6 +145,9 @@ const F_AUTO := 1024  ## Autopilot plays this rider's choices (Autopilot on, or 
 const F_PEDAL_NAV := 2048  ## the menu scans and auto-confirms (PlayerSlot.pedal_nav)
 const F_WARMUP := 4096  ## the drive-out warm-up: the fish do not bite yet
 const F_BOT := 8192  ## a bot rider
+## A big fish's surge (FishingConst.SURGE_S after a run starts, fish >= SURGE_KG): rod jerks,
+## line snaps taut. The rules requested an ERG haptic_pull when the rider allows haptics.
+const F_SURGE := 16384
 
 ## Protocol.decode() paths (GameModule.int_fields "snapshot").
 const INT_PATHS: Array[String] = ["v", "k", "R[][]", "R[][][]", "R[][][][]", "T[]", "C[][]"]

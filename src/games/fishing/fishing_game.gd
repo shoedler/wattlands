@@ -78,6 +78,10 @@ var _rate_count: PackedInt32Array = PackedInt32Array()
 ## Highest look index per kind [line, canopy, trim, pennant] (summary intents are clamped to it).
 var _cos_counts: Array[int] = [0, 0, 0, 0]
 var _finished: bool = false
+## The local rider's latest telemetry (host/SOLO: this tick's frame; clients: client_predict's
+## `local`), null before the first tick: the view and HUD read exact cadence and power from it
+## (heart rate is zeroed in game frames; the HUD has its own path for it).
+var local_tm: Telemetry = null
 
 
 ## Every peer, first. Content goes through ctx.load_content_json so run_game_sim --override works.
@@ -149,6 +153,7 @@ func build_effort_plans() -> Dictionary:
 func sim_step(dt: float, frame: InputFrame) -> void:
 	if state == null:
 		return
+	local_tm = frame.telemetry(ctx.local_peer)
 	for inp: FishingRiderInput in _inputs:
 		_fill_input(inp, frame)
 	_apply(FishingRules.step(state, _inputs, dt))
@@ -415,6 +420,7 @@ func apply_event(event: Dictionary) -> void:
 ## Clients: only the local cadence marker moves ahead of the next snapshot; the host owns the
 ## boat, the meters and everything else.
 func client_predict(dt: float, local: Telemetry) -> void:
+	local_tm = local
 	var r := own_rider()
 	if r != null and local != null:
 		var k := 1.0 - exp(-dt / FishingConst.CADENCE_TAU_S)

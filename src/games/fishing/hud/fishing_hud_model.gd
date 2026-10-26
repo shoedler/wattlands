@@ -19,6 +19,16 @@ const KEY_CAST := "FISHING_MENU_CAST"
 const KEY_DRIVE_ON := "FISHING_MENU_DRIVE_ON"
 const KEY_TURN := "FISHING_MENU_TURN"
 const KEY_SPRINTING := "FISHING_ACTION_SPRINT"
+const KEY_RPM := "FISHING_HUD_RPM"
+const KEY_WATTS := "FISHING_HUD_WATTS"
+const KEY_BPM := "FISHING_HUD_BPM"
+const KEY_FTP := "FISHING_HUD_FTP"
+const KEY_KNOTS := "FISHING_HUD_KNOTS"
+const KEY_KMH := "FISHING_HUD_KMH"
+const KEY_TARGET := "FISHING_HUD_TARGET"
+const KEY_NOW := "FISHING_HUD_NOW"
+## Knots per m/s.
+const KNOTS_PER_MPS := 1.943844
 ## FishingConst.ACTION_NAMES -> FISHING_ACTION_<NAME> (the leaderboard's action column).
 const ACTION_PREFIX := "FISHING_ACTION_"
 const KEYS: Array[String] = [
@@ -34,6 +44,14 @@ const KEYS: Array[String] = [
 	KEY_DRIVE_ON,
 	KEY_TURN,
 	KEY_SPRINTING,
+	KEY_RPM,
+	KEY_WATTS,
+	KEY_BPM,
+	KEY_FTP,
+	KEY_KNOTS,
+	KEY_KMH,
+	KEY_TARGET,
+	KEY_NOW,
 ]
 ## English stand-ins when a key has no translation (headless tests without ctx.strings).
 const FALLBACK := {
@@ -49,7 +67,17 @@ const FALLBACK := {
 	KEY_DRIVE_ON: "Drive on",
 	KEY_TURN: "Turn around",
 	KEY_SPRINTING: "Sprinting",
+	KEY_RPM: "rpm",
+	KEY_WATTS: "W",
+	KEY_BPM: "bpm",
+	KEY_FTP: "{0}% FTP",
+	KEY_KNOTS: "{0} kn",
+	KEY_KMH: "{0} km/h",
+	KEY_TARGET: "Target",
+	KEY_NOW: "now",
 }
+
+static var _flat_cache: Vector3 = Vector3(-1, -1, 0)
 
 
 static func strings_of(game: FishingGame) -> GameStrings:
@@ -188,18 +216,43 @@ static func species_name(game: FishingGame, sp: int) -> String:
 	return tx.t(key) if tx.has(key) else str(FishingConst.SPECIES[sp]).capitalize()
 
 
-## The fish row: {"visible", "sp", "name", "d_m", "stamina", "kg"} (with a fish on).
+## The fish row: {"visible", "sp", "name", "d_m" (line out), "reel" (0..1 of the line reeled
+## in, FishingRiderState.reel), "stamina"} (with a fish on).
 static func fish_row(game: FishingGame, r: FishingRiderState) -> Dictionary:
 	var on := r != null and r.in_fight() and r.fish.sp >= 0 and not r.fish.off_line
 	if not on:
-		return {"visible": false, "sp": -1, "name": "", "d_m": 0, "stamina": 0.0}
+		return {"visible": false, "sp": -1, "name": "", "d_m": 0, "reel": 0.0, "stamina": 0.0}
 	return {
 		"visible": true,
 		"sp": r.fish.sp,
 		"name": species_name(game, r.fish.sp),
 		"d_m": roundi(r.line_m()),
+		"reel": clampf(r.reel, 0.0, 1.0),
 		"stamina": clampf(r.fish.s, 0.0, 1.0),
 	}
+
+
+## True while the fight panel stands in for the cruise box: a fish on the line in a fight (the
+## Landing and a lost fish keep the cruise box, so raw W and %FTP always show).
+static func fight_panel_up(game: FishingGame, r: FishingRiderState) -> bool:
+	return r != null and r.action == FishingConst.A_FIGHT and bool(fish_row(game, r)["visible"])
+
+
+## The boat's speed in knots, one decimal ("18.4").
+static func knots_text(v_mps: float) -> String:
+	return "%.1f" % (absf(v_mps) * KNOTS_PER_MPS)
+
+
+## The speed (km/h) `power_w` would ride on a flat road (SpeedModel at grade 0) for a rider of
+## `rider_kg` with the model's bike mass; cached for the last whole watt.
+static func flat_kmh(power_w: float, rider_kg: float) -> float:
+	var w := roundf(maxf(power_w, 0.0))
+	if w == _flat_cache.x and rider_kg == _flat_cache.y:
+		return _flat_cache.z
+	var mass := rider_kg + SpeedModel.DEFAULT_MASS_OFFSET_KG
+	var kmh := SpeedModel.steady_state_speed(w, 0.0, mass) * 3.6 if w > 0.0 else 0.0
+	_flat_cache = Vector3(w, rider_kg, kmh)
+	return kmh
 
 
 ## The gaff meter during a Landing: {"visible", "fill", "phase" (KEY_SPRINT, KEY_SPIN or

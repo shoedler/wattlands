@@ -29,14 +29,34 @@ func test_every_part_has_its_sprite_at_its_rig_point() -> void:
 		assert_not_null(s.texture, s.name)
 
 
-func test_cadence_turns_the_crank_frames() -> void:
+func test_the_crank_turns_at_exactly_the_cadence_every_frame() -> void:
 	var b := _boat()
 	b.cadence = 90.0
-	var seen := {}
-	for i in 20:
-		b.advance(0.05)
-		seen[b.crew_frame()] = true
-	assert_eq(seen.size(), FishingArtGrids.CREW_FRAMES, "the pedals go round")
+	b.advance(0.0)
+	var a0 := b.crank()
+	for i in 10:
+		b.advance(1.0 / 60.0)
+	var turned := fposmod(b.crank() - a0, TAU)
+	assert_almost_eq(turned, 90.0 / 60.0 * TAU * 10.0 / 60.0, 1e-4, "1.5 turns a second")
+	var p0 := FishingRig.drivetrain(0.0)
+	var p1 := FishingRig.drivetrain(0.3)
+	assert_ne(p0, p1, "every angle draws its own crank and leg, no quarter-turn frames")
+
+
+func test_the_drivetrain_is_a_ring_a_brass_hub_and_a_two_pixel_crank_and_leg() -> void:
+	var colours := {}
+	for a in [0.0, PI * 0.5, PI, PI * 1.5]:
+		var ring := 0
+		var hub := 0
+		for p in FishingRig.drivetrain(a):
+			colours[p.z] = true
+			ring += 1 if p.z == 0 else 0
+			hub += 1 if p.z == 2 else 0
+		assert_eq(ring, 48, "the ring is fixed")
+		assert_eq(hub, 4, "a 2 x 2 hub")
+	assert_eq(colours.size(), 3, "three colours: slate ring, abyss crank and leg, brass hub")
+	for p in FishingRig.drivetrain(1.0):
+		assert_true(Rect2i(Vector2i.ZERO, FishingRig.CREW_SIZE).has_point(Vector2i(p.x, p.y)))
 
 
 func test_a_still_rider_leaves_the_drivetrain_still() -> void:
@@ -45,11 +65,11 @@ func test_a_still_rider_leaves_the_drivetrain_still() -> void:
 	b.prop_drive = 0.0
 	b.advance(0.05)
 	var tex := b.prop.texture
-	var crew := b.crew.texture
+	var crank := b.crank()
 	for i in 20:
 		b.advance(0.05)
 	assert_eq(b.prop.texture, tex)
-	assert_eq(b.crew.texture, crew)
+	assert_eq(b.crank(), crank)
 
 
 func test_fishing_switches_the_crew_to_the_fishing_pose() -> void:
@@ -89,6 +109,7 @@ func test_sprites_load_with_their_frames_and_wrap() -> void:
 	var n := FishingArtGrids.CREW_POSES * FishingArtGrids.CREW_FRAMES
 	assert_eq(FishingSprites.count("boat_crew"), n)
 	assert_eq(FishingSprites.frame("boat_crew", n + 1), FishingSprites.frame("boat_crew", 1))
+	assert_eq(FishingSprites.count("fish_tuna"), FishingArtGrids.FISH_POSES.size())
 	assert_eq(FishingSprites.size_of("boat_hull"), FishingRig.HULL_SIZE)
 	assert_eq(FishingSprites.anchor("fish_tuna").x, 0)
 	assert_has(FishingSprites.ids(), "fish_oarfish")

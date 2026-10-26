@@ -93,91 +93,91 @@
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_mackerel",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				17,
-				7
+				28,
+				21
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_sea_bream",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				15,
-				10
+				21,
+				20
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_snapper",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				19,
-				11
+				26,
+				23
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_mahi",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				31,
-				14
+				40,
+				29
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_tuna",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				31,
-				12
+				40,
+				32
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_wahoo",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				37,
-				8
+				48,
+				32
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_swordfish",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				46,
-				12
+				60,
+				40
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_marlin",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				54,
-				15
+				70,
+				45
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_grouper",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				46,
-				22
+				58,
+				43
 			]
 		},
 		{
 			"_source": "hand-authored grid, FishingArtGrids",
 			"id": "fish_oarfish",
-			"prompt": "fish facing left, mouth at anchor",
+			"prompt": "fish facing left: swim x3, pull 15/30, tired",
 			"size": [
-				66,
-				9
+				84,
+				45
 			]
 		},
 		{

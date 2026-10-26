@@ -5,7 +5,7 @@
 				0,
 				0
 			],
-			"frames": 16,
+			"frames": 4,
 			"size": [
 				30,
 				18
@@ -69,34 +69,34 @@
 		"fish_grouper": {
 			"anchor": [
 				0,
-				8
+				12
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				46,
-				22
+				58,
+				43
 			]
 		},
 		"fish_mackerel": {
 			"anchor": [
 				0,
-				3
+				5
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				17,
-				7
+				28,
+				21
 			]
 		},
 		"fish_mahi": {
 			"anchor": [
 				0,
-				6
+				7
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				31,
-				14
+				40,
+				29
 			]
 		},
 		"fish_marlin": {
@@ -104,10 +104,10 @@
 				0,
 				9
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				54,
-				15
+				70,
+				45
 			]
 		},
 		"fish_oarfish": {
@@ -115,65 +115,65 @@
 				0,
 				4
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				66,
-				9
+				84,
+				45
 			]
 		},
 		"fish_sea_bream": {
 			"anchor": [
 				0,
-				4
+				6
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				15,
-				10
+				21,
+				20
 			]
 		},
 		"fish_snapper": {
 			"anchor": [
 				0,
-				5
+				7
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				19,
-				11
+				26,
+				23
 			]
 		},
 		"fish_swordfish": {
 			"anchor": [
 				0,
-				6
+				8
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				46,
-				12
+				60,
+				40
 			]
 		},
 		"fish_tuna": {
 			"anchor": [
 				0,
-				5
+				8
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				31,
-				12
+				40,
+				32
 			]
 		},
 		"fish_wahoo": {
 			"anchor": [
 				0,
-				3
+				6
 			],
-			"frames": 4,
+			"frames": 6,
 			"size": [
-				37,
-				8
+				48,
+				32
 			]
 		},
 		"fx_sparkle": {

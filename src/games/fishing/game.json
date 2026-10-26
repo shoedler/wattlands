@@ -11,6 +11,12 @@
 		640,
 		360
 	],
+	"pixel_flex": {
+		"min": [
+			568,
+			320
+		]
+	},
 	"entry": "res://src/games/fishing/fishing_game.gd",
 	"contents": [
 		"roam_30",

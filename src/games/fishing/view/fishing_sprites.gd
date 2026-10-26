@@ -7,7 +7,14 @@ extends RefCounted
 const DIR := "res://assets/fishing/sprites"
 const INDEX := "res://assets/fishing/sprites/sprites.json"
 
+## Fish frames (FishingArtGrids.FISH_POSES): the swim cycle, the pulls and tired.
+const FISH_SWIM: Array[int] = [0, 1, 2, 1]
+const FISH_PULL15 := 3
+const FISH_PULL30 := 4
+const FISH_TIRED := 5
+
 static var _meta: Dictionary = {}
+static var _bounds: Dictionary = {}
 static var _strips: Dictionary = {}
 static var _frames: Dictionary = {}
 
@@ -59,6 +66,25 @@ static func fish_id(sp: int) -> String:
 	return "fish_" + str(FishingConst.SPECIES[sp])
 
 
+## The opaque pixels' box of frame `k` of `id` (cached; the frame's whole rect when empty or
+## missing).
+static func bounds(id: String, k: int = 0) -> Rect2i:
+	var n := count(id)
+	var key := "%s:%d" % [id, posmod(k, maxi(n, 1))]
+	if _bounds.has(key):
+		return _bounds[key]
+	var size := size_of(id)
+	var out := Rect2i(Vector2i.ZERO, size)
+	var strip := texture(id)
+	if strip != null and n > 0:
+		var cell := Rect2i(Vector2i(posmod(k, n) * size.x, 0), size)
+		var used := strip.get_image().get_region(cell).get_used_rect()
+		if used.size != Vector2i.ZERO:
+			out = used
+	_bounds[key] = out
+	return out
+
+
 ## Frames in `id` (0 when missing).
 static func count(id: String) -> int:
 	return frames(id).size()
@@ -101,3 +127,4 @@ static func clear_cache() -> void:
 	_meta.clear()
 	_strips.clear()
 	_frames.clear()
+	_bounds.clear()

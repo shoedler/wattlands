@@ -1,8 +1,10 @@
 class_name FishingBoatView
 extends Node2D
 ## One rider's boat (FishingRig's points, boat-local art px): the slate hull in its pose with
-## its outboard leg, the crew sprite (clutch lever, a seated cyclist, the flywheel with its brass
-## hub and the bar; four crank frames per pose), the winch drum and the prop as frame-animated
+## its outboard leg, the crew sprite (clutch lever, a seated cyclist; one frame per pose), the
+## drivetrain drawn every frame at the exact crank angle (FishingRig.drivetrain: the flywheel
+## ring, its brass hub, the crank and the leg; the angle integrates the raw cadence the view
+## sets, no frames and no smoothing), the winch drum and the prop as frame-animated
 ## sprites, and in the player's colour the rod (thick at the butt; stowed, raised, bent back
 ## under tension), the rider's cap and the bow pennant. The view sets position
 ## (the stern's waterline point on the surface), the shown values and calls advance(). Nothing
@@ -49,6 +51,9 @@ var pitch_deg: float = 0.0
 ## Braking 0..1 (the boat's deceleration, FishingRiderState.brake).
 var brake: float = 0.0
 var bob_px: float = 0.0
+## The hull's heave (whole px, up positive) from the boat physics.
+var heave_px: int = 0
+## Raw cadence (rpm): the crank turns at exactly this rate.
 var cadence: float = 0.0
 ## 0 driving .. 1 fishing (eased toward `fishing_target`).
 var fishing: float = 0.0
@@ -151,18 +156,20 @@ func tilt_at(x: float) -> float:
 	return float(FishingRig.tilt_dy(pose(), floori(x)))
 
 
-## The crew frame shown: the pose's block (driving, fishing, leaning into a sprint, sat back
-## braking), then the crank's quarter turn.
+## The crew frame shown: driving, fishing, leaning into a sprint or sat back braking.
 func crew_frame() -> int:
-	var block := 0
 	if fishing >= 0.5:
-		block = 1
-	elif _pose >= LEAN_POSE:
-		block = 2
-	elif _pose < 0:
-		block = 3
-	var k := posmod(floori(_crank / (TAU / float(FishingArtGrids.CREW_FRAMES))), 4)
-	return block * FishingArtGrids.CREW_FRAMES + k
+		return 1
+	if _pose >= LEAN_POSE:
+		return 2
+	if _pose < 0:
+		return 3
+	return 0
+
+
+## The crank angle (radians, 0 .. TAU).
+func crank() -> float:
+	return _crank
 
 
 ## One frame of `dt` seconds: eases the clutch, turns the parts, places the body.
@@ -177,7 +184,7 @@ func advance(dt: float) -> void:
 	prop.texture = FishingSprites.frame("boat_prop", floori(_prop_t))
 	winch.texture = FishingSprites.frame("boat_winch", floori(_winch_t))
 	scale.x = float(heading) if heading != 0 else 1.0
-	body.position = -PIVOT + Vector2(0, roundf(bob_px))
+	body.position = -PIVOT + Vector2(0, roundf(bob_px) - float(heave_px))
 	winch.position = FishingRig.WINCH_AT + Vector2(0, tilt_at(FishingRig.WINCH_AT.x))
 	prop.position = FishingRig.PROP_AT + Vector2(0, tilt_at(FishingRig.PROP_AT.x))
 	crew.position = FishingRig.CREW_AT + Vector2(0, tilt_at(CREW_SEAT_X))
@@ -229,6 +236,9 @@ func line_above() -> Color:
 
 
 func _paint_near(c: CanvasItem) -> void:
+	var at := FishingRig.CREW_AT + Vector2(0, tilt_at(CREW_SEAT_X))
+	for p in FishingRig.drivetrain(_crank):
+		c.draw_rect(Rect2(at + Vector2(p.x, p.y), Vector2.ONE), FishingRig.DRIVE_COLOURS[p.z])
 	var col := player_color()
 	var rod := rod_points()
 	for i in rod.size():
