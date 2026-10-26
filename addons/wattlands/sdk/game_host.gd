@@ -836,6 +836,10 @@ func _build_presentation() -> void:
 			var pb: Variant = manifest.get("pixel_base", [640, 360])
 			if pb is Array and (pb as Array).size() == 2:
 				_pixel_viewport.pixel_base = Vector2i(int(pb[0]), int(pb[1]))
+			var flex: Variant = manifest.get("pixel_flex", null)
+			if flex is Dictionary and (flex as Dictionary).get("min") is Array:
+				var mn: Array = (flex as Dictionary)["min"]
+				_pixel_viewport.flex_min = Vector2i(int(mn[0]), int(mn[1]))
 			parent.add_child(_pixel_viewport)
 			_pixel_viewport.set_game_view(view as Node2D)
 			if view.get_parent() == null:

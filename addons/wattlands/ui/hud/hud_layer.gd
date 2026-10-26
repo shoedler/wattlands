@@ -18,13 +18,17 @@ extends CanvasLayer
 ##   a teammate strip wraps into two rows and then shrinks, other kit widgets shrink, and
 ##   toast and banner text wraps. Toasts and banners in a corner wrap within a third of the
 ##   screen (corner_text_width()).
-## - Rect2i positions are art pixels mapped through PixelViewport.art_rect_to_screen()
-##   (integer scale plus letterbox) and re-laid out when the PixelViewport or the window
-##   resizes, or the PixelViewport emits `layout_changed`. Kit widgets in a rect shrink to
-##   fit it (several in one rect stack and share it; a teammate strip prefers one row scaled
-##   to the rect's width and height, wrapping only below its minimum scale); key numbers
-##   stay >= 48 px, so a rect below a widget's min_rect() overflows. Game Controls in a rect are sized to it. Without
-##   a PixelViewport (3D games) a Rect2i is taken as 1080p pixels.
+## - Rect2i positions are art pixels on the game's pixel_base, placed on the current art
+##   canvas by PixelViewport.anchor_art_rect() (flex mode: rects in the right or bottom half
+##   follow that edge, rects across the middle stay centred; art_size() tells the canvas) and
+##   mapped through PixelViewport.art_rect_to_screen() (integer scale plus letterbox). They are
+##   re-laid out when the PixelViewport or the window resizes, or the PixelViewport emits
+##   `layout_changed`. Kit widgets in a rect shrink to fit it (several in one rect stack and
+##   share it; a teammate strip prefers one row scaled to the rect's width and height, wrapping
+##   only below its minimum scale); key numbers stay >= 48 px while the rect allows, and a rect
+##   smaller than the widgets' min_rect() scales the whole stack down to fit (fonts included)
+##   instead of letting it run over its neighbours. Game Controls in a rect are sized to it.
+##   Without a PixelViewport (3D games) a Rect2i is taken as 1080p pixels.
 ## - The CanvasLayer `layer` is LAYER (10): a game view's own CanvasLayer with a lower
 ##   layer draws under the HUD (vignettes), a higher one above it.
 ## - Raw W and %FTP always show: if the spec has no power gauge (and not both a power_w and
@@ -433,8 +437,10 @@ func relayout() -> void:
 		holder.size = r.size
 		var stack: VBoxContainer = slot["stack"]
 		_fit_slot(stack, r.size)
+		var f := overflow_scale(stack.get_combined_minimum_size(), r.size)
+		stack.scale = Vector2(f, f)
 		stack.position = Vector2.ZERO
-		stack.size = r.size
+		stack.size = r.size / f
 
 
 func screen_size() -> Vector2:
@@ -464,9 +470,30 @@ func center_width(center: String, ss: Vector2) -> float:
 	return maxf(120.0, ss.x - 2.0 * (WlTheme.MARGIN_PX + side))
 
 
+## The uniform scale (<= 1) that fits content of minimum size `need` into `avail`: 1 when it
+## fits, else the stack of a rect slot is drawn smaller (fonts included) to stay in its rect.
+static func overflow_scale(need: Vector2, avail: Vector2) -> float:
+	if avail.x <= 0.0 or avail.y <= 0.0:
+		return 1.0
+	var f := 1.0
+	if need.x > avail.x + 0.5:
+		f = minf(f, avail.x / need.x)
+	if need.y > avail.y + 0.5:
+		f = minf(f, avail.y / need.y)
+	return maxf(f, 0.05)
+
+
+## The game's art canvas in art pixels (PixelViewport.art_size(): pixel_base, or the flexible
+## size in flex mode); Vector2i.ZERO without a PixelViewport.
+func art_size() -> Vector2i:
+	if _pv != null and is_instance_valid(_pv):
+		return _pv.art_size()
+	return Vector2i.ZERO
+
+
 ## Keep `size` (1080p pixels, measured from the screen corner's margin) clear at a corner
 ## anchor (HudSpec.TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT or BOTTOM_RIGHT) for something the host
-## draws there, such as the app shell's on-screen panic button (BRIEF 4.6.5): that corner's
+## draws there (the app shell reserves none today): that corner's
 ## stack moves inward by the reserved height plus a gap (bottom corners up, top corners down)
 ## and the centre stack of the same edge keeps clear of the reserved width. Vector2.ZERO
 ## releases the corner. Additive (W2).
@@ -516,10 +543,11 @@ static func anchor_position(anchor: String, sz: Vector2, ss: Vector2) -> Vector2
 	return Vector2(m, m)
 
 
-## An art-pixel rect in screen pixels (through the PixelViewport; 1:1 without one).
+## An art-pixel rect (on pixel_base) in screen pixels (anchored to the current art canvas and
+## mapped through the PixelViewport; 1:1 without one).
 func map_rect(r: Rect2i) -> Rect2:
 	if _pv != null and is_instance_valid(_pv):
-		return _pv.art_rect_to_screen(r)
+		return _pv.art_rect_to_screen(_pv.anchor_art_rect(r))
 	if not _warned_no_pv:
 		_warned_no_pv = true
 		push_warning("HudLayer: a Rect2i position without a PixelViewport is taken as 1080p pixels")

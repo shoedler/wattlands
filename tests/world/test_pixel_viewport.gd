@@ -406,3 +406,95 @@ func test_demo_scene_animates_over_time() -> void:
 	assert_gt(spun_after, spun, "gears turn")
 	assert_ne(chain.travel(), chain_before, "the chain scrolls")
 	assert_lt((fish[0] as Sprite2D).position.x, fish_x, "fish swim left")
+
+
+# --- Flex mode (game.json pixel_flex) ------------------------------------------------------
+
+const FLEX_MIN := Vector2i(568, 320)
+
+
+## [window (device px), scale, art size, offset]: the largest k with window / k >= min, the
+## canvas floor(window / k), centred with at most k - 1 px of border.
+func test_flex_layout_picks_scale_and_art_size() -> void:
+	var cases: Array[Array] = [
+		[Vector2(1920, 1080), 3, Vector2i(640, 360), Vector2(0, 0)],
+		[Vector2(2560, 1440), 4, Vector2i(640, 360), Vector2(0, 0)],
+		[Vector2(2560, 1361), 4, Vector2i(640, 340), Vector2(0, 0)],
+		[Vector2(3440, 1440), 4, Vector2i(860, 360), Vector2(0, 0)],
+		[Vector2(1280, 720), 2, Vector2i(640, 360), Vector2(0, 0)],
+		[Vector2(1366, 768), 2, Vector2i(683, 384), Vector2(0, 0)],
+		[Vector2(1921, 1083), 3, Vector2i(640, 361), Vector2(0, 0)],
+	]
+	for c: Array in cases:
+		var l := PixelViewport.fit_layout(c[0], BASE, 1.0, FLEX_MIN)
+		assert_eq(l["scale"], c[1], "scale at %s" % c[0])
+		assert_eq(l["art_size"], c[2], "art size at %s" % c[0])
+		assert_eq(l["offset"], c[3], "offset at %s" % c[0])
+		var border: Vector2 = (c[0] as Vector2) - Vector2(c[2]) * float(c[1])
+		assert_lt(border.x, float(c[1]), "less than k px of border")
+		assert_lt(border.y, float(c[1]))
+
+
+func test_flex_layout_never_below_min() -> void:
+	var l := PixelViewport.fit_layout(Vector2(500, 300), BASE, 1.0, FLEX_MIN)
+	assert_eq(l["scale"], 1)
+	assert_eq(l["art_size"], FLEX_MIN, "a window below min clips")
+	assert_lt((l["offset"] as Vector2).x, 0.0)
+
+
+func test_flex_layout_with_device_scale() -> void:
+	# A maximized 1440p window: canvas 1920 x 1021 at 2560 / 1920 device px per unit.
+	var s := 2560.0 / 1920.0
+	var l := PixelViewport.fit_layout(Vector2(1920, 1361.0 / s), BASE, s, FLEX_MIN)
+	assert_eq(l["scale"], 4)
+	assert_eq(l["art_size"], Vector2i(640, 340))
+	assert_almost_eq(float(l["art_scale"]), 4.0 / s, 0.0001)
+
+
+func test_without_flex_the_letterbox_is_unchanged() -> void:
+	for sz: Vector2 in [Vector2(2560, 1361), Vector2(3440, 1440), Vector2(1920, 1080)]:
+		var plain := PixelViewport.fit_layout(sz, BASE)
+		var off := PixelViewport.fit_layout(sz, BASE, 1.0, Vector2i.ZERO)
+		assert_eq(off, plain, "flex off at %s" % sz)
+		assert_eq(plain["art_size"], BASE)
+	var pv := _make(Vector2(2560, 1361))
+	assert_eq(pv.integer_scale(), 3, "fixed base: 3x with bars")
+	assert_eq(pv.art_size(), BASE)
+	assert_eq(pv.subviewport().size, BASE)
+	assert_false(pv.is_flex())
+
+
+func test_flex_node_resizes_the_subviewport() -> void:
+	var pv := _make(Vector2(1920, 1080))
+	watch_signals(pv)
+	pv.flex_min = FLEX_MIN
+	assert_true(pv.is_flex())
+	assert_eq(pv.art_size(), Vector2i(640, 360))
+	pv.size = Vector2(3440, 1440)
+	assert_eq(pv.integer_scale(), 4)
+	assert_eq(pv.art_size(), Vector2i(860, 360))
+	assert_eq(pv.subviewport().size, Vector2i(860, 360), "the game view sees the new size")
+	assert_signal_emitted_with_parameters(pv, "art_size_changed", [Vector2i(860, 360)])
+	assert_eq(pv.image_rect(), Rect2(0, 0, 3440, 1440), "no border")
+	pv.size = Vector2(2560, 1361)
+	assert_eq(pv.art_size(), Vector2i(640, 340))
+	assert_eq(pv.letterbox_offset(), Vector2(0, 0), "1 px of border, at the bottom")
+	assert_eq(pv.capture().get_size(), Vector2i(640, 340), "headless capture at the art size")
+
+
+func test_anchor_rect_follows_the_nearest_edge() -> void:
+	var art := Vector2i(860, 340)
+	assert_eq(PixelViewport.anchor_rect(Rect2i(4, 4, 100, 30), BASE, art), Rect2i(4, 4, 100, 30))
+	assert_eq(
+		PixelViewport.anchor_rect(Rect2i(427, 318, 213, 42), BASE, art),
+		Rect2i(647, 298, 213, 42),
+		"right and bottom half: follows those edges"
+	)
+	assert_eq(
+		PixelViewport.anchor_rect(Rect2i(220, 10, 200, 30), BASE, art),
+		Rect2i(330, 10, 200, 30),
+		"across the middle: centred"
+	)
+	assert_eq(
+		PixelViewport.anchor_rect(Rect2i(427, 318, 213, 42), BASE, BASE), Rect2i(427, 318, 213, 42)
+	)
