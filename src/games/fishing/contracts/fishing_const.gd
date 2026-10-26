@@ -50,39 +50,58 @@ const TRIP_E2E := "e2e"  ## the 2-minute end-to-end workout
 
 # --- Boat physics (FishingBoat; 0.05 s steps) -----------------------------------------------
 const P_EFF_REF_W := 250.0  ## 100 % FTP-equivalent
-const V_FTP_MPS := 15.0  ## steady speed at 100 %: the 18 km map in 20 min
-const SPEED_EXP := 0.6  ## steady speed = V_FTP x (P_eff / 250 W)^0.6
+const V_FTP_MPS := 15.0  ## displacement steady speed at 100 % (16 m/s on the plane)
+const SPEED_EXP := 0.6  ## displacement steady speed = V_FTP x (P_eff / 250 W)^0.6
 const SPEED_P_MAX_FRAC := 3.0  ## P_eff counts up to 300 % (29 m/s)
-const ACCEL_TAU_S := 0.9  ## speeding up: 95 % of the new steady speed in under 3 s
-const DECEL_TAU_S := 0.6  ## less power, prop still engaged: water drag slows it faster
-const DRIFT_TAU_S := 1.2  ## prop free: dv/dt = -(|v| / 1.2 s + 0.6 m/s^2), 15 m/s to 0 in ~3 s
-const DRIFT_BRAKE_MPS2 := 0.6
 const DRIFT_P_FRAC := 0.2  ## under 20 % FTP-equivalent the prop disengages
 const STOP_SPEED := 0.3  ## a drifting boat counts as stopped below this
 const DRIVE_ON_P_FRAC := 0.8  ## pedaling >= 80 % for DRIVE_ON_S in the menu drives on
 const DRIVE_ON_S := 2.0
 const SPRINT_P_FRAC := 1.05  ## the sprint flag (wake icon): P_eff > 105 % FTP-equivalent
-## Signed trim (R_PITCH_DD): its target is 3 deg per V_FTP of the steady speed the power holds
-## while the prop drives, plus 0.5 deg per m/s^2 of forward acceleration (a surge kicks the bow
-## up) or 0.8 deg per m/s^2 of deceleration (braking digs it in), followed by a spring-damper
-## (about 1.4 s period, damping 0.55: a small overshoot).
-const TRIM_PER_SPEED := 3.0
-const TRIM_SPEED_MAX := 2.0  ## the speed part counts up to 2 x V_FTP
-const TRIM_PER_ACCEL := 0.5
-const TRIM_PER_DECEL := 0.8
-const TRIM_OMEGA := 4.5  ## rad/s
-const TRIM_ZETA := 0.55
-## The signed trim's range: bow up to +14 deg, bow down to -6 deg while braking.
+## The rigid body (FishingBoat): shaft power = TURBO_GAIN x P_eff, thrust = shaft / (u+ + V0).
+const TURBO_GAIN := 150.0
+const BOAT_MASS_KG := 300.0  ## boat, rider and the water it carries along
+const THRUST_V0_MPS := 6.0
+## Drag: the displacement hump (+15 % at 9.5 m/s, 1.5 m/s wide), x 2 backing, and with the prop
+## free a windmilling prop: 150 N per m/s + 200 N (fading in under 0.5 m/s).
+const HUMP_K := 0.15
+const HUMP_V_MPS := 9.5
+const HUMP_W_MPS := 1.5
+const REVERSE_DRAG := 2.0
+const FREE_N_PER_MPS := 150.0
+const FREE_N := 200.0
+const FREE_SOFT_MPS := 0.5
+## Planing: the cruise on the plane is 7 % faster at the same power; 70 % FTP-equivalent planes.
+const PLANE_SPEED_GAIN := 0.07
+const PLANE_P_FRAC := 0.7
+const PLANE_RISE_S := 1.0  ## the planing level climbs 0 -> 1 in 1 s, falls in 0.6 s
+const PLANE_FALL_S := 0.6
+## Heave (m) and pitch (deg) spring-dampers and what moves their equilibrium (FishingBoat).
+const HEAVE_OMEGA := 5.0
+const HEAVE_ZETA := 0.6
+const HEAVE_PLANE_M := 0.06  ## on the plane the hull rides 6 cm higher
+const HEAVE_SQUAT_M := 0.08  ## at the hump it squats 8 cm
+const HEAVE_DIG_M := 0.05  ## per F_ref of braking force
+const HEAVE_TOW_M := 0.04  ## at TOW_MAX_N straight down
+const DIG_MAX := 2.0  ## the braking force counts up to 2 x F_ref
+const PITCH_OMEGA := 4.0
+const PITCH_ZETA := 0.5
+const PITCH_THRUST_DEG := 4.0  ## per F_ref of thrust (bow up)
+const PITCH_DRAG_DEG := 2.0  ## per F_ref of drag (bow down)
+const PITCH_HUMP_DEG := 5.0
+const PITCH_PLANE_DEG := 0.5
+const PITCH_TOW_DEG := 5.0  ## at TOW_MAX_N straight down (stern down, bow up)
+## The signed pitch's range: bow up to +14 deg, bow down to -6 deg while braking.
 const TRIM_MAX_DEG := 14.0
 const TRIM_MIN_DEG := -6.0
 const BRAKE_FULL_MPS2 := 10.0  ## brake = deceleration / 10 m/s^2, 0..1 (R_BRAKE)
 const BRAKE_TAU_S := 0.15
 const WAKE_SPEED := 0.6  ## wake = 0.6 x |v| / WAKE_V_FULL + 0.4 x throttle (0..1)
 const WAKE_V_FULL := 21.0
-## Planing (FishingBoat): the latch sets above PLANE_ON_MPS (the speed 70 % FTP-equivalent
-## reaches) and clears under PLANE_OFF_MPS (hysteresis).
-const PLANE_ON_MPS := 12.0
-const PLANE_OFF_MPS := 11.0
+## The planing latch sets above PLANE_ON_MPS (70 % FTP-equivalent reaches it, 66 % does not)
+## and clears under PLANE_OFF_MPS (the plane holds down to about 55 %).
+const PLANE_ON_MPS := 11.9
+const PLANE_OFF_MPS := 11.3
 ## Hull geometry: the transom (prop) sits STERN_ARM_M behind the hull's centre; at rest the prop
 ## is PROP_REST_M deep, and it never rises above PROP_MIN_M (the prop stays in the water).
 const STERN_ARM_M := 1.6
@@ -95,6 +114,7 @@ const TOW_MAX_N := 500.0
 const SURGE_KG := 30.0
 const SURGE_PULL_PCT := 50.0
 const SURGE_S := 2.0
+const SURGE_GAP_S := 15.0  ## at most one surge per 15 s (the governor's haptic spacing)
 
 # --- Trainer load while driving (SIM, grade_source "game") ------------------------------------
 const GRADE_BASE_PCT := 0.5  ## water drag: 0.5 % + 2 x (v / V_FTP)^2, at most 3 %

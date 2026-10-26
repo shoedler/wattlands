@@ -20,8 +20,9 @@
 //   d_roam_a, d_roam_b        roam_10, 2 band-trackers + 2 bots, seed 7, twice
 // FIT (--fit): tools/fit_check on every FIT with each rider's expected laps.
 //
-// Every run (ALL): completed; no plan warnings; every directive accepted; each request is a
-// Fishing ERG pull/run/jump inside its phase's range_pct (or the Landing's haptic) and is applied
+// Every run (ALL): completed; no plan warnings; every directive accepted (a surge's haptic pull
+// may be refused); each request is a Fishing ERG pull/run/jump inside its phase's range_pct (or
+// the Landing's haptic, or a surge's +50 % FTP 2 s haptic pull) and is applied
 // clamped only by the allowed rules (never ceiling, long_phase, limit_105, limit_120); every trace
 // row likewise; every course grade 0..3 % and only in a Free Roam SIM game phase; every ERG phase
 // of the final plans obeys BRIEF 4.6.1 (longer than 300 s: <= 105 %); events valid; snapshots
@@ -46,6 +47,7 @@ import {
   fmt,
   gradeOf,
   isObj,
+  isSurge,
   median,
   requestShapeProblems,
   sum,
@@ -120,10 +122,13 @@ export function runProblems(name, r) {
   }
   for (const d of r.directives ?? []) {
     const at = `${name}: ${d.kind} #${d.id} peer ${d.peer} t ${fmt(d.t)}`;
-    if (d.accepted !== true) probs.push(`${at}: refused (${d.reason})`);
+    // A surge's haptic pull is a feel the governor may refuse (a governor without the haptic
+    // pull channel, the 15 s haptic spacing): its shape is checked, its outcome is not.
+    const surge = d.kind === 'request' && isSurge(d.requested);
+    if (d.accepted !== true && !surge) probs.push(`${at}: refused (${d.reason})`);
     if (d.kind === 'request') {
       for (const p of requestShapeProblems(d.requested)) probs.push(`${at}: ${p}`);
-      for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
+      if (!surge || d.accepted === true) for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
       const req = d.requested ?? {};
       if (req.mode === 'ERG' && isObj(d.applied)) {
         const ph = plans[String(d.peer)]?.phases?.[d.applied.phase_index];
@@ -268,7 +273,7 @@ export function checkR5(reports) {
   for (const d of r.directives ?? []) {
     if (d.kind !== 'request') continue;
     const req = d.requested ?? {};
-    if (req.mode === 'SIM' && String(d.peer) === String(R5.hapticsOffPeer)) probs.push(`${name}: a haptic for the opted-out rider at ${fmt(d.t)}`);
+    if ((req.mode === 'SIM' || isSurge(req)) && String(d.peer) === String(R5.hapticsOffPeer)) probs.push(`${name}: a haptic for the opted-out rider at ${fmt(d.t)}`);
     if (req.mode !== 'ERG' || !isObj(d.applied)) continue;
     const clamps = d.applied.clamped_by ?? [];
     if (!clamps.includes('unverified')) probs.push(`${name}: #${d.id} has no unverified clamp`);

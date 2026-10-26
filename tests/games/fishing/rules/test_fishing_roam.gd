@@ -207,7 +207,8 @@ func test_the_course_grade_follows_the_speed_while_driving_and_is_0_when_stopped
 	h.run(60.0)
 	assert_eq(h.violations, [] as Array[String], "grades only in game phases")
 	var last: Array = h.grades.back()
-	assert_almost_eq(float(last[2]), snappedf(FishingBoat.grade_for(h.rider().v_mps), 0.1), 0.11)
+	var r := h.rider()
+	assert_almost_eq(float(last[2]), snappedf(FishingBoat.grade_for(r.v_mps, r.plane), 0.1), 0.11)
 	for g: Array in h.grades:
 		assert_between(float(g[2]), 0.0, FishingConst.GRADE_MAX_PCT)
 	for k in range(1, h.grades.size()):

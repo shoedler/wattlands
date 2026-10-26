@@ -50,6 +50,10 @@ export const ERG_KEYS = ['duration_s', 'mode', 'reason', 'source', 'target_pct']
 export const ERG_REASONS = new Set(['pull', 'run', 'jump']);
 /** The Landing's one haptic directive. */
 export const HAPTIC = Object.freeze({ mode: 'SIM', haptic: 3.0, duration_s: 5, reason: 'last_run', source: 'fishing' });
+/** A big fish's surge: the ERG haptic pull (FishingFight.surge_directive). */
+export const SURGE = Object.freeze({ haptic_pull: 50.0, duration_s: 2, reason: 'surge', source: 'fishing' });
+/** True for a surge's haptic_pull request. */
+export const isSurge = (req) => isObj(req) && 'haptic_pull' in req;
 export const SELF_CAP_PCT = 110;
 /** The driving load: FishingConst.GRADE_MAX_PCT. */
 export const GRADE_MAX_PCT = 3;
@@ -118,11 +122,20 @@ export function clampProblems(list, allowed = ALLOWED_CLAMPS) {
   return out;
 }
 
-/** Problems with the requested side of one Fishing request (an ERG pull/run/jump or the haptic). */
+/** Problems with the requested side of one Fishing request (an ERG pull/run/jump, the Landing's
+ *  haptic or a surge's haptic pull). */
 export function requestShapeProblems(req) {
   if (!isObj(req)) return ['no requested directive'];
   const r = { ...req };
   delete r.id;
+  if ('haptic_pull' in r) {
+    const probs = [];
+    const keys = Object.keys(r).sort();
+    const want = Object.keys(SURGE).sort();
+    if (JSON.stringify(keys) !== JSON.stringify(want)) probs.push(`surge keys ${keys.join(',')}, wanted ${want.join(',')}`);
+    for (const [k, v] of Object.entries(SURGE)) if (r[k] !== v) probs.push(`surge directive ${k} ${JSON.stringify(r[k])}, wanted ${JSON.stringify(v)}`);
+    return probs;
+  }
   if (r.mode === 'SIM') {
     const probs = [];
     for (const [k, v] of Object.entries(HAPTIC)) if (r[k] !== v) probs.push(`haptic directive ${k} ${JSON.stringify(r[k])}, wanted ${JSON.stringify(v)}`);

@@ -161,6 +161,10 @@ static func _step_rider(
 		_tick_troll(st, r, inp, dt, out)
 	else:
 		_tips(r, out)
+	if r.surging and st.t + EPS >= r.surge_end_t:
+		r.surging = false
+	r.tow_n = FishingFight.tension(st, r)
+	r.reel = r.reel_progress()
 	FishingBoat.step(r, r.p_eff_w, _thrust_on(st, r), st.world.edge_x_m(), dt)
 	if st.roam:
 		_grade(st, r, inp, out)
@@ -342,7 +346,7 @@ static func _grade(
 		return
 	var g := 0.0
 	if _thrust_on(st, r):
-		g = snappedf(FishingBoat.grade_for(absf(r.v_mps)), FishingConst.GRADE_STEP_PCT)
+		g = snappedf(FishingBoat.grade_for(absf(r.v_mps), r.plane), FishingConst.GRADE_STEP_PCT)
 	if not is_nan(r.grade_sent):
 		if absf(g - r.grade_sent) < FishingConst.GRADE_STEP_PCT - EPS:
 			return

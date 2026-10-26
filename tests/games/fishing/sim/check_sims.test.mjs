@@ -84,6 +84,9 @@ test('request shapes, clamps and grades', () => {
   assert.ok(requestShapeProblems(erg(111)).some((p) => /target_pct/.test(p)));
   assert.ok(requestShapeProblems({ ...erg(80), extra: 1 }).some((p) => /keys/.test(p)));
   assert.deepEqual(requestShapeProblems({ mode: 'SIM', haptic: 3, duration_s: 5, reason: 'last_run', source: 'fishing' }), []);
+  assert.deepEqual(requestShapeProblems({ haptic_pull: 50, duration_s: 2, reason: 'surge', source: 'fishing' }), []);
+  assert.ok(requestShapeProblems({ haptic_pull: 80, duration_s: 2, reason: 'surge', source: 'fishing' }).some((p) => /haptic_pull/.test(p)));
+  assert.ok(requestShapeProblems({ haptic_pull: 50, duration_s: 2, reason: 'surge', source: 'fishing', mode: 'ERG' }).some((p) => /keys/.test(p)));
   assert.deepEqual(clampProblems(['slew', 'switch_ramp', 'grade_range']), []);
   assert.match(clampProblems(['long_phase'])[0], /forbidden/);
   assert.equal(gradeOf({ requested: { grade_pct: 1.5 } }), 1.5);
