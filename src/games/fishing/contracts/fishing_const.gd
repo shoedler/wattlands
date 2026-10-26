@@ -79,6 +79,22 @@ const BRAKE_FULL_MPS2 := 10.0  ## brake = deceleration / 10 m/s^2, 0..1 (R_BRAKE
 const BRAKE_TAU_S := 0.15
 const WAKE_SPEED := 0.6  ## wake = 0.6 x |v| / WAKE_V_FULL + 0.4 x throttle (0..1)
 const WAKE_V_FULL := 21.0
+## Planing (FishingBoat): the latch sets above PLANE_ON_MPS (the speed 70 % FTP-equivalent
+## reaches) and clears under PLANE_OFF_MPS (hysteresis).
+const PLANE_ON_MPS := 12.0
+const PLANE_OFF_MPS := 11.0
+## Hull geometry: the transom (prop) sits STERN_ARM_M behind the hull's centre; at rest the prop
+## is PROP_REST_M deep, and it never rises above PROP_MIN_M (the prop stays in the water).
+const STERN_ARM_M := 1.6
+const PROP_REST_M := 0.35
+const PROP_MIN_M := 0.2
+## The line tension a hooked fish can reach (N): FishingBoat tows the boat with it.
+const TOW_MAX_N := 500.0
+## Big-fish surges: a run by a fish of SURGE_KG or more requests an ERG haptic_pull of
+## SURGE_PULL_PCT % FTP for SURGE_S (the governor bounds and spaces it); F_SURGE shows it.
+const SURGE_KG := 30.0
+const SURGE_PULL_PCT := 50.0
+const SURGE_S := 2.0
 
 # --- Trainer load while driving (SIM, grade_source "game") ------------------------------------
 const GRADE_BASE_PCT := 0.5  ## water drag: 0.5 % + 2 x (v / V_FTP)^2, at most 3 %

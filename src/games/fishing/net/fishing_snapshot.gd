@@ -83,6 +83,11 @@ static func _row(st: FishingState, r: FishingRiderState) -> Array:
 	row[S.R_STATE_DS] = roundi(r.state_t * 10.0)
 	row[S.R_FURTHEST_DM] = roundi(r.furthest_x_m * 10.0)
 	row[S.R_BRAKE] = S.u8(r.brake)
+	row[S.R_HEAVE_CM] = roundi(r.heave_m * 100.0)
+	row[S.R_PLANE] = S.u8(r.plane)
+	row[S.R_TOW] = S.u8(r.tow_n / FishingConst.TOW_MAX_N)
+	row[S.R_PROP_CM] = roundi(r.prop_depth_m * 100.0)
+	row[S.R_REEL] = S.u8(r.reel) if fighting else 0
 	return row
 
 
@@ -117,6 +122,8 @@ static func flags(st: FishingState, r: FishingRiderState) -> int:
 		fl |= S.F_WARMUP
 	if r.is_bot:
 		fl |= S.F_BOT
+	if r.in_fight() and r.surging:
+		fl |= S.F_SURGE
 	return fl
 
 
@@ -208,6 +215,13 @@ static func _apply_row(r: FishingRiderState, row: Array) -> void:
 	r.state_t = int(row[S.R_STATE_DS]) / 10.0
 	r.furthest_x_m = int(row[S.R_FURTHEST_DM]) / 10.0
 	r.brake = S.unit(row[S.R_BRAKE])
+	r.heave_m = int(row[S.R_HEAVE_CM]) / 100.0
+	r.plane = S.unit(row[S.R_PLANE])
+	r.planing = r.plane >= 0.5
+	r.tow_n = S.unit(row[S.R_TOW]) * FishingConst.TOW_MAX_N
+	r.prop_depth_m = int(row[S.R_PROP_CM]) / 100.0
+	r.reel = S.unit(row[S.R_REEL])
+	r.surging = fl & S.F_SURGE != 0
 
 
 ## JSON.stringify byte length of `snap` (the size GAME_SDK 12 measures; cap 2048 at 4 riders).
