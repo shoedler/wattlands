@@ -12,6 +12,16 @@ const SLACK := FishingPalette.SAGE
 const GAFF := FishingPalette.ACCENT
 const STAMINA := FishingPalette.SURFACE
 const ALERT := FishingPalette.HUD_ALERT
+## The heart rate box's heart: the one colour outside the palette, a muted red, HUD only.
+const HEART := Color("#b5675f")
+const HEART_ROWS: Array[String] = [
+	".##.##.",
+	"#######",
+	"#######",
+	".#####.",
+	"..###..",
+	"...#...",
+]
 ## The pixel font (FishingFontGrids through the Image Font importer) and its cell height.
 const FONT_PATH := "res://assets/fishing/font/turbo_reel_5x7.png"
 const FONT_PX := 9
@@ -152,6 +162,61 @@ static func pixels(c: CanvasItem, rows: Array, pos: Vector2, u: float, col: Colo
 
 ## The trophy star.
 const STAR: Array[String] = ["..#..", ".###.", "#####", ".###.", "..#.."]
+
+
+## A power graph over `trace` in `r` (HUD px, on the art grid of `u` px), the newest sample at
+## the right, `bottom_w` at the bottom and `top_w` at the top: the target band (each sample's target
+## +/- `band` of it, rows lit in FishingPalette.UPPER) behind the power, either an unbroken
+## 1-pixel line in `col` or, `filled`, a mid-teal area under a `col` top edge.
+static func graph(
+	c: CanvasItem,
+	r: Rect2,
+	trace: FishingPowerTrace,
+	top_w: float,
+	u: float,
+	band: float = 0.05,
+	filled: bool = false,
+	col: Color = FishingPalette.FOAM,
+	bottom_w: float = 0.0
+) -> void:
+	var n := floori(r.size.x / u)
+	var rows := floori(r.size.y / u)
+	if n <= 0 or rows <= 1 or top_w <= bottom_w:
+		return
+	var prev := -1
+	for i in n:
+		var s := trace.at_column(i, n)
+		if s.x < 0.0:
+			prev = -1
+			continue
+		var x := r.position.x + float(i) * u
+		if s.y > 0.0 and band > 0.0:
+			var a := graph_row(s.y * (1.0 + band), top_w, rows, bottom_w)
+			var b := graph_row(s.y * (1.0 - band), top_w, rows, bottom_w)
+			c.draw_rect(Rect2(x, r.position.y + float(a) * u, u, float(b - a + 1) * u), UPPER_BAND)
+		var y := graph_row(s.x, top_w, rows, bottom_w)
+		if filled:
+			var fill_h := float(rows - 1 - y) * u
+			c.draw_rect(Rect2(x, r.position.y + float(y + 1) * u, u, fill_h), FishingPalette.MID)
+		# a step joins on this column, from the row after the previous one: an unbroken line
+		var y0 := y
+		var y1 := y
+		if prev >= 0 and prev < y:
+			y0 = prev + 1
+		elif prev > y:
+			y1 = prev - 1
+		c.draw_rect(Rect2(x, r.position.y + float(y0) * u, u, float(y1 - y0 + 1) * u), col)
+		prev = y
+
+
+## The graph row (0 at the top of `rows`) of `w` watts on a `bottom_w` .. `top_w` scale.
+static func graph_row(w: float, top_w: float, rows: int, bottom_w: float = 0.0) -> int:
+	var u := (w - bottom_w) / maxf(top_w - bottom_w, 1.0)
+	return clampi(roundi((1.0 - u) * float(rows - 1)), 0, rows - 1)
+
+
+## The target band's colour in the graphs.
+const UPPER_BAND := FishingPalette.UPPER
 
 
 ## A flat panel in the HUD's panel teal inside a one-pixel (`u` px) surface-teal frame, so it

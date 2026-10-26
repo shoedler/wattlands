@@ -50,17 +50,12 @@ var window_b: float = -1.0
 var _t: float = 0.0
 
 
-static func make(p_game: FishingGame) -> FishingMinimap:
+static func make(p_game: FishingGame, rect: Rect2i = ART) -> FishingMinimap:
 	var m := FishingMinimap.new()
 	m.game = p_game
 	m.name = "FishingMinimap"
-	m.design_h = float(ART.size.y * 3)
+	m.place_at(rect)
 	return m
-
-
-## HUD px per art px.
-func ap() -> float:
-	return size.x / float(ART.size.x) if size.x > 0.0 else 3.0
 
 
 func refresh() -> void:
@@ -92,11 +87,12 @@ func refresh() -> void:
 	zones.assign(mm["zones"])
 	window_a = -1.0
 	window_b = -1.0
-	if game.has_meta(FishingView.META) and game.get_meta(FishingView.META) is FishingView:
-		var cam: float = (game.get_meta(FishingView.META) as FishingView).cam_m
+	var v := view()
+	if v != null:
+		var cam: float = v.cam_m
 		var span := maxf(x1 - x0, 1.0)
 		window_a = clampf((cam - x0) / span, 0.0, 1.0)
-		var view_m := float(FishingScenery.W) / FishingScenery.PX_PER_M
+		var view_m := float(v.art_size().x) / FishingScenery.PX_PER_M
 		window_b = clampf((cam + view_m - x0) / span, 0.0, 1.0)
 	icons.clear()
 	var me := FishingHudModel.own_rider(game)
@@ -118,7 +114,7 @@ func _draw() -> void:
 	if floor_m.is_empty():
 		return
 	var s := ap()
-	var w := float(ART.size.x)
+	var w := float(art_rect.size.x)
 	var top := float(ICON_ROWS + 1)
 	var h := STRIP_ROWS
 	var strip := Rect2(0, top * s, w * s, h * s)

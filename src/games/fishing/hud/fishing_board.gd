@@ -18,11 +18,11 @@ var rows: Array[Dictionary] = []
 var _t: float = 0.0
 
 
-static func make(p_game: FishingGame) -> FishingBoard:
+static func make(p_game: FishingGame, rect: Rect2i = ART) -> FishingBoard:
 	var b := FishingBoard.new()
 	b.game = p_game
 	b.name = "FishingBoard"
-	b.design_h = float(ART.size.y * 3)
+	b.place_at(rect)
 	return b
 
 

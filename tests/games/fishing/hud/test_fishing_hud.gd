@@ -1,7 +1,8 @@
 extends GutTest
-## Turbo Reel's HUD: the spec's rects, the minimap and its action icons, the leaderboard, the
-## clock, the stopped menu's chips next to the boat, the fight meters and panel, and that every
-## string the HUD uses exists.
+## Turbo Reel's HUD: the spec's rects at every art size, the help overlay, the minimap and its
+## action icons, the leaderboard, the clock, the stopped menu's chips next to the boat, the
+## cruise box (with and without heart rate), the speed behind the stern, the fight panel under
+## the boat, and that every string the HUD uses exists.
 
 const FX := preload("res://tests/games/fishing/view/fishing_view_fixtures.gd")
 const STRINGS := "res://content/fishing/strings.csv"
@@ -14,40 +15,62 @@ func _keys() -> Dictionary:
 	return out
 
 
-func _panic() -> Rect2i:
-	return Rect2i(
-		FishingConst.PANIC_X,
-		FishingConst.PANIC_Y,
-		FishingConst.PIXEL_W - FishingConst.PANIC_X,
-		FishingConst.PIXEL_H - FishingConst.PANIC_Y
-	)
+const SIZES: Array[Vector2i] = [
+	Vector2i(640, 360), Vector2i(860, 360), Vector2i(640, 340), Vector2i(568, 320)
+]
+
+
+func _panic(art: Vector2i) -> Rect2i:
+	var w := FishingConst.PIXEL_W - FishingConst.PANIC_X
+	var h := FishingConst.PIXEL_H - FishingConst.PANIC_Y
+	return Rect2i(art.x - w, art.y - h, w, h)
 
 
 func _ctl(c: FishingHudControl) -> FishingHudControl:
 	add_child_autofree(c)
-	c.size = Vector2(c.design_h * 4.0, c.design_h)
+	c.size = Vector2(c.art_rect.size) * 3.0
 	return c
 
 
-func test_no_rect_reaches_the_panic_corner_or_leaves_the_view() -> void:
-	var view := Rect2i(0, 0, FishingConst.PIXEL_W, FishingConst.PIXEL_H)
-	for r in FishingHud.rects():
-		if r == FishingChips.ART:
-			continue
-		assert_false(r.intersects(_panic()), "%s clear of PANIC" % r)
-		assert_true(view.encloses(r), "%s inside the view" % r)
+func test_no_rect_reaches_the_panic_corner_or_leaves_the_view_at_any_art_size() -> void:
+	for art in SIZES:
+		var view := Rect2i(Vector2i.ZERO, art)
+		for r in FishingHud.rects(art):
+			assert_false(r.intersects(_panic(art)), "%s clear of PANIC at %s" % [r, art])
+			assert_true(view.encloses(r), "%s inside the view at %s" % [r, art])
 
 
-func test_the_spec_has_the_minimap_board_chips_and_meters() -> void:
+func test_the_layout_follows_the_art_size() -> void:
+	var a := FishingHud.layout(Vector2i(640, 360))
+	var b := FishingHud.layout(Vector2i(860, 340))
+	assert_eq((a["board"] as Rect2i).end.x, 636, "the board keeps to the right edge")
+	assert_eq((b["board"] as Rect2i).end.x, 856)
+	assert_eq((a["minimap"] as Rect2i).size.x, 412)
+	assert_eq((b["minimap"] as Rect2i).size.x, 412 + 220, "the minimap takes the extra width")
+	assert_eq((a["cruise"] as Rect2i).end.y, 356, "the cruise box sits on the bottom edge")
+	assert_eq((b["cruise"] as Rect2i).end.y, 336)
+	assert_eq((b["fight"] as Rect2i).size, Vector2i(860, 340), "the fight panel can go anywhere")
+
+
+func test_the_spec_has_its_own_power_box_the_gear_and_a_help_overlay() -> void:
 	var g := FX.make_game(2)
 	add_child_autofree(g)
 	var spec := FishingHud.spec(g)
-	assert_true(spec.has_widget(HudSpec.POWER_GAUGE))
-	assert_true(spec.has_widget(HudSpec.CADENCE))
+	assert_false(spec.has_widget(HudSpec.POWER_GAUGE), "the cruise box and the fight panel")
+	assert_false(spec.has_widget(HudSpec.CADENCE))
+	assert_true(spec.shows_power, "the game draws raw W and %FTP itself")
+	assert_true(spec.has_widget(HudSpec.GEAR), "BRIEF 4.5: the gear stays on the HUD")
 	assert_false(spec.has_widget(HudSpec.TIMELINE), "Free Roam has no plan timeline")
 	var w := FX.make_game(1, 0, Wl.SOLO, "base_60")
 	add_child_autofree(w)
 	assert_true(FishingHud.spec(w).has_widget(HudSpec.TIMELINE), "workouts keep the timeline")
+	var keys := _keys()
+	assert_between(spec.help.size(), 5, 8)
+	var view := Rect2(Vector2.ZERO, Vector2(FishingConst.PIXEL_W, FishingConst.PIXEL_H))
+	for e in spec.help:
+		assert_true(keys.has(str(e["text"])), "%s is in strings.csv" % e["text"])
+		assert_true(view.has_point(e["at"] as Vector2), "%s inside the view" % e["text"])
+		assert_true(view.has_point(e["arrow_to"] as Vector2), "%s points inside" % e["text"])
 
 
 func test_shown_actions_pick_afk_and_pause_first_then_sprint() -> void:
@@ -174,35 +197,56 @@ func test_the_workout_minimap_is_a_moving_window_round_the_boats() -> void:
 	assert_almost_eq(float(m.icons[0]["x"]), 0.5, 0.01)
 
 
-func test_meters_show_only_in_a_fight() -> void:
-	var g := FX.make_game(1)
-	add_child_autofree(g)
-	var strain := _ctl(FishingMeter.make(g, FishingMeter.STRAIN)) as FishingMeter
-	var slack := _ctl(FishingMeter.make(g, FishingMeter.SLACK)) as FishingMeter
-	FX.set_drive(g.state.rider(0), 100.0)
-	strain.refresh()
-	assert_false(strain.shown)
-	FX.set_fight(g.state.rider(0), 3000.0, 4, 30.0, 20.0, 0.6, 0.2)
-	strain.refresh()
-	slack.refresh()
-	assert_true(strain.shown)
-	assert_eq(strain.fill, 0.6)
-	assert_eq(slack.fill, 0.2)
+func _view(g: FishingGame, frames: int = 6) -> FishingView:
+	var v := FishingView.new()
+	v.game = g
+	add_child_autofree(v)
+	for i in frames:
+		v.advance(0.05)
+	return v
 
 
-func test_the_fight_panel_shows_the_fish_the_gaff_or_the_place() -> void:
+func _tm(power: float, cadence: float, hr: int, target: int = 0) -> Telemetry:
+	var t := Telemetry.new()
+	t.t = 10.0
+	t.power_w = power
+	t.cadence_rpm = cadence
+	t.heart_rate_bpm = hr
+	t.applied_target_w = target
+	return t
+
+
+func test_the_fight_panel_shows_the_fish_reel_in_target_now_and_the_cues() -> void:
 	var g := FX.make_game(1)
 	add_child_autofree(g)
 	var r := g.state.rider(0)
-	var p := _ctl(FishingFightPanel.make(g)) as FishingFightPanel
+	var l := FishingHud.layout(Vector2i(640, 360))
+	var p := _ctl(FishingFightPanel.make(g, l["fight"])) as FishingFightPanel
 	FX.set_drive(r, 2600.0)
 	p.refresh()
 	assert_false(bool(p.fish["visible"]))
-	assert_string_contains(p.place, "m")
-	FX.set_fight(r, 7000.0, 8, 30.0, 400.0)
+	FX.set_fight(r, 7000.0, 8, 30.0, 400.0, 0.6, 0.2)
+	r.reel = 0.35
+	r.band_lo = 84.0
+	r.band_hi = 100.0
+	_view(g)
+	p.set_telemetry(_tm(231.0, 91.0, 0, 236))
 	p.refresh()
 	assert_true(bool(p.fish["visible"]))
 	assert_eq(int(p.fish["sp"]), 8)
+	assert_almost_eq(float(p.fish["reel"]), 0.35, 1e-6, "the bar is the reel-in progress")
+	assert_eq(float(p.numbers["target"]), 236.0)
+	assert_eq(float(p.numbers["power"]), 231.0)
+	assert_eq(p.strain, 0.6)
+	assert_eq(p.slack, 0.2)
+	assert_eq(p.band, Vector2(84, 100))
+	p.queue_redraw()
+	await wait_physics_frames(2)
+	var boat: Vector2 = (g.get_meta(FishingView.META) as FishingView).model["boats"][0]
+	assert_gt(p.panel_rect.position.y, FishingScenery.SURF_Y, "under the surface")
+	assert_lt(p.panel_rect.position.y, FishingScenery.SURF_Y + 20, "just under the boat")
+	assert_true(p.panel_rect.position.x <= int(boat.x), "it reaches under the boat")
+	assert_true(Rect2i(0, 0, 640, 360).encloses(p.panel_rect))
 	FX.set_land(r, 500.0)
 	p.refresh()
 	assert_true(bool(p.gaff["visible"]))
@@ -211,6 +255,55 @@ func test_the_fight_panel_shows_the_fish_the_gaff_or_the_place() -> void:
 	assert_eq(str(FishingHudModel.gaff(r)["phase"]), FishingHudModel.KEY_SPIN)
 	r.gaff = 1.0
 	assert_eq(str(FishingHudModel.gaff(r)["phase"]), FishingHudModel.KEY_TROPHY)
+
+
+func test_the_cruise_box_grows_by_half_without_heart_rate_and_hides_in_a_fight() -> void:
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	FX.set_drive(r, 2600.0, 12.0)
+	var l := FishingHud.layout(Vector2i(640, 360))
+	var c := _ctl(FishingCruisePanel.make(g, l["cruise"])) as FishingCruisePanel
+	c.set_telemetry(_tm(250.0, 88.0, 141))
+	c.refresh()
+	assert_true(c.shown)
+	assert_string_contains(c.place, "m")
+	c.queue_redraw()
+	await wait_physics_frames(2)
+	assert_eq(c.panel_rect.size.x, 2 * FishingCruisePanel.BOX_W, "watts and heart rate")
+	assert_eq(c.panel_rect.end.y, (l["cruise"] as Rect2i).size.y, "on the rect's bottom")
+	c.set_telemetry(_tm(250.0, 88.0, 0))
+	c.refresh()
+	c.queue_redraw()
+	await wait_physics_frames(2)
+	assert_eq(c.panel_rect.size.x, FishingCruisePanel.BOX_W * 3 / 2, "1.5 boxes without HR")
+	assert_gt(c.tag_rect.position.x, c.panel_rect.end.x, "the zone tag right of the box")
+	FX.set_fight(r, 7000.0)
+	c.refresh()
+	assert_false(c.shown, "the fight panel takes over")
+
+
+func test_the_speed_shows_knots_behind_the_stern_and_the_flat_road_speed() -> void:
+	var g := FX.make_game(1)
+	add_child_autofree(g)
+	var r := g.state.rider(0)
+	FX.set_drive(r, 2600.0, 10.0)
+	_view(g)
+	var l := FishingHud.layout(Vector2i(640, 360))
+	var s := _ctl(FishingSpeedTag.make(g, l["speed"])) as FishingSpeedTag
+	s.set_telemetry(_tm(250.0, 90.0, 0))
+	s.refresh()
+	assert_true(s.shown)
+	assert_string_contains(s.knots, "19.4")
+	var kmh := SpeedModel.steady_state_speed(250.0, 0.0, 75.0 + SpeedModel.DEFAULT_MASS_OFFSET_KG)
+	assert_string_contains(s.kmh, str(roundi(kmh * 3.6)))
+	s.queue_redraw()
+	await wait_physics_frames(2)
+	var boat: Vector2 = (g.get_meta(FishingView.META) as FishingView).model["boats"][0]
+	assert_lt(s.text_rect.end.x, int(boat.x), "behind the stern, heading out")
+	FX.set_menu(r, 2600.0)
+	s.refresh()
+	assert_false(s.shown, "not while stopped")
 
 
 func test_the_board_refreshes_its_rows_and_clock() -> void:
@@ -226,6 +319,8 @@ func test_every_hud_string_is_in_the_strings_csv() -> void:
 	var keys := _keys()
 	for k in FishingHudModel.KEYS:
 		assert_true(keys.has(k), k)
+		assert_true(FishingHudModel.FALLBACK.has(k), "%s has an English stand-in" % k)
+	for k in FishingHudModel.KEYS_PENDING:
 		assert_true(FishingHudModel.FALLBACK.has(k), "%s has an English stand-in" % k)
 
 
