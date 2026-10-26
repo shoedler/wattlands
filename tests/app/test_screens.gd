@@ -228,8 +228,9 @@ func test_session_screen_opens_headless() -> void:
 	assert_eq(s.error, "")
 	assert_not_null(s.host)
 	assert_true((s.host as FakeHost).started)
-	assert_not_null(s.panic_button)
-	assert_gte(s.panic_button.get_theme_font_size("font_size"), AppStyle.KEY_NUMBER_MIN)
+	assert_null(s.top_root.get_node_or_null("Panic"), "no on-screen panic button")
+	assert_eq(s.panic_hint.text, AppScreen.t("APP_SESSION_PANIC_HINT"))
+	assert_ne(s.panic_hint.text, "APP_SESSION_PANIC_HINT", "translated")
 
 
 func test_results_screen_opens() -> void:

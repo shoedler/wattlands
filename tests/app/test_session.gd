@@ -500,7 +500,9 @@ func test_no_metronome_when_off() -> void:
 	assert_eq(fx.fake_sfx().metronome_calls, [])
 
 
-func test_on_screen_panic() -> void:
+## Panic from the pause overlay's Panic item (the on-screen button is gone; Backspace held 1 s
+## and View + Menu are the keys, named by the overlay's hint line).
+func test_overlay_panic() -> void:
 	fx.give_profile()
 	var s := (
 		open_screen(
@@ -510,8 +512,11 @@ func test_on_screen_panic() -> void:
 		as AppSessionScreen
 	)
 	watch_signals(fx.bus)
-	s.panic_button.pressed.emit()
+	s.open_menu()
+	assert_true(s.panic_hint.visible, "the hint names Backspace and View + Menu")
+	confirm_pick(s, "panic")
 	assert_signal_emitted(fx.bus, "panic_requested")
+	assert_false(s.panic_hint.visible, "already safe: no hint")
 	assert_eq((fx.trainer.local_rider() as FakeRider).panics, 1)
 	assert_true(s.panicked)
 	assert_true(s.overlay.visible)
