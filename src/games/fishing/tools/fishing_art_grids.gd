@@ -47,6 +47,8 @@ const FISH: Array[String] = [
 const FISH_POSES: Array[String] = ["swim1", "swim2", "swim3", "pull15", "pull30", "tired"]
 const SWIM_FRAMES := 3
 const PULL_RUNS: Array[int] = [4, 2]
+## A fish this long (the oarfish ribbon) pulls at half the slope, so it keeps its body depth.
+const LONG_FISH_PX := 80
 ## Frames per pose in boat_crew (the drivetrain is drawn by FishingBoatView, so one each).
 const CREW_FRAMES := 1
 ## Crew poses after CREW's two: leaning into a sprint, sat back braking ([last row, dx] bands
@@ -503,7 +505,7 @@ static func fish_pose(id: String, kind: String) -> Dictionary:
 			for x in w:
 				dys[x] = 0 if x < tail_x else (b if x < tip_x else 2 * b)
 		"pull15", "pull30":
-			var run := PULL_RUNS[0 if kind == "pull15" else 1]
+			var run := PULL_RUNS[0 if kind == "pull15" else 1] * (2 if w >= LONG_FISH_PX else 1)
 			for x in w:
 				dys[x] = -((w - 1 - mini(x, tail_x)) / run) + (1 if x >= tail_x else 0)
 		_:

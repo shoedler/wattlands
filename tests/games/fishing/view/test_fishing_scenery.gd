@@ -127,6 +127,11 @@ func test_fish_stay_the_darkest_subject_in_every_band() -> void:
 	assert_eq(FishingPaletteMap.shift_for(1), 0)
 	assert_eq(FishingPaletteMap.shift_for(2), 1)
 	assert_eq(FishingPaletteMap.shift_for(FishingPalette.SEA.size() - 1), 1)
+	for band in FishingPalette.SEA.size():
+		var belly := FishingPalette.darker(FishingPalette.UPPER, FishingPaletteMap.fish_shift(band))
+		var ridge := FishingFloor.RIDGE_BANDS[band]
+		var ladder := FishingPalette.LADDER
+		assert_gt(ladder.find(belly), ladder.find(ridge), "band %d: the belly is darker" % band)
 
 
 func test_waves_are_crests_or_flat() -> void:
@@ -332,3 +337,23 @@ func test_audio_clicks_while_the_winch_brings_line_in() -> void:
 	assert_has(a.played, "fishing_click")
 	assert_does_not_have(a.played, "fishing_gull", "no gulls out at sea")
 	assert_eq(FishingAudio.sound_names().size(), FishingAudio.SOUNDS.size() + 3)
+
+
+func test_no_narrow_slot_sinks_between_higher_floor_pieces() -> void:
+	var s := FishingScenery.new()
+	var map: Variant = JSON.parse_string(
+		FileAccess.get_file_as_string("res://content/fishing/map.json")
+	)
+	s.world = FishingWorld.from_map(map, 1)
+	for cam_m in [2000.0, 5600.0, 8000.0, 11000.0, 14000.0]:
+		s.view_depth_m = s.target_view_depth(cam_m)
+		var shown := s.floor_art.profile(s, roundf(cam_m * 2.0), INF)
+		for i in range(1, shown.size() - 1):
+			var e := shown[i]
+			if float(e["sx1"]) - float(e["sx0"]) >= FishingFloor.NARROW_PX:
+				continue
+			var low := maxf(float(shown[i - 1]["top"]), float(shown[i + 1]["top"]))
+			assert_lte(float(e["top"]), low, "no slot at %s m, piece %d" % [cam_m, i])
+		var body := FishingFloor.body_band(shown)
+		for e in shown:
+			assert_lte(int(e["band"]), body, "one body fill under every cap")

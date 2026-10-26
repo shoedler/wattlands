@@ -113,11 +113,19 @@ const MOUND_MIN_PX := 44.0
 ## interior a step darker than their floor, no rim, their floor as its walls.
 const PIT_MAX_PX := 64.0
 const PIT_MIN_PX := 8.0
+## A piece narrower than this sunk between two higher ones fills up to the higher (no slots).
+const NARROW_PX := 24.0
 ## A pit's floor lies at most this far under its lower rim.
 const PIT_DEEPEST_PX := 12.0
 ## Neighbouring pieces closer in height than this share the first one's colours (no colour seam
 ## on a flat run).
 const SEAM_PX := 6.0
+## A piece's own band shows as a cap this many rows deep over the floor's body colour, ending in
+## a slope CAP_SLOPE px in per row where the next piece's band differs.
+const CAP_ROWS := 12
+const CAP_SLOPE := 2
+## A pit's dark floor: a cap this deep, sloping in at both ends.
+const PIT_CAP_ROWS := 4
 ## The abyss cliff: from the last piece, a ledge ABYSS_LEDGES[0] px wide ABYSS_DROPS[0] px down,
 ## a second one, then one tall face to the bottom.
 const ABYSS_LEDGES: Array[float] = [20.0, 5.0]
@@ -248,8 +256,11 @@ func paint(c: CanvasItem, sc: FishingScenery, cam_m: float, t: float, edge_px: f
 	var cam_px := roundf(cam_m * FishingScenery.PX_PER_M)
 	var shown := profile(sc, cam_px, edge_px)
 	_paint_ridge(c, sc, cam_px, shown, minf(edge_px, floor_end(shown, cam_px, sc.w)))
-	for e in shown:
-		_paint_piece(c, e, sc.h)
+	var body := body_band(shown)
+	for i in shown.size():
+		var left := int(shown[i - 1]["band"]) if i > 0 else -1
+		var right := int(shown[i + 1]["band"]) if i + 1 < shown.size() else -1
+		_paint_piece(c, shown[i], sc.h, body, left, right)
 	var taken := _paint_drops(c, shown)
 	for e in shown:
 		_paint_mound(c, e, taken)
@@ -292,6 +303,16 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 					}
 				)
 			)
+	# a sliver of a piece sunk between two higher ones would be a slot: it fills up to the higher
+	for i in range(1, out.size() - 1):
+		var a := out[i - 1]
+		var e := out[i]
+		var b := out[i + 1]
+		var hi := a if float(a["top"]) <= float(b["top"]) else b
+		var sunk := float(e["top"]) > maxf(float(a["top"]), float(b["top"]))
+		if float(e["sx1"]) - float(e["sx0"]) < NARROW_PX and sunk:
+			e["top"] = hi["top"]
+			e["band"] = hi["band"]
 	for i in range(1, out.size() - 1):
 		var a := out[i - 1]
 		var e := out[i]
@@ -330,18 +351,43 @@ static func top_at(shown: Array[Dictionary], sx: float) -> float:
 	return INF
 
 
-func _paint_piece(c: CanvasItem, e: Dictionary, view_h: int) -> void:
+## The floor's body colour under every piece's cap: the darkest band's floor in sight, so
+## biomes change only along the floor's top (never in a column down to the frame's bottom).
+static func body_band(shown: Array[Dictionary]) -> int:
+	var out := 0
+	for e in shown:
+		out = maxi(out, int(e["band"]))
+	return out
+
+
+## Piece `e`: the water sliver over it, the body fill (band `body`) down to the bottom, its own
+## band's floor as a CAP_ROWS cap under its lit rim; where a neighbour's band (`left`, `right`;
+## -1 none) differs, the cap ends in a 1:2 slope (CAP_SLOPE px in per row down) instead of a
+## vertical seam. A pit's dark floor is a cap too.
+func _paint_piece(
+	c: CanvasItem, e: Dictionary, view_h: int, body: int, left: int, right: int
+) -> void:
 	var sx0 := float(e["sx0"])
 	var w := float(e["sx1"]) - sx0
 	var top := float(e["top"])
 	var band := int(e["band"])
-	var h := float(view_h) - top
 	if int(e["pit"]) >= 0:
 		var floor_y := minf(top, float(e["pit_top"]) + PIT_DEEPEST_PX)
-		c.draw_rect(Rect2(sx0, floor_y, w, float(view_h) - floor_y), DARK_BANDS[int(e["pit"])])
+		c.draw_rect(Rect2(sx0, floor_y, w, float(view_h) - floor_y), FLOOR_BANDS[body])
+		for r in PIT_CAP_ROWS:
+			var inset := float(r * CAP_SLOPE)
+			if w - 2.0 * inset > 0.0:
+				var row := Rect2(sx0 + inset, floor_y + float(r), w - 2.0 * inset, 1.0)
+				c.draw_rect(row, DARK_BANDS[int(e["pit"])])
 		return
 	c.draw_rect(Rect2(sx0, top - SLIVER_ROWS, w, SLIVER_ROWS), FishingPalette.SEA[band])
-	c.draw_rect(Rect2(sx0, top, w, h), FLOOR_BANDS[band])
+	c.draw_rect(Rect2(sx0, top, w, float(view_h) - top), FLOOR_BANDS[body])
+	if band != body:
+		for r in CAP_ROWS:
+			var a := float(r * CAP_SLOPE) if left >= 0 and left != band else 0.0
+			var b := float(r * CAP_SLOPE) if right >= 0 and right != band else 0.0
+			if w - a - b > 0.0:
+				c.draw_rect(Rect2(sx0 + a, top + float(r), w - a - b, 1.0), FLOOR_BANDS[band])
 	c.draw_rect(Rect2(sx0, top, w, RIM_ROWS), RIM_BANDS[band])
 
 
@@ -480,22 +526,49 @@ func _paint_ridge(
 		var w := float(RIDGE_MESA_MIN + h % RIDGE_MESA_SPAN)
 		var tall := float(RIDGE_HEIGHTS[(h >> 7) % RIDGE_HEIGHTS.size()]) * scale
 		var sx := x - off
-		var shoulder := float(RIDGE_SHOULDER)
-		_ridge_rect(c, sc, sx, minf(sx + w, edge_px), base - roundf(tall * 0.5))
-		_ridge_rect(c, sc, sx + shoulder, minf(sx + w - shoulder, edge_px), base - tall)
+		_ridge_mesa(c, sc, sx, minf(sx + w, edge_px), base - tall, h)
 		x += float(span)
 		k += 1
 
 
-func _ridge_rect(c: CanvasItem, sc: FishingScenery, sx0: float, sx1: float, top: float) -> void:
-	if sx1 <= sx0:
-		return
-	var y := 2.0 * roundf(top * 0.5)
+## One mesa of the back ridge from screen x `sx0` to `sx1`, its top on row `top`: a flat top
+## with a lit edge, then shoulders stepping out 2 px per 2 rows (both sides; by seed one side
+## steps in a shelf half way down), each row in its water band's ridge colour.
+func _ridge_mesa(
+	c: CanvasItem, sc: FishingScenery, sx0: float, sx1: float, top: float, seed_h: int
+) -> void:
+	var y0 := 2.0 * roundf(top * 0.5)
+	var w := sx1 - sx0
+	var steps := mini(RIDGE_SHOULDER / 2 + 1, int(w / 8.0))
+	var shelf := (seed_h >> 3) % 2 == 0
+	for s in steps + 1:
+		var inset := 2.0 * float(steps - s)
+		var y := y0 + 2.0 * float(s)
+		var a := sx0 + inset + (float(RIDGE_SHOULDER) if shelf and s == 0 else 0.0)
+		var b := sx1 - inset
+		var bottom := y + 2.0 if s < steps else float(sc.h)
+		_ridge_rect(c, sc, a, b, y, bottom)
+	var lit := y0
 	for band in FishingScenery.WATER_STEPS_M.size():
 		var rows := sc.band_rows(band)
-		var y0 := maxf(y, rows.x)
-		if rows.y > y0:
-			c.draw_rect(Rect2(sx0, y0, sx1 - sx0, rows.y - y0), RIDGE_BANDS[band])
+		if lit >= rows.x and lit < rows.y:
+			var inset0 := 2.0 * float(steps)
+			var a0 := sx0 + inset0 + (float(RIDGE_SHOULDER) if shelf else 0.0)
+			if sx1 - inset0 > a0:
+				c.draw_rect(Rect2(a0, lit, sx1 - inset0 - a0, 1.0), RIM_BANDS[band])
+
+
+func _ridge_rect(
+	c: CanvasItem, sc: FishingScenery, sx0: float, sx1: float, top: float, bottom: float
+) -> void:
+	if sx1 <= sx0:
+		return
+	for band in FishingScenery.WATER_STEPS_M.size():
+		var rows := sc.band_rows(band)
+		var y0 := maxf(top, rows.x)
+		var y1 := minf(bottom, rows.y)
+		if y1 > y0:
+			c.draw_rect(Rect2(sx0, y0, sx1 - sx0, y1 - y0), RIDGE_BANDS[band])
 
 
 ## The prop colours for water band `band` (see FishingProps); in the darkest band the props'

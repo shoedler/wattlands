@@ -2,13 +2,14 @@ class_name FishingFightPanel
 extends FishingHudControl
 ## The fight panel (mockup A1), one HUD panel just under the local boat, on the side away from
 ## the fish: the species and the line out, a reel-in bar (FishingRiderState.reel: how much of
-## the line is reeled in, consistent with the metres shown); the target watts and the watts now,
-## big (now in the accent when it is more than NOW_BAND off the target), with %FTP; the cadence
-## on a bar with the band lit, a marker at the cadence now and the strain and slack cues at its
-## ends (filling up, in the accent with a frame past ALERT_AT); the band's limits under it; and a
-## 30 s power graph with the target band shaded. In the Landing a slim panel in the same place
-## shows the gaff meter (Sprint! then Easy spin, a star for a trophy). Its rect is the whole
-## view; the panel follows the boat (FishingView's model).
+## the line is reeled in, consistent with the metres shown) over a slim strip of the fish's
+## stamina; the target watts and the watts now, big (the target bright, now muted and in the
+## accent when it is more than NOW_BAND off); the cadence on a bar with the band lit and a
+## marker at the cadence now, %FTP under the rpm and the band's limits centred under its edges,
+## and while the line strains or goes slack a labelled cue at that end; and a 30 s power graph
+## with the target band shaded (1.25 x FTP or the window's most at the top). In the Landing a
+## slim panel in the same place shows the gaff meter (Sprint! then Easy spin, a star for a
+## trophy). Its rect is the whole view; the panel follows the boat (FishingView's model).
 
 const W := 128
 const PAD := 3
@@ -27,13 +28,17 @@ const OVER_PIVOT := 30
 const NOW_BAND := 0.05
 const ALERT_AT := 0.75
 const GRAPH_S := 30.0
-## The graph's range as shares of the target.
-const GRAPH_TOP := 1.3
-const GRAPH_BOTTOM := 0.6
-## The cadence bar's scale (rpm) reaches at least this far round the band.
+## The graph's top is GRAPH_FTP x FTP or the window's most; a strain or slack cue shows past
+## CUE_AT.
+const GRAPH_FTP := 1.25
+const CUE_AT := 0.5
+## The row the strain and slack cues' labels take under the band's limits.
+const CUE_ROW := CAP + 2
+## The cadence bar's scale (rpm): CAD_MARGIN either side of the band (CAD_MIN .. CAD_MAX
+## without one).
 const CAD_MIN := 50.0
 const CAD_MAX := 120.0
-const CAD_MARGIN := 15.0
+const CAD_MARGIN := 25.0
 
 var fish: Dictionary = {}
 var gaff: Dictionary = {}
@@ -60,9 +65,15 @@ static func make(p_game: FishingGame, rect: Rect2i) -> FishingFightPanel:
 static func panel_h(landing: bool = false) -> int:
 	if landing:
 		return PAD + CAP + 3 + BAR_ROWS + PAD
-	return (
-		PAD + CAP + 3 + BAR_ROWS + 4 + CAP + 2 + BIG_CAP + 5 + CAP + 3 + CAP + 4 + GRAPH_ROWS + PAD
-	)
+	# the rows top-down: title, reel bar, labels, the big numbers, the cadence row, its limits,
+	# the cue labels, the graph
+	var rows: Array[int] = [
+		PAD, CAP, 3, BAR_ROWS, 4, CAP, 2, BIG_CAP, 5, CAP, 3, CAP, CUE_ROW, 4, GRAPH_ROWS, PAD
+	]
+	var out := 0
+	for r in rows:
+		out += r
+	return out
 
 
 func refresh() -> void:
@@ -129,18 +140,15 @@ func _draw_fight(s: float, u: float) -> void:
 	var dist := FishingHudModel.tr_key(game, FishingHudModel.KEY_DISTANCE, [str(fish["d_m"])])
 	_right(o, y, dist, s, text, false)
 	y += 3
-	var reel := Rect2(o + Vector2(PAD, y) * u, Vector2(inner, BAR_ROWS * u))
+	# the line reeled in (fills as the fish comes in), the fish's stamina a slim strip under it
+	var reel := Rect2(o + Vector2(PAD, y) * u, Vector2(inner, (BAR_ROWS - 1) * u))
 	FishingHudDraw.bar(self, reel, float(fish["reel"]), FishingHudDraw.STAMINA, false, u)
+	var stam := Rect2(o + Vector2(PAD, y + BAR_ROWS - 1) * u, Vector2(inner, u))
+	FishingHudDraw.bar(self, stam, float(fish["stamina"]), FishingPalette.SAGE, false, u)
 	y += BAR_ROWS + 4 + CAP
-	FishingHudDraw.text(
-		self,
-		o + Vector2(PAD, y) * u,
-		FishingHudModel.tr_key(game, FishingHudModel.KEY_TARGET),
-		s,
-		dim
-	)
-	var now := FishingHudModel.tr_key(game, FishingHudModel.KEY_NOW)
-	_right(o, y, "%d%%  %s" % [roundi(float(numbers["pct"])), now], s, dim, false)
+	var target_label := FishingHudModel.tr_key(game, FishingHudModel.KEY_TARGET)
+	FishingHudDraw.text(self, o + Vector2(PAD, y) * u, target_label, s, dim)
+	_right(o, y, FishingHudModel.tr_key(game, FishingHudModel.KEY_NOW), s, dim, false)
 	y += 2 + BIG_CAP
 	var target := float(numbers["target"])
 	var power := float(numbers["power"])
@@ -153,39 +161,54 @@ func _draw_fight(s: float, u: float) -> void:
 	FishingHudDraw.text(self, Vector2(right - ww, o.y + float(y) * u), watts, s, dim)
 	var now_txt := str(roundi(power))
 	var nw := FishingHudDraw.text_w(now_txt, s, true)
-	var now_col := FishingHudDraw.ALERT if off else text
+	# the target is the bright number to hold; now is muted, the accent when off the target
+	var now_col := FishingHudDraw.ALERT if off else dim
 	FishingHudDraw.text(
 		self, Vector2(right - ww - u - nw, o.y + float(y) * u), now_txt, s, now_col, true
 	)
 	y += 5 + CAP
 	_draw_cadence(o, y, s, u)
-	y += 3 + CAP + 4
+	y += 3 + CAP + CUE_ROW + 4
 	var g := Rect2(o + Vector2(PAD, y) * u, Vector2(inner, GRAPH_ROWS * u))
-	# zoomed round the target, so the band and the wobble read
-	var mid := target if target > 0.0 else maxf(trace.peak(), 100.0)
-	var top_w := mid * GRAPH_TOP
-	var bottom_w := mid * GRAPH_BOTTOM
-	FishingHudDraw.graph(self, g, trace, top_w, u, NOW_BAND, false, FishingPalette.FOAM, bottom_w)
+	var top_w := graph_top(trace, r_ftp())
+	FishingHudDraw.graph(self, g, trace, top_w, u, NOW_BAND, false, FishingPalette.FOAM)
 
 
-## The cadence row with its baseline on row `y`: "91 rpm", the bar with the band, the marker and
-## the strain and slack cues, the band's limits under it.
+## The graphs' top (W): 1.25 x FTP or the window's most, so steady power sits mid-height.
+static func graph_top(tr: FishingPowerTrace, ftp: float) -> float:
+	return maxf(maxf(GRAPH_FTP * ftp, tr.peak()), 100.0)
+
+
+## The local rider's FTP (200 W without a rider).
+func r_ftp() -> float:
+	var r := FishingHudModel.own_rider(game)
+	return r.ftp if r != null else 200.0
+
+
+## The cadence row with its baseline on row `y`: "91 rpm", the bar with the band and a marker at
+## the cadence now; under it the band's limits, each centred on its edge (pushed apart when
+## they would touch), and a labelled cue at a bar end while the line strains (left) or goes
+## slack (right) past CUE_AT.
 func _draw_cadence(o: Vector2, y: int, s: float, u: float) -> void:
 	var cad := float(numbers["cadence"])
+	var dim := FishingPalette.HUD_DIM
 	var x := FishingHudDraw.text(self, o + Vector2(PAD, y) * u, str(roundi(cad)), s)
 	var rpm := " " + FishingHudModel.tr_key(game, FishingHudModel.KEY_RPM)
-	x += FishingHudDraw.text(
-		self, o + Vector2(PAD, y) * u + Vector2(x, 0), rpm, s, FishingPalette.HUD_DIM
-	)
+	x += FishingHudDraw.text(self, o + Vector2(PAD, y) * u + Vector2(x, 0), rpm, s, dim)
 	var bx := PAD + ceili(x / u) + 4
 	var bw := W - PAD - bx
 	var top := y - CAP + (CAP - CAD_ROWS) / 2 - 1
-	var lo := minf(CAD_MIN, band.x - CAD_MARGIN) if band.x > 0.0 else CAD_MIN
-	var hi := maxf(CAD_MAX, band.y + CAD_MARGIN) if band.y > 0.0 else CAD_MAX
+	var lo := band.x - CAD_MARGIN if band.y > band.x else CAD_MIN
+	var hi := band.y + CAD_MARGIN if band.y > band.x else CAD_MAX
 	var track_x := bx + CUE_W + 1
 	var track_w := bw - 2 * (CUE_W + 1)
 	var track := Rect2(o + Vector2(track_x, top) * u, Vector2(track_w, CAD_ROWS) * u)
 	self.draw_rect(track, FishingPalette.HUD_TRACK)
+	var base := o + Vector2(0, y + 3 + CAP) * u
+	var pct := FishingHudModel.tr_key(
+		game, FishingHudModel.KEY_FTP, [roundi(float(numbers["pct"]))]
+	)
+	FishingHudDraw.text(self, base + Vector2(PAD * u, 0), pct, s, dim)
 	if band.y > band.x:
 		var a := cad_col(band.x, lo, hi, track_w)
 		var b := cad_col(band.y, lo, hi, track_w)
@@ -193,19 +216,36 @@ func _draw_cadence(o: Vector2, y: int, s: float, u: float) -> void:
 		self.draw_rect(lit, FishingPalette.SURFACE)
 		var la := str(roundi(band.x))
 		var lb := str(roundi(band.y))
-		var base := o + Vector2(0, y + 3 + CAP) * u
-		var law := FishingHudDraw.text_w(la, s)
-		var lo_at := base + Vector2(float(track_x + a) * u - law - u, 0)
-		FishingHudDraw.text(self, lo_at, la, s, FishingPalette.HUD_DIM)
-		var hi_at := base + Vector2(float(track_x + b + 2) * u, 0)
-		FishingHudDraw.text(self, hi_at, lb, s, FishingPalette.HUD_DIM)
+		var law := ceili(FishingHudDraw.text_w(la, s) / u)
+		var lbw := ceili(FishingHudDraw.text_w(lb, s) / u)
+		var xa := track_x + a - law / 2
+		var xb := track_x + b - lbw / 2 + 1
+		var gap := xb - (xa + law) - 2
+		if gap < 0:
+			xa += gap / 2 - 1
+			xb -= gap / 2 - 1
+		FishingHudDraw.text(self, base + Vector2(float(xa) * u, 0), la, s, dim)
+		FishingHudDraw.text(self, base + Vector2(float(xb) * u, 0), lb, s, dim)
 	var m := cad_col(cad, lo, hi, track_w)
 	self.draw_rect(
 		Rect2(o + Vector2(track_x + m, top - 1) * u, Vector2(1, CAD_ROWS + 2) * u),
 		FishingPalette.FOAM
 	)
-	_cue(o + Vector2(bx, top - 1) * u, strain, FishingHudDraw.STRAIN, u)
-	_cue(o + Vector2(bx + bw - CUE_W, top - 1) * u, slack, FishingHudDraw.SLACK, u)
+	var cue_base := base + Vector2(0, CUE_ROW) * u
+	if strain > CUE_AT:
+		_cue(o + Vector2(bx, top - 1) * u, strain, FishingHudDraw.STRAIN, u)
+		var word := FishingHudModel.tr_key(game, FishingHudModel.KEY_STRAIN)
+		FishingHudDraw.text(self, cue_base + Vector2(float(bx) * u, 0), word, s, _cue_col(strain))
+	if slack > CUE_AT:
+		_cue(o + Vector2(bx + bw - CUE_W, top - 1) * u, slack, FishingHudDraw.SLACK, u)
+		var word := FishingHudModel.tr_key(game, FishingHudModel.KEY_SLACK)
+		var sw := FishingHudDraw.text_w(word, s)
+		var at := cue_base + Vector2(float(W - PAD) * u - sw, 0)
+		FishingHudDraw.text(self, at, word, s, _cue_col(slack))
+
+
+static func _cue_col(fill: float) -> Color:
+	return FishingHudDraw.ALERT if fill > ALERT_AT else FishingPalette.HUD_DIM
 
 
 ## A strain or slack cue at `at` (HUD px): a CUE_W x CUE_ROWS meter filling up with `fill`, in

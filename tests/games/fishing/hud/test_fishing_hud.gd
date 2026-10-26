@@ -50,6 +50,13 @@ func test_the_layout_follows_the_art_size() -> void:
 	assert_eq((a["cruise"] as Rect2i).end.y, 356, "the cruise box sits on the bottom edge")
 	assert_eq((b["cruise"] as Rect2i).end.y, 336)
 	assert_eq((b["fight"] as Rect2i).size, Vector2i(860, 340), "the fight panel can go anywhere")
+	for art in SIZES:
+		var l := FishingHud.layout(art)
+		var gear: Rect2i = l["gear"]
+		var cruise: Rect2i = l["cruise"]
+		assert_eq(gear.position.x, cruise.position.x + FishingCruisePanel.tag_x(), "over the tag")
+		var tag_top := cruise.end.y - FishingCruisePanel.TAG_H
+		assert_eq(gear.end.y, tag_top - 2, "the gear right above the zone tag at %s" % art)
 
 
 func test_the_spec_has_its_own_power_box_the_gear_and_a_help_overlay() -> void:
