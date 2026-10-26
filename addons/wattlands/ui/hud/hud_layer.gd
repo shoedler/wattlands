@@ -236,12 +236,17 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	relayout()
 
 
-## Per-tick local data: the local rider's telemetry, current phase, and plan (timeline).
+## Per-tick local data: the local rider's telemetry, current phase, and plan (timeline). A game
+## Control (HudSpec.controls) that defines set_telemetry(t: Telemetry) gets the same local
+## telemetry, heart rate included.
 func update(telemetry: Telemetry, phase: PhaseState, plan: EffortPlan) -> void:
 	if telemetry != null:
 		_advance_messages(telemetry.t)
 		for w in _widgets:
 			w.set_telemetry(telemetry)
+		for c: Control in _game_controls:
+			if is_instance_valid(c) and c.has_method("set_telemetry"):
+				c.call("set_telemetry", telemetry)
 		_tele_rescue = telemetry.rescue
 		_tele_paused = telemetry.paused
 		_refresh_safety()
