@@ -11,9 +11,13 @@ Design notes only (BRIEF 1: P2 is never built in this run). Game-specific P2 not
 - Start: a neutral roll-out at ERG 60% FTP behind a pace car (warm-up content), then a ramped switch to SIM for the race.
 - Results: positions, best lap, sprint peaks; grade from position and effort compliance; FIT laps per race lap.
 
+## Games
+
+- Help overlays (`HudSpec.help`, F1) for Castellum Rotae (`siege`), Workout and Diesel Domestiques (`tank`): each game's next session writes its entries (what the HUD shows, the controls, the safety stop). Turbo Reel has one.
+
 ## Platform
 
-- Heart-rate strap support (0x180D) and HR-based balancing.
+- HR-based balancing.
 - A Wahoo Direct Connect (Bluetooth over TCP, DIRCON) backend for KICKR CORE 2 (`DirconTransport` behind `BleTransport`).
 - OpenBikeControl input.
 - Host migration when the host leaves (today the session ends gracefully).
