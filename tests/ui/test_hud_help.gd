@@ -203,3 +203,18 @@ func test_help_seen_per_profile_and_game() -> void:
 	Paths.set_override(_dir)
 	assert_eq(Paths.help_seen_path(), path, "the profile's user dir")
 	Paths.set_override("")
+
+
+func test_art_map_moves_help_points() -> void:
+	var pv: PixelViewport = FakePV.new()
+	pv.set("fake_scale", 2)
+	add_child_autofree(pv)
+	var help: Array[Dictionary] = [
+		{"text": "Edge", "at": Vector2(100, 50), "arrow_to": Vector2(300, 200)},
+	]
+	_hud.build(_spec(help), _ctx, pv)
+	var h := _hud.help_overlay()
+	h.art_map = func(p: Vector2) -> Vector2: return p + Vector2(40, 0)
+	_hud.show_help()
+	assert_eq(h.to_screen(Vector2(100, 50)), Vector2(280, 100), "a flex layout's anchoring")
+	assert_eq(h.arrow_of(0)[1], Vector2(680, 400))

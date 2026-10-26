@@ -32,6 +32,10 @@ var _title_label: Label = null
 var _pv: PixelViewport = null
 var _screen: Vector2 = HudLayer.BASE_SIZE
 var _left_s: float = 0.0
+## (Vector2 art px laid out on pixel_base) -> Vector2 art px now. Identity until a flex
+## PixelViewport (pixel_flex) anchors HUD art rects to the nearest edge: HudLayer then sets the
+## same anchoring here, so help points follow the HUD (merge hook, see art_point()).
+var art_map: Callable = Callable()
 
 
 func _init() -> void:
@@ -157,8 +161,16 @@ func layout(screen: Vector2, pv: PixelViewport = null) -> void:
 func to_screen(v: Variant) -> Vector2:
 	var p: Vector2 = v if v is Vector2 else Vector2.ZERO
 	if _pv != null:
-		return _pv.art_to_screen(p)
+		return _pv.art_to_screen(art_point(p))
 	return p * _screen
+
+
+## An entry's art point (laid out on pixel_base) in the current art size: art_map when set,
+## else unchanged.
+func art_point(p: Vector2) -> Vector2:
+	if art_map.is_valid():
+		return art_map.call(p)
+	return p
 
 
 ## The arrow of entry `i` on screen: [from, to] (from the panel's edge), or [] without one.
@@ -195,7 +207,7 @@ func arrow_pixels(i: int) -> Array[Vector2i]:
 	if a.is_empty() or _pv == null:
 		return out
 	var from := Vector2i(_pv.screen_to_art(a[0]).floor())
-	var to := Vector2i((_entries[i]["arrow_to"] as Vector2).floor())
+	var to := Vector2i(art_point(_entries[i]["arrow_to"] as Vector2).floor())
 	out = line_pixels(from, to)
 	var d := Vector2(to - from)
 	if d.length() < 1e-6:
