@@ -12,36 +12,18 @@ extends RefCounted
 ## {"type": "mouse_button", "button": int}. Only actions in actions() are saved and loaded.
 ## Keys bind by physical_keycode (layout independent, like the defaults); keycode is used only
 ## for an event without a physical code.
-## Besides Wl.ACTIONS there are the platform's own actions (PLATFORM_EXTRA_ACTIONS: `help`, the
-## help overlay, F1 and the left stick click). Their defaults live here (EXTRA_DEFAULTS) for as
-## long as project.godot's input map doesn't name them; they rebind and save like the others.
 
 const VERSION := 1
 const SECTION_META := "input"
 const SECTION_BINDINGS := "bindings"
-## Platform actions that aren't in Wl.ACTIONS (v0.3.0): `help` toggles the help overlay.
-const PLATFORM_EXTRA_ACTIONS: Array[StringName] = [&"help"]
-## Defaults of PLATFORM_EXTRA_ACTIONS when project.godot has none: action -> [event dicts].
-const EXTRA_DEFAULTS := {
-	&"help":
-	[
-		{"type": "key", "physical_keycode": KEY_F1, "keycode": 0},
-		{"type": "joy_button", "button": JOY_BUTTON_LEFT_STICK},
-	],
-}
 
 
-## Every rebindable action: Wl.ACTIONS, then the platform's extra actions.
+## Every rebindable action (Wl.ACTIONS).
 static func actions() -> Array[StringName]:
-	var out: Array[StringName] = Wl.ACTIONS.duplicate()
-	for a in PLATFORM_EXTRA_ACTIONS:
-		if not out.has(a):
-			out.append(a)
-	return out
+	return Wl.ACTIONS.duplicate()
 
 
-## The project.godot default events of `action` (fresh copies); for a platform extra action
-## without project.godot events, its EXTRA_DEFAULTS.
+## The project.godot default events of `action` (fresh copies).
 static func default_events(action: StringName) -> Array[InputEvent]:
 	var out: Array[InputEvent] = []
 	var setting: Variant = ProjectSettings.get_setting("input/" + String(action), null)
@@ -51,9 +33,6 @@ static func default_events(action: StringName) -> Array[InputEvent]:
 			for e: Variant in events:
 				if e is InputEvent:
 					out.append((e as InputEvent).duplicate() as InputEvent)
-	if out.is_empty() and EXTRA_DEFAULTS.has(action):
-		for d: Dictionary in EXTRA_DEFAULTS[action]:
-			out.append(dict_to_event(d))
 	return out
 
 

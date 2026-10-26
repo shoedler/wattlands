@@ -83,10 +83,10 @@ clamp wbal to [0, Wp]          # Wp = W' in joules, P and CP in watts
 
 ### 3.5 Input, gestures and Autopilot
 
-Actions: confirm, back, up, down, left, right, ability_1, ability_2, item, swap, shift_up, shift_down, pause, panic. Each game defines what `swap`, the abilities and `item` do (for example moving your power to the next target, or moving to the next free seat at a checkpoint).
+Actions: confirm, back, up, down, left, right, ability_1, ability_2, item, swap, shift_up, shift_down, pause, panic, help. `help` toggles the platform's help overlay, a short tour of the game's screen. Each game defines what `swap`, the abilities and `item` do (for example moving your power to the next target, or moving to the next free seat at a checkpoint).
 
-- Keyboard: arrows or WASD move, Enter or Space confirm, Esc back, 1 and 2 abilities, F item, R swap, Q and E shift down and up, P pause, Backspace held for 1 s panic.
-- Xbox controller: left stick or D-pad move, A confirm, B back, X and Y abilities, RB item, LB swap, LT and RT shift down and up, Start pause, View plus Menu together panic.
+- Keyboard: arrows or WASD move, Enter or Space confirm, Esc back, 1 and 2 abilities, F item, R swap, Q and E shift down and up, P pause, Backspace held for 1 s panic, F1 help.
+- Xbox controller: left stick or D-pad move, A confirm, B back, X and Y abilities, RB item, LB swap, LT and RT shift down and up, Start pause, View plus Menu together panic, left stick click help.
 - Everything rebindable and saved to `input.cfg` in `Paths.user_dir()` (section 6). The README explains how to map Zwift Click or Zwift Play buttons to these keys with BikeControl (open source).
 
 Pedal gestures (a GestureRecognizer, unit-tested on synthetic streams):

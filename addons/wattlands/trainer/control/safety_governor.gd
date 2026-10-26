@@ -142,12 +142,10 @@ const HAPTIC_COOLDOWN_S := 15.0
 ## Haptic pull (4.6.6): at most +50% FTP after the intensity, for at most 3 s.
 const PULL_MAX_PCT := 50.0
 const PULL_MAX_S := 3.0
-## In clamped_by (status, telemetry, the 1 Hz trace) while a haptic pull raises the applied
-## ERG target.
-const CLAMP_PULL := "haptic_pull"
-## Refusal / drop reasons of a haptic pull besides Wl.REFUSE_HAPTIC_OFF, _WARMUP and _COOLDOWN.
-const REFUSE_PULL_SIM := "haptic_pull_in_sim"
-const REFUSE_PULL_UNSAFE := "haptic_pull_unsafe"
+## The haptic pull's clamp and refusal names (Wl.CLAMP_PULL, Wl.REFUSE_PULL_*), kept here too.
+const CLAMP_PULL := Wl.CLAMP_PULL
+const REFUSE_PULL_SIM := Wl.REFUSE_PULL_SIM
+const REFUSE_PULL_UNSAFE := Wl.REFUSE_PULL_UNSAFE
 const FACTOR_MIN := 0.5
 const FACTOR_MAX := 1.0
 const SIM_BLOCK_MIN_S := 10.0

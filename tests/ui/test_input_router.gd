@@ -653,7 +653,8 @@ func test_fullscreen_keys_are_never_actions() -> void:
 
 
 func test_help_is_f1_and_the_left_stick_click() -> void:
-	assert_true(InputBindings.actions().has(&"help"))
+	assert_true(Wl.ACTIONS.has(&"help"))
+	assert_true(InputMap.has_action(&"help"), "project.godot defines it")
 	assert_true(_router.PLATFORM_ACTIONS.has(&"help"), "never passed to local_intents")
 	assert_true(_has_key(_router.bindings(&"help"), KEY_F1))
 	assert_true(_has_button(_router.bindings(&"help"), JOY_BUTTON_LEFT_STICK))
@@ -668,6 +669,8 @@ func test_help_is_f1_and_the_left_stick_click() -> void:
 
 func test_left_stick_click_is_no_other_default() -> void:
 	for a: StringName in Wl.ACTIONS:
+		if a == &"help":
+			continue
 		assert_false(_has_button(_router.bindings(a), JOY_BUTTON_LEFT_STICK), String(a))
 		assert_false(_has_key(_router.bindings(a), KEY_F1), String(a))
 

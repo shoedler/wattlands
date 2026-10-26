@@ -77,6 +77,7 @@ const CLAMP_HAPTIC := "haptic_limit"  ## 4.6.6 haptic <= +3% (or equal wind forc
 const CLAMP_HAPTIC_INTENSITY := "haptic_intensity"  ## 4.6.6 haptic scaled by the rider's intensity setting
 const CLAMP_FACTOR := "factor_bounds"  ## 4.6.6 crr/cw factors in [0.5, 1.0]
 const CLAMP_PAUSE := "paused"  ## 4.1 paused: ERG floor or SIM flat
+const CLAMP_PULL := "haptic_pull"  ## 4.6.6 a haptic pull raises the applied ERG target
 
 # Directive refusal reasons (DirectiveResult.reason, applied records)
 const REFUSE_NO_PHASE := "no_phase"
@@ -89,6 +90,10 @@ const REFUSE_HAPTIC_ERG := "haptic_in_erg"
 const REFUSE_HAPTIC_OFF := "haptics_off"
 const REFUSE_HAPTIC_WARMUP := "haptic_in_warmup"
 const REFUSE_HAPTIC_COOLDOWN := "haptic_cooldown"
+## A haptic pull for a rider in (or switching to) SIM, or during a SIM block.
+const REFUSE_PULL_SIM := "haptic_pull_in_sim"
+## A haptic pull during rescue and its ramp-back, coasting, AFK, pause, panic or a ramp test.
+const REFUSE_PULL_UNSAFE := "haptic_pull_unsafe"
 const REFUSE_BAD_FIELDS := "bad_fields"
 const REFUSE_UNKNOWN_PEER := "unknown_peer"
 const REFUSE_NOT_OPEN_ENDED := "not_open_ended"
@@ -102,7 +107,8 @@ const REFUSE_NOT_GAME_GRADE := "grade_source_not_game"
 ## A SIM block requested during rescue, coasting, AFK or pause.
 const REFUSE_SIM_BLOCK_UNSAFE := "sim_block_unsafe"
 
-# Input actions (BRIEF 3.5). The input map in project.godot defines each.
+# Input actions (BRIEF 3.5). The input map in project.godot defines each. `help` (F1, the left
+# stick click) toggles the platform's help overlay.
 const ACTIONS: Array[StringName] = [
 	&"confirm",
 	&"back",
@@ -118,6 +124,7 @@ const ACTIONS: Array[StringName] = [
 	&"shift_down",
 	&"pause",
 	&"panic",
+	&"help",
 ]
 
 # Pedal gestures (BRIEF 3.5). `surge` doubles as confirm, `coast` as back, `stop_5s` as pause.

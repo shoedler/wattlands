@@ -7,8 +7,7 @@ extends Node
 ## Defaults: arrows/WASD move, Enter/Space confirm, Esc back, 1/2 abilities, F item, R swap,
 ## Q/E shift down/up, P pause, Backspace held 1 s panic; controller: left stick/D-pad move,
 ## A confirm, B back, X/Y abilities, RB item, LB swap, LT/RT shift down/up, Start pause,
-## View+Menu together panic; F1 or the left stick click help (the help overlay, a platform
-## action outside Wl.ACTIONS: InputBindings.PLATFORM_EXTRA_ACTIONS). Panic emits
+## View+Menu together panic; F1 or the left stick click help (the help overlay). Panic emits
 ## EventBus.panic_requested immediately.
 ## Pedal navigation (opt-in, pedal_nav_active()): `surge` acts as confirm and `coast` as back
 ## for menus (pedal-scan); with it off menus take the keyboard and controller only. `stop_5s`

@@ -80,6 +80,9 @@ func test_rule_names() -> void:
 	assert_eq(Wl.REFUSE_ERG_IN_SIM, "erg_in_sim_phase")
 	assert_eq(Wl.REFUSE_NOT_GAME_GRADE, "grade_source_not_game")
 	assert_eq(Wl.REFUSE_SIM_BLOCK_UNSAFE, "sim_block_unsafe")
+	assert_eq(Wl.CLAMP_PULL, "haptic_pull")
+	assert_eq(Wl.REFUSE_PULL_SIM, "haptic_pull_in_sim")
+	assert_eq(Wl.REFUSE_PULL_UNSAFE, "haptic_pull_unsafe")
 	var clamps := [
 		Wl.CLAMP_UNVERIFIED,
 		Wl.CLAMP_CEILING,
@@ -98,7 +101,8 @@ func test_rule_names() -> void:
 		Wl.CLAMP_HAPTIC,
 		Wl.CLAMP_HAPTIC_INTENSITY,
 		Wl.CLAMP_FACTOR,
-		Wl.CLAMP_PAUSE
+		Wl.CLAMP_PAUSE,
+		Wl.CLAMP_PULL
 	]
 	var refusals := [
 		Wl.REFUSE_NO_PHASE,
@@ -111,6 +115,8 @@ func test_rule_names() -> void:
 		Wl.REFUSE_HAPTIC_OFF,
 		Wl.REFUSE_HAPTIC_WARMUP,
 		Wl.REFUSE_HAPTIC_COOLDOWN,
+		Wl.REFUSE_PULL_SIM,
+		Wl.REFUSE_PULL_UNSAFE,
 		Wl.REFUSE_BAD_FIELDS,
 		Wl.REFUSE_UNKNOWN_PEER,
 		Wl.REFUSE_NOT_OPEN_ENDED,
@@ -133,6 +139,7 @@ func _assert_unique(names: Array, what: String) -> void:
 
 
 func test_actions_and_gestures() -> void:
-	assert_eq(Wl.ACTIONS.size(), 14)
+	assert_eq(Wl.ACTIONS.size(), 15)
 	assert_has(Wl.ACTIONS, &"panic")
+	assert_has(Wl.ACTIONS, &"help")
 	assert_eq(Wl.GESTURES, [&"pedal_start", &"surge", &"coast", &"stop_5s"])

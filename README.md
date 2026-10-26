@@ -42,8 +42,10 @@ Friends in another place: the relay must be reachable from their PC. The simples
 | Virtual gears down / up | Q / E | LT / RT |
 | Pause | P | Start |
 | Panic (trainer to safe at once) | Hold Backspace 1 s | View + Menu |
+| Help (what is on the screen) | F1 | Left stick click |
+| Fullscreen on / off | F11 or Alt+Enter | |
 
-Bindings can be changed in Settings > Controls. The session screen also has an on-screen PANIC button. Zwift Click or Play buttons can be mapped to these keys with BikeControl.
+Bindings can be changed in Settings > Controls (fullscreen also in Settings > Audio and display). The pause menu has a Panic item too. Zwift Click or Play buttons can be mapped to these keys with BikeControl.
 
 ## Strava
 
