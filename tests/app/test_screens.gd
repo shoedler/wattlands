@@ -233,7 +233,7 @@ func test_results_screen_opens() -> void:
 func test_rides_and_ftp_test_pages_open() -> void:
 	fx.give_profile()
 	var rides := open_screen(AppRidesScreen.new()) as AppRidesScreen
-	assert_eq(menu(rides).ids(), ["back"])
+	assert_eq(menu(rides).ids(), ["copy_folder", "back"])
 	var ftp := open_screen(AppFtpTestScreen.new()) as AppFtpTestScreen
 	assert_eq(menu(ftp).ids(), ["start", "back"])
 	assert_gte(font_size(ftp.big_label), AppStyle.KEY_NUMBER_MIN)

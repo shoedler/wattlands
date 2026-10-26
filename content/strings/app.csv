@@ -210,7 +210,16 @@ APP_ACTION_PANIC,Panic
 APP_ACTION_HELP,Help
 APP_RIDES_TITLE,Rides
 APP_RIDES_NONE,No rides saved yet.
-APP_RIDES_HINT,Pick a ride to upload it to Strava again.
+APP_RIDES_HINT,Pick a ride to upload it to Strava or copy its title and description.
+APP_RIDES_FOLDER,Rides are saved in: {0}
+APP_RIDES_COPY_FOLDER,Copy folder path
+APP_RIDES_UPLOAD,Upload to Strava
+APP_RIDES_REUPLOAD,Upload to Strava again
+APP_RIDES_COPY_TITLE,Copy title
+APP_RIDES_COPY_DESCRIPTION,Copy description
+APP_RIDES_COPIED_TITLE,Title copied
+APP_RIDES_COPIED_DESCRIPTION,Description copied
+APP_RIDES_COPIED_FOLDER,Folder path copied
 APP_RIDES_UPLOADED,on Strava
 APP_FTP_TITLE,FTP test
 APP_FTP_INTRO,"A 5-minute ramp-in, then one-minute steps that get 6% harder each minute until you can't hold the target. Stop pedaling to end it. Your new FTP is 75% of your best minute; it is saved 10 s after the test unless you keep your old one."
