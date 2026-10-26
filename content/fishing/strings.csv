@@ -127,3 +127,9 @@ FISHING_HELP_MENU,"Stopped: cast at a fish, drive on or turn around"
 FISHING_HELP_FIGHT,"Fight: hold the target watts, keep cadence in the band"
 FISHING_HELP_GEAR,"Gears (Q/E) change how pedaling feels, not your speed"
 FISHING_HELP_STOP,Idle 10 s: pause. Hold Backspace or View+Menu: stop
+FISHING_HUD_BPM,bpm
+FISHING_HUD_FTP,"{0}% FTP"
+FISHING_HUD_KNOTS,"{0} kn"
+FISHING_HUD_KMH,"{0} km/h"
+FISHING_HUD_TARGET,Target
+FISHING_HUD_NOW,now
