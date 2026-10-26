@@ -180,6 +180,10 @@ func test_power_is_always_visible() -> void:
 		_ctx
 	)
 	assert_null(_hud.widget(HudSpec.POWER_GAUGE), "power_w and ftp_pct readouts are enough")
+	var own := HudSpec.new()
+	own.shows_power = true
+	_hud.build(own, _ctx)
+	assert_null(_hud.widget(HudSpec.POWER_GAUGE), "the game's own controls show raw W and %FTP")
 	_hud.ensure_power_visible = false
 	_hud.build(HudSpec.new(), _ctx)
 	assert_null(_hud.widget(HudSpec.POWER_GAUGE))

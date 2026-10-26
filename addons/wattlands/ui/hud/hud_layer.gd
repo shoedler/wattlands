@@ -792,6 +792,8 @@ func _set_pixel_viewport(pv: PixelViewport) -> void:
 
 
 func _shows_power() -> bool:
+	if _spec.shows_power:
+		return true
 	var power := false
 	var pct := false
 	for entry: Dictionary in _spec.widgets:

@@ -66,6 +66,9 @@ var show_safety_banners: bool = true
 ## text_dim, bar_bg, bar_fg, accent, banner_bg, banner_text. Safety and warning colors (rescue,
 ## warm-up, pause and trainer banners, WlTheme.WARN, the in-band glow) ignore it.
 var palette: Dictionary = {}
+## The game's own controls always show the local rider's raw W and %FTP (BRIEF 3.1), so the
+## HudLayer adds no fallback power gauge.
+var shows_power: bool = false
 ## The game's help overlay (F1, and once when a rider first plays the game): entries
 ## {"text": String (string key or text), "at": Vector2 (art px for 2D games, else 0..1 of
 ## the screen), "arrow_to": Vector2 (optional, same space)}. Empty = no help.
