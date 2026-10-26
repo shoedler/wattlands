@@ -411,6 +411,12 @@ function findGdtoolkit() {
   if (probe('uvx', [...from, 'gdlint', '--version'])) {
     return { lint: ['uvx', ...from, 'gdlint'], format: ['uvx', ...from, 'gdformat'] };
   }
+  // Windows application control can block the gdlint/gdformat launcher executables; the same
+  // pinned release still runs as Python modules.
+  const viaPython = ['run', '--no-project', '--with', `gdtoolkit==${GDTOOLKIT_VERSION}`, 'python', '-m'];
+  if (probe('uv', [...viaPython, 'gdtoolkit.linter', '--version'])) {
+    return { lint: ['uv', ...viaPython, 'gdtoolkit.linter'], format: ['uv', ...viaPython, 'gdtoolkit.formatter'] };
+  }
   return null;
 }
 
