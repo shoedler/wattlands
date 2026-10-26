@@ -218,3 +218,48 @@ func test_art_map_moves_help_points() -> void:
 	_hud.show_help()
 	assert_eq(h.to_screen(Vector2(100, 50)), Vector2(280, 100), "a flex layout's anchoring")
 	assert_eq(h.arrow_of(0)[1], Vector2(680, 400))
+
+
+## Flex mode (pixel_flex): HudLayer anchors help points like its HUD rects, so a point inside a
+## rect moves with that rect and any other point with the art pixel under it.
+func test_help_points_follow_a_flex_layout() -> void:
+	var holder := Control.new()
+	holder.size = Vector2(3440, 1440)
+	add_child_autofree(holder)
+	var pv := PixelViewport.new()
+	pv.pixel_base = Vector2i(640, 360)
+	pv.flex_min = Vector2i(568, 320)
+	holder.add_child(pv)
+	pv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pv.refresh_layout()
+	assert_eq(pv.art_size(), Vector2i(860, 360), "220 art px wider than pixel_base")
+	var spec := _spec(
+		[
+			{"text": "Left", "at": Vector2(100, 50)},
+			{"text": "Right", "at": Vector2(500, 50), "arrow_to": Vector2(600, 20)},
+			{"text": "Middle", "at": Vector2(200, 200), "arrow_to": Vector2(300, 320)},
+		]
+	)
+	spec.add_control(Control.new(), Rect2i(270, 300, 100, 40))
+	_hud.build(spec, _ctx, pv)
+	var h := _hud.help_overlay()
+	assert_true(h.art_map.is_valid(), "HudLayer sets the anchoring")
+	assert_eq(h.art_point(Vector2(100, 50)), Vector2(100, 50), "left half stays")
+	assert_eq(h.art_point(Vector2(500, 50)), Vector2(720, 50), "right half follows the edge")
+	assert_eq(
+		h.art_point(Vector2(300, 320)), Vector2(410, 320), "inside a centred rect: moves with it"
+	)
+	assert_eq(h.art_point(Vector2(300, 100)), Vector2(300, 100), "the same x outside it stays")
+	_hud.show_help()
+	_hud.relayout()
+	assert_eq(h.to_screen(Vector2(500, 50)), pv.art_to_screen(Vector2(720, 50)))
+	assert_eq(h.arrow_of(2)[1], pv.art_to_screen(Vector2(410, 320)))
+
+
+func test_help_points_stay_without_flex() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.set("fake_scale", 2)
+	_hud.build(_spec([{"text": "Right", "at": Vector2(500, 50)}]), _ctx, pv)
+	assert_eq(_hud.help_art_point(Vector2(500, 50)), Vector2(500, 50))
+	_hud.build(_spec([]), _ctx)
+	assert_eq(_hud.help_art_point(Vector2(500, 50)), Vector2(500, 50), "no PixelViewport")

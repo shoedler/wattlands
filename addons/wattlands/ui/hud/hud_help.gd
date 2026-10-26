@@ -33,8 +33,8 @@ var _pv: PixelViewport = null
 var _screen: Vector2 = HudLayer.BASE_SIZE
 var _left_s: float = 0.0
 ## (Vector2 art px laid out on pixel_base) -> Vector2 art px now. Identity until a flex
-## PixelViewport (pixel_flex) anchors HUD art rects to the nearest edge: HudLayer then sets the
-## same anchoring here, so help points follow the HUD (merge hook, see art_point()).
+## Maps an entry's art point (laid out on pixel_base) to the current art canvas; HudLayer sets
+## HudLayer.help_art_point (the HUD's flex anchoring) so help points follow the HUD.
 var art_map: Callable = Callable()
 
 

@@ -198,6 +198,7 @@ func build(spec: HudSpec, ctx: GameContext, pixel_viewport: PixelViewport = null
 	_toasts.set_palette(_palette)
 	_mock_keys.set_palette(_palette)
 	_help.set_palette(_palette)
+	_help.art_map = help_art_point
 	_help.set_entries(_help_entries(_spec.help))
 	for entry: Dictionary in _spec.widgets:
 		var id := str(entry.get("widget", ""))
@@ -547,6 +548,22 @@ func art_size() -> Vector2i:
 	return Vector2i.ZERO
 
 
+## A help point (art pixels laid out on pixel_base) on the current art canvas, so help follows
+## a flex layout like the HUD: a point inside a Rect2i placement of the spec (widgets, controls,
+## toast and banner areas; the first that holds it) moves with that rect
+## (PixelViewport.anchor_art_rect()), any other point with the art pixel under it. Unchanged
+## without a PixelViewport or outside flex mode.
+func help_art_point(p: Vector2) -> Vector2:
+	if _pv == null or not is_instance_valid(_pv):
+		return p
+	var r := Rect2i(Vector2i(p.floor()), Vector2i.ONE)
+	for placed in _spec_rects():
+		if Rect2(placed).has_point(p):
+			r = placed
+			break
+	return p + Vector2(_pv.anchor_art_rect(r).position - r.position)
+
+
 ## Keep `size` (1080p pixels, measured from the screen corner's margin) clear at a corner
 ## anchor (HudSpec.TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT or BOTTOM_RIGHT) for something the host
 ## draws there (the app shell reserves none today): that corner's
@@ -868,6 +885,21 @@ func _set_pixel_viewport(pv: PixelViewport) -> void:
 			_pv.resized.connect(_queue_relayout)
 		if not _pv.layout_changed.is_connected(_queue_relayout):
 			_pv.layout_changed.connect(_queue_relayout)
+
+
+## The spec's Rect2i placements (widgets, controls, toast_area, banner_area), in that order.
+func _spec_rects() -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	if _spec == null:
+		return out
+	for entry: Dictionary in _spec.widgets + _spec.controls:
+		var at: Variant = entry.get("at", null)
+		if at is Rect2i:
+			out.append(at)
+	for area: Variant in [_spec.toast_area, _spec.banner_area]:
+		if area is Rect2i:
+			out.append(area)
+	return out
 
 
 func _shows_power() -> bool:
