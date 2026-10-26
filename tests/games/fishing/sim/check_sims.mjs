@@ -128,7 +128,8 @@ export function runProblems(name, r) {
     if (d.accepted !== true && !surge) probs.push(`${at}: refused (${d.reason})`);
     if (d.kind === 'request') {
       for (const p of requestShapeProblems(d.requested)) probs.push(`${at}: ${p}`);
-      if (!surge || d.accepted === true) for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
+      const refusedSurge = surge && (d.accepted !== true || d.applied?.refused === true);
+      if (!refusedSurge) for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
       const req = d.requested ?? {};
       if (req.mode === 'ERG' && isObj(d.applied)) {
         const ph = plans[String(d.peer)]?.phases?.[d.applied.phase_index];
