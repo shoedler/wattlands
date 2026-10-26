@@ -18,3 +18,4 @@ BLE_HR_STATUS_SCANNING,Looking for heart rate sensors
 BLE_HR_STATUS_NONE_FOUND,No heart rate sensor found
 BLE_HR_STATUS_UNAVAILABLE,Bluetooth is not available for sensors yet
 BLE_HR_STATUS_NOT_HR,That device has no heart rate service
+BLE_HR_STATUS_WAITING,"{name}: waiting for heart rate (if Windows asks to pair the sensor, allow it)"

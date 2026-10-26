@@ -3,7 +3,9 @@ extends GutTest
 ## connect -> discover -> subscribe 0x2A37 -> ready, notifications -> current_bpm() (stale,
 ## zero and no-contact readings are 0), remembering and forgetting the sensor, auto-connect to
 ## the remembered sensor, the reconnect backoff, a transport that is not there yet, and that
-## the sensor is never written to. Every file goes to a temp Paths dir.
+## the sensor is never written to. Ready only once heart rate flows: no notification after
+## subscribing (or while ready), a failed subscription and a GATT reset subscribe again once
+## on the same link, then reconnect. Every file goes to a temp Paths dir.
 
 const FakeHr := preload("res://tests/ble/fake_hr_transport.gd")
 
@@ -62,8 +64,10 @@ func _run(seconds: float) -> void:
 		_m.tick(DT)
 
 
+## Connects and delivers the first measurement (90 bpm): ready.
 func _pair() -> void:
 	_m.connect_to(ADDR, NAME)
+	_t.measure(PackedByteArray([0x00, 90]))
 	assert_true(_m.is_ready(), "precondition: ready")
 
 
@@ -87,7 +91,13 @@ func test_scan_lists_heart_rate_sensors_only() -> void:
 
 
 func test_pair_subscribes_and_never_writes() -> void:
-	_pair()
+	_m.connect_to(ADDR, NAME)
+	assert_false(_m.is_ready(), "subscribed is not ready: no heart rate yet")
+	assert_eq(_m.status(), TrainerDevice.STATUS_CONNECTING)
+	assert_eq(HrSensorManager.read_last_sensor(), {}, "not remembered before heart rate flows")
+	_t.measure(PackedByteArray([0x00, 90]))
+	assert_true(_m.is_ready(), "the first notification makes it ready")
+	assert_eq(_m.current_bpm(), 90)
 	assert_eq(_t.count("discover_services"), 1)
 	assert_eq(_t.last("subscribe_characteristic"), ["subscribe_characteristic", "180d", "2a37"])
 	assert_eq(_t.count("write_characteristic"), 0, "a heart rate sensor is never written to")
@@ -97,10 +107,9 @@ func test_pair_subscribes_and_never_writes() -> void:
 
 func test_notifications_give_the_heart_rate() -> void:
 	_pair()
-	assert_eq(_m.current_bpm(), 0, "nothing measured yet")
 	_t.measure(PackedByteArray([0x06, 128]))
 	assert_eq(_m.current_bpm(), 128)
-	assert_eq(_bpms, [128])
+	assert_eq(_bpms, [90, 128])
 	_t.measure(PackedByteArray([0x04, 131]))
 	assert_eq(_m.current_bpm(), 0, "no skin contact")
 	assert_true(_m.no_contact())
@@ -110,12 +119,14 @@ func test_notifications_give_the_heart_rate() -> void:
 	assert_eq(_m.current_bpm(), 140)
 	_run(0.2)
 	assert_eq(_m.current_bpm(), 0, "stale after 5 s without a measurement")
+	assert_true(_m.is_ready(), "still ready until NOTIFY_TIMEOUT_S")
 
 
 func test_other_characteristics_are_ignored() -> void:
 	_pair()
-	_t.characteristic_notified.emit("00002a19-0000-1000-8000-00805f9b34fb", PackedByteArray([90]))
-	assert_eq(_m.current_bpm(), 0)
+	_t.characteristic_notified.emit("00002a19-0000-1000-8000-00805f9b34fb", PackedByteArray([60]))
+	assert_eq(_m.current_bpm(), 90, "the battery level is not a heart rate")
+	assert_eq(_bpms, [90])
 
 
 func test_a_device_without_the_heart_rate_service_is_refused() -> void:
@@ -146,6 +157,7 @@ func test_a_lost_link_reconnects_with_backoff() -> void:
 	assert_eq(_t.count("connect_device"), connects + 2)
 	_t.connect_result = "ok"
 	_run(4.1)
+	_t.measure(PackedByteArray([0x00, 121]))
 	assert_true(_m.is_ready(), "reconnected after 4 s more")
 	assert_eq(_t.count("subscribe_characteristic"), 2, "subscribed again")
 	assert_eq(_t.count("write_characteristic"), 0)
@@ -171,6 +183,7 @@ func test_start_connects_the_remembered_sensor_when_seen() -> void:
 	_t.advertise("AA:00:00:00:00:09", "HRM-Dual", [HRS])
 	assert_eq(_t.count("connect_device"), 0, "not another sensor")
 	_t.advertise(ADDR.to_lower(), NAME, [HRS])
+	_t.measure(PackedByteArray([0x00, 70]))
 	assert_true(_m.is_ready(), "connected the remembered sensor")
 	assert_eq(_m.sensor()["address"], ADDR.to_lower())
 
@@ -210,3 +223,81 @@ func test_adapter_loss_drops_the_transport() -> void:
 	assert_eq(_m.current_bpm(), 0)
 	await wait_process_frames(1)
 	assert_null(_m.transport(), "dropped; asked for again on the next attempt")
+
+
+func test_no_first_notification_subscribes_again_then_reconnects() -> void:
+	_t.subscribe_result = "silent"
+	_m.connect_to(ADDR, NAME)
+	_run(HrSensorManager.NOTIFY_TIMEOUT_S - 0.1)
+	assert_eq(_t.count("subscribe_characteristic"), 1)
+	_run(0.2)
+	assert_eq(_t.count("discover_services"), 2, "discovers again on the same link")
+	assert_eq(_t.count("subscribe_characteristic"), 2, "and subscribes again")
+	assert_eq(_t.count("disconnect_device"), 0)
+	_run(HrSensorManager.NOTIFY_TIMEOUT_S)
+	assert_eq(_t.count("disconnect_device"), 1, "a second miss drops the link")
+	assert_eq(_m.status(), TrainerDevice.STATUS_CONNECTING, "and reconnects")
+	_run(1.05)
+	assert_eq(_t.count("connect_device"), 2, "after the 1 s backoff")
+	_t.measure(PackedByteArray([0x00, 101]))
+	assert_true(_m.is_ready(), "heart rate flows on the new link")
+	assert_eq(_m.current_bpm(), 101)
+
+
+func test_a_failed_subscription_reconnects() -> void:
+	_t.subscribe_result = "fail"
+	_m.connect_to(ADDR, NAME)
+	assert_false(_m.is_ready())
+	assert_eq(_t.count("disconnect_device"), 1, "the link is dropped")
+	_t.subscribe_result = "ok"
+	_run(1.05)
+	assert_eq(_t.count("connect_device"), 2, "reconnected after 1 s")
+	assert_eq(_t.count("subscribe_characteristic"), 2)
+	_t.measure(PackedByteArray([0x00, 99]))
+	assert_true(_m.is_ready())
+	assert_eq(_t.count("write_characteristic"), 0)
+
+
+func test_a_failed_notification_stream_while_ready_reconnects() -> void:
+	_pair()
+	_t.operation_failed.emit("notification", "stream ended")
+	assert_false(_m.is_ready())
+	assert_eq(_m.current_bpm(), 0)
+	assert_eq(_t.count("disconnect_device"), 1)
+	_run(1.05)
+	assert_eq(_t.count("connect_device"), 2)
+
+
+func test_a_silent_sensor_while_ready_subscribes_again() -> void:
+	_pair()
+	_run(HrSensorManager.NOTIFY_TIMEOUT_S + 0.1)
+	assert_false(_m.is_ready(), "no heart rate for 10 s")
+	assert_eq(_t.count("subscribe_characteristic"), 2, "subscribed again on the same link")
+	assert_eq(_t.count("disconnect_device"), 0)
+	_t.measure(PackedByteArray([0x00, 95]))
+	assert_true(_m.is_ready(), "back once heart rate flows")
+	_run(HrSensorManager.NOTIFY_TIMEOUT_S + 0.1)
+	assert_eq(_t.count("subscribe_characteristic"), 3, "a later stall gets its own re-subscribe")
+
+
+## A GATT reset (services changed, e.g. once Windows bonded the sensor) re-subscribes on the
+## same link; a second one before heart rate flows again reconnects.
+func test_gatt_reset_subscribes_again_then_reconnects() -> void:
+	_pair()
+	_t.operation_failed.emit(GdbleTransport.OP_GATT_RESET, "SERVICES_CHANGED")
+	assert_false(_m.is_ready())
+	assert_eq(_t.count("discover_services"), 2)
+	assert_eq(_t.count("subscribe_characteristic"), 2)
+	_t.operation_failed.emit(GdbleTransport.OP_GATT_RESET, "SERVICES_CHANGED")
+	assert_eq(_t.count("disconnect_device"), 1, "the second reset reconnects")
+	_run(1.05)
+	assert_eq(_t.count("connect_device"), 2)
+
+
+func test_status_changes_are_reported_once() -> void:
+	var seen: Array = []
+	_m.status_changed.connect(func(s: String, _d: String) -> void: seen.append(s))
+	_pair()
+	_t.measure(PackedByteArray([0x00, 91]))
+	_t.measure(PackedByteArray([0x00, 92]))
+	assert_eq(seen.count(TrainerDevice.STATUS_READY), 1, "ready once, not per measurement")

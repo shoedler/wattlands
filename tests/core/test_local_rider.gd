@@ -6,6 +6,7 @@ extends GutTest
 ## W0 MockTrainer or a hand-driven FakeDevice.
 
 const Fakes := preload("res://tests/core/helpers/fakes.gd")
+const FakeHrTransport := preload("res://tests/ble/fake_hr_transport.gd")
 const DT := Wl.SIM_DT
 
 var _bus: WlEventBus = null
@@ -729,6 +730,34 @@ func test_heart_rate_from_the_source_or_the_mock() -> void:
 	assert_between(bpm, 120, 180, "the mock's heart rate follows power")
 	m.heart_rate_source = func() -> int: return 0
 	assert_eq(m.telemetry().heart_rate_bpm, bpm, "a quiet sensor falls back to the mock")
+
+
+## The sensor path end to end: HrSensorManager notifications (fake transport) -> the rider's
+## Telemetry -> the recorder's records and the FIT heart rate fields.
+func test_sensor_heart_rate_reaches_telemetry_and_the_fit() -> void:
+	var dir := Paths.make_temp_dir("wattlands_rider_hr_test")
+	Paths.set_override(dir)
+	var link := FakeHrTransport.new()
+	var hr := HrSensorManager.new()
+	hr.manual_clock = true
+	hr.make_transport = func() -> BleTransport: return link
+	add_child_autofree(hr)
+	var rec := RideRecorder.new()
+	var r := _rider(_mock("const:w=200,rpm=90"), {"recorder": rec})
+	r.heart_rate_source = hr.current_bpm
+	hr.connect_to("E8:11:22:33:44:55", "Polar H10")
+	for _i in roundi(3.0 / DT):
+		link.measure(PackedByteArray([0x00, 142]))
+		hr.tick(DT)
+		r.tick(DT)
+	assert_eq(r.telemetry().heart_rate_bpm, 142)
+	assert_eq(int(rec.records().back()["heart_rate_bpm"]), 142, "recorded")
+	var fit := rec.fit_data()
+	assert_true(bool(fit["heart_rate"]), "the FIT carries heart rate fields")
+	assert_eq(int((fit["records"] as Array).back()["heart_rate_bpm"]), 142)
+	Paths.set_override("")
+	DirAccess.remove_absolute(dir.path_join("last_hr_sensor.json"))
+	DirAccess.remove_absolute(dir)
 
 
 func test_gesture_queue_is_bounded() -> void:
