@@ -66,6 +66,10 @@ var show_safety_banners: bool = true
 ## text_dim, bar_bg, bar_fg, accent, banner_bg, banner_text. Safety and warning colors (rescue,
 ## warm-up, pause and trainer banners, WlTheme.WARN, the in-band glow) ignore it.
 var palette: Dictionary = {}
+## The game's help overlay (F1, and once when a rider first plays the game): entries
+## {"text": String (string key or text), "at": Vector2 (art px for 2D games, else 0..1 of
+## the screen), "arrow_to": Vector2 (optional, same space)}. Empty = no help.
+var help: Array[Dictionary] = []
 
 
 func add(widget: String, at: Variant, options: Dictionary = {}) -> HudSpec:

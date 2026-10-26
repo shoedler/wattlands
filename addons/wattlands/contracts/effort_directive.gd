@@ -13,6 +13,8 @@ extends RefCounted
 ##     refused (Wl.REFUSE_ERG_IN_SIM). Use channels_for_phase(), not channels(), to route.
 ##   - mode grade: `mode_grade` (only inside a SIM block or a SIM phase)
 ##   - haptic: `haptic` (grade %) or `haptic_wind` (m/s headwind), at most 8 s
+##   - haptic pull: `haptic_pull` (% FTP added on top of the ERG target for at most 3 s, an
+##     ERG "tug" a rider feels rather than rides; bounded by BRIEF 4.6.6)
 ##   - factors: `crr` and `cw`, relative factors in [0.5, 1.0]
 ## `duration_s` applies to the channels this request sets; 0 means "until the phase
 ## ends". On expiry only those channels revert to the plan.
@@ -31,6 +33,7 @@ const FLOAT_FIELDS: Array[String] = [
 	"mode_grade",
 	"haptic",
 	"haptic_wind",
+	"haptic_pull",
 	"crr",
 	"cw",
 ]
@@ -45,6 +48,8 @@ var mode_grade: float = NAN
 var haptic: float = NAN
 ## Haptic headwind in m/s (bounded to the force of +3% grade at the current speed).
 var haptic_wind: float = NAN
+## Haptic pull in % FTP on top of the ERG target (ERG only; at most 3 s; see BRIEF 4.6.6).
+var haptic_pull: float = NAN
 var crr: float = NAN
 var cw: float = NAN
 var duration_s: float = 0.0
