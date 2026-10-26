@@ -29,6 +29,18 @@ extends SubViewportContainer
 ## pv.layout_changed.connect(_relayout_hud)
 ## [/codeblock]
 ##
+## Flex mode (game.json `"pixel_flex": {"min": [w, h]}`; the GameHost sets flex_min): instead
+## of letterboxing a fixed pixel_base, the art canvas grows with the window. The scale is the
+## largest whole k with window / k >= min on both axes (device pixels; 1 when even that fails),
+## and the SubViewport becomes floor(window / k) art pixels (never below min: a smaller window
+## clips), centred, so at most k - 1 device pixels of border remain. With min 568 x 320:
+## 1920 x 1080 gives 3x 640 x 360, 2560 x 1440 4x 640 x 360, 2560 x 1361 4x 640 x 340,
+## 3440 x 1440 4x 860 x 360. The game's Node2D sees the new size through
+## get_viewport_rect().size (or `art_size_changed`); art_size() is the current canvas,
+## pixel_base the design size. anchor_art_rect() moves a rect laid out on pixel_base with the
+## edges it belongs to (HudLayer maps every HudSpec Rect2i through it). Without flex_min
+## nothing changes: art_size() is pixel_base, letterboxed at the integer fit scale.
+##
 ## Put screen-space parts (ParallaxStrip, backgrounds) in a view without a Camera2D, or in
 ## a CanvasLayer inside the view. Everything in the view renders at art resolution, so
 ## rotated sprites (SpinningPart) keep the chunky pixel look. The SubViewport has 3D
@@ -40,13 +52,20 @@ extends SubViewportContainer
 ## emitted as well, so code written against the W0 API, which re-lays out on `resized`
 ## (HudLayer), follows every layout change.
 signal layout_changed
+## Flex mode: the art canvas (the SubViewport) changed size.
+signal art_size_changed(art_size: Vector2i)
 
-## Art resolution, e.g. Vector2i(640, 360).
+## Art resolution, e.g. Vector2i(640, 360) (the design size in flex mode).
 var pixel_base: Vector2i = Vector2i(640, 360):
 	set(value):
 		pixel_base = Vector2i(maxi(value.x, 1), maxi(value.y, 1))
-		if _sub != null:
-			_sub.size = pixel_base
+		refresh_layout()
+
+## Flex mode's smallest art canvas (game.json pixel_flex.min); Vector2i.ZERO (the default)
+## keeps the fixed pixel_base with letterbox.
+var flex_min: Vector2i = Vector2i.ZERO:
+	set(value):
+		flex_min = Vector2i(maxi(value.x, 0), maxi(value.y, 0))
 		refresh_layout()
 
 ## Color of the letterbox bars around the scaled image.
@@ -78,8 +97,10 @@ var _scale: int = 1
 var _art_scale: float = 1.0
 var _offset: Vector2 = Vector2.ZERO
 var _image_size: Vector2 = Vector2(640, 360)
+var _art_size: Vector2i = Vector2i(640, 360)
 var _device_scale: float = 1.0
-## [size, pixel_base, device scale] of the last layout; getters re-lay out when it is stale
+## [size, pixel_base, device scale, flex_min] of the last layout; getters re-lay out when it
+## is stale
 ## (a size set outside the tree gets no RESIZED notification).
 var _layout_key: Array = []
 
@@ -268,9 +289,26 @@ func screen_to_art(p: Vector2) -> Vector2:
 	return (local - _offset) / _art_scale
 
 
-## The internal SubViewport (size pixel_base) that renders the game view.
+## The internal SubViewport (size art_size()) that renders the game view.
 func subviewport() -> SubViewport:
 	return _sub
+
+
+## The art canvas in art pixels: pixel_base, or in flex mode the current flexible size.
+func art_size() -> Vector2i:
+	_ensure_layout()
+	return _art_size
+
+
+## True when flex_min is set (game.json pixel_flex).
+func is_flex() -> bool:
+	return flex_min.x > 0 and flex_min.y > 0
+
+
+## `r`, laid out on pixel_base, on the current art canvas (anchor_rect()).
+func anchor_art_rect(r: Rect2i) -> Rect2i:
+	_ensure_layout()
+	return anchor_rect(r, pixel_base, _art_size)
 
 
 ## The frame scaled by integer_scale() with nearest filtering, as it appears on screen.
@@ -289,8 +327,12 @@ func refresh_layout() -> void:
 	var ds := device_scale()
 	var had_layout := not _layout_key.is_empty()
 	var prev_size: Vector2 = _layout_key[0] if had_layout else Vector2(-1.0, -1.0)
-	_layout_key = [size, pixel_base, ds]
-	var l: Dictionary = fit_layout(size, pixel_base, ds)
+	_layout_key = [size, pixel_base, ds, flex_min]
+	var l: Dictionary = fit_layout(size, pixel_base, ds, flex_min)
+	var new_art: Vector2i = l["art_size"]
+	var art_changed := new_art != _art_size or _sub.size != new_art
+	_art_size = new_art
+	_sub.size = new_art
 	var new_scale: int = l["scale"]
 	var new_offset: Vector2 = l["offset"]
 	var new_size: Vector2 = l["size"]
@@ -298,7 +340,8 @@ func refresh_layout() -> void:
 	# The raw measurement, so _process compares like with like (fit_layout sanitizes it).
 	_device_scale = ds
 	var changed: bool = (
-		new_scale != _scale
+		art_changed
+		or new_scale != _scale
 		or not new_offset.is_equal_approx(_offset)
 		or not new_size.is_equal_approx(_image_size)
 		or not is_equal_approx(new_art_scale, _art_scale)
@@ -310,6 +353,8 @@ func refresh_layout() -> void:
 	_screen.position = _offset
 	_screen.size = _image_size
 	queue_redraw()
+	if art_changed:
+		art_size_changed.emit(_art_size)
 	if changed:
 		layout_changed.emit()
 		# A size change emits `resized` by itself (Control); any other layout change says so
@@ -328,19 +373,27 @@ static func fit_scale(available: Vector2, base: Vector2i) -> int:
 
 ## Pure layout math: {"scale": int (device px per art px), "art_scale": float (canvas units
 ## per art px), "offset": Vector2 (canvas units, top-left of the image in the control),
-## "size": Vector2 (canvas units), "device_scale": float}. The image is centred and its
-## offset snapped to whole device pixels; an image larger than the control (scale 1 in a
-## tiny window) gets a negative offset and is clipped.
+## "size": Vector2 (canvas units), "device_scale": float, "art_size": Vector2i (art px)}. The
+## image is centred and its offset snapped to whole device pixels; an image larger than the
+## control (scale 1 in a tiny window) gets a negative offset and is clipped. With `flex`
+## (flex mode's min, both axes > 0) the art size follows the control (see the class doc).
 static func fit_layout(
-	control_size: Vector2, base: Vector2i, screen_scale: float = 1.0
+	control_size: Vector2, base: Vector2i, screen_scale: float = 1.0, flex: Vector2i = Vector2i.ZERO
 ) -> Dictionary:
 	var s: float = screen_scale
 	if is_nan(s) or is_inf(s) or s < 0.0001:
 		s = 1.0
-	var b := Vector2(maxi(base.x, 1), maxi(base.y, 1))
+	var b := Vector2i(maxi(base.x, 1), maxi(base.y, 1))
 	var dev: Vector2 = (control_size * s).round()
-	var k: int = fit_scale(dev, Vector2i(b))
-	var img_dev: Vector2 = b * float(k)
+	var k: int = fit_scale(dev, b)
+	var art := b
+	if flex.x > 0 and flex.y > 0 and dev.x >= 1.0 and dev.y >= 1.0:
+		k = fit_scale(dev, flex)
+		art = Vector2i(
+			maxi(flex.x, int(floor(dev.x / float(k) + 0.0001))),
+			maxi(flex.y, int(floor(dev.y / float(k) + 0.0001)))
+		)
+	var img_dev: Vector2 = Vector2(art) * float(k)
 	var off_dev: Vector2 = ((dev - img_dev) * 0.5).floor()
 	return {
 		"scale": k,
@@ -348,15 +401,31 @@ static func fit_layout(
 		"offset": off_dev / s,
 		"size": img_dev / s,
 		"device_scale": s,
+		"art_size": art,
 	}
 
 
+## A rect laid out on a `base` canvas, placed on an `art` canvas of another size: per axis, a
+## rect wholly in the first half stays put, one wholly in the second half moves with the far
+## edge (right, bottom), and one across the middle stays centred. Unchanged when art == base.
+static func anchor_rect(r: Rect2i, base: Vector2i, art: Vector2i) -> Rect2i:
+	var d := art - base
+	var p := r.position
+	for axis in 2:
+		var half := float(base[axis]) * 0.5
+		if float(r.position[axis]) >= half:
+			p[axis] += d[axis]
+		elif float(r.position[axis] + r.size[axis]) > half:
+			p[axis] += int(floor(float(d[axis]) * 0.5))
+	return Rect2i(p, r.size)
+
+
 func _ensure_layout() -> void:
-	if _layout_key != [size, pixel_base, device_scale()]:
+	if _layout_key != [size, pixel_base, device_scale(), flex_min]:
 		refresh_layout()
 
 
 func _blank_frame() -> Image:
-	var img := Image.create_empty(pixel_base.x, pixel_base.y, false, Image.FORMAT_RGBA8)
+	var img := Image.create_empty(_art_size.x, _art_size.y, false, Image.FORMAT_RGBA8)
 	img.fill(background_color)
 	return img

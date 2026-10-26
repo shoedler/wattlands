@@ -124,3 +124,40 @@ func test_the_sharing_transport_loses_the_adapter_with_its_primary() -> void:
 	assert_eq(_named(_hr_events, "adapter_ready").back(), ["adapter_ready", false, "adapter lost"])
 	assert_false(_hr.is_link_up())
 	add_child(_trainer)
+
+
+## App quit: the sensor's transport leaves the tree before the trainer's, so the primary's
+## departure must not report an adapter loss (no "backend unavailable" warning at quit).
+func test_a_sharer_already_out_of_the_tree_stays_quiet() -> void:
+	_trainer.initialize()
+	_hr.initialize()
+	await wait_process_frames(1)
+	_hr.connect_device(HRM)
+	(_mgr.devices[HRM.to_lower()] as FakeDevice).connected.emit()
+	var before := _hr_events.size()
+	remove_child(_hr)
+	remove_child(_trainer)
+	assert_eq(_hr_events.size(), before, "nothing reported")
+	assert_null(_hr.primary(), "but it let go of the manager")
+	add_child(_trainer)
+	add_child(_hr)
+
+
+## GDBLE's structured subscribe success becomes subscribed(char_uuid).
+func test_a_subscribe_success_is_reported() -> void:
+	_trainer.initialize()
+	_hr.initialize()
+	await wait_process_frames(1)
+	_hr.connect_device(HRM)
+	var dev := _mgr.devices[HRM.to_lower()] as FakeDevice
+	dev.connected.emit()
+	var got: Array = []
+	_hr.subscribed.connect(func(c: String) -> void: got.append(c))
+	dev.ble_event.emit(
+		{"operation": &"subscribe", "phase": &"started", "characteristic_uuid": HR_CHAR}
+	)
+	assert_eq(got, [], "not before it succeeded")
+	dev.ble_event.emit(
+		{"operation": &"subscribe", "phase": &"succeeded", "characteristic_uuid": HR_CHAR}
+	)
+	assert_eq(got, [HR_CHAR])

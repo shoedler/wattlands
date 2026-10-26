@@ -479,3 +479,27 @@ func test_off_grid_ints_fall_back_in_the_lobby_and_fail_the_tool() -> void:
 		"player_options.reel_pct: 62 is not on the 50 + n * 5 grid"
 	)
 	assert_eq(_reg.check_option_values("fx_solo", {"reel_pct": 65}, true), "")
+
+
+## pixel_flex (BRIEF 3.9): {"min": [w, h]} in whole pixels 1..pixel_base, 2d games only;
+## normalized to ints.
+func test_pixel_flex_validates_and_normalizes() -> void:
+	assert_eq(_reg.validate_manifest(_with({"pixel_flex": {"min": [568, 320]}})), "")
+	assert_eq(_reg.validate_manifest(_with({"pixel_flex": {"min": [640.0, 360.0]}})), "")
+	var bad := [
+		{"min": [568]},
+		{"min": [0, 320]},
+		{"min": [641, 320]},
+		{"min": [568.5, 320]},
+		{"min": [568, 320], "max": [900, 400]},
+		[568, 320],
+	]
+	for f: Variant in bad:
+		var err := _reg.validate_manifest(_with({"pixel_flex": f}))
+		assert_true(err.begins_with("pixel_flex"), "%s -> %s" % [JSON.stringify(f), err])
+	var three_d := _with({"presentation": "3d", "pixel_flex": {"min": [568, 320]}}, ["pixel_base"])
+	assert_true(_reg.validate_manifest(three_d).begins_with("pixel_flex:"), "2d only")
+	var n := WlGameRegistry.normalized(_with({"pixel_flex": {"min": [568.0, 320.0]}}))
+	assert_eq(n["pixel_flex"], {"min": [568, 320]})
+	assert_true(n["pixel_flex"]["min"][0] is int)
+	assert_false(WlGameRegistry.normalized(_valid()).has("pixel_flex"), "absent: no flex")

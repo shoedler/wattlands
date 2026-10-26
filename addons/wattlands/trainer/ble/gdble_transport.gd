@@ -50,6 +50,8 @@ extends BleTransport
 ##     properties: Array[String]}]}]) (GDBLE's property dictionary becomes the list of set flags)
 ##   characteristic_read / _written / _notified -> the same signals, UUID expanded
 ##   operation_failed(op, err) -> operation_failed(op, err)
+##   the device's ble_event {operation "subscribe", phase "succeeded"} -> subscribed(char_uuid)
+##     (additive: the subscription is live; HrSensorManager logs it)
 ##
 ## UUIDs: callers may pass 16-bit ("2AD2", "0x2ad2") or full UUIDs in any case; they are
 ## expanded to GDBLE's lower-case hyphenated form before every call and in every signal,
@@ -68,7 +70,11 @@ extends BleTransport
 ## from the primary's state. Scans are shared too: one GDBLE scan serves both transports
 ## (both see every discovery), start_scan() restarts it to cover the longer window, and
 ## stop_scan() leaves it running while the other transport's window lasts. When the primary
-## leaves the tree, a sharing transport reports its link down and adapter_ready(false).
+## leaves the tree, a sharing transport reports its link down and adapter_ready(false),
+## unless the sharing transport already left the tree itself (the app is quitting).
+
+## The device acknowledged a subscription (GDBLE's structured subscribe success).
+signal subscribed(char_uuid: String)
 
 const MANAGER_CLASS := "BluetoothManager"
 const DEVICE_CLASS := "BleDevice"
@@ -409,9 +415,11 @@ func _peer_scan_until() -> int:
 	return best
 
 
-## The primary (and its manager) is going away: this transport loses the adapter too.
+## The primary (and its manager) is going away: this transport loses the adapter too. Out
+## of the tree (the app quits and tears this transport down first) it only lets go.
 func _on_primary_gone() -> void:
-	var was_up := _link_up
+	var was_up := _link_up and is_inside_tree()
+	var report := is_inside_tree()
 	_detach_device()
 	_manager = null
 	_initialized = false
@@ -420,7 +428,8 @@ func _on_primary_gone() -> void:
 	_services = []
 	if was_up:
 		device_disconnected.emit(_address, REASON_ADAPTER_LOST)
-	adapter_ready.emit(false, REASON_ADAPTER_LOST)
+	if report:
+		adapter_ready.emit(false, REASON_ADAPTER_LOST)
 
 
 func _require_device(op: String) -> bool:
@@ -455,6 +464,7 @@ func _attach_device(handle: RefCounted, address: String) -> void:
 	_connect_signal(_device, &"characteristic_written", _on_characteristic_written)
 	_connect_signal(_device, &"characteristic_notified", _on_characteristic_notified)
 	_connect_signal(_device, &"operation_failed", _on_operation_failed)
+	_connect_signal(_device, &"ble_event", _on_device_event)
 
 
 func _detach_device() -> void:
@@ -469,6 +479,7 @@ func _detach_device() -> void:
 		[&"characteristic_written", _on_characteristic_written],
 		[&"characteristic_notified", _on_characteristic_notified],
 		[&"operation_failed", _on_operation_failed],
+		[&"ble_event", _on_device_event],
 	]:
 		# Signal(...) reaches Object's own disconnect even where a device defines a
 		# zero-argument disconnect() of its own.
@@ -609,3 +620,11 @@ func _on_characteristic_notified(char_uuid: String, data: PackedByteArray) -> vo
 
 func _on_operation_failed(op: String, error: String) -> void:
 	operation_failed.emit(op, error)
+
+
+func _on_device_event(event: Dictionary) -> void:
+	if (
+		String(event.get("operation", "")) == "subscribe"
+		and String(event.get("phase", "")) == "succeeded"
+	):
+		subscribed.emit(expand_uuid(String(event.get("characteristic_uuid", ""))))

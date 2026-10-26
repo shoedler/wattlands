@@ -2,7 +2,15 @@ class_name AppLobbyCard
 extends PanelContainer
 ## One rider's card in the lobby (BRIEF 3.6): slot look chip, name (bots "Bot n"), FTP, ready
 ## state, trainer status and their player_options values. The local rider's card is marked and
-## edited through the lobby menu ("My <option>" entries).
+## edited through the lobby menu ("My <option>" entries). The options line (under the name)
+## and the trainer line (under the ready state, TRAINER_W wide) wrap within the card, at most
+## MAX_LINES each, then an ellipsis: long option labels never widen or stretch the card and
+## push the lobby's menu column off screen.
+
+## Width of the trainer line.
+const TRAINER_W := 180.0
+## Lines the options and the trainer line may wrap to.
+const MAX_LINES := 2
 
 var peer_id: int = 0
 var is_local: bool = false
@@ -43,13 +51,14 @@ func _build(slot: PlayerSlot, local: bool) -> void:
 	col.add_child(name_label)
 	detail_label = AppStyle.label("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
 	col.add_child(detail_label)
-	options_label = AppStyle.label("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+	options_label = _wrapping_label()
 	col.add_child(options_label)
 	var right := AppStyle.vbox(4)
 	row.add_child(right)
 	ready_label = AppStyle.label("", AppStyle.FONT_BODY)
 	right.add_child(ready_label)
-	trainer_label = AppStyle.label("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+	trainer_label = _wrapping_label()
+	trainer_label.custom_minimum_size = Vector2(TRAINER_W, 0)
 	right.add_child(trainer_label)
 	var ftp_text := "%d W" % int(round(slot.ftp))
 	if slot.is_bot:
@@ -57,6 +66,13 @@ func _build(slot: PlayerSlot, local: bool) -> void:
 	else:
 		var verified := "" if slot.ftp_verified else AppScreen.t("APP_UNVERIFIED")
 		detail_label.text = ("FTP %s %s" % [ftp_text, verified]).strip_edges()
+
+
+static func _wrapping_label() -> Label:
+	var l := AppStyle.paragraph("", AppStyle.FONT_SMALL, AppStyle.TEXT_DIM)
+	l.max_lines_visible = MAX_LINES
+	l.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	return l
 
 
 ## ready: shown as Ready / Not ready (bots are always ready); trainer: TrainerDevice status.

@@ -58,8 +58,8 @@ How to start the app for these tests: the exported build (`node tools/export_win
 
 ## 7. Coasting and panic
 
-- [ ] Stop pedaling in ERG. Expected: after 3 s the target falls to the floor (max(30% FTP, 50 W)); after 5 s a solo session pauses and the pause symbol shows; 1 s of pedaling at 30 rpm or more resumes it, and the target ramps back from the floor at 30 W/s.
-- [ ] In a multiplayer session, stop pedaling on one machine only. Expected: that rider sees the pause symbol after 5 s and the others ride on; once every human rider has stopped, the session pauses on every machine; it resumes when one rider pedals again.
+- [ ] Stop pedaling in ERG. Expected: after 3 s the target falls to the floor (max(30% FTP, 50 W)); after 10 s a solo session pauses and the pause symbol shows; 1 s of pedaling at 30 rpm or more resumes it, and the target ramps back from the floor at 30 W/s.
+- [ ] In a multiplayer session, stop pedaling on one machine only. Expected: that rider sees the pause symbol after 10 s and the others ride on; once every human rider has stopped, the session pauses on every machine; it resumes when one rider pedals again.
 - [ ] Hold Backspace for 1 s during an ERG interval. Expected: ERG off and SIM 0% immediately; the trainer stays safe until you resume.
 - [ ] During a SIM sprint, trigger panic. Expected: grade 0 and wind 0 at once.
 

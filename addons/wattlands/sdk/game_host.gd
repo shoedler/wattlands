@@ -237,7 +237,7 @@ func _process(delta: float) -> void:
 ##   (bool, default true: step() polls the net session), platform_pause (bool, default
 ##   true: an injected `pause` toggles the pause and a `confirm` resumes it; false: the
 ##   GameHost never pauses or resumes on actions and the app calls pause()/resume() itself;
-##   either way the SOLO pause on not pedaling (LocalRider.pause_requested: 5 s of
+##   either way the SOLO pause on not pedaling (LocalRider.pause_requested: 10 s of
 ##   not_pedaling, or the governor's 10 s coasting rule, BRIEF 3.5, 4.6.4) still pauses, and
 ##   ends when the rider's ride pause ends (LocalRider.ride_paused_changed: 1 s of pedaling
 ##   at >= 30 rpm) unless the rider paused it), session_nonce (String appended to results.session_id as
@@ -836,6 +836,10 @@ func _build_presentation() -> void:
 			var pb: Variant = manifest.get("pixel_base", [640, 360])
 			if pb is Array and (pb as Array).size() == 2:
 				_pixel_viewport.pixel_base = Vector2i(int(pb[0]), int(pb[1]))
+			var flex: Variant = manifest.get("pixel_flex", null)
+			if flex is Dictionary and (flex as Dictionary).get("min") is Array:
+				var mn: Array = (flex as Dictionary)["min"]
+				_pixel_viewport.flex_min = Vector2i(int(mn[0]), int(mn[1]))
 			parent.add_child(_pixel_viewport)
 			_pixel_viewport.set_game_view(view as Node2D)
 			if view.get_parent() == null:

@@ -87,13 +87,13 @@ APP_ERR_NO_PLAYERS,No riders in the lobby.
 APP_ERR_NO_LOCAL_SLOT,You aren't in this session's rider list.
 APP_ERR_NO_TRAINER,"No trainer connected: connect one in Settings, or use the mock trainer."
 APP_PANIC,PANIC: trainer safe
-APP_PANIC_BUTTON,PANIC
 APP_SESSION_MENU,Ride menu
 APP_SESSION_PAUSED,Paused
 APP_SESSION_PAUSED_DETAIL,You stopped pedaling. Start pedaling again to ride on.
 APP_SESSION_PAUSED_USER,You paused the ride. Pick Resume to ride on.
 APP_SESSION_PANIC_TITLE,Trainer safe
 APP_SESSION_PANIC_DETAIL,Resistance is off. Resume the trainer when you're ready.
+APP_SESSION_PANIC_HINT,Hold Backspace (gamepad: View + Menu) for an emergency stop: no resistance
 APP_SESSION_RESUME,Resume
 APP_SESSION_RESUME_TRAINER,Resume the trainer
 APP_SESSION_END,End the ride
@@ -162,7 +162,7 @@ APP_SET_TRAINER,Trainer
 APP_SET_STRAVA,Strava
 APP_SET_HAPTICS,Haptics
 APP_SET_CONTROLS,Controls
-APP_SET_AUDIO,Audio
+APP_SET_AUDIO,Audio and display
 APP_SET_NETWORK,Network
 APP_SET_PEDAL_NAV,Pedal navigation
 APP_SET_FTP_TEST,FTP test
@@ -189,6 +189,7 @@ APP_SET_HAPTICS_ON,Haptic effects
 APP_SET_HAPTICS_INTENSITY,Intensity
 APP_SET_VOLUME,Volume
 APP_SET_METRONOME,Cadence metronome
+APP_SET_FULLSCREEN,Fullscreen (F11 or Alt+Enter)
 APP_SET_RELAY,Relay
 APP_SET_PEDAL_NAV_ON,Pedal navigation
 APP_SET_SCAN_INTERVAL,Scan interval

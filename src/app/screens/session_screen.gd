@@ -5,9 +5,10 @@ extends AppScreen
 ## bot on the host, MockTrainer.from_spec(Bots.RIDER_SPEC, bot FTP)), the net session, the
 ## options and the scaling mode (AppSessionLauncher). The GameHost places the game's view in
 ## its PixelViewport (2D) or the 3D root inside `view_layer` and its HudLayer in `hud_layer`.
-## On top: a pause overlay with its own pedal-scan menu over a dimming scrim, and an
-## always-visible on-screen panic button in the warning colors (EventBus.panic_requested plus
-## LocalRider.panic(): the governor goes safe at once).
+## On top: a pause overlay with its own pedal-scan menu over a dimming scrim. Panic (BRIEF
+## 4.6.5; EventBus.panic_requested plus LocalRider.panic(): the governor goes safe at once)
+## is Backspace held 1 s, gamepad View + Menu, or the overlay's Panic item; the overlay's hint
+## line says so (APP_SESSION_PANIC_HINT). There is no on-screen panic button.
 ## params: role (Wl.SOLO/HOST/CLIENT), game_id, content_id, quick (solo zero-touch start: set
 ## up the offline lobby here), session_start (CLIENT), rejoin + replay (a restarted client:
 ## messages that arrived before the GameHost existed are re-emitted to it).
@@ -24,7 +25,8 @@ var hud_layer: Control = null
 var overlay: CenterContainer = null
 var overlay_title: Label = null
 var overlay_detail: Label = null
-var panic_button: Button = null
+## The overlay's line naming the emergency stop keys (hidden once panicked or on an error).
+var panic_hint: Label = null
 var error_label: Label = null
 var error: String = ""
 var finished: bool = false
@@ -45,23 +47,19 @@ var _overlay_menu_open: bool = false
 var _left: bool = false
 ## What the GameHost reads from the InputRouter (AppSessionInput); null without a router.
 var session_input: AppSessionInput = null
-## Above the HudLayer: the pause overlay and the panic button.
+## Above the HudLayer: the pause overlay.
 var top_layer: CanvasLayer = null
 var top_root: Control = null
 ## Dims the HUD and the game behind the overlay (shown with it), so the overlay's text never
 ## mixes with the HUD's banners and widgets.
 var overlay_scrim: ColorRect = null
-var _panic_reserved: bool = false
 ## The network notice banner (top centre, above the HUD) and what it says.
 var net_notice: Label = null
 var host_dropped: bool = false
 var net_reconnecting: bool = false
 
-const PANIC_SIZE := Vector2(380, 100)
 const SCRIM_COLOR := Color(0.0, 0.0, 0.0, 0.6)
 const OVERLAY_PANEL_COLOR := Color(0.06, 0.07, 0.09, 0.97)
-const PANIC_BG := Color("#8a1f17")
-const PANIC_BG_HI := Color("#b02a20")
 
 
 func _build() -> void:
@@ -78,8 +76,8 @@ func _build() -> void:
 	hud_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	hud_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(hud_layer)
-	# The pause overlay and the panic button draw above the GameHost's HudLayer (a CanvasLayer
-	# at HudLayer.LAYER), so no HUD widget or toast ever covers them.
+	# The pause overlay draws above the GameHost's HudLayer (a CanvasLayer at HudLayer.LAYER),
+	# so no HUD widget or toast ever covers it.
 	top_layer = CanvasLayer.new()
 	top_layer.name = "Top"
 	top_layer.layer = HudLayer.LAYER + 10
@@ -91,7 +89,6 @@ func _build() -> void:
 	top_layer.add_child(top_root)
 	top_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_build_overlay()
-	_build_panic_button()
 	_build_net_notice()
 	_connect_bus()
 	if role != Wl.CLIENT and auto_process:
@@ -141,7 +138,6 @@ func _start_session() -> void:
 		# stop_5s maps to pause only in a solo session (WlInputRouter.solo).
 		services.input.solo = role == Wl.SOLO
 	host.start()
-	_reserve_panic_corner()
 	_start_metronome()
 	for r in AppSessionLauncher.replay_messages(params, services.net):
 		services.net.game_message.emit(int(r["from"]), r["data"])
@@ -332,74 +328,13 @@ func _build_overlay() -> void:
 	error_label.name = "Error"
 	error_label.visible = false
 	box.add_child(error_label)
+	panic_hint = AppStyle.paragraph(t("APP_SESSION_PANIC_HINT"), AppStyle.FONT_SMALL, AppStyle.WARN)
+	panic_hint.name = "PanicHint"
+	box.add_child(panic_hint)
 
 
-func _build_panic_button() -> void:
-	panic_button = Button.new()
-	panic_button.name = "Panic"
-	panic_button.text = t("APP_PANIC_BUTTON")
-	panic_button.tooltip_text = t("APP_PANIC")
-	panic_button.add_theme_font_size_override("font_size", AppStyle.FONT_HEADING)
-	# A safety control looks like one: white text on red with a light-red border, unlike every
-	# HUD panel (the word carries the meaning; the color is a second cue).
-	for state: String in ["normal", "hover", "pressed", "focus", "disabled"]:
-		panic_button.add_theme_stylebox_override(
-			state, _panic_style(PANIC_BG_HI if state in ["hover", "pressed"] else PANIC_BG)
-		)
-	for c: String in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color"]:
-		panic_button.add_theme_color_override(c, Color.WHITE)
-	panic_button.add_theme_color_override("font_outline_color", Color.BLACK)
-	panic_button.add_theme_constant_override("outline_size", 6)
-	panic_button.focus_mode = Control.FOCUS_NONE
-	panic_button.custom_minimum_size = PANIC_SIZE
-	top_root.add_child(panic_button)
-	# In the bottom-right corner at the HUD's margin, growing left and up with its text; the
-	# HudLayer keeps that corner clear (_reserve_panic_corner).
-	panic_button.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-	panic_button.grow_horizontal = Control.GROW_DIRECTION_BEGIN
-	panic_button.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	panic_button.offset_right = -WlTheme.MARGIN_PX
-	panic_button.offset_bottom = -WlTheme.MARGIN_PX
-	panic_button.offset_left = panic_button.offset_right - PANIC_SIZE.x
-	panic_button.offset_top = panic_button.offset_bottom - PANIC_SIZE.y
-	panic_button.pressed.connect(panic)
-
-
-static func _panic_style(bg: Color) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.border_color = AppStyle.BAD
-	sb.set_border_width_all(4)
-	sb.set_corner_radius_all(12)
-	sb.content_margin_left = 24
-	sb.content_margin_right = 24
-	sb.content_margin_top = 8
-	sb.content_margin_bottom = 8
-	return sb
-
-
-## The panic button's size (its text may make it wider than PANIC_SIZE).
-func panic_button_size() -> Vector2:
-	if panic_button == null:
-		return Vector2.ZERO
-	var m := panic_button.get_combined_minimum_size()
-	return Vector2(maxf(m.x, PANIC_SIZE.x), maxf(m.y, PANIC_SIZE.y))
-
-
-## Ask the session's HudLayer to keep the panic button's corner clear (once it exists: a
-## client's HUD is built when session_start arrives).
-func _reserve_panic_corner() -> void:
-	if _panic_reserved or host == null or not is_instance_valid(host):
-		return
-	var hud := host.hud_layer()
-	if hud == null:
-		return
-	hud.reserve_corner(HudSpec.BOTTOM_RIGHT, panic_button_size())
-	_panic_reserved = true
-
-
-## On-screen panic (BRIEF 4.6.5): ERG off, SIM grade 0 and wind 0 at once, through the
-## governor; stays safe until the rider resumes.
+## Panic (BRIEF 4.6.5): ERG off, SIM grade 0 and wind 0 at once, through the governor; stays
+## safe until the rider resumes.
 func panic() -> void:
 	panicked = true
 	if services.bus != null:
@@ -445,6 +380,7 @@ func _show_overlay(force_menu: bool = false) -> void:
 		overlay_title.text = t("APP_SESSION_MENU")
 		overlay_detail.text = ""
 	overlay_detail.visible = overlay_detail.text != ""
+	panic_hint.visible = not panicked and error == ""
 	var items := overlay_items()
 	if not _overlay_menu_open:
 		_overlay_menu_open = true
@@ -625,7 +561,6 @@ func _disconnect_bus() -> void:
 
 
 func _on_host_state(state: String) -> void:
-	_reserve_panic_corner()
 	match state:
 		"paused":
 			paused = true

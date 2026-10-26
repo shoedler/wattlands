@@ -54,10 +54,7 @@ func test_a_solo_session_on_the_real_game_host_reaches_the_results() -> void:
 		fx.trainer.is_external_tick(), "the GameHost ticks the rider, TrainerService does not"
 	)
 	assert_same(s.local_rider(), rider)
-	assert_gt(
-		s.top_layer.layer, HudLayer.LAYER, "the overlay and the panic button draw above the HUD"
-	)
-	assert_same(s.panic_button.get_parent(), s.top_root)
+	assert_gt(s.top_layer.layer, HudLayer.LAYER, "the overlay draws above the HUD")
 	assert_same(s.overlay.get_parent(), s.top_root)
 	assert_true(
 		rider.recorder != null and rider.recorder.is_recording(), "the ride records from the start"
@@ -202,10 +199,10 @@ static func _pump(nets: Array, done: Callable, max_iter: int = 400) -> bool:
 
 
 ## A CLIENT's session screen builds its HUD from the host's session_start (seen windowed in
-## tools/screenshot --app-screen=session): the panic button's corner is reserved on that HUD,
-## the gear stack sits above the button in the sprint, and the overlay, its scrim and the
-## button draw above the HUD.
-func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void:
+## tools/screenshot --app-screen=session): no corner is reserved (no on-screen panic button),
+## the gear stack sits at the bottom margin in the sprint, and the overlay and its scrim draw
+## above the HUD with the emergency stop hint.
+func test_a_client_hud_from_session_start() -> void:
 	var registry := get_tree().root.get_node("GameRegistry") as WlGameRegistry
 	var games := AppLobbyModel.installed_games(registry)
 	var hub: RefCounted = LoopbackTransport.create_hub()
@@ -321,14 +318,8 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 		return
 	assert_eq(
 		hud.reserved_corner(HudSpec.BOTTOM_RIGHT),
-		s.panic_button_size(),
-		"the panic corner is kept clear"
-	)
-	assert_eq(s.panic_button.text, AppScreen.t("APP_PANIC_BUTTON"))
-	assert_eq(
-		(s.panic_button.get_theme_stylebox("normal") as StyleBoxFlat).bg_color,
-		AppSessionScreen.PANIC_BG,
-		"the panic button is red"
+		Vector2.ZERO,
+		"no on-screen panic button: the corner is the game's"
 	)
 	var n := 0
 	while s.host.clock.platform_time() < 100.0 and n < 3000:
@@ -342,23 +333,14 @@ func test_a_client_hud_from_session_start_keeps_the_panic_corner_clear() -> void
 	assert_true(gear != null and gear.visible, "the gear shows in SIM")
 	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
 	var bottom := box.position.y + box.size.y
-	assert_lte(
-		bottom,
-		1080.0 - WlTheme.MARGIN_PX - s.panic_button_size().y - WlTheme.GAP_PX + 0.5,
-		"the gear sits above the panic button"
-	)
+	assert_lte(bottom, 1080.0 - WlTheme.MARGIN_PX + 0.5, "the gear sits at the bottom margin")
 	s.open_menu()
 	assert_true(s.overlay.visible and s.overlay_scrim.visible, "the overlay and its scrim show")
-	assert_gt(s.top_layer.layer, hud.layer, "the overlay and the panic button draw above the HUD")
+	assert_gt(s.top_layer.layer, hud.layer, "the overlay draws above the HUD")
 	var kids := s.top_root.get_children()
-	assert_true(
-		(
-			kids.find(s.overlay_scrim) < kids.find(s.overlay)
-			and kids.find(s.overlay) < kids.find(s.panic_button)
-		),
-		"scrim, then the overlay, then the panic button"
-	)
+	assert_lt(kids.find(s.overlay_scrim), kids.find(s.overlay), "scrim, then the overlay")
 	assert_false(s.overlay_detail.visible, "no empty detail line in the ride menu")
+	assert_true(s.panic_hint.visible, "the overlay names the emergency stop keys")
 
 
 func _real_router() -> WlInputRouter:

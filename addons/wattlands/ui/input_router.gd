@@ -93,6 +93,9 @@ func handle_event(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and (event as InputEventKey).echo:
 		return
+	if WlWindowMode.is_toggle_event(event):
+		# F11 and Alt+Enter toggle fullscreen (the app shell); never an action or a binding.
+		return
 	if _capture_action != &"" and _is_capture_press(event):
 		var a := _capture_action
 		_capture_action = &""

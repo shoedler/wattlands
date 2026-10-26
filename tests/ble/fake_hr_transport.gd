@@ -3,11 +3,16 @@ extends "res://tests/ble/fake_transport.gd"
 ## with the Heart Rate service (or `services` when set), and every GATT call is recorded, so
 ## tests can assert that the sensor is subscribed to and never written to.
 
+## Like GdbleTransport.subscribed: the subscription was acknowledged.
+signal subscribed(char_uuid: String)
+
 const HR_SERVICE := "0000180d-0000-1000-8000-00805f9b34fb"
 const HR_MEASUREMENT := "00002a37-0000-1000-8000-00805f9b34fb"
 
 ## What discover_services() reports; null means the standard Heart Rate service.
 var services: Variant = null
+## subscribe_characteristic(): "ok" (acknowledged), "fail" (operation_failed) or "silent".
+var subscribe_result: String = "ok"
 
 
 func discover_services() -> void:
@@ -27,6 +32,13 @@ func discover_services() -> void:
 
 func subscribe_characteristic(service_uuid: String, char_uuid: String) -> void:
 	calls.append(["subscribe_characteristic", service_uuid, char_uuid])
+	match subscribe_result:
+		"ok":
+			subscribed.emit(HR_MEASUREMENT)
+		"fail":
+			operation_failed.emit("subscribe", "insufficient authentication")
+		_:
+			pass
 
 
 func read_characteristic(service_uuid: String, char_uuid: String) -> void:

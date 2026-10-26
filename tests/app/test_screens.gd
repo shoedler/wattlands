@@ -99,6 +99,21 @@ func test_settings_screen_pages() -> void:
 		assert_eq(s.menus.size(), 1, "%s page closed" % section)
 
 
+## Settings > Audio and display: the fullscreen toggle stores the `fullscreen` setting (the
+## window follows through WlWindowMode; the headless test window stays as it is).
+func test_settings_fullscreen_toggle() -> void:
+	fx.give_profile()
+	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
+	confirm_pick(s, "audio")
+	assert_true(menu(s).ids().has("fullscreen"))
+	assert_true(menu(s).text_of("fullscreen").ends_with(AppScreen.t("APP_OFF")))
+	confirm_pick(s, "fullscreen")
+	assert_true(bool(fx.settings.get_value("fullscreen", false)), "on")
+	assert_true(menu(s).text_of("fullscreen").ends_with(AppScreen.t("APP_ON")))
+	confirm_pick(s, "fullscreen")
+	assert_false(bool(fx.settings.get_value("fullscreen", false)), "and off again")
+
+
 func test_settings_haptics_and_pedal_nav() -> void:
 	fx.give_profile()
 	var s := open_screen(AppSettingsScreen.new()) as AppSettingsScreen
@@ -213,8 +228,9 @@ func test_session_screen_opens_headless() -> void:
 	assert_eq(s.error, "")
 	assert_not_null(s.host)
 	assert_true((s.host as FakeHost).started)
-	assert_not_null(s.panic_button)
-	assert_gte(s.panic_button.get_theme_font_size("font_size"), AppStyle.KEY_NUMBER_MIN)
+	assert_null(s.top_root.get_node_or_null("Panic"), "no on-screen panic button")
+	assert_eq(s.panic_hint.text, AppScreen.t("APP_SESSION_PANIC_HINT"))
+	assert_ne(s.panic_hint.text, "APP_SESSION_PANIC_HINT", "translated")
 
 
 func test_results_screen_opens() -> void:

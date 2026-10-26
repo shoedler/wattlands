@@ -523,3 +523,35 @@ func test_leave_from_back_needs_a_confirm() -> void:
 	s.feed_gesture(Wl.G_SURGE)
 	assert_eq(fx.app.state, "title")
 	assert_eq(fx.fake_net().calls_named("leave").size(), 1)
+
+
+## Diag v0.3.0: long player-option labels ("Reel effort (% FTP): 60 · Relaxed tension band: Off")
+## and trainer lines wrap inside the rider cards, so with four riders (bots included) the cards
+## stay within the left column and the menu column stays on screen, at 1920 x 1080 and at
+## 1280 x 720 (the same 1080p canvas, stretched).
+func test_four_cards_with_long_options_keep_the_menu_on_screen() -> void:
+	var old_size := get_tree().root.size
+	var s := _host_lobby("siege")
+	for _i in 3:
+		confirm_pick(s, "add_bot")
+	assert_eq(s.cards_box.get_child_count(), 4)
+	var long_text := "Reel effort (% FTP): 60 · Relaxed tension band: Off"
+	for i in s.cards_box.get_child_count():
+		var card := s.cards_box.get_child(i) as AppLobbyCard
+		card.update(true, TrainerDevice.STATUS_CONTROL_LOST, long_text, i > 0)
+	for win: Vector2i in [Vector2i(1920, 1080), Vector2i(1280, 720)]:
+		get_tree().root.size = win
+		await wait_process_frames(3)
+		var screen := s.get_viewport_rect()
+		var column := s.menu_scroll.get_global_rect()
+		assert_true(
+			screen.encloses(column), "%s: menu column %s on screen %s" % [win, column, screen]
+		)
+		var own := s.cards_box.get_child(0) as AppLobbyCard
+		assert_gt(own.options_label.get_line_count(), 1, "%s: the options wrap" % win)
+		var cards := s.cards_box.get_global_rect()
+		assert_lte(cards.end.x, column.position.x + 0.5, "%s: cards left of the menu" % win)
+		for c in s.cards_box.get_children():
+			var r := (c as Control).get_global_rect()
+			assert_true(screen.encloses(r), "%s: card %s on screen" % [win, r])
+	get_tree().root.size = old_size

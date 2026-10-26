@@ -145,11 +145,11 @@
 - Alternatives: let the GameHost own pause (then the overlay's confirm both picks an item and resumes); ask sdk-runtime to stop toggling pause (app-shell's W1 request, not taken).
 - Reason: with the real GameHost a P press paused (screen) and resumed (GameHost, next tick), and a confirm on the overlay both picked the highlighted item and resumed; after a session the router had no rider, so results and menus lost pedal gestures.
 
-## 2026-10-21 (W2): Overlay and panic button above the HUD
+## 2026-10-21 (W2): Overlay above the HUD
 
-- Decision: the session screen puts its pause overlay and the panic button in a CanvasLayer at `HudLayer.LAYER + 10`; the panic button sits at the HUD margin in the bottom-right corner, grows left and up with its text, and the HudLayer keeps that corner clear (`reserve_corner`).
+- Decision: the session screen puts its pause overlay in a CanvasLayer at `HudLayer.LAYER + 10`.
 - Alternatives: keep them in the screen's canvas (drawn under the HudLayer CanvasLayer).
-- Reason: seen in a windowed run on the real GameHost: HUD widgets and toasts drew over the overlay, the gear widget under the panic button, and the button's text ran off screen.
+- Reason: seen in a windowed run on the real GameHost: HUD widgets and toasts drew over the overlay.
 
 ## 2026-10-21 (W2 round 2): The FTP test page drives the platform's FtpTest
 
@@ -163,11 +163,11 @@
 - Alternatives: tie W/kg to `share_weight`.
 - Reason: BRIEF 3.3 shows W/kg only if the rider opted in; seeing your own W/kg doesn't need your weight to leave the PC.
 
-## 2026-10-21 (W2 round 2): The session overlay dims the HUD; the panic button looks like one
+## 2026-10-21 (W2 round 2): The session overlay dims the HUD
 
-- Decision: the session overlay gets a full-screen scrim (black, 60%) under it in the top layer, and its panel is opaque (97%); an empty detail line is hidden. The on-screen panic button reads "PANIC" (the menu item keeps "PANIC: trainer safe") in white on red with a light-red border, at least 380 x 100. A test seam `AppSessionScreen.render_headless` builds the view and HUD under GUT's headless display server. The lobby's message line starts hidden.
+- Decision: the session overlay gets a full-screen scrim (black, 60%) under it in the top layer, and its panel is opaque (97%); an empty detail line is hidden. A test seam `AppSessionScreen.render_headless` builds the view and HUD under GUT's headless display server. The lobby's message line starts hidden.
 - Alternatives: the 82% panel alone; a status-like panic label in the HUD's own colors.
-- Reason: seen in tools/screenshot --app-screen=session as a client: the panic overlay's title ran into the sprint banner showing through the panel; the panic button looked like one more HUD panel, and its long label reserved 559 px of the bottom edge from the teammate strip. In the solo lobby an empty message line pushed the content down.
+- Reason: seen in tools/screenshot --app-screen=session as a client: the panic overlay's title ran into the sprint banner showing through the panel. In the solo lobby an empty message line pushed the content down.
 
 
 ## 2026-10-21 (W4): A client's governor works from the rider's own profile (W3 SAF-1)

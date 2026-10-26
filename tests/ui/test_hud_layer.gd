@@ -1319,3 +1319,57 @@ func test_demo_scene_builds_headless() -> void:
 	for id: String in HudSpec.KIT_WIDGETS:
 		assert_not_null(hud.widget(id), id)
 	assert_true(hud.widget(HudSpec.GEAR).visible, "the demo rides in SIM")
+
+
+## Flex mode (game.json pixel_flex): rects laid out on pixel_base follow their edge on the
+## wider canvas, and the HUD reports the art size.
+func test_rect_positions_follow_a_flex_pixel_viewport() -> void:
+	var holder := Control.new()
+	holder.size = Vector2(3440, 1440)
+	add_child_autofree(holder)
+	var pv := PixelViewport.new()
+	pv.pixel_base = Vector2i(640, 360)
+	pv.flex_min = Vector2i(568, 320)
+	holder.add_child(pv)
+	pv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pv.refresh_layout()
+	assert_eq(pv.art_size(), Vector2i(860, 360))
+	var card := Control.new()
+	_hud.build(_fishing_spec(card), _ctx, pv)
+	assert_eq(_hud.art_size(), Vector2i(860, 360))
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	assert_eq(
+		_hud.slot_screen_rect(gauge),
+		pv.art_rect_to_screen(Rect2i(647, 0, 213, 42)),
+		"a right-half rect follows the right edge"
+	)
+	assert_eq(_hud.slot_screen_rect(card), pv.art_rect_to_screen(Rect2i(0, 10, 100, 20)))
+
+
+## A rect smaller than its widgets' min_rect (a maximized window at a low art scale): the
+## stack is drawn smaller, fonts included, and stays inside the rect instead of running over
+## its neighbours.
+func test_a_rect_below_min_rect_scales_its_widgets_down() -> void:
+	var pv: FakePV = add_child_autofree(FakePV.new())
+	pv.fake_scale = 1
+	_hud.build(_fishing_spec(Control.new()), _ctx, pv)
+	_hud.relayout()
+	var gauge := _hud.widget(HudSpec.POWER_GAUGE)
+	var slot := _hud.slot_screen_rect(gauge)
+	assert_eq(slot.size, Vector2(213, 42))
+	var stack := gauge.get_parent() as Control
+	assert_lt(stack.scale.x, 1.0, "scaled down")
+	var drawn := stack.get_combined_minimum_size() * stack.scale
+	assert_lte(drawn.x, slot.size.x + 1.0, "fits the rect's width")
+	assert_lte(drawn.y, slot.size.y + 1.0, "and its height")
+	pv.set_fake(3, Vector2.ZERO)
+	_hud.relayout()
+	assert_eq(stack.scale, Vector2.ONE, "full size where the rect is big enough")
+
+
+func test_overflow_scale() -> void:
+	assert_eq(HudLayer.overflow_scale(Vector2(100, 50), Vector2(200, 100)), 1.0)
+	assert_almost_eq(
+		HudLayer.overflow_scale(Vector2(300, 106), Vector2(213, 42)), 42.0 / 106.0, 0.001
+	)
+	assert_eq(HudLayer.overflow_scale(Vector2(300, 106), Vector2.ZERO), 1.0)

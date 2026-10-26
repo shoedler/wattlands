@@ -29,6 +29,9 @@ extends BleTransport
 ## Time: _process(delta) polls the socket and advances the timeouts unless manual_poll is
 ## set; tests call poll() and tick(dt) themselves.
 
+## The bridge acknowledged a subscription (additive, as GdbleTransport.subscribed).
+signal subscribed(char_uuid: String)
+
 const DEFAULT_URL := "ws://127.0.0.1:8765"
 const PROTO := 1
 const CLIENT_NAME := "wattlands"
@@ -365,6 +368,8 @@ func _handle_response(msg: Dictionary) -> void:
 			characteristic_read.emit(expand_uuid(chr), bytes)
 		"write":
 			characteristic_written.emit(expand_uuid(String(result.get("char", req["char"]))))
+		"subscribe":
+			subscribed.emit(expand_uuid(String(result.get("char", req["char"]))))
 		_:
 			pass
 

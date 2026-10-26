@@ -18,9 +18,16 @@ extends Node
 ##
 ## Flow: scan(s) lists sensors (advertised 0x180D, or a heart-rate-like name, is_hr_sensor);
 ## connect_to(address, name) -> connect_device -> discover_services -> subscribe 0x2A37 ->
-## STATUS_READY; the sensor is saved as {address, name} in Paths.last_hr_sensor_path().
-## A link loss or failed attempt reconnects with backoff_delay(n) = 1, 2, 4, 8, 15, 15, ... s.
-## A GATT reset (operation_failed "gatt_reset") discovers and subscribes again on the same link.
+## the first measurement notification -> STATUS_READY; the sensor is saved as {address, name}
+## in Paths.last_hr_sensor_path(). A subscription the transport acknowledges (the optional
+## `subscribed(char_uuid)` signal of GdbleTransport and BridgeTransport) is only logged: ready
+## means heart rate flows.
+## Recovery: no notification for NOTIFY_TIMEOUT_S after subscribing (or while ready), or a GATT
+## reset (operation_failed "gatt_reset", e.g. services changed after Windows bonded the sensor),
+## discovers and subscribes again on the same link, once per link. A second miss, a failed
+## discovery or subscription (also a refused Windows pairing), a link loss or a failed attempt
+## reconnects with backoff_delay(n) = 1, 2, 4, 8, 15, 15, ... s, so a sensor that asks Windows
+## to pair connects once the pairing is allowed. Every status change is logged once (print).
 ## start(true) scans in AUTO_SCAN_S windows for the remembered sensor and connects when it is
 ## seen; without a remembered sensor it stays idle until scan(). forget() disconnects and
 ## deletes the remembered sensor.
@@ -58,8 +65,11 @@ const NAME_HINTS: Array[String] = [
 ]
 const BACKOFF_MAX_S := 15.0
 const CONNECT_TIMEOUT_S := 30.0
-## discover + subscribe must finish within this.
+## Service discovery must answer within this.
 const SETUP_TIMEOUT_S := 15.0
+## Seconds without a measurement notification, after subscribing or while ready, before the
+## manager subscribes again (once per link) and then reconnects.
+const NOTIFY_TIMEOUT_S := 10.0
 const DEFAULT_SCAN_S := 10.0
 const AUTO_SCAN_S := 30.0
 ## Seconds without a measurement after which current_bpm() is 0.
@@ -89,6 +99,10 @@ var _attempt: int = 0
 var _retry_left: float = 0.0
 var _attempt_left: float = 0.0
 var _setup_left: float = 0.0
+## SETUP: the subscription was sent; the deadline is now the first notification.
+var _subscribe_sent: bool = false
+## This link's one same-link re-subscription was used.
+var _resubscribed: bool = false
 var _disconnect_requested: bool = false
 var _scanning: bool = false
 var _scan_left: float = 0.0
@@ -278,7 +292,18 @@ func tick(dt: float) -> void:
 		Link.SETUP:
 			_setup_left -= dt
 			if _setup_left <= _EPS:
-				_attempt_failed("setup timed out")
+				if not _subscribe_sent:
+					_drop_link("setup timed out")
+				elif _resubscribed:
+					_drop_link("no heart rate")
+				else:
+					_resubscribe("no heart rate")
+		Link.READY:
+			if _t - _bpm_t > NOTIFY_TIMEOUT_S + _EPS:
+				if _resubscribed:
+					_drop_link("heart rate stopped")
+				else:
+					_resubscribe("heart rate stopped")
 		_:
 			pass
 
@@ -380,6 +405,8 @@ func _use_transport(t: BleTransport) -> void:
 	t.services_discovered.connect(_on_services_discovered)
 	t.characteristic_notified.connect(_on_notified)
 	t.operation_failed.connect(_on_operation_failed)
+	if t.has_signal(&"subscribed"):
+		t.connect(&"subscribed", _on_subscribed)
 	_backend = Backend.STARTING
 	t.initialize()
 
@@ -403,13 +430,16 @@ func _drop_transport() -> void:
 		var sig: Signal = pair[0]
 		if sig.is_connected(pair[1]):
 			sig.disconnect(pair[1])
+	if t.has_signal(&"subscribed") and t.is_connected(&"subscribed", _on_subscribed):
+		t.disconnect(&"subscribed", _on_subscribed)
 	if t.get_parent() == self:
 		t.queue_free()
 
 
 func _on_adapter_ready(ok: bool, error: String) -> void:
 	if not ok:
-		if not _warned_unavailable:
+		# Out of the tree means the app is quitting: nothing to report.
+		if not _warned_unavailable and is_inside_tree():
 			_warned_unavailable = true
 			push_warning("Bluetooth: heart rate sensor backend unavailable (%s)" % error)
 		_scanning = false
@@ -492,13 +522,38 @@ func _begin_attempt() -> void:
 func _on_device_connected(address: String) -> void:
 	if _link != Link.CONNECTING or not _same_address(address, String(_target["address"])):
 		return
+	_resubscribed = false
+	_begin_setup()
+
+
+## Discover, then subscribe, on the current link; ready waits for the first notification.
+func _begin_setup() -> void:
 	_link = Link.SETUP
 	_setup_left = SETUP_TIMEOUT_S
+	_subscribe_sent = false
+	_set_status(TrainerDevice.STATUS_CONNECTING, _fmt("BLE_HR_STATUS_WAITING"))
 	_transport.discover_services()
 
 
+## The link is up but no heart rate flows (or the GATT state was reset): discover and
+## subscribe again on the same link, once per link.
+func _resubscribe(why: String) -> void:
+	print("Heart rate sensor: %s, subscribing again" % why)
+	_resubscribed = true
+	_clear_bpm()
+	_begin_setup()
+
+
+## Give the link up and reconnect with backoff.
+func _drop_link(error: String) -> void:
+	if _transport != null:
+		_disconnect_requested = true
+		_transport.disconnect_device()
+	_link_lost(error)
+
+
 func _on_services_discovered(services: Array) -> void:
-	if _link != Link.SETUP and _link != Link.READY:
+	if _link != Link.SETUP or _subscribe_sent:
 		return
 	if not _has_measurement(services):
 		_link = Link.IDLE
@@ -506,11 +561,21 @@ func _on_services_discovered(services: Array) -> void:
 		_transport.disconnect_device()
 		_set_status(TrainerDevice.STATUS_DISCONNECTED, tr("BLE_HR_STATUS_NOT_HR"))
 		return
+	_subscribe_sent = true
+	_setup_left = NOTIFY_TIMEOUT_S
 	_transport.subscribe_characteristic(HR_SERVICE_UUID, HR_MEASUREMENT_UUID)
-	if _link == Link.READY:
-		return
+
+
+func _on_subscribed(char_uuid: String) -> void:
+	if _link == Link.SETUP and BleTransport.same_uuid(char_uuid, HR_MEASUREMENT_UUID):
+		print("Heart rate sensor: subscribed, waiting for the first measurement")
+
+
+## The first measurement on this link: heart rate flows.
+func _enter_ready() -> void:
 	_link = Link.READY
 	_attempt = 0
+	_resubscribed = false
 	var addr := String(_target["address"])
 	var n := String(_target.get("name", ""))
 	if _last.get("address", "") != addr or _last.get("name", "") != n:
@@ -520,11 +585,16 @@ func _on_services_discovered(services: Array) -> void:
 
 
 func _on_notified(char_uuid: String, data: PackedByteArray) -> void:
-	if _link != Link.READY or not BleTransport.same_uuid(char_uuid, HR_MEASUREMENT_UUID):
+	var waiting := _link == Link.SETUP and _subscribe_sent
+	if not (waiting or _link == Link.READY):
+		return
+	if not BleTransport.same_uuid(char_uuid, HR_MEASUREMENT_UUID):
 		return
 	var m := HeartRateParser.parse(data)
 	if not bool(m["ok"]):
 		return
+	if waiting:
+		_enter_ready()
 	_bpm = int(m["bpm"])
 	_bpm_t = _t
 	_contact_supported = bool(m["contact_supported"])
@@ -546,16 +616,18 @@ func _on_operation_failed(op: String, error: String) -> void:
 		Link.CONNECTING:
 			if op == "connect":
 				_attempt_failed(error)
-		Link.SETUP:
-			# Discovery or the subscription failed (the manager-wide "bluetooth" and "scan"
-			# errors are not this link's).
-			if op != "scan" and op != "bluetooth":
-				_disconnect_requested = true
-				_transport.disconnect_device()
-				_attempt_failed(error)
-		Link.READY:
+		Link.SETUP, Link.READY:
+			# The manager-wide "bluetooth" and "scan" errors are not this link's.
+			if op == "scan" or op == "bluetooth":
+				return
 			if op == GdbleTransport.OP_GATT_RESET:
-				_transport.discover_services()
+				if _resubscribed:
+					_drop_link(error)
+				else:
+					_resubscribe("GATT reset (%s)" % error)
+			elif _link == Link.SETUP or op == "subscribe" or op == "notification":
+				# Discovery or the subscription failed (on Windows also a refused pairing).
+				_drop_link("%s: %s" % [op, error])
 		_:
 			pass
 
@@ -599,6 +671,7 @@ func _set_status(s: String, detail: String) -> void:
 		return
 	_status = s
 	_status_detail = detail
+	print("Heart rate sensor: %s%s" % [s, "" if detail.is_empty() else " (%s)" % detail])
 	status_changed.emit(s, detail)
 
 

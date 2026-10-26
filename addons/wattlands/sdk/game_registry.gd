@@ -23,6 +23,9 @@ extends Node
 ## string key, featured?: bool}} gives a content its own card in the lobby's content picker
 ## (icon, a second line of text, featured ones listed first and drawn larger). A missing or
 ## unreadable image logs a warning and the card has no icon.
+## pixel_flex (optional, 2d only): {"min": [w, h]} turns on PixelViewport's flex mode: the art
+## canvas grows with the window from pixel_base's integer scale (BRIEF 3.9; min whole numbers
+## 1..pixel_base on each axis).
 ##
 ## Validation (validate_manifest) names the failing field first: "<field>: <reason>", for
 ## example "presentation: must be \"2d\" or \"3d\"" or "options[1].default: 7 is outside
@@ -207,6 +210,12 @@ func validate_manifest(m: Dictionary, path: String = "") -> String:
 			or int(pb[1]) < 1
 		):
 			return "pixel_base: a 2d game needs [width, height] in whole pixels"
+		if m.has("pixel_flex"):
+			var flex_err := _check_pixel_flex(m["pixel_flex"], pb)
+			if flex_err != "":
+				return flex_err
+	elif m.has("pixel_flex"):
+		return "pixel_flex: only a 2d game has a pixel canvas"
 	var entry_err := _check_entry(m.get("entry", null))
 	if entry_err != "":
 		return entry_err
@@ -598,6 +607,9 @@ static func normalized(m: Dictionary) -> Dictionary:
 	out["first_run_priority"] = int(out.get("first_run_priority", 0))
 	if out.has("pixel_base") and out["pixel_base"] is Array:
 		out["pixel_base"] = [int(out["pixel_base"][0]), int(out["pixel_base"][1])]
+	if out.has("pixel_flex") and out["pixel_flex"] is Dictionary:
+		var mn: Array = out["pixel_flex"]["min"]
+		out["pixel_flex"] = {"min": [int(mn[0]), int(mn[1])]}
 	if not out.has("picker_image"):
 		out["picker_image"] = ""
 	for f: String in ["options", "player_options"]:
@@ -647,6 +659,19 @@ static func is_whole(v: Variant) -> bool:
 		var f: float = v
 		return not is_nan(f) and not is_inf(f) and f == floorf(f) and absf(f) < 9.0e15
 	return false
+
+
+## "" when `flex` is {"min": [w, h]} with whole numbers 1..pixel_base, else the reason.
+static func _check_pixel_flex(flex: Variant, base: Variant) -> String:
+	if not (flex is Dictionary) or (flex as Dictionary).keys() != ["min"]:
+		return 'pixel_flex: must be {"min": [width, height]}'
+	var mn: Variant = (flex as Dictionary)["min"]
+	if not (mn is Array) or (mn as Array).size() != 2:
+		return "pixel_flex.min: must be [width, height]"
+	for i in 2:
+		if not is_whole(mn[i]) or int(mn[i]) < 1 or int(mn[i]) > int(base[i]):
+			return "pixel_flex.min: whole pixels from 1 up to pixel_base"
+	return ""
 
 
 ## JSON equality: numbers compare by value (1 == 1.0), containers element-wise.

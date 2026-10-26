@@ -6,9 +6,10 @@ extends RefCounted
 ## cadence once per tick on platform time, so both times count from the tick in which the
 ## sample that meets (or breaks) the condition arrived.
 ## It is a timer/clock feature layered on top of the governor, which keeps every 4.6 rule of
-## its own (coasting floor at 3 s, the solo pause or AFK at 10 s, the ramp back).
+## its own (coasting floor at 3 s, the solo pause or AFK at 10 s, the ramp back); ENTER_S
+## matches that 10 s, so a stop pauses once, never before the governor's own limit.
 
-const ENTER_S := 5.0
+const ENTER_S := 10.0
 const RESUME_S := 1.0
 const RESUME_RPM := 30.0
 const _EPS := 1e-6

@@ -11,7 +11,7 @@ extends RefCounted
 ##                                   captured from the host's view at each sim second
 ##   --scene=<res path>              a scene (for example a kit demo) after --frames frames
 ##   --app-screen=title|picker|lobby the app shell on that screen with a mock trainer
-##   --app-screen=session            the app's session screen (HUD, panic button, overlay) with
+##   --app-screen=session            the app's session screen (HUD, overlay) with
 ##                                   --app-role=client|host|solo (default client: the app joins
 ##                                   an in-process host over loopback; tools/qa/screenshot_session.gd),
 ##                                   shot at each --at (platform seconds of the app's session,

@@ -35,7 +35,8 @@ func before_each() -> void:
 		"characteristic_read",
 		"characteristic_written",
 		"characteristic_notified",
-		"operation_failed"
+		"operation_failed",
+		"subscribed"
 	]:
 		_t.connect(sig, _recorder(sig))
 
@@ -49,7 +50,7 @@ func after_each() -> void:
 
 func _recorder(sig: String) -> Callable:
 	match sig:
-		"device_found", "device_connected", "services_discovered", "characteristic_written":
+		"device_found", "device_connected", "services_discovered", "characteristic_written", "subscribed":
 			return func(a: Variant) -> void: _events.append([sig, a])
 		_:
 			return func(a: Variant, b: Variant) -> void: _events.append([sig, a, b])
@@ -333,6 +334,8 @@ func test_discover_read_subscribe_notify() -> void:
 	_t.subscribe_characteristic("0x1826", "0X2AD2")
 	assert_true(_pump_until(func() -> bool: return _server.ops().has("subscribe")))
 	assert_eq(_server.last("subscribe")["char"], IBD)
+	assert_true(_pump_until(func() -> bool: return _named("subscribed").size() == 1))
+	assert_eq(_named("subscribed")[0], ["subscribed", IBD], "the acknowledged subscription")
 	_server.send(
 		{
 			"event": "notify",

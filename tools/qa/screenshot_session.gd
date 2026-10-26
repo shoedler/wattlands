@@ -1,7 +1,7 @@
 class_name QaScreenshotSession
 extends RefCounted
 ## tools/screenshot --app-screen=session: the app's real session screen (AppSessionScreen) in a
-## windowed run, so the HUD, the on-screen panic button and the session overlay show together
+## windowed run, so the HUD and the session overlay show together
 ## as a rider sees them (BRIEF 3.9, 4.6.5, 7.8). Owned by qa; driven by
 ## tools/qa/screenshot_main.gd.
 ##   --app-role=client (default): the app joins a room that an in-process, headless host opens
@@ -17,8 +17,8 @@ extends RefCounted
 ## shot with the session menu (or the panic overlay) open. The app reads --sim-speed itself
 ## (CmdLine); the in-process peer runs at the same speed. The app's profile is "Rider"
 ## (FTP 200), the other peer "Guest" (FTP 180), both on --mock-trainer.
-## Prints one "screenshot: session ..." line per shot with the panic button's rect, the HUD's
-## reserved bottom-right corner, that corner's stack and whether they overlap.
+## Prints one "screenshot: session ..." line per shot with the HUD's bottom-right stack and the
+## overlay's layer above the HUD.
 
 const DEFAULT_AT := 30.0
 const PEER_FTP := 180.0
@@ -121,31 +121,16 @@ func advance_to(at: float) -> bool:
 	)
 
 
-## One line for the run log: the panic button, the HUD's reserved corner and its stack.
+## One line for the run log: the HUD's bottom-right stack and the layers.
 func describe(screen: AppSessionScreen) -> String:
 	var hud: HudLayer = screen.host.hud_layer() if screen.host != null else null
 	if hud == null:
 		return "screenshot: session %s: no HUD (headless?)" % role
-	var pb := screen.panic_button.get_global_rect()
-	var reserved := hud.reserved_corner(HudSpec.BOTTOM_RIGHT)
 	var box := hud.anchor_box(HudSpec.BOTTOM_RIGHT)
 	var box_rect := box.get_global_rect() if box != null and box.visible else Rect2()
-	var overlap := box_rect.has_area() and box_rect.intersects(pb)
 	return (
-		(
-			"screenshot: session %s at %.1f s: panic button %s, reserved bottom-right %s, "
-			+ "bottom-right stack %s, overlap %s, top layer %d above HUD layer %d"
-		)
-		% [
-			role,
-			session_seconds(),
-			_rect_text(pb),
-			reserved,
-			_rect_text(box_rect),
-			overlap,
-			screen.top_layer.layer,
-			hud.layer
-		]
+		"screenshot: session %s at %.1f s: bottom-right stack %s, top layer %d above HUD layer %d"
+		% [role, session_seconds(), _rect_text(box_rect), screen.top_layer.layer, hud.layer]
 	)
 
 
