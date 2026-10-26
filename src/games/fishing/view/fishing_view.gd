@@ -1,35 +1,63 @@
 class_name FishingView
 extends Node2D
-## The 640 x 360 view: one ocean across the whole width (the HUD draws on top of it). The
-## camera follows the local boat; every rider's boat, line, wobbler and fish is drawn when in
-## sight. Back to front:
+## The view: one ocean across the whole width (the HUD draws on top of it), laid out from the
+## art size of the SubViewport it draws in (the PixelViewport's: 640 x 360 at the base, any flex
+## size; FishingScenery.set_size() every frame; the base size outside one). The camera follows
+## the local boat; every rider's boat, line, wobbler and fish is drawn when in sight. Back to
+## front:
 ##  1. FishingScenery.paint_back: sky, clouds, haze islands, town and pier, water bands, the
 ##     stepped floor and its rocks, the edge's void and waterfall;
 ##  2. the local rider's menu hints (flat species silhouettes at their depth, the picked one
-##     drawn) and every fish and wobbler, shifted along the palette ladder by the water around
-##     them (FishingPaletteMap);
+##     drawn) and every fish (its pose from the line: swimming, pulling at 15 or 30 degrees,
+##     tired) and wobbler, shifted along the palette ladder by the water around them
+##     (FishingPaletteMap);
 ##  3. the prop wash and the lines (behind the hulls): each a FishingRope drawn as a clean 1 px
 ##     curve, the rod's slate above the water and a colour per water band under it;
 ##  4. the boats (others first, the local boat last; FishingBoatView);
 ##  5. wakes (foam slabs in a fixed rhythm) and the bow wave, then the effects (splashes, catch
 ##     sparkles).
-## It only reads `game.state`. On a client the boats are drawn between snapshots from a
-## FishingSnapHistory with a render clock behind the newest snapshot by its mean spacing (GAME_SDK
-## 12), never past the newest and never backwards. Effects and sounds come from FishingCues: the
-## module's fx_event signal when it has one, else edges in the state. FishingAudio is a child.
-## The HUD finds the view through the game's "fishing_view" meta and reads `model`.
+## It only reads `game.state`. Boats and fish are drawn between states from a FishingSnapHistory
+## every frame: on a client with a render clock behind the newest snapshot by its mean spacing
+## (GAME_SDK 12), on the host and in SOLO one sim step behind the newest step (the sim-clock
+## fraction), never past the newest and never backwards. Effects and sounds come from
+## FishingCues: the module's fx_event signal when it has one, else edges in the state.
+## FishingAudio is a child. The HUD finds the view through the game's "fishing_view" meta and
+## reads `model`.
 
 const INTERP_DELAY_S := 0.1
 const CLOCK_RESYNC_S := 1.5
 const INTERP_DELAY_MAX_S := CLOCK_RESYNC_S - 0.1
 const CLOCK_CATCHUP_TAU_S := 0.25
-## Camera: the local boat's screen x while driving (heading right; mirrored heading left), the
-## easing, and how the view depth follows the floor in sight.
-const CAM_DRIVE_X := 210.0
+## Camera: the local boat's screen x while driving (heading right; mirrored heading left) as a
+## share of the view's width, and the easing.
+const CAM_DRIVE_U := 210.0 / 640.0
 const CAM_TAU_S := 1.1
 ## A camera goal this far away (a rejoin, a fast-forward) is jumped to, not eased toward.
 const CAM_SNAP_M := 150.0
-const DEPTH_TAU_S := 1.6
+## The view depth (FishingScenery.view_depth_m) eases toward a goal over DEPTH_TAU_S; the goal
+## moves only when the floor in sight asks for DEPTH_DEEPER more depth or DEPTH_SHALLOWER less
+## (hysteresis), so the floor rows keep still while the boat moves over small steps, and the
+## easing ends on the goal.
+const DEPTH_TAU_S := 0.9
+const DEPTH_DEEPER := 0.08
+const DEPTH_SHALLOWER := 0.3
+const DEPTH_DONE := 0.002
+## The boat's heave in whole px per m (FishingRiderState.heave_m) and its range (the prop stays
+## in the water: at most HEAVE_UP_PX up).
+const HEAVE_PX_PER_M := 30.0
+const HEAVE_UP_PX := 2
+const HEAVE_DOWN_PX := 3
+## Fish poses: tired under TIRED_S stamina (and in the Landing); a pull pose from rod tension
+## PULL15_AT (the 15 degree pose) or PULL30_AT (up to the 30 degree one), picked by the line's
+## angle at the mouth (level under PULL15_DEG, steep from PULL30_DEG); the swim cycle at SWIM_FPS
+## (SWIM_RUN_FPS on a run).
+const TIRED_S := 0.12
+const PULL15_AT := 0.45
+const PULL30_AT := 0.6
+const PULL15_DEG := 8.0
+const PULL30_DEG := 22.0
+const SWIM_FPS := 7.0
+const SWIM_RUN_FPS := 12.0
 ## Other riders' boats float this many px higher, on the far water (FishingScenery.FAR_ROWS),
 ## hazier and behind the local boat, so boats at the same x read as side by side.
 const FAR_ROW_PX := 6
@@ -117,7 +145,7 @@ var effects: FishingEffects = null
 var boats: Dictionary = {}
 ## World x (m) at the view's left edge.
 var cam_m: float = 0.0
-## Client: the host time (s) the boats are drawn at.
+## The game time (s) boats and fish are drawn at (the host's on a client).
 var render_t: float = 0.0
 var events_connected: bool = false
 ## Every cue handled so far, newest last (tests read it; capped).
@@ -152,6 +180,9 @@ var _ropes: Dictionary = {}
 var _brake_t: Dictionary = {}
 ## The camera's eased lead (px).
 var _lead: float = 0.0
+## The view depth's goal (m; see DEPTH_DEEPER) and the frame time since the newest state.
+var _depth_goal: float = -1.0
+var _since: float = 0.0
 
 
 func _ready() -> void:
@@ -172,18 +203,22 @@ func advance(delta: float) -> void:
 		return
 	var st := game.state
 	_t += delta
+	var vp := get_viewport() if is_inside_tree() else null
+	if vp is SubViewport:
+		scenery.set_size((vp as SubViewport).size)
+	_track_snapshots(st)
 	if _is_client():
-		_track_snapshots(st)
 		_advance_clock(delta)
+	else:
+		_advance_local_clock(delta)
 	for r in st.riders:
 		_shown[r.slot] = _values(r)
 	_camera(delta, st)
-	var want_depth := scenery.target_view_depth(cam_m)
-	if _t <= delta:
-		scenery.view_depth_m = want_depth
-	var ease := 1.0 - exp(-delta / DEPTH_TAU_S)
-	scenery.view_depth_m += (want_depth - scenery.view_depth_m) * ease
+	_ease_depth(delta)
 	model["cam_m"] = cam_m
+	model["size"] = scenery.size()
+	model["mouth"] = {}
+	model["fish_frame"] = {}
 	model["local"] = _local_slot
 	model["boats"] = {}
 	model["fish"] = {}
@@ -229,6 +264,11 @@ func interp_delay() -> float:
 func on_fx_event(event: Dictionary) -> void:
 	for c in FishingCues.from_event(event):
 		_pending.append(c)
+
+
+## The art size drawn (px).
+func art_size() -> Vector2i:
+	return scenery.size()
 
 
 ## The screen point of world `x_m` at `depth_m` (negative depth: above the surface).
@@ -330,11 +370,52 @@ func _line_colour(r: FishingRiderState) -> Color:
 	return FishingPalette.LINE
 
 
-## Client: a new tick in the state is a snapshot just applied; record it unless the module does.
+## Records the state: on a client each new tick (a snapshot just applied) unless the module
+## does; on the host and in SOLO every frame (a push at the newest time replaces it).
 func _track_snapshots(st: FishingState) -> void:
-	if _own_history and st.tick != _seen_tick:
+	if not _own_history:
+		return
+	if st.tick != _seen_tick:
 		_seen_tick = st.tick
+		_since = 0.0
 		_history.push(st.t, st)
+	elif not _is_client():
+		_history.push(st.t, st)
+
+
+## Host and SOLO: render_t runs one sim step behind the newest state, moving with the frame
+## clock between steps (the sim-clock fraction), catching up when steps come faster than frames.
+func _advance_local_clock(delta: float) -> void:
+	if _history.is_empty():
+		return
+	var newest := _history.newest_t()
+	var goal := newest - Wl.SIM_DT + minf(_since, Wl.SIM_DT)
+	_since += maxf(delta, 0.0)
+	if not _clock_set or absf(goal - render_t) > CLOCK_RESYNC_S:
+		render_t = goal
+		_clock_set = true
+		return
+	var next := maxf(render_t + maxf(delta, 0.0), goal - Wl.SIM_DT)
+	render_t = clampf(next, render_t, newest)
+
+
+## The view depth eases toward its goal, which moves only past the hysteresis band.
+func _ease_depth(delta: float) -> void:
+	var want := scenery.target_view_depth(cam_m)
+	var first := _depth_goal < 0.0
+	if (
+		first
+		or want > _depth_goal * (1.0 + DEPTH_DEEPER)
+		or want < _depth_goal * (1.0 - DEPTH_SHALLOWER)
+	):
+		_depth_goal = want
+	if first:
+		scenery.view_depth_m = _depth_goal
+		return
+	var ease := 1.0 - exp(-delta / DEPTH_TAU_S)
+	scenery.view_depth_m += (_depth_goal - scenery.view_depth_m) * ease
+	if absf(_depth_goal - scenery.view_depth_m) <= _depth_goal * DEPTH_DONE:
+		scenery.view_depth_m = _depth_goal
 
 
 ## render_t moves with the frame clock, catches up softly toward newest - interp_delay() and
@@ -357,7 +438,7 @@ func _advance_clock(delta: float) -> void:
 
 func _values(r: FishingRiderState) -> Dictionary:
 	var v := FishingSnapHistory.values_of(r)
-	if _is_client() and _clock_set:
+	if _clock_set:
 		for k: String in FishingSnapHistory.KEYS:
 			v[k] = _history.value_at(r.slot, k, render_t, float(v[k]))
 	return v
@@ -370,15 +451,16 @@ func _camera(delta: float, st: FishingState) -> void:
 	if r == null:
 		return
 	var v: Dictionary = _shown[r.slot]
-	var sx := float(FishingScenery.W) * 0.5
+	var vw := float(scenery.w)
+	var sx := vw * 0.5
 	var lead := lead_px(r.v_mps)
-	var centre_m := cam_m + float(FishingScenery.W) * 0.5 / FishingScenery.PX_PER_M
+	var centre_m := cam_m + vw * 0.5 / FishingScenery.PX_PER_M
 	var snap := not _cam_set or absf(float(v["x"]) - centre_m) > CAM_SNAP_M
 	_lead = lead if snap else _lead + (lead - _lead) * (1.0 - exp(-delta / LEAD_TAU_S))
 	match r.action:
 		FishingConst.A_DRIVE, FishingConst.A_DRIFT, FishingConst.A_HOME:
-			var x := CAM_DRIVE_X - _lead
-			sx = x if r.heading > 0 else float(FishingScenery.W) - x
+			var x := roundf(vw * CAM_DRIVE_U) - _lead
+			sx = x if r.heading > 0 else vw - x
 		FishingConst.A_FIGHT, FishingConst.A_LAND:
 			var half := clampf(absf(float(v["fdx"])) * FishingScenery.PX_PER_M * 0.5, 0.0, 200.0)
 			sx += half * signf(-float(v["fdx"])) if absf(float(v["fdx"])) > 0.1 else 0.0
@@ -401,13 +483,14 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 		return
 	var v: Dictionary = _shown[r.slot]
 	var sx := FishingScenery.screen_x(float(v["x"]), cam_m)
-	b.visible = sx > -DRAW_MARGIN_PX and sx < float(FishingScenery.W) + DRAW_MARGIN_PX
+	b.visible = sx > -DRAW_MARGIN_PX and sx < float(scenery.w) + DRAW_MARGIN_PX
 	var wx := float(v["x"]) * FishingScenery.PX_PER_M
 	b.heading = r.heading
 	b.pitch_deg = float(v["pitch"])
 	b.brake = float(v["brake"])
 	b.bob_px = -float(FishingScenery.wave(wx, _t))
-	b.cadence = float(v["cad"])
+	b.heave_px = heave_px(float(v["heave"]))
+	b.cadence = raw_cadence(r, float(v["cad"]))
 	var line := r.line_m()
 	var was := float(_line_m.get(r.slot, line))
 	_line_m[r.slot] = line
@@ -428,6 +511,19 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	(model["boats"] as Dictionary)[r.slot] = b.position
 
 
+## The hull's heave in whole px (up positive) for `heave_m`.
+static func heave_px(heave_m: float) -> int:
+	return clampi(roundi(heave_m * HEAVE_PX_PER_M), -HEAVE_DOWN_PX, HEAVE_UP_PX)
+
+
+## The cadence the crank turns at: the local rider's raw telemetry (FishingGame.local_tm), any
+## other rider's shown cadence `shown_rpm`.
+func raw_cadence(r: FishingRiderState, shown_rpm: float) -> float:
+	if r.slot == _local_slot and game != null and game.local_tm != null:
+		return game.local_tm.cadence_rpm
+	return shown_rpm
+
+
 ## Rod tension 0..1: a fight's strain (all of it on a run, the rod bent at least
 ## FIGHT_BEND_MIN), the landing, a wobbler working.
 func _tension(r: FishingRiderState) -> float:
@@ -435,7 +531,7 @@ func _tension(r: FishingRiderState) -> float:
 		FishingConst.A_FIGHT:
 			if r.fish.off_line:
 				return 0.0
-			if r.fish.run_active:
+			if r.fish.run_active or r.surging:
 				return 1.0
 			return clampf(0.35 + 0.65 * r.strain - 0.3 * r.slack, FIGHT_BEND_MIN, 1.0)
 		FishingConst.A_LAND:
@@ -460,6 +556,7 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 		var lfy := scenery.floor_y(float(v["x"]) + float(v["ldx"]))
 		if not is_inf(lfy):
 			p.y = minf(p.y, lfy - 3.0)
+		p.y = minf(p.y, float(scenery.h) - 3.0)
 		var id := "lure"
 		lure.texture = FishingSprites.frame(id, floori(_t * 6.0))
 		lure.flip_h = r.heading < 0
@@ -493,22 +590,51 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 				leap["k"] = int(u)
 				effects.spawn("fx_splash", float(v["x"]) + float(v["fdx"]), FishingScenery.SURF_Y)
 	var size := FishingSprites.size_of(id2)
+	var a := Vector2(FishingSprites.anchor(id2))
+	var k := _fish_frame(r, mouth, b.rod_tip() if b != null else mouth)
+	var box := FishingSprites.bounds(id2, k)
 	var floor_y := scenery.floor_y(float(v["x"]) + float(v["fdx"]))
+	var bottom := float(scenery.h) - 2.0
 	if not aboard and not is_inf(floor_y):
-		var below := float(size.y - FishingSprites.anchor(id2).y) + FISH_FLOOR_GAP_PX
-		mouth.y = minf(mouth.y, floorf(floor_y) - below)
-	fish.texture = FishingSprites.frame(id2, floori(_t * (8.0 if r.fish.run_active else 4.0)))
+		bottom = minf(bottom, floorf(floor_y) - FISH_FLOOR_GAP_PX)
+	if not aboard:
+		mouth.y = minf(mouth.y, bottom - float(box.end.y) + a.y)
+	fish.texture = FishingSprites.frame(id2, k)
 	var boat_x := FishingScenery.screen_x(float(v["x"]), cam_m)
 	fish.flip_h = mouth.x < boat_x if not aboard else r.heading > 0
 	if not aboard:
 		mouth = mouth.round()
-	var a := Vector2(FishingSprites.anchor(id2))
 	var top_left := mouth - a
+	var left := float(box.position.x)
 	if fish.flip_h:
 		top_left = mouth - Vector2(float(size.x) - a.x, a.y)
+		left = float(size.x - box.end.x)
 	fish.position = top_left.round()
 	_map_depth(_fish_mat[r.slot], depth if mouth.y > float(FishingScenery.SURF_Y) else 0.0)
-	(model["fish"] as Dictionary)[r.slot] = Rect2(fish.position, Vector2(size))
+	var drawn := Rect2(fish.position + Vector2(left, float(box.position.y)), Vector2(box.size))
+	(model["fish"] as Dictionary)[r.slot] = drawn
+	(model["mouth"] as Dictionary)[r.slot] = mouth
+	(model["fish_frame"] as Dictionary)[r.slot] = k
+
+
+## The fish frame (FishingSprites.FISH_*): tired when spent or in the Landing; a pull pose while
+## the rod is under tension, as steep as the line at the mouth (toward the rod tip `tip`) and the
+## tension allow; else the swim cycle, faster on a run.
+func _fish_frame(r: FishingRiderState, mouth: Vector2, tip: Vector2) -> int:
+	if r.action == FishingConst.A_LAND or r.fish.s < TIRED_S:
+		return FishingSprites.FISH_TIRED
+	var t := _tension(r)
+	var d := tip - mouth
+	var deg := rad_to_deg(atan2(absf(d.y), maxf(absf(d.x), 0.001)))
+	var want := 0 if deg < PULL15_DEG else (1 if deg < PULL30_DEG else 2)
+	var allow := 2 if t >= PULL30_AT else (1 if t >= PULL15_AT else 0)
+	match mini(want, allow):
+		1:
+			return FishingSprites.FISH_PULL15
+		2:
+			return FishingSprites.FISH_PULL30
+	var fps := SWIM_RUN_FPS if r.fish.run_active else SWIM_FPS
+	return FishingSprites.FISH_SWIM[floori(_t * fps) % FishingSprites.FISH_SWIM.size()]
 
 
 ## A fish or wobbler at `depth_m`: dark on the light water bands, darker on the teals.
@@ -530,15 +656,17 @@ func _place_hints(r: FishingRiderState) -> void:
 		var id := FishingSprites.fish_id(sp)
 		var x := float(_shown[r.slot]["x"]) + float(r.hints[4 * i + 1])
 		var depth := float(r.hints[4 * i + 2])
-		var sz := Vector2(FishingSprites.size_of(id))
+		var box := FishingSprites.bounds(id, 0)
+		var sz := Vector2(box.size)
 		var fy := scenery.floor_y(x)
 		if not is_inf(fy):
 			depth = minf(depth, scenery.depth_of_y(fy - sz.y * 0.5 - FISH_FLOOR_GAP_PX))
 		depth = maxf(depth, 0.5)
 		var band := FishingScenery.band_at(depth)
 		var p := hint_inside_band(to_screen(x, depth), sz, scenery.band_rows(band))
-		s.texture = FishingSprites.frame(id, floori(_t * 3.0) + i)
-		s.position = (p - sz * 0.5).round()
+		var cycle := FishingSprites.FISH_SWIM
+		s.texture = FishingSprites.frame(id, cycle[(floori(_t * 3.0) + i) % cycle.size()])
+		s.position = (p - sz * 0.5 - Vector2(box.position)).round()
 		var lit := r.selected >= 0 and r.selected < r.menu.size() and r.menu[r.selected] == i
 		_map_depth(_hint_mats[i], depth)
 		if not lit:
@@ -549,12 +677,10 @@ func _place_hints(r: FishingRiderState) -> void:
 
 ## Where the line ends in view px: the fish's mouth or the wobbler (Vector2.INF: no line out).
 func _line_end(r: FishingRiderState) -> Vector2:
-	var fr: Variant = (model.get("fish", {}) as Dictionary).get(r.slot)
-	if fr is Rect2 and (_fish[r.slot] as Sprite2D).visible:
-		var rect: Rect2 = fr
-		var y := rect.position.y + float(FishingSprites.anchor(_fish_id(r)).y)
+	var mp: Variant = (model.get("mouth", {}) as Dictionary).get(r.slot)
+	if mp is Vector2 and (_fish[r.slot] as Sprite2D).visible:
 		var flip := (_fish[r.slot] as Sprite2D).flip_h
-		return Vector2(rect.end.x - 1.0 if flip else rect.position.x, y)
+		return (mp as Vector2) - Vector2(1.0 if flip else 0.0, 0.0)
 	var lp: Variant = (model.get("lure", {}) as Dictionary).get(r.slot)
 	if lp is Vector2 and (_lure[r.slot] as Sprite2D).visible:
 		return lp
@@ -663,7 +789,7 @@ func _paint_line_parts(c: CanvasItem, under: bool) -> void:
 			continue
 		var first := rope.points[0]
 		var last := rope.points[rope.points.size() - 1]
-		if not b.visible and (last.x < 0.0 or last.x > float(FishingScenery.W)):
+		if not b.visible and (last.x < 0.0 or last.x > float(scenery.w)):
 			continue
 		var path: Array[Vector2i] = []
 		var tip := Vector2i(b.rod_tip())

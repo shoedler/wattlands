@@ -43,7 +43,7 @@ func test_the_camera_keeps_a_driving_boat_left_of_centre_looking_ahead() -> void
 	var p: Vector2 = v.model["boats"][0]
 	var lead := FishingView.lead_px(5.0)
 	assert_gt(lead, 0.0, "the camera leads ahead with speed")
-	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X - lead, 3.0)
+	assert_almost_eq(p.x, roundf(FishingView.CAM_DRIVE_U * 640.0) - lead, 3.0)
 	assert_eq(p.y, float(FishingScenery.SURF_Y))
 
 
@@ -53,7 +53,7 @@ func test_heading_home_mirrors_the_camera_and_flips_the_boat() -> void:
 	var v := _view(g)
 	_run(v, 80)
 	var p: Vector2 = v.model["boats"][0]
-	var x := FishingView.CAM_DRIVE_X - FishingView.lead_px(5.0)
+	var x := roundf(FishingView.CAM_DRIVE_U * 640.0) - FishingView.lead_px(5.0)
 	assert_almost_eq(p.x, float(FishingScenery.W) - x, 3.0)
 	assert_eq(v.boat_view(0).scale.x, -1.0)
 
@@ -67,7 +67,7 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 	_run(v, 1)
 	var p: Vector2 = v.model["boats"][0]
 	var lead := FishingView.lead_px(g.state.rider(0).v_mps)
-	assert_almost_eq(p.x, FishingView.CAM_DRIVE_X - lead, 3.0)
+	assert_almost_eq(p.x, roundf(FishingView.CAM_DRIVE_U * 640.0) - lead, 3.0)
 
 
 func test_signed_trim_picks_bow_up_and_braking_poses_by_whole_pixels_never_rotating() -> void:
@@ -367,3 +367,116 @@ func test_a_client_draws_boats_between_snapshots() -> void:
 	var t0 := v.render_t
 	v.advance(0.016)
 	assert_gte(v.render_t, t0, "the render clock never runs backwards")
+
+
+## The view inside a SubViewport of `size` (the flex PixelViewport's art size).
+func _sized_view(game: FishingGame, size: Vector2i) -> FishingView:
+	add_child_autofree(game)
+	var vp := SubViewport.new()
+	vp.size = size
+	add_child_autofree(vp)
+	var v := FishingView.new()
+	v.game = game
+	vp.add_child(v)
+	return v
+
+
+func test_the_view_lays_out_from_its_art_size() -> void:
+	for size: Vector2i in [Vector2i(860, 360), Vector2i(640, 340), Vector2i(568, 320)]:
+		var g := FX.make_game(1)
+		FX.set_drive(g.state.rider(0), 3000.0, 5.0, 1)
+		var v := _sized_view(g, size)
+		_run(v, 80)
+		assert_eq(v.art_size(), size)
+		var p: Vector2 = v.model["boats"][0]
+		var want := roundf(float(size.x) * FishingView.CAM_DRIVE_U) - FishingView.lead_px(5.0)
+		assert_almost_eq(p.x, want, 3.0, "the drive spot scales with the width at %s" % size)
+		var deepest := v.scenery.y_of_depth(v.scenery.view_depth_m)
+		assert_almost_eq(
+			deepest,
+			float(size.y - FishingScenery.FLOOR_GAP),
+			0.5,
+			"the deepest floor keeps its gap to the bottom at %s" % size
+		)
+
+
+func test_solo_draws_the_fish_between_sim_steps() -> void:
+	var g := FX.make_game(1)
+	var r := g.state.rider(0)
+	FX.set_fight(r, 7000.0, 4, 30.0, 40.0)
+	var v := _view(g)
+	_run(v, 3, 1.0 / 60.0)
+	var xs: Array[float] = []
+	for step in 4:
+		g.state.tick += 1
+		g.state.t += Wl.SIM_DT
+		r.fish.d += 1.0
+		for f in 3:
+			v.advance(Wl.SIM_DT / 3.0)
+			xs.append(-float(v.shown(0)["fdx"]))
+	for i in range(1, xs.size()):
+		assert_gt(xs[i] - xs[i - 1], -1e-6, "never backwards")
+		assert_lt(xs[i] - xs[i - 1], 0.6, "no whole-step jumps: frame %d" % i)
+	assert_gt(xs[-1] - xs[0], 2.0, "it follows the fish")
+
+
+func test_the_fish_pulls_on_a_taut_steep_line_and_tires_when_spent() -> void:
+	var g := FX.make_game(1)
+	var r := g.state.rider(0)
+	FX.set_fight(r, 7000.0, 4, 20.0, 60.0, 0.9, 0.0)
+	var v := _view(g)
+	_run(v, 10)
+	var k := int(v.model["fish_frame"][0])
+	assert_true(
+		k == FishingSprites.FISH_PULL15 or k == FishingSprites.FISH_PULL30, "pulling: frame %d" % k
+	)
+	r.strain = 0.0
+	r.slack = 0.6
+	_run(v, 4)
+	assert_has(FishingSprites.FISH_SWIM, int(v.model["fish_frame"][0]), "a slack line: swimming")
+	r.fish.s = 0.05
+	_run(v, 2)
+	assert_eq(int(v.model["fish_frame"][0]), FishingSprites.FISH_TIRED)
+
+
+func test_heave_moves_the_hull_by_whole_pixels_and_never_lifts_the_prop_out() -> void:
+	assert_eq(FishingView.heave_px(0.0), 0)
+	assert_eq(FishingView.heave_px(0.06), FishingView.HEAVE_UP_PX, "on the plane")
+	assert_eq(FishingView.heave_px(-0.12), -FishingView.HEAVE_DOWN_PX, "squatting at the hump")
+	var g := FX.make_game(1)
+	var r := g.state.rider(0)
+	FX.set_drive(r, 3000.0, 14.0)
+	r.heave_m = 0.06
+	var v := _view(g)
+	_run(v, 4)
+	var b := v.boat_view(0)
+	assert_eq(b.heave_px, FishingView.HEAVE_UP_PX)
+	var hub := b.pixel_of(Vector2i(FishingRig.PROP_HUB))
+	assert_gt(hub.y, float(FishingScenery.SURF_Y), "the prop stays in the water")
+
+
+func test_floor_slopes_and_the_view_depth_hold_still_as_the_camera_scrolls() -> void:
+	var hi := {"top": 200.0, "x0": 4000.0, "sx0": 10.0, "sx1": 60.0}
+	var lo := {"top": 208.0, "x0": 4100.0, "sx0": 60.0, "sx1": 160.0}
+	var run := FishingFloor.ramp_run(hi, lo)
+	for shift in [1.0, 2.0, 7.0]:
+		var hi2 := hi.duplicate()
+		var lo2 := lo.duplicate()
+		for e: Dictionary in [hi2, lo2]:
+			e["sx0"] = float(e["sx0"]) - shift
+			e["sx1"] = float(e["sx1"]) - shift
+		assert_eq(FishingFloor.ramp_run(hi2, lo2), run, "the slope pick ignores the camera")
+	var g := FX.make_game(1)
+	var r := g.state.rider(0)
+	FX.set_drive(r, 5000.0, 6.0)
+	var v := _view(g)
+	_run(v, 60)
+	var changes := 0
+	var last := v.scenery.view_depth_m
+	for i in 120:
+		r.x_m += 0.3
+		v.advance(0.05)
+		if v.scenery.view_depth_m != last:
+			changes += 1
+		last = v.scenery.view_depth_m
+	assert_lt(changes, 90, "the view depth rests between retargets")

@@ -1,16 +1,20 @@
 class_name FishingSnapHistory
 extends RefCounted
-## Client: the riders of the last few snapshots keyed by the host's game time (tick x
-## Wl.SIM_DT), so the view draws every boat between two snapshots with its render clock behind
-## the newest by mean_spacing() (GAME_SDK 12). push(t, state) records a snapshot just applied
-## (FishingGame calls it, or the view when it sees a new tick); the view reads value_at().
+## The riders of the last few states keyed by the game time (tick x Wl.SIM_DT), so the view
+## draws every boat and fish between two of them: on a client between snapshots with its render
+## clock behind the newest by mean_spacing() (GAME_SDK 12), on the host and in SOLO between sim
+## steps one step behind. push(t, state) records a state (the view pushes every frame; a push at
+## the newest time replaces it); the view reads value_at().
 
 const CAPACITY := 8
 ## A snapshot more than this after the newest (a rejoin, a long stall) starts the history over.
 const MAX_GAP_S := 1.5
 ## The values kept per rider: boat x (m), signed trim (deg, bow up positive), wake, braking
-## (0..1), the fish's dx and depth (m), the wobbler's dx and depth (m), EMA cadence (rpm).
-const KEYS: Array[String] = ["x", "pitch", "wake", "brake", "fdx", "fz", "ldx", "lz", "cad"]
+## (0..1), the fish's dx and depth (m), the wobbler's dx and depth (m), EMA cadence (rpm), heave
+## (m, up positive).
+const KEYS: Array[String] = [
+	"x", "pitch", "wake", "brake", "fdx", "fz", "ldx", "lz", "cad", "heave"
+]
 
 ## Oldest first: [{"t": host seconds, "r": {slot: {key: value}}}].
 var entries: Array[Dictionary] = []
@@ -40,6 +44,7 @@ static func values_of(r: FishingRiderState) -> Dictionary:
 		"ldx": r.lure_dx,
 		"lz": r.lure_depth,
 		"cad": r.cadence_ema,
+		"heave": r.heave_m,
 	}
 
 

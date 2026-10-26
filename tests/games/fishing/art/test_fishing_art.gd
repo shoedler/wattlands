@@ -10,6 +10,8 @@ const ART_JSON := "res://assets/fishing/art.json"
 var _built: Dictionary = {}
 var _index: Dictionary = {}
 var _palette: Dictionary = {}
+## Colours a fish may show as a lone pixel: the eye, its highlight, accent finlets.
+var _lone_ok: Dictionary = {}
 
 
 func before_all() -> void:
@@ -20,6 +22,8 @@ func before_all() -> void:
 	_index = (idx as Dictionary).get("sprites", {}) if idx is Dictionary else {}
 	for c in FishingPalette.ALL:
 		_palette[_key(c)] = true
+	for c in [FishingPalette.ABYSS, FishingPalette.FOAM, FishingPalette.ACCENT]:
+		_lone_ok[_key(c)] = true
 
 
 func _key(c: Color) -> int:
@@ -143,7 +147,7 @@ func test_every_species_has_an_animated_fish_facing_left() -> void:
 		var id := FishingSprites.fish_id(sp)
 		assert_true(_built.has(id), id)
 		var frames: Array = _built[id]["frames"]
-		assert_eq(frames.size(), FishingArtGrids.SWIM_FRAMES, id)
+		assert_eq(frames.size(), FishingArtGrids.FISH_POSES.size(), id)
 		var f: Image = frames[0]
 		var left := 0
 		for y in f.get_height():
@@ -151,6 +155,22 @@ func test_every_species_has_an_animated_fish_facing_left() -> void:
 		assert_gt(left, 0, "%s: the mouth is at the left edge" % id)
 		var a: Vector2i = _built[id]["anchor"]
 		assert_eq(a.x, 0, "%s: the anchor is the mouth" % id)
+
+
+func test_every_fish_frame_keeps_the_mouth_on_the_anchor_and_pulls_tilt_the_tail_down() -> void:
+	for id: String in FishingArtGrids.FISH:
+		var a: Vector2i = _built[id]["anchor"]
+		var frames: Array = _built[id]["frames"]
+		for k in frames.size():
+			var f: Image = frames[k]
+			assert_gt(f.get_pixel(0, a.y).a, 0.5, "%s frame %d: the mouth on the anchor" % [id, k])
+		for k in [FishingSprites.FISH_PULL15, FishingSprites.FISH_PULL30]:
+			var used := (frames[k] as Image).get_used_rect()
+			var level := (frames[1] as Image).get_used_rect()
+			assert_gt(used.end.y, level.end.y, "%s pull %d: the tail hangs lower" % [id, k])
+		var p30 := (frames[FishingSprites.FISH_PULL30] as Image).get_used_rect()
+		var p15 := (frames[FishingSprites.FISH_PULL15] as Image).get_used_rect()
+		assert_gt(p30.size.y, p15.size.y, "%s: 30 degrees is steeper" % id)
 
 
 func test_swim_frames_differ_so_the_fish_moves() -> void:
@@ -221,7 +241,8 @@ func test_fish_have_no_outline_and_no_isolated_specks() -> void:
 				if border:
 					edge += 1
 					edge_dark += 1 if _key(c) == _key(FishingPalette.ABYSS) else 0
-				if same == 0 and _key(c) != _key(FishingPalette.ABYSS):
+				var lone_ok := _lone_ok.has(_key(c))
+				if same == 0 and not lone_ok:
 					specks += 1
 		assert_lt(float(edge_dark), float(edge) * 0.1, "%s has no dark contour" % id)
 		assert_eq(specks, 0, "%s has no lone pixels but its eye" % id)

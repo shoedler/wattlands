@@ -247,9 +247,9 @@ func paint(c: CanvasItem, sc: FishingScenery, cam_m: float, t: float, edge_px: f
 		return
 	var cam_px := roundf(cam_m * FishingScenery.PX_PER_M)
 	var shown := profile(sc, cam_px, edge_px)
-	_paint_ridge(c, sc, cam_px, shown, minf(edge_px, floor_end(shown, cam_px)))
+	_paint_ridge(c, sc, cam_px, shown, minf(edge_px, floor_end(shown, cam_px, sc.w)))
 	for e in shown:
-		_paint_piece(c, e)
+		_paint_piece(c, e, sc.h)
 	var taken := _paint_drops(c, shown)
 	for e in shown:
 		_paint_mound(c, e, taken)
@@ -263,7 +263,7 @@ func paint(c: CanvasItem, sc: FishingScenery, cam_m: float, t: float, edge_px: f
 ## (world px), "c0"}], each top on an even row.
 func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for tr in terraces_in(cam_px - 64.0, cam_px + float(FishingScenery.W) + 64.0):
+	for tr in terraces_in(cam_px - 64.0, cam_px + float(sc.w) + 64.0):
 		if is_inf(float(tr["d"])):
 			continue
 		var base := 2.0 * roundf(sc.y_of_depth(float(tr["d"])) * 0.5)
@@ -273,7 +273,7 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 			if sx1 <= sx0:
 				continue
 			var top := base + p.z
-			if top >= float(FishingScenery.H):
+			if top >= float(sc.h):
 				continue
 			var band := FishingScenery.band_at(sc.depth_of_y(top - 1.0 - float(SLIVER_ROWS)))
 			(
@@ -313,14 +313,11 @@ func profile(sc: FishingScenery, cam_px: float, edge_px: float) -> Array[Diction
 
 
 ## The screen x where the floor in sight drops away into the abyss (INF when it does not).
-func floor_end(shown: Array[Dictionary], cam_px: float) -> float:
+func floor_end(shown: Array[Dictionary], cam_px: float, view_w: int = FishingScenery.W) -> float:
 	if shown.is_empty():
 		return INF
 	var sx := float(shown[-1]["sx1"])
-	if (
-		sx < float(FishingScenery.W)
-		and is_inf(depth_at((sx + cam_px + 1.0) / FishingScenery.PX_PER_M))
-	):
+	if sx < float(view_w) and is_inf(depth_at((sx + cam_px + 1.0) / FishingScenery.PX_PER_M)):
 		return sx
 	return INF
 
@@ -333,17 +330,15 @@ static func top_at(shown: Array[Dictionary], sx: float) -> float:
 	return INF
 
 
-func _paint_piece(c: CanvasItem, e: Dictionary) -> void:
+func _paint_piece(c: CanvasItem, e: Dictionary, view_h: int) -> void:
 	var sx0 := float(e["sx0"])
 	var w := float(e["sx1"]) - sx0
 	var top := float(e["top"])
 	var band := int(e["band"])
-	var h := float(FishingScenery.H) - top
+	var h := float(view_h) - top
 	if int(e["pit"]) >= 0:
 		var floor_y := minf(top, float(e["pit_top"]) + PIT_DEEPEST_PX)
-		c.draw_rect(
-			Rect2(sx0, floor_y, w, float(FishingScenery.H) - floor_y), DARK_BANDS[int(e["pit"])]
-		)
+		c.draw_rect(Rect2(sx0, floor_y, w, float(view_h) - floor_y), DARK_BANDS[int(e["pit"])])
 		return
 	c.draw_rect(Rect2(sx0, top - SLIVER_ROWS, w, SLIVER_ROWS), FishingPalette.SEA[band])
 	c.draw_rect(Rect2(sx0, top, w, h), FLOOR_BANDS[band])
@@ -391,13 +386,10 @@ func _paint_drops(c: CanvasItem, shown: Array[Dictionary]) -> Array[Vector2]:
 ## as a clean slope laid on `lo`, 1 px down per RAMP_RUNS px, with a lit 2-row top: when its seed
 ## picks a slope and `lo` has room. Returns the span it covers (Vector2.ZERO: none drawn).
 func ramp(c: CanvasItem, edge: float, hi: Dictionary, lo: Dictionary, right: bool) -> Vector2:
+	var run := ramp_run(hi, lo)
+	if run == 0:
+		return Vector2.ZERO
 	var drop := float(lo["top"]) - float(hi["top"])
-	if drop < RAMP_MIN or drop > RAMP_MAX:
-		return Vector2.ZERO
-	var h := FishingScenery.hash2(int(edge + float(hi["x0"])), 61)
-	if h % 2 == 0:
-		return Vector2.ZERO
-	var run := RAMP_RUNS[(h >> 3) % RAMP_RUNS.size()]
 	var length := drop * float(run)
 	if float(lo["sx1"]) - float(lo["sx0"]) < length + 6.0:
 		return Vector2.ZERO
@@ -409,6 +401,19 @@ func ramp(c: CanvasItem, edge: float, hi: Dictionary, lo: Dictionary, right: boo
 		c.draw_rect(Rect2(x, y, 1.0, float(lo["top"]) - y + 2.0), FLOOR_BANDS[band])
 		c.draw_rect(Rect2(x, y, 1.0, RIM_ROWS), RIM_BANDS[band])
 	return Vector2(edge, edge + length) if right else Vector2(edge - length, edge)
+
+
+## The slope's run (px per row down) the seed picks for the drop from piece `hi` to `lo`, 0 for
+## a sheer drop: seeded by the two pieces' world x, never by the camera, so it holds still as the
+## view scrolls.
+static func ramp_run(hi: Dictionary, lo: Dictionary) -> int:
+	var drop := float(lo["top"]) - float(hi["top"])
+	if drop < RAMP_MIN or drop > RAMP_MAX:
+		return 0
+	var h := FishingScenery.hash2(int(float(hi["x0"]) + float(lo["x0"])), 61)
+	if h % 2 == 0:
+		return 0
+	return RAMP_RUNS[(h >> 3) % RAMP_RUNS.size()]
 
 
 ## A low mound on piece `e` by seed (where no slope lies): a flat top MOUND rows high stepping
@@ -470,7 +475,7 @@ func _paint_ridge(
 	var span := RIDGE_MESA_MIN + RIDGE_MESA_SPAN
 	var k := floori(off / float(span)) - 1
 	var x := float(k * span)
-	while x - off < float(FishingScenery.W):
+	while x - off < float(sc.w):
 		var h := FishingScenery.hash2(k, 29)
 		var w := float(RIDGE_MESA_MIN + h % RIDGE_MESA_SPAN)
 		var tall := float(RIDGE_HEIGHTS[(h >> 7) % RIDGE_HEIGHTS.size()]) * scale
@@ -579,11 +584,11 @@ func _paint_abyss_drop(
 	if shown.is_empty():
 		return
 	var last := shown[-1]
-	var x := floor_end(shown, cam_px)
+	var x := floor_end(shown, cam_px, sc.w)
 	if x >= edge_px:
 		return
 	var y := float(last["top"])
-	var bottom := float(FishingScenery.H)
+	var bottom := float(sc.h)
 	for k in ABYSS_LEDGES.size():
 		var lg := legend(FishingScenery.band_at(sc.depth_of_y(y - 1.0)))
 		var ny := minf(y + ABYSS_DROPS[k], bottom)
@@ -607,7 +612,7 @@ func _paint_landmarks(
 ) -> void:
 	if not world.has_method("landmarks"):
 		return
-	var view_m := float(FishingScenery.W) / FishingScenery.PX_PER_M
+	var view_m := float(sc.w) / FishingScenery.PX_PER_M
 	for lm: Dictionary in world.call("landmarks", cam_m - 80.0, cam_m + view_m + 80.0):
 		var sx := roundf(FishingScenery.screen_x(float(lm["x_m"]), cam_m))
 		if sx >= edge_px:
@@ -616,7 +621,7 @@ func _paint_landmarks(
 		if kind == "lighthouse":
 			FishingProps.lighthouse(c, sx, float(FishingScenery.SURF_Y))
 			continue
-		var top := top_at(shown, clampf(sx, 0.0, 639.0))
+		var top := top_at(shown, clampf(sx, 0.0, float(sc.w - 1)))
 		if is_inf(top):
 			continue
 		var band := FishingScenery.band_at(sc.depth_of_y(top - 1.0 - float(SLIVER_ROWS)))

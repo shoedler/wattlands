@@ -13,9 +13,35 @@ const WATERLINE := 28
 ## Hull extent along the deck (stern transom .. bow stem).
 const STERN_X := 24
 const BOW_X := 90
-## The crew sprite (clutch lever, seat, rider, leg, flywheel; four crank frames per pose).
+## The crew sprite (clutch lever, seat, rider; one frame per pose).
 const CREW_AT := Vector2(30, 3)
 const CREW_SIZE := Vector2i(30, 18)
+## The drivetrain, crew-local, drawn at the exact crank angle (drivetrain()): the flywheel ring
+## (a 2 px slate ring, WHEEL_RING's rows from WHEEL_AT), its brass hub (2 x 2 on the centre),
+## the crank (CRANK_R px to the pedal) and the leg from the hip to the pedal through a knee
+## (THIGH_PX and SHIN_PX long, bent up), crank and leg 2 px thick in the rider's abyss.
+const WHEEL_AT := Vector2i(15, 8)
+const WHEEL_RING: Array[String] = [
+	"...####...",
+	".########.",
+	".##....##.",
+	"##......##",
+	"##......##",
+	"##......##",
+	"##......##",
+	".##....##.",
+	".########.",
+	"...####...",
+]
+const WHEEL_C := Vector2(20.0, 13.0)
+const CRANK_R := 3.5
+const HIP := Vector2(12.0, 12.0)
+const THIGH_PX := 5.5
+const SHIN_PX := 5.5
+## drivetrain()'s colour indices: ring, crank and leg, hub.
+const DRIVE_COLOURS: Array[Color] = [
+	FishingPalette.SLATE, FishingPalette.ABYSS, FishingPalette.ACCENT
+]
 ## Winch drum and outboard prop sprites (top-left) and the prop's hub.
 const WINCH_AT := Vector2(26, 13)
 const PROP_AT := Vector2(20, 30)
@@ -59,6 +85,39 @@ const ROD_HARD_AT := 0.7
 ## Where the wake starts (behind the outboard, on the waterline) and the bow's waterline.
 const WAKE_AT := Vector2i(19, WATERLINE)
 const SPRAY_AT := Vector2i(87, WATERLINE)
+
+
+## The drivetrain's pixels at crank angle `angle` (radians, clockwise on screen), crew-local,
+## back to front: Vector3i(x, y, DRIVE_COLOURS index).
+static func drivetrain(angle: float) -> Array[Vector3i]:
+	var out: Array[Vector3i] = []
+	for y in WHEEL_RING.size():
+		for x in WHEEL_RING[y].length():
+			if WHEEL_RING[y][x] == "#":
+				out.append(Vector3i(WHEEL_AT.x + x, WHEEL_AT.y + y, 0))
+	var pedal := WHEEL_C + Vector2(cos(angle), sin(angle)) * CRANK_R
+	var d := pedal - HIP
+	var reach := clampf(d.length(), 0.5, THIGH_PX + SHIN_PX - 0.01)
+	var along := (THIGH_PX * THIGH_PX - SHIN_PX * SHIN_PX + reach * reach) / (2.0 * reach)
+	var lift := sqrt(maxf(THIGH_PX * THIGH_PX - along * along, 0.0))
+	var dir := d.normalized() if d.length() > 0.01 else Vector2.RIGHT
+	var side := Vector2(dir.y, -dir.x) * lift
+	var knee := HIP + dir * along + side
+	var other := HIP + dir * along - side
+	if other.y < knee.y:
+		knee = other
+	var hub := Vector2i(WHEEL_C.floor()) - Vector2i.ONE
+	var foot := Vector2i(pedal.floor()) - Vector2i.ONE
+	var hip := Vector2i(HIP.floor())
+	var k := Vector2i(knee.floor())
+	var block: Array[Vector2i] = [Vector2i.ZERO, Vector2i(1, 0), Vector2i(0, 1), Vector2i.ONE]
+	for seg: Array in [[hip, k], [k, foot], [hub, foot]]:
+		for p in raster(seg[0], seg[1]):
+			for q in block:
+				out.append(Vector3i(p.x + q.x, p.y + q.y, 1))
+	for q in block:
+		out.append(Vector3i(hub.x + q.x, hub.y + q.y, 2))
+	return out
 
 
 ## How far boat-local column `x` moves in pose `pose` (POSE_LEVELS).

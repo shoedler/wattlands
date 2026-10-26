@@ -21,7 +21,11 @@ const LEGEND := {
 	"w": FishingPalette.WOOD,
 	"u": FishingPalette.SLATE,
 	"Y": FishingPalette.ACCENT,
+	"n": FishingPalette.MID,
+	"p": FishingPalette.DEEP,
 }
+## The fish grids' fin characters (fins, the pectoral, accent fins): a tired fish folds them.
+const FIN_CHARS := "npY"
 ## Every fish sprite id (fish_<species id>), shallow to legendary.
 const FISH: Array[String] = [
 	"fish_mackerel",
@@ -35,12 +39,16 @@ const FISH: Array[String] = [
 	"fish_grouper",
 	"fish_oarfish",
 ]
-## Swim frames per fish: the tail (the last TAIL of the body) beats a pixel up and down.
-const SWIM_FRAMES := 4
-const SWIM_BEAT: Array[int] = [0, -1, 0, 1]
-const TAIL := 0.22
-## Crank frames per pose in boat_crew (driving frames first, then fishing).
-const CREW_FRAMES := 4
+## A fish sprite's frames (FishingSprites.FISH_* indices): three swim frames (the tail block
+## beats a row up and down, its tip two), the pulls at 15 and 30 degrees (columns moved whole
+## rows toward the mouth, 1 per PULL_RUNS columns, the tail kicked a row; never rotated) and
+## tired (fins folded, the tail sagging, no eye highlight). Every frame has the mouth on the
+## sprite's anchor.
+const FISH_POSES: Array[String] = ["swim1", "swim2", "swim3", "pull15", "pull30", "tired"]
+const SWIM_FRAMES := 3
+const PULL_RUNS: Array[int] = [4, 2]
+## Frames per pose in boat_crew (the drivetrain is drawn by FishingBoatView, so one each).
+const CREW_FRAMES := 1
 ## Crew poses after CREW's two: leaning into a sprint, sat back braking ([last row, dx] bands
 ## from the top; rows past the last band stay).
 const CREW_POSES := 4
@@ -291,11 +299,8 @@ static func build() -> Dictionary:
 	_add(out, "fx_splash", frames_of(SPLASH), Vector2i(5, 6), "splash")
 	_add(out, "fx_sparkle", frames_of(SPARKLE), Vector2i(2, 2), "catch sparkle")
 	for id: String in FISH:
-		var base := img(fish_grid(id))
-		var frames: Array[Image] = []
-		for k in SWIM_FRAMES:
-			frames.append(swim(base, k))
-		_add(out, id, frames, Vector2i(0, mouth_row(base) + 1), "fish facing left, mouth at anchor")
+		var ff := fish_frames(id)
+		_add(out, id, ff["frames"], ff["anchor"], "fish facing left: swim x3, pull 15/30, tired")
 	for id: String in ICONS:
 		_add(out, id, frames_of(ICON_GRIDS[id]), Vector2i(5, 4), "action icon")
 	var town := town_img()
@@ -396,13 +401,12 @@ static func _sheared(level: Image, pose: int) -> Image:
 
 
 ## The crew sheet: driving and fishing (CREW), then driving leaning forward (a sprint) and sat
-## back (braking), each CREW_FRAMES crank frames: the head and torso rows moved whole pixels
-## (CREW_LEAN_FWD, CREW_LEAN_BACK: [last row, dx] from the top).
+## back (braking): the head and torso rows moved whole pixels (CREW_LEAN_FWD, CREW_LEAN_BACK:
+## [last row, dx] from the top).
 static func crew_frames() -> Array[Image]:
 	var out := frames_of(CREW)
 	for lean: Array in [CREW_LEAN_FWD, CREW_LEAN_BACK]:
-		for k in CREW_FRAMES:
-			out.append(_leaned(img(CREW[k]), lean))
+		out.append(_leaned(img(CREW[0]), lean))
 	return out
 
 
@@ -429,30 +433,93 @@ static func frames_of(grids: Array) -> Array[Image]:
 	return out
 
 
-## The first row with a pixel in the leftmost column (the mouth of a left-facing fish).
-static func mouth_row(base: Image) -> int:
-	for y in base.get_height():
-		if base.get_pixel(0, y).a > 0.5:
-			return y
-	return base.get_height() / 2
+## The mouth row of a left-facing fish grid: the middle of its leftmost column's pixels.
+static func mouth_row(rows: Array[String]) -> int:
+	var lo := -1
+	var hi := -1
+	for y in rows.size():
+		if rows[y].length() > 0 and rows[y][0] != ".":
+			lo = y if lo < 0 else lo
+			hi = y
+	return (lo + hi) / 2 if lo >= 0 else rows.size() / 2
 
 
-## Swim frame k of a left-facing fish: the tail block (the last TAIL of the columns) moves by
-## SWIM_BEAT[k] rows as a whole, so the body keeps its flat planes. The frame gains a row top
-## and bottom so nothing is clipped.
-static func swim(base: Image, k: int) -> Image:
-	var w := base.get_width()
-	var h := base.get_height()
-	var out := Image.create_empty(w, h + 2, false, Image.FORMAT_RGBA8)
-	out.fill(Color(0, 0, 0, 0))
-	var tail_x := floori(float(w) * (1.0 - TAIL))
-	for x in w:
-		var dy := SWIM_BEAT[posmod(k, SWIM_BEAT.size())] if x >= tail_x else 0
-		for y in h:
-			var c := base.get_pixel(x, y)
-			if c.a > 0.5:
-				out.set_pixel(x, y + 1 + dy, c)
-	return out
+## Every frame of fish `id` (FISH_POSES) on one canvas size with the mouth on the same pixel:
+## {"frames": Array[Image], "anchor": Vector2i (the mouth)}.
+static func fish_frames(id: String) -> Dictionary:
+	var rows := fish_grid(id)
+	var poses: Array[Dictionary] = []
+	var above := 0
+	var below := 0
+	var w := 1
+	for r in rows:
+		w = maxi(w, r.length())
+	for kind in FISH_POSES:
+		var p := fish_pose(id, kind)
+		poses.append(p)
+		var my := int(p["mouth"])
+		for at: Vector2i in p["px"]:
+			above = maxi(above, my - at.y)
+			below = maxi(below, at.y - my)
+	var frames: Array[Image] = []
+	for p in poses:
+		var f := Image.create_empty(w, above + below + 1, false, Image.FORMAT_RGBA8)
+		f.fill(Color(0, 0, 0, 0))
+		var dy := above - int(p["mouth"])
+		var px: Dictionary = p["px"]
+		for at: Vector2i in px:
+			f.set_pixel(at.x, at.y + dy, LEGEND[px[at]])
+		frames.append(f)
+	return {"frames": frames, "anchor": Vector2i(0, above)}
+
+
+## Fish `id` in pose `kind` (FISH_POSES): {"px": {Vector2i: grid character}, "mouth": row}.
+static func fish_pose(id: String, kind: String) -> Dictionary:
+	var rows := fish_grid(id)
+	var w := 1
+	for r in rows:
+		w = maxi(w, r.length())
+	var shape: Array = FISH_SHAPES.get(id, [w - 4, w - 2])
+	var tail_x := int(shape[0])
+	var tip_x := int(shape[1])
+	var mouth := mouth_row(rows)
+	var src := {}
+	var body_top := rows.size()
+	var body_bottom := -1
+	for y in rows.size():
+		for x in rows[y].length():
+			var ch := rows[y][x]
+			if LEGEND.has(ch):
+				src[Vector2i(x, y)] = ch
+				if not FIN_CHARS.contains(ch) and ch != "x" and ch != "W":
+					body_top = mini(body_top, y)
+					body_bottom = maxi(body_bottom, y)
+	var dys: Array[int] = []
+	dys.resize(w)
+	var fold := false
+	match kind:
+		"swim1", "swim2", "swim3":
+			var b := FISH_POSES.find(kind) - 1
+			for x in w:
+				dys[x] = 0 if x < tail_x else (b if x < tip_x else 2 * b)
+		"pull15", "pull30":
+			var run := PULL_RUNS[0 if kind == "pull15" else 1]
+			for x in w:
+				dys[x] = -((w - 1 - mini(x, tail_x)) / run) + (1 if x >= tail_x else 0)
+		_:
+			fold = true
+			var mid := tail_x / 2
+			for x in w:
+				dys[x] = maxi(0, (mini(x, tail_x) - mid) / 6) + (1 if x >= tail_x else 0)
+	var px := {}
+	for at: Vector2i in src:
+		var ch: String = src[at]
+		if fold and FIN_CHARS.contains(ch) and (at.y < body_top or at.y > body_bottom):
+			continue
+		if fold and ch == "W":
+			ch = "c"
+		px[Vector2i(at.x, at.y + dys[at.x])] = ch
+	return {"px": px, "mouth": mouth + dys[0]}
 
 
 ## The pixels of FishingRig's runs through `points` in `c`.
@@ -479,7 +546,10 @@ static func blit(dst: Image, src: Image, at: Vector2i) -> void:
 static func boat(fishing: bool, k: int = 0) -> Image:
 	var out := img(BOAT_HULL[0])
 	var pose := 1 if fishing else 0
-	blit(out, img(CREW[pose * CREW_FRAMES + posmod(k, CREW_FRAMES)]), Vector2i(FishingRig.CREW_AT))
+	blit(out, img(CREW[pose]), Vector2i(FishingRig.CREW_AT))
+	for p in FishingRig.drivetrain(float(k) * TAU / 4.0):
+		var at := Vector2i(FishingRig.CREW_AT) + Vector2i(p.x, p.y)
+		out.set_pixelv(at, FishingRig.DRIVE_COLOURS[p.z])
 	blit(out, img(WINCH[posmod(k, 2) if fishing else 0]), Vector2i(FishingRig.WINCH_AT))
 	blit(out, img(PROP[0 if fishing else posmod(k, 4)]), Vector2i(FishingRig.PROP_AT))
 	var rod := FishingRig.rod(1.0 if fishing else 0.0, 0.0)
@@ -513,7 +583,10 @@ static func card(kind: int) -> Image:
 	for i in tops.size():
 		out.fill_rect(Rect2i(0, tops[i], CARD.x, CARD.y - tops[i]), FishingPalette.SEA[i])
 	var fish := "fish_marlin" if kind == 0 else ("fish_grouper" if kind == 1 else "fish_tuna")
-	var fimg := swim(img(fish_grid(fish)), 1)
+	var ff := fish_frames(fish)
+	var full: Image = (ff["frames"] as Array)[0]
+	var used := full.get_used_rect()
+	var fimg := full.get_region(used)
 	var fat := Vector2i(96, 58) if kind == 1 else Vector2i(4, 64 if kind == 0 else 66)
 	var band := 0
 	for i in tops.size():
@@ -535,7 +608,9 @@ static func card(kind: int) -> Image:
 	blit(out, fimg, fat)
 	blit(out, b, bat)
 	var tip := FishingRig.rod(1.0, 0.0)[-1] + bat + BOAT_PAD
-	var mouth := fat + Vector2i(fimg.get_width() - 1, mouth_row(img(fish_grid(fish))) + 1)
+	var mouth := (
+		fat + Vector2i(fimg.get_width() - 1, (ff["anchor"] as Vector2i).y - used.position.y)
+	)
 	for p in FishingRig.raster(tip, mouth):
 		out.set_pixelv(p, FishingPalette.LINE if p.y < surf else FishingView.line_under())
 	return out
@@ -598,6 +673,8 @@ const BOAT_HULL: Array = [
 		"................................................................................................",
 	],
 ]
+## The crew without its drivetrain (FishingBoatView draws the flywheel ring, the crank and
+## the leg at the exact crank angle): driving (hand on the tiller) and fishing (clutch aft).
 const CREW: Array = [
 	[
 		"..............................",
@@ -608,76 +685,16 @@ const CREW: Array = [
 		".........uxxx.................",
 		".........uxxxxxxxx............",
 		".........uxxxxxxxx............",
-		"....YY...uxxx.....uuuu........",
-		"....uu...uxxx...uuuuuuuu......",
-		"....uu...uxxx...uu....uu......",
-		"...uu....uxxx..uu......uu.....",
-		"...uu....uxxxxxxxxxxxxxxu.....",
-		"...uu....uxxxxxxxxxxxxxxu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
+		"....YY...uxxx.................",
+		"....uu...uxxx.................",
+		"....uu...uxxx.................",
+		"...uu....uxxx.................",
+		"...uu....uxxx.................",
+		"...uu....uxxx.................",
 		".........uxxx.................",
-		".........uxxxxxxxx............",
-		".........uxxxxxxxx............",
-		"....YY...uxxx.....uuuu........",
-		"....uu...uxxx...uuuuuuuu......",
-		"....uu...uxxx...uu....uu......",
-		"...uu....uxxx..uu......uu.....",
-		"...uu....uxxxxxxxxxxx..uu.....",
-		"...uu....uxxxxxxxxxxx..uu.....",
-		".........uxxx..uu..xx..uu.....",
-		"........wwwwww..uu.xx.uu......",
-		"........uuuuuu..uuuxxuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
-		".........uxxx.................",
-		".........uxxxxxxxx............",
-		".........uxxxxxxxx............",
-		"....YY...uxxx.....uuuu........",
-		"....uu...uxxx...uuuuuuuu......",
-		"....uu...uxxx...uu....uu......",
-		"...uu....uxxx..uu......uu.....",
-		"...uu....uxxxxxxxx.YY..uu.....",
-		"...uu....uxxxxxxxx.YY..uu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
-		".........uxxx.................",
-		".........uxxxxxxxx............",
-		".........uxxxxxxxx............",
-		"....YY...uxxx.....uuuu........",
-		"....uu...uxxx...uuuxxuuu......",
-		"....uu...uxxx...uu.xx.uu......",
-		"...uu....uxxxxxxxxxxx..uu.....",
-		"...uu....uxxxxxxxxxxx..uu.....",
-		"...uu....uxxx..uu..YY..uu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
+		"........wwwwww................",
+		"........uuuuuu................",
+		"........uuuuuu................",
 	],
 	[
 		"..............................",
@@ -688,198 +705,193 @@ const CREW: Array = [
 		".........uxxx.................",
 		".........uxxx.................",
 		"...xxxxxxuxxx.................",
-		".YYxxxxxxuxxx.....uuuu........",
-		".uu......uxxx...uuuuuuuu......",
-		".uu......uxxx...uu....uu......",
-		"..uu.....uxxx..uu......uu.....",
-		"..uu.....uxxxxxxxxxxxxxxu.....",
-		"..uu.....uxxxxxxxxxxxxxxu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
+		".YYxxxxxxuxxx.................",
+		".uu......uxxx.................",
+		".uu......uxxx.................",
+		"..uu.....uxxx.................",
+		"..uu.....uxxx.................",
+		"..uu.....uxxx.................",
 		".........uxxx.................",
-		".........uxxx.................",
-		"...xxxxxxuxxx.................",
-		".YYxxxxxxuxxx.....uuuu........",
-		".uu......uxxx...uuuuuuuu......",
-		".uu......uxxx...uu....uu......",
-		"..uu.....uxxx..uu......uu.....",
-		"..uu.....uxxxxxxxxxxx..uu.....",
-		"..uu.....uxxxxxxxxxxx..uu.....",
-		".........uxxx..uu..xx..uu.....",
-		"........wwwwww..uu.xx.uu......",
-		"........uuuuuu..uuuxxuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
-		".........uxxx.................",
-		".........uxxx.................",
-		"...xxxxxxuxxx.................",
-		".YYxxxxxxuxxx.....uuuu........",
-		".uu......uxxx...uuuuuuuu......",
-		".uu......uxxx...uu....uu......",
-		"..uu.....uxxx..uu......uu.....",
-		"..uu.....uxxxxxxxx.YY..uu.....",
-		"..uu.....uxxxxxxxx.YY..uu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
-	],
-	[
-		"..............................",
-		"..............................",
-		"..........xx..................",
-		"..........xx..................",
-		".........uxww.................",
-		".........uxxx.................",
-		".........uxxx.................",
-		"...xxxxxxuxxx.................",
-		".YYxxxxxxuxxx.....uuuu........",
-		".uu......uxxx...uuuxxuuu......",
-		".uu......uxxx...uu.xx.uu......",
-		"..uu.....uxxxxxxxxxxx..uu.....",
-		"..uu.....uxxxxxxxxxxx..uu.....",
-		"..uu.....uxxx..uu..YY..uu.....",
-		".........uxxx..uu......uu.....",
-		"........wwwwww..uu....uu......",
-		"........uuuuuu..uuuuuuuu......",
-		"........uuuuuu....uuuu........",
+		"........wwwwww................",
+		"........uuuuuu................",
+		"........uuuuuu................",
 	],
 ]
+## The fish (D2): a dark back plane over the flank and a light belly, fins as their own
+## shapes (n fins, p the pectoral), the eye with a foam highlight; facing left, the mouth on
+## column 0. FISH_SHAPES: [the first column of the tail block, the first column of its tip].
 const FISH_MACKEREL: Array[String] = [
-	"...bbbbbbbbb...cc",
-	".bbxbbbbbbbbbb.cc",
-	"cccccccccccccccc.",
-	".ddddddddddddd.cc",
-	"...ddddddddd...cc",
+	"..........nn................",
+	".........nnnn.......nn......",
+	"......dddddddddddddnnnn.....",
+	"...ddddddddddddddddddd....nn",
+	".dddxWddddddddddddddddd..nn.",
+	"ccccccccccccccccccccccccnn..",
+	".bbbbbbpppbbbbbbbbbbbbb.nn..",
+	"...bbbbbppbbbbbbbbbbbb...nn.",
+	"......bbbbbbbbbbbbb.......nn",
+	"............nnn.............",
 ]
 const FISH_SEA_BREAM: Array[String] = [
-	"....bbbbbb....c",
-	"..bbbbbbbbb..cc",
-	".bbxbbbbbbbb.cc",
-	"cccccccccccccc.",
-	"cccccccccccccc.",
-	".dddccccccdd.cc",
-	"..ddddddddd..cc",
-	"....dddddd....c",
+	".......nnnnn.........",
+	".....nnnnnnnnn.......",
+	"....dddddddddd.......",
+	"..dddddddddddddd..nnn",
+	".ddxWddddddddddddnnn.",
+	".ddddddddddddddddnn..",
+	"cccccccccccccccccn...",
+	"cccccccccccccccccnn..",
+	".bbbbbpppbbbbbbbbnnn.",
+	"..bbbbbppbbbbbbb..nnn",
+	"....bbbbbbbbbb.......",
+	"......nnnnnn.........",
+	"........nnn..........",
 ]
 const FISH_SNAPPER: Array[String] = [
-	".....YYYYYY........",
-	"....bbbbbbbb.....cc",
-	"..bbbbbbbbbbbb..ccc",
-	".bbxbbbbbbbbbbb.cc.",
-	"ccccccccccccccccc..",
-	"ccccccccccccccccc..",
-	".dddccccccccddd.cc.",
-	"..dddddddddddd..ccc",
-	"....dddddddd.....cc",
+	"........YYYYY.............",
+	"......nnnnnnnnn...........",
+	".....dddddddddddd.........",
+	"...dddddddddddddddd.......",
+	"..dddddddddddddddddd...nnn",
+	".dddxWddddddddddddddd.nnn.",
+	".ddddddddddddddddddddnnn..",
+	"cccccccccccccccccccccnn...",
+	"cccccccccccccccccccccnn...",
+	".bbbbbbppppbbbbbbbbbbnnn..",
+	"..bbbbbbpppbbbbbbbbb..nnn.",
+	"...bbbbbbbbbbbbbbbb....nnn",
+	".....bbbbbbbbbbbb.........",
+	".......nnn..nnnn..........",
 ]
 const FISH_MAHI: Array[String] = [
-	"...bbbbbbbbbbbbbbbbbbb.....ccc.",
-	".bbbbbbbbbbbbbbbb.........cccc.",
-	".bbbbbbbbbbbbbbbbbb......ccccc.",
-	".bbxbbbbbbbbbbbbbbbbb...ccccc..",
-	".ccbbbbbbbbbbbbbbbbbbbb.cccc...",
-	"cccccccccccccccccccccbbbcc.....",
-	"cccccccccccccccccccccccccc.....",
-	"cccccccccccccccccccccdddccdd...",
-	".ddccccccccccccccdddddd.ccddd..",
-	".dddddddddddddddddddd....cdddd.",
-	".dddddddddddddddddd.......dddd.",
-	"...dddddddddddddd..........ddd.",
+	"...nnnnnnnnnnnnnnnnnn...................",
+	"..nnnnnnnnnnnnnnnnnnnnn.................",
+	".dddddddddddddddddddddddnn..............",
+	".dddddddddddddddddddddddddnn.........nnn",
+	".dddxWddddddddddddddddddddddnn.....nnnn.",
+	".ddddddddddddddddddddddddddddd...nnnnn..",
+	"ccccccccccccccccccccccccccccccccnnnn....",
+	"ccccccccccccccccccccccccccccccccnn......",
+	"bbbbbbbbppppbbbbbbbbbbbbbbbbbbbbnnnn....",
+	".bbbbbbbbpppbbbbbbbbbbbbbbbbbb...nnnnn..",
+	".bbbbbbbbbbbbbbbbbbbbbbbbbbbnn.....nnnn.",
+	".bbbbbbbbbbbbbbbbbbbbbbbbbnn.........nnn",
+	"..bbbbbbbbbbbbbbbbbbbbbbnn..............",
+	"........nnnnnnnnnnnnnn..................",
+	"..........nnnnnnnnnn....................",
 ]
 const FISH_TUNA: Array[String] = [
-	".......bbbbbbbbbbb..........cc.",
-	"....bbbbbbbbbbbbbbbb.......cc..",
-	"..bbbbbbbbbbbbbbbbbbbb....cc...",
-	".bbxbbbcccccccccccbbbbbb.cc....",
-	"ccccccccccccccccccccccccccc....",
-	"ccccccccccccccccccccccccccc....",
-	".dddccccccccccccccccdddd.cc....",
-	"..dddddddddddddddddddd....cc...",
-	"....dddddddddddddddd.......cc..",
-	".......ddddddddddd..........cc.",
+	".............nn.........................",
+	"............nnnnn....................nn.",
+	"..........ddddddddddddd.............nn..",
+	"......dddddddddddddddddddddY.......nn...",
+	"....ddddddddddddddddddddddddddY...nn....",
+	"..ddddxWdddddddddddddddddddddddd.nn.....",
+	".ccccccccccccccccccccccccccccccccnn.....",
+	"cccccccccccccccccccccccccccccccccc......",
+	".bbbbbbbbpppppbbbbbbbbbbbbbbbbbbbnn.....",
+	"..bbbbbbbbbpppbbbbbbbbbbbbbbbbbb.nn.....",
+	"....bbbbbbbbbbbbbbbbbbbbbbbbbbY...nn....",
+	"......bbbbbbbbbbbbbbbbbbbbbY.......nn...",
+	"..........bbbbbbbbbbbbb.............nn..",
+	"..............nnnnn..................nn.",
+	"................nn......................",
 ]
 const FISH_WAHOO: Array[String] = [
-	"...bbbbbbbbbbbbbbbbbbbbbbbbbbb....cc.",
-	".bbxbbbbbbbbbbbbbbbbbbbbbbbbbbbb.cc..",
-	"cccccccccccccccccccccccccccccccccc...",
-	"cccccccccccccccccccccccccccccccccc...",
-	".ddddddddddddddddddddddddddddddd.cc..",
-	"...ddddddddddddddddddddddddddd....cc.",
+	"................................................",
+	"............nnnnnnnnnnnnnnnnnnn..............nnn",
+	"......ddddddddddddddddddddddddddddd.........nnn.",
+	"...ddddddddddddddddddddddddddddddddddd.....nnn..",
+	".dddxWdddddddddddddddddddddddddddddddddd..nnn...",
+	"cccccccccccccccccccccccccccccccccccccccccnnn....",
+	".bbbbbbbppppbbbbbbbbbbbbbbbbbbbbbbbbbbbb..nnn...",
+	"...bbbbbbpppbbbbbbbbbbbbbbbbbbbbbbbbbb.....nnn..",
+	"......bbbbbbbbbbbbbbbbbbbbbbbbbbbbb.........nnn.",
+	"....................nnnnnnn..................nnn",
 ]
 const FISH_SWORDFISH: Array[String] = [
-	"..................bbbb...................cc...",
-	".................bbbbbbbbbbbb...........cc....",
-	".............bbbbbbbbbbbbbbbbbbbb......cc.....",
-	"...........bbbbbbbbbbbbbbbbbbbbbbbbb..cc......",
-	"..........bbxccccccccccccccccccccccccccc......",
-	"cccccccccccccccccccccccccccccccccccccccc......",
-	"..........dddccccccccccccccccddddddd..cc......",
-	"...........dddddddddddddddddddddd......cc.....",
-	".............dddddddddddddddd...........cc....",
-	".........................................cc...",
+	"......................nnnn..............................nnn.",
+	".....................nnnnnnn...........................nnn..",
+	"....................nnnnnnnnnn........................nnn...",
+	".................dddddddddddddddddddddddd............nnn....",
+	"..............ddddddddddddddddddddddddddddddd......nnnn.....",
+	".............ddddxWdddddddddddddddddddddddddddd..nnnn.......",
+	"dddddddddddddcccccccccccccccccccccccccccccccccccnnn.........",
+	".............bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..nnnn.......",
+	"..............bbbbbbppppbbbbbbbbbbbbbbbbbbbbb......nnnn.....",
+	".................bbbbbpppbbbbbbbbbbbbbbbb............nnn....",
+	"..............................nnnn....................nnn...",
+	".......................................................nnn..",
+	"........................................................nnn.",
 ]
 const FISH_MARLIN: Array[String] = [
-	"..................bbbbb...........................cc..",
-	".................bbbbbbbb........................cc...",
-	"................bbbbbbbbbbbb....................ccc...",
-	"...............bbbbbbbbbbbbbbbb.................cc....",
-	"..............bbbbbbbbbbbbbbbbbbbb.............cc.....",
-	".............bbbbbbbbbbbbbbbbbbbbbb...........cc......",
-	"...........bbbbbbbbbbbbbbbbbbbbbbbbbbbb.......cc......",
-	"..........bbxccccccccccccccccccccccccccbbbbccccc......",
-	"cccccccccccccccccccccccccccccccccccccccccccccccc......",
-	"..........ddddddddddddddddddddddddddddddddd...cc......",
-	"...........dddddddddddddddddddddddd...........ccc.....",
-	"...............................................ccc....",
-	"................................................ccc...",
+	"......................nnnnn...........................................",
+	".....................nnnnnnnnnn.......................................",
+	"....................nnnnnnnnnnnnnnn...............................nnn.",
+	"...................nnnnnnnnnnnnnnnnnnnn..........................nnn..",
+	"..................nnnnnnnnnnnnnnnnnnnnnnn......................nnnn...",
+	"..................ddddddddddddddddddddddddddd................nnnn.....",
+	"................ddddddddddddddddddddddddddddddddd..........nnnn.......",
+	"...............dddddddddddddddddddddddddddddddddddd......nnnn.........",
+	"..............ddddxWddddddddddddddddddddddddddddddddd..nnnn...........",
+	"ddddddddddddddccccccccccccccccccccccccccccccccccccccccnnn.............",
+	"..............bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..nnnn...........",
+	"...............bbbbbbbpppppbbbbbbbbbbbbbbbbbbbbbbbb......nnnn.........",
+	".................bbbbbbbppppbbbbbbbbbbbbbbbbbbb............nnnn.......",
+	"....................bbbbbbbbbbbbbbbbbbbbb....................nnnn.....",
+	"....................................nnnnn......................nnnn...",
+	".....................................nnn.........................nnn..",
+	"..................................................................nnn.",
 ]
 const FISH_GROUPER: Array[String] = [
-	"..............hhhhhhhhhhhh....................",
-	"..........hhhhhhhhhhhhhhhhhhhh................",
-	".........hhhhhhhhhhhhhhhhhhh..............bb..",
-	"......hhhhhhhhhhhhhhhhhhhhhhhhhh.........bbb..",
-	"....hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh.....bbbb..",
-	"..hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh....bbbbb..",
-	".hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh..bbbbb..",
-	"hhhhhhhxhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhbbbbb..",
-	"hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhbbbbb..",
-	"hhhhhhbbbbbbbbbbbbbbbbbbbbbbbbbbbbbhhhhbbbbb..",
-	"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
-	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
-	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbccccbbbbb..",
-	"bbccbbbbbbbbbbbbbbbbbbbbbbbbbbbbcccccccbbbbb..",
-	"ccccccccccccccccccccccccccccccccccccc..bbbbb..",
-	"ccccccccccccccccccccccccccccccccccc.....bbbb..",
-	".cccccccccccccccccccccccccccccccccc......bbb..",
-	"....cccccccccccccccccccccccccccc..........bb..",
-	"......cccccccccccccccccccccc..................",
-	"..............................................",
+	".................nnnnnnnnnnnnnnnnn........................",
+	"..............nnnnnnnnnnnnnnnnnnnnnnn.....................",
+	"..........ddddddddddddddddddddddddddddd...................",
+	".......dddddddddddddddddddddddddddddddddd.................",
+	".....dddddddddddddddddddddddddddddddddddddd...............",
+	"...dddddddddddddddddddddddddddddddddddddddddd......nnnnn..",
+	"..dddddddddddddddddddddddddddddddddddddddddddd....nnnnnnn.",
+	".dddddddddddddddddddddddddddddddddddddddddddddd..nnnnnnnnn",
+	".ccccccxWcccccccccccccccccccccccccccccccccccccccnnnnnnnnnn",
+	".ccccccxxcccccccccccccccccccccccccccccccccccccccnnnnnnnnnn",
+	".cccccccccccccccccccccccccccccccccccccccccccccccnnnnnnnnnn",
+	"dddddcccccccccccccccccccccccccccccccccccccccccccnnnnnnnnnn",
+	"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbnnnnnnnnnn",
+	"bbbbbbbbbbbbpppppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbnnnnnnnnnn",
+	".bbbbbbbbbbbbppppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbnnnnnnnnnn",
+	".bbbbbbbbbbbbbpppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..nnnnnnnnn",
+	"..bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb....nnnnnnn.",
+	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb......nnnnn..",
+	".....bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...............",
+	".......bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.................",
+	"..........bbbbbbbbbbbbbbbbbbbbbbbbbbbb....................",
+	"............nnnn........nnnnnnnnnnn.......................",
+	".............nnn..........nnnnnnn.........................",
+	"..............nn..........................................",
+	"..........................................................",
 ]
 const FISH_OARFISH: Array[String] = [
-	"..YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY..",
-	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb...",
-	".bbxbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbc",
-	"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-	"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-	".ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddc",
-	"...dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd...",
+	"...YYYY.............................................................................",
+	"....YYYYYYYYYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.....",
+	"...ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd....",
+	".ddxWddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd..",
+	"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+	".bbbbbpppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
+	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb....",
+	".......nnn..........................................................................",
 ]
+const FISH_SHAPES := {
+	"fish_mackerel": [23, 25],
+	"fish_sea_bream": [17, 19],
+	"fish_snapper": [21, 23],
+	"fish_mahi": [32, 35],
+	"fish_tuna": [33, 35],
+	"fish_wahoo": [41, 44],
+	"fish_swordfish": [48, 53],
+	"fish_marlin": [54, 61],
+	"fish_grouper": [48, 52],
+	"fish_oarfish": [74, 80],
+}
 ## The town is stored in two halves (line length); hjoin() puts them side by side.
 const SCENERY_TOWN_L: Array[String] = [
 	"....................................................................................",
