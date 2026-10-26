@@ -913,7 +913,7 @@ func controls_fields() -> Array:
 			"run": ask_reset_controls
 		}
 	]
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		var label := "%s: %s" % [t("APP_ACTION_" + String(a).to_upper()), compact_binding_text(a)]
 		fields.append(
 			{
@@ -1015,7 +1015,7 @@ func compact_binding_text(action: StringName) -> String:
 ## Every action with all its bindings, one line each (the Controls page's content column).
 func all_bindings_text() -> String:
 	var lines: PackedStringArray = []
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		var labels := binding_labels(a)
 		lines.append(
 			(
@@ -1119,6 +1119,10 @@ func _refresh_status(section: String) -> void:
 		return
 	if controls_help_label != null:
 		controls_help_label.visible = section == "controls"
+	# One line per action: the Controls list uses the small size so every row fits at 1080p.
+	status_label.add_theme_font_size_override(
+		"font_size", AppStyle.FONT_SMALL if section == "controls" else AppStyle.FONT_BODY
+	)
 	match section:
 		"strava":
 			status_label.text = t("APP_SET_STRAVA_HELP")

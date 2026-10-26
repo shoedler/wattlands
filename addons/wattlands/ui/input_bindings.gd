@@ -9,16 +9,39 @@ extends RefCounted
 ##   [bindings] <action> = [{"type": "key", "physical_keycode": 4194309}, ...]
 ## Event dictionaries: {"type": "key", "physical_keycode": int, "keycode": int},
 ## {"type": "joy_button", "button": int}, {"type": "joy_motion", "axis": int, "value": float},
-## {"type": "mouse_button", "button": int}. Only actions in Wl.ACTIONS are saved and loaded.
+## {"type": "mouse_button", "button": int}. Only actions in actions() are saved and loaded.
 ## Keys bind by physical_keycode (layout independent, like the defaults); keycode is used only
 ## for an event without a physical code.
+## Besides Wl.ACTIONS there are the platform's own actions (PLATFORM_EXTRA_ACTIONS: `help`, the
+## help overlay, F1 and the left stick click). Their defaults live here (EXTRA_DEFAULTS) for as
+## long as project.godot's input map doesn't name them; they rebind and save like the others.
 
 const VERSION := 1
 const SECTION_META := "input"
 const SECTION_BINDINGS := "bindings"
+## Platform actions that aren't in Wl.ACTIONS (v0.3.0): `help` toggles the help overlay.
+const PLATFORM_EXTRA_ACTIONS: Array[StringName] = [&"help"]
+## Defaults of PLATFORM_EXTRA_ACTIONS when project.godot has none: action -> [event dicts].
+const EXTRA_DEFAULTS := {
+	&"help":
+	[
+		{"type": "key", "physical_keycode": KEY_F1, "keycode": 0},
+		{"type": "joy_button", "button": JOY_BUTTON_LEFT_STICK},
+	],
+}
 
 
-## The project.godot default events of `action` (fresh copies).
+## Every rebindable action: Wl.ACTIONS, then the platform's extra actions.
+static func actions() -> Array[StringName]:
+	var out: Array[StringName] = Wl.ACTIONS.duplicate()
+	for a in PLATFORM_EXTRA_ACTIONS:
+		if not out.has(a):
+			out.append(a)
+	return out
+
+
+## The project.godot default events of `action` (fresh copies); for a platform extra action
+## without project.godot events, its EXTRA_DEFAULTS.
 static func default_events(action: StringName) -> Array[InputEvent]:
 	var out: Array[InputEvent] = []
 	var setting: Variant = ProjectSettings.get_setting("input/" + String(action), null)
@@ -28,6 +51,9 @@ static func default_events(action: StringName) -> Array[InputEvent]:
 			for e: Variant in events:
 				if e is InputEvent:
 					out.append((e as InputEvent).duplicate() as InputEvent)
+	if out.is_empty() and EXTRA_DEFAULTS.has(action):
+		for d: Dictionary in EXTRA_DEFAULTS[action]:
+			out.append(dict_to_event(d))
 	return out
 
 
@@ -39,18 +65,18 @@ static func default_deadzone(action: StringName) -> float:
 	return 0.5
 
 
-## Make sure every Wl.ACTIONS action exists in InputMap (headless tools, tests).
+## Make sure every action (actions()) exists in InputMap (headless tools, tests).
 static func ensure_actions() -> void:
-	for action: StringName in Wl.ACTIONS:
+	for action: StringName in actions():
 		if not InputMap.has_action(action):
 			InputMap.add_action(action, default_deadzone(action))
 			for e in default_events(action):
 				InputMap.action_add_event(action, e)
 
 
-## Reset every Wl.ACTIONS action to its project.godot events.
+## Reset every action (actions()) to its default events.
 static func reset_to_defaults() -> void:
-	for action: StringName in Wl.ACTIONS:
+	for action: StringName in actions():
 		if InputMap.has_action(action):
 			InputMap.action_erase_events(action)
 		else:
@@ -102,7 +128,7 @@ static func same_input(a: InputEvent, b: InputEvent) -> bool:
 ## joypad) and is removed from every other action, so one input never does two things.
 ## Returns false (push_error) for an unknown action or an unsupported event.
 static func rebind(action: StringName, event: InputEvent) -> bool:
-	if not Wl.ACTIONS.has(action) or not InputMap.has_action(action):
+	if not actions().has(action) or not InputMap.has_action(action):
 		push_error("InputBindings: unknown action %s" % action)
 		return false
 	var d := event_to_dict(event)
@@ -111,7 +137,7 @@ static func rebind(action: StringName, event: InputEvent) -> bool:
 		return false
 	var clean := dict_to_event(d)
 	var fam := family(clean)
-	for other: StringName in Wl.ACTIONS:
+	for other: StringName in actions():
 		if not InputMap.has_action(other):
 			continue
 		for e: InputEvent in InputMap.action_get_events(other):
@@ -123,7 +149,7 @@ static func rebind(action: StringName, event: InputEvent) -> bool:
 
 ## Add `event` to `action` without removing anything (a second key for the same action).
 static func add_binding(action: StringName, event: InputEvent) -> bool:
-	if not Wl.ACTIONS.has(action) or not InputMap.has_action(action):
+	if not actions().has(action) or not InputMap.has_action(action):
 		push_error("InputBindings: unknown action %s" % action)
 		return false
 	var d := event_to_dict(event)
@@ -138,11 +164,11 @@ static func add_binding(action: StringName, event: InputEvent) -> bool:
 	return true
 
 
-## Save the current bindings of every Wl.ACTIONS action to `path`.
+## Save the current bindings of every action (actions()) to `path`.
 static func save(path: String) -> bool:
 	var cfg := ConfigFile.new()
 	cfg.set_value(SECTION_META, "version", VERSION)
-	for action: StringName in Wl.ACTIONS:
+	for action: StringName in actions():
 		var arr: Array = []
 		for e in events_of(action):
 			var d := event_to_dict(e)
@@ -178,7 +204,7 @@ static func load_from(path: String) -> bool:
 		return true
 	for key: String in cfg.get_section_keys(SECTION_BINDINGS):
 		var action := StringName(key)
-		if not Wl.ACTIONS.has(action):
+		if not actions().has(action):
 			push_warning("InputBindings: ignoring unknown action %s in %s" % [key, path])
 			continue
 		var arr: Variant = cfg.get_value(SECTION_BINDINGS, key, [])

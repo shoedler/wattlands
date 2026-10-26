@@ -30,7 +30,8 @@ static func create(p_services: AppServices) -> AppSessionLauncher:
 ## The config for GameHost.setup(), or {} with `error` set. params: game_id, content_id, seed,
 ## session_start (CLIENT), sim_speed, record_rides, realtime (default true: the GameHost
 ## advances its SimClock from _process, also in headless app runs such as scripted peers;
-## tests pass false and step it themselves).
+## tests pass false and step it themselves), auto_help (default true: a rendering GameHost
+## opens the game's help overlay the first time this profile plays it).
 func build_config(
 	role: String, params: Dictionary, view_parent: Node, hud_parent: Node, headless: bool
 ) -> Dictionary:
@@ -175,6 +176,7 @@ func build_config(
 		"hud_parent": hud_parent,
 		"record_rides": bool(params.get("record_rides", true)),
 		"report": false,
+		"auto_help": bool(params.get("auto_help", true)),
 	}
 	if services.sfx != null:
 		# The GameHost runs the metronome on rendering peers (band centre, else the preferred

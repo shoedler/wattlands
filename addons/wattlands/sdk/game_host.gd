@@ -148,6 +148,9 @@ var _headless: bool = true
 var _realtime: bool = false
 var _platform_pause: bool = true
 var _record_rides: bool = true
+## config.auto_help: open the game's help overlay once per profile (HelpSeen) when the HUD is
+## built (v0.3.0; the app passes true).
+var _auto_help: bool = false
 var _local_peer: int = 0
 var _input_router: Node = null
 var _injected_actions: Array[StringName] = []
@@ -243,7 +246,9 @@ func _process(delta: float) -> void:
 ##   at >= 30 rpm) unless the rider paused it), session_nonce (String appended to results.session_id as
 ##   "<game>/<content>/<seed>/<nonce>"; default a fresh UTC-millisecond nonce, so every
 ##   session's id is unique; "" keeps "<game>/<content>/<seed>", which GameSimRunner passes
-##   for deterministic reports). A CLIENT's game, players, options and seed come from the host's session_start:
+##   for deterministic reports), auto_help (bool, default false; v0.3.0: when the HUD is
+##   built, open the game's HudSpec.help once per profile and game, remembered in HelpSeen;
+##   the app passes true). A CLIENT's game, players, options and seed come from the host's session_start:
 ##   config.session_start (the message that opened the session, which the app shell received
 ##   before this GameHost existed) is applied on the first step(), else the first
 ##   session_start from the net.
@@ -261,6 +266,7 @@ func setup(p_config: Dictionary) -> String:
 	_realtime = bool(config.get("realtime", true))
 	_platform_pause = bool(config.get("platform_pause", true))
 	_record_rides = bool(config.get("record_rides", true))
+	_auto_help = bool(config.get("auto_help", false))
 	bus = config.get("bus") as WlEventBus
 	if bus == null:
 		bus = _autoload("EventBus") as WlEventBus
@@ -850,6 +856,19 @@ func _build_presentation() -> void:
 		hp = self
 	hp.add_child(_hud_layer)
 	_hud_layer.build(game.hud_spec(), ctx, _pixel_viewport)
+	_auto_show_help()
+
+
+## The first session of a game on this profile opens its help (config.auto_help, HelpSeen);
+## a game without help entries is not remembered, so help it adds later still opens once.
+func _auto_show_help() -> void:
+	if not _auto_help or _hud_layer == null or not _hud_layer.has_help():
+		return
+	var gid := ctx.game_id if ctx != null else ""
+	if gid.is_empty() or HelpSeen.has(gid):
+		return
+	HelpSeen.mark(gid)
+	_hud_layer.show_help()
 
 
 # --- authority step ----------------------------------------------------------------------
@@ -2373,6 +2392,22 @@ func _take_actions() -> Array[StringName]:
 			out.append(action)
 	out.append_array(_injected_actions)
 	_injected_actions.clear()
+	return _help_actions(out)
+
+
+## The help overlay's actions (v0.3.0): `help` toggles it (never reaches the game); while it is
+## open, `back` and `confirm` close it and are consumed. Every other action passes, so the game
+## keeps running under the overlay. Without a HUD (headless) `help` is dropped.
+func _help_actions(actions: Array[StringName]) -> Array[StringName]:
+	var out: Array[StringName] = []
+	for a in actions:
+		if a == &"help":
+			if _hud_layer != null:
+				_hud_layer.toggle_help()
+		elif (a == &"back" or a == &"confirm") and _hud_layer != null and _hud_layer.help_visible():
+			_hud_layer.hide_help()
+		else:
+			out.append(a)
 	return out
 
 

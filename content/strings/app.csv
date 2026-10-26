@@ -207,6 +207,7 @@ APP_ACTION_SHIFT_UP,Shift up
 APP_ACTION_SHIFT_DOWN,Shift down
 APP_ACTION_PAUSE,Pause
 APP_ACTION_PANIC,Panic
+APP_ACTION_HELP,Help
 APP_RIDES_TITLE,Rides
 APP_RIDES_NONE,No rides saved yet.
 APP_RIDES_HINT,Pick a ride to upload it to Strava again.

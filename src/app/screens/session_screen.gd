@@ -569,9 +569,19 @@ func _handle_action(action: StringName) -> bool:
 		open_menu()
 		return true
 	if action == &"back":
+		if _help_open():
+			# The GameHost takes this `back` from its queue and closes the help overlay.
+			return true
 		open_menu()
 		return true
 	return true
+
+
+## The session HUD's help overlay is open (HudLayer.help_visible()).
+func _help_open() -> bool:
+	if host == null or not is_instance_valid(host) or host.hud_layer() == null:
+		return false
+	return host.hud_layer().help_visible()
 
 
 ## A pause on not pedaling ends in the GameHost (1 s of pedaling at >= 30 rpm, BRIEF 3.5).

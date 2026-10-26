@@ -23,6 +23,14 @@ func art_rect_to_screen(r: Rect2i) -> Rect2:
 	return Rect2(fake_offset + Vector2(r.position) * fake_scale, Vector2(r.size) * fake_scale)
 
 
+func art_to_screen(p: Vector2) -> Vector2:
+	return fake_offset + p * fake_scale
+
+
+func screen_to_art(p: Vector2) -> Vector2:
+	return (p - fake_offset) / float(fake_scale)
+
+
 ## Change scale and letterbox as a window resize would, and emit `resized`.
 func set_fake(p_scale: int, p_offset: Vector2) -> void:
 	fake_scale = p_scale

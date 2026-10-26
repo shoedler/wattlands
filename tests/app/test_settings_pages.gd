@@ -336,7 +336,7 @@ func test_controls_content_column_follows_a_rebind() -> void:
 	var ls := InputEventJoypadButton.new()
 	ls.button_index = JOY_BUTTON_LEFT_STICK
 	ls.pressed = true
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		for e: InputEvent in InputMap.action_get_events(a) if InputMap.has_action(a) else []:
 			if e.is_match(ls):
 				holder = a
@@ -376,7 +376,7 @@ func test_controls_page_rows_fit_the_menu_column() -> void:
 	)
 	# Every binding is still on the page: the content column lists them all.
 	var all := s.all_bindings_text()
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		for label in s.binding_labels(a):
 			assert_true(all.contains(label), "%s's binding %s is listed" % [a, label])
 	assert_eq(s.status_label.text, all)
@@ -470,7 +470,7 @@ func test_every_controls_row_is_on_a_1080p_screen_when_highlighted() -> void:
 	await wait_process_frames(2)
 	var m := menu(s)
 	var back := m.index_of_id("back")
-	assert_eq(back, Wl.ACTIONS.size() + 1, "Reset, a row per action, then Back")
+	assert_eq(back, InputBindings.actions().size() + 1, "Reset, a row per action, then Back")
 	var holder := m.get_parent() as Control
 	assert_gt(
 		holder.size.y,
@@ -695,7 +695,7 @@ static func _bound(action: StringName, event: InputEvent) -> bool:
 ## Every action's bindings now, as plain data.
 static func _all_bindings() -> Dictionary:
 	var out := {}
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		var list: Array = []
 		for e: InputEvent in InputBindings.events_of(a):
 			list.append(InputBindings.event_to_dict(e))
@@ -706,7 +706,7 @@ static func _all_bindings() -> Dictionary:
 ## Every action's project.godot defaults, as plain data.
 static func _default_bindings() -> Dictionary:
 	var out := {}
-	for a: StringName in Wl.ACTIONS:
+	for a: StringName in InputBindings.actions():
 		var list: Array = []
 		for e: InputEvent in InputBindings.default_events(a):
 			list.append(InputBindings.event_to_dict(e))
@@ -720,9 +720,11 @@ func test_controls_page_has_a_reset_row_and_says_how_to_cancel() -> void:
 	assert_false(s.controls_help_label.visible, "the help shows only on the Controls page")
 	confirm_pick(s, "controls")
 	var ids := menu(s).ids()
-	assert_eq(ids.size(), Wl.ACTIONS.size() + 2, "Reset to defaults, a row per action, Back")
+	assert_eq(
+		ids.size(), InputBindings.actions().size() + 2, "Reset to defaults, a row per action, Back"
+	)
 	assert_eq(ids[0], "reset_controls", "Reset to defaults comes first")
-	assert_eq(ids[1], "bind:" + String(Wl.ACTIONS[0]), "then the action rows")
+	assert_eq(ids[1], "bind:" + String(InputBindings.actions()[0]), "then the action rows")
 	assert_eq(ids[ids.size() - 1], "back")
 	assert_eq(menu(s).text_of("reset_controls"), AppScreen.t("APP_SET_CONTROLS_RESET"))
 	assert_false(menu(s).is_disabled_id("reset_controls"))
