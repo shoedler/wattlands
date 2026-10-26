@@ -820,7 +820,23 @@ func audio_fields() -> Array:
 			"get": func() -> Variant: return p().metronome,
 			"set": func(v: Variant) -> void: _set_profile("metronome", bool(v))
 		},
+		{
+			"id": "fullscreen",
+			"label": t("APP_SET_FULLSCREEN"),
+			"type": "toggle",
+			"get": fullscreen_on,
+			"set": set_fullscreen
+		},
 	]
+
+
+func fullscreen_on() -> bool:
+	return WlWindowMode.stored(services.settings)
+
+
+## The Settings key `fullscreen`, applied to the window at once (WlWindowMode).
+func set_fullscreen(v: Variant) -> void:
+	WlWindowMode.set_fullscreen(services.settings, bool(v))
 
 
 func current_volume_db() -> float:
@@ -1039,7 +1055,7 @@ func start_capture(action: StringName) -> void:
 
 
 func capture_event(event: InputEvent) -> bool:
-	if capturing == &"":
+	if capturing == &"" or WlWindowMode.is_toggle_event(event):
 		return false
 	if event is InputEventKey:
 		var k := event as InputEventKey

@@ -44,6 +44,13 @@ func _ready() -> void:
 		show_state(st, services.app.params)
 
 
+## F11 or Alt+Enter toggles fullscreen on every screen (WlWindowMode; saved in Settings).
+func _input(event: InputEvent) -> void:
+	if WlWindowMode.is_toggle_event(event) and services != null:
+		WlWindowMode.toggle(services.settings)
+		get_viewport().set_input_as_handled()
+
+
 func _exit_tree() -> void:
 	if services == null:
 		return
@@ -53,12 +60,13 @@ func _exit_tree() -> void:
 		services.navigated.disconnect(_on_app_state)
 
 
-## Launch-time work (BRIEF 3.5, 3.8): profile and settings (and the saved master volume), the
-## trainer backend (auto-connect to the last trainer), queued uploads.
+## Launch-time work (BRIEF 3.5, 3.8): profile and settings (and the saved master volume and
+## fullscreen), the trainer backend (auto-connect to the last trainer), queued uploads.
 func boot() -> void:
 	if services.settings != null:
 		services.settings.load_all()
 		AppSettingsScreen.apply_volume(float(services.settings.get_value("master_volume_db", 0.0)))
+		WlWindowMode.apply(WlWindowMode.stored(services.settings))
 	if (
 		services.trainer != null
 		and services.trainer.device() == null

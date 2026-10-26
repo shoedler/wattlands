@@ -631,3 +631,19 @@ func test_capture_unknown_and_cancel() -> void:
 	_router.cancel_capture()
 	_tap(KEY_F)
 	assert_eq(_router.take_actions(), [&"item"])
+
+
+## F11 and Alt+Enter toggle fullscreen (WlWindowMode, the app shell): no action fires for them,
+## though plain Enter is `confirm`, and no default binding uses F11.
+func test_fullscreen_keys_are_never_actions() -> void:
+	var f11 := _key(KEY_F11, true)
+	for a: StringName in Wl.ACTIONS:
+		assert_false(InputMap.has_action(a) and f11.is_action(a), "F11 is not bound to %s" % a)
+	_router.handle_event(f11)
+	var alt_enter := _key(KEY_ENTER, true)
+	alt_enter.alt_pressed = true
+	_router.handle_event(alt_enter)
+	assert_eq(_router.take_actions(), [], "neither is an action")
+	_router.handle_event(_key(KEY_ENTER, false))
+	_router.handle_event(_key(KEY_ENTER, true))
+	assert_eq(_router.take_actions(), [&"confirm"], "plain Enter still confirms")

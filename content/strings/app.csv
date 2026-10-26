@@ -162,7 +162,7 @@ APP_SET_TRAINER,Trainer
 APP_SET_STRAVA,Strava
 APP_SET_HAPTICS,Haptics
 APP_SET_CONTROLS,Controls
-APP_SET_AUDIO,Audio
+APP_SET_AUDIO,Audio and display
 APP_SET_NETWORK,Network
 APP_SET_PEDAL_NAV,Pedal navigation
 APP_SET_FTP_TEST,FTP test
@@ -189,6 +189,7 @@ APP_SET_HAPTICS_ON,Haptic effects
 APP_SET_HAPTICS_INTENSITY,Intensity
 APP_SET_VOLUME,Volume
 APP_SET_METRONOME,Cadence metronome
+APP_SET_FULLSCREEN,Fullscreen (F11 or Alt+Enter)
 APP_SET_RELAY,Relay
 APP_SET_PEDAL_NAV_ON,Pedal navigation
 APP_SET_SCAN_INTERVAL,Scan interval
