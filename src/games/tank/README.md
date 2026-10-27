@@ -26,7 +26,7 @@ Numbers are the current content (`content/tank/*.json`) after the v2 rules pass 
 
 **Objectives**: an Advance is done when the tank has driven the segment's `length_m` to the halt line; a gun line when every gun is down (the dozer then shoves the tank traps aside); the boss when the Behemoth dies (`victory`). If the boss reaches `max_s` the Behemoth withdraws (`withdrawn`). The ride itself never fails.
 
-**Drive**: the SIM speed model (BRIEF 3.11) with mass = rider mass + 8 kg and CdA 0.5 m2, on the terrain grade under the tank; the world scrolls at 0.4 x game speed, 20 art px per visual metre. While the driver is in band, enemy hit chances are x 0.5 (evasive). A barricade (wire, a wreck) stops the tank 180 px short of it, where the main gun and the bow guns reach; a heavy shell, three light shells or 4 s of bow-gun fire clears it.
+**Drive**: the SIM speed model (BRIEF 3.11) with mass = rider mass + 8 kg and CdA 0.5 m2, on the terrain grade under the tank; the world scrolls at 0.4 x game speed, 20 art px per visual metre. While the driver is in band, enemy hit chances are x 0.45 (evasive). A barricade (wire, a wreck) stops the tank 180 px short of it, where the main gun and the bow guns reach; a heavy shell, three light shells or 4 s of bow-gun fire clears it.
 
 **Gun**: the main turret faces right or left; a traverse flips it. Elevation -12 to +30 degrees, shells fly 360 px/s under 300 px/s2 gravity and inherit the hull's speed; the solver reaches a light tank at its hold distance from every tank (tested). Auto-aim priority: tank destroyer in telegraph, dug-in, heavy, medium, light, obstacle, nearer first (lower arc, with lead); it fires within 0.5 degrees once a shell is loaded. Damage: light 20, heavy 50, Overpressure 100; splash 16 px at 50 %. Mediums take 50 % from light shells and bow-gun bursts; heavies, destroyers and the Behemoth take 25 % from them.
 
@@ -34,20 +34,20 @@ Numbers are the current content (`content/tank/*.json`) after the v2 rules pass 
 
 **Lanes**: every enemy holds its position in one of four depth lanes, and no two held positions on one side and lane overlap (the view draws the lanes).
 
-**Enemies** (HP and counts x 0.75 Bulwark, 0.8 Rampart, 1.0 Citadel, counts rounded, at least 1):
+**Enemies** (HP and counts x 0.75 Bulwark, 0.8 Rampart, 1.0 Citadel, 1.2 Bastion, counts rounded, at least 1; held distances are clamped so the enemy stays on screen, which with the long v2 hulls is often nearer than the range below):
 
 | Enemy | HP | Behaviour | Gun (damage / every / hit) |
 | --- | --- | --- | --- |
-| Light tank | 30 | rushes to 120-140 px, weaves, rammable, breaks off after 45 s | 2.5 / 4 s / 50 % |
+| Light tank | 30 | rushes to 120-140 px, weaves, breaks off after 45 s; its first shot at its hold is a telegraphed flank shot (2.5 s) | 2.5 / 4 s / 50 %; flank shot 8 / 70 % |
 | Medium tank | 64 | holds 260-340 px | 4 / 6 s / 60 % |
 | Tank destroyer | 50 | stops at the screen edge, 4 s glint telegraph, shifts 40 px after each shot | 9 / 9 s / 75 % |
 | Dug-in tank | 50 | gun line; only the turret above the concrete is hit | 5 / 7 s / 60 % |
-| Heavy tank | 100 | gun-line duel at 300-380 px, 3 s telegraph, backs off 30 px per 50 damage | 7 / 7 s / 60 % |
-| Behemoth (boss) | 3 bogies x 50, turret 270 | creeps to 150 px, each broken bogie pushes it back 24 px, phase 2 immobile; main gun every 35-45 s (25-35 s in phase 2) after a 6 s telegraph | main 13 / 75 %, secondary 2 every 5 s / 50 % |
+| Heavy tank | 130 | gun-line duel at 300-380 px, 3 s telegraph, backs off 30 px per 50 damage | 7 / 7 s / 60 % |
+| Behemoth (boss) | 3 bogies x 50, turret 205 | creeps to 120 px, each broken bogie pushes it back 24 px, phase 2 immobile; main gun every 35-45 s (25-35 s in phase 2) after a 6 s telegraph | main 13 / 75 %, secondary 2 every 5 s / 50 % |
 
 Telegraphed shots (destroyer, heavy, the light's first shot at its hold, the Behemoth's main gun) can be evaded (How to play). Caps: 16 enemies, 24 shells. Enemy hits roll with `ctx.rng` at fire time; the shell lands on the tank or 20-40 px off. Encounters come only from the mission's fixed lists.
 
-**Hull**: 140 HP, +30 at each checkpoint (the maximum rises by 30 and it heals 30). At 0 HP: breakdown (no movement or fire, damage ignored) until the driving station's P_eff has paid 5 kJ, then 40 HP.
+**Hull**: 150 HP, +30 at each checkpoint (the maximum rises by 30 and it heals 30). At 0 HP: breakdown (no movement or fire, damage ignored) until the driving station's P_eff has paid 5 kJ, then 40 HP.
 
 **Score** = 1000 x (0.3 band + 0.2 accuracy + 0.3 objectives + 0.2 survival). Band = the crew mean of WORK time in band; accuracy = main-gun hits / shots (0 with no shot); objectives = 0.6 x stages completed without an overrun / 3, plus 0.4 if the Behemoth died; survival = max(0, 1 - 0.25 x breakdowns). Grades: S >= 900, A >= 800, B >= 650, C >= 500, else D. XP = round(kJ / 10) + S 60, A 40, B 25, C 10, D 0. Hull finishes (`content/tank/cosmetics.json`, saved to `ctx.progress`): Soot on the first finish, Rust at B, Ash at A, Mud stripe at S, Brass machinery for a Behemoth kill with no breakdown. Equipping a finish needs the garage (P1, below). The `drill` has no boss, so its WORK time is 0 and its grade is D.
 
@@ -109,19 +109,19 @@ Everything below is a content number: change it in the file, re-run the matrix (
 | Knob | File and key | Now |
 | --- | --- | --- |
 | Enemy HP and count per tank | `tanks.json` `tanks.<tank>.enemy_scale` | Bulwark 0.75, Rampart 0.8, Citadel 1.0, Bastion 1.2 |
-| Hull toughness | `tanks.json` `hull.hp`, `hull.checkpoint_hp`, `hull.repair_j` | 140, 30, 5000 |
-| What driving in band avoids | `tanks.json` `drive.evasive_hit_mult` | 0.5 |
+| Hull toughness | `tanks.json` `hull.hp`, `hull.checkpoint_hp`, `hull.repair_j` | 150, 30, 5000 |
+| What driving in band avoids | `tanks.json` `drive.evasive_hit_mult` | 0.45 |
 | Enemy guns | `enemies.json` `types.<t>.gun`, `boss.main` | see the table above |
-| Dynamo bank | `tanks.json` `dynamo.stabilizer_per_s`, `per_traverse`, `per_degree`, `hoist_s` | 1.5, 15, 0.5, [22, 11] |
-| Steam fill and latch | `tanks.json` `steam.full_j`, `window_s`, `breech_cycle_s` | 4500, 5, 6 |
-| Bulwark gearbox | `tanks.json` `gearbox.hoist_j`, `auto_drive_clear_px`, `manual_suspend_s` | 4000, 340, 15 |
+| Dynamo bank | `tanks.json` `dynamo.stabilizer_per_s`, `per_traverse`, `per_degree`, `hoist_s` | 1.5 (Rampart 1.3, Bastion 2.0: `tanks.<tank>.stabilizer_per_s`), 15, 0.5, [24, 12] |
+| Steam fill and latch | `tanks.json` `steam.full_j`, `window_s`, `breech_cycle_s` | 4000, 5, 7 |
+| Bulwark gearbox | `tanks.json` `gearbox.hoist_j`, `auto_drive_clear_px`, `manual_suspend_s` | 5250, 340, 15 |
 | Surge to evade | `tanks.json` `evade.sprint_window_s`, `hold_s`, `boss_hold_s`; telegraphs `enemies.json` `types.<t>.telegraph_s`, `types.light.flank`, `boss.main.telegraph_s` | 3, 2, 3; 4 / 3 / 2.5 / 6 s |
 | Bow guns | `tanks.json` `bow` | 5 every 2 s, 40-220 px, 2 units a burst, under band 0.5, Bulwark 0.5, 4 s to clear |
 | Arc generator | `tanks.json` `arc.lit_dispersion_mult`; `stations.json` `arc` | 0.5; 65 + 15 x duty |
 | Bank, arc, boiler, hoist, terrain and haptic directive shape | `stations.json` `bank`, `arc`, `boiler`, `hoist`, `terrain`, `haptics` | schema-bounded |
 | Spacing | `enemies.json` `lanes` | 4 lanes, 8 px gaps |
 | Stage length and enemy lists | `missions/ashfall_road.json` `segments[].length_m`, `encounters`, `enemies`, `at_px` | Advances 1100 / 1200 / 950 m |
-| Boss pacing | `enemies.json` `boss`; the mission's boss `start_left_px` and `end_hold_s` | `end_hold_s` 6.5 |
+| Boss pacing | `enemies.json` `boss`; the mission's boss `start_left_px` and `end_hold_s` | `end_hold_s` 7.5 |
 | Score and grades | `scoring.json` | as above |
 
 ## Tests, gates and commands
@@ -154,18 +154,18 @@ The simulation matrix (`tests/games/tank/sim/`, checked by `check_sims.mjs`):
 
 | Run | What it asserts |
 | --- | --- |
-| S1 compliant `erg` riders, crews 1-3, seeds 1-3 | T1 phase times, no overrun, grade B or better; T2 (crews 2-3) the dynamo above 80 % for 30 s per stage and 60 s in the boss, back to 65 % or lower within 120 s; T3 (crew 3) each heavy shell built in 18-35 s and at least 6 s at boiler grade 0 for the rider who latched it; T4 (crew 1) the Bulwark on Drive for 60 % of each Advance; T6 a light and a medium in each Advance (and crew 1's "Surge to ram" prompt), a heavy duel of 90-180 s in gun lines 2 and 3 |
+| S1 compliant `erg` riders, crews 1-4, seeds 1-3 | T1 phase times, no overrun, grade B or better; T2 (crews 2-4) the dynamo above 80 % for 30 s per stage and 60 s in the boss, back to 65 % or lower within 120 s; T3 (crews 3-4) each heavy shell built in 18-35 s and at least 6 s at boiler grade 0 for the rider who latched it; T4 (crew 1) the Bulwark on Drive for 60 % of each Advance; T6 a telegraphed shot and a medium in each Advance (and crew 1's "Surge to evade" prompt), a heavy duel of 90-180 s in gun lines 2 and 3; T7 (crew 4) the arc target above 72 % for 30 s per stage and back to 68 % within 60 s of a fight's end |
 | S2 zero riders | crew 3 at 0 W: the host's shared pause holds the depot (no kill, grade D); crew 3 spinning at 10 W and 25 rpm overruns every stage (withdrawn, grade D); crew 1 pauses in the depot |
 | S3 compliance 100 / 85 / 70 % | T5: the mean score falls strictly |
-| S4 every content and crew | every directive, plan and trace rule of BRIEF 4.5 and 4.6: patterns, applied values never above what was asked, warm-up limits, switch spacing, laps |
+| S4 every content and crew (1-4) | every directive, plan and trace rule of BRIEF 4.5 and 4.6: patterns, applied values never above what was asked, warm-up limits, switch spacing, laps |
 | S5 30 rpm collapse in a dynamo stage and in a 90 % gun line | rescue, stagger, the plan continues |
 | S6 haptics off for one slot | no haptic applied to that rider |
 | S7 same seed twice | identical events and snapshot hashes |
 | S8 stress (`sim/test_tank_s8.gd`) | counts x 3: at most 16 enemies, snapshots under 4 KB |
-| S9 a scripted sprinter (crew 1) | a Ram in every Advance, the ram haptic accepted, a gun line entered after a sprint at or below its target |
-| S10 crew 3 on the network path | every rider a scripted sprinter: the clients' Rams arrive as telemetry intents and only count on the diesel; slot 1 stops dead for 60 s in a dynamo gun line: rescue, AFK within 10 s, a station on reserve, back, nobody else affected |
+| S9 a scripted sprinter (crew 1) | telegraphed shots evaded by the solo rider, no Ram event or haptic, a gun line entered after a sprint at or below its target |
+| S10 crew 3 on the network path | every rider a scripted sprinter: a client's `over` arrives as a telemetry intent, is owned by the steam engine and latches an Overpressure shell (a client's `aim` is proven by `integration/test_tank_session.gd`: headless sims press no keys); slot 1 stops dead for 60 s in a dynamo gun line: rescue, AFK within 10 s, a station on reserve, back, nobody else affected |
 
-Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test_conformance.gd` (Autopilot humans at 1 and 3 riders), the matrix with `fit_check`, `node tools/e2e/run.mjs --games=tank`, and the full `tools/run_tests` at or above the green-count floor.
+Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test_conformance.gd` (Autopilot humans at 1 and 4 riders), the matrix with `fit_check`, `node tools/e2e/run.mjs --games=tank`, and the full `tools/run_tests` at or above the green-count floor.
 
 ## Art
 
@@ -190,12 +190,12 @@ Then look at every sprite (reroll failures with a changed prompt, at most twice)
 
 | Path | What |
 | --- | --- |
-| `game.json` | The manifest: two contents, the `rotation` option, `first_run_priority` -1, no bots |
+| `game.json` | The manifest: 1 to 4 riders, the contents, the `rotation` option, `first_run_priority` -1, no bots |
 | `tank_game.gd` | `TankGame` (GameModule): intents, the host loop, bands and `end_phase` through the director, events, prompts, HUD feeds, snapshot, results, `apply_progress` |
 | `contracts/` | Ids, constants, the state records, the intent / event / snapshot schemas, the content schemas, `TankGeometry`, `TankTerrain` (see `contracts/README.md`) |
 | `effort/` | `TankPlanBuilder` (plans, rotation) and `TankDirector` (every directive, bands, haptics, `end_phase`; the only code that touches `ctx.directives`) |
-| `rules/` | `TankRules.step` and its parts: segments, stations, drive and Ram, hull, score, host-only bookkeeping (`TankAux`) |
-| `combat/` | Ballistics, aim, targets, shells, damage, enemies, encounters, the Behemoth |
+| `rules/` | `TankRules.step` and its parts: segments, stations (the arc generator too), drive, hull, score, host-only bookkeeping (`TankAux`) |
+| `combat/` | Ballistics, aim, targets, shells, damage, enemies and their lanes, encounters, the Behemoth, Surge to evade (`TankEvade`), the bow guns (`TankBow`) |
 | `content/` | `TankContent`, the validated loader |
 | `autopilot/`, `net/` | `TankAutopilot`; `TankSnapshot`, `TankCues`, `TankEventCast` |
 | `view/` | `TankView` and the diorama: backdrop planes with blur and haze, rigs, cutaway rooms, lights, particles, interpolation, placeholder art |
@@ -208,4 +208,4 @@ Then look at every sprite (reroll failures with a changed prompt, at most twice)
 - The art is placeholders and the sound is synthesized; the look and the mix have been reviewed from screenshots and headless logs only.
 - P1 is not built: the garage between missions (scrap buys +10 HP armour x3, +20 bank units, -10 % boiler energy, and the hull finish picker, so unlocked finishes cannot be equipped yet), Viaduct Crossing (a river viaduct with an armoured train as the gun line), and two tanks in one lobby (up to 6 riders, the second on a rear ground line 40 px higher, enemy scales summed).
 - P2 ideas: tank duels across a ruined town square (a stand-off stage where heavies trade shells across rubble with dug-in guns behind cover); the cool-down gate roll-through (today the cool-down swaps the town backdrop in, or the field road if the Behemoth withdrew, and the tank keeps rolling; the broken Foundry Gate and a scripted camera move through it are not drawn); hull finishes drawn on the tank (today an unlock is a progress entry only); the garage.
-- Balance was tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance, sprint timing and the Ram and dodge windows (a dodge sprint must start within about 1.25 s of the 6 s telegraph) may want a retune once someone has ridden it.
+- Balance was tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune once someone has ridden it: from a 90 % FTP ride the 3 s sprint rule holds after about 1.5 s at 1.5 x FTP, so the heavy's 3 s glow needs about 1.8 x FTP from its start and the light's 2.5 s flank shot is evadable only by a rider already sprinting.
