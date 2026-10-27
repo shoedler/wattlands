@@ -195,6 +195,10 @@ static func flip(state: TankState, aux: TankAux) -> void:
 			e.hold_px = 1.0e9 if e.side > 0 else 400.0
 			continue
 		var want := TankEnemies.clamp_hold(state, e.w, e.side, e.hold_px)
+		if e.side > 0:
+			# A pursuer behind the hull holds -8 px (its last 24 px at the edge); turned ahead it
+			# must not keep that and sit inside the hull's nose: ahead holds start at min_hold_px.
+			want = maxf(want, state.content.num("enemies", "lanes.min_hold_px", 60.0))
 		TankEnemies.reserve_hold(state, aux, e, want, e.lane)
 		if e.mode != TankIds.EM_ENTER:
 			e.mode = TankIds.EM_MOVE
