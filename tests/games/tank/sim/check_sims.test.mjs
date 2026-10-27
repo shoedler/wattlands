@@ -410,8 +410,11 @@ test('S2 crew 3 at 0 W fails when the run completes, leaves the depot, never pau
   other.events[0].reason = 'user';
   assert.match(ids(C.checkS2(allS2({ s2_c3_zero: other })).details), /never paused for all_stopped/);
   const late = zeroCrew3();
-  late.events[0].pt = 10.2;
-  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: late })).details), /paused at 10.2/);
+  late.events[0].pt = 11.2;
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: late })).details), /paused at 11.2/);
+  const edge = zeroCrew3();
+  edge.events[0].pt = 11.1;
+  assert.equal(C.checkS2(allS2({ s2_c3_zero: edge })).status, 'PASS', '10 s + 1 tick after the latest first notification');
   const resumed = zeroCrew3();
   resumed.events.push({ type: 'paused', paused: false, reason: 'resume', t: 50, pt: 50 });
   assert.match(ids(C.checkS2(allS2({ s2_c3_zero: resumed })).details), /the shared pause ended/);
@@ -438,12 +441,20 @@ test('S2 crew 3 at 10 W fails on a stage that ended on its own, a pause, another
   assert.match(ids(C.checkS2(allS2({ s2_c3_idle: graded })).details), /s2_c3_idle: grade C/);
 });
 
+test('S2 anchors the pause on the first not-pedaling sample: the first trainer notification, not the t = 0 row', () => {
+  assert.equal(C.notPedalingAnchor({ t: 0 }), C.FIRST_SAMPLE_MAX_S - C.TICK_S);
+  assert.equal(C.notPedalingAnchor({ t: 60 }), 60, 'a rider who stops later: the 0 W row');
+  const lastRun = zeroCrew1();
+  lastRun.events[0].pt = 10.95;
+  assert.equal(C.checkS2(allS2({ s2_c1_zero: lastRun })).status, 'PASS', 'sample at 1.0 s, paused 10 s later');
+});
+
 test('S2 crew 1: paused late, not paused, more than the depot, a kill or a grade fail', () => {
   const late = zeroCrew1();
-  late.events[0].pt = 10.2;
-  assert.match(ids(C.checkS2({ s2_c1_zero: late }).details), /paused at 10.2/);
+  late.events[0].pt = 11.15;
+  assert.match(ids(C.checkS2({ s2_c1_zero: late }).details), /paused at 11.15/);
   const edge = zeroCrew1();
-  edge.events[0].pt = 10.05;
+  edge.events[0].pt = 11.1;
   assert.equal(C.checkS2(allS2({ s2_c1_zero: edge })).status, 'PASS', 'one tick of slack');
   const never = zeroCrew1();
   never.events = [];
