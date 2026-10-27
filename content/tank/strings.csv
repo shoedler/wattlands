@@ -37,10 +37,10 @@ TANK_LEVER_DIG,Dig
 TANK_LEVER_TURRET,Turret
 TANK_LEVER_HOIST,Hoist
 TANK_LEVER_AUTO,Auto lever
-TANK_PROMPT_RAM,Surge to ram
-TANK_PROMPT_DODGE,Surge to dodge
+TANK_PROMPT_EVADE,Surge to evade
 TANK_PROMPT_OVER,Surge to overpressure
 TANK_TOAST_DYNAMO_STALLED,Dynamo stalled
+TANK_TOAST_ARC_STALLED,Arc generator stalled
 TANK_TOAST_STAGGER,Catch your breath: the tank holds
 TANK_TOAST_REGROUP,Regroup
 TANK_TOAST_BREAKDOWN,Breakdown! Pedal the diesel to repair
@@ -49,9 +49,7 @@ TANK_TOAST_OVERRUN_ADVANCE,Towed to the halt line
 TANK_TOAST_OVERRUN_GUN_LINE,Support barrage called in
 TANK_TOAST_BEHEMOTH_WITHDRAWS,The Behemoth withdraws
 TANK_TOAST_ROTATION,Change stations: {0}
-TANK_TOAST_RAM_HIT,Rammed!
-TANK_TOAST_RAM_MISS,Ram failed: stalled
-TANK_TOAST_DODGED,Dodged!
+TANK_TOAST_EVADED,Evaded!
 TANK_TOAST_LOADED_HEAVY,Heavy shell loaded
 TANK_TOAST_LOADED_LIGHT,Light shell loaded
 TANK_TOAST_OVERPRESSURE,Overpressure shell loaded
@@ -68,6 +66,7 @@ TANK_TEACH_DIESEL,Diesel: your watts drive the tracks. Hold 76-105% FTP to glow.
 TANK_TEACH_BULWARK,"One engine does it all: the lever moves itself between Drive, Turret and Hoist."
 TANK_TEACH_DYNAMO,Dynamo: steady cadence charges the bank that turns the turret.
 TANK_TEACH_STEAM,Steam: build pressure to load a heavy shell.
+TANK_TEACH_ARC,Arc generator: hold your target to light the searchlights and feed the bow guns.
 TANK_TEACH_AIM,Aim drill: the turret lines up on the wrecks.
 TANK_TEACH_FIRE,Load and fire!
 TANK_CARD_SPEED,Speed
@@ -83,7 +82,7 @@ TANK_CARD_RESERVE,Reserve
 TANK_SHELL_LIGHT,Light
 TANK_SHELL_HEAVY,Heavy
 TANK_SHELL_OVER,Overpressure
-TANK_SHELL_SECONDARY,Secondary
+TANK_SHELL_SECONDARY,Bow guns
 TANK_OBJ_DEPOT,Depot drill
 TANK_OBJ_ADVANCE,Halt line: {0} m
 TANK_OBJ_GUN_LINE,Gun line {0}/{1}
@@ -117,23 +116,27 @@ TANK_RIDE_SCORE,Score: {0} (grade {1})
 TANK_RIDE_KILLS,Enemies destroyed: {0}
 TANK_RIDE_BREAKDOWNS,Breakdowns: {0}
 TANK_RIDE_GUNNERY,Shots: {0}; hits: {1}
-TANK_RIDE_RAMS,Rams: {0}; dodges: {1}
+TANK_RIDE_EVADES,Shots evaded: {0} of {1}
+TANK_RIDE_BOW,Bow-gun hits: {0}
 TANK_STAT_DIESEL_S,Diesel (s)
 TANK_STAT_DYNAMO_S,Dynamo (s)
 TANK_STAT_STEAM_S,Steam (s)
 TANK_STAT_BULWARK_S,Gearbox diesel (s)
-TANK_STAT_RAMS,Rams
-TANK_STAT_DODGES,Dodges
+TANK_STAT_ARC_S,Arc generator (s)
+TANK_STAT_EVADES,Evades (made/tried)
+TANK_STAT_BOW_HITS,Bow-gun hits
 TANK_STAT_BERM,Berm absorbed
 TANK_STAT_SHOTS,Shots
 TANK_STAT_HITS,Hits
 TANK_STAT_ACCURACY,Accuracy %
-TANK_STAT_SHELLS,Shells light/heavy/over/secondary
+TANK_STAT_SHELLS,Shells light/heavy/over/bow
 TANK_TEAM_OUTCOME,Mission
 TANK_TEAM_HP,Hull HP per segment
 TANK_TEAM_BREAKDOWNS,Breakdowns
 TANK_TEAM_OVERRUNS,Overruns
 TANK_TEAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy/Behemoth)
+TANK_TEAM_EVADES,Evades (made/tried)
+TANK_TEAM_BOW_HITS,Bow-gun hits
 TANK_UNLOCK_SOOT,Soot hull finish
 TANK_UNLOCK_RUST,Rust hull finish
 TANK_UNLOCK_ASH,Ash hull finish

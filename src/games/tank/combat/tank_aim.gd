@@ -32,7 +32,7 @@ static func solve(
 	var c := state.content
 	var v0 := c.num("tanks", "gun.shell_speed_px_s", 360.0)
 	var g := c.num("tanks", "gun.gravity_px_s2", 300.0)
-	var lo := c.num("tanks", "gun.elev_min_deg", -5.0)
+	var lo := c.num("tanks", "gun.elev_min_deg", -12.0)
 	var hi := c.num("tanks", "gun.elev_max_deg", 30.0)
 	var elev := 0.0
 	for _i in 3:
@@ -73,7 +73,7 @@ static func solve_target(
 		if not is_nan(e):
 			aim_out[0] = p
 			return e
-	var lo := state.content.num("tanks", "gun.elev_min_deg", -5.0)
+	var lo := state.content.num("tanks", "gun.elev_min_deg", -12.0)
 	if grazes(state, aux, t, facing, t.vel - hull_v, lo):
 		aim_out[0] = t.center()
 		return lo

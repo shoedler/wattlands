@@ -7,6 +7,11 @@ extends RefCounted
 ## near edge; a held distance is clamped so an enemy ahead ends at screen x <= 632 and 24 px of an
 ## enemy behind shows at the left edge. Hit rolls use the session RNG at fire time; the shell lands
 ## on the tank or 20-40 px short of it. Owner: rules (combat).
+##
+## v2 (brief 2.4): every held position is reserved in a depth lane (enemies.json lanes; each type
+## prefers its `lane`), so no two enemies on one side and lane overlap (reserve_hold); telegraphed
+## shots (a `telegraph_s` type, or a light tank's first shot at its hold, its `flank` shot) always
+## run their full telegraph and go through TankEvade, which can make them miss.
 
 
 ## The definition of `e`'s type (enemies.json).
@@ -83,6 +88,8 @@ static func spawn(
 			rng.randf_range(float(span[0]), float(span[1])) if rng != null else float(span[0])
 		)
 	e.hold_px = clamp_hold(state, e.w, side, e.hold_px)
+	e.lane = int(def.get("lane", 0))
+	reserve_hold(state, aux, e, e.hold_px, e.lane)
 	if float(def.get("weave_px", 0.0)) > 0.0 and rng != null:
 		e.weave = rng.randf() * TAU
 	var gun: Dictionary = def.get("gun", {})
@@ -107,13 +114,87 @@ static func spawn(
 	return e
 
 
-## A heavy tank backs off: its held distance grows by backoff_px (within the screen clamp).
+## A heavy tank backs off: its held distance grows by backoff_px (within the screen clamp and the
+## lanes' room; no room, no back-off).
 static func back_off(state: TankState, e: TankEnemyState) -> void:
 	var def := def_of(state, e)
+	var aux := TankAux.of(state)
 	var farther := clamp_hold(state, e.w, e.side, e.hold_px + float(def.get("backoff_px", 30.0)))
-	if farther > e.hold_px:
-		e.hold_px = farther
+	if farther <= e.hold_px:
+		return
+	var old_hold := e.hold_px
+	var old_lane := e.lane
+	reserve_hold(state, aux, e, farther, e.lane)
+	if e.hold_px > old_hold + 1e-6:
 		e.mode = TankIds.EM_BACKOFF
+	else:
+		e.hold_px = old_hold
+		e.lane = old_lane
+
+
+# --- Lanes and spacing (brief 2.4 Spacing) ------------------------------------------------------
+
+
+## The half-extent an enemy needs around its held box: its weave amplitude.
+static func pad_of(state: TankState, e: TankEnemyState) -> float:
+	return float(def_of(state, e).get("weave_px", 0.0))
+
+
+## Whether `e` reserves a held position (alive and not breaking off).
+static func holds_position(aux: TankAux, e: TankEnemyState) -> bool:
+	return e.hp > 0.0 and not bool(aux.enemy_leaving.get(e.id, false))
+
+
+## Reserves a held position for `e` near `want` (a distance from the hull's nearer end) in a depth
+## lane, so that its box (plus its weave and lanes.gap_px) overlaps no other enemy's held box on the
+## same side and lane. Tries every lane; a lane other than `lane` costs lanes.switch_px of distance.
+## Ahead, the position stays between lanes.min_hold_px (or `want`, if nearer) and the screen clamp;
+## behind, an enemy only ever shows its 24 px at the left edge, so only `want` (in either lane) is
+## tried. When no lane has room, `e` keeps `want` in `lane` (the content keeps that from happening,
+## tested). Sets e.hold_px and e.lane.
+static func reserve_hold(
+	state: TankState, aux: TankAux, e: TankEnemyState, want: float, lane: int
+) -> void:
+	var c := state.content
+	var lanes := maxi(int(c.num("enemies", "lanes.count", 1.0)), 1)
+	var gap := c.num("enemies", "lanes.gap_px", 8.0)
+	var switch_cost := c.num("enemies", "lanes.switch_px", 48.0)
+	var pad := pad_of(state, e)
+	var hi := clamp_hold(state, e.w, e.side, 1.0e9)
+	var lo := minf(want, c.num("enemies", "lanes.min_hold_px", 60.0)) if e.side > 0 else want
+	var best := want
+	var best_lane := clampi(lane, 0, lanes - 1)
+	var best_cost := INF
+	for l in lanes:
+		var spans: Array = []
+		for o in state.enemies:
+			if o == e or o.side != e.side or o.lane != l or not holds_position(aux, o):
+				continue
+			var op := pad_of(state, o)
+			spans.append([o.hold_px - op, o.hold_px + o.w + op])
+		var cands: Array[float] = [want]
+		for sp: Array in spans:
+			cands.append(float(sp[1]) + gap + pad)
+			cands.append(float(sp[0]) - gap - pad - e.w)
+		for p in cands:
+			if p > hi + 1e-6 or p < lo - 1e-6:
+				continue
+			if not _fits(p, e.w, pad, gap, spans):
+				continue
+			var cost := absf(p - want) + (0.0 if l == lane else switch_cost)
+			if cost < best_cost - 1e-6:
+				best_cost = cost
+				best = p
+				best_lane = l
+	e.hold_px = best
+	e.lane = best_lane
+
+
+static func _fits(p: float, w: float, pad: float, gap: float, spans: Array) -> bool:
+	for sp: Array in spans:
+		if p + w + pad + gap > float(sp[0]) + 1e-6 and p - pad - gap < float(sp[1]) - 1e-6:
+			return false
+	return true
 
 
 ## Moves every enemy one tick (after the hull moved): entering, keeping station, weaving, shifting.
@@ -135,13 +216,15 @@ static func move(state: TankState, aux: TankAux, dt: float) -> void:
 		forget(aux, e.id)
 
 
-## Forgets everything the aux keeps about enemy `id`.
+## Forgets everything the aux keeps about enemy `id` (its running telegraph included).
 static func forget(aux: TankAux, id: int) -> void:
 	aux.enemy_vx.erase(id)
 	aux.enemy_dist.erase(id)
 	aux.enemy_age.erase(id)
 	aux.enemy_leaving.erase(id)
 	aux.enemy_shots.erase(id)
+	aux.enemy_flank_done.erase(id)
+	TankEvade.forget(aux, id)
 
 
 ## A raider (linger_s in its definition) harasses the tank for that long and then breaks off: it
@@ -166,21 +249,22 @@ static func _linger(
 		e.mode = TankIds.EM_LEAVE
 		e.hold_px = 1.0e9 if e.side > 0 else 400.0
 		e.telegraph_s = 0.0
+		TankEvade.forget(aux, e.id)
 	return false
 
 
+## A gun line's gun: rolls in, backs off and (a destroyer) shifts after a shot to its new held
+## position in world space, then holds.
 static func _move_fixed(state: TankState, e: TankEnemyState, speed: float, dt: float) -> void:
-	if e.mode != TankIds.EM_ENTER and e.mode != TankIds.EM_BACKOFF:
+	if e.mode != TankIds.EM_ENTER and e.mode != TankIds.EM_BACKOFF and e.mode != TankIds.EM_MOVE:
 		return
 	var tx := state.hull.x_px + state.hull.hull_w + e.hold_px
-	if e.mode == TankIds.EM_ENTER:
-		e.x_px = maxf(e.x_px - speed * dt, tx)
-		if e.x_px <= tx:
-			e.mode = TankIds.EM_HOLD
-	else:
-		e.x_px = minf(e.x_px + speed * dt, tx)
-		if e.x_px >= tx:
-			e.mode = TankIds.EM_HOLD
+	if e.side < 0:
+		tx = state.hull.x_px - e.w - e.hold_px
+	e.x_px = move_toward(e.x_px, tx, maxf(speed, 1.0) * dt)
+	if is_equal_approx(e.x_px, tx):
+		e.x_px = tx
+		e.mode = TankIds.EM_HOLD
 
 
 static func _move_station(
@@ -208,37 +292,57 @@ static func _move_station(
 	place(state, aux, e, dist)
 
 
-## Counts every enemy's gun down and fires the ones whose time came (a telegraph shows for the last
-## telegraph_s seconds of a destroyer's or heavy tank's countdown and the enemy holds still). The
-## countdown runs while a destroyer shifts, but it only fires once it holds again; nothing counts
-## while an enemy is still rolling in or backing off.
+## Counts every enemy's gun down and fires the ones whose time came. A telegraphed shot (a type with
+## telegraph_s, destroyer 4 s and heavy 3 s; a light tank's first shot at its hold, its `flank`
+## shot, 2.5 s) shows its telegraph for the last telegraph_s seconds of the countdown while the
+## enemy holds still, always in full (a countdown that ran down while the enemy moved restarts at
+## telegraph_s), and TankEvade decides whether it misses. The countdown runs while a destroyer
+## shifts, but it only fires once it holds again; nothing counts while an enemy is still rolling in
+## or backing off.
 static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictionary]) -> void:
+	var c := state.content
 	for e in state.enemies.duplicate():
 		if e.mode == TankIds.EM_ENTER or e.mode == TankIds.EM_BACKOFF:
+			e.telegraph_s = 0.0
 			continue
 		var def := def_of(state, e)
 		var gun: Dictionary = def.get("gun", {})
-		var tele := float(def.get("telegraph_s", 0.0))
+		var flank := is_flank(aux, e, def)
+		var shot: Dictionary = def.get("flank", {}) if flank else gun
+		var tele := (
+			float(shot.get("telegraph_s", 0.0)) if flank else float(def.get("telegraph_s", 0.0))
+		)
 		e.gun_s = maxf(e.gun_s - dt, 0.0)
 		if e.mode == TankIds.EM_MOVE or e.mode == TankIds.EM_LEAVE:
+			e.telegraph_s = 0.0
 			continue
-		if tele > 0.0 and e.gun_s > 0.0 and e.gun_s <= tele:
-			e.mode = TankIds.EM_TELEGRAPH
-			e.telegraph_s = e.gun_s
+		if tele > 0.0:
+			if e.mode != TankIds.EM_TELEGRAPH and e.gun_s <= tele:
+				e.gun_s = maxf(e.gun_s, tele)
+				e.mode = TankIds.EM_TELEGRAPH
+			if e.mode == TankIds.EM_TELEGRAPH:
+				e.telegraph_s = e.gun_s
+				TankEvade.accumulate(state, aux, e.id, dt, c.num("tanks", "evade.hold_s", 2.0))
 		if e.gun_s > 0.0:
 			continue
 		e.gun_s = float(gun.get("every_s", 5.0))
 		e.telegraph_s = 0.0
 		e.mode = TankIds.EM_HOLD
-		var from := muzzle(aux, e, def)
+		var miss := false
+		if tele > 0.0:
+			miss = TankEvade.resolve(
+				state, aux, e.id, e.code, c.num("tanks", "evade.hold_s", 2.0), events
+			)
+		if flank:
+			aux.enemy_flank_done[e.id] = true
 		launch(
 			state,
 			aux,
-			from,
+			muzzle(aux, e, def),
 			TankIds.SHELL_ENEMY,
-			float(gun.get("damage", 4.0)),
-			float(gun.get("hit", 0.6)),
-			false,
+			float(shot.get("damage", 4.0)),
+			float(shot.get("hit", 0.6)),
+			miss,
 			e.id,
 			e.code,
 			events
@@ -246,7 +350,15 @@ static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 		_after_shot(state, aux, e, def)
 
 
-## Destroyers move after each shot: alternately closer by move_after_shot_px and back.
+## True while `e`'s next shot is its flank shot: its type has one (enemies.json flank, the light
+## tank's) and it has not fired it yet. Its first shot is always at its hold (nothing fires while
+## rolling in), so that is "its first shot after it reaches its hold distance" (brief 2.4).
+static func is_flank(aux: TankAux, e: TankEnemyState, def: Dictionary) -> bool:
+	return def.get("flank") is Dictionary and not aux.enemy_flank_done.has(e.id)
+
+
+## Destroyers move after each shot: alternately closer by move_after_shot_px and back (to a free
+## position in their lane).
 static func _after_shot(state: TankState, aux: TankAux, e: TankEnemyState, def: Dictionary) -> void:
 	var shift := float(def.get("move_after_shot_px", 0.0))
 	if shift <= 0.0:
@@ -254,7 +366,7 @@ static func _after_shot(state: TankState, aux: TankAux, e: TankEnemyState, def: 
 	var n := int(aux.enemy_shots.get(e.id, 0)) + 1
 	aux.enemy_shots[e.id] = n
 	var edge := clamp_hold(state, e.w, e.side, 1.0e9)
-	e.hold_px = edge if n % 2 == 0 else edge - shift
+	reserve_hold(state, aux, e, edge if n % 2 == 0 else edge - shift, e.lane)
 	e.mode = TankIds.EM_MOVE
 
 

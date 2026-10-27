@@ -1,10 +1,11 @@
 class_name TankStations
 extends RefCounted
-## The engine rooms' models (brief 2.4 Dynamo, Steam, Bulwark gearbox; owner: rules): the dynamo's
-## capacitor bank and the Rampart's hoist, the steam engine's boiler (window, Overpressure, light
-## latch, breech cycle) and the Bulwark's three-way gearbox with its auto-lever. The diesel's
-## drive is TankDrive. Every energy is the room's P_eff (reserve 60 W for an AFK rider, 0 when
-## everyone is AFK). Pure: no random draws; time only through `dt`.
+## The engine rooms' models (brief 2.4 Dynamo, Steam, Bulwark gearbox, Arc generator; owner:
+## rules): the dynamo's capacitor bank and the Rampart's hoist, the steam engine's boiler (window,
+## Overpressure, light latch, breech cycle), the Bulwark's three-way gearbox with its auto-lever and
+## the Bastion's arc generator (searchlights, stall). The diesel's drive is TankDrive, the bow guns
+## TankBow. Every energy is the room's P_eff (reserve 60 W for an AFK rider, 0 when everyone is
+## AFK). Pure: no random draws; time only through `dt`.
 
 
 static func step(
@@ -20,6 +21,8 @@ static func step(
 			_dynamo(state, aux, st as TankDynamoState, ri, dt)
 		elif st is TankSteamState:
 			_steam(state, aux, st as TankSteamState, ri, dt, events)
+		elif st is TankArcState:
+			_arc(state, st as TankArcState, ri)
 	_rampart_hoist(state, aux, dt, events)
 
 
@@ -114,6 +117,18 @@ static func _rampart_hoist(
 	var c := state.content
 	st.hoist_s = by_bank(state, c.value("tanks", "dynamo.hoist_s", [20, 10]))
 	drain(state, c.num("tanks", "dynamo.per_hoist", 25.0))
+
+
+# --- Arc generator ------------------------------------------------------------------------------
+
+
+## The arc generator (brief 2.4): a rescue stalls it (the bow guns stop, the searchlights dim:
+## "Arc generator stalled"); the searchlights are lit while its rider is in band (ERG: power >= 95%
+## of the applied target and cadence >= 60), which never holds on reserve or in rescue. Its load
+## (`duty`) is the bow guns' share of the last 10 s firing (TankBow notes it).
+static func _arc(state: TankState, st: TankArcState, ri: TankRiderInput) -> void:
+	st.stalled = in_rescue(ri) and not state.all_afk
+	st.lit = st.slot >= 0 and st.in_band and not st.stalled and not st.reserve and not state.all_afk
 
 
 # --- Steam ---------------------------------------------------------------------------------------
@@ -228,7 +243,7 @@ static func rider_rule(state: TankState, ri: TankRiderInput) -> SprintRule:
 	var r := state.rider(ri.peer)
 	if r == null:
 		return null
-	return r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+	return r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0))
 
 
 # --- Bulwark gearbox -----------------------------------------------------------------------------

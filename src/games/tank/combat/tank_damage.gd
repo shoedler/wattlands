@@ -1,7 +1,7 @@
 class_name TankDamage
 extends RefCounted
-## The damage table (brief 2.4 Gun): light 20, heavy 50, Overpressure 100, a Citadel secondary 5;
-## splash 16 px at 50%; mediums take half from light shells and secondaries, heavy tanks, tank
+## The damage table (brief 2.4 Gun): light 20, heavy 50, Overpressure 100, a bow-gun burst 5;
+## splash 16 px at 50%; mediums take half from light shells and bow-gun bursts, heavy tanks, tank
 ## destroyers and the Behemoth a quarter (enemies.json `light_mult`); heavy and Overpressure
 ## shells deal full damage to every target. Owner: rules (combat).
 
@@ -16,11 +16,11 @@ static func shell_damage(c: TankContent, shell: int) -> float:
 		TankIds.SHELL_OVER:
 			return c.num("tanks", "damage.over", 100.0)
 		TankIds.SHELL_BOW:
-			return c.num("tanks", "secondary.damage", 5.0)
+			return c.num("tanks", "bow.damage", 5.0)
 	return 0.0
 
 
-## True for the shells armour reduces (light shells and secondaries).
+## True for the shells armour reduces (light shells and bow-gun bursts).
 static func is_soft(shell: int) -> bool:
 	return shell == TankIds.SHELL_LIGHT or shell == TankIds.SHELL_BOW
 

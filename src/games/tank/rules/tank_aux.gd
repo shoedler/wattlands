@@ -24,6 +24,10 @@ var enemy_age: Dictionary = {}
 var enemy_leaving: Dictionary = {}
 ## Enemy id -> shots fired (a destroyer alternates the side it shifts to).
 var enemy_shots: Dictionary = {}
+## Enemy id -> true once its flank shot (enemies.json flank, the light tank's) has been fired.
+var enemy_flank_done: Dictionary = {}
+## Running telegraphs (TankEvade): shooter id -> {held: {slot: s}, able: {slot: true}}.
+var evade: Dictionary = {}
 ## Enemy shell id -> seconds until it lands (the arrival resolves the hit rolled at fire time).
 var shell_left: Dictionary = {}
 ## The auto-aim's choice this tick (TankAim.current): target, elevation and facing; reset to
@@ -36,9 +40,6 @@ var aim_facing: int = TankIds.FACE_RIGHT
 var drills: Array = []
 ## The target the rider cycled to by hand stays the auto-aim's target until it falls.
 var manual_target: bool = false
-## A target stood within a Ram's reach during the open window (a Ram that never gets the sprint
-## rule to hold while one does fails when the window closes).
-var ram_contact: bool = false
 ## An enemy stands on screen (the dynamo's stabilizer drain, this tick).
 var enemy_in_range: bool = false
 ## Some shootable target stands on screen (the Rampart's hoist and the Bulwark's auto-lever).
@@ -49,7 +50,7 @@ var over_j: float = 0.0
 var turret_factor: float = 0.0
 ## Depot drills already started (the aim drill's wrecks stand).
 var drill_wrecks: bool = false
-## The Behemoth's telegraph length at its start (for the dodge's "inside the telegraph" clock).
+## The Behemoth's telegraph length at its start (the HUD's countdown pips read telegraph_s).
 var boss_tele_total: float = 0.0
 ## Seconds since the last Advance enemy was spawned (spawns of one encounter stagger).
 var last_spawn_t: float = -100.0

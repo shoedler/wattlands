@@ -222,7 +222,7 @@ static func damage_boss(
 
 
 ## A shell of `shell` hits an obstacle: a heavy or Overpressure shell clears it, three light shells
-## do; secondaries do nothing.
+## do (bow-gun fire clears it by time, TankBow).
 static func damage_obstacle(o: TankObstacleState, shell: int, c: TankContent) -> void:
 	if o.cleared:
 		return

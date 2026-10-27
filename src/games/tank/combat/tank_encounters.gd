@@ -33,7 +33,8 @@ static func begin(
 	aux.enemy_shots.clear()
 	aux.shell_left.clear()
 	aux.manual_target = false
-	aux.ram_contact = false
+	aux.enemy_flank_done.clear()
+	aux.evade.clear()
 	aux.drill_wrecks = false
 	hull.berm_hp = 0.0
 	hull.berm_j = 0.0
@@ -41,10 +42,8 @@ static func begin(
 	hull.traps_cleared = false
 	hull.target_id = 0
 	var d := TankHullRules.driver(state)
-	if d != null:
-		d.ram_s = 0.0
-		if d is TankGearboxState:
-			(d as TankGearboxState).drive_s = 0.0
+	if d is TankGearboxState:
+		(d as TankGearboxState).drive_s = 0.0
 	var c := state.content
 	var seg := c.segment(state.seg.segment_index)
 	aux.drills = seg.get("drills", [])
@@ -107,8 +106,9 @@ static func advance(state: TankState, aux: TankAux) -> void:
 		)
 		var type := str(enc.get("enemy", ""))
 		var n := state.content.scaled_count(int(enc.get("count", 1)), state.hull.tank)
-		for i in n:
-			var e := TankEnemies.spawn(
+		for _i in n:
+			# Each copy rolls its own hold; TankEnemies.reserve_hold keeps them apart in the lanes.
+			TankEnemies.spawn(
 				state,
 				aux,
 				type,
@@ -118,8 +118,6 @@ static func advance(state: TankState, aux: TankAux) -> void:
 				false,
 				sg.next_encounter
 			)
-			if e != null and i > 0:
-				e.hold_px = TankEnemies.clamp_hold(state, e.w, e.side, e.hold_px + 70.0 * i)
 		sg.next_encounter += 1
 
 

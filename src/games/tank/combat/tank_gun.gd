@@ -1,11 +1,13 @@
 class_name TankGun
 extends RefCounted
-## The main turret and the Citadel's secondaries (brief 2.4 Gun; owner: rules). The gunner is the
-## dynamo (Rampart, Citadel) or the Bulwark's gearbox on Turret. Elevation -5..+30 degrees at 8
-## degrees/s with a full bank (2 at 0), a traverse takes 2.5 s (8 s at 0) and flips the facing when
-## it completes; the bank pays 0.5 per degree and 15 per traverse. Auto-aim (default) aims once a
-## shell is in the breech and fires within 0.5 degrees; the rider's nudges pause it for 5 s.
-## Shells inherit the hull's velocity, so a moving tank's shell keeps the tank's pace.
+## The main turret (brief 2.4 Gun; owner: rules; the bow guns are TankBow). The gunner is the
+## dynamo (Rampart, Citadel, Bastion) or the Bulwark's gearbox on Turret. Elevation -12..+30
+## degrees (tanks.json gun) at 8 degrees/s with a full bank (2 at 0), a traverse takes 2.5 s (8 s at
+## 0) and flips the facing when it completes; the bank pays 0.5 per degree and 15 per traverse.
+## Auto-aim (default) aims once a shell is in the breech and fires within 0.5 degrees; the rider's
+## nudges pause it for 5 s. The dispersion is halved while the Bastion's searchlights are lit (its
+## arc rider in band). Shells inherit the hull's velocity, so a moving tank's shell keeps the
+## tank's pace.
 
 
 static func step(
@@ -47,7 +49,7 @@ static func step(
 		if hull.facing != aux.aim_facing and hull.traverse_s <= 0.0 and trav_rate > 0.0:
 			_start_traverse(state, gs)
 	# Slew.
-	var lo := c.num("tanks", "gun.elev_min_deg", -5.0)
+	var lo := c.num("tanks", "gun.elev_min_deg", -12.0)
 	var hi := c.num("tanks", "gun.elev_max_deg", 30.0)
 	hull.elev_target_deg = clampf(hull.elev_target_deg, lo, hi)
 	var step := elev_rate * dt
@@ -65,7 +67,12 @@ static func step(
 	if auto and tgt != null and powered and can_fire(hull) and on_target(state, aux):
 		if not tgt.drill or TankSegments.fire_drill(state):
 			fire(state, aux, gs, tgt.drill, events)
-	_secondaries(state, aux, dt, events)
+
+
+## The Bastion's searchlights are lit (its arc room's `lit`: the arc rider in band, brief 2.4).
+static func searchlights_lit(state: TankState) -> bool:
+	var arc := state.station(TankIds.ENGINE_ARC) as TankArcState
+	return arc != null and arc.lit
 
 
 ## Whether a loaded shell can leave the barrel now: loaded, the breech cycle over, no traverse.
@@ -100,7 +107,7 @@ static func _intent(
 		TankIds.INTENT_AIM:
 			hull.elev_target_deg = clampf(
 				hull.elev_deg + float(int(n.get("d", 0))) * c.num("tanks", "gun.nudge_deg", 1.0),
-				c.num("tanks", "gun.elev_min_deg", -5.0),
+				c.num("tanks", "gun.elev_min_deg", -12.0),
 				c.num("tanks", "gun.elev_max_deg", 30.0)
 			)
 			hull.aim_pause_s = c.num("tanks", "gun.manual_pause_s", 5.0)
@@ -169,6 +176,8 @@ static func fire(
 	if gs is TankDynamoState:
 		bank = (gs as TankDynamoState).bank
 	var disp := TankBallistics.dispersion_deg(c, bank)
+	if searchlights_lit(state):
+		disp *= c.num("tanks", "arc.lit_dispersion_mult", 0.5)
 	var err := state.rng.randf_range(-disp, disp) if state.rng != null else 0.0
 	var v0 := c.num("tanks", "gun.shell_speed_px_s", 360.0)
 	var muzzle := TankAim.muzzle_world(state, aux, hull.elev_deg, hull.facing)
@@ -197,79 +206,3 @@ static func fire(
 			r.shots += 1
 			r.shells_by_type[int(TankRiderState.SHELL_INDEX[shell])] += 1
 	return true
-
-
-# --- Citadel secondaries -------------------------------------------------------------------------
-
-
-## The fore (right) and aft (left) machine guns: 5 damage every 3 s at the nearest enemy within 240
-## px; each shot costs the bank 2 units and they stop below 10 units, in a breakdown and when the
-## dynamo is stalled. They hit at once (a tracer), armour applies.
-static func _secondaries(
-	state: TankState, aux: TankAux, dt: float, events: Array[Dictionary]
-) -> void:
-	if state.hull.tank != TankIds.TANK_CITADEL:
-		return
-	var hull := state.hull
-	var dyn := state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
-	var mounts := aux.geo.secondary_muzzles(hull.tank)
-	if dyn == null or dyn.slot < 0 or mounts.size() < 2:
-		return
-	var c := state.content
-	var ok := not hull.breakdown and not state.all_afk and not dyn.stalled
-	var origin := TankTargets.hull_origin(state)
-	for i in 2:
-		hull.secondary_cd_s[i] = maxf(hull.secondary_cd_s[i] - dt, 0.0)
-		if not ok or hull.secondary_cd_s[i] > 0.0:
-			continue
-		if dyn.bank < c.num("tanks", "dynamo.secondary_min_bank", 10.0):
-			continue
-		var mount: Array = mounts[i]
-		var m: Vector2 = origin + (mount[0] as Vector2)
-		var t := _nearest(
-			state, aux, m.x, int(mount[1]), c.num("tanks", "secondary.range_px", 240.0)
-		)
-		if t == null:
-			continue
-		hull.secondary_cd_s[i] = c.num("tanks", "secondary.every_s", 3.0)
-		TankStations.drain(state, c.num("tanks", "dynamo.per_secondary", 2.0))
-		var sid := state.take_id()
-		events.append(TankEvents.shot(dyn.slot, TankIds.SHELL_BOW, sid))
-		var r := state.rider_at(dyn.slot)
-		if r != null:
-			r.shells_by_type[int(TankRiderState.SHELL_INDEX[TankIds.SHELL_BOW])] += 1
-		var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
-		var on := TankEvents.ON_ENEMY
-		if t.kind == TankTarget.KIND_ENEMY:
-			TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_SHELL, dyn.slot, events)
-		else:
-			on = TankEvents.ON_BOSS
-			TankShells.damage_boss(state, aux, t.part, dmg, dyn.slot, events)
-		events.append(TankEvents.hit(on, t.id, dmg, TankIds.SHELL_BOW, 0.0, t.center().x))
-
-
-## The nearest enemy (or Behemoth part) in front of a machine gun at world x `mx` facing `face`
-## and within `range_px` of it, on screen; null if none.
-static func _nearest(
-	state: TankState, aux: TankAux, mx: float, face: int, range_px: float
-) -> TankTarget:
-	var cam := state.camera_x()
-	var best: TankTarget = null
-	var best_d := INF
-	for t in aux.targets:
-		if t.kind == TankTarget.KIND_OBSTACLE or not collidable_enemy(t):
-			continue
-		if not TankTargets.engageable(t, cam):
-			continue
-		var d := t.rect.position.x - mx if face > 0 else mx - t.rect.end.x
-		if face > 0 and t.rect.end.x < mx or face < 0 and t.rect.position.x > mx:
-			continue
-		d = maxf(d, 0.0)
-		if d <= range_px and d < best_d:
-			best_d = d
-			best = t
-	return best
-
-
-static func collidable_enemy(t: TankTarget) -> bool:
-	return TankShells.collidable(t)

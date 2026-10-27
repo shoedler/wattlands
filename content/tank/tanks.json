@@ -52,17 +52,11 @@
 		"evasive_hit_mult": 0.5,
 		"halt_line_px": 300
 	},
-	"ram": {
-		"window_s": 10,
-		"cooldown_s": 30,
-		"reach_px": 120,
-		"sprint_ftp": 1.2,
+	"evade": {
+		"_doc": "Surge to evade (brief 2.4): a telegraphed shot misses when a rider who can evade (a SIM WORK phase of their own plan, past its first 300 s) holds the sprint rule (the trailing sprint_window_s average >= 1.2 x FTP raw, BRIEF 3.5) for hold_s inside the telegraph, boss_hold_s for the Behemoth's main gun. v1's ram block, reduced to what evade needs.",
 		"sprint_window_s": 3,
-		"fail_damage": 10,
-		"fail_stall_s": 5,
-		"boss_lunge_px": 24,
-		"boss_dodge_hold_s": 3,
-		"prompt_px": 300
+		"hold_s": 2,
+		"boss_hold_s": 3
 	},
 	"berm": {
 		"j_per_hp": 250,
@@ -88,8 +82,6 @@
 		"per_degree": 0.5,
 		"per_traverse": 15,
 		"per_hoist": 25,
-		"per_secondary": 2,
-		"secondary_min_bank": 10,
 		"elev_deg_s": [2, 8],
 		"traverse_s": [8, 2.5],
 		"full_at": 50,
@@ -119,7 +111,7 @@
 		"manual_suspend_s": 15
 	},
 	"gun": {
-		"elev_min_deg": -5,
+		"elev_min_deg": -12,
 		"elev_max_deg": 30,
 		"shell_speed_px_s": 360,
 		"gravity_px_s2": 300,
@@ -136,10 +128,21 @@
 		"medium_light_mult": 0.5,
 		"armored_light_mult": 0.25
 	},
-	"secondary": {
+	"bow": {
+		"_doc": "The bow guns (brief 2.4 Gun), two short guns in the nose on every tank: a damage burst (one SHELL_BOW round, both guns) every every_s at the nearest enemy (or Behemoth part) ahead whose near edge is min_px..max_px off the hull front, else a wire or wreck there (clear_s of fire clears it). Armour: enemies.json light_mult (mediums 0.5; heavies, destroyers, the Behemoth 0.25). Power: the Bastion's arc generator (full rate in band, under_band_rate under band, none on reserve or stalled), the Rampart's and the Citadel's dynamo bank (per_burst_units a burst, none below min_bank, none stalled), the Bulwark's gearbox (bulwark_rate, free).",
 		"damage": 5,
-		"every_s": 3,
-		"range_px": 240
+		"every_s": 2,
+		"min_px": 40,
+		"max_px": 220,
+		"per_burst_units": 2,
+		"min_bank": 10,
+		"under_band_rate": 0.5,
+		"bulwark_rate": 0.5,
+		"clear_s": 4
+	},
+	"arc": {
+		"_doc": "The arc generator (brief 2.4): while its rider is in band the searchlights are lit and the main gun's dispersion is multiplied by lit_dispersion_mult.",
+		"lit_dispersion_mult": 0.5
 	},
 	"caps": {
 		"enemies": 16,
