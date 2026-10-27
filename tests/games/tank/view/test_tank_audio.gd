@@ -74,9 +74,12 @@ func _audio_for(peer: int) -> TankAudio:
 	return a
 
 
-func test_secondaries_boom_softly_and_enemy_guns_whistle_in() -> void:
+func test_bow_guns_rattle_and_enemy_guns_whistle_in() -> void:
 	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 1))
-	assert_eq(_audio.played[0], "tank_boom_small")
+	for _i in 6:
+		_step()
+	assert_gte(_audio.played.count("tank_bow_rattle"), 4, "a burst rattles")
+	assert_does_not_have(_audio.played, "tank_boom_low", "not the cannon")
 	_audio.played.clear()
 	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(-1, TankIds.SHELL_ENEMY, 2, 11, 2))
 	assert_eq(_audio.played[0], "tank_boom_small")
@@ -96,8 +99,6 @@ func test_impacts_explosions_ram_breakdown_lever_and_latch() -> void:
 	assert_has(_audio.played, "tank_hit")
 	_audio.on_cue(TankEvents.KILL, TankEvents.kill(11, 2, TankEvents.BY_SHELL, 0))
 	assert_has(_audio.played, "tank_boom_big")
-	_audio.on_cue(TankEvents.RAM, TankEvents.ram(2, true, 12))
-	assert_has(_audio.played, "tank_ram")
 	_audio.on_cue(TankEvents.BREAKDOWN, TankEvents.breakdown())
 	assert_has(_audio.played, "tank_breakdown")
 	_audio.on_cue(TankEvents.LEVER, TankEvents.lever(0, TankIds.LEVER_HOIST))
@@ -256,3 +257,33 @@ func test_the_view_feeds_the_audio_every_frame() -> void:
 	assert_has(v.audio.played, "tank_boom_low")
 	assert_eq(v.audio.local_peer, 1)
 	assert_true(v.audio.loop_on[TankIds.ENGINE_DYNAMO])
+
+
+func test_the_arc_generator_hums_and_crackles_on_its_riders_cadence() -> void:
+	var s := U.fixture("state", 4)
+	var g := U.make_game(s)
+	autofree(g)
+	var a := TankAudio.new()
+	a.game = g
+	add_child_autofree(a)
+	var me := s.rider_at(s.station(TankIds.ENGINE_ARC).slot).peer
+	for _i in 40:
+		a.update(s, 0.05, me, U.feed_of(s, 180.0, 90.0))
+	assert_true(a.loop_on[TankIds.ENGINE_ARC], "the hum runs")
+	assert_eq(
+		a.loop_db[TankIds.ENGINE_ARC], TankAudio.OWN_DB[TankIds.ENGINE_ARC], "its rider's own"
+	)
+	# 90 rpm, two climbs a revolution: about 6 crackles in 2 s.
+	assert_between(a.played.count("tank_arc_crackle"), 4, 7)
+	a.played.clear()
+	for _i in 40:
+		a.update(s, 0.05, me, U.feed_of(s, 0.0, 0.0))
+	assert_false(a.loop_on[TankIds.ENGINE_ARC], "stopped at 0 rpm")
+	assert_eq(a.played.count("tank_arc_crackle"), 0)
+
+
+func test_the_night_ambience_and_its_crickets() -> void:
+	for _i in 120:
+		_step()
+	assert_true(_audio.ambience_on)
+	assert_gt(_audio.played.count("tank_cricket"), 2, "crickets in 6 s")

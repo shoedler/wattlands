@@ -1,40 +1,25 @@
 [remap]
 
-importer="texture"
-type="CompressedTexture2D"
+importer="font_data_image"
+type="FontFile"
 uid="uid://cmkdvmfqnr0hp"
-path="res://.godot/imported/tank_stencil_5x9.png-496ea7eae4d43fea8f7a54548aa54483.ctex"
-metadata={
-"vram_texture": false
-}
+path="res://.godot/imported/tank_stencil_5x9.png-496ea7eae4d43fea8f7a54548aa54483.fontdata"
 
 [deps]
 
 source_file="res://assets/tank/v2/hud/tank_stencil_5x9.png"
-dest_files=["res://.godot/imported/tank_stencil_5x9.png-496ea7eae4d43fea8f7a54548aa54483.ctex"]
+dest_files=["res://.godot/imported/tank_stencil_5x9.png-496ea7eae4d43fea8f7a54548aa54483.fontdata"]
 
 [params]
 
-compress/mode=0
-compress/high_quality=false
-compress/lossy_quality=0.7
-compress/uastc_level=0
-compress/rdo_quality_loss=0.0
-compress/hdr_compression=1
-compress/normal_map=0
-compress/channel_pack=0
-mipmaps/generate=false
-mipmaps/limit=-1
-roughness/mode=0
-roughness/src_normal=""
-process/channel_remap/red=0
-process/channel_remap/green=1
-process/channel_remap/blue=2
-process/channel_remap/alpha=3
-process/fix_alpha_border=true
-process/premult_alpha=false
-process/normal_map_invert_y=false
-process/hdr_as_srgb=false
-process/hdr_clamp_exposure=false
-process/size_limit=0
-detect_3d/compress_to=1
+character_ranges=PackedStringArray("32-126", "8211", "183", "8230", "176")
+kerning_pairs=PackedStringArray()
+columns=16
+rows=7
+image_margin=Rect2i(0, 0, 0, 0)
+character_margin=Rect2i(0, 0, 0, 0)
+ascent=9
+descent=2
+fallbacks=[]
+compress=true
+scaling_mode=1

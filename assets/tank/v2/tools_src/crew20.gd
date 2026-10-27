@@ -2,12 +2,13 @@ extends SceneTree
 # Crewmen at 19-20 art px tall (the reference's size at 960x540). Parametric skeleton poses drawn on a
 # material grid, then shaded with a warm top light (room lamps above), like the reference's lit
 # silhouettes. Writes assets/tank/v2/crew20/<pose>_<i>.png, crew20.json, crew20_sheet.png (1x)
-# and crew20_sheet_4x.png.
+# and crew20_sheet_4x.png (the json and sheets to build/v2/; kit.gd folds the json into kit.json).
 
 var F = load("res://build/v2/font.gd")
 const CW := 30
 const CH := 24
 const OUT := "res://assets/tank/v2/"
+const BUILD := "res://build/v2/"
 
 enum M {
 	NONE, HELMET, SKIN, JACKET, TROUSER, BOOT, BELT, WOOD, STEEL, BRASS, BRASS_D, COAL, DMETAL,
@@ -464,9 +465,9 @@ func _init() -> void:
 			big.fill_rect(Rect2i(bx, by, CW * sc, CH * sc), wall)
 			big.blend_rect(b, Rect2i(0, 0, CW * sc, CH * sc), Vector2i(bx, by))
 		meta["frames"][nm] = paths
-	sheet.save_png(OUT + "crew20_sheet.png")
-	big.save_png(OUT + "crew20_sheet_4x.png")
-	var fa := FileAccess.open(OUT + "crew20.json", FileAccess.WRITE)
+	sheet.save_png(BUILD + "crew20_sheet.png")
+	big.save_png(BUILD + "crew20_sheet_4x.png")
+	var fa := FileAccess.open(BUILD + "crew20.json", FileAccess.WRITE)
 	fa.store_string(JSON.stringify(meta, "  ", false))
 	fa.close()
 	print("crew20: ", names)

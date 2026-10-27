@@ -1,11 +1,13 @@
 extends Control
 ## A windowed look at the Tank view and HUD for tools/screenshot --scene (GAME_SDK 19.3): a fixture
-## state (Stage 2 Advance, its gun line or the boss fight) for the Bulwark, Rampart or Citadel in a
-## PixelViewport with the real HUD on top, animated by a tiny fake of the rules (the hull drives,
+## state (Stage 2 Advance, its gun line or the boss fight) for the Bulwark, Rampart, Citadel or
+## Bastion in a PixelViewport with the real HUD on top (or none), animated by a tiny fake of the rules (the hull drives,
 ## enemies keep station, shells fly, the gun fires now and then). Not a test: the view tests build the
 ## same thing headless.
 ## Options (user args or the TANK_FIXTURE environment variable, ";"-separated):
-##   crew=<1..3>        the tank (default 3)
+##   crew=<1..4>        the tank (default 3; 4 is the Citadel's fixture with an arc-generator rider)
+##   flex               pixel_flex on (min 852 x 480), as the GameHost sets it
+##   nohud              no HUD (the picker and content cards are rendered this way)
 ##   kind=state|gun_line|boss|cap   the fixture (default state); cap is the Citadel at the snapshot caps,
 ##                      16 enemies and 24 shells always in view, the gun firing every 0.4 s
 ##   peer=<n>           the local rider's peer (default 1)
@@ -15,6 +17,7 @@ extends Control
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
+const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 
 var game: TankGame = null
 var view: TankView = null
@@ -33,27 +36,28 @@ var _elapsed: float = 0.0
 
 func _ready() -> void:
 	_opts = _options()
-	var crew := clampi(int(_opts.get("crew", 3)), 1, 3)
+	var crew := clampi(int(_opts.get("crew", 3)), 1, 4)
 	match str(_opts.get("kind", "state")):
-		"gun_line":
-			state = TankFixtures.gun_line(crew)
-		"boss":
-			state = TankFixtures.boss(crew)
 		"cap":
 			state = _cap_state()
 			if not _opts.has("fire"):
 				_opts["fire"] = "0.4"
-		_:
-			state = TankFixtures.state(crew)
+		var kind:
+			state = U.fixture(kind, crew)
 	var peer := int(_opts.get("peer", 1))
 	var ctx := F.make_ctx(crew, 0, "ashfall_road", Wl.SOLO, peer)
 	game = F.make_game(ctx)
 	game.state = state
 	pv = PixelViewport.new()
+	pv.pixel_base = Vector2i(960, 540)
+	if _opts.has("flex"):
+		pv.flex_min = Vector2i(852, 480)
 	pv.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(pv)
 	view = game.make_view() as TankView
 	pv.set_game_view(view)
+	if _opts.has("nohud"):
+		return
 	hud = HudLayer.new()
 	add_child(hud)
 	hud.build(game.hud_spec(), ctx, pv)

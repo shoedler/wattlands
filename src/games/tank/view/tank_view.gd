@@ -1,127 +1,127 @@
 class_name TankView
 extends Node2D
-## The 2D view at pixel_base 640 x 360 (brief 3): the dark 2.5D diorama. Sprite planes in depth
-## (TankBackdrop), the cutaway tank (TankRig), enemies, wrecks, the Behemoth, shells with tracers,
-## the trajectory dots in the gunner's colour (TankRowLayer), particles (TankFx) and additive halos
-## (TankLights). It only reads TankGame.state; it never changes the rules.
+## The 2D view (docs/games/tank.md 3): the reference's night diorama at 960 x 540 art px from the v2
+## kit (TankKit). make_view() returns this Node2D; the PixelViewport shows it. It only reads
+## TankGame.state and the cue events; it never writes the state.
 ##
-## Time: positions come from a snapshot history (TankSnapHistory) drawn at TankRenderClock.render_t,
-## a little behind the newest entry: a client records one entry per applied snapshot (the game's
-## snapshot_applied signal), the host and SOLO one per sim tick they see, so motion is smooth at any
-## frame rate. The local rider's own room runs from the live state (client_predict feeds it).
-## Machinery moves with frame time, cosmetic randomness comes from TankFx.rng (seeded from ctx.seed).
+## Layers, back to front (all under `stage`, which is offset vertically on taller or shorter
+## canvases): the planes (far: sky, Milky Way, mountains, the pale cliff and the misty lake; the
+## forest; the road; TankWorldDraw), the world on the road (the halt line, obstacles, wrecks aging on
+## sim time, enemies in depth lanes, the Behemoth), the tank (TankHullDraw: the variant for the crew
+## size cut from the reference, its barrel at the gun's elevation and traverse, running gear,
+## the machines in the rooms in sync with their riders, crew, plaques, bow guns), the additive light
+## (TankLightDraw: room lamps in slot colours, beams, position lights, fires, flashes, shells), the
+## smoke and the foreground plane, the tilt-shift shading; then the per-frame depth of field
+## (TankDof) over the whole canvas.
 ##
-## Layout (TankConst): ground line y 296, the hull's rear at screen x 16, enemies entering from the
-## right (rear rushers from the left); the HUD covers only y 0-60 and 300-360.
+## Scale: the rules' 640 x 360 units x 1.5 (TankView.sx/sy). The art tank is a little longer than
+## the rules' hull, so the hull's span maps onto the art hull and the ground ahead onto the rest of
+## the base canvas; a wider canvas (pixel_flex) keeps that scale and shows more world on the right,
+## a narrower one squeezes the ground ahead so the rules' screen still fits.
+##
+## Time: positions come from a snapshot history (TankSnapHistory) drawn at TankRenderClock.render_t
+## (a client records one entry per applied snapshot, the host and SOLO one per sim tick). Machines
+## turn by their rider's cadence integrated over render time; cosmetic randomness comes from
+## TankFx.rng, seeded from ctx.seed.
+##
+## Hooks: play_evade(kind) (the evade lurch or smoke screen; the `evade` cue calls it too),
+## power_ratio(rider) (watts over the rider's target), set_canvas_size(size) (tests), and the HUD's
+## geometry (hud_world_x, hud_ground_y, hud_tank_point, hud_enemy_rect, hud_boss_rect,
+## hud_boss_muzzle), found through the game's meta TankHudGeom.VIEW_META, which the view sets.
 
+const BASE := Vector2(960, 540)
+## Rules px -> art px.
+const S := 1.5
+## The road's ground line (stage y) and where enemies stand on it.
+const GROUND := 340.0
+const ROAD_ENEMY_Y := 343.0
+## The variant's top-left on the base canvas (the reference's framing).
+const TANK_POS := Vector2(6, 107)
+## The hull's rear in variant px.
+const ART_REAR := 18.0
+## Of a canvas wider than the base, this share moves the tank inward (the rest shows more world).
+const WIDE_SHIFT := 0.3
+## The road band (stage y): sharp under the depth of field; the HUD keeps clear of it.
+const BAND := Vector2(150, 360)
+## The rooms with a machine (and a rider), rear to front.
+const MACHINE_ROOMS: Array[String] = ["diesel", "steam", "dynamo", "arc"]
+const MAX_WRECKS := 8
+## Depth lanes on the road (each 9 px further back, dimmer).
+const LANES := 4
+## A wreck burns as a hulk this long, then collapses into a heap over WRECK_COLLAPSE_S; its fire
+## dies over WRECK_BURN_S; it is gone after WRECK_GONE_S (or once it scrolled off).
+const WRECK_HULK_S := 5.0
+const WRECK_COLLAPSE_S := 3.0
+const WRECK_BURN_S := 30.0
+const WRECK_GONE_S := 240.0
 const MAX_CUES_PER_FRAME := 24
 const CUE_QUEUE_MAX := 64
-const MAX_WRECKS := 6
-const WRECK_TTL_S := 40.0
-const WRECK_BURN_S := 12.0
-## Wrecks sit on the back lane: scaled down, lifted and darkened toward the haze.
-const WRECK_SCALE := 0.8
-const WRECK_LIFT_PX := 9.0
-## Charred dark grey, not black: the plate seams and the cool rim still read at half strength, so a
-## wreck keeps its type's silhouette and detail.
-const WRECK_TINT := Color(0.48, 0.46, 0.45)
-## Where a live enemy stands in front of a wreck, the wreck recedes into the haze (half see-through,
-## so the hazy backdrop shows through it, its fire dimmer) over WRECK_VEIL_S, so the two never
-## merge into one dark blob and the live one's barrel and silhouette read against it (polish round
-## 6).
-const WRECK_VEIL_TINT := Color(0.46, 0.47, 0.5, 0.42)
-const WRECK_VEIL_S := 0.4
-## The depot gate stands behind the start (world x of its left edge).
-const DEPOT_GATE_X := -90.0
-## Ground props (craters, rubble, pairs of telegraph poles with their wires, fence posts and wire,
-## flooded ruts; at the depot drums, barriers, crates and floodlights) every this many world px, by
-## hash.
-const PROP_CELL_PX := 210.0
-## The depot yard's props on the tank's plane, every this many world px.
-const DEPOT_PROP_CELL_PX := 150.0
-## The depot's yards along the roll-out, DEPOT_BAY_PX world px each: every third bay opens with a
-## yard gate (the depot gate's sprite, a little smaller and set back, the tank rolling past its
-## piers), the others hold a workshop: a brick shed with a sawtooth roof, lit windows and a stack.
-## So the depot reads as a depot for the whole warm-up, not only at the start (polish round 6: at
-## 60 s the yard was an empty brown band with two lamp posts).
-const DEPOT_BAY_PX := 340.0
-## The compound wall behind the yard: its height and the spacing of its piers (world px).
-const DEPOT_WALL_H := 16.0
-const DEPOT_PIER_PX := 96.0
-const DEPOT_YARD_TINT := Color(0.66, 0.68, 0.72)
-## The aimed arc: a dot every TRAJECTORY_STEP_S of flight (about 16 px), so the dots read as one
-## dotted arc in the gunner's colour, every third with a faint halo, not as stray pixels.
-const TRAJECTORY_STEP_S := 0.045
-const TRAJECTORY_DOTS := 34
-## No HP bar floats on the tank's plane (the scene critic): damage shows on the sprite. A hit flashes
-## the enemy warm for HIT_FLASH_S; below DAMAGE_SMOKE_FRAC of its HP its hull smokes, and below
-## DAMAGE_FIRE_FRAC a small fire burns in it.
-const HIT_FLASH_S := 0.16
-const DAMAGE_SMOKE_FRAC := 0.5
-const DAMAGE_FIRE_FRAC := 0.25
-const HALO_RADIUS := {
-	TankIds.SHELL_LIGHT: 9.0,
-	TankIds.SHELL_HEAVY: 13.0,
-	TankIds.SHELL_OVER: 18.0,
-	TankIds.SHELL_BOW: 6.0,
-	TankIds.SHELL_ENEMY: 11.0,
-	TankIds.SHELL_BOSS_MAIN: 26.0,
-}
-## Enemies on one lane keep at least this gap between them (else the next one steps back a lane).
-const ENEMY_GAP_PX := 8.0
-## A falling shell that vanishes this close to the ground landed in it.
-const SHELL_LANDING_PX := 22.0
-const WITHDRAW_PX_S := 46.0
-const FADE_S := 1.5
 
 var game: TankGame = null
 var audio: TankAudio = null
 ## Turn off to drive advance() yourself (tests, screenshots).
 var auto_process: bool = true
-
-var backdrop: TankBackdrop = null
-var world: Node2D = null
-var props_layer: TankRowLayer = null
-var enemies_layer: TankRowLayer = null
-var rig: TankRig = null
-var shots_layer: TankRowLayer = null
-var fx: TankFx = null
-var lights: TankLights = null
-var overlay: TankPainter = null
-var hub: TankRigHub = TankRigHub.new()
+var kit: TankKit = null
+var fx: TankFx = TankFx.new()
+var crew: TankCrew = TankCrew.new()
+var dof: TankDof = null
 var history: TankSnapHistory = TankSnapHistory.new()
 var clock: TankRenderClock = TankRenderClock.new()
+var stage: Node2D = null
+## Fixed canvas size (tests); zero = the viewport's (the PixelViewport's art size).
+var canvas_override: Vector2 = Vector2.ZERO
 
-## The camera's world x this frame (the interpolated hull x minus the rear's screen x).
+# --- Per frame (read by the draw classes and the tests) ---------------------------------------------------
+## The canvas (art px) and the stage's vertical offset on it.
+var canvas: Vector2 = BASE
+var y_off: float = 0.0
+## The camera's world x (rules px) and the frame's scroll (art px).
 var cam_x: float = 0.0
-## Frames advanced (tests).
-var frames: int = 0
-## Wrecks: {"x": world left x, "w", "h", "code", "side", "age", "key"}.
-var wrecks: Array[Dictionary] = []
-## Screen rects of what is drawn: enemy id -> Rect2 (tests, effects).
+var scroll_px: float = 0.0
+var variant: String = "tank_3rider"
+## The variant's top-left this frame (stage px; shake and lurch included) and without them.
+var origin: Vector2 = TANK_POS
+var tank_pos: Vector2 = TANK_POS
+## Room engine -> the rider working it (TankRiderState), from state.stations.
+var room_riders: Dictionary = {}
+## Room engine -> crank revolutions / power ratio / cadence.
+var phases: Dictionary = {}
+var powers: Dictionary = {}
+var cadences: Dictionary = {}
+## Room id -> Rect2 (variant px) of the current variant.
+var room_rects: Dictionary = {}
+## Enemy id -> Rect2 (stage px) as drawn, and its depth lane.
 var enemy_rects: Dictionary = {}
-var geometry: TankGeometry = null
+var lanes: Dictionary = {}
+## {x: world x of its middle, kind, lane, side, t: sim time of the kill}.
+var wrecks: Array[Dictionary] = []
+var recoil: float = 0.0
+## The barrel's swing during a traverse: 1 facing right .. -1 facing left.
+var barrel_dir: float = 1.0
+## Hit shake (decays) and the evade lurch / smoke screen timers (s; < 0 when idle).
+var shake: float = 0.0
+var lurch_s: float = -1.0
+var screen_s: float = -1.0
+var frames: int = 0
+## The view's own frame clock (s): flicker and drift only.
+var time: float = 0.0
+var dt: float = 0.0
 
 var _built: bool = false
-var _dt: float = 0.0
-var _time: float = 0.0
+var _layers: Dictionary = {}
 var _last_tick: int = -1
-var _seg_index: int = -2
-var _seen_enemies: Dictionary = {}
-var _seen_shells: Dictionary = {}
-var _cues: Array[Dictionary] = []
-var _timers: Array[Dictionary] = []
-var _fade_t: float = 0.0
-var _fade_was: float = -1.0
-var _barrage_t: float = 0.0
-var _barrage_next: float = 0.0
-var _withdraw_s: float = 0.0
-var _prev_cam: float = 0.0
+var _last_render_t: float = -1.0
+var _last_sim_t: float = -1.0
+var _prev_cam_px: float = 0.0
 var _cam_primed: bool = false
-var _traps_were_cleared: bool = false
-var _boss_death_done: bool = false
-## Enemy id -> [last hp seen, seconds its hit flash still shows].
-var _hp_seen: Dictionary = {}
+var _traverse_from: float = 0.0
+var _seen: Dictionary = {}
+var _shell_seen: Dictionary = {}
+var _cues: Array[Dictionary] = []
+var _smoke_acc: float = 0.0
+var _dust_acc: float = 0.0
+var _steam_acc: float = 0.0
+var _gun_shots: int = 0
 
 
 func _ready() -> void:
@@ -147,57 +147,78 @@ func _build() -> void:
 	if _built or game == null or game.state == null:
 		return
 	_built = true
-	geometry = TankGeometry.load_default()
-	fx = TankFx.new()
-	fx.name = "Fx"
-	fx.seed_rng(game.ctx.seed if game.ctx != null else 1)
-	lights = TankLights.new()
-	lights.name = "Lights"
-	hub.fx = fx
-	hub.lights = lights
-	hub.local_peer = game.ctx.local_peer if game.ctx != null else 0
-	if game.ctx != null:
-		for p in game.ctx.players:
-			hub.looks[p.slot_index] = {
-				"color": p.color, "shape": p.shape, "pattern": p.pattern, "hollow": p.hollow
-			}
+	kit = TankKit.shared()
+	var ctx := game.ctx
+	fx.seed_rng(ctx.seed if ctx != null else 1)
+	if ctx != null:
 		clock.min_delay_s = (
 			TankRenderClock.CLIENT_DELAY_S
-			if game.ctx.role == Wl.CLIENT
+			if ctx.role == Wl.CLIENT
 			else TankRenderClock.HOST_DELAY_S
 		)
-	backdrop = TankBackdrop.new()
-	add_child(backdrop)
-	world = Node2D.new()
-	world.name = "World"
-	add_child(world)
-	props_layer = _row_layer("Props")
-	enemies_layer = _row_layer("Enemies")
-	rig = TankRig.new()
-	rig.assemble(game.state.hull.tank, hub)
-	world.add_child(rig)
-	shots_layer = _row_layer("Shots")
-	world.add_child(fx)
-	world.add_child(lights)
-	add_child(backdrop.front)
-	overlay = TankPainter.new()
-	overlay.name = "Overlay"
-	overlay.painter = _paint_overlay
-	add_child(overlay)
-	backdrop.set_near(TankBackdrop.backdrop_id(game.state))
+	stage = Node2D.new()
+	stage.name = "Stage"
+	add_child(stage)
+	for n: String in ["Back", "World", "Tank", "Light", "Front", "Post"]:
+		var l := Node2D.new()
+		l.name = n
+		if n == "Light":
+			var m := CanvasItemMaterial.new()
+			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			l.material = m
+		stage.add_child(l)
+		_layers[n] = l
+	(_layers["Back"] as Node2D).draw.connect(_draw_back)
+	(_layers["World"] as Node2D).draw.connect(_draw_world)
+	(_layers["Tank"] as Node2D).draw.connect(_draw_tank)
+	(_layers["Light"] as Node2D).draw.connect(_draw_light)
+	(_layers["Front"] as Node2D).draw.connect(_draw_front)
+	(_layers["Post"] as Node2D).draw.connect(_draw_post)
+	dof = TankDof.new()
+	dof.enabled = miniature_option()
+	add_child(dof)
+	# The HUD's world tags find the view here (TankHudGeom.VIEW_META).
+	game.set_meta(TankHudGeom.VIEW_META, self)
 
 
-func _row_layer(layer_name: String) -> TankRowLayer:
-	var l := TankRowLayer.new()
-	l.name = layer_name
-	world.add_child(l)
-	return l
+func _exit_tree() -> void:
+	if (
+		game != null
+		and game.has_meta(TankHudGeom.VIEW_META)
+		and game.get_meta(TankHudGeom.VIEW_META) == self
+	):
+		game.remove_meta(TankHudGeom.VIEW_META)
+
+
+## The local rider's `miniature` player option (default on).
+func miniature_option() -> bool:
+	if game == null or game.ctx == null:
+		return true
+	var me := game.ctx.local_player()
+	if me == null:
+		return true
+	return bool(me.options.get("miniature", true))
+
+
+## Turns the per-frame depth of field on or off (the option; the auto-off still applies).
+func set_miniature(on: bool) -> void:
+	if dof != null:
+		dof.enabled = on
+
+
+func set_canvas_size(size: Vector2) -> void:
+	canvas_override = size
+
+
+func layer(n: String) -> Node2D:
+	return _layers.get(n, null)
 
 
 # --- Frame ---------------------------------------------------------------------------------------------
 
 
-## One frame of `delta` seconds: history and render clock, planes, rig, rows, effects, lights, audio.
+## One frame of `delta` seconds: history and render clock, layout, riders and machines, cues,
+## effects, the layers' redraw and the audio.
 func advance(delta: float) -> void:
 	if game == null or game.state == null:
 		return
@@ -206,42 +227,105 @@ func advance(delta: float) -> void:
 		return
 	var state := game.state
 	frames += 1
-	_dt = delta
-	_time += delta
-	fx.note_frame_time(delta)
+	dt = minf(delta, 0.1)
+	time += dt
 	_poll_history(state)
 	clock.advance(delta, history)
-	var t := clock.render_t
-	cam_x = _hull_x(state, t) - float(TankConst.REAR_SCREEN_X)
-	var scroll := cam_x - _prev_cam if _cam_primed else 0.0
-	_prev_cam = cam_x
+	var rt := clock.render_t
+	var render_dt := 0.0
+	if _last_render_t >= 0.0 and clock.is_set():
+		render_dt = clampf(rt - _last_render_t, 0.0, 0.25)
+	_last_render_t = rt
+	var sim_adv := 0.0
+	if _last_sim_t >= 0.0:
+		sim_adv = maxf(state.t - _last_sim_t, 0.0)
+	_last_sim_t = state.t
+	if dof != null:
+		dof.note_frame(delta, sim_adv)
+	_layout(state)
+	var hull_x := history.hull_x_at(rt, state.hull.x_px) if clock.is_set() else state.hull.x_px
+	cam_x = hull_x - float(TankConst.REAR_SCREEN_X)
+	var cam_px := cam_x * S
+	scroll_px = cam_px - _prev_cam_px if _cam_primed else 0.0
+	if absf(scroll_px) > 200.0:
+		scroll_px = 0.0
+	_prev_cam_px = cam_px
 	_cam_primed = true
-	_on_segment(state)
-	lights.begin()
-	backdrop.set_world_x(cam_x)
-	backdrop.advance(delta)
-	var feed := rider_feed(state, t)
-	rig.update(state, feed, delta)
-	backdrop.hull_span = Vector2(rig.base_pos.x - 2.0, rig.base_pos.x + float(rig.hull_w) + 2.0)
+	var feed := rider_feed(state, rt)
+	_riders(state, feed, render_dt)
+	_turret(state)
+	_motion(dt)
 	_process_cues(state)
-	_process_timers(delta)
-	_track_enemies(state, delta)
-	_track_shells(state)
-	_build_props(state)
-	_build_enemies(state, t)
-	_build_shots(state)
-	_ambient(state, delta)
-	_scenery(delta)
-	fx.step(delta, scroll)
-	_reflections()
-	lights.wash = fx.flash
-	lights.wash_color = fx.flash_color
-	lights.wash_pos = fx.flash_pos
-	lights.end()
-	world.position = (rig.shake_offset * 0.6).round()
-	_update_fade(delta)
+	_track_enemies(state)
+	_age_wrecks(state)
+	_emit(state, feed, dt)
+	fx.step(dt, scroll_px)
+	if dof != null:
+		dof.update(canvas, BAND + Vector2(y_off, y_off))
+	for l: Node2D in _layers.values():
+		l.queue_redraw()
 	if audio != null:
-		audio.update(state, delta, hub.local_peer, feed)
+		audio.update(state, delta, game.ctx.local_peer if game.ctx != null else 0, feed)
+
+
+func _layout(state: TankState) -> void:
+	canvas = canvas_size()
+	y_off = roundf((canvas.y - BASE.y) * 0.5)
+	if stage != null:
+		stage.position = Vector2(0, y_off)
+	variant = TankKit.variant_for(state.hull.tank, state.crew)
+	if _arc_station(state) != null:
+		variant = "tank_4rider"
+	if not kit.variants.has(variant):
+		variant = "tank_3rider"
+	tank_pos = Vector2(TANK_POS.x + maxf(canvas.x - BASE.x, 0.0) * WIDE_SHIFT, TANK_POS.y)
+	room_rects.clear()
+	for room: Dictionary in kit.rooms(variant):
+		room_rects[str(room["id"])] = TankKit.rect_of(room)
+
+
+## The canvas the view draws on (art px): the override, else the PixelViewport's SubViewport.
+func canvas_size() -> Vector2:
+	if canvas_override != Vector2.ZERO:
+		return canvas_override
+	var vp := get_viewport() if is_inside_tree() else null
+	if vp is SubViewport:
+		return Vector2((vp as SubViewport).size)
+	return BASE
+
+
+func _arc_station(state: TankState) -> TankStationState:
+	for st in state.stations:
+		if st.engine == TankIds.ENGINE_ARC:
+			return st
+	return null
+
+
+# --- Mapping -------------------------------------------------------------------------------------------
+
+
+## World x (rules px) -> stage x (art px).
+func sx(world_x: float) -> float:
+	var s := world_x - cam_x
+	var rear := float(TankConst.REAR_SCREEN_X)
+	var rf := rear + float(game.state.hull.hull_w)
+	var art_rear := tank_pos.x + ART_REAR
+	var front := tank_pos.x + kit.anchor(variant, "headlight").x
+	if s <= rf:
+		return art_rear + (s - rear) * (front - art_rear) / maxf(rf - rear, 1.0)
+	var right := minf(canvas.x, BASE.x) - 20.0 + (tank_pos.x - TANK_POS.x)
+	var k := (right - front) / maxf(float(TankConst.SCREEN_W) - rf, 1.0)
+	return front + (s - rf) * k
+
+
+## World y (rules px) -> stage y.
+func sy(world_y: float) -> float:
+	return GROUND - (float(TankConst.GROUND_Y) - world_y) * S
+
+
+## A variant anchor in stage px (this frame's origin).
+func anchor(name: String) -> Vector2:
+	return origin + kit.anchor(variant, name)
 
 
 # --- History and time ---------------------------------------------------------------------------------
@@ -260,17 +344,13 @@ func _poll_history(state: TankState) -> void:
 		_last_tick = state.tick
 
 
-func _hull_x(state: TankState, t: float) -> float:
-	return history.hull_x_at(t, state.hull.x_px) if clock.is_set() else state.hull.x_px
-
-
 ## The x an enemy is drawn at (world, left edge).
 func enemy_x(e: TankEnemyState) -> float:
 	return history.enemy_x_at(e.id, clock.render_t, e.x_px) if clock.is_set() else e.x_px
 
 
-func _boss_x(state: TankState, t: float) -> float:
-	return history.boss_x_at(t, state.boss.x_px) if clock.is_set() else state.boss.x_px
+func boss_x(state: TankState) -> float:
+	return history.boss_x_at(clock.render_t, state.boss.x_px) if clock.is_set() else state.boss.x_px
 
 
 ## Where a shell is drawn (world).
@@ -284,37 +364,159 @@ func shell_pos(s: TankShellState) -> Vector2:
 func rider_feed(state: TankState, t: float) -> Dictionary:
 	var out := {}
 	var client := game.ctx != null and game.ctx.role == Wl.CLIENT
+	var me := game.ctx.local_peer if game.ctx != null else 0
 	for r in state.riders:
 		var live := Vector2(r.raw_w, r.cadence_rpm)
-		if client and r.peer != hub.local_peer and clock.is_set():
+		if client and r.peer != me and clock.is_set():
 			live = history.rider_at(r.peer, t, live)
 		out[r.peer] = live
 	return out
 
 
-# --- Segment ---------------------------------------------------------------------------------------------
+# --- Riders and machines --------------------------------------------------------------------------------
 
 
-func _on_segment(state: TankState) -> void:
-	var idx := state.seg.phase_index
-	backdrop.set_segment(idx)
-	backdrop.set_near(TankBackdrop.backdrop_id(state), cam_x)
-	if idx == _seg_index:
+## The power the machines show: watts over the rider's target (1 = in band, 0.84-1.17): raw W /
+## (target_pct / 100 x FTP), the host's TankRiderState.target_pct; %FTP over the SIM band's centre
+## (TankMech.rider_power) while it is 0 (no phase yet).
+static func power_ratio(r: TankRiderState) -> float:
+	if r == null:
+		return 0.0
+	if r.target_pct > 0.0 and r.ftp > 0.0:
+		return clampf(r.raw_w / (r.ftp * r.target_pct / 100.0), 0.0, 1.6)
+	return TankMech.rider_power(r.ftp_pct)
+
+
+## The room an engine works in (the Bulwark's gearbox diesel is the diesel room).
+static func room_of(engine: String) -> String:
+	return TankIds.ENGINE_DIESEL if engine == TankIds.ENGINE_BULWARK else engine
+
+
+func _riders(state: TankState, feed: Dictionary, render_dt: float) -> void:
+	room_riders.clear()
+	for st in state.stations:
+		if st.slot < 0:
+			continue
+		var r := state.rider_at(st.slot)
+		if r != null:
+			room_riders[room_of(st.engine)] = r
+	if state.stations.is_empty():
+		for r2 in state.riders:
+			if r2.engine != "":
+				room_riders[room_of(r2.engine)] = r2
+	for e: String in MACHINE_ROOMS:
+		var r3: TankRiderState = room_riders.get(e, null)
+		var rpm := 0.0
+		if r3 != null:
+			var f: Vector2 = feed.get(r3.peer, Vector2(r3.raw_w, r3.cadence_rpm))
+			rpm = f.y if f.y > 1.0 else 0.0
+		cadences[e] = rpm
+		phases[e] = float(phases.get(e, 0.0)) + rpm / 60.0 * render_dt
+		powers[e] = power_ratio(r3)
+
+
+## The rider of a room's engine, or null.
+func rider_of(engine: String) -> TankRiderState:
+	return room_riders.get(engine, null)
+
+
+## Crank revolutions of a room's machine (its rider's cadence integrated over render time).
+func machine_phase(engine: String) -> float:
+	return float(phases.get(engine, 0.0))
+
+
+func machine_power(engine: String) -> float:
+	return float(powers.get(engine, 0.0))
+
+
+## How bright the searchlights are (0.15..1): the Bastion's follow its arc generator (lit while its
+## rider is in band, dimmed when stalled or out of band, TankArcState); the others are always lit.
+func searchlight_k(state: TankState) -> float:
+	var arc := _arc_station(state) as TankArcState
+	if arc == null:
+		return 1.0
+	if state.hull.breakdown or arc.stalled or arc.unpowered:
+		return 0.15
+	return 1.0 if arc.lit else 0.3
+
+
+func _turret(state: TankState) -> void:
+	var h := state.hull
+	var face := 1.0 if h.facing == TankIds.FACE_RIGHT else -1.0
+	if h.traverse_s > 0.0:
+		_traverse_from = maxf(_traverse_from, h.traverse_s)
+		var p := 1.0 - h.traverse_s / maxf(_traverse_from, 0.001)
+		barrel_dir = face * cos(p * PI)
+	else:
+		_traverse_from = 0.0
+		barrel_dir = face
+
+
+func _motion(step_dt: float) -> void:
+	recoil = maxf(recoil - step_dt * 6.0, 0.0)
+	shake = maxf(shake - step_dt * 3.0, 0.0)
+	var off := Vector2.ZERO
+	if shake > 0.0:
+		off = Vector2(roundf(sin(time * 61.0) * 2.0 * shake), roundf(cos(time * 47.0) * shake))
+	if lurch_s >= 0.0:
+		lurch_s += step_dt
+		# A surge forward and a settle back over 1.2 s.
+		var k := lurch_s / 1.2
+		off.x += roundf(sin(minf(k, 1.0) * PI) * 6.0)
+		if lurch_s > 1.2:
+			lurch_s = -1.0
+	if screen_s >= 0.0:
+		screen_s += step_dt
+		if screen_s > 6.0:
+			screen_s = -1.0
+	origin = tank_pos + off
+
+
+# --- Public effects -------------------------------------------------------------------------------------
+
+
+## The evade effect (docs/games/tank.md 2.4): "lurch" (the diesel or the Bulwark surges the tank
+## forward with a burst of dust) or "smoke" (the steam boiler blows a smoke screen). The `evade` cue
+## with ok 1 calls it; the module may call it too.
+func play_evade(kind: String) -> void:
+	if not _built:
 		return
-	_seg_index = idx
-	wrecks.clear()
-	_seen_enemies.clear()
-	_seen_shells.clear()
-	_traps_were_cleared = state.hull.traps_cleared
+	if kind == "smoke":
+		screen_s = 0.0
+		var vent := anchor("exhaust") + Vector2(40, -6)
+		for i in 26:
+			var j := fx.rng.randf()
+			fx.puff(
+				vent + Vector2(i * 9.0, fx.rng.randf_range(-6.0, 6.0)),
+				Vector2(fx.rng.randf_range(10.0, 40.0), fx.rng.randf_range(-10.0, 2.0)),
+				5.0 + j * 2.0,
+				Vector2(10.0, 50.0 + j * 20.0),
+				0.4,
+				Color(0.62, 0.62, 0.6).lerp(Color(0.5, 0.48, 0.45), j),
+				0.6
+			)
+	else:
+		lurch_s = 0.0
+		var rear := Vector2(origin.x + ART_REAR + 30.0, GROUND - 2.0)
+		for i in 10:
+			fx.puff(
+				rear + Vector2(i * 8.0, 0),
+				Vector2(fx.rng.randf_range(-30.0, -10.0), fx.rng.randf_range(-12.0, -4.0)),
+				1.6,
+				Vector2(4.0, 18.0),
+				0.35,
+				Color(0.36, 0.3, 0.24),
+				1.0
+			)
 
 
-# --- Cues ---------------------------------------------------------------------------------------------------
+# --- Cues -----------------------------------------------------------------------------------------------
 
 
 func _on_cue(kind: String, data: Dictionary) -> void:
+	if _cues.size() >= CUE_QUEUE_MAX:
+		_cues.pop_front()
 	_cues.append({"kind": kind, "data": data})
-	if _cues.size() > CUE_QUEUE_MAX:
-		_cues = _cues.slice(_cues.size() - CUE_QUEUE_MAX)
 
 
 func _process_cues(state: TankState) -> void:
@@ -325,7 +527,7 @@ func _process_cues(state: TankState) -> void:
 		n += 1
 
 
-## Turns one game event into effects: muzzle blasts, impacts, explosions, shakes.
+## One event's effects (shots, hits, kills, the evade, breakdowns).
 func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 	match kind:
 		TankEvents.SHOT:
@@ -333,1412 +535,498 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 		TankEvents.HIT:
 			_cue_hit(state, data)
 		TankEvents.KILL:
-			if int(data.get("e", 0)) == TankIds.BOSS_CODE:
-				_boss_death()
-		TankEvents.RAM:
-			_cue_ram(state, data)
+			_cue_kill(state, data)
+		"evade":
+			if int(data.get("ok", 0)) == 1:
+				play_evade(_evade_kind())
 		TankEvents.BREAKDOWN:
-			rig.add_shake(3.5)
-			var at := rig.hull_point(Vector2(rig.hull_w * 0.4, 0.0))
-			for i in 3:
-				fx.explosion(at + Vector2(float(i) * 14.0 - 14.0, 4.0), false)
-		TankEvents.REPAIRED:
-			# Welding sparks on the armour's top band (the deck), never inside the cutaway rooms.
-			for i in 6:
-				var hx := 30.0 + float(i) * 12.0
-				fx.impact_sparks(rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0)), Vector2.UP)
-		TankEvents.ROTATION:
-			rig.flash_rooms()
-		TankEvents.OVERRUN:
-			_cue_overrun(data)
-		TankEvents.BOSS_PHASE:
-			rig.add_shake(3.0)
-			if int(data.get("p", 0)) == TankIds.BOSS_PHASE_2:
-				_schedule(0.1, _explode_boss_rear)
+			shake = 1.0
+			fx.boom(anchor("exhaust") + Vector2(30, 40), 18.0, 8)
+
+
+## Who evaded: the steam rider sprinting blows a smoke screen, anyone else lurches the tank.
+func _evade_kind() -> String:
+	var r := rider_of(TankIds.ENGINE_STEAM)
+	if r != null and r.ftp > 0.0 and r.raw_w >= r.ftp * 1.2:
+		var d := rider_of(TankIds.ENGINE_DIESEL)
+		if d == null or d.raw_w < d.ftp * 1.2:
+			return "smoke"
+	return "lurch"
 
 
 func _cue_shot(state: TankState, data: Dictionary) -> void:
 	var sh := int(data.get("sh", 0))
-	if int(data.get("s", -1)) >= 0:
-		if sh == TankIds.SHELL_BOW:
-			var idx := 0
-			for s in state.shells:
-				if s.id == int(data.get("id", 0)):
-					idx = 0 if s.vx >= 0.0 else 1
-			rig.fire_secondary(idx)
-		else:
-			rig.fire_main(_shell_strength(sh))
-		return
-	var src := int(data.get("src", 0))
-	if sh == TankIds.SHELL_BOSS_MAIN or src == 0:
-		var heavy := sh == TankIds.SHELL_BOSS_MAIN
-		var mz := _boss_muzzle(state, heavy)
-		if heavy:
-			fx.muzzle_blast(mz, Vector2.LEFT, 1.0, false)
-			rig.add_shake(2.0)
-		else:
-			fx.small_blast(mz, Vector2.LEFT, TankPalette.FIRE)
-		return
-	var row: Variant = enemy_rects.get(src)
-	var e := state.enemy(src)
-	if row is Rect2 and e != null:
-		fx.small_blast(
-			_enemy_muzzle(e, row), Vector2(-1.0 if e.side > 0 else 1.0, -0.05), TankPalette.FIRE
-		)
+	var slot := int(data.get("s", -1))
+	if slot >= 0 and sh in [TankIds.SHELL_LIGHT, TankIds.SHELL_HEAVY, TankIds.SHELL_OVER]:
+		var d := barrel_vector()
+		var m := muzzle()
+		var r := 34.0 if sh != TankIds.SHELL_LIGHT else 26.0
+		fx.flash(m + d * 4.0, r, 0.16, Color(1.0, 0.7, 0.3), d)
+		fx.light_scene(m, 1.0 if sh != TankIds.SHELL_LIGHT else 0.7, Color(1.0, 0.72, 0.4))
+		recoil = 1.0
+		_gun_shots += 1
+		for i in 4:
+			fx.puff(
+				m + d * (6.0 + i * 6.0),
+				d * (10.0 + i * 6.0) + Vector2(0, -6.0),
+				1.6,
+				Vector2(4.0, 16.0 + i * 2.0),
+				0.35,
+				Color(0.3, 0.28, 0.26),
+				0.5
+			)
+	elif slot >= 0 and sh == TankIds.SHELL_BOW:
+		_bow_burst()
+	elif slot < 0:
+		var src := int(data.get("src", 0))
+		var e := state.enemy(src)
+		if e != null and enemy_rects.has(src):
+			var er: Rect2 = enemy_rects[src]
+			var mz := enemy_muzzle(e, er)
+			var dir := Vector2.RIGHT if e.side < 0 else Vector2.LEFT
+			fx.flash(mz, 18.0, 0.12, Color(1.0, 0.55, 0.25), dir)
+			fx.light_scene(mz, 0.35, Color(1.0, 0.55, 0.25))
+		elif sh == TankIds.SHELL_BOSS_MAIN:
+			var bm := boss_rect(state).position + boss_muzzle()
+			fx.flash(bm - Vector2(4, 0), 40.0, 0.18, Color(1.0, 0.55, 0.25), Vector2.LEFT)
+			fx.light_scene(bm, 0.8, Color(1.0, 0.55, 0.25))
 
 
-static func _shell_strength(sh: int) -> float:
-	match sh:
-		TankIds.SHELL_HEAVY:
-			return 0.8
-		TankIds.SHELL_OVER:
-			return 1.0
-	return 0.45
+## The bow guns' burst: a flash at each muzzle, a stream of tracers at the nearest enemy ahead (or
+## down the road) and brass falling from the breeches.
+func _bow_burst() -> void:
+	var target := Vector2.ZERO
+	var best := INF
+	var front := anchor("headlight").x
+	for id: int in enemy_rects:
+		var r: Rect2 = enemy_rects[id]
+		var cx := r.get_center().x
+		if cx > front and cx - front < best:
+			best = cx - front
+			target = r.get_center() + Vector2(0, r.size.y * 0.1)
+	for n: String in ["bow_gun_upper_muzzle", "bow_gun_lower_muzzle"]:
+		var m := anchor(n)
+		fx.flash(m, 12.0, 0.08, Color(1.0, 0.8, 0.4), Vector2.RIGHT)
+		var tgt := target if target != Vector2.ZERO else m + Vector2(260, 14)
+		for i in 3:
+			var jitter := Vector2(fx.rng.randf_range(-6, 6), fx.rng.randf_range(-4, 4))
+			fx.tracer(m, tgt + jitter, Color(1.0, 0.78, 0.35), 0.18 + 0.07 * i)
+		fx.casing(m + Vector2(-24, 2), GROUND - 2.0)
+		fx.casing(m + Vector2(-26, 3), GROUND - 2.0)
+	if target != Vector2.ZERO:
+		fx.spark_burst(target, 5, Color(1.0, 0.8, 0.4), 50.0)
 
 
 func _cue_hit(state: TankState, data: Dictionary) -> void:
+	var on := int(data.get("on", -1))
+	var id := int(data.get("id", 0))
 	var dmg := float(data.get("dmg", 0))
-	var wx := float(data.get("x", 0)) - cam_x
-	match int(data.get("on", -1)):
-		TankEvents.ON_TANK:
-			# The shell strikes the armour's top band (the deck line), never the cutaway rooms: sparks
-			# over a room's lamp read as that room's own sparks.
-			var x := clampf(wx, rig.base_pos.x + 6.0, rig.base_pos.x + float(rig.hull_w) - 6.0)
-			var hx := x - rig.base_pos.x
-			var at := rig.hull_point(Vector2(hx, rig.deck_y(hx) + 2.0))
-			fx.impact_sparks(at, Vector2(1.0, -0.6).normalized())
-			rig.hit(clampf(dmg / 20.0, 0.1, 1.0))
-			if int(data.get("sh", 0)) == TankIds.SHELL_BOSS_MAIN:
-				fx.explosion(at, true)
-				rig.add_shake(4.0)
-		TankEvents.ON_ENEMY:
-			var r: Variant = enemy_rects.get(int(data.get("id", 0)))
-			var at := Vector2(wx, float(TankConst.GROUND_Y) - 20.0)
-			if r is Rect2:
-				at = (r as Rect2).get_center()
-			fx.impact_sparks(at, Vector2(1.0, -0.5).normalized())
-		TankEvents.ON_BOSS:
-			var at := _boss_part_center(state, TankBossState.part_of(int(data.get("id", 0))))
-			fx.impact_sparks(at, Vector2(1.0, -0.4).normalized())
-			if dmg >= 40.0:
-				fx.explosion(at, false)
-		TankEvents.ON_OBSTACLE:
-			fx.impact_sparks(Vector2(wx, float(TankConst.GROUND_Y) - 12.0), Vector2.UP)
-			fx.dirt_spray(Vector2(wx, float(TankConst.GROUND_Y)))
-
-
-func _cue_ram(state: TankState, data: Dictionary) -> void:
-	rig.add_shake(3.0)
-	var front := rig.hull_point(Vector2(float(rig.hull_w) + 14.0, float(rig.hull_h) - 10.0))
-	if int(data.get("ok", 0)) == 1:
-		var r: Variant = enemy_rects.get(int(data.get("id", 0)))
-		fx.explosion((r as Rect2).get_center() if r is Rect2 else front, false)
-	else:
-		fx.impact_sparks(front, Vector2.UP)
-		fx.dirt_spray(Vector2(front.x, float(TankConst.GROUND_Y)))
-	if state.hull.stall_s > 0.0:
-		rig.hit(0.6)
-
-
-func _cue_overrun(data: Dictionary) -> void:
-	match TankIds.seg_of(int(data.get("sg", 0))):
-		TankIds.SEG_ADVANCE:
-			_fade_t = FADE_S
-		TankIds.SEG_GUN_LINE:
-			_barrage_t = 2.4
-			_barrage_next = 0.0
-
-
-func _boss_death() -> void:
-	if _boss_death_done:
+	if on == TankEvents.ON_TANK:
+		shake = clampf(0.4 + dmg / 12.0, 0.4, 1.0)
+		var p := origin + Vector2(kit.anchor(variant, "headlight").x - 30.0, 120.0)
+		fx.boom(p + Vector2(fx.rng.randf_range(-60, 10), fx.rng.randf_range(-40, 10)), 14.0, 4)
 		return
-	_boss_death_done = true
-	for i in 7:
-		_schedule(0.2 * float(i), _explode_boss_random)
-	rig.add_shake(4.0)
-
-
-func _explode_boss_random() -> void:
-	if game == null or game.state == null or fx == null:
+	if on == TankEvents.ON_ENEMY and enemy_rects.has(id):
+		var r: Rect2 = enemy_rects[id]
+		fx.boom(r.get_center() + Vector2(fx.rng.randf_range(-8, 8), 0), 16.0, 4)
 		return
-	var bx := game.state.boss.x_px - cam_x
-	fx.explosion(Vector2(bx + fx.r(20.0, 300.0), fx.r(150.0, 280.0)), true)
-	rig.add_shake(3.0)
-
-
-func _explode_boss_rear() -> void:
-	if game == null or game.state == null or fx == null:
+	if on == TankEvents.ON_BOSS and state.boss.phase != TankIds.BOSS_NONE:
+		var br := boss_rect(state)
+		var part := TankBossState.part_of(id)
+		var at := br.get_center()
+		var meta: Dictionary = kit.enemies.get("behemoth", {}).get("meta", {})
+		if part >= 0 and part < 3:
+			var b: Array = meta.get("bogies_at", [])
+			if part < b.size():
+				at = br.position + br.size * TankKit.vec(b[part])
+		elif part == TankBossState.TURRET_PART:
+			at = br.position + br.size * TankKit.vec(meta.get("turret_at", [0.6, 0.3]))
+		fx.boom(at, 22.0, 6)
 		return
-	fx.explosion(_boss_part_center(game.state, 2), true)
+	var x := float(data.get("x", 0))
+	if x != 0.0:
+		fx.boom(Vector2(sx(x), GROUND - 18.0), 16.0, 4)
 
 
-func _schedule(delay: float, fn: Callable) -> void:
-	_timers.append({"t": delay, "fn": fn})
-
-
-func _process_timers(dt: float) -> void:
-	var i := 0
-	while i < _timers.size():
-		_timers[i]["t"] = float(_timers[i]["t"]) - dt
-		if float(_timers[i]["t"]) <= 0.0:
-			var fn: Callable = _timers[i]["fn"]
-			_timers.remove_at(i)
-			fn.call()
-		else:
-			i += 1
-	if _barrage_t > 0.0:
-		_barrage_t -= dt
-		_barrage_next -= dt
-		if _barrage_next <= 0.0:
-			_barrage_next = 0.22
-			fx.explosion(Vector2(fx.r(260.0, 610.0), fx.r(230.0, 290.0)), false)
-			fx.dirt_spray(Vector2(fx.r(260.0, 610.0), float(TankConst.GROUND_Y)))
-			rig.add_shake(1.5)
-
-
-func _update_fade(dt: float) -> void:
-	if _fade_t > 0.0:
-		_fade_t = maxf(0.0, _fade_t - dt)
-	var f := fade_amount()
-	if not is_equal_approx(f, _fade_was):
-		_fade_was = f
-		overlay.queue_redraw()
-
-
-## The black fade of a tow, 0 .. 1: in over the first third, held, out over the last third.
-func fade_amount() -> float:
-	if _fade_t <= 0.0:
-		return 0.0
-	var k := 1.0 - _fade_t / FADE_S
-	return clampf(minf(k / 0.33, (1.0 - k) / 0.33), 0.0, 1.0)
-
-
-# --- Tracking: enemies, wrecks, shells -----------------------------------------------------------------
-
-
-## Notes what is on screen and, for an enemy that vanished, a fireball and a wreck.
-func _track_enemies(state: TankState, dt: float) -> void:
-	var now := {}
-	for e in state.enemies:
-		now[e.id] = true
-	for id: int in _seen_enemies.keys():
-		if now.has(id):
-			continue
-		var info: Dictionary = _seen_enemies[id]
-		_seen_enemies.erase(id)
-		_hp_seen.erase(id)
-		fx.forget("e%d" % id)
-		var center: Vector2 = info["center"]
-		fx.explosion(center, int(info["code"]) >= TankIds.enemy_code(TankIds.ENEMY_MEDIUM))
-		rig.add_shake(1.0)
-		_add_wreck(info)
-	var i := 0
-	while i < wrecks.size():
-		wrecks[i]["age"] = float(wrecks[i]["age"]) + dt
-		if float(wrecks[i]["age"]) > WRECK_TTL_S:
-			fx.forget(str(wrecks[i]["key"]))
-			wrecks.remove_at(i)
-		else:
-			i += 1
-
-
-func _add_wreck(info: Dictionary) -> void:
-	(
-		wrecks
-		. append(
-			{
-				"x": float(info["x"]),
-				"w": int(info["w"]),
-				"h": int(info["h"]),
-				"code": int(info["code"]),
-				"side": int(info["side"]),
-				"age": 0.0,
-				"key": "wreck%d" % int(info["id"]),
-			}
-		)
-	)
-	if wrecks.size() > MAX_WRECKS:
-		var old: Dictionary = wrecks.pop_front()
-		fx.forget(str(old["key"]))
-
-
-## Wreck `w`'s haze veil 0..1 at screen rect `r`: it eases (WRECK_VEIL_S) toward 1 while a live
-## enemy (last frame's enemy_rects) overlaps it and back to 0 when none does.
-func wreck_veil(w: Dictionary, r: Rect2) -> float:
-	var want := 0.0
-	for er: Rect2 in enemy_rects.values():
-		if er.grow(3.0).intersects(r):
-			want = 1.0
-			break
-	var v := move_toward(float(w.get("veil", 0.0)), want, _dt / WRECK_VEIL_S)
-	w["veil"] = v
-	return v
-
-
-## The screen top-left of wreck `w` drawn at size `sz` on the back lane.
-func wreck_pos(w: Dictionary, sz: Vector2) -> Vector2:
-	var full := float(w["w"])
-	var x := float(w["x"]) - cam_x + (full - sz.x) * 0.5
-	return Vector2(x, float(TankConst.GROUND_Y) - sz.y + 2.0 - WRECK_LIFT_PX)
-
-
-## Shells that vanish while falling near the ground threw up dirt (judged on the state's latest
-## position, not the delayed drawn one, so a shell that lands between two frames still counts).
-func _track_shells(state: TankState) -> void:
-	var now := {}
-	for s in state.shells:
-		now[s.id] = true
-	for id: int in _seen_shells.keys():
-		if now.has(id):
-			continue
-		var info: Dictionary = _seen_shells[id]
-		_seen_shells.erase(id)
-		var p: Vector2 = info["pos"]
-		if p.y >= float(TankConst.GROUND_Y) - SHELL_LANDING_PX and float(info["vy"]) > 0.0:
-			fx.dirt_spray(Vector2(p.x - cam_x, float(TankConst.GROUND_Y)))
-	for s in state.shells:
-		_seen_shells[s.id] = {"pos": Vector2(s.x, s.y), "vy": s.vy, "type": s.type}
-
-
-# --- Rows ----------------------------------------------------------------------------------------------------
-
-
-func _build_props(state: TankState) -> void:
-	var rows: Array[Dictionary] = []
-	var ground := float(TankConst.GROUND_Y)
-	if state.seg.seg == TankIds.SEG_DEPOT:
-		_compound_wall(rows, ground)
-	if state.seg.seg == TankIds.SEG_DEPOT or state.seg.phase_index == 0:
-		var gs := TankSprites.size("depot_gate")
-		var gate_pos := Vector2(DEPOT_GATE_X - cam_x, ground - gs.y + 2.0)
-		rows.append(_sprite_row("depot_gate", gate_pos, gs, false, Color(0.78, 0.8, 0.84)))
-	_halt_line(rows, state)
-	_ground_props(rows, state)
-	for ob in state.obstacles:
-		_obstacle_row(rows, ob, state)
-	for w in wrecks:
-		var sprite := _enemy_sprite(int(w["code"]))
-		var sz := Vector2(float(w["w"]), float(w["h"]))
-		if sz.x <= 0.0:
-			sz = TankSprites.size(sprite)
-		# Wrecks lie on the back lane (smaller, higher, hazed and dark), so a live enemy keeping
-		# station over one keeps its own silhouette; their fires stay on the wreck.
-		sz = (sz * WRECK_SCALE).round()
-		var pos := wreck_pos(w, sz)
-		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
-		var veil := wreck_veil(w, Rect2(pos, sz))
-		var tint := WRECK_TINT.lerp(WRECK_VEIL_TINT, veil)
-		rows.append(_sprite_row(sprite, pos, sz, int(w["side"]) < 0, tint))
-		var wh := TankBackdrop.cell_hash(int(w["x"]), 61)
-		var hatch := pos + Vector2(sz.x * (0.3 + 0.4 * float(wh % 7) / 6.0), sz.y * 0.3)
-		if burn > 0.2:
-			var halo := 20.0 + 10.0 * burn
-			lights.add(hatch, halo, TankPalette.FIRE, 0.5 * burn * (1.0 - 0.5 * veil))
-		# Embers glow in the open hatch for a while after the flames: one slit at its own place
-		# on each wreck (never a row of matching lamps, never a round eye), then they die.
-		if burn > 0.0 or float(w["age"]) < WRECK_BURN_S * 2.0:
-			var glow := 0.3 + 0.1 * sin(_time * 3.1 + float(wh % 17))
-			port_light(rows, hatch + Vector2(0, float(wh % 5)), 3.0 + float(wh % 3), glow)
-	props_layer.set_rows(rows)
-
-
-## The size of the halt line's lamp post (tests find the line by it).
-const HALT_POST := Vector2(2, 24)
-
-
-## The halt line of an Advance, standing where the hull's front is when its rear reaches the end of
-## the road (TankHudModel.halt_distance_m is zero there): a row of concrete dragon's teeth across
-## the road (three blunt pyramids, the nearest largest, lit on their upper-left faces, mud banked at
-## their feet) and a short post at the line with a hooded amber lamp throwing its light down. No
-## banner, nothing striped and nothing brighter than the concrete but the lamp (no flag).
-func _halt_line(rows: Array[Dictionary], state: TankState) -> void:
-	if state.seg.seg != TankIds.SEG_ADVANCE or state.content == null:
+func _cue_kill(state: TankState, data: Dictionary) -> void:
+	var id := int(data.get("id", 0))
+	if int(data.get("e", 0)) == TankIds.BOSS_CODE:
+		var br := boss_rect(state)
+		for i in 5:
+			fx.boom(br.position + br.size * Vector2(0.2 + 0.15 * i, 0.5 + 0.08 * (i % 2)), 40.0, 8)
+		fx.light_scene(br.get_center(), 1.0, Color(1.0, 0.5, 0.2))
 		return
-	var length_m := float(state.content.segment(state.seg.phase_index).get("length_m", 0.0))
-	if length_m <= 0.0:
+	if not _seen.has(id):
 		return
-	var x := roundf(TankConst.m_to_px(length_m) + float(state.hull.hull_w) - cam_x)
-	if x < -40.0 or x > float(TankConst.SCREEN_W) + 40.0:
-		return
-	var ground := float(TankConst.GROUND_Y)
-	# Far to near: each tooth a little lower (nearer) and larger.
-	var teeth: Array[Vector3] = [Vector3(12, -4, 9), Vector3(26, -2, 11), Vector3(5, 1, 13)]
-	for t in teeth:
-		_tooth(rows, Vector2(x + t.x, ground + t.y), t.z)
-	var post := Rect2(Vector2(x, ground - HALT_POST.y), HALT_POST)
-	rows.append({"t": "rect", "r": post, "c": TankPalette.IRON, "of": "halt_line"})
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(post.position, Vector2(1, post.size.y)),
-			"c": TankPalette.STEEL_DARK
-		}
-	)
-	# The hood: a dark cowl over the lamp so its light falls on the road, not up into the sky.
-	var hood := post.position + Vector2(-3, -3)
-	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 3)), "c": TankPalette.IRON_DARK})
-	rows.append({"t": "rect", "r": Rect2(hood, Vector2(8, 1)), "c": TankPalette.STEEL_DARK})
-	rows.append(
-		{"t": "rect", "r": Rect2(hood + Vector2(2, 3), Vector2(3, 1)), "c": TankPalette.AMBER}
-	)
-	var lamp := hood + Vector2(3.5, 4.0)
-	lights.add(lamp, 6.0, TankPalette.GLOW_WARM, 0.6)
-	lights.add(lamp + Vector2(0, 10), 26.0, TankPalette.AMBER, 0.32)
+	var w: Dictionary = (_seen[id] as Dictionary).duplicate()
+	w["t"] = state.t
+	wrecks.append(w)
+	while wrecks.size() > MAX_WRECKS:
+		wrecks.pop_front()
+	if enemy_rects.has(id):
+		var r: Rect2 = enemy_rects[id]
+		fx.boom(r.get_center(), 30.0, 8)
+		fx.light_scene(r.get_center(), 0.6, Color(1.0, 0.5, 0.2))
 
 
-## One concrete dragon's tooth (a blunt pyramid seen from the side) standing on `foot` (its base's
-## middle), `s` px tall: a lit upper-left face, a darker right face, a flat cap and a mud foot.
-func _tooth(rows: Array[Dictionary], foot: Vector2, s: float) -> void:
-	var half := s * 0.62
-	var cap := s * 0.18
-	var top := foot + Vector2(-s * 0.08, -s)
-	var left_face := PackedVector2Array(
-		[foot + Vector2(-half, 0), top + Vector2(-cap, 0), top + Vector2(cap * 0.3, 0), foot]
-	)
-	var right_face := PackedVector2Array(
-		[foot, top + Vector2(cap * 0.3, 0), top + Vector2(cap, 0), foot + Vector2(half, 0)]
-	)
-	rows.append({"t": "poly", "pts": left_face, "c": TankPalette.STEEL_DARK})
-	rows.append({"t": "poly", "pts": right_face, "c": TankPalette.IRON})
-	rows.append(
-		{
-			"t": "line",
-			"a": foot + Vector2(-half, -0.5),
-			"b": top + Vector2(-cap, 0.5),
-			"w": 1.0,
-			"c": TankPalette.STEEL
-		}
-	)
-	rows.append(
-		{
-			"t": "line",
-			"a": top + Vector2(-cap, 0),
-			"b": top + Vector2(cap, 0),
-			"w": 1.0,
-			"c": TankPalette.STEEL
-		}
-	)
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2((foot + Vector2(-half - 1.0, -2.0)).round(), Vector2(half * 2.0 + 2.0, 3)),
-			"c": TankPalette.MUD_DARK
-		}
-	)
+# --- Enemies and wrecks ---------------------------------------------------------------------------------
 
 
-## Props on the tank's plane, placed by a hash of the world cell (no RNG), so the road ahead is never
-## empty: flooded craters that catch the lamps, rubble, a pair of telegraph poles with two wires
-## sagging from one to the other (never a single pole with a wire ending in the air), fence posts
-## strung with sagging wire, and flooded ruts (a dark sheet of water with a cold sky line and the
-## near lights' reflection). The depot yard has its own (_depot_props).
-func _ground_props(rows: Array[Dictionary], state: TankState) -> void:
-	var ground := float(TankConst.GROUND_Y)
-	if state.seg.seg == TankIds.SEG_DEPOT:
-		_depot_props(rows, ground)
-		return
-	var first := int(floor(cam_x / PROP_CELL_PX)) - 1
-	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / PROP_CELL_PX)) + 1
-	for cell in range(first, last + 1):
-		var h := TankBackdrop.cell_hash(cell, state.seg.phase_index + 17)
-		var x := float(cell) * PROP_CELL_PX + float(h % 120) - cam_x
-		match h % 8:
-			0, 6:
-				_flooded_crater(rows, x, ground)
-			1, 7:
-				var rs := TankSprites.size("prop_rubble")
-				rows.append(
-					_sprite_row(
-						"prop_rubble",
-						Vector2(x, ground - rs.y + 3.0),
-						rs,
-						h % 2 == 0,
-						Color(0.8, 0.8, 0.82)
-					)
-				)
-			2:
-				_poles(rows, x, ground, h)
-			3, 4:
-				_fence(rows, x, ground, h)
-			5:
-				_puddle(rows, x, ground, h)
-				_fence(rows, x + 40.0, ground, h >> 2)
+func enemy_kind(e: TankEnemyState) -> String:
+	var k := TankIds.enemy_of(e.code)
+	return k if kit.enemies.has(k) else "medium"
 
 
-## A shell crater full of rainwater: the crater's rim, a flat sheet of dark water in it whose far
-## edge catches the cold sky, and on its surface the reflection of the lamps and fires near it (the
-## tank's room glow as it passes, a burning farm behind): a soft streak in their colour.
-func _flooded_crater(rows: Array[Dictionary], x: float, ground: float) -> void:
-	var cs := TankSprites.size("prop_crater")
-	rows.append(
-		_sprite_row("prop_crater", Vector2(x, ground - 9.0), cs, false, Color(0.7, 0.72, 0.78))
-	)
-	var mid := Vector2(roundf(x + cs.x * 0.5), ground - 2.0)
-	var half := roundf(cs.x * 0.34)
-	var pts := PackedVector2Array()
-	for k in 13:
-		var a := PI * float(k) / 12.0
-		pts.append(mid + Vector2(-cos(a) * half, -sin(a) * 1.5))
-	for k in 13:
-		var a := PI * float(k) / 12.0
-		pts.append(mid + Vector2(cos(a) * half, sin(a) * 2.0))
-	rows.append({"t": "poly", "pts": pts, "c": Color("#121519")})
-	rows.append(
-		{
-			"t": "line",
-			"a": mid + Vector2(-half + 3.0, -1.0),
-			"b": mid + Vector2(half - 3.0, -1.0),
-			"w": 1.0,
-			"c": TankPalette.with_alpha(TankPalette.SLATE, 0.9)
-		}
-	)
-	_water_glint(mid, half)
-
-
-## The reflection on a sheet of water centred at `mid`, `half` px either side: the colour of the
-## halos near it (this frame's world lights and the scenery's fires), as a flat additive streak and
-## a soft glow under it, stronger the nearer and brighter they are; with no light near, a faint cold
-## sheen of the sky.
-func _water_glint(mid: Vector2, half: float) -> void:
-	var wet := lights.intensity_near(mid + Vector2(0, -30), 90.0)
-	var col := lights.near_color()
-	var far := backdrop.scenery_lights.intensity_near(mid + Vector2(0, -60), 160.0)
-	if far > wet:
-		wet = far * 0.8
-		col = backdrop.scenery_lights.near_color()
-	var k := minf(0.55, wet * 0.6)
-	if wet < 0.06:
-		# No lamp near: the water still holds the cold night sky (a faint sheen, always there, so
-		# a flooded crater reads in the dark and its glint never blinks on and off).
-		col = TankPalette.COLD
-		k = 0.08
-	lights.add_line(mid + Vector2(-half * 0.7, 0), mid + Vector2(half * 0.7, 0), col, k)
-	lights.add(mid + Vector2(0, 1), half * 0.8, col, k * 0.35)
-
-
-## Two telegraph poles 60-80 px apart, the far one leaning after a near miss, each with a short
-## bracket and two insulators, and two wires sagging from the near pole's insulators to the far
-## pole's: a stretch of line that ends on poles at both ends, on small mud heaps.
-func _poles(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var gap := 60.0 + float(h % 21)
-	var tips: Array[Array] = []
-	for k in 2:
-		var px := x + gap * float(k)
-		var ht := 44.0 + float((h >> (3 + k * 4)) % 10)
-		var lean := 0.0 if k == 0 else float((h >> 9) % 7) - 3.0
-		var top := Vector2(px + lean, ground - ht)
-		var foot := Vector2(px, ground + 1.0)
-		rows.append({"t": "line", "a": foot, "b": top, "w": 3.0, "c": TankPalette.IRON_DARK})
-		rows.append(
-			{
-				"t": "line",
-				"a": foot + Vector2(-1, 0),
-				"b": top + Vector2(-1, 0),
-				"w": 1.0,
-				"c": TankPalette.STEEL_DARK
-			}
-		)
-		var bar := top.lerp(foot, 0.07)
-		var l := bar + Vector2(-4, 0.5)
-		var r := bar + Vector2(4, -0.5)
-		rows.append({"t": "line", "a": l, "b": r, "w": 2.0, "c": TankPalette.IRON})
-		for ins: Vector2 in [l, r]:
-			rows.append(
-				{
-					"t": "rect",
-					"r": Rect2((ins + Vector2(0, -1)).round(), Vector2(1, 1)),
-					"c": TankPalette.STEEL_PALE
-				}
-			)
-		tips.append([l, r])
-		_mud_heap(rows, foot)
-	for side in 2:
-		var a: Vector2 = tips[0][side]
-		var b: Vector2 = tips[1][side]
-		var sag := 7.0 + float((h >> (5 + side)) % 4)
-		var wire := PackedVector2Array()
-		for k in 11:
-			var t := float(k) / 10.0
-			wire.append(a.lerp(b, t) + Vector2(0, 4.0 * sag * t * (1.0 - t)))
-		rows.append({"t": "polyline", "pts": wire, "w": 1.0, "c": TankPalette.STEEL_DARK})
-
-
-func _mud_heap(rows: Array[Dictionary], foot: Vector2) -> void:
-	rows.append(
-		{
-			"t": "poly",
-			"pts":
-			PackedVector2Array(
-				[
-					foot + Vector2(-8, 1),
-					foot + Vector2(-3, -3),
-					foot + Vector2(4, -2),
-					foot + Vector2(9, 1)
-				]
-			),
-			"c": TankPalette.MUD_DARK
-		}
-	)
-
-
-## The depot yard on the tank's plane, by a hash of the world cell: groups of fuel drums, concrete
-## barrier blocks, stacked crates and floodlight posts throwing a cold light down on the apron.
-func _depot_props(rows: Array[Dictionary], ground: float) -> void:
-	_depot_yards(rows, ground)
-	var first := int(floor(cam_x / DEPOT_PROP_CELL_PX)) - 1
-	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PROP_CELL_PX)) + 1
-	for cell in range(first, last + 1):
-		var h := TankBackdrop.cell_hash(cell, 977)
-		var x := roundf(float(cell) * DEPOT_PROP_CELL_PX + float(h % 90) - cam_x)
-		match h % 5:
-			0, 1:
-				_drums(rows, x, ground, h)
-			2:
-				_barriers(rows, x, ground, h)
-			3:
-				_crates(rows, x, ground, h)
-			4:
-				_floodlight(rows, x, ground, h)
-
-
-## The depot's yard gates and workshops (DEPOT_BAY_PX) on screen, behind the road's props. The
-## first bays are the depot gate's own (DEPOT_GATE_X, drawn by _build_props, alone in view as the
-## roll-out starts), so the yards start at bay 2.
-func _depot_yards(rows: Array[Dictionary], ground: float) -> void:
-	var first := int(floor((cam_x - 200.0) / DEPOT_BAY_PX))
-	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_BAY_PX))
-	for bay in range(maxi(first, 2), last + 1):
-		var h := TankBackdrop.cell_hash(bay, 4211)
-		var x := roundf(float(bay) * DEPOT_BAY_PX + 30.0 + float(h % 60) - cam_x)
-		if bay % 3 == 1:
-			var gs := (TankSprites.size("depot_gate") * 0.86).round()
-			var pos := Vector2(x, ground - gs.y - 2.0)
-			var row := _sprite_row("depot_gate", pos, gs, false, DEPOT_YARD_TINT)
-			row["of"] = "yard_gate"
-			rows.append(row)
-			lights.add(pos + Vector2(gs.x * 0.5, gs.y * 0.17), 22.0, TankPalette.AMBER, 0.3)
-		else:
-			_workshop(rows, x, ground - 3.0, h)
-
-
-## The depot's compound wall along the back of the yard for the whole roll-out: a low concrete
-## wall with a lit coping, piers every DEPOT_PIER_PX world px (some carrying a hooded lamp that
-## throws a cold pool down the wall), behind the gates and workshops.
-func _compound_wall(rows: Array[Dictionary], ground: float) -> void:
-	var base := ground - 6.0
-	var top := base - DEPOT_WALL_H
-	var wall := Rect2(-2.0, top, float(TankConst.SCREEN_W) + 4.0, DEPOT_WALL_H)
-	rows.append({"t": "rect", "r": wall, "c": Color("#23262a"), "of": "compound_wall"})
-	rows.append({"t": "rect", "r": Rect2(-2.0, top, wall.size.x, 1), "c": TankPalette.STEEL_DARK})
-	rows.append({"t": "rect", "r": Rect2(-2.0, top + 1.0, wall.size.x, 1), "c": TankPalette.IRON})
-	var first := int(floor(cam_x / DEPOT_PIER_PX)) - 1
-	var last := int(floor((cam_x + float(TankConst.SCREEN_W)) / DEPOT_PIER_PX)) + 1
-	for k in range(first, last + 1):
-		var x := roundf(float(k) * DEPOT_PIER_PX - cam_x)
-		var h := TankBackdrop.cell_hash(k, 4271)
-		rows.append(
-			{"t": "rect", "r": Rect2(x, top - 3.0, 6, DEPOT_WALL_H + 3.0), "c": Color("#2e3135")}
-		)
-		rows.append({"t": "rect", "r": Rect2(x, top - 3.0, 6, 1), "c": TankPalette.STEEL_LIGHT})
-		rows.append(
-			{
-				"t": "rect",
-				"r": Rect2(x + 5.0, top - 2.0, 1, DEPOT_WALL_H + 2.0),
-				"c": TankPalette.IRON
-			}
-		)
-		# Water stains running down from the coping.
-		rows.append(
-			{
-				"t": "rect",
-				"r": Rect2(x + 14.0 + float(h % 30), top + 2.0, 1, 4.0 + float(h % 5)),
-				"c": TankPalette.IRON
-			}
-		)
-		if h % 3 == 0:
-			var lamp := Vector2(x + 3.0, top - 5.0)
-			rows.append(
-				{
-					"t": "rect",
-					"r": Rect2(lamp + Vector2(-3, -1), Vector2(7, 2)),
-					"c": TankPalette.IRON_DARK
-				}
-			)
-			rows.append(
-				{
-					"t": "rect",
-					"r": Rect2(lamp + Vector2(-2, 1), Vector2(5, 1)),
-					"c": TankPalette.COLD_LIGHT
-				}
-			)
-			lights.add(lamp + Vector2(0.5, 2.0), 5.0, TankPalette.WHITE_COLD, 0.45)
-			lights.add(lamp + Vector2(0.5, 10.0), 18.0, TankPalette.COLD_LIGHT, 0.16)
-
-
-## A depot workshop standing on `base` from x: a long brick shed (its width by hash) under a
-## sawtooth roof, two or three window groups of different sizes, some lit warm, a roller door, and
-## a tapering brick stack rising from one end (no bar, no beam).
-func _workshop(rows: Array[Dictionary], x: float, base: float, h: int) -> void:
-	var w := 96.0 + float(h % 40)
-	var ht := 34.0 + float((h >> 6) % 10)
-	var top := base - ht
-	var body := Rect2(x, top, w, ht)
-	rows.append({"t": "rect", "r": body, "c": Color("#3a2e26"), "of": "workshop"})
-	# Brick courses catching the yard lamps now and then.
-	for cy in range(int(top) + 4, int(base) - 4, 5):
-		var cw := 10.0 + float((h >> (cy % 9)) % 20)
-		var cx := x + 4.0 + float((h >> (cy % 7)) % int(maxf(w - cw - 8.0, 1.0)))
-		rows.append({"t": "rect", "r": Rect2(cx, cy, cw, 1), "c": Color("#4a3a2e")})
-	rows.append({"t": "rect", "r": Rect2(x, top, 2, ht), "c": TankPalette.MUD_DARK})
-	rows.append({"t": "rect", "r": Rect2(x + w - 2.0, top, 2, ht), "c": TankPalette.RUST_DARK})
-	rows.append({"t": "rect", "r": Rect2(x, base - 3.0, w, 3), "c": TankPalette.COAL})
-	# The sawtooth roof: teeth rising to the right, their steep faces glazed and dark.
-	var teeth := int(w / 16.0)
-	for t in teeth:
-		var tx := x + float(t) * 16.0
-		var tooth := PackedVector2Array(
-			[Vector2(tx, top), Vector2(tx + 13.0, top - 9.0), Vector2(tx + 16.0, top)]
-		)
-		rows.append({"t": "poly", "pts": tooth, "c": TankPalette.IRON_DARK})
-		rows.append(
-			{
-				"t": "line",
-				"a": Vector2(tx, top - 0.5),
-				"b": Vector2(tx + 13.0, top - 9.5),
-				"w": 1.0,
-				"c": TankPalette.STEEL_DARK
-			}
-		)
-	# The roller door, half up, a dark mouth under it.
-	var dx := x + 8.0 + float((h >> 3) % 12)
-	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 18), "c": TankPalette.BLACK})
-	rows.append({"t": "rect", "r": Rect2(dx, base - 18.0, 18, 7), "c": TankPalette.IRON})
-	rows.append({"t": "rect", "r": Rect2(dx, base - 12.0, 18, 1), "c": TankPalette.STEEL_DARK})
-	# Window groups along the wall, irregular, some lit.
-	var wx := dx + 26.0
-	var k := 0
-	while wx < x + w - 10.0:
-		var ww := 4.0 + float((h >> (k + 2)) % 4)
-		var wy := top + 8.0 + float((h >> (k + 5)) % 4)
-		var lit := (h >> (k + 9)) % 3 != 0
-		var col := TankPalette.GLOW_WARM if lit else TankPalette.SOOT
-		rows.append({"t": "rect", "r": Rect2(wx, wy, ww, 5), "c": col})
-		if lit:
-			rows.append({"t": "rect", "r": Rect2(wx, wy + 3.0, ww, 2), "c": TankPalette.AMBER})
-			lights.add(Vector2(wx + ww * 0.5, wy + 2.0), 12.0 + ww, TankPalette.AMBER, 0.28)
-		wx += ww + 9.0 + float((h >> (k + 4)) % 9)
-		k += 1
-	# The stack at one end.
-	var sx := x + w - 14.0 if h % 2 == 0 else x + 6.0
-	var sh := 30.0 + float((h >> 11) % 14)
-	var stack := PackedVector2Array(
-		[
-			Vector2(sx, top),
-			Vector2(sx + 1.0, top - sh),
-			Vector2(sx + 6.0, top - sh),
-			Vector2(sx + 7.0, top),
-		]
-	)
-	rows.append({"t": "poly", "pts": stack, "c": TankPalette.RUST_DARK})
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(sx + 5.0, top - sh, 1, sh),
-			"c": TankPalette.with_alpha(TankPalette.RUST, 0.8)
-		}
-	)
-
-
-## Two to four upright fuel drums, rust-dark with two rim bands and a lit edge.
-func _drums(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var n := 2 + h % 3
-	for k in n:
-		var dx := x + float(k) * 7.0 + float((h >> k) % 2)
-		var body := TankPalette.RUST_DARK if k % 2 == 0 else TankPalette.IRON
-		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 9), "c": body})
-		rows.append({"t": "rect", "r": Rect2(dx, ground - 9.0, 6, 1), "c": TankPalette.STEEL_DARK})
-		rows.append({"t": "rect", "r": Rect2(dx, ground - 6.0, 6, 1), "c": TankPalette.COAL})
-		rows.append({"t": "rect", "r": Rect2(dx, ground - 3.0, 6, 1), "c": TankPalette.COAL})
-		rows.append({"t": "rect", "r": Rect2(dx + 5.0, ground - 8.0, 1, 7), "c": TankPalette.RUST})
-
-
-## A row of two or three concrete barrier blocks (wide feet, sloped faces, a lit top).
-func _barriers(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var n := 2 + h % 2
-	for k in n:
-		var bx := x + float(k) * 17.0
-		var pts := PackedVector2Array(
-			[
-				Vector2(bx, ground + 1.0),
-				Vector2(bx + 3.0, ground - 4.0),
-				Vector2(bx + 4.0, ground - 9.0),
-				Vector2(bx + 11.0, ground - 9.0),
-				Vector2(bx + 12.0, ground - 4.0),
-				Vector2(bx + 15.0, ground + 1.0)
-			]
-		)
-		rows.append({"t": "poly", "pts": pts, "c": TankPalette.STEEL_DARK})
-		rows.append({"t": "rect", "r": Rect2(bx + 4.0, ground - 9.0, 7, 1), "c": TankPalette.STEEL})
-
-
-## Stacked wooden crates: two below, one on top.
-func _crates(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var boxes: Array[Rect2] = [Rect2(x, ground - 9.0, 10, 9), Rect2(x + 11.0, ground - 8.0, 9, 8)]
-	if h % 2 == 0:
-		boxes.append(Rect2(x + 4.0, ground - 17.0, 10, 8))
-	for b in boxes:
-		rows.append({"t": "rect", "r": b, "c": TankPalette.MUD})
-		var lid := Rect2(b.position, Vector2(b.size.x, 1))
-		rows.append({"t": "rect", "r": lid, "c": TankPalette.MUD_PALE})
-		var side := Rect2(b.position + Vector2(b.size.x - 1.0, 1.0), Vector2(1, b.size.y - 1.0))
-		rows.append({"t": "rect", "r": side, "c": TankPalette.MUD_DARK})
-
-
-## A floodlight post: a steel post with a hooded lamp head throwing a cold light onto the apron.
-func _floodlight(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var ht := 40.0 + float(h % 9)
-	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 2, ht), "c": TankPalette.IRON})
-	rows.append({"t": "rect", "r": Rect2(x, ground - ht, 1, ht), "c": TankPalette.STEEL_DARK})
-	var head := Vector2(x - 3.0, ground - ht - 2.0)
-	rows.append({"t": "rect", "r": Rect2(head, Vector2(8, 2)), "c": TankPalette.IRON_DARK})
-	var lens := Rect2(head + Vector2(1, 2), Vector2(6, 1))
-	rows.append({"t": "rect", "r": lens, "c": TankPalette.COLD_LIGHT})
-	var lamp := head + Vector2(4, 3)
-	lights.add(lamp, 6.0, TankPalette.WHITE_COLD, 0.5)
-	lights.add(lamp + Vector2(0, 14), 30.0, TankPalette.COLD_LIGHT, 0.2)
-	_mud_heap(rows, Vector2(x + 1.0, ground + 1.0))
-
-
-## Wire on stakes: 3-5 leaning timber stakes (their tops catching the cold sky) strung with two
-## strands of sagging barbed wire, its barbs glinting every few px; every strand is tied to a stake
-## at both ends. Lighter than the mud behind it, so the wire reads (polish round 6: it was lost).
-func _fence(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var n := 3 + h % 3
-	var tops: Array[Vector2] = []
-	for k in n:
-		var px := roundf(x + float(k) * (13.0 + float((h >> k) % 6)))
-		var ht := 14.0 + float((h >> (k + 3)) % 8)
-		var top := Vector2(px + float((h >> (k + 1)) % 3) - 1.0, ground - ht).round()
-		tops.append(top)
-		var foot := Vector2(px, ground + 1.0)
-		rows.append({"t": "line", "a": foot, "b": top, "w": 2.0, "c": TankPalette.MUD})
-		rows.append(
-			{
-				"t": "line",
-				"a": foot + Vector2(1, 0),
-				"b": top + Vector2(1, 0),
-				"w": 1.0,
-				"c": TankPalette.MUD_PALE
-			}
-		)
-		rows.append(
-			{"t": "rect", "r": Rect2(top + Vector2(0, -1), Vector2(2, 1)), "c": TankPalette.SLATE}
-		)
-	for strand in 2:
-		var pts := PackedVector2Array()
-		for k in range(tops.size() - 1):
-			for q in 6:
-				var t := float(q) / 6.0
-				var sag := sin(t * PI) * (2.0 + float(strand))
-				pts.append(
-					tops[k].lerp(tops[k + 1], t) + Vector2(0, 2.0 + 5.0 * float(strand) + sag)
-				)
-		pts.append(tops[tops.size() - 1] + Vector2(0, 2.0 + 5.0 * float(strand)))
-		rows.append({"t": "polyline", "pts": pts, "w": 1.0, "c": TankPalette.STEEL_LIGHT})
-		for q in range(2, pts.size() - 1, 3):
-			var b := pts[q].round()
-			rows.append(
-				{
-					"t": "rect",
-					"r": Rect2(b + Vector2(0, -1), Vector2(1, 1)),
-					"c": TankPalette.STEEL_PALE
-				}
-			)
-
-
-## A flooded rut: a flat dark sheet of water on the road, its far edge catching the cold sky and its
-## surface the near lights' colour.
-func _puddle(rows: Array[Dictionary], x: float, ground: float, h: int) -> void:
-	var w := 22.0 + float(h % 18)
-	var y := ground - 2.0
-	var pts := PackedVector2Array()
-	for k in 13:
-		var a := PI * float(k) / 12.0
-		pts.append(Vector2(x + w * 0.5 - cos(a) * w * 0.5, y + 1.0 - sin(a) * 2.0))
-	for k in 13:
-		var a := PI * float(k) / 12.0
-		pts.append(Vector2(x + w * 0.5 + cos(a) * w * 0.5, y + 1.0 + sin(a) * 1.0))
-	rows.append({"t": "poly", "pts": pts, "c": TankPalette.COAL})
-	rows.append(
-		{
-			"t": "line",
-			"a": Vector2(x + 3.0, y - 0.5),
-			"b": Vector2(x + w - 3.0, y - 0.5),
-			"w": 1.0,
-			"c": TankPalette.with_alpha(TankPalette.SLATE, 0.8)
-		}
-	)
-	var mid := Vector2(x + w * 0.5, y)
-	var wet := lights.intensity_near(mid, 80.0)
-	if wet > 0.04:
-		var k := minf(0.5, wet * 0.5)
-		lights.add_line(
-			mid + Vector2(-w * 0.3, 1), mid + Vector2(w * 0.3, 1), lights.near_color(), k
-		)
-
-
-func _obstacle_row(rows: Array[Dictionary], ob: TankObstacleState, state: TankState) -> void:
-	if ob.cleared:
-		return
-	var kind := TankIds.obstacle_of(ob.code)
-	if kind == TankIds.OBST_TANK_TRAPS:
-		if not state.hull.traps_cleared:
-			TankObstacleArt.traps(rows, ob.x_px - cam_x, float(ob.w), ob.id)
-		return
-	if kind != TankIds.OBST_WRECK and kind != TankIds.OBST_DRILL_WRECK:
-		TankObstacleArt.wire(rows, ob.x_px - cam_x, float(ob.w), ob.id)
-		return
-	var sprite := "prop_wire"
-	var tint := Color.WHITE
-	match kind:
-		TankIds.OBST_WRECK:
-			sprite = "prop_wreck_barricade"
-		TankIds.OBST_DRILL_WRECK:
-			sprite = "prop_wreck_barricade"
-			tint = Color(0.55, 0.56, 0.58)
-		TankIds.OBST_TANK_TRAPS:
-			sprite = "prop_tank_traps"
-			if state.hull.traps_cleared:
-				return
-	var sz := TankSprites.size(sprite)
-	var pos := Vector2(
-		ob.x_px - cam_x + (float(ob.w) - sz.x) * 0.5, float(TankConst.GROUND_Y) - sz.y + 3.0
-	)
-	rows.append(_sprite_row(sprite, pos, sz, false, tint))
-	if kind == TankIds.OBST_WRECK or kind == TankIds.OBST_DRILL_WRECK:
-		fx.fire_and_smoke("ob%d" % ob.id, pos + Vector2(sz.x * 0.5, 4.0), 0.0, 0.5, _dt)
-
-
-func _enemy_sprite(code: int) -> String:
-	return TankSprites.enemy_id(TankIds.enemy_of(code))
-
-
-func _build_enemies(state: TankState, t: float) -> void:
-	var rows: Array[Dictionary] = []
-	enemy_rects.clear()
-	var dug_i := 0
-	var ground := float(TankConst.GROUND_Y)
-	# Dug-in guns are drawn first, on lanes behind the road, so a tank passing in front of a
-	# revetment keeps its own silhouette; the rest share the road and step back to a second lane
-	# only where they would overlap (a gap of ENEMY_GAP_PX at least), back lane drawn first.
-	var order: Array[TankEnemyState] = []
-	for e in state.enemies:
-		if TankIds.enemy_of(e.code) == TankIds.ENEMY_DUGIN:
-			order.append(e)
-	var lanes := enemy_lanes(state)
-	for want in [1, 0]:
-		for e in state.enemies:
-			if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN and int(lanes.get(e.id, 0)) == want:
-				order.append(e)
-	for e in order:
-		var type := TankIds.enemy_of(e.code)
-		var sprite := TankSprites.enemy_id(type)
-		var sz := Vector2(float(e.w), float(e.h))
-		if sz.x <= 0.0:
-			sz = TankSprites.size(sprite)
-		var lift := 0.0
-		var dim := 1.0
-		if type == TankIds.ENEMY_DUGIN:
-			# Dug-ins alternate between two lanes behind the road so neighbours never merge.
-			lift = 7.0 if dug_i % 2 == 0 else 13.0
-			dim = 0.72 if dug_i % 2 == 0 else 0.6
-			dug_i += 1
-		elif int(lanes.get(e.id, 0)) == 1:
-			# The back lane: higher and dimmer, toward the haze.
-			lift = 6.0
-			dim = 0.72
-		var pos := Vector2(enemy_x(e) - cam_x, ground - sz.y + 2.0 - lift)
-		var max_hp := enemy_max_hp(state, type)
-		var hit := hit_flash(e, max_hp)
-		var tint := Color(dim + 0.75 * hit, dim + 0.55 * hit, dim + 0.4 * hit)
-		rows.append(_sprite_row(sprite, pos, sz, e.side < 0, tint))
-		enemy_rects[e.id] = Rect2(pos.round(), sz)
-		if max_hp > 0.0 and e.hp < max_hp * DAMAGE_SMOKE_FRAC:
-			var vent := pos + Vector2(sz.x * (0.45 if e.side > 0 else 0.55), sz.y * 0.35)
-			fx.fire_and_smoke("e%d_dmg" % e.id, vent, 0.0, 0.7, _dt)
-			if e.hp < max_hp * DAMAGE_FIRE_FRAC:
-				# Fire inside: one hatch slit glowing amber, flickering (never a pair of round orbs,
-				# which read as eyes).
-				var k := 0.45 + 0.15 * sin(_time * 7.0 + float(e.id % 11))
-				var slit := pos + Vector2(sz.x * (0.62 if e.side > 0 else 0.38), sz.y * 0.42)
-				port_light(rows, slit.round(), 5.0, k)
-		_seen_enemies[e.id] = {
-			"id": e.id,
-			"x": enemy_x(e),
-			"w": int(sz.x),
-			"h": int(sz.y),
-			"code": e.code,
-			"side": e.side,
-			"center": pos + sz * 0.5,
-		}
-		if e.telegraph_s > 0.0:
-			_telegraph_light(state, e, type, Rect2(pos, sz))
-		elif e.mode in [TankIds.EM_ENTER, TankIds.EM_MOVE, TankIds.EM_BACKOFF, TankIds.EM_LEAVE]:
-			var stack := pos + Vector2(sz.x * (0.25 if e.side > 0 else 0.7), 2.0)
-			fx.exhaust("e%d" % e.id, stack, 0.4, _dt)
-	_boss_rows(state, t, rows)
-	enemies_layer.set_rows(rows)
-
-
-## The hit flash of `e`, 1 at a hit fading to 0 over HIT_FLASH_S: its HP dropped since the last
-## frame (an enemy first seen damaged does not flash).
-func hit_flash(e: TankEnemyState, max_hp: float) -> float:
-	if max_hp <= 0.0:
-		return 0.0
-	var seen: Array = _hp_seen.get(e.id, [e.hp, 0.0])
-	var left := maxf(float(seen[1]) - _dt, 0.0)
-	if e.hp < float(seen[0]) - 0.01:
-		left = HIT_FLASH_S
-	_hp_seen[e.id] = [e.hp, left]
-	return clampf(left / HIT_FLASH_S, 0.0, 1.0)
-
-
-## A glowing hatch or port slit centred at `at`, `w` px wide and 1 px high (an amber core in a fire
-## rim, palette colours) with a flat additive glow along it, at `k` 0..1: the light of a fire inside
-## a hull, never round.
-func port_light(rows: Array[Dictionary], at: Vector2, w: float, k: float) -> void:
-	var p := (at - Vector2(w * 0.5, 0.0)).round()
-	rows.append(
-		{"t": "rect", "r": Rect2(p + Vector2(-1, 0), Vector2(w + 2.0, 1)), "c": TankPalette.FIRE}
-	)
-	rows.append(
-		{"t": "rect", "r": Rect2(p + Vector2(1, 0), Vector2(w - 2.0, 1)), "c": TankPalette.AMBER}
-	)
-	lights.add_line(p + Vector2(-1, 0.5), p + Vector2(w + 1.0, 0.5), TankPalette.AMBER, 0.5 * k)
-	lights.add_line(p + Vector2(0, -0.5), p + Vector2(w, -0.5), TankPalette.FIRE, 0.25 * k)
-
-
-## The road lane of every enemy that is not dug in, enemy id -> 0 (front) or 1 (back): left to right,
-## an enemy takes the front lane unless it would come within ENEMY_GAP_PX of the last one there, then
-## the back lane on the same rule, else whichever lane's last enemy ends farther left.
-func enemy_lanes(state: TankState) -> Dictionary:
-	var road: Array[TankEnemyState] = []
-	for e in state.enemies:
-		if TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
-			road.append(e)
-	road.sort_custom(_drawn_left_of)
-	var ends: Array[float] = [-INF, -INF]
+## Depth lanes: enemies sorted by x, each in the nearest lane (0 front .. LANES - 1 back) where it
+## keeps clear of the one before it, so none overlap at a gun line (the round 2 mock's fix).
+func _lanes(state: TankState) -> Dictionary:
 	var out := {}
-	for e in road:
-		var x := enemy_x(e)
-		var w := float(e.w) if e.w > 0 else TankSprites.size(_enemy_sprite(e.code)).x
+	var ends: Array[float] = []
+	ends.resize(LANES)
+	ends.fill(-INF)
+	var list: Array[TankEnemyState] = []
+	for e in state.enemies:
+		if e.mode != TankIds.EM_DEAD:
+			list.append(e)
+	list.sort_custom(func(a: TankEnemyState, b: TankEnemyState) -> bool: return a.x_px < b.x_px)
+	for e2 in list:
+		var w := float(kit.enemies[enemy_kind(e2)]["size"].x)
+		var x := sx(enemy_x(e2) + float(e2.w) * 0.5) - w * 0.5
 		var lane := 0
-		if x < ends[0] + ENEMY_GAP_PX:
-			lane = 1 if (x >= ends[1] + ENEMY_GAP_PX or ends[1] < ends[0]) else 0
+		while lane < LANES - 1 and x < ends[lane] + 6.0:
+			lane += 1
 		ends[lane] = maxf(ends[lane], x + w)
-		out[e.id] = lane
+		out[e2.id] = lane
 	return out
 
 
-func _drawn_left_of(a: TankEnemyState, b: TankEnemyState) -> bool:
-	return enemy_x(a) < enemy_x(b)
-
-
-## Maximum HP of an enemy type after the tank's scale (clients never get it in the snapshot).
-func enemy_max_hp(state: TankState, type: String) -> float:
-	if state.content == null:
-		return 0.0
-	var hp := float(state.content.enemy_def(type).get("hp", 0))
-	return hp * state.content.enemy_scale(state.hull.tank)
-
-
-func _enemy_muzzle(e: TankEnemyState, r: Rect2) -> Vector2:
-	var m := geometry.enemy_muzzle(TankSprites.enemy_id(TankIds.enemy_of(e.code)))
-	return Vector2(r.end.x - m.x if e.side < 0 else r.position.x + m.x, r.position.y + m.y)
-
-
-func _telegraph_light(state: TankState, e: TankEnemyState, type: String, r: Rect2) -> void:
-	var total := float(state.content.enemy_def(type).get("telegraph_s", 3.0))
-	var k := 1.0 - clampf(e.telegraph_s / maxf(total, 0.1), 0.0, 1.0)
-	var blink := 0.55 + 0.45 * sin(_time * (6.0 + 14.0 * k))
-	var cold := type == TankIds.ENEMY_DESTROYER
-	var col := TankPalette.COLD_LIGHT if cold else TankPalette.AMBER
-	# A glint along the barrel's end and a small halo (never a big round orb on the hull).
-	var m := _enemy_muzzle(e, r)
-	var dir := -1.0 if e.side > 0 else 1.0
-	var glint := (0.3 + 0.6 * k) * blink
-	lights.add_line(m + Vector2(-dir * 3.0, 0), m + Vector2(dir * (2.0 + 5.0 * k), 0), col, glint)
-	lights.add(m, 5.0 + 6.0 * k, col, glint * 0.6)
-
-
-func _boss_rows(state: TankState, t: float, rows: Array[Dictionary]) -> void:
-	var b := state.boss
-	if b.phase == TankIds.BOSS_NONE:
-		_boss_death_done = false
-		_withdraw_s = 0.0
-		return
-	if b.phase == TankIds.BOSS_WITHDRAWN:
-		_withdraw_s += _dt
-	var origin := Vector2(
-		_boss_x(state, t) - cam_x + _withdraw_s * WITHDRAW_PX_S,
-		float(TankConst.GROUND_Y) - _boss_height()
-	)
-	var dead := b.phase == TankIds.BOSS_DEAD
-	var tint := Color(0.5, 0.5, 0.52) if dead else Color.WHITE
-	for i in 3:
-		var rr := geometry.boss_part_rect(i)
-		var broken := b.bogie_hp[i] <= 0.0
-		var sprite := "boss_bogie_broken" if broken else "boss_bogie"
-		rows.append(_sprite_row(sprite, origin + rr.position, rr.size, false, tint))
-		if broken:
-			var at := origin + rr.position + Vector2(rr.size.x * 0.5, 4.0)
-			fx.fire_and_smoke("boss%d" % i, at, 0.0 if dead else 0.4, 0.9, _dt)
-	_boss_running_gear(b, origin, rows)
-	var turret := geometry.boss_part_rect(TankBossState.TURRET_PART)
-	var muzzle := origin + geometry.boss_muzzle()
-	# The barrel runs level from the gun block to the muzzle (no stair-stepped slope).
-	var base := Vector2(origin.x + turret.position.x + 8.0, muzzle.y)
-	# The main gun: a 4 px tube with a dark underside, a steel body and one lit top row, a collar
-	# where it leaves the gun block and a muzzle brake block, so it reads as a gun and not a rule.
-	rows.append({"t": "line", "a": base, "b": muzzle, "w": 5.0, "c": TankPalette.IRON_DARK})
-	rows.append(
-		{
-			"t": "line",
-			"a": base + Vector2(0, -1),
-			"b": muzzle + Vector2(0, -1),
-			"w": 2.0,
-			"c": TankPalette.IRON
-		}
-	)
-	rows.append(
-		{
-			"t": "line",
-			"a": base + Vector2(0, -2),
-			"b": muzzle + Vector2(0, -2),
-			"w": 1.0,
-			"c": TankPalette.STEEL_DARK
-		}
-	)
-	rows.append(
-		{"t": "line", "a": base, "b": base + Vector2(-12, 0), "w": 9.0, "c": TankPalette.IRON}
-	)
-	rows.append(
-		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 9)), "c": TankPalette.IRON}
-	)
-	rows.append(
-		{"t": "rect", "r": Rect2(muzzle + Vector2(-2, -5), Vector2(11, 1)), "c": TankPalette.STEEL}
-	)
-	rows.append(
-		{"t": "rect", "r": Rect2(muzzle + Vector2(2, -4), Vector2(2, 7)), "c": TankPalette.SOOT}
-	)
-	rows.append(_sprite_row("boss_hull", origin, TankSprites.size("boss_hull"), false, tint))
-	_boss_skirt(origin, rows, dead)
-	var tur_broken := b.turret_hp <= 0.0
-	var tur_sprite := "boss_turret_broken" if tur_broken else "boss_turret"
-	rows.append(_sprite_row(tur_sprite, origin + turret.position, turret.size, false, tint))
-	if not tur_broken:
-		_boss_mantlet(Vector2(origin.x + turret.position.x, muzzle.y), rows)
-	if tur_broken:
-		var at := origin + turret.position + turret.size * 0.5
-		fx.fire_and_smoke("boss_t", at, 0.0 if dead else 0.6, 1.1, _dt)
-	if b.telegraph_s > 0.0:
-		var k := 1.0 - clampf(b.telegraph_s / 6.0, 0.0, 1.0)
-		var blink := 0.6 + 0.4 * sin(_time * (5.0 + 12.0 * k))
-		lights.add(muzzle, 22.0 + 40.0 * k, TankPalette.FIRE, (0.3 + 0.7 * k) * blink)
-		lights.add(muzzle, 10.0 + 10.0 * k, TankPalette.GLOW_WARM, 0.5 * k * blink)
-	if dead:
-		_boss_death()
-
-
-## The Behemoth's track run between its three bogies: a belt top and bottom joining each pair of
-## neighbouring bogies and two road wheels in each gap, so the running gear reads as one long
-## tracked run under the hull, not as three railcar trucks (a broken bogie breaks its joins).
-func _boss_running_gear(b: TankBossState, origin: Vector2, rows: Array[Dictionary]) -> void:
-	for i in 2:
-		if b.bogie_hp[i] <= 0.0 or b.bogie_hp[i + 1] <= 0.0:
+func _track_enemies(state: TankState) -> void:
+	lanes = _lanes(state)
+	enemy_rects.clear()
+	for e in state.enemies:
+		if not lanes.has(e.id):
 			continue
-		var ra := geometry.boss_part_rect(i)
-		var rb := geometry.boss_part_rect(i + 1)
-		var x0 := origin.x + ra.end.x - 4.0
-		var x1 := origin.x + rb.position.x + 4.0
-		var y_top := origin.y + ra.position.y + ra.size.y * 0.42
-		var y_bot := origin.y + ra.end.y - 2.0
-		for k in 2:
-			var cx := lerpf(x0, x1, 0.3 + 0.4 * float(k))
-			var c := Vector2(cx, y_bot - 7.0)
-			rows.append({"t": "poly", "pts": _circle_pts(c, 6.0, 12), "c": TankPalette.IRON_DARK})
-			rows.append({"t": "poly", "pts": _circle_pts(c, 2.0, 8), "c": TankPalette.STEEL_DARK})
-		for y: float in [y_top, y_bot]:
-			rows.append(
-				{
-					"t": "line",
-					"a": Vector2(x0, y),
-					"b": Vector2(x1, y),
-					"w": 3.0,
-					"c": TankPalette.COAL
-				}
+		var lane := int(lanes[e.id])
+		var sz: Vector2 = kit.enemies[enemy_kind(e)]["size"]
+		var mid := enemy_x(e) + float(e.w) * 0.5
+		var lift := 9.0 * float(lane) + (6.0 if enemy_kind(e) == "dugin" else 0.0)
+		var r := Rect2(
+			Vector2(roundf(sx(mid) - sz.x * 0.5), roundf(ROAD_ENEMY_Y - sz.y - lift)), sz
+		)
+		enemy_rects[e.id] = r
+		_seen[e.id] = {"x": mid, "kind": enemy_kind(e), "lane": lane, "side": e.side}
+	for id: int in _seen.keys():
+		if state.enemy(id) == null:
+			_seen.erase(id)
+
+
+## A wreck's age (sim seconds).
+func wreck_age(w: Dictionary) -> float:
+	return game.state.t - float(w["t"])
+
+
+## 0 a burning hulk .. 1 a collapsed debris heap.
+func wreck_collapse(w: Dictionary) -> float:
+	return clampf((wreck_age(w) - WRECK_HULK_S) / WRECK_COLLAPSE_S, 0.0, 1.0)
+
+
+## How hard it still burns (1 .. 0).
+func wreck_fire(w: Dictionary) -> float:
+	return clampf(1.0 - wreck_age(w) / WRECK_BURN_S, 0.0, 1.0)
+
+
+func _age_wrecks(state: TankState) -> void:
+	var keep: Array[Dictionary] = []
+	for w in wrecks:
+		var age := state.t - float(w["t"])
+		if age < 0.0 or age > WRECK_GONE_S or sx(float(w["x"])) < -260.0:
+			continue
+		keep.append(w)
+	wrecks = keep
+
+
+## Where an enemy's gun fires from (stage px).
+func enemy_muzzle(e: TankEnemyState, r: Rect2) -> Vector2:
+	var m: Vector2 = kit.enemies[enemy_kind(e)]["muzzle"]
+	if e.side < 0:
+		return Vector2(r.end.x - m.x, r.position.y + m.y)
+	return r.position + m
+
+
+func boss_rect(state: TankState) -> Rect2:
+	var sz: Vector2 = kit.enemies.get("behemoth", {}).get("size", Vector2(583, 297))
+	var right := minf(canvas.x, BASE.x) + (tank_pos.x - TANK_POS.x)
+	var x := clampf(sx(boss_x(state)), right - 400.0, right - 260.0)
+	return Rect2(Vector2(roundf(x), roundf(ROAD_ENEMY_Y + 4.0 - sz.y)), sz)
+
+
+func boss_muzzle() -> Vector2:
+	return kit.enemies.get("behemoth", {}).get("muzzle", Vector2(16, 140))
+
+
+func boss_visible(state: TankState) -> bool:
+	return state.boss.phase != TankIds.BOSS_NONE and state.boss.phase != TankIds.BOSS_WITHDRAWN
+
+
+# --- The gun --------------------------------------------------------------------------------------------
+
+
+## The barrel's angle (radians, screen: negative is up) at the gun's elevation.
+func barrel_angle() -> float:
+	return -deg_to_rad(game.state.hull.elev_deg)
+
+
+## The barrel's unit direction (stage px), facing and traverse included.
+func barrel_vector() -> Vector2:
+	var a := barrel_angle()
+	return Vector2(cos(a) * barrel_dir, sin(a))
+
+
+## The pivot the barrel turns on (stage px): mirrored about the turret's pivot while it faces left.
+func barrel_pivot() -> Vector2:
+	var piv := anchor("barrel_pivot")
+	var tp := anchor("turret_pivot")
+	var u := (barrel_dir + 1.0) * 0.5
+	return Vector2(lerpf(2.0 * tp.x - piv.x, piv.x, u), piv.y)
+
+
+func muzzle() -> Vector2:
+	var blen := kit.anchor(variant, "muzzle").x - kit.anchor(variant, "barrel_pivot").x
+	return barrel_pivot() + barrel_vector() * blen
+
+
+# --- Emitters (view-only) --------------------------------------------------------------------------------
+
+
+func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
+	var hull := state.hull
+	# The diesel's exhaust by watts: more and darker puffs as the rider pushes.
+	var rd := rider_of(TankIds.ENGINE_DIESEL)
+	var w := 0.0
+	if rd != null:
+		w = (feed.get(rd.peer, Vector2(rd.raw_w, rd.cadence_rpm)) as Vector2).x
+	var rate := 3.0 + w / 30.0
+	_smoke_acc += step_dt * rate
+	var ex := anchor("exhaust")
+	var soot := clampf(w / 400.0, 0.0, 1.0)
+	while _smoke_acc >= 1.0:
+		_smoke_acc -= 1.0
+		var j := fx.rng.randf()
+		fx.puff(
+			ex + Vector2(j * 3.0 - 1.5, 0),
+			Vector2(-12.0 - j * 10.0, -14.0 - j * 6.0 - soot * 6.0),
+			6.0 + j * 2.0,
+			Vector2(6.0, 52.0 + j * 22.0),
+			0.12 + 0.1 * soot,
+			Color(0.42, 0.42, 0.44).lerp(Color(0.2, 0.18, 0.16), soot * 0.7).lerp(
+				Color(0.48, 0.41, 0.35), j * 0.4
+			),
+			0.3
+		)
+	# Steam: a plume from the boiler's stack while the steam rider pedals, the safety valve over band.
+	if room_rects.has("steam"):
+		var sr: Rect2 = room_rects["steam"]
+		var pw := machine_power(TankIds.ENGINE_STEAM)
+		var cad := float(cadences.get(TankIds.ENGINE_STEAM, 0.0))
+		_steam_acc += step_dt * (cad / 30.0 + (6.0 if pw > 1.18 else 0.0))
+		while _steam_acc >= 1.0:
+			_steam_acc -= 1.0
+			var top := origin + Vector2(sr.end.x - 6.0, sr.position.y - 34.0)
+			var over := pw > 1.18
+			fx.puff(
+				top + Vector2(fx.rng.randf_range(-2, 2), 0),
+				Vector2(-6.0, -22.0 - (14.0 if over else 0.0)),
+				2.2,
+				Vector2(3.0, 16.0 if over else 10.0),
+				0.16 if over else 0.08,
+				Color(0.78, 0.8, 0.82),
+				0.3
 			)
-			rows.append(
-				{
-					"t": "line",
-					"a": Vector2(x0, y - 1.0),
-					"b": Vector2(x1, y - 1.0),
-					"w": 1.0,
-					"c": TankPalette.IRON
-				}
+	# Dust and mud from the tracks at speed; burning wrecks smoke.
+	var px_s := hull.speed_mps * TankConst.PX_PER_M * S
+	_dust_acc += step_dt * clampf(px_s / 8.0, 0.0, 6.0)
+	while _dust_acc >= 1.0:
+		_dust_acc -= 1.0
+		var rw: Dictionary = kit.spec(variant).get("anchors", {}).get("road_wheel_line", {})
+		var gy := float(rw.get("ground_contact_y", 233.0))
+		var x0 := float(rw.get("x_from", 80.0))
+		var at := origin + Vector2(x0 - 10.0 + fx.rng.randf_range(0, 30), gy - 1.0)
+		fx.puff(
+			at,
+			Vector2(fx.rng.randf_range(-14, -4), fx.rng.randf_range(-6, -2)),
+			1.4,
+			Vector2(2.0, 9.0),
+			0.18,
+			Color(0.3, 0.25, 0.2),
+			1.0
+		)
+	for wk in wrecks:
+		var fire := wreck_fire(wk)
+		if fire > 0.0 and fx.rng.randf() < step_dt * 3.0 * (0.3 + fire):
+			var wx := sx(float(wk["x"]))
+			if wx > -40.0 and wx < canvas.x + 40.0:
+				fx.puff(
+					Vector2(wx, ROAD_ENEMY_Y - 8.0),
+					Vector2(-4.0, -18.0),
+					5.0,
+					Vector2(5.0, 34.0),
+					0.3,
+					Color(0.14, 0.13, 0.13),
+					1.0
+				)
+	if hull.breakdown and fx.rng.randf() < step_dt * 4.0:
+		fx.puff(
+			ex + Vector2(20, 10),
+			Vector2(-6, -16),
+			4.0,
+			Vector2(6.0, 30.0),
+			0.35,
+			Color(0.1, 0.09, 0.09)
+		)
+		if fx.rng.randf() < 0.3:
+			fx.spark_burst(
+				origin + room_rects.get("diesel", Rect2()).get_center(),
+				4,
+				Color(1, 0.7, 0.3),
+				40.0,
+				0.0
 			)
 
 
-## Skirt plates along the Behemoth's foot over the dark wheel arches: a riveted band with a lit top
-## edge and a mud-dark bottom, the bogies' wheels showing below it.
-func _boss_skirt(origin: Vector2, rows: Array[Dictionary], dead: bool) -> void:
-	var first := geometry.boss_part_rect(0)
-	var last := geometry.boss_part_rect(2)
-	var x0 := origin.x + first.position.x - 4.0
-	var x1 := origin.x + last.end.x - 2.0
-	var y := origin.y + first.position.y + 1.0
-	var k := 0.55 if dead else 1.0
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(x0, y, x1 - x0, 11),
-			"c": TankPalette.darkened(TankPalette.IRON, 1.0 - k)
-		}
-	)
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(x0, y, x1 - x0, 1),
-			"c": TankPalette.darkened(TankPalette.STEEL, 1.0 - k)
-		}
-	)
-	rows.append({"t": "rect", "r": Rect2(x0, y + 9.0, x1 - x0, 2), "c": TankPalette.MUD_DARK})
-	var px := x0 + 3.0
-	var plate := 0
-	while px < x1 - 2.0:
-		rows.append(
+## Shells as drawn this frame: [{at: stage px, dir, friendly, type}], easing from the art muzzle
+## onto the rules' path over their first 260 px (the art gun is not where the rules' gun is).
+func shells_drawn(state: TankState) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var alive := {}
+	for s in state.shells:
+		alive[s.id] = true
+		var wp := shell_pos(s)
+		var p := Vector2(sx(wp.x), sy(wp.y))
+		var info: Dictionary = _shell_seen.get(s.id, {})
+		if info.is_empty():
+			var start := p
+			if s.friendly:
+				start = muzzle() if s.type != TankIds.SHELL_BOW else anchor("bow_gun_upper_muzzle")
+			info = {"first": p, "off": start - p}
+			_shell_seen[s.id] = info
+		var first: Vector2 = info["first"]
+		var k := clampf(1.0 - first.distance_to(p) / 260.0, 0.0, 1.0)
+		var v := Vector2(s.vx, s.vy).normalized()
+		if v == Vector2.ZERO:
+			v = Vector2.RIGHT if s.friendly else Vector2.LEFT
+		out.append(
 			{
-				"t": "rect",
-				"r": Rect2(px, y + 3.0, 1, 1),
-				"c": TankPalette.darkened(TankPalette.STEEL_LIGHT, 1.0 - k)
+				"at": p + (info["off"] as Vector2) * k,
+				"dir": v,
+				"friendly": s.friendly,
+				"type": s.type
 			}
 		)
-		plate += 1
-		if plate % 8 == 0:
-			rows.append({"t": "rect", "r": Rect2(px + 2.0, y + 1.0, 1, 8), "c": TankPalette.COAL})
-		px += 6.0
+	for id: int in _shell_seen.keys():
+		if not alive.has(id):
+			_shell_seen.erase(id)
+	return out
 
 
-## A cast mantlet where the Behemoth's gun leaves its turret (centred on the barrel's line).
-func _boss_mantlet(at: Vector2, rows: Array[Dictionary]) -> void:
-	var r := Rect2(at + Vector2(-9, -8), Vector2(14, 16))
-	rows.append({"t": "rect", "r": r, "c": TankPalette.IRON})
-	rows.append({"t": "rect", "r": Rect2(r.position, Vector2(r.size.x, 1)), "c": TankPalette.STEEL})
-	rows.append(
-		{"t": "rect", "r": Rect2(r.position, Vector2(1, r.size.y)), "c": TankPalette.STEEL_DARK}
-	)
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(r.position + Vector2(0, r.size.y - 2), Vector2(r.size.x, 2)),
-			"c": TankPalette.COAL
-		}
-	)
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(r.position + Vector2(3, 4), Vector2(1, 1)),
-			"c": TankPalette.STEEL_PALE
-		}
-	)
-	rows.append(
-		{
-			"t": "rect",
-			"r": Rect2(r.position + Vector2(3, 11), Vector2(1, 1)),
-			"c": TankPalette.STEEL_PALE
-		}
-	)
+# --- The HUD's geometry (TankHudGeom; canvas art px, 0,0 the canvas' top left) ----------------------
 
 
-static func _circle_pts(c: Vector2, r: float, n: int) -> PackedVector2Array:
-	var pts := PackedVector2Array()
-	for i in n:
-		pts.append(c + Vector2.from_angle(TAU * float(i) / float(n)) * r)
-	return pts
+## A rules world x on the canvas.
+func hud_world_x(world_x_px: float) -> float:
+	return sx(world_x_px)
 
 
-func _boss_height() -> float:
-	var h := 0.0
-	for i in 3:
-		h = maxf(h, geometry.boss_part_rect(i).end.y)
-	return maxf(h, 100.0)
+## The road line under the tank.
+func hud_ground_y() -> float:
+	return GROUND + y_off
 
 
-func _boss_origin(state: TankState) -> Vector2:
-	var bx := _boss_x(state, clock.render_t) - cam_x + _withdraw_s * WITHDRAW_PX_S
-	return Vector2(bx, float(TankConst.GROUND_Y) - _boss_height())
+## A tank point as drawn now: "barrel_pivot", "muzzle" (at the elevation and facing), "rear" (the
+## road under the hull's rear end), or any kit.json anchor.
+func hud_tank_point(name: String) -> Vector2:
+	var off := Vector2(0, y_off)
+	match name:
+		"barrel_pivot":
+			return barrel_pivot() + off
+		"muzzle":
+			return muzzle() + off
+		"rear":
+			return Vector2(origin.x + ART_REAR, GROUND) + off
+	return anchor(name) + off
 
 
-## The centre of boss part `index` (0..2 bogies, 3 turret) on screen.
-func _boss_part_center(state: TankState, index: int) -> Vector2:
-	var rr := geometry.boss_part_rect(clampi(index, 0, 3))
-	return _boss_origin(state) + rr.position + rr.size * 0.5
+## An enemy's sprite (Rect2() when it is not drawn).
+func hud_enemy_rect(id: int) -> Rect2:
+	if not enemy_rects.has(id):
+		return Rect2()
+	var r: Rect2 = enemy_rects[id]
+	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
-func _boss_muzzle(state: TankState, main: bool) -> Vector2:
-	var m := geometry.boss_muzzle() if main else geometry.boss_secondary_muzzle()
-	return _boss_origin(state) + m
+## The Behemoth's sprite (Rect2() when it is not drawn).
+func hud_boss_rect() -> Rect2:
+	if game == null or game.state == null or not boss_visible(game.state):
+		return Rect2()
+	var r := boss_rect(game.state)
+	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
-func _sprite_row(id: String, pos: Vector2, size: Vector2, flip: bool, tint: Color) -> Dictionary:
-	return {"t": "sprite", "id": id, "pos": pos.round(), "size": size, "flip": flip, "tint": tint}
+## The Behemoth's main gun (Vector2.ZERO when it is not drawn).
+func hud_boss_muzzle() -> Vector2:
+	var r := hud_boss_rect()
+	return Vector2.ZERO if r.size == Vector2.ZERO else r.position + boss_muzzle()
 
 
-## Shells with tracers and halos, and the trajectory dots in the gunner's colour.
-func _build_shots(state: TankState) -> void:
-	var rows: Array[Dictionary] = []
-	for s in state.shells:
-		var p := shell_pos(s) - Vector2(cam_x, 0.0)
-		var v := Vector2(s.vx, s.vy)
-		var dir := v.normalized() if v.length() > 1.0 else Vector2.RIGHT
-		var core: Color = TankPalette.TRACER.get(s.type, TankPalette.AMBER)
-		# A glowing tracer: a 3 px streak (2 px for secondaries) fading back from a white-hot head,
-		# a 1 px hot core along its front half and a halo, unlike the 2 px trajectory dots.
-		var tail := 16.0
-		if s.type == TankIds.SHELL_BOSS_MAIN:
-			tail = 26.0
-		elif s.type == TankIds.SHELL_OVER:
-			tail = 20.0
-		elif s.type == TankIds.SHELL_BOW:
-			tail = 10.0
-		var w := 2.0 if s.type == TankIds.SHELL_BOW else 3.0
-		var a := p - dir * tail
-		var m := p - dir * tail * 0.45
-		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.3)})
-		rows.append({"t": "line", "a": m, "b": p, "w": w, "c": TankPalette.with_alpha(core, 0.9)})
-		rows.append({"t": "line", "a": m, "b": p, "w": 1.0, "c": TankPalette.WHITE_WARM})
-		rows.append({"t": "rect", "r": Rect2(p - Vector2(1, 1), Vector2(3, 3)), "c": Color.WHITE})
-		lights.add(p, float(HALO_RADIUS.get(s.type, 9.0)) * 1.4, core, 0.9)
-		lights.add(m, 8.0, core, 0.5)
-	_trajectory(state, rows)
-	shots_layer.set_rows(rows)
+# --- Layers ---------------------------------------------------------------------------------------------
 
 
-## The aimed arc as dots from the muzzle, in the gunner's slot colour.
-func _trajectory(state: TankState, rows: Array[Dictionary]) -> void:
-	var hl := state.hull
-	if hl.target_id == 0 or rig.turret.is_turning() or hl.breakdown:
+func _draw_back() -> void:
+	if _built and game.state != null:
+		TankWorldDraw.draw_back(layer("Back"), self)
+
+
+func _draw_world() -> void:
+	if _built and game.state != null:
+		TankWorldDraw.draw_world(layer("World"), self, game.state)
+
+
+func _draw_tank() -> void:
+	if _built and game.state != null:
+		TankHullDraw.draw(layer("Tank"), self, game.state)
+
+
+func _draw_light() -> void:
+	if _built and game.state != null:
+		TankLightDraw.draw(layer("Light"), self, game.state)
+
+
+func _draw_front() -> void:
+	if not _built or game.state == null:
 		return
-	var v0 := state.content.num("tanks", "gun.shell_speed_px_s", 360.0)
-	var g := state.content.num("tanks", "gun.gravity_px_s2", 300.0)
-	var facing := 1 if rig.turret.scale.x >= 0.0 else -1
-	var vel := TankBallistics.velocity(v0, rig.turret.elev, facing)
-	var from := rig.muzzle_layer()
-	var base_alpha := 0.9 if hl.loaded != TankIds.SHELL_NONE else 0.55
-	var col := gunner_color(state)
-	for i in range(1, TRAJECTORY_DOTS + 1):
-		var p := TankBallistics.position(from, vel, g, float(i) * TRAJECTORY_STEP_S)
-		if p.y > float(TankConst.GROUND_Y) or p.x < 0.0 or p.x > float(TankConst.SCREEN_W):
-			break
-		var a := base_alpha * (1.0 - 0.75 * float(i) / float(TRAJECTORY_DOTS + 1))
-		rows.append(
-			{"t": "rect", "r": Rect2(p.floor(), Vector2(2, 2)), "c": TankPalette.with_alpha(col, a)}
-		)
-		if i % 3 == 0:
-			lights.add(p + Vector2(1, 1), 5.0, col, 0.3 * a)
+	var ci := layer("Front")
+	fx.draw_solid(ci)
+	fx.draw_smoke(ci)
+	TankWorldDraw.draw_front(ci, self)
 
 
-## The slot colour of the gunner (the dynamo's or the Bulwark's rider).
-func gunner_color(state: TankState) -> Color:
-	var st := state.station(TankIds.ENGINE_DYNAMO)
-	if st == null:
-		st = state.station(TankIds.ENGINE_BULWARK)
-	var slot := st.slot if st != null and st.slot >= 0 else 0
-	return hub.look(slot).get("color", Color.WHITE)
-
-
-# --- Ambient effects ---------------------------------------------------------------------------------------
-
-
-func _ambient(state: TankState, dt: float) -> void:
-	for w in wrecks:
-		var burn := clampf(1.0 - float(w["age"]) / WRECK_BURN_S, 0.0, 1.0)
-		var at := Vector2(
-			float(w["x"]) - cam_x + float(w["w"]) * 0.5,
-			float(TankConst.GROUND_Y) - WRECK_LIFT_PX - float(w["h"]) * WRECK_SCALE * 0.8
-		)
-		fx.fire_and_smoke(str(w["key"]), at, burn * 0.6, 1.0 if burn > 0.0 else 0.5, dt)
-	if state.hull.traps_cleared and not _traps_were_cleared:
-		var tp := Vector2(
-			rig.base_pos.x + float(rig.hull_w) + 30.0, float(TankConst.GROUND_Y) - 8.0
-		)
-		fx.dirt_spray(tp)
-		fx.explosion(tp, false)
-	_traps_were_cleared = state.hull.traps_cleared
-
-
-## Wet ground and wet steel (brief 3 "Light"): every bright halo near the ground drops a soft
-## vertical streak of its colour onto the wet road below it, and when a muzzle flash or a fire is
-## close the hull's and the turret's top edges catch a faint specular line.
-func _reflections() -> void:
-	var ground := float(TankConst.GROUND_Y)
-	lights.add_reflections(ground - 1.0, ground - 70.0, 0.3)
-	var style := TankBackdrop.road_style(backdrop.near_id)
-	for p in TankBackdrop.road_puddles(style, cam_x, float(TankConst.SCREEN_W)):
-		var half := (p.y - p.x) * 0.5
-		_water_glint(Vector2(p.x + half, p.z), half)
-	var roof := rig.hull_roof()
-	if roof.size.x <= 0.0:
+## Tilt-shift shading: the top and the bottom of the frame darkened (the planes carry the blur).
+func _draw_post() -> void:
+	if not _built:
 		return
-	var mid := roof.position + Vector2(roof.size.x * 0.5, 0)
-	var wet := lights.intensity_near(mid, roof.size.x * 0.5 + 40.0) + fx.flash * 1.5
-	if wet > 0.08:
-		var k := minf(0.3, wet * 0.16)
-		var a := roof.position + rig.shake_offset * 0.6
-		lights.add_line(a, a + Vector2(roof.size.x, 0), lights.near_color(), k)
-
-
-## Lights and fires of the near plane (scenery), with flames on the far plane.
-func _scenery(dt: float) -> void:
-	var sl := backdrop.scenery_lights
-	sl.begin()
-	var near_lights := TankBackdrop.scenery(
-		backdrop.near_id, cam_x, float(TankConst.SCREEN_W), backdrop.near_offset
+	var ci := layer("Post")
+	var w := canvas.x
+	var top := -y_off
+	var clear := Color(0, 0, 0, 0)
+	var t1 := Color(0, 0, 0, 0.16)
+	ci.draw_polygon(
+		PackedVector2Array([Vector2(0, top), Vector2(w, top), Vector2(w, 170), Vector2(0, 170)]),
+		PackedColorArray([t1, t1, clear, clear])
 	)
-	for l: Dictionary in near_lights:
-		var lp: Vector2 = l["pos"]
-		if lp.x < -50.0 or lp.x > float(TankConst.SCREEN_W) + 50.0:
-			continue
-		var flick := 1.0
-		var radius := float(l["radius"])
-		var k := 1.0
-		# A fire behind the hull would throw its back-plane flames over the cutaway and its halo
-		# would bloom over the deck, reading as the hull burning: no flames there, and its halo
-		# stays small and faint (polish round 6: the Rampart's rear deck glowed amber).
-		var behind := _behind_hull(lp)
-		if behind:
-			radius = minf(radius, 12.0)
-			k = 0.3
-		elif bool(l["fire"]):
-			flick = 0.8 + 0.2 * sin(_time * 9.0 + float(int(l["seed"]) % 13))
-			fx.fire_and_smoke(
-				"sc%d" % int(l["seed"]), l["pos"], 0.6, 0.5, dt, TankParticles.PLANE_BACK
-			)
-		sl.add(l["pos"], radius, l["color"], float(l["intensity"]) * flick * k)
-	sl.add_reflections(TankBackdrop.NEAR_BOTTOM_Y - 22.0, 200.0, 0.22)
-	sl.end()
-
-
-## True when screen point `p` lies behind the tank's hull and turret (with a margin).
-func _behind_hull(p: Vector2) -> bool:
-	var r := Rect2(rig.base_pos + Vector2(-24, -84), Vector2(rig.hull_w + 48, rig.hull_h + 94))
-	return r.has_point(p)
-
-
-func _paint_overlay(item: Node2D) -> void:
-	item.draw_texture_rect(
-		TankProcTex.vignette(), Rect2(0, 0, TankConst.SCREEN_W, TankConst.SCREEN_H), false
+	var b1 := Color(0, 0, 0, 0.45)
+	var bottom := canvas.y - y_off
+	ci.draw_polygon(
+		PackedVector2Array(
+			[Vector2(0, 400), Vector2(w, 400), Vector2(w, bottom), Vector2(0, bottom)]
+		),
+		PackedColorArray([clear, clear, b1, b1])
 	)
-	var f := fade_amount()
-	if f > 0.01:
-		item.draw_rect(Rect2(0, 0, TankConst.SCREEN_W, TankConst.SCREEN_H), Color(0, 0, 0, f))

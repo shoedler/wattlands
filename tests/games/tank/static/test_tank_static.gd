@@ -9,12 +9,9 @@ extends GutTest
 ##     no RandomNumberGenerator.new() and draw only from an rng object;
 ##   - ctx.directives is used only by the effort director, and only for the four calls Tank makes
 ##     (request, course_grade, cadence_band, end_phase: never replan);
-##   - art.json keeps <= 32 colours and the no-people, no-text clause, and every sprite id has a
-##     placeholder at its size;
 ##   - the scanner itself is proven on bad snippets, so a green run cannot be a dead regex.
 
 const GAME_DIR := "res://src/games/tank"
-const ART_JSON := "res://assets/tank/art.json"
 const TRAINER_NAMES: Array[String] = [
 	"TrainerController",
 	"SafetyGovernor",
@@ -337,36 +334,3 @@ func test_class_names_are_unique_and_carry_the_tank_prefix() -> void:
 func test_no_todo_implement_marker_is_left_in_the_game() -> void:
 	for path in files(GAME_DIR, ["gd", "json", "md"]):
 		assert_false(read(path).to_lower().contains("todo: implement"), path)
-
-
-# --- art.json and the placeholders ---------------------------------------------------------------------
-
-
-func test_art_json_has_at_most_32_colours_and_keeps_the_no_people_no_text_clause() -> void:
-	var art: Dictionary = JSON.parse_string(read(ART_JSON))
-	assert_lte((art["palette"] as Array).size(), 32)
-	var style := str(art["style"])
-	for clause: String in [
-		"No people, figures or faces",
-		"no text, letters, numbers, flags, insignia, emblems, markings or logos"
-	]:
-		assert_string_contains(style, clause)
-	for s: Dictionary in art["sprites"]:
-		var prompt := str(s["prompt"]).to_lower()
-		for word: String in ["soldier", "flag of", "logo of", "swastika", "insignia of"]:
-			assert_false(prompt.contains(word), "%s: %s" % [s["id"], word])
-
-
-func test_every_sprite_id_has_a_placeholder_at_its_art_json_size() -> void:
-	var art: Dictionary = JSON.parse_string(read(ART_JSON))
-	var n := 0
-	for s: Dictionary in art["sprites"]:
-		var id := str(s["id"])
-		var img := TankPlaceholderArt.placeholder_image(id)
-		assert_eq(
-			Vector2i(img.get_width(), img.get_height()),
-			Vector2i(int(s["size"][0]), int(s["size"][1])),
-			id
-		)
-		n += 1
-	assert_eq(n, 61)
