@@ -102,6 +102,8 @@ func xf_at(LL: Dictionary, at: Vector2, rot: float) -> Transform2D:
 func put_tank(canvas: Image, tank: Image, at: Vector2, rot: float, st: Dictionary, gy: float, LL: Dictionary = {}) -> void:
 	if LL.is_empty():
 		LL = L
+	if LL.has("rack"):
+		at -= Vector2(Tank6.jolt(float(st.get("fire_t", 99.0))), 0).rotated(rot)
 	var xf := xf_at(LL, at, rot)
 	var layer := Px.blank(canvas.get_width(), canvas.get_height())
 	if absf(rot) < 0.0005:
@@ -118,10 +120,13 @@ func put_tank(canvas: Image, tank: Image, at: Vector2, rot: float, st: Dictionar
 	var bb := layer.get_used_rect()
 	Light.bloom(canvas, layer, bb)
 	Light.tank_lights(canvas, LL, xf, bool(st.get("search_on", true)))
-	if LL.has("rack") and ft >= 0.0 and ft < 0.16:
-		var k := 1.0 - ft / 0.16
-		Light.halo(canvas, m["p"], 150.0, Color("#ffc070"), 0.7 * k)
-		Light.halo(canvas, m["p"] + Vector2(0, 60), 120.0, Color("#ffb060"), 0.3 * k)
+	if LL.has("rack") and ft >= 0.0 and ft < 0.14:
+		# the scene flash: the muzzle, the tank's own hull and the road, for about four frames
+		var k := 1.0 - ft / 0.14
+		Light.halo(canvas, m["p"], 240.0, Color("#ffc070"), 0.85 * k)
+		Light.halo(canvas, m["p"] + Vector2(-120, 50), 220.0, Color("#ffb060"), 0.45 * k)
+		Light.halo(canvas, m["p"] + Vector2(10, 90), 160.0, Color("#ffb060"), 0.4 * k)
+		Light.halo(canvas, m["p"], 26.0, Color("#fff4d0"), 1.0 * k)
 		Light.halo(canvas, m["p"], 20.0, Color("#fff4d0"), 1.0 * k)
 
 
@@ -186,6 +191,7 @@ func job_drive() -> void:
 		var cv := Px.blank(tank.get_width() + 280, tank.get_height() + 50, BG)
 		road(cv, int(pad.y) + int(L["ground"]), float(st["travel"]))
 		put_tank(cv, tank, pad, deg_to_rad(Tank6.rock(float(st["fire_t"]))), st, pad.y + float(L["ground"]))
+		cv = shaken(cv, float(st["fire_t"]))
 		frames.append(cv)
 		save(Px.scaled(cv, 2), "frames/drive/f%03d.png" % k)
 	save(strip(frames, 4, 3, "R6 DRIVING: A MAIN-GUN SHOT AT 1.0 S, THE BOW GUNS' BURSTS"), "drive_strip.png")
@@ -194,23 +200,43 @@ func job_drive() -> void:
 # --- the firing close-up at 3x ---------------------------------------------------------------------------------
 
 
+## The frame moved by the view's screen-shake hint (the edge filled with the background).
+func shaken(cv: Image, ft: float) -> Image:
+	var s := Tank6.shake(ft)
+	if s == Vector2i.ZERO:
+		return cv
+	var o := Px.blank(cv.get_width(), cv.get_height(), BG)
+	o.blend_rect(cv, Rect2i(Vector2i.ZERO, cv.get_size()), s)
+	return o
+
+
 func job_fire() -> void:
 	var frames: Array[Image] = []
-	for k in 36:
-		var t := 2.0 + k / 20.0
-		var st := state(t, CREW_DRIVE, 2.05)
+	var fx: Array = []
+	for k in 60:
+		var t := 2.0 + (k - 2) / 30.0
+		var st := state(t, CREW_DRIVE, 2.0)
 		st["travel"] = 0.0
+		var ft := float(st["fire_t"])
 		var tank := Tank6.frame(B, st)
 		var pad := Vector2(16, 40)
-		var cv := Px.blank(tank.get_width() + 280, tank.get_height() + 50, BG)
+		var cv := Px.blank(tank.get_width() + 300, tank.get_height() + 60, BG)
 		road(cv, int(pad.y) + int(L["ground"]), 0.0)
-		put_tank(cv, tank, pad, deg_to_rad(Tank6.rock(float(st["fire_t"]))), st, pad.y + float(L["ground"]))
-		var c := cv.get_region(Rect2i(300, 40, 300, 220))
+		put_tank(cv, tank, pad, deg_to_rad(Tank6.rock(ft)), st, pad.y + float(L["ground"]))
+		cv = shaken(cv, ft)
+		fx.append({"t": snappedf(ft, 0.001), "recoil_px": snappedf(Tank6.recoil(ft), 0.01), "rock_deg": snappedf(Tank6.rock(ft), 0.01), "jolt_px": Tank6.jolt(ft), "shake_px": [Tank6.shake(ft).x, Tank6.shake(ft).y]})
+		var c := cv.get_region(Rect2i(260, 30, 360, 240))
 		var big := Px.scaled(c, 3)
-		Px.text(big, 8, 6, "R6 FIRING  %.2f S AFTER THE SHOT" % maxf(float(st["fire_t"]), 0.0), LABEL)
+		Px.text(big, 8, 6, "R6B FIRING  %+.3f S  (30 FPS)" % ft, LABEL)
 		frames.append(big)
 		save(big, "frames/fire/f%03d.png" % k)
-	save(strip(frames, 3, 4, "R6 FIRING CLOSE-UP (3X)"), "fire_strip.png")
+	var picks: Array[Image] = []
+	for k in [1, 2, 3, 4, 5, 6, 8, 10, 13, 17, 22, 28, 35, 42, 50, 59]:
+		picks.append(frames[k])
+	save(strip(picks, 1, 4, "R6B FIRING CLOSE-UP (3X): FRAMES AT 30 FPS, 0 TO 1.9 S"), "fire_strip.png")
+	var f := FileAccess.open(ProjectSettings.globalize_path(OUT_DIR + "/fire_fx.json"), FileAccess.WRITE)
+	f.store_string(JSON.stringify({"note": "Per frame (30 fps) after the main gun's shot: barrel recoil (px along the bore), hull rock on the suspension (deg, negative = nose up), turret/hull jolt (px back), and the screen-shake hint for the view (canvas px). tank_r6.gd recoil(), rock(), jolt(), shake() are the formulas.", "frames": fx}, "  "))
+	f.close()
 
 
 # --- terrain tilt with suspension (method a) ------------------------------------------------------------------

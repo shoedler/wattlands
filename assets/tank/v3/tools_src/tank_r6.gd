@@ -104,21 +104,38 @@ static func build() -> Dictionary:
 	return {"L": L, "img": base, "open": open, "w": sz.x, "h": sz.y}
 
 
-## The main gun's recoil (px back along the bore) `ft` s after the shot.
+## The main gun's recoil (px back along the bore) `ft` s after the shot: 11 px in two frames,
+## back over about 0.55 s.
 static func recoil(ft: float) -> float:
-	if ft < 0.0 or ft > 0.6:
+	if ft < 0.0 or ft > 0.65:
 		return 0.0
-	if ft < 0.08:
-		return 9.0 * ft / 0.08
-	var k := (ft - 0.08) / 0.52
-	return 9.0 * (1.0 - k) * (1.0 - k)
+	if ft < 0.06:
+		return 11.0 * ft / 0.06
+	var k := (ft - 0.06) / 0.59
+	return 11.0 * (1.0 - k) * (1.0 - k)
 
 
-## The hull's rock on its springs after the shot (degrees, negative = nose up).
+## The hull's rock on its springs after the shot (degrees, negative = nose up): about 2 degrees back,
+## a bounce, settled by 1.5 s.
 static func rock(ft: float) -> float:
-	if ft < 0.0 or ft > 1.4:
+	if ft < 0.0 or ft > 1.8:
 		return 0.0
-	return -1.1 * exp(-ft * 3.5) * cos(ft * 11.0)
+	return -2.2 * exp(-ft * 2.6) * cos(ft * 9.0) * minf(ft / 0.05, 1.0)
+
+
+## The turret's jolt (px, along the bore, backwards) in the first frames.
+static func jolt(ft: float) -> float:
+	if ft < 0.0 or ft > 0.15:
+		return 0.0
+	return 2.0 if ft < 0.07 else 1.0
+
+
+## A screen-shake hint for the view (canvas px) for the first three frames after the shot.
+static func shake(ft: float) -> Vector2i:
+	if ft < 0.0 or ft >= 0.1:
+		return Vector2i.ZERO
+	var k := int(floor(ft * 30.0))
+	return [Vector2i(2, -1), Vector2i(-2, 1), Vector2i(1, 1)][clampi(k, 0, 2)]
 
 
 static func frame(B: Dictionary, st: Dictionary) -> Image:
@@ -479,63 +496,99 @@ static func puff(img: Image, c: Vector2, r: float, ramp: Array, fade: float, see
 			Px.put(img, x, y, col)
 
 
-## The main gun's blast `ft` s after the shot: a star flash, a fire ball, sparks, smoke puffs and a
-## smoke ring drifting forward, a dust kick off the road under the muzzle. `m` = muzzle, `a` = bore
-## angle, `gy` = the road's canvas y under the muzzle.
+## The main gun's blast `ft` s after the shot (r6b: 2-3x the r6 one), hard pixels throughout:
+##  0.00-0.07  a big cross/star flash (about 50 px across) with blade jets out of the slotted brake
+##  0.05-0.22  a lumpy fire ball (30-40 px) rolling forward, flame fragments thrown off
+##  0.08-1.9   a billowing grey-brown smoke cloud growing to about 100 px, a smoke ring
+##  0.02-1.4   blast dust off the road under the muzzle, a dust shockwave running along the road both
+##             ways, pebbles kicked up; sparks
+## `m` = muzzle, `a` = bore angle, `gy` = the road's canvas y under the muzzle.
 static func blast(img: Image, m: Vector2, a: float, ft: float, gy: float) -> void:
-	if ft < 0.0 or ft > 1.6:
+	if ft < 0.0 or ft > 2.0:
 		return
 	var d := Vector2(cos(a), sin(a))
 	var n := Vector2(-d.y, d.x)
+	# smoke (behind everything else)
 	if ft > 0.08:
 		var age := ft - 0.08
-		for j in 11:
-			var sp := 12.0 + 34.0 * Px.h2(j, 1, 41)
-			var up := 8.0 + 16.0 * Px.h2(j, 2, 41)
-			var c := m + d * (2.0 + j * 4.0 + sp * age) + n * ((Px.h2(j, 3, 41) - 0.5) * 14.0) + Vector2(0, -up * age)
-			var r := 3.5 + 8.0 * minf(age * 1.4, 1.0) + Px.h2(j, 4, 41) * 3.0
-			puff(img, c, r, SMOKE, clampf((age - 0.6) / 0.9, 0.0, 1.0), j * 13)
-		var rc := m + d * (6.0 + 46.0 * age)
-		var rr := 4.0 + 11.0 * minf(age * 2.0, 1.0)
-		var fade := clampf((age - 0.4) / 0.6, 0.0, 1.0)
-		for k in 48:
-			var t := TAU * k / 48.0
-			var q := rc + d * cos(t) * rr * 0.45 + n * sin(t) * rr
-			if Px.h2(k, 9, 5) >= fade:
-				Px.put(img, floori(q.x), floori(q.y), SMOKE[2] if sin(t) < 0 else SMOKE[1])
-	if ft > 0.03 and ft < 1.2:
-		var age2 := ft - 0.03
-		for j in 5:
-			var c2 := Vector2(m.x - 20.0 + j * 12.0 + 10.0 * age2, gy - 2.0 - 10.0 * age2 * (0.5 + Px.h2(j, 5, 43)))
-			puff(img, c2, 2.0 + 3.5 * minf(age2 * 2.0, 1.0), [DUST[0], DUST[0], DUST[1], DUST[2]], clampf((age2 - 0.5) / 0.7, 0.0, 1.0), j * 7 + 100)
-	if ft < 0.4:
-		for j in 18:
-			var sa := a + (Px.h2(j, 6, 47) - 0.5) * 1.8
-			var spd := 90.0 + 120.0 * Px.h2(j, 7, 47)
-			var p0 := m + Vector2(cos(sa), sin(sa)) * spd * ft + Vector2(0, 60.0 * ft * ft)
-			var p1 := p0 - Vector2(cos(sa), sin(sa)) * 3.0
+		for j in 16:
+			var sp := 18.0 + 46.0 * Px.h2(j, 1, 41)
+			var up := 10.0 + 26.0 * Px.h2(j, 2, 41)
+			var slow := 1.0 / (1.0 + age * 1.2)
+			var c := m + d * (6.0 + j * 4.5 + sp * age * slow) + n * ((Px.h2(j, 3, 41) - 0.5) * 26.0 * minf(age * 2.0, 1.0)) + Vector2(0, -up * age)
+			var r := 4.0 + 13.0 * minf(age * 1.1, 1.0) + Px.h2(j, 4, 41) * 4.0
+			puff(img, c, r, SMOKE, clampf((age - 0.9) / 1.0, 0.0, 1.0), j * 13)
+		var rc := m + d * (8.0 + 60.0 * age / (1.0 + age))
+		var rr := 5.0 + 16.0 * minf(age * 1.6, 1.0)
+		var fade := clampf((age - 0.5) / 0.8, 0.0, 1.0)
+		for k in 72:
+			var t := TAU * k / 72.0
+			for w in 2:
+				var q := rc + d * cos(t) * (rr * 0.42 + w) + n * sin(t) * (rr + w)
+				if Px.h2(k, 9 + w, 5) >= fade:
+					Px.put(img, floori(q.x), floori(q.y), SMOKE[2] if sin(t) < 0 else SMOKE[1])
+	# dust: the blast off the road under the muzzle, the shockwave along it, pebbles
+	if ft > 0.02 and ft < 1.6:
+		var age2 := ft - 0.02
+		for j in 9:
+			var c2 := Vector2(m.x - 30.0 + j * 9.0 + 14.0 * age2, gy - 3.0 - 22.0 * age2 * (0.4 + Px.h2(j, 5, 43)))
+			puff(img, c2, 3.0 + 7.0 * minf(age2 * 1.8, 1.0), [DUST[0], DUST[0], DUST[1], DUST[2]], clampf((age2 - 0.6) / 0.8, 0.0, 1.0), j * 7 + 100)
+		if age2 < 0.9:
+			for side in [-1.0, 1.0]:
+				for j in 4:
+					var xr: float = m.x + side * (14.0 + 150.0 * age2 - j * 7.0)
+					puff(img, Vector2(xr, gy - 2.0), 2.0 + 1.5 * Px.h2(j, 6, 44), [DUST[0], DUST[0], DUST[1], DUST[2]], clampf(age2 / 0.9, 0.0, 1.0), j * 5 + 200 + int(side))
+		if age2 < 0.8:
+			for j in 12:
+				var vx := (Px.h2(j, 7, 45) - 0.3) * 120.0
+				var vy := -70.0 - 80.0 * Px.h2(j, 8, 45)
+				var pp := Vector2(m.x - 10.0 + j * 3.0, gy - 1.0) + Vector2(vx, vy) * age2 + Vector2(0, 260.0 * age2 * age2)
+				if pp.y <= gy:
+					Px.put(img, floori(pp.x), floori(pp.y), DUST[0] if j % 2 else Color("#1a140e"))
+					Px.put(img, floori(pp.x) + 1, floori(pp.y), DUST[1])
+	# sparks
+	if ft < 0.5:
+		for j in 26:
+			var sa := a + (Px.h2(j, 6, 47) - 0.5) * 2.0
+			var spd := 120.0 + 180.0 * Px.h2(j, 7, 47)
+			var p0 := m + Vector2(cos(sa), sin(sa)) * spd * ft + Vector2(0, 80.0 * ft * ft)
+			var p1 := p0 - Vector2(cos(sa), sin(sa)) * 4.0
 			Px.linef(img, p1, p0, F_YEL if j % 3 else F_ORA)
-	if ft >= 0.04 and ft < 0.16:
-		var fb := m + d * (6.0 + 30.0 * (ft - 0.04))
-		var fr := 13.0 - 30.0 * (ft - 0.04)
-		puff(img, fb, fr + 2.0, [F_DRED, F_RED, F_ORA, F_YEL], 0.0, 77)
-		puff(img, fb - d * 1.0, fr * 0.55, [F_ORA, F_YEL, F_WHITE, F_WHITE], 0.0, 78)
-	if ft < 0.07:
-		var big := 1.0 if ft < 0.035 else 0.7
-		for y in range(floori(m.y) - 24, ceili(m.y) + 25):
-			for x in range(floori(m.x) - 10, ceili(m.x) + 40):
+	# the fire ball and its fragments
+	if ft >= 0.05 and ft < 0.24:
+		var u := ft - 0.05
+		var fb := m + d * (12.0 + 90.0 * u)
+		var fr := 19.0 - 30.0 * u
+		puff(img, fb, fr + 3.0, [F_DRED, F_RED, F_ORA, F_YEL], clampf((u - 0.12) / 0.07, 0.0, 1.0) * 0.6, 77)
+		puff(img, fb - d * 2.0 + n * 3.0, fr * 0.62, [F_ORA, F_YEL, F_WHITE, F_WHITE], 0.0, 78)
+		puff(img, fb + d * (fr * 0.7) - n * 5.0, fr * 0.45, [F_RED, F_ORA, F_YEL, F_YEL], 0.0, 79)
+		for j in 7:
+			var fa := a + (Px.h2(j, 11, 49) - 0.5) * 2.4
+			var fp := m + Vector2(cos(fa), sin(fa)) * (20.0 + 160.0 * u) + Vector2(0, 50.0 * u * u)
+			puff(img, fp, 2.5 + 1.5 * Px.h2(j, 12, 49), [F_DRED, F_RED, F_ORA, F_YEL], 0.0, 80 + j)
+	# the cross/star flash with the brake's side jets
+	if ft < 0.075:
+		var big := 1.0 if ft < 0.04 else 0.75
+		var bk := m - d * 4.0
+		for y in range(floori(m.y) - 34, ceili(m.y) + 35):
+			for x in range(floori(m.x) - 16, ceili(m.x) + 58):
 				var v := Vector2(x + 0.5, y + 0.5) - m
 				var rho := v.length()
 				var phi := atan2(v.dot(n), v.dot(d))
-				var R := (6.0 + 28.0 * pow(maxf(cos(phi), 0.0), 6.0) + 13.0 * pow(maxf(cos(4.0 * phi), 0.0), 8.0)) * big
-				if rho > R + 1.0:
+				var R := (8.0 + 40.0 * pow(maxf(cos(phi), 0.0), 7.0) + 20.0 * pow(maxf(cos(4.0 * phi), 0.0), 12.0) + 10.0 * pow(maxf(cos(8.0 * phi + 0.4), 0.0), 16.0)) * big
+				# the brake's side jets: blades straight up and down out of the slots
+				var vb := Vector2(x + 0.5, y + 0.5) - bk
+				var jet := absf(vb.dot(d)) < 2.5 - absf(vb.dot(n)) * 0.06 and absf(vb.dot(n)) < 24.0 * big
+				if rho > R + 1.5 and not jet:
 					continue
 				var col := F_ORA
-				if rho > R:
+				if jet:
+					col = F_YEL if absf(vb.dot(n)) < 14.0 * big else F_ORA
+				elif rho > R:
 					col = F_RED
-				elif rho < R * 0.35:
+				elif rho < R * 0.45:
 					col = F_WHITE
-				elif rho < R * 0.65:
+				elif rho < R * 0.72:
 					col = F_YEL
 				Px.put(img, x, y, col)
 
