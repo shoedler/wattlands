@@ -81,12 +81,51 @@ Nominal 300 + 3 x (180 + 120 + 60) + 240 + 180 = 1800 s; at most 2460 s. A check
 
 Evade and Overpressure sprints send nothing: the rider sprints inside the phase's own SIM. They are off in WARMUP phases, ERG phases and the first 300 s.
 
+## Free roam (brief 2.10)
+
+`roam_10`, `roam_20`, `roam_30` (featured), `roam_45` and `roam_60`: one long night valley driven back and forth for N minutes, points for every kill. Each content file is `{id, kind: "roam", label, minutes}`; `TankContent.expand_roam` turns it into two segments, so every other part of the game sees an ordinary mission:
+
+| Segment | Kind | Length | Plan (`stations.json` `roam_plans`) |
+| --- | --- | --- | --- |
+| Drive-out (`depot`) | WARMUP | 300 s (`valley.json` `drive_out_s`) | the depot's: diesel and Bulwark SIM `game` (0..+2 %), dynamo and arc ERG 50 % ramping to 65 %, steam SIM flat (boiler 3 %); no drills, no enemies |
+| Roam (`roam`) | WORK, open-ended | `min_s` = minutes x 60 - 300, `max_s` = `min_s` + 300 | diesel SIM `game` on the valley's grade (-3..+5 %, 2 Hz); dynamo ERG 55 % with the bank pattern in `range_pct` [55, 85]; steam SIM flat + the boiler; arc ERG 65 % with the arc pattern in [65, 80]; Bulwark SIM `game` + the hoist (the Advance's) |
+| Cool-down | appended | 180 s | Tank sends nothing |
+
+Every roam phase is longer than 300 s, so BRIEF 4.6.1's 105 % cap applies; no bound Tank sets there is above 85 %. Each rider keeps its slot's start engine for the whole session (no rotation: diesel, dynamo, steam, arc; the Bulwark solo). There are no ERG <-> SIM switches before the cool-down. FIT laps: the drive-out, the roam and the cool-down.
+
+**The valley** (`content/tank/roam/valley.json`, `contracts/tank_roam_map.gd`): about 6 km (5.8-6.2 km), built at the session start from a seed the host draws from `ctx.rng` (the snapshot carries it; every peer rebuilds the same map with `TankRoamMap`, a pure LCG of its own). Pine forest at both ends (each with a turning place), and between them the lake shore under the cliffs, the village, the quarry and the open meadow once each in a seeded order, some separated by more forest. Each zone has its own terrain range (forest -2..+3 %, lake -1..+1 %, village -1..+2 %, quarry -3..+5 %, meadow -2..+2 %; points 150-260 m apart, at most 2.5 points apart, flat over 200 m at both ends) and its own near plane. Travelling west the grade is the negation, clamped to -3..+5 %. Dug-in strongpoints stand at one seeded spot in each village, quarry and forest zone that fits (at least 900 m apart, 700 m clear of the ends).
+
+**Driving and the turn** (`rules/tank_roam.gd`). The rules keep working in the travel frame: the tank always drives toward +x in rules px as in a mission; `TankRoamState.map_m` is the hull centre's place on the road and `TankHullState.dir` which way +x points (east +1, west -1). The road stops at the turning places (the hull's centre 60 m inside either end). The driver (the diesel, or the Bulwark solo) turns the tank with `ability_1` (or `confirm` on the diesel): the `turn` intent, refused for 30 s after a turn. A turn is an 8 s stop; at its midpoint `TankRoam.flip` mirrors the travel frame about the hull's centre (enemies change sides and move to a held place on their new side, a running telegraph is called off, shells and obstacles mirror, the turret keeps pointing the same way along the road), so every map point keeps its place. The Autopilot (a human on the fallback, a bot, a station on reserve) turns 3 s after the tank reached a turning place; the driver also gets the toast "Turn around".
+
+**Patrols and strongpoints.** A patrol comes every 50-110 s of WORK time (drawn): 1-2 light tanks (45 %), a medium with a light half the time (30 %), a tank destroyer (15 %), a heavy tank (10 %, only after 600 s of WORK time and while no heavy is on the field). Counts scale with the tank (`enemy_scale`, as in missions), the patrol enters ahead (75 %) or behind (always behind with less than 150 m of road ahead) and is trimmed to 6 enemies on the field (a full field retries 10 s later). Patrols use the mission rules: depth lanes, holds, the light's 2.5 s flank shot, telegraphs and Surge to evade, the bow guns, breakdowns. A strongpoint joins the field when its spot nears the screen and leaves it, still standing, once well off screen; it returns 600 s after it falls. The tank halts ("Engage") while a strongpoint ahead is within 180 rules px of its front or a heavy tank within 400 px, else drives on. Nothing spawns in the drive-out.
+
+**Time up.** At the roam phase's `min_s` the rules raise `time_up {p}` (`p`: the patrols so far; none come after): no new patrol or strongpoint. A fight in progress (an enemy within 400 px of the hull) may finish, the board shows OVERTIME; once none is left, or 1 s before `max_s` at the latest, the phase's objective is done and the director ends it for every rider in one step; the cool-down follows and the module finishes `time_up`.
+
+**Points** (the crew's): light 10, medium 25, destroyer 30, dug-in 20, heavy 60 per kill by crew fire, +5 per evaded shot, -40 per breakdown, +2 per full kilometre driven in the roam phase. **Grade** by points per WORK minute: S >= 22.5, A >= 17.5, B >= 12.5, C >= 7.5, else D. These are the brief's starting cut-offs (9 / 7 / 5 / 3) x 2.5, tuned on the simulations: a compliant crew kills nearly every patrol, about 16-25 points a WORK minute, so the brief's cut-offs graded every compliant crew S. On `roam_30`, seeds 1-3: compliant crews 1-4 at 17.5-18.3 / 16.1-18.6 / 17.8-20.1 / 20.3-24.8 points a minute (A, B to A, A, A to S), crew 3 at 85 % compliance 16.7-19.8 (B or A), at 70 % 5.9-13.7 (D to B, with 3-7 breakdowns). Sprints that evade lift a crew toward S (+5 each). **Results**: the points, points a minute, kills by type (light/medium/destroyer/dug-in/heavy), distance, evades, breakdowns and patrols; XP = round(kJ / 10) + the grade bonus; unlocks as for missions (no Behemoth one); `summary_key` `TANK_RESULT_TIME_UP`; Strava `ride_tag` "Free Roam N min" and lines for points, kills, distance, evades and breakdowns.
+
+**Net.** The snapshot's optional `rm` row (free roam only): the map seed, the hull's place on the road (0.1 m), the turn and its cooldown, the time at the end, flags (time up, overtime, engaging, the map end), the points, the strongpoints that are down, the odometers; a crew of 4 at the caps stays under 4 KB (tested). Events `turn {s, dir}` (s -1 for the Autopilot) and `time_up {p}`.
+
+**View.** The camera follows the tank. The planes scroll with the hull's place on the road (`TankView.plane_x`), so the world scrolls with the direction; driving west, the world, tank, light and effect layers are drawn mirrored (the tank on the right, facing left; the planes and the HUD never mirror). A turn hides the flip in a dust cloud thickest at its midpoint; wrecks keep their place on the road through it. Each zone swaps the forest plane for its own near plane (lake shore, village, quarry, meadow; the pine forest keeps the forest plane), cross-faded over 60 m at a zone's edge; they are built by `assets/tank/v2/tools_src/zones.gd` from the kit's own planes (no fal) and listed in `kit.json` `zone_planes`. A turning place (a gravel loop, a hatched timber barrier, a hooded amber lamp) stands at each end of the road. The mission look is unchanged.
+
+**HUD.** The map strip (`TankHudRoamStrip`) across the top in place of the mission plate: the zones in profile, the terrain, the turning places, the tank with its direction and the screen's bracket, patrols and strongpoints (crossed out while down), "ROAM / 30 MIN" (DRIVE-OUT, ENGAGE). The board (`TankHudBoard`) top right: the time left (the drive-out counts toward it; OVERTIME in red), points and kills; the hull plate under it without its kills; toasts under the strip; the turn marker (a striped post) at the turning place ahead; help for the map, the board and the turn. Toasts: "Turn around" (the driver), "Turning round", "Engage", "Time up: finish the fight".
+
+| Knob | File and key | Now |
+| --- | --- | --- |
+| The valley | `roam/valley.json` `length_m`, `zones`, `terrain_*`, `end_flat_m`, `start_m`, `end_m` | 5.8-6.2 km; see above |
+| Drive-out and overtime | `roam/valley.json` `drive_out_s`, `overtime_s` | 300, 300 |
+| Patrols | `roam/valley.json` `patrols` | every 50-110 s, 75 % ahead, at most 6, heavy after 600 s, weights 45 / 30 / 15 / 10 |
+| Strongpoints and the halt | `roam/valley.json` `strongpoints`, `engage_heavy_px`, `fight_px` | village, quarry, forest; 900 m apart; back after 600 s; 180 px; 400 px; 400 px |
+| The turn | `roam/valley.json` `turn` | 8 s stop, 30 s cooldown, the Autopilot after 3 s |
+| Points and grades | `roam/valley.json` `points`, `grades` | 10 / 25 / 30 / 20 / 60, +5, -40, +2 per km; S 22.5, A 17.5, B 12.5, C 7.5 |
+| Roam plans | `stations.json` `roam_plans` | the table above |
+
 ## Content
 
 | Content | Plan | Notes |
 | --- | --- | --- |
 | `ashfall_road` (default, zero-input) | depot 300 s, 3 x (Advance 90-300 s, gun line 60-180 s, checkpoint 60 s), boss 120-360 s, cool-down 180 s | 30 min nominal, 41 min at most; 12 FIT laps; Poplar Road (1100 m), Kettle Ford (1200 m), Quarry Ridge (950 m), Foundry Gate |
 | `drill` (e2e) | depot 30 s, skirmish 70 s (WARMUP), checkpoint 30 s, cool-down 180 s | inside the warm-up limits, no haptics, at most one mode switch per rider; 4 FIT laps |
+| `roam_10`, `roam_20`, `roam_30` (featured), `roam_45`, `roam_60` | drive-out 300 s (WARMUP), roam (WORK, `min_s` minutes x 60 - 300, `max_s` + 300), cool-down 180 s | free roam (above); 3 FIT laps; no rotation |
 
 ### Content files and schemas
 
@@ -95,8 +134,10 @@ Every file is JSON, validated at load by `TankContentSchema` (`contracts/tank_co
 | File | Holds |
 | --- | --- |
 | `tanks.json` | `tanks` (code, crew, hull size, engines, turrets, `enemy_scale`, the Bastion's `stabilizer_per_s`), `hull`, `drive`, `evade`, `berm`, `in_band`, `power_ratio`, `dynamo`, `steam`, `gearbox`, `gun`, `damage`, `bow`, `arc`, `caps`, `props`, `drill` |
-| `stations.json` | engines and start engines, `rotation` rows, `plans` per engine and segment type, `drill_plans`, `terrain`, `bank`, `arc`, `boiler`, `hoist`, `cadence_band`, `haptics` |
+| `stations.json` | engines and start engines, `rotation` rows, `plans` per engine and segment type, `drill_plans`, `roam_plans`, `terrain`, `bank`, `arc`, `boiler`, `hoist`, `cadence_band`, `haptics` |
 | `enemies.json` | `types` (light, medium, destroyer, dugin, heavy: HP, size, preferred `lane`, hold distance, speed, gun, the light's telegraphed `flank` shot) and the `boss` (bogies, turret, main and secondary guns, telegraph), shell speed, miss distance, `lanes` |
+| `missions/roam_<n>.json` | free roam: `id`, `kind` "roam", `label`, `minutes` (10..120); expanded at load (`TankContent.expand_roam`) |
+| `roam/valley.json` | the free-roam valley: length, zones and their terrain, ends, drive-out and overtime, strongpoints, patrols, the halt, the turn, points and grades |
 | `missions/<id>.json` | `id`, `label`, `rotation`, `plan_table`, `segments[]` (`id`, `type`, `stage`, `kind`, `duration_s`, `min_s`, `max_s`, `length_m`, `terrain` as `[distance_m, grade_pct]` points, `encounters[]` with `at_m` / `enemy` / `count` / `from`, `obstacles[]`, gun-line `enemies[]` with `at_px`, `props`, `drills`, `teach`) and the `cooldown` backdrops |
 | `scoring.json` | score weights and scale, objective fractions, survival per breakdown, grade cut-offs, XP |
 | `cosmetics.json` | hull finish unlock rules |
@@ -164,6 +205,8 @@ The simulation matrix (`tests/games/tank/sim/`, checked by `check_sims.mjs`):
 | S8 stress (`sim/test_tank_s8.gd`) | counts x 3: at most 16 enemies, snapshots under 4 KB |
 | S9 a scripted sprinter (crew 1) | telegraphed shots evaded by the solo rider, no Ram event or haptic, a gun line entered after a sprint at or below its target |
 | S10 crew 3 on the network path | every rider a scripted sprinter: a client's `over` arrives as a telemetry intent, is owned by the steam engine and latches an Overpressure shell (a client's `aim` is proven by `integration/test_tank_session.gd`: headless sims press no keys); slot 1 stops dead for 60 s in a dynamo gun line: rescue, AFK within 10 s, a station on reserve, back, nobody else affected |
+| S11 free roam: `roam_10` crews 1 (SOLO) and 4, `roam_30` crew 3 | time up at `min_s` (`time_up` once), the roam phase ended by `end_phase` within `min_s` .. `max_s` and for every rider at once, no patrol after time up (the event's count equals the results'), 3 FIT laps, the plans' bounds, every directive, plan and trace rule of S4, the grade by points per WORK minute (crew 3 on `roam_30`: B or A), `ride_tag` "Free Roam N min" |
+| S12 `roam_10` crew 3 at 0 W | as S2's zero crew: the shared pause holds the drive-out to `--max-sim-seconds`, no kill by crew fire, grade D |
 
 Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test_conformance.gd` (Autopilot humans at 1 and 4 riders), the matrix with `fit_check`, `node tools/e2e/run.mjs --games=tank`, and the full `tools/run_tests` at or above the green-count floor.
 
@@ -194,12 +237,12 @@ Then look at every sprite (reroll failures with a changed prompt, at most twice)
 | `tank_game.gd` | `TankGame` (GameModule): intents, the host loop, bands and `end_phase` through the director, events, prompts, HUD feeds, snapshot, results, `apply_progress` |
 | `contracts/` | Ids, constants, the state records, the intent / event / snapshot schemas, the content schemas, `TankGeometry`, `TankTerrain` (see `contracts/README.md`) |
 | `effort/` | `TankPlanBuilder` (plans, rotation) and `TankDirector` (every directive, bands, haptics, `end_phase`; the only code that touches `ctx.directives`) |
-| `rules/` | `TankRules.step` and its parts: segments, stations (the arc generator too), drive, hull, score, host-only bookkeeping (`TankAux`) |
+| `rules/` | `TankRules.step` and its parts: segments, stations (the arc generator too), drive, hull, score, free roam (`TankRoam`), host-only bookkeeping (`TankAux`) |
 | `combat/` | Ballistics, aim, targets, shells, damage, enemies and their lanes, encounters, the Behemoth, Surge to evade (`TankEvade`), the bow guns (`TankBow`) |
 | `content/` | `TankContent`, the validated loader |
 | `autopilot/`, `net/` | `TankAutopilot`; `TankSnapshot`, `TankCues`, `TankEventCast` |
 | `view/` | `TankView` and the diorama: backdrop planes with blur and haze, rigs, cutaway rooms, lights, particles, interpolation, placeholder art |
-| `hud/` | `TankHud` (the `HudSpec` rects), the station card, the objective line, the boss bars |
+| `hud/` | `TankHud` (the `HudSpec` rects; the free-roam layout), the plates, the crew row, the world tags, the roam strip and board |
 | `audio/` | `TankAudio`, synthesized with `Sfx.synth` |
 
 ## Known gaps and P2 notes

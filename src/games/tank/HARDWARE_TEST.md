@@ -211,3 +211,30 @@ Planned ERG <-> SIM switches with four riders (each at least 60 s apart; check e
 | 4 Bastion | slot 3: arc, diesel, dynamo, steam | 4 | Advance 2 (ERG -> SIM), gun line 2 (SIM -> ERG), boss (ERG -> SIM), cool-down (SIM -> ERG) |
 
 Log: date, trainer firmware, FTP, verified or not, difficulty and haptic settings, crew size, the content, and each step's result with the running log of a full ride attached. Anything that spikes, jolts, exceeds a stated bound or feels wrong is a failed safety check: stop, note the segment and time, and report it to the lead.
+
+## 13. v2: free roam (the drive-out, a long ERG roam phase, the turn, time up)
+
+Free roam (`roam_10` ... `roam_60`, brief 2.10) is one 300 s drive-out (WARMUP: the depot's targets, no enemies) and one open-ended WORK phase per rider on the engine of its slot for the whole session (no rotation): min_s = minutes x 60 - 300, max_s = min_s + 300 for a fight past time up. Every roam phase is longer than 300 s, so BRIEF 4.6.1's 105% cap applies to it; every bound Tank sets there is at most 85%. Start `roam_30` (or `roam_45` / `roam_60` for the long-ERG steps). To ride the dynamo or the arc generator with one trainer, host the Rampart (you in slot 1 on the dynamo) or the Bastion (you in slot 3 on the arc) with clients on `--mock-trainer=erg`. The steps of the drive-out and the turn work on any engine; the diesel steps need slot 0 (or solo, the Bulwark).
+
+| What | % FTP | Watts at 250 | Unverified watts |
+| --- | --- | --- | --- |
+| Dynamo roam, bank full | 55 | 138 | 117 |
+| Dynamo roam, bank empty (the roam's cap) | 85 | 212 | 181 |
+| Arc generator roam, no bow-gun fire | 65 | 162 | 138 |
+| Arc generator roam, bow guns always firing | 80 | 200 | 170 |
+
+| # | Step | Expected | Result |
+| --- | --- | --- | --- |
+| 80 | Drive-out on the dynamo or the arc generator (0:00-5:00) | ERG 50% rising smoothly to 65% over 300 s, never above 65%; no bank or arc pattern, no haptic; the tank drives east along the valley and no enemy appears | |
+| 81 | Drive-out on the diesel (or solo) | SIM with the valley's grade at 2 Hz, clamped to 0 to +2% before difficulty; no power band; no haptic | |
+| 82 | 5:00, the roam phase starts | One FIT lap boundary; the dynamo stays ERG (55%), the arc ERG (65%), the diesel and the steam engine SIM: no ERG <-> SIM switch here | |
+| 83 | A long ERG roam phase on the dynamo: let patrols drain the bank (stay in band; the bow guns of the Rampart and the Citadel also cost 2 units a burst) | The target rises as the bank drains, 10 points at most per update in three 1 s sub-steps, and never above **85%** however empty the bank, for the whole phase (25 min in `roam_30`); log the target every 30 s | |
+| 84 | The same on the arc generator through several fights | 65 + 15 x duty, never outside 65 to 80%; back to 68% or below within 60 s of a fight's end | |
+| 85 | The 105% cap: with the roam phase past 300 s, check the governor never applies more than 105% FTP in ERG (it never should: Tank asks at most 85%) and nothing accrues above 105% | Never above 85% (x 0.85 unverified) in the trace | |
+| 86 | Diesel in the roam: SIM on the valley's grade | -3 to +5% before difficulty at 2 Hz, the sign flipping after a turn (a climb one way is a descent the other way); the power band 76-105% shows | |
+| 87 | Drive to a map end (about 6 km; a turning place with a barrier and a lamp) | The tank stops; the driver sees "Turn around"; with no input the Autopilot turns after 3 s; the trainer does nothing special | |
+| 88 | The driver turns by hand (ability 1, or confirm on the diesel) anywhere | An 8 s stop behind a dust cloud, the tank faces the other way, the world scrolls the other way; a second turn within 30 s is refused; the grade under you changes sign | |
+| 89 | A strongpoint or a heavy tank in range | "Engage": the tank halts while it stands; the diesel's SIM grade follows the terrain under the stopped tank (no change) | |
+| 90 | Time up at min_s (25:00 into `roam_30`, 30:00 on the clock) with an enemy within reach | "Time up: finish the fight"; the board reads OVERTIME; no new patrol; once the fight ends (at the latest 5 min later) every rider leaves the roam phase in the same second, the 180 s cool-down at 50% follows and the ride ends "time_up" | |
+| 91 | Time up with nothing in range | The roam phase ends at once; 3 FIT laps in all (drive-out, roam, cool-down); the Strava title says "Free Roam 30 min" | |
+| 92 | Haptics in the roam (SIM rider, past 5:00) | A hit of 4 or more: +2.0% for 1.5 s, 15 s apart; none to an ERG rider, none in the drive-out or the cool-down | |
