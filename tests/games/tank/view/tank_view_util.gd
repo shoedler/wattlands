@@ -65,3 +65,80 @@ static func feed_of(state: TankState, watts: float, cadence: float) -> Dictionar
 	for r in state.riders:
 		out[r.peer] = Vector2(watts, cadence)
 	return out
+
+
+## A free-roam state (brief 2.10) for `crew` 1..4: `content_id` on the valley of `seed_value`, 400 s into
+## the roam phase, the hull's centre at map metre `map_m` (the middle of the road when negative)
+## travelling `dir`, every rider pedalling, a light ahead in its weave, a medium holding ahead in the
+## far lane and a destroyer behind (no RNG: fixed numbers).
+static func roam_state(
+	crew: int,
+	dir: int = TankIds.DIR_RIGHT,
+	map_m: float = -1.0,
+	seed_value: int = 7,
+	content_id: String = "roam_30"
+) -> TankState:
+	var c := TankFixtures.content(content_id)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	var s := TankRules.new_state(c, TankFixtures.slots(crew), content_id, false, rng)
+	s.rng = null
+	var segs := c.segments()
+	s.seg.seg = TankIds.SEG_ROAM
+	s.seg.stage = 1
+	s.seg.phase_index = 1
+	s.seg.segment_index = 1
+	s.seg.kind = Wl.WORK
+	s.seg.elapsed_s = 400.0
+	s.seg.min_s = float(segs[1]["min_s"])
+	s.seg.max_s = float(segs[1]["max_s"])
+	s.seg.open_ended = true
+	s.tick = 14000
+	s.t = 700.0
+	s.hull.x_px = 24000.0
+	s.hull.distance_m = s.hull.x_px / TankConst.PX_PER_M
+	s.hull.speed_mps = 7.5
+	s.hull.dir = dir
+	s.hull.facing = TankIds.FACE_RIGHT
+	s.roam.map_m = map_m if map_m >= 0.0 else s.roam_map.length_m * 0.5
+	s.roam.points = 120
+	s.roam.work_s = 400.0
+	for r in s.riders:
+		r.raw_w = 0.9 * r.ftp
+		r.cadence_rpm = 90.0
+		r.ftp_pct = 90.0
+		r.target_pct = 90.0
+		r.in_band = true
+	var front := s.hull.x_px + float(s.hull.hull_w)
+	s.enemies.append(_roam_enemy(s, 301, TankIds.ENEMY_LIGHT, front + 120.0, 1, 0))
+	s.enemies.append(_roam_enemy(s, 302, TankIds.ENEMY_MEDIUM, front + 250.0, 1, 1))
+	s.enemies.append(_roam_enemy(s, 303, TankIds.ENEMY_DESTROYER, s.hull.x_px - 101.0, -1, 1))
+	return s
+
+
+static func _roam_enemy(
+	s: TankState, id: int, type: String, x: float, side: int, lane: int
+) -> TankEnemyState:
+	var def := s.content.enemy_def(type)
+	var e := TankEnemyState.new()
+	e.id = id
+	e.code = TankIds.enemy_code(type)
+	e.w = int(def["size_px"][0])
+	e.h = int(def["size_px"][1])
+	e.hp_max = float(def["hp"]) * s.content.enemy_scale(s.hull.tank)
+	e.hp = e.hp_max * 0.7
+	e.x_px = x
+	e.side = side
+	e.lane = lane
+	e.mode = TankIds.EM_HOLD
+	return e
+
+
+## A configured module on a free-roam content around `state` (its ctx's content is `content_id`).
+static func roam_game(
+	state: TankState, content_id: String = "roam_30", local_peer: int = 1
+) -> TankGame:
+	var ctx := F.make_ctx(clampi(state.riders.size(), 1, 4), 0, content_id, Wl.SOLO, local_peer)
+	var g := F.make_game(ctx)
+	g.state = state
+	return g

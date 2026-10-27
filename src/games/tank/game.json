@@ -11,7 +11,7 @@
   "pixel_flex": {"min": [852, 480]},
   "entry": "res://src/games/tank/tank_game.gd",
   "picker_image": "res://assets/tank/v2/picker_card.png",
-  "contents": ["ashfall_road", "drill"],
+  "contents": ["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
   "default_content": "ashfall_road",
   "e2e_content": "drill",
   "zero_input_content": "ashfall_road",
@@ -20,6 +20,11 @@
   "player_options": [{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}],
   "content_cards": {
     "ashfall_road": {"image": "res://assets/tank/v2/card_mission.png", "detail": "TANK_CARD_MISSION", "featured": true},
+    "roam_30": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": true},
+    "roam_10": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_20": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_45": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_60": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
     "drill": {"image": "res://assets/tank/v2/card_drill.png", "detail": "TANK_CARD_DRILL", "featured": false}
   }
 }

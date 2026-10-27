@@ -28,6 +28,9 @@
 //   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Overpressure (`over` from a surge on the
 //                          steam engine) arrives as telemetry intents; a client's `aim` is GUT-tested (no actions in sims)
 //   s10_c3_dynamo_stop     crew 3, slot 1 stops pedaling for 60 s in the stage 1 gun line (rescue, AFK, reserve, back)
+//   s11_roam10_c1, s11_roam10_c4, s11_roam30_c3   free roam, compliant `erg` riders (brief 2.10): time up, the overtime
+//                          bound, no patrol after time up, FIT laps, the grade (roam_30 crew 3: B or A, the tuning target)
+//   s12_roam10_c3_zero     free roam roam_10, crew 3 at 0 W: the shared pause holds the drive-out, no kill, grade D
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
 //   segment       a plan phase with its span in `phases[peer]` (game seconds) and how it ended
@@ -1131,6 +1134,133 @@ export function checkS10(reports) {
   return result('S10', title, probs, notes.join(', '));
 }
 
+// --- S11 and S12: free roam (brief 2.10) ---------------------------------------------------------------------
+
+/** The roam phase is plan phase 1 (after the 300 s drive-out); its min_s is minutes x 60 - 300, max_s min_s + 300. */
+export const ROAM_PHASE = 1;
+export const ROAM_DRIVE_OUT_S = 300;
+export const ROAM_OVERTIME_S = 300;
+/** FIT laps of a free roam: the drive-out, the roam and the platform's cool-down. */
+export const ROAM_LAPS = 3;
+/** Brief 2.8 / 2.10: a compliant 30-min crew of 3 earns B or A. */
+export const ROAM_TARGET_GRADES = ['A', 'B'];
+/** content/tank/roam/valley.json grades: points per WORK minute (the brief's 9 / 7 / 5 / 3 x 2.5, P5 tuning). */
+export const ROAM_GRADES = [['S', 22.5], ['A', 17.5], ['B', 12.5], ['C', 7.5]];
+
+/** The minutes of a roam content id (roam_30 -> 30), or NaN. */
+export const roamMinutes = (contentId) => Number(String(contentId ?? '').match(/^roam_(\d+)$/)?.[1] ?? NaN);
+
+/** The grade of `pointsPerMin` points per WORK minute (ROAM_GRADES, else D). */
+export function roamGrade(pointsPerMin) {
+  for (const [g, cut] of ROAM_GRADES) if (pointsPerMin >= cut - EPS) return g;
+  return 'D';
+}
+
+/** Problems of one completed free-roam run: time up, the overtime bound, no patrol after it, laps, the grade. */
+export function roamProblems(name, r) {
+  const probs = [];
+  const minutes = roamMinutes(r.content_id);
+  const minS = minutes * 60 - ROAM_DRIVE_OUT_S;
+  const maxS = minS + ROAM_OVERTIME_S;
+  probs.push(...completeProblems(name, r, ['time_up']));
+  probs.push(...cleanProblems(name, r));
+  probs.push(...planProblems(name, r));
+  probs.push(...directivesProblems(name, r));
+  probs.push(...traceProblems(name, r));
+  for (const peer of humanPeers(r)) {
+    const plan = planOf(r, peer);
+    if (planLaps(r, peer) !== ROAM_LAPS) probs.push(`${name}: peer ${peer} plan has ${planLaps(r, peer)} lap-true phases, wanted ${ROAM_LAPS}`);
+    const ph = plan[ROAM_PHASE] ?? {};
+    if (num(ph.min_s) !== minS || num(ph.max_s) !== maxS) probs.push(`${name}: peer ${peer} roam phase ${ph.min_s}-${ph.max_s} s, wanted ${minS}-${maxS}`);
+    const seg = segmentsOf(r, peer).find((x) => x.index === ROAM_PHASE);
+    if (!seg) {
+      probs.push(`${name}: peer ${peer} never reached the roam phase`);
+      continue;
+    }
+    if (seg.endedBy !== 'end_phase') probs.push(`${name}: peer ${peer} roam phase ended by ${seg.endedBy || 'nothing'}, wanted end_phase`);
+    if (seg.dur < minS - TICK_S - EPS) probs.push(`${name}: peer ${peer} roam phase ${fmt(seg.dur)} s, ended before min_s ${minS}`);
+    if (seg.dur > maxS + EPS) probs.push(`${name}: peer ${peer} roam phase ${fmt(seg.dur)} s, past the overtime bound ${maxS}`);
+  }
+  const host = hostPeer(r);
+  const starts = segmentsOf(r, host).filter((x) => x.index === ROAM_PHASE).map((x) => x.start);
+  const ends = segmentsOf(r, host).filter((x) => x.index === ROAM_PHASE + 1).map((x) => x.start);
+  const peersEnded = new Set(humanPeers(r).map((p) => fmt(segmentsOf(r, p).find((x) => x.index === ROAM_PHASE + 1)?.start ?? NaN)));
+  if (peersEnded.size > 1) probs.push(`${name}: the riders left the roam phase at different times (${[...peersEnded].join(', ')}), wanted one step`);
+  const ups = eventsOf(r, 'time_up');
+  if (ups.length !== 1) probs.push(`${name}: ${ups.length} time_up events, wanted 1`);
+  else if (starts.length && Math.abs(num(ups[0]._t) - (starts[0] + minS)) > 0.2) {
+    probs.push(`${name}: time up at ${fmt(num(ups[0]._t))} s, wanted the roam start ${fmt(starts[0])} + min_s ${minS}`);
+  }
+  const patrols = num(r.results?.team?.TANK_TEAM_PATROLS, NaN);
+  if (ups.length === 1 && Number.isFinite(patrols) && num(ups[0].p, NaN) !== patrols) {
+    probs.push(`${name}: ${patrols} patrols in all but ${ups[0].p} at time up: a patrol came after time up`);
+  }
+  if (ends.length && ups.length === 1 && ends[0] < num(ups[0]._t) - EPS) probs.push(`${name}: the roam ended before time up`);
+  const results = r.results ?? {};
+  const workMin = ups.length && ends.length ? (ends[0] - (starts[0] ?? 0)) / 60 : NaN;
+  const points = num(results.score, NaN);
+  if (Number.isFinite(workMin) && Number.isFinite(points) && results.grade !== roamGrade(points / workMin)) {
+    probs.push(`${name}: grade ${results.grade} for ${fmt(points)} points in ${fmt(workMin)} WORK minutes (${fmt(points / workMin)} a minute, wanted ${roamGrade(points / workMin)})`);
+  }
+  if (results.ride_tag !== `Free Roam ${minutes} min`) probs.push(`${name}: ride_tag "${results.ride_tag}", wanted "Free Roam ${minutes} min"`);
+  return probs;
+}
+
+/** One line of a roam run's numbers for the summary. */
+export function roamLine(name, r) {
+  const host = hostPeer(r);
+  const seg = segmentsOf(r, host).find((x) => x.index === ROAM_PHASE);
+  const minS = roamMinutes(r.content_id) * 60 - ROAM_DRIVE_OUT_S;
+  const team = r.results?.team ?? {};
+  const kills = eventsOf(r, 'kill').filter((e) => num(e.by) !== BY_BARRAGE).length;
+  const turns = eventsOf(r, 'turn').length;
+  return `${name} ${seg ? fmt(seg.dur) : '?'} s (overtime ${seg ? fmt(Math.max(0, seg.dur - minS)) : '?'} s), ${fmt(num(r.results?.score, NaN))} points (${team.TANK_TEAM_POINTS_PER_MIN ?? '?'}/min), ${kills} kills (${team.TANK_TEAM_ROAM_KILLS ?? '?'}), ${turns} turns, ${team.TANK_TEAM_PATROLS ?? '?'} patrols, grade ${gradeOf(r)}`;
+}
+
+export function checkS11(reports) {
+  const title = 'free roam: roam_10 crews 1 and 4, roam_30 crew 3 (time up, the overtime bound, no patrol after time up, FIT laps, grade)';
+  const want = [
+    ['s11_roam10_c1', 'roam_10', 1, 'SOLO'],
+    ['s11_roam10_c4', 'roam_10', 4, 'HOST'],
+    ['s11_roam30_c3', 'roam_30', 3, 'HOST'],
+  ];
+  const { found, missing } = pick(reports, want.map((w) => w[0]));
+  if (found.length === 0) return skip('S11', title, 'no s11_* reports');
+  const probs = missing.map((m) => `missing report ${m}`);
+  const lines = [];
+  for (const [name, content, players, role] of want) {
+    const r = reports[name];
+    if (!r) continue;
+    probs.push(...argsProblems(name, r, { content, players, bots: 0, role }));
+    probs.push(...roamProblems(name, r));
+    if (name === 's11_roam30_c3' && !ROAM_TARGET_GRADES.includes(gradeOf(r))) {
+      probs.push(`${name}: grade ${gradeOf(r)}, wanted ${ROAM_TARGET_GRADES.join(' or ')} (a compliant 30-min crew of 3)`);
+    }
+    lines.push(roamLine(name, r));
+  }
+  return result('S11', title, probs, lines.join('; '));
+}
+
+export function checkS12(reports) {
+  const title = 'free roam roam_10, crew 3 at 0 W: the shared pause holds the drive-out, no kill by crew fire, grade D';
+  const n = 's12_roam10_c3_zero';
+  const r = reports[n];
+  if (!r) return skip('S12', title, `no ${n} report`);
+  const probs = argsProblems(n, r, { content: 'roam_10', players: 3, bots: 0, role: 'HOST' });
+  // As s2_c3_zero: every rider ride-pauses for not pedaling and the host pauses the shared game clock, so the
+  // run ends at --max-sim-seconds still paused, in the drive-out.
+  if (r.end_reason !== 'timeout') probs.push(`${n}: end_reason ${r.end_reason}, wanted timeout (paused to the end)`);
+  const spans = spansOf(r, hostPeer(r));
+  if (spans.length !== 1 || num(spans[0]?.index) !== 0) probs.push(`${n}: ${spans.length} phases started, wanted only the drive-out`);
+  const pauses = (r.events ?? []).filter((e) => e && e.type === 'paused');
+  if (!pauses.length || pauses[0].paused !== true || pauses[0].reason !== SHARED_PAUSE_REASON) probs.push(`${n}: never paused for ${SHARED_PAUSE_REASON}`);
+  if (pauses.some((e) => e.paused === false)) probs.push(`${n}: the shared pause ended, nobody pedaled`);
+  const crewKills = eventsOf(r, 'kill').filter((e) => num(e.by) !== BY_BARRAGE);
+  if (crewKills.length) probs.push(`${n}: ${crewKills.length} kills by crew fire at 0 W`);
+  if (gradeOf(r) !== 'D') probs.push(`${n}: grade ${gradeOf(r)}, wanted D`);
+  return result('S12', title, probs, `${r.end_reason}, ${crewKills.length} kills, grade ${gradeOf(r)}`);
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -1169,7 +1299,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10, S11: checkS11, S12: checkS12 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };

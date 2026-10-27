@@ -189,3 +189,43 @@ TANK_HELP_MISSION,"Stage, time left and the road ahead"
 TANK_HELP_HULL,"Hull, kills and the Behemoth"
 TANK_HELP_SURGE,"SURGE: sprint 2 s, the shot misses"
 TANK_SHELL_BOW,Bow-gun round
+TANK_CONTENT_ROAM_10,Free Roam (10 min)
+TANK_CONTENT_ROAM_20,Free Roam (20 min)
+TANK_CONTENT_ROAM_30,Free Roam (30 min)
+TANK_CONTENT_ROAM_45,Free Roam (45 min)
+TANK_CONTENT_ROAM_60,Free Roam (60 min)
+TANK_MISSION_ROAM_10,Free Roam 10 min
+TANK_MISSION_ROAM_20,Free Roam 20 min
+TANK_MISSION_ROAM_30,Free Roam 30 min
+TANK_MISSION_ROAM_45,Free Roam 45 min
+TANK_MISSION_ROAM_60,Free Roam 60 min
+TANK_CARD_ROAM,"Patrol the night valley, back and forth: every kill scores."
+TANK_PHASE_DRIVE_OUT,Drive-out
+TANK_PHASE_ROAM,Free roam
+TANK_PLACE_VALLEY,The valley road
+TANK_ZONE_FOREST,Pines
+TANK_ZONE_LAKE,Lake
+TANK_ZONE_VILLAGE,Village
+TANK_ZONE_QUARRY,Quarry
+TANK_ZONE_MEADOW,Meadow
+TANK_HUD_ROAM,ROAM
+TANK_HUD_ROAM_MIN,{0} MIN
+TANK_HUD_DRIVE_OUT,DRIVE-OUT
+TANK_HUD_ENGAGE,ENGAGE
+TANK_TOAST_TURN_AROUND,Turn around
+TANK_TOAST_TURNING,Turning round
+TANK_TOAST_ENGAGE,Engage
+TANK_TOAST_TIME_UP,Time up: finish the fight
+TANK_RESULT_TIME_UP,Time up
+TANK_OUTCOME_TIME_UP,Time up
+TANK_RIDE_ROAM,Free Roam {0} min
+TANK_RIDE_POINTS,Points: {0} (grade {1})
+TANK_RIDE_DISTANCE,Distance driven: {0} km
+TANK_TEAM_POINTS,Points
+TANK_TEAM_POINTS_PER_MIN,Points per work minute
+TANK_TEAM_ROAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy)
+TANK_TEAM_DISTANCE,Distance (km)
+TANK_TEAM_PATROLS,Patrols met
+TANK_HELP_ROAM_MAP,"The valley: you, patrols, strongpoints"
+TANK_HELP_ROAM_BOARD,"Time left, points and kills"
+TANK_HELP_TURN,Driver: ability 1 turns the tank round

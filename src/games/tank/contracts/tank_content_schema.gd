@@ -23,6 +23,10 @@ extends RefCounted
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
 ##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
 ##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
+##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
+##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
+##   roam/valley.json  the free-roam valley: length, zones, terrain, strongpoints, patrols, turn,
+##                  points and grades (validate_valley; VALLEY_SPEC)
 ##   scoring.json   scale, weights, objectives, survival_per_breakdown, grades, xp (SCORING_SPEC)
 ##   cosmetics.json unlocks: [{id, kind, rule: finish | grade | behemoth_no_breakdown, min_grade?}]
 ##   validate_cross(files): what needs two files (each tank's start engines are its rooms in slot
@@ -114,6 +118,7 @@ const STATIONS_SPEC := {
 	"rotation": "obj",
 	"plans": "obj",
 	"drill_plans": "obj",
+	"roam_plans": "obj",
 	"terrain.send_every_s": "pos",
 	"terrain.warmup_grade_pct": "pair",
 	"bank.base_pct": "pos",
@@ -209,15 +214,69 @@ const SEGMENT_KINDS := {
 	TankIds.SEG_GUN_LINE: Wl.WORK,
 	TankIds.SEG_BOSS: Wl.WORK,
 	TankIds.SEG_CHECKPOINT: Wl.RECOVERY,
+	TankIds.SEG_ROAM: Wl.WORK,
 }
-const OPEN_SEGMENTS: Array[String] = [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS]
+const OPEN_SEGMENTS: Array[String] = [
+	TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS, TankIds.SEG_ROAM
+]
 const UNLOCK_RULES: Array[String] = ["finish", "grade", "behemoth_no_breakdown"]
 const GRADES: Array[String] = ["S", "A", "B", "C", "D"]
 ## The segment types every engine needs an entry for, per plan table.
 const TABLE_SEGMENTS := {
 	"plans": [TankIds.SEG_DEPOT, TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS],
 	"drill_plans": [TankIds.SEG_DEPOT, TankIds.SEG_SKIRMISH],
+	"roam_plans": [TankIds.SEG_DEPOT, TankIds.SEG_ROAM],
 }
+## valley.json (free roam, brief 2.10).
+const VALLEY_SPEC := {
+	"length_m": "pair",
+	"start_m": "pos",
+	"end_m": "pos",
+	"drive_out_s": "pos",
+	"overtime_s": "pos",
+	"zones": "obj",
+	"first_zone": "str",
+	"last_zone": "str",
+	"middle": "arr",
+	"forest_between": "frac",
+	"terrain_step_m": "pair",
+	"terrain_max_step_pct": "pos",
+	"terrain_pct": "pair",
+	"end_flat_m": "nonneg",
+	"strongpoints.zones": "arr",
+	"strongpoints.min_gap_m": "nonneg",
+	"strongpoints.clear_ends_m": "nonneg",
+	"strongpoints.respawn_s": "pos",
+	"strongpoints.engage_px": "pos",
+	"patrols.every_s": "pair",
+	"patrols.ahead_share": "frac",
+	"patrols.max_alive": "pos",
+	"patrols.heavy_after_s": "nonneg",
+	"patrols.retry_s": "pos",
+	"patrols.clear_ahead_m": "nonneg",
+	"patrols.kinds": "arr",
+	"engage_heavy_px": "pos",
+	"fight_px": "pos",
+	"turn.stop_s": "pos",
+	"turn.cooldown_s": "pos",
+	"turn.autopilot_wait_s": "nonneg",
+	"points.light": "num",
+	"points.medium": "num",
+	"points.destroyer": "num",
+	"points.dugin": "num",
+	"points.heavy": "num",
+	"points.evade": "num",
+	"points.breakdown": "num",
+	"points.per_km": "num",
+	"grades.S": "num",
+	"grades.A": "num",
+	"grades.B": "num",
+	"grades.C": "num",
+}
+## A free roam's length in minutes (roam_10 .. roam_60; the roam phase's min_s = minutes x 60 -
+## the drive-out stays > 0).
+const ROAM_MINUTES_MIN := 10
+const ROAM_MINUTES_MAX := 120
 
 # --- The brief's safety envelope (brief 2.3 checks, 2.7; BRIEF 4.6) ---------------------------------
 ## 4.6.1: every ERG target, ramp and range bound in % FTP.
@@ -512,6 +571,99 @@ static func validate_mission(d: Variant, mission_id: String = "") -> Array[Strin
 	return errors
 
 
+## A free-roam file (brief 2.10): {id, kind "roam", label, minutes 10..120}.
+static func validate_roam(d: Variant, mission_id: String = "") -> Array[String]:
+	var errors: Array[String] = []
+	var at := "missions/%s.json" % mission_id
+	if not (d is Dictionary):
+		return ["%s: expected an object" % at]
+	if mission_id != "" and str(d.get("id", "")) != mission_id:
+		errors.append("%s id: must be %s" % [at, mission_id])
+	if str(d.get("kind", "")) != TankIds.KIND_ROAM:
+		errors.append("%s kind: must be roam" % at)
+	if not (d.get("label") is String) or str(d["label"]) == "":
+		errors.append("%s label: expected a strings key" % at)
+	var mins: Variant = d.get("minutes")
+	if not (_num(mins) and float(mins) == floorf(float(mins))):
+		errors.append("%s minutes: expected a whole number" % at)
+	elif int(mins) < ROAM_MINUTES_MIN or int(mins) > ROAM_MINUTES_MAX:
+		errors.append("%s minutes: must be %d..%d" % [at, ROAM_MINUTES_MIN, ROAM_MINUTES_MAX])
+	if (d as Dictionary).has("segments"):
+		errors.append("%s segments: a free roam lists none (TankContent.expand_roam)" % at)
+	return errors
+
+
+## The free-roam valley (roam/valley.json, brief 2.10): VALLEY_SPEC, every zone of TankIds.ZONES with
+## its len_m and terrain_pct inside the valley's terrain_pct, which lies inside the brief's -3..+6%
+## (BRIEF 4.6.6), a drive-out of at least the first 300 s (BRIEF 4.6.8: the roam's ERG ranges start
+## after it), patrol kinds with known enemies and positive weights, and the grade cut-offs falling.
+static func validate_valley(d: Variant) -> Array[String]:
+	var errors: Array[String] = []
+	var at := "roam/valley.json"
+	if not (d is Dictionary):
+		return ["%s: expected an object" % at]
+	check_spec(d, VALLEY_SPEC, at, errors)
+	if not errors.is_empty():
+		return errors
+	var tp: Array = d["terrain_pct"]
+	if float(tp[0]) < TERRAIN_MIN_PCT or float(tp[1]) > TERRAIN_MAX_PCT or tp[0] > tp[1]:
+		errors.append("%s terrain_pct: must lie in -3..+6%% (BRIEF 4.6.6)" % at)
+	if float(d["drive_out_s"]) < TankConst.FIRST_S:
+		errors.append("%s drive_out_s: must be >= 300 (the warm-up, BRIEF 4.6.8)" % at)
+	var zones: Dictionary = d["zones"]
+	for z: String in TankIds.ZONES:
+		if not zones.has(z):
+			errors.append("%s zones: missing %s" % [at, z])
+			continue
+		var where := "%s zones.%s" % [at, z]
+		check_spec(
+			zones[z], {"len_m": "pair", "terrain_pct": "pair", "label": "str"}, where, errors
+		)
+		var zt: Variant = dig(zones[z], "terrain_pct")
+		if zt is Array and (zt as Array).size() == 2 and _num(zt[0]) and _num(zt[1]):
+			if float(zt[0]) < float(tp[0]) or float(zt[1]) > float(tp[1]):
+				errors.append("%s terrain_pct: must lie inside the valley's terrain_pct" % where)
+	for k: String in ["first_zone", "last_zone"]:
+		if not TankIds.ZONES.has(str(d[k])):
+			errors.append("%s %s: one of %s" % [at, k, ", ".join(TankIds.ZONES)])
+	for z2: Variant in (d["middle"] as Array) + (d["strongpoints"]["zones"] as Array):
+		if not TankIds.ZONES.has(str(z2)):
+			errors.append("%s: unknown zone %s" % [at, str(z2)])
+	var lo := float(d["length_m"][0])
+	if lo <= 2.0 * float(d["end_m"]) or float(d["length_m"][1]) < lo:
+		errors.append("%s length_m: [lo, hi] with lo > 2 x end_m" % at)
+	var kinds: Array = d["patrols"]["kinds"]
+	if kinds.is_empty():
+		errors.append("%s patrols.kinds: expected at least one" % at)
+	for k2: Variant in kinds:
+		var ok: bool = k2 is Dictionary and _num(k2.get("weight")) and float(k2["weight"]) > 0.0
+		ok = ok and k2.get("units") is Array and not (k2["units"] as Array).is_empty()
+		if not ok:
+			errors.append("%s patrols.kinds: each needs a weight > 0 and units" % at)
+			continue
+		for u: Variant in k2["units"]:
+			if not _unit_ok(u):
+				errors.append("%s patrols.kinds units: {enemy, count: [lo, hi]}" % at)
+	var cut: Array[float] = []
+	for g: String in ["S", "A", "B", "C"]:
+		cut.append(float(d["grades"][g]))
+	for i in range(1, cut.size()):
+		if cut[i] > cut[i - 1]:
+			errors.append("%s grades: S >= A >= B >= C" % at)
+			break
+	return errors
+
+
+## A patrol unit {enemy: a known type, count: [lo, hi] whole, 0 <= lo <= hi}.
+static func _unit_ok(u: Variant) -> bool:
+	if not (u is Dictionary) or not TankIds.ENEMY_TYPES.has(str(u.get("enemy", ""))):
+		return false
+	var n: Variant = u.get("count")
+	if not (n is Array) or (n as Array).size() != 2 or not _num(n[0]) or not _num(n[1]):
+		return false
+	return int(n[0]) >= 0 and int(n[0]) <= int(n[1])
+
+
 static func validate_scoring(d: Variant) -> Array[String]:
 	var errors: Array[String] = []
 	if not (d is Dictionary):
@@ -627,7 +779,7 @@ static func validate_cross(files: Dictionary) -> Array[String]:
 	var table := str(m.get("plan_table", "plans"))
 	var at := "missions/%s.json" % str(m.get("id", ""))
 	if not TABLE_SEGMENTS.has(table):
-		errors.append("%s plan_table: one of plans, drill_plans" % at)
+		errors.append("%s plan_table: one of %s" % [at, ", ".join(TABLE_SEGMENTS.keys())])
 		return errors
 	var warm: Array = st["terrain"]["warmup_grade_pct"]
 	var segs: Array = m.get("segments", [])

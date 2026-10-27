@@ -27,6 +27,10 @@
 #       steam engine; a client's `aim` needs a key, which headless sims cannot press: GUT-tested in
 #       tests/games/tank/integration), and slot 1 stopping dead for 60 s in the stage 1 gun line
 #       (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
+#   s11 free roam, compliant `erg` riders: roam_10 for crews 1 (SOLO) and 4 (HOST), roam_30 for crew 3 (HOST):
+#       time up, the overtime bound, no patrol after time up, the FIT laps (drive-out, roam, cool-down), the grade
+#   s12 free roam roam_10, crew 3 at 0 W (HOST): like s2's zero crew the host's shared pause holds the drive-out, so
+#       the run ends at --max-sim-seconds still paused: no kill by crew fire, grade D
 #
 # A scenario that needs another's report (s3, s4, s7 need s1 crew 3; the checks of s1 reuse
 # them) runs that report first when it is missing. Every run goes through tools/run_game_sim at
@@ -147,7 +151,17 @@ scenario_s10() {
     "--rider=$ERG" --seed=1
 }
 
-order="s1 s2 s3 s4 s5 s6 s7 s9 s10"
+scenario_s11() {
+  run s11_roam10_c1 --content=roam_10 --players=1 --bots=0 "--rider=$ERG" --seed=1
+  run s11_roam10_c4 --content=roam_10 --players=4 --bots=0 "--rider=$ERG" --seed=1
+  run s11_roam30_c3 --content=roam_30 --players=3 --bots=0 "--rider=$ERG" --seed=1
+}
+
+scenario_s12() {
+  run s12_roam10_c3_zero --content=roam_10 --players=3 --bots=0 --rider=zero --seed=1 --max-sim-seconds=300
+}
+
+order="s1 s2 s3 s4 s5 s6 s7 s9 s10 s11 s12"
 if [ "$#" -gt 0 ]; then
   wanted="$*"
 else

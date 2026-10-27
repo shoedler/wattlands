@@ -43,7 +43,7 @@ func test_the_bow_round_keeps_code_4_and_the_dir_and_outcome_ids_exist() -> void
 	assert_eq(TankIds.OUTCOME_TIME_UP, "time_up")
 
 
-func test_turn_is_a_deliberate_intent_no_engine_owns_yet() -> void:
+func test_turn_is_a_deliberate_intent_only_the_driver_owns() -> void:
 	assert_eq(TankIds.INTENT_KINDS.back(), TankIds.INTENT_TURN, "appended")
 	assert_eq(TankIds.DELIBERATE_KINDS.back(), TankIds.INTENT_TURN)
 	var n := TankIntents.normalize({"k": "turn"})
@@ -51,7 +51,10 @@ func test_turn_is_a_deliberate_intent_no_engine_owns_yet() -> void:
 	assert_true(TankIntents.is_deliberate(n))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize({"k": "turn", "auto": 1})))
 	for engine: String in TankIds.ENGINES:
-		assert_false(TankIntents.owned(TankIds.INTENT_TURN, engine), "no handling yet: " + engine)
+		var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK
+		assert_eq(
+			TankIntents.owned(TankIds.INTENT_TURN, engine), drives, "the driver only: " + engine
+		)
 
 
 func test_evade_turn_and_time_up_events_are_appended_with_int_fields() -> void:
@@ -63,10 +66,11 @@ func test_evade_turn_and_time_up_events_are_appended_with_int_fields() -> void:
 	assert_eq(TankEvents.evade(13, 3, false, 2)["s"], -1, "no slot for a shot that was not evaded")
 	assert_eq(TankEvents.evade(-4, TankIds.BOSS_CODE, false)["ok"], 0)
 	assert_eq(TankEvents.turn(-1, TankIds.DIR_LEFT), {"type": "turn", "s": -1, "dir": -1})
-	assert_eq(TankEvents.time_up(), {"type": "time_up"})
+	assert_eq(TankEvents.time_up(), {"type": "time_up", "p": 0})
+	assert_eq(TankEvents.time_up(9), {"type": "time_up", "p": 9}, "the patrols raised before it")
 	assert_eq(TankEvents.INT_FIELDS[TankEvents.EVADE], ["id", "e", "ok", "s"])
 	assert_eq(TankEvents.INT_FIELDS[TankEvents.TURN], ["s", "dir"])
-	assert_eq(TankEvents.INT_FIELDS[TankEvents.TIME_UP], [])
+	assert_eq(TankEvents.INT_FIELDS[TankEvents.TIME_UP], ["p"])
 	var cast := TankEventCast.cast(JSON.parse_string(JSON.stringify(TankEvents.evade(7, 1, true))))
 	assert_eq(typeof(cast["ok"]), TYPE_INT, "the wire cast knows the new fields")
 

@@ -95,6 +95,9 @@ func test_the_kit_ships_only_what_the_game_uses() -> void:
 		used[str(m["enemies"][kind]["file"])] = true
 	for c: String in m["cards"]:
 		used[str(m["cards"][c])] = true
+	for z: String in m.get("zone_planes", {}):
+		if TankIds.ZONES.has(z):
+			used[str(m["zone_planes"][z])] = true
 	var stray: Array[String] = []
 	for f in _pngs(DIR, ""):
 		if f.begins_with("hud/") or f.begins_with("source/") or f.begins_with("tools_src/"):

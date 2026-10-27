@@ -22,6 +22,8 @@ const TAG_LIFT := 10.0
 const WARN_TRI := ["...#...", "..#.#..", "..#.#..", ".#.#.#.", ".#...#.", "#..#..#", "#######"]
 const PIN_ARROW := ["#...", "##..", "###.", "####", "###.", "##..", "#..."]
 const PIN_ARROW_L := ["...#", "..##", ".###", "####", ".###", "..##", "...#"]
+## Free roam: the turn marker shows once the turning place ahead is this near (game metres).
+const TURN_MARKER_M := 160.0
 
 var m: Dictionary = {}
 ## The turn marker (free roam): world x in rules px and the direction it turns the tank to
@@ -68,6 +70,7 @@ func geom() -> TankHudGeom:
 
 func refresh() -> void:
 	var s := st()
+	_feed_turn(s)
 	var g := geom()
 	var h := s.hull
 	m = {"speed": h.speed_mps * 3.6, "rear": g.tank_point("rear"), "ground": g.ground_y()}
@@ -99,6 +102,23 @@ func refresh() -> void:
 		m["turn_x"] = g.world_x(turn_x)
 
 
+## Free roam: the turn marker at the turning place ahead while it is within TURN_MARKER_M of the
+## hull (pointing back the way the tank will drive after its turn), cleared otherwise.
+func _feed_turn(s: TankState) -> void:
+	if not s.roam.active:
+		return
+	if s.roam_map == null or s.roam.turn_s > 0.0:
+		clear_turn_marker()
+		return
+	var ahead := TankRoam.road_ahead_m(s)
+	if ahead > TURN_MARKER_M:
+		clear_turn_marker()
+		return
+	var end_m := s.roam_map.length_m if s.hull.dir > 0 else 0.0
+	var at := end_m - float(s.hull.dir) * TankWorldDraw.TURN_BARRIER_M
+	set_turn_marker(TankRoam.travel_x(s, at), 1 if geom().mirrored() else -1)
+
+
 ## The canvas-to-local offset (this Control's rect on the canvas).
 func origin() -> Vector2:
 	return Vector2(canvas_rect().position)
@@ -125,7 +145,12 @@ func paint() -> void:
 func _speed_tag() -> void:
 	var p: Vector2 = m["rear"]
 	var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
-	var r := Rect2(roundf(p.x - 6), roundf(p.y + 6), D.tall_w(txt) + 10, 15)
+	var w := D.tall_w(txt) + 10.0
+	var x := p.x - 6.0
+	if geom().mirrored():
+		# Driving west the hull's rear is on the right: the plate grows toward the tank.
+		x = p.x + 6.0 - w
+	var r := Rect2(roundf(x), roundf(p.y + 6), w, 15)
 	D.plate(self, r, D.FRAME, 0)
 	D.tall(self, r.position.x + 5, r.position.y + 3, txt, D.TEXT)
 

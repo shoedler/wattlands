@@ -1,5 +1,5 @@
 # tests/games/tank/sim/run_sims.ps1: the PowerShell twin of run_sims.sh (Windows PowerShell 5.1). Same
-# scenarios (s1-s7, s9 and s10), same report names in build/tank/sims, same checker.
+# scenarios (s1-s7, s9 to s12), same report names in build/tank/sims, same checker.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/games/tank/sim/run_sims.ps1 [s1 s2 ...]
 #
@@ -79,7 +79,17 @@ function Invoke-S10 {
     Invoke-Sim 's10_c3_dynamo_stop' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", "--rider=$Stop", "--rider=$Erg", '--seed=1')
 }
 
-$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10')
+function Invoke-S11 {
+    Invoke-Sim 's11_roam10_c1' @('--content=roam_10', '--players=1', '--bots=0', "--rider=$Erg", '--seed=1')
+    Invoke-Sim 's11_roam10_c4' @('--content=roam_10', '--players=4', '--bots=0', "--rider=$Erg", '--seed=1')
+    Invoke-Sim 's11_roam30_c3' @('--content=roam_30', '--players=3', '--bots=0', "--rider=$Erg", '--seed=1')
+}
+
+function Invoke-S12 {
+    Invoke-Sim 's12_roam10_c3_zero' @('--content=roam_10', '--players=3', '--bots=0', '--rider=zero', '--seed=1', '--max-sim-seconds=300')
+}
+
+$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10', 's11', 's12')
 $wanted = if ($Scenarios -and $Scenarios.Count -gt 0) { $Scenarios } elseif ($env:TANK_SIMS) { $env:TANK_SIMS -split '[,\s]+' } else { $order }
 foreach ($sc in $wanted) {
     if ($order -notcontains $sc) { Write-Error "run_sims: unknown scenario $sc (one of: $($order -join ' '))"; exit 2 }

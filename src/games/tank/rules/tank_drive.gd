@@ -33,15 +33,18 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> void:
 # --- Movement ------------------------------------------------------------------------------------
 
 
-## Whether the segment lets the tank roll right now.
+## Whether the segment lets the tank roll right now (free roam: not while it turns, engages or stands
+## at the turning place ahead, TankRoam.halted).
 static func _may_move(state: TankState) -> bool:
 	var sg := state.seg
+	if state.roam.active and TankRoam.halted(state):
+		return false
 	match sg.seg:
 		TankIds.SEG_DEPOT:
 			return TankSegments.depot_driving(state)
 		TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH:
 			return not sg.objective_done and state.hull.distance_m < sg.length_m
-		TankIds.SEG_COOLDOWN:
+		TankIds.SEG_COOLDOWN, TankIds.SEG_ROAM:
 			return true
 	return false
 
@@ -54,9 +57,12 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	)
 	if ri != null:
 		sm.rider_mass_kg = ri.rider_mass_kg
-	hull.grade_pct = TankTerrain.for_segment(
-		c, state.seg.segment_index, hull.distance_m, state.seg.kind == Wl.WARMUP
-	)
+	if state.roam.active:
+		hull.grade_pct = TankRoam.grade_pct(state, state.seg.kind == Wl.WARMUP)
+	else:
+		hull.grade_pct = TankTerrain.for_segment(
+			c, state.seg.segment_index, hull.distance_m, state.seg.kind == Wl.WARMUP
+		)
 	var power := 0.0
 	if d != null:
 		power = d.p_eff_w
@@ -79,6 +85,8 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	var seg := state.seg.seg
 	if seg == TankIds.SEG_ADVANCE or seg == TankIds.SEG_SKIRMISH:
 		stop_at = state.seg.length_m
+	if state.roam.active:
+		stop_at = minf(stop_at, hull.distance_m + TankRoam.stop_ahead_m(state))
 	var blocker := 0
 	var standoff := c.num("tanks", "props.standoff_px", 260.0)
 	for o in state.obstacles:
@@ -94,6 +102,7 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 		v = 0.0
 		hull.blocked_by = blocker
 	hull.speed_mps = v
+	TankRoam.moved(state, dist - hull.distance_m)
 	hull.distance_m = dist
 	hull.x_px = TankConst.m_to_px(dist)
 

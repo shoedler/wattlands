@@ -42,6 +42,10 @@ static var _shared: TankKit = null
 var manifest: Dictionary = {}
 ## Back to front: {name, tex, w, y0, parallax, layer}.
 var planes: Array[Dictionary] = []
+## Free roam (kit.json zone_planes): zone id -> the plane row that replaces `zone_replaces` (the forest
+## plane) in that zone, with the replaced plane's y0, parallax and layer and the zone's texture.
+var zone_planes: Dictionary = {}
+var zone_replaces: String = "forest"
 ## variant -> {hull: Texture2D, barrel: Texture2D, barrel_off: Vector2, v: Dictionary (kit.json)}.
 var variants: Dictionary = {}
 ## pose -> Array of Texture2D.
@@ -77,6 +81,7 @@ func load_all() -> void:
 		row["tex"] = tex
 		row["w"] = float(tex.get_width())
 		planes.append(row)
+	_load_zone_planes()
 	_load_variants()
 	crew_meta = manifest.get("crew", {})
 	var frames: Dictionary = crew_meta.get("frames", {})
@@ -99,6 +104,31 @@ func load_all() -> void:
 			"muzzle": vec(e.get("muzzle", [0, 0])),
 			"meta": e,
 		}
+
+
+func _load_zone_planes() -> void:
+	var zp: Dictionary = manifest.get("zone_planes", {})
+	zone_replaces = str(zp.get("replaces", "forest"))
+	var base := plane(zone_replaces)
+	if base.is_empty():
+		return
+	for z: String in TankIds.ZONES:
+		if not zp.has(z):
+			continue
+		var tex := _tex(str(zp[z]))
+		if tex == null:
+			continue
+		var row := base.duplicate()
+		row["tex"] = tex
+		row["w"] = float(tex.get_width())
+		row["zone"] = z
+		zone_planes[z] = row
+
+
+## The plane a zone draws in place of the replaced one (the replaced plane for the forest or a zone
+## without its own).
+func zone_plane(zone: String) -> Dictionary:
+	return zone_planes.get(zone, plane(zone_replaces))
 
 
 func _tex(rel: String) -> Texture2D:
@@ -225,6 +255,10 @@ static func check(m: Dictionary) -> Array[String]:
 			out.append("no %s section" % key)
 	for p: Dictionary in m.get("planes", []):
 		_check_file(out, str(p.get("file", "")))
+	var zp: Dictionary = m.get("zone_planes", {})
+	for z: String in zp:
+		if TankIds.ZONES.has(z):
+			_check_file(out, str(zp[z]))
 	var tank: Dictionary = m.get("tank", {})
 	_check_file(out, str(tank.get("barrel", "")))
 	var all: Dictionary = tank.get("variants", {})

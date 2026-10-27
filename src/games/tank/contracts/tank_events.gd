@@ -28,7 +28,7 @@ extends RefCounted
 ##               that resolves (the shot event follows it in the same tick)
 ##   turn       {s: the slot that turned or -1 (Autopilot at a map end), dir: the new travel
 ##               direction TankIds.DIR_*}                         free roam: the tank turns round
-##   time_up    {}                                             free roam: min_s reached, no new patrols
+##   time_up    {p: patrols raised before it}                  free roam: min_s reached, no new patrols
 ##
 ## Semantics the haptics depend on (brief 2.7; the director reads them this way):
 ## - An evaded shot misses: no `hit` event, so no haptic.
@@ -106,7 +106,7 @@ const INT_FIELDS := {
 	LEVER: ["s", "lv"],
 	EVADE: ["id", "e", "ok", "s"],
 	TURN: ["s", "dir"],
-	TIME_UP: [],
+	TIME_UP: ["p"],
 }
 
 
@@ -181,8 +181,10 @@ static func turn(slot: int, dir: int) -> Dictionary:
 	return {"type": TURN, "s": slot, "dir": dir}
 
 
-static func time_up() -> Dictionary:
-	return {"type": TIME_UP}
+## Free roam's time up; `patrols`: how many patrols came before it (none come after: the results'
+## TANK_TEAM_PATROLS equals it).
+static func time_up(patrols: int = 0) -> Dictionary:
+	return {"type": TIME_UP, "p": patrols}
 
 
 ## True for a hit on the tank that the brief's "Hit of >= 8 damage" haptic covers (brief 2.7):

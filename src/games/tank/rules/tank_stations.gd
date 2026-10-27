@@ -361,7 +361,7 @@ static func _auto_lever(state: TankState, aux: TankAux) -> int:
 		return TankIds.LEVER_DRIVE
 	var tgt := TankAim.current(state, aux)
 	var seg := state.seg.seg
-	if seg == TankIds.SEG_ADVANCE or seg == TankIds.SEG_SKIRMISH:
+	if seg == TankIds.SEG_ADVANCE or seg == TankIds.SEG_SKIRMISH or seg == TankIds.SEG_ROAM:
 		var clear := state.content.num("tanks", "gearbox.auto_drive_clear_px", 300.0)
 		if not _target_within(state, aux, clear):
 			return TankIds.LEVER_DRIVE

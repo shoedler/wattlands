@@ -55,11 +55,14 @@ const SEG_GUN_LINE := "gun_line"
 const SEG_CHECKPOINT := "checkpoint"
 const SEG_BOSS := "boss"
 const SEG_SKIRMISH := "skirmish"
+## v2 free roam (brief 2.10): the one open-ended WORK phase on the valley road (the drive-out before
+## it is a SEG_DEPOT of WARMUP kind with no drills and no enemies).
+const SEG_ROAM := "roam"
 ## Not a plan phase of the game's: the PlanValidator's appended cool-down.
 const SEG_COOLDOWN := "cooldown"
 const SEG_NONE := ""
 const SEGMENTS: Array[String] = [
-	SEG_DEPOT, SEG_ADVANCE, SEG_GUN_LINE, SEG_CHECKPOINT, SEG_BOSS, SEG_SKIRMISH
+	SEG_DEPOT, SEG_ADVANCE, SEG_GUN_LINE, SEG_CHECKPOINT, SEG_BOSS, SEG_SKIRMISH, SEG_ROAM
 ]
 const SEG_CODES := {
 	SEG_NONE: 0,
@@ -70,7 +73,21 @@ const SEG_CODES := {
 	SEG_BOSS: 5,
 	SEG_SKIRMISH: 6,
 	SEG_COOLDOWN: 7,
+	SEG_ROAM: 8,
 }
+
+# --- Contents and free roam (brief 2.9, 2.10) ------------------------------------------------------
+## missions/<id>.json "kind": a mission (segments listed in the file) or a free roam (kind "roam",
+## minutes; TankContent expands it into the drive-out and the roam segment).
+const KIND_MISSION := "mission"
+const KIND_ROAM := "roam"
+## The valley's zones (content/tank/roam/valley.json), each with its terrain and near planes.
+const ZONE_FOREST := "forest"
+const ZONE_LAKE := "lake"
+const ZONE_VILLAGE := "village"
+const ZONE_QUARRY := "quarry"
+const ZONE_MEADOW := "meadow"
+const ZONES: Array[String] = [ZONE_FOREST, ZONE_LAKE, ZONE_VILLAGE, ZONE_QUARRY, ZONE_MEADOW]
 
 # --- Enemies (brief 2.4 table) ----------------------------------------------------------------------
 const ENEMY_LIGHT := "light"
@@ -173,7 +190,7 @@ const INTENT_FIRE := "fire"
 const INTENT_LATCH := "latch"
 const INTENT_OVER := "over"
 ## v2 free roam (brief 2.10): flip the travel direction (the diesel or Bulwark rider, 30 s
-## cooldown). Declared for the wire; no engine owns it and the rules do not handle it yet.
+## cooldown; TankRoam). Refused outside free roam.
 const INTENT_TURN := "turn"
 const INTENT_KINDS: Array[String] = [
 	INTENT_LEVER,

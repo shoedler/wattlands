@@ -124,7 +124,10 @@ static func _lamps(ci: CanvasItem, v: TankView, state: TankState, o: Vector2) ->
 	if not is_nan(hl.x):
 		TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.85, 0.6, 0.7))
 		TankDraw.glow_at(ci, hl + Vector2(0, 14), 30.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.3))
-	if state.seg.seg == TankIds.SEG_DEPOT:
+	for tl in TankWorldDraw.turn_lamps(v, state):
+		TankDraw.glow_at(ci, tl, 5.0, Color(1.0, 0.85, 0.6, 0.7))
+		TankDraw.glow_at(ci, tl + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
+	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
 		for p in TankWorldDraw.depot_lamps(v):
 			TankDraw.glow_at(ci, p, 5.0, Color(1.0, 0.85, 0.6, 0.7))
 			TankDraw.glow_at(ci, p + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))

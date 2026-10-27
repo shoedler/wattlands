@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Renders the picker card and the content cards (assets/tank/v2/picker_card.png, card_mission.png,
-# card_drill.png) in-engine: the view's fixture scene without its HUD at 960 x 540 through
+# card_drill.png, card_roam.png) in-engine: the view's fixture scene without its HUD at 960 x 540 through
 # tools/screenshot --scene (a window: headless captures are blank), then cards.gd crops and scales
 # each render to 320 x 180. Run from the repository root in Git Bash:
 #   bash assets/tank/v2/tools_src/cards.sh
@@ -25,5 +25,6 @@ render() { # <name> <fixture options>
 render picker "crew=3;fire=1.0" || exit 1
 render mission "crew=3;kind=boss;fire=0.9" || exit 1
 render drill "crew=1;kind=gun_line;fire=1.1" || exit 1
+render roam "crew=3;kind=roam;zone=village;fire=1.3" || exit 1
 env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/godot.sh --headless --path . -s build/v2/cards.gd -- "$OUT" || exit 1
 env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/godot.sh --headless --path . --import >/dev/null 2>&1

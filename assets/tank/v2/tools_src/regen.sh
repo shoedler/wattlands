@@ -5,7 +5,7 @@
 # .gdignore'd). Intermediates and previews land in build/v2/; the shipped files in assets/tank/v2/.
 # Order: ref (decode the webp) -> plate (the tank-free plate) -> tankfix (markings and crew painted out)
 # -> tank (the cut-out tank) -> assemble (modules, the four variants, turret_barrel.png) -> planes2 (the
-# planes with their baked blur) -> crew20 (the 20 px crewmen) -> kit (kit.json) -> enemies (they read
+# planes with their baked blur) -> zones (the free-roam zones' near planes) -> crew20 (the 20 px crewmen) -> kit (kit.json) -> enemies (they read
 # kit.json) -> kit again (the enemies' measured muzzles). Afterwards: tools/godot.sh --headless --path . --import
 # Checked on 2026-10-27: everything comes back bit-exact except about 0.2 % of the far, forest and
 # road planes' pixels in the quilted tank-free band (max 0.18 per channel; the shipped planes are the
@@ -21,6 +21,6 @@ run() {
 	grep -E "SCRIPT ERROR|^ERROR" "build/v2/$1.log" && { echo "regen: $1 logged errors"; exit 1; }
 	echo "regen: $1 done"
 }
-for s in ref.gd plate.gd tankfix.gd tank.gd assemble.gd planes2.gd crew20.gd kit.gd enemies.gd kit.gd; do
+for s in ref.gd plate.gd tankfix.gd tank.gd assemble.gd planes2.gd zones.gd crew20.gd kit.gd enemies.gd kit.gd; do
 	run "$s"
 done

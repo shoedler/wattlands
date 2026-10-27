@@ -4,8 +4,9 @@ extends TankHudCtl
 ## of the mission plate): the valley road in profile on an iron plate (its zones: forest, lake,
 ## village, quarry, meadow; the terrain line), the turning places at both ends hatched, patrols as
 ## red diamonds, strongpoints as squares (crossed out while down), and the tank with its travel
-## direction and the bracket of what the screen shows. It draws only what its setters gave it; the
-## roam builder feeds them (set_map once, the rest as the state changes).
+## direction and the bracket of what the screen shows. It draws only what its setters gave it;
+## refresh() feeds them from the state (feed(): the map once its seed is known, the tank, the patrols
+## and the strongpoints every frame).
 
 const ZONE_COL := {
 	"forest": Color("#2f3a26"),
@@ -36,6 +37,41 @@ var strongpoints: Array = []
 ## The title (e.g. "ROAM") and its second line (e.g. "30 min").
 var title: String = ""
 var subtitle: String = ""
+
+## The map's seed the strip was last given (0: none).
+var map_seed: int = 0
+
+
+func refresh() -> void:
+	if game != null and game.state != null:
+		feed(game.state)
+
+
+## Feeds the setters from `s` (free roam only): the map once, the tank, the contacts and the title.
+func feed(s: TankState) -> void:
+	if not s.roam.active or s.roam_map == null:
+		return
+	var map := s.roam_map
+	if map.map_seed != map_seed:
+		map_seed = map.map_seed
+		set_map(map.length_m, map.zones, map.profile(96))
+	set_tank(s.roam.map_m, s.hull.dir, float(TankConst.SCREEN_W) / TankConst.PX_PER_M)
+	var pats := PackedFloat32Array()
+	var aux_strong := s.roam.strong_id
+	for e in s.enemies:
+		if e.hp > 0.0 and not aux_strong.has(e.id) and e.mode != TankIds.EM_LEAVE:
+			pats.append(TankRoam.map_of(s, e.x_px + float(e.w) * 0.5))
+	var sps: Array = []
+	for i in map.strongpoints.size():
+		sps.append({"at_m": map.strongpoints[i], "alive": not s.roam.strong_down(i)})
+	set_contacts(pats, sps)
+	var mins := s.content.roam_minutes() if s.content != null else 0
+	var sub := tx("TANK_HUD_ROAM_MIN", [mins])
+	if s.roam.engaging:
+		sub = tx("TANK_HUD_ENGAGE")
+	elif s.seg.seg == TankIds.SEG_DEPOT:
+		sub = tx("TANK_HUD_DRIVE_OUT")
+	set_title(tx("TANK_HUD_ROAM"), sub)
 
 
 func set_map(p_length_m: float, p_zones: Array, p_profile: PackedFloat32Array) -> void:

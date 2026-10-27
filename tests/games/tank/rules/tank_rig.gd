@@ -8,7 +8,7 @@ extends RefCounted
 ## With `auto_phase` the clock ends open phases like the platform does (the objective done and
 ## min_s passed, else max_s) and fixed ones at their duration, so a whole session can be played.
 
-const OPEN_SEGS := [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS]
+const OPEN_SEGS := [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS, TankIds.SEG_ROAM]
 
 var content: TankContent
 var mission_id: String = "ashfall_road"

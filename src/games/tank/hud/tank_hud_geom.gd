@@ -101,7 +101,17 @@ func barrel() -> Dictionary:
 	var piv := tank_point("barrel_pivot")
 	var muzzle := tank_point("muzzle")
 	var left := state.hull.facing == TankIds.FACE_LEFT
+	if mirrored():
+		left = not left
 	return {"pivot": piv, "length": maxf(piv.distance_to(muzzle), 1.0), "left": left}
+
+
+## True while the view draws the world mirrored (free roam, driving west; the view's hud_mirrored(),
+## else the travel direction).
+func mirrored() -> bool:
+	if view != null and view.has_method("hud_mirrored"):
+		return bool(view.call("hud_mirrored"))
+	return state.roam.active and state.hull.dir < 0
 
 
 static func kit_anchors(crew: int) -> Dictionary:

@@ -89,7 +89,7 @@ static func encode(state: TankState) -> Dictionary:
 	]
 	if bs.phase == TankIds.BOSS_NONE:
 		b = [0, 0, 0, 0, 0, 0, 0]
-	return {
+	var out := {
 		"v": S.VERSION,
 		"tick": state.tick,
 		"sg": [TankIds.seg_code(sg.seg), sg.stage, sg.phase_index, S.ms(sg.elapsed_s), sg_flags],
@@ -134,6 +134,35 @@ static func encode(state: TankState) -> Dictionary:
 			state.score.crew_kills
 		],
 	}
+	if state.roam.active:
+		out[S.RM_KEY] = _roam_row(state)
+	return out
+
+
+## The free-roam row (brief 2.6, 2.10): the map seed (every peer rebuilds the valley from it), the
+## hull's place on the road, the turn, the map end, the flags, the points and the strongpoints down.
+static func _roam_row(state: TankState) -> Array:
+	var rm := state.roam
+	var f := (
+		S.RMF_ACTIVE
+		| (S.RMF_TIME_UP if rm.time_up else 0)
+		| (S.RMF_OVERTIME if rm.overtime else 0)
+		| (S.RMF_ENGAGING if rm.engaging else 0)
+		| (S.RMF_END_WEST if rm.at_end < 0 else 0)
+		| (S.RMF_END_EAST if rm.at_end > 0 else 0)
+	)
+	return [
+		rm.map_seed,
+		S.x10(rm.map_m),
+		S.ms(rm.turn_s),
+		S.ms(rm.turn_cd_s),
+		S.ms(rm.end_s),
+		f,
+		rm.points,
+		rm.down_mask(),
+		roundi(rm.odo_m),
+		roundi(rm.work_m)
+	]
 
 
 static func _station_row(s: TankStationState) -> Array:
@@ -228,6 +257,9 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 		state.score.overruns = int(sc[S.SC_OVERRUNS])
 		state.score.behemoth_killed = int(sc[S.SC_BEHEMOTH]) != 0
 		state.score.crew_kills = int(sc[S.SC_CREW_KILLS])
+	var rm: Array = snap.get(S.RM_KEY, [])
+	if rm.size() == S.RM_LEN:
+		_apply_roam(state, rm)
 	derive(state)
 
 
@@ -273,6 +305,8 @@ static func _derive_segment(state: TankState, c: TankContent) -> void:
 ## The mission's result once the plan's last segment ended (the rules' rule): victory when the
 ## Behemoth died, withdrawn when a mission with a boss ended without it, complete without a boss.
 static func _outcome(state: TankState, c: TankContent) -> String:
+	if state.roam.active or c.is_roam():
+		return TankIds.OUTCOME_TIME_UP
 	if state.score.behemoth_killed:
 		return TankIds.OUTCOME_VICTORY
 	for s: Variant in c.segments():
@@ -289,6 +323,29 @@ static func _derive_maxima(state: TankState, c: TankContent) -> void:
 	for en in state.enemies:
 		if en.hp_max < en.hp:
 			en.hp_max = en.hp
+
+
+static func _apply_roam(state: TankState, rm: Array) -> void:
+	var r := state.roam
+	var f := int(rm[S.RM_FLAGS])
+	r.active = (f & S.RMF_ACTIVE) != 0
+	r.map_seed = int(rm[S.RM_SEED])
+	r.map_m = int(rm[S.RM_MAP_DM]) / 10.0
+	r.turn_s = int(rm[S.RM_TURN_MS]) / 1000.0
+	r.turn_cd_s = int(rm[S.RM_TURN_CD_MS]) / 1000.0
+	r.end_s = int(rm[S.RM_END_MS]) / 1000.0
+	r.time_up = (f & S.RMF_TIME_UP) != 0
+	r.overtime = (f & S.RMF_OVERTIME) != 0
+	r.engaging = (f & S.RMF_ENGAGING) != 0
+	r.at_end = -1 if (f & S.RMF_END_WEST) != 0 else (1 if (f & S.RMF_END_EAST) != 0 else 0)
+	r.points = int(rm[S.RM_POINTS])
+	r.odo_m = float(int(rm[S.RM_ODO_M]))
+	r.work_m = float(int(rm[S.RM_WORK_M]))
+	TankRoam.ensure_map(state)
+	var down := int(rm[S.RM_DOWN])
+	for i in r.strong_back_s.size():
+		# A client knows only up or down; the return clock is the host's.
+		r.strong_back_s[i] = 1.0 if (down >> i) & 1 else 0.0
 
 
 static func _apply_hull(hl: TankHullState, tk: Array) -> void:

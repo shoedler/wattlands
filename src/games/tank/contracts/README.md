@@ -124,3 +124,15 @@ Brief 2.2-2.4, 2.6-2.8 on top of the contract additions above.
 - **The arc generator** (`TankStations._arc`): `stalled` on rescue, `lit` while its rider is in band; lit searchlights halve the main gun's dispersion (`tanks.json` `arc.lit_dispersion_mult`). Its directive is pattern 2 in `TankDirector` (`stations.json` `arc`).
 - **Lanes** (`TankEnemies.reserve_hold`, `enemies.json` `lanes`, each type's `lane`): every held position (spawn, a destroyer's shift, a heavy's back-off) is reserved in one of 4 depth lanes so no two held boxes (weave and `gap_px` included) overlap on one side and lane. `TankEnemyState.lane` [snap] is the snapshot's `e` column 7.
 - **Geometry**: rigs.json tank guns re-measured from the v2 kit, `tanks.<id>.bow_guns[]` (`TankGeometry.bow_muzzles`), the hull standing on the ground (`screen.skirt_gap_px` 0); `tanks.citadel.secondaries` is no longer required.
+
+## v2 free roam (P5, the roam builder, 2026-10-27)
+
+Brief 2.10 on the contracts above; additive (no renamed or removed name).
+
+- **Ids.** `SEG_ROAM` "roam" (code 8, in `SEGMENTS`); `KIND_MISSION` / `KIND_ROAM` (a mission file's `kind`); the zones `ZONE_FOREST`, `ZONE_LAKE`, `ZONE_VILLAGE`, `ZONE_QUARRY`, `ZONE_MEADOW` (`ZONES`). `INTENT_TURN` is now owned by the driver (`TankIntents.OWNERS`: the diesel and the Bulwark); the rules refuse it outside free roam.
+- **`TankRoamState`** (`tank_roam_state.gd`, `TankState.roam`): `active`, `map_seed`, `map_m` (the hull centre's place on the road, m), the turn (`turn_s`, `turn_cd_s`, `flipped`), the map end (`at_end`, `end_s`), `engaging`, `time_up`, `overtime`, `points` (and their sources), the odometers, the WORK clock, the patrol timer and count, per strongpoint spot `strong_back_s` / `strong_id`. `TankState.roam_map` (`TankRoamMap`, not serialized) is rebuilt from the seed on every peer (`TankRoam.ensure_map`).
+- **`TankRoamMap`** (`tank_roam_map.gd`): the seeded valley from `roam/valley.json` (pure, its own LCG): `length_m`, `zones`, `terrain` (for travel east), `strongpoints`, `lo_m` / `hi_m`, `zone_at`, `grade_at(m, dir)`, `profile(n)`.
+- **`TankTerrain.for_roam`**: the one sampler for free roam (the drive and the director): the valley's grade under `map_m` in the travel direction, clamped to `valley.json` `terrain_pct` (warm-up range in WARMUP kinds).
+- **Snapshot.** The optional `rm` row (`RM_*`, `RMF_*`; sent only while `TankRoamState.active`, `check()` validates it when present) and `INT_PATHS` `rm[]`.
+- **Events.** `time_up` carries `p` (the patrols raised before it).
+- **Content.** `missions/roam_<n>.json` (`kind` "roam", `minutes`) and `roam/valley.json` (`TankContent` file key `valley`, loaded with every content, validated for a roam: `validate_roam`, `validate_valley`, `VALLEY_SPEC`); `stations.json` `roam_plans` (`TABLE_SEGMENTS` "roam_plans": depot and roam); `SEGMENT_KINDS` and `OPEN_SEGMENTS` gain the roam. `TankContent.expand_roam`, `is_roam`, `roam_minutes`, `valley` are new methods (the frozen ones are unchanged).

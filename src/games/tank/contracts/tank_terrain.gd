@@ -37,3 +37,21 @@ static func for_segment(c: TankContent, segment: int, distance_m: float, warmup:
 		var w: Array = c.value("stations", "terrain.warmup_grade_pct", [0, 2])
 		return clampf(g, float(w[0]), float(w[1]))
 	return clampf(g, TankContentSchema.TERRAIN_MIN_PCT, TankContentSchema.TERRAIN_MAX_PCT)
+
+
+## Free roam (brief 2.10): the grade under the hull's centre at `map_m` on `map` travelling `dir`
+## (the valley's terrain negated westward), clamped to valley.json terrain_pct (-3..+5%) in WORK
+## and to the warm-up terrain range in WARMUP kinds (the drive-out), like for_segment.
+static func for_roam(
+	c: TankContent, map: TankRoamMap, map_m: float, dir: int, warmup: bool
+) -> float:
+	if map == null:
+		return 0.0
+	var g := map.grade_at(map_m, dir)
+	if warmup:
+		var w: Array = c.value("stations", "terrain.warmup_grade_pct", [0, 2])
+		return clampf(g, float(w[0]), float(w[1]))
+	var r: Array = c.value("valley", "terrain_pct", [-3, 5])
+	var lo := maxf(float(r[0]), TankContentSchema.TERRAIN_MIN_PCT)
+	var hi := minf(float(r[1]), TankContentSchema.TERRAIN_MAX_PCT)
+	return clampf(g, lo, hi)

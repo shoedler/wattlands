@@ -1,0 +1,7 @@
+{
+	"_doc": "Free roam (brief 2.10): 60 minutes on the valley road (roam/valley.json), a 300 s drive-out, then one open-ended WORK phase (min_s = minutes x 60 - 300, max_s = min_s + 300 for a fight in progress). Owner: roam. Schema: TankContentSchema.validate_roam; TankContent.expand_roam builds the segments.",
+	"id": "roam_60",
+	"kind": "roam",
+	"label": "TANK_CONTENT_ROAM_60",
+	"minutes": 60
+}
