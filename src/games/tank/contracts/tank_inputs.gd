@@ -54,6 +54,7 @@ static func from_frame(
 			ri.phase_kind = ps.kind
 			ri.phase_mode = ps.mode
 			ri.plan_elapsed_s = ps.plan_elapsed_s
+			ri.planned_pct = ps.planned_pct
 			ri.engine = str(meta_of(plans.get(p.peer_id), ps.index).get("engine", ""))
 			ri.grade_source = grade_source_of(plans.get(p.peer_id), ps.index)
 		var tm := frame.telemetry(p.peer_id)

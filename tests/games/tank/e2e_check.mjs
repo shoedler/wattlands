@@ -39,6 +39,7 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 /** Tank's event types (TankEvents.TYPES). */
 export const EVENT_TYPES = [
   'segment', 'rotation', 'shot', 'hit', 'kill', 'ram', 'dodge', 'breakdown', 'repaired', 'overrun', 'boss_phase', 'latch', 'lever',
+  'evade', 'turn', 'time_up',
 ];
 /** Declared int fields per type (TankEvents.INT_FIELDS; "r[][]" is rows of ints). */
 export const INT_FIELDS = {
@@ -55,6 +56,9 @@ export const INT_FIELDS = {
   boss_phase: ['p'],
   latch: ['s', 'sh'],
   lever: ['s', 'lv'],
+  evade: ['id', 'e', 'ok'],
+  turn: ['s', 'dir'],
+  time_up: [],
 };
 /** Segment codes (TankIds.SEG_CODES). */
 export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7 };
@@ -73,8 +77,8 @@ const CITADEL = { tank: 3, riders: 3, rooms: 3 };
 const ENEMY_CODES = [1, 2, 3, 4, 5, 6];
 const SNAPSHOT_KEYS = ['v', 'tick', 'sg', 'tk', 'r', 'st', 'e', 's', 'o', 'gl', 'b', 'sc'];
 /** Column counts of TankSnapshotSchema. */
-export const SNAPSHOT_WIDTHS = { sg: 5, tk: 16, gl: 4, b: 7, sc: 4 };
-export const ROW_WIDTHS = { r: 6, st: 8, e: 7, s: 7, o: 5 };
+export const SNAPSHOT_WIDTHS = { sg: 5, tk: 17, gl: 4, b: 7, sc: 4 };
+export const ROW_WIDTHS = { r: 7, st: 8, e: 7, s: 7, o: 5 };
 const ROLES = ['host', 'client1', 'client2'];
 const COMBAT = new Set(['hit', 'kill']);
 

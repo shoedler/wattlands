@@ -8,23 +8,33 @@ extends RefCounted
 const TANK_BULWARK := "bulwark"
 const TANK_RAMPART := "rampart"
 const TANK_CITADEL := "citadel"
+## v2: the Citadel plus an arc-generator room and a searchlight tower (crew 4).
+const TANK_BASTION := "bastion"
 ## Index = crew size - 1.
-const TANKS: Array[String] = [TANK_BULWARK, TANK_RAMPART, TANK_CITADEL]
-const TANK_CODES := {TANK_BULWARK: 1, TANK_RAMPART: 2, TANK_CITADEL: 3}
+const TANKS: Array[String] = [TANK_BULWARK, TANK_RAMPART, TANK_CITADEL, TANK_BASTION]
+const TANK_CODES := {TANK_BULWARK: 1, TANK_RAMPART: 2, TANK_CITADEL: 3, TANK_BASTION: 4}
 
 # --- Engines (stations). "bulwark" is the solo diesel with its three-way gearbox --------------------
 const ENGINE_DIESEL := "diesel"
 const ENGINE_DYNAMO := "dynamo"
 const ENGINE_STEAM := "steam"
 const ENGINE_BULWARK := "bulwark"
-const ENGINES: Array[String] = [ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_BULWARK]
-const ENGINE_CODES := {ENGINE_DIESEL: 1, ENGINE_DYNAMO: 2, ENGINE_STEAM: 3, ENGINE_BULWARK: 4}
+## v2 (the Bastion): the arc generator, steady ERG tempo that lifts while the bow guns fire; it
+## lights the searchlights and powers the Bastion's bow guns (brief 2.4 Arc generator).
+const ENGINE_ARC := "arc"
+const ENGINES: Array[String] = [
+	ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_BULWARK, ENGINE_ARC
+]
+const ENGINE_CODES := {
+	ENGINE_DIESEL: 1, ENGINE_DYNAMO: 2, ENGINE_STEAM: 3, ENGINE_BULWARK: 4, ENGINE_ARC: 5
+}
 ## Engine name keys (TANK_ENGINE_*), for station cards and results.
 const ENGINE_LABELS := {
 	ENGINE_DIESEL: "TANK_ENGINE_DIESEL",
 	ENGINE_DYNAMO: "TANK_ENGINE_DYNAMO",
 	ENGINE_STEAM: "TANK_ENGINE_STEAM",
 	ENGINE_BULWARK: "TANK_ENGINE_BULWARK",
+	ENGINE_ARC: "TANK_ENGINE_ARC",
 }
 ## The engine icon the teammate strip shows (teammate_status "icon", a res:// texture path). artqa
 ## may ship them (14 x 14 art px palette icons with their .import files, not art.json sprites);
@@ -35,6 +45,7 @@ const ENGINE_ICONS := {
 	ENGINE_DYNAMO: "res://assets/tank/icons/engine_dynamo.png",
 	ENGINE_STEAM: "res://assets/tank/icons/engine_steam.png",
 	ENGINE_BULWARK: "res://assets/tank/icons/engine_bulwark.png",
+	ENGINE_ARC: "res://assets/tank/icons/engine_arc.png",
 }
 
 # --- Segments (brief 2.3 segment table; the drill's skirmish, 2.9) -----------------------------------
@@ -106,6 +117,7 @@ const SHELL_NONE := 0
 const SHELL_LIGHT := 1
 const SHELL_HEAVY := 2
 const SHELL_OVER := 3
+## The bow guns' round (v2, brief 2.4 Gun; formerly the Citadel's secondaries, same code).
 const SHELL_BOW := 4
 ## Enemy rounds (one code; the enemy type is in the shot event).
 const SHELL_ENEMY := 5
@@ -132,6 +144,11 @@ const LEVER_DIG_LABEL := "TANK_LEVER_DIG"
 const FACE_RIGHT := 1
 const FACE_LEFT := -1
 
+# --- Travel direction (TankHullState.dir; v2 free roam, brief 2.10) ----------------------------------
+## Missions always travel right; a free-roam turn flips it.
+const DIR_RIGHT := 1
+const DIR_LEFT := -1
+
 # --- Boss -------------------------------------------------------------------------------------------
 const BOSS_NONE := 0
 const BOSS_PHASE_1 := 1
@@ -144,6 +161,8 @@ const OUTCOME_VICTORY := "victory"
 const OUTCOME_WITHDRAWN := "withdrawn"
 ## The drill has no boss: it finishes "complete" once every rider is in the cool-down.
 const OUTCOME_COMPLETE := "complete"
+## v2 free roam: the session's time ran out (finished("time_up"), brief 2.8, 2.10).
+const OUTCOME_TIME_UP := "time_up"
 
 # --- Intents (brief 2.6; TankIntents) ---------------------------------------------------------------
 const INTENT_LEVER := "lever"
@@ -154,6 +173,9 @@ const INTENT_FIRE := "fire"
 const INTENT_LATCH := "latch"
 const INTENT_RAM := "ram"
 const INTENT_OVER := "over"
+## v2 free roam (brief 2.10): flip the travel direction (the diesel or Bulwark rider, 30 s
+## cooldown). Declared for the wire; no engine owns it and the rules do not handle it yet.
+const INTENT_TURN := "turn"
 const INTENT_KINDS: Array[String] = [
 	INTENT_LEVER,
 	INTENT_AIM,
@@ -162,11 +184,12 @@ const INTENT_KINDS: Array[String] = [
 	INTENT_FIRE,
 	INTENT_LATCH,
 	INTENT_RAM,
-	INTENT_OVER
+	INTENT_OVER,
+	INTENT_TURN
 ]
 ## Intents that end a human's Autopilot fallback (brief 2.5); ram and over never do.
 const DELIBERATE_KINDS: Array[String] = [
-	INTENT_LEVER, INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH
+	INTENT_LEVER, INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN
 ]
 
 const VIA_ACTION := "action"

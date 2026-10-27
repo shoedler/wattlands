@@ -1,5 +1,5 @@
 {
-	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. Added keys: ram.prompt_px (a light tank this near shows the Surge to ram prompt), props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull).",
+	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. v2 contracts (docs/decisions/tank.md 2026-10-27 v2 contract): the Bastion (crew 4); the Citadel's rooms in the reference's order rear to front (diesel, steam, dynamo; the slot-to-engine map is stations.json start_engines) and only its main turret (bow guns replace the secondaries); the Bastion's hull_px from assets/tank/v2/kit.json in rules px (art px / 1.5, rounded): width tank.variants.tank_4rider.hull_length_px 491 / 1.5 = 327, height 71 = (road_wheel_line.ground_contact_y 233 - the hull roof row 127 of hull_3rider.png) / 1.5 (one vertical framing for every variant); the kit's sizes for the other tanks (Bulwark [220, 71], Rampart [251, 71], Citadel [296, 71]) wait for the v2 view, since the v1 view and its rigs.json are built on [192, 72], [240, 76] and [288, 80]; power_ratio: the target % FTP of SIM phases without an ERG target (TankRules.target_pct). Added keys: ram.prompt_px (a light tank this near shows the Surge to ram prompt), props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull).",
 	"tanks": {
 		"bulwark": {
 			"code": 1,
@@ -23,10 +23,19 @@
 			"code": 3,
 			"crew": 3,
 			"hull_px": [288, 80],
-			"engines": ["diesel", "dynamo", "steam"],
-			"turrets": ["main", "secondary_fore", "secondary_aft"],
+			"engines": ["diesel", "steam", "dynamo"],
+			"turrets": ["main"],
 			"enemy_scale": 1.0,
 			"label": "TANK_TANK_CITADEL"
+		},
+		"bastion": {
+			"code": 4,
+			"crew": 4,
+			"hull_px": [327, 71],
+			"engines": ["diesel", "steam", "dynamo", "arc"],
+			"turrets": ["main"],
+			"enemy_scale": 1.2,
+			"label": "TANK_TANK_BASTION"
 		}
 	},
 	"hull": {
@@ -66,6 +75,11 @@
 		"steam_cycle_cadence_rpm": 50,
 		"recovery_cadence_rpm": 60,
 		"reserve_p_eff_w": 60
+	},
+	"power_ratio": {
+		"_doc": "TankRiderState.target_pct where no ERG target applies (brief 2.3 In band): the diesel and the Bulwark use the middle of in_band.sim_ftp_pct, the building steam engine TankConst.STEAM_BUILD_PCT; these are the rest.",
+		"steam_loaded_pct": 60,
+		"warmup_sim_pct": 60
 	},
 	"dynamo": {
 		"bank_max": 100,

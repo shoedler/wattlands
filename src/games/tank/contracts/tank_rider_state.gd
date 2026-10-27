@@ -9,14 +9,12 @@ const ENGINE_INDEX := {
 	TankIds.ENGINE_DIESEL: 0,
 	TankIds.ENGINE_DYNAMO: 1,
 	TankIds.ENGINE_STEAM: 2,
-	TankIds.ENGINE_BULWARK: 3
+	TankIds.ENGINE_BULWARK: 3,
+	TankIds.ENGINE_ARC: 4
 }
 ## Indexes of shells_by_type.
 const SHELL_INDEX := {
-	TankIds.SHELL_LIGHT: 0,
-	TankIds.SHELL_HEAVY: 1,
-	TankIds.SHELL_OVER: 2,
-	TankIds.SHELL_BOW: 3
+	TankIds.SHELL_LIGHT: 0, TankIds.SHELL_HEAVY: 1, TankIds.SHELL_OVER: 2, TankIds.SHELL_BOW: 3
 }
 
 ## [snap]
@@ -40,6 +38,13 @@ var engine: String = ""
 var raw_w: float = 0.0
 var cadence_rpm: float = 0.0
 var ftp_pct: float = 0.0
+## [snap] (v2) The rider's current effort target in % FTP, for the HUD's and the view's power ratio:
+## power = raw W / (target_pct / 100 x FTP). The host sets it each tick (TankRules.target_pct): the
+## applied ERG target, else the phase's planned ERG target, else in SIM the engine's band centre
+## (diesel and Bulwark: the middle of tanks.json in_band.sim_ftp_pct; steam building 90, loaded or
+## cycling tanks.json power_ratio.steam_loaded_pct; WARMUP-kind SIM power_ratio.warmup_sim_pct).
+## 0 when there is none (no phase).
+var target_pct: float = 0.0
 ## [snap]
 var in_band: bool = false
 ## [snap]
@@ -54,7 +59,7 @@ var connected: bool = true
 var work_s: float = 0.0
 var band_s: float = 0.0
 ## Game seconds per engine (ENGINE_INDEX).
-var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0]
+var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
 var rams: int = 0
 var dodges: int = 0
 ## Berm HP that absorbed damage while this rider dug in.

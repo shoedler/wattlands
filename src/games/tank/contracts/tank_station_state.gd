@@ -2,7 +2,8 @@ class_name TankStationState
 extends TankRecord
 ## One engine room (G0 contract): what every station has in common. Subclasses add each
 ## engine's own model: TankDieselState, TankDynamoState, TankSteamState, TankGearboxState (the
-## Bulwark). TankState.stations lists the tank's rooms rear to front (tanks.json engines).
+## Bulwark) and TankArcState (v2, the Bastion's arc generator). TankState.stations lists the
+## tank's rooms rear to front (tanks.json engines).
 ## Which rider works a room changes at checkpoints with rotation; a room without a connected,
 ## pedalling rider runs on reserve (brief 2.2).
 
@@ -34,6 +35,8 @@ static func make(p_engine: String) -> TankStationState:
 			s = TankSteamState.new()
 		TankIds.ENGINE_BULWARK:
 			s = TankGearboxState.new()
+		TankIds.ENGINE_ARC:
+			s = TankArcState.new()
 		_:
 			s = TankStationState.new()
 	s.engine = p_engine

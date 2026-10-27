@@ -189,6 +189,9 @@ func test_every_event_declares_its_int_fields() -> void:
 		TankEvents.boss_phase(TankIds.BOSS_PHASE_2),
 		TankEvents.latch(2, TankIds.SHELL_LIGHT),
 		TankEvents.lever(0, TankIds.LEVER_HOIST),
+		TankEvents.evade(13, TankIds.enemy_code(TankIds.ENEMY_DESTROYER), true),
+		TankEvents.turn(0, TankIds.DIR_LEFT),
+		TankEvents.time_up(),
 	]
 	assert_eq(samples.size(), TankEvents.TYPES.size())
 	for e in samples:
