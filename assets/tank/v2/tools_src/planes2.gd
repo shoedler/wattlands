@@ -1,5 +1,5 @@
 extends SceneTree
-# Sharper, reference-faithful planes for the in-engine mock (assets/tank/v2/planes2/). The kit's planes
+# The planes the view draws (assets/tank/v2/planes2/), sharper and reference-faithful. The kit's planes
 # double-blur the reference (it already carries its own depth of field) and its level-quilted forest hides
 # the lake; here: far (sky + mountains + cliff + misty lake, opaque), forest (the reference's own sloping
 # tree line, so the lake shows on the right), road; each 1920 wide = the 960 cut + its mirror (seamless,
@@ -49,7 +49,7 @@ func mirror(img: Image) -> Image:
 
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
-	plate = L.to_f(Image.load_from_file(KIT + "plate_full.png"))
+	plate = L.to_f(Image.load_from_file("res://build/v2/plate_full.png"))
 	var forest_top := [
 		Vector2(0, 0), Vector2(60, 0), Vector2(80, 40), Vector2(150, 58), Vector2(260, 88), Vector2(380, 108),
 		Vector2(470, 128), Vector2(560, 156), Vector2(620, 186), Vector2(680, 212), Vector2(760, 236),

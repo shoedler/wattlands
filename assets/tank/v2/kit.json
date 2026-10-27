@@ -1,101 +1,61 @@
 {
-  "version": "v2-1",
-  "note": "Mock asset kit for owner approval, built from the reference image only (no fal). 960x540 art px.",
+  "version": "v2-2",
+  "note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), 960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh.",
   "art_resolution": [
     960,
     540
   ],
-  "reference_to_art": {
+  "reference": {
+    "file": "source/reference.webp",
     "scale": 0.882352941176471,
     "offset_y": 2,
     "note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"
   },
-  "plate": {
-    "file": "plate_full.png",
-    "note": "reference without tank, beams, smoke and turret crew; tank area filled by quilting tank-free bands"
-  },
   "planes": [
     {
-      "blur_box_radius": 1,
-      "blur_sigma_px": 1.41,
-      "file": "plane_sky.png",
-      "name": "sky",
-      "parallax": 0.02,
-      "wide_file": "plane_sky_wide.png",
-      "wide_px": 1920,
+      "name": "far",
+      "file": "planes2/far_wide.png",
       "y0": 0,
-      "y1": 260
-    },
-    {
-      "blur_box_radius": 3,
-      "blur_sigma_px": 3.46,
-      "file": "plane_mountains.png",
-      "name": "mountains",
-      "parallax": 0.08,
-      "wide_file": "plane_mountains_wide.png",
-      "wide_px": 1920,
-      "y0": 20,
-      "y1": 232
-    },
-    {
-      "blur_box_radius": 3,
-      "blur_sigma_px": 3.46,
-      "file": "plane_cliff_lake.png",
-      "name": "cliff_lake",
-      "parallax": 0.2,
-      "wide_file": "",
-      "wide_px": 0,
-      "y0": 40,
-      "y1": 330
-    },
-    {
-      "blur_box_radius": 2,
-      "blur_sigma_px": 2.45,
-      "file": "plane_forest.png",
-      "name": "forest",
-      "parallax": 0.45,
-      "wide_file": "plane_forest_wide.png",
-      "wide_px": 1920,
-      "y0": 0,
-      "y1": 354
-    },
-    {
+      "parallax": 0.04,
       "blur_box_radius": 0,
-      "blur_sigma_px": 0,
-      "file": "plane_road.png",
-      "name": "road",
-      "parallax": 1.0,
-      "wide_file": "plane_road_wide.png",
-      "wide_px": 1920,
-      "y0": 312,
-      "y1": 392
+      "layer": "back"
     },
     {
-      "blur_box_radius": 6,
-      "blur_sigma_px": 6.48,
-      "file": "plane_foreground.png",
+      "name": "forest",
+      "file": "planes2/forest_wide.png",
+      "y0": 0,
+      "parallax": 0.3,
+      "blur_box_radius": 1,
+      "layer": "back"
+    },
+    {
+      "name": "road",
+      "file": "planes2/road_wide.png",
+      "y0": 312,
+      "parallax": 1.0,
+      "blur_box_radius": 0,
+      "layer": "road"
+    },
+    {
       "name": "foreground",
-      "parallax": 1.35,
-      "wide_file": "plane_foreground_wide.png",
-      "wide_px": 1920,
+      "file": "planes2/foreground_wide.png",
       "y0": 344,
-      "y1": 540
+      "parallax": 1.35,
+      "blur_box_radius": 2,
+      "layer": "front",
+      "darken": 0.86
     }
   ],
-  "planes_note": "Back to front: sky, mountains, cliff_lake, forest, [tank on road], road, foreground. y0/y1 = rows of the 960x540 frame the plane image covers. parallax = scroll factor vs the road (1.0). Blur is baked (box radius x3 passes ~ gaussian sigma). Wide files are 1920 px seamless tiles (sky/mountains mirrored, forest/road/foreground quilted from calm cut points; the forest wide strip has a level tree-top fade). cliff_lake is a single landmark piece (alpha 0 left of x~560).",
+  "planes_note": "Back to front: far (sky with the Milky Way, mountains, the pale cliff, the misty lake), forest, [the tank, enemies and props on the road], road, foreground. Each file is the reference's own 960 px cut plus its mirror (1920 px, seamless). y0 = the row of the 960x540 frame the plane's top sits on; parallax = scroll factor against the road (1.0). The tilt-shift blur is baked once by planes2.gd: blur_box_radius (two box passes); the reference already carries its own depth of field, so the far plane keeps it. darken = the factor baked into the foreground.",
   "tank": {
-    "source": "tank_citadel.png (= tank_3rider.png), cut from the reference, star and A17 painted out, crew removed from rooms and turret roof, beams/smoke/headlight glow removed",
-    "parts": {
-      "hull_3rider": "hull_3rider.png",
-      "turret_body": "turret_body.png",
-      "turret_barrel": "turret_barrel.png",
-      "note": "parts share the tank_3rider frame (480x240): overlay at the same origin"
-    },
+    "source": "cut from the reference (tank.gd, tankfix.gd: the star and A17 painted out, crew, beams, smoke and headlight glow removed), split into modules at its bulkheads and assembled per crew size (assemble.gd). turret_barrel.png shares the 3-rider frame (480x240): the view erases each variant's baked barrel and draws this one at the gun's elevation.",
+    "barrel": "turret_barrel.png",
     "modules": {
       "note": "reference px. Hull layers: upper (y<310: roof + upper deck), lower (310..352: lower deck), running gear (y>=352, rebuilt per length by removing/duplicating 34 px wheel periods and resampling). Cuts sit at bulkheads; seams cross-fade 4 px.",
       "rear": "x 17..188 upper / 17..256 lower (rear plate, engine room, ladder 1)",
       "middle_steam": "lower 256..332 (ladder 2 + shell rack)",
       "middle_dynamo": "lower 332..386 (generator room)",
+      "middle_arc": "lower 332..386 copied in at 386 (the Bastion's arc-generator room)",
       "middle_upper_bays": "upper 188..264 (desk bays), 300..385 turret-drive room",
       "front": "x 386..561 (front rooms, glacis, bow guns, headlight, sprocket)",
       "turret": "x 188..534 y 118..263, scaled 0.85 for 1 rider",
@@ -103,6 +63,8 @@
     },
     "variants": {
       "tank_1rider": {
+        "tank": "bulwark",
+        "crew": 1,
         "file": "tank_1rider.png",
         "size": [
           366,
@@ -255,6 +217,8 @@
         }
       },
       "tank_2rider": {
+        "tank": "rampart",
+        "crew": 2,
         "file": "tank_2rider.png",
         "size": [
           413,
@@ -439,6 +403,8 @@
         }
       },
       "tank_3rider": {
+        "tank": "citadel",
+        "crew": 3,
         "file": "tank_3rider.png",
         "size": [
           480,
@@ -643,6 +609,8 @@
         }
       },
       "tank_4rider": {
+        "tank": "bastion",
+        "crew": 4,
         "file": "tank_4rider.png",
         "size": [
           528,
@@ -873,71 +841,172 @@
     }
   },
   "crew": {
-    "sheet": "crew_sheet.png",
     "cell": [
-      16,
-      14
+      30.0,
+      24.0
     ],
+    "feet_row": 23.0,
     "facing": "right",
-    "feet_row": 13,
-    "figure_height_px": "11-13",
+    "figure_height_px": "19-20",
     "frames": {
-      "commander": [
-        "crew_frames/commander_0.png",
-        "crew_frames/commander_1.png",
-        "crew_frames/commander_2.png"
-      ],
-      "engineer": [
-        "crew_frames/engineer_0.png",
-        "crew_frames/engineer_1.png",
-        "crew_frames/engineer_2.png"
-      ],
-      "gunner": [
-        "crew_frames/gunner_0.png",
-        "crew_frames/gunner_1.png",
-        "crew_frames/gunner_2.png"
+      "stoker": [
+        "crew20/stoker_0.png",
+        "crew20/stoker_1.png",
+        "crew20/stoker_2.png",
+        "crew20/stoker_3.png"
       ],
       "loader": [
-        "crew_frames/loader_0.png",
-        "crew_frames/loader_1.png",
-        "crew_frames/loader_2.png",
-        "crew_frames/loader_3.png"
+        "crew20/loader_0.png",
+        "crew20/loader_1.png",
+        "crew20/loader_2.png",
+        "crew20/loader_3.png"
       ],
       "loader_climb": [
-        "crew_frames/loader_climb_0.png",
-        "crew_frames/loader_climb_1.png"
+        "crew20/loader_climb_0.png",
+        "crew20/loader_climb_1.png"
       ],
-      "stoker": [
-        "crew_frames/stoker_0.png",
-        "crew_frames/stoker_1.png",
-        "crew_frames/stoker_2.png",
-        "crew_frames/stoker_3.png"
+      "engineer": [
+        "crew20/engineer_0.png",
+        "crew20/engineer_1.png",
+        "crew20/engineer_2.png"
+      ],
+      "gunner": [
+        "crew20/gunner_0.png",
+        "crew20/gunner_1.png",
+        "crew20/gunner_2.png"
+      ],
+      "commander": [
+        "crew20/commander_0.png",
+        "crew20/commander_1.png",
+        "crew20/commander_2.png"
       ],
       "tech": [
-        "crew_frames/tech_0.png",
-        "crew_frames/tech_1.png",
-        "crew_frames/tech_2.png"
+        "crew20/tech_0.png",
+        "crew20/tech_1.png",
+        "crew20/tech_2.png"
+      ],
+      "idle": [
+        "crew20/idle_0.png",
+        "crew20/idle_1.png",
+        "crew20/idle_2.png"
+      ],
+      "spotter": [
+        "crew20/spotter_0.png",
+        "crew20/spotter_1.png",
+        "crew20/spotter_2.png"
       ]
     },
     "commander_lens_px": {
       "0": [
-        11,
-        5
+        22.0,
+        9.0
       ],
       "1": [
-        10,
-        3
+        22.0,
+        6.0
       ],
       "2": [
-        11,
-        7
+        22.0,
+        12.0
       ]
     },
     "commander_beam_angle_deg": {
-      "0": 0,
-      "1": -35,
-      "2": 25
+      "0": 0.0,
+      "1": -32.0,
+      "2": 28.0
     },
-    "note": "the reference crew are ~20 px tall at 960 scale; these follow the 10-12 px spec"
+    "note": "anchor a frame at its feet: cell x 10 (hips), row 23 on the floor. Face right; mirror for left."
+  },
+  "enemies": {
+    "light": {
+      "file": "enemies/light.png",
+      "size": [
+        136,
+        45
+      ],
+      "muzzle": [
+        3,
+        19
+      ]
+    },
+    "medium": {
+      "file": "enemies/medium.png",
+      "size": [
+        165,
+        83
+      ],
+      "muzzle": [
+        2,
+        26
+      ]
+    },
+    "destroyer": {
+      "file": "enemies/destroyer.png",
+      "size": [
+        163,
+        56
+      ],
+      "muzzle": [
+        3,
+        5
+      ]
+    },
+    "heavy": {
+      "file": "enemies/heavy.png",
+      "size": [
+        199,
+        79
+      ],
+      "muzzle": [
+        3,
+        51
+      ]
+    },
+    "dugin": {
+      "file": "enemies/dugin.png",
+      "size": [
+        110,
+        28
+      ],
+      "muzzle": [
+        7,
+        13
+      ]
+    },
+    "behemoth": {
+      "file": "enemies/behemoth.png",
+      "size": [
+        583,
+        297
+      ],
+      "muzzle": [
+        16,
+        140
+      ],
+      "bogies_at": [
+        [
+          0.25,
+          0.78
+        ],
+        [
+          0.47,
+          0.78
+        ],
+        [
+          0.69,
+          0.78
+        ]
+      ],
+      "turret_at": [
+        0.62,
+        0.3
+      ],
+      "note": "muzzle: the main gun's left end; bogies_at / turret_at: fractions of the sprite (fires, hits)"
+    }
+  },
+  "cards": {
+    "picker": "picker_card.png",
+    "card_mission": "card_mission.png",
+    "card_drill": "card_drill.png"
   }
 }

@@ -1,8 +1,23 @@
 extends SceneTree
-# Writes assets/tank/v2/kit.json: planes, tank variants with rooms + anchors (sprite px at 960x540 scale),
-# module cuts, crew frames. All tank coordinates are measured in the 1088x608 reference and mapped here.
+# Writes assets/tank/v2/kit.json, the kit's single manifest: planes, tank variants with rooms + anchors (sprite px
+# at 960x540 scale), module cuts, crew frames (from crew20.gd's build/v2/crew20.json), enemies (measured
+# muzzles), cards. All tank coordinates are measured in the 1088x608 reference and mapped here.
 
 const OUT := "res://assets/tank/v2/"
+const BUILD := "res://build/v2/"
+## The planes the view draws (planes2.gd writes them).
+const PLANES := [
+	{"name": "far", "file": "planes2/far_wide.png", "y0": 0, "parallax": 0.04, "blur_box_radius": 0, "layer": "back"},
+	{"name": "forest", "file": "planes2/forest_wide.png", "y0": 0, "parallax": 0.3, "blur_box_radius": 1, "layer": "back"},
+	{"name": "road", "file": "planes2/road_wide.png", "y0": 312, "parallax": 1.0, "blur_box_radius": 0, "layer": "road"},
+	{"name": "foreground", "file": "planes2/foreground_wide.png", "y0": 344, "parallax": 1.35, "blur_box_radius": 2,
+		"layer": "front", "darken": 0.86},
+]
+## In-engine renders for the picker and the lobby's content cards (tests/games/tank/view/card_scene.gd).
+const CARDS := {"picker": "picker_card.png", "card_mission": "card_mission.png", "card_drill": "card_drill.png"}
+## Which tank each variant is (docs/games/tank.md 2.2).
+const TANK_IDS := {"tank_1rider": ["bulwark", 1], "tank_2rider": ["rampart", 2], "tank_3rider": ["citadel", 3],
+	"tank_4rider": ["bastion", 4]}
 const S := 15.0 / 17.0
 const X0 := 17.0
 const Y0 := 119.0
@@ -90,11 +105,6 @@ func map_pt(v: Dictionary, x: float, y: float, layer: String) -> Vector2:
 
 
 func _init() -> void:
-	var planes: Dictionary = JSON.parse_string(FileAccess.get_file_as_string("res://build/v2/planes.json"))
-	for pl in planes.planes:
-		for k in pl:
-			if typeof(pl[k]) == TYPE_FLOAT and pl[k] == floor(pl[k]) and k != "parallax":
-				pl[k] = int(pl[k])
 	var variants := {}
 	for name in VARIANTS:
 		var v: Dictionary = VARIANTS[name]
@@ -167,42 +177,34 @@ func _init() -> void:
 				room["icon_chip_at"] = [a0[0] + 3, a0[1] + 3]
 			rooms.append(room)
 		variants[name] = {
+			"tank": TANK_IDS[name][0], "crew": TANK_IDS[name][1],
 			"file": name + ".png", "size": [img.get_width(), img.get_height()],
 			"hull_length_px": snappedf((503.0 + d) * S, 1.0),
 			"place_at_reference_framing": [15, 107],
 			"turret_scale": v.ts,
 			"rooms": rooms, "anchors": anchors,
 		}
-	var crew := {}
-	for f in DirAccess.get_files_at(OUT + "crew_frames"):
-		if not f.ends_with(".png"):
-			continue
-		var pose := f.get_basename().rsplit("_", true, 1)[0]
-		if not crew.has(pose):
-			crew[pose] = []
-		crew[pose].append("crew_frames/" + f)
-	for k in crew:
-		crew[k].sort()
+	var crew: Dictionary = JSON.parse_string(FileAccess.get_file_as_string(BUILD + "crew20.json"))
 	var kit := {
-		"version": "v2-1",
-		"note": "Mock asset kit for owner approval, built from the reference image only (no fal). 960x540 art px.",
+		"version": "v2-2",
+		"note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), "
+			+ "960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh.",
 		"art_resolution": [960, 540],
-		"reference_to_art": {"scale": 15.0 / 17.0, "offset_y": 2,
+		"reference": {"file": "source/reference.webp", "scale": 15.0 / 17.0, "offset_y": 2,
 			"note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"},
-		"plate": {"file": "plate_full.png",
-			"note": "reference without tank, beams, smoke and turret crew; tank area filled by quilting tank-free bands"},
-		"planes": planes.planes,
-		"planes_note": "Back to front: sky, mountains, cliff_lake, forest, [tank on road], road, foreground. "
-			+ "y0/y1 = rows of the 960x540 frame the plane image covers. parallax = scroll factor vs the road (1.0). "
-			+ "Blur is baked (box radius x3 passes ~ gaussian sigma). Wide files are 1920 px seamless tiles "
-			+ "(sky/mountains mirrored, forest/road/foreground quilted from calm cut points; the forest wide strip "
-			+ "has a level tree-top fade). cliff_lake is a single landmark piece (alpha 0 left of x~560).",
+		"planes": PLANES,
+		"planes_note": "Back to front: far (sky with the Milky Way, mountains, the pale cliff, the misty lake), forest, "
+			+ "[the tank, enemies and props on the road], road, foreground. Each file is the reference's own 960 px cut "
+			+ "plus its mirror (1920 px, seamless). y0 = the row of the 960x540 frame the plane's top sits on; "
+			+ "parallax = scroll factor against the road (1.0). The tilt-shift blur is baked once by planes2.gd: "
+			+ "blur_box_radius (two box passes); the reference already carries its own depth of field, so the far "
+			+ "plane keeps it. darken = the factor baked into the foreground.",
 		"tank": {
-			"source": "tank_citadel.png (= tank_3rider.png), cut from the reference, star and A17 painted out, "
-				+ "crew removed from rooms and turret roof, beams/smoke/headlight glow removed",
-			"parts": {"hull_3rider": "hull_3rider.png", "turret_body": "turret_body.png",
-				"turret_barrel": "turret_barrel.png",
-				"note": "parts share the tank_3rider frame (480x240): overlay at the same origin"},
+			"source": "cut from the reference (tank.gd, tankfix.gd: the star and A17 painted out, crew, beams, smoke "
+				+ "and headlight glow removed), split into modules at its bulkheads and assembled per crew size "
+				+ "(assemble.gd). turret_barrel.png shares the 3-rider frame (480x240): the view erases each "
+				+ "variant's baked barrel and draws this one at the gun's elevation.",
+			"barrel": "turret_barrel.png",
 			"modules": {
 				"note": "reference px. Hull layers: upper (y<310: roof + upper deck), lower (310..352: lower deck), "
 					+ "running gear (y>=352, rebuilt per length by removing/duplicating 34 px wheel periods and "
@@ -210,6 +212,7 @@ func _init() -> void:
 				"rear": "x 17..188 upper / 17..256 lower (rear plate, engine room, ladder 1)",
 				"middle_steam": "lower 256..332 (ladder 2 + shell rack)",
 				"middle_dynamo": "lower 332..386 (generator room)",
+				"middle_arc": "lower 332..386 copied in at 386 (the Bastion's arc-generator room)",
 				"middle_upper_bays": "upper 188..264 (desk bays), 300..385 turret-drive room",
 				"front": "x 386..561 (front rooms, glacis, bow guns, headlight, sprocket)",
 				"turret": "x 188..534 y 118..263, scaled 0.85 for 1 rider",
@@ -217,16 +220,38 @@ func _init() -> void:
 			},
 			"variants": variants,
 		},
-		"crew": {
-			"sheet": "crew_sheet.png", "cell": [16, 14], "facing": "right", "feet_row": 13,
-			"figure_height_px": "11-13", "frames": crew,
-			"commander_lens_px": {"0": [11, 5], "1": [10, 3], "2": [11, 7]},
-			"commander_beam_angle_deg": {"0": 0, "1": -35, "2": 25},
-			"note": "the reference crew are ~20 px tall at 960 scale; these follow the 10-12 px spec",
-		},
+		"crew": crew,
+		"enemies": _enemies(),
+		"cards": CARDS,
 	}
 	var f := FileAccess.open(OUT + "kit.json", FileAccess.WRITE)
 	f.store_string(JSON.stringify(kit, "  ", false))
 	f.close()
 	print("kit.json written")
 	quit()
+
+
+## Each enemy's file, size and muzzle (the leftmost opaque pixel in its upper 70 %: they face left).
+func _enemies() -> Dictionary:
+	var out := {}
+	for k in ["light", "medium", "destroyer", "heavy", "dugin"]:
+		var img := Image.load_from_file(OUT + "enemies/%s.png" % k)
+		img.convert(Image.FORMAT_RGBA8)
+		var muzzle := [0, 0]
+		var found := false
+		for x in img.get_width():
+			for y in int(img.get_height() * 0.7):
+				if img.get_pixel(x, y).a > 0.5:
+					muzzle = [x, y]
+					found = true
+					break
+			if found:
+				break
+		out[k] = {"file": "enemies/%s.png" % k, "size": [img.get_width(), img.get_height()], "muzzle": muzzle}
+	var b := Image.load_from_file(OUT + "enemies/behemoth.png")
+	out["behemoth"] = {
+		"file": "enemies/behemoth.png", "size": [b.get_width(), b.get_height()], "muzzle": [16, 140],
+		"bogies_at": [[0.25, 0.78], [0.47, 0.78], [0.69, 0.78]], "turret_at": [0.62, 0.3],
+		"note": "muzzle: the main gun's left end; bogies_at / turret_at: fractions of the sprite (fires, hits)",
+	}
+	return out
