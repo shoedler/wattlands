@@ -2,6 +2,25 @@
 
 Releases, newest first. Modules and games write fragments in `docs/changelog.d/<module or game id>.md`; the lead merges them here at each release and empties them.
 
+## v0.3.0 (2026-10-27)
+
+### Turbo Reel
+
+- The boat is a small physics sim: it surges with every pedal stroke, squats over the hump, climbs onto the plane from about 70 % FTP (7 % faster, the prop always in the water) and brakes bow-down when you stop. A big white whitewater mound piles up at the stern, and a spray fan flies off it on the plane.
+- A hooked fish tows the boat; big fish (30 kg and up) jerk the line on their runs with a short tug you feel in the trainer (haptics on).
+- New fight HUD under the boat: big target and current watts, cadence band, reel-in progress and a power graph. New cruise box: watts, cadence and %FTP, heart rate when a sensor is paired, a power graph, and your speed in knots behind the boat (with the same power's cycling speed).
+- Bolder fish that angle against the line and move smoothly; the wheel turns at your exact cadence; the sea floor no longer flickers.
+
+### Platform
+
+- Heart rate straps connect reliably (also after Windows asks to pair them).
+- Real fullscreen (F11, Alt+Enter, or Settings > Audio and display); 2D games fill the screen with crisp pixels.
+- F1 help overlays; Turbo Reel has one, the other games follow.
+- The pause on not pedaling waits 10 s. The on-screen panic button is gone; hold Backspace (gamepad: View + Menu) for an emergency stop.
+- Settings > Rides: copy a ride's Strava title and description, and see where rides are saved.
+- The one approved safety-rule change: a short ERG "haptic pull" (up to +50 % FTP for at most 3 s, scaled by your haptic intensity, never above 150 % FTP, 15 s cooldown, off in warm-up, rescue, coasting and pause, and for riders with haptics off).
+- Lobby cards no longer push the menu off screen.
+
 ## v0.2.2 (2026-10-25)
 
 ### Turbo Reel
