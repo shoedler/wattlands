@@ -131,6 +131,18 @@ func secondary_muzzles(tank: String) -> Array:
 	return out
 
 
+## The bow guns' muzzles of `tank` in the hull frame (v2, rigs.json tanks.<id>.bow_guns[].muzzle,
+## re-measured from the kit; empty when the rig has none). The rules' bursts are hitscan, so only
+## presentation and tests read them.
+func bow_muzzles(tank: String) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var guns: Variant = TankContentSchema.dig(data, "tanks.%s.bow_guns" % rig_of(tank))
+	for g: Variant in guns if guns is Array else []:
+		if g is Dictionary and g.get("muzzle") is Array:
+			out.append(_to_vec(g["muzzle"]))
+	return out
+
+
 ## An enemy's muzzle in its sprite's frame (art.json sprite id, e.g. "enemy_light").
 func enemy_muzzle(sprite: String) -> Vector2:
 	return _vec("enemies.%s.muzzle" % sprite)

@@ -4,7 +4,7 @@
 		"bulwark": {
 			"code": 1,
 			"crew": 1,
-			"hull_px": [192, 72],
+			"hull_px": [220, 71],
 			"engines": ["bulwark"],
 			"turrets": ["main"],
 			"enemy_scale": 0.75,
@@ -13,7 +13,7 @@
 		"rampart": {
 			"code": 2,
 			"crew": 2,
-			"hull_px": [240, 76],
+			"hull_px": [251, 71],
 			"engines": ["diesel", "dynamo"],
 			"turrets": ["main"],
 			"enemy_scale": 0.8,
@@ -22,7 +22,7 @@
 		"citadel": {
 			"code": 3,
 			"crew": 3,
-			"hull_px": [288, 80],
+			"hull_px": [296, 71],
 			"engines": ["diesel", "steam", "dynamo"],
 			"turrets": ["main"],
 			"enemy_scale": 1.0,
@@ -154,7 +154,7 @@
 		"drill_wreck": {"w": 72, "h": 32},
 		"tank_traps": {"w": 64, "h": 24},
 		"light_hits_to_clear": 3,
-		"standoff_px": 260
+		"standoff_px": 180
 	},
 	"drill": {
 		"wreck_px": [220, 330]
