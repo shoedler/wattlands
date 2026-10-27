@@ -6,10 +6,10 @@ extends RefCounted
 const Px = preload("res://assets/tank/v3/tools_src/px.gd")
 
 const TRK0 := Color("#0f0c09")
-const TRK1 := Color("#2a2219")
-const TRK2 := Color("#44382b")
-const TRK3 := Color("#6c5a44")
-const TRK4 := Color("#8f7958")
+const TRK1 := Color("#1c1610")
+const TRK2 := Color("#30271d")
+const TRK3 := Color("#4e4131")
+const TRK4 := Color("#6e5c44")
 const OUT := Color("#0b0806")
 const LINK_PITCH := 7.0
 
@@ -122,12 +122,12 @@ static func draw_track(img: Image, b: Dictionary, travel: float, thick := 5.0, e
 ## A wheel at `c` (target px), radius `r`, turned `ang` radians. kind: road, sprocket, idler, roller.
 static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: String, enemy := false) -> void:
 	var ext := r + (3.5 if kind == "sprocket" else 1.0)
-	var rim := Color("#4a3826") if not enemy else Color("#39403a")
-	var rim_hi := Color("#7a5e3e") if not enemy else Color("#5d665c")
-	var disc := Color("#2e2218") if not enemy else Color("#222823")
+	var rim := Color("#33261a") if not enemy else Color("#39403a")
+	var rim_hi := Color("#5e4a32") if not enemy else Color("#5d665c")
+	var disc := Color("#21180f") if not enemy else Color("#222823")
 	var disc_d := Color("#1c140d") if not enemy else Color("#161a17")
-	var hub := Color("#b08a4a") if not enemy else Color("#7d8578")
-	var hub_hi := Color("#e6c27a") if not enemy else Color("#b0b8aa")
+	var hub := Color("#6a5236") if not enemy else Color("#7d8578")
+	var hub_hi := Color("#9a7a4a") if not enemy else Color("#b0b8aa")
 	for y in range(floori(c.y - ext), ceili(c.y + ext) + 1):
 		for x in range(floori(c.x - ext), ceili(c.x + ext) + 1):
 			var d := Vector2(x + 0.5, y + 0.5) - c
@@ -153,11 +153,13 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 							col = rim
 					elif rho > 1.6:
 						col = disc_d
-						var bk := fposmod(phi * 4.0 / TAU + 0.125, 1.0)
-						if rho < 2.6 and bk < 0.2:
-							col = Color("#c8a468") if not enemy else hub_hi
+						var bk := fposmod(phi * 6.0 / TAU, 1.0)
+						if rho > 2.2 and rho < 3.4 and bk < 0.22:
+							col = Color("#5e4a32") if not enemy else hub
 					else:
-						col = hub_hi if litf > 0.3 else hub
+						col = Color("#6a5236") if litf > 0.3 else Color("#3e2e1e")
+						if enemy:
+							col = hub
 				"roller":
 					if rho > r + 0.6:
 						continue
@@ -194,7 +196,7 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 							col = disc
 						var bolt := fposmod(phi * 10.0 / TAU, 1.0)
 						if rho > r - 1.7 and rho < r - 0.7 and bolt < 0.2:
-							col = Color("#c8a468") if not enemy else hub_hi
+							col = Color("#7a6244") if not enemy else hub_hi
 					elif rho < 3.2:
 						col = hub if rho > 1.3 else hub_hi
 						if rho > 2.4:

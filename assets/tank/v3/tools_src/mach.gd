@@ -443,3 +443,131 @@ static func beltfeed(i: Image, r: Rect2i, t: float, rpm: float, slot: int, feed:
 			var y := lerpf(float(rc.end.y + 1), float(bin.position.y), f)
 			var x := lerpf(rc.position.x + 2.0, bin.position.x + 3.0, f)
 			p(i, floori(x), floori(y), BR2)
+
+
+# --- r3: v2-style stations ---------------------------------------------------------------------------
+
+
+## The drive room's long diesel (the reference's engine): two finned cylinders lying on a cradle,
+## a flywheel at the rear end on the pedals' chain, rockers bobbing, the exhaust to the roof.
+static func diesel_long(i: Image, r: Rect2i, t: float, rpm: float, slot: int) -> void:
+	var fy := r.end.y - 3
+	var ang := t * rpm / 60.0 * TAU
+	var cc := seat(i, r.position.x + 3, fy, ang, slot)
+	var eng := ang * 2.4 if slot >= 0 else 0.0
+	var x0 := r.position.x + 30
+	var x1 := r.end.x - 4
+	box(i, Rect2i(x0 + 2, fy - 3, x1 - x0 - 4, 3), ST1, ST2, ST0)
+	for k in 2:
+		var y0 := fy - 11 - k * 9
+		for y in range(y0, y0 + 8):
+			for x in range(x0, x1):
+				var row := y - y0
+				var col := ST2 if row < 3 else (ST1 if row < 6 else ST0)
+				if row == 0:
+					col = ST3
+				if (x - x0) % 3 == 0 and row > 0 and row < 7:
+					col = col.darkened(0.45)
+				if x == x0 or x == x1 - 1 or row == 7:
+					col = OUT
+				p(i, x, y, col)
+		pr(i, Rect2i(x0 - 2, y0 + 1, 2, 6), ST3)
+		pr(i, Rect2i(x1, y0 + 1, 2, 6), ST1)
+	var n := (x1 - x0 - 6) / 7
+	for k in n:
+		var hx := x0 + 4 + k * 7
+		var bob := roundi(sin(eng + k * 1.9) + 1.0)
+		pr(i, Rect2i(hx, fy - 22, 4, 2), CU1)
+		pr(i, Rect2i(hx + 1, fy - 24 - bob, 2, 2 + bob), ST3)
+	pr(i, Rect2i(x1 - 3, r.position.y + 2, 2, fy - 22 - r.position.y - 2), CU0)
+	pr(i, Rect2i(x1 - 3, r.position.y + 2, 1, fy - 22 - r.position.y - 2), CU1)
+	var fw := Vector2(x0 - 6.5, fy - 9.5)
+	chain(i, cc, fw, 2.5, 3.0, t * rpm / 60.0 * 9.0)
+	wheel(i, fw, 7.5, eng, ST2, 6)
+	wheel(i, fw, 2.5, eng, BR1, 3, 7)
+	if slot >= 0:
+		glow(i, Vector2((x0 + x1) * 0.5, fy - 20), 14.0, Color("#ff8a30"), 0.14 + 0.05 * sin(t * 13.0))
+
+
+## The gun room's dynamo, face on (v2's card): copper windings round a dark hub, turning; sparks.
+static func dynamo_round(i: Image, r: Rect2i, t: float, rpm: float, slot: int) -> void:
+	var fy := r.end.y - 3
+	var on := slot >= 0 and rpm > 1.0
+	var ang := t * rpm / 60.0 * TAU
+	var cc := seat(i, r.position.x + 3, fy, ang, slot)
+	var rad := minf(12.0, (fy - r.position.y - 6) * 0.5)
+	var dc := Vector2(r.end.x - rad - 4.5, fy - rad - 1.5)
+	box(i, Rect2i(floori(dc.x - rad) + 1, fy - 3, floori(rad * 2.0) - 1, 3), ST1, ST2, ST0)
+	var sp := ang * 3.0 if on else 0.0
+	for y in range(floori(dc.y - rad) - 1, ceili(dc.y + rad) + 2):
+		for x in range(floori(dc.x - rad) - 1, ceili(dc.x + rad) + 2):
+			var d := Vector2(x + 0.5, y + 0.5) - dc
+			var rho := d.length()
+			if rho > rad + 0.6:
+				continue
+			var phi := atan2(d.y, d.x)
+			if rho > rad - 0.4:
+				p(i, x, y, OUT)
+			elif rho > rad - 2.0:
+				p(i, x, y, ST3 if d.y < -rad * 0.3 else ST1)
+				if fposmod(phi * 8.0 / TAU, 1.0) < 0.15:
+					p(i, x, y, BR1)
+			elif rho > rad * 0.35:
+				var seg := fposmod((phi - sp) * 14.0 / TAU, 1.0)
+				var c := CU2 if seg < 0.3 else (CU1 if seg < 0.75 else CU0)
+				if d.y > rad * 0.4:
+					c = c.darkened(0.35)
+				p(i, x, y, c)
+			elif rho > 2.0:
+				p(i, x, y, Color("#1a1210"))
+			else:
+				p(i, x, y, BR2)
+	chain(i, cc, dc, 2.5, 3.0, t * rpm / 60.0 * 9.0)
+	if on:
+		var fl := Px.h2(floori(t * 24.0), 5, 1)
+		var sa := fl * TAU
+		var spk := dc + Vector2(cos(sa), sin(sa)) * (rad - 1.0)
+		p(i, floori(spk.x), floori(spk.y), ARC)
+		glow(i, spk, 6.0, ARC_GLOW, 0.5)
+		glow(i, dc, rad + 6.0, Color("#ff8a40"), 0.12)
+	pr(i, Rect2i(floori(dc.x) - 1, r.position.y + 2, 2, floori(dc.y - rad) - r.position.y - 2), ST2)
+	pr(i, Rect2i(floori(dc.x) - 1, r.position.y + 2, 1, floori(dc.y - rad) - r.position.y - 2), ST4)
+
+
+## The lights room's arc generator (v2's card): a copper coil, two carbon rods in a V, the arc at
+## its foot, cold light; cables up to the searchlight.
+static func arc_v(i: Image, r: Rect2i, t: float, rpm: float, slot: int) -> void:
+	var fy := r.end.y - 3
+	var on := slot >= 0 and rpm > 1.0
+	var ang := t * rpm / 60.0 * TAU
+	var cc := seat(i, r.position.x + 3, fy, ang, slot)
+	var x0 := r.position.x + 22
+	var coil := Rect2i(x0, fy - 16, 7, 14)
+	box(i, Rect2i(x0 - 1, fy - 2, 9, 2), ST1, ST2, ST0)
+	for y in range(coil.position.y, coil.end.y):
+		for x in range(coil.position.x, coil.end.x):
+			var band := (y + (floori(ang * 2.0) if on else 0)) % 2 == 0
+			var c := CU2 if band else CU0
+			if x == coil.position.x or x == coil.end.x - 1:
+				c = OUT
+			p(i, x, y, c)
+	pr(i, Rect2i(x0 - 1, coil.position.y - 1, 9, 1), ST3)
+	chain(i, cc, Vector2(x0 + 3.5, fy - 6.5), 2.5, 2.0, t * rpm / 60.0 * 9.0)
+	var tip := Vector2(r.position.x + 41.5, fy - 7.5)
+	var la := Vector2(tip.x - 8.0, r.position.y + 6.0)
+	var ra := Vector2(tip.x + 8.0, r.position.y + 6.0)
+	pr(i, Rect2i(floori(la.x) - 2, floori(la.y) - 2, floori(ra.x - la.x) + 5, 2), BR1)
+	pl(i, la, tip + Vector2(-1, -1), ST1 if not on else ST3)
+	pl(i, ra, tip + Vector2(1, -1), ST1 if not on else ST3)
+	pl(i, la + Vector2(1, 0), tip + Vector2(0, -1), ST0)
+	pl(i, ra + Vector2(-1, 0), tip + Vector2(0, -1), ST0)
+	box(i, Rect2i(floori(tip.x) - 4, fy - 4, 9, 4), ST1, ST2, ST0)
+	if on:
+		var fl := Px.h2(floori(t * 30.0), 3, 9)
+		p(i, floori(tip.x), floori(tip.y), ARC)
+		p(i, floori(tip.x) - 1, floori(tip.y), ARC)
+		p(i, floori(tip.x) + floori(fl * 3.0) - 1, floori(tip.y) - 1, ARC_GLOW)
+		glow(i, tip, 22.0, ARC_GLOW, 0.65 + 0.25 * fl)
+		glow(i, tip, 5.0, ARC, 0.8)
+	pl(i, Vector2(ra.x + 2, ra.y), Vector2(ra.x + 2, r.position.y), OUT)
+	pl(i, Vector2(ra.x + 3, ra.y), Vector2(ra.x + 3, r.position.y), Color("#3a1a10"))

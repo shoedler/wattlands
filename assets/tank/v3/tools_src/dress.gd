@@ -9,8 +9,16 @@ const Px = preload("res://assets/tank/v3/tools_src/px.gd")
 
 const OUT := Color("#0b0806")
 const WALL: Array = [
-	Color("#170f08"), Color("#28190c"), Color("#3c2712"), Color("#573a19"), Color("#7a5223"), Color("#a06e30"),
-	Color("#c48a40")
+	Color("#0d0805"), Color("#1a1009"), Color("#2c1c0e"), Color("#462c14"), Color("#6a4420"), Color("#9a6a30"),
+	Color("#d09a4c")
+]
+const WALL_COLD: Array = [
+	Color("#06090c"), Color("#0e161c"), Color("#18263a"), Color("#284058"), Color("#406686"), Color("#6c98b8"),
+	Color("#b8daf0")
+]
+const WALL_STEAM: Array = [
+	Color("#0c0805"), Color("#1a110a"), Color("#2e1d10"), Color("#4c3018"), Color("#764a22"), Color("#a8702e"),
+	Color("#e0a050")
 ]
 const BEAM := Color("#100a06")
 const LAMP := Color("#ffd98a")
@@ -58,6 +66,13 @@ static func light(img: Image, open: PackedByteArray, w: int, h: int, o: Dictiona
 	_g = g
 	var r: Rect2i = o["rect"]
 	var lamp := lamp_at(o)
+	var lamps: Array = o.get("lamps", [lamp])
+	var ramp: Array = WALL
+	match str(o.get("tint", "warm")):
+		"cold":
+			ramp = WALL_COLD
+		"steam":
+			ramp = WALL_STEAM
 	var has_lamp := bool(o.get("has_lamp", true))
 	var reach := float(o.get("reach", maxf(r.size.x * 0.7, r.size.y * 1.1)))
 	var dim := float(o.get("dim", 0.0))
@@ -68,8 +83,10 @@ static func light(img: Image, open: PackedByteArray, w: int, h: int, o: Dictiona
 		for x in range(r.position.x, r.end.x):
 			if x < 0 or y < 0 or x >= w or y >= h or open[y * w + x] != g:
 				continue
-			var d := Vector2(x + 0.5 - lamp.x, (y + 0.5 - lamp.y) * (0.8 if y > lamp.y else 1.6))
-			var v := clampf(1.0 - d.length() / reach, 0.0, 1.0)
+			var v := 0.0
+			for lp: Vector2 in lamps:
+				var d := Vector2(x + 0.5 - lp.x, (y + 0.5 - lp.y) * (0.8 if y > lp.y else 1.6))
+				v = maxf(v, clampf(1.0 - d.length() / reach, 0.0, 1.0))
 			v = v * v * 0.95 + 0.06 - dim
 			if not has_lamp:
 				v = 0.12 - dim
@@ -86,7 +103,7 @@ static func light(img: Image, open: PackedByteArray, w: int, h: int, o: Dictiona
 					v += 0.12
 			elif (y - r.position.y) % 9 == 8:
 				v -= 0.06
-			var col := Px.dither(WALL, v, x, y)
+			var col := Px.dither(ramp, v, x, y)
 			if beam and y < r.position.y + 2:
 				col = BEAM
 			if floor_on and y >= fy:
@@ -259,3 +276,135 @@ static func bay(img: Image, open: PackedByteArray, w: int, h: int, o: Dictionary
 		_p(img, lx, ly, LAMP_CORE)
 		_p(img, lx + 1, ly, LAMP)
 		_p(img, lx, ly + 1, LAMP)
+
+
+# --- r3: the crew quarters (the upper deck, v2's look) ---------------------------------------------------
+
+
+## A seated crewman facing `dir` (1 right, -1 left) at a table, feet on floor row `fy` (non-rider).
+static func sitter(img: Image, x: int, fy: int, dir: int, seed: int) -> void:
+	var uni := Color("#5a4c32")
+	var uni_l := Color("#7a6844")
+	var skin := Color("#b88a62")
+	var hx := x - dir * 3 - (0 if dir > 0 else 1)
+	_p(img, x, fy - 1, Color("#100a06"))
+	_p(img, x + dir, fy - 1, Color("#100a06"))
+	_p(img, x, fy - 2, Color("#2a2a30"))
+	_p(img, x, fy - 3, Color("#2a2a30"))
+	_r(img, Rect2i(mini(x, x - dir * 3), fy - 4, 4, 1), Color("#2a2a30"))
+	_r(img, Rect2i(x - dir * 3 - (0 if dir > 0 else 1), fy - 10, 2, 6), uni)
+	_r(img, Rect2i(mini(x - dir * 2, x), fy - 7, 3, 1), uni_l)
+	_r(img, Rect2i(hx, fy - 13, 3, 3), skin)
+	_r(img, Rect2i(hx, fy - 14, 3, 1), Color("#3a3428") if seed % 2 else Color("#2a2620"))
+	_r(img, Rect2i(x - dir * 4 - 1, fy - 4, 3, 1), Color("#5e4220"))
+	_p(img, x - dir * 4, fy - 3, Color("#3a2814"))
+	_p(img, x - dir * 4, fy - 2, Color("#3a2814"))
+
+
+static func quarters(img: Image, open: PackedByteArray, w: int, h: int, o: Dictionary) -> void:
+	var r: Rect2i = o["rect"]
+	_open = open
+	_w = w
+	_h = h
+	_g = int(o.get("group", 0))
+	var fy := r.end.y - 3
+	var q: Dictionary = o["quarters"]
+	for bx in q.get("walls", []):
+		var x := int(bx)
+		_r(img, Rect2i(x, r.position.y, 2, fy - r.position.y - 14), Color("#140c07"))
+		_r(img, Rect2i(x, r.position.y, 1, fy - r.position.y - 14), Color("#3a2818"))
+		_r(img, Rect2i(x - 1, fy - 15, 4, 1), Color("#5e4220"))
+	for bx in q.get("bunks", []):
+		var x := int(bx)
+		for tier in 2:
+			var y := fy - 3 - tier * 9
+			_r(img, Rect2i(x, y - 2, 18, 2), Color("#5a4a38") if tier == 0 else Color("#6a5842"))
+			_r(img, Rect2i(x, y - 2, 18, 1), Color("#8a7458"))
+			_r(img, Rect2i(x, y, 18, 1), Color("#140c07"))
+			_r(img, Rect2i(x + 1, y - 3, 4, 1), Color("#a89070"))
+		_r(img, Rect2i(x, fy - 21, 1, 21), Color("#3a2814"))
+		_r(img, Rect2i(x + 17, fy - 21, 1, 21), Color("#3a2814"))
+	var n := 0
+	for tx in q.get("tables", []):
+		var x := int(tx)
+		_r(img, Rect2i(x - 4, fy - 7, 9, 1), Color("#9a7040"))
+		_r(img, Rect2i(x - 4, fy - 6, 9, 1), Color("#3a2814"))
+		_r(img, Rect2i(x - 3, fy - 5, 1, 5), Color("#3a2814"))
+		_r(img, Rect2i(x + 3, fy - 5, 1, 5), Color("#3a2814"))
+		_p(img, x - 1, fy - 8, Color("#c8c0b0"))
+		_p(img, x + 1, fy - 9, Color("#e8d8a0"))
+		sitter(img, x - 7, fy, 1, n)
+		if n % 2 == 0:
+			sitter(img, x + 7, fy, -1, n + 1)
+		n += 1
+	for lx in q.get("lockers", []):
+		var x := int(lx)
+		for k in 2:
+			var lr := Rect2i(x + k * 5, fy - 18, 5, 18)
+			_r(img, lr, Color("#2c2a24"))
+			_r(img, Rect2i(lr.position.x, lr.position.y, 5, 1), Color("#5a564a"))
+			_r(img, Rect2i(lr.position.x + 4, lr.position.y, 1, 18), Color("#141210"))
+			_p(img, lr.position.x + 3, lr.position.y + 8, Color("#a08a5a"))
+			_r(img, Rect2i(lr.position.x + 1, lr.position.y + 3, 2, 1), Color("#141210"))
+	for lx in q.get("ladders", []):
+		var x := int(lx)
+		_r(img, Rect2i(x, r.position.y + 2, 1, fy - r.position.y + 3), Color("#7a5a34"))
+		_r(img, Rect2i(x + 5, r.position.y + 2, 1, fy - r.position.y + 3), Color("#7a5a34"))
+		for y in range(r.position.y + 4, fy + 4, 4):
+			_r(img, Rect2i(x + 1, y, 4, 1), Color("#9a7444"))
+	if q.has("ring"):
+		var rc: Vector2 = q["ring"]
+		var rr := float(q.get("ring_r", 40.0))
+		for y in range(r.position.y, fy):
+			for x in range(r.position.x, r.end.x):
+				var d := Vector2(x + 0.5, y + 0.5) - rc
+				var rho := d.length()
+				if d.y < 0.0 or rho < rr - 5.0 or rho > rr + 0.6:
+					continue
+				var phi := atan2(d.y, d.x)
+				var c := Color("#2a221a")
+				if rho > rr - 0.4:
+					c = Color("#0a0806")
+				elif rho > rr - 1.6:
+					c = Color("#6a5236")
+				elif rho < rr - 3.6:
+					c = Color("#4a3a28") if fposmod(phi * 60.0 / TAU, 1.0) < 0.5 else Color("#0a0806")
+				_p(img, x, y, c)
+	for lp: Vector2 in o.get("lamps", []):
+		var lx := floori(lp.x)
+		var ly := floori(lp.y)
+		_r(img, Rect2i(lx - 1, r.position.y + 2, 3, 1), Color("#3a2814"))
+		_r(img, Rect2i(lx - 1, ly - 1, 3, 1), BR0)
+		_p(img, lx - 1, ly, LAMP)
+		_p(img, lx, ly, LAMP_CORE)
+		_p(img, lx + 1, ly, LAMP)
+
+
+## Dark rear machinery seen through a narrow cut: cabinets with dials, pipes, a fuel tank.
+static func machinery(img: Image, open: PackedByteArray, w: int, h: int, o: Dictionary) -> void:
+	var r: Rect2i = o["rect"]
+	_open = open
+	_w = w
+	_h = h
+	_g = int(o.get("group", 0))
+	var fy := r.end.y - 3
+	var x := r.position.x + 2
+	var k := 0
+	while x < r.end.x - 4:
+		var bh := 10 + (k * 7) % 9
+		var bw := 8 + (k * 3) % 5
+		var b := Rect2i(x, fy - bh, bw, bh)
+		_r(img, b, Color("#1e1c18"))
+		_r(img, Rect2i(b.position.x, b.position.y, bw, 1), Color("#3e3a30"))
+		_r(img, Rect2i(b.end.x - 1, b.position.y, 1, bh), Color("#0a0806"))
+		_p(img, b.position.x + 2, b.position.y + 3, Color("#c89a50"))
+		_p(img, b.position.x + 4, b.position.y + 3, Color("#7ab060") if k % 2 else Color("#c8503c"))
+		x += bw + 1
+		k += 1
+	var tk := Rect2i(r.position.x + 3, r.position.y + 6, r.size.x - 8, 14)
+	_r(img, tk, Color("#2a2418"))
+	_r(img, Rect2i(tk.position.x, tk.position.y, tk.size.x, 1), Color("#4a4030"))
+	_r(img, Rect2i(tk.position.x, tk.position.y + 5, tk.size.x, 1), Color("#5e4220"))
+	for y in range(r.position.y + 2, fy):
+		_p(img, r.end.x - 4, y, CU0)
+		_p(img, r.end.x - 3, y, CU1 if y % 5 else BR1)

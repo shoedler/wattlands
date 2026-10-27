@@ -16,18 +16,18 @@ const Dress = preload("res://assets/tank/v3/tools_src/dress.gd")
 
 const OUT := Color("#0b0806")
 const RAMP_HULL: Array = [
-	Color("#110b07"), Color("#1c140d"), Color("#291e14"), Color("#37291c"), Color("#473525"), Color("#5c452f")
+	Color("#060403"), Color("#0c0806"), Color("#130d09"), Color("#1b130d"), Color("#251a12"), Color("#322419")
 ]
 const RAMP_ENEMY: Array = [
 	Color("#0d100e"), Color("#161b17"), Color("#212722"), Color("#2d352e"), Color("#3b443b"), Color("#4d574b")
 ]
-const HI := Color("#86683f")
+const HI := Color("#4c3c2a")
 const HI_EN := Color("#66705f")
-const RUST := Color("#5a3019")
-const RUST_L := Color("#7a4322")
-const CHIP := Color("#6f6252")
-const RIV_HI := Color("#b2905e")
-const RIV_MID := Color("#6a5236")
+const RUST := Color("#2e180c")
+const RUST_L := Color("#45250f")
+const CHIP := Color("#3e3428")
+const RIV_HI := Color("#86683f")
+const RIV_MID := Color("#33261a")
 const RIV_HI_EN := Color("#8c9584")
 const RIV_LO := Color("#0e0906")
 const LAMP := Color("#ffd98a")
@@ -68,6 +68,10 @@ static func build(L: Dictionary) -> Dictionary:
 	for o: Dictionary in L.get("openings", []):
 		if o.has("dress"):
 			Dress.bay(img, open, w, h, o)
+		if o.has("quarters"):
+			Dress.quarters(img, open, w, h, o)
+		if bool(o.get("machinery", false)):
+			Dress.machinery(img, open, w, h, o)
 	# exterior details never paint into a cutaway: keep the openings' pixels and put them back
 	var keep := img.duplicate() as Image
 	for d: Dictionary in L.get("details", []):
@@ -76,6 +80,7 @@ static func build(L: Dictionary) -> Dictionary:
 		for x in w:
 			if open[y * w + x] != 0:
 				img.set_pixel(x, y, keep.get_pixel(x, y))
+	_spill(img, mask, open, w, h, L)
 	return {"img": img, "front": front, "mask": mask, "open": open, "dist": dist, "w": w, "h": h}
 
 
@@ -324,6 +329,57 @@ static func _distance(mask: PackedByteArray, w: int, h: int) -> PackedInt32Array
 			m = mini(m, d[i + w] + 1) if y < h - 1 else 1
 			d[i] = m
 	return d
+
+
+## Lamp light spilling out of the cutaways onto the hull round them: a breadth-first distance from
+## every opening into the hull (up to `spill_px`), each hull pixel lit in its nearest opening's tint
+## (L.tints: group -> Color; warm by default, none for an unlit group).
+static func _spill(img: Image, mask: PackedByteArray, open: PackedByteArray, w: int, h: int, L: Dictionary) -> void:
+	var reach := int(L.get("spill_px", 0))
+	if reach <= 0:
+		return
+	var tints: Dictionary = L.get("tints", {})
+	var dist := PackedInt32Array()
+	dist.resize(w * h)
+	dist.fill(-1)
+	var grp := PackedByteArray()
+	grp.resize(w * h)
+	var q := PackedInt32Array()
+	for i in w * h:
+		if open[i] != 0:
+			dist[i] = 0
+			grp[i] = open[i]
+			q.append(i)
+	var head := 0
+	while head < q.size():
+		var i := q[head]
+		head += 1
+		var d := dist[i]
+		if d >= reach:
+			continue
+		var x := i % w
+		var y := i / w
+		for nb in [i - 1, i + 1, i - w, i + w]:
+			if nb < 0 or nb >= w * h:
+				continue
+			if (nb == i - 1 and x == 0) or (nb == i + 1 and x == w - 1):
+				continue
+			if dist[nb] >= 0 or mask[nb] == 0:
+				continue
+			dist[nb] = d + 1
+			grp[nb] = grp[i]
+			q.append(nb)
+	var amt := float(L.get("spill_amt", 0.5))
+	for i in w * h:
+		var d := dist[i]
+		if d <= 1 or open[i] != 0:
+			continue
+		var g := int(grp[i])
+		var tc: Color = tints.get(g, Color("#ff9a48"))
+		if tc.a < 0.01:
+			continue
+		var f := 1.0 - float(d) / float(reach + 1)
+		Px.add(img, i % w, i / w, tc, amt * f * f)
 
 
 # --- Openings -------------------------------------------------------------------------------------------
@@ -591,6 +647,32 @@ static func _detail(img: Image, d: Dictionary, enemy: bool) -> void:
 			Px.rect(img, Rect2i(r4.position.x, r4.end.y - 1, r4.size.x, 1), ramp[1])
 			for x in [r4.position.x + 2, r4.end.x - 3]:
 				Px.rect(img, Rect2i(x, r4.position.y + 2, 1, 3), BRASS)
+		"crate":
+			var rc: Rect2i = d["rect"]
+			Px.rect(img, rc.grow(1), OUT)
+			for y in range(rc.position.y, rc.end.y):
+				for x in range(rc.position.x, rc.end.x):
+					var plank := (y - rc.position.y) % 5
+					var col := Color("#3a1a10") if plank > 0 else Color("#1a0a06")
+					if plank == 1:
+						col = Color("#4e2416")
+					if Px.h2(x, y, 61) > 0.85:
+						col = Color("#2a120a")
+					Px.put(img, x, y, col)
+			for x in [rc.position.x, rc.end.x - 2]:
+				Px.rect(img, Rect2i(x, rc.position.y, 2, rc.size.y), Color("#2a1c12"))
+				Px.rect(img, Rect2i(x, rc.position.y, 1, rc.size.y), Color("#4a3a28"))
+			Px.rect(img, Rect2i(rc.position.x, rc.position.y + rc.size.y / 2, rc.size.x, 1), Color("#2a1c12"))
+		"commander":
+			# head and shoulders out of the roof hatch, by the searchlight (crew on the tank)
+			var pc: Vector2i = d["at"]
+			Px.rect(img, Rect2i(pc.x - 3, pc.y - 4, 7, 4), Color("#2e2618"))
+			Px.rect(img, Rect2i(pc.x - 2, pc.y - 4, 5, 1), Color("#4a3e28"))
+			Px.rect(img, Rect2i(pc.x - 1, pc.y - 8, 3, 3), Color("#7a5a40"))
+			Px.rect(img, Rect2i(pc.x - 2, pc.y - 9, 5, 1), Color("#2a2a22"))
+			Px.rect(img, Rect2i(pc.x - 1, pc.y - 10, 3, 1), Color("#3a3a2e"))
+			Px.put(img, pc.x + 1, pc.y - 7, Color("#1a120a"))
+			Px.line(img, Vector2i(pc.x + 3, pc.y - 3), Vector2i(pc.x + 6, pc.y - 4), Color("#3a3226"))
 		"bolt_row":
 			var a8: Vector2i = d["a"]
 			var b8: Vector2i = d["b"]

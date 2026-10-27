@@ -66,249 +66,102 @@ static func _turret_details(o: Dictionary) -> Array:
 # --- Layouts ---------------------------------------------------------------------------------------
 
 
-## A: long, five bays in a row under one roof, the turret over the gun and loader bays.
-static func layout_a() -> Dictionary:
+## R3: the reference's tank rebuilt on the pixel grid (Simon picked A, then asked for the reference's
+## silhouette back): the long low hull with its wedge front and sloped rear, the second floor (crew
+## quarters with a row of lamps, the turret ring hanging from the roof) over the lower deck's five
+## stations of different widths (v2's room look: warm diesel, the dynamo's copper, the steam room,
+## the arc's cold blue-white; the belt feed in the upper front room behind the bow guns' armoured
+## box), the riveted boxy turret with the crate and grille at its rear, the antenna and the long
+## barrel, the large high front sprocket and a flat lower run. Coordinates: the reference crop
+## (x 30.., y 170..) at 0.9.
+static func layout_r3() -> Dictionary:
+	var lw := 160
 	var bays := [
-		_bay("drive", "diesel", Rect2i(62, 88, 50, 51), 1),
-		_bay("lights", "arcgen", Rect2i(116, 88, 48, 51), 2),
-		_bay("gun", "dynamo", Rect2i(168, 88, 48, 51), 3),
-		_bay("loader", "steam", Rect2i(220, 88, 66, 51), 4),
-		_bay("sec", "beltfeed", Rect2i(290, 88, 84, 51), 5),
+		_bay("drive", "diesel_long", Rect2i(98, 128, 88, 43), 1),
+		_bay("gun", "dynamo_round", Rect2i(190, 128, 50, 43), 3),
+		_bay("loader", "steam", Rect2i(244, 128, 74, 43), 4),
+		_bay("lights", "arc_v", Rect2i(322, 128, 58, 43), 2),
+		_bay("sec", "beltfeed", Rect2i(334, 90, 46, 34), 5),
 	]
+	var qlamps: Array = [Vector2(110, 96), Vector2(136, 96), Vector2(166, 96), Vector2(196, 96), Vector2(226, 96), Vector2(270, 96)]
 	var openings: Array = [
-		_open_bay(bays[0], {"shelf": [64, 80], "valve": 82}),
-		_open_bay(bays[1], {"shelf": [118, 134]}),
-		_open_bay(bays[2], {"shelf": [170, 186], "valve": 188}),
-		_open_bay(bays[3], {"shelf": [222, 238]}),
-		_open_bay(bays[4], {"shelf": [328, 352], "gauges": 312}),
-		{"rect": Rect2i(254, 47, 72, 28), "group": 4, "inset": 3, "lamp": Vector2(288, 52), "dress": {"pipes": false}},
-		{"rect": Rect2i(269, 71, 17, 21), "group": 4, "inset": 2, "has_lamp": false, "floor": false, "beam": false, "dim": 0.15},
-	]
-	var details: Array = []
-	for b: Dictionary in bays:
-		var r: Rect2i = b["rect"]
-		details.append({"kind": "vision", "at": Vector2i(r.position.x + r.size.x / 2 - 2, 79), "w": 5})
-	details.append_array([
-		{"kind": "shovel", "at": Vector2i(94, 82)},
-		{"kind": "pick", "at": Vector2i(148, 82)},
-		{"kind": "bar", "at": Vector2i(199, 82), "w": 40},
-		{"kind": "cable", "a": Vector2i(264, 82), "b": Vector2i(324, 82)},
-		{"kind": "louvre", "rect": Rect2i(36, 90, 20, 13)},
-		{"kind": "lamp_red", "at": Vector2i(28, 101)},
-		{"kind": "lamp_green", "at": Vector2i(69, 61)},
-		{"kind": "lamp_red", "at": Vector2i(400, 108)},
-		{"kind": "stack", "x": 76, "y0": 50, "y1": 64},
-		{"kind": "stack", "x": 89, "y0": 53, "y1": 64},
-		{"kind": "can", "at": Vector2i(99, 57)},
-		{"kind": "can", "at": Vector2i(106, 57)},
-		{"kind": "coil", "at": Vector2i(121, 61)},
-		{"kind": "hatch_top", "at": Vector2i(138, 74), "w": 10},
-		{"kind": "periscope", "at": Vector2i(156, 74)},
-		{"kind": "vent", "at": Vector2i(176, 74)},
-		{"kind": "vent", "at": Vector2i(186, 74)},
-		{"kind": "periscope", "at": Vector2i(335, 74)},
-		{"kind": "links", "a": Vector2(347, 82), "b": Vector2(372, 96), "n": 3},
-		{"kind": "headlight", "at": Vector2i(405, 117)},
-	])
-	details.append_array(_turret_details({
-		"hatch": Vector2i(286, 44), "periscope": Vector2i(224, 37), "searchlight": Vector2i(248, 37),
-		"antenna": Vector2i(208, 48), "rail_a": Vector2i(210, 57), "rail_b": Vector2i(248, 57),
-		"vision": Vector2i(226, 64), "box": Rect2i(191, 55, 10, 13), "slit": Vector2i(218, 40),
-	}))
-	return {
-		"name": "A",
-		"title": "A  LONG: FIVE BAYS IN A ROW",
-		"size": Vector2i(440, 176),
-		"ground": 170.0,
-		"parts": [
-			{"poly": P([200, 76, 203, 52, 212, 44, 318, 44, 331, 51, 335, 62, 333, 76]), "seams_x": [236, 254], "seams_y": [60], "tone": 0.03, "seed": 11},
-			{"poly": P([66, 76, 70, 64, 126, 64, 130, 76]), "seams_x": [98], "tone": -0.02, "seed": 12},
-			{"poly": P([26, 96, 36, 84, 62, 74, 340, 74, 404, 110, 411, 118, 409, 127, 394, 144, 60, 144, 46, 140, 30, 124, 24, 108]),
-			 "seams_x": [114, 166, 218, 288], "seams_y": [86, 139], "seed": 13},
-			{"poly": P([323, 48, 337, 48, 342, 53, 342, 62, 337, 67, 323, 67]), "cast": true, "tone": 0.06, "seed": 14},
-			{"poly": P([214, 44, 216, 37, 236, 37, 238, 44]), "cast": true, "tone": 0.05, "seed": 15},
-			{"poly": P([66, 139, 128, 139, 128, 146, 66, 146]), "front": true, "seams_x": [97], "split": false, "tone": 0.04, "seed": 16},
-			{"poly": P([146, 139, 214, 139, 214, 146, 146, 146]), "front": true, "seams_x": [180], "split": false, "tone": 0.04, "seed": 17},
-			{"poly": P([232, 139, 300, 139, 300, 146, 232, 146]), "front": true, "seams_x": [266], "split": false, "tone": 0.04, "seed": 18},
-		],
-		"bays": bays,
-		"openings": openings,
-		"details": details,
-		"gun": {"trunnion": Vector2(333, 57.5), "len": 80.0},
-		"sec": {"pivot": Vector2(383.5, 100.5), "len": 22.0, "feed": Vector2(364, 101)},
-		"loader": {"bay": 3, "boiler_x": 241, "rack_x": 254, "hoist_x": 272, "window": Rect2i(254, 47, 72, 28)},
-		"gear": {
-			"T": 5.0, "up": 4.0, "droop": 2.0, "track_front": true,
-			"idler": {"c": Vector2(38, 126), "r": 11.0},
-			"sprocket": {"c": Vector2(396, 132), "r": 13.0},
-			"rollers": [
-				{"c": Vector2(77, 148.5), "r": 2.5}, {"c": Vector2(152, 148.5), "r": 2.5}, {"c": Vector2(228, 148.5), "r": 2.5},
-				{"c": Vector2(303, 148.5), "r": 2.5}, {"c": Vector2(354, 148.5), "r": 2.5},
-			],
-			"wheels": _wheels(13, 64.0, 25.2, 158.0, 7.0),
-		},
-	}
-
-
-## B: compact two-deck: lights and loader above, drive, gun and the belt feed below.
-static func layout_b() -> Dictionary:
-	var bays := [
-		_bay("lights", "arcgen", Rect2i(56, 82, 64, 44), 2),
-		_bay("loader", "steam", Rect2i(124, 82, 82, 44), 4),
-		_bay("drive", "diesel", Rect2i(50, 131, 74, 44), 1),
-		_bay("gun", "dynamo", Rect2i(128, 131, 86, 44), 3),
-		_bay("sec", "beltfeed", Rect2i(218, 131, 96, 44), 5),
-	]
-	var openings: Array = [
-		_open_bay(bays[0], {"shelf": [58, 74], "door": "R"}),
-		_open_bay(bays[1], {"shelf": [126, 142]}),
-		_open_bay(bays[2], {"shelf": [52, 68], "door": "R"}),
-		_open_bay(bays[3], {"shelf": [130, 146], "door": "R", "valve": 192}),
-		_open_bay(bays[4], {"shelf": [256, 280], "gauges": 240}),
-		{"rect": Rect2i(176, 48, 66, 29), "group": 4, "inset": 3, "lamp": Vector2(206, 52), "dress": {"pipes": false}},
-		{"rect": Rect2i(189, 73, 17, 12), "group": 4, "inset": 2, "has_lamp": false, "floor": false, "beam": false, "dim": 0.15},
+		{"rect": bays[0]["rect"], "group": 1, "dress": {"shelf": [100, 116], "seed": 3}, "lamps": [Vector2(118, 133), Vector2(160, 133)], "reach": 30.0},
+		{"rect": bays[1]["rect"], "group": 3, "dress": {"shelf": [192, 208], "seed": 5}, "lamp": Vector2(206, 133), "reach": 28.0},
+		{"rect": bays[2]["rect"], "group": 4, "tint": "steam", "dress": {"shelf": [246, 262], "seed": 7}, "lamp": Vector2(270, 133), "reach": 34.0},
+		{"rect": bays[3]["rect"], "group": 2, "tint": "cold", "dress": {"shelf": [324, 340], "seed": 9}, "lamp": Vector2(340, 133), "reach": 26.0},
+		{"rect": bays[4]["rect"], "group": 5, "dress": {"seed": 11, "pipes": false}, "lamp": Vector2(352, 96), "reach": 26.0},
+		{"rect": Rect2i(98, 90, 200, 34), "group": 6, "lamps": qlamps, "reach": 22.0, "quarters": {
+			"walls": [128, 182, 240], "bunks": [102, 214], "tables": [150, 198], "lockers": [130],
+			"ladders": [242], "ring": Vector2(296, 72), "ring_r": 46.0,
+		}},
+		{"rect": Rect2i(270, 50, 80, 33), "group": 4, "inset": 3, "lamp": Vector2(286, 54), "reach": 30.0, "dress": {"pipes": false}},
+		{"rect": Rect2i(298, 80, 20, 52), "group": 4, "inset": 2, "has_lamp": false, "floor": false, "beam": false, "dim": 0.1},
+		{"rect": Rect2i(66, 104, 28, 67), "group": 7, "has_lamp": false, "dim": 0.05, "machinery": true},
 	]
 	var details: Array = [
-		{"kind": "vision", "at": Vector2i(226, 88), "w": 5},
-		{"kind": "vision", "at": Vector2i(256, 102), "w": 5},
-		{"kind": "hatch", "rect": Rect2i(222, 100, 16, 14)},
-		{"kind": "links", "a": Vector2(262, 86), "b": Vector2(296, 111), "n": 4},
-		{"kind": "shovel", "at": Vector2i(214, 120)},
-		{"kind": "louvre", "rect": Rect2i(34, 118, 14, 12)},
-		{"kind": "stack", "x": 68, "y0": 54, "y1": 68},
-		{"kind": "stack", "x": 82, "y0": 57, "y1": 68},
-		{"kind": "can", "at": Vector2i(90, 61)},
-		{"kind": "coil", "at": Vector2i(108, 72)},
-		{"kind": "headlight", "at": Vector2i(318, 129)},
-		{"kind": "lamp_red", "at": Vector2i(28, 126)},
-		{"kind": "lamp_green", "at": Vector2i(57, 65)},
-		{"kind": "lamp_red", "at": Vector2i(312, 118)},
-		{"kind": "cable", "a": Vector2i(60, 128), "b": Vector2i(206, 128)},
-		{"kind": "periscope", "at": Vector2i(112, 76)},
-		{"kind": "vent", "at": Vector2i(250, 76)},
+		{"kind": "rail", "a": Vector2i(96, 83), "b": Vector2i(330, 83)},
+		{"kind": "louvre", "rect": Rect2i(20, 106, 36, 24)},
+		{"kind": "hatch", "rect": Rect2i(30, 134, 12, 14)},
+		{"kind": "stack", "x": 80, "y0": 63, "y1": 77},
+		{"kind": "stack", "x": 92, "y0": 66, "y1": 77},
+		{"kind": "can", "at": Vector2i(100, 70)},
+		{"kind": "coil", "at": Vector2i(112, 74)},
+		{"kind": "lamp_red", "at": Vector2i(19, 96)},
+		{"kind": "lamp_green", "at": Vector2i(106, 72)},
+		{"kind": "lamp_red", "at": Vector2i(444, 117)},
+		{"kind": "headlight", "at": Vector2i(450, 138)},
+		{"kind": "vision", "at": Vector2i(380, 128), "w": 5},
+		{"kind": "bolt_row", "a": Vector2i(96, 126), "b": Vector2i(380, 126)},
+		{"kind": "bolt_row", "a": Vector2i(58, 175), "b": Vector2i(396, 175)},
+		{"kind": "bolt_row", "a": Vector2i(96, 88), "b": Vector2i(334, 88)},
+		{"kind": "links", "a": Vector2(422, 126), "b": Vector2(442, 132), "n": 2},
+		# turret
+		{"kind": "louvre", "rect": Rect2i(126, 57, 40, 20)},
+		{"kind": "crate", "rect": Rect2i(169, 52, 26, 26)},
+		{"kind": "antenna", "at": Vector2i(183, 52), "h": 50},
+		{"kind": "vision", "at": Vector2i(212, 62), "w": 5},
+		{"kind": "vision", "at": Vector2i(240, 62), "w": 5},
+		{"kind": "slit", "at": Vector2i(204, 52), "w": 10},
+		{"kind": "periscope", "at": Vector2i(236, 44)},
+		{"kind": "hatch_top", "at": Vector2i(262, 37), "w": 11},
+		{"kind": "commander", "at": Vector2i(282, 37)},
+		{"kind": "searchlight", "at": Vector2i(312, 39), "lit": true},
+		{"kind": "rail", "a": Vector2i(200, 48), "b": Vector2i(262, 48)},
 	]
-	details.append_array(_turret_details({
-		"hatch": Vector2i(200, 44), "periscope": Vector2i(146, 37), "searchlight": Vector2i(170, 37),
-		"antenna": Vector2i(130, 56), "rail_a": Vector2i(132, 54), "rail_b": Vector2i(172, 54),
-		"vision": Vector2i(150, 62), "box": Rect2i(114, 54, 10, 14), "slit": Vector2i(142, 40),
-	}))
 	return {
-		"name": "B",
-		"title": "B  COMPACT TWO-DECK",
-		"size": Vector2i(360, 212),
-		"ground": 206.0,
+		"name": "R3",
+		"title": "V3 TANK (REFERENCE REBUILD)",
+		"size": Vector2i(470, 202),
+		"ground": 197.0,
+		"spill_px": 9,
+		"spill_amt": 0.45,
+		"tints": {2: Color("#a8d0ff"), 7: Color(0, 0, 0, 0), 4: Color("#ffa040")},
 		"parts": [
-			{"poly": P([124, 78, 128, 52, 138, 44, 226, 44, 240, 51, 244, 62, 242, 78]), "seams_x": [160, 176], "seams_y": [60], "tone": 0.03, "seed": 21},
-			{"poly": P([54, 78, 58, 68, 102, 68, 106, 78]), "seams_x": [80], "tone": -0.02, "seed": 22},
-			{"poly": P([26, 116, 40, 92, 58, 76, 256, 76, 318, 122, 325, 132, 322, 146, 312, 178, 64, 180, 48, 176, 30, 152, 24, 130]),
-			 "seams_x": [122, 210], "seams_y": [128, 176], "seed": 23},
-			{"poly": P([236, 51, 250, 51, 255, 56, 255, 65, 250, 70, 236, 70]), "cast": true, "tone": 0.06, "seed": 24},
-			{"poly": P([138, 44, 140, 37, 158, 37, 160, 44]), "cast": true, "tone": 0.05, "seed": 25},
-			{"poly": P([66, 176, 130, 176, 130, 183, 66, 183]), "front": true, "seams_x": [98], "split": false, "tone": 0.04, "seed": 26},
-			{"poly": P([148, 176, 214, 176, 214, 183, 148, 183]), "front": true, "seams_x": [181], "split": false, "tone": 0.04, "seed": 27},
-			{"poly": P([232, 176, 296, 176, 296, 183, 232, 183]), "front": true, "seams_x": [264], "split": false, "tone": 0.04, "seed": 28},
+			{"poly": P([120, 86, 121, 54, 126, 50, 196, 50, 200, 44, 336, 44, 348, 50, 354, 60, 354, 86]), "seams_x": [168, 198, 268], "seams_y": [62], "tone": 0.02, "seed": 51},
+			{"poly": P([70, 90, 73, 77, 118, 77, 121, 90]), "seams_x": [96], "tone": 0.0, "seed": 52},
+			{"poly": P([12, 100, 30, 94, 70, 90, 94, 86, 338, 86, 420, 117, 446, 119, 452, 127, 452, 146, 444, 158, 420, 171, 398, 179, 54, 179, 30, 170, 14, 148, 8, 120]),
+			 "seams_x": [64, 96, 188, 242, 320, 332, 392], "seams_y": [90, 126, 171], "seed": 53},
+			{"poly": P([346, 62, 360, 60, 367, 64, 367, 80, 360, 84, 346, 84]), "cast": true, "tone": 0.06, "seed": 54},
+			{"poly": P([248, 45, 252, 37, 288, 37, 292, 45]), "cast": true, "tone": 0.04, "seed": 55},
+			{"poly": P([378, 104, 400, 97, 414, 100, 417, 121, 383, 125]), "seams_x": [398], "tone": 0.05, "seed": 56, "shadow": true, "top_face": 2},
 		],
 		"bays": bays,
 		"openings": openings,
 		"details": details,
-		"gun": {"trunnion": Vector2(245.5, 60.5), "len": 76.0},
-		"sec": {"pivot": Vector2(321.5, 140.5), "len": 20.0, "feed": Vector2(306, 142)},
-		"loader": {"bay": 1, "boiler_x": 145, "rack_x": 160, "hoist_x": 190, "window": Rect2i(176, 48, 66, 29)},
+		"gun": {"trunnion": Vector2(360, 72.5), "len": 86.0, "breech_off": 8.0},
+		"sec": {"pivot": Vector2(412.5, 110.5), "len": 30.0, "feed": Vector2(372, 108), "boxed": true},
+		"loader": {"bay": 2, "boiler_x": 266, "rack_x": 280, "hoist_x": 300, "window": Rect2i(270, 50, 80, 33), "green": true},
 		"gear": {
-			"T": 5.0, "up": 4.0, "droop": 2.0, "track_front": true,
-			"idler": {"c": Vector2(40, 158), "r": 11.0},
-			"sprocket": {"c": Vector2(316, 162), "r": 13.0},
+			"T": 5.0, "up": 3.0, "droop": 2.0,
+			"idler": {"c": Vector2(22, 158), "r": 11.0},
+			"sprocket": {"c": Vector2(414, 162), "r": 17.0},
 			"rollers": [
-				{"c": Vector2(81, 184.5), "r": 2.5}, {"c": Vector2(133, 184.5), "r": 2.5}, {"c": Vector2(185, 184.5), "r": 2.5},
-				{"c": Vector2(237, 184.5), "r": 2.5}, {"c": Vector2(289, 184.5), "r": 2.5},
+				{"c": Vector2(64, 173), "r": 2.5}, {"c": Vector2(134, 173), "r": 2.5}, {"c": Vector2(204, 173), "r": 2.5},
+				{"c": Vector2(274, 173), "r": 2.5}, {"c": Vector2(344, 173), "r": 2.5},
 			],
-			"wheels": _wheels(9, 68.0, 26.0, 194.0, 7.0),
+			"wheels": _wheels(13, 50.0, 28.0, 185.0, 7.0),
 		},
-	}
-
-
-## C: a rhomboid landship: the track runs round the whole hull, the turret rides above the top run,
-## the twin guns sit in a side sponson.
-static func layout_c() -> Dictionary:
-	var gear := {
-		"T": 5.0, "up": 3.0, "droop": 2.0, "track_front": true,
-		"idler": {"c": Vector2(38, 96), "r": 10.0},
-		"sprocket": {"c": Vector2(376, 84), "r": 13.0},
-		"rollers": [{"c": Vector2(110, 69), "r": 4.0}, {"c": Vector2(200, 65), "r": 4.0}, {"c": Vector2(290, 65), "r": 4.0}],
-		"wheels": _wheels(10, 96.0, 24.0, 195.0, 6.0),
-	}
-	var rest: Array[Vector2] = []
-	for w: Dictionary in gear["wheels"]:
-		rest.append(Vector2(float(w["x"]), float(w["y"])))
-	var b := Gear.belt(Gear._circles(gear, Transform2D.IDENTITY, rest), 1.0)
-	var side := PackedVector2Array()
-	var k := 0
-	for e: Array in b["pts"]:
-		if k % 5 == 0:
-			var q: Vector2 = (e[0] as Vector2) - (e[1] as Vector2) * 1.0
-			q.y = minf(q.y, 187.0)
-			side.append(q)
-		k += 1
-	var bays := [
-		_bay("loader", "steam", Rect2i(134, 78, 82, 46), 4),
-		_bay("lights", "arcgen", Rect2i(222, 78, 84, 46), 2),
-		_bay("drive", "diesel", Rect2i(98, 129, 66, 53), 1),
-		_bay("gun", "dynamo", Rect2i(168, 129, 62, 53), 3),
-		_bay("sec", "beltfeed", Rect2i(238, 127, 76, 50), 5),
-	]
-	var openings: Array = [
-		_open_bay(bays[0], {"shelf": [136, 152]}),
-		_open_bay(bays[1], {"shelf": [224, 240], "door": "R", "valve": 268}),
-		_open_bay(bays[2], {"shelf": [100, 116]}),
-		_open_bay(bays[3], {"shelf": [170, 186], "valve": 190}),
-		_open_bay(bays[4], {"shelf": [276, 300], "gauges": 262}),
-		{"rect": Rect2i(182, 40, 68, 20), "group": 4, "inset": 3, "lamp": Vector2(216, 44), "dress": {"pipes": false}},
-		{"rect": Rect2i(197, 56, 17, 25), "group": 4, "inset": 2, "has_lamp": false, "floor": false, "beam": false, "dim": 0.15},
-	]
-	var details: Array = [
-		{"kind": "louvre", "rect": Rect2i(56, 98, 22, 13)},
-		{"kind": "hatch", "rect": Rect2i(90, 88, 14, 18)},
-		{"kind": "vision", "at": Vector2i(114, 82), "w": 5},
-		{"kind": "shovel", "at": Vector2i(58, 118)},
-		{"kind": "pick", "at": Vector2i(88, 122)},
-		{"kind": "vision", "at": Vector2i(320, 84), "w": 5},
-		{"kind": "vision", "at": Vector2i(336, 96), "w": 5},
-		{"kind": "hatch", "rect": Rect2i(316, 100, 13, 17)},
-		{"kind": "rail", "a": Vector2i(262, 72), "b": Vector2i(330, 72)},
-		{"kind": "bolt_row", "a": Vector2i(312, 124), "b": Vector2i(340, 124)},
-		{"kind": "headlight", "at": Vector2i(388, 100)},
-		{"kind": "lamp_red", "at": Vector2i(31, 110)},
-		{"kind": "lamp_green", "at": Vector2i(47, 86)},
-		{"kind": "lamp_red", "at": Vector2i(384, 108)},
-		{"kind": "cable", "a": Vector2i(100, 126), "b": Vector2i(228, 126)},
-		{"kind": "bolt_row", "a": Vector2i(234, 124), "b": Vector2i(300, 124)},
-		{"kind": "can", "at": Vector2i(64, 132)},
-		{"kind": "can", "at": Vector2i(71, 132)},
-	]
-	details.append_array(_turret_details({
-		"hatch": Vector2i(222, 36), "periscope": Vector2i(160, 29), "searchlight": Vector2i(184, 30),
-		"antenna": Vector2i(146, 50), "rail_a": Vector2i(150, 46), "rail_b": Vector2i(176, 46),
-		"vision": Vector2i(158, 52), "box": Rect2i(130, 44, 10, 13), "slit": Vector2i(154, 32),
-	}))
-	return {
-		"name": "C",
-		"title": "C  RHOMBOID LANDSHIP + SPONSON",
-		"size": Vector2i(420, 214),
-		"ground": 206.0,
-		"parts": [
-			{"poly": P([140, 64, 144, 44, 152, 36, 238, 36, 250, 42, 254, 52, 252, 64]), "seams_x": [176, 182], "seams_y": [50], "tone": 0.03, "seed": 31},
-			{"poly": side, "seams_x": [132, 166, 232, 300], "seams_y": [126, 182], "seed": 33},
-			{"poly": P([232, 121, 304, 121, 320, 133, 320, 178, 232, 182]), "seams_x": [276], "tone": 0.04, "seed": 36, "shadow": true, "top_face": 3},
-			{"poly": P([246, 40, 260, 40, 264, 44, 264, 53, 260, 57, 246, 57]), "cast": true, "tone": 0.06, "seed": 34},
-			{"poly": P([152, 36, 154, 29, 172, 29, 174, 36]), "cast": true, "tone": 0.05, "seed": 35},
-		],
-		"bays": bays,
-		"openings": openings,
-		"details": details,
-		"gun": {"trunnion": Vector2(255.5, 48.5), "len": 72.0},
-		"sec": {"pivot": Vector2(321.5, 146.5), "len": 20.0, "feed": Vector2(306, 146)},
-		"loader": {"bay": 0, "boiler_x": 155, "rack_x": 170, "hoist_x": 198, "window": Rect2i(182, 40, 68, 20)},
-		"gear": gear,
+		"_lw": lw,
 	}
 
 
@@ -346,7 +199,7 @@ static func layout_enemy() -> Dictionary:
 
 
 static func layouts() -> Array:
-	return [layout_a(), layout_b(), layout_c()]
+	return [layout_r3()]
 
 
 # --- Build and compose ---------------------------------------------------------------------------
@@ -405,6 +258,12 @@ static func interior(img: Image, B: Dictionary, st: Dictionary) -> void:
 		match str(b["kind"]):
 			"diesel":
 				Mach.diesel(img, r, t, c, slot)
+			"diesel_long":
+				Mach.diesel_long(img, r, t, c, slot)
+			"dynamo_round":
+				Mach.dynamo_round(img, r, t, c, slot)
+			"arc_v":
+				Mach.arc_v(img, r, t, c, slot)
 			"arcgen":
 				Mach.arcgen(img, r, t, c, slot)
 			"dynamo":
@@ -471,8 +330,11 @@ static func guns(img: Image, L: Dictionary, xf: Transform2D, st: Dictionary) -> 
 				[10.0, sl, 0.55, 0.55, Color("#8a877e"), Color("#5a5850"), Color("#2a2a26")],
 				[sl - 1.5, sl, 0.9, 0.9, Color("#3a3a34"), Color("#3a3a34"), Color("#1c1c18")],
 			])
+		if bool(s.get("boxed", false)):
+			Px.profile(img, piv, sa, [[-1.0, 4.0, 4.2, 3.6, Color("#3a2c1e"), Color("#22180f"), Color("#100a06")]])
+			Px.put(img, floori(piv.x + sd.x * 2.0 - sn.x * 3.0), floori(piv.y + sd.y * 2.0 - sn.y * 3.0), Color("#6e5638"))
 		# ball mount over the roots
-		for y in range(floori(piv.y) - 5, floori(piv.y) + 6):
+		for y in (range(floori(piv.y) - 5, floori(piv.y) + 6) if not bool(s.get("boxed", false)) else []):
 			for x in range(floori(piv.x) - 5, floori(piv.x) + 6):
 				var d := Vector2(x + 0.5, y + 0.5) - piv
 				var rho := d.length()
@@ -563,6 +425,8 @@ static func loader(img: Image, B: Dictionary, st: Dictionary, r: Rect2i, t: floa
 			if y < top + 3 and absf(dx) > 3.0 + float(y - top) * 1.2:
 				continue
 			var col := Mach.CU2 if dx < -3.5 else (Mach.CU1 if dx < 1.5 else Mach.CU0)
+			if bool(lo.get("green", false)):
+				col = Color("#5a7a62") if dx < -3.5 else (Color("#2e4a3a") if dx < 1.5 else Color("#1a2c22"))
 			if absf(dx) > 5.0 or (y == top and absf(dx) > 2.5):
 				col = OUT
 			elif (y - top) % 8 == 4:
@@ -649,7 +513,7 @@ static func loader(img: Image, B: Dictionary, st: Dictionary, r: Rect2i, t: floa
 			tray_y = top_y
 			var g: Dictionary = L["gun"]
 			var d: Vector2 = bt["d"]
-			var u_ch := -12.0
+			var u_ch := -12.0 - float(g.get("breech_off", 0.0))
 			var u_now := lerpf(float(bt["u"]), u_ch, _ease(k))
 			shell_at = (g["trunnion"] as Vector2) + d * u_now
 			shell_ang = bt["ang"]
@@ -657,7 +521,7 @@ static func loader(img: Image, B: Dictionary, st: Dictionary, r: Rect2i, t: floa
 		"BREECH SHUT":
 			tray_y = top_y
 			show_shell = false
-			rammer = lerpf(-12.0 - float(bt["u"]), 0.0, _ease(k))
+			rammer = lerpf(-12.0 - float((L["gun"] as Dictionary).get("breech_off", 0.0)) - float(bt["u"]), 0.0, _ease(k))
 		"TRAY DOWN":
 			tray_y = lerpf(top_y, low_y, _ease(k))
 			show_shell = false
@@ -711,7 +575,7 @@ static func breech(img: Image, B: Dictionary, st: Dictionary) -> void:
 	var recoil := 0.0
 	if fire_t >= 0.0 and fire_t < 0.6:
 		recoil = 4.0 * (1.0 - fire_t / 0.6) if fire_t > 0.05 else 4.0
-	var o: Vector2 = (g["trunnion"] as Vector2) - d * recoil
+	var o: Vector2 = (g["trunnion"] as Vector2) - d * (recoil + float(g.get("breech_off", 0.0)))
 	var lt := float(st.get("load_t", -1.0))
 	var ls := load_step(lt) if lt >= 0.0 else {"step": "IDLE", "k": 0.0}
 	var opened := 0.0
