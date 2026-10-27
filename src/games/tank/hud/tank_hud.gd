@@ -16,8 +16,10 @@ extends RefCounted
 ##  - the world tags (TankHudTags: speed, the halt-line post, SURGE TO EVADE, the gun's elevation
 ##    arc, the turn marker) over the middle of the canvas;
 ##  - banners over the sky in the middle, themed by PALETTE; help (F1): five entries.
-## Free roam has the map strip (TankHudRoamStrip) and the board (TankHudBoard) at LAYOUT's roam
-## rects; the roam builder places them instead of the mission plate and feeds their setters.
+## Free roam (brief 2.10, 3.6) has the map strip (TankHudRoamStrip) across the top in place of the
+## mission plate, the board (TankHudBoard: time left, points, kills) top right with the hull plate
+## under it without its kills, the toasts under the strip, and its own help (ROAM_HELP); each feeds
+## its setters from the state in refresh().
 ## Nothing reaches into the bottom-right 200 x 60 (CLEAR) or, apart from the world tags, the
 ## tank's band (y 150-360), on any canvas from 852 x 480 up.
 
@@ -74,23 +76,39 @@ const HELP := [
 	["TANK_HELP_HULL", Vector2(770, 128), Vector2(880, 40)],
 	["TANK_HELP_SURGE", Vector2(330, 300), Vector2(60, 506)],
 ]
+## Free roam's help: the map strip and the board instead of the mission and hull plates, and the turn.
+const ROAM_HELP := [
+	["TANK_HELP_NUMBERS", Vector2(150, 404), Vector2(90, 452)],
+	["TANK_HELP_CREW", Vector2(500, 404), Vector2(420, 452)],
+	["TANK_HELP_ROAM_MAP", Vector2(240, 120), Vector2(300, 40)],
+	["TANK_HELP_ROAM_BOARD", Vector2(700, 128), Vector2(850, 40)],
+	["TANK_HELP_TURN", Vector2(330, 300), Vector2(60, 506)],
+]
 
 
 ## The HudSpec: Tank Controls only, toasts under the mission plate, banners in the middle,
 ## shows_power (my numbers show raw W and %FTP), the palette and the help.
 static func spec(game: TankGame) -> HudSpec:
 	var hs := HudSpec.new()
-	_add(hs, TankHudMission.new(), game, "mission")
-	_add(hs, TankHudHull.new(), game, "hull")
-	_add(hs, TankHudBoss.new(), game, "boss")
+	var roam := is_roam(game)
+	if roam:
+		_add(hs, TankHudRoamStrip.new(), game, "roam_strip")
+		_add(hs, TankHudBoard.new(), game, "roam_board")
+		var hull := TankHudHull.new()
+		hull.show_kills = false
+		_add(hs, hull, game, "roam_hull")
+	else:
+		_add(hs, TankHudMission.new(), game, "mission")
+		_add(hs, TankHudHull.new(), game, "hull")
+		_add(hs, TankHudBoss.new(), game, "boss")
 	_add(hs, TankHudMine.new(), game, "mine")
 	_add(hs, TankHudCrew.new(), game, "crew")
 	# last, so a help point inside a plate moves with that plate rather than with the tags
 	_add(hs, TankHudTags.new(), game, "tags")
-	hs.toasts_at(LAYOUT["toasts"])
+	hs.toasts_at(LAYOUT["roam_toasts" if roam else "toasts"])
 	hs.banners_at(LAYOUT["banners"])
 	hs.shows_power = true
-	hs.help = help()
+	hs.help = help(roam)
 	var pal := PALETTE.duplicate()
 	pal["font"] = TankHudDraw.font()
 	hs.palette = pal
@@ -102,11 +120,16 @@ static func _add(hs: HudSpec, c: TankHudCtl, game: TankGame, key: String) -> voi
 	hs.add_control(c.setup(game, r), r)
 
 
-static func help() -> Array[Dictionary]:
+static func help(roam: bool = false) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for e: Array in HELP:
+	for e: Array in ROAM_HELP if roam else HELP:
 		out.append({"text": str(e[0]), "at": e[1], "arrow_to": e[2]})
 	return out
+
+
+## True for a free-roam session (its HUD layout).
+static func is_roam(game: TankGame) -> bool:
+	return game != null and game.content != null and game.content.ok() and game.content.is_roam()
 
 
 ## `r` (art px of the base) placed on an `art` canvas the way the HUD anchors it.

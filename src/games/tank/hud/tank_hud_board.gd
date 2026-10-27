@@ -2,8 +2,9 @@ class_name TankHudBoard
 extends TankHudCtl
 ## The free-roam board, top right (brief 2.10, 3.6; TankHud.LAYOUT "roam_board", 200 x 44 art px):
 ## the time left as a key number (OVERTIME in red past time up while a fight finishes), the crew's
-## points and kills. It draws only what its setters gave it; the roam builder feeds them. Put the
-## hull plate without its kills (TankHudHull.show_kills = false) at "roam_hull" under it.
+## points and kills. It draws only what its setters gave it; refresh() feeds them from the state
+## (feed()). The hull plate without its kills (TankHudHull.show_kills = false) sits at "roam_hull"
+## under it.
 
 ## Seconds left of the ride (<= 0: time up).
 var left_s: float = 0.0
@@ -11,6 +12,34 @@ var left_s: float = 0.0
 var overtime: bool = false
 var points: int = 0
 var kills: int = 0
+
+
+func refresh() -> void:
+	if game != null and game.state != null:
+		feed(game.state)
+
+
+## Feeds the setters from `s` (free roam only): the ride's time left (the drive-out's rest plus the
+## roam's min_s, 0 past time up; OVERTIME while a fight finishes), the points and the kills.
+func feed(s: TankState) -> void:
+	if not s.roam.active:
+		return
+	set_time(time_left_s(s), s.roam.overtime)
+	set_score(s.roam.points, TankHudModel.kills(s))
+
+
+## Seconds of the ride left before time up (the drive-out counts toward it).
+static func time_left_s(s: TankState) -> float:
+	if s.content == null or s.roam.time_up or s.in_cooldown():
+		return 0.0
+	var segs := s.content.segments()
+	if segs.size() < 2:
+		return 0.0
+	var roam_min := float((segs[1] as Dictionary).get("min_s", 0.0))
+	if s.seg.seg == TankIds.SEG_DEPOT:
+		var out_s := float((segs[0] as Dictionary).get("duration_s", 0.0))
+		return maxf(out_s - s.seg.elapsed_s, 0.0) + roam_min
+	return maxf(roam_min - s.seg.elapsed_s, 0.0)
 
 
 func set_time(p_left_s: float, p_overtime: bool) -> void:
