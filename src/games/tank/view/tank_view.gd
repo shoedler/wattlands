@@ -53,11 +53,13 @@ const BAND := Vector2(150, 360)
 ## The rooms with a machine (and a rider), rear to front.
 const MACHINE_ROOMS: Array[String] = ["diesel", "steam", "dynamo", "arc"]
 const MAX_WRECKS := 8
-## Depth lanes on the road (each LANE_LIFT art px further back, dimmer).
+## Depth lanes on the road (each LANE_LIFT art px further back, smaller, darker and hazier).
 const LANES := 4
-## How much higher each lane further back stands (art px): enough that sprites of neighbouring
-## lanes read as one behind the other at a crowded gun line (the Bastion's short field).
-const LANE_LIFT := 15.0
+## How much higher each lane further back stands (art px), on its own ground (a bank rising off the
+## road), so sprites of neighbouring lanes read as one behind the other at a crowded gun line.
+const LANE_LIFT := 12.0
+## Each lane's sprite scale (perspective: a back lane is never drawn larger than the type in front).
+const LANE_SCALE: Array[float] = [1.0, 0.84, 0.7, 0.58]
 ## A wreck burns as a hulk this long, then collapses into a heap over WRECK_COLLAPSE_S; its fire
 ## dies over WRECK_BURN_S; it is gone after WRECK_GONE_S (or once it scrolled off).
 const WRECK_HULK_S := 5.0
@@ -72,6 +74,8 @@ const ZONE_BLEND_M := 60.0
 const TURN_DUST_GAIN := 1.8
 ## The layers mirrored while the tank drives west (the planes behind and the HUD never are).
 const MIRROR_LAYERS: Array[String] = ["World", "Tank", "Light", "Front"]
+## The turret's width end on, a share of its side view (a traverse squeezes it to this).
+const TURRET_MIN_W := 0.55
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -145,6 +149,7 @@ var _shell_seen: Dictionary = {}
 var _cues: Array[Dictionary] = []
 var _smoke_acc: float = 0.0
 var _dust_acc: float = 0.0
+var _kick_acc: float = 0.0
 var _steam_acc: float = 0.0
 var _gun_shots: int = 0
 
@@ -802,17 +807,29 @@ func _track_enemies(state: TankState) -> void:
 		if not lanes.has(e.id):
 			continue
 		var lane := int(lanes[e.id])
-		var sz: Vector2 = kit.enemies[enemy_kind(e)]["size"]
 		var mid := enemy_x(e) + float(e.w) * 0.5
-		var lift := LANE_LIFT * float(lane) + (6.0 if enemy_kind(e) == "dugin" else 0.0)
-		var r := Rect2(
-			Vector2(roundf(sx(mid) - sz.x * 0.5), roundf(ROAD_ENEMY_Y - sz.y - lift)), sz
-		)
-		enemy_rects[e.id] = r
+		enemy_rects[e.id] = lane_rect(enemy_kind(e), sx(mid), lane)
 		_seen[e.id] = {"x": mid, "kind": enemy_kind(e), "lane": lane, "side": e.side}
 	for id: int in _seen.keys():
 		if state.enemy(id) == null:
 			_seen.erase(id)
+
+
+## The sprite rect (stage px) of a `kind` centred on stage x `cx` in depth lane `lane`: scaled by
+## the lane, its foot on the lane's ground line (lane_foot).
+func lane_rect(kind: String, cx: float, lane: int) -> Rect2:
+	var sz: Vector2 = kit.enemies.get(kind, {}).get("size", Vector2(120, 50))
+	sz = (sz * lane_scale(lane)).round()
+	return Rect2(Vector2(roundf(cx - sz.x * 0.5), lane_foot(lane) - sz.y), sz)
+
+
+static func lane_scale(lane: int) -> float:
+	return LANE_SCALE[clampi(lane, 0, LANE_SCALE.size() - 1)]
+
+
+## The ground line (stage y) of depth lane `lane`: the road for the front lane, higher further back.
+static func lane_foot(lane: int) -> float:
+	return roundf(ROAD_ENEMY_Y - LANE_LIFT * float(clampi(lane, 0, LANES - 1)))
 
 
 ## A wreck's age (sim seconds).
@@ -878,12 +895,23 @@ func barrel_vector() -> Vector2:
 	return Vector2(cos(a) * barrel_dir, sin(a))
 
 
-## The pivot the barrel turns on (stage px): mirrored about the turret's pivot while it faces left.
-func barrel_pivot() -> Vector2:
-	var piv := anchor("barrel_pivot")
+## The turret's horizontal scale about its pivot as drawn (brief 3.2): 1 facing forward, -1 facing
+## backwards (the whole turret mirrored: mantlet, barrel root, crate, roof crew and searchlight), and
+## in between through a traverse, never thinner than TURRET_MIN_W (a turret seen end on).
+func turret_sx() -> float:
+	var s := signf(barrel_dir) if barrel_dir != 0.0 else 1.0
+	return s * lerpf(TURRET_MIN_W, 1.0, absf(barrel_dir))
+
+
+## A point on the turret (stage px) where the turret's traverse puts it this frame.
+func turret_map(p: Vector2) -> Vector2:
 	var tp := anchor("turret_pivot")
-	var u := (barrel_dir + 1.0) * 0.5
-	return Vector2(lerpf(2.0 * tp.x - piv.x, piv.x, u), piv.y)
+	return Vector2(tp.x + (p.x - tp.x) * turret_sx(), p.y)
+
+
+## The pivot the barrel turns on (stage px): on the turret's mantlet as the turret turns.
+func barrel_pivot() -> Vector2:
+	return turret_map(anchor("barrel_pivot"))
 
 
 func muzzle() -> Vector2:
@@ -941,11 +969,11 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 	# Dust and mud from the tracks at speed (and thick while the tank turns); burning wrecks smoke.
 	var px_s := hull.speed_mps * TankConst.PX_PER_M * S
 	_dust_acc += step_dt * clampf(px_s / 8.0, 0.0, 6.0)
-	_dust_acc += step_dt * 30.0 * turn_dust(state)
+	_dust_acc += step_dt * 12.0 * turn_dust(state)
+	var rw: Dictionary = kit.spec(variant).get("anchors", {}).get("road_wheel_line", {})
+	var gy := float(rw.get("ground_contact_y", 233.0))
 	while _dust_acc >= 1.0:
 		_dust_acc -= 1.0
-		var rw: Dictionary = kit.spec(variant).get("anchors", {}).get("road_wheel_line", {})
-		var gy := float(rw.get("ground_contact_y", 233.0))
 		var x0 := float(rw.get("x_from", 80.0))
 		var at := origin + Vector2(x0 - 10.0 + fx.rng.randf_range(0, 30), gy - 1.0)
 		fx.puff(
@@ -957,18 +985,35 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 			Color(0.3, 0.25, 0.2),
 			1.0
 		)
+	# Grit kicked up where the track rolls off the drive sprocket, with the speed: small light puffs.
+	_kick_acc += step_dt * clampf(px_s / 6.0, 0.0, 10.0)
+	var sp := kit.anchor(variant, "drive_sprocket_centre")
+	while _kick_acc >= 1.0:
+		_kick_acc -= 1.0
+		var kick := origin + Vector2(sp.x + fx.rng.randf_range(-6.0, 8.0), gy - 2.0)
+		fx.puff(
+			kick,
+			Vector2(fx.rng.randf_range(-22, -8), fx.rng.randf_range(-10, -3)),
+			0.9,
+			Vector2(1.5, 6.0),
+			0.16,
+			Color(0.42, 0.36, 0.28),
+			1.0
+		)
+	# A burning wreck: a thin column of smoke rising from its hatch, widening as it climbs.
 	for wk in wrecks:
 		var fire := wreck_fire(wk)
-		if fire > 0.0 and fx.rng.randf() < step_dt * 3.0 * (0.3 + fire):
-			var wx := sx(float(wk["x"]))
-			if wx > -40.0 and wx < canvas.x + 40.0:
+		if fire > 0.0 and fx.rng.randf() < step_dt * 6.0 * (0.3 + fire):
+			var hp := TankWorldDraw.wreck_hatch(self, wk)
+			if hp.x > -40.0 and hp.x < canvas.x + 40.0:
+				var j := fx.rng.randf()
 				fx.puff(
-					Vector2(wx, ROAD_ENEMY_Y - 8.0),
-					Vector2(-4.0, -18.0),
-					5.0,
-					Vector2(5.0, 34.0),
-					0.3,
-					Color(0.14, 0.13, 0.13),
+					hp + Vector2(j * 2.0 - 1.0, -2.0),
+					Vector2(-3.0 - j * 3.0, -20.0 - j * 6.0),
+					4.0,
+					Vector2(2.0, 14.0 + j * 8.0),
+					0.26,
+					Color(0.2, 0.19, 0.18).lerp(Color(0.12, 0.11, 0.11), j),
 					1.0
 				)
 	if hull.breakdown and fx.rng.randf() < step_dt * 4.0:
@@ -1058,6 +1103,34 @@ func hud_tank_point(name: String) -> Vector2:
 	return Vector2(_hud_x(p.x), p.y) + off
 
 
+## The variant drawn now (kit.json tank.variants key).
+func hud_variant() -> String:
+	return variant
+
+
+## The barrel's direction on the canvas as drawn now: 1 pointing right, -1 left, in between while
+## the turret traverses (the mirror of the travel frame included).
+func hud_barrel_dir() -> float:
+	return -barrel_dir if mirrored else barrel_dir
+
+
+## The tank's body on the canvas as drawn now, which the world tags keep out of: the turret (as it
+## faces, with its roof crew) and the hull below it.
+func hud_tank_rects() -> Array[Rect2]:
+	var off := Vector2(0, y_off)
+	var tr := kit.turret_rect(variant)
+	var a := turret_map(origin + tr.position)
+	var b := turret_map(origin + tr.end)
+	var turret := Rect2(Vector2(minf(a.x, b.x), a.y), Vector2(absf(b.x - a.x), tr.size.y))
+	var hull := kit.hull_rect(variant)
+	hull.position += origin
+	var out: Array[Rect2] = []
+	for r: Rect2 in [turret, hull]:
+		var h := _hud_rect(r)
+		out.append(Rect2(h.position + off, h.size))
+	return out
+
+
 ## An enemy's sprite (Rect2() when it is not drawn).
 func hud_enemy_rect(id: int) -> Rect2:
 	if not enemy_rects.has(id):
@@ -1109,7 +1182,6 @@ func _draw_front() -> void:
 	var ci := layer("Front")
 	fx.draw_solid(ci)
 	fx.draw_smoke(ci)
-	TankWorldDraw.draw_turn_dust(ci, self, game.state)
 	if mirrored:
 		# The foreground plane belongs to the road, not the travel frame: undo the layer's mirror.
 		ci.draw_set_transform(Vector2(canvas.x, 0), 0.0, Vector2(-1, 1))

@@ -95,7 +95,10 @@ func refresh() -> void:
 	var laying := absf(h.elev_deg - h.elev_target_deg) > 0.5 or h.target_id != 0
 	m["aim"] = laying and absf(h.elev_deg) >= 2.0 and not h.breakdown
 	if bool(m["aim"]):
-		m["barrel"] = g.barrel()
+		var b := g.barrel()
+		m["aim"] = not bool(b["turning"])
+		m["barrel"] = b
+		m["body"] = g.tank_rects()
 		m["elev"] = h.elev_deg
 		m["elev_to"] = h.elev_target_deg
 	if turn_dir != 0:
@@ -141,18 +144,23 @@ func paint() -> void:
 		_elev_arc()
 
 
-## A small brass plate fixed under the rear track: the speed in the tall face.
+## A small riveted plate standing on the road behind the rear track, the HUD's plate style with room
+## round the text: the speed in the tall face, a drop shadow on the gravel and two iron legs.
 func _speed_tag() -> void:
 	var p: Vector2 = m["rear"]
 	var txt := tx("TANK_HUD_SPEED", [roundi(float(m["speed"]))])
-	var w := D.tall_w(txt) + 10.0
-	var x := p.x - 6.0
+	var w := D.tall_w(txt) + 16.0
+	var x := p.x - 10.0
 	if geom().mirrored():
 		# Driving west the hull's rear is on the right: the plate grows toward the tank.
-		x = p.x + 6.0 - w
-	var r := Rect2(roundf(x), roundf(p.y + 6), w, 15)
+		x = p.x + 10.0 - w
+	var r := Rect2(roundf(x), roundf(p.y + 3), w, 17)
+	D.rect(self, Rect2(r.position + Vector2(2, r.size.y), Vector2(r.size.x - 2, 1)), D.SHADOW)
+	for lx: float in [r.position.x + 5.0, r.end.x - 7.0]:
+		D.rect(self, Rect2(lx, r.end.y, 2, 4), D.RIVET_LO)
+		D.rect(self, Rect2(lx, r.end.y, 1, 4), D.FRAME_IN)
 	D.plate(self, r, D.FRAME, 0)
-	D.tall(self, r.position.x + 5, r.position.y + 3, txt, D.TEXT)
+	D.tall(self, r.position.x + 8, r.position.y + 4, txt, D.TEXT)
 
 
 ## A striped post at canvas x `x` with a lamp and a plate (`title`, `value` in the 2x face); pinned
@@ -233,27 +241,39 @@ func _warn_tag(w: Dictionary) -> void:
 		D.rect(self, Rect2(lx - 3 + k, tr.end.y + k, 7 - 2 * k, 1), edge)
 
 
-## The elevation arc beyond the muzzle (TankHudGeom's pure geometry, tested clear of the barrel).
+## The elevation arc beyond the muzzle of the barrel as drawn (TankHudGeom's pure geometry, tested
+## clear of the barrel and of the tank's body for every variant, facing and elevation).
 func _elev_arc() -> void:
 	var b: Dictionary = m["barrel"]
 	var piv: Vector2 = b["pivot"]
 	var left := bool(b["left"])
-	var radius := TankHudGeom.arc_radius(float(b["length"]))
+	var ev := float(m["elev"])
+	var e := roundi(ev)
+	var lab := ("+" if e > 0 else "") + str(e) + "°"
+	var body: Array[Rect2] = []
+	body.assign(m.get("body", []))
+	var lay := TankHudGeom.arc_layout(b, Vector2(D.tall_w(lab), D.TALL_CAP), body)
+	var radius := float(lay["radius"])
+	var keep: Array = lay["keep_out"]
 	var col := Color(D.AMBER, 0.6)
 	for p in TankHudGeom.arc_pixels(piv, radius, left):
-		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)
+		_arc_px(keep, p, col)
 	var deg := TankHudGeom.ELEV_MIN + 2.0
 	while deg <= TankHudGeom.ELEV_MAX:
 		for p in TankHudGeom.tick_pixels(piv, deg, left, radius + 1.0, radius + 2.0):
-			D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)
+			_arc_px(keep, p, col)
 		deg += 10.0
 	var to := float(m["elev_to"])
 	for p in TankHudGeom.tick_pixels(piv, to, left, radius + 3.0, radius + 6.0):
-		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), D.COOL)
-	var ev := float(m["elev"])
+		_arc_px(keep, p, D.COOL)
 	for p in TankHudGeom.tick_pixels(piv, ev, left, radius - 2.0, radius + 3.0):
-		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), D.AMBER)
-	var e := roundi(ev)
-	var lab := ("+" if e > 0 else "") + str(e) + "°"
-	var lr := TankHudGeom.label_rect(piv, radius, left, Vector2(D.tall_w(lab), D.TALL_CAP))
-	D.tall_shadow(self, lr.position.x, lr.position.y, lab, D.AMBER)
+		_arc_px(keep, p, D.AMBER)
+	var lr: Rect2 = lay["label"]
+	if lr.size != Vector2.ZERO:
+		D.tall_shadow(self, lr.position.x, lr.position.y, lab, D.AMBER)
+
+
+## One arc pixel, only outside the tank's body (TankHudGeom.arc_px_ok).
+func _arc_px(keep: Array, p: Vector2i, col: Color) -> void:
+	if TankHudGeom.arc_px_ok(p, keep):
+		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)

@@ -21,6 +21,8 @@ const TANK_R := ["..##....", ".#####..", "########", "########", ".######."]
 const TANK_L := ["....##..", "..#####.", "########", "########", ".######."]
 const LABEL_W := 58.0
 const END_W := 6.0
+## The contacts' row: this far above the map's base line (the terrain line's row, below the names).
+const MARK_LIFT := 9.0
 
 ## The map: its length (m), zones [{id, from_m, to_m, label (a string key, optional)}] and the
 ## terrain profile (heights 0..1 at even steps along the map).
@@ -106,6 +108,17 @@ func map_rect() -> Rect2:
 	return Rect2(LABEL_W + 6.0, 6, float(art_rect.size.x) - LABEL_W - 12.0, art_rect.size.y - 12)
 
 
+## The top of the contacts' markers (5 px tall, on a 7 px backing from one row above).
+func marker_y() -> float:
+	return map_rect().end.y - 6.0 - MARK_LIFT
+
+
+## The zone names' rows: from their top to the tall face's full height.
+func label_rows() -> Vector2:
+	var top := map_rect().position.y + 2.0
+	return Vector2(top, top + D.TALL_H)
+
+
 ## The strip x of `metres` along the map.
 func mx(metres: float) -> float:
 	var r := map_rect()
@@ -142,12 +155,17 @@ func paint() -> void:
 		D.rect(self, Rect2(ex, map.position.y, END_W, map.size.y), Color("#3a1a12"))
 		for y in range(int(map.position.y), int(map.end.y)):
 			D.rect(self, Rect2(ex + posmod(y, int(END_W)), y, 1, 1), D.RED)
+	# Contacts sit on the terrain line's row, under the zone names (never on them), each on a dark
+	# backing so the line does not run through it.
+	var my := marker_y()
 	for sp: Dictionary in strongpoints:
 		var sx := mx(float(sp.get("at_m", 0.0))) - 2.0
 		var alive := bool(sp.get("alive", true))
-		D.pixels(self, SQUARE, Vector2(sx, base - 16), D.OVER if alive else D.DIM)
+		D.rect(self, Rect2(sx - 1.0, my - 1.0, 7, 7), Color("#0e0c09"))
+		D.pixels(self, SQUARE, Vector2(sx, my), D.OVER if alive else D.DIM)
 	for p in patrols:
-		D.pixels(self, DIAMOND, Vector2(mx(p) - 2.0, base - 16), D.RED)
+		D.rect(self, Rect2(mx(p) - 3.0, my - 1.0, 7, 7), Color("#0e0c09"))
+		D.pixels(self, DIAMOND, Vector2(mx(p) - 2.0, my), D.RED)
 	var tx0 := mx(tank_m)
 	var bw := maxf(roundf((map.size.x - 2.0 * END_W) * view_m / length_m), 14.0)
 	var bx := tx0 - 3.0 if tank_dir > 0 else tx0 - bw + 3.0

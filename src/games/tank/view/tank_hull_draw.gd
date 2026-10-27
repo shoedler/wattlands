@@ -29,13 +29,14 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		return
 	var o := v.origin
 	_barrel(ci, v, tv)
-	ci.draw_texture(tv["hull"], o)
+	_body(ci, v, tv, o)
 	_running_gear(ci, v, o)
 	var machine_rooms := {}
 	for e: String in TankView.MACHINE_ROOMS:
 		if v.room_rects.has(e):
 			machine_rooms[e] = v.room_rects[e]
 	TankRoomMachines.draw(ci, o, machine_rooms, v.phases, v.powers, v.time)
+	var tsx := v.turret_sx()
 	var info := {
 		"cad": v.cadences,
 		"steam_phase": v.machine_phase(TankIds.ENGINE_STEAM),
@@ -45,12 +46,19 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		"dt": v.dt,
 	}
 	for a in v.crew.actors(v.kit.spec(v.variant), info):
+		if bool(a.get("roof", false)) and tsx != 1.0:
+			# The roof crew turn with the turret.
+			a["at"] = v.turret_map(o + (a["at"] as Vector2)).round() - o
+			if tsx < 0.0:
+				a["flip"] = not bool(a["flip"])
 		TankCrew.draw_actor(ci, v.kit, a, o)
 	_plaques(ci, v, state, o)
 	if state.hull.breakdown:
 		for room: Dictionary in v.kit.rooms(v.variant):
 			var r := TankKit.rect_of(room)
 			ci.draw_rect(Rect2(o + r.position, r.size), Color(0, 0, 0, 0.45))
+	# The turn's dust over the tank, under the light layer (the lamps glow through it).
+	TankWorldDraw.draw_turn_dust(ci, v, state)
 
 
 ## The barrel (drawn behind the hull art; it pivots at the turret's front), mirrored and foreshortened
@@ -68,6 +76,26 @@ static func _barrel(ci: CanvasItem, v: TankView, tv: Dictionary) -> void:
 	var off: Vector2 = tv["barrel_off"] + Vector2(-v.recoil * 4.0, 0)
 	ci.draw_texture(tex, off)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+## The variant's art: as cut from the reference while the turret faces forward; through a traverse
+## and while it faces backwards, the hull with its turret block cleared and the turret block drawn
+## scaled about the turret's pivot (TankView.turret_sx: squeezed end on, mirrored facing back), so
+## the mantlet always leads the barrel.
+static func _body(ci: CanvasItem, v: TankView, tv: Dictionary, o: Vector2) -> void:
+	var tsx := v.turret_sx()
+	if tsx == 1.0 or not tv.has("turret"):
+		ci.draw_texture(tv["hull"], o)
+		return
+	ci.draw_texture(tv["hull_open"], o)
+	var tex: Texture2D = tv["turret"]
+	var at: Vector2 = o + (tv["turret_at"] as Vector2)
+	var tp := v.anchor("turret_pivot")
+	var x0 := roundf(tp.x + (at.x - tp.x) * tsx)
+	var x1 := roundf(tp.x + (at.x + tex.get_width() - tp.x) * tsx)
+	# A negative width mirrors the texture in place (the rect keeps its left edge).
+	var dst := Rect2(Vector2(minf(x0, x1), at.y), Vector2(x1 - x0, tex.get_height()))
+	ci.draw_texture_rect(tex, dst, false)
 
 
 ## Wheels: a rim highlight turning with the distance driven, the sprocket's teeth, the lower track

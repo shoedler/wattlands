@@ -98,6 +98,16 @@ func test_the_strip_is_fed_the_map_the_tank_and_the_contacts() -> void:
 	assert_gt(behind, s.roam.map_m, "going west, the destroyer behind is east of the tank")
 
 
+func test_the_strips_contacts_sit_under_the_zone_names_on_the_line_row() -> void:
+	var g := _game(3, TankIds.DIR_RIGHT)
+	var strip: TankHudRoamStrip = _controls(g)["TankHudRoamStrip"]["ctl"]
+	strip.refresh()
+	var names := strip.label_rows()
+	var top := strip.marker_y() - 1.0
+	assert_gte(top, names.y, "the markers' backing starts below the names")
+	assert_lte(strip.marker_y() + 6.0, strip.map_rect().end.y, "and stays inside the map")
+
+
 func test_the_board_counts_down_to_time_up_and_shows_overtime() -> void:
 	var g := _game(3, TankIds.DIR_RIGHT, "roam_20")
 	var board: TankHudBoard = _controls(g)["TankHudBoard"]["ctl"]

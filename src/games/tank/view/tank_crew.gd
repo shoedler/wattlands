@@ -36,7 +36,8 @@ static func cad_fps(rpm: float, per_rev: float) -> float:
 	return maxf(c / 60.0 * per_rev, 0.4) if c > 0.0 else 0.0
 
 
-## The actors of variant `vspec` (kit.json): [{pose, at (variant px of the feet), flip, frame, mod}].
+## The actors of variant `vspec` (kit.json): [{pose, at (variant px of the feet), flip, frame, mod}];
+## the commander and the spotter also carry roof: true (they turn with the turret).
 ## `info`: {cad: {engine: rpm}, steam_phase: float, solo: bool, breakdown: bool, recoil: 0..1,
 ## dt: float}.
 func actors(vspec: Dictionary, info: Dictionary) -> Array[Dictionary]:
@@ -103,10 +104,12 @@ func actors(vspec: Dictionary, info: Dictionary) -> Array[Dictionary]:
 	var feet := TankKit.vec(vspec.get("anchors", {}).get("turret_roof_commander_feet", [0, 0]))
 	var spot := _act("spotter", feet + Vector2(-34, 0), false, 0.4, "spot", dt)
 	spot["mod"] = SPOTTER_TINT
+	spot["roof"] = true
 	out.append(spot)
 	var cmd := _act("commander", feet, false, 0.0, "cmd", dt)
 	cmd["frame"] = 0
 	cmd["mod"] = COMMANDER_TINT
+	cmd["roof"] = true
 	out.append(cmd)
 	return out
 
