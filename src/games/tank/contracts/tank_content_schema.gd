@@ -22,7 +22,7 @@ extends RefCounted
 ##                  miss_px; clamp; lanes (ENEMIES_SPEC)
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
 ##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
-##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
+##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
 ##   scoring.json   scale, weights, objectives, survival_per_breakdown, grades, xp (SCORING_SPEC)
 ##   cosmetics.json unlocks: [{id, kind, rule: finish | grade | behemoth_no_breakdown, min_grade?}]
 ##   validate_cross(files): what needs two files (each tank's start engines are its rooms in slot

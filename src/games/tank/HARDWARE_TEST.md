@@ -45,7 +45,7 @@ t (mm:ss) | segment | engine | trainer mode | target W or grade % | power W | ca
 
 | # | Step | Expected | Result |
 | --- | --- | --- | --- |
-| 1 | Start Ashfall Road as the Citadel slot 0 (diesel) and pedal from 0:00 | SIM from the first second. Grade follows the depot's terrain 0 to +2% (before difficulty), never above +3% total in the first 300 s, never below -2%. No haptic. One teaching toast per station | |
+| 1 | Start Ashfall Road as the Citadel slot 0 (diesel) and pedal from 0:00 | SIM from the first second. Grade follows the depot's terrain 0 to +2% (before difficulty), never above +3% total in the first 300 s, never below -2%. No haptic | |
 | 2 | In the depot sprint at 130% FTP while an enemy telegraphs (the drill's skirmish has light tanks) and do a surge gesture | Nothing happens on the trainer, no "Surge to evade" prompt and the shot is not evaded: evade and Overpressure are off in WARMUP phases and the first 300 s | |
 | 3 | Repeat as the dynamo (host a second run with the dynamo in slot 0, or ride the Rampart in slot 1) | ERG 50% rising smoothly to 65% over 300 s (125 to 162 W at FTP 250), slewed, never above 65%. No haptic | |
 | 4 | Repeat as the steam engine (Citadel slot 2) | SIM flat. The boiler grade rises with pressure to +3% (before difficulty) and never above it, even if you sprint; when the shell latches it drops to 0 at once | |

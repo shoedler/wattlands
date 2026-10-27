@@ -19,15 +19,6 @@
 				{"from_s": 0, "to_s": 120, "drill": "drive"},
 				{"from_s": 120, "to_s": 240, "drill": "aim", "targets": 2},
 				{"from_s": 240, "to_s": 300, "drill": "fire"}
-			],
-			"teach": [
-				{"at_s": 8, "engine": "diesel", "key": "TANK_TEACH_DIESEL"},
-				{"at_s": 8, "engine": "bulwark", "key": "TANK_TEACH_BULWARK"},
-				{"at_s": 14, "engine": "dynamo", "key": "TANK_TEACH_DYNAMO"},
-				{"at_s": 20, "engine": "steam", "key": "TANK_TEACH_STEAM"},
-				{"at_s": 26, "engine": "arc", "key": "TANK_TEACH_ARC"},
-				{"at_s": 125, "engine": "all", "key": "TANK_TEACH_AIM"},
-				{"at_s": 245, "engine": "all", "key": "TANK_TEACH_FIRE"}
 			]
 		},
 		{

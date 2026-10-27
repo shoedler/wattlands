@@ -164,8 +164,7 @@ func test_the_terrain_profiles_match_the_briefs_ranges() -> void:
 		assert_between(float(pt[1]), 0.0, 2.0, "depot terrain 0 to +2%")
 
 
-func test_the_depot_script_is_drive_then_aim_then_fire_with_one_teaching_toast_per_station(
-) -> void:
+func test_the_depot_script_is_drive_then_aim_then_fire() -> void:
 	var c := _load("ashfall_road")
 	var depot := c.segment(0)
 	assert_eq(int(depot["duration_s"]), 300)
@@ -178,12 +177,6 @@ func test_the_depot_script_is_drive_then_aim_then_fire_with_one_teaching_toast_p
 		[int(drills[1]["from_s"]), int(drills[1]["to_s"]), int(drills[1]["targets"])], [120, 240, 2]
 	)
 	assert_eq([int(drills[2]["from_s"]), int(drills[2]["to_s"])], [240, 300])
-	var engines := {}
-	for t: Dictionary in depot["teach"]:
-		engines[t["engine"]] = int(engines.get(t["engine"], 0)) + 1
-		assert_lt(float(t["at_s"]), 300.0)
-	for e in ["diesel", "dynamo", "steam", "bulwark"]:
-		assert_eq(engines.get(e, 0), 1, "one teaching toast for the %s" % e)
 	assert_false(depot.has("encounters"), "no enemies in the depot")
 
 
