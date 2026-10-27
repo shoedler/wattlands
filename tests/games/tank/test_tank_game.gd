@@ -225,7 +225,7 @@ func test_local_intents_by_engine_and_surge_never_fires() -> void:
 	var surge: Array[StringName] = [Wl.G_SURGE]
 	var confirm: Array[StringName] = [&"confirm"]
 	g.ctx.local_peer = 1
-	assert_eq(g.local_intents(none, surge), [{"k": "ram", "via": "surge"}], "diesel")
+	assert_eq(g.local_intents(none, surge), [], "diesel: Surge to evade needs no intent")
 	g.ctx.local_peer = 3
 	assert_eq(g.local_intents(none, surge), [{"k": "over", "via": "surge"}], "steam")
 	assert_eq(g.local_intents(confirm, surge), [{"k": "over", "via": "surge"}], "never latch")
@@ -246,8 +246,8 @@ func test_intents_are_owned_by_engine_and_rate_limited() -> void:
 	var got: Dictionary = g._collect_intents(f)
 	assert_eq(
 		(got[1] as Array).map(func(n: Dictionary) -> String: return n["k"]),
-		["ram"],
-		"the diesel can't fire"
+		[],
+		"the diesel can't fire, and v2 has no ram intent"
 	)
 	assert_eq((got[2] as Array).size(), 5, "5 a second per peer")
 

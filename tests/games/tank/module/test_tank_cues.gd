@@ -30,29 +30,37 @@ func _peer_of(state: TankState, engine: String) -> int:
 	return 0
 
 
-func _diesel(state: TankState) -> TankDieselState:
-	for st in state.stations:
-		if st is TankDieselState:
-			return st as TankDieselState
-	return null
+## Sets every enemy's telegraph to `seconds` (the fixture's destroyer is the one telegraphing).
+func _telegraph(state: TankState, seconds: float) -> void:
+	for e in state.enemies:
+		e.telegraph_s = seconds if e.code == TankIds.enemy_code(TankIds.ENEMY_DESTROYER) else 0.0
 
 
 # --- prompt_of ----------------------------------------------------------------------------------------
 
 
-func test_the_prompt_follows_the_station_and_the_segment() -> void:
+func test_the_evade_prompt_follows_the_telegraph_and_the_riders_own_flag() -> void:
 	var s := TankFixtures.state(3)
 	var diesel_peer := _peer_of(s, TankIds.ENGINE_DIESEL)
 	var steam_peer := _peer_of(s, TankIds.ENGINE_STEAM)
 	var dyn_peer := _peer_of(s, TankIds.ENGINE_DYNAMO)
+	_telegraph(s, 0.0)
 	assert_eq(TankCues.prompt_of(s, s.rider(diesel_peer)), TankCues.PROMPT_NONE)
-	_diesel(s).prompt = true
-	assert_eq(TankCues.prompt_of(s, s.rider(diesel_peer)), TankCues.PROMPT_RAM)
-	assert_eq(TankCues.prompt_of(s, s.rider(dyn_peer)), TankCues.PROMPT_NONE, "not the dynamo's")
-	s.seg.seg = TankIds.SEG_BOSS
-	assert_eq(TankCues.prompt_of(s, s.rider(diesel_peer)), TankCues.PROMPT_DODGE, "at the boss")
+	_telegraph(s, 2.5)
+	assert_eq(TankCues.prompt_of(s, s.rider(diesel_peer)), TankCues.PROMPT_EVADE)
+	assert_eq(TankCues.prompt_of(s, s.rider(steam_peer)), TankCues.PROMPT_EVADE, "steam is SIM too")
+	assert_eq(TankCues.prompt_of(s, s.rider(dyn_peer)), TankCues.PROMPT_NONE, "an ERG rider")
+	s.rider(diesel_peer).can_evade = false
+	assert_eq(TankCues.prompt_of(s, s.rider(diesel_peer)), TankCues.PROMPT_NONE, "its own flag")
+	_telegraph(s, 0.0)
+	s.boss.telegraph_s = 4.0
+	assert_eq(TankCues.prompt_of(s, s.rider(steam_peer)), TankCues.PROMPT_EVADE, "the Behemoth")
+	s.boss.telegraph_s = 0.0
 	(s.station(TankIds.ENGINE_STEAM) as TankSteamState).window_s = 3.0
 	assert_eq(TankCues.prompt_of(s, s.rider(steam_peer)), TankCues.PROMPT_OVER)
+	_telegraph(s, 1.0)
+	assert_eq(TankCues.prompt_of(s, s.rider(steam_peer)), TankCues.PROMPT_EVADE, "evade first")
+	_telegraph(s, 0.0)
 	(s.station(TankIds.ENGINE_STEAM) as TankSteamState).window_s = 0.0
 	assert_eq(TankCues.prompt_of(s, s.rider(steam_peer)), TankCues.PROMPT_NONE)
 
@@ -60,7 +68,7 @@ func test_the_prompt_follows_the_station_and_the_segment() -> void:
 func test_no_sprint_prompt_outside_work_phases_or_when_the_rider_cannot_act() -> void:
 	var s := TankFixtures.state(3)
 	var diesel_peer := _peer_of(s, TankIds.ENGINE_DIESEL)
-	_diesel(s).prompt = true
+	_telegraph(s, 2.5)
 	(s.station(TankIds.ENGINE_STEAM) as TankSteamState).window_s = 4.0
 	var steam_peer := _peer_of(s, TankIds.ENGINE_STEAM)
 	for kind in [Wl.WARMUP, Wl.RECOVERY, Wl.COOLDOWN, ""]:
@@ -76,13 +84,16 @@ func test_no_sprint_prompt_outside_work_phases_or_when_the_rider_cannot_act() ->
 	assert_eq(TankCues.prompt_of(null, null), TankCues.PROMPT_NONE)
 
 
-func test_the_bulwark_prompts_like_the_diesel() -> void:
+func test_the_bulwark_evades_like_the_diesel() -> void:
 	var s := TankFixtures.state(1)
+	_telegraph(s, 0.0)
 	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_NONE)
-	(s.station(TankIds.ENGINE_BULWARK) as TankGearboxState).prompt = true
-	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_RAM)
+	_telegraph(s, 2.0)
+	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_EVADE)
 	s.seg.seg = TankIds.SEG_BOSS
-	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_DODGE)
+	_telegraph(s, 0.0)
+	s.boss.telegraph_s = 5.0
+	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_EVADE)
 
 
 # --- the host raises only its own ------------------------------------------------------------------------
@@ -91,36 +102,36 @@ func test_the_bulwark_prompts_like_the_diesel() -> void:
 func test_the_host_toasts_its_own_riders_prompt_with_its_own_peer() -> void:
 	var s := TankFixtures.state(3)
 	var diesel_peer := _peer_of(s, TankIds.ENGINE_DIESEL)
-	_diesel(s).prompt = true
+	_telegraph(s, 2.5)
 	var host_ctx := _ctx(3, diesel_peer)
 	var cues := TankCues.new(host_ctx)
 	cues.on_state(s)
-	assert_eq(_keys(_toasts(host_ctx)), ["TANK_PROMPT_RAM"])
+	assert_eq(_keys(_toasts(host_ctx)), ["TANK_PROMPT_EVADE"])
 	assert_eq(_toasts(host_ctx)[0][3], diesel_peer, "drawn on the host only, never broadcast")
 	var other_ctx := _ctx(3, _peer_of(s, TankIds.ENGINE_DYNAMO))
 	TankCues.new(other_ctx).on_state(s)
-	assert_eq(_toasts(other_ctx), [], "another rider's prompt is not ours")
+	assert_eq(_toasts(other_ctx), [], "the dynamo rider (ERG) cannot evade: no prompt")
 
 
 func test_a_prompt_comes_up_once_and_again_after_it_went_away() -> void:
 	var s := TankFixtures.state(1)
 	var ctx := _ctx(1, 1, Wl.SOLO)
 	var cues := TankCues.new(ctx)
-	var box := s.station(TankIds.ENGINE_BULWARK) as TankGearboxState
+	_telegraph(s, 0.0)
 	cues.on_state(s)
 	assert_eq(_toasts(ctx), [])
-	box.prompt = true
+	_telegraph(s, 2.5)
 	for _i in 5:
 		cues.on_state(s)
-	assert_eq(_keys(_toasts(ctx)), ["TANK_PROMPT_RAM"], "once while it stays up")
-	box.prompt = false
+	assert_eq(_keys(_toasts(ctx)), ["TANK_PROMPT_EVADE"], "once while it stays up")
+	_telegraph(s, 0.0)
 	cues.on_state(s)
-	box.prompt = true
+	_telegraph(s, 2.5)
 	cues.on_state(s)
-	assert_eq(_keys(_toasts(ctx)), ["TANK_PROMPT_RAM", "TANK_PROMPT_RAM"])
-	s.seg.seg = TankIds.SEG_BOSS
+	assert_eq(_keys(_toasts(ctx)), ["TANK_PROMPT_EVADE", "TANK_PROMPT_EVADE"])
+	s.rider(1).can_evade = false
 	cues.on_state(s)
-	assert_eq(_keys(_toasts(ctx))[-1], "TANK_PROMPT_DODGE", "the prompt changed: say so")
+	assert_eq(_toasts(ctx).size(), 2, "it went away: nothing more to say")
 
 
 func test_the_steam_overpressure_prompt() -> void:
@@ -182,6 +193,27 @@ func test_a_rescue_hold_staggers_its_own_rider_and_stalls_the_dynamo() -> void:
 	)
 
 
+func test_the_arc_stalled_toast_goes_to_the_whole_crew_once() -> void:
+	var s := TankFixtures.state(4)
+	var arc_peer := _peer_of(s, TankIds.ENGINE_ARC)
+	var ctxs: Array[GameContext] = []
+	var cues: Array[TankCues] = []
+	for r in s.riders:
+		var c := _ctx(4, r.peer)
+		ctxs.append(c)
+		cues.append(TankCues.new(c))
+		cues[-1].on_state(s)
+	s.rider(arc_peer).rescue = true
+	for i in ctxs.size():
+		cues[i].on_state(s)
+		cues[i].on_state(s)
+		assert_eq(_keys(_toasts(ctxs[i])), ["TANK_TOAST_ARC_STALLED"], "slot %d" % i)
+	s.rider(arc_peer).rescue = false
+	(s.station(TankIds.ENGINE_ARC) as TankArcState).stalled = true
+	cues[0].on_state(s)
+	assert_eq(_toasts(ctxs[0]).size(), 1, "still the same stall")
+
+
 func test_regroup_is_said_once_when_the_objective_is_met_before_min_s() -> void:
 	var s := TankFixtures.state(1)
 	var ctx := _ctx(1, 1, Wl.SOLO)
@@ -202,27 +234,23 @@ func test_event_cues_for_the_local_rider() -> void:
 	var other := s.rider(_peer_of(s, TankIds.ENGINE_DYNAMO))
 	var ctx := _ctx(3, diesel_peer)
 	var cues := TankCues.new(ctx)
-	cues.on_event(s, TankEvents.ram(me.slot, true, 5))
-	cues.on_event(s, TankEvents.ram(me.slot, false, 0))
-	cues.on_event(s, TankEvents.ram(other.slot, true, 5))
-	cues.on_event(s, TankEvents.dodge(me.slot))
-	cues.on_event(s, TankEvents.dodge(other.slot))
+	cues.on_event(s, TankEvents.evade(13, 3, true, other.slot))
+	cues.on_event(s, TankEvents.evade(13, 3, false))
+	cues.on_event(s, TankEvents.latch(other.slot, TankIds.SHELL_HEAVY))
 	cues.on_event(s, TankEvents.latch(me.slot, TankIds.SHELL_HEAVY))
 	cues.on_event(s, TankEvents.breakdown())
 	cues.on_event(s, TankEvents.repaired(40.0))
 	assert_eq(
 		_keys(_toasts(ctx)),
 		[
-			"TANK_TOAST_RAM_HIT",
-			"TANK_TOAST_RAM_MISS",
-			"TANK_TOAST_DODGED",
+			"TANK_TOAST_EVADED",
 			"TANK_TOAST_LOADED_HEAVY",
 			"TANK_TOAST_BREAKDOWN",
 			"TANK_TOAST_REPAIRED"
 		],
-		"another rider's ram and dodge are not ours"
+		"an evaded shot is good news for the whole crew; another rider's latch is not ours"
 	)
-	assert_eq(_toasts(ctx)[5][2], [40])
+	assert_eq(_toasts(ctx)[3][2], [40])
 	for t: Array in _toasts(ctx):
 		assert_eq(t[3], diesel_peer)
 
@@ -310,8 +338,8 @@ func test_a_clients_snapshot_raises_only_its_own_prompt() -> void:
 	var host: TankGame = autofree(F.make_game(host_ctx))
 	host.state = TankFixtures.state(3)
 	host.state.content = host.content
-	var diesel_peer := _peer_of(host.state, TankIds.ENGINE_DIESEL)
-	_diesel(host.state).prompt = true
+	var dyn_peer := _peer_of(host.state, TankIds.ENGINE_DYNAMO)
+	_telegraph(host.state, 2.5)
 	var wire: Variant = JSON.parse_string(JSON.stringify(host.snapshot()))
 	wire = Protocol.apply_int_fields(wire, host.int_fields()["snapshot"])
 	var made := {}
@@ -322,15 +350,16 @@ func test_a_clients_snapshot_raises_only_its_own_prompt() -> void:
 		client.apply_snapshot(wire)
 		made[peer] = _keys(_toasts(ctx))
 	for peer in [1, 2, 3]:
-		assert_eq(made[peer], ["TANK_PROMPT_RAM"] if peer == diesel_peer else [], "peer %d" % peer)
+		var want := [] if peer == dyn_peer else ["TANK_PROMPT_EVADE"]
+		assert_eq(made[peer], want, "peer %d: its own rider's flag from the snapshot" % peer)
 
 
 func test_a_clients_events_raise_its_own_cues() -> void:
 	var ctx := F.make_ctx(1, 0, "ashfall_road", Wl.CLIENT, 1)
 	var client: TankGame = autofree(F.make_game(ctx))
-	client.apply_event(JSON.parse_string(JSON.stringify(TankEvents.ram(0, true, 4))))
+	client.apply_event(JSON.parse_string(JSON.stringify(TankEvents.evade(4, 3, true, 0))))
 	client.apply_event(JSON.parse_string(JSON.stringify(TankEvents.breakdown())))
-	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_RAM_HIT", "TANK_TOAST_BREAKDOWN"])
+	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_EVADED", "TANK_TOAST_BREAKDOWN"])
 
 
 func test_a_full_session_never_broadcasts_a_toast_or_banner() -> void:

@@ -317,8 +317,7 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.shot(-1, TankIds.SHELL_ENEMY, 42, 12, 2),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 11.6, TankIds.SHELL_ENEMY, 3.2, 3400.4),
 		TankEvents.kill(12, 1, TankEvents.BY_SHELL, 1),
-		TankEvents.ram(2, true, 13),
-		TankEvents.dodge(2),
+		TankEvents.kill(13, 2, TankEvents.BY_BOW, 3),
 		TankEvents.breakdown(),
 		TankEvents.repaired(40.0),
 		TankEvents.overrun(TankIds.SEG_GUN_LINE, 2),
@@ -326,6 +325,7 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.latch(2, TankIds.SHELL_OVER),
 		TankEvents.lever(0, TankIds.LEVER_TURRET),
 		TankEvents.evade(-4, TankIds.BOSS_CODE, false),
+		TankEvents.evade(13, 3, true, 2),
 		TankEvents.turn(-1, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
 	]

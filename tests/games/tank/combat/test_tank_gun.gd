@@ -1,6 +1,6 @@
 extends GutTest
-## The main turret and the Citadel's secondaries (brief 2.4 Gun): auto-aim priority and lead, the
-## 0.5 degree rule, manual controls, dispersion, the breech cycle, the shell cap, secondaries.
+## The main turret (brief 2.4 Gun): auto-aim priority and lead, the 0.5 degree rule, manual
+## controls, dispersion, the breech cycle, the shell cap (the bow guns: test_tank_bow.gd).
 
 const ADVANCE := 1
 const CHECKPOINT := 3
@@ -220,15 +220,15 @@ func test_no_second_shot_inside_the_breech_cycle() -> void:
 	assert_eq(_gun_shots(rig).size(), 2)
 
 
-func test_the_elevation_limits_are_minus_5_and_plus_30() -> void:
+func test_the_elevation_limits_are_minus_12_and_plus_30() -> void:
 	var rig := _rig(2)
 	rig.power_w[_g(rig)] = 50.0
 	rig.hull().elev_target_deg = 80.0
 	rig.run(6.0)
 	assert_eq(rig.hull().elev_deg, 30.0)
 	rig.hull().elev_target_deg = -80.0
-	rig.run(8.0)
-	assert_eq(rig.hull().elev_deg, -5.0)
+	rig.run(12.0)
+	assert_eq(rig.hull().elev_deg, -12.0)
 
 
 func test_aim_nudges_move_one_degree_and_pause_auto_aim_for_5_seconds() -> void:
@@ -364,78 +364,6 @@ func test_target_ids_are_the_entity_id_or_the_negative_boss_part() -> void:
 	rig.run(0.2)
 	assert_eq(rig.hull().target_id, m.id)
 	assert_gt(m.id, 0)
-
-
-# --- Secondaries ---------------------------------------------------------------------------------
-
-
-func _secondary_shots(rig: TankRulesRig) -> Array:
-	return rig.of_type("shot").filter(
-		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_BOW
-	)
-
-
-func test_the_citadel_secondaries_do_5_damage_every_3_seconds_to_the_nearest_enemy_within_240_px(
-) -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var fore := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	fore.hp = 500.0
-	fore.hp_max = 500.0
-	fore.gun_s = 999.0
-	rig.run(0.1)
-	assert_eq(_secondary_shots(rig).size(), 1, "the fore secondary fires at once")
-	assert_almost_eq(fore.hp, 495.0, 0.001, "5 damage on a light tank")
-	rig.run(9.0)
-	assert_between(_secondary_shots(rig).size(), 3, 4, "one every 3 s")
-	var far := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 224.0)
-	far.hp = 500.0
-	far.hp_max = 500.0
-	far.gun_s = 999.0
-	rig.state.enemies.erase(fore)
-	rig.run(3.2)
-	assert_almost_eq(far.hp, 497.5, 2.6, "mediums take half from secondaries")
-
-
-func test_the_aft_secondary_covers_enemies_behind_and_each_gun_keeps_its_own_timer() -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var rear := rig.spawn(TankIds.ENEMY_LIGHT, -1, 100.0)
-	rear.hp = 500.0
-	rear.hp_max = 500.0
-	rear.gun_s = 999.0
-	var fore := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	fore.hp = 500.0
-	fore.hp_max = 500.0
-	fore.gun_s = 999.0
-	rig.run(0.2)
-	assert_lt(rear.hp, 500.0, "aft fired at the enemy behind")
-	assert_lt(fore.hp, 500.0, "fore fired at the enemy ahead")
-	assert_eq(_secondary_shots(rig).size(), 2)
-
-
-func test_secondaries_ignore_enemies_beyond_240_px_and_obstacles() -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 224.0, true)
-	med.gun_s = 999.0
-	med.x_px = rig.hull().x_px + rig.hull().hull_w + 330.0
-	TankEncounters.add_obstacle(
-		rig.state, TankIds.OBST_WIRE, rig.hull().x_px + rig.hull().hull_w + 40.0
-	)
-	rig.run(1.0)
-	assert_eq(_secondary_shots(rig).size(), 0)
-
-
-func test_only_the_citadel_has_secondaries() -> void:
-	for crew in [1, 2]:
-		var rig := _rig(crew)
-		var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-		e.hp = 500.0
-		e.gun_s = 999.0
-		rig.no_fire = true
-		rig.run(4.0)
-		assert_eq(_secondary_shots(rig).size(), 0, "crew %d" % crew)
 
 
 func test_an_autopilot_traverse_does_not_pause_the_auto_aim() -> void:

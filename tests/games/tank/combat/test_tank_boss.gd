@@ -1,6 +1,6 @@
 extends GutTest
 ## The Behemoth (brief 2.4 Enemies and Foundry Gate): creep, push-back, the two phases, the main
-## gun with its telegraph and the dodge, the secondary, death and withdrawal.
+## gun with its telegraph and "Surge to evade", the secondary, death and withdrawal.
 
 const BOSS := 10
 
@@ -257,25 +257,29 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 	b.secondary_s = 1000.0
 	rig.run(1.2)
 	assert_gt(b.telegraph_s, 0.0, "telegraph")
-	assert_true(rig.diesel().prompt, "Surge to dodge")
+	assert_true(rig.rider(d).can_evade, "the driver rides SIM in the boss: Surge to evade")
 	rig.power_w[d] = 1.5 * rig.slots[d - 1].ftp
 	rig.run(3.0)
-	assert_false(b.dodged, "the trailing 3 s average needs about 1.5 s to reach 1.2 x FTP")
+	assert_false(b.evaded, "the trailing 3 s average needs about 1.5 s to reach 1.2 x FTP")
 	rig.run(2.0)
 	assert_true(
-		b.dodged, "held 3 s inside the telegraph: about 1.75 s for the rule to hold, then 3 s"
+		b.evaded, "held 3 s inside the telegraph: about 1.75 s for the rule to hold, then 3 s"
 	)
-	assert_eq(rig.of_type("dodge").size(), 1)
-	assert_eq(rig.of_type("dodge")[0]["s"], rig.slots[d - 1].slot_index)
-	assert_eq(rig.rider(d).dodges, 1)
-	assert_gte(rig.diesel().dodge_s, 3.0)
+	assert_eq(rig.of_type("evade").size(), 0, "the event comes when the shot resolves")
 	var hp := rig.hull().hp
 	rig.run(3.0)
 	assert_eq(b.telegraph_s, 0.0, "the gun fired")
+	var ev := rig.of_type("evade")
+	assert_eq(ev.size(), 1)
+	assert_eq(
+		[ev[0]["id"], ev[0]["e"], ev[0]["ok"], ev[0]["s"]],
+		[TankEvade.boss_shooter(), TankIds.BOSS_CODE, 1, rig.slots[d - 1].slot_index]
+	)
+	assert_eq([rig.rider(d).evades_ok, rig.rider(d).evades_tried], [1, 1])
+	assert_eq([rig.state.score.evades_ok, rig.state.score.evades_tried], [1, 1])
 	rig.run(4.0)
 	assert_eq(rig.hull().hp, hp, "and missed")
-	assert_false(b.dodged, "armed again for the next shot")
-	assert_eq(rig.diesel().dodge_s, 0.0)
+	assert_false(b.evaded, "armed again for the next shot")
 
 
 func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
@@ -303,7 +307,7 @@ func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 	)
 
 
-func test_the_dodge_does_nothing_in_the_first_300_seconds() -> void:
+func test_the_evade_does_nothing_in_the_first_300_seconds() -> void:
 	var rig := _rig(2)
 	rig.plan_t = 200.0
 	var b := rig.state.boss
@@ -311,9 +315,13 @@ func test_the_dodge_does_nothing_in_the_first_300_seconds() -> void:
 	b.main_s = 7.0
 	rig.run(1.2)
 	_sprint(rig, d, 5.0)
-	assert_false(b.dodged)
-	assert_false(rig.diesel().prompt)
-	assert_eq(rig.of_type("dodge").size(), 0)
+	assert_false(b.evaded)
+	assert_false(rig.rider(d).can_evade)
+	rig.run(1.0)
+	var ev := rig.of_type("evade")
+	assert_eq(ev.size(), 1, "the telegraphed shot resolves")
+	assert_eq(ev[0]["ok"], 0, "not evaded")
+	assert_eq(rig.state.score.evades_tried, 0, "nobody could evade: not an evade tried")
 
 
 func test_the_secondary_fires_3_damage_every_5_seconds() -> void:
@@ -364,23 +372,3 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)
-
-
-func test_a_ram_at_the_boss_is_a_lunge_with_no_target_and_no_penalty() -> void:
-	var rig := _rig(2, true)
-	var d := _driver(rig)
-	rig.hull().speed_mps = 0.0
-	var hp := rig.hull().hp
-	rig.power_w[d] = 1.5 * rig.slots[d - 1].ftp
-	rig.run(4.0)
-	rig.send(d, {"k": "ram", "via": "surge"})
-	rig.run(0.2)
-	assert_gt(rig.diesel().ram_s, 9.0, "the window opens: the 24 px lunge")
-	rig.run(10.0)
-	assert_eq(rig.diesel().ram_s, 0.0)
-	assert_eq(rig.of_type("ram").size(), 0, "nothing to hit, nothing failed")
-	assert_gte(
-		rig.hull().hp, hp - 3.0, "no 10 HP loss (a Behemoth secondary may have scratched it)"
-	)
-	assert_eq(rig.hull().stall_s, 0.0)
-	assert_almost_eq(rig.diesel().ram_cd_s, 30.0, 1.0)
