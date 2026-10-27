@@ -7,8 +7,10 @@ extends RefCounted
 ##   diesel: six rockers nodding in the firing order on the block top and its flywheel (2:1);
 ##   steam:  the high-mounted engine (cylinder, crosshead, flywheel) and the shell hoist (1 shell a
 ##           revolution), the firebox lit by power;
-##   dynamo: the armature turning 3:1 and three capacitor jars charging once a revolution;
-##   arc:    the Jacob's ladder horns (two climbs a revolution) and the magneto flywheel.
+##   dynamo: one big spoked armature turning 3:1 in its copper ring, sparks at its brushes by watts,
+##           two capacitor jars charging once a revolution;
+##   arc:    a tall V of copper horns (the Jacob's ladder: two climbs a revolution, the white-hot arc
+##           reaching higher with the watts) and a small magneto wheel.
 ## Over band a machine shakes by a pixel; under band its lights die down. draw() paints the metal
 ## (normal blend), draw_light() the glow (the additive layer). Rooms are rects in variant px,
 ## `origin` is the variant's top-left on the canvas.
@@ -22,6 +24,14 @@ const COPPER := Color(0.74, 0.4, 0.19)
 const STEEL := Color(0.62, 0.6, 0.55)
 const RED := Color(0.62, 0.15, 0.09)
 const SHADES: Array[Color] = [DK, HI, GLINT, Color(0.615, 0.465, 0.225)]
+## The dynamo's armature (its centre in the room, its rim's radius) and the jars' left edge.
+const DYNAMO_AT := Vector2(30, 15)
+const DYNAMO_R := 9.0
+const JAR_X := 41.0
+const JARS := 2
+## The arc's horns: their foot's x in the room and how far each tip leans out.
+const ARC_FOOT := 15.0
+const ARC_SPREAD := 11.0
 ## Crank angle (degrees, 720 a cycle) at which each of the six cylinders fires.
 const DIESEL_FIRING: Array[float] = [0.0, 480.0, 240.0, 600.0, 120.0, 360.0]
 
@@ -143,44 +153,48 @@ static func firebox_heat(pw: float) -> float:
 
 
 static func _dynamo(ci: CanvasItem, o: Vector2, ry: Rect2, ph: float, pw: float, t: float) -> void:
+	# One big readable silhouette: the armature, a spoked wheel DYNAMO_R px across its rim, turning 3:1
+	# on the rider's cadence inside its copper field ring, a brush either side; the jars beside it.
 	var arm := ph * float(TankMech.RATIO["dynamo"]) * TAU
 	var base := o + ry.position.floor() + shake(pw, t, 3.0)
-	var dc := base + Vector2(25, 20)
-	ci.draw_circle(dc + Vector2.ONE, 6.5, Color(0.12, 0.12, 0.08))
-	for k2 in 24:
-		var a := k2 * TAU / 24.0
-		TankDraw.px(
-			ci, dc + Vector2.ONE * 0.5 + Vector2(cos(a), sin(a)) * 6.0, Color(0.3, 0.31, 0.2)
-		)
-	for k3 in 9:
-		var d2 := Vector2(cos(arm + k3 * TAU / 9.0), sin(arm + k3 * TAU / 9.0))
-		TankDraw.line_px(
-			ci,
-			dc + Vector2.ONE * 0.5 + d2 * 1.5,
-			dc + Vector2.ONE * 0.5 + d2 * 4.5,
-			Color(0.62, 0.31, 0.14)
-		)
-	ci.draw_rect(Rect2(dc, Vector2(2, 2)), BRASS)
-	for i2 in 3:
-		var jx := base.x + 33.0 + i2 * 4.0
+	var dc := base + DYNAMO_AT
+	ci.draw_circle(dc + Vector2(0.5, 1.5), DYNAMO_R + 2.0, Color(0.05, 0.05, 0.04))
+	ci.draw_circle(dc + Vector2(0.5, 0.5), DYNAMO_R + 1.5, Color(0.36, 0.17, 0.08))
+	var shades: Array[Color] = [Color(0.12, 0.1, 0.07), COPPER, Color(0.95, 0.7, 0.42), BRASS]
+	TankDraw.wheel(ci, dc, DYNAMO_R, 6, arm, Color(0.5, 0.26, 0.12), shades)
+	for s in [-1.0, 1.0]:
+		var bp := dc + Vector2(s * (DYNAMO_R + 2.0), 0)
+		ci.draw_rect(Rect2((bp - Vector2(1, 2)).floor(), Vector2(2, 4)), Color(0.1, 0.09, 0.08))
+		TankDraw.px(ci, bp - Vector2(0, 2), STEEL)
+	ci.draw_rect(Rect2(dc + Vector2(-3, DYNAMO_R + 2.0), Vector2(7, 3)), DK)
+	for i2 in JARS:
+		var jx := base.x + JAR_X + i2 * 3.0
 		var jy := base.y + 21.0
-		ci.draw_rect(Rect2(Vector2(jx, jy), Vector2(3, 8)), Color(0.07, 0.08, 0.09))
+		ci.draw_rect(Rect2(Vector2(jx, jy), Vector2(2, 8)), Color(0.07, 0.08, 0.09))
 		ci.draw_rect(Rect2(Vector2(jx, jy), Vector2(1, 8)), Color(0.42, 0.48, 0.5))
 		TankDraw.px(ci, Vector2(jx + 1.0, jy - 1.0), BRASS)
 
 
 static func _arc(ci: CanvasItem, o: Vector2, ra: Rect2, ph: float, pw: float, t: float) -> void:
+	# One big readable silhouette: a tall V of copper horns (the Jacob's ladder) on an insulator, the
+	# arc climbing it (draw_light); a small magneto wheel turning at its foot.
 	var base := o + ra.position.floor() + shake(pw, t, 4.0)
 	var fy := ra.size.y
-	ci.draw_rect(Rect2(base + Vector2(17, fy - 4.0), Vector2(5, 2)), Color(0.6, 0.58, 0.52))
-	TankDraw.line_px(ci, base + Vector2(19, fy - 5.0), base + Vector2(14, 4), COPPER)
-	TankDraw.line_px(ci, base + Vector2(20, fy - 5.0), base + Vector2(25, 4), COPPER)
-	var mc := base + Vector2(31, 9)
-	TankDraw.wheel(ci, mc, 5.0, 4, ph * TAU, MID, SHADES)
+	ci.draw_rect(
+		Rect2(base + Vector2(ARC_FOOT - 4.0, fy - 4.0), Vector2(10, 3)), Color(0.6, 0.58, 0.52)
+	)
+	ci.draw_rect(Rect2(base + Vector2(ARC_FOOT - 4.0, fy - 2.0), Vector2(10, 1)), DK)
+	for s in [-1.0, 1.0]:
+		var foot := base + Vector2(ARC_FOOT + (0.0 if s < 0.0 else 1.0), fy - 5.0)
+		var tip := base + Vector2(ARC_FOOT + 0.5 + s * ARC_SPREAD, 3.0)
+		TankDraw.line_px(ci, foot, tip, COPPER)
+		TankDraw.line_px(ci, foot + Vector2(s, 0), tip + Vector2(s, 0), Color(0.42, 0.2, 0.09))
+		TankDraw.px(ci, tip, Color(0.95, 0.7, 0.42))
+	var mc := base + Vector2(5.0, fy - 7.0)
+	TankDraw.wheel(ci, mc, 4.0, 4, ph * TAU, MID, SHADES)
 	for k4 in 4:
 		var a3 := ph * TAU + (k4 + 0.5) * TAU / 4.0
-		TankDraw.px(ci, mc + Vector2(cos(a3), sin(a3)) * 5.0, RED)
-	ci.draw_rect(Rect2(mc + Vector2(-1, -9), Vector2(3, 2)), COPPER)
+		TankDraw.px(ci, mc + Vector2(cos(a3), sin(a3)) * 4.0, RED)
 
 
 ## The machines' light: firing flashes and hot heads (diesel), the firebox (steam), sparks and the
@@ -235,27 +249,29 @@ static func draw_light(
 static func _dynamo_light(
 	ci: CanvasItem, o: Vector2, ry: Rect2, ph: float, pw: float, t: float
 ) -> void:
-	var dc := o + ry.position.floor() + Vector2(26, 21)
-	for k2 in int(roundf(pw * 3.0)):
+	var dc := o + ry.position.floor() + DYNAMO_AT + Vector2(0.5, 0.5)
+	# Sparks at the brushes, more with the watts.
+	for k2 in int(roundf(pw * 4.0)):
 		var seed_v := floorf(t * 24.0) + k2 * 13.0
 		var s := -1.0 if k2 % 2 == 0 else 1.0
 		if TankDraw.hash01(seed_v) > 0.3:
-			var sp := dc + Vector2(s * 2.0, floorf(TankDraw.hash01(seed_v + 1.0) * 3.0) - 1.0)
+			var dy := floorf(TankDraw.hash01(seed_v + 1.0) * 3.0) - 1.0
+			var sp := dc + Vector2(s * (DYNAMO_R + 2.0), dy)
 			ci.draw_rect(Rect2(sp.floor(), Vector2.ONE), Color(0.85, 0.92, 1.0, 1.0))
 	if pw > 0.1:
 		TankDraw.glow_at(
-			ci, dc, 5.0 + 3.0 * pw, Color(0.45, 0.55, 1.0, 0.25 + 0.25 * minf(pw, 1.4))
+			ci, dc, DYNAMO_R + 4.0 * pw, Color(0.45, 0.55, 1.0, 0.2 + 0.2 * minf(pw, 1.4))
 		)
 	var cyc2 := fposmod(ph, 1.0)
 	var fill := jar_fill(pw, cyc2)
-	for i2 in 3:
-		var lvl := clampf(fill * 3.0 - float(i2), 0.0, 1.0)
+	for i2 in JARS:
+		var lvl := clampf(fill * float(JARS) - float(i2), 0.0, 1.0)
 		if lvl <= 0.0:
 			continue
-		var jx := o.x + floorf(ry.position.x) + 34.0 + i2 * 4.0
+		var jx := o.x + floorf(ry.position.x) + JAR_X + i2 * 3.0
 		var jy := o.y + floorf(ry.position.y) + 29.0
 		var hgt := roundf(lvl * 7.0)
-		ci.draw_rect(Rect2(Vector2(jx, jy - hgt), Vector2(2, hgt)), Color(0.5, 0.68, 1.0, 0.85))
+		ci.draw_rect(Rect2(Vector2(jx, jy - hgt), Vector2(1, hgt)), Color(0.5, 0.68, 1.0, 0.85))
 		TankDraw.glow_at(ci, Vector2(jx + 1.0, jy - 3.0), 5.0, Color(0.4, 0.55, 1.0, 0.3 * lvl))
 		# Over band the jars overflow: a spark jumps from the top.
 		if pw > 1.18 and lvl >= 1.0 and TankDraw.hash01(floorf(t * 20.0) + i2) > 0.6:
@@ -278,24 +294,27 @@ static func _arc_light(
 	var climbs := float(TankMech.PARTS["arc"]["ladder_arc_climbs"])
 	var climb := fposmod(ph * climbs, 1.0)
 	if strength > 0.0 and climb <= reach:
-		var ya := lerpf(fy - 6.0, 5.0, climb)
-		var f := (fy - 5.0 - ya) / (fy - 10.0)
-		var xa := lerpf(19.0, 14.0, f) + 1.0
-		var xb := lerpf(20.0, 25.0, f) - 1.0
+		var ya := lerpf(fy - 6.0, 4.0, climb)
+		var f := (fy - 5.0 - ya) / (fy - 8.0)
+		var xa := ARC_FOOT - ARC_SPREAD * f + 1.0
+		var xb := ARC_FOOT + 1.0 + ARC_SPREAD * f - 1.0
 		var seed2 := floorf(t * 30.0)
 		var x2 := xa
 		while x2 <= xb:
 			var j := roundf((TankDraw.hash01(seed2 + x2) - 0.5) * 2.0)
 			var bow := sin((x2 - xa) / maxf(xb - xa, 1.0) * PI) * (1.0 + 2.0 * climb)
 			var ap := base + Vector2(x2, ya - bow + j)
-			ci.draw_rect(Rect2(ap.floor(), Vector2.ONE), Color(0.88, 0.94, 1.0, 1.0))
+			ci.draw_rect(Rect2(ap.floor(), Vector2(1, 2)), Color(0.7, 0.8, 1.0, 0.9))
+			ci.draw_rect(Rect2(ap.floor(), Vector2.ONE), Color(1.0, 1.0, 1.0, 1.0))
 			x2 += 1.0
 		var mid := base + Vector2((xa + xb) * 0.5, ya - 1.0)
-		TankDraw.glow_at(ci, mid, 10.0 + 6.0 * strength, Color(0.5, 0.6, 1.0, 0.45 * strength))
+		TankDraw.glow_at(ci, mid, 12.0 + 8.0 * strength, Color(0.5, 0.6, 1.0, 0.5 * strength))
+		TankDraw.glow_at(ci, mid, 4.0, Color(0.9, 0.95, 1.0, 0.8 * strength))
 	var a_me := fposmod(ph * TAU + 0.5 * TAU / 4.0 + PI * 0.5, TAU / 4.0)
 	var pulse := maxf(0.0, 1.0 - minf(a_me, TAU / 4.0 - a_me) / 0.4)
 	if pulse > 0.0 and pw > 0.1:
-		TankDraw.glow_at(ci, base + Vector2(31.5, 1.5), 4.0, Color(0.6, 0.7, 1.0, 0.6 * pulse))
+		var mc := base + Vector2(5.0, fy - 7.0)
+		TankDraw.glow_at(ci, mc, 4.0, Color(0.6, 0.7, 1.0, 0.6 * pulse))
 
 
 ## Where the arc climbs this frame (variant px inside the room) or Vector2(-1, -1) when it is out:
@@ -306,4 +325,4 @@ static func arc_at(ra: Rect2, ph: float, pw: float) -> Vector2:
 	var climb := fposmod(ph * float(TankMech.PARTS["arc"]["ladder_arc_climbs"]), 1.0)
 	if strength <= 0.0 or climb > reach:
 		return Vector2(-1, -1)
-	return Vector2(19.5, lerpf(ra.size.y - 6.0, 5.0, climb))
+	return Vector2(ARC_FOOT + 0.5, lerpf(ra.size.y - 6.0, 4.0, climb))

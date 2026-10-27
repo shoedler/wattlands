@@ -37,6 +37,16 @@ const ANCHORS: Array[String] = [
 	"drive_sprocket_centre",
 ]
 
+## The turret block behind its pivot at turret_scale 1 (the rear box and the crate; variant px).
+const TURRET_REAR := 89.0
+## The roof crew's height over their feet (the commander, his searchlight; variant px).
+const CREW_H := 22.0
+## The hull: its rear plate's x and how far the rear deck rises above the turret's pivot row.
+const HULL_REAR_X := 18.0
+const HULL_DECK_RISE := 15.0
+## The turret ring's rows above the deck that stay on the hull when the turret turns.
+const TURRET_RING := 5.0
+
 static var _shared: TankKit = null
 
 var manifest: Dictionary = {}
@@ -104,6 +114,8 @@ func load_all() -> void:
 			"muzzle": vec(e.get("muzzle", [0, 0])),
 			"meta": e,
 		}
+		if kind != "behemoth":
+			_shades(enemies[kind], tex2)
 
 
 func _load_zone_planes() -> void:
@@ -174,6 +186,7 @@ func _load_variants() -> void:
 				for x in range(int(piv.x) + 2, mini(int(muz.x) + 5, img.get_width())):
 					img.set_pixel(x, y, Color(0, 0, 0, 0))
 			row["hull"] = ImageTexture.create_from_image(img)
+			_cut_turret(row, img, v)
 			var sc := float(v.get("turret_scale", 1.0))
 			var b := bar_img.get_region(bused)
 			var off := Vector2(bused.position) - piv3
@@ -187,6 +200,56 @@ func _load_variants() -> void:
 			row["barrel"] = ImageTexture.create_from_image(b)
 			row["barrel_off"] = off
 		variants[vn] = row
+
+
+## An enemy sprite's shading masks (white, the sprite's alpha): "sil" its silhouette (the depth
+## lanes' haze, a wreck's char) and "rim" its edges facing the tank, the top and the gun end (the
+## sprites face left), which the hero's beams light.
+static func _shades(row: Dictionary, tex: Texture2D) -> void:
+	var img := tex.get_image()
+	if img == null:
+		return
+	if img.is_compressed():
+		img.decompress()
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	var sil := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var rim := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var a := img.get_pixel(x, y).a
+			if a < 0.5:
+				continue
+			sil.set_pixel(x, y, Color(1, 1, 1, 1))
+			var k := 0.0
+			for d in 2:
+				if y - 1 - d < 0 or img.get_pixel(x, y - 1 - d).a < 0.5:
+					k = maxf(k, 1.0 - 0.5 * d)
+				if x - 1 - d < 0 or img.get_pixel(x - 1 - d, y).a < 0.5:
+					k = maxf(k, 0.8 - 0.4 * d)
+			if k > 0.0:
+				rim.set_pixel(x, y, Color(1, 1, 1, k))
+	row["sil"] = ImageTexture.create_from_image(sil)
+	row["rim"] = ImageTexture.create_from_image(rim)
+
+
+## The turret block cut out of a variant's hull (the barrel already erased): "turret" (its pixels
+## above the deck band, sky to the top so the antenna goes with it), "turret_at" (its top-left,
+## variant px) and "hull_open" (the hull with that block cleared). The view draws these instead of
+## the hull while the turret turns or faces backwards (mirrored about the turret's pivot); the
+## turret ring's bottom TURRET_RING rows stay on the hull.
+func _cut_turret(row: Dictionary, img: Image, v: Dictionary) -> void:
+	var tr := turret_rect_of(v)
+	var cut := Rect2i(int(tr.position.x), 0, int(tr.size.x), int(tr.end.y - TURRET_RING))
+	cut = cut.intersection(Rect2i(Vector2i.ZERO, img.get_size()))
+	if cut.size.x <= 0 or cut.size.y <= 0:
+		return
+	row["turret"] = ImageTexture.create_from_image(img.get_region(cut))
+	row["turret_at"] = Vector2(cut.position)
+	var open := img.duplicate() as Image
+	open.fill_rect(cut, Color(0, 0, 0, 0))
+	row["hull_open"] = ImageTexture.create_from_image(open)
 
 
 ## The variant for a hull's tank id (falls back on the crew size).
@@ -217,6 +280,38 @@ func has_anchor(vn: String, name: String) -> bool:
 
 func rooms(vn: String) -> Array:
 	return spec(vn).get("rooms", [])
+
+
+## The turret as cut from the reference (variant px): from its rear box (TURRET_REAR x the turret's
+## scale behind the turret's pivot) to the mantlet, from the roof crew's heads down to the deck (the
+## turret's pivot row). The view mirrors this block about the pivot while the gun faces backwards.
+func turret_rect(vn: String) -> Rect2:
+	return turret_rect_of(spec(vn))
+
+
+static func turret_rect_of(v: Dictionary) -> Rect2:
+	var a: Dictionary = v.get("anchors", {})
+	var sc := float(v.get("turret_scale", 1.0))
+	var tp := vec(a.get("turret_pivot", [0, 0]))
+	var x0 := floorf(tp.x - TURRET_REAR * sc)
+	var x1 := ceilf(vec(a.get("barrel_pivot", [0, 0])).x + 3.0)
+	var top := floorf(vec(a.get("turret_roof_commander_feet", [0, 0])).y - CREW_H)
+	return Rect2(x0, top, x1 - x0, tp.y - top)
+
+
+## The hull below the turret (variant px): the rear plate to the headlight, from the rear deck's
+## top down to the tracks' ground contact.
+func hull_rect(vn: String) -> Rect2:
+	return hull_rect_of(spec(vn))
+
+
+static func hull_rect_of(v: Dictionary) -> Rect2:
+	var a: Dictionary = v.get("anchors", {})
+	var tp := vec(a.get("turret_pivot", [0, 0]))
+	var top := tp.y - HULL_DECK_RISE
+	var ground := float(a.get("road_wheel_line", {}).get("ground_contact_y", 233.0))
+	var front := vec(a.get("headlight", [0, 0])).x + 4.0
+	return Rect2(HULL_REAR_X, top, front - HULL_REAR_X, ground - top)
 
 
 ## A room's rect (variant px), or an empty Rect2.

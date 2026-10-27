@@ -112,7 +112,7 @@ const AMBIENT := Color(0.15, 0.14, 0.16)
 ## Each machine's key: the colour of its room lamp (diesel orange, dynamo pale amber, steam a cool
 ## brass-white, arc a cold white) and of its ambient fill.
 const KEYS := {
-	"diesel": Color(1.0, 0.66, 0.34),
+	"diesel": Color(1.0, 0.8, 0.6),
 	"dynamo": Color(1.0, 0.8, 0.56),
 	"steam": Color(0.9, 0.9, 0.8),
 	"arc": Color(0.82, 0.85, 0.97),
@@ -277,17 +277,25 @@ static func _room_static(cv: Cv, lamp_x: int) -> void:
 	cv.hl(lamp_x - 1, lamp_x + 1, 6, STEEL[2])
 
 
-## The lamp's colour and strength: the rider's slot colour while in band, a dim amber under band,
-## a hot white over.
-## Under band keeps about 75 % of the light (only heat and glow go out: never "broken"); in band
-## the machine's key tinted by the slot colour; over a hot white.
-static func _lamp_col(pw: float, slot: Color) -> Color:
+## The room light's colour and strength: the machine's own key (the slot colour stays on the bulb
+## and the enamel tag, so the rider's colour never washes the picture out), a dim amber under band,
+## a hot white over. Under band keeps about 75 % of the light (only heat and glow go out: never
+## "broken").
+static func _lamp_col(pw: float, _slot: Color) -> Color:
 	if in_band(pw):
-		var tint := _key.lerp(slot, 0.4)
-		return tint * (1.05 / maxf(tint.r, maxf(tint.g, tint.b)))
+		return _key * (1.05 / maxf(_key.r, maxf(_key.g, _key.b)))
 	if pw < IN_BAND_LO:
 		return _key * (0.74 + 0.26 * smoothstep(0.1, 0.84, pw))
 	return _key.lerp(Color(1.0, 0.95, 0.85), 0.3) * 1.15
+
+
+## The bulb itself: the room light's colour, tinted by the rider's slot colour while in band.
+static func _bulb_col(pw: float, slot: Color) -> Color:
+	var c := _lamp_col(pw, slot)
+	if not in_band(pw):
+		return c
+	var tint := _key.lerp(slot, 0.4)
+	return tint * (maxf(c.r, maxf(c.g, c.b)) / maxf(tint.r, maxf(tint.g, tint.b)))
 
 
 static func _lamp_light(cv: Cv, x: int, pw: float, slot: Color) -> void:
@@ -297,7 +305,7 @@ static func _lamp_light(cv: Cv, x: int, pw: float, slot: Color) -> void:
 
 ## The bulb (flickering under band) and its halo.
 static func _lamp(cv: Cv, x: int, pw: float, t: float, slot: Color) -> void:
-	var c0 := _lamp_col(pw, slot)
+	var c0 := _bulb_col(pw, slot)
 	var inten := maxf(c0.r, maxf(c0.g, c0.b))
 	var col := c0 / maxf(inten, 0.01)
 	var flick := 1.0

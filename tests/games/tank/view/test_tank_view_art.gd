@@ -1,0 +1,121 @@
+extends GutTest
+## The art-fix pass (2026-10-27 critique): enemies in depth lanes smaller, higher, darker and hazier
+## further back, each on its own ground; wrecks in their lane, opaque and lit by the beams they
+## cross; the tank on a lit road; the depot set piece; the dynamo's and the arc's stations one big
+## silhouette inside their rooms; the engine windows' room light free of the slot colour.
+
+const U := preload("res://tests/games/tank/view/tank_view_util.gd")
+
+
+func test_back_lanes_stand_higher_smaller_darker_and_hazier() -> void:
+	var v := U.view_of(self, U.fixture("gun_line", 3))
+	for kind: String in TankKit.ENEMY_KINDS:
+		var prev := Rect2()
+		for lane in TankView.LANES:
+			var r := v.lane_rect(kind, 500.0, lane)
+			assert_eq(
+				r.end.y, TankView.lane_foot(lane), "%s lane %d stands on its ground" % [kind, lane]
+			)
+			if lane > 0:
+				assert_lt(r.end.y, prev.end.y, "%s: a lane further back stands higher" % kind)
+				assert_lt(r.size.x, prev.size.x, "%s: and smaller" % kind)
+				assert_lt(TankWorldDraw.lane_dim(lane), TankWorldDraw.lane_dim(lane - 1))
+				assert_gt(TankWorldDraw.lane_fog(lane), TankWorldDraw.lane_fog(lane - 1))
+			assert_almost_eq(r.get_center().x, 500.0, 1.0, "centred where the rules hold it")
+			prev = r
+	assert_eq(TankView.lane_foot(0), TankView.ROAD_ENEMY_Y, "the front lane on the road")
+	# A heavy two lanes back is drawn no larger than a medium in the front lane.
+	var heavy := v.lane_rect("heavy", 500.0, 2)
+	var medium := v.lane_rect("medium", 500.0, 0)
+	assert_lte(heavy.size.y, medium.size.y)
+
+
+func test_every_enemy_sprite_carries_its_shading_masks() -> void:
+	var kit := TankKit.shared()
+	for kind: String in TankKit.ENEMY_KINDS:
+		var row: Dictionary = kit.enemies[kind]
+		for m: String in ["sil", "rim"]:
+			assert_true(row.has(m), "%s %s" % [kind, m])
+			assert_eq(
+				Vector2((row[m] as Texture2D).get_size()), row["size"], "%s %s size" % [kind, m]
+			)
+
+
+func test_wrecks_stand_in_their_lane_and_the_beams_light_them() -> void:
+	var s := U.fixture("state", 3)
+	var v := U.view_of(self, s)
+	for lane in TankView.LANES:
+		var w := {"x": s.hull.x_px + 420.0, "kind": "medium", "lane": lane, "side": 1, "t": s.t}
+		var r := TankWorldDraw.wreck_rect(v, w)
+		assert_eq(r.end.y, TankView.lane_foot(lane) + TankWorldDraw.WRECK_SINK, "lane %d" % lane)
+		var hatch := TankWorldDraw.wreck_hatch(v, w)
+		assert_true(r.grow(1.0).has_point(hatch), "the fire shows through the hulk's hatch")
+	# The headlight lights the road ahead, not the road behind the tank.
+	var ahead := v.anchor("headlight") + Vector2(220, 40)
+	var behind := Vector2(v.origin.x - 60.0, TankView.GROUND - 20.0)
+	assert_gt(TankLightDraw.beam_light(v, s, ahead), 0.2, "in the headlight's cone")
+	assert_eq(TankLightDraw.beam_light(v, s, behind), 0.0, "nothing lights the road behind")
+	var lit := TankLightDraw.beam_light(v, s, ahead)
+	s.hull.breakdown = true
+	assert_lt(TankLightDraw.beam_light(v, s, ahead), lit, "a breakdown dims the headlight")
+
+
+func test_the_road_band_fades_in_over_the_road_plane_and_is_solid_under_the_tracks() -> void:
+	var tex := TankWorldDraw.road_tex()
+	assert_eq(tex.get_width(), TankWorldDraw.ROAD_W)
+	var img := tex.get_image()
+	assert_lt(img.get_pixel(5, 0).a, 0.05, "it fades in at its far edge")
+	var under := TankWorldDraw.ROAD_TOP + 4
+	for x in range(0, TankWorldDraw.ROAD_W, 37):
+		assert_eq(img.get_pixel(x, under).a, 1.0, "solid under the tracks at x %d" % x)
+
+
+func test_the_depot_stands_along_the_road_with_lit_doorways_and_lamps() -> void:
+	var s := U.fixture("state", 2)
+	s.seg.seg = TankIds.SEG_DEPOT
+	var v := U.view_of(self, s)
+	var lights := TankDepotDraw.lights(v)
+	var kinds := {}
+	var on_screen := 0
+	for l: Dictionary in lights:
+		kinds[str(l["kind"])] = true
+		var p: Vector2 = l["p"]
+		if p.x >= 0.0 and p.x <= v.canvas.x:
+			on_screen += 1
+	assert_true(kinds.has("door") and kinds.has("lamp"), "hangar doorways and hooded lamps")
+	assert_gt(on_screen, 1, "the yard is in view")
+	U.run(v, 3)
+	assert_gt(v.frames, 3, "it draws")
+
+
+func test_the_dynamo_and_arc_stations_are_one_big_silhouette_inside_their_rooms() -> void:
+	var kit := TankKit.shared()
+	var ry := kit.room_rect("tank_4rider", "dynamo")
+	var ra := kit.room_rect("tank_4rider", "arc")
+	var r := TankRoomMachines.DYNAMO_R
+	assert_gte(r * 2.0, 12.0, "the armature at least 12 art px across")
+	var c := TankRoomMachines.DYNAMO_AT
+	assert_true(
+		Rect2(Vector2.ZERO, ry.size).encloses(Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0))
+	)
+	var horns := TankRoomMachines.ARC_SPREAD * 2.0
+	assert_gte(horns, 12.0, "the arc's V at least 12 art px across")
+	assert_gte(TankRoomMachines.ARC_FOOT - TankRoomMachines.ARC_SPREAD, 0.0)
+	assert_lte(TankRoomMachines.ARC_FOOT + 1.0 + TankRoomMachines.ARC_SPREAD, ra.size.x)
+	var low := TankRoomMachines.arc_at(ra, 0.05, 1.0)
+	var high := TankRoomMachines.arc_at(ra, 0.2, 1.0)
+	assert_lt(high.y, low.y, "the arc climbs the horns")
+
+
+func test_the_engine_windows_room_light_does_not_take_the_slot_colour() -> void:
+	var a := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	var b := Image.create_empty(TankMech.W, TankMech.H, false, Image.FORMAT_RGBA8)
+	for kind: String in ["diesel", "steam", "dynamo", "arc"]:
+		TankMech.paint_ex(a, kind, 0.3, 1.0, 1.0, Color(0.9, 0.3, 0.1), 90.0)
+		TankMech.paint_ex(b, kind, 0.3, 1.0, 1.0, Color(0.2, 0.5, 1.0), 90.0)
+		var differ := 0
+		for y in TankMech.H:
+			for x in TankMech.W:
+				if not a.get_pixel(x, y).is_equal_approx(b.get_pixel(x, y)):
+					differ += 1
+		assert_lt(differ, TankMech.W * TankMech.H / 8, "%s: only the bulb and the tag" % kind)

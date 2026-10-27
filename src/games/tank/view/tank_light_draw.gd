@@ -12,6 +12,8 @@ const WARM := Color(1.0, 0.64, 0.32)
 const RED := Color(1.0, 0.15, 0.1)
 const GREEN := Color(0.2, 1.0, 0.35)
 const AMBER := Color(1.0, 0.68, 0.3)
+## The beams' warm light on what they cross.
+const BEAM_LIT := Color(1.0, 0.8, 0.52)
 
 
 static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
@@ -32,6 +34,7 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	if v.fx.wash > 0.0:
 		var c := v.fx.wash_color
 		TankDraw.glow_at(ci, v.fx.wash_pos, 320.0, Color(c.r, c.g, c.b, 0.16 * v.fx.wash))
+	_lit_by_beams(ci, v, state)
 	for id: int in v.enemy_rects:
 		var e := state.enemy(id)
 		if e == null:
@@ -43,6 +46,89 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankDraw.glow_at(
 			ci, er.position + Vector2(slit_x, er.size.y * 0.45), 3.0, Color(1.0, 0.2, 0.1, 0.7)
 		)
+
+
+## How much of the hero's beams falls on stage point `p` (0..1): the headlight and the commander's
+## searchlight (and the Bastion's tower light behind), each by how near `p` lies to its cone's axis and
+## how far down its reach.
+static func beam_light(v: TankView, state: TankState, p: Vector2) -> float:
+	var o := v.origin
+	var sk := v.searchlight_k(state)
+	var hk := 0.3 if state.hull.breakdown else 1.0
+	var beams: Array[Array] = [
+		[o + v.kit.anchor(v.variant, "headlight"), deg_to_rad(16.0), deg_to_rad(14.0), 560.0, hk],
+		[_lens(v), _sweep(v), deg_to_rad(10.5), 760.0, sk],
+	]
+	if v.kit.has_anchor(v.variant, "searchlight_tower_lens"):
+		var tl := o + v.kit.anchor(v.variant, "searchlight_tower_lens")
+		beams.append([tl, deg_to_rad(198.0), deg_to_rad(5.0), 560.0, 0.6 * sk])
+	var k := 0.0
+	for b: Array in beams:
+		var d: Vector2 = p - (b[0] as Vector2)
+		var dist := d.length()
+		if dist < 1.0:
+			continue
+		var off := absf(angle_difference(d.angle(), float(b[1])))
+		var cone := clampf(1.0 - off / (float(b[2]) * 2.2), 0.0, 1.0)
+		var reach := clampf(1.0 - dist / float(b[3]), 0.0, 1.0)
+		k += cone * cone * sqrt(reach) * float(b[4])
+	return clampf(k, 0.0, 1.0)
+
+
+## The beams' warm light on the enemies and the wrecks they cross: their edges facing the tank (the
+## kit's rim mask) catch it brightly, the rest of the sprite a little; back lanes less (haze).
+static func _lit_by_beams(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	for id: int in v.enemy_rects:
+		var e := state.enemy(id)
+		if e == null or not v.lanes.has(id):
+			continue
+		var r: Rect2 = v.enemy_rects[id]
+		_beam_rim(ci, v, state, v.kit.enemies[v.enemy_kind(e)], r, e.side < 0, int(v.lanes[id]))
+	for w in v.wrecks:
+		if v.wreck_collapse(w) >= 1.0:
+			continue
+		var wr := TankWorldDraw.wreck_rect(v, w)
+		var row: Dictionary = v.kit.enemies.get(str(w["kind"]), {})
+		if not row.is_empty():
+			_beam_rim(ci, v, state, row, wr, int(w.get("side", 1)) < 0, int(w.get("lane", 0)), 0.7)
+
+
+static func _beam_rim(
+	ci: CanvasItem,
+	v: TankView,
+	state: TankState,
+	row: Dictionary,
+	r: Rect2,
+	flip: bool,
+	lane: int,
+	gain: float = 1.0
+) -> void:
+	if not row.has("rim") or r.end.x < 0.0 or r.position.x > v.canvas.x:
+		return
+	var k := beam_light(v, state, r.get_center()) * gain * (1.0 - TankWorldDraw.lane_fog(lane))
+	if k < 0.02:
+		return
+	TankWorldDraw.sprite(
+		ci, row["sil"], r, flip, Color(BEAM_LIT.r, BEAM_LIT.g, BEAM_LIT.b, 0.04 * k)
+	)
+	TankWorldDraw.sprite(
+		ci, row["rim"], r, flip, Color(BEAM_LIT.r, BEAM_LIT.g, BEAM_LIT.b, 0.5 * k)
+	)
+
+
+## The commander's searchlight lens (stage px) and its sweep (radians) this frame, turning with the
+## turret (facing back it sweeps the road behind).
+static func _lens(v: TankView) -> Vector2:
+	var feet := v.origin + v.kit.anchor(v.variant, "turret_roof_commander_feet")
+	var lens := feet - TankCrew.FEET + Vector2(22, 9) + Vector2(0.5, 0.5)
+	if v.turret_sx() != 1.0:
+		lens = v.turret_map(feet.round()) + (lens - feet.round()) * Vector2(signf(v.turret_sx()), 1)
+	return lens
+
+
+static func _sweep(v: TankView) -> float:
+	var sweep := deg_to_rad(14.0 + 3.0 * sin(v.time * 0.45))
+	return PI - sweep if v.turret_sx() < 0.0 else sweep
 
 
 ## Room lamps: the rider's slot colour while in band, else a dim warm lamp; dark in a breakdown
@@ -60,10 +146,12 @@ static func _rooms(ci: CanvasItem, v: TankView, o: Vector2, broken: bool) -> voi
 			TankDraw.glow_at(ci, lamp, rect.size.x * 0.5, Color(1.0, 0.7, 0.4, 0.12))
 			continue
 		var rd := v.rider_of(str(room["engine"]))
+		# The small electrical rooms (dynamo, arc) get their lamp a step brighter.
+		var gain := 1.3 if str(room["engine"]) in ["dynamo", "arc"] else 1.0
 		if rd != null and rd.in_band:
 			var c := WARM.lerp(TankHullDraw.slot_color(rd), 0.12)
 			var fl := 0.9 + 0.1 * sin(v.time * 3.0 + rect.position.x)
-			TankDraw.glow_at(ci, lamp, rect.size.x * 0.55, Color(c.r, c.g, c.b, 0.26 * fl))
+			TankDraw.glow_at(ci, lamp, rect.size.x * 0.55, Color(c.r, c.g, c.b, 0.26 * fl * gain))
 			TankDraw.glow_at(ci, lamp, 5.0, Color(1.0, 0.8, 0.55, 0.8))
 			TankDraw.fill_room(ci, rect, Color(c.r, c.g, c.b, 0.05))
 		else:
@@ -83,9 +171,8 @@ static func _rooms(ci: CanvasItem, v: TankView, o: Vector2, broken: bool) -> voi
 static func _beams(ci: CanvasItem, v: TankView, state: TankState, o: Vector2, broken: bool) -> void:
 	var sk := v.searchlight_k(state)
 	# The commander's searchlight on the turret roof, sweeping slowly.
-	var feet := o + v.kit.anchor(v.variant, "turret_roof_commander_feet")
-	var lens := feet - TankCrew.FEET + Vector2(22, 9) + Vector2(0.5, 0.5)
-	var sweep := deg_to_rad(14.0 + 3.0 * sin(v.time * 0.45))
+	var lens := _lens(v)
+	var sweep := _sweep(v)
 	TankDraw.beam(ci, lens, sweep, 270.0, deg_to_rad(10.5), Color(1.0, 0.84, 0.56), 0.5 * sk)
 	TankDraw.glow_at(ci, lens, 10.0, Color(1.0, 0.9, 0.7, 0.9 * maxf(sk, 0.3)))
 	TankDraw.glow_at(ci, lens, 28.0, Color(1.0, 0.8, 0.5, 0.25 * sk))
@@ -104,14 +191,26 @@ static func _beams(ci: CanvasItem, v: TankView, state: TankState, o: Vector2, br
 	TankDraw.beam(ci, hl, deg_to_rad(16.0), 190.0, deg_to_rad(14.0), Color(1.0, 0.8, 0.5), 0.5 * hk)
 	TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.95, 0.8, hk))
 	TankDraw.glow_at(ci, hl, 22.0, Color(1.0, 0.8, 0.5, 0.35 * hk))
-	var pool := hl + Vector2(150, 44)
-	ci.draw_set_transform(pool, 0.0, Vector2(1.0, 0.18))
-	ci.draw_texture_rect(
-		TankDraw.glow_tex(),
-		Rect2(Vector2(-110, -110), Vector2(220, 220)),
-		false,
-		Color(1.0, 0.75, 0.45, 0.42 * hk)
-	)
+	# Where the beam lands: a long warm pool on the road ahead, and a nearer spill under the nose.
+	var g := TankView.GROUND
+	ground_glow(ci, Vector2(hl.x + 165.0, g + 5.0), 125.0, Color(1.0, 0.75, 0.45, 0.4 * hk))
+	ground_glow(ci, Vector2(hl.x + 50.0, g + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * hk))
+	# The cutaway rooms' lamps spill down onto the road beside the tracks.
+	if not broken:
+		for room: Dictionary in v.kit.rooms(v.variant):
+			var r := TankKit.rect_of(room)
+			var lit := 0.07
+			if room.has("engine"):
+				var rd := v.rider_of(str(room["engine"]))
+				lit = 0.12 if rd != null and rd.in_band else 0.06
+			var at := Vector2(o.x + r.get_center().x, g + 6.0)
+			ground_glow(ci, at, r.size.x * 0.8 + 20.0, Color(1.0, 0.66, 0.36, lit))
+
+
+## A flat glow lying on the road (an ellipse 0.14 as tall as wide) at `p`, `r` px wide each side.
+static func ground_glow(ci: CanvasItem, p: Vector2, r: float, c: Color) -> void:
+	ci.draw_set_transform(p, 0.0, Vector2(1.0, 0.14))
+	ci.draw_texture_rect(TankDraw.glow_tex(), Rect2(Vector2(-r, -r), Vector2(r, r) * 2.0), false, c)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
@@ -128,7 +227,12 @@ static func _lamps(ci: CanvasItem, v: TankView, state: TankState, o: Vector2) ->
 		TankDraw.glow_at(ci, tl, 5.0, Color(1.0, 0.85, 0.6, 0.7))
 		TankDraw.glow_at(ci, tl + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
 	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
-		for p in TankWorldDraw.depot_lamps(v):
+		for l: Dictionary in TankDepotDraw.lights(v):
+			var p: Vector2 = l["p"]
+			if str(l["kind"]) == "door":
+				TankDraw.glow_at(ci, p, 34.0, Color(1.0, 0.62, 0.3, 0.3))
+				ground_glow(ci, p + Vector2(0, 22), 60.0, Color(1.0, 0.62, 0.32, 0.3))
+				continue
 			TankDraw.glow_at(ci, p, 5.0, Color(1.0, 0.85, 0.6, 0.7))
 			TankDraw.glow_at(ci, p + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
 
@@ -147,13 +251,10 @@ static func _fires(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		var r := TankWorldDraw.wreck_rect(v, w)
 		if r.position.x > v.canvas.x + 10.0 or r.end.x < -10.0:
 			continue
-		var c := Vector2(
-			r.get_center().x,
-			lerpf(r.position.y + r.size.y * 0.35, r.end.y - 5.0, v.wreck_collapse(w))
-		)
+		var c := TankWorldDraw.wreck_hatch(v, w) + Vector2(0, -2)
 		var fl := 0.75 + 0.25 * sin(v.time * 9.0 + r.position.x) * sin(v.time * 5.3)
-		TankDraw.glow_at(ci, c, 18.0 * k, Color(1.0, 0.42, 0.12, 0.5 * fl * k))
-		TankDraw.glow_at(ci, c + Vector2(2, -2), 5.0, Color(1.0, 0.75, 0.35, 0.8 * fl * k))
+		TankDraw.glow_at(ci, c, 14.0 * k, Color(1.0, 0.42, 0.12, 0.45 * fl * k))
+		TankDraw.glow_at(ci, c, 4.0, Color(1.0, 0.75, 0.35, 0.7 * fl * k))
 	if not v.boss_visible(state):
 		return
 	var b := state.boss
