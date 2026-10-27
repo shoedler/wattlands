@@ -2,7 +2,7 @@
 
 One to four riders crew a pedal-powered landship through a starry forest night, one engine each: the diesel drives, the dynamo aims, the steam engine loads, the arc generator lights the searchlights and feeds the bow guns. A solo rider gets the Bulwark, whose diesel does everything through a three-way gearbox. Presentation `2d` (the reference's night diorama at 960 x 540; the rules keep 640 x 360 units), version 0.2.0, 1 to 4 riders, no bots. Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
 
-Status: P0 complete. Every crew size plays Ashfall Road (30 to 41 minutes) to the results with zero input. The art is procedural placeholders (no fal run was made) and the sound is synthesized. Nothing has run on a real trainer (see "Known gaps and P2 notes").
+Status: v2 (0.2.0). Every crew size, 1 to 4, plays Ashfall Road (30 to 41 minutes) to the results with zero input. The look is the v2 kit built from Simon's reference image (no generated sprites), the HUD is the game's own and the sound is synthesized. Nothing has run on a real trainer (see "Known gaps and P2 notes").
 
 ## How to play
 
@@ -15,7 +15,7 @@ Status: P0 complete. Every crew size plays Ashfall Road (30 to 41 minutes) to th
 - **Steam** (the Citadel's loader): SIM flat. Pressure builds with your watts (100 % = 4.5 kJ) and the boiler adds resistance as it builds (8 % x pressure). At 100 % a heavy shell latches after a 5 s window ("Surge to overpressure" inside it builds up to 150 % on a sprint, for a double-damage shell); `confirm` latches a light shell from 40 %. Each latch drops the boiler grade to 0 for the 6 s breech cycle. In band is 90 % FTP while building, cadence 50 while a shell is loaded or cycling.
 - **Bulwark gearbox** (solo): the lever sits on Drive, Turret or Hoist (`left` / `right` / `swap` move it, 1 s with no power anywhere). The auto-lever (default on) picks Hoist when unloaded with a target in range, Turret when loaded and off target, otherwise Drive; a manual move suspends it for 15 s. Hoist adds a 4 % grade on top of the terrain in an Advance.
 - **Zero input works.** The defaults play every station: the diesel drives on watts and digs in, auto-aim aims and fires, the boiler latches a heavy shell at 100 %, the auto-lever runs the Bulwark. The bow guns fire on their own. The Autopilot adds rear traverses and obstacle shots; it never latches early, moves the lever by hand, sprints (so never evades) or Overpressures, and never changes effort. A human counts as Autopilot until their first deliberate `lever`, `aim`, `target`, `traverse`, `fire`, `latch` or `turn` intent (an `over` never ends it).
-- **Reserve and AFK.** A rider who stops pedaling gets the floor after 3 s, the platform's pause symbol and a stopped ride timer after 5 s (BRIEF 3.5), and goes AFK after 10 s; a dropped peer is AFK at once. That station runs on reserve (as if 60 W, never in band) under the Autopilot and keeps its plan until the rider returns. When every rider in the crew has stopped, the host pauses the game (`all_stopped`) until one pedals again. A solo rider who stops pedaling pauses after 5 s.
+- **Reserve and AFK.** A rider who stops pedaling gets the floor after 3 s, and after 10 s the platform's pause symbol, a stopped ride timer (BRIEF 3.5) and AFK (4.6.4); a dropped peer is AFK at once. That station runs on reserve (as if 60 W, never in band) under the Autopilot and keeps its plan until the rider returns. When every rider in the crew has stopped, the host pauses the game (`all_stopped`) until one pedals again. A solo rider who stops pedaling pauses after 10 s.
 - **Rescue.** A cadence collapse in a dynamo or arc phase at 60 % of FTP or more, or in any 90 % gun line, arms the platform's rescue (target 50 %): the dynamo stalls (turret frozen, bank not charging, toast "Dynamo stalled"), the arc generator stalls (bow guns stop, searchlights dark, toast "Arc generator stalled"), the Bulwark's gun line gives nothing power, the berm stops growing. The plan continues.
 
 ## Rules summary
@@ -39,9 +39,9 @@ Numbers are the current content (`content/tank/*.json`) after the v2 rules pass 
 | Enemy | HP | Behaviour | Gun (damage / every / hit) |
 | --- | --- | --- | --- |
 | Light tank | 30 | rushes to 120-140 px, weaves, breaks off after 45 s; its first shot at its hold is a telegraphed flank shot (2.5 s) | 2.5 / 4 s / 50 %; flank shot 8 / 70 % |
-| Medium tank | 64 | holds 260-340 px | 4 / 6 s / 60 % |
+| Medium tank | 50 | holds 260-340 px | 4 / 6 s / 60 % |
 | Tank destroyer | 50 | stops at the screen edge, 4 s glint telegraph, shifts 40 px after each shot | 9 / 9 s / 75 % |
-| Dug-in tank | 50 | gun line; only the turret above the concrete is hit | 5 / 7 s / 60 % |
+| Dug-in tank | 50 | gun line; only the turret above the concrete is hit | 5 / 9 s / 60 % |
 | Heavy tank | 130 | gun-line duel at 300-380 px, 3 s telegraph, backs off 30 px per 50 damage | 7 / 7 s / 60 % |
 | Behemoth (boss) | 3 bogies x 50, turret 205 | creeps to 120 px, each broken bogie pushes it back 24 px, phase 2 immobile; main gun every 35-45 s (25-35 s in phase 2) after a 6 s telegraph | main 13 / 75 %, secondary 2 every 5 s / 50 % |
 
@@ -112,7 +112,7 @@ Everything below is a content number: change it in the file, re-run the matrix (
 | Hull toughness | `tanks.json` `hull.hp`, `hull.checkpoint_hp`, `hull.repair_j` | 150, 30, 5000 |
 | What driving in band avoids | `tanks.json` `drive.evasive_hit_mult` | 0.45 |
 | Enemy guns | `enemies.json` `types.<t>.gun`, `boss.main` | see the table above |
-| Dynamo bank | `tanks.json` `dynamo.stabilizer_per_s`, `per_traverse`, `per_degree`, `hoist_s` | 1.5 (Rampart 1.3, Bastion 2.0: `tanks.<tank>.stabilizer_per_s`), 15, 0.5, [24, 12] |
+| Dynamo bank | `tanks.json` `dynamo.stabilizer_per_s`, `per_traverse`, `per_degree`, `hoist_s` | 1.5 (Rampart 1.3, Bastion 2.0: `tanks.<tank>.stabilizer_per_s`), 15, 0.5, [22, 11] (the Rampart's hoist) |
 | Steam fill and latch | `tanks.json` `steam.full_j`, `window_s`, `breech_cycle_s` | 4000, 5, 7 |
 | Bulwark gearbox | `tanks.json` `gearbox.hoist_j`, `auto_drive_clear_px`, `manual_suspend_s` | 5250, 340, 15 |
 | Surge to evade | `tanks.json` `evade.sprint_window_s`, `hold_s`, `boss_hold_s`; telegraphs `enemies.json` `types.<t>.telegraph_s`, `types.light.flank`, `boss.main.telegraph_s` | 3, 2, 3; 4 / 3 / 2.5 / 6 s |
@@ -128,10 +128,10 @@ Everything below is a content number: change it in the file, re-run the matrix (
 
 ```bash
 . tools/env.sh
-# Tank GUT suite (strict): unit, static, art, balance harness, S8 stress, rules-step perf
+# Tank GUT suite (strict): unit, static, view and HUD from fixtures, balance harness, S2 timing, S8 stress, rules-step perf
 env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/run_tests --only=gut --gdir=res://tests/games/tank
 env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/godot.sh --headless --path . -s tools/check_scripts.gd
-# Node tests: the sim checker, the art.json dry run, the e2e report checker
+# Node tests: the sim checker and the e2e report checker
 (cd tests/games/tank && node --test)
 # Lint
 uvx --from gdtoolkit==4.5.0 gdformat --check src/games/tank tests/games/tank
@@ -148,6 +148,8 @@ env -u FAL_KEY -u WATTLANDS_ALLOW_ART node tools/e2e/run.mjs --games=tank
 tools/godot.sh --timeout=7200 --path . -- --mock-trainer=erg
 # Screenshots: the depot, the skirmish, a gun line and the boss, solo
 env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/screenshot --game=tank --content=ashfall_road --at=60,400,560,1500
+# The same with a crew of four (the Bastion)
+env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/screenshot --game=tank --content=ashfall_road --players=4 --at=60,400,560,1500
 ```
 
 The simulation matrix (`tests/games/tank/sim/`, checked by `check_sims.mjs`):
@@ -155,7 +157,7 @@ The simulation matrix (`tests/games/tank/sim/`, checked by `check_sims.mjs`):
 | Run | What it asserts |
 | --- | --- |
 | S1 compliant `erg` riders, crews 1-4, seeds 1-3 | T1 phase times, no overrun, grade B or better; T2 (crews 2-4) the dynamo above 80 % for 30 s per stage and 60 s in the boss, back to 65 % or lower within 120 s; T3 (crews 3-4) each heavy shell built in 18-35 s and at least 6 s at boiler grade 0 for the rider who latched it; T4 (crew 1) the Bulwark on Drive for 60 % of each Advance; T6 a telegraphed shot and a medium in each Advance (and crew 1's "Surge to evade" prompt), a heavy duel of 90-180 s in gun lines 2 and 3; T7 (crew 4) the arc target above 72 % for 30 s per stage and back to 68 % within 60 s of a fight's end |
-| S2 zero riders | crew 3 at 0 W: the host's shared pause holds the depot (no kill, grade D); crew 3 spinning at 10 W and 25 rpm overruns every stage (withdrawn, grade D); crew 1 pauses in the depot |
+| S2 zero riders | crew 3 at 0 W: the host's shared pause holds the depot (no kill, grade D); crew 3 spinning at 10 W and 25 rpm overruns every stage (withdrawn, grade D); crew 1 pauses in the depot; each pause at most 10 s + 1 tick after the first sample that meets not_pedaling (the report bounds it from the trainer's first notification; `sim/test_tank_s2_pause.gd` measures it exactly) |
 | S3 compliance 100 / 85 / 70 % | T5: the mean score falls strictly |
 | S4 every content and crew (1-4) | every directive, plan and trace rule of BRIEF 4.5 and 4.6: patterns, applied values never above what was asked, warm-up limits, switch spacing, laps |
 | S5 30 rpm collapse in a dynamo stage and in a 90 % gun line | rescue, stagger, the plan continues |
@@ -167,24 +169,13 @@ The simulation matrix (`tests/games/tank/sim/`, checked by `check_sims.mjs`):
 
 Gates: the Tank GUT suite, `check_scripts`, gdformat and gdlint, `tests/sdk/test_conformance.gd` (Autopilot humans at 1 and 4 riders), the matrix with `fit_check`, `node tools/e2e/run.mjs --games=tank`, and the full `tools/run_tests` at or above the green-count floor.
 
-## Art
+## The look: the v2 kit, the view and the HUD
 
-No generated art ships: every one of the 61 sprite ids is a procedural placeholder drawn at runtime by `view/placeholder_art.gd` in the 32 palette colours (no PNG is written; `assets/tank/sprites/` does not exist), and the view works with placeholders for every id. `assets/tank/art.json` is ready for a real pass (a dry run estimates about $4.27 for the 61 sunburst requests; the budget is $15). To regenerate with fal, a human sets `FAL_KEY` and `WATTLANDS_ALLOW_ART=1` in the shell for these commands only (never print or commit the key, and never export them for the test commands):
+**The kit** (`assets/tank/v2/`, manifest `kit.json`, read by `TankKit`). Everything is built from Simon's reference image (`source/reference.webp`) by the scripts in `tools_src/` (`.gdignore`d; `regen.sh` rebuilds the kit): the four tank variants `tank_1rider` .. `tank_4rider` and the turret barrel, cut from the reference at its bulkheads (the Citadel is the reference tank, the Bastion adds the arc room and the searchlight tower); the backdrop planes in `planes2/` (far: sky, Milky Way, mountains, the pale cliff and the lake; forest; road; the dark foreground), each the reference's own 960 px cut plus its mirror, blurred once by `planes2.gd`; the enemies and the Behemoth in `enemies/`, procedural sprites in the reference's style; the 20 px crewmen in `crew20/`; the HUD's bitmap fonts in `hud/`; the content cards and the picker card. `kit.json` holds every rect, anchor, room, muzzle and light the view and the HUD read. No sprite is generated and the game makes no fal call.
 
-```bash
-. tools/env.sh                      # keeps both locks on; generate.mjs does not read the network lock
-node tools/art/generate.mjs --game=tank --dry-run
-# 1. Style check on flare: set "endpoint" in assets/tank/art.json to openai/gpt-image-2.5/flare/text-to-image
-node tools/art/generate.mjs --game=tank --only=hull_citadel,room_diesel,diesel_block,enemy_medium,bg_village_near,explosion_large --budget=1
-tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=tank --only=hull_citadel,room_diesel,diesel_block,enemy_medium,bg_village_near,explosion_large
-# Look at assets/tank/sprites/*.png at 3x, fix prompts and palette, set "endpoint" back to the sunburst endpoint.
-# 2. The full pass, then pixelate everything and import
-node tools/art/generate.mjs --game=tank --budget=<15 - spent>
-tools/godot.sh --headless --path . -s tools/art/pixelate.gd -- --game=tank
-tools/godot.sh --headless --path . --import
-```
+**The view** (`view/`, `TankView`, a Node2D the PixelViewport shows at 960 x 540 art px, `pixel_flex` down to 852 x 480). Rules px x 1.5 = art px (`TankView.sx` / `sy`). Back to front: the planes at their parallax, the road with the halt line, obstacles, wrecks aging on sim time into debris heaps, the enemies in the depth lanes the rules hold them in (`TankEnemyState.lane`, in the snapshot) and the Behemoth at its rules position; the tank (`TankHullDraw`: the barrel at the gun's elevation and traverse, running gear at tank speed, the room machines `TankMech` and `TankRoomMachines` turning on their riders' cadence and showing under, in and over band, the crew `TankCrew`, plaques in slot colours, the bow guns); additive light (`TankLightDraw`: room lamps, the headlight and searchlight cones, the Bastion's searchlights following its arc generator, fires and flashes); smoke and the foreground plane; the tilt-shift shading; then the per-frame depth of field (`TankDof`, the rider's `miniature` option, off by itself after 5 s of slow frames). Effects come from pooled emitters with caps (`TankFx`, seeded from `ctx.seed`). Positions are drawn from a snapshot history (`TankSnapHistory`, `TankRenderClock`), so a client interpolates. The view only reads the state; the evade cue lurches the tank (the diesel or the Bulwark evaded) or blows a smoke screen (the steam engine did), from the event's slot.
 
-Then look at every sprite (reroll failures with a changed prompt, at most twice), re-measure the anchors in `assets/tank/rigs.json` (the gameplay keys keep their names and frames; `muzzle == trunnion + [barrel_px, 0]` is tested), add `"picker_image": "res://assets/tank/sprites/picker_card.png"` to `game.json` once that PNG exists, optionally add the 14 x 14 engine icons `assets/tank/icons/engine_{diesel,dynamo,steam,bulwark}.png` (the teammate strip shows the engine name until they exist), and credit OpenAI's GPT Image 2.5 through fal with the spend from `assets/tank/art_manifest.json` in `docs/credits.d/tank.md`. A generated `explosion_large`, `explosion_small` or `muzzle_flash` replaces its procedural stand-in automatically (`TankSprites.has_real`); re-tune the haze and light values after the art pass (`docs/decisions/tank.md`, "G1 view").
+**The HUD** (`hud/`, `TankHud.spec()`: the game's own Controls, no kit widgets, `shows_power = true`), in the brief's riveted-iron palette and the game's own pixel fonts: the mission plate top left (stage, clock, stage strip, objective) with the toasts under it; the hull plate top right (HP bar and number, kills) with the Behemoth's bars under it; my numbers bottom left (watts and %FTP, cadence, their band gauges, one instruction line such as HOLD 152-210 W, SPIN 60+ RPM, SURGE 240+ W, LATCH or RESERVE, W' and the gear, the station); the crew row bottom middle (one live engine window per rider in room order, name in the slot colour, watts, an in-band strip, YOU on your own); world tags (the speed tag, the halt line's distance plate, SURGE TO EVADE with countdown pips over a telegraphing shooter, the gun's elevation arc); banners in the middle; F1 help with five entries. Nothing covers the bottom-right 200 x 60 or, apart from the world tags, the tank's band (y 150-360). `TankHudGeom` reads the view's geometry for the tags.
 
 ## Files
 
@@ -198,14 +189,14 @@ Then look at every sprite (reroll failures with a changed prompt, at most twice)
 | `combat/` | Ballistics, aim, targets, shells, damage, enemies and their lanes, encounters, the Behemoth, Surge to evade (`TankEvade`), the bow guns (`TankBow`) |
 | `content/` | `TankContent`, the validated loader |
 | `autopilot/`, `net/` | `TankAutopilot`; `TankSnapshot`, `TankCues`, `TankEventCast` |
-| `view/` | `TankView` and the diorama: backdrop planes with blur and haze, rigs, cutaway rooms, lights, particles, interpolation, placeholder art |
-| `hud/` | `TankHud` (the `HudSpec` rects), the station card, the objective line, the boss bars |
+| `view/` | `TankView` and the diorama from the v2 kit: planes, the tank variants, room machines (`TankMech`), crew, enemies in their lanes, the Behemoth, lights, effects, the depth of field, interpolation |
+| `hud/` | `TankHud` (the game's own Controls at art-px rects): mission plate, hull plate, the Behemoth's bars, my numbers, the crew row, world tags, help |
 | `audio/` | `TankAudio`, synthesized with `Sfx.synth` |
 
 ## Known gaps and P2 notes
 
 - Not tested on a real trainer: `HARDWARE_TEST.md` is the checklist, and its last section lists every item the automated runs could not judge (real sprint gestures, the mix, frame pacing on integrated graphics, network loss). Nothing has met a real Strava upload either.
-- The art is placeholders and the sound is synthesized; the look and the mix have been reviewed from screenshots and headless logs only.
+- The sound is synthesized; the look and the mix have been reviewed from screenshots and headless logs only.
 - P1 is not built: the garage between missions (scrap buys +10 HP armour x3, +20 bank units, -10 % boiler energy, and the hull finish picker, so unlocked finishes cannot be equipped yet), Viaduct Crossing (a river viaduct with an armoured train as the gun line), and two tanks in one lobby (up to 6 riders, the second on a rear ground line 40 px higher, enemy scales summed).
 - P2 ideas: tank duels across a ruined town square (a stand-off stage where heavies trade shells across rubble with dug-in guns behind cover); the cool-down gate roll-through (today the cool-down swaps the town backdrop in, or the field road if the Behemoth withdrew, and the tank keeps rolling; the broken Foundry Gate and a scripted camera move through it are not drawn); hull finishes drawn on the tank (today an unlock is a progress entry only); the garage.
 - Balance was tuned on the simulation matrix with compliant synthetic riders. Real riders' compliance and sprint timing may want a retune once someone has ridden it: from a 90 % FTP ride the 3 s sprint rule holds after about 1.5 s at 1.5 x FTP, so the heavy's 3 s glow needs about 1.8 x FTP from its start and the light's 2.5 s flank shot is evadable only by a rider already sprinting.

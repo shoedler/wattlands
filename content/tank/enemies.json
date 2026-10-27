@@ -19,7 +19,7 @@
 		"medium": {
 			"lane": 1,
 			"code": 2,
-			"hp": 64,
+			"hp": 50,
 			"size_px": [110, 55],
 			"hold_px": [260, 340],
 			"speed_px_s": 40,
@@ -47,7 +47,7 @@
 			"size_px": [73, 19],
 			"hitbox": "turret",
 			"light_mult": 1.0,
-			"gun": {"damage": 5, "every_s": 7, "hit": 0.6},
+			"gun": {"damage": 5, "every_s": 9, "hit": 0.6},
 			"sprite": "enemy_dugin"
 		},
 		"heavy": {

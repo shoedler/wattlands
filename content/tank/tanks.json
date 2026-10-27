@@ -89,7 +89,7 @@
 		"full_at": 50,
 		"dispersion_deg": [0.5, 1.5],
 		"low_bank": 20,
-		"hoist_s": [24, 12]
+		"hoist_s": [22, 11]
 	},
 	"steam": {
 		"full_j": 4000,
