@@ -7,15 +7,16 @@ extends RefCounted
 ## the files and runs these.
 ##
 ## Files:
-##   tanks.json     tanks {bulwark, rampart, citadel}: {code, crew, hull_px, engines, turrets,
-##                  enemy_scale}; hull, drive, ram, berm, in_band, dynamo, steam, gearbox, gun,
-##                  damage, secondary, caps (TANKS_SPEC)
+##   tanks.json     tanks {bulwark, rampart, citadel, bastion}: {code (TankIds.TANK_CODES), crew
+##                  (its index in TankIds.TANKS + 1), hull_px, engines (rooms rear to front),
+##                  turrets, enemy_scale}; hull, drive, ram, berm, in_band, power_ratio, dynamo,
+##                  steam, gearbox, gun, damage, secondary, caps (TANKS_SPEC)
 ##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, boiler,
 ##                  hoist, cadence_band, haptics (STATIONS_SPEC; plan entries:
 ##                  {mode: ERG, target_pct, ramp_to_pct?, range_pct?} or {mode: SIM, grade_source});
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; rotation rows
-##                  use their tank's start engines, start with the slot's own and man every room
-##                  in every column
+##                  (every tank of crew 2 and up) use their tank's start engines, start with the
+##                  slot's own and man every room in every column
 ##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
 ##                  every_s, hit}, light_mult}; boss; miss_px; clamp (ENEMIES_SPEC)
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
@@ -23,7 +24,8 @@ extends RefCounted
 ##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
 ##   scoring.json   scale, weights, objectives, survival_per_breakdown, grades, xp (SCORING_SPEC)
 ##   cosmetics.json unlocks: [{id, kind, rule: finish | grade | behemoth_no_breakdown, min_grade?}]
-##   validate_cross(files): what needs two files (tank engines, the mission's plan table and its
+##   validate_cross(files): what needs two files (each tank's start engines are its rooms in slot
+##                  order, a permutation of tanks.json engines; the mission's plan table and its
 ##                  segment types, 90% ERG phases <= 180 s, warm-up terrain inside the warm-up grades)
 ##
 ## Safety envelope: besides types, the validators hold every number that carries a brief 2.3 check
@@ -58,6 +60,8 @@ const TANKS_SPEC := {
 	"in_band.steam_cycle_cadence_rpm": "pos",
 	"in_band.recovery_cadence_rpm": "pos",
 	"in_band.reserve_p_eff_w": "nonneg",
+	"power_ratio.steam_loaded_pct": "pos",
+	"power_ratio.warmup_sim_pct": "pos",
 	"dynamo.bank_max": "pos",
 	"dynamo.j_per_unit": "pos",
 	"dynamo.stabilizer_per_s": "nonneg",
@@ -284,6 +288,17 @@ static func validate_tanks(d: Variant) -> Array[String]:
 				errors.append("tanks.json tanks: missing %s" % t)
 				continue
 			check_spec(tanks[t], TANK_SPEC, "tanks.json tanks.%s" % t, errors)
+			var def: Variant = tanks[t]
+			if def is Dictionary and _num(def.get("code")):
+				if int(def["code"]) != int(TankIds.TANK_CODES[t]):
+					errors.append(
+						"tanks.json tanks.%s.code: must be %d" % [t, TankIds.TANK_CODES[t]]
+					)
+			if def is Dictionary and _num(def.get("crew")):
+				if int(def["crew"]) != TankIds.TANKS.find(t) + 1:
+					errors.append(
+						"tanks.json tanks.%s.crew: must be %d" % [t, TankIds.TANKS.find(t) + 1]
+					)
 			for e: Variant in (tanks[t] as Dictionary).get("engines", []):
 				if not TankIds.ENGINES.has(str(e)):
 					errors.append("tanks.json tanks.%s.engines: unknown engine %s" % [t, str(e)])
@@ -313,8 +328,9 @@ static func validate_stations(d: Variant) -> Array[String]:
 			errors.append("stations.json start_engines.%s: one engine per slot" % t)
 	if errors.size() > 0:
 		return errors
-	for t: String in [TankIds.TANK_RAMPART, TankIds.TANK_CITADEL]:
-		_check_rotation(d["rotation"].get(t), d["start_engines"][t], t, errors)
+	for t: String in TankIds.TANKS:
+		if TankIds.TANKS.find(t) > 0:
+			_check_rotation(d["rotation"].get(t), d["start_engines"][t], t, errors)
 	for table: String in TABLE_SEGMENTS:
 		_check_table(d[table], table, errors)
 	_check_station_bounds(d, errors)
@@ -575,11 +591,19 @@ static func validate_cross(files: Dictionary) -> Array[String]:
 	var st: Dictionary = files.get("stations", {})
 	var m: Dictionary = files.get("mission", {})
 	for t: String in TankIds.TANKS:
-		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", [])
-		var starts: Array = st["start_engines"].get(t, [])
+		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", []).duplicate()
+		var starts: Array = st["start_engines"].get(t, []).duplicate()
+		rooms.sort()
+		starts.sort()
 		if rooms != starts:
-			errors.append(
-				"stations.json start_engines.%s: must be tanks.json tanks.%s.engines" % [t, t]
+			(
+				errors
+				. append(
+					(
+						"stations.json start_engines.%s: must be tanks.json tanks.%s.engines (any order)"
+						% [t, t]
+					)
+				)
 			)
 	var table := str(m.get("plan_table", "plans"))
 	var at := "missions/%s.json" % str(m.get("id", ""))

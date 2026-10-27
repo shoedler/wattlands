@@ -15,14 +15,14 @@ static func shell_damage(c: TankContent, shell: int) -> float:
 			return c.num("tanks", "damage.heavy", 50.0)
 		TankIds.SHELL_OVER:
 			return c.num("tanks", "damage.over", 100.0)
-		TankIds.SHELL_SECONDARY:
+		TankIds.SHELL_BOW:
 			return c.num("tanks", "secondary.damage", 5.0)
 	return 0.0
 
 
 ## True for the shells armour reduces (light shells and secondaries).
 static func is_soft(shell: int) -> bool:
-	return shell == TankIds.SHELL_LIGHT or shell == TankIds.SHELL_SECONDARY
+	return shell == TankIds.SHELL_LIGHT or shell == TankIds.SHELL_BOW
 
 
 ## The armour factor `shell` meets on enemy `type` (1 for heavy and Overpressure shells).

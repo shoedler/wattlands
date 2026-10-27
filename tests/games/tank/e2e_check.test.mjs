@@ -245,7 +245,7 @@ test('final snapshots: a float, a missing key, a short row, a wrong crew, an ove
   assert.match(errs(missing), /client1: snapshot: missing gl/);
   const short = report();
   short.peers.client2.final_state.snapshot.r[0].pop();
-  assert.match(errs(short), /client2: snapshot\.r: a row needs 6 columns/);
+  assert.match(errs(short), /client2: snapshot\.r: a row needs 7 columns/);
   const solo = report();
   for (const role of ['host', 'client1', 'client2']) solo.peers[role].final_state.snapshot.r.pop();
   assert.match(errs(solo), /host: snapshot: 2 riders, wanted 3/);

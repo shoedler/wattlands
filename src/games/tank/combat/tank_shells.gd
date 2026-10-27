@@ -135,7 +135,7 @@ static func _impact(
 					damage_obstacle(hit.obstacle, s.type, c)
 				dmg = TankDamage.shell_damage(c, s.type)
 		events.append(TankEvents.hit(on, hit.id, dmg, s.type, 0.0, point.x))
-		if not hit.drill and s.type != TankIds.SHELL_SECONDARY:
+		if not hit.drill and s.type != TankIds.SHELL_BOW:
 			state.score.hits += 1
 			if rider != null:
 				rider.hits += 1

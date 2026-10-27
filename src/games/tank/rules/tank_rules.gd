@@ -83,6 +83,32 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 	return r.ftp_pct >= float(band[0]) and r.ftp_pct <= float(band[1])
 
 
+## The rider's current effort target in % FTP (TankRiderState.target_pct, v2), the denominator of
+## the HUD's and the view's power ratio: the applied ERG target when the telemetry carries one (the
+## governor's, rescue and the unverified factor included), else the phase's planned ERG target,
+## else in SIM the engine's band centre (brief 2.3 In band): WARMUP-kind phases tanks.json
+## power_ratio.warmup_sim_pct; the steam engine building TankConst.STEAM_BUILD_PCT, loaded or
+## cycling power_ratio.steam_loaded_pct; the diesel, the Bulwark and the rest the middle of
+## in_band.sim_ftp_pct (90.5). 0 when the rider has no phase (neither mode known).
+static func target_pct(state: TankState, r: TankRiderInput, station: TankStationState) -> float:
+	if r.mode == Wl.ERG and r.applied_target_w > 0.0:
+		return r.applied_pct()
+	if r.phase_mode == Wl.ERG and r.planned_pct > 0.0:
+		return r.planned_pct
+	if r.phase_mode != Wl.SIM and r.mode != Wl.SIM:
+		return 0.0
+	var c := state.content
+	if r.in_warmup():
+		return c.num("tanks", "power_ratio.warmup_sim_pct", 60.0) if c != null else 60.0
+	if station is TankSteamState:
+		var steam := station as TankSteamState
+		if steam.loaded or steam.cycling:
+			return c.num("tanks", "power_ratio.steam_loaded_pct", 60.0) if c != null else 60.0
+		return TankConst.STEAM_BUILD_PCT
+	var band: Array = c.value("tanks", "in_band.sim_ftp_pct", [76, 105]) if c != null else [76, 105]
+	return (float(band[0]) + float(band[1])) / 2.0
+
+
 ## Rooms follow each rider's plan meta (rotation is in the plans); a rotation event when they move.
 static func _assign_stations(
 	state: TankState, inputs: TankInputs, events: Array[Dictionary]
@@ -126,6 +152,7 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 		r.raw_w = ri.power_w
 		r.cadence_rpm = ri.cadence_rpm
 		r.ftp_pct = ri.ftp_pct
+		r.target_pct = target_pct(state, ri, st)
 		r.rescue = ri.rescue
 		r.afk = ri.afk
 		r.connected = ri.connected

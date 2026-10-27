@@ -21,6 +21,8 @@ var phase_kind: String = ""
 var phase_mode: String = ""
 ## PlanPhase.grade_source (Wl.GRADE_FLAT / GRADE_GAME) of a SIM phase; "" for ERG and the cool-down.
 var grade_source: String = ""
+## (v2) PhaseState.planned_pct: the plan's ERG target now in % FTP (its ramp included); 0 in SIM.
+var planned_pct: float = 0.0
 ## Game seconds since this rider's plan started (PhaseState.plan_elapsed_s).
 var plan_elapsed_s: float = 0.0
 ## PlayerSlot.rider_mass_kg (scaling-mode mass; real on the host, 75 for others on a client). The

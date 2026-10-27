@@ -6,14 +6,15 @@ extends RefCounted
 ## the telegraphing shooters, the mission plate's stage strip and objective, the halt distance and
 ## the boss bars. It only reads the state.
 
-## The arc generator's engine id (TankIds.ENGINE_ARC once the contracts have it).
-const ENGINE_ARC := "arc"
 ## The sprint rule's threshold (brief 2.4: >= 1.2 x FTP over the last 3 s, raw W).
 const SPRINT_FTP := 1.2
 ## The first 300 s of the plan: no sprint prompt (brief 2.3).
 const FIRST_S := 300.0
 ## In band for the engine windows (TankMech: 0.84-1.17 of the rider's target).
 const RATIO_HI := 1.17
+const RATIO_MAX := 1.6
+## The target before the host has set one: the middle of the SIM band (TankMech.rider_power).
+const FALLBACK_TARGET_PCT := 90.5
 ## The diesel's and Bulwark's SIM band in % FTP (tanks.json in_band.sim_ftp_pct).
 const SIM_BAND_PCT: Array = [76.0, 105.0]
 ## Steam "building" at >= 90 % FTP; a loaded or cycling loader only needs cadence >= 50.
@@ -44,17 +45,18 @@ const MECH := {
 	TankIds.ENGINE_BULWARK: "diesel",
 	TankIds.ENGINE_DYNAMO: "dynamo",
 	TankIds.ENGINE_STEAM: "steam",
-	ENGINE_ARC: "arc",
+	TankIds.ENGINE_ARC: "arc",
 }
 
 
 ## The power the engine windows show for `r` at `watts` raw W: watts over the rider's target
-## (1 = on target; in band 0.84-1.17). For now the target is the middle of the SIM tempo band
-## (90.5 % FTP, TankMech.rider_power); the one place to switch to TankRiderState.target_pct.
+## (1 = on target; in band 0.84-1.17): raw W / (TankRiderState.target_pct / 100 x FTP). Before the
+## host has set a target (target_pct 0), the middle of the SIM tempo band (90.5 % FTP) stands in.
 static func power_ratio(r: TankRiderState, watts: float) -> float:
 	if r == null or r.ftp <= 0.0:
 		return 0.0
-	return TankMech.rider_power(100.0 * watts / r.ftp)
+	var target := r.target_pct if r.target_pct > 0.0 else FALLBACK_TARGET_PCT
+	return clampf(watts / (target / 100.0 * r.ftp), 0.0, RATIO_MAX)
 
 
 ## -1 under the band, 0 in it, +1 over it (the crew row's strip): the rider's in-band flag first,

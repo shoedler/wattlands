@@ -20,9 +20,9 @@ func _hud(ctx: GameContext) -> F.Hud:
 
 func test_the_crew_size_picks_the_tank_and_its_rooms() -> void:
 	var expect := {
-		1: [TankIds.TANK_BULWARK, ["bulwark"]],
-		2: [TankIds.TANK_RAMPART, ["diesel", "dynamo"]],
-		3: [TankIds.TANK_CITADEL, ["diesel", "dynamo", "steam"]],
+		1: [TankIds.TANK_BULWARK, ["bulwark"], ["bulwark"]],
+		2: [TankIds.TANK_RAMPART, ["diesel", "dynamo"], ["diesel", "dynamo"]],
+		3: [TankIds.TANK_CITADEL, ["diesel", "steam", "dynamo"], ["diesel", "dynamo", "steam"]],
 	}
 	for crew: int in expect:
 		var g := _game(F.make_ctx(crew))
@@ -33,7 +33,7 @@ func test_the_crew_size_picks_the_tank_and_its_rooms() -> void:
 		)
 		assert_eq(engines, expect[crew][1], "rooms rear to front")
 		for r in g.state.riders:
-			assert_eq(r.engine, expect[crew][1][r.slot], "slot %d starts on its engine" % r.slot)
+			assert_eq(r.engine, expect[crew][2][r.slot], "slot %d starts on its engine" % r.slot)
 			assert_eq(g.state.station(r.engine).slot, r.slot)
 
 
