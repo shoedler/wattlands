@@ -340,3 +340,32 @@ static func _pose(acts: Array[Dictionary], pose: String) -> Dictionary:
 		if a["pose"] == pose:
 			return a
 	return {}
+
+
+func test_the_hud_geometry_reads_the_view() -> void:
+	for size: Vector2 in [Vector2(960, 540), Vector2(1146, 480)]:
+		var s := U.fixture("state", 3)
+		var v := U.view_of(self, s, Wl.SOLO, 1, size)
+		U.run(v, 2)
+		assert_eq(v.game.get_meta(TankHudGeom.VIEW_META), v, "the view registers on the game")
+		var g := TankHudGeom.make(s, v.game.get_meta(TankHudGeom.VIEW_META))
+		assert_eq(g.view, v)
+		var wx := s.hull.x_px + 400.0
+		assert_eq(g.world_x(wx), v.sx(wx))
+		assert_eq(g.ground_y(), TankView.GROUND + v.y_off)
+		assert_eq(g.tank_point("muzzle"), v.muzzle() + Vector2(0, v.y_off))
+		assert_eq(g.tank_point("barrel_pivot"), v.barrel_pivot() + Vector2(0, v.y_off))
+		assert_almost_eq(g.tank_point("rear").y, g.ground_y(), 0.01)
+		var e := s.enemies[0]
+		var r := g.enemy_rect(e)
+		assert_eq(r.position, (v.enemy_rects[e.id] as Rect2).position + Vector2(0, v.y_off))
+		assert_eq(v.hud_enemy_rect(-999), Rect2())
+		assert_eq(g.boss_rect(), Rect2(), "no Behemoth in an Advance")
+	var b := U.fixture("boss", 3)
+	var vb := U.view_of(self, b)
+	U.run(vb, 2)
+	var gb := TankHudGeom.make(b, vb)
+	assert_gt(gb.boss_rect().size.x, 100.0)
+	assert_true(
+		gb.boss_rect().grow(1.0).has_point(vb.hud_boss_muzzle()), "the main gun on the sprite"
+	)

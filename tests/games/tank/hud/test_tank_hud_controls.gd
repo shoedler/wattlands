@@ -1,206 +1,304 @@
 extends GutTest
-## The Tank Controls as Controls: they read TankGame.state, recompute their model each frame, redraw
-## only when it changed, draw headless without errors, and the Bulwark's lever cell sends intents.
+## The game's own HUD Controls built and drawn headless from fixture states for crews 1-4 (the
+## Bastion's fourth rider on the arc generator), the crew row's cards (room order, live engine
+## windows, YOU, names cut with an ellipsis), my numbers from the local telemetry, the world tags,
+## the free-roam strip and board from their setters, the fonts, and the elevation arc clear of the
+## barrel's pixels.
 
-const F := preload("res://tests/games/tank/tank_fakes.gd")
-
-
-func _make(state: TankState, peer: int = 1) -> Dictionary:
-	var ctx := F.make_ctx(state.crew, 0, "ashfall_road", Wl.SOLO, peer)
-	var g := F.make_game(ctx)
-	autofree(g)
-	g.state = state
-	var spec := TankHud.spec(g)
-	var by_name := {}
-	for c: Dictionary in spec.controls:
-		var control := c["control"] as Control
-		var rect: Rect2i = c["at"]
-		control.size = Vector2(rect.size * 3)
-		add_child_autofree(control)
-		by_name[str((control.get_script() as Script).get_global_name())] = control
-	return {"game": g, "controls": by_name, "ctx": ctx}
+const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
+const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
+const BARREL_PNG := "res://assets/tank/v2/turret_barrel.png"
+## The kit frame the turret parts share (tank_3rider) and its barrel pivot.
+const PART_PIVOT := Vector2(350.5, 114.5)
 
 
-func _card(m: Dictionary) -> TankStationCard:
-	return m["controls"]["TankStationCard"]
+func _place(c: TankHudCtl) -> TankHudCtl:
+	add_child_autofree(c)
+	c.size = Vector2(c.art_rect.size * 2)
+	return c
 
 
-func test_the_card_follows_the_local_riders_engine() -> void:
-	var s := TankFixtures.state(3)
+func _controls(g: TankGame) -> Array[TankHudCtl]:
+	var out: Array[TankHudCtl] = []
+	for e: Dictionary in TankHud.spec(g).controls:
+		out.append(_place(e["control"]))
+	return out
+
+
+func test_every_control_builds_and_draws_for_crews_1_to_4() -> void:
+	for crew in range(1, 5):
+		for kind: String in ["advance", "gun_line", "boss"]:
+			var g: TankGame = autofree(X.game(X.state(crew, kind)))
+			var ctls := _controls(g)
+			for c in ctls:
+				c.set_telemetry(X.tm(185.0, 88.0))
+				c.tick(0.1)
+				c.refresh()
+				c.queue_redraw()
+			await wait_physics_frames(2)
+			for c in ctls:
+				assert_gt(c.draws, 0, "%s crew %d %s drew" % [c.name, crew, kind])
+
+
+func test_the_crew_row_has_one_card_per_rider_in_room_order() -> void:
+	for crew in range(1, 5):
+		var s := X.state(crew)
+		var g: TankGame = autofree(X.game(s))
+		var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+		row.refresh()
+		assert_eq(row.cards.size(), crew, "crew %d" % crew)
+		var order: Array[String] = []
+		for st in s.stations:
+			if st.slot >= 0:
+				order.append(st.engine)
+		var shown: Array[String] = []
+		for c: Dictionary in row.cards:
+			shown.append(str(c["engine"]))
+			assert_not_null(row.texture_of(str(c["engine"])), "a live engine window")
+		assert_eq(shown, order, "rear to front, as the rooms")
+	var bastion := X.state(4)
+	var row4 := TankHudModel.crew_cards(bastion, 1)
+	assert_eq(str(row4[-1]["engine"]), TankIds.ENGINE_ARC)
+	assert_eq(str(row4[-1]["mech"]), "arc", "TankMech paints the arc generator")
+
+
+func test_the_engine_windows_turn_with_cadence_and_stop_at_zero() -> void:
+	var s := X.state(3)
+	var g: TankGame = autofree(X.game(s))
+	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	row.refresh()
+	var diesel := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
+	diesel.cadence_rpm = 0.0
+	row.refresh()
+	row.tick(1.0)
+	assert_eq(row.phase_of(TankIds.ENGINE_DIESEL), 0.0, "at 0 rpm everything stands still")
+	var dynamo := s.rider_at(s.station(TankIds.ENGINE_DYNAMO).slot)
+	dynamo.cadence_rpm = 90.0
+	row.refresh()
+	var before := row.phase_of(TankIds.ENGINE_DYNAMO)
+	row.tick(2.0)
+	assert_almost_eq(row.phase_of(TankIds.ENGINE_DYNAMO) - before, 3.0, 1e-6, "90 rpm: 1.5 rev/s")
+
+
+func test_the_local_card_says_you_and_uses_the_local_telemetry() -> void:
+	var s := X.state(3)
+	var g: TankGame = autofree(X.game(s, 2))
+	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	row.set_telemetry(X.tm(321.0, 101.0))
+	row.refresh()
+	var locals := row.cards.filter(func(c: Dictionary) -> bool: return bool(c["local"]))
+	assert_eq(locals.size(), 1)
+	assert_eq(int(locals[0]["peer"]), 2)
+	assert_eq(float(locals[0]["w"]), 321.0)
+	assert_eq(float(locals[0]["cad"]), 101.0)
+	assert_eq(str(locals[0]["name"]), "Rider 2")
+	s.rider(3).afk = true
+	row.refresh()
+	var away := row.cards.filter(func(c: Dictionary) -> bool: return int(c["peer"]) == 3)
+	assert_true(bool(away[0]["reserve"]))
+	assert_eq(float(away[0]["cad"]), 0.0, "a reserve engine idles")
+
+
+func test_names_are_cut_with_an_ellipsis_to_fit_their_card() -> void:
+	var long := "Bartholomew Longname-Smythe"
+	for w in [98.0, float(TankHudCrew.CARD_W)]:
+		var fitted := TankHudCrew.fit_name(long, w, "180 W")
+		assert_true(fitted.ends_with(D.ELLIPSIS), fitted)
+		assert_lte(D.tall_w(fitted), w - 12.0 - D.tall_w("180 W") - 9.0)
+		assert_gt(fitted.length(), 3, "still a name")
+	assert_eq(TankHudCrew.fit_name("Ann", 98.0, "180 W"), "Ann")
+	assert_eq(D.fit_tall("anything", 1.0), "")
+
+
+func test_my_numbers_come_from_the_local_telemetry() -> void:
+	var s := X.state(3)
+	for e in s.enemies:
+		e.telegraph_s = 0.0
+	var dyn_slot := s.station(TankIds.ENGINE_DYNAMO).slot
+	var peer := s.rider_at(dyn_slot).peer
+	var g: TankGame = autofree(X.game(s, peer))
+	var mine := _place(TankHudMine.new().setup(g, TankHud.LAYOUT["mine"])) as TankHudMine
+	mine.set_telemetry(X.tm(150.0, 92.0, Wl.ERG, 150))
+	mine.refresh()
+	assert_eq(float(mine.m["w"]), 150.0)
+	assert_eq(float(mine.m["cad"]), 92.0)
+	assert_almost_eq((mine.m["band"] as Vector2).x, 142.5, 1e-3)
+	assert_almost_eq((mine.m["band"] as Vector2).y, 157.5, 1e-3)
+	assert_eq(str(mine.m["line"]), TankHud.tx(g, "TANK_HUD_DO_HOLD", ["143", "158"]))
+	assert_false(bool(mine.m["sim"]), "the gear is dim in ERG")
+	assert_almost_eq(float(mine.m["wbal"]), 0.75, 1e-6)
+	s.rider(peer).in_band = false
+	mine.set_telemetry(X.tm(190.0, 92.0, Wl.ERG, 150))
+	mine.refresh()
+	assert_eq(int(mine.m["state"]), 1, "over the band")
+	mine.set_telemetry(X.tm(90.0, 92.0, Wl.ERG, 150))
+	mine.refresh()
+	assert_eq(int(mine.m["state"]), -1, "under the band")
+	var drv := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
+	var g2: TankGame = autofree(X.game(s, drv.peer))
+	var m2 := _place(TankHudMine.new().setup(g2, TankHud.LAYOUT["mine"])) as TankHudMine
+	s.enemy(13).telegraph_s = 3.4
+	m2.set_telemetry(X.tm(250.0, 95.0, Wl.SIM))
+	m2.refresh()
+	var sprint := str(roundi(1.2 * drv.ftp))
+	var want := TankHud.tx(g2, "TANK_HUD_DO_SURGE", [sprint]) + "  0:04"
+	assert_eq(str(m2.m["line"]), want, "SURGE nnn+ W with the seconds left")
+	assert_true(bool(m2.m["urgent"]))
+
+
+func test_the_world_tags_find_the_shooters_the_halt_line_and_the_gun() -> void:
+	var s := X.state(3)
+	var g: TankGame = autofree(X.game(s))
+	var tags := _place(TankHudTags.new().setup(g, TankHud.LAYOUT["tags"])) as TankHudTags
+	tags.refresh()
+	assert_eq((tags.m["warn"] as Array).size(), 1, "the destroyer's glint")
+	assert_true(tags.m.has("halt_x"), "an Advance has a halt line")
+	assert_true(bool(tags.m["aim"]), "the gunner lays the gun on a target")
+	var b := TankHudTags.new().setup(autofree(X.game(X.state(3, "boss"))), TankHud.LAYOUT["tags"])
+	_place(b)
+	b.refresh()
+	assert_eq(((b as TankHudTags).m["warn"] as Array).size(), 1, "the Behemoth's main gun")
+	assert_false((b as TankHudTags).m.has("halt_x"))
+	tags.set_turn_marker(s.hull.x_px + 400.0, -1)
+	tags.refresh()
+	assert_true(tags.m.has("turn_x"))
+	tags.queue_redraw()
+	await wait_physics_frames(2)
+	assert_gt(tags.draws, 0)
+	tags.clear_turn_marker()
+	tags.refresh()
+	assert_false(tags.m.has("turn_x"))
+
+
+func test_the_roam_strip_and_board_draw_what_their_setters_give() -> void:
+	var g: TankGame = autofree(X.game(X.state(3)))
+	var strip := _place(TankHudRoamStrip.new().setup(g, TankHud.LAYOUT["roam_strip"]))
+	var rs := strip as TankHudRoamStrip
+	var zones := [
+		{"id": "forest", "from_m": 0.0, "to_m": 1500.0},
+		{"id": "lake", "from_m": 1500.0, "to_m": 2600.0, "label": "TANK_HUD_TURN"},
+		{"id": "village", "from_m": 2600.0, "to_m": 6000.0},
+	]
+	rs.set_map(6000.0, zones, PackedFloat32Array([0.1, 0.5, 0.3, 0.9, 0.2]))
+	rs.set_tank(2500.0, -1, 120.0)
+	rs.set_contacts(PackedFloat32Array([3100.0, 900.0]), [{"at_m": 4000.0, "alive": false}])
+	rs.set_title("ROAM", "30 min")
+	var map := rs.map_rect()
+	assert_eq(rs.mx(0.0), map.position.x + TankHudRoamStrip.END_W)
+	assert_eq(rs.mx(6000.0), map.end.x - TankHudRoamStrip.END_W)
+	assert_eq(rs.mx(99999.0), rs.mx(6000.0), "clamped to the map")
+	assert_eq(rs.tank_dir, -1)
+	var board := _place(TankHudBoard.new().setup(g, TankHud.LAYOUT["roam_board"])) as TankHudBoard
+	board.set_time(125.0, false)
+	board.set_score(1234, 7)
+	assert_eq(TankHudBoard.thousands(12345), "12 345")
+	assert_eq(TankHudBoard.thousands(999), "999")
+	strip.queue_redraw()
+	board.queue_redraw()
+	await wait_physics_frames(2)
+	assert_gt(strip.draws, 0)
+	assert_gt(board.draws, 0)
+
+
+func test_the_fonts_load_and_match_their_generator() -> void:
+	var f := D.font()
+	assert_true(f is FontFile, "the stencil 5 x 7 face")
+	assert_true(D.font_tall() is FontFile, "the stencil 5 x 9 face")
+	assert_eq(D.text_w("ABC"), 17.0, "6 px advance, the last gap is not ink")
+	assert_eq(D.tall_w("ABC"), 17.0)
+	assert_not_null(D.digits(), "the 14 x 24 key-number strip")
 	for pair: Array in [
-		[1, TankIds.ENGINE_DYNAMO], [2, TankIds.ENGINE_STEAM], [3, TankIds.ENGINE_DIESEL]
+		[TankHudFont.TEXT_PNG, TankHudFont.text_image()],
+		[TankHudFont.TALL_PNG, TankHudFont.tall_image()],
+		[TankHudFont.DIGITS_PNG, TankHudFont.digits_image()],
 	]:
-		var m := _make(s, pair[0])
-		_card(m).refresh()
-		assert_eq(_card(m).model["kind"], pair[1], "peer %d" % pair[0])
+		var png := Image.load_from_file(ProjectSettings.globalize_path(str(pair[0])))
+		var gen: Image = pair[1]
+		assert_eq(png.get_size(), gen.get_size(), str(pair[0]))
+		var diff := 0
+		for y in gen.get_height():
+			for x in gen.get_width():
+				if (png.get_pixel(x, y).a > 0.5) != (gen.get_pixel(x, y).a > 0.5):
+					diff += 1
+		assert_eq(diff, 0, "%s is TankHudFont's" % pair[0])
+	assert_eq(TankHudFont.DIGIT_CELL.y, 24, "key numbers 24 art px tall")
 
 
-func test_a_card_redraws_only_when_the_model_changes() -> void:
-	var s := TankFixtures.state(2)
-	var m := _make(s, 2)
-	var card := _card(m)
-	card.refresh()
-	var n := card.model_changes
-	assert_eq(n, 1)
-	card.refresh()
-	card.refresh()
-	assert_eq(card.model_changes, n, "nothing moved: no redraw")
-	s.hull.speed_mps += 1.0
-	card.refresh()
-	assert_eq(card.model_changes, n + 1)
+## The barrel sprite's opaque pixels (centres, in its kit frame).
+func _opaque(img: Image) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for y in img.get_height():
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.0:
+				out.append(Vector2(x, y) + Vector2(0.5, 0.5))
+	return out
 
 
-func test_controls_draw_headless_for_every_engine_and_fixture() -> void:
-	for crew in [1, 2, 3]:
-		for kind in ["state", "gun_line", "boss"]:
-			var s: TankState
-			match kind:
-				"gun_line":
-					s = TankFixtures.gun_line(crew)
-				"boss":
-					s = TankFixtures.boss(crew)
-				_:
-					s = TankFixtures.state(crew)
-			for peer in range(1, crew + 1):
-				var m := _make(s, peer)
-				for c: TankHudPanel in m["controls"].values():
-					c.refresh()
-					c.queue_redraw()
-	await get_tree().process_frame
-	await get_tree().process_frame
-	assert_true(true, "no errors while drawing every card")
+## The barrel sprite on the canvas at elevation `deg` round `pivot` (as the view turns it), each
+## pixel with its 8 neighbours so rounding never hides a touch.
+func _barrel_sprite(
+	opaque: Array[Vector2], pivot: Vector2, scale: float, deg: float, left: bool
+) -> Dictionary:
+	var out := {}
+	var r := deg_to_rad(deg)
+	for q in opaque:
+		var rel := (q - PART_PIVOT) * scale
+		var rot := Vector2(rel.x * cos(r) + rel.y * sin(r), -rel.x * sin(r) + rel.y * cos(r))
+		if left:
+			rot.x = -rot.x
+		var p := Vector2i((pivot + rot).floor())
+		for dy in range(-1, 2):
+			for dx in range(-1, 2):
+				out[p + Vector2i(dx, dy)] = true
+	return out
 
 
-## A station card that records what the Ram cell draws instead of drawing it.
-class SpyCard:
-	extends TankStationCard
-	var labels: Array[String] = []
-	var lines: int = 0
-
-	func text(
-		_at: Vector2,
-		s: String,
-		_px: float,
-		_color: Color = WlTheme.TEXT,
-		_width: float = -1.0,
-		_align: int = HORIZONTAL_ALIGNMENT_LEFT,
-		_outlined: bool = true
-	) -> void:
-		labels.append(s)
-
-	func line(_a: Vector2, _b: Vector2, _color: Color, _width: float = 3.0) -> void:
-		lines += 1
-
-	func bar(_r: Rect2, _frac: float, _fill: Color) -> void:
-		labels.append("<bar>")
-
-
-func _spy_for(state: TankState, peer: int) -> SpyCard:
-	var m := _make(state, peer)
-	var spy := SpyCard.new()
-	spy.game = m["game"]
-	add_child_autofree(spy)
-	spy.refresh()
-	spy.call("_ram_cell", 2)
-	return spy
-
-
-func test_the_ram_cell_shows_a_ready_mark_only_when_the_ram_works() -> void:
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
-	var ready := _spy_for(s, peer)
-	assert_eq(ready.lines, 2, "an Advance past 300 s: the check mark")
-	assert_true(ready.labels.has("Surge to ram"))
-	for pair: Array in [[TankIds.SEG_DEPOT, Wl.WARMUP], [TankIds.SEG_CHECKPOINT, Wl.RECOVERY]]:
-		var q := TankFixtures.state(2)
-		q.seg.seg = pair[0]
-		q.seg.kind = pair[1]
-		var idle := _spy_for(q, peer)
-		assert_eq(idle.lines, 0, "%s: no check mark" % pair[0])
-		assert_false(idle.labels.has("<bar>"), "%s: no full bar" % pair[0])
-		assert_true(idle.labels.has("-"), "%s: a dash" % pair[0])
-	var early := TankFixtures.state(2)
-	early.t = 120.0
-	assert_eq(_spy_for(early, peer).lines, 0, "the first 300 s: no check mark")
-	var bs := TankFixtures.boss(2)
-	var boss := _spy_for(bs, bs.rider_at(bs.station(TankIds.ENGINE_DIESEL).slot).peer)
-	assert_false(boss.labels.has("Surge to ram"), "the boss asks for a dodge")
-	assert_true(boss.labels.has("Surge to dodge"))
+func test_the_elevation_arc_never_touches_the_barrel() -> void:
+	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
+	var opaque := _opaque(img)
+	assert_gt(opaque.size(), 500, "the barrel sprite")
+	for crew in range(1, 5):
+		var s := X.state(crew)
+		var scale := 0.85 if crew == 1 else 1.0
+		for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
+			s.hull.facing = facing
+			var left: bool = facing == TankIds.FACE_LEFT
+			var deg := TankHudGeom.ELEV_MIN
+			while deg <= TankHudGeom.ELEV_MAX:
+				s.hull.elev_deg = deg
+				var b := TankHudGeom.make(s, null).barrel()
+				var piv: Vector2 = b["pivot"]
+				var radius := TankHudGeom.arc_radius(float(b["length"]))
+				var barrel := _barrel_sprite(opaque, piv, scale, deg, left)
+				var model := TankHudGeom.barrel_pixels(piv, float(b["length"]), deg, left)
+				var drawn: Array[Vector2i] = TankHudGeom.arc_pixels(piv, radius, left)
+				drawn.append_array(
+					TankHudGeom.tick_pixels(piv, deg, left, radius - 2.0, radius + 3.0)
+				)
+				drawn.append_array(
+					TankHudGeom.tick_pixels(piv, deg, left, radius + 3.0, radius + 6.0)
+				)
+				var lr := TankHudGeom.label_rect(piv, radius, left, Vector2(30, 9))
+				for y in range(int(lr.position.y), int(lr.end.y)):
+					for x in range(int(lr.position.x), int(lr.end.x)):
+						drawn.append(Vector2i(x, y))
+				var hits := 0
+				for p in drawn:
+					if barrel.has(p) or model.has(p):
+						hits += 1
+				assert_eq(hits, 0, "crew %d facing %d at %.0f deg" % [crew, facing, deg])
+				deg += 3.0
 
 
-func test_the_objective_line_and_boss_bars_model() -> void:
-	var m := _make(TankFixtures.boss(1), 1)
-	var obj := m["controls"]["TankObjectiveLine"] as TankObjectiveLine
-	var boss := m["controls"]["TankBossBars"] as TankBossBars
-	obj.refresh()
-	boss.refresh()
-	assert_eq(obj.model["key"], "TANK_OBJ_BOSS")
-	assert_true(boss.model["show"])
-	var quiet := _make(TankFixtures.state(1), 1)
-	var qb := quiet["controls"]["TankBossBars"] as TankBossBars
-	qb.refresh()
-	assert_false(qb.model["show"])
-
-
-func test_a_game_without_state_is_harmless() -> void:
-	var g := TankGame.new()
-	autofree(g)
-	var card := TankStationCard.new()
-	card.game = g
-	add_child_autofree(card)
-	card.refresh()
-	assert_eq(card.model, {})
-	var none := TankStationCard.new()
-	add_child_autofree(none)
-	none.refresh()
-	assert_eq(none.model, {})
-
-
-func _click(card: TankStationCard, design: Vector2) -> void:
-	var ev := InputEventMouseButton.new()
-	ev.button_index = MOUSE_BUTTON_LEFT
-	ev.pressed = true
-	ev.position = design * card.k()
-	card._gui_input(ev)
-
-
-func test_clicking_the_bulwarks_lever_sends_a_button_intent() -> void:
-	var s := TankFixtures.state(1)
-	var m := _make(s, 1)
-	var card := _card(m)
-	card.refresh()
-	assert_eq(card.mouse_filter, Control.MOUSE_FILTER_STOP, "the Bulwark's card takes clicks")
-	var sent: Array = (m["ctx"].intents as F.Intents).sent
-	_click(card, TankStationCard.lever_rect(2).get_center())
-	assert_eq(sent.size(), 1)
-	assert_eq(sent[0], TankIntents.lever("hoist", TankIds.VIA_BUTTON))
-	_click(card, TankStationCard.lever_rect(0).get_center())
-	assert_eq(sent[1], TankIntents.lever("drive", TankIds.VIA_BUTTON))
-	_click(card, TankStationCard.lever_rect(1).get_center())
-	assert_eq(sent[2]["to"], "turret")
-	_click(card, Vector2(5, 5))
-	assert_eq(sent.size(), 3, "a click outside the lever does nothing")
-	assert_true(TankIntents.normalize(sent[0])["via"] == TankIds.VIA_BUTTON)
-	assert_eq(TankIntents.normalize(sent[0])["to"], TankIds.LEVER_HOIST, "the host accepts it")
-
-
-func test_other_engines_never_take_clicks_or_send_intents() -> void:
-	var s := TankFixtures.state(3)
-	var m := _make(s, 1)
-	var card := _card(m)
-	card.refresh()
-	assert_eq(card.mouse_filter, Control.MOUSE_FILTER_IGNORE)
-	_click(card, TankStationCard.lever_rect(1).get_center())
-	assert_eq((m["ctx"].intents as F.Intents).sent.size(), 0)
-	assert_eq(
-		_make(s, 2)["controls"]["TankObjectiveLine"].mouse_filter, Control.MOUSE_FILTER_IGNORE
-	)
-
-
-func test_the_controls_never_change_the_state() -> void:
-	var s := TankFixtures.state(3)
-	var before := JSON.stringify(s.to_dict())
-	var m := _make(s, 1)
-	for c: TankHudPanel in m["controls"].values():
-		c.refresh()
-	assert_eq(JSON.stringify(s.to_dict()), before)
+func test_the_barrel_check_catches_an_arc_inside_the_barrels_reach() -> void:
+	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
+	var s := X.state(3)
+	s.hull.elev_deg = 10.0
+	var b := TankHudGeom.make(s, null).barrel()
+	var piv: Vector2 = b["pivot"]
+	var barrel := _barrel_sprite(_opaque(img), piv, 1.0, 10.0, false)
+	var hits := 0
+	for p in TankHudGeom.arc_pixels(piv, 20.0, false):
+		if barrel.has(p):
+			hits += 1
+	assert_gt(hits, 0, "the round 2 mock's 20 px arc ran under the barrel")

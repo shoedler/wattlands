@@ -272,7 +272,9 @@ func test_the_arc_generator_hums_and_crackles_on_its_riders_cadence() -> void:
 	for _i in 40:
 		a.update(s, 0.05, me, U.feed_of(s, 180.0, 90.0))
 	assert_true(a.loop_on[TankIds.ENGINE_ARC], "the hum runs")
-	assert_eq(a.loop_db[TankIds.ENGINE_ARC], TankAudio.OWN_DB[TankIds.ENGINE_ARC], "its rider's own")
+	assert_eq(
+		a.loop_db[TankIds.ENGINE_ARC], TankAudio.OWN_DB[TankIds.ENGINE_ARC], "its rider's own"
+	)
 	# 90 rpm, two climbs a revolution: about 6 crackles in 2 s.
 	assert_between(a.played.count("tank_arc_crackle"), 4, 7)
 	a.played.clear()

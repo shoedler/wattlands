@@ -24,8 +24,10 @@ extends Node2D
 ## turn by their rider's cadence integrated over render time; cosmetic randomness comes from
 ## TankFx.rng, seeded from ctx.seed.
 ##
-## Hooks for the module: play_evade(kind) (the evade lurch or smoke screen; the `evade` cue calls it
-## too), power_ratio(rider) (watts over the rider's target), set_canvas_size(size) (tests).
+## Hooks: play_evade(kind) (the evade lurch or smoke screen; the `evade` cue calls it too),
+## power_ratio(rider) (watts over the rider's target), set_canvas_size(size) (tests), and the HUD's
+## geometry (hud_world_x, hud_ground_y, hud_tank_point, hud_enemy_rect, hud_boss_rect,
+## hud_boss_muzzle), found through the game's meta TankHudGeom.VIEW_META, which the view sets.
 
 const BASE := Vector2(960, 540)
 ## Rules px -> art px.
@@ -175,6 +177,17 @@ func _build() -> void:
 	dof = TankDof.new()
 	dof.enabled = miniature_option()
 	add_child(dof)
+	# The HUD's world tags find the view here (TankHudGeom.VIEW_META).
+	game.set_meta(TankHudGeom.VIEW_META, self)
+
+
+func _exit_tree() -> void:
+	if (
+		game != null
+		and game.has_meta(TankHudGeom.VIEW_META)
+		and game.get_meta(TankHudGeom.VIEW_META) == self
+	):
+		game.remove_meta(TankHudGeom.VIEW_META)
 
 
 ## The local rider's `miniature` player option (default on).
@@ -913,6 +926,55 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 		if not alive.has(id):
 			_shell_seen.erase(id)
 	return out
+
+
+# --- The HUD's geometry (TankHudGeom; canvas art px, 0,0 the canvas' top left) ----------------------
+
+
+## A rules world x on the canvas.
+func hud_world_x(world_x_px: float) -> float:
+	return sx(world_x_px)
+
+
+## The road line under the tank.
+func hud_ground_y() -> float:
+	return GROUND + y_off
+
+
+## A tank point as drawn now: "barrel_pivot", "muzzle" (at the elevation and facing), "rear" (the
+## road under the hull's rear end), or any kit.json anchor.
+func hud_tank_point(name: String) -> Vector2:
+	var off := Vector2(0, y_off)
+	match name:
+		"barrel_pivot":
+			return barrel_pivot() + off
+		"muzzle":
+			return muzzle() + off
+		"rear":
+			return Vector2(origin.x + ART_REAR, GROUND) + off
+	return anchor(name) + off
+
+
+## An enemy's sprite (Rect2() when it is not drawn).
+func hud_enemy_rect(id: int) -> Rect2:
+	if not enemy_rects.has(id):
+		return Rect2()
+	var r: Rect2 = enemy_rects[id]
+	return Rect2(r.position + Vector2(0, y_off), r.size)
+
+
+## The Behemoth's sprite (Rect2() when it is not drawn).
+func hud_boss_rect() -> Rect2:
+	if game == null or game.state == null or not boss_visible(game.state):
+		return Rect2()
+	var r := boss_rect(game.state)
+	return Rect2(r.position + Vector2(0, y_off), r.size)
+
+
+## The Behemoth's main gun (Vector2.ZERO when it is not drawn).
+func hud_boss_muzzle() -> Vector2:
+	var r := hud_boss_rect()
+	return Vector2.ZERO if r.size == Vector2.ZERO else r.position + boss_muzzle()
 
 
 # --- Layers ---------------------------------------------------------------------------------------------
