@@ -998,10 +998,10 @@
         ]
       ],
       "turret_at": [
-        0.62,
-        0.3
+        0.466,
+        0.414
       ],
-      "note": "muzzle: the main gun's left end; bogies_at / turret_at: fractions of the sprite (fires, hits)"
+      "note": "muzzle: the main gun's left end; bogies_at / turret_at: fractions of the sprite (fires, hits): the bogies' centres and the turret block's centre (art x 151-392, y 102-144), measured on the sprite; assets/tank/rigs.json boss holds the same parts in rules px"
     }
   },
   "cards": {

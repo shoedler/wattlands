@@ -148,7 +148,7 @@ func test_slow_frames_for_five_seconds_switch_the_pass_off() -> void:
 	assert_false(d2.auto_off, "under 5 s keeps it")
 
 
-func test_enemies_keep_their_depth_lanes_apart() -> void:
+func test_enemies_stand_in_the_lanes_the_rules_hold_them_in() -> void:
 	var s := U.fixture("gun_line", 3)
 	s.enemies.clear()
 	var x := s.hull.x_px + 420.0
@@ -161,23 +161,74 @@ func test_enemies_keep_their_depth_lanes_apart() -> void:
 		e.h = 48
 		e.hp = 40.0
 		e.hp_max = 64.0
+		e.lane = 3 - i
 		s.enemies.append(e)
 	var v := U.view_of(self, s)
 	U.run(v, 2)
-	var by_lane := {}
-	for id: int in v.lanes:
-		var lane := int(v.lanes[id])
-		if not by_lane.has(lane):
-			by_lane[lane] = []
-		(by_lane[lane] as Array).append(v.enemy_rects[id])
-	assert_gte(by_lane.size(), 3, "four close enemies spread over the lanes")
-	for lane: int in by_lane:
-		var rects: Array = by_lane[lane]
-		for i in rects.size():
-			for j in range(i + 1, rects.size()):
-				assert_false((rects[i] as Rect2).intersects(rects[j]), "lane %d overlap" % lane)
-	var back: Rect2 = v.enemy_rects[v.lanes.keys()[0]]
-	assert_lte(back.end.y, TankView.ROAD_ENEMY_Y + 0.5, "enemies stand on the road")
+	for e in s.enemies:
+		assert_eq(int(v.lanes[e.id]), e.lane, "enemy %d in its rules lane" % e.id)
+	for i in range(1, 4):
+		var nearer: Rect2 = v.enemy_rects[100 + i]
+		var further: Rect2 = v.enemy_rects[100 + i - 1]
+		assert_gt(nearer.end.y, further.end.y, "a nearer lane stands lower on the road")
+	assert_lte(v.enemy_rects[103].end.y, TankView.ROAD_ENEMY_Y + 0.5, "enemies stand on the road")
+	s.enemies[0].lane = 9
+	U.run(v, 1)
+	assert_eq(int(v.lanes[100]), TankView.LANES - 1, "a lane past the last is drawn in the last")
+
+
+func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane() -> void:
+	for crew in [1, 2, 3, 4]:
+		for index: int in [2, 5, 8]:
+			var rig := TankRulesRig.new(crew)
+			rig.enter(index, 0.5)
+			var v := U.view_of(self, rig.state)
+			U.run(v, 2)
+			var at := "crew %d gun line %d" % [crew, index]
+			var live: Array[TankEnemyState] = []
+			for e in rig.state.enemies:
+				if e.mode != TankIds.EM_DEAD:
+					live.append(e)
+					assert_eq(int(v.lanes[e.id]), e.lane, "%s: enemy %d" % [at, e.id])
+			assert_eq(v.lanes.size(), live.size(), "%s: every live enemy drawn" % at)
+			for i in live.size():
+				for j in range(i + 1, live.size()):
+					if live[i].lane != live[j].lane or live[i].side != live[j].side:
+						continue
+					var a: Rect2 = v.enemy_rects[live[i].id]
+					var b: Rect2 = v.enemy_rects[live[j].id]
+					assert_false(a.intersects(b), "%s: lane %d overlap" % [at, live[i].lane])
+
+
+func test_the_behemoth_is_drawn_where_the_rules_hit_it() -> void:
+	for crew in [1, 2, 3, 4]:
+		var s := U.fixture("boss", crew)
+		var v := U.view_of(self, s)
+		U.run(v, 2)
+		var br := v.boss_rect(s)
+		assert_eq(br.position.x, roundf(v.sx(v.boss_x(s))), "crew %d: its left edge" % crew)
+		var aux := TankAux.of(s)
+		var meta: Dictionary = v.kit.enemies["behemoth"]["meta"]
+		var at: Array = (meta["bogies_at"] as Array).duplicate()
+		at.append(meta["turret_at"])
+		for i in 4:
+			var r := TankTargets.boss_rect(s, aux, i)
+			var drawn := Rect2(
+				Vector2(v.sx(r.position.x), v.sy(r.position.y)),
+				Vector2(v.sx(r.end.x) - v.sx(r.position.x), v.sy(r.end.y) - v.sy(r.position.y))
+			)
+			var hit := br.position + br.size * TankKit.vec(at[i])
+			assert_true(
+				drawn.grow(2.0).has_point(hit),
+				(
+					"crew %d part %d: the view's hit at %s inside the rules box %s"
+					% [crew, i, hit, drawn]
+				)
+			)
+		var mz := TankTargets.boss_origin(s, aux) + aux.geo.boss_muzzle()
+		var view_mz := br.position + v.boss_muzzle()
+		assert_almost_eq(v.sx(mz.x), view_mz.x, 8.0, "crew %d: the main gun's end (x)" % crew)
+		assert_almost_eq(v.sy(mz.y), view_mz.y, 4.0, "crew %d: the main gun's end (y)" % crew)
 
 
 func test_wrecks_age_on_sim_time_into_debris_heaps() -> void:
@@ -232,18 +283,26 @@ func test_shots_hits_and_bursts_light_the_scene() -> void:
 func test_the_evade_lurches_the_tank_or_blows_a_smoke_screen() -> void:
 	var s := U.fixture("state", 3)
 	var v := U.view_of(self, s)
-	v.apply_cue(s, "evade", {"e": 13, "ok": 0})
+	var diesel := s.station(TankIds.ENGINE_DIESEL).slot
+	var steam := s.station(TankIds.ENGINE_STEAM).slot
+	v.apply_cue(s, TankEvents.EVADE, TankEvents.evade(13, 3, false))
 	assert_eq(v.lurch_s, -1.0, "a missed evade does nothing")
-	v.apply_cue(s, "evade", {"e": 13, "ok": 1})
-	assert_gte(v.lurch_s, 0.0, "a diesel sprint lurches the tank")
+	assert_eq(v.screen_s, -1.0)
+	v.apply_cue(s, TankEvents.EVADE, TankEvents.evade(13, 3, true, diesel))
+	assert_gte(v.lurch_s, 0.0, "the diesel's sprint lurches the tank")
+	assert_eq(v.screen_s, -1.0, "no smoke screen for the diesel")
 	U.run(v, 30)
 	assert_gt(v.origin.x, v.tank_pos.x, "forward")
 	U.run(v, 60)
 	assert_eq(v.lurch_s, -1.0)
 	var before := v.fx.smoke.size()
-	v.play_evade("smoke")
-	assert_gte(v.screen_s, 0.0)
+	v.apply_cue(s, TankEvents.EVADE, TankEvents.evade(13, 3, true, steam))
+	assert_gte(v.screen_s, 0.0, "the steam engine's sprint blows a smoke screen")
+	assert_eq(v.lurch_s, -1.0, "and does not lurch the tank")
 	assert_gt(v.fx.smoke.size(), before + 15, "the boiler blows a smoke screen")
+	assert_eq(v.evade_kind(s, -1), "lurch", "an unknown slot lurches")
+	var solo := U.fixture("state", 1)
+	assert_eq(v.evade_kind(solo, solo.stations[0].slot), "lurch", "the Bulwark lurches")
 
 
 func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void:

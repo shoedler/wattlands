@@ -70,7 +70,7 @@
 		"bogies": 3,
 		"bogie_hp": 50,
 		"turret_hp": 205,
-		"hull_px": [320, 100],
+		"hull_px": [388.7, 198],
 		"creep_px_s": 2,
 		"stop_px": 120,
 		"pushback_px": 24,

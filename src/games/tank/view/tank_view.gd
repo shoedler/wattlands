@@ -536,21 +536,21 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 			_cue_hit(state, data)
 		TankEvents.KILL:
 			_cue_kill(state, data)
-		"evade":
+		TankEvents.EVADE:
 			if int(data.get("ok", 0)) == 1:
-				play_evade(_evade_kind())
+				play_evade(evade_kind(state, int(data.get("s", -1))))
 		TankEvents.BREAKDOWN:
 			shake = 1.0
 			fx.boom(anchor("exhaust") + Vector2(30, 40), 18.0, 8)
 
 
-## Who evaded: the steam rider sprinting blows a smoke screen, anyone else lurches the tank.
-func _evade_kind() -> String:
-	var r := rider_of(TankIds.ENGINE_STEAM)
-	if r != null and r.ftp > 0.0 and r.raw_w >= r.ftp * 1.2:
-		var d := rider_of(TankIds.ENGINE_DIESEL)
-		if d == null or d.raw_w < d.ftp * 1.2:
-			return "smoke"
+## How the evade looks (brief 2.4), from the evade event's `s`, the slot whose surge made the shot
+## miss: on the steam engine the boiler blows a smoke screen; on the diesel or the Bulwark (or an
+## unknown slot) the tank lurches.
+func evade_kind(state: TankState, slot: int) -> String:
+	var st := state.station_of(slot) if slot >= 0 else null
+	if st != null and st.engine == TankIds.ENGINE_STEAM:
+		return "smoke"
 	return "lurch"
 
 
@@ -677,26 +677,14 @@ func enemy_kind(e: TankEnemyState) -> String:
 	return k if kit.enemies.has(k) else "medium"
 
 
-## Depth lanes: enemies sorted by x, each in the nearest lane (0 front .. LANES - 1 back) where it
-## keeps clear of the one before it, so none overlap at a gun line (the round 2 mock's fix).
+## Depth lanes (brief 2.4 Spacing): each live enemy is drawn in the lane the rules hold it in
+## (TankEnemyState.lane, in the snapshot), 0 the front lane .. LANES - 1 the back one, so the view
+## and the rules agree on who stands where (the rules keep held positions in a lane apart).
 func _lanes(state: TankState) -> Dictionary:
 	var out := {}
-	var ends: Array[float] = []
-	ends.resize(LANES)
-	ends.fill(-INF)
-	var list: Array[TankEnemyState] = []
 	for e in state.enemies:
 		if e.mode != TankIds.EM_DEAD:
-			list.append(e)
-	list.sort_custom(func(a: TankEnemyState, b: TankEnemyState) -> bool: return a.x_px < b.x_px)
-	for e2 in list:
-		var w := float(kit.enemies[enemy_kind(e2)]["size"].x)
-		var x := sx(enemy_x(e2) + float(e2.w) * 0.5) - w * 0.5
-		var lane := 0
-		while lane < LANES - 1 and x < ends[lane] + 6.0:
-			lane += 1
-		ends[lane] = maxf(ends[lane], x + w)
-		out[e2.id] = lane
+			out[e.id] = clampi(e.lane, 0, LANES - 1)
 	return out
 
 
@@ -753,11 +741,12 @@ func enemy_muzzle(e: TankEnemyState, r: Rect2) -> Vector2:
 	return r.position + m
 
 
+## The Behemoth's sprite (stage px): its left edge where the rules have it (boss.x_px, no clamp),
+## standing on the road, so its parts are drawn where the rules hit them (rigs.json boss is the
+## kit sprite in rules px).
 func boss_rect(state: TankState) -> Rect2:
 	var sz: Vector2 = kit.enemies.get("behemoth", {}).get("size", Vector2(583, 297))
-	var right := minf(canvas.x, BASE.x) + (tank_pos.x - TANK_POS.x)
-	var x := clampf(sx(boss_x(state)), right - 400.0, right - 260.0)
-	return Rect2(Vector2(roundf(x), roundf(ROAD_ENEMY_Y + 4.0 - sz.y)), sz)
+	return Rect2(Vector2(roundf(sx(boss_x(state))), roundf(ROAD_ENEMY_Y + 4.0 - sz.y)), sz)
 
 
 func boss_muzzle() -> Vector2:
