@@ -97,6 +97,7 @@ static func pre(
 		r.work_s += dt
 	_turn(state, inputs, aux, dt, events)
 	_ends(state, dt)
+	_forced_turn(state, events)
 	_time_up(state, events)
 	_strongpoints(state, aux, dt)
 	_patrols(state, aux, dt)
@@ -125,6 +126,18 @@ static func _turn(
 			var slot := -1 if bool(n.get("auto", false)) else ri.slot
 			start_turn(state, slot, events)
 			return
+
+
+## A driver who plays by hand and leaves the "Turn around" prompt standing: the crew turns on its
+## own once the tank has stood turn.forced_wait_s at the turning place (the Autopilot turns sooner,
+## turn.autopilot_wait_s), so a free-roam session never stalls at a road end.
+static func _forced_turn(state: TankState, events: Array[Dictionary]) -> void:
+	var r := state.roam
+	if r.at_end == 0 or state.all_afk:
+		return
+	if r.end_s < _num(state, "turn.forced_wait_s", 12.0) - EPS or not can_turn(state):
+		return
+	start_turn(state, -1, events)
 
 
 ## Whether a turn may start now: free roam, no turn running, the cooldown over, not broken down,

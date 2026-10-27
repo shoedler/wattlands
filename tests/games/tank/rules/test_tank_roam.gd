@@ -186,7 +186,7 @@ func test_the_road_stops_at_the_turning_place() -> void:
 	var rig := _rig(3)
 	_enter_roam(rig)
 	rig.state.roam.map_m = rig.state.roam_map.hi_m - 30.0
-	rig.run(20.0)
+	rig.run(11.0)
 	assert_almost_eq(rig.state.roam.map_m, rig.state.roam_map.hi_m, 0.01, "stopped at the end")
 	assert_eq(rig.state.roam.at_end, 1)
 	assert_eq(rig.state.hull.speed_mps, 0.0)
@@ -282,6 +282,21 @@ func test_the_autopilot_turns_3_s_after_the_end() -> void:
 	rig.run(9.0)
 	assert_eq(rig.state.hull.dir, TankIds.DIR_LEFT)
 	assert_eq(rig.state.roam.at_end, 0)
+
+
+func test_the_crew_turns_on_its_own_12_s_after_the_end_when_the_driver_does_not() -> void:
+	var rig := _rig(3)
+	_enter_roam(rig)
+	rig.state.roam.map_m = rig.state.roam_map.hi_m
+	rig.run_until(func() -> bool: return rig.state.roam.end_s >= 11.9, 20.0)
+	assert_eq(rig.state.roam.turn_s, 0.0, "no turn before 12 s at the end")
+	var turns := 0
+	for i in 10:
+		turns += _count(rig.step(), TankEvents.TURN)
+	assert_eq(turns, 1, "the forced turn")
+	assert_gt(rig.state.roam.turn_s, 0.0, "turning")
+	rig.run(9.0)
+	assert_eq(rig.state.hull.dir, TankIds.DIR_LEFT)
 
 
 func test_nobody_but_the_driver_gets_the_autopilot_turn() -> void:

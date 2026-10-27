@@ -260,6 +260,7 @@ const VALLEY_SPEC := {
 	"turn.stop_s": "pos",
 	"turn.cooldown_s": "pos",
 	"turn.autopilot_wait_s": "nonneg",
+	"turn.forced_wait_s": "nonneg",
 	"points.light": "num",
 	"points.medium": "num",
 	"points.destroyer": "num",
