@@ -24,6 +24,13 @@ extends Node2D
 ## turn by their rider's cadence integrated over render time; cosmetic randomness comes from
 ## TankFx.rng, seeded from ctx.seed.
 ##
+## Free roam (brief 2.10, 3.1): the planes scroll with the hull's place on the valley road (plane_x)
+## and the zone's near plane replaces the forest plane (zone_mix, cross-faded over 60 m at a zone's
+## edge); while the tank drives west (TankHullState.dir -1) the world, the tank, the light and the
+## effects layers are drawn mirrored (the tank faces left on the right of the screen and the world
+## scrolls the other way); a turn hides the flip behind a dust cloud, and a turning place stands at
+## each end of the road.
+##
 ## Hooks: play_evade(kind) (the evade lurch or smoke screen; the `evade` cue calls it too),
 ## power_ratio(rider) (watts over the rider's target), set_canvas_size(size) (tests), and the HUD's
 ## geometry (hud_world_x, hud_ground_y, hud_tank_point, hud_enemy_rect, hud_boss_rect,
@@ -56,6 +63,12 @@ const WRECK_BURN_S := 30.0
 const WRECK_GONE_S := 240.0
 const MAX_CUES_PER_FRAME := 24
 const CUE_QUEUE_MAX := 64
+## Free roam: the near planes cross-fade over this many metres either side of a zone's edge.
+const ZONE_BLEND_M := 60.0
+## The turn's dust: full thickness over the middle (1 - 1 / gain) of the stop.
+const TURN_DUST_GAIN := 1.8
+## The layers mirrored while the tank drives west (the planes behind and the HUD never are).
+const MIRROR_LAYERS: Array[String] = ["World", "Tank", "Light", "Front"]
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -106,6 +119,15 @@ var frames: int = 0
 ## The view's own frame clock (s): flicker and drift only.
 var time: float = 0.0
 var dt: float = 0.0
+## Free roam: the travel frame is drawn mirrored (the tank drives west); the planes' scroll in rules
+## px (the camera in missions, the hull's place on the road in free roam); the map metre the hull's
+## centre is drawn at; the hull's x as drawn; the near plane's zones {a, b, k} (b blended in by k).
+var mirrored: bool = false
+var plane_x: float = 0.0
+var map_m: float = 0.0
+var hull_x: float = 0.0
+var zone_mix: Dictionary = {}
+var _dir_seen: int = 0
 
 var _built: bool = false
 var _layers: Dictionary = {}
@@ -243,8 +265,9 @@ func advance(delta: float) -> void:
 	if dof != null:
 		dof.note_frame(delta, sim_adv)
 	_layout(state)
-	var hull_x := history.hull_x_at(rt, state.hull.x_px) if clock.is_set() else state.hull.x_px
+	hull_x = history.hull_x_at(rt, state.hull.x_px) if clock.is_set() else state.hull.x_px
 	cam_x = hull_x - float(TankConst.REAR_SCREEN_X)
+	_roam_frame(state)
 	var cam_px := cam_x * S
 	scroll_px = cam_px - _prev_cam_px if _cam_primed else 0.0
 	if absf(scroll_px) > 200.0:
@@ -299,6 +322,87 @@ func _arc_station(state: TankState) -> TankStationState:
 		if st.engine == TankIds.ENGINE_ARC:
 			return st
 	return null
+
+
+# --- Free roam -----------------------------------------------------------------------------------------
+
+
+## The frame's free-roam set-up: the mirror (and the wrecks mirrored when the direction flipped), the
+## planes' scroll from the hull's place on the road, the near plane's zones.
+func _roam_frame(state: TankState) -> void:
+	var r := state.roam
+	var dir := state.hull.dir if r.active else TankIds.DIR_RIGHT
+	if r.active and _dir_seen != 0 and dir != _dir_seen:
+		_mirror_wrecks(state)
+	_dir_seen = dir
+	mirrored = r.active and dir < 0
+	if r.active and state.roam_map != null:
+		map_m = r.map_m + (hull_x - state.hull.x_px) / TankConst.PX_PER_M * float(dir)
+		plane_x = map_m * TankConst.PX_PER_M
+		zone_mix = zone_mix_at(state.roam_map, map_m)
+	else:
+		plane_x = cam_x
+		zone_mix = {}
+	for n: String in MIRROR_LAYERS:
+		var l: Node2D = _layers.get(n, null)
+		if l != null:
+			l.scale = Vector2(-1, 1) if mirrored else Vector2.ONE
+			l.position = Vector2(canvas.x, 0) if mirrored else Vector2.ZERO
+
+
+## The near plane's zones at map metre `m`: {"a", "b", "k"}, b blended in by k (0..1) within
+## ZONE_BLEND_M of a zone's edge.
+static func zone_mix_at(map: TankRoamMap, m: float) -> Dictionary:
+	var i := map.zone_index_at(m)
+	if i < 0:
+		return {}
+	var z: Dictionary = map.zones[i]
+	var id := str(z["id"])
+	var from := float(z["from_m"])
+	var to := float(z["to_m"])
+	if i > 0 and m - from < ZONE_BLEND_M:
+		var prev := str(map.zones[i - 1]["id"])
+		return {"a": prev, "b": id, "k": 0.5 + 0.5 * (m - from) / ZONE_BLEND_M}
+	if i < map.zones.size() - 1 and to - m < ZONE_BLEND_M:
+		var nxt := str(map.zones[i + 1]["id"])
+		return {"a": id, "b": nxt, "k": 0.5 - 0.5 * (to - m) / ZONE_BLEND_M}
+	return {"a": id, "b": id, "k": 0.0}
+
+
+## The travel-frame x (rules px) of map metre `m` as drawn this frame.
+func travel_x(state: TankState, m: float) -> float:
+	var cx := hull_x + float(state.hull.hull_w) * 0.5
+	return cx + (m - map_m) * float(state.hull.dir) * TankConst.PX_PER_M
+
+
+## The wrecks stay where they lie on the road when the travel frame flips (the turn's midpoint).
+func _mirror_wrecks(state: TankState) -> void:
+	var cx := state.hull.x_px + float(state.hull.hull_w) * 0.5
+	for w in wrecks:
+		w["x"] = 2.0 * cx - float(w["x"])
+		w["side"] = -int(w.get("side", 1))
+
+
+## How thick the turn's dust cloud is (0..1): it billows up over the first part of the stop, stays
+## thick over its middle (where the frame flips) and settles again.
+func turn_dust(state: TankState) -> float:
+	var r := state.roam
+	if not r.active or r.turn_s <= 0.0:
+		return 0.0
+	var half := 0.5 * (state.content.num("valley", "turn.stop_s", 8.0) if state.content else 8.0)
+	var k := 1.0 - absf(r.turn_s - half) / maxf(half, 0.01)
+	return clampf(k * TURN_DUST_GAIN, 0.0, 1.0)
+
+
+## A canvas x as the HUD sees it (mirrored while the tank drives west).
+func _hud_x(x: float) -> float:
+	return canvas.x - x if mirrored else x
+
+
+func _hud_rect(r: Rect2) -> Rect2:
+	if not mirrored or r.size == Vector2.ZERO:
+		return r
+	return Rect2(Vector2(canvas.x - r.end.x, r.position.y), r.size)
 
 
 # --- Mapping -------------------------------------------------------------------------------------------
@@ -842,9 +946,10 @@ func _emit(state: TankState, feed: Dictionary, step_dt: float) -> void:
 				Color(0.78, 0.8, 0.82),
 				0.3
 			)
-	# Dust and mud from the tracks at speed; burning wrecks smoke.
+	# Dust and mud from the tracks at speed (and thick while the tank turns); burning wrecks smoke.
 	var px_s := hull.speed_mps * TankConst.PX_PER_M * S
 	_dust_acc += step_dt * clampf(px_s / 8.0, 0.0, 6.0)
+	_dust_acc += step_dt * 30.0 * turn_dust(state)
 	while _dust_acc >= 1.0:
 		_dust_acc -= 1.0
 		var rw: Dictionary = kit.spec(variant).get("anchors", {}).get("road_wheel_line", {})
@@ -933,7 +1038,12 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 
 ## A rules world x on the canvas.
 func hud_world_x(world_x_px: float) -> float:
-	return sx(world_x_px)
+	return _hud_x(sx(world_x_px))
+
+
+## True while the world is drawn mirrored (free roam, driving west): the HUD flips its barrel arc.
+func hud_mirrored() -> bool:
+	return mirrored
 
 
 ## The road line under the tank.
@@ -945,21 +1055,22 @@ func hud_ground_y() -> float:
 ## road under the hull's rear end), or any kit.json anchor.
 func hud_tank_point(name: String) -> Vector2:
 	var off := Vector2(0, y_off)
+	var p := anchor(name)
 	match name:
 		"barrel_pivot":
-			return barrel_pivot() + off
+			p = barrel_pivot()
 		"muzzle":
-			return muzzle() + off
+			p = muzzle()
 		"rear":
-			return Vector2(origin.x + ART_REAR, GROUND) + off
-	return anchor(name) + off
+			p = Vector2(origin.x + ART_REAR, GROUND)
+	return Vector2(_hud_x(p.x), p.y) + off
 
 
 ## An enemy's sprite (Rect2() when it is not drawn).
 func hud_enemy_rect(id: int) -> Rect2:
 	if not enemy_rects.has(id):
 		return Rect2()
-	var r: Rect2 = enemy_rects[id]
+	var r: Rect2 = _hud_rect(enemy_rects[id])
 	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
@@ -967,7 +1078,7 @@ func hud_enemy_rect(id: int) -> Rect2:
 func hud_boss_rect() -> Rect2:
 	if game == null or game.state == null or not boss_visible(game.state):
 		return Rect2()
-	var r := boss_rect(game.state)
+	var r := _hud_rect(boss_rect(game.state))
 	return Rect2(r.position + Vector2(0, y_off), r.size)
 
 
@@ -1006,7 +1117,12 @@ func _draw_front() -> void:
 	var ci := layer("Front")
 	fx.draw_solid(ci)
 	fx.draw_smoke(ci)
+	TankWorldDraw.draw_turn_dust(ci, self, game.state)
+	if mirrored:
+		# The foreground plane belongs to the road, not the travel frame: undo the layer's mirror.
+		ci.draw_set_transform(Vector2(canvas.x, 0), 0.0, Vector2(-1, 1))
 	TankWorldDraw.draw_front(ci, self)
+	ci.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 ## Tilt-shift shading: the top and the bottom of the frame darkened (the planes carry the blur).

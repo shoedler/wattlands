@@ -14,7 +14,20 @@ const PLANES := [
 		"layer": "front", "darken": 0.86},
 ]
 ## In-engine renders for the picker and the lobby's content cards (tests/games/tank/view/card_scene.gd).
-const CARDS := {"picker": "picker_card.png", "card_mission": "card_mission.png", "card_drill": "card_drill.png"}
+const CARDS := {"picker": "picker_card.png", "card_mission": "card_mission.png", "card_drill": "card_drill.png",
+	"card_roam": "card_roam.png"}
+## The free-roam zones' near planes (zones.gd writes them; the forest zone keeps the forest plane).
+const ZONE_PLANES := {
+	"note": "Free roam (docs/games/tank.md 2.10, 3.1): the zone's near plane replaces the forest plane (the "
+		+ "same frame, y0, parallax and blur) while the tank drives through it; the pine forest keeps the forest "
+		+ "plane. Built by zones.gd from the kit's own planes (the forest's trees squashed into lower tree lines, "
+		+ "the far plane's pale cliff as quarry rock) plus houses, haystacks, fences, reeds and a gantry in code.",
+	"replaces": "forest",
+	"lake": "planes2/zone_lake_wide.png",
+	"village": "planes2/zone_village_wide.png",
+	"quarry": "planes2/zone_quarry_wide.png",
+	"meadow": "planes2/zone_meadow_wide.png",
+}
 ## Which tank each variant is (docs/games/tank.md 2.2).
 const TANK_IDS := {"tank_1rider": ["bulwark", 1], "tank_2rider": ["rampart", 2], "tank_3rider": ["citadel", 3],
 	"tank_4rider": ["bastion", 4]}
@@ -199,6 +212,7 @@ func _init() -> void:
 			+ "parallax = scroll factor against the road (1.0). The tilt-shift blur is baked once by planes2.gd: "
 			+ "blur_box_radius (two box passes); the reference already carries its own depth of field, so the far "
 			+ "plane keeps it. darken = the factor baked into the foreground.",
+		"zone_planes": ZONE_PLANES,
 		"tank": {
 			"source": "cut from the reference (tank.gd, tankfix.gd: the star and A17 painted out, crew, beams, smoke "
 				+ "and headlight glow removed), split into modules at its bulkheads and assembled per crew size "

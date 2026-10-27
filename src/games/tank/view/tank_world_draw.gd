@@ -5,7 +5,9 @@ extends RefCounted
 ## front), the depot's yard lamps and drums, the halt line (concrete teeth, a post with a hooded
 ## amber lamp), obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk
 ## into a debris heap, the enemies in their depth lanes (a dark rim, dimmer further back, a warm
-## pulse while they telegraph) and the Behemoth.
+## pulse while they telegraph) and the Behemoth. Free roam (brief 2.10, 3.1): the zone's near plane in
+## place of the forest plane, cross-faded at a zone's edge, the planes scrolled by the hull's place on
+## the road (TankView.plane_x); the turning places at the road's ends; the turn's dust cloud.
 
 const LANE_DIM: Array[float] = [1.0, 0.7, 0.5, 0.4]
 const RIM := Color(0.02, 0.025, 0.03, 0.9)
@@ -19,17 +21,31 @@ const WOOD := Color(0.24, 0.18, 0.12)
 const WIRE := Color(0.42, 0.42, 0.4)
 ## Depot props every this many world px (by hash), in the depot only.
 const DEPOT_CELL_PX := 170.0
+## Free roam: the turning place's barrier and the start of its gravel loop, metres inside the road's end.
+const TURN_BARRIER_M := 15.0
+const TURN_LOOP_M := 70.0
+const GRAVEL := Color(0.2, 0.18, 0.15)
+const GRAVEL_DK := Color(0.12, 0.11, 0.09)
 
 
-## A plane tiled across the canvas at its parallax.
-static func tile(ci: CanvasItem, v: TankView, p: Dictionary) -> void:
+## A plane tiled across the canvas at its parallax (scrolled by TankView.plane_x), tinted `mod`.
+static func tile(ci: CanvasItem, v: TankView, p: Dictionary, mod: Color = Color.WHITE) -> void:
 	var w: float = p["w"]
-	var scroll := v.cam_x * TankView.S
+	var scroll := v.plane_x * TankView.S
 	var x := -fposmod(scroll * float(p["parallax"]), w)
 	var tex: Texture2D = p["tex"]
 	while x < v.canvas.x:
-		ci.draw_texture(tex, Vector2(roundf(x), float(p["y0"])))
+		ci.draw_texture(tex, Vector2(roundf(x), float(p["y0"])), mod)
 		x += w
+
+
+## Free roam: the zone's near plane in place of the replaced one, the next zone's faded in at an edge.
+static func _zone_plane(ci: CanvasItem, v: TankView) -> void:
+	var mix := v.zone_mix
+	var k := float(mix.get("k", 0.0))
+	tile(ci, v, v.kit.zone_plane(str(mix.get("a", ""))), Color(1, 1, 1, 1.0 - k))
+	if k > 0.0:
+		tile(ci, v, v.kit.zone_plane(str(mix.get("b", ""))), Color(1, 1, 1, k))
 
 
 static func draw_back(ci: CanvasItem, v: TankView) -> void:
@@ -39,7 +55,10 @@ static func draw_back(ci: CanvasItem, v: TankView) -> void:
 		ci.draw_rect(Rect2(0, -v.y_off, v.canvas.x, v.y_off + 1.0), Color(0.016, 0.03, 0.035))
 	for p in v.kit.planes:
 		if str(p.get("layer", "")) == "back":
-			tile(ci, v, p)
+			if not v.zone_mix.is_empty() and str(p.get("name", "")) == v.kit.zone_replaces:
+				_zone_plane(ci, v)
+			else:
+				tile(ci, v, p)
 	for p2 in v.kit.planes:
 		if str(p2.get("layer", "")) == "road":
 			tile(ci, v, p2)
@@ -58,8 +77,10 @@ static func draw_front(ci: CanvasItem, v: TankView) -> void:
 
 
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
-	if state.seg.seg == TankIds.SEG_DEPOT:
+	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
 		_depot(ci, v)
+	if state.roam.active and state.roam_map != null:
+		_turning_places(ci, v, state)
 	_halt_line(ci, v, state)
 	for ob in state.obstacles:
 		_obstacle(ci, v, ob)
@@ -283,6 +304,101 @@ static func _obstacle(ci: CanvasItem, v: TankView, ob: TankObstacleState) -> voi
 				false,
 				Color(0.22, 0.2, 0.18)
 			)
+
+
+# --- Free roam ---------------------------------------------------------------------------------------------
+
+
+## The turning places at the road's ends (brief 2.10): a widened gravel loop on the road, churned
+## track marks, a timber barrier with hatched boards (no text) and a hooded amber lamp on a post.
+static func _turning_places(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	var map := state.roam_map
+	for end in [-1, 1]:
+		var at := map.length_m if end > 0 else 0.0
+		var barrier_m := at - float(end) * TURN_BARRIER_M
+		var bx := roundf(v.sx(v.travel_x(state, barrier_m)))
+		var lx := v.sx(v.travel_x(state, at - float(end) * TURN_LOOP_M))
+		var x0 := minf(lx, bx)
+		var x1 := maxf(lx, bx)
+		if x1 < -80.0 or x0 > v.canvas.x + 80.0:
+			continue
+		var g := TankView.GROUND
+		for i in int(x1 - x0):
+			var x := x0 + float(i)
+			var h := TankDraw.hash01(x * 0.37 + float(end) * 11.0)
+			ci.draw_rect(
+				Rect2(Vector2(x, g - 3.0 + roundf(h * 2.0)), Vector2(1, 3)),
+				GRAVEL.lerp(GRAVEL_DK, h)
+			)
+		for k in 3:
+			var y := g - 1.0 + float(k) * 2.0
+			ci.draw_line(
+				Vector2(x0 + 8.0, y), Vector2(x1 - 8.0, y + 1.0), Color(0.06, 0.05, 0.04, 0.8), 1.0
+			)
+		var dir := -float(end) if not v.mirrored else float(end)
+		_barrier(ci, bx, g, dir)
+		var post := Vector2(bx - 26.0 * float(end) * (-1.0 if v.mirrored else 1.0), g)
+		ci.draw_rect(Rect2(post + Vector2(0, -46), Vector2(2, 46)), IRON)
+		ci.draw_rect(Rect2(post + Vector2(-4, -49), Vector2(10, 3)), Color(0.08, 0.07, 0.06))
+		ci.draw_rect(Rect2(post + Vector2(-2, -46), Vector2(6, 1)), AMBER)
+
+
+## A timber barrier across the road: two posts, two hatched boards, stones at its foot.
+static func _barrier(ci: CanvasItem, x: float, g: float, _dir: float) -> void:
+	for px: float in [x - 14.0, x + 12.0]:
+		ci.draw_rect(Rect2(Vector2(px, g - 26.0), Vector2(3, 26)), WOOD)
+		ci.draw_rect(Rect2(Vector2(px, g - 26.0), Vector2(1, 26)), Color(0.32, 0.24, 0.16))
+	for by: float in [g - 22.0, g - 13.0]:
+		ci.draw_rect(Rect2(Vector2(x - 18.0, by), Vector2(36, 5)), Color(0.2, 0.15, 0.1))
+		var k := 0
+		while k < 36:
+			ci.draw_rect(
+				Rect2(Vector2(x - 18.0 + k, by), Vector2(3, 5)), Color(0.42, 0.33, 0.2, 0.55)
+			)
+			k += 7
+		ci.draw_rect(Rect2(Vector2(x - 18.0, by), Vector2(36, 1)), Color(0.36, 0.28, 0.18))
+	for sx: float in [-20.0, -9.0, 4.0, 17.0]:
+		ci.draw_rect(Rect2(Vector2(x + sx, g - 3.0), Vector2(6, 3)), CONCRETE)
+
+
+## Where the turning places' lamps hang (stage px) this frame (the light layer lights them).
+static func turn_lamps(v: TankView, state: TankState) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	if not state.roam.active or state.roam_map == null:
+		return out
+	for end in [-1, 1]:
+		var at := state.roam_map.length_m if end > 0 else 0.0
+		var bx := roundf(v.sx(v.travel_x(state, at - float(end) * TURN_BARRIER_M)))
+		var px := bx - 26.0 * float(end) * (-1.0 if v.mirrored else 1.0)
+		if px > -40.0 and px < v.canvas.x + 40.0:
+			out.append(Vector2(px + 1.0, TankView.GROUND - 45.0))
+	return out
+
+
+## The turn's dust cloud (brief 2.10): soft brown billows over the tank, thickest at the turn's midpoint
+## where the frame flips.
+static func draw_turn_dust(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	var k := v.turn_dust(state)
+	if k <= 0.0:
+		return
+	var size := _variant_size(v)
+	var top := v.origin + Vector2(0, size.y * 0.2)
+	TankDraw.soft_at(
+		ci, top + size * Vector2(0.5, 0.5), size.x * 0.62, Color(0.2, 0.17, 0.14, 0.8 * k)
+	)
+	for i in 34:
+		var h := TankDraw.hash01(float(i) * 7.13)
+		var h2 := TankDraw.hash01(float(i) * 3.71 + 1.0)
+		var wob := sin(v.time * (0.7 + h) + float(i)) * 8.0
+		var p := top + Vector2(size.x * (0.02 + 0.96 * h) + wob, size.y * (0.1 + 0.7 * h2))
+		var r := 40.0 + 46.0 * h2
+		var c := Color(0.32, 0.27, 0.21).lerp(Color(0.22, 0.19, 0.16), h)
+		TankDraw.soft_at(ci, p, r, Color(c.r, c.g, c.b, 0.85 * k))
+
+
+static func _variant_size(v: TankView) -> Vector2:
+	var s: Variant = v.kit.spec(v.variant).get("size", [480, 240])
+	return TankKit.vec(s)
 
 
 ## The depot yard: hooded lamp posts, fuel drums and crates along the road (world-anchored, by hash).
