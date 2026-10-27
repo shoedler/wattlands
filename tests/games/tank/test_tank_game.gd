@@ -4,6 +4,8 @@ extends GutTest
 ## results and progress. Lead-owned G0 tests; builders add theirs under their own folders.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
+## Well under a tick (0.05 s).
+const TIME_EPS := 1e-6
 
 
 func _game(ctx: GameContext) -> TankGame:
@@ -199,11 +201,14 @@ func test_bands_at_each_segment_start() -> void:
 				assert_almost_eq(float(last[3]), want[1] / 100.0 * p.ftp, 0.001, at)
 
 
-## The [t, peer, ...] rows of `peer` with t0 <= t < t1.
+## The [t, peer, ...] rows of `peer` with t0 <= t < t1, to within TIME_EPS: the rows' times and the
+## fake clock's phase starts are summed differently and can differ in the last bits (1057.55 and
+## 1057.5500000000002 are the same tick).
 func _rows_in(rows: Array, peer: int, t0: float, t1: float) -> Array:
 	var out: Array = []
 	for r: Array in rows:
-		if int(r[1]) == peer and float(r[0]) >= t0 and float(r[0]) < t1:
+		var t := float(r[0])
+		if int(r[1]) == peer and t >= t0 - TIME_EPS and t < t1 - TIME_EPS:
 			out.append(r)
 	return out
 

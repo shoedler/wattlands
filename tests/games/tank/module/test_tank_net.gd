@@ -172,7 +172,7 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	var size: Array = c.content.enemy_def("medium")["size_px"]
 	assert_eq([c.enemy(11).w, c.enemy(11).h], [int(size[0]), int(size[1])])
 	var solo_host := _host(1)
-	solo_host.state.enemy(11).hp = 40.0
+	solo_host.state.enemy(11).hp = 30.0
 	var solo := _client(1)
 	solo.apply_snapshot(_wire(solo_host))
 	var scale := c.content.enemy_scale(TankIds.TANK_BULWARK)
@@ -180,8 +180,12 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * scale, 0.001, "enemy scale"
 	)
 	assert_almost_eq(solo.state.boss.turret_max, float(boss_def["turret_hp"]) * scale, 0.001)
+	# A client derives an enemy's maximum from the content, rounded up like every HP it shows.
 	assert_almost_eq(
-		solo.state.enemy(11).hp_max, float(c.content.enemy_def("medium")["hp"]) * scale, 0.001
+		solo.state.enemy(11).hp_max,
+		ceilf(float(c.content.enemy_def("medium")["hp"]) * scale),
+		0.001,
+		"the scaled maximum, rounded up"
 	)
 
 

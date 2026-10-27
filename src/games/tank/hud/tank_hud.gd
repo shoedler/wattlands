@@ -43,9 +43,6 @@ const LAYOUT := {
 ## The bottom-right corner nothing covers, and the tank's band the plates keep out of.
 const CLEAR := Rect2i(760, 480, 200, 60)
 const TANK_BAND_Y := Vector2i(150, 360)
-## The custom readout id the module feeds with ctx.hud.readout (no Control shows it: the hull
-## plate reads the state).
-const READOUT_HULL := "hull_hp"
 ## The palette for the platform's toasts, banners and help (brief 3.6).
 const PALETTE := {
 	"panel": Color("#17140f"),

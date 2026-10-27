@@ -31,8 +31,6 @@ signal cue(kind: String, data: Dictionary)
 ## its interpolation history. Clients only; the host's view reads the live state.
 signal snapshot_applied(tick: int)
 
-## The host refreshes the teammate strip this often (ticks; 2 Hz).
-const STATUS_EVERY_TICKS := 10
 ## Session ids kept in the progress file (a restarted client sees the same results twice).
 const PROGRESS_SESSIONS_KEPT := 32
 
@@ -48,7 +46,6 @@ var _rescue: Dictionary = {}
 var _afk: Dictionary = {}
 var _group_phase: int = -1
 var _finished: bool = false
-var _hull_shown: int = -1
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -98,9 +95,6 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 		_finished = true
 		finished.emit(state.outcome if state.outcome != "" else TankIds.OUTCOME_COMPLETE)
 	_cues.on_state(state)
-	_feed_hull()
-	if frame.tick % STATUS_EVERY_TICKS == 0:
-		_feed_status()
 
 
 ## Called by the platform for bots and Autopilot riders only (its result is appended to their own
@@ -168,27 +162,6 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 		if ps == null or not ps.is_cooldown():
 			return false
 	return not ctx.players.is_empty()
-
-
-## The teammate strip (engine icon, engine name, in band), 2 Hz (host).
-func _feed_status() -> void:
-	for r in state.riders:
-		if r.engine == "":
-			continue
-		var status := {
-			"in_band": r.in_band,
-			"icon": str(TankIds.ENGINE_ICONS.get(r.engine, "")),
-			"text": ctx.strings.t(str(TankIds.ENGINE_LABELS.get(r.engine, "")))
-		}
-		ctx.hud.teammate_status(r.peer, status)
-
-
-## The hull HP readout, whenever the shown number changes.
-func _feed_hull() -> void:
-	var hp := ceili(state.hull.hp)
-	if hp != _hull_shown:
-		_hull_shown = hp
-		ctx.hud.readout(TankHud.READOUT_HULL, str(hp))
 
 
 # --- Every peer: input ------------------------------------------------------------------------
@@ -286,7 +259,6 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if not problem.contains("more than"):
 			return
 	TankSnapshot.apply(state, snap)
-	_feed_hull()
 	_cues.on_state(state)
 	snapshot_applied.emit(state.tick)
 

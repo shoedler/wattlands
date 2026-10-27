@@ -62,13 +62,6 @@ TANK_BANNER_BOSS,The Behemoth
 TANK_BANNER_BOSS_PHASE2,The bogies are broken: hit the turret
 TANK_BANNER_VICTORY,Foundry Gate taken
 TANK_BANNER_WITHDRAWN,The Behemoth got away
-TANK_TEACH_DIESEL,Diesel: your watts drive the tracks. Hold 76-105% FTP to glow.
-TANK_TEACH_BULWARK,"One engine does it all: the lever moves itself between Drive, Turret and Hoist."
-TANK_TEACH_DYNAMO,Dynamo: steady cadence charges the bank that turns the turret.
-TANK_TEACH_STEAM,Steam: build pressure to load a heavy shell.
-TANK_TEACH_ARC,Arc generator: hold your target to light the searchlights and feed the bow guns.
-TANK_TEACH_AIM,Aim drill: the turret lines up on the wrecks.
-TANK_TEACH_FIRE,Load and fire!
 TANK_CARD_SPEED,Speed
 TANK_CARD_TO_HALT,To halt line
 TANK_CARD_BERM,Berm

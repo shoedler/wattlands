@@ -98,6 +98,14 @@ export const RANGE_GRADE_MAX_PCT = 10;
 export const MAX_SNAPSHOT_BYTES = 4096;
 export const PAUSE_AFTER_S = 10;
 export const TICK_S = 0.05;
+/**
+ * The latest moment (sample `t`, end of its tick) a MockTrainer's first notification arrives:
+ * MockTrainer.SAMPLE_MAX_S (its notifications come every 0.9-1.1 s, seeded, the first one too).
+ * BRIEF 3.5 times the pause on not pedaling from the first *sample* that meets not_pedaling; the
+ * report's 1 Hz trace rows before that sample carry the default 0 W telemetry, so the row at t = 0
+ * is no sample. test_tank_s2_pause.gd measures the exact anchor in process and pins this value.
+ */
+export const FIRST_SAMPLE_MAX_S = 1.1;
 export const GRADE_ORDER = ['S', 'A', 'B', 'C', 'D'];
 const EPS = 1e-6;
 
@@ -548,9 +556,19 @@ export function checkS1(reports, opts = {}) {
 
 // --- S2 ----------------------------------------------------------------------------------------------------
 
-/** The first trace row of `peer` at 0 W (the not-pedaling sample), or null. */
+/** The first trace row of `peer` at 0 W, or null. */
 export function firstNotPedaling(r, peer) {
   return traceOf(r, peer).find((row) => num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0) ?? null;
+}
+
+/**
+ * The latest platform time (the tick's start, as event `pt`) at which the sample that meets
+ * not_pedaling can have arrived, for a rider whose first 0 W trace row is `row`: no sample comes
+ * before the trainer's first notification (FIRST_SAMPLE_MAX_S at the latest, the end of its tick),
+ * and a 0 W row later in the ride shows a sample that arrived by then.
+ */
+export function notPedalingAnchor(row) {
+  return Math.max(num(row.t), FIRST_SAMPLE_MAX_S - TICK_S);
 }
 
 /** GameHost's shared pause (BRIEF 3.5): every human rider ride-paused for not pedaling. */
@@ -562,9 +580,11 @@ export function checkS2(reports) {
   const { found, missing } = pick(reports, ['s2_c3_zero', 's2_c3_idle', 's2_c1_zero']);
   if (found.length === 0) return skip('S2', title, 'no s2_* reports');
   const probs = missing.map((m) => `missing report ${m}`);
-  // Crew 3 at 0 W: since v0.2 (BRIEF 3.5) every rider ride-pauses after 5 s of not pedaling and the
-  // host pauses the shared game clock once all of them are, so the crew never leaves the depot. A
-  // HOST run ends only at max_sim_seconds (`timeout`), still paused.
+  // Crew 3 at 0 W: (BRIEF 3.5) every rider ride-pauses after 10 s of not pedaling and the host
+  // pauses the shared game clock once all of them are, so the crew never leaves the depot. A HOST
+  // run ends only at max_sim_seconds (`timeout`), still paused. The bound stays 10 s + 1 tick
+  // after the last rider's first not-pedaling sample (notPedalingAnchor: the first trainer
+  // notification, not the t = 0 trace row).
   const r3 = reports.s2_c3_zero;
   if (r3) {
     const n = 's2_c3_zero';
@@ -578,9 +598,9 @@ export function checkS2(reports) {
     else if (!pauses.length || pauses[0].paused !== true || pauses[0].reason !== SHARED_PAUSE_REASON) {
       probs.push(`${n}: never paused for ${SHARED_PAUSE_REASON}`);
     } else {
-      const last = Math.max(...firsts.map((f) => num(f.t)));
+      const last = Math.max(...firsts.map((f) => notPedalingAnchor(f)));
       if (num(pauses[0].pt) > last + PAUSE_AFTER_S + TICK_S + EPS) {
-        probs.push(`${n}: paused at ${fmt(num(pauses[0].pt))} s, ${fmt(num(pauses[0].pt) - last)} s after the last rider's first not-pedaling sample (max ${PAUSE_AFTER_S} s + 1 tick)`);
+        probs.push(`${n}: paused at ${fmt(num(pauses[0].pt))} s, ${fmt(num(pauses[0].pt) - last)} s after the last rider's first not-pedaling sample at ${fmt(last)} s at the latest (max ${PAUSE_AFTER_S} s + 1 tick)`);
       }
       if (pauses.some((e) => e.paused === false)) probs.push(`${n}: the shared pause ended, nobody pedaled`);
     }
@@ -613,8 +633,9 @@ export function checkS2(reports) {
     const paused = (r1.events ?? []).find((e) => e && e.type === 'paused' && e.paused === true);
     if (!first) probs.push(`${n}: no not-pedaling sample in the trace`);
     else if (!paused) probs.push(`${n}: never paused`);
-    else if (num(paused.pt) > num(first.t) + PAUSE_AFTER_S + TICK_S + EPS) {
-      probs.push(`${n}: paused at ${fmt(num(paused.pt))} s, ${fmt(num(paused.pt) - num(first.t))} s after the first not-pedaling sample (max ${PAUSE_AFTER_S} s + 1 tick)`);
+    else if (num(paused.pt) > notPedalingAnchor(first) + PAUSE_AFTER_S + TICK_S + EPS) {
+      const at = notPedalingAnchor(first);
+      probs.push(`${n}: paused at ${fmt(num(paused.pt))} s, ${fmt(num(paused.pt) - at)} s after the first not-pedaling sample at ${fmt(at)} s at the latest (max ${PAUSE_AFTER_S} s + 1 tick)`);
     }
     if (eventsOf(r1, 'kill').length) probs.push(`${n}: kills in a paused run`);
     if (gradeOf(r1) !== 'D') probs.push(`${n}: grade ${gradeOf(r1)}, wanted D`);

@@ -22,7 +22,7 @@ extends RefCounted
 ##                  miss_px; clamp; lanes (ENEMIES_SPEC)
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
 ##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
-##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
+##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
 ##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
 ##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
 ##   roam/valley.json  the free-roam valley: length, zones, terrain, strongpoints, patrols, turn,

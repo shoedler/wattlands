@@ -18,13 +18,12 @@ func _errors(files: Dictionary) -> String:
 # --- Ids ------------------------------------------------------------------------------------------
 
 
-func test_the_arc_engine_and_the_bastion_have_ids_codes_labels_and_an_icon() -> void:
+func test_the_arc_engine_and_the_bastion_have_ids_codes_and_labels() -> void:
 	assert_eq(TankIds.ENGINE_ARC, "arc")
 	assert_has(TankIds.ENGINES, TankIds.ENGINE_ARC)
 	assert_eq(TankIds.engine_code(TankIds.ENGINE_ARC), 5)
 	assert_eq(TankIds.engine_of(5), TankIds.ENGINE_ARC)
 	assert_eq(TankIds.ENGINE_LABELS[TankIds.ENGINE_ARC], "TANK_ENGINE_ARC")
-	assert_eq(TankIds.ENGINE_ICONS[TankIds.ENGINE_ARC], "res://assets/tank/icons/engine_arc.png")
 	assert_eq(TankIds.TANK_BASTION, "bastion")
 	assert_eq(TankIds.TANKS, ["bulwark", "rampart", "citadel", "bastion"] as Array[String])
 	assert_eq(TankIds.TANK_CODES[TankIds.TANK_BASTION], 4)
