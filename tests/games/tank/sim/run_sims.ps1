@@ -22,6 +22,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $Erg = 'erg:compliance=1.0'
 $DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 $Sprinter = 'intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
+$S9Sprinter = 'intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
 $Stop = 'erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 $GunlineDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 
@@ -70,7 +71,7 @@ function Invoke-S7 {
 }
 
 function Invoke-S9 {
-    Invoke-Sim 's9_c1_sprint' @('--content=ashfall_road', '--players=1', '--bots=0', "--rider=$Sprinter", '--seed=1')
+    Invoke-Sim 's9_c1_sprint' @('--content=ashfall_road', '--players=1', '--bots=0', "--rider=$S9Sprinter", '--seed=1')
 }
 
 function Invoke-S10 {

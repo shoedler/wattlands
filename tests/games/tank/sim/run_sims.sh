@@ -18,7 +18,7 @@
 #       and in a 90% gun line (slot 0, the same gun line, phase 2)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
-#   s9  crew 1 with a scripted sprinter (mock `intervals`: 12 s at 300 W, 150 W for 28 s, FTP 200; it
+#   s9  crew 1 with a scripted sprinter (mock `intervals`: 20 s at 300 W, 150 W for 17 s, FTP 200; it
 #       is not a compliant rider, so its grade does not matter): the sprint half of the workout that
 #       the compliant Autopilot runs never reach (Surge to evade, a gun line entered after a sprint).
 #       S8 is the GUT test test_tank_s8.gd.
@@ -51,6 +51,9 @@ ERG='erg:compliance=1.0'
 # Cadence collapse to 30 rpm for 30 s once the rider's own plan phase is `at_phase` and its
 # applied ERG target is at least 60% FTP (the profile waits for it).
 SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
+# S9's sprinter rides 20 s on, 17 s off, so its sprints cover an Advance's end (the first ends at
+# about 490 s with the v2 content and this rider): a gun line entered while still sprinting.
+S9_SPRINTER='intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
 STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 GUNLINE_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
@@ -135,7 +138,7 @@ scenario_s7() {
 }
 
 scenario_s9() {
-  run s9_c1_sprint --content=ashfall_road --players=1 --bots=0 "--rider=$SPRINTER" --seed=1
+  run s9_c1_sprint --content=ashfall_road --players=1 --bots=0 "--rider=$S9_SPRINTER" --seed=1
 }
 
 scenario_s10() {
