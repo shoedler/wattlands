@@ -181,10 +181,10 @@ func test_swim_frames_differ_so_the_fish_moves() -> void:
 
 
 func test_the_big_fish_are_bigger_than_the_shallow_ones() -> void:
-	var small := _frame("fish_mackerel", 0).get_size()
+	var small := _frame("fish_mackerel", 0).get_used_rect().size
 	for id: String in ["fish_marlin", "fish_grouper", "fish_oarfish", "fish_swordfish"]:
-		var big := _frame(id, 0).get_size()
-		assert_gt(big.x * big.y, small.x * small.y * 4, id)
+		var big := _frame(id, 0).get_used_rect().size
+		assert_gt(big.x, small.x * 2, "%s is more than twice as long" % id)
 
 
 func test_the_hull_is_a_slate_mass_under_a_straight_foam_rail() -> void:

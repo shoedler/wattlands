@@ -56,6 +56,13 @@ static func shift_for(band: int) -> int:
 	return 0 if band <= 1 else 1
 
 
+## The shift for a fish (FishingArtGrids' D2 planes: back deep, flank mid, belly upper) in water
+## band `band`: as drawn on the haze band and a step darker per band down, so its belly stays
+## darker than the water and the back ridge there (in the deepest band a dark silhouette).
+static func fish_shift(band: int) -> int:
+	return clampi(band, 0, FishingPalette.SEA.size() - 1)
+
+
 static func set_flat(m: ShaderMaterial, on: bool, col: Color = Color.BLACK) -> void:
 	m.set_shader_parameter("flat_on", on)
 	m.set_shader_parameter("flat_col", col)

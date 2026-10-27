@@ -186,10 +186,12 @@ static func graph(
 	var prev := -1
 	for i in n:
 		var s := trace.at_column(i, n)
-		if s.x < 0.0:
-			prev = -1
-			continue
 		var x := r.position.x + float(i) * u
+		if s.x < 0.0:
+			# no history there yet: the line runs along the bottom, so the graph spans its width
+			c.draw_rect(Rect2(x, r.position.y + float(rows - 1) * u, u, u), col)
+			prev = rows - 1
+			continue
 		if s.y > 0.0 and band > 0.0:
 			var a := graph_row(s.y * (1.0 + band), top_w, rows, bottom_w)
 			var b := graph_row(s.y * (1.0 - band), top_w, rows, bottom_w)

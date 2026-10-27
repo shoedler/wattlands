@@ -52,7 +52,8 @@ func test_the_level_follows_speed_and_planing_with_hysteresis() -> void:
 	assert_eq(FishingWhitewater.level(2.0, 0.0), FishingWhitewater.IDLE)
 	assert_eq(FishingWhitewater.level(8.0, 0.0), FishingWhitewater.CRUISE)
 	assert_eq(FishingWhitewater.level(11.0, 0.0), FishingWhitewater.HUMP)
-	assert_eq(FishingWhitewater.level(11.0, 0.8), FishingWhitewater.PLANE)
+	assert_eq(FishingWhitewater.level(11.0, 1.0), FishingWhitewater.PLANE)
+	assert_eq(FishingWhitewater.level(11.5, 0.5), FishingWhitewater.HUMP, "climbing: the hump")
 	assert_eq(FishingWhitewater.level(-8.0, 0.0), FishingWhitewater.CRUISE, "astern counts too")
 	assert_eq(
 		FishingWhitewater.level(10.3, 0.0, FishingWhitewater.HUMP),

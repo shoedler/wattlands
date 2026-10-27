@@ -49,6 +49,14 @@ const DEPTH_DONE := 0.002
 const HEAVE_PX_PER_M := 60.0
 const HEAVE_UP_PX := 4
 const HEAVE_DOWN_PX := 4
+## The hull's trim and heave made plain per water state (shown_pitch(), shown_heave()): bow up
+## and stern squatting on the hump (pose 5 and a row down: stern 3, bow 7 up), flat on the plane
+## (pose 2 at most), towed stern first (pose 4 and 3 rows down: stern 5 down, bow 3 up).
+const CLIMB_PITCH := 12.6
+const CLIMB_SQUAT_PX := 1
+const PLANE_PITCH := 3.6
+const TOW_PITCH := 9.0
+const TOW_SQUAT_PX := 3
 ## Fish poses: tired under TIRED_S stamina (and in the Landing); a pull pose from rod tension
 ## PULL15_AT (the 15 degree pose) or PULL30_AT (up to the 30 degree one), picked by the line's
 ## angle at the mouth (level under PULL15_DEG, steep from PULL30_DEG); the swim cycle at SWIM_FPS
@@ -445,10 +453,10 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	b.visible = sx > -DRAW_MARGIN_PX and sx < float(scenery.w) + DRAW_MARGIN_PX
 	var wx := float(v["x"]) * FishingScenery.PX_PER_M
 	b.heading = r.heading
-	b.pitch_deg = float(v["pitch"])
+	b.pitch_deg = shown_pitch(r, float(v["pitch"]))
 	b.brake = float(v["brake"])
 	b.bob_px = -float(FishingScenery.wave(wx, _t))
-	b.heave_px = heave_px(float(v["heave"]))
+	b.heave_px = shown_heave(r, heave_px(float(v["heave"])))
 	b.cadence = raw_cadence(r, float(v["cad"]))
 	var line := r.line_m()
 	var was := float(_line_m.get(r.slot, line))
@@ -471,6 +479,39 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	var moved := absf(float(v["x"]) - was_x) * FishingScenery.PX_PER_M
 	_odo[r.slot] = float(_odo.get(r.slot, 0.0)) + (moved if moved < CAM_SNAP_M else 0.0)
 	(model["boats"] as Dictionary)[r.slot] = b.position
+
+
+## The trim the hull shows: the physics' pitch, with the water's state made plain: climbing
+## onto the plane (FishingWhitewater.HUMP) the bow stands up at least CLIMB_PITCH, on the plane
+## the hull lies flat (at most PLANE_PITCH), towed stern first by a fish the bow is up at least
+## TOW_PITCH.
+func shown_pitch(r: FishingRiderState, pitch: float) -> float:
+	if towed(r):
+		return maxf(pitch, TOW_PITCH)
+	match whitewater.level_of(r.slot, r.v_mps, r.plane):
+		FishingWhitewater.HUMP:
+			return maxf(pitch, CLIMB_PITCH)
+		FishingWhitewater.PLANE:
+			return minf(pitch, PLANE_PITCH)
+	return pitch
+
+
+## The heave the hull shows (whole px): squatting at least CLIMB_SQUAT_PX on the hump, up at
+## least HEAVE_UP_PX on the plane, the stern dragged down at least TOW_SQUAT_PX when towed.
+func shown_heave(r: FishingRiderState, px: int) -> int:
+	if towed(r):
+		return mini(px, -TOW_SQUAT_PX)
+	match whitewater.level_of(r.slot, r.v_mps, r.plane):
+		FishingWhitewater.HUMP:
+			return mini(px, -CLIMB_SQUAT_PX)
+		FishingWhitewater.PLANE:
+			return maxi(px, HEAVE_UP_PX)
+	return px
+
+
+## True while a fish tows rider `r`'s boat (FishingWhitewater.TOW_AT of the most tension).
+static func towed(r: FishingRiderState) -> bool:
+	return r.tow_n / FishingConst.TOW_MAX_N >= FishingWhitewater.TOW_AT
 
 
 ## The hull's heave in whole px (up positive) for `heave_m`.
@@ -572,7 +613,7 @@ func _place_catch(r: FishingRiderState, delta: float) -> void:
 		top_left = mouth - Vector2(float(size.x) - a.x, a.y)
 		left = float(size.x - box.end.x)
 	fish.position = top_left.round()
-	_map_depth(_fish_mat[r.slot], depth if mouth.y > float(FishingScenery.SURF_Y) else 0.0)
+	_map_depth(_fish_mat[r.slot], depth if mouth.y > float(FishingScenery.SURF_Y) else 0.0, true)
 	var drawn := Rect2(fish.position + Vector2(left, float(box.position.y)), Vector2(box.size))
 	(model["fish"] as Dictionary)[r.slot] = drawn
 	(model["mouth"] as Dictionary)[r.slot] = mouth
@@ -599,10 +640,13 @@ func _fish_frame(r: FishingRiderState, mouth: Vector2, tip: Vector2) -> int:
 	return FishingSprites.FISH_SWIM[floori(_t * fps) % FishingSprites.FISH_SWIM.size()]
 
 
-## A fish or wobbler at `depth_m`: dark on the light water bands, darker on the teals.
-func _map_depth(m: ShaderMaterial, depth_m: float) -> void:
+## A fish (`fish`) or wobbler at `depth_m`: dark on the light water bands, darker on the teals
+## (a fish's belly stays darker than the back ridge and floor of its band: fish_shift()).
+func _map_depth(m: ShaderMaterial, depth_m: float, fish: bool = false) -> void:
 	FishingPaletteMap.set_flat(m, false)
-	FishingPaletteMap.set_shift(m, FishingPaletteMap.shift_for(FishingScenery.band_at(depth_m)))
+	var band := FishingScenery.band_at(depth_m)
+	var steps := FishingPaletteMap.fish_shift(band) if fish else FishingPaletteMap.shift_for(band)
+	FishingPaletteMap.set_shift(m, steps)
 
 
 ## The local rider's menu: each fish hint as its species' flat silhouette at its depth (a step
@@ -630,7 +674,7 @@ func _place_hints(r: FishingRiderState) -> void:
 		s.texture = FishingSprites.frame(id, cycle[(floori(_t * 3.0) + i) % cycle.size()])
 		s.position = (p - sz * 0.5 - Vector2(box.position)).round()
 		var lit := r.selected >= 0 and r.selected < r.menu.size() and r.menu[r.selected] == i
-		_map_depth(_hint_mats[i], depth)
+		_map_depth(_hint_mats[i], depth, true)
 		if not lit:
 			FishingPaletteMap.set_flat(_hint_mats[i], true, silhouette(depth))
 		out.append({"pos": p, "sp": sp, "selected": lit, "index": i})
@@ -750,10 +794,12 @@ func _paint_lines(c: CanvasItem) -> void:
 	_paint_line_parts(c, false)
 
 
-## Each rope's pixels above the water (`under` false: drawn behind the hulls) or under it (`under`
-## true: drawn in front, so a hull's shadow slab never breaks the line).
-func _paint_line_parts(c: CanvasItem, under: bool) -> void:
+## Each rope's pixels (only `only`'s when set) above the water (`under` false: drawn behind the
+## hulls) or under it (`under` true: drawn in front, so a hull's shadow slab never breaks it).
+func _paint_line_parts(c: CanvasItem, under: bool, only: int = -1) -> void:
 	for slot: int in _ropes:
+		if only >= 0 and slot != only:
+			continue
 		var b: FishingBoatView = boats.get(slot)
 		var rope: FishingRope = _ropes[slot]
 		if b == null or rope.points.is_empty():
@@ -811,6 +857,10 @@ func _paint_front(c: CanvasItem) -> void:
 		var w := water_state(slot)
 		if b.visible and not b.far and not w.is_empty():
 			whitewater.paint_front(c, b, w)
+			# towed, the line leaves the bent rod over the foam piled at the transom
+			var r := game.state.rider(slot)
+			if r != null and towed(r):
+				_paint_line_parts(c, false, slot)
 
 
 ## A farther boat's own surface: a FAR_WATERLINE_ROWS foam slab on its waterline, a little

@@ -27,6 +27,8 @@ const KEY_KNOTS := "FISHING_HUD_KNOTS"
 const KEY_KMH := "FISHING_HUD_KMH"
 const KEY_TARGET := "FISHING_HUD_TARGET"
 const KEY_NOW := "FISHING_HUD_NOW"
+const KEY_STRAIN := "FISHING_HUD_STRAIN"
+const KEY_SLACK := "FISHING_HUD_SLACK"
 ## Knots per m/s.
 const KNOTS_PER_MPS := 1.943844
 ## FishingConst.ACTION_NAMES -> FISHING_ACTION_<NAME> (the leaderboard's action column).
@@ -52,6 +54,8 @@ const KEYS: Array[String] = [
 	KEY_KMH,
 	KEY_TARGET,
 	KEY_NOW,
+	KEY_STRAIN,
+	KEY_SLACK,
 ]
 ## English stand-ins when a key has no translation (headless tests without ctx.strings).
 const FALLBACK := {
@@ -75,6 +79,8 @@ const FALLBACK := {
 	KEY_KMH: "{0} km/h",
 	KEY_TARGET: "Target",
 	KEY_NOW: "now",
+	KEY_STRAIN: "strain",
+	KEY_SLACK: "slack",
 }
 
 static var _flat_cache: Vector3 = Vector3(-1, -1, 0)

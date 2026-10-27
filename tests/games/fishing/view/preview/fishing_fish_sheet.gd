@@ -76,7 +76,7 @@ func _ready() -> void:
 			s.texture = FishingSprites.frame(id, k)
 			s.position = Vector2(mouth - a)
 			var m := FishingPaletteMap.apply(s)
-			FishingPaletteMap.set_shift(m, FishingPaletteMap.shift_for(BANDS[i]))
+			FishingPaletteMap.set_shift(m, FishingPaletteMap.fish_shift(BANDS[i]))
 			root.add_child(s)
 			var run := 4 if k == FishingSprites.FISH_PULL15 else 2
 			if k == FishingSprites.FISH_PULL15 or k == FishingSprites.FISH_PULL30:

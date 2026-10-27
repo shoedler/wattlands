@@ -7,14 +7,17 @@ extends RefCounted
 ## hysteresis (level()):
 ##  - IDLE (barely moving): two foam sheets at the transom and the stem;
 ##  - CRUISE (about 50 % FTP): a mound behind and onto the stern quarter, a bow wave;
-##  - HUMP (about 70 %, the stern squats): a big boiling mound that buries the transom to the
-##    deck, a short rooster stub, a spray sheet ramping up from the wet forefoot;
-##  - PLANE: the mound hides the leg and the transom, a rooster tail arches back, breaks up
-##    toward its far end and falls as lumps, only a low sheet peels off the wet aft third;
-##  - towed by a fish: a mound piled against the transom, a short reverse wake off the bow;
+##  - HUMP (near the hump speed or climbing onto the plane: the stern squats, the bow is up): a
+##    big boiling mound that buries the transom to the deck, a spray sheet ramping up from the
+##    wet forefoot, no rooster tail yet;
+##  - PLANE (fully on the plane: the hull flat and up): the mound hides the leg and the transom,
+##    a rooster tail arches back over a curtain falling into the wake and breaks up toward its
+##    far end, only a low sheet peels off the wet aft third;
+##  - towed by a fish: a mound piled against the transom, a short reverse wake off the bow on
+##    the waterline;
 ##  - braking: a mound pushed ahead of the bow, a churn behind the stern.
-## Behind the boats (paint_behind): the far arm of the V wake climbing through the far water to
-## the horizon and the aerated prop wash under the surface. In front (paint_front): the centre
+## Behind the boats (paint_behind): the far arm of the V wake, crests climbing a few rows into
+## the far water, and the aerated prop wash under the surface. In front (paint_front): the centre
 ## wake, the mounds, the rooster tail, the bow water. The wake's lumps live in the water: each
 ## spawns at the transom every SPACING px of the boat's travel (`odo`, the view's odometer per
 ## boat), drifts back as the boat moves on, shrinks a step every SPACING px and fades a palette
@@ -30,9 +33,11 @@ const IDLE_MPS := 0.5
 const CRUISE_MPS := 4.0
 const HUMP_MPS := 10.5
 const HOLD_MPS := 0.5
-## On the plane from this planing level (FishingRiderState.plane); towed from this share of the
-## line's most tension (FishingConst.TOW_MAX_N).
-const PLANE_AT := 0.5
+## On the plane from this planing level (FishingRiderState.plane), climbing onto it (the hump:
+## the stern squats, no rooster tail yet) from CLIMB_AT; towed from this share of the line's
+## most tension (FishingConst.TOW_MAX_N).
+const PLANE_AT := 0.95
+const CLIMB_AT := 0.05
 const TOW_AT := 0.3
 ## The wake's spacing (px of travel) and the mound's boil beat (Hz).
 const SPACING := 12.0
@@ -41,7 +46,9 @@ const BOIL_HZ := 2.5
 ## far V arm [start behind T, crests, first width, rows per climb step], the prop wash under the
 ## surface ([x from the prop, dy under the surface, w, h]) and the mound ([x from T, dy, w, h]).
 const TRAIL := [[24, 6, 8], [40, 5, 10], [66, 4, 9]]
-const ARM := [[10, 5, 7, 5], [12, 7, 9, 5], [14, 9, 10, 7]]
+const ARM := [[10, 4, 7, 5], [12, 4, 9, 5], [14, 4, 10, 7]]
+## The far arm's crests climb at most this many rows over the surface (they stay on the water).
+const ARM_RISE := 6
 const WASH := [
 	[[-6, 3, 6, 2], [-16, 2, 8, 2]],
 	[[-8, 4, 8, 3], [-20, 3, 12, 3], [-34, 1, 12, 2]],
@@ -54,8 +61,9 @@ const MOUND := [
 		[-28, 7, 14, 8],
 		[-16, 10, 14, 11],
 		[-6, 9, 14, 10],
-		[6, 5, 12, 6],
-		[15, 3, 10, 4]
+		[4, 8, 12, 9],
+		[13, 5, 12, 6],
+		[22, 3, 10, 4]
 	],
 	[[-30, 4, 18, 5], [-18, 8, 14, 9], [-8, 10, 12, 11], [2, 6, 12, 7], [12, 3, 10, 4]],
 ]
@@ -65,13 +73,11 @@ const BOW_CRUISE := [[-14, 2, 10, 3], [-7, 5, 9, 6], [1, 3, 6, 4]]
 const BOW_HUMP := [[1, 4, 10, 5], [9, 6, 10, 7], [-8, 3, 10, 4], [18, 3, 7, 4]]
 const BOW_HUMP_DROPS := [[24, 7, 4, 2], [22, 11, 3, 2]]
 const BOW_PLANE := [[-8, 2, 10, 3], [2, 1, 6, 2]]
-## The rooster tail: [x from T, rows above the surface at its base, points, dx per point, rise,
-## fall, first w, first h, last w, last h]; from BREAK of its length on, every other lump only,
-## and FALLING lumps keep dropping past its end.
-const ROOSTER_HUMP := [-12, 9, 6, -4, 1.6, 0.45, 12, 8, 6, 4]
+## The rooster tail on the plane: [x from T, rows above the surface at its base, points, dx per
+## point, rise, fall, first w, first h, last w, last h]; from BREAK of its length on every
+## other lump only (the gaps walk back with time), the curtain falling under all of it.
 const ROOSTER_PLANE := [-6, 9, 18, -3, 3.0, 0.22, 12, 11, 6, 6]
 const BREAK := 0.6
-const FALLING := 3
 ## Towed: the mound against the transom, the water dragged under it and the reverse wake.
 const TOW_MOUND := [
 	[-36, 4, 12, 5],
@@ -104,6 +110,8 @@ var _level: Dictionary = {}
 static func level(v_mps: float, plane: float, prev: int = NONE) -> int:
 	if plane >= PLANE_AT:
 		return PLANE
+	if plane >= CLIMB_AT:
+		return HUMP
 	var v := absf(v_mps)
 	var edges: Array[float] = [IDLE_MPS, CRUISE_MPS, HUMP_MPS]
 	var out := NONE
@@ -184,7 +192,6 @@ func paint_behind(c: CanvasItem, b: FishingBoatView, s: Dictionary) -> void:
 	var g := geometry(b)
 	var lv := level_of(int(s["slot"]), float(s["v"]), float(s["plane"]))
 	if float(s["tow"]) >= TOW_AT:
-		_arm(c, g, float(s["odo"]), [-(FishingRig.BOW_X - FishingRig.STERN_X) - 6, 9, 9, 7], b.far)
 		if not b.far:
 			for e: Array in TOW_UNDER:
 				_lump(c, g, g["T"], e, -1, FishingPalette.SKY, FishingPalette.SKY, false, true)
@@ -225,7 +232,6 @@ func paint_front(c: CanvasItem, b: FishingBoatView, s: Dictionary) -> void:
 		CRUISE:
 			_mound(c, g, MOUND[0], t, far)
 		HUMP:
-			_rooster(c, g, ROOSTER_HUMP, t, far)
 			_mound(c, g, MOUND[1], t, far)
 		PLANE:
 			_rooster(c, g, ROOSTER_PLANE, t, far)
@@ -335,9 +341,7 @@ func _arm(c: CanvasItem, g: Dictionary, odo: float, cfg: Array, far: bool) -> vo
 		if k >= count:
 			continue
 		var w := maxi(3, w0 - k)
-		var y := sy - 2.0 - floorf(d / float(slope))
-		if y < sy - float(FishingScenery.FAR_ROWS) + 1.0:
-			continue
+		var y := sy - 2.0 - minf(floorf(d / float(slope)), float(ARM_RISE))
 		var pale := far or k >= count / 2
 		var x := -start - floori(d) - w if start >= 0 else -start + floori(d)
 		var left := float(g["T"]) + float(x) if h > 0 else float(g["T"]) - float(x + w - 1)
@@ -361,9 +365,10 @@ func _reverse_wake(c: CanvasItem, g: Dictionary, odo: float, far: bool) -> void:
 		_lump(c, g, g["B"], lump, j, FishingPalette.FOAM, FishingPalette.SKY, far or k >= 4)
 
 
-## The rooster tail along a stepped parabola from the transom (`cfg`: ROOSTER_*), drawn from
-## its tip back to its base: whole lumps up to BREAK of its length, every other one beyond (the
-## gaps walk back with time), then FALLING lumps dropping past its end toward the surface.
+## The rooster tail along a stepped parabola from the transom (`cfg`: ROOSTER_*): under it a
+## curtain falls into the wake (a face plane from each lump down to the surface, a shadow seam
+## where it lands), so it never reads as a bridge; over it the lumps, drawn from its tip back to
+## its base (joined to the mound), whole up to BREAK of its length, every other one beyond.
 func _rooster(c: CanvasItem, g: Dictionary, cfg: Array, t: float, far: bool) -> void:
 	var x0 := int(cfg[0])
 	var base := int(cfg[1])
@@ -372,24 +377,23 @@ func _rooster(c: CanvasItem, g: Dictionary, cfg: Array, t: float, far: bool) -> 
 	var rise := float(cfg[4])
 	var fall := float(cfg[5])
 	var gait := floori(t / 0.15) % 2
-	var pts: Array[Vector2i] = []
-	for p in n + FALLING:
-		pts.append(Vector2i(x0 + dx * p, base + roundi(rise * float(p) - fall * float(p * p))))
-	for p in range(n + FALLING - 1, -1, -1):
-		var at := pts[p]
-		var u := float(mini(p, n - 1)) / float(maxi(1, n - 1))
+	var lumps: Array = []
+	for p in n:
+		var dy := base + roundi(rise * float(p) - fall * float(p * p))
+		var u := float(p) / float(maxi(1, n - 1))
 		var w := roundi(lerpf(float(cfg[6]), float(cfg[8]), u))
-		var hh := roundi(lerpf(float(cfg[7]), float(cfg[9]), u))
-		if p >= n:
-			if (p + gait) % 2 == 1:
-				continue
-			w = maxi(3, w - 2 * (p - n + 1))
-			hh = 2
-		elif float(p) >= BREAK * float(n - 1) and (p + gait) % 2 == 1:
+		var hh := mini(roundi(lerpf(float(cfg[7]), float(cfg[9]), u)), dy + 2)
+		lumps.append([x0 + dx * p - w / 2, dy, w, hh])
+	var face := FishingPalette.HAZE if far else FishingPalette.SKY
+	for e: Array in lumps:
+		var under := int(e[1]) - int(e[3])
+		if under >= 1:
+			var curtain := [e[0], under, e[2], under + 1]
+			_lump(c, g, g["T"], curtain, -1, face, face, far)
+	for p in range(n - 1, -1, -1):
+		if float(p) >= BREAK * float(n - 1) and (p + gait) % 2 == 1:
 			continue
-		if at.y < 2:
+		var e: Array = lumps[p]
+		if int(e[1]) < 2:
 			continue
-		hh = mini(hh, at.y + 2)
-		var lump := [at.x - w / 2, at.y, w, hh]
-		var pale := far or p >= n
-		_lump(c, g, g["T"], lump, p, FishingPalette.FOAM, FishingPalette.SKY, pale)
+		_lump(c, g, g["T"], e, p, FishingPalette.FOAM, FishingPalette.SKY, far)

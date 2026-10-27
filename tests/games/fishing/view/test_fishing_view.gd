@@ -203,7 +203,7 @@ func test_a_hooked_fish_shows_with_its_mouth_toward_the_boat_and_tinted() -> voi
 	assert_true(spr.flip_h, "mouth on the right, toward the boat")
 	var m := spr.material as ShaderMaterial
 	var band := FishingScenery.band_at(300.0)
-	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.shift_for(band), "by its band")
+	assert_eq(FishingPaletteMap.shift_of(m), FishingPaletteMap.fish_shift(band), "by its band")
 	assert_gt(FishingPaletteMap.shift_of(m), 0, "a dark subject on the deep water")
 
 
@@ -447,10 +447,17 @@ func test_heave_moves_the_hull_by_whole_pixels_and_never_lifts_the_prop_out() ->
 	var r := g.state.rider(0)
 	FX.set_drive(r, 3000.0, 14.0)
 	r.heave_m = 0.06
+	r.plane = 1.0
 	var v := _view(g)
 	_run(v, 4)
 	var b := v.boat_view(0)
-	assert_eq(b.heave_px, FishingView.HEAVE_UP_PX)
+	assert_eq(b.heave_px, FishingView.HEAVE_UP_PX, "on the plane: up and flat")
+	assert_lte(b.pose(), 2)
+	r.plane = 0.5
+	_run(v, 4)
+	assert_lt(b.heave_px, 0, "climbing onto the plane the stern squats")
+	assert_eq(b.pose(), FishingRig.POSE_MAX, "and the bow stands up")
+	r.plane = 1.0
 	var hub := b.pixel_of(Vector2i(FishingRig.PROP_HUB))
 	assert_gt(hub.y, float(FishingScenery.SURF_Y), "the prop stays in the water")
 

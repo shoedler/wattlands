@@ -5,8 +5,8 @@ extends RefCounted
 ##  - top: FishingMinimap (the ocean in profile, every rider's action icon; as wide as the board
 ##    leaves) and FishingBoard (time left, the leaderboard) at the right;
 ##  - bottom left: FishingCruisePanel (watts, cadence, %FTP, heart rate, a power graph, the zone
-##    tag) outside a fight, the kit gear right of it (shown in SIM), and in a workout the kit
-##    timeline above it;
+##    tag bottom-aligned right of it) outside a fight, the kit gear (shown in SIM) right above
+##    the tag, and in a workout the kit timeline above them;
 ##  - FishingFightPanel under the boat in a fight and the Landing; FishingSpeedTag on the water
 ##    behind the stern; FishingChips over the view (the stopped menu next to the boat);
 ##  - toasts under the minimap, banners over the middle of the view;
@@ -114,8 +114,8 @@ static func layout(art: Vector2i) -> Dictionary:
 	var board := Rect2i(w - BOARD_W - MARGIN, 2, BOARD_W, BOARD_H)
 	var minimap := Rect2i(MARGIN, 2, board.position.x - 2 * MARGIN - MARGIN, MINIMAP_H)
 	var cruise := Rect2i(MARGIN, h - CRUISE_H - MARGIN, CRUISE_W, CRUISE_H)
-	var box_w := FishingCruisePanel.panel_size(true).x
-	var gear := Rect2i(MARGIN + box_w + MARGIN, cruise.position.y, GEAR_W, GEAR_H)
+	var gear_y := cruise.end.y - FishingCruisePanel.TAG_H - 2 - GEAR_H
+	var gear := Rect2i(MARGIN + FishingCruisePanel.tag_x(), gear_y, GEAR_W, GEAR_H)
 	var tw := mini(TOAST_W, minimap.size.x - 16)
 	var bw := mini(BANNER_W, w - 2 * MARGIN)
 	return {
