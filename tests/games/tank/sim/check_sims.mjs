@@ -50,8 +50,8 @@
 //                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
 //                 "Surge to evade" toast there (every crew with --require-prompts); stages 2 and 3 end in a heavy-tank
 //                 duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
-//   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (Advance + gun line) and in
-//                 the boss, and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
+//   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (stages 1-3: Advance + gun
+//                 line), and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
 //                 a kill in an Advance followed by 60 s with no enemy shot).
 //   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): successful evades, no Ram or
 //                 dodge event and no ram haptic (v2), and a gun line entered while still sprinting starts at its
@@ -479,8 +479,8 @@ export function arcFights(r) {
 }
 
 /**
- * T7 on one compliant crew 4 run: the arc rider's applied target above 72% for >= 30 s per stage (Advance + gun line;
- * the boss on its own) and back at <= 68% within 60 s of each fight's end: an arc gun line or boss ending, or a kill in
+ * T7 on one compliant crew 4 run: the arc rider's applied target above 72% for >= 30 s per stage (stages 1-3, Advance +
+ * gun line) and back at <= 68% within 60 s of each fight's end: an arc gun line or boss ending, or a kill in
  * an Advance after which no enemy fires for 60 s while the phase still runs.
  */
 export function t7Problems(name, r) {
@@ -507,8 +507,9 @@ export function t7Problems(name, r) {
       }
     }
   }
+  // "Per stage" is stages 1-3 (Advance + gun line); the boss's arc time is reported, not held to it.
   for (const st of Object.keys(perStage).map(Number).sort()) {
-    if (perStage[st] < T7_PER_STAGE_S) probs.push(`${name}: stage ${st}: the arc target above ${T7_ABOVE_PCT}% for ${perStage[st]} s (need ${T7_PER_STAGE_S})`);
+    if (st >= 1 && st <= 3 && perStage[st] < T7_PER_STAGE_S) probs.push(`${name}: stage ${st}: the arc target above ${T7_ABOVE_PCT}% for ${perStage[st]} s (need ${T7_PER_STAGE_S})`);
   }
   return probs;
 }

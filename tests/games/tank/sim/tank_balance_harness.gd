@@ -14,6 +14,9 @@ extends RefCounted
 ##   shells          per steam shell: the seconds from "ready to build" to the latch (the 5 s
 ##                   window included) and the seconds at boiler grade 0 until the next build (T3)
 ##   drive_share     per Advance, the Bulwark's share of time with the lever on Drive (T4)
+##   arc             per fight phase of the arc rider (crew 4): seconds with the applied ERG target
+##                   above 72% FTP and its largest value (T7)
+##   telegraphs      per Advance: telegraphed shots (evade events) and mediums seen (T6)
 ##   max_enemies, max_shells, max_snapshot_bytes (S8's caps), directive and event counts, a hash
 ##
 ## It never touches the trainer stack: only TankFakes.Directives and TankFakes.Hud, which record
@@ -58,6 +61,8 @@ var _g0_ticks: int = 0
 var _phase_seen: int = -1
 var _phase_t: float = 0.0
 var _drive: Dictionary = {}
+var _arc: Dictionary = {}
+var _adv: Dictionary = {}
 var _kills: Array[int] = [0, 0, 0, 0, 0, 0, 0]
 
 
@@ -253,6 +258,28 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 			_g0_ticks = 0
 			_ready_since = t
 		_was_busy = busy
+	var arc := state.station(TankIds.ENGINE_ARC)
+	if arc != null and arc.peer != 0 and FIGHT_SEGS.has(sg.seg):
+		var apct := riders.applied_pct(arc.peer)
+		var akey := sg.phase_index
+		if not _arc.has(akey):
+			_arc[akey] = {"index": akey, "seg": sg.seg, "stage": sg.stage, "above72_s": 0.0, "max": 0.0}
+		var arec: Dictionary = _arc[akey]
+		if apct > 72.0:
+			arec["above72_s"] = float(arec["above72_s"]) + Wl.SIM_DT
+		arec["max"] = maxf(float(arec["max"]), apct)
+	if sg.seg == TankIds.SEG_ADVANCE:
+		var tkey := sg.phase_index
+		if not _adv.has(tkey):
+			_adv[tkey] = {"stage": sg.stage, "telegraphs": 0, "evaded": 0, "mediums": 0}
+		var trec: Dictionary = _adv[tkey]
+		for e in evs:
+			var ty := str(e.get("type", ""))
+			if ty == TankEvents.EVADE:
+				trec["telegraphs"] = int(trec["telegraphs"]) + 1
+				trec["evaded"] = int(trec["evaded"]) + int(e.get("ok", 0))
+			if ty == TankEvents.SHOT and int(e.get("e", 0)) == TankIds.enemy_code(TankIds.ENEMY_MEDIUM):
+				trec["mediums"] = int(trec["mediums"]) + 1
 	var gb := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
 	if gb != null and sg.seg == TankIds.SEG_ADVANCE:
 		var key := sg.phase_index
@@ -336,6 +363,8 @@ func _result(end_t: float) -> Dictionary:
 		"dynamo": dyn_list,
 		"shells": _shells.duplicate(true),
 		"drive_share": drive_list,
+		"arc": _arc.values(),
+		"telegraphs": _adv.values(),
 		"max_enemies": max_enemies,
 		"max_shells": max_shells,
 		"max_snapshot_bytes": max_snapshot_bytes,
@@ -402,6 +431,18 @@ static func format(r: Dictionary) -> String:
 		builds.append("%.0f/%.0f" % [s["build_s"], s["grade0_s"]])
 	if not builds.is_empty():
 		lines.append("  shells (build s / grade-0 s): " + ", ".join(builds))
+	var arcs: PackedStringArray = []
+	for a: Dictionary in r.get("arc", []):
+		arcs.append(
+			"%s%d %.0f s (max %.0f)" % [str(a["seg"]).substr(0, 3), a["stage"], a["above72_s"], a["max"]]
+		)
+	if not arcs.is_empty():
+		lines.append("  arc above 72%: " + ", ".join(arcs))
+	var tel: PackedStringArray = []
+	for a: Dictionary in r.get("telegraphs", []):
+		tel.append("adv%d %d/%d mediums %d" % [a["stage"], a["evaded"], a["telegraphs"], a["mediums"]])
+	if not tel.is_empty():
+		lines.append("  telegraphs (evaded/all): " + ", ".join(tel))
 	var shares: PackedStringArray = []
 	for d: Dictionary in r["drive_share"]:
 		shares.append("%.0f%%" % (100.0 * float(d["share"])))

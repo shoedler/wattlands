@@ -25,6 +25,7 @@
 				{"at_s": 8, "engine": "bulwark", "key": "TANK_TEACH_BULWARK"},
 				{"at_s": 14, "engine": "dynamo", "key": "TANK_TEACH_DYNAMO"},
 				{"at_s": 20, "engine": "steam", "key": "TANK_TEACH_STEAM"},
+				{"at_s": 26, "engine": "arc", "key": "TANK_TEACH_ARC"},
 				{"at_s": 125, "engine": "all", "key": "TANK_TEACH_AIM"},
 				{"at_s": 245, "engine": "all", "key": "TANK_TEACH_FIRE"}
 			]
@@ -44,7 +45,9 @@
 			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
 				{"at_m": 130, "enemy": "light", "count": 1, "from": "front"},
+				{"at_m": 250, "enemy": "light", "count": 1, "from": "rear"},
 				{"at_m": 360, "enemy": "medium", "count": 1, "from": "front"},
+				{"at_m": 600, "enemy": "destroyer", "count": 1, "from": "front"},
 				{"at_m": 830, "enemy": "light", "count": 1, "from": "front"}
 			],
 			"obstacles": [
@@ -64,7 +67,7 @@
 			"backdrop": "bg_fields_near",
 			"enemies": [
 				{"enemy": "dugin", "count": 4, "at_px": [110, 140, 170, 200]},
-				{"enemy": "medium", "count": 1, "at_px": [230]}
+				{"enemy": "medium", "count": 2, "at_px": [200, 230]}
 			],
 			"props": [
 				{"type": "tank_traps", "at_px": 40}
@@ -194,7 +197,7 @@
 			"label": "TANK_PHASE_BOSS",
 			"name": "TANK_PLACE_FOUNDRY_GATE",
 			"backdrop": "bg_town_near",
-			"end_hold_s": 6.5,
+			"end_hold_s": 7.5,
 			"boss": {"start_left_px": 560}
 		}
 	],

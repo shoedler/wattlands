@@ -94,7 +94,7 @@ static func t3(results: Array) -> Dictionary:
 	var problems: Array[String] = []
 	var runs := 0
 	for r: Dictionary in results:
-		if not _compliant(r) or int(r["crew"]) != 3:
+		if not _compliant(r) or int(r["crew"]) < 3:
 			continue
 		runs += 1
 		var heavy := 0
@@ -102,7 +102,7 @@ static func t3(results: Array) -> Dictionary:
 			if int(s["shell"]) != TankIds.SHELL_HEAVY or str(s["seg"]) == TankIds.SEG_DEPOT:
 				continue
 			heavy += 1
-			var at := "crew 3 seed %d t=%.0f" % [r["seed"], s["t"]]
+			var at := "crew %d seed %d t=%.0f" % [r["crew"], r["seed"], s["t"]]
 			# Like check_sims.mjs: the first shell of a segment is only held to the maximum
 			# (pressure holds across a checkpoint).
 			var too_fast := float(s["build_s"]) < 18.0 and not bool(s.get("first", false))
@@ -111,7 +111,7 @@ static func t3(results: Array) -> Dictionary:
 			if float(s["grade0_s"]) < 6.0:
 				problems.append("%s: %.1f s at grade 0" % [at, s["grade0_s"]])
 		if heavy == 0:
-			problems.append("crew 3 seed %d: no heavy shell was built" % r["seed"])
+			problems.append("crew %d seed %d: no heavy shell was built" % [r["crew"], r["seed"]])
 	return _verdict("T3", problems, runs)
 
 
@@ -139,7 +139,7 @@ static func t4(results: Array) -> Dictionary:
 static func t5(results: Array) -> Dictionary:
 	var problems: Array[String] = []
 	var runs := 0
-	for crew: int in [1, 2, 3]:
+	for crew: int in [1, 2, 3, 4]:
 		var means := {}
 		for c: float in [1.0, 0.85, 0.7]:
 			var total := 0.0

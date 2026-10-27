@@ -89,8 +89,19 @@ static func _dynamo(
 	if st.in_band:
 		bank += st.p_eff_w * dt / c.num("tanks", "dynamo.j_per_unit", 150.0)
 	if st.stabilizing:
-		bank -= c.num("tanks", "dynamo.stabilizer_per_s", 1.5) * dt
+		bank -= stabilizer_per_s(state) * dt
 	st.bank = clampf(bank, 0.0, c.num("tanks", "dynamo.bank_max", 100.0))
+
+
+## The dynamo's stabilizer drain in units a second: the tank's own (tanks.json
+## tanks.<tank>.stabilizer_per_s, the Bastion's heavier turret with its searchlight tower), else
+## dynamo.stabilizer_per_s.
+static func stabilizer_per_s(state: TankState) -> float:
+	var c := state.content
+	var own: Variant = c.tank_def(state.hull.tank).get("stabilizer_per_s")
+	if own is float or own is int:
+		return float(own)
+	return c.num("tanks", "dynamo.stabilizer_per_s", 1.5)
 
 
 ## The Rampart's hoist (no steam engine, no gearbox): it lifts a heavy shell, 10 s at a bank of 50
