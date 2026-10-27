@@ -2,7 +2,7 @@
 # Assembles the r3 GIFs from build/v3mock/tank/r3/frames/<name>/f###.png (ImageMagick).
 set -eu
 cd "$(dirname "${BASH_SOURCE[0]}")/../../../.."
-out=build/v3mock/tank/r3
+out=build/v3mock/tank/${1:-r3}
 command -v magick >/dev/null || { echo "gifs_r3.sh: magick not on PATH; the frame strips are the deliverable"; exit 0; }
 gif() {
   [ -d "$out/frames/$1" ] || return 0

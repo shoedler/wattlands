@@ -541,7 +541,7 @@ static func arc_v(i: Image, r: Rect2i, t: float, rpm: float, slot: int) -> void:
 	var on := slot >= 0 and rpm > 1.0
 	var ang := t * rpm / 60.0 * TAU
 	var cc := seat(i, r.position.x + 3, fy, ang, slot)
-	var x0 := r.position.x + 22
+	var x0 := r.position.x + 20
 	var coil := Rect2i(x0, fy - 16, 7, 14)
 	box(i, Rect2i(x0 - 1, fy - 2, 9, 2), ST1, ST2, ST0)
 	for y in range(coil.position.y, coil.end.y):
@@ -553,7 +553,7 @@ static func arc_v(i: Image, r: Rect2i, t: float, rpm: float, slot: int) -> void:
 			p(i, x, y, c)
 	pr(i, Rect2i(x0 - 1, coil.position.y - 1, 9, 1), ST3)
 	chain(i, cc, Vector2(x0 + 3.5, fy - 6.5), 2.5, 2.0, t * rpm / 60.0 * 9.0)
-	var tip := Vector2(r.position.x + 41.5, fy - 7.5)
+	var tip := Vector2(r.end.x - 9.5, fy - 7.5)
 	var la := Vector2(tip.x - 8.0, r.position.y + 6.0)
 	var ra := Vector2(tip.x + 8.0, r.position.y + 6.0)
 	pr(i, Rect2i(floori(la.x) - 2, floori(la.y) - 2, floori(ra.x - la.x) + 5, 2), BR1)
