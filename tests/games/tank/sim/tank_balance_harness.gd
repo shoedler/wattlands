@@ -263,7 +263,9 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 		var apct := riders.applied_pct(arc.peer)
 		var akey := sg.phase_index
 		if not _arc.has(akey):
-			_arc[akey] = {"index": akey, "seg": sg.seg, "stage": sg.stage, "above72_s": 0.0, "max": 0.0}
+			_arc[akey] = {
+				"index": akey, "seg": sg.seg, "stage": sg.stage, "above72_s": 0.0, "max": 0.0
+			}
 		var arec: Dictionary = _arc[akey]
 		if apct > 72.0:
 			arec["above72_s"] = float(arec["above72_s"]) + Wl.SIM_DT
@@ -278,7 +280,10 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 			if ty == TankEvents.EVADE:
 				trec["telegraphs"] = int(trec["telegraphs"]) + 1
 				trec["evaded"] = int(trec["evaded"]) + int(e.get("ok", 0))
-			if ty == TankEvents.SHOT and int(e.get("e", 0)) == TankIds.enemy_code(TankIds.ENEMY_MEDIUM):
+			if (
+				ty == TankEvents.SHOT
+				and int(e.get("e", 0)) == TankIds.enemy_code(TankIds.ENEMY_MEDIUM)
+			):
 				trec["mediums"] = int(trec["mediums"]) + 1
 	var gb := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
 	if gb != null and sg.seg == TankIds.SEG_ADVANCE:
@@ -434,13 +439,18 @@ static func format(r: Dictionary) -> String:
 	var arcs: PackedStringArray = []
 	for a: Dictionary in r.get("arc", []):
 		arcs.append(
-			"%s%d %.0f s (max %.0f)" % [str(a["seg"]).substr(0, 3), a["stage"], a["above72_s"], a["max"]]
+			(
+				"%s%d %.0f s (max %.0f)"
+				% [str(a["seg"]).substr(0, 3), a["stage"], a["above72_s"], a["max"]]
+			)
 		)
 	if not arcs.is_empty():
 		lines.append("  arc above 72%: " + ", ".join(arcs))
 	var tel: PackedStringArray = []
 	for a: Dictionary in r.get("telegraphs", []):
-		tel.append("adv%d %d/%d mediums %d" % [a["stage"], a["evaded"], a["telegraphs"], a["mediums"]])
+		tel.append(
+			"adv%d %d/%d mediums %d" % [a["stage"], a["evaded"], a["telegraphs"], a["mediums"]]
+		)
 	if not tel.is_empty():
 		lines.append("  telegraphs (evaded/all): " + ", ".join(tel))
 	var shares: PackedStringArray = []
