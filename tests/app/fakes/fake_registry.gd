@@ -164,7 +164,7 @@ static func tank() -> Dictionary:
 		"first_run_priority": -1,
 		"options": [{"id": "rotation", "type": "toggle", "default": true}],
 		"player_options": [],
-		"picker_image": "res://assets/tank/sprites/picker_card.png",
+		"picker_image": "res://assets/tank/v2/picker_card.png",
 	}
 
 
