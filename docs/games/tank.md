@@ -6,6 +6,110 @@ Diesel Domestiques (game id `tank`) is one game module on the Wattlands platform
 
 > tank / landship from a fictional ww2 era, allied side, side profile, driving through a starry, extremely dark, blue/greenish-tinted summer night in the forest … warm headlights and searchlights and few, green and red, small position lights … strong tilt shift … many rivets and intricate details about little mechanisms, armament and creature comforts … dark brown paint, weathering … sections that allow a peek beneath the armor, showcasing the main drive diesel engine, the electric motor for turret traverse, the petrol engine for loading the shell and some more. Everything inside is just about enough illuminated by the incandescent lights inside the tank, giving an eery vibe … All the mechanisms allow the examiner of the image to imagine how they work, as they have a logical process that can be inferred from looking at the mechanisms in detail.
 
+## v3 (2026-10-28): what changes from v2
+
+Simon played v2 and chose v3 from mockups (the "Diesel Domestiques v3 Options" page, rounds 1 to 4). Where this section and the v2 sections below differ, this section wins. The mockup code lives on local branches `mock/tank3-tank` (the tank generator, `assets/tank/v3/tools_src/`, round r6) and `mock/tank3-env` (forest planes, layout, light layers, seat HUD, `assets/tank/v3env/`, `src/games/tank/view/tank_v3_env.gd`, `src/games/tank/hud/tank_hud_seats.gd`).
+
+### One tank, five seats
+- **Tank:** every crew size (1-4) rides the same tank, the reference landship rebuilt as pixel art (`r6`: 475 × 216 art px, base art plus live parts). The Bulwark, Rampart, Citadel and Bastion variants and the Bulwark gearbox go.
+- **Seats:** five, with fixed trainer modes:
+
+  | Seat | Engine id | Machine | Trainer | Job | Empty seat |
+  | --- | --- | --- | --- | --- | --- |
+  | Drive | `diesel` | diesel | SIM, terrain grade | moves the tank; in a gun line it digs the berm | the tank stops |
+  | Gun | `dynamo` | dynamo | ERG, the bank pattern (55-100 %) | traverses and elevates the main gun, fires what is in the rack | the gun stays where it is and does not fire |
+  | Loader | `steam` | steam | SIM, boiler grade | reloads into a 3-round ready rack, about 7 s a shell in band | no reloads |
+  | Lights | `arc` | arc generator | ERG 65-80 % (searchlight load) | the searchlights: full gun range and normal dispersion | the gun reaches only the headlight's range (about 260 rules px), dispersion x2 |
+  | Secondaries | `feed` (new) | crank-driven twin belt feed | SIM, flat | the two bow guns: exactly 2 rounds per pedal revolution (rounds per minute = 2 × cadence); power in band sets their slew speed | silent |
+
+- **An empty seat does nothing.** With at most 4 riders at least one seat is always empty.
+- **Rotation is gone;** seat choice replaces it.
+
+### Seat choice and switching
+- **Moving:** any rider moves to an empty seat with left/right (pick) and confirm (sit), only while their seat lock is open.
+- **Seat lock:** a rider may change seats only 60 s or more after their last trainer-mode change of any kind (a seat switch or a plan boundary). A switch that would bring a mode change within 60 s of a planned one (a segment boundary such as a checkpoint) is refused. The HUD shows the lock as a timer.
+- **Effort:** each switch is a `replan` for that rider. The rest of the current phase continues with the new seat's mode and targets, and the platform ramps every ERG <-> SIM switch (BRIEF 4.5). The PlanValidator must pass every replanned plan with no switch warning.
+- **Automatic seating:** a rider who has never sent a seat or deliberate intent (Autopilot, and the solo rider by default) is seated automatically. The rule (solo loop):
+  1. Drive while no target is in range.
+  2. When a target comes and the rack is not full, the Loader until the rack is full.
+  3. Then the Gun while the rack holds shells and a target is in range.
+  4. The Secondaries when only light targets are within 220 px.
+
+  Every stay is at least 60 s. With 2-4 riders the automatic riders fill the most needed empty seat: Drive first, then Gun, Loader, Lights, Secondaries.
+
+### Combat changes
+- **Main gun reload:** the Loader in band fills a 3-round ready rack, one shell per `steam.full_j` (tuned so a shell takes about 7 s at 250 W). The Gun fires from the rack. Each shot chambers the next shell in 1 s at the loading elevation, after which the gun re-lays. Overpressure stays (a sprint for a double-damage shell).
+- **Secondaries:** two bow guns. Each pedal revolution of the Secondaries rider fires 2 rounds (alternating guns) at the nearest enemy 40-220 px ahead. Damage is per round, tuned for balance.
+- **Telegraphs:** every telegraphed shot warns at least 6 s ahead:
+
+  | Shooter | Telegraph |
+  | --- | --- |
+  | Light flank shot | 6 s |
+  | Heavy | 6 s |
+  | Destroyer | 7 s |
+  | Behemoth | 8 s |
+
+  The evade rule is unchanged: hold the sprint 2 s inside the warning (3 s for the Behemoth).
+- **Difficulty is enemy count:** enemy counts scale with the crew size (1 rider 0.5, 2 riders 0.7, 3 riders 0.85, 4 riders 1.0, rounded, at least 1). Enemy HP is the same for every crew size.
+- **Hitbox:** the rules' hull, turret and track-run rects come from the drawn tank (`r6_hitbox.json`, art px / 1.5), as do the trunnion, muzzle and bow-gun muzzles.
+- **Terrain relief:** the view follows the rules' terrain with a height profile plus small seeded cosmetic bumps.
+  - Every road wheel rides its own suspension arm.
+  - The hull rotates as a whole sprite (nearest filtering) to fit the wheels, and bobs on the springs.
+  - Enemies do the same.
+  - The rules may use the ground height for the aim solver; otherwise the relief is cosmetic.
+
+### World
+- **Forest, mostly:** the road runs through a pine forest at night, bluer and greener, with moderate tilt-shift. The road and tank sit lower (ground line 385 art px), with a soft verge between the road and the foreground blur.
+- **Little bases:** a fenced clearing with a bunker, lamp, crates and barrier stands at the depot start, at gun lines where it fits, and at the free-roam strongpoints.
+- **Removed:** the village, quarry, lake and foundry-town backdrops and zone planes.
+- **No people outside the tank.**
+- **Ashfall Road** keeps its segments, gun lines and the Behemoth, through the forest.
+- **Free-roam zones** become forest variants and base clearings. The strip names change to match.
+- **Lights:** the world's lights draw on their own layer behind the tank (the v2 layering bug). The tank's lights:
+  - the room lamps;
+  - the headlight;
+  - the turret searchlight, forward and about 11° down, on while Lights is manned and in band;
+  - the rear searchlight, aft and about 13° down, always on as a work light;
+  - v2's position lights.
+
+### The tank, in the view
+- **Base:** the r6 base art (re-pixelled from the reference, 63 colours).
+- **Live parts, drawn each frame:**
+  - the track and the road wheels on their suspension;
+  - the main gun with recoil;
+  - the bow guns tilting in their armoured box;
+  - each seat's machine moving with its rider (the diesel's pistons on cadence);
+  - a rider on each manned seat, and a bare saddle and still crank on an empty one;
+  - the turret's two windows: the ready rack with its manipulator, and the breech with its rammer, following the rules' rack and loader state;
+  - both bow guns' receivers.
+- **Firing:**
+  - the r6 main-gun blast: star flash, brake jets, fireball, smoke, dust, pebbles;
+  - 11 px recoil, a 2° hull rock, a short screen shake and a scene flash;
+  - the bow guns' per-round flashes, tracers and casings.
+
+### HUD
+- **Seat row:** seat panel A replaces the crew row: five live machine cards (Drive, Gun, Loader, Lights, Secondaries), each with a tiny ERG or SIM tag.
+  - Empty seats are dark and marked EMPTY.
+  - Your card carries YOU and the lock timer, and the hint plate reads "seat locked" or "< > move  OK sit".
+  - The rack pips show on the Gun and Loader cards, and rounds per minute on the Secondaries card.
+- **My numbers** follow your seat.
+- **W' becomes SPRINT.**
+- **Secondaries dial:** a small cold blue-white dial next to the main gun's arc.
+
+### Effort plan (per seat, mission segments)
+
+| Seat | Depot (WARMUP) | Advance | Gun line | Boss | Checkpoint |
+| --- | --- | --- | --- | --- | --- |
+| Drive | SIM game 0..+2 % | SIM game -3..+6 % | SIM flat (dig) | SIM flat | ERG 50 % |
+| Gun | ERG 50 % -> 65 % | ERG bank [55, 100] | same | same | ERG 50 % |
+| Loader | SIM flat, boiler 3 % × p | SIM flat, boiler 8 % × min(p, 1) | same | same | ERG 50 % |
+| Lights | ERG 50 % -> 65 % | ERG [65, 80] | same | same | ERG 50 % |
+| Secondaries | SIM flat | SIM flat | SIM flat | SIM flat | ERG 50 % |
+
+- **Free roam:** each seat's work mode for the whole roam phase. The Gun's bank range is [55, 85].
+- **v2's 90 % ERG gun-line block for the diesel is gone:** gun lines are now the Gun seat's bank work and the Drive seat's dig.
+- **Unchanged:** every BRIEF 4.6 and 4.5 check in 2.3 applies to every replanned plan.
+
 ## 0. Hard requirements
 
 1. Build the game through the Game SDK only (BRIEF 3.6): a `GameModule` declared by `src/games/tank/game.json`, listed by `GameRegistry`, passing `tests/sdk/test_conformance.gd` with no change to platform tests.
