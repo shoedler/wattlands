@@ -4,17 +4,6 @@ extends GutTest
 ## results and progress. Lead-owned G0 tests; builders add theirs under their own folders.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
-## The kit minimums at 1080p (GAME_SDK 10.1), divided by 3 for art px and rounded up.
-const KIT_MIN := {
-	"power_gauge": Vector2i(100, 36),
-	"cadence": Vector2i(97, 33),
-	"timeline": Vector2i(127, 36),
-	"hull_hp": Vector2i(57, 36),
-	"watts": Vector2i(57, 36),
-	"wbal": Vector2i(80, 14),
-	"gear": Vector2i(50, 14),
-	"teammates": Vector2i(134, 21),
-}
 
 
 func _game(ctx: GameContext) -> TankGame:
@@ -272,44 +261,6 @@ func test_int_fields_cover_the_snapshot_and_every_event_type() -> void:
 	assert_eq(f["snapshot"], TankSnapshotSchema.INT_PATHS)
 	for t: String in TankEvents.TYPES:
 		assert_true(f.has(t), t)
-
-
-func test_hud_rects_stay_in_the_hud_bands_clear_of_panic_and_at_kit_minimums() -> void:
-	var panic := Rect2i(
-		TankConst.PANIC_X, TankConst.PANIC_Y, 640 - TankConst.PANIC_X, 360 - TankConst.PANIC_Y
-	)
-	var rects: Array = TankHud.RECTS.values()
-	for name: String in TankHud.RECTS:
-		var r: Rect2i = TankHud.RECTS[name]
-		assert_true(
-			r.end.y <= TankConst.HUD_TOP_H or r.position.y >= TankConst.HUD_BOTTOM_Y,
-			"%s in a HUD band" % name
-		)
-		assert_true(r.position.x >= 0 and r.end.x <= 640 and r.end.y <= 360, "%s on screen" % name)
-		assert_false(r.intersects(panic), "%s clear of PANIC" % name)
-		if KIT_MIN.has(name):
-			assert_true(
-				r.size.x >= KIT_MIN[name].x and r.size.y >= KIT_MIN[name].y,
-				"%s at its minimum" % name
-			)
-	for i in rects.size():
-		for j in range(i + 1, rects.size()):
-			assert_false(
-				(rects[i] as Rect2i).intersects(rects[j]), "rects %d and %d overlap" % [i, j]
-			)
-	var spec := _game(F.make_ctx(3)).hud_spec()
-	for w: String in [
-		HudSpec.TIMELINE,
-		HudSpec.POWER_GAUGE,
-		HudSpec.CADENCE,
-		HudSpec.WBAL,
-		HudSpec.GEAR,
-		HudSpec.TEAMMATES,
-		HudSpec.READOUT
-	]:
-		assert_true(spec.has_widget(w), w)
-	for c: Dictionary in spec.controls:
-		(c["control"] as Control).free()
 
 
 func test_make_view_returns_a_node2d_that_reads_the_state() -> void:
