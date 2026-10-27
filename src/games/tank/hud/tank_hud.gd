@@ -39,6 +39,8 @@ const LAYOUT := {
 	"roam_board": Rect2i(754, 6, 200, 44),
 	"roam_hull": Rect2i(866, 56, 88, 48),
 	"roam_toasts": Rect2i(6, 56, 300, 24),
+	# MOCK v3: layout B's seat board, docked on top of my numbers
+	"seats_b": Rect2i(6, 398, 222, 38),
 }
 ## The bottom-right corner nothing covers, and the tank's band the plates keep out of.
 const CLEAR := Rect2i(760, 480, 200, 60)
@@ -99,7 +101,19 @@ static func spec(game: TankGame) -> HudSpec:
 		_add(hs, TankHudHull.new(), game, "hull")
 		_add(hs, TankHudBoss.new(), game, "boss")
 	_add(hs, TankHudMine.new(), game, "mine")
-	_add(hs, TankHudCrew.new(), game, "crew")
+	# MOCK v3 (TankHudSeats): A = the seat row replaces the crew row; B = the seat board over my
+	# numbers, the crew row stays; 0 = v2.
+	var hud3 := v3_hud()
+	if hud3 == "A":
+		var seats := TankHudSeats.new()
+		seats.layout = "A"
+		_add(hs, seats, game, "crew")
+	else:
+		_add(hs, TankHudCrew.new(), game, "crew")
+		if hud3 == "B":
+			var board := TankHudSeats.new()
+			board.layout = "B"
+			_add(hs, board, game, "seats_b")
 	# last, so a help point inside a plate moves with that plate rather than with the tags
 	_add(hs, TankHudTags.new(), game, "tags")
 	hs.toasts_at(LAYOUT["roam_toasts" if roam else "toasts"])
@@ -110,6 +124,12 @@ static func spec(game: TankGame) -> HudSpec:
 	pal["font"] = TankHudDraw.font()
 	hs.palette = pal
 	return hs
+
+
+## MOCK v3: the HUD mock's layout (TANK_V3_HUD: "A" by default, "B", or "0" for v2).
+static func v3_hud() -> String:
+	var e := OS.get_environment("TANK_V3_HUD")
+	return e if e in ["A", "B", "0"] else "A"
 
 
 static func _add(hs: HudSpec, c: TankHudCtl, game: TankGame, key: String) -> void:

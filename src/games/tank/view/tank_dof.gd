@@ -48,6 +48,43 @@ void fragment() {
 }
 """
 
+## MOCK v3 (TankV3Env): three rings of 12 taps, so the much larger radii of the stronger
+## tilt-shift stay smooth.
+const SHADER_V3 := """
+shader_type canvas_item;
+render_mode blend_disabled;
+uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
+uniform vec2 canvas_px = vec2(960.0, 540.0);
+uniform vec2 band = vec2(150.0, 360.0);
+uniform float ramp_px = 70.0;
+uniform float max_radius = 2.2;
+
+void fragment() {
+	float y = UV.y * canvas_px.y;
+	float d = max(band.x - y, y - band.y);
+	float k = clamp(d / ramp_px, 0.0, 1.0);
+	float r = k * k * max_radius;
+	vec2 px = 1.0 / canvas_px;
+	vec4 c = texture(screen_tex, SCREEN_UV);
+	if (r > 0.15) {
+		vec4 acc = c;
+		float n = 1.0;
+		for (int ring = 1; ring <= 3; ring++) {
+			float rr = r * float(ring) / 3.0;
+			float w = 1.0 - float(ring - 1) * 0.22;
+			for (int i = 0; i < 12; i++) {
+				float a = float(i) * 0.523599 + float(ring) * 0.2618;
+				vec2 o = vec2(cos(a), sin(a)) * rr * px;
+				acc += texture(screen_tex, SCREEN_UV + o) * w;
+				n += w;
+			}
+		}
+		c = acc / n;
+	}
+	COLOR = vec4(c.rgb, 1.0);
+}
+"""
+
 ## The rider's option (player_options `miniature`).
 var enabled: bool = true
 ## True once the frame time switched it off (for the rest of the session).
@@ -64,7 +101,7 @@ var _slow_s: float = 0.0
 func _init() -> void:
 	name = "Dof"
 	var sh := Shader.new()
-	sh.code = SHADER
+	sh.code = SHADER_V3 if TankV3Env.on() else SHADER
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
 	material = _mat
@@ -100,11 +137,18 @@ func update(p_canvas: Vector2, p_band: Vector2) -> void:
 	canvas = p_canvas
 	band = p_band
 	visible = active()
+	var ramp := RAMP_PX
+	var max_r := MAX_RADIUS_PX
+	if TankV3Env.on():
+		var d := TankV3Env.dof()
+		band = p_band - TankView.BAND + (d["band"] as Vector2)
+		ramp = float(d["ramp"])
+		max_r = float(d["max"])
 	if _mat != null:
 		_mat.set_shader_parameter("canvas_px", canvas)
 		_mat.set_shader_parameter("band", band)
-		_mat.set_shader_parameter("ramp_px", RAMP_PX)
-		_mat.set_shader_parameter("max_radius", MAX_RADIUS_PX)
+		_mat.set_shader_parameter("ramp_px", ramp)
+		_mat.set_shader_parameter("max_radius", max_r)
 	queue_redraw()
 
 

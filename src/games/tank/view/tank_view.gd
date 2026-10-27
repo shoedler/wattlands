@@ -73,7 +73,7 @@ const ZONE_BLEND_M := 60.0
 ## The turn's dust: full thickness over the middle (1 - 1 / gain) of the stop.
 const TURN_DUST_GAIN := 1.8
 ## The layers mirrored while the tank drives west (the planes behind and the HUD never are).
-const MIRROR_LAYERS: Array[String] = ["World", "Tank", "Light", "Front"]
+const MIRROR_LAYERS: Array[String] = ["World", "WorldLight", "Tank", "Light", "Front"]
 ## The turret's width end on, a share of its side view (a traverse squeezes it to this).
 const TURRET_MIN_W := 0.55
 
@@ -189,10 +189,11 @@ func _build() -> void:
 	stage = Node2D.new()
 	stage.name = "Stage"
 	add_child(stage)
-	for n: String in ["Back", "World", "Tank", "Light", "Front", "Post"]:
+	# MOCK v3: "WorldLight" (additive) lights the world behind the tank (the layering fix).
+	for n: String in ["Back", "World", "WorldLight", "Tank", "Light", "Front", "Post"]:
 		var l := Node2D.new()
 		l.name = n
-		if n == "Light":
+		if n == "Light" or n == "WorldLight":
 			var m := CanvasItemMaterial.new()
 			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 			l.material = m
@@ -202,6 +203,7 @@ func _build() -> void:
 	(_layers["World"] as Node2D).draw.connect(_draw_world)
 	(_layers["Tank"] as Node2D).draw.connect(_draw_tank)
 	(_layers["Light"] as Node2D).draw.connect(_draw_light)
+	(_layers["WorldLight"] as Node2D).draw.connect(_draw_world_light)
 	(_layers["Front"] as Node2D).draw.connect(_draw_front)
 	(_layers["Post"] as Node2D).draw.connect(_draw_post)
 	dof = TankDof.new()
@@ -301,7 +303,8 @@ func advance(delta: float) -> void:
 
 func _layout(state: TankState) -> void:
 	canvas = canvas_size()
-	y_off = roundf((canvas.y - BASE.y) * 0.5)
+	# MOCK v3 r2: the stage drops so the road and the tank sit lower (TankV3Env.GROUND_Y).
+	y_off = roundf((canvas.y - BASE.y) * 0.5) + TankV3Env.ground_drop()
 	if stage != null:
 		stage.position = Vector2(0, y_off)
 	variant = TankKit.variant_for(state.hull.tank, state.crew)
@@ -437,6 +440,11 @@ func sy(world_y: float) -> float:
 
 ## A variant anchor in stage px (this frame's origin).
 func anchor(name: String) -> Vector2:
+	if TankV3Env.r4():
+		# MOCK v3 r3: the r4 tank's anchors where it has them
+		var a := TankV3Env.r4_anchor(origin, name)
+		if not is_nan(a.x):
+			return a
 	return origin + kit.anchor(variant, name)
 
 
@@ -916,6 +924,8 @@ func barrel_pivot() -> Vector2:
 
 func muzzle() -> Vector2:
 	var blen := kit.anchor(variant, "muzzle").x - kit.anchor(variant, "barrel_pivot").x
+	if TankV3Env.r4():
+		blen = float(TankV3Env.R4["gun_len"])
 	return barrel_pivot() + barrel_vector() * blen
 
 
@@ -1100,6 +1110,8 @@ func hud_tank_point(name: String) -> Vector2:
 			p = muzzle()
 		"rear":
 			p = Vector2(origin.x + ART_REAR, GROUND)
+			if TankV3Env.r4():
+				p = Vector2(TankV3Env.r4_at(origin).x + 14.0, GROUND)
 	return Vector2(_hud_x(p.x), p.y) + off
 
 
@@ -1118,6 +1130,12 @@ func hud_barrel_dir() -> float:
 ## faces, with its roof crew) and the hull below it.
 func hud_tank_rects() -> Array[Rect2]:
 	var off := Vector2(0, y_off)
+	if TankV3Env.r4():
+		var rs: Array[Rect2] = []
+		for r in TankV3Env.r4_rects(origin):
+			var h0 := _hud_rect(r)
+			rs.append(Rect2(h0.position + off, h0.size))
+		return rs
 	var tr := kit.turret_rect(variant)
 	var a := turret_map(origin + tr.position)
 	var b := turret_map(origin + tr.end)
@@ -1168,12 +1186,21 @@ func _draw_world() -> void:
 
 func _draw_tank() -> void:
 	if _built and game.state != null:
+		if TankV3Env.r4():
+			TankV3Env.draw_tank_r4(layer("Tank"), self)
+			return
 		TankHullDraw.draw(layer("Tank"), self, game.state)
 
 
 func _draw_light() -> void:
 	if _built and game.state != null:
 		TankLightDraw.draw(layer("Light"), self, game.state)
+
+
+## MOCK v3: the world's own lights, behind the tank (TankV3Env.layer_fix()).
+func _draw_world_light() -> void:
+	if _built and game.state != null and TankV3Env.layer_fix():
+		TankLightDraw.draw_world(layer("WorldLight"), self, game.state)
 
 
 func _draw_front() -> void:

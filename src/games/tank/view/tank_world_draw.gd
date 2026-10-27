@@ -130,6 +130,9 @@ static func _zone_plane(ci: CanvasItem, v: TankView) -> void:
 
 
 static func draw_back(ci: CanvasItem, v: TankView) -> void:
+	if TankV3Env.on():
+		TankV3Env.draw_back(ci, v)
+		return
 	var far := v.kit.plane("far")
 	if v.y_off > 0.0 and not far.is_empty():
 		# A taller canvas: the night sky continues above the reference's frame.
@@ -152,6 +155,9 @@ static func draw_back(ci: CanvasItem, v: TankView) -> void:
 
 
 static func draw_front(ci: CanvasItem, v: TankView) -> void:
+	if TankV3Env.on():
+		TankV3Env.draw_front(ci, v)
+		return
 	for p in v.kit.planes:
 		if str(p.get("layer", "")) == "front":
 			tile(ci, v, p)
@@ -164,8 +170,12 @@ static func draw_front(ci: CanvasItem, v: TankView) -> void:
 
 
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	if TankV3Env.on():
+		# MOCK v3: no depot yard (no people); the occasional little base instead.
+		for bx in TankV3Env.bases(v, state):
+			TankV3Env.draw_base(ci, bx)
 	_tank_contact(ci, v)
-	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
+	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active and not TankV3Env.on():
 		TankDepotDraw.draw(ci, v)
 	if state.roam.active and state.roam_map != null:
 		_turning_places(ci, v, state)

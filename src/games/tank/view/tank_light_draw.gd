@@ -19,6 +19,17 @@ const BEAM_LIT := Color(1.0, 0.8, 0.52)
 static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	var o := v.origin
 	var broken := state.hull.breakdown
+	if TankV3Env.r4():
+		# MOCK v3 r3: the r4 tank's own lights instead of the v2 rooms, machines and beams
+		TankV3Env.draw_r4_lights(ci, v, state)
+		_shells(ci, v, state)
+		v.fx.draw_light(ci)
+		if v.fx.wash > 0.0:
+			var cw := v.fx.wash_color
+			TankDraw.glow_at(ci, v.fx.wash_pos, 320.0, Color(cw.r, cw.g, cw.b, 0.16 * v.fx.wash))
+		if not TankV3Env.layer_fix():
+			draw_world(ci, v, state)
+		return
 	_rooms(ci, v, o, broken)
 	if not broken:
 		var rooms := {}
@@ -27,13 +38,32 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 				rooms[e] = v.room_rects[e]
 		TankRoomMachines.draw_light(ci, o, rooms, v.phases, v.powers, v.time)
 	_beams(ci, v, state, o, broken)
-	_lamps(ci, v, state, o)
-	_fires(ci, v, state)
+	_running_lights(ci, v, o)
 	_shells(ci, v, state)
 	v.fx.draw_light(ci)
 	if v.fx.wash > 0.0:
 		var c := v.fx.wash_color
 		TankDraw.glow_at(ci, v.fx.wash_pos, 320.0, Color(c.r, c.g, c.b, 0.16 * v.fx.wash))
+	if not TankV3Env.layer_fix():
+		# v2 (the bug Simon saw): the world's lamps, fires and glows on this layer, over the tank.
+		draw_world(ci, v, state)
+
+
+## MOCK v3 (the layering fix): the lights that belong to the world behind the tank, drawn by the
+## view's WorldLight layer between the world and the tank: the pools on the road (the headlight's,
+## the rooms' spill), the halt line's, the turning places', the depot's and the little bases' lamps,
+## burning wrecks and the Behemoth, the beams' rim light on enemies and wrecks, the enemies' slits
+## and telegraph glows. So a lamp standing behind the hull never shines through it.
+static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	if TankV3Env.r4():
+		TankV3Env.draw_r4_pools(ci, v, state.hull.breakdown)
+	else:
+		_ground_pools(ci, v, state.hull.breakdown)
+	_world_lamps(ci, v, state)
+	if TankV3Env.on():
+		for bx in TankV3Env.bases(v, state):
+			TankV3Env.draw_base_light(ci, bx)
+	_fires(ci, v, state)
 	_lit_by_beams(ci, v, state)
 	for id: int in v.enemy_rects:
 		var e := state.enemy(id)
@@ -191,11 +221,19 @@ static func _beams(ci: CanvasItem, v: TankView, state: TankState, o: Vector2, br
 	TankDraw.beam(ci, hl, deg_to_rad(16.0), 190.0, deg_to_rad(14.0), Color(1.0, 0.8, 0.5), 0.5 * hk)
 	TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.95, 0.8, hk))
 	TankDraw.glow_at(ci, hl, 22.0, Color(1.0, 0.8, 0.5, 0.35 * hk))
-	# Where the beam lands: a long warm pool on the road ahead, and a nearer spill under the nose.
+
+
+## Where the headlight's beam lands (a long warm pool on the road ahead, a nearer spill under the
+## nose) and the cutaway rooms' lamps spilling down onto the road beside the tracks.
+static func _ground_pools(ci: CanvasItem, v: TankView, broken: bool) -> void:
+	var o := v.origin
+	var hk := 1.0
+	if broken:
+		hk = 0.25 + 0.2 * TankDraw.hash01(floorf(v.time * 12.0))
+	var hl := o + v.kit.anchor(v.variant, "headlight")
 	var g := TankView.GROUND
 	ground_glow(ci, Vector2(hl.x + 165.0, g + 5.0), 125.0, Color(1.0, 0.75, 0.45, 0.4 * hk))
 	ground_glow(ci, Vector2(hl.x + 50.0, g + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * hk))
-	# The cutaway rooms' lamps spill down onto the road beside the tracks.
 	if not broken:
 		for room: Dictionary in v.kit.rooms(v.variant):
 			var r := TankKit.rect_of(room)
@@ -214,11 +252,14 @@ static func ground_glow(ci: CanvasItem, p: Vector2, r: float, c: Color) -> void:
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
-static func _lamps(ci: CanvasItem, v: TankView, state: TankState, o: Vector2) -> void:
+static func _running_lights(ci: CanvasItem, v: TankView, o: Vector2) -> void:
 	var blink := 0.75 + 0.25 * sin(v.time * 2.2)
 	TankDraw.lamp(ci, o + v.kit.anchor(v.variant, "running_light_red_rear"), RED, blink)
 	TankDraw.lamp(ci, o + v.kit.anchor(v.variant, "running_light_red_front"), RED, 0.9)
 	TankDraw.lamp(ci, o + v.kit.anchor(v.variant, "running_light_green_rear"), GREEN, blink)
+
+
+static func _world_lamps(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	var hl := TankWorldDraw.halt_lamp(v, state)
 	if not is_nan(hl.x):
 		TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.85, 0.6, 0.7))
@@ -226,7 +267,7 @@ static func _lamps(ci: CanvasItem, v: TankView, state: TankState, o: Vector2) ->
 	for tl in TankWorldDraw.turn_lamps(v, state):
 		TankDraw.glow_at(ci, tl, 5.0, Color(1.0, 0.85, 0.6, 0.7))
 		TankDraw.glow_at(ci, tl + Vector2(0, 16), 34.0, Color(AMBER.r, AMBER.g, AMBER.b, 0.26))
-	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
+	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active and not TankV3Env.on():
 		for l: Dictionary in TankDepotDraw.lights(v):
 			var p: Vector2 = l["p"]
 			if str(l["kind"]) == "door":
