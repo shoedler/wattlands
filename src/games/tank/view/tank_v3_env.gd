@@ -17,8 +17,9 @@ extends RefCounted
 ##                            before/after frame
 ##   TANK_V3_BASE_SX=<px>     one little base with its left end at this stage x (art px), for the
 ##                            hero frames; otherwise bases stand at their world places
-##   TANK_V3_TANK=r4          r3: draw the tank builder's rebuilt tank (round 4, a static composed
-##                            sprite, assets/tank/v3env/tank_r4.png) instead of the v2 tank, with
+##   TANK_V3_TANK=r4|r5       r3/r4: draw the tank builder's rebuilt tank (its round 4 or 5, a
+##                            static composed sprite, assets/tank/v3env/tank_<r>.png; same anchors,
+##                            r5 adds the rear searchlight) instead of the v2 tank, with
 ##                            its own lights (position lamps, headlight, searchlight, room bloom)
 ##   TANK_V3_GROUND_Y=<px>    r2: where the road line (the tank's and the enemies' ground) sits on
 ##                            the 960 x 540 base canvas (default GROUND_Y; v2 had 340). The whole
@@ -86,7 +87,29 @@ const LAMP := Color(1.0, 0.7, 0.34)
 ## the sprite, its ground row (track bottom), where its local origin sits relative to the v2
 ## tank's top-left (TankView.TANK_POS; x as the tank builder placed it over this backdrop), and its
 ## anchors in sprite px.
-const R4_FILE := "res://assets/tank/v3env/tank_r4.png"
+const R4_FILE := "res://assets/tank/v3env/tank_%s.png"
+## r5's two searchlights (tank3-tank: tank_r5.gd layout() details "searchlight" and
+## "searchlight_rear", lens = at + lens offset): the turret's aimed forward 11 degrees down, the
+## rear deck's aimed aft 13 degrees down (167 degrees) and always on (a work light); beam length,
+## half angle, strength; a pool where each cone's axis meets the road (r5's light.gd).
+const R5_SEARCH := [
+	{
+		"lens": Vector2(309.5, 65.5),
+		"ang": 11.0,
+		"len": 560.0,
+		"half": 6.0,
+		"a": 0.45,
+		"always": false
+	},
+	{
+		"lens": Vector2(98.0, 92.5),
+		"ang": 167.0,
+		"len": 220.0,
+		"half": 8.0,
+		"a": 0.4,
+		"always": true
+	},
+]
 const R4_GROUND := 209.0
 const R4_DX := 12.0
 const R4 := {
@@ -140,7 +163,8 @@ static func cfg() -> Dictionary:
 			"layer_fix": OS.get_environment("TANK_V3_LAYERFIX") != "0",
 			"base_sx": float(bsx) if bsx.is_valid_float() else NAN,
 			"ground_y": GROUND_Y,
-			"r4": OS.get_environment("TANK_V3_TANK") == "r4",
+			"r4": OS.get_environment("TANK_V3_TANK") in ["r4", "r5"],
+			"tank": OS.get_environment("TANK_V3_TANK"),
 		}
 		var gy := OS.get_environment("TANK_V3_GROUND_Y")
 		if gy.is_valid_float():
@@ -191,7 +215,8 @@ static func r4_anchor(origin: Vector2, name: String) -> Vector2:
 
 static func r4_tex() -> Texture2D:
 	if _r4 == null:
-		var img := Image.load_from_file(ProjectSettings.globalize_path(R4_FILE))
+		var path := R4_FILE % str(cfg()["tank"])
+		var img := Image.load_from_file(ProjectSettings.globalize_path(path))
 		_r4 = ImageTexture.create_from_image(img)
 	return _r4
 
@@ -218,18 +243,48 @@ static func draw_r4_lights(ci: CanvasItem, v: TankView, state: TankState) -> voi
 	TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.95, 0.8, hk))
 	TankDraw.glow_at(ci, hl, 22.0, Color(1.0, 0.8, 0.5, 0.35 * hk))
 	var sk := v.searchlight_k(state)
+	if r5():
+		for sd: Dictionary in R5_SEARCH:
+			var k := 1.0 if bool(sd["always"]) else sk
+			var lp: Vector2 = at + (sd["lens"] as Vector2)
+			var ang := deg_to_rad(float(sd["ang"]) + 1.0 * sin(v.time * 0.45))
+			var col := Color(1.0, 0.94, 0.78)
+			TankDraw.beam(
+				ci,
+				lp,
+				ang,
+				float(sd["len"]),
+				deg_to_rad(float(sd["half"])),
+				col,
+				float(sd["a"]) * k
+			)
+			TankDraw.glow_at(ci, lp, 9.0, Color(1.0, 0.95, 0.8, 0.9 * maxf(k, 0.3)))
+			TankDraw.glow_at(ci, lp, 24.0, Color(1.0, 0.85, 0.6, 0.2 * k))
+	else:
+		_r4_searchlight(ci, at, sk, v.time)
+	if state.hull.breakdown:
+		return
+	_room_bloom(ci, at, v.time)
+
+
+static func r5() -> bool:
+	return r4() and str(cfg()["tank"]) == "r5"
+
+
+static func _r4_searchlight(ci: CanvasItem, at: Vector2, sk: float, time: float) -> void:
 	var sl := at + (R4["searchlight"] as Vector2)
-	var sweep := deg_to_rad(-11.0 + 3.0 * sin(v.time * 0.45))
+	var sweep := deg_to_rad(-11.0 + 3.0 * sin(time * 0.45))
 	TankDraw.beam(ci, sl, sweep, 300.0, deg_to_rad(6.0), Color(1.0, 0.92, 0.75), 0.5 * sk)
 	TankDraw.glow_at(ci, sl, 9.0, Color(1.0, 0.95, 0.8, 0.9 * maxf(sk, 0.3)))
 	TankDraw.glow_at(ci, sl, 26.0, Color(1.0, 0.85, 0.6, 0.22 * sk))
-	if state.hull.breakdown:
-		return
+
+
+static func _room_bloom(ci: CanvasItem, at: Vector2, time: float) -> void:
 	for id: String in R4_ROOMS:
 		var r: Rect2 = R4_ROOMS[id]
 		var c := at + r.get_center()
 		var col := Color(0.66, 0.82, 1.0) if id == "lights" else Color(1.0, 0.66, 0.34)
-		var fl := 0.92 + 0.08 * sin(v.time * 3.0 + r.position.x)
+		var fl := 0.92 + 0.08 * sin(time * 3.0 + r.position.x)
 		TankDraw.glow_at(ci, c, r.size.x * 0.75, Color(col.r, col.g, col.b, 0.1 * fl))
 		TankDraw.glow_at(ci, c, r.size.x * 0.35, Color(col.r, col.g, col.b, 0.08 * fl))
 
@@ -246,6 +301,15 @@ static func draw_r4_pools(ci: CanvasItem, v: TankView, broken: bool) -> void:
 	TankLightDraw.ground_glow(
 		ci, Vector2(hl.x + 45.0, g + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * hk)
 	)
+	if r5():
+		# where each searchlight's cone axis meets the road: a warm oval pool (r5's light.gd)
+		for sd: Dictionary in R5_SEARCH:
+			var lp: Vector2 = at + (sd["lens"] as Vector2)
+			var dv := Vector2.from_angle(deg_to_rad(float(sd["ang"])))
+			var gy := at.y + R4_GROUND
+			if dv.y > 0.01:
+				var hit := lp + dv * ((gy - lp.y) / dv.y)
+				TankLightDraw.ground_glow(ci, hit, 46.0, Color(1.0, 0.9, 0.72, 0.32))
 	if broken:
 		return
 	for id: String in R4_ROOMS:
