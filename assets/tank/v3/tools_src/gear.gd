@@ -13,6 +13,9 @@ const TRK4 := Color("#6e5c44")
 const OUT := Color("#0b0806")
 const LINK_PITCH := 7.0
 
+## r5: dark steel and mud track shoes (set from the gear dictionary's "dark").
+static var DARK := false
+
 
 ## Belt samples round `circles` ([{c, r}] in clockwise screen order): {pts: [[p, n, s]], len}.
 ## n is the outward normal; s the arc length. A circle the belt would wrap concavely (a wheel
@@ -71,6 +74,11 @@ static func draw_track(img: Image, b: Dictionary, travel: float, thick := 5.0, e
 		c2 = Color("#323833")
 		c3 = Color("#4f574f")
 		c4 = Color("#6f786d")
+	elif DARK:
+		c1 = Color("#0d0a08")
+		c2 = Color("#15110d")
+		c3 = Color("#1e1913")
+		c4 = Color("#3a3024")
 	var horn0 := pitch * 0.4
 	var horn1 := pitch * 0.4 + 2.0
 	var gr0 := pitch * 0.3
@@ -140,6 +148,28 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 			match kind:
 				"road":
 					if rho > r + 0.7:
+						continue
+					if r > 9.0:
+						if rho > r:
+							col = OUT
+						elif rho > r * 0.8:
+							col = Color("#1a1612") if litf > 0.5 else Color("#0c0a08")
+						elif rho > r * 0.68:
+							col = rim_hi if litf > 0.2 else rim
+						elif rho > r * 0.36:
+							col = disc if litf > -0.2 else disc_d
+							for kk in 6:
+								var ha := phi - TAU * kk / 6.0
+								if (Vector2(cos(ha), sin(ha)) * r * 0.52).distance_to(Vector2(rho, 0)) < r * 0.11:
+									col = OUT
+						elif rho > r * 0.2:
+							col = disc_d
+							if fposmod(phi * 6.0 / TAU, 1.0) < 0.2:
+								col = Color("#7a6244") if not enemy else hub
+						else:
+							col = Color("#6a5236") if litf > 0.3 else Color("#3e2e1e")
+						if col.a > 0.0:
+							Px.put(img, x, y, col)
 						continue
 					if rho > r:
 						col = OUT
@@ -259,8 +289,12 @@ static func draw_back(
 		Px.linef(img, wc[i] + Vector2(0, 1), piv + Vector2(0, 1), dark)
 		Px.linef(img, wc[i], piv, mid)
 		Px.put(img, floori(piv.x), floori(piv.y), lit)
+	DARK = bool(gear.get("dark", false))
 	if not bool(gear.get("track_front", false)):
 		draw_track(img, b, travel, t, enemy)
+	if bool(gear.get("idler_back", false)):
+		var idb: Dictionary = gear["idler"]
+		draw_wheel(img, xf * (idb["c"] as Vector2), float(idb["r"]), travel / float(idb["r"]) + xf.get_rotation(), "idler", enemy)
 	for i in wc.size():
 		var w2: Dictionary = gear["wheels"][i]
 		draw_wheel(img, wc[i], float(w2["r"]), ang / float(w2["r"]), "road", enemy)
@@ -271,13 +305,15 @@ static func draw_back(
 static func draw_front(
 	img: Image, gear: Dictionary, xf: Transform2D, wc: Array[Vector2], travel: float, enemy := false
 ) -> void:
+	DARK = bool(gear.get("dark", false))
 	if bool(gear.get("track_front", false)):
 		draw_track(img, belt(_circles(gear, xf, wc)), travel, float(gear["T"]), enemy)
 	var rot := xf.get_rotation()
 	var sp: Dictionary = gear["sprocket"]
 	var idl: Dictionary = gear["idler"]
 	draw_wheel(img, xf * (sp["c"] as Vector2), float(sp["r"]), travel / float(sp["r"]) + rot, "sprocket", enemy)
-	draw_wheel(img, xf * (idl["c"] as Vector2), float(idl["r"]), travel / float(idl["r"]) + rot, "idler", enemy)
+	if not bool(gear.get("idler_back", false)):
+		draw_wheel(img, xf * (idl["c"] as Vector2), float(idl["r"]), travel / float(idl["r"]) + rot, "idler", enemy)
 
 
 static func _circles(gear: Dictionary, xf: Transform2D, wc: Array[Vector2]) -> Array:

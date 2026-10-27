@@ -12,3 +12,4 @@ gif() {
 gif drive 8 drive.gif
 gif tilt 7 tilt_a.gif
 gif loader 10 loader_closeup.gif
+gif secbox 8 secondaries_closeup.gif

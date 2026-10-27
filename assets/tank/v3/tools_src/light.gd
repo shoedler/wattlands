@@ -71,6 +71,20 @@ static func halo(dst: Image, at: Vector2, rad: float, col: Color, a: float) -> v
 			dst.set_pixel(x, y, Color(minf(o.r + col.r * f, 1.0), minf(o.g + col.g * f, 1.0), minf(o.b + col.b * f, 1.0), o.a))
 
 
+## A flat oval pool of light on the ground (rx wide, ry tall).
+static func pool(dst: Image, at: Vector2, rx: float, ry: float, col: Color, a: float) -> void:
+	for y in range(floori(at.y - ry), ceili(at.y + ry) + 1):
+		for x in range(floori(at.x - rx), ceili(at.x + rx) + 1):
+			if not Px.inside(dst, x, y):
+				continue
+			var d := Vector2((x + 0.5 - at.x) / rx, (y + 0.5 - at.y) / ry).length()
+			if d >= 1.0:
+				continue
+			var f := (1.0 - d) * (1.0 - d) * a
+			var o := dst.get_pixel(x, y)
+			dst.set_pixel(x, y, Color(minf(o.r + col.r * f, 1.0), minf(o.g + col.g * f, 1.0), minf(o.b + col.b * f, 1.0), o.a))
+
+
 ## A light cone from `at` along `ang` (radians, y down), `length` px, half-angle `half`.
 static func beam(dst: Image, at: Vector2, ang: float, length: float, half: float, col: Color, a: float) -> void:
 	var d := Vector2(cos(ang), sin(ang))
@@ -117,8 +131,19 @@ static func tank_lights(dst: Image, L: Dictionary, xf: Transform2D, search_on: b
 				beam(dst, p3, rot + deg_to_rad(5.0), 230.0, deg_to_rad(9.0), Color("#ffd890"), 0.32)
 				halo(dst, p3, 12.0, Color("#ffd890"), 0.9)
 				halo(dst, p3, 4.0, Color("#fff6d8"), 1.0)
-			"searchlight":
-				var p4 := xf * (Vector2(d["at"]) + Vector2(5.5, -0.5))
-				if search_on:
-					beam(dst, p4, rot - deg_to_rad(11.0), 300.0, deg_to_rad(5.0), Color("#fff0c8"), 0.36)
+			"searchlight", "searchlight_rear":
+				var off: Vector2 = d.get("lens", Vector2(5.5, -0.5))
+				var p4 := xf * (Vector2(d["at"]) + off)
+				if search_on or bool(d.get("always", false)):
+					var a := rot + deg_to_rad(float(d.get("ang", -11.0)))
+					var ln := float(d.get("len", 300.0))
+					var hf := deg_to_rad(float(d.get("half", 5.0)))
+					beam(dst, p4, a, ln, hf, Color("#fff0c8"), float(d.get("a", 0.36)))
 					halo(dst, p4, 10.0, Color("#fff0c8"), 0.9)
+					if d.has("ground"):
+						# where the cone's axis meets the road: a warm oval pool
+						var gy: float = (xf * Vector2(0, float(d["ground"]))).y
+						var dv := Vector2(cos(a), sin(a))
+						if dv.y > 0.01:
+							var hit := p4 + dv * ((gy - p4.y) / dv.y)
+							pool(dst, hit, 46.0, 7.0, Color("#ffe8b8"), 0.32)
