@@ -7,17 +7,17 @@ extends RefCounted
 ## own rider and passes ctx.local_peer, and no peer ever raises a prompt for another one:
 ##   - the host calls on_event() with the events it just sent and on_state() after each step;
 ##   - a client calls on_event() from apply_event() and on_state() from apply_snapshot().
-## Prompts follow the replicated state (the station's prompt flag, the steam window), raised once
-## when they come up; sprint prompts only show in WORK phases (never in WARMUP, RECOVERY or ERG
-## gun lines, which carry no prompt flag: brief 2.3).
+## Prompts follow the replicated state (a running telegraph and the rider's own can-evade flag, the
+## steam window), raised once when they come up; sprint prompts only show to a rider who can sprint
+## for them: "Surge to evade" in a SIM WORK phase past the first 300 s (TankRiderState.can_evade,
+## never in WARMUP, RECOVERY or ERG phases: brief 2.3, 2.4), "Surge to overpressure" in the steam
+## window. The arc generator's stall is announced to the whole crew, like the dynamo's.
 
 const PROMPT_NONE := ""
-const PROMPT_RAM := "ram"
-const PROMPT_DODGE := "dodge"
+const PROMPT_EVADE := "evade"
 const PROMPT_OVER := "over"
 const PROMPT_KEYS := {
-	PROMPT_RAM: "TANK_PROMPT_RAM",
-	PROMPT_DODGE: "TANK_PROMPT_DODGE",
+	PROMPT_EVADE: "TANK_PROMPT_EVADE",
 	PROMPT_OVER: "TANK_PROMPT_OVER",
 }
 ## Shell type -> the "loaded" toast.
@@ -32,6 +32,7 @@ var ctx: GameContext = null
 
 var _prompt: String = PROMPT_NONE
 var _stalled: bool = false
+var _arc_stalled: bool = false
 var _rescue: bool = false
 var _regroup: bool = false
 var _all_afk: bool = false
@@ -43,19 +44,41 @@ func _init(p_ctx: GameContext) -> void:
 	ctx = p_ctx
 
 
-## The prompt the local rider's station shows now (PROMPT_*): "Surge to ram" on the diesel or
-## the Bulwark, "Surge to dodge" at the boss, "Surge to overpressure" in the steam window.
+## The prompt the local rider shows now (PROMPT_*): "Surge to evade" while a telegraphed shot is
+## coming and this rider can evade (any engine in a SIM WORK phase), else "Surge to overpressure"
+## in the steam window.
 static func prompt_of(state: TankState, rider: TankRiderState) -> String:
 	if state == null or rider == null or state.seg.kind != Wl.WORK:
 		return PROMPT_NONE
 	if rider.afk or rider.rescue or state.all_afk:
 		return PROMPT_NONE
+	if rider.can_evade and telegraph_running(state):
+		return PROMPT_EVADE
 	var st := state.station_of(rider.slot)
 	if st is TankSteamState:
 		return PROMPT_OVER if (st as TankSteamState).window_s > 0.0 else PROMPT_NONE
-	if st is TankDieselState and (st as TankDieselState).prompt:
-		return PROMPT_DODGE if state.seg.seg == TankIds.SEG_BOSS else PROMPT_RAM
 	return PROMPT_NONE
+
+
+## True while some enemy or the Behemoth shows a telegraph (from the replicated telegraph times).
+static func telegraph_running(state: TankState) -> bool:
+	if state.boss.telegraph_s > 0.0:
+		return true
+	for e in state.enemies:
+		if e.telegraph_s > 0.0:
+			return true
+	return false
+
+
+## True while the arc generator is stalled: its room says so, or its rider is in a rescue hold.
+static func arc_stalled(state: TankState) -> bool:
+	var st := state.station(TankIds.ENGINE_ARC)
+	if st == null:
+		return false
+	if (st as TankArcState).stalled:
+		return true
+	var holder := state.rider_at(st.slot)
+	return holder != null and holder.rescue
 
 
 ## True while the dynamo is stalled: its station says so, or its rider is in a rescue hold.
@@ -82,7 +105,12 @@ func on_state(state: TankState) -> void:
 	if stalled and not _stalled:
 		_toast("TANK_TOAST_DYNAMO_STALLED")
 	_stalled = stalled
-	if me.rescue and not _rescue and me.engine != TankIds.ENGINE_DYNAMO:
+	var arc := arc_stalled(state)
+	if arc and not _arc_stalled:
+		_toast("TANK_TOAST_ARC_STALLED")
+	_arc_stalled = arc
+	var own_stall := me.engine == TankIds.ENGINE_DYNAMO or me.engine == TankIds.ENGINE_ARC
+	if me.rescue and not _rescue and not own_stall:
 		_toast("TANK_TOAST_STAGGER")
 	_rescue = me.rescue
 	var regroup := state.seg.regroup and state.seg.kind == Wl.WORK
@@ -122,12 +150,9 @@ func on_event(state: TankState, e: Dictionary) -> void:
 			_toast("TANK_TOAST_REPAIRED", [int(e.get("hp", 0))])
 		TankEvents.OVERRUN:
 			_overrun_toast(int(e.get("sg", 0)))
-		TankEvents.RAM:
-			if int(e.get("s", -2)) == slot:
-				_toast("TANK_TOAST_RAM_HIT" if int(e.get("ok", 0)) != 0 else "TANK_TOAST_RAM_MISS")
-		TankEvents.DODGE:
-			if int(e.get("s", -2)) == slot:
-				_toast("TANK_TOAST_DODGED")
+		TankEvents.EVADE:
+			if int(e.get("ok", 0)) != 0:
+				_toast("TANK_TOAST_EVADED")
 		TankEvents.LATCH:
 			if int(e.get("s", -2)) == slot and LOADED_KEYS.has(int(e.get("sh", 0))):
 				_toast(str(LOADED_KEYS[int(e.get("sh", 0))]))
