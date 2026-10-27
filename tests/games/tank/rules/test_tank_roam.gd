@@ -254,6 +254,21 @@ func test_a_turn_mirrors_the_field_so_every_map_point_keeps_its_place() -> void:
 	assert_almost_eq(after, before, 6.0, "the enemy stays where it was on the road (it moves on)")
 
 
+func test_a_pursuer_turned_ahead_holds_off_the_hulls_nose() -> void:
+	var rig := _rig(3)
+	_enter_roam(rig, 10.0)
+	rig.no_fire = true
+	rig.no_bow = true
+	var e := rig.spawn(TankIds.ENEMY_LIGHT, -1, -8.0)
+	e.hold_px = -8.0
+	rig.send(_driver_peer(rig), {"k": "turn"})
+	rig.step()
+	rig.run(4.1)
+	assert_eq(e.side, 1, "behind became ahead")
+	var min_hold := rig.state.content.num("enemies", "lanes.min_hold_px", 60.0)
+	assert_gte(e.hold_px, min_hold - 1e-6, "not the pursuer's -8 px inside the nose")
+
+
 func test_the_autopilot_turns_3_s_after_the_end() -> void:
 	var rig := _rig(1)
 	_enter_roam(rig)

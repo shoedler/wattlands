@@ -108,6 +108,17 @@ func test_the_strips_contacts_sit_under_the_zone_names_on_the_line_row() -> void
 	assert_lte(strip.marker_y() + 6.0, strip.map_rect().end.y, "and stays inside the map")
 
 
+func test_the_strips_screen_bracket_never_crosses_the_zone_names() -> void:
+	for dir in [TankIds.DIR_RIGHT, TankIds.DIR_LEFT]:
+		var g := _game(3, dir)
+		var strip: TankHudRoamStrip = _controls(g)["TankHudRoamStrip"]["ctl"]
+		strip.refresh()
+		var box := strip.view_box()
+		assert_gte(box.position.y, strip.label_rows().y, "dir %d: under the names" % dir)
+		assert_lte(box.end.y, strip.map_rect().end.y, "dir %d: inside the map" % dir)
+		assert_gt(box.size.x, 0.0)
+
+
 func test_the_board_counts_down_to_time_up_and_shows_overtime() -> void:
 	var g := _game(3, TankIds.DIR_RIGHT, "roam_20")
 	var board: TankHudBoard = _controls(g)["TankHudBoard"]["ctl"]

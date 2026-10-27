@@ -13,6 +13,9 @@ const LANE_DIM: Array[float] = [1.0, 0.74, 0.56, 0.44]
 ## How much night haze each depth lane carries (a cool teal laid over the sprite).
 const LANE_FOG: Array[float] = [0.0, 0.2, 0.36, 0.5]
 const HAZE := Color(0.05, 0.085, 0.09)
+## Enemies behind the tank (pursuers) are drawn darker and hazed at least this much.
+const PURSUER_DIM := 0.7
+const PURSUER_FOG := 0.45
 ## The banks the back lanes stand on.
 const BANK := Color(0.14, 0.125, 0.1)
 const BANK_HI := Color(0.25, 0.22, 0.17)
@@ -230,8 +233,12 @@ static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState, lane: int) ->
 	for off: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1)]:
 		sprite(ci, sil, Rect2(r.position + off, r.size), flip, RIM)
 	var dim := lane_dim(lane)
-	sprite(ci, tex, r, flip, Color(dim + flash, dim + flash * 0.6, dim, 1.0))
 	var fog := lane_fog(lane)
+	if e.side < 0:
+		# A pursuer behind the tank stays in the dark, hazed (the HUD's edge arrow marks a sliver).
+		dim *= PURSUER_DIM
+		fog = maxf(fog, PURSUER_FOG)
+	sprite(ci, tex, r, flip, Color(dim + flash, dim + flash * 0.6, dim, 1.0))
 	if fog > 0.0:
 		sprite(ci, sil, r, flip, Color(HAZE.r, HAZE.g, HAZE.b, fog))
 	if e.hp_max > 0.0 and e.hp < e.hp_max:

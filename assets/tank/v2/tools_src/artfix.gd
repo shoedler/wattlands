@@ -3,8 +3,8 @@ extends SceneTree
 # step paints absolute colours at fixed places, so running it again changes nothing.
 #  - The four variants' turret side: the healed star and "A17" read as heraldic ghosts (a shield, a
 #    "Y"); they become plain plate with a vision block (a dark slit in an iron box, brass rim, a lit
-#    pixel) and a pistol port. The red crate with its X brace (a saltire at 1x) becomes a planked
-#    crate under an iron strap with a brass buckle.
+#    pixel) and a pistol port (a plain round plug, no cross). The red crate with its X brace (a
+#    saltire at 1x) becomes a planked crate under an iron strap with a brass buckle.
 #  - The dug-in tank: the two full-width rows of sandbags read as a track under a floating turret;
 #    it now sits in an earthwork: a concrete casemate lip in front, an earth berm with a lit crest
 #    tapering into the ground at both ends, a short row of sandbags on the crest. Same size, same
@@ -100,19 +100,17 @@ func turret_side(img: Image, tp: Vector2, sc: float) -> void:
 	for x in range(bx + 2, bx + bw - 2):
 		img.set_pixel(x, by + bh / 2, SLIT)
 		img.set_pixel(x, by + bh / 2 - 1, SLIT if x > bx + 2 else GLINT)
-	# A pistol port where the shield was: a small round plug in a brass ring.
+	# A pistol port where the shield was: a plain round plug (a dark disc in a 1 px brass rim, one
+	# highlight pixel; no cross or centre mark, so it never reads as a sight or a roundel).
 	var sb := place(BLOB_SHIELD, tp, sc)
 	var c := Vector2i(sb.position.x + sb.size.x / 2, sb.position.y + roundi(6 * sc))
 	for oy in range(-2, 3):
 		for ox in range(-2, 3):
-			var d := absi(ox) + absi(oy)
-			if d > 3:
+			if absi(ox) == 2 and absi(oy) == 2:
 				continue
-			var col := BRASS if d >= 2 else BOX
-			if d >= 2 and (ox < 0 or oy < 0):
-				col = BRASS_HI
-			img.set_pixel(c.x + ox, c.y + oy, col)
-	img.set_pixel(c.x, c.y, SLIT)
+			var rim := absi(ox) == 2 or absi(oy) == 2
+			img.set_pixel(c.x + ox, c.y + oy, BRASS if rim else BOX)
+	img.set_pixel(c.x - 1, c.y - 1, BOX_HI)
 	crate(img, place(CRATE, tp, sc))
 
 

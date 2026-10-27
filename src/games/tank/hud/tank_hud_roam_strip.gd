@@ -113,6 +113,19 @@ func marker_y() -> float:
 	return map_rect().end.y - 6.0 - MARK_LIFT
 
 
+## The screen's bracket on the map (art px of the strip): the stretch of road on screen, from just
+## under the zone names to the map's foot.
+func view_box() -> Rect2:
+	var map := map_rect()
+	var tx0 := mx(tank_m)
+	var bw := 14.0
+	if length_m > 0.0:
+		bw = maxf(roundf((map.size.x - 2.0 * END_W) * view_m / length_m), 14.0)
+	var bx := tx0 - 3.0 if tank_dir > 0 else tx0 - bw + 3.0
+	var top := label_rows().y + 1.0
+	return Rect2(bx, top, bw, map.end.y - 1.0 - top)
+
+
 ## The zone names' rows: from their top to the tall face's full height.
 func label_rows() -> Vector2:
 	var top := map_rect().position.y + 2.0
@@ -167,9 +180,12 @@ func paint() -> void:
 		D.rect(self, Rect2(mx(p) - 3.0, my - 1.0, 7, 7), Color("#0e0c09"))
 		D.pixels(self, DIAMOND, Vector2(mx(p) - 2.0, my), D.RED)
 	var tx0 := mx(tank_m)
-	var bw := maxf(roundf((map.size.x - 2.0 * END_W) * view_m / length_m), 14.0)
-	var bx := tx0 - 3.0 if tank_dir > 0 else tx0 - bw + 3.0
-	D.frame(self, Rect2(bx, map.position.y + 1, bw, map.size.y - 2), Color(D.TEXT, 0.8))
+	# The screen's bracket: open at the top, under the zone names (never across them).
+	var vb := view_box()
+	var bc := Color(D.TEXT, 0.8)
+	D.rect(self, Rect2(vb.position.x, vb.end.y - 1, vb.size.x, 1), bc)
+	D.rect(self, Rect2(vb.position.x, vb.position.y, 1, vb.size.y), bc)
+	D.rect(self, Rect2(vb.end.x - 1, vb.position.y, 1, vb.size.y), bc)
 	var icon := TANK_R if tank_dir > 0 else TANK_L
 	D.pixels(self, icon, Vector2(tx0 - 4.0, base - 9), D.AMBER)
 
