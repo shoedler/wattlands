@@ -11,6 +11,9 @@ extends RefCounted
 ##                                             road under the hull's rear end)
 ##   hud_enemy_rect(id: int) -> Rect2          an enemy's sprite (Rect2() when not drawn)
 ##   hud_boss_rect() -> Rect2                  the Behemoth's sprite (Rect2() when not drawn)
+##   hud_barrel_dir() -> float                 the barrel as drawn: 1 right .. -1 left (traverse)
+##   hud_tank_rects() -> Array[Rect2]          the turret (as it faces) and the hull, kept clear
+##   hud_variant() -> String                   the variant drawn
 ## The HUD finds the view through the game's meta VIEW_META (the view sets it), else by looking
 ## for a node with hud_world_x() in the tree. Without one (tests, headless runs, the v1 view) the
 ## same comes from the state, TankConst and kit.json: rules px x 1.5 with the hull's rear at
@@ -32,6 +35,12 @@ const BARREL_OVERHANG := 3.0
 const BARREL_HALF := 10.0
 ## The arc's gap beyond the barrel's tip.
 const ARC_GAP := 8.0
+## The arc keeps this clear of the tank's body, stepping out ARC_STEP at a time, at most ARC_PUSH_MAX.
+const ARC_CLEAR := 2.0
+const ARC_STEP := 2.0
+const ARC_PUSH_MAX := 60.0
+## The view's barrel counts as turned (an arc drawn) once |hud_barrel_dir| reaches this.
+const TURNED := 0.98
 
 static var _kit: Dictionary = {}
 
@@ -96,14 +105,95 @@ func boss_rect() -> Rect2:
 	return Rect2(world_x(state.boss.x_px), ground_y() - 150.0, 260.0, 150.0)
 
 
-## The barrel as drawn: {pivot, length (pivot to muzzle), left}.
+## The barrel as drawn: {pivot, length (pivot to the muzzle at full length), left, turning}. The
+## side comes from the barrel the view draws (hud_barrel_dir), not from the ordered facing, so the
+## arc follows the gun through a traverse; `turning` while the turret is part way round (no arc).
 func barrel() -> Dictionary:
 	var piv := tank_point("barrel_pivot")
-	var muzzle := tank_point("muzzle")
 	var left := state.hull.facing == TankIds.FACE_LEFT
 	if mirrored():
 		left = not left
-	return {"pivot": piv, "length": maxf(piv.distance_to(muzzle), 1.0), "left": left}
+	var turning := false
+	if view != null and view.has_method("hud_barrel_dir"):
+		var d := float(view.call("hud_barrel_dir"))
+		left = d < 0.0
+		turning = absf(d) < TURNED
+	var a := kit_anchors(state.riders.size())
+	if view != null and view.has_method("hud_variant"):
+		a = (kit_variant_of(str(view.call("hud_variant"))).get("anchors", {}) as Dictionary)
+	var length := _kit_point(a, "muzzle").distance_to(_kit_point(a, "barrel_pivot"))
+	return {"pivot": piv, "length": maxf(length, 1.0), "left": left, "turning": turning}
+
+
+## The tank's body on the canvas (the turret as it faces, the hull below it): the world tags keep
+## out of these rects.
+func tank_rects() -> Array[Rect2]:
+	if view != null and view.has_method("hud_tank_rects"):
+		return view.call("hud_tank_rects")
+	var v := kit_variant(state.riders.size())
+	var tr := TankKit.turret_rect_of(v)
+	if state.hull.facing == TankIds.FACE_LEFT:
+		var tp := _kit_point(v.get("anchors", {}), "turret_pivot").x - TANK_POS.x
+		tr.position.x = 2.0 * tp - tr.end.x
+	var out: Array[Rect2] = []
+	for r: Rect2 in [tr, TankKit.hull_rect_of(v)]:
+		out.append(Rect2(r.position + TANK_POS, r.size))
+	return out
+
+
+## The elevation arc as it will be drawn for the barrel `b` (barrel()), its label `label_size` art
+## px: {radius, label (Rect2; empty when it would touch the tank), keep_out (Array[Rect2])}. The arc
+## starts ARC_GAP past the barrel's tip and steps out (ARC_STEP) until neither the arc, its ticks
+## (every elevation, radius - 2 .. + 6) nor its label touch the tank's body (`keep_out` grown by
+## ARC_CLEAR), at most ARC_PUSH_MAX; the painter then skips any pixel still inside (arc_px_ok), so
+## the arc is never drawn on the tank.
+static func arc_layout(b: Dictionary, label_size: Vector2, keep_out: Array[Rect2]) -> Dictionary:
+	var piv: Vector2 = b["pivot"]
+	var left := bool(b["left"])
+	var base := arc_radius(float(b["length"]))
+	var grown: Array[Rect2] = []
+	for k in keep_out:
+		grown.append(k.grow(ARC_CLEAR))
+	var radius := base
+	while radius < base + ARC_PUSH_MAX:
+		if _clear(arc_reach(piv, radius, left), label_rect(piv, radius, left, label_size), grown):
+			break
+		radius += ARC_STEP
+	var lr := label_rect(piv, radius, left, label_size)
+	for k2 in grown:
+		if lr.intersects(k2):
+			lr = Rect2()
+			break
+	return {"radius": radius, "label": lr, "keep_out": grown}
+
+
+## True when the arc may paint pixel `p` (outside every keep-out rect of arc_layout()).
+static func arc_px_ok(p: Vector2i, keep_out: Array) -> bool:
+	for r: Rect2 in keep_out:
+		if r.has_point(Vector2(p) + Vector2(0.5, 0.5)):
+			return false
+	return true
+
+
+## Every pixel the arc can paint at `radius`: the arc and a tick at every degree from radius - 2
+## to radius + 6 (the 10-degree ticks, the ordered and the actual elevation's marks).
+static func arc_reach(piv: Vector2, radius: float, left: bool) -> Array[Vector2i]:
+	var px := arc_pixels(piv, radius, left)
+	var deg := ELEV_MIN
+	while deg <= ELEV_MAX + 0.001:
+		px.append_array(tick_pixels(piv, deg, left, radius - 2.0, radius + 6.0))
+		deg += 1.0
+	return px
+
+
+static func _clear(px: Array[Vector2i], label: Rect2, rects: Array[Rect2]) -> bool:
+	for r in rects:
+		if label.size != Vector2.ZERO and label.intersects(r):
+			return false
+	for p in px:
+		if not arc_px_ok(p, rects):
+			return false
+	return true
 
 
 ## True while the view draws the world mirrored (free roam, driving west; the view's hud_mirrored(),
@@ -115,12 +205,20 @@ func mirrored() -> bool:
 
 
 static func kit_anchors(crew: int) -> Dictionary:
+	return kit_variant(crew).get("anchors", {})
+
+
+## kit.json's entry of the variant for `crew` riders.
+static func kit_variant(crew: int) -> Dictionary:
+	return kit_variant_of(VARIANTS[clampi(crew, 1, 4) - 1])
+
+
+static func kit_variant_of(vn: String) -> Dictionary:
 	if _kit.is_empty():
 		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(KIT))
 		_kit = parsed if parsed is Dictionary else {"tank": {"variants": {}}}
 	var variants: Dictionary = (_kit.get("tank", {}) as Dictionary).get("variants", {})
-	var v: Dictionary = variants.get(VARIANTS[clampi(crew, 1, 4) - 1], {})
-	return v.get("anchors", {})
+	return variants.get(vn, {})
 
 
 static func _kit_point(anchors: Dictionary, key: String) -> Vector2:
