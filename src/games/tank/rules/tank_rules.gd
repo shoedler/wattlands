@@ -9,8 +9,9 @@ extends RefCounted
 ## Behemoth (its telegraph and main gun through TankEvade), rebuild the target list, run the
 ## stations (TankStations), the main gun (TankGun), the bow guns (TankBow), the enemies' guns
 ## (telegraphs through TankEvade), the shells in flight (TankShells), the repair and the berm
-## (TankHullRules) and the objectives. Events come back in that order. Everything is split by topic over rules/ and combat/; the signatures here
-## (new_state, step, in_band) are the module's contract.
+## (TankHullRules) and the objectives. Events come back in that order. Everything is split by
+## topic over rules/ and combat/; the signatures here (new_state, step, in_band) are the module's
+## contract.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.

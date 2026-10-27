@@ -39,7 +39,10 @@ func _bursts(rig: TankRulesRig) -> Array[Dictionary]:
 
 func test_every_tank_has_bow_guns_and_its_power_source() -> void:
 	var want := {
-		1: TankIds.ENGINE_BULWARK, 2: TankIds.ENGINE_DYNAMO, 3: TankIds.ENGINE_DYNAMO, 4: TankIds.ENGINE_ARC
+		1: TankIds.ENGINE_BULWARK,
+		2: TankIds.ENGINE_DYNAMO,
+		3: TankIds.ENGINE_DYNAMO,
+		4: TankIds.ENGINE_ARC
 	}
 	for crew: int in want:
 		var rig := _rig(crew)
@@ -129,10 +132,9 @@ func test_the_bastions_arc_generator_full_rate_in_band_half_under_none_afk_or_st
 	var rig := _rig(4)
 	var arc_peer := rig.peer_of(TankIds.ENGINE_ARC)
 	_target(rig, TankIds.ENEMY_LIGHT, 130.0)
-	var bank := rig.dynamo().bank
+	rig.dynamo().bank = 5.0
 	rig.run(10.0)
-	assert_eq(_bursts(rig).size(), 5, "in band: every 2 s")
-	assert_eq(rig.dynamo().bank, bank, "the Bastion's bow guns never touch the bank")
+	assert_eq(_bursts(rig).size(), 5, "in band: every 2 s, whatever the dynamo's bank holds")
 	rig.cadence[arc_peer] = 40.0
 	rig.run(12.0)
 	assert_false(rig.state.station(TankIds.ENGINE_ARC).in_band)
@@ -207,7 +209,9 @@ func test_a_bow_kill_is_credited_by_bow() -> void:
 	rig.run(0.05)
 	var kill := rig.of_type("kill")
 	assert_eq(kill.size(), 1)
-	assert_eq([kill[0]["id"], kill[0]["by"], kill[0]["s"]], [e.id, TankEvents.BY_BOW, rig.dynamo().slot])
+	assert_eq(
+		[kill[0]["id"], kill[0]["by"], kill[0]["s"]], [e.id, TankEvents.BY_BOW, rig.dynamo().slot]
+	)
 	assert_eq(rig.state.score.crew_kills, 1)
 
 

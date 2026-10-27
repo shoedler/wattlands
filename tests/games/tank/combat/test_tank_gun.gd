@@ -82,8 +82,8 @@ func test_nearer_first_inside_a_tier() -> void:
 
 func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 	var rig := _rig(1)
-	# A light tank right under the barrel cannot be reached (-5 degrees at most); a medium can.
-	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 60.0)
+	# A light tank right against the bow cannot be reached (-12 degrees at most); a medium can.
+	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 10.0)
 	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
 	var t := _aim(rig)
 	assert_eq(t.id, med.id)
@@ -97,8 +97,30 @@ func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 	assert_null(_aim(rig))
 
 
+## Brief 2.4 Gun and section 4: at -12 degrees the solver hits a light tank anywhere on its hold
+## distance (enemies.json hold_px, plus its weave), from every tank.
+func test_the_solver_hits_a_light_tank_at_its_hold_distance_from_every_tank() -> void:
+	for crew in [1, 2, 3, 4]:
+		var rig := _rig(crew)
+		var aux := TankAux.of(rig.state)
+		var def := rig.content.enemy_def(TankIds.ENEMY_LIGHT)
+		var span: Array = def["hold_px"]
+		var weave := float(def["weave_px"])
+		assert_eq(rig.content.num("tanks", "gun.elev_min_deg"), -12.0)
+		for d: float in [
+			float(span[0]) - weave, float(span[0]), float(span[1]), float(span[1]) + weave
+		]:
+			rig.state.enemies.clear()
+			var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, d)
+			TankTargets.build(rig.state, aux)
+			var out: Array[Vector2] = [Vector2.ZERO]
+			var el := TankAim.solve_target(rig.state, aux, TankTargets.by_id(aux, e.id), 1, out)
+			assert_false(is_nan(el), "crew %d: a light tank %.0f px off the bow" % [crew, d])
+			assert_between(el, -12.0, 30.0)
+
+
 func test_every_gun_line_enemy_is_reachable_from_every_tank() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
 		for index in [2, 5, 8]:
 			rig.enter(index, 1.0)

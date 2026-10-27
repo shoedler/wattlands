@@ -39,7 +39,7 @@ function Invoke-S1Run([string]$Crew, [string]$Seed) {
     Invoke-Sim "s1_c${Crew}_seed${Seed}" @('--content=ashfall_road', "--players=$Crew", '--bots=0', "--rider=$Erg", "--seed=$Seed")
 }
 
-function Invoke-S1 { foreach ($c in 1, 2, 3) { foreach ($s in $seeds) { Invoke-S1Run $c $s } } }
+function Invoke-S1 { foreach ($c in 1, 2, 3, 4) { foreach ($s in $seeds) { Invoke-S1Run $c $s } } }
 function Invoke-S2 {
     Invoke-Sim 's2_c3_zero' @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=zero', '--seed=1')
     Invoke-Sim 's2_c1_zero' @('--content=ashfall_road', '--players=1', '--bots=0', '--rider=zero', '--seed=1')
@@ -52,10 +52,10 @@ function Invoke-S3 {
     }
 }
 function Invoke-S4 {
-    foreach ($c in 1, 2, 3) {
+    foreach ($c in 1, 2, 3, 4) {
         Invoke-Sim "s4_drill_c$c" @('--content=drill', "--players=$c", '--bots=0', "--rider=$Erg", '--seed=1')
     }
-    foreach ($s in $seeds) { foreach ($c in 1, 2, 3) { if (-not (Test-Have "s1_c${c}_seed$s")) { Invoke-S1Run "$c" $s } } }
+    foreach ($s in $seeds) { foreach ($c in 1, 2, 3, 4) { if (-not (Test-Have "s1_c${c}_seed$s")) { Invoke-S1Run "$c" $s } } }
 }
 function Invoke-S5 {
     Invoke-Sim 's5_c3_dynamo_drop' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", "--rider=$DynamoDrop", "--rider=$Erg", '--seed=1')

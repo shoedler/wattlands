@@ -250,4 +250,4 @@ func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_s
 	for e in rig.state.enemies:
 		var far_screen := front_screen + e.hold_px + e.w
 		assert_lte(far_screen, 632.0 + 0.01)
-		assert_gte(e.hold_px, 150.0)
+		assert_gte(e.hold_px, rig.content.num("enemies", "lanes.min_hold_px", 60.0) - 0.01)

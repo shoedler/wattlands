@@ -146,13 +146,7 @@ static func _station_row(s: TankStationState) -> Array:
 	if s is TankGearboxState:
 		var g := s as TankGearboxState
 		f |= (S.STF_SPRINTING if g.sprinting else 0) | (S.STF_AUTO if g.auto else 0)
-		v = [
-			0,
-			0,
-			g.lever + 4 * g.lever_to,
-			S.ms(g.move_s),
-			roundi(g.hoist_j / 10.0)
-		]
+		v = [0, 0, g.lever + 4 * g.lever_to, S.ms(g.move_s), roundi(g.hoist_j / 10.0)]
 	elif s is TankDieselState:
 		var d := s as TankDieselState
 		f |= S.STF_SPRINTING if d.sprinting else 0

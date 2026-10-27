@@ -16,9 +16,9 @@ extends RefCounted
 ##     once a second) and shot once the gun points at it.
 ## It never latches (no early latch), never moves the Bulwark's lever by hand, never sprints (so it
 ## never evades) or Overpressures and never changes effort (BRIEF 3.5): the diesel, the steam engine
-## and the arc generator get nothing (the bow guns fire on their own). Every intent it returns is tagged "auto": 1 (TankIntents.auto) so it never ends a
-## human's fallback; the module filters them through the same ownership and 5-a-second rules as
-## a rider's own.
+## and the arc generator get nothing (the bow guns fire on their own). Every intent it returns is
+## tagged "auto": 1 (TankIntents.auto) so it never ends a human's fallback; the module filters them
+## through the same ownership and 5-a-second rules as a rider's own.
 
 ## An enemy counts as in range while any of it is this far inside the screen's edges.
 const EDGE_MARGIN_PX := 4.0

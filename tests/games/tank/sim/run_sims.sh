@@ -7,12 +7,12 @@
 #   TANK_SIMS="s2 s5" bash tests/games/tank/sim/run_sims.sh
 #
 # Scenarios (default: all). One report per run in build/tank/sims/ (TANK_SIMS_OUT):
-#   s1  ashfall_road, compliant `erg` riders, crews 1-3 (crews 2-3 run as HOST) x seeds 1-3
-#       (these runs also serve T1-T4, T6 and, as the 100% leg, S3's T5, S4 and S7's first run)
+#   s1  ashfall_road, compliant `erg` riders, crews 1-4 (crews 2-4 run as HOST) x seeds 1-3
+#       (these runs also serve T1-T4, T6, T7 (crew 4) and, as the 100% leg, S3's T5, S4 and S7's first run)
 #   s2  zero riders: crew 3 (HOST: the shared pause holds the depot) and crew 1 (SOLO: it pauses),
 #       and crew 3 spinning at 10 W and 25 rpm (no pause, no AFK: every stage overruns)
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
-#   s4  drill, compliant, crews 1-3 as the S4 rule checks' other content (s1 is the other)
+#   s4  drill, compliant, crews 1-4 as the S4 rule checks' other content (s1 is the other)
 #   s5  crew 3: cadence_drop to 30 rpm at at_phase + at_target_pct=60 in a dynamo stage (slot 1,
 #       stage 1 gun line, phase 2: the dynamo is ERG 55-100% there and enemies drain the bank)
 #       and in a 90% gun line (slot 0, the same gun line, phase 2)
@@ -20,16 +20,18 @@
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
 #   s9  crew 1 with a scripted sprinter (mock `intervals`: 12 s at 300 W, 150 W for 28 s, FTP 200; it
 #       is not a compliant rider, so its grade does not matter): the sprint half of the workout that
-#       the compliant Autopilot runs never reach (Ram, the ram haptic, a gun line entered after a
-#       sprint). S8 is the GUT test test_tank_s8.gd.
-#   s10 crew 3 on the network path: every rider the same scripted sprinter (the clients' Rams reach
-#       the host as Telemetry.intents, owned by the diesel), and slot 1 stopping dead for 60 s in the
-#       stage 1 gun line (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
+#       the compliant Autopilot runs never reach (Surge to evade, a gun line entered after a sprint).
+#       S8 is the GUT test test_tank_s8.gd.
+#   s10 crew 3 on the network path: every rider the same scripted sprinter (a client on the steam
+#       engine surges in its window: its `over` reaches the host as Telemetry.intents, owned by the
+#       steam engine; a client's `aim` needs a key, which headless sims cannot press: GUT-tested in
+#       tests/games/tank/integration), and slot 1 stopping dead for 60 s in the stage 1 gun line
+#       (rescue, AFK, a station on reserve, back; at_phase=2, ERG target >= 60%)
 #
 # A scenario that needs another's report (s3, s4, s7 need s1 crew 3; the checks of s1 reuse
 # them) runs that report first when it is missing. Every run goes through tools/run_game_sim at
 # --sim-speed=200 and stops this script on a non-zero exit (75: the Godot lock wait timed out,
-# just rerun). A full matrix is about 40 runs, 10 to 40 s each on a quiet machine.
+# just rerun). A full matrix is about 50 runs, 10 to 60 s each on a quiet machine.
 # Environment: TANK_SEEDS="1 2 3" (seeds), TANK_SIMS_OUT (report dir), TANK_SKIP_CHECK=1 (runs
 # only), TANK_FIT=0 (no fit_check), TANK_GODOT_TIMEOUT (seconds per run, default 1800).
 # The locks (no hardware control, no network integrations) are exported by tools/run_game_sim;
@@ -79,7 +81,7 @@ s1_run() {
 
 scenario_s1() {
   local c s
-  for c in 1 2 3; do
+  for c in 1 2 3 4; do
     for s in $seeds; do s1_run "$c" "$s"; done
   done
 }
@@ -105,13 +107,13 @@ scenario_s3() {
 
 scenario_s4() {
   local c
-  for c in 1 2 3; do
+  for c in 1 2 3 4; do
     run "s4_drill_c${c}" --content=drill "--players=$c" --bots=0 "--rider=$ERG" --seed=1
   done
   # The ashfall_road half of S4 reads s1's reports.
   local s
   for s in $seeds; do
-    for c in 1 2 3; do have "s1_c${c}_seed${s}" || s1_run "$c" "$s"; done
+    for c in 1 2 3 4; do have "s1_c${c}_seed${s}" || s1_run "$c" "$s"; done
   done
 }
 

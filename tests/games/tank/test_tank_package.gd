@@ -85,7 +85,8 @@ func test_entry_is_an_instantiable_game_module() -> void:
 func test_game_json_is_exactly_the_brief() -> void:
 	var m := F.manifest()
 	assert_eq(m["title"], "Diesel Domestiques")
-	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 3])
+	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 4])
+	assert_eq(m["version"], "0.2.0")
 	assert_false(m["bots"], "no bots (brief 0.3)")
 	assert_eq(m["contents"], ["ashfall_road", "drill"])
 	assert_eq(

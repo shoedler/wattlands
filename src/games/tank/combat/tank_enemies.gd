@@ -318,7 +318,10 @@ static func fire(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 			continue
 		if tele > 0.0:
 			if e.mode != TankIds.EM_TELEGRAPH and e.gun_s <= tele:
-				e.gun_s = maxf(e.gun_s, tele)
+				# A countdown that ran down while the enemy could not telegraph restarts the
+				# telegraph in full; one that just reached it keeps its time (within a tick).
+				if e.gun_s < tele - dt - 1e-6:
+					e.gun_s = tele
 				e.mode = TankIds.EM_TELEGRAPH
 			if e.mode == TankIds.EM_TELEGRAPH:
 				e.telegraph_s = e.gun_s

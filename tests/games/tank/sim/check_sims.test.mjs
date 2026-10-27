@@ -31,8 +31,14 @@ const ROTATION = {
   1: [['bulwark', 'bulwark', 'bulwark', 'bulwark']],
   2: [['diesel', 'dynamo', 'diesel', 'dynamo'], ['dynamo', 'diesel', 'dynamo', 'diesel']],
   3: [['diesel', 'dynamo', 'steam', 'diesel'], ['dynamo', 'steam', 'diesel', 'dynamo'], ['steam', 'diesel', 'dynamo', 'steam']],
+  4: [
+    ['diesel', 'dynamo', 'steam', 'arc'],
+    ['dynamo', 'steam', 'arc', 'diesel'],
+    ['steam', 'arc', 'diesel', 'dynamo'],
+    ['arc', 'diesel', 'dynamo', 'steam'],
+  ],
 };
-const START = { 1: ['bulwark'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'] };
+const START = { 1: ['bulwark'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
 
 function engineAt(crew, slot, i, table = SEG_TABLE) {
   const [seg, stage] = table[i];
@@ -55,6 +61,11 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
     if (seg === 'depot') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 };
     return { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 100] };
   }
+  if (engine === 'arc') {
+    if (drill) return seg === 'depot' ? { ...base, mode: 'ERG', target_pct: 50 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 65] };
+    if (seg === 'depot') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 };
+    return { ...base, mode: 'ERG', target_pct: 65, range_pct: [65, 80] };
+  }
   if (engine === 'steam') return { ...base, mode: 'SIM', grade_source: 'flat' };
   if (seg === 'gun_line') return { ...base, mode: 'ERG', target_pct: 90 };
   return { ...base, mode: 'SIM', grade_source: seg === 'boss' ? 'flat' : 'game' };
@@ -62,7 +73,7 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
 
 /**
  * A clean compliant ashfall_road run of `crew` riders. opts: durations {advance, gun_line, boss}
- * (seconds, per run), grade, score, ended {index: how}, dynamoPct (applied % in dynamo fights),
+ * (seconds, per run), grade, score, ended {index: how}, dynamoPct (applied % in dynamo fights), arcPct (in arc fights),
  * events [], directives [], extraRows (fn(row, peer) -> row), seed, role, endReason.
  */
 function makeRun(crew, opts = {}) {
@@ -103,8 +114,10 @@ function makeRun(crew, opts = {}) {
     for (let sec = 0; sec <= end; sec += 1) {
       const idx = phases[peer].findLastIndex((sp) => sp.start <= sec);
       const ph = plan[idx];
-      const fight = ['advance', 'gun_line', 'boss'].includes(ph.meta?.seg) && ph.meta.engine === 'dynamo';
-      const pct = ph.mode === 'ERG' ? (fight ? opts.dynamoPct ?? 90 : ph.target_pct) : 0;
+      const fighting = ['advance', 'gun_line', 'boss'].includes(ph.meta?.seg);
+      const fight = fighting && ph.meta.engine === 'dynamo';
+      const arcFight = fighting && ph.meta.engine === 'arc';
+      const pct = ph.mode === 'ERG' ? (fight ? opts.dynamoPct ?? 90 : arcFight ? opts.arcPct ?? 76 : ph.target_pct) : 0;
       let row = {
         t: sec, game_t: sec, phase: idx, kind: ph.kind, mode: ph.mode, applied_pct: pct, applied_target_w: Math.floor((pct * 200) / 100),
         applied_grade_pct: 0, clamped_by: [], rescue: false, afk: false, paused: false, haptic: 0, power_w: 150, cadence_rpm: 90, connected: true,
@@ -116,9 +129,10 @@ function makeRun(crew, opts = {}) {
   }
   const ge = (time, event) => ({ type: 'game_event', t: time, pt: time, event });
   const events = [];
-  // Light + medium in each Advance; a heavy in gun lines 2 and 3.
+  // A telegraphed shot (light flank shot: evade then shot) + a medium in each Advance; a heavy in gun lines 2 and 3.
   if (table === SEG_TABLE) SEG_TABLE.forEach((row, i) => {
     if (row[0] === 'advance') {
+      events.push(ge(starts[i] + 20, { type: 'evade', id: 1, e: 1, ok: 0, s: -1 }));
       events.push(ge(starts[i] + 20, { type: 'shot', s: -1, sh: 5, id: 1, src: 1, e: 1 }));
       events.push(ge(starts[i] + 40, { type: 'shot', s: -1, sh: 5, id: 2, src: 2, e: 2 }));
     }
@@ -127,7 +141,7 @@ function makeRun(crew, opts = {}) {
   // The loader: shots and heavy latches in each gun line / boss: first latch early, the next 24 s after the shot + 6 s.
   const directives = [...(opts.directives ?? [])];
   let id = 100;
-  if (crew === 3 && table === SEG_TABLE) {
+  if (crew >= 3 && table === SEG_TABLE) {
     SEG_TABLE.forEach((row, i) => {
       if (!['gun_line', 'boss'].includes(row[0])) return;
       const a = starts[i];
@@ -140,10 +154,10 @@ function makeRun(crew, opts = {}) {
       }
     });
   }
-  // Crew 1's host rider drives the Bulwark: its "Surge to ram" prompt shows in every Advance (the report's hud log is the host rider's).
+  // Crew 1's host rider rides the Bulwark in SIM: its "Surge to evade" prompt shows in every Advance (the report's hud log is the host rider's).
   if (crew === 1 && table === SEG_TABLE) {
     SEG_TABLE.forEach((row, i) => {
-      if (row[0] === 'advance') events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_RAM', peer: 1, t: starts[i] + 5 });
+      if (row[0] === 'advance') events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_EVADE', peer: 1, t: starts[i] + 5 });
     });
   }
   events.push(...(opts.events ?? []));
@@ -316,24 +330,23 @@ test('T4 reads the Bulwark lever share per Advance', () => {
   assert.ok(shares[0].share < 0.1 || shares[0].share > 0.9);
 });
 
-test('T6 needs a light and a medium per Advance and a 90-180 s heavy duel in gun lines 2 and 3', () => {
+test('T6 needs a telegraphed shot and a medium per Advance and a 90-180 s heavy duel in gun lines 2 and 3', () => {
   assert.deepEqual(C.t6Problems('x', makeRun(3)), []);
   const noMedium = makeRun(3);
   noMedium.events = noMedium.events.filter((e) => !(e.event?.type === 'shot' && e.event.e === 2));
   assert.match(ids(C.t6Problems('x', noMedium)), /no medium tank/);
-  const noLight = makeRun(3);
-  noLight.events = noLight.events.filter((e) => !(e.event?.type === 'shot' && e.event.e === 1));
-  assert.match(ids(C.t6Problems('x', noLight)), /no light tank/);
+  const noTelegraph = makeRun(3);
+  noTelegraph.events = noTelegraph.events.filter((e) => e.event?.type !== 'evade');
+  assert.match(ids(C.t6Problems('x', noTelegraph)), /no telegraphed shot/);
   assert.match(ids(C.t6Problems('x', makeRun(3, { durations: { gun_line: 85 } }))), /heavy duel lasted 85/);
   const noHeavy = makeRun(3);
   noHeavy.events = noHeavy.events.filter((e) => !(e.event?.type === 'shot' && e.event.e === 5));
   assert.match(ids(C.t6Problems('x', noHeavy)), /no heavy tank duel/);
-  assert.match(ids(C.t6Problems('x', makeRun(3), { requirePrompts: true })), /no "Surge to ram" prompt/);
+  assert.match(ids(C.t6Problems('x', makeRun(3), { requirePrompts: true })), /no "Surge to evade" prompt/);
   const withToast = makeRun(3);
-  for (const [a] of [[300], [600], [900]]) withToast.events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_RAM', peer: 1, t: a + 30 });
-  withToast.events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_RAM', peer: 1, t: 30 });
+  withToast.events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_EVADE', peer: 1, t: 30 });
   const starts = C.segmentsOf(withToast).filter((s) => s.seg === 'advance').map((s) => s.start + 5);
-  for (const t of starts) withToast.events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_RAM', peer: 1, t });
+  for (const t of starts) withToast.events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_EVADE', peer: 1, t });
   assert.deepEqual(C.t6Problems('x', withToast, { requirePrompts: true }), []);
 });
 
@@ -711,17 +724,33 @@ test('S7 compares the deterministic hash, the game events and the snapshot hashe
   assert.match(ids(C.checkS7({ s1_c3_seed1: a, s7_c3_seed1: other }).details), /not started with the same arguments/);
 });
 
+// --- T7 ---------------------------------------------------------------------------------------------------------------
+
+test('T7 needs the arc target above 72% for 30 s per stage and back at 68% within 60 s of a fight', () => {
+  assert.deepEqual(C.t7Problems('x', makeRun(4)), []);
+  assert.equal(C.arcFights(makeRun(4)).length, 7, 'three Advances, three gun lines and the boss, each on its own arc rider');
+  assert.match(ids(C.t7Problems('x', makeRun(4, { arcPct: 70 }))), /stage 1: the arc target above 72% for 0 s/);
+  const stuck = makeRun(4, { extraRows: (row) => (row.kind !== 'COOLDOWN' ? { ...row, mode: 'ERG', applied_pct: 76 } : row) });
+  assert.match(ids(C.t7Problems('x', stuck)), /stayed above 68%/);
+  // A kill in an arc Advance followed by 60 s with no enemy shot is a fight's end too.
+  const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
+  const quiet = makeRun(4, { events: [ge(400, { type: "kill", id: 4, e: 1, by: 0, s: 1 })] });
+  assert.match(ids(C.t7Problems('x', quiet)), /advance 1: the arc target stayed above 68% for 60 s after the fight at 400 s/);
+  const busy = makeRun(4, { events: [ge(400, { type: "kill", id: 4, e: 1, by: 0, s: 1 }), ge(420, { type: "shot", s: -1, sh: 5, id: 9, src: 2, e: 2 })] });
+  assert.deepEqual(C.t7Problems('x', busy), [], 'another enemy still fires: the fight goes on');
+  assert.match(ids(C.t7Problems('x', makeRun(3))), /no arc generator stage/);
+});
+
 // --- S9 ---------------------------------------------------------------------------------------------------------------
 
-/** A clean sprinting solo run: a Ram in each Advance with its haptic, power 300 W at the end of the stage 1 Advance (gun line at 500 s). */
+/** A clean sprinting solo run: an evaded telegraphed shot in each Advance, power 300 W at the end of the stage 1 Advance (gun line at 500 s). */
 function sprintRun(over = {}) {
   const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
   const starts = [300, 660, 1020];
-  const events = starts.map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 1, id: 10 + i }));
-  const directives = starts.map((a, i) => req(1, a + 40, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' }, { id: 40 + i }));
+  const events = starts.map((a, i) => ge(a + 40, { type: 'evade', id: 10 + i, e: 3, ok: 1, s: 0 }));
   const r = makeRun(1, {
     events: over.events ?? events,
-    directives: over.directives ?? directives,
+    directives: over.directives ?? [],
     extraRows: (row) => {
       let out = row;
       if (row.t >= 494 && row.t < 500) out = { ...out, power_w: 300 };
@@ -732,34 +761,33 @@ function sprintRun(over = {}) {
   return r;
 }
 
-test('S9 passes on a sprinter that rams in every Advance and enters the gun line at its target', () => {
+test('S9 passes on a sprinter that evades and enters the gun line at its target', () => {
   const r = C.checkS9({ s9_c1_sprint: sprintRun() });
   assert.equal(r.status, 'PASS', ids(r.details));
-  assert.match(r.summary, /3 Rams, 3 ram haptics, 1 gun line entries/);
+  assert.match(r.summary, /3 of 6 telegraphed shots evaded, 1 gun line entries/);
   assert.equal(C.checkS9({}).status, 'SKIP');
-  assert.deepEqual(C.successfulRams(sprintRun()).map((e) => e.id), [10, 11, 12]);
+  assert.deepEqual(C.successfulEvades(sprintRun()).map((e) => e.id), [10, 11, 12]);
   const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 2);
   assert.equal(sw.length, 1);
   assert.ok(sw[0].trailingW >= 300 - 1e-6, 'the 3 s before the gun line are the sprint');
 });
 
-test('S9 fails without a Ram in an Advance, without the haptic, with a refused one, or with no sprint into the gun line', () => {
+test('S9 fails without an evade, with a Ram event or haptic, or with no sprint into the gun line', () => {
   const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
-  const noRam2 = [300, 1020].map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 1, id: 10 + i }));
-  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: noRam2 }) }).details), /stage 2 Advance has no successful Ram/);
-  const failedOnly = [300, 660, 1020].map((a, i) => ge(a + 40, { type: 'ram', s: 0, ok: 0, id: 0 }));
-  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: failedOnly }) }).details), /stage 1 Advance has no successful Ram/);
-  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: [] }) }).details), /a Ram never sent its haptic/);
-  const refused = [req(1, 340, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' }, { accepted: false, reason: 'cooldown' })];
-  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: refused }) }).details), /ram haptic .* refused: cooldown/);
+  const failedOnly = [300, 660, 1020].map((a, i) => ge(a + 40, { type: 'evade', id: 10 + i, e: 3, ok: 0, s: -1 }));
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: failedOnly }) }).details), /never made a telegraphed shot miss/);
+  const ram = [ge(340, { type: 'evade', id: 10, e: 3, ok: 1, s: 0 }), ge(345, { type: 'ram', s: 0, ok: 1, id: 3 })];
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: ram }) }).details), /1 Ram or dodge events/);
+  const hap = [req(1, 340, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' })];
+  assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: hap }) }).details), /1 ram haptics/);
   const calm = sprintRun({ rows: (row) => (row.t >= 494 && row.t < 500 ? { ...row, power_w: 150 } : row) });
   assert.match(ids(C.checkS9({ s9_c1_sprint: calm }).details), /no gun line was entered straight after a sprint/);
 });
 
-test('S9 fails when the gun line is entered at the sprint power, or a Ram haptic goes to an ERG rider', () => {
+test('S9 fails when the gun line is entered at the sprint power, or a haptic goes to an ERG rider', () => {
   const spike = sprintRun({ rows: (row) => (row.phase === 2 && row.t <= 502 ? { ...row, applied_target_w: 300 } : row) });
   assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /entered after a 300 W sprint with a 300 W target \(planned 180 W\)/);
-  const erg = [req(1, 560, { mode: "SIM", haptic: 3.0, duration_s: 1.0, reason: "ram" })];
+  const erg = [req(1, 560, { mode: "SIM", haptic: 2.0, duration_s: 1.5, reason: "hit" })];
   const r = sprintRun({ directives: erg });
   assert.match(ids(C.checkS9({ s9_c1_sprint: r }).details), /haptic to an ERG rider|SIM-mode\) in an ERG/);
   const wrongRun = sprintRun();
@@ -767,24 +795,24 @@ test('S9 fails when the gun line is entered at the sprint power, or a Ram haptic
   assert.match(ids(C.checkS9({ s9_c1_sprint: wrongRun }).details), /players 3, wanted 1/);
 });
 
-test('S1 holds crew 1 to the "Surge to ram" prompt in every Advance, other crews only with --require-prompts', () => {
+test('S1 holds crew 1 to the "Surge to evade" prompt in every Advance, other crews only with --require-prompts', () => {
   assert.equal(C.checkS1(goodSet(), { seeds: [1] }).status, 'PASS');
   const set = goodSet();
   set.s1_c1_seed1.events = set.s1_c1_seed1.events.filter((e) => e.type !== 'hud');
   const r = C.checkS1(set, { seeds: [1] });
   assert.equal(r.status, 'FAIL');
-  assert.match(ids(r.details), /s1_c1_seed1: stage 1 Advance raised no "Surge to ram" prompt/);
-  assert.doesNotMatch(ids(r.details), /s1_c3_seed1: .*prompt/, 'crews 2-3 are not asked (their host rider is not the driver)');
+  assert.match(ids(r.details), /s1_c1_seed1: stage 1 Advance raised no "Surge to evade" prompt/);
+  assert.doesNotMatch(ids(r.details), /s1_c3_seed1: .*prompt/, 'crews 2-4 are not asked (their host rider rotates onto ERG engines)');
   assert.match(ids(C.checkS1(goodSet(), { seeds: [1], requirePrompts: true }).details), /s1_c3_seed1: stage 1 Advance raised no/);
 });
 
 // --- S10 --------------------------------------------------------------------------------------------------------------
 
-const ram = (t, slot, ok = 1) => ({ type: 'game_event', t, pt: t, event: { type: 'ram', s: slot, ok, id: ok ? 7 : 0 } });
+const over = (t, slot, sh = 3) => ({ type: 'game_event', t, pt: t, event: { type: 'latch', s: slot, sh } });
 
-/** Crew 3 with every rider sprinting: slot 2 drives in stage 2 (660-860 s), slot 1 in stage 3 (1020-1220 s). */
+/** Crew 3 with every rider sprinting: slot 2 works the steam engine in stage 1 (300-500 s), slot 1 in stage 2 (660-860 s). */
 function clientSprintRun(events) {
-  return makeRun(3, { events: events ?? [ram(700, 2), ram(1100, 1), ram(350, 0)] });
+  return makeRun(3, { events: events ?? [over(400, 2), over(700, 1)] });
 }
 
 /** Crew 3 where peer 2 (the dynamo of the stage 1 gun line, 500-600 s) stops dead from 520 s to 580 s. */
@@ -805,22 +833,24 @@ function stopRun(patch = {}) {
 
 const s10Set = (a, b) => ({ s10_c3_clients_sprint: a, s10_c3_dynamo_stop: b });
 
-test('S10 passes on client Rams owned by the diesel and a dynamo rider who stops and returns', () => {
+test('S10 passes on client Overpressure owned by the steam engine and a dynamo rider who stops and returns', () => {
   const r = C.checkS10(s10Set(clientSprintRun(), stopRun()));
   assert.equal(r.status, 'PASS', ids(r.details));
-  assert.match(r.summary, /2 client Rams/);
+  assert.match(r.summary, /2 client Overpressure shells/);
   assert.equal(C.checkS10({}).status, 'SKIP');
   assert.equal(C.peerOfSlot(clientSprintRun(), 2), '3');
-  assert.deepEqual(C.intentOwnershipProblems('x', clientSprintRun()), [], 'slot 0 drives in stage 1, slot 2 in stage 2, slot 1 in stage 3');
-  assert.equal(C.intentOwnershipProblems('x', clientSprintRun([ram(700, 0)])).length, 1, 'slot 0 is the dynamo in stage 2');
+  assert.deepEqual(C.intentOwnershipProblems('x', clientSprintRun()), [], 'slot 2 is the steam engine in stage 1, slot 1 in stage 2');
+  assert.equal(C.intentOwnershipProblems('x', clientSprintRun([over(700, 0)])).length, 1, 'slot 0 is the dynamo in stage 2');
 });
 
-test('S10 fails when no client Ram lands or one comes from a rider who is not on the diesel', () => {
-  const none = clientSprintRun([ram(350, 0), ram(700, 2, 0)]);
-  assert.match(ids(C.checkS10(s10Set(none, stopRun())).details), /no client rider .* destroyed anything with a Ram/);
-  const wrong = clientSprintRun([ram(700, 1), ram(1100, 1)]);
-  assert.match(ids(C.checkS10(s10Set(wrong, stopRun())).details), /ram by slot 1 at 700 s, who was on "steam"/);
-  const fine = clientSprintRun([ram(700, 2), ram(1100, 1)]);
+test('S10 fails when no client Overpressure lands, one comes from a rider off the steam engine, or a Ram shows up', () => {
+  const none = clientSprintRun([over(1100, 0), over(400, 2, 2)]);
+  assert.match(ids(C.checkS10(s10Set(none, stopRun())).details), /no client rider .* latched an Overpressure shell/);
+  const wrong = clientSprintRun([over(400, 1), over(700, 1)]);
+  assert.match(ids(C.checkS10(s10Set(wrong, stopRun())).details), /Overpressure shell by slot 1 at 400 s, who was on "dynamo"/);
+  const ram = clientSprintRun([over(400, 2), { type: 'game_event', t: 450, pt: 450, event: { type: 'ram', s: 0, ok: 1, id: 7 } }]);
+  assert.match(ids(C.checkS10(s10Set(ram, stopRun())).details), /a ram event at 450 s/);
+  const fine = clientSprintRun([over(400, 2)]);
   assert.equal(C.checkS10(s10Set(fine, stopRun())).status, 'PASS');
 });
 

@@ -105,11 +105,7 @@ static func target(state: TankState, aux: TankAux) -> TankTarget:
 ## One burst at `t`: the dynamo pays for it, the shot and hit events, the damage (kills credited
 ## to the powering station's rider, by BY_BOW) and the counters.
 static func _burst(
-	state: TankState,
-	aux: TankAux,
-	src: TankStationState,
-	t: TankTarget,
-	events: Array[Dictionary]
+	state: TankState, aux: TankAux, src: TankStationState, t: TankTarget, events: Array[Dictionary]
 ) -> void:
 	var c := state.content
 	state.hull.bow_cd_s = c.num("tanks", "bow.every_s", 2.0)

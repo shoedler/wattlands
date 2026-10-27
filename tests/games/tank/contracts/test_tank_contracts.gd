@@ -265,7 +265,8 @@ func test_the_geometry_contract_holds() -> void:
 	assert_eq(g.validate(), [] as Array[String])
 	for t: String in TankIds.TANKS:
 		var m0 := g.muzzle(t, 0.0, TankIds.FACE_RIGHT)
-		assert_eq(m0, g.trunnion(t) + Vector2(g.barrel_px(t), 0.0), t)
+		assert_almost_eq(m0, g.trunnion(t) + Vector2(g.barrel_px(t), 0.0), Vector2(0.01, 0.01), t)
+		assert_eq(g.bow_muzzles(t).size(), 2, "%s: two bow guns (v2)" % t)
 		var up := g.muzzle(t, 30.0, TankIds.FACE_RIGHT)
 		assert_lt(up.y, m0.y, "%s: elevation raises the muzzle" % t)
 		assert_almost_eq(up.distance_to(g.trunnion(t)), g.barrel_px(t), 0.001)

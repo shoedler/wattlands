@@ -57,11 +57,14 @@ func test_turn_is_a_deliberate_intent_no_engine_owns_yet() -> void:
 func test_evade_turn_and_time_up_events_are_appended_with_int_fields() -> void:
 	var n := TankEvents.TYPES.size()
 	assert_eq(TankEvents.TYPES.slice(n - 3), ["evade", "turn", "time_up"] as Array[String])
-	assert_eq(TankEvents.evade(13, 3, true), {"type": "evade", "id": 13, "e": 3, "ok": 1})
+	assert_eq(
+		TankEvents.evade(13, 3, true, 2), {"type": "evade", "id": 13, "e": 3, "ok": 1, "s": 2}
+	)
+	assert_eq(TankEvents.evade(13, 3, false, 2)["s"], -1, "no slot for a shot that was not evaded")
 	assert_eq(TankEvents.evade(-4, TankIds.BOSS_CODE, false)["ok"], 0)
 	assert_eq(TankEvents.turn(-1, TankIds.DIR_LEFT), {"type": "turn", "s": -1, "dir": -1})
 	assert_eq(TankEvents.time_up(), {"type": "time_up"})
-	assert_eq(TankEvents.INT_FIELDS[TankEvents.EVADE], ["id", "e", "ok"])
+	assert_eq(TankEvents.INT_FIELDS[TankEvents.EVADE], ["id", "e", "ok", "s"])
 	assert_eq(TankEvents.INT_FIELDS[TankEvents.TURN], ["s", "dir"])
 	assert_eq(TankEvents.INT_FIELDS[TankEvents.TIME_UP], [])
 	var cast := TankEventCast.cast(JSON.parse_string(JSON.stringify(TankEvents.evade(7, 1, true))))
@@ -288,7 +291,7 @@ func test_four_tanks_validate_and_the_bastion_has_the_kit_hull_size() -> void:
 		assert_eq(c.errors, [] as Array[String], m)
 	var c := TankFixtures.content()
 	var want := {
-		"bulwark": [192, 72], "rampart": [240, 76], "citadel": [288, 80], "bastion": [327, 71]
+		"bulwark": [220, 71], "rampart": [251, 71], "citadel": [296, 71], "bastion": [327, 71]
 	}
 	for t: String in TankIds.TANKS:
 		var def := c.tank_def(t)

@@ -95,6 +95,7 @@ func test_a_wire_stops_the_tank_at_its_standoff_until_a_heavy_shell_clears_it() 
 		)
 	)
 	rig.no_fire = true
+	rig.no_bow = true
 	rig.enter(ADVANCE, 1.0)
 	var o := rig.state.obstacles[0]
 	var standoff := rig.content.num("tanks", "props.standoff_px")

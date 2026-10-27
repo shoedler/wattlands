@@ -55,7 +55,9 @@ func test_a_full_load_climbs_in_three_sub_steps_per_update() -> void:
 	_arc(h).duty = 1.0
 	h.run_s(ADV1, 12.0)
 	var rows := h.sent(4, "arc")
-	var want := [65.0 + 10.0 / 3.0, 65.0 + 20.0 / 3.0, 75.0, 75.0 + 5.0 / 3.0, 75.0 + 10.0 / 3.0, 80.0]
+	var want := [
+		65.0 + 10.0 / 3.0, 65.0 + 20.0 / 3.0, 75.0, 75.0 + 5.0 / 3.0, 75.0 + 10.0 / 3.0, 80.0
+	]
 	var ticks := [0, 20, 40, 100, 120, 140]
 	assert_eq(rows.size(), 6)
 	for i in rows.size():

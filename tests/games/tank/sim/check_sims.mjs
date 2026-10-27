@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7, plus S9 the sprint
-// half of the workout and S10 the network paths; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T6 over the reports
-// tools/run_game_sim wrote.
+// tests/games/tank/sim/check_sims.mjs: asserts brief section 4's simulation matrix (S1-S7 for crews 1-4, plus S9 the
+// sprint half of the workout and S10 the network paths; S8 is the GUT test test_tank_s8.gd) and the tuning targets T1-T7
+// over the reports tools/run_game_sim wrote.
 //
 //   node tests/games/tank/sim/check_sims.mjs build/tank/sims [--only=S1,S4] [--seeds=1,2,3] [--fit]
 //                                           [--require-prompts]
@@ -15,17 +15,18 @@
 //
 // Report names (written by run_sims.sh; the scenario is read from the name, the content, players and
 // seed are cross-checked against the report's own `args`):
-//   s1_c<crew>_seed<n>     ashfall_road, compliant `erg` riders (crews 2-3 as HOST)
+//   s1_c<crew>_seed<n>     ashfall_road, compliant `erg` riders, crews 1-4 (crews 2-4 as HOST)
 //   s2_c3_zero, s2_c1_zero crew 3 at 0 W (HOST: the shared pause holds the depot), crew 1 at 0 W (SOLO: paused)
 //   s2_c3_idle             crew 3 spinning at 10 W and 25 rpm (pedaling for every detector, no effort): overruns
 //   s3_c3_c85_seed<n>, s3_c3_c70_seed<n>   crew 3 at compliance 0.85 / 0.70 (100% is s1_c3_seed<n>)
-//   s4_drill_c<crew>       the drill, compliant (S4 also reads every s1 report)
+//   s4_drill_c<crew>       the drill, compliant, crews 1-4 (S4 also reads every s1 report)
 //   s5_c3_dynamo_drop, s5_c3_gunline_drop  cadence to 30 rpm in a dynamo stage / a 90% gun line
 //   s6_c3_haptics_off      crew 3, slot 0 opted out of haptics
 //   s7_c3_seed1            s1_c3_seed1 again
-//   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: Ram, ram haptic,
+//   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: evades,
 //                          the gun line entered straight after a sprint (S8 is the GUT test test_tank_s8.gd)
-//   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Rams arrive as telemetry intents
+//   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Overpressure (`over` from a surge on the
+//                          steam engine) arrives as telemetry intents; a client's `aim` is GUT-tested (no actions in sims)
 //   s10_c3_dynamo_stop     crew 3, slot 1 stops pedaling for 60 s in the stage 1 gun line (rescue, AFK, reserve, back)
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
@@ -33,10 +34,10 @@
 //                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase).
 //   T1            every Advance 150-240 s, gun line 80-160 s, boss 180-330 s, no overrun, at most 1
 //                 breakdown (game events), grade S/A/B.
-//   T2 (crews 2-3) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
+//   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
 //                 stage (Advance + gun line) and >= 60 s in the boss, and is back at <= 65% within
 //                 120 s after each dynamo gun line or boss ends.
-//   T3 (crew 3)   each heavy shell (latch event, shell code 2) is built in 18-35 s: from the later of
+//   T3 (crews 3-4) each heavy shell (latch event, shell code 2) is built in 18-35 s: from the later of
 //                 the previous main-gun shot + the 6 s breech cycle and the segment start, to the
 //                 latch (the 5 s window included); a shell that is the first of its segment is only
 //                 held to 35 s (pressure holds across a checkpoint). After the latch the latching
@@ -45,23 +46,26 @@
 //   T4 (crew 1)   the Bulwark's lever is on Drive for >= 60% of each Advance (lever events; the
 //                 lever starts on Drive).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
-//   T6            every Advance has a light and a medium tank in it (enemy `shot` or `kill`
-//                 events; also a "Surge to ram" toast for crew 1, whose host rider drives, or for every
-//                 crew with --require-prompts); stages 2 and 3 end in a heavy-tank duel: the gun line
-//                 lasts 90-180 s and a heavy tank fired or died in it.
-//   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): a successful Ram in every
-//                 Advance, each Ram's haptic sent and accepted (S4 holds it to SIM riders), and a gun line
-//                 entered while still sprinting starts at its planned target, not at the sprint power.
-//   S10 (crew 3)  every rider a sprinter: a client's Ram (an intent over Telemetry.intents, owned by the diesel) destroys
-//                 something; and a dynamo rider who stops in a gun line is rescued, goes AFK within 10 s, is announced
-//                 as on reserve, comes back, with nobody else affected and the plan completing.
+//   T6            every Advance has a telegraphed shot (an `evade` event: a sprint prompt) and a medium tank (enemy
+//                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
+//                 "Surge to evade" toast there (every crew with --require-prompts); stages 2 and 3 end in a heavy-tank
+//                 duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
+//   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (Advance + gun line) and in
+//                 the boss, and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
+//                 a kill in an Advance followed by 60 s with no enemy shot).
+//   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): successful evades, no Ram or
+//                 dodge event and no ram haptic (v2), and a gun line entered while still sprinting starts at its
+//                 planned target, not at the sprint power.
+//   S10 (crew 3)  every rider a sprinter: a client's Overpressure (`over` over Telemetry.intents, owned by the steam
+//                 engine) latches an Overpressure shell; and a dynamo rider who stops in a gun line is rescued, goes AFK
+//                 within 10 s, is announced as on reserve, comes back, with nobody else affected and the plan completing.
 
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const CREWS = [1, 2, 3];
+export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
 export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };
@@ -72,6 +76,10 @@ export const T2_PER_STAGE_S = 30;
 export const T2_BOSS_S = 60;
 export const T2_BACK_PCT = 65;
 export const T2_BACK_WITHIN_S = 120;
+export const T7_ABOVE_PCT = 72;
+export const T7_PER_STAGE_S = 30;
+export const T7_BACK_PCT = 68;
+export const T7_BACK_WITHIN_S = 60;
 export const T3_BUILD_RANGE = [18, 35];
 export const T3_GRADE0_MIN_S = 6;
 export const BREECH_CYCLE_S = 6;
@@ -93,6 +101,7 @@ const EPS = 1e-6;
 // Event codes (TankIds).
 export const SHELL_LIGHT = 1;
 export const SHELL_HEAVY = 2;
+export const SHELL_OVER = 3;
 export const SHELL_BOW = 4;
 export const ENEMY_LIGHT = 1;
 export const ENEMY_MEDIUM = 2;
@@ -307,7 +316,7 @@ export function t1Problems(name, r) {
 /** The applied ERG % FTP rows of `peer` in plan phase `index`. */
 const ergRows = (r, peer, index) => traceOf(r, peer).filter((row) => num(row.phase) === index && row.mode === 'ERG');
 
-/** T2 on one compliant crew 2-3 run: seconds above 80% per stage and the return to <= 65%. */
+/** T2 on one compliant crew 2-4 run: seconds above 80% per stage and the return to <= 65%. */
 export function t2Problems(name, r) {
   const probs = [];
   const perStage = {};
@@ -430,20 +439,20 @@ export function t4Problems(name, r) {
   return probs;
 }
 
-/** T6 on one compliant run: enemies by size in each Advance, a heavy duel in gun lines 2 and 3. */
+/** T6 on one compliant run: a telegraphed shot and a medium in each Advance, a heavy duel in gun lines 2 and 3. */
 export function t6Problems(name, r, opts = {}) {
   const probs = [];
   const events = gameEvents(r);
   const within = (e, s) => e._t >= s.start - EPS && e._t <= s.end + EPS;
   const seen = (s, code) => events.some((e) => (e.type === 'shot' || e.type === 'kill') && e.e === code && within(e, s));
-  const toasts = (r.events ?? []).filter((e) => e && e.type === 'hud' && e.kind === 'toast' && /RAM/i.test(String(e.key ?? '')));
+  const toasts = (r.events ?? []).filter((e) => e && e.type === 'hud' && e.kind === 'toast' && /PROMPT_EVADE/.test(String(e.key ?? '')));
   for (const s of segmentsOf(r)) {
     if (!Number.isFinite(s.end)) continue;
     if (s.seg === 'advance') {
-      if (!seen(s, ENEMY_LIGHT)) probs.push(`${name}: stage ${s.stage} Advance has no light tank`);
+      if (!events.some((e) => e.type === 'evade' && within(e, s))) probs.push(`${name}: stage ${s.stage} Advance has no telegraphed shot (no sprint prompt)`);
       if (!seen(s, ENEMY_MEDIUM)) probs.push(`${name}: stage ${s.stage} Advance has no medium tank`);
       if (opts.requirePrompts && !toasts.some((e) => num(e.t) >= s.start - EPS && num(e.t) <= s.end + EPS)) {
-        probs.push(`${name}: stage ${s.stage} Advance raised no "Surge to ram" prompt`);
+        probs.push(`${name}: stage ${s.stage} Advance raised no "Surge to evade" prompt`);
       }
     }
     if (s.seg === 'gun_line' && (s.stage === 2 || s.stage === 3)) {
@@ -456,11 +465,59 @@ export function t6Problems(name, r, opts = {}) {
   return probs;
 }
 
+/** The arc rider's fight phases of a crew 4 run: [{peer, index, seg, stage, start, end}]. */
+export function arcFights(r) {
+  const out = [];
+  for (const peer of humanPeers(r)) {
+    const plan = planOf(r, peer);
+    for (const sp of segmentsOf(r, peer)) {
+      const ph = plan[sp.index];
+      if (ph?.meta?.engine === 'arc' && ['advance', 'gun_line', 'boss'].includes(ph.meta.seg)) out.push({ peer, ...sp });
+    }
+  }
+  return out;
+}
+
+/**
+ * T7 on one compliant crew 4 run: the arc rider's applied target above 72% for >= 30 s per stage (Advance + gun line;
+ * the boss on its own) and back at <= 68% within 60 s of each fight's end: an arc gun line or boss ending, or a kill in
+ * an Advance after which no enemy fires for 60 s while the phase still runs.
+ */
+export function t7Problems(name, r) {
+  const probs = [];
+  const perStage = {};
+  const events = gameEvents(r);
+  const fights = arcFights(r);
+  if (fights.length === 0) probs.push(`${name}: no arc generator stage in the plans`);
+  for (const f of fights) {
+    const rows = traceOf(r, f.peer).filter((row) => num(row.phase) === f.index && row.mode === 'ERG');
+    perStage[f.stage] = (perStage[f.stage] ?? 0) + rows.filter((row) => num(row.applied_pct) > T7_ABOVE_PCT).length;
+    const ends = [];
+    if (f.seg !== 'advance' && Number.isFinite(f.end)) ends.push(f.end);
+    if (f.seg === 'advance' && Number.isFinite(f.end)) {
+      for (const k of events.filter((e) => e.type === 'kill' && e._t >= f.start && e._t + T7_BACK_WITHIN_S <= f.end)) {
+        const quiet = !events.some((e) => e.type === 'shot' && num(e.s) === -1 && e._t > k._t && e._t <= k._t + T7_BACK_WITHIN_S);
+        if (quiet && !ends.some((t) => Math.abs(t - k._t) < T7_BACK_WITHIN_S)) ends.push(k._t);
+      }
+    }
+    for (const t of ends) {
+      const after = traceOf(r, f.peer).filter((row) => num(row.game_t) > t - EPS && num(row.game_t) <= t + T7_BACK_WITHIN_S + EPS);
+      if (after.length && !after.some((row) => num(row.applied_pct) <= T7_BACK_PCT + EPS)) {
+        probs.push(`${name}: peer ${f.peer} ${f.seg} ${f.stage}: the arc target stayed above ${T7_BACK_PCT}% for ${T7_BACK_WITHIN_S} s after the fight at ${fmt(t)} s`);
+      }
+    }
+  }
+  for (const st of Object.keys(perStage).map(Number).sort()) {
+    if (perStage[st] < T7_PER_STAGE_S) probs.push(`${name}: stage ${st}: the arc target above ${T7_ABOVE_PCT}% for ${perStage[st]} s (need ${T7_PER_STAGE_S})`);
+  }
+  return probs;
+}
+
 // --- S1 ----------------------------------------------------------------------------------------------------
 
 export function checkS1(reports, opts = {}) {
   const seeds = opts.seeds ?? DEFAULT_SEEDS;
-  const title = 'ashfall_road, compliant crews 1-3: T1, T2, T3, T4, T6';
+  const title = 'ashfall_road, compliant crews 1-4: T1, T2, T3, T4, T6, T7';
   const names = [];
   for (const c of CREWS) for (const s of seeds) names.push(`s1_c${c}_seed${s}`);
   const { found, missing } = pick(reports, names);
@@ -474,10 +531,11 @@ export function checkS1(reports, opts = {}) {
     probs.push(...completeProblems(name, r));
     probs.push(...t1Problems(name, r));
     if (crew >= 2) probs.push(...t2Problems(name, r));
-    if (crew === 3) probs.push(...t3Problems(name, r));
+    if (crew >= 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));
-    // The sim report's HUD log holds only the host rider's own toasts: the "Surge to ram" prompt is the host rider's
-    // only when that rider drives, which is the Bulwark of crew 1 (crews 2-3 rotate the driver away from slot 0).
+    if (crew === 4) probs.push(...t7Problems(name, r));
+    // The sim report's HUD log holds only the host rider's own toasts: the "Surge to evade" prompt is the host rider's
+    // in every Advance only for crew 1 (the Bulwark rides SIM there; crews 2-4 rotate slot 0 onto ERG engines).
     probs.push(...t6Problems(name, r, { ...opts, requirePrompts: opts.requirePrompts || crew === 1 }));
     lines.push(`c${crew}s${seedS} ${fmt(scoreOf(r))}/${gradeOf(r)}`);
   }
@@ -621,14 +679,15 @@ function enteredTargetW(r, peer, index) {
 export function classify(d) {
   const q = d.requested ?? {};
   const reason = q.reason;
-  if (q.haptic !== undefined) return ['hit', 'boss_hit', 'ram'].includes(reason) ? 'haptic' : '';
+  if (q.haptic !== undefined) return ['hit', 'boss_hit'].includes(reason) ? 'haptic' : '';
   if (reason === 'bank' && q.mode === 'ERG' && q.target_pct !== undefined) return 'bank';
+  if (reason === 'arc' && q.mode === 'ERG' && q.target_pct !== undefined) return 'arc';
   if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';
   if (reason === 'hoist' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'hoist';
   return '';
 }
 
-const HAPTICS = { hit: [2.0, 1.5], boss_hit: [3.0, 2.0], ram: [3.0, 1.0] };
+const HAPTICS = { hit: [2.0, 1.5], boss_hit: [3.0, 2.0] };
 
 /** Problems with one directive entry against brief 2.3 and 2.7 (at most a few per run are reported). */
 export function directiveProblems(name, r, d) {
@@ -662,13 +721,15 @@ export function directiveProblems(name, r, d) {
       if (!isObj(d.applied) || !Array.isArray(d.applied.clamped_by)) probs.push(`${at}: no governor record with clamped_by (not clamped)`);
       probs.push(...appliedProblems(at, kind, q, d));
       const warm = isWarmupKind(ph);
-      if (kind === 'bank') {
+      if (kind === 'bank' || kind === 'arc') {
         const t = num(q.target_pct);
-        if (ph.mode !== 'ERG' || ph.kind === 'RECOVERY') probs.push(`${at}: bank target outside a dynamo ERG phase`);
+        const engine = kind === 'bank' ? 'dynamo' : 'arc';
+        if (ph.mode !== 'ERG' || ph.kind === 'RECOVERY') probs.push(`${at}: ${kind} target outside an ERG phase`);
+        if (ph.meta?.engine !== undefined && ph.meta.engine !== engine) probs.push(`${at}: ${kind} target to a rider on ${ph.meta.engine}`);
         const range = ph.range_pct;
-        if (!Array.isArray(range)) probs.push(`${at}: bank target in a phase without range_pct (depot or checkpoint)`);
-        else if (t < range[0] - EPS || t > range[1] + EPS) probs.push(`${at}: bank target ${t}% outside range_pct ${JSON.stringify(range)}`);
-        if (t > 100 + EPS || t < 50 - EPS) probs.push(`${at}: bank target ${t}% outside 50-100% FTP`);
+        if (!Array.isArray(range)) probs.push(`${at}: ${kind} target in a phase without range_pct (depot or checkpoint)`);
+        else if (t < range[0] - EPS || t > range[1] + EPS) probs.push(`${at}: ${kind} target ${t}% outside range_pct ${JSON.stringify(range)}`);
+        if (t > 100 + EPS || t < 50 - EPS) probs.push(`${at}: ${kind} target ${t}% outside 50-100% FTP`);
       } else if (kind === 'boiler') {
         const g = num(q.mode_grade);
         if (ph.mode !== 'SIM') probs.push(`${at}: boiler grade in an ERG phase`);
@@ -685,7 +746,7 @@ export function directiveProblems(name, r, d) {
         if (num(d.t) < FIRST_S - EPS) probs.push(`${at}: haptic in the first ${FIRST_S} s of the plan`);
         if (slotOf(r, peer).haptics_on === false && !(d.accepted === false || d.applied?.refused === true)) probs.push(`${at}: haptic applied to a rider who opted out`);
       }
-      if (ph.mode === 'ERG' && kind !== 'bank') probs.push(`${at}: a ${kind} directive (SIM-mode) in an ERG phase`);
+      if (ph.mode === 'ERG' && kind !== 'bank' && kind !== 'arc') probs.push(`${at}: a ${kind} directive (SIM-mode) in an ERG phase`);
       break;
     }
     default:
@@ -707,7 +768,7 @@ export function appliedProblems(at, kind, q, d) {
   const over = (what, applied, asked) => {
     if (applied !== undefined && !(num(applied, NaN) <= num(asked, NaN) + EPS)) probs.push(`${at}: applied ${what} ${fmt(num(applied, NaN))} above the requested ${fmt(num(asked, NaN))}`);
   };
-  if (kind === 'bank') over('ERG target %', got.target_pct, q.target_pct);
+  if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);
   else if (kind === 'boiler' || kind === 'hoist') over('mode grade %', got.mode_grade, q.mode_grade);
   else if (kind === 'haptic') over('haptic %', got.haptic_pct, q.haptic);
   return probs;
@@ -942,11 +1003,11 @@ export function checkS7(reports) {
 
 // --- S9: the sprint half of the workout ---------------------------------------------------------------------------
 
-/** A trailing mean power at or above this share of FTP is a sprint (tanks.json ram.sprint_ftp 1.2). The S9 rider (run_sims.sh) rides 12 s at 1.5 x FTP every 40 s. */
+/** A trailing mean power at or above this share of FTP is a sprint (the sprint rule, 1.2 x FTP). The S9 rider (run_sims.sh) rides 12 s at 1.5 x FTP every 40 s. */
 export const S9_SPRINT_SIM_FTP_PCT = 120;
 
-/** The Ram events that destroyed something (`ok` 1). */
-export const successfulRams = (r) => eventsOf(r, 'ram').filter((e) => num(e.ok) === 1);
+/** The telegraphed shots a rider's surge made miss (`evade` ok 1). */
+export const successfulEvades = (r) => eventsOf(r, 'evade').filter((e) => num(e.ok) === 1);
 
 /** SIM -> ERG switches of `peer` with the trailing mean raw power (last `n` rows before the switch). */
 export function switchesIntoErg(r, peer, n = 3) {
@@ -961,22 +1022,21 @@ export function switchesIntoErg(r, peer, n = 3) {
 }
 
 export function checkS9(reports) {
-  const title = 'a sprinting solo rider: a Ram in every Advance, a ram haptic only in SIM, gun lines entered after a sprint at or below their target';
+  const title = 'a sprinting solo rider: successful evades, no Ram (v2), gun lines entered after a sprint at or below their target';
   const n = 's9_c1_sprint';
   const r = reports[n];
   if (!r) return skip('S9', title, `no ${n} report`);
   const probs = [...argsProblems(n, r, { content: 'ashfall_road', players: 1, bots: 0, role: 'SOLO' }), ...completeProblems(n, r)];
   probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
-  const rams = successfulRams(r);
-  for (const s of segmentsOf(r)) {
-    if (s.seg !== 'advance' || !Number.isFinite(s.end)) continue;
-    if (!rams.some((e) => e._t >= s.start - EPS && e._t <= s.end + EPS)) probs.push(`${n}: stage ${s.stage} Advance has no successful Ram (the sprint rider should destroy a light tank)`);
+  const evades = successfulEvades(r);
+  if (evades.length === 0) probs.push(`${n}: the sprinting rider never made a telegraphed shot miss`);
+  for (const e of evades) {
+    if (num(e.s) !== 0) probs.push(`${n}: evade at ${fmt(e._t)} s credited to slot ${e.s} (the solo rider is slot 0)`);
   }
+  const ram = gameEvents(r).filter((e) => e.type === 'ram' || e.type === 'dodge');
+  if (ram.length) probs.push(`${n}: ${ram.length} Ram or dodge events (v2 has none)`);
   const hap = (r.directives ?? []).filter((d) => d.kind === 'request' && d.requested?.reason === 'ram');
-  if (hap.length === 0) probs.push(`${n}: a Ram never sent its haptic`);
-  for (const d of hap) {
-    if (d.accepted === false || d.applied?.refused === true) probs.push(`${n}: ram haptic ${d.id} at ${fmt(num(d.t))} s refused: ${d.reason || d.applied?.reason}`);
-  }
+  if (hap.length) probs.push(`${n}: ${hap.length} ram haptics (v2 has none)`);
   // A gun line (ERG) entered while the rider is still sprinting: the trainer must start at the planned target, not at the sprint power.
   const host = hostPeer(r);
   const ftp = num(slotOf(r, host).ftp, 200);
@@ -988,7 +1048,8 @@ export function checkS9(reports) {
     const worst = Math.max(0, ...first.map((row) => num(row.applied_target_w)));
     if (worst > bound + EPS) probs.push(`${n}: gun line at ${fmt(sw.t)} s entered after a ${fmt(sw.trailingW)} W sprint with a ${worst} W target (planned ${Math.round(bound - 1)} W)`);
   }
-  return result('S9', title, probs, `${rams.length} Rams, ${hap.length} ram haptics, ${entries.length} gun line entries after a sprint`);
+  const tried = eventsOf(r, 'evade').length;
+  return result('S9', title, probs, `${evades.length} of ${tried} telegraphed shots evaded, ${entries.length} gun line entries after a sprint`);
 }
 
 // --- S10: clients sending intents, a client that stops ---------------------------------------------------------------
@@ -998,20 +1059,24 @@ export const AFK_AFTER_S = 10;
 /** The engine of `peer`'s plan phase at report time t, or ''. */
 const engineAt = (r, peer, t) => planOf(r, peer)[phaseIndexAt(r, peer, t)]?.meta?.engine ?? '';
 
-/** Ram and dodge events whose slot was not on a driving engine at that time (a client's intent must be owned by its engine). */
+/** Overpressure latches (latch sh 3) whose slot was not on the steam engine then (`over` must be owned by its engine). */
 export function intentOwnershipProblems(name, r) {
   const probs = [];
   for (const e of gameEvents(r)) {
-    if (e.type !== 'ram' && e.type !== 'dodge') continue;
+    if (e.type === 'ram' || e.type === 'dodge') probs.push(`${name}: a ${e.type} event at ${fmt(e._t)} s (v2 has none)`);
+    if (e.type !== 'latch' || num(e.sh) !== SHELL_OVER) continue;
     const peer = peerOfSlot(r, e.s);
     const engine = peer === null ? '' : engineAt(r, peer, e._t);
-    if (engine !== 'diesel' && engine !== 'bulwark') probs.push(`${name}: ${e.type} by slot ${e.s} at ${fmt(e._t)} s, who was on "${engine}", not a driving engine`);
+    if (engine !== 'steam') probs.push(`${name}: an Overpressure shell by slot ${e.s} at ${fmt(e._t)} s, who was on "${engine}", not the steam engine`);
   }
   return probs;
 }
 
+/** Overpressure shells (latch sh 3) latched by a client rider (slot 1 or 2): their `over` came over Telemetry.intents. */
+export const clientOverpressures = (r) => eventsOf(r, 'latch').filter((e) => num(e.sh) === SHELL_OVER && num(e.s) >= 1);
+
 export function checkS10(reports) {
-  const title = 'crew 3 where the clients send the intents and one stops: client Rams, a station on reserve through a rescue';
+  const title = 'crew 3 where the clients send the intents and one stops: client Overpressure, a station on reserve through a rescue';
   const cases = ['s10_c3_clients_sprint', 's10_c3_dynamo_stop'];
   const { found, missing } = pick(reports, cases);
   if (found.length === 0) return skip('S10', title, 'no s10_* reports');
@@ -1022,15 +1087,16 @@ export function checkS10(reports) {
     probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
   };
 
-  // Every rider sprints: the Ram of slot 1 or 2 reaches the host as a client's Telemetry.intents and only counts on the diesel.
+  // Every rider sprints: a client on the steam engine surges in the window, its `over` reaches the host as Telemetry.intents
+  // (owned by the steam engine) and the held sprint builds an Overpressure shell.
   const sprint = reports.s10_c3_clients_sprint;
   if (sprint) {
     const n = 's10_c3_clients_sprint';
     hygiene(n, sprint);
     probs.push(...intentOwnershipProblems(n, sprint));
-    const clientRams = successfulRams(sprint).filter((e) => num(e.s) >= 1);
-    if (clientRams.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) destroyed anything with a Ram: their intents never reached the host`);
-    notes.push(`${n} ${clientRams.length} client Rams`);
+    const overs = clientOverpressures(sprint);
+    if (overs.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) latched an Overpressure shell: their over intents never reached the host`);
+    notes.push(`${n} ${overs.length} client Overpressure shells`);
   }
 
   // Slot 1 stops pedaling in the stage 1 gun line (the dynamo, ERG 60% or more): rescue, then AFK and a station on reserve, then back.

@@ -139,6 +139,7 @@ func test_the_steam_overpressure_prompt() -> void:
 	var steam_peer := _peer_of(s, TankIds.ENGINE_STEAM)
 	var ctx := _ctx(3, steam_peer)
 	var cues := TankCues.new(ctx)
+	_telegraph(s, 0.0)
 	(s.station(TankIds.ENGINE_STEAM) as TankSteamState).window_s = 5.0
 	cues.on_state(s)
 	assert_eq(_keys(_toasts(ctx)), ["TANK_PROMPT_OVER"])
@@ -146,6 +147,7 @@ func test_the_steam_overpressure_prompt() -> void:
 
 func test_the_dynamo_stalled_toast_goes_to_the_whole_crew_once() -> void:
 	var s := TankFixtures.state(3)
+	_telegraph(s, 0.0)
 	var peers := [
 		_peer_of(s, TankIds.ENGINE_DIESEL),
 		_peer_of(s, TankIds.ENGINE_DYNAMO),
@@ -167,6 +169,7 @@ func test_the_dynamo_stalled_toast_goes_to_the_whole_crew_once() -> void:
 
 func test_a_rescue_hold_staggers_its_own_rider_and_stalls_the_dynamo() -> void:
 	var s := TankFixtures.state(3)
+	_telegraph(s, 0.0)
 	var dyn_peer := _peer_of(s, TankIds.ENGINE_DYNAMO)
 	var diesel_peer := _peer_of(s, TankIds.ENGINE_DIESEL)
 	var ctx := _ctx(3, diesel_peer)
@@ -195,6 +198,7 @@ func test_a_rescue_hold_staggers_its_own_rider_and_stalls_the_dynamo() -> void:
 
 func test_the_arc_stalled_toast_goes_to_the_whole_crew_once() -> void:
 	var s := TankFixtures.state(4)
+	_telegraph(s, 0.0)
 	var arc_peer := _peer_of(s, TankIds.ENGINE_ARC)
 	var ctxs: Array[GameContext] = []
 	var cues: Array[TankCues] = []
@@ -216,6 +220,7 @@ func test_the_arc_stalled_toast_goes_to_the_whole_crew_once() -> void:
 
 func test_regroup_is_said_once_when_the_objective_is_met_before_min_s() -> void:
 	var s := TankFixtures.state(1)
+	_telegraph(s, 0.0)
 	var ctx := _ctx(1, 1, Wl.SOLO)
 	var cues := TankCues.new(ctx)
 	s.seg.regroup = true

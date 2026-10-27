@@ -23,6 +23,8 @@ func _rig(crew: int = 2) -> TankRulesRig:
 	rig.enter(ADVANCE, 5.0)
 	rig.hull().hp = 100000.0
 	rig.hull().hp_max = 100000.0
+	# The sprint rule averages a full 3 s window: ride on target long enough to fill it first.
+	rig.run(3.5)
 	return rig
 
 
