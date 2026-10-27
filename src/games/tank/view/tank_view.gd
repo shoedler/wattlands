@@ -303,7 +303,8 @@ func advance(delta: float) -> void:
 
 func _layout(state: TankState) -> void:
 	canvas = canvas_size()
-	y_off = roundf((canvas.y - BASE.y) * 0.5)
+	# MOCK v3 r2: the stage drops so the road and the tank sit lower (TankV3Env.GROUND_Y).
+	y_off = roundf((canvas.y - BASE.y) * 0.5) + TankV3Env.ground_drop()
 	if stage != null:
 		stage.position = Vector2(0, y_off)
 	variant = TankKit.variant_for(state.hull.tank, state.crew)

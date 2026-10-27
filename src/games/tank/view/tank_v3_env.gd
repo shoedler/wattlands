@@ -17,15 +17,21 @@ extends RefCounted
 ##                            before/after frame
 ##   TANK_V3_BASE_SX=<px>     one little base with its left end at this stage x (art px), for the
 ##                            hero frames; otherwise bases stand at their world places
+##   TANK_V3_GROUND_Y=<px>    r2: where the road line (the tank's and the enemies' ground) sits on
+##                            the 960 x 540 base canvas (default GROUND_Y; v2 had 340). The whole
+##                            stage drops by GROUND_Y - TankView.GROUND: the sky gains rows on top,
+##                            the foreground loses them at the bottom, the HUD's world tags follow
+##                            (they read the view's y_off). The one knob to place a new tank.
 
 const DIR := "res://assets/tank/v3env/planes/"
 ## Back to front. layer: back (behind the world), road (the verge, with the road band over it),
 ## front (over the tank).
 const PLANES: Array[Dictionary] = [
-	{"name": "far", "y0": 0.0, "parallax": 0.04, "layer": "back"},
+	{"name": "far", "y0": -80.0, "parallax": 0.04, "layer": "back"},
 	{"name": "ridge", "y0": 0.0, "parallax": 0.12, "layer": "back"},
 	{"name": "forest", "y0": 0.0, "parallax": 0.3, "layer": "back"},
 	{"name": "verge", "y0": 296.0, "parallax": 1.0, "layer": "road"},
+	{"name": "near", "y0": 356.0, "parallax": 1.0, "layer": "near"},
 	{"name": "foreground", "y0": 344.0, "parallax": 1.35, "layer": "front"},
 ]
 ## The per-frame pass per strength: blur radius (art px) far from the band, its ramp, the band.
@@ -34,6 +40,13 @@ const DOF := {
 	"strong": {"max": 4.0, "ramp": 60.0, "band": Vector2(150, 358)},
 	"extreme": {"max": 6.5, "ramp": 44.0, "band": Vector2(152, 356)},
 }
+## r2 layout: the road line's default place on the 960 x 540 base (v2: TankView.GROUND = 340).
+## Measured: the road band runs from GROUND_Y - 6 to GROUND_Y + 42 (its near edge wavy round
+## GROUND_Y + 37), the near shoulder below it, the foreground from about GROUND_Y + 42 down.
+const GROUND_Y := 385.0
+## r2: the road band's depth (rows; v2's was TankWorldDraw.ROAD_H = 30): the gravel continues toward
+## the viewer and fades under the near shoulder's wavy edge.
+const ROAD3_H := 48
 ## The sky above the far plane on a taller canvas.
 const SKY := Color(0.012, 0.03, 0.04)
 ## Little bases: world x (rules px) in a mission; in free roam one by the start and one at each
@@ -84,7 +97,11 @@ static func cfg() -> Dictionary:
 			"tilt": tilt,
 			"layer_fix": OS.get_environment("TANK_V3_LAYERFIX") != "0",
 			"base_sx": float(bsx) if bsx.is_valid_float() else NAN,
+			"ground_y": GROUND_Y,
 		}
+		var gy := OS.get_environment("TANK_V3_GROUND_Y")
+		if gy.is_valid_float():
+			_cfg["ground_y"] = float(gy)
 	return _cfg
 
 
@@ -94,6 +111,13 @@ static func on() -> bool:
 
 static func layer_fix() -> bool:
 	return bool(cfg()["layer_fix"])
+
+
+## How far the stage drops below v2's layout (art px; 0 with the v2 world).
+static func ground_drop() -> float:
+	if not on():
+		return 0.0
+	return roundf(float(cfg()["ground_y"]) - TankView.GROUND)
 
 
 static func tilt() -> String:
@@ -150,6 +174,10 @@ static func draw_back(ci: CanvasItem, v: TankView) -> void:
 	while lx < v.canvas.x:
 		ci.draw_texture(rel, Vector2(roundf(lx), TankView.GROUND - TankWorldDraw.ROAD_TOP - 4.0))
 		lx += float(RELIEF_W)
+	# r2: the near shoulder over the road band's near rows (grass and stones across the edge)
+	for p in ps:
+		if str(p["layer"]) == "near":
+			TankWorldDraw.tile(ci, v, p)
 
 
 static func draw_front(ci: CanvasItem, v: TankView) -> void:
@@ -164,11 +192,37 @@ static func draw_front(ci: CanvasItem, v: TankView) -> void:
 		)
 
 
-## The v2 road band regraded blue-green (the light layer still warms it).
+## The road band (r2: ROAD3_H deep): v2's far rows, then more gravel toward the viewer (coarser
+## pebbles, a faint third rut pair, a little darker), fading out under the near shoulder; all
+## regraded blue-green (the light layer still warms it).
 static func road_tex() -> Texture2D:
 	if _road != null:
 		return _road
-	var img := TankWorldDraw.road_tex().get_image()
+	var v2 := TankWorldDraw.road_tex().get_image()
+	var w := v2.get_width()
+	var img := Image.create(w, ROAD3_H, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	img.blit_rect(v2, Rect2i(0, 0, w, 26), Vector2i.ZERO)
+	for y in range(26, ROAD3_H):
+		for x in w:
+			var n := TankWorldDraw._tile_noise(x, y)
+			var near := float(y - 26) / float(ROAD3_H - 26)
+			var col := TankWorldDraw.GRAVEL_BASE.lerp(
+				TankWorldDraw.GRAVEL_DK, n * 0.6 + near * 0.25
+			)
+			if y in [31, 32, 39]:
+				col = col.lerp(TankWorldDraw.RUT, 0.3)
+			var h := TankDraw.hash01(float(x) * 1.37 + float(y) * 91.7)
+			if h > 0.94:
+				col = TankWorldDraw.PEBBLE.lerp(TankWorldDraw.GRAVEL_BASE, n)
+			var a := 1.0 - smoothstep(float(ROAD3_H - 7), float(ROAD3_H), float(y))
+			img.set_pixel(x, y, Color(col.r, col.g, col.b, a))
+	for x in w:
+		var h2 := TankDraw.hash01(float(x) * 4.13 + 9.0)
+		if h2 > 0.9:
+			var py := 27 + int(TankDraw.hash01(float(x) * 3.3) * 12.0)
+			img.fill_rect(Rect2i(x, py, 2, 1), TankWorldDraw.PEBBLE)
+			img.fill_rect(Rect2i(x, py + 1, 2, 1), TankWorldDraw.GRAVEL_SH)
 	for y in img.get_height():
 		for x in img.get_width():
 			var c := img.get_pixel(x, y)
@@ -206,7 +260,7 @@ static func relief_tex() -> Texture2D:
 	if _relief != null:
 		return _relief
 	var top := TankWorldDraw.ROAD_TOP + 4
-	var hh := TankWorldDraw.ROAD_H + 4
+	var hh := ROAD3_H + 4
 	var img := Image.create(RELIEF_W, hh, false, Image.FORMAT_RGBA8)
 	img.fill(Color(0, 0, 0, 0))
 	var gravel := Color(0.1, 0.11, 0.1)

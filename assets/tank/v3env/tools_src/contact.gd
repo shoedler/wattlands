@@ -19,6 +19,7 @@ func _init() -> void:
 	var tw := 480
 	var items: Array = []
 	var title := ""
+	var thumb_h := 0
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--out="):
 			out = a.substr(6)
@@ -26,11 +27,13 @@ func _init() -> void:
 			cols = int(a.substr(7))
 		elif a.begins_with("--thumb="):
 			tw = int(a.substr(8))
+		elif a.begins_with("--thumbh="):
+			thumb_h = int(a.substr(9))
 		elif a.begins_with("--title="):
 			title = a.substr(8)
 		else:
 			items.append(a.split("|"))
-	var th := int(tw * 9 / 16)
+	var th := thumb_h if thumb_h > 0 else int(tw * 9 / 16)
 	var lab_h := 26
 	var rows := ceili(float(items.size()) / cols)
 	var head := 40 if title != "" else 0

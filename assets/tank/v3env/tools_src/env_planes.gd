@@ -20,18 +20,52 @@ const BAND := Vector2(150.0, 352.0)
 ## Per strength: ramp max radius (box px), ramp length (px), each plane's depth base radius.
 const STRENGTHS := {
 	"moderate":
-	{"maxr": 2.5, "ramp": 130.0, "far": 1.2, "ridge": 0.8, "forest": 0.25, "verge": 0.0, "fg": 1.0},
+	{
+		"maxr": 2.5,
+		"ramp": 130.0,
+		"far": 1.2,
+		"ridge": 0.8,
+		"forest": 0.25,
+		"verge": 0.0,
+		"near": 0.4,
+		"fg": 1.0
+	},
 	"strong":
-	{"maxr": 4.5, "ramp": 110.0, "far": 2.2, "ridge": 1.6, "forest": 0.6, "verge": 0.0, "fg": 2.5},
+	{
+		"maxr": 4.5,
+		"ramp": 110.0,
+		"far": 2.2,
+		"ridge": 1.6,
+		"forest": 0.6,
+		"verge": 0.0,
+		"near": 0.8,
+		"fg": 2.5
+	},
 	"extreme":
-	{"maxr": 7.5, "ramp": 90.0, "far": 3.5, "ridge": 2.6, "forest": 1.0, "verge": 0.0, "fg": 4.5},
+	{
+		"maxr": 7.5,
+		"ramp": 90.0,
+		"far": 3.5,
+		"ridge": 2.6,
+		"forest": 1.0,
+		"verge": 0.0,
+		"near": 1.2,
+		"fg": 4.5
+	},
 }
+## r2: the far plane gets this much more sky on top (mirrored from its own top rows), so the
+## layout can drop the road and the tank lower without a seam over the sky.
+const SKY_EXTRA := 80
+## r2: the road's near edge (stage y, wavy round it): the near shoulder plane and the foreground's
+## alpha follow it, so the road fades into the foreground without a straight seam.
+const NEAR_EDGE := 377.0
 ## Planes: stage y0 and height.
 const PLANES := {
-	"far": Vector2i(0, 330),
+	"far": Vector2i(-SKY_EXTRA, 330 + SKY_EXTRA),
 	"ridge": Vector2i(0, 342),
 	"forest": Vector2i(0, 352),
 	"verge": Vector2i(296, 112),
+	"near": Vector2i(356, 74),
 	"foreground": Vector2i(344, 196),
 }
 
@@ -74,6 +108,7 @@ func _init() -> void:
 		"forest": _forest(),
 		"verge": _verge(),
 		"foreground": _foreground(),
+		"near": _near(),
 	}
 	print("env_planes: raw planes in %d ms" % (Time.get_ticks_msec() - t0))
 	var only := ""
@@ -111,6 +146,9 @@ func _radius(st: Dictionary, pname: String, y: float) -> float:
 	var base := float(st["fg" if pname == "foreground" else pname])
 	if pname == "verge":
 		return base + k * k * float(st["maxr"]) * 0.5
+	if pname == "near":
+		# graded: sharp where it meets the road, softer row by row toward the viewer
+		return base + clampf((y - NEAR_EDGE + 4.0) / 40.0, 0.0, 1.0) * float(st["maxr"]) * 0.8
 	return base + pow(k, 1.3) * float(st["maxr"])
 
 
@@ -141,7 +179,13 @@ func _graded(img: Image, amount: float) -> PackedFloat32Array:
 
 
 func _far() -> PackedFloat32Array:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(V2 + "far_wide.png"))
+	var src := Image.load_from_file(ProjectSettings.globalize_path(V2 + "far_wide.png"))
+	src.convert(Image.FORMAT_RGBA8)
+	var img := Image.create(W, src.get_height() + SKY_EXTRA, false, Image.FORMAT_RGBA8)
+	img.blit_rect(src, Rect2i(0, 0, W, src.get_height()), Vector2i(0, SKY_EXTRA))
+	var top := src.get_region(Rect2i(0, 0, W, SKY_EXTRA))
+	top.flip_y()
+	img.blit_rect(top, Rect2i(0, 0, W, SKY_EXTRA), Vector2i.ZERO)
 	var h := img.get_height()
 	var f := _to_f(img)
 	# take the stars out (a pixel well above its 5 x 5 neighbourhood, in the sky)
@@ -150,7 +194,7 @@ func _far() -> PackedFloat32Array:
 	for i in W * h:
 		lum[i] = f[i * 4] * 0.3 + f[i * 4 + 1] * 0.55 + f[i * 4 + 2] * 0.15
 	var fill := {}
-	for y in range(2, 250):
+	for y in range(2, 250 + SKY_EXTRA):
 		for x in W:
 			var c := lum[y * W + x]
 			if c < 0.12:
@@ -196,7 +240,7 @@ func _bokeh(f: PackedFloat32Array, h: int, radii: PackedFloat32Array) -> void:
 			continue
 		if k < 0.13 and r > 3.0:
 			continue
-		var peak := clampf(k * 2.2 / (1.0 + 0.25 * r * r), 0.03, 0.45)
+		var peak := clampf(k * 1.8 / (1.0 + 0.4 * r * r), 0.03, 0.35)
 		var ri := int(ceilf(r))
 		for dy in range(-ri, ri + 1):
 			for dx in range(-ri, ri + 1):
@@ -220,9 +264,71 @@ func _foreground() -> PackedFloat32Array:
 	var f := _graded(
 		Image.load_from_file(ProjectSettings.globalize_path(V2 + "foreground_wide.png")), 0.8
 	)
+	var y0: int = PLANES["foreground"].x
+	var h: int = PLANES["foreground"].y
 	for i in f.size() / 4:
 		for c in 3:
 			f[i * 4 + c] *= 1.05
+	# r2: the alpha follows the near edge, wavy, and ramps over 26 rows (no straight seam)
+	for x in W:
+		var e := _edge(x) + 5.0
+		for y in h:
+			var sy := float(y0 + y)
+			var a := smoothstep(e - 2.0, e + 26.0, sy)
+			var i2 := (y * W + x) * 4 + 3
+			f[i2] = minf(f[i2], a) if sy < e + 26.0 else f[i2]
+	return f
+
+
+## The road's near edge (stage y) at tile column x: wavy, a little ragged.
+func _edge(x: int) -> float:
+	var a := TAU * float(x) / W
+	return (
+		NEAR_EDGE
+		+ 3.5 * sin(a * 9.0 + 0.6)
+		+ 2.0 * sin(a * 31.0 + 2.0)
+		+ 1.5 * (_hash(x * 0.37) - 0.5)
+	)
+
+
+## r2: the road's near shoulder, between the road band and the foreground: dark earth and grass
+## under a wavy edge, grass tufts and stones crossing up over the gravel's near rows, fading out
+## below into the foreground (whose blur it shares toward the bottom).
+func _near() -> PackedFloat32Array:
+	var y0: int = PLANES["near"].x
+	var h: int = PLANES["near"].y
+	var f := _new(h)
+	for x in W:
+		var e := int(roundf(_edge(x))) - y0
+		for y in range(e, h):
+			var k := float(y - e) / 30.0
+			var c := GRASS.darkened(0.45).lerp(Color(0.01, 0.018, 0.02), clampf(k, 0.0, 1.0))
+			c.a = 1.0 - smoothstep(0.6, 1.0, k * 0.75)
+			_put(f, h, x, y, c)
+		# the edge itself: crumbled gravel, darker under the grass
+		_put(f, h, x, e - 1, Color(0.05, 0.06, 0.055, 0.7))
+		# grass rising over the road's near rows
+		var tuft := _hash(floorf(x / 4.0) * 5.3)
+		var gh := int(2.0 + 9.0 * tuft * _hash(x * 1.7 + 2.0))
+		if _hash(x * 0.9) < 0.3:
+			gh = int(gh * 0.3)
+		for k2 in gh:
+			var lean := 0 if k2 < gh / 2 else (1 if _hash(x + 0.25) > 0.5 else -1)
+			var col := GRASS.darkened(0.2) if k2 < gh - 2 else GRASS.lerp(GRASS_TIP, 0.6)
+			_put(f, h, x + lean, e - 1 - k2, col)
+	# stones and clods sitting on the edge, half over the gravel
+	var x := rng.randf_range(0.0, 40.0)
+	while x < W:
+		var cx := int(x)
+		_rock(
+			f, h, cx, int(roundf(_edge(cx))) - y0 + 2, rng.randi_range(4, 9), rng.randi_range(3, 5)
+		)
+		x += rng.randf_range(30.0, 100.0)
+	x = rng.randf_range(0.0, 60.0)
+	while x < W:
+		var fx := int(x)
+		_fern(f, h, fx, int(roundf(_edge(fx))) - y0, rng.randi_range(6, 11))
+		x += rng.randf_range(50.0, 120.0)
 	return f
 
 
@@ -681,8 +787,8 @@ func _to_img(f: PackedFloat32Array, w: int, h: int) -> Image:
 func _preview(imgs: Dictionary, path: String) -> void:
 	var comp := Image.create(960, 540, false, Image.FORMAT_RGBA8)
 	comp.fill(Color(0.016, 0.03, 0.035))
-	for pname: String in ["far", "ridge", "forest", "verge", "foreground"]:
+	for pname: String in ["far", "ridge", "forest", "verge", "near", "foreground"]:
 		var img: Image = imgs[pname]
 		var g: Vector2i = PLANES[pname]
-		comp.blend_rect(img, Rect2i(0, 0, 960, g.y), Vector2i(0, g.x))
+		comp.blend_rect(img, Rect2i(0, 0, 960, g.y), Vector2i(0, g.x + 40))
 	comp.save_png(path)

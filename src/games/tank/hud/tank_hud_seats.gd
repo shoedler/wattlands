@@ -17,11 +17,46 @@ extends TankHudCtl
 ## TANK_V3_RACK=<0..3> the ready rack. TANK_V3_HUD=A|B picks the layout (TankHud.spec).
 
 const SEATS: Array[Dictionary] = [
-	{"id": "drive", "label": "DRIVE", "short": "DRV", "mech": "diesel", "icon": "diesel"},
-	{"id": "gun", "label": "GUN", "short": "GUN", "mech": "dynamo", "icon": "dynamo"},
-	{"id": "loader", "label": "LOADER", "short": "LDR", "mech": "steam", "icon": "steam"},
-	{"id": "lights", "label": "LIGHTS", "short": "LGT", "mech": "arc", "icon": "arc"},
-	{"id": "secondaries", "label": "SECONDARY", "short": "SEC", "mech": "feed", "icon": "feed"},
+	{
+		"id": "drive",
+		"mode": "SIM",
+		"label": "DRIVE",
+		"short": "DRV",
+		"mech": "diesel",
+		"icon": "diesel"
+	},
+	{
+		"id": "gun",
+		"mode": "ERG",
+		"label": "GUN",
+		"short": "GUN",
+		"mech": "dynamo",
+		"icon": "dynamo"
+	},
+	{
+		"id": "loader",
+		"mode": "SIM",
+		"label": "LOADER",
+		"short": "LDR",
+		"mech": "steam",
+		"icon": "steam"
+	},
+	{
+		"id": "lights",
+		"mode": "ERG",
+		"label": "LIGHTS",
+		"short": "LGT",
+		"mech": "arc",
+		"icon": "arc"
+	},
+	{
+		"id": "secondaries",
+		"mode": "SIM",
+		"label": "SECONDARY",
+		"short": "SEC",
+		"mech": "feed",
+		"icon": "feed"
+	},
 ]
 const ENGINE_SEAT := {"diesel": 0, "bulwark": 0, "dynamo": 1, "steam": 2, "arc": 3}
 const LOCK_S := 60.0
@@ -329,6 +364,7 @@ func _card(d: Dictionary, r: Rect2) -> void:
 		D.rect(self, yr, D.AMBER)
 		D.text(self, yr.position.x + 4, yr.position.y + 2, you, D.PANEL)
 		_lock(Vector2(fr.position.x + 4, fr.end.y - 15))
+	_mode_tag(str(d["mode"]), Vector2(fr.end.x - 3, r.position.y + 13), empty)
 	if str(d["id"]) in ["loader", "gun"]:
 		_rack_pips(Vector2(fr.end.x - 21, fr.end.y - 13), true)
 	if str(d["id"]) == "secondaries" and not empty:
@@ -383,6 +419,15 @@ func _footer(d: Dictionary, sr: Rect2, edge: Color) -> void:
 	var nm := D.fit_tall(str(d["name"]), sr.size.x - 12.0 - D.tall_w(wtxt) - 9.0)
 	D.tall(self, sr.position.x + 12, sr.position.y + 4, nm, D.slot_text(slot_col))
 	D.rect(self, Rect2(sr.position.x, sr.end.y - 1, sr.size.x, 2), state_col)
+
+
+## r2: the seat's trainer mode (ERG or SIM) as a tiny dim tag in the window's top-right corner
+## (right end at `p`), in the 5 x 7 stencil face.
+func _mode_tag(mode: String, p: Vector2, empty: bool) -> void:
+	var tw := D.text_w(mode) + 4.0
+	var r := Rect2(p.x - tw, p.y, tw, 10)
+	D.rect(self, r, Color(D.PANEL, 0.82))
+	D.text(self, r.position.x + 2, r.position.y + 1, mode, Color("#6b5d48") if empty else D.DIM)
 
 
 ## Your seat's switch lock: a padlock and the seconds left, or an open lamp once you may move.
