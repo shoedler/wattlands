@@ -88,7 +88,22 @@ func test_game_json_is_exactly_the_brief() -> void:
 	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 4])
 	assert_eq(m["version"], "0.2.0")
 	assert_false(m["bots"], "no bots (brief 0.3)")
-	assert_eq(m["contents"], ["ashfall_road", "drill"])
+	assert_eq(
+		m["contents"],
+		["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
+		"brief 2.2's order"
+	)
+	var cards: Dictionary = m.get("content_cards", {})
+	assert_eq(cards.keys().size(), 7, "a card per content")
+	assert_true(bool(cards["ashfall_road"]["featured"]))
+	assert_true(bool(cards["roam_30"]["featured"]), "Free Roam 30 min is featured")
+	for id: String in ["roam_10", "roam_20", "roam_45", "roam_60", "drill"]:
+		assert_false(bool(cards[id].get("featured", false)), id)
+	for id2: String in ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]:
+		assert_eq(cards[id2]["image"], "res://assets/tank/v2/card_roam.png", id2)
+		assert_eq(cards[id2]["detail"], "TANK_CARD_ROAM", id2)
+	for c: String in cards:
+		assert_true(ResourceLoader.exists(str(cards[c]["image"])), "%s card image exists" % c)
 	assert_eq(
 		[m["default_content"], m["e2e_content"], m["zero_input_content"]],
 		["ashfall_road", "drill", "ashfall_road"]
