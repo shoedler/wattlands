@@ -45,12 +45,14 @@ func numbers(r: TankRiderState) -> Dictionary:
 	return n
 
 
-## The plan's ERG target in W when no telemetry says it (the dynamo's bank target, an ERG
-## entry's target_pct); 0 in SIM.
+## The ERG target in W when no telemetry says it (the rider's target_pct from the host, else the
+## dynamo's bank target or the plan entry's target_pct); 0 in SIM.
 func _plan_target_w(r: TankRiderState) -> float:
 	var s := st()
 	if TankHudModel.plan_mode(s, r.engine) != Wl.ERG:
 		return 0.0
+	if r.target_pct > 0.0:
+		return r.target_pct / 100.0 * r.ftp
 	if r.engine == TankIds.ENGINE_DYNAMO:
 		var d := s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
 		if d != null:

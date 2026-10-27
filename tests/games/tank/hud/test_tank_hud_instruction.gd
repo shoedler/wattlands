@@ -153,9 +153,13 @@ func test_the_telegraph_list_has_every_shooter_with_its_full_length() -> void:
 func test_the_power_ratio_is_watts_over_the_riders_target_in_one_helper() -> void:
 	var r := TankRiderState.new()
 	r.ftp = 200.0
+	r.target_pct = 0.0
 	assert_almost_eq(TankHudModel.power_ratio(r, 181.0), 1.0, 1e-3, "90.5 % FTP is on target")
 	assert_almost_eq(TankHudModel.power_ratio(r, 0.0), 0.0, 1e-6)
 	assert_almost_eq(TankHudModel.power_ratio(r, 1000.0), 1.6, 1e-6, "TankMech's ceiling")
+	r.target_pct = 70.0
+	assert_almost_eq(TankHudModel.power_ratio(r, 140.0), 1.0, 1e-6, "raw W / (target_pct x FTP)")
+	assert_almost_eq(TankHudModel.power_ratio(r, 182.0), 1.3, 1e-6)
 	assert_eq(TankHudModel.band_state(true, 2.0), 0)
 	assert_eq(TankHudModel.band_state(false, 1.3), 1)
 	assert_eq(TankHudModel.band_state(false, 0.5), -1)

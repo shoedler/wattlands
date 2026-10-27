@@ -58,7 +58,7 @@ func test_the_crew_row_has_one_card_per_rider_in_room_order() -> void:
 		assert_eq(shown, order, "rear to front, as the rooms")
 	var bastion := X.state(4)
 	var row4 := TankHudModel.crew_cards(bastion, 1)
-	assert_eq(str(row4[-1]["engine"]), "arc")
+	assert_eq(str(row4[-1]["engine"]), TankIds.ENGINE_ARC)
 	assert_eq(str(row4[-1]["mech"]), "arc", "TankMech paints the arc generator")
 
 
