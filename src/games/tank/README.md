@@ -1,32 +1,38 @@
 # Diesel Domestiques (`tank`)
 
-One to three riders crew a pedal-powered super-heavy tank through burning countryside toward an enemy super-heavy, one engine each: the diesel drives, the dynamo aims, the steam engine loads. A solo rider gets the Bulwark, whose diesel does everything through a three-way gearbox. Presentation `2d` (a dark 2.5D cutaway diorama at 640 x 360), version 0.1.0, 1 to 3 riders, no bots. Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
+One to four riders crew a pedal-powered landship through a starry forest night, one engine each: the diesel drives, the dynamo aims, the steam engine loads, the arc generator lights the searchlights and feeds the bow guns. A solo rider gets the Bulwark, whose diesel does everything through a three-way gearbox. Presentation `2d` (the reference's night diorama at 960 x 540; the rules keep 640 x 360 units), version 0.2.0, 1 to 4 riders, no bots. Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
 
 Status: P0 complete. Every crew size plays Ashfall Road (30 to 41 minutes) to the results with zero input. The art is procedural placeholders (no fal run was made) and the sound is synthesized. Nothing has run on a real trainer (see "Known gaps and P2 notes").
 
 ## How to play
 
 - **Pedal.** Your watts (P_eff) run your engine. Each station is lit and its machinery turns on your cadence; the room glows and its wall lamp lights when you are "in band".
-- **Crew size picks the tank.** 1 rider: Bulwark (192 x 72 hull); 2: Rampart (240 x 76, diesel and dynamo); 3: Citadel (288 x 80, diesel, dynamo and steam, plus fore and aft secondary guns). Slot 0 starts on the diesel, slot 1 on the dynamo, slot 2 on the steam engine. The `rotation` option (lobby toggle, default on) moves every rider to the next engine at each checkpoint; with it off nobody moves.
-- **Diesel** (the Bulwark's gearbox when solo): SIM. The tank's speed is your SIM speed; in band is 76-105 % of FTP. In an Advance, `ability_1` (or a `surge` pedal gesture) opens a 10 s Ram window (30 s cooldown); reaching a light tank or a barricade within 120 px while your last 3 s average at least 1.2 x FTP destroys it, otherwise a window with a target in reach costs 10 HP and a 5 s stall. At a gun line the tracks lock and you "dig in" at ERG 90 %: in band you build a mud berm that absorbs hits (1 HP per 250 J, max 40). In the boss fight a Ram is a short lunge, and a sprint held 3 s inside the main gun's 6 s telegraph makes that shot miss ("Surge to dodge").
-- **Dynamo** (gunner): ERG. The target is its capacitor bank: it starts at 55 % FTP and climbs to 100 % as the bank drains. Power at 95 % of the target and cadence 60 charges the bank (1 unit per 150 J). The bank pays for stabilizing the gun while an enemy is on screen, elevation, traverses, the Rampart's hoist and the Citadel's secondaries. Auto-aim picks targets and fires; `left` / `right` cycle targets, `up` / `down` nudge the elevation (auto-aim pauses 5 s), `ability_2` traverses the turret to the other side, `confirm` fires.
+- **Crew size picks the tank.** 1 rider: Bulwark (220 x 71 rules px hull); 2: Rampart (251 x 71, diesel and dynamo); 3: Citadel (296 x 71, diesel, steam and dynamo); 4: Bastion (327 x 71, the Citadel plus an arc-generator room and a searchlight tower). Every tank has two bow guns in its nose. Slot 0 starts on the diesel, slot 1 on the dynamo, slot 2 on the steam engine, slot 3 on the arc generator. The `rotation` option (lobby toggle, default on) moves every rider to the next engine at each checkpoint (diesel, dynamo, steam, arc, among the tank's engines); with it off nobody moves.
+- **Surge to evade.** Some enemy shots are telegraphed: a tank destroyer's 4 s glint, a heavy tank's 3 s muzzle glow, a light tank's 2.5 s flank shot (its first shot at its hold distance, 8 damage), the Behemoth's 6 s main gun. If any rider who can evade (in a SIM WORK phase past the first 300 s: the diesel, the steam engine, the Bulwark) holds the sprint rule (their last 3 s average at least 1.2 x FTP) for 2 s inside the telegraph (3 s for the Behemoth), the shot misses. There is no button: your legs are the input, so the Autopilot never evades.
+- **Diesel** (the Bulwark's gearbox when solo): SIM. The tank's speed is your SIM speed; in band is 76-105 % of FTP. At a gun line the tracks lock and you "dig in" at ERG 90 %: in band you build a mud berm that absorbs hits (1 HP per 250 J, max 40).
+- **Dynamo** (gunner): ERG. The target is its capacitor bank: it starts at 55 % FTP and climbs to 100 % as the bank drains. Power at 95 % of the target and cadence 60 charges the bank (1 unit per 150 J). The bank pays for stabilizing the gun while an enemy is on screen (the Bastion's heavier turret more), elevation, traverses, the Rampart's hoist and the bow guns of the Rampart and the Citadel (2 units a burst, none below 10).
+- **Arc generator** (the Bastion): ERG 65 to 80 %: the target lifts with the arc load, the share of the last 10 s the bow guns fired (65 + 15 x duty). In band (power at 95 % of the target, cadence 60) the searchlights are lit (the main gun's dispersion halves) and the bow guns fire every 2 s; under band every 4 s; on reserve or stalled not at all. Auto-aim picks targets and fires; `left` / `right` cycle targets, `up` / `down` nudge the elevation (auto-aim pauses 5 s), `ability_2` traverses the turret to the other side, `confirm` fires.
 - **Steam** (the Citadel's loader): SIM flat. Pressure builds with your watts (100 % = 4.5 kJ) and the boiler adds resistance as it builds (8 % x pressure). At 100 % a heavy shell latches after a 5 s window ("Surge to overpressure" inside it builds up to 150 % on a sprint, for a double-damage shell); `confirm` latches a light shell from 40 %. Each latch drops the boiler grade to 0 for the 6 s breech cycle. In band is 90 % FTP while building, cadence 50 while a shell is loaded or cycling.
 - **Bulwark gearbox** (solo): the lever sits on Drive, Turret or Hoist (`left` / `right` / `swap` move it, 1 s with no power anywhere). The auto-lever (default on) picks Hoist when unloaded with a target in range, Turret when loaded and off target, otherwise Drive; a manual move suspends it for 15 s. Hoist adds a 4 % grade on top of the terrain in an Advance.
-- **Zero input works.** The defaults play every station: the diesel drives on watts and digs in, auto-aim aims and fires, the boiler latches a heavy shell at 100 %, the auto-lever runs the Bulwark. The Autopilot adds rear traverses and obstacle shots; it never latches early, moves the lever by hand, Rams, dodges or Overpressures, and never changes effort. A human counts as Autopilot until their first deliberate `lever`, `aim`, `target`, `traverse`, `fire` or `latch` intent (a `ram` or `over` never ends it).
+- **Zero input works.** The defaults play every station: the diesel drives on watts and digs in, auto-aim aims and fires, the boiler latches a heavy shell at 100 %, the auto-lever runs the Bulwark. The bow guns fire on their own. The Autopilot adds rear traverses and obstacle shots; it never latches early, moves the lever by hand, sprints (so never evades) or Overpressures, and never changes effort. A human counts as Autopilot until their first deliberate `lever`, `aim`, `target`, `traverse`, `fire`, `latch` or `turn` intent (an `over` never ends it).
 - **Reserve and AFK.** A rider who stops pedaling gets the floor after 3 s, the platform's pause symbol and a stopped ride timer after 5 s (BRIEF 3.5), and goes AFK after 10 s; a dropped peer is AFK at once. That station runs on reserve (as if 60 W, never in band) under the Autopilot and keeps its plan until the rider returns. When every rider in the crew has stopped, the host pauses the game (`all_stopped`) until one pedals again. A solo rider who stops pedaling pauses after 5 s.
-- **Rescue.** A cadence collapse in a dynamo phase at 60 % of FTP or more, or in any 90 % gun line, arms the platform's rescue (target 50 %): the dynamo stalls (turret frozen, bank not charging, toast "Dynamo stalled"), the Bulwark's gun line gives nothing power, the berm stops growing. The plan continues.
+- **Rescue.** A cadence collapse in a dynamo or arc phase at 60 % of FTP or more, or in any 90 % gun line, arms the platform's rescue (target 50 %): the dynamo stalls (turret frozen, bank not charging, toast "Dynamo stalled"), the arc generator stalls (bow guns stop, searchlights dark, toast "Arc generator stalled"), the Bulwark's gun line gives nothing power, the berm stops growing. The plan continues.
 
 ## Rules summary
 
-Numbers are the current content (`content/tank/*.json`) after the G2 balance pass; where they differ from the brief, the ADRs "G1 rules: balance retune" and "Balance iteration 1" in `docs/decisions/tank.md` name the number and the evidence.
+Numbers are the current content (`content/tank/*.json`) after the v2 rules pass (P4); where they differ from the brief, the ADRs "G1 rules: balance retune", "Balance iteration 1" and the P4 rules entries in `docs/decisions/tank.md` name the number and the evidence.
 
 **The session**: depot, then three stages of (Advance, gun line, checkpoint), then the boss, then the platform's 180 s cool-down. Every phase is a FIT lap (12 laps). Advances, gun lines and the boss are open-ended: once the objective is done and `min_s` has passed ("Regroup" until then), the director ends the phase for every rider in one step; the platform cuts it at `max_s`, which is an overrun and costs score (an Advance tows the tank to the halt line, a gun line is finished by a support barrage, the Behemoth withdraws).
 
 **Objectives**: an Advance is done when the tank has driven the segment's `length_m` to the halt line; a gun line when every gun is down (the dozer then shoves the tank traps aside); the boss when the Behemoth dies (`victory`). If the boss reaches `max_s` the Behemoth withdraws (`withdrawn`). The ride itself never fails.
 
-**Drive**: the SIM speed model (BRIEF 3.11) with mass = rider mass + 8 kg and CdA 0.5 m2, on the terrain grade under the tank; the world scrolls at 0.4 x game speed, 20 art px per visual metre. While the driver is in band, enemy hit chances are x 0.5 (evasive). A barricade stops the tank 260 px short of it, where the gun can reach; a Ram, a heavy shell or three light shells clears it.
+**Drive**: the SIM speed model (BRIEF 3.11) with mass = rider mass + 8 kg and CdA 0.5 m2, on the terrain grade under the tank; the world scrolls at 0.4 x game speed, 20 art px per visual metre. While the driver is in band, enemy hit chances are x 0.5 (evasive). A barricade (wire, a wreck) stops the tank 180 px short of it, where the main gun and the bow guns reach; a heavy shell, three light shells or 4 s of bow-gun fire clears it.
 
-**Gun**: the main turret faces right or left; a traverse flips it. Elevation -5 to +30 degrees, shells fly 360 px/s under 300 px/s2 gravity and inherit the hull's speed. Auto-aim priority: tank destroyer in telegraph, dug-in, heavy, medium, light, obstacle, nearer first (lower arc, with lead); it fires within 0.5 degrees once a shell is loaded. Damage: light 20, heavy 50, Overpressure 100; splash 16 px at 50 %. Mediums take 50 % from light shells and secondaries; heavies, destroyers and the Behemoth take 25 % from them. Citadel secondaries do 5 every 3 s to the nearest enemy within 240 px. The main gun cannot depress onto anything nearer than about 230 px: rear light tanks are Ram prey, and the Citadel's aft secondary shoots them.
+**Gun**: the main turret faces right or left; a traverse flips it. Elevation -12 to +30 degrees, shells fly 360 px/s under 300 px/s2 gravity and inherit the hull's speed; the solver reaches a light tank at its hold distance from every tank (tested). Auto-aim priority: tank destroyer in telegraph, dug-in, heavy, medium, light, obstacle, nearer first (lower arc, with lead); it fires within 0.5 degrees once a shell is loaded. Damage: light 20, heavy 50, Overpressure 100; splash 16 px at 50 %. Mediums take 50 % from light shells and bow-gun bursts; heavies, destroyers and the Behemoth take 25 % from them.
+
+**Bow guns** (every tank): a 5-damage burst every 2 s at the nearest enemy (or Behemoth part) ahead whose near edge is 40-220 px off the hull front, else a barricade there; hitscan. Power: the Bastion's arc generator (full rate in band, half under band, none on reserve or stalled), the Rampart's and the Citadel's dynamo bank (2 units a burst, none below 10), the Bulwark's gearbox (half rate, free). Rear light tanks are out of every gun's reach; they break off after 45 s.
+
+**Lanes**: every enemy holds its position in one of four depth lanes, and no two held positions on one side and lane overlap (the view draws the lanes).
 
 **Enemies** (HP and counts x 0.75 Bulwark, 0.8 Rampart, 1.0 Citadel, counts rounded, at least 1):
 
@@ -39,7 +45,7 @@ Numbers are the current content (`content/tank/*.json`) after the G2 balance pas
 | Heavy tank | 100 | gun-line duel at 300-380 px, 3 s telegraph, backs off 30 px per 50 damage | 7 / 7 s / 60 % |
 | Behemoth (boss) | 3 bogies x 50, turret 270 | creeps to 150 px, each broken bogie pushes it back 24 px, phase 2 immobile; main gun every 35-45 s (25-35 s in phase 2) after a 6 s telegraph | main 13 / 75 %, secondary 2 every 5 s / 50 % |
 
-Caps: 16 enemies, 24 shells. Enemy hits roll with `ctx.rng` at fire time; the shell lands on the tank or 20-40 px off. Encounters come only from the mission's fixed lists.
+Telegraphed shots (destroyer, heavy, the light's first shot at its hold, the Behemoth's main gun) can be evaded (How to play). Caps: 16 enemies, 24 shells. Enemy hits roll with `ctx.rng` at fire time; the shell lands on the tank or 20-40 px off. Encounters come only from the mission's fixed lists.
 
 **Hull**: 140 HP, +30 at each checkpoint (the maximum rises by 30 and it heals 30). At 0 HP: breakdown (no movement or fire, damage ignored) until the driving station's P_eff has paid 5 kJ, then 40 HP.
 
@@ -52,25 +58,28 @@ Every rider has a plan of the same shape. Targets are % FTP; the platform's gove
 | Segment (kind, length) | Diesel | Dynamo | Steam | Bulwark |
 | --- | --- | --- | --- | --- |
 | Depot (WARMUP, 300 s) | SIM, terrain 0 to +2 % | ERG 50 % ramping to 65 % | SIM flat, boiler 3 % x pressure | SIM, terrain 0 to +2 %, Hoist 1 % |
-| Advance (WORK, nominal 180 s, `min_s` 90, `max_s` 300) | SIM, terrain -3 to +6 %; Ram sprints | ERG 55 %, `range_pct` [55, 100] (the bank) | SIM flat, boiler 8 % x min(pressure, 1); Overpressure sprints | SIM, terrain + Hoist 4 %; Ram sprints |
+| Advance (WORK, nominal 180 s, `min_s` 90, `max_s` 300) | SIM, terrain -3 to +6 %; evade sprints | ERG 55 %, `range_pct` [55, 100] (the bank) | SIM flat, boiler 8 % x min(pressure, 1); Overpressure and evade sprints | SIM, terrain + Hoist 4 %; evade sprints |
 | Gun line (WORK, 120 s, 60-180) | **ERG 90 %** | the bank, as the Advance | the boiler, as the Advance | **ERG 90 %**; Hoist sends nothing |
 | Checkpoint (RECOVERY, 60 s) | ERG 50 % | ERG 50 % | ERG 50 % | ERG 50 % |
-| Boss (WORK, 240 s, 120-360) | SIM flat; dodge sprints | the bank | the boiler | SIM flat + Hoist 4 % or 0; dodge sprints |
+| Boss (WORK, 240 s, 120-360) | SIM flat; evade sprints | the bank | the boiler; evade sprints | SIM flat + Hoist 4 % or 0; evade sprints |
 | Cool-down (appended, 180 s) | ERG 50 %; Tank sends nothing | | | |
 
-Nominal 300 + 3 x (180 + 120 + 60) + 240 + 180 = 1800 s; at most 2460 s. A checkpoint already carries the next segment's engine. Rotation rows (stage 1, 2, 3, boss): Rampart slot 0 diesel, dynamo, diesel, dynamo and slot 1 the reverse; Citadel slot 0 diesel, dynamo, steam, diesel, slot 1 dynamo, steam, diesel, dynamo, slot 2 steam, diesel, dynamo, steam. The `drill` plan (130 s) uses `stations.json` `drill_plans` and ignores rotation.
+The arc generator (Bastion): depot ERG 50 % ramping to 65 %, Advance, gun line and boss ERG 65 % with `range_pct` [65, 80] (the arc load), checkpoints 50 %.
+
+Nominal 300 + 3 x (180 + 120 + 60) + 240 + 180 = 1800 s; at most 2460 s. A checkpoint already carries the next segment's engine. Rotation rows (stage 1, 2, 3, boss): Rampart slot 0 diesel, dynamo, diesel, dynamo and slot 1 the reverse; Citadel slot 0 diesel, dynamo, steam, diesel, slot 1 dynamo, steam, diesel, dynamo, slot 2 steam, diesel, dynamo, steam; Bastion slot s works engine (s + k) mod 4 of diesel, dynamo, steam, arc in stage k + 1 (the boss is k = 3). The `drill` plan (130 s) uses `stations.json` `drill_plans` and ignores rotation.
 
 **Directives** (all through `ctx.directives`, `source: "tank"`, sent only by `TankDirector`):
 
 1. Bank: `{mode: ERG, target_pct: 55 + 45 x (1 - bank/100), reason: "bank"}` clamped to the phase's `range_pct`; an update every 5 s moves at most 10 points and is sent as three sub-steps 1 s apart (at most 3.3 % FTP per second); none in the depot or checkpoints.
-2. Boiler: `{mode: SIM, mode_grade: 8 % x min(pressure, 1), reason: "boiler"}` (3 % in WARMUP), at most once per second, rises at most 0.5 % per step, drops to 0 in one step at a latch and stays 0 while a shell is loaded or cycling; only in SIM phases.
-3. Hoist (Bulwark): `{mode: SIM, mode_grade: 4 % (1 % in WARMUP), reason: "hoist"}` rising 1 % per second from reaching Hoist, 0 at once on leaving; none in a gun line.
-4. Terrain: `course_grade` at 2 Hz in `grade_source: game` phases, the grade under the tank (one sampler, `TankTerrain`).
-5. `cadence_band(60, 120)` at every segment start, (50, 120) while the loader's shell is loaded or cycling in a WORK phase; `power_band` 76-105 % FTP for diesel and Bulwark riders in WORK SIM phases.
-6. Haptics: a hit of 8 damage or more +2.0 % for 1.5 s to every rider in SIM; a Behemoth main-gun hit +3.0 % for 2.0 s to every rider in SIM; a Ram impact +3.0 % for 1.0 s to the driver. Never in WARMUP, the first 300 s or the cool-down, never to an ERG rider or one who opted out; 15 s apart. The governor scales them by the rider's intensity setting.
-7. `end_phase` once the objective is done and `min_s` has passed; nothing in the cool-down.
+2. Arc: `{mode: ERG, target_pct: 65 + 15 x duty, reason: "arc"}` clamped to the phase's `range_pct`, on the bank's schedule (every 5 s, at most 10 points, three sub-steps 1 s apart); none in the depot or checkpoints.
+3. Boiler: `{mode: SIM, mode_grade: 8 % x min(pressure, 1), reason: "boiler"}` (3 % in WARMUP), at most once per second, rises at most 0.5 % per step, drops to 0 in one step at a latch and stays 0 while a shell is loaded or cycling; only in SIM phases.
+4. Hoist (Bulwark): `{mode: SIM, mode_grade: 4 % (1 % in WARMUP), reason: "hoist"}` rising 1 % per second from reaching Hoist, 0 at once on leaving; none in a gun line.
+5. Terrain: `course_grade` at 2 Hz in `grade_source: game` phases, the grade under the tank (one sampler, `TankTerrain`).
+6. `cadence_band(60, 120)` at every segment start, (50, 120) while the loader's shell is loaded or cycling in a WORK phase; `power_band` 76-105 % FTP for diesel and Bulwark riders in WORK SIM phases.
+7. Haptics: a hit (the content's `haptics.hit.min_damage`) +2.0 % for 1.5 s to every rider in SIM; a Behemoth main-gun hit +3.0 % for 2.0 s to every rider in SIM; an evaded shot is a miss, so no haptic. Never in WARMUP, the first 300 s or the cool-down, never to an ERG rider or one who opted out; 15 s apart. The governor scales them by the rider's intensity setting.
+8. `end_phase` once the objective is done and `min_s` has passed; nothing in the cool-down.
 
-Ram, dodges and Overpressure send nothing: the rider sprints inside the phase's own SIM. They are off in WARMUP phases and the first 300 s.
+Evade and Overpressure sprints send nothing: the rider sprints inside the phase's own SIM. They are off in WARMUP phases, ERG phases and the first 300 s.
 
 ## Content
 
@@ -85,9 +94,9 @@ Every file is JSON, validated at load by `TankContentSchema` (`contracts/tank_co
 
 | File | Holds |
 | --- | --- |
-| `tanks.json` | `tanks` (code, crew, hull size, engines, turrets, `enemy_scale`), `hull`, `drive`, `ram`, `berm`, `in_band`, `dynamo`, `steam`, `gearbox`, `gun`, `damage`, `secondary`, `caps`, `props`, `drill` |
-| `stations.json` | engines and start engines, `rotation` rows, `plans` per engine and segment type, `drill_plans`, `terrain`, `bank`, `boiler`, `hoist`, `cadence_band`, `haptics` |
-| `enemies.json` | `types` (light, medium, destroyer, dugin, heavy: HP, size, hold distance, speed, gun) and the `boss` (bogies, turret, main and secondary guns, telegraph), shell speed, miss distance |
+| `tanks.json` | `tanks` (code, crew, hull size, engines, turrets, `enemy_scale`, the Bastion's `stabilizer_per_s`), `hull`, `drive`, `evade`, `berm`, `in_band`, `power_ratio`, `dynamo`, `steam`, `gearbox`, `gun`, `damage`, `bow`, `arc`, `caps`, `props`, `drill` |
+| `stations.json` | engines and start engines, `rotation` rows, `plans` per engine and segment type, `drill_plans`, `terrain`, `bank`, `arc`, `boiler`, `hoist`, `cadence_band`, `haptics` |
+| `enemies.json` | `types` (light, medium, destroyer, dugin, heavy: HP, size, preferred `lane`, hold distance, speed, gun, the light's telegraphed `flank` shot) and the `boss` (bogies, turret, main and secondary guns, telegraph), shell speed, miss distance, `lanes` |
 | `missions/<id>.json` | `id`, `label`, `rotation`, `plan_table`, `segments[]` (`id`, `type`, `stage`, `kind`, `duration_s`, `min_s`, `max_s`, `length_m`, `terrain` as `[distance_m, grade_pct]` points, `encounters[]` with `at_m` / `enemy` / `count` / `from`, `obstacles[]`, gun-line `enemies[]` with `at_px`, `props`, `drills`, `teach`) and the `cooldown` backdrops |
 | `scoring.json` | score weights and scale, objective fractions, survival per breakdown, grade cut-offs, XP |
 | `cosmetics.json` | hull finish unlock rules |
@@ -99,15 +108,18 @@ Everything below is a content number: change it in the file, re-run the matrix (
 
 | Knob | File and key | Now |
 | --- | --- | --- |
-| Enemy HP and count per tank | `tanks.json` `tanks.<tank>.enemy_scale` | Bulwark 0.75, Rampart 0.8, Citadel 1.0 |
+| Enemy HP and count per tank | `tanks.json` `tanks.<tank>.enemy_scale` | Bulwark 0.75, Rampart 0.8, Citadel 1.0, Bastion 1.2 |
 | Hull toughness | `tanks.json` `hull.hp`, `hull.checkpoint_hp`, `hull.repair_j` | 140, 30, 5000 |
 | What driving in band avoids | `tanks.json` `drive.evasive_hit_mult` | 0.5 |
 | Enemy guns | `enemies.json` `types.<t>.gun`, `boss.main` | see the table above |
 | Dynamo bank | `tanks.json` `dynamo.stabilizer_per_s`, `per_traverse`, `per_degree`, `hoist_s` | 1.5, 15, 0.5, [22, 11] |
 | Steam fill and latch | `tanks.json` `steam.full_j`, `window_s`, `breech_cycle_s` | 4500, 5, 6 |
 | Bulwark gearbox | `tanks.json` `gearbox.hoist_j`, `auto_drive_clear_px`, `manual_suspend_s` | 4000, 340, 15 |
-| Ram | `tanks.json` `ram.window_s`, `cooldown_s`, `reach_px`, `sprint_ftp`, `fail_damage` | 10, 30, 120, 1.2, 10 |
-| Bank, boiler, hoist, terrain and haptic directive shape | `stations.json` `bank`, `boiler`, `hoist`, `terrain`, `haptics` | schema-bounded |
+| Surge to evade | `tanks.json` `evade.sprint_window_s`, `hold_s`, `boss_hold_s`; telegraphs `enemies.json` `types.<t>.telegraph_s`, `types.light.flank`, `boss.main.telegraph_s` | 3, 2, 3; 4 / 3 / 2.5 / 6 s |
+| Bow guns | `tanks.json` `bow` | 5 every 2 s, 40-220 px, 2 units a burst, under band 0.5, Bulwark 0.5, 4 s to clear |
+| Arc generator | `tanks.json` `arc.lit_dispersion_mult`; `stations.json` `arc` | 0.5; 65 + 15 x duty |
+| Bank, arc, boiler, hoist, terrain and haptic directive shape | `stations.json` `bank`, `arc`, `boiler`, `hoist`, `terrain`, `haptics` | schema-bounded |
+| Spacing | `enemies.json` `lanes` | 4 lanes, 8 px gaps |
 | Stage length and enemy lists | `missions/ashfall_road.json` `segments[].length_m`, `encounters`, `enemies`, `at_px` | Advances 1100 / 1200 / 950 m |
 | Boss pacing | `enemies.json` `boss`; the mission's boss `start_left_px` and `end_hold_s` | `end_hold_s` 6.5 |
 | Score and grades | `scoring.json` | as above |
