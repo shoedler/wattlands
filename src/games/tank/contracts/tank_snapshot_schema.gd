@@ -28,7 +28,10 @@ extends RefCounted
 ##  "o":  [[id, obstacle code, x_px, light_hits, cleared 0/1], ...]
 ##  "gl": [active 0/1, guns_total, guns_left, barrage 0/1],
 ##  "b":  [boss phase, x_dpx, bogie hp x3, turret hp, telegraph_ms]   (all 0 without a boss)
-##  "sc": [breakdowns, overruns, behemoth killed 0/1, crew kills]}
+##  "sc": [breakdowns, overruns, behemoth killed 0/1, crew kills],
+##  "rm": [map seed, map_dm (hull centre on the valley road, 0.1 m), turn_ms, turn_cd_ms, end_ms,
+##         flags RMF_*, points, strongpoints down (bit i = spot i), odo_m, work_m]}
+##        (free roam only, brief 2.10: optional, sent only while TankRoamState.active; additive in v2)
 
 const VERSION := 2
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
@@ -173,6 +176,26 @@ const SC_BEHEMOTH := 2
 const SC_CREW_KILLS := 3
 const SC_LEN := 4
 
+# rm columns and flags (free roam, optional key)
+const RM_KEY := "rm"
+const RM_SEED := 0
+const RM_MAP_DM := 1
+const RM_TURN_MS := 2
+const RM_TURN_CD_MS := 3
+const RM_END_MS := 4
+const RM_FLAGS := 5
+const RM_POINTS := 6
+const RM_DOWN := 7
+const RM_ODO_M := 8
+const RM_WORK_M := 9
+const RM_LEN := 10
+const RMF_ACTIVE := 1
+const RMF_TIME_UP := 2
+const RMF_OVERTIME := 4
+const RMF_ENGAGING := 8
+const RMF_END_WEST := 16
+const RMF_END_EAST := 32
+
 ## int_fields()["snapshot"] (GAME_SDK 12): every number in the snapshot.
 const INT_PATHS: Array[String] = [
 	"v",
@@ -187,6 +210,7 @@ const INT_PATHS: Array[String] = [
 	"gl[]",
 	"b[]",
 	"sc[]",
+	"rm[]",
 ]
 
 
@@ -206,6 +230,9 @@ static func check(snap: Dictionary) -> String:
 		for row: Variant in snap[spec[0]]:
 			if not (row is Array) or (row as Array).size() != int(spec[1]):
 				return "%s: a row needs %d columns" % [spec[0], int(spec[1])]
+	if snap.has(RM_KEY):
+		if not (snap[RM_KEY] is Array) or (snap[RM_KEY] as Array).size() != RM_LEN:
+			return "rm needs %d columns" % RM_LEN
 	if (snap["e"] as Array).size() > TankConst.MAX_ENEMIES:
 		return "e: more than %d enemies" % TankConst.MAX_ENEMIES
 	if (snap["s"] as Array).size() > TankConst.MAX_SHELLS:

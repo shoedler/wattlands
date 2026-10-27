@@ -80,6 +80,30 @@
 		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
+	"roam_plans": {
+		"_doc": "Free roam (brief 2.10): the drive-out is the depot's targets and models (WARMUP, no enemies); the roam is one open-ended WORK phase per rider on the engine of its slot for the whole session (no rotation): the diesel SIM game on the valley's grade, the dynamo ERG 55% with the bank pattern in range_pct [55, 85], the steam engine SIM flat with the boiler, the arc generator ERG 65% with the arc pattern in [65, 80], the Bulwark the Advance's (SIM game plus the hoist). Every roam phase is longer than 300 s, so BRIEF 4.6.1's 105% cap applies; every bound here is at most 85%.",
+		"diesel": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"roam": {"mode": "SIM", "grade_source": "game"}
+		},
+		"dynamo": {
+			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
+			"roam": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 85]}
+		},
+		"steam": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"roam": {"mode": "SIM", "grade_source": "flat"}
+		},
+		"bulwark": {
+			"depot": {"mode": "SIM", "grade_source": "game"},
+			"roam": {"mode": "SIM", "grade_source": "game"}
+		},
+		"arc": {
+			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
+			"roam": {"mode": "ERG", "target_pct": 65, "range_pct": [65, 80]}
+		},
+		"checkpoint": {"mode": "ERG", "target_pct": 50}
+	},
 	"terrain": {
 		"send_every_s": 0.5,
 		"warmup_grade_pct": [0, 2]
