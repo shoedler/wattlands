@@ -15,6 +15,8 @@
 - Enemies hold their own depth lanes, so no two overlap at a gun line, and the view draws them in the lanes the rules use. Wire and wrecks block the road until they are shot clear.
 - Rebalanced on the simulation matrix for crews 1 to 4: gun-line make-up, enemy HP and guns, and the energy of the steam engine, the gearbox and the Rampart's hoist. A crew of 1 to 4 riders who hold their targets wins Ashfall Road on the Autopilot, every phase inside its target time.
 - New sounds, all synthesized: the arc's crackle, the bow guns' rattle and crickets in the night.
+- Free Roam (`roam_10`, `roam_20`, `roam_30`, `roam_45`, `roam_60`): a 5-minute drive-out, then one engine per rider for the whole session on a seeded 6 km valley of pine forest, lake shore, village, quarry and meadow, driven back and forth (the driver turns the tank around; it turns on its own at a road's end). Random patrols and dug-in strongpoints, crew points per kill and kilometre, time up with up to 5 minutes for a fight in progress, grades by points per minute. A map strip and a time, points and kills board replace the mission plates.
+- The depot yard has a hangar, a gantry and a barrier; the road is lit under the tank; enemies stand on their own banks in depth, wrecks burn charred in the beams, and the turret turns to face the rear whole.
 
 ### Changed (Diesel Domestiques) v0.1.1
 
