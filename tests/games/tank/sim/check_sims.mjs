@@ -106,6 +106,14 @@ export const TICK_S = 0.05;
  * is no sample. test_tank_s2_pause.gd measures the exact anchor in process and pins this value.
  */
 export const FIRST_SAMPLE_MAX_S = 1.1;
+/**
+ * A client's ride pause reaches the host only in its telemetry, sent every GameHost.TELEMETRY_EVERY
+ * (4) ticks: 0.2 s. The shared game-clock pause (BRIEF 3.5: only while every human rider is paused)
+ * can therefore come up to one telemetry interval after the last rider's own 10 s pause. That pause
+ * is a game-clock convenience, not a BRIEF 4.6 rule: each rider's own coasting floor, ride pause and
+ * AFK stay bound to 10 s + 1 tick (test_tank_s2_pause.gd, the solo run, the platform's scenarios).
+ */
+export const SHARED_PAUSE_TELEMETRY_S = 0.2;
 export const GRADE_ORDER = ['S', 'A', 'B', 'C', 'D'];
 const EPS = 1e-6;
 
@@ -599,8 +607,8 @@ export function checkS2(reports) {
       probs.push(`${n}: never paused for ${SHARED_PAUSE_REASON}`);
     } else {
       const last = Math.max(...firsts.map((f) => notPedalingAnchor(f)));
-      if (num(pauses[0].pt) > last + PAUSE_AFTER_S + TICK_S + EPS) {
-        probs.push(`${n}: paused at ${fmt(num(pauses[0].pt))} s, ${fmt(num(pauses[0].pt) - last)} s after the last rider's first not-pedaling sample at ${fmt(last)} s at the latest (max ${PAUSE_AFTER_S} s + 1 tick)`);
+      if (num(pauses[0].pt) > last + PAUSE_AFTER_S + SHARED_PAUSE_TELEMETRY_S + TICK_S + EPS) {
+        probs.push(`${n}: paused at ${fmt(num(pauses[0].pt))} s, ${fmt(num(pauses[0].pt) - last)} s after the last rider's first not-pedaling sample at ${fmt(last)} s at the latest (max ${PAUSE_AFTER_S} s + one telemetry interval ${SHARED_PAUSE_TELEMETRY_S} s + 1 tick)`);
       }
       if (pauses.some((e) => e.paused === false)) probs.push(`${n}: the shared pause ended, nobody pedaled`);
     }

@@ -410,8 +410,8 @@ test('S2 crew 3 at 0 W fails when the run completes, leaves the depot, never pau
   other.events[0].reason = 'user';
   assert.match(ids(C.checkS2(allS2({ s2_c3_zero: other })).details), /never paused for all_stopped/);
   const late = zeroCrew3();
-  late.events[0].pt = 11.2;
-  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: late })).details), /paused at 11.2/);
+  late.events[0].pt = 11.4;
+  assert.match(ids(C.checkS2(allS2({ s2_c3_zero: late })).details), /paused at 11.4/);
   const edge = zeroCrew3();
   edge.events[0].pt = 11.1;
   assert.equal(C.checkS2(allS2({ s2_c3_zero: edge })).status, 'PASS', '10 s + 1 tick after the latest first notification');
@@ -926,4 +926,10 @@ test('main exits 2 on bad usage, 0 on all-skip, 1 on a failing scenario', () => 
     process.stdout.write = out;
     process.stderr.write = err;
   }
+});
+
+test('S2 crew 3 allows one telemetry interval for the shared pause, not more', () => {
+  const onTime = zeroCrew3();
+  onTime.events[0].pt = 11.25;
+  assert.equal(C.checkS2(allS2({ s2_c3_zero: onTime })).status, 'PASS', 'the last rider pauses at 11.1 s, the host learns it 0.2 s later');
 });
