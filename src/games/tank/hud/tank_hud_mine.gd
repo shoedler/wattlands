@@ -179,9 +179,12 @@ func _cadence() -> void:
 
 func _reserve_and_gear() -> void:
 	D.rect(self, Rect2(4, 76, W - 8, 1), D.FRAME_IN)
-	D.tall(self, 6, 80, tx("TANK_HUD_WPRIME"), D.DIM)
+	# MOCK v3: W' relabelled SPRINT (the bar shortened to fit)
+	var lab := "SPRINT" if TankHud.v3_hud() != "0" else tx("TANK_HUD_WPRIME")
+	var lw := D.tall(self, 6, 80, lab, D.DIM)
 	var wb := float(m["wbal"])
-	D.bar(self, Rect2(30, 82, 76, 5), wb, D.BRASS if wb > 0.25 else D.OVER)
+	var bx := maxf(30.0, roundf(6.0 + lw + 4.0))
+	D.bar(self, Rect2(bx, 82, 106.0 - bx, 5), wb, D.BRASS if wb > 0.25 else D.OVER)
 	var sim := bool(m["sim"])
 	D.tall(self, 117, 80, tx("TANK_HUD_GEAR"), D.DIM)
 	var g := int(m["gear"])

@@ -1,0 +1,479 @@
+class_name TankV3Env
+extends RefCounted
+## MOCK (Diesel Domestiques v3, background: spec item 4). Not for merging as is.
+##
+## The v3 world around the tank: a pine forest road at night (no people anywhere outside the tank),
+## more blue-green, a much stronger tilt-shift baked into the planes at three strengths (moderate,
+## strong, extreme; assets/tank/v3env/planes/<strength>/, baked by assets/tank/v3env/tools_src/
+## env_planes.gd) plus a matching per-frame pass (TankDof), the occasional "little base" (a small
+## fenced clearing with a bunker, a lamp, crates, drums and a gate barrier; no text, no people), and
+## gentle bumps and slope shading on the road surface (visual only).
+##
+## Mock switches (environment variables, read once; the screenshot tool passes the environment on):
+##   TANK_V3_ENV=0            the v2 world as shipped (every other switch then does nothing but the
+##                            layering fix)
+##   TANK_V3_TILT=moderate|strong|extreme   (default strong)
+##   TANK_V3_LAYERFIX=0       the v2 light layering (world lamps drawn over the tank) for the
+##                            before/after frame
+##   TANK_V3_BASE_SX=<px>     one little base with its left end at this stage x (art px), for the
+##                            hero frames; otherwise bases stand at their world places
+
+const DIR := "res://assets/tank/v3env/planes/"
+## Back to front. layer: back (behind the world), road (the verge, with the road band over it),
+## front (over the tank).
+const PLANES: Array[Dictionary] = [
+	{"name": "far", "y0": 0.0, "parallax": 0.04, "layer": "back"},
+	{"name": "ridge", "y0": 0.0, "parallax": 0.12, "layer": "back"},
+	{"name": "forest", "y0": 0.0, "parallax": 0.3, "layer": "back"},
+	{"name": "verge", "y0": 296.0, "parallax": 1.0, "layer": "road"},
+	{"name": "foreground", "y0": 344.0, "parallax": 1.35, "layer": "front"},
+]
+## The per-frame pass per strength: blur radius (art px) far from the band, its ramp, the band.
+const DOF := {
+	"moderate": {"max": 2.6, "ramp": 80.0, "band": Vector2(150, 360)},
+	"strong": {"max": 4.0, "ramp": 60.0, "band": Vector2(150, 358)},
+	"extreme": {"max": 6.5, "ramp": 44.0, "band": Vector2(152, 356)},
+}
+## The sky above the far plane on a taller canvas.
+const SKY := Color(0.012, 0.03, 0.04)
+## Little bases: world x (rules px) in a mission; in free roam one by the start and one at each
+## strongpoint in the old village and quarry zones (now forest). Drawn in the travel frame (the
+## world layers mirror them while the tank drives west).
+const BASE_W := 236.0
+const MISSION_BASES: Array[float] = [620.0]
+## Road relief: the profile's tile (art px) and its gentle amplitude.
+const RELIEF_W := 1920
+const RELIEF_AMP := 3.6
+## Colours (graded night).
+const EARTH := Color(0.07, 0.072, 0.064)
+const EARTH_HI := Color(0.13, 0.14, 0.125)
+const CONC := Color(0.17, 0.185, 0.18)
+const CONC_HI := Color(0.27, 0.3, 0.29)
+const CONC_DK := Color(0.07, 0.08, 0.08)
+const SOD := Color(0.04, 0.075, 0.055)
+const SOD_HI := Color(0.09, 0.15, 0.11)
+const BAG := Color(0.2, 0.2, 0.165)
+const BAG_DK := Color(0.08, 0.085, 0.07)
+const POST := Color(0.12, 0.1, 0.08)
+const POST_HI := Color(0.22, 0.19, 0.15)
+const WIRE := Color(0.32, 0.35, 0.34)
+const PLANK := Color(0.2, 0.16, 0.11)
+const PLANK_DK := Color(0.09, 0.075, 0.055)
+const DRUM := Color(0.11, 0.14, 0.12)
+const DRUM_HI := Color(0.22, 0.27, 0.23)
+const IRON := Color(0.1, 0.105, 0.1)
+const ARM_RED := Color(0.5, 0.13, 0.09)
+const ARM_WHITE := Color(0.6, 0.62, 0.58)
+const LAMP := Color(1.0, 0.7, 0.34)
+
+static var _cfg: Dictionary = {}
+static var _planes: Dictionary = {}
+static var _road: Texture2D = null
+static var _relief: Texture2D = null
+static var _profile: PackedFloat32Array = PackedFloat32Array()
+
+
+static func cfg() -> Dictionary:
+	if _cfg.is_empty():
+		var tilt := OS.get_environment("TANK_V3_TILT")
+		if not DOF.has(tilt):
+			tilt = "strong"
+		var bsx := OS.get_environment("TANK_V3_BASE_SX")
+		_cfg = {
+			"on": OS.get_environment("TANK_V3_ENV") != "0",
+			"tilt": tilt,
+			"layer_fix": OS.get_environment("TANK_V3_LAYERFIX") != "0",
+			"base_sx": float(bsx) if bsx.is_valid_float() else NAN,
+		}
+	return _cfg
+
+
+static func on() -> bool:
+	return bool(cfg()["on"])
+
+
+static func layer_fix() -> bool:
+	return bool(cfg()["layer_fix"])
+
+
+static func tilt() -> String:
+	return str(cfg()["tilt"])
+
+
+static func dof() -> Dictionary:
+	return DOF[tilt()]
+
+
+## The planes of the chosen strength: name -> {tex, w, y0, parallax, layer}.
+static func planes() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var key := tilt()
+	if not _planes.has(key):
+		var rows: Array[Dictionary] = []
+		for p in PLANES:
+			var path := ProjectSettings.globalize_path(DIR + key + "/" + str(p["name"]) + ".png")
+			var img := Image.load_from_file(path)
+			if img == null or img.is_empty():
+				push_warning(
+					"TankV3Env: missing %s (run assets/tank/v3env/tools_src/regen.sh)" % path
+				)
+				continue
+			var row := p.duplicate()
+			row["tex"] = ImageTexture.create_from_image(img)
+			row["w"] = float(img.get_width())
+			rows.append(row)
+		_planes[key] = rows
+	out.assign(_planes[key])
+	return out
+
+
+# --- Planes, road ------------------------------------------------------------------------------------------
+
+
+static func draw_back(ci: CanvasItem, v: TankView) -> void:
+	if v.y_off > 0.0:
+		ci.draw_rect(Rect2(0, -v.y_off, v.canvas.x, v.y_off + 1.0), SKY)
+	var ps := planes()
+	for p in ps:
+		if str(p["layer"]) == "back":
+			TankWorldDraw.tile(ci, v, p)
+	for p in ps:
+		if str(p["layer"]) == "road":
+			TankWorldDraw.tile(ci, v, p)
+	var road := road_tex()
+	var rx := -fposmod(v.plane_x * TankView.S, float(road.get_width()))
+	while rx < v.canvas.x:
+		ci.draw_texture(road, Vector2(roundf(rx), TankView.GROUND - TankWorldDraw.ROAD_TOP))
+		rx += float(road.get_width())
+	var rel := relief_tex()
+	var lx := -fposmod(v.plane_x * TankView.S, float(RELIEF_W))
+	while lx < v.canvas.x:
+		ci.draw_texture(rel, Vector2(roundf(lx), TankView.GROUND - TankWorldDraw.ROAD_TOP - 4.0))
+		lx += float(RELIEF_W)
+
+
+static func draw_front(ci: CanvasItem, v: TankView) -> void:
+	for p in planes():
+		if str(p["layer"]) == "front":
+			TankWorldDraw.tile(ci, v, p)
+	var bottom := v.canvas.y - v.y_off
+	if bottom > TankView.BASE.y:
+		ci.draw_rect(
+			Rect2(0, TankView.BASE.y - 1.0, v.canvas.x, bottom - TankView.BASE.y + 1.0),
+			Color(0.008, 0.014, 0.016)
+		)
+
+
+## The v2 road band regraded blue-green (the light layer still warms it).
+static func road_tex() -> Texture2D:
+	if _road != null:
+		return _road
+	var img := TankWorldDraw.road_tex().get_image()
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a > 0.0:
+				var l := c.r * 0.3 + c.g * 0.55 + c.b * 0.15
+				var g := c.lerp(Color(l * 0.8, l * 0.98, l * 1.0, c.a), 0.55)
+				g.a = c.a
+				img.set_pixel(x, y, g)
+	_road = ImageTexture.create_from_image(img)
+	return _road
+
+
+## The road's gentle profile (art px, up positive) at tile column `x` (0..RELIEF_W).
+static func profile(x: int) -> float:
+	if _profile.is_empty():
+		_profile.resize(RELIEF_W)
+		for i in RELIEF_W:
+			var a := TAU * float(i) / float(RELIEF_W)
+			_profile[i] = (
+				RELIEF_AMP
+				* (
+					0.55 * sin(a * 3.0 + 0.7)
+					+ 0.3 * sin(a * 7.0 + 2.2)
+					+ 0.15 * sin(a * 17.0 + 0.4)
+				)
+			)
+	return _profile[posmod(x, RELIEF_W)]
+
+
+## The road's relief over the band (RELIEF_W x ROAD_H + 4, tileable): the far edge rising over
+## crests (gravel) and sinking in dips (the verge's dark), slopes facing the light (left, the
+## headlight's side) a little lighter and the others darker, dips damp and darker with a puddle
+## catching the sky in the deepest ones, crests drier and paler.
+static func relief_tex() -> Texture2D:
+	if _relief != null:
+		return _relief
+	var top := TankWorldDraw.ROAD_TOP + 4
+	var hh := TankWorldDraw.ROAD_H + 4
+	var img := Image.create(RELIEF_W, hh, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var gravel := Color(0.1, 0.11, 0.1)
+	var gravel_hi := Color(0.16, 0.17, 0.155)
+	for x in RELIEF_W:
+		var hgt := profile(x)
+		var slope := profile(x + 6) - profile(x - 6)
+		var lift := int(roundf(hgt))
+		# far edge
+		if lift > 0:
+			for k in lift:
+				var c := gravel if k < lift - 1 else gravel_hi
+				img.set_pixel(x, top - 1 - k, c)
+		elif lift < 0:
+			for k in -lift:
+				img.set_pixel(x, top + k, Color(0.02, 0.035, 0.03, 0.85))
+		# slope light and dip shade across the band
+		var lit := clampf(-slope * 0.1, 0.0, 0.16)
+		var dark := clampf(slope * 0.1, 0.0, 0.2) + clampf(-hgt * 0.05, 0.0, 0.16)
+		var dry := clampf(hgt * 0.03, 0.0, 0.08)
+		for y in range(top + maxi(-lift, 0), hh - 4):
+			var fade := 1.0 - float(y - top) / float(hh - top) * 0.4
+			var c2 := Color(0, 0, 0, 0)
+			if dark > 0.0:
+				c2 = Color(0.0, 0.01, 0.012, dark * fade)
+			if lit + dry > 0.0:
+				c2 = Color(0.55, 0.6, 0.55, (lit + dry) * fade * 0.5)
+			if c2.a > 0.0:
+				img.set_pixel(x, y, c2)
+		# a puddle in the deepest dips, along the ruts
+		if hgt < -RELIEF_AMP * 0.72:
+			var w := TankDraw.hash01(float(x / 9) * 1.7)
+			if w > 0.35:
+				for ry: int in [top + 5, top + 12]:
+					img.set_pixel(x, ry, Color(0.2, 0.3, 0.32, 0.55))
+					img.set_pixel(x, ry + 1, Color(0.06, 0.1, 0.11, 0.6))
+	_relief = ImageTexture.create_from_image(img)
+	return _relief
+
+
+# --- Little bases ------------------------------------------------------------------------------------------
+
+
+## The little bases on screen: their left ends (stage x).
+static func bases(v: TankView, state: TankState) -> Array[float]:
+	var out: Array[float] = []
+	var bsx := float(cfg()["base_sx"])
+	if not is_nan(bsx):
+		out.append(bsx)
+		return out
+	if state.roam.active and state.roam_map != null:
+		var map := state.roam_map
+		var spots: Array[float] = [map.lo_m + 60.0]
+		for m in map.strongpoints:
+			if map.zone_at(m) in ["village", "quarry"]:
+				spots.append(m)
+		for m: float in spots:
+			var cx := v.sx(v.travel_x(state, m))
+			out.append(roundf(cx - BASE_W * 0.5))
+	else:
+		for wx in MISSION_BASES:
+			out.append(roundf(v.sx(wx)))
+	var vis: Array[float] = []
+	for x in out:
+		if x < v.canvas.x + 20.0 and x + BASE_W > -20.0:
+			vis.append(x)
+	return vis
+
+
+## A little base at stage x `x0` on the road's far edge: a cleared earth bank, a fence of posts
+## and wire with a gate, a sodded concrete bunker with a dark firing slit behind sandbags, a hooded
+## lamp on a post, crates under a tarp, fuel drums, the gate's red and white barrier raised.
+static func draw_base(ci: CanvasItem, x0: float) -> void:
+	var g := TankView.GROUND - 5.0
+	_bank(ci, x0, g)
+	_fence(ci, x0, g, true)
+	_bunker(ci, x0 + 26.0, g)
+	_drums(ci, x0 + 98.0, g)
+	_lamp_post(ci, x0 + 120.0, g)
+	_crates(ci, x0 + 130.0, g)
+	_barrier(ci, x0 + 182.0, g)
+	_fence(ci, x0, g, false)
+
+
+## The base's lights (stage px): the lamp and the bunker's slit.
+static func base_lights(x0: float) -> Array[Dictionary]:
+	var g := TankView.GROUND - 5.0
+	return [
+		{"p": Vector2(x0 + 121.0, g - 45.0), "kind": "lamp"},
+		{"p": Vector2(x0 + 58.0, g - 15.0), "kind": "slit"},
+	]
+
+
+static func _bank(ci: CanvasItem, x0: float, g: float) -> void:
+	var pts := PackedVector2Array()
+	var n := 24
+	for i in n + 1:
+		var u := float(i) / float(n)
+		var x := x0 - 14.0 + u * (BASE_W + 28.0)
+		var hgt := 5.0 * sin(u * PI) + 1.5 * TankDraw.hash01(x0 * 0.1 + i)
+		pts.append(Vector2(roundf(x), roundf(g + 2.0 - hgt)))
+	var top := pts.duplicate()
+	pts.append(Vector2(x0 + BASE_W + 14.0, g + 5.0))
+	pts.append(Vector2(x0 - 14.0, g + 5.0))
+	ci.draw_polygon(pts, PackedColorArray([EARTH]))
+	ci.draw_polyline(top, EARTH_HI, 1.0)
+
+
+## Posts every 13 px with three sagging wires and barbs; `back` draws the far run (behind the
+## bunker), else the near posts at the ends, with the gate's gap left open.
+static func _fence(ci: CanvasItem, x0: float, g: float, back: bool) -> void:
+	var gate := Vector2(x0 + 172.0, x0 + 206.0)
+	var y_base := g - (3.0 if back else -1.0)
+	var col := POST.darkened(0.35) if back else POST
+	var wire := Color(WIRE, 0.55) if back else WIRE
+	var xs: Array[float] = []
+	var x := x0
+	while x <= x0 + BASE_W:
+		if x < gate.x or x > gate.y:
+			xs.append(x)
+		x += 13.0
+	if not back:
+		xs = [x0, gate.x - 4.0, gate.y + 2.0, x0 + BASE_W]
+	for px in xs:
+		var hgt := 17.0 if back else 21.0
+		ci.draw_rect(Rect2(px, y_base - hgt, 2, hgt), col)
+		ci.draw_rect(Rect2(px, y_base - hgt, 1, hgt), col.lightened(0.25))
+	if back:
+		for k in 3:
+			var wy := y_base - 5.0 - float(k) * 5.0
+			for i in xs.size() - 1:
+				var a := xs[i]
+				var b := xs[i + 1]
+				if b - a > 20.0:
+					continue
+				for xx in range(int(a) + 2, int(b)):
+					var u := (float(xx) - a) / (b - a)
+					var sag := roundf(sin(u * PI) * 1.2)
+					ci.draw_rect(Rect2(xx, wy + sag, 1, 1), wire)
+					if (xx + k * 3) % 6 == 0:
+						ci.draw_rect(Rect2(xx, wy + sag - 1.0, 1, 1), wire)
+
+
+## A low concrete pillbox: a sodded roof slab with grass, a lit-edge face, a dark firing slit,
+## a sandbag wall in front of its foot.
+static func _bunker(ci: CanvasItem, x: float, g: float) -> void:
+	var w := 64.0
+	var hgt := 22.0
+	var body := PackedVector2Array(
+		[
+			Vector2(x, g),
+			Vector2(x + 5.0, g - hgt),
+			Vector2(x + w - 5.0, g - hgt),
+			Vector2(x + w, g),
+		]
+	)
+	ci.draw_polygon(body, PackedColorArray([CONC]))
+	ci.draw_line(Vector2(x, g), Vector2(x + 5.0, g - hgt), CONC_HI, 1.0)
+	ci.draw_rect(Rect2(x + w - 9.0, g - hgt, 4, hgt), CONC_DK)
+	# pour lines and stains
+	for k in 3:
+		ci.draw_rect(Rect2(x + 6.0, g - 6.0 - float(k) * 6.0, w - 15.0, 1), Color(CONC_DK, 0.5))
+	# roof slab, overhanging, sod and grass on top
+	ci.draw_rect(Rect2(x + 1.0, g - hgt - 4.0, w - 2.0, 4), CONC_DK)
+	ci.draw_rect(Rect2(x + 1.0, g - hgt - 4.0, w - 2.0, 1), CONC_HI)
+	ci.draw_rect(Rect2(x + 4.0, g - hgt - 8.0, w - 8.0, 4), SOD)
+	for i in int(w - 8.0):
+		var h := TankDraw.hash01(x * 0.3 + float(i) * 1.7)
+		if h > 0.45:
+			var gh := 1.0 + roundf(h * 3.0)
+			ci.draw_rect(Rect2(x + 4.0 + i, g - hgt - 8.0 - gh, 1, gh), SOD if h < 0.85 else SOD_HI)
+	# the firing slit (dark, a faint warm line at its bottom from inside)
+	ci.draw_rect(Rect2(x + 20.0, g - 16.0, 26, 4), Color(0.01, 0.012, 0.012))
+	ci.draw_rect(Rect2(x + 20.0, g - 17.0, 26, 1), CONC_HI)
+	ci.draw_rect(Rect2(x + 22.0, g - 13.0, 22, 1), Color(0.35, 0.22, 0.1))
+	# sandbags along the foot
+	for row in 2:
+		var y := g - 4.0 - float(row) * 4.0
+		var bx := x - 6.0 + float(row % 2) * 3.0
+		while bx < x + w + 4.0 - float(row) * 8.0:
+			if row == 1 and bx > x + 12.0 and bx < x + 50.0:
+				bx += 7.0
+				continue
+			ci.draw_rect(Rect2(bx, y, 6, 4), BAG)
+			ci.draw_rect(Rect2(bx, y, 6, 1), BAG.lightened(0.18))
+			ci.draw_rect(Rect2(bx + 5.0, y, 1, 4), BAG_DK)
+			bx += 7.0
+
+
+static func _lamp_post(ci: CanvasItem, x: float, g: float) -> void:
+	ci.draw_rect(Rect2(x, g - 44.0, 2, 44), IRON)
+	ci.draw_rect(Rect2(x, g - 44.0, 1, 44), IRON.lightened(0.2))
+	ci.draw_rect(Rect2(x - 4.0, g - 47.0, 10, 3), Color(0.04, 0.045, 0.045))
+	ci.draw_rect(Rect2(x - 4.0, g - 47.0, 10, 1), IRON.lightened(0.3))
+	ci.draw_rect(Rect2(x - 2.0, g - 44.0, 6, 1), LAMP)
+	# a cable box at its foot
+	ci.draw_rect(Rect2(x - 2.0, g - 8.0, 6, 5), IRON)
+
+
+static func _drums(ci: CanvasItem, x: float, g: float) -> void:
+	for k in 2:
+		var dx := x + float(k) * 7.0
+		ci.draw_rect(Rect2(dx, g - 10.0, 6, 10), DRUM)
+		ci.draw_rect(Rect2(dx, g - 10.0, 1, 10), DRUM_HI)
+		ci.draw_rect(Rect2(dx, g - 10.0, 6, 1), DRUM_HI)
+		for by: float in [0.3, 0.7]:
+			ci.draw_rect(Rect2(dx, roundf(g - 10.0 * by), 6, 1), Color(0.03, 0.04, 0.035))
+
+
+## Planked crates, one stack under a sagging tarp.
+static func _crates(ci: CanvasItem, x: float, g: float) -> void:
+	_planked(ci, Rect2(x, g - 12.0, 15, 12))
+	_planked(ci, Rect2(x + 15.0, g - 10.0, 12, 10))
+	_planked(ci, Rect2(x + 4.0, g - 21.0, 11, 9))
+	var tarp := PackedVector2Array(
+		[
+			Vector2(x + 28.0, g),
+			Vector2(x + 30.0, g - 15.0),
+			Vector2(x + 38.0, g - 18.0),
+			Vector2(x + 47.0, g - 14.0),
+			Vector2(x + 49.0, g),
+		]
+	)
+	ci.draw_polygon(tarp, PackedColorArray([Color(0.08, 0.1, 0.075)]))
+	ci.draw_line(Vector2(x + 30.0, g - 15.0), Vector2(x + 38.0, g - 18.0), SOD_HI, 1.0)
+	ci.draw_line(Vector2(x + 38.0, g - 18.0), Vector2(x + 39.0, g), Color(0.04, 0.05, 0.04), 1.0)
+
+
+static func _planked(ci: CanvasItem, r: Rect2) -> void:
+	ci.draw_rect(r, PLANK)
+	var y := r.position.y + 3.0
+	while y < r.end.y - 1.0:
+		ci.draw_rect(Rect2(Vector2(r.position.x, y), Vector2(r.size.x, 1)), PLANK_DK)
+		y += 3.0
+	ci.draw_rect(Rect2(r.position, Vector2(r.size.x, 1)), PLANK.lightened(0.25))
+	ci.draw_rect(Rect2(r.position, Vector2(1, r.size.y)), PLANK_DK)
+	ci.draw_rect(Rect2(Vector2(r.end.x - 1.0, r.position.y), Vector2(1, r.size.y)), PLANK_DK)
+
+
+## The gate: a post with its red and white arm raised (painted stripes, no text), a counterweight.
+static func _barrier(ci: CanvasItem, x: float, g: float) -> void:
+	ci.draw_rect(Rect2(x, g - 20.0, 3, 21), IRON)
+	ci.draw_rect(Rect2(x, g - 20.0, 1, 21), IRON.lightened(0.25))
+	var pivot := Vector2(x + 1.0, g - 18.0)
+	var d := Vector2.from_angle(deg_to_rad(-58.0))
+	for i in 8:
+		var a := pivot + d * float(i) * 5.0
+		var b := pivot + d * float(i + 1) * 5.0
+		ci.draw_line(a, b, ARM_RED if i % 2 == 0 else ARM_WHITE, 2.0)
+	ci.draw_rect(
+		Rect2((pivot - d * 6.0 - Vector2(2, 2)).round(), Vector2(4, 4)), IRON.darkened(0.4)
+	)
+
+
+# --- The base's light (the world light layer, behind the tank) ----------------------------------------------
+
+
+static func draw_base_light(ci: CanvasItem, x0: float) -> void:
+	for l in base_lights(x0):
+		var p: Vector2 = l["p"]
+		if str(l["kind"]) == "slit":
+			TankDraw.glow_at(ci, p, 10.0, Color(1.0, 0.55, 0.25, 0.1))
+			continue
+		TankDraw.glow_at(ci, p, 5.0, Color(1.0, 0.86, 0.6, 0.8))
+		TankDraw.glow_at(ci, p + Vector2(0, 14), 36.0, Color(LAMP.r, LAMP.g, LAMP.b, 0.24))
+		# the hooded lamp's cone down onto the yard, and its pool
+		TankDraw.beam(ci, p, PI * 0.5, 48.0, deg_to_rad(30.0), Color(1.0, 0.75, 0.42), 0.18)
+		TankLightDraw.ground_glow(
+			ci, Vector2(p.x, TankView.GROUND - 3.0), 52.0, Color(1.0, 0.68, 0.36, 0.3)
+		)

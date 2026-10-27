@@ -128,6 +128,7 @@ func refresh() -> void:
 		m["elev_to"] = h.elev_target_deg
 	if turn_dir != 0:
 		m["turn_x"] = g.world_x(turn_x)
+	_feed_secondaries(s, g)
 	m["layout"] = layout()
 
 
@@ -360,6 +361,8 @@ func paint() -> void:
 		D.pixels(self, EDGE_ARROW if left else EDGE_ARROW_R, p, Color(D.RED, 0.9))
 	if bool(m["aim"]):
 		_elev_arc()
+	if m.has("sec"):
+		_sec_arc()
 
 
 ## A small riveted plate standing on the road behind the rear track, the HUD's plate style with room
@@ -468,9 +471,139 @@ func _elev_arc() -> void:
 	var lr: Rect2 = lay["label"]
 	if lr.size != Vector2.ZERO:
 		D.tall_shadow(self, lr.position.x, lr.position.y, lab, D.AMBER)
+		if TankHud.v3_hud() != "0":
+			_rack_pips(lr, left)
 
 
 ## One arc pixel, only outside the tank's body (TankHudGeom.arc_px_ok).
 func _arc_px(keep: Array, p: Vector2i, col: Color) -> void:
 	if TankHudGeom.arc_px_ok(p, keep):
 		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)
+
+
+# --- MOCK v3: the ready rack by the gun's arc, the secondaries' angle widget --------------------------------
+
+const SEC_MIN := -10.0
+const SEC_MAX := 35.0
+const SEC_R := 19.0
+const SEC_GAP := 7.0
+const SEC_COL := Color("#d6ecff")
+const SEC_DIM := Color(0.62, 0.78, 0.92, 0.5)
+const SHELL_PIP := [".#.", "###", "###", "###", "###", "###", "###"]
+
+
+## The ready rack's three shells beside the elevation label (lit while loaded).
+func _rack_pips(lr: Rect2, left: bool) -> void:
+	var rack := TankHudSeats.rack_of(st())
+	var x := lr.end.x + 4.0 if not left else lr.position.x - 19.0
+	var p := Vector2(roundf(x), lr.position.y + 1.0)
+	D.rect(self, Rect2(p - Vector2(2, 1), Vector2(19, 9)), Color(D.PANEL, 0.7))
+	for i in 3:
+		var col := D.BRASS.lightened(0.2) if i < rack else Color("#4a3e30")
+		D.pixels(self, SHELL_PIP, p + Vector2(i * 5, 0), col)
+		if i < rack:
+			D.rect(self, Rect2(p + Vector2(i * 5 + 1, 0), Vector2(1, 1)), Color("#e07a3c"))
+
+
+## The secondaries' widget data while their seat is manned and an enemy is ahead: the bow guns'
+## pivot and length as drawn, their elevation (on the nearest enemy ahead, clamped to their reach)
+## and the rounds a minute (2 x the rider's cadence).
+func _feed_secondaries(s: TankState, g: TankHudGeom) -> void:
+	m.erase("sec")
+	if TankHud.v3_hud() == "0" or TankHudSeats.seat_slots(s)[4] < 0:
+		return
+	var piv := g.tank_point("bow_gun_upper_pivot")
+	var mz := g.tank_point("bow_gun_upper_muzzle")
+	var left := g.mirrored()
+	var best := Rect2()
+	var best_d := INF
+	for e in s.enemies:
+		if e.mode == TankIds.EM_DEAD:
+			continue
+		var r := g.enemy_rect(e)
+		if r.size == Vector2.ZERO:
+			continue
+		var dx := r.get_center().x - piv.x
+		if (dx > 0.0) == left or absf(dx) > best_d:
+			continue
+		best_d = absf(dx)
+		best = r
+	if best.size == Vector2.ZERO and not bool(m.get("aim", false)):
+		return
+	var deg := 4.0
+	if best.size != Vector2.ZERO:
+		var d := best.get_center() - piv
+		deg = clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX)
+	m["sec"] = {
+		"pivot": piv,
+		"length": maxf(absf(mz.x - piv.x), 6.0),
+		"left": left,
+		"deg": deg,
+		"rpm": 2.0 * TankHudSeats.secondaries_cad(s),
+	}
+
+
+## The secondaries' angle widget: a small cold blue-white dial (radius SEC_R, about a fifth of the
+## main arc) standing just past the bow guns' muzzles and clear of the hull, its centre on their
+## bore line: the reach (-10 .. +35 degrees) with a tick every 15 degrees, a faint level line, the
+## needle at the guns' elevation, the degrees and the rounds a minute under it.
+func _sec_arc() -> void:
+	var sd: Dictionary = m["sec"]
+	var left := bool(sd["left"])
+	# the hull only: the turret's rect reaches over the barrel, which stands well above the dial
+	var body: Array[Rect2] = []
+	var rects: Array = m.get("body", [])
+	if rects.size() > 1:
+		body.append((rects[1] as Rect2).grow(2.0))
+	var mz: Vector2 = sd["pivot"] + TankHudGeom.dir(0.0, left) * float(sd["length"])
+	var c := Vector2(roundf(mz.x + (SEC_GAP if not left else -SEC_GAP)), roundf(mz.y))
+	var tries := 0
+	while tries < 30 and not _sec_clear(c, SEC_R + 2.0, left, body):
+		c.x += -2.0 if left else 2.0
+		tries += 1
+	# the sector's faint fill and its two edges
+	var a := SEC_MIN
+	while a <= SEC_MAX + 0.001:
+		for pf in TankHudGeom.tick_pixels(c, a, left, 1.0, SEC_R - 1.0):
+			_arc_px(body, pf, Color(0.1, 0.16, 0.22, 0.35))
+		a += 1.5
+	for edge: float in [SEC_MIN, SEC_MAX]:
+		for pe in TankHudGeom.tick_pixels(c, edge, left, 1.0, SEC_R):
+			_arc_px(body, pe, Color(SEC_DIM, 0.35))
+	a = SEC_MIN
+	while a <= SEC_MAX + 0.001:
+		var p := Vector2i((c + TankHudGeom.dir(a, left) * SEC_R).round())
+		_arc_px(body, p, SEC_DIM)
+		a += 0.75
+	var t := SEC_MIN
+	while t <= SEC_MAX + 0.001:
+		for p2 in TankHudGeom.tick_pixels(c, t, left, SEC_R + 1.0, SEC_R + 2.0):
+			_arc_px(body, p2, SEC_DIM)
+		t += 15.0
+	for p4 in TankHudGeom.tick_pixels(c, 0.0, left, SEC_R + 1.0, SEC_R + 3.0):
+		_arc_px(body, p4, SEC_COL)
+	var deg := float(sd["deg"])
+	for p3 in TankHudGeom.tick_pixels(c, deg, left, 0.0, SEC_R + 4.0):
+		_arc_px(body, p3, SEC_COL)
+	var tip := c + TankHudGeom.dir(deg, left) * (SEC_R + 4.0)
+	D.rect(self, Rect2(tip.round() - Vector2(1, 1), Vector2(3, 3)), SEC_COL)
+	D.rect(self, Rect2(c - Vector2(1, 1), Vector2(3, 3)), SEC_COL)
+	var e := roundi(deg)
+	var lab := ("+" if e > 0 else "") + str(e) + "°"
+	var mid := c + TankHudGeom.dir(SEC_MIN, left) * (SEC_R + 4.0)
+	var x := mid.x + 2.0 if not left else mid.x - 2.0 - D.text_w(lab)
+	D.text_shadow(self, roundf(x), roundf(mid.y - 1.0), lab, SEC_COL)
+	var rpm := "%d/min" % roundi(float(sd["rpm"]))
+	D.text_shadow(self, roundf(x), roundf(mid.y + 8.0), rpm, SEC_DIM)
+
+
+func _sec_clear(piv: Vector2, radius: float, left: bool, body: Array[Rect2]) -> bool:
+	if not TankHudGeom.arc_px_ok(Vector2i(piv), body):
+		return false
+	var a := SEC_MIN
+	while a <= SEC_MAX + 0.001:
+		var p := Vector2i((piv + TankHudGeom.dir(a, left) * radius).round())
+		if not TankHudGeom.arc_px_ok(p, body):
+			return false
+		a += 2.0
+	return true

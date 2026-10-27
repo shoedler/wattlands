@@ -73,7 +73,7 @@ const ZONE_BLEND_M := 60.0
 ## The turn's dust: full thickness over the middle (1 - 1 / gain) of the stop.
 const TURN_DUST_GAIN := 1.8
 ## The layers mirrored while the tank drives west (the planes behind and the HUD never are).
-const MIRROR_LAYERS: Array[String] = ["World", "Tank", "Light", "Front"]
+const MIRROR_LAYERS: Array[String] = ["World", "WorldLight", "Tank", "Light", "Front"]
 ## The turret's width end on, a share of its side view (a traverse squeezes it to this).
 const TURRET_MIN_W := 0.55
 
@@ -189,10 +189,11 @@ func _build() -> void:
 	stage = Node2D.new()
 	stage.name = "Stage"
 	add_child(stage)
-	for n: String in ["Back", "World", "Tank", "Light", "Front", "Post"]:
+	# MOCK v3: "WorldLight" (additive) lights the world behind the tank (the layering fix).
+	for n: String in ["Back", "World", "WorldLight", "Tank", "Light", "Front", "Post"]:
 		var l := Node2D.new()
 		l.name = n
-		if n == "Light":
+		if n == "Light" or n == "WorldLight":
 			var m := CanvasItemMaterial.new()
 			m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 			l.material = m
@@ -202,6 +203,7 @@ func _build() -> void:
 	(_layers["World"] as Node2D).draw.connect(_draw_world)
 	(_layers["Tank"] as Node2D).draw.connect(_draw_tank)
 	(_layers["Light"] as Node2D).draw.connect(_draw_light)
+	(_layers["WorldLight"] as Node2D).draw.connect(_draw_world_light)
 	(_layers["Front"] as Node2D).draw.connect(_draw_front)
 	(_layers["Post"] as Node2D).draw.connect(_draw_post)
 	dof = TankDof.new()
@@ -1174,6 +1176,12 @@ func _draw_tank() -> void:
 func _draw_light() -> void:
 	if _built and game.state != null:
 		TankLightDraw.draw(layer("Light"), self, game.state)
+
+
+## MOCK v3: the world's own lights, behind the tank (TankV3Env.layer_fix()).
+func _draw_world_light() -> void:
+	if _built and game.state != null and TankV3Env.layer_fix():
+		TankLightDraw.draw_world(layer("WorldLight"), self, game.state)
 
 
 func _draw_front() -> void:
