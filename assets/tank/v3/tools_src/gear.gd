@@ -11,7 +11,7 @@ const TRK2 := Color("#44382b")
 const TRK3 := Color("#6c5a44")
 const TRK4 := Color("#8f7958")
 const OUT := Color("#0b0806")
-const LINK_PITCH := 6.0
+const LINK_PITCH := 7.0
 
 
 ## Belt samples round `circles` ([{c, r}] in clockwise screen order): {pts: [[p, n, s]], len}.
@@ -56,47 +56,66 @@ static func belt(circles: Array, ds := 0.4) -> Dictionary:
 	return {"pts": pts, "len": s}
 
 
-## The track: links of LINK_PITCH (stretched so a whole number fits the loop), `thick` px, moving
-## by `travel` (positive: the top run moves forward, clockwise). `ramp` colours the plates.
-static func draw_track(img: Image, b: Dictionary, travel: float, thick := 4.0, enemy := false) -> void:
+## The track: shoes of LINK_PITCH (stretched so a whole number fits the loop), `thick` px, moving
+## by `travel` (positive: the top run moves forward, clockwise). Each shoe has an inner guide horn,
+## a pin boss at its joint, a plate with a gap to the next shoe, and an outer grouser bar.
+static func draw_track(img: Image, b: Dictionary, travel: float, thick := 5.0, enemy := false) -> void:
 	var total: float = b["len"]
 	var pitch := total / roundf(total / LINK_PITCH)
 	var c1 := TRK1
 	var c2 := TRK2
 	var c3 := TRK3
+	var c4 := TRK4
 	if enemy:
 		c1 = Color("#1d211d")
 		c2 = Color("#323833")
 		c3 = Color("#4f574f")
-	# outline pass then fill pass
+		c4 = Color("#6f786d")
+	var horn0 := pitch * 0.4
+	var horn1 := pitch * 0.4 + 2.0
+	var gr0 := pitch * 0.3
+	var gr1 := pitch * 0.3 + 2.6
 	for pass_i in 2:
 		for e: Array in b["pts"]:
 			var p: Vector2 = e[0]
 			var nv: Vector2 = e[1]
 			var u := fposmod(float(e[2]) - travel, pitch)
 			var lit := nv.y < -0.35
-			var dd := -0.5
-			while dd <= thick + 1.0:
+			var horn := u >= horn0 and u < horn1
+			var grouser := u >= gr0 and u < gr1
+			var dd := -2.0
+			while dd <= thick + 2.0:
 				var q := p + nv * dd
 				var x := floori(q.x)
 				var y := floori(q.y)
-				if pass_i == 0:
-					if dd < 0.0 or dd > thick:
-						if not (dd > thick and (u < 1.0 or u > pitch - 1.5)):
-							Px.put(img, x, y, OUT)
+				var col := Color(0, 0, 0, 0)
+				var outl := false
+				if dd < -1.0:
+					outl = horn
+				elif dd < 0.0:
+					if horn:
+						col = c3 if lit else c2
+					else:
+						outl = true
+				elif dd < 1.0:
+					col = c4 if u < 1.3 else (c2 if u > 1.8 else TRK0)
+				elif dd < thick - 1.0:
+					col = TRK0 if u < 0.8 else (c2 if lit else c1)
+					if dd < 2.0 and u >= 0.8 and u < 1.8:
+						col = c3
+				elif dd < thick:
+					col = TRK0 if u < 0.8 else (c3 if lit else c2)
+				elif dd < thick + 1.0:
+					if grouser:
+						col = c4 if lit else c3
+					else:
+						outl = true
 				else:
-					if dd >= 0.0 and dd <= thick:
-						var col: Color
-						if dd < 1.0:
-							col = c3 if u < 1.2 else c2
-						elif dd < thick - 1.0:
-							col = TRK0 if u < 1.0 else (c2 if lit else c1)
-						else:
-							if u < 1.0 or u > pitch - 1.5:
-								col = TRK0
-							else:
-								col = c3 if lit else c2
-						Px.put(img, x, y, col)
+					outl = grouser
+				if pass_i == 0 and outl:
+					Px.put(img, x, y, OUT)
+				elif pass_i == 1 and col.a > 0.0:
+					Px.put(img, x, y, col)
 				dd += 0.5
 
 
@@ -105,8 +124,10 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 	var ext := r + (3.5 if kind == "sprocket" else 1.0)
 	var rim := Color("#4a3826") if not enemy else Color("#39403a")
 	var rim_hi := Color("#7a5e3e") if not enemy else Color("#5d665c")
-	var disc := Color("#2a1f15") if not enemy else Color("#222823")
+	var disc := Color("#2e2218") if not enemy else Color("#222823")
+	var disc_d := Color("#1c140d") if not enemy else Color("#161a17")
 	var hub := Color("#b08a4a") if not enemy else Color("#7d8578")
+	var hub_hi := Color("#e6c27a") if not enemy else Color("#b0b8aa")
 	for y in range(floori(c.y - ext), ceili(c.y + ext) + 1):
 		for x in range(floori(c.x - ext), ceili(c.x + ext) + 1):
 			var d := Vector2(x + 0.5, y + 0.5) - c
@@ -118,60 +139,77 @@ static func draw_wheel(img: Image, c: Vector2, r: float, ang: float, kind: Strin
 			var col := Color(0, 0, 0, 0)
 			match kind:
 				"road":
-					if rho > r:
+					if rho > r + 0.7:
 						continue
-					if rho > r - 1.4:
-						col = TRK1 if litf > 0.4 else TRK0
-					elif rho > r - 2.4:
-						col = rim_hi if litf > 0.3 else rim
-					elif rho < 1.5:
-						col = hub if rho > 0.7 or litf < 0 else Color("#e6c27a")
+					if rho > r:
+						col = OUT
+					elif rho > r - 1.3:
+						col = TRK1 if litf > 0.45 else TRK0
+					elif rho > r - 2.3:
+						col = rim_hi if litf > 0.25 else rim
+					elif rho > 2.6:
+						col = disc_d if cos(5.0 * phi) > 0.55 else disc
+						if litf > 0.6 and rho > r - 3.0:
+							col = rim
+					elif rho > 1.6:
+						col = disc_d
+						var bk := fposmod(phi * 4.0 / TAU + 0.125, 1.0)
+						if rho < 2.6 and bk < 0.2:
+							col = Color("#c8a468") if not enemy else hub_hi
 					else:
-						col = disc
-						var hr := (r - 2.4 + 1.5) * 0.5
-						for k in 5:
-							var ha := phi - TAU * k / 5.0
-							var hp := Vector2(cos(ha), sin(ha)) * hr
-							if hp.distance_to(Vector2(rho, 0)) < 1.05:
-								col = OUT
+						col = hub_hi if litf > 0.3 else hub
 				"roller":
-					if rho > r:
+					if rho > r + 0.6:
 						continue
-					col = rim_hi if litf > 0.3 else rim
-					if rho < r - 1.2:
+					col = OUT if rho > r else (rim_hi if litf > 0.3 else rim)
+					if rho < r - 1.0:
 						col = disc
-					if rho < 1.2:
+					if rho < 1.0:
+						col = hub
+					if rho >= 1.0 and rho < r - 1.0 and fposmod(phi * 3.0 / TAU, 1.0) < 0.2:
 						col = hub
 				"sprocket", "idler":
-					var teeth := 12 if kind == "sprocket" else 0
+					var teeth := 11 if kind == "sprocket" else 0
 					if rho > r:
-						if teeth == 0 or rho > r + 3.0:
-							continue
-						var tv := cos(teeth * phi)
-						if tv < 0.15:
-							continue
-						col = rim_hi if litf > 0.2 else rim
-						if rho > r + 2.2 or tv < 0.4:
-							col = OUT
-					elif rho > r - 2.4:
+						if teeth == 0:
+							if rho < r + 0.7:
+								col = OUT
+							else:
+								continue
+						else:
+							var tv := cos(teeth * phi)
+							var tw := 0.1 + (rho - r) * 0.18
+							if tv < tw:
+								if rho < r + 0.8:
+									col = OUT
+								else:
+									continue
+							elif rho > r + 2.4 or tv < tw + 0.15:
+								col = OUT
+							else:
+								col = rim_hi if litf > 0.1 else rim
+					elif rho > r - 2.6:
 						col = rim_hi if litf > 0.35 else rim
-						if rho < r - 1.6:
+						if rho < r - 1.7:
 							col = disc
-						var bolt := fposmod(phi * 8.0 / TAU, 1.0)
-						if rho > r - 1.6 and rho < r - 0.6 and bolt < 0.18:
-							col = Color("#b2905e")
-					elif rho < 3.0:
-						col = hub if rho > 1.2 else Color("#e6c27a")
-						if rho > 2.3:
-							col = rim
+						var bolt := fposmod(phi * 10.0 / TAU, 1.0)
+						if rho > r - 1.7 and rho < r - 0.7 and bolt < 0.2:
+							col = Color("#c8a468") if not enemy else hub_hi
+					elif rho < 3.2:
+						col = hub if rho > 1.3 else hub_hi
+						if rho > 2.4:
+							col = OUT
+						elif rho > 1.3 and fposmod(phi * 5.0 / TAU, 1.0) < 0.25:
+							col = hub_hi
 					else:
 						var ns := 6 if kind == "sprocket" else 5
 						var sp := fposmod(phi, TAU / ns)
+						var side := sp < TAU / ns * 0.5
 						sp = minf(sp, TAU / ns - sp)
 						var w := sp * rho
-						if w < 1.1:
-							col = rim_hi if litf > 0.0 else rim
-						elif w < 1.9:
+						if w < 1.2:
+							col = rim_hi if (litf > 0.0 or side) else rim
+						elif w < 2.0:
 							col = OUT
 						else:
 							continue
@@ -202,12 +240,23 @@ static func draw_back(
 	var b := belt(circles)
 	var ang := travel
 	var t := float(gear["T"])
-	# suspension arms: hub up to the hull skirt
+	# suspension: a trailing arm from each hub to its pivot on the hull, a coil spring above the hub
+	var dark := Color("#1a130d") if not enemy else Color("#151915")
+	var mid := Color("#3a2c1e") if not enemy else Color("#2c332c")
+	var lit := Color("#6a5236") if not enemy else Color("#4f574f")
 	for i in wc.size():
 		var w: Dictionary = gear["wheels"][i]
-		var top: Vector2 = xf * Vector2(float(w["x"]) + 3.0, float(w["y"]) - float(w["r"]) - 5.0)
-		Px.linef(img, wc[i], top, Color("#1a130d") if not enemy else Color("#151915"))
-		Px.linef(img, wc[i] + Vector2(1, 0), top + Vector2(1, 0), Color("#2c2117") if not enemy else Color("#252b25"))
+		var r := float(w["r"])
+		var piv: Vector2 = xf * Vector2(float(w["x"]) - r + 0.5, float(w["y"]) - r * 0.6)
+		var stop: Vector2 = xf * Vector2(float(w["x"]) + 2.5, float(w["y"]) - r - 7.0)
+		var n := maxi(ceili(wc[i].distance_to(stop)), 1)
+		for k in n + 1:
+			var q := wc[i].lerp(stop, float(k) / n) + Vector2(1, 0)
+			Px.put(img, floori(q.x), floori(q.y), lit if k % 2 == 0 else dark)
+			Px.put(img, floori(q.x) + 1, floori(q.y), mid if k % 2 == 0 else dark)
+		Px.linef(img, wc[i] + Vector2(0, 1), piv + Vector2(0, 1), dark)
+		Px.linef(img, wc[i], piv, mid)
+		Px.put(img, floori(piv.x), floori(piv.y), lit)
 	if not bool(gear.get("track_front", false)):
 		draw_track(img, b, travel, t, enemy)
 	for i in wc.size():

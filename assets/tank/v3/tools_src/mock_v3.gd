@@ -349,10 +349,13 @@ func tilt_frame(B: Dictionary, E: Dictionary, t: float, method: String, size: Ve
 		var wcw := Gear.wheel_centres(L["gear"], xq, gfn)
 		st["gear"] = false
 		st["guns"] = false
+		st["front"] = false
 		var body := Tank.frame(B, st)
 		Gear.draw_back(img, L["gear"], xq, wcw, float(st["travel"]))
 		Px.rotate_rotsprite(Px.rotsprite_prep(body), rq2, psrc, img, pdst)
 		Gear.draw_front(img, L["gear"], xq, wcw, float(st["travel"]))
+		if B.has("front_prep"):
+			Px.rotate_rotsprite(B["front_prep"], rq2, psrc, img, pdst)
 		Tank.guns(img, L, xq, st)
 	return {"img": img, "deg": info["deg"]}
 
@@ -377,6 +380,7 @@ func job_tilt(names: Array) -> void:
 	}
 	for name: String in names:
 		var B := Tank.build(layout(name))
+		B["front_prep"] = Px.rotsprite_prep(B["front"])
 		var size := Vector2i(720, 270)
 		for m: String in ["a", "b", "c"]:
 			var n := 90
