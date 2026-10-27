@@ -19,6 +19,17 @@ const BEAM_LIT := Color(1.0, 0.8, 0.52)
 static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	var o := v.origin
 	var broken := state.hull.breakdown
+	if TankV3Env.r4():
+		# MOCK v3 r3: the r4 tank's own lights instead of the v2 rooms, machines and beams
+		TankV3Env.draw_r4_lights(ci, v, state)
+		_shells(ci, v, state)
+		v.fx.draw_light(ci)
+		if v.fx.wash > 0.0:
+			var cw := v.fx.wash_color
+			TankDraw.glow_at(ci, v.fx.wash_pos, 320.0, Color(cw.r, cw.g, cw.b, 0.16 * v.fx.wash))
+		if not TankV3Env.layer_fix():
+			draw_world(ci, v, state)
+		return
 	_rooms(ci, v, o, broken)
 	if not broken:
 		var rooms := {}
@@ -44,7 +55,10 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 ## burning wrecks and the Behemoth, the beams' rim light on enemies and wrecks, the enemies' slits
 ## and telegraph glows. So a lamp standing behind the hull never shines through it.
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
-	_ground_pools(ci, v, state.hull.breakdown)
+	if TankV3Env.r4():
+		TankV3Env.draw_r4_pools(ci, v, state.hull.breakdown)
+	else:
+		_ground_pools(ci, v, state.hull.breakdown)
 	_world_lamps(ci, v, state)
 	if TankV3Env.on():
 		for bx in TankV3Env.bases(v, state):

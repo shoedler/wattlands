@@ -440,6 +440,11 @@ func sy(world_y: float) -> float:
 
 ## A variant anchor in stage px (this frame's origin).
 func anchor(name: String) -> Vector2:
+	if TankV3Env.r4():
+		# MOCK v3 r3: the r4 tank's anchors where it has them
+		var a := TankV3Env.r4_anchor(origin, name)
+		if not is_nan(a.x):
+			return a
 	return origin + kit.anchor(variant, name)
 
 
@@ -919,6 +924,8 @@ func barrel_pivot() -> Vector2:
 
 func muzzle() -> Vector2:
 	var blen := kit.anchor(variant, "muzzle").x - kit.anchor(variant, "barrel_pivot").x
+	if TankV3Env.r4():
+		blen = float(TankV3Env.R4["gun_len"])
 	return barrel_pivot() + barrel_vector() * blen
 
 
@@ -1103,6 +1110,8 @@ func hud_tank_point(name: String) -> Vector2:
 			p = muzzle()
 		"rear":
 			p = Vector2(origin.x + ART_REAR, GROUND)
+			if TankV3Env.r4():
+				p = Vector2(TankV3Env.r4_at(origin).x + 14.0, GROUND)
 	return Vector2(_hud_x(p.x), p.y) + off
 
 
@@ -1121,6 +1130,12 @@ func hud_barrel_dir() -> float:
 ## faces, with its roof crew) and the hull below it.
 func hud_tank_rects() -> Array[Rect2]:
 	var off := Vector2(0, y_off)
+	if TankV3Env.r4():
+		var rs: Array[Rect2] = []
+		for r in TankV3Env.r4_rects(origin):
+			var h0 := _hud_rect(r)
+			rs.append(Rect2(h0.position + off, h0.size))
+		return rs
 	var tr := kit.turret_rect(variant)
 	var a := turret_map(origin + tr.position)
 	var b := turret_map(origin + tr.end)
@@ -1171,6 +1186,9 @@ func _draw_world() -> void:
 
 func _draw_tank() -> void:
 	if _built and game.state != null:
+		if TankV3Env.r4():
+			TankV3Env.draw_tank_r4(layer("Tank"), self)
+			return
 		TankHullDraw.draw(layer("Tank"), self, game.state)
 
 

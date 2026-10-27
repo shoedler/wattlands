@@ -17,6 +17,9 @@ extends RefCounted
 ##                            before/after frame
 ##   TANK_V3_BASE_SX=<px>     one little base with its left end at this stage x (art px), for the
 ##                            hero frames; otherwise bases stand at their world places
+##   TANK_V3_TANK=r4          r3: draw the tank builder's rebuilt tank (round 4, a static composed
+##                            sprite, assets/tank/v3env/tank_r4.png) instead of the v2 tank, with
+##                            its own lights (position lamps, headlight, searchlight, room bloom)
 ##   TANK_V3_GROUND_Y=<px>    r2: where the road line (the tank's and the enemies' ground) sits on
 ##                            the 960 x 540 base canvas (default GROUND_Y; v2 had 340). The whole
 ##                            stage drops by GROUND_Y - TankView.GROUND: the sky gains rows on top,
@@ -79,6 +82,45 @@ const ARM_RED := Color(0.5, 0.13, 0.09)
 const ARM_WHITE := Color(0.6, 0.62, 0.58)
 const LAMP := Color(1.0, 0.7, 0.34)
 
+## r3: the tank builder's r4 tank (tank3-tank: assets/tank/v3/tools_src/tank_r4.gd layout()):
+## the sprite, its ground row (track bottom), where its local origin sits relative to the v2
+## tank's top-left (TankView.TANK_POS; x as the tank builder placed it over this backdrop), and its
+## anchors in sprite px.
+const R4_FILE := "res://assets/tank/v3env/tank_r4.png"
+const R4_GROUND := 209.0
+const R4_DX := 12.0
+const R4 := {
+	"barrel_pivot": Vector2(350.1, 103.05),
+	"gun_len": 90.5,
+	"bow_gun_upper_pivot": Vector2(400.0, 126.9),
+	"bow_gun_upper_len": 23.5,
+	"bow_gun_lower_pivot": Vector2(430.2, 139.0),
+	"bow_gun_lower_len": 22.0,
+	"headlight": Vector2(456.5, 164.0),
+	"searchlight": Vector2(308.5, 63.5),
+	"lamp_red_rear": Vector2(31.5, 127.5),
+	"lamp_red_front": Vector2(442.5, 149.5),
+	"lamp_green": Vector2(105.5, 102.5),
+	"exhaust": Vector2(40.0, 112.0),
+	"turret_roof_commander_feet": Vector2(300.0, 76.0),
+	"rear": Vector2(14.0, 209.0),
+}
+## r4's rooms (sprite px) and their bloom colours (the arc room cold).
+const R4_ROOMS := {
+	"drive": Rect2(89, 152, 92, 31),
+	"loader": Rect2(181, 152, 69, 31),
+	"gun": Rect2(250, 152, 43, 31),
+	"lights": Rect2(293, 152, 43, 31),
+	"sec": Rect2(361, 156, 30, 27),
+	"quarters": Rect2(104, 125, 160, 24),
+	"turret_drive": Rect2(268, 123, 67, 27),
+}
+## The body rects the HUD's world tags keep clear of (sprite px): the turret without the barrel,
+## and the hull.
+const R4_TURRET := Rect2(178, 56, 176, 58)
+const R4_HULL := Rect2(8, 106, 460, 110)
+
+static var _r4: Texture2D = null
 static var _cfg: Dictionary = {}
 static var _planes: Dictionary = {}
 static var _road: Texture2D = null
@@ -98,6 +140,7 @@ static func cfg() -> Dictionary:
 			"layer_fix": OS.get_environment("TANK_V3_LAYERFIX") != "0",
 			"base_sx": float(bsx) if bsx.is_valid_float() else NAN,
 			"ground_y": GROUND_Y,
+			"r4": OS.get_environment("TANK_V3_TANK") == "r4",
 		}
 		var gy := OS.get_environment("TANK_V3_GROUND_Y")
 		if gy.is_valid_float():
@@ -111,6 +154,115 @@ static func on() -> bool:
 
 static func layer_fix() -> bool:
 	return bool(cfg()["layer_fix"])
+
+
+static func r4() -> bool:
+	return on() and bool(cfg()["r4"])
+
+
+## The r4 sprite's top-left on the stage for the view's tank origin (shake and lurch included).
+static func r4_at(origin: Vector2) -> Vector2:
+	return Vector2(origin.x + R4_DX, origin.y - TankView.TANK_POS.y + TankView.GROUND - R4_GROUND)
+
+
+## An r4 anchor on the stage (sprite px + r4_at), or NAN when r4 has none by that name.
+static func r4_anchor(origin: Vector2, name: String) -> Vector2:
+	var key := name
+	match name:
+		"muzzle":
+			var p: Vector2 = R4["barrel_pivot"]
+			return r4_at(origin) + p + Vector2(float(R4["gun_len"]), 0)
+		"bow_gun_upper_muzzle", "bow_gun_lower_muzzle":
+			var k2 := name.replace("_muzzle", "")
+			var p2: Vector2 = R4[k2 + "_pivot"]
+			return r4_at(origin) + p2 + Vector2(float(R4[k2 + "_len"]), 0)
+		"searchlight_turret_lens":
+			key = "searchlight"
+		"running_light_red_rear":
+			key = "lamp_red_rear"
+		"running_light_red_front":
+			key = "lamp_red_front"
+		"running_light_green_rear":
+			key = "lamp_green"
+	if not R4.has(key) or not R4[key] is Vector2:
+		return Vector2(NAN, NAN)
+	return r4_at(origin) + (R4[key] as Vector2)
+
+
+static func r4_tex() -> Texture2D:
+	if _r4 == null:
+		var img := Image.load_from_file(ProjectSettings.globalize_path(R4_FILE))
+		_r4 = ImageTexture.create_from_image(img)
+	return _r4
+
+
+## r3: the r4 tank, static (no moving tracks in these frames), standing on the ground line.
+static func draw_tank_r4(ci: CanvasItem, v: TankView) -> void:
+	ci.draw_texture(r4_tex(), r4_at(v.origin).round())
+
+
+## r3: r4's own lights on the tank light layer: the position lamps with halos, the headlight with
+## its halo and beam, the turret searchlight's beam (dimmed with the arc as in v2), and a bloom of
+## the lit rooms (the arc room cold).
+static func draw_r4_lights(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	var at := r4_at(v.origin)
+	var blink := 0.75 + 0.25 * sin(v.time * 2.2)
+	TankDraw.lamp(ci, at + (R4["lamp_red_rear"] as Vector2), TankLightDraw.RED, blink)
+	TankDraw.lamp(ci, at + (R4["lamp_red_front"] as Vector2), TankLightDraw.RED, 0.9)
+	TankDraw.lamp(ci, at + (R4["lamp_green"] as Vector2), TankLightDraw.GREEN, blink)
+	var hk := 0.3 if state.hull.breakdown else 1.0
+	var hl := at + (R4["headlight"] as Vector2)
+	TankDraw.beam(
+		ci, hl, deg_to_rad(9.0), 210.0, deg_to_rad(12.0), Color(1.0, 0.82, 0.52), 0.5 * hk
+	)
+	TankDraw.glow_at(ci, hl, 6.0, Color(1.0, 0.95, 0.8, hk))
+	TankDraw.glow_at(ci, hl, 22.0, Color(1.0, 0.8, 0.5, 0.35 * hk))
+	var sk := v.searchlight_k(state)
+	var sl := at + (R4["searchlight"] as Vector2)
+	var sweep := deg_to_rad(-11.0 + 3.0 * sin(v.time * 0.45))
+	TankDraw.beam(ci, sl, sweep, 300.0, deg_to_rad(6.0), Color(1.0, 0.92, 0.75), 0.5 * sk)
+	TankDraw.glow_at(ci, sl, 9.0, Color(1.0, 0.95, 0.8, 0.9 * maxf(sk, 0.3)))
+	TankDraw.glow_at(ci, sl, 26.0, Color(1.0, 0.85, 0.6, 0.22 * sk))
+	if state.hull.breakdown:
+		return
+	for id: String in R4_ROOMS:
+		var r: Rect2 = R4_ROOMS[id]
+		var c := at + r.get_center()
+		var col := Color(0.66, 0.82, 1.0) if id == "lights" else Color(1.0, 0.66, 0.34)
+		var fl := 0.92 + 0.08 * sin(v.time * 3.0 + r.position.x)
+		TankDraw.glow_at(ci, c, r.size.x * 0.75, Color(col.r, col.g, col.b, 0.1 * fl))
+		TankDraw.glow_at(ci, c, r.size.x * 0.35, Color(col.r, col.g, col.b, 0.08 * fl))
+
+
+## r3: the headlight's pool on the road and the rooms' spill, from r4's anchors (world light).
+static func draw_r4_pools(ci: CanvasItem, v: TankView, broken: bool) -> void:
+	var at := r4_at(v.origin)
+	var hk := 0.3 if broken else 1.0
+	var hl := at + (R4["headlight"] as Vector2)
+	var g := TankView.GROUND
+	TankLightDraw.ground_glow(
+		ci, Vector2(hl.x + 160.0, g + 6.0), 125.0, Color(1.0, 0.75, 0.45, 0.4 * hk)
+	)
+	TankLightDraw.ground_glow(
+		ci, Vector2(hl.x + 45.0, g + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * hk)
+	)
+	if broken:
+		return
+	for id: String in R4_ROOMS:
+		var r: Rect2 = R4_ROOMS[id]
+		var c := Color(0.66, 0.82, 1.0, 0.06) if id == "lights" else Color(1.0, 0.66, 0.36, 0.08)
+		TankLightDraw.ground_glow(
+			ci, Vector2(at.x + r.get_center().x, g + 6.0), r.size.x * 0.8 + 20.0, c
+		)
+
+
+## r3: the body rects the HUD keeps clear of, on the stage.
+static func r4_rects(origin: Vector2) -> Array[Rect2]:
+	var at := r4_at(origin)
+	var out: Array[Rect2] = []
+	for r: Rect2 in [R4_TURRET, R4_HULL]:
+		out.append(Rect2(at + r.position, r.size))
+	return out
 
 
 ## How far the stage drops below v2's layout (art px; 0 with the v2 world).
