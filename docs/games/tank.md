@@ -244,7 +244,7 @@ The v1 rules otherwise hold (never in WARMUP, the first 300 s or the cool-down, 
 
 **Free roam:**
 - **Score:** team points (2.10), kills by type, distance, evades, breakdowns.
-- **Grade:** by points per minute of WORK time: S ≥ 9, A ≥ 7, B ≥ 5, C ≥ 3, else D (tune in P7 so a compliant 30-min crew of 3 earns B or A).
+- **Grade:** by points per minute of WORK time: S ≥ 22.5, A ≥ 17.5, B ≥ 12.5, C ≥ 7.5, else D (tuned in P5 so a compliant 30-min crew of 3 earns B or A).
 - **Outcome:** `finished("time_up")`.
 - **Rewards:** XP = round(kJ / 10) plus the grade bonus. Unlocks as for missions, minus the Behemoth one.
 - **Strava `ride_tag`:** "Free Roam N min".
