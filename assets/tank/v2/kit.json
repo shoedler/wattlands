@@ -1,0 +1,943 @@
+{
+  "version": "v2-1",
+  "note": "Mock asset kit for owner approval, built from the reference image only (no fal). 960x540 art px.",
+  "art_resolution": [
+    960,
+    540
+  ],
+  "reference_to_art": {
+    "scale": 0.882352941176471,
+    "offset_y": 2,
+    "note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"
+  },
+  "plate": {
+    "file": "plate_full.png",
+    "note": "reference without tank, beams, smoke and turret crew; tank area filled by quilting tank-free bands"
+  },
+  "planes": [
+    {
+      "blur_box_radius": 1,
+      "blur_sigma_px": 1.41,
+      "file": "plane_sky.png",
+      "name": "sky",
+      "parallax": 0.02,
+      "wide_file": "plane_sky_wide.png",
+      "wide_px": 1920,
+      "y0": 0,
+      "y1": 260
+    },
+    {
+      "blur_box_radius": 3,
+      "blur_sigma_px": 3.46,
+      "file": "plane_mountains.png",
+      "name": "mountains",
+      "parallax": 0.08,
+      "wide_file": "plane_mountains_wide.png",
+      "wide_px": 1920,
+      "y0": 20,
+      "y1": 232
+    },
+    {
+      "blur_box_radius": 3,
+      "blur_sigma_px": 3.46,
+      "file": "plane_cliff_lake.png",
+      "name": "cliff_lake",
+      "parallax": 0.2,
+      "wide_file": "",
+      "wide_px": 0,
+      "y0": 40,
+      "y1": 330
+    },
+    {
+      "blur_box_radius": 2,
+      "blur_sigma_px": 2.45,
+      "file": "plane_forest.png",
+      "name": "forest",
+      "parallax": 0.45,
+      "wide_file": "plane_forest_wide.png",
+      "wide_px": 1920,
+      "y0": 0,
+      "y1": 354
+    },
+    {
+      "blur_box_radius": 0,
+      "blur_sigma_px": 0,
+      "file": "plane_road.png",
+      "name": "road",
+      "parallax": 1.0,
+      "wide_file": "plane_road_wide.png",
+      "wide_px": 1920,
+      "y0": 312,
+      "y1": 392
+    },
+    {
+      "blur_box_radius": 6,
+      "blur_sigma_px": 6.48,
+      "file": "plane_foreground.png",
+      "name": "foreground",
+      "parallax": 1.35,
+      "wide_file": "plane_foreground_wide.png",
+      "wide_px": 1920,
+      "y0": 344,
+      "y1": 540
+    }
+  ],
+  "planes_note": "Back to front: sky, mountains, cliff_lake, forest, [tank on road], road, foreground. y0/y1 = rows of the 960x540 frame the plane image covers. parallax = scroll factor vs the road (1.0). Blur is baked (box radius x3 passes ~ gaussian sigma). Wide files are 1920 px seamless tiles (sky/mountains mirrored, forest/road/foreground quilted from calm cut points; the forest wide strip has a level tree-top fade). cliff_lake is a single landmark piece (alpha 0 left of x~560).",
+  "tank": {
+    "source": "tank_citadel.png (= tank_3rider.png), cut from the reference, star and A17 painted out, crew removed from rooms and turret roof, beams/smoke/headlight glow removed",
+    "parts": {
+      "hull_3rider": "hull_3rider.png",
+      "turret_body": "turret_body.png",
+      "turret_barrel": "turret_barrel.png",
+      "note": "parts share the tank_3rider frame (480x240): overlay at the same origin"
+    },
+    "modules": {
+      "note": "reference px. Hull layers: upper (y<310: roof + upper deck), lower (310..352: lower deck), running gear (y>=352, rebuilt per length by removing/duplicating 34 px wheel periods and resampling). Cuts sit at bulkheads; seams cross-fade 4 px.",
+      "rear": "x 17..188 upper / 17..256 lower (rear plate, engine room, ladder 1)",
+      "middle_steam": "lower 256..332 (ladder 2 + shell rack)",
+      "middle_dynamo": "lower 332..386 (generator room)",
+      "middle_upper_bays": "upper 188..264 (desk bays), 300..385 turret-drive room",
+      "front": "x 386..561 (front rooms, glacis, bow guns, headlight, sprocket)",
+      "turret": "x 188..534 y 118..263, scaled 0.85 for 1 rider",
+      "running_gear_period_ref_px": 34
+    },
+    "variants": {
+      "tank_1rider": {
+        "file": "tank_1rider.png",
+        "size": [
+          366,
+          240
+        ],
+        "hull_length_px": 330.0,
+        "place_at_reference_framing": [
+          15,
+          107
+        ],
+        "turret_scale": 0.85,
+        "rooms": [
+          {
+            "id": "diesel",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              99.5,
+              169.5,
+              110.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "diesel",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              102.5,
+              172.5
+            ]
+          },
+          {
+            "id": "front_machinery",
+            "role": "spare",
+            "deck": "lower",
+            "rect": [
+              224.0,
+              174.0,
+              49.5,
+              29.0
+            ],
+            "floor_y": 203.0
+          },
+          {
+            "id": "quarters",
+            "role": "crew",
+            "deck": "upper",
+            "rect": [
+              115.5,
+              138.5,
+              100.5,
+              26.5
+            ],
+            "floor_y": 165.0
+          },
+          {
+            "id": "upper_front",
+            "role": "spare",
+            "deck": "upper",
+            "rect": [
+              216.0,
+              145.5,
+              26.0,
+              26.5
+            ],
+            "floor_y": 172.0
+          }
+        ],
+        "anchors": {
+          "muzzle": [
+            368.0,
+            117.5
+          ],
+          "barrel_pivot": [
+            282.5,
+            116.5
+          ],
+          "turret_pivot": [
+            197.0,
+            127.0
+          ],
+          "antenna_tip": [
+            146.0,
+            26.0
+          ],
+          "turret_roof_commander_feet": [
+            230.5,
+            92.0
+          ],
+          "searchlight_turret_lens": [
+            243.5,
+            79.0
+          ],
+          "headlight": [
+            347.0,
+            182.5
+          ],
+          "running_light_red_front": [
+            332.0,
+            167.0
+          ],
+          "running_light_red_rear": [
+            32.5,
+            136.0
+          ],
+          "running_light_green_rear": [
+            118.0,
+            114.5
+          ],
+          "exhaust": [
+            84.0,
+            131.5
+          ],
+          "bow_gun_upper_muzzle": [
+            309.0,
+            141.0
+          ],
+          "bow_gun_upper_pivot": [
+            283.0,
+            141.0
+          ],
+          "bow_gun_lower_muzzle": [
+            340.5,
+            155.5
+          ],
+          "bow_gun_lower_pivot": [
+            317.0,
+            154.5
+          ],
+          "drive_sprocket_centre": [
+            305.5,
+            209.0
+          ],
+          "road_wheel_line": {
+            "y": 218.0,
+            "x_from": 79.5,
+            "x_to": 266.5,
+            "wheel_centres_x": [
+              79.5,
+              105.5,
+              139.5,
+              171.5,
+              202.5,
+              235.0,
+              266.5
+            ],
+            "wheel_radius": 8,
+            "ground_contact_y": 233.0
+          },
+          "drive_sprocket_radius": 18.5
+        }
+      },
+      "tank_2rider": {
+        "file": "tank_2rider.png",
+        "size": [
+          413,
+          240
+        ],
+        "hull_length_px": 377.0,
+        "place_at_reference_framing": [
+          15,
+          107
+        ],
+        "turret_scale": 1.0,
+        "rooms": [
+          {
+            "id": "diesel",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              99.5,
+              169.5,
+              110.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "diesel",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              102.5,
+              172.5
+            ]
+          },
+          {
+            "id": "dynamo",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              211.0,
+              169.5,
+              47.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "dynamo",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              214.0,
+              172.5
+            ]
+          },
+          {
+            "id": "front_machinery",
+            "role": "spare",
+            "deck": "lower",
+            "rect": [
+              271.0,
+              174.0,
+              49.5,
+              29.0
+            ],
+            "floor_y": 203.0
+          },
+          {
+            "id": "quarters",
+            "role": "crew",
+            "deck": "upper",
+            "rect": [
+              115.5,
+              138.5,
+              63.5,
+              26.5
+            ],
+            "floor_y": 165.0
+          },
+          {
+            "id": "turret_drive",
+            "role": "gunner",
+            "deck": "upper",
+            "rect": [
+              182.5,
+              137.0,
+              75.0,
+              30.0
+            ],
+            "floor_y": 167.0
+          },
+          {
+            "id": "upper_front",
+            "role": "spare",
+            "deck": "upper",
+            "rect": [
+              263.0,
+              145.5,
+              25.5,
+              26.5
+            ],
+            "floor_y": 172.0
+          }
+        ],
+        "anchors": {
+          "muzzle": [
+            415.5,
+            115.5
+          ],
+          "barrel_pivot": [
+            315.0,
+            114.5
+          ],
+          "turret_pivot": [
+            214.5,
+            127.0
+          ],
+          "antenna_tip": [
+            154.5,
+            8.0
+          ],
+          "turret_roof_commander_feet": [
+            254.0,
+            85.5
+          ],
+          "searchlight_turret_lens": [
+            269.0,
+            70.5
+          ],
+          "headlight": [
+            393.5,
+            182.5
+          ],
+          "running_light_red_front": [
+            378.5,
+            167.0
+          ],
+          "running_light_red_rear": [
+            32.5,
+            136.0
+          ],
+          "running_light_green_rear": [
+            118.0,
+            114.5
+          ],
+          "exhaust": [
+            84.0,
+            131.5
+          ],
+          "bow_gun_upper_muzzle": [
+            355.5,
+            141.0
+          ],
+          "bow_gun_upper_pivot": [
+            330.0,
+            141.0
+          ],
+          "bow_gun_lower_muzzle": [
+            387.5,
+            155.5
+          ],
+          "bow_gun_lower_pivot": [
+            363.5,
+            154.5
+          ],
+          "drive_sprocket_centre": [
+            352.0,
+            209.0
+          ],
+          "road_wheel_line": {
+            "y": 218.0,
+            "x_from": 79.5,
+            "x_to": 313.5,
+            "wheel_centres_x": [
+              79.5,
+              104.5,
+              136.0,
+              166.0,
+              195.5,
+              226.0,
+              255.0,
+              282.5,
+              313.5
+            ],
+            "wheel_radius": 8,
+            "ground_contact_y": 233.0
+          },
+          "drive_sprocket_radius": 18.5
+        }
+      },
+      "tank_3rider": {
+        "file": "tank_3rider.png",
+        "size": [
+          480,
+          240
+        ],
+        "hull_length_px": 444.0,
+        "place_at_reference_framing": [
+          15,
+          107
+        ],
+        "turret_scale": 1.0,
+        "rooms": [
+          {
+            "id": "diesel",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              99.5,
+              169.5,
+              110.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "diesel",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              102.5,
+              172.5
+            ]
+          },
+          {
+            "id": "steam",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              211.0,
+              169.5,
+              67.0,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "steam",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              214.0,
+              172.5
+            ]
+          },
+          {
+            "id": "dynamo",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              278.0,
+              169.5,
+              47.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "dynamo",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              281.0,
+              172.5
+            ]
+          },
+          {
+            "id": "front_machinery",
+            "role": "spare",
+            "deck": "lower",
+            "rect": [
+              338.0,
+              174.0,
+              49.5,
+              29.0
+            ],
+            "floor_y": 203.0
+          },
+          {
+            "id": "quarters",
+            "role": "crew",
+            "deck": "upper",
+            "rect": [
+              115.5,
+              138.5,
+              130.5,
+              26.5
+            ],
+            "floor_y": 165.0
+          },
+          {
+            "id": "turret_drive",
+            "role": "gunner",
+            "deck": "upper",
+            "rect": [
+              249.5,
+              137.0,
+              75.0,
+              30.0
+            ],
+            "floor_y": 167.0
+          },
+          {
+            "id": "upper_front",
+            "role": "spare",
+            "deck": "upper",
+            "rect": [
+              330.0,
+              145.5,
+              25.5,
+              26.5
+            ],
+            "floor_y": 172.0
+          }
+        ],
+        "anchors": {
+          "muzzle": [
+            451.0,
+            115.5
+          ],
+          "barrel_pivot": [
+            350.5,
+            114.5
+          ],
+          "turret_pivot": [
+            249.5,
+            127.0
+          ],
+          "antenna_tip": [
+            189.5,
+            8.0
+          ],
+          "turret_roof_commander_feet": [
+            289.5,
+            85.5
+          ],
+          "searchlight_turret_lens": [
+            304.5,
+            70.5
+          ],
+          "headlight": [
+            460.5,
+            182.5
+          ],
+          "running_light_red_front": [
+            445.5,
+            167.0
+          ],
+          "running_light_red_rear": [
+            32.5,
+            136.0
+          ],
+          "running_light_green_rear": [
+            118.0,
+            114.5
+          ],
+          "exhaust": [
+            84.0,
+            131.5
+          ],
+          "bow_gun_upper_muzzle": [
+            422.5,
+            141.0
+          ],
+          "bow_gun_upper_pivot": [
+            397.0,
+            141.0
+          ],
+          "bow_gun_lower_muzzle": [
+            454.5,
+            155.5
+          ],
+          "bow_gun_lower_pivot": [
+            430.5,
+            154.5
+          ],
+          "drive_sprocket_centre": [
+            419.0,
+            209.0
+          ],
+          "road_wheel_line": {
+            "y": 218.0,
+            "x_from": 79.5,
+            "x_to": 380.5,
+            "wheel_centres_x": [
+              79.5,
+              105.0,
+              137.5,
+              168.5,
+              198.5,
+              230.5,
+              261.0,
+              290.5,
+              320.5,
+              348.5,
+              380.5
+            ],
+            "wheel_radius": 8,
+            "ground_contact_y": 233.0
+          },
+          "drive_sprocket_radius": 18.5
+        }
+      },
+      "tank_4rider": {
+        "file": "tank_4rider.png",
+        "size": [
+          528,
+          240
+        ],
+        "hull_length_px": 491.0,
+        "place_at_reference_framing": [
+          15,
+          107
+        ],
+        "turret_scale": 1.0,
+        "rooms": [
+          {
+            "id": "diesel",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              99.5,
+              169.5,
+              110.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "diesel",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              102.5,
+              172.5
+            ]
+          },
+          {
+            "id": "steam",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              211.0,
+              169.5,
+              67.0,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "steam",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              214.0,
+              172.5
+            ]
+          },
+          {
+            "id": "dynamo",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              278.0,
+              169.5,
+              47.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "dynamo",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              281.0,
+              172.5
+            ]
+          },
+          {
+            "id": "arc",
+            "role": "engine",
+            "deck": "lower",
+            "rect": [
+              325.5,
+              169.5,
+              47.5,
+              33.5
+            ],
+            "floor_y": 203.0,
+            "engine": "arc",
+            "lamp_tint_slot": true,
+            "icon_chip_at": [
+              328.5,
+              172.5
+            ]
+          },
+          {
+            "id": "front_machinery",
+            "role": "spare",
+            "deck": "lower",
+            "rect": [
+              385.5,
+              174.0,
+              49.5,
+              29.0
+            ],
+            "floor_y": 203.0
+          },
+          {
+            "id": "quarters",
+            "role": "crew",
+            "deck": "upper",
+            "rect": [
+              115.5,
+              138.5,
+              178.5,
+              26.5
+            ],
+            "floor_y": 165.0
+          },
+          {
+            "id": "turret_drive",
+            "role": "gunner",
+            "deck": "upper",
+            "rect": [
+              297.5,
+              137.0,
+              75.0,
+              30.0
+            ],
+            "floor_y": 167.0
+          },
+          {
+            "id": "upper_front",
+            "role": "spare",
+            "deck": "upper",
+            "rect": [
+              377.5,
+              145.5,
+              25.5,
+              26.5
+            ],
+            "floor_y": 172.0
+          }
+        ],
+        "anchors": {
+          "muzzle": [
+            489.5,
+            115.5
+          ],
+          "barrel_pivot": [
+            389.0,
+            114.5
+          ],
+          "turret_pivot": [
+            288.5,
+            127.0
+          ],
+          "antenna_tip": [
+            228.5,
+            8.0
+          ],
+          "turret_roof_commander_feet": [
+            328.0,
+            85.5
+          ],
+          "searchlight_turret_lens": [
+            343.0,
+            70.5
+          ],
+          "headlight": [
+            508.0,
+            182.5
+          ],
+          "running_light_red_front": [
+            493.0,
+            167.0
+          ],
+          "running_light_red_rear": [
+            32.5,
+            136.0
+          ],
+          "running_light_green_rear": [
+            118.0,
+            114.5
+          ],
+          "exhaust": [
+            84.0,
+            131.5
+          ],
+          "bow_gun_upper_muzzle": [
+            470.5,
+            141.0
+          ],
+          "bow_gun_upper_pivot": [
+            444.5,
+            141.0
+          ],
+          "bow_gun_lower_muzzle": [
+            502.0,
+            155.5
+          ],
+          "bow_gun_lower_pivot": [
+            478.0,
+            154.5
+          ],
+          "drive_sprocket_centre": [
+            467.0,
+            209.0
+          ],
+          "road_wheel_line": {
+            "y": 218.0,
+            "x_from": 79.5,
+            "x_to": 428.0,
+            "wheel_centres_x": [
+              79.5,
+              104.5,
+              136.0,
+              166.0,
+              195.0,
+              225.5,
+              255.5,
+              284.0,
+              313.0,
+              341.5,
+              370.0,
+              397.5,
+              428.0
+            ],
+            "wheel_radius": 8,
+            "ground_contact_y": 233.0
+          },
+          "drive_sprocket_radius": 18.5,
+          "searchlight_tower_lens": [
+            123,
+            103
+          ]
+        }
+      }
+    }
+  },
+  "crew": {
+    "sheet": "crew_sheet.png",
+    "cell": [
+      16,
+      14
+    ],
+    "facing": "right",
+    "feet_row": 13,
+    "figure_height_px": "11-13",
+    "frames": {
+      "commander": [
+        "crew_frames/commander_0.png",
+        "crew_frames/commander_1.png",
+        "crew_frames/commander_2.png"
+      ],
+      "engineer": [
+        "crew_frames/engineer_0.png",
+        "crew_frames/engineer_1.png",
+        "crew_frames/engineer_2.png"
+      ],
+      "gunner": [
+        "crew_frames/gunner_0.png",
+        "crew_frames/gunner_1.png",
+        "crew_frames/gunner_2.png"
+      ],
+      "loader": [
+        "crew_frames/loader_0.png",
+        "crew_frames/loader_1.png",
+        "crew_frames/loader_2.png",
+        "crew_frames/loader_3.png"
+      ],
+      "loader_climb": [
+        "crew_frames/loader_climb_0.png",
+        "crew_frames/loader_climb_1.png"
+      ],
+      "stoker": [
+        "crew_frames/stoker_0.png",
+        "crew_frames/stoker_1.png",
+        "crew_frames/stoker_2.png",
+        "crew_frames/stoker_3.png"
+      ],
+      "tech": [
+        "crew_frames/tech_0.png",
+        "crew_frames/tech_1.png",
+        "crew_frames/tech_2.png"
+      ]
+    },
+    "commander_lens_px": {
+      "0": [
+        11,
+        5
+      ],
+      "1": [
+        10,
+        3
+      ],
+      "2": [
+        11,
+        7
+      ]
+    },
+    "commander_beam_angle_deg": {
+      "0": 0,
+      "1": -35,
+      "2": 25
+    },
+    "note": "the reference crew are ~20 px tall at 960 scale; these follow the 10-12 px spec"
+  }
+}
