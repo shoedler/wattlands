@@ -17,7 +17,6 @@ const FROZEN_KEYS: Array[String] = [
 	"tanks.*.turret.trunnion",
 	"tanks.*.turret.barrel_px",
 	"tanks.*.muzzle",
-	"tanks.citadel.secondaries",
 	"enemies.enemy_light.muzzle",
 	"enemies.enemy_medium.muzzle",
 	"enemies.enemy_heavy.muzzle",
@@ -51,9 +50,10 @@ static func from_dict(d: Dictionary) -> TankGeometry:
 	return g
 
 
-## Every problem with the frozen keys ([] when usable): each present with the right shape, the
-## Citadel's two secondaries with muzzle and facing, three bogies, and muzzle == trunnion +
-## [barrel_px, 0] at 0 degrees for every tank.
+## Every problem with the frozen keys ([] when usable): each present with the right shape, three
+## bogies, and muzzle == trunnion + [barrel_px, 0] at 0 degrees for every tank. (v2: the bow guns
+## replace the Citadel's secondaries, so the rules no longer need `tanks.citadel.secondaries`; the
+## accessor stays for a rig that still has them.)
 func validate() -> Array[String]:
 	var errors: Array[String] = []
 	for key in FROZEN_KEYS:
@@ -76,8 +76,6 @@ func validate() -> Array[String]:
 		var want := trunnion(t) + Vector2(barrel_px(t), 0.0)
 		if not muzzle(t, 0.0, TankIds.FACE_RIGHT).is_equal_approx(want):
 			errors.append("rigs.json tanks.%s: muzzle must equal trunnion + [barrel_px, 0]" % t)
-	if secondary_muzzles(TankIds.TANK_CITADEL).size() != 2:
-		errors.append("rigs.json tanks.citadel.secondaries: fore and aft, each with a muzzle")
 	if (TankContentSchema.dig(data, "boss.bogies") as Array).size() != 3:
 		errors.append(
 			"rigs.json boss.bogies: three [x, y, w, h] boxes, lowest x (nearest the tank) first"
@@ -130,6 +128,18 @@ func secondary_muzzles(tank: String) -> Array:
 	for s: Variant in secs if secs is Array else []:
 		if s is Dictionary and s.get("muzzle") is Array:
 			out.append([_to_vec(s["muzzle"]), int(s.get("facing", TankIds.FACE_RIGHT))])
+	return out
+
+
+## The bow guns' muzzles of `tank` in the hull frame (v2, rigs.json tanks.<id>.bow_guns[].muzzle,
+## re-measured from the kit; empty when the rig has none). The rules' bursts are hitscan, so only
+## presentation and tests read them.
+func bow_muzzles(tank: String) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var guns: Variant = TankContentSchema.dig(data, "tanks.%s.bow_guns" % rig_of(tank))
+	for g: Variant in guns if guns is Array else []:
+		if g is Dictionary and g.get("muzzle") is Array:
+			out.append(_to_vec(g["muzzle"]))
 	return out
 
 

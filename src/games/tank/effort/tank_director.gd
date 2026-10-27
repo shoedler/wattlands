@@ -17,23 +17,28 @@ extends RefCounted
 ##    bank.max_step_pts from the last sent target, sent as bank.substeps sub-steps bank.substep_s
 ##    apart: {mode ERG, target_pct, reason "bank"} (brief 2.3 pattern 1; in an ERG phase with no SIM
 ##    block running, mode ERG changes nothing but the target).
-## 2. Boiler (steam, the rider's SIM phases): {mode SIM, mode_grade, reason "boiler"} with
+## 2. Arc (the arc generator, ERG phases with a range_pct, never the depot or checkpoints): the same
+##    schedule (stations.json arc) toward arc_target_pct = 65 + 15 x duty, the bow guns' share of
+##    the last 10 s firing (TankArcState), clamped to the phase's range: {mode ERG, target_pct,
+##    reason "arc"} (brief 2.3 pattern 2).
+## 3. Boiler (steam, the rider's SIM phases): {mode SIM, mode_grade, reason "boiler"} with
 ##    boiler_grade_pct, at most once per boiler.min_interval_s, rising at most boiler.max_rise_pct
 ##    a step, falling (the latch's drop to 0 included) in one step.
-## 3. Hoist (Bulwark, SIM phases): {mode SIM, mode_grade, reason "hoist"} climbing at
+## 4. Hoist (Bulwark, SIM phases): {mode SIM, mode_grade, reason "hoist"} climbing at
 ##    hoist.rise_pct_s (one step every hoist.step_s, counted from reaching Hoist) to hoist.grade_pct
 ##    (warmup_grade_pct in WARMUP kinds) while the lever is on Hoist; 0 in one step on leaving.
-## 4. Terrain: course_grade every terrain.send_every_s (2 Hz) in grade_source "game" phases, the
+## 5. Terrain: course_grade every terrain.send_every_s (2 Hz) in grade_source "game" phases, the
 ##    grade under the tank from the mission terrain (warm-up range in WARMUP kinds).
-## 5. cadence_band default (60, 120) at each segment start; loader (50, 120) while the steam
+## 6. cadence_band default (60, 120) at each segment start; loader (50, 120) while the steam
 ##    rider's shell is loaded or the breech cycles in a WORK phase (the in-band rule's cadence 50
 ##    applies only there), back to the default when it clears.
-## 6. Haptics (2.7): {mode SIM, haptic, duration_s, reason} for hit / boss_hit (every rider in
-##    SIM) and ram (the driver), never in WARMUP kinds, the first 300 s, the cool-down, ERG, to an
-##    opted-out or reserve rider, nor within haptics.cooldown_s of the end of the last one.
-## 7. end_phase for every rider of the group's phase in one step once the objective is done and
+## 7. Haptics (2.7): {mode SIM, haptic, duration_s, reason} for hit / boss_hit (every rider in
+##    SIM), never in WARMUP kinds, the first 300 s, the cool-down, ERG, to an opted-out or reserve
+##    rider, nor within haptics.cooldown_s of the end of the last one. (v2 removed the Ram haptic.)
+## 8. end_phase for every rider of the group's phase in one step once the objective is done and
 ##    min_s has passed (ADR "Who calls end_phase"); a refused rider is retried on later ticks.
-## A rider on reserve (dropped or AFK) gets no bank, boiler or hoist request: a dropped peer never
+## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
+## A rider on reserve (dropped or AFK) gets no bank, arc, boiler or hoist request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
 ## one. Its bank and grade memory is erased, and on the tick it is back the bank restarts from what
 ## the rider's governor holds (applied target), the boiler and hoist from 0, so the first update
@@ -44,10 +49,10 @@ extends RefCounted
 const HAPTIC_NONE := ""
 const HAPTIC_HIT := "hit"
 const HAPTIC_BOSS_HIT := "boss_hit"
-const HAPTIC_RAM := "ram"
 
 const SOURCE := "tank"
 const REASON_BANK := "bank"
+const REASON_ARC := "arc"
 const REASON_BOILER := "boiler"
 const REASON_HOIST := "hoist"
 
@@ -75,7 +80,8 @@ var _done_at: Dictionary = {}
 var _started: Dictionary = {}
 ## peer -> the tick that phase started on.
 var _start_tick: Dictionary = {}
-## peer -> {"cur": last sent %, "from": update start %, "goal": update goal %}.
+## peer -> {"cur": last sent %, "from": update start %, "goal": update goal %} of the rider's bank
+## (dynamo) or arc load (arc generator) pattern in its current phase.
 var _bank: Dictionary = {}
 ## peer -> the last boiler / hoist mode grade sent in this phase (the platform resets the channel
 ## at every phase change).
@@ -175,29 +181,54 @@ func _segment_start(ri: TankRiderInput) -> void:
 	ctx.hud.power_band(ri.peer, pb[0] / 100.0 * slot.ftp, pb[1] / 100.0 * slot.ftp)
 
 
-# --- Pattern 1: the bank -------------------------------------------------------------------------
+# --- Patterns 1 and 2: the bank and the arc load -------------------------------------------------
 
 
 ## True when pattern 1 runs in `ph` for a rider on `engine`: the dynamo in an ERG phase with a
 ## range_pct, never the depot or a checkpoint.
 static func bank_phase(engine: String, ph: PlanPhase) -> bool:
-	if engine != TankIds.ENGINE_DYNAMO or ph == null or ph.mode != Wl.ERG:
-		return false
-	if ph.range_pct.size() != 2:
+	return engine == TankIds.ENGINE_DYNAMO and _load_phase(ph)
+
+
+## True when pattern 2 runs in `ph` for a rider on `engine`: the arc generator in an ERG phase with
+## a range_pct, never the depot or a checkpoint.
+static func arc_phase(engine: String, ph: PlanPhase) -> bool:
+	return engine == TankIds.ENGINE_ARC and _load_phase(ph)
+
+
+static func _load_phase(ph: PlanPhase) -> bool:
+	if ph == null or ph.mode != Wl.ERG or ph.range_pct.size() != 2:
 		return false
 	var seg := str(ph.meta.get("seg", ""))
 	return seg != TankIds.SEG_DEPOT and seg != TankIds.SEG_CHECKPOINT
 
 
+## Patterns 1 and 2 share one schedule: every <key>.every_s an update toward the engine's goal,
+## sent in <key>.substeps sub-steps <key>.substep_s apart (key "bank" or "arc").
 func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> void:
-	if ri.phase_mode != Wl.ERG or not bank_phase(ri.engine, ph):
+	if ri.phase_mode != Wl.ERG:
 		return
-	var dyn := state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
-	if dyn == null:
+	var key := ""
+	var reason := ""
+	var dyn: TankDynamoState = null
+	var arc: TankArcState = null
+	if bank_phase(ri.engine, ph):
+		key = "bank"
+		reason = REASON_BANK
+		dyn = state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
+		if dyn == null:
+			return
+	elif arc_phase(ri.engine, ph):
+		key = "arc"
+		reason = REASON_ARC
+		arc = state.station(TankIds.ENGINE_ARC) as TankArcState
+		if arc == null:
+			return
+	else:
 		return
-	var every := _ticks(content.num("stations", "bank.every_s", 5.0))
-	var sub := _ticks(content.num("stations", "bank.substep_s", 1.0))
-	var n := maxi(int(content.num("stations", "bank.substeps", 3.0)), 1)
+	var every := _ticks(content.num("stations", key + ".every_s", 5.0))
+	var sub := _ticks(content.num("stations", key + ".substep_s", 1.0))
+	var n := maxi(int(content.num("stations", key + ".substeps", 3.0)), 1)
 	if not _bank.has(ri.peer):
 		var start := ph.planned_pct_at(float(e) * Wl.SIM_DT)
 		if bool(_returned.get(ri.peer, false)):
@@ -209,7 +240,10 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	if u == 0:
 		var cur := float(b["cur"])
 		b["from"] = cur
-		b["goal"] = bank_goal_pct(content, dyn.bank, ph, cur)
+		if dyn != null:
+			b["goal"] = bank_goal_pct(content, dyn.bank, ph, cur)
+		else:
+			b["goal"] = arc_goal_pct(content, arc.duty, ph, cur)
 	if u % sub != 0 or u / sub >= n:
 		return
 	var from := float(b["from"])
@@ -217,9 +251,7 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 	if absf(goal - from) < EPS:
 		return
 	var pct := bank_substep_pct(from, goal, u / sub + 1, n)
-	if _request(
-		ri.peer, {"mode": Wl.ERG, "target_pct": pct, "reason": REASON_BANK, "source": SOURCE}
-	):
+	if _request(ri.peer, {"mode": Wl.ERG, "target_pct": pct, "reason": reason, "source": SOURCE}):
 		b["cur"] = pct
 
 
@@ -242,6 +274,24 @@ static func bank_goal_pct(c: TankContent, bank: float, ph: PlanPhase, cur_pct: f
 	return clampf(target, cur_pct - step, cur_pct + step)
 
 
+## One arc update's goal: arc_target_pct, moved at most arc.max_step_pts from `cur_pct`.
+static func arc_goal_pct(c: TankContent, duty: float, ph: PlanPhase, cur_pct: float) -> float:
+	var step := c.num("stations", "arc.max_step_pts", 10.0)
+	var target := arc_target_pct(c, duty, ph)
+	return clampf(target, cur_pct - step, cur_pct + step)
+
+
+## Pattern 2: the arc generator's ERG target in % FTP, base + span x duty (65 + 15 x duty), clamped
+## to the phase's effective_range() (65..80 in a stage, 55..65 in the drill's skirmish). Apply it
+## before the <= max_step_pts limit and the sub-steps. Only for phases with a range_pct.
+static func arc_target_pct(c: TankContent, duty: float, ph: PlanPhase) -> float:
+	var base := c.num("stations", "arc.base_pct", 65.0)
+	var span := c.num("stations", "arc.span_pct", 15.0)
+	var pct := base + span * clampf(duty, 0.0, 1.0)
+	var r := ph.effective_range()
+	return clampf(pct, float(r[0]), float(r[1]))
+
+
 ## Sub-step `k` (1..n) of an update from `from_pct` to `goal_pct` (the last one is the goal).
 static func bank_substep_pct(from_pct: float, goal_pct: float, k: int, n: int) -> float:
 	if k >= n:
@@ -261,7 +311,7 @@ static func bank_target_pct(c: TankContent, bank: float, ph: PlanPhase) -> float
 	return clampf(pct, float(r[0]), float(r[1]))
 
 
-# --- Pattern 2: the boiler -----------------------------------------------------------------------
+# --- Pattern 3: the boiler -----------------------------------------------------------------------
 
 
 func _boiler_step(state: TankState, ri: TankRiderInput, tick: int) -> void:
@@ -296,7 +346,7 @@ static func boiler_next_pct(c: TankContent, last_pct: float, want_pct: float) ->
 	return minf(want_pct, last_pct + c.num("stations", "boiler.max_rise_pct", 0.5))
 
 
-## Pattern 2: the boiler's mode grade in % before difficulty: grade x min(pressure, 1), with the
+## Pattern 3: the boiler's mode grade in % before difficulty: grade x min(pressure, 1), with the
 ## warm-up grade (3%) in WARMUP-kind phases, 0 while a shell is loaded or the breech cycles.
 static func boiler_grade_pct(
 	c: TankContent, pressure_pct: float, warmup: bool, loaded_or_cycling: bool
@@ -308,7 +358,7 @@ static func boiler_grade_pct(
 	return grade * clampf(pressure_pct / 100.0, 0.0, 1.0)
 
 
-# --- Pattern 3: the Bulwark's hoist --------------------------------------------------------------
+# --- Pattern 4: the Bulwark's hoist --------------------------------------------------------------
 
 
 func _hoist_step(state: TankState, ri: TankRiderInput, tick: int) -> void:
@@ -343,7 +393,7 @@ static func on_hoist(gear: TankGearboxState) -> bool:
 	)
 
 
-## Pattern 3: the hoist grade `held_s` seconds after reaching Hoist: hoist.rise_pct_s per second
+## Pattern 4: the hoist grade `held_s` seconds after reaching Hoist: hoist.rise_pct_s per second
 ## in whole hoist.step_s steps (never above rise x held_s), up to hoist.grade_pct (warmup_grade_pct
 ## in WARMUP kinds).
 static func hoist_grade_pct(c: TankContent, held_s: float, warmup: bool) -> float:
@@ -355,7 +405,7 @@ static func hoist_grade_pct(c: TankContent, held_s: float, warmup: bool) -> floa
 	return minf(top, rise * step_s * steps)
 
 
-# --- Pattern 4: terrain --------------------------------------------------------------------------
+# --- Pattern 5: terrain --------------------------------------------------------------------------
 
 
 func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> void:
@@ -368,7 +418,7 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 	ctx.directives.course_grade(ri.peer, g)
 
 
-## Pattern 4: the grade under the tank `distance_m` into mission segment `segment`: the shared
+## Pattern 5: the grade under the tank `distance_m` into mission segment `segment`: the shared
 ## sampler `TankTerrain.for_segment`, the same function the rules roll the hull on.
 static func terrain_grade_pct(
 	c: TankContent, segment: int, distance_m: float, warmup: bool
@@ -376,7 +426,7 @@ static func terrain_grade_pct(
 	return TankTerrain.for_segment(c, segment, distance_m, warmup)
 
 
-# --- Pattern 5: the loader's cadence band --------------------------------------------------------
+# --- Pattern 6: the loader's cadence band --------------------------------------------------------
 
 
 func _loader_step(state: TankState, ri: TankRiderInput) -> void:
@@ -392,21 +442,16 @@ func _loader_step(state: TankState, ri: TankRiderInput) -> void:
 	ctx.directives.cadence_band(ri.peer, float(band[0]), float(band[1]))
 
 
-# --- Pattern 6: haptics --------------------------------------------------------------------------
+# --- Pattern 7: haptics --------------------------------------------------------------------------
 
 
 func _haptics(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> void:
-	var crew := crew_haptic(events, content.num("stations", "haptics.hit.min_damage", 4.0))
-	var drivers := {}
-	for e in events:
-		if str(e.get("type", "")) == TankEvents.RAM:
-			drivers[int(e.get("s", -1))] = true
-	if crew == HAPTIC_NONE and drivers.is_empty():
+	var kind := crew_haptic(events, content.num("stations", "haptics.hit.min_damage", 4.0))
+	if kind == HAPTIC_NONE:
 		return
 	var cool := content.num("stations", "haptics.cooldown_s", 15.0)
 	for ri in inputs.riders:
-		var kind := HAPTIC_RAM if drivers.has(ri.slot) else crew
-		if kind == HAPTIC_NONE or not haptic_allowed(ri, _phase(ri), _haptics_on(state, ri)):
+		if not haptic_allowed(ri, _phase(ri), _haptics_on(state, ri)):
 			continue
 		if inputs.t + EPS < float(_haptic_end.get(ri.peer, -INF)) + cool:
 			continue  # inside the receiver's 15 s spacing: dropped, never queued
@@ -415,7 +460,7 @@ func _haptics(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -
 			_haptic_end[ri.peer] = inputs.t + float(d["duration_s"])
 
 
-## The haptic request of `kind` (hit, boss_hit or ram), exactly as brief 2.7's table.
+## The haptic request of `kind` (hit or boss_hit), exactly as brief 2.7's table.
 static func haptic_directive(c: TankContent, kind: String) -> Dictionary:
 	var cfg: Dictionary = c.value("stations", "haptics." + kind, {})
 	return {
@@ -448,7 +493,7 @@ func _haptics_on(state: TankState, ri: TankRiderInput) -> bool:
 
 
 ## The crew-wide haptic this tick's events call for: HAPTIC_BOSS_HIT over HAPTIC_HIT (one per
-## receiver per tick, TankEvents doc), or HAPTIC_NONE. The ram haptic is the driver's own.
+## receiver per tick, TankEvents doc), or HAPTIC_NONE.
 static func crew_haptic(events: Array[Dictionary], min_damage: float) -> String:
 	var out := HAPTIC_NONE
 	for e in events:

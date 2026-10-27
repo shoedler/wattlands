@@ -79,12 +79,12 @@ func test_ashfall_road_follows_the_segment_table() -> void:
 
 
 func test_fixture_snapshots_match_the_encoder_and_the_schema() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [1, 2, 3, 4]:
 		var snap := TankSnapshot.encode(TankFixtures.state(crew))
 		assert_eq(TankSnapshotSchema.check(snap), "", "crew %d" % crew)
 		assert_eq(_canon(snap), JSON.stringify(TankFixtures.snapshot(crew)), "snapshot_%d" % crew)
 	for f: Callable in [_gun_line, _boss]:
-		for crew in [1, 3]:
+		for crew in [1, 3, 4]:
 			assert_eq(TankSnapshotSchema.check(TankSnapshot.encode(f.call(crew))), "")
 
 
@@ -129,11 +129,12 @@ func test_intents_normalize_and_reject_junk() -> void:
 	assert_eq(TankIntents.normalize({"k": "lever", "to": "left", "via": "button"})["d"], -1)
 	assert_eq(TankIntents.normalize({"k": "aim", "d": -1.0})["d"], -1)
 	assert_true(TankIntents.normalize({"k": "fire", "auto": 1})["auto"])
-	assert_eq(TankIntents.normalize({"k": "ram", "via": "surge"})["via"], "surge")
+	assert_eq(TankIntents.normalize({"k": "over", "via": "surge"})["via"], "surge")
 	for junk: Variant in [
 		null,
 		[],
 		{"k": "boost"},
+		{"k": "ram", "via": "surge"},
 		{"k": "aim", "d": 2},
 		{"k": "lever", "to": 1},
 		{"k": "fire", "via": "x"}
@@ -143,10 +144,11 @@ func test_intents_normalize_and_reject_junk() -> void:
 
 func test_intents_belong_to_their_engine() -> void:
 	var expect := {
-		"diesel": ["ram"],
+		"diesel": [],
 		"dynamo": ["aim", "target", "traverse", "fire"],
 		"steam": ["latch", "over"],
-		"bulwark": ["lever", "aim", "target", "traverse", "fire", "latch", "ram"],
+		"bulwark": ["lever", "aim", "target", "traverse", "fire", "latch"],
+		"arc": [],
 	}
 	for engine: String in expect:
 		for k: String in TankIds.INTENT_KINDS:
@@ -155,9 +157,7 @@ func test_intents_belong_to_their_engine() -> void:
 				(expect[engine] as Array).has(k),
 				"%s %s" % [engine, k]
 			)
-	assert_false(
-		TankIntents.is_deliberate(TankIntents.normalize({"k": "ram"})), "ram never ends Autopilot"
-	)
+	assert_false(TankIds.INTENT_KINDS.has("ram"), "v2: no Ram intent")
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize({"k": "over"})))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize({"k": "fire", "auto": 1})))
 	assert_true(TankIntents.is_deliberate(TankIntents.normalize({"k": "fire"})))
@@ -180,16 +180,17 @@ func test_every_event_declares_its_int_fields() -> void:
 		TankEvents.rotation([[0, "dynamo"], [1, "diesel"]]),
 		TankEvents.shot(0, TankIds.SHELL_HEAVY, 5, 0, 0),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 12.4, TankIds.SHELL_ENEMY, 4.0, 300.0),
-		TankEvents.kill(7, 1, TankEvents.BY_RAM, 0),
-		TankEvents.ram(0, true, 7),
-		TankEvents.dodge(0),
+		TankEvents.kill(7, 1, TankEvents.BY_BOW, 0),
+		# Reserved v1 types (never emitted in v2): their wire form stays declared.
+		{"type": TankEvents.RAM, "s": 0, "ok": 1, "id": 7},
+		{"type": TankEvents.DODGE, "s": 0},
 		TankEvents.breakdown(),
 		TankEvents.repaired(40.0),
 		TankEvents.overrun("gun_line", 2),
 		TankEvents.boss_phase(TankIds.BOSS_PHASE_2),
 		TankEvents.latch(2, TankIds.SHELL_LIGHT),
 		TankEvents.lever(0, TankIds.LEVER_HOIST),
-		TankEvents.evade(13, TankIds.enemy_code(TankIds.ENEMY_DESTROYER), true),
+		TankEvents.evade(13, TankIds.enemy_code(TankIds.ENEMY_DESTROYER), true, 2),
 		TankEvents.turn(0, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
 	]
@@ -264,13 +265,13 @@ func test_the_geometry_contract_holds() -> void:
 	assert_eq(g.validate(), [] as Array[String])
 	for t: String in TankIds.TANKS:
 		var m0 := g.muzzle(t, 0.0, TankIds.FACE_RIGHT)
-		assert_eq(m0, g.trunnion(t) + Vector2(g.barrel_px(t), 0.0), t)
+		assert_almost_eq(m0, g.trunnion(t) + Vector2(g.barrel_px(t), 0.0), Vector2(0.01, 0.01), t)
+		assert_eq(g.bow_muzzles(t).size(), 2, "%s: two bow guns (v2)" % t)
 		var up := g.muzzle(t, 30.0, TankIds.FACE_RIGHT)
 		assert_lt(up.y, m0.y, "%s: elevation raises the muzzle" % t)
 		assert_almost_eq(up.distance_to(g.trunnion(t)), g.barrel_px(t), 0.001)
 		var left := g.muzzle(t, 0.0, TankIds.FACE_LEFT)
 		assert_almost_eq(left.x, 2.0 * g.ring(t).x - m0.x, 0.001, "%s: mirrored" % t)
-	assert_eq(g.secondary_muzzles(TankIds.TANK_CITADEL).size(), 2)
 	for i in TankBossState.PART_COUNT:
 		assert_true(g.boss_part_rect(i).has_area(), "boss part %d" % i)
 	assert_true(g.enemy_hitbox("enemy_dugin").has_area(), "the dug-in's turret")
@@ -289,7 +290,8 @@ func test_shared_thresholds_agree() -> void:
 	assert_eq(c.num("tanks", "in_band.erg_cadence_rpm"), float(band[0]))
 	assert_null(c.value("stations", "power_band_pct"), "one source: tanks.json in_band")
 	assert_null(c.value("stations", "haptics.none_before_s"), "one source: TankConst.FIRST_S")
-	assert_null(c.value("tanks", "ram.no_ability_first_s"), "one source: TankConst.FIRST_S")
+	assert_null(c.value("tanks", "evade.no_ability_first_s"), "one source: TankConst.FIRST_S")
+	assert_null(c.value("tanks", "ram"), "v2: no Ram block")
 	assert_null(c.value("tanks", "in_band.steam_build_tol_pct"), "one source: TankConst")
 
 

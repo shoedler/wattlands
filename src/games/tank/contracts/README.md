@@ -36,7 +36,7 @@ Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)` -> `snapshot_appl
 ## Drive, sprint and ids
 
 - The drive is `TankHullState.speed_model(cda, offset)` (`SpeedModel`, host only), with `rider_mass_kg` set each tick from the `TankRiderInput` of the rider on the diesel or bulwark station; `speed_mps` is its v.
-- The sprint rule is `TankRiderState.sprint_rule(ram.sprint_window_s)` (`SprintRule`, host only): "held" means the trailing 3 s average >= 1.2 x FTP; `sprinting` mirrors `holds()`, `sprint_s` and `dodge_s` count `held_s()`.
+- The sprint rule is `TankRiderState.sprint_rule(evade.sprint_window_s)` (`SprintRule`, host only): "held" means the trailing 3 s average >= 1.2 x FTP; the rider's and the diesel's `sprinting` mirror `holds()`.
 - Entity ids (`TankState.take_id`) are > 0; boss part ids are negative (`TankBossState.part_id`); 0 is "none".
 - Per-rider gates (SIM-only patterns, haptics, warm-up numbers, the first 300 s, the in-band kind) read the receiver's own `TankRiderInput` phase fields, never the group's `TankPhaseInfo`.
 
@@ -47,11 +47,11 @@ Clients: `apply_snapshot` -> `TankSnapshot.apply(state, snap)` -> `snapshot_appl
 | `TankPlanBuilder` | `effort/tank_plan_builder.gd` | effort | complete (segment table, engines, rotation, drill, meta) |
 | `TankDirector` | `effort/tank_director.gd` | effort | complete: every directive pattern (bank sub-steps, boiler, hoist, terrain, cadence and power bands, haptics, `end_phase` with the boss `end_hold_s`) and the pure helpers `power_band_pct`, `bank_target_pct`, `boiler_grade_pct`, `crew_haptic` |
 | `TankContent` | `content/tank_content.gd` | rules | complete: loader and validation through `TankContentSchema` |
-| `TankRules` | `rules/tank_rules.gd` | rules | complete: segments, rotation, overruns, stations, the drive, Ram and dodge, hull and breakdown, reserve, all-AFK, in-band, WORK time (parts in `rules/` and `combat/`) |
+| `TankRules` | `rules/tank_rules.gd` | rules | complete: segments, rotation, overruns, stations (the arc generator too), the drive, Surge to evade (`TankEvade`), the bow guns (`TankBow`), lanes, hull and breakdown, reserve, all-AFK, in-band, WORK time (parts in `rules/` and `combat/`) |
 | `TankScore` | `rules/tank_score.gd` | rules | complete: score, grade, XP, unlocks (brief 2.8) |
 | `TankBallistics` | `combat/tank_ballistics.gd` | rules | complete: analytic arc, lower-arc solver, range, lead and dispersion |
 | `TankGame` | `tank_game.gd` | module | complete: the flow above, the Autopilot merge, prompts, the teammate strip and hull HP feeds, snapshot, results, progress |
-| `TankAutopilot` | `autopilot/tank_autopilot.gd` | module | complete: rear traverses and obstacle shots (never a Ram, dodge, Overpressure, early latch or manual lever) |
+| `TankAutopilot` | `autopilot/tank_autopilot.gd` | module | complete: rear traverses and obstacle shots (never a sprint, so never an evade, never an Overpressure, early latch or manual lever) |
 | `TankSnapshot` | `net/tank_snapshot.gd` | module | complete encode / apply |
 | `TankView` | `view/tank_view.gd` | view | complete: the cutaway diorama (parallax planes with blur and haze, rigs and rooms, additive lights, pooled particles, snapshot interpolation); works with the placeholder art for every id |
 | `TankHud` | `hud/tank_hud.gd` | view | complete: the ADR's `Rect2i`s with kit widgets, the station card, the objective line and the boss bars |
@@ -104,7 +104,7 @@ Art px of the 640 x 360 view (world x in art px along the segment, 8 px per game
 
 Additive, for the v2 brief (`docs/games/tank.md` 2.2, 2.4, 2.6, 2.10). Behaviour (evade, bow guns, the arc's plan and searchlights, free roam) comes from later builders; these are the names they build on.
 
-- **Ids.** `ENGINE_ARC` "arc" (code 5, label `TANK_ENGINE_ARC`, icon `engine_arc.png`); `TANK_BASTION` "bastion" (code 4, the 4th of `TANKS`, so crew 4 picks it); `SHELL_BOW` 4 (was `SHELL_SECONDARY`, name "bow"); `INTENT_TURN` "turn" (deliberate; no engine owns it yet); `DIR_RIGHT` 1 / `DIR_LEFT` -1; `OUTCOME_TIME_UP` "time_up". Ram and dodge stay until the gameplay builder removes them.
+- **Ids.** `ENGINE_ARC` "arc" (code 5, label `TANK_ENGINE_ARC`, icon `engine_arc.png`); `TANK_BASTION` "bastion" (code 4, the 4th of `TANKS`, so crew 4 picks it); `SHELL_BOW` 4 (was `SHELL_SECONDARY`, name "bow"); `INTENT_TURN` "turn" (deliberate; no engine owns it yet); `DIR_RIGHT` 1 / `DIR_LEFT` -1; `OUTCOME_TIME_UP` "time_up".
 - **Events.** `evade {id, e, ok}`, `turn {s, dir}`, `time_up {}` appended to `TYPES` with `INT_FIELDS`; no emitter yet.
 - **`TankArcState`** (`TankStationState.make("arc")`): [snap] `duty` 0..1, `lit`, `stalled`; host-only `note_fire(tick, fired)` keeps a 200-tick (10 s) fire ring and refreshes `duty`; `reset_fire()`.
 - **`TankRiderState.target_pct`** [snap]: the rider's effort target in % FTP for the power ratio, set each tick by `TankRules.target_pct(state, rider_input, station)` (applied ERG target, else `TankRiderInput.planned_pct` from `PhaseState.planned_pct`, else the SIM band centre: diesel/Bulwark 90.5, steam building 90, loaded or cycling and WARMUP-kind SIM from `tanks.json` `power_ratio`). `client_predict` refreshes the local rider's.
@@ -112,3 +112,15 @@ Additive, for the v2 brief (`docs/games/tank.md` 2.2, 2.4, 2.6, 2.10). Behaviour
 - **Snapshot v2.** `tk` gains `dir` (17 columns), `r` gains `target_x10` (7), the arc's `st` row carries `duty_pml` in `a` and the `STF_LIT` / `STF_ARC_STALLED` bits. The Bastion at the caps (4 riders, 4 rooms, 16 enemies, 24 shells) is about 1.6 KB.
 - **Content.** `tanks.json`: the Bastion; the Citadel's rooms in the reference's order (diesel, steam, dynamo) with only its main turret; every `hull_px` from `assets/tank/v2/kit.json` / 1.5. `validate_cross` takes start engines as any order of the rooms. `stations.json`: the arc's plans (brief 2.3 table) and crew 4's rotation ((s + k) mod 4 of diesel, dynamo, steam, arc).
 - **Geometry.** `TankGeometry.RIG_FALLBACK`: the Bastion uses the Citadel's rigs.json geometry until its own entry lands (`has_rig`, `rig_of`).
+
+## v2 gameplay (P4, the rules builder, 2026-10-27)
+
+Brief 2.2-2.4, 2.6-2.8 on top of the contract additions above.
+
+- **The Ram is gone.** `TankIds.INTENT_RAM`, `TankEvents.ram()` / `dodge()`, `BY_RAM`, the diesel's `ram_s`, `ram_cd_s`, `dodge_s`, `sprint_s` and `prompt`, the hull's `stall_s` and `secondary_cd_s`, `TankBossState.dodged` (now `evaded`), `TankRiderState.rams` / `dodges`, `tanks.json` `ram` (now `evade`: `sprint_window_s`, `hold_s`, `boss_hold_s`) and `stations.json` `haptics.ram` are removed. The event types `ram` and `dodge` (and kill `by` 1) stay reserved on the wire, never emitted; the snapshot keeps their columns as zeros (`tk` stall_ms, the diesel's and Bulwark's a/b, the diesel's c) and the `STF_PROMPT` bit unused. A "ram" intent is junk to `normalize`.
+- **Surge to evade** (`combat/tank_evade.gd`). Telegraphed shots: destroyer 4 s, heavy 3 s, a light tank's first shot at its hold (its `flank` shot, 2.5 s, 8 damage at 70 %), the Behemoth's main gun 6 s; a telegraph always runs in full. While one runs, every rider with `can_evade` (a SIM WORK phase of its own plan past the first 300 s, present, not in rescue) and `sprinting` adds the tick to its held seconds (`aux.evade`); the shot misses when one held `evade.hold_s` (2 s; `boss_hold_s` 3 s for the Behemoth). Every telegraphed shot that resolves raises `evade {id, e, ok, s}` before its `shot`; the score and each rider count evades tried and made. No intent; the Autopilot never sprints.
+- **Rider flags** [snap]: `TankRiderState.can_evade` and `sprinting` (`r` flags `RF_CAN_EVADE` 16, `RF_SPRINTING` 32). Each peer raises its own "Surge to evade" from them and the replicated telegraph times (`TankCues`).
+- **Bow guns** (`combat/tank_bow.gd`): every tank; a burst (one `SHELL_BOW` round) of `bow.damage` 5 every `bow.every_s` 2 at the nearest enemy or Behemoth part 40-220 px off the hull front (else a wire or wreck there: `bow.clear_s` 4 s of fire clears it, `TankObstacleState.bow_s`); hitscan (shot + hit events), kills `BY_BOW` (3) credited to the powering station's rider. Power: the Bastion's arc generator (1 in band, `bow.under_band_rate` 0.5 under, 0 on reserve or stalled), the dynamo bank (2 units a burst, none below 10 or stalled), the Bulwark (0.5, free). `TankArcState.note_fire` every tick with "engaged".
+- **The arc generator** (`TankStations._arc`): `stalled` on rescue, `lit` while its rider is in band; lit searchlights halve the main gun's dispersion (`tanks.json` `arc.lit_dispersion_mult`). Its directive is pattern 2 in `TankDirector` (`stations.json` `arc`).
+- **Lanes** (`TankEnemies.reserve_hold`, `enemies.json` `lanes`, each type's `lane`): every held position (spawn, a destroyer's shift, a heavy's back-off) is reserved in one of 4 depth lanes so no two held boxes (weave and `gap_px` included) overlap on one side and lane. `TankEnemyState.lane` [snap] is the snapshot's `e` column 7.
+- **Geometry**: rigs.json tank guns re-measured from the v2 kit, `tanks.<id>.bow_guns[]` (`TankGeometry.bow_muzzles`), the hull standing on the ground (`screen.skirt_gap_px` 0); `tanks.citadel.secondaries` is no longer required.

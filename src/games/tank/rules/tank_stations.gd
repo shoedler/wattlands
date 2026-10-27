@@ -1,10 +1,11 @@
 class_name TankStations
 extends RefCounted
-## The engine rooms' models (brief 2.4 Dynamo, Steam, Bulwark gearbox; owner: rules): the dynamo's
-## capacitor bank and the Rampart's hoist, the steam engine's boiler (window, Overpressure, light
-## latch, breech cycle) and the Bulwark's three-way gearbox with its auto-lever. The diesel's
-## drive is TankDrive. Every energy is the room's P_eff (reserve 60 W for an AFK rider, 0 when
-## everyone is AFK). Pure: no random draws; time only through `dt`.
+## The engine rooms' models (brief 2.4 Dynamo, Steam, Bulwark gearbox, Arc generator; owner:
+## rules): the dynamo's capacitor bank and the Rampart's hoist, the steam engine's boiler (window,
+## Overpressure, light latch, breech cycle), the Bulwark's three-way gearbox with its auto-lever and
+## the Bastion's arc generator (searchlights, stall). The diesel's drive is TankDrive, the bow guns
+## TankBow. Every energy is the room's P_eff (reserve 60 W for an AFK rider, 0 when everyone is
+## AFK). Pure: no random draws; time only through `dt`.
 
 
 static func step(
@@ -20,6 +21,8 @@ static func step(
 			_dynamo(state, aux, st as TankDynamoState, ri, dt)
 		elif st is TankSteamState:
 			_steam(state, aux, st as TankSteamState, ri, dt, events)
+		elif st is TankArcState:
+			_arc(state, st as TankArcState, ri)
 	_rampart_hoist(state, aux, dt, events)
 
 
@@ -86,8 +89,19 @@ static func _dynamo(
 	if st.in_band:
 		bank += st.p_eff_w * dt / c.num("tanks", "dynamo.j_per_unit", 150.0)
 	if st.stabilizing:
-		bank -= c.num("tanks", "dynamo.stabilizer_per_s", 1.5) * dt
+		bank -= stabilizer_per_s(state) * dt
 	st.bank = clampf(bank, 0.0, c.num("tanks", "dynamo.bank_max", 100.0))
+
+
+## The dynamo's stabilizer drain in units a second: the tank's own (tanks.json
+## tanks.<tank>.stabilizer_per_s, the Bastion's heavier turret with its searchlight tower), else
+## dynamo.stabilizer_per_s.
+static func stabilizer_per_s(state: TankState) -> float:
+	var c := state.content
+	var own: Variant = c.tank_def(state.hull.tank).get("stabilizer_per_s")
+	if own is float or own is int:
+		return float(own)
+	return c.num("tanks", "dynamo.stabilizer_per_s", 1.5)
 
 
 ## The Rampart's hoist (no steam engine, no gearbox): it lifts a heavy shell, 10 s at a bank of 50
@@ -114,6 +128,18 @@ static func _rampart_hoist(
 	var c := state.content
 	st.hoist_s = by_bank(state, c.value("tanks", "dynamo.hoist_s", [20, 10]))
 	drain(state, c.num("tanks", "dynamo.per_hoist", 25.0))
+
+
+# --- Arc generator ------------------------------------------------------------------------------
+
+
+## The arc generator (brief 2.4): a rescue stalls it (the bow guns stop, the searchlights dim:
+## "Arc generator stalled"); the searchlights are lit while its rider is in band (ERG: power >= 95%
+## of the applied target and cadence >= 60), which never holds on reserve or in rescue. Its load
+## (`duty`) is the bow guns' share of the last 10 s firing (TankBow notes it).
+static func _arc(state: TankState, st: TankArcState, ri: TankRiderInput) -> void:
+	st.stalled = in_rescue(ri) and not state.all_afk
+	st.lit = st.slot >= 0 and st.in_band and not st.stalled and not st.reserve and not state.all_afk
 
 
 # --- Steam ---------------------------------------------------------------------------------------
@@ -228,7 +254,7 @@ static func rider_rule(state: TankState, ri: TankRiderInput) -> SprintRule:
 	var r := state.rider(ri.peer)
 	if r == null:
 		return null
-	return r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+	return r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0))
 
 
 # --- Bulwark gearbox -----------------------------------------------------------------------------

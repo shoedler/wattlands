@@ -26,8 +26,12 @@ var fixed: bool = false
 var gun_line: bool = false
 ## Seconds to the next shot (a telegraph runs inside it for destroyers and heavies).
 var gun_s: float = 0.0
-## [snap] Seconds of a telegraph left (destroyer glint, heavy muzzle glow); 0 none.
+## [snap] Seconds of a telegraph left (destroyer glint 4 s, heavy muzzle glow 3 s, a light tank's
+## 2.5 s flank shot); 0 none. "Surge to evade" can make that shot miss (brief 2.4).
 var telegraph_s: float = 0.0
+## [snap] (v2) The depth lane it holds in (brief 2.4 Spacing; the view draws lanes): 0 the near
+## lane on the road, 1 the far one behind it. Within a lane and side no two held positions overlap.
+var lane: int = 0
 ## Heavy: damage taken since the last back-off.
 var dmg_since_backoff: float = 0.0
 ## Light: weave phase in radians (an offset around hold_px).

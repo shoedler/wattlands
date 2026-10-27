@@ -13,39 +13,42 @@ extends RefCounted
 ##               (rounded), sh: shell type, b: the part the berm absorbed (rounded), x: world x px};
 ##               a tank hit by the Behemoth's main gun has sh SHELL_BOSS_MAIN
 ##   kill       {id, e: enemy code (BOSS_CODE for the Behemoth), by: BY_*, s: credited slot or -1}
-##   ram        {s: slot, ok: 1 destroyed / 0 failed (10 HP, 5 s stall), id: target id or 0}
-##   dodge      {s: slot}                                                 the boss shot will miss
+##   ram, dodge reserved (v1's Ram and boss dodge; v2 removed both, brief 2.4): never emitted, kept
+##              in TYPES and INT_FIELDS so their names stay taken on the wire
 ##   breakdown  {}                                                        the hull hit 0 HP
 ##   repaired   {hp}                                                      back to 40 HP
 ##   overrun    {sg: seg code, st: stage}                                 the previous segment hit max_s
 ##   boss_phase {p: TankIds.BOSS_*}
 ## Additive (G0): latch {s, sh: shell type}, lever {s, lv: TankIds.LEVER_*} for sound and view.
-## Additive (v2, brief 2.4, 2.6, 2.10; declared here, no emitter yet):
+## Additive (v2, brief 2.4, 2.6, 2.10):
 ##   evade      {id: the shooter's id (an enemy, or the Behemoth's turret part id), e: enemy code
 ##               (BOSS_CODE for the Behemoth's main gun), ok: 1 the shot missed (a rider held the
-##               sprint rule inside the telegraph) / 0 it was not evaded}
+##               sprint rule inside the telegraph) / 0 it was not evaded, s: the slot whose surge
+##               made it miss (the lowest such slot; -1 when not evaded)}: every telegraphed shot
+##               that resolves (the shot event follows it in the same tick)
 ##   turn       {s: the slot that turned or -1 (Autopilot at a map end), dir: the new travel
 ##               direction TankIds.DIR_*}                         free roam: the tank turns round
 ##   time_up    {}                                             free roam: min_s reached, no new patrols
 ##
 ## Semantics the haptics depend on (brief 2.7; the director reads them this way):
-## - A failed Ram emits only `ram ok:0` (its 10 HP is applied without a `hit` event), so the driver
-##   gets the ram haptic and never a second `hit` haptic for it. "Ram impact" covers ok 1 and 0.
+## - An evaded shot misses: no `hit` event, so no haptic.
 ## - During a breakdown (damage ignored) a round that lands still emits `hit` with dmg 0: no haptic.
 ## - A hit the berm absorbs keeps its pre-berm dmg (b says how much the berm took): it still
 ##   counts as a "Hit of >= 8 damage".
 ## - A Behemoth main-gun hit is `hit` with sh SHELL_BOSS_MAIN: is_boss_main_hit, never is_tank_hit,
 ##   so it sends the boss_hit haptic (3.0 for 2 s) and not the 2.0 one.
-## - At most one haptic per receiver per tick, by precedence boss_hit, then hit (crew-wide), with
-##   ram for the driver ahead of both (TankDirector.crew_haptic picks the crew-wide one); a haptic
-##   inside the receiver's 15 s cooldown is dropped, never queued.
+## - At most one haptic per receiver per tick, by precedence boss_hit, then hit (crew-wide;
+##   TankDirector.crew_haptic picks it); a haptic inside the receiver's 15 s cooldown is dropped,
+##   never queued.
 
 const SEGMENT := "segment"
 const ROTATION := "rotation"
 const SHOT := "shot"
 const HIT := "hit"
 const KILL := "kill"
+## Reserved (v1; never emitted in v2).
 const RAM := "ram"
+## Reserved (v1; never emitted in v2).
 const DODGE := "dodge"
 const BREAKDOWN := "breakdown"
 const REPAIRED := "repaired"
@@ -80,10 +83,11 @@ const ON_TANK := 0
 const ON_ENEMY := 1
 const ON_BOSS := 2
 const ON_OBSTACLE := 3
-## kill "by"
+## kill "by" (1 was v1's Ram: reserved, never used in v2)
 const BY_SHELL := 0
-const BY_RAM := 1
 const BY_BARRAGE := 2
+## v2: a bow-gun burst (brief 2.4 Gun).
+const BY_BOW := 3
 
 ## int_fields() entries for every event type (the snapshot's are TankSnapshotSchema.INT_PATHS).
 const INT_FIELDS := {
@@ -100,7 +104,7 @@ const INT_FIELDS := {
 	BOSS_PHASE: ["p"],
 	LATCH: ["s", "sh"],
 	LEVER: ["s", "lv"],
-	EVADE: ["id", "e", "ok"],
+	EVADE: ["id", "e", "ok", "s"],
 	TURN: ["s", "dir"],
 	TIME_UP: [],
 }
@@ -142,14 +146,6 @@ static func kill(target_id: int, code: int, by: int, slot: int) -> Dictionary:
 	return {"type": KILL, "id": target_id, "e": code, "by": by, "s": slot}
 
 
-static func ram(slot: int, ok: bool, target_id: int) -> Dictionary:
-	return {"type": RAM, "s": slot, "ok": int(ok), "id": target_id}
-
-
-static func dodge(slot: int) -> Dictionary:
-	return {"type": DODGE, "s": slot}
-
-
 static func breakdown() -> Dictionary:
 	return {"type": BREAKDOWN}
 
@@ -174,9 +170,10 @@ static func lever(slot: int, position: int) -> Dictionary:
 	return {"type": LEVER, "s": slot, "lv": position}
 
 
-## A telegraphed shot resolved: `ok` true when the crew's surge made it miss.
-static func evade(shooter_id: int, code: int, ok: bool) -> Dictionary:
-	return {"type": EVADE, "id": shooter_id, "e": code, "ok": int(ok)}
+## A telegraphed shot resolved: `ok` true when the crew's surge made it miss; `slot` the rider
+## whose surge did it (-1 when not evaded).
+static func evade(shooter_id: int, code: int, ok: bool, slot: int = -1) -> Dictionary:
+	return {"type": EVADE, "id": shooter_id, "e": code, "ok": int(ok), "s": slot if ok else -1}
 
 
 ## The tank turned round (free roam); `dir` is the new TankIds.DIR_*.

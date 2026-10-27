@@ -99,8 +99,6 @@ func test_impacts_explosions_ram_breakdown_lever_and_latch() -> void:
 	assert_has(_audio.played, "tank_hit")
 	_audio.on_cue(TankEvents.KILL, TankEvents.kill(11, 2, TankEvents.BY_SHELL, 0))
 	assert_has(_audio.played, "tank_boom_big")
-	_audio.on_cue(TankEvents.RAM, TankEvents.ram(2, true, 12))
-	assert_has(_audio.played, "tank_ram")
 	_audio.on_cue(TankEvents.BREAKDOWN, TankEvents.breakdown())
 	assert_has(_audio.played, "tank_breakdown")
 	_audio.on_cue(TankEvents.LEVER, TankEvents.lever(0, TankIds.LEVER_HOIST))

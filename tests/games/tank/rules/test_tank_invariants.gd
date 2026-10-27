@@ -3,7 +3,7 @@ extends GutTest
 ## flips, every tick checked against the state's invariants (no NaN, bounds, caps, unique ids,
 ## steam rules). Seeded, so a failure repeats.
 
-const KINDS := ["lever", "aim", "target", "traverse", "fire", "latch", "ram", "over"]
+const KINDS := ["lever", "aim", "target", "traverse", "fire", "latch", "over"]
 const TO := ["next", "left", "right", "drive", "turret", "hoist"]
 
 
@@ -26,12 +26,11 @@ func _check(rig: TankRulesRig, label: String) -> void:
 	)
 	assert_between(h.hp, 0.0, h.hp_max, "%s hp" % label)
 	assert_between(h.berm_hp, 0.0, 40.0, "%s berm" % label)
-	assert_between(h.elev_deg, -5.0, 30.0, "%s elevation" % label)
+	assert_between(h.elev_deg, -12.0, 30.0, "%s elevation" % label)
 	assert_gte(h.speed_mps, 0.0, "%s speed" % label)
 	assert_has([TankIds.FACE_LEFT, TankIds.FACE_RIGHT], h.facing, "%s facing" % label)
 	assert_gte(h.breech_s, 0.0)
 	assert_gte(h.traverse_s, 0.0)
-	assert_gte(h.stall_s, 0.0)
 	assert_lte(s.enemies.size(), TankConst.MAX_ENEMIES, "%s enemies cap" % label)
 	assert_lte(s.shells.size(), TankConst.MAX_SHELLS, "%s shells cap" % label)
 	var ids := {}
@@ -132,4 +131,4 @@ func test_random_play_keeps_every_invariant_for_the_citadel() -> void:
 	_fuzz(3, 6)
 	assert_gt(rig.of_type("latch").size(), 2, "shells were latched")
 	assert_gt(rig.of_type("shot").size(), 10)
-	assert_gt(rig.of_type("ram").size() + rig.of_type("kill").size(), 0)
+	assert_gt(rig.of_type("kill").size(), 0)

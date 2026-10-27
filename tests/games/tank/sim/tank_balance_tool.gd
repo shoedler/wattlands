@@ -13,7 +13,7 @@ extends SceneTree
 
 func _initialize() -> void:
 	var args: Dictionary = CmdLine.parse(OS.get_cmdline_user_args())
-	var crews := _numbers(args, "crews", [1, 2, 3])
+	var crews := _numbers(args, "crews", [1, 2, 3, 4])
 	var seeds := _numbers(args, "seeds", [1, 2, 3])
 	var comps := _numbers(args, "compliance", [1.0, 0.85, 0.7])
 	var content := _last(args, "content", "ashfall_road")

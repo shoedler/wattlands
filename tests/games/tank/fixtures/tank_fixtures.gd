@@ -9,11 +9,12 @@ extends RefCounted
 ##   stage-2 engines with rotation on, the hull at 72 / 120 HP, a medium ahead holding 300 px, a
 ##   light rushing from the rear, a tank destroyer in its telegraph, a wreck barricade, three shells
 ##   in flight, the bank at 64, pressure at 72%, the Bulwark's lever on Turret, the arc's duty at
-##   0.35 with the searchlights lit, each rider's target_pct (TARGETS by engine).
+##   0.35 with the searchlights lit, each rider's target_pct (TARGETS by engine); every rider on a
+##   SIM engine can evade (v2), the medium and the destroyer hold in the far lane.
 ## gun_line(crew): Stage 2 gun line (phase 5) 40 s in: a heavy tank in its telegraph and 2 dug-in
 ##   tanks, the berm at 18 HP, the turret loaded with a heavy shell.
 ## boss(crew): the boss (phase 10) 150 s in: phase 1, the last bogie (index 2, farthest from the
-##   tank) broken, the main gun in its telegraph, the diesel sprinting with a dodge prompt.
+##   tank) broken, the main gun in its telegraph, the diesel's rider sprinting to evade it.
 ## cap(): the Citadel's state(3) with 16 enemies and 24 shells at large coordinates (the 4 KB test).
 ## cap4(): the same at the caps for the Bastion's state(4): 4 riders, 4 rooms (v2's 4 KB test).
 ## frame(crew): an InputFrame for state(crew) (every rider compliant at 90% FTP in SIM, on target
@@ -75,13 +76,14 @@ static func state(crew: int) -> TankState:
 	s.hull.evasive = true
 	s.hull.elev_deg = 6.5
 	s.hull.target_id = 11
-	s.enemies.append(
-		_enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, _medium_hp(), 1)
-	)
+	var md := _enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, _medium_hp(), 1)
+	md.lane = 1
+	s.enemies.append(md)
 	s.enemies.append(_enemy(12, TankIds.ENEMY_LIGHT, s.hull.x_px - 140.0 - 80.0, 24.0, -1))
 	var td := _enemy(13, TankIds.ENEMY_DESTROYER, s.camera_x() + 640.0 - 112.0, 50.0, 1)
 	td.mode = TankIds.EM_TELEGRAPH
 	td.telegraph_s = 2.5
+	td.lane = 1
 	s.enemies.append(td)
 	var ob := TankObstacleState.new()
 	ob.id = 14
@@ -147,8 +149,9 @@ static func boss(crew: int) -> TankState:
 	for st in s.stations:
 		if st is TankDieselState:
 			(st as TankDieselState).sprinting = true
-			(st as TankDieselState).prompt = true
-			(st as TankDieselState).dodge_s = 1.2
+			var r := s.rider_at(st.slot)
+			if r != null:
+				r.sprinting = true
 	s.next_id = 30
 	return s
 
@@ -163,6 +166,7 @@ static func cap(crew: int = 3) -> TankState:
 		)
 		e.mode = TankIds.EM_TELEGRAPH
 		e.telegraph_s = 3.999
+		e.lane = i % 2
 		s.enemies.append(e)
 	for i in TankConst.MAX_SHELLS:
 		s.shells.append(
@@ -278,6 +282,10 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 		r.ftp_pct = 90.0
 		r.target_pct = float(TARGETS.get(r.engine, 0.0))
 		r.in_band = true
+		r.can_evade = (
+			str(seg["kind"]) == Wl.WORK
+			and c.plan_entry(r.engine, str(seg["type"])).get("mode", "") == Wl.SIM
+		)
 	for st in s.stations:
 		st.slot = -1
 		st.peer = 0

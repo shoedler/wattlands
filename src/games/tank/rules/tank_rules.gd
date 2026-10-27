@@ -4,12 +4,14 @@ extends RefCounted
 ## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
 ##
 ## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), assign
-## stations and read the riders, count the breech down, spawn the Advance's encounters, drive
-## (TankDrive: speed model, obstacles, Ram, dodge), move the enemies and the Behemoth, rebuild the
-## target list, run the stations (TankStations), the gun (TankGun), the enemies' guns, the shells
-## in flight (TankShells), the repair and the berm (TankHullRules) and the objectives. Events come
-## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
-## (new_state, step, in_band) are the module's contract.
+## stations and read the riders (who can evade, who sprints), count the breech down, spawn the
+## Advance's encounters, drive (TankDrive: speed model, obstacles), move the enemies and the
+## Behemoth (its telegraph and main gun through TankEvade), rebuild the target list, run the
+## stations (TankStations), the main gun (TankGun), the bow guns (TankBow), the enemies' guns
+## (telegraphs through TankEvade), the shells in flight (TankShells), the repair and the berm
+## (TankHullRules) and the objectives. Events come back in that order. Everything is split by
+## topic over rules/ and combat/; the signatures here (new_state, step, in_band) are the module's
+## contract.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
@@ -38,12 +40,13 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
 	TankEncounters.advance(state, aux)
 	TankEncounters.depot_wrecks(state, aux)
-	TankDrive.step(state, inputs, dt, events)
+	TankDrive.step(state, inputs, dt)
 	TankEnemies.move(state, aux, dt)
 	TankBoss.step(state, aux, dt, events)
 	TankTargets.build(state, aux)
 	TankStations.step(state, inputs, dt, events)
 	TankGun.step(state, inputs, dt, events)
+	TankBow.step(state, dt, events)
 	TankEnemies.fire(state, aux, dt, events)
 	TankShells.step(state, aux, dt, events)
 	TankHullRules.repair(state, dt, events)
@@ -119,7 +122,7 @@ static func _assign_stations(
 		if r == null or ri.engine == "" or ri.engine == r.engine:
 			continue
 		r.engine = ri.engine
-		r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0)).reset()
+		r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0)).reset()
 		moved = true
 	if not moved:
 		return
@@ -157,8 +160,10 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 		r.afk = ri.afk
 		r.connected = ri.connected
 		r.in_band = in_band(state, ri, st)
-		var rule := r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+		var rule := r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0))
 		rule.update(state.t, ri.power_w)
+		r.sprinting = rule.holds()
+		r.can_evade = TankEvade.can_evade(state, ri)
 		if not r.is_bot and not r.autopilot:
 			for n in ri.intents:
 				if TankIntents.is_deliberate(n):

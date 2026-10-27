@@ -27,7 +27,7 @@ const HUD_BOTTOM_Y := 300
 const PANIC_X := 503
 const PANIC_Y := 316
 
-## The first 300 s of the plan: no Ram, dodge, Overpressure, sprint prompt or haptic
+## The first 300 s of the plan: no evade, Overpressure, sprint prompt or haptic
 ## (PhaseState.plan_elapsed_s < FIRST_S), brief 2.3, 2.7.
 const FIRST_S := 300.0
 

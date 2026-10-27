@@ -7,8 +7,7 @@ extends Node
 ## explosions, track clank, the lever's clunk and the hoist's ratchet, over a quiet night ambience
 ## (wind in the pines and crickets; docs/games/tank.md 3.7). The local rider's own station is
 ## loudest. Silent and error-free headless (no players are created; what would play is still
-## recorded in `played`). The Ram's sound stays while the rules still emit the `ram` event (the
-## rules builder removes the Ram; drop "tank_ram" with it).
+## recorded in `played`). v2 has no Ram, so no Ram sound.
 ##
 ## TankView creates it as a child, connects TankGame.cue to on_cue and calls update() every frame
 ## with the state, the frame time, the local peer and the riders' feed (peer -> Vector2(raw_w,
@@ -28,7 +27,6 @@ const SOUND_NAMES: Array[String] = [
 	"tank_chuff",
 	"tank_hiss",
 	"tank_hit",
-	"tank_ram",
 	"tank_breakdown",
 	"tank_arc_crackle",
 	"tank_bow_rattle",
@@ -48,7 +46,6 @@ const DEFS := {
 	"tank_chuff": ["noise", 0.0, 0.13, 0.01, 0.1],
 	"tank_hiss": ["noise", 0.0, 0.7, 0.05, 0.5],
 	"tank_hit": ["triangle", 540.0, 0.2, 0.001, 0.18],
-	"tank_ram": ["saw", 70.0, 0.4, 0.003, 0.3],
 	"tank_breakdown": ["saw", 90.0, 0.9, 0.01, 0.8],
 	"tank_arc_crackle": ["noise", 0.0, 0.07, 0.001, 0.06],
 	"tank_bow_rattle": ["square", 210.0, 0.035, 0.001, 0.03],
@@ -185,12 +182,6 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			if boss:
 				_after(0.4, "tank_boom_big", -2.0, 0.8)
 				_after(0.9, "tank_boom_big", -4.0, 0.6)
-		TankEvents.RAM:
-			if int(data.get("ok", 0)) == 1:
-				_play("tank_ram", -2.0)
-				_after(0.12, "tank_boom_big", -6.0)
-			else:
-				_play("tank_ram", -4.0, 0.7)
 		TankEvents.BREAKDOWN:
 			_play("tank_breakdown", -3.0)
 		TankEvents.REPAIRED:
@@ -201,8 +192,6 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			_play("tank_clunk", -8.0, 0.8)
 		TankEvents.LATCH:
 			_latch(data)
-		TankEvents.DODGE:
-			_play("whoosh", -8.0)
 		TankEvents.BOSS_PHASE:
 			_play("tank_boom_big", -4.0, 0.75)
 

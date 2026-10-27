@@ -1,10 +1,10 @@
 {
-	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. v2 contracts (docs/decisions/tank.md 2026-10-27 v2 contract): the Bastion (crew 4); the Citadel's rooms in the reference's order rear to front (diesel, steam, dynamo; the slot-to-engine map is stations.json start_engines) and only its main turret (bow guns replace the secondaries); the Bastion's hull_px from assets/tank/v2/kit.json in rules px (art px / 1.5, rounded): width tank.variants.tank_4rider.hull_length_px 491 / 1.5 = 327, height 71 = (road_wheel_line.ground_contact_y 233 - the hull roof row 127 of hull_3rider.png) / 1.5 (one vertical framing for every variant); the kit's sizes for the other tanks (Bulwark [220, 71], Rampart [251, 71], Citadel [296, 71]) wait for the v2 view, since the v1 view and its rigs.json are built on [192, 72], [240, 76] and [288, 80]; power_ratio: the target % FTP of SIM phases without an ERG target (TankRules.target_pct). Added keys: ram.prompt_px (a light tank this near shows the Surge to ram prompt), props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull).",
+	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. v2 contracts (docs/decisions/tank.md 2026-10-27 v2 contract): the Bastion (crew 4); the Citadel's rooms in the reference's order rear to front (diesel, steam, dynamo; the slot-to-engine map is stations.json start_engines) and only its main turret (bow guns replace the secondaries); the Bastion's hull_px from assets/tank/v2/kit.json in rules px (art px / 1.5, rounded): width tank.variants.tank_4rider.hull_length_px 491 / 1.5 = 327, height 71 = (road_wheel_line.ground_contact_y 233 - the hull roof row 127 of hull_3rider.png) / 1.5 (one vertical framing for every variant); the kit's sizes for the other tanks (Bulwark [220, 71], Rampart [251, 71], Citadel [296, 71]) wait for the v2 view, since the v1 view and its rigs.json are built on [192, 72], [240, 76] and [288, 80]; power_ratio: the target % FTP of SIM phases without an ERG target (TankRules.target_pct). Added keys: props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull). v2 rules (P4, docs/decisions/tank.md 2026-10-27 P4 rules ADR): the ram block is gone (evade: sprint_window_s, hold_s, boss_hold_s); bow (the bow guns on every tank) replaces secondary and dynamo.per_secondary / secondary_min_bank; arc.lit_dispersion_mult; gun.elev_min_deg -12 (the brief); hull_px from the kit for every tank; the Rampart's and the Bastion's own stabilizer_per_s (1.3 and 2.0; dynamo.stabilizer_per_s 1.5 for the rest). Retuned on the v2 geometry and the bow guns (each within +-50% of the brief): hull.hp 150 (brief 100, the bound), drive.evasive_hit_mult 0.45 (0.7), props.standoff_px 180 (the main gun and the bow guns reach a barricade there), steam.full_j 4000 (6000), steam.breech_cycle_s 7 (6: the boiler's 0 lands up to 1 s after a latch, and with -12 degrees the gun often fires at once, so 7 keeps T3's 6 s at grade 0), gearbox.hoist_j 5250 (4000), dynamo.hoist_s [24, 12] ([20, 10]).",
 	"tanks": {
 		"bulwark": {
 			"code": 1,
 			"crew": 1,
-			"hull_px": [192, 72],
+			"hull_px": [220, 71],
 			"engines": ["bulwark"],
 			"turrets": ["main"],
 			"enemy_scale": 0.75,
@@ -13,16 +13,17 @@
 		"rampart": {
 			"code": 2,
 			"crew": 2,
-			"hull_px": [240, 76],
+			"hull_px": [251, 71],
 			"engines": ["diesel", "dynamo"],
 			"turrets": ["main"],
 			"enemy_scale": 0.8,
+			"stabilizer_per_s": 1.3,
 			"label": "TANK_TANK_RAMPART"
 		},
 		"citadel": {
 			"code": 3,
 			"crew": 3,
-			"hull_px": [288, 80],
+			"hull_px": [296, 71],
 			"engines": ["diesel", "steam", "dynamo"],
 			"turrets": ["main"],
 			"enemy_scale": 1.0,
@@ -35,11 +36,12 @@
 			"engines": ["diesel", "steam", "dynamo", "arc"],
 			"turrets": ["main"],
 			"enemy_scale": 1.2,
+			"stabilizer_per_s": 2.0,
 			"label": "TANK_TANK_BASTION"
 		}
 	},
 	"hull": {
-		"hp": 140,
+		"hp": 150,
 		"checkpoint_hp": 30,
 		"repair_j": 5000,
 		"repair_hp": 40
@@ -49,20 +51,14 @@
 		"mass_offset_kg": 8,
 		"world_scroll": 0.4,
 		"px_per_visual_m": 20,
-		"evasive_hit_mult": 0.5,
+		"evasive_hit_mult": 0.45,
 		"halt_line_px": 300
 	},
-	"ram": {
-		"window_s": 10,
-		"cooldown_s": 30,
-		"reach_px": 120,
-		"sprint_ftp": 1.2,
+	"evade": {
+		"_doc": "Surge to evade (brief 2.4): a telegraphed shot misses when a rider who can evade (a SIM WORK phase of their own plan, past its first 300 s) holds the sprint rule (the trailing sprint_window_s average >= 1.2 x FTP raw, BRIEF 3.5) for hold_s inside the telegraph, boss_hold_s for the Behemoth's main gun. v1's ram block, reduced to what evade needs.",
 		"sprint_window_s": 3,
-		"fail_damage": 10,
-		"fail_stall_s": 5,
-		"boss_lunge_px": 24,
-		"boss_dodge_hold_s": 3,
-		"prompt_px": 300
+		"hold_s": 2,
+		"boss_hold_s": 3
 	},
 	"berm": {
 		"j_per_hp": 250,
@@ -88,30 +84,28 @@
 		"per_degree": 0.5,
 		"per_traverse": 15,
 		"per_hoist": 25,
-		"per_secondary": 2,
-		"secondary_min_bank": 10,
 		"elev_deg_s": [2, 8],
 		"traverse_s": [8, 2.5],
 		"full_at": 50,
 		"dispersion_deg": [0.5, 1.5],
 		"low_bank": 20,
-		"hoist_s": [22, 11]
+		"hoist_s": [24, 12]
 	},
 	"steam": {
-		"full_j": 4500,
+		"full_j": 4000,
 		"window_s": 5,
 		"over_j": 3000,
 		"over_max_pct": 150,
 		"over_bleed_pct_s": 2,
 		"over_max_s": 30,
-		"breech_cycle_s": 6,
+		"breech_cycle_s": 7,
 		"light_latch_pct": 40
 	},
 	"gearbox": {
 		"positions": ["drive", "turret", "hoist"],
 		"move_s": 1,
 		"turret_full_w": 200,
-		"hoist_j": 4000,
+		"hoist_j": 5250,
 		"light_latch_pct": 40,
 		"breech_cycle_s": 6,
 		"auto_dwell_s": 3,
@@ -119,7 +113,7 @@
 		"manual_suspend_s": 15
 	},
 	"gun": {
-		"elev_min_deg": -5,
+		"elev_min_deg": -12,
 		"elev_max_deg": 30,
 		"shell_speed_px_s": 360,
 		"gravity_px_s2": 300,
@@ -136,10 +130,21 @@
 		"medium_light_mult": 0.5,
 		"armored_light_mult": 0.25
 	},
-	"secondary": {
+	"bow": {
+		"_doc": "The bow guns (brief 2.4 Gun), two short guns in the nose on every tank: a damage burst (one SHELL_BOW round, both guns) every every_s at the nearest enemy (or Behemoth part) ahead whose near edge is min_px..max_px off the hull front, else a wire or wreck there (clear_s of fire clears it). Armour: enemies.json light_mult (mediums 0.5; heavies, destroyers, the Behemoth 0.25). Power: the Bastion's arc generator (full rate in band, under_band_rate under band, none on reserve or stalled), the Rampart's and the Citadel's dynamo bank (per_burst_units a burst, none below min_bank, none stalled), the Bulwark's gearbox (bulwark_rate, free).",
 		"damage": 5,
-		"every_s": 3,
-		"range_px": 240
+		"every_s": 2,
+		"min_px": 40,
+		"max_px": 220,
+		"per_burst_units": 2,
+		"min_bank": 10,
+		"under_band_rate": 0.5,
+		"bulwark_rate": 0.5,
+		"clear_s": 4
+	},
+	"arc": {
+		"_doc": "The arc generator (brief 2.4): while its rider is in band the searchlights are lit and the main gun's dispersion is multiplied by lit_dispersion_mult.",
+		"lit_dispersion_mult": 0.5
 	},
 	"caps": {
 		"enemies": 16,
@@ -151,7 +156,7 @@
 		"drill_wreck": {"w": 72, "h": 32},
 		"tank_traps": {"w": 64, "h": 24},
 		"light_hits_to_clear": 3,
-		"standoff_px": 260
+		"standoff_px": 180
 	},
 	"drill": {
 		"wreck_px": [220, 330]

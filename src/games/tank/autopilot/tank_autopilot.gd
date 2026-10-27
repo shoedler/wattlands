@@ -6,19 +6,19 @@ extends RefCounted
 ## The defaults already play every station with no input (the diesel drives on watts and digs in,
 ## auto-aim aims and fires, the boiler latches a heavy shell at 100%, the auto-lever runs the
 ## Bulwark); intents() adds only the gunner's two extra jobs:
-##   - rear traverses (for rear enemies the main gun can reach; rear lights are left to the
-##     secondary and the Ram): the main turret faces right or left, and a traverse flips it. It flips when
+##   - rear traverses (for rear enemies the main gun can reach; it cannot reach a rear light, which
+##     breaks off after its linger_s): the main turret faces right or left, and a traverse flips it. It flips when
 ##     nothing is in range on the side it faces and something is on the other side, and flips
 ##     back to the front once the rear is clear (no flip while the current side still has a
 ##     target, so a mixed fight never makes it flip-flop); asked for twice a second at most;
 ##   - obstacle shots: with no enemy in range anywhere, the turret facing front and the gun
 ##     loaded, a wire or wreck barricade that blocks the road is targeted (a target cycle, at most
 ##     once a second) and shot once the gun points at it.
-## It never latches (no early latch), never moves the Bulwark's lever by hand, never Rams, dodges
-## or Overpressures and never changes effort (BRIEF 3.5): the diesel and the steam engine get
-## nothing. Every intent it returns is tagged "auto": 1 (TankIntents.auto) so it never ends a
-## human's fallback; the module filters them through the same ownership and 5-a-second rules as
-## a rider's own.
+## It never latches (no early latch), never moves the Bulwark's lever by hand, never sprints (so it
+## never evades) or Overpressures and never changes effort (BRIEF 3.5): the diesel, the steam engine
+## and the arc generator get nothing (the bow guns fire on their own). Every intent it returns is
+## tagged "auto": 1 (TankIntents.auto) so it never ends a human's fallback; the module filters them
+## through the same ownership and 5-a-second rules as a rider's own.
 
 ## An enemy counts as in range while any of it is this far inside the screen's edges.
 const EDGE_MARGIN_PX := 4.0
@@ -57,7 +57,7 @@ static func is_gunner(engine: String) -> bool:
 
 
 ## {ahead, behind}: the live enemies in range on each side (the Behemoth counts ahead while a
-## part of it stands). Rear lights are left to the secondary and the Ram: not counted.
+## part of it stands). Rear lights are out of the main gun's reach: not counted.
 static func enemies_in_range(state: TankState) -> Dictionary:
 	var cam := state.camera_x()
 	var lo := cam + EDGE_MARGIN_PX

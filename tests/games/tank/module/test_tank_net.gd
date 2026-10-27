@@ -169,7 +169,8 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 		float(c.content.enemy_def("medium")["hp"]),
 		"a medium's full HP at scale 1.0"
 	)
-	assert_eq([c.enemy(11).w, c.enemy(11).h], [104, 52])
+	var size: Array = c.content.enemy_def("medium")["size_px"]
+	assert_eq([c.enemy(11).w, c.enemy(11).h], [int(size[0]), int(size[1])])
 	var solo_host := _host(1)
 	solo_host.state.enemy(11).hp = 40.0
 	var solo := _client(1)
@@ -317,8 +318,9 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.shot(-1, TankIds.SHELL_ENEMY, 42, 12, 2),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 11.6, TankIds.SHELL_ENEMY, 3.2, 3400.4),
 		TankEvents.kill(12, 1, TankEvents.BY_SHELL, 1),
-		TankEvents.ram(2, true, 13),
-		TankEvents.dodge(2),
+		TankEvents.kill(13, 2, TankEvents.BY_BOW, 3),
+		{"type": TankEvents.RAM, "s": 2, "ok": 1, "id": 13},
+		{"type": TankEvents.DODGE, "s": 2},
 		TankEvents.breakdown(),
 		TankEvents.repaired(40.0),
 		TankEvents.overrun(TankIds.SEG_GUN_LINE, 2),
@@ -326,6 +328,7 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.latch(2, TankIds.SHELL_OVER),
 		TankEvents.lever(0, TankIds.LEVER_TURRET),
 		TankEvents.evade(-4, TankIds.BOSS_CODE, false),
+		TankEvents.evade(13, 3, true, 2),
 		TankEvents.turn(-1, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
 	]

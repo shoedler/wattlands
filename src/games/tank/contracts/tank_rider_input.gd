@@ -67,7 +67,7 @@ func on_reserve() -> bool:
 	return afk or not connected
 
 
-## In this rider's own first 300 s (no Ram, dodge, Overpressure, sprint prompt or haptic).
+## In this rider's own first 300 s (no evade, Overpressure, sprint prompt or haptic).
 func in_first_window() -> bool:
 	return TankConst.in_first_window(plan_elapsed_s)
 

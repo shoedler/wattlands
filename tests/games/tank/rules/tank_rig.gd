@@ -42,8 +42,11 @@ var compliance: float = 1.0
 ## 55 + 45 x (1 - bank / 100), clamped to the phase's range (instantly here, not in sub-steps).
 var bank_director: bool = false
 ## The breech never opens (nothing loads, nothing fires) and the Bulwark's lever stays where it is
-## (Drive): the gun is out of the picture (tests of the drive and the Ram).
+## (Drive): the main gun is out of the picture (tests of the drive, evade and the bow guns).
 var no_fire: bool = false
+## The bow guns never get to a burst (their clock never runs down) and never wear a barricade
+## down: tests of enemies and obstacles on their own.
+var no_bow: bool = false
 ## Seconds each segment ran when auto_phase moved on (index -> seconds).
 var seg_len: Dictionary = {}
 var ended_by: Dictionary = {}
@@ -118,6 +121,10 @@ func run_until(cond: Callable, limit_s: float = 600.0) -> float:
 
 
 func step() -> Array[Dictionary]:
+	if no_bow:
+		state.hull.bow_cd_s = 1.0e9
+		for o in state.obstacles:
+			o.bow_s = 0.0
 	if no_fire:
 		state.hull.breech_s = 1.0e6
 		var g := gearbox()

@@ -1,6 +1,6 @@
 extends GutTest
-## The main turret and the Citadel's secondaries (brief 2.4 Gun): auto-aim priority and lead, the
-## 0.5 degree rule, manual controls, dispersion, the breech cycle, the shell cap, secondaries.
+## The main turret (brief 2.4 Gun): auto-aim priority and lead, the 0.5 degree rule, manual
+## controls, dispersion, the breech cycle, the shell cap (the bow guns: test_tank_bow.gd).
 
 const ADVANCE := 1
 const CHECKPOINT := 3
@@ -82,8 +82,8 @@ func test_nearer_first_inside_a_tier() -> void:
 
 func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 	var rig := _rig(1)
-	# A light tank right under the barrel cannot be reached (-5 degrees at most); a medium can.
-	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 60.0)
+	# A light tank right against the bow cannot be reached (-12 degrees at most); a medium can.
+	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 10.0)
 	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
 	var t := _aim(rig)
 	assert_eq(t.id, med.id)
@@ -97,8 +97,30 @@ func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 	assert_null(_aim(rig))
 
 
+## Brief 2.4 Gun and section 4: at -12 degrees the solver hits a light tank anywhere on its hold
+## distance (enemies.json hold_px, plus its weave), from every tank.
+func test_the_solver_hits_a_light_tank_at_its_hold_distance_from_every_tank() -> void:
+	for crew in [1, 2, 3, 4]:
+		var rig := _rig(crew)
+		var aux := TankAux.of(rig.state)
+		var def := rig.content.enemy_def(TankIds.ENEMY_LIGHT)
+		var span: Array = def["hold_px"]
+		var weave := float(def["weave_px"])
+		assert_eq(rig.content.num("tanks", "gun.elev_min_deg"), -12.0)
+		for d: float in [
+			float(span[0]) - weave, float(span[0]), float(span[1]), float(span[1]) + weave
+		]:
+			rig.state.enemies.clear()
+			var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, d)
+			TankTargets.build(rig.state, aux)
+			var out: Array[Vector2] = [Vector2.ZERO]
+			var el := TankAim.solve_target(rig.state, aux, TankTargets.by_id(aux, e.id), 1, out)
+			assert_false(is_nan(el), "crew %d: a light tank %.0f px off the bow" % [crew, d])
+			assert_between(el, -12.0, 30.0)
+
+
 func test_every_gun_line_enemy_is_reachable_from_every_tank() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
 		for index in [2, 5, 8]:
 			rig.enter(index, 1.0)
@@ -131,7 +153,9 @@ func test_the_gun_aims_and_fires_within_half_a_degree_and_hits() -> void:
 	var shot: Dictionary = _gun_shots(rig)[0]
 	assert_eq([shot["s"], shot["sh"]], [_g(rig) - 1, TankIds.SHELL_HEAVY])
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
-	assert_almost_eq(rig.hull().breech_s, 6.0, 0.1, "6 s breech cycle")
+	var cycle := rig.content.num("tanks", "steam.breech_cycle_s")
+	assert_between(cycle, 6.0, 9.0, "6 s in the brief, tuned to 7 s (P4 rules ADR), +50% at most")
+	assert_almost_eq(rig.hull().breech_s, cycle, 0.1, "the steam breech cycle")
 	assert_lte(
 		absf(rig.hull().elev_deg - aux.aim_elev), 0.5 + 1e-6, "within 0.5 degrees of the solution"
 	)
@@ -220,15 +244,15 @@ func test_no_second_shot_inside_the_breech_cycle() -> void:
 	assert_eq(_gun_shots(rig).size(), 2)
 
 
-func test_the_elevation_limits_are_minus_5_and_plus_30() -> void:
+func test_the_elevation_limits_are_minus_12_and_plus_30() -> void:
 	var rig := _rig(2)
 	rig.power_w[_g(rig)] = 50.0
 	rig.hull().elev_target_deg = 80.0
 	rig.run(6.0)
 	assert_eq(rig.hull().elev_deg, 30.0)
 	rig.hull().elev_target_deg = -80.0
-	rig.run(8.0)
-	assert_eq(rig.hull().elev_deg, -5.0)
+	rig.run(12.0)
+	assert_eq(rig.hull().elev_deg, -12.0)
 
 
 func test_aim_nudges_move_one_degree_and_pause_auto_aim_for_5_seconds() -> void:
@@ -364,78 +388,6 @@ func test_target_ids_are_the_entity_id_or_the_negative_boss_part() -> void:
 	rig.run(0.2)
 	assert_eq(rig.hull().target_id, m.id)
 	assert_gt(m.id, 0)
-
-
-# --- Secondaries ---------------------------------------------------------------------------------
-
-
-func _secondary_shots(rig: TankRulesRig) -> Array:
-	return rig.of_type("shot").filter(
-		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_BOW
-	)
-
-
-func test_the_citadel_secondaries_do_5_damage_every_3_seconds_to_the_nearest_enemy_within_240_px(
-) -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var fore := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	fore.hp = 500.0
-	fore.hp_max = 500.0
-	fore.gun_s = 999.0
-	rig.run(0.1)
-	assert_eq(_secondary_shots(rig).size(), 1, "the fore secondary fires at once")
-	assert_almost_eq(fore.hp, 495.0, 0.001, "5 damage on a light tank")
-	rig.run(9.0)
-	assert_between(_secondary_shots(rig).size(), 3, 4, "one every 3 s")
-	var far := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 224.0)
-	far.hp = 500.0
-	far.hp_max = 500.0
-	far.gun_s = 999.0
-	rig.state.enemies.erase(fore)
-	rig.run(3.2)
-	assert_almost_eq(far.hp, 497.5, 2.6, "mediums take half from secondaries")
-
-
-func test_the_aft_secondary_covers_enemies_behind_and_each_gun_keeps_its_own_timer() -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var rear := rig.spawn(TankIds.ENEMY_LIGHT, -1, 100.0)
-	rear.hp = 500.0
-	rear.hp_max = 500.0
-	rear.gun_s = 999.0
-	var fore := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	fore.hp = 500.0
-	fore.hp_max = 500.0
-	fore.gun_s = 999.0
-	rig.run(0.2)
-	assert_lt(rear.hp, 500.0, "aft fired at the enemy behind")
-	assert_lt(fore.hp, 500.0, "fore fired at the enemy ahead")
-	assert_eq(_secondary_shots(rig).size(), 2)
-
-
-func test_secondaries_ignore_enemies_beyond_240_px_and_obstacles() -> void:
-	var rig := _rig(3)
-	rig.no_fire = true
-	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 224.0, true)
-	med.gun_s = 999.0
-	med.x_px = rig.hull().x_px + rig.hull().hull_w + 330.0
-	TankEncounters.add_obstacle(
-		rig.state, TankIds.OBST_WIRE, rig.hull().x_px + rig.hull().hull_w + 40.0
-	)
-	rig.run(1.0)
-	assert_eq(_secondary_shots(rig).size(), 0)
-
-
-func test_only_the_citadel_has_secondaries() -> void:
-	for crew in [1, 2]:
-		var rig := _rig(crew)
-		var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-		e.hp = 500.0
-		e.gun_s = 999.0
-		rig.no_fire = true
-		rig.run(4.0)
-		assert_eq(_secondary_shots(rig).size(), 0, "crew %d" % crew)
 
 
 func test_an_autopilot_traverse_does_not_pause_the_auto_aim() -> void:

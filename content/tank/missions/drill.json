@@ -22,7 +22,8 @@
 				{"at_s": 2, "engine": "diesel", "key": "TANK_TEACH_DIESEL"},
 				{"at_s": 2, "engine": "bulwark", "key": "TANK_TEACH_BULWARK"},
 				{"at_s": 6, "engine": "dynamo", "key": "TANK_TEACH_DYNAMO"},
-				{"at_s": 10, "engine": "steam", "key": "TANK_TEACH_STEAM"}
+				{"at_s": 10, "engine": "steam", "key": "TANK_TEACH_STEAM"},
+				{"at_s": 14, "engine": "arc", "key": "TANK_TEACH_ARC"}
 			]
 		},
 		{

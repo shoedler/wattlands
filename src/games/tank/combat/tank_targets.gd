@@ -4,8 +4,9 @@ extends RefCounted
 ## owner: rules). Rebuilt once a tick after the enemies and the Behemoth moved, in a fixed order:
 ## enemies by id, the boss parts (bogie 0 nearest the tank first), obstacles by id.
 
-## The hull sprite's bottom sits this far above the ground line (rigs.json screen.skirt_gap_px).
-const SKIRT_GAP := 10
+## The hull's bottom sits this far above the ground line (rigs.json screen.skirt_gap_px): v2's kit
+## hull (hull_px height 71) runs from its roof down to the ground under the tracks, so 0.
+const SKIRT_GAP := 0
 ## The obstacles' hit box heights when content has none (tanks.json props.<type>.h).
 const DEFAULT_PROP_H := 24
 
