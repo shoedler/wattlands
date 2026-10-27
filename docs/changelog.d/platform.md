@@ -16,3 +16,6 @@
 - v0.3.0: the pause on not pedaling waits 10 s (was 5 s).
 - v0.3.0: the on-screen panic button is gone; the pause overlay names the emergency stop keys (Backspace held 1 s, View + Menu).
 - v0.3.0: lobby cards wrap long option labels, so the menu stays on screen.
+- v0.3.0: games can give a short ERG "haptic pull" (up to +50 % FTP for at most 3 s, scaled by your haptic intensity), the one approved change to the safety rules: never in SIM, warm-up, rescue, coasting, pause or panic, never for riders with haptics off, one 15 s cooldown with the other haptics, always within the absolute ceiling and the duration limits.
+- v0.3.0: help overlay: F1 or the left stick click shows what is on a game's screen; it opens once the first time you play each game and closes with F1, Esc, Enter or after 20 s while the ride goes on.
+- v0.3.0: Settings > Rides: pick a ride to upload it or copy its Strava title and description; the page shows the rides folder and copies its path.
