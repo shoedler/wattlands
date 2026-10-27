@@ -199,7 +199,8 @@ func _feed_hull() -> void:
 ## sprint itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and
 ## right cycle targets (the dynamo; on the Bulwark they step the lever and `item` cycles targets,
 ## `swap` steps it too), ability_1 overpressures, ability_2 traverses, confirm fires, or latches
-## (the steam engine; the Bulwark with an empty gun).
+## (the steam engine; the Bulwark with an empty gun). In free roam the driver turns the tank round:
+## ability_1 (the diesel and the Bulwark) or confirm (the diesel).
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
@@ -221,6 +222,14 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 			out.append(TankIntents.target(TankIds.TARGET_NEXT))
 	if engine == TankIds.ENGINE_BULWARK:
 		out.append_array(_lever_intents(actions))
+	if state.roam.active and not surge:
+		var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK
+		var key := (
+			actions.has(&"ability_1")
+			or (engine == TankIds.ENGINE_DIESEL and actions.has(&"confirm"))
+		)
+		if drives and key:
+			out.append(TankIntents.make(TankIds.INTENT_TURN))
 	if actions.has(&"confirm") and not surge:
 		match engine:
 			TankIds.ENGINE_DYNAMO:
@@ -371,6 +380,8 @@ func results() -> GameResults:
 	if state == null:
 		res.grade = "D"
 		return res
+	if state.roam.active:
+		return _roam_results(res)
 	var sum := TankScore.summary(state)
 	var grade := str(sum["grade"])
 	var done := state.in_cooldown()
@@ -481,6 +492,77 @@ func _team_stats() -> Dictionary:
 		"TANK_TEAM_KILLS": "/".join(kills),
 		"TANK_TEAM_EVADES": "%d/%d" % [sc.evades_ok, sc.evades_tried],
 		"TANK_TEAM_BOW_HITS": sc.bow_hits,
+	}
+
+
+## Free roam's results (brief 2.8): the crew's points and the grade by points per WORK minute
+## (TankRoam.grade_of), kills by type, distance, evades and breakdowns; XP as for missions; unlocks
+## as for missions (the Behemoth's never comes in a roam); ride_tag "Free Roam N min".
+func _roam_results(res: GameResults) -> GameResults:
+	var per_min := TankRoam.points_per_min(state)
+	var grade := TankRoam.grade_of(content, per_min)
+	var done := state.in_cooldown()
+	for row in res.rows:
+		var r := state.rider(int(row["peer_id"]))
+		if r == null:
+			continue
+		row["time_in_band_s"] = r.band_s
+		row["time_in_band_pct"] = 100.0 * r.band_s / r.work_s if r.work_s > 0.0 else 0.0
+		row["stats"].merge(_rider_stats(r), true)
+		row["xp"] = TankScore.xp(content, float(row.get("kj", 0.0)), grade)
+		var unlocks: Array = []
+		unlocks.append_array(TankScore.unlocks(state, grade, done))
+		row["unlocks"] = unlocks
+	res.grade = grade
+	res.score = float(state.roam.points)
+	res.team = _roam_team_stats(per_min)
+	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP
+	res.summary_key = "TANK_RESULT_TIME_UP" if timed_out else "TANK_RESULT_ABANDONED"
+	var tx := ctx.strings
+	res.ride_tag = tx.t("TANK_RIDE_ROAM", [content.roam_minutes()])
+	var sc := state.score
+	var lines: Array[String] = [
+		tx.t("TANK_RIDE_POINTS", [state.roam.points, grade]),
+		tx.t("TANK_RIDE_KILLS", [_kill_total()]),
+		tx.t("TANK_RIDE_DISTANCE", ["%.1f" % (state.roam.odo_m / 1000.0)]),
+		tx.t("TANK_RIDE_EVADES", [sc.evades_ok, sc.evades_tried]),
+		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
+	]
+	res.ride_lines = lines
+	for row in res.rows:
+		var r2 := state.rider(int(row["peer_id"]))
+		if r2 != null:
+			var own := res.ride_lines.duplicate()
+			own.append_array(_rider_ride_lines(r2))
+			row["ride_lines"] = own
+	return res
+
+
+func _kill_total() -> int:
+	var n := 0
+	for code in range(1, state.score.kills.size()):
+		n += int(state.score.kills[code])
+	return n
+
+
+## The crew's free-roam values in the results screen's order: the outcome, points, points per WORK
+## minute, kills by type (light/medium/destroyer/dug-in/heavy), distance, evades, breakdowns, patrols.
+func _roam_team_stats(per_min: float) -> Dictionary:
+	var sc := state.score
+	var kills: PackedStringArray = []
+	for code in range(1, TankIds.BOSS_CODE):
+		kills.append(str(sc.kills[code]))
+	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP
+	return {
+		"TANK_TEAM_OUTCOME":
+		ctx.strings.t("TANK_OUTCOME_TIME_UP" if timed_out else "TANK_RESULT_ABANDONED"),
+		"TANK_TEAM_POINTS": state.roam.points,
+		"TANK_TEAM_POINTS_PER_MIN": "%.1f" % per_min,
+		"TANK_TEAM_ROAM_KILLS": "/".join(kills),
+		"TANK_TEAM_DISTANCE": "%.1f" % (state.roam.odo_m / 1000.0),
+		"TANK_TEAM_EVADES": "%d/%d" % [sc.evades_ok, sc.evades_tried],
+		"TANK_TEAM_BREAKDOWNS": sc.breakdowns,
+		"TANK_TEAM_PATROLS": state.roam.patrols,
 	}
 
 

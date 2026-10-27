@@ -28,7 +28,9 @@ extends RefCounted
 ##    hoist.rise_pct_s (one step every hoist.step_s, counted from reaching Hoist) to hoist.grade_pct
 ##    (warmup_grade_pct in WARMUP kinds) while the lever is on Hoist; 0 in one step on leaving.
 ## 5. Terrain: course_grade every terrain.send_every_s (2 Hz) in grade_source "game" phases, the
-##    grade under the tank from the mission terrain (warm-up range in WARMUP kinds).
+##    grade under the tank from the mission terrain (warm-up range in WARMUP kinds); in free roam
+##    the valley's grade under the hull in its travel direction (TankRoam.grade_pct, the same
+##    sampler the drive rolls on: -3..+5%, the warm-up range in the drive-out).
 ## 6. cadence_band default (60, 120) at each segment start; loader (50, 120) while the steam
 ##    rider's shell is loaded or the breech cycles in a WORK phase (the in-band rule's cadence 50
 ##    applies only there), back to the default when it clears.
@@ -413,8 +415,12 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 		return
 	if e % _ticks(content.num("stations", "terrain.send_every_s", 0.5)) != 0:
 		return
-	var seg := int(ph.meta.get("segment", ri.phase_index))
-	var g := terrain_grade_pct(content, seg, state.hull.distance_m, ri.in_warmup())
+	var g := 0.0
+	if state.roam.active:
+		g = TankRoam.grade_pct(state, ri.in_warmup())
+	else:
+		var seg := int(ph.meta.get("segment", ri.phase_index))
+		g = terrain_grade_pct(content, seg, state.hull.distance_m, ri.in_warmup())
 	ctx.directives.course_grade(ri.peer, g)
 
 

@@ -11,7 +11,8 @@ extends RefCounted
 ## (telegraphs through TankEvade), the shells in flight (TankShells), the repair and the berm
 ## (TankHullRules) and the objectives. Events come back in that order. Everything is split by
 ## topic over rules/ and combat/; the signatures here (new_state, step, in_band) are the module's
-## contract.
+## contract. Free roam (brief 2.10, TankRoam) adds its turn, time up, strongpoints and patrols
+## before the drive, and its points, engagement halt and time-up finish at the end.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
@@ -22,7 +23,9 @@ static func new_state(
 	rotation: bool,
 	rng: RandomNumberGenerator
 ) -> TankState:
-	return TankState.create(content, players, mission, rotation, rng)
+	var s := TankState.create(content, players, mission, rotation, rng)
+	TankRoam.setup(s)
+	return s
 
 
 ## Advances the state by dt (always Wl.SIM_DT); returns the events raised (TankEvents), in order.
@@ -38,6 +41,7 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	_assign_stations(state, inputs, events)
 	_update_riders(state, inputs, dt)
 	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
+	TankRoam.pre(state, inputs, aux, dt, events)
 	TankEncounters.advance(state, aux)
 	TankEncounters.depot_wrecks(state, aux)
 	TankDrive.step(state, inputs, dt)
@@ -52,6 +56,7 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	TankHullRules.repair(state, dt, events)
 	TankHullRules.dig(state, inputs, dt)
 	TankSegments.objectives(state)
+	TankRoam.post(state, aux, events)
 	return events
 
 

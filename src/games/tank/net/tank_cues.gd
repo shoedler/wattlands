@@ -12,6 +12,9 @@ extends RefCounted
 ## for them: "Surge to evade" in a SIM WORK phase past the first 300 s (TankRiderState.can_evade,
 ## never in WARMUP, RECOVERY or ERG phases: brief 2.3, 2.4), "Surge to overpressure" in the steam
 ## window. The arc generator's stall is announced to the whole crew, like the dynamo's.
+## Free roam (brief 2.10, 3.6): "Turn around" to the driver (the diesel or the Bulwark) when the tank
+## stands at a turning place, "Engage" to everyone when it halts for a strongpoint or a heavy tank,
+## "Turning round" on a turn and "Time up" when the roam phase's min_s passed.
 
 const PROMPT_NONE := ""
 const PROMPT_EVADE := "evade"
@@ -36,6 +39,8 @@ var _arc_stalled: bool = false
 var _rescue: bool = false
 var _regroup: bool = false
 var _all_afk: bool = false
+var _at_end: int = 0
+var _engaging: bool = false
 ## peer -> was on reserve at the last call; empty until the first call, which only records.
 var _reserve: Dictionary = {}
 
@@ -118,6 +123,23 @@ func on_state(state: TankState) -> void:
 		_toast("TANK_TOAST_REGROUP")
 	_regroup = regroup
 	_reserve_cues(state)
+	_roam_cues(state, me)
+
+
+## Free roam: "Turn around" for the driver at a map end (once per arrival, not while turning),
+## "Engage" for everyone when the tank halts to fight.
+func _roam_cues(state: TankState, me: TankRiderState) -> void:
+	var r := state.roam
+	if not r.active:
+		return
+	var drives := me.engine == TankIds.ENGINE_DIESEL or me.engine == TankIds.ENGINE_BULWARK
+	var end := r.at_end if r.turn_s <= 0.0 else 0
+	if end != 0 and end != _at_end and drives and not state.in_cooldown():
+		_toast("TANK_TOAST_TURN_AROUND")
+	_at_end = end
+	if r.engaging and not _engaging:
+		_toast("TANK_TOAST_ENGAGE")
+	_engaging = r.engaging
 
 
 ## "<name> on reserve" when a rider goes AFK or drops, and "No power" when every rider has. The
@@ -158,6 +180,10 @@ func on_event(state: TankState, e: Dictionary) -> void:
 				_toast(str(LOADED_KEYS[int(e.get("sh", 0))]))
 		TankEvents.BOSS_PHASE:
 			_boss_banner(int(e.get("p", 0)))
+		TankEvents.TURN:
+			_toast("TANK_TOAST_TURNING")
+		TankEvents.TIME_UP:
+			_toast("TANK_TOAST_TIME_UP")
 
 
 func _segment_banner(state: TankState, index: int) -> void:

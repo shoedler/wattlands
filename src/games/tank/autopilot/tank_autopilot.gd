@@ -14,10 +14,13 @@ extends RefCounted
 ##   - obstacle shots: with no enemy in range anywhere, the turret facing front and the gun
 ##     loaded, a wire or wreck barricade that blocks the road is targeted (a target cycle, at most
 ##     once a second) and shot once the gun points at it.
+##   - free roam (brief 2.10): the driver (the diesel or the Bulwark) turns the tank round once it
+##     has stood valley.json turn.autopilot_wait_s (3 s) at the turning place ahead.
 ## It never latches (no early latch), never moves the Bulwark's lever by hand, never sprints (so it
-## never evades) or Overpressures and never changes effort (BRIEF 3.5): the diesel, the steam engine
-## and the arc generator get nothing (the bow guns fire on their own). Every intent it returns is
-## tagged "auto": 1 (TankIntents.auto) so it never ends a human's fallback; the module filters them
+## never evades) or Overpressures and never changes effort (BRIEF 3.5): the steam engine and the
+## arc generator get nothing (the bow guns fire on their own), the diesel only its free-roam turn.
+## Every intent it returns is tagged "auto": 1 (TankIntents.auto) so it never ends a human's
+## fallback; the module filters them
 ## through the same ownership and 5-a-second rules as a rider's own.
 
 ## An enemy counts as in range while any of it is this far inside the screen's edges.
@@ -39,16 +42,39 @@ static func intents(state: TankState, peer: int) -> Array:
 	if state == null:
 		return []
 	var rider := state.rider(peer)
-	if rider == null or not is_gunner(rider.engine):
+	if rider == null:
+		return []
+	var turn := roam_turn(state, rider)
+	if not turn.is_empty():
+		return turn
+	if not is_gunner(rider.engine):
 		return []
 	if state.in_cooldown() or state.seg.seg == TankIds.SEG_NONE:
 		return []
 	if state.all_afk or state.hull.breakdown:
 		return []
-	var turn := _traverse(state)
-	if not turn.is_empty():
-		return turn if state.tick % ASK_EVERY_TICKS == 0 else []
+	var flip := _traverse(state)
+	if not flip.is_empty():
+		return flip if state.tick % ASK_EVERY_TICKS == 0 else []
 	return _obstacle_shot(state)
+
+
+## Free roam: the driver's turn at the turning place ahead, once the tank has stood there
+## turn.autopilot_wait_s (asked twice a second at most, while a turn may start).
+static func roam_turn(state: TankState, rider: TankRiderState) -> Array:
+	var r := state.roam
+	if not r.active or r.at_end == 0 or state.all_afk:
+		return []
+	if rider.engine != TankIds.ENGINE_DIESEL and rider.engine != TankIds.ENGINE_BULWARK:
+		return []
+	var wait := 3.0
+	if state.content != null:
+		wait = state.content.num("valley", "turn.autopilot_wait_s", 3.0)
+	if r.end_s < wait - 1e-6 or not TankRoam.can_turn(state):
+		return []
+	if state.tick % ASK_EVERY_TICKS != 0:
+		return []
+	return [TankIntents.auto(TankIds.INTENT_TURN)]
 
 
 ## True for the engines that work the main gun: the dynamo and the Bulwark's gearbox diesel.
