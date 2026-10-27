@@ -17,7 +17,9 @@ extends RefCounted
 ##                            before/after frame
 ##   TANK_V3_BASE_SX=<px>     one little base with its left end at this stage x (art px), for the
 ##                            hero frames; otherwise bases stand at their world places
-##   TANK_V3_TANK=r4|r5       r3/r4: draw the tank builder's rebuilt tank (its round 4 or 5, a
+##   TANK_V3_FIRE_T=<s>       r5: show the main gun's blast this long after a shot (r6's blast,
+##                            TankV3Blast) at the muzzle anchor, with its scene flash
+##   TANK_V3_TANK=r4|r5|r6    r3/r4/r5: draw the tank builder's rebuilt tank (its round 4 or 5, a
 ##                            static composed sprite, assets/tank/v3env/tank_<r>.png; same anchors,
 ##                            r5 adds the rear searchlight) instead of the v2 tank, with
 ##                            its own lights (position lamps, headlight, searchlight, room bloom)
@@ -119,7 +121,7 @@ const R4 := {
 	"bow_gun_upper_len": 23.5,
 	"bow_gun_lower_pivot": Vector2(430.2, 139.0),
 	"bow_gun_lower_len": 22.0,
-	"headlight": Vector2(456.5, 164.0),
+	"headlight": Vector2(457.0, 164.0),
 	"searchlight": Vector2(308.5, 63.5),
 	"lamp_red_rear": Vector2(31.5, 127.5),
 	"lamp_red_front": Vector2(442.5, 149.5),
@@ -142,6 +144,10 @@ const R4_ROOMS := {
 ## and the hull.
 const R4_TURRET := Rect2(178, 56, 176, 58)
 const R4_HULL := Rect2(8, 106, 460, 110)
+## r6's own keep-out rects (tank_r6_hitbox.json "rects": turret; hull joined with track_run).
+const R6_TURRET := Rect2(178, 77, 190, 41)
+const R6_HULL := Rect2(14, 112, 444, 97)
+static var _blast_tex: ImageTexture = null
 
 static var _r4: Texture2D = null
 static var _cfg: Dictionary = {}
@@ -163,9 +169,13 @@ static func cfg() -> Dictionary:
 			"layer_fix": OS.get_environment("TANK_V3_LAYERFIX") != "0",
 			"base_sx": float(bsx) if bsx.is_valid_float() else NAN,
 			"ground_y": GROUND_Y,
-			"r4": OS.get_environment("TANK_V3_TANK") in ["r4", "r5"],
+			"r4": OS.get_environment("TANK_V3_TANK") in ["r4", "r5", "r6"],
+			"fire_t": NAN,
 			"tank": OS.get_environment("TANK_V3_TANK"),
 		}
+		var ft := OS.get_environment("TANK_V3_FIRE_T")
+		if ft.is_valid_float():
+			_cfg["fire_t"] = float(ft)
 		var gy := OS.get_environment("TANK_V3_GROUND_Y")
 		if gy.is_valid_float():
 			_cfg["ground_y"] = float(gy)
@@ -224,6 +234,7 @@ static func r4_tex() -> Texture2D:
 ## r3: the r4 tank, static (no moving tracks in these frames), standing on the ground line.
 static func draw_tank_r4(ci: CanvasItem, v: TankView) -> void:
 	ci.draw_texture(r4_tex(), r4_at(v.origin).round())
+	draw_blast(ci, v)
 
 
 ## r3: r4's own lights on the tank light layer: the position lamps with halos, the headlight with
@@ -262,13 +273,59 @@ static func draw_r4_lights(ci: CanvasItem, v: TankView, state: TankState) -> voi
 			TankDraw.glow_at(ci, lp, 24.0, Color(1.0, 0.85, 0.6, 0.2 * k))
 	else:
 		_r4_searchlight(ci, at, sk, v.time)
+	draw_blast_light(ci, v)
 	if state.hull.breakdown:
 		return
 	_room_bloom(ci, at, v.time)
 
 
 static func r5() -> bool:
-	return r4() and str(cfg()["tank"]) == "r5"
+	return r4() and str(cfg()["tank"]) in ["r5", "r6"]
+
+
+static func fire_t() -> float:
+	return float(cfg()["fire_t"])
+
+
+## r5 frames: the blast at fire_t() after the shot, drawn round the muzzle (cached: a still).
+static func draw_blast(ci: CanvasItem, v: TankView) -> void:
+	var ft := fire_t()
+	if is_nan(ft):
+		return
+	var m := r4_anchor(v.origin, "muzzle").round()
+	var box := Vector2(80, 120)
+	if _blast_tex == null:
+		var img := Image.create(320, 240, false, Image.FORMAT_RGBA8)
+		img.fill(Color(0, 0, 0, 0))
+		var gy := TankView.GROUND - m.y + box.y
+		TankV3Blast.blast(img, box + Vector2(0.5, 0.5), 0.0, ft, gy)
+		_blast_tex = ImageTexture.create_from_image(img)
+	ci.draw_texture(_blast_tex, m - box)
+
+
+## r5 frames: the shot's scene flash on the tank light layer (a wide warm halo lighting the hull
+## and the air, a white core) for the first frames after the shot.
+static func draw_blast_light(ci: CanvasItem, v: TankView) -> void:
+	var ft := fire_t()
+	if is_nan(ft) or ft > 0.14:
+		return
+	var k := 1.0 - ft / 0.14
+	var m := r4_anchor(v.origin, "muzzle")
+	TankDraw.glow_at(ci, m + Vector2(18, 0), 180.0, Color(1.0, 0.7, 0.35, 0.45 * k))
+	TankDraw.glow_at(ci, m + Vector2(12, 0), 60.0, Color(1.0, 0.92, 0.7, 0.7 * k))
+	TankDraw.glow_at(ci, m + Vector2(-140, 40), 200.0, Color(1.0, 0.66, 0.32, 0.18 * k))
+
+
+## r5 frames: the shot's flash lighting the road (world light layer).
+static func draw_blast_pool(ci: CanvasItem, v: TankView) -> void:
+	var ft := fire_t()
+	if is_nan(ft) or ft > 0.14:
+		return
+	var k := 1.0 - ft / 0.14
+	var m := r4_anchor(v.origin, "muzzle")
+	TankLightDraw.ground_glow(
+		ci, Vector2(m.x, TankView.GROUND + 4.0), 220.0, Color(1.0, 0.72, 0.38, 0.5 * k)
+	)
 
 
 static func _r4_searchlight(ci: CanvasItem, at: Vector2, sk: float, time: float) -> void:
@@ -301,6 +358,7 @@ static func draw_r4_pools(ci: CanvasItem, v: TankView, broken: bool) -> void:
 	TankLightDraw.ground_glow(
 		ci, Vector2(hl.x + 45.0, g + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * hk)
 	)
+	draw_blast_pool(ci, v)
 	if r5():
 		# where each searchlight's cone axis meets the road: a warm oval pool (r5's light.gd)
 		for sd: Dictionary in R5_SEARCH:
@@ -324,7 +382,10 @@ static func draw_r4_pools(ci: CanvasItem, v: TankView, broken: bool) -> void:
 static func r4_rects(origin: Vector2) -> Array[Rect2]:
 	var at := r4_at(origin)
 	var out: Array[Rect2] = []
-	for r: Rect2 in [R4_TURRET, R4_HULL]:
+	var parts: Array[Rect2] = [R4_TURRET, R4_HULL]
+	if str(cfg()["tank"]) == "r6":
+		parts = [R6_TURRET, R6_HULL]
+	for r: Rect2 in parts:
 		out.append(Rect2(at + r.position, r.size))
 	return out
 
