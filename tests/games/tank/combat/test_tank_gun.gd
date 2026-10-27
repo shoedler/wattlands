@@ -153,7 +153,9 @@ func test_the_gun_aims_and_fires_within_half_a_degree_and_hits() -> void:
 	var shot: Dictionary = _gun_shots(rig)[0]
 	assert_eq([shot["s"], shot["sh"]], [_g(rig) - 1, TankIds.SHELL_HEAVY])
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
-	assert_almost_eq(rig.hull().breech_s, 6.0, 0.1, "6 s breech cycle")
+	var cycle := rig.content.num("tanks", "steam.breech_cycle_s")
+	assert_between(cycle, 6.0, 9.0, "6 s in the brief, tuned to 7 s (P4 rules ADR), +50% at most")
+	assert_almost_eq(rig.hull().breech_s, cycle, 0.1, "the steam breech cycle")
 	assert_lte(
 		absf(rig.hull().elev_deg - aux.aim_elev), 0.5 + 1e-6, "within 0.5 degrees of the solution"
 	)

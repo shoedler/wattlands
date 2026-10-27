@@ -81,7 +81,9 @@ func test_every_stage_has_a_light_sprint_prompt_and_a_medium_in_its_advance() ->
 	var c := _load("ashfall_road")
 	for s: Dictionary in _segments(c, "advance"):
 		var enc: Array = s["encounters"]
-		assert_gte(_count(enc, "light"), 1, "stage %d: a light tank to Ram" % s["stage"])
+		assert_gte(
+			_count(enc, "light"), 1, "stage %d: a light tank's telegraphed flank shot" % s["stage"]
+		)
 		assert_gte(_count(enc, "medium"), 1, "stage %d: a medium to hold the band for" % s["stage"])
 
 
@@ -92,7 +94,10 @@ func test_stages_2_and_3_end_in_a_heavy_tank_duel_at_the_gun_line() -> void:
 	assert_gte(_count(lines[0]["enemies"], "dugin"), 3)
 	for i in [1, 2]:
 		assert_eq(_count(lines[i]["enemies"], "heavy"), 1, "stage %d" % (i + 1))
-		assert_gte(_count(lines[i]["enemies"], "dugin"), 2)
+	# P4 rules ADR: gun line 3 keeps one dug-in beside its heavy and destroyer (2 -> 1, the -50%
+	# bound) so a crew's duel stays inside T1's 160 s.
+	assert_gte(_count(lines[1]["enemies"], "dugin"), 2)
+	assert_eq(_count(lines[2]["enemies"], "dugin"), 1)
 	assert_eq(_count(lines[2]["enemies"], "destroyer"), 1, "stage 3 adds a tank destroyer")
 	for g: Dictionary in lines:
 		assert_lte(float(g["max_s"]), 180.0, "a 90% gun line lasts at most 180 s")
@@ -101,12 +106,16 @@ func test_stages_2_and_3_end_in_a_heavy_tank_duel_at_the_gun_line() -> void:
 
 
 ## The brief's lists, except one medium fewer in stages 2 and 3 (2 -> 1, the -50% bound; ADR "Balance
-## iteration 1"): every Advance still has a light and a medium (T6).
+## iteration 1") and stage 1's rear light and destroyer (P4 rules ADR): every Advance still has a
+## telegraphed shot and a medium (T6).
 func test_the_brief_enemy_lists_per_stage() -> void:
 	var c := _load("ashfall_road")
 	var adv := _segments(c, "advance")
 	var s1: Array = adv[0]["encounters"]
-	assert_eq([_count(s1, "light"), _count(s1, "medium")], [2, 1])
+	assert_eq([_count(s1, "light"), _count(s1, "medium"), _count(s1, "destroyer")], [3, 1, 1])
+	assert_eq(
+		s1.filter(_is_rear_light).size(), 1, "stage 1's rear light: a flank shot no gun reaches"
+	)
 	assert_eq(adv[0]["obstacles"].map(func(o: Dictionary) -> String: return o["type"]), ["wire"])
 	var s2: Array = adv[1]["encounters"]
 	assert_eq([_count(s2, "medium"), _count(s2, "destroyer"), _count(s2, "light")], [1, 1, 1])
