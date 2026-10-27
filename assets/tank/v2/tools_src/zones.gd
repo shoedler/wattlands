@@ -4,8 +4,8 @@ extends SceneTree
 # 1920 x 354 frame, y0 0, parallax 0.3, the same two-pass box blur of radius 1) while the tank drives
 # through its zone; the pine forest zone keeps planes2/forest_wide.png. Built from the kit's own planes
 # only (no fal): the forest plane's trees squashed into a lower or distant tree line, the far plane's
-# pale cliff as the quarry's rock, its lake mist as the lake's water; houses, haystacks, fences, reeds,
-# spoil heaps and a timber gantry drawn in code in the planes' palette. Seamless (every feature wraps at
+# lake mist as the lake's water; houses, haystacks, fences, reeds, the quarry's benched rock faces,
+# spoil cones, a conveyor and a timber gantry drawn in code in the planes' palette. Seamless (every feature wraps at
 # 1920 px) and seeded (a fixed LCG), so a rerun is bit-exact.
 # Run by regen.sh after planes2.gd, or alone from the repository root:
 #   cp assets/tank/v2/tools_src/zones.gd build/v2/ && tools/godot.sh --headless --path . -s build/v2/zones.gd
@@ -17,8 +17,6 @@ const W := 1920
 const H := 354
 ## The forest plane's foot (the road's far edge) in plane rows.
 const FOOT := 344.0
-## The pale cliff in far_wide.png (the reference's landmark), the quarry's rock texture.
-const CLIFF := Rect2i(842, 92, 236, 66)
 
 var forest: Image
 var far: Image
@@ -308,9 +306,12 @@ func _steeple(img: Image, x: float, base: float) -> void:
 	gable(img, x - 31.0, x + 1.0, base - 32.0, x - 14.0, base - 46.0, roof)
 
 
-## The quarry: pale cut rock faces from the far plane's cliff, each with a ragged crest, sloping talus
-## at its sides, two or three worked ledges (a lit lip over a shadow), dark fissures and a darker foot;
-## spoil heaps at their foot and a timber gantry with its pulley; the forest low behind.
+## The quarry: worked rock faces cut in benches, each with a ragged crest tapering at both ends into
+## talus slopes, built procedurally (no copied texture, nothing mirrored or tiled under the plane's
+## 1920 px): horizontal strata of varying height and tone, a lit lip over a shadow at every bench,
+## per-column noise, vertical cracks, scree fans at the foot; moonlit grey-teal at the crest darkening
+## toward the night teal at the foot, kept below the hero's values. At their feet gravel spoil cones,
+## one fed by a conveyor on trestles, and a timber gantry with its pulley; the forest low behind.
 func _quarry() -> Image:
 	var img := squash(0.5, FOOT - GROUND, 0.3)
 	var spans: Array[Vector2] = []
@@ -319,57 +320,119 @@ func _quarry() -> Image:
 		var w := between(300.0, 560.0)
 		spans.append(Vector2(x, x + w))
 		x += w + between(160.0, 300.0)
+	var rock_top := Color(0.25, 0.285, 0.285)
+	var rock_foot := Color(0.075, 0.095, 0.1)
 	for sp in spans:
 		var ph := rnd() * TAU
-		var crest := between(182.0, 206.0)
-		var talus := between(40.0, 70.0)
-		var tex_dx := int(rnd() * float(CLIFF.size.x))
-		var ledges: Array[float] = []
-		for i in int(between(2.0, 3.99)):
-			ledges.append(between(0.25, 0.8))
+		var crest := between(186.0, 208.0)
+		var talus := between(60.0, 96.0)
+		# Benches (fractions of the face) and the strata between them, each with its own tone.
+		var benches: Array[float] = []
+		var b := between(0.18, 0.3)
+		while b < 0.85:
+			benches.append(b)
+			b += between(0.16, 0.3)
+		# Strata: [start (fraction of the face), tone, joint spacing (px), joint offset].
+		var strata: Array[Vector4] = []
+		var s := 0.0
+		while s < 1.0:
+			var sh := between(0.05, 0.14)
+			strata.append(Vector4(s, between(-0.05, 0.05), between(8.0, 22.0), between(0.0, 40.0)))
+			s += sh
 		for xx in range(int(sp.x), int(sp.y)):
-			var top := crest + 14.0 * (wave(float(xx), 210.0, 61.0, ph) - 0.5)
+			var top := crest + 14.0 * (wave(float(xx), 230.0, 67.0, ph) - 0.5)
 			top += 3.0 * (wave(float(xx), 13.0, 5.0, ph * 2.0) - 0.5)
 			var side := minf(float(xx) - sp.x, sp.y - float(xx))
-			if side < talus:
-				top = lerpf(GROUND, top, smoothstep(0.0, 1.0, side / talus))
+			var t_end := smoothstep(0.0, 1.0, side / talus)
+			top = lerpf(GROUND - 2.0, top, t_end)
 			var face_h := GROUND + 2.0 - top
+			var col_noise := (_hash(float(xx) * 0.37 + ph) - 0.5) * 0.05
+			var dip := 0.02 * (wave(float(xx), 310.0, 97.0, ph * 0.7) - 0.5)
+			var prev_si := -1
 			for y in range(int(top), int(GROUND) + 3):
 				var k := (float(y) - top) / maxf(face_h, 1.0)
-				var t := far.get_pixel(
-					CLIFF.position.x + posmod(xx + tex_dx, CLIFF.size.x),
-					CLIFF.position.y + posmod(y, CLIFF.size.y)
-				)
-				var lum := 1.8 * lerpf(1.0, 0.45, pow(k, 0.9))
-				if side < talus:
-					lum *= 0.8
-				over(img, xx, y, Color(t.r * lum, t.g * lum, t.b * lum))
-			over(img, xx, int(top), Color(0.52, 0.54, 0.52), 0.4)
-			if side >= talus:
-				for lk in ledges:
-					var wob := 1.5 * (wave(float(xx), 37.0, 11.0, lk * 9.0) - 0.5)
-					var ly := int(top + face_h * lk + wob)
-					over(img, xx, ly, Color(0.5, 0.52, 0.5), 0.3)
-					over(img, xx, ly + 1, Color(0.02, 0.025, 0.025), 0.7)
-					over(img, xx, ly + 2, Color(0.02, 0.025, 0.025), 0.35)
-		var n := int((sp.y - sp.x) / 22.0)
-		for i in n:
+				var c := rock_top.lerp(rock_foot, pow(k, 0.8))
+				var si := 0
+				for i2 in strata.size():
+					if k + dip >= strata[i2].x:
+						si = i2
+				var st: Vector4 = strata[si]
+				var n := st.y + col_noise + (_hash(float(xx) * 1.3 + float(y) * 7.1) - 0.5) * 0.035
+				if t_end < 1.0:
+					n -= 0.04 * (1.0 - t_end)
+				var jx := posmod(xx + int(st.w), maxi(int(st.z), 2))
+				if t_end >= 1.0 and si != prev_si and prev_si >= 0:
+					n -= 0.07
+				elif t_end >= 1.0 and jx == 0:
+					n -= 0.06
+				elif t_end >= 1.0 and jx == 1:
+					n += 0.03
+				prev_si = si
+				over(img, xx, y, Color(c.r + n, c.g + n, c.b + n * 0.9))
+			over(img, xx, int(top), Color(0.34, 0.37, 0.36), 0.5)
+			if t_end >= 1.0:
+				for bk in benches:
+					var wob := 1.5 * (wave(float(xx), 41.0, 11.0, bk * 9.0) - 0.5)
+					var ly := int(top + face_h * bk + wob)
+					over(img, xx, ly, Color(0.3, 0.33, 0.32), 0.45)
+					over(img, xx, ly + 1, Color(0.02, 0.025, 0.028), 0.7)
+					over(img, xx, ly + 2, Color(0.02, 0.025, 0.028), 0.35)
+			else:
+				# Talus: loose scree, a speckle of lighter stones.
+				for y2 in range(int(top) + 1, int(GROUND) + 2):
+					if _hash(float(xx) * 3.7 + float(y2) * 1.9) > 0.9:
+						over(img, xx, y2, Color(0.22, 0.24, 0.24), 0.6)
+		# Cracks: thin dark verticals, a little crooked.
+		var nc := int((sp.y - sp.x) / 26.0)
+		for i in nc:
 			var fx := between(sp.x + talus, sp.y - talus)
-			var fy := between(crest + 8.0, GROUND - 30.0)
-			var fl := between(8.0, 30.0)
-			var lean := between(-0.25, 0.25)
+			var fy := between(crest + 6.0, GROUND - 34.0)
+			var fl := between(8.0, 34.0)
+			var lean := between(-0.2, 0.2)
 			for d in int(fl):
-				over(img, int(fx + lean * d), int(fy) + d, Color(0.03, 0.035, 0.035), 0.7)
-		for i in 2:
-			var hx := between(sp.x + 30.0, sp.y - 30.0)
-			var hw := between(34.0, 60.0)
-			var hh := between(12.0, 20.0)
-			var hb := GROUND + 3.0
-			gable(img, hx - hw * 0.5, hx + hw * 0.5, hb, hx, hb - hh, Color(0.22, 0.22, 0.21))
-			line(img, Vector2(hx - hw * 0.5, hb), Vector2(hx, hb - hh), Color(0.34, 0.35, 0.34))
+				over(img, int(fx + lean * d), int(fy) + d, Color(0.02, 0.025, 0.028), 0.65)
+		# Scree fans at the foot of the face.
+		for i in int(between(2.0, 4.99)):
+			var cx := between(sp.x + talus, sp.y - talus)
+			var fw := between(18.0, 34.0)
+			var fh := between(8.0, 16.0)
+			for y3 in range(int(GROUND - fh), int(GROUND) + 3):
+				var kk := (float(y3) - (GROUND - fh)) / fh
+				var hw := fw * 0.5 * kk
+				for x3 in range(int(cx - hw), int(cx + hw) + 1):
+					var h3 := _hash(float(x3) * 2.1 + float(y3) * 5.3)
+					over(img, x3, y3, Color(0.14, 0.155, 0.155) if h3 > 0.3 else Color(0.2, 0.22, 0.22))
+	# Spoil cones of gravel at the faces' feet, one fed by a conveyor on trestles.
+	for i in spans.size():
+		var sp2 := spans[i]
+		var hx := between(sp2.x + 60.0, sp2.y - 90.0)
+		var hw2 := between(60.0, 90.0)
+		var hh2 := between(20.0, 30.0)
+		var hb := GROUND + 3.0
+		for y4 in range(int(hb - hh2), int(hb) + 1):
+			var k4 := (float(y4) - (hb - hh2)) / hh2
+			for x4 in range(int(hx - hw2 * 0.5 * k4), int(hx + hw2 * 0.5 * k4) + 1):
+				var h4 := _hash(float(x4) * 1.7 + float(y4) * 3.1)
+				var lit := 0.03 if x4 < hx else -0.03
+				var g4 := 0.12 + lit + (0.06 if h4 > 0.82 else 0.0) - (0.05 if h4 < 0.2 else 0.0)
+				over(img, x4, y4, Color(g4 * 1.05, g4, g4 * 0.9))
+		if i % 2 == 0:
+			var top2 := Vector2(hx, hb - hh2 - 2.0)
+			var far2 := top2 + Vector2(70.0, -46.0)
+			line(img, top2, far2, Color(0.05, 0.045, 0.04), 2)
+			for tk in [0.35, 0.7]:
+				var tp := top2.lerp(far2, tk)
+				line(img, tp, Vector2(tp.x, hb), Color(0.06, 0.055, 0.05))
+			over(img, int(far2.x), int(far2.y) - 1, Color(0.9, 0.62, 0.3), 0.8)
 	var gx := spans[0].y - 50.0 if not spans.is_empty() else 600.0
 	_gantry(img, gx)
 	return img
+
+
+## A stable 0..1 from a number (the quarry's grain).
+func _hash(a: float) -> float:
+	var s := sin(a * 12.9898 + 78.233) * 43758.5453
+	return s - floorf(s)
 
 
 func _gantry(img: Image, x: float) -> void:
