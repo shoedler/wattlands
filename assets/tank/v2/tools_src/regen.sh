@@ -7,6 +7,9 @@
 # -> tank (the cut-out tank) -> assemble (modules, the four variants, turret_barrel.png) -> planes2 (the
 # planes with their baked blur) -> crew20 (the 20 px crewmen) -> kit (kit.json) -> enemies (they read
 # kit.json) -> kit again (the enemies' measured muzzles). Afterwards: tools/godot.sh --headless --path . --import
+# Checked on 2026-10-27: everything comes back bit-exact except about 0.2 % of the far, forest and
+# road planes' pixels in the quilted tank-free band (max 0.18 per channel; the shipped planes are the
+# approved mock's), so review those three before committing a regeneration.
 set -eu
 cd "$(dirname "${BASH_SOURCE[0]}")/../../../.."
 source tools/env.sh >/dev/null 2>&1
