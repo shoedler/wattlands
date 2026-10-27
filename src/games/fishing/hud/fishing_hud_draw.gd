@@ -167,7 +167,7 @@ const STAR: Array[String] = ["..#..", ".###.", "#####", ".###.", "..#.."]
 ## A power graph over `trace` in `r` (HUD px, on the art grid of `u` px), the newest sample at
 ## the right, `bottom_w` at the bottom and `top_w` at the top: the target band (each sample's target
 ## +/- `band` of it, rows lit in FishingPalette.UPPER) behind the power, either an unbroken
-## 1-pixel line in `col` or, `filled`, a mid-teal area under a `col` top edge.
+## 1-pixel line in `col` or, `filled`, a `fill_col` area under a `col` top edge.
 static func graph(
 	c: CanvasItem,
 	r: Rect2,
@@ -177,7 +177,8 @@ static func graph(
 	band: float = 0.05,
 	filled: bool = false,
 	col: Color = FishingPalette.FOAM,
-	bottom_w: float = 0.0
+	bottom_w: float = 0.0,
+	fill_col: Color = FishingPalette.MID
 ) -> void:
 	var n := floori(r.size.x / u)
 	var rows := floori(r.size.y / u)
@@ -199,7 +200,7 @@ static func graph(
 		var y := graph_row(s.x, top_w, rows, bottom_w)
 		if filled:
 			var fill_h := float(rows - 1 - y) * u
-			c.draw_rect(Rect2(x, r.position.y + float(y + 1) * u, u, fill_h), FishingPalette.MID)
+			c.draw_rect(Rect2(x, r.position.y + float(y + 1) * u, u, fill_h), fill_col)
 		# a step joins on this column, from the row after the previous one: an unbroken line
 		var y0 := y
 		var y1 := y

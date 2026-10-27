@@ -5,8 +5,9 @@ extends FishingHudControl
 ## the line is reeled in, consistent with the metres shown) over a slim strip of the fish's
 ## stamina; the target watts and the watts now, big (the target bright, now muted and in the
 ## accent when it is more than NOW_BAND off); the cadence on a bar with the band lit and a
-## marker at the cadence now, %FTP under the rpm and the band's limits centred under its edges,
-## and while the line strains or goes slack a labelled cue at that end; and a 30 s power graph
+## marker at the cadence now, the band's limits centred under its edges; a row with %FTP and,
+## while the line strains or goes slack off the target or the band, that word with a small
+## meter at its side; and a 30 s power graph
 ## with the target band shaded (1.25 x FTP or the window's most at the top). In the Landing a
 ## slim panel in the same place shows the gaff meter (Sprint! then Easy spin, a star for a
 ## trophy). Its rect is the whole view; the panel follows the boat (FishingView's model).
@@ -18,7 +19,7 @@ const BIG_CAP := 14
 const BAR_ROWS := 4
 const CAD_ROWS := 6
 const CUE_W := 3
-const CUE_ROWS := 8
+const CUE_ROWS := 7
 const GRAPH_ROWS := 18
 ## The panel's top under the surface row, and how far it reaches past the boat's pivot toward
 ## the fish.
@@ -187,8 +188,7 @@ func r_ftp() -> float:
 
 ## The cadence row with its baseline on row `y`: "91 rpm", the bar with the band and a marker at
 ## the cadence now; under it the band's limits, each centred on its edge (pushed apart when
-## they would touch), and a labelled cue at a bar end while the line strains (left) or goes
-## slack (right) past CUE_AT.
+## they would touch), then the cue row (_draw_cue_row()).
 func _draw_cadence(o: Vector2, y: int, s: float, u: float) -> void:
 	var cad := float(numbers["cadence"])
 	var dim := FishingPalette.HUD_DIM
@@ -200,15 +200,11 @@ func _draw_cadence(o: Vector2, y: int, s: float, u: float) -> void:
 	var top := y - CAP + (CAP - CAD_ROWS) / 2 - 1
 	var lo := band.x - CAD_MARGIN if band.y > band.x else CAD_MIN
 	var hi := band.y + CAD_MARGIN if band.y > band.x else CAD_MAX
-	var track_x := bx + CUE_W + 1
-	var track_w := bw - 2 * (CUE_W + 1)
+	var track_x := bx
+	var track_w := bw
 	var track := Rect2(o + Vector2(track_x, top) * u, Vector2(track_w, CAD_ROWS) * u)
 	self.draw_rect(track, FishingPalette.HUD_TRACK)
 	var base := o + Vector2(0, y + 3 + CAP) * u
-	var pct := FishingHudModel.tr_key(
-		game, FishingHudModel.KEY_FTP, [roundi(float(numbers["pct"]))]
-	)
-	FishingHudDraw.text(self, base + Vector2(PAD * u, 0), pct, s, dim)
 	if band.y > band.x:
 		var a := cad_col(band.x, lo, hi, track_w)
 		var b := cad_col(band.y, lo, hi, track_w)
@@ -231,24 +227,42 @@ func _draw_cadence(o: Vector2, y: int, s: float, u: float) -> void:
 		Rect2(o + Vector2(track_x + m, top - 1) * u, Vector2(1, CAD_ROWS + 2) * u),
 		FishingPalette.FOAM
 	)
-	var cue_base := base + Vector2(0, CUE_ROW) * u
-	if strain > CUE_AT:
-		_cue(o + Vector2(bx, top - 1) * u, strain, FishingHudDraw.STRAIN, u)
+	_draw_cue_row(base + Vector2(0, CUE_ROW) * u, s, u)
+
+
+## The row under the band's limits: %FTP at the left, apart from the band's numbers, and while
+## the line strains (after it) or goes slack (at the right) past CUE_AT, and the rider is off
+## the target or the band, that word with a small meter, in the accent past ALERT_AT.
+func _draw_cue_row(base: Vector2, s: float, u: float) -> void:
+	var dim := FishingPalette.HUD_DIM
+	var pct := FishingHudModel.tr_key(
+		game, FishingHudModel.KEY_FTP, [roundi(float(numbers["pct"]))]
+	)
+	var pw := FishingHudDraw.text(self, base + Vector2(PAD * u, 0), pct, s, dim)
+	var cad := float(numbers["cadence"])
+	var target := float(numbers["target"])
+	var on_target := target > 0.0 and absf(float(numbers["power"]) - target) <= target * NOW_BAND
+	var in_band := band.y <= band.x or (cad >= band.x and cad <= band.y)
+	var steady := on_target and in_band
+	var meter_at := base + Vector2(0, -CAP) * u
+	if strain > CUE_AT and not steady:
 		var word := FishingHudModel.tr_key(game, FishingHudModel.KEY_STRAIN)
-		FishingHudDraw.text(self, cue_base + Vector2(float(bx) * u, 0), word, s, _cue_col(strain))
-	if slack > CUE_AT:
-		_cue(o + Vector2(bx + bw - CUE_W, top - 1) * u, slack, FishingHudDraw.SLACK, u)
+		var x0 := PAD * u + roundf(pw / u) * u + 6.0 * u
+		var ww := FishingHudDraw.text(self, base + Vector2(x0, 0), word, s, _cue_col(strain))
+		_cue(meter_at + Vector2(x0 + ww + u, 0), strain, FishingHudDraw.STRAIN, u)
+	if slack > CUE_AT and not steady:
 		var word := FishingHudModel.tr_key(game, FishingHudModel.KEY_SLACK)
 		var sw := FishingHudDraw.text_w(word, s)
-		var at := cue_base + Vector2(float(W - PAD) * u - sw, 0)
-		FishingHudDraw.text(self, at, word, s, _cue_col(slack))
+		var x := float(W - PAD) * u - sw
+		FishingHudDraw.text(self, base + Vector2(x, 0), word, s, _cue_col(slack))
+		_cue(meter_at + Vector2(x - float(CUE_W + 1) * u, 0), slack, FishingHudDraw.SLACK, u)
 
 
 static func _cue_col(fill: float) -> Color:
 	return FishingHudDraw.ALERT if fill > ALERT_AT else FishingPalette.HUD_DIM
 
 
-## A strain or slack cue at `at` (HUD px): a CUE_W x CUE_ROWS meter filling up with `fill`, in
+## A strain or slack meter at `at` (HUD px): a CUE_W x CUE_ROWS bar filling up with `fill`, in
 ## the accent with a frame past ALERT_AT.
 func _cue(at: Vector2, fill: float, col: Color, u: float) -> void:
 	var r := Rect2(at, Vector2(CUE_W, CUE_ROWS) * u)

@@ -127,11 +127,18 @@ func test_fish_stay_the_darkest_subject_in_every_band() -> void:
 	assert_eq(FishingPaletteMap.shift_for(1), 0)
 	assert_eq(FishingPaletteMap.shift_for(2), 1)
 	assert_eq(FishingPaletteMap.shift_for(FishingPalette.SEA.size() - 1), 1)
+	var ladder := FishingPalette.LADDER
 	for band in FishingPalette.SEA.size():
-		var belly := FishingPalette.darker(FishingPalette.UPPER, FishingPaletteMap.fish_shift(band))
+		var shift := FishingPaletteMap.fish_shift(band)
+		var belly := FishingPalette.darker(FishingPalette.UPPER, shift)
+		var back := FishingPalette.darker(FishingPalette.DEEP, shift)
 		var ridge := FishingFloor.RIDGE_BANDS[band]
-		var ladder := FishingPalette.LADDER
-		assert_gt(ladder.find(belly), ladder.find(ridge), "band %d: the belly is darker" % band)
+		var water := FishingPalette.SEA[band]
+		assert_gt(ladder.find(belly), ladder.find(water), "band %d: darker than the water" % band)
+		assert_gt(ladder.find(back), ladder.find(ridge), "band %d: the back is darker" % band)
+		if band < FishingPalette.SEA.size() - 1:
+			assert_gt(ladder.find(belly), ladder.find(ridge), "band %d: the belly too" % band)
+		assert_ne(belly, back, "band %d: two planes" % band)
 
 
 func test_waves_are_crests_or_flat() -> void:

@@ -103,9 +103,12 @@ func _draw() -> void:
 		FishingHudDraw.text(self, Vector2(hx, small_base), bpm, s, FishingPalette.HUD_DIM)
 	var gy := top + PAD + BIG_CAP + ROW_GAP + SMALL_CAP + ROW_GAP
 	var g := Rect2(Vector2(PAD, gy) * u, Vector2(ps.x - 2 * PAD, GRAPH_ROWS) * u)
-	self.draw_rect(g, FishingPalette.HUD_PANEL)
+	# B2's strip: a mid-teal ground, a surface-teal fill under a haze trace
+	self.draw_rect(g, FishingPalette.MID)
 	var top_w := FishingFightPanel.graph_top(trace, r_ftp())
-	FishingHudDraw.graph(self, g, trace, top_w, u, 0.0, true, FishingPalette.SURFACE)
+	FishingHudDraw.graph(
+		self, g, trace, top_w, u, 0.0, true, FishingPalette.HAZE, 0.0, FishingPalette.SURFACE
+	)
 	tag_rect = Rect2i()
 	if place != "":
 		var tw := ceili(FishingHudDraw.text_w(place, s) / u) + 2 * PAD

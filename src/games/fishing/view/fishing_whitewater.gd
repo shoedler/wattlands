@@ -73,11 +73,18 @@ const BOW_CRUISE := [[-14, 2, 10, 3], [-7, 5, 9, 6], [1, 3, 6, 4]]
 const BOW_HUMP := [[1, 4, 10, 5], [9, 6, 10, 7], [-8, 3, 10, 4], [18, 3, 7, 4]]
 const BOW_HUMP_DROPS := [[24, 7, 4, 2], [22, 11, 3, 2]]
 const BOW_PLANE := [[-8, 2, 10, 3], [2, 1, 6, 2]]
-## The rooster tail on the plane: [x from T, rows above the surface at its base, points, dx per
-## point, rise, fall, first w, first h, last w, last h]; from BREAK of its length on every
-## other lump only (the gaps walk back with time), the curtain falling under all of it.
-const ROOSTER_PLANE := [-6, 9, 18, -3, 3.0, 0.22, 12, 11, 6, 6]
-const BREAK := 0.6
+## The rooster tail on the plane, a thin fan of spray thrown back from the transom with the sky
+## under it: [x from T, rows above the surface at its base, points, dx per point, rise, fall,
+## first w, first h, last w, last h]; it peaks under ROOSTER_TOP rows (never over the horizon)
+## and from BREAK of its length on it falls as a broken dotted edge of DROP-sized drops.
+const ROOSTER_PLANE := [-6, 5, 16, -4, 2.4, 0.17, 8, 4, 5, 3]
+const ROOSTER_TOP := 14
+const BREAK := 0.55
+const DROP := Vector2i(3, 2)
+## The mounds and the wake scale with the rider's effective power (FishingRiderState.p_eff_w
+## over FishingConst.P_EFF_REF_W): SCALE_LO at half of it, 1 at all of it, at most SCALE_HI.
+const SCALE_LO := 0.8
+const SCALE_HI := 1.25
 ## Towed: the mound against the transom, the water dragged under it and the reverse wake.
 const TOW_MOUND := [
 	[-36, 4, 12, 5],
@@ -187,7 +194,8 @@ static func geometry(b: FishingBoatView) -> Dictionary:
 
 
 ## The far V arm and the prop wash for boat `b` (behind every hull). `s`: {"slot", "odo" (px of
-## travel), "t" (s), "v" (m/s), "plane", "tow" (0..1), "brake" (0..2)}.
+## travel), "t" (s), "v" (m/s), "plane", "tow" (0..1), "brake" (0..2), "p" (effective power
+## over FishingConst.P_EFF_REF_W)}.
 func paint_behind(c: CanvasItem, b: FishingBoatView, s: Dictionary) -> void:
 	var g := geometry(b)
 	var lv := level_of(int(s["slot"]), float(s["v"]), float(s["plane"]))
@@ -219,9 +227,10 @@ func paint_front(c: CanvasItem, b: FishingBoatView, s: Dictionary) -> void:
 	var odo := float(s["odo"])
 	var lv := level_of(int(s["slot"]), float(s["v"]), float(s["plane"]))
 	var far := b.far
+	var size := power_scale(float(s.get("p", 1.0)))
 	if float(s["tow"]) >= TOW_AT:
 		_reverse_wake(c, g, odo, far)
-		_mound(c, g, TOW_MOUND, t, far)
+		_mound(c, g, TOW_MOUND, t, far, size)
 		return
 	if lv >= CRUISE:
 		_trail(c, g, odo, TRAIL[lv - CRUISE], far)
@@ -230,12 +239,12 @@ func paint_front(c: CanvasItem, b: FishingBoatView, s: Dictionary) -> void:
 			_sheet(c, g, g["T"], -6, far)
 			_sheet(c, g, g["B"], -2, far)
 		CRUISE:
-			_mound(c, g, MOUND[0], t, far)
+			_mound(c, g, MOUND[0], t, far, size)
 		HUMP:
-			_mound(c, g, MOUND[1], t, far)
+			_mound(c, g, MOUND[1], t, far, size)
 		PLANE:
 			_rooster(c, g, ROOSTER_PLANE, t, far)
-			_mound(c, g, MOUND[2], t, far)
+			_mound(c, g, MOUND[2], t, far, size)
 	var brake := int(s["brake"])
 	if brake > 0:
 		var n := BRAKE_BOW.size() if brake >= 2 else BRAKE_BOW.size() - 1
@@ -295,13 +304,18 @@ func _sheet(c: CanvasItem, g: Dictionary, x0: float, x: int, far: bool) -> void:
 	_rect(c, Rect2(left, sy, 4, 1), face)
 
 
-## The mound: `lumps` from the transom, each boiling (a row taller) on its own slow beat.
-func _mound(c: CanvasItem, g: Dictionary, lumps: Array, t: float, far: bool) -> void:
+## The mound: `lumps` from the transom scaled by `size` (power_scale()), each boiling (a row
+## taller) on its own slow beat.
+func _mound(
+	c: CanvasItem, g: Dictionary, lumps: Array, t: float, far: bool, size: float = 1.0
+) -> void:
 	var beat := floori(t * BOIL_HZ)
 	for k in lumps.size():
 		var e: Array = lumps[k]
 		var up := 1 if posmod(beat + FishingScenery.hash2(k, 23) % 3, 3) == 0 else 0
-		var lump := [e[0], int(e[1]) + up, e[2], int(e[3]) + up]
+		var x := roundi(float(int(e[0])) * size)
+		var dy := roundi(float(int(e[1])) * size) + up
+		var lump := [x, dy, roundi(float(int(e[2])) * size), roundi(float(int(e[3])) * size) + up]
 		_lump(c, g, g["T"], lump, k, FishingPalette.FOAM, FishingPalette.SKY, far)
 
 
@@ -365,10 +379,10 @@ func _reverse_wake(c: CanvasItem, g: Dictionary, odo: float, far: bool) -> void:
 		_lump(c, g, g["B"], lump, j, FishingPalette.FOAM, FishingPalette.SKY, far or k >= 4)
 
 
-## The rooster tail along a stepped parabola from the transom (`cfg`: ROOSTER_*): under it a
-## curtain falls into the wake (a face plane from each lump down to the surface, a shadow seam
-## where it lands), so it never reads as a bridge; over it the lumps, drawn from its tip back to
-## its base (joined to the mound), whole up to BREAK of its length, every other one beyond.
+## The rooster tail along a stepped parabola from the transom (`cfg`: ROOSTER_*): a band of
+## foam lumps on haze faces (spray, not cloud), sky under it, drawn from its tip back to its base
+## (joined to the mound); from BREAK of its length on it breaks into drops, every other one, the
+## gaps walking back with time.
 func _rooster(c: CanvasItem, g: Dictionary, cfg: Array, t: float, far: bool) -> void:
 	var x0 := int(cfg[0])
 	var base := int(cfg[1])
@@ -377,23 +391,26 @@ func _rooster(c: CanvasItem, g: Dictionary, cfg: Array, t: float, far: bool) -> 
 	var rise := float(cfg[4])
 	var fall := float(cfg[5])
 	var gait := floori(t / 0.15) % 2
-	var lumps: Array = []
-	for p in n:
-		var dy := base + roundi(rise * float(p) - fall * float(p * p))
+	for p in range(n - 1, -1, -1):
+		var dy := mini(base + roundi(rise * float(p) - fall * float(p * p)), ROOSTER_TOP)
+		if dy < 2:
+			continue
 		var u := float(p) / float(maxi(1, n - 1))
 		var w := roundi(lerpf(float(cfg[6]), float(cfg[8]), u))
-		var hh := mini(roundi(lerpf(float(cfg[7]), float(cfg[9]), u)), dy + 2)
-		lumps.append([x0 + dx * p - w / 2, dy, w, hh])
-	var face := FishingPalette.HAZE if far else FishingPalette.SKY
-	for e: Array in lumps:
-		var under := int(e[1]) - int(e[3])
-		if under >= 1:
-			var curtain := [e[0], under, e[2], under + 1]
-			_lump(c, g, g["T"], curtain, -1, face, face, far)
-	for p in range(n - 1, -1, -1):
-		if float(p) >= BREAK * float(n - 1) and (p + gait) % 2 == 1:
-			continue
-		var e: Array = lumps[p]
-		if int(e[1]) < 2:
-			continue
-		_lump(c, g, g["T"], e, p, FishingPalette.FOAM, FishingPalette.SKY, far)
+		var hh := mini(roundi(lerpf(float(cfg[7]), float(cfg[9]), u)), dy)
+		var x := x0 + dx * p - w / 2
+		if u >= BREAK:
+			if (p + gait) % 2 == 1:
+				continue
+			w = DROP.x
+			hh = DROP.y
+		var lump := [x, dy, w, hh]
+		if far:
+			_lump(c, g, g["T"], lump, p, FishingPalette.SKY, FishingPalette.HAZE, true)
+		else:
+			_lump(c, g, g["T"], lump, p, FishingPalette.FOAM, FishingPalette.HAZE, false)
+
+
+## The size factor for effective power share `p` (SCALE_LO .. SCALE_HI).
+static func power_scale(p: float) -> float:
+	return clampf(SCALE_LO + (1.0 - SCALE_LO) * (p - 0.5) / 0.5, SCALE_LO, SCALE_HI)
