@@ -36,17 +36,6 @@ const ENGINE_LABELS := {
 	ENGINE_BULWARK: "TANK_ENGINE_BULWARK",
 	ENGINE_ARC: "TANK_ENGINE_ARC",
 }
-## The engine icon the teammate strip shows (teammate_status "icon", a res:// texture path). artqa
-## may ship them (14 x 14 art px palette icons with their .import files, not art.json sprites);
-## until then the kit skips the missing file and the engine name in "text" carries the meaning, which
-## is an accepted state, not a bug.
-const ENGINE_ICONS := {
-	ENGINE_DIESEL: "res://assets/tank/icons/engine_diesel.png",
-	ENGINE_DYNAMO: "res://assets/tank/icons/engine_dynamo.png",
-	ENGINE_STEAM: "res://assets/tank/icons/engine_steam.png",
-	ENGINE_BULWARK: "res://assets/tank/icons/engine_bulwark.png",
-	ENGINE_ARC: "res://assets/tank/icons/engine_arc.png",
-}
 
 # --- Segments (brief 2.3 segment table; the drill's skirmish, 2.9) -----------------------------------
 const SEG_DEPOT := "depot"
