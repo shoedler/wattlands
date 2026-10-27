@@ -53,7 +53,7 @@ const TRACER := {
 	TankIds.SHELL_LIGHT: Color("#ffd99a"),
 	TankIds.SHELL_HEAVY: Color("#ffb35c"),
 	TankIds.SHELL_OVER: Color("#e6f3fb"),
-	TankIds.SHELL_SECONDARY: Color("#ffd99a"),
+	TankIds.SHELL_BOW: Color("#ffd99a"),
 	TankIds.SHELL_ENEMY: Color("#e8743a"),
 	TankIds.SHELL_BOSS_MAIN: Color("#e8743a"),
 }

@@ -93,7 +93,7 @@ const EPS = 1e-6;
 // Event codes (TankIds).
 export const SHELL_LIGHT = 1;
 export const SHELL_HEAVY = 2;
-export const SHELL_SECONDARY = 4;
+export const SHELL_BOW = 4;
 export const ENEMY_LIGHT = 1;
 export const ENEMY_MEDIUM = 2;
 export const ENEMY_HEAVY = 5;
@@ -355,7 +355,7 @@ export function heavyShells(r) {
     .map((d) => ({ t: num(d.t), peer: String(d.peer), grade: num(d.requested.mode_grade) }))
     .sort((a, b) => a.t - b.t);
   for (const e of events) {
-    if (e.type === 'shot' && e.s >= 0 && e.sh !== SHELL_SECONDARY) lastShot = e._t;
+    if (e.type === 'shot' && e.s >= 0 && e.sh !== SHELL_BOW) lastShot = e._t;
     if (e.type !== 'latch' || e.sh !== SHELL_HEAVY) continue;
     const seg = spans.find((s) => e._t >= s.start - EPS && (!Number.isFinite(s.end) || e._t < s.end + EPS));
     if (!seg || seg.seg === 'depot') continue;

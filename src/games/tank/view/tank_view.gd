@@ -63,7 +63,7 @@ const HALO_RADIUS := {
 	TankIds.SHELL_LIGHT: 9.0,
 	TankIds.SHELL_HEAVY: 13.0,
 	TankIds.SHELL_OVER: 18.0,
-	TankIds.SHELL_SECONDARY: 6.0,
+	TankIds.SHELL_BOW: 6.0,
 	TankIds.SHELL_ENEMY: 11.0,
 	TankIds.SHELL_BOSS_MAIN: 26.0,
 }
@@ -360,7 +360,7 @@ func apply_cue(state: TankState, kind: String, data: Dictionary) -> void:
 func _cue_shot(state: TankState, data: Dictionary) -> void:
 	var sh := int(data.get("sh", 0))
 	if int(data.get("s", -1)) >= 0:
-		if sh == TankIds.SHELL_SECONDARY:
+		if sh == TankIds.SHELL_BOW:
 			var idx := 0
 			for s in state.shells:
 				if s.id == int(data.get("id", 0)):
@@ -1609,9 +1609,9 @@ func _build_shots(state: TankState) -> void:
 			tail = 26.0
 		elif s.type == TankIds.SHELL_OVER:
 			tail = 20.0
-		elif s.type == TankIds.SHELL_SECONDARY:
+		elif s.type == TankIds.SHELL_BOW:
 			tail = 10.0
-		var w := 2.0 if s.type == TankIds.SHELL_SECONDARY else 3.0
+		var w := 2.0 if s.type == TankIds.SHELL_BOW else 3.0
 		var a := p - dir * tail
 		var m := p - dir * tail * 0.45
 		rows.append({"t": "line", "a": a, "b": m, "w": w, "c": TankPalette.with_alpha(core, 0.3)})

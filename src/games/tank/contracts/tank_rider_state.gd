@@ -16,7 +16,7 @@ const SHELL_INDEX := {
 	TankIds.SHELL_LIGHT: 0,
 	TankIds.SHELL_HEAVY: 1,
 	TankIds.SHELL_OVER: 2,
-	TankIds.SHELL_SECONDARY: 3
+	TankIds.SHELL_BOW: 3
 }
 
 ## [snap]

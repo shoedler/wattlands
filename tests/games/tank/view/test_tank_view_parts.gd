@@ -119,7 +119,7 @@ func test_palette_helpers_and_tracer_colours() -> void:
 		TankIds.SHELL_LIGHT,
 		TankIds.SHELL_HEAVY,
 		TankIds.SHELL_OVER,
-		TankIds.SHELL_SECONDARY,
+		TankIds.SHELL_BOW,
 		TankIds.SHELL_ENEMY,
 		TankIds.SHELL_BOSS_MAIN
 	]:

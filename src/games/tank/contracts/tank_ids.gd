@@ -106,7 +106,7 @@ const SHELL_NONE := 0
 const SHELL_LIGHT := 1
 const SHELL_HEAVY := 2
 const SHELL_OVER := 3
-const SHELL_SECONDARY := 4
+const SHELL_BOW := 4
 ## Enemy rounds (one code; the enemy type is in the shot event).
 const SHELL_ENEMY := 5
 const SHELL_BOSS_MAIN := 6
@@ -114,7 +114,7 @@ const SHELL_NAMES := {
 	SHELL_LIGHT: "light",
 	SHELL_HEAVY: "heavy",
 	SHELL_OVER: "over",
-	SHELL_SECONDARY: "secondary",
+	SHELL_BOW: "bow",
 	SHELL_ENEMY: "enemy",
 	SHELL_BOSS_MAIN: "boss_main",
 }

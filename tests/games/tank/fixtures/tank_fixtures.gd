@@ -84,7 +84,7 @@ static func state(crew: int) -> TankState:
 		_shell(16, TankIds.SHELL_ENEMY, s.hull.x_px + 420.0, 240.0, -300.0, 40.0, false)
 	)
 	s.shells.append(
-		_shell(17, TankIds.SHELL_SECONDARY, s.hull.x_px + 120.0, 230.0, -280.0, -30.0, true)
+		_shell(17, TankIds.SHELL_BOW, s.hull.x_px + 120.0, 230.0, -280.0, -30.0, true)
 	)
 	s.next_id = 18
 	return s

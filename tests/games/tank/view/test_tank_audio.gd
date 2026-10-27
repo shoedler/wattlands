@@ -75,7 +75,7 @@ func _audio_for(peer: int) -> TankAudio:
 
 
 func test_secondaries_boom_softly_and_enemy_guns_whistle_in() -> void:
-	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_SECONDARY, 1))
+	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 1))
 	assert_eq(_audio.played[0], "tank_boom_small")
 	_audio.played.clear()
 	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(-1, TankIds.SHELL_ENEMY, 2, 11, 2))

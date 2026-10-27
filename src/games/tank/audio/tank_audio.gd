@@ -179,7 +179,7 @@ func _latch(data: Dictionary) -> void:
 func _shot(data: Dictionary) -> void:
 	var sh := int(data.get("sh", 0))
 	if int(data.get("s", -1)) >= 0:
-		if sh == TankIds.SHELL_SECONDARY:
+		if sh == TankIds.SHELL_BOW:
 			_play("tank_boom_small", -10.0)
 			return
 		var gunner := _is_gunner_slot(int(data.get("s", -1)))

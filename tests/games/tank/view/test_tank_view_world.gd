@@ -381,7 +381,7 @@ func test_a_shot_kicks_the_gun_flashes_and_smokes() -> void:
 func test_a_secondary_shot_kicks_the_right_turret() -> void:
 	var s := TankFixtures.state(3)
 	var v := U.view_of(self, s)
-	v.game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_SECONDARY, 17))
+	v.game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 17))
 	v.advance(0.016)
 	assert_gt(v.rig.secondaries[1].recoil + v.rig.secondaries[0].recoil, 0.0)
 
