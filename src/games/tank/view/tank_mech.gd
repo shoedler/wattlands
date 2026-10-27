@@ -133,7 +133,9 @@ static var _amb_key: Color = Color(0.15, 0.14, 0.16)
 
 ## The contract (MOCK_SPEC_R2): clears and paints the whole Image. The rpm for the needles and
 ## motion blur is estimated from successive calls (phase over t) per kind and slot.
-static func paint(img: Image, kind: String, phase: float, power: float, t: float, slot: Color) -> void:
+static func paint(
+	img: Image, kind: String, phase: float, power: float, t: float, slot: Color
+) -> void:
 	paint_ex(img, kind, phase, power, t, slot, -1.0)
 
 
@@ -370,7 +372,9 @@ static func _puff(cv: Cv, c: Vector2, r: float, col: Color, a: float) -> void:
 
 
 ## Vapour leaving a vent along `dir` (white steam, or fumes): three puffs cycling on t.
-static func _vent(cv: Cv, at: Vector2, dir: Vector2, k: float, t: float, seed: float, col: Color) -> void:
+static func _vent(
+	cv: Cv, at: Vector2, dir: Vector2, k: float, t: float, seed: float, col: Color
+) -> void:
 	if k <= 0.02:
 		return
 	for i in 3:
@@ -411,7 +415,9 @@ static func _chain(
 	var shift := ph * float(m) * per
 	for q: Vector3 in pts:
 		var u := fposmod(q.z - shift, per) / per
-		cv.p(roundi(q.x), roundi(q.y), STEEL[4] if u < 0.34 else (STEEL[2] if u < 0.67 else IRON[0]))
+		cv.p(
+			roundi(q.x), roundi(q.y), STEEL[4] if u < 0.34 else (STEEL[2] if u < 0.67 else IRON[0])
+		)
 
 
 ## A flat belt loop (2 px: a lit outer face with moving lacing marks, a dark inner face); pixels
@@ -707,7 +713,9 @@ static func _diesel(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 	var dens := 0.35 + 0.1 * under + 0.35 * over + 0.15 * heat
 	for k3 in 3:
 		var age := (since + 240.0 * k3) / 720.0
-		var c2 := Vector2(99.0 - age * 22.0 + sin(t * 2.0 + k3) * 0.8, 3.0 - age * 2.0 + under * age * 3.0)
+		var c2 := Vector2(
+			99.0 - age * 22.0 + sin(t * 2.0 + k3) * 0.8, 3.0 - age * 2.0 + under * age * 3.0
+		)
 		_puff(cv, c2, 1.6 + age * (4.5 + 3.0 * under), smoke, dens * (1.0 - age))
 	_vent(cv, Vector2(38, 15), Vector2(-0.4, -1.0), over, t, 0.0, STEAM_WHITE)
 	_vent(cv, Vector2(86, 40), Vector2(0.5, -1.0), over, t, 0.5, Color(0.55, 0.53, 0.5))
@@ -802,7 +810,11 @@ static func _dynamo_static(cv: Cv) -> void:
 		cv.rivet(roundi(bp.x), roundi(bp.y))
 	# brush rocker arms
 	for s: float in [-1.0, 1.0]:
-		cv.line_f(Vector2(Y_DC.x + s * 7.0, Y_DC.y - 2.0), Vector2(Y_DC.x + s * 13.0, Y_DC.y - 13.0), BRASS[2])
+		cv.line_f(
+			Vector2(Y_DC.x + s * 7.0, Y_DC.y - 2.0),
+			Vector2(Y_DC.x + s * 13.0, Y_DC.y - 13.0),
+			BRASS[2]
+		)
 
 
 static func _jar_static(cv: Cv, x: int, y: int) -> void:
@@ -890,7 +902,8 @@ static func _dynamo(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 			if _h(seed) > 0.25 + 0.4 * under:
 				var spread := 2.5 + 4.0 * over
 				var sp := Vector2(
-					bx + s2 * (_h(seed + 1.0) * spread - 1.0), Y_DC.y - 2.0 + _h(seed + 2.0) * (4.0 + 3.0 * over)
+					bx + s2 * (_h(seed + 1.0) * spread - 1.0),
+					Y_DC.y - 2.0 + _h(seed + 2.0) * (4.0 + 3.0 * over)
 				)
 				cv.e(roundi(sp.x), roundi(sp.y), ARC_CORE, 0.7 + 0.7 * heat)
 		if pw > 0.15:
@@ -922,7 +935,10 @@ static func _dynamo(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: f
 				var a := Vector2(Y_JX + 3 + i2 * 9, Y_JY - 2)
 				var prev := a
 				for k3 in range(1, 10):
-					var q := a + Vector2(k3, -2.5 * sin(k3 / 9.0 * PI) + (_h(seed2 + k3 + i2) - 0.5) * 2.0)
+					var q := (
+						a
+						+ Vector2(k3, -2.5 * sin(k3 / 9.0 * PI) + (_h(seed2 + k3 + i2) - 0.5) * 2.0)
+					)
 					cv.e_line(prev, q, ARC_CORE, 1.0)
 					prev = q
 				cv.glow(a.x + 4.5, a.y - 2.0, 6.0, ARC_GLOW, 0.4 * over)
@@ -945,7 +961,9 @@ static func _jar_fill(cv: Cv, x: int, y: int, fill: float, seed: float) -> void:
 	var lvl := roundi(fill * 17.0)
 	for yy in range(y + 20 - lvl, y + 20):
 		for xx in range(x + 1, x + 6):
-			var k := (0.55 + 0.45 * fill) * (0.55 + 0.2 * _h(float(xx + yy * 3) + floorf(seed * 10.0)))
+			var k := (
+				(0.55 + 0.45 * fill) * (0.55 + 0.2 * _h(float(xx + yy * 3) + floorf(seed * 10.0)))
+			)
 			cv.e(xx, yy, Color(0.5, 0.68, 1.0), k)
 	for xx2 in range(x + 2, x + 5):
 		cv.e(xx2, y + 20 - lvl, ARC_CORE, 0.8 * fill)
@@ -1186,7 +1204,13 @@ static func _steam(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: fl
 	var stroke := fposmod(ph * 2.0, 1.0)
 	if heat > 0.3:
 		var wa := fposmod(t * 1.3, 1.0)
-		_puff(cv, Vector2(45.0 + wa * 3.0, cy - 3.0 - wa * 5.0), 0.8 + wa * 1.6, STEAM_WHITE, 0.45 * heat * (1.0 - wa))
+		_puff(
+			cv,
+			Vector2(45.0 + wa * 3.0, cy - 3.0 - wa * 5.0),
+			0.8 + wa * 1.6,
+			STEAM_WHITE,
+			0.45 * heat * (1.0 - wa)
+		)
 	if over > 0.05:
 		for k2 in 6:
 			var age := fposmod(t * 2.4 + k2 / 6.0, 1.0)
@@ -1196,7 +1220,13 @@ static func _steam(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: fl
 		for side: float in [28.0, 41.0]:
 			var on := 1.0 if (side < 30.0) == (stroke < 0.5) else 0.45
 			var dc := Vector2(side, cy + 8.0)
-			_puff(cv, dc + Vector2((side - 34.5) * 0.25 * sa, sa * 6.0), 1.5 + sa * 4.0, STEAM_WHITE, over * 0.9 * on * (1.0 - sa * 0.8))
+			_puff(
+				cv,
+				dc + Vector2((side - 34.5) * 0.25 * sa, sa * 6.0),
+				1.5 + sa * 4.0,
+				STEAM_WHITE,
+				over * 0.9 * on * (1.0 - sa * 0.8)
+			)
 
 
 # --- Arc generator ---------------------------------------------------------------------------------------
@@ -1363,10 +1393,14 @@ static func _arc(cv: Cv, ph: float, pw: float, t: float, slot: Color, rate: floa
 				cv.e_line(prev + Vector2(0, 1), q + Vector2(0, 1), ARC_GLOW, 0.6 * over)
 			prev = q
 		var mid := Vector2((xa + xb) * 0.5, y_arc - bow)
-		cv.glow(mid.x, mid.y, 7.0 + 8.0 * strength + 6.0 * over, ARC_GLOW, 0.35 * strength + 0.25 * over)
+		cv.glow(
+			mid.x, mid.y, 7.0 + 8.0 * strength + 6.0 * over, ARC_GLOW, 0.35 * strength + 0.25 * over
+		)
 		if over > 0.3 and hk > 0.7:
 			for k in 6:
-				var sp := Vector2(xa + _h(seed + k) * (xb - xa), y_arc - bow - _h(seed + k + 9.0) * 5.0)
+				var sp := Vector2(
+					xa + _h(seed + k) * (xb - xa), y_arc - bow - _h(seed + k + 9.0) * 5.0
+				)
 				cv.e(roundi(sp.x), roundi(sp.y), ARC_CORE, over)
 	if strength > 0.0:
 		cv.glow(60, 48, 3.0, ARC_GLOW, 0.25 * strength)

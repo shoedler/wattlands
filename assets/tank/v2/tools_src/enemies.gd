@@ -6,6 +6,7 @@ var L = load("res://build/v2/lib.gd")
 var F = load("res://build/v2/font.gd")
 const KIT := "res://assets/tank/v2/"
 const OUT := "res://assets/tank/v2/enemies/"
+const BUILD := "res://build/v2/"
 
 var kit: Dictionary = {}
 var plate: Image = null
@@ -14,7 +15,7 @@ var plate: Image = null
 func _init() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	kit = JSON.parse_string(FileAccess.get_file_as_string(KIT + "kit.json"))
-	var tb := Image.load_from_file(KIT + "turret_body.png")
+	var tb := Image.load_from_file(BUILD + "turret_body.png")
 	tb.convert(Image.FORMAT_RGBA8)
 	plate = tb.get_region(Rect2i(206, 94, 136, 30))
 	var out := {}
@@ -58,7 +59,7 @@ func _init() -> void:
 	b.save_png(OUT + "behemoth.png")
 	F.draw(sheet, 10, 300, "BEHEMOTH %dX%d" % [b.get_width(), b.get_height()], Color8(160, 150, 130))
 	sheet.blend_rect(b, Rect2i(Vector2i.ZERO, b.get_size()), Vector2i(10, 310))
-	sheet.save_png(OUT + "enemies_sheet.png")
+	sheet.save_png(BUILD + "enemies_sheet.png")
 	print("enemies: ", out.keys())
 	quit()
 
@@ -132,7 +133,7 @@ func add_cupola(img: Image) -> void:
 
 
 func dugin() -> Image:
-	var tb := Image.load_from_file(KIT + "turret_body.png")
+	var tb := Image.load_from_file(BUILD + "turret_body.png")
 	tb.convert(Image.FORMAT_RGBA8)
 	var bar := Image.load_from_file(KIT + "turret_barrel.png")
 	bar.convert(Image.FORMAT_RGBA8)

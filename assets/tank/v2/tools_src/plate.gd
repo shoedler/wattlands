@@ -118,5 +118,5 @@ func _init() -> void:
 		for y in 2:
 			p960.set_pixel(x, y, sm.get_pixel(x, 0))
 			p960.set_pixel(x, 538 + y, sm.get_pixel(x, 535))
-	p960.save_png("res://assets/tank/v2/plate_full.png")
+	p960.save_png("res://build/v2/plate_full.png")
 	quit()

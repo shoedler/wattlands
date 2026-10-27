@@ -1,6 +1,7 @@
 extends SceneTree
 # Splits the cut-out tank (reference scale) into hull layers + turret + barrel and assembles the 1-4 rider variants.
-# Writes reference-scale intermediates to build/v2/ and 960-scale results to assets/tank/v2/.
+# Writes reference-scale intermediates (and the 960-scale hull_3rider / turret_body parts) to build/v2/ and the
+# shipped 960-scale variants and turret_barrel.png to assets/tank/v2/.
 
 var L = load("res://build/v2/lib.gd")
 var F = load("res://build/v2/font.gd")
@@ -8,6 +9,8 @@ const W := 1088
 const H := 608
 const S := 15.0 / 17.0  # 960 / 1088
 const OUT := "res://assets/tank/v2/"
+## Intermediates and previews (never shipped).
+const BUILD := "res://build/v2/"
 # Layer split rows (reference px): upper = hull roof + upper deck, lower = lower deck, rg = running gear.
 const Y_LOWER := 310
 const Y_RG := 352
@@ -198,7 +201,8 @@ func save_variant(buf: PackedFloat32Array, name: String, width_ref: int) -> Imag
 	var nw := int(round(width_ref * S))
 	var nh := int(round((Y1 - Y0) * S))
 	var small: Image = L.resize_pm(crop, nw, nh, Image.INTERPOLATE_LANCZOS)
-	small.save_png(OUT + name + ".png")
+	var ship := name.begins_with("tank_") or name == "turret_barrel"
+	small.save_png((OUT if ship else BUILD) + name + ".png")
 	return small
 
 
@@ -249,7 +253,7 @@ func _init() -> void:
 	var parts := {"hull_3rider": hull, "turret_body": turret, "turret_barrel": barrel}
 	for pn in parts:
 		save_variant(parts[pn], pn, X1 - X0)
-	results["tank_3rider"].save_png(OUT + "tank_citadel.png")
+	results["tank_3rider"].save_png(BUILD + "tank_citadel.png")
 	lineup(results)
 	quit()
 
@@ -378,4 +382,4 @@ func lineup(results: Dictionary) -> void:
 		sheet.fill_rect(Rect2i(130, y + img.get_height() - 4, maxw, 1), Color8(60, 52, 40))
 		sheet.blend_rect(img, Rect2i(0, 0, img.get_width(), img.get_height()), Vector2i(130, y))
 		y += img.get_height() + 24
-	sheet.save_png(OUT + "variants_lineup.png")
+	sheet.save_png(BUILD + "variants_lineup.png")

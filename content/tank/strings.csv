@@ -139,6 +139,9 @@ TANK_UNLOCK_RUST,Rust hull finish
 TANK_UNLOCK_ASH,Ash hull finish
 TANK_UNLOCK_MUD_STRIPE,Mud stripe hull finish
 TANK_UNLOCK_BRASS_MACHINERY,Brass machinery
+TANK_OPT_MINIATURE,Miniature look (tilt-shift blur)
+TANK_CARD_MISSION,Four stages through the night forest to the Behemoth.
+TANK_CARD_DRILL,A two-minute depot drill: try every station.
 TANK_HUD_ENG_DIESEL,Diesel
 TANK_HUD_ENG_DYNAMO,Dynamo
 TANK_HUD_ENG_STEAM,Steam
