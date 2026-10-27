@@ -4,17 +4,8 @@ extends GutTest
 ## results and progress. Lead-owned G0 tests; builders add theirs under their own folders.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
-## The kit minimums at 1080p (GAME_SDK 10.1), divided by 3 for art px and rounded up.
-const KIT_MIN := {
-	"power_gauge": Vector2i(100, 36),
-	"cadence": Vector2i(97, 33),
-	"timeline": Vector2i(127, 36),
-	"hull_hp": Vector2i(57, 36),
-	"watts": Vector2i(57, 36),
-	"wbal": Vector2i(80, 14),
-	"gear": Vector2i(50, 14),
-	"teammates": Vector2i(134, 21),
-}
+## Well under a tick (0.05 s).
+const TIME_EPS := 1e-6
 
 
 func _game(ctx: GameContext) -> TankGame:
@@ -31,9 +22,9 @@ func _hud(ctx: GameContext) -> F.Hud:
 
 func test_the_crew_size_picks_the_tank_and_its_rooms() -> void:
 	var expect := {
-		1: [TankIds.TANK_BULWARK, ["bulwark"]],
-		2: [TankIds.TANK_RAMPART, ["diesel", "dynamo"]],
-		3: [TankIds.TANK_CITADEL, ["diesel", "dynamo", "steam"]],
+		1: [TankIds.TANK_BULWARK, ["bulwark"], ["bulwark"]],
+		2: [TankIds.TANK_RAMPART, ["diesel", "dynamo"], ["diesel", "dynamo"]],
+		3: [TankIds.TANK_CITADEL, ["diesel", "steam", "dynamo"], ["diesel", "dynamo", "steam"]],
 	}
 	for crew: int in expect:
 		var g := _game(F.make_ctx(crew))
@@ -44,7 +35,7 @@ func test_the_crew_size_picks_the_tank_and_its_rooms() -> void:
 		)
 		assert_eq(engines, expect[crew][1], "rooms rear to front")
 		for r in g.state.riders:
-			assert_eq(r.engine, expect[crew][1][r.slot], "slot %d starts on its engine" % r.slot)
+			assert_eq(r.engine, expect[crew][2][r.slot], "slot %d starts on its engine" % r.slot)
 			assert_eq(g.state.station(r.engine).slot, r.slot)
 
 
@@ -210,11 +201,14 @@ func test_bands_at_each_segment_start() -> void:
 				assert_almost_eq(float(last[3]), want[1] / 100.0 * p.ftp, 0.001, at)
 
 
-## The [t, peer, ...] rows of `peer` with t0 <= t < t1.
+## The [t, peer, ...] rows of `peer` with t0 <= t < t1, to within TIME_EPS: the rows' times and the
+## fake clock's phase starts are summed differently and can differ in the last bits (1057.55 and
+## 1057.5500000000002 are the same tick).
 func _rows_in(rows: Array, peer: int, t0: float, t1: float) -> Array:
 	var out: Array = []
 	for r: Array in rows:
-		if int(r[1]) == peer and float(r[0]) >= t0 and float(r[0]) < t1:
+		var t := float(r[0])
+		if int(r[1]) == peer and t >= t0 - TIME_EPS and t < t1 - TIME_EPS:
 			out.append(r)
 	return out
 
@@ -225,7 +219,7 @@ func test_local_intents_by_engine_and_surge_never_fires() -> void:
 	var surge: Array[StringName] = [Wl.G_SURGE]
 	var confirm: Array[StringName] = [&"confirm"]
 	g.ctx.local_peer = 1
-	assert_eq(g.local_intents(none, surge), [{"k": "ram", "via": "surge"}], "diesel")
+	assert_eq(g.local_intents(none, surge), [], "diesel: Surge to evade needs no intent")
 	g.ctx.local_peer = 3
 	assert_eq(g.local_intents(none, surge), [{"k": "over", "via": "surge"}], "steam")
 	assert_eq(g.local_intents(confirm, surge), [{"k": "over", "via": "surge"}], "never latch")
@@ -246,8 +240,8 @@ func test_intents_are_owned_by_engine_and_rate_limited() -> void:
 	var got: Dictionary = g._collect_intents(f)
 	assert_eq(
 		(got[1] as Array).map(func(n: Dictionary) -> String: return n["k"]),
-		["ram"],
-		"the diesel can't fire"
+		[],
+		"the diesel can't fire, and v2 has no ram intent"
 	)
 	assert_eq((got[2] as Array).size(), 5, "5 a second per peer")
 
@@ -272,44 +266,6 @@ func test_int_fields_cover_the_snapshot_and_every_event_type() -> void:
 	assert_eq(f["snapshot"], TankSnapshotSchema.INT_PATHS)
 	for t: String in TankEvents.TYPES:
 		assert_true(f.has(t), t)
-
-
-func test_hud_rects_stay_in_the_hud_bands_clear_of_panic_and_at_kit_minimums() -> void:
-	var panic := Rect2i(
-		TankConst.PANIC_X, TankConst.PANIC_Y, 640 - TankConst.PANIC_X, 360 - TankConst.PANIC_Y
-	)
-	var rects: Array = TankHud.RECTS.values()
-	for name: String in TankHud.RECTS:
-		var r: Rect2i = TankHud.RECTS[name]
-		assert_true(
-			r.end.y <= TankConst.HUD_TOP_H or r.position.y >= TankConst.HUD_BOTTOM_Y,
-			"%s in a HUD band" % name
-		)
-		assert_true(r.position.x >= 0 and r.end.x <= 640 and r.end.y <= 360, "%s on screen" % name)
-		assert_false(r.intersects(panic), "%s clear of PANIC" % name)
-		if KIT_MIN.has(name):
-			assert_true(
-				r.size.x >= KIT_MIN[name].x and r.size.y >= KIT_MIN[name].y,
-				"%s at its minimum" % name
-			)
-	for i in rects.size():
-		for j in range(i + 1, rects.size()):
-			assert_false(
-				(rects[i] as Rect2i).intersects(rects[j]), "rects %d and %d overlap" % [i, j]
-			)
-	var spec := _game(F.make_ctx(3)).hud_spec()
-	for w: String in [
-		HudSpec.TIMELINE,
-		HudSpec.POWER_GAUGE,
-		HudSpec.CADENCE,
-		HudSpec.WBAL,
-		HudSpec.GEAR,
-		HudSpec.TEAMMATES,
-		HudSpec.READOUT
-	]:
-		assert_true(spec.has_widget(w), w)
-	for c: Dictionary in spec.controls:
-		(c["control"] as Control).free()
 
 
 func test_make_view_returns_a_node2d_that_reads_the_state() -> void:

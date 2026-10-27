@@ -2,9 +2,12 @@ class_name TankAudio
 extends Node
 ## Synthesized sound (brief 3 Audio; Sfx.synth only, no downloads): the diesel's rumble by cadence,
 ## the dynamo's whine by armature speed, a steam chuff per pedal stroke and a hiss when a shell
-## latches, the cannon's boom, the shell's whistle, spent brass, explosions, track clank, the lever's
-## clunk and the hoist's ratchet. The local rider's own station is loudest. Silent and error-free
-## headless (no players are created; what would play is still recorded in `played`).
+## latches, the arc generator's hum and a crackle each time its arc climbs the ladder (two a
+## revolution), the bow guns' rattle, the cannon's boom, the shell's whistle, spent brass,
+## explosions, track clank, the lever's clunk and the hoist's ratchet, over a quiet night ambience
+## (wind in the pines and crickets; docs/games/tank.md 3.7). The local rider's own station is
+## loudest. Silent and error-free headless (no players are created; what would play is still
+## recorded in `played`). v2 has no Ram, so no Ram sound.
 ##
 ## TankView creates it as a child, connects TankGame.cue to on_cue and calls update() every frame
 ## with the state, the frame time, the local peer and the riders' feed (peer -> Vector2(raw_w,
@@ -24,8 +27,10 @@ const SOUND_NAMES: Array[String] = [
 	"tank_chuff",
 	"tank_hiss",
 	"tank_hit",
-	"tank_ram",
 	"tank_breakdown",
+	"tank_arc_crackle",
+	"tank_bow_rattle",
+	"tank_cricket",
 ]
 ## name -> [synth kind, Hz, duration s, attack s, release s]
 const DEFS := {
@@ -41,25 +46,45 @@ const DEFS := {
 	"tank_chuff": ["noise", 0.0, 0.13, 0.01, 0.1],
 	"tank_hiss": ["noise", 0.0, 0.7, 0.05, 0.5],
 	"tank_hit": ["triangle", 540.0, 0.2, 0.001, 0.18],
-	"tank_ram": ["saw", 70.0, 0.4, 0.003, 0.3],
 	"tank_breakdown": ["saw", 90.0, 0.9, 0.01, 0.8],
+	"tank_arc_crackle": ["noise", 0.0, 0.07, 0.001, 0.06],
+	"tank_bow_rattle": ["square", 210.0, 0.035, 0.001, 0.03],
+	"tank_cricket": ["sine", 4300.0, 0.05, 0.004, 0.04],
 }
-## Loops: engine -> [synth kind, Hz]. Their pitch follows cadence (the dynamo's armature runs faster).
+## The arc generator's engine id (TankIds.ENGINE_ARC).
+const ENGINE_ARC := TankIds.ENGINE_ARC
+## Loops: engine -> [synth kind, Hz]. Their pitch follows cadence (the dynamo's armature runs faster;
+## the arc generator hums low).
 const LOOPS := {
 	TankIds.ENGINE_DIESEL: ["saw", 46.0],
 	TankIds.ENGINE_BULWARK: ["saw", 46.0],
 	TankIds.ENGINE_DYNAMO: ["sine", 380.0],
+	ENGINE_ARC: ["triangle", 100.0],
 }
+## The night ambience: a quiet wind loop and crickets chirping in short trains.
+const AMBIENCE := ["noise", 0.0]
+const AMBIENCE_DB := -34.0
+const CRICKET_DB := -27.0
+const CRICKET_GAP_S := Vector2(0.7, 2.6)
 ## Pitch scale of a loop at cadence 0 .. 120 rpm.
 const RUMBLE_PITCH := Vector2(0.7, 1.7)
 const WHINE_PITCH := Vector2(0.6, 2.0)
+const HUM_PITCH := Vector2(0.8, 1.3)
 ## Loop volumes (dB): the local rider's own station, and the others.
 const OWN_DB := {
-	TankIds.ENGINE_DIESEL: -11.0, TankIds.ENGINE_BULWARK: -11.0, TankIds.ENGINE_DYNAMO: -17.0
+	TankIds.ENGINE_DIESEL: -11.0,
+	TankIds.ENGINE_BULWARK: -11.0,
+	TankIds.ENGINE_DYNAMO: -17.0,
+	ENGINE_ARC: -15.0,
 }
 const OTHER_DB := {
-	TankIds.ENGINE_DIESEL: -22.0, TankIds.ENGINE_BULWARK: -22.0, TankIds.ENGINE_DYNAMO: -28.0
+	TankIds.ENGINE_DIESEL: -22.0,
+	TankIds.ENGINE_BULWARK: -22.0,
+	TankIds.ENGINE_DYNAMO: -28.0,
+	ENGINE_ARC: -25.0,
 }
+const OWN_CRACKLE_DB := -14.0
+const OTHER_CRACKLE_DB := -22.0
 ## A loop stops below this cadence.
 const LOOP_MIN_RPM := 8.0
 const OWN_CHUFF_DB := -9.0
@@ -83,6 +108,12 @@ var loop_on: Dictionary = {}
 var loop_players: Dictionary = {}
 var local_peer: int = 0
 var own_engine: String = ""
+## Whether the night ambience runs (it does once update() ran; tests read it).
+var ambience_on: bool = false
+
+var _rng := RandomNumberGenerator.new()
+var _cricket_t: float = 1.0
+var _ambience: AudioStreamPlayer = null
 
 var _sfx: WlSfx = null
 var _plays_this_frame: int = 0
@@ -108,6 +139,14 @@ func _ready() -> void:
 				p.stream = _sfx.synth(str(d[0]), float(d[1]), 1.0, 0.0, 0.0, true)
 			add_child(p)
 			loop_players[engine] = p
+		_ambience = AudioStreamPlayer.new()
+		_ambience.name = "Ambience"
+		_ambience.volume_db = AMBIENCE_DB
+		if _sfx != null:
+			_ambience.stream = _sfx.synth(str(AMBIENCE[0]), float(AMBIENCE[1]), 4.0, 0.0, 0.0, true)
+		add_child(_ambience)
+	if game != null and game.ctx != null:
+		_rng.seed = game.ctx.seed + 7
 
 
 func _register() -> void:
@@ -143,12 +182,6 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			if boss:
 				_after(0.4, "tank_boom_big", -2.0, 0.8)
 				_after(0.9, "tank_boom_big", -4.0, 0.6)
-		TankEvents.RAM:
-			if int(data.get("ok", 0)) == 1:
-				_play("tank_ram", -2.0)
-				_after(0.12, "tank_boom_big", -6.0)
-			else:
-				_play("tank_ram", -4.0, 0.7)
 		TankEvents.BREAKDOWN:
 			_play("tank_breakdown", -3.0)
 		TankEvents.REPAIRED:
@@ -159,8 +192,6 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			_play("tank_clunk", -8.0, 0.8)
 		TankEvents.LATCH:
 			_latch(data)
-		TankEvents.DODGE:
-			_play("whoosh", -8.0)
 		TankEvents.BOSS_PHASE:
 			_play("tank_boom_big", -4.0, 0.75)
 
@@ -179,8 +210,10 @@ func _latch(data: Dictionary) -> void:
 func _shot(data: Dictionary) -> void:
 	var sh := int(data.get("sh", 0))
 	if int(data.get("s", -1)) >= 0:
-		if sh == TankIds.SHELL_SECONDARY:
-			_play("tank_boom_small", -10.0)
+		if sh == TankIds.SHELL_BOW:
+			# The bow guns' burst: a short rattle of rounds.
+			for i in 5:
+				_after(0.06 * i, "tank_bow_rattle", -11.0, 1.0 + 0.04 * float(i % 2))
 			return
 		var gunner := _is_gunner_slot(int(data.get("s", -1)))
 		var heavy := sh == TankIds.SHELL_HEAVY or sh == TankIds.SHELL_OVER
@@ -231,6 +264,8 @@ func update(state: TankState, dt: float, p_local_peer: int, feed: Dictionary = {
 	for engine: String in LOOPS:
 		_loop(state, engine, feed)
 	_chuffs(state, dt, feed)
+	_crackles(state, dt, feed)
+	_night(dt)
 	_clank(state, dt)
 	_ratchets(state, dt)
 
@@ -253,7 +288,11 @@ func _loop(state: TankState, engine: String, feed: Dictionary) -> void:
 	var cadence := _station_cadence(state, engine, feed) if present else 0.0
 	var on := present and cadence >= LOOP_MIN_RPM
 	var own := engine == own_engine
-	var span := WHINE_PITCH if engine == TankIds.ENGINE_DYNAMO else RUMBLE_PITCH
+	var span := RUMBLE_PITCH
+	if engine == TankIds.ENGINE_DYNAMO:
+		span = WHINE_PITCH
+	elif engine == ENGINE_ARC:
+		span = HUM_PITCH
 	loop_on[engine] = on
 	loop_db[engine] = float(OWN_DB[engine] if own else OTHER_DB[engine])
 	loop_pitch[engine] = pitch_for(cadence, 120.0, span)
@@ -283,6 +322,38 @@ func _chuffs(state: TankState, dt: float, feed: Dictionary) -> void:
 		var pitch := 0.9 + 0.4 * clampf(st.pressure_pct / 150.0, 0.0, 1.0)
 		_play("tank_chuff", OWN_CHUFF_DB if own else OTHER_CHUFF_DB, pitch)
 	_stroke[TankIds.ENGINE_STEAM] = phase
+
+
+## The arc crackles each time it climbs the ladder (two climbs a revolution of the generator).
+func _crackles(state: TankState, dt: float, feed: Dictionary) -> void:
+	if state.station(ENGINE_ARC) == null:
+		return
+	var cadence := _station_cadence(state, ENGINE_ARC, feed)
+	if cadence < LOOP_MIN_RPM:
+		return
+	var phase: float = float(_stroke.get(ENGINE_ARC, 0.0)) + cadence / 60.0 * 2.0 * dt
+	if phase >= 1.0:
+		phase = fmod(phase, 1.0)
+		var own := own_engine == ENGINE_ARC
+		_play(
+			"tank_arc_crackle",
+			OWN_CRACKLE_DB if own else OTHER_CRACKLE_DB,
+			0.8 + 0.4 * _rng.randf()
+		)
+	_stroke[ENGINE_ARC] = phase
+
+
+## The night: the wind loop runs quietly, crickets chirp in trains of two or three.
+func _night(dt: float) -> void:
+	ambience_on = true
+	if _ambience != null and not _ambience.playing:
+		_ambience.play()
+	_cricket_t -= dt
+	if _cricket_t <= 0.0:
+		_cricket_t = _rng.randf_range(CRICKET_GAP_S.x, CRICKET_GAP_S.y)
+		var pitch := _rng.randf_range(0.92, 1.08)
+		for i in 2 + _rng.randi_range(0, 1):
+			_after(0.09 * i, "tank_cricket", CRICKET_DB, pitch)
 
 
 ## Track clank: faster and louder with the hull's speed.

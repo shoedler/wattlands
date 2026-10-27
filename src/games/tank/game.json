@@ -1,19 +1,30 @@
 {
   "id": "tank",
   "title": "Diesel Domestiques",
-  "summary": "Crew a pedal-powered super-heavy tank through burning countryside and villages. One engine per rider: diesel, dynamo, steam.",
-  "version": "0.1.0",
+  "summary": "Crew a pedal-powered landship through a starry forest night. One engine per rider: diesel, dynamo, steam, arc generator.",
+  "version": "0.2.0",
   "min_players": 1,
-  "max_players": 3,
+  "max_players": 4,
   "bots": false,
   "presentation": "2d",
-  "pixel_base": [640, 360],
+  "pixel_base": [960, 540],
+  "pixel_flex": {"min": [852, 480]},
   "entry": "res://src/games/tank/tank_game.gd",
-  "picker_image": "res://assets/tank/sprites/picker_card.png",
-  "contents": ["ashfall_road", "drill"],
+  "picker_image": "res://assets/tank/v2/picker_card.png",
+  "contents": ["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
   "default_content": "ashfall_road",
   "e2e_content": "drill",
   "zero_input_content": "ashfall_road",
   "first_run_priority": -1,
-  "options": [{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
+  "options": [{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}],
+  "player_options": [{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}],
+  "content_cards": {
+    "ashfall_road": {"image": "res://assets/tank/v2/card_mission.png", "detail": "TANK_CARD_MISSION", "featured": true},
+    "roam_30": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": true},
+    "roam_10": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_20": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_45": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "roam_60": {"image": "res://assets/tank/v2/card_roam.png", "detail": "TANK_CARD_ROAM", "featured": false},
+    "drill": {"image": "res://assets/tank/v2/card_drill.png", "detail": "TANK_CARD_DRILL", "featured": false}
+  }
 }

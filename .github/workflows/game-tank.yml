@@ -1,11 +1,12 @@
-# Diesel Domestiques (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, art,
-# rules-level balance harness, S8 stress, rules-step perf), its Node tests (the sim checker, the art
-# checks and the module's e2e report checker) and the script check; a second job runs a short subset of
+# Diesel Domestiques (docs/games/tank.md): the game's own GUT tests (strict gate: unit, static, view
+# and HUD built headless from fixtures, rules-level balance harness, S2 pause timing, S8 stress,
+# rules-step perf), its Node tests (the sim checker and the module's e2e report checker) and the
+# script check; a second job runs a short subset of
 # the simulation matrix (tests/games/tank/sim/run_sims.sh: S2 zero riders, S5 rescue, S6 haptics off, S9 the sprinting rider, S10 client intents and a stopped rider)
 # through tools/run_game_sim with the check_sims.mjs assertions and fit_check on every FIT. The full
 # matrix (S1-S7, S9 and S10), the e2e run and tools/run_tests belong to the lead's suite (.github/workflows/lead.yml).
-# No fal call can happen here: FAL_KEY and WATTLANDS_ALLOW_ART are never set, and the art tests only
-# run generate.mjs with --dry-run.
+# No fal call can happen here: FAL_KEY and WATTLANDS_ALLOW_ART are never set, and no tank test runs
+# the art tool (v2 ships no generated sprites: the kit under assets/tank/v2/ is committed PNGs).
 # Nothing is pushed during a build, so GitHub never runs this there: every step passed locally.
 name: game-tank
 
@@ -55,10 +56,10 @@ jobs:
       - name: Import
         run: tools/godot.sh --headless --path . --import || echo "import exited non-zero (not a gate)"
 
-      - name: Tank unit, static, art, balance, S8 and perf tests (GUT, BRIEF 7 strict rules)
+      - name: Tank unit, static, view, HUD, balance, S2 timing, S8 and perf tests (GUT, BRIEF 7 strict rules)
         run: tools/run_tests --only=gut --gdir=res://tests/games/tank
 
-      - name: Tank Node tests (sim checker, art.json dry run, e2e report checker)
+      - name: Tank Node tests (sim checker, e2e report checker)
         working-directory: tests/games/tank
         run: node --test
 

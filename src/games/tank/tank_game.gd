@@ -13,7 +13,7 @@ extends GameModule
 ## riders; a human who is not flagged Autopilot but is still on the fallback (no deliberate
 ## intent yet) or on reserve (AFK, dropped) gets TankAutopilot's intents added in
 ## _collect_intents(), through the same ownership and 5-a-second filter. The first lever, aim,
-## target, traverse, fire or latch intent of a human ends their fallback (ram and over never do,
+## target, traverse, fire, latch or turn intent of a human ends their fallback (over never does,
 ## nor does anything tagged "auto").
 ##
 ## Prompts and toasts are per peer (TankCues): each peer raises only its own rider's, the host with
@@ -31,8 +31,6 @@ signal cue(kind: String, data: Dictionary)
 ## its interpolation history. Clients only; the host's view reads the live state.
 signal snapshot_applied(tick: int)
 
-## The host refreshes the teammate strip this often (ticks; 2 Hz).
-const STATUS_EVERY_TICKS := 10
 ## Session ids kept in the progress file (a restarted client sees the same results twice).
 const PROGRESS_SESSIONS_KEPT := 32
 
@@ -48,7 +46,6 @@ var _rescue: Dictionary = {}
 var _afk: Dictionary = {}
 var _group_phase: int = -1
 var _finished: bool = false
-var _hull_shown: int = -1
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -98,9 +95,6 @@ func sim_step(dt: float, frame: InputFrame) -> void:
 		_finished = true
 		finished.emit(state.outcome if state.outcome != "" else TankIds.OUTCOME_COMPLETE)
 	_cues.on_state(state)
-	_feed_hull()
-	if frame.tick % STATUS_EVERY_TICKS == 0:
-		_feed_status()
 
 
 ## Called by the platform for bots and Autopilot riders only (its result is appended to their own
@@ -151,7 +145,7 @@ func _collect_intents(frame: InputFrame) -> Dictionary:
 	return out
 
 
-## A human who sends a deliberate intent (lever, aim, target, traverse, fire, latch; not ram, over
+## A human who sends a deliberate intent (lever, aim, target, traverse, fire, latch, turn; not over
 ## or anything tagged auto) plays that station themselves from now on.
 func _end_fallback(p: PlayerSlot, accepted: Array[Dictionary]) -> void:
 	var r := state.rider(p.peer_id)
@@ -170,37 +164,16 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 	return not ctx.players.is_empty()
 
 
-## The teammate strip (engine icon, engine name, in band), 2 Hz (host).
-func _feed_status() -> void:
-	for r in state.riders:
-		if r.engine == "":
-			continue
-		var status := {
-			"in_band": r.in_band,
-			"icon": str(TankIds.ENGINE_ICONS.get(r.engine, "")),
-			"text": ctx.strings.t(str(TankIds.ENGINE_LABELS.get(r.engine, "")))
-		}
-		ctx.hud.teammate_status(r.peer, status)
-
-
-## The hull HP readout, whenever the shown number changes.
-func _feed_hull() -> void:
-	var hp := ceili(state.hull.hp)
-	if hp != _hull_shown:
-		_hull_shown = hp
-		ctx.hud.readout(TankHud.READOUT_HULL, str(hp))
-
-
 # --- Every peer: input ------------------------------------------------------------------------
 
 
 ## The local rider's actions and gestures as intents for its current engine (brief 2.5, 2.6): a
-## surge becomes only ram or over (the diesel and the Bulwark ram, which is also the boss dodge;
-## the steam engine overpressures; the dynamo has no sprint), never fire or latch. Keys: up and
-## down nudge the elevation, left and right cycle targets (the dynamo; on the Bulwark they step
-## the lever and `item` cycles targets, `swap` steps it too), ability_1 rams or overpressures,
-## ability_2 traverses, confirm fires, or latches (the steam engine; the Bulwark with an empty
-## gun).
+## surge becomes only over (the steam engine overpressures; "Surge to evade" needs no intent, the
+## sprint itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and
+## right cycle targets (the dynamo; on the Bulwark they step the lever and `item` cycles targets,
+## `swap` steps it too), ability_1 overpressures, ability_2 traverses, confirm fires, or latches
+## (the steam engine; the Bulwark with an empty gun). In free roam the driver turns the tank round:
+## ability_1 (the diesel and the Bulwark) or confirm (the diesel).
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
@@ -210,12 +183,9 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 	var out: Array = []
 	var engine := r.engine
 	var surge := gestures.has(Wl.G_SURGE)
-	if surge or actions.has(&"ability_1"):
+	if (surge or actions.has(&"ability_1")) and engine == TankIds.ENGINE_STEAM:
 		var via := TankIds.VIA_SURGE if surge else TankIds.VIA_ACTION
-		if engine == TankIds.ENGINE_STEAM:
-			out.append(TankIntents.make(TankIds.INTENT_OVER, via))
-		elif engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK:
-			out.append(TankIntents.make(TankIds.INTENT_RAM, via))
+		out.append(TankIntents.make(TankIds.INTENT_OVER, via))
 	if engine == TankIds.ENGINE_DYNAMO or engine == TankIds.ENGINE_BULWARK:
 		out.append_array(_gunner_intents(actions))
 	if engine == TankIds.ENGINE_DYNAMO:
@@ -225,6 +195,14 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 			out.append(TankIntents.target(TankIds.TARGET_NEXT))
 	if engine == TankIds.ENGINE_BULWARK:
 		out.append_array(_lever_intents(actions))
+	if state.roam.active and not surge:
+		var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK
+		var key := (
+			actions.has(&"ability_1")
+			or (engine == TankIds.ENGINE_DIESEL and actions.has(&"confirm"))
+		)
+		if drives and key:
+			out.append(TankIntents.make(TankIds.INTENT_TURN))
 	if actions.has(&"confirm") and not surge:
 		match engine:
 			TankIds.ENGINE_DYNAMO:
@@ -281,7 +259,6 @@ func apply_snapshot(snap: Dictionary) -> void:
 		if not problem.contains("more than"):
 			return
 	TankSnapshot.apply(state, snap)
-	_feed_hull()
 	_cues.on_state(state)
 	snapshot_applied.emit(state.tick)
 
@@ -298,8 +275,9 @@ func apply_event(event: Dictionary) -> void:
 
 
 ## Moves only what the local rider controls ahead of the next snapshot: its watts, cadence and
-## %FTP, its room's power and its glow (the in-band rule on its own telemetry). Everything else
-## renders from snapshots.
+## %FTP, its effort target (TankRules.target_pct on its own telemetry, when it has one), its room's
+## power and its glow (the in-band rule on its own telemetry). Everything else renders from
+## snapshots.
 func client_predict(_dt: float, local: Telemetry) -> void:
 	if state == null or local == null:
 		return
@@ -314,9 +292,13 @@ func client_predict(_dt: float, local: Telemetry) -> void:
 		return
 	if not st.reserve and not st.unpowered:
 		st.p_eff_w = local.p_eff_w
-	var band := TankRules.in_band(state, _local_input(r, local, st), st)
+	var ri := _local_input(r, local, st)
+	var band := TankRules.in_band(state, ri, st)
 	r.in_band = band
 	st.in_band = band
+	var target := TankRules.target_pct(state, ri, st)
+	if target > 0.0:
+		r.target_pct = target
 
 
 ## The in-band rule's input for the local rider from its own telemetry and the replicated state.
@@ -370,6 +352,8 @@ func results() -> GameResults:
 	if state == null:
 		res.grade = "D"
 		return res
+	if state.roam.active:
+		return _roam_results(res)
 	var sum := TankScore.summary(state)
 	var grade := str(sum["grade"])
 	var done := state.in_cooldown()
@@ -426,8 +410,8 @@ func _ride_tag() -> String:
 	return tx.t(tag_key, [mission])
 
 
-## The crew's Strava description lines (GameResults.ride_lines): score and grade, kills and
-## breakdowns.
+## The crew's Strava description lines (GameResults.ride_lines): score and grade, kills,
+## breakdowns and evades.
 func _team_ride_lines(res: GameResults) -> Array[String]:
 	var sc := state.score
 	var kills := 0
@@ -438,20 +422,22 @@ func _team_ride_lines(res: GameResults) -> Array[String]:
 		tx.t("TANK_RIDE_SCORE", [roundi(res.score), res.grade]),
 		tx.t("TANK_RIDE_KILLS", [kills]),
 		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
+		tx.t("TANK_RIDE_EVADES", [sc.evades_ok, sc.evades_tried]),
 	]
 
 
-## One rider's own Strava lines (row["ride_lines"] after the crew's): gunnery, rams and dodges.
+## One rider's own Strava lines (row["ride_lines"] after the crew's): gunnery and bow-gun hits.
 func _rider_ride_lines(r: TankRiderState) -> Array[String]:
 	var tx := ctx.strings
 	return [
 		tx.t("TANK_RIDE_GUNNERY", [r.shots, r.hits]),
-		tx.t("TANK_RIDE_RAMS", [r.rams, r.dodges]),
+		tx.t("TANK_RIDE_BOW", [r.bow_hits]),
 	]
 
 
 ## The crew's values in the results screen's order: the mission, hull HP at the end of each
-## segment, breakdowns, overruns and kills (light/medium/destroyer/dug-in/heavy/Behemoth).
+## segment, breakdowns, overruns, kills (light/medium/destroyer/dug-in/heavy/Behemoth), evades
+## (successful/tried) and bow-gun hits.
 func _team_stats() -> Dictionary:
 	var sc := state.score
 	var outcome_key: String
@@ -476,6 +462,79 @@ func _team_stats() -> Dictionary:
 		"TANK_TEAM_BREAKDOWNS": sc.breakdowns,
 		"TANK_TEAM_OVERRUNS": sc.overruns,
 		"TANK_TEAM_KILLS": "/".join(kills),
+		"TANK_TEAM_EVADES": "%d/%d" % [sc.evades_ok, sc.evades_tried],
+		"TANK_TEAM_BOW_HITS": sc.bow_hits,
+	}
+
+
+## Free roam's results (brief 2.8): the crew's points and the grade by points per WORK minute
+## (TankRoam.grade_of), kills by type, distance, evades and breakdowns; XP as for missions; unlocks
+## as for missions (the Behemoth's never comes in a roam); ride_tag "Free Roam N min".
+func _roam_results(res: GameResults) -> GameResults:
+	var per_min := TankRoam.points_per_min(state)
+	var grade := TankRoam.grade_of(content, per_min)
+	var done := state.in_cooldown()
+	for row in res.rows:
+		var r := state.rider(int(row["peer_id"]))
+		if r == null:
+			continue
+		row["time_in_band_s"] = r.band_s
+		row["time_in_band_pct"] = 100.0 * r.band_s / r.work_s if r.work_s > 0.0 else 0.0
+		row["stats"].merge(_rider_stats(r), true)
+		row["xp"] = TankScore.xp(content, float(row.get("kj", 0.0)), grade)
+		var unlocks: Array = []
+		unlocks.append_array(TankScore.unlocks(state, grade, done))
+		row["unlocks"] = unlocks
+	res.grade = grade
+	res.score = float(state.roam.points)
+	res.team = _roam_team_stats(per_min)
+	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP
+	res.summary_key = "TANK_RESULT_TIME_UP" if timed_out else "TANK_RESULT_ABANDONED"
+	var tx := ctx.strings
+	res.ride_tag = tx.t("TANK_RIDE_ROAM", [content.roam_minutes()])
+	var sc := state.score
+	var lines: Array[String] = [
+		tx.t("TANK_RIDE_POINTS", [state.roam.points, grade]),
+		tx.t("TANK_RIDE_KILLS", [_kill_total()]),
+		tx.t("TANK_RIDE_DISTANCE", ["%.1f" % (state.roam.odo_m / 1000.0)]),
+		tx.t("TANK_RIDE_EVADES", [sc.evades_ok, sc.evades_tried]),
+		tx.t("TANK_RIDE_BREAKDOWNS", [sc.breakdowns]),
+	]
+	res.ride_lines = lines
+	for row in res.rows:
+		var r2 := state.rider(int(row["peer_id"]))
+		if r2 != null:
+			var own := res.ride_lines.duplicate()
+			own.append_array(_rider_ride_lines(r2))
+			row["ride_lines"] = own
+	return res
+
+
+func _kill_total() -> int:
+	var n := 0
+	for code in range(1, state.score.kills.size()):
+		n += int(state.score.kills[code])
+	return n
+
+
+## The crew's free-roam values in the results screen's order: the outcome, points, points per WORK
+## minute, kills by type (light/medium/destroyer/dug-in/heavy), distance, evades, breakdowns, patrols.
+func _roam_team_stats(per_min: float) -> Dictionary:
+	var sc := state.score
+	var kills: PackedStringArray = []
+	for code in range(1, TankIds.BOSS_CODE):
+		kills.append(str(sc.kills[code]))
+	var timed_out := state.outcome == TankIds.OUTCOME_TIME_UP
+	return {
+		"TANK_TEAM_OUTCOME":
+		ctx.strings.t("TANK_OUTCOME_TIME_UP" if timed_out else "TANK_RESULT_ABANDONED"),
+		"TANK_TEAM_POINTS": state.roam.points,
+		"TANK_TEAM_POINTS_PER_MIN": "%.1f" % per_min,
+		"TANK_TEAM_ROAM_KILLS": "/".join(kills),
+		"TANK_TEAM_DISTANCE": "%.1f" % (state.roam.odo_m / 1000.0),
+		"TANK_TEAM_EVADES": "%d/%d" % [sc.evades_ok, sc.evades_tried],
+		"TANK_TEAM_BREAKDOWNS": sc.breakdowns,
+		"TANK_TEAM_PATROLS": state.roam.patrols,
 	}
 
 
@@ -489,8 +548,9 @@ static func _rider_stats(r: TankRiderState) -> Dictionary:
 		"TANK_STAT_DYNAMO_S": roundi(r.engine_s[1]),
 		"TANK_STAT_STEAM_S": roundi(r.engine_s[2]),
 		"TANK_STAT_BULWARK_S": roundi(r.engine_s[3]),
-		"TANK_STAT_RAMS": r.rams,
-		"TANK_STAT_DODGES": r.dodges,
+		"TANK_STAT_ARC_S": roundi(r.engine_s[4]),
+		"TANK_STAT_EVADES": "%d/%d" % [r.evades_ok, r.evades_tried],
+		"TANK_STAT_BOW_HITS": r.bow_hits,
 		"TANK_STAT_BERM": roundi(r.berm_absorbed),
 		"TANK_STAT_SHOTS": r.shots,
 		"TANK_STAT_HITS": r.hits,

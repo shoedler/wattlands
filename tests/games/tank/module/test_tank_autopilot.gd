@@ -196,15 +196,16 @@ func test_nothing_while_broken_down_all_afk_or_in_the_cooldown() -> void:
 
 
 ## Over every fixture state and a mix of positions: the Autopilot only ever traverses, fires or
-## cycles a target, never latches, levers, rams, overpressures or nudges the aim, always tagged auto
-## and always owned by the rider's engine, so the module's ownership filter drops none of it.
-func test_it_never_latches_levers_rams_overpressures_or_aims() -> void:
+## cycles a target, never latches, levers, overpressures, turns or nudges the aim (and never
+## sprints, so it never evades), always tagged auto and always owned by the rider's engine, so the
+## module's ownership filter drops none of it.
+func test_it_never_latches_levers_overpressures_or_aims() -> void:
 	var allowed := ["traverse", "fire", "target"]
 	var builds: Array[Callable] = [
 		TankFixtures.state, TankFixtures.gun_line, TankFixtures.boss, _quiet
 	]
 	var seen := {}
-	for crew in [1, 2, 3]:
+	for crew in [1, 2, 3, 4]:
 		for build in builds:
 			var s: TankState = build.call(crew)
 			for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
@@ -253,7 +254,7 @@ func test_a_traverse_or_a_shot_is_asked_for_twice_a_second_at_most() -> void:
 	assert_eq(asked, 4, "the same for the shot")
 
 
-func test_a_rear_light_is_left_to_the_secondary_and_the_ram() -> void:
+func test_a_rear_light_is_left_alone_out_of_the_main_guns_reach() -> void:
 	var s := _quiet(1)
 	_enemy(s, 90, -1, s.camera_x() + 10.0)
 	assert_eq(TankAutopilot.enemies_in_range(s)["behind"], 0, "the main gun cannot reach it")

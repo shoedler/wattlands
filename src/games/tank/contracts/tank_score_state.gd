@@ -5,7 +5,7 @@ extends TankRecord
 
 ## Kills by code: index TankIds.ENEMY_CODES value, BOSS_CODE for the Behemoth (index 0 unused).
 var kills: Array[int] = [0, 0, 0, 0, 0, 0, 0]
-## Kills by crew fire or Ram (a support barrage kills nothing).
+## Kills by crew fire, main gun or bow guns (a support barrage kills nothing).
 var crew_kills: int = 0
 ## [snap]
 var breakdowns: int = 0
@@ -24,3 +24,10 @@ var hits: int = 0
 var hp_by_segment: Array[int] = []
 ## Damage the berm absorbed in all.
 var berm_absorbed: float = 0.0
+## (v2) Telegraphed shots that resolved while some rider could evade, and the ones evaded (brief
+## 2.8: evades tried and successful).
+var evades_tried: int = 0
+var evades_ok: int = 0
+## (v2) Bow-gun bursts fired and the ones that hit.
+var bow_shots: int = 0
+var bow_hits: int = 0

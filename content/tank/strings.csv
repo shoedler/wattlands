@@ -26,19 +26,21 @@ TANK_PLACE_FOUNDRY_GATE,Foundry Gate
 TANK_TANK_BULWARK,Bulwark
 TANK_TANK_RAMPART,Rampart
 TANK_TANK_CITADEL,Citadel
+TANK_TANK_BASTION,Bastion
 TANK_ENGINE_DIESEL,Diesel
 TANK_ENGINE_DYNAMO,Dynamo
 TANK_ENGINE_STEAM,Steam
 TANK_ENGINE_BULWARK,Diesel and gearbox
+TANK_ENGINE_ARC,Arc generator
 TANK_LEVER_DRIVE,Drive
 TANK_LEVER_DIG,Dig
 TANK_LEVER_TURRET,Turret
 TANK_LEVER_HOIST,Hoist
 TANK_LEVER_AUTO,Auto lever
-TANK_PROMPT_RAM,Surge to ram
-TANK_PROMPT_DODGE,Surge to dodge
+TANK_PROMPT_EVADE,Surge to evade
 TANK_PROMPT_OVER,Surge to overpressure
 TANK_TOAST_DYNAMO_STALLED,Dynamo stalled
+TANK_TOAST_ARC_STALLED,Arc generator stalled
 TANK_TOAST_STAGGER,Catch your breath: the tank holds
 TANK_TOAST_REGROUP,Regroup
 TANK_TOAST_BREAKDOWN,Breakdown! Pedal the diesel to repair
@@ -47,9 +49,7 @@ TANK_TOAST_OVERRUN_ADVANCE,Towed to the halt line
 TANK_TOAST_OVERRUN_GUN_LINE,Support barrage called in
 TANK_TOAST_BEHEMOTH_WITHDRAWS,The Behemoth withdraws
 TANK_TOAST_ROTATION,Change stations: {0}
-TANK_TOAST_RAM_HIT,Rammed!
-TANK_TOAST_RAM_MISS,Ram failed: stalled
-TANK_TOAST_DODGED,Dodged!
+TANK_TOAST_EVADED,Evaded!
 TANK_TOAST_LOADED_HEAVY,Heavy shell loaded
 TANK_TOAST_LOADED_LIGHT,Light shell loaded
 TANK_TOAST_OVERPRESSURE,Overpressure shell loaded
@@ -62,12 +62,6 @@ TANK_BANNER_BOSS,The Behemoth
 TANK_BANNER_BOSS_PHASE2,The bogies are broken: hit the turret
 TANK_BANNER_VICTORY,Foundry Gate taken
 TANK_BANNER_WITHDRAWN,The Behemoth got away
-TANK_TEACH_DIESEL,Diesel: your watts drive the tracks. Hold 76-105% FTP to glow.
-TANK_TEACH_BULWARK,"One engine does it all: the lever moves itself between Drive, Turret and Hoist."
-TANK_TEACH_DYNAMO,Dynamo: steady cadence charges the bank that turns the turret.
-TANK_TEACH_STEAM,Steam: build pressure to load a heavy shell.
-TANK_TEACH_AIM,Aim drill: the turret lines up on the wrecks.
-TANK_TEACH_FIRE,Load and fire!
 TANK_CARD_SPEED,Speed
 TANK_CARD_TO_HALT,To halt line
 TANK_CARD_BERM,Berm
@@ -81,7 +75,7 @@ TANK_CARD_RESERVE,Reserve
 TANK_SHELL_LIGHT,Light
 TANK_SHELL_HEAVY,Heavy
 TANK_SHELL_OVER,Overpressure
-TANK_SHELL_SECONDARY,Secondary
+TANK_SHELL_SECONDARY,Bow guns
 TANK_OBJ_DEPOT,Depot drill
 TANK_OBJ_ADVANCE,Halt line: {0} m
 TANK_OBJ_GUN_LINE,Gun line {0}/{1}
@@ -115,25 +109,116 @@ TANK_RIDE_SCORE,Score: {0} (grade {1})
 TANK_RIDE_KILLS,Enemies destroyed: {0}
 TANK_RIDE_BREAKDOWNS,Breakdowns: {0}
 TANK_RIDE_GUNNERY,Shots: {0}; hits: {1}
-TANK_RIDE_RAMS,Rams: {0}; dodges: {1}
+TANK_RIDE_EVADES,Shots evaded: {0} of {1}
+TANK_RIDE_BOW,Bow-gun hits: {0}
 TANK_STAT_DIESEL_S,Diesel (s)
 TANK_STAT_DYNAMO_S,Dynamo (s)
 TANK_STAT_STEAM_S,Steam (s)
 TANK_STAT_BULWARK_S,Gearbox diesel (s)
-TANK_STAT_RAMS,Rams
-TANK_STAT_DODGES,Dodges
+TANK_STAT_ARC_S,Arc generator (s)
+TANK_STAT_EVADES,Evades (made/tried)
+TANK_STAT_BOW_HITS,Bow-gun hits
 TANK_STAT_BERM,Berm absorbed
 TANK_STAT_SHOTS,Shots
 TANK_STAT_HITS,Hits
 TANK_STAT_ACCURACY,Accuracy %
-TANK_STAT_SHELLS,Shells light/heavy/over/secondary
+TANK_STAT_SHELLS,Shells light/heavy/over/bow
 TANK_TEAM_OUTCOME,Mission
 TANK_TEAM_HP,Hull HP per segment
 TANK_TEAM_BREAKDOWNS,Breakdowns
 TANK_TEAM_OVERRUNS,Overruns
 TANK_TEAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy/Behemoth)
+TANK_TEAM_EVADES,Evades (made/tried)
+TANK_TEAM_BOW_HITS,Bow-gun hits
 TANK_UNLOCK_SOOT,Soot hull finish
 TANK_UNLOCK_RUST,Rust hull finish
 TANK_UNLOCK_ASH,Ash hull finish
 TANK_UNLOCK_MUD_STRIPE,Mud stripe hull finish
 TANK_UNLOCK_BRASS_MACHINERY,Brass machinery
+TANK_OPT_MINIATURE,Miniature look (tilt-shift blur)
+TANK_CARD_MISSION,Four stages through the night forest to the Behemoth.
+TANK_CARD_DRILL,A two-minute depot drill: try every station.
+TANK_HUD_ENG_DIESEL,Diesel
+TANK_HUD_ENG_DYNAMO,Dynamo
+TANK_HUD_ENG_STEAM,Steam
+TANK_HUD_ENG_BULWARK,Diesel
+TANK_HUD_ENG_ARC,Arc
+TANK_HUD_JOB_DIESEL,drive
+TANK_HUD_JOB_DYNAMO,turret and gun
+TANK_HUD_JOB_STEAM,loader
+TANK_HUD_JOB_BULWARK,"drive, gearbox"
+TANK_HUD_JOB_ARC,"lights, bow guns"
+TANK_HUD_DO_HOLD,HOLD {0}-{1} W
+TANK_HUD_DO_HOLD_MIN,HOLD {0}+ W
+TANK_HUD_DO_SPIN,SPIN {0}+ RPM
+TANK_HUD_DO_SURGE,SURGE {0}+ W
+TANK_HUD_DO_LATCH,LATCH
+TANK_HUD_DO_RESERVE,RESERVE
+TANK_HUD_W,W
+TANK_HUD_FTP,FTP
+TANK_HUD_RPM,rpm
+TANK_HUD_WPRIME,W'
+TANK_HUD_GEAR,GEAR
+TANK_HUD_YOU,YOU
+TANK_HUD_RESERVE,RESERVE
+TANK_HUD_WATTS_N,{0} W
+TANK_HUD_NEXT,NEXT
+TANK_HUD_GUNS,GUNS
+TANK_HUD_KILLS,KILLS
+TANK_HUD_BREAKDOWN,BREAKDOWN
+TANK_HUD_BEHEMOTH,BEHEMOTH
+TANK_HUD_MAIN_GUN,MAIN GUN
+TANK_HUD_DESTROYED,DESTROYED
+TANK_HUD_SPEED,{0} km/h
+TANK_HUD_HALT_LINE,HALT LINE
+TANK_HUD_TURN,TURN
+TANK_HUD_SURGE_TAG,SURGE TO EVADE
+TANK_HUD_TIME_LEFT,TIME LEFT
+TANK_HUD_OVERTIME,OVERTIME
+TANK_HUD_POINTS,POINTS
+TANK_HELP_NUMBERS,"Your watts, cadence and what to do now"
+TANK_HELP_CREW,Your crew's engines run on their legs
+TANK_HELP_MISSION,"Stage, time left and the road ahead"
+TANK_HELP_HULL,"Hull, kills and the Behemoth"
+TANK_HELP_SURGE,"SURGE: sprint 2 s, the shot misses"
+TANK_SHELL_BOW,Bow-gun round
+TANK_CONTENT_ROAM_10,Free Roam (10 min)
+TANK_CONTENT_ROAM_20,Free Roam (20 min)
+TANK_CONTENT_ROAM_30,Free Roam (30 min)
+TANK_CONTENT_ROAM_45,Free Roam (45 min)
+TANK_CONTENT_ROAM_60,Free Roam (60 min)
+TANK_MISSION_ROAM_10,Free Roam 10 min
+TANK_MISSION_ROAM_20,Free Roam 20 min
+TANK_MISSION_ROAM_30,Free Roam 30 min
+TANK_MISSION_ROAM_45,Free Roam 45 min
+TANK_MISSION_ROAM_60,Free Roam 60 min
+TANK_CARD_ROAM,"Patrol the night valley, back and forth: every kill scores."
+TANK_PHASE_DRIVE_OUT,Drive-out
+TANK_PHASE_ROAM,Free roam
+TANK_PLACE_VALLEY,The valley road
+TANK_ZONE_FOREST,Pines
+TANK_ZONE_LAKE,Lake
+TANK_ZONE_VILLAGE,Village
+TANK_ZONE_QUARRY,Quarry
+TANK_ZONE_MEADOW,Meadow
+TANK_HUD_ROAM,ROAM
+TANK_HUD_ROAM_MIN,{0} MIN
+TANK_HUD_DRIVE_OUT,DRIVE-OUT
+TANK_HUD_ENGAGE,ENGAGE
+TANK_TOAST_TURN_AROUND,Turn around
+TANK_TOAST_TURNING,Turning round
+TANK_TOAST_ENGAGE,Engage
+TANK_TOAST_TIME_UP,Time up: finish the fight
+TANK_RESULT_TIME_UP,Time up
+TANK_OUTCOME_TIME_UP,Time up
+TANK_RIDE_ROAM,Free Roam {0} min
+TANK_RIDE_POINTS,Points: {0} (grade {1})
+TANK_RIDE_DISTANCE,Distance driven: {0} km
+TANK_TEAM_POINTS,Points
+TANK_TEAM_POINTS_PER_MIN,Points per work minute
+TANK_TEAM_ROAM_KILLS,Kills (light/medium/destroyer/dug-in/heavy)
+TANK_TEAM_DISTANCE,Distance (km)
+TANK_TEAM_PATROLS,Patrols met
+TANK_HELP_ROAM_MAP,"The valley: you, patrols, strongpoints"
+TANK_HELP_ROAM_BOARD,"Time left, points and kills"
+TANK_HELP_TURN,Driver: ability 1 turns the tank round

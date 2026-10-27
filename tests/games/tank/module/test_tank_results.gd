@@ -9,8 +9,9 @@ const STAT_KEYS: Array[String] = [
 	"TANK_STAT_DYNAMO_S",
 	"TANK_STAT_STEAM_S",
 	"TANK_STAT_BULWARK_S",
-	"TANK_STAT_RAMS",
-	"TANK_STAT_DODGES",
+	"TANK_STAT_ARC_S",
+	"TANK_STAT_EVADES",
+	"TANK_STAT_BOW_HITS",
 	"TANK_STAT_BERM",
 	"TANK_STAT_SHOTS",
 	"TANK_STAT_HITS",
@@ -23,6 +24,8 @@ const TEAM_KEYS: Array[String] = [
 	"TANK_TEAM_BREAKDOWNS",
 	"TANK_TEAM_OVERRUNS",
 	"TANK_TEAM_KILLS",
+	"TANK_TEAM_EVADES",
+	"TANK_TEAM_BOW_HITS",
 ]
 
 
@@ -240,25 +243,29 @@ func test_the_drill_title_is_for_a_completed_drill_only() -> void:
 
 
 ## GAME_SDK 15 (Strava text): the title tag names the mission and how it ended; the crew's lines
-## open every rider's own lines (row["ride_lines"]), which add that rider's gunnery and rams.
+## open every rider's own lines (row["ride_lines"]), which add that rider's gunnery and bow-gun
+## hits.
 func test_the_strava_tag_and_lines() -> void:
 	var perfect := _perfect(3)
 	perfect.state.riders[1].shots = 7
 	perfect.state.riders[1].hits = 5
-	perfect.state.riders[1].rams = 2
+	perfect.state.riders[1].bow_hits = 2
+	perfect.state.score.evades_ok = 3
+	perfect.state.score.evades_tried = 4
 	var res := perfect.results()
 	assert_eq(res.ride_tag, "Ashfall Road - won")
-	assert_eq(res.ride_lines.size(), 3)
+	assert_eq(res.ride_lines.size(), 4)
 	assert_eq(res.ride_lines[0], "Score: %d (grade S)" % roundi(res.score))
 	assert_eq(res.ride_lines[2], "Breakdowns: 0")
+	assert_eq(res.ride_lines[3], "Shots evaded: 3 of 4")
 	for row in res.rows:
 		var own: Array = row["ride_lines"]
-		assert_eq(own.size(), 5, "the crew's 3 lines, then the rider's 2")
-		assert_eq(JSON.stringify(own.slice(0, 3)), JSON.stringify(res.ride_lines))
-	assert_eq(res.row(2)["ride_lines"][3], "Shots: 7; hits: 5")
-	assert_eq(res.row(2)["ride_lines"][4], "Rams: 2; dodges: 0")
+		assert_eq(own.size(), 6, "the crew's 4 lines, then the rider's 2")
+		assert_eq(JSON.stringify(own.slice(0, 4)), JSON.stringify(res.ride_lines))
+	assert_eq(res.row(2)["ride_lines"][4], "Shots: 7; hits: 5")
+	assert_eq(res.row(2)["ride_lines"][5], "Bow-gun hits: 2")
 	res.own_peer = 2
-	assert_eq(res.own_ride_lines()[3], "Shots: 7; hits: 5", "each peer uploads its own row's lines")
+	assert_eq(res.own_ride_lines()[4], "Shots: 7; hits: 5", "each peer uploads its own row's lines")
 	var back := GameResults.from_dict(JSON.parse_string(JSON.stringify(res.to_dict())))
 	assert_eq(back.ride_tag, res.ride_tag, "JSON safe")
 	assert_eq(JSON.stringify(back.row(2)["ride_lines"]), JSON.stringify(res.row(2)["ride_lines"]))

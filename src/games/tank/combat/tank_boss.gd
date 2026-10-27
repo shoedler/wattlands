@@ -4,9 +4,10 @@ extends RefCounted
 ## creeps toward the tank at 2 px/s until its left edge is 120 px from the hull's front; each broken
 ## bogie pushes it back 24 px. Phase 2 (every bogie broken): immobile; shoot the turret, which only
 ## takes damage then. The main gun fires every 35-45 s (25-35 s in phase 2) after a 6 s telegraph
-## (muzzle glow, "Surge to dodge"); a sprint held 3 s inside it makes that shot miss (TankDrive sets
-## `dodged`). A secondary does 3 damage every 5 s at 60%. Maximum HP is the content HP x the tank's
-## enemy_scale. Not killed when the boss segment ends: it withdraws.
+## (muzzle glow, "Surge to evade"); a rider who can evade holding the sprint rule 3 s inside it makes
+## that shot miss (TankEvade; `evaded` turns true once one has). A secondary does 3 damage every 5 s
+## at 60%. Maximum HP is the content HP x the tank's enemy_scale. Not killed when the boss segment
+## ends: it withdraws. v2 removed the Bulwark's boss lunge with the Ram (brief 2.4).
 
 
 ## The boss segment starts: full health, phase 1, the first main-gun and secondary countdowns.
@@ -22,7 +23,8 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	var seg := c.segment(state.seg.segment_index)
 	var left_screen := float((seg.get("boss", {}) as Dictionary).get("start_left_px", 440))
 	b.x_px = state.hull.x_px + left_screen - float(TankConst.REAR_SCREEN_X)
-	b.dodged = false
+	b.evaded = false
+	TankEvade.forget(aux, TankEvade.boss_shooter())
 	b.telegraph_s = 0.0
 	aux.boss_tele_total = 0.0
 	b.main_s = _roll(state, def.get("main", {}).get("every_s", [35, 45]))
@@ -55,12 +57,18 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 	var origin := TankTargets.boss_origin(state, aux)
 	var main: Dictionary = def.get("main", {})
 	var tele := float(main.get("telegraph_s", 6.0))
+	var need := c.num("tanks", "evade.boss_hold_s", 3.0)
 	b.main_s -= dt
 	if b.main_s > 0.0 and b.main_s <= tele:
 		if b.telegraph_s <= 0.0:
 			aux.boss_tele_total = b.main_s
 		b.telegraph_s = b.main_s
+		if TankEvade.accumulate(state, aux, TankEvade.boss_shooter(), dt, need):
+			b.evaded = true
 	elif b.main_s <= 0.0:
+		var miss := TankEvade.resolve(
+			state, aux, TankEvade.boss_shooter(), TankIds.BOSS_CODE, need, events
+		)
 		var from := origin + aux.geo.boss_muzzle()
 		TankEnemies.launch(
 			state,
@@ -69,7 +77,7 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 			TankIds.SHELL_BOSS_MAIN,
 			float(main.get("damage", 20.0)),
 			float(main.get("hit", 0.85)),
-			b.dodged,
+			miss,
 			0,
 			TankIds.BOSS_CODE,
 			events
@@ -77,7 +85,7 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 		var key := "every_s" if b.phase == TankIds.BOSS_PHASE_1 else "every_s_phase2"
 		b.main_s = _roll(state, main.get(key, [35, 45]))
 		b.telegraph_s = 0.0
-		b.dodged = false
+		b.evaded = false
 		aux.boss_tele_total = 0.0
 	var sec: Dictionary = def.get("secondary", {})
 	b.secondary_s -= dt
@@ -111,8 +119,9 @@ static func die(state: TankState, aux: TankAux, slot: int, events: Array[Diction
 	var b := state.boss
 	b.phase = TankIds.BOSS_DEAD
 	b.telegraph_s = 0.0
-	b.dodged = false
+	b.evaded = false
 	aux.boss_tele_total = 0.0
+	TankEvade.forget(aux, TankEvade.boss_shooter())
 	state.score.behemoth_killed = true
 	state.score.kills[TankIds.BOSS_CODE] += 1
 	state.score.crew_kills += 1
@@ -134,6 +143,7 @@ static func withdraw(state: TankState, aux: TankAux, events: Array[Dictionary]) 
 		return
 	b.phase = TankIds.BOSS_WITHDRAWN
 	b.telegraph_s = 0.0
-	b.dodged = false
+	b.evaded = false
 	aux.boss_tele_total = 0.0
+	TankEvade.forget(aux, TankEvade.boss_shooter())
 	events.append(TankEvents.boss_phase(b.phase))

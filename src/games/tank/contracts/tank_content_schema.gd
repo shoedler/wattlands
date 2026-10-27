@@ -7,23 +7,30 @@ extends RefCounted
 ## the files and runs these.
 ##
 ## Files:
-##   tanks.json     tanks {bulwark, rampart, citadel}: {code, crew, hull_px, engines, turrets,
-##                  enemy_scale}; hull, drive, ram, berm, in_band, dynamo, steam, gearbox, gun,
-##                  damage, secondary, caps (TANKS_SPEC)
-##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, boiler,
+##   tanks.json     tanks {bulwark, rampart, citadel, bastion}: {code (TankIds.TANK_CODES), crew
+##                  (its index in TankIds.TANKS + 1), hull_px, engines (rooms rear to front),
+##                  turrets, enemy_scale}; hull, drive, evade, berm, in_band, power_ratio, dynamo,
+##                  steam, gearbox, gun, damage, bow, arc, caps (TANKS_SPEC)
+##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, arc, boiler,
 ##                  hoist, cadence_band, haptics (STATIONS_SPEC; plan entries:
 ##                  {mode: ERG, target_pct, ramp_to_pct?, range_pct?} or {mode: SIM, grade_source});
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; rotation rows
-##                  use their tank's start engines, start with the slot's own and man every room
-##                  in every column
+##                  (every tank of crew 2 and up) use their tank's start engines, start with the
+##                  slot's own and man every room in every column
 ##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
-##                  every_s, hit}, light_mult}; boss; miss_px; clamp (ENEMIES_SPEC)
+##                  every_s, hit}, light_mult, lane, flank? {telegraph_s, damage, hit}}; boss;
+##                  miss_px; clamp; lanes (ENEMIES_SPEC)
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
 ##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
-##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
+##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
+##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
+##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
+##   roam/valley.json  the free-roam valley: length, zones, terrain, strongpoints, patrols, turn,
+##                  points and grades (validate_valley; VALLEY_SPEC)
 ##   scoring.json   scale, weights, objectives, survival_per_breakdown, grades, xp (SCORING_SPEC)
 ##   cosmetics.json unlocks: [{id, kind, rule: finish | grade | behemoth_no_breakdown, min_grade?}]
-##   validate_cross(files): what needs two files (tank engines, the mission's plan table and its
+##   validate_cross(files): what needs two files (each tank's start engines are its rooms in slot
+##                  order, a permutation of tanks.json engines; the mission's plan table and its
 ##                  segment types, 90% ERG phases <= 180 s, warm-up terrain inside the warm-up grades)
 ##
 ## Safety envelope: besides types, the validators hold every number that carries a brief 2.3 check
@@ -41,15 +48,9 @@ const TANKS_SPEC := {
 	"drive.world_scroll": "pos",
 	"drive.px_per_visual_m": "pos",
 	"drive.evasive_hit_mult": "nonneg",
-	"ram.window_s": "pos",
-	"ram.cooldown_s": "nonneg",
-	"ram.reach_px": "pos",
-	"ram.sprint_ftp": "pos",
-	"ram.sprint_window_s": "pos",
-	"ram.fail_damage": "nonneg",
-	"ram.fail_stall_s": "nonneg",
-	"ram.boss_lunge_px": "nonneg",
-	"ram.boss_dodge_hold_s": "pos",
+	"evade.sprint_window_s": "pos",
+	"evade.hold_s": "pos",
+	"evade.boss_hold_s": "pos",
 	"berm.j_per_hp": "pos",
 	"berm.max_hp": "nonneg",
 	"in_band.sim_ftp_pct": "pair",
@@ -58,14 +59,14 @@ const TANKS_SPEC := {
 	"in_band.steam_cycle_cadence_rpm": "pos",
 	"in_band.recovery_cadence_rpm": "pos",
 	"in_band.reserve_p_eff_w": "nonneg",
+	"power_ratio.steam_loaded_pct": "pos",
+	"power_ratio.warmup_sim_pct": "pos",
 	"dynamo.bank_max": "pos",
 	"dynamo.j_per_unit": "pos",
 	"dynamo.stabilizer_per_s": "nonneg",
 	"dynamo.per_degree": "nonneg",
 	"dynamo.per_traverse": "nonneg",
 	"dynamo.per_hoist": "nonneg",
-	"dynamo.per_secondary": "nonneg",
-	"dynamo.secondary_min_bank": "nonneg",
 	"dynamo.elev_deg_s": "pair",
 	"dynamo.traverse_s": "pair",
 	"dynamo.hoist_s": "pair",
@@ -90,9 +91,16 @@ const TANKS_SPEC := {
 	"damage.over": "nonneg",
 	"damage.splash_px": "nonneg",
 	"damage.splash_frac": "nonneg",
-	"secondary.damage": "nonneg",
-	"secondary.every_s": "pos",
-	"secondary.range_px": "pos",
+	"bow.damage": "nonneg",
+	"bow.every_s": "pos",
+	"bow.min_px": "nonneg",
+	"bow.max_px": "pos",
+	"bow.per_burst_units": "nonneg",
+	"bow.min_bank": "nonneg",
+	"bow.under_band_rate": "frac",
+	"bow.bulwark_rate": "frac",
+	"bow.clear_s": "pos",
+	"arc.lit_dispersion_mult": "frac",
 	"caps.enemies": "pos",
 	"caps.shells": "pos",
 }
@@ -110,6 +118,7 @@ const STATIONS_SPEC := {
 	"rotation": "obj",
 	"plans": "obj",
 	"drill_plans": "obj",
+	"roam_plans": "obj",
 	"terrain.send_every_s": "pos",
 	"terrain.warmup_grade_pct": "pair",
 	"bank.base_pct": "pos",
@@ -119,6 +128,12 @@ const STATIONS_SPEC := {
 	"bank.substep_s": "pos",
 	"bank.max_step_pts": "pos",
 	"bank.clamp_to_range": "bool",
+	"arc.base_pct": "pos",
+	"arc.span_pct": "nonneg",
+	"arc.every_s": "pos",
+	"arc.substeps": "pos",
+	"arc.substep_s": "pos",
+	"arc.max_step_pts": "pos",
 	"boiler.grade_pct": "nonneg",
 	"boiler.warmup_grade_pct": "nonneg",
 	"boiler.max_rise_pct": "pos",
@@ -134,8 +149,6 @@ const STATIONS_SPEC := {
 	"haptics.hit.duration_s": "pos",
 	"haptics.boss_hit.haptic": "pos",
 	"haptics.boss_hit.duration_s": "pos",
-	"haptics.ram.haptic": "pos",
-	"haptics.ram.duration_s": "pos",
 	"haptics.cooldown_s": "nonneg",
 }
 const ENEMY_SPEC := {
@@ -143,6 +156,7 @@ const ENEMY_SPEC := {
 	"hp": "pos",
 	"size_px": "pair",
 	"light_mult": "nonneg",
+	"lane": "nonneg",
 	"gun.damage": "nonneg",
 	"gun.every_s": "pos",
 	"gun.hit": "frac",
@@ -166,7 +180,12 @@ const ENEMIES_SPEC := {
 	"miss_px": "pair",
 	"clamp.ahead_max_right_px": "pos",
 	"clamp.behind_min_show_px": "nonneg",
+	"lanes.count": "pos",
+	"lanes.gap_px": "nonneg",
 }
+## An enemy type's optional flank shot (v2, the light tank's, brief 2.4): its first shot after it
+## reaches its hold distance, telegraphed.
+const FLANK_SPEC := {"telegraph_s": "pos", "damage": "nonneg", "hit": "frac"}
 const SCORING_SPEC := {
 	"scale": "pos",
 	"weights.band": "nonneg",
@@ -195,15 +214,70 @@ const SEGMENT_KINDS := {
 	TankIds.SEG_GUN_LINE: Wl.WORK,
 	TankIds.SEG_BOSS: Wl.WORK,
 	TankIds.SEG_CHECKPOINT: Wl.RECOVERY,
+	TankIds.SEG_ROAM: Wl.WORK,
 }
-const OPEN_SEGMENTS: Array[String] = [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS]
+const OPEN_SEGMENTS: Array[String] = [
+	TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS, TankIds.SEG_ROAM
+]
 const UNLOCK_RULES: Array[String] = ["finish", "grade", "behemoth_no_breakdown"]
 const GRADES: Array[String] = ["S", "A", "B", "C", "D"]
 ## The segment types every engine needs an entry for, per plan table.
 const TABLE_SEGMENTS := {
 	"plans": [TankIds.SEG_DEPOT, TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS],
 	"drill_plans": [TankIds.SEG_DEPOT, TankIds.SEG_SKIRMISH],
+	"roam_plans": [TankIds.SEG_DEPOT, TankIds.SEG_ROAM],
 }
+## valley.json (free roam, brief 2.10).
+const VALLEY_SPEC := {
+	"length_m": "pair",
+	"start_m": "pos",
+	"end_m": "pos",
+	"drive_out_s": "pos",
+	"overtime_s": "pos",
+	"zones": "obj",
+	"first_zone": "str",
+	"last_zone": "str",
+	"middle": "arr",
+	"forest_between": "frac",
+	"terrain_step_m": "pair",
+	"terrain_max_step_pct": "pos",
+	"terrain_pct": "pair",
+	"end_flat_m": "nonneg",
+	"strongpoints.zones": "arr",
+	"strongpoints.min_gap_m": "nonneg",
+	"strongpoints.clear_ends_m": "nonneg",
+	"strongpoints.respawn_s": "pos",
+	"strongpoints.engage_px": "pos",
+	"patrols.every_s": "pair",
+	"patrols.ahead_share": "frac",
+	"patrols.max_alive": "pos",
+	"patrols.heavy_after_s": "nonneg",
+	"patrols.retry_s": "pos",
+	"patrols.clear_ahead_m": "nonneg",
+	"patrols.kinds": "arr",
+	"engage_heavy_px": "pos",
+	"fight_px": "pos",
+	"turn.stop_s": "pos",
+	"turn.cooldown_s": "pos",
+	"turn.autopilot_wait_s": "nonneg",
+	"turn.forced_wait_s": "nonneg",
+	"points.light": "num",
+	"points.medium": "num",
+	"points.destroyer": "num",
+	"points.dugin": "num",
+	"points.heavy": "num",
+	"points.evade": "num",
+	"points.breakdown": "num",
+	"points.per_km": "num",
+	"grades.S": "num",
+	"grades.A": "num",
+	"grades.B": "num",
+	"grades.C": "num",
+}
+## A free roam's length in minutes (roam_10 .. roam_60; the roam phase's min_s = minutes x 60 -
+## the drive-out stays > 0).
+const ROAM_MINUTES_MIN := 10
+const ROAM_MINUTES_MAX := 120
 
 # --- The brief's safety envelope (brief 2.3 checks, 2.7; BRIEF 4.6) ---------------------------------
 ## 4.6.1: every ERG target, ramp and range bound in % FTP.
@@ -255,6 +329,9 @@ const STATION_BOUNDS: Array = [
 	["bank.base_pct", ">=", ERG_MIN_PCT, "bank targets inside 50..100% (4.6.1)"],
 	["bank.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
 	["bank.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
+	["arc.base_pct", ">=", ERG_MIN_PCT, "arc targets inside 50..100% (4.6.1)"],
+	["arc.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
+	["arc.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
 	["boiler.grade_pct", "<=", BOILER_MAX_PCT, "boiler 8% x difficulty <= +8% (4.6.6)"],
 	["boiler.warmup_grade_pct", "<=", BOILER_WARMUP_MAX_PCT, "warm-up SIM <= +3% (4.6.8)"],
 	["boiler.max_rise_pct", "<=", BOILER_MAX_RISE_PCT, "boiler rises <= 0.5% a step"],
@@ -266,8 +343,6 @@ const STATION_BOUNDS: Array = [
 	["haptics.hit.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
 	["haptics.boss_hit.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
 	["haptics.boss_hit.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
-	["haptics.ram.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
-	["haptics.ram.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
 	["haptics.cooldown_s", ">=", HAPTIC_MIN_COOLDOWN_S, "haptic cooldown >= 15 s (2.7)"],
 ]
 
@@ -284,6 +359,17 @@ static func validate_tanks(d: Variant) -> Array[String]:
 				errors.append("tanks.json tanks: missing %s" % t)
 				continue
 			check_spec(tanks[t], TANK_SPEC, "tanks.json tanks.%s" % t, errors)
+			var def: Variant = tanks[t]
+			if def is Dictionary and _num(def.get("code")):
+				if int(def["code"]) != int(TankIds.TANK_CODES[t]):
+					errors.append(
+						"tanks.json tanks.%s.code: must be %d" % [t, TankIds.TANK_CODES[t]]
+					)
+			if def is Dictionary and _num(def.get("crew")):
+				if int(def["crew"]) != TankIds.TANKS.find(t) + 1:
+					errors.append(
+						"tanks.json tanks.%s.crew: must be %d" % [t, TankIds.TANKS.find(t) + 1]
+					)
 			for e: Variant in (tanks[t] as Dictionary).get("engines", []):
 				if not TankIds.ENGINES.has(str(e)):
 					errors.append("tanks.json tanks.%s.engines: unknown engine %s" % [t, str(e)])
@@ -313,8 +399,9 @@ static func validate_stations(d: Variant) -> Array[String]:
 			errors.append("stations.json start_engines.%s: one engine per slot" % t)
 	if errors.size() > 0:
 		return errors
-	for t: String in [TankIds.TANK_RAMPART, TankIds.TANK_CITADEL]:
-		_check_rotation(d["rotation"].get(t), d["start_engines"][t], t, errors)
+	for t: String in TankIds.TANKS:
+		if TankIds.TANKS.find(t) > 0:
+			_check_rotation(d["rotation"].get(t), d["start_engines"][t], t, errors)
 	for table: String in TABLE_SEGMENTS:
 		_check_table(d[table], table, errors)
 	_check_station_bounds(d, errors)
@@ -414,16 +501,18 @@ static func _check_station_bounds(d: Dictionary, errors: Array[String]) -> void:
 		var ok := float(v) >= float(c[2]) if c[1] == ">=" else float(v) <= float(c[2])
 		if not ok:
 			errors.append("stations.json %s: must be %s %s (%s)" % [c[0], c[1], c[2], c[3]])
-	var sub_pts := float(d["bank"]["max_step_pts"]) / maxf(float(d["bank"]["substeps"]), 1.0)
-	if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
-		var why := "bank.max_step_pts / bank.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
-		errors.append("stations.json " + why % sub_pts)
+	for k: String in ["bank", "arc"]:
+		var sub_pts := float(d[k]["max_step_pts"]) / maxf(float(d[k]["substeps"]), 1.0)
+		if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
+			var why := "%s.max_step_pts / %s.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
+			errors.append("stations.json " + why % [k, k, sub_pts])
 	var hoist_step := float(d["hoist"]["rise_pct_s"]) * float(d["hoist"]["step_s"])
 	if hoist_step > HOIST_MAX_STEP_PCT + 1e-9:
 		var why := "hoist.rise_pct_s x hoist.step_s: must be <= 1, got %s (+1%%/s, 4.6.6)"
 		errors.append("stations.json " + why % hoist_step)
-	if float(d["bank"]["base_pct"]) + float(d["bank"]["span_pct"]) > ERG_MAX_PCT:
-		errors.append("stations.json bank: base_pct + span_pct must be <= 100 (4.6.1)")
+	for k: String in ["bank", "arc"]:
+		if float(d[k]["base_pct"]) + float(d[k]["span_pct"]) > ERG_MAX_PCT:
+			errors.append("stations.json %s: base_pct + span_pct must be <= 100 (4.6.1)" % k)
 	if not bool(d["bank"]["clamp_to_range"]):
 		errors.append("stations.json bank.clamp_to_range: must be true (targets stay in range_pct)")
 	var warm_hi := float(d["terrain"]["warmup_grade_pct"][1])
@@ -456,6 +545,12 @@ static func validate_enemies(d: Variant) -> Array[String]:
 			check_spec(types[t], ENEMY_SPEC, "enemies.json types.%s" % t, errors)
 			if int(types[t].get("code", 0)) != TankIds.enemy_code(t):
 				errors.append("enemies.json types.%s.code: must be %d" % [t, TankIds.enemy_code(t)])
+			if (types[t] as Dictionary).has("flank"):
+				check_spec(types[t]["flank"], FLANK_SPEC, "enemies.json types.%s.flank" % t, errors)
+			var lanes: Variant = dig(d, "lanes.count")
+			var lane: Variant = (types[t] as Dictionary).get("lane")
+			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
+				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
 	return errors
 
 
@@ -475,6 +570,99 @@ static func validate_mission(d: Variant, mission_id: String = "") -> Array[Strin
 	for i in (segs as Array).size():
 		_check_segment(segs[i], "%s segments[%d]" % [at, i], errors)
 	return errors
+
+
+## A free-roam file (brief 2.10): {id, kind "roam", label, minutes 10..120}.
+static func validate_roam(d: Variant, mission_id: String = "") -> Array[String]:
+	var errors: Array[String] = []
+	var at := "missions/%s.json" % mission_id
+	if not (d is Dictionary):
+		return ["%s: expected an object" % at]
+	if mission_id != "" and str(d.get("id", "")) != mission_id:
+		errors.append("%s id: must be %s" % [at, mission_id])
+	if str(d.get("kind", "")) != TankIds.KIND_ROAM:
+		errors.append("%s kind: must be roam" % at)
+	if not (d.get("label") is String) or str(d["label"]) == "":
+		errors.append("%s label: expected a strings key" % at)
+	var mins: Variant = d.get("minutes")
+	if not (_num(mins) and float(mins) == floorf(float(mins))):
+		errors.append("%s minutes: expected a whole number" % at)
+	elif int(mins) < ROAM_MINUTES_MIN or int(mins) > ROAM_MINUTES_MAX:
+		errors.append("%s minutes: must be %d..%d" % [at, ROAM_MINUTES_MIN, ROAM_MINUTES_MAX])
+	if (d as Dictionary).has("segments"):
+		errors.append("%s segments: a free roam lists none (TankContent.expand_roam)" % at)
+	return errors
+
+
+## The free-roam valley (roam/valley.json, brief 2.10): VALLEY_SPEC, every zone of TankIds.ZONES with
+## its len_m and terrain_pct inside the valley's terrain_pct, which lies inside the brief's -3..+6%
+## (BRIEF 4.6.6), a drive-out of at least the first 300 s (BRIEF 4.6.8: the roam's ERG ranges start
+## after it), patrol kinds with known enemies and positive weights, and the grade cut-offs falling.
+static func validate_valley(d: Variant) -> Array[String]:
+	var errors: Array[String] = []
+	var at := "roam/valley.json"
+	if not (d is Dictionary):
+		return ["%s: expected an object" % at]
+	check_spec(d, VALLEY_SPEC, at, errors)
+	if not errors.is_empty():
+		return errors
+	var tp: Array = d["terrain_pct"]
+	if float(tp[0]) < TERRAIN_MIN_PCT or float(tp[1]) > TERRAIN_MAX_PCT or tp[0] > tp[1]:
+		errors.append("%s terrain_pct: must lie in -3..+6%% (BRIEF 4.6.6)" % at)
+	if float(d["drive_out_s"]) < TankConst.FIRST_S:
+		errors.append("%s drive_out_s: must be >= 300 (the warm-up, BRIEF 4.6.8)" % at)
+	var zones: Dictionary = d["zones"]
+	for z: String in TankIds.ZONES:
+		if not zones.has(z):
+			errors.append("%s zones: missing %s" % [at, z])
+			continue
+		var where := "%s zones.%s" % [at, z]
+		check_spec(
+			zones[z], {"len_m": "pair", "terrain_pct": "pair", "label": "str"}, where, errors
+		)
+		var zt: Variant = dig(zones[z], "terrain_pct")
+		if zt is Array and (zt as Array).size() == 2 and _num(zt[0]) and _num(zt[1]):
+			if float(zt[0]) < float(tp[0]) or float(zt[1]) > float(tp[1]):
+				errors.append("%s terrain_pct: must lie inside the valley's terrain_pct" % where)
+	for k: String in ["first_zone", "last_zone"]:
+		if not TankIds.ZONES.has(str(d[k])):
+			errors.append("%s %s: one of %s" % [at, k, ", ".join(TankIds.ZONES)])
+	for z2: Variant in (d["middle"] as Array) + (d["strongpoints"]["zones"] as Array):
+		if not TankIds.ZONES.has(str(z2)):
+			errors.append("%s: unknown zone %s" % [at, str(z2)])
+	var lo := float(d["length_m"][0])
+	if lo <= 2.0 * float(d["end_m"]) or float(d["length_m"][1]) < lo:
+		errors.append("%s length_m: [lo, hi] with lo > 2 x end_m" % at)
+	var kinds: Array = d["patrols"]["kinds"]
+	if kinds.is_empty():
+		errors.append("%s patrols.kinds: expected at least one" % at)
+	for k2: Variant in kinds:
+		var ok: bool = k2 is Dictionary and _num(k2.get("weight")) and float(k2["weight"]) > 0.0
+		ok = ok and k2.get("units") is Array and not (k2["units"] as Array).is_empty()
+		if not ok:
+			errors.append("%s patrols.kinds: each needs a weight > 0 and units" % at)
+			continue
+		for u: Variant in k2["units"]:
+			if not _unit_ok(u):
+				errors.append("%s patrols.kinds units: {enemy, count: [lo, hi]}" % at)
+	var cut: Array[float] = []
+	for g: String in ["S", "A", "B", "C"]:
+		cut.append(float(d["grades"][g]))
+	for i in range(1, cut.size()):
+		if cut[i] > cut[i - 1]:
+			errors.append("%s grades: S >= A >= B >= C" % at)
+			break
+	return errors
+
+
+## A patrol unit {enemy: a known type, count: [lo, hi] whole, 0 <= lo <= hi}.
+static func _unit_ok(u: Variant) -> bool:
+	if not (u is Dictionary) or not TankIds.ENEMY_TYPES.has(str(u.get("enemy", ""))):
+		return false
+	var n: Variant = u.get("count")
+	if not (n is Array) or (n as Array).size() != 2 or not _num(n[0]) or not _num(n[1]):
+		return false
+	return int(n[0]) >= 0 and int(n[0]) <= int(n[1])
 
 
 static func validate_scoring(d: Variant) -> Array[String]:
@@ -575,16 +763,24 @@ static func validate_cross(files: Dictionary) -> Array[String]:
 	var st: Dictionary = files.get("stations", {})
 	var m: Dictionary = files.get("mission", {})
 	for t: String in TankIds.TANKS:
-		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", [])
-		var starts: Array = st["start_engines"].get(t, [])
+		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", []).duplicate()
+		var starts: Array = st["start_engines"].get(t, []).duplicate()
+		rooms.sort()
+		starts.sort()
 		if rooms != starts:
-			errors.append(
-				"stations.json start_engines.%s: must be tanks.json tanks.%s.engines" % [t, t]
+			(
+				errors
+				. append(
+					(
+						"stations.json start_engines.%s: must be tanks.json tanks.%s.engines (any order)"
+						% [t, t]
+					)
+				)
 			)
 	var table := str(m.get("plan_table", "plans"))
 	var at := "missions/%s.json" % str(m.get("id", ""))
 	if not TABLE_SEGMENTS.has(table):
-		errors.append("%s plan_table: one of plans, drill_plans" % at)
+		errors.append("%s plan_table: one of %s" % [at, ", ".join(TABLE_SEGMENTS.keys())])
 		return errors
 	var warm: Array = st["terrain"]["warmup_grade_pct"]
 	var segs: Array = m.get("segments", [])

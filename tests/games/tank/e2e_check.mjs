@@ -14,7 +14,8 @@
 //   2. the host and the client that stayed hold the same Tank events in the same order, and the
 //      rejoined client's events are a tail of that sequence;
 //   3. the drill's story: the group's segments come once each, in order (depot, skirmish,
-//      checkpoint, then the cool-down's own event if the rules send one); nothing a WARMUP phase forbids happens (no Ram, dodge, boss event
+//      checkpoint, then the cool-down's own event if the rules send one); nothing a WARMUP phase forbids happens (no Ram, dodge
+//      (v2 never emits them), no successful evade (nobody can evade in WARMUP), boss event
 //      or overrun, no haptic directive); no more kills than the skirmish has tanks, none twice;
 //      every repair follows a breakdown; no hit or kill in the depot; the rotation option is
 //      ignored (no rotation event);
@@ -39,6 +40,7 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 /** Tank's event types (TankEvents.TYPES). */
 export const EVENT_TYPES = [
   'segment', 'rotation', 'shot', 'hit', 'kill', 'ram', 'dodge', 'breakdown', 'repaired', 'overrun', 'boss_phase', 'latch', 'lever',
+  'evade', 'turn', 'time_up',
 ];
 /** Declared int fields per type (TankEvents.INT_FIELDS; "r[][]" is rows of ints). */
 export const INT_FIELDS = {
@@ -55,6 +57,9 @@ export const INT_FIELDS = {
   boss_phase: ['p'],
   latch: ['s', 'sh'],
   lever: ['s', 'lv'],
+  evade: ['id', 'e', 'ok', 's'],
+  turn: ['s', 'dir'],
+  time_up: [],
 };
 /** Segment codes (TankIds.SEG_CODES). */
 export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7 };
@@ -73,8 +78,8 @@ const CITADEL = { tank: 3, riders: 3, rooms: 3 };
 const ENEMY_CODES = [1, 2, 3, 4, 5, 6];
 const SNAPSHOT_KEYS = ['v', 'tick', 'sg', 'tk', 'r', 'st', 'e', 's', 'o', 'gl', 'b', 'sc'];
 /** Column counts of TankSnapshotSchema. */
-export const SNAPSHOT_WIDTHS = { sg: 5, tk: 16, gl: 4, b: 7, sc: 4 };
-export const ROW_WIDTHS = { r: 6, st: 8, e: 7, s: 7, o: 5 };
+export const SNAPSHOT_WIDTHS = { sg: 5, tk: 17, gl: 4, b: 7, sc: 4 };
+export const ROW_WIDTHS = { r: 7, st: 8, e: 8, s: 7, o: 5 };
 const ROLES = ['host', 'client1', 'client2'];
 const COMBAT = new Set(['hit', 'kill']);
 
@@ -122,7 +127,7 @@ export function eventErrors(e) {
     case 'rotation':
       for (const [slot, engine] of e.r) {
         inRange('slot', slot, 0, 2);
-        inRange('engine', engine, 1, 4);
+        inRange('engine', engine, 1, 5);
       }
       break;
     case 'shot':
@@ -141,7 +146,7 @@ export function eventErrors(e) {
     case 'kill':
       inRange('id', e.id, 1, 1e9);
       inRange('e', e.e, 1, 6);
-      inRange('by', e.by, 0, 2);
+      inRange('by', e.by, 0, 3);
       inRange('s', e.s, -1, 2);
       break;
     case 'ram':
@@ -150,6 +155,11 @@ export function eventErrors(e) {
       break;
     case 'dodge':
       inRange('s', e.s, 0, 2);
+      break;
+    case 'evade':
+      inRange('e', e.e, 1, 6);
+      inRange('ok', e.ok, 0, 1);
+      inRange('s', e.s, -1, 3);
       break;
     case 'repaired':
       inRange('hp', e.hp, 1, 1000);
@@ -231,6 +241,8 @@ export function drillErrors(events, { tail = false } = {}) {
     const n = events.filter((e) => e.type === t).length;
     if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss, rotation ignored)`);
   }
+  const evaded = events.filter((e) => e.type === 'evade' && e.ok === 1).length;
+  if (evaded > 0) errs.push(`${evaded} evaded shot(s) in the drill (nobody can evade in a WARMUP phase)`);
   const kills = events.filter((e) => e.type === 'kill');
   if (kills.length > DRILL_ENEMIES) errs.push(`${kills.length} kills, the skirmish has ${DRILL_ENEMIES} tanks`);
   const ids = new Set();

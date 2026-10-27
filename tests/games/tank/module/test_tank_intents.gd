@@ -63,7 +63,7 @@ func _local(
 # --- Keys and gestures ------------------------------------------------------------------------
 
 
-func test_a_surge_is_only_ever_ram_or_over() -> void:
+func test_a_surge_is_only_ever_over() -> void:
 	var g := _game(3)
 	var surge: Array[StringName] = [Wl.G_SURGE]
 	var confirm: Array[StringName] = [&"confirm"]
@@ -75,13 +75,15 @@ func test_a_surge_is_only_ever_ram_or_over() -> void:
 		var peer: int = engines[engine]
 		var got := _local(g, peer, confirm, surge)
 		for i: Dictionary in got:
-			assert_has(["ram", "over"], i["k"], "%s: a surge never fires or latches" % engine)
+			assert_eq(i["k"], "over", "%s: a surge never fires or latches" % engine)
 			assert_eq(i["via"], "surge")
 		var with_keys := _local(g, peer, every, surge)
 		for i: Dictionary in with_keys:
 			if i["via"] == "surge":
-				assert_has(["ram", "over"], i["k"])
-	assert_eq(_local(g, engines["diesel"], _actions, surge), [{"k": "ram", "via": "surge"}])
+				assert_eq(i["k"], "over")
+	assert_eq(
+		_local(g, engines["diesel"], _actions, surge), [], "Surge to evade needs no intent (v2)"
+	)
 	assert_eq(_local(g, engines["steam"], _actions, surge), [{"k": "over", "via": "surge"}])
 	assert_eq(_local(g, engines["dynamo"], _actions, surge), [], "the dynamo has no sprint")
 
@@ -93,7 +95,7 @@ func test_the_bulwark_keys() -> void:
 		return _local(g, 1, acts, _gestures)
 	assert_eq(one.call(&"up"), [{"k": "aim", "d": 1, "via": "action"}])
 	assert_eq(one.call(&"down"), [{"k": "aim", "d": -1, "via": "action"}])
-	assert_eq(one.call(&"ability_1"), [{"k": "ram", "via": "action"}])
+	assert_eq(one.call(&"ability_1"), [], "v2: no Ram")
 	assert_eq(one.call(&"ability_2"), [{"k": "traverse", "via": "action"}])
 	assert_eq(one.call(&"swap"), [{"k": "lever", "to": "next", "via": "action"}])
 	assert_eq(one.call(&"left"), [{"k": "lever", "to": "left", "via": "action"}])
@@ -120,8 +122,8 @@ func test_the_crew_keys() -> void:
 	assert_eq(act.call(dyn, &"right"), [{"k": "target", "d": 1, "via": "action"}])
 	assert_eq(act.call(dyn, &"ability_2"), [{"k": "traverse", "via": "action"}])
 	assert_eq(act.call(dyn, &"confirm"), [{"k": "fire", "via": "action"}])
-	assert_eq(act.call(dyn, &"ability_1"), [], "the dynamo does not ram")
-	assert_eq(act.call(by_engine["diesel"], &"ability_1"), [{"k": "ram", "via": "action"}])
+	assert_eq(act.call(dyn, &"ability_1"), [], "the dynamo has no sprint intent")
+	assert_eq(act.call(by_engine["diesel"], &"ability_1"), [], "v2: no Ram")
 	assert_eq(act.call(by_engine["diesel"], &"confirm"), [], "the diesel has no gun")
 	assert_eq(act.call(by_engine["steam"], &"ability_1"), [{"k": "over", "via": "action"}])
 	assert_eq(act.call(by_engine["steam"], &"confirm"), [{"k": "latch", "via": "action"}])
@@ -129,10 +131,15 @@ func test_the_crew_keys() -> void:
 
 
 func test_a_surge_that_also_arrives_as_confirm_counts_as_the_surge() -> void:
-	var g := _game(1)
+	var g := _game(3)
+	var steam := 0
+	for r in g.state.riders:
+		if r.engine == TankIds.ENGINE_STEAM:
+			steam = r.peer
 	var both: Array[StringName] = [&"confirm", &"ability_1"]
 	var surge: Array[StringName] = [Wl.G_SURGE]
-	assert_eq(_local(g, 1, both, surge), [{"k": "ram", "via": "surge"}], "one ram, via the surge")
+	assert_eq(_local(g, steam, both, surge), [{"k": "over", "via": "surge"}], "one over, no latch")
+	assert_eq(_local(_game(1), 1, both, surge), [], "the Bulwark neither fires nor latches")
 
 
 func test_every_local_intent_normalizes() -> void:
@@ -215,26 +222,26 @@ func test_only_peers_of_the_session_are_read() -> void:
 func test_what_passes_reaches_the_rules_input_in_order() -> void:
 	var g := _game(1)
 	var f := _frame(
-		g, TICK, {1: [{"k": "aim", "d": 1}, {"k": "fire"}, {"k": "ram", "via": "surge"}]}
+		g, TICK, {1: [{"k": "aim", "d": 1}, {"k": "fire"}, {"k": "traverse", "via": "button"}]}
 	)
 	var inp := TankInputs.from_frame(f, g.ctx.players, g.plans, g._collect_intents(f), {}, {})
 	var got: Array = inp.rider(1).intents.map(func(n: Dictionary) -> String: return str(n["k"]))
-	assert_eq(got, ["aim", "fire", "ram"])
-	assert_eq(inp.rider(1).intents[2]["via"], "surge")
+	assert_eq(got, ["aim", "fire", "traverse"])
+	assert_eq(inp.rider(1).intents[2]["via"], "button")
 	assert_eq(inp.rider(1).intents[0]["d"], 1, "normalized ints")
 
 
 # --- The Autopilot fallback ------------------------------------------------------------------------
 
 
-func test_a_human_with_only_surge_ram_keeps_the_rear_traverses() -> void:
+func test_a_human_with_only_junk_or_unowned_intents_keeps_the_rear_traverses() -> void:
 	var g := _game(1, true)
 	_rear_enemy(g)
 	var ram_by_surge := {"k": "ram", "via": "surge"}
 	var got := g._collect_intents(_frame(g, TICK, {1: [ram_by_surge]}))
-	assert_eq(_kinds(got[1]), ["ram", "traverse"], "the Autopilot's traverse follows the ram")
-	assert_true(got[1][1]["auto"], "tagged auto")
-	assert_true(g.state.rider(1).fallback, "a surge-made ram does not end the fallback")
+	assert_eq(_kinds(got[1]), ["traverse"], "v2's junk ram is dropped; the Autopilot traverses")
+	assert_true(got[1][0]["auto"], "tagged auto")
+	assert_true(g.state.rider(1).fallback, "a dropped intent does not end the fallback")
 	var over_and_ram := [{"k": "over", "via": "surge"}, {"k": "ram", "via": "action"}]
 	g._collect_intents(_frame(g, TICK + 1, {1: over_and_ram}))
 	assert_true(
@@ -242,7 +249,7 @@ func test_a_human_with_only_surge_ram_keeps_the_rear_traverses() -> void:
 	)
 
 
-func test_a_human_with_only_surge_ram_keeps_the_obstacle_shots() -> void:
+func test_a_human_with_only_a_junk_intent_keeps_the_obstacle_shots() -> void:
 	var g := _game(1, true)
 	var ob := _wreck(g)
 	g.state.hull.target_id = ob.id
@@ -250,7 +257,7 @@ func test_a_human_with_only_surge_ram_keeps_the_obstacle_shots() -> void:
 	g.state.hull.elev_deg = 4.0
 	g.state.hull.elev_target_deg = 4.0
 	var got := g._collect_intents(_frame(g, TICK, {1: [{"k": "ram", "via": "surge"}]}))
-	assert_eq(_kinds(got[1]), ["ram", "fire"])
+	assert_eq(_kinds(got[1]), ["fire"])
 	assert_true(g.state.rider(1).fallback)
 
 

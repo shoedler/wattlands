@@ -26,8 +26,10 @@ static func track(
 		sg.regroup = false
 		sg.overrun = ph.overran_previous()
 		sg.next_encounter = 0
-		state.hull.distance_m = 0.0
-		state.hull.x_px = 0.0
+		if not state.roam.active:
+			# Free roam keeps one continuous road (TankRoam): the world never resets.
+			state.hull.distance_m = 0.0
+			state.hull.x_px = 0.0
 		var s: Dictionary = state.content.segment(ph.segment) if state.content != null else {}
 		sg.length_m = float(s.get("length_m", 0.0))
 		if sg.overrun:
@@ -60,8 +62,11 @@ static func track(
 
 
 ## The mission's result once the plan's last segment ended: victory when the Behemoth died,
-## withdrawn when a mission with a boss ended without its death, complete without a boss (drill).
+## withdrawn when a mission with a boss ended without its death, complete without a boss (drill),
+## time_up for a free roam (brief 2.10).
 static func _outcome(state: TankState) -> String:
+	if state.roam.active:
+		return TankIds.OUTCOME_TIME_UP
 	if state.score.behemoth_killed:
 		return TankIds.OUTCOME_VICTORY
 	if state.content != null:

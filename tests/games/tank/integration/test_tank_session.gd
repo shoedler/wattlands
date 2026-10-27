@@ -203,3 +203,79 @@ func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_or
 	assert_eq(idx.slice(0, 11), range(11), "the eleven segments, once each, in order")
 	assert_eq((r.get("fit_paths", []) as Array).size(), 1)
 	assert_true(FileAccess.file_exists(str((r["fit_paths"] as Array)[0])), "the ride was written")
+
+
+## Four riders (brief 2.2, 2.5): the Bastion plays the drill as a host with three loopback clients
+## to the results, every peer's last snapshot carries 4 riders and 4 rooms within 4 KB, and the
+## drill stays inside the warm-up limits (no ERG above 65%, nothing refused).
+func test_a_host_drill_with_four_humans_completes_as_the_bastion() -> void:
+	var r := _run(["--content=drill", "--players=4", "--rider=erg", "--seed=4"])
+	assert_eq(r["_end"], "complete")
+	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
+	assert_eq((r.get("fit_paths", []) as Array).size(), 4)
+	assert_eq(int(r.get("oversize_snapshots", -1)), 0)
+	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
+	for d: Dictionary in r.get("directives", []):
+		assert_true(bool(d["accepted"]), "accepted: %s" % JSON.stringify(d))
+	for peer: String in r["trace"]:
+		for row: Dictionary in r["trace"][peer]:
+			if str(row.get("mode", "")) == Wl.ERG:
+				assert_lte(float(row["applied_pct"]), 65.0 + 0.6, "warm-up ERG, peer %s" % peer)
+
+
+## Zero input with four riders: the Bastion plays Ashfall Road to the results (a mission outcome),
+## every WORK phase ending by end_phase or at max_s.
+func test_a_host_bastion_plays_ashfall_road_to_the_results_with_zero_input() -> void:
+	var r := _run(["--content=ashfall_road", "--players=4", "--rider=erg", "--seed=1"])
+	assert_eq(r["_end"], "complete")
+	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
+	assert_eq((r["phases"]["4"] as Array).size(), 12, "11 segments and the cool-down")
+	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
+	var arc := 0
+	for d: Dictionary in r.get("directives", []):
+		if d["kind"] == "request" and str(d["requested"].get("reason", "")) == "arc":
+			arc += 1
+	assert_gt(arc, 0, "the arc generator's load pattern ran")
+
+
+## Brief section 4, S10: a client's own `aim` (a key on the client: the up action) reaches the host
+## over Telemetry.intents, owned by its engine (the drill's dynamo, slot 1), and the host's rules
+## apply it: the elevation target moves and the auto-aim pauses; the deliberate intent ends that
+## rider's Autopilot fallback. Headless sims cannot press keys, so this is the network proof for aim.
+func test_a_clients_aim_intent_is_applied_by_the_host() -> void:
+	var report := _dirs[0].path_join("aim.json")
+	var parsed := GameSimRunner.parse_args(
+		PackedStringArray(
+			[
+				"--game=" + F.GAME_ID,
+				"--report=" + report,
+				"--content=drill",
+				"--players=2",
+				"--rider=erg",
+				"--seed=6"
+			]
+		)
+	)
+	parsed["headless"] = true
+	parsed["registry"] = _registry()
+	var runner := GameSimRunner.new()
+	add_child_autofree(runner)
+	_runners.append(runner)
+	assert_eq(runner.setup(parsed), "")
+	var host_game := runner.host.game as TankGame
+	for _i in 200:
+		runner.step()
+	var dyn := host_game.state.station(TankIds.ENGINE_DYNAMO)
+	assert_eq(dyn.peer, 2, "the client works the dynamo")
+	assert_true(host_game.state.rider(2).fallback, "no deliberate intent yet")
+	var before := host_game.state.hull.elev_target_deg
+	runner.clients[0].inject_action(&"up")
+	var seen := false
+	for _i in 60:
+		runner.step()
+		if host_game.state.hull.aim_pause_s > 0.0:
+			seen = true
+			break
+	assert_true(seen, "the host applied the client's aim intent (auto-aim paused)")
+	assert_ne(host_game.state.hull.elev_target_deg, before, "the elevation target moved")
+	assert_false(host_game.state.rider(2).fallback, "a deliberate intent ends the fallback")

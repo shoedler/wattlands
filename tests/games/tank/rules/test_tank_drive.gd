@@ -1,6 +1,6 @@
 extends GutTest
 ## The tracks (brief 2.4 Drive): the speed model on the driver's P_eff, the world scroll, obstacles,
-## the Ram, evasive, the berm, breakdown and repair.
+## the sprint rule, evasive, the berm, breakdown and repair (v2: no Ram, brief 2.4).
 
 const ADVANCE := 1
 const GUN_LINE := 2
@@ -95,6 +95,7 @@ func test_a_wire_stops_the_tank_at_its_standoff_until_a_heavy_shell_clears_it() 
 		)
 	)
 	rig.no_fire = true
+	rig.no_bow = true
 	rig.enter(ADVANCE, 1.0)
 	var o := rig.state.obstacles[0]
 	var standoff := rig.content.num("tanks", "props.standoff_px")
@@ -123,8 +124,8 @@ func test_three_light_shells_clear_an_obstacle_and_two_do_not() -> void:
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	assert_false(o.cleared)
-	TankShells.damage_obstacle(o, TankIds.SHELL_SECONDARY, rig.content)
-	assert_false(o.cleared, "secondaries do nothing to a barricade")
+	TankShells.damage_obstacle(o, TankIds.SHELL_BOW, rig.content)
+	assert_false(o.cleared, "a bow-gun round clears a barricade by time, not by hits (TankBow)")
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	assert_true(o.cleared)
 	var o2 := TankObstacleState.new()
@@ -194,10 +195,10 @@ func test_evasive_cuts_enemy_hit_chances_by_the_content_factor_while_the_driver_
 	assert_false(rig.hull().evasive, "out of band (50% FTP)")
 
 
-# --- Ram -----------------------------------------------------------------------------------------
+# --- The sprint rule ---------------------------------------------------------------------------
 
 
-func _ram_rig(crew: int = 1) -> TankRulesRig:
+func _sprint_rig(crew: int = 1) -> TankRulesRig:
 	var rig := TankRulesRig.new(
 		crew,
 		"ashfall_road",
@@ -216,206 +217,15 @@ func _sprint(rig: TankRulesRig, seconds: float, mult: float = 1.5) -> void:
 	rig.run(seconds)
 
 
-func test_a_ram_with_the_sprint_held_destroys_a_light_tank_in_reach() -> void:
-	var rig := _ram_rig()
-	var light := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	_sprint(rig, 3.5)
-	assert_true(rig.diesel().sprinting, "1.5 x FTP over 3 s")
-	assert_true(rig.state.enemies.has(light), "no ram intent yet")
-	rig.send(1, {"k": "ram", "via": "surge"})
-	rig.run(0.1)
-	assert_false(rig.state.enemies.has(light), "destroyed")
-	var ram := rig.of_type("ram")
-	assert_eq(ram.size(), 1)
-	assert_eq([ram[0]["ok"], ram[0]["id"], ram[0]["s"]], [1, light.id, 0])
-	var kill := rig.of_type("kill")[0]
-	assert_eq([kill["by"], kill["e"], kill["s"]], [TankEvents.BY_RAM, 1, 0])
-	assert_eq(rig.rider().rams, 1)
-	assert_eq(rig.state.score.kills[1], 1, "a Ram kill counts")
-	assert_eq(rig.state.score.crew_kills, 1)
-	assert_almost_eq(rig.diesel().ram_cd_s, 30.0, 0.2, "30 s cooldown")
-	assert_eq(rig.diesel().ram_s, 0.0)
-	assert_eq(rig.hull().hp, rig.hull().hp_max)
-
-
-func test_a_ram_reaches_120_px_plus_the_lunge_and_no_farther() -> void:
-	var rig := _ram_rig()
-	var far := rig.spawn(TankIds.ENEMY_LIGHT, 1, 200.0)
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(1.0)
-	assert_true(rig.state.enemies.has(far), "200 px is out of reach")
-	assert_eq(rig.of_type("ram").size(), 0)
-	assert_gt(rig.diesel().ram_s, 0.0, "the window is open")
-	far.hold_px = 140.0
-	rig.run(0.2)
-	assert_false(rig.state.enemies.has(far), "within 120 + 24 px")
-
-
-func test_a_ram_window_lasts_10_seconds() -> void:
-	var rig := _ram_rig()
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.1)
-	assert_almost_eq(rig.diesel().ram_s, 10.0 - 0.1, 0.11)
-	rig.run(9.0)
-	assert_gt(rig.diesel().ram_s, 0.0)
-	rig.run(1.2)
-	assert_eq(rig.diesel().ram_s, 0.0, "closed")
-	assert_gt(rig.diesel().ram_cd_s, 25.0, "the cooldown started")
-	assert_eq(rig.of_type("ram").size(), 0, "no target ever came: no penalty")
-	assert_eq(rig.hull().hp, rig.hull().hp_max)
-
-
-func test_a_ram_without_the_sprint_fails_for_10_hp_and_a_5_second_stall() -> void:
-	var rig := _ram_rig()
-	var light := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	rig.send(1, {"k": "ram"})
-	rig.run(10.5)
-	var ram := rig.of_type("ram")
-	assert_eq(ram.size(), 1)
-	assert_eq([ram[0]["ok"], ram[0]["id"]], [0, 0], "a failed Ram emits only ram ok 0")
-	assert_true(rig.state.enemies.has(light), "the light tank lives")
-	assert_eq(rig.of_type("hit").size(), 0, "its 10 HP raise no hit event")
-	assert_lte(rig.hull().hp, rig.hull().hp_max - 10.0)
-	assert_gt(rig.hull().stall_s, 3.0, "5 s stall")
-	var d := rig.hull().distance_m
-	rig.run(2.0)
-	assert_eq(rig.hull().distance_m, d, "the tank is stalled")
-	assert_eq(rig.hull().speed_mps, 0.0)
-	rig.run(4.0)
-	assert_gt(rig.hull().distance_m, d, "rolling again after 5 s")
-
-
-func test_ram_cooldown_blocks_a_second_window() -> void:
-	var rig := _ram_rig()
-	rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.2)
-	rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.5)
-	assert_eq(rig.diesel().ram_s, 0.0, "cooling down")
-	assert_eq(rig.of_type("ram").size(), 1)
-	rig.run(30.0)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.2)
-	assert_eq(rig.of_type("ram").size(), 2, "after 30 s the second one works")
-
-
-func test_a_ram_charges_the_wire_the_tank_stands_off_from() -> void:
-	var rig := TankRulesRig.new(
-		1,
-		"ashfall_road",
-		true,
-		7,
-		_patch(
-			ADVANCE,
-			{"encounters": [], "obstacles": [{"at_m": 300, "type": "wire"}], "terrain": [[0, 0]]}
-		)
-	)
-	rig.no_fire = true
-	rig.enter(ADVANCE, 5.0)
-	rig.run(70.0)
-	var o := rig.state.obstacles[0]
-	assert_eq(rig.hull().blocked_by, o.id)
-	assert_true(rig.diesel().prompt, "Surge to ram")
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram", "via": "surge"})
-	rig.run(0.2)
-	assert_true(o.cleared)
-	assert_eq(rig.of_type("ram")[0]["id"], o.id)
-	rig.run(5.0)
-	assert_gt(rig.hull().speed_mps, 1.0, "rolling on")
-
-
-func test_ram_does_not_reach_a_medium_tank() -> void:
-	var rig := _ram_rig()
-	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 100.0)
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(2.0)
-	assert_true(rig.state.enemies.has(m), "only light tanks and barricades are rammable")
-
-
-func test_the_ram_reaches_a_light_tank_behind_the_tank_too() -> void:
-	var rig := _ram_rig()
-	var light := rig.spawn(TankIds.ENEMY_LIGHT, -1, 100.0)
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.2)
-	assert_false(rig.state.enemies.has(light))
-
-
-func test_ram_is_sim_only_and_does_nothing_in_a_gun_line() -> void:
-	var rig := TankRulesRig.new(1)
-	rig.enter(GUN_LINE, 5.0)
-	rig.state.enemies.clear()
-	_sprint(rig, 3.5)
-	rig.send(1, {"k": "ram"})
-	rig.run(0.5)
-	assert_eq(rig.diesel().ram_s, 0.0, "ERG phase: no window")
-	assert_false(rig.diesel().prompt)
-
-
-func test_ram_does_nothing_in_warmup_phases_or_the_first_300_seconds() -> void:
-	# The depot is WARMUP; the drill's skirmish is WARMUP too.
-	var depot := TankRulesRig.new(1)
-	depot.enter(0, 100.0)
-	depot.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	_sprint(depot, 3.5)
-	depot.send(1, {"k": "ram"})
-	depot.run(0.5)
-	assert_eq(depot.diesel().ram_s, 0.0)
-	assert_false(depot.diesel().prompt)
-	assert_eq(depot.state.enemies.size(), 1)
-	var drill := TankRulesRig.new(1, "drill")
-	drill.enter(1, 20.0)
-	drill.state.enemies.clear()
-	var light := drill.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	_sprint(drill, 3.5)
-	drill.send(1, {"k": "ram"})
-	drill.run(0.5)
-	assert_eq(drill.diesel().ram_s, 0.0)
-	assert_true(drill.state.enemies.has(light))
-	# A WORK SIM phase inside the first 300 s of the plan: same.
-	var early := _ram_rig()
-	early.plan_t = 250.0
-	early.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	_sprint(early, 3.5)
-	early.send(1, {"k": "ram"})
-	early.run(0.5)
-	assert_eq(early.diesel().ram_s, 0.0, "plan_elapsed_s < 300")
-	early.plan_t = 301.0
-	early.send(1, {"k": "ram"})
-	early.run(0.2)
-	assert_gt(early.diesel().ram_s + early.diesel().ram_cd_s, 0.0, "after 300 s it works")
-
-
-func test_ram_prompt_shows_for_a_light_tank_near_and_not_in_cooldown() -> void:
-	var rig := _ram_rig()
-	rig.spawn(TankIds.ENEMY_LIGHT, 1, 250.0)
-	rig.run(0.2)
-	assert_true(rig.diesel().prompt, "a light tank within 300 px")
-	rig.state.enemies.clear()
-	rig.run(0.2)
-	assert_false(rig.diesel().prompt)
-	rig.diesel().ram_cd_s = 10.0
-	rig.spawn(TankIds.ENEMY_LIGHT, 1, 250.0)
-	rig.run(0.2)
-	assert_false(rig.diesel().prompt, "cooling down")
-
-
 func test_the_sprint_rule_is_the_trailing_3_second_average_at_1_2_ftp() -> void:
-	var rig := _ram_rig()
+	var rig := _sprint_rig()
 	_sprint(rig, 2.0, 1.5)
 	assert_false(rig.diesel().sprinting, "not yet: the average over 3 s")
 	rig.run(1.6)
 	assert_true(rig.diesel().sprinting)
 	_sprint(rig, 3.5, 1.15)
 	assert_false(rig.diesel().sprinting, "1.15 x FTP is below 1.2 x")
-	assert_eq(rig.diesel().sprint_s, 0.0)
+	assert_false(rig.rider().sprinting)
 
 
 # --- Dig in -------------------------------------------------------------------------------------
@@ -493,7 +303,7 @@ func test_the_berm_clears_when_the_segment_ends() -> void:
 
 
 func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> void:
-	var rig := _ram_rig()
+	var rig := _sprint_rig()
 	rig.hull().hp = 5.0
 	var events: Array[Dictionary] = []
 	TankHullRules.hit(rig.state, 12.0, TankIds.SHELL_ENEMY, 300.0, events)
@@ -501,7 +311,6 @@ func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> v
 	assert_eq(rig.hull().hp, 0.0)
 	assert_eq(rig.state.score.breakdowns, 1)
 	assert_eq(events.back()["type"], "breakdown")
-	rig.send(1, {"k": "ram"})
 	rig.run(1.0)
 	assert_eq(rig.hull().speed_mps, 0.0, "no movement")
 	events.clear()
@@ -520,7 +329,7 @@ func test_zero_hp_is_a_breakdown_that_ignores_damage_until_5_kj_repair_it() -> v
 
 func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 	for w: float in [417.0, 250.0, 167.0]:
-		var rig := _ram_rig()
+		var rig := _sprint_rig()
 		rig.p_eff[1] = w
 		rig.hull().hp = 1.0
 		var events: Array[Dictionary] = []
@@ -529,17 +338,8 @@ func test_repair_time_is_12_to_30_seconds_across_the_p_eff_range() -> void:
 		assert_almost_eq(t, 5000.0 / w, 0.2, "%d W" % w)
 
 
-func test_a_failed_ram_that_empties_the_hull_is_a_breakdown() -> void:
-	var rig := _ram_rig()
-	rig.hull().hp = 8.0
-	rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)
-	rig.send(1, {"k": "ram"})
-	rig.run(10.5)
-	assert_true(rig.hull().breakdown)
-
-
 func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
-	var rig := _ram_rig(2)
+	var rig := _sprint_rig(2)
 	rig.hull().hp = 1.0
 	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
 	rig.afk[1] = true
@@ -597,7 +397,7 @@ func test_when_every_rider_is_afk_nothing_has_power() -> void:
 	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY, "the loaded shell stays in the breech")
 
 
-func test_when_every_rider_is_afk_the_citadels_secondaries_stay_quiet_too() -> void:
+func test_when_every_rider_is_afk_the_bow_guns_stay_quiet_too() -> void:
 	var rig := TankRulesRig.new(3)
 	rig.enter(ADVANCE, 20.0)
 	var e := rig.spawn(TankIds.ENEMY_LIGHT, 1, 130.0)

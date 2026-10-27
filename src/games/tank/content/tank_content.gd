@@ -12,6 +12,13 @@ extends RefCounted
 ## Load in the module with load_for(ctx) (through ctx.load_content_json, so run_game_sim
 ## --override reaches every file); tests and the rules-level harness use read_files() +
 ## from_dicts(). The mission is content/tank/missions/<content id>.json.
+##
+## Free roam (brief 2.10): a missions/<id>.json with "kind": "roam" and "minutes" holds no segments;
+## from_dicts validates it and expands it (expand_roam) into two segments before anything else reads
+## it: the drive-out (type depot, WARMUP, valley.json drive_out_s = 300 s, no drills, no enemies) and
+## the roam (type roam, WORK, open-ended, min_s = minutes x 60 - drive_out_s, max_s = min_s +
+## overtime_s), plan table stations.json roam_plans, no rotation. The valley (roam/valley.json, file
+## key "valley") is loaded with every content and validated when the content is a roam.
 
 const FILES := {
 	"tanks": "tanks.json",
@@ -19,6 +26,7 @@ const FILES := {
 	"enemies": "enemies.json",
 	"scoring": "scoring.json",
 	"cosmetics": "cosmetics.json",
+	"valley": "roam/valley.json",
 }
 const CONTENT_DIR := "res://content/tank"
 
@@ -62,10 +70,51 @@ static func from_dicts(files: Dictionary, p_mission_id: String) -> TankContent:
 	c.errors.append_array(TankContentSchema.validate_enemies(files.get("enemies")))
 	c.errors.append_array(TankContentSchema.validate_scoring(files.get("scoring")))
 	c.errors.append_array(TankContentSchema.validate_cosmetics(files.get("cosmetics")))
-	c.errors.append_array(TankContentSchema.validate_mission(files.get("mission"), p_mission_id))
+	var m: Variant = files.get("mission")
+	if m is Dictionary and str((m as Dictionary).get("kind", "")) == TankIds.KIND_ROAM:
+		var roam_errors := TankContentSchema.validate_roam(m, p_mission_id)
+		roam_errors.append_array(TankContentSchema.validate_valley(files.get("valley")))
+		c.errors.append_array(roam_errors)
+		if roam_errors.is_empty():
+			c.data["mission"] = expand_roam(m, files.get("valley"))
+	c.errors.append_array(TankContentSchema.validate_mission(c.data.get("mission"), p_mission_id))
 	if c.errors.is_empty():
 		c.errors.append_array(TankContentSchema.validate_cross(c.data))
 	return c
+
+
+## A free-roam file ({id, kind "roam", label, minutes}) as a mission with its two segments (brief
+## 2.10 Effort plan): the drive-out and the open-ended roam phase.
+static func expand_roam(roam: Dictionary, valley: Dictionary) -> Dictionary:
+	var drive_s := float(valley.get("drive_out_s", 300.0))
+	var min_s := float(roam.get("minutes", 30)) * 60.0 - drive_s
+	var out := roam.duplicate(true)
+	out["rotation"] = false
+	out["plan_table"] = "roam_plans"
+	out["segments"] = [
+		{
+			"id": "drive_out",
+			"type": TankIds.SEG_DEPOT,
+			"stage": 0,
+			"kind": Wl.WARMUP,
+			"duration_s": drive_s,
+			"label": "TANK_PHASE_DRIVE_OUT",
+			"name": "TANK_PLACE_VALLEY",
+		},
+		{
+			"id": "roam",
+			"type": TankIds.SEG_ROAM,
+			"stage": 1,
+			"kind": Wl.WORK,
+			"duration_s": min_s,
+			"min_s": min_s,
+			"max_s": min_s + float(valley.get("overtime_s", 300.0)),
+			"label": "TANK_PHASE_ROAM",
+			"name": "TANK_PLACE_VALLEY",
+		},
+	]
+	out["cooldown"] = {}
+	return out
 
 
 static func _read(path: String) -> Variant:
@@ -178,3 +227,19 @@ func scaled_count(count: int, tank: String) -> int:
 
 func unlocks() -> Array:
 	return data["cosmetics"].get("unlocks", [])
+
+
+## True for a free-roam content (brief 2.10).
+func is_roam() -> bool:
+	return str(mission().get("kind", TankIds.KIND_MISSION)) == TankIds.KIND_ROAM
+
+
+## A free roam's length in minutes (0 for a mission).
+func roam_minutes() -> int:
+	return int(mission().get("minutes", 0)) if is_roam() else 0
+
+
+## The valley (roam/valley.json) as validated ({} when missing).
+func valley() -> Dictionary:
+	var v: Variant = data.get("valley", {})
+	return v if v is Dictionary else {}

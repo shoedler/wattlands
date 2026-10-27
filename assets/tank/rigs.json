@@ -1,15 +1,15 @@
 {
-	"_doc": "Cutaway rig anchors and gameplay geometry in art px (G0 estimates on the placeholder geometry; artqa re-measures the values on the pixelated sprites). Frames: every point under tanks.<id> (turret.ring, turret.trunnion, muzzle, secondaries[].muzzle, rooms, wheels) is in the hull frame: relative to the hull sprite's top-left, y down, negative y above the roof; turret.rect is the turret sprite's rect in the hull frame and turret.pivot_in_sprite is inside that sprite. Keys ending in _screen are art px of the 640 x 360 view with the hull's rear at x 16 and its bottom 10 px above the ground line y 296. Gun: the barrel pivots at turret.trunnion; at elevation a (degrees, facing right) the muzzle is trunnion + barrel_px x (cos a, -sin a), so muzzle == trunnion + [barrel_px, 0] at 0 degrees (tested); facing left mirrors x about turret.ring.x. enemies.<sprite>: relative to that sprite's top-left facing left (toward the tank); hitbox [x, y, w, h] is the only hit area where present (enemy_dugin: the turret above the concrete). boss: relative to boss_hull's top-left, facing left; bogies [x, y, w, h] rear to front are the hit boxes of parts 0..2 and turret.rect that of part 3 (TankBossState.part_id). Frozen contract (contracts/README.md 'Geometry'): TankGeometry reads tanks.*.turret.ring, tanks.*.turret.trunnion, tanks.*.turret.barrel_px, tanks.*.muzzle, tanks.citadel.secondaries[].muzzle and .facing, enemies.*.muzzle, enemies.enemy_dugin.hitbox, boss.bogies, boss.turret.rect, boss.turret.muzzle and boss.secondary_muzzle. artqa may change their values, never their names or frames; rules code and tests read them through TankGeometry, never hard-coded.",
+	"_doc": "Cutaway rig anchors and gameplay geometry in art px (G0 estimates on the placeholder geometry; artqa re-measures the values on the pixelated sprites). Frames: every point under tanks.<id> (turret.ring, turret.trunnion, muzzle, secondaries[].muzzle, rooms, wheels) is in the hull frame: relative to the hull sprite's top-left, y down, negative y above the roof; turret.rect is the turret sprite's rect in the hull frame and turret.pivot_in_sprite is inside that sprite. Keys ending in _screen are art px of the 640 x 360 view with the hull's rear at x 16 and its bottom 10 px above the ground line y 296. Gun: the barrel pivots at turret.trunnion; at elevation a (degrees, facing right) the muzzle is trunnion + barrel_px x (cos a, -sin a), so muzzle == trunnion + [barrel_px, 0] at 0 degrees (tested); facing left mirrors x about turret.ring.x. enemies.<sprite>: relative to that sprite's top-left facing left (toward the tank); hitbox [x, y, w, h] is the only hit area where present (enemy_dugin: the turret above the concrete). boss: relative to boss_hull's top-left, facing left; bogies [x, y, w, h] rear to front are the hit boxes of parts 0..2 and turret.rect that of part 3 (TankBossState.part_id). Frozen contract (contracts/README.md 'Geometry'): TankGeometry reads tanks.*.turret.ring, tanks.*.turret.trunnion, tanks.*.turret.barrel_px, tanks.*.muzzle, tanks.citadel.secondaries[].muzzle and .facing, enemies.*.muzzle, enemies.enemy_dugin.hitbox, boss.bogies, boss.turret.rect, boss.turret.muzzle and boss.secondary_muzzle. artqa may change their values, never their names or frames; rules code and tests read them through TankGeometry, never hard-coded. v2 (rules builder, 2026-10-27): the four tanks' hull_px, turret.ring, turret.trunnion, turret.barrel_px, muzzle and bow_guns[] (muzzle, pivot; the bow guns of brief 2.4) re-measured from assets/tank/v2/kit.json anchors (barrel_pivot, muzzle, turret_pivot, bow_gun_*), in rules px: x maps the art hull [x 18, headlight] onto [0, hull_w] like TankView.sx, y = (kit y - (ground_contact_y - 1.5 x 71)) / 1.5, the hull standing on the ground (screen.skirt_gap_px 0); the trunnion keeps its own y and the muzzle sits at trunnion + [barrel_px, 0]. Enemy muzzles are the kit's sprite muzzles / 1.5 (sizes in enemies.json); the dug-in's hit box is its turret above the concrete (estimated on the kit sprite, 73 x 19). The other keys (rooms, wheels, *_screen) are v1 view geometry the v2 view no longer reads. v2 boss (integration polish, 2026-10-27): measured on the kit's Behemoth sprite (assets/tank/v2/enemies/behemoth.png, 583 x 297 art px, facing left) in rules px (art px / 1.5): hull_px its size; turret.rect the turret block on the deck (art x 151-392, y 102-144); turret.muzzle the main gun's left end (art 17, 140, kit.json muzzle); secondary_muzzle the low bow gun (art 12, 192); bogies three 110 x 122 art px boxes centred on kit.json bogies_at (x 0.25 / 0.47 / 0.69, y 0.78 of the sprite), down to the track's ground row 292, so the rules stand the Behemoth on the road where the view draws it. TankView draws its hits at kit.json bogies_at / turret_at, which the boss rects match (tested).",
 	"screen": {
 		"ground_y": 296,
 		"rear_x": 16,
-		"skirt_gap_px": 10
+		"skirt_gap_px": 0
 	},
 	"tanks": {
 		"bulwark": {
 			"hull_px": [
-				192,
-				72
+				220,
+				71
 			],
 			"hull_screen_top_left": [
 				16,
@@ -23,22 +23,22 @@
 					36
 				],
 				"ring": [
-					108,
-					0
+					119.7,
+					0.3
 				],
 				"pivot_in_sprite": [
 					44,
 					32
 				],
 				"trunnion": [
-					152,
-					-18
+					176.9,
+					-6.7
 				],
-				"barrel_px": 40
+				"barrel_px": 57.1
 			},
 			"muzzle": [
-				192,
-				-18
+				234.0,
+				-6.7
 			],
 			"muzzle_screen": [
 				208,
@@ -135,12 +135,34 @@
 						5
 					]
 				}
+			],
+			"bow_guns": [
+				{
+					"muzzle": [
+						194.6,
+						9.7
+					],
+					"pivot": [
+						177.2,
+						9.7
+					]
+				},
+				{
+					"muzzle": [
+						215.7,
+						19.3
+					],
+					"pivot": [
+						199.9,
+						18.7
+					]
+				}
 			]
 		},
 		"rampart": {
 			"hull_px": [
-				240,
-				76
+				251,
+				71
 			],
 			"hull_screen_top_left": [
 				16,
@@ -154,22 +176,22 @@
 					40
 				],
 				"ring": [
-					136,
-					0
+					131.3,
+					0.3
 				],
 				"pivot_in_sprite": [
 					52,
 					36
 				],
 				"trunnion": [
-					188,
-					-20
+					198.5,
+					-8.0
 				],
-				"barrel_px": 44
+				"barrel_px": 67.2
 			},
 			"muzzle": [
-				232,
-				-20
+				265.7,
+				-8.0
 			],
 			"muzzle_screen": [
 				248,
@@ -287,12 +309,34 @@
 			"hoist_breech": [
 				178,
 				7
+			],
+			"bow_guns": [
+				{
+					"muzzle": [
+						225.6,
+						9.7
+					],
+					"pivot": [
+						208.6,
+						9.7
+					]
+				},
+				{
+					"muzzle": [
+						247.0,
+						19.3
+					],
+					"pivot": [
+						230.9,
+						18.7
+					]
+				}
 			]
 		},
 		"citadel": {
 			"hull_px": [
-				288,
-				80
+				296,
+				71
 			],
 			"hull_screen_top_left": [
 				16,
@@ -306,22 +350,22 @@
 					44
 				],
 				"ring": [
-					164,
-					0
+					154.9,
+					0.3
 				],
 				"pivot_in_sprite": [
 					60,
 					40
 				],
 				"trunnion": [
-					224,
-					-22
+					222.4,
+					-8.0
 				],
-				"barrel_px": 48
+				"barrel_px": 67.2
 			},
 			"muzzle": [
-				272,
-				-22
+				289.6,
+				-8.0
 			],
 			"muzzle_screen": [
 				288,
@@ -483,33 +527,242 @@
 					]
 				}
 			],
-			"secondaries": [
+			"bow_guns": [
 				{
-					"id": "fore",
-					"facing": 1,
-					"rect": [
-						236,
-						-18,
-						44,
-						22
-					],
 					"muzzle": [
-						300,
-						-10
+						270.6,
+						9.7
+					],
+					"pivot": [
+						253.5,
+						9.7
 					]
 				},
 				{
-					"id": "aft",
-					"facing": -1,
+					"muzzle": [
+						292.0,
+						19.3
+					],
+					"pivot": [
+						275.9,
+						18.7
+					]
+				}
+			]
+		},
+		"bastion": {
+			"hull_px": [
+				327,
+				71
+			],
+			"hull_screen_top_left": [
+				16,
+				206
+			],
+			"turret": {
+				"rect": [
+					104,
+					-40,
+					120,
+					44
+				],
+				"ring": [
+					180.5,
+					0.3
+				],
+				"pivot_in_sprite": [
+					60,
+					40
+				],
+				"trunnion": [
+					247.6,
+					-8.0
+				],
+				"barrel_px": 67.1
+			},
+			"muzzle": [
+				314.7,
+				-8.0
+			],
+			"muzzle_screen": [
+				288,
+				184
+			],
+			"wheel_line_y": 81,
+			"road_wheel_r": 9,
+			"sprocket_r": 11,
+			"idler_r": 10,
+			"road_wheels_x": [
+				22,
+				46,
+				71,
+				95,
+				120,
+				144,
+				168,
+				193,
+				217,
+				242,
+				266
+			],
+			"drive_sprocket": [
+				10,
+				78
+			],
+			"idler": [
+				278,
+				78
+			],
+			"track_belt": [
+				4,
+				70,
+				280,
+				22
+			],
+			"exhaust": [
+				66,
+				-2
+			],
+			"rooms": [
+				{
+					"engine": "diesel",
 					"rect": [
-						8,
-						-18,
-						44,
+						12,
+						18,
+						96,
+						48
+					],
+					"lamp": [
+						60,
 						22
 					],
+					"diesel_block": [
+						20,
+						30
+					],
+					"flywheel": [
+						86,
+						44
+					],
+					"chain_to": "drive_sprocket"
+				},
+				{
+					"engine": "dynamo",
+					"rect": [
+						112,
+						18,
+						80,
+						48
+					],
+					"lamp": [
+						152,
+						22
+					],
+					"dynamo_housing": [
+						120,
+						34
+					],
+					"armature": [
+						140,
+						49
+					],
+					"capacitor_jars": [
+						[
+							167,
+							44,
+							6,
+							16
+						],
+						[
+							174,
+							44,
+							6,
+							16
+						],
+						[
+							181,
+							44,
+							6,
+							16
+						]
+					],
+					"shaft_to": "turret_ring"
+				},
+				{
+					"engine": "steam",
+					"rect": [
+						196,
+						18,
+						88,
+						48
+					],
+					"lamp": [
+						216,
+						22
+					],
+					"boiler": [
+						200,
+						32
+					],
+					"firebox": [
+						210,
+						50
+					],
+					"gauge": [
+						220,
+						42
+					],
+					"hoist_rail": [
+						[
+							194,
+							62
+						],
+						[
+							194,
+							10
+						]
+					],
+					"shell_rack": [
+						262,
+						21
+					],
+					"hoist_breech": [
+						194,
+						5
+					],
+					"cylinder": [
+						240,
+						50
+					],
+					"engine_flywheel": [
+						270,
+						53
+					],
+					"flyball": [
+						243,
+						34
+					]
+				}
+			],
+			"bow_guns": [
+				{
 					"muzzle": [
-						-12,
-						-10
+						302.0,
+						9.7
+					],
+					"pivot": [
+						284.6,
+						9.7
+					]
+				},
+				{
+					"muzzle": [
+						323.0,
+						19.3
+					],
+					"pivot": [
+						307.0,
+						18.7
 					]
 				}
 			]
@@ -606,85 +859,85 @@
 	"enemies": {
 		"enemy_light": {
 			"muzzle": [
-				52,
-				20
+				2.0,
+				12.7
 			],
 			"track_y": 34
 		},
 		"enemy_medium": {
 			"muzzle": [
-				0,
-				15
+				1.3,
+				17.3
 			],
 			"track_y": 46
 		},
 		"enemy_heavy": {
 			"muzzle": [
-				0,
-				29
+				2.0,
+				34.0
 			],
 			"track_y": 54
 		},
 		"enemy_destroyer": {
 			"muzzle": [
-				0,
-				17
+				2.0,
+				3.3
 			],
 			"track_y": 38
 		},
 		"enemy_dugin": {
 			"muzzle": [
-				23,
-				16
+				4.7,
+				8.7
 			],
 			"hitbox": [
 				8,
 				0,
-				32,
-				14
+				40,
+				11
 			]
 		}
 	},
 	"boss": {
 		"hull_px": [
-			320,
-			100
+			388.7,
+			198
 		],
 		"turret": {
 			"rect": [
-				100,
-				-52,
-				152,
-				56
+				100.7,
+				68,
+				160.7,
+				28
 			],
 			"muzzle": [
-				-60,
-				-30
+				11.3,
+				93.3
 			]
 		},
 		"bogies": [
 			[
-				20,
-				84,
-				64,
-				32
+				60.7,
+				113.3,
+				73.3,
+				81.3
 			],
 			[
-				128,
-				84,
-				64,
-				32
+				146,
+				113.3,
+				73.3,
+				81.3
 			],
 			[
-				236,
-				84,
-				64,
-				32
+				231.3,
+				113.3,
+				73.3,
+				81.3
 			]
 		],
 		"secondary_muzzle": [
-			10,
-			30
+			8,
+			128
 		]
 	}
 }

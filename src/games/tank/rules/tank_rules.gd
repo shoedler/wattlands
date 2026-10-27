@@ -4,12 +4,15 @@ extends RefCounted
 ## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
 ##
 ## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), assign
-## stations and read the riders, count the breech down, spawn the Advance's encounters, drive
-## (TankDrive: speed model, obstacles, Ram, dodge), move the enemies and the Behemoth, rebuild the
-## target list, run the stations (TankStations), the gun (TankGun), the enemies' guns, the shells
-## in flight (TankShells), the repair and the berm (TankHullRules) and the objectives. Events come
-## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
-## (new_state, step, in_band) are the module's contract.
+## stations and read the riders (who can evade, who sprints), count the breech down, spawn the
+## Advance's encounters, drive (TankDrive: speed model, obstacles), move the enemies and the
+## Behemoth (its telegraph and main gun through TankEvade), rebuild the target list, run the
+## stations (TankStations), the main gun (TankGun), the bow guns (TankBow), the enemies' guns
+## (telegraphs through TankEvade), the shells in flight (TankShells), the repair and the berm
+## (TankHullRules) and the objectives. Events come back in that order. Everything is split by
+## topic over rules/ and combat/; the signatures here (new_state, step, in_band) are the module's
+## contract. Free roam (brief 2.10, TankRoam) adds its turn, time up, strongpoints and patrols
+## before the drive, and its points, engagement halt and time-up finish at the end.
 
 
 ## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
@@ -20,7 +23,9 @@ static func new_state(
 	rotation: bool,
 	rng: RandomNumberGenerator
 ) -> TankState:
-	return TankState.create(content, players, mission, rotation, rng)
+	var s := TankState.create(content, players, mission, rotation, rng)
+	TankRoam.prepare(s)
+	return s
 
 
 ## Advances the state by dt (always Wl.SIM_DT); returns the events raised (TankEvents), in order.
@@ -36,19 +41,22 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	_assign_stations(state, inputs, events)
 	_update_riders(state, inputs, dt)
 	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
+	TankRoam.pre(state, inputs, aux, dt, events)
 	TankEncounters.advance(state, aux)
 	TankEncounters.depot_wrecks(state, aux)
-	TankDrive.step(state, inputs, dt, events)
+	TankDrive.step(state, inputs, dt)
 	TankEnemies.move(state, aux, dt)
 	TankBoss.step(state, aux, dt, events)
 	TankTargets.build(state, aux)
 	TankStations.step(state, inputs, dt, events)
 	TankGun.step(state, inputs, dt, events)
+	TankBow.step(state, dt, events)
 	TankEnemies.fire(state, aux, dt, events)
 	TankShells.step(state, aux, dt, events)
 	TankHullRules.repair(state, dt, events)
 	TankHullRules.dig(state, inputs, dt)
 	TankSegments.objectives(state)
+	TankRoam.post(state, aux, events)
 	return events
 
 
@@ -83,6 +91,32 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 	return r.ftp_pct >= float(band[0]) and r.ftp_pct <= float(band[1])
 
 
+## The rider's current effort target in % FTP (TankRiderState.target_pct, v2), the denominator of
+## the HUD's and the view's power ratio: the applied ERG target when the telemetry carries one (the
+## governor's, rescue and the unverified factor included), else the phase's planned ERG target,
+## else in SIM the engine's band centre (brief 2.3 In band): WARMUP-kind phases tanks.json
+## power_ratio.warmup_sim_pct; the steam engine building TankConst.STEAM_BUILD_PCT, loaded or
+## cycling power_ratio.steam_loaded_pct; the diesel, the Bulwark and the rest the middle of
+## in_band.sim_ftp_pct (90.5). 0 when the rider has no phase (neither mode known).
+static func target_pct(state: TankState, r: TankRiderInput, station: TankStationState) -> float:
+	if r.mode == Wl.ERG and r.applied_target_w > 0.0:
+		return r.applied_pct()
+	if r.phase_mode == Wl.ERG and r.planned_pct > 0.0:
+		return r.planned_pct
+	if r.phase_mode != Wl.SIM and r.mode != Wl.SIM:
+		return 0.0
+	var c := state.content
+	if r.in_warmup():
+		return c.num("tanks", "power_ratio.warmup_sim_pct", 60.0) if c != null else 60.0
+	if station is TankSteamState:
+		var steam := station as TankSteamState
+		if steam.loaded or steam.cycling:
+			return c.num("tanks", "power_ratio.steam_loaded_pct", 60.0) if c != null else 60.0
+		return TankConst.STEAM_BUILD_PCT
+	var band: Array = c.value("tanks", "in_band.sim_ftp_pct", [76, 105]) if c != null else [76, 105]
+	return (float(band[0]) + float(band[1])) / 2.0
+
+
 ## Rooms follow each rider's plan meta (rotation is in the plans); a rotation event when they move.
 static func _assign_stations(
 	state: TankState, inputs: TankInputs, events: Array[Dictionary]
@@ -93,7 +127,7 @@ static func _assign_stations(
 		if r == null or ri.engine == "" or ri.engine == r.engine:
 			continue
 		r.engine = ri.engine
-		r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0)).reset()
+		r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0)).reset()
 		moved = true
 	if not moved:
 		return
@@ -126,12 +160,15 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 		r.raw_w = ri.power_w
 		r.cadence_rpm = ri.cadence_rpm
 		r.ftp_pct = ri.ftp_pct
+		r.target_pct = target_pct(state, ri, st)
 		r.rescue = ri.rescue
 		r.afk = ri.afk
 		r.connected = ri.connected
 		r.in_band = in_band(state, ri, st)
-		var rule := r.sprint_rule(state.content.num("tanks", "ram.sprint_window_s", 3.0))
+		var rule := r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0))
 		rule.update(state.t, ri.power_w)
+		r.sprinting = rule.holds()
+		r.can_evade = TankEvade.can_evade(state, ri)
 		if not r.is_bot and not r.autopilot:
 			for n in ri.intents:
 				if TankIntents.is_deliberate(n):

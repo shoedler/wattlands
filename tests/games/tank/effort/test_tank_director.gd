@@ -602,9 +602,9 @@ func test_every_non_light_gun_reaches_the_hit_haptic_threshold() -> void:
 	assert_gt(main, min_damage, "the main gun has boss_hit anyway")
 
 
-## A Behemoth main-gun hit is boss_hit {3.0, 2.0 s}, never also the hit haptic; a Ram impact is the
-## driver's {3.0, 1.0 s} ahead of both.
-func test_boss_hit_and_ram_haptics() -> void:
+## A Behemoth main-gun hit is boss_hit {3.0, 2.0 s}, never also the hit haptic; an evaded shot
+## (v2 removed the Ram and its haptic) sends nothing.
+func test_boss_hit_haptics_and_nothing_for_an_evade() -> void:
 	var h := _h()
 	h.run_s(BOSS, 1.0)
 	h.clear()
@@ -617,10 +617,11 @@ func test_boss_hit_and_ram_haptics() -> void:
 	var r := _h()
 	r.run_s(ADV1, 1.0)
 	r.clear()
-	r.step(ADV1, _ev([TankEvents.ram(0, false, 0), _hit(10.0)]))
+	r.step(ADV1, _ev([TankEvents.evade(9, 3, true, 0)]))
+	assert_eq(_haptics(r), [], "an evaded shot is a miss: no haptic")
+	r.step(ADV1, _ev([TankEvents.evade(9, 3, false), _hit(10.0)]))
 	t = r.tick - 1
-	_assert_rows(r.sent(1, "ram"), [[t, _haptic_dict(3.0, 1.0, "ram")]], "the driver")
-	assert_eq(r.sent(1, "hit"), [], "one haptic per receiver per tick")
+	_assert_rows(r.sent(1, "hit"), [[t, _haptic_dict(2.0, 1.5, "hit")]], "the driver")
 	_assert_rows(r.sent(3, "hit"), [[t, _haptic_dict(2.0, 1.5, "hit")]], "the crew")
 
 
@@ -645,7 +646,7 @@ func test_haptic_spacing_of_15_s() -> void:
 ## Never in WARMUP kinds, the first 300 s, the cool-down, to an ERG rider, an opted-out rider or
 ## one on reserve.
 func test_haptic_gates() -> void:
-	var events := _ev([_hit(20.0), TankEvents.ram(0, true, 5)])
+	var events := _ev([_hit(20.0), TankEvents.evade(5, 3, true, 0)])
 	var h := _h()
 	h.plan_start_s = 400.0
 	h.run_s(DEPOT, 1.0)
@@ -663,7 +664,7 @@ func test_haptic_gates() -> void:
 	w2.step(ADV1, events)  # plan_elapsed 299.95
 	assert_eq(_haptics(w2), [], "before 300 s")
 	w2.step(ADV1, events)  # plan_elapsed 300.0
-	assert_eq(_haptics(w2).size(), 2, "from 300 s on: the driver's ram, the loader's hit")
+	assert_eq(_haptics(w2).size(), 2, "from 300 s on: the hit for the driver and the loader")
 	var b := _h(1)
 	b.run_s(GUN1, 1.0)
 	b.step(GUN1, events)
@@ -769,7 +770,7 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 	_steam(h).loaded = true
 	h.state.seg.objective_done = true
 	for i in 400:
-		h.step(COOLDOWN, _ev([_hit(30.0), _boss_hit(), TankEvents.ram(0, true, 3)]))
+		h.step(COOLDOWN, _ev([_hit(30.0), _boss_hit(), TankEvents.evade(3, 3, true, 0)]))
 	assert_eq([h.requests.size(), h.grades.size(), h.bands.size(), h.ended.size()], counts)
 	assert_eq(h.hud().power_band_at.size(), pb)
 	var b := _h(1)
@@ -784,13 +785,14 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 
 
 ## Every crew x rotation x content through every phase with every pattern busy (a draining and
-## refilling bank, full pressure with latches, the lever on Hoist, rolling terrain, hits, boss hits
-## and Rams every few seconds): every request matches its pattern, nothing SIM-only reaches an ERG
-## phase, every ERG target is 50-100% inside the phase's range, haptics only past 300 s in WORK SIM
-## phases and >= 15 s apart, terrain only in grade_source "game" phases.
+## refilling bank, an arc load swinging between 0 and 1, full pressure with latches, the lever on
+## Hoist, rolling terrain, hits and boss hits every few seconds): every request matches its
+## pattern, nothing SIM-only reaches an ERG phase, every ERG target is 50-100% inside the phase's
+## range, haptics only past 300 s in WORK SIM phases and >= 15 s apart, terrain only in
+## grade_source "game" phases.
 func test_every_directive_in_every_phase_matches_its_pattern() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
-		for crew in [1, 2, 3]:
+		for crew in [1, 2, 3, 4]:
 			for rotation in [true, false]:
 				var h := _h(crew, mission, rotation)
 				_sweep(h)
@@ -807,6 +809,9 @@ func _sweep(h: H) -> void:
 			var dyn := _dyn(h)
 			if dyn != null:
 				dyn.bank = 0.0 if fmod(t, 30.0) < 15.0 else 100.0
+			var arc := h.state.station(TankIds.ENGINE_ARC) as TankArcState
+			if arc != null:
+				arc.duty = 1.0 if fmod(t, 30.0) < 15.0 else 0.0
 			var steam := _steam(h)
 			if steam != null:
 				steam.pressure_pct = minf(t * 6.0, 150.0)
@@ -816,14 +821,14 @@ func _sweep(h: H) -> void:
 				_lever(h, TankIds.LEVER_HOIST if fmod(t, 14.0) < 10.0 else TankIds.LEVER_DRIVE)
 			h.state.hull.distance_m = t * 8.0
 			var ev: Array[Dictionary] = []
-			# A hit at 0 s, a boss hit at 17 s and a Ram at 34 s: each lands just past the 15 s
-			# spacing of the one before; the hits every 5 s in between are dropped.
+			# A hit at 0 s, a boss hit at 17 s and an evaded shot at 34 s: each haptic lands just
+			# past the 15 s spacing of the one before; the hits every 5 s in between are dropped.
 			if i == 0 or i % 100 == 50:
 				ev.append(_hit(9.0))
 			if i == 340:
 				ev.append(_boss_hit())
 			if i == 680:
-				ev.append(TankEvents.ram(0, true, 4))
+				ev.append(TankEvents.evade(4, 3, true, 0))
 			h.step(index, ev)
 
 
@@ -834,7 +839,7 @@ func _check_sweep(h: H, at: String) -> void:
 		"hoist": ["mode", "mode_grade", "duration_s", "reason", "source"],
 		"hit": ["mode", "haptic", "duration_s", "reason", "source"],
 		"boss_hit": ["mode", "haptic", "duration_s", "reason", "source"],
-		"ram": ["mode", "haptic", "duration_s", "reason", "source"],
+		"arc": ["mode", "target_pct", "duration_s", "reason", "source"],
 	}
 	var haptic_end := {}
 	var reasons := {}
@@ -860,12 +865,16 @@ func _check_sweep(h: H, at: String) -> void:
 		assert_eq(got_keys, want_keys, where)
 		if d.has("mode_grade") or d.has("haptic"):
 			assert_eq(ph.mode, Wl.SIM, where + ": SIM-only directive in an ERG phase")
-		if reason != "bank":
-			assert_eq(str(d["mode"]), Wl.SIM, where + ": mode ERG belongs to the bank only")
+		if reason != "bank" and reason != "arc":
+			assert_eq(str(d["mode"]), Wl.SIM, where + ": mode ERG belongs to the bank and arc only")
 		if d.has("target_pct"):
-			assert_eq(str(d["mode"]), Wl.ERG, where + ": the bank says mode ERG (brief 2.3)")
+			assert_eq(str(d["mode"]), Wl.ERG, where + ": bank and arc say mode ERG (brief 2.3)")
 			assert_eq(ph.mode, Wl.ERG, where)
-			assert_true(TankDirector.bank_phase(str(ph.meta["engine"]), ph), where)
+			var engine := str(ph.meta["engine"])
+			if reason == "bank":
+				assert_true(TankDirector.bank_phase(engine, ph), where)
+			else:
+				assert_true(TankDirector.arc_phase(engine, ph), where)
 			var r2 := ph.effective_range()
 			assert_between(float(d["target_pct"]), float(r2[0]), float(r2[1]), where)
 			assert_between(float(d["target_pct"]), 50.0, 100.0, where)
@@ -900,13 +909,16 @@ func _check_sweep(h: H, at: String) -> void:
 		assert_lt(int(b[4]), h.plan(int(b[1])).size(), at + ": no band in the cool-down")
 		assert_has([[60.0, 120.0], [50.0, 120.0]], [b[2], b[3]], at)
 	if str(h.ctx.content_id) == "ashfall_road":
-		for reason: String in ["boiler", "hit", "boss_hit", "ram"]:
-			if reason != "boiler" or h.ctx.players.size() == 3:
+		for reason: String in ["boiler", "hit", "boss_hit"]:
+			if reason != "boiler" or h.ctx.players.size() >= 3:
 				assert_true(reasons.has(reason), "%s: the sweep exercised %s" % [at, reason])
 		if h.ctx.players.size() == 1:
 			assert_true(reasons.has("hoist"), at + ": hoist exercised")
 		else:
 			assert_true(reasons.has("bank"), at + ": bank exercised")
+		if h.ctx.players.size() == 4:
+			assert_true(reasons.has("arc"), at + ": arc exercised")
+		assert_false(reasons.has("ram"), at + ": v2 has no Ram haptic")
 
 
 ## A sink that refuses requests with one reason (for the accepted-only bookkeeping).

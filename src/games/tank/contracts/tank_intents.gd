@@ -13,21 +13,25 @@ extends RefCounted
 ##   {"k": "traverse", "via"?}                  flip the turret's facing
 ##   {"k": "fire", "via"?}                      fire the loaded shell
 ##   {"k": "latch", "via"?}                     latch a light shell at >= 40% (steam, Bulwark hoist)
-##   {"k": "ram", "via"?}                       open a Ram window (diesel, Bulwark); the boss dodge
 ##   {"k": "over", "via"?}                      Overpressure inside the window (steam)
+##   {"k": "turn", "via"?}                      free roam: turn the tank round (diesel, Bulwark)
+##   (v2: the Ram and its "ram" intent are gone, brief 2.4; "Surge to evade" has no intent: the
+##   legs are the input. The diesel owns only `turn`, which the rules refuse outside free roam.)
 ##   "via": "action" (default) | "surge" | "button" | "auto"; "auto": 1 marks Autopilot output.
 ## Normalized form (what TankRiderInput.intents holds):
 ##   {"k": String, "to": int (lever: TankIds.LEVER_* or -1), "d": int (lever step, aim or target
 ##    direction; 0 when unused), "auto": bool, "via": String}
 ## `auto` is true for "auto": 1 (any non-zero number or true) or "via": "auto". Auto intents and
-## ram / over never end a human's Autopilot fallback (TankIds.DELIBERATE_KINDS); local_intents
-## turns a surge only into ram or over, never fire or latch (brief 2.5).
+## over never end a human's Autopilot fallback (TankIds.DELIBERATE_KINDS); local_intents turns a
+## surge only into over, never fire or latch (brief 2.5).
 
 const MAX_KEYS := 6
 ## Which engine may send which intent (brief 2.2 and 2.6): the gunner is the dynamo (Rampart,
-## Citadel); the loader is the steam engine (Citadel); the Bulwark does everything.
+## Citadel, Bastion); the loader is the steam engine (Citadel, Bastion); the Bulwark does
+## everything; the driver (the diesel or the Bulwark) owns the free-roam `turn` (brief 2.10); the arc
+## generator owns none (its bow guns need none).
 const OWNERS := {
-	TankIds.ENGINE_DIESEL: [TankIds.INTENT_RAM],
+	TankIds.ENGINE_DIESEL: [TankIds.INTENT_TURN],
 	TankIds.ENGINE_DYNAMO:
 	[TankIds.INTENT_AIM, TankIds.INTENT_TARGET, TankIds.INTENT_TRAVERSE, TankIds.INTENT_FIRE],
 	TankIds.ENGINE_STEAM: [TankIds.INTENT_LATCH, TankIds.INTENT_OVER],
@@ -39,8 +43,9 @@ const OWNERS := {
 		TankIds.INTENT_TRAVERSE,
 		TankIds.INTENT_FIRE,
 		TankIds.INTENT_LATCH,
-		TankIds.INTENT_RAM
+		TankIds.INTENT_TURN
 	],
+	TankIds.ENGINE_ARC: [],
 }
 const LEVER_WORDS := {
 	"drive": TankIds.LEVER_DRIVE, "turret": TankIds.LEVER_TURRET, "hoist": TankIds.LEVER_HOIST

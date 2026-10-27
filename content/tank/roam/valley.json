@@ -1,0 +1,49 @@
+{
+	"_doc": "The free-roam valley (brief 2.10). Owner: roam. Schema: TankContentSchema.validate_valley. TankRoamMap builds the map from a seed (ctx.rng on the host, carried in the snapshot): length_m drawn in [lo, hi] (game metres); first_zone and last_zone at the two ends, the middle zones once each in a seeded order, with forest between two of them at forest_between odds; zone lengths drawn from len_m and scaled to fill the road. Terrain: points terrain_step_m apart, each drawn from its zone's terrain_pct, moving at most terrain_max_step_pct from the last, flat over end_flat_m at both ends; grades are for travel east and negated westward, always clamped to terrain_pct (-3..+5%, inside BRIEF 4.6.6's -3..+6%). start_m: where the hull's centre starts (the west end, facing east); end_m: the turning places, where the road stops for the hull's centre. drive_out_s: the WARMUP drive-out (>= 300 s, BRIEF 4.6.8); overtime_s: how long a fight in progress may run past time up (max_s = min_s + overtime_s). Strongpoints: one dug-in tank per listed zone at a seeded spot (at least min_gap_m apart, clear_ends_m from either end), back respawn_s after it falls; one stands on the field only while its spot is near the screen, never in the drive-out or after time up; the tank halts to engage one ahead within engage_px (rules px from the hull's front to its near edge) and any heavy tank within engage_heavy_px. Patrols: one every every_s seconds of WORK time (drawn), ahead of the tank at ahead_share odds else behind (always behind with less than clear_ahead_m of road ahead), a kind drawn by weight (heavy only past heavy_after_s of WORK time and with no heavy alive), counts drawn from each unit's [lo, hi] and scaled like mission counts (tanks.json enemy_scale), trimmed to max_alive enemies on the field (none fit: retry_s later); none after time up. fight_px: an enemy this near (rules px from the hull's nearer end) is a fight in progress at time up. Turn: an 8 s stop with the flip at its midpoint, a 30 s cooldown, the Autopilot turning autopilot_wait_s after reaching an end, and the crew turning on its own after forced_wait_s when a hand-playing driver does not. Points per kill by enemy type, per evaded shot, per breakdown and per full kilometre driven in the roam phase. Grades: points per minute of WORK time; the brief's starting cut-offs (S >= 9, A >= 7, B >= 5, C >= 3) x 2.5, keeping their ratios (P5 tuning, docs/decisions/tank.md: every patrol of a compliant crew dies, about 16-25 points a WORK minute for crews 1-4 on roam_30, so the brief's cut-offs gave every compliant crew S; with these a compliant crew of 3 earns A (17.8-20.1 over seeds 1-3), crews 1, 2 and 4 B to A (one S at 24.8), 85% compliance A or B, 70% B to D).",
+	"length_m": [5800, 6200],
+	"start_m": 160,
+	"end_m": 60,
+	"drive_out_s": 300,
+	"overtime_s": 300,
+	"zones": {
+		"forest": {"label": "TANK_ZONE_FOREST", "len_m": [600, 1000], "terrain_pct": [-2, 3]},
+		"lake": {"label": "TANK_ZONE_LAKE", "len_m": [700, 1100], "terrain_pct": [-1, 1]},
+		"village": {"label": "TANK_ZONE_VILLAGE", "len_m": [500, 800], "terrain_pct": [-1, 2]},
+		"quarry": {"label": "TANK_ZONE_QUARRY", "len_m": [600, 900], "terrain_pct": [-3, 5]},
+		"meadow": {"label": "TANK_ZONE_MEADOW", "len_m": [700, 1100], "terrain_pct": [-2, 2]}
+	},
+	"first_zone": "forest",
+	"last_zone": "forest",
+	"middle": ["lake", "village", "quarry", "meadow"],
+	"forest_between": 0.5,
+	"terrain_step_m": [150, 260],
+	"terrain_max_step_pct": 2.5,
+	"terrain_pct": [-3, 5],
+	"end_flat_m": 200,
+	"strongpoints": {
+		"zones": ["village", "quarry", "forest"],
+		"min_gap_m": 900,
+		"clear_ends_m": 700,
+		"respawn_s": 600,
+		"engage_px": 180
+	},
+	"patrols": {
+		"every_s": [50, 110],
+		"ahead_share": 0.75,
+		"max_alive": 6,
+		"heavy_after_s": 600,
+		"retry_s": 10,
+		"clear_ahead_m": 150,
+		"kinds": [
+			{"id": "lights", "weight": 45, "units": [{"enemy": "light", "count": [1, 2]}]},
+			{"id": "medium", "weight": 30, "units": [{"enemy": "medium", "count": [1, 1]}, {"enemy": "light", "count": [0, 1]}]},
+			{"id": "destroyer", "weight": 15, "units": [{"enemy": "destroyer", "count": [1, 1]}]},
+			{"id": "heavy", "weight": 10, "units": [{"enemy": "heavy", "count": [1, 1]}]}
+		]
+	},
+	"engage_heavy_px": 400,
+	"fight_px": 400,
+	"turn": {"stop_s": 8, "cooldown_s": 30, "autopilot_wait_s": 3, "forced_wait_s": 12},
+	"points": {"light": 10, "medium": 25, "destroyer": 30, "dugin": 20, "heavy": 60, "evade": 5, "breakdown": -40, "per_km": 2},
+	"grades": {"S": 22.5, "A": 17.5, "B": 12.5, "C": 7.5}
+}

@@ -64,7 +64,8 @@ func test_manifest_has_every_required_field_and_matches_its_folder() -> void:
 		assert_true(m.has(k), "game.json has %s" % k)
 	assert_eq(m["id"], F.GAME_DIR.get_file(), "id is the folder name")
 	assert_eq(m["presentation"], "2d")
-	assert_eq(m["pixel_base"], [640.0, 360.0])
+	assert_eq(m["pixel_base"], [960.0, 540.0], "v2: the reference at 960 x 540 (brief 0.2)")
+	assert_eq(m["pixel_flex"], {"min": [852.0, 480.0]})
 	assert_between(int(m["min_players"]), 1, int(m["max_players"]))
 	assert_lte(int(m["max_players"]), Wl.MAX_SLOTS)
 	assert_typeof(m["bots"], TYPE_BOOL)
@@ -84,9 +85,25 @@ func test_entry_is_an_instantiable_game_module() -> void:
 func test_game_json_is_exactly_the_brief() -> void:
 	var m := F.manifest()
 	assert_eq(m["title"], "Diesel Domestiques")
-	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 3])
+	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 4])
+	assert_eq(m["version"], "0.2.0")
 	assert_false(m["bots"], "no bots (brief 0.3)")
-	assert_eq(m["contents"], ["ashfall_road", "drill"])
+	assert_eq(
+		m["contents"],
+		["ashfall_road", "roam_30", "roam_10", "roam_20", "roam_45", "roam_60", "drill"],
+		"brief 2.2's order"
+	)
+	var cards: Dictionary = m.get("content_cards", {})
+	assert_eq(cards.keys().size(), 7, "a card per content")
+	assert_true(bool(cards["ashfall_road"]["featured"]))
+	assert_true(bool(cards["roam_30"]["featured"]), "Free Roam 30 min is featured")
+	for id: String in ["roam_10", "roam_20", "roam_45", "roam_60", "drill"]:
+		assert_false(bool(cards[id].get("featured", false)), id)
+	for id2: String in ["roam_10", "roam_20", "roam_30", "roam_45", "roam_60"]:
+		assert_eq(cards[id2]["image"], "res://assets/tank/v2/card_roam.png", id2)
+		assert_eq(cards[id2]["detail"], "TANK_CARD_ROAM", id2)
+	for c: String in cards:
+		assert_true(ResourceLoader.exists(str(cards[c]["image"])), "%s card image exists" % c)
 	assert_eq(
 		[m["default_content"], m["e2e_content"], m["zero_input_content"]],
 		["ashfall_road", "drill", "ashfall_road"]
@@ -96,7 +113,11 @@ func test_game_json_is_exactly_the_brief() -> void:
 		m["options"],
 		[{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
 	)
-	assert_false(m.has("player_options"))
+	# v2 (brief 3.1): one per-rider option, the miniature (per-frame depth of field) toggle.
+	assert_eq(
+		m.get("player_options", []),
+		[{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}]
+	)
 	# G2 adds the picker card once its PNG exists, and only then.
 	var picker := str(m.get("picker_image", ""))
 	if picker != "":
@@ -199,23 +220,6 @@ func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 		var hit := re.search(FileAccess.get_file_as_string(path))
 		assert_null(hit, "%s: %s" % [path, hit.get_string() if hit != null else ""])
 	assert_gte(scanned, 20, "the contracts, rules, effort, combat, net, autopilot and the module")
-
-
-func test_art_json_keeps_61_sprites_32_colours_and_the_no_people_no_text_clause() -> void:
-	var art: Dictionary = JSON.parse_string(
-		FileAccess.get_file_as_string("res://assets/tank/art.json")
-	)
-	assert_lte((art["palette"] as Array).size(), 32)
-	assert_eq((art["sprites"] as Array).size(), 61)
-	var style := str(art["style"])
-	for clause: String in [
-		"No people, figures or faces", "no text, letters, numbers, flags, insignia"
-	]:
-		assert_string_contains(style, clause)
-	for id: String in TankPlaceholderArt.ids():
-		var img := TankPlaceholderArt.placeholder_image(id)
-		assert_eq(Vector2i(img.get_width(), img.get_height()), TankPlaceholderArt.size_of(id), id)
-		assert_not_null(TankPlaceholderArt.texture(id), id)
 
 
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:

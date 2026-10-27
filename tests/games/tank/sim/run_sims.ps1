@@ -1,5 +1,5 @@
 # tests/games/tank/sim/run_sims.ps1: the PowerShell twin of run_sims.sh (Windows PowerShell 5.1). Same
-# scenarios (s1-s7, s9 and s10), same report names in build/tank/sims, same checker.
+# scenarios (s1-s7, s9 to s12), same report names in build/tank/sims, same checker.
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File tests/games/tank/sim/run_sims.ps1 [s1 s2 ...]
 #
@@ -22,6 +22,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $Erg = 'erg:compliance=1.0'
 $DynamoDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 $Sprinter = 'intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
+$S9Sprinter = 'intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
 $Stop = 'erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 $GunlineDrop = 'erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
 
@@ -39,7 +40,7 @@ function Invoke-S1Run([string]$Crew, [string]$Seed) {
     Invoke-Sim "s1_c${Crew}_seed${Seed}" @('--content=ashfall_road', "--players=$Crew", '--bots=0', "--rider=$Erg", "--seed=$Seed")
 }
 
-function Invoke-S1 { foreach ($c in 1, 2, 3) { foreach ($s in $seeds) { Invoke-S1Run $c $s } } }
+function Invoke-S1 { foreach ($c in 1, 2, 3, 4) { foreach ($s in $seeds) { Invoke-S1Run $c $s } } }
 function Invoke-S2 {
     Invoke-Sim 's2_c3_zero' @('--content=ashfall_road', '--players=3', '--bots=0', '--rider=zero', '--seed=1')
     Invoke-Sim 's2_c1_zero' @('--content=ashfall_road', '--players=1', '--bots=0', '--rider=zero', '--seed=1')
@@ -52,10 +53,10 @@ function Invoke-S3 {
     }
 }
 function Invoke-S4 {
-    foreach ($c in 1, 2, 3) {
+    foreach ($c in 1, 2, 3, 4) {
         Invoke-Sim "s4_drill_c$c" @('--content=drill', "--players=$c", '--bots=0', "--rider=$Erg", '--seed=1')
     }
-    foreach ($s in $seeds) { foreach ($c in 1, 2, 3) { if (-not (Test-Have "s1_c${c}_seed$s")) { Invoke-S1Run "$c" $s } } }
+    foreach ($s in $seeds) { foreach ($c in 1, 2, 3, 4) { if (-not (Test-Have "s1_c${c}_seed$s")) { Invoke-S1Run "$c" $s } } }
 }
 function Invoke-S5 {
     Invoke-Sim 's5_c3_dynamo_drop' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", "--rider=$DynamoDrop", "--rider=$Erg", '--seed=1')
@@ -70,7 +71,7 @@ function Invoke-S7 {
 }
 
 function Invoke-S9 {
-    Invoke-Sim 's9_c1_sprint' @('--content=ashfall_road', '--players=1', '--bots=0', "--rider=$Sprinter", '--seed=1')
+    Invoke-Sim 's9_c1_sprint' @('--content=ashfall_road', '--players=1', '--bots=0', "--rider=$S9Sprinter", '--seed=1')
 }
 
 function Invoke-S10 {
@@ -78,7 +79,17 @@ function Invoke-S10 {
     Invoke-Sim 's10_c3_dynamo_stop' @('--content=ashfall_road', '--players=3', '--bots=0', "--rider=$Erg", "--rider=$Stop", "--rider=$Erg", '--seed=1')
 }
 
-$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10')
+function Invoke-S11 {
+    Invoke-Sim 's11_roam10_c1' @('--content=roam_10', '--players=1', '--bots=0', "--rider=$Erg", '--seed=1')
+    Invoke-Sim 's11_roam10_c4' @('--content=roam_10', '--players=4', '--bots=0', "--rider=$Erg", '--seed=1')
+    Invoke-Sim 's11_roam30_c3' @('--content=roam_30', '--players=3', '--bots=0', "--rider=$Erg", '--seed=1')
+}
+
+function Invoke-S12 {
+    Invoke-Sim 's12_roam10_c3_zero' @('--content=roam_10', '--players=3', '--bots=0', '--rider=zero', '--seed=1', '--max-sim-seconds=300')
+}
+
+$order = @('s1', 's2', 's3', 's4', 's5', 's6', 's7', 's9', 's10', 's11', 's12')
 $wanted = if ($Scenarios -and $Scenarios.Count -gt 0) { $Scenarios } elseif ($env:TANK_SIMS) { $env:TANK_SIMS -split '[,\s]+' } else { $order }
 foreach ($sc in $wanted) {
     if ($order -notcontains $sc) { Write-Error "run_sims: unknown scenario $sc (one of: $($order -join ' '))"; exit 2 }

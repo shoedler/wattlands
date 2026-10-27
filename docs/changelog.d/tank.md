@@ -1,5 +1,23 @@
 # Changelog: tank
 
+### Changed (Diesel Domestiques) v0.2.0
+
+- Up to four riders. Four riders crew the Bastion: the Citadel plus an arc-generator room and a searchlight tower. The arc generator rider rides ERG at 65-80% FTP; the target rises with how often the bow guns fire. In band, the searchlights are lit and the main gun shoots straighter. A cadence collapse stalls the arc generator. With rotation on, every rider works every engine once.
+- A new look built from Simon's reference image: a starry forest night at 960 x 540 art px, with a strong tilt-shift. Each plane is blurred once, and a light per-frame depth of field can be turned off with the rider's "miniature" option; it also switches itself off on slow machines. The tank is cut from the reference into four variants with x-ray engine rooms. The machines run on their riders' cadence and watts and show under, in and over band. Drawn crewmen work the diesel, shovel coal, carry shells, man the breech, the panels and the turret roof. Enemies and the Behemoth are new procedural sprites in the same style.
+- The game draws its own HUD instead of the kit widgets:
+  - your watts and cadence against their bands, with one instruction line;
+  - a crew row with a live engine window per rider;
+  - a mission plate, a hull plate and the Behemoth's bars;
+  - tags in the world: SURGE TO EVADE with countdown pips, the speed tag, the halt line's distance plate and the gun's elevation arc.
+  - It uses its own stencil fonts and an F1 help overlay.
+- Surge to evade replaces the Ram. Some shots are telegraphed: a tank destroyer's glint (4 s), a heavy tank's muzzle glow (3 s), a light tank's flank shot (2.5 s) and the Behemoth's main gun (6 s). Hold a sprint (1.2 x FTP over 3 s) for 2 s inside the telegraph (3 s for the Behemoth) and the shot misses. The tank lurches when the diesel or the Bulwark evades; the boiler blows a smoke screen when the steam engine does. There is no button: pedaling is the input, so the Autopilot never evades.
+- Every tank has two bow guns in its nose. They fire automatically at the nearest enemy 40-220 px ahead, powered by the arc generator, the dynamo's bank or the Bulwark's gearbox. They also clear wire and wrecks. The main gun now depresses to -12 degrees, so close targets can be hit.
+- Enemies hold their own depth lanes, so no two overlap at a gun line, and the view draws them in the lanes the rules use. Wire and wrecks block the road until they are shot clear.
+- Rebalanced on the simulation matrix for crews 1 to 4: gun-line make-up, enemy HP and guns, and the energy of the steam engine, the gearbox and the Rampart's hoist. A crew of 1 to 4 riders who hold their targets wins Ashfall Road on the Autopilot, every phase inside its target time.
+- New sounds, all synthesized: the arc's crackle, the bow guns' rattle and crickets in the night.
+- Free Roam (`roam_10`, `roam_20`, `roam_30`, `roam_45`, `roam_60`): a 5-minute drive-out, then one engine per rider for the whole session on a seeded 6 km valley of pine forest, lake shore, village, quarry and meadow, driven back and forth (the driver turns the tank around; it turns on its own at a road's end). Random patrols and dug-in strongpoints, crew points per kill and kilometre, time up with up to 5 minutes for a fight in progress, grades by points per minute. A map strip and a time, points and kills board replace the mission plates.
+- The depot yard has a hangar, a gantry and a barrier; the road is lit under the tank; enemies stand on their own banks in depth, wrecks burn charred in the beams, and the turret turns to face the rear whole.
+
 ### Changed (Diesel Domestiques) v0.1.1
 
 - New art in the brief's dark 2.5D diorama style, replacing the procedural placeholders:

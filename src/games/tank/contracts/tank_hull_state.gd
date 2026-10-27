@@ -14,6 +14,9 @@ var hull_h: int = 72
 # --- Drive (brief 2.4 Drive) -------------------------------------------------------------------------
 ## [snap] World x of the hull's rear edge in art px (the camera follows it).
 var x_px: float = 0.0
+## [snap] Travel direction (v2): TankIds.DIR_RIGHT (+1, travelling right) or DIR_LEFT (-1). Missions
+## always travel right; a free-roam turn flips it (brief 2.10).
+var dir: int = TankIds.DIR_RIGHT
 ## Game metres driven in the current segment (terrain and encounters key on it). Not in the
 ## snapshot: during an Advance x_px == TankConst.m_to_px(distance_m) (a tow snaps both), so a
 ## client's "distance to the halt line" is (m_to_px(segment length_m) - x_px) / PX_PER_M.
@@ -25,8 +28,6 @@ var speed_mps: float = 0.0
 var grade_pct: float = 0.0
 ## Tracks locked: dug in at a gun line, holding at the boss, or "Regroup" before min_s.
 var holding: bool = false
-## [snap] Seconds of a failed-Ram stall left.
-var stall_s: float = 0.0
 ## Stopped by an obstacle (its id; 0 none).
 var blocked_by: int = 0
 ## The driver is in band: enemy hit chances x evasive_hit_mult.
@@ -53,7 +54,7 @@ var traps_cleared: bool = false
 # --- Main gun (brief 2.4 Gun) ------------------------------------------------------------------------
 ## [snap] TankIds.FACE_RIGHT or FACE_LEFT.
 var facing: int = TankIds.FACE_RIGHT
-## [snap] Barrel elevation in degrees (-5..+30).
+## [snap] Barrel elevation in degrees (-12..+30, tanks.json gun).
 var elev_deg: float = 0.0
 ## The elevation the gun is slewing to.
 var elev_target_deg: float = 0.0
@@ -68,8 +69,9 @@ var breech_s: float = 0.0
 var target_id: int = 0
 ## Seconds left of auto-aim's pause after a manual nudge.
 var aim_pause_s: float = 0.0
-## Citadel secondaries: seconds to the next shot (fore, aft).
-var secondary_cd_s: Array[float] = [0.0, 0.0]
+## (v2) The bow guns (brief 2.4 Gun): seconds to the next burst, counted down at the power rate
+## (1 full, 0.5 half, 0 none).
+var bow_cd_s: float = 0.0
 
 ## Host only (never serialized): the drive's SpeedModel (BRIEF 3.11), created on first use with
 ## tanks.json drive.cda_m2 and drive.mass_offset_kg; the rules set its rider_mass_kg each tick to

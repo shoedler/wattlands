@@ -17,6 +17,7 @@ static func _quiet(index: int, props: Dictionary = {"encounters": [], "obstacles
 func _rig(crew: int = 1, index: int = ADVANCE, seed_v: int = 7) -> TankRulesRig:
 	var rig := TankRulesRig.new(crew, "ashfall_road", true, seed_v, _quiet(index))
 	rig.no_fire = true
+	rig.no_bow = true
 	rig.enter(index, 5.0)
 	return rig
 
@@ -70,8 +71,8 @@ func test_enemies_in_an_advance_keep_station_with_the_moving_hull() -> void:
 
 
 func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void:
-	# Medium 260-340, light 120-140, clamp: an enemy ahead ends at screen x <= 632.
-	for crew in [1, 2, 3]:
+	# Rolled from enemies.json hold_px; clamp: an enemy ahead ends at screen x <= 632.
+	for crew in [1, 2, 3, 4]:
 		var rig := _rig(crew)
 		var front_screen := 16.0 + rig.hull().hull_w
 		for type in [TankIds.ENEMY_MEDIUM, TankIds.ENEMY_LIGHT, TankIds.ENEMY_DESTROYER]:
@@ -82,18 +83,21 @@ func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void
 				rig.state.enemies.erase(e)
 	var rig := _rig(1)
 	var seen := {}
+	var light: Dictionary = rig.content.enemy_def(TankIds.ENEMY_LIGHT)
+	var span: Array = light["hold_px"]
 	for _i in 40:
-		var e := _enter(rig, TankIds.ENEMY_MEDIUM)
-		assert_between(e.hold_px, 260.0, 320.0, "Bulwark: 260-340 clamped to 320")
-		seen[snappedf(e.hold_px, 10.0)] = true
+		var e := _enter(rig, TankIds.ENEMY_LIGHT)
+		assert_between(e.hold_px, float(span[0]), float(span[1]), "the Bulwark: light hold_px")
+		seen[snappedf(e.hold_px, 2.0)] = true
 		rig.state.enemies.erase(e)
 	assert_gt(seen.size(), 3, "rolled, not fixed")
-	var cit := _rig(3)
-	var m := _enter(cit, TankIds.ENEMY_MEDIUM)
+	var bas := _rig(4)
+	var m := _enter(bas, TankIds.ENEMY_MEDIUM)
+	var mw := float(bas.content.enemy_def(TankIds.ENEMY_MEDIUM)["size_px"][0])
 	assert_eq(
 		m.hold_px,
-		632.0 - 104.0 - (16.0 + 288.0),
-		"the Citadel's long hull clamps a medium to 224 px"
+		minf(m.hold_px, 632.0 - mw - (16.0 + bas.hull().hull_w)),
+		"the Bastion's long hull clamps a medium to the screen"
 	)
 
 
@@ -144,8 +148,16 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 		rig.hull().hp = 100000.0
 		rig.hull().hp_max = 100000.0
 		var e := rig.spawn(type, 1, 220.0)
-		e.gun_s = 0.5
-		rig.run(1.0)
+		# Telegraphed guns run their whole telegraph first (test_tank_evade.gd).
+		var tele := float(rig.content.enemy_def(type).get("telegraph_s", 0.0))
+		e.gun_s = 0.5 + tele
+		# The light's first shot is its telegraphed flank shot (test_tank_evade.gd): its gun after.
+		TankAux.of(rig.state).enemy_flank_done[e.id] = true
+		var fired := func() -> bool:
+			return rig.state.shells.any(func(s: TankShellState) -> bool: return not s.friendly)
+		var t := rig.run_until(fired, 10.0)
+		assert_almost_eq(t, 0.5 + tele, 0.06, "%s fires after its countdown" % type)
+		rig.run(0.3)
 		var first: TankShellState = null
 		for s in rig.state.shells:
 			if not s.friendly:
@@ -156,13 +168,15 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 		assert_between(chance, 0.3, 0.95, "%s has a real hit chance" % type)
 		assert_eq(first.source, e.id)
 		assert_almost_eq(
-			e.gun_s, table[type][1] - 0.5, 0.1, "%s reloads in %.0f s" % [type, table[type][1]]
+			e.gun_s, table[type][1] - 0.3, 0.1, "%s reloads in %.0f s" % [type, table[type][1]]
 		)
 
 
 func test_a_destroyer_telegraphs_for_4_seconds_before_each_shot_and_shifts_40_px_after() -> void:
 	var rig := _rig(1)
-	var e := rig.spawn(TankIds.ENEMY_DESTROYER, 1, 312.0)
+	var edge := TankEnemies.clamp_hold(rig.state, 109, 1, 1.0e9)
+	var e := rig.spawn(TankIds.ENEMY_DESTROYER, 1, 1000.0)
+	assert_almost_eq(e.hold_px, edge, 0.01, "at the screen edge")
 	e.gun_s = 6.0
 	rig.run(2.2)
 	assert_eq(e.mode, TankIds.EM_TELEGRAPH)
@@ -171,13 +185,13 @@ func test_a_destroyer_telegraphs_for_4_seconds_before_each_shot_and_shifts_40_px
 	rig.run(4.0)
 	assert_eq(e.telegraph_s, 0.0, "fired")
 	assert_eq(rig.of_type("shot").size(), 1)
-	assert_almost_eq(e.hold_px, 272.0, 0.01, "moves 40 px closer after the shot")
+	assert_almost_eq(e.hold_px, edge - 40.0, 0.01, "moves 40 px closer after the shot")
 	rig.run(3.0)
 	assert_eq(e.mode, TankIds.EM_HOLD)
-	assert_almost_eq(_dist(rig, e), 272.0, 4.0, "it holds 40 px closer")
+	assert_almost_eq(_dist(rig, e), edge - 40.0, 4.0, "it holds 40 px closer")
 	e.gun_s = 0.1
-	rig.run(0.5)
-	assert_almost_eq(e.hold_px, 312.0, 0.01, "and back to the edge after the next")
+	rig.run(4.5)
+	assert_almost_eq(e.hold_px, edge, 0.01, "and back to the edge after the next (full 4 s glint)")
 
 
 func test_a_destroyer_in_telegraph_is_the_autoaims_first_target() -> void:
@@ -272,8 +286,9 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 		if e.code == TankIds.enemy_code(TankIds.ENEMY_HEAVY):
 			h = e
 	rig.run(15.0)
-	h.hold_px = 250.0
-	h.x_px = rig.hull().x_px + rig.hull().hull_w + 250.0
+	var room := TankEnemies.clamp_hold(rig.state, h.w, 1, 1.0e9) - 60.0
+	h.hold_px = room
+	h.x_px = rig.hull().x_px + rig.hull().hull_w + room
 	h.gun_s = 100.0
 	var aux := TankAux.of(rig.state)
 	h.hp = 90.0
@@ -282,10 +297,11 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 	assert_eq(h.mode, TankIds.EM_HOLD, "30 damage: no back-off yet")
 	TankShells.damage_enemy(rig.state, aux, h, 20.0, TankEvents.BY_SHELL, 0, rig.events)
 	assert_eq(h.mode, TankIds.EM_BACKOFF, "50 damage taken")
-	assert_almost_eq(h.hold_px - hold, 30.0, 0.01)
+	var moved := h.hold_px - hold
+	assert_between(moved, 30.0, 60.0, "30 px back, or the next free spot in its lane")
 	rig.run(3.0)
 	assert_eq(h.mode, TankIds.EM_HOLD)
-	assert_almost_eq(h.x_px - (rig.hull().x_px + rig.hull().hull_w), hold + 30.0, 0.01)
+	assert_almost_eq(h.x_px - (rig.hull().x_px + rig.hull().hull_w), hold + moved, 0.01)
 	# The telegraph: 3 s before the shot.
 	h.gun_s = 4.0
 	rig.run(1.3)
@@ -429,7 +445,7 @@ func test_a_light_tank_harasses_for_linger_s_and_then_breaks_off_with_no_kill() 
 	var linger := float(rig.content.enemy_def("light")["linger_s"])
 	var e := _enter(rig, TankIds.ENEMY_LIGHT)
 	rig.run(8.0)
-	assert_eq(e.mode, TankIds.EM_HOLD)
+	assert_has([TankIds.EM_HOLD, TankIds.EM_TELEGRAPH], e.mode, "on station (its flank shot)")
 	rig.run(linger - 6.0)
 	assert_true(rig.state.enemies.has(e), "still on station")
 	assert_ne(e.mode, TankIds.EM_LEAVE)

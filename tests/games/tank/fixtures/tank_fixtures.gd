@@ -4,23 +4,35 @@ extends RefCounted
 ## Every builder is deterministic (fixed numbers, no RNG), so tests can compare against the JSON
 ## files next to this script:
 ##
-## state(crew): ashfall_road Stage 2 Advance (phase 4) 60 s in, for crew 1 (Bulwark), 2 (Rampart)
-##   or 3 (Citadel): slots 1..crew (FTP 200, 220, 240; slot 1 unverified), stage-2 engines with
-##   rotation on, the hull at 72 / 120 HP, a medium ahead holding 300 px, a light rushing from the
-##   rear, a tank destroyer in its telegraph, a wreck barricade, three shells in flight, the bank at
-##   64, pressure at 72%, the Bulwark's lever on Turret.
+## state(crew): ashfall_road Stage 2 Advance (phase 4) 60 s in, for crew 1 (Bulwark), 2 (Rampart),
+##   3 (Citadel) or 4 (Bastion, v2): slots 1..crew (FTP 200, 220, 240, 260; slot 1 unverified),
+##   stage-2 engines with rotation on, the hull at 72 / 120 HP, a medium ahead holding 300 px, a
+##   light rushing from the rear, a tank destroyer in its telegraph, a wreck barricade, three shells
+##   in flight, the bank at 64, pressure at 72%, the Bulwark's lever on Turret, the arc's duty at
+##   0.35 with the searchlights lit, each rider's target_pct (TARGETS by engine); every rider on a
+##   SIM engine can evade (v2), the medium and the destroyer hold in the far lane.
 ## gun_line(crew): Stage 2 gun line (phase 5) 40 s in: a heavy tank in its telegraph and 2 dug-in
 ##   tanks, the berm at 18 HP, the turret loaded with a heavy shell.
 ## boss(crew): the boss (phase 10) 150 s in: phase 1, the last bogie (index 2, farthest from the
-##   tank) broken, the main gun in its telegraph, the diesel sprinting with a dodge prompt.
+##   tank) broken, the main gun in its telegraph, the diesel's rider sprinting to evade it.
 ## cap(): the Citadel's state(3) with 16 enemies and 24 shells at large coordinates (the 4 KB test).
+## cap4(): the same at the caps for the Bastion's state(4): 4 riders, 4 rooms (v2's 4 KB test).
 ## frame(crew): an InputFrame for state(crew) (every rider compliant at 90% FTP in SIM, on target
 ##   in ERG); frames.json holds the same frames as dictionaries for view and HUD tests.
 ## snapshot_<tank>.json: TankSnapshot.encode(state(crew)) as JSON (ints).
 
 const DIR := "res://tests/games/tank/fixtures"
 const FRAMES_PATH := DIR + "/frames.json"
-const PEERS: Array[int] = [1, 2, 3]
+const PEERS: Array[int] = [1, 2, 3, 4]
+## Each rider's target_pct in state(crew) by engine: SIM band centres (diesel, Bulwark 90.5; steam
+## building 90) and the ERG targets the bank at 64 and the arc's duty 0.35 ask for.
+const TARGETS := {
+	TankIds.ENGINE_DIESEL: 90.5,
+	TankIds.ENGINE_BULWARK: 90.5,
+	TankIds.ENGINE_STEAM: 90.0,
+	TankIds.ENGINE_DYNAMO: 71.2,
+	TankIds.ENGINE_ARC: 70.3,
+}
 
 static var _contents: Dictionary = {}
 
@@ -64,13 +76,14 @@ static func state(crew: int) -> TankState:
 	s.hull.evasive = true
 	s.hull.elev_deg = 6.5
 	s.hull.target_id = 11
-	s.enemies.append(
-		_enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, _medium_hp(), 1)
-	)
+	var md := _enemy(11, TankIds.ENEMY_MEDIUM, s.hull.x_px + s.hull.hull_w + 300.0, _medium_hp(), 1)
+	md.lane = 1
+	s.enemies.append(md)
 	s.enemies.append(_enemy(12, TankIds.ENEMY_LIGHT, s.hull.x_px - 140.0 - 80.0, 24.0, -1))
 	var td := _enemy(13, TankIds.ENEMY_DESTROYER, s.camera_x() + 640.0 - 112.0, 50.0, 1)
 	td.mode = TankIds.EM_TELEGRAPH
 	td.telegraph_s = 2.5
+	td.lane = 1
 	s.enemies.append(td)
 	var ob := TankObstacleState.new()
 	ob.id = 14
@@ -83,9 +96,7 @@ static func state(crew: int) -> TankState:
 	s.shells.append(
 		_shell(16, TankIds.SHELL_ENEMY, s.hull.x_px + 420.0, 240.0, -300.0, 40.0, false)
 	)
-	s.shells.append(
-		_shell(17, TankIds.SHELL_SECONDARY, s.hull.x_px + 120.0, 230.0, -280.0, -30.0, true)
-	)
+	s.shells.append(_shell(17, TankIds.SHELL_BOW, s.hull.x_px + 120.0, 230.0, -280.0, -30.0, true))
 	s.next_id = 18
 	return s
 
@@ -138,14 +149,15 @@ static func boss(crew: int) -> TankState:
 	for st in s.stations:
 		if st is TankDieselState:
 			(st as TankDieselState).sprinting = true
-			(st as TankDieselState).prompt = true
-			(st as TankDieselState).dodge_s = 1.2
+			var r := s.rider_at(st.slot)
+			if r != null:
+				r.sprinting = true
 	s.next_id = 30
 	return s
 
 
-static func cap() -> TankState:
-	var s := state(3)
+static func cap(crew: int = 3) -> TankState:
+	var s := state(crew)
 	s.enemies.clear()
 	s.shells.clear()
 	for i in TankConst.MAX_ENEMIES:
@@ -154,6 +166,7 @@ static func cap() -> TankState:
 		)
 		e.mode = TankIds.EM_TELEGRAPH
 		e.telegraph_s = 3.999
+		e.lane = i % 2
 		s.enemies.append(e)
 	for i in TankConst.MAX_SHELLS:
 		s.shells.append(
@@ -162,6 +175,10 @@ static func cap() -> TankState:
 	s.tick = 49200
 	s.hull.x_px = 99999.9
 	return s
+
+
+static func cap4() -> TankState:
+	return cap(4)
 
 
 ## The InputFrame for state(crew): its phase for every rider, compliant telemetry.
@@ -263,7 +280,12 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 		r.raw_w = roundf(0.9 * r.ftp)
 		r.cadence_rpm = 90.0
 		r.ftp_pct = 90.0
+		r.target_pct = float(TARGETS.get(r.engine, 0.0))
 		r.in_band = true
+		r.can_evade = (
+			str(seg["kind"]) == Wl.WORK
+			and c.plan_entry(r.engine, str(seg["type"])).get("mode", "") == Wl.SIM
+		)
 	for st in s.stations:
 		st.slot = -1
 		st.peer = 0
@@ -279,6 +301,9 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 			(st as TankDynamoState).stabilizing = true
 		elif st is TankSteamState:
 			(st as TankSteamState).pressure_pct = 72.0
+		elif st is TankArcState:
+			(st as TankArcState).duty = 0.35
+			(st as TankArcState).lit = true
 		elif st is TankGearboxState:
 			(st as TankGearboxState).lever = TankIds.LEVER_TURRET
 			(st as TankGearboxState).lever_to = TankIds.LEVER_TURRET

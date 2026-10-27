@@ -8,7 +8,7 @@ extends RefCounted
 ## With `auto_phase` the clock ends open phases like the platform does (the objective done and
 ## min_s passed, else max_s) and fixed ones at their duration, so a whole session can be played.
 
-const OPEN_SEGS := [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS]
+const OPEN_SEGS := [TankIds.SEG_ADVANCE, TankIds.SEG_GUN_LINE, TankIds.SEG_BOSS, TankIds.SEG_ROAM]
 
 var content: TankContent
 var mission_id: String = "ashfall_road"
@@ -42,8 +42,11 @@ var compliance: float = 1.0
 ## 55 + 45 x (1 - bank / 100), clamped to the phase's range (instantly here, not in sub-steps).
 var bank_director: bool = false
 ## The breech never opens (nothing loads, nothing fires) and the Bulwark's lever stays where it is
-## (Drive): the gun is out of the picture (tests of the drive and the Ram).
+## (Drive): the main gun is out of the picture (tests of the drive, evade and the bow guns).
 var no_fire: bool = false
+## The bow guns never get to a burst (their clock never runs down) and never wear a barricade
+## down: tests of enemies and obstacles on their own.
+var no_bow: bool = false
 ## Seconds each segment ran when auto_phase moved on (index -> seconds).
 var seg_len: Dictionary = {}
 var ended_by: Dictionary = {}
@@ -118,6 +121,10 @@ func run_until(cond: Callable, limit_s: float = 600.0) -> float:
 
 
 func step() -> Array[Dictionary]:
+	if no_bow:
+		state.hull.bow_cd_s = 1.0e9
+		for o in state.obstacles:
+			o.bow_s = 0.0
 	if no_fire:
 		state.hull.breech_s = 1.0e6
 		var g := gearbox()
@@ -225,6 +232,7 @@ func _rider_input(p: PlayerSlot) -> TankRiderInput:
 			if bank_director and ri.engine == TankIds.ENGINE_DYNAMO and ph.range_pct.size() == 2:
 				pct = TankDirector.bank_target_pct(content, dynamo().bank, ph)
 			ri.applied_target_w = roundf(pct / 100.0 * p.ftp)
+			ri.planned_pct = ph.planned_pct_at(seg_t)
 	if ri.mode == Wl.ERG:
 		ri.power_w = float(power_w.get(p.peer_id, ri.applied_target_w * compliance))
 	else:

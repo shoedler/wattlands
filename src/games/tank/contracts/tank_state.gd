@@ -42,6 +42,11 @@ var obstacles: Array[TankObstacleState] = []
 var gun_line: TankGunLineState = TankGunLineState.new()
 var boss: TankBossState = TankBossState.new()
 var score: TankScoreState = TankScoreState.new()
+## (v2) Free roam (brief 2.10): inactive in missions.
+var roam: TankRoamState = TankRoamState.new()
+## (v2) The free-roam valley built from roam.map_seed (TankRoam.prepare on the host, TankRoam.ensure_map on
+## a client once a snapshot brought the seed); null in missions. Not serialized.
+var roam_map: TankRoamMap = null
 
 
 ## A fresh state at the session start: the tank for the crew size with its rooms, every rider on
@@ -169,6 +174,7 @@ func to_dict() -> Dictionary:
 	d["gun_line"] = gun_line.to_dict()
 	d["boss"] = boss.to_dict()
 	d["score"] = score.to_dict()
+	d["roam"] = roam.to_dict()
 	d["riders"] = _dicts(riders)
 	d["stations"] = _dicts(stations)
 	d["enemies"] = _dicts(enemies)
@@ -184,6 +190,7 @@ func load_dict(d: Dictionary) -> TankRecord:
 	gun_line.load_dict(d.get("gun_line", {}))
 	boss.load_dict(d.get("boss", {}))
 	score.load_dict(d.get("score", {}))
+	roam.load_dict(d.get("roam", {}))
 	riders.clear()
 	for x: Variant in d.get("riders", []):
 		riders.append(TankRiderState.new().load_dict(x) as TankRiderState)

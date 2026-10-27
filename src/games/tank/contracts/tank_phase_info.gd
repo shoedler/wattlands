@@ -63,6 +63,6 @@ func overran_previous() -> bool:
 	return prev_ended_by == Wl.ENDED_MAX_S
 
 
-## In the first 300 s of the plan, where Ram, dodge, Overpressure and haptics are off.
+## In the first 300 s of the plan, where evade, Overpressure and haptics are off.
 func in_first_window() -> bool:
 	return TankConst.in_first_window(plan_elapsed_s)

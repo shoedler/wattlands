@@ -135,7 +135,7 @@ static func _impact(
 					damage_obstacle(hit.obstacle, s.type, c)
 				dmg = TankDamage.shell_damage(c, s.type)
 		events.append(TankEvents.hit(on, hit.id, dmg, s.type, 0.0, point.x))
-		if not hit.drill and s.type != TankIds.SHELL_SECONDARY:
+		if not hit.drill and s.type != TankIds.SHELL_BOW:
 			state.score.hits += 1
 			if rider != null:
 				rider.hits += 1
@@ -222,7 +222,7 @@ static func damage_boss(
 
 
 ## A shell of `shell` hits an obstacle: a heavy or Overpressure shell clears it, three light shells
-## do; secondaries do nothing.
+## do (bow-gun fire clears it by time, TankBow).
 static func damage_obstacle(o: TankObstacleState, shell: int, c: TankContent) -> void:
 	if o.cleared:
 		return

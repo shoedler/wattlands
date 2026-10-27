@@ -1,83 +1,6 @@
 extends GutTest
-## What the Tank Controls show, from the fixtures: the station card per engine (diesel speed,
-## distance to the halt line and berm; dynamo bank, target and elevation; steam dial marks and the
-## loaded shell; Bulwark lever, auto marker and hoist progress), the objective line and boss bars.
-
-
-func _card(state: TankState, peer: int) -> Dictionary:
-	return TankHudModel.card(state, peer)
-
-
-func test_the_diesel_card_shows_speed_halt_distance_and_the_ram() -> void:
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
-	var c := _card(s, peer)
-	assert_eq(c["kind"], TankIds.ENGINE_DIESEL)
-	assert_almost_eq(float(c["speed_kmh"]), 7.4 * 3.6, 1e-3)
-	var length_m := float(s.content.segment(s.seg.phase_index)["length_m"])
-	assert_almost_eq(float(c["halt_m"]), length_m - s.hull.x_px / TankConst.PX_PER_M, 1e-3)
-	assert_false(c["show_berm"], "the berm shows at a gun line")
-	var d := s.station(TankIds.ENGINE_DIESEL) as TankDieselState
-	d.ram_s = 4.0
-	d.ram_cd_s = 0.0
-	var ram := _card(s, peer)
-	assert_almost_eq(float(ram["ram_frac"]), 0.4, 1e-6, "a 10 s window")
-	d.ram_s = 0.0
-	d.ram_cd_s = 15.0
-	assert_almost_eq(float(_card(s, peer)["ram_cd_frac"]), 0.5, 1e-6, "a 30 s cooldown")
-
-
-## The diesel rider's card in segment type `seg` / phase kind `kind` at plan time `plan_s`.
-func _drive_card(seg: String, kind: String, plan_s: float) -> Dictionary:
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
-	s.seg.seg = seg
-	s.seg.kind = kind
-	s.t = plan_s
-	s.seg.plan_elapsed_s = plan_s
-	return _card(s, peer)
-
-
-func test_the_ram_is_ready_only_where_the_rules_let_it_work() -> void:
-	assert_true(_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 400.0)["ram_ok"], "an Advance past 300 s")
-	assert_true(_drive_card(TankIds.SEG_BOSS, Wl.WORK, 2000.0)["ram_ok"], "the boss (the dodge)")
-	assert_true(_drive_card(TankIds.SEG_BOSS, Wl.WORK, 2000.0)["dodge"])
-	assert_false(_drive_card(TankIds.SEG_DEPOT, Wl.WARMUP, 60.0)["ram_ok"], "no Ram in the depot")
-	assert_false(_drive_card(TankIds.SEG_SKIRMISH, Wl.WARMUP, 60.0)["ram_ok"], "nor the drill")
-	assert_false(
-		_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 299.0)["ram_ok"], "nor in the first 300 s"
-	)
-	assert_true(_drive_card(TankIds.SEG_ADVANCE, Wl.WORK, 300.0)["ram_ok"])
-	assert_false(_drive_card(TankIds.SEG_GUN_LINE, Wl.WORK, 900.0)["ram_ok"], "a gun line is ERG")
-	assert_false(
-		_drive_card(TankIds.SEG_CHECKPOINT, Wl.RECOVERY, 900.0)["ram_ok"], "a checkpoint is ERG"
-	)
-	assert_false(_drive_card(TankIds.SEG_COOLDOWN, Wl.COOLDOWN, 2400.0)["ram_ok"])
-
-
-func test_a_client_reads_the_plan_clock_as_the_game_clock() -> void:
-	# plan_elapsed_s is a host-side value (not in the snapshot): a client's state carries 0.
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
-	s.seg.plan_elapsed_s = 0.0
-	s.t = 200.0
-	assert_false(_card(s, peer)["ram_ok"], "the first 300 s")
-	s.t = 700.0
-	assert_true(_card(s, peer)["ram_ok"])
-
-
-func test_the_ram_is_not_ready_on_a_broken_down_tank_or_for_an_absent_rider() -> void:
-	var s := TankFixtures.state(2)
-	var r := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
-	assert_true(_card(s, r.peer)["ram_ok"])
-	s.hull.breakdown = true
-	assert_false(_card(s, r.peer)["ram_ok"], "a breakdown")
-	s.hull.breakdown = false
-	r.rescue = true
-	assert_false(_card(s, r.peer)["ram_ok"], "a rescue hold")
-	r.rescue = false
-	r.afk = true
-	assert_false(_card(s, r.peer)["ram_ok"], "AFK")
+## TankHudModel's pure parts the plates read, from the fixtures: the halt distance, the dynamo's
+## bank target, the objective line and the boss bars.
 
 
 func test_the_halt_distance_comes_from_the_mission_and_clamps_at_zero() -> void:
@@ -91,36 +14,6 @@ func test_the_halt_distance_comes_from_the_mission_and_clamps_at_zero() -> void:
 	assert_eq(TankHudModel.halt_distance_m(s), -1.0, "only an Advance has a halt line")
 
 
-func test_the_berm_shows_at_a_gun_line() -> void:
-	var s := TankFixtures.gun_line(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot).peer
-	var c := _card(s, peer)
-	assert_true(c["show_berm"])
-	assert_eq(c["berm"], 18.0)
-	assert_eq(c["berm_max"], 40.0)
-
-
-func test_the_dynamo_card_shows_the_bank_its_target_and_the_elevation() -> void:
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DYNAMO).slot).peer
-	var c := _card(s, peer)
-	assert_eq(c["kind"], TankIds.ENGINE_DYNAMO)
-	assert_eq(c["bank"], 64.0)
-	assert_almost_eq(float(c["bank_frac"]), 0.64, 1e-6)
-	assert_almost_eq(
-		float(c["target_pct"]),
-		55.0 + 45.0 * 0.36,
-		1e-3,
-		"the ERG target 55 + 45 x (1 - bank / 100)"
-	)
-	assert_eq(c["elev_deg"], 6.5)
-	assert_eq(c["facing"], TankIds.FACE_RIGHT)
-	(s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState).bank = 0.0
-	assert_almost_eq(float(_card(s, peer)["target_pct"]), 100.0, 1e-3)
-	(s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState).bank = 100.0
-	assert_almost_eq(float(_card(s, peer)["target_pct"]), 55.0, 1e-3)
-
-
 func test_the_bank_target_follows_the_phases_range() -> void:
 	var s := TankFixtures.state(2)
 	s.seg.seg = TankIds.SEG_ADVANCE
@@ -131,71 +24,6 @@ func test_the_bank_target_follows_the_phases_range() -> void:
 	var t := TankHudModel.bank_target_pct(s, 0.0)
 	assert_gte(t, lo)
 	assert_lte(t, hi)
-
-
-func test_the_steam_card_shows_the_dial_marks_and_the_loaded_shell() -> void:
-	var s := TankFixtures.state(3)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_STEAM).slot).peer
-	var c := _card(s, peer)
-	assert_eq(c["kind"], TankIds.ENGINE_STEAM)
-	assert_eq(c["pressure"], 72.0)
-	assert_almost_eq(float(c["dial_frac"]), 0.48, 1e-6, "72% on a 0..150 dial")
-	assert_eq(c["marks"], [40.0, 100.0, 150.0] as Array[float])
-	assert_eq(c["shell"], "")
-	var st := s.station(TankIds.ENGINE_STEAM) as TankSteamState
-	st.loaded = true
-	s.hull.loaded = TankIds.SHELL_HEAVY
-	assert_eq(_card(s, peer)["shell"], "TANK_SHELL_HEAVY")
-	s.hull.loaded = TankIds.SHELL_OVER
-	assert_eq(_card(s, peer)["shell"], "TANK_SHELL_OVER")
-	s.hull.loaded = TankIds.SHELL_LIGHT
-	assert_eq(_card(s, peer)["shell"], "TANK_SHELL_LIGHT")
-	st.window_s = 2.5
-	assert_almost_eq(float(_card(s, peer)["window_frac"]), 0.5, 1e-6, "a 5 s window")
-	st.pressure_pct = 125.0
-	assert_almost_eq(
-		float(_card(s, peer)["over_frac"]), 0.5, 1e-6, "100 to 150 is the Overpressure build"
-	)
-
-
-func test_the_bulwark_card_shows_the_lever_the_auto_marker_and_the_hoist() -> void:
-	var s := TankFixtures.state(1)
-	var c := _card(s, 1)
-	assert_eq(c["kind"], TankIds.ENGINE_BULWARK)
-	assert_eq(c["lever"], TankIds.LEVER_TURRET)
-	assert_true(c["auto"], "the auto-lever is on by default")
-	assert_almost_eq(
-		float(c["hoist_frac"]),
-		1500.0 / TankFixtures.content().num("tanks", "gearbox.hoist_j", 4000.0),
-		1e-6
-	)
-	assert_almost_eq(float(c["speed_kmh"]), 7.4 * 3.6, 1e-3, "the Bulwark drives too")
-	var g := s.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	g.auto = false
-	g.lever = TankIds.LEVER_DRIVE
-	g.lever_to = TankIds.LEVER_HOIST
-	g.move_s = 0.4
-	var moving := _card(s, 1)
-	assert_false(moving["auto"])
-	assert_eq(moving["lever_to"], TankIds.LEVER_HOIST)
-	assert_almost_eq(float(moving["move_s"]), 0.4, 1e-6)
-	var gl := TankFixtures.gun_line(1)
-	assert_true(_card(gl, 1)["dig"], "Drive is Dig at a gun line")
-
-
-func test_an_unknown_peer_has_no_card() -> void:
-	assert_eq(_card(TankFixtures.state(3), 99), {"kind": "none"})
-
-
-func test_a_reserve_or_unpowered_station_is_flagged() -> void:
-	var s := TankFixtures.state(2)
-	var peer := s.rider_at(s.station(TankIds.ENGINE_DYNAMO).slot).peer
-	s.station(TankIds.ENGINE_DYNAMO).reserve = true
-	assert_true(_card(s, peer)["reserve"])
-	s.all_afk = true
-	assert_true(_card(s, peer)["unpowered"])
-	(s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState).stalled = true
-	assert_true(_card(s, peer)["stalled"])
 
 
 func test_the_objective_line_per_segment() -> void:

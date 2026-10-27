@@ -38,14 +38,6 @@ static func hit(
 	return lost
 
 
-## HP lost without a `hit` event or the berm (a failed Ram's 10 HP).
-static func hurt(state: TankState, amount: float, events: Array[Dictionary]) -> void:
-	if state.hull.breakdown:
-		return
-	state.hull.hp -= amount
-	_check_breakdown(state, events)
-
-
 static func _check_breakdown(state: TankState, events: Array[Dictionary]) -> void:
 	var hull := state.hull
 	if hull.hp > 0.0 or hull.breakdown:

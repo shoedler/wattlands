@@ -62,7 +62,7 @@ func test_the_stabilizer_drains_1_5_units_a_second_while_an_enemy_is_in_range() 
 	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 	rig.run(10.0)
 	assert_true(dy.stabilizing)
-	var drain := rig.content.num("tanks", "dynamo.stabilizer_per_s")
+	var drain := TankStations.stabilizer_per_s(rig.state)
 	assert_between(
 		drain, 0.75, 2.25, "1.5 in the brief, +-50% (a long fight must not empty the bank)"
 	)
@@ -207,13 +207,13 @@ func test_the_citadel_secondaries_cost_2_units_and_stop_below_10() -> void:
 	e.hp_max = 1000.0
 	rig.run(0.1)
 	var shots := rig.of_type("shot").filter(
-		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_SECONDARY
+		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_BOW
 	)
 	assert_eq(shots.size(), 1, "the fore secondary fires at once")
 	assert_almost_eq(dy.bank, 10.0 - 1.5 * 0.1 + 0.0, 0.3)
 	rig.run(9.0)
 	shots = rig.of_type("shot").filter(
-		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_SECONDARY
+		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_BOW
 	)
 	assert_eq(shots.size(), 1, "below 10 units they stop")
 
@@ -226,7 +226,7 @@ func test_pressure_is_the_boilers_energy_in_joules_of_p_eff_per_100_percent() ->
 	var st := rig.steam()
 	assert_eq(st.peer, 3)
 	var full_j := rig.content.num("tanks", "steam.full_j")
-	assert_eq(full_j, 4500.0, "6 kJ in the brief, tuned to 4.5 kJ (ADR in the rules report)")
+	assert_eq(full_j, 4000.0, "6 kJ in the brief, tuned to 4 kJ (P4 rules ADR)")
 	st.pressure_pct = 0.0
 	rig.run(full_j / 225.0 / 2.0)
 	# Slot 2: FTP 240 W, 90% = 216 W raw, P_eff 225 W: half the energy in half the time.
@@ -668,8 +668,12 @@ func test_in_a_gun_line_the_hoist_lifts_on_the_riders_erg_work() -> void:
 	rig.state.enemies.clear()
 	_lever(rig, "hoist")
 	rig.gearbox().hoist_j = 0.0
-	rig.run(20.0)
-	# ERG 90% of 200 W = 180 W raw, P_eff 225 W: 4.5 kJ in 20 s.
+	var need := rig.content.num("tanks", "gearbox.hoist_j")
+	assert_between(need, 2000.0, 6000.0, "4 kJ in the brief, tuned to 5.25 kJ (P4 rules ADR)")
+	# ERG 90% of 200 W = 180 W raw, P_eff 225 W.
+	rig.run(need / 225.0 - 1.0)
+	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "not before the hoist energy is in")
+	rig.run(2.0)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY)
 
 
