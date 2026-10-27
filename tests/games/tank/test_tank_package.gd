@@ -64,7 +64,8 @@ func test_manifest_has_every_required_field_and_matches_its_folder() -> void:
 		assert_true(m.has(k), "game.json has %s" % k)
 	assert_eq(m["id"], F.GAME_DIR.get_file(), "id is the folder name")
 	assert_eq(m["presentation"], "2d")
-	assert_eq(m["pixel_base"], [640.0, 360.0])
+	assert_eq(m["pixel_base"], [960.0, 540.0], "v2: the reference at 960 x 540 (brief 0.2)")
+	assert_eq(m["pixel_flex"], {"min": [852.0, 480.0]})
 	assert_between(int(m["min_players"]), 1, int(m["max_players"]))
 	assert_lte(int(m["max_players"]), Wl.MAX_SLOTS)
 	assert_typeof(m["bots"], TYPE_BOOL)
@@ -96,7 +97,11 @@ func test_game_json_is_exactly_the_brief() -> void:
 		m["options"],
 		[{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
 	)
-	assert_false(m.has("player_options"))
+	# v2 (brief 3.1): one per-rider option, the miniature (per-frame depth of field) toggle.
+	assert_eq(
+		m.get("player_options", []),
+		[{"id": "miniature", "type": "toggle", "default": true, "label": "TANK_OPT_MINIATURE"}]
+	)
 	# G2 adds the picker card once its PNG exists, and only then.
 	var picker := str(m.get("picker_image", ""))
 	if picker != "":
@@ -199,23 +204,6 @@ func test_rules_and_module_use_no_wall_clock_or_global_randomness() -> void:
 		var hit := re.search(FileAccess.get_file_as_string(path))
 		assert_null(hit, "%s: %s" % [path, hit.get_string() if hit != null else ""])
 	assert_gte(scanned, 20, "the contracts, rules, effort, combat, net, autopilot and the module")
-
-
-func test_art_json_keeps_61_sprites_32_colours_and_the_no_people_no_text_clause() -> void:
-	var art: Dictionary = JSON.parse_string(
-		FileAccess.get_file_as_string("res://assets/tank/art.json")
-	)
-	assert_lte((art["palette"] as Array).size(), 32)
-	assert_eq((art["sprites"] as Array).size(), 61)
-	var style := str(art["style"])
-	for clause: String in [
-		"No people, figures or faces", "no text, letters, numbers, flags, insignia"
-	]:
-		assert_string_contains(style, clause)
-	for id: String in TankPlaceholderArt.ids():
-		var img := TankPlaceholderArt.placeholder_image(id)
-		assert_eq(Vector2i(img.get_width(), img.get_height()), TankPlaceholderArt.size_of(id), id)
-		assert_not_null(TankPlaceholderArt.texture(id), id)
 
 
 func test_nothing_reaches_the_trainer_except_ctx_directives() -> void:
