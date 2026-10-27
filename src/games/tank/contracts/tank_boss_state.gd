@@ -2,7 +2,8 @@ class_name TankBossState
 extends TankRecord
 ## The Behemoth (G0 contract; brief 2.4 Boss and Foundry Gate). Phase 1: while a bogie stands it
 ## creeps toward the tank at 2 px/s until 120 px away; each broken bogie pushes it back 24 px.
-## Phase 2: immobile; shoot the turret. Main gun after a 6 s telegraph ("Surge to dodge").
+## Phase 2: immobile; shoot the turret. Main gun after a 6 s telegraph ("Surge to evade": a rider
+## who can evade holds the sprint rule 3 s inside it, brief 2.4).
 ##
 ## Maximum HP: enemies.json boss.bogie_hp and boss.turret_hp x the tank's enemy_scale (brief 2.4:
 ## "HP and counts x 0.6 / 0.8 / 1.0" covers the Behemoth). bogie_max and turret_max are not in the
@@ -30,8 +31,8 @@ var main_s: float = 0.0
 var telegraph_s: float = 0.0
 ## Seconds to the next secondary shot.
 var secondary_s: float = 0.0
-## The current telegraph's shot will miss (a dodge: the sprint rule held >= 3 s inside it).
-var dodged: bool = false
+## The current telegraph's shot will miss (evaded: a rider held the sprint rule >= 3 s inside it).
+var evaded: bool = false
 
 
 ## The target id of part `index` (0..2 bogies, index 0 nearest the tank, 3 the turret).

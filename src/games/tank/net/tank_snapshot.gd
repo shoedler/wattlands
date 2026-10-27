@@ -38,6 +38,8 @@ static func encode(state: TankState) -> Dictionary:
 			| (S.RF_RESCUE if rd.rescue else 0)
 			| (S.RF_AFK if rd.afk else 0)
 			| (S.RF_CONNECTED if rd.connected else 0)
+			| (S.RF_CAN_EVADE if rd.can_evade else 0)
+			| (S.RF_SPRINTING if rd.sprinting else 0)
 		)
 		r.append(
 			[
@@ -56,7 +58,16 @@ static func encode(state: TankState) -> Dictionary:
 	var e: Array = []
 	for en in state.enemies:
 		e.append(
-			[en.id, en.code, S.x10(en.x_px), S.hp(en.hp), en.mode, en.side, S.ms(en.telegraph_s)]
+			[
+				en.id,
+				en.code,
+				S.x10(en.x_px),
+				S.hp(en.hp),
+				en.mode,
+				en.side,
+				S.ms(en.telegraph_s),
+				en.lane
+			]
 		)
 	var sh: Array = []
 	for s in state.shells:
@@ -91,7 +102,7 @@ static func encode(state: TankState) -> Dictionary:
 			S.hp(hl.hp),
 			roundi(hl.hp_max),
 			S.hp(hl.berm_hp),
-			S.ms(hl.stall_s),
+			0,
 			roundi(hl.repair_j / 100.0),
 			hl.facing,
 			S.x10(hl.elev_deg),
@@ -134,19 +145,18 @@ static func _station_row(s: TankStationState) -> Array:
 	var v: Array = [0, 0, 0, 0, 0]
 	if s is TankGearboxState:
 		var g := s as TankGearboxState
-		f |= (S.STF_SPRINTING if g.sprinting else 0) | (S.STF_PROMPT if g.prompt else 0)
-		f |= S.STF_AUTO if g.auto else 0
+		f |= (S.STF_SPRINTING if g.sprinting else 0) | (S.STF_AUTO if g.auto else 0)
 		v = [
-			S.ms(g.ram_s),
-			S.ms(g.ram_cd_s),
+			0,
+			0,
 			g.lever + 4 * g.lever_to,
 			S.ms(g.move_s),
 			roundi(g.hoist_j / 10.0)
 		]
 	elif s is TankDieselState:
 		var d := s as TankDieselState
-		f |= (S.STF_SPRINTING if d.sprinting else 0) | (S.STF_PROMPT if d.prompt else 0)
-		v = [S.ms(d.ram_s), S.ms(d.ram_cd_s), S.ms(d.dodge_s), 0, 0]
+		f |= S.STF_SPRINTING if d.sprinting else 0
+		v = [0, 0, 0, 0, 0]
 	elif s is TankDynamoState:
 		var dy := s as TankDynamoState
 		f |= (S.STF_STALLED if dy.stalled else 0) | (S.STF_STABILIZING if dy.stabilizing else 0)
@@ -195,6 +205,8 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 		rd.rescue = (f & S.RF_RESCUE) != 0
 		rd.afk = (f & S.RF_AFK) != 0
 		rd.connected = (f & S.RF_CONNECTED) != 0
+		rd.can_evade = (f & S.RF_CAN_EVADE) != 0
+		rd.sprinting = (f & S.RF_SPRINTING) != 0
 	for row: Variant in snap.get("st", []):
 		var s := state.station(TankIds.engine_of(int(row[S.ST_ENGINE])))
 		if s != null:
@@ -293,7 +305,6 @@ static func _apply_hull(hl: TankHullState, tk: Array) -> void:
 	hl.hp = float(int(tk[S.TK_HP]))
 	hl.hp_max = float(int(tk[S.TK_HP_MAX]))
 	hl.berm_hp = float(int(tk[S.TK_BERM]))
-	hl.stall_s = int(tk[S.TK_STALL_MS]) / 1000.0
 	hl.repair_j = int(tk[S.TK_REPAIR_HJ]) * 100.0
 	hl.facing = int(tk[S.TK_FACING])
 	hl.elev_deg = int(tk[S.TK_ELEV_X10]) / 10.0
@@ -325,10 +336,7 @@ static func _apply_station(s: TankStationState, row: Array) -> void:
 	if s is TankGearboxState:
 		var g := s as TankGearboxState
 		g.sprinting = (f & S.STF_SPRINTING) != 0
-		g.prompt = (f & S.STF_PROMPT) != 0
 		g.auto = (f & S.STF_AUTO) != 0
-		g.ram_s = a / 1000.0
-		g.ram_cd_s = b / 1000.0
 		g.lever = c & 3
 		g.lever_to = c >> 2
 		g.move_s = int(row[S.ST_D]) / 1000.0
@@ -336,10 +344,6 @@ static func _apply_station(s: TankStationState, row: Array) -> void:
 	elif s is TankDieselState:
 		var d := s as TankDieselState
 		d.sprinting = (f & S.STF_SPRINTING) != 0
-		d.prompt = (f & S.STF_PROMPT) != 0
-		d.ram_s = a / 1000.0
-		d.ram_cd_s = b / 1000.0
-		d.dodge_s = c / 1000.0
 	elif s is TankDynamoState:
 		var dy := s as TankDynamoState
 		dy.stalled = (f & S.STF_STALLED) != 0
@@ -376,6 +380,7 @@ static func _apply_enemies(state: TankState, rows: Array) -> void:
 		en.mode = int(row[S.E_MODE])
 		en.side = int(row[S.E_SIDE])
 		en.telegraph_s = int(row[S.E_TELEGRAPH_MS]) / 1000.0
+		en.lane = int(row[S.E_LANE])
 		if state.content != null and en.w == 0:
 			var def := state.content.enemy_def(TankIds.enemy_of(en.code))
 			var size: Array = def.get("size_px", [0, 0])

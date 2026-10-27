@@ -9,16 +9,17 @@ extends RefCounted
 ## Files:
 ##   tanks.json     tanks {bulwark, rampart, citadel, bastion}: {code (TankIds.TANK_CODES), crew
 ##                  (its index in TankIds.TANKS + 1), hull_px, engines (rooms rear to front),
-##                  turrets, enemy_scale}; hull, drive, ram, berm, in_band, power_ratio, dynamo,
-##                  steam, gearbox, gun, damage, secondary, caps (TANKS_SPEC)
-##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, boiler,
+##                  turrets, enemy_scale}; hull, drive, evade, berm, in_band, power_ratio, dynamo,
+##                  steam, gearbox, gun, damage, bow, arc, caps (TANKS_SPEC)
+##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, arc, boiler,
 ##                  hoist, cadence_band, haptics (STATIONS_SPEC; plan entries:
 ##                  {mode: ERG, target_pct, ramp_to_pct?, range_pct?} or {mode: SIM, grade_source});
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; rotation rows
 ##                  (every tank of crew 2 and up) use their tank's start engines, start with the
 ##                  slot's own and man every room in every column
 ##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
-##                  every_s, hit}, light_mult}; boss; miss_px; clamp (ENEMIES_SPEC)
+##                  every_s, hit}, light_mult, lane, flank? {telegraph_s, damage, hit}}; boss;
+##                  miss_px; clamp; lanes (ENEMIES_SPEC)
 ##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
 ##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
 ##                  obstacles?, enemies?, props?, drills?, teach?, boss?}], cooldown}
@@ -43,15 +44,9 @@ const TANKS_SPEC := {
 	"drive.world_scroll": "pos",
 	"drive.px_per_visual_m": "pos",
 	"drive.evasive_hit_mult": "nonneg",
-	"ram.window_s": "pos",
-	"ram.cooldown_s": "nonneg",
-	"ram.reach_px": "pos",
-	"ram.sprint_ftp": "pos",
-	"ram.sprint_window_s": "pos",
-	"ram.fail_damage": "nonneg",
-	"ram.fail_stall_s": "nonneg",
-	"ram.boss_lunge_px": "nonneg",
-	"ram.boss_dodge_hold_s": "pos",
+	"evade.sprint_window_s": "pos",
+	"evade.hold_s": "pos",
+	"evade.boss_hold_s": "pos",
 	"berm.j_per_hp": "pos",
 	"berm.max_hp": "nonneg",
 	"in_band.sim_ftp_pct": "pair",
@@ -68,8 +63,6 @@ const TANKS_SPEC := {
 	"dynamo.per_degree": "nonneg",
 	"dynamo.per_traverse": "nonneg",
 	"dynamo.per_hoist": "nonneg",
-	"dynamo.per_secondary": "nonneg",
-	"dynamo.secondary_min_bank": "nonneg",
 	"dynamo.elev_deg_s": "pair",
 	"dynamo.traverse_s": "pair",
 	"dynamo.hoist_s": "pair",
@@ -94,9 +87,16 @@ const TANKS_SPEC := {
 	"damage.over": "nonneg",
 	"damage.splash_px": "nonneg",
 	"damage.splash_frac": "nonneg",
-	"secondary.damage": "nonneg",
-	"secondary.every_s": "pos",
-	"secondary.range_px": "pos",
+	"bow.damage": "nonneg",
+	"bow.every_s": "pos",
+	"bow.min_px": "nonneg",
+	"bow.max_px": "pos",
+	"bow.per_burst_units": "nonneg",
+	"bow.min_bank": "nonneg",
+	"bow.under_band_rate": "frac",
+	"bow.bulwark_rate": "frac",
+	"bow.clear_s": "pos",
+	"arc.lit_dispersion_mult": "frac",
 	"caps.enemies": "pos",
 	"caps.shells": "pos",
 }
@@ -123,6 +123,12 @@ const STATIONS_SPEC := {
 	"bank.substep_s": "pos",
 	"bank.max_step_pts": "pos",
 	"bank.clamp_to_range": "bool",
+	"arc.base_pct": "pos",
+	"arc.span_pct": "nonneg",
+	"arc.every_s": "pos",
+	"arc.substeps": "pos",
+	"arc.substep_s": "pos",
+	"arc.max_step_pts": "pos",
 	"boiler.grade_pct": "nonneg",
 	"boiler.warmup_grade_pct": "nonneg",
 	"boiler.max_rise_pct": "pos",
@@ -138,8 +144,6 @@ const STATIONS_SPEC := {
 	"haptics.hit.duration_s": "pos",
 	"haptics.boss_hit.haptic": "pos",
 	"haptics.boss_hit.duration_s": "pos",
-	"haptics.ram.haptic": "pos",
-	"haptics.ram.duration_s": "pos",
 	"haptics.cooldown_s": "nonneg",
 }
 const ENEMY_SPEC := {
@@ -147,6 +151,7 @@ const ENEMY_SPEC := {
 	"hp": "pos",
 	"size_px": "pair",
 	"light_mult": "nonneg",
+	"lane": "nonneg",
 	"gun.damage": "nonneg",
 	"gun.every_s": "pos",
 	"gun.hit": "frac",
@@ -170,7 +175,12 @@ const ENEMIES_SPEC := {
 	"miss_px": "pair",
 	"clamp.ahead_max_right_px": "pos",
 	"clamp.behind_min_show_px": "nonneg",
+	"lanes.count": "pos",
+	"lanes.gap_px": "nonneg",
 }
+## An enemy type's optional flank shot (v2, the light tank's, brief 2.4): its first shot after it
+## reaches its hold distance, telegraphed.
+const FLANK_SPEC := {"telegraph_s": "pos", "damage": "nonneg", "hit": "frac"}
 const SCORING_SPEC := {
 	"scale": "pos",
 	"weights.band": "nonneg",
@@ -259,6 +269,9 @@ const STATION_BOUNDS: Array = [
 	["bank.base_pct", ">=", ERG_MIN_PCT, "bank targets inside 50..100% (4.6.1)"],
 	["bank.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
 	["bank.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
+	["arc.base_pct", ">=", ERG_MIN_PCT, "arc targets inside 50..100% (4.6.1)"],
+	["arc.max_step_pts", "<=", BANK_MAX_STEP_PTS, "<= 10 points per update (4.6.2)"],
+	["arc.substep_s", ">=", BANK_MIN_SUBSTEP_S, "sub-steps >= 1 s apart (4.6.2)"],
 	["boiler.grade_pct", "<=", BOILER_MAX_PCT, "boiler 8% x difficulty <= +8% (4.6.6)"],
 	["boiler.warmup_grade_pct", "<=", BOILER_WARMUP_MAX_PCT, "warm-up SIM <= +3% (4.6.8)"],
 	["boiler.max_rise_pct", "<=", BOILER_MAX_RISE_PCT, "boiler rises <= 0.5% a step"],
@@ -270,8 +283,6 @@ const STATION_BOUNDS: Array = [
 	["haptics.hit.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
 	["haptics.boss_hit.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
 	["haptics.boss_hit.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
-	["haptics.ram.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
-	["haptics.ram.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
 	["haptics.cooldown_s", ">=", HAPTIC_MIN_COOLDOWN_S, "haptic cooldown >= 15 s (2.7)"],
 ]
 
@@ -430,16 +441,18 @@ static func _check_station_bounds(d: Dictionary, errors: Array[String]) -> void:
 		var ok := float(v) >= float(c[2]) if c[1] == ">=" else float(v) <= float(c[2])
 		if not ok:
 			errors.append("stations.json %s: must be %s %s (%s)" % [c[0], c[1], c[2], c[3]])
-	var sub_pts := float(d["bank"]["max_step_pts"]) / maxf(float(d["bank"]["substeps"]), 1.0)
-	if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
-		var why := "bank.max_step_pts / bank.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
-		errors.append("stations.json " + why % sub_pts)
+	for k: String in ["bank", "arc"]:
+		var sub_pts := float(d[k]["max_step_pts"]) / maxf(float(d[k]["substeps"]), 1.0)
+		if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
+			var why := "%s.max_step_pts / %s.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
+			errors.append("stations.json " + why % [k, k, sub_pts])
 	var hoist_step := float(d["hoist"]["rise_pct_s"]) * float(d["hoist"]["step_s"])
 	if hoist_step > HOIST_MAX_STEP_PCT + 1e-9:
 		var why := "hoist.rise_pct_s x hoist.step_s: must be <= 1, got %s (+1%%/s, 4.6.6)"
 		errors.append("stations.json " + why % hoist_step)
-	if float(d["bank"]["base_pct"]) + float(d["bank"]["span_pct"]) > ERG_MAX_PCT:
-		errors.append("stations.json bank: base_pct + span_pct must be <= 100 (4.6.1)")
+	for k: String in ["bank", "arc"]:
+		if float(d[k]["base_pct"]) + float(d[k]["span_pct"]) > ERG_MAX_PCT:
+			errors.append("stations.json %s: base_pct + span_pct must be <= 100 (4.6.1)" % k)
 	if not bool(d["bank"]["clamp_to_range"]):
 		errors.append("stations.json bank.clamp_to_range: must be true (targets stay in range_pct)")
 	var warm_hi := float(d["terrain"]["warmup_grade_pct"][1])
@@ -472,6 +485,12 @@ static func validate_enemies(d: Variant) -> Array[String]:
 			check_spec(types[t], ENEMY_SPEC, "enemies.json types.%s" % t, errors)
 			if int(types[t].get("code", 0)) != TankIds.enemy_code(t):
 				errors.append("enemies.json types.%s.code: must be %d" % [t, TankIds.enemy_code(t)])
+			if (types[t] as Dictionary).has("flank"):
+				check_spec(types[t]["flank"], FLANK_SPEC, "enemies.json types.%s.flank" % t, errors)
+			var lanes: Variant = dig(d, "lanes.count")
+			var lane: Variant = (types[t] as Dictionary).get("lane")
+			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
+				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
 	return errors
 
 

@@ -171,7 +171,6 @@ const INTENT_TARGET := "target"
 const INTENT_TRAVERSE := "traverse"
 const INTENT_FIRE := "fire"
 const INTENT_LATCH := "latch"
-const INTENT_RAM := "ram"
 const INTENT_OVER := "over"
 ## v2 free roam (brief 2.10): flip the travel direction (the diesel or Bulwark rider, 30 s
 ## cooldown). Declared for the wire; no engine owns it and the rules do not handle it yet.
@@ -183,11 +182,11 @@ const INTENT_KINDS: Array[String] = [
 	INTENT_TRAVERSE,
 	INTENT_FIRE,
 	INTENT_LATCH,
-	INTENT_RAM,
 	INTENT_OVER,
 	INTENT_TURN
 ]
-## Intents that end a human's Autopilot fallback (brief 2.5); ram and over never do.
+## Intents that end a human's Autopilot fallback (brief 2.5); over never does. (v2: the Ram and its
+## "ram" intent are gone, brief 2.4; a "ram" intent is junk to TankIntents.normalize.)
 const DELIBERATE_KINDS: Array[String] = [
 	INTENT_LEVER, INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN
 ]

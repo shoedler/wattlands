@@ -7,21 +7,23 @@ extends RefCounted
 ## angles and % targets in 0.1 units (x10), shares 0..1 in thousandths (x1000, "pml"), HP rounded
 ## up (ceil) so a living target never shows 0.
 ##
-## v2 (VERSION 2) added, at the ends of their rows: tk dir, r target_x10, and the arc room's row.
+## v2 (VERSION 2) added, at the ends of their rows: tk dir, r target_x10, e lane, and the arc room's
+## row; the r flags R_CAN_EVADE and R_SPRINTING. v1's Ram columns (tk stall_ms, the diesel's and the
+## Bulwark's ram_ms / ram_cd_ms / dodge_ms) and the STF_PROMPT bit are reserved: always 0 (brief 2.4).
 ##
 ## {"v": 2, "tick": n,
 ##  "sg": [seg code, stage, phase index, elapsed_ms, flags SG_*],
-##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, stall_ms, repair_hj,
+##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, 0 (reserved), repair_hj,
 ##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*,
 ##         dir (TankIds.DIR_*: 1 right, -1 left)],
 ##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10], ...]  slot order
 ##  "st": [[engine code, slot, flags ST_* (+ engine bits), a, b, c, d, e], ...]  rooms rear to front
-##        diesel:  a ram_ms, b ram_cd_ms, c dodge_ms, d 0, e 0
+##        diesel:  a 0, b 0, c 0, d 0, e 0 (a-c reserved)
 ##        dynamo:  a bank_x10, b hoist_ms, c 0, d 0, e 0
 ##        steam:   a pressure_x10, b window_ms, c over_ms, d 0, e 0
-##        bulwark: a ram_ms, b ram_cd_ms, c lever + 4 x lever_to, d move_ms, e hoist_j / 10
+##        bulwark: a 0, b 0 (reserved), c lever + 4 x lever_to, d move_ms, e hoist_j / 10
 ##        arc:     a duty_pml (duty x 1000), b 0, c 0, d 0, e 0
-##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms], ...]   live enemies, spawn order
+##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms, lane], ...]  live enemies, spawn order
 ##  "s":  [[id, shell type, x, y, vx, vy, friendly 0/1], ...]   shells in flight (px, px/s)
 ##  "o":  [[id, obstacle code, x_px, light_hits, cleared 0/1], ...]
 ##  "gl": [active 0/1, guns_total, guns_left, barrage 0/1],
@@ -51,6 +53,7 @@ const TK_GRADE_X10 := 3
 const TK_HP := 4
 const TK_HP_MAX := 5
 const TK_BERM := 6
+## Reserved (v1's failed-Ram stall): always 0.
 const TK_STALL_MS := 7
 const TK_REPAIR_HJ := 8
 const TK_FACING := 9
@@ -83,6 +86,9 @@ const RF_IN_BAND := 1
 const RF_RESCUE := 2
 const RF_AFK := 4
 const RF_CONNECTED := 8
+## v2: TankRiderState.can_evade and sprinting.
+const RF_CAN_EVADE := 16
+const RF_SPRINTING := 32
 
 # st columns; flags shared by every room, then per engine
 const ST_ENGINE := 0
@@ -99,6 +105,7 @@ const STF_RESERVE := 2
 const STF_UNPOWERED := 4
 ## diesel and bulwark
 const STF_SPRINTING := 8
+## Reserved (v1's Ram prompt): never set.
 const STF_PROMPT := 16
 ## bulwark
 const STF_AUTO := 32
@@ -122,7 +129,9 @@ const E_HP := 3
 const E_MODE := 4
 const E_SIDE := 5
 const E_TELEGRAPH_MS := 6
-const E_LEN := 7
+## v2: TankEnemyState.lane.
+const E_LANE := 7
+const E_LEN := 8
 
 # s columns
 const S_ID := 0

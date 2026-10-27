@@ -47,6 +47,11 @@ var ftp_pct: float = 0.0
 var target_pct: float = 0.0
 ## [snap]
 var in_band: bool = false
+## [snap] (v2) This rider can "Surge to evade" now (brief 2.4): in a SIM WORK phase of its own plan,
+## past its first 300 s, present and not in rescue. Each peer raises its own rider's prompt from it.
+var can_evade: bool = false
+## [snap] (v2) The rider's sprint rule holds now (>= 1.2 x FTP raw over the trailing 3 s).
+var sprinting: bool = false
 ## [snap]
 var rescue: bool = false
 ## [snap] AFK or dropped: the station runs on reserve.
@@ -60,8 +65,12 @@ var work_s: float = 0.0
 var band_s: float = 0.0
 ## Game seconds per engine (ENGINE_INDEX).
 var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
-var rams: int = 0
-var dodges: int = 0
+## (v2) Telegraphed shots that resolved while this rider could evade, and those this rider's own
+## surge made miss (brief 2.8: evades tried and successful).
+var evades_tried: int = 0
+var evades_ok: int = 0
+## (v2) Bow-gun bursts credited to this rider (its station powered them) that hit.
+var bow_hits: int = 0
 ## Berm HP that absorbed damage while this rider dug in.
 var berm_absorbed: float = 0.0
 ## Main-gun shots fired from this rider's station and hits, plus every shell by type.
@@ -70,10 +79,10 @@ var hits: int = 0
 var shells_by_type: Array[int] = [0, 0, 0, 0]
 
 # --- Host-only helpers (never serialized: "_" names and Objects are skipped by TankRecord) -----------
-## The sprint rule for Ram, dodge and Overpressure: SprintRule.create(ftp, ram.sprint_window_s),
-## the trailing 3 s average >= 1.2 x FTP (BRIEF 3.5, brief 2.4). The rules feed it every tick with
-## (state.t, raw watts) through sprint_rule(); the station's `sprinting` mirrors holds() and
-## `sprint_s` / `dodge_s` count held_s(). Reset it when the rider changes station.
+## The sprint rule for evade and Overpressure: SprintRule.create(ftp, evade.sprint_window_s), the
+## trailing 3 s average >= 1.2 x FTP (BRIEF 3.5, brief 2.4). The rules feed it every tick with
+## (state.t, raw watts) through sprint_rule(); `sprinting` mirrors holds(). Reset it when the rider
+## changes station.
 var _sprint: SprintRule = null
 
 
