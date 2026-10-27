@@ -120,6 +120,44 @@ test('ALL catches refusals, out-of-range targets, forbidden clamps and stray gra
   assert.match(probs, /3000 bytes/);
 });
 
+const surge = (id, t, outcome) => ({
+  id,
+  peer: 1,
+  t,
+  kind: 'request',
+  requested: { haptic_pull: 50, duration_s: 2, reason: 'surge', source: 'fishing', id },
+  accepted: outcome.accepted ?? true,
+  reason: outcome.reason ?? '',
+  applied: outcome.applied,
+});
+
+test('ALL wants surge pulls applied, or dropped only for a 4.6.6 reason', () => {
+  const r = roamReport();
+  const pulled = { clamped_by: ['haptic_intensity'], refused: false, phase_index: 2, applied: { haptic_pull_s: 2, haptic_pull_pct: 35, haptic_pull_w: 70 } };
+  r.directives.push(surge(20, 340, { applied: pulled }));
+  r.directives.push(surge(21, 345, { applied: { clamped_by: [], refused: true, reason: 'haptic_cooldown' } }));
+  r.directives.push(surge(22, 346, { accepted: false, reason: 'haptic_pull_unsafe', applied: null }));
+  r.trace[1].push({ t: 341, game_t: 341, clamped_by: ['haptic_intensity', 'haptic_pull'] });
+  assert.deepEqual(cs.runProblems('x', r), [], 'applied, cooldown, unsafe; the pull row is noted');
+  const all = cs.checkAll({ x: r });
+  assert.equal(all.ok, true, all.probs.join(' | '));
+  assert.match(all.info, /1\/3 surge pulls applied/);
+
+  const bad = roamReport();
+  bad.directives.push(surge(30, 340, { applied: { clamped_by: [], refused: true, reason: 'haptic_pull_in_sim' } }));
+  bad.directives.push(surge(31, 360, { applied: { ...pulled, applied: { haptic_pull_s: 4, haptic_pull_pct: 60 } } }));
+  bad.directives.push(surge(32, 380, { applied: { ...pulled, clamped_by: ['haptic_pull', 'limit_105'] } }));
+  const probs = cs.runProblems('x', bad).join(' | ');
+  assert.match(probs, /surge pull refused \(haptic_pull_in_sim\)/);
+  assert.match(probs, /haptic_pull_s 4/);
+  assert.match(probs, /haptic_pull_pct 60/);
+  assert.match(probs, /limit_105 \(forbidden\)/);
+
+  const none = roamReport();
+  none.directives.push(surge(40, 340, { applied: { clamped_by: [], refused: true, reason: 'haptic_cooldown' } }));
+  assert.match(cs.checkAll({ x: none }).probs.join(' | '), /no surge pull applied \(1 sent\)/);
+});
+
 test('ALL rejects an ERG phase over 300 s above 105 %', () => {
   const r = roamReport();
   r.plans[1] = { ...plan, phases: plan.phases.map((p, i) => (i === 2 ? { ...p, max_s: 420, range_pct: [100, 108] } : p)) };

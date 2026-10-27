@@ -107,7 +107,7 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 
 ## 2026-10-23 Allowed clamps in the sims
 
-- Decision: applied records and trace rows may show only slew, floor, unverified, rescue, coasting, haptic_intensity and warmup; switch_ramp, paused and the SIM grade bounds are noted. ceiling, long_phase, limit_105 and limit_120 fail by name.
+- Decision: applied records and trace rows may show only slew, floor, unverified, rescue, coasting, haptic_intensity and warmup; switch_ramp, paused, the SIM grade bounds and haptic_pull (a surge's pull, exempt from the 105 % long-phase cap) are noted. ceiling, long_phase, limit_105 and limit_120 fail by name.
 - Reason: the plans must never need the governor's caps; rule names from wl.gd.
 
 ## 2026-10-27 The boat is a rigid body on the water
@@ -118,6 +118,6 @@ Short ADRs for Turbo Reel (game id `fishing`): date, decision, alternatives, rea
 
 ## 2026-10-27 Big-fish surges as an ERG haptic pull
 
-- Decision: a run or jump by a fish of 30 kg or more requests haptic_pull +50 % FTP for 2 s (haptics on, not in the first 300 s or a stagger, one per 15 s) and shows F_SURGE for 2 s either way. The sims check its shape and accept a refusal.
+- Decision: a run or jump by a fish of 30 kg or more requests haptic_pull +50 % FTP for 2 s (haptics on, not in the first 300 s or a stagger, one per 15 s) and shows F_SURGE for 2 s either way. The governor applies it: the sims and the e2e check want every surge pull applied (at most 3 s and +50 % FTP) or dropped only for haptics off, warm-up, the haptic cooldown or an unsafe rider, and at least one applied across the matrix.
 - Alternatives: a SIM haptic grade (not available in an ERG phase); a target change (would be a ride target, not a feel).
 - Reason: owner-approved BRIEF 4.6.6 amendment; the governor bounds and spaces it.

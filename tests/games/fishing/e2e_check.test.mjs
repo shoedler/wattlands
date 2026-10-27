@@ -126,3 +126,16 @@ test('the CLI exits 1 on a failing report and 2 on usage or I/O errors', () => {
   assert.equal(ec.main([path.join(here, 'no_such_report.json')], sink(), sink()), 2);
   assert.equal(ec.checkReport({}).ok, false);
 });
+
+test("a surge's haptic pull is applied or dropped only for a 4.6.6 reason", () => {
+  const pull = { haptic_pull: 50, duration_s: 2, reason: 'surge', source: 'fishing' };
+  const applied = { haptic_pull_s: 2, haptic_pull_pct: 35, haptic_pull_w: 70 };
+  const ok = e2eReport();
+  ok.directives[0] = { ...ok.directives[0], requested: { ...pull, id: 1 }, clamped_by: ['haptic_intensity'], applied };
+  ok.directives[1] = { ...ok.directives[1], requested: { ...pull, id: 1 }, refused: true, reason: 'haptic_cooldown', clamped_by: [], applied: {} };
+  ok.peers.client1.trace.push({ t: 70, clamped_by: ['haptic_intensity', 'haptic_pull'] });
+  assert.equal(ec.checkReport(ok).ok, true, errs(ok));
+  const bad = e2eReport();
+  bad.directives[0] = { ...bad.directives[0], requested: { ...pull, id: 1 }, refused: true, reason: 'haptic_pull_in_sim', clamped_by: [], applied: {} };
+  assert.match(errs(bad), /host: directive 1: surge pull refused \(haptic_pull_in_sim\)/);
+});

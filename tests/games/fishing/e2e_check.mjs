@@ -15,8 +15,9 @@
 //      restarted client's events are a tail of the host's (it misses what came while it was down);
 //   4. each rider's trip reaches the cool-down (phase 4) <= 135 s after its ride out started;
 //   5. every applied directive was clamped only by the allowed rules (slew, floor, unverified,
-//      rescue, coasting, haptic intensity, warm-up; switch_ramp and paused noted), never refused,
-//      and is a Fishing ERG request {mode, target_pct, duration_s, reason pull|run|jump, source};
+//      rescue, coasting, haptic intensity, warm-up; switch_ramp, paused and haptic_pull noted),
+//      never refused (a surge's haptic pull only for haptics off, warm-up, the haptic cooldown or an
+//      unsafe rider), and is a Fishing request (an ERG pull, run or jump, or a surge's pull);
 //      every trace row carries only allowed clamps;
 //   6. every peer that reports an exit_reason ended "complete";
 //   7. when fit_check's JSON is in the report, every FIT has 4 laps (ride out, Troll, Fight, cool-down).
@@ -35,7 +36,9 @@ import {
   eventErrors,
   fishingEvents,
   isObj,
+  isSurge,
   requestShapeProblems,
+  surgeProblems,
 } from './sim/fishing_sim_lib.mjs';
 
 export const ROLES = ['host', 'client1', 'client2'];
@@ -153,7 +156,9 @@ export function checkReport(report) {
   for (const { role, rec } of recs) {
     if (rec.kind !== undefined && rec.kind !== 'request') continue;
     const at = `directive ${rec.id}`;
-    for (const m of appliedProblems(rec)) err(role, `${at}: ${m}`);
+    const surge = { accepted: rec.refused !== true, reason: rec.reason, applied: rec };
+    const probs = isSurge(rec.requested) ? surgeProblems(surge).probs : appliedProblems(rec);
+    for (const m of probs) err(role, `${at}: ${m}`);
     for (const m of requestShapeProblems(rec.requested)) err(role, `${at}: ${m}`);
   }
   for (const role of ROLES) {

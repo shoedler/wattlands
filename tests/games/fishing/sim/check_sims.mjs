@@ -20,11 +20,13 @@
 //   d_roam_a, d_roam_b        roam_10, 2 band-trackers + 2 bots, seed 7, twice
 // FIT (--fit): tools/fit_check on every FIT with each rider's expected laps.
 //
-// Every run (ALL): completed; no plan warnings; every directive accepted (a surge's haptic pull
-// may be refused); each request is a Fishing ERG pull/run/jump inside its phase's range_pct (or
-// the Landing's haptic, or a surge's +50 % FTP 2 s haptic pull) and is applied
-// clamped only by the allowed rules (never ceiling, long_phase, limit_105, limit_120); every trace
-// row likewise; every course grade 0..3 % and only in a Free Roam SIM game phase; every ERG phase
+// Every run (ALL): completed; no plan warnings; every directive accepted; each request is a
+// Fishing ERG pull/run/jump inside its phase's range_pct (or the Landing's haptic, or a surge's
+// +50 % FTP 2 s haptic pull) and is applied clamped only by the allowed rules (never ceiling,
+// long_phase, limit_105, limit_120); a surge's pull is applied (<= 3 s, <= +50 % FTP) or dropped
+// only for haptics off, warm-up, the haptic cooldown or an unsafe rider, and the matrix applies at
+// least one when it sends any; every trace row likewise (haptic_pull noted: the pull may sit
+// above 105 % in a long phase); every course grade 0..3 % and only in a Free Roam SIM game phase; every ERG phase
 // of the final plans obeys BRIEF 4.6.1 (longer than 300 s: <= 105 %); events valid; snapshots
 // <= 2 KB; one FIT per human slot.
 
@@ -48,6 +50,7 @@ import {
   gradeOf,
   isObj,
   isSurge,
+  surgeProblems,
   median,
   requestShapeProblems,
   sum,
@@ -122,14 +125,13 @@ export function runProblems(name, r) {
   }
   for (const d of r.directives ?? []) {
     const at = `${name}: ${d.kind} #${d.id} peer ${d.peer} t ${fmt(d.t)}`;
-    // A surge's haptic pull is a feel the governor may refuse (a governor without the haptic
-    // pull channel, the 15 s haptic spacing): its shape is checked, its outcome is not.
+    // A surge's haptic pull is applied, or dropped only for a reason BRIEF 4.6.6 gives.
     const surge = d.kind === 'request' && isSurge(d.requested);
     if (d.accepted !== true && !surge) probs.push(`${at}: refused (${d.reason})`);
     if (d.kind === 'request') {
       for (const p of requestShapeProblems(d.requested)) probs.push(`${at}: ${p}`);
-      const refusedSurge = surge && (d.accepted !== true || d.applied?.refused === true);
-      if (!refusedSurge) for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
+      if (surge) for (const p of surgeProblems(d).probs) probs.push(`${at}: ${p}`);
+      else for (const p of appliedProblems(d.applied)) probs.push(`${at}: ${p}`);
       const req = d.requested ?? {};
       if (req.mode === 'ERG' && isObj(d.applied)) {
         const ph = plans[String(d.peer)]?.phases?.[d.applied.phase_index];
@@ -162,7 +164,17 @@ export function checkAll(reports) {
   const names = Object.keys(reports);
   if (!names.length) return skip('ALL', title, 'no reports');
   const probs = names.flatMap((n) => runProblems(n, reports[n]));
-  return result('ALL', title, probs, `${names.length} runs`);
+  let sent = 0;
+  let applied = 0;
+  for (const n of names) {
+    for (const d of reports[n].directives ?? []) {
+      if (d.kind !== 'request' || !isSurge(d.requested)) continue;
+      sent += 1;
+      if (surgeProblems(d).applied) applied += 1;
+    }
+  }
+  if (sent > 0 && applied === 0) probs.push(`no surge pull applied (${sent} sent)`);
+  return result('ALL', title, probs, `${names.length} runs, ${applied}/${sent} surge pulls applied`);
 }
 
 // --- scenarios ---------------------------------------------------------------------------------

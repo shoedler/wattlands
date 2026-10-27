@@ -37,12 +37,14 @@ export const EVENT_TYPES = Object.keys(INT_FIELDS);
 /**
  * Governor clamp rules a Fishing directive or trace row may show: slew (4.6.2), the floor and the
  * unverified-FTP factor (4.6.1), rescue (4.6.3), coasting (4.6.4), haptic intensity (4.6.6) and
- * the warm-up clamp (4.6.8). switch_ramp (the ramped ERG<->SIM entry, BRIEF 4.5), paused and the
- * SIM grade bounds are allowed and noted. The absolute ceiling, the 105 % long-phase cap and the
+ * the warm-up clamp (4.6.8). switch_ramp (the ramped ERG<->SIM entry, BRIEF 4.5), paused, the
+ * SIM grade bounds and haptic_pull (a surge's ERG pull, the owner-approved 4.6.6 amendment: a
+ * row with it may sit above 105 % in a long phase, the pull being exempt from that cap) are
+ * allowed and noted. The absolute ceiling, the 105 % long-phase cap and the
  * duration limits fail: the plans must never need them.
  */
 export const ALLOWED_CLAMPS = new Set(['slew', 'floor', 'unverified', 'rescue', 'coasting', 'haptic_intensity', 'warmup']);
-export const NOTED_CLAMPS = new Set(['switch_ramp', 'paused', 'grade_range', 'grade_limit', 'haptic_limit']);
+export const NOTED_CLAMPS = new Set(['switch_ramp', 'paused', 'grade_range', 'grade_limit', 'haptic_limit', 'haptic_pull']);
 export const FORBIDDEN_CLAMPS = new Set(['ceiling', 'long_phase', 'limit_105', 'limit_120']);
 
 /** Every ERG directive is {mode: ERG, target_pct, duration_s, reason, source: "fishing"}. */
@@ -54,6 +56,10 @@ export const HAPTIC = Object.freeze({ mode: 'SIM', haptic: 3.0, duration_s: 5, r
 export const SURGE = Object.freeze({ haptic_pull: 50.0, duration_s: 2, reason: 'surge', source: 'fishing' });
 /** True for a surge's haptic_pull request. */
 export const isSurge = (req) => isObj(req) && 'haptic_pull' in req;
+/** Why the governor may drop a surge's pull (BRIEF 4.6.6, Wl.REFUSE_*): the rider's haptics are
+ *  off, warm-up, the shared 15 s haptic cooldown, or the rider is unsafe (rescue and its
+ *  ramp-back, coasting, AFK, pause, panic). Any other refusal (in SIM, bad fields) fails. */
+export const PULL_REFUSALS = new Set(['haptics_off', 'haptic_in_warmup', 'haptic_cooldown', 'haptic_pull_unsafe']);
 export const SELF_CAP_PCT = 110;
 /** The driving load: FishingConst.GRADE_MAX_PCT. */
 export const GRADE_MAX_PCT = 3;
@@ -160,6 +166,23 @@ export function appliedProblems(rec, allowed = ALLOWED_CLAMPS) {
   if (!Array.isArray(rec.clamped_by)) probs.push('the applied record has no clamped_by list');
   probs.push(...clampProblems(rec.clamped_by, allowed));
   return probs;
+}
+
+/** Problems with a surge's outcome: applied as a pull (haptic_pull_s 0..3 s, at most +50 % FTP,
+ *  only allowed clamps), or refused for one of PULL_REFUSALS. Returns {probs, applied}. */
+export function surgeProblems(d) {
+  const rec = d?.applied;
+  if (d?.accepted !== true || rec?.refused === true) {
+    const why = (isObj(rec) && rec.reason) || d?.reason || '';
+    return { probs: PULL_REFUSALS.has(why) ? [] : [`surge pull refused (${why})`], applied: false };
+  }
+  const probs = appliedProblems(rec);
+  const a = isObj(rec) && isObj(rec.applied) ? rec.applied : {};
+  const s = Number(a.haptic_pull_s ?? NaN);
+  const pct = Number(a.haptic_pull_pct ?? NaN);
+  if (!(s > 0 && s <= 3 + EPS)) probs.push(`surge pull haptic_pull_s ${a.haptic_pull_s} (0..3 s)`);
+  if (!(pct >= 0 && pct <= 50 + EPS)) probs.push(`surge pull haptic_pull_pct ${a.haptic_pull_pct} (0..50)`);
+  return { probs, applied: true };
 }
 
 /** The grade a course_grade entry requested, else NaN. */
