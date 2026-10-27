@@ -35,11 +35,15 @@ func test_the_bastion_has_its_arc_room_tower_and_rider() -> void:
 	var v := U.view_of(self, s)
 	assert_eq(v.variant, "tank_4rider")
 	assert_true(v.room_rects.has("arc"))
-	assert_eq(v.rider_of("arc").slot, 3)
+	assert_eq(v.rider_of("arc"), s.rider_at(s.station(TankIds.ENGINE_ARC).slot), "from stations")
 	assert_true(v.kit.has_anchor(v.variant, "searchlight_tower_lens"))
+	(s.station(TankIds.ENGINE_ARC) as TankArcState).lit = true
 	assert_eq(v.searchlight_k(s), 1.0, "the arc rider in band lights the searchlights")
-	s.stations[s.stations.size() - 1].in_band = false
+	var arc := s.station(TankIds.ENGINE_ARC) as TankArcState
+	arc.lit = false
 	assert_lt(v.searchlight_k(s), 0.5, "out of band they dim")
+	arc.stalled = true
+	assert_lt(v.searchlight_k(s), 0.2, "a stalled generator nearly kills them")
 	assert_eq(v.searchlight_k(U.fixture("state", 3)), 1.0, "no arc generator: always lit")
 
 
@@ -210,7 +214,7 @@ func test_shots_hits_and_bursts_light_the_scene() -> void:
 	assert_gt(v.fx.flashes.size(), 0)
 	assert_gt(v.fx.wash, 0.0, "the flash lights the scene")
 	var tracers := v.fx.tracers.size()
-	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankView.SHELL_BOW, 17))
+	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankIds.SHELL_BOW, 17))
 	assert_gt(v.fx.tracers.size(), tracers, "the bow guns throw tracers")
 	assert_gt(v.fx.casings.size(), 0, "and brass")
 	v.apply_cue(

@@ -207,13 +207,13 @@ func test_the_citadel_secondaries_cost_2_units_and_stop_below_10() -> void:
 	e.hp_max = 1000.0
 	rig.run(0.1)
 	var shots := rig.of_type("shot").filter(
-		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_SECONDARY
+		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_BOW
 	)
 	assert_eq(shots.size(), 1, "the fore secondary fires at once")
 	assert_almost_eq(dy.bank, 10.0 - 1.5 * 0.1 + 0.0, 0.3)
 	rig.run(9.0)
 	shots = rig.of_type("shot").filter(
-		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_SECONDARY
+		func(x: Dictionary) -> bool: return x["sh"] == TankIds.SHELL_BOW
 	)
 	assert_eq(shots.size(), 1, "below 10 units they stop")
 

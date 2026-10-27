@@ -3,19 +3,24 @@ extends RefCounted
 ## The 10 Hz snapshot layout (brief 2.6; G0 contract): full state as compact integer arrays, at most
 ## 4 KB of JSON at the caps (16 enemies, 24 shells). TankSnapshot (net/, module) encodes and
 ## applies it; this file pins the keys, the row columns, the flag bits and the int paths.
-## Units on the wire: positions in art px (dpx = 0.1 px), times in ms, speeds in cm/s, grades and
-## angles in 0.1 units (x10), HP rounded up (ceil) so a living target never shows 0.
+## Units on the wire: positions in art px (dpx = 0.1 px), times in ms, speeds in cm/s, grades,
+## angles and % targets in 0.1 units (x10), shares 0..1 in thousandths (x1000, "pml"), HP rounded
+## up (ceil) so a living target never shows 0.
 ##
-## {"v": 1, "tick": n,
+## v2 (VERSION 2) added, at the ends of their rows: tk dir, r target_x10, and the arc room's row.
+##
+## {"v": 2, "tick": n,
 ##  "sg": [seg code, stage, phase index, elapsed_ms, flags SG_*],
 ##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, stall_ms, repair_hj,
-##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*],
-##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*], ...]   slot order
+##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*,
+##         dir (TankIds.DIR_*: 1 right, -1 left)],
+##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10], ...]  slot order
 ##  "st": [[engine code, slot, flags ST_* (+ engine bits), a, b, c, d, e], ...]  rooms rear to front
 ##        diesel:  a ram_ms, b ram_cd_ms, c dodge_ms, d 0, e 0
 ##        dynamo:  a bank_x10, b hoist_ms, c 0, d 0, e 0
 ##        steam:   a pressure_x10, b window_ms, c over_ms, d 0, e 0
 ##        bulwark: a ram_ms, b ram_cd_ms, c lever + 4 x lever_to, d move_ms, e hoist_j / 10
+##        arc:     a duty_pml (duty x 1000), b 0, c 0, d 0, e 0
 ##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms], ...]   live enemies, spawn order
 ##  "s":  [[id, shell type, x, y, vx, vy, friendly 0/1], ...]   shells in flight (px, px/s)
 ##  "o":  [[id, obstacle code, x_px, light_hits, cleared 0/1], ...]
@@ -23,7 +28,7 @@ extends RefCounted
 ##  "b":  [boss phase, x_dpx, bogie hp x3, turret hp, telegraph_ms]   (all 0 without a boss)
 ##  "sc": [breakdowns, overruns, behemoth killed 0/1, crew kills]}
 
-const VERSION := 1
+const VERSION := 2
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
 const KEYS: Array[String] = ["v", "tick", "sg", "tk", "r", "st", "e", "s", "o", "gl", "b", "sc"]
 
@@ -55,7 +60,9 @@ const TK_LOADED := 12
 const TK_BREECH_MS := 13
 const TK_TARGET := 14
 const TK_FLAGS := 15
-const TK_LEN := 16
+## v2: TankHullState.dir.
+const TK_DIR := 16
+const TK_LEN := 17
 const TKF_HOLDING := 1
 const TKF_EVASIVE := 2
 const TKF_TRAPS_CLEARED := 4
@@ -69,7 +76,9 @@ const R_RAW_W := 2
 const R_CADENCE := 3
 const R_FTP_PCT := 4
 const R_FLAGS := 5
-const R_LEN := 6
+## v2: TankRiderState.target_pct x 10.
+const R_TARGET_X10 := 6
+const R_LEN := 7
 const RF_IN_BAND := 1
 const RF_RESCUE := 2
 const RF_AFK := 4
@@ -101,6 +110,9 @@ const STF_OVER := 8
 const STF_LOADED := 16
 const STF_CYCLING := 32
 const STF_STEAM_SPRINTING := 64
+## arc (v2)
+const STF_LIT := 8
+const STF_ARC_STALLED := 16
 
 # e columns
 const E_ID := 0
@@ -204,6 +216,11 @@ static func ms(seconds: float) -> int:
 
 static func x10(v: float) -> int:
 	return roundi(v * 10.0)
+
+
+## A share 0..1 in thousandths.
+static func pml(v: float) -> int:
+	return roundi(v * 1000.0)
 
 
 static func hp(v: float) -> int:

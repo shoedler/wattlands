@@ -36,7 +36,7 @@ func test_the_shell_damage_table() -> void:
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_LIGHT), 20.0)
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_HEAVY), 50.0)
 	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_OVER), 100.0)
-	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_SECONDARY), 5.0)
+	assert_eq(TankDamage.shell_damage(c, TankIds.SHELL_BOW), 5.0)
 	assert_eq(
 		TankDamage.shell_damage(c, TankIds.SHELL_ENEMY), 0.0, "enemy rounds have their gun's damage"
 	)
@@ -53,11 +53,11 @@ func test_light_shells_and_secondaries_are_armoured_heavy_and_overpressure_are_n
 	}
 	for type: String in armour:
 		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_LIGHT), armour[type], type)
-		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_SECONDARY), armour[type], type)
+		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_BOW), armour[type], type)
 		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_HEAVY), 1.0, type)
 		assert_eq(TankDamage.enemy_mult(c, type, TankIds.SHELL_OVER), 1.0, type)
 	assert_eq(TankDamage.boss_mult(c, TankIds.SHELL_LIGHT), 0.25, "the Behemoth takes a quarter")
-	assert_eq(TankDamage.boss_mult(c, TankIds.SHELL_SECONDARY), 0.25)
+	assert_eq(TankDamage.boss_mult(c, TankIds.SHELL_BOW), 0.25)
 	assert_eq(TankDamage.boss_mult(c, TankIds.SHELL_HEAVY), 1.0)
 
 

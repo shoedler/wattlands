@@ -32,7 +32,7 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	ci.draw_texture(tv["hull"], o)
 	_running_gear(ci, v, o)
 	var machine_rooms := {}
-	for e: String in ["diesel", "steam", "dynamo", TankView.ENGINE_ARC]:
+	for e: String in TankView.MACHINE_ROOMS:
 		if v.room_rects.has(e):
 			machine_rooms[e] = v.room_rects[e]
 	TankRoomMachines.draw(ci, o, machine_rooms, v.phases, v.powers, v.time)

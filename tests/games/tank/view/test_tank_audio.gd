@@ -75,7 +75,7 @@ func _audio_for(peer: int) -> TankAudio:
 
 
 func test_bow_guns_rattle_and_enemy_guns_whistle_in() -> void:
-	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankAudio.SHELL_BOW, 1))
+	_audio.on_cue(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 1))
 	for _i in 6:
 		_step()
 	assert_gte(_audio.played.count("tank_bow_rattle"), 4, "a burst rattles")
@@ -268,18 +268,17 @@ func test_the_arc_generator_hums_and_crackles_on_its_riders_cadence() -> void:
 	var a := TankAudio.new()
 	a.game = g
 	add_child_autofree(a)
+	var me := s.rider_at(s.station(TankIds.ENGINE_ARC).slot).peer
 	for _i in 40:
-		a.update(s, 0.05, 4, U.feed_of(s, 180.0, 90.0))
-	assert_true(a.loop_on[TankAudio.ENGINE_ARC], "the hum runs")
-	assert_eq(
-		a.loop_db[TankAudio.ENGINE_ARC], TankAudio.OWN_DB[TankAudio.ENGINE_ARC], "peer 4's own"
-	)
+		a.update(s, 0.05, me, U.feed_of(s, 180.0, 90.0))
+	assert_true(a.loop_on[TankIds.ENGINE_ARC], "the hum runs")
+	assert_eq(a.loop_db[TankIds.ENGINE_ARC], TankAudio.OWN_DB[TankIds.ENGINE_ARC], "its rider's own")
 	# 90 rpm, two climbs a revolution: about 6 crackles in 2 s.
 	assert_between(a.played.count("tank_arc_crackle"), 4, 7)
 	a.played.clear()
 	for _i in 40:
-		a.update(s, 0.05, 4, U.feed_of(s, 0.0, 0.0))
-	assert_false(a.loop_on[TankAudio.ENGINE_ARC], "stopped at 0 rpm")
+		a.update(s, 0.05, me, U.feed_of(s, 0.0, 0.0))
+	assert_false(a.loop_on[TankIds.ENGINE_ARC], "stopped at 0 rpm")
 	assert_eq(a.played.count("tank_arc_crackle"), 0)
 
 

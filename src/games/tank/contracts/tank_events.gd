@@ -20,6 +20,13 @@ extends RefCounted
 ##   overrun    {sg: seg code, st: stage}                                 the previous segment hit max_s
 ##   boss_phase {p: TankIds.BOSS_*}
 ## Additive (G0): latch {s, sh: shell type}, lever {s, lv: TankIds.LEVER_*} for sound and view.
+## Additive (v2, brief 2.4, 2.6, 2.10; declared here, no emitter yet):
+##   evade      {id: the shooter's id (an enemy, or the Behemoth's turret part id), e: enemy code
+##               (BOSS_CODE for the Behemoth's main gun), ok: 1 the shot missed (a rider held the
+##               sprint rule inside the telegraph) / 0 it was not evaded}
+##   turn       {s: the slot that turned or -1 (Autopilot at a map end), dir: the new travel
+##               direction TankIds.DIR_*}                         free roam: the tank turns round
+##   time_up    {}                                             free roam: min_s reached, no new patrols
 ##
 ## Semantics the haptics depend on (brief 2.7; the director reads them this way):
 ## - A failed Ram emits only `ram ok:0` (its 10 HP is applied without a `hit` event), so the driver
@@ -46,6 +53,9 @@ const OVERRUN := "overrun"
 const BOSS_PHASE := "boss_phase"
 const LATCH := "latch"
 const LEVER := "lever"
+const EVADE := "evade"
+const TURN := "turn"
+const TIME_UP := "time_up"
 const TYPES: Array[String] = [
 	SEGMENT,
 	ROTATION,
@@ -59,7 +69,10 @@ const TYPES: Array[String] = [
 	OVERRUN,
 	BOSS_PHASE,
 	LATCH,
-	LEVER
+	LEVER,
+	EVADE,
+	TURN,
+	TIME_UP
 ]
 
 ## hit "on"
@@ -87,6 +100,9 @@ const INT_FIELDS := {
 	BOSS_PHASE: ["p"],
 	LATCH: ["s", "sh"],
 	LEVER: ["s", "lv"],
+	EVADE: ["id", "e", "ok"],
+	TURN: ["s", "dir"],
+	TIME_UP: [],
 }
 
 
@@ -156,6 +172,20 @@ static func latch(slot: int, shell: int) -> Dictionary:
 
 static func lever(slot: int, position: int) -> Dictionary:
 	return {"type": LEVER, "s": slot, "lv": position}
+
+
+## A telegraphed shot resolved: `ok` true when the crew's surge made it miss.
+static func evade(shooter_id: int, code: int, ok: bool) -> Dictionary:
+	return {"type": EVADE, "id": shooter_id, "e": code, "ok": int(ok)}
+
+
+## The tank turned round (free roam); `dir` is the new TankIds.DIR_*.
+static func turn(slot: int, dir: int) -> Dictionary:
+	return {"type": TURN, "s": slot, "dir": dir}
+
+
+static func time_up() -> Dictionary:
+	return {"type": TIME_UP}
 
 
 ## True for a hit on the tank that the brief's "Hit of >= 8 damage" haptic covers (brief 2.7):

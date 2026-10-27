@@ -29,6 +29,10 @@ const FROZEN_KEYS: Array[String] = [
 	"boss.turret.muzzle",
 	"boss.secondary_muzzle",
 ]
+## Tanks rigs.json may not have yet (v2): until their own rig lands, their gameplay geometry is
+## the named tank's (the Bastion is the Citadel plus a room, so its turret and gun match). A tank
+## the file has always uses its own; validate() requires every tank not listed here.
+const RIG_FALLBACK := {TankIds.TANK_BASTION: TankIds.TANK_CITADEL}
 
 var data: Dictionary = {}
 
@@ -56,7 +60,8 @@ func validate() -> Array[String]:
 		var paths: Array[String] = []
 		if key.contains("*"):
 			for t: String in TankIds.TANKS:
-				paths.append(key.replace("*", t))
+				if not RIG_FALLBACK.has(t) or has_rig(t):
+					paths.append(key.replace("*", t))
 		else:
 			paths.append(key)
 		for p in paths:
@@ -65,6 +70,9 @@ func validate() -> Array[String]:
 	if not errors.is_empty():
 		return errors
 	for t: String in TankIds.TANKS:
+		if RIG_FALLBACK.has(t) and not has_rig(rig_of(t)):
+			errors.append("rigs.json tanks.%s: missing, and so is its fallback" % t)
+			continue
 		var want := trunnion(t) + Vector2(barrel_px(t), 0.0)
 		if not muzzle(t, 0.0, TankIds.FACE_RIGHT).is_equal_approx(want):
 			errors.append("rigs.json tanks.%s: muzzle must equal trunnion + [barrel_px, 0]" % t)
@@ -77,25 +85,37 @@ func validate() -> Array[String]:
 	return errors
 
 
+## True when rigs.json has an entry for `tank`.
+func has_rig(tank: String) -> bool:
+	return TankContentSchema.dig(data, "tanks.%s" % tank) is Dictionary
+
+
+## The rigs.json tank whose geometry `tank` uses: its own, else its RIG_FALLBACK.
+func rig_of(tank: String) -> String:
+	if has_rig(tank) or not RIG_FALLBACK.has(tank):
+		return tank
+	return str(RIG_FALLBACK[tank])
+
+
 ## The barrel's pivot, hull frame.
 func trunnion(tank: String) -> Vector2:
-	return _vec("tanks.%s.turret.trunnion" % tank)
+	return _vec("tanks.%s.turret.trunnion" % rig_of(tank))
 
 
 ## The turret ring's centre (the mirror axis when facing left), hull frame.
 func ring(tank: String) -> Vector2:
-	return _vec("tanks.%s.turret.ring" % tank)
+	return _vec("tanks.%s.turret.ring" % rig_of(tank))
 
 
 func barrel_px(tank: String) -> float:
-	return float(TankContentSchema.dig(data, "tanks.%s.turret.barrel_px" % tank))
+	return float(TankContentSchema.dig(data, "tanks.%s.turret.barrel_px" % rig_of(tank)))
 
 
 ## The main gun's muzzle at `elev_deg` (positive up) facing TankIds.FACE_RIGHT or FACE_LEFT, hull
 ## frame. At 0 degrees facing right it is the file's `muzzle`.
 func muzzle(tank: String, elev_deg: float, facing: int) -> Vector2:
 	if is_zero_approx(elev_deg) and facing == TankIds.FACE_RIGHT:
-		return _vec("tanks.%s.muzzle" % tank)
+		return _vec("tanks.%s.muzzle" % rig_of(tank))
 	var a := deg_to_rad(elev_deg)
 	var p := trunnion(tank) + barrel_px(tank) * Vector2(cos(a), -sin(a))
 	if facing == TankIds.FACE_LEFT:
@@ -106,7 +126,7 @@ func muzzle(tank: String, elev_deg: float, facing: int) -> Vector2:
 ## [[muzzle (hull frame), facing], ...] of the tank's secondaries (empty for none).
 func secondary_muzzles(tank: String) -> Array:
 	var out: Array = []
-	var secs: Variant = TankContentSchema.dig(data, "tanks.%s.secondaries" % tank)
+	var secs: Variant = TankContentSchema.dig(data, "tanks.%s.secondaries" % rig_of(tank))
 	for s: Variant in secs if secs is Array else []:
 		if s is Dictionary and s.get("muzzle") is Array:
 			out.append([_to_vec(s["muzzle"]), int(s.get("facing", TankIds.FACE_RIGHT))])

@@ -291,12 +291,19 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 ## stretched past 180 s at ERG 90%, start engines that aren't the tank's rooms.
 func test_the_cross_file_checks_name_what_is_wrong() -> void:
 	var f := TankContent.read_files("ashfall_road")
-	f["stations"]["start_engines"]["rampart"] = ["dynamo", "diesel"]
+	f["stations"]["start_engines"]["rampart"] = ["diesel", "steam"]
 	f["stations"]["rotation"]["rampart"] = [
-		["dynamo", "diesel", "dynamo", "diesel"], ["diesel", "dynamo", "diesel", "dynamo"]
+		["diesel", "steam", "diesel", "steam"], ["steam", "diesel", "steam", "diesel"]
 	]
 	var c := TankContent.from_dicts(f, "ashfall_road")
 	assert_string_contains("\n".join(c.errors), "start_engines.rampart: must be tanks.json")
+	var order := TankContent.read_files("ashfall_road")
+	order["stations"]["start_engines"]["rampart"] = ["dynamo", "diesel"]
+	order["stations"]["rotation"]["rampart"] = [
+		["dynamo", "diesel", "dynamo", "diesel"], ["diesel", "dynamo", "diesel", "dynamo"]
+	]
+	var ok := TankContent.from_dicts(order, "ashfall_road")
+	assert_eq(ok.errors, [] as Array[String], "v2: slots may start in any order of the rooms")
 	var g := TankContent.read_files("drill")
 	g["mission"]["segments"][1]["type"] = "advance"
 	g["mission"]["segments"][1]["kind"] = "WORK"

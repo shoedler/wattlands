@@ -234,18 +234,18 @@ static func _secondaries(
 		hull.secondary_cd_s[i] = c.num("tanks", "secondary.every_s", 3.0)
 		TankStations.drain(state, c.num("tanks", "dynamo.per_secondary", 2.0))
 		var sid := state.take_id()
-		events.append(TankEvents.shot(dyn.slot, TankIds.SHELL_SECONDARY, sid))
+		events.append(TankEvents.shot(dyn.slot, TankIds.SHELL_BOW, sid))
 		var r := state.rider_at(dyn.slot)
 		if r != null:
-			r.shells_by_type[int(TankRiderState.SHELL_INDEX[TankIds.SHELL_SECONDARY])] += 1
-		var dmg := TankDamage.against(c, TankIds.SHELL_SECONDARY, t)
+			r.shells_by_type[int(TankRiderState.SHELL_INDEX[TankIds.SHELL_BOW])] += 1
+		var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
 		var on := TankEvents.ON_ENEMY
 		if t.kind == TankTarget.KIND_ENEMY:
 			TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_SHELL, dyn.slot, events)
 		else:
 			on = TankEvents.ON_BOSS
 			TankShells.damage_boss(state, aux, t.part, dmg, dyn.slot, events)
-		events.append(TankEvents.hit(on, t.id, dmg, TankIds.SHELL_SECONDARY, 0.0, t.center().x))
+		events.append(TankEvents.hit(on, t.id, dmg, TankIds.SHELL_BOW, 0.0, t.center().x))
 
 
 ## The nearest enemy (or Behemoth part) in front of a machine gun at world x `mx` facing `face`

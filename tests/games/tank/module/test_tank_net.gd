@@ -325,6 +325,9 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.boss_phase(TankIds.BOSS_PHASE_2),
 		TankEvents.latch(2, TankIds.SHELL_OVER),
 		TankEvents.lever(0, TankIds.LEVER_TURRET),
+		TankEvents.evade(-4, TankIds.BOSS_CODE, false),
+		TankEvents.turn(-1, TankIds.DIR_LEFT),
+		TankEvents.time_up(),
 	]
 
 

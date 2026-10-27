@@ -4,46 +4,17 @@ extends RefCounted
 ## generator included), a TankGame around one and a TankView built from it, driven by hand.
 
 const F := preload("res://tests/games/tank/tank_fakes.gd")
-const ENGINE_ARC := "arc"
 
 
-## The fixture state `kind` ("state", "gun_line" or "boss") for `crew` 1..4. Crew 4 is the Citadel's
-## fixture plus a fourth rider on the arc generator and the Bastion's hull (the contracts builder adds
-## the real one).
+## The fixture state `kind` ("state", "gun_line" or "boss") for `crew` 1..4 (4: the Bastion, its
+## fourth rider on the arc generator).
 static func fixture(kind: String, crew: int) -> TankState:
-	var base := clampi(crew, 1, 3)
-	var s: TankState
 	match kind:
 		"gun_line":
-			s = TankFixtures.gun_line(base)
+			return TankFixtures.gun_line(crew)
 		"boss":
-			s = TankFixtures.boss(base)
-		_:
-			s = TankFixtures.state(base)
-	if crew >= 4:
-		add_arc_rider(s)
-	return s
-
-
-## Adds slot 3 (peer 4) on the arc generator's station and makes the hull the Bastion.
-static func add_arc_rider(s: TankState) -> void:
-	var r := TankRiderState.new()
-	r.slot = 3
-	r.peer = 4
-	r.engine = ENGINE_ARC
-	r.ftp = 260.0
-	r.raw_w = 170.0
-	r.cadence_rpm = 88.0
-	r.ftp_pct = 65.0
-	r.in_band = true
-	s.riders.append(r)
-	var st := TankStationState.make(ENGINE_ARC)
-	st.slot = 3
-	st.peer = 4
-	st.in_band = true
-	s.stations.append(st)
-	s.crew = 4
-	s.hull.tank = "bastion"
+			return TankFixtures.boss(crew)
+	return TankFixtures.state(crew)
 
 
 ## A configured module whose state is `state` (a fixture), local peer `local_peer`.

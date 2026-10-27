@@ -32,7 +32,7 @@ func _g(rig: TankRulesRig) -> int:
 
 func _gun_shots(rig: TankRulesRig) -> Array:
 	return rig.of_type("shot").filter(
-		func(e: Dictionary) -> bool: return e["s"] >= 0 and e["sh"] != TankIds.SHELL_SECONDARY
+		func(e: Dictionary) -> bool: return e["s"] >= 0 and e["sh"] != TankIds.SHELL_BOW
 	)
 
 
@@ -371,7 +371,7 @@ func test_target_ids_are_the_entity_id_or_the_negative_boss_part() -> void:
 
 func _secondary_shots(rig: TankRulesRig) -> Array:
 	return rig.of_type("shot").filter(
-		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_SECONDARY
+		func(e: Dictionary) -> bool: return e["sh"] == TankIds.SHELL_BOW
 	)
 
 

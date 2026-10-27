@@ -123,7 +123,7 @@ func test_three_light_shells_clear_an_obstacle_and_two_do_not() -> void:
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	assert_false(o.cleared)
-	TankShells.damage_obstacle(o, TankIds.SHELL_SECONDARY, rig.content)
+	TankShells.damage_obstacle(o, TankIds.SHELL_BOW, rig.content)
 	assert_false(o.cleared, "secondaries do nothing to a barricade")
 	TankShells.damage_obstacle(o, TankIds.SHELL_LIGHT, rig.content)
 	assert_true(o.cleared)

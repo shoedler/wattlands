@@ -41,10 +41,8 @@ const ART_REAR := 18.0
 const WIDE_SHIFT := 0.3
 ## The road band (stage y): sharp under the depth of field; the HUD keeps clear of it.
 const BAND := Vector2(150, 360)
-## The contracts builder's fourth engine and the bow-gun round (SHELL_BOW, formerly
-## SHELL_SECONDARY), by value until the contracts land.
-const ENGINE_ARC := "arc"
-const SHELL_BOW := 4
+## The rooms with a machine (and a rider), rear to front.
+const MACHINE_ROOMS: Array[String] = ["diesel", "steam", "dynamo", "arc"]
 const MAX_WRECKS := 8
 ## Depth lanes on the road (each 9 px further back, dimmer).
 const LANES := 4
@@ -285,7 +283,7 @@ func canvas_size() -> Vector2:
 
 func _arc_station(state: TankState) -> TankStationState:
 	for st in state.stations:
-		if st.engine == ENGINE_ARC:
+		if st.engine == TankIds.ENGINE_ARC:
 			return st
 	return null
 
@@ -365,17 +363,14 @@ func rider_feed(state: TankState, t: float) -> Dictionary:
 # --- Riders and machines --------------------------------------------------------------------------------
 
 
-## The power the machines show: watts over the rider's target (1 = in band, 0.84-1.17). Uses the
-## rider's target_pct (% FTP, the contracts builder's TankRiderState.target_pct) once it exists and
-## is set, else %FTP over the SIM band's centre (TankMech.rider_power). The one place to switch.
+## The power the machines show: watts over the rider's target (1 = in band, 0.84-1.17): raw W /
+## (target_pct / 100 x FTP), the host's TankRiderState.target_pct; %FTP over the SIM band's centre
+## (TankMech.rider_power) while it is 0 (no phase yet).
 static func power_ratio(r: TankRiderState) -> float:
 	if r == null:
 		return 0.0
-	var tp := 0.0
-	if "target_pct" in r:
-		tp = float(r.get("target_pct"))
-	if tp > 0.0 and r.ftp > 0.0:
-		return clampf(r.raw_w / (r.ftp * tp / 100.0), 0.0, 1.6)
+	if r.target_pct > 0.0 and r.ftp > 0.0:
+		return clampf(r.raw_w / (r.ftp * r.target_pct / 100.0), 0.0, 1.6)
 	return TankMech.rider_power(r.ftp_pct)
 
 
@@ -396,7 +391,7 @@ func _riders(state: TankState, feed: Dictionary, render_dt: float) -> void:
 		for r2 in state.riders:
 			if r2.engine != "":
 				room_riders[room_of(r2.engine)] = r2
-	for e: String in ["diesel", "steam", "dynamo", ENGINE_ARC]:
+	for e: String in MACHINE_ROOMS:
 		var r3: TankRiderState = room_riders.get(e, null)
 		var rpm := 0.0
 		if r3 != null:
@@ -421,14 +416,15 @@ func machine_power(engine: String) -> float:
 	return float(powers.get(engine, 0.0))
 
 
-## Whether the Bastion's searchlights are lit (the arc rider in band) and how bright (0.25..1).
+## How bright the searchlights are (0.15..1): the Bastion's follow its arc generator (lit while its
+## rider is in band, dimmed when stalled or out of band, TankArcState); the others are always lit.
 func searchlight_k(state: TankState) -> float:
-	var arc := _arc_station(state)
+	var arc := _arc_station(state) as TankArcState
 	if arc == null:
 		return 1.0
-	if state.hull.breakdown or arc.unpowered:
+	if state.hull.breakdown or arc.stalled or arc.unpowered:
 		return 0.15
-	return 1.0 if arc.in_band else 0.3
+	return 1.0 if arc.lit else 0.3
 
 
 func _turret(state: TankState) -> void:
@@ -566,7 +562,7 @@ func _cue_shot(state: TankState, data: Dictionary) -> void:
 				Color(0.3, 0.28, 0.26),
 				0.5
 			)
-	elif slot >= 0 and sh == SHELL_BOW:
+	elif slot >= 0 and sh == TankIds.SHELL_BOW:
 		_bow_burst()
 	elif slot < 0:
 		var src := int(data.get("src", 0))
@@ -897,7 +893,7 @@ func shells_drawn(state: TankState) -> Array[Dictionary]:
 		if info.is_empty():
 			var start := p
 			if s.friendly:
-				start = muzzle() if s.type != SHELL_BOW else anchor("bow_gun_upper_muzzle")
+				start = muzzle() if s.type != TankIds.SHELL_BOW else anchor("bow_gun_upper_muzzle")
 			info = {"first": p, "off": start - p}
 			_shell_seen[s.id] = info
 		var first: Vector2 = info["first"]

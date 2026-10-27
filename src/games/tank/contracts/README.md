@@ -68,7 +68,7 @@ Owned paths: effort `src/games/tank/effort/`, `content/tank/stations.json`, `tes
 | `tank_const.gd` | Units, screen geometry, the first-300-s rule, the steam tolerance, caps, the snapshot budget |
 | `tank_record.gd` | `to_dict` / `load_dict` base for state records |
 | `tank_state.gd` | `TankState` (+ `create`, lookups) with `TankSegmentState`, `TankHullState`, `TankRiderState`, stations, enemies, shells, obstacles, `TankGunLineState`, `TankBossState`, `TankScoreState` |
-| `tank_station_state.gd` + `tank_{diesel,dynamo,steam,gearbox}_state.gd` | One room per engine; the Bulwark's `TankGearboxState` extends the diesel |
+| `tank_station_state.gd` + `tank_{diesel,dynamo,steam,gearbox,arc}_state.gd` | One room per engine; the Bulwark's `TankGearboxState` extends the diesel; `TankArcState` is the Bastion's arc generator (v2) |
 | `tank_phase_info.gd`, `tank_rider_input.gd`, `tank_inputs.gd` | The rider input digest and the group's phase |
 | `tank_intents.gd`, `tank_intent_limiter.gd` | Intent wire and normalized forms, ownership by engine, the 5/s limit |
 | `tank_events.gd` | Event types, fields, builders, `INT_FIELDS` |
@@ -99,3 +99,16 @@ Art px of the 640 x 360 view (world x in art px along the segment, 8 px per game
 - **Autopilot for unflagged humans.** The platform merges `autopilot_intents()` only for flagged riders and bots. `TankGame._collect_intents` adds `TankAutopilot` output, through the same engine ownership and 5/s filter, for a human who has not yet sent a deliberate intent (the fallback) whether or not the lobby Autopilot flag is set, and always for a station on reserve (AFK or dropped). `_end_fallback` ends the fallback of any human on a deliberate intent. The Autopilot is a stateless function of `TankState`.
 - **Cadence band.** (60, 120) at every segment start for every rider; (50, 120) only while the steam rider's shell is loaded or cycling in a WORK phase (brief 2.3 pattern 5), then back to (60, 120).
 - **Sprite id `flyball`** (was `governor`; the no-bypass scan forbids that literal in game code). `TankSprites.flyball_id()` returns it.
+
+## v2 contract additions (2026-10-27)
+
+Additive, for the v2 brief (`docs/games/tank.md` 2.2, 2.4, 2.6, 2.10). Behaviour (evade, bow guns, the arc's plan and searchlights, free roam) comes from later builders; these are the names they build on.
+
+- **Ids.** `ENGINE_ARC` "arc" (code 5, label `TANK_ENGINE_ARC`, icon `engine_arc.png`); `TANK_BASTION` "bastion" (code 4, the 4th of `TANKS`, so crew 4 picks it); `SHELL_BOW` 4 (was `SHELL_SECONDARY`, name "bow"); `INTENT_TURN` "turn" (deliberate; no engine owns it yet); `DIR_RIGHT` 1 / `DIR_LEFT` -1; `OUTCOME_TIME_UP` "time_up". Ram and dodge stay until the gameplay builder removes them.
+- **Events.** `evade {id, e, ok}`, `turn {s, dir}`, `time_up {}` appended to `TYPES` with `INT_FIELDS`; no emitter yet.
+- **`TankArcState`** (`TankStationState.make("arc")`): [snap] `duty` 0..1, `lit`, `stalled`; host-only `note_fire(tick, fired)` keeps a 200-tick (10 s) fire ring and refreshes `duty`; `reset_fire()`.
+- **`TankRiderState.target_pct`** [snap]: the rider's effort target in % FTP for the power ratio, set each tick by `TankRules.target_pct(state, rider_input, station)` (applied ERG target, else `TankRiderInput.planned_pct` from `PhaseState.planned_pct`, else the SIM band centre: diesel/Bulwark 90.5, steam building 90, loaded or cycling and WARMUP-kind SIM from `tanks.json` `power_ratio`). `client_predict` refreshes the local rider's.
+- **`TankHullState.dir`** [snap]: +1 travelling right (missions), -1 left (free roam turns).
+- **Snapshot v2.** `tk` gains `dir` (17 columns), `r` gains `target_x10` (7), the arc's `st` row carries `duty_pml` in `a` and the `STF_LIT` / `STF_ARC_STALLED` bits. The Bastion at the caps (4 riders, 4 rooms, 16 enemies, 24 shells) is about 1.6 KB.
+- **Content.** `tanks.json`: the Bastion; the Citadel's rooms in the reference's order (diesel, steam, dynamo) with only its main turret; every `hull_px` from `assets/tank/v2/kit.json` / 1.5. `validate_cross` takes start engines as any order of the rooms. `stations.json`: the arc's plans (brief 2.3 table) and crew 4's rotation ((s + k) mod 4 of diesel, dynamo, steam, arc).
+- **Geometry.** `TankGeometry.RIG_FALLBACK`: the Bastion uses the Citadel's rigs.json geometry until its own entry lands (`has_rig`, `rig_of`).

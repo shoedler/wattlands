@@ -20,7 +20,7 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_rooms(ci, v, o, broken)
 	if not broken:
 		var rooms := {}
-		for e: String in ["diesel", "steam", "dynamo", TankView.ENGINE_ARC]:
+		for e: String in TankView.MACHINE_ROOMS:
 			if v.room_rects.has(e):
 				rooms[e] = v.room_rects[e]
 		TankRoomMachines.draw_light(ci, o, rooms, v.phases, v.powers, v.time)
@@ -174,7 +174,7 @@ static func _shells(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	for s in v.shells_drawn(state):
 		var at: Vector2 = s["at"]
 		var d: Vector2 = s["dir"]
-		var bow := int(s["type"]) == TankView.SHELL_BOW
+		var bow := int(s["type"]) == TankIds.SHELL_BOW
 		var col := Color(1.0, 0.75, 0.35) if bool(s["friendly"]) else Color(1.0, 0.35, 0.2)
 		var tail := 8.0 if bow else 14.0
 		ci.draw_line(at - d * tail, at, Color(col.r, col.g, col.b, 0.35), 1.0 if bow else 2.0)

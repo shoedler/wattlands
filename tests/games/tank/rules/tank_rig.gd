@@ -225,6 +225,7 @@ func _rider_input(p: PlayerSlot) -> TankRiderInput:
 			if bank_director and ri.engine == TankIds.ENGINE_DYNAMO and ph.range_pct.size() == 2:
 				pct = TankDirector.bank_target_pct(content, dynamo().bank, ph)
 			ri.applied_target_w = roundf(pct / 100.0 * p.ftp)
+			ri.planned_pct = ph.planned_pct_at(seg_t)
 	if ri.mode == Wl.ERG:
 		ri.power_w = float(power_w.get(p.peer_id, ri.applied_target_w * compliance))
 	else:

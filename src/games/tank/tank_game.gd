@@ -298,8 +298,9 @@ func apply_event(event: Dictionary) -> void:
 
 
 ## Moves only what the local rider controls ahead of the next snapshot: its watts, cadence and
-## %FTP, its room's power and its glow (the in-band rule on its own telemetry). Everything else
-## renders from snapshots.
+## %FTP, its effort target (TankRules.target_pct on its own telemetry, when it has one), its room's
+## power and its glow (the in-band rule on its own telemetry). Everything else renders from
+## snapshots.
 func client_predict(_dt: float, local: Telemetry) -> void:
 	if state == null or local == null:
 		return
@@ -314,9 +315,13 @@ func client_predict(_dt: float, local: Telemetry) -> void:
 		return
 	if not st.reserve and not st.unpowered:
 		st.p_eff_w = local.p_eff_w
-	var band := TankRules.in_band(state, _local_input(r, local, st), st)
+	var ri := _local_input(r, local, st)
+	var band := TankRules.in_band(state, ri, st)
 	r.in_band = band
 	st.in_band = band
+	var target := TankRules.target_pct(state, ri, st)
+	if target > 0.0:
+		r.target_pct = target
 
 
 ## The in-band rule's input for the local rider from its own telemetry and the replicated state.

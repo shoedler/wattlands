@@ -14,6 +14,9 @@ var hull_h: int = 72
 # --- Drive (brief 2.4 Drive) -------------------------------------------------------------------------
 ## [snap] World x of the hull's rear edge in art px (the camera follows it).
 var x_px: float = 0.0
+## [snap] Travel direction (v2): TankIds.DIR_RIGHT (+1, travelling right) or DIR_LEFT (-1). Missions
+## always travel right; a free-roam turn flips it (brief 2.10).
+var dir: int = TankIds.DIR_RIGHT
 ## Game metres driven in the current segment (terrain and encounters key on it). Not in the
 ## snapshot: during an Advance x_px == TankConst.m_to_px(distance_m) (a tow snaps both), so a
 ## client's "distance to the halt line" is (m_to_px(segment length_m) - x_px) / PX_PER_M.

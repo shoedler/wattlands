@@ -54,10 +54,8 @@ const DEFS := {
 	"tank_bow_rattle": ["square", 210.0, 0.035, 0.001, 0.03],
 	"tank_cricket": ["sine", 4300.0, 0.05, 0.004, 0.04],
 }
-## The arc generator (the contracts builder's fourth engine, by value until the contracts land) and
-## the bow-gun round (SHELL_BOW, formerly SHELL_SECONDARY).
-const ENGINE_ARC := "arc"
-const SHELL_BOW := 4
+## The arc generator's engine id (TankIds.ENGINE_ARC).
+const ENGINE_ARC := TankIds.ENGINE_ARC
 ## Loops: engine -> [synth kind, Hz]. Their pitch follows cadence (the dynamo's armature runs faster;
 ## the arc generator hums low).
 const LOOPS := {
@@ -223,7 +221,7 @@ func _latch(data: Dictionary) -> void:
 func _shot(data: Dictionary) -> void:
 	var sh := int(data.get("sh", 0))
 	if int(data.get("s", -1)) >= 0:
-		if sh == SHELL_BOW:
+		if sh == TankIds.SHELL_BOW:
 			# The bow guns' burst: a short rattle of rounds.
 			for i in 5:
 				_after(0.06 * i, "tank_bow_rattle", -11.0, 1.0 + 0.04 * float(i % 2))
