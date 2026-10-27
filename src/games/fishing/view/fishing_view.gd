@@ -48,11 +48,20 @@ const DEPTH_DONE := 0.002
 ## in the water: at most HEAVE_UP_PX up).
 const HEAVE_PX_PER_M := 60.0
 const HEAVE_UP_PX := 4
-const HEAVE_DOWN_PX := 4
+## Down the hull moves less (it sinks into its own foam otherwise): HEAVE_DOWN_PX_PER_M, at most
+## HEAVE_DOWN_PX.
+const HEAVE_DOWN_PX_PER_M := 20.0
+const HEAVE_DOWN_PX := 2
 ## The hull's trim and heave made plain per water state (shown_pitch(), shown_heave()): bow up
 ## and stern squatting on the hump (pose 5 and a row down: stern 3, bow 7 up), flat on the plane
 ## (pose 2 at most), towed stern first (pose 4 and 3 rows down: stern 5 down, bow 3 up).
 const CLIMB_PITCH := 12.6
+## Cruising in displacement (mockup E4 50 %) the hull rides at its waterline, the bow up at
+## least pose 1.
+const CRUISE_PITCH := 1.6
+## Cruising, the bow wave carries the hull this many px up, so at least six dark hull rows show
+## above the water midships.
+const CRUISE_LIFT_PX := 1
 const CLIMB_SQUAT_PX := 1
 const PLANE_PITCH := 3.6
 const TOW_PITCH := 9.0
@@ -481,14 +490,17 @@ func _place_boat(r: FishingRiderState, delta: float) -> void:
 	(model["boats"] as Dictionary)[r.slot] = b.position
 
 
-## The trim the hull shows: the physics' pitch, with the water's state made plain: climbing
-## onto the plane (FishingWhitewater.HUMP) the bow stands up at least CLIMB_PITCH, on the plane
+## The trim the hull shows: the physics' pitch, with the water's state made plain: cruising in
+## displacement the bow is up at least a little (CRUISE_PITCH; braking passes), climbing onto the plane
+## (FishingWhitewater.HUMP) the bow stands up at least CLIMB_PITCH, on the plane
 ## the hull lies flat (at most PLANE_PITCH), towed stern first by a fish the bow is up at least
 ## TOW_PITCH.
 func shown_pitch(r: FishingRiderState, pitch: float) -> float:
 	if towed(r):
 		return maxf(pitch, TOW_PITCH)
 	match whitewater.level_of(r.slot, r.v_mps, r.plane):
+		FishingWhitewater.CRUISE:
+			return maxf(pitch, CRUISE_PITCH) if pitch >= 0.0 else pitch
 		FishingWhitewater.HUMP:
 			return maxf(pitch, CLIMB_PITCH)
 		FishingWhitewater.PLANE:
@@ -496,12 +508,18 @@ func shown_pitch(r: FishingRiderState, pitch: float) -> float:
 	return pitch
 
 
-## The heave the hull shows (whole px): squatting at least CLIMB_SQUAT_PX on the hump, up at
-## least HEAVE_UP_PX on the plane, the stern dragged down at least TOW_SQUAT_PX when towed.
+## The heave the hull shows (whole px): never down while idle, CRUISE_LIFT_PX up cruising,
+## squatting at least
+## CLIMB_SQUAT_PX on the hump, up at least HEAVE_UP_PX on the plane, the stern dragged down at
+## least TOW_SQUAT_PX when towed.
 func shown_heave(r: FishingRiderState, px: int) -> int:
 	if towed(r):
 		return mini(px, -TOW_SQUAT_PX)
 	match whitewater.level_of(r.slot, r.v_mps, r.plane):
+		FishingWhitewater.IDLE:
+			return maxi(px, 0)
+		FishingWhitewater.CRUISE:
+			return maxi(px, CRUISE_LIFT_PX)
 		FishingWhitewater.HUMP:
 			return mini(px, -CLIMB_SQUAT_PX)
 		FishingWhitewater.PLANE:
@@ -516,7 +534,9 @@ static func towed(r: FishingRiderState) -> bool:
 
 ## The hull's heave in whole px (up positive) for `heave_m`.
 static func heave_px(heave_m: float) -> int:
-	return clampi(roundi(heave_m * HEAVE_PX_PER_M), -HEAVE_DOWN_PX, HEAVE_UP_PX)
+	if heave_m < 0.0:
+		return maxi(roundi(heave_m * HEAVE_DOWN_PX_PER_M), -HEAVE_DOWN_PX)
+	return mini(roundi(heave_m * HEAVE_PX_PER_M), HEAVE_UP_PX)
 
 
 ## The cadence the crank turns at: the local rider's raw telemetry (FishingGame.local_tm), any
@@ -760,6 +780,7 @@ func water_state(slot: int) -> Dictionary:
 		"plane": r.plane,
 		"tow": clampf(r.tow_n / FishingConst.TOW_MAX_N, 0.0, 1.0),
 		"brake": b.braking(),
+		"p": r.p_eff_w / FishingConst.P_EFF_REF_W,
 	}
 
 

@@ -73,7 +73,7 @@ func test_a_far_camera_goal_is_jumped_to() -> void:
 func test_signed_trim_picks_bow_up_and_braking_poses_by_whole_pixels_never_rotating() -> void:
 	var g := FX.make_game(1)
 	var r := g.state.rider(0)
-	FX.set_drive(r, 3000.0, 7.0)
+	FX.set_drive(r, 3000.0, 3.0)  # idle water: the pitch shows as it is
 	r.pitch_deg = 14.0
 	var v := _view(g)
 	_run(v, 10)

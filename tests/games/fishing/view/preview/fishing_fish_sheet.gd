@@ -80,7 +80,8 @@ func _ready() -> void:
 			root.add_child(s)
 			var run := 4 if k == FishingSprites.FISH_PULL15 else 2
 			if k == FishingSprites.FISH_PULL15 or k == FishingSprites.FISH_PULL30:
-				var up := mini(mouth.y - y - 2, 12)
+				var cell_left := LABEL_W + COL_W * k
+				var up := mini(mini(mouth.y - y - 2, 12), (mouth.x - cell_left - 2) / run)
 				(row["lines"] as Array).append(
 					[mouth - Vector2i(1, 0), mouth - Vector2i(up * run, up)]
 				)

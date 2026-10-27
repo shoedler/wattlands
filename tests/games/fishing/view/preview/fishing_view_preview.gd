@@ -51,10 +51,13 @@ func _ready() -> void:
 			FX.set_fight(other, 9120.0, 3, 25.0, 40.0)
 		"cruise":
 			FX.set_drive(me, 4300.0, 15.0)
-			me.pitch_deg = 4.0
+			me.plane = 1.0
+			me.planing = true
+			me.heave_m = 0.06
+			me.pitch_deg = 3.0
 			me.wake = 0.8
 			me.power_w = 205.0
-			me.p_eff_w = 205.0
+			me.p_eff_w = 258.0
 			me.cadence_ema = 88.0
 			FX.set_drive(other, 4180.0, 14.0)
 		"hump":

@@ -47,8 +47,10 @@ const FISH: Array[String] = [
 const FISH_POSES: Array[String] = ["swim1", "swim2", "swim3", "pull15", "pull30", "tired"]
 const SWIM_FRAMES := 3
 const PULL_RUNS: Array[int] = [4, 2]
-## A fish this long (the oarfish ribbon) pulls at half the slope, so it keeps its body depth.
+## A fish this long (the oarfish ribbon) pulls at half the slope, so it keeps its body depth,
+## swims with a wave WAVE_PX long running down its body and sags half as much when tired.
 const LONG_FISH_PX := 80
+const WAVE_PX := 42.0
 ## Frames per pose in boat_crew (the drivetrain is drawn by FishingBoatView, so one each).
 const CREW_FRAMES := 1
 ## Crew poses after CREW's two: leaning into a sprint, sat back braking ([last row, dx] bands
@@ -504,6 +506,10 @@ static func fish_pose(id: String, kind: String) -> Dictionary:
 			var b := FISH_POSES.find(kind) - 1
 			for x in w:
 				dys[x] = 0 if x < tail_x else (b if x < tip_x else 2 * b)
+				if w >= LONG_FISH_PX and x < tail_x:
+					# a ribbon swims with a wave running down its body
+					var phase := TAU * float(x) / WAVE_PX + TAU * float(b + 1) / 3.0
+					dys[x] = roundi(sin(phase))
 		"pull15", "pull30":
 			var run := PULL_RUNS[0 if kind == "pull15" else 1] * (2 if w >= LONG_FISH_PX else 1)
 			for x in w:
@@ -511,8 +517,9 @@ static func fish_pose(id: String, kind: String) -> Dictionary:
 		_:
 			fold = true
 			var mid := tail_x / 2
+			var sag := 12 if w >= LONG_FISH_PX else 6
 			for x in w:
-				dys[x] = maxi(0, (mini(x, tail_x) - mid) / 6) + (1 if x >= tail_x else 0)
+				dys[x] = maxi(0, (mini(x, tail_x) - mid) / sag) + (1 if x >= tail_x else 0)
 	var px := {}
 	for at: Vector2i in src:
 		var ch: String = src[at]
@@ -873,14 +880,13 @@ const FISH_GROUPER: Array[String] = [
 	"..........................................................",
 ]
 const FISH_OARFISH: Array[String] = [
-	"...YYYY.............................................................................",
-	"....YYYYYYYYYnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn.....",
-	"...ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd....",
-	".ddxWddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd..",
-	"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-	".bbbbbpppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..",
-	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb....",
-	".......nnn..........................................................................",
+	"....YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY....nnn",
+	"..ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.nnn.",
+	".ddxWdddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddnn..",
+	"ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc...",
+	".bbbbbbpppbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbnn..",
+	"...bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb..nnn.",
+	"........nnn......................................................................nnn",
 ]
 const FISH_SHAPES := {
 	"fish_mackerel": [23, 25],
@@ -892,7 +898,7 @@ const FISH_SHAPES := {
 	"fish_swordfish": [48, 53],
 	"fish_marlin": [54, 61],
 	"fish_grouper": [48, 52],
-	"fish_oarfish": [74, 80],
+	"fish_oarfish": [79, 82],
 }
 ## The town is stored in two halves (line length); hjoin() puts them side by side.
 const SCENERY_TOWN_L: Array[String] = [
