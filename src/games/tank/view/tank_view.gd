@@ -46,8 +46,11 @@ const BAND := Vector2(150, 360)
 ## The rooms with a machine (and a rider), rear to front.
 const MACHINE_ROOMS: Array[String] = ["diesel", "steam", "dynamo", "arc"]
 const MAX_WRECKS := 8
-## Depth lanes on the road (each 9 px further back, dimmer).
+## Depth lanes on the road (each LANE_LIFT art px further back, dimmer).
 const LANES := 4
+## How much higher each lane further back stands (art px): enough that sprites of neighbouring
+## lanes read as one behind the other at a crowded gun line (the Bastion's short field).
+const LANE_LIFT := 15.0
 ## A wreck burns as a hulk this long, then collapses into a heap over WRECK_COLLAPSE_S; its fire
 ## dies over WRECK_BURN_S; it is gone after WRECK_GONE_S (or once it scrolled off).
 const WRECK_HULK_S := 5.0
@@ -697,7 +700,7 @@ func _track_enemies(state: TankState) -> void:
 		var lane := int(lanes[e.id])
 		var sz: Vector2 = kit.enemies[enemy_kind(e)]["size"]
 		var mid := enemy_x(e) + float(e.w) * 0.5
-		var lift := 9.0 * float(lane) + (6.0 if enemy_kind(e) == "dugin" else 0.0)
+		var lift := LANE_LIFT * float(lane) + (6.0 if enemy_kind(e) == "dugin" else 0.0)
 		var r := Rect2(
 			Vector2(roundf(sx(mid) - sz.x * 0.5), roundf(ROAD_ENEMY_Y - sz.y - lift)), sz
 		)

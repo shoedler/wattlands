@@ -107,7 +107,7 @@ static func _sprite(ci: CanvasItem, tex: Texture2D, r: Rect2, flip: bool, mod: C
 static func wreck_rect(v: TankView, w: Dictionary) -> Rect2:
 	var sz: Vector2 = v.kit.enemies.get(str(w["kind"]), {}).get("size", Vector2(120, 50))
 	var x := v.sx(float(w["x"])) - sz.x * 0.5
-	var lift := 9.0 * float(w.get("lane", 0)) + 4.0
+	var lift := TankView.LANE_LIFT * float(w.get("lane", 0)) + 4.0
 	return Rect2(Vector2(roundf(x), roundf(TankView.ROAD_ENEMY_Y - sz.y - lift)), sz)
 
 
