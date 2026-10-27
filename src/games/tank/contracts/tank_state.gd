@@ -44,7 +44,7 @@ var boss: TankBossState = TankBossState.new()
 var score: TankScoreState = TankScoreState.new()
 ## (v2) Free roam (brief 2.10): inactive in missions.
 var roam: TankRoamState = TankRoamState.new()
-## (v2) The free-roam valley built from roam.map_seed (TankRoam.setup on the host, TankRoam.ensure_map on
+## (v2) The free-roam valley built from roam.map_seed (TankRoam.prepare on the host, TankRoam.ensure_map on
 ## a client once a snapshot brought the seed); null in missions. Not serialized.
 var roam_map: TankRoamMap = null
 

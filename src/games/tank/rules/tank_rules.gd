@@ -24,7 +24,7 @@ static func new_state(
 	rng: RandomNumberGenerator
 ) -> TankState:
 	var s := TankState.create(content, players, mission, rotation, rng)
-	TankRoam.setup(s)
+	TankRoam.prepare(s)
 	return s
 
 

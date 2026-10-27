@@ -41,7 +41,7 @@ const EPS := 1e-6
 ## The session start (TankRules.new_state): a free-roam content activates roam, draws the map's
 ## seed and the first patrol's wait from state.rng (the host; a client gets the seed from the first
 ## snapshot) and puts the hull's centre at valley.json start_m, facing east.
-static func setup(state: TankState) -> void:
+static func prepare(state: TankState) -> void:
 	var c := state.content
 	if c == null or not c.is_roam():
 		return
