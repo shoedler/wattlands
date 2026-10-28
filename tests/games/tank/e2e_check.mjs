@@ -17,8 +17,8 @@
 //      checkpoint, then the cool-down's own event if the rules send one); nothing a WARMUP phase forbids happens (no Ram, dodge
 //      (v2 never emits them), no successful evade (nobody can evade in WARMUP), boss event
 //      or overrun, no haptic directive); no more kills than the skirmish has tanks, none twice;
-//      every repair follows a breakdown; no hit or kill in the depot; the rotation option is
-//      ignored (no rotation event);
+//      every repair follows a breakdown; no hit or kill in the depot; no rotation event (v3
+//      retired rotation; the name stays reserved); seat moves (v3) carry known seats;
 //   4. every peer's final snapshot is a well-formed Tank snapshot (the schema of
 //      contracts/tank_snapshot_schema.gd, whole numbers, at most 4 KB, three riders and the
 //      landship's five rooms) and matches the host's within 2%;
@@ -245,7 +245,7 @@ export function drillErrors(events, { tail = false } = {}) {
   }
   for (const t of ['ram', 'dodge', 'boss_phase', 'overrun', 'rotation']) {
     const n = events.filter((e) => e.type === t).length;
-    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss, rotation ignored)`);
+    if (n > 0) errs.push(`${n} ${t} event(s) in the drill (a WARMUP-only session with no boss; v3 has no rotation)`);
   }
   const evaded = events.filter((e) => e.type === 'evade' && e.ok === 1).length;
   if (evaded > 0) errs.push(`${evaded} evaded shot(s) in the drill (nobody can evade in a WARMUP phase)`);
@@ -266,7 +266,7 @@ export function drillErrors(events, { tail = false } = {}) {
     }
   }
   // Nothing is hit or killed in the depot: the drill puts no enemy there. (A shell may latch there:
-  // in a WARMUP phase the steam engine latches at 100% at once.)
+  // v3, the Loader stows shells into the ready rack.)
   let seg = tail ? -1 : null;
   for (const e of events) {
     if (e.type === 'segment') seg = e.i;

@@ -1,10 +1,10 @@
 {
-	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Light tanks hold 120-140 px (the solver reaches them there at -12 degrees, tested). Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry. G1 tuning against the brief (details in docs/decisions/tank.md): guns light 2.5 at 50% (4 at 60%), medium 5 at 60% (8 at 70%), destroyer 11 every 9 s at 75% (15 / 8 s / 90%), dug-in 7 at 60% (10 at 75%), heavy 9 at 60% and 100 HP (12 at 75%, 160 HP), Behemoth bogies 50 HP and turret 200 HP (100 / 300), stop_px 150 (120), main gun 16 at 75%, secondary 2 at 50% (3 at 60%). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): medium HP 64 (brief 80), guns dug-in 5 / medium 4 / destroyer 9 / heavy 7 / Behemoth main 13, Behemoth turret HP 270. Added keys: linger_s (a raider breaks off after this long on station and is gone with no credit), shell_speed_px_s (enemy shells fly straight at this speed), boss.main.hit. v2 rules (P4): sizes and muzzles from the kit sprites (/1.5); lane (each type's preferred depth lane) and lanes (4 lanes, gap_px, switch_px, min_hold_px; TankEnemies.reserve_hold); the light's flank shot (its first shot at its hold: 2.5 s telegraph, 8 damage, 70%, the brief); rammable gone. Retuned (each within +-50% of the brief): dug-in HP 50 (the brief), heavy HP 130 (160), the Behemoth's turret 205 (300) and stop_px 120 (the brief: the gun reaches the front bogie at -12 degrees). Integration polish (2026-10-27): medium hp 50 (brief 80), dug-in gun every_s 9 (brief 7); boss.hull_px is the kit Behemoth in rules px (583 x 297 art / 1.5).",
+	"_doc": "Enemy tanks (brief 2.4). Owner: rules. Light tanks hold 120-140 px (the solver reaches them there at -12 degrees, tested). Schema: TankContentSchema.validate_enemies. HP and counts scale by the tank's enemy_scale (tanks.json; counts rounded, at least 1). hold_px runs from the hull's nearer end to the enemy's near edge. light_mult: the factor on light shells and secondaries. Muzzles and hit boxes (the dug-in's turret, the Behemoth's bogies and turret) are geometry: assets/tank/rigs.json through TankGeometry. G1 tuning against the brief (details in docs/decisions/tank.md): guns light 2.5 at 50% (4 at 60%), medium 5 at 60% (8 at 70%), destroyer 11 every 9 s at 75% (15 / 8 s / 90%), dug-in 7 at 60% (10 at 75%), heavy 9 at 60% and 100 HP (12 at 75%, 160 HP), Behemoth bogies 50 HP and turret 200 HP (100 / 300), stop_px 150 (120), main gun 16 at 75%, secondary 2 at 50% (3 at 60%). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): medium HP 64 (brief 80), guns dug-in 5 / medium 4 / destroyer 9 / heavy 7 / Behemoth main 13, Behemoth turret HP 270. Added keys: linger_s (a raider breaks off after this long on station and is gone with no credit), shell_speed_px_s (enemy shells fly straight at this speed), boss.main.hit. v2 rules (P4): sizes and muzzles from the kit sprites (/1.5); lane (each type's preferred depth lane) and lanes (4 lanes, gap_px, switch_px, min_hold_px; TankEnemies.reserve_hold); the light's flank shot (its first shot at its hold: 2.5 s telegraph, 8 damage, 70%, the brief); rammable gone. Retuned (each within +-50% of the brief): dug-in HP 50 (the brief), heavy HP 130 (160), the Behemoth's turret 205 (300) and stop_px 120 (the brief: the gun reaches the front bogie at -12 degrees). Integration polish (2026-10-27): medium hp 50 (brief 80), dug-in gun every_s 9 (brief 7); boss.hull_px is the kit Behemoth in rules px (583 x 297 art / 1.5). v3 rules (2026-10-28, docs/decisions/tank.md v3 rules ADR): every telegraph at least 6 s (light flank 6, heavy 6, destroyer 7, Behemoth 8; brief v3 Combat changes); crew_count_scale: enemy counts x 0.5 / 0.7 / 0.85 / 1.0 for crews 1-4 (a segment's total, rounded, at least 1; TankContent.crew_count, TankEncounters.crew_counts), HP the same for every crew. Retuned on the v3 rack (its shells come about 2.3x faster than v2's boiler; the main gun's damage is halved, tanks.json damage): HP light 35 (30), medium 70 (50; brief 80), destroyer 80 (50), heavy 150 (130; brief 160), the Behemoth's turret 150 (205) so a crew of 2 still breaks it inside the boss's max_s. boss.pushback_px 12 (24): on the v3 hull the main gun reaches the Behemoth's turret only up to about 240 px off the hull's front, and three bogies at 24 px pushed it to about 258 px, out of reach for good (phase 2 does not move).",
 	"types": {
 		"light": {
 			"lane": 0,
 			"code": 1,
-			"hp": 30,
+			"hp": 35,
 			"size_px": [91, 30],
 			"hold_px": [120, 140],
 			"speed_px_s": 60,
@@ -13,13 +13,13 @@
 			"linger_s": 45,
 			"light_mult": 1.0,
 			"gun": {"damage": 2.5, "every_s": 4, "hit": 0.5},
-			"flank": {"telegraph_s": 2.5, "damage": 8, "hit": 0.7},
+			"flank": {"telegraph_s": 6, "damage": 8, "hit": 0.7},
 			"sprite": "enemy_light"
 		},
 		"medium": {
 			"lane": 1,
 			"code": 2,
-			"hp": 50,
+			"hp": 70,
 			"size_px": [110, 55],
 			"hold_px": [260, 340],
 			"speed_px_s": 40,
@@ -30,11 +30,11 @@
 		"destroyer": {
 			"lane": 1,
 			"code": 3,
-			"hp": 50,
+			"hp": 80,
 			"size_px": [109, 37],
 			"hold": "edge",
 			"speed_px_s": 30,
-			"telegraph_s": 4,
+			"telegraph_s": 7,
 			"move_after_shot_px": 40,
 			"light_mult": 0.25,
 			"gun": {"damage": 9, "every_s": 9, "hit": 0.75},
@@ -53,11 +53,11 @@
 		"heavy": {
 			"lane": 1,
 			"code": 5,
-			"hp": 130,
+			"hp": 150,
 			"size_px": [133, 53],
 			"hold_px": [300, 380],
 			"speed_px_s": 25,
-			"telegraph_s": 3,
+			"telegraph_s": 6,
 			"backoff_px": 30,
 			"backoff_every_damage": 50,
 			"light_mult": 0.25,
@@ -69,18 +69,19 @@
 		"code": 6,
 		"bogies": 3,
 		"bogie_hp": 50,
-		"turret_hp": 205,
+		"turret_hp": 150,
 		"hull_px": [388.7, 198],
 		"creep_px_s": 2,
 		"stop_px": 120,
-		"pushback_px": 24,
+		"pushback_px": 12,
 		"light_mult": 0.25,
-		"main": {"damage": 13, "hit": 0.75, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 6},
+		"main": {"damage": 13, "hit": 0.75, "every_s": [35, 45], "every_s_phase2": [25, 35], "telegraph_s": 8},
 		"secondary": {"damage": 2, "every_s": 5, "hit": 0.5}
 	},
 	"shell_speed_px_s": 300,
 	"miss_px": [20, 40],
 	"clamp": {"ahead_max_right_px": 632, "behind_min_show_px": 24},
 	"spawn_margin_px": 16,
-	"lanes": {"count": 4, "gap_px": 8, "switch_px": 48, "min_hold_px": 60}
+	"lanes": {"count": 4, "gap_px": 8, "switch_px": 48, "min_hold_px": 60},
+	"crew_count_scale": [0.5, 0.7, 0.85, 1.0]
 }

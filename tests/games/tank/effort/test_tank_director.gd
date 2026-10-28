@@ -19,9 +19,9 @@ const COOLDOWN := 11
 const BANK_RATE := 10.0 / 3.0
 
 
-func _h(crew: int = 3, mission: String = "ashfall_road", rotation: bool = true) -> H:
+func _h(crew: int = 3, mission: String = "ashfall_road") -> H:
 	var h := H.new()
-	h.build(crew, mission, rotation)
+	h.build(crew, mission)
 	return h
 
 
@@ -182,7 +182,7 @@ func test_bank_slew_is_at_most_a_third_of_ten_points_a_second() -> void:
 			assert_lte(absf(last - first), 10.0 * 2.0 / 3.0 + 1e-9, "one update <= 10 points")
 
 
-## The bank never runs in the depot (the plan's ramp), checkpoints, or the diesel's ERG 90% gun line;
+## The bank never runs in the depot (the plan's ramp), checkpoints, or for the Drive seat (SIM);
 ## it runs in the gun line and the boss for the dynamo, and the drill's skirmish clamps it to 65%.
 func test_bank_only_in_dynamo_phases_with_a_range() -> void:
 	var h := _h()
@@ -193,7 +193,7 @@ func test_bank_only_in_dynamo_phases_with_a_range() -> void:
 		assert_ne(str(r[2].get("reason")), "bank", "no bank in the depot or a checkpoint")
 	h.clear()
 	h.run_s(GUN1, 6.0)
-	assert_eq(h.sent(1, "bank"), [], "the diesel's ERG 90% gun line")
+	assert_eq(h.sent(1, "bank"), [], "the Drive seat digs in SIM flat")
 	assert_eq(h.sent(2, "bank").size(), 4, "the dynamo's gun line: 0, 1, 2 and 5 s")
 	var d := _h(2, "drill")
 	_dyn(d).bank = 0.0
@@ -587,7 +587,9 @@ func test_haptic_gates() -> void:
 	var b := _h(1)
 	b.run_s(GUN1, 1.0)
 	b.step(GUN1, events)
-	assert_eq(b.requests, [], "the solo driver's ERG gun line")
+	assert_eq(
+		_haptics(b).size(), 1, "v3: Drive digs in SIM flat at a gun line, so the hit reaches it"
+	)
 	var e := _h()
 	e.applied_mode[1] = Wl.ERG
 	e.ctx.players[2].haptics_on = false
@@ -702,7 +704,7 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 # --- Whole-plan sweep ----------------------------------------------------------------------------
 
 
-## Every crew x rotation x content through every phase with every pattern busy (a draining and
+## Every crew x content through every phase with every pattern busy (a draining and
 ## refilling bank, an arc load swinging between 0 and 1, full pressure with latches, rolling
 ## terrain, hits and boss hits every few seconds): every request matches its
 ## pattern, nothing SIM-only reaches an ERG phase, every ERG target is 50-100% inside the phase's
@@ -711,10 +713,9 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 func test_every_directive_in_every_phase_matches_its_pattern() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
 		for crew in [1, 2, 3, 4]:
-			for rotation in [true, false]:
-				var h := _h(crew, mission, rotation)
-				_sweep(h)
-				_check_sweep(h, "%s crew %d rotation %s" % [mission, crew, rotation])
+			var h := _h(crew, mission)
+			_sweep(h)
+			_check_sweep(h, "%s crew %d" % [mission, crew])
 
 
 func _sweep(h: H) -> void:

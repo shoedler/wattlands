@@ -17,10 +17,10 @@ extends RefCounted
 ##    bank.max_step_pts from the last sent target, sent as bank.substeps sub-steps bank.substep_s
 ##    apart: {mode ERG, target_pct, reason "bank"} (brief 2.3 pattern 1; in an ERG phase with no SIM
 ##    block running, mode ERG changes nothing but the target).
-## 2. Arc (the arc generator, ERG phases with a range_pct, never the depot or checkpoints): the same
-##    schedule (stations.json arc) toward arc_target_pct = 65 + 15 x duty, the bow guns' share of
-##    the last 10 s firing (TankArcState), clamped to the phase's range: {mode ERG, target_pct,
-##    reason "arc"} (brief 2.3 pattern 2).
+## 2. Arc (the Lights seat, ERG phases with a range_pct, never the depot or checkpoints): the same
+##    schedule (stations.json arc) toward arc_target_pct = 65 + 15 x duty, the searchlight load (v3:
+##    the share of the last 10 s an enemy stood in range, TankArcState), clamped to the phase's
+##    range: {mode ERG, target_pct, reason "arc"} (brief 2.3 pattern 2).
 ## 3. Boiler (steam, the rider's SIM phases): {mode SIM, mode_grade, reason "boiler"} with
 ##    boiler_grade_pct, at most once per boiler.min_interval_s, rising at most boiler.max_rise_pct
 ##    a step, falling (the latch's drop to 0 included) in one step.
@@ -29,22 +29,29 @@ extends RefCounted
 ##    grade under the tank from the mission terrain (warm-up range in WARMUP kinds); in free roam
 ##    the valley's grade under the hull in its travel direction (TankRoam.grade_pct, the same
 ##    sampler the drive rolls on: -3..+5%, the warm-up range in the drive-out).
-## 6. cadence_band default (60, 120) at each segment start; loader (50, 120) while the steam
-##    rider's shell is loaded or the breech cycles in a WORK phase (the in-band rule's cadence 50
-##    applies only there), back to the default when it clears.
+## 6. cadence_band default (60, 120) at each phase start; loader (50, 120) while the Loader idles
+##    (v3: the ready rack is full) in a WORK phase (the in-band rule's cadence 50 applies only
+##    there), back to the default when it clears.
 ## 7. Haptics (2.7): {mode SIM, haptic, duration_s, reason} for hit / boss_hit (every rider in
 ##    SIM), never in WARMUP kinds, the first 300 s, the cool-down, ERG, to an opted-out or reserve
 ##    rider, nor within haptics.cooldown_s of the end of the last one. (v2 removed the Ram haptic.)
-## 8. end_phase for every rider of the group's phase in one step once the objective is done and
-##    min_s has passed (ADR "Who calls end_phase"); a refused rider is retried on later ticks.
+## 8. end_phase for every rider of the group's segment in one step once the objective is done,
+##    the segment's min_s has passed and every rider is past its own phase's min_s (v3: a seat
+##    switch's split phase may hold it; ADR "Who calls end_phase"); a refused rider is retried.
+## 9. Seat switches (v3): for every rider with a pending move (TankRiderState.seat_target, judged
+##    by TankSeats), the replan TankSeatPlan builds: at once the later segments for the new seat
+##    (so the move lands at the phase's end), and, as soon as the rider's open-ended phase may end
+##    and the segment does not end this tick, the split (the rest of the segment for the new seat)
+##    with end_phase in the same tick. `plans` follows every accepted replan (the module shares the
+##    dictionary). A cancelled move is replanned back to the rider's seat.
 ## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
 ## A rider on reserve (dropped or AFK) gets no bank, arc or boiler request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
 ## one. Its bank and grade memory is erased, and on the tick it is back the bank restarts from what
 ## the rider's governor holds (applied target), the boiler from 0, so the first update after a
 ## rejoin is again within the 10-point / 0.5% limits of the rider's real value.
-## The power band: tanks.json in_band.sim_ftp_pct for diesel (Drive) riders in WORK SIM
-## phases, cleared (0, 0) everywhere else, at each segment start.
+## The power band: tanks.json in_band.sim_ftp_pct for Drive and Secondaries riders in WORK SIM
+## phases, cleared (0, 0) everywhere else, at each phase start.
 
 const HAPTIC_NONE := ""
 const HAPTIC_HIT := "hit"
@@ -75,6 +82,9 @@ var plans: Dictionary = {}
 var _ended: Dictionary = {}
 ## Phase index -> the phase's elapsed seconds when its objective was first seen done.
 var _done_at: Dictionary = {}
+## peer -> {"index": plan phase index, "engine": seat, "split": bool}: the seat replan sent for
+## the rider's pending move (v3).
+var _seat_sent: Dictionary = {}
 ## peer -> the phase index whose start this director handled.
 var _started: Dictionary = {}
 ## peer -> the tick that phase started on.
@@ -129,7 +139,8 @@ func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> vo
 		_terrain_step(state, ri, ph, e)
 		_loader_step(state, ri)
 	_haptics(state, inputs, events)
-	_maybe_end_phase(state, inputs)
+	var ending := _maybe_end_phase(state, inputs)
+	_seat_step(state, inputs, ending)
 
 
 ## The rider's PlanPhase, or null in the cool-down (past the plan) or without a phase or plan.
@@ -459,52 +470,58 @@ static func crew_haptic(events: Array[Dictionary], min_damage: float) -> String:
 
 
 ## The SIM power band in % FTP to publish for a rider in `ph`: tanks.json in_band.sim_ftp_pct for
-## the diesel (Drive) in WORK SIM phases (the tempo the in-band rule scores), else [0, 0]
-## (cleared): never a tempo band in the warm-up (BRIEF 4.6.8), checkpoints or ERG, and never for
-## the steam engine (its 90% rule stays on the station card).
+## Drive (diesel) and Secondaries (feed) in WORK SIM phases (the tempo the in-band rule scores),
+## else [0, 0] (cleared): never a tempo band in the warm-up (BRIEF 4.6.8), checkpoints or ERG, and
+## never for the Loader (its 90% rule stays on the station card).
 static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 	var engine := str(ph.meta.get("engine", ""))
-	var drives := engine == TankIds.ENGINE_DIESEL
+	var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_FEED
 	if ph.kind != Wl.WORK or ph.mode != Wl.SIM or not drives:
 		return [0.0, 0.0]
 	var b: Array = c.value("tanks", "in_band.sim_ftp_pct", [76, 105])
 	return [float(b[0]), float(b[1])]
 
 
-## end_phase for every rider of the group's phase in one step, once the objective is done, min_s
-## has passed (until then the tank holds: "Regroup") and the segment's `end_hold_s` (mission file,
-## default 0; the boss uses it for the Behemoth's death beat) has run since the objective was done.
-## The hold never runs the phase into max_s: it ends END_MARGIN_S before it, so a won mission is
-## not scored as an overrun. A rider whose end_phase is refused is retried (the next tick, then
-## once a second) until it is accepted or the group has moved on.
-func _maybe_end_phase(state: TankState, inputs: TankInputs) -> void:
+## end_phase for every rider of the group's segment in one step, once the objective is done, min_s
+## has passed (until then the tank holds: "Regroup"), every rider of the segment is past its own
+## phase's min_s (v3: a seat switch's split phase may hold the end; TankSegments.riders_may_end)
+## and the segment's `end_hold_s` (mission file, default 0; the boss uses it for the Behemoth's
+## death beat) has run since the objective was done. The hold never runs the segment into max_s:
+## it ends END_MARGIN_S before it, so a won mission is not scored as an overrun. A rider whose
+## end_phase is refused is retried (the next tick, then once a second) until it is accepted or the
+## group has moved on. Returns true on the tick it ends the segment (the first round of calls).
+func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	var ph := inputs.phase
 	if not ph.open_ended or ph.is_cooldown() or _ended.has(ph.index):
-		return
+		return false
 	if not state.seg.objective_done:
-		return
+		return false
 	if not _done_at.has(ph.index):
 		_done_at[ph.index] = ph.elapsed_s
 	if ph.elapsed_s < ph.min_s:
-		return
+		return false
+	var first := false
 	if not _end_pending.has(ph.index):
 		var hold := float(content.segment(ph.segment).get("end_hold_s", 0.0))
 		var held := ph.elapsed_s - float(_done_at[ph.index]) >= hold - EPS
 		var out_of_time := ph.max_s > 0.0 and ph.elapsed_s >= ph.max_s - END_MARGIN_S - EPS
 		if not held and not out_of_time:
-			return
+			return false
+		if not TankSegments.riders_may_end(inputs):
+			return false
 		var peers: Array = []
 		for ri in inputs.riders:
-			if ri.phase_index == ph.index:
+			if ri.segment == ph.index:
 				peers.append(ri.peer)
 		_end_pending[ph.index] = peers
 		_end_retry_tick[ph.index] = inputs.tick
 		_end_retries[ph.index] = 0
+		first = true
 	elif inputs.tick < int(_end_retry_tick[ph.index]):
-		return
+		return false
 	var here := {}
 	for ri in inputs.riders:
-		if ri.phase_index == ph.index:
+		if ri.segment == ph.index:
 			here[ri.peer] = true
 	var left: Array = []
 	for peer: int in _end_pending[ph.index]:
@@ -514,11 +531,83 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> void:
 	if left.is_empty():
 		_ended[ph.index] = true
 		_end_pending.erase(ph.index)
-		return
+		return first
 	_end_pending[ph.index] = left
 	var tries := int(_end_retries[ph.index]) + 1
 	_end_retries[ph.index] = tries
 	_end_retry_tick[ph.index] = inputs.tick + (1 if tries <= 1 else _ticks(END_RETRY_S))
+	return first
+
+
+# --- Pattern 9: seat switches (v3) ---------------------------------------------------------------
+
+
+## The replans of pending seat moves (see the class doc). `ending`: this tick ends the group's
+## segment, so no rider splits it now (the later-segments replan lands the move at the end).
+func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
+	for ri in inputs.riders:
+		var r := state.rider(ri.peer)
+		var plan: EffortPlan = plans.get(ri.peer)
+		if r == null or plan == null or ri.phase_index < 0 or ri.phase_index >= plan.size():
+			_seat_sent.erase(ri.peer)
+			continue
+		var sent: Dictionary = _seat_sent.get(ri.peer, {})
+		if not sent.is_empty() and str(sent["engine"]) == ri.engine:
+			_seat_sent.erase(ri.peer)
+			sent = {}
+		if ri.on_reserve():
+			continue
+		var want := r.seat_target
+		var same_phase := not sent.is_empty() and int(sent["index"]) == ri.phase_index
+		if want == "":
+			if same_phase and not bool(sent["split"]):
+				# A cancelled move: the later segments go back to the rider's seat.
+				_send_seat(ri, ri.engine, false)
+			_seat_sent.erase(ri.peer)
+			continue
+		var same := same_phase and str(sent["engine"]) == want
+		if same and bool(sent["split"]):
+			continue
+		# Once the segment's objective is done a move lands at the segment's end (the Autopilot then
+		# seats riders for the next segment; a split would only hold the end for its rest).
+		# Never a split while the rider's seat lock runs (a lock-waived move lands at the end).
+		var can_split := (
+			not ending
+			and r.seat_lock_s <= 0.0
+			and not state.seg.objective_done
+			and ri.phase_open_ended
+			and ri.phase_elapsed_s >= ri.phase_min_s - EPS
+			and ri.phase_remaining_s > 2.0 * Wl.SIM_DT
+		)
+		if can_split and _send_seat(ri, want, true):
+			continue
+		if not same:
+			_send_seat(ri, want, false)
+
+
+## Sends the seat replan for rider `ri` moving to `engine` (`split`: the rest of the segment now,
+## with end_phase; else the later segments). True when it was accepted (and, for a split, the
+## phase ended).
+func _send_seat(ri: TankRiderInput, engine: String, split: bool) -> bool:
+	var plan: EffortPlan = plans.get(ri.peer)
+	var mv := TankSeatPlan.move_now(
+		content, plan, ri.phase_index, ri.phase_elapsed_s, ri.seg_offset_s, engine, split
+	)
+	if mv.is_empty() or bool(mv["split"]) != split:
+		return false
+	var rest: EffortPlan = mv["plan"]
+	if not ctx.directives.replan(ri.peer, rest):
+		return false
+	plans[ri.peer] = TankSeatPlan.whole(plan, ri.phase_index, rest)
+	_seat_sent[ri.peer] = {"index": ri.phase_index, "engine": engine, "split": split}
+	if split and not ctx.directives.end_phase(ri.peer):
+		# The phase cannot end now: land at its end instead (never a split after the segment).
+		var later := TankSeatPlan.tail(content, plan, ri.phase_index, engine, false, 0.0)
+		if later != null and ctx.directives.replan(ri.peer, later):
+			plans[ri.peer] = TankSeatPlan.whole(plan, ri.phase_index, later)
+		_seat_sent[ri.peer] = {"index": ri.phase_index, "engine": engine, "split": false}
+		return false
+	return true
 
 
 # --- Helpers -------------------------------------------------------------------------------------

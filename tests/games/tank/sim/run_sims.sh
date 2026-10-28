@@ -13,9 +13,9 @@
 #       and crew 3 spinning at 10 W and 25 rpm (no pause, no AFK: every stage overruns)
 #   s3  crew 3 at compliance 0.85 and 0.70 x seeds 1-3 (100% comes from s1)
 #   s4  drill, compliant, crews 1-4 as the S4 rule checks' other content (s1 is the other)
-#   s5  crew 3: cadence_drop to 30 rpm at at_phase + at_target_pct=60 in a dynamo stage (slot 1,
-#       stage 1 gun line, phase 2: the dynamo is ERG 55-100% there and enemies drain the bank)
-#       and in a 90% gun line (slot 0, the same gun line, phase 2)
+#   s5  cadence_drop to 30 rpm at at_phase + at_target_pct=60: crew 3 in a Gun phase (slot 1, plan
+#       phase 2, ERG 55-100% with the bank), crew 4 in a Lights phase (slot 3, plan phase 1, ERG 65-80%)
+#       (v3: Drive digs in SIM, so no 90% gun line arms rescue any more)
 #   s6  crew 3, haptics off for slot 0
 #   s7  the s1 crew 3 seed 1 run again (same arguments, another report name)
 #   s9  crew 1 with a scripted sprinter (mock `intervals`: 20 s at 300 W, 150 W for 17 s, FTP 200; it
@@ -31,6 +31,8 @@
 #       time up, the overtime bound, no patrol after time up, the FIT laps (drive-out, roam, cool-down), the grade
 #   s12 free roam roam_10, crew 3 at 0 W (HOST): like s2's zero crew the host's shared pause holds the drive-out, so
 #       the run ends at --max-sim-seconds still paused: no kill by crew fire, grade D
+#   s13 v3 seat switching: crew 3 HOST with --autopilot=none (every human on the fallback, seated by the host's
+#       Autopilot through replans, the two clients included): the lock, the replans, the switches, the laps
 #
 # A scenario that needs another's report (s3, s4, s7 need s1 crew 3; the checks of s1 reuse
 # them) runs that report first when it is missing. Every run goes through tools/run_game_sim at
@@ -60,7 +62,7 @@ SPRINTER='intervals:on_w=300,off_w=150,on_s=12,off_s=28,rpm=100'
 S9_SPRINTER='intervals:on_w=300,off_w=150,on_s=20,off_s=17,rpm=100'
 STOP='erg+cadence_drop:rpm=0,at_phase=2,at_target_pct=60,for_s=60'
 DYNAMO_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
-GUNLINE_DROP='erg+cadence_drop:rpm=30,at_phase=2,at_target_pct=60,for_s=30'
+ARC_DROP='erg+cadence_drop:rpm=30,at_phase=1,at_target_pct=60,for_s=30'
 # Pedaling for the not_pedaling detector (cadence >= 20 rpm) with no effort to speak of.
 IDLE='const:w=10,rpm=25'
 
@@ -127,8 +129,8 @@ scenario_s4() {
 scenario_s5() {
   run s5_c3_dynamo_drop --content=ashfall_road --players=3 --bots=0 \
     "--rider=$ERG" "--rider=$DYNAMO_DROP" "--rider=$ERG" --seed=1
-  run s5_c3_gunline_drop --content=ashfall_road --players=3 --bots=0 \
-    "--rider=$GUNLINE_DROP" "--rider=$ERG" "--rider=$ERG" --seed=1
+  run s5_c4_arc_drop --content=ashfall_road --players=4 --bots=0 \
+    "--rider=$ERG" "--rider=$ERG" "--rider=$ERG" "--rider=$ARC_DROP" --seed=1
 }
 
 scenario_s6() {
@@ -161,7 +163,11 @@ scenario_s12() {
   run s12_roam10_c3_zero --content=roam_10 --players=3 --bots=0 --rider=zero --seed=1 --max-sim-seconds=300
 }
 
-order="s1 s2 s3 s4 s5 s6 s7 s9 s10 s11 s12"
+scenario_s13() {
+  run s13_c3_seats --content=ashfall_road --players=3 --bots=0 "--rider=$ERG" --autopilot=none --seed=1
+}
+
+order="s1 s2 s3 s4 s5 s6 s7 s9 s10 s11 s12 s13"
 if [ "$#" -gt 0 ]; then
   wanted="$*"
 else

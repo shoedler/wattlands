@@ -182,7 +182,8 @@ func test_the_limiter_allows_5_a_second_per_peer() -> void:
 func test_every_event_declares_its_int_fields() -> void:
 	var samples: Array[Dictionary] = [
 		TankEvents.segment(1, "advance", 1),
-		TankEvents.rotation([[0, "dynamo"], [1, "diesel"]]),
+		# Reserved (v3 retired rotation).
+		{"type": TankEvents.ROTATION, "r": [[0, 2], [1, 1]]},
 		TankEvents.shot(0, TankIds.SHELL_HEAVY, 5, 0, 0),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 12.4, TankIds.SHELL_ENEMY, 4.0, 300.0),
 		TankEvents.kill(7, 1, TankEvents.BY_BOW, 0),
@@ -225,7 +226,7 @@ func test_steam_building_keeps_a_small_tolerance_at_90_percent() -> void:
 func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 	var c := TankFixtures.content()
 	var players := TankFixtures.slots(3)
-	var plans := TankPlanBuilder.build_all(c, players, true)
+	var plans := TankPlanBuilder.build_all(c, players)
 	var f := TankFixtures.frame(3)
 	f.players[2].intents = [{"k": "fire"}]
 	var inp := TankInputs.from_frame(

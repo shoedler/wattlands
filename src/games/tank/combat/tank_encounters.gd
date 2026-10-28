@@ -1,10 +1,10 @@
 class_name TankEncounters
 extends RefCounted
-## What stands in each segment (brief 2.4 mission P0, 2.9; ADR "P0 simplifications" 2): the Advance's
-## obstacles and its fixed encounter list keyed by metres driven, a gun line's guns and props, the
-## Behemoth, the depot's drill wrecks. Counts and HP scale with the tank (TankContent.scaled_count,
-## enemy_scale). No random spawns: the mission file lists everything, so the plan builder knows every
-## segment before the ride starts. Owner: rules (combat).
+## What stands in each segment (brief 2.4 mission P0, 2.9; ADR "P0 simplifications" 2): the
+## Advance's obstacles and its fixed encounter list keyed by metres driven, a gun line's guns and
+## props, the Behemoth, the depot's drill wrecks. Counts scale with the crew (v3:
+## TankContent.crew_count; enemy_scale). No random spawns: the mission file lists everything, so the
+## plan builder knows every segment before the ride starts. Owner: rules (combat).
 
 
 ## A new segment began (TankSegments.track): clears the previous one's world and sets this one up.
@@ -69,12 +69,14 @@ static func add_obstacle(state: TankState, type: String, x_px: float) -> TankObs
 
 
 static func _gun_line(state: TankState, aux: TankAux, seg: Dictionary) -> void:
-	var c := state.content
 	var total := 0
-	for spec: Variant in seg.get("enemies", []):
+	var specs: Array = seg.get("enemies", [])
+	var counts := crew_counts(state, specs)
+	for k in specs.size():
+		var spec: Dictionary = specs[k]
 		var type := str(spec.get("enemy", ""))
 		var at: Array = spec.get("at_px", [200])
-		for i in c.scaled_count(int(spec.get("count", 1)), state.hull.tank):
+		for i in counts[k]:
 			var raw: Variant = at[mini(i, at.size() - 1)]
 			var hold := -1.0 if raw is String else float(raw)
 			if TankEnemies.spawn(state, aux, type, 1, hold, true, true, -1) != null:
@@ -94,6 +96,7 @@ static func advance(state: TankState, aux: TankAux) -> void:
 	if sg.seg != TankIds.SEG_ADVANCE and sg.seg != TankIds.SEG_SKIRMISH:
 		return
 	var list: Array = state.content.segment(sg.segment_index).get("encounters", [])
+	var counts := crew_counts(state, list)
 	while sg.next_encounter < list.size():
 		var enc: Dictionary = list[sg.next_encounter]
 		if state.hull.distance_m < float(enc.get("at_m", 0.0)):
@@ -102,8 +105,7 @@ static func advance(state: TankState, aux: TankAux) -> void:
 			TankIds.FROM_REAR if str(enc.get("from", "front")) == "rear" else TankIds.FROM_FRONT
 		)
 		var type := str(enc.get("enemy", ""))
-		var n := state.content.scaled_count(int(enc.get("count", 1)), state.hull.tank)
-		for _i in n:
+		for _i in counts[sg.next_encounter]:
 			# Each copy rolls its own hold; TankEnemies.reserve_hold keeps them apart in the lanes.
 			TankEnemies.spawn(
 				state,
@@ -116,6 +118,24 @@ static func advance(state: TankState, aux: TankAux) -> void:
 				sg.next_encounter
 			)
 		sg.next_encounter += 1
+
+
+## (v3, brief "Difficulty is enemy count") How many of each entry of a segment's list (encounters
+## or gun-line enemies, {enemy, count}) the crew meets: the segment's total count x the crew's scale
+## (TankContent.crew_count: 0.5 / 0.7 / 0.85 / 1.0 for crews 1-4, rounded, at least 1), taken from
+## the entries in their order (a later entry gets what is left, maybe 0), so a list puts first what
+## the smallest crews must still meet.
+static func crew_counts(state: TankState, entries: Array) -> Array[int]:
+	var total := 0
+	for e: Variant in entries:
+		total += int(e.get("count", 1))
+	var left := state.content.crew_count(total, state.hull.tank, state.crew)
+	var out: Array[int] = []
+	for e: Variant in entries:
+		var n := mini(int(e.get("count", 1)), left)
+		left -= n
+		out.append(n)
+	return out
 
 
 ## The depot's aim drill: its wrecks stand ahead of the halted tank once the drill starts.

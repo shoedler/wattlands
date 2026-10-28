@@ -27,30 +27,16 @@ const DRILL_TABLE = [
   ['skirmish', 1, 'WARMUP', 70],
   ['checkpoint', 1, 'RECOVERY', 30],
 ];
-const ROTATION = {
-  1: [['bulwark', 'bulwark', 'bulwark', 'bulwark']],
-  2: [['diesel', 'dynamo', 'diesel', 'dynamo'], ['dynamo', 'diesel', 'dynamo', 'diesel']],
-  3: [['diesel', 'dynamo', 'steam', 'diesel'], ['dynamo', 'steam', 'diesel', 'dynamo'], ['steam', 'diesel', 'dynamo', 'steam']],
-  4: [
-    ['diesel', 'dynamo', 'steam', 'arc'],
-    ['dynamo', 'steam', 'arc', 'diesel'],
-    ['steam', 'arc', 'diesel', 'dynamo'],
-    ['arc', 'diesel', 'dynamo', 'steam'],
-  ],
-};
-const START = { 1: ['bulwark'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
+// v3: one tank, every slot on its start seat for the whole plan (no rotation; seat switches replan).
+const START = { 1: ['diesel'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
 
-function engineAt(crew, slot, i, table = SEG_TABLE) {
-  const [seg, stage] = table[i];
-  if (table === DRILL_TABLE) return START[crew][slot];
-  const row = ROTATION[crew][slot];
-  if (seg === 'checkpoint') return engineAt(crew, slot, i + 1, table);
-  return stage === 0 ? START[crew][slot] : row[stage - 1];
+function engineAt(crew, slot) {
+  return START[crew][slot];
 }
 
 function planPhase(crew, slot, i, table = SEG_TABLE) {
   const [seg, stage, kind, dur, min, max] = table[i];
-  const engine = engineAt(crew, slot, i, table);
+  const engine = engineAt(crew, slot);
   const drill = table === DRILL_TABLE;
   const meta = { engine, mission: 'ashfall_road', seg, segment: i, stage };
   const base = { duration_s: dur, kind, label: `L${i}`, lap: true, meta };
@@ -66,9 +52,9 @@ function planPhase(crew, slot, i, table = SEG_TABLE) {
     if (seg === 'depot') return { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 };
     return { ...base, mode: 'ERG', target_pct: 65, range_pct: [65, 80] };
   }
-  if (engine === 'steam') return { ...base, mode: 'SIM', grade_source: 'flat' };
-  if (seg === 'gun_line') return { ...base, mode: 'ERG', target_pct: 90 };
-  return { ...base, mode: 'SIM', grade_source: seg === 'boss' ? 'flat' : 'game' };
+  if (engine === 'steam' || engine === 'feed') return { ...base, mode: 'SIM', grade_source: 'flat' };
+  // v3: Drive digs in at a gun line in SIM flat.
+  return { ...base, mode: 'SIM', grade_source: seg === 'boss' || seg === 'gun_line' ? 'flat' : 'game' };
 }
 
 /**
@@ -138,23 +124,29 @@ function makeRun(crew, opts = {}) {
     }
     if (row[0] === 'gun_line' && row[1] >= 2) events.push(ge(starts[i] + 20, { type: 'shot', s: -1, sh: 5, id: 3, src: 3, e: 5 }));
   });
-  // The loader: shots and heavy latches in each gun line / boss: first latch early, the next 24 s after the shot + 6 s.
+  // The Loader (v3, slot 2): three shells stowed 7 s apart in each Advance, gun line and the boss, with the boiler
+  // grade rising and dropping; the Gun (slot 1) fires in each gun line and the boss.
   const directives = [...(opts.directives ?? [])];
   let id = 100;
   if (crew >= 3 && table === SEG_TABLE) {
     SEG_TABLE.forEach((row, i) => {
-      if (!['gun_line', 'boss'].includes(row[0])) return;
+      if (!['advance', 'gun_line', 'boss'].includes(row[0])) return;
       const a = starts[i];
-      const loader = Number(Object.keys(plans).find((p) => plans[p].phases[i].meta.engine === 'steam') ?? 3);
-      events.push(ge(a + 10, { type: 'latch', s: loader - 1, sh: 2 }));
-      events.push(ge(a + 20, { type: 'shot', s: 1, sh: 2, id: 10, src: 0, e: 0 }));
-      events.push(ge(a + 20 + 6 + 24, { type: 'latch', s: loader - 1, sh: 2 }));
-      for (const [tt, g] of [[a + 10, 0], [a + 26, 3], [a + 56, 0], [a + 72, 3]]) {
-        directives.push({ id: id++, peer: loader, t: tt, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: g, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
+      for (const k of [0, 1, 2]) events.push(ge(a + 10 + 7 * k, { type: 'latch', s: 2, sh: 2 }));
+      if (row[0] !== 'advance') events.push(ge(a + 40, { type: 'shot', s: 1, sh: 2, id: 10, src: 0, e: 0 }));
+      for (const [tt, g] of [[a + 10, 0], [a + 14, 3], [a + 17, 0], [a + 21, 3]]) {
+        directives.push({ id: id++, peer: 3, t: tt, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: g, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
       }
     });
   }
-  // Crew 1's host rider rides the Bulwark in SIM: its "Surge to evade" prompt shows in every Advance (the report's hud log is the host rider's).
+  // The solo loop (v3): the solo rider fires twice in each gun line.
+  if (crew === 1 && table === SEG_TABLE) {
+    SEG_TABLE.forEach((row, i) => {
+      if (row[0] !== 'gun_line') return;
+      for (const k of [0, 1]) events.push(ge(starts[i] + 30 + 20 * k, { type: 'shot', s: 0, sh: 2, id: 20 + k, src: 0, e: 0 }));
+    });
+  }
+  // Crew 1's host rider drives in SIM: its "Surge to evade" prompt shows in every Advance (the report's hud log is the host rider's).
   if (crew === 1 && table === SEG_TABLE) {
     SEG_TABLE.forEach((row, i) => {
       if (row[0] === 'advance') events.push({ type: 'hud', kind: 'toast', key: 'TANK_PROMPT_EVADE', peer: 1, t: starts[i] + 5 });
@@ -216,6 +208,40 @@ test('segmentsOf joins the plan and the spans', () => {
   assert.equal(C.phaseIndexAt(makeRun(3), '1', 310), 1);
 });
 
+/** Crew 3 where peer 1 moves from Drive to the Loader's seat 100 s into the stage 1 Advance (v3: a split phase). */
+function splitRun() {
+  const r = makeRun(3);
+  const plan = r.plans['1'].phases;
+  const rest = { ...plan[1], lap: false, mode: 'SIM', grade_source: 'flat', min_s: 0.05, max_s: 200, meta: { ...plan[1].meta, engine: 'feed', offset_s: 100 } };
+  plan.splice(2, 0, rest);
+  const spans = r.phases['1'];
+  const adv = spans[1];
+  const second = { ...adv, index: 2, start: adv.start + 100 };
+  adv.end = adv.start + 100;
+  adv.ended_by = 'end_phase';
+  spans.splice(2, 0, second);
+  for (let i = 3; i < spans.length; i += 1) spans[i].index = i;
+  for (const row of r.trace['1']) if (row.phase >= 2 || (row.phase === 1 && row.t >= adv.end)) row.phase += 1;
+  r.events.push({ type: 'game_event', t: adv.end, pt: adv.end, event: { type: 'seat', s: 0, from: 1, to: 6 } });
+  return r;
+}
+
+test('segmentsOf merges a split segment (v3 seats); phaseSpansOf keeps its phases', () => {
+  const r = splitRun();
+  const segs = C.segmentsOf(r, '1');
+  assert.equal(segs.length, 12, 'still one entry per segment');
+  assert.deepEqual([segs[1].seg, segs[1].dur, segs[1].phases.length], ['advance', 200, 2]);
+  assert.deepEqual(segs[1].phases.map((p) => p.engine), ['diesel', 'feed']);
+  assert.equal(segs[2].seg, 'gun_line');
+  assert.equal(C.phaseSpansOf(r, '1').length, 13);
+  assert.equal(C.planLaps(r, '1'), 12, 'the split continues the lap');
+  assert.deepEqual(C.lapProblems('x', r), []);
+  const bad = splitRun();
+  delete bad.plans['1'].phases[2].meta.offset_s;
+  assert.match(ids(C.lapProblems('x', bad)), /lap false that is no split/);
+  assert.deepEqual(C.t1Problems('x', r), []);
+});
+
 // --- S1 ------------------------------------------------------------------------------------------------------------
 
 test('S1 passes on clean compliant runs for every crew', () => {
@@ -232,8 +258,8 @@ test('S1 is skipped with no reports and fails with some missing', () => {
 
 test('T1 catches a slow Advance, a short gun line, a long boss, an overrun, breakdowns and a low grade', () => {
   assert.deepEqual(C.t1Problems('x', makeRun(3)), []);
-  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { advance: 250 } }))), /advance 1 lasted 250/);
-  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { gun_line: 70 } }))), /gun_line 1 lasted 70/);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { advance: 290 } }))), /advance 1 lasted 290/);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { gun_line: 170 } }))), /gun_line 1 lasted 170/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { boss: 340 } }))), /boss 4 lasted 340/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { ended: { 2: 'max_s' }, durations: { gun_line: 180 } }))), /gun_line 1 overran/);
   const two = [{ type: 'game_event', t: 400, event: { type: 'breakdown' } }, { type: 'game_event', t: 800, event: { type: 'breakdown' } }];
@@ -253,81 +279,47 @@ test('T2 needs 30 s above 80% per stage, 60 s in the boss, and a return to 65%',
   assert.match(ids(C.t2Problems('x', stuck)), /stayed above 65%/);
 });
 
-test('T3 judges heavy shells: build time, the first-of-segment allowance, the grade-0 rest', () => {
+test('T3 (v3) needs 3 shells stowed per stage and about 7 s a shell back to back', () => {
   assert.deepEqual(C.t3Problems('x', makeRun(3)), []);
-  const shells = C.heavyShells(makeRun(3));
-  assert.ok(shells.length >= 4);
-  assert.equal(shells[0].first, true);
-  assert.ok(Math.abs(shells[1].buildS - 24) < 1e-6);
-  const slow = makeRun(3);
-  slow.events = slow.events.map((e) => (e.type === 'game_event' && e.event.type === 'latch' && e.t === 300 + 200 + 20 + 6 + 24 ? { ...e, t: e.t + 20 } : e));
-  assert.match(ids(C.t3Problems('x', slow)), /took .* to build/);
+  const st = C.loaderStows(makeRun(3));
+  assert.equal(st.perStage[1], 6, 'Advance and gun line');
+  assert.ok(st.gaps.every((g) => Math.abs(g - 7) < 1e-6));
+  const few = makeRun(3);
+  few.events = few.events.filter((e) => !(e.event?.type === 'latch' && e.t > 300 && e.t < 600 && e.t !== 310));
+  assert.match(ids(C.t3Problems('x', few)), /stage 1: 1 shells stowed \(need 3\)/);
   const fast = makeRun(3);
-  fast.events = fast.events.map((e) => (e.type === 'game_event' && e.event.type === 'latch' && e.t === 300 + 200 + 20 + 6 + 24 ? { ...e, t: e.t - 12 } : e));
-  assert.match(ids(C.t3Problems('x', fast)), /min 18/);
-  const noRest = makeRun(3);
-  noRest.directives = noRest.directives.map((d) => (d.requested.mode_grade === 3 ? { ...d, t: d.t - 12 } : d));
-  assert.match(ids(C.t3Problems('x', noRest)), /boiler grade 0 for only/);
+  for (const e of fast.events) if (e.event?.type === 'latch') e.t = Math.floor(e.t / 7) * 7 + (e.t % 7) / 4;
+  const slow = makeRun(3);
+  const lat = slow.events.filter((e) => e.event?.type === 'latch');
+  lat.forEach((e, k) => {
+    e.t += (k % 3) * 6;
+  });
+  assert.match(ids(C.t3Problems('x', slow)), /a shell takes 13 s at the median/);
   const none = makeRun(3);
-  none.events = none.events.filter((e) => !(e.event && e.event.type === 'latch'));
-  assert.match(ids(C.t3Problems('x', none)), /no heavy shell/);
+  none.events = none.events.filter((e) => e.event?.type !== 'latch');
+  assert.match(ids(C.t3Problems('x', none)), /no back-to-back stows/);
 });
 
-test('T3 reads the rest of the rider who latched, not the longest rest of any steam rider (rotation)', () => {
-  const r = makeRun(3);
-  const first = C.heavyShells(r).find((x) => x.seg === 'gun_line');
-  const latch = r.events.find((e) => e.event?.type === 'latch' && Math.abs(e.t - first.t) < 1e-6);
-  const peer = C.peerOfSlot(r, latch.event.s);
-  const peers = new Set(r.directives.filter((d) => d.requested?.reason === 'boiler').map((d) => String(d.peer)));
-  assert.ok(peers.size >= 3, 'every rider is the steam rider in some stage');
-  assert.ok(peers.has(peer));
-  // The latching rider's next grade comes 2 s after the latch while the other steam riders still rest for long.
-  const short = makeRun(3);
-  const nextUp = short.directives.find((d) => String(d.peer) === peer && d.requested.mode_grade === 3 && d.t > first.t);
-  nextUp.t = first.t + 2;
-  assert.ok(C.heavyShells(short).some((x) => x.t === first.t && Math.abs(x.grade0S - 2) < 1e-6), "grade0S is the latching rider's 2 s");
-  assert.match(ids(C.t3Problems('x', short)), /boiler grade 0 for only 2 s/);
-  // Another rider's request at that time changes nothing for this latch.
-  const other = makeRun(3);
-  const foreign = other.directives.find((d) => String(d.peer) !== peer && d.requested.mode_grade === 3 && d.t > first.t + 200);
-  foreign.t = first.t + 2;
-  assert.ok(C.heavyShells(other).some((x) => x.t === first.t && x.grade0S > 6));
-  // A latch whose slot has no human cannot be judged.
-  const lost = makeRun(3);
-  lost.slots = lost.slots.filter((x) => x.slot !== latch.event.s);
-  assert.match(ids(C.t3Problems('x', lost)), /no boiler grade 0 after the latch/);
-});
-
-test('T3 accepts a short rest only when the rider left SIM (a checkpoint carries no mode grade)', () => {
-  const r = makeRun(3);
-  const gun = C.segmentsOf(r).filter((x) => x.seg === 'gun_line' && x.stage === 1)[0];
-  const latch = r.events.filter((e) => e.event?.type === 'latch' && e.t >= gun.start && e.t < gun.end).pop();
-  const peer = C.peerOfSlot(r, latch.event.s);
-  const end = C.segmentsOf(r, peer).find((x) => x.seg === 'gun_line' && x.stage === 1).end;
-  // The last latch of the gun line, 2 s before the checkpoint: its zero is the rider's last request.
-  latch.t = end - 2;
-  r.directives = r.directives.filter((d) => !(String(d.peer) === peer && d.t > end - 60 && d.t < end));
-  r.directives.push({ id: 999, peer: Number(peer), t: end - 2, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: 0, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
-  const sh = C.heavyShells(r).find((x) => x.t === end - 2);
-  assert.equal(sh.cut, true, 'the rest ended at the ERG checkpoint');
-  assert.ok(Math.abs(sh.grade0S - 2) < 1e-6);
-  assert.doesNotMatch(ids(C.t3Problems("x", r)), /boiler grade 0 for only/);
-  // The same 2 s inside a SIM phase (a later request while still in SIM) is a real failure.
-  r.directives.push({ id: 1000, peer: Number(peer), t: end - 1, kind: 'request', accepted: true, reason: '', requested: { mode: 'SIM', mode_grade: 3, reason: 'boiler', source: 'tank', duration_s: 0 }, applied: { clamped_by: [], refused: false, applied: {} } });
-  assert.match(ids(C.t3Problems('x', r)), new RegExp(`heavy shell at ${end - 2} s: boiler grade 0 for only 1 s`));
-});
-
-test('T4 reads the Bulwark lever share per Advance', () => {
+test('T4 (v3) reads the solo loop: Drive share per Advance, main-gun shells or a bow kill per gun line', () => {
   assert.deepEqual(C.t4Problems('x', makeRun(1)), []);
-  const ge = (t, lv) => ({ type: 'game_event', t, event: { type: 'lever', s: 0, lv } });
-  // Stage 1 Advance runs 300-500: 100 s on Turret is 50% on Drive.
-  const half = makeRun(1, { events: [ge(350, 1), ge(450, 0)] });
-  assert.match(ids(C.t4Problems('x', half)), /stage 1 Advance on Drive 50%/);
-  const ok = makeRun(1, { events: [ge(350, 1), ge(400, 0)] });
-  assert.deepEqual(C.t4Problems('x', ok), []);
-  const shares = C.driveShares(makeRun(1, { events: [ge(310, 2)] }));
-  assert.equal(shares.length, 3);
-  assert.ok(shares[0].share < 0.1 || shares[0].share > 0.9);
+  // Stage 1 Advance 300-500: the solo rider leaves Drive for the Loader at 330 s and comes back at 470 s (30% on Drive).
+  const r = makeRun(1);
+  const plan = r.plans['1'].phases;
+  const spans = r.phases['1'];
+  const adv = spans[1];
+  plan.splice(2, 0, { ...plan[1], lap: false, mode: 'SIM', grade_source: 'flat', meta: { ...plan[1].meta, engine: 'steam', offset_s: 30 } });
+  plan.splice(3, 0, { ...plan[1], lap: false, meta: { ...plan[1].meta, offset_s: 170 } });
+  spans.splice(2, 0, { ...adv, index: 2, start: 330, end: 470 }, { ...adv, index: 3, start: 470, end: adv.end });
+  adv.end = 330;
+  for (let i = 4; i < spans.length; i += 1) spans[i].index = i;
+  assert.match(ids(C.t4Problems('x', r)), /stage 1 Advance on Drive 30%/);
+  const quiet = makeRun(1);
+  quiet.events = quiet.events.filter((e) => !(e.event?.type === 'shot' && e.event.s === 0));
+  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 gun line: 0 main-gun shells fired and no bow-gun kill/);
+  const gl1 = C.segmentsOf(quiet).find((s) => s.seg === 'gun_line' && s.stage === 1);
+  quiet.events.push({ type: 'game_event', t: gl1.start + 5, pt: gl1.start + 5, event: { type: 'kill', id: 99, e: 4, by: 3, s: 0 } });
+  assert.doesNotMatch(ids(C.t4Problems('x', quiet)), /stage 1 gun line/, 'the bow guns worked it');
+  assert.equal(C.soloLoop(makeRun(1)).filter((x) => x.seg === 'gun_line').length, 3);
 });
 
 test('T6 needs a telegraphed shot and a medium per Advance and a 90-180 s heavy duel in gun lines 2 and 3', () => {
@@ -338,7 +330,7 @@ test('T6 needs a telegraphed shot and a medium per Advance and a 90-180 s heavy 
   const noTelegraph = makeRun(3);
   noTelegraph.events = noTelegraph.events.filter((e) => e.event?.type !== 'evade');
   assert.match(ids(C.t6Problems('x', noTelegraph)), /no telegraphed shot/);
-  assert.match(ids(C.t6Problems('x', makeRun(3, { durations: { gun_line: 85 } }))), /heavy duel lasted 85/);
+  assert.match(ids(C.t6Problems('x', makeRun(3, { durations: { gun_line: 185 } }))), /heavy duel lasted 185/);
   const noHeavy = makeRun(3);
   noHeavy.events = noHeavy.events.filter((e) => !(e.event?.type === 'shot' && e.event.e === 5));
   assert.match(ids(C.t6Problems('x', noHeavy)), /no heavy tank duel/);
@@ -501,14 +493,15 @@ test('S4 passes on directives that match brief 2.3 and 2.7', () => {
     { id: 9, peer: 1, t: 480, kind: 'end_phase', requested: {}, accepted: true, applied: null },
   ];
   assert.deepEqual(dirOf(dirs), []);
-  assert.deepEqual(dirOf([req(1, 450, { mode: 'SIM', mode_grade: 4, reason: 'hoist' })], 1), []);
+  assert.match(ids(dirOf([req(1, 450, { mode: 'SIM', mode_grade: 4, reason: 'hoist' })], 1)), /matches no pattern/, 'v3 retired the hoist');
+  assert.deepEqual(dirOf([{ id: 10, peer: 1, t: 400, kind: 'replan', requested: {}, accepted: true, applied: null }]), [], 'a seat replan (S13 judges it)');
 });
 
 test('S4 rejects directives outside brief 2.3 and 2.7', () => {
   assert.match(ids(dirOf([req(1, 400, { mode: 'ERG', target_pct: 80, reason: 'surprise' })])), /matches no pattern/);
-  // A SIM-mode directive in an ERG phase: the diesel's gun line (phase 2 is 400-500 for peer 1: ERG 90).
-  assert.match(ids(dirOf([req(1, 560, { mode: 'SIM', mode_grade: 3, reason: 'boiler' })])), /ERG phase/);
-  assert.match(ids(dirOf([req(1, 560, { mode: 'SIM', haptic: 2.0, duration_s: 1.5, reason: 'hit' })])), /haptic to an ERG rider|SIM-mode\) in an ERG/);
+  // A SIM-mode directive in an ERG phase: the Gun's gun line (peer 2, ERG with the bank).
+  assert.match(ids(dirOf([req(2, 560, { mode: 'SIM', mode_grade: 3, reason: 'boiler' })])), /ERG phase/);
+  assert.match(ids(dirOf([req(2, 560, { mode: 'SIM', haptic: 2.0, duration_s: 1.5, reason: 'hit' })])), /haptic to an ERG rider|SIM-mode\) in an ERG/);
   assert.match(ids(dirOf([req(2, 310, { mode: 'ERG', target_pct: 105, reason: 'bank' })])), /outside range_pct|outside 50-100/);
   assert.match(ids(dirOf([req(2, 310, { mode: 'ERG', target_pct: 60, reason: 'bank' })], 3, {})), /^$/);
   assert.match(ids(dirOf([req(2, 5, { mode: 'ERG', target_pct: 60, reason: 'bank' })])), /without range_pct/);
@@ -543,14 +536,14 @@ test('S4 plan, trace, switch and lap rules', () => {
   assert.match(ids(C.traceProblems('x', over)), /applied ERG 106% FTP at 600 s/);
   const early = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t === 100 ? { ...row, haptic: 2 } : row) });
   assert.match(ids(C.traceProblems('x', early)), /haptic 2 applied at 100 s/);
-  const inErg = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t === 550 ? { ...row, haptic: 2 } : row) });
+  const inErg = makeRun(3, { extraRows: (row, peer) => (peer === '2' && row.t === 550 ? { ...row, haptic: 2 } : row) });
   assert.match(ids(C.traceProblems('x', inErg)), /haptic applied in ERG/);
   const cool = makeRun(3, { extraRows: (row, peer) => (peer === '2' && row.t === 1700 ? { ...row, haptic: 2, mode: 'SIM' } : row) });
   assert.match(ids(C.traceProblems('x', cool)), /cool-down/);
-  // A SIM -> ERG entry above the planned target: peer 1 enters the gun line (ERG 90% = 180 W) at 400 s.
-  const spike = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 2 && row.t <= 502 ? { ...row, applied_target_w: 190 } : row) });
-  assert.match(ids(C.traceProblems('x', spike)), /entered ERG at 500 s with 190 W/);
-  const fine = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 2 && row.t <= 502 ? { ...row, applied_target_w: 180 } : row) });
+  // A SIM -> ERG entry above the planned target: peer 1 (Drive) enters the checkpoint (ERG 50% = 100 W) at 600 s.
+  const spike = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 110 } : row) });
+  assert.match(ids(C.traceProblems('x', spike)), /entered ERG at 600 s with 110 W/);
+  const fine = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 100 } : row) });
   assert.deepEqual(C.traceProblems('x', fine), []);
   // Two switches 30 s apart: an ERG blip inside the SIM Advance.
   const quick = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t >= 350 && row.t < 380 ? { ...row, mode: 'ERG' } : row) });
@@ -586,7 +579,7 @@ test('S4 applied values never exceed what was requested', () => {
   assert.match(run(withApplied({ mode: 'ERG', target_pct: 70, reason: 'bank' }, { mode: 'ERG', target_pct: 80, target_w: 160 })), /applied ERG target % 80 above the requested 70/);
   assert.equal(run(withApplied({ mode: 'SIM', mode_grade: 6, reason: 'boiler' }, { mode: 'SIM', mode_grade: 6, grade_pct: 3 }, 700, 3)), '');
   assert.match(run(withApplied({ mode: 'SIM', mode_grade: 6, reason: 'boiler' }, { mode: 'SIM', mode_grade: 7.5, grade_pct: 3 }, 700, 3)), /applied mode grade % 7.5 above the requested 6/);
-  assert.match(run(withApplied({ mode: 'SIM', mode_grade: 4, reason: 'hoist' }, { mode: 'SIM', mode_grade: 5 }, 450, 1), 1), /applied mode grade % 5 above the requested 4/);
+  assert.match(run(withApplied({ mode: 'ERG', target_pct: 70, reason: 'arc' }, { mode: 'ERG', target_pct: 75 }, 310, 4), 4), /applied ERG target % 75 above the requested 70/);
   assert.equal(run(withApplied({ mode: 'SIM', haptic: 3, duration_s: 2, reason: 'boss_hit' }, { mode: 'SIM', haptic_pct: 2.1, haptic_s: 2 }, 1400, 1)), '');
   assert.match(run(withApplied({ mode: 'SIM', haptic: 2, duration_s: 1.5, reason: 'hit' }, { mode: 'SIM', haptic_pct: 3.4, haptic_s: 1.5 }, 400, 1)), /applied haptic % 3.4 above the requested 2/);
   // A refused request applies nothing and is judged by the refusal check.
@@ -666,31 +659,41 @@ function rescueRun(peer, phaseStart, from, to) {
   });
 }
 
+/** Crew 4 where the Lights rider (peer 4) is in rescue in the stage 1 Advance. */
+function arcRescueRun(from = 320, to = 360) {
+  const r = makeRun(4, {
+    extraRows: (row, p) => (p === '4' && row.t >= from && row.t < to ? { ...row, rescue: true, applied_pct: 50, clamped_by: ['rescue'] } : row),
+  });
+  return r;
+}
+
 test('S5 passes when the collapsing rider enters rescue in the right phase, recovers, and the plan continues', () => {
-  const set = { s5_c3_dynamo_drop: rescueRun('2', 500, 520, 560), s5_c3_gunline_drop: rescueRun('1', 500, 520, 560) };
+  const set = { s5_c3_dynamo_drop: rescueRun('2', 500, 520, 560), s5_c4_arc_drop: arcRescueRun() };
   const r = C.checkS5(set);
   assert.equal(r.status, 'PASS', ids(r.details));
   assert.equal(C.checkS5({}).status, 'SKIP');
 });
 
 test('S5 fails without rescue, with rescue that never ends, at the wrong power, and when the plan stops', () => {
-  const ok = rescueRun('2', 500, 520, 560);
-  const gl = rescueRun('1', 500, 520, 560);
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: makeRun(3), s5_c3_gunline_drop: gl }).details), /never entered rescue/);
+  const gl = arcRescueRun();
+  const set = (dyn) => ({ s5_c3_dynamo_drop: dyn, s5_c4_arc_drop: gl });
+  assert.match(ids(C.checkS5(set(makeRun(3))).details), /never entered rescue/);
   const endless = rescueRun('2', 500, 520, 99999);
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: endless, s5_c3_gunline_drop: gl }).details), /rescue never ended/);
+  assert.match(ids(C.checkS5(set(endless)).details), /rescue never ended/);
   const strong = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 520 && row.t < 560 ? { ...row, rescue: true, applied_pct: 70, clamped_by: ['rescue'] } : row) });
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: strong, s5_c3_gunline_drop: gl }).details), /rescue applied 70% FTP/);
+  assert.match(ids(C.checkS5(set(strong)).details), /rescue applied 70% FTP/);
   const stopped = rescueRun('2', 500, 520, 560);
   stopped.phases['2'] = stopped.phases['2'].slice(0, 5);
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: stopped, s5_c3_gunline_drop: gl }).details), /plan phases ran/);
+  assert.match(ids(C.checkS5(set(stopped)).details), /plan phases ran/);
   const bystander = rescueRun('2', 500, 520, 560);
-  for (const row of bystander.trace["3"]) if (row.t === 525) row.rescue = true;
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: bystander, s5_c3_gunline_drop: gl }).details), /peer 3 \(not the collapsing rider\)/);
+  for (const row of bystander.trace['3']) if (row.t === 525) row.rescue = true;
+  assert.match(ids(C.checkS5(set(bystander)).details), /peer 3 \(not the collapsing rider\)/);
   const unclamped = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 520 && row.t < 560 ? { ...row, rescue: true, applied_pct: 50 } : row) });
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: unclamped, s5_c3_gunline_drop: gl }).details), /clamped by rescue/);
-  const wrongPhase = makeRun(3, { extraRows: (row, p) => (p === '1' && row.t >= 320 && row.t < 360 ? { ...row, rescue: true, applied_pct: 50, clamped_by: ["rescue"] } : row) });
-  assert.match(ids(C.checkS5({ s5_c3_dynamo_drop: ok, s5_c3_gunline_drop: wrongPhase }).details), /rescue began before phase 2/);
+  assert.match(ids(C.checkS5(set(unclamped)).details), /clamped by rescue/);
+  // Rescue in a SIM phase (the Drive rider in the depot) is not the Gun's or the Lights'.
+  const wrongPhase = makeRun(3, { extraRows: (row, p) => (p === '2' && row.t >= 100 && row.t < 140 ? { ...row, rescue: true, applied_pct: 50, clamped_by: ['rescue'] } : row) });
+  wrongPhase.plans['2'].phases[0] = { ...wrongPhase.plans['2'].phases[0], mode: 'SIM', meta: { ...wrongPhase.plans['2'].phases[0].meta, engine: 'diesel' } };
+  assert.match(ids(C.checkS5(set(wrongPhase)).details), /rescue began in a SIM phase of diesel/);
 });
 
 // --- S6 / S7 ---------------------------------------------------------------------------------------------------------
@@ -754,7 +757,7 @@ test('T7 needs the arc target above 72% for 30 s per stage and back at 68% withi
 
 // --- S9 ---------------------------------------------------------------------------------------------------------------
 
-/** A clean sprinting solo run: an evaded telegraphed shot in each Advance, power 300 W at the end of the stage 1 Advance (gun line at 500 s). */
+/** A clean sprinting solo run: an evaded telegraphed shot in each Advance, power 300 W at the end of the stage 1 gun line (the ERG checkpoint at 600 s). */
 function sprintRun(over = {}) {
   const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
   const starts = [300, 660, 1020];
@@ -764,7 +767,7 @@ function sprintRun(over = {}) {
     directives: over.directives ?? [],
     extraRows: (row) => {
       let out = row;
-      if (row.t >= 494 && row.t < 500) out = { ...out, power_w: 300 };
+      if (row.t >= 594 && row.t < 600) out = { ...out, power_w: 300 };
       if (over.rows) out = over.rows(out) ?? out;
       return out;
     },
@@ -772,18 +775,18 @@ function sprintRun(over = {}) {
   return r;
 }
 
-test('S9 passes on a sprinter that evades and enters the gun line at its target', () => {
+test('S9 passes on a sprinter that evades and enters every ERG phase at its target', () => {
   const r = C.checkS9({ s9_c1_sprint: sprintRun() });
   assert.equal(r.status, 'PASS', ids(r.details));
-  assert.match(r.summary, /3 of 6 telegraphed shots evaded, 1 gun line entries/);
+  assert.match(r.summary, /3 of 6 telegraphed shots evaded, 4 ERG entries \(1 after a sprint\)/);
   assert.equal(C.checkS9({}).status, 'SKIP');
   assert.deepEqual(C.successfulEvades(sprintRun()).map((e) => e.id), [10, 11, 12]);
-  const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 2);
+  const sw = C.switchesIntoErg(sprintRun(), '1').filter((x) => x.phase === 3);
   assert.equal(sw.length, 1);
-  assert.ok(sw[0].trailingW >= 300 - 1e-6, 'the 3 s before the gun line are the sprint');
+  assert.ok(sw[0].trailingW >= 300 - 1e-6, 'the 3 s before the checkpoint are the sprint');
 });
 
-test('S9 fails without an evade, with a Ram event or haptic, or with no sprint into the gun line', () => {
+test('S9 fails without an evade, or with a Ram event or haptic', () => {
   const ge = (t, event) => ({ type: 'game_event', t, pt: t, event });
   const failedOnly = [300, 660, 1020].map((a, i) => ge(a + 40, { type: 'evade', id: 10 + i, e: 3, ok: 0, s: -1 }));
   assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: failedOnly }) }).details), /never made a telegraphed shot miss/);
@@ -791,14 +794,14 @@ test('S9 fails without an evade, with a Ram event or haptic, or with no sprint i
   assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ events: ram }) }).details), /1 Ram or dodge events/);
   const hap = [req(1, 340, { mode: 'SIM', haptic: 3.0, duration_s: 1.0, reason: 'ram' })];
   assert.match(ids(C.checkS9({ s9_c1_sprint: sprintRun({ directives: hap }) }).details), /1 ram haptics/);
-  const calm = sprintRun({ rows: (row) => (row.t >= 494 && row.t < 500 ? { ...row, power_w: 150 } : row) });
-  assert.match(ids(C.checkS9({ s9_c1_sprint: calm }).details), /no gun line was entered straight after a sprint/);
+  const calm = sprintRun({ rows: (row) => (row.t >= 594 && row.t < 600 ? { ...row, power_w: 150 } : row) });
+  assert.equal(C.checkS9({ s9_c1_sprint: calm }).status, 'PASS', 'an ERG entry after a sprint is not required (v3)');
 });
 
-test('S9 fails when the gun line is entered at the sprint power, or a haptic goes to an ERG rider', () => {
-  const spike = sprintRun({ rows: (row) => (row.phase === 2 && row.t <= 502 ? { ...row, applied_target_w: 300 } : row) });
-  assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /entered after a 300 W sprint with a 300 W target \(planned 180 W\)/);
-  const erg = [req(1, 560, { mode: "SIM", haptic: 2.0, duration_s: 1.5, reason: "hit" })];
+test('S9 fails when an ERG phase is entered at the sprint power, or a haptic goes to an ERG rider', () => {
+  const spike = sprintRun({ rows: (row) => (row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 300 } : row) });
+  assert.match(ids(C.checkS9({ s9_c1_sprint: spike }).details), /ERG phase 3 at 600 s entered after 300 W with a 300 W target \(planned 100 W\)/);
+  const erg = [req(1, 620, { mode: "SIM", haptic: 2.0, duration_s: 1.5, reason: "hit" })];
   const r = sprintRun({ directives: erg });
   assert.match(ids(C.checkS9({ s9_c1_sprint: r }).details), /haptic to an ERG rider|SIM-mode\) in an ERG/);
   const wrongRun = sprintRun();
@@ -806,14 +809,12 @@ test('S9 fails when the gun line is entered at the sprint power, or a haptic goe
   assert.match(ids(C.checkS9({ s9_c1_sprint: wrongRun }).details), /players 3, wanted 1/);
 });
 
-test('S1 holds crew 1 to the "Surge to evade" prompt in every Advance, other crews only with --require-prompts', () => {
+test('S1 holds every crew to the "Surge to evade" prompt only with --require-prompts (v3: the host rider changes seats)', () => {
   assert.equal(C.checkS1(goodSet(), { seeds: [1] }).status, 'PASS');
   const set = goodSet();
   set.s1_c1_seed1.events = set.s1_c1_seed1.events.filter((e) => e.type !== 'hud');
-  const r = C.checkS1(set, { seeds: [1] });
-  assert.equal(r.status, 'FAIL');
-  assert.match(ids(r.details), /s1_c1_seed1: stage 1 Advance raised no "Surge to evade" prompt/);
-  assert.doesNotMatch(ids(r.details), /s1_c3_seed1: .*prompt/, 'crews 2-4 are not asked (their host rider rotates onto ERG engines)');
+  assert.equal(C.checkS1(set, { seeds: [1] }).status, 'PASS');
+  assert.match(ids(C.checkS1(set, { seeds: [1], requirePrompts: true }).details), /s1_c1_seed1: stage 1 Advance raised no "Surge to evade" prompt/);
   assert.match(ids(C.checkS1(goodSet(), { seeds: [1], requirePrompts: true }).details), /s1_c3_seed1: stage 1 Advance raised no/);
 });
 
@@ -821,9 +822,9 @@ test('S1 holds crew 1 to the "Surge to evade" prompt in every Advance, other cre
 
 const over = (t, slot, sh = 3) => ({ type: 'game_event', t, pt: t, event: { type: 'latch', s: slot, sh } });
 
-/** Crew 3 with every rider sprinting: slot 2 works the steam engine in stage 1 (300-500 s), slot 1 in stage 2 (660-860 s). */
+/** Crew 3 with every rider sprinting: slot 2 works the Loader (the steam engine) all along. */
 function clientSprintRun(events) {
-  return makeRun(3, { events: events ?? [over(400, 2), over(700, 1)] });
+  return makeRun(3, { events: events ?? [over(400, 2), over(700, 2)] });
 }
 
 /** Crew 3 where peer 2 (the dynamo of the stage 1 gun line, 500-600 s) stops dead from 520 s to 580 s. */
@@ -850,14 +851,14 @@ test('S10 passes on client Overpressure owned by the steam engine and a dynamo r
   assert.match(r.summary, /2 client Overpressure shells/);
   assert.equal(C.checkS10({}).status, 'SKIP');
   assert.equal(C.peerOfSlot(clientSprintRun(), 2), '3');
-  assert.deepEqual(C.intentOwnershipProblems('x', clientSprintRun()), [], 'slot 2 is the steam engine in stage 1, slot 1 in stage 2');
-  assert.equal(C.intentOwnershipProblems('x', clientSprintRun([over(700, 0)])).length, 1, 'slot 0 is the dynamo in stage 2');
+  assert.deepEqual(C.intentOwnershipProblems('x', clientSprintRun()), [], 'slot 2 is the Loader');
+  assert.equal(C.intentOwnershipProblems('x', clientSprintRun([over(700, 0)])).length, 1, 'slot 0 drives');
 });
 
 test('S10 fails when no client Overpressure lands, one comes from a rider off the steam engine, or a Ram shows up', () => {
   const none = clientSprintRun([over(1100, 0), over(400, 2, 2)]);
   assert.match(ids(C.checkS10(s10Set(none, stopRun())).details), /no client rider .* latched an Overpressure shell/);
-  const wrong = clientSprintRun([over(400, 1), over(700, 1)]);
+  const wrong = clientSprintRun([over(400, 1), over(700, 2)]);
   assert.match(ids(C.checkS10(s10Set(wrong, stopRun())).details), /Overpressure shell by slot 1 at 400 s, who was on "dynamo"/);
   const ram = clientSprintRun([over(400, 2), { type: 'game_event', t: 450, pt: 450, event: { type: 'ram', s: 0, ok: 1, id: 7 } }]);
   assert.match(ids(C.checkS10(s10Set(ram, stopRun())).details), /a ram event at 450 s/);
@@ -881,6 +882,45 @@ test('S10 fails when the stopped rider never goes AFK, never returns, has no res
   stuck.phases['2'] = stuck.phases['2'].slice(0, 5);
   assert.match(ids(C.checkS10(s10Set(clientSprintRun(), stuck)).details), /plan did not continue/);
   assert.match(ids(C.checkS10({ s10_c3_clients_sprint: clientSprintRun() }).details), /missing report s10_c3_dynamo_stop/);
+});
+
+// --- S13 seat switching ---------------------------------------------------------------------------------------------
+
+/** splitRun as the s13 run: crew 3 on the fallback, peer 1 (slot 0) moves to the Secondaries, peer 2 (a client) later too. */
+function seatRun() {
+  const r = splitRun();
+  r.args.autopilot = 'none';
+  r.directives.push({ id: 900, peer: 1, t: 399.95, kind: 'replan', accepted: true, reason: '', requested: {} });
+  // Peer 2 (slot 1) moves at the stage 2 checkpoint's end (a boundary landing) to the Lights.
+  const plan2 = r.plans['2'].phases;
+  for (let i = 7; i < plan2.length - 1; i += 1) plan2[i] = { ...plan2[i], meta: { ...plan2[i].meta, engine: 'arc' } };
+  r.events.push({ type: 'game_event', t: 1020, pt: 1020, event: { type: 'seat', s: 1, from: 2, to: 5 } });
+  r.directives.push({ id: 901, peer: 2, t: 990, kind: 'replan', accepted: true, reason: '', requested: {} });
+  return r;
+}
+
+test('S13 passes on moves that respect the lock, land on their seat and come from accepted replans', () => {
+  const r = C.checkS13({ s13_c3_seats: seatRun() });
+  assert.equal(r.status, 'FAIL', 'two moves only');
+  assert.match(ids(r.details), /2 seat moves \(want at least 3\)/);
+  const three = seatRun();
+  three.events.push({ type: 'game_event', t: 1500, pt: 1500, event: { type: 'seat', s: 1, from: 5, to: 5 } });
+  three.directives.push({ id: 902, peer: 2, t: 1499, kind: 'replan', accepted: true, reason: '', requested: {} });
+  const ok = C.checkS13({ s13_c3_seats: three });
+  assert.equal(ok.status, 'PASS', ids(ok.details));
+  assert.equal(C.checkS13({}).status, 'SKIP');
+});
+
+test('S13 fails on a move inside the lock, a move its plan does not show, or a refused replan', () => {
+  const r = seatRun();
+  r.events.push({ type: 'game_event', t: 1050, pt: 1050, event: { type: 'seat', s: 1, from: 5, to: 5 } });
+  assert.match(ids(C.seatProblems('x', r)), /slot 1 moved at 1020 s and again at 1050 s/);
+  const wrong = seatRun();
+  wrong.events.push({ type: 'game_event', t: 1600, pt: 1600, event: { type: 'seat', s: 2, from: 3, to: 1 } });
+  assert.match(ids(C.seatProblems('x', wrong)), /slot 2 moved to diesel at 1600 s but its plan says steam/);
+  const refused = seatRun();
+  refused.directives.push({ id: 903, peer: 3, t: 1700, kind: 'replan', accepted: false, reason: 'plan_invalid', requested: {} });
+  assert.match(ids(C.seatProblems('x', refused)), /replan 903 \(peer 3 at 1700 s\) refused: plan_invalid/);
 });
 
 // --- FIT, arguments, main ----------------------------------------------------------------------------------------------

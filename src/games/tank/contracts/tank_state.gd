@@ -17,8 +17,6 @@ var rng: RandomNumberGenerator = null
 ## The mission (content id); v3: every crew size rides the one tank (TankIds.tank_for_crew).
 var mission: String = ""
 var crew: int = 1
-## The rotation option as the plans were built (always false for the drill).
-var rotation: bool = true
 ## [snap] Game tick of the latest step.
 var tick: int = 0
 ## Game seconds (tick x 0.05).
@@ -57,7 +55,6 @@ static func create(
 	p_content: TankContent,
 	slots: Array[PlayerSlot],
 	p_mission: String,
-	p_rotation: bool,
 	p_rng: RandomNumberGenerator
 ) -> TankState:
 	var s := TankState.new()
@@ -65,7 +62,6 @@ static func create(
 	s.rng = p_rng
 	s.mission = p_mission
 	s.crew = clampi(slots.size(), 1, TankIds.MAX_CREW)
-	s.rotation = p_rotation
 	var tank := TankIds.tank_for_crew(s.crew)
 	var def := p_content.tank_def(tank)
 	s.hull.tank = tank

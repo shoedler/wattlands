@@ -5,8 +5,10 @@ extends RefCounted
 ## clients apply them in apply_event in the host's order. Every number is an int (declared in
 ## INT_FIELDS, returned by int_fields()). Never name an event "snapshot" or "wl.*".
 ##
-##   segment    {i: phase index, sg: seg code, st: stage}                 the group entered a segment
-##   rotation   {r: [[slot, engine code], ...]}                           stations changed (checkpoint)
+##   segment    {i: the segment's index (the plan phase index of the unsplit plans; v3), sg: seg
+##               code, st: stage}                                          the group entered a segment
+##   rotation   reserved (v3 retired rotation: seat choice replaces it): never emitted, kept in TYPES
+##              and INT_FIELDS so the name stays taken on the wire
 ##   shot       {s: slot or -1 (enemy), sh: shell type, id: shell id, src: enemy id or 0,
 ##               e: enemy code or 0}
 ##   hit        {on: ON_*, id: target id (0 the tank), dmg: the round's damage before the berm
@@ -19,7 +21,8 @@ extends RefCounted
 ##   repaired   {hp}                                                      back to 40 HP
 ##   overrun    {sg: seg code, st: stage}                                 the previous segment hit max_s
 ##   boss_phase {p: TankIds.BOSS_*}
-## Additive (G0): latch {s, sh: shell type} for sound and view; lever {s, lv} is reserved (v3
+## Additive (G0): latch {s, sh: shell type} for sound and view (v3: the Loader stowed a shell of
+## that type in the ready rack); lever {s, lv} is reserved (v3
 ## retired the Bulwark's gearbox): never emitted, kept so the name stays taken on the wire.
 ## Additive (v2, brief 2.4, 2.6, 2.10):
 ##   evade      {id: the shooter's id (an enemy, or the Behemoth's turret part id), e: enemy code
@@ -46,6 +49,7 @@ extends RefCounted
 ##   never queued.
 
 const SEGMENT := "segment"
+## Reserved (v3 retired rotation; never emitted).
 const ROTATION := "rotation"
 const SHOT := "shot"
 const HIT := "hit"
@@ -121,14 +125,6 @@ const INT_FIELDS := {
 
 static func segment(index: int, seg: String, stage: int) -> Dictionary:
 	return {"type": SEGMENT, "i": index, "sg": TankIds.seg_code(seg), "st": stage}
-
-
-## `pairs`: [[slot, engine], ...] in slot order.
-static func rotation(pairs: Array) -> Dictionary:
-	var r: Array = []
-	for p: Array in pairs:
-		r.append([int(p[0]), TankIds.engine_code(str(p[1]))])
-	return {"type": ROTATION, "r": r}
 
 
 static func shot(

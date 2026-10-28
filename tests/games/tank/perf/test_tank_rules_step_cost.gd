@@ -12,7 +12,7 @@ const DIRECTOR_BUDGET_US := 250.0
 
 func _inputs(tick: int) -> TankInputs:
 	var slots := TankFixtures.slots(3)
-	var plans := TankPlanBuilder.build_all(TankFixtures.content(), slots, true)
+	var plans := TankPlanBuilder.build_all(TankFixtures.content(), slots)
 	var inp := TankInputs.from_frame(TankFixtures.frame(3), slots, plans, {}, {}, {})
 	inp.tick = tick
 	inp.t = tick * Wl.SIM_DT
@@ -74,7 +74,7 @@ func test_the_director_step_stays_far_below_the_budget() -> void:
 	var state := TankFixtures.cap()
 	var ctx := TankFakes.make_ctx(3, 0, "ashfall_road", Wl.HOST, 1, 5)
 	var content := TankFixtures.content()
-	var plans := TankPlanBuilder.build_all(content, ctx.players, true)
+	var plans := TankPlanBuilder.build_all(content, ctx.players)
 	var director := TankDirector.new(ctx, content, plans)
 	var inp := _inputs(0)
 	var none: Array[Dictionary] = []

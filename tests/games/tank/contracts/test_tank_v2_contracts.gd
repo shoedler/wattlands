@@ -168,7 +168,7 @@ func test_target_pct_in_sim_is_the_engines_band_centre() -> void:
 func test_the_input_digest_carries_the_planned_target() -> void:
 	var c := TankFixtures.content()
 	var players := TankFixtures.slots(3)
-	var plans := TankPlanBuilder.build_all(c, players, true)
+	var plans := TankPlanBuilder.build_all(c, players)
 	var f := TankFixtures.frame(3)
 	var inp := TankInputs.from_frame(f, players, plans, {}, {}, {})
 	for ri in inp.riders:
@@ -179,6 +179,10 @@ func test_the_input_digest_carries_the_planned_target() -> void:
 func test_the_rules_fill_target_pct_every_tick() -> void:
 	var rig := TankRulesRig.new(4)
 	rig.enter(1, 30.0)
+	# v3: the Loader loads (90% FTP to build) while its rack has room; a full rack idles it.
+	rig.set_rack(0)
+	rig.load_shell()
+	rig.step()
 	rig.step()
 	var want := {
 		TankIds.ENGINE_DIESEL: 90.5,
@@ -206,9 +210,7 @@ func test_the_hull_travels_right_by_default() -> void:
 
 
 func _fresh(crew: int) -> TankState:
-	return TankState.create(
-		TankFixtures.content(), TankFixtures.slots(crew), "ashfall_road", true, null
-	)
+	return TankState.create(TankFixtures.content(), TankFixtures.slots(crew), "ashfall_road", null)
 
 
 func test_the_new_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
@@ -294,5 +296,5 @@ func test_the_arc_plans_follow_the_brief() -> void:
 	var drill := TankContent.from_dicts(_files("drill"), "drill")
 	assert_eq(float(drill.plan_entry("arc", "depot")["target_pct"]), 50.0)
 	assert_eq(drill.plan_entry("arc", "skirmish")["range_pct"], [55.0, 65.0])
-	var plans := TankPlanBuilder.build_all(c, TankFixtures.slots(4), true)
+	var plans := TankPlanBuilder.build_all(c, TankFixtures.slots(4))
 	assert_eq(plans.size(), 4, "a plan per rider of a crew of 4")

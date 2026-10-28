@@ -27,9 +27,8 @@ const DRILL := [
 ]
 
 
-func _plans(content_id: String, crew: int, rotation: bool = true) -> Dictionary:
+func _plans(content_id: String, crew: int) -> Dictionary:
 	var ctx := F.make_ctx(crew, 0, content_id)
-	ctx.options["rotation"] = rotation
 	var game: TankGame = autofree(F.make_game(ctx))
 	return game.build_effort_plans()
 
@@ -38,29 +37,28 @@ func _content(mission: String = "ashfall_road") -> TankContent:
 	return TankFixtures.content(mission)
 
 
-## Every plan, every crew, rotation on and off: valid, no switch warning, the first 300 s within
-## 4.6.8, and per rider every ERG <-> SIM switch >= 60 s apart with each open phase at its min_s
-## and at its max_s (brief 2.3, BRIEF 4.5).
+## Every plan, every crew (v3: no rotation; seat replans are TankSeatPlan's tests): valid, no switch
+## warning, the first 300 s within 4.6.8, and per rider every ERG <-> SIM switch >= 60 s apart with
+## each open phase at its min_s and at its max_s (brief 2.3, BRIEF 4.5).
 func test_every_plan_passes_the_validator_with_switches_60_s_apart() -> void:
 	for content_id: String in F.manifest()["contents"]:
 		for crew in [1, 2, 3, 4]:
-			for rotation in [true, false]:
-				var plans := _plans(content_id, crew, rotation)
-				for peer: int in plans:
-					var at := "%s crew %d rotation %s peer %d" % [content_id, crew, rotation, peer]
-					var plan: EffortPlan = plans[peer]
-					var v := PlanValidator.validate(plan)
-					assert_true(v["ok"], "%s: %s" % [at, v["errors"]])
-					assert_eq(v["warnings"], [], at)
-					var final := PlanValidator.finalize(plan)
-					assert_eq(final.phase(final.size() - 1).kind, Wl.COOLDOWN, at)
-					for use_max in [false, true]:
-						assert_gte(
-							_min_switch_gap(final, use_max),
-							60.0,
-							"%s (open at %s)" % [at, "max" if use_max else "min"]
-						)
-					assert_true(_warmup_ok(plan), "%s: first 300 s within 4.6.8" % at)
+			var plans := _plans(content_id, crew)
+			for peer: int in plans:
+				var at := "%s crew %d peer %d" % [content_id, crew, peer]
+				var plan: EffortPlan = plans[peer]
+				var v := PlanValidator.validate(plan)
+				assert_true(v["ok"], "%s: %s" % [at, v["errors"]])
+				assert_eq(v["warnings"], [], at)
+				var final := PlanValidator.finalize(plan)
+				assert_eq(final.phase(final.size() - 1).kind, Wl.COOLDOWN, at)
+				for use_max in [false, true]:
+					assert_gte(
+						_min_switch_gap(final, use_max),
+						60.0,
+						"%s (open at %s)" % [at, "max" if use_max else "min"]
+					)
+				assert_true(_warmup_ok(plan), "%s: first 300 s within 4.6.8" % at)
 
 
 func _min_switch_gap(plan: EffortPlan, use_max: bool) -> float:
@@ -254,24 +252,7 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "plans.dynamo.boss.range_pct", [55, 105], "plans.dynamo.boss: every ERG"],
 		["stations", "plans.steam.gun_line", null, "plans.steam.gun_line: missing"],
 		["stations", "drill_plans.diesel.skirmish", null, "drill_plans.diesel.skirmish: missing"],
-		[
-			"stations",
-			"rotation.landship",
-			_rows(0, ["dynamo", "dynamo", "steam", "diesel"]),
-			"rotation.landship[0]: stage 1"
-		],
-		[
-			"stations",
-			"rotation.landship",
-			_rows(1, ["dynamo", "bulwark", "dynamo", "dynamo"]),
-			"bulwark is not one of the tank's engines"
-		],
-		[
-			"stations",
-			"rotation.landship",
-			_rows(1, ["dynamo", "diesel", "dynamo", "dynamo"]),
-			"rotation.landship column 2"
-		],
+		["stations", "rotation", {}, "stations.json rotation: retired in v3"],
 		["stations", "start_engines.landship", ["diesel", "dynamo", "dynamo", "arc"], "distinct"],
 		["tanks", "in_band.sim_ftp_pct", [76, 110], "in_band.sim_ftp_pct: must lie in 50..105"],
 		["mission", "segments.2.max_s", 200, "segments[2] max_s: a 90% gun line"],
@@ -301,16 +282,6 @@ func test_the_cross_file_checks_name_what_is_wrong() -> void:
 	g["mission"]["segments"][1]["max_s"] = 70
 	var d := TankContent.from_dicts(g, "drill")
 	assert_string_contains("\n".join(d.errors), "advance is not in stations.json drill_plans")
-
-
-## v3 rotation rows for the landship's four start seats, every slot on its own seat, with row
-## `slot` replaced by `row` (the schema still checks rows where a tank has them).
-func _rows(slot: int, row: Array) -> Array:
-	var out: Array = []
-	for e: String in ["diesel", "dynamo", "steam", "arc"]:
-		out.append([e, e, e, e])
-	out[slot] = row
-	return out
 
 
 ## Sets a dotted path (numeric parts index arrays); null erases the key.

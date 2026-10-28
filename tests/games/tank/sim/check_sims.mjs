@@ -20,7 +20,7 @@
 //   s2_c3_idle             crew 3 spinning at 10 W and 25 rpm (pedaling for every detector, no effort): overruns
 //   s3_c3_c85_seed<n>, s3_c3_c70_seed<n>   crew 3 at compliance 0.85 / 0.70 (100% is s1_c3_seed<n>)
 //   s4_drill_c<crew>       the drill, compliant, crews 1-4 (S4 also reads every s1 report)
-//   s5_c3_dynamo_drop, s5_c3_gunline_drop  cadence to 30 rpm in a dynamo stage / a 90% gun line
+//   s5_c3_dynamo_drop, s5_c4_arc_drop  cadence to 30 rpm in a Gun (dynamo) phase / a Lights (arc) phase
 //   s6_c3_haptics_off      crew 3, slot 0 opted out of haptics
 //   s7_c3_seed1            s1_c3_seed1 again
 //   s9_c1_sprint           crew 1 with a scripted sprinter (intervals), the sprint half of the workout: evades,
@@ -28,40 +28,47 @@
 //   s10_c3_clients_sprint  crew 3, every rider a scripted sprinter: the clients' Overpressure (`over` from a surge on the
 //                          steam engine) arrives as telemetry intents; a client's `aim` is GUT-tested (no actions in sims)
 //   s10_c3_dynamo_stop     crew 3, slot 1 stops pedaling for 60 s in the stage 1 gun line (rescue, AFK, reserve, back)
+//   s13_c3_seats           crew 3 on the fallback (--autopilot=none): automatic seating through replans, clients included
 //   s11_roam10_c1, s11_roam10_c4, s11_roam30_c3   free roam, compliant `erg` riders (brief 2.10): time up, the overtime
 //                          bound, no patrol after time up, FIT laps, the grade (roam_30 crew 3: B or A, the tuning target)
 //   s12_roam10_c3_zero     free roam roam_10, crew 3 at 0 W: the shared pause holds the drive-out, no kill, grade D
 //
 // Definitions (the numbers are brief 2.3, 2.4 and 4):
-//   segment       a plan phase with its span in `phases[peer]` (game seconds) and how it ended
-//                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase).
-//   T1            every Advance 150-240 s, gun line 80-160 s, boss 180-330 s, no overrun, at most 1
-//                 breakdown (game events), grade S/A/B.
+//   segment       a mission segment with its span in `phases[peer]` (game seconds) and how it ended
+//                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase); v3: a seat
+//                 switch splits a segment into plan phases (the rest of it a lap-false phase), so a segment is
+//                 every phase with its meta `segment` (phaseSpansOf keeps them one by one).
+//   T1 (crews 2-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s, no overrun, at most 1
+//                 breakdown (game events), grade S/A/B (v3: the rack's ~7 s shells end fights sooner
+//                 than v2's 18-35 s; the solo loop's 60 s stays put crew 1 under T4 instead).
 //   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
 //                 stage (Advance + gun line) and >= 60 s in the boss, and is back at <= 65% within
 //                 120 s after each dynamo gun line or boss ends.
-//   T3 (crews 3-4) each heavy shell (latch event, shell code 2) is built in 18-35 s: from the later of
-//                 the previous main-gun shot + the 6 s breech cycle and the segment start, to the
-//                 latch (the 5 s window included); a shell that is the first of its segment is only
-//                 held to 35 s (pressure holds across a checkpoint). After the latch the latching
-//                 rider's own boiler grade (the event's slot, not any other steam rider's) stays 0
-//                 for >= 6 s (the breech cycle), unless that rider leaves SIM first (a checkpoint).
-//   T4 (crew 1)   the Bulwark's lever is on Drive for >= 60% of each Advance (lever events; the
-//                 lever starts on Drive).
+//   T3 (crews 3-4, v3 the Loader's rack) the crew stows >= 3 shells per stage (Advance + gun line;
+//                 latch events), and one rider's back-to-back stows (<= 15 s apart, the rack never
+//                 full between them) take 4-12 s each at the median (about 7 s at 250 W P_eff).
+//   T4 (crew 1, v3 the solo loop) the solo rider spends >= 40% of each Advance on Drive (its plan
+//                 phases' seat) and works each gun line's guns: >= 2 main-gun shells fired, or a
+//                 kill by the bow guns (the loop's step 4 mans the Secondaries when only light
+//                 targets, dug-in turrets among them, stand within 220 px).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
 //   T6            every Advance has a telegraphed shot (an `evade` event: a sprint prompt) and a medium tank (enemy
 //                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
 //                 "Surge to evade" toast there (every crew with --require-prompts); stages 2 and 3 end in a heavy-tank
-//                 duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
+//                 duel: the gun line lasts 60-180 s (v3) and a heavy tank fired or died in it.
 //   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (stages 1-3: Advance + gun
 //                 line), and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
 //                 a kill in an Advance followed by 60 s with no enemy shot).
 //   S9 (crew 1)   the sprinting rider (scripted intervals, not a compliant one): successful evades, no Ram or
-//                 dodge event and no ram haptic (v2), and a gun line entered while still sprinting starts at its
-//                 planned target, not at the sprint power.
+//                 dodge event and no ram haptic (v2), and every SIM -> ERG entry (v3: a move to the Gun or the
+//                 Lights, a checkpoint) starts at its planned target, not at the sprint power.
 //   S10 (crew 3)  every rider a sprinter: a client's Overpressure (`over` over Telemetry.intents, owned by the steam
 //                 engine) latches an Overpressure shell; and a dynamo rider who stops in a gun line is rescued, goes AFK
 //                 within 10 s, is announced as on reserve, comes back, with nobody else affected and the plan completing.
+//   S13 (crew 3)  seat switching (v3): humans on the fallback (--autopilot=none) seated by the host's Autopilot, the
+//                 clients' moves included: seat events, every one 60 s or more after that rider's last, every replan
+//                 accepted with no plan warning, each rider on its new seat's plan after the move, every ERG <-> SIM
+//                 switch 60 s from the next, the plans' FIT laps unchanged (a split is a lap-false phase).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -72,8 +79,9 @@ export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
 export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };
-export const T1_RANGES = { advance: [150, 240], gun_line: [80, 160], boss: [180, 330] };
-export const T6_DUEL_RANGE = [90, 180];
+export const T1_RANGES = { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] };
+export const T1_CREWS = [2, 3, 4];
+export const T6_DUEL_RANGE = [60, 180];
 export const T2_ABOVE_PCT = 80;
 export const T2_PER_STAGE_S = 30;
 export const T2_BOSS_S = 60;
@@ -83,10 +91,11 @@ export const T7_ABOVE_PCT = 72;
 export const T7_PER_STAGE_S = 30;
 export const T7_BACK_PCT = 68;
 export const T7_BACK_WITHIN_S = 60;
-export const T3_BUILD_RANGE = [18, 35];
-export const T3_GRADE0_MIN_S = 6;
-export const BREECH_CYCLE_S = 6;
-export const T4_MIN_SHARE = 0.6;
+export const T3_BUILD_RANGE = [4, 12];
+export const T3_PAIR_MAX_S = 15;
+export const T3_PER_STAGE = 3;
+export const T4_MIN_SHARE = 0.4;
+export const T4_SHOTS_PER_GUN_LINE = 2;
 export const SWITCH_SPACING_S = 60;
 export const FIRST_S = 300;
 /** BRIEF 4.6: the first 300 s are ERG at 65% FTP at most or SIM at -2..+3% grade; the stacked grade is -10..+16% in total (range clamp +10% before the haptic). */
@@ -122,11 +131,12 @@ export const SHELL_LIGHT = 1;
 export const SHELL_HEAVY = 2;
 export const SHELL_OVER = 3;
 export const SHELL_BOW = 4;
+/** TankEvents.BY_BOW: a kill by the bow guns. */
+export const BY_BOW = 3;
 export const ENEMY_LIGHT = 1;
 export const ENEMY_MEDIUM = 2;
 export const ENEMY_HEAVY = 5;
 export const BY_BARRAGE = 2;
-export const LEVER_DRIVE = 0;
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const sum = (a) => a.reduce((x, y) => x + y, 0);
@@ -181,9 +191,11 @@ export function phaseIndexAt(report, peer, t) {
   return idx;
 }
 
-/** [{index, seg, stage, kind, mode, engine, start, end, dur, endedBy, overran}] of one rider's plan. */
-export function segmentsOf(report, peer = hostPeer(report)) {
+/** [{index, seg, stage, kind, mode, engine, segment, start, end, dur, endedBy, overran}]: one rider's plan phases as they ran. */
+export function phaseSpansOf(report, peer = hostPeer(report)) {
   const plan = planOf(report, peer);
+  const last = plan.filter((p) => p.kind !== 'COOLDOWN').at(-1);
+  const coolSeg = num(last?.meta?.segment, plan.length - 2) + 1;
   return spansOf(report, peer).map((sp) => {
     const ph = plan[num(sp.index)] ?? {};
     const start = num(sp.start);
@@ -195,6 +207,7 @@ export function segmentsOf(report, peer = hostPeer(report)) {
       kind: ph.kind ?? sp.kind,
       mode: ph.mode ?? sp.mode,
       engine: ph.meta?.engine ?? '',
+      segment: ph.kind === 'COOLDOWN' ? coolSeg : num(ph.meta?.segment, num(sp.index)),
       start,
       end,
       dur: end - start,
@@ -202,6 +215,28 @@ export function segmentsOf(report, peer = hostPeer(report)) {
       overran: sp.ended_by === 'max_s',
     };
   });
+}
+
+/**
+ * [{index (the segment), seg, stage, kind, mode, engine, start, end, dur, endedBy, overran, phases}] of one rider: its
+ * plan phases merged by mission segment (v3: a seat switch splits a segment), `phases` the phase spans, `engine` and
+ * `mode` the first phase's, `endedBy` the last phase's.
+ */
+export function segmentsOf(report, peer = hostPeer(report)) {
+  const out = [];
+  for (const p of phaseSpansOf(report, peer)) {
+    const prev = out.at(-1);
+    if (prev && prev.index === p.segment) {
+      prev.end = p.end;
+      prev.dur = p.end - prev.start;
+      prev.endedBy = p.endedBy;
+      prev.overran = p.overran;
+      prev.phases.push(p);
+      continue;
+    }
+    out.push({ ...p, index: p.segment, phases: [p] });
+  }
+  return out;
 }
 
 /** Plan phases with lap true (the cool-down included, ADR G0.2). */
@@ -341,7 +376,7 @@ export function t2Problems(name, r) {
   const perStage = {};
   for (const peer of humanPeers(r)) {
     const plan = planOf(r, peer);
-    const spans = segmentsOf(r, peer);
+    const spans = phaseSpansOf(r, peer);
     plan.forEach((ph, index) => {
       const seg = ph.meta?.seg;
       if (ph.meta?.engine !== 'dynamo' || !['advance', 'gun_line', 'boss'].includes(seg)) return;
@@ -349,7 +384,9 @@ export function t2Problems(name, r) {
       const rows = ergRows(r, peer, index);
       perStage[stage] = (perStage[stage] ?? 0) + rows.filter((row) => num(row.applied_pct) > T2_ABOVE_PCT).length;
       const sp = spans.find((s) => s.index === index);
-      if (seg !== 'advance' && sp && Number.isFinite(sp.end)) {
+      // The fight ends with the segment (a seat switch out of the Gun is not a fight's end).
+      const segEnd = sp && spans.find((s) => s.index === index + 1)?.segment !== sp.segment;
+      if (seg !== 'advance' && sp && segEnd && Number.isFinite(sp.end)) {
         const after = traceOf(r, peer).filter((row) => num(row.game_t) > sp.end - EPS && num(row.game_t) <= sp.end + T2_BACK_WITHIN_S + EPS);
         if (after.length && !after.some((row) => num(row.applied_pct) <= T2_BACK_PCT + EPS)) {
           probs.push(`${name}: peer ${peer} ${seg} ${stage}: the target stayed above ${T2_BACK_PCT}% for ${T2_BACK_WITHIN_S} s after the fight`);
@@ -372,88 +409,73 @@ export function peerOfSlot(report, slot) {
   return s ? String(s.peer) : null;
 }
 
-/** Heavy shells of a crew 3 run: [{t, buildS, first, grade0S}] from latch / shot events and boiler directives. */
-export function heavyShells(r) {
-  const events = gameEvents(r);
+/**
+ * The Loader's stows of a run (latch events, v3 the ready rack): {perStage: {stage: shells}, gaps: [s]} where a gap is
+ * the time between two stows by one rider inside one segment at most T3_PAIR_MAX_S apart (longer ones had the rack
+ * full or the seat empty in between).
+ */
+export function loaderStows(r) {
   const spans = segmentsOf(r);
-  const out = [];
-  let lastShot = -Infinity;
-  const boiler = (r.directives ?? [])
-    .filter((d) => d.kind === 'request' && d.requested?.reason === 'boiler' && d.requested.mode_grade !== undefined)
-    .map((d) => ({ t: num(d.t), peer: String(d.peer), grade: num(d.requested.mode_grade) }))
-    .sort((a, b) => a.t - b.t);
-  for (const e of events) {
-    if (e.type === 'shot' && e.s >= 0 && e.sh !== SHELL_BOW) lastShot = e._t;
-    if (e.type !== 'latch' || e.sh !== SHELL_HEAVY) continue;
+  const perStage = {};
+  const gaps = [];
+  const last = {};
+  for (const e of eventsOf(r, 'latch')) {
     const seg = spans.find((s) => e._t >= s.start - EPS && (!Number.isFinite(s.end) || e._t < s.end + EPS));
-    if (!seg || seg.seg === 'depot') continue;
-    const ready = Math.max(lastShot + BREECH_CYCLE_S, seg.start);
-    const first = lastShot + BREECH_CYCLE_S <= seg.start + EPS;
-    // The latching rider's own boiler grade after the latch: the time at grade 0 until their next grade > 0. With rotation
-    // every stage has another steam rider, so no other peer's requests count. The rest also ends when that rider leaves SIM
-    // (a checkpoint's ERG carries no mode grade): then the 6 s breech cycle runs out with nothing to hold at 0 (`cut`).
-    const peer = peerOfSlot(r, e.s);
-    const leaves = peer === null ? undefined : segmentsOf(r, peer).find((s) => s.start > e._t + EPS && s.mode !== 'SIM');
-    const leaveT = leaves ? leaves.start : Infinity;
-    const mine = boiler.filter((b) => b.peer === peer && b.t >= e._t - EPS && b.t < leaveT - EPS);
-    const zero = mine.find((b) => b.grade === 0);
-    let grade0S = null;
-    let cut = false;
-    if (zero) {
-      const next = mine.find((b) => b.t > zero.t && b.grade > 0);
-      const nextT = next ? next.t : Infinity;
-      cut = leaveT <= nextT;
-      const stop = Math.min(nextT, leaveT);
-      grade0S = (Number.isFinite(stop) ? stop : Number.isFinite(seg.end) ? seg.end : zero.t) - e._t;
-    }
-    out.push({ t: e._t, buildS: e._t - ready, first, grade0S, cut, seg: seg.seg });
+    if (!seg || !['advance', 'gun_line', 'boss'].includes(seg.seg)) continue;
+    perStage[seg.stage] = (perStage[seg.stage] ?? 0) + 1;
+    const key = `${e.s}`;
+    const prev = last[key];
+    if (prev && prev.seg === seg.index && e._t - prev.t <= T3_PAIR_MAX_S + EPS) gaps.push(e._t - prev.t);
+    last[key] = { t: e._t, seg: seg.index };
   }
-  return out;
+  return { perStage, gaps };
 }
 
-/** T3 on one compliant crew 3 run. */
+/** T3 on one compliant crew 3-4 run (v3): shells per stage, and the median back-to-back stow time. */
 export function t3Problems(name, r) {
   const probs = [];
-  const shells = heavyShells(r);
-  if (shells.length === 0) probs.push(`${name}: no heavy shell was latched`);
-  for (const s of shells) {
-    const at = `${name}: heavy shell at ${fmt(s.t)} s`;
-    if (s.buildS > T3_BUILD_RANGE[1] + EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (max ${T3_BUILD_RANGE[1]})`);
-    if (!s.first && s.buildS < T3_BUILD_RANGE[0] - EPS) probs.push(`${at} took ${fmt(s.buildS)} s to build (min ${T3_BUILD_RANGE[0]})`);
-    if (s.grade0S !== null && !s.cut && s.grade0S < T3_GRADE0_MIN_S - EPS) probs.push(`${at}: boiler grade 0 for only ${fmt(s.grade0S)} s`);
-    if (s.grade0S === null) probs.push(`${at}: no boiler grade 0 after the latch`);
+  const { perStage, gaps } = loaderStows(r);
+  for (const st of [1, 2, 3]) {
+    const n = perStage[st] ?? 0;
+    if (n < T3_PER_STAGE) probs.push(`${name}: stage ${st}: ${n} shells stowed (need ${T3_PER_STAGE})`);
+  }
+  if (gaps.length === 0) probs.push(`${name}: no back-to-back stows`);
+  else {
+    const sorted = [...gaps].sort((a, b) => a - b);
+    const med = sorted[Math.floor(sorted.length / 2)];
+    if (med < T3_BUILD_RANGE[0] - EPS || med > T3_BUILD_RANGE[1] + EPS) probs.push(`${name}: a shell takes ${fmt(med)} s at the median (${T3_BUILD_RANGE[0]}-${T3_BUILD_RANGE[1]})`);
   }
   return probs;
 }
 
-/** The Bulwark's Drive share per Advance: [{stage, share}] from lever events (it starts on Drive). */
-export function driveShares(r) {
-  const levers = eventsOf(r, 'lever').sort((a, b) => a._t - b._t);
+/** The solo rider's Drive share per Advance and main-gun shots per gun line (v3 the solo loop). */
+export function soloLoop(r) {
+  const host = hostPeer(r);
+  const shots = eventsOf(r, 'shot').filter((e) => num(e.s) >= 0 && num(e.sh) !== SHELL_BOW);
+  const bowKills = eventsOf(r, 'kill').filter((e) => num(e.by) === BY_BOW);
   const out = [];
-  for (const s of segmentsOf(r)) {
-    if (s.seg !== 'advance' || !Number.isFinite(s.end)) continue;
-    let pos = LEVER_DRIVE;
-    for (const e of levers) if (e._t <= s.start + EPS) pos = e.lv;
-    let t = s.start;
-    let drive = 0;
-    for (const e of levers) {
-      if (e._t <= s.start + EPS || e._t >= s.end) continue;
-      if (pos === LEVER_DRIVE) drive += e._t - t;
-      t = e._t;
-      pos = e.lv;
+  for (const s of segmentsOf(r, host)) {
+    if (!Number.isFinite(s.end)) continue;
+    if (s.seg === 'advance') {
+      const drive = sum(s.phases.filter((p) => p.engine === 'diesel').map((p) => (Number.isFinite(p.end) ? p.end : s.end) - p.start));
+      out.push({ seg: s.seg, stage: s.stage, share: s.dur > 0 ? drive / s.dur : 1 });
+    } else if (s.seg === 'gun_line') {
+      const inS = (e) => e._t >= s.start - EPS && e._t <= s.end + EPS;
+      out.push({ seg: s.seg, stage: s.stage, shots: shots.filter(inS).length, bowKills: bowKills.filter(inS).length });
     }
-    if (pos === LEVER_DRIVE) drive += s.end - t;
-    out.push({ stage: s.stage, share: s.dur > 0 ? drive / s.dur : 1 });
   }
   return out;
 }
 
-/** T4 on one compliant crew 1 run. */
+/** T4 on one compliant crew 1 run (v3): the solo loop drives and fights. */
 export function t4Problems(name, r) {
-  const shares = driveShares(r);
-  const probs = shares.length === 0 ? [`${name}: no Advance found`] : [];
-  for (const s of shares) {
-    if (s.share < T4_MIN_SHARE - EPS) probs.push(`${name}: stage ${s.stage} Advance on Drive ${fmt(100 * s.share)}% (min ${100 * T4_MIN_SHARE}%)`);
+  const rows = soloLoop(r);
+  const probs = rows.some((x) => x.seg === 'advance') ? [] : [`${name}: no Advance found`];
+  for (const x of rows) {
+    if (x.seg === 'advance' && x.share < T4_MIN_SHARE - EPS) probs.push(`${name}: stage ${x.stage} Advance on Drive ${fmt(100 * x.share)}% (min ${100 * T4_MIN_SHARE}%)`);
+    if (x.seg === 'gun_line' && x.shots < T4_SHOTS_PER_GUN_LINE && x.bowKills === 0) {
+      probs.push(`${name}: stage ${x.stage} gun line: ${x.shots} main-gun shells fired and no bow-gun kill (min ${T4_SHOTS_PER_GUN_LINE} shells or a bow kill)`);
+    }
   }
   return probs;
 }
@@ -489,9 +511,12 @@ export function arcFights(r) {
   const out = [];
   for (const peer of humanPeers(r)) {
     const plan = planOf(r, peer);
-    for (const sp of segmentsOf(r, peer)) {
+    const spans = phaseSpansOf(r, peer);
+    for (const sp of spans) {
       const ph = plan[sp.index];
-      if (ph?.meta?.engine === 'arc' && ['advance', 'gun_line', 'boss'].includes(ph.meta.seg)) out.push({ peer, ...sp });
+      // A fight ends with its segment (a seat switch out of the Lights is not a fight's end).
+      const segEnd = spans.find((x) => x.index === sp.index + 1)?.segment !== sp.segment;
+      if (ph?.meta?.engine === 'arc' && ['advance', 'gun_line', 'boss'].includes(ph.meta.seg)) out.push({ peer, ...sp, segEnd });
     }
   }
   return out;
@@ -512,7 +537,7 @@ export function t7Problems(name, r) {
     const rows = traceOf(r, f.peer).filter((row) => num(row.phase) === f.index && row.mode === 'ERG');
     perStage[f.stage] = (perStage[f.stage] ?? 0) + rows.filter((row) => num(row.applied_pct) > T7_ABOVE_PCT).length;
     const ends = [];
-    if (f.seg !== 'advance' && Number.isFinite(f.end)) ends.push(f.end);
+    if (f.seg !== 'advance' && f.segEnd && Number.isFinite(f.end)) ends.push(f.end);
     if (f.seg === 'advance' && Number.isFinite(f.end)) {
       for (const k of events.filter((e) => e.type === 'kill' && e._t >= f.start && e._t + T7_BACK_WITHIN_S <= f.end)) {
         const quiet = !events.some((e) => e.type === 'shot' && num(e.s) === -1 && e._t > k._t && e._t <= k._t + T7_BACK_WITHIN_S);
@@ -549,14 +574,14 @@ export function checkS1(reports, opts = {}) {
     const crew = Number(crewS);
     probs.push(...argsProblems(name, r, { content: 'ashfall_road', players: crew, bots: 0, seed: Number(seedS), role: crew >= 2 ? 'HOST' : 'SOLO' }));
     probs.push(...completeProblems(name, r));
-    probs.push(...t1Problems(name, r));
+    if (T1_CREWS.includes(crew)) probs.push(...t1Problems(name, r));
     if (crew >= 2) probs.push(...t2Problems(name, r));
     if (crew >= 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));
     if (crew === 4) probs.push(...t7Problems(name, r));
-    // The sim report's HUD log holds only the host rider's own toasts: the "Surge to evade" prompt is the host rider's
-    // in every Advance only for crew 1 (the Bulwark rides SIM there; crews 2-4 rotate slot 0 onto ERG engines).
-    probs.push(...t6Problems(name, r, { ...opts, requirePrompts: opts.requirePrompts || crew === 1 }));
+    // The sim report's HUD log holds only the host rider's own toasts, and v3 seats move the host rider onto ERG seats
+    // (the Gun, the Lights) too: the "Surge to evade" prompt is required only with --require-prompts.
+    probs.push(...t6Problems(name, r, opts));
     lines.push(`c${crew}s${seedS} ${fmt(scoreOf(r))}/${gradeOf(r)}`);
   }
   return result('S1', title, probs, `${found.length} runs: ${lines.join(', ')}`);
@@ -708,7 +733,7 @@ function enteredTargetW(r, peer, index) {
   return Math.max((pct / 100) * ftp * f, floor);
 }
 
-/** What one `request` directive is, by brief 2.3 / 2.7: 'bank' | 'boiler' | 'hoist' | 'haptic' | '' (unknown). */
+/** What one `request` directive is, by brief 2.3 / 2.7: 'bank' | 'arc' | 'boiler' | 'haptic' | '' (unknown; v3 retired the hoist). */
 export function classify(d) {
   const q = d.requested ?? {};
   const reason = q.reason;
@@ -716,7 +741,6 @@ export function classify(d) {
   if (reason === 'bank' && q.mode === 'ERG' && q.target_pct !== undefined) return 'bank';
   if (reason === 'arc' && q.mode === 'ERG' && q.target_pct !== undefined) return 'arc';
   if (reason === 'boiler' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'boiler';
-  if (reason === 'hoist' && q.mode === 'SIM' && q.mode_grade !== undefined) return 'hoist';
   return '';
 }
 
@@ -744,6 +768,9 @@ export function directiveProblems(name, r, d) {
     case 'end_phase':
       if (!ph.open_ended) probs.push(`${at}: end_phase on a fixed phase`);
       break;
+    case 'replan':
+      // v3: a seat switch's replan (seatProblems and the platform's PlanValidator judge it).
+      break;
     case 'request': {
       const kind = classify(d);
       if (!kind) {
@@ -767,10 +794,6 @@ export function directiveProblems(name, r, d) {
         const g = num(q.mode_grade);
         if (ph.mode !== 'SIM') probs.push(`${at}: boiler grade in an ERG phase`);
         if (g < 0 || g > (warm ? 3 : 8) + EPS) probs.push(`${at}: boiler grade ${g}% (max ${warm ? 3 : 8}%)`);
-      } else if (kind === 'hoist') {
-        const g = num(q.mode_grade);
-        if (ph.mode !== 'SIM') probs.push(`${at}: hoist grade in an ERG phase (gun lines send none)`);
-        if (g < 0 || g > (warm ? 1 : 4) + EPS) probs.push(`${at}: hoist grade ${g}% (max ${warm ? 1 : 4}%)`);
       } else if (kind === 'haptic') {
         const want = HAPTICS[q.reason];
         if (!want || num(q.haptic) !== want[0] || num(q.duration_s) !== want[1]) probs.push(`${at}: haptic ${q.haptic} for ${q.duration_s} s as ${q.reason} (wanted ${want?.join(' for ')} s)`);
@@ -789,7 +812,7 @@ export function directiveProblems(name, r, d) {
 }
 
 /**
- * The governor may only lower what Tank asked for: the applied boiler / hoist mode grade, bank ERG target and
+ * The governor may only lower what Tank asked for: the applied boiler mode grade, bank or arc ERG target and
  * haptic never exceed the requested value (a refused request applies nothing and is judged elsewhere).
  */
 export function appliedProblems(at, kind, q, d) {
@@ -802,7 +825,7 @@ export function appliedProblems(at, kind, q, d) {
     if (applied !== undefined && !(num(applied, NaN) <= num(asked, NaN) + EPS)) probs.push(`${at}: applied ${what} ${fmt(num(applied, NaN))} above the requested ${fmt(num(asked, NaN))}`);
   };
   if (kind === 'bank' || kind === 'arc') over('ERG target %', got.target_pct, q.target_pct);
-  else if (kind === 'boiler' || kind === 'hoist') over('mode grade %', got.mode_grade, q.mode_grade);
+  else if (kind === 'boiler') over('mode grade %', got.mode_grade, q.mode_grade);
   else if (kind === 'haptic') over('haptic %', got.haptic_pct, q.haptic);
   return probs;
 }
@@ -899,7 +922,8 @@ export function lapProblems(name, r) {
   for (const peer of humanPeers(r)) {
     const n = planLaps(r, peer);
     if (want !== undefined && n !== want) probs.push(`${name}: peer ${peer} plan has ${n} lap-true phases, wanted ${want}`);
-    if (planOf(r, peer).some((p) => p.kind !== 'COOLDOWN' && p.lap !== true)) probs.push(`${name}: peer ${peer} has a plan phase with lap false`);
+    // v3: only the rest of a segment after a seat switch (meta offset_s) continues the segment's lap.
+    if (planOf(r, peer).some((p) => p.kind !== 'COOLDOWN' && p.lap !== true && p.meta?.offset_s === undefined)) probs.push(`${name}: peer ${peer} has a plan phase with lap false that is no split`);
   }
   return probs;
 }
@@ -942,10 +966,10 @@ export function rescueStats(r, peer) {
 }
 
 export function checkS5(reports) {
-  const title = 'cadence collapse to 30 rpm in a dynamo stage and in a 90% gun line: rescue, stagger, the plan continues';
+  const title = 'cadence collapse to 30 rpm in a Gun (dynamo) phase and a Lights (arc) phase: rescue, stagger, the plan continues';
   const cases = [
-    { name: 's5_c3_dynamo_drop', peer: '2', engine: 'dynamo', seg: 'gun_line', phase: 2 },
-    { name: 's5_c3_gunline_drop', peer: '1', engine: 'diesel', seg: 'gun_line', phase: 2 },
+    { name: 's5_c3_dynamo_drop', peer: '2', players: 3 },
+    { name: 's5_c4_arc_drop', peer: '4', players: 4 },
   ];
   const { found, missing } = pick(reports, cases.map((c) => c.name));
   if (found.length === 0) return skip('S5', title, 'no s5_* reports');
@@ -955,26 +979,23 @@ export function checkS5(reports) {
     const r = reports[c.name];
     if (!r) continue;
     const n = c.name;
-    probs.push(...argsProblems(n, r, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }));
+    probs.push(...argsProblems(n, r, { content: 'ashfall_road', players: c.players, bots: 0, role: 'HOST' }));
     probs.push(...completeProblems(n, r));
     probs.push(...cleanProblems(n, r));
-    const plan = planOf(r, c.peer)[c.phase];
-    if (plan?.meta?.engine !== c.engine || plan?.meta?.seg !== c.seg) probs.push(`${n}: peer ${c.peer} phase ${c.phase} is ${plan?.meta?.engine}/${plan?.meta?.seg}, wanted ${c.engine}/${c.seg} (the profile's at_phase)`);
     const st = rescueStats(r, c.peer);
     if (st.rows === 0) probs.push(`${n}: peer ${c.peer} never entered rescue`);
     else {
       if (!(st.maxPct <= 50 + 100 / Math.max(num(slotOf(r, c.peer).ftp, 200), 1) + EPS)) probs.push(`${n}: rescue applied ${fmt(st.maxPct)}% FTP (wanted 50%)`);
-      const span = segmentsOf(r, c.peer).find((s) => s.index === c.phase);
-      if (span && st.first && num(st.first.game_t) < span.start - EPS) probs.push(`${n}: rescue began before phase ${c.phase}`);
-      const spanEnd = span && Number.isFinite(span.end) ? span.end : Infinity;
-      if (span && st.first && num(st.first.game_t) > spanEnd + EPS) probs.push(`${n}: rescue began after the phase`);
+      // Rescue arms only in ERG at 60% FTP or more (BRIEF 4.6.3): the phase it began in is an ERG phase of the Gun or Lights.
+      const { ph } = phaseAt(r, c.peer, num(st.first.game_t));
+      if (ph?.mode !== 'ERG' || !['dynamo', 'arc'].includes(ph?.meta?.engine)) probs.push(`${n}: rescue began in a ${ph?.mode} phase of ${ph?.meta?.engine} (wanted the Gun or the Lights in ERG)`);
       const afterRows = traceOf(r, c.peer).filter((row) => num(row.game_t) > num(st.last.game_t));
       if (!afterRows.some((row) => row.rescue !== true)) probs.push(`${n}: rescue never ended`);
       const clampedRescue = traceOf(r, c.peer).some((row) => row.rescue === true && (row.clamped_by ?? []).includes('rescue'));
       if (!clampedRescue) probs.push(`${n}: no trace row clamped by rescue`);
       notes.push(`${c.name} ${st.rows} s in rescue`);
     }
-    const spans = segmentsOf(r, c.peer);
+    const spans = phaseSpansOf(r, c.peer);
     if (spans.length !== planOf(r, c.peer).length) probs.push(`${n}: ${spans.length} of ${planOf(r, c.peer).length} plan phases ran (the plan must continue)`);
     for (const peer of humanPeers(r)) {
       if (peer === c.peer) continue;
@@ -1070,19 +1091,20 @@ export function checkS9(reports) {
   if (ram.length) probs.push(`${n}: ${ram.length} Ram or dodge events (v2 has none)`);
   const hap = (r.directives ?? []).filter((d) => d.kind === 'request' && d.requested?.reason === 'ram');
   if (hap.length) probs.push(`${n}: ${hap.length} ram haptics (v2 has none)`);
-  // A gun line (ERG) entered while the rider is still sprinting: the trainer must start at the planned target, not at the sprint power.
+  // Every ERG phase entered from SIM (v3: a move to the Gun or the Lights, a checkpoint), above all straight after a sprint:
+  // the trainer must start at the planned target, not at the sprint power.
   const host = hostPeer(r);
   const ftp = num(slotOf(r, host).ftp, 200);
-  const entries = switchesIntoErg(r, host).filter((sw) => sw.trailingW >= (S9_SPRINT_SIM_FTP_PCT / 100) * ftp - EPS && planOf(r, host)[sw.phase]?.kind === 'WORK');
-  if (entries.length === 0) probs.push(`${n}: no gun line was entered straight after a sprint (the profile should sprint at one of the Advance ends)`);
-  for (const sw of entries) {
+  const all = switchesIntoErg(r, host);
+  const entries = all.filter((sw) => sw.trailingW >= (S9_SPRINT_SIM_FTP_PCT / 100) * ftp - EPS);
+  for (const sw of all) {
     const bound = enteredTargetW(r, host, sw.phase) + 1;
     const first = traceOf(r, host).filter((row) => num(row.phase) === sw.phase && row.mode === 'ERG' && num(row.game_t, num(row.t)) <= sw.t + 5);
     const worst = Math.max(0, ...first.map((row) => num(row.applied_target_w)));
-    if (worst > bound + EPS) probs.push(`${n}: gun line at ${fmt(sw.t)} s entered after a ${fmt(sw.trailingW)} W sprint with a ${worst} W target (planned ${Math.round(bound - 1)} W)`);
+    if (worst > bound + EPS) probs.push(`${n}: ERG phase ${sw.phase} at ${fmt(sw.t)} s entered after ${fmt(sw.trailingW)} W with a ${worst} W target (planned ${Math.round(bound - 1)} W)`);
   }
   const tried = eventsOf(r, 'evade').length;
-  return result('S9', title, probs, `${evades.length} of ${tried} telegraphed shots evaded, ${entries.length} gun line entries after a sprint`);
+  return result('S9', title, probs, `${evades.length} of ${tried} telegraphed shots evaded, ${all.length} ERG entries (${entries.length} after a sprint)`);
 }
 
 // --- S10: clients sending intents, a client that stops ---------------------------------------------------------------
@@ -1139,7 +1161,7 @@ export function checkS10(reports) {
     hygiene(n, stop);
     const peer = '2';
     const rows = traceOf(stop, peer);
-    const span = segmentsOf(stop, peer).find((x) => x.index === 2);
+    const span = phaseSpansOf(stop, peer).find((x) => x.index === 2);
     const zero = rows.find((row) => num(row.game_t) >= num(span?.start, 0) - EPS && num(row.power_w) <= 0 && num(row.cadence_rpm) <= 0);
     const afk = rows.filter((row) => row.afk === true);
     if (!zero) probs.push(`${n}: peer ${peer} never stopped pedaling in the gun line`);
@@ -1157,7 +1179,7 @@ export function checkS10(reports) {
       if (other === peer) continue;
       if (traceOf(stop, other).some((row) => row.rescue === true || row.afk === true)) probs.push(`${n}: peer ${other} (not the rider who stopped) was in rescue or AFK`);
     }
-    if (segmentsOf(stop, peer).length !== planOf(stop, peer).length) probs.push(`${n}: the plan did not continue to its last phase`);
+    if (phaseSpansOf(stop, peer).length !== planOf(stop, peer).length) probs.push(`${n}: the plan did not continue to its last phase`);
     notes.push(`${n} ${afk.length} s AFK, ${st.rows} s in rescue`);
   }
   return result('S10', title, probs, notes.join(', '));
@@ -1199,8 +1221,9 @@ export function roamProblems(name, r) {
   for (const peer of humanPeers(r)) {
     const plan = planOf(r, peer);
     if (planLaps(r, peer) !== ROAM_LAPS) probs.push(`${name}: peer ${peer} plan has ${planLaps(r, peer)} lap-true phases, wanted ${ROAM_LAPS}`);
+    // v3: the roam phase is open from 60 s (a seat switch may split it); its meta carries the segment's own min_s.
     const ph = plan[ROAM_PHASE] ?? {};
-    if (num(ph.min_s) !== minS || num(ph.max_s) !== maxS) probs.push(`${name}: peer ${peer} roam phase ${ph.min_s}-${ph.max_s} s, wanted ${minS}-${maxS}`);
+    if (num(ph.meta?.seg_min_s) !== minS || num(ph.max_s) !== maxS) probs.push(`${name}: peer ${peer} roam phase ${ph.meta?.seg_min_s}-${ph.max_s} s, wanted ${minS}-${maxS}`);
     const seg = segmentsOf(r, peer).find((x) => x.index === ROAM_PHASE);
     if (!seg) {
       probs.push(`${name}: peer ${peer} never reached the roam phase`);
@@ -1290,6 +1313,49 @@ export function checkS12(reports) {
   return result('S12', title, probs, `${r.end_reason}, ${crewKills.length} kills, grade ${gradeOf(r)}`);
 }
 
+// --- S13: seat switching (v3) -----------------------------------------------------------------------------------------
+
+/** Engine codes (TankIds.ENGINE_CODES). */
+export const ENGINE_OF_CODE = { 1: 'diesel', 2: 'dynamo', 3: 'steam', 5: 'arc', 6: 'feed' };
+export const SEAT_LOCK_S = 60;
+
+/** Seat problems of one run: the lock between a rider's moves, each move landing on its seat's plan, accepted replans. */
+export function seatProblems(name, r) {
+  const probs = [];
+  const seats = eventsOf(r, 'seat');
+  const bySlot = {};
+  for (const e of seats) {
+    const slot = num(e.s);
+    const prev = bySlot[slot];
+    if (prev !== undefined && e._t - prev < SEAT_LOCK_S - 0.06) probs.push(`${name}: slot ${slot} moved at ${fmt(prev)} s and again at ${fmt(e._t)} s (the lock is ${SEAT_LOCK_S} s)`);
+    bySlot[slot] = e._t;
+    const peer = peerOfSlot(r, slot);
+    const engine = peer === null ? '' : engineAt(r, peer, e._t + 0.01);
+    if (engine !== ENGINE_OF_CODE[num(e.to)]) probs.push(`${name}: slot ${slot} moved to ${ENGINE_OF_CODE[num(e.to)]} at ${fmt(e._t)} s but its plan says ${engine}`);
+  }
+  for (const d of r.directives ?? []) {
+    if (d.kind === 'replan' && d.accepted === false) probs.push(`${name}: replan ${d.id} (peer ${d.peer} at ${fmt(num(d.t))} s) refused: ${d.reason}`);
+  }
+  return probs;
+}
+
+export function checkS13(reports) {
+  const title = 'seat switching: crew 3 on the fallback seated through replans, the clients included (lock, replans, switches, laps)';
+  const n = 's13_c3_seats';
+  const r = reports[n];
+  if (!r) return skip('S13', title, `no ${n} report`);
+  const probs = [...argsProblems(n, r, { content: 'ashfall_road', players: 3, bots: 0, role: 'HOST' }), ...completeProblems(n, r)];
+  probs.push(...cleanProblems(n, r), ...planProblems(n, r), ...directivesProblems(n, r), ...traceProblems(n, r), ...lapProblems(n, r));
+  probs.push(...seatProblems(n, r));
+  const seats = eventsOf(r, 'seat');
+  const clients = seats.filter((e) => num(e.s) >= 1);
+  if (seats.length < 3) probs.push(`${n}: ${seats.length} seat moves (want at least 3)`);
+  if (clients.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) moved seats`);
+  const replans = (r.directives ?? []).filter((d) => d.kind === 'replan');
+  if (replans.length < seats.length) probs.push(`${n}: ${replans.length} replans for ${seats.length} moves`);
+  return result('S13', title, probs, `${seats.length} moves (${clients.length} by clients), ${replans.length} replans`);
+}
+
 // --- FIT ------------------------------------------------------------------------------------------------------------
 
 /** [[laps|null, [files]]] groups of the FIT files the reports name, existing on disk. */
@@ -1328,7 +1394,7 @@ export function checkFit(reports, dir, repo) {
 
 // --- main ------------------------------------------------------------------------------------------------------------
 
-export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10, S11: checkS11, S12: checkS12 };
+export const CHECKS = { S1: checkS1, S2: checkS2, S3: checkS3, S4: checkS4, S5: checkS5, S6: checkS6, S7: checkS7, S9: checkS9, S10: checkS10, S11: checkS11, S12: checkS12, S13: checkS13 };
 
 export function parseArgs(argv) {
   const o = { dir: null, only: null, seeds: DEFAULT_SEEDS, fit: false, requirePrompts: false };

@@ -7,7 +7,7 @@ extends RefCounted
 ## state(crew): ashfall_road Stage 2 Advance (phase 4) 60 s in, for a crew of 1 to 4 on the v3
 ##   landship (five seats; the riders on their start seats Drive, Gun, Loader, Lights, the rest
 ##   empty): slots 1..crew (FTP 200, 220, 240, 260; slot 1 unverified), the hull at 72 / 120 HP, a
-##   medium ahead holding 300 px, a light rushing from the rear, a tank destroyer in its telegraph, a
+## medium ahead holding 300 px, a light rushing from the rear, a tank destroyer in its telegraph, a
 ##   wreck barricade, three shells in flight, the bank at 64, pressure at 72% with 2 shells in the
 ##   rack, one chambered and the loader 40% into the next, the arc's duty at 0.35 with the
 ##   searchlights lit while Lights is manned, the feed's 37 rounds at 180 rpm, each rider's
@@ -62,10 +62,9 @@ static func slots(crew: int) -> Array[PlayerSlot]:
 	return out
 
 
-## The rider's engine in mission segment `index` with rotation on (v3: no rotation rows, so the
-## slot's start seat).
-static func engine_at(c: TankContent, crew: int, slot: int, index: int) -> String:
-	return TankPlanBuilder.engine_for(c, TankIds.tank_for_crew(crew), slot, index, true)
+## The rider's seat in mission segment `index` before any seat switch (v3: the slot's start seat).
+static func engine_at(c: TankContent, crew: int, slot: int, _index: int) -> String:
+	return TankPlanBuilder.engine_for(c, TankIds.tank_for_crew(crew), slot)
 
 
 static func state(crew: int) -> TankState:
@@ -191,7 +190,7 @@ static func frame(crew: int) -> InputFrame:
 	var f := InputFrame.new()
 	f.tick = 49200
 	f.t = f.tick * Wl.SIM_DT
-	var plans := TankPlanBuilder.build_all(c, slots(crew), true)
+	var plans := TankPlanBuilder.build_all(c, slots(crew))
 	for p in slots(crew):
 		var plan: EffortPlan = plans[p.peer_id]
 		var ph := plan.phase(4)
@@ -265,7 +264,7 @@ static func snapshot(crew: int) -> Dictionary:
 
 
 static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> TankState:
-	var s := TankState.create(c, slots(crew), "ashfall_road", true, null)
+	var s := TankState.create(c, slots(crew), "ashfall_road", null)
 	var seg := c.segment(index)
 	s.tick = 49200
 	s.t = s.tick * Wl.SIM_DT

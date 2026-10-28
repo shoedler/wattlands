@@ -15,7 +15,7 @@ static func _quiet(index: int, props: Dictionary = {"encounters": [], "obstacles
 
 
 func _rig(crew: int = 1, index: int = ADVANCE, seed_v: int = 7) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, seed_v, _quiet(index))
+	var rig := TankRulesRig.new(crew, "ashfall_road", seed_v, _quiet(index))
 	rig.no_fire = true
 	rig.no_bow = true
 	rig.enter(index, 5.0)
@@ -172,26 +172,26 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 		)
 
 
-func test_a_destroyer_telegraphs_for_4_seconds_before_each_shot_and_shifts_40_px_after() -> void:
+func test_a_destroyer_telegraphs_for_7_seconds_before_each_shot_and_shifts_40_px_after() -> void:
 	var rig := _rig(1)
 	var edge := TankEnemies.clamp_hold(rig.state, 109, 1, 1.0e9)
 	var e := rig.spawn(TankIds.ENEMY_DESTROYER, 1, 1000.0)
 	assert_almost_eq(e.hold_px, edge, 0.01, "at the screen edge")
-	e.gun_s = 6.0
+	e.gun_s = 9.0
 	rig.run(2.2)
 	assert_eq(e.mode, TankIds.EM_TELEGRAPH)
-	assert_almost_eq(e.telegraph_s, 3.8, 0.15, "the glint runs for the last 4 s")
+	assert_almost_eq(e.telegraph_s, 6.8, 0.15, "the glint runs for the last 7 s (v3)")
 	assert_eq(rig.of_type("shot").size(), 0)
-	rig.run(4.0)
+	rig.run(7.0)
 	assert_eq(e.telegraph_s, 0.0, "fired")
 	assert_eq(rig.of_type("shot").size(), 1)
 	assert_almost_eq(e.hold_px, edge - 40.0, 0.01, "moves 40 px closer after the shot")
 	rig.run(3.0)
-	assert_eq(e.mode, TankIds.EM_HOLD)
+	assert_has([TankIds.EM_HOLD, TankIds.EM_TELEGRAPH], e.mode, "it holds (its next 7 s glint)")
 	assert_almost_eq(_dist(rig, e), edge - 40.0, 4.0, "it holds 40 px closer")
 	e.gun_s = 0.1
-	rig.run(4.5)
-	assert_almost_eq(e.hold_px, edge, 0.01, "and back to the edge after the next (full 4 s glint)")
+	rig.run(7.5)
+	assert_almost_eq(e.hold_px, edge, 0.01, "and back to the edge after the next (full 7 s glint)")
 
 
 func test_a_destroyer_in_telegraph_is_the_autoaims_first_target() -> void:
@@ -231,9 +231,9 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	rig.enter(GUN_LINE, 1.0)
 	var guns := rig.state.enemies
 	var want := 0
-	for spec: Dictionary in rig.content.segment(GUN_LINE)["enemies"]:
-		want += rig.content.scaled_count(int(spec["count"]), TankIds.TANK_LANDSHIP)
-	assert_eq(guns.size(), want, "the mission's gun line x the tank's scale")
+	for n in TankEncounters.crew_counts(rig.state, rig.content.segment(GUN_LINE)["enemies"]):
+		want += n
+	assert_eq(guns.size(), want, "the mission's gun line x the crew's scale")
 	assert_gt(want, 0)
 	var holding := 0
 	for e in guns:
@@ -272,14 +272,14 @@ func test_a_heavy_tank_rolls_in_to_its_hold_and_halts() -> void:
 	assert_eq(h.mode, TankIds.EM_ENTER)
 	assert_gte(h.x_px, rig.state.camera_x() + 640.0)
 	rig.run(15.0)
-	assert_eq(h.mode, TankIds.EM_HOLD)
+	assert_has([TankIds.EM_HOLD, TankIds.EM_TELEGRAPH], h.mode, "it holds (its 6 s glint may run)")
 	var front := rig.hull().x_px + rig.hull().hull_w
 	assert_almost_eq(h.x_px - front, h.hold_px, 0.01)
 	assert_true(h.fixed)
 	assert_eq(h.hp_max, float(rig.content.enemy_def("heavy")["hp"]), "Citadel: scale 1.0")
 
 
-func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50() -> void:
+func test_a_heavy_tank_telegraphs_6_seconds_and_backs_off_30_px_after_taking_50() -> void:
 	var rig := _heavy_rig(1)
 	var h: TankEnemyState = null
 	for e in rig.state.enemies:
@@ -290,6 +290,8 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 	h.hold_px = room
 	h.x_px = rig.hull().x_px + rig.hull().hull_w + room
 	h.gun_s = 100.0
+	h.mode = TankIds.EM_HOLD
+	h.telegraph_s = 0.0
 	var aux := TankAux.of(rig.state)
 	h.hp = 90.0
 	var hold := h.hold_px
@@ -302,12 +304,12 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 	rig.run(3.0)
 	assert_eq(h.mode, TankIds.EM_HOLD)
 	assert_almost_eq(h.x_px - (rig.hull().x_px + rig.hull().hull_w), hold + moved, 0.01)
-	# The telegraph: 3 s before the shot.
-	h.gun_s = 4.0
+	# The telegraph: 6 s before the shot (v3).
+	h.gun_s = 7.0
 	rig.run(1.3)
 	assert_eq(h.mode, TankIds.EM_TELEGRAPH)
-	assert_almost_eq(h.telegraph_s, 2.7, 0.15)
-	rig.run(3.0)
+	assert_almost_eq(h.telegraph_s, 5.7, 0.15)
+	rig.run(6.0)
 	assert_eq(h.telegraph_s, 0.0)
 
 

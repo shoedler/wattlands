@@ -35,7 +35,7 @@ func test_the_arc_rider_is_peer_4_in_stage_1() -> void:
 
 func test_the_target_is_65_plus_15_x_duty_inside_the_range() -> void:
 	var c := TankFixtures.content()
-	var plan := TankPlanBuilder.build(c, TankIds.TANK_LANDSHIP, 3, true)
+	var plan := TankPlanBuilder.build(c, TankIds.TANK_LANDSHIP, 3)
 	var ph := plan.phase(ADV1)
 	assert_eq(TankDirector.arc_target_pct(c, 0.0, ph), 65.0)
 	assert_eq(TankDirector.arc_target_pct(c, 0.5, ph), 72.5)
@@ -43,7 +43,7 @@ func test_the_target_is_65_plus_15_x_duty_inside_the_range() -> void:
 	assert_eq(TankDirector.arc_target_pct(c, 2.0, ph), 80.0, "duty is a share: 0..1")
 	assert_eq(TankDirector.arc_goal_pct(c, 1.0, ph, 65.0), 75.0, "<= 10 points an update")
 	var drill := TankFixtures.content("drill")
-	var dp := TankPlanBuilder.build(drill, TankIds.TANK_LANDSHIP, 3, false).phase(1)
+	var dp := TankPlanBuilder.build(drill, TankIds.TANK_LANDSHIP, 3).phase(1)
 	assert_eq(TankDirector.arc_target_pct(drill, 1.0, dp), 65.0, "the drill: 55..65")
 	assert_eq(TankDirector.arc_target_pct(drill, 0.0, dp), 65.0, "65 is inside 55..65")
 
@@ -155,7 +155,8 @@ func test_t7_a_fight_lifts_the_target_and_its_end_brings_it_back_within_60_s() -
 	assert_lte((int(back[0][0]) - end_tick) * Wl.SIM_DT, 60.0, "<= 68% within 60 s of the end")
 
 
-## A refused arc sub-step does not move the director's idea of the target; on reserve nothing is sent.
+## A refused arc sub-step does not move the director's idea of the target; on reserve nothing is
+## sent.
 func test_reserve_and_refusal() -> void:
 	var h := _h()
 	h.afk[4] = true

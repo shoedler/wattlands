@@ -101,6 +101,21 @@ const ZONE_QUARRY := "quarry"
 const ZONE_MEADOW := "meadow"
 const ZONES: Array[String] = [ZONE_FOREST, ZONE_LAKE, ZONE_VILLAGE, ZONE_QUARRY, ZONE_MEADOW]
 
+# --- Backdrops (v3, brief "World": the forest, mostly, and little bases) -----------------------------
+## A mission segment's `backdrop` and a valley zone's (content) name what the view draws around the
+## road; the view builder draws each. v3 keeps the zone ids above for the wire and the map, and gives
+## every zone a forest variant or a base clearing (roam/valley.json zones.<id>.backdrop, label).
+## The pine forest at night (the default).
+const BACKDROP_FOREST := "forest"
+## A darker, denser stand of firs.
+const BACKDROP_FIRS := "forest_firs"
+## A paler stand of birches among the pines.
+const BACKDROP_BIRCHES := "forest_birches"
+## A little base: a fenced clearing with a bunker, a lamp, crates and barrier stands (the depot,
+## gun lines where it fits, free-roam strongpoints and the camp zones).
+const BACKDROP_BASE := "base"
+const BACKDROPS: Array[String] = [BACKDROP_FOREST, BACKDROP_FIRS, BACKDROP_BIRCHES, BACKDROP_BASE]
+
 # --- Enemies (brief 2.4 table) ----------------------------------------------------------------------
 const ENEMY_LIGHT := "light"
 const ENEMY_MEDIUM := "medium"

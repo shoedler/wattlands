@@ -69,8 +69,8 @@ var breech_s: float = 0.0
 var target_id: int = 0
 ## Seconds left of auto-aim's pause after a manual nudge.
 var aim_pause_s: float = 0.0
-## (v2) The bow guns (brief 2.4 Gun): seconds to the next burst, counted down at the power rate
-## (1 full, 0.5 half, 0 none).
+## (v2) The bow guns (brief 2.4 Gun): seconds to the next burst. Unused in v3 (the Secondaries
+## seat fires rounds by pedal revolutions, TankFeedState); always 0.
 var bow_cd_s: float = 0.0
 
 ## Host only (never serialized): the drive's SpeedModel (BRIEF 3.11), created on first use with

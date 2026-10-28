@@ -320,19 +320,16 @@ func test_a_segment_event_banners_the_segments_label() -> void:
 	assert_eq(_banners(ctx).size(), 1, "the cool-down has no label of Tank's")
 
 
-func test_a_rotation_event_names_the_riders_new_station() -> void:
+func test_a_seat_event_names_the_riders_new_seat_to_that_rider_only() -> void:
 	var s := TankFixtures.state(3)
 	var ctx := _ctx(3, 2)
 	var cues := TankCues.new(ctx)
 	var me := s.rider(2)
-	cues.on_event(
-		s,
-		TankEvents.rotation(
-			[[0, TankIds.ENGINE_STEAM], [1, TankIds.ENGINE_DIESEL], [2, TankIds.ENGINE_DYNAMO]]
-		)
-	)
-	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_ROTATION"])
-	assert_eq(_toasts(ctx)[0][2], [ctx.strings.t("TANK_ENGINE_DIESEL")], "slot %d" % me.slot)
+	cues.on_event(s, TankEvents.seat(me.slot + 1, TankIds.ENGINE_DIESEL, TankIds.ENGINE_ARC))
+	assert_eq(_toasts(ctx).size(), 0, "another rider's move")
+	cues.on_event(s, TankEvents.seat(me.slot, me.engine, TankIds.ENGINE_FEED))
+	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_SEAT"])
+	assert_eq(_toasts(ctx)[0][2], [ctx.strings.t("TANK_SEAT_SECONDARIES")], "slot %d" % me.slot)
 
 
 # --- through the module ------------------------------------------------------------------------------------

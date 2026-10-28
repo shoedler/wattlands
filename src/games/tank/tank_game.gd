@@ -5,16 +5,19 @@ extends GameModule
 ## Host / SOLO, every tick (sim_step): intents are normalized, ownership-filtered and rate-limited
 ## (TankIntentLimiter, 5 a second per peer, only peers in ctx.players) -> TankInputs.from_frame ->
 ## TankRules.step (the events) -> TankDirector.step (every ctx.directives call and the power band)
-## -> send_event for each event -> phase_changed with the group's phase (the lowest index any
-## rider is in) -> finished(outcome) once every rider is in the cool-down. Clients: apply_snapshot
+## -> send_event for each event -> phase_changed with the group's phase (v3: the lowest segment
+## any rider is in; a seat switch splits a rider's phase, TankSeatPlan) -> finished(outcome) once
+## every rider is in the cool-down. `plans` is shared with the director, which splices every
+## accepted seat replan into it. Clients: apply_snapshot
 ## and apply_event rebuild the state; client_predict moves the local rider's own room.
 ##
 ## Autopilot: the platform merges autopilot_intents() into the telemetry of bots and Autopilot
 ## riders; a human who is not flagged Autopilot but is still on the fallback (no deliberate
 ## intent yet) or on reserve (AFK, dropped) gets TankAutopilot's intents added in
-## _collect_intents(), through the same ownership and 5-a-second filter. The first lever, aim,
-## target, traverse, fire, latch or turn intent of a human ends their fallback (over never does,
-## nor does anything tagged "auto").
+## _collect_intents(), through the same ownership and 5-a-second filter. The first aim, target,
+## traverse, fire, latch, turn or seat intent of a human ends their fallback (over never does, nor
+## does anything tagged "auto"); while on the fallback the Autopilot also seats them (v3 automatic
+## seating, TankAutopilot.seat_intents).
 ##
 ## Prompts and toasts are per peer (TankCues): each peer raises only its own rider's, the host with
 ## ctx.local_peer, a client from apply_event / apply_snapshot, so none is ever broadcast.
@@ -61,15 +64,14 @@ func configure(p_ctx: GameContext) -> void:
 		else:
 			push_warning(msg)
 		return
-	var rotation := bool(ctx.options.get("rotation", true)) and content.mission_rotates()
 	var rng: RandomNumberGenerator = ctx.rng if ctx.is_authority() else null
-	state = TankRules.new_state(content, ctx.players, ctx.content_id, rotation, rng)
+	state = TankRules.new_state(content, ctx.players, ctx.content_id, rng)
 
 
 func build_effort_plans() -> Dictionary:
 	if state == null:
 		return {}
-	plans = TankPlanBuilder.build_all(content, ctx.players, state.rotation)
+	plans = TankPlanBuilder.build_all(content, ctx.players)
 	director = TankDirector.new(ctx, content, plans)
 	return plans
 
@@ -147,7 +149,7 @@ func _collect_intents(frame: InputFrame) -> Dictionary:
 	return out
 
 
-## A human who sends a deliberate intent (lever, aim, target, traverse, fire, latch, turn; not over
+## A human who sends a deliberate intent (aim, target, traverse, fire, latch, turn, seat; not over
 ## or anything tagged auto) plays that station themselves from now on.
 func _end_fallback(p: PlayerSlot, accepted: Array[Dictionary]) -> void:
 	var r := state.rider(p.peer_id)
@@ -169,13 +171,13 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 # --- Every peer: input ------------------------------------------------------------------------
 
 
-## The local rider's actions and gestures as intents for its current engine (brief 2.5, 2.6): a
-## surge becomes only over (the steam engine overpressures; "Surge to evade" needs no intent, the
-## sprint itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and
-## right cycle targets (the dynamo), ability_1 overpressures, ability_2 traverses, confirm fires, or
-## latches (the steam engine). In free roam the driver turns the tank round: ability_1 or confirm
-## (the diesel). v3: the seat picker (TankHudSeatPicker) takes its keys first: left / right
-## (swap on the Gun) pick an empty seat and confirm sits there while the seat lock is open.
+## The local rider's actions and gestures as intents for its current seat (brief 2.5, 2.6): a
+## surge becomes only over (the Loader overpressures; "Surge to evade" needs no intent, the sprint
+## itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and right
+## cycle targets, ability_2 traverses, confirm fires (the Gun); ability_1 overpressures, confirm
+## latches (the Loader). In free roam the Drive rider turns the tank round: ability_1 or confirm.
+## v3: the seat picker (TankHudSeatPicker) takes its keys first: left / right (swap on the Gun)
+## pick an empty seat and confirm sits there while the seat lock is open.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
@@ -192,7 +194,6 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 		out.append(TankIntents.make(TankIds.INTENT_OVER, via))
 	if engine == TankIds.ENGINE_DYNAMO:
 		out.append_array(_gunner_intents(actions))
-	if engine == TankIds.ENGINE_DYNAMO:
 		if actions.has(&"left"):
 			out.append(TankIntents.target(TankIds.TARGET_PREV))
 		if actions.has(&"right"):
