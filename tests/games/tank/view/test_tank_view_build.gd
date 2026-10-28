@@ -5,7 +5,8 @@ extends GutTest
 ## evade, and a view that only reads the state.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
-## The seats each fixture crew mans (the v2 fixtures' stations: the one-rider gearbox drives).
+## The seats each fixture crew mans (stations.json start_engines.landship: the first n of Drive,
+## Gun, Loader, Lights).
 const SEATS_OF := {
 	1: ["drive"],
 	2: ["drive", "gun"],
@@ -51,7 +52,6 @@ func test_the_lights_seat_has_its_rider_and_the_searchlights_follow_its_arc() ->
 	arc.stalled = true
 	assert_lt(v.searchlight_k(s), 0.2, "a stalled generator nearly kills them")
 	var v3 := U.view_of(self, U.fixture("state", 3))
-	assert_eq(v3.searchlight_k(v3.game.state), 1.0, "no arc generator: the rear one lit")
 	assert_false(v3.turret_search_on(v3.game.state), "the Lights seat empty: the turret one off")
 
 
@@ -192,8 +192,7 @@ func test_enemies_stand_in_the_lanes_the_rules_hold_them_in() -> void:
 
 
 ## The crews whose rules hull spans the drawn tank (the v3 contracts give every crew the r6 hull,
-## TankGeometry from r6_hitbox.json; the v2 contracts' Bulwark and Rampart are shorter, so their
-## ground ahead is squeezed onto the canvas).
+## TankGeometry from r6_hitbox.json: all of them).
 func _full_hull_crews() -> Array[int]:
 	var out: Array[int] = []
 	var rig := TankRig.shared()
@@ -229,7 +228,7 @@ func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane
 
 
 func test_the_behemoth_is_drawn_where_the_rules_hit_it() -> void:
-	assert_gt(_full_hull_crews().size(), 0)
+	assert_eq(_full_hull_crews(), [1, 2, 3, 4] as Array[int], "one tank for every crew")
 	for crew in _full_hull_crews():
 		var s := U.fixture("boss", crew)
 		var v := U.view_of(self, s)
@@ -293,8 +292,9 @@ func test_shots_hits_and_bursts_light_the_scene() -> void:
 	assert_eq(v.firing.shots, 1)
 	assert_gt(v.fx.wash, 0.0, "the flash lights the scene")
 	assert_eq(v.firing.flash_k(), 1.0)
-	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankIds.SHELL_BOW, 17))
-	assert_eq(v.firing.rounds.size(), 1, "a bow round: its flash, tracer and case")
+	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rounds += 1
+	U.run(v, 1)
+	assert_eq(v.firing.rounds.size(), 1, "a Secondaries round: its flash, tracer and case")
 	v.apply_cue(
 		s,
 		TankEvents.HIT,

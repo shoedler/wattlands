@@ -31,6 +31,8 @@ func test_the_kit_ships_only_what_the_game_uses() -> void:
 		used[str(m["enemies"][kind]["file"])] = true
 	for c: String in m["cards"]:
 		used[str(m["cards"][c])] = true
+	# The v2 barrel the HUD's tests still measure the elevation arc against.
+	used["turret_barrel.png"] = true
 	var stray: Array[String] = []
 	for f in _pngs(DIR, ""):
 		if f.begins_with("hud/") or f.begins_with("source/") or f.begins_with("tools_src/"):

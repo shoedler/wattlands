@@ -71,8 +71,6 @@ const TURN_DUST_GAIN := 1.8
 const MIRROR_LAYERS: Array[String] = ["World", "WorldLight", "Tank", "Light", "Front"]
 ## The turret's width end on, a share of its side view (a traverse squeezes it to this).
 const TURRET_MIN_W := 0.55
-## The drive seat's engine in the v2 contracts' one-rider tank (it works the drive room).
-const ENGINE_BULWARK := "bulwark"
 ## The hull's springs: stiffness (1/s^2) and damping (1/s) of the bob, for the angle and the lift.
 const SPRING_K := 90.0
 const SPRING_D := 9.0
@@ -84,6 +82,7 @@ const BOW_SLEW := 24.0
 ## The bow guns' kick (px) and how long it lasts (s).
 const BOW_KICK := 1.5
 const BOW_KICK_S := 0.06
+const MAX_ROUNDS_PER_FRAME := 4
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -169,6 +168,7 @@ var _smoke_acc: float = 0.0
 var _dust_acc: float = 0.0
 var _kick_acc: float = 0.0
 var _steam_acc: float = 0.0
+var _rounds_seen: int = -1
 var _rot_v: float = 0.0
 var _lift_v: float = 0.0
 var _pose_primed: bool = false
@@ -319,6 +319,7 @@ func advance(delta: float) -> void:
 	_seats(state, feed, render_dt)
 	_turret(state)
 	_process_cues(state)
+	_feed_rounds(state)
 	firing.step(dt)
 	_track_enemies(state)
 	_bow_aim(state, dt)
@@ -468,7 +469,7 @@ func _relief(state: TankState) -> void:
 	if state.roam.active and state.roam_map != null:
 		key = "roam %d" % state.roam.map_seed
 		hm = map_m
-		points = _roam_points(state.roam_map)
+		points = state.roam_map.terrain
 	elif state.content != null:
 		key = "seg %d" % state.seg.phase_index
 		var t: Variant = state.content.segment(state.seg.phase_index).get("terrain", [])
@@ -477,16 +478,6 @@ func _relief(state: TankState) -> void:
 	if mirrored:
 		hull_cx = canvas.x - hull_cx
 	ground.frame(plane_x * S, hull_cx, hm, key, points)
-
-
-## The valley's grade as terrain points (one every 10 m), travelling east.
-static func _roam_points(map: TankRoamMap) -> Array:
-	var out: Array = []
-	var m := 0.0
-	while m <= map.length_m:
-		out.append([m, map.grade_at(m, TankIds.DIR_RIGHT)])
-		m += 10.0
-	return out
 
 
 ## The tank's pose: the fit of the relief under the wheels and their springs' lift (the targets),
@@ -598,19 +589,13 @@ static func power_ratio(r: TankRiderState) -> float:
 	return TankMech.rider_power(r.ftp_pct)
 
 
-## The station of a seat (by its engine; the v2 one-rider tank's gearbox works the drive), or null.
+## The station of a seat (TankIds.SEATS: by its engine), or null.
 func seat_station(state: TankState, seat: String) -> TankStationState:
-	var eng := str((rig.seats.get(seat, {}) as Dictionary).get("engine", ""))
-	for st in state.stations:
-		if st.engine == eng or (seat == "drive" and st.engine == ENGINE_BULWARK):
-			return st
-	return null
+	return state.station(str((rig.seats.get(seat, {}) as Dictionary).get("engine", "")))
 
 
 ## The seat a station's engine works (or "").
 func seat_of_engine(engine: String) -> String:
-	if engine == ENGINE_BULWARK:
-		return "drive"
 	for s: String in rig.seats:
 		if str(rig.seats[s]["engine"]) == engine:
 			return s
@@ -622,13 +607,8 @@ func _seats(state: TankState, feed: Dictionary, render_dt: float) -> void:
 	seat_slots.clear()
 	for seat in TankRig.SEATS:
 		var st := seat_station(state, seat)
-		var slot := st.slot if st != null else -1
+		var slot := st.slot if st != null and not st.is_empty() else -1
 		var r: TankRiderState = state.rider_at(slot) if slot >= 0 else null
-		if st == null and state.stations.is_empty():
-			for r2 in state.riders:
-				if seat_of_engine(r2.engine) == seat:
-					r = r2
-					slot = r2.slot
 		seat_riders[seat] = r
 		seat_slots[seat] = slot if r != null else -1
 		var rpm := 0.0
@@ -676,9 +656,8 @@ func turret_search_on(state: TankState) -> bool:
 	return rider_on("lights") != null and searchlight_k(state) >= 1.0
 
 
-## The loader's picture (the adapter the lead switches to the contracts' [snap] rack / chamber /
-## load_t when they land): {lt (s into the r6 7 s cycle, < 0 idle), ready (rounds in the rack),
-## elev, fire_t}. See TankFiring.loader_view.
+## The loader's picture from the contracts' rack, load_t and chamber_s: {lt (s into the r6 7 s
+## cycle, < 0 idle), ready (rounds in the rack), fire_t}. See TankFiring.loader_view.
 func loader_view(state: TankState) -> Dictionary:
 	return TankFiring.loader_view(state, seat_station(state, "loader"), firing.fire_t)
 
@@ -697,6 +676,9 @@ func _paint(state: TankState) -> void:
 	inp["loader"] = lv
 	var sec: Dictionary = inp["sec"]
 	inp["bow"] = {"revs": machine_phase("sec") if bool(sec["on"]) else -1.0}
+	var feed := seat_station(state, "sec") as TankFeedState
+	if feed != null and feed.rpm <= 0.0:
+		inp["bow"] = {"revs": -1.0}
 	if interior.paints == 0:
 		interior.paint_all(inp)
 	else:
@@ -784,12 +766,13 @@ func play_evade(kind: String) -> void:
 
 
 ## A shot of the tank's own: "main" (the main gun: blast, recoil, rock, jolt, scene flash, shake)
-## or "bow" (one round from the bow guns, alternating). The `shot` cue calls it.
-func fire(kind: String) -> void:
+## or "bow" (one round from bow gun `gun`, alternating when -1). The `shot` cue and the feed's
+## round count call it.
+func fire(kind: String, gun: int = -1) -> void:
 	if not _built:
 		return
 	if kind == "bow":
-		var k := firing.bow_round()
+		var k := firing.bow_round(gun)
 		var m := bow_muzzle(k)
 		var tgt := bow_target if bow_target != Vector2.ZERO else m + Vector2(260, 14)
 		if bow_target != Vector2.ZERO:
@@ -798,6 +781,21 @@ func fire(kind: String) -> void:
 	firing.fire_main()
 	var mz := muzzle()
 	fx.light_scene(mz, 1.0, Color(1.0, 0.72, 0.4))
+
+
+## The Secondaries' new rounds (TankFeedState.rounds; round k from gun (k - 1) mod 2): a flash, a
+## tracer and a case each, at most MAX_ROUNDS_PER_FRAME a frame (a late snapshot catches up).
+func _feed_rounds(state: TankState) -> void:
+	var feed := seat_station(state, "sec") as TankFeedState
+	if feed == null:
+		return
+	if _rounds_seen < 0 or feed.rounds < _rounds_seen:
+		_rounds_seen = feed.rounds
+		return
+	var from := maxi(_rounds_seen + 1, feed.rounds - MAX_ROUNDS_PER_FRAME + 1)
+	for k in range(from, feed.rounds + 1):
+		fire("bow", posmod(k - 1, 2))
+	_rounds_seen = feed.rounds
 
 
 # --- Cues -----------------------------------------------------------------------------------------------
@@ -849,7 +847,9 @@ func _cue_shot(state: TankState, data: Dictionary) -> void:
 	if slot >= 0 and sh in [TankIds.SHELL_LIGHT, TankIds.SHELL_HEAVY, TankIds.SHELL_OVER]:
 		fire("main")
 	elif slot >= 0 and sh == TankIds.SHELL_BOW:
-		for i in clampi(int(data.get("n", 1)), 1, 4):
+		# The Secondaries' rounds come from TankFeedState.rounds (_feed_rounds); without a feed
+		# station a bow shot is one round.
+		if seat_station(state, "sec") == null:
 			fire("bow")
 	elif slot < 0:
 		var src := int(data.get("src", 0))

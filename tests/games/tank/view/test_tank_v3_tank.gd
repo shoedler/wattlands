@@ -34,7 +34,7 @@ func test_every_crew_builds_with_any_seat_empty() -> void:
 			assert_eq(int(v.seat_slots[seat]), -1)
 			assert_eq(v.machine_phase(seat), 0.0, "crew %d: an empty seat stands still" % crew)
 			assert_gt(v.interior.paints, 0)
-			assert_null(v.rider_on("sec"), "the v2 fixtures never man the Secondaries")
+			assert_true(st.is_empty())
 
 
 func test_a_manned_seat_shows_its_rider_and_an_empty_one_a_bare_saddle() -> void:
@@ -197,18 +197,50 @@ func test_firing_effects_spawn_and_expire() -> void:
 	assert_eq(TankFiring.frame_at(2.5, v.rig.blast_fps, int(air["frames"])), -1, "then nothing")
 	U.run(v, 12)
 	assert_eq(v.firing.flash_k(), 0.0, "the flash lasts about four frames")
-	for i in 4:
-		v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankIds.SHELL_BOW, 17))
+	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rounds += 4
+	U.run(v, 1)
 	assert_eq(v.firing.rounds.size(), 4, "a flash, a tracer and a case per round")
 	var guns := {}
 	for r in v.firing.rounds:
 		guns[int(r["k"])] = true
 	assert_eq(guns.size(), 2, "alternating between the two bow guns")
-	U.run(v, 1)
 	assert_true(v.firing.bow_kicking(0, TankView.BOW_KICK_S) or v.firing.bow_kicking(1, 0.06))
 	U.run(v, 150)
 	assert_false(v.firing.active(), "everything expires")
 	assert_eq(v.firing.rounds.size(), 0)
+
+
+func test_each_new_secondaries_round_fires_from_its_gun() -> void:
+	var s := U.fixture("state", 4)
+	var feed := s.station(TankIds.ENGINE_FEED) as TankFeedState
+	assert_not_null(feed, "the Secondaries seat")
+	feed.rounds = 10
+	var v := U.view_of(self, s)
+	U.run(v, 2)
+	assert_eq(v.firing.rounds.size(), 0, "the rounds fired before the view came are not replayed")
+	feed.rounds = 13
+	feed.rpm = 180.0
+	U.run(v, 1)
+	assert_eq(v.firing.rounds.size(), 3, "a flash, a tracer and a case per new round")
+	var guns: Array = []
+	for r in v.firing.rounds:
+		guns.append(int(r["k"]))
+	assert_eq(guns, [0, 1, 0], "round k from gun (k - 1) mod 2: 11, 12, 13")
+	feed.rounds = 40
+	U.run(v, 1)
+	assert_eq(v.firing.rounds.size(), 3 + TankView.MAX_ROUNDS_PER_FRAME, "a late snapshot capped")
+	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(3, TankIds.SHELL_BOW, 17))
+	assert_eq(
+		v.firing.rounds.size(), 3 + TankView.MAX_ROUNDS_PER_FRAME, "the feed counts, not the cue"
+	)
+
+
+func test_the_relief_integrates_the_rules_terrain_like_tank_terrain() -> void:
+	var pts := [[0, 0.0], [130, 1.5], [250, 3.0], [380, 1.0], [510, -2.0], [630, 0.0]]
+	var g := TankGround.new(1)
+	g.frame(0.0, 300.0, 0.0, "seg", pts)
+	for m: float in [0.0, 77.0, 130.0, 333.3, 600.0, 900.0]:
+		assert_almost_eq(g.height_m(m), TankTerrain.height_at(pts, m), 0.02, "at %.0f m" % m)
 
 
 func test_the_bow_guns_tilt_toward_the_nearest_enemy_ahead() -> void:
@@ -259,24 +291,29 @@ func test_the_loader_picture_follows_the_rack_the_stow_and_the_chambering() -> v
 		steps[str(TankInterior.step_at(float(ch["lt"]))["step"])] = true
 	for want: String in ["FEED", "BREECH OPEN", "RAM", "BREECH SHUT"]:
 		assert_true(steps.has(want), "the chambering shows " + want)
-	# The v2 contracts' adapter: a latched shell is one racked round; the boiler's pressure the stow.
+	# From the contracts: TankSteamState rack, load_t, chamber_s.
 	var s := U.fixture("state", 3)
 	var st := s.station(TankIds.ENGINE_STEAM) as TankSteamState
-	s.hull.loaded = TankIds.SHELL_NONE
-	s.hull.breech_s = 0.0
-	st.loaded = false
-	st.cycling = false
-	st.pressure_pct = 40.0
+	st.rack = 1
+	st.load_t = 0.4
+	st.chamber_s = 0.0
 	var lv := TankFiring.loader_view(s, st, 99.0)
-	assert_eq(int(lv["ready"]), 0)
-	assert_between(float(lv["lt"]), 0.0, TankFiring.STOW_TO, "stowing on the boiler's pressure")
-	s.hull.loaded = TankIds.SHELL_HEAVY
-	assert_eq(int(TankFiring.loader_view(s, st, 99.0)["ready"]), 1, "a shell up: one racked")
+	assert_eq(int(lv["ready"]), 1, "the rack's count")
+	assert_between(float(lv["lt"]), 0.0, TankFiring.STOW_TO, "stowing the next round at load_t")
+	st.chamber_s = 0.5
+	var ch := TankFiring.loader_view(s, st, 0.5)
+	var step := str(TankInterior.step_at(float(ch["lt"]))["step"])
+	assert_true(step in ["FEED", "BREECH OPEN", "RAM", "BREECH SHUT"], "chambering: " + step)
+	st.chamber_s = 0.0
+	st.load_t = 0.0
+	assert_eq(float(TankFiring.loader_view(s, st, 99.0)["lt"]), -1.0, "idle")
+	st.load_t = 0.4
 	st.slot = -1
-	s.hull.loaded = TankIds.SHELL_NONE
 	assert_eq(
 		float(TankFiring.loader_view(s, st, 99.0)["lt"]), -1.0, "an empty Loader seat: no reload"
 	)
+	st.rack = 3
+	assert_eq(int(TankFiring.loader_view(s, st, 99.0)["ready"]), 3, "a full rack")
 
 
 func test_world_lights_draw_behind_the_tank() -> void:

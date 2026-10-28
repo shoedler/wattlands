@@ -30,7 +30,7 @@ const CHAMBER_TO := 6.3
 const RESET_FROM := 6.3
 ## A stow's last share is the tray going back down (RESET).
 const STOW_RESET_K := 0.9
-## The v2 contracts' last second of the breech cycle shows the chambering.
+## How long chambering the next shell takes (brief: about 1 s; TankSteamState.chamber_s counts down).
 const CHAMBER_S := 1.0
 
 ## Seconds since the main gun's last shot (large when none).
@@ -57,10 +57,11 @@ func fire_main() -> void:
 	shots += 1
 
 
-## A bow round from the next gun (alternating); returns the gun.
-func bow_round() -> int:
-	var k := _next_bow
-	_next_bow = (_next_bow + 1) % 2
+## A bow round from gun `gun` (0 upper, 1 lower; the next one, alternating, when -1); returns the
+## gun.
+func bow_round(gun: int = -1) -> int:
+	var k := _next_bow if gun < 0 else clampi(gun, 0, 1)
+	_next_bow = (k + 1) % 2
 	if rounds.size() >= MAX_ROUNDS:
 		rounds.pop_front()
 	rounds.append({"k": k, "age": 0.0})
@@ -210,26 +211,21 @@ func _rounds(ci: CanvasItem, v: TankView) -> void:
 # --- The loader's picture (the adapter) ---------------------------------------------------------------------
 
 
-## The loader's picture for TankInterior: {lt (s into the r6 7 s cycle, < 0 idle), ready (rounds
-## shown in the rack), fire_t}. THE ADAPTER: until the contracts' [snap] rack / chamber / load_t
-## land on the steam and gun states it reads what the v2 state has (a shell latched or in the
-## breech counts one round racked; the boiler's pressure is the next round's stow; the breech
-## cycle's last CHAMBER_S is the chambering). When they land, read `ready` (rack), `stow_k` (the
-## next round's progress 0..1 from load_t, -1 none) and `chamber_k` (the chambering's progress 0..1
-## from chamber, -1 none) here and keep from_fields().
+## The loader's picture for TankInterior from the contracts (TankSteamState): {lt (s into the r6
+## 7 s cycle, < 0 idle), ready (rounds shown in the rack), fire_t}. The rack count is `rack`; the
+## next round's stow is `load_t` (0..1, while the Loader is manned and the rack not full); the
+## chambering after a shot is `chamber_s` counting down from CHAMBER_S.
 static func loader_view(state: TankState, steam: TankStationState, p_fire_t: float) -> Dictionary:
-	var ready := 0
-	var stow_k := -1.0
-	var chamber_k := -1.0
-	var h := state.hull
-	if h.loaded != TankIds.SHELL_NONE:
-		ready = 1
 	var sst := steam as TankSteamState
-	if sst != null and sst.slot >= 0 and not sst.loaded and not sst.cycling and ready == 0:
-		stow_k = clampf(sst.pressure_pct / 100.0, 0.0, 0.999)
-	if h.breech_s > 0.0 and h.breech_s <= CHAMBER_S:
-		chamber_k = 1.0 - h.breech_s / CHAMBER_S
-	return from_fields(ready, stow_k, chamber_k, p_fire_t)
+	if sst == null:
+		return from_fields(0, -1.0, -1.0, p_fire_t)
+	var stow_k := -1.0
+	if not sst.is_empty() and sst.load_t > 0.0 and sst.load_t < 1.0 and not state.hull.breakdown:
+		stow_k = sst.load_t
+	var chamber_k := -1.0
+	if sst.chamber_s > 0.0:
+		chamber_k = clampf(1.0 - sst.chamber_s / CHAMBER_S, 0.0, 0.999)
+	return from_fields(sst.rack, stow_k, chamber_k, p_fire_t)
 
 
 ## Maps the rack count, the next round's stow (0..1, < 0 none) and the chambering (0..1, < 0 none)

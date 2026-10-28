@@ -2,8 +2,9 @@ class_name TankGround
 extends RefCounted
 ## The road's relief (docs/games/tank.md v3 "Terrain relief"), cosmetic: the height of the road
 ## surface on the canvas, which the road band, the tank's wheels and the enemies follow. Two parts:
-##   terrain  the rules' terrain points (a segment's [distance_m, grade_pct], the valley's grade in
-##            free roam) integrated into a height profile, taken relative to the hull and scaled
+##   terrain  the rules' terrain points (a segment's [distance_m, grade_pct], the valley's terrain in
+##            free roam) integrated into a height profile (once per segment, in STEP_M steps: the
+##            trapezoids TankTerrain.height_at sums), taken relative to the hull and scaled
 ##            (TERRAIN_K) and saturated (TERRAIN_MAX px), so a climb tilts the tank and the road
 ##            ahead rises while the planes stay level
 ##   bumps    small seeded bumps: three waves (BUMPS: wavelength px, amplitude px) with phases from
