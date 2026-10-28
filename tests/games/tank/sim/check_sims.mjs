@@ -48,7 +48,9 @@
 //                 latch events), and one rider's back-to-back stows (<= 15 s apart, the rack never
 //                 full between them) take 4-12 s each at the median (about 7 s at 250 W P_eff).
 //   T4 (crew 1, v3 the solo loop) the solo rider spends >= 40% of each Advance on Drive (its plan
-//                 phases' seat) and fires >= 2 main-gun shells in each gun line.
+//                 phases' seat) and works each gun line's guns: >= 2 main-gun shells fired, or a
+//                 kill by the bow guns (the loop's step 4 mans the Secondaries when only light
+//                 targets, dug-in turrets among them, stand within 220 px).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
 //   T6            every Advance has a telegraphed shot (an `evade` event: a sprint prompt) and a medium tank (enemy
 //                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
@@ -129,6 +131,8 @@ export const SHELL_LIGHT = 1;
 export const SHELL_HEAVY = 2;
 export const SHELL_OVER = 3;
 export const SHELL_BOW = 4;
+/** TankEvents.BY_BOW: a kill by the bow guns. */
+export const BY_BOW = 3;
 export const ENEMY_LIGHT = 1;
 export const ENEMY_MEDIUM = 2;
 export const ENEMY_HEAVY = 5;
@@ -448,6 +452,7 @@ export function t3Problems(name, r) {
 export function soloLoop(r) {
   const host = hostPeer(r);
   const shots = eventsOf(r, 'shot').filter((e) => num(e.s) >= 0 && num(e.sh) !== SHELL_BOW);
+  const bowKills = eventsOf(r, 'kill').filter((e) => num(e.by) === BY_BOW);
   const out = [];
   for (const s of segmentsOf(r, host)) {
     if (!Number.isFinite(s.end)) continue;
@@ -455,7 +460,8 @@ export function soloLoop(r) {
       const drive = sum(s.phases.filter((p) => p.engine === 'diesel').map((p) => (Number.isFinite(p.end) ? p.end : s.end) - p.start));
       out.push({ seg: s.seg, stage: s.stage, share: s.dur > 0 ? drive / s.dur : 1 });
     } else if (s.seg === 'gun_line') {
-      out.push({ seg: s.seg, stage: s.stage, shots: shots.filter((e) => e._t >= s.start - EPS && e._t <= s.end + EPS).length });
+      const inS = (e) => e._t >= s.start - EPS && e._t <= s.end + EPS;
+      out.push({ seg: s.seg, stage: s.stage, shots: shots.filter(inS).length, bowKills: bowKills.filter(inS).length });
     }
   }
   return out;
@@ -467,7 +473,9 @@ export function t4Problems(name, r) {
   const probs = rows.some((x) => x.seg === 'advance') ? [] : [`${name}: no Advance found`];
   for (const x of rows) {
     if (x.seg === 'advance' && x.share < T4_MIN_SHARE - EPS) probs.push(`${name}: stage ${x.stage} Advance on Drive ${fmt(100 * x.share)}% (min ${100 * T4_MIN_SHARE}%)`);
-    if (x.seg === 'gun_line' && x.shots < T4_SHOTS_PER_GUN_LINE) probs.push(`${name}: stage ${x.stage} gun line: ${x.shots} main-gun shells fired (min ${T4_SHOTS_PER_GUN_LINE})`);
+    if (x.seg === 'gun_line' && x.shots < T4_SHOTS_PER_GUN_LINE && x.bowKills === 0) {
+      probs.push(`${name}: stage ${x.stage} gun line: ${x.shots} main-gun shells fired and no bow-gun kill (min ${T4_SHOTS_PER_GUN_LINE} shells or a bow kill)`);
+    }
   }
   return probs;
 }

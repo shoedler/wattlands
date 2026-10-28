@@ -300,7 +300,7 @@ test('T3 (v3) needs 3 shells stowed per stage and about 7 s a shell back to back
   assert.match(ids(C.t3Problems('x', none)), /no back-to-back stows/);
 });
 
-test('T4 (v3) reads the solo loop: Drive share per Advance and main-gun shells per gun line', () => {
+test('T4 (v3) reads the solo loop: Drive share per Advance, main-gun shells or a bow kill per gun line', () => {
   assert.deepEqual(C.t4Problems('x', makeRun(1)), []);
   // Stage 1 Advance 300-500: the solo rider leaves Drive for the Loader at 330 s and comes back at 470 s (30% on Drive).
   const r = makeRun(1);
@@ -315,7 +315,10 @@ test('T4 (v3) reads the solo loop: Drive share per Advance and main-gun shells p
   assert.match(ids(C.t4Problems('x', r)), /stage 1 Advance on Drive 30%/);
   const quiet = makeRun(1);
   quiet.events = quiet.events.filter((e) => !(e.event?.type === 'shot' && e.event.s === 0));
-  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 gun line: 0 main-gun shells fired \(min 2\)/);
+  assert.match(ids(C.t4Problems('x', quiet)), /stage 1 gun line: 0 main-gun shells fired and no bow-gun kill/);
+  const gl1 = C.segmentsOf(quiet).find((s) => s.seg === 'gun_line' && s.stage === 1);
+  quiet.events.push({ type: 'game_event', t: gl1.start + 5, pt: gl1.start + 5, event: { type: 'kill', id: 99, e: 4, by: 3, s: 0 } });
+  assert.doesNotMatch(ids(C.t4Problems('x', quiet)), /stage 1 gun line/, 'the bow guns worked it');
   assert.equal(C.soloLoop(makeRun(1)).filter((x) => x.seg === 'gun_line').length, 3);
 });
 
