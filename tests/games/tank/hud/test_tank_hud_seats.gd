@@ -3,10 +3,10 @@ extends GutTest
 ## choice of seats (any seat empty) builds five cards in seat order with the empty ones dark; the
 ## lock timer and the hint plate's states; the seat picker (left / right, swap on the Gun, confirm,
 ## back, the idle close, no picker for Autopilot) and the seat intent it sends through
-## TankGame.local_intents; the rack pips and the Secondaries' rounds a minute; the ERG / SIM tags; my
-## numbers per seat; the layout on 852 x 480, 960 x 540 and 1146 x 480 (nothing in the bottom-right
-## 200 x 60, no plate over the tank band or my numbers); the fonts cover the panel's text; the belt
-## feed's machine window.
+## TankGame.local_intents; the rack pips and the Secondaries' rounds a minute, or "no target" while
+## their rider pedals at nothing; the ERG / SIM tags; my numbers per seat; the layout on 852 x 480,
+## 960 x 540 and 1146 x 480 (nothing in the bottom-right 200 x 60, no plate over the tank band or my
+## numbers); the fonts cover the panel's text; the belt feed's machine window.
 
 const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
@@ -260,6 +260,45 @@ func test_the_rack_pips_and_the_secondaries_rate_come_from_the_state() -> void:
 	assert_gt(p.draws, 0)
 
 
+func test_the_secondaries_card_says_no_target_while_its_rider_pedals_at_nothing() -> void:
+	var s := X.state(4)
+	assert_eq(TankHudModel.feed_label(s, 90.0), "", "an empty seat: no rate line")
+	reseat(
+		s, [TankIds.ENGINE_DIESEL, TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM, TankIds.ENGINE_FEED]
+	)
+	var fd := s.station(TankIds.ENGINE_FEED) as TankFeedState
+	fd.rpm = 180.0
+	assert_eq(TankHudModel.feed_label(s, 90.0), "TANK_HUD_PER_MIN", "firing: the rate")
+	fd.rpm = 0.0
+	assert_eq(
+		TankHudModel.feed_label(s, 90.0), "TANK_HUD_NO_TARGET", "pedalling, silent: no target"
+	)
+	assert_eq(TankHudModel.feed_label(s, 0.0), "TANK_HUD_PER_MIN", "not pedalling: 0/min")
+	s.hull.breakdown = true
+	assert_eq(TankHudModel.feed_label(s, 90.0), "TANK_HUD_PER_MIN", "the guns down: 0/min")
+	s.hull.breakdown = false
+	fd.reserve = true
+	assert_eq(TankHudModel.feed_label(s, 90.0), "", "on reserve: the card says RESERVE")
+	var g: TankGame = autofree(X.game(s))
+	var txt := TankHud.tx(g, "TANK_HUD_NO_TARGET")
+	assert_eq(txt, "no target")
+	for art in CANVASES:
+		var w := TankHudSeats.card_rects(art)[0].size.x
+		assert_lte(D.text_w(txt) + 6.0, w - 6.0, "it fits a card on %s" % str(art))
+	var idle := TankHud.tx(g, "TANK_HUD_DO_FEED_IDLE", ["60"])
+	assert_lte(
+		D.text_w(idle, 2), float(TankHudMine.W) - 12.0, "my numbers' line fits in large type"
+	)
+	fd.reserve = false
+	for e in s.enemies:
+		e.telegraph_s = 0.0
+	s.boss.telegraph_s = 0.0
+	assert_eq(TankHudModel.telegraph_left(s), 0.0, "no shot coming: no surge")
+	var r := s.rider_at(fd.slot)
+	var line := TankHudModel.instruction(s, r, {"cad": 90.0})
+	assert_eq(line["key"], "TANK_HUD_DO_FEED_IDLE", "my numbers say it too")
+
+
 func test_every_seat_card_carries_its_erg_or_sim_tag() -> void:
 	var cards := TankHudModel.seat_cards(X.state(3), 1)
 	var modes: Array[String] = []
@@ -340,7 +379,9 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	var keys: Array[String] = HINT_KEYS.duplicate()
 	keys.append_array(["TANK_HUD_SEAT_EMPTY", "TANK_HUD_SEAT_MOVE_OK", "TANK_HUD_SPRINT"])
 	keys.append_array(["TANK_HUD_DO_BUILD", "TANK_HUD_DO_OVER", "TANK_HUD_DO_FEED"])
+	keys.append("TANK_HUD_DO_FEED_IDLE")
 	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS", "TANK_HELP_SEAT_LOCK"])
+	keys.append("TANK_HUD_NO_TARGET")
 	for e: String in TankIds.SEATS:
 		keys.append("TANK_HUD_TAB_" + e.to_upper())
 		keys.append("TANK_HUD_TAB_SHORT_" + e.to_upper())
