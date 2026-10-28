@@ -129,7 +129,7 @@ func feed(state: TankState, r: TankRiderState, actions: Array[StringName]) -> Di
 		close()
 		return out
 	idle_s += DT
-	if idle_s >= IDLE_S:
+	if idle_s >= IDLE_S - 0.001:
 		close()
 	return out
 
