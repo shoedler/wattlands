@@ -66,10 +66,6 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	var power := 0.0
 	if d != null:
 		power = d.p_eff_w
-		if d is TankGearboxState:
-			var g := d as TankGearboxState
-			if g.lever != TankIds.LEVER_DRIVE or g.move_s > 0.0:
-				power = 0.0
 	var rolls := _may_move(state) and not hull.breakdown and not state.all_afk
 	hull.holding = not rolls and not hull.breakdown and state.seg.seg != TankIds.SEG_CHECKPOINT
 	if state.seg.seg == TankIds.SEG_CHECKPOINT or state.seg.seg == TankIds.SEG_BOSS:

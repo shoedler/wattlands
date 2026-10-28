@@ -11,18 +11,27 @@ extends RefCounted
 ## row; the r flags R_CAN_EVADE and R_SPRINTING. v1's Ram columns (tk stall_ms, the diesel's and the
 ## Bulwark's ram_ms / ram_cd_ms / dodge_ms) and the STF_PROMPT bit are reserved: always 0 (brief 2.4).
 ##
-## {"v": 2, "tick": n,
+## v3 (VERSION 3) added: r seat_lock_ms and seat_target (the rider's seat move, brief v3 "Seat
+## choice and switching"); a sixth st column f; the feed room's row (the Secondaries seat); the
+## steam room's rack, load_pml, chamber_ms and STF_CHAMBER (the Loader's ready rack). An empty seat
+## is a room row with slot -1. The Bulwark's gearbox row (engine code 4) is retired, never sent.
+##
+## {"v": 3, "tick": n,
 ##  "sg": [seg code, stage, phase index, elapsed_ms, flags SG_*],
 ##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, 0 (reserved), repair_hj,
 ##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*,
 ##         dir (TankIds.DIR_*: 1 right, -1 left)],
-##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10], ...]  slot order
-##  "st": [[engine code, slot, flags ST_* (+ engine bits), a, b, c, d, e], ...]  rooms rear to front
-##        diesel:  a 0, b 0, c 0, d 0, e 0 (a-c reserved)
-##        dynamo:  a bank_x10, b hoist_ms, c 0, d 0, e 0
-##        steam:   a pressure_x10, b window_ms, c over_ms, d 0, e 0
-##        bulwark: a 0, b 0 (reserved), c lever + 4 x lever_to, d move_ms, e hoist_j / 10
-##        arc:     a duty_pml (duty x 1000), b 0, c 0, d 0, e 0
+##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10, seat_lock_ms,
+##          seat_target engine code (0 none)], ...]  slot order
+##  "st": [[engine code, slot (-1 empty), flags ST_* (+ engine bits), a, b, c, d, e, f], ...]
+##        rooms rear to front
+##        diesel:  a 0, b 0, c 0, d 0, e 0, f 0 (a-c reserved)
+##        dynamo:  a bank_x10, b hoist_ms, c 0, d 0, e 0, f 0
+##        steam:   a pressure_x10, b window_ms, c over_ms, d rack (0..3), e load_pml (load_t x 1000),
+##                 f chamber_ms; STF_CHAMBER when a round is chambered
+##        arc:     a duty_pml (duty x 1000), b 0, c 0, d 0, e 0, f 0
+##        feed:    a rounds, b rpm_x10, c fire_tick (-1 before the first round), d 0, e 0, f 0
+##        (code 4, v2's bulwark gearbox row, is retired: never sent)
 ##  "e":  [[id, enemy code, x_dpx, hp, mode EM_*, side, telegraph_ms, lane], ...]  live enemies, spawn order
 ##  "s":  [[id, shell type, x, y, vx, vy, friendly 0/1], ...]   shells in flight (px, px/s)
 ##  "o":  [[id, obstacle code, x_px, light_hits, cleared 0/1], ...]
@@ -33,7 +42,7 @@ extends RefCounted
 ##         flags RMF_*, points, strongpoints down (bit i = spot i), odo_m, work_m]}
 ##        (free roam only, brief 2.10: optional, sent only while TankRoamState.active; additive in v2)
 
-const VERSION := 2
+const VERSION := 3
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
 const KEYS: Array[String] = ["v", "tick", "sg", "tk", "r", "st", "e", "s", "o", "gl", "b", "sc"]
 
@@ -84,7 +93,10 @@ const R_FTP_PCT := 4
 const R_FLAGS := 5
 ## v2: TankRiderState.target_pct x 10.
 const R_TARGET_X10 := 6
-const R_LEN := 7
+## v3: TankRiderState.seat_lock_s in ms, and seat_target's engine code (0 for "").
+const R_SEAT_LOCK_MS := 7
+const R_SEAT_TARGET := 8
+const R_LEN := 9
 const RF_IN_BAND := 1
 const RF_RESCUE := 2
 const RF_AFK := 4
@@ -102,15 +114,17 @@ const ST_B := 4
 const ST_C := 5
 const ST_D := 6
 const ST_E := 7
-const ST_LEN := 8
+## v3: a sixth per-engine column.
+const ST_F := 8
+const ST_LEN := 9
 const STF_IN_BAND := 1
 const STF_RESERVE := 2
 const STF_UNPOWERED := 4
-## diesel and bulwark
+## diesel (and v2's bulwark)
 const STF_SPRINTING := 8
 ## Reserved (v1's Ram prompt): never set.
 const STF_PROMPT := 16
-## bulwark
+## Reserved (v2's bulwark auto-lever; the gearbox is retired in v3): never set.
 const STF_AUTO := 32
 ## dynamo
 const STF_STALLED := 8
@@ -120,6 +134,8 @@ const STF_OVER := 8
 const STF_LOADED := 16
 const STF_CYCLING := 32
 const STF_STEAM_SPRINTING := 64
+## v3: TankSteamState.chamber.
+const STF_CHAMBER := 128
 ## arc (v2)
 const STF_LIT := 8
 const STF_ARC_STALLED := 16

@@ -4,12 +4,12 @@ extends TankRecord
 ## The rules (TankRules) write it on the host; TankSnapshot carries the [snap] fields; the view
 ## and HUD read it. Units: TankConst.
 
-## TankIds.TANK_* and its code.
-var tank: String = TankIds.TANK_BULWARK
-var code: int = 1
-## Hull size in art px (tanks.json hull_px).
-var hull_w: int = 192
-var hull_h: int = 72
+## TankIds.TANK_* and its code (v3: always the landship, code 5).
+var tank: String = TankIds.TANK_LANDSHIP
+var code: int = 5
+## Hull size in rules px (tanks.json hull_px; the landship's [296, 65]).
+var hull_w: int = 296
+var hull_h: int = 65
 
 # --- Drive (brief 2.4 Drive) -------------------------------------------------------------------------
 ## [snap] World x of the hull's rear edge in art px (the camera follows it).
@@ -40,7 +40,7 @@ var hp: float = 100.0
 var hp_max: float = 100.0
 ## [snap] At 0 HP: no movement or fire, damage ignored, until repair_j reaches the repair energy.
 var breakdown: bool = false
-## [snap] Joules of the diesel's (or Bulwark's) P_eff paid toward the repair.
+## [snap] Joules of the diesel's P_eff paid toward the repair.
 var repair_j: float = 0.0
 
 # --- Dig in (gun lines) ------------------------------------------------------------------------------
@@ -75,7 +75,7 @@ var bow_cd_s: float = 0.0
 
 ## Host only (never serialized): the drive's SpeedModel (BRIEF 3.11), created on first use with
 ## tanks.json drive.cda_m2 and drive.mass_offset_kg; the rules set its rider_mass_kg each tick to
-## the mass of the rider on the diesel or bulwark station (TankRiderInput.rider_mass_kg) and keep
+## the mass of the rider on the diesel (Drive) station (TankRiderInput.rider_mass_kg) and keep
 ## speed_mps == its v_mps.
 var _speed: SpeedModel = null
 

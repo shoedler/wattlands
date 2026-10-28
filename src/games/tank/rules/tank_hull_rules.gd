@@ -2,16 +2,14 @@ class_name TankHullRules
 extends RefCounted
 ## The hull's HP, the berm, the breakdown and its repair (brief 2.4 Drive, Dig in, Enemies;
 ## owner: rules). Hull 100 HP (+20 per checkpoint, TankSegments). At 0 HP the tank breaks down: no
-## movement or fire and damage is ignored, while the diesel's (or the Bulwark's) P_eff pays 5 kJ
+## movement or fire and damage is ignored, while the diesel's P_eff pays 5 kJ
 ## toward the repair (12-30 s); then it runs again on 40 HP.
 
 
-## The driver's station: the diesel, else the Bulwark's gearbox (null when the tank has neither).
+## The driver's station: the diesel (the Drive seat; null when the tank has none). v3: an empty
+## Drive seat has no P_eff, so the tank stops.
 static func driver(state: TankState) -> TankDieselState:
-	var d := state.station(TankIds.ENGINE_DIESEL)
-	if d == null:
-		d = state.station(TankIds.ENGINE_BULWARK)
-	return d as TankDieselState
+	return state.station(TankIds.ENGINE_DIESEL) as TankDieselState
 
 
 ## A round of `dmg` lands on the tank (an enemy or Behemoth shell). The berm absorbs first. During
@@ -69,7 +67,7 @@ static func repair(state: TankState, dt: float, events: Array[Dictionary]) -> vo
 
 
 ## Dig in (a gun line): the driver's P_eff in band raises the mud berm by 1 HP per 250 J up to 40
-## HP. The Bulwark digs only with the lever on Drive (Dig); a rescue stops the berm growing.
+## HP; a rescue stops the berm growing.
 static func dig(state: TankState, inputs: TankInputs, dt: float) -> void:
 	var hull := state.hull
 	if state.seg.seg != TankIds.SEG_GUN_LINE or hull.breakdown or state.all_afk:
@@ -80,10 +78,6 @@ static func dig(state: TankState, inputs: TankInputs, dt: float) -> void:
 	var ri := inputs.rider(d.peer)
 	if TankStations.in_rescue(ri):
 		return
-	if d is TankGearboxState:
-		var g := d as TankGearboxState
-		if g.lever != TankIds.LEVER_DRIVE or g.move_s > 0.0:
-			return
 	var c := state.content
 	var max_hp := c.num("tanks", "berm.max_hp", 40.0)
 	if hull.berm_hp >= max_hp:

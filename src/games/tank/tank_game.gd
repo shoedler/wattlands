@@ -170,10 +170,9 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 ## The local rider's actions and gestures as intents for its current engine (brief 2.5, 2.6): a
 ## surge becomes only over (the steam engine overpressures; "Surge to evade" needs no intent, the
 ## sprint itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and
-## right cycle targets (the dynamo; on the Bulwark they step the lever and `item` cycles targets,
-## `swap` steps it too), ability_1 overpressures, ability_2 traverses, confirm fires, or latches
-## (the steam engine; the Bulwark with an empty gun). In free roam the driver turns the tank round:
-## ability_1 (the diesel and the Bulwark) or confirm (the diesel).
+## right cycle targets (the dynamo), ability_1 overpressures, ability_2 traverses, confirm fires, or
+## latches (the steam engine). In free roam the driver turns the tank round: ability_1 or confirm
+## (the diesel). (v3 retired the Bulwark's lever keys; the seat keys come with the seat rules.)
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
@@ -186,21 +185,16 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 	if (surge or actions.has(&"ability_1")) and engine == TankIds.ENGINE_STEAM:
 		var via := TankIds.VIA_SURGE if surge else TankIds.VIA_ACTION
 		out.append(TankIntents.make(TankIds.INTENT_OVER, via))
-	if engine == TankIds.ENGINE_DYNAMO or engine == TankIds.ENGINE_BULWARK:
+	if engine == TankIds.ENGINE_DYNAMO:
 		out.append_array(_gunner_intents(actions))
 	if engine == TankIds.ENGINE_DYNAMO:
 		if actions.has(&"left"):
 			out.append(TankIntents.target(TankIds.TARGET_PREV))
 		if actions.has(&"right"):
 			out.append(TankIntents.target(TankIds.TARGET_NEXT))
-	if engine == TankIds.ENGINE_BULWARK:
-		out.append_array(_lever_intents(actions))
 	if state.roam.active and not surge:
-		var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK
-		var key := (
-			actions.has(&"ability_1")
-			or (engine == TankIds.ENGINE_DIESEL and actions.has(&"confirm"))
-		)
+		var drives := engine == TankIds.ENGINE_DIESEL
+		var key := actions.has(&"ability_1") or actions.has(&"confirm")
 		if drives and key:
 			out.append(TankIntents.make(TankIds.INTENT_TURN))
 	if actions.has(&"confirm") and not surge:
@@ -209,10 +203,6 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 				out.append(TankIntents.make(TankIds.INTENT_FIRE))
 			TankIds.ENGINE_STEAM:
 				out.append(TankIntents.make(TankIds.INTENT_LATCH))
-			TankIds.ENGINE_BULWARK:
-				var loaded := state.hull.loaded != TankIds.SHELL_NONE
-				var kind := TankIds.INTENT_FIRE if loaded else TankIds.INTENT_LATCH
-				out.append(TankIntents.make(kind))
 	return out
 
 
@@ -224,19 +214,6 @@ func _gunner_intents(actions: Array[StringName]) -> Array:
 		out.append(TankIntents.aim(TankIds.AIM_DOWN))
 	if actions.has(&"ability_2"):
 		out.append(TankIntents.make(TankIds.INTENT_TRAVERSE))
-	return out
-
-
-func _lever_intents(actions: Array[StringName]) -> Array:
-	var out: Array = []
-	if actions.has(&"item"):
-		out.append(TankIntents.target(TankIds.TARGET_NEXT))
-	if actions.has(&"swap"):
-		out.append(TankIntents.lever(TankIds.LEVER_TO_NEXT))
-	if actions.has(&"left"):
-		out.append(TankIntents.lever(TankIds.LEVER_TO_LEFT))
-	if actions.has(&"right"):
-		out.append(TankIntents.lever(TankIds.LEVER_TO_RIGHT))
 	return out
 
 
@@ -547,8 +524,8 @@ static func _rider_stats(r: TankRiderState) -> Dictionary:
 		"TANK_STAT_DIESEL_S": roundi(r.engine_s[0]),
 		"TANK_STAT_DYNAMO_S": roundi(r.engine_s[1]),
 		"TANK_STAT_STEAM_S": roundi(r.engine_s[2]),
-		"TANK_STAT_BULWARK_S": roundi(r.engine_s[3]),
 		"TANK_STAT_ARC_S": roundi(r.engine_s[4]),
+		"TANK_STAT_FEED_S": roundi(r.engine_s[5]),
 		"TANK_STAT_EVADES": "%d/%d" % [r.evades_ok, r.evades_tried],
 		"TANK_STAT_BOW_HITS": r.bow_hits,
 		"TANK_STAT_BERM": roundi(r.berm_absorbed),

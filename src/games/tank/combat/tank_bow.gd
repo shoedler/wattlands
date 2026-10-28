@@ -8,13 +8,14 @@ extends RefCounted
 ## (mediums 50%; heavies, destroyers and the Behemoth's parts 25%). With no enemy in range they
 ## work on a wire or wreck barricade in range instead: bow.clear_s (4 s) of fire clears it.
 ##
-## Power by tank: the Bastion's arc generator (full rate in band, bow.under_band_rate under band,
-## none while its rider is on reserve or stalled); the Rampart's and the Citadel's dynamo bank
-## (bow.per_burst_units a burst, none below bow.min_bank or while the dynamo is stalled); the
-## Bulwark's gearbox (bow.bulwark_rate, free). Nothing fires in a breakdown or with every rider
-## AFK. The rate scales the burst clock (half rate: a burst every 4 s) and the clearing time.
-## Each tick the Bastion's arc room records whether the guns were firing (engaged on a target with
-## power): TankArcState.note_fire, the arc load `duty` the director turns into its ERG target.
+## Power (v2's sources, a v3 interim until the rules builder moves the bow guns onto the Secondaries
+## seat, TankFeedState): the arc generator while the Lights seat is manned (full rate in band,
+## bow.under_band_rate under band, none while its rider is on reserve or stalled), else the dynamo
+## bank while the Gun seat is manned (bow.per_burst_units a burst, none below bow.min_bank or while
+## the dynamo is stalled). Nothing fires in a breakdown or with every rider AFK. The rate scales the
+## burst clock (half rate: a burst every 4 s) and the clearing time. Each tick the arc room records
+## whether the guns were firing (engaged on a target with power): TankArcState.note_fire, the arc
+## load `duty` the director turns into its ERG target.
 
 
 static func step(state: TankState, dt: float, events: Array[Dictionary]) -> void:
@@ -38,18 +39,18 @@ static func step(state: TankState, dt: float, events: Array[Dictionary]) -> void
 		arc.note_fire(state.tick, engaged)
 
 
-## The station that powers the bow guns: the arc generator (Bastion), else the dynamo (Rampart,
-## Citadel), else the Bulwark's gearbox; null for none.
+## The station that powers the bow guns: the arc generator while its seat is manned, else the
+## dynamo while its seat is manned; null for none (an empty seat powers nothing).
 static func source(state: TankState) -> TankStationState:
-	for engine: String in [TankIds.ENGINE_ARC, TankIds.ENGINE_DYNAMO, TankIds.ENGINE_BULWARK]:
+	for engine: String in [TankIds.ENGINE_ARC, TankIds.ENGINE_DYNAMO]:
 		var st := state.station(engine)
-		if st != null:
+		if st != null and not st.is_empty():
 			return st
 	return null
 
 
-## The bow guns' rate now: 1 full, bow.under_band_rate or bow.bulwark_rate, 0 none (see the class
-## doc). The dynamo's bank must hold a burst.
+## The bow guns' rate now: 1 full, bow.under_band_rate, 0 none (see the class doc). The dynamo's
+## bank must hold a burst.
 static func power_rate(state: TankState, src: TankStationState) -> float:
 	var c := state.content
 	if src == null or state.hull.breakdown or state.all_afk:
@@ -64,8 +65,6 @@ static func power_rate(state: TankState, src: TankStationState) -> float:
 		if dyn.slot < 0 or dyn.stalled or dyn.bank < c.num("tanks", "bow.min_bank", 10.0):
 			return 0.0
 		return 1.0
-	if src is TankGearboxState:
-		return c.num("tanks", "bow.bulwark_rate", 0.5)
 	return 0.0
 
 

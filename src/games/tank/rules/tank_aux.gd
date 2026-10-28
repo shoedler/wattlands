@@ -8,7 +8,8 @@ extends RefCounted
 
 const META := &"tank_aux"
 
-## rigs.json through TankGeometry (muzzles, hit boxes), loaded once per state.
+## rigs.json through TankGeometry (muzzles, hit boxes; v3: the tank's own from the content's
+## tanks.json, TankGeometry.load_for), loaded once per state.
 var geo: TankGeometry = null
 ## The target list of this tick (TankTargets.build), nearest-first order is not implied.
 var targets: Array[TankTarget] = []
@@ -46,8 +47,6 @@ var enemy_in_range: bool = false
 var any_target: bool = false
 ## Joules counted toward Overpressure while the sprint rule held.
 var over_j: float = 0.0
-## The Bulwark's turret speed factor this tick (min(1, P_eff / turret_full_w); 0 off Turret).
-var turret_factor: float = 0.0
 ## Depot drills already started (the aim drill's wrecks stand).
 var drill_wrecks: bool = false
 ## The Behemoth's telegraph length at its start (the HUD's countdown pips read telegraph_s).
@@ -61,6 +60,6 @@ static func of(state: TankState) -> TankAux:
 	if state.has_meta(META):
 		return state.get_meta(META) as TankAux
 	var a := TankAux.new()
-	a.geo = TankGeometry.load_default()
+	a.geo = TankGeometry.load_for(state.content)
 	state.set_meta(META, a)
 	return a

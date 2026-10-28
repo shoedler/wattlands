@@ -65,7 +65,7 @@ static func roam_turn(state: TankState, rider: TankRiderState) -> Array:
 	var r := state.roam
 	if not r.active or r.at_end == 0 or state.all_afk:
 		return []
-	if rider.engine != TankIds.ENGINE_DIESEL and rider.engine != TankIds.ENGINE_BULWARK:
+	if rider.engine != TankIds.ENGINE_DIESEL:
 		return []
 	var wait := 3.0
 	if state.content != null:
@@ -77,9 +77,9 @@ static func roam_turn(state: TankState, rider: TankRiderState) -> Array:
 	return [TankIntents.auto(TankIds.INTENT_TURN)]
 
 
-## True for the engines that work the main gun: the dynamo and the Bulwark's gearbox diesel.
+## True for the engine that works the main gun: the dynamo (the Gun seat).
 static func is_gunner(engine: String) -> bool:
-	return engine == TankIds.ENGINE_DYNAMO or engine == TankIds.ENGINE_BULWARK
+	return engine == TankIds.ENGINE_DYNAMO
 
 
 ## {ahead, behind}: the live enemies in range on each side (the Behemoth counts ahead while a

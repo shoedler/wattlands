@@ -132,7 +132,7 @@ func _roam_cues(state: TankState, me: TankRiderState) -> void:
 	var r := state.roam
 	if not r.active:
 		return
-	var drives := me.engine == TankIds.ENGINE_DIESEL or me.engine == TankIds.ENGINE_BULWARK
+	var drives := me.engine == TankIds.ENGINE_DIESEL
 	var end := r.at_end if r.turn_s <= 0.0 else 0
 	if end != 0 and end != _at_end and drives and not state.in_cooldown():
 		_toast("TANK_TOAST_TURN_AROUND")

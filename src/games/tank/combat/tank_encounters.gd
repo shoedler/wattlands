@@ -41,9 +41,6 @@ static func begin(
 	hull.blocked_by = 0
 	hull.traps_cleared = false
 	hull.target_id = 0
-	var d := TankHullRules.driver(state)
-	if d is TankGearboxState:
-		(d as TankGearboxState).drive_s = 0.0
 	var c := state.content
 	var seg := c.segment(state.seg.segment_index)
 	aux.drills = seg.get("drills", [])

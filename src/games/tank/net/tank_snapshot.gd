@@ -49,7 +49,9 @@ static func encode(state: TankState) -> Dictionary:
 				roundi(rd.cadence_rpm),
 				roundi(rd.ftp_pct),
 				f,
-				S.x10(rd.target_pct)
+				S.x10(rd.target_pct),
+				S.ms(rd.seat_lock_s),
+				TankIds.engine_code(rd.seat_target)
 			]
 		)
 	var st: Array = []
@@ -171,28 +173,34 @@ static func _station_row(s: TankStationState) -> Array:
 		| (S.STF_RESERVE if s.reserve else 0)
 		| (S.STF_UNPOWERED if s.unpowered else 0)
 	)
-	var v: Array = [0, 0, 0, 0, 0]
-	if s is TankGearboxState:
-		var g := s as TankGearboxState
-		f |= (S.STF_SPRINTING if g.sprinting else 0) | (S.STF_AUTO if g.auto else 0)
-		v = [0, 0, g.lever + 4 * g.lever_to, S.ms(g.move_s), roundi(g.hoist_j / 10.0)]
-	elif s is TankDieselState:
+	var v: Array = [0, 0, 0, 0, 0, 0]
+	if s is TankDieselState:
 		var d := s as TankDieselState
 		f |= S.STF_SPRINTING if d.sprinting else 0
-		v = [0, 0, 0, 0, 0]
 	elif s is TankDynamoState:
 		var dy := s as TankDynamoState
 		f |= (S.STF_STALLED if dy.stalled else 0) | (S.STF_STABILIZING if dy.stabilizing else 0)
-		v = [S.x10(dy.bank), S.ms(dy.hoist_s), 0, 0, 0]
+		v = [S.x10(dy.bank), S.ms(dy.hoist_s), 0, 0, 0, 0]
 	elif s is TankSteamState:
 		var sm := s as TankSteamState
 		f |= (S.STF_OVER if sm.over else 0) | (S.STF_LOADED if sm.loaded else 0)
 		f |= (S.STF_CYCLING if sm.cycling else 0) | (S.STF_STEAM_SPRINTING if sm.sprinting else 0)
-		v = [S.x10(sm.pressure_pct), S.ms(sm.window_s), S.ms(sm.over_s), 0, 0]
+		f |= S.STF_CHAMBER if sm.chamber else 0
+		v = [
+			S.x10(sm.pressure_pct),
+			S.ms(sm.window_s),
+			S.ms(sm.over_s),
+			sm.rack,
+			S.pml(sm.load_t),
+			S.ms(sm.chamber_s)
+		]
 	elif s is TankArcState:
 		var arc := s as TankArcState
 		f |= (S.STF_LIT if arc.lit else 0) | (S.STF_ARC_STALLED if arc.stalled else 0)
-		v = [S.pml(arc.duty), 0, 0, 0, 0]
+		v = [S.pml(arc.duty), 0, 0, 0, 0, 0]
+	elif s is TankFeedState:
+		var fd := s as TankFeedState
+		v = [fd.rounds, S.x10(fd.rpm), fd.fire_tick, 0, 0, 0]
 	return [TankIds.engine_code(s.engine), s.slot, f] + v
 
 
@@ -223,6 +231,8 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 		rd.cadence_rpm = int(row[S.R_CADENCE])
 		rd.ftp_pct = int(row[S.R_FTP_PCT])
 		rd.target_pct = int(row[S.R_TARGET_X10]) / 10.0
+		rd.seat_lock_s = int(row[S.R_SEAT_LOCK_MS]) / 1000.0
+		rd.seat_target = TankIds.engine_of(int(row[S.R_SEAT_TARGET]))
 		var f := int(row[S.R_FLAGS])
 		rd.in_band = (f & S.RF_IN_BAND) != 0
 		rd.rescue = (f & S.RF_RESCUE) != 0
@@ -384,15 +394,7 @@ static func _apply_station(s: TankStationState, row: Array) -> void:
 	var a := int(row[S.ST_A])
 	var b := int(row[S.ST_B])
 	var c := int(row[S.ST_C])
-	if s is TankGearboxState:
-		var g := s as TankGearboxState
-		g.sprinting = (f & S.STF_SPRINTING) != 0
-		g.auto = (f & S.STF_AUTO) != 0
-		g.lever = c & 3
-		g.lever_to = c >> 2
-		g.move_s = int(row[S.ST_D]) / 1000.0
-		g.hoist_j = int(row[S.ST_E]) * 10.0
-	elif s is TankDieselState:
+	if s is TankDieselState:
 		var d := s as TankDieselState
 		d.sprinting = (f & S.STF_SPRINTING) != 0
 	elif s is TankDynamoState:
@@ -410,11 +412,20 @@ static func _apply_station(s: TankStationState, row: Array) -> void:
 		sm.pressure_pct = a / 10.0
 		sm.window_s = b / 1000.0
 		sm.over_s = c / 1000.0
+		sm.chamber = (f & S.STF_CHAMBER) != 0
+		sm.rack = int(row[S.ST_D])
+		sm.load_t = int(row[S.ST_E]) / 1000.0
+		sm.chamber_s = int(row[S.ST_F]) / 1000.0
 	elif s is TankArcState:
 		var arc := s as TankArcState
 		arc.lit = (f & S.STF_LIT) != 0
 		arc.stalled = (f & S.STF_ARC_STALLED) != 0
 		arc.duty = a / 1000.0
+	elif s is TankFeedState:
+		var fd := s as TankFeedState
+		fd.rounds = a
+		fd.rpm = b / 10.0
+		fd.fire_tick = c
 
 
 static func _apply_enemies(state: TankState, rows: Array) -> void:
