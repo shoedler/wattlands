@@ -6,7 +6,7 @@ d=build/v3mock/r6
 mkdir -p "$d"
 source tools/env.sh >/dev/null
 gd() { env -u FAL_KEY -u WATTLANDS_ALLOW_ART tools/godot.sh --headless --path . -s assets/tank/v3/tools_src/r6_base.gd -- "$1" 2>&1 | grep -E "prep|clean|ERROR|error" || true; }
-magick assets/tank/v2/tank_4rider.png -filter Box -resize 90% -unsharp 0x0.7+1.0+0 "$d/s90.png"
+magick assets/tank/v3/tools_src/src/tank_4rider.png -filter Box -resize 90% -unsharp 0x0.7+1.0+0 "$d/s90.png"
 gd prep
 # the curated palette: the image's own 44 darks, browns, rusts and lamp tones, plus the fixed accents
 magick "$d/prep.png" -background black -alpha remove +dither -colors 44 -unique-colors "$d/pal_auto.png"
