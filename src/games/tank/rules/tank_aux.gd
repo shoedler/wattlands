@@ -41,9 +41,10 @@ var aim_facing: int = TankIds.FACE_RIGHT
 var drills: Array = []
 ## The target the rider cycled to by hand stays the auto-aim's target until it falls.
 var manual_target: bool = false
-## An enemy stands on screen (the dynamo's stabilizer drain, this tick).
+## An enemy stands on screen (the dynamo's stabilizer drain and the Lights' searchlight load, this
+## tick).
 var enemy_in_range: bool = false
-## Some shootable target stands on screen (the Rampart's hoist and the Bulwark's auto-lever).
+## Some shootable target stands on screen.
 var any_target: bool = false
 ## Joules counted toward Overpressure while the sprint rule held.
 var over_j: float = 0.0
@@ -53,6 +54,19 @@ var drill_wrecks: bool = false
 var boss_tele_total: float = 0.0
 ## Seconds since the last Advance enemy was spawned (spawns of one encounter stagger).
 var last_spawn_t: float = -100.0
+
+# --- v3 seats, rack and bow guns -------------------------------------------------------------------
+## peer -> the plan phase index the seat lock last saw (a new one is a plan boundary).
+var seat_phase: Dictionary = {}
+## peer -> the game time of the rider's last plan boundary (the seat lock counts from it).
+var seat_since: Dictionary = {}
+## The ready rack's shells, oldest first (TankIds.SHELL_*; TankSteamState.rack is its size). The
+## Gun chambers the oldest; an Overpressure takes the newest back to the boiler.
+var rack_types: Array[int] = []
+## The Loader's progress on the next shell (pressure %) set aside while an Overpressure builds.
+var carry_pct: float = 0.0
+## The bow guns' elevation now (degrees, up positive; TankBow slews it to the target).
+var bow_deg: float = 0.0
 
 
 ## The state's aux, created on first use.

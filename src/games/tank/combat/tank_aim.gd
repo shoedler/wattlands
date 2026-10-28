@@ -117,7 +117,7 @@ static func pick(
 	var aim: Array[Vector2] = [Vector2.ZERO]
 	if aux.manual_target:
 		var m := TankTargets.by_id(aux, state.hull.target_id)
-		if m == null or (m.drill and not drill_ok):
+		if m == null or (m.drill and not drill_ok) or not in_reach(state, m):
 			aux.manual_target = false
 		else:
 			var f := facing_for(state, aux, m.center().x)
@@ -133,7 +133,7 @@ static func pick(
 		for t in aux.targets:
 			if skip.has(t.id) or (t.drill and not drill_ok):
 				continue
-			if not TankTargets.engageable(t, cam):
+			if not TankTargets.engageable(t, cam) or not in_reach(state, t):
 				continue
 			var key := float(t.tier) * 100000.0 + absf(t.center().x - muzzle.x)
 			if key < best_key:
@@ -149,6 +149,20 @@ static func pick(
 			return best
 		skip[best.id] = true
 	return null
+
+
+## Whether the main gun can see `t` (v3, the Lights seat): always while the searchlights are lit;
+## dark, only within the headlight's range: the target's near edge at most tanks.json
+## arc.dark_range_px off the hull's front (off its rear for a target behind it).
+static func in_reach(state: TankState, t: TankTarget) -> bool:
+	if TankGun.searchlights_lit(state):
+		return true
+	var hull := state.hull
+	var reach := state.content.num("tanks", "arc.dark_range_px", 260.0)
+	var front := hull.x_px + float(hull.hull_w)
+	if t.rect.end.x <= hull.x_px:
+		return hull.x_px - t.rect.end.x <= reach + 1e-6
+	return t.rect.position.x - front <= reach + 1e-6
 
 
 ## The auto-aim's choice for this tick, computed once per step (aux.aim_valid is cleared at the

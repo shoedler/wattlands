@@ -25,6 +25,25 @@ var grade_source: String = ""
 var planned_pct: float = 0.0
 ## Game seconds since this rider's plan started (PhaseState.plan_elapsed_s).
 var plan_elapsed_s: float = 0.0
+## (v3) The mission segment of this rider's phase (its meta "segment"; the segment count in the
+## cool-down, -1 without a phase). A seat switch splits a phase (TankSeatPlan), so a rider's plan
+## phase index can run ahead of the segment's: the group and end_phase key on the segment.
+var segment: int = -1
+## (v3) This rider's own phase clock and bounds (PhaseState elapsed_s, min_s, max_s, open_ended,
+## remaining_s): a split phase's elapsed counts from the switch, and its min_s may hold the
+## segment's end (TankDirector waits for every rider's min_s before it ends a segment).
+var phase_elapsed_s: float = 0.0
+var phase_min_s: float = 0.0
+var phase_max_s: float = 0.0
+var phase_open_ended: bool = false
+var phase_remaining_s: float = 0.0
+## (v3) Seconds into the segment this rider's phase starts (its meta "offset_s"; 0 unless the phase
+## is the rest of a segment after a seat switch).
+var seg_offset_s: float = 0.0
+## (v3) Host only: this rider's plan as the module keeps it (no cool-down; spliced on every seat
+## replan), so the seat rules can build and check a replan (TankSeatPlan). Null on clients and in
+## tests that do not need it.
+var plan: EffortPlan = null
 ## PlayerSlot.rider_mass_kg (scaling-mode mass; real on the host, 75 for others on a client). The
 ## drive (SpeedModel.create(mass, 0.5, 8.0), GAME_SDK) uses the mass of the rider whose station is
 ## diesel or bulwark this tick, so it changes with rotation.

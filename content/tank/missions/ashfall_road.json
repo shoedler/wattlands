@@ -2,7 +2,6 @@
 	"_doc": "Ashfall Road (brief 2.4, P0). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance; obstacles stand at at_m in world space; gun-line and boss enemies are fixed in world space; a gun-line at_px is the distance from the halted hull's front to the enemy's near edge (\"edge\": at the screen edge), clamped like a held distance (enemies.json clamp). Enemy counts scale by the tank's enemy_scale (rounded, at least 1). G2 balance iteration 1 (docs/decisions/tank.md): Advance lengths 1100 / 1200 / 950 m, stages 2 and 3 with one medium (brief 2), gun line 1 with 4 dug-in and a medium, gun line 2 with a third dug-in, the Behemoth 560 px out, end_hold_s on the boss (seconds the director waits after the objective is done before end_phase: the Behemoth's death beat, so the loader's last shell keeps its 6 s at grade 0). G1: Advance lengths 1100 / 1100 / 1000 m (brief 1300 / 1300 / 1400; the profiles and trigger points scale with them) so every tank finishes inside max_s; gun-line at_px keep every gun inside the gun's reach for all three tanks (the gun cannot depress onto anything nearer than about 230 px from the muzzle; tested); the Behemoth starts 470 px from the left edge, past the Citadel's stop line. v2 rules (P4): gun-line at_px moved in for the shorter field ahead of the kit hulls (TankEnemies.reserve_hold spreads them over depth lanes); gun line 1 five dug-ins and a medium, gun line 2 a heavy and four single dug-ins, gun line 3 a heavy, one dug-in and a destroyer; stage 1's Advance gains a rear light (a flank shot no gun reaches, so its sprint prompt always comes: T6) and a destroyer; end_hold_s 7.5. Integration polish (docs/decisions/tank.md 2026-10-27 integration polish ADR): gun line 1's dug-ins are two entries of 2 (4 for every tank), gun line 2's single dug-ins stand at 110-170 px (no splash onto the heavy).",
 	"id": "ashfall_road",
 	"label": "TANK_CONTENT_ASHFALL_ROAD",
-	"rotation": true,
 	"plan_table": "plans",
 	"segments": [
 		{
@@ -13,7 +12,7 @@
 			"duration_s": 300,
 			"label": "TANK_PHASE_DEPOT",
 			"name": "TANK_PLACE_DEPOT",
-			"backdrop": "bg_depot_near",
+			"backdrop": "base",
 			"terrain": [[0, 0], [200, 1], [400, 2], [600, 1], [800, 0], [1000, 1.5], [1200, 0.5], [1500, 0]],
 			"drills": [
 				{"from_s": 0, "to_s": 120, "drill": "drive"},
@@ -30,8 +29,8 @@
 			"min_s": 90,
 			"max_s": 300,
 			"label": "TANK_PHASE_ADVANCE_1",
-			"name": "TANK_PLACE_POPLAR_ROAD",
-			"backdrop": "bg_fields_near",
+			"name": "TANK_PLACE_PINE_ROAD",
+			"backdrop": "forest",
 			"length_m": 1100,
 			"terrain": [[0, 0], [130, 1.5], [250, 3], [380, 1], [510, -2], [630, 0], [760, 2.5], [890, 1], [1020, -1], [1100, 0]],
 			"encounters": [
@@ -54,8 +53,8 @@
 			"min_s": 60,
 			"max_s": 180,
 			"label": "TANK_PHASE_GUN_LINE_1",
-			"name": "TANK_PLACE_FARM_WALL",
-			"backdrop": "bg_fields_near",
+			"name": "TANK_PLACE_FOREST_POST",
+			"backdrop": "base",
 			"enemies": [
 				{"enemy": "dugin", "count": 2, "at_px": [110, 140]},
 				{"enemy": "dugin", "count": 2, "at_px": [230, 170]},
@@ -73,7 +72,7 @@
 			"duration_s": 60,
 			"label": "TANK_PHASE_CHECKPOINT_1",
 			"name": "TANK_PLACE_CHECKPOINT",
-			"backdrop": "bg_fields_near"
+			"backdrop": "forest"
 		},
 		{
 			"id": "stage2_advance",
@@ -84,8 +83,8 @@
 			"min_s": 90,
 			"max_s": 300,
 			"label": "TANK_PHASE_ADVANCE_2",
-			"name": "TANK_PLACE_KETTLE_FORD",
-			"backdrop": "bg_village_near",
+			"name": "TANK_PLACE_FIR_HOLLOW",
+			"backdrop": "forest_firs",
 			"length_m": 1200,
 			"terrain": [[0, 0], [142, -2], [273, -3], [415, -1], [513, 0], [600, 0], [742, 3], [873, 5], [1015, 4], [1113, 2], [1200, 0]],
 			"encounters": [
@@ -106,8 +105,8 @@
 			"min_s": 60,
 			"max_s": 180,
 			"label": "TANK_PHASE_GUN_LINE_2",
-			"name": "TANK_PLACE_VILLAGE_SQUARE",
-			"backdrop": "bg_village_near",
+			"name": "TANK_PLACE_LOGGING_CAMP",
+			"backdrop": "base",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "at_px": [230]},
 				{"enemy": "dugin", "count": 1, "at_px": [110]},
@@ -127,7 +126,7 @@
 			"duration_s": 60,
 			"label": "TANK_PHASE_CHECKPOINT_2",
 			"name": "TANK_PLACE_CHECKPOINT",
-			"backdrop": "bg_village_near"
+			"backdrop": "forest_firs"
 		},
 		{
 			"id": "stage3_advance",
@@ -138,8 +137,8 @@
 			"min_s": 90,
 			"max_s": 300,
 			"label": "TANK_PHASE_ADVANCE_3",
-			"name": "TANK_PLACE_QUARRY_RIDGE",
-			"backdrop": "bg_quarry_near",
+			"name": "TANK_PLACE_BIRCH_RIDGE",
+			"backdrop": "forest_birches",
 			"length_m": 950,
 			"terrain": [[0, 1], [133, 3], [238, 6], [342, 4], [446, -1], [551, -3], [646, 0], [741, 5], [846, 6], [950, 2]],
 			"encounters": [
@@ -160,7 +159,7 @@
 			"max_s": 180,
 			"label": "TANK_PHASE_GUN_LINE_3",
 			"name": "TANK_PLACE_RIDGE",
-			"backdrop": "bg_quarry_near",
+			"backdrop": "forest_birches",
 			"enemies": [
 				{"enemy": "heavy", "count": 1, "at_px": [230]},
 				{"enemy": "dugin", "count": 1, "at_px": [140]},
@@ -178,7 +177,7 @@
 			"duration_s": 60,
 			"label": "TANK_PHASE_CHECKPOINT_3",
 			"name": "TANK_PLACE_CHECKPOINT",
-			"backdrop": "bg_quarry_near"
+			"backdrop": "forest"
 		},
 		{
 			"id": "boss",
@@ -189,14 +188,14 @@
 			"min_s": 120,
 			"max_s": 360,
 			"label": "TANK_PHASE_BOSS",
-			"name": "TANK_PLACE_FOUNDRY_GATE",
-			"backdrop": "bg_town_near",
+			"name": "TANK_PLACE_IRON_GATE",
+			"backdrop": "base",
 			"end_hold_s": 7.5,
 			"boss": {"start_left_px": 560}
 		}
 	],
 	"cooldown": {
-		"backdrop_victory": "bg_town_near",
-		"backdrop_withdrawn": "bg_fields_near"
+		"backdrop_victory": "base",
+		"backdrop_withdrawn": "forest"
 	}
 }

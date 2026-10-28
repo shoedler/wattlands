@@ -94,8 +94,10 @@ static func _prev_stage(state: TankState, segment: int) -> int:
 
 
 ## Objectives (brief 2.4): an Advance is done at the halt line, a gun line when every gun fell,
-## the boss when the Behemoth died. Once done the tank holds ("Regroup") until min_s.
-static func objectives(state: TankState) -> void:
+## the boss when the Behemoth died. Once done the tank holds ("Regroup") until min_s, and (v3) until
+## every rider of the segment may end its phase: a rider whose seat switch split the segment has the
+## rest of it as a phase whose own min_s keeps its next mode change 60 s away (TankSeatPlan).
+static func objectives(state: TankState, inputs: TankInputs = null) -> void:
 	var sg := state.seg
 	if not sg.objective_done and sg.length_m >= 0.0:
 		match sg.seg:
@@ -109,7 +111,20 @@ static func objectives(state: TankState) -> void:
 				)
 			TankIds.SEG_BOSS:
 				sg.objective_done = state.boss.phase == TankIds.BOSS_DEAD
-	sg.regroup = sg.objective_done and sg.elapsed_s < sg.min_s
+	sg.regroup = (sg.objective_done and (sg.elapsed_s < sg.min_s or not riders_may_end(inputs)))
+
+
+## True when every rider in the group's segment is past its own phase's min_s (v3: a split phase
+## may hold the segment's end; TankDirector waits for it). True without inputs.
+static func riders_may_end(inputs: TankInputs) -> bool:
+	if inputs == null:
+		return true
+	for ri in inputs.riders:
+		if ri.segment != inputs.phase.segment or not ri.phase_open_ended:
+			continue
+		if ri.phase_elapsed_s < ri.phase_min_s - 1e-6:
+			return false
+	return true
 
 
 # --- Depot drills -------------------------------------------------------------------------------

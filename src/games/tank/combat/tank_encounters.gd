@@ -2,7 +2,7 @@ class_name TankEncounters
 extends RefCounted
 ## What stands in each segment (brief 2.4 mission P0, 2.9; ADR "P0 simplifications" 2): the Advance's
 ## obstacles and its fixed encounter list keyed by metres driven, a gun line's guns and props, the
-## Behemoth, the depot's drill wrecks. Counts and HP scale with the tank (TankContent.scaled_count,
+## Behemoth, the depot's drill wrecks. Counts scale with the crew (v3: TankContent.crew_count;
 ## enemy_scale). No random spawns: the mission file lists everything, so the plan builder knows every
 ## segment before the ride starts. Owner: rules (combat).
 
@@ -74,7 +74,7 @@ static func _gun_line(state: TankState, aux: TankAux, seg: Dictionary) -> void:
 	for spec: Variant in seg.get("enemies", []):
 		var type := str(spec.get("enemy", ""))
 		var at: Array = spec.get("at_px", [200])
-		for i in c.scaled_count(int(spec.get("count", 1)), state.hull.tank):
+		for i in c.crew_count(int(spec.get("count", 1)), state.hull.tank, state.crew):
 			var raw: Variant = at[mini(i, at.size() - 1)]
 			var hold := -1.0 if raw is String else float(raw)
 			if TankEnemies.spawn(state, aux, type, 1, hold, true, true, -1) != null:
@@ -102,7 +102,7 @@ static func advance(state: TankState, aux: TankAux) -> void:
 			TankIds.FROM_REAR if str(enc.get("from", "front")) == "rear" else TankIds.FROM_FRONT
 		)
 		var type := str(enc.get("enemy", ""))
-		var n := state.content.scaled_count(int(enc.get("count", 1)), state.hull.tank)
+		var n := state.content.crew_count(int(enc.get("count", 1)), state.hull.tank, state.crew)
 		for _i in n:
 			# Each copy rolls its own hold; TankEnemies.reserve_hold keeps them apart in the lanes.
 			TankEnemies.spawn(

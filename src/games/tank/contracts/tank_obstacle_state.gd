@@ -13,7 +13,8 @@ var x_px: float = 0.0
 var w: int = 64
 ## [snap] Light-shell hits taken (3 clear it).
 var light_hits: int = 0
-## (v2) Seconds of bow-gun fire it has taken (tanks.json bow.clear_s, 4 s, clears it).
+## (v2) Bow-gun fire it has taken; v3: bow-gun rounds that hit it (tanks.json bow.clear_rounds
+## clear it).
 var bow_s: float = 0.0
 ## [snap]
 var cleared: bool = false

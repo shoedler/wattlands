@@ -1,5 +1,5 @@
 {
-	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. v2 contracts (docs/decisions/tank.md 2026-10-27 v2 contract): the Bastion (crew 4); the Citadel's rooms in the reference's order rear to front (diesel, steam, dynamo; the slot-to-engine map is stations.json start_engines) and only its main turret (bow guns replace the secondaries); the Bastion's hull_px from assets/tank/v2/kit.json in rules px (art px / 1.5, rounded): width tank.variants.tank_4rider.hull_length_px 491 / 1.5 = 327, height 71 = (road_wheel_line.ground_contact_y 233 - the hull roof row 127 of hull_3rider.png) / 1.5 (one vertical framing for every variant); the kit's sizes for the other tanks (Bulwark [220, 71], Rampart [251, 71], Citadel [296, 71]) wait for the v2 view, since the v1 view and its rigs.json are built on [192, 72], [240, 76] and [288, 80]; power_ratio: the target % FTP of SIM phases without an ERG target (TankRules.target_pct). Added keys: props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull). v2 rules (P4, docs/decisions/tank.md 2026-10-27 P4 rules ADR): the ram block is gone (evade: sprint_window_s, hold_s, boss_hold_s); bow (the bow guns on every tank) replaces secondary and dynamo.per_secondary / secondary_min_bank; arc.lit_dispersion_mult; gun.elev_min_deg -12 (the brief); hull_px from the kit for every tank; the Rampart's and the Bastion's own stabilizer_per_s (1.3 and 2.0; dynamo.stabilizer_per_s 1.5 for the rest). Retuned on the v2 geometry and the bow guns (each within +-50% of the brief): hull.hp 150 (brief 100, the bound), drive.evasive_hit_mult 0.45 (0.7), props.standoff_px 180 (the main gun and the bow guns reach a barricade there), steam.full_j 4000 (6000), steam.breech_cycle_s 7 (6: the boiler's 0 lands up to 1 s after a latch, and with -12 degrees the gun often fires at once, so 7 keeps T3's 6 s at grade 0), gearbox.hoist_j 5250 (4000), dynamo.hoist_s [24, 12] ([20, 10]). Integration polish (2026-10-27): dynamo.hoist_s [22, 11] (the Rampart's hoist; brief [20, 10]). v3 contracts (2026-10-28, docs/decisions/tank.md v3 contracts ADR): one tank, the landship (code 5, crew 1-4, five seats rear to front: diesel, steam, dynamo, arc, feed), with its hull_px and geometry from the r6 hitbox in rules px; the Bulwark, Rampart, Citadel and Bastion (codes 1-4 reserved) and the Bulwark gearbox block are retired; enemy_scale 1.0 for every crew until the rules builder scales enemy counts by crew size (brief v3: 0.5, 0.7, 0.85, 1.0; HP the same). The dynamo hoist (dynamo.hoist_s, per_hoist) is v2's Rampart hoist, kept as an interim for a crew with no Loader (TankStations).",
+	"_doc": "Tanks, the drive, the gun and the station energy models (brief 2.2, 2.4). Owner: rules. Schema: TankContentSchema.validate_tanks. Units: art px, game metres, seconds, joules of P_eff, % FTP. G1 tuning against the brief (balance probe, TankRig sessions of every crew; details in docs/decisions/tank.md): hull.hp 120 (brief 100), dynamo.stabilizer_per_s 2.0 (1.5), steam.full_j 4500 (6000), gearbox.hoist_j 3500 (4000), gearbox.auto_drive_clear_px 340 (300: a medium holds up to 340 px, so 300 left it unengaged). G2 balance iteration 1 (docs/decisions/tank.md Balance iteration 1): Bulwark enemy_scale 0.75 (0.6), hull.hp 140 (100), hull.checkpoint_hp 30 (20), drive.evasive_hit_mult 0.5 (0.7), dynamo.stabilizer_per_s back to the brief 1.5, dynamo.hoist_s [22, 11] ([20, 10]), gearbox.hoist_j back to the brief 4000. v2 contracts (docs/decisions/tank.md 2026-10-27 v2 contract): the Bastion (crew 4); the Citadel's rooms in the reference's order rear to front (diesel, steam, dynamo; the slot-to-engine map is stations.json start_engines) and only its main turret (bow guns replace the secondaries); the Bastion's hull_px from assets/tank/v2/kit.json in rules px (art px / 1.5, rounded): width tank.variants.tank_4rider.hull_length_px 491 / 1.5 = 327, height 71 = (road_wheel_line.ground_contact_y 233 - the hull roof row 127 of hull_3rider.png) / 1.5 (one vertical framing for every variant); the kit's sizes for the other tanks (Bulwark [220, 71], Rampart [251, 71], Citadel [296, 71]) wait for the v2 view, since the v1 view and its rigs.json are built on [192, 72], [240, 76] and [288, 80]; power_ratio: the target % FTP of SIM phases without an ERG target (TankRules.target_pct). Added keys: props (obstacle sizes, light_hits_to_clear, standoff_px: a barricade stops the tank this far short because the gun cannot depress onto anything nearer than about 230 px), drill.wreck_px (the aim drill's wrecks, px ahead of the halted hull). v2 rules (P4, docs/decisions/tank.md 2026-10-27 P4 rules ADR): the ram block is gone (evade: sprint_window_s, hold_s, boss_hold_s); bow (the bow guns on every tank) replaces secondary and dynamo.per_secondary / secondary_min_bank; arc.lit_dispersion_mult; gun.elev_min_deg -12 (the brief); hull_px from the kit for every tank; the Rampart's and the Bastion's own stabilizer_per_s (1.3 and 2.0; dynamo.stabilizer_per_s 1.5 for the rest). Retuned on the v2 geometry and the bow guns (each within +-50% of the brief): hull.hp 150 (brief 100, the bound), drive.evasive_hit_mult 0.45 (0.7), props.standoff_px 180 (the main gun and the bow guns reach a barricade there), steam.full_j 4000 (6000), steam.breech_cycle_s 7 (6: the boiler's 0 lands up to 1 s after a latch, and with -12 degrees the gun often fires at once, so 7 keeps T3's 6 s at grade 0), gearbox.hoist_j 5250 (4000), dynamo.hoist_s [24, 12] ([20, 10]). Integration polish (2026-10-27): dynamo.hoist_s [22, 11] (the Rampart's hoist; brief [20, 10]). v3 contracts (2026-10-28, docs/decisions/tank.md v3 contracts ADR): one tank, the landship (code 5, crew 1-4, five seats rear to front: diesel, steam, dynamo, arc, feed), with its hull_px and geometry from the r6 hitbox in rules px; the Bulwark, Rampart, Citadel and Bastion (codes 1-4 reserved) and the Bulwark gearbox block are retired; enemy_scale 1.0 for every crew (HP the same for every crew size; v3 scales enemy counts by crew size instead: enemies.json crew_count_scale). v3 rules (2026-10-28, docs/decisions/tank.md v3 rules ADR): the dynamo hoist is gone (an empty Loader seat means no reloads); steam is the Loader's ready rack (full_j 1750 J of P_eff in band a shell, about 7 s at 250 W; rack_start 3 shells in the rack at the start; chamber_s 1 s to chamber the next round at gun.load_elev_deg; breech_cycle_s retired); bow is the Secondaries seat's rounds (2 per pedal revolution: damage per round, slew_deg_s [under band, in band], aim_tol_deg, clear_rounds for a barricade); arc is the Lights seat (lit: the gun's full range and dispersion; dark: dark_range_px from the hull's front, dispersion x dark_dispersion_mult).",
 	"tanks": {
 		"landship": {
 			"_doc": "v3 (brief 'One tank, five seats'): the one tank every crew size (1-4) rides, the reference landship rebuilt as pixel art (r6). engines: its five seats rear to front as the art has them (Drive diesel, Loader steam, Gun dynamo, Lights arc, Secondaries feed); crew: [smallest, largest]. hull_px and geometry are rules px (art px / 1.5) in the hull frame: x from the hull's rear (art x 14, the r6 hull rect's rear edge), y down from art y 111.5 so the hull's bottom row (the track run's ground contact, art y 209) is y hull_px[1] = 65; negative y lies above the hull rect (the turret). Source: assets/tank/v3/r6_hitbox.json (the mockup's collision data, sprite 475 x 216 art px facing right) and the r6 room rects (assets/tank/v3/tools_src/tank_r5.gd layout, which r6 keeps). The gun invariant: muzzle == trunnion + [barrel_px, 0] at 0 degrees (TankGeometry.validate).",
@@ -86,25 +86,26 @@
 		"stabilizer_per_s": 1.5,
 		"per_degree": 0.5,
 		"per_traverse": 15,
-		"per_hoist": 25,
 		"elev_deg_s": [2, 8],
 		"traverse_s": [8, 2.5],
 		"full_at": 50,
 		"dispersion_deg": [0.5, 1.5],
-		"low_bank": 20,
-		"hoist_s": [22, 11]
+		"low_bank": 20
 	},
 	"steam": {
-		"full_j": 4000,
+		"_doc": "v3 (brief 'Combat changes'): the Loader in band (or on reserve) fills the ready rack, one shell per full_j joules of P_eff (pressure 0..100% is the shell's progress); at 100% the shell is stowed (a heavy, or a light shell latched from light_latch_pct); with window_s the rider may surge (`over`) within it to take the shell just stowed back to the boiler and overpressure it (100 -> over_max_pct on over_j while the sprint rule holds; bleeds over_bleed_pct_s otherwise; a heavy again after over_max_s), the double-damage Overpressure shell. The Gun fires the chambered round and chambers the next in chamber_s at gun.load_elev_deg.",
+		"full_j": 1750,
+		"rack_start": 3,
+		"chamber_s": 1,
 		"window_s": 5,
 		"over_j": 3000,
 		"over_max_pct": 150,
 		"over_bleed_pct_s": 2,
 		"over_max_s": 30,
-		"breech_cycle_s": 7,
 		"light_latch_pct": 40
 	},
 	"gun": {
+		"load_elev_deg": 0,
 		"elev_min_deg": -12,
 		"elev_max_deg": 30,
 		"shell_speed_px_s": 360,
@@ -123,19 +124,18 @@
 		"armored_light_mult": 0.25
 	},
 	"bow": {
-		"_doc": "The bow guns (brief 2.4 Gun), two short guns in the nose on every tank: a damage burst (one SHELL_BOW round, both guns) every every_s at the nearest enemy (or Behemoth part) ahead whose near edge is min_px..max_px off the hull front, else a wire or wreck there (clear_s of fire clears it). Armour: enemies.json light_mult (mediums 0.5; heavies, destroyers, the Behemoth 0.25). Power (v2, kept until the v3 rules builder moves the bow guns onto the Secondaries seat): the arc generator while its seat is manned (full rate in band, under_band_rate under band, none on reserve or stalled), else the dynamo bank while the Gun seat is manned (per_burst_units a burst, none below min_bank, none stalled). v3 retired the Bulwark's gearbox and its bulwark_rate.",
-		"damage": 5,
-		"every_s": 2,
+		"_doc": "v3: the Secondaries seat (feed): two bow guns, 2 rounds per pedal revolution of its rider (alternating guns) at the nearest enemy, or Behemoth part, ahead whose near edge is min_px..max_px off the hull front, else a wire or wreck barricade there (clear_rounds rounds clear it). damage per round (armour: enemies.json light_mult). The guns slew at slew_deg_s [under band, in band] (power in band sets their speed); a round hits when the gun points within aim_tol_deg of the target, else it misses.",
+		"damage": 1.5,
 		"min_px": 40,
 		"max_px": 220,
-		"per_burst_units": 2,
-		"min_bank": 10,
-		"under_band_rate": 0.5,
-		"clear_s": 4
+		"slew_deg_s": [8, 40],
+		"aim_tol_deg": 3,
+		"clear_rounds": 12
 	},
 	"arc": {
-		"_doc": "The arc generator (brief 2.4): while its rider is in band the searchlights are lit and the main gun's dispersion is multiplied by lit_dispersion_mult.",
-		"lit_dispersion_mult": 0.5
+		"_doc": "v3: the Lights seat (arc generator). While its rider is in band the searchlights are lit: the main gun reaches its full range with its normal dispersion. Empty or not lit, the gun reaches only the headlight: targets whose near edge is at most dark_range_px off the hull's front (off its rear for a target behind), with its dispersion x dark_dispersion_mult.",
+		"dark_range_px": 260,
+		"dark_dispersion_mult": 2
 	},
 	"caps": {
 		"enemies": 16,

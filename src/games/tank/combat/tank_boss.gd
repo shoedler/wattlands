@@ -7,7 +7,7 @@ extends RefCounted
 ## (muzzle glow, "Surge to evade"); a rider who can evade holding the sprint rule 3 s inside it makes
 ## that shot miss (TankEvade; `evaded` turns true once one has). A secondary does 3 damage every 5 s
 ## at 60%. Maximum HP is the content HP x the tank's enemy_scale. Not killed when the boss segment
-## ends: it withdraws. v2 removed the Bulwark's boss lunge with the Ram (brief 2.4).
+## ends: it withdraws.
 
 
 ## The boss segment starts: full health, phase 1, the first main-gun and secondary countdowns.

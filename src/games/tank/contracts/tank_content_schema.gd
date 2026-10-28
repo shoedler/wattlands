@@ -11,19 +11,21 @@ extends RefCounted
 ##                  crew [1, TankIds.MAX_CREW], hull_px, engines (its five seats rear to front, each
 ##                  of TankIds.SEATS once), turrets, enemy_scale, geometry (GEOMETRY_SPEC, rules px in
 ##                  the hull frame; TankGeometry reads it)}; hull, drive, evade, berm, in_band,
-##                  power_ratio, dynamo, steam, gun, damage, bow, arc, caps (TANKS_SPEC)
-##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, arc, boiler,
+##                  power_ratio, dynamo, steam (v3: the Loader's rack), gun, damage, bow (v3: the
+##                  Secondaries' rounds), arc (v3: the Lights' dark range), caps (TANKS_SPEC)
+##   stations.json  engines, start_engines, plans, drill_plans, terrain, bank, arc, boiler,
 ##                  cadence_band, haptics (STATIONS_SPEC; plan entries:
 ##                  {mode: ERG, target_pct, ramp_to_pct?, range_pct?} or {mode: SIM, grade_source});
 ##                  every engine has an entry for every segment type of TABLE_SEGMENTS; start_engines
 ##                  per tank: the seat of each slot (TankIds.MAX_CREW distinct seats; a crew of n
-##                  uses the first n); rotation (v3: none, {}) rows, where a tank has them, use its
-##                  start engines, start with the slot's own and man every room in every column
+##                  uses the first n); v3 retired rotation (seat choice replaces it)
 ##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
 ##                  every_s, hit}, light_mult, lane, flank? {telegraph_s, damage, hit}}; boss;
-##                  miss_px; clamp; lanes (ENEMIES_SPEC)
-##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
-##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
+##                  miss_px; clamp; lanes; crew_count_scale (v3: enemy counts by crew size, one
+##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC)
+##   missions/<id>.json  {id, label, segments: [{id, type, stage, kind, duration_s,
+##                  min_s?, max_s?, label, name, backdrop (TankIds.BACKDROPS), terrain?, length_m?,
+##                  encounters?,
 ##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
 ##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
 ##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
@@ -68,16 +70,16 @@ const TANKS_SPEC := {
 	"dynamo.stabilizer_per_s": "nonneg",
 	"dynamo.per_degree": "nonneg",
 	"dynamo.per_traverse": "nonneg",
-	"dynamo.per_hoist": "nonneg",
 	"dynamo.elev_deg_s": "pair",
 	"dynamo.traverse_s": "pair",
-	"dynamo.hoist_s": "pair",
 	"steam.full_j": "pos",
 	"steam.window_s": "nonneg",
 	"steam.over_j": "pos",
 	"steam.over_max_pct": "pos",
-	"steam.breech_cycle_s": "nonneg",
+	"steam.rack_start": "nonneg",
+	"steam.chamber_s": "pos",
 	"steam.light_latch_pct": "pos",
+	"gun.load_elev_deg": "num",
 	"gun.elev_min_deg": "num",
 	"gun.elev_max_deg": "num",
 	"gun.shell_speed_px_s": "pos",
@@ -89,14 +91,13 @@ const TANKS_SPEC := {
 	"damage.splash_px": "nonneg",
 	"damage.splash_frac": "nonneg",
 	"bow.damage": "nonneg",
-	"bow.every_s": "pos",
 	"bow.min_px": "nonneg",
 	"bow.max_px": "pos",
-	"bow.per_burst_units": "nonneg",
-	"bow.min_bank": "nonneg",
-	"bow.under_band_rate": "frac",
-	"bow.clear_s": "pos",
-	"arc.lit_dispersion_mult": "frac",
+	"bow.slew_deg_s": "pair",
+	"bow.aim_tol_deg": "pos",
+	"bow.clear_rounds": "pos",
+	"arc.dark_dispersion_mult": "pos",
+	"arc.dark_range_px": "pos",
 	"caps.enemies": "pos",
 	"caps.shells": "pos",
 }
@@ -126,7 +127,6 @@ const GEOMETRY_SPEC := {
 const STATIONS_SPEC := {
 	"engines": "arr",
 	"start_engines": "obj",
-	"rotation": "obj",
 	"plans": "obj",
 	"drill_plans": "obj",
 	"roam_plans": "obj",
@@ -460,11 +460,8 @@ static func validate_stations(d: Variant) -> Array[String]:
 				break
 	if errors.size() > 0:
 		return errors
-	for t: String in d["rotation"]:
-		if TankIds.TANKS.has(t):
-			_check_rotation(d["rotation"][t], d["start_engines"][t], t, errors)
-		else:
-			errors.append("stations.json rotation.%s: not a tank" % t)
+	if d.has("rotation"):
+		errors.append("stations.json rotation: retired in v3 (seat choice replaces it)")
 	for table: String in TABLE_SEGMENTS:
 		_check_table(d[table], table, errors)
 	_check_station_bounds(d, errors)
@@ -499,31 +496,6 @@ static func _check_table(tbl: Dictionary, table: String, errors: Array[String]) 
 	)
 	if not exact:
 		errors.append("stations.json %s.checkpoint: must be exactly ERG 50%% (brief 2.3)" % table)
-
-
-## The rotation rows of tank `t`: one per slot, [stage 1, 2, 3, boss], only the tank's engines,
-## each row starting on its slot's start engine, every column manning every room once.
-static func _check_rotation(rows: Variant, starts: Array, t: String, errors: Array[String]) -> void:
-	var where := "stations.json rotation.%s" % t
-	if not (rows is Array) or (rows as Array).size() != starts.size():
-		errors.append("%s: one row per slot" % where)
-		return
-	for slot in (rows as Array).size():
-		var row: Variant = rows[slot]
-		if not (row is Array) or (row as Array).size() != 4:
-			errors.append("%s: rows are [stage 1, 2, 3, boss]" % where)
-			return
-		for e: Variant in row:
-			if not starts.has(e):
-				errors.append("%s[%d]: %s is not one of the tank's engines" % [where, slot, str(e)])
-		if str(row[0]) != str(starts[slot]):
-			errors.append("%s[%d]: stage 1 must be the slot's start engine" % [where, slot])
-	for col in 4:
-		var seen := {}
-		for row: Array in rows:
-			seen[str(row[col])] = true
-		if seen.size() != starts.size():
-			errors.append("%s column %d: every room needs exactly one rider" % [where, col + 1])
 
 
 ## A WARMUP-kind entry (the depot, the drill's skirmish): ERG at most 65% (BRIEF 4.6.8).
@@ -602,6 +574,18 @@ static func validate_enemies(d: Variant) -> Array[String]:
 			var lane: Variant = (types[t] as Dictionary).get("lane")
 			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
 				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
+	var scale: Variant = (d as Dictionary).get("crew_count_scale")
+	var scale_ok: bool = scale is Array and (scale as Array).size() == TankIds.MAX_CREW
+	if scale_ok:
+		for f: Variant in scale:
+			scale_ok = scale_ok and _num(f) and float(f) > 0.0 and float(f) <= 1.0
+	if not scale_ok:
+		errors.append(
+			(
+				"enemies.json crew_count_scale: one factor in (0, 1] per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
 	return errors
 
 
@@ -671,6 +655,8 @@ static func validate_valley(d: Variant) -> Array[String]:
 		check_spec(
 			zones[z], {"len_m": "pair", "terrain_pct": "pair", "label": "str"}, where, errors
 		)
+		if not TankIds.BACKDROPS.has(str((zones[z] as Dictionary).get("backdrop", ""))):
+			errors.append("%s backdrop: one of %s" % [where, ", ".join(TankIds.BACKDROPS)])
 		var zt: Variant = dig(zones[z], "terrain_pct")
 		if zt is Array and (zt as Array).size() == 2 and _num(zt[0]) and _num(zt[1]):
 			if float(zt[0]) < float(tp[0]) or float(zt[1]) > float(tp[1]):
@@ -903,6 +889,8 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 		errors.append("%s label: expected a strings key" % where)
 	if not _num(s.get("stage")):
 		errors.append("%s stage: expected a number" % where)
+	if s.has("backdrop") and not TankIds.BACKDROPS.has(str(s["backdrop"])):
+		errors.append("%s backdrop: one of %s" % [where, ", ".join(TankIds.BACKDROPS)])
 	if [TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH].has(type):
 		if not _num(s.get("length_m")) or float(s["length_m"]) <= 0.0:
 			errors.append("%s length_m: expected > 0" % where)
