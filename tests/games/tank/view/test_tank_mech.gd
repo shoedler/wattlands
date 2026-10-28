@@ -70,17 +70,3 @@ func test_the_in_band_window_and_the_rider_power() -> void:
 	assert_almost_eq(TankMech.rider_power(90.5), 1.0, 0.001)
 	assert_true(TankMech.in_band(TankMech.rider_power(77.0)), "77 % FTP is in the SIM band")
 	assert_true(TankMech.in_band(TankMech.rider_power(105.0)), "105 % FTP is in the SIM band")
-
-
-func test_the_room_machines_draw_their_parts_by_phase() -> void:
-	# The in-world overlays share the coupling: the dynamo's jars charge once a revolution, the arc
-	# climbs twice a revolution and dies under band.
-	assert_almost_eq(TankRoomMachines.jar_fill(1.0, 0.0), 0.0, 0.001)
-	assert_gt(TankRoomMachines.jar_fill(1.0, 0.7), 0.5)
-	assert_almost_eq(TankRoomMachines.jar_fill(0.0, 0.7), 0.0, 0.001, "no power, no charge")
-	var ra := Rect2(0, 0, 47, 33)
-	var low := TankRoomMachines.arc_at(ra, 0.05, 1.0)
-	var high := TankRoomMachines.arc_at(ra, 0.2, 1.0)
-	assert_true(low.y > high.y, "the arc climbs with the phase")
-	assert_eq(TankRoomMachines.arc_at(ra, 0.05, 0.0), Vector2(-1, -1), "no arc without power")
-	assert_eq(TankRoomMachines.shake(1.0, 3.0, 1.0), Vector2.ZERO, "in band stands steady")

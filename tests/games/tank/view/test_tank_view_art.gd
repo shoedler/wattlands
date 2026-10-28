@@ -1,8 +1,8 @@
 extends GutTest
-## The art-fix pass (2026-10-27 critique): enemies in depth lanes smaller, higher, darker and hazier
-## further back, each on its own ground; wrecks in their lane, opaque and lit by the beams they
-## cross; the tank on a lit road; the depot set piece; the dynamo's and the arc's stations one big
-## silhouette inside their rooms; the engine windows' room light free of the slot colour.
+## The world's art: enemies in depth lanes smaller, higher, darker and hazier further back, each on
+## its own ground; wrecks in their lane, opaque and lit by the beams they cross; the road band
+## fading in over the verge and solid under the tracks; the engine windows' room light free of the
+## slot colour.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
 
@@ -51,60 +51,26 @@ func test_wrecks_stand_in_their_lane_and_the_beams_light_them() -> void:
 		var hatch := TankWorldDraw.wreck_hatch(v, w)
 		assert_true(r.grow(1.0).has_point(hatch), "the fire shows through the hulk's hatch")
 	# The headlight lights the road ahead, not the road behind the tank.
-	var ahead := v.anchor("headlight") + Vector2(220, 40)
-	var behind := Vector2(v.origin.x - 60.0, TankView.GROUND - 20.0)
+	var ahead := v.at_sprite(v.rig.detail("headlight")["at"]) + Vector2(220, 40)
+	var behind := Vector2(v.tank_pos.x - 60.0, TankView.GROUND - 20.0)
 	assert_gt(TankLightDraw.beam_light(v, s, ahead), 0.2, "in the headlight's cone")
-	assert_eq(TankLightDraw.beam_light(v, s, behind), 0.0, "nothing lights the road behind")
+	assert_lt(
+		TankLightDraw.beam_light(v, s, behind), 0.05, "the road behind: the work light's edge"
+	)
 	var lit := TankLightDraw.beam_light(v, s, ahead)
 	s.hull.breakdown = true
 	assert_lt(TankLightDraw.beam_light(v, s, ahead), lit, "a breakdown dims the headlight")
 
 
-func test_the_road_band_fades_in_over_the_road_plane_and_is_solid_under_the_tracks() -> void:
-	var tex := TankWorldDraw.road_tex()
-	assert_eq(tex.get_width(), TankWorldDraw.ROAD_W)
+func test_the_road_band_fades_in_over_the_verge_and_is_solid_under_the_tracks() -> void:
+	var tex := TankForest.road_tex()
+	assert_eq(tex.get_width(), TankForest.ROAD_W)
 	var img := tex.get_image()
 	assert_lt(img.get_pixel(5, 0).a, 0.05, "it fades in at its far edge")
-	var under := TankWorldDraw.ROAD_TOP + 4
-	for x in range(0, TankWorldDraw.ROAD_W, 37):
+	assert_lt(img.get_pixel(5, TankForest.ROAD_H - 1).a, 0.1, "and out under the near shoulder")
+	var under := TankForest.ROAD_TOP + 4
+	for x in range(0, TankForest.ROAD_W, 37):
 		assert_eq(img.get_pixel(x, under).a, 1.0, "solid under the tracks at x %d" % x)
-
-
-func test_the_depot_stands_along_the_road_with_lit_doorways_and_lamps() -> void:
-	var s := U.fixture("state", 2)
-	s.seg.seg = TankIds.SEG_DEPOT
-	var v := U.view_of(self, s)
-	var lights := TankDepotDraw.lights(v)
-	var kinds := {}
-	var on_screen := 0
-	for l: Dictionary in lights:
-		kinds[str(l["kind"])] = true
-		var p: Vector2 = l["p"]
-		if p.x >= 0.0 and p.x <= v.canvas.x:
-			on_screen += 1
-	assert_true(kinds.has("door") and kinds.has("lamp"), "hangar doorways and hooded lamps")
-	assert_gt(on_screen, 1, "the yard is in view")
-	U.run(v, 3)
-	assert_gt(v.frames, 3, "it draws")
-
-
-func test_the_dynamo_and_arc_stations_are_one_big_silhouette_inside_their_rooms() -> void:
-	var kit := TankKit.shared()
-	var ry := kit.room_rect("tank_4rider", "dynamo")
-	var ra := kit.room_rect("tank_4rider", "arc")
-	var r := TankRoomMachines.DYNAMO_R
-	assert_gte(r * 2.0, 12.0, "the armature at least 12 art px across")
-	var c := TankRoomMachines.DYNAMO_AT
-	assert_true(
-		Rect2(Vector2.ZERO, ry.size).encloses(Rect2(c - Vector2(r, r), Vector2(r, r) * 2.0))
-	)
-	var horns := TankRoomMachines.ARC_SPREAD * 2.0
-	assert_gte(horns, 12.0, "the arc's V at least 12 art px across")
-	assert_gte(TankRoomMachines.ARC_FOOT - TankRoomMachines.ARC_SPREAD, 0.0)
-	assert_lte(TankRoomMachines.ARC_FOOT + 1.0 + TankRoomMachines.ARC_SPREAD, ra.size.x)
-	var low := TankRoomMachines.arc_at(ra, 0.05, 1.0)
-	var high := TankRoomMachines.arc_at(ra, 0.2, 1.0)
-	assert_lt(high.y, low.y, "the arc climbs the horns")
 
 
 func test_the_engine_windows_room_light_does_not_take_the_slot_colour() -> void:
