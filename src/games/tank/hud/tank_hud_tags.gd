@@ -2,7 +2,7 @@ class_name TankHudTags
 extends TankHudCtl
 ## The world tags (brief 3.6), drawn in the world rather than in panels: a Control over the middle
 ## of the canvas (TankHud.LAYOUT "tags", 852 x 480, which stays on screen on every canvas) that
-## draws at canvas positions from TankHudGeom (the view's public API, else the state and kit.json)
+## draws at canvas positions from TankHudGeom (the view's public API, else the state and the v3 kit)
 ## and may reach past its own rect to the canvas edges:
 ##  - the speed tag on the road behind the tank ("23 km/h");
 ##  - the halt line in an Advance: a striped post where the line is with its distance on a plate,
@@ -511,10 +511,11 @@ func _rack_pips(lr: Rect2, left: bool) -> void:
 
 
 ## The bow guns' elevation as the dial shows it: {deg (+ up, SEC_MIN..SEC_MAX), target (an enemy in
-## their reach)}. SWITCH POINT for the lead: until the rules expose the bow guns' elevation, it is
-## derived here the way the view aims them, from the nearest live enemy SEC_REACH_PX ahead of the bow
-## muzzles (the bore line from the upper gun's pivot to the enemy's centre), level (0) with none.
-## Once the state carries it, return that instead and keep the signature.
+## their reach)}. SWITCH POINT for the lead: until the rules expose the bow guns' elevation, deg
+## is the upper gun's bore as the view draws it (pivot to muzzle, which the view tilts toward the
+## nearest enemy ahead), else (no view) the bore line from its pivot to the nearest live enemy
+## SEC_REACH_PX ahead of the muzzles, level (0) with none. Once the state carries the elevation,
+## return that instead and keep the signature.
 static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
 	var piv := g.tank_point("bow_gun_upper_pivot")
 	var mz := g.tank_point("bow_gun_upper_muzzle")
@@ -534,10 +535,13 @@ static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
 			continue
 		best_d = ahead
 		best = r
-	if best.size == Vector2.ZERO:
-		return {"deg": 0.0, "target": false}
-	var d := best.get_center() - piv
-	return {"deg": clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX), "target": true}
+	var has := best.size != Vector2.ZERO
+	var d := mz - piv
+	if g.view == null:
+		if not has:
+			return {"deg": 0.0, "target": false}
+		d = best.get_center() - piv
+	return {"deg": clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX), "target": has}
 
 
 ## The Secondaries' dial data while their seat is manned and the guns fire or have a target: the bow

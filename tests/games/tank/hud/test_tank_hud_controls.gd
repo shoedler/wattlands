@@ -8,9 +8,6 @@ extends GutTest
 
 const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
-const BARREL_PNG := "res://assets/tank/v2/turret_barrel.png"
-## The kit frame the turret parts share (tank_3rider) and its barrel pivot.
-const PART_PIVOT := Vector2(350.5, 114.5)
 
 
 func _place(c: TankHudCtl) -> TankHudCtl:
@@ -229,26 +226,26 @@ func test_the_fonts_load_and_match_their_generator() -> void:
 	assert_eq(TankHudFont.DIGIT_CELL.y, 24, "key numbers 24 art px tall")
 
 
-## The barrel sprite's opaque pixels (centres, in its kit frame).
-func _opaque(img: Image) -> Array[Vector2]:
+## The v3 barrel sprite's opaque pixels (centres, relative to its trunnion: TankRig.barrel_origin).
+func _opaque() -> Array[Vector2]:
+	var rig := TankRig.shared()
+	var img := rig.barrel_tex.get_image()
 	var out: Array[Vector2] = []
 	for y in img.get_height():
 		for x in img.get_width():
 			if img.get_pixel(x, y).a > 0.0:
-				out.append(Vector2(x, y) + Vector2(0.5, 0.5))
+				out.append(Vector2(x, y) + Vector2(0.5, 0.5) - rig.barrel_origin)
 	return out
 
 
-## The barrel sprite on the canvas at elevation `deg` round `pivot` (as the view turns it), each
-## pixel with its 8 neighbours so rounding never hides a touch.
-func _barrel_sprite(
-	opaque: Array[Vector2], pivot: Vector2, scale: float, deg: float, left: bool
-) -> Dictionary:
+## The barrel sprite on the canvas at elevation `deg` round `pivot` (as TankBody turns it: the bore
+## along +x, rotated up by `deg`, mirrored when it faces left), each pixel with its 8 neighbours so
+## rounding never hides a touch.
+func _barrel_sprite(opaque: Array[Vector2], pivot: Vector2, deg: float, left: bool) -> Dictionary:
 	var out := {}
-	var r := deg_to_rad(deg)
+	var t := Transform2D(-deg_to_rad(deg), Vector2.ZERO)
 	for q in opaque:
-		var rel := (q - PART_PIVOT) * scale
-		var rot := Vector2(rel.x * cos(r) + rel.y * sin(r), -rel.x * sin(r) + rel.y * cos(r))
+		var rot := t * q
 		if left:
 			rot.x = -rot.x
 		var p := Vector2i((pivot + rot).floor())
@@ -259,12 +256,10 @@ func _barrel_sprite(
 
 
 func test_the_elevation_arc_never_touches_the_barrel() -> void:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
-	var opaque := _opaque(img)
-	assert_gt(opaque.size(), 500, "the barrel sprite")
+	var opaque := _opaque()
+	assert_gt(opaque.size(), 200, "the barrel sprite")
 	for crew in range(1, 5):
 		var s := X.state(crew)
-		var scale := 0.85 if crew == 1 else 1.0
 		for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
 			s.hull.facing = facing
 			var left: bool = facing == TankIds.FACE_LEFT
@@ -274,7 +269,7 @@ func test_the_elevation_arc_never_touches_the_barrel() -> void:
 				var b := TankHudGeom.make(s, null).barrel()
 				var piv: Vector2 = b["pivot"]
 				var radius := TankHudGeom.arc_radius(float(b["length"]))
-				var barrel := _barrel_sprite(opaque, piv, scale, deg, left)
+				var barrel := _barrel_sprite(opaque, piv, deg, left)
 				var model := TankHudGeom.barrel_pixels(piv, float(b["length"]), deg, left)
 				var drawn: Array[Vector2i] = TankHudGeom.arc_pixels(piv, radius, left)
 				drawn.append_array(
@@ -296,14 +291,13 @@ func test_the_elevation_arc_never_touches_the_barrel() -> void:
 
 
 func test_the_barrel_check_catches_an_arc_inside_the_barrels_reach() -> void:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
 	var s := X.state(3)
 	s.hull.elev_deg = 10.0
 	var b := TankHudGeom.make(s, null).barrel()
 	var piv: Vector2 = b["pivot"]
-	var barrel := _barrel_sprite(_opaque(img), piv, 1.0, 10.0, false)
+	var barrel := _barrel_sprite(_opaque(), piv, 10.0, false)
 	var hits := 0
 	for p in TankHudGeom.arc_pixels(piv, 20.0, false):
 		if barrel.has(p):
 			hits += 1
-	assert_gt(hits, 0, "the round 2 mock's 20 px arc ran under the barrel")
+	assert_gt(hits, 0, "an arc 20 px out runs under the barrel")
