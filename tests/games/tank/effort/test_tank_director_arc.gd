@@ -2,7 +2,7 @@ extends GutTest
 ## TankDirector's pattern 2, the arc generator's load (brief 2.3): {mode ERG, target_pct 65 + 15 x
 ## duty, reason "arc"} every 5 s in three sub-steps 1 s apart, <= 10 points an update, inside the
 ## phase's range_pct, never in the depot or checkpoints; the drill's skirmish clamps it to 55..65.
-## The Bastion (crew 4) with rotation on: in stage 1 peer 4 works the arc generator.
+## A crew of 4 on the v3 landship (no rotation): peer 4 works the arc generator in every phase.
 
 const H := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
 
@@ -35,7 +35,7 @@ func test_the_arc_rider_is_peer_4_in_stage_1() -> void:
 
 func test_the_target_is_65_plus_15_x_duty_inside_the_range() -> void:
 	var c := TankFixtures.content()
-	var plan := TankPlanBuilder.build(c, TankIds.TANK_BASTION, 3, true)
+	var plan := TankPlanBuilder.build(c, TankIds.TANK_LANDSHIP, 3, true)
 	var ph := plan.phase(ADV1)
 	assert_eq(TankDirector.arc_target_pct(c, 0.0, ph), 65.0)
 	assert_eq(TankDirector.arc_target_pct(c, 0.5, ph), 72.5)
@@ -43,7 +43,7 @@ func test_the_target_is_65_plus_15_x_duty_inside_the_range() -> void:
 	assert_eq(TankDirector.arc_target_pct(c, 2.0, ph), 80.0, "duty is a share: 0..1")
 	assert_eq(TankDirector.arc_goal_pct(c, 1.0, ph, 65.0), 75.0, "<= 10 points an update")
 	var drill := TankFixtures.content("drill")
-	var dp := TankPlanBuilder.build(drill, TankIds.TANK_BASTION, 3, false).phase(1)
+	var dp := TankPlanBuilder.build(drill, TankIds.TANK_LANDSHIP, 3, false).phase(1)
 	assert_eq(TankDirector.arc_target_pct(drill, 1.0, dp), 65.0, "the drill: 55..65")
 	assert_eq(TankDirector.arc_target_pct(drill, 0.0, dp), 65.0, "65 is inside 55..65")
 
@@ -107,8 +107,8 @@ func test_the_arc_slew_and_range() -> void:
 		prev_t = int(r[0])
 
 
-## Never in the depot or a checkpoint; in the gun line and the boss for the arc rider (rotation
-## moves it: the boss's arc rider is slot 0); the drill's skirmish stays in 55..65.
+## Never in the depot or a checkpoint; in the gun line and the boss for the arc rider (v3: still
+## slot 3 at the boss, no rotation); the drill's skirmish stays in 55..65.
 func test_the_arc_load_only_runs_in_arc_phases_with_a_range() -> void:
 	var h := _h()
 	_arc(h).duty = 1.0
@@ -122,7 +122,7 @@ func test_the_arc_load_only_runs_in_arc_phases_with_a_range() -> void:
 	h.clear()
 	h.run_s(BOSS, 6.0)
 	var boss_arc := h.peer_on(TankIds.ENGINE_ARC, BOSS)
-	assert_eq(boss_arc, 1, "rotation: slot 0 works the arc generator at the boss")
+	assert_eq(boss_arc, 4, "v3: the Lights rider keeps the seat to the boss")
 	assert_gt(h.sent(boss_arc, "arc").size(), 0)
 	var d := _h("drill")
 	_arc(d).duty = 1.0

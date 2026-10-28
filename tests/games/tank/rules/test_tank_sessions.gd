@@ -2,8 +2,11 @@ extends GutTest
 ## Whole sessions through the rules alone (TankRulesRig): compliant riders with no input play Ashfall
 ## Road and the drill to the cool-down for every crew (brief 0.4, 2.5; T1 and T5 in spirit; the
 ## balance gates themselves are the simulation matrix's). Each full session takes a few seconds.
+## v3 interim: the solo rider sits on Drive with the Gun and the Loader empty until the rules builder
+## seats it automatically, so crew 1 reaches the results without a win (its own test below).
 
-const ROADS := [1, 2, 3]
+const ROADS := [2, 3]
+const DRILL_CREWS := [1, 2, 3]
 
 ## crew -> the finished compliant session (seed 1, the bank director on), played once.
 var _done: Dictionary = {}
@@ -37,15 +40,13 @@ func test_every_crew_wins_ashfall_road_with_no_overrun_and_every_open_phase_ends
 				assert_gte(len_s + 0.01, float(s["min_s"]), "never before min_s")
 				assert_lt(len_s, float(s["max_s"]), "inside max_s")
 		assert_true(rig.state.score.behemoth_killed)
-		if crew == 1:
-			assert_gt(rig.of_type("lever").size(), 10, "the auto-lever works the gearbox")
 		assert_eq(rig.state.score.stages_clean, 3)
 		var sum := TankScore.summary(rig.state)
 		assert_has(["S", "A", "B"], sum["grade"], "crew %d: %s" % [crew, sum["grade"]])
 
 
 func test_every_crew_plays_the_drill_to_the_results() -> void:
-	for crew in ROADS:
+	for crew in DRILL_CREWS:
 		var rig := TankRulesRig.new(crew, "drill", true, 2)
 		var t := rig.play()
 		assert_lt(t, 200.0)
@@ -67,7 +68,18 @@ func test_the_score_falls_with_compliance_100_85_70() -> void:
 	assert_gt(score[1], score[2], "85% beats 70%")
 
 
-func test_a_bulwark_that_never_pedals_gets_through_on_the_reserve_alone() -> void:
+## v3 interim: a solo rider on Drive drives Ashfall Road to the results; nobody works the Gun or
+## the Loader, so nothing is fired and the Behemoth withdraws.
+func test_a_solo_rider_on_drive_reaches_the_results_without_a_gun() -> void:
+	var rig := TankRulesRig.new(1, "ashfall_road", true, 1)
+	rig.play()
+	assert_true(rig.in_cooldown())
+	assert_eq(rig.state.outcome, TankIds.OUTCOME_WITHDRAWN)
+	assert_eq(rig.state.score.shots, 0, "an empty Gun seat never fires")
+	assert_gt(rig.rider(1).engine_s[0], 1000.0, "the whole ride on Drive")
+
+
+func test_a_solo_rider_that_never_pedals_gets_through_on_the_reserve_alone() -> void:
 	# Everyone AFK all session: nothing has power, nothing moves, every open phase is cut at max_s.
 	var rig := TankRulesRig.new(1, "ashfall_road", true, 3)
 	rig.afk[1] = true
@@ -93,7 +105,7 @@ func test_every_event_carries_ints_for_the_fields_the_wire_declares() -> void:
 						assert_eq(typeof(v), TYPE_INT, "%s %s" % [type, field])
 			else:
 				assert_eq(typeof(e[field]), TYPE_INT, "%s.%s" % [type, field])
-	for type in ["segment", "rotation", "shot", "hit", "kill", "latch", "boss_phase"]:
+	for type in ["segment", "shot", "hit", "kill", "latch", "boss_phase"]:
 		assert_true(seen.has(type), "a full session raises %s" % type)
 
 

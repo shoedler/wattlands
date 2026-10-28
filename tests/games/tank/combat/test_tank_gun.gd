@@ -72,17 +72,24 @@ func test_the_auto_aim_priority_is_telegraph_dugin_heavy_medium_light_obstacle()
 
 
 func test_nearer_first_inside_a_tier() -> void:
-	var rig := _rig(1)
-	var far := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
-	var near := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 260.0)
+	var rig := _rig(2)
+	# Inside the screen clamp of a medium's hold on the v3 hull (about 210 px).
+	var far := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 200.0)
+	var near := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 150.0)
 	assert_eq(_aim(rig).id, near.id)
 	rig.state.enemies.erase(near)
 	assert_eq(_aim(rig).id, far.id)
 
 
 func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
-	var rig := _rig(1)
-	# A light tank right against the bow cannot be reached (-12 degrees at most); a medium can.
+	# With the gun held to -2 degrees a light tank right against the bow cannot be reached; a medium
+	# can. (v3: the r6 gun sits lower on the hull and reaches it at -12 degrees.)
+	var patch := func(files: Dictionary) -> void:
+		_quiet(CHECKPOINT).call(files)
+		files["tanks"]["gun"]["elev_min_deg"] = -2
+	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, patch)
+	rig.enter(CHECKPOINT, 5.0)
+	rig.dynamo().bank = 100.0
 	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 10.0)
 	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
 	var t := _aim(rig)
@@ -331,18 +338,6 @@ func test_the_dispersion_is_half_a_degree_and_widens_to_one_and_a_half_below_a_b
 			widest = maxf(widest, absf(rad_to_deg(atan2(-s.vy, s.vx))))
 		assert_lte(widest, float(row[1]) + 0.01, "bank %.0f" % row[0])
 		assert_gt(widest, float(row[1]) * 0.8, "and it uses the range")
-
-
-func test_the_bulwark_fires_with_the_full_bank_dispersion() -> void:
-	var rig := _rig(1)
-	var widest := 0.0
-	for _i in 200:
-		rig.load_shell(TankIds.SHELL_HEAVY)
-		rig.state.shells.clear()
-		TankGun.fire(rig.state, TankAux.of(rig.state), rig.gearbox(), false, rig.events)
-		var s := rig.state.shells[0]
-		widest = maxf(widest, absf(rad_to_deg(atan2(-s.vy, s.vx))))
-	assert_lte(widest, 0.51)
 
 
 func test_the_gun_stops_at_24_shells_in_flight() -> void:

@@ -1,7 +1,7 @@
 extends GutTest
-## The bow guns (brief 2.4 Gun) on every tank: a 5-damage burst every 2 s at the nearest enemy ahead
-## 40-220 px off the hull front, the armour factors, the power by tank (the Bastion's arc generator,
-## the Rampart's and the Citadel's dynamo bank, the Bulwark's gearbox), barricades cleared by 4 s of
+## The bow guns (brief 2.4 Gun): a 5-damage burst every 2 s at the nearest enemy ahead 40-220 px
+## off the hull front, the armour factors, the power by manned seat (v2's sources, a v3 interim: the
+## arc generator, else the dynamo bank; an empty seat powers nothing), barricades cleared by 4 s of
 ## fire, kill credit, and the arc's fire record (duty).
 
 const CHECKPOINT := 3
@@ -37,13 +37,13 @@ func _bursts(rig: TankRulesRig) -> Array[Dictionary]:
 	)
 
 
-func test_every_tank_has_bow_guns_and_its_power_source() -> void:
-	var want := {
-		1: TankIds.ENGINE_BULWARK,
-		2: TankIds.ENGINE_DYNAMO,
-		3: TankIds.ENGINE_DYNAMO,
-		4: TankIds.ENGINE_ARC
-	}
+func test_every_crew_powers_its_bow_guns_from_a_manned_seat() -> void:
+	var solo := _rig(1)
+	assert_null(TankBow.source(solo.state), "the solo rider on Drive powers no bow gun")
+	_target(solo, TankIds.ENEMY_LIGHT, 130.0)
+	solo.run(4.1)
+	assert_eq(_bursts(solo).size(), 0, "empty Gun and Lights seats do nothing")
+	var want := {2: TankIds.ENGINE_DYNAMO, 3: TankIds.ENGINE_DYNAMO, 4: TankIds.ENGINE_ARC}
 	for crew: int in want:
 		var rig := _rig(crew)
 		assert_eq(TankBow.source(rig.state).engine, want[crew], "crew %d" % crew)
@@ -121,14 +121,7 @@ func test_the_dynamo_bank_powers_them_down_to_10_and_a_stall_stops_them() -> voi
 	assert_eq(_bursts(rig).size(), 1)
 
 
-func test_the_bulwark_fires_at_half_rate_for_free() -> void:
-	var rig := _rig(1)
-	_target(rig, TankIds.ENEMY_LIGHT, 130.0)
-	rig.run(12.0)
-	assert_eq(_bursts(rig).size(), 3, "a burst every 4 s: 0, 4, 8 s")
-
-
-func test_the_bastions_arc_generator_full_rate_in_band_half_under_none_afk_or_stalled() -> void:
+func test_the_arc_generator_full_rate_in_band_half_under_none_afk_or_stalled() -> void:
 	var rig := _rig(4)
 	var arc_peer := rig.peer_of(TankIds.ENGINE_ARC)
 	_target(rig, TankIds.ENEMY_LIGHT, 130.0)
@@ -175,13 +168,15 @@ func test_four_seconds_of_bow_fire_clear_a_barricade_in_range() -> void:
 	assert_gt(_bursts(rig).size(), 0)
 	rig.run(0.2)
 	assert_true(wire.cleared, "4 s of fire")
-	var bul := _rig(1)
+	# Half rate (v3: the Lights rider under band; v2 had the Bulwark's gearbox here): 8 s.
+	var half := _rig(4)
+	half.cadence[half.peer_of(TankIds.ENGINE_ARC)] = 40.0
 	var w2 := TankEncounters.add_obstacle(
-		bul.state, TankIds.OBST_WRECK, bul.hull().x_px + bul.hull().hull_w + 150.0
+		half.state, TankIds.OBST_WRECK, half.hull().x_px + half.hull().hull_w + 150.0
 	)
-	bul.run(7.9)
+	half.run(7.9)
 	assert_false(w2.cleared, "half rate: 8 s")
-	bul.run(0.2)
+	half.run(0.2)
 	assert_true(w2.cleared)
 	var far := _rig(2)
 	var w3 := TankEncounters.add_obstacle(

@@ -97,7 +97,7 @@ func test_the_harness_runs_the_drill_for_every_crew_and_is_deterministic() -> vo
 		assert_eq(a["score"], b["score"])
 
 
-func test_the_harness_reports_every_ashfall_road_segment_for_the_citadel() -> void:
+func test_the_harness_reports_every_ashfall_road_segment_for_crew_3() -> void:
 	var r := TankBalanceHarness.run({"crew": 3, "seed": 1, "compliance": 1.0, "snapshots": false})
 	assert_false(r.has("error"), str(r.get("error", "")))
 	var segs: Array = r["segments"]
@@ -117,14 +117,6 @@ func test_the_harness_reports_every_ashfall_road_segment_for_the_citadel() -> vo
 	assert_eq(int(r["crew"]), 3)
 	assert_true((r["dynamo"] as Array).size() > 0, "the dynamo's phases are tracked")
 	assert_true(TankBalanceHarness.format(r).contains("crew 3 seed 1"))
-
-
-func test_the_solo_harness_tracks_the_bulwark_s_advances() -> void:
-	var r := TankBalanceHarness.run({"crew": 1, "seed": 2, "snapshots": false})
-	assert_false(r.has("error"), str(r.get("error", "")))
-	assert_eq((r["drive_share"] as Array).size(), 3, "one Drive share per Advance")
-	for d: Dictionary in r["drive_share"]:
-		assert_between(float(d["share"]), 0.0, 1.0)
 
 
 func test_the_synthetic_rider_follows_the_band_and_the_target() -> void:

@@ -84,7 +84,7 @@ func test_no_sprint_prompt_outside_work_phases_or_when_the_rider_cannot_act() ->
 	assert_eq(TankCues.prompt_of(null, null), TankCues.PROMPT_NONE)
 
 
-func test_the_bulwark_evades_like_the_diesel() -> void:
+func test_the_solo_driver_evades_like_any_diesel_rider() -> void:
 	var s := TankFixtures.state(1)
 	_telegraph(s, 0.0)
 	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_NONE)
@@ -384,6 +384,8 @@ func test_a_full_session_never_broadcasts_a_toast_or_banner() -> void:
 
 func test_a_rider_going_to_reserve_is_said_once_and_the_first_call_only_records() -> void:
 	var s := TankFixtures.state(3)
+	# No telegraph: peer 1 sits on Drive (v3) and would get its "Surge to evade" prompt.
+	s.enemies.clear()
 	s.rider(3).afk = true
 	var ctx := _ctx(3, 1)
 	var cues := TankCues.new(ctx)

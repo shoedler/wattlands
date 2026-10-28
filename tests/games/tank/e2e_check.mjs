@@ -5,7 +5,7 @@
 //
 // tools/e2e/run.mjs runs it after playing Tank's e2e content, the drill (a 30 s depot, a 70 s
 // skirmish against two light tanks and a medium, a 30 s checkpoint, then the cool-down) with a
-// host and two clients, the Citadel, Autopilot and mock trainers; client2 is killed at about 25 s
+// host and two clients (a crew of 3 on the v3 landship), Autopilot and mock trainers; client2 is killed at about 25 s
 // and rejoins. The harness checks the generic things (same shared events on every peer, final
 // state, directives, warm-up limits, FIT files); this checks Tank's:
 //   1. every Tank game event, on every peer, is a known type with every declared field the right
@@ -20,8 +20,8 @@
 //      every repair follows a breakdown; no hit or kill in the depot; the rotation option is
 //      ignored (no rotation event);
 //   4. every peer's final snapshot is a well-formed Tank snapshot (the schema of
-//      contracts/tank_snapshot_schema.gd, whole numbers, at most 4 KB, the Citadel's three
-//      riders and rooms) and matches the host's within 2%;
+//      contracts/tank_snapshot_schema.gd, whole numbers, at most 4 KB, three riders and the
+//      landship's five rooms) and matches the host's within 2%;
 //   5. no push_error or script error on any peer (killed run included), no desync warning, every
 //      peer finished complete;
 //   6. when fit_check's JSON is in the report, every FIT has the drill's 4 laps.
@@ -40,7 +40,7 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 /** Tank's event types (TankEvents.TYPES). */
 export const EVENT_TYPES = [
   'segment', 'rotation', 'shot', 'hit', 'kill', 'ram', 'dodge', 'breakdown', 'repaired', 'overrun', 'boss_phase', 'latch', 'lever',
-  'evade', 'turn', 'time_up',
+  'evade', 'turn', 'time_up', 'seat',
 ];
 /** Declared int fields per type (TankEvents.INT_FIELDS; "r[][]" is rows of ints). */
 export const INT_FIELDS = {
@@ -60,6 +60,7 @@ export const INT_FIELDS = {
   evade: ['id', 'e', 'ok', 's'],
   turn: ['s', 'dir'],
   time_up: [],
+  seat: ['s', 'from', 'to'],
 };
 /** Segment codes (TankIds.SEG_CODES). */
 export const SEG = { none: 0, depot: 1, advance: 2, gun_line: 3, checkpoint: 4, boss: 5, skirmish: 6, cooldown: 7 };
@@ -70,16 +71,16 @@ export const DRILL_SEGMENTS = [
   { i: 2, sg: SEG.checkpoint, st: 1 },
   { i: 3, sg: SEG.cooldown, st: 0 },
 ];
-/** The drill's enemies: 2 light tanks and a medium, all at scale 1.0 on the Citadel. */
+/** The drill's enemies: 2 light tanks and a medium, all at scale 1.0 (v3: one tank). */
 export const DRILL_ENEMIES = 3;
 export const DRILL_LAPS = 4;
 export const SNAPSHOT_MAX_BYTES = 4096;
-const CITADEL = { tank: 3, riders: 3, rooms: 3 };
+const CREW3 = { tank: 5, riders: 3, rooms: 5 };
 const ENEMY_CODES = [1, 2, 3, 4, 5, 6];
 const SNAPSHOT_KEYS = ['v', 'tick', 'sg', 'tk', 'r', 'st', 'e', 's', 'o', 'gl', 'b', 'sc'];
 /** Column counts of TankSnapshotSchema. */
 export const SNAPSHOT_WIDTHS = { sg: 5, tk: 17, gl: 4, b: 7, sc: 4 };
-export const ROW_WIDTHS = { r: 7, st: 8, e: 8, s: 7, o: 5 };
+export const ROW_WIDTHS = { r: 9, st: 9, e: 8, s: 7, o: 5 };
 const ROLES = ['host', 'client1', 'client2'];
 const COMBAT = new Set(['hit', 'kill']);
 
@@ -127,7 +128,7 @@ export function eventErrors(e) {
     case 'rotation':
       for (const [slot, engine] of e.r) {
         inRange('slot', slot, 0, 2);
-        inRange('engine', engine, 1, 5);
+        inRange('engine', engine, 1, 6);
       }
       break;
     case 'shot':
@@ -178,6 +179,11 @@ export function eventErrors(e) {
     case 'lever':
       inRange('s', e.s, 0, 2);
       inRange('lv', e.lv, 0, 2);
+      break;
+    case 'seat':
+      inRange('s', e.s, 0, 3);
+      inRange('from', e.from, 1, 6);
+      inRange('to', e.to, 1, 6);
       break;
     default:
       break;
@@ -352,7 +358,7 @@ export function checkReport(report) {
       err(role, 'no final snapshot');
       continue;
     }
-    for (const m of snapshotErrors(finals[role], { crew: drill ? CITADEL : null })) err(role, m);
+    for (const m of snapshotErrors(finals[role], { crew: drill ? CREW3 : null })) err(role, m);
   }
   if (isObj(finals[hostRole])) {
     info.snapshotBytes = Buffer.byteLength(JSON.stringify(finals[hostRole]), 'utf8');

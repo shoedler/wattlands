@@ -1,6 +1,7 @@
 extends GutTest
 ## TankAutopilot (brief 2.5): rear traverses and obstacle shots for the gunner, nothing else, every
-## intent tagged auto. Built on the fixture states (stage 2 Advance), moved around by hand.
+## intent tagged auto. Built on the fixture states (stage 2 Advance), moved around by hand; the
+## gunner is peer 2 (slot 1 sits on the Gun; v3: the solo rider is on Drive, with no gunner).
 
 
 func _gunner(state: TankState) -> TankRiderState:
@@ -68,11 +69,11 @@ func test_only_the_gunner_gets_anything() -> void:
 			else:
 				assert_eq(got, [], "crew %d %s works no gun" % [crew, r.engine])
 	assert_eq(TankAutopilot.intents(null, 1), [])
-	assert_eq(TankAutopilot.intents(_quiet(1), 99), [], "an unknown peer")
+	assert_eq(TankAutopilot.intents(_quiet(2), 99), [], "an unknown peer")
 
 
 func test_a_rear_enemy_alone_flips_the_turret_and_the_intent_is_tagged_auto() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [2, 3, 4]:
 		var s := _quiet(crew)
 		_rear(s)
 		var peer := _gunner(s).peer
@@ -84,95 +85,95 @@ func test_a_rear_enemy_alone_flips_the_turret_and_the_intent_is_tagged_auto() ->
 
 
 func test_no_flip_while_the_facing_side_still_has_a_target() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_rear(s)
 	_front(s)
-	assert_eq(TankAutopilot.intents(s, 1), [], "front and rear: stay on the front")
+	assert_eq(TankAutopilot.intents(s, 2), [], "front and rear: stay on the front")
 	s.hull.facing = TankIds.FACE_LEFT
-	assert_eq(TankAutopilot.intents(s, 1), [], "facing the rear while it still has one")
+	assert_eq(TankAutopilot.intents(s, 2), [], "facing the rear while it still has one")
 
 
 func test_the_turret_returns_to_the_front_once_the_rear_is_clear() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	s.hull.facing = TankIds.FACE_LEFT
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "nothing anywhere")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "nothing anywhere")
 	_front(s)
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "only ahead")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "only ahead")
 	var rear := _rear(s)
-	assert_eq(TankAutopilot.intents(s, 1), [], "a rear target keeps it facing back")
+	assert_eq(TankAutopilot.intents(s, 2), [], "a rear target keeps it facing back")
 	rear.mode = TankIds.EM_DEAD
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "a dead enemy is no target")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "a dead enemy is no target")
 
 
 func test_no_second_traverse_while_one_runs() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_rear(s)
 	s.hull.traverse_s = 1.5
-	assert_eq(TankAutopilot.intents(s, 1), [])
+	assert_eq(TankAutopilot.intents(s, 2), [])
 
 
 func test_enemies_off_screen_are_out_of_range() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_enemy(s, 90, -1, s.camera_x() - 200.0)
-	assert_eq(TankAutopilot.intents(s, 1), [], "behind the left edge")
+	assert_eq(TankAutopilot.intents(s, 2), [], "behind the left edge")
 	var far := _enemy(s, 91, 1, s.camera_x() + 1000.0)
 	far.hp = 30.0
-	assert_eq(TankAutopilot.intents(s, 1), [], "past the right edge")
+	assert_eq(TankAutopilot.intents(s, 2), [], "past the right edge")
 
 
 func test_the_behemoth_counts_as_a_target_ahead() -> void:
-	var s := TankFixtures.boss(1)
+	var s := TankFixtures.boss(2)
 	s.hull.facing = TankIds.FACE_LEFT
 	s.hull.traverse_s = 0.0
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "face the Behemoth")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "face the Behemoth")
 	s.hull.facing = TankIds.FACE_RIGHT
-	assert_eq(TankAutopilot.intents(s, 1), [], "already facing it")
+	assert_eq(TankAutopilot.intents(s, 2), [], "already facing it")
 
 
 func test_an_aligned_loaded_gun_shoots_the_obstacle_when_no_enemy_is_in_range() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	var ob := _wreck(s)
 	s.hull.target_id = ob.id
-	assert_eq(TankAutopilot.intents(s, 1), [{"k": "fire", "auto": 1}])
+	assert_eq(TankAutopilot.intents(s, 2), [{"k": "fire", "auto": 1}])
 	s.hull.elev_target_deg = 9.0
-	assert_eq(TankAutopilot.intents(s, 1), [], "not within the aim tolerance yet")
+	assert_eq(TankAutopilot.intents(s, 2), [], "not within the aim tolerance yet")
 	s.hull.elev_target_deg = 4.4
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["fire"], "within 0.5 degrees")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["fire"], "within 0.5 degrees")
 	s.hull.loaded = TankIds.SHELL_NONE
-	assert_eq(TankAutopilot.intents(s, 1), [], "an empty breech")
+	assert_eq(TankAutopilot.intents(s, 2), [], "an empty breech")
 	s.hull.loaded = TankIds.SHELL_HEAVY
 	s.hull.breech_s = 2.0
-	assert_eq(TankAutopilot.intents(s, 1), [], "the breech cycle is running")
+	assert_eq(TankAutopilot.intents(s, 2), [], "the breech cycle is running")
 
 
 func test_no_obstacle_shot_with_an_enemy_in_range_or_a_cleared_or_ignored_obstacle() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	var ob := _wreck(s)
 	s.hull.target_id = ob.id
 	_front(s)
-	assert_eq(TankAutopilot.intents(s, 1), [], "an enemy in range: auto-aim's business")
+	assert_eq(TankAutopilot.intents(s, 2), [], "an enemy in range: auto-aim's business")
 	s.enemies.clear()
 	ob.cleared = true
-	assert_eq(TankAutopilot.intents(s, 1), [], "a cleared obstacle")
+	assert_eq(TankAutopilot.intents(s, 2), [], "a cleared obstacle")
 	ob.cleared = false
 	ob.code = TankIds.obstacle_code(TankIds.OBST_TANK_TRAPS)
-	assert_eq(TankAutopilot.intents(s, 1), [], "tank traps are shoved aside, not shot")
+	assert_eq(TankAutopilot.intents(s, 2), [], "tank traps are shoved aside, not shot")
 	ob.code = TankIds.obstacle_code(TankIds.OBST_DRILL_WRECK)
-	assert_eq(TankAutopilot.intents(s, 1), [], "the drill wrecks belong to the scripted drills")
+	assert_eq(TankAutopilot.intents(s, 2), [], "the drill wrecks belong to the scripted drills")
 	ob.code = TankIds.obstacle_code(TankIds.OBST_WIRE)
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["fire"], "wire is shot")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["fire"], "wire is shot")
 	s.hull.facing = TankIds.FACE_LEFT
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "turn to the front first")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "turn to the front first")
 
 
 func test_it_cycles_the_target_toward_a_blocking_obstacle_once_a_second() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_wreck(s)
 	s.hull.target_id = 0
 	var cycles := 0
 	for tick in 100:
 		s.tick = 5000 + tick
-		var got := TankAutopilot.intents(s, 1)
+		var got := TankAutopilot.intents(s, 2)
 		if not got.is_empty():
 			assert_eq(got, [{"k": "target", "d": 1, "auto": 1}])
 			cycles += 1
@@ -180,19 +181,19 @@ func test_it_cycles_the_target_toward_a_blocking_obstacle_once_a_second() -> voi
 
 
 func test_nothing_while_broken_down_all_afk_or_in_the_cooldown() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_rear(s)
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"])
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"])
 	s.hull.breakdown = true
-	assert_eq(TankAutopilot.intents(s, 1), [], "no fire in a breakdown")
+	assert_eq(TankAutopilot.intents(s, 2), [], "no fire in a breakdown")
 	s.hull.breakdown = false
 	s.all_afk = true
-	assert_eq(TankAutopilot.intents(s, 1), [], "nothing has power")
+	assert_eq(TankAutopilot.intents(s, 2), [], "nothing has power")
 	s.all_afk = false
 	s.seg.seg = TankIds.SEG_COOLDOWN
-	assert_eq(TankAutopilot.intents(s, 1), [])
+	assert_eq(TankAutopilot.intents(s, 2), [])
 	s.seg.seg = TankIds.SEG_NONE
-	assert_eq(TankAutopilot.intents(s, 1), [], "before the first segment")
+	assert_eq(TankAutopilot.intents(s, 2), [], "before the first segment")
 
 
 ## Over every fixture state and a mix of positions: the Autopilot only ever traverses, fires or
@@ -238,33 +239,33 @@ func test_the_same_state_gives_the_same_intents() -> void:
 
 
 func test_a_traverse_or_a_shot_is_asked_for_twice_a_second_at_most() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_rear(s)
 	var asked := 0
 	for tick in 40:
 		s.tick = 6000 + tick
-		asked += TankAutopilot.intents(s, 1).size()
+		asked += TankAutopilot.intents(s, 2).size()
 	assert_eq(asked, 4, "every tenth tick of 40")
-	var t := _quiet(1)
+	var t := _quiet(2)
 	t.hull.target_id = _wreck(t).id
 	asked = 0
 	for tick in 40:
 		t.tick = 6000 + tick
-		asked += TankAutopilot.intents(t, 1).size()
+		asked += TankAutopilot.intents(t, 2).size()
 	assert_eq(asked, 4, "the same for the shot")
 
 
 func test_a_rear_light_is_left_alone_out_of_the_main_guns_reach() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_enemy(s, 90, -1, s.camera_x() + 10.0)
 	assert_eq(TankAutopilot.enemies_in_range(s)["behind"], 0, "the main gun cannot reach it")
-	assert_eq(TankAutopilot.intents(s, 1), [], "no traverse, no bank spent, no aim pause")
+	assert_eq(TankAutopilot.intents(s, 2), [], "no traverse, no bank spent, no aim pause")
 	s.hull.facing = TankIds.FACE_LEFT
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"], "back to the front")
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"], "back to the front")
 
 
 func test_a_rear_enemy_the_main_gun_can_reach_still_flips_the_turret() -> void:
-	var s := _quiet(1)
+	var s := _quiet(2)
 	_rear(s)
 	assert_eq(TankAutopilot.enemies_in_range(s)["behind"], 1)
-	assert_eq(_kinds(TankAutopilot.intents(s, 1)), ["traverse"])
+	assert_eq(_kinds(TankAutopilot.intents(s, 2)), ["traverse"])

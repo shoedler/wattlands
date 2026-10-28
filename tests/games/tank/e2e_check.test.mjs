@@ -1,7 +1,7 @@
 // node --test tests/games/tank/e2e_check.test.mjs: e2e_check.mjs on a synthetic e2e report (the
 // drill with a host and two clients, client2 killed and rejoined) and on broken variants of it.
 // Independent of build/. The snapshot comes from the lead's fixtures (TankSnapshot.encode of the
-// Citadel), so the schema the check pins is the one the game writes.
+// crew of 3, snapshot_crew3.json), so the schema the check pins is the one the game writes.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import * as ec from './e2e_check.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const SNAPSHOT = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'snapshot_citadel.json'), 'utf8'));
+const SNAPSHOT = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'snapshot_crew3.json'), 'utf8'));
 const ge = (event) => ({ type: 'game_event', event });
 const errs = (r) => ec.checkReport(r).errors.join('\n');
 const clone = (v) => JSON.parse(JSON.stringify(v));
@@ -94,8 +94,8 @@ test('a clean drill report passes', () => {
   assert.ok(v.info.snapshotBytes > 100 && v.info.snapshotBytes <= 4096);
 });
 
-test('the fixture snapshot is a valid Citadel snapshot', () => {
-  assert.deepEqual(ec.snapshotErrors(SNAPSHOT, { crew: { tank: 3, riders: 3, rooms: 3 } }), []);
+test('the fixture snapshot is a valid crew-3 snapshot of the landship', () => {
+  assert.deepEqual(ec.snapshotErrors(SNAPSHOT, { crew: { tank: 5, riders: 3, rooms: 5 } }), []);
 });
 
 test('events_by_peer is read when the peers carry no events', () => {
@@ -140,10 +140,12 @@ test('fields that are floats, strings or missing fail the schema', () => {
   assert.equal(ec.eventErrors(whole[2]).length, 0, 'a whole float (JSON) is an int');
 });
 
-test('ranges: a kill of the wrong enemy code, a hit on nothing, a lever off the gearbox', () => {
+test('ranges: a kill of the wrong enemy code, a hit on nothing, a reserved lever or a seat out of range', () => {
   assert.match(ec.eventErrors({ type: 'kill', id: 4, e: 9, by: 0, s: 0 }).join(), /e 9 outside 1\.\.6/);
   assert.match(ec.eventErrors({ type: 'hit', on: 7, id: 0, dmg: 1, sh: 1, b: 0, x: 0 }).join(), /on 7 outside 0\.\.3/);
   assert.match(ec.eventErrors({ type: 'lever', s: 0, lv: 5 }).join(), /lv 5 outside 0\.\.2/);
+  assert.match(ec.eventErrors({ type: 'seat', s: 0, from: 1, to: 7 }).join(), /to 7 outside 1\.\.6/);
+  assert.deepEqual(ec.eventErrors({ type: 'seat', s: 3, from: 5, to: 6 }), []);
   assert.match(ec.eventErrors({ type: 'ram', s: 0, ok: 2, id: 1 }).join(), /ok 2 outside 0\.\.1/);
   assert.match(ec.eventErrors({ type: 'segment', i: 1, sg: 0, st: 1 }).join(), /sg 0 outside 1\.\.7/);
   assert.deepEqual(ec.eventErrors({ type: 'breakdown' }), []);
@@ -245,7 +247,7 @@ test('final snapshots: a float, a missing key, a short row, a wrong crew, an ove
   assert.match(errs(missing), /client1: snapshot: missing gl/);
   const short = report();
   short.peers.client2.final_state.snapshot.r[0].pop();
-  assert.match(errs(short), /client2: snapshot\.r: a row needs 7 columns/);
+  assert.match(errs(short), /client2: snapshot\.r: a row needs 9 columns/);
   const solo = report();
   for (const role of ['host', 'client1', 'client2']) solo.peers[role].final_state.snapshot.r.pop();
   assert.match(errs(solo), /host: snapshot: 2 riders, wanted 3/);

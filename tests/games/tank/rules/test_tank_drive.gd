@@ -64,15 +64,6 @@ func test_the_drive_uses_the_mass_of_the_rider_on_the_diesel() -> void:
 	assert_almost_eq(_driver_v(slow), SpeedModel.steady_state_speed(225.0, 4.0, 118.0, 0.5), 0.15)
 
 
-func test_rotation_puts_the_next_riders_mass_on_the_tracks() -> void:
-	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
-	rig.enter(ADVANCE, 1.0)
-	assert_eq(rig.diesel().engine, TankIds.ENGINE_DIESEL)
-	assert_eq(rig.diesel().peer, 1, "slot 0 drives in stage 1")
-	rig.enter(4, 1.0)
-	assert_eq(rig.diesel().peer, 2, "slot 1 drives in stage 2")
-
-
 func test_the_tank_holds_in_gun_lines_checkpoints_and_the_boss_and_in_a_breakdown() -> void:
 	var rig := TankRulesRig.new(1)
 	for index in [2, 3, 10]:
@@ -384,8 +375,9 @@ func test_when_every_rider_is_afk_nothing_has_power() -> void:
 	assert_true(rig.state.all_afk)
 	assert_eq(rig.hull().speed_mps, 0.0, "no drive")
 	for st in rig.state.stations:
-		assert_true(st.unpowered)
 		assert_eq(st.p_eff_w, 0.0)
+		if not st.is_empty():
+			assert_true(st.unpowered, "%s: a manned seat loses its power" % st.engine)
 	var bank := rig.dynamo().bank
 	rig.run(20.0)
 	assert_eq(rig.dynamo().bank, bank, "the bank is frozen: no charge, no drain")

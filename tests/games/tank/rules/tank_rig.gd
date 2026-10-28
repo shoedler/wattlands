@@ -41,8 +41,8 @@ var compliance: float = 1.0
 ## The dynamo's ERG target follows its bank like the director's pattern 1 does:
 ## 55 + 45 x (1 - bank / 100), clamped to the phase's range (instantly here, not in sub-steps).
 var bank_director: bool = false
-## The breech never opens (nothing loads, nothing fires) and the Bulwark's lever stays where it is
-## (Drive): the main gun is out of the picture (tests of the drive, evade and the bow guns).
+## The breech never opens (nothing loads, nothing fires): the main gun is out of the picture
+## (tests of the drive, evade and the bow guns).
 var no_fire: bool = false
 ## The bow guns never get to a burst (their clock never runs down) and never wear a barricade
 ## down: tests of enemies and obstacles on their own.
@@ -127,10 +127,6 @@ func step() -> Array[Dictionary]:
 			o.bow_s = 0.0
 	if no_fire:
 		state.hull.breech_s = 1.0e6
-		var g := gearbox()
-		if g != null:
-			g.auto = false
-			g.suspend_s = 1.0e9
 	var out := TankRules.step(state, inputs(), Wl.SIM_DT)
 	tick += 1
 	seg_t += Wl.SIM_DT
@@ -287,8 +283,12 @@ func steam() -> TankSteamState:
 	return state.station(TankIds.ENGINE_STEAM) as TankSteamState
 
 
-func gearbox() -> TankGearboxState:
-	return state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
+func arc() -> TankArcState:
+	return state.station(TankIds.ENGINE_ARC) as TankArcState
+
+
+func feed() -> TankFeedState:
+	return state.station(TankIds.ENGINE_FEED) as TankFeedState
 
 
 ## The peer working `engine` right now.

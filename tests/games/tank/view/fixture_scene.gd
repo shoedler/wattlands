@@ -1,7 +1,7 @@
 extends Control
 ## A windowed look at the Tank view and HUD for tools/screenshot --scene (GAME_SDK 19.3): a fixture
-## state (Stage 2 Advance, its gun line or the boss fight) for the Bulwark, Rampart, Citadel or
-## Bastion in a PixelViewport with the real HUD on top (or none), animated by a tiny fake of the rules (the hull drives,
+## state (Stage 2 Advance, its gun line or the boss fight) for a crew of 1 to 4 (v3: one tank) in a
+## PixelViewport with the real HUD on top (or none), animated by a tiny fake of the rules (the hull drives,
 ## enemies keep station, shells fly, the gun fires now and then). Not a test: the view tests build the
 ## same thing headless.
 ## Options (user args or the TANK_FIXTURE environment variable, ";"-separated):
@@ -124,10 +124,6 @@ func _tick() -> void:
 		elif st is TankSteamState:
 			(st as TankSteamState).pressure_pct = fposmod(
 				(st as TankSteamState).pressure_pct + 0.8, 150.0
-			)
-		elif st is TankGearboxState:
-			(st as TankGearboxState).hoist_j = fposmod(
-				(st as TankGearboxState).hoist_j + 14.0, 4000.0
 			)
 	var keep: Array[TankShellState] = []
 	for s in state.shells:

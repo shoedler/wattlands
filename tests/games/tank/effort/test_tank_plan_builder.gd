@@ -1,6 +1,7 @@
 extends GutTest
 ## TankPlanBuilder against brief 2.2, 2.3 and 2.9 (and BRIEF 4.5, 4.6): every crew 1-3 x rotation
-## on / off x FTP {80, 200, 400} x verified / unverified, plus the drill. The expected tables are
+## on / off x FTP {80, 200, 400} x verified / unverified, plus the drill. v3: one tank, every slot
+## on its start seat for the whole plan (rotation is gone; the option changes nothing). The expected tables are
 ## written out from the brief here, never read back from stations.json, so a content edit that
 ## leaves the brief fails these tests.
 
@@ -48,11 +49,11 @@ const ENGINE_TABLE := {
 		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
-	"bulwark":
+	"feed":
 	{
-		"depot": ["SIM", null, null, null, "game"],
-		"advance": ["SIM", null, null, null, "game"],
-		"gun_line": ["ERG", 90.0, null, null, null],
+		"depot": ["SIM", null, null, null, "flat"],
+		"advance": ["SIM", null, null, null, "flat"],
+		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
 }
@@ -73,33 +74,20 @@ const DRILL_TABLE := {
 		"depot": ["SIM", null, null, null, "flat"],
 		"skirmish": ["SIM", null, null, null, "flat"],
 	},
-	"bulwark":
+	"feed":
 	{
-		"depot": ["SIM", null, null, null, "game"],
-		"skirmish": ["SIM", null, null, null, "game"],
+		"depot": ["SIM", null, null, null, "flat"],
+		"skirmish": ["SIM", null, null, null, "flat"],
 	},
 }
 ## Checkpoints: ERG 50% for everyone.
 const CHECKPOINT := ["ERG", 50.0, null, null, null]
-## Brief 2.2: the start engines and the rotation rows (stages 1, 2, 3, boss) per slot.
+## v3: the start seat of each slot (Drive, Gun, Loader, Lights); a crew of n takes the first n.
 const START := {
-	1: ["bulwark"],
+	1: ["diesel"],
 	2: ["diesel", "dynamo"],
 	3: ["diesel", "dynamo", "steam"],
 }
-const ROTATION := {
-	1: [["bulwark", "bulwark", "bulwark", "bulwark"]],
-	2: [["diesel", "dynamo", "diesel", "dynamo"], ["dynamo", "diesel", "dynamo", "diesel"]],
-	3:
-	[
-		["diesel", "dynamo", "steam", "diesel"],
-		["dynamo", "steam", "diesel", "dynamo"],
-		["steam", "diesel", "dynamo", "steam"],
-	],
-}
-## The rotation column of each ashfall segment (-1: the start engine). A checkpoint carries the
-## engine of the segment after it (the crew moves at the checkpoint).
-const COLUMN := [-1, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
 const FTPS := [80.0, 200.0, 400.0]
 
 
@@ -197,8 +185,9 @@ func test_segments_kinds_lengths_labels_meta_and_shared_boundaries() -> void:
 				)
 
 
-## Brief 2.2: each slot's engine per segment, with rotation on and off; the drill ignores it.
-func test_rotation_tables() -> void:
+## v3: each slot's engine per segment is its start seat, with rotation on and off (rotation is
+## gone: seat choice replaces it); the drill ignores the option too.
+func test_every_slot_keeps_its_start_seat() -> void:
 	var c := _content()
 	for crew in [1, 2, 3]:
 		for rotation in [true, false]:
@@ -206,18 +195,15 @@ func test_rotation_tables() -> void:
 			for slot in crew:
 				var plan: EffortPlan = plans[slot + 1]
 				var start: String = START[crew][slot]
-				var row: Array = ROTATION[crew][slot]
 				for i in plan.size():
-					var col := int(COLUMN[i])
-					var want: String = start if col < 0 or not rotation else str(row[col])
 					var at := "crew %d rotation %s slot %d phase %d" % [crew, rotation, slot, i]
-					assert_eq(str(plan.phase(i).meta["engine"]), want, at)
-			# Every room is manned in every segment (one rider per engine).
+					assert_eq(str(plan.phase(i).meta["engine"]), start, at)
+			# One rider per seat in every segment.
 			for i in ASHFALL.size():
 				var seen := {}
 				for slot in crew:
 					seen[str((plans[slot + 1] as EffortPlan).phase(i).meta["engine"])] = true
-				assert_eq(seen.size(), crew, "crew %d phase %d: every room manned" % [crew, i])
+				assert_eq(seen.size(), crew, "crew %d phase %d: one rider per seat" % [crew, i])
 	var d := _content("drill")
 	for crew in [1, 2, 3]:
 		var on := TankPlanBuilder.build_all(d, _slots(crew, 200.0, true), true)

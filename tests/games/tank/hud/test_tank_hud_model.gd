@@ -74,15 +74,15 @@ func test_boss_bars_show_the_fractions_scaled_by_the_tank() -> void:
 	assert_true(b["telegraph"])
 	var small := TankFixtures.boss(1)
 	var def := TankFixtures.content().boss_def()
-	var scale := TankFixtures.content().enemy_scale(TankIds.TANK_BULWARK)
+	var scale := TankFixtures.content().enemy_scale(TankIds.TANK_LANDSHIP)
 	var bogie_max := float(def["bogie_hp"]) * scale
 	var turret_max := float(def["turret_hp"]) * scale
 	small.boss.bogie_hp = [bogie_max, bogie_max * 0.5, 0.0]
 	small.boss.turret_hp = turret_max * 0.5
 	var bb := TankHudModel.boss_bars(small)
-	assert_almost_eq(bb["bogies"][0], 1.0, 1e-6, "the boss HP x the Bulwark's scale")
+	assert_almost_eq(bb["bogies"][0], 1.0, 1e-6, "the boss HP x the tank's scale")
 	assert_almost_eq(bb["bogies"][1], 0.5, 1e-6)
-	assert_almost_eq(bb["turret"], 0.5, 1e-6, "the turret HP x the Bulwark's scale")
+	assert_almost_eq(bb["turret"], 0.5, 1e-6, "the turret HP x the tank's scale")
 
 
 func test_no_boss_bars_before_the_behemoth() -> void:

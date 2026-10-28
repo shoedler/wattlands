@@ -185,10 +185,11 @@ func test_the_boss_segment_and_the_cooldown_backdrops() -> void:
 	var boss := c.segment(10)
 	assert_eq(boss["type"], "boss")
 	assert_eq([int(boss["duration_s"]), int(boss["min_s"]), int(boss["max_s"])], [240, 120, 360])
-	var citadel_stop := float(TankConst.REAR_SCREEN_X) + 288.0 + float(c.boss_def()["stop_px"])
+	var hull_w := float(c.tank_def(TankIds.TANK_LANDSHIP)["hull_px"][0])
+	var stop := float(TankConst.REAR_SCREEN_X) + hull_w + float(c.boss_def()["stop_px"])
 	assert_gt(
 		float(boss["boss"]["start_left_px"]),
-		citadel_stop,
+		stop,
 		"the Behemoth starts past the longest tank's stop line"
 	)
 	assert_gt(float(boss.get("end_hold_s", 0.0)), 0.0, "a death beat before the boss phase ends")
@@ -216,17 +217,17 @@ func test_the_drill_is_130_seconds_inside_warmup_limits() -> void:
 		assert_between(float(pt[1]), 0.0, 2.0)
 
 
-func test_the_citadel_never_meets_more_than_16_enemies_at_once_even_if_none_dies() -> void:
+func test_no_crew_meets_more_than_16_enemies_at_once_even_if_none_dies() -> void:
 	var c := _load("ashfall_road")
 	for s: Dictionary in _segments(c, "advance"):
 		var total := 0
 		for e: Dictionary in s["encounters"]:
-			total += c.scaled_count(int(e["count"]), "citadel")
+			total += c.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
 		assert_lte(total, TankConst.MAX_ENEMIES)
 	for s: Dictionary in _segments(c, "gun_line"):
 		var total := 0
 		for e: Dictionary in s["enemies"]:
-			total += c.scaled_count(int(e["count"]), "citadel")
+			total += c.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
 		assert_lte(total, TankConst.MAX_ENEMIES)
 
 
