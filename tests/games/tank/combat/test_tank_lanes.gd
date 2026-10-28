@@ -98,8 +98,8 @@ func test_a_destroyer_shift_and_a_heavy_back_off_respect_the_lanes() -> void:
 	blocker.hold_px = edge - 60.0
 	blocker.gun_s = 1.0e6
 	d.gun_s = 0.1
-	rig.run(5.0)
-	assert_eq(rig.of_type("shot").size(), 1)
+	rig.run(8.0)
+	assert_eq(rig.of_type("shot").size(), 1, "after its full 7 s glint")
 	_assert_apart(rig, "after the destroyer's shift")
 	var h := rig.spawn(TankIds.ENEMY_HEAVY, 1, 60.0)
 	h.gun_s = 1.0e6

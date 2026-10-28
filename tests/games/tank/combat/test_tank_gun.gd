@@ -1,6 +1,7 @@
 extends GutTest
-## The main turret (brief 2.4 Gun): auto-aim priority and lead, the 0.5 degree rule, manual
-## controls, dispersion, the breech cycle, the shell cap (the bow guns: test_tank_bow.gd).
+## The main turret (brief 2.4 Gun; v3): auto-aim priority and lead, the 0.5 degree rule, manual
+## controls, dispersion, chambering from the rack, the dark gun's reach, the shell cap (the bow
+## guns: test_tank_bow.gd; chambering in detail: test_tank_stations.gd).
 
 const ADVANCE := 1
 const CHECKPOINT := 3
@@ -17,7 +18,7 @@ static func _quiet(index: int) -> Callable:
 ## A rig in a checkpoint: the tank stands still, nothing else is going on, only the gun is under
 ## test.
 func _rig(crew: int = 2, index: int = CHECKPOINT) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, 7, _quiet(index))
+	var rig := TankRulesRig.new(crew, "ashfall_road", 7, _quiet(index))
 	rig.enter(index, 5.0)
 	if rig.dynamo() != null:
 		rig.dynamo().bank = 100.0
@@ -87,7 +88,7 @@ func test_a_target_the_gun_cannot_reach_is_skipped() -> void:
 	var patch := func(files: Dictionary) -> void:
 		_quiet(CHECKPOINT).call(files)
 		files["tanks"]["gun"]["elev_min_deg"] = -2
-	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, patch)
+	var rig := TankRulesRig.new(2, "ashfall_road", 7, patch)
 	rig.enter(CHECKPOINT, 5.0)
 	rig.dynamo().bank = 100.0
 	var close := rig.spawn(TankIds.ENEMY_LIGHT, 1, 10.0)
@@ -160,9 +161,10 @@ func test_the_gun_aims_and_fires_within_half_a_degree_and_hits() -> void:
 	var shot: Dictionary = _gun_shots(rig)[0]
 	assert_eq([shot["s"], shot["sh"]], [_g(rig) - 1, TankIds.SHELL_HEAVY])
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
-	var cycle := rig.content.num("tanks", "steam.breech_cycle_s")
-	assert_between(cycle, 6.0, 9.0, "6 s in the brief, tuned to 7 s (P4 rules ADR), +50% at most")
-	assert_almost_eq(rig.hull().breech_s, cycle, 0.1, "the steam breech cycle")
+	var chamber := rig.content.num("tanks", "steam.chamber_s")
+	assert_eq(chamber, 1.0, "v3: the next round chambers in 1 s")
+	assert_almost_eq(rig.steam().chamber_s, chamber, 0.06, "from the rack")
+	assert_eq(rig.hull().breech_s, 0.0, "no breech cycle in v3")
 	assert_lte(
 		absf(rig.hull().elev_deg - aux.aim_elev), 0.5 + 1e-6, "within 0.5 degrees of the solution"
 	)
@@ -253,6 +255,7 @@ func test_no_second_shot_inside_the_breech_cycle() -> void:
 
 func test_the_elevation_limits_are_minus_12_and_plus_30() -> void:
 	var rig := _rig(2)
+	rig.set_rack(0)
 	rig.power_w[_g(rig)] = 50.0
 	rig.hull().elev_target_deg = 80.0
 	rig.run(6.0)
@@ -264,6 +267,7 @@ func test_the_elevation_limits_are_minus_12_and_plus_30() -> void:
 
 func test_aim_nudges_move_one_degree_and_pause_auto_aim_for_5_seconds() -> void:
 	var rig := _rig(2)
+	rig.set_rack(0)
 	rig.send(_g(rig), {"k": "aim", "d": 1})
 	rig.run(0.05)
 	assert_eq(rig.hull().elev_target_deg, 1.0)
@@ -324,9 +328,11 @@ func test_fire_shoots_the_loaded_shell_at_the_current_elevation() -> void:
 	assert_lt(rig.state.shells[0].vy, -50.0, "rising at 12 degrees")
 
 
+## Lit (crew 4's Lights rider in band); dark it doubles (test_tank_bow.gd).
 func test_the_dispersion_is_half_a_degree_and_widens_to_one_and_a_half_below_a_bank_of_20() -> void:
 	for row: Array in [[100.0, 0.5], [10.0, 1.5]]:
-		var rig := _rig(2)
+		var rig := _rig(4)
+		assert_true(rig.arc().lit)
 		rig.hull().elev_deg = 0.0
 		var widest := 0.0
 		for _i in 300:
@@ -406,3 +412,26 @@ func test_a_traverse_by_hand_pauses_the_auto_aim_so_it_is_not_undone() -> void:
 	rig.run(3.0)
 	assert_eq(rig.hull().facing, TankIds.FACE_LEFT, "turned to the rear and left there")
 	assert_eq(_gun_shots(rig).size(), 0)
+
+
+## v3: dark (no Lights rider in band) the gun sees only the headlight's range, 260 rules px off the
+## hull's front; lit it reaches as far as the solver does.
+func test_the_dark_gun_reaches_only_the_headlights_range() -> void:
+	var rig := _rig(2)
+	var reach := rig.content.num("tanks", "arc.dark_range_px")
+	assert_eq(reach, 260.0)
+	# The screen clamps every held enemy ahead inside about 255 px of the hull's front, so the test
+	# puts one past the headlight by hand (the Behemoth's far parts stand there in play).
+	var far := rig.spawn(TankIds.ENEMY_LIGHT, 1, 200.0)
+	far.gun_s = 999.0
+	far.x_px = rig.hull().x_px + rig.hull().hull_w + 290.0
+	assert_false(TankGun.searchlights_lit(rig.state))
+	assert_null(_aim(rig), "290 px: in the dark")
+	far.x_px = rig.hull().x_px + rig.hull().hull_w + 250.0
+	assert_eq(_aim(rig).id, far.id, "250 px: in the headlight")
+	var lit := _rig(4)
+	var f2 := lit.spawn(TankIds.ENEMY_LIGHT, 1, 200.0)
+	f2.gun_s = 999.0
+	f2.x_px = lit.hull().x_px + lit.hull().hull_w + 290.0
+	assert_true(TankGun.searchlights_lit(lit.state))
+	assert_eq(_aim(lit).id, f2.id, "lit: the full range")

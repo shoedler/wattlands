@@ -105,9 +105,9 @@ func test_stages_2_and_3_end_in_a_heavy_tank_duel_at_the_gun_line() -> void:
 		assert_eq(float(g["min_s"]), 60.0)
 
 
-## The brief's lists, except one medium fewer in stages 2 and 3 (2 -> 1, the -50% bound; ADR "Balance
-## iteration 1") and stage 1's rear light and destroyer (P4 rules ADR): every Advance still has a
-## telegraphed shot and a medium (T6).
+## The brief's lists, except one medium fewer in stages 2 and 3 (2 -> 1, the -50% bound; ADR
+## "Balance iteration 1") and stage 1's rear light and destroyer (P4 rules ADR): every Advance still
+## has a telegraphed shot and a medium (T6).
 func test_the_brief_enemy_lists_per_stage() -> void:
 	var c := _load("ashfall_road")
 	var adv := _segments(c, "advance")
@@ -193,8 +193,10 @@ func test_the_boss_segment_and_the_cooldown_backdrops() -> void:
 		"the Behemoth starts past the longest tank's stop line"
 	)
 	assert_gt(float(boss.get("end_hold_s", 0.0)), 0.0, "a death beat before the boss phase ends")
-	assert_eq(boss["backdrop"], "bg_town_near", "the foundry town")
-	assert_eq(c.mission()["cooldown"]["backdrop_victory"], "bg_town_near")
+	assert_eq(boss["backdrop"], TankIds.BACKDROP_BASE, "v3: the Behemoth's gate at a little base")
+	assert_eq(c.mission()["cooldown"]["backdrop_victory"], TankIds.BACKDROP_BASE)
+	for s: Dictionary in c.segments():
+		assert_has(TankIds.BACKDROPS, str(s["backdrop"]), "v3: the forest, or a little base")
 	assert_true(c.mission()["cooldown"].has("backdrop_withdrawn"))
 
 
@@ -212,7 +214,7 @@ func test_the_drill_is_130_seconds_inside_warmup_limits() -> void:
 	assert_eq(_count(skirmish["encounters"], "light"), 2)
 	assert_eq(_count(skirmish["encounters"], "medium"), 1)
 	assert_false(skirmish.has("min_s"), "fixed length: no objective")
-	assert_false(c.mission_rotates())
+	assert_false(c.mission().has("rotation"), "v3 retired rotation")
 	for pt: Array in skirmish["terrain"]:
 		assert_between(float(pt[1]), 0.0, 2.0)
 
@@ -231,15 +233,15 @@ func test_no_crew_meets_more_than_16_enemies_at_once_even_if_none_dies() -> void
 		assert_lte(total, TankConst.MAX_ENEMIES)
 
 
-func test_each_tank_meets_the_scaled_gun_line() -> void:
-	for crew in [1, 2, 3]:
+## v3: enemy counts by crew size (0.5 / 0.7 / 0.85 / 1.0 per enemy type and segment, at least 1).
+func test_each_crew_meets_its_scaled_gun_line() -> void:
+	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
-		var tank := TankIds.tank_for_crew(crew)
 		for i in 3:
 			var index: int = [2, 5, 8][i]
 			var want := 0
-			for spec: Dictionary in rig.content.segment(index)["enemies"]:
-				want += rig.content.scaled_count(int(spec["count"]), tank)
+			for n in TankEncounters.crew_counts(rig.state, rig.content.segment(index)["enemies"]):
+				want += n
 			rig.enter(index, 0.0)
 			assert_eq(rig.state.gun_line.guns_total, want, "crew %d gun line %d" % [crew, i + 1])
 			assert_eq(rig.state.enemies.size(), want)
@@ -254,3 +256,26 @@ func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_s
 		var far_screen := front_screen + e.hold_px + e.w
 		assert_lte(far_screen, 632.0 + 0.01)
 		assert_gte(e.hold_px, rig.content.num("enemies", "lanes.min_hold_px", 60.0) - 0.01)
+
+
+func test_enemy_counts_scale_by_crew_size_per_type() -> void:
+	var c := TankFixtures.content()
+	assert_eq(c.value("enemies", "crew_count_scale", []), [0.5, 0.7, 0.85, 1.0])
+	var want := {1: 2, 2: 3, 3: 3, 4: 4}
+	for crew: int in want:
+		var rig := TankRulesRig.new(crew)
+		var dug := TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"])
+		# Gun line 2: a heavy (1 for every crew) and four dug-ins in one entry.
+		assert_eq(dug, [1, want[crew]] as Array[int], "crew %d" % crew)
+		var adv := TankEncounters.crew_counts(rig.state, rig.content.segment(1)["encounters"])
+		var lights := 0
+		for k in adv.size():
+			if str(rig.content.segment(1)["encounters"][k]["enemy"]) == TankIds.ENEMY_LIGHT:
+				lights += adv[k]
+		assert_eq(
+			lights, maxi(1, roundi(3 * float(c.value("enemies", "crew_count_scale")[crew - 1])))
+		)
+	var hp := TankRulesRig.new(1)
+	hp.enter(5, 0.0)
+	for e in hp.state.enemies:
+		assert_eq(e.hp_max, float(c.enemy_def(TankIds.enemy_of(e.code))["hp"]), "HP the same")

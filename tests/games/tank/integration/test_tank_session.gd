@@ -85,15 +85,26 @@ func test_a_host_drill_with_two_humans_completes() -> void:
 	assert_eq(group, [0, 1, 2, 3], "the group's phase, the cool-down included")
 
 
-## Zero input (brief 0.4): a solo rider (v3: on Drive) plays Ashfall Road to the results with a mission
-## outcome; every WORK phase ends by end_phase or at max_s (whether the crew wins without an
-## overrun is T1, a G2 balance gate), every other phase by its duration.
+## Zero input (brief 0.4): a solo rider plays Ashfall Road to the results with a mission outcome,
+## seated by the solo loop (v3: every seat move a replan the platform accepts with no warning, the
+## rest of a segment a lap-false phase of its own); every WORK phase ends by end_phase or at max_s
+## (whether the crew wins without an overrun is T1, a balance gate), every other by its duration.
 func test_a_solo_rider_plays_ashfall_road_to_the_results_with_zero_input() -> void:
 	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=1"])
 	assert_eq(r["_end"], "complete")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
 	var hist: Array = r["phases"]["1"]
-	assert_eq(hist.size(), 12, "11 segments and the cool-down")
+	var plan: Array = r["plans"]["1"]["phases"]
+	var laps := 0
+	for ph: Variant in plan:
+		laps += 1 if bool(ph.get("lap", false)) else 0
+	assert_eq(laps, 12, "11 segments and the cool-down are the laps")
+	assert_gt(hist.size(), 12, "the solo loop split segments")
+	assert_eq(r.get("plan_warnings", {}).get("1", []), [], "no switch warning")
+	var seats := _tank_events(r.get("events", [])).filter(
+		func(e: Dictionary) -> bool: return str(e["type"]) == "seat"
+	)
+	assert_gt(seats.size(), 2, "the solo rider moved seats")
 	for ph: Dictionary in hist:
 		var at := "phase %d" % int(ph["index"])
 		if str(ph["kind"]) == Wl.WORK:
@@ -241,7 +252,8 @@ func test_a_host_crew_of_4_plays_ashfall_road_to_the_results_with_zero_input() -
 ## Brief section 4, S10: a client's own `aim` (a key on the client: the up action) reaches the host
 ## over Telemetry.intents, owned by its engine (the drill's dynamo, slot 1), and the host's rules
 ## apply it: the elevation target moves and the auto-aim pauses; the deliberate intent ends that
-## rider's Autopilot fallback. Headless sims cannot press keys, so this is the network proof for aim.
+## rider's Autopilot fallback. Headless sims cannot press keys, so this is the network proof for
+## aim.
 func test_a_clients_aim_intent_is_applied_by_the_host() -> void:
 	var report := _dirs[0].path_join("aim.json")
 	var parsed := GameSimRunner.parse_args(

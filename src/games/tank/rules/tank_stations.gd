@@ -153,8 +153,8 @@ static func _arc(state: TankState, aux: TankAux, st: TankArcState, ri: TankRider
 ## (a heavy shell, the latch event) and, where the rider may sprint (TankDrive.ability_ok), the
 ## "Surge to overpressure" window opens for window_s: an `over` intent in it takes that shell back
 ## to the boiler and overpressures it (_overpressure). The `latch` intent stows a light shell from
-## light_latch_pct. With the rack full the loader idles (`loaded`: no boiler grade, cadence band 50).
-## Pressure holds in checkpoints and the cool-down. An empty Loader seat loads nothing.
+## light_latch_pct. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
+## 50). Pressure holds in checkpoints and the cool-down. An empty Loader seat loads nothing.
 static func _steam(
 	state: TankState,
 	aux: TankAux,
@@ -165,6 +165,7 @@ static func _steam(
 ) -> void:
 	var c := state.content
 	st.cycling = false
+	st.chamber = state.hull.loaded != TankIds.SHELL_NONE
 	st.rack = aux.rack_types.size()
 	st.loaded = st.rack >= TankConst.RACK_MAX and not st.over
 	if ri == null:

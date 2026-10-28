@@ -4,14 +4,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as C from './check_sims.mjs';
 
-const START = { 1: ['bulwark'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
+const START = { 1: ['diesel'], 2: ['diesel', 'dynamo'], 3: ['diesel', 'dynamo', 'steam'], 4: ['diesel', 'dynamo', 'steam', 'arc'] };
 
 function roamPhase(engine, seg, minutes) {
   const minS = minutes * 60 - 300;
   const meta = { engine, mission: `roam_${minutes}`, seg, segment: seg === 'depot' ? 0 : 1, stage: seg === 'depot' ? 0 : 1 };
+  if (seg !== 'depot') meta.seg_min_s = minS;
   const base = seg === 'depot'
     ? { duration_s: 300, kind: 'WARMUP', label: 'TANK_PHASE_DRIVE_OUT', lap: true, meta }
-    : { duration_s: minS, kind: 'WORK', label: 'TANK_PHASE_ROAM', lap: true, meta, open_ended: true, min_s: minS, max_s: minS + 300 };
+    : { duration_s: minS, kind: 'WORK', label: 'TANK_PHASE_ROAM', lap: true, meta, open_ended: true, min_s: 60, max_s: minS + 300 };
   if (engine === 'dynamo') return seg === 'depot' ? { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 } : { ...base, mode: 'ERG', target_pct: 55, range_pct: [55, 85] };
   if (engine === 'arc') return seg === 'depot' ? { ...base, mode: 'ERG', target_pct: 50, ramp_to_pct: 65 } : { ...base, mode: 'ERG', target_pct: 65, range_pct: [65, 80] };
   return { ...base, mode: 'SIM', grade_source: engine === 'steam' ? 'flat' : 'game' };

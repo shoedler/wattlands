@@ -21,9 +21,7 @@ func _errors(files: Dictionary) -> String:
 
 
 func _fresh(crew: int) -> TankState:
-	return TankState.create(
-		TankFixtures.content(), TankFixtures.slots(crew), "ashfall_road", true, null
-	)
+	return TankState.create(TankFixtures.content(), TankFixtures.slots(crew), "ashfall_road", null)
 
 
 func _row(snap: Dictionary, engine: String) -> Array:
@@ -355,13 +353,11 @@ func test_the_content_has_the_one_tank_and_five_seats() -> void:
 	assert_null(c.value("tanks", "gearbox"), "the Bulwark's gearbox block is retired")
 	assert_null(c.value("tanks", "bow.bulwark_rate"))
 	assert_null(c.value("stations", "hoist"), "the Bulwark's hoist pattern is retired")
-	assert_eq(c.value("stations", "rotation"), {}, "no rotation in v3")
+	assert_null(c.value("stations", "rotation"), "no rotation in v3")
 	assert_eq(
 		c.start_engines(TankIds.TANK_LANDSHIP),
 		["diesel", "dynamo", "steam", "arc"] as Array[String]
 	)
-	assert_eq(c.rotation_row(TankIds.TANK_LANDSHIP, 2), ["steam", "steam", "steam", "steam"])
-	assert_eq(c.rotation_row(TankIds.TANK_LANDSHIP, 4), ["", "", "", ""])
 	for table: String in ["plans", "drill_plans", "roam_plans"]:
 		for e: String in TankIds.ENGINES:
 			assert_true((c.value("stations", table) as Dictionary).has(e), "%s.%s" % [table, e])
@@ -395,7 +391,7 @@ func test_the_schema_rejects_a_broken_landship_or_seats() -> void:
 		[["tanks", "tanks", "landship", "geometry"], null, "landship geometry: expected obj"],
 		[["stations", "start_engines", "landship"], ["diesel", "dynamo"], "one seat per slot"],
 		[["stations", "start_engines", "landship"], ["diesel", "x", "steam", "arc"], "distinct"],
-		[["stations", "rotation", "bastion"], [], "rotation.bastion: not a tank"],
+		[["stations", "rotation"], {}, "rotation: retired in v3"],
 		[["stations", "plans", "feed"], null, "plans.feed: missing"],
 	]
 	for case: Array in cases:
@@ -426,13 +422,19 @@ func test_the_v3_strings_exist_and_the_retired_ones_are_gone() -> void:
 		"TANK_STAT_FEED_S",
 		"TANK_HUD_ENG_FEED",
 		"TANK_HUD_JOB_FEED",
+		"TANK_TOAST_SEAT",
 	]:
 		assert_true(keys.has(k), k)
 	for e: String in TankIds.SEATS:
 		assert_true(keys.has(TankIds.SEAT_LABELS[e]), e)
 		assert_true(keys.has(TankIds.ENGINE_LABELS[e]), e)
 	for k: String in [
-		"TANK_TANK_BULWARK", "TANK_TANK_BASTION", "TANK_ENGINE_BULWARK", "TANK_LEVER_DRIVE"
+		"TANK_TANK_BULWARK",
+		"TANK_TANK_BASTION",
+		"TANK_ENGINE_BULWARK",
+		"TANK_LEVER_DRIVE",
+		"TANK_TOAST_ROTATION",
+		"TANK_CARD_HOIST"
 	]:
 		assert_false(keys.has(k), "retired: " + k)
 

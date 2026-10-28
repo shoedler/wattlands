@@ -31,6 +31,9 @@ class Directives:
 	var ended: Array = []
 	## [[peer, EffortPlan]]
 	var replans: Array = []
+	## (v3) The PhaseClock that follows these directives, if any: it validates every replan like
+	## the DirectiveRouter (spliced, PlanValidator) and swaps the plan in at the next phase change.
+	var clock: PhaseClock = null
 
 	func request(peer: int, directive: EffortDirective) -> DirectiveResult:
 		requests.append([peer, directive.to_dict()])
@@ -49,7 +52,7 @@ class Directives:
 
 	func replan(peer: int, plan: EffortPlan) -> bool:
 		replans.append([peer, plan])
-		return true
+		return clock.replan(peer, plan) if clock != null else true
 
 
 class Hud:
@@ -96,10 +99,17 @@ class PhaseClock:
 	## peer -> [index, start_t, prev_ended_by]
 	var _at: Dictionary = {}
 	var _seen: int = 0
+	## (v3) peer -> the finalized plan a replan put in, swapped in at the next phase change.
+	var pending: Dictionary = {}
+	## (v3) Every replan: {t, peer, index, ok, errors, warnings, plan (the whole finalized plan)}.
+	var replan_log: Array = []
+	var _t: float = 0.0
 
 	func _init(p_plans: Dictionary, p_dirs: Directives) -> void:
 		plans = p_plans
 		dirs = p_dirs
+		if dirs != null:
+			dirs.clock = self
 		for peer: int in plans:
 			_at[peer] = [0, 0.0, ""]
 			changes.append({"t": 0.0, "peer": peer, "index": 0, "ended_by": ""})
@@ -107,6 +117,7 @@ class PhaseClock:
 	## Applies the end_phase calls made since the last call, then the platform's own ends, so
 	## phase() is right at game time `t` (the start of the tick about to be stepped).
 	func advance(t: float) -> void:
+		_t = t
 		var peers: Array = []
 		while _seen < dirs.ended.size():
 			peers.append(int(dirs.ended[_seen]))
@@ -128,7 +139,12 @@ class PhaseClock:
 		var at: Array = _at[peers[0]]
 		var ph := (plans[peers[0]] as EffortPlan).phase(int(at[0]))
 		var elapsed := t - float(at[1])
-		var refused := not ph.open_ended or elapsed + 1e-6 < ph.min_s
+		var refused := false
+		for peer: int in peers:
+			var pa: Array = _at[peer]
+			var pp := (plans[peer] as EffortPlan).phase(int(pa[0]))
+			if not pp.open_ended or t - float(pa[1]) + 1e-6 < pp.min_s:
+				refused = true
 		var batch := {
 			"t": t,
 			"index": int(at[0]),
@@ -138,11 +154,41 @@ class PhaseClock:
 			"refused": refused
 		}
 		batches.append(batch)
-		if not refused:
-			for peer: int in peers:
+		for peer: int in peers:
+			var pa: Array = _at[peer]
+			var pp := (plans[peer] as EffortPlan).phase(int(pa[0]))
+			if pp.open_ended and t - float(pa[1]) + 1e-6 >= pp.min_s:
 				_next(peer, t, Wl.ENDED_END_PHASE)
 
+	## (v3) A replan as the DirectiveRouter takes it: phases up to the rider's current one kept,
+	## `plan` after them, validated whole; accepted, it is swapped in at the next phase change.
+	func replan(peer: int, plan: EffortPlan) -> bool:
+		if not _at.has(peer) or plan == null:
+			return false
+		var index := int(_at[peer][0])
+		var whole := PlanValidator.spliced(plans[peer], index, plan)
+		var res := PlanValidator.validate(whole)
+		var entry := {
+			"t": _t,
+			"peer": peer,
+			"index": index,
+			"ok": bool(res["ok"]),
+			"errors": res["errors"],
+			"warnings": res["warnings"],
+			"plan": null
+		}
+		replan_log.append(entry)
+		if not bool(res["ok"]):
+			return false
+		var fin := PlanValidator.finalize(whole)
+		entry["plan"] = fin
+		pending[peer] = fin
+		return true
+
 	func _next(peer: int, t: float, ended_by: String) -> void:
+		if pending.has(peer):
+			plans[peer] = pending[peer]
+			pending.erase(peer)
 		var index := int(_at[peer][0]) + 1
 		_at[peer] = [index, t, ended_by]
 		changes.append({"t": t, "peer": peer, "index": index, "ended_by": ended_by})

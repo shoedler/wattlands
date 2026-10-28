@@ -7,8 +7,8 @@ extends GutTest
 ##     set_target_power, set_simulation, set_resistance and the rest of GAME_SDK 21's list);
 ##   - rules/, effort/ and combat/ (and the other host-side folders) use no clock, no global RNG,
 ##     no RandomNumberGenerator.new() and draw only from an rng object;
-##   - ctx.directives is used only by the effort director, and only for the four calls Tank makes
-##     (request, course_grade, cadence_band, end_phase: never replan);
+##   - ctx.directives is used only by the effort director, and only for the five calls Tank makes
+##     (request, course_grade, cadence_band, end_phase and, v3, replan for a seat switch);
 ##   - the scanner itself is proven on bad snippets, so a green run cannot be a dead regex.
 
 const GAME_DIR := "res://src/games/tank"
@@ -39,8 +39,11 @@ const HOST_DIRS: Array[String] = [
 ]
 ## Folders that must stay free of the scene tree, input and presentation.
 const PURE_DIRS: Array[String] = ["rules", "combat"]
-## The ctx.directives calls Tank makes (brief 2.3: requests, course grade, cadence band, end_phase).
-const DIRECTIVE_CALLS: Array[String] = ["request", "course_grade", "cadence_band", "end_phase"]
+## The ctx.directives calls Tank makes (brief 2.3: requests, course grade, cadence band, end_phase;
+## v3: replan, each seat switch).
+const DIRECTIVE_CALLS: Array[String] = [
+	"request", "course_grade", "cadence_band", "end_phase", "replan"
+]
 const CLOCKS := (
 	"\\bTime\\b|\\bOS\\s*\\.\\s*(get_ticks|get_unix_time|get_system_time|delay_)"
 	+ "|\\bEngine\\s*\\.\\s*get_(frames|process_frames|physics_frames)"
@@ -253,7 +256,11 @@ func test_only_the_effort_director_uses_ctx_directives_and_only_the_four_calls()
 			seen[m.get_string(1)] = path
 	for call: String in seen:
 		assert_has(DIRECTIVE_CALLS, call, "Tank calls directives.%s (%s)" % [call, seen[call]])
-	assert_does_not_have(seen, "replan", "Tank calls no replan (plans cover the whole session)")
+	assert_eq(
+		str(seen.get("replan", "")),
+		GAME_DIR + "/effort/tank_director.gd",
+		"v3: only the director replans (a seat switch)"
+	)
 
 
 func test_effort_rules_and_combat_use_no_wall_clock_and_no_global_randomness() -> void:

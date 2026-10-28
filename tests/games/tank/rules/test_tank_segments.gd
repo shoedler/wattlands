@@ -87,11 +87,12 @@ func test_nobody_moves_at_the_checkpoint() -> void:
 	assert_true(rig.state.station("feed").is_empty())
 
 
-func test_rotation_off_never_moves_anyone() -> void:
-	var rig := TankRulesRig.new(3, "ashfall_road", false)
+func test_segment_boundaries_never_move_anyone() -> void:
+	var rig := TankRulesRig.new(3, "ashfall_road")
 	for index in [ADVANCE, CHECKPOINT, STAGE2_ADVANCE, BOSS]:
 		rig.enter(index, 1.0)
 	assert_eq(rig.of_type("rotation").size(), 0)
+	assert_eq(rig.of_type("seat").size(), 0)
 	assert_eq(rig.rider(1).engine, "diesel")
 
 
@@ -102,7 +103,6 @@ func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
 	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
-		true,
 		7,
 		_patch(ADVANCE, {"encounters": [], "obstacles": [], "terrain": [[0, -3]], "length_m": 150})
 	)

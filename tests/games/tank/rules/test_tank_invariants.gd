@@ -1,7 +1,7 @@
 extends GutTest
 ## A fuzz of whole sessions: random intents from every rider, random power, cadence, rescue and AFK
 ## flips, every tick checked against the state's invariants (no NaN, bounds, caps, unique ids,
-## steam rules). Seeded, so a failure repeats.
+## the Loader's rack and Overpressure, seats). Seeded, so a failure repeats.
 
 const KINDS := ["seat", "aim", "target", "traverse", "fire", "latch", "over"]
 const TO := ["next", "prev", "diesel", "dynamo", "steam", "arc", "feed"]
@@ -53,8 +53,10 @@ func _check(rig: TankRulesRig, label: String) -> void:
 		elif st is TankSteamState:
 			var sm := st as TankSteamState
 			assert_between(sm.pressure_pct, 0.0, 150.0, "%s pressure" % label)
-			if s.hull.loaded != TankIds.SHELL_NONE or s.hull.breech_s > 0.0:
-				assert_eq(sm.pressure_pct, 0.0, "%s: no pressure while loaded or cycling" % label)
+			if not sm.over:
+				assert_lte(sm.pressure_pct, 100.0, "%s: over 100%% only in Overpressure" % label)
+			assert_eq(sm.chamber, s.hull.loaded != TankIds.SHELL_NONE, "%s chamber" % label)
+			assert_eq(sm.rack, TankAux.of(s).rack_types.size(), "%s rack types" % label)
 			assert_false(
 				sm.over and sm.window_s > 0.0, "%s: over and window exclude each other" % label
 			)
@@ -72,7 +74,7 @@ func _check(rig: TankRulesRig, label: String) -> void:
 
 
 func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, rng_seed)
+	var rig := TankRulesRig.new(crew, "ashfall_road", rng_seed)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed * 7919
 	rig.auto_phase = true

@@ -319,7 +319,8 @@ func test_int_fields_declare_the_snapshot_and_every_event_type() -> void:
 func _sample_events() -> Array[Dictionary]:
 	return [
 		TankEvents.segment(4, TankIds.SEG_ADVANCE, 2),
-		TankEvents.rotation([[0, "dynamo"], [1, "steam"], [2, "diesel"]]),
+		{"type": TankEvents.ROTATION, "r": [[0, 2], [1, 3], [2, 1]]},
+		TankEvents.seat(1, TankIds.ENGINE_STEAM, TankIds.ENGINE_FEED),
 		TankEvents.shot(1, TankIds.SHELL_HEAVY, 41, 0, 0),
 		TankEvents.shot(-1, TankIds.SHELL_ENEMY, 42, 12, 2),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 11.6, TankIds.SHELL_ENEMY, 3.2, 3400.4),

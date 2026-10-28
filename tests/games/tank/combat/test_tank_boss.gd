@@ -125,7 +125,8 @@ func test_killing_the_turret_kills_the_behemoth() -> void:
 
 
 func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
-	var rig := _rig(1, true)
+	# Crew 4: the Lights seat lights the searchlights, so the gun sees the whole Behemoth.
+	var rig := _rig(4, true)
 	rig.run(100.0)
 	var aux := TankAux.of(rig.state)
 	var order: Array[int] = []
@@ -151,7 +152,7 @@ func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
 	)
 
 
-func test_the_main_gun_fires_every_35_to_45_seconds_after_a_6_second_telegraph() -> void:
+func test_the_main_gun_fires_every_35_to_45_seconds_after_an_8_second_telegraph() -> void:
 	var rig := _rig(2)
 	rig.hull().hp = 100000.0
 	rig.hull().hp_max = 100000.0
@@ -170,8 +171,8 @@ func test_the_main_gun_fires_every_35_to_45_seconds_after_a_6_second_telegraph()
 	assert_gte(shots.size(), 2, "two shots in 110 s")
 	assert_between(shots[0], 35.0, 46.0)
 	assert_between(shots[1] - shots[0], 35.0, 45.5)
-	assert_almost_eq(telegraphs.max(), 6.0, 0.1, "the telegraph shows for 6 s")
-	assert_lte(telegraphs[0], 6.0)
+	assert_almost_eq(telegraphs.max(), 8.0, 0.1, "the telegraph shows for 8 s (v3)")
+	assert_lte(telegraphs[0], 8.0)
 
 
 func test_in_phase_2_the_main_gun_comes_every_25_to_35_seconds() -> void:
@@ -220,7 +221,7 @@ func test_the_main_gun_hits_for_20_and_raises_the_boss_hit_event() -> void:
 	var tries := 0
 	while not hit_seen and tries < 12:
 		tries += 1
-		var r2 := TankRulesRig.new(2, "ashfall_road", true, 100 + tries)
+		var r2 := TankRulesRig.new(2, "ashfall_road", 100 + tries)
 		r2.enter(BOSS, 1.0)
 		r2.state.boss.main_s = 0.06
 		for _i in 400:
@@ -285,7 +286,7 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 	var hits := 0
 	for s in 30:
-		var rig := TankRulesRig.new(2, "ashfall_road", true, 200 + s)
+		var rig := TankRulesRig.new(2, "ashfall_road", 200 + s)
 		rig.enter(BOSS, 1.0)
 		rig.hull().hp = 100000.0
 		rig.hull().hp_max = 100000.0
