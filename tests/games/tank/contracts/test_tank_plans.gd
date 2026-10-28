@@ -43,7 +43,7 @@ func _content(mission: String = "ashfall_road") -> TankContent:
 ## and at its max_s (brief 2.3, BRIEF 4.5).
 func test_every_plan_passes_the_validator_with_switches_60_s_apart() -> void:
 	for content_id: String in F.manifest()["contents"]:
-		for crew in [1, 2, 3]:
+		for crew in [1, 2, 3, 4]:
 			for rotation in [true, false]:
 				var plans := _plans(content_id, crew, rotation)
 				for peer: int in plans:
@@ -149,7 +149,7 @@ func test_the_drill_switches_mode_at_most_once_and_ends_at_130_s() -> void:
 				assert_eq(plan.phase(1).effective_range(), [55.0, 65.0], at)
 
 
-## The power band is the tempo band only for the diesel and the Bulwark in WORK SIM phases; every
+## The power band is the tempo band only for the diesel in WORK SIM phases; every
 ## WARMUP (the depot, the drill's depot and skirmish), RECOVERY (checkpoints) and ERG phase, and
 ## the steam engine, clear it.
 func test_power_bands_are_cleared_outside_work_sim_drivers() -> void:
@@ -163,7 +163,7 @@ func test_power_bands_are_cleared_outside_work_sim_drivers() -> void:
 					var ph := plan.phase(i)
 					var pb := TankDirector.power_band_pct(c, ph)
 					var at := "%s crew %d peer %d phase %d" % [mission, crew, peer, i]
-					var drives := ["diesel", "bulwark"].has(str(ph.meta["engine"]))
+					var drives := str(ph.meta["engine"]) == "diesel"
 					if ph.kind == Wl.WORK and ph.mode == Wl.SIM and drives:
 						assert_eq(pb, [76.0, 105.0] as Array[float], at)
 					else:
@@ -228,10 +228,6 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "boiler.warmup_grade_pct", 3.5, "boiler.warmup_grade_pct: must be <="],
 		["stations", "boiler.max_rise_pct", 1.0, "boiler.max_rise_pct"],
 		["stations", "boiler.min_interval_s", 0.5, "boiler.min_interval_s"],
-		["stations", "hoist.grade_pct", 4.5, "hoist.grade_pct: must be <= 4"],
-		["stations", "hoist.warmup_grade_pct", 1.5, "hoist.warmup_grade_pct: must be <="],
-		["stations", "hoist.rise_pct_s", 2.0, "hoist.rise_pct_s"],
-		["stations", "hoist.step_s", 0, "hoist.step_s"],
 		["stations", "terrain.warmup_grade_pct.1", 2.5, "terrain.warmup_grade_pct.1"],
 		["stations", "terrain.warmup_grade_pct.0", -1.0, "terrain.warmup_grade_pct.0"],
 		["stations", "terrain.send_every_s", 0.25, "terrain.send_every_s"],
@@ -248,8 +244,6 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "bank.substeps", 1, "bank.max_step_pts / bank.substeps"],
 		["stations", "bank.substeps", 2, "bank.max_step_pts / bank.substeps"],
 		["stations", "bank.max_step_pts", 12, "bank.max_step_pts / bank.substeps"],
-		["stations", "hoist.step_s", 4, "hoist.rise_pct_s x hoist.step_s"],
-		["stations", "hoist.step_s", 2, "hoist.rise_pct_s x hoist.step_s"],
 		["stations", "bank.base_pct", 45, "bank.base_pct"],
 		["stations", "bank.span_pct", 50, "base_pct + span_pct"],
 		["stations", "bank.clamp_to_range", false, "bank.clamp_to_range"],
@@ -262,22 +256,23 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 		["stations", "drill_plans.diesel.skirmish", null, "drill_plans.diesel.skirmish: missing"],
 		[
 			"stations",
-			"rotation.citadel.0",
-			["dynamo", "dynamo", "steam", "diesel"],
-			"rotation.citadel[0]: stage 1"
+			"rotation.landship",
+			_rows(0, ["dynamo", "dynamo", "steam", "diesel"]),
+			"rotation.landship[0]: stage 1"
 		],
 		[
 			"stations",
-			"rotation.rampart.1",
-			["dynamo", "bulwark", "dynamo", "diesel"],
+			"rotation.landship",
+			_rows(1, ["dynamo", "bulwark", "dynamo", "dynamo"]),
 			"bulwark is not one of the tank's engines"
 		],
 		[
 			"stations",
-			"rotation.rampart.1",
-			["dynamo", "diesel", "diesel", "diesel"],
-			"rotation.rampart column 3"
+			"rotation.landship",
+			_rows(1, ["dynamo", "diesel", "dynamo", "dynamo"]),
+			"rotation.landship column 2"
 		],
+		["stations", "start_engines.landship", ["diesel", "dynamo", "dynamo", "arc"], "distinct"],
 		["tanks", "in_band.sim_ftp_pct", [76, 110], "in_band.sim_ftp_pct: must lie in 50..105"],
 		["mission", "segments.2.max_s", 200, "segments[2] max_s: a 90% gun line"],
 		["mission", "segments.1.terrain.2", [300, 7], "segments[1] terrain: grade"],
@@ -292,22 +287,13 @@ func test_the_validators_hold_the_safety_envelope() -> void:
 
 
 ## A number past its bound in the mission and stations together (validate_cross): a gun line
-## stretched past 180 s at ERG 90%, start engines that aren't the tank's rooms.
+## stretched past 180 s at ERG 90%, a mission segment type the plan table lacks. (v3: the start
+## seats are checked in validate_stations: four distinct known seats, in any order.)
 func test_the_cross_file_checks_name_what_is_wrong() -> void:
-	var f := TankContent.read_files("ashfall_road")
-	f["stations"]["start_engines"]["rampart"] = ["diesel", "steam"]
-	f["stations"]["rotation"]["rampart"] = [
-		["diesel", "steam", "diesel", "steam"], ["steam", "diesel", "steam", "diesel"]
-	]
-	var c := TankContent.from_dicts(f, "ashfall_road")
-	assert_string_contains("\n".join(c.errors), "start_engines.rampart: must be tanks.json")
 	var order := TankContent.read_files("ashfall_road")
-	order["stations"]["start_engines"]["rampart"] = ["dynamo", "diesel"]
-	order["stations"]["rotation"]["rampart"] = [
-		["dynamo", "diesel", "dynamo", "diesel"], ["diesel", "dynamo", "diesel", "dynamo"]
-	]
+	order["stations"]["start_engines"]["landship"] = ["dynamo", "diesel", "feed", "steam"]
 	var ok := TankContent.from_dicts(order, "ashfall_road")
-	assert_eq(ok.errors, [] as Array[String], "v2: slots may start in any order of the rooms")
+	assert_eq(ok.errors, [] as Array[String], "slots may start on any seats of the tank")
 	var g := TankContent.read_files("drill")
 	g["mission"]["segments"][1]["type"] = "advance"
 	g["mission"]["segments"][1]["kind"] = "WORK"
@@ -315,6 +301,16 @@ func test_the_cross_file_checks_name_what_is_wrong() -> void:
 	g["mission"]["segments"][1]["max_s"] = 70
 	var d := TankContent.from_dicts(g, "drill")
 	assert_string_contains("\n".join(d.errors), "advance is not in stations.json drill_plans")
+
+
+## v3 rotation rows for the landship's four start seats, every slot on its own seat, with row
+## `slot` replaced by `row` (the schema still checks rows where a tank has them).
+func _rows(slot: int, row: Array) -> Array:
+	var out: Array = []
+	for e: String in ["diesel", "dynamo", "steam", "arc"]:
+		out.append([e, e, e, e])
+	out[slot] = row
+	return out
 
 
 ## Sets a dotted path (numeric parts index arrays); null erases the key.

@@ -13,7 +13,8 @@ extends RefCounted
 ##                   80% FTP, and seconds from the fight's end until it is back at <= 65% (T2)
 ##   shells          per steam shell: the seconds from "ready to build" to the latch (the 5 s
 ##                   window included) and the seconds at boiler grade 0 until the next build (T3)
-##   drive_share     per Advance, the Bulwark's share of time with the lever on Drive (T4)
+##   drive_share     per Advance, the Bulwark's share of time with the lever on Drive (T4); v3
+##                   retired the gearbox, so it stays empty until the v3 rules builder retunes T4
 ##   arc             per fight phase of the arc rider (crew 4): seconds with the applied ERG target
 ##                   above 72% FTP and its largest value (T7)
 ##   telegraphs      per Advance: telegraphed shots (evade events) and mediums seen (T6)
@@ -285,15 +286,6 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 				and int(e.get("e", 0)) == TankIds.enemy_code(TankIds.ENEMY_MEDIUM)
 			):
 				trec["mediums"] = int(trec["mediums"]) + 1
-	var gb := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	if gb != null and sg.seg == TankIds.SEG_ADVANCE:
-		var key := sg.phase_index
-		if not _drive.has(key):
-			_drive[key] = {"index": key, "stage": sg.stage, "ticks": 0, "drive_ticks": 0}
-		var d: Dictionary = _drive[key]
-		d["ticks"] = int(d["ticks"]) + 1
-		if gb.lever == TankIds.LEVER_DRIVE:
-			d["drive_ticks"] = int(d["drive_ticks"]) + 1
 
 
 func _result(end_t: float) -> Dictionary:

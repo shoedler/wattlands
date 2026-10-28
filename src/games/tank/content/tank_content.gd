@@ -184,7 +184,8 @@ func engines_of(tank: String) -> Array[String]:
 	return out
 
 
-## Starting engine by slot (stations.json start_engines).
+## Starting engine by slot (stations.json start_engines; v3: the seat of each slot, a crew of n
+## takes the first n).
 func start_engines(tank: String) -> Array[String]:
 	var out: Array[String] = []
 	for e: Variant in (data["stations"].get("start_engines", {}) as Dictionary).get(tank, []):
@@ -193,7 +194,8 @@ func start_engines(tank: String) -> Array[String]:
 
 
 ## The engines of `slot` for stages 1, 2, 3 and the boss with rotation on (stations.json
-## rotation; the Bulwark always "bulwark").
+## rotation; v3 has no rows, so every slot keeps its start seat: the start engine x4, "" x4 for a
+## slot past the start list).
 func rotation_row(tank: String, slot: int) -> Array[String]:
 	var out: Array[String] = []
 	var rows: Array = (data["stations"].get("rotation", {}) as Dictionary).get(tank, [])
@@ -202,7 +204,7 @@ func rotation_row(tank: String, slot: int) -> Array[String]:
 			out.append(str(e))
 	else:
 		var start := start_engines(tank)
-		var e: String = start[slot] if slot >= 0 and slot < start.size() else TankIds.ENGINE_BULWARK
+		var e: String = start[slot] if slot >= 0 and slot < start.size() else ""
 		for _i in 4:
 			out.append(e)
 	return out

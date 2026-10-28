@@ -198,8 +198,9 @@ func test_the_road_stops_at_the_turning_place() -> void:
 
 func test_only_the_driver_owns_the_turn() -> void:
 	assert_true(TankIntents.owned(TankIds.INTENT_TURN, TankIds.ENGINE_DIESEL))
-	assert_true(TankIntents.owned(TankIds.INTENT_TURN, TankIds.ENGINE_BULWARK))
-	for e: String in [TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM, TankIds.ENGINE_ARC]:
+	for e: String in [
+		TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED
+	]:
 		assert_false(TankIntents.owned(TankIds.INTENT_TURN, e), e)
 	assert_true(TankIntents.is_deliberate(TankIntents.normalize({"k": "turn"})))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize(TankIntents.auto("turn"))))

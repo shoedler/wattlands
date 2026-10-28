@@ -85,10 +85,10 @@ func test_a_host_drill_with_two_humans_completes() -> void:
 	assert_eq(group, [0, 1, 2, 3], "the group's phase, the cool-down included")
 
 
-## Zero input (brief 0.4): a solo Bulwark plays Ashfall Road to the results with a mission
+## Zero input (brief 0.4): a solo rider (v3: on Drive) plays Ashfall Road to the results with a mission
 ## outcome; every WORK phase ends by end_phase or at max_s (whether the crew wins without an
 ## overrun is T1, a G2 balance gate), every other phase by its duration.
-func test_a_solo_bulwark_plays_ashfall_road_to_the_results_with_zero_input() -> void:
+func test_a_solo_rider_plays_ashfall_road_to_the_results_with_zero_input() -> void:
 	var r := _run(["--content=ashfall_road", "--players=1", "--rider=erg", "--seed=1"])
 	assert_eq(r["_end"], "complete")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
@@ -205,10 +205,10 @@ func test_the_solo_ashfall_road_keeps_its_snapshots_small_and_its_segments_in_or
 	assert_true(FileAccess.file_exists(str((r["fit_paths"] as Array)[0])), "the ride was written")
 
 
-## Four riders (brief 2.2, 2.5): the Bastion plays the drill as a host with three loopback clients
-## to the results, every peer's last snapshot carries 4 riders and 4 rooms within 4 KB, and the
+## Four riders (brief 2.2, 2.5): a crew of 4 plays the drill as a host with three loopback clients
+## to the results, every peer's last snapshot carries 4 riders and 5 rooms within 4 KB, and the
 ## drill stays inside the warm-up limits (no ERG above 65%, nothing refused).
-func test_a_host_drill_with_four_humans_completes_as_the_bastion() -> void:
+func test_a_host_drill_with_four_humans_completes() -> void:
 	var r := _run(["--content=drill", "--players=4", "--rider=erg", "--seed=4"])
 	assert_eq(r["_end"], "complete")
 	assert_eq(r.get("finished_reason"), TankIds.OUTCOME_COMPLETE)
@@ -223,9 +223,9 @@ func test_a_host_drill_with_four_humans_completes_as_the_bastion() -> void:
 				assert_lte(float(row["applied_pct"]), 65.0 + 0.6, "warm-up ERG, peer %s" % peer)
 
 
-## Zero input with four riders: the Bastion plays Ashfall Road to the results (a mission outcome),
+## Zero input with four riders: the crew of 4 plays Ashfall Road to the results (a mission outcome),
 ## every WORK phase ending by end_phase or at max_s.
-func test_a_host_bastion_plays_ashfall_road_to_the_results_with_zero_input() -> void:
+func test_a_host_crew_of_4_plays_ashfall_road_to_the_results_with_zero_input() -> void:
 	var r := _run(["--content=ashfall_road", "--players=4", "--rider=erg", "--seed=1"])
 	assert_eq(r["_end"], "complete")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))

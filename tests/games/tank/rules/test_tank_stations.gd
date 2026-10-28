@@ -1,6 +1,6 @@
 extends GutTest
-## The engine rooms (brief 2.4 Dynamo, Steam, Bulwark gearbox): the capacitor bank, the boiler and
-## the three-way gearbox with its auto-lever.
+## The engine rooms (brief 2.4 Dynamo, Steam): the capacitor bank, the gunner's hoist and the
+## boiler. (v3 retired the Bulwark's three-way gearbox and its tests.)
 
 const DEPOT := 0
 const ADVANCE := 1
@@ -54,6 +54,8 @@ func test_the_bank_does_not_charge_out_of_band_or_on_reserve() -> void:
 func test_the_stabilizer_drains_1_5_units_a_second_while_an_enemy_is_in_range() -> void:
 	var rig := _quiet(2)
 	rig.no_fire = true
+	# The medium's hold is clamped to the screen, inside the bow guns' 220 px on the v3 hull.
+	rig.no_bow = true
 	var dy := rig.dynamo()
 	dy.bank = 60.0
 	rig.power_w[2] = 50.0
@@ -121,13 +123,14 @@ func test_a_traverse_costs_15_units_and_takes_2_5_s_at_a_full_bank_8_s_at_empty(
 	assert_almost_eq(mid.hull().traverse_s, 5.25 - 0.05, 0.06, "linear between 0 and 50 units")
 
 
-func test_the_rampart_hoist_time_follows_the_bank_and_it_costs_25() -> void:
+func test_the_gunner_hoist_time_follows_the_bank_and_it_costs_25() -> void:
 	var hs: Array = _quiet(2).content.value("tanks", "dynamo.hoist_s", [20, 10])
 	assert_between(float(hs[1]), 5.0, 15.0, "10 s in the brief, +-50%")
 	assert_between(float(hs[0]), 10.0, 30.0, "20 s in the brief, +-50%")
 	var mid := (float(hs[0]) + float(hs[1])) / 2.0
 	for row: Array in [[100.0, hs[1]], [50.0, hs[1]], [0.0, hs[0]], [25.0, mid]]:
 		var rig := _quiet(2)
+		rig.no_bow = true
 		rig.power_w[2] = 50.0
 		rig.spawn(TankIds.ENEMY_MEDIUM, 1, 300.0)
 		rig.dynamo().bank = float(row[0])
@@ -196,7 +199,7 @@ func test_rescue_stalls_the_dynamo_the_turret_freezes_and_the_bank_holds() -> vo
 	assert_false(dy.stalled)
 
 
-func test_the_citadel_secondaries_cost_2_units_and_stop_below_10() -> void:
+func test_the_bow_guns_on_the_bank_cost_2_units_and_stop_below_10() -> void:
 	var rig := _quiet(3)
 	rig.no_fire = false
 	rig.power_w[2] = 50.0
@@ -440,261 +443,3 @@ func test_steam_on_reserve_builds_at_60_watts_and_all_afk_freezes_it() -> void:
 	var p := st.pressure_pct
 	rig.run(5.0)
 	assert_eq(st.pressure_pct, p, "every rider AFK: the pressure freezes")
-
-
-# --- Bulwark gearbox -------------------------------------------------------------------------------
-
-
-func _bulwark(index: int = ADVANCE, into_s: float = 5.0) -> TankRulesRig:
-	var rig := _quiet(1, index, into_s)
-	var g := rig.gearbox()
-	g.auto = false
-	g.suspend_s = 1.0e9
-	return rig
-
-
-## Moves the lever by hand to `to` ("hoist", "turret", "drive") and keeps the auto-lever off.
-func _lever(rig: TankRulesRig, to: String) -> void:
-	rig.send(1, {"k": "lever", "to": to})
-	rig.run(1.2)
-	rig.gearbox().auto = false
-	rig.gearbox().suspend_s = 1.0e9
-
-
-func test_a_lever_move_takes_1_s_with_no_power_anywhere() -> void:
-	var rig := _bulwark()
-	var g := rig.gearbox()
-	rig.send(1, {"k": "lever", "to": "hoist"})
-	rig.run(0.1)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE, "still on Drive while it moves")
-	assert_eq(g.lever_to, TankIds.LEVER_HOIST)
-	assert_almost_eq(g.move_s, 0.95, 0.06)
-	assert_eq(g.p_eff_w, 0.0, "no power during a move")
-	var hoist := g.hoist_j
-	rig.run(0.8)
-	assert_eq(g.hoist_j, hoist)
-	rig.run(0.3)
-	assert_eq(g.lever, TankIds.LEVER_HOIST)
-	assert_eq(g.move_s, 0.0)
-	assert_eq(rig.of_type("lever")[0]["lv"], TankIds.LEVER_HOIST)
-	rig.run(1.0)
-	assert_gt(g.hoist_j, 100.0, "now the hoist gets the power")
-
-
-func test_the_tank_coasts_while_the_lever_is_off_drive() -> void:
-	var rig := _bulwark()
-	rig.run(40.0)
-	var v := rig.hull().speed_mps
-	assert_gt(v, 6.0)
-	rig.send(1, {"k": "lever", "to": "turret"})
-	rig.run(1.2)
-	var coast := rig.hull().speed_mps
-	assert_lt(coast, v, "no drive power: it slows")
-	assert_gt(coast, v - 1.0, "but coasts")
-
-
-func test_swap_cycles_and_left_right_step_the_lever() -> void:
-	var rig := _bulwark()
-	var g := rig.gearbox()
-	var seen: Array[int] = []
-	for _i in 4:
-		rig.send(1, {"k": "lever", "to": "next", "via": "action"})
-		rig.run(1.2)
-		seen.append(g.lever)
-	assert_eq(
-		seen, [TankIds.LEVER_TURRET, TankIds.LEVER_HOIST, TankIds.LEVER_DRIVE, TankIds.LEVER_TURRET]
-	)
-	rig.send(1, {"k": "lever", "to": "left"})
-	rig.run(1.2)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE)
-	rig.send(1, {"k": "lever", "to": "right"})
-	rig.run(1.2)
-	assert_eq(g.lever, TankIds.LEVER_TURRET)
-	rig.send(1, {"k": "lever", "to": "right"})
-	rig.run(1.2)
-	rig.send(1, {"k": "lever", "to": "right"})
-	rig.run(1.2)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE, "right wraps")
-
-
-func test_hoist_lifts_a_heavy_shell_on_the_hoist_energy() -> void:
-	var rig := _bulwark()
-	var g := rig.gearbox()
-	var full := rig.content.num("tanks", "gearbox.hoist_j")
-	assert_between(full, 2000.0, 6000.0, "4 kJ in the brief, +-50%")
-	_lever(rig, "hoist")
-	g.hoist_j = 0.0
-	var secs := full / 225.0
-	rig.run(secs - 0.5)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "225 W for a little under the time")
-	rig.run(1.0)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY)
-	assert_eq(g.hoist_j, 0.0)
-
-
-func test_confirm_at_40_percent_of_the_hoist_latches_a_light_shell() -> void:
-	var rig := _bulwark()
-	var g := rig.gearbox()
-	var full := rig.content.num("tanks", "gearbox.hoist_j")
-	g.hoist_j = 0.39 * full
-	rig.send(1, {"k": "latch"})
-	rig.run(0.1)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "under 40%")
-	g.hoist_j = 0.42 * full
-	rig.send(1, {"k": "latch"})
-	rig.run(0.1)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_LIGHT)
-	assert_eq(g.hoist_j, 0.0)
-
-
-func test_the_turret_slews_at_full_speed_from_200_w_and_linearly_below() -> void:
-	for row: Array in [[300.0, 8.0], [200.0, 8.0], [100.0, 4.0], [0.0, 0.0]]:
-		var rig := _bulwark()
-		rig.send(1, {"k": "lever", "to": "turret"})
-		rig.run(1.2)
-		rig.p_eff[1] = float(row[0])
-		rig.hull().elev_target_deg = 30.0
-		rig.hull().aim_pause_s = 10.0
-		rig.run(1.0)
-		assert_almost_eq(rig.hull().elev_deg, float(row[1]), 0.3, "P_eff %.0f W" % row[0])
-
-
-func test_a_traverse_takes_the_bulwark_2_5_s_at_full_turret_speed() -> void:
-	var rig := _bulwark()
-	_lever(rig, "turret")
-	rig.send(1, {"k": "traverse"})
-	rig.run(0.1)
-	assert_almost_eq(rig.hull().traverse_s, 2.45, 0.06)
-	rig.run(2.6)
-	assert_eq(rig.hull().facing, TankIds.FACE_LEFT)
-
-
-func test_a_traverse_needs_the_lever_on_turret() -> void:
-	var rig := _bulwark()
-	rig.send(1, {"k": "traverse"})
-	rig.run(0.5)
-	assert_eq(rig.hull().traverse_s, 0.0)
-
-
-func test_a_manual_move_suspends_the_auto_lever_for_15_seconds() -> void:
-	var rig := _quiet(1)
-	var g := rig.gearbox()
-	g.auto = true
-	rig.send(1, {"k": "lever", "to": "turret"})
-	rig.run(0.1)
-	assert_false(g.auto)
-	assert_almost_eq(g.suspend_s, 15.0, 0.1)
-	rig.run(14.0)
-	assert_false(g.auto)
-	rig.run(1.2)
-	assert_true(g.auto, "back after 15 s")
-
-
-func test_the_auto_lever_drives_in_an_advance_when_nothing_is_near() -> void:
-	var rig := _quiet(1)
-	var g := rig.gearbox()
-	g.lever = TankIds.LEVER_HOIST
-	g.lever_to = TankIds.LEVER_HOIST
-	g.auto = true
-	g.dwell_s = 0.0
-	rig.run(2.5)
-	assert_eq(g.lever, TankIds.LEVER_HOIST, "dwell of 3 s")
-	rig.run(1.0)
-	assert_eq(g.lever_to, TankIds.LEVER_DRIVE)
-	rig.run(1.2)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE)
-
-
-func test_the_auto_lever_hoists_when_unloaded_with_a_target_in_range() -> void:
-	var rig := _quiet(1)
-	var g := rig.gearbox()
-	g.auto = true
-	g.dwell_s = 5.0
-	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
-	rig.run(1.3)
-	assert_eq(g.lever_to, TankIds.LEVER_HOIST)
-
-
-func test_the_auto_lever_turns_the_turret_when_loaded_and_off_target() -> void:
-	var rig := _quiet(1)
-	var g := rig.gearbox()
-	g.auto = true
-	g.dwell_s = 5.0
-	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
-	rig.load_shell(TankIds.SHELL_HEAVY)
-	rig.run(1.3)
-	assert_eq(g.lever_to, TankIds.LEVER_TURRET)
-
-
-func test_the_auto_lever_stays_put_inside_its_dwell() -> void:
-	var rig := _quiet(1)
-	var g := rig.gearbox()
-	g.auto = true
-	g.dwell_s = 0.0
-	rig.spawn(TankIds.ENEMY_MEDIUM, 1, 280.0)
-	rig.run(2.0)
-	assert_eq(g.lever_to, TankIds.LEVER_DRIVE, "dwell >= 3 s before the first auto move")
-
-
-func test_a_breakdown_forces_drive() -> void:
-	var rig := _bulwark()
-	var g := rig.gearbox()
-	rig.send(1, {"k": "lever", "to": "hoist"})
-	rig.run(1.2)
-	assert_eq(g.lever, TankIds.LEVER_HOIST)
-	rig.hull().hp = 1.0
-	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
-	rig.run(0.1)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE)
-	assert_eq(g.move_s, 0.0)
-	rig.send(1, {"k": "lever", "to": "turret"})
-	rig.run(0.5)
-	assert_eq(g.lever, TankIds.LEVER_DRIVE, "no manual move while broken down")
-
-
-func test_in_a_gun_line_drive_is_dig_and_only_it_raises_the_berm() -> void:
-	var rig := _bulwark(GUN_LINE, 1.0)
-	rig.state.enemies.clear()
-	rig.run(10.0)
-	assert_gt(rig.hull().berm_hp, 6.0)
-	var berm := rig.hull().berm_hp
-	rig.send(1, {"k": "lever", "to": "turret"})
-	rig.run(5.0)
-	assert_lte(rig.hull().berm_hp, berm + 1.0, "the dozer waits while the lever is elsewhere")
-
-
-func test_in_a_gun_line_the_hoist_lifts_on_the_riders_erg_work() -> void:
-	var rig := _bulwark(GUN_LINE, 1.0)
-	rig.state.enemies.clear()
-	_lever(rig, "hoist")
-	rig.gearbox().hoist_j = 0.0
-	var need := rig.content.num("tanks", "gearbox.hoist_j")
-	assert_between(need, 2000.0, 6000.0, "4 kJ in the brief, tuned to 5.25 kJ (P4 rules ADR)")
-	# ERG 90% of 200 W = 180 W raw, P_eff 225 W.
-	rig.run(need / 225.0 - 1.0)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE, "not before the hoist energy is in")
-	rig.run(2.0)
-	assert_eq(rig.hull().loaded, TankIds.SHELL_HEAVY)
-
-
-func test_rescue_in_a_gun_line_powers_nothing_for_the_bulwark() -> void:
-	var rig := _bulwark(GUN_LINE, 1.0)
-	rig.state.enemies.clear()
-	rig.rescue[1] = true
-	rig.run(10.0)
-	assert_eq(rig.hull().berm_hp, 0.0)
-	assert_eq(rig.gearbox().p_eff_w, 0.0)
-	rig.send(1, {"k": "lever", "to": "hoist"})
-	rig.run(4.0)
-	assert_eq(rig.gearbox().hoist_j, 0.0, "nothing gets power")
-
-
-func test_a_solo_bulwark_that_goes_afk_has_no_power_at_all() -> void:
-	var rig := _bulwark()
-	_lever(rig, "hoist")
-	rig.gearbox().hoist_j = 0.0
-	rig.afk[1] = true
-	rig.run(10.0)
-	assert_true(rig.state.all_afk, "the only rider is the whole crew")
-	assert_eq(rig.gearbox().hoist_j, 0.0)
-	assert_eq(rig.gearbox().p_eff_w, 0.0)

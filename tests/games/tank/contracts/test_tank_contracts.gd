@@ -33,7 +33,7 @@ func test_every_content_file_validates() -> void:
 
 func test_the_schemas_name_what_is_wrong() -> void:
 	var f := _files()
-	f["tanks"]["tanks"].erase("citadel")
+	f["tanks"]["tanks"].erase("landship")
 	f["stations"]["plans"]["dynamo"]["advance"]["range_pct"] = [55, 110]
 	f["enemies"]["types"]["light"]["gun"]["hit"] = 1.5
 	f["mission"]["segments"][1].erase("max_s")
@@ -41,7 +41,7 @@ func test_the_schemas_name_what_is_wrong() -> void:
 	var c := TankContent.from_dicts(f, "ashfall_road")
 	var all := "\n".join(c.errors)
 	for needle: String in [
-		"tanks: missing citadel",
+		"tanks: missing landship",
 		"plans.dynamo.advance: every ERG value",
 		"types.light gun.hit",
 		"segments[1]: open-ended",
@@ -123,10 +123,10 @@ func test_state_records_round_trip() -> void:
 
 func test_intents_normalize_and_reject_junk() -> void:
 	assert_eq(
-		TankIntents.normalize({"k": "lever", "to": "hoist"}),
-		{"k": "lever", "to": 2, "d": 0, "auto": false, "via": "action"}
+		TankIntents.normalize({"k": "seat", "to": "steam"}),
+		{"k": "seat", "to": 3, "d": 0, "auto": false, "via": "action"}
 	)
-	assert_eq(TankIntents.normalize({"k": "lever", "to": "left", "via": "button"})["d"], -1)
+	assert_eq(TankIntents.normalize({"k": "seat", "to": "prev", "via": "button"})["d"], -1)
 	assert_eq(TankIntents.normalize({"k": "aim", "d": -1.0})["d"], -1)
 	assert_true(TankIntents.normalize({"k": "fire", "auto": 1})["auto"])
 	assert_eq(TankIntents.normalize({"k": "over", "via": "surge"})["via"], "surge")
@@ -136,7 +136,9 @@ func test_intents_normalize_and_reject_junk() -> void:
 		{"k": "boost"},
 		{"k": "ram", "via": "surge"},
 		{"k": "aim", "d": 2},
-		{"k": "lever", "to": 1},
+		{"k": "lever", "to": "hoist"},
+		{"k": "seat", "to": 1},
+		{"k": "seat", "to": "bulwark"},
 		{"k": "fire", "via": "x"}
 	]:
 		assert_eq(TankIntents.normalize(junk), {}, str(junk))
@@ -144,11 +146,12 @@ func test_intents_normalize_and_reject_junk() -> void:
 
 func test_intents_belong_to_their_engine() -> void:
 	var expect := {
-		"diesel": ["turn"],
-		"dynamo": ["aim", "target", "traverse", "fire"],
-		"steam": ["latch", "over"],
-		"bulwark": ["lever", "aim", "target", "traverse", "fire", "latch", "turn"],
-		"arc": [],
+		"diesel": ["turn", "seat"],
+		"dynamo": ["aim", "target", "traverse", "fire", "seat"],
+		"steam": ["latch", "over", "seat"],
+		"arc": ["seat"],
+		"feed": ["seat"],
+		"bulwark": [],
 	}
 	for engine: String in expect:
 		for k: String in TankIds.INTENT_KINDS:
@@ -158,6 +161,8 @@ func test_intents_belong_to_their_engine() -> void:
 				"%s %s" % [engine, k]
 			)
 	assert_false(TankIds.INTENT_KINDS.has("ram"), "v2: no Ram intent")
+	assert_false(TankIds.INTENT_KINDS.has("lever"), "v3: no gearbox lever")
+	assert_true(TankIntents.is_deliberate(TankIntents.normalize({"k": "seat", "to": "next"})))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize({"k": "over"})))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize({"k": "fire", "auto": 1})))
 	assert_true(TankIntents.is_deliberate(TankIntents.normalize({"k": "fire"})))
@@ -189,10 +194,12 @@ func test_every_event_declares_its_int_fields() -> void:
 		TankEvents.overrun("gun_line", 2),
 		TankEvents.boss_phase(TankIds.BOSS_PHASE_2),
 		TankEvents.latch(2, TankIds.SHELL_LIGHT),
-		TankEvents.lever(0, TankIds.LEVER_HOIST),
+		# Reserved (v3 retired the Bulwark's gearbox lever).
+		{"type": TankEvents.LEVER, "s": 0, "lv": 2},
 		TankEvents.evade(13, TankIds.enemy_code(TankIds.ENEMY_DESTROYER), true, 2),
 		TankEvents.turn(0, TankIds.DIR_LEFT),
 		TankEvents.time_up(),
+		TankEvents.seat(1, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED),
 	]
 	assert_eq(samples.size(), TankEvents.TYPES.size())
 	for e in samples:
@@ -228,7 +235,7 @@ func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 	assert_eq(inp.phase.seg, TankIds.SEG_ADVANCE)
 	assert_eq(inp.phase.stage, 2)
 	var engines: Array = inp.riders.map(func(r: TankRiderInput) -> String: return r.engine)
-	assert_eq(engines, ["dynamo", "steam", "diesel"], "stage 2 with rotation")
+	assert_eq(engines, ["diesel", "dynamo", "steam"], "v3: the start seats (no rotation)")
 	assert_true(inp.rider(3).rescue)
 	assert_eq(inp.rider(2).intents.size(), 0, "already ownership-filtered")
 	for ri in inp.riders:
@@ -239,7 +246,7 @@ func test_the_input_digest_reads_the_group_phase_and_each_engine() -> void:
 		assert_eq(ri.plan_elapsed_s, 300.0 + 180.0 + 120.0 + 60.0 + 60.0)
 		assert_false(ri.in_first_window())
 		assert_false(ri.in_warmup())
-	assert_eq(inp.rider(3).grade_source, Wl.GRADE_GAME, "the diesel's terrain")
+	assert_eq(inp.rider(1).grade_source, Wl.GRADE_GAME, "the diesel's terrain")
 	players[2].rider_mass_kg = 91.0
 	var heavy := TankInputs.from_frame(f, players, plans, {}, {}, {})
 	assert_eq(heavy.rider(3).rider_mass_kg, 91.0, "the drive's mass comes from the slot")
@@ -277,7 +284,7 @@ func test_the_geometry_contract_holds() -> void:
 	assert_true(g.enemy_hitbox("enemy_dugin").has_area(), "the dug-in's turret")
 	var broken := TankGeometry.from_dict({"tanks": {}})
 	var problems := " | ".join(broken.validate())
-	assert_string_contains(problems, "tanks.bulwark.turret.trunnion: missing")
+	assert_string_contains(problems, "tanks.landship.turret.trunnion: missing")
 
 
 ## Thresholds that live in two files must agree (one meaning, two owners).

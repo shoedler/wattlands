@@ -8,7 +8,7 @@ const GUN_LINE := 2
 const SKIRMISH := 1
 
 
-## A quiet Advance: no encounters, no obstacles, the gun and the lever out of the picture.
+## A quiet Advance: no encounters, no obstacles, the gun out of the picture.
 static func _quiet(index: int, props: Dictionary = {"encounters": [], "obstacles": []}) -> Callable:
 	return func(files: Dictionary) -> void:
 		(files["mission"]["segments"][index] as Dictionary).merge(props, true)
@@ -87,7 +87,7 @@ func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void
 	var span: Array = light["hold_px"]
 	for _i in 40:
 		var e := _enter(rig, TankIds.ENEMY_LIGHT)
-		assert_between(e.hold_px, float(span[0]), float(span[1]), "the Bulwark: light hold_px")
+		assert_between(e.hold_px, float(span[0]), float(span[1]), "crew 1: light hold_px")
 		seen[snappedf(e.hold_px, 2.0)] = true
 		rig.state.enemies.erase(e)
 	assert_gt(seen.size(), 3, "rolled, not fixed")
@@ -97,7 +97,7 @@ func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void
 	assert_eq(
 		m.hold_px,
 		minf(m.hold_px, 632.0 - mw - (16.0 + bas.hull().hull_w)),
-		"the Bastion's long hull clamps a medium to the screen"
+		"crew 4: the hull clamps a medium to the screen"
 	)
 
 
@@ -232,8 +232,8 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	var guns := rig.state.enemies
 	var want := 0
 	for spec: Dictionary in rig.content.segment(GUN_LINE)["enemies"]:
-		want += rig.content.scaled_count(int(spec["count"]), TankIds.TANK_BULWARK)
-	assert_eq(guns.size(), want, "the mission's gun line x the Bulwark's scale")
+		want += rig.content.scaled_count(int(spec["count"]), TankIds.TANK_LANDSHIP)
+	assert_eq(guns.size(), want, "the mission's gun line x the tank's scale")
 	assert_gt(want, 0)
 	var holding := 0
 	for e in guns:

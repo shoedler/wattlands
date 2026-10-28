@@ -1,29 +1,27 @@
 class_name TankStations
 extends RefCounted
-## The engine rooms' models (brief 2.4 Dynamo, Steam, Bulwark gearbox, Arc generator; owner:
-## rules): the dynamo's capacitor bank and the Rampart's hoist, the steam engine's boiler (window,
-## Overpressure, light latch, breech cycle), the Bulwark's three-way gearbox with its auto-lever and
-## the Bastion's arc generator (searchlights, stall). The diesel's drive is TankDrive, the bow guns
-## TankBow. Every energy is the room's P_eff (reserve 60 W for an AFK rider, 0 when everyone is
-## AFK). Pure: no random draws; time only through `dt`.
+## The engine rooms' models (brief 2.4 Dynamo, Steam, Arc generator; owner: rules): the dynamo's
+## capacitor bank and the gunner's hoist, the steam engine's boiler (window, Overpressure, light
+## latch, breech cycle) and the arc generator (searchlights, stall). The diesel's drive is
+## TankDrive, the bow guns TankBow. Every energy is the room's P_eff (reserve 60 W for an AFK
+## rider, 0 when everyone is AFK; an empty seat, slot -1, has none). Pure: no random draws; time
+## only through `dt`. v3 retired the Bulwark's three-way gearbox; the Secondaries seat (feed) has
+## no model here yet (the v3 rules builder adds it).
 
 
 static func step(
 	state: TankState, inputs: TankInputs, dt: float, events: Array[Dictionary]
 ) -> void:
 	var aux := TankAux.of(state)
-	aux.turret_factor = 0.0
 	for st in state.stations:
 		var ri: TankRiderInput = inputs.rider(st.peer) if st.slot >= 0 else null
-		if st is TankGearboxState:
-			_gearbox(state, aux, st as TankGearboxState, ri, dt, events)
-		elif st is TankDynamoState:
+		if st is TankDynamoState:
 			_dynamo(state, aux, st as TankDynamoState, ri, dt)
 		elif st is TankSteamState:
 			_steam(state, aux, st as TankSteamState, ri, dt, events)
 		elif st is TankArcState:
 			_arc(state, st as TankArcState, ri)
-	_rampart_hoist(state, aux, dt, events)
+	_gunner_hoist(state, aux, dt, events)
 
 
 # --- Shell loading -----------------------------------------------------------------------------
@@ -38,10 +36,9 @@ static func load_shell(state: TankState, shell: int, slot: int, events: Array[Di
 	return true
 
 
-## The station of the gunner: the dynamo, else the Bulwark's gearbox, else null.
+## The station of the gunner: the dynamo (the Gun seat), else null.
 static func gunner(state: TankState) -> TankStationState:
-	var d := state.station(TankIds.ENGINE_DYNAMO)
-	return d if d != null else state.station(TankIds.ENGINE_BULWARK)
+	return state.station(TankIds.ENGINE_DYNAMO)
 
 
 ## Takes `units` out of the dynamo's bank (never below 0). A tank without a dynamo has no bank.
@@ -51,7 +48,7 @@ static func drain(state: TankState, units: float) -> void:
 		d.bank = maxf(d.bank - units, 0.0)
 
 
-## The dynamo's bank scaled to 0..1 at `full_at` units (1 for the Bulwark, which has no bank).
+## The dynamo's bank scaled to 0..1 at `full_at` units (1 for a tank without a dynamo).
 static func bank_frac(state: TankState) -> float:
 	var d := state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
 	if d == null:
@@ -94,8 +91,7 @@ static func _dynamo(
 
 
 ## The dynamo's stabilizer drain in units a second: the tank's own (tanks.json
-## tanks.<tank>.stabilizer_per_s, the Bastion's heavier turret with its searchlight tower), else
-## dynamo.stabilizer_per_s.
+## tanks.<tank>.stabilizer_per_s, where a tank has one), else dynamo.stabilizer_per_s.
 static func stabilizer_per_s(state: TankState) -> float:
 	var c := state.content
 	var own: Variant = c.tank_def(state.hull.tank).get("stabilizer_per_s")
@@ -104,14 +100,17 @@ static func stabilizer_per_s(state: TankState) -> float:
 	return c.num("tanks", "dynamo.stabilizer_per_s", 1.5)
 
 
-## The Rampart's hoist (no steam engine, no gearbox): it lifts a heavy shell, 10 s at a bank of 50
-## or more up to 20 s at 0, once a shot is cleared of the breech cycle and a target stands. It
-## costs the bank 25 units when it starts and stops while the dynamo is stalled or the tank broke.
-static func _rampart_hoist(
+## The gunner's hoist (v2's Rampart hoist; v3 interim): with the Gun seat manned and the Loader
+## seat empty (or absent) it lifts a heavy shell, 10 s at a bank of 50 or more up to 20 s at 0, once
+## a shot is cleared of the breech cycle and a target stands. It costs the bank 25 units when it
+## starts and stops while the dynamo is stalled or the tank broke. The v3 rules builder replaces it
+## (brief v3: an empty Loader seat means no reloads).
+static func _gunner_hoist(
 	state: TankState, aux: TankAux, dt: float, events: Array[Dictionary]
 ) -> void:
 	var st := state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
-	if st == null or state.station(TankIds.ENGINE_STEAM) != null or st.slot < 0:
+	var loader := state.station(TankIds.ENGINE_STEAM)
+	if st == null or (loader != null and not loader.is_empty()) or st.slot < 0:
 		return
 	if state.hull.breakdown or state.all_afk or st.stalled:
 		return
@@ -255,136 +254,3 @@ static func rider_rule(state: TankState, ri: TankRiderInput) -> SprintRule:
 	if r == null:
 		return null
 	return r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0))
-
-
-# --- Bulwark gearbox -----------------------------------------------------------------------------
-
-
-static func _gearbox(
-	state: TankState,
-	aux: TankAux,
-	g: TankGearboxState,
-	ri: TankRiderInput,
-	dt: float,
-	events: Array[Dictionary]
-) -> void:
-	var c := state.content
-	var hull := state.hull
-	if hull.breakdown and (g.lever != TankIds.LEVER_DRIVE or g.lever_to != TankIds.LEVER_DRIVE):
-		g.lever = TankIds.LEVER_DRIVE
-		g.lever_to = TankIds.LEVER_DRIVE
-		g.move_s = 0.0
-		g.dwell_s = 0.0
-	if g.move_s > 0.0:
-		g.move_s = maxf(g.move_s - dt, 0.0)
-		if g.move_s == 0.0:
-			g.lever = g.lever_to
-			g.dwell_s = 0.0
-	else:
-		g.dwell_s += dt
-	if g.suspend_s > 0.0:
-		g.suspend_s = maxf(g.suspend_s - dt, 0.0)
-		if g.suspend_s == 0.0:
-			g.auto = true
-	var slot := ri.slot if ri != null else -1
-	if state.seg.seg == TankIds.SEG_ADVANCE and g.lever == TankIds.LEVER_DRIVE and g.move_s == 0.0:
-		g.drive_s += dt
-	if ri != null and not hull.breakdown:
-		for n in ri.intents:
-			match str(n.get("k", "")):
-				TankIds.INTENT_LEVER:
-					_manual_lever(state, g, slot, n, events)
-				TankIds.INTENT_LATCH:
-					_light_latch(state, g, slot, events)
-	if g.auto and g.move_s == 0.0 and not hull.breakdown and not state.all_afk:
-		if g.dwell_s >= c.num("tanks", "gearbox.auto_dwell_s", 3.0):
-			var want := _auto_lever(state, aux)
-			if want != g.lever:
-				_start_move(state, g, want, slot, events)
-	# Power: nothing during a move, and nothing in a gun line while the rider is in rescue.
-	var power := g.p_eff_w
-	if g.move_s > 0.0 or (state.seg.seg == TankIds.SEG_GUN_LINE and in_rescue(ri)):
-		power = 0.0
-		g.p_eff_w = 0.0
-	if g.lever == TankIds.LEVER_TURRET and g.move_s == 0.0:
-		var full := c.num("tanks", "gearbox.turret_full_w", 200.0)
-		aux.turret_factor = clampf(power / full, 0.0, 1.0)
-	elif g.lever == TankIds.LEVER_HOIST and g.move_s == 0.0:
-		if hull.loaded == TankIds.SHELL_NONE and hull.breech_s <= 0.0 and not hull.breakdown:
-			g.hoist_j += power * dt
-			if g.hoist_j >= c.num("tanks", "gearbox.hoist_j", 4000.0):
-				if load_shell(state, TankIds.SHELL_HEAVY, slot, events):
-					g.hoist_j = 0.0
-
-
-## Starts a lever move (it takes gearbox.move_s, 1 s, with no power anywhere).
-static func _start_move(
-	state: TankState, g: TankGearboxState, to: int, slot: int, events: Array[Dictionary]
-) -> void:
-	g.lever_to = to
-	g.move_s = state.content.num("tanks", "gearbox.move_s", 1.0)
-	events.append(TankEvents.lever(slot, to))
-
-
-static func _manual_lever(
-	state: TankState, g: TankGearboxState, slot: int, n: Dictionary, events: Array[Dictionary]
-) -> void:
-	if g.move_s > 0.0:
-		return
-	var to := int(n.get("to", -1))
-	if to < 0:
-		var step := int(n.get("d", 0))
-		to = posmod(g.lever + step, 3) if step != 0 else g.lever
-	g.auto = false
-	g.suspend_s = state.content.num("tanks", "gearbox.manual_suspend_s", 15.0)
-	if to != g.lever:
-		_start_move(state, g, to, slot, events)
-
-
-## The light shell: a hoist of 40% or more, once the breech is free.
-static func _light_latch(
-	state: TankState, g: TankGearboxState, slot: int, events: Array[Dictionary]
-) -> void:
-	var c := state.content
-	var full := c.num("tanks", "gearbox.hoist_j", 4000.0)
-	var need := full * c.num("tanks", "gearbox.light_latch_pct", 40.0) / 100.0
-	if g.hoist_j >= need and load_shell(state, TankIds.SHELL_LIGHT, slot, events):
-		g.hoist_j = 0.0
-
-
-## The auto-lever's choice (brief 2.4): Drive on a breakdown; in an Advance Drive when nothing
-## stands within auto_drive_clear_px; Hoist when unloaded with a target; Turret when loaded and
-## the gun is not on the target (or faces away); else Drive.
-static func _auto_lever(state: TankState, aux: TankAux) -> int:
-	var hull := state.hull
-	if hull.breakdown:
-		return TankIds.LEVER_DRIVE
-	var tgt := TankAim.current(state, aux)
-	var seg := state.seg.seg
-	if seg == TankIds.SEG_ADVANCE or seg == TankIds.SEG_SKIRMISH or seg == TankIds.SEG_ROAM:
-		var clear := state.content.num("tanks", "gearbox.auto_drive_clear_px", 300.0)
-		if not _target_within(state, aux, clear):
-			return TankIds.LEVER_DRIVE
-	if tgt == null:
-		return TankIds.LEVER_DRIVE
-	if hull.loaded == TankIds.SHELL_NONE:
-		return TankIds.LEVER_HOIST
-	if not TankGun.on_target(state, aux):
-		return TankIds.LEVER_TURRET
-	return TankIds.LEVER_DRIVE
-
-
-## Some enemy or obstacle stands on screen within `px` of the hull's nearer end.
-static func _target_within(state: TankState, aux: TankAux, px: float) -> bool:
-	var hull := state.hull
-	var front := hull.x_px + hull.hull_w
-	var cam := state.camera_x()
-	for t in aux.targets:
-		if t.drill or (not TankTargets.engageable(t, cam)):
-			continue
-		var d := t.rect.position.x - front
-		if t.rect.end.x <= hull.x_px + hull.hull_w * 0.5:
-			d = hull.x_px - t.rect.end.x
-		if d <= px:
-			return true
-	return false

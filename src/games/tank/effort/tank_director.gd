@@ -24,9 +24,7 @@ extends RefCounted
 ## 3. Boiler (steam, the rider's SIM phases): {mode SIM, mode_grade, reason "boiler"} with
 ##    boiler_grade_pct, at most once per boiler.min_interval_s, rising at most boiler.max_rise_pct
 ##    a step, falling (the latch's drop to 0 included) in one step.
-## 4. Hoist (Bulwark, SIM phases): {mode SIM, mode_grade, reason "hoist"} climbing at
-##    hoist.rise_pct_s (one step every hoist.step_s, counted from reaching Hoist) to hoist.grade_pct
-##    (warmup_grade_pct in WARMUP kinds) while the lever is on Hoist; 0 in one step on leaving.
+## 4. (Retired in v3 with the Bulwark's gearbox: its hoist grade.)
 ## 5. Terrain: course_grade every terrain.send_every_s (2 Hz) in grade_source "game" phases, the
 ##    grade under the tank from the mission terrain (warm-up range in WARMUP kinds); in free roam
 ##    the valley's grade under the hull in its travel direction (TankRoam.grade_pct, the same
@@ -40,12 +38,12 @@ extends RefCounted
 ## 8. end_phase for every rider of the group's phase in one step once the objective is done and
 ##    min_s has passed (ADR "Who calls end_phase"); a refused rider is retried on later ticks.
 ## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
-## A rider on reserve (dropped or AFK) gets no bank, arc, boiler or hoist request: a dropped peer never
+## A rider on reserve (dropped or AFK) gets no bank, arc or boiler request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
 ## one. Its bank and grade memory is erased, and on the tick it is back the bank restarts from what
-## the rider's governor holds (applied target), the boiler and hoist from 0, so the first update
-## after a rejoin is again within the 10-point / 0.5% / 1% limits of the rider's real value.
-## The power band: tanks.json in_band.sim_ftp_pct for diesel and Bulwark riders in WORK SIM
+## the rider's governor holds (applied target), the boiler from 0, so the first update after a
+## rejoin is again within the 10-point / 0.5% limits of the rider's real value.
+## The power band: tanks.json in_band.sim_ftp_pct for diesel (Drive) riders in WORK SIM
 ## phases, cleared (0, 0) everywhere else, at each segment start.
 
 const HAPTIC_NONE := ""
@@ -56,7 +54,6 @@ const SOURCE := "tank"
 const REASON_BANK := "bank"
 const REASON_ARC := "arc"
 const REASON_BOILER := "boiler"
-const REASON_HOIST := "hoist"
 
 ## Changes smaller than this are float noise, not worth a directive.
 const EPS := 1e-6
@@ -85,18 +82,16 @@ var _start_tick: Dictionary = {}
 ## peer -> {"cur": last sent %, "from": update start %, "goal": update goal %} of the rider's bank
 ## (dynamo) or arc load (arc generator) pattern in its current phase.
 var _bank: Dictionary = {}
-## peer -> the last boiler / hoist mode grade sent in this phase (the platform resets the channel
+## peer -> the last boiler mode grade sent in this phase (the platform resets the channel
 ## at every phase change).
 var _grade: Dictionary = {}
 ## peer -> the tick of the last boiler send (kept across phases: at most once per second).
 var _boiler_tick: Dictionary = {}
-## peer -> the tick the lever reached Hoist (or the phase started on Hoist); absent off Hoist.
-var _hoist_since: Dictionary = {}
 ## peer -> true while the loader band (50, 120) is published.
 var _loader: Dictionary = {}
 ## peer -> the game time the receiver's last haptic ends.
 var _haptic_end: Dictionary = {}
-## peer -> true while the rider is on reserve (bank, boiler and hoist memory erased).
+## peer -> true while the rider is on reserve (bank and boiler memory erased).
 var _reserve: Dictionary = {}
 ## peer -> true on the tick the rider came back from reserve (the bank reseeds from the governor).
 var _returned: Dictionary = {}
@@ -131,7 +126,6 @@ func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> vo
 			# On reserve nothing held is sent (it may never arrive) or remembered as sent.
 			_bank_step(state, ri, ph, e)
 			_boiler_step(state, ri, inputs.tick)
-			_hoist_step(state, ri, inputs.tick)
 		_terrain_step(state, ri, ph, e)
 		_loader_step(state, ri)
 	_haptics(state, inputs, events)
@@ -157,7 +151,6 @@ func _reserve_step(ri: TankRiderInput) -> bool:
 		_reserve[ri.peer] = true
 		_bank.erase(ri.peer)
 		_grade[ri.peer] = 0.0
-		_hoist_since.erase(ri.peer)
 		return true
 	if bool(_reserve.get(ri.peer, false)):
 		_reserve[ri.peer] = false
@@ -169,7 +162,6 @@ func _segment_start(ri: TankRiderInput) -> void:
 	_returned.erase(ri.peer)
 	_bank.erase(ri.peer)
 	_grade[ri.peer] = 0.0
-	_hoist_since.erase(ri.peer)
 	_loader[ri.peer] = false
 	var ph := _phase(ri)
 	if ph == null:
@@ -360,53 +352,6 @@ static func boiler_grade_pct(
 	return grade * clampf(pressure_pct / 100.0, 0.0, 1.0)
 
 
-# --- Pattern 4: the Bulwark's hoist --------------------------------------------------------------
-
-
-func _hoist_step(state: TankState, ri: TankRiderInput, tick: int) -> void:
-	if ri.engine != TankIds.ENGINE_BULWARK or ri.phase_mode != Wl.SIM:
-		return
-	if ri.phase_kind != Wl.WORK and ri.phase_kind != Wl.WARMUP:
-		return
-	var gear := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	if gear == null:
-		return
-	var want := 0.0
-	if on_hoist(gear):
-		if not _hoist_since.has(ri.peer):
-			_hoist_since[ri.peer] = tick
-		var held_s := float(tick - int(_hoist_since[ri.peer])) * Wl.SIM_DT
-		want = hoist_grade_pct(content, held_s, ri.in_warmup())
-	else:
-		_hoist_since.erase(ri.peer)
-	if absf(want - float(_grade.get(ri.peer, 0.0))) < EPS:
-		return
-	var d := {"mode": Wl.SIM, "mode_grade": want, "reason": REASON_HOIST, "source": SOURCE}
-	if _request(ri.peer, d):
-		_grade[ri.peer] = want
-
-
-## The lever stands on Hoist (not moving to or from it).
-static func on_hoist(gear: TankGearboxState) -> bool:
-	return (
-		gear.lever == TankIds.LEVER_HOIST
-		and gear.lever_to == TankIds.LEVER_HOIST
-		and gear.move_s <= 0.0
-	)
-
-
-## Pattern 4: the hoist grade `held_s` seconds after reaching Hoist: hoist.rise_pct_s per second
-## in whole hoist.step_s steps (never above rise x held_s), up to hoist.grade_pct (warmup_grade_pct
-## in WARMUP kinds).
-static func hoist_grade_pct(c: TankContent, held_s: float, warmup: bool) -> float:
-	var key := "hoist.warmup_grade_pct" if warmup else "hoist.grade_pct"
-	var top := c.num("stations", key, 1.0 if warmup else 4.0)
-	var rise := c.num("stations", "hoist.rise_pct_s", 1.0)
-	var step_s := maxf(c.num("stations", "hoist.step_s", 1.0), Wl.SIM_DT)
-	var steps := floorf((held_s + EPS) / step_s)
-	return minf(top, rise * step_s * steps)
-
-
 # --- Pattern 5: terrain --------------------------------------------------------------------------
 
 
@@ -514,12 +459,12 @@ static func crew_haptic(events: Array[Dictionary], min_damage: float) -> String:
 
 
 ## The SIM power band in % FTP to publish for a rider in `ph`: tanks.json in_band.sim_ftp_pct for
-## the diesel and the Bulwark in WORK SIM phases (the tempo the in-band rule scores), else [0, 0]
+## the diesel (Drive) in WORK SIM phases (the tempo the in-band rule scores), else [0, 0]
 ## (cleared): never a tempo band in the warm-up (BRIEF 4.6.8), checkpoints or ERG, and never for
 ## the steam engine (its 90% rule stays on the station card).
 static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 	var engine := str(ph.meta.get("engine", ""))
-	var drives := engine == TankIds.ENGINE_DIESEL or engine == TankIds.ENGINE_BULWARK
+	var drives := engine == TankIds.ENGINE_DIESEL
 	if ph.kind != Wl.WORK or ph.mode != Wl.SIM or not drives:
 		return [0.0, 0.0]
 	var b: Array = c.value("tanks", "in_band.sim_ftp_pct", [76, 105])

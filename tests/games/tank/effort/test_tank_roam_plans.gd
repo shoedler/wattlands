@@ -74,11 +74,11 @@ func test_each_engine_rides_the_brief_table_in_the_roam() -> void:
 			var engine := str(ph.meta["engine"])
 			var at := "crew %d peer %d %s" % [crew, peer, engine]
 			match engine:
-				TankIds.ENGINE_DIESEL, TankIds.ENGINE_BULWARK:
+				TankIds.ENGINE_DIESEL:
 					assert_eq(ph.mode, Wl.SIM, at)
 					assert_eq(ph.grade_source, Wl.GRADE_GAME, at)
 					assert_eq(out.grade_source, Wl.GRADE_GAME, at)
-				TankIds.ENGINE_STEAM:
+				TankIds.ENGINE_STEAM, TankIds.ENGINE_FEED:
 					assert_eq(ph.mode, Wl.SIM, at)
 					assert_eq(ph.grade_source, Wl.GRADE_FLAT, at)
 				TankIds.ENGINE_DYNAMO:
@@ -93,7 +93,7 @@ func test_each_engine_rides_the_brief_table_in_the_roam() -> void:
 					assert_eq([out.target_pct, out.ramp_to_pct], [50.0, 65.0], "the depot's: " + at)
 				_:
 					fail_test("unknown engine " + at)
-	var starts := {1: ["bulwark"], 4: ["diesel", "dynamo", "steam", "arc"]}
+	var starts := {1: ["diesel"], 4: ["diesel", "dynamo", "steam", "arc"]}
 	for crew: int in starts:
 		var plans := _plans("roam_10", crew, 200.0, true)
 		var got: Array = []
@@ -146,7 +146,7 @@ func test_power_bands_in_the_roam() -> void:
 				[0.0, 0.0] as Array[float],
 				"never a tempo band in the drive-out"
 			)
-			var drives := ["diesel", "bulwark"].has(str(plan.phase(1).meta["engine"]))
+			var drives := str(plan.phase(1).meta["engine"]) == "diesel"
 			var band: Array[float] = [76.0, 105.0]
 			var none: Array[float] = [0.0, 0.0]
 			assert_eq(TankDirector.power_band_pct(c, plan.phase(1)), band if drives else none)

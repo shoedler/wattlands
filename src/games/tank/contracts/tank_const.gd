@@ -46,6 +46,13 @@ const MAX_SHELLS := 24
 ## Host-side intent rate limit per peer (brief 2.6).
 const INTENTS_PER_S := 5
 
+## v3 (brief "Combat changes"): the Loader's ready rack holds this many main-gun shells (the r6
+## turret window draws three).
+const RACK_MAX := 3
+## v3 (brief "Seat choice and switching"): a rider may change seats only this long after their last
+## trainer-mode change (a seat switch or a plan boundary), the BRIEF 4.5 60 s switch spacing.
+const SEAT_LOCK_S := 60.0
+
 
 ## True when a rider at `power_w` raw watts with FTP `ftp_w` counts as building steam.
 static func steam_building(power_w: float, ftp_w: float) -> bool:

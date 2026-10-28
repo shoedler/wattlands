@@ -1,12 +1,12 @@
 class_name TankGun
 extends RefCounted
 ## The main turret (brief 2.4 Gun; owner: rules; the bow guns are TankBow). The gunner is the
-## dynamo (Rampart, Citadel, Bastion) or the Bulwark's gearbox on Turret. Elevation -12..+30
+## dynamo (v3: the Gun seat; an empty Gun seat leaves the gun where it is and silent). Elevation -12..+30
 ## degrees (tanks.json gun) at 8 degrees/s with a full bank (2 at 0), a traverse takes 2.5 s (8 s at
 ## 0) and flips the facing when it completes; the bank pays 0.5 per degree and 15 per traverse.
 ## Auto-aim (default) aims once a shell is in the breech and fires within 0.5 degrees; the rider's
-## nudges pause it for 5 s. The dispersion is halved while the Bastion's searchlights are lit (its
-## arc rider in band). Shells inherit the hull's velocity, so a moving tank's shell keeps the
+## nudges pause it for 5 s. The dispersion is halved while the searchlights are lit (the Lights
+## rider in band). Shells inherit the hull's velocity, so a moving tank's shell keeps the
 ## tank's pace.
 
 
@@ -25,14 +25,9 @@ static func step(
 	var elev_rate := 0.0
 	var trav_rate := 0.0
 	var elev_pair: Array = c.value("tanks", "dynamo.elev_deg_s", [2, 8])
-	if powered:
-		if gs is TankDynamoState:
-			if not (gs as TankDynamoState).stalled:
-				elev_rate = TankStations.by_bank(state, elev_pair)
-				trav_rate = 1.0
-		else:
-			elev_rate = float(elev_pair[1]) * aux.turret_factor
-			trav_rate = aux.turret_factor
+	if powered and gs is TankDynamoState and not (gs as TankDynamoState).stalled:
+		elev_rate = TankStations.by_bank(state, elev_pair)
+		trav_rate = 1.0
 	if ri != null and powered:
 		for n in ri.intents:
 			_intent(state, aux, gs, n, trav_rate, events)
@@ -69,7 +64,7 @@ static func step(
 			fire(state, aux, gs, tgt.drill, events)
 
 
-## The Bastion's searchlights are lit (its arc room's `lit`: the arc rider in band, brief 2.4).
+## The searchlights are lit (the arc room's `lit`: the Lights rider in band, brief 2.4).
 static func searchlights_lit(state: TankState) -> bool:
 	var arc := state.station(TankIds.ENGINE_ARC) as TankArcState
 	return arc != null and arc.lit
@@ -196,8 +191,7 @@ static func fire(
 	s.source = gs.slot
 	state.shells.append(s)
 	hull.loaded = TankIds.SHELL_NONE
-	var cycle_key := "gearbox.breech_cycle_s" if gs is TankGearboxState else "steam.breech_cycle_s"
-	hull.breech_s = c.num("tanks", cycle_key, 6.0)
+	hull.breech_s = c.num("tanks", "steam.breech_cycle_s", 6.0)
 	events.append(TankEvents.shot(gs.slot, shell, s.id))
 	if not drill:
 		state.score.shots += 1

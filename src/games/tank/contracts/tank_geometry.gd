@@ -9,8 +9,17 @@ extends RefCounted
 ## Frames (rigs.json _doc): tank points are in the hull frame (the hull sprite's top-left, y down,
 ## negative y above the roof), facing right; enemy points are in their sprite's frame facing left;
 ## boss points in boss_hull's frame facing left.
+##
+## v3: the tank's own geometry comes from content/tank/tanks.json tanks.<id>.geometry (the
+## landship's, converted from assets/tank/v3/r6_hitbox.json; TankContentSchema.GEOMETRY_SPEC):
+## with_tanks() lays it over rigs.json's tanks.<id> in the rig form (turret.ring, turret.trunnion,
+## turret.barrel_px, turret.rect, muzzle, bow_guns) plus the v3 keys hull_rect, track_rect,
+## headlight and seats, so the frozen accessors read the v3 tank and rigs.json keeps the enemies,
+## the dug-in and the Behemoth. load_default() and load_for() both merge it.
 
 const PATH := "res://assets/tank/rigs.json"
+## The tanks file whose tanks.<id>.geometry load_default() merges (load_for() takes the content's).
+const TANKS_PATH := "res://content/tank/tanks.json"
 ## The frozen key paths; "*" is every tank id.
 const FROZEN_KEYS: Array[String] = [
 	"tanks.*.turret.ring",
@@ -28,26 +37,75 @@ const FROZEN_KEYS: Array[String] = [
 	"boss.turret.muzzle",
 	"boss.secondary_muzzle",
 ]
-## Tanks rigs.json may not have yet (v2): until their own rig lands, their gameplay geometry is
-## the named tank's (the Bastion is the Citadel plus a room, so its turret and gun match). A tank
-## the file has always uses its own; validate() requires every tank not listed here.
-const RIG_FALLBACK := {TankIds.TANK_BASTION: TankIds.TANK_CITADEL}
+## Tanks the data may not have yet: until their own rig lands, their gameplay geometry is the named
+## tank's. v3: none (the landship's comes from tanks.json; v2's Bastion -> Citadel entry retired with
+## both tanks). validate() requires every tank not listed here.
+const RIG_FALLBACK := {}
 
 var data: Dictionary = {}
 
 
-## Reads rigs.json (an empty geometry, which validate() reports, when the file is missing).
+## Reads rigs.json and lays content/tank/tanks.json's tank geometry over it (an empty geometry,
+## which validate() reports, when a file is missing).
 static func load_default() -> TankGeometry:
-	var parsed: Variant = null
-	if FileAccess.file_exists(PATH):
-		parsed = JSON.parse_string(FileAccess.get_file_as_string(PATH))
-	return from_dict(parsed if parsed is Dictionary else {})
+	return from_dict(_read(PATH)).with_tanks(_read(TANKS_PATH))
+
+
+## rigs.json with the tank geometry of the loaded content's tanks.json (the rules: TankAux).
+static func load_for(c: TankContent) -> TankGeometry:
+	var tanks: Variant = c.data.get("tanks") if c != null else null
+	return from_dict(_read(PATH)).with_tanks(tanks if tanks is Dictionary else {})
+
+
+static func _read(path: String) -> Dictionary:
+	if not FileAccess.file_exists(path):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	return parsed if parsed is Dictionary else {}
 
 
 static func from_dict(d: Dictionary) -> TankGeometry:
 	var g := TankGeometry.new()
 	g.data = d
 	return g
+
+
+## v3: replaces data.tanks.<id> with the rig form of every tanks.json tank that has a `geometry`
+## (`tanks_json` is the parsed tanks.json); returns self. Tanks without one keep rigs.json's.
+func with_tanks(tanks_json: Dictionary) -> TankGeometry:
+	var defs: Variant = tanks_json.get("tanks")
+	if not (defs is Dictionary):
+		return self
+	data = data.duplicate(true)
+	if not (data.get("tanks") is Dictionary):
+		data["tanks"] = {}
+	for t: String in defs:
+		var geo: Variant = (
+			(defs[t] as Dictionary).get("geometry") if defs[t] is Dictionary else null
+		)
+		if geo is Dictionary:
+			data["tanks"][t] = rig_from_geometry(geo)
+	return self
+
+
+## The rig form (rigs.json tanks.<id>) of a tanks.json geometry block.
+static func rig_from_geometry(geo: Dictionary) -> Dictionary:
+	return {
+		"turret":
+		{
+			"ring": geo.get("turret_ring"),
+			"trunnion": geo.get("trunnion"),
+			"barrel_px": geo.get("barrel_px"),
+			"rect": geo.get("turret_rect"),
+		},
+		"muzzle": geo.get("muzzle"),
+		"bow_guns": geo.get("bow_guns", []),
+		"hull_rect": geo.get("hull_rect"),
+		"track_rect": geo.get("track_rect"),
+		"headlight": geo.get("headlight"),
+		"seats": geo.get("seats", {}),
+		"ground_y": geo.get("ground_y"),
+	}
 
 
 ## Every problem with the frozen keys ([] when usable): each present with the right shape, three
@@ -140,6 +198,32 @@ func bow_muzzles(tank: String) -> Array[Vector2]:
 	for g: Variant in guns if guns is Array else []:
 		if g is Dictionary and g.get("muzzle") is Array:
 			out.append(_to_vec(g["muzzle"]))
+	return out
+
+
+## v3: the tank's hit rects in the hull frame, broad phase first: the hull, the track run and the
+## turret (tanks.json geometry hull_rect, track_rect, turret_rect); a rect the data lacks is left out.
+func hit_rects(tank: String) -> Array[Rect2]:
+	var out: Array[Rect2] = []
+	for key: String in ["hull_rect", "track_rect", "turret.rect"]:
+		var r := _rect("tanks.%s.%s" % [rig_of(tank), key])
+		if r.size != Vector2.ZERO:
+			out.append(r)
+	return out
+
+
+## v3: the room of seat `engine` in the hull frame (tanks.json geometry seats), or an empty Rect2.
+func seat_rect(tank: String, engine: String) -> Rect2:
+	return _rect("tanks.%s.seats.%s" % [rig_of(tank), engine])
+
+
+## v3: the bow guns' pivots in the hull frame (the guns turn about them; empty when none).
+func bow_pivots(tank: String) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var guns: Variant = TankContentSchema.dig(data, "tanks.%s.bow_guns" % rig_of(tank))
+	for g: Variant in guns if guns is Array else []:
+		if g is Dictionary and g.get("pivot") is Array:
+			out.append(_to_vec(g["pivot"]))
 	return out
 
 

@@ -4,37 +4,60 @@ extends RefCounted
 ## are what content, intents and plan metas carry; the int codes are what snapshots and events
 ## carry (TankSnapshotSchema, TankEvents). Codes never change once shipped: add new ones at the end.
 
-# --- Tanks (brief 2.2): the crew size picks the tank ------------------------------------------------
-const TANK_BULWARK := "bulwark"
-const TANK_RAMPART := "rampart"
-const TANK_CITADEL := "citadel"
-## v2: the Citadel plus an arc-generator room and a searchlight tower (crew 4).
-const TANK_BASTION := "bastion"
-## Index = crew size - 1.
-const TANKS: Array[String] = [TANK_BULWARK, TANK_RAMPART, TANK_CITADEL, TANK_BASTION]
-const TANK_CODES := {TANK_BULWARK: 1, TANK_RAMPART: 2, TANK_CITADEL: 3, TANK_BASTION: 4}
+# --- Tank (v3, brief "v3: One tank, five seats"): every crew size rides the one tank ---------------
+## v3: the reference landship rebuilt as pixel art (r6), for crews of 1 to MAX_CREW.
+const TANK_LANDSHIP := "landship"
+## Every tank id content may define (tanks.json tanks); v3 has one.
+const TANKS: Array[String] = [TANK_LANDSHIP]
+## Wire codes (TankHullState.code, the snapshot's tk column 0). Codes 1-4 were v2's Bulwark,
+## Rampart, Citadel and Bastion (RETIRED_TANK_CODES): reserved, never sent again.
+const TANK_CODES := {TANK_LANDSHIP: 5}
+## v2's four tanks, retired in v3 (one tank for every crew size): their codes stay taken.
+const RETIRED_TANK_CODES := {"bulwark": 1, "rampart": 2, "citadel": 3, "bastion": 4}
+## The largest crew (game.json max_players); the smallest is 1.
+const MAX_CREW := 4
 
-# --- Engines (stations). "bulwark" is the solo diesel with its three-way gearbox --------------------
+# --- Engines (stations, v3: seats) -----------------------------------------------------------------
+## Each engine is one seat of the tank (v3 seat table): its machine, its trainer mode and its job.
+## Drive: the diesel (SIM, terrain grade); moves the tank, digs the berm in a gun line.
 const ENGINE_DIESEL := "diesel"
+## Gun: the dynamo (ERG, the bank pattern); traverses, elevates and fires the main gun.
 const ENGINE_DYNAMO := "dynamo"
+## Loader: the steam engine (SIM, boiler grade); reloads the main gun's 3-round ready rack.
 const ENGINE_STEAM := "steam"
+## Retired in v3 with the Bulwark's three-way gearbox: code 4 is reserved and never sent; the
+## constant stays so older presentation code still compiles.
 const ENGINE_BULWARK := "bulwark"
-## v2 (the Bastion): the arc generator, steady ERG tempo that lifts while the bow guns fire; it
-## lights the searchlights and powers the Bastion's bow guns (brief 2.4 Arc generator).
+## Lights: the arc generator (ERG, the searchlight load); lights the searchlights.
 const ENGINE_ARC := "arc"
-const ENGINES: Array[String] = [
-	ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_BULWARK, ENGINE_ARC
-]
+## Secondaries (v3): the crank-driven twin belt feed (SIM flat) of the two bow guns, 2 rounds per
+## pedal revolution (TankFeedState).
+const ENGINE_FEED := "feed"
+## Every engine content and plans know (stations.json engines).
+const ENGINES: Array[String] = [ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED]
+## Wire codes. 4 was the Bulwark's gearbox diesel: reserved.
 const ENGINE_CODES := {
-	ENGINE_DIESEL: 1, ENGINE_DYNAMO: 2, ENGINE_STEAM: 3, ENGINE_BULWARK: 4, ENGINE_ARC: 5
+	ENGINE_DIESEL: 1, ENGINE_DYNAMO: 2, ENGINE_STEAM: 3, ENGINE_ARC: 5, ENGINE_FEED: 6
 }
 ## Engine name keys (TANK_ENGINE_*), for station cards and results.
 const ENGINE_LABELS := {
 	ENGINE_DIESEL: "TANK_ENGINE_DIESEL",
 	ENGINE_DYNAMO: "TANK_ENGINE_DYNAMO",
 	ENGINE_STEAM: "TANK_ENGINE_STEAM",
-	ENGINE_BULWARK: "TANK_ENGINE_BULWARK",
 	ENGINE_ARC: "TANK_ENGINE_ARC",
+	ENGINE_FEED: "TANK_ENGINE_FEED",
+}
+## v3: the five seats in the seat row's order (Drive, Gun, Loader, Lights, Secondaries; the HUD's
+## seat panel, "next" / "prev" seat intents and the automatic seating's fill priority). The tank's
+## rooms rear to front are tanks.json engines (diesel, steam, dynamo, arc, feed).
+const SEATS: Array[String] = [ENGINE_DIESEL, ENGINE_DYNAMO, ENGINE_STEAM, ENGINE_ARC, ENGINE_FEED]
+## Seat name keys (TANK_SEAT_*).
+const SEAT_LABELS := {
+	ENGINE_DIESEL: "TANK_SEAT_DRIVE",
+	ENGINE_DYNAMO: "TANK_SEAT_GUN",
+	ENGINE_STEAM: "TANK_SEAT_LOADER",
+	ENGINE_ARC: "TANK_SEAT_LIGHTS",
+	ENGINE_FEED: "TANK_SEAT_SECONDARIES",
 }
 
 # --- Segments (brief 2.3 segment table; the drill's skirmish, 2.9) -----------------------------------
@@ -137,15 +160,6 @@ const SHELL_NAMES := {
 	SHELL_BOSS_MAIN: "boss_main",
 }
 
-# --- Bulwark gearbox lever --------------------------------------------------------------------------
-## Drive is "Dig" at a gun line (the same position).
-const LEVER_DRIVE := 0
-const LEVER_TURRET := 1
-const LEVER_HOIST := 2
-const LEVER_NAMES: Array[String] = ["drive", "turret", "hoist"]
-const LEVER_LABELS: Array[String] = ["TANK_LEVER_DRIVE", "TANK_LEVER_TURRET", "TANK_LEVER_HOIST"]
-const LEVER_DIG_LABEL := "TANK_LEVER_DIG"
-
 # --- Turret -----------------------------------------------------------------------------------------
 const FACE_RIGHT := 1
 const FACE_LEFT := -1
@@ -171,6 +185,7 @@ const OUTCOME_COMPLETE := "complete"
 const OUTCOME_TIME_UP := "time_up"
 
 # --- Intents (brief 2.6; TankIntents) ---------------------------------------------------------------
+## Reserved (v3 retired the Bulwark's gearbox lever): "lever" is junk to TankIntents.normalize.
 const INTENT_LEVER := "lever"
 const INTENT_AIM := "aim"
 const INTENT_TARGET := "target"
@@ -178,23 +193,27 @@ const INTENT_TRAVERSE := "traverse"
 const INTENT_FIRE := "fire"
 const INTENT_LATCH := "latch"
 const INTENT_OVER := "over"
-## v2 free roam (brief 2.10): flip the travel direction (the diesel or Bulwark rider, 30 s
-## cooldown; TankRoam). Refused outside free roam.
+## v2 free roam (brief 2.10): flip the travel direction (the Drive rider, 30 s cooldown;
+## TankRoam). Refused outside free roam.
 const INTENT_TURN := "turn"
+## v3 (brief "Seat choice and switching"): move to another seat, {to: an engine id, or "next" /
+## "prev" in SEATS order}; deliberate. Every seat may send it; the rules decide whether the move
+## is allowed (the seat lock, an empty target seat, a planned mode change within 60 s).
+const INTENT_SEAT := "seat"
 const INTENT_KINDS: Array[String] = [
-	INTENT_LEVER,
 	INTENT_AIM,
 	INTENT_TARGET,
 	INTENT_TRAVERSE,
 	INTENT_FIRE,
 	INTENT_LATCH,
 	INTENT_OVER,
-	INTENT_TURN
+	INTENT_TURN,
+	INTENT_SEAT
 ]
-## Intents that end a human's Autopilot fallback (brief 2.5); over never does. (v2: the Ram and its
-## "ram" intent are gone, brief 2.4; a "ram" intent is junk to TankIntents.normalize.)
+## Intents that end a human's Autopilot fallback (brief 2.5; v3: and its automatic seating); over
+## never does. (v2: the Ram and its "ram" intent are gone, brief 2.4; v3: so is "lever".)
 const DELIBERATE_KINDS: Array[String] = [
-	INTENT_LEVER, INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN
+	INTENT_AIM, INTENT_TARGET, INTENT_TRAVERSE, INTENT_FIRE, INTENT_LATCH, INTENT_TURN, INTENT_SEAT
 ]
 
 const VIA_ACTION := "action"
@@ -203,18 +222,27 @@ const VIA_BUTTON := "button"
 const VIA_AUTO := "auto"
 const VIAS: Array[String] = [VIA_ACTION, VIA_SURGE, VIA_BUTTON, VIA_AUTO]
 
-## Lever intent "to" words; "next" is `swap`, "left" / "right" step.
-const LEVER_TO_NEXT := "next"
-const LEVER_TO_LEFT := "left"
-const LEVER_TO_RIGHT := "right"
+## Seat intent "to" words that step through SEATS (wrapping) instead of naming a seat.
+const SEAT_TO_NEXT := "next"
+const SEAT_TO_PREV := "prev"
 const AIM_UP := 1
 const AIM_DOWN := -1
 const TARGET_NEXT := 1
 const TARGET_PREV := -1
 
 
-static func tank_for_crew(crew: int) -> String:
-	return TANKS[clampi(crew, 1, TANKS.size()) - 1]
+## The tank a crew of `crew` rides: the landship for every crew size (v3).
+static func tank_for_crew(_crew: int) -> String:
+	return TANK_LANDSHIP
+
+
+## The seat `step` places from `engine` in SEATS order, wrapping ("next" +1, "prev" -1); `engine`
+## itself for step 0, SEATS[0] for an unknown engine.
+static func seat_step(engine: String, step: int) -> String:
+	var at := SEATS.find(engine)
+	if at < 0:
+		return SEATS[0]
+	return SEATS[posmod(at + step, SEATS.size())]
 
 
 static func engine_code(engine: String) -> int:

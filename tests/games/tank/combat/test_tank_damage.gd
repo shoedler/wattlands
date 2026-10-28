@@ -87,13 +87,10 @@ func test_a_shell_hit_applies_the_table_to_a_real_enemy() -> void:
 
 func test_enemy_hp_and_counts_scale_with_the_tank() -> void:
 	var c := TankContent.from_dicts(TankContent.read_files("ashfall_road"), "ashfall_road")
-	# The scales are content (tanks.json): the brief's 0.6 / 0.8 / 1.0, each within +-50%.
-	var scale := {}
-	for tank: String in [TankIds.TANK_BULWARK, TankIds.TANK_RAMPART, TankIds.TANK_CITADEL]:
-		scale[tank] = c.enemy_scale(tank)
-	assert_between(scale[TankIds.TANK_BULWARK], 0.3, 0.9, "Bulwark: 0.6 +-50%")
-	assert_between(scale[TankIds.TANK_RAMPART], 0.4, 1.2, "Rampart: 0.8 +-50%")
-	assert_between(scale[TankIds.TANK_CITADEL], 0.5, 1.5, "Citadel: 1.0 +-50%")
+	# v3: one tank, and enemy HP is the same for every crew size (tanks.json enemy_scale 1.0; the
+	# rules builder scales the counts by crew size).
+	var scale := {TankIds.TANK_LANDSHIP: c.enemy_scale(TankIds.TANK_LANDSHIP)}
+	assert_eq(scale[TankIds.TANK_LANDSHIP], 1.0, "v3: the same HP for every crew")
 	for tank: String in scale:
 		assert_eq(c.scaled_count(1, tank), 1, "at least one")
 		assert_eq(c.scaled_count(3, tank), maxi(1, roundi(3.0 * scale[tank])))

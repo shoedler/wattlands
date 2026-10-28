@@ -4,31 +4,34 @@ extends RefCounted
 ## Every builder is deterministic (fixed numbers, no RNG), so tests can compare against the JSON
 ## files next to this script:
 ##
-## state(crew): ashfall_road Stage 2 Advance (phase 4) 60 s in, for crew 1 (Bulwark), 2 (Rampart),
-##   3 (Citadel) or 4 (Bastion, v2): slots 1..crew (FTP 200, 220, 240, 260; slot 1 unverified),
-##   stage-2 engines with rotation on, the hull at 72 / 120 HP, a medium ahead holding 300 px, a
-##   light rushing from the rear, a tank destroyer in its telegraph, a wreck barricade, three shells
-##   in flight, the bank at 64, pressure at 72%, the Bulwark's lever on Turret, the arc's duty at
-##   0.35 with the searchlights lit, each rider's target_pct (TARGETS by engine); every rider on a
-##   SIM engine can evade (v2), the medium and the destroyer hold in the far lane.
+## state(crew): ashfall_road Stage 2 Advance (phase 4) 60 s in, for a crew of 1 to 4 on the v3
+##   landship (five seats; the riders on their start seats Drive, Gun, Loader, Lights, the rest
+##   empty): slots 1..crew (FTP 200, 220, 240, 260; slot 1 unverified), the hull at 72 / 120 HP, a
+##   medium ahead holding 300 px, a light rushing from the rear, a tank destroyer in its telegraph, a
+##   wreck barricade, three shells in flight, the bank at 64, pressure at 72% with 2 shells in the
+##   rack, one chambered and the loader 40% into the next, the arc's duty at 0.35 with the
+##   searchlights lit while Lights is manned, the feed's 37 rounds at 180 rpm, each rider's
+##   target_pct (TARGETS by engine); every rider on a SIM engine can evade (v2), the medium and the
+##   destroyer hold in the far lane; v3 seat locks 12.5 s x slot, and with 4 riders the Lights rider
+##   moving to the empty Secondaries seat.
 ## gun_line(crew): Stage 2 gun line (phase 5) 40 s in: a heavy tank in its telegraph and 2 dug-in
 ##   tanks, the berm at 18 HP, the turret loaded with a heavy shell.
 ## boss(crew): the boss (phase 10) 150 s in: phase 1, the last bogie (index 2, farthest from the
 ##   tank) broken, the main gun in its telegraph, the diesel's rider sprinting to evade it.
-## cap(): the Citadel's state(3) with 16 enemies and 24 shells at large coordinates (the 4 KB test).
-## cap4(): the same at the caps for the Bastion's state(4): 4 riders, 4 rooms (v2's 4 KB test).
+## cap(): state(3) with 16 enemies and 24 shells at large coordinates (the 4 KB test).
+## cap4(): the same at the caps for state(4): 4 riders, 5 rooms (the v3 4 KB test).
 ## frame(crew): an InputFrame for state(crew) (every rider compliant at 90% FTP in SIM, on target
 ##   in ERG); frames.json holds the same frames as dictionaries for view and HUD tests.
-## snapshot_<tank>.json: TankSnapshot.encode(state(crew)) as JSON (ints).
+## snapshot_crew<n>.json: TankSnapshot.encode(state(n)) as JSON (ints; v3: one tank, so by crew).
 
 const DIR := "res://tests/games/tank/fixtures"
 const FRAMES_PATH := DIR + "/frames.json"
 const PEERS: Array[int] = [1, 2, 3, 4]
-## Each rider's target_pct in state(crew) by engine: SIM band centres (diesel, Bulwark 90.5; steam
+## Each rider's target_pct in state(crew) by engine: SIM band centres (diesel and feed 90.5; steam
 ## building 90) and the ERG targets the bank at 64 and the arc's duty 0.35 ask for.
 const TARGETS := {
 	TankIds.ENGINE_DIESEL: 90.5,
-	TankIds.ENGINE_BULWARK: 90.5,
+	TankIds.ENGINE_FEED: 90.5,
 	TankIds.ENGINE_STEAM: 90.0,
 	TankIds.ENGINE_DYNAMO: 71.2,
 	TankIds.ENGINE_ARC: 70.3,
@@ -59,7 +62,8 @@ static func slots(crew: int) -> Array[PlayerSlot]:
 	return out
 
 
-## The rider's engine in mission segment `index` with rotation on.
+## The rider's engine in mission segment `index` with rotation on (v3: no rotation rows, so the
+## slot's start seat).
 static func engine_at(c: TankContent, crew: int, slot: int, index: int) -> String:
 	return TankPlanBuilder.engine_for(c, TankIds.tank_for_crew(crew), slot, index, true)
 
@@ -253,7 +257,7 @@ static func frame_dict(crew: int) -> Dictionary:
 
 ## The snapshot JSON path of `crew`'s state().
 static func snapshot_path(crew: int) -> String:
-	return DIR.path_join("snapshot_%s.json" % TankIds.tank_for_crew(crew))
+	return DIR.path_join("snapshot_crew%d.json" % crew)
 
 
 static func snapshot(crew: int) -> Dictionary:
@@ -277,6 +281,9 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 	s.seg.length_m = float(seg.get("length_m", 0.0))
 	for r in s.riders:
 		r.engine = engine_at(c, crew, r.slot, index)
+		r.seat_lock_s = 12.5 * r.slot
+		if crew == TankIds.MAX_CREW and r.slot == crew - 1:
+			r.seat_target = TankIds.ENGINE_FEED
 		r.raw_w = roundf(0.9 * r.ftp)
 		r.cadence_rpm = 90.0
 		r.ftp_pct = 90.0
@@ -300,14 +307,19 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 			(st as TankDynamoState).bank = 64.0
 			(st as TankDynamoState).stabilizing = true
 		elif st is TankSteamState:
-			(st as TankSteamState).pressure_pct = 72.0
+			var sm := st as TankSteamState
+			sm.pressure_pct = 72.0
+			sm.rack = 2
+			sm.chamber = true
+			sm.load_t = 0.4
 		elif st is TankArcState:
 			(st as TankArcState).duty = 0.35
-			(st as TankArcState).lit = true
-		elif st is TankGearboxState:
-			(st as TankGearboxState).lever = TankIds.LEVER_TURRET
-			(st as TankGearboxState).lever_to = TankIds.LEVER_TURRET
-			(st as TankGearboxState).hoist_j = 1500.0
+			(st as TankArcState).lit = not st.is_empty()
+		elif st is TankFeedState:
+			var fd := st as TankFeedState
+			fd.rounds = 37
+			fd.rpm = 180.0
+			fd.fire_tick = 49190
 	s.score.overruns = 1
 	s.score.crew_kills = 5
 	return s
