@@ -81,6 +81,7 @@ func test_the_turret_mirrors_with_a_rear_facing_gun() -> void:
 		assert_eq(v.turret_sx(), 1.0)
 		var front := v.hud_tank_rects()[0]
 		var tp := v.hud_tank_point("turret_pivot").x
+		var piv_front := v.hud_tank_point("barrel_pivot")
 		s.hull.facing = TankIds.FACE_LEFT
 		v.advance(1.0 / 60.0)
 		assert_eq(v.turret_sx(), -1.0, "crew %d: the whole turret mirrored" % crew)
@@ -89,9 +90,11 @@ func test_the_turret_mirrors_with_a_rear_facing_gun() -> void:
 		var piv := v.hud_tank_point("barrel_pivot")
 		var muz := v.hud_tank_point("muzzle")
 		assert_lt(muz.x, piv.x, "crew %d: the barrel points back" % crew)
-		assert_almost_eq(piv.x, back.position.x + 3.0, 1.5, "crew %d: from the mantlet" % crew)
-		var tv := v.kit.variant(v.variant)
-		assert_true(tv.has("turret") and tv.has("hull_open"), "the turret block is cut out")
+		assert_almost_eq(
+			piv.x, 2.0 * tp - piv_front.x, 1.5, "crew %d: the trunnion mirrored" % crew
+		)
+		assert_true(back.encloses(Rect2(piv, Vector2.ZERO).grow(0.5)), "in the hitbox turret")
+		assert_gt(v.rig.hit_rect("turret").size.x, 0.0, "the hitbox's turret")
 
 
 func test_a_traverse_squeezes_the_turret_and_hides_the_arc_until_it_is_round() -> void:

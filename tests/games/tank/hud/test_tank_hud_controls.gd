@@ -1,15 +1,13 @@
 extends GutTest
-## The game's own HUD Controls built and drawn headless from fixture states for crews 1-4 (the
-## Bastion's fourth rider on the arc generator), the crew row's cards (room order, live engine
-## windows, YOU, names cut with an ellipsis), my numbers from the local telemetry, the world tags,
+## The game's own HUD Controls built and drawn headless from fixture states for crews 1-4 (v3: the
+## landship's five seats, the fourth rider on Lights), the seat panel's cards (seat order, live
+## machine windows, YOU, names cut with an ellipsis), my numbers from the local telemetry, the
+## world tags,
 ## the free-roam strip and board from their setters, the fonts, and the elevation arc clear of the
 ## barrel's pixels.
 
 const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
-const BARREL_PNG := "res://assets/tank/v2/turret_barrel.png"
-## The kit frame the turret parts share (tank_3rider) and its barrel pivot.
-const PART_PIVOT := Vector2(350.5, 114.5)
 
 
 func _place(c: TankHudCtl) -> TankHudCtl:
@@ -40,32 +38,36 @@ func test_every_control_builds_and_draws_for_crews_1_to_4() -> void:
 				assert_gt(c.draws, 0, "%s crew %d %s drew" % [c.name, crew, kind])
 
 
-func test_the_crew_row_has_one_card_per_rider_in_room_order() -> void:
+func test_the_seat_panel_has_five_cards_in_seat_order_for_crews_1_to_4() -> void:
 	for crew in range(1, 5):
 		var s := X.state(crew)
 		var g: TankGame = autofree(X.game(s))
-		var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+		var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 		row.refresh()
-		assert_eq(row.cards.size(), crew, "crew %d" % crew)
-		var order: Array[String] = []
-		for st in s.stations:
-			if st.slot >= 0:
-				order.append(st.engine)
+		assert_eq(row.cards.size(), TankIds.SEATS.size(), "crew %d: every seat" % crew)
 		var shown: Array[String] = []
+		var manned := 0
 		for c: Dictionary in row.cards:
-			shown.append(str(c["engine"]))
-			assert_not_null(row.texture_of(str(c["engine"])), "a live engine window")
-		assert_eq(shown, order, "rear to front, as the rooms")
-	var bastion := X.state(4)
-	var row4 := TankHudModel.crew_cards(bastion, 1)
-	assert_eq(str(row4[-1]["engine"]), TankIds.ENGINE_ARC)
-	assert_eq(str(row4[-1]["mech"]), "arc", "TankMech paints the arc generator")
+			var engine := str(c["engine"])
+			shown.append(engine)
+			assert_not_null(row.texture_of(engine), "a machine window")
+			assert_eq(int(c["slot"]), s.station(engine).slot, engine)
+			assert_eq(bool(c["empty"]), s.station(engine).is_empty(), engine)
+			if not bool(c["empty"]):
+				manned += 1
+		assert_eq(shown, TankIds.SEATS, "Drive, Gun, Loader, Lights, Secondaries")
+		assert_eq(manned, crew, "crew %d: one card per rider manned" % crew)
+	var four := TankHudModel.seat_cards(X.state(4), 1)
+	assert_eq(str(four[3]["engine"]), TankIds.ENGINE_ARC)
+	assert_eq(str(four[3]["mech"]), "arc", "TankMech paints the arc generator")
+	assert_eq(str(four[4]["mech"]), "feed", "and the belt feed")
+	assert_true(bool(four[4]["empty"]))
 
 
 func test_the_engine_windows_turn_with_cadence_and_stop_at_zero() -> void:
 	var s := X.state(3)
 	var g: TankGame = autofree(X.game(s))
-	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 	row.refresh()
 	var diesel := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
 	diesel.cadence_rpm = 0.0
@@ -83,7 +85,7 @@ func test_the_engine_windows_turn_with_cadence_and_stop_at_zero() -> void:
 func test_the_local_card_says_you_and_uses_the_local_telemetry() -> void:
 	var s := X.state(3)
 	var g: TankGame = autofree(X.game(s, 2))
-	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 	row.set_telemetry(X.tm(321.0, 101.0))
 	row.refresh()
 	var locals := row.cards.filter(func(c: Dictionary) -> bool: return bool(c["local"]))
@@ -101,12 +103,12 @@ func test_the_local_card_says_you_and_uses_the_local_telemetry() -> void:
 
 func test_names_are_cut_with_an_ellipsis_to_fit_their_card() -> void:
 	var long := "Bartholomew Longname-Smythe"
-	for w in [98.0, float(TankHudCrew.CARD_W)]:
-		var fitted := TankHudCrew.fit_name(long, w, "180 W")
+	for w in [90.0, float(TankHudSeats.CARD_W)]:
+		var fitted := TankHudSeats.fit_name(long, w, "180 W")
 		assert_true(fitted.ends_with(D.ELLIPSIS), fitted)
 		assert_lte(D.tall_w(fitted), w - 12.0 - D.tall_w("180 W") - 9.0)
 		assert_gt(fitted.length(), 3, "still a name")
-	assert_eq(TankHudCrew.fit_name("Ann", 98.0, "180 W"), "Ann")
+	assert_eq(TankHudSeats.fit_name("Ann", 90.0, "180 W"), "Ann")
 	assert_eq(D.fit_tall("anything", 1.0), "")
 
 
@@ -224,26 +226,26 @@ func test_the_fonts_load_and_match_their_generator() -> void:
 	assert_eq(TankHudFont.DIGIT_CELL.y, 24, "key numbers 24 art px tall")
 
 
-## The barrel sprite's opaque pixels (centres, in its kit frame).
-func _opaque(img: Image) -> Array[Vector2]:
+## The v3 barrel sprite's opaque pixels (centres, relative to its trunnion: TankRig.barrel_origin).
+func _opaque() -> Array[Vector2]:
+	var rig := TankRig.shared()
+	var img := rig.barrel_tex.get_image()
 	var out: Array[Vector2] = []
 	for y in img.get_height():
 		for x in img.get_width():
 			if img.get_pixel(x, y).a > 0.0:
-				out.append(Vector2(x, y) + Vector2(0.5, 0.5))
+				out.append(Vector2(x, y) + Vector2(0.5, 0.5) - rig.barrel_origin)
 	return out
 
 
-## The barrel sprite on the canvas at elevation `deg` round `pivot` (as the view turns it), each
-## pixel with its 8 neighbours so rounding never hides a touch.
-func _barrel_sprite(
-	opaque: Array[Vector2], pivot: Vector2, scale: float, deg: float, left: bool
-) -> Dictionary:
+## The barrel sprite on the canvas at elevation `deg` round `pivot` (as TankBody turns it: the bore
+## along +x, rotated up by `deg`, mirrored when it faces left), each pixel with its 8 neighbours so
+## rounding never hides a touch.
+func _barrel_sprite(opaque: Array[Vector2], pivot: Vector2, deg: float, left: bool) -> Dictionary:
 	var out := {}
-	var r := deg_to_rad(deg)
+	var t := Transform2D(-deg_to_rad(deg), Vector2.ZERO)
 	for q in opaque:
-		var rel := (q - PART_PIVOT) * scale
-		var rot := Vector2(rel.x * cos(r) + rel.y * sin(r), -rel.x * sin(r) + rel.y * cos(r))
+		var rot := t * q
 		if left:
 			rot.x = -rot.x
 		var p := Vector2i((pivot + rot).floor())
@@ -254,12 +256,10 @@ func _barrel_sprite(
 
 
 func test_the_elevation_arc_never_touches_the_barrel() -> void:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
-	var opaque := _opaque(img)
-	assert_gt(opaque.size(), 500, "the barrel sprite")
+	var opaque := _opaque()
+	assert_gt(opaque.size(), 200, "the barrel sprite")
 	for crew in range(1, 5):
 		var s := X.state(crew)
-		var scale := 0.85 if crew == 1 else 1.0
 		for facing in [TankIds.FACE_RIGHT, TankIds.FACE_LEFT]:
 			s.hull.facing = facing
 			var left: bool = facing == TankIds.FACE_LEFT
@@ -269,7 +269,7 @@ func test_the_elevation_arc_never_touches_the_barrel() -> void:
 				var b := TankHudGeom.make(s, null).barrel()
 				var piv: Vector2 = b["pivot"]
 				var radius := TankHudGeom.arc_radius(float(b["length"]))
-				var barrel := _barrel_sprite(opaque, piv, scale, deg, left)
+				var barrel := _barrel_sprite(opaque, piv, deg, left)
 				var model := TankHudGeom.barrel_pixels(piv, float(b["length"]), deg, left)
 				var drawn: Array[Vector2i] = TankHudGeom.arc_pixels(piv, radius, left)
 				drawn.append_array(
@@ -291,14 +291,13 @@ func test_the_elevation_arc_never_touches_the_barrel() -> void:
 
 
 func test_the_barrel_check_catches_an_arc_inside_the_barrels_reach() -> void:
-	var img := Image.load_from_file(ProjectSettings.globalize_path(BARREL_PNG))
 	var s := X.state(3)
 	s.hull.elev_deg = 10.0
 	var b := TankHudGeom.make(s, null).barrel()
 	var piv: Vector2 = b["pivot"]
-	var barrel := _barrel_sprite(_opaque(img), piv, 1.0, 10.0, false)
+	var barrel := _barrel_sprite(_opaque(), piv, 10.0, false)
 	var hits := 0
 	for p in TankHudGeom.arc_pixels(piv, 20.0, false):
 		if barrel.has(p):
 			hits += 1
-	assert_gt(hits, 0, "the round 2 mock's 20 px arc ran under the barrel")
+	assert_gt(hits, 0, "an arc 20 px out runs under the barrel")

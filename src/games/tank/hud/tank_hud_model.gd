@@ -2,7 +2,8 @@ class_name TankHudModel
 extends RefCounted
 ## What Diesel Domestiques' own HUD shows, as plain data computed from TankGame.state (pure and
 ## static, so tests read it without drawing; brief 2.3, 2.4, 3.6): the local rider's band and their
-## one instruction line (HOLD / SPIN / SURGE / LATCH / RESERVE), the crew row's cards in room order,
+## one instruction line (v3 per seat: HOLD / SURGE / BUILD / OVER / SPIN / RESERVE), the seat panel's
+## cards in seat order, the rack and the feed's rate,
 ## the telegraphing shooters, the mission plate's stage strip and objective, the halt distance and
 ## the boss bars. It only reads the state.
 
@@ -15,9 +16,9 @@ const RATIO_HI := 1.17
 const RATIO_MAX := 1.6
 ## The target before the host has set one: the middle of the SIM band (TankMech.rider_power).
 const FALLBACK_TARGET_PCT := 90.5
-## The diesel's and Bulwark's SIM band in % FTP (tanks.json in_band.sim_ftp_pct).
+## The Drive seat's SIM band in % FTP (tanks.json in_band.sim_ftp_pct).
 const SIM_BAND_PCT: Array = [76.0, 105.0]
-## Steam "building" at >= 90 % FTP; a loaded or cycling loader only needs cadence >= 50.
+## The Loader "building" its rack at >= 90 % FTP; with the rack full it only needs cadence >= 50.
 const STEAM_PCT := 90.0
 const LOADER_RPM := 50.0
 const DEFAULT_RPM := 60.0
@@ -32,20 +33,32 @@ const TELEGRAPH_S := {
 	TankIds.ENEMY_LIGHT: 2.5,
 	"boss": 6.0,
 }
-## Instruction kinds.
+## Instruction kinds (v3: per seat). Drive HOLD (SURGE to evade), Gun HOLD (ERG), Loader BUILD
+## (OVER inside the Overpressure window, SPIN once the rack is full), Lights HOLD (ERG), Secondaries
+## FEED (SPIN with the rounds a minute).
 const DO_NONE := ""
 const DO_HOLD := "hold"
 const DO_SPIN := "spin"
 const DO_SURGE := "surge"
-const DO_LATCH := "latch"
+const DO_BUILD := "build"
+const DO_OVER := "over"
+const DO_FEED := "feed"
 const DO_RESERVE := "reserve"
-## The machine TankMech paints for each engine.
+## The machine TankMech paints for each seat's engine.
 const MECH := {
 	TankIds.ENGINE_DIESEL: "diesel",
-	TankIds.ENGINE_BULWARK: "diesel",
 	TankIds.ENGINE_DYNAMO: "dynamo",
 	TankIds.ENGINE_STEAM: "steam",
 	TankIds.ENGINE_ARC: "arc",
+	TankIds.ENGINE_FEED: "feed",
+}
+## Each seat's trainer mode in its work (the v3 seat table): the seat cards' ERG / SIM tags.
+const SEAT_MODE := {
+	TankIds.ENGINE_DIESEL: Wl.SIM,
+	TankIds.ENGINE_DYNAMO: Wl.ERG,
+	TankIds.ENGINE_STEAM: Wl.SIM,
+	TankIds.ENGINE_ARC: Wl.ERG,
+	TankIds.ENGINE_FEED: Wl.SIM,
 }
 
 
@@ -67,56 +80,96 @@ static func band_state(in_band: bool, ratio: float) -> int:
 	return 1 if ratio > RATIO_HI else -1
 
 
-## The crew row: one card per manned room, rear to front (state.stations order): {engine, mech,
-## peer, slot, w, cad, ratio, state (band_state), in_band, local, reserve}. The local rider's
-## watts and cadence come from `local` ({"w", "cad"}) when given (their own telemetry).
-static func crew_cards(state: TankState, local_peer: int, local: Dictionary = {}) -> Array:
+## The seat panel (v3 seat panel A): one card per seat in TankIds.SEATS order (Drive, Gun, Loader,
+## Lights, Secondaries), manned or not: {engine, mech, mode (the seat's ERG / SIM), empty, slot (-1
+## empty), peer, w, cad, ratio, state (band_state), in_band, local, reserve, lock_s (the rider's
+## seat lock), moving_to (the rider's seat_target), incoming (the slot moving into this seat, -1
+## none)}. The local rider's watts and cadence come from `local` ({"w", "cad"}) when given (their
+## own telemetry).
+static func seat_cards(state: TankState, local_peer: int, local: Dictionary = {}) -> Array:
 	var out: Array = []
 	if state == null:
 		return out
-	for st in state.stations:
-		var r := state.rider_at(st.slot) if st.slot >= 0 else null
-		if r == null:
-			continue
-		var is_local := r.peer == local_peer
-		var w := float(local.get("w", r.raw_w)) if is_local else r.raw_w
-		var cad := float(local.get("cad", r.cadence_rpm)) if is_local else r.cadence_rpm
-		var away := r.afk or not r.connected or st.reserve
-		if away or state.all_afk:
-			cad = 0.0
-		var ratio := power_ratio(r, w)
-		(
-			out
-			. append(
-				{
-					"engine": st.engine,
-					"mech": str(MECH.get(st.engine, "diesel")),
-					"peer": r.peer,
-					"slot": r.slot,
-					"w": w,
-					"cad": cad,
-					"ratio": ratio,
-					"in_band": r.in_band,
-					"state": band_state(r.in_band, ratio),
-					"local": is_local,
-					"reserve": away,
-				}
-			)
-		)
+	for engine in TankIds.SEATS:
+		var c := {
+			"engine": engine,
+			"mech": str(MECH[engine]),
+			"mode": str(SEAT_MODE[engine]),
+			"empty": true,
+			"slot": -1,
+			"peer": 0,
+			"w": 0.0,
+			"cad": 0.0,
+			"ratio": 0.0,
+			"in_band": false,
+			"state": -1,
+			"local": false,
+			"reserve": false,
+			"lock_s": 0.0,
+			"moving_to": "",
+			"incoming": -1,
+		}
+		for rr in state.riders:
+			if rr.seat_target == engine and rr.engine != engine:
+				c["incoming"] = rr.slot
+		var st := state.station(engine)
+		var r := state.rider_at(st.slot) if st != null and st.slot >= 0 else null
+		if r != null:
+			c.merge(_manned(state, st, r, local_peer, local), true)
+		out.append(c)
 	return out
 
 
-## The trainer mode the plan gives `engine` in the current segment (the mission's plan entry; SIM
-## for the drive and the boiler, ERG otherwise, when the entry has none).
+static func _manned(
+	state: TankState, st: TankStationState, r: TankRiderState, local_peer: int, local: Dictionary
+) -> Dictionary:
+	var is_local := r.peer == local_peer
+	var w := float(local.get("w", r.raw_w)) if is_local else r.raw_w
+	var cad := float(local.get("cad", r.cadence_rpm)) if is_local else r.cadence_rpm
+	var away := r.afk or not r.connected or st.reserve
+	if away or state.all_afk:
+		cad = 0.0
+	var ratio := power_ratio(r, w)
+	return {
+		"empty": false,
+		"slot": r.slot,
+		"peer": r.peer,
+		"w": w,
+		"cad": cad,
+		"ratio": ratio,
+		"in_band": r.in_band,
+		"state": band_state(r.in_band, ratio),
+		"local": is_local,
+		"reserve": away,
+		"lock_s": r.seat_lock_s,
+		"moving_to": r.seat_target,
+	}
+
+
+## The Loader's ready rack (0..TankConst.RACK_MAX; 0 without a Loader room).
+static func rack(state: TankState) -> int:
+	if state == null:
+		return 0
+	var stm := state.station(TankIds.ENGINE_STEAM) as TankSteamState
+	return clampi(stm.rack, 0, TankConst.RACK_MAX) if stm != null else 0
+
+
+## The bow guns' rounds a minute now (TankFeedState.rpm; 0 while the Secondaries seat is empty).
+static func feed_rpm(state: TankState) -> float:
+	if state == null:
+		return 0.0
+	var fd := state.station(TankIds.ENGINE_FEED) as TankFeedState
+	return fd.rpm if fd != null and not fd.is_empty() else 0.0
+
+
+## The trainer mode the plan gives `engine` in the current segment (the mission's plan entry; else
+## the seat's own mode, SEAT_MODE).
 static func plan_mode(state: TankState, engine: String) -> String:
 	if state.content != null and state.seg.seg != "":
 		var e := state.content.plan_entry(engine, state.seg.seg)
 		if e.has("mode"):
 			return str(e["mode"])
-	match engine:
-		TankIds.ENGINE_DIESEL, TankIds.ENGINE_BULWARK, TankIds.ENGINE_STEAM:
-			return Wl.SIM
-	return Wl.ERG
+	return str(SEAT_MODE.get(engine, Wl.ERG))
 
 
 ## Game seconds since the plan started as a client can see it (the host's plan clock when the
@@ -173,10 +226,11 @@ static func telegraph_left(state: TankState) -> float:
 
 
 ## The local rider's power band in W (x low, y high; y 0 = open-ended, "lo+"; ZERO = none) for
-## their engine now (brief 2.3 In band): the published SIM band (`published`, the HudLayer's) or
-## 76-105 % FTP for the drive in SIM; >= 90 % FTP for the boiler building; the applied ERG target
-## (`target_w`) +/- 5 % for an ERG rider; none for a cadence-only rule (the depot, checkpoints, a
-## loaded or cycling loader).
+## their seat now (brief 2.3 In band, v3 effort table): the applied ERG target (`target_w`) +/- 5 %
+## for an ERG rider (Gun, Lights, any checkpoint); the published SIM band (`published`, the
+## HudLayer's) or 76-105 % FTP for Drive in SIM; >= 90 % FTP for the Loader building its rack; the
+## published band (else none) for the Secondaries; none outside WORK or for a cadence-only rule (a
+## full rack).
 static func band_w(
 	state: TankState, r: TankRiderState, mode: String, target_w: float, published: Vector2
 ) -> Vector2:
@@ -187,7 +241,7 @@ static func band_w(
 			return Vector2(ERG_LO * target_w, ERG_HI * target_w)
 		return Vector2.ZERO
 	match r.engine:
-		TankIds.ENGINE_DIESEL, TankIds.ENGINE_BULWARK:
+		TankIds.ENGINE_DIESEL:
 			if published.y > 0.0:
 				return published
 			var b: Array = SIM_BAND_PCT
@@ -195,20 +249,20 @@ static func band_w(
 				b = state.content.value("tanks", "in_band.sim_ftp_pct", SIM_BAND_PCT)
 			return Vector2(float(b[0]) / 100.0 * r.ftp, float(b[1]) / 100.0 * r.ftp)
 		TankIds.ENGINE_STEAM:
-			var stm := state.station(TankIds.ENGINE_STEAM) as TankSteamState
-			if stm != null and (stm.loaded or stm.cycling):
+			if rack(state) >= TankConst.RACK_MAX:
 				return Vector2.ZERO
 			return Vector2(STEAM_PCT / 100.0 * r.ftp, 0.0)
 	return published if published.y > 0.0 else Vector2.ZERO
 
 
-## The one instruction line for the local rider: {kind (DO_*), key, args, urgent, left_s}.
+## The one instruction line for the local rider's seat: {kind (DO_*), key, args, urgent, left_s}.
 ## `nums`: {"mode": the trainer mode, "cad": cadence, "band": band_w(), "cband": the published
-## cadence band (ZERO = none)}. In order: nothing in the cool-down; RESERVE while the station runs
-## on reserve; SURGE nnn+ W with the time left while the steam window is open or, for a rider who
-## can evade, while a shooter telegraphs; SPIN 50+ RPM for a loaded or cycling loader; LATCH with
-## the boiler at 100 % and nothing latched; SPIN nn+ RPM where the rule is cadence (the depot,
-## checkpoints, an ERG rider under the cadence floor); else HOLD lo-hi W (or lo+ W).
+## cadence band (ZERO = none)}. In order: nothing in the cool-down; RESERVE while the seat runs on
+## reserve; Loader: OVER nnn+ W with the time left while the Overpressure window is open; SURGE
+## nnn+ W with the time left for a SIM rider who can evade while a shooter telegraphs;
+## Secondaries: SPIN nn+ and the bow guns' rounds a minute (FEED); Loader in WORK: SPIN 50+ RPM
+## with the rack full, else BUILD nnn+ W; SPIN nn+ RPM where the rule is cadence (the depot,
+## checkpoints, an ERG rider under the cadence floor); else HOLD lo-hi W (Drive, Gun, Lights).
 static func instruction(state: TankState, r: TankRiderState, nums: Dictionary) -> Dictionary:
 	if state == null or r == null or r.engine == "" or state.in_cooldown():
 		return _line(DO_NONE, "", [], 0.0)
@@ -220,18 +274,21 @@ static func instruction(state: TankState, r: TankRiderState, nums: Dictionary) -
 	var stm := st as TankSteamState
 	var work := state.seg.kind == Wl.WORK
 	if work and stm != null and stm.window_s > 0.0:
-		return _line(DO_SURGE, "TANK_HUD_DO_SURGE", [sprint], stm.window_s)
+		return _line(DO_OVER, "TANK_HUD_DO_OVER", [sprint], stm.window_s)
 	var left := telegraph_left(state)
 	if left > 0.0 and can_evade(state, r, mode):
 		return _line(DO_SURGE, "TANK_HUD_DO_SURGE", [sprint], left)
 	var cb: Vector2 = nums.get("cband", Vector2.ZERO)
 	var floor_rpm := str(roundi(cb.x if cb.y > 0.0 else DEFAULT_RPM))
-	if work and stm != null and (stm.loaded or stm.cycling):
-		var lr := str(roundi(cb.x if cb.y > 0.0 else LOADER_RPM))
-		return _line(DO_SPIN, "TANK_HUD_DO_SPIN", [lr], 0.0)
-	if work and stm != null and stm.pressure_pct >= 100.0 and not stm.over:
-		return _line(DO_LATCH, "TANK_HUD_DO_LATCH", [], 0.0)
+	if st is TankFeedState:
+		var rate := str(roundi(feed_rpm(state)))
+		return _line(DO_FEED, "TANK_HUD_DO_FEED", [floor_rpm, rate], 0.0)
 	var band: Vector2 = nums.get("band", Vector2.ZERO)
+	if work and stm != null:
+		if rack(state) >= TankConst.RACK_MAX or band.x <= 0.0:
+			var lr := str(roundi(cb.x if cb.y > 0.0 else LOADER_RPM))
+			return _line(DO_SPIN, "TANK_HUD_DO_SPIN", [lr], 0.0)
+		return _line(DO_BUILD, "TANK_HUD_DO_BUILD", [str(roundi(band.x))], 0.0)
 	var cad := float(nums.get("cad", r.cadence_rpm))
 	var under_floor := mode == Wl.ERG and cad < float(floor_rpm)
 	if not work or under_floor or band.x <= 0.0:
@@ -243,7 +300,8 @@ static func instruction(state: TankState, r: TankRiderState, nums: Dictionary) -
 
 
 static func _line(kind: String, key: String, args: Array, left: float) -> Dictionary:
-	return {"kind": kind, "key": key, "args": args, "urgent": kind == DO_SURGE, "left_s": left}
+	var urgent := kind == DO_SURGE or kind == DO_OVER
+	return {"kind": kind, "key": key, "args": args, "urgent": urgent, "left_s": left}
 
 
 ## The mission plate: {title (the segment's label key), left_s (to the nominal end, or to the

@@ -3,30 +3,40 @@ extends RefCounted
 ## Where the world tags (TankHudTags) go on the art canvas (art px, 0,0 the canvas' top left), and
 ## the gun's elevation arc. It only reads.
 ##
-## The view answers when it has this public API (the v2 view, requested from the view builder):
+## The view answers when it has this public API (the v3 view):
 ##   hud_world_x(world_x_px: float) -> float   a rules world x (TankState units) on the canvas
 ##   hud_ground_y() -> float                   the road line under the tank
-##   hud_tank_point(anchor: String) -> Vector2 kit.json anchors as drawn now (facing, elevation,
-##                                             hull bob): "barrel_pivot", "muzzle", "rear" (the
-##                                             road under the hull's rear end)
+##   hud_tank_point(anchor: String) -> Vector2 a tank point as drawn now (facing, elevation,
+##                                             recoil, hull pose): "barrel_pivot" (the trunnion),
+##                                             "muzzle", "rear" (the road under the hull's rear
+##                                             end), "turret_pivot", "headlight", "exhaust",
+##                                             "bow_gun_upper_pivot" / "_muzzle",
+##                                             "bow_gun_lower_pivot" / "_muzzle",
+##                                             "searchlight_turret_lens", "searchlight_rear_lens"
+##   hud_barrel_length() -> float              the main gun, trunnion to muzzle
+##   hud_bow_muzzles() -> Array[Vector2]       the bow guns' muzzles as drawn
 ##   hud_enemy_rect(id: int) -> Rect2          an enemy's sprite (Rect2() when not drawn)
 ##   hud_boss_rect() -> Rect2                  the Behemoth's sprite (Rect2() when not drawn)
 ##   hud_barrel_dir() -> float                 the barrel as drawn: 1 right .. -1 left (traverse)
-##   hud_tank_rects() -> Array[Rect2]          the turret (as it faces) and the hull, kept clear
-##   hud_variant() -> String                   the variant drawn
+##   hud_tank_rects() -> Array[Rect2]          the hitbox's turret (as it faces) and its hull with
+##                                             the track run, rotated with the hull: kept clear
+##   hud_mirrored() -> bool                    the world drawn mirrored (free roam, west)
 ## The HUD finds the view through the game's meta VIEW_META (the view sets it), else by looking
-## for a node with hud_world_x() in the tree. Without one (tests, headless runs, the v1 view) the
-## same comes from the state, TankConst and kit.json: rules px x 1.5 with the hull's rear at
-## canvas x REAR_X, the road at GROUND, the variant's anchors at TANK_POS (the approved mock's
-## framing).
+## for a node with hud_world_x() in the tree. Without one (tests, headless runs) the same comes
+## from the state, TankConst and the v3 tank kit (TankRig: the r6 landship, its hitbox and
+## anchors) at rest: rules px x SCALE with the hull's rear at canvas x REAR_X, the road at GROUND,
+## the tank sprite's top left at TANK_POS (TankView.TANK_AT), unrotated.
 
 const VIEW_META := "tank_view"
-const KIT := "res://assets/tank/v2/kit.json"
-const VARIANTS: Array[String] = ["tank_1rider", "tank_2rider", "tank_3rider", "tank_4rider"]
 const SCALE := 1.5
-const REAR_X := 24.0
-const GROUND := 340.0
-const TANK_POS := Vector2(6, 107)
+## The v3 view's frame at rest on the 960 x 540 base: the sprite's top left (TankView.TANK_AT), the
+## hull's rear in the sprite (TankView.ART_REAR) and the road line (TankView.GROUND).
+const TANK_POS := Vector2(18, 176)
+const ART_REAR := 14.0
+const REAR_X := TANK_POS.x + ART_REAR
+const GROUND := 385.0
+## The bow guns' tilt at rest (TankBody.bow_elev_deg's default).
+const BOW_REST_DEG := 2.0
 ## The gun's reach (brief 2.4) and the arc: drawn beyond the muzzle, so never on the barrel.
 const ELEV_MIN := -12.0
 const ELEV_MAX := 30.0
@@ -41,8 +51,6 @@ const ARC_STEP := 2.0
 const ARC_PUSH_MAX := 60.0
 ## The view's barrel counts as turned (an arc drawn) once |hud_barrel_dir| reaches this.
 const TURNED := 0.98
-
-static var _kit: Dictionary = {}
 
 var state: TankState = null
 ## The view when it has the API (else null: the fallback).
@@ -69,25 +77,53 @@ func ground_y() -> float:
 	return GROUND
 
 
-## A tank anchor on the canvas: "barrel_pivot", "muzzle" (at the barrel's elevation), "rear".
+## A tank point on the canvas (the names hud_tank_point() takes): the view's as drawn, else the
+## v3 kit's at rest (the turret's points mirrored about its pivot when the gun faces back).
 func tank_point(anchor: String) -> Vector2:
 	if view != null:
 		return view.call("hud_tank_point", anchor)
-	var a := kit_anchors(state.riders.size())
+	var rig := TankRig.shared()
 	var left := state.hull.facing == TankIds.FACE_LEFT
-	var piv := _kit_point(a, "barrel_pivot")
-	var tp := _kit_point(a, "turret_pivot")
+	var tp := rig.turret_pivot_x
+	var piv := rig.trunnion
 	if left:
-		piv.x = 2.0 * tp.x - piv.x
+		piv.x = 2.0 * tp - piv.x
+	var p := Vector2(rig.size.x * 0.5, rig.ground)
 	match anchor:
-		"barrel_pivot":
-			return piv
+		"barrel_pivot", "trunnion":
+			p = piv
 		"muzzle":
-			var length := _kit_point(a, "muzzle").distance_to(_kit_point(a, "barrel_pivot"))
-			return piv + dir(state.hull.elev_deg, left) * length
+			p = piv + dir(state.hull.elev_deg, left) * (rig.gun_len + 1.0)
 		"rear":
-			return Vector2(REAR_X + 12.0, ground_y())
-	return _kit_point(a, anchor)
+			return Vector2(TANK_POS.x + ART_REAR, ground_y())
+		"turret_pivot":
+			p = Vector2(tp, rig.turret_rect.end.y)
+		"headlight":
+			p = rig.detail("headlight").get("at", p)
+		"exhaust":
+			p = rig.exhaust
+		"bow_gun_upper_pivot", "bow_gun_lower_pivot":
+			p = _bow(rig, 0 if anchor.contains("upper") else 1, false)
+		"bow_gun_upper_muzzle", "bow_gun_lower_muzzle":
+			p = _bow(rig, 0 if anchor.contains("upper") else 1, true)
+		"searchlight_turret_lens":
+			var d := rig.detail("searchlight")
+			p = TankRig.lens_of(d) if not d.is_empty() else p
+			if left:
+				p.x = 2.0 * tp - p.x
+		"searchlight_rear_lens":
+			var d2 := rig.detail("searchlight_rear")
+			p = TankRig.lens_of(d2) if not d2.is_empty() else p
+	return p + TANK_POS
+
+
+## Bow gun `k`'s pivot, or its muzzle at the rest tilt (sprite px).
+static func _bow(rig: TankRig, k: int, muzzle: bool) -> Vector2:
+	if rig.bow.is_empty():
+		return Vector2(rig.size.x, rig.ground * 0.5)
+	var b: Dictionary = rig.bow[clampi(k, 0, rig.bow.size() - 1)]
+	var piv: Vector2 = b["pivot"]
+	return piv + dir(BOW_REST_DEG, false) * (float(b["len"]) + 1.0) if muzzle else piv
 
 
 func enemy_rect(e: TankEnemyState) -> Rect2:
@@ -114,29 +150,28 @@ func barrel() -> Dictionary:
 	if mirrored():
 		left = not left
 	var turning := false
+	var length := TankRig.shared().gun_len + 1.0
 	if view != null and view.has_method("hud_barrel_dir"):
 		var d := float(view.call("hud_barrel_dir"))
 		left = d < 0.0
 		turning = absf(d) < TURNED
-	var a := kit_anchors(state.riders.size())
-	if view != null and view.has_method("hud_variant"):
-		a = (kit_variant_of(str(view.call("hud_variant"))).get("anchors", {}) as Dictionary)
-	var length := _kit_point(a, "muzzle").distance_to(_kit_point(a, "barrel_pivot"))
+	if view != null and view.has_method("hud_barrel_length"):
+		length = float(view.call("hud_barrel_length"))
 	return {"pivot": piv, "length": maxf(length, 1.0), "left": left, "turning": turning}
 
 
-## The tank's body on the canvas (the turret as it faces, the hull below it): the world tags keep
-## out of these rects.
+## The tank's body on the canvas (the hitbox's turret as it faces, the hull with the track run
+## below it): the world tags keep out of these rects.
 func tank_rects() -> Array[Rect2]:
 	if view != null and view.has_method("hud_tank_rects"):
 		return view.call("hud_tank_rects")
-	var v := kit_variant(state.riders.size())
-	var tr := TankKit.turret_rect_of(v)
+	var rig := TankRig.shared()
+	var tr := rig.hit_rect("turret")
 	if state.hull.facing == TankIds.FACE_LEFT:
-		var tp := _kit_point(v.get("anchors", {}), "turret_pivot").x - TANK_POS.x
-		tr.position.x = 2.0 * tp - tr.end.x
+		tr.position.x = 2.0 * rig.turret_pivot_x - tr.end.x
+	var hull := rig.hit_rect("hull").merge(rig.hit_rect("track_run"))
 	var out: Array[Rect2] = []
-	for r: Rect2 in [tr, TankKit.hull_rect_of(v)]:
+	for r: Rect2 in [tr, hull]:
 		out.append(Rect2(r.position + TANK_POS, r.size))
 	return out
 
@@ -202,30 +237,6 @@ func mirrored() -> bool:
 	if view != null and view.has_method("hud_mirrored"):
 		return bool(view.call("hud_mirrored"))
 	return state.roam.active and state.hull.dir < 0
-
-
-static func kit_anchors(crew: int) -> Dictionary:
-	return kit_variant(crew).get("anchors", {})
-
-
-## kit.json's entry of the variant for `crew` riders.
-static func kit_variant(crew: int) -> Dictionary:
-	return kit_variant_of(VARIANTS[clampi(crew, 1, 4) - 1])
-
-
-static func kit_variant_of(vn: String) -> Dictionary:
-	if _kit.is_empty():
-		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(KIT))
-		_kit = parsed if parsed is Dictionary else {"tank": {"variants": {}}}
-	var variants: Dictionary = (_kit.get("tank", {}) as Dictionary).get("variants", {})
-	return variants.get(vn, {})
-
-
-static func _kit_point(anchors: Dictionary, key: String) -> Vector2:
-	var a: Variant = anchors.get(key)
-	if a is Array and (a as Array).size() >= 2:
-		return TANK_POS + Vector2(float(a[0]), float(a[1]))
-	return TANK_POS
 
 
 # --- The elevation arc (pure) ------------------------------------------------------------------

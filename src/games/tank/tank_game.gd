@@ -42,6 +42,8 @@ var state: TankState = null
 ## peer -> EffortPlan built here (host / SOLO).
 var plans: Dictionary = {}
 var director: TankDirector = null
+## v3: the local rider's seat picker (TankHudSeatPicker; the seat panel draws its highlight).
+var seat_picker := TankHudSeatPicker.new()
 
 var _limiter := TankIntentLimiter.new()
 var _cues: TankCues = null
@@ -49,14 +51,6 @@ var _rescue: Dictionary = {}
 var _afk: Dictionary = {}
 var _group_phase: int = -1
 var _finished: bool = false
-## (v3) The local rider's seat pick ("" none): left / right (or swap) step it over the empty seats
-## while the seat lock is open, confirm sits there (a seat intent). The HUD reads it.
-var seat_pick: String = ""
-## Ticks since the pick last moved (it drops after PICK_TICKS).
-var _pick_ticks: int = 0
-
-## A seat pick nobody confirms drops after this many ticks (6 s).
-const PICK_TICKS := 120
 
 
 func configure(p_ctx: GameContext) -> void:
@@ -182,21 +176,19 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 ## itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and right
 ## cycle targets, ability_2 traverses, confirm fires (the Gun); ability_1 overpressures, confirm
 ## latches (the Loader). In free roam the Drive rider turns the tank round: ability_1 or confirm.
-## v3 seats: while the seat lock is open, left and right (swap on every seat; the Gun keeps left and
-## right for its targets) move the seat pick over the empty seats, and confirm with a pick sits
-## there (a seat intent) instead of the seat's own confirm.
+## v3: the seat picker (TankHudSeatPicker) takes its keys first: left / right (swap on the Gun)
+## pick an empty seat and confirm sits there while the seat lock is open.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
 	var r := state.rider(ctx.local_peer)
 	if r == null:
 		return []
-	var out: Array = []
+	var seat := seat_picker.feed(state, r, actions)
+	actions = TankHudSeatPicker.without(actions, seat["taken"])
+	var out: Array = seat["intents"]
 	var engine := r.engine
 	var surge := gestures.has(Wl.G_SURGE)
-	var sit := _seat_keys(r, actions, surge)
-	if not sit.is_empty():
-		return [sit]
 	if (surge or actions.has(&"ability_1")) and engine == TankIds.ENGINE_STEAM:
 		var via := TankIds.VIA_SURGE if surge else TankIds.VIA_ACTION
 		out.append(TankIntents.make(TankIds.INTENT_OVER, via))
@@ -209,7 +201,7 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 	if state.roam.active and not surge:
 		var drives := engine == TankIds.ENGINE_DIESEL
 		var key := actions.has(&"ability_1") or actions.has(&"confirm")
-		if drives and key and seat_pick == "":
+		if drives and key:
 			out.append(TankIntents.make(TankIds.INTENT_TURN))
 	if actions.has(&"confirm") and not surge:
 		match engine:
@@ -218,37 +210,6 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 			TankIds.ENGINE_STEAM:
 				out.append(TankIntents.make(TankIds.INTENT_LATCH))
 	return out
-
-
-## The seat pick (v3): moves it on left / right (not the Gun's) or swap while the lock is open and
-## returns the seat intent when confirm sits on it; {} otherwise. The pick drops after PICK_TICKS,
-## when the lock closes or once the rider sits on it.
-func _seat_keys(r: TankRiderState, actions: Array[StringName], surge: bool) -> Dictionary:
-	_pick_ticks += 1
-	if r.seat_lock_s > 0.0 or _pick_ticks > PICK_TICKS or seat_pick == r.engine:
-		seat_pick = ""
-	if r.seat_lock_s > 0.0:
-		return {}
-	var step := 0
-	var gun := r.engine == TankIds.ENGINE_DYNAMO
-	if actions.has(&"swap") or (actions.has(&"right") and not gun):
-		step = 1
-	elif actions.has(&"left") and not gun:
-		step = -1
-	if step != 0:
-		var from := seat_pick if seat_pick != "" else r.engine
-		var probe := TankRiderState.new()
-		probe.slot = r.slot
-		probe.engine = from
-		var next := TankSeats.next_free(state, probe, step)
-		seat_pick = "" if next == r.engine else next
-		_pick_ticks = 0
-		return {}
-	if actions.has(&"confirm") and not surge and seat_pick != "":
-		var to := seat_pick
-		seat_pick = ""
-		return TankIntents.seat(to)
-	return {}
 
 
 func _gunner_intents(actions: Array[StringName]) -> Array:

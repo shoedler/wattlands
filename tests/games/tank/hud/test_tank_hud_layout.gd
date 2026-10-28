@@ -3,7 +3,7 @@ extends GutTest
 ## widget; shows_power; the palette themes the platform's toasts, banners and help; 3-6 help
 ## entries whose keys are in strings.csv; every rect on the canvas after the HUD's anchoring from
 ## 852 x 480 up to 1146 x 480; nothing in the bottom-right 200 x 60; no plate over the tank's
-## band (y 150-360) but the world tags; the crew row's cards clear of my numbers and the corner.
+## band (y 150-360) but the world tags; the seat panel's cards clear of my numbers and the corner.
 
 const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 const STRINGS := "res://content/tank/strings.csv"
@@ -11,9 +11,11 @@ const CANVASES: Array[Vector2i] = [
 	Vector2i(852, 480), Vector2i(853, 480), Vector2i(960, 540), Vector2i(1146, 480)
 ]
 ## The plates of the mission HUD and of free roam (each set shares one canvas).
-const MISSION_KEYS: Array[String] = ["mission", "toasts", "hull", "boss", "banners", "mine", "crew"]
+const MISSION_KEYS: Array[String] = [
+	"mission", "toasts", "hull", "boss", "banners", "mine", "seats"
+]
 const ROAM_KEYS: Array[String] = [
-	"roam_strip", "roam_toasts", "roam_board", "roam_hull", "mine", "crew"
+	"roam_strip", "roam_toasts", "roam_board", "roam_hull", "mine", "seats"
 ]
 
 
@@ -45,7 +47,9 @@ func test_the_spec_has_only_the_games_own_controls() -> void:
 		assert_true(c["control"] is TankHudCtl)
 		assert_true(c["at"] is Rect2i)
 		kinds.append((c["control"] as Object).get_script().get_global_name())
-	for k: String in ["TankHudMission", "TankHudHull", "TankHudBoss", "TankHudMine", "TankHudCrew"]:
+	for k: String in [
+		"TankHudMission", "TankHudHull", "TankHudBoss", "TankHudMine", "TankHudSeats"
+	]:
 		assert_has(kinds, k)
 	assert_eq(kinds[-1], "TankHudTags", "the tags last: help points in a plate move with it")
 	var rects := {}
@@ -147,29 +151,26 @@ func test_no_plate_covers_the_tank_band_and_none_overlap() -> void:
 	assert_eq(TankHud.anchored(tags, TankHud.FLEX_MIN), Rect2i(Vector2i.ZERO, TankHud.FLEX_MIN))
 
 
-func test_the_crew_cards_stay_clear_of_my_numbers_and_the_corner() -> void:
+func test_the_seat_cards_stay_clear_of_my_numbers_and_the_corner() -> void:
 	for art in CANVASES:
-		var own := TankHud.anchored(TankHud.LAYOUT["crew"], art)
+		var own := TankHud.anchored(TankHud.LAYOUT["seats"], art)
 		var mine := TankHud.anchored(TankHud.LAYOUT["mine"], art)
 		var clear := TankHud.anchored(TankHud.CLEAR, art)
-		for n in range(1, 5):
-			var cards := TankHudCrew.card_rects(n, art)
-			assert_eq(cards.size(), n)
-			for i in n:
-				var c := cards[i].abs()
-				var on_canvas := Rect2i(Vector2i(c.position) + own.position, Vector2i(c.size))
-				assert_false(
-					on_canvas.intersects(mine), "card %d/%d by my numbers on %s" % [i, n, art]
-				)
-				assert_false(on_canvas.intersects(clear), "card %d/%d corner on %s" % [i, n, art])
-				assert_true(Rect2i(Vector2i.ZERO, art).encloses(on_canvas))
-				assert_gte(c.size.x, 90.0, "a readable card")
-				if i > 0:
-					assert_gt(c.position.x, cards[i - 1].end.x, "left to right, no overlap")
+		var cards := TankHudSeats.card_rects(art)
+		assert_eq(cards.size(), TankIds.SEATS.size())
+		for i in cards.size():
+			var c := cards[i].abs()
+			var on_canvas := Rect2i(Vector2i(c.position) + own.position, Vector2i(c.size))
+			assert_false(on_canvas.intersects(mine), "card %d by my numbers on %s" % [i, art])
+			assert_false(on_canvas.intersects(clear), "card %d in the corner on %s" % [i, art])
+			assert_true(Rect2i(Vector2i.ZERO, art).encloses(on_canvas))
+			assert_gte(c.size.x, 76.0, "a readable card")
+			if i > 0:
+				assert_gt(c.position.x, cards[i - 1].end.x, "left to right, no overlap")
 		if art.x >= 960:
-			assert_eq(TankHudCrew.card_rects(4, art)[0].size.x, float(TankHudCrew.CARD_W))
-	assert_eq(TankHudCrew.card_rects(3, TankHud.FLEX_MIN)[0].size.x, float(TankHudCrew.CARD_W))
-	assert_lt(TankHudCrew.card_rects(4, TankHud.FLEX_MIN)[0].size.x, float(TankHudCrew.CARD_W))
+			assert_eq(cards[0].size.x, float(TankHudSeats.CARD_W), "full cards on %s" % art)
+	var narrow := TankHudSeats.card_rects(TankHud.FLEX_MIN)
+	assert_lt(narrow[0].size.x, float(TankHudSeats.CARD_W), "five narrow cards on 852 x 480")
 
 
 func test_the_hud_code_names_no_kit_widget() -> void:
