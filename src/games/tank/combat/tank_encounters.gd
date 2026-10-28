@@ -47,6 +47,8 @@ static func begin(
 	match state.seg.seg:
 		TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH:
 			for o: Variant in seg.get("obstacles", []):
+				if not _meets(state, o):
+					continue
 				var at_px := TankConst.m_to_px(float(o.get("at_m", 0.0)))
 				add_obstacle(state, str(o.get("type", TankIds.OBST_WIRE)), at_px)
 		TankIds.SEG_GUN_LINE:
@@ -120,6 +122,12 @@ static func advance(state: TankState, aux: TankAux) -> void:
 		sg.next_encounter += 1
 
 
+## True when the crew meets entry `e` at all: its optional min_crew (v3 solo balance: the smallest
+## crew it shows up for, default 1) is at most the crew's size.
+static func _meets(state: TankState, e: Variant) -> bool:
+	return state.crew >= int((e as Dictionary).get("min_crew", 1))
+
+
 ## (v3, brief "Difficulty is enemy count") How many of each entry of a segment's list (encounters
 ## or gun-line enemies, {enemy, count}) the crew meets: the segment's total count x the crew's scale
 ## (TankContent.crew_count: 0.5 / 0.7 / 0.85 / 1.0 for crews 1-4, rounded, at least 1), taken from
@@ -128,11 +136,12 @@ static func advance(state: TankState, aux: TankAux) -> void:
 static func crew_counts(state: TankState, entries: Array) -> Array[int]:
 	var total := 0
 	for e: Variant in entries:
-		total += int(e.get("count", 1))
-	var left := state.content.crew_count(total, state.hull.tank, state.crew)
+		if _meets(state, e):
+			total += int(e.get("count", 1))
+	var left := state.content.crew_count(total, state.hull.tank, state.crew) if total > 0 else 0
 	var out: Array[int] = []
 	for e: Variant in entries:
-		var n := mini(int(e.get("count", 1)), left)
+		var n := mini(int(e.get("count", 1)), left) if _meets(state, e) else 0
 		left -= n
 		out.append(n)
 	return out

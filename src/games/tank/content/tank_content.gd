@@ -224,6 +224,27 @@ func crew_count(count: int, tank: String, crew: int) -> int:
 	return maxi(1, roundi(count * enemy_scale(tank) * crew_scale(crew)))
 
 
+## (v3 solo balance) The factor on the damage enemy and Behemoth shells do to the tank for a crew
+## of `crew` (enemies.json crew_damage_scale; 1 without it). Enemy HP stays the same for every crew.
+func crew_damage_scale(crew: int) -> float:
+	var f: Variant = data.get("enemies", {}).get("crew_damage_scale")
+	if not (f is Array) or (f as Array).is_empty():
+		return 1.0
+	return float(f[clampi(crew, 1, (f as Array).size()) - 1])
+
+
+## (v3 solo balance) How many of the Behemoth's bogies stand for a crew of `crew` (enemies.json
+## boss.bogies_by_crew; every bogie without it): the rest come already wrecked, the far ones first
+## (none standing: the Behemoth starts in phase 2, its turret alone).
+func boss_bogies(crew: int) -> int:
+	var b: Dictionary = boss_def()
+	var all := int(b.get("bogies", 3))
+	var f: Variant = b.get("bogies_by_crew")
+	if not (f is Array) or (f as Array).is_empty():
+		return all
+	return clampi(int(f[clampi(crew, 1, (f as Array).size()) - 1]), 0, all)
+
+
 func unlocks() -> Array:
 	return data["cosmetics"].get("unlocks", [])
 

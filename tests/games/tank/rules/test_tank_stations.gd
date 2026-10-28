@@ -409,3 +409,18 @@ func test_a_shot_starts_the_next_chambering_and_an_empty_rack_chambers_nothing()
 	assert_eq(rig.steam().chamber_s, 0.0, "nothing left to chamber")
 	rig.run(3.0)
 	assert_eq(rig.hull().loaded, TankIds.SHELL_NONE)
+
+
+## v3 solo balance (tanks.json steam.checkpoint_rack_by_crew [3, 0, 0, 0]): a solo rider's rack is
+## restocked to 3 at each checkpoint; a crew loads its own.
+func test_a_solo_riders_rack_is_restocked_at_each_checkpoint() -> void:
+	var solo := _quiet(1, 2, 5.0)
+	solo.set_rack(0)
+	solo.enter(3, 0.0)
+	solo.run(0.1)
+	assert_eq(solo.steam().rack, TankConst.RACK_MAX)
+	var crew := _quiet(2, 2, 5.0)
+	crew.set_rack(1)
+	crew.enter(3, 0.0)
+	crew.run(0.1)
+	assert_eq(crew.steam().rack, 1, "crews 2-4 load their own")

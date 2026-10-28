@@ -50,6 +50,8 @@ const SHOT_OBSTACLES: Array[String] = [TankIds.OBST_WIRE, TankIds.OBST_WRECK]
 ## A seat is asked for at most once in this many ticks (1 a second).
 const SEAT_EVERY_TICKS := 20
 ## A crew rider moves only to a seat this much more needed than its own (no dithering).
+## The solo loop goes from Drive straight to the Gun with this many shells (rack and chamber).
+const SOLO_GUN_FIRST := 2
 const SEAT_MARGIN := 0.5
 
 
@@ -221,7 +223,7 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	elif not bool(TankAux.of(state).seat_now.get(rider.peer, false)):
 		return {}
 	var want := (
-		seat_wanted_solo(state, rider, sit)
+		seat_wanted_solo(state, rider, sit, seg)
 		if state.riders.size() == 1
 		else seat_wanted_crew(state, rider, sit, seg)
 	)
@@ -237,13 +239,22 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	return out
 
 
-## The solo loop (brief v3 "Automatic seating"), from the seat the rider is on. "In range" is the
-## gun's reach now: the solo rider never mans the Lights, so the headlight's range.
+## The solo loop (brief v3 "Automatic seating"), from the seat the rider is on, for a segment of
+## type `seg` (default the current one). "In range" is the gun's reach now: the solo rider never
+## mans the Lights, so the headlight's range. Timing (v3 solo balance): in an Advance the rider
+## leaves Drive for one stay at most (one 60 s stay is all an Advance's time bound leaves beside
+## the drive to the halt line); after it, or when the Advance began on another seat, it drives on
+## to the halt line.
 static func seat_wanted_solo(
-	state: TankState, rider: TankRiderState, sit: Dictionary = {}
+	state: TankState, rider: TankRiderState, sit: Dictionary = {}, seg: String = ""
 ) -> String:
 	if sit.is_empty():
 		sit = situation(state)
+	if seg == "":
+		seg = state.seg.seg
+	var here := seg == state.seg.seg
+	if here and seg == TankIds.SEG_ADVANCE and _advance_stay_spent(state, rider):
+		return TankIds.ENGINE_DIESEL
 	if not bool(sit["near"]):
 		return TankIds.ENGINE_DIESEL
 	if bool(sit["only_light"]):
@@ -255,7 +266,28 @@ static func seat_wanted_solo(
 			return TankIds.ENGINE_STEAM if rack < TankConst.RACK_MAX else TankIds.ENGINE_DYNAMO
 		TankIds.ENGINE_DYNAMO:
 			return TankIds.ENGINE_DYNAMO if shells > 0 else TankIds.ENGINE_STEAM
-	return TankIds.ENGINE_STEAM if rack < TankConst.RACK_MAX else TankIds.ENGINE_DYNAMO
+	# From Drive (or the Secondaries): a rack with SOLO_GUN_FIRST shells or more goes to the Gun at
+	# once (a 60 s stay on the Loader would only top it up), else the Loader fills it first.
+	if shells >= SOLO_GUN_FIRST or rack >= TankConst.RACK_MAX:
+		return TankIds.ENGINE_DYNAMO
+	return TankIds.ENGINE_STEAM
+
+
+## True when rider `rider` sat somewhere other than Drive in the current Advance: it sits there now,
+## or one of its plan phases of this segment up to the current one has another seat.
+static func _advance_stay_spent(state: TankState, rider: TankRiderState) -> bool:
+	if rider.engine != TankIds.ENGINE_DIESEL:
+		return true
+	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
+	if ri == null or ri.plan == null:
+		return false
+	for k in mini(ri.phase_index + 1, ri.plan.size()):
+		var meta := ri.plan.phase(k).meta
+		if int(meta.get("segment", -1)) != state.seg.segment_index:
+			continue
+		if str(meta.get("engine", "")) != TankIds.ENGINE_DIESEL:
+			return true
+	return false
 
 
 ## A crew rider the Autopilot seats: the seats the Autopilot's riders should hold are the most
@@ -438,7 +470,9 @@ static func next_fight_segment(state: TankState) -> String:
 
 ## The situation the seating expects at the start of a segment of type `seg`: a fight at a gun line
 ## or the boss (targets in reach and past the headlight), the open road in an Advance; the rack as
-## it is now.
+## it is now. For a solo rider a gun line reads its enemy list (what a crew of 1 meets of it,
+## TankEncounters.crew_counts): "bow" when one stands inside the bow guns' range, "only_light" when
+## every one is a light target there (dug-in turrets).
 static func expected(state: TankState, seg: String) -> Dictionary:
 	var sit := situation(state)
 	var fight := seg == TankIds.SEG_GUN_LINE or seg == TankIds.SEG_BOSS
@@ -448,4 +482,36 @@ static func expected(state: TankState, seg: String) -> Dictionary:
 	sit["bow"] = false
 	sit["only_light"] = false
 	sit["gun"] = fight
+	if seg == TankIds.SEG_GUN_LINE and state.content != null and state.riders.size() == 1:
+		var i := next_fight_index(state)
+		var specs: Array = state.content.segment(i).get("enemies", []) if i >= 0 else []
+		var counts := TankEncounters.crew_counts(state, specs)
+		var lo := state.content.num("tanks", "bow.min_px", 40.0)
+		var hi := state.content.num("tanks", "bow.max_px", 220.0)
+		var light := true
+		var bow := false
+		for k in specs.size():
+			if counts[k] <= 0:
+				continue
+			var def := state.content.enemy_def(str(specs[k].get("enemy", "")))
+			var at: Array = specs[k].get("at_px", [200])
+			for n in counts[k]:
+				var raw: Variant = at[mini(n, at.size() - 1)]
+				var near := not (raw is String) and float(raw) >= lo and float(raw) <= hi
+				bow = bow or near
+				light = light and near and float(def.get("light_mult", 0.0)) >= 1.0 - 1e-9
+		sit["bow"] = bow
+		sit["only_light"] = bow and light
 	return sit
+
+
+## The index of the next segment with work in it after the current one (checkpoints skipped), or
+## -1 after the last.
+static func next_fight_index(state: TankState) -> int:
+	if state.content == null:
+		return -1
+	var segs := state.content.segments()
+	var i := state.seg.segment_index + 1
+	while i < segs.size() and str(segs[i].get("type", "")) == TankIds.SEG_CHECKPOINT:
+		i += 1
+	return i if i < segs.size() else -1

@@ -268,6 +268,13 @@ test('T1 catches a slow Advance, a short gun line, a long boss, an overrun, brea
   assert.deepEqual(C.t1Problems('x', makeRun(3, { grade: 'B' })), []);
 });
 
+test('T1 holds every crew, the solo rider (crew 1) included', () => {
+  assert.deepEqual(C.T1_CREWS, [1, 2, 3, 4]);
+  const set = { s1_c1_seed1: makeRun(1, { grade: 'C' }) };
+  const r = C.checkS1(set, { seeds: [1] });
+  assert.match(ids(r.details), /s1_c1_seed1: grade C \(B or better\)/);
+});
+
 test('T2 needs 30 s above 80% per stage, 60 s in the boss, and a return to 65%', () => {
   assert.deepEqual(C.t2Problems('x', makeRun(3)), []);
   assert.deepEqual(C.t2Problems('x', makeRun(2)), []);

@@ -107,6 +107,9 @@ var _reserve: Dictionary = {}
 var _returned: Dictionary = {}
 ## Phase index -> the peers whose end_phase was refused and is still to be retried.
 var _end_pending: Dictionary = {}
+## peer -> the phase tick (e) of the rider's first ERG tick in a phase that began in the switch
+## ramp (-1 until then; 0 for a phase in ERG from its first tick).
+var _erg_from: Dictionary = {}
 ## Phase index -> the tick of the next end_phase retry.
 var _end_retry_tick: Dictionary = {}
 ## Phase index -> how many retry rounds ran.
@@ -172,6 +175,9 @@ func _reserve_step(ri: TankRiderInput) -> bool:
 func _segment_start(ri: TankRiderInput) -> void:
 	_returned.erase(ri.peer)
 	_bank.erase(ri.peer)
+	# -1: the phase began in the switch ramp (its first ERG tick is recorded by _bank_step).
+	var ramped := ri.phase_mode == Wl.ERG and ri.mode != Wl.ERG and not ri.on_reserve()
+	_erg_from[ri.peer] = -1 if ramped else 0
 	_grade[ri.peer] = 0.0
 	_loader[ri.peer] = false
 	var ph := _phase(ri)
@@ -241,7 +247,19 @@ func _bank_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) -> 
 		_returned.erase(ri.peer)
 		_bank[ri.peer] = {"cur": start, "from": start, "goal": start}
 	var b: Dictionary = _bank[ri.peer]
+	# A phase that began in the platform's switch ramp (SIM -> ERG, _erg_from -1 at its start):
+	# nothing until the rider is in ERG, and its first full cycle in ERG keeps the entered target.
+	if int(_erg_from.get(ri.peer, 0)) < 0:
+		if ri.mode != Wl.ERG:
+			return
+		_erg_from[ri.peer] = e
 	var u := e % every
+	var ramp := int(_erg_from.get(ri.peer, 0))
+	if u == 0 and ramp > 0 and e - ramp < every:
+		# A phase entered through the switch ramp (SIM -> ERG) keeps the entered target for its
+		# first full cycle in ERG (S9: an ERG phase starts at its planned target, never above it
+		# in its first 5 s); a phase in ERG from its first tick updates as before.
+		return
 	if u == 0:
 		var cur := float(b["cur"])
 		b["from"] = cur
@@ -490,6 +508,27 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 ## it ends END_MARGIN_S before it, so a won mission is not scored as an overrun. A rider whose
 ## end_phase is refused is retried (the next tick, then once a second) until it is accepted or the
 ## group has moved on. Returns true on the tick it ends the segment (the first round of calls).
+## (v3 solo balance) True while the segment's end waits for a solo rider the Autopilot seats: its
+## seat lock still runs, it wants another seat for the next fight segment (TankAutopilot's solo
+## loop), and the wait stays inside SEAT_LOCK_S + 2 s of the objective and the phase's max_s. Once
+## its lock opens the seating asks within a second and the move lands at the segment's end.
+func _solo_seat_wait(state: TankState, ph: TankPhaseInfo, done_at: float) -> bool:
+	if state.riders.size() != 1:
+		return false
+	var r := state.riders[0]
+	if not (r.fallback or r.autopilot or r.is_bot) or r.seat_target != "" or r.afk:
+		return false
+	if ph.elapsed_s - done_at > TankConst.SEAT_LOCK_S + 2.0:
+		return false
+	if ph.max_s > 0.0 and ph.elapsed_s + r.seat_lock_s + 2.0 > ph.max_s - END_MARGIN_S:
+		return false
+	var nxt := TankAutopilot.next_fight_segment(state)
+	if nxt == "":
+		return false
+	var want := TankAutopilot.seat_wanted_solo(state, r, TankAutopilot.expected(state, nxt), nxt)
+	return want != "" and want != r.engine
+
+
 func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 	var ph := inputs.phase
 	if not ph.open_ended or ph.is_cooldown() or _ended.has(ph.index):
@@ -508,6 +547,8 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 		if not held and not out_of_time:
 			return false
 		if not TankSegments.riders_may_end(inputs):
+			return false
+		if not out_of_time and _solo_seat_wait(state, ph, float(_done_at[ph.index])):
 			return false
 		var peers: Array = []
 		for ri in inputs.riders:

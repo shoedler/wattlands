@@ -136,6 +136,20 @@ func test_bank_updates_climb_in_three_sub_steps() -> void:
 	assert_eq(_to(h, 2).size(), 15)
 
 
+## A phase the rider enters through the platform's switch ramp (SIM -> ERG: a move to the Gun) keeps
+## the entered target for its first full 5 s cycle in ERG (S9), then the bank pattern runs as before.
+func test_a_ramped_erg_entry_keeps_its_target_for_a_cycle() -> void:
+	var h := _h()
+	_dyn(h).bank = 0.0
+	h.applied_mode[2] = Wl.SIM
+	h.run_s(ADV1, 1.0)
+	h.applied_mode.erase(2)
+	h.run_s(ADV1, 8.95)
+	assert_eq(h.sent(2, "bank"), [], "the first cycle after the ramp keeps the entered target")
+	h.run_s(ADV1, 1.0)
+	assert_eq(h.sent(2, "bank").size(), 1, "then the bank pattern as before")
+
+
 ## A full bank asks the planned 55% (nothing to send); a refilling bank falls by <= 10 points an
 ## update too.
 func test_bank_falls_in_steps_and_holds_when_full() -> void:
@@ -626,6 +640,31 @@ func test_end_phase_all_riders_once_after_min_s() -> void:
 	h.state.seg.objective_done = true
 	h.run_s(DEPOT, 5.0)
 	assert_eq(h.ended.size(), 3, "a fixed phase never ends early")
+
+
+## v3 solo balance: a solo rider the Autopilot seats who wants another seat for the next fight
+## segment holds the segment's end ("Regroup") while its seat lock runs, so the move can land at the
+## end; it never holds a crew, and stops once the rider asked.
+func test_a_solo_segment_end_waits_for_the_riders_seat_lock() -> void:
+	var h := _h(1)
+	var r := h.state.riders[0]
+	r.engine = TankIds.ENGINE_FEED
+	r.seat_lock_s = 20.0
+	h.run_s(GUN1, 30.0)
+	h.state.seg.objective_done = true
+	h.run_s(GUN1, 35.0)
+	assert_eq(h.ended, [], "the rider wants Drive for the next Advance; its lock runs")
+	r.seat_lock_s = 0.0
+	r.seat_target = TankIds.ENGINE_DIESEL
+	h.run_s(GUN1, 3.0)
+	assert_eq(h.ended.size(), 1, "it asked: the segment ends")
+	var crew := _h(2)
+	for c in crew.state.riders:
+		c.engine = TankIds.ENGINE_FEED
+		c.seat_lock_s = 20.0
+	crew.state.seg.objective_done = true
+	crew.run_s(GUN1, 65.0)
+	assert_eq(crew.ended.size(), 2, "a crew never waits")
 
 
 ## The boss waits its `end_hold_s` (the Behemoth's death beat) after the objective is done, so the

@@ -388,7 +388,7 @@ func test_a_missing_shell_lands_20_to_40_px_short_of_the_tank_and_a_hit_on_it() 
 
 
 func test_a_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	rig.hull().evasive = false
 	var s := _fire_from(rig, 1.0)
 	var full := rig.hull().hp
@@ -410,7 +410,7 @@ func test_a_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> void:
 
 
 func test_at_the_shell_cap_an_enemy_shot_resolves_at_once() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	rig.hull().evasive = false
 	var full := rig.hull().hp
 	var aux := TankAux.of(rig.state)
@@ -437,6 +437,21 @@ func test_at_the_shell_cap_an_enemy_shot_resolves_at_once() -> void:
 	)
 	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS, "no 25th shell")
 	assert_eq(rig.hull().hp, full - 4.0, "applied at once")
+
+
+## v3 solo balance (enemies.json crew_damage_scale [0.5, 1, 1, 1]): an enemy shell costs a solo
+## rider's hull half its damage; crews 2-4 take it in full. Enemy HP is the same for every crew.
+func test_a_solo_hull_takes_the_crew_damage_scale_of_an_enemy_shell() -> void:
+	for crew in [1, 2, 4]:
+		var rig := _rig(crew)
+		rig.hull().evasive = false
+		var full := rig.hull().hp
+		var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 0.0, rig.events)
+		var want := 4.0 * rig.content.crew_damage_scale(crew)
+		assert_almost_eq(lost, want, 1e-6, "crew %d" % crew)
+		assert_almost_eq(rig.hull().hp, full - want, 1e-6)
+	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.5)
+	assert_eq(TankFixtures.content().crew_damage_scale(2), 1.0)
 
 
 # --- Raiders -------------------------------------------------------------------------------------
