@@ -39,6 +39,8 @@ var state: TankState = null
 ## peer -> EffortPlan built here (host / SOLO).
 var plans: Dictionary = {}
 var director: TankDirector = null
+## v3: the local rider's seat picker (TankHudSeatPicker; the seat panel draws its highlight).
+var seat_picker := TankHudSeatPicker.new()
 
 var _limiter := TankIntentLimiter.new()
 var _cues: TankCues = null
@@ -172,14 +174,17 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 ## sprint itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and
 ## right cycle targets (the dynamo), ability_1 overpressures, ability_2 traverses, confirm fires, or
 ## latches (the steam engine). In free roam the driver turns the tank round: ability_1 or confirm
-## (the diesel). (v3 retired the Bulwark's lever keys; the seat keys come with the seat rules.)
+## (the diesel). v3: the seat picker (TankHudSeatPicker) takes its keys first: left / right
+## (swap on the Gun) pick an empty seat and confirm sits there while the seat lock is open.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
 	var r := state.rider(ctx.local_peer)
 	if r == null:
 		return []
-	var out: Array = []
+	var seat := seat_picker.feed(state, r, actions)
+	actions = TankHudSeatPicker.without(actions, seat["taken"])
+	var out: Array = seat["intents"]
 	var engine := r.engine
 	var surge := gestures.has(Wl.G_SURGE)
 	if (surge or actions.has(&"ability_1")) and engine == TankIds.ENGINE_STEAM:

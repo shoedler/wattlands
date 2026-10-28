@@ -1,7 +1,8 @@
 extends GutTest
-## The game's own HUD Controls built and drawn headless from fixture states for crews 1-4 (the
-## Bastion's fourth rider on the arc generator), the crew row's cards (room order, live engine
-## windows, YOU, names cut with an ellipsis), my numbers from the local telemetry, the world tags,
+## The game's own HUD Controls built and drawn headless from fixture states for crews 1-4 (v3: the
+## landship's five seats, the fourth rider on Lights), the seat panel's cards (seat order, live
+## machine windows, YOU, names cut with an ellipsis), my numbers from the local telemetry, the
+## world tags,
 ## the free-roam strip and board from their setters, the fonts, and the elevation arc clear of the
 ## barrel's pixels.
 
@@ -40,32 +41,36 @@ func test_every_control_builds_and_draws_for_crews_1_to_4() -> void:
 				assert_gt(c.draws, 0, "%s crew %d %s drew" % [c.name, crew, kind])
 
 
-func test_the_crew_row_has_one_card_per_rider_in_room_order() -> void:
+func test_the_seat_panel_has_five_cards_in_seat_order_for_crews_1_to_4() -> void:
 	for crew in range(1, 5):
 		var s := X.state(crew)
 		var g: TankGame = autofree(X.game(s))
-		var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+		var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 		row.refresh()
-		assert_eq(row.cards.size(), crew, "crew %d" % crew)
-		var order: Array[String] = []
-		for st in s.stations:
-			if st.slot >= 0:
-				order.append(st.engine)
+		assert_eq(row.cards.size(), TankIds.SEATS.size(), "crew %d: every seat" % crew)
 		var shown: Array[String] = []
+		var manned := 0
 		for c: Dictionary in row.cards:
-			shown.append(str(c["engine"]))
-			assert_not_null(row.texture_of(str(c["engine"])), "a live engine window")
-		assert_eq(shown, order, "rear to front, as the rooms")
-	var bastion := X.state(4)
-	var row4 := TankHudModel.crew_cards(bastion, 1)
-	assert_eq(str(row4[-1]["engine"]), TankIds.ENGINE_ARC)
-	assert_eq(str(row4[-1]["mech"]), "arc", "TankMech paints the arc generator")
+			var engine := str(c["engine"])
+			shown.append(engine)
+			assert_not_null(row.texture_of(engine), "a machine window")
+			assert_eq(int(c["slot"]), s.station(engine).slot, engine)
+			assert_eq(bool(c["empty"]), s.station(engine).is_empty(), engine)
+			if not bool(c["empty"]):
+				manned += 1
+		assert_eq(shown, TankIds.SEATS, "Drive, Gun, Loader, Lights, Secondaries")
+		assert_eq(manned, crew, "crew %d: one card per rider manned" % crew)
+	var four := TankHudModel.seat_cards(X.state(4), 1)
+	assert_eq(str(four[3]["engine"]), TankIds.ENGINE_ARC)
+	assert_eq(str(four[3]["mech"]), "arc", "TankMech paints the arc generator")
+	assert_eq(str(four[4]["mech"]), "feed", "and the belt feed")
+	assert_true(bool(four[4]["empty"]))
 
 
 func test_the_engine_windows_turn_with_cadence_and_stop_at_zero() -> void:
 	var s := X.state(3)
 	var g: TankGame = autofree(X.game(s))
-	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 	row.refresh()
 	var diesel := s.rider_at(s.station(TankIds.ENGINE_DIESEL).slot)
 	diesel.cadence_rpm = 0.0
@@ -83,7 +88,7 @@ func test_the_engine_windows_turn_with_cadence_and_stop_at_zero() -> void:
 func test_the_local_card_says_you_and_uses_the_local_telemetry() -> void:
 	var s := X.state(3)
 	var g: TankGame = autofree(X.game(s, 2))
-	var row := _place(TankHudCrew.new().setup(g, TankHud.LAYOUT["crew"])) as TankHudCrew
+	var row := _place(TankHudSeats.new().setup(g, TankHud.LAYOUT["seats"])) as TankHudSeats
 	row.set_telemetry(X.tm(321.0, 101.0))
 	row.refresh()
 	var locals := row.cards.filter(func(c: Dictionary) -> bool: return bool(c["local"]))
@@ -101,12 +106,12 @@ func test_the_local_card_says_you_and_uses_the_local_telemetry() -> void:
 
 func test_names_are_cut_with_an_ellipsis_to_fit_their_card() -> void:
 	var long := "Bartholomew Longname-Smythe"
-	for w in [98.0, float(TankHudCrew.CARD_W)]:
-		var fitted := TankHudCrew.fit_name(long, w, "180 W")
+	for w in [90.0, float(TankHudSeats.CARD_W)]:
+		var fitted := TankHudSeats.fit_name(long, w, "180 W")
 		assert_true(fitted.ends_with(D.ELLIPSIS), fitted)
 		assert_lte(D.tall_w(fitted), w - 12.0 - D.tall_w("180 W") - 9.0)
 		assert_gt(fitted.length(), 3, "still a name")
-	assert_eq(TankHudCrew.fit_name("Ann", 98.0, "180 W"), "Ann")
+	assert_eq(TankHudSeats.fit_name("Ann", 90.0, "180 W"), "Ann")
 	assert_eq(D.fit_tall("anything", 1.0), "")
 
 

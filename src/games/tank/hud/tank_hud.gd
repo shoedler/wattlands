@@ -12,10 +12,12 @@ extends RefCounted
 ##    under it (TankHudBoss, only while it is up);
 ##  - bottom left: my numbers (TankHudMine: watts, %FTP, cadence, their gauges, the instruction
 ##    line, W' and the gear, the station);
-##  - bottom middle: the crew row (TankHudCrew: one live engine window per rider in room order);
+##  - bottom middle: the seat panel (TankHudSeats, v3 seat panel A: one live machine window per
+##    seat, Drive, Gun, Loader, Lights and Secondaries, manned or empty; your seat lock and the seat
+##    keys' hint over your card);
 ##  - the world tags (TankHudTags: speed, the halt-line post, SURGE TO EVADE, the gun's elevation
 ##    arc, the turn marker) over the middle of the canvas;
-##  - banners over the sky in the middle, themed by PALETTE; help (F1): five entries.
+##  - banners over the sky in the middle, themed by PALETTE; help (F1): six entries.
 ## Free roam (brief 2.10, 3.6) has the map strip (TankHudRoamStrip) across the top in place of the
 ## mission plate, the board (TankHudBoard: time left, points, kills) top right with the hull plate
 ## under it without its kills, the toasts under the strip, and its own help (ROAM_HELP); each feeds
@@ -33,14 +35,12 @@ const LAYOUT := {
 	"boss": Rect2i(704, 58, 250, 40),
 	"banners": Rect2i(280, 112, 400, 36),
 	"mine": Rect2i(6, 440, 222, 94),
-	"crew": Rect2i(288, 444, 416, 90),
+	"seats": Rect2i(288, 444, 416, 90),
 	"tags": Rect2i(54, 30, 852, 480),
 	"roam_strip": Rect2i(60, 6, 630, 44),
 	"roam_board": Rect2i(754, 6, 200, 44),
 	"roam_hull": Rect2i(866, 56, 88, 48),
 	"roam_toasts": Rect2i(6, 56, 300, 24),
-	# MOCK v3: layout B's seat board, docked on top of my numbers
-	"seats_b": Rect2i(6, 398, 222, 38),
 }
 ## The bottom-right corner nothing covers, and the tank's band the plates keep out of.
 const CLEAR := Rect2i(760, 480, 200, 60)
@@ -70,7 +70,8 @@ const PALETTE := {
 ## the plate it explains, so it moves with that plate).
 const HELP := [
 	["TANK_HELP_NUMBERS", Vector2(150, 404), Vector2(90, 452)],
-	["TANK_HELP_CREW", Vector2(500, 404), Vector2(420, 452)],
+	["TANK_HELP_SEATS", Vector2(470, 400), Vector2(420, 452)],
+	["TANK_HELP_SEAT_LOCK", Vector2(700, 418), Vector2(640, 470)],
 	["TANK_HELP_MISSION", Vector2(190, 132), Vector2(100, 56)],
 	["TANK_HELP_HULL", Vector2(770, 128), Vector2(880, 40)],
 	["TANK_HELP_SURGE", Vector2(330, 300), Vector2(60, 506)],
@@ -78,7 +79,8 @@ const HELP := [
 ## Free roam's help: the map strip and the board instead of the mission and hull plates, and the turn.
 const ROAM_HELP := [
 	["TANK_HELP_NUMBERS", Vector2(150, 404), Vector2(90, 452)],
-	["TANK_HELP_CREW", Vector2(500, 404), Vector2(420, 452)],
+	["TANK_HELP_SEATS", Vector2(470, 400), Vector2(420, 452)],
+	["TANK_HELP_SEAT_LOCK", Vector2(700, 418), Vector2(640, 470)],
 	["TANK_HELP_ROAM_MAP", Vector2(240, 120), Vector2(300, 40)],
 	["TANK_HELP_ROAM_BOARD", Vector2(700, 128), Vector2(850, 40)],
 	["TANK_HELP_TURN", Vector2(330, 300), Vector2(60, 506)],
@@ -101,19 +103,7 @@ static func spec(game: TankGame) -> HudSpec:
 		_add(hs, TankHudHull.new(), game, "hull")
 		_add(hs, TankHudBoss.new(), game, "boss")
 	_add(hs, TankHudMine.new(), game, "mine")
-	# MOCK v3 (TankHudSeats): A = the seat row replaces the crew row; B = the seat board over my
-	# numbers, the crew row stays; 0 = v2.
-	var hud3 := v3_hud()
-	if hud3 == "A":
-		var seats := TankHudSeats.new()
-		seats.layout = "A"
-		_add(hs, seats, game, "crew")
-	else:
-		_add(hs, TankHudCrew.new(), game, "crew")
-		if hud3 == "B":
-			var board := TankHudSeats.new()
-			board.layout = "B"
-			_add(hs, board, game, "seats_b")
+	_add(hs, TankHudSeats.new(), game, "seats")
 	# last, so a help point inside a plate moves with that plate rather than with the tags
 	_add(hs, TankHudTags.new(), game, "tags")
 	hs.toasts_at(LAYOUT["roam_toasts" if roam else "toasts"])
@@ -124,12 +114,6 @@ static func spec(game: TankGame) -> HudSpec:
 	pal["font"] = TankHudDraw.font()
 	hs.palette = pal
 	return hs
-
-
-## MOCK v3: the HUD mock's layout (TANK_V3_HUD: "A" by default, "B", or "0" for v2).
-static func v3_hud() -> String:
-	var e := OS.get_environment("TANK_V3_HUD")
-	return e if e in ["A", "B", "0"] else "A"
 
 
 static func _add(hs: HudSpec, c: TankHudCtl, game: TankGame, key: String) -> void:
