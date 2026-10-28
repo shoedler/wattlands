@@ -1,7 +1,7 @@
 extends GutTest
 ## The free-roam view (brief 2.10, 3.1, 4): built headless for crews 1-4 in both travel directions,
 ## the tank and the world mirrored while it drives west (the planes behind never), the planes
-## scrolled by the hull's place on the road, the zones' near planes swapped and cross-faded, the turn's
+## scrolled by the hull's place on the road, the zones as forest variants cross-faded, the turn's
 ## dust cloud peaking where the frame flips, the wrecks keeping their place through the flip, the
 ## turning places at the road's ends, the HUD's geometry mirrored with it, and the mission look kept.
 
@@ -20,7 +20,7 @@ func test_every_crew_builds_and_runs_in_both_directions() -> void:
 			var s := U.roam_state(crew, dir)
 			var v := _view(s)
 			U.run(v, 20)
-			assert_eq(v.variant, "tank_%drider" % crew)
+			assert_not_null(v.body, "the one tank")
 			assert_eq(v.mirrored, dir < 0, "crew %d dir %d" % [crew, dir])
 			for n: String in MIRRORED:
 				var l := v.layer(n)
@@ -28,7 +28,9 @@ func test_every_crew_builds_and_runs_in_both_directions() -> void:
 				assert_eq(l.position.x, v.canvas.x if dir < 0 else 0.0, n)
 			for n2: String in ["Back", "Post"]:
 				assert_eq(v.layer(n2).scale.x, 1.0, "%s never mirrored" % n2)
-			assert_false(v.zone_mix.is_empty(), "a zone's near plane")
+			assert_eq(
+				TankForest.forest_tint(v, s), _tint_at(s.roam_map, v.map_m), "the zone's forest"
+			)
 			assert_gt(v.frames, 20)
 
 
@@ -65,34 +67,32 @@ func test_the_planes_scroll_with_the_road_and_the_world_with_the_direction() -> 
 	var m := U.view_of(self, U.fixture("state", 3))
 	assert_eq(m.plane_x, m.cam_x, "missions scroll the planes with the camera, as before")
 	assert_false(m.mirrored)
-	assert_true(m.zone_mix.is_empty())
+	assert_eq(TankForest.forest_tint(m, m.game.state), Color.WHITE, "missions: the plain forest")
 
 
-func test_zones_swap_the_near_plane_and_cross_fade_at_their_edges() -> void:
+func test_zones_are_forest_variants_cross_faded_at_their_edges() -> void:
 	var s := U.roam_state(3)
 	var map := s.roam_map
-	var kit := TankKit.shared()
-	for z: String in [
-		TankIds.ZONE_LAKE, TankIds.ZONE_VILLAGE, TankIds.ZONE_QUARRY, TankIds.ZONE_MEADOW
-	]:
-		assert_true(kit.zone_planes.has(z), "a near plane for " + z)
-		var row: Dictionary = kit.zone_planes[z]
-		var forest := kit.plane("forest")
-		assert_eq(row["parallax"], forest["parallax"], z)
-		assert_eq(row["y0"], forest["y0"], z)
-	assert_eq(kit.zone_plane(TankIds.ZONE_FOREST), kit.plane("forest"), "the forest keeps its own")
+	var v := _view(s)
+	var seen := {}
 	for i in map.zones.size():
-		var z2: Dictionary = map.zones[i]
-		var mid := (float(z2["from_m"]) + float(z2["to_m"])) * 0.5
-		var mix := TankView.zone_mix_at(map, mid)
-		assert_eq(mix, {"a": z2["id"], "b": z2["id"], "k": 0.0}, "inside zone %d" % i)
+		var z: Dictionary = map.zones[i]
+		var mid := (float(z["from_m"]) + float(z["to_m"])) * 0.5
+		v.map_m = mid
+		var c := TankForest.forest_tint(v, s)
+		assert_eq(c, TankForest.ZONE_TINT.get(str(z["id"]), Color.WHITE), "inside zone %d" % i)
+		seen[str(z["id"])] = c
 		if i > 0:
-			var at := TankView.zone_mix_at(map, float(z2["from_m"]))
-			assert_eq(at["a"], map.zones[i - 1]["id"])
-			assert_eq(at["b"], z2["id"])
-			assert_almost_eq(float(at["k"]), 0.5, 1e-6, "half way at the edge")
-			var later := TankView.zone_mix_at(map, float(z2["from_m"]) + 59.0)
-			assert_gt(float(later["k"]), 0.95)
+			v.map_m = float(z["from_m"])
+			var prev: Color = TankForest.ZONE_TINT.get(str(map.zones[i - 1]["id"]), Color.WHITE)
+			var here: Color = TankForest.ZONE_TINT.get(str(z["id"]), Color.WHITE)
+			var at := TankForest.forest_tint(v, s)
+			assert_almost_eq(at.r, (prev.r + here.r) * 0.5, 1e-4, "half way at the edge")
+	assert_gt(seen.size(), 1, "the valley has more than one forest variant")
+
+
+static func _tint_at(map: TankRoamMap, m: float) -> Color:
+	return TankForest.forest_tint_at(map, m)
 
 
 func test_the_turn_hides_the_flip_in_dust_and_the_wrecks_keep_their_place() -> void:

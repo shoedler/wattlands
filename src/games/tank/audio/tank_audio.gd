@@ -270,7 +270,11 @@ func _station_cadence(state: TankState, engine: String, feed: Dictionary) -> flo
 	var st := state.station(engine)
 	if st == null or st.unpowered or state.all_afk:
 		return 0.0
-	if st.reserve or st.slot < 0:
+	# v3: an empty seat (slot -1) does nothing, so its machine is silent; a dropped rider's room
+	# still runs on reserve.
+	if st.slot < 0:
+		return 0.0
+	if st.reserve:
 		return 45.0
 	var r := state.rider_at(st.slot)
 	if r == null:

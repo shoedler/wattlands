@@ -13,44 +13,11 @@ const SLOW_FOR_S := 5.0
 ## Frame-time smoothing (s): one long frame never trips it.
 const SMOOTH_TAU_S := 0.5
 ## Blur radius in art px far from the band, and the ramp (art px) over which it grows.
-const MAX_RADIUS_PX := 2.2
-const RAMP_PX := 70.0
+const MAX_RADIUS_PX := 2.6
+const RAMP_PX := 80.0
 
+## Three rings of 12 taps, so the larger radii stay smooth.
 const SHADER := """
-shader_type canvas_item;
-render_mode blend_disabled;
-uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
-uniform vec2 canvas_px = vec2(960.0, 540.0);
-uniform vec2 band = vec2(150.0, 360.0);
-uniform float ramp_px = 70.0;
-uniform float max_radius = 2.2;
-
-void fragment() {
-	float y = UV.y * canvas_px.y;
-	float d = max(band.x - y, y - band.y);
-	float k = clamp(d / ramp_px, 0.0, 1.0);
-	float r = k * k * max_radius;
-	vec2 px = 1.0 / canvas_px;
-	vec4 c = texture(screen_tex, SCREEN_UV);
-	if (r > 0.15) {
-		vec4 acc = c;
-		float n = 1.0;
-		for (int i = 0; i < 8; i++) {
-			float a = float(i) * 0.785398;
-			vec2 o = vec2(cos(a), sin(a)) * r * px;
-			acc += texture(screen_tex, SCREEN_UV + o);
-			acc += texture(screen_tex, SCREEN_UV + o * 0.5);
-			n += 2.0;
-		}
-		c = acc / n;
-	}
-	COLOR = vec4(c.rgb, 1.0);
-}
-"""
-
-## MOCK v3 (TankV3Env): three rings of 12 taps, so the much larger radii of the stronger
-## tilt-shift stay smooth.
-const SHADER_V3 := """
 shader_type canvas_item;
 render_mode blend_disabled;
 uniform sampler2D screen_tex : hint_screen_texture, filter_linear;
@@ -91,7 +58,7 @@ var enabled: bool = true
 var auto_off: bool = false
 ## The canvas size (art px) and the sharp band (art y, top and bottom) on it.
 var canvas: Vector2 = Vector2(960, 540)
-var band: Vector2 = Vector2(150, 360)
+var band: Vector2 = Vector2(195, 405)
 
 var _mat: ShaderMaterial = null
 var _smooth_dt: float = 0.0
@@ -101,7 +68,7 @@ var _slow_s: float = 0.0
 func _init() -> void:
 	name = "Dof"
 	var sh := Shader.new()
-	sh.code = SHADER_V3 if TankV3Env.on() else SHADER
+	sh.code = SHADER
 	_mat = ShaderMaterial.new()
 	_mat.shader = sh
 	material = _mat
@@ -139,11 +106,6 @@ func update(p_canvas: Vector2, p_band: Vector2) -> void:
 	visible = active()
 	var ramp := RAMP_PX
 	var max_r := MAX_RADIUS_PX
-	if TankV3Env.on():
-		var d := TankV3Env.dof()
-		band = p_band - TankView.BAND + (d["band"] as Vector2)
-		ramp = float(d["ramp"])
-		max_r = float(d["max"])
 	if _mat != null:
 		_mat.set_shader_parameter("canvas_px", canvas)
 		_mat.set_shader_parameter("band", band)
