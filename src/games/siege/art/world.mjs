@@ -151,7 +151,8 @@ export function wadi(x, y) {
   const abx = b.x - a.x, aby = b.y - a.y;
   const t = clamp(((x - a.x) * abx + (y - a.y) * aby) / (abx * abx + aby * aby), 0, 1);
   const cx = a.x + abx * t + Math.sin(t * 9) * 5, cy = a.y + aby * t - Math.sin(t * 9) * 4;
-  return 1 - clamp((Math.hypot(x - cx, y - cy) - 2) / 5, 0, 1);
+  const half = 0.6 + t * 3.4;
+  return 1 - clamp((Math.hypot(x - cx, y - cy) - half) / 3, 0, 1);
 }
 
 export function heightRaw(x, y) {
@@ -187,7 +188,7 @@ export function build() {
       s0 += dist2(poly[i], poly[i + 1]);
     }
   }
-  stampSegment({ x: 44, y: 74 }, { x: 44, y: 82 }, 3.6);
+  stampSegment({ x: 44, y: 74 }, { x: 44, y: 82 }, ROAD_HALF);
   hw = GRID_MAX.x - GRID_MIN.x + 1;
   hh = GRID_MAX.y - GRID_MIN.y + 1;
   hc = new Float32Array(hw * hh);
@@ -246,18 +247,14 @@ export function height(x, y) {
   return lerp(a, b, ty);
 }
 
-// Gold vein strength at a rock point (0 none, 1 core): two zigzag seams across the quarry face
-// and the rock over the mine mouth, nowhere else.
-const fr = (v) => v - Math.floor(v);
+// The gold-bearing band (0 none, 1 core): one band along a stratum across the quarry face and
+// the rock over the mine mouth, gently wavy, nowhere else.
 export function vein(p) {
-  const dx = p.x - MINE.x;
-  const d = Math.hypot(dx, (p.y - MINE.y) * 0.8, (p.z - 7) * 0.6);
-  if (d > 20) return 0;
-  const zig = Math.abs(fr(dx * 0.09) - 0.5) * 8;
-  const s1 = Math.abs(p.z - 4 - zig - vnoise(p.x * 0.2, p.y * 0.2) * 1.2);
-  const s2 = Math.abs(p.z - 12 + zig * 0.7);
-  const core = Math.max(1 - clamp(s1 / 0.6, 0, 1), (1 - clamp(s2 / 0.5, 0, 1)) * 0.85);
-  return core * (1 - clamp((d - 13) / 7, 0, 1));
+  const d = Math.hypot(p.x - MINE.x, (p.y - MINE.y) * 0.8);
+  if (d > 22) return 0;
+  const zc = 6.5 + (p.x - MINE.x) * 0.12 + (vnoise(p.x * 0.08, p.y * 0.08) - 0.5) * 2;
+  const core = 1 - clamp(Math.abs(p.z - zc) / 0.75, 0, 1);
+  return core * (1 - clamp((d - 14) / 8, 0, 1));
 }
 
 // A point on a road by arc length (m) from the plaza end, and the direction there.

@@ -24,7 +24,7 @@ console.log(`mock: rendered at ${Date.now() - t0} ms`);
 new Life(r, scene).run();
 const post = { skyTop: hex('#c8c3ba'), skyBottom: hex('#c8c3ba') };
 const sharp = r.finish({ ...post, maxBlur: 0 });
-const frame = r.finish({ ...post, focusTop: 110, focusBottom: 470, rampTop: 80, rampBottom: 60, blurTop: 3, blurBottom: 1.8 });
+const frame = r.finish({ ...post, focusTop: 110, focusBottom: 500, rampTop: 80, rampBottom: 40, blurTop: 3, blurBottom: 3 });
 const save = (name, img, scale) => {
   const o = toRgba8(960, 540, img, scale);
   writePng(join(out, name), o.w, o.h, o.data);

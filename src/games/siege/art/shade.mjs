@@ -28,9 +28,10 @@ const DITHER = 0.9;
 
 export const C = {
   SAND: hex('#c9a677'), SAND_L: hex('#d9c098'), GRAVEL: hex('#a8977c'), MUD: hex('#6e5a44'),
-  DUNE: hex('#a88a60'), WADI: hex('#a88a62'), SCREE: hex('#8c857a'), SHOULDER: hex('#cdb48c'),
+  DUNE: hex('#a88a60'), WADI: hex('#b39572'), SCREE: hex('#8c857a'), SHOULDER: hex('#cdb48c'),
   ROAD: hex('#9a8363'), RUT: hex('#7a664b'), VIA: hex('#ada391'), KERB: hex('#8a8272'),
-  ROCK_A: hex('#9c9488'), ROCK_B: hex('#6e6860'), ROCK_D: hex('#4a4648'), CLEFT: hex('#34313a'), LEDGE: hex('#b49e7c'),
+  ROCK_A: hex('#a09484'), ROCK_B: hex('#7a7064'), ROCK_D: hex('#565058'), CLEFT: hex('#3a3640'), LEDGE: hex('#b49e7c'),
+  HOST: hex('#4a3a2a'), NUGGET: hex('#e8c35a'),
   MUDB: hex('#b8a07c'), MUDR: hex('#a08866'),
   GOLD: hex('#f2d16b'), ORE: hex('#c9a54a'), GLINT: hex('#fff3c0'),
   WATER_SH: hex('#3f7f79'), WATER_MD: hex('#2d5f5e'), WATER_DP: hex('#1f4248'), WGLINT: hex('#a6cfc4'),
@@ -87,7 +88,7 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
     case M.CLIFF: {
       const c = cliff(p, n);
       const r = ramp(c, light, px, py);
-      return c === C.GOLD ? [r[0], r[1], r[2], 0.2] : r;
+      return c === C.NUGGET ? [r[0], r[1], r[2], 0.15] : r;
     }
     case M.WATER: return water(p, sh, px, py);
     case M.WALL: return ramp(wall(p, n, Math.abs(n.y) > Math.abs(n.x) ? p.x : p.y), light * ao(p.z), px, py);
@@ -102,9 +103,9 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
       if (fpm(p.z, 1.4) < 0.18) c = C.ROCK_D;
       if (W.hash2(Math.floor(p.x * 1.5), Math.floor(p.z / 1.4)) > 0.86) c = cmix(c, C.ROCK_A, 0.5);
       const v = W.vein(p);
-      if (v > 0.3 && W.hash2(px, py) > 0.35) c = W.hash2(px + 7, py) > 0.5 ? C.GOLD : C.ORE;
+      if (v > 0.3) c = vein(c, v, p);
       const r = ramp(c, light, px, py);
-      return c === C.GOLD ? [r[0], r[1], r[2], 0.25] : r;
+      return c === C.NUGGET ? [r[0], r[1], r[2], 0.3] : r;
     }
     case M.MUDBRICK: return ramp(n.z > 0.5 ? C.MUDR : fpm(p.z, 0.5) < 0.08 ? cdark(C.MUDB, 0.1) : C.MUDB, light, px, py);
     case M.ARCH_AQ: {
@@ -206,11 +207,11 @@ function terrain(p, n) {
   if (W.hash2(Math.floor(p.x * 4), Math.floor(p.y * 4)) > 0.95) sand = cdark(sand, 0.1);
   // the wadi bed, scree at the foot of the massif
   const wd = W.wadi(p.x, p.y);
-  if (wd > 0.4) sand = cmix(sand, C.WADI, 0.8);
+  if (wd > 0.4) sand = W.hash2(Math.floor(p.x * 3), Math.floor(p.y * 3)) > 0.86 ? C.GRAVEL : cmix(sand, C.WADI, 0.7);
   const foot = W.mountain(p.x, p.y - 8) > 1 || W.mountain(p.x, p.y - 15) > 4;
   if (foot && W.hash2(Math.floor(p.x * 2), Math.floor(p.y * 2)) > 0.6) sand = C.SCREE;
   // the moat banks are mud and stones
-  if (p.z < -0.3) {
+  if (p.z < -0.3 && W.fortDistance(p.x, p.y) < 22) {
     sand = cmix(sand, C.MUD, clamp((-0.3 - p.z) / 0.8, 0, 1));
     if (W.hash2(Math.floor(p.x * 2), Math.floor(p.y * 2)) > 0.78) sand = C.ROCK_B;
   }
@@ -265,23 +266,27 @@ function rock(p, n = { x: 0, y: 0, z: 1 }) {
   return c;
 }
 
-// The massif: lit tops (some sand ledges), faces in two rock tones with 1 px strata ticks,
-// dark gullies, gold seams near the mine. No crack lines.
+// The massif in three planar tones by its normal (lit tops, faces turned to the sun, faces in
+// shade), sparse cracks on steep faces only, sand drifted onto ledges and into the gullies,
+// and the gold-bearing band near the mine.
 function cliff(p, n) {
   const g = W.gully(p.x, p.y);
-  if (g > 0.55 && p.z > 12) return C.CLEFT;
-  if (n.z > 0.72) {
-    let c = C.ROCK_A;
-    if (n.z > 0.9 && W.vnoise(p.x * 0.12, p.y * 0.12) > 0.62) c = C.LEDGE;
-    if (W.hash2(Math.floor(p.x * 3), Math.floor(p.y * 3)) > 0.93) c = C.ROCK_B;
-    return c;
-  }
-  let c = W.vnoise(p.x * 0.05, p.y * 0.05 + p.z * 0.02) > 0.58 ? cmix(C.ROCK_B, C.ROCK_D, 0.35) : C.ROCK_B;
-  if (W.hash2(Math.floor((p.x + p.y) * 1.4), Math.floor(p.z / 1.6)) > 0.84) c = C.ROCK_D;
-  if (g > 0.3) c = cmix(c, C.CLEFT, 0.5);
+  const drift = W.vnoise(p.x * 0.1, p.y * 0.1);
+  if (n.z > 0.72) return n.z > 0.86 && drift > 0.5 ? C.LEDGE : C.ROCK_A;
+  if (g > 0.45 && drift > 0.35) return cmix(C.LEDGE, C.ROCK_B, 0.35);
+  let c = n.x > 0.2 ? C.ROCK_D : n.y > 0.45 ? C.ROCK_B : cmix(C.ROCK_B, C.ROCK_D, 0.5);
+  if (g > 0.6) c = C.CLEFT;
+  if (n.z < 0.35 && W.hash3(Math.floor(p.x * 1.2), Math.floor(p.y * 1.2), Math.floor(p.z * 0.6)) > 0.965) c = C.CLEFT;
   const v = W.vein(p);
-  if (v > 0.3 && W.hash3(Math.floor(p.x * 3), Math.floor(p.y * 3), Math.floor(p.z * 3)) > 0.4) c = v > 0.6 ? C.GOLD : C.ORE;
+  if (v > 0.3) c = vein(c, v, p);
   return c;
+}
+
+// The gold-bearing band: a dark host band with clustered nuggets.
+function vein(c, v, p) {
+  if (v < 0.3) return c;
+  const cluster = W.vnoise(p.x * 0.9 + p.z, p.y * 0.9) > 0.55;
+  return v > 0.6 && cluster && W.hash3(Math.floor(p.x * 4), Math.floor(p.y * 4), Math.floor(p.z * 4)) > 0.45 ? C.NUGGET : C.HOST;
 }
 
 // Travertine ashlar (0.9 m courses of 1.8 m blocks, two tones per face) with an opus mixtum

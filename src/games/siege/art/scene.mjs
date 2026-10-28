@@ -381,7 +381,7 @@ export class Scene {
       r.beam(v3(x, h.y0 + 0.3, 4.4), v3(x, h.y1 - 0.3, 4.4), 0.25, M.WOOD_DARK, o);
     }
     for (const y of [h.y0 + 0.3, h.y1 - 0.3]) r.beam(v3(h.x0 + 0.3, y, 4.4), v3(h.x1 - 0.3, y, 4.4), 0.3, M.WOOD_DARK, o);
-    r.quad(v3(h.x0 - 0.4, h.y0 - 0.6, 5.4), v3(h.x1 + 0.4, h.y0 - 0.6, 5.4), v3(h.x1 + 0.4, h.y0 + 2.6, 4.5), v3(h.x0 - 0.4, h.y0 + 2.6, 4.5), M.ROOF, o, norm(v3(0, 0.27, 1)));
+    r.box(v3(h.x0, h.y1 - 0.6, 4.4), v3(h.x1, h.y1, 4.75), M.ROOF, o);
     // input gears (one per wheel) and output gears (one per station), dull or bronze
     const gear = (x, y, on) => {
       r.cyl(v3(x, y - 0.18, 2.2), v3(x, y + 0.18, 2.2), 1.2, on ? M.BRONZE : M.IRON, o, 12);
@@ -703,21 +703,31 @@ export class Scene {
     r.box(v3(x - 9, y1 - 1, 0), v3(x + 1, y1 + 1, 1.2), M.WALL, o, M.WATER);
   }
 
-  // A small vicus east of the fort: flat-roofed mud-brick houses round a well, the wadi's palms
-  // and boulders below it.
+  // A small vicus east of the fort: mud-brick houses along a crooked lane round a well, with
+  // doors, parapets and frond awnings; the wadi's boulders below it.
   vicus() {
     const r = this.r, o = 87;
-    const houses = [[118, 26, 4, 5], [124, 24, 5, 4], [131, 28, 4, 4], [117, 34, 5, 4], [127, 34, 4, 5], [133, 38, 4, 4], [120, 42, 4, 4], [126, 44, 5, 4], [138, 30, 3.5, 4]];
-    for (const [x, y, w, d] of houses) {
+    const houses = [[116, 24, 4, 5], [122.5, 22.5, 5, 4], [130, 27, 4, 4.5], [115, 33, 5, 4], [126, 33.5, 4, 5], [133.5, 36, 4, 4], [119, 42, 4.5, 4], [127.5, 45, 5, 4], [138, 29, 3.5, 4], [112, 41, 3.5, 3.5]];
+    houses.forEach(([x, y, w, d], k) => {
       const z = W.height(x, y);
-      const hgt = 2.4 + W.hash2(x, y) * 1.2;
-      r.box(v3(x, y, z - 0.3), v3(x + w, y + d, z + hgt), M.MUDBRICK, o);
-      r.quad(v3(x + w + 0.02, y + d * 0.5 + 0.4, z + 1.6), v3(x + w + 0.02, y + d * 0.5 - 0.4, z + 1.6), v3(x + w + 0.02, y + d * 0.5 - 0.4, z), v3(x + w + 0.02, y + d * 0.5 + 0.4, z), M.STONE_DARK, o, v3(1, 0, 0));
-    }
-    r.cylZ(v3(125.5, 39.5, W.height(125.5, 39.5)), 0.9, 0.8, M.WALL, o, 10, M.WATER);
-    for (let k = 0; k < 18; k++) {
-      const t = k / 18;
-      this.rock({ x: 112 + t * 58 + this.range(-4, 4), y: 76 + t * 70 + this.range(-4, 4) }, this.range(0.5, 1.6));
+      const hgt = 2.5 + W.hash2(k, 9) * 1.5;
+      const mat = k % 3 === 0 ? M.PLASTER : M.MUDBRICK;
+      r.box(v3(x, y, z - 0.3), v3(x + w, y + d, z + hgt), mat, o);
+      // parapet
+      r.box(v3(x, y + d - 0.25, z + hgt), v3(x + w, y + d, z + hgt + 0.4), mat, o);
+      r.box(v3(x + w - 0.25, y, z + hgt), v3(x + w, y + d, z + hgt + 0.4), mat, o);
+      // door and a frond awning on the lane side
+      r.quad(v3(x + w + 0.02, y + d * 0.5 + 0.4, z + 1.7), v3(x + w + 0.02, y + d * 0.5 - 0.4, z + 1.7), v3(x + w + 0.02, y + d * 0.5 - 0.4, z), v3(x + w + 0.02, y + d * 0.5 + 0.4, z), M.STONE_DARK, o, v3(1, 0, 0));
+      if (k % 2 === 0) r.quad(v3(x + w, y + d * 0.5 - 1.2, z + 2.1), v3(x + w, y + d * 0.5 + 1.2, z + 2.1), v3(x + w + 1.4, y + d * 0.5 + 1.2, z + 1.7), v3(x + w + 1.4, y + d * 0.5 - 1.2, z + 1.7), M.HIDE, o);
+    });
+    r.cylZ(v3(124.5, 40, W.height(124.5, 40)), 0.9, 0.8, M.WALL, o, 10, M.WATER);
+    const c = v3(121, 38.5, W.height(121, 38.5));
+    r.box(add(c, v3(0, 0, 0.4)), add(c, v3(1.6, 2.4, 1.2)), M.WOOD, o);
+    r.cyl(add(c, v3(-0.1, 0.6, 0.45)), add(c, v3(1.7, 0.6, 0.45)), 0.45, M.WOOD_DARK, o, 6);
+    for (let k = 0; k < 14; k++) {
+      const t = k / 14;
+      const side = k % 2 ? 1 : -1;
+      this.rock({ x: 112 + t * 58 + side * (2 + t * 4), y: 76 + t * 70 - side * (2 + t * 3) }, this.range(0.5, 1.4));
     }
   }
 
