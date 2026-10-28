@@ -31,15 +31,15 @@ export const C = {
   DUNE: hex('#a88a60'), WADI: hex('#b39572'), SCREE: hex('#8c857a'), SHOULDER: hex('#cdb48c'),
   ROAD: hex('#9a8363'), RUT: hex('#7a664b'), VIA: hex('#ada391'), KERB: hex('#8a8272'),
   ROCK_A: hex('#a09484'), ROCK_B: hex('#7a7064'), ROCK_D: hex('#565058'), CLEFT: hex('#3a3640'), LEDGE: hex('#b49e7c'),
-  HOST: hex('#4a3a2a'), NUGGET: hex('#e8c35a'),
+  HOST: hex('#6e5a40'), NUGGET: hex('#d9a441'),
   MUDB: hex('#b8a07c'), MUDR: hex('#a08866'),
-  GOLD: hex('#f2d16b'), ORE: hex('#c9a54a'), GLINT: hex('#fff3c0'),
+  GOLD: hex('#c99a3a'), ORE: hex('#b8892e'), GLINT: hex('#f3e2b0'),
   WATER_SH: hex('#3f7f79'), WATER_MD: hex('#2d5f5e'), WATER_DP: hex('#1f4248'), WGLINT: hex('#a6cfc4'),
   WALL: hex('#bfb199'), WALL_B: hex('#b3a58c'), MORTAR: hex('#8c8170'), WALLTOP: hex('#b3a68f'), CAP: hex('#e8e0cf'),
   BRICK: hex('#8e4e3c'), BRICK_D: hex('#7a4232'),
   PAVE: hex('#a39985'), PAVE_B: hex('#8f8572'), JOINT: hex('#7a705f'),
   ROOF: hex('#a9573c'), ROOF_D: hex('#8a4430'),
-  WOOD: hex('#8a6b49'), WOOD_DK: hex('#6a4f35'), WOOD_LT: hex('#a3845e'), SHAFT: hex('#5a4a3a'),
+  WOOD: hex('#8a6b49'), WOOD_DK: hex('#6a4f35'), WOOD_LT: hex('#a3845e'), SHAFT: hex('#5a4a3a'), SHAFT_T: hex('#6b4a2e'),
   BRONZE: hex('#b8954a'), PATINA: hex('#5f8274'), IRON: hex('#4a4a52'),
   OXBLOOD: hex('#7a2e26'), FRINGE: hex('#b8954a'), LINEN: hex('#e6ddc6'), HIDE: hex('#b09468'),
   PLUM: hex('#5a3550'), TENT: hex('#d8ccb2'),
@@ -171,12 +171,13 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
     }
     case M.MINE_DIRT: return ramp(cmix(hex('#6e5d4a'), hex('#57493a'), W.hash2(Math.floor(p.x * 3), Math.floor(p.y * 3))), light, px, py);
     case M.ACC0: case M.ACC1: case M.ACC2: case M.ACC3:
-      return ramp(cmix(SLOT[mat - M.ACC0], C.WOOD_DK, 0.2), light, px, py);
+      return ramp(cmix(SLOT[mat - M.ACC0], C.WOOD_DK, 0.1), Math.max(light, 0.5), px, py);
     case M.LIT0: case M.LIT1: case M.LIT2: case M.LIT3: {
-      let c = SLOT[mat - M.LIT0];
-      if (fpm(uv.x * 1.5, 1) < 0.35) c = clight(c, 0.3);
-      const r = ramp(c, Math.max(light, 0.62) + 0.1, px, py);
-      return [r[0], r[1], r[2], 0.15];
+      // a powered shaft: timber wrapped in the rider's colour, 0.4 m timber gaps every 1.2 m
+      const slot = SLOT[mat - M.LIT0];
+      const band = fpm(uv.x, 1.2) < 0.8;
+      const c = band ? slot : n.z > 0.6 ? cmix(C.SHAFT_T, slot, 0.35) : C.SHAFT_T;
+      return ramp(c, Math.max(light, 0.5), px, py);
     }
     case M.FIRE: return W.hash2(px, py) > 0.4 ? [1, 0.81, 0.35, 0.8] : [1, 0.54, 0.16, 0.8];
     case M.STONE_DARK: return ramp(hex('#2e2a2c'), light, px, py);
@@ -184,7 +185,7 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
       // the junction floor: dark dressed basalt in 2 m slabs, so the lit shafts read on it
       const j = fpm(p.x, 2) < 0.12 || fpm(p.y, 2) < 0.12;
       const g = W.hash2(Math.floor(p.x / 2), Math.floor(p.y / 2));
-      return ramp(j ? hex('#2f2b2b') : cmix(hex('#504945'), hex('#463f3c'), g), light, px, py);
+      return ramp(j ? hex('#26262c') : cmix(hex('#3a3a42'), hex('#34343b'), g), light, px, py);
     }
     case M.MARBLE: return ramp(C.MARBLE, light, px, py);
     case M.ROPE: return ramp(C.ROPE, light, px, py);
@@ -210,7 +211,7 @@ function terrain(p, n) {
   if (fpm(p.x * 0.7 + p.y * 0.35 + W.vnoise(p.x * 0.2, p.y * 0.2) * 1.5, 1) < 0.08) sand = cdark(sand, 0.04);
   const plain = W.vnoise(p.x * 0.015 + 11, p.y * 0.015 - 7);
   if (plain > 0.64) sand = cmix(sand, C.GRAVEL, 0.45 * smoothT(plain, 0.64, 0.72));
-  if (W.hash2(Math.floor(p.x * 4), Math.floor(p.y * 4)) > 0.95) sand = cdark(sand, 0.1);
+  if (W.hash2(Math.floor(p.x * 4), Math.floor(p.y * 4)) > 0.975) sand = cdark(sand, 0.1);
   // the wadi bed, scree at the foot of the massif
   const wd = W.wadi(p.x, p.y);
   if (wd > 0.4) sand = W.hash2(Math.floor(p.x * 3), Math.floor(p.y * 3)) > 0.86 ? C.GRAVEL : cmix(sand, C.WADI, 0.7);
@@ -332,20 +333,20 @@ function water(p, sh, px, py) {
 }
 
 function tar(p, uv, falling, sh, px, py) {
-  let c = hex('#1a1416');
+  let c = hex('#2a1a10');
   if (falling) {
     // ribbons running down the curtain (the gaps show the arches), a wet sheen catching the sun
     const streak = W.vnoise(uv.x * 2.6, uv.y * 0.22);
     const gap = W.vnoise(uv.x * 3.1 + 7, uv.y * 0.1);
     if (gap < 0.4 && uv.y < 8.8) return null;
-    c = hex('#1a1416');
-    if (streak > 0.66) c = hex('#3a3236');
-    if (streak > 0.78) c = hex('#6a5e58');
+    c = hex('#2a1a10');
+    if (streak > 0.66) c = hex('#4a3020');
+    if (streak > 0.8) c = hex('#8a6a40');
   } else {
     const g = W.vnoise(p.x * 0.8, p.y * 1.6);
-    if (g > 0.62) c = hex('#2c221b');
-    if (g > 0.78) c = hex('#525a60');
-    if (W.hash2(px * 5, py * 3) > 0.975) c = hex('#b8c4c8');
+    c = hex('#2a1a10');
+    if (g > 0.62) c = hex('#3e2a1a');
+    if (g > 0.8) c = hex('#8a6a40');
   }
   if (sh < 0.5) c = cdark(c, 0.25);
   return c;

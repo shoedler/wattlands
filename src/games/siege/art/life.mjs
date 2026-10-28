@@ -259,7 +259,7 @@ export class Life {
     const r = this.r;
     // catapult: the stone part-way through its flight to the Valley road's leading block
     const stoneK = 0.0016;
-    const tip = this.scene.catapultTip();
+    const tip = this.scene.catapultRelease();
     const tgt = this.ground(W.roadPoint(0, 88));
     const shot = aim(tip, tgt, 28, false, stoneK);
     const path = fly(tip, shot.v0, stoneK, shot.steps);

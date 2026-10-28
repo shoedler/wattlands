@@ -23,12 +23,12 @@ export const TAR_PUMP = v3(44, 58.5, 13);
 // The junction: a dark basalt floor with four lane shafts along x (one per rota, always turning
 // in its rider's colour) and five station columns along y under them. A clutch drum at a
 // crossing couples lane i to column j: the 4 x 5 grid shows every possible route at once.
-const HALL = { x0: 6, x1: 63, y0: 17.5, y1: 28 };
+const HALL = { x0: 5, x1: 64, y0: 16.5, y1: 29 };
 export const LANE_Y = [19.2, 21.4, 23.6, 25.8];
 const LANE_Z = 2.6;
 const COL_Z = 1.3;
 const OVER_Z = 4.4;
-const GEAR_X = [60, 31, 17, 47, 52];
+const GEAR_X = [60, 31, 17, 52, 47];
 const LOW22 = Math.tan(deg(22));
 
 export class Scene {
@@ -37,7 +37,7 @@ export class Scene {
     this.r = r;
     this.routes = opts.routes ?? [ST.BALLISTA, ST.CATAPULT, ST.ARROWS, ST.TAR];
     this.wheelAngle = opts.wheelAngle ?? [0.3, 1.1, 2.0, 0.7];
-    this.armDeg = opts.armDeg ?? 68;
+    this.armDeg = opts.armDeg ?? 140;
     this.tar = opts.tar ?? 1;
     let s = 7;
     this.rand = () => {
@@ -266,7 +266,7 @@ export class Scene {
       for (let y = 37; y < 49; y += 4.2) this.window(v3(x0 + 4.2, y, 1.6), v3(1, 0, 0));
     }
     // tar barrels by the gate
-    for (let i = 0; i < 6; i++) r.cylZ(v3(50 + (i % 3) * 1.3, 49 + Math.floor(i / 3) * 1.3, 0), 0.55, 1.3, M.WOOD_DARK, 16, 8, M.TAR);
+    for (let i = 0; i < 6; i++) r.cylZ(v3(55.5 + (i % 3) * 1.3, 50 + Math.floor(i / 3) * 1.3, 0), 0.55, 1.3, M.WOOD_DARK, 16, 8, M.TAR);
     // a cistern and a cart
     r.box(v3(55, 34, 0), v3(58, 37, 1), M.WALL, 16, M.WATER);
     r.box(v3(38, 44, 0.5), v3(39.8, 47, 1.4), M.WOOD, 17, M.ROCK);
@@ -307,7 +307,7 @@ export class Scene {
         const am = ang + (TAU * (s + 0.5)) / segN;
         const rad = v3(Math.cos(am), 0, Math.sin(am));
         const tan = v3(-Math.sin(am), 0, Math.cos(am));
-        let mat = side > 0 ? acc : M.WOOD;
+        let mat = acc;
         if (i === 3 && s % 4 === 0) mat = M.IRON;
         r.obox(add(cc, mul(rad, R)), tan, Y, rad, { x: segL * 0.53, y: 0.22, z: 0.32 }, mat, o);
       }
@@ -385,7 +385,11 @@ export class Scene {
           r.box(v3(p.x - 0.45, p.y - 0.45, 0), v3(p.x + 0.45, p.y + 0.45, p.z - 0.35), M.WALL, o, M.WALLTOP);
         }
       }
-      if (i < pts.length - 2) r.box(sub(b, v3(0.6, 0.6, 0.6)), add(b, v3(0.6, 0.6, 0.6)), M.BRONZE, o);
+      if (i < pts.length - 2) {
+        r.box(sub(b, v3(0.55, 0.55, 0.55)), add(b, v3(0.55, 0.55, 0.55)), M.WOOD_DARK, o, M.BRONZE);
+        const d = norm(sub(b, a));
+        r.cyl(add(b, mul(d, 0.55)), add(b, mul(d, 0.8)), 0.95, M.BRONZE, o, 14);
+      }
     }
     const e = pts[pts.length - 1];
     r.box(sub(e, v3(0.6, 0.6, 0.6)), add(e, v3(0.6, 0.6, 0.6)), M.BRONZE, o);
@@ -408,7 +412,7 @@ export class Scene {
     for (let j = 0; j < 5; j++) {
       const x = GEAR_X[j];
       const i0 = this.routes.indexOf(j);
-      r.beam(v3(x, h.y0 + 0.4, COL_Z), v3(x, h.y1 - 0.4, COL_Z), 0.5, M.SHAFT, o);
+      r.beam(v3(x, h.y0 + 0.4, COL_Z), v3(x, h.y1 - 0.4, COL_Z), 0.55, M.WOOD_DARK, o);
       if (i0 >= 0) {
         const ya = j === ST.MINE ? h.y0 + 0.4 : LANE_Y[i0], yb = j === ST.MINE ? LANE_Y[i0] : h.y1 - 0.4;
         r.beam(v3(x, ya, COL_Z), v3(x, yb, COL_Z), 0.66, M.LIT0 + i0, o);
@@ -417,7 +421,8 @@ export class Scene {
         const y = LANE_Y[i];
         if (this.routes[i] === j) {
           r.cylZ(v3(x, y, COL_Z), 0.35, LANE_Z - COL_Z, M.IRON, o, 6);
-          r.cylZ(v3(x, y, LANE_Z - 0.5), 1.2, 1.1, M.LIT0 + i, o, 16, M.BRONZE);
+          r.cylZ(v3(x, y, LANE_Z - 0.5), 1.15, 1.1, M.ACC0 + i, o, 16, M.ACC0 + i);
+          r.cylZ(v3(x, y, LANE_Z + 0.6), 1.2, 0.12, M.WOOD_DARK, o, 16, M.ACC0 + i);
           for (let k = 0; k < 12; k++) {
             const a = (TAU * k) / 12;
             r.box(v3(x + Math.cos(a) * 1.2 - 0.16, y + Math.sin(a) * 1.2 - 0.16, LANE_Z + 0.6), v3(x + Math.cos(a) * 1.2 + 0.16, y + Math.sin(a) * 1.2 + 0.16, LANE_Z + 0.9), M.BRONZE, o);
@@ -433,11 +438,11 @@ export class Scene {
       return i >= 0 ? M.LIT0 + i : M.SHAFT;
     };
     const C = COL_Z;
-    this.shaft([v3(60, h.y0 + 0.4, C), v3(60, 16.2, C), v3(63.2, 16.2, C)], lit(ST.MINE));
+    this.shaft([v3(60, h.y0 + 0.4, C), v3(60, 15.4, C), v3(62.8, 15.4, C)], lit(ST.MINE));
     this.shaft([v3(31, h.y1 - 0.4, C), v3(31, 35.4, C)], lit(ST.CATAPULT));
-    this.shaft([v3(17, h.y1 - 0.4, C), v3(17, 30.5, C), v3(7, 30.5, C), v3(7, 51.5, C), v3(4.3, 55.4, 15.2)], lit(ST.BALLISTA));
-    this.shaft([v3(47, h.y1 - 0.4, C), v3(47, 52.5, C), v3(46, 56.4, 11.9)], lit(ST.TAR));
-    this.shaft([v3(52, h.y1 - 0.4, C), v3(52, 29, C), v3(71, 29, C), v3(78.2, 29, 9.8), v3(78.2, 54.6, 9.8), v3(79.7, 55.6, 15.2)], lit(ST.ARROWS));
+    this.shaft([v3(17, h.y1 - 0.4, C), v3(17, 50, C), v3(4.3, 55.4, 15.2)], lit(ST.BALLISTA));
+    this.shaft([v3(52, h.y1 - 0.4, C), v3(52, 50.5, C), v3(46.5, 56.4, 11.9)], lit(ST.TAR));
+    this.shaft([v3(47, h.y1 - 0.4, C), v3(47, 30, C), v3(71, 30, C), v3(78.2, 30, 9.8), v3(78.2, 54.6, 9.8), v3(79.7, 55.6, 15.2)], lit(ST.ARROWS));
   }
 
   pennant(base, h, mat, o) {
@@ -450,13 +455,13 @@ export class Scene {
   // and, when powered, a pennant in that colour.
   stationMark(j, c, rad, flag = v3(0.7, -0.7, 0)) {
     const i = this.routes.indexOf(j);
-    const mat = i >= 0 ? M.LIT0 + i : M.STONE_DARK;
+    const mat = i >= 0 ? M.ACC0 + i : M.STONE_DARK;
     const n = Math.max(14, Math.round(rad * 5));
     for (let k = 0; k < n; k++) {
       const a = (TAU * k) / n;
       this.ybox(add(c, v3(Math.cos(a) * rad, Math.sin(a) * rad, 0)), a, { x: 0.28, y: ((TAU * rad) / n) * 0.36, z: 0.07 }, mat, 65);
     }
-    if (i >= 0) this.pennant(add(c, mul(flag, rad)), 5.5, M.LIT0 + i, 65);
+    if (i >= 0) this.pennant(add(c, mul(flag, rad)), 5.5, M.ACC0 + i, 65);
   }
 
   // --- stations ---------------------------------------------------------------------------
@@ -471,9 +476,14 @@ export class Scene {
     return this.catP(0, -1.8, 1.8);
   }
 
-  catapultTip() {
-    const a = deg(this.armDeg);
-    return this.catP(0, -1.8 + Math.cos(a) * 8.5, 1.8 + Math.sin(a) * 8.5);
+  catapultTip(armDeg = this.armDeg) {
+    const a = deg(armDeg);
+    return this.catP(0, -1.8 + Math.cos(a) * 6.5, 1.8 + Math.sin(a) * 6.5);
+  }
+
+  // Where a stone leaves the sling (the arm against the crossbeam).
+  catapultRelease() {
+    return this.catapultTip(80);
   }
 
   catapult() {
@@ -496,10 +506,13 @@ export class Scene {
     rail(-1.9, 2.8, 0.6, 1.9, 3.4, 1.3, M.WOOD_DARK);
     r.beam(P(-2.2, 0.6, 5.4), P(2.2, 0.6, 5.4), 0.7 * S, M.HIDE, o);
     const pivot = this.catapultPivot();
-    r.cyl(P(-2, -1.8, 1.8), P(2, -1.8, 1.8), 0.7 * S, M.ROPE, o, 10);
+    r.cyl(P(-2, -1.8, 1.8), P(2, -1.8, 1.8), 0.42 * S, M.WOOD_DARK, o, 10);
     const tip = this.catapultTip();
     r.beam(pivot, tip, 0.55 * S, M.WOOD_LIGHT, o, v3(1, 0, 0));
-    this.ybox(sub(tip, v3(0, 0, 0.45)), yaw, { x: 0.9, y: 0.9, z: 0.4 }, M.HIDE, o);
+    const sling = sub(tip, v3(0, 0, 2.2));
+    r.line3(tip, sling, [0.62, 0.52, 0.38]);
+    this.ybox(sub(sling, v3(0, 0, 0.4)), yaw, { x: 0.6, y: 0.6, z: 0.3 }, M.HIDE, o);
+    r.cylZ(sub(sling, v3(0, 0, 0.1)), 0.45, 0.7, M.ROCK, o, 8);
     // the powered windlass across the back: a spur gear the input shaft turns, the rope to the arm
     r.cyl(P(-1.8, -3.9, 1.2), P(1.8, -3.9, 1.2), 0.3 * S, M.WOOD_DARK, o, 8);
     r.cyl(P(-0.25, -3.9, 1.2), P(0.25, -3.9, 1.2), 1.05 * S, M.BRONZE, o, 16);
@@ -514,11 +527,11 @@ export class Scene {
   ballista() {
     const r = this.r, b = BALLISTA, o = 51, k = 2.2;
     const a = this.ballistaAim();
-    this.stationMark(ST.BALLISTA, b, 4.5, v3(-0.2, -0.95, 0));
+    this.stationMark(ST.BALLISTA, b, 3.9, v3(-0.2, -0.95, 0));
     const L = (base, l) => this.local(base, a, mul(l, k));
-    r.cylZ(b, 3.8, 0.4, M.WOOD_DARK, o, 16);
-    this.ybox(add(b, v3(0, 0, 0.4)), a, { x: 0.5 * k, y: 0.5 * k, z: 0.9 * k }, M.WOOD, o);
-    const base = add(b, v3(0, 0, 0.4 + 1.6 * k));
+    r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
+    this.ybox(add(b, v3(0, 0, 0.4)), a, { x: 0.5 * k, y: 0.5 * k, z: 1.25 * k }, M.WOOD, o);
+    const base = add(b, v3(0, 0, 0.4 + 2.3 * k));
     const back = L(base, v3(-2.4, 0, 0));
     const front = L(base, v3(2.6, 0, 0.35));
     r.beam(back, front, 0.38 * k, M.WOOD_LIGHT, o);
@@ -530,17 +543,19 @@ export class Scene {
       r.beam(L(fr, v3(0, 0, 0.8)), L(fr, v3(0, side, 0.8)), 0.2 * k, M.BRONZE, o);
       const armTip = L(fr, v3(0.6, 2.6 * side, 0.1));
       r.beam(L(fr, v3(0, 0.75 * side, 0.1)), armTip, 0.2 * k, M.WOOD_DARK, o);
-      r.line3(armTip, L(base, v3(2.2, 0, 0.45)), [0.85, 0.78, 0.63]);
+      r.line3(armTip, L(base, v3(-1.2, 0, 0.45)), [0.88, 0.85, 0.75]);
     }
     r.cyl(L(back, v3(0.3, -0.7, 0)), L(back, v3(0.3, 0.7, 0)), 0.18 * k, M.WOOD_DARK, o, 6);
+    r.line3(L(base, v3(-1.2, 0, 0.5)), L(base, v3(3.4, 0, 0.5)), [0.3, 0.24, 0.18]);
+    r.point(L(base, v3(3.4, 0, 0.5)), [0.75, 0.76, 0.8], 1);
     this.ballistaMuzzle = L(base, v3(2.6, 0, 0.45));
   }
 
   arrowBattery() {
     const r = this.r, b = ARROWS, o = 52, k = 2.0;
     const a = Math.atan2(26, -34);
-    this.stationMark(ST.ARROWS, b, 4.5, v3(0.95, -0.2, 0));
-    r.cylZ(b, 3.8, 0.4, M.WOOD_DARK, o, 16);
+    this.stationMark(ST.ARROWS, b, 3.9, v3(0.95, -0.2, 0));
+    r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
     const base = add(b, v3(0, 0, 0.4));
     const L = (l) => this.local(base, a, mul(l, k));
     // two A-frame trestles carry the rack on trunnions
@@ -549,19 +564,21 @@ export class Scene {
       r.beam(L(v3(-1, 1.35 * side, 0.1)), L(v3(1, 1.35 * side, 0.1)), 0.2 * k, M.WOOD_DARK, o);
     }
     // the rack: a slatted frame of 4 x 6 tubes raised 35 degrees, iron-banded, arrows bristling
-    const tilt = deg(35);
+    const tilt = deg(30);
     const fwd = v3(Math.cos(a) * Math.cos(tilt), Math.sin(a) * Math.cos(tilt), Math.sin(tilt));
     const side = v3(-Math.sin(a), Math.cos(a), 0);
     let upv = norm(cross(fwd, side));
     if (upv.z < 0) upv = mul(upv, -1);
     const center = L(v3(0, 0, 1.75));
-    r.obox(center, fwd, side, upv, { x: 0.9 * k, y: 1.2 * k, z: 0.38 * k }, M.WOOD_LIGHT, o);
+    r.obox(center, fwd, side, upv, { x: 0.9 * k, y: 1.2 * k, z: 0.38 * k }, M.WOOD_DARK, o);
     for (const t of [-0.55, 0.55]) r.obox(add(center, mul(fwd, t * k)), fwd, side, upv, { x: 0.07 * k, y: 1.24 * k, z: 0.42 * k }, M.IRON, o);
-    for (let row = 0; row < 4; row++) for (let cm = 0; cm < 6; cm++) {
-      const m = add(add(add(center, mul(side, (-1.0 + cm * 0.4) * k)), mul(upv, (-0.27 + row * 0.18) * k)), mul(fwd, 0.9 * k));
-      const tip = add(m, mul(fwd, 0.9 * k));
-      r.line3(m, tip, [0.86, 0.78, 0.6]);
+    // the magazine: a bed of arrows on the rack's top, their heads bristling past the front
+    for (let cm = 0; cm < 7; cm++) {
+      const m = add(add(add(center, mul(side, (-0.96 + cm * 0.32) * k)), mul(upv, 0.42 * k)), mul(fwd, -0.8 * k));
+      const tip = add(m, mul(fwd, 2.3 * k));
+      r.line3(m, tip, [0.71, 0.6, 0.44]);
       r.point(tip, [0.2, 0.2, 0.23], 1);
+      r.point(m, [0.95, 0.92, 0.86], 1);
     }
     // the drive: a bronze flywheel on the trunnion, turned by the shaft from the wall
     r.cyl(L(v3(0, 1.55, 1.7)), L(v3(0, 1.85, 1.7)), 0.85 * k, M.BRONZE, o, 14);
@@ -841,10 +858,10 @@ export class Scene {
       }
     }
     for (let k = 0; k < 4; k++) {
-      const p = v3(16 + k * 0.6, 37 + (k % 2) * 0.5, 0);
+      const p = v3(36 + k * 0.6, 46.5 + (k % 2) * 0.5, 0);
       for (let q = 0; q < 5; q++) r.beam(add(p, v3(q * 0.1, 0, 0.1 + q * 0.06)), add(p, v3(q * 0.1, 3.2, 0.1 + q * 0.06)), 0.1, M.WOOD_LIGHT, o);
     }
-    for (const [x, y] of [[49, 38], [50.3, 38], [49.6, 39.3], [70, 50], [71.2, 50.5], [37, 32]]) r.box(v3(x, y, 0), v3(x + 1.1, y + 1.1, 1.0), M.WOOD_LIGHT, o, M.WOOD);
+    for (const [x, y] of [[55, 38], [56.3, 38], [55.6, 39.3], [70, 50], [71.2, 50.5], [37, 32]]) r.box(v3(x, y, 0), v3(x + 1.1, y + 1.1, 1.0), M.WOOD_LIGHT, o, M.WOOD);
     r.box(v3(41, 33, 0.5), v3(42.8, 36, 1.4), M.WOOD, o, M.ORE);
     r.cyl(v3(40.9, 33.7, 0.55), v3(42.9, 33.7, 0.55), 0.5, M.WOOD_DARK, o, 8);
     r.cyl(v3(40.9, 35.3, 0.55), v3(42.9, 35.3, 0.55), 0.5, M.WOOD_DARK, o, 8);

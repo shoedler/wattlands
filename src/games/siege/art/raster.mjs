@@ -444,6 +444,14 @@ export class Raster {
             img[i * 3] = base[i * 3] * 0.62;
             img[i * 3 + 1] = base[i * 3 + 1] * 0.58;
             img[i * 3 + 2] = base[i * 3 + 2] * 0.62;
+          } else if (this.oid[i] >= 30 && this.oid[i] < 55 && !this.keep[i]) {
+            // a selective dark outline on the wooden machines' silhouettes (not the rider colours)
+            const far = Math.min(dep[i - 1], dep[i + 1], dep[i - w], dep[i + w]);
+            if (far < dep[i] - 1.2) {
+              img[i * 3] = base[i * 3] * 0.3 + 0.165 * 0.7;
+              img[i * 3 + 1] = base[i * 3 + 1] * 0.3 + 0.102 * 0.7;
+              img[i * 3 + 2] = base[i * 3 + 2] * 0.3 + 0.063 * 0.7;
+            }
           }
         }
       }
