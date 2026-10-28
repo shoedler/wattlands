@@ -3,9 +3,10 @@
 import { hex, rng, TAU } from './v3.mjs';
 
 const PAL = {
-  h: '#1f1a17', s: '#9b6337', S: '#b07a4a', w: '#efe7d2', k: '#cfc4aa', d: '#a8743f', D: '#e8dcc0',
-  p: '#cdb070', g: '#e6b84a', b: '#6a4a2a', m: '#8a8e96', M: '#5d6068', r: '#8c2f2c', R: '#6e2422',
-  q: '#7a2826', t: '#ddd3bd', T: '#b8ad96', n: '#6b4a30', N: '#4a3322', o: '#2a2420', l: '#3a2c22',
+  h: '#1e1a1a', s: '#8a5a3c', S: '#a87452', w: '#e6ddc6', k: '#c6bba3', d: '#9a7044', D: '#ddd0b4',
+  p: '#a8843e', g: '#b8954a', b: '#5e4428', m: '#a8843e', M: '#6e5a34', r: '#7a2e26', R: '#5e231d',
+  q: '#6e2a22', t: '#d6ccb5', T: '#aea38c', n: '#5e4430', N: '#46321f', o: '#2a2420', l: '#3a2c22',
+  P: '#5a3550',
 };
 const PALC = Object.fromEntries(Object.entries(PAL).map(([k, v]) => [k, hex(v)]));
 
@@ -64,7 +65,7 @@ function palm(seed) {
     put(x + 1, y, hex('#5b4128'));
     top = { x: Math.round(x), y };
   }
-  const greens = [hex('#3f5a26'), hex('#5c7a32'), hex('#7d9a44'), hex('#2f4420')];
+  const greens = [hex('#3a5230'), hex('#4f6a3a'), hex('#647d48'), hex('#2c3e24')];
   for (let f = 0; f < 8; f++) {
     const a = (TAU * f) / 8 + r.range(-0.2, 0.2);
     const length = r.range(7, 10.5);

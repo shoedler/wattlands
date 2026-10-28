@@ -6,15 +6,17 @@
 // collected, then rendered into a sun shadow map and into the colour buffer with per-pixel
 // depth. Sprites and effects are stamped afterwards with the same depth test.
 import { v3, add, sub, mul, dot, cross, norm, len, lerp3, TAU, clamp } from './v3.mjs';
-import { shade } from './shade.mjs';
+import { shade, KEEP } from './shade.mjs';
 
 export const K_DEFAULT = 5;
 export const F_COLOR = 1;
 export const F_SHADOW = 2;
 export const F_TWO_SIDED = 4;
 const VIEW = norm(v3(1, 1, 1));
-const AMB = 0.42;
-const DIF = 0.62;
+const AMB = 0.36;
+const DIF = 0.68;
+// Ambient occlusion from a top-down height map of everything but the ground (0.5 m cells).
+const AO_RES = 0.5;
 const SM_RES = 0.25;
 
 export const depthOf = (p) => p.x + p.y + p.z;
@@ -31,6 +33,7 @@ export class Raster {
     this.dep = new Float32Array(w * h).fill(-1e9);
     this.oid = new Int32Array(w * h);
     this.glow = new Float32Array(w * h * 3);
+    this.keep = new Uint8Array(w * h);
     this.tris = []; // {a, b, c, ua.., n, mat, o, f}
     this.sm = null;
   }
@@ -198,7 +201,43 @@ export class Raster {
 
   render() {
     this.buildShadowMap();
+    this.buildHeightMap();
     this.renderColor();
+  }
+
+  buildHeightMap() {
+    const x0 = -140, y0 = -160, W = 760, H = 740;
+    const hm = new Float32Array(W * H).fill(-1e9);
+    for (const t of this.tris) {
+      if (t.o <= 3 || t.o === 71) continue;
+      const pa = { x: (t.a.x - x0) / AO_RES, y: (t.a.y - y0) / AO_RES };
+      const pb = { x: (t.b.x - x0) / AO_RES, y: (t.b.y - y0) / AO_RES };
+      const pc = { x: (t.c.x - x0) / AO_RES, y: (t.c.y - y0) / AO_RES };
+      rasterTri(pa, pb, pc, W, H, -0.05, (x, y, w0, w1, w2) => {
+        const z = t.a.z * w0 + t.b.z * w1 + t.c.z * w2;
+        const i = y * W + x;
+        if (z > hm[i]) hm[i] = z;
+      });
+    }
+    this.hm = { data: hm, x0, y0, W, H };
+  }
+
+  // 1 open sky, lower where taller geometry stands within ~2 m (contact shadow at bases).
+  aoAt(p) {
+    const m = this.hm;
+    if (!m) return 1;
+    let occ = 0;
+    for (let k = 0; k < 8; k++) {
+      const a = (k * Math.PI) / 4;
+      for (const r of [0.7, 1.6]) {
+        const x = Math.floor((p.x + Math.cos(a) * r - m.x0) / AO_RES);
+        const y = Math.floor((p.y + Math.sin(a) * r - m.y0) / AO_RES);
+        if (x < 0 || y < 0 || x >= m.W || y >= m.H) continue;
+        const hz = m.data[y * m.W + x];
+        if (hz > p.z + 0.6) occ += r < 1 ? 1 : 0.6;
+      }
+    }
+    return 1 - Math.min(occ / 12.8, 1) * 0.55;
   }
 
   buildShadowMap() {
@@ -270,7 +309,8 @@ export class Raster {
           z: a.z * w0 + b.z * w1 + c.z * w2,
         };
         const sh = ndl > 0 ? this.sunVis(wp, n) : 1;
-        const light = AMB + DIF * ndl * sh;
+        let light = AMB + DIF * ndl * sh;
+        if (n.z > 0.7 && (o <= 2 || o === 10 || o === 70)) light *= this.aoAt(wp);
         const uv = { x: ua.x * w0 + ub.x * w1 + uc.x * w2, y: ua.y * w0 + ub.y * w1 + uc.y * w2 };
         const cc = shade(mat, wp, n, uv, light, sh, x, y);
         if (!cc) return;
@@ -279,6 +319,7 @@ export class Raster {
         col[i * 3 + 2] = cc[2];
         dep[i] = d;
         oid[i] = o;
+        this.keep[i] = KEEP.has(mat) ? 1 : 0;
         if (cc.length > 3) {
           this.glow[i * 3] += cc[0] * cc[3];
           this.glow[i * 3 + 1] += cc[1] * cc[3];
@@ -314,6 +355,7 @@ export class Raster {
         this.col[i * 3 + 2] = c[2] * k;
         this.dep[i] = d;
         this.oid[i] = o;
+        this.keep[i] = 0;
       }
     }
   }
@@ -382,7 +424,7 @@ export class Raster {
   // --- post -------------------------------------------------------------------------------
 
   // Sky, depth-edge outline, glow, tilt-shift blur by row, grade and vignette. Returns Float32 RGB.
-  finish({ skyTop, skyBottom, focusY = 300, focusHalf = 90, ramp = 150, maxBlur = 1.6, outline = true }) {
+  finish({ skyTop, skyBottom, focusTop = 110, focusBottom = 460, rampTop = 70, rampBottom = 70, blurTop = 3, blurBottom = 2, maxBlur = 1, outline = true, grade = {} }) {
     const { w, h, dep } = this;
     const base = new Float32Array(this.col);
     for (let y = 0; y < h; y++) {
@@ -409,27 +451,44 @@ export class Raster {
     const glow = blur(this.glow, w, h, 6, 3);
     const b1 = blur(img, w, h, 1, 2);
     const b2 = blur(img, w, h, 2, 3);
+    const b3 = blur(img, w, h, 4, 3);
     const out = new Float32Array(w * h * 3);
     const cx = w / 2, cy = h / 2;
+    const { sat = 0.86, contrast = 1.22, shadowTint = [0.235, 0.259, 0.384], hiTint = [1, 0.914, 0.788], floor = [0.102, 0.094, 0.125], haze = [0.784, 0.765, 0.729] } = grade;
     for (let y = 0; y < h; y++) {
-      const dist = Math.max(Math.abs(y - focusY) - focusHalf, 0);
-      const amt = clamp(dist / ramp, 0, 1) * maxBlur;
+      const amt = maxBlur * (y < focusTop ? clamp((focusTop - y) / rampTop, 0, 1) * blurTop : y > focusBottom ? clamp((y - focusBottom) / rampBottom, 0, 1) * blurBottom : 0);
+      const inBand = y >= focusTop && y <= focusBottom ? 1 : 0;
+      const hz = clamp(1 - y / 70, 0, 1) * 0.18;
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 3;
         const vx = (x - cx) / cx, vy = (y - cy) / cy;
         const vig = 1 - 0.12 * clamp(vx * vx + vy * vy - 0.35, 0, 1);
+        const c = [0, 0, 0];
         for (let k = 0; k < 3; k++) {
-          let c = img[i + k];
-          if (amt > 0) c = amt <= 1 ? c + (b1[i + k] - c) * amt : b1[i + k] + (b2[i + k] - b1[i + k]) * Math.min(amt - 1, 1);
-          c += glow[i + k] * 1.4 + this.glow[i + k] * 0.4;
-          const warm = k === 0 ? 1.03 : k === 2 ? 0.95 : 1;
-          c = c * warm + (k === 0 ? 0.01 : 0);
-          c = (c - 0.5) * 1.1 + 0.5;
-          out[i + k] = c * vig;
+          let v = img[i + k];
+          if (amt > 0) {
+            if (amt <= 1) v += (b1[i + k] - v) * amt;
+            else if (amt <= 2) v = b1[i + k] + (b2[i + k] - b1[i + k]) * (amt - 1);
+            else v = b2[i + k] + (b3[i + k] - b2[i + k]) * Math.min(amt - 2, 1);
+          }
+          c[k] = v + glow[i + k] * 1.4 + this.glow[i + k] * 0.4;
         }
-        // a little more saturation
-        const l = out[i] * 0.3 + out[i + 1] * 0.59 + out[i + 2] * 0.11;
-        for (let k = 0; k < 3; k++) out[i + k] = clamp(l + (out[i + k] - l) * 1.1, 0, 1);
+        // environment saturation down (the riders' colours keep theirs), contrast, split tone
+        const keep = this.keep[y * w + x];
+        const l = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+        const s = keep ? 1.05 : sat * (1 + 0.08 * inBand);
+        const lc = (l - 0.5) * contrast + 0.5;
+        const ws = clamp(1 - lc * 1.6, 0, 1) * 0.13;
+        const wh = clamp((lc - 0.6) * 2.5, 0, 1) * 0.08;
+        for (let k = 0; k < 3; k++) {
+          let v = l + (c[k] - l) * s;
+          v = (v - 0.5) * contrast * (1 + 0.08 * inBand) + 0.5;
+          v = v * (1 - ws) + shadowTint[k] * ws;
+          v = v * (1 - wh) + hiTint[k] * wh;
+          v = v * (1 - hz) + haze[k] * hz;
+          v = floor[k] + v * (1 - floor[k]);
+          out[i + k] = clamp(v * vig, 0, 1);
+        }
       }
     }
     return out;

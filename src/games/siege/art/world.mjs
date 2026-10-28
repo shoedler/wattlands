@@ -1,6 +1,6 @@
 // The map of Castellum Rotae v2 (metres): the fort on flat ground, its back wall built into a
-// mountain with gold veins, a moat on the other three sides, one bridge to the only gate, and
-// three dry dirt roads meeting at the bridgehead. Hashed integer noise: renders are identical.
+// mountain with a gold vein at the mine, a moat on the other three sides, one bridge to the only
+// gate, and one long road from the attackers' camp. Hashed integer noise: renders are identical.
 import { clamp, lerp, smoothstep, dist2 } from './v3.mjs';
 
 export const FORT_MIN = { x: 0, y: 2 };
@@ -14,19 +14,55 @@ export const WATER_Z = -1.4;
 export const BRIDGE_Y0 = 60;
 export const BRIDGE_Y1 = 76;
 export const PLAZA = { x: 44, y: 81 };
-export const MINE = { x: 72, y: 3, z: 3 };
-export const ROAD_HALF = 2.8;
+export const MINE = { x: 72, y: 4.5, z: 3 };
+export const ROAD_HALF = 2.0;
+// The mockup camera: pixels per metre and the screen position of the world origin.
+export const CAMERA = { k: 3.5, ox: 450, oy: 127 };
 
-export const ROADS = [
-  [[44, 78], [32, 85], [16, 92], [-2, 101], [-22, 112], [-50, 126], [-90, 140]],
-  [[44, 78], [45, 92], [42, 108], [45, 126], [51, 146], [56, 175]],
-  [[44, 78], [60, 87], [76, 97], [92, 109], [108, 125], [124, 146]],
-].map((r) => r.map(([x, y]) => ({ x, y })));
+// One long road that snakes from the attackers' camp (top left, off screen) down the west side,
+// around an outcrop and an oasis, across the foreground in two hairpins and up a straight
+// final run to the bridgehead. Placed in screen pixels for the mockup camera, kept in metres.
+const ROAD_SCREEN = [
+  [-30, 60], [60, 85], [130, 130], [80, 190], [50, 240], [40, 300], [110, 345], [40, 430],
+  [200, 500], [400, 505], [440, 470], [330, 440], [200, 415], [233, 390],
+];
+const toWorld = ([sx, sy]) => {
+  const d = (sx - CAMERA.ox) / CAMERA.k;
+  const sm = (sy - CAMERA.oy) / (CAMERA.k / 2);
+  return [(sm + d) / 2, (sm - d) / 2];
+};
+const ROAD_CTRL = [...ROAD_SCREEN.map(toWorld), [44, 92], [44, 79]];
+
+// Catmull-Rom through the control points, sampled every metre or so, plaza end first.
+function spline(ctrl, step = 1) {
+  const p = ctrl.map(([x, y]) => ({ x, y })).reverse();
+  const out = [];
+  for (let i = 0; i < p.length - 1; i++) {
+    const p0 = p[Math.max(i - 1, 0)], p1 = p[i], p2 = p[i + 1], p3 = p[Math.min(i + 2, p.length - 1)];
+    const n = Math.max(Math.ceil(Math.hypot(p2.x - p1.x, p2.y - p1.y) / step), 1);
+    for (let k = 0; k < n; k++) {
+      const t = k / n, t2 = t * t, t3 = t2 * t;
+      const f = (a, b, c, d) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+      out.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y) });
+    }
+  }
+  out.push(p[p.length - 1]);
+  return out;
+}
+
+export const ROADS = [spline(ROAD_CTRL)];
+
+export function roadLength(r = 0) {
+  let l = 0;
+  for (let i = 0; i < ROADS[r].length - 1; i++) l += dist2(ROADS[r][i], ROADS[r][i + 1]);
+  return l;
+}
 
 const GRID_MIN = { x: -130, y: -90 };
 const GRID_MAX = { x: 220, y: 200 };
 const GRID_RES = 0.5;
 let road = null;
+let roadSGrid = null;
 let gw = 0;
 let gh = 0;
 let hc = null;
@@ -73,39 +109,65 @@ export function fortDistance(x, y) {
 
 export const inFort = (x, y) => x >= FORT_MIN.x && x <= FORT_MAX.x && y >= FORT_MIN.y && y <= FORT_MAX.y;
 
-// The mountain behind the back wall and the spur beside the right wall: a cliff behind the
-// mine, peaks from large-scale noise, ridges, and terraced rock ledges.
+// Gullies: dark clefts running down the massif toward the fort (x positions with a wiggle).
+const GULLIES = [18, 48, 80];
+export function gully(x, y) {
+  let g = 0;
+  for (const gx of GULLIES) {
+    const cx = gx + Math.sin(y * 0.15 + gx) * 3 - y * 0.12;
+    g = Math.max(g, 1 - clamp(Math.abs(x - cx) / 3.2, 0, 1));
+  }
+  return g;
+}
+
+// The massif behind the fort. Inside the fort's width the courtyard ends at a quarried cut face
+// 11 m tall (y 4..5); above and behind it the rock rises in big masses toward the top right,
+// terraced with steps of 3-12 m whose risers dominate, cut by gullies, and falling away to
+// scree at either end.
 export function mountain(x, y) {
-  const back = Math.max(5 - y, 0);
-  const spur = Math.max(x - 89, 0) * clamp((36 - y) / 14, 0, 1);
-  const t = Math.max(back, spur * 0.9);
+  const back = Math.max(4.2 - y, 0);
+  const span = smoothstep(-46, -16, x) * (1 - smoothstep(88, 106, x));
+  const t = back * span;
   if (t <= 0) return 0;
-  const cliff = smoothstep(46, 60, x) * (1 - smoothstep(92, 104, x));
-  let h = Math.min(t * (1.15 + 1.6 * cliff), 13 + 9 * cliff + t * 0.45);
-  const peaks = fbm(x * 0.028 + 3, y * 0.028 - 5, 4);
-  h *= 0.55 + 1.0 * peaks;
-  const rid = 1 - Math.abs(2 * vnoise(x * 0.07, y * 0.07) - 1);
-  h += rid * Math.min(h, 12) * 0.45;
-  h += (vnoise(x * 0.33, y * 0.33) - 0.5) * Math.min(h, 8) * 0.5;
-  const step = 3.4;
+  const inQuarry = x > 2 && x < 82;
+  if (inQuarry && t < 0.5) return 11;
+  let h = (inQuarry ? 11 : 0) + Math.min(t * 1.7, 34) * (0.55 + 0.9 * fbm(x * 0.025 + 3, y * 0.03 - 5, 3));
+  h *= 0.75 + 0.45 * smoothstep(-20, 90, x);
+  h += (1 - Math.abs(2 * vnoise(x * 0.03, y * 0.03) - 1)) * Math.min(h, 16) * 0.45;
+  // gullies cut down the face (not into the quarry rim)
+  h -= gully(x, y) * 5 * smoothstep(2, 10, t);
+  const step = 3 + 9 * vnoise(x * 0.04 + 9, y * 0.04);
   const f = h / step;
   const fl = Math.floor(f);
-  const terr = (fl + smoothstep(0.5, 1, f - fl)) * step;
-  return lerp(h, terr, 0.7) * smoothstep(0, 2.5, t);
+  const terr = (fl + smoothstep(0.35, 1, f - fl)) * step;
+  h = lerp(h, terr, 0.75);
+  const rim = inQuarry ? 11 : 0;
+  return Math.max(h, rim) * (inQuarry ? 1 : smoothstep(0, 3, t));
+}
+
+// The dry wadi east of the fort, running to the bottom-right corner (0..1 at its bed).
+export function wadi(x, y) {
+  const a = { x: 108, y: 70 }, b = { x: 175, y: 150 };
+  const abx = b.x - a.x, aby = b.y - a.y;
+  const t = clamp(((x - a.x) * abx + (y - a.y) * aby) / (abx * abx + aby * aby), 0, 1);
+  const cx = a.x + abx * t + Math.sin(t * 9) * 5, cy = a.y + aby * t - Math.sin(t * 9) * 4;
+  return 1 - clamp((Math.hypot(x - cx, y - cy) - 2) / 5, 0, 1);
 }
 
 export function heightRaw(x, y) {
-  if (x >= FORT_MIN.x && x <= FORT_MAX.x && y >= 5 && y <= FORT_MAX.y) return 0;
+  if (x >= FORT_MIN.x && x <= FORT_MAX.x && y > 4.01 && y <= FORT_MAX.y) return 0;
   let h = (fbm(x * 0.05, y * 0.05, 3) - 0.5) * 0.8;
-  // low dunes in the open desert, away from the fort and the roads
+  // low dunes in the open desert, away from the fort and the road
   const far = smoothstep(16, 40, fortDistance(x, y));
-  const dune = Math.sin(x * 0.11 + y * 0.05 + fbm(x * 0.02, y * 0.02, 2) * 6);
-  h += far * (Math.max(dune, -0.3) + 0.3) * 1.6;
+  const dune = Math.sin(x * 0.07 + y * 0.04 + fbm(x * 0.015, y * 0.015, 3) * 9);
+  h += far * (Math.max(dune, -0.3) + 0.3) * 1.3 * vnoise(x * 0.012 + 3, y * 0.012);
   h += mountain(x, y);
+  h -= wadi(x, y) * 1.6;
   const d = fortDistance(x, y);
-  const moatSide = (y > 14 || x < 0) && !(x > 86 && y < 34);
-  if (moatSide && d > MOAT_IN - 1 && d < MOAT_OUT + 1) {
-    const e = Math.min(smoothstep(MOAT_IN - 1, MOAT_IN + 2, d), 1 - smoothstep(MOAT_OUT - 2, MOAT_OUT + 1, d));
+  const moatSide = (y > 14 || x < 0 || x > 84) && y > 4;
+  const outer = MOAT_OUT + (vnoise(x * 0.08, y * 0.08) - 0.5) * 3;
+  if (moatSide && d > MOAT_IN - 1 && d < outer + 1) {
+    const e = Math.min(smoothstep(MOAT_IN - 1, MOAT_IN + 2, d), 1 - smoothstep(outer - 2, outer + 1, d));
     h -= MOAT_DEPTH * e;
   }
   const r = roadAt(x, y);
@@ -117,16 +179,22 @@ export function build() {
   gw = Math.floor((GRID_MAX.x - GRID_MIN.x) / GRID_RES);
   gh = Math.floor((GRID_MAX.y - GRID_MIN.y) / GRID_RES);
   road = new Float32Array(gw * gh);
-  for (const poly of ROADS) for (let i = 0; i < poly.length - 1; i++) stampSegment(poly[i], poly[i + 1], ROAD_HALF);
-  stampSegment(PLAZA, { x: PLAZA.x + 0.01, y: PLAZA.y }, 7.5);
-  stampSegment({ x: 44, y: 74 }, { x: 44, y: 80 }, 4.5);
+  roadSGrid = new Float32Array(gw * gh).fill(1e9);
+  for (const poly of ROADS) {
+    let s0 = 0;
+    for (let i = 0; i < poly.length - 1; i++) {
+      stampSegment(poly[i], poly[i + 1], ROAD_HALF, s0);
+      s0 += dist2(poly[i], poly[i + 1]);
+    }
+  }
+  stampSegment({ x: 44, y: 74 }, { x: 44, y: 82 }, 3.6);
   hw = GRID_MAX.x - GRID_MIN.x + 1;
   hh = GRID_MAX.y - GRID_MIN.y + 1;
   hc = new Float32Array(hw * hh);
   for (let j = 0; j < hh; j++) for (let i = 0; i < hw; i++) hc[j * hw + i] = heightRaw(GRID_MIN.x + i, GRID_MIN.y + j);
 }
 
-function stampSegment(a, b, half) {
+function stampSegment(a, b, half, s0 = 0) {
   const pad = half + 2;
   const gx0 = Math.max(Math.floor((Math.min(a.x, b.x) - pad - GRID_MIN.x) / GRID_RES), 0);
   const gx1 = Math.min(Math.floor((Math.max(a.x, b.x) + pad - GRID_MIN.x) / GRID_RES), gw - 1);
@@ -141,9 +209,10 @@ function stampSegment(a, b, half) {
       const t = clamp(((px - a.x) * abx + (py - a.y) * aby) / l2, 0, 1);
       const d = Math.hypot(px - (a.x + abx * t), py - (a.y + aby * t));
       const wob = (vnoise(px * 0.35, py * 0.35) - 0.5) * 1.6;
-      const v = clamp((half + wob - d) / 1.2 + 0.5, 0, 1);
+      const v = clamp((half + wob * 0.12 - d) / 0.7 + 0.5, 0, 1);
       const i = gy * gw + gx;
       if (v > road[i]) road[i] = v;
+      if (v > 0 && s0 + t * Math.sqrt(l2) < roadSGrid[i]) roadSGrid[i] = s0 + t * Math.sqrt(l2);
     }
   }
 }
@@ -154,6 +223,15 @@ export function roadAt(x, y) {
   const gy = Math.floor((y - GRID_MIN.y) / GRID_RES);
   if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return 0;
   return road[gy * gw + gx];
+}
+
+// Arc length (m from the bridgehead) of the road at x, y (1e9 off the road).
+export function roadS(x, y) {
+  if (!roadSGrid) return 1e9;
+  const gx = Math.floor((x - GRID_MIN.x) / GRID_RES);
+  const gy = Math.floor((y - GRID_MIN.y) / GRID_RES);
+  if (gx < 0 || gy < 0 || gx >= gw || gy >= gh) return 1e9;
+  return roadSGrid[gy * gw + gx];
 }
 
 export function height(x, y) {
@@ -168,20 +246,18 @@ export function height(x, y) {
   return lerp(a, b, ty);
 }
 
-// Gold vein strength at a rock point (0 none, 1 core): wavy seams along the strata and
-// diagonal branches in the cliff over the mine, patchy so they glitter rather than draw lines.
+// Gold vein strength at a rock point (0 none, 1 core): two zigzag seams across the quarry face
+// and the rock over the mine mouth, nowhere else.
 const fr = (v) => v - Math.floor(v);
 export function vein(p) {
-  const d = Math.hypot(p.x - MINE.x, (p.y - MINE.y) * 0.9) + Math.abs(p.z - 10) * 0.3;
-  if (d > 38) return 0;
-  const w1 = fbm(p.x * 0.07, p.y * 0.07 + p.z * 0.04, 3) * 3.2;
-  const w2 = vnoise(p.x * 0.05 + 7, p.z * 0.06) * 2.5;
-  const s1 = Math.abs(fr(p.z * 0.26 + w1) - 0.5);
-  const s2 = Math.abs(fr((p.x + p.y) * 0.11 + p.z * 0.17 + w2) - 0.5);
-  const mask = vnoise(p.x * 0.11 + 3, p.y * 0.11 + p.z * 0.09);
-  let core = mask > 0.3 ? 1 - clamp(s1 / 0.1, 0, 1) : 0;
-  core = Math.max(core, mask > 0.45 ? (1 - clamp(s2 / 0.05, 0, 1)) * 0.85 : 0);
-  return core * (1 - clamp((d - 16) / 22, 0, 1));
+  const dx = p.x - MINE.x;
+  const d = Math.hypot(dx, (p.y - MINE.y) * 0.8, (p.z - 7) * 0.6);
+  if (d > 20) return 0;
+  const zig = Math.abs(fr(dx * 0.09) - 0.5) * 8;
+  const s1 = Math.abs(p.z - 4 - zig - vnoise(p.x * 0.2, p.y * 0.2) * 1.2);
+  const s2 = Math.abs(p.z - 12 + zig * 0.7);
+  const core = Math.max(1 - clamp(s1 / 0.6, 0, 1), (1 - clamp(s2 / 0.5, 0, 1)) * 0.85);
+  return core * (1 - clamp((d - 13) / 7, 0, 1));
 }
 
 // A point on a road by arc length (m) from the plaza end, and the direction there.

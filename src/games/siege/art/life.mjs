@@ -88,27 +88,27 @@ export class Life {
   person(id, p, shadow = true) {
     const s = sprite(id);
     this.r.stamp(s, p, 1, s.h - 1, 90, true, this.rnd.f() < 0.5);
-    if (shadow) this.r.groundShadow(p, 0.35, 1.6, 0.78);
+    if (shadow) this.r.groundShadow(p, 0.4, 1.6, 0.66);
   }
 
-  block(road, s, ranks, files, kinds, sp = 1.1) {
+  block(road, s, ranks, files, kinds, sp = 0.95) {
     const d = W.roadDir(road, s);
     const side = { x: -d.y, y: d.x };
     for (let i = 0; i < ranks; i++) {
       for (let j = 0; j < files; j++) {
-        const ss = s + i * sp + this.rnd.range(-0.25, 0.25);
+        const ss = s + i * sp + this.rnd.range(-0.08, 0.08);
         const c = W.roadPoint(road, ss);
         const off = (j - (files - 1) / 2) * sp;
-        const p = { x: c.x + side.x * off + this.rnd.range(-0.2, 0.2), y: c.y + side.y * off + this.rnd.range(-0.2, 0.2) };
+        const p = { x: c.x + side.x * off + this.rnd.range(-0.06, 0.06), y: c.y + side.y * off + this.rnd.range(-0.06, 0.06) };
         this.person(kinds[Math.floor(this.rnd.f() * kinds.length)], this.ground(p));
       }
     }
     // a fan standard beside the block
     const c = W.roadPoint(road, s + ranks * sp * 0.5);
     const base = this.ground({ x: c.x + side.x * files * sp * 0.5, y: c.y + side.y * files * sp * 0.5 });
-    this.r.line3(base, add(base, v3(0, 0, 3.4)), hex('#5a3d27'));
-    this.r.point(add(base, v3(0, 0, 3.6)), hex('#e6b84a'), 2);
-    this.r.point(add(base, v3(-0.3, 0.3, 3.4)), hex('#efe7d2'), 1);
+    this.r.line3(base, add(base, v3(0, 0, 3.4)), hex('#46321f'));
+    this.r.point(add(base, v3(0, 0, 3.6)), hex('#b8954a'), 2);
+    this.r.point(add(base, v3(-0.4, 0.4, 3.2)), hex('#5a3550'), 2);
   }
 
   crew(road, s0, n, perRank, spread) {
@@ -125,48 +125,56 @@ export class Life {
     const inf = ['spear', 'spear', 'spear2', 'spear', 'officer'];
     const arch = ['archer', 'archer', 'spear'];
     // West road: two siege towers pushed by their crews, blocks behind
-    this.crew(0, 28.5, 14, 4, 1.4);
-    this.block(0, 33, 6, 5, inf);
-    this.crew(0, 50, 10, 3, 1.3);
-    this.block(0, 54, 6, 5, arch);
-    this.block(0, 64, 6, 5, inf);
-    // Valley road: the ram and its crew, three blocks (the middle one just hit by a stone)
+    // the one road, bridgehead first: shields at the bridgehead, a block under the arrows, a
+    // siege tower on the straight, blocks down the hairpins, a ram, chariots, the second tower
+    // and the column still leaving the camp
+    this.block(0, 8, 6, 4, inf);
+    this.block(0, 15, 6, 4, inf);
+    this.crew(0, 30.5, 14, 4, 1.4);
+    this.block(0, 40, 6, 4, inf);
+    this.block(0, 62, 6, 4, arch);
+    this.block(0, 86, 6, 4, inf);
     for (let k = 0; k < 10; k++) {
-      const s = 20 + (k % 5) * 1.4;
-      const d = W.roadDir(1, s);
-      const c = W.roadPoint(1, s);
-      const off = k < 5 ? 2.4 : -2.4;
+      const s = 116 + (k % 5) * 1.4;
+      const d = W.roadDir(0, s);
+      const c = W.roadPoint(0, s);
+      const off = k < 5 ? 2.2 : -2.2;
       this.person('hauler', this.ground({ x: c.x - d.y * off, y: c.y + d.x * off }));
     }
-    this.block(1, 32, 5, 6, inf);
-    this.block(1, 46, 6, 6, inf);
-    this.block(1, 60, 7, 5, arch);
-    // East road: chariots ahead, a block under the arrow volley, archers behind
+    this.block(0, 128, 6, 4, inf);
     for (let k = 0; k < 5; k++) {
-      const s = 16 + k * 4;
-      const d = W.roadDir(2, s);
-      const c = W.roadPoint(2, s);
-      const off = k % 2 === 0 ? 1.3 : -1.3;
+      const s = 150 + k * 5;
+      const d = W.roadDir(0, s);
+      const c = W.roadPoint(0, s);
+      const off = k % 2 === 0 ? 1.1 : -1.1;
       const p = this.ground({ x: c.x - d.y * off, y: c.y + d.x * off });
       const spr = sprite('chariot');
       this.r.stamp(spr, p, 4, spr.h - 1, 91, true, d.x < 0);
       this.r.groundShadow(p, 1, 1.4, 0.8);
     }
-    this.block(2, 38, 6, 5, inf);
-    this.block(2, 50, 5, 5, arch);
-    this.block(2, 60, 6, 5, inf);
+    this.block(0, 185, 6, 4, arch);
+    this.crew(0, 214.5, 14, 4, 1.4);
+    this.block(0, 228, 6, 4, inf);
+    this.block(0, 262, 6, 4, inf);
+    this.block(0, 300, 6, 4, inf);
+    this.block(0, 335, 6, 4, arch);
     // on the bridge: the ram's crew stuck in the tar; shields at the bridgehead
     for (let k = 0; k < 8; k++) this.person('hauler', v3(44 + (k % 2 === 0 ? 2.3 : -2.3), 71 + Math.floor(k / 2) * 1.2, 0.4), false);
-    for (let k = 0; k < 14; k++) this.person('spear', this.ground({ x: W.PLAZA.x + this.rnd.range(-5, 5), y: W.PLAZA.y + this.rnd.range(-2, 4) }));
+    // villagers in the vicus
+    for (let k = 0; k < 12; k++) this.person(k % 2 ? 'worker' : 'engineer', this.ground({ x: this.rnd.range(116, 140), y: this.rnd.range(22, 48) }));
     // the camp
-    for (let k = 0; k < 26; k++) {
-      const p = { x: this.rnd.range(2, 36), y: this.rnd.range(126, 156) };
+    for (let k = 0; k < 40; k++) {
+      const p = { x: this.rnd.range(-90, -46), y: this.rnd.range(0, 38) };
       if (W.roadAt(p.x, p.y) > 0.3) continue;
       this.person(['spear', 'hauler', 'archer'][k % 3], this.ground(p));
     }
   }
 
   defenders() {
+    // two drilling squads in the courtyard, oxblood shields, 3 x 6
+    for (const [x0, y0] of [[40, 30], [48, 41]]) {
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) this.person('roman', v3(x0 + i * 0.95, y0 + j * 0.95, 0));
+    }
     const wz = W.WALL_H;
     for (let x = 1; x < 83; x += 1.6) {
       if ((x < 39 || x > 49) && this.rnd.f() < 0.55) this.person(this.rnd.f() < 0.6 ? 'roman' : 'roman_bow', v3(x, 58.2, wz), false);
@@ -175,7 +183,7 @@ export class Life {
       if (this.rnd.f() < 0.35) this.person('roman', v3(82.5, y, wz), false);
       if (this.rnd.f() < 0.3) this.person('roman', v3(1.5, y, wz), false);
     }
-    for (const p of [v3(36, 58, 13.5), v3(52, 58, 13.5), v3(17, 57.5, 12), v3(19.5, 60, 12), v3(64, 58, 12), v3(1, 28.5, 12), v3(83, 36, 12)]) this.person('roman_bow', p, false);
+    for (const p of [v3(17, 57.5, 12), v3(19.5, 60, 12), v3(64, 58, 12), v3(67, 60.5, 12), v3(1, 28.5, 12), v3(83, 36, 12), v3(42, 61.5, 11.5), v3(46, 61.5, 11.5)]) this.person('roman_bow', p, false);
   }
 
   wheelWalkers() {
@@ -191,18 +199,19 @@ export class Life {
 
   crews() {
     const spots = [
-      v3(19.5, 40, 0), v3(25, 41, 0), v3(24, 47.5, 0),
-      v3(0, 56, 15), v3(3.5, 60, 15),
-      v3(80, 56, 15), v3(84, 59.5, 15),
+      v3(23, 40, 0), v3(31, 41, 0), v3(30.5, 48, 0),
+      v3(-1, 56.5, 15), v3(2.5, 61.5, 15),
+      v3(81, 56.5, 15), v3(85, 60.5, 15),
       v3(41, 56.5, 13), v3(46.5, 60.5, 13),
-      v3(64, 15, 0), v3(70, 18, 0), v3(58, 16, 0),
-      v3(33, 28, 0), v3(18, 30, 0), v3(48, 22, 0),
+      v3(68, 17, 0), v3(74, 18, 0), v3(70.5, 8, 0),
+      v3(33, 27, 0), v3(18, 27, 0), v3(48, 27, 0),
+      v3(14.5, 30, 0), v3(16, 31, 0), v3(66, 47, 0), v3(37, 50, 0), v3(52, 46, 0),
     ];
     for (const p of spots) this.person('engineer', p, p.z < 0.5);
   }
 
   palms() {
-    const groves = [[-20, 78], [4, 82], [70, 82], [106, 90], [120, 70], [28, 118], [-4, 124], [64, 124], [96, 132], [130, 110], [-40, 100], [-40, 30], [-46, 38], [-34, 22], [-70, 10], [-60, 60]];
+    const groves = [[4, 128], [8, 122], [-2, 134], [-24, 92], [106, 90], [120, 70], [64, 104], [96, 150], [130, 110], [-30, 40], [-60, 54], [-80, 46], [30, 98], [112, 128]];
     let n = 0;
     for (const [gx, gy] of groves) {
       const count = this.rnd.int(3, 6);
@@ -251,7 +260,7 @@ export class Life {
     // catapult: the stone part-way through its flight to the Valley road's leading block
     const stoneK = 0.0016;
     const tip = this.scene.catapultTip();
-    const tgt = this.ground(W.roadPoint(1, 34));
+    const tgt = this.ground(W.roadPoint(0, 88));
     const shot = aim(tip, tgt, 28, false, stoneK);
     const path = fly(tip, shot.v0, stoneK, shot.steps);
     const now = Math.floor(shot.steps * this.t);
@@ -272,10 +281,10 @@ export class Life {
       r.point(q, hex('#fff2c8'), 1, false);
     }
     // the previous stone's impact in the middle Valley block
-    this.impact(this.ground(W.roadPoint(1, 48.5)), 0.32);
+    this.impact(this.ground(W.roadPoint(0, 130)), 0.32);
     // ballista: a bolt three quarters of the way to the first siege tower, streak behind it
     const bp = add(S.BALLISTA, v3(0, 0, 2.1));
-    const st = W.roadPoint(0, 24);
+    const st = W.roadPoint(0, 26);
     const stHit = v3(st.x, st.y, W.height(st.x, st.y) + 10);
     const bk = 0.0004;
     const bshot = aim(bp, stHit, 78, false, bk);
@@ -292,7 +301,7 @@ export class Life {
     r.line3(add(stHit, v3(-1.5, 0.8, -3)), add(stHit, v3(-0.2, -0.6, -2.6)), hex('#4a3322'));
     // arrow battery: a volley of 20 arrows dropping on the East road block
     const ap = add(S.ARROWS, v3(0, 0, 2.8));
-    const at = this.ground(W.roadPoint(2, 40));
+    const at = this.ground(W.roadPoint(0, 17));
     const ak = 0.006;
     for (let k = 0; k < 28; k++) {
       const jit = v3(this.rnd.range(-4, 4), this.rnd.range(-4, 4), 0);
@@ -323,15 +332,17 @@ export class Life {
       for (let k = 0; k < 18; k++) r.point(v3(this.rnd.range(40.8, 47.2), this.rnd.range(63.9, 66.5), 0.5 + this.rnd.range(0, 0.6)), hex('#2a201a'), 1);
       for (let k = 0; k < 9; k++) this.puff(v3(this.rnd.range(41, 47), this.rnd.range(62, 70), 1.2 + k * 0.7), 0.9 + k * 0.12, hex('#b8b0a8'), 0.28);
     }
-    for (const p of [v3(34.5, 62.5, 12.5), v3(39.5, 62.5, 12.5), v3(48.5, 62.5, 12.5), v3(53.5, 62.5, 12.5), v3(-2.5, 62.5, 16.2), v3(86.5, 62.5, 16.2), v3(40.5, 63.7, 6), v3(47.5, 63.7, 6), v3(20.5, 61.5, 13.2), v3(68.5, 61.5, 13.2)]) this.fire(p, 1);
-    for (const [x, y] of [[16, 133], [26, 146], [6, 136]]) {
+    // torches every 8 m along the wall tops, braziers on the open towers and the empty pads
+    for (let x = 8; x < 80; x += 8) if (x < 38 || x > 50) this.fire(v3(x, 59.6, 9.3), 0.7);
+    for (let y = 12; y < 54; y += 8) this.fire(v3(83.6, y, 9.3), 0.7);
+    for (const p of [v3(18, 59, 13.3), v3(1.5, 30.5, 13.3), v3(40.5, 63.7, 6), v3(47.5, 63.7, 6), v3(73, 46, 1.6), v3(59.4, 46, 1.6), v3(72, 5.4, 1.2)]) this.fire(p, 1.3);
+    for (const [x, y] of [[-66, 22], [-58, 12], [-78, 28], [-50, 26]]) {
+      this.fire(add(this.ground({ x, y }), v3(1.5, 1, 0.3)), 1.5);
       const b = this.ground({ x, y });
       this.fire(add(b, v3(0, 0, 0.3)), 1.2);
       for (let k = 0; k < 8; k++) this.puff(add(b, v3(k * 0.8, -k * 0.3, 1.5 + k * 1.4)), 0.7 + k * 0.18, hex('#8f8a86'), 0.32 - k * 0.02);
     }
-    for (let road = 0; road < 3; road++) {
-      for (const s of [32, 44, 58, 74, 88]) this.puff(add(this.ground(W.roadPoint(road, s + 6)), v3(0, 0, 0.8)), 2.2, hex('#e6d2a6'), 0.22);
-    }
+    for (const s of [36, 58, 92, 124, 160, 190, 222, 244, 268, 306]) this.puff(add(this.ground(W.roadPoint(0, s)), v3(0, 0, 0.8)), 2.2, hex('#e6d2a6'), 0.22);
   }
 
   // A projectile's shadow on the ground straight below it (reads its height).
