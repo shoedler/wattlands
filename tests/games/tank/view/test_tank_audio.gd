@@ -164,6 +164,10 @@ func test_loops_stop_without_cadence_power_or_a_room() -> void:
 	_step(0.05, 90.0)
 	assert_false(_audio.loop_on[TankIds.ENGINE_DIESEL])
 	assert_false(_audio.loop_on[TankIds.ENGINE_BULWARK], "the Citadel has no gearbox room")
+	_state.station(TankIds.ENGINE_DIESEL).unpowered = false
+	_state.station(TankIds.ENGINE_DYNAMO).slot = -1
+	_step(0.05, 90.0)
+	assert_false(_audio.loop_on[TankIds.ENGINE_DYNAMO], "an empty seat's machine is silent")
 	_state.all_afk = true
 	_step(0.05, 90.0)
 	assert_false(_audio.loop_on[TankIds.ENGINE_DYNAMO])

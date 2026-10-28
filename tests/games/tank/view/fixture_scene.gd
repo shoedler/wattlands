@@ -16,6 +16,9 @@ extends Control
 ##   zone=<id>          (roam) the hull in the middle of that zone (lake, village, quarry, meadow, forest)
 ##   peer=<n>           the local rider's peer (default 1)
 ##   fire=<s>           seconds between shots (default 2.5, 0 for none)
+##   shot_frame=<n>     (with fire=0) the main gun fires on frame n (a firing still with --frames)
+##   bow=<n>            the bow guns fire n rounds a second
+##   empty=<engine>     that station's seat empty (slot -1), e.g. empty=arc
 ##   still              the hull holds still
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
@@ -31,6 +34,7 @@ var state: TankState = null
 
 var _opts: Dictionary = {}
 var _acc: float = 0.0
+var _bow_acc: float = 0.0
 var _fire_in: float = 1.0
 var _next_shell_id: int = 900
 var _times: Array[float] = []
@@ -58,6 +62,11 @@ func _ready() -> void:
 						break
 		var kind:
 			state = U.fixture(kind, crew)
+	if _opts.has("empty"):
+		var st := state.station(str(_opts["empty"]))
+		if st != null:
+			st.slot = -1
+			st.peer = 0
 	var peer := int(_opts.get("peer", 1))
 	var ctx := F.make_ctx(crew, 0, content, Wl.SOLO, peer)
 	game = F.make_game(ctx)
@@ -90,6 +99,14 @@ func _process(delta: float) -> void:
 	while _acc >= Wl.SIM_DT:
 		_acc -= Wl.SIM_DT
 		_tick()
+	if _opts.has("shot_frame") and _frames == int(_opts["shot_frame"]):
+		_fire()
+	var bow := float(_opts.get("bow", 0.0))
+	if bow > 0.0:
+		_bow_acc += delta * bow
+		while _bow_acc >= 1.0:
+			_bow_acc -= 1.0
+			game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 0))
 	var fire_every := float(_opts.get("fire", 2.5))
 	if fire_every > 0.0:
 		_fire_in -= delta

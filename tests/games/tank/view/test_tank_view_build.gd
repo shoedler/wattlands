@@ -1,50 +1,58 @@
 extends GutTest
-## The v2 view built headless from fixtures (docs/games/tank.md 3, 4): every tank variant for crews
-## 1-4 (the Bastion's arc room included), every pixel_flex canvas, the machines in sync with their
-## riders, the depth of field toggling, enemies in depth lanes, wrecks aging on sim time, the
-## effects of shots, hits and the evade, and a view that only reads the state.
+## The v3 view built headless from fixtures (docs/games/tank.md v3, 3, 4): the one tank for crews
+## 1-4, every pixel_flex canvas, the machines in sync with their riders, the depth of field
+## toggling, enemies in depth lanes, wrecks aging on sim time, the effects of shots, hits and the
+## evade, and a view that only reads the state.
 
 const U := preload("res://tests/games/tank/view/tank_view_util.gd")
-const VARIANT_OF := {1: "tank_1rider", 2: "tank_2rider", 3: "tank_3rider", 4: "tank_4rider"}
-const ROOMS_OF := {
-	1: ["diesel"],
-	2: ["diesel", "dynamo"],
-	3: ["diesel", "steam", "dynamo"],
-	4: ["diesel", "steam", "dynamo", "arc"],
+## The seats each fixture crew mans (the v2 fixtures' stations: the one-rider gearbox drives).
+const SEATS_OF := {
+	1: ["drive"],
+	2: ["drive", "gun"],
+	3: ["drive", "gun", "loader"],
+	4: ["drive", "gun", "loader", "lights"],
 }
 
 
-func test_every_variant_builds_and_runs_from_every_fixture() -> void:
+func test_the_one_tank_builds_and_runs_from_every_fixture() -> void:
 	for crew in [1, 2, 3, 4]:
 		for kind: String in ["state", "gun_line", "boss"]:
 			var v := U.view_of(self, U.fixture(kind, crew))
 			U.run(v, 20)
-			assert_eq(v.variant, VARIANT_OF[crew], "crew %d %s" % [crew, kind])
-			for n: String in ["Back", "World", "Tank", "Light", "Front", "Post"]:
+			for n: String in ["Back", "World", "WorldLight", "Tank", "Light", "Front", "Post"]:
 				assert_not_null(v.layer(n), n)
-			var rooms: Array = v.room_riders.keys()
-			rooms.sort()
-			var want: Array = (ROOMS_OF[crew] as Array).duplicate()
-			want.sort()
-			assert_eq(rooms, want, "crew %d: a rider in every engine room" % crew)
+			var manned: Array = []
+			for seat in TankRig.SEATS:
+				if v.rider_on(seat) != null:
+					manned.append(seat)
+					assert_gte(int(v.seat_slots[seat]), 0, "crew %d %s" % [crew, seat])
+				else:
+					assert_eq(int(v.seat_slots[seat]), -1, "crew %d %s empty" % [crew, seat])
+			assert_eq(
+				manned, SEATS_OF[crew], "crew %d %s: a rider on every manned seat" % [crew, kind]
+			)
+			assert_not_null(v.body, "the tank's sprite")
+			assert_gt(v.interior.paints, 0, "the rooms painted")
 			assert_gt(v.frames, 20)
 
 
-func test_the_bastion_has_its_arc_room_tower_and_rider() -> void:
+func test_the_lights_seat_has_its_rider_and_the_searchlights_follow_its_arc() -> void:
 	var s := U.fixture("state", 4)
 	var v := U.view_of(self, s)
-	assert_eq(v.variant, "tank_4rider")
-	assert_true(v.room_rects.has("arc"))
-	assert_eq(v.rider_of("arc"), s.rider_at(s.station(TankIds.ENGINE_ARC).slot), "from stations")
-	assert_true(v.kit.has_anchor(v.variant, "searchlight_tower_lens"))
+	assert_eq(v.rider_on("lights"), s.rider_at(s.station(TankIds.ENGINE_ARC).slot), "from stations")
+	assert_eq(v.rider_of("arc"), v.rider_on("lights"))
 	(s.station(TankIds.ENGINE_ARC) as TankArcState).lit = true
 	assert_eq(v.searchlight_k(s), 1.0, "the arc rider in band lights the searchlights")
+	assert_true(v.turret_search_on(s), "the turret searchlight is on")
 	var arc := s.station(TankIds.ENGINE_ARC) as TankArcState
 	arc.lit = false
 	assert_lt(v.searchlight_k(s), 0.5, "out of band they dim")
+	assert_false(v.turret_search_on(s), "and the turret searchlight is off")
 	arc.stalled = true
 	assert_lt(v.searchlight_k(s), 0.2, "a stalled generator nearly kills them")
-	assert_eq(v.searchlight_k(U.fixture("state", 3)), 1.0, "no arc generator: always lit")
+	var v3 := U.view_of(self, U.fixture("state", 3))
+	assert_eq(v3.searchlight_k(v3.game.state), 1.0, "no arc generator: the rear one lit")
+	assert_false(v3.turret_search_on(v3.game.state), "the Lights seat empty: the turret one off")
 
 
 func test_pixel_flex_canvases_build_and_keep_the_world_on_screen() -> void:
@@ -59,9 +67,9 @@ func test_pixel_flex_canvases_build_and_keep_the_world_on_screen() -> void:
 		assert_eq(v.y_off, roundf((size.y - 540.0) * 0.5))
 		var right := v.sx(v.cam_x + float(TankConst.SCREEN_W))
 		assert_lte(right, size.x - 10.0, "%s: the rules' screen fits" % size)
-		var front := v.anchor("headlight").x
+		var front := v.at_sprite(v.rig.detail("headlight")["at"]).x
 		assert_lt(front, size.x * 0.6, "%s: the tank leaves the road ahead in view" % size)
-		assert_gte(v.origin.x, 0.0)
+		assert_gte(v.xf.origin.x, 0.0)
 		var band := v.dof.band
 		assert_eq(
 			band, TankView.BAND + Vector2(v.y_off, v.y_off), "the sharp band moves with the stage"
@@ -85,17 +93,18 @@ func test_machines_turn_with_their_riders_cadence_and_stand_still_at_zero() -> v
 	for r in s.riders:
 		r.cadence_rpm = 90.0
 	U.run(v, 60)
-	var p0 := v.machine_phase("steam")
+	var p0 := v.machine_phase("loader")
 	U.run(v, 60)
-	var turned := v.machine_phase("steam") - p0
+	var turned := v.machine_phase("loader") - p0
 	assert_almost_eq(turned, 1.5, 0.2, "90 rpm for 1 s is 1.5 crank revolutions")
 	for r in s.riders:
 		r.cadence_rpm = 0.0
 		r.raw_w = 0.0
 	U.run(v, 3)
-	var p1 := v.machine_phase("dynamo")
+	var p1 := v.machine_phase("gun")
 	U.run(v, 60)
-	assert_eq(v.machine_phase("dynamo"), p1, "at 0 rpm everything stands still")
+	assert_eq(v.machine_phase("gun"), p1, "at 0 rpm everything stands still")
+	assert_eq(v.machine_phase("sec"), 0.0, "an empty seat never turns")
 
 
 func test_the_power_ratio_is_watts_over_the_target() -> void:
@@ -120,7 +129,6 @@ func test_the_miniature_pass_follows_the_option_and_turns_itself_off() -> void:
 	v.set_miniature(true)
 	U.run(v, 1)
 	assert_true(v.dof.visible)
-	# The rider's option off at the start.
 	var g := U.make_game(U.fixture("state", 3))
 	autofree(g)
 	g.ctx.local_player().options["miniature"] = false
@@ -171,14 +179,34 @@ func test_enemies_stand_in_the_lanes_the_rules_hold_them_in() -> void:
 		var nearer: Rect2 = v.enemy_rects[100 + i]
 		var further: Rect2 = v.enemy_rects[100 + i - 1]
 		assert_gt(nearer.end.y, further.end.y, "a nearer lane stands lower on the road")
-	assert_lte(v.enemy_rects[103].end.y, TankView.ROAD_ENEMY_Y + 0.5, "enemies stand on the road")
+	var front: Rect2 = v.enemy_rects[103]
+	assert_almost_eq(
+		front.end.y,
+		TankView.ROAD_ENEMY_Y - (TankView.GROUND - v.ground_y(front.get_center().x)),
+		2.0,
+		"the front lane stands on the road's relief"
+	)
 	s.enemies[0].lane = 9
 	U.run(v, 1)
 	assert_eq(int(v.lanes[100]), TankView.LANES - 1, "a lane past the last is drawn in the last")
 
 
-func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane() -> void:
+## The crews whose rules hull spans the drawn tank (the v3 contracts give every crew the r6 hull,
+## TankGeometry from r6_hitbox.json; the v2 contracts' Bulwark and Rampart are shorter, so their
+## ground ahead is squeezed onto the canvas).
+func _full_hull_crews() -> Array[int]:
+	var out: Array[int] = []
+	var rig := TankRig.shared()
+	var art := (rig.detail("headlight")["at"] as Vector2).x - TankView.ART_REAR
 	for crew in [1, 2, 3, 4]:
+		var s := U.fixture("state", crew)
+		if float(s.hull.hull_w) * TankView.S >= art * 0.95:
+			out.append(crew)
+	return out
+
+
+func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane() -> void:
+	for crew in _full_hull_crews():
 		for index: int in [2, 5, 8]:
 			var rig := TankRulesRig.new(crew)
 			rig.enter(index, 0.5)
@@ -201,7 +229,8 @@ func test_the_rules_gun_lines_are_drawn_in_their_lanes_with_no_overlap_in_a_lane
 
 
 func test_the_behemoth_is_drawn_where_the_rules_hit_it() -> void:
-	for crew in [1, 2, 3, 4]:
+	assert_gt(_full_hull_crews().size(), 0)
+	for crew in _full_hull_crews():
 		var s := U.fixture("boss", crew)
 		var v := U.view_of(self, s)
 		U.run(v, 2)
@@ -242,7 +271,6 @@ func test_wrecks_age_on_sim_time_into_debris_heaps() -> void:
 	var w := v.wrecks[0]
 	assert_eq(v.wreck_collapse(w), 0.0, "a burning hulk at first")
 	assert_eq(v.wreck_fire(w), 1.0)
-	# Frames without sim time change nothing.
 	U.run(v, 120, 1.0 / 60.0, false)
 	assert_eq(v.wreck_collapse(w), 0.0, "frame time does not age it")
 	s.t += TankView.WRECK_HULK_S + TankView.WRECK_COLLAPSE_S + 0.5
@@ -261,23 +289,20 @@ func test_shots_hits_and_bursts_light_the_scene() -> void:
 	var s := U.fixture("state", 3)
 	var v := U.view_of(self, s)
 	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_HEAVY, 15))
-	assert_eq(v.recoil, 1.0, "the barrel recoils")
-	assert_gt(v.fx.flashes.size(), 0)
+	assert_eq(v.firing.fire_t, 0.0, "the main gun fires")
+	assert_eq(v.firing.shots, 1)
 	assert_gt(v.fx.wash, 0.0, "the flash lights the scene")
-	var tracers := v.fx.tracers.size()
+	assert_eq(v.firing.flash_k(), 1.0)
 	v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankIds.SHELL_BOW, 17))
-	assert_gt(v.fx.tracers.size(), tracers, "the bow guns throw tracers")
-	assert_gt(v.fx.casings.size(), 0, "and brass")
+	assert_eq(v.firing.rounds.size(), 1, "a bow round: its flash, tracer and case")
 	v.apply_cue(
 		s,
 		TankEvents.HIT,
 		TankEvents.hit(TankEvents.ON_TANK, 0, 12.0, TankIds.SHELL_ENEMY, 0.0, 3300.0)
 	)
 	assert_gt(v.shake, 0.0, "a hit shakes the hull")
-	U.run(v, 3)
-	assert_ne(v.origin, v.tank_pos, "the hull moves while it shakes")
-	U.run(v, 120)
-	assert_eq(v.origin, v.tank_pos, "and settles")
+	U.run(v, 200)
+	assert_eq(v.shake, 0.0, "and settles")
 
 
 func test_the_evade_lurches_the_tank_or_blows_a_smoke_screen() -> void:
@@ -289,20 +314,21 @@ func test_the_evade_lurches_the_tank_or_blows_a_smoke_screen() -> void:
 	assert_eq(v.lurch_s, -1.0, "a missed evade does nothing")
 	assert_eq(v.screen_s, -1.0)
 	v.apply_cue(s, TankEvents.EVADE, TankEvents.evade(13, 3, true, diesel))
-	assert_gte(v.lurch_s, 0.0, "the diesel's sprint lurches the tank")
-	assert_eq(v.screen_s, -1.0, "no smoke screen for the diesel")
+	assert_gte(v.lurch_s, 0.0, "the drive's sprint lurches the tank")
+	assert_eq(v.screen_s, -1.0, "no smoke screen for the drive")
+	var rest := v.xf.origin.x
 	U.run(v, 30)
-	assert_gt(v.origin.x, v.tank_pos.x, "forward")
+	assert_gt(v.xf.origin.x, rest + 2.0, "forward")
 	U.run(v, 60)
 	assert_eq(v.lurch_s, -1.0)
 	var before := v.fx.smoke.size()
 	v.apply_cue(s, TankEvents.EVADE, TankEvents.evade(13, 3, true, steam))
-	assert_gte(v.screen_s, 0.0, "the steam engine's sprint blows a smoke screen")
+	assert_gte(v.screen_s, 0.0, "the loader's sprint blows a smoke screen")
 	assert_eq(v.lurch_s, -1.0, "and does not lurch the tank")
 	assert_gt(v.fx.smoke.size(), before + 15, "the boiler blows a smoke screen")
 	assert_eq(v.evade_kind(s, -1), "lurch", "an unknown slot lurches")
 	var solo := U.fixture("state", 1)
-	assert_eq(v.evade_kind(solo, solo.stations[0].slot), "lurch", "the Bulwark lurches")
+	assert_eq(v.evade_kind(solo, solo.stations[0].slot), "lurch", "the drive lurches")
 
 
 func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void:
@@ -313,7 +339,7 @@ func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void
 	assert_gt(v.barrel_vector().y, 0.0, "-12 degrees points down")
 	s.hull.elev_deg = 30.0
 	U.run(v, 1)
-	assert_almost_eq(v.barrel_vector().angle(), -deg_to_rad(30.0), 0.001)
+	assert_almost_eq(v.barrel_vector().angle(), -deg_to_rad(30.0) + v.xf.get_rotation(), 0.001)
 	s.hull.traverse_s = 2.0
 	U.run(v, 1)
 	s.hull.traverse_s = 1.0
@@ -323,36 +349,8 @@ func test_the_barrel_swings_through_a_traverse_and_holds_its_elevation() -> void
 	s.hull.facing = TankIds.FACE_LEFT
 	U.run(v, 1)
 	assert_eq(v.barrel_dir, -1.0)
-	assert_lt(v.muzzle().x, v.anchor("turret_pivot").x, "the muzzle faces the rear")
-
-
-func test_a_breakdown_kills_the_lamps_and_the_crew_works_the_repair() -> void:
-	var s := U.fixture("state", 3)
-	var v := U.view_of(self, s)
-	s.hull.breakdown = true
-	U.run(v, 10)
-	var acts := v.crew.actors(v.kit.spec(v.variant), {"breakdown": true, "cad": v.cadences})
-	var poses := {}
-	for a in acts:
-		poses[a["pose"]] = true
-	assert_true(poses.has("engineer"))
-	assert_false(poses.has("stoker"), "the stoker drops his shovel for a wrench")
-	assert_false(poses.has("tech"))
-
-
-func test_the_crew_follow_the_state() -> void:
-	var v := U.view_of(self, U.fixture("state", 3))
-	var spec := v.kit.spec(v.variant)
-	var calm := v.crew.actors(spec, {"recoil": 0.0, "cad": {"steam": 90.0}})
-	var fired := v.crew.actors(spec, {"recoil": 1.0, "cad": {"steam": 90.0}})
-	var g0 := _pose(calm, "gunner")
-	var g1 := _pose(fired, "gunner")
-	assert_ne(g0["frame"], g1["frame"], "the gunner recoils with the shot")
-	assert_lt((g1["at"] as Vector2).x, (g0["at"] as Vector2).x)
-	assert_false(_pose(calm, "commander").is_empty(), "the commander on the turret roof")
-	assert_false(_pose(calm, "stoker").is_empty(), "a stoker in the steam room")
-	var solo := v.crew.actors(v.kit.spec("tank_1rider"), {"solo": true, "cad": {"diesel": 80.0}})
-	assert_false(_pose(solo, "stoker").is_empty(), "the Bulwark's stoker at the diesel")
+	assert_eq(v.turret_sx(), -1.0, "the whole turret mirrored")
+	assert_lt(v.muzzle().x, v.hud_tank_point("turret_pivot").x, "the muzzle faces the rear")
 
 
 func test_the_halt_line_stands_ahead_in_an_advance() -> void:
@@ -363,7 +361,7 @@ func test_the_halt_line_stands_ahead_in_an_advance() -> void:
 		return
 	var hx := TankWorldDraw.halt_x(s)
 	assert_false(is_nan(hx))
-	assert_gt(v.sx(hx), v.anchor("headlight").x, "ahead of the tank")
+	assert_gt(v.sx(hx), v.hud_tank_point("headlight").x, "ahead of the tank")
 
 
 func test_the_view_never_writes_the_state() -> void:
@@ -372,6 +370,7 @@ func test_the_view_never_writes_the_state() -> void:
 		var before := JSON.stringify(s.to_dict())
 		var v := U.view_of(self, s)
 		v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_HEAVY, 15))
+		v.apply_cue(s, TankEvents.SHOT, TankEvents.shot(1, TankIds.SHELL_BOW, 17))
 		v.apply_cue(s, "evade", {"e": 1, "ok": 1})
 		U.run(v, 90, 1.0 / 60.0, false)
 		assert_eq(JSON.stringify(s.to_dict()), before, "crew %d" % crew)
@@ -394,13 +393,6 @@ func test_a_client_view_interpolates_from_snapshots() -> void:
 	)
 
 
-static func _pose(acts: Array[Dictionary], pose: String) -> Dictionary:
-	for a in acts:
-		if a["pose"] == pose:
-			return a
-	return {}
-
-
 func test_the_hud_geometry_reads_the_view() -> void:
 	for size: Vector2 in [Vector2(960, 540), Vector2(1146, 480)]:
 		var s := U.fixture("state", 3)
@@ -415,6 +407,12 @@ func test_the_hud_geometry_reads_the_view() -> void:
 		assert_eq(g.tank_point("muzzle"), v.muzzle() + Vector2(0, v.y_off))
 		assert_eq(g.tank_point("barrel_pivot"), v.barrel_pivot() + Vector2(0, v.y_off))
 		assert_almost_eq(g.tank_point("rear").y, g.ground_y(), 0.01)
+		assert_eq(v.hud_bow_muzzles().size(), 2, "both bow guns' muzzles")
+		assert_eq(v.hud_bow_muzzles()[0], v.bow_muzzle(0) + Vector2(0, v.y_off))
+		var body := v.hud_tank_rects()
+		assert_eq(body.size(), 2, "the turret and the hull from the hitbox")
+		assert_true(body[0].has_point(v.barrel_pivot() + Vector2(-20, v.y_off)), "the turret")
+		assert_almost_eq(v.hud_barrel_length(), v.rig.gun_len + 1.0, 0.01)
 		var e := s.enemies[0]
 		var r := g.enemy_rect(e)
 		assert_eq(r.position, (v.enemy_rects[e.id] as Rect2).position + Vector2(0, v.y_off))

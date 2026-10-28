@@ -1,6 +1,6 @@
 {
   "version": "v2-2",
-  "note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), 960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh.",
+  "note": "Diesel Domestiques v2 art kit (docs/games/tank.md 3), built from the reference image only (no fal), 960x540 art px. The single manifest the view reads (TankKit). Regenerate with tools_src/regen.sh. v3: the enemies, the Behemoth and the cards are used; the tank, crew and planes went with v3.",
   "art_resolution": [
     960,
     540
@@ -11,69 +11,12 @@
     "offset_y": 2,
     "note": "x960 = x1088 * 15/17, y540 = y608 * 15/17 + 2 (1088x608 -> 960x536, edge rows repeated to 540)"
   },
-  "planes": [
-    {
-      "name": "far",
-      "file": "planes2/far_wide.png",
-      "y0": 0,
-      "parallax": 0.04,
-      "blur_box_radius": 0,
-      "layer": "back"
-    },
-    {
-      "name": "forest",
-      "file": "planes2/forest_wide.png",
-      "y0": 0,
-      "parallax": 0.3,
-      "blur_box_radius": 1,
-      "layer": "back"
-    },
-    {
-      "name": "road",
-      "file": "planes2/road_wide.png",
-      "y0": 312,
-      "parallax": 1.0,
-      "blur_box_radius": 0,
-      "layer": "road"
-    },
-    {
-      "name": "foreground",
-      "file": "planes2/foreground_wide.png",
-      "y0": 344,
-      "parallax": 1.35,
-      "blur_box_radius": 2,
-      "layer": "front",
-      "darken": 0.86
-    }
-  ],
-  "planes_note": "Back to front: far (sky with the Milky Way, mountains, the pale cliff, the misty lake), forest, [the tank, enemies and props on the road], road, foreground. Each file is the reference's own 960 px cut plus its mirror (1920 px, seamless). y0 = the row of the 960x540 frame the plane's top sits on; parallax = scroll factor against the road (1.0). The tilt-shift blur is baked once by planes2.gd: blur_box_radius (two box passes); the reference already carries its own depth of field, so the far plane keeps it. darken = the factor baked into the foreground.",
-  "zone_planes": {
-    "note": "Free roam (docs/games/tank.md 2.10, 3.1): the zone's near plane replaces the forest plane (the same frame, y0, parallax and blur) while the tank drives through it; the pine forest keeps the forest plane. Built by zones.gd from the kit's own planes (the forest's trees squashed into lower tree lines, the far plane's pale cliff as quarry rock) plus houses, haystacks, fences, reeds and a gantry in code.",
-    "replaces": "forest",
-    "lake": "planes2/zone_lake_wide.png",
-    "village": "planes2/zone_village_wide.png",
-    "quarry": "planes2/zone_quarry_wide.png",
-    "meadow": "planes2/zone_meadow_wide.png"
-  },
   "tank": {
     "source": "cut from the reference (tank.gd, tankfix.gd: the star and A17 painted out, crew, beams, smoke and headlight glow removed), split into modules at its bulkheads and assembled per crew size (assemble.gd). turret_barrel.png shares the 3-rider frame (480x240): the view erases each variant's baked barrel and draws this one at the gun's elevation.",
-    "barrel": "turret_barrel.png",
-    "modules": {
-      "note": "reference px. Hull layers: upper (y<310: roof + upper deck), lower (310..352: lower deck), running gear (y>=352, rebuilt per length by removing/duplicating 34 px wheel periods and resampling). Cuts sit at bulkheads; seams cross-fade 4 px.",
-      "rear": "x 17..188 upper / 17..256 lower (rear plate, engine room, ladder 1)",
-      "middle_steam": "lower 256..332 (ladder 2 + shell rack)",
-      "middle_dynamo": "lower 332..386 (generator room)",
-      "middle_arc": "lower 332..386 copied in at 386 (the Bastion's arc-generator room)",
-      "middle_upper_bays": "upper 188..264 (desk bays), 300..385 turret-drive room",
-      "front": "x 386..561 (front rooms, glacis, bow guns, headlight, sprocket)",
-      "turret": "x 188..534 y 118..263, scaled 0.85 for 1 rider",
-      "running_gear_period_ref_px": 34
-    },
     "variants": {
       "tank_1rider": {
         "tank": "bulwark",
         "crew": 1,
-        "file": "tank_1rider.png",
         "size": [
           366,
           240
@@ -227,7 +170,6 @@
       "tank_2rider": {
         "tank": "rampart",
         "crew": 2,
-        "file": "tank_2rider.png",
         "size": [
           413,
           240
@@ -413,7 +355,6 @@
       "tank_3rider": {
         "tank": "citadel",
         "crew": 3,
-        "file": "tank_3rider.png",
         "size": [
           480,
           240
@@ -619,7 +560,6 @@
       "tank_4rider": {
         "tank": "bastion",
         "crew": 4,
-        "file": "tank_4rider.png",
         "size": [
           528,
           240
@@ -846,84 +786,8 @@
           ]
         }
       }
-    }
-  },
-  "crew": {
-    "cell": [
-      30.0,
-      24.0
-    ],
-    "feet_row": 23.0,
-    "facing": "right",
-    "figure_height_px": "19-20",
-    "frames": {
-      "stoker": [
-        "crew20/stoker_0.png",
-        "crew20/stoker_1.png",
-        "crew20/stoker_2.png",
-        "crew20/stoker_3.png"
-      ],
-      "loader": [
-        "crew20/loader_0.png",
-        "crew20/loader_1.png",
-        "crew20/loader_2.png",
-        "crew20/loader_3.png"
-      ],
-      "loader_climb": [
-        "crew20/loader_climb_0.png",
-        "crew20/loader_climb_1.png"
-      ],
-      "engineer": [
-        "crew20/engineer_0.png",
-        "crew20/engineer_1.png",
-        "crew20/engineer_2.png"
-      ],
-      "gunner": [
-        "crew20/gunner_0.png",
-        "crew20/gunner_1.png",
-        "crew20/gunner_2.png"
-      ],
-      "commander": [
-        "crew20/commander_0.png",
-        "crew20/commander_1.png",
-        "crew20/commander_2.png"
-      ],
-      "tech": [
-        "crew20/tech_0.png",
-        "crew20/tech_1.png",
-        "crew20/tech_2.png"
-      ],
-      "idle": [
-        "crew20/idle_0.png",
-        "crew20/idle_1.png",
-        "crew20/idle_2.png"
-      ],
-      "spotter": [
-        "crew20/spotter_0.png",
-        "crew20/spotter_1.png",
-        "crew20/spotter_2.png"
-      ]
     },
-    "commander_lens_px": {
-      "0": [
-        22.0,
-        9.0
-      ],
-      "1": [
-        22.0,
-        6.0
-      ],
-      "2": [
-        22.0,
-        12.0
-      ]
-    },
-    "commander_beam_angle_deg": {
-      "0": 0.0,
-      "1": -32.0,
-      "2": 28.0
-    },
-    "note": "anchor a frame at its feet: cell x 10 (hips), row 23 on the floor. Face right; mirror for left."
+    "note": "v3: the v2 variants' numbers only (anchors, rooms, sizes), for TankHudGeom's fallback while the HUD moves to the v3 tank; their sprites are gone. The v3 tank is assets/tank/v3/."
   },
   "enemies": {
     "light": {
