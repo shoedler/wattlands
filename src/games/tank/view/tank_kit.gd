@@ -2,19 +2,12 @@ class_name TankKit
 extends RefCounted
 ## The v2 kit's pieces the v3 game still uses (assets/tank/v2/kit.json): the enemies and the
 ## Behemoth (procedural sprites in the reference's style, with their shading masks), and the
-## content cards. The v3 tank is TankRig's (assets/tank/v3/). kit.json's "tank" section keeps the v2
-## variants' numbers for TankHudGeom's fallback only (turret_rect_of, hull_rect_of); their sprites
-## are gone. Loaded once and shared (shared()); the view only reads it. check() lists what is wrong
-## with a manifest for the tests.
+## content cards. The v3 tank is TankRig's (assets/tank/v3/). Loaded once and shared (shared());
+## the view only reads it. check() lists what is wrong with a manifest for the tests.
 
 const DIR := "res://assets/tank/v2/"
 const MANIFEST := DIR + "kit.json"
 const ENEMY_KINDS: Array[String] = ["light", "medium", "destroyer", "heavy", "dugin"]
-## The v2 turret block's geometry (TankHudGeom's fallback).
-const TURRET_REAR := 89.0
-const CREW_H := 22.0
-const HULL_REAR_X := 18.0
-const HULL_DECK_RISE := 15.0
 
 static var _shared: TankKit = null
 
@@ -94,32 +87,6 @@ static func _shades(row: Dictionary, tex: Texture2D) -> void:
 				rim.set_pixel(x, y, Color(1, 1, 1, k))
 	row["sil"] = ImageTexture.create_from_image(sil)
 	row["rim"] = ImageTexture.create_from_image(rim)
-
-
-## A v2 variant's kit.json entry (numbers only; TankHudGeom's fallback and the v2 HUD tests).
-func variant(vn: String) -> Dictionary:
-	return (manifest.get("tank", {}) as Dictionary).get("variants", {}).get(vn, {})
-
-
-## The v2 turret block of a kit.json variant entry (TankHudGeom's fallback).
-static func turret_rect_of(v: Dictionary) -> Rect2:
-	var a: Dictionary = v.get("anchors", {})
-	var sc := float(v.get("turret_scale", 1.0))
-	var tp := vec(a.get("turret_pivot", [0, 0]))
-	var x0 := floorf(tp.x - TURRET_REAR * sc)
-	var x1 := ceilf(vec(a.get("barrel_pivot", [0, 0])).x + 3.0)
-	var top := floorf(vec(a.get("turret_roof_commander_feet", [0, 0])).y - CREW_H)
-	return Rect2(x0, top, x1 - x0, tp.y - top)
-
-
-## The v2 hull below the turret of a kit.json variant entry (TankHudGeom's fallback).
-static func hull_rect_of(v: Dictionary) -> Rect2:
-	var a: Dictionary = v.get("anchors", {})
-	var tp := vec(a.get("turret_pivot", [0, 0]))
-	var top := tp.y - HULL_DECK_RISE
-	var ground := float(a.get("road_wheel_line", {}).get("ground_contact_y", 233.0))
-	var front := vec(a.get("headlight", [0, 0])).x + 4.0
-	return Rect2(HULL_REAR_X, top, front - HULL_REAR_X, ground - top)
 
 
 static func vec(a: Variant) -> Vector2:

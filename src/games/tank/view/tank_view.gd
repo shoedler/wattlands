@@ -146,8 +146,6 @@ var frames: int = 0
 var time: float = 0.0
 var dt: float = 0.0
 var mirrored: bool = false
-## The v2 kit variant TankHudGeom's fallback and the v2 HUD tests read (hud_variant()).
-var variant: String = "tank_4rider"
 var plane_x: float = 0.0
 var map_m: float = 0.0
 var hull_x: float = 0.0
@@ -1268,12 +1266,6 @@ func hud_bow_muzzles() -> Array[Vector2]:
 ## The barrel's length (art px, trunnion to the muzzle).
 func hud_barrel_length() -> float:
 	return rig.gun_len + 1.0
-
-
-## The v2 kit variant the HUD's fallback measures its barrel on (TankHudGeom.barrel() still reads
-## kit.json v2 through it; hud_barrel_length() is the v3 tank's).
-func hud_variant() -> String:
-	return variant
 
 
 func hud_barrel_dir() -> float:
