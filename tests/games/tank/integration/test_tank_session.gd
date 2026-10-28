@@ -240,7 +240,13 @@ func test_a_host_crew_of_4_plays_ashfall_road_to_the_results_with_zero_input() -
 	var r := _run(["--content=ashfall_road", "--players=4", "--rider=erg", "--seed=1"])
 	assert_eq(r["_end"], "complete")
 	assert_has([TankIds.OUTCOME_VICTORY, TankIds.OUTCOME_WITHDRAWN], r.get("finished_reason"))
-	assert_eq((r["phases"]["4"] as Array).size(), 12, "11 segments and the cool-down")
+	# v3: a seat move splits a segment into plan phases; count the segments they belong to.
+	var plan: Array = r["plans"]["4"]["phases"]
+	var segs := {}
+	for sp: Dictionary in r["phases"]["4"]:
+		var meta: Dictionary = (plan[int(sp["index"])] as Dictionary).get("meta", {})
+		segs[int(meta.get("segment", -1))] = true
+	assert_eq(segs.size(), 12, "11 segments and the cool-down")
 	assert_lte(int(r.get("max_snapshot_bytes", 99999)), TankConst.SNAPSHOT_MAX_BYTES)
 	var arc := 0
 	for d: Dictionary in r.get("directives", []):

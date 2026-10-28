@@ -126,18 +126,23 @@ func test_a_crew_fills_the_most_needed_seats() -> void:
 	_enemy(s, TankIds.ENEMY_HEAVY, 280.0)
 	TankStations.fill_rack(s, 1)
 	assert_eq(_want(s, 1), "", "a fight on the road keeps the driver driving")
-	# A gun line with the rack full: the Loader's rider takes the Lights (a target past the headlight).
+	# A gun line with the rack full and the heavy past the headlight (dark: out of the gun's reach):
+	# the Loader's rider stays (3: the fight will need the rack), the Gun's takes the Lights (3.4
+	# beats a Gun with nothing to lay on, 2), Drive stays manned (3.2: the next Advance needs it).
 	s.seg.seg = TankIds.SEG_GUN_LINE
 	TankStations.fill_rack(s, TankConst.RACK_MAX)
 	var needs := TankAutopilot.seat_needs(s)
-	assert_gt(float(needs[TankIds.ENGINE_ARC]), float(needs[TankIds.ENGINE_STEAM]))
-	assert_eq(_want(s, 3), TankIds.ENGINE_ARC, "the Loader to the Lights")
-	assert_eq(_want(s, 1), "", "Drive stays manned at a gun line (the next Advance needs it)")
-	assert_eq(_want(s, 2), "", "the Gun stays")
+	assert_almost_eq(float(needs[TankIds.ENGINE_ARC]), 3.4, 1e-9)
+	assert_almost_eq(float(needs[TankIds.ENGINE_STEAM]), 3.0, 1e-9)
+	assert_almost_eq(float(needs[TankIds.ENGINE_DYNAMO]), 2.0, 1e-9)
+	assert_eq(_want(s, 3), "", "the Loader stays")
+	assert_eq(_want(s, 2), TankIds.ENGINE_ARC, "the Gun to the Lights")
+	assert_eq(_want(s, 1), "", "Drive stays manned at a gun line")
 
 
 func test_riders_who_play_their_own_seat_are_left_there() -> void:
 	var s := _state(3)
+	(s.station(TankIds.ENGINE_ARC) as TankArcState).lit = true
 	_enemy(s, TankIds.ENEMY_HEAVY, 280.0)
 	TankStations.fill_rack(s, 1)
 	s.rider(1).fallback = false
@@ -147,3 +152,42 @@ func test_riders_who_play_their_own_seat_are_left_there() -> void:
 	s.rider(3).fallback = false
 	s.rider(3).autopilot = false
 	assert_eq(_want(s, 2), "", "the one auto rider keeps the most needed seat it has")
+
+
+## In a fight with shells to fire the Lights (3.4: lit, the gun reaches the field with half the
+## dark dispersion) stay manned before the Secondaries (3.5 is not 0.5 more), the brief's order.
+func test_a_crew_of_4_keeps_the_lights_manned_in_a_fight() -> void:
+	var s := _state(4)
+	(s.station(TankIds.ENGINE_ARC) as TankArcState).lit = true
+	_enemy(s, TankIds.ENEMY_MEDIUM, 240.0)
+	_enemy(s, TankIds.ENEMY_LIGHT, 130.0, 91)
+	assert_true(bool(TankAutopilot.situation(s)["gun"]), "the main gun lays on the medium")
+	var needs := TankAutopilot.seat_needs(s)
+	assert_almost_eq(float(needs[TankIds.ENGINE_ARC]), 3.4, 1e-9)
+	assert_almost_eq(float(needs[TankIds.ENGINE_FEED]), 3.5, 1e-9)
+	assert_eq(_want(s, 4), "", "the Lights' rider stays")
+	assert_eq(_want(s, 3), TankIds.ENGINE_FEED, "the idle Loader (rack full) takes the bow guns")
+
+
+## A target only the bow guns can reach (the main gun has nothing to lay on): the Secondaries (4.6)
+## come before a Gun with nothing to lay on (2), and the Gun's rider takes them.
+func test_the_secondaries_come_first_when_the_main_gun_has_nothing_to_lay_on() -> void:
+	var s := _state(2)
+	var sit := {
+		"targets": true,
+		"near": true,
+		"gun": false,
+		"bow": true,
+		"only_light": true,
+		"far": false,
+		"rack": TankConst.RACK_MAX,
+		"shells": TankConst.RACK_MAX,
+	}
+	var needs := TankAutopilot.seat_needs(s, sit)
+	assert_almost_eq(float(needs[TankIds.ENGINE_FEED]), 4.6, 1e-9)
+	assert_almost_eq(float(needs[TankIds.ENGINE_DYNAMO]), 2.0, 1e-9)
+	assert_eq(TankAutopilot.seat_wanted_crew(s, s.rider(2), sit), TankIds.ENGINE_FEED)
+	assert_eq(TankAutopilot.seat_wanted_crew(s, s.rider(1), sit), TankIds.ENGINE_DIESEL)
+	sit["gun"] = true
+	assert_almost_eq(float(TankAutopilot.seat_needs(s, sit)[TankIds.ENGINE_FEED]), 3.5, 1e-9)
+	assert_eq(TankAutopilot.seat_wanted_crew(s, s.rider(2), sit), TankIds.ENGINE_DYNAMO)

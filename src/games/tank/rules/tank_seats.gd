@@ -9,7 +9,8 @@ extends RefCounted
 ##   event goes out.
 ## - The seat lock: seat_lock_s counts TankConst.SEAT_LOCK_S (60 s) down from the rider's last plan
 ##   boundary (every phase start: a segment boundary, or the split of a seat switch, so every
-##   trainer-mode change of that rider). A seat intent is refused while it runs.
+##   trainer-mode change of that rider). A seat intent is refused while it runs (and the director
+##   never splits a phase while it runs).
 ## - A seat intent asks for an empty seat: a named one, or the next / previous empty one in
 ##   TankIds.SEATS order (wrapping, skipping manned seats and those another rider is moving to).
 ##   It is refused while the lock runs, on reserve, in the cool-down, for a manned or claimed
@@ -32,6 +33,7 @@ static func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]
 		var since := float(aux.seat_since.get(ri.peer, state.t))
 		r.seat_lock_s = maxf(TankConst.SEAT_LOCK_S - (state.t - since), 0.0)
 		aux.seat_now[ri.peer] = can_land_now(ri)
+		aux.seat_input[ri.peer] = ri
 		if ri.phase_kind == Wl.COOLDOWN or ri.engine == "":
 			r.seat_target = ""
 	for ri in inputs.riders:
@@ -94,14 +96,45 @@ static func request(
 	return true
 
 
-## True when a move asked for now would land at once (a split: the rider's open-ended phase is past
-## its own min_s with room for a 60 s rest before its max_s), not at the phase's end. The
-## Autopilot seats riders only then (TankAux.seat_now), so its moves never land in the next segment.
+## True when a move asked for now could land at once (a split: the rider's open-ended phase is past
+## its own min_s and not at its max_s), not at the phase's end. The Autopilot seats riders only then
+## (TankAux.seat_now) and only with a split that passes (splits_now), so its moves never land in the
+## next segment.
 static func can_land_now(ri: TankRiderInput) -> bool:
 	return (
 		ri.phase_open_ended
 		and ri.phase_elapsed_s >= ri.phase_min_s - 1e-6
-		and ri.phase_remaining_s > TankConst.SEAT_LOCK_S + 1.0
+		and ri.phase_remaining_s > 2.0 * Wl.SIM_DT
+	)
+
+
+## True when rider `peer`'s move to `engine` asked for now would split its phase at once
+## (can_land_now, and TankSeatPlan.move_now finds a split that passes: the rest phase fits before
+## the phase's max_s). Without this tick's input (a test's bare state) it is TankAux.seat_now.
+static func splits_now(state: TankState, peer: int, engine: String) -> bool:
+	var aux := TankAux.of(state)
+	if not bool(aux.seat_now.get(peer, false)):
+		return false
+	var ri: TankRiderInput = aux.seat_input.get(peer)
+	if ri == null or ri.plan == null:
+		return true
+	var mv := TankSeatPlan.move_now(
+		state.content, ri.plan, ri.phase_index, ri.phase_elapsed_s, ri.seg_offset_s, engine, true
+	)
+	return not mv.is_empty() and bool(mv["split"])
+
+
+## True when rider `ri`'s next plan phase is a checkpoint: fixed, at least SEAT_LOCK_S long, ERG 50%
+## for every seat.
+static func checkpoint_next(ri: TankRiderInput) -> bool:
+	var nxt := ri.phase_index + 1
+	if ri.plan == null or ri.phase_index < 0 or nxt >= ri.plan.size():
+		return false
+	var ph := ri.plan.phase(nxt)
+	return (
+		str(ph.meta.get("seg", "")) == TankIds.SEG_CHECKPOINT
+		and not ph.open_ended
+		and ph.duration_s >= TankConst.SEAT_LOCK_S - 1e-6
 	)
 
 

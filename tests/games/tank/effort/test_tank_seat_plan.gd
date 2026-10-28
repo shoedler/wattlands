@@ -54,6 +54,20 @@ func test_a_split_between_two_switches_holds_60_s() -> void:
 	)
 
 
+## Free roam: the roam phase is open from its plan_min_s (60 s), and so is the rest after a move,
+## so a crew can move again 60 s later (the game's time up still reads the meta's seg_min_s).
+func test_a_roam_rest_can_split_again() -> void:
+	var c := _content("roam_30")
+	var plan := _plan(c, 1)
+	var rest := TankSeatPlan.tail(c, plan, 1, TankIds.ENGINE_STEAM, true, 300.0)
+	assert_not_null(rest)
+	assert_lt(rest.phase(0).min_s, TankConst.SEAT_LOCK_S + 1e-6, "not the roam's 25 minutes")
+	assert_eq(float(rest.phase(0).meta["seg_min_s"]), float(c.segment(1)["min_s"]))
+	var whole := TankSeatPlan.whole(plan, 1, rest)
+	var mv := TankSeatPlan.move_now(c, whole, 2, 70.0, 300.0, TankIds.ENGINE_DYNAMO, true)
+	assert_true(bool(mv.get("split", false)), "back to the Gun 70 s on")
+
+
 func test_a_split_with_no_mode_change_ends_with_the_segment() -> void:
 	var c := _content()
 	var plan := _plan(c, 0)

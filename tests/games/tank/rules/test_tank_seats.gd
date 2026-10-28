@@ -6,6 +6,7 @@ extends GutTest
 
 const DEPOT := 0
 const ADVANCE := 1
+const GUN_LINE := 2
 const CHECKPOINT := 3
 const BOSS := 10
 
@@ -165,3 +166,31 @@ func test_an_empty_seat_does_nothing() -> void:
 	two.run(5.0)
 	assert_true(two.diesel().is_empty())
 	assert_eq(two.hull().speed_mps, 0.0, "nobody drives")
+
+
+## The Autopilot asks for a move only when a split for it passes (TankSeats.splits_now): 40 s
+## before a gun line's max_s the Gun's rider cannot take the Loader (ERG to SIM, the checkpoint's
+## ERG next: the rest needs 60 s) but can take the Lights (ERG to ERG).
+func test_splits_now_asks_the_seat_plan() -> void:
+	var rig := _rig(2, GUN_LINE, 0.0)
+	var max_s := float(rig.content.segment(GUN_LINE)["max_s"])
+	rig.seg_t = max_s - 40.0
+	rig.plan_t = rig.seg_start(GUN_LINE) + rig.seg_t
+	rig.run(0.05)
+	assert_true(bool(TankAux.of(rig.state).seat_now.get(2, false)))
+	assert_false(TankSeats.splits_now(rig.state, 2, TankIds.ENGINE_STEAM), "no room for 60 s")
+	assert_true(TankSeats.splits_now(rig.state, 2, TankIds.ENGINE_ARC), "no mode change")
+
+
+func test_a_split_is_possible_until_the_phase_is_at_its_max_s() -> void:
+	var ri := TankRiderInput.new()
+	ri.phase_open_ended = true
+	ri.phase_min_s = 90.0
+	ri.phase_elapsed_s = 100.0
+	ri.phase_remaining_s = 20.0
+	assert_true(TankSeats.can_land_now(ri), "20 s left: TankSeatPlan decides whether a rest fits")
+	ri.phase_remaining_s = 0.05
+	assert_false(TankSeats.can_land_now(ri), "at max_s")
+	ri.phase_remaining_s = 20.0
+	ri.phase_elapsed_s = 80.0
+	assert_false(TankSeats.can_land_now(ri), "before its min_s")

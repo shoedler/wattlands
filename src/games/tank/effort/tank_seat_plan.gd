@@ -165,7 +165,9 @@ static func _rest_phase(
 	var ph := TankPlanBuilder.phase_for(content, s, engine, seg)
 	if not ph.open_ended:
 		return null
-	var seg_min := float(s.get("min_s", ph.min_s))
+	# A mission's plan_min_s (free roam) stands for the segment's own min_s here too, so a rest
+	# phase can split again 60 s on.
+	var seg_min := float(s.get("plan_min_s", s.get("min_s", ph.min_s)))
 	var seg_max := float(s.get("max_s", ph.max_s))
 	var max_s := seg_max - offset_s
 	var need := maxf(seg_min - offset_s, MIN_REST_S)

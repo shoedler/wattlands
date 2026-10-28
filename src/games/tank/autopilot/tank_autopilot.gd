@@ -198,13 +198,24 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	if state.seg.seg == TankIds.SEG_NONE or state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return {}
+	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
 	# The segment's objective is done ("Regroup" until it ends): the rider takes the seat the next
 	# segment wants, landing at the segment's end (the director never splits it then). Otherwise only
 	# moves that land at once: a move pending to the phase's end would land in the next segment,
 	# which the seating has not looked at (TankSeats.can_land_now).
 	var sit := situation(state)
 	var seg := state.seg.seg
-	if state.seg.objective_done and state.seg.open_ended:
+	# The solo rider's last minute before a checkpoint goes to the next segment's seat (it starts
+	# the Advance driving), unless the Gun has shells to fire at a target now.
+	var last_minute := (
+		state.riders.size() == 1
+		and ri != null
+		and TankSeats.checkpoint_next(ri)
+		and ri.phase_remaining_s < TankConst.SEAT_LOCK_S + 1.0
+		and seat_wanted_solo(state, rider, sit) != TankIds.ENGINE_DYNAMO
+	)
+	var at_end := (state.seg.objective_done and state.seg.open_ended) or last_minute
+	if at_end:
 		seg = next_fight_segment(state)
 		sit = expected(state, seg)
 	elif not bool(TankAux.of(state).seat_now.get(rider.peer, false)):
@@ -218,6 +229,8 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	var st := state.station(want)
 	if st == null or not st.is_empty():
+		return {}
+	if not at_end and not TankSeats.splits_now(state, rider.peer, want):
 		return {}
 	var out := TankIntents.seat(want, TankIds.VIA_AUTO)
 	out["auto"] = 1
@@ -295,10 +308,14 @@ static func rank_seats(seats: Array[String], needs: Dictionary) -> Array[String]
 ## How much each seat is needed now (seat id -> a score, higher first): Drive to move on (5) on a
 ## road segment until its objective is done, fight or not (the enemies keep station with the tank),
 ## or to dig in at a gun line (3.2: kept manned there, so the next Advance starts with a driver;
-## the seat lock leaves no time to move one there between the segments); the Gun (4.5) in a fight
-## with shells to fire or a Loader working; the Loader (4 in a fight, 3 on the road) while the rack
-## has room; the Lights (3) when an enemy stands beyond the headlight; the Secondaries (3.5) with a
-## target in the bow guns' range.
+## the seat lock leaves no time to move one there between the segments); the Gun in a fight with
+## shells to fire or a Loader working (4.5 with a target the auto-aim can lay on now, 2 without: a
+## light tank inside the gun's depression limit, or one past the headlight in the dark); the Loader
+## (4 in a fight, 3 on the road) while the rack has room, 3 in a fight with the rack full (the fight
+## will need it: only the Secondaries' 3.5 or more take its rider); the Lights (3.4) in a fight while the gun
+## can fire (lit, it reaches the whole field with half the dark dispersion) or an enemy stands
+## beyond the headlight; the Secondaries with a target in the bow guns' range (3.5, a rider on the
+## Lights stays: 3.5 is not 0.5 more; 4.6 when the main gun has nothing to lay on).
 static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "") -> Dictionary:
 	if sit.is_empty():
 		sit = situation(state)
@@ -314,14 +331,21 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 	var loader := state.station(TankIds.ENGINE_STEAM)
 	var loading := loader != null and not loader.is_empty()
 	var gun := 0.3
-	if fight:
-		gun = 4.5 if int(sit["shells"]) > 0 or loading else 1.0
+	if fight and (int(sit["shells"]) > 0 or loading):
+		gun = 4.5 if bool(sit["gun"]) else 2.0
+	elif fight:
+		gun = 1.0
+	var feed := 0.1
+	if bool(sit["bow"]):
+		feed = 3.5 if bool(sit["gun"]) else 4.6
 	var steam := 0.2
 	if int(sit["rack"]) < TankConst.RACK_MAX:
 		steam = 4.0 if fight else 3.0
+	elif fight:
+		steam = 3.0
 	var arc := 0.1
-	if bool(sit["far"]):
-		arc = 3.0
+	if bool(sit["far"]) or (fight and (int(sit["shells"]) > 0 or loading)):
+		arc = 3.4
 	elif fight:
 		arc = 1.0
 	return {
@@ -329,7 +353,7 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 		TankIds.ENGINE_DYNAMO: gun,
 		TankIds.ENGINE_STEAM: steam,
 		TankIds.ENGINE_ARC: arc,
-		TankIds.ENGINE_FEED: 3.5 if bool(sit["bow"]) else 0.1,
+		TankIds.ENGINE_FEED: feed,
 	}
 
 
@@ -338,8 +362,8 @@ static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "")
 ## aside, or a barricade blocking the road), "near": one of them within the gun's reach now
 ## (TankAim.in_reach: the headlight's range while the searchlights are dark), "only_light": something
 ## in the bow guns' range and every target there a light one (light_target), "bow": something in the bow
-## guns' range, "far": an enemy beyond the headlight's range, "rack": shells in the rack, "shells":
-## the rack plus a chambered round}.
+## guns' range, "far": an enemy beyond the headlight's range, "gun": the auto-aim can lay on a
+## target now (TankAim.pick), "rack": shells in the rack, "shells": the rack plus a chambered round}.
 static func situation(state: TankState) -> Dictionary:
 	var aux := TankAux.of(state)
 	var cam := state.camera_x()
@@ -374,9 +398,13 @@ static func situation(state: TankState) -> Dictionary:
 	var st := state.station(TankIds.ENGINE_STEAM) as TankSteamState
 	var rack := st.rack if st != null else 0
 	var chambered := 1 if state.hull.loaded != TankIds.SHELL_NONE else 0
+	var elev: Array[float] = [0.0]
+	var face: Array[int] = [state.hull.facing]
+	var gun := targets and TankAim.pick(state, aux, false, elev, face) != null
 	return {
 		"targets": targets,
 		"near": near,
+		"gun": gun,
 		"only_light": bow and only_light,
 		"bow": bow,
 		"far": far,
@@ -419,4 +447,5 @@ static func expected(state: TankState, seg: String) -> Dictionary:
 	sit["far"] = fight
 	sit["bow"] = false
 	sit["only_light"] = false
+	sit["gun"] = fight
 	return sit

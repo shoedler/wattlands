@@ -48,6 +48,9 @@ var enemy_in_range: bool = false
 var any_target: bool = false
 ## Joules counted toward Overpressure while the sprint rule held.
 var over_j: float = 0.0
+## Seconds an `over` asked for before the shell in progress was stowed still counts: that shell
+## goes straight back to the boiler when it is stowed (a surge just before the window).
+var over_arm_s: float = 0.0
 ## Depot drills already started (the aim drill's wrecks stand).
 var drill_wrecks: bool = false
 ## The Behemoth's telegraph length at its start (the HUD's countdown pips read telegraph_s).
@@ -62,6 +65,8 @@ var seat_phase: Dictionary = {}
 var seat_since: Dictionary = {}
 ## peer -> true while a seat move asked for now would land at once (TankSeats.can_land_now).
 var seat_now: Dictionary = {}
+## peer -> the rider's TankRiderInput of this tick (TankSeats.splits_now, checkpoint_next).
+var seat_input: Dictionary = {}
 ## The ready rack's shells, oldest first (TankIds.SHELL_*; TankSteamState.rack is its size). The
 ## Gun chambers the oldest; an Overpressure takes the newest back to the boiler.
 var rack_types: Array[int] = []

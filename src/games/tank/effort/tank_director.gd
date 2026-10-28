@@ -570,8 +570,10 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 			continue
 		# Once the segment's objective is done a move lands at the segment's end (the Autopilot then
 		# seats riders for the next segment; a split would only hold the end for its rest).
+		# Never a split while the rider's seat lock runs (a lock-waived move lands at the end).
 		var can_split := (
 			not ending
+			and r.seat_lock_s <= 0.0
 			and not state.seg.objective_done
 			and ri.phase_open_ended
 			and ri.phase_elapsed_s >= ri.phase_min_s - EPS
