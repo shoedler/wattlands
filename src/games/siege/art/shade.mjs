@@ -16,7 +16,7 @@ for (const name of [
   'ACC0', 'ACC1', 'ACC2', 'ACC3', 'LIT0', 'LIT1', 'LIT2', 'LIT3', 'FIRE', 'STONE_DARK', 'SHAFT',
   'MARBLE', 'ROPE', 'GATE', 'TAR_FALL', 'PLASTER', 'CLIFF', 'ROUNDWALL', 'MERLON', 'ARCH_GATE',
   'ARCH_BRIDGE', 'TEMPLE', 'SCUTUM', 'PLUM', 'TENT', 'ORE', 'GLOWCAVE', 'BRICK', 'QUARRY', 'MUDBRICK',
-  'ARCH_AQ',
+  'ARCH_AQ', 'BASALT',
 ]) M[name] = id++;
 
 // Materials whose pixels keep their saturation through the grade (the riders' colours).
@@ -180,6 +180,12 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
     }
     case M.FIRE: return W.hash2(px, py) > 0.4 ? [1, 0.81, 0.35, 0.8] : [1, 0.54, 0.16, 0.8];
     case M.STONE_DARK: return ramp(hex('#2e2a2c'), light, px, py);
+    case M.BASALT: {
+      // the junction floor: dark dressed basalt in 2 m slabs, so the lit shafts read on it
+      const j = fpm(p.x, 2) < 0.12 || fpm(p.y, 2) < 0.12;
+      const g = W.hash2(Math.floor(p.x / 2), Math.floor(p.y / 2));
+      return ramp(j ? hex('#2f2b2b') : cmix(hex('#504945'), hex('#463f3c'), g), light, px, py);
+    }
     case M.MARBLE: return ramp(C.MARBLE, light, px, py);
     case M.ROPE: return ramp(C.ROPE, light, px, py);
     case M.GATE: {

@@ -172,7 +172,7 @@ export class Life {
 
   defenders() {
     // two drilling squads in the courtyard, oxblood shields, 3 x 6
-    for (const [x0, y0] of [[40, 30], [48, 41]]) {
+    for (const [x0, y0] of [[40, 38.5], [55, 46]]) {
       for (let i = 0; i < 6; i++) for (let j = 0; j < 3; j++) this.person('roman', v3(x0 + i * 0.95, y0 + j * 0.95, 0));
     }
     const wz = W.WALL_H;
@@ -199,12 +199,12 @@ export class Life {
 
   crews() {
     const spots = [
-      v3(23, 40, 0), v3(31, 41, 0), v3(30.5, 48, 0),
+      v3(24, 32.5, 0), v3(33.5, 37.5, 0), v3(19.5, 44, 0), v3(28, 47.5, 0),
       v3(-1, 56.5, 15), v3(2.5, 61.5, 15),
       v3(81, 56.5, 15), v3(85, 60.5, 15),
       v3(41, 56.5, 13), v3(46.5, 60.5, 13),
       v3(68, 17, 0), v3(74, 18, 0), v3(70.5, 8, 0),
-      v3(33, 27, 0), v3(18, 27, 0), v3(48, 27, 0),
+      v3(33, 27.2, 0.5), v3(19, 27.2, 0.5), v3(49, 27.2, 0.5), v3(28, 18.2, 0.5), v3(55, 18.2, 0.5),
       v3(14.5, 30, 0), v3(16, 31, 0), v3(66, 47, 0), v3(37, 50, 0), v3(52, 46, 0),
     ];
     for (const p of spots) this.person('engineer', p, p.z < 0.5);
