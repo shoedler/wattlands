@@ -65,6 +65,7 @@ func test_solo_drives_while_nothing_is_in_range() -> void:
 
 func test_solo_loads_then_fires_then_loads() -> void:
 	var s := _state(1)
+	s.seg.seg = TankIds.SEG_GUN_LINE
 	_enemy(s, TankIds.ENEMY_MEDIUM, 240.0)
 	TankStations.fill_rack(s, 1)
 	assert_eq(_want(s), TankIds.ENGINE_STEAM, "a target, the rack not full: the Loader")
@@ -191,3 +192,45 @@ func test_the_secondaries_come_first_when_the_main_gun_has_nothing_to_lay_on() -
 	sit["gun"] = true
 	assert_almost_eq(float(TankAutopilot.seat_needs(s, sit)[TankIds.ENGINE_FEED]), 3.5, 1e-9)
 	assert_eq(TankAutopilot.seat_wanted_crew(s, s.rider(2), sit), TankIds.ENGINE_DYNAMO)
+
+
+## v3 solo balance: in an Advance the solo rider leaves Drive for one stay at most, then drives on
+## to the halt line (an Advance begun on another seat has had its stay).
+func test_solo_leaves_drive_once_per_advance() -> void:
+	var s := _state(1)
+	_enemy(s, TankIds.ENEMY_MEDIUM, 240.0)
+	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "a target, shells: the Gun")
+	_sit(s, 1, TankIds.ENGINE_DYNAMO)
+	assert_eq(_want(s), TankIds.ENGINE_DIESEL, "the stay is spent: back to Drive")
+	s.seg.seg = TankIds.SEG_GUN_LINE
+	assert_eq(_want(s), "", "at a gun line the loop keeps the Gun")
+
+
+## v3 solo balance: from Drive the solo rider goes straight to the Gun with SOLO_GUN_FIRST shells or
+## more (rack and chamber), else to the Loader first.
+func test_solo_goes_to_the_gun_first_with_two_shells() -> void:
+	var s := _state(1)
+	s.seg.seg = TankIds.SEG_GUN_LINE
+	_enemy(s, TankIds.ENEMY_HEAVY, 230.0)
+	TankStations.fill_rack(s, 1)
+	assert_eq(_want(s), TankIds.ENGINE_STEAM, "1 shell: the Loader first")
+	s.hull.loaded = TankIds.SHELL_HEAVY
+	assert_eq(TankAutopilot.SOLO_GUN_FIRST, 2)
+	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "2 shells: the Gun")
+
+
+## v3 solo balance: planning a gun line, the solo rider reads what it will meet there: gun line 1's
+## dug-in turrets inside the bow guns' range take it to the Secondaries, gun line 2's heavy to the
+## Gun (with the shells for it).
+func test_solo_plans_a_gun_line_from_its_enemy_list() -> void:
+	var s := _state(1)
+	s.seg.segment_index = 1
+	var sit := TankAutopilot.expected(s, TankIds.SEG_GUN_LINE)
+	assert_true(bool(sit["only_light"]), "gun line 1: dug-ins at 110 and 140 px")
+	var r := s.rider(1)
+	var gl := TankIds.SEG_GUN_LINE
+	assert_eq(TankAutopilot.seat_wanted_solo(s, r, sit, gl), TankIds.ENGINE_FEED)
+	s.seg.segment_index = 4
+	sit = TankAutopilot.expected(s, TankIds.SEG_GUN_LINE)
+	assert_false(bool(sit["only_light"]), "gun line 2: the heavy")
+	assert_eq(TankAutopilot.seat_wanted_solo(s, r, sit, gl), TankIds.ENGINE_DYNAMO)
