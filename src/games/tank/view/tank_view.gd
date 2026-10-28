@@ -83,6 +83,10 @@ const BOW_SLEW := 24.0
 const BOW_KICK := 1.5
 const BOW_KICK_S := 0.06
 const MAX_ROUNDS_PER_FRAME := 4
+## The turret searchlight fades in and out over SEARCH_FADE_S and holds SEARCH_HOLD_S after its
+## rider drops out of band before it fades (a rider wobbling at the band's edge does not flicker it).
+const SEARCH_FADE_S := 0.4
+const SEARCH_HOLD_S := 2.0
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -132,6 +136,8 @@ var enemy_rects: Dictionary = {}
 var lanes: Dictionary = {}
 var enemy_rots: Dictionary = {}
 var wrecks: Array[Dictionary] = []
+## A gun line's base slide (rules px, NAN for none), latched per gun line (TankForest.gun_line_base).
+var base_slides: Dictionary = {}
 ## The barrel's swing during a traverse: 1 facing right .. -1 facing left.
 var barrel_dir: float = 1.0
 ## The bow guns' tilt (degrees up) and where they aim (stage px; ZERO none).
@@ -170,6 +176,10 @@ var _rounds_seen: int = -1
 var _rot_v: float = 0.0
 var _lift_v: float = 0.0
 var _pose_primed: bool = false
+## The turret searchlight's level (0 off .. 1 on; search_fade()) and its hold left (s).
+var search_level: float = 0.0
+var _search_hold: float = 0.0
+var _search_primed: bool = false
 
 
 func _ready() -> void:
@@ -316,9 +326,10 @@ func advance(delta: float) -> void:
 	var feed := rider_feed(state, rt)
 	_seats(state, feed, render_dt)
 	_turret(state)
+	_search(state, dt)
 	_process_cues(state)
 	_feed_rounds(state)
-	firing.step(dt)
+	firing.step(dt, scroll_px)
 	_track_enemies(state)
 	_bow_aim(state, dt)
 	_pose(dt)
@@ -649,9 +660,40 @@ func searchlight_k(state: TankState) -> float:
 
 
 ## The turret searchlight (forward, about 11 degrees down) is on while the Lights seat is manned
-## and its arc lit (brief v3 "Lights").
+## and its arc lit (brief v3 "Lights"); search_level fades it (search_fade()).
 func turret_search_on(state: TankState) -> bool:
 	return rider_on("lights") != null and searchlight_k(state) >= 1.0
+
+
+## The turret searchlight's level this frame: on (turret_search_on) it fades up; off, it holds
+## SEARCH_HOLD_S first while its rider stays on the seat (dropped out of band), then fades down. An
+## empty seat or a breakdown fades it at once.
+func _search(state: TankState, step_dt: float) -> void:
+	var want := turret_search_on(state)
+	if not _search_primed:
+		_search_primed = true
+		search_level = 1.0 if want else 0.0
+		_search_hold = SEARCH_HOLD_S if want else 0.0
+		return
+	if not want and (rider_on("lights") == null or state.hull.breakdown):
+		_search_hold = 0.0
+	var lh := search_fade(search_level, _search_hold, want, step_dt)
+	search_level = lh.x
+	_search_hold = lh.y
+
+
+## One step of the searchlight's fade: Vector2(level, hold left) after `step_dt` s from `level`
+## (0..1) and `hold` (s) with the light wanted on or not. On: up by step_dt / SEARCH_FADE_S, the
+## hold refilled. Off: the hold runs out first, the rest of the step fades it down.
+static func search_fade(level: float, hold: float, want: bool, step_dt: float) -> Vector2:
+	if want:
+		var up := level + step_dt / SEARCH_FADE_S
+		return Vector2(1.0 if up > 0.999 else up, SEARCH_HOLD_S)
+	var left := hold - step_dt
+	if left >= 0.0:
+		return Vector2(level, left)
+	var down := level + left / SEARCH_FADE_S
+	return Vector2(0.0 if down < 0.001 else down, 0.0)
 
 
 ## The loader's picture from the contracts' rack, load_t and chamber_s: {lt (s into the r6 7 s
@@ -689,7 +731,7 @@ func _paint(state: TankState) -> void:
 	body.bow_elev_deg = bow_elev
 	for k in 2:
 		body.bow_kick[k] = BOW_KICK if firing.bow_kicking(k, BOW_KICK_S) else 0.0
-	body.search_lit = turret_search_on(state)
+	body.search_lit = search_level >= 0.5
 
 
 func _turret(state: TankState) -> void:
@@ -776,8 +818,8 @@ func fire(kind: String, gun: int = -1) -> void:
 		if bow_target != Vector2.ZERO:
 			fx.spark_burst(tgt, 2, Color(1.0, 0.8, 0.4), 40.0)
 		return
-	firing.fire_main()
 	var mz := muzzle()
+	firing.fire_main(mz, barrel_vector().angle())
 	fx.light_scene(mz, 1.0, Color(1.0, 0.72, 0.4))
 
 
@@ -953,8 +995,8 @@ func _track_enemies(state: TankState) -> void:
 
 
 ## An enemy's pose on the relief (the tank's suspension fit over its track footprint): {rot
-## (radians), lift (px it stands above its lane's flat foot)}. Back lanes stand on their banks, which
-## follow the relief at their middle.
+## (radians), lift (px it stands above its lane's flat foot)}. Back lanes stand level on their flat
+## berms, lifted with the relief at their middle (the road's slope is not theirs).
 func enemy_pose(r: Rect2, lane: int) -> Dictionary:
 	var cx := r.get_center().x
 	var half := r.size.x * 0.38
@@ -962,7 +1004,7 @@ func enemy_pose(r: Rect2, lane: int) -> Dictionary:
 	for i in 5:
 		var x := cx + lerpf(-half, half, float(i) / 4.0)
 		pts.append(Vector2(x, ground_y(x)))
-	var rot := TankSuspension.fit_angle(pts) * (1.0 if lane == 0 else 0.5)
+	var rot := TankSuspension.fit_angle(pts) if lane == 0 else 0.0
 	var mean := 0.0
 	for q in pts:
 		mean += q.y

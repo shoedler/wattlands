@@ -738,8 +738,10 @@ func rack_window(ready: int, step: String, k: float) -> void:
 		shell(Vector2(lerpf(sx, sx + 30.0, TankPx.ease_k(k)), float(sy[slot_i])), 0.0)
 
 
-## The breech window: the loading tray, the chain rammer, the breech ring and its sliding block, at
-## the gun's elevation and recoiling with it.
+## The breech window: the loading tray (a trough under its rail, on two struts), the chain rammer
+## in its casing over it (links showing), the breech ring and its sliding block, at the gun's
+## elevation and recoiling with it; the tray and the casing fill the window behind the breech even
+## while it is run out and idle.
 func breech_window(elev: float, fire_t: float, step: String, k: float) -> void:
 	var ang := -deg_to_rad(elev)
 	var d := Vector2(cos(ang), sin(ang))
@@ -762,6 +764,19 @@ func breech_window(elev: float, fire_t: float, step: String, k: float) -> void:
 		"BREECH SHUT":
 			opened = 1.0 - TankPx.ease_k(k)
 			ram = lerpf(16.0, 0.0, TankPx.ease_k(k))
+	# the rammer's casing over the tray, its chain's links along the bottom
+	TankPx.profile(img, o - n * 2.4, ang, [[-41.0, -21.0, 1.3, 1.3, ST2, ST1, ST0]], OUT6, _clip)
+	var ph := floori(ram)
+	for j in 18:
+		var lq := o - n * 1.2 + d * (-39.0 + float(j))
+		if (j + ph) % 2 == 0:
+			p(floori(lq.x), floori(lq.y), BR1)
+	# the tray: a trough under the rail, on two struts down to the window's floor
+	TankPx.profile(img, o + n * 4.6, ang, [[-37.0, -21.0, 1.5, 1.2, ST2, ST1, ST0]], OUT6, _clip)
+	for su: float in [-34.0, -25.0]:
+		for j2 in 4:
+			var sq := o + n * (6.5 + float(j2)) + d * su
+			p(floori(sq.x), floori(sq.y), ST1 if j2 % 2 == 0 else ST0)
 	TankPx.profile(img, o + n * 2.6, ang, [[-36.0, -21.0, 0.6, 0.6, ST3, ST2, ST1]], OUT6, _clip)
 	TankPx.profile(
 		img,

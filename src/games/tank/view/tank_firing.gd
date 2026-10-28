@@ -2,13 +2,16 @@ class_name TankFiring
 extends RefCounted
 ## The tank's firing in the view (docs/games/tank.md v3 "Firing"), ported from the r6b mock
 ## (assets/tank/v3/tools_src/tank_r6.gd: recoil(), rock(), jolt(), shake(), blast(), bursts()):
-##   main gun  the blast from the baked sheets (TankRig.blast: the star flash with the brake's
-##             jets, the fire ball and its fragments, the smoke cloud and ring along the bore; the
-##             dust, the shockwave and the pebbles on the road under the muzzle) plus 26 sparks;
-##             11 px recoil, the hull's 2 degree rock on its springs, a 2 px jolt, the scene flash
-##             (TankLightDraw) and a three-frame screen shake (the view's stage offset)
-##   bow guns  per round, alternating guns: a star flash at the muzzle, a white-and-orange tracer,
-##             a case tumbling down from under the receiver, a 1.5 px kick
+##   main gun  the blast from the baked sheets (TankRig.blast): on the muzzle the star flash with
+##             the brake's jets and the fire ball with its fragments ("air"); latched where the shot
+##             left the muzzle, at its bore angle, and scrolled with the world like TankFx's puffs
+##             (blast_at, blast_shift), the smoke cloud and ring ("smoke"), the dust, the shockwave
+##             and the pebbles on the road ("ground") and 26 sparks; 11 px recoil, the hull's
+##             2 degree rock on its springs, a 2 px jolt, the scene flash (TankLightDraw) and a
+##             three-frame screen shake (the view's stage offset)
+##   bow guns  per round, alternating guns: a star flash at the muzzle for FLASH_BOW_S, a tracer
+##             TRACER_W px wide and TRACER_LEN long (white head, yellow, orange tail; its glow on the
+##             Light layer, tracers()), a case tumbling down from under the receiver, a 1.5 px kick
 ## Timed on the view's own clock from the shot cues; nothing feeds the rules.
 
 const F_WHITE := Color("#fff8e0")
@@ -23,6 +26,10 @@ const FLASH_S := 0.14
 const ROUND_S := 0.9
 const MAX_ROUNDS := 24
 const TRACER_SPEED := 240.0
+## A bow round's tracer (px) and its muzzle flash (s).
+const TRACER_LEN := 11
+const TRACER_W := 2
+const FLASH_BOW_S := 0.08
 ## The loader's adapter: where the stow and the chambering sit in the r6 7 s cycle.
 const STOW_TO := 3.4
 const CHAMBER_FROM := 3.4
@@ -37,13 +44,21 @@ const CHAMBER_S := 1.0
 var fire_t: float = 99.0
 ## Main-gun shots seen.
 var shots: int = 0
+## Where the last shot left the muzzle (stage px) and its bore angle: the smoke, the dust and the
+## sparks stay there, scrolled by `blast_shift` (the world's scroll since the shot, stage px).
+var blast_at: Vector2 = Vector2.ZERO
+var blast_ang: float = 0.0
+var blast_shift: float = 0.0
 ## The bow guns' rounds: {k (gun), age (s)}.
 var rounds: Array[Dictionary] = []
 var _next_bow: int = 0
 
 
-func step(dt: float) -> void:
+## Advances `dt` s; the world scrolled `scroll` stage px (TankView.scroll_px) meanwhile.
+func step(dt: float, scroll: float = 0.0) -> void:
 	fire_t += dt
+	if fire_t < MAIN_S:
+		blast_shift += scroll
 	var keep: Array[Dictionary] = []
 	for r in rounds:
 		r["age"] = float(r["age"]) + dt
@@ -52,9 +67,18 @@ func step(dt: float) -> void:
 	rounds = keep
 
 
-func fire_main() -> void:
+## A main-gun shot leaving the muzzle at `at` (stage px) along `ang` (radians).
+func fire_main(at: Vector2 = Vector2.ZERO, ang: float = 0.0) -> void:
 	fire_t = 0.0
 	shots += 1
+	blast_at = at
+	blast_ang = ang
+	blast_shift = 0.0
+
+
+## Where the latched blast (smoke, dust, sparks) stands now (stage px).
+func latched() -> Vector2:
+	return blast_at - Vector2(blast_shift, 0.0)
 
 
 ## A bow round from gun `gun` (0 upper, 1 lower; the next one, alternating, when -1); returns the
@@ -143,28 +167,31 @@ func draw(ci: CanvasItem, v: TankView) -> void:
 
 
 func _blast(ci: CanvasItem, v: TankView) -> void:
-	var m := v.muzzle()
-	var d := v.barrel_vector()
-	var a := d.angle()
 	var rig := v.rig
+	var at := latched()
 	var gnd: Dictionary = rig.blast.get("ground", {})
 	if not gnd.is_empty():
 		var f := frame_at(fire_t, rig.blast_fps, int(gnd["frames"]))
 		if f >= 0:
-			var gy := v.ground_y(m.x)
-			_sheet(ci, gnd, f, rig.blast_cols, Vector2(roundf(m.x), roundf(gy)), 0.0)
+			var gy := v.ground_y(at.x)
+			_sheet(ci, gnd, f, rig.blast_cols, Vector2(roundf(at.x), roundf(gy)), 0.0)
+	var smoke: Dictionary = rig.blast.get("smoke", {})
+	if not smoke.is_empty():
+		var f3 := frame_at(fire_t, rig.blast_fps, int(smoke["frames"]))
+		if f3 >= 0:
+			_sheet(ci, smoke, f3, rig.blast_cols, at.round(), blast_ang)
 	var air: Dictionary = rig.blast.get("air", {})
 	if not air.is_empty():
 		var f2 := frame_at(fire_t, rig.blast_fps, int(air["frames"]))
 		if f2 >= 0:
-			_sheet(ci, air, f2, rig.blast_cols, m, a)
+			_sheet(ci, air, f2, rig.blast_cols, v.muzzle(), v.barrel_vector().angle())
 	if fire_t < 0.5:
 		var ft := floorf(fire_t * rig.blast_fps) / rig.blast_fps
 		for j in 26:
-			var sa := a + (TankPx.h2(j, 6, 47) - 0.5) * 2.0
+			var sa := blast_ang + (TankPx.h2(j, 6, 47) - 0.5) * 2.0
 			var spd := 120.0 + 180.0 * TankPx.h2(j, 7, 47)
 			var dv := Vector2(cos(sa), sin(sa))
-			var p0 := m + dv * spd * ft + Vector2(0, 80.0 * ft * ft)
+			var p0 := at + dv * spd * ft + Vector2(0, 80.0 * ft * ft)
 			TankBody._line(ci, p0 - dv * 4.0, p0, F_YEL if j % 3 else F_ORA)
 
 
@@ -176,7 +203,29 @@ func _sheet(ci: CanvasItem, part: Dictionary, f: int, cols: int, at: Vector2, an
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 
 
-## The bow guns' rounds (tank_r6 bursts()): the flash, the tracer, the case.
+## A bow round's tracer as drawn `age` s after it left muzzle `m` along `sd`: its head (stage px).
+static func tracer_head(m: Vector2, sd: Vector2, age: float) -> Vector2:
+	return m + sd * (TRACER_SPEED * age + 4.0)
+
+
+## The bow rounds' tracer heads and muzzle flashes now, for the Light layer's glow: [{p (the
+## tracer's head), muzzle, flash (0..1 while the muzzle flash burns, else 0)}].
+func tracers(v: TankView) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for r in rounds:
+		var k := int(r["k"])
+		var age := float(r["age"])
+		var m := v.bow_muzzle(k)
+		var sd := v.bow_vector(k)
+		out.append({"p": tracer_head(m, sd, age), "muzzle": m, "flash": _bow_flash(age)})
+	return out
+
+
+static func _bow_flash(age: float) -> float:
+	return clampf(1.0 - age / FLASH_BOW_S, 0.0, 1.0) if age < FLASH_BOW_S else 0.0
+
+
+## The bow guns' rounds (tank_r6 bursts(), heavier): the flash, the tracer, the case.
 func _rounds(ci: CanvasItem, v: TankView) -> void:
 	var wins: Array[Rect2] = [
 		v.rig.windows.get("boxwin", Rect2()), v.rig.windows.get("boxwin2", Rect2())
@@ -186,16 +235,22 @@ func _rounds(ci: CanvasItem, v: TankView) -> void:
 		var age := float(r["age"])
 		var m := v.bow_muzzle(k)
 		var sd := v.bow_vector(k)
+		var nn := Vector2(-sd.y, sd.x)
 		if age < ROUND_S:
-			var tp := m + sd * (TRACER_SPEED * age + 4.0)
-			TankBody._line(ci, tp - sd * 5.0, tp - sd * 2.0, F_ORA)
-			TankBody._line(ci, tp - sd * 2.0, tp, F_WHITE)
-		if age < 0.05:
-			var nn := Vector2(-sd.y, sd.x)
-			for s in 5:
-				var q := m + sd * s
-				ci.draw_rect(Rect2(q.floor(), Vector2.ONE), F_WHITE if s < 2 else F_YEL)
-			for e: float in [-2.0, -1.0, 1.0, 2.0]:
+			var tp := tracer_head(m, sd, age)
+			for s in TRACER_LEN:
+				var c := F_WHITE if s < 3 else (F_YEL if s < 6 else F_ORA)
+				if s >= TRACER_LEN - 2:
+					c = Color(F_ORA, 0.55)
+				var q := (tp - sd * float(s)).floor()
+				ci.draw_rect(Rect2(q, Vector2(1, TRACER_W)), c)
+		if age < FLASH_BOW_S:
+			var big := age < FLASH_BOW_S * 0.5
+			for s2 in 7 if big else 5:
+				var q1 := m + sd * s2
+				ci.draw_rect(Rect2(q1.floor(), Vector2.ONE), F_WHITE if s2 < 3 else F_YEL)
+			var arms := [-3.0, -2.0, -1.0, 1.0, 2.0, 3.0] if big else [-2.0, -1.0, 1.0, 2.0]
+			for e: float in arms:
 				var q2 := m + sd + nn * e
 				ci.draw_rect(Rect2(q2.floor(), Vector2.ONE), F_ORA if absf(e) > 1.0 else F_YEL)
 		if age < 0.55:
