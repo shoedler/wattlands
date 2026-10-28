@@ -385,3 +385,35 @@ func test_the_belt_feed_paints_two_rounds_a_revolution() -> void:
 			if not a.get_pixel(x2, y2).is_equal_approx(low.get_pixel(x2, y2)):
 				lit += 1
 	assert_gt(lit, 20, "and changes with the power")
+
+
+func test_the_secondaries_dial_shows_while_their_seat_is_manned() -> void:
+	var s := X.state(4)
+	var g: TankGame = autofree(X.game(s))
+	var tags := TankHudTags.new().setup(g, TankHud.LAYOUT["tags"]) as TankHudTags
+	add_child_autofree(tags)
+	tags.size = Vector2(tags.art_rect.size * 2)
+	tags.refresh()
+	assert_false(tags.m.has("sec"), "the Secondaries seat is empty: no dial")
+	var seats := [TankIds.ENGINE_DIESEL, TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM]
+	seats.append(TankIds.ENGINE_FEED)
+	reseat(s, seats)
+	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rpm = 180.0
+	tags.refresh()
+	assert_true(tags.m.has("sec"), "manned and firing")
+	var sec: Dictionary = tags.m["sec"]
+	assert_eq(float(sec["rpm"]), 180.0)
+	assert_between(float(sec["deg"]), TankHudTags.SEC_MIN, TankHudTags.SEC_MAX)
+	var be := TankHudTags.bow_elevation(s, tags.geom())
+	assert_eq(float(be["deg"]), float(sec["deg"]), "one function for the guns' elevation")
+	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rpm = 0.0
+	for e in s.enemies:
+		e.mode = TankIds.EM_DEAD
+	tags.refresh()
+	assert_false(tags.m.has("sec"), "silent with nothing in reach")
+	assert_false(bool(TankHudTags.bow_elevation(s, tags.geom())["target"]))
+	(s.station(TankIds.ENGINE_FEED) as TankFeedState).rpm = 120.0
+	tags.refresh()
+	tags.queue_redraw()
+	await wait_physics_frames(2)
+	assert_gt(tags.draws, 0)
