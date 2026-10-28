@@ -83,6 +83,9 @@ static func layout() -> Dictionary:
 	var g: Dictionary = L["gear"]
 	g["up"] = 7.0
 	g["droop"] = 5.0
+	# the aft idler 6 px further in (art fix round, 2026-10-28): the track round it no longer pokes
+	# past the rear plate; it still sits behind the armour as approved
+	g["idler"] = {"c": Vector2(36, 162), "r": 11.0}
 	L["rack"] = {"pivot": Vector2(251.5, 95.5), "slots_x": 263.0, "slots_y": [107.0, 102.0, 97.0], "head": Vector2(242.0, 105.0)}
 	return L
 

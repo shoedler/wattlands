@@ -491,6 +491,8 @@ const SEC_R := 19.0
 const SEC_GAP := 7.0
 const SEC_COL := Color("#d6ecff")
 const SEC_DIM := Color(0.62, 0.78, 0.92, 0.5)
+## The plate under the dial's two lines (its alpha).
+const SEC_PLATE_A := 0.8
 ## The bow guns' reach ahead of their muzzles in rules px (TankFeedState: they fire at the nearest
 ## enemy 40-220 px ahead).
 const SEC_REACH_PX := Vector2(40.0, 220.0)
@@ -616,8 +618,11 @@ func _sec_arc() -> void:
 	var lab := ("+" if e > 0 else "") + str(e) + "°"
 	var mid := c + TankHudGeom.dir(SEC_MIN, left) * (SEC_R + 4.0)
 	var x := mid.x + 2.0 if not left else mid.x - 2.0 - D.text_w(lab)
-	D.text_shadow(self, roundf(x), roundf(mid.y - 1.0), lab, SEC_COL)
 	var rpm := tx("TANK_HUD_PER_MIN", [roundi(float(sd["rpm"]))])
+	# a dark plate under the two lines: the bow rounds' tracers pass behind, never through the text
+	var pw := maxf(D.text_w(lab), D.text_w(rpm)) + 4.0
+	D.rect(self, Rect2(roundf(x - 2.0), roundf(mid.y - 3.0), pw, 21.0), Color(D.PANEL, SEC_PLATE_A))
+	D.text_shadow(self, roundf(x), roundf(mid.y - 1.0), lab, SEC_COL)
 	D.text_shadow(self, roundf(x), roundf(mid.y + 8.0), rpm, SEC_DIM)
 
 

@@ -22,12 +22,20 @@ const STRIP_STEP := 4.0
 ## The relief's light: slopes facing the headlight's side lighter, the others and the dips darker.
 const SLOPE_LIGHT := 2.5
 const DIP_SHADE := 0.05
-## Little bases: their width (art px), the depot's left end (rules px from the segment's start),
-## a gun line's (rules px), and the free-roam start's metre.
+## Little bases: their width (art px), the depot's left end (rules px from the segment's start: the
+## whole clearing on screen ahead of the tank's nose at the start, the gate last, so the tank rolls
+## out past it), a gun line's (rules px), and the free-roam start's metre.
 const BASE_W := 236.0
-const DEPOT_BASE_X := 180.0
+const DEPOT_BASE_X := 460.0
 const GUN_LINE_BASE_X := 560.0
 const ROAM_START_M := 60.0
+## A gun line's base slides along the road in steps of BASE_SLIDE (rules px), nearest first, up to
+## BASE_SLIDE_MAX either way, until its clearing (BASE_W and its bank, BASE_BANK each side) keeps
+## BASE_CLEAR art px clear of every dug-in in every lane, standing or wrecked.
+const BASE_SLIDE := 30.0
+const BASE_SLIDE_MAX := 480.0
+const BASE_BANK := 14.0
+const BASE_CLEAR := 6.0
 ## The forest variants: zone id -> the forest planes' tint.
 const ZONE_TINT := {
 	TankIds.ZONE_FOREST: Color(1, 1, 1),
@@ -41,7 +49,11 @@ const ZONE_BLEND_M := 60.0
 const ROAD_BASE := Color(0.145, 0.125, 0.1)
 const ROAD_DK := Color(0.12, 0.11, 0.09)
 const ROAD_SH := Color(0.06, 0.05, 0.04)
-const PEBBLE := Color(0.3, 0.26, 0.2)
+const PEBBLE := Color(0.23, 0.205, 0.165)
+## The road's pebbles: a pebble (PEBBLE_W x 1 px, its shadow pixel under its left end) starts at
+## about PEBBLE_SHARE / PEBBLE_W of the texture's pixels, so about PEBBLE_SHARE of them are pebble.
+const PEBBLE_SHARE := 0.02
+const PEBBLE_W := 2
 const RUT := Color(0.08, 0.07, 0.055)
 const TUFT := Color(0.16, 0.18, 0.1)
 const EARTH := Color(0.07, 0.072, 0.064)
@@ -191,12 +203,29 @@ static func _shade(l0: float, l1: float) -> Color:
 	return Color(k, k, k, 1.0)
 
 
-## The road band's texture (tileable, ROAD_W x ROAD_H): night gravel with pebbles and two pairs of
-## ruts, tufts along its far edge, fading in at the top and out under the near shoulder; regraded
-## blue-green (the light layer warms it).
+## The road band's texture (tileable, ROAD_W x ROAD_H; road_image()).
 static func road_tex() -> Texture2D:
-	if _road != null:
-		return _road
+	if _road == null:
+		_road = ImageTexture.create_from_image(road_image())
+	return _road
+
+
+## Whether a pebble starts at texture pixel (x, y): about PEBBLE_SHARE / PEBBLE_W of them, never
+## two touching along a row.
+static func pebble_at(x: int, y: int) -> bool:
+	return _pebble_hash(x, y) and not _pebble_hash(x - 1, y) and not _pebble_hash(x - 2, y)
+
+
+static func _pebble_hash(x: int, y: int) -> bool:
+	var h := TankDraw.hash01(float(posmod(x, ROAD_W)) * 1.37 + float(y) * 91.7)
+	return h > 1.0 - PEBBLE_SHARE / float(PEBBLE_W)
+
+
+## The road band's image: night gravel with small pebbles (PEBBLE_W x 1 px over a shadow pixel, low
+## contrast, about PEBBLE_SHARE of the pixels) and two pairs of ruts, tufts along its far edge,
+## fading in at the top and out under the near shoulder; regraded blue-green (the light layer warms
+## it).
+static func road_image() -> Image:
 	var img := Image.create(ROAD_W, ROAD_H, false, Image.FORMAT_RGBA8)
 	for y in ROAD_H:
 		for x in ROAD_W:
@@ -206,11 +235,10 @@ static func road_tex() -> Texture2D:
 			var ry := y - ROAD_TOP
 			if ry in [5, 6, 12, 13] or y in [31, 32, 39]:
 				col = col.lerp(RUT, 0.55 if y < 26 else 0.3)
-			var h := TankDraw.hash01(float(x) * 1.37 + float(y) * 91.7)
-			if h > 0.93:
-				col = PEBBLE.lerp(ROAD_BASE, n)
-			elif h > 0.9:
-				col = ROAD_DK
+			if pebble_at(x, y) or pebble_at(x - 1, y):
+				col = PEBBLE.lerp(ROAD_BASE, n * 0.5)
+			elif pebble_at(x, y - 1):
+				col = col.lerp(ROAD_SH, 0.5)
 			var a := clampf(float(y) / float(ROAD_TOP), 0.0, 1.0)
 			a *= 1.0 - smoothstep(float(ROAD_H - 7), float(ROAD_H), float(y))
 			var l := col.r * 0.3 + col.g * 0.55 + col.b * 0.15
@@ -218,17 +246,10 @@ static func road_tex() -> Texture2D:
 			img.set_pixel(x, y, Color(col.r, col.g, col.b, a))
 	for x2 in ROAD_W:
 		var h2 := TankDraw.hash01(float(x2) * 7.31 + 3.0)
-		if h2 > 0.82:
-			var py := (
-				ROAD_TOP + 1 + int(TankDraw.hash01(float(x2) * 2.9) * float(ROAD_H - ROAD_TOP - 12))
-			)
-			img.set_pixel(x2, py, PEBBLE)
-			img.set_pixel(x2, py + 1, ROAD_SH)
 		if h2 < 0.1:
 			for k in int(2 + h2 * 30.0):
 				img.set_pixel(x2, ROAD_TOP - k, TUFT if k % 2 == 0 else TUFT.darkened(0.3))
-	_road = ImageTexture.create_from_image(img)
-	return _road
+	return img
 
 
 ## Seamless value noise over the road texture (0..1), tiling every ROAD_W px.
@@ -249,7 +270,7 @@ static func _noise(x: int, y: int) -> float:
 
 
 ## The little bases on screen: their left ends (travel-frame stage x). The depot's at its start; a
-## gun line's ahead where no enemy stands in front of it; free roam's at the start and at each
+## gun line's clear of its dug-ins (gun_line_base()); free roam's at the start and at each
 ## strongpoint.
 static func bases(v: TankView, state: TankState) -> Array[float]:
 	var out: Array[float] = []
@@ -263,19 +284,67 @@ static func bases(v: TankView, state: TankState) -> Array[float]:
 	elif state.seg.seg == TankIds.SEG_DEPOT:
 		out.append(roundf(v.sx(DEPOT_BASE_X)))
 	elif state.seg.seg == TankIds.SEG_GUN_LINE:
-		var x0 := roundf(v.sx(GUN_LINE_BASE_X))
-		var r := Rect2(x0, TankView.GROUND - 60.0, BASE_W, 60.0)
-		var free := true
-		for id: int in v.enemy_rects:
-			if int(v.lanes.get(id, 0)) >= 1 and (v.enemy_rects[id] as Rect2).intersects(r):
-				free = false
-		if free:
-			out.append(x0)
+		var gx := gun_line_base(v, state)
+		if not is_nan(gx):
+			out.append(gx)
 	var vis: Array[float] = []
 	for x in out:
 		if x < v.canvas.x + 20.0 and x + BASE_W > -20.0:
 			vis.append(x)
 	return vis
+
+
+## A gun line's base (its left end, travel-frame stage x; NAN where none fits): GUN_LINE_BASE_X
+## slid by the nearest step of BASE_SLIDE that keeps its clearing clear of every dug-in, standing
+## or wrecked, in every lane (dugin_spans()). The slide is latched per gun line once a dug-in is
+## known (TankView.base_slides), so the base never jumps when a dug-in falls or its wreck goes.
+static func gun_line_base(v: TankView, state: TankState) -> float:
+	var key := "gun line %d" % state.seg.phase_index
+	var spans := dugin_spans(v, state)
+	var d: Variant = v.base_slides.get(key, null)
+	if d == null:
+		d = base_slide(v, spans)
+		if not spans.is_empty():
+			v.base_slides[key] = d
+	if is_nan(float(d)):
+		return NAN
+	return roundf(v.sx(GUN_LINE_BASE_X + float(d)))
+
+
+## The slide (rules px) of the nearest clear spot for a gun line's base against `spans` (stage x
+## ranges, dugin_spans()); NAN when none within BASE_SLIDE_MAX.
+static func base_slide(v: TankView, spans: Array[Vector2]) -> float:
+	var n := int(BASE_SLIDE_MAX / BASE_SLIDE)
+	for i in 2 * n + 1:
+		var d := BASE_SLIDE * float(ceili(float(i) / 2.0)) * (1.0 if i % 2 == 1 else -1.0)
+		var x0 := v.sx(GUN_LINE_BASE_X + d)
+		var a := x0 - BASE_BANK - BASE_CLEAR
+		var b := x0 + BASE_W + BASE_BANK + BASE_CLEAR
+		var clear := true
+		for sp in spans:
+			if a < sp.y and b > sp.x:
+				clear = false
+				break
+		if clear:
+			return d
+	return NAN
+
+
+## The dug-ins' stage x ranges (Vector2(left, right)): every standing one in any lane and every
+## dug-in wreck.
+static func dugin_spans(v: TankView, state: TankState) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for e in state.enemies:
+		if e.mode == TankIds.EM_DEAD or TankIds.enemy_of(e.code) != TankIds.ENEMY_DUGIN:
+			continue
+		var lane := clampi(e.lane, 0, TankView.LANES - 1)
+		var r := v.lane_rect(TankIds.ENEMY_DUGIN, v.sx(v.enemy_x(e) + float(e.w) * 0.5), lane)
+		out.append(Vector2(r.position.x, r.end.x))
+	for w in v.wrecks:
+		if str(w.get("kind", "")) == TankIds.ENEMY_DUGIN:
+			var wr := TankWorldDraw.wreck_rect(v, w)
+			out.append(Vector2(wr.position.x, wr.end.x))
+	return out
 
 
 ## The road line (stage y) a base at `x0` stands on: the relief at its middle, on the far edge.
@@ -284,7 +353,8 @@ static func base_ground(v: TankView, x0: float) -> float:
 
 
 ## A little base at stage x `x0`: a cleared earth bank, a fence of posts and wire with a gate, a
-## sodded concrete bunker with a dark firing slit behind sandbags, a hooded lamp on a post, crates
+## sodded concrete bunker (formwork joints, a vent grille, a periscope pipe, rust under the slit's
+## frame) with a dark firing slit behind sandbags, a hooded lamp on a post, crates
 ## under a tarp, fuel drums, the gate's red and white barrier raised.
 static func draw_base(ci: CanvasItem, v: TankView, x0: float) -> void:
 	var g := base_ground(v, x0)
@@ -374,6 +444,20 @@ static func _bunker(ci: CanvasItem, x: float, g: float) -> void:
 		if h > 0.45:
 			var gh := 1.0 + roundf(h * 3.0)
 			ci.draw_rect(Rect2(x + 4.0 + i, g - hgt - 8.0 - gh, 1, gh), SOD if h < 0.85 else SOD_HI)
+	# the formwork's joints, a vent grille, a periscope pipe through the sod, rust run down from
+	# the slit's steel frame
+	for jx: float in [17.0, 33.0, 49.0]:
+		ci.draw_rect(Rect2(x + jx, g - hgt + 1.0, 1, hgt - 2.0), Color(CONC_DK, 0.45))
+		ci.draw_rect(Rect2(x + jx + 1.0, g - hgt + 1.0, 1, hgt - 2.0), Color(CONC_HI, 0.25))
+	ci.draw_rect(Rect2(x + 8.0, g - 18.0, 7, 5), CONC_DK)
+	for gy: float in [17.0, 15.0]:
+		ci.draw_rect(Rect2(x + 9.0, g - gy, 5, 1), Color(CONC_HI, 0.6))
+	ci.draw_rect(Rect2(x + 48.0, g - hgt - 13.0, 2, 6), IRON)
+	ci.draw_rect(Rect2(x + 48.0, g - hgt - 13.0, 1, 6), IRON.lightened(0.25))
+	ci.draw_rect(Rect2(x + 46.0, g - hgt - 14.0, 5, 2), IRON.darkened(0.3))
+	for sx2: float in [24.0, 29.0, 37.0, 42.0]:
+		var run := 2.0 + roundf(TankDraw.hash01(x * 0.7 + sx2) * 3.0)
+		ci.draw_rect(Rect2(x + sx2, g - 12.0, 1, run), Color(0.3, 0.17, 0.08, 0.55))
 	ci.draw_rect(Rect2(x + 20.0, g - 16.0, 26, 4), Color(0.01, 0.012, 0.012))
 	ci.draw_rect(Rect2(x + 20.0, g - 17.0, 26, 1), CONC_HI)
 	ci.draw_rect(Rect2(x + 22.0, g - 13.0, 22, 1), Color(0.35, 0.22, 0.1))

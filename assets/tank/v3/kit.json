@@ -9,8 +9,8 @@
   "lit": {
     "file": "tank_lit.png",
     "at": [
-      308,
-      62
+      18,
+      54
     ]
   },
   "turret": {
@@ -30,7 +30,7 @@
     "pitch": 7.0,
     "idler": {
       "c": [
-        30.0,
+        36.0,
         162.0
       ],
       "r": 11.0
@@ -252,7 +252,7 @@
     "cols": 10,
     "air": {
       "file": "blast_air.png",
-      "frames": 60,
+      "frames": 8,
       "size": [
         168,
         150
@@ -260,6 +260,18 @@
       "origin": [
         20,
         96
+      ]
+    },
+    "smoke": {
+      "file": "blast_smoke.png",
+      "frames": 60,
+      "size": [
+        184,
+        180
+      ],
+      "origin": [
+        24,
+        124
       ]
     },
     "ground": {

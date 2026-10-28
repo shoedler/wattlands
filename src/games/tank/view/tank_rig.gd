@@ -17,6 +17,8 @@ const SEATS: Array[String] = ["drive", "gun", "loader", "lights", "sec"]
 ## The rooms every seat machine lives in, and the windows the loader and the bow guns show.
 const WINDOWS: Array[String] = ["shaft", "rackwin", "breechwin", "boxwin", "boxwin2"]
 const GEAR_SHEETS: Array[String] = ["road", "sprocket", "idler", "roller"]
+## The blast sheets: on the muzzle (air), latched where the shot left it (smoke, ground).
+const BLAST_PARTS: Array[String] = ["air", "smoke", "ground"]
 
 static var _shared: TankRig = null
 
@@ -193,7 +195,7 @@ func _load_blast() -> void:
 	var bl: Dictionary = manifest.get("blast", {})
 	blast_fps = float(bl.get("fps", 30.0))
 	blast_cols = int(bl.get("cols", 10))
-	for part: String in ["air", "ground"]:
+	for part: String in BLAST_PARTS:
 		var row: Dictionary = bl.get(part, {})
 		if row.is_empty():
 			continue
@@ -266,7 +268,7 @@ static func check(m: Dictionary) -> Array[String]:
 			out.append("gear sheet %s missing" % kind)
 		else:
 			_check_file(out, str(gsh[kind]["file"]))
-	for part: String in ["air", "ground"]:
+	for part: String in BLAST_PARTS:
 		var row: Dictionary = (m.get("blast", {}) as Dictionary).get(part, {})
 		if row.is_empty():
 			out.append("blast %s missing" % part)

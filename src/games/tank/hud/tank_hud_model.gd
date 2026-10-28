@@ -162,6 +162,24 @@ static func feed_rpm(state: TankState) -> float:
 	return fd.rpm if fd != null and not fd.is_empty() else 0.0
 
 
+## The Secondaries card's rate line, a string key: TANK_HUD_PER_MIN while the bow guns fire;
+## TANK_HUD_NO_TARGET while their seat is manned and its rider pedals (`cad` rpm, the card's) with
+## the guns powered but nothing in their reach (TankBow keeps them silent, so the rate would read
+## 0/min); TANK_HUD_PER_MIN (0/min) while the rider does not pedal or the guns are down (a
+## breakdown, every rider AFK); "" for an empty seat or one on reserve (the card says so).
+static func feed_label(state: TankState, cad: float) -> String:
+	if state == null:
+		return ""
+	var fd := state.station(TankIds.ENGINE_FEED) as TankFeedState
+	if fd == null or fd.is_empty() or fd.reserve:
+		return ""
+	if fd.rpm > 0.0:
+		return "TANK_HUD_PER_MIN"
+	if cad > 1.0 and not fd.unpowered and not state.all_afk and not state.hull.breakdown:
+		return "TANK_HUD_NO_TARGET"
+	return "TANK_HUD_PER_MIN"
+
+
 ## The trainer mode the plan gives `engine` in the current segment (the mission's plan entry; else
 ## the seat's own mode, SEAT_MODE).
 static func plan_mode(state: TankState, engine: String) -> String:
@@ -281,6 +299,9 @@ static func instruction(state: TankState, r: TankRiderState, nums: Dictionary) -
 	var cb: Vector2 = nums.get("cband", Vector2.ZERO)
 	var floor_rpm := str(roundi(cb.x if cb.y > 0.0 else DEFAULT_RPM))
 	if st is TankFeedState:
+		var fcad := float(nums.get("cad", r.cadence_rpm))
+		if feed_label(state, fcad) == "TANK_HUD_NO_TARGET":
+			return _line(DO_FEED, "TANK_HUD_DO_FEED_IDLE", [floor_rpm], 0.0)
 		var rate := str(roundi(feed_rpm(state)))
 		return _line(DO_FEED, "TANK_HUD_DO_FEED", [floor_rpm, rate], 0.0)
 	var band: Vector2 = nums.get("band", Vector2.ZERO)

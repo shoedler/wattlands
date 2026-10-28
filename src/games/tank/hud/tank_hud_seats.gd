@@ -17,7 +17,10 @@ extends TankHudCtl
 ##    (TankRiderState.seat_target) marks its target card in the mover's slot colour with an arrow and
 ##    their chip.
 ##  - The Gun and Loader cards carry the ready rack's three shell pips (the Loader's rack), the
-##    Secondaries card its rounds a minute (TankFeedState.rpm) while manned.
+##    Secondaries card its rounds a minute (TankFeedState.rpm) while manned, or "no target" while
+##    its rider pedals with nothing in the guns' reach (TankHudModel.feed_label).
+##  - Every tag on a card (ERG / SIM, the rate, the rack pips, the lock) sits on a solid plate with a
+##    1 px rim, so the live machine behind never runs into its text.
 ## `phase` is the crank's revolutions, the integral of the rider's cadence (rpm / 60 per second, on
 ## the wall clock so a client's 10 Hz snapshots still turn it smoothly); `power` is
 ## TankHudModel.power_ratio. The local rider's watts and cadence come from their telemetry.
@@ -254,12 +257,16 @@ func _card(c: Dictionary, r: Rect2) -> void:
 	_mode_tag(str(c["mode"]), Vector2(fr.end.x - 3, r.position.y + 13), empty)
 	if engine in [TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM]:
 		_rack_pips(Vector2(fr.end.x - 21, fr.end.y - 13))
+	var fkey := ""
 	if engine == TankIds.ENGINE_FEED and not empty:
-		var rpm := tx("TANK_HUD_PER_MIN", [roundi(feed_rpm)])
+		fkey = TankHudModel.feed_label(st(), float(c["cad"]))
+	if fkey != "":
+		var idle := fkey == "TANK_HUD_NO_TARGET"
+		var rpm := tx(fkey) if idle else tx(fkey, [roundi(feed_rpm)])
 		var tw := D.text_w(rpm) + 6.0
 		var tr := Rect2(fr.end.x - 3.0 - tw, fr.end.y - 14, tw, 11)
-		D.rect(self, tr, Color(D.PANEL, 0.85))
-		D.text(self, tr.position.x + 3, tr.position.y + 2, rpm, COLD)
+		_plate(tr)
+		D.text(self, tr.position.x + 3, tr.position.y + 2, rpm, D.DIM if idle else COLD)
 	if picked or incoming >= 0:
 		_arrival(fr, D.AMBER if picked else slot_color(incoming), incoming if not picked else -1)
 	elif empty:
@@ -318,10 +325,16 @@ static func fit_name(rider: String, card_w: float, watts: String) -> String:
 ## The seat's trainer mode (ERG or SIM) as a tiny dim tag in the window's top-right corner (right
 ## end at `p`), in the 5 x 7 stencil face.
 func _mode_tag(mode: String, p: Vector2, empty: bool) -> void:
-	var tw := D.text_w(mode) + 4.0
-	var r := Rect2(p.x - tw, p.y, tw, 10)
-	D.rect(self, r, Color(D.PANEL, 0.82))
-	D.text(self, r.position.x + 2, r.position.y + 1, mode, Color("#6b5d48") if empty else D.DIM)
+	var tw := D.text_w(mode) + 6.0
+	var r := Rect2(p.x - tw, p.y, tw, 11)
+	_plate(r)
+	D.text(self, r.position.x + 3, r.position.y + 2, mode, Color("#6b5d48") if empty else D.DIM)
+
+
+## A tag's backing plate: solid panel with a 1 px dark rim, so nothing behind shows through it.
+func _plate(r: Rect2) -> void:
+	D.rect(self, r, D.PANEL)
+	D.frame(self, r, D.FRAME_IN)
 
 
 ## Your seat lock at `p`: a padlock and the seconds left with a bar of what is left of the 60 s, or
@@ -330,7 +343,7 @@ func _lock(p: Vector2, lock_s: float) -> void:
 	var txt := lock_text(lock_s)
 	var tw := D.text_w(txt) + 16.0
 	var r := Rect2(p, Vector2(tw, 11))
-	D.rect(self, r, Color(D.PANEL, 0.88))
+	D.rect(self, r, D.PANEL)
 	D.frame(self, r, D.FRAME_IN.lightened(0.2))
 	var locked := lock_s > 0.0
 	var col := D.AMBER if locked else D.GOOD
@@ -343,7 +356,7 @@ func _lock(p: Vector2, lock_s: float) -> void:
 
 ## The ready rack: three shells, lit while in the rack.
 func _rack_pips(p: Vector2) -> void:
-	D.rect(self, Rect2(p - Vector2(2, 2), Vector2(18, 11)), Color(D.PANEL, 0.85))
+	_plate(Rect2(p - Vector2(2, 2), Vector2(18, 11)))
 	for i in TankConst.RACK_MAX:
 		var col := D.BRASS.lightened(0.2) if i < rack else Color("#3a3128")
 		D.pixels(self, SHELL, p + Vector2(i * 5, 0), col)

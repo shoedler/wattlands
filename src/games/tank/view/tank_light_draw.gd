@@ -6,14 +6,18 @@ extends RefCounted
 ##                 the rooms' incandescent lamps (warm; the seat's slot colour mixed in while its
 ##                 rider is in band; the Lights room cold while its arc burns; dark in a breakdown),
 ##                 the turret windows' lamps, the headlight, the turret searchlight (forward about 11
-##                 degrees down, on while the Lights seat is manned and its arc lit), the rear
-##                 searchlight (aft about 13 degrees down, always on: a work light), the red and
-##                 green position lights, the main gun's scene flash, shells, flashes, the wash
+##                 degrees down, on while the Lights seat is manned and its arc lit, fading in and
+##                 out with TankView.search_level; a dim standby glow on its lens while off), the
+##                 rear searchlight (aft about 13 degrees down, always on: a work light), the red
+##                 and green position lights, the main gun's scene flash, the bow rounds' tracers
+##                 and muzzle flashes, shells, flashes, the wash
 ##   draw_world()  every world light, on the WorldLight layer behind the tank: the tank's pools on
-##                 the road (the headlight's, the searchlights' where their axes meet the road, the
-##                 rooms' spill, the shot's flash), the little bases' lamps, the halt line's and the
-##                 turning places' lamps, burning wrecks and the Behemoth, the beams' rim light on
-##                 enemies and wrecks, the enemies' slits and telegraph glows
+##                 the road (the headlight's; each searchlight's where its cone's lower edge meets
+##                 the road, kept on screen, with a faint spill along the road out to where its
+##                 axis lands, beam_pool(); the rooms' spill; the shot's flash), the little bases'
+##                 lamps, the halt line's and the turning places' lamps, burning wrecks and the
+##                 Behemoth, the beams' rim light on enemies and wrecks, the enemies' slits and
+##                 telegraph glows
 
 const WARM := Color(1.0, 0.64, 0.32)
 const COLD := Color(0.66, 0.82, 1.0)
@@ -30,6 +34,12 @@ const HEAD_HALF := 12.0
 ## The searchlights' slow sway (degrees) and its rate.
 const SWAY_DEG := 1.0
 const SWAY_HZ := 0.45
+## A searchlight's pool on the road: its half width, and how far inside the canvas' edges its
+## centre stays (px).
+const POOL_R := 46.0
+const POOL_EDGE := 20.0
+## The turret searchlight's lens while off: a dim standby glow.
+const STANDBY := Color(1.0, 0.62, 0.34, 0.55)
 ## The rooms that glow (kit rooms).
 const GLOW_ROOMS: Array[String] = [
 	"drive", "loader", "gun", "lights", "sec", "quarters", "turret_drive", "upper_front"
@@ -42,6 +52,7 @@ static func draw(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	_beams(ci, v, state)
 	_running_lights(ci, v)
 	_scene_flash(ci, v)
+	_bow_rounds(ci, v)
 	_shells(ci, v, state)
 	v.fx.draw_light(ci)
 	if v.fx.wash > 0.0:
@@ -92,7 +103,7 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 		)
 	var sway := deg_to_rad(SWAY_DEG * sin(v.time * SWAY_HZ))
 	var ts := v.rig.detail("searchlight")
-	if not ts.is_empty() and v.turret_search_on(state):
+	if not ts.is_empty() and v.search_level > 0.0:
 		var a := deg_to_rad(float(ts.get("ang", 11.0)))
 		if v.turret_sx() < 0.0:
 			a = PI - a
@@ -104,7 +115,7 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 					"ang": v.hull_rot + a + sway,
 					"half": deg_to_rad(float(ts.get("half", 6.0))),
 					"len": float(ts.get("len", 560.0)),
-					"k": v.searchlight_k(state),
+					"k": v.search_level,
 					"head": false,
 				}
 			)
@@ -191,6 +202,22 @@ static func _beams(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankDraw.beam(ci, p, ang, float(b["len"]), half, SEARCH, 0.45 * k)
 		TankDraw.glow_at(ci, p, 9.0, Color(1.0, 0.95, 0.8, 0.9 * maxf(k, 0.3)))
 		TankDraw.glow_at(ci, p, 24.0, Color(1.0, 0.85, 0.6, 0.2 * k))
+	var ts := v.rig.detail("searchlight")
+	if not ts.is_empty() and v.search_level < 1.0:
+		var lens := v.at_turret(TankRig.lens_of(ts))
+		var off := 1.0 - v.search_level
+		TankDraw.glow_at(ci, lens, 3.5, Color(STANDBY, STANDBY.a * off))
+		TankDraw.glow_at(ci, lens, 9.0, Color(STANDBY, STANDBY.a * 0.3 * off))
+
+
+## The bow rounds' light: a glow on each tracer's head and, while it burns, the muzzle flash.
+static func _bow_rounds(ci: CanvasItem, v: TankView) -> void:
+	for t in v.firing.tracers(v):
+		TankDraw.glow_at(ci, t["p"], 5.0, Color(1.0, 0.7, 0.35, 0.4))
+		var fl := float(t["flash"])
+		if fl > 0.0:
+			TankDraw.glow_at(ci, t["muzzle"], 12.0, Color(1.0, 0.75, 0.4, 0.7 * fl))
+			TankDraw.glow_at(ci, t["muzzle"], 4.0, Color(1.0, 0.95, 0.8, 0.9 * fl))
 
 
 ## The red and green position lights (the rear red one and the green one blinking slowly).
@@ -233,12 +260,16 @@ static func _ground_pools(ci: CanvasItem, v: TankView, state: TankState) -> void
 				ci, Vector2(x2, v.ground_y(x2) + 3.0), 70.0, Color(1.0, 0.72, 0.42, 0.22 * k)
 			)
 			continue
-		var dv := Vector2.from_angle(float(b["ang"]))
-		if dv.y > 0.01:
-			var hit := p + dv * ((v.ground_y(p.x) - p.y) / dv.y)
-			hit.y = v.ground_y(hit.x)
-			if hit.distance_to(p) < float(b["len"]):
-				ground_glow(ci, hit, 46.0, Color(1.0, 0.9, 0.72, 0.32 * k))
+		var pool := beam_pool(v, b)
+		if pool.is_empty():
+			continue
+		var spill: Vector2 = pool["spill"]
+		if spill.y > 0.0:
+			var sc := Vector2(spill.x, v.ground_y(spill.x) + 4.0)
+			ground_glow(ci, sc, spill.y, Color(1.0, 0.9, 0.72, 0.09 * k))
+		ground_glow(
+			ci, pool["at"], float(pool["r"]), Color(1.0, 0.9, 0.72, 0.32 * k * float(pool["a"]))
+		)
 	var fk := v.firing.flash_k()
 	if fk > 0.0:
 		var m := v.muzzle()
@@ -260,6 +291,44 @@ static func _ground_pools(ci: CanvasItem, v: TankView, state: TankState) -> void
 		if id == "lights" and v.turret_search_on(state):
 			c = Color(COLD.r, COLD.g, COLD.b, 0.07)
 		ground_glow(ci, Vector2(x, v.ground_y(x) + 6.0), r.size.x * 0.8 + 20.0, c)
+
+
+## A searchlight's pool on the road (beam `b` of beams()): {at (where its cone's lower edge meets the
+## road, its x kept POOL_EDGE inside the canvas), r, a (0.35..1: dimmer the further the light
+## travelled and when the true pool lies off screen), spill (Vector2(centre x, half width) of the
+## faint light along the road from the pool out to where the axis lands, kept on the canvas; y 0
+## for none)}; {} for a beam pointing up.
+static func beam_pool(v: TankView, b: Dictionary) -> Dictionary:
+	var p: Vector2 = b["p"]
+	var ang := float(b["ang"])
+	var half := float(b["half"])
+	var lo := ang + half if sin(ang + half) > sin(ang - half) else ang - half
+	var e := Vector2.from_angle(lo)
+	if e.y <= 0.01:
+		return {}
+	var hit := road_hit(v, p, e)
+	var dist := hit.distance_to(p)
+	var a := clampf(1.2 - dist / (float(b["len"]) * 1.6), 0.35, 1.0)
+	var lim := Vector2(POOL_EDGE, v.canvas.x - POOL_EDGE)
+	var x := clampf(hit.x, lim.x, lim.y)
+	if x != hit.x:
+		a *= 0.7
+	var at := Vector2(x, v.ground_y(x) + 4.0)
+	var spill := Vector2.ZERO
+	var dv := Vector2.from_angle(ang)
+	if dv.y > 0.01:
+		var far := clampf(road_hit(v, p, dv).x, 0.0, v.canvas.x)
+		if absf(far - x) > 8.0:
+			spill = Vector2((far + x) * 0.5, absf(far - x) * 0.5 + POOL_R * 0.5)
+	return {"at": at, "r": POOL_R, "a": a, "spill": spill}
+
+
+## Where the ray from `p` along `d` (pointing down) meets the road (stage px).
+static func road_hit(v: TankView, p: Vector2, d: Vector2) -> Vector2:
+	var hit := p + d * ((v.ground_y(p.x) - p.y) / d.y)
+	hit = p + d * ((v.ground_y(hit.x) - p.y) / d.y)
+	hit.y = v.ground_y(hit.x)
+	return hit
 
 
 ## A flat glow lying on the road (an ellipse 0.14 as tall as wide) at `p`, `r` px wide each side.
