@@ -1,17 +1,17 @@
 extends GutTest
 ## A fuzz of whole sessions: random intents from every rider, random power, cadence, rescue and AFK
 ## flips, every tick checked against the state's invariants (no NaN, bounds, caps, unique ids,
-## steam rules). Seeded, so a failure repeats.
+## the Loader's rack and Overpressure, seats). Seeded, so a failure repeats.
 
-const KINDS := ["lever", "aim", "target", "traverse", "fire", "latch", "over"]
-const TO := ["next", "left", "right", "drive", "turret", "hoist"]
+const KINDS := ["seat", "aim", "target", "traverse", "fire", "latch", "over"]
+const TO := ["next", "prev", "diesel", "dynamo", "steam", "arc", "feed"]
 
 
 func _random_intent(rng: RandomNumberGenerator) -> Dictionary:
 	var k: String = KINDS[rng.randi() % KINDS.size()]
 	var d := {"k": k, "via": ["action", "surge", "button", "auto"][rng.randi() % 4]}
 	match k:
-		"lever":
+		"seat":
 			d["to"] = TO[rng.randi() % TO.size()]
 		"aim", "target":
 			d["d"] = 1 if rng.randi() % 2 == 0 else -1
@@ -53,15 +53,17 @@ func _check(rig: TankRulesRig, label: String) -> void:
 		elif st is TankSteamState:
 			var sm := st as TankSteamState
 			assert_between(sm.pressure_pct, 0.0, 150.0, "%s pressure" % label)
-			if s.hull.loaded != TankIds.SHELL_NONE or s.hull.breech_s > 0.0:
-				assert_eq(sm.pressure_pct, 0.0, "%s: no pressure while loaded or cycling" % label)
+			if not sm.over:
+				assert_lte(sm.pressure_pct, 100.0, "%s: over 100%% only in Overpressure" % label)
+			assert_eq(sm.chamber, s.hull.loaded != TankIds.SHELL_NONE, "%s chamber" % label)
+			assert_eq(sm.rack, TankAux.of(s).rack_types.size(), "%s rack types" % label)
 			assert_false(
 				sm.over and sm.window_s > 0.0, "%s: over and window exclude each other" % label
 			)
-		elif st is TankGearboxState:
-			var g := st as TankGearboxState
-			assert_between(g.lever, 0, 2)
-			assert_between(g.hoist_j, 0.0, 4000.0)
+			assert_between(sm.rack, 0, TankConst.RACK_MAX, "%s rack" % label)
+			assert_between(sm.load_t, 0.0, 1.0, "%s load_t" % label)
+		elif st is TankFeedState:
+			assert_gte((st as TankFeedState).rounds, 0, "%s rounds" % label)
 	var b := s.boss
 	assert_between(b.turret_hp, 0.0, b.turret_max + 0.001)
 	for hp in b.bogie_hp:
@@ -72,7 +74,7 @@ func _check(rig: TankRulesRig, label: String) -> void:
 
 
 func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, rng_seed)
+	var rig := TankRulesRig.new(crew, "ashfall_road", rng_seed)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed * 7919
 	rig.auto_phase = true
@@ -112,23 +114,34 @@ func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
 	return rig
 
 
-func test_random_play_keeps_every_invariant_for_the_bulwark() -> void:
+## v3: the solo rider sits on Drive (until the rules builder seats it automatically): the Gun and
+## the Loader seats are empty, so the main gun never fires.
+func test_random_play_keeps_every_invariant_for_a_solo_crew() -> void:
 	var rig := _fuzz(1, 1)
 	_fuzz(1, 2)
-	assert_gt(rig.of_type("lever").size(), 5, "levers moved")
-	assert_gt(rig.of_type("shot").size(), 10, "shells flew")
+	var main := rig.of_type("shot").filter(
+		func(e: Dictionary) -> bool: return int(e["s"]) >= 0 and e["sh"] != TankIds.SHELL_BOW
+	)
+	assert_eq(main.size(), 0, "an empty Gun seat never fires")
+	assert_gt(rig.of_type("hit").size(), 0, "the enemies did")
 
 
-func test_random_play_keeps_every_invariant_for_the_rampart() -> void:
+func test_random_play_keeps_every_invariant_for_a_crew_of_2() -> void:
 	var rig := _fuzz(2, 3)
 	_fuzz(2, 4)
 	assert_gt(rig.of_type("shot").size(), 10)
 	assert_gt(rig.of_type("hit").size(), 5)
 
 
-func test_random_play_keeps_every_invariant_for_the_citadel() -> void:
+func test_random_play_keeps_every_invariant_for_a_crew_of_3() -> void:
 	var rig := _fuzz(3, 5)
 	_fuzz(3, 6)
 	assert_gt(rig.of_type("latch").size(), 2, "shells were latched")
 	assert_gt(rig.of_type("shot").size(), 10)
 	assert_gt(rig.of_type("kill").size(), 0)
+
+
+func test_random_play_keeps_every_invariant_for_a_crew_of_4() -> void:
+	var rig := _fuzz(4, 7)
+	assert_gt(rig.of_type("latch").size(), 2, "shells were latched")
+	assert_gt(rig.of_type("shot").size(), 10)

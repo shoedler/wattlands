@@ -22,7 +22,7 @@ func _driver(rig: TankRulesRig) -> int:
 
 
 func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [2, 3, 4]:
 		var rig := _rig(crew)
 		var b := rig.state.boss
 		assert_eq(b.phase, TankIds.BOSS_PHASE_1)
@@ -40,14 +40,14 @@ func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void
 
 
 func test_the_boss_stands_partly_past_the_right_edge() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	var left_screen := rig.state.boss.x_px - rig.state.camera_x()
 	assert_almost_eq(left_screen, float(rig.content.segment(BOSS)["boss"]["start_left_px"]), 0.5)
 	assert_gt(left_screen + 320.0, 640.0, "its 320 px hull runs off the right edge")
 
 
 func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var gap := _gap(rig)
 	var start := float(rig.content.segment(BOSS)["boss"]["start_left_px"])
 	assert_almost_eq(gap, start - float(TankConst.REAR_SCREEN_X) - rig.hull().hull_w, 1.0)
@@ -65,19 +65,21 @@ func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
 	assert_almost_eq(_gap(cit), stop, 0.01)
 
 
-func test_each_broken_bogie_pushes_it_back_24_px_and_the_third_starts_phase_2() -> void:
-	var rig := _rig(1, true)
+func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> void:
+	var rig := _rig(2, true)
 	rig.run(80.0)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
 	var x := b.x_px
+	var push := float(rig.content.boss_def()["pushback_px"])
+	assert_eq(push, 12.0, "v3: 12 px (the turret stays in the gun's reach)")
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
 	assert_eq(b.bogie_hp[0], 0.0)
-	assert_almost_eq(b.x_px, x + 24.0, 0.001)
+	assert_almost_eq(b.x_px, x + push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 	TankShells.damage_boss(rig.state, aux, 1, 1000.0, 0, rig.events)
 	TankShells.damage_boss(rig.state, aux, 2, 1000.0, 0, rig.events)
-	assert_almost_eq(b.x_px, x + 72.0, 0.001)
+	assert_almost_eq(b.x_px, x + 3.0 * push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
 	var x2 := b.x_px
@@ -85,8 +87,26 @@ func test_each_broken_bogie_pushes_it_back_24_px_and_the_third_starts_phase_2() 
 	assert_eq(b.x_px, x2, "phase 2: immobile")
 
 
+## v3: with its front bogie broken it creeps on until the next standing bogie stands where the front
+## one stood (the dark gun's headlight then reaches it), and so on.
+func test_it_creeps_on_until_its_next_standing_bogie_stands_at_the_stop() -> void:
+	var rig := _rig(2, true)
+	var aux := TankAux.of(rig.state)
+	var stop := float(rig.content.boss_def()["stop_px"])
+	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
+	var front := rig.hull().x_px + rig.hull().hull_w
+	var near0 := TankTargets.boss_rect(rig.state, aux, 0).position.x - front
+	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
+	var spacing := aux.geo.boss_part_rect(1).position.x - aux.geo.boss_part_rect(0).position.x
+	assert_gt(spacing, 0.0)
+	rig.run(ceilf((spacing + 12.0) / 2.0) + 1.0)
+	var near1 := TankTargets.boss_rect(rig.state, aux, 1).position.x - front
+	assert_almost_eq(near1, near0, 0.01, "bogie 1 where bogie 0 stood")
+	assert_lte(near1, rig.content.num("tanks", "arc.dark_range_px"), "inside the headlight")
+
+
 func test_a_broken_bogie_cannot_break_twice() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
 	var x := rig.state.boss.x_px
@@ -95,7 +115,7 @@ func test_a_broken_bogie_cannot_break_twice() -> void:
 
 
 func test_the_turret_only_takes_damage_in_phase_2() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
 	TankShells.damage_boss(rig.state, aux, TankBossState.TURRET_PART, 100.0, 0, rig.events)
@@ -125,7 +145,8 @@ func test_killing_the_turret_kills_the_behemoth() -> void:
 
 
 func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
-	var rig := _rig(1, true)
+	# Crew 4: the Lights seat lights the searchlights, so the gun sees the whole Behemoth.
+	var rig := _rig(4, true)
 	rig.run(100.0)
 	var aux := TankAux.of(rig.state)
 	var order: Array[int] = []
@@ -151,7 +172,27 @@ func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
 	)
 
 
-func test_the_main_gun_fires_every_35_to_45_seconds_after_a_6_second_telegraph() -> void:
+## v3: the main gun reaches the Behemoth's turret only up to about 240 px off the hull's front, so
+## the Behemoth starts and is pushed back (three bogies) no farther than that.
+func test_the_turret_stays_in_reach_after_three_push_backs() -> void:
+	var rig := _rig(4, true)
+	var aux := TankAux.of(rig.state)
+	var c := rig.content
+	var front := rig.hull().x_px + rig.hull().hull_w
+	var start := float(c.segment(BOSS)["boss"]["start_left_px"]) - (16.0 + rig.hull().hull_w)
+	var worst := start + 3.0 * float(c.boss_def()["pushback_px"])
+	for i in 3:
+		TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
+	rig.state.boss.x_px = front + worst
+	aux.aim_valid = false
+	TankTargets.build(rig.state, aux)
+	var t := TankAim.current(rig.state, aux)
+	assert_not_null(t, "the turret at %.0f px" % worst)
+	if t != null:
+		assert_eq(t.id, TankBossState.part_id(TankBossState.TURRET_PART))
+
+
+func test_the_main_gun_fires_every_35_to_45_seconds_after_an_8_second_telegraph() -> void:
 	var rig := _rig(2)
 	rig.hull().hp = 100000.0
 	rig.hull().hp_max = 100000.0
@@ -170,8 +211,8 @@ func test_the_main_gun_fires_every_35_to_45_seconds_after_a_6_second_telegraph()
 	assert_gte(shots.size(), 2, "two shots in 110 s")
 	assert_between(shots[0], 35.0, 46.0)
 	assert_between(shots[1] - shots[0], 35.0, 45.5)
-	assert_almost_eq(telegraphs.max(), 6.0, 0.1, "the telegraph shows for 6 s")
-	assert_lte(telegraphs[0], 6.0)
+	assert_almost_eq(telegraphs.max(), 8.0, 0.1, "the telegraph shows for 8 s (v3)")
+	assert_lte(telegraphs[0], 8.0)
 
 
 func test_in_phase_2_the_main_gun_comes_every_25_to_35_seconds() -> void:
@@ -220,7 +261,7 @@ func test_the_main_gun_hits_for_20_and_raises_the_boss_hit_event() -> void:
 	var tries := 0
 	while not hit_seen and tries < 12:
 		tries += 1
-		var r2 := TankRulesRig.new(2, "ashfall_road", true, 100 + tries)
+		var r2 := TankRulesRig.new(2, "ashfall_road", 100 + tries)
 		r2.enter(BOSS, 1.0)
 		r2.state.boss.main_s = 0.06
 		for _i in 400:
@@ -285,7 +326,7 @@ func test_a_sprint_held_3_seconds_inside_the_telegraph_makes_the_shot_miss() -> 
 func test_without_the_sprint_the_telegraphed_shot_is_a_normal_roll() -> void:
 	var hits := 0
 	for s in 30:
-		var rig := TankRulesRig.new(2, "ashfall_road", true, 200 + s)
+		var rig := TankRulesRig.new(2, "ashfall_road", 200 + s)
 		rig.enter(BOSS, 1.0)
 		rig.hull().hp = 100000.0
 		rig.hull().hp_max = 100000.0
@@ -372,3 +413,27 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)
+
+
+## v3 solo balance (enemies.json boss.bogies_by_crew [0, 3, 3, 3]): a solo rider meets the Behemoth
+## with every bogie wrecked: immobile at its stop line, its turret fighting (phase 2) from the start,
+## the turret's HP the same as for any crew.
+func test_a_solo_rider_meets_the_behemoth_with_its_bogies_wrecked() -> void:
+	var rig := _rig(1, true)
+	var b := rig.state.boss
+	assert_eq(rig.content.boss_bogies(1), 0)
+	assert_eq(rig.content.boss_bogies(2), 3)
+	assert_eq(b.bogies_left(), 0)
+	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
+	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
+	assert_eq(b.turret_hp, float(rig.content.boss_def()["turret_hp"]))
+	var stop := float(rig.content.boss_def()["stop_px"])
+	assert_almost_eq(_gap(rig), stop, 0.01, "at its stop line")
+	rig.run(10.0)
+	assert_almost_eq(_gap(rig), stop, 0.01, "immobile")
+	var aux := TankAux.of(rig.state)
+	var t := TankTargets.boss_rect(rig.state, aux, TankBossState.TURRET_PART)
+	var front := rig.hull().x_px + rig.hull().hull_w
+	assert_lte(
+		t.position.x - front, rig.content.num("tanks", "arc.dark_range_px"), "in the headlight"
+	)

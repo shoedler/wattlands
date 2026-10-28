@@ -8,14 +8,14 @@ const GUN_LINE := 2
 const SKIRMISH := 1
 
 
-## A quiet Advance: no encounters, no obstacles, the gun and the lever out of the picture.
+## A quiet Advance: no encounters, no obstacles, the gun out of the picture.
 static func _quiet(index: int, props: Dictionary = {"encounters": [], "obstacles": []}) -> Callable:
 	return func(files: Dictionary) -> void:
 		(files["mission"]["segments"][index] as Dictionary).merge(props, true)
 
 
 func _rig(crew: int = 1, index: int = ADVANCE, seed_v: int = 7) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, seed_v, _quiet(index))
+	var rig := TankRulesRig.new(crew, "ashfall_road", seed_v, _quiet(index))
 	rig.no_fire = true
 	rig.no_bow = true
 	rig.enter(index, 5.0)
@@ -87,7 +87,7 @@ func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void
 	var span: Array = light["hold_px"]
 	for _i in 40:
 		var e := _enter(rig, TankIds.ENEMY_LIGHT)
-		assert_between(e.hold_px, float(span[0]), float(span[1]), "the Bulwark: light hold_px")
+		assert_between(e.hold_px, float(span[0]), float(span[1]), "crew 1: light hold_px")
 		seen[snappedf(e.hold_px, 2.0)] = true
 		rig.state.enemies.erase(e)
 	assert_gt(seen.size(), 3, "rolled, not fixed")
@@ -97,7 +97,7 @@ func test_held_distances_are_rolled_per_type_and_clamped_to_the_screen() -> void
 	assert_eq(
 		m.hold_px,
 		minf(m.hold_px, 632.0 - mw - (16.0 + bas.hull().hull_w)),
-		"the Bastion's long hull clamps a medium to the screen"
+		"crew 4: the hull clamps a medium to the screen"
 	)
 
 
@@ -172,26 +172,26 @@ func test_the_shot_cadence_and_damage_of_every_type() -> void:
 		)
 
 
-func test_a_destroyer_telegraphs_for_4_seconds_before_each_shot_and_shifts_40_px_after() -> void:
+func test_a_destroyer_telegraphs_for_7_seconds_before_each_shot_and_shifts_40_px_after() -> void:
 	var rig := _rig(1)
 	var edge := TankEnemies.clamp_hold(rig.state, 109, 1, 1.0e9)
 	var e := rig.spawn(TankIds.ENEMY_DESTROYER, 1, 1000.0)
 	assert_almost_eq(e.hold_px, edge, 0.01, "at the screen edge")
-	e.gun_s = 6.0
+	e.gun_s = 9.0
 	rig.run(2.2)
 	assert_eq(e.mode, TankIds.EM_TELEGRAPH)
-	assert_almost_eq(e.telegraph_s, 3.8, 0.15, "the glint runs for the last 4 s")
+	assert_almost_eq(e.telegraph_s, 6.8, 0.15, "the glint runs for the last 7 s (v3)")
 	assert_eq(rig.of_type("shot").size(), 0)
-	rig.run(4.0)
+	rig.run(7.0)
 	assert_eq(e.telegraph_s, 0.0, "fired")
 	assert_eq(rig.of_type("shot").size(), 1)
 	assert_almost_eq(e.hold_px, edge - 40.0, 0.01, "moves 40 px closer after the shot")
 	rig.run(3.0)
-	assert_eq(e.mode, TankIds.EM_HOLD)
+	assert_has([TankIds.EM_HOLD, TankIds.EM_TELEGRAPH], e.mode, "it holds (its next 7 s glint)")
 	assert_almost_eq(_dist(rig, e), edge - 40.0, 4.0, "it holds 40 px closer")
 	e.gun_s = 0.1
-	rig.run(4.5)
-	assert_almost_eq(e.hold_px, edge, 0.01, "and back to the edge after the next (full 4 s glint)")
+	rig.run(7.5)
+	assert_almost_eq(e.hold_px, edge, 0.01, "and back to the edge after the next (full 7 s glint)")
 
 
 func test_a_destroyer_in_telegraph_is_the_autoaims_first_target() -> void:
@@ -231,9 +231,9 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	rig.enter(GUN_LINE, 1.0)
 	var guns := rig.state.enemies
 	var want := 0
-	for spec: Dictionary in rig.content.segment(GUN_LINE)["enemies"]:
-		want += rig.content.scaled_count(int(spec["count"]), TankIds.TANK_BULWARK)
-	assert_eq(guns.size(), want, "the mission's gun line x the Bulwark's scale")
+	for n in TankEncounters.crew_counts(rig.state, rig.content.segment(GUN_LINE)["enemies"]):
+		want += n
+	assert_eq(guns.size(), want, "the mission's gun line x the crew's scale")
 	assert_gt(want, 0)
 	var holding := 0
 	for e in guns:
@@ -272,14 +272,14 @@ func test_a_heavy_tank_rolls_in_to_its_hold_and_halts() -> void:
 	assert_eq(h.mode, TankIds.EM_ENTER)
 	assert_gte(h.x_px, rig.state.camera_x() + 640.0)
 	rig.run(15.0)
-	assert_eq(h.mode, TankIds.EM_HOLD)
+	assert_has([TankIds.EM_HOLD, TankIds.EM_TELEGRAPH], h.mode, "it holds (its 6 s glint may run)")
 	var front := rig.hull().x_px + rig.hull().hull_w
 	assert_almost_eq(h.x_px - front, h.hold_px, 0.01)
 	assert_true(h.fixed)
 	assert_eq(h.hp_max, float(rig.content.enemy_def("heavy")["hp"]), "Citadel: scale 1.0")
 
 
-func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50() -> void:
+func test_a_heavy_tank_telegraphs_6_seconds_and_backs_off_30_px_after_taking_50() -> void:
 	var rig := _heavy_rig(1)
 	var h: TankEnemyState = null
 	for e in rig.state.enemies:
@@ -290,6 +290,8 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 	h.hold_px = room
 	h.x_px = rig.hull().x_px + rig.hull().hull_w + room
 	h.gun_s = 100.0
+	h.mode = TankIds.EM_HOLD
+	h.telegraph_s = 0.0
 	var aux := TankAux.of(rig.state)
 	h.hp = 90.0
 	var hold := h.hold_px
@@ -302,12 +304,12 @@ func test_a_heavy_tank_telegraphs_3_seconds_and_backs_off_30_px_after_taking_50(
 	rig.run(3.0)
 	assert_eq(h.mode, TankIds.EM_HOLD)
 	assert_almost_eq(h.x_px - (rig.hull().x_px + rig.hull().hull_w), hold + moved, 0.01)
-	# The telegraph: 3 s before the shot.
-	h.gun_s = 4.0
+	# The telegraph: 6 s before the shot (v3).
+	h.gun_s = 7.0
 	rig.run(1.3)
 	assert_eq(h.mode, TankIds.EM_TELEGRAPH)
-	assert_almost_eq(h.telegraph_s, 2.7, 0.15)
-	rig.run(3.0)
+	assert_almost_eq(h.telegraph_s, 5.7, 0.15)
+	rig.run(6.0)
 	assert_eq(h.telegraph_s, 0.0)
 
 
@@ -386,7 +388,7 @@ func test_a_missing_shell_lands_20_to_40_px_short_of_the_tank_and_a_hit_on_it() 
 
 
 func test_a_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	rig.hull().evasive = false
 	var s := _fire_from(rig, 1.0)
 	var full := rig.hull().hp
@@ -408,7 +410,7 @@ func test_a_shell_that_hits_costs_the_hull_its_damage_when_it_arrives() -> void:
 
 
 func test_at_the_shell_cap_an_enemy_shot_resolves_at_once() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	rig.hull().evasive = false
 	var full := rig.hull().hp
 	var aux := TankAux.of(rig.state)
@@ -435,6 +437,21 @@ func test_at_the_shell_cap_an_enemy_shot_resolves_at_once() -> void:
 	)
 	assert_eq(rig.state.shells.size(), TankConst.MAX_SHELLS, "no 25th shell")
 	assert_eq(rig.hull().hp, full - 4.0, "applied at once")
+
+
+## v3 solo balance (enemies.json crew_damage_scale [0.5, 1, 1, 1]): an enemy shell costs a solo
+## rider's hull half its damage; crews 2-4 take it in full. Enemy HP is the same for every crew.
+func test_a_solo_hull_takes_the_crew_damage_scale_of_an_enemy_shell() -> void:
+	for crew in [1, 2, 4]:
+		var rig := _rig(crew)
+		rig.hull().evasive = false
+		var full := rig.hull().hp
+		var lost := TankHullRules.hit(rig.state, 4.0, TankIds.SHELL_ENEMY, 0.0, rig.events)
+		var want := 4.0 * rig.content.crew_damage_scale(crew)
+		assert_almost_eq(lost, want, 1e-6, "crew %d" % crew)
+		assert_almost_eq(rig.hull().hp, full - want, 1e-6)
+	assert_eq(TankFixtures.content().crew_damage_scale(1), 0.5)
+	assert_eq(TankFixtures.content().crew_damage_scale(2), 1.0)
 
 
 # --- Raiders -------------------------------------------------------------------------------------

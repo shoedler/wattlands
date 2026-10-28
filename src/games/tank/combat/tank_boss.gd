@@ -1,13 +1,26 @@
 class_name TankBoss
 extends RefCounted
 ## The Behemoth (brief 2.4 Enemies and Foundry Gate; owner: rules). Phase 1: while a bogie stands it
-## creeps toward the tank at 2 px/s until its left edge is 120 px from the hull's front; each broken
-## bogie pushes it back 24 px. Phase 2 (every bogie broken): immobile; shoot the turret, which only
+## creeps toward the tank at 2 px/s until its left edge is 120 px from the hull's front (v3: until its
+## front-most standing bogie stands where the front bogie stood then, so in the dark the headlight's
+## range reaches each bogie in turn); each broken bogie pushes it back pushback_px. Phase 2 (every
+## bogie broken): immobile; shoot the turret, which only
 ## takes damage then. The main gun fires every 35-45 s (25-35 s in phase 2) after a 6 s telegraph
 ## (muzzle glow, "Surge to evade"); a rider who can evade holding the sprint rule 3 s inside it makes
 ## that shot miss (TankEvade; `evaded` turns true once one has). A secondary does 3 damage every 5 s
 ## at 60%. Maximum HP is the content HP x the tank's enemy_scale. Not killed when the boss segment
-## ends: it withdraws. v2 removed the Bulwark's boss lunge with the Ram (brief 2.4).
+## ends: it withdraws.
+
+
+## How far the front-most standing bogie sits behind the front bogie (0 while the front one stands).
+static func _lead_px(aux: TankAux, b: TankBossState) -> float:
+	if aux.geo == null:
+		return 0.0
+	var x0 := aux.geo.boss_part_rect(0).position.x
+	for i in b.bogie_hp.size():
+		if b.bogie_hp[i] > 0.0:
+			return aux.geo.boss_part_rect(i).position.x - x0
+	return 0.0
 
 
 ## The boss segment starts: full health, phase 1, the first main-gun and secondary countdowns.
@@ -19,6 +32,9 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	b.bogie_max = float(def.get("bogie_hp", 100.0)) * scale
 	b.turret_max = float(def.get("turret_hp", 300.0)) * scale
 	b.bogie_hp = [b.bogie_max, b.bogie_max, b.bogie_max]
+	# v3 solo balance: a small crew meets a Behemoth with its far bogies (or all) already wrecked.
+	for i in range(c.boss_bogies(state.crew), b.bogie_hp.size()):
+		b.bogie_hp[i] = 0.0
 	b.turret_hp = b.turret_max
 	var seg := c.segment(state.seg.segment_index)
 	var left_screen := float((seg.get("boss", {}) as Dictionary).get("start_left_px", 440))
@@ -31,6 +47,13 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	b.secondary_s = float((def.get("secondary", {}) as Dictionary).get("every_s", 5.0))
 	b.phase = TankIds.BOSS_PHASE_1
 	events.append(TankEvents.boss_phase(b.phase))
+	if b.bogies_left() == 0:
+		# Every bogie wrecked: it stands immobile at its stop line from the start and its turret
+		# fights (phase 2).
+		b.x_px = state.hull.x_px + state.hull.hull_w + float(def.get("stop_px", 120.0))
+		b.main_s = _roll(state, def.get("main", {}).get("every_s_phase2", [25, 35]))
+		b.phase = TankIds.BOSS_PHASE_2
+		events.append(TankEvents.boss_phase(b.phase))
 
 
 static func _roll(state: TankState, span: Array) -> float:
@@ -48,12 +71,9 @@ static func step(state: TankState, aux: TankAux, dt: float, events: Array[Dictio
 	var def := c.boss_def()
 	var hull := state.hull
 	if b.phase == TankIds.BOSS_PHASE_1:
-		var gap := b.x_px - (hull.x_px + hull.hull_w)
-		var stop := float(def.get("stop_px", 120.0))
-		if gap > stop:
-			b.x_px = maxf(
-				b.x_px - float(def.get("creep_px_s", 2.0)) * dt, hull.x_px + hull.hull_w + stop
-			)
+		var stop_x := hull.x_px + hull.hull_w + float(def.get("stop_px", 120.0)) - _lead_px(aux, b)
+		if b.x_px > stop_x:
+			b.x_px = maxf(b.x_px - float(def.get("creep_px_s", 2.0)) * dt, stop_x)
 	var origin := TankTargets.boss_origin(state, aux)
 	var main: Dictionary = def.get("main", {})
 	var tele := float(main.get("telegraph_s", 6.0))

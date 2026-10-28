@@ -7,7 +7,7 @@ func _fingerprint(rig: TankRulesRig) -> String:
 
 
 func _play(crew: int, rng_seed: int, seconds: float) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, "ashfall_road", true, rng_seed)
+	var rig := TankRulesRig.new(crew, "ashfall_road", rng_seed)
 	rig.auto_phase = true
 	rig.enter(1, 0.0)
 	rig.run(seconds)
@@ -29,8 +29,8 @@ func test_another_seed_changes_the_fight() -> void:
 
 
 func test_the_same_seed_gives_the_same_whole_mission() -> void:
-	var a := TankRulesRig.new(2, "ashfall_road", true, 5)
-	var b := TankRulesRig.new(2, "ashfall_road", true, 5)
+	var a := TankRulesRig.new(2, "ashfall_road", 5)
+	var b := TankRulesRig.new(2, "ashfall_road", 5)
 	a.play()
 	b.play()
 	assert_eq(a.seg_len, b.seg_len)

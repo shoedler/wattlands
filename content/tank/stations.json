@@ -1,34 +1,14 @@
 {
-	"_doc": "Effort per engine (brief 2.3, 2.7). Owner: effort. Schema: TankContentSchema.validate_stations, which also holds every number here to the brief's safety envelope (BRIEF 4.6.1, 4.6.2, 4.6.6, 4.6.8): G2 tuning cannot move one past it. Plans: per engine and segment type, the PlanPhase mode and its numbers; every engine needs an entry for every segment type of its table; the mission file gives each segment's kind and length. WARMUP-kind segments (the depot, the drill's skirmish) use the warm-up numbers of the boiler (3% x min(pressure, 1)), the hoist (1%) and terrain (0..+2%). Bank (pattern 1): every target is clamp(base_pct + span_pct x (1 - bank/100), lo, hi) of the rider's phase effective_range(), clamped before the max_step_pts limit and the sub-steps; it runs in every dynamo phase with a range_pct (stages, boss and the drill's skirmish, so 55..65 there), never in the depot or checkpoints. The SIM power band the director publishes is tanks.json in_band.sim_ftp_pct (one source); the first 300 s is TankConst.FIRST_S. v2 contracts: the arc generator (the Bastion's fourth engine, slot 3's start) has plan entries from brief 2.3's table (depot ERG 50 -> 65, stages ERG 65 in [65, 80]; the drill 50, then 55 in [55, 65]); its arc-load pattern is stations.json arc (brief 2.3 pattern 2). v2 removed the Ram haptic (brief 2.7). Crew 4 rotates slot s in stage k to the engine (s + k) mod 4 of diesel, dynamo, steam, arc.",
-	"engines": ["diesel", "dynamo", "steam", "bulwark", "arc"],
+	"_doc": "Effort per engine (brief 2.3, 2.7). Owner: effort. Schema: TankContentSchema.validate_stations, which also holds every number here to the brief's safety envelope (BRIEF 4.6.1, 4.6.2, 4.6.6, 4.6.8): G2 tuning cannot move one past it. Plans: per engine and segment type, the PlanPhase mode and its numbers; every engine needs an entry for every segment type of its table; the mission file gives each segment's kind and length. WARMUP-kind segments (the depot, the drill's skirmish) use the warm-up numbers of the boiler (3% x min(pressure, 1)), the hoist (1%) and terrain (0..+2%). Bank (pattern 1): every target is clamp(base_pct + span_pct x (1 - bank/100), lo, hi) of the rider's phase effective_range(), clamped before the max_step_pts limit and the sub-steps; it runs in every dynamo phase with a range_pct (stages, boss and the drill's skirmish, so 55..65 there), never in the depot or checkpoints. The SIM power band the director publishes is tanks.json in_band.sim_ftp_pct (one source); the first 300 s is TankConst.FIRST_S. v2 contracts: the arc generator (the Bastion's fourth engine, slot 3's start) has plan entries from brief 2.3's table (depot ERG 50 -> 65, stages ERG 65 in [65, 80]; the drill 50, then 55 in [55, 65]); its arc-load pattern is stations.json arc (brief 2.3 pattern 2). v2 removed the Ram haptic (brief 2.7). Crew 4 rotates slot s in stage k to the engine (s + k) mod 4 of diesel, dynamo, steam, arc. v3 contracts (2026-10-28): one tank (the landship, five seats) for every crew size; start_engines.landship lists the seat of each slot (a crew of n uses the first n: Drive, Gun, Loader, Lights; the solo rider on Drive until the rules builder adds automatic seating); rotation is gone (brief v3: seat choice replaces it), so every slot keeps its start seat for the whole mission; the Bulwark's plans and its hoist pattern are retired with its gearbox; feed, the new Secondaries seat, rides SIM flat in every segment (brief v3 effort table). v3 rules (2026-10-28): the Drive seat digs the berm at a gun line in SIM flat (v2's ERG 90% gun-line block is gone; brief v3 effort table), the solo rider's start seat is Drive and automatic seating moves it (TankAutopilot); a seat switch replans the rest of the rider's plan for the new seat (TankSeatPlan: the rest of the current segment as its own phase, then every later segment), from these same tables.",
+	"engines": ["diesel", "dynamo", "steam", "arc", "feed"],
 	"start_engines": {
-		"bulwark": ["bulwark"],
-		"rampart": ["diesel", "dynamo"],
-		"citadel": ["diesel", "dynamo", "steam"],
-		"bastion": ["diesel", "dynamo", "steam", "arc"]
-	},
-	"rotation": {
-		"rampart": [
-			["diesel", "dynamo", "diesel", "dynamo"],
-			["dynamo", "diesel", "dynamo", "diesel"]
-		],
-		"citadel": [
-			["diesel", "dynamo", "steam", "diesel"],
-			["dynamo", "steam", "diesel", "dynamo"],
-			["steam", "diesel", "dynamo", "steam"]
-		],
-		"bastion": [
-			["diesel", "dynamo", "steam", "arc"],
-			["dynamo", "steam", "arc", "diesel"],
-			["steam", "arc", "diesel", "dynamo"],
-			["arc", "diesel", "dynamo", "steam"]
-		]
+		"landship": ["diesel", "dynamo", "steam", "arc"]
 	},
 	"plans": {
 		"diesel": {
 			"depot": {"mode": "SIM", "grade_source": "game"},
 			"advance": {"mode": "SIM", "grade_source": "game"},
-			"gun_line": {"mode": "ERG", "target_pct": 90},
+			"gun_line": {"mode": "SIM", "grade_source": "flat"},
 			"boss": {"mode": "SIM", "grade_source": "flat"}
 		},
 		"dynamo": {
@@ -43,17 +23,17 @@
 			"gun_line": {"mode": "SIM", "grade_source": "flat"},
 			"boss": {"mode": "SIM", "grade_source": "flat"}
 		},
-		"bulwark": {
-			"depot": {"mode": "SIM", "grade_source": "game"},
-			"advance": {"mode": "SIM", "grade_source": "game"},
-			"gun_line": {"mode": "ERG", "target_pct": 90},
-			"boss": {"mode": "SIM", "grade_source": "flat"}
-		},
 		"arc": {
 			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
 			"advance": {"mode": "ERG", "target_pct": 65, "range_pct": [65, 80]},
 			"gun_line": {"mode": "ERG", "target_pct": 65, "range_pct": [65, 80]},
 			"boss": {"mode": "ERG", "target_pct": 65, "range_pct": [65, 80]}
+		},
+		"feed": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"advance": {"mode": "SIM", "grade_source": "flat"},
+			"gun_line": {"mode": "SIM", "grade_source": "flat"},
+			"boss": {"mode": "SIM", "grade_source": "flat"}
 		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
@@ -70,18 +50,18 @@
 			"depot": {"mode": "SIM", "grade_source": "flat"},
 			"skirmish": {"mode": "SIM", "grade_source": "flat"}
 		},
-		"bulwark": {
-			"depot": {"mode": "SIM", "grade_source": "game"},
-			"skirmish": {"mode": "SIM", "grade_source": "game"}
-		},
 		"arc": {
 			"depot": {"mode": "ERG", "target_pct": 50},
 			"skirmish": {"mode": "ERG", "target_pct": 55, "range_pct": [55, 65]}
 		},
+		"feed": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"skirmish": {"mode": "SIM", "grade_source": "flat"}
+		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
 	"roam_plans": {
-		"_doc": "Free roam (brief 2.10): the drive-out is the depot's targets and models (WARMUP, no enemies); the roam is one open-ended WORK phase per rider on the engine of its slot for the whole session (no rotation): the diesel SIM game on the valley's grade, the dynamo ERG 55% with the bank pattern in range_pct [55, 85], the steam engine SIM flat with the boiler, the arc generator ERG 65% with the arc pattern in [65, 80], the Bulwark the Advance's (SIM game plus the hoist). Every roam phase is longer than 300 s, so BRIEF 4.6.1's 105% cap applies; every bound here is at most 85%.",
+		"_doc": "Free roam (brief 2.10): the drive-out is the depot's targets and models (WARMUP, no enemies); the roam is one open-ended WORK phase per rider on the engine of its slot for the whole session (no rotation): the diesel SIM game on the valley's grade, the dynamo ERG 55% with the bank pattern in range_pct [55, 85], the steam engine SIM flat with the boiler, the arc generator ERG 65% with the arc pattern in [65, 80], (v3) the feed SIM flat. Every roam phase is longer than 300 s, so BRIEF 4.6.1's 105% cap applies; every bound here is at most 85%.",
 		"diesel": {
 			"depot": {"mode": "SIM", "grade_source": "game"},
 			"roam": {"mode": "SIM", "grade_source": "game"}
@@ -94,13 +74,13 @@
 			"depot": {"mode": "SIM", "grade_source": "flat"},
 			"roam": {"mode": "SIM", "grade_source": "flat"}
 		},
-		"bulwark": {
-			"depot": {"mode": "SIM", "grade_source": "game"},
-			"roam": {"mode": "SIM", "grade_source": "game"}
-		},
 		"arc": {
 			"depot": {"mode": "ERG", "target_pct": 50, "ramp_to_pct": 65},
 			"roam": {"mode": "ERG", "target_pct": 65, "range_pct": [65, 80]}
+		},
+		"feed": {
+			"depot": {"mode": "SIM", "grade_source": "flat"},
+			"roam": {"mode": "SIM", "grade_source": "flat"}
 		},
 		"checkpoint": {"mode": "ERG", "target_pct": 50}
 	},
@@ -118,7 +98,7 @@
 		"clamp_to_range": true
 	},
 	"arc": {
-		"_doc": "Pattern 2 (the arc generator, brief 2.3): every every_s an update toward base_pct + span_pct x duty (duty: the share of the last 10 s the bow guns fired, TankArcState), clamped to the phase's effective range_pct, moving at most max_step_pts from the last sent target, in substeps sub-steps substep_s apart (<= 3.3% FTP/s, BRIEF 4.6.2); only in arc ERG phases with a range_pct, never in the depot or checkpoints.",
+		"_doc": "Pattern 2 (the arc generator, brief 2.3; v3 the Lights seat): every every_s an update toward base_pct + span_pct x duty (duty: the searchlight load, the share of the last 10 s an enemy stood in the main gun's range, TankArcState), clamped to the phase's effective range_pct, moving at most max_step_pts from the last sent target, in substeps sub-steps substep_s apart (<= 3.3% FTP/s, BRIEF 4.6.2); only in arc ERG phases with a range_pct, never in the depot or checkpoints.",
 		"base_pct": 65,
 		"span_pct": 15,
 		"every_s": 5,
@@ -127,18 +107,11 @@
 		"max_step_pts": 10
 	},
 	"boiler": {
-		"_doc": "Pattern 2: grade_pct x min(pressure, 1) in WORK SIM phases, warmup_grade_pct x min(pressure, 1) in WARMUP-kind ones; 0 while loaded or cycling.",
+		"_doc": "Pattern 3: grade_pct x min(pressure, 1) in WORK SIM phases, warmup_grade_pct x min(pressure, 1) in WARMUP-kind ones; 0 while the loader idles (v3: the ready rack is full).",
 		"grade_pct": 8,
 		"warmup_grade_pct": 3,
 		"max_rise_pct": 0.5,
 		"min_interval_s": 1
-	},
-	"hoist": {
-		"_doc": "Pattern 3 (the Bulwark): rise_pct_s per second in whole step_s steps counted from reaching Hoist, up to grade_pct (warmup_grade_pct in WARMUP kinds), only in SIM phases; 0 in one step on leaving Hoist.",
-		"grade_pct": 4,
-		"warmup_grade_pct": 1,
-		"rise_pct_s": 1,
-		"step_s": 1
 	},
 	"cadence_band": {
 		"default": [60, 120],

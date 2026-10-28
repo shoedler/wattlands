@@ -2,8 +2,8 @@ class_name TankEventCast
 extends RefCounted
 ## Casts an event's numbers to int (GAME_SDK 12): Protocol.decode() already does it for the paths
 ## int_fields() declares, and apply_event() casts again so an event that reaches the game by another
-## road (a test, a replay) is just as clean. The declared fields are TankEvents.INT_FIELDS; "r[][]"
-## is every number of the rotation's [[slot, engine code], ...] rows.
+## road (a test, a replay) is just as clean. The declared fields are TankEvents.INT_FIELDS; a path
+## ending in "[]" casts every number of a (nested) array (the reserved rotation event's "r[][]").
 
 
 ## A copy of `event` with every declared int field cast; unknown keys are kept as they are.

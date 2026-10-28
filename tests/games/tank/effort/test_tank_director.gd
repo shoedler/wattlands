@@ -1,9 +1,10 @@
 extends GutTest
 ## TankDirector against brief 2.3 directive patterns 1-7 and 2.7 haptics: every directive's exact
-## dictionary, the bank's sub-step slew, the boiler and hoist steps, terrain at 2 Hz, the cadence
-## and power bands, the haptic rules, end_phase, nothing SIM-only in an ERG phase and nothing in
-## the cool-down. Citadel (crew 3) with rotation on: in stage 1 peer 1 drives the diesel, peer 2
-## the dynamo, peer 3 the steam engine; the Bulwark (crew 1) is peer 1.
+## dictionary, the bank's sub-step slew, the boiler steps, terrain at 2 Hz, the cadence and power
+## bands, the haptic rules, end_phase, nothing SIM-only in an ERG phase and nothing in the
+## cool-down. Crew 3 on the v3 landship (no rotation): peer 1 drives the diesel, peer 2 the dynamo,
+## peer 3 the steam engine in every phase; the solo rider (crew 1) is peer 1 on the diesel. (v3
+## retired the Bulwark's hoist pattern and its tests.)
 
 const H := preload("res://tests/games/tank/effort/tank_effort_harness.gd")
 
@@ -18,9 +19,9 @@ const COOLDOWN := 11
 const BANK_RATE := 10.0 / 3.0
 
 
-func _h(crew: int = 3, mission: String = "ashfall_road", rotation: bool = true) -> H:
+func _h(crew: int = 3, mission: String = "ashfall_road") -> H:
 	var h := H.new()
-	h.build(crew, mission, rotation)
+	h.build(crew, mission)
 	return h
 
 
@@ -30,17 +31,6 @@ func _dyn(h: H) -> TankDynamoState:
 
 func _steam(h: H) -> TankSteamState:
 	return h.state.station(TankIds.ENGINE_STEAM) as TankSteamState
-
-
-func _gear(h: H) -> TankGearboxState:
-	return h.state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-
-
-func _lever(h: H, position: int, moving: bool = false) -> void:
-	var g := _gear(h)
-	g.lever = position
-	g.lever_to = position
-	g.move_s = 1.0 if moving else 0.0
 
 
 func _hit(dmg: float) -> Dictionary:
@@ -146,6 +136,20 @@ func test_bank_updates_climb_in_three_sub_steps() -> void:
 	assert_eq(_to(h, 2).size(), 15)
 
 
+## A phase the rider enters through the platform's switch ramp (SIM -> ERG: a move to the Gun) keeps
+## the entered target for its first full 5 s cycle in ERG (S9), then the bank pattern runs as before.
+func test_a_ramped_erg_entry_keeps_its_target_for_a_cycle() -> void:
+	var h := _h()
+	_dyn(h).bank = 0.0
+	h.applied_mode[2] = Wl.SIM
+	h.run_s(ADV1, 1.0)
+	h.applied_mode.erase(2)
+	h.run_s(ADV1, 8.95)
+	assert_eq(h.sent(2, "bank"), [], "the first cycle after the ramp keeps the entered target")
+	h.run_s(ADV1, 1.0)
+	assert_eq(h.sent(2, "bank").size(), 1, "then the bank pattern as before")
+
+
 ## A full bank asks the planned 55% (nothing to send); a refilling bank falls by <= 10 points an
 ## update too.
 func test_bank_falls_in_steps_and_holds_when_full() -> void:
@@ -192,7 +196,7 @@ func test_bank_slew_is_at_most_a_third_of_ten_points_a_second() -> void:
 			assert_lte(absf(last - first), 10.0 * 2.0 / 3.0 + 1e-9, "one update <= 10 points")
 
 
-## The bank never runs in the depot (the plan's ramp), checkpoints, or the diesel's ERG 90% gun line;
+## The bank never runs in the depot (the plan's ramp), checkpoints, or for the Drive seat (SIM);
 ## it runs in the gun line and the boss for the dynamo, and the drill's skirmish clamps it to 65%.
 func test_bank_only_in_dynamo_phases_with_a_range() -> void:
 	var h := _h()
@@ -203,7 +207,7 @@ func test_bank_only_in_dynamo_phases_with_a_range() -> void:
 		assert_ne(str(r[2].get("reason")), "bank", "no bank in the depot or a checkpoint")
 	h.clear()
 	h.run_s(GUN1, 6.0)
-	assert_eq(h.sent(1, "bank"), [], "the diesel's ERG 90% gun line")
+	assert_eq(h.sent(1, "bank"), [], "the Drive seat digs in SIM flat")
 	assert_eq(h.sent(2, "bank").size(), 4, "the dynamo's gun line: 0, 1, 2 and 5 s")
 	var d := _h(2, "drill")
 	_dyn(d).bank = 0.0
@@ -318,9 +322,9 @@ func test_boiler_rises_half_a_percent_a_second_and_drops_in_one_step() -> void:
 	assert_almost_eq(float(rows[-1][1]["mode_grade"]), 4.0, 1e-9)
 
 
-## S1: the boiler and the hoist send nothing to a rider on reserve and restart from 0 when it is
-## back: a restarted client rides mode_grade 0, so the first step is <= 0.5% (hoist <= 1%).
-func test_boiler_and_hoist_restart_from_zero_after_a_reserve() -> void:
+## S1: the boiler sends nothing to a rider on reserve and restarts from 0 when it is back: a
+## restarted client rides mode_grade 0, so the first step is <= 0.5%.
+func test_boiler_restarts_from_zero_after_a_reserve() -> void:
 	var h := _h()
 	_steam(h).pressure_pct = 100.0
 	h.run_s(ADV1, 14.0)
@@ -338,22 +342,6 @@ func test_boiler_and_hoist_restart_from_zero_after_a_reserve() -> void:
 		var g := float(r[1]["mode_grade"])
 		assert_lte(g - prev, 0.5 + 1e-9, "rise <= 0.5% from the client's 0")
 		prev = g
-	var b := _h(1)
-	_lever(b, TankIds.LEVER_HOIST)
-	b.run_s(ADV1, 6.0)
-	assert_almost_eq(float(b.sent(1, "hoist")[-1][1]["mode_grade"]), 4.0, 1e-9)
-	b.clear()
-	b.afk[1] = true
-	b.run_s(ADV1, 5.0)
-	assert_eq(b.sent(1, "hoist"), [], "nothing to an AFK Bulwark rider")
-	b.afk[1] = false
-	b.run_s(ADV1, 5.0)
-	prev = 0.0
-	for r: Array in b.sent(1, "hoist"):
-		var g := float(r[1]["mode_grade"])
-		assert_lte(g - prev, 1.0 + 1e-9, "the climb restarts at 1% a second")
-		prev = g
-	assert_almost_eq(prev, 4.0, 1e-9)
 
 
 ## Every boiler send is >= 1 s after the previous one and rises <= 0.5%, whatever the pressure.
@@ -405,61 +393,6 @@ func test_no_boiler_outside_the_steam_riders_sim_phases() -> void:
 		assert_eq(int(r[1]), 3, "only the steam rider gets the boiler")
 
 
-# --- Pattern 3: the Bulwark's hoist --------------------------------------------------------------
-
-
-## On Hoist in an Advance: +1% a second to 4%; leaving sends 0 at once; a lever move is "leaving".
-func test_hoist_climbs_one_percent_a_second_and_drops_on_leaving() -> void:
-	var h := _h(1)
-	_lever(h, TankIds.LEVER_HOIST)
-	h.run_s(ADV1, 6.0)
-	var want: Array = []
-	for k in 4:
-		want.append([(k + 1) * 20, _grade_dict(float(k + 1), "hoist")])
-	_assert_rows(h.sent(1, "hoist"), want, "hoist climb")
-	h.clear()
-	var g := _gear(h)
-	g.lever_to = TankIds.LEVER_TURRET
-	g.move_s = 1.0
-	h.step(ADV1)
-	_assert_rows(h.sent(1, "hoist"), [[h.tick - 1, _grade_dict(0.0, "hoist")]], "leaving")
-	_lever(h, TankIds.LEVER_TURRET)
-	h.run_s(ADV1, 3.0)
-	assert_eq(h.sent(1, "hoist").size(), 1, "nothing more off Hoist")
-	_lever(h, TankIds.LEVER_HOIST)
-	h.clear()
-	h.run_s(ADV1, 1.5)
-	_assert_rows(
-		h.sent(1, "hoist"), [[h.tick - 10, _grade_dict(1.0, "hoist")]], "the climb restarts"
-	)
-
-
-## The depot's lever drill: Hoist 1%; the boss: 4%; the ERG 90% gun line: nothing at all.
-func test_hoist_in_the_depot_the_boss_and_the_gun_line() -> void:
-	var h := _h(1)
-	_lever(h, TankIds.LEVER_HOIST)
-	h.run_s(DEPOT, 5.0)
-	_assert_rows(h.sent(1, "hoist"), [[20, _grade_dict(1.0, "hoist")]], "depot")
-	h.clear()
-	h.run_s(GUN1, 10.0)
-	assert_eq(h.requests, [], "ERG gun line: Hoist sends nothing")
-	h.run_s(BOSS, 5.0)
-	assert_almost_eq(float(h.sent(1, "hoist")[-1][1]["mode_grade"]), 4.0, 1e-9, "boss")
-
-
-func test_hoist_grade_math() -> void:
-	var c := TankFixtures.content()
-	assert_eq(TankDirector.hoist_grade_pct(c, 0.0, false), 0.0)
-	assert_eq(TankDirector.hoist_grade_pct(c, 0.95, false), 0.0)
-	assert_eq(TankDirector.hoist_grade_pct(c, 1.0, false), 1.0)
-	assert_eq(TankDirector.hoist_grade_pct(c, 3.5, false), 3.0)
-	assert_eq(TankDirector.hoist_grade_pct(c, 60.0, false), 4.0)
-	assert_eq(TankDirector.hoist_grade_pct(c, 60.0, true), 1.0)
-	for i in 200:
-		var s := float(i) * 0.05
-		assert_lte(TankDirector.hoist_grade_pct(c, s, false), s + 1e-9, "never above 1%/s")
-
-
 # --- Pattern 4: terrain --------------------------------------------------------------------------
 
 
@@ -487,7 +420,7 @@ func test_terrain_at_2_hz_in_game_phases() -> void:
 	var b := _h(1)
 	b.state.hull.distance_m = 1000.0
 	b.run_s(ADV1, 1.0)
-	assert_eq(b.grades_of(1).size(), 2, "the Bulwark's Advance")
+	assert_eq(b.grades_of(1).size(), 2, "the solo driver's Advance")
 
 
 func test_terrain_grade_math() -> void:
@@ -539,10 +472,10 @@ func test_cadence_bands() -> void:
 	h.clear()
 	_steam(h).loaded = true
 	h.run_s(CP1, 1.0)
-	assert_eq(h.bands_of(2), [[h.tick - 20, 60.0, 120.0]], "checkpoint: the steam rider is peer 2")
+	assert_eq(h.bands_of(3), [[h.tick - 20, 60.0, 120.0]], "checkpoint: the steam rider (peer 3)")
 
 
-## The power band: 76-105% FTP for the diesel and the Bulwark in WORK SIM phases, (0, 0) elsewhere,
+## The power band: 76-105% FTP for the diesel in WORK SIM phases, (0, 0) elsewhere,
 ## once at each segment start.
 func test_power_band_at_each_segment_start() -> void:
 	var h := _h()
@@ -558,7 +491,7 @@ func test_power_band_at_each_segment_start() -> void:
 			assert_almost_eq(float(r[2]), want[0] / 100.0 * p.ftp, 1e-6)
 			assert_almost_eq(float(r[3]), want[1] / 100.0 * p.ftp, 1e-6)
 			var tempo := ph.kind == Wl.WORK and ph.mode == Wl.SIM
-			tempo = tempo and ["diesel", "bulwark"].has(str(ph.meta["engine"]))
+			tempo = tempo and str(ph.meta["engine"]) == "diesel"
 			assert_eq(float(r[3]) > 0.0, tempo, "phase %d peer %d" % [index, r[1]])
 
 
@@ -612,7 +545,7 @@ func test_boss_hit_haptics_and_nothing_for_an_evade() -> void:
 	var t := h.tick - 1
 	_assert_rows(h.sent(1, "boss_hit"), [[t, _haptic_dict(3.0, 2.0, "boss_hit")]], "boss diesel")
 	assert_eq(h.sent(1, "hit"), [])
-	# Boss engines with rotation: peer 1 diesel, peer 2 dynamo (ERG), peer 3 steam.
+	# Boss seats (v3, no rotation): peer 1 diesel, peer 2 dynamo (ERG), peer 3 steam.
 	_assert_rows(h.sent(3, "boss_hit"), [[t, _haptic_dict(3.0, 2.0, "boss_hit")]], "boss steam")
 	var r := _h()
 	r.run_s(ADV1, 1.0)
@@ -668,7 +601,9 @@ func test_haptic_gates() -> void:
 	var b := _h(1)
 	b.run_s(GUN1, 1.0)
 	b.step(GUN1, events)
-	assert_eq(b.requests, [], "the Bulwark's ERG gun line")
+	assert_eq(
+		_haptics(b).size(), 1, "v3: Drive digs in SIM flat at a gun line, so the hit reaches it"
+	)
 	var e := _h()
 	e.applied_mode[1] = Wl.ERG
 	e.ctx.players[2].haptics_on = false
@@ -705,6 +640,31 @@ func test_end_phase_all_riders_once_after_min_s() -> void:
 	h.state.seg.objective_done = true
 	h.run_s(DEPOT, 5.0)
 	assert_eq(h.ended.size(), 3, "a fixed phase never ends early")
+
+
+## v3 solo balance: a solo rider the Autopilot seats who wants another seat for the next fight
+## segment holds the segment's end ("Regroup") while its seat lock runs, so the move can land at the
+## end; it never holds a crew, and stops once the rider asked.
+func test_a_solo_segment_end_waits_for_the_riders_seat_lock() -> void:
+	var h := _h(1)
+	var r := h.state.riders[0]
+	r.engine = TankIds.ENGINE_FEED
+	r.seat_lock_s = 20.0
+	h.run_s(GUN1, 30.0)
+	h.state.seg.objective_done = true
+	h.run_s(GUN1, 35.0)
+	assert_eq(h.ended, [], "the rider wants Drive for the next Advance; its lock runs")
+	r.seat_lock_s = 0.0
+	r.seat_target = TankIds.ENGINE_DIESEL
+	h.run_s(GUN1, 3.0)
+	assert_eq(h.ended.size(), 1, "it asked: the segment ends")
+	var crew := _h(2)
+	for c in crew.state.riders:
+		c.engine = TankIds.ENGINE_FEED
+		c.seat_lock_s = 20.0
+	crew.state.seg.objective_done = true
+	crew.run_s(GUN1, 65.0)
+	assert_eq(crew.ended.size(), 2, "a crew never waits")
 
 
 ## The boss waits its `end_hold_s` (the Behemoth's death beat) after the objective is done, so the
@@ -776,7 +736,6 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 	var b := _h(1)
 	b.run_s(BOSS, 1.0)
 	b.clear()
-	_lever(b, TankIds.LEVER_HOIST)
 	b.run_s(COOLDOWN, 10.0)
 	assert_eq([b.requests, b.grades, b.bands], [[], [], []])
 
@@ -784,19 +743,18 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 # --- Whole-plan sweep ----------------------------------------------------------------------------
 
 
-## Every crew x rotation x content through every phase with every pattern busy (a draining and
-## refilling bank, an arc load swinging between 0 and 1, full pressure with latches, the lever on
-## Hoist, rolling terrain, hits and boss hits every few seconds): every request matches its
+## Every crew x content through every phase with every pattern busy (a draining and
+## refilling bank, an arc load swinging between 0 and 1, full pressure with latches, rolling
+## terrain, hits and boss hits every few seconds): every request matches its
 ## pattern, nothing SIM-only reaches an ERG phase, every ERG target is 50-100% inside the phase's
 ## range, haptics only past 300 s in WORK SIM phases and >= 15 s apart, terrain only in
 ## grade_source "game" phases.
 func test_every_directive_in_every_phase_matches_its_pattern() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
 		for crew in [1, 2, 3, 4]:
-			for rotation in [true, false]:
-				var h := _h(crew, mission, rotation)
-				_sweep(h)
-				_check_sweep(h, "%s crew %d rotation %s" % [mission, crew, rotation])
+			var h := _h(crew, mission)
+			_sweep(h)
+			_check_sweep(h, "%s crew %d" % [mission, crew])
 
 
 func _sweep(h: H) -> void:
@@ -816,9 +774,6 @@ func _sweep(h: H) -> void:
 			if steam != null:
 				steam.pressure_pct = minf(t * 6.0, 150.0)
 				steam.loaded = fmod(t, 12.0) > 9.0
-			var gear := _gear(h)
-			if gear != null:
-				_lever(h, TankIds.LEVER_HOIST if fmod(t, 14.0) < 10.0 else TankIds.LEVER_DRIVE)
 			h.state.hull.distance_m = t * 8.0
 			var ev: Array[Dictionary] = []
 			# A hit at 0 s, a boss hit at 17 s and an evaded shot at 34 s: each haptic lands just
@@ -836,7 +791,6 @@ func _check_sweep(h: H, at: String) -> void:
 	var keys := {
 		"bank": ["mode", "target_pct", "duration_s", "reason", "source"],
 		"boiler": ["mode", "mode_grade", "duration_s", "reason", "source"],
-		"hoist": ["mode", "mode_grade", "duration_s", "reason", "source"],
 		"hit": ["mode", "haptic", "duration_s", "reason", "source"],
 		"boss_hit": ["mode", "haptic", "duration_s", "reason", "source"],
 		"arc": ["mode", "target_pct", "duration_s", "reason", "source"],
@@ -882,10 +836,6 @@ func _check_sweep(h: H, at: String) -> void:
 			assert_eq(str(ph.meta["engine"]), "steam", where)
 			var top := 3.0 if ph.kind == Wl.WARMUP else 8.0
 			assert_between(float(d["mode_grade"]), 0.0, top, where)
-		if reason == "hoist":
-			assert_eq(str(ph.meta["engine"]), "bulwark", where)
-			var top := 1.0 if ph.kind == Wl.WARMUP else 4.0
-			assert_between(float(d["mode_grade"]), 0.0, top, where)
 		if d.has("haptic"):
 			assert_eq(ph.kind, Wl.WORK, where)
 			assert_lte(float(d["haptic"]), 3.0, where)
@@ -912,9 +862,7 @@ func _check_sweep(h: H, at: String) -> void:
 		for reason: String in ["boiler", "hit", "boss_hit"]:
 			if reason != "boiler" or h.ctx.players.size() >= 3:
 				assert_true(reasons.has(reason), "%s: the sweep exercised %s" % [at, reason])
-		if h.ctx.players.size() == 1:
-			assert_true(reasons.has("hoist"), at + ": hoist exercised")
-		else:
+		if h.ctx.players.size() >= 2:
 			assert_true(reasons.has("bank"), at + ": bank exercised")
 		if h.ctx.players.size() == 4:
 			assert_true(reasons.has("arc"), at + ": arc exercised")

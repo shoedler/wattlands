@@ -7,21 +7,25 @@ extends RefCounted
 ## the files and runs these.
 ##
 ## Files:
-##   tanks.json     tanks {bulwark, rampart, citadel, bastion}: {code (TankIds.TANK_CODES), crew
-##                  (its index in TankIds.TANKS + 1), hull_px, engines (rooms rear to front),
-##                  turrets, enemy_scale}; hull, drive, evade, berm, in_band, power_ratio, dynamo,
-##                  steam, gearbox, gun, damage, bow, arc, caps (TANKS_SPEC)
-##   stations.json  engines, start_engines, rotation, plans, drill_plans, terrain, bank, arc, boiler,
-##                  hoist, cadence_band, haptics (STATIONS_SPEC; plan entries:
+##   tanks.json     tanks {landship} (v3: one tank, TankIds.TANKS): {code (TankIds.TANK_CODES),
+##                  crew [1, TankIds.MAX_CREW], hull_px, engines (its five seats rear to front, each
+##                  of TankIds.SEATS once), turrets, enemy_scale, geometry (GEOMETRY_SPEC, rules px in
+##                  the hull frame; TankGeometry reads it)}; hull, drive, evade, berm, in_band,
+##                  power_ratio, dynamo, steam (v3: the Loader's rack), gun, damage, bow (v3: the
+##                  Secondaries' rounds), arc (v3: the Lights' dark range), caps (TANKS_SPEC)
+##   stations.json  engines, start_engines, plans, drill_plans, terrain, bank, arc, boiler,
+##                  cadence_band, haptics (STATIONS_SPEC; plan entries:
 ##                  {mode: ERG, target_pct, ramp_to_pct?, range_pct?} or {mode: SIM, grade_source});
-##                  every engine has an entry for every segment type of TABLE_SEGMENTS; rotation rows
-##                  (every tank of crew 2 and up) use their tank's start engines, start with the
-##                  slot's own and man every room in every column
+##                  every engine has an entry for every segment type of TABLE_SEGMENTS; start_engines
+##                  per tank: the seat of each slot (TankIds.MAX_CREW distinct seats; a crew of n
+##                  uses the first n); v3 retired rotation (seat choice replaces it)
 ##   enemies.json   types {light, medium, destroyer, dugin, heavy}: {code, hp, size_px, gun {damage,
 ##                  every_s, hit}, light_mult, lane, flank? {telegraph_s, damage, hit}}; boss;
-##                  miss_px; clamp; lanes (ENEMIES_SPEC)
-##   missions/<id>.json  {id, label, rotation, segments: [{id, type, stage, kind, duration_s,
-##                  min_s?, max_s?, label, name, backdrop, terrain?, length_m?, encounters?,
+##                  miss_px; clamp; lanes; crew_count_scale (v3: enemy counts by crew size, one
+##                  factor in (0, 1] per crew size 1..TankIds.MAX_CREW) (ENEMIES_SPEC)
+##   missions/<id>.json  {id, label, segments: [{id, type, stage, kind, duration_s,
+##                  min_s?, max_s?, label, name, backdrop (TankIds.BACKDROPS), terrain?, length_m?,
+##                  encounters?,
 ##                  obstacles?, enemies?, props?, drills?, boss?}], cooldown}
 ##   missions/<id>.json with "kind": "roam" (free roam, brief 2.10): {id, kind, label, minutes}
 ##                  (validate_roam; TankContent.expand_roam turns it into the drive-out and the roam)
@@ -29,8 +33,8 @@ extends RefCounted
 ##                  points and grades (validate_valley; VALLEY_SPEC)
 ##   scoring.json   scale, weights, objectives, survival_per_breakdown, grades, xp (SCORING_SPEC)
 ##   cosmetics.json unlocks: [{id, kind, rule: finish | grade | behemoth_no_breakdown, min_grade?}]
-##   validate_cross(files): what needs two files (each tank's start engines are its rooms in slot
-##                  order, a permutation of tanks.json engines; the mission's plan table and its
+##   validate_cross(files): what needs two files (each tank's start engines are rooms of its own
+##                  tanks.json engines, in slot order; the mission's plan table and its
 ##                  segment types, 90% ERG phases <= 180 s, warm-up terrain inside the warm-up grades)
 ##
 ## Safety envelope: besides types, the validators hold every number that carries a brief 2.3 check
@@ -66,21 +70,16 @@ const TANKS_SPEC := {
 	"dynamo.stabilizer_per_s": "nonneg",
 	"dynamo.per_degree": "nonneg",
 	"dynamo.per_traverse": "nonneg",
-	"dynamo.per_hoist": "nonneg",
 	"dynamo.elev_deg_s": "pair",
 	"dynamo.traverse_s": "pair",
-	"dynamo.hoist_s": "pair",
 	"steam.full_j": "pos",
 	"steam.window_s": "nonneg",
 	"steam.over_j": "pos",
 	"steam.over_max_pct": "pos",
-	"steam.breech_cycle_s": "nonneg",
+	"steam.rack_start": "nonneg",
+	"steam.chamber_s": "pos",
 	"steam.light_latch_pct": "pos",
-	"gearbox.move_s": "nonneg",
-	"gearbox.turret_full_w": "pos",
-	"gearbox.hoist_j": "pos",
-	"gearbox.auto_dwell_s": "nonneg",
-	"gearbox.manual_suspend_s": "nonneg",
+	"gun.load_elev_deg": "num",
 	"gun.elev_min_deg": "num",
 	"gun.elev_max_deg": "num",
 	"gun.shell_speed_px_s": "pos",
@@ -92,30 +91,42 @@ const TANKS_SPEC := {
 	"damage.splash_px": "nonneg",
 	"damage.splash_frac": "nonneg",
 	"bow.damage": "nonneg",
-	"bow.every_s": "pos",
 	"bow.min_px": "nonneg",
 	"bow.max_px": "pos",
-	"bow.per_burst_units": "nonneg",
-	"bow.min_bank": "nonneg",
-	"bow.under_band_rate": "frac",
-	"bow.bulwark_rate": "frac",
-	"bow.clear_s": "pos",
-	"arc.lit_dispersion_mult": "frac",
+	"bow.slew_deg_s": "pair",
+	"bow.aim_tol_deg": "pos",
+	"bow.clear_rounds": "pos",
+	"arc.dark_dispersion_mult": "pos",
+	"arc.dark_range_px": "pos",
 	"caps.enemies": "pos",
 	"caps.shells": "pos",
 }
 const TANK_SPEC := {
 	"code": "pos",
-	"crew": "pos",
+	"crew": "pair",
 	"hull_px": "pair",
 	"engines": "arr",
 	"turrets": "arr",
-	"enemy_scale": "pos"
+	"enemy_scale": "pos",
+	"geometry": "obj",
+}
+## v3: tanks.json tanks.<id>.geometry, rules px in the hull frame (x from the hull's rear, y down,
+## the hull's bottom at y hull_px[1]; negative y above the hull rect). Rects are [x, y, w, h].
+const GEOMETRY_SPEC := {
+	"ground_y": "num",
+	"hull_rect": "arr",
+	"track_rect": "arr",
+	"turret_rect": "arr",
+	"turret_ring": "pair",
+	"trunnion": "pair",
+	"barrel_px": "pos",
+	"muzzle": "pair",
+	"bow_guns": "arr",
+	"seats": "obj",
 }
 const STATIONS_SPEC := {
 	"engines": "arr",
 	"start_engines": "obj",
-	"rotation": "obj",
 	"plans": "obj",
 	"drill_plans": "obj",
 	"roam_plans": "obj",
@@ -138,10 +149,6 @@ const STATIONS_SPEC := {
 	"boiler.warmup_grade_pct": "nonneg",
 	"boiler.max_rise_pct": "pos",
 	"boiler.min_interval_s": "pos",
-	"hoist.grade_pct": "nonneg",
-	"hoist.warmup_grade_pct": "nonneg",
-	"hoist.rise_pct_s": "pos",
-	"hoist.step_s": "pos",
 	"cadence_band.default": "pair",
 	"cadence_band.loader": "pair",
 	"haptics.hit.min_damage": "nonneg",
@@ -300,23 +307,17 @@ const WARMUP_TERRAIN_MIN_PCT := 0.0
 const WARMUP_TERRAIN_MAX_PCT := 2.0
 ## Pattern 4 at most 2 Hz.
 const TERRAIN_MIN_EVERY_S := 0.5
-## Patterns 2 and 3: mode grades before difficulty, and how fast they may rise.
+## Pattern 2: mode grades before difficulty, and how fast they may rise. (v3 retired the Bulwark's
+## hoist pattern and its bounds with its gearbox.)
 const BOILER_MAX_PCT := 8.0
 const BOILER_WARMUP_MAX_PCT := 3.0
 const BOILER_MAX_RISE_PCT := 0.5
 const BOILER_MIN_INTERVAL_S := 1.0
-const HOIST_MAX_PCT := 4.0
-const HOIST_WARMUP_MAX_PCT := 1.0
-const HOIST_MAX_RISE_PCT_S := 1.0
-## 4.6.6: terrain maximum + hoist (the Bulwark's (6 + 4)%) inside the default +10% range top.
-const STACK_MAX_PCT := 10.0
 ## Pattern 1 (4.6.2): <= 10 points per update, sub-steps >= 1 s apart, targets inside 50..100%.
 const BANK_MAX_STEP_PTS := 10.0
 const BANK_MIN_SUBSTEP_S := 1.0
 ## 4.6.2: one bank update's largest sub-step, 10 points over the 3 s the rule spreads it across (3.3%/s).
 const BANK_MAX_SUBSTEP_PTS := 10.0 / 3.0
-## Pattern 3: the largest single hoist step (rise_pct_s x step_s), the +1%/s rule.
-const HOIST_MAX_STEP_PCT := 1.0
 ## 2.7: the largest haptic +3% for at most 8 s; the game's own cooldown at least 15 s.
 const HAPTIC_MAX := 3.0
 const HAPTIC_MAX_S := 8.0
@@ -336,9 +337,6 @@ const STATION_BOUNDS: Array = [
 	["boiler.warmup_grade_pct", "<=", BOILER_WARMUP_MAX_PCT, "warm-up SIM <= +3% (4.6.8)"],
 	["boiler.max_rise_pct", "<=", BOILER_MAX_RISE_PCT, "boiler rises <= 0.5% a step"],
 	["boiler.min_interval_s", ">=", BOILER_MIN_INTERVAL_S, "boiler <= once a second"],
-	["hoist.grade_pct", "<=", HOIST_MAX_PCT, "hoist 4% (4.6.6)"],
-	["hoist.warmup_grade_pct", "<=", HOIST_WARMUP_MAX_PCT, "warm-up hoist 1% (4.6.8)"],
-	["hoist.rise_pct_s", "<=", HOIST_MAX_RISE_PCT_S, "hoist rises at +1%/s"],
 	["haptics.hit.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
 	["haptics.hit.duration_s", "<=", HAPTIC_MAX_S, "haptics <= 8 s (2.7)"],
 	["haptics.boss_hit.haptic", "<=", HAPTIC_MAX, "haptics <= +3% (2.7, 4.6.6)"],
@@ -352,27 +350,21 @@ static func validate_tanks(d: Variant) -> Array[String]:
 	if not (d is Dictionary):
 		return ["tanks.json: expected an object"]
 	check_spec(d, TANKS_SPEC, "tanks.json", errors)
+	var restock: Variant = dig(d, "steam.checkpoint_rack_by_crew")
+	if restock != null and not _crew_list(restock, 0.0, float(TankConst.RACK_MAX), true):
+		errors.append(
+			(
+				"tanks.json steam.checkpoint_rack_by_crew: one count 0..%d per crew size 1..%d"
+				% [TankConst.RACK_MAX, TankIds.MAX_CREW]
+			)
+		)
 	var tanks: Variant = d.get("tanks")
 	if tanks is Dictionary:
 		for t: String in TankIds.TANKS:
 			if not (tanks as Dictionary).has(t):
 				errors.append("tanks.json tanks: missing %s" % t)
 				continue
-			check_spec(tanks[t], TANK_SPEC, "tanks.json tanks.%s" % t, errors)
-			var def: Variant = tanks[t]
-			if def is Dictionary and _num(def.get("code")):
-				if int(def["code"]) != int(TankIds.TANK_CODES[t]):
-					errors.append(
-						"tanks.json tanks.%s.code: must be %d" % [t, TankIds.TANK_CODES[t]]
-					)
-			if def is Dictionary and _num(def.get("crew")):
-				if int(def["crew"]) != TankIds.TANKS.find(t) + 1:
-					errors.append(
-						"tanks.json tanks.%s.crew: must be %d" % [t, TankIds.TANKS.find(t) + 1]
-					)
-			for e: Variant in (tanks[t] as Dictionary).get("engines", []):
-				if not TankIds.ENGINES.has(str(e)):
-					errors.append("tanks.json tanks.%s.engines: unknown engine %s" % [t, str(e)])
+			_check_tank(tanks[t], t, errors)
 	var band: Variant = dig(d, "in_band.sim_ftp_pct")
 	if band is Array and (band as Array).size() == 2 and _num(band[0]) and _num(band[1]):
 		if not (
@@ -386,6 +378,75 @@ static func validate_tanks(d: Variant) -> Array[String]:
 	return errors
 
 
+## One tank of tanks.json (v3): its spec, its code, its crew range [1, TankIds.MAX_CREW], its rooms
+## (each of TankIds.SEATS exactly once, rear to front) and its geometry (GEOMETRY_SPEC: rects of
+## four numbers with a positive size, the gun invariant muzzle == trunnion + [barrel_px, 0], at
+## least one bow gun with a muzzle, a seat rect per room, the ground at hull_px[1]).
+static func _check_tank(def: Variant, t: String, errors: Array[String]) -> void:
+	var where := "tanks.json tanks.%s" % t
+	check_spec(def, TANK_SPEC, where, errors)
+	if not (def is Dictionary):
+		return
+	if _num(def.get("code")) and int(def["code"]) != int(TankIds.TANK_CODES[t]):
+		errors.append("%s.code: must be %d" % [where, TankIds.TANK_CODES[t]])
+	var crew: Variant = def.get("crew")
+	if _pair_ok(crew) and (int(crew[0]) != 1 or int(crew[1]) != TankIds.MAX_CREW):
+		errors.append("%s.crew: must be [1, %d]" % [where, TankIds.MAX_CREW])
+	var rooms: Variant = def.get("engines", [])
+	if rooms is Array:
+		for e: Variant in rooms:
+			if not TankIds.ENGINES.has(str(e)):
+				errors.append("%s.engines: unknown engine %s" % [where, str(e)])
+		for seat: String in TankIds.SEATS:
+			if (rooms as Array).count(seat) != 1:
+				errors.append("%s.engines: needs the %s seat exactly once" % [where, seat])
+	var g: Variant = def.get("geometry")
+	if not (g is Dictionary):
+		return
+	var gw := where + ".geometry"
+	var before := errors.size()
+	check_spec(g, GEOMETRY_SPEC, gw, errors)
+	if errors.size() > before:
+		return
+	for k: String in ["hull_rect", "track_rect", "turret_rect"]:
+		if not _rect_ok(g[k]):
+			errors.append("%s.%s: [x, y, w, h] with a positive size" % [gw, k])
+	var want_x := float(g["trunnion"][0]) + float(g["barrel_px"])
+	var muzzle: Array = g["muzzle"]
+	if (
+		absf(float(muzzle[0]) - want_x) > 0.01
+		or absf(float(muzzle[1]) - float(g["trunnion"][1])) > 0.01
+	):
+		errors.append("%s.muzzle: must equal trunnion + [barrel_px, 0]" % gw)
+	if (g["bow_guns"] as Array).is_empty():
+		errors.append("%s.bow_guns: at least one" % gw)
+	for i in (g["bow_guns"] as Array).size():
+		var bg: Variant = g["bow_guns"][i]
+		if not (bg is Dictionary) or not _pair_ok(bg.get("muzzle")):
+			errors.append("%s.bow_guns[%d]: {muzzle: [x, y], pivot?: [x, y]}" % [gw, i])
+	if rooms is Array:
+		for e: Variant in rooms:
+			if not _rect_ok((g["seats"] as Dictionary).get(str(e))):
+				errors.append("%s.seats.%s: [x, y, w, h] of the seat's room" % [gw, str(e)])
+	var size: Variant = def.get("hull_px")
+	if size is Array and (size as Array).size() == 2 and _num(size[1]):
+		if absf(float(g["ground_y"]) - float(size[1])) > 0.01:
+			errors.append("%s.ground_y: must be hull_px[1] (the hull stands on the ground)" % gw)
+
+
+static func _rect_ok(v: Variant) -> bool:
+	if not (v is Array) or (v as Array).size() != 4:
+		return false
+	for x: Variant in v:
+		if not _num(x):
+			return false
+	return float(v[2]) > 0.0 and float(v[3]) > 0.0
+
+
+static func _pair_ok(v: Variant) -> bool:
+	return v is Array and (v as Array).size() == 2 and _num(v[0]) and _num(v[1])
+
+
 static func validate_stations(d: Variant) -> Array[String]:
 	var errors: Array[String] = []
 	if not (d is Dictionary):
@@ -395,13 +456,20 @@ static func validate_stations(d: Variant) -> Array[String]:
 		return errors
 	for t: String in TankIds.TANKS:
 		var starts: Variant = d["start_engines"].get(t)
-		if not (starts is Array) or (starts as Array).size() != TankIds.TANKS.find(t) + 1:
-			errors.append("stations.json start_engines.%s: one engine per slot" % t)
+		if not (starts is Array) or (starts as Array).size() != TankIds.MAX_CREW:
+			errors.append(
+				"stations.json start_engines.%s: one seat per slot (%d)" % [t, TankIds.MAX_CREW]
+			)
+			continue
+		for i in (starts as Array).size():
+			var e := str(starts[i])
+			if not TankIds.ENGINES.has(e) or (starts as Array).find(e) != i:
+				errors.append("stations.json start_engines.%s: distinct known seats" % t)
+				break
 	if errors.size() > 0:
 		return errors
-	for t: String in TankIds.TANKS:
-		if TankIds.TANKS.find(t) > 0:
-			_check_rotation(d["rotation"].get(t), d["start_engines"][t], t, errors)
+	if d.has("rotation"):
+		errors.append("stations.json rotation: retired in v3 (seat choice replaces it)")
 	for table: String in TABLE_SEGMENTS:
 		_check_table(d[table], table, errors)
 	_check_station_bounds(d, errors)
@@ -436,31 +504,6 @@ static func _check_table(tbl: Dictionary, table: String, errors: Array[String]) 
 	)
 	if not exact:
 		errors.append("stations.json %s.checkpoint: must be exactly ERG 50%% (brief 2.3)" % table)
-
-
-## The rotation rows of tank `t`: one per slot, [stage 1, 2, 3, boss], only the tank's engines,
-## each row starting on its slot's start engine, every column manning every room once.
-static func _check_rotation(rows: Variant, starts: Array, t: String, errors: Array[String]) -> void:
-	var where := "stations.json rotation.%s" % t
-	if not (rows is Array) or (rows as Array).size() != starts.size():
-		errors.append("%s: one row per slot" % where)
-		return
-	for slot in (rows as Array).size():
-		var row: Variant = rows[slot]
-		if not (row is Array) or (row as Array).size() != 4:
-			errors.append("%s: rows are [stage 1, 2, 3, boss]" % where)
-			return
-		for e: Variant in row:
-			if not starts.has(e):
-				errors.append("%s[%d]: %s is not one of the tank's engines" % [where, slot, str(e)])
-		if str(row[0]) != str(starts[slot]):
-			errors.append("%s[%d]: stage 1 must be the slot's start engine" % [where, slot])
-	for col in 4:
-		var seen := {}
-		for row: Array in rows:
-			seen[str(row[col])] = true
-		if seen.size() != starts.size():
-			errors.append("%s column %d: every room needs exactly one rider" % [where, col + 1])
 
 
 ## A WARMUP-kind entry (the depot, the drill's skirmish): ERG at most 65% (BRIEF 4.6.8).
@@ -506,25 +549,13 @@ static func _check_station_bounds(d: Dictionary, errors: Array[String]) -> void:
 		if sub_pts > BANK_MAX_SUBSTEP_PTS + 1e-9:
 			var why := "%s.max_step_pts / %s.substeps: must be <= 10/3, got %s (3.3%%/s, 4.6.2)"
 			errors.append("stations.json " + why % [k, k, sub_pts])
-	var hoist_step := float(d["hoist"]["rise_pct_s"]) * float(d["hoist"]["step_s"])
-	if hoist_step > HOIST_MAX_STEP_PCT + 1e-9:
-		var why := "hoist.rise_pct_s x hoist.step_s: must be <= 1, got %s (+1%%/s, 4.6.6)"
-		errors.append("stations.json " + why % hoist_step)
 	for k: String in ["bank", "arc"]:
 		if float(d[k]["base_pct"]) + float(d[k]["span_pct"]) > ERG_MAX_PCT:
 			errors.append("stations.json %s: base_pct + span_pct must be <= 100 (4.6.1)" % k)
 	if not bool(d["bank"]["clamp_to_range"]):
 		errors.append("stations.json bank.clamp_to_range: must be true (targets stay in range_pct)")
-	var warm_hi := float(d["terrain"]["warmup_grade_pct"][1])
-	if warm_hi + float(d["hoist"]["warmup_grade_pct"]) > WARMUP_SIM_MAX_PCT:
-		(
-			errors
-			. append(
-				"stations.json terrain.warmup_grade_pct + hoist.warmup_grade_pct: must be <= +3% (4.6.8)"
-			)
-		)
-	if TERRAIN_MAX_PCT + float(d["hoist"]["grade_pct"]) > STACK_MAX_PCT:
-		errors.append("stations.json hoist.grade_pct: terrain +6% + hoist must be <= +10% (4.6.6)")
+	if float(d["terrain"]["warmup_grade_pct"][1]) > WARMUP_SIM_MAX_PCT:
+		errors.append("stations.json terrain.warmup_grade_pct: must be <= +3% (4.6.8)")
 	for k: String in ["default", "loader"]:
 		var b: Array = d["cadence_band"][k]
 		if float(b[0]) > float(b[1]):
@@ -551,7 +582,48 @@ static func validate_enemies(d: Variant) -> Array[String]:
 			var lane: Variant = (types[t] as Dictionary).get("lane")
 			if _num(lanes) and _num(lane) and int(lane) >= int(lanes):
 				errors.append("enemies.json types.%s.lane: must be below lanes.count" % t)
+	var scale: Variant = (d as Dictionary).get("crew_count_scale")
+	var scale_ok: bool = scale is Array and (scale as Array).size() == TankIds.MAX_CREW
+	if scale_ok:
+		for f: Variant in scale:
+			scale_ok = scale_ok and _num(f) and float(f) > 0.0 and float(f) <= 1.0
+	if not scale_ok:
+		errors.append(
+			(
+				"enemies.json crew_count_scale: one factor in (0, 1] per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
+	var dmg: Variant = (d as Dictionary).get("crew_damage_scale")
+	if dmg != null and not _crew_list(dmg, 1e-9, 1.0, false):
+		errors.append(
+			(
+				"enemies.json crew_damage_scale: one factor in (0, 1] per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
+	var bogies: Variant = dig(d, "boss.bogies_by_crew")
+	var all: Variant = dig(d, "boss.bogies")
+	if bogies != null and not _crew_list(bogies, 0.0, float(all) if _num(all) else 0.0, true):
+		errors.append(
+			(
+				"enemies.json boss.bogies_by_crew: one count 0..boss.bogies per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
 	return errors
+
+
+## True for an array of one value per crew size 1..MAX_CREW, each in [lo, hi] (`ints`: whole).
+static func _crew_list(v: Variant, lo: float, hi: float, ints: bool) -> bool:
+	if not (v is Array) or (v as Array).size() != TankIds.MAX_CREW:
+		return false
+	for f: Variant in v:
+		if not _num(f) or float(f) < lo or float(f) > hi:
+			return false
+		if ints and float(f) != floorf(float(f)):
+			return false
+	return true
 
 
 static func validate_mission(d: Variant, mission_id: String = "") -> Array[String]:
@@ -620,6 +692,8 @@ static func validate_valley(d: Variant) -> Array[String]:
 		check_spec(
 			zones[z], {"len_m": "pair", "terrain_pct": "pair", "label": "str"}, where, errors
 		)
+		if not TankIds.BACKDROPS.has(str((zones[z] as Dictionary).get("backdrop", ""))):
+			errors.append("%s backdrop: one of %s" % [where, ", ".join(TankIds.BACKDROPS)])
 		var zt: Variant = dig(zones[z], "terrain_pct")
 		if zt is Array and (zt as Array).size() == 2 and _num(zt[0]) and _num(zt[1]):
 			if float(zt[0]) < float(tp[0]) or float(zt[1]) > float(tp[1]):
@@ -753,30 +827,25 @@ static func dig_index(d: Variant, path: String) -> Variant:
 
 
 ## What needs two files ({tanks, stations, mission}; run once each file validated alone): the
-## start engines are each tank's rooms; the mission's plan table exists and holds every segment
-## type it uses; an ERG phase planned at or above 90% (target or ramp, not the bank's range top)
-## lasts at most 180 s at its longest; WARMUP-kind
-## terrain stays inside stations.json terrain.warmup_grade_pct.
+## start engines are rooms of their tank (v3: four of its five seats); the mission's plan table
+## exists and holds every segment type it uses; an ERG phase planned at or above 90% (target or
+## ramp, not the bank's range top) lasts at most 180 s at its longest; WARMUP-kind terrain stays
+## inside stations.json terrain.warmup_grade_pct.
 static func validate_cross(files: Dictionary) -> Array[String]:
 	var errors: Array[String] = []
 	var tanks: Dictionary = files.get("tanks", {})
 	var st: Dictionary = files.get("stations", {})
 	var m: Dictionary = files.get("mission", {})
 	for t: String in TankIds.TANKS:
-		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", []).duplicate()
-		var starts: Array = st["start_engines"].get(t, []).duplicate()
-		rooms.sort()
-		starts.sort()
-		if rooms != starts:
-			(
-				errors
-				. append(
+		var rooms: Array = (tanks["tanks"][t] as Dictionary).get("engines", [])
+		for e: Variant in st["start_engines"].get(t, []):
+			if not rooms.has(e):
+				errors.append(
 					(
-						"stations.json start_engines.%s: must be tanks.json tanks.%s.engines (any order)"
-						% [t, t]
+						"stations.json start_engines.%s: %s is not a room of tanks.json tanks.%s"
+						% [t, e, t]
 					)
 				)
-			)
 	var table := str(m.get("plan_table", "plans"))
 	var at := "missions/%s.json" % str(m.get("id", ""))
 	if not TABLE_SEGMENTS.has(table):
@@ -857,12 +926,19 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 		errors.append("%s label: expected a strings key" % where)
 	if not _num(s.get("stage")):
 		errors.append("%s stage: expected a number" % where)
+	if s.has("backdrop") and not TankIds.BACKDROPS.has(str(s["backdrop"])):
+		errors.append("%s backdrop: one of %s" % [where, ", ".join(TankIds.BACKDROPS)])
 	if [TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH].has(type):
 		if not _num(s.get("length_m")) or float(s["length_m"]) <= 0.0:
 			errors.append("%s length_m: expected > 0" % where)
 		for e: Variant in s.get("encounters", []):
 			if not (e is Dictionary) or not TankIds.ENEMY_TYPES.has(str(e.get("enemy", ""))):
 				errors.append("%s encounters: each needs a known enemy" % where)
+	for key in ["encounters", "enemies", "obstacles"]:
+		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:
+			var mc: Variant = (e as Dictionary).get("min_crew", 1) if e is Dictionary else 1
+			if not _num(mc) or int(mc) < 1 or int(mc) > TankIds.MAX_CREW:
+				errors.append("%s %s: min_crew is 1..%d" % [where, key, TankIds.MAX_CREW])
 	if type == TankIds.SEG_GUN_LINE and _num(s.get("max_s")):
 		if float(s["max_s"]) > HARD_ERG_MAX_S:
 			errors.append("%s max_s: a 90%% gun line lasts at most 180 s (4.6.1)" % where)

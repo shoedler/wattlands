@@ -1,72 +1,57 @@
 class_name TankBow
 extends RefCounted
-## The bow guns (brief 2.4 Gun; owner: rules): two short guns in the nose of every tank, as in the
-## reference, replacing v1's Citadel secondaries. A burst (one SHELL_BOW round for the pair) does
-## tanks.json bow.damage (5) every bow.every_s (2 s) at the nearest enemy, or Behemoth part, ahead
-## whose near edge is bow.min_px..bow.max_px (40-220 px) off the hull front, auto-aimed and hitting
-## at once (a tracer: shot and hit events, no shell in flight). Armour is enemies.json light_mult
-## (mediums 50%; heavies, destroyers and the Behemoth's parts 25%). With no enemy in range they
-## work on a wire or wreck barricade in range instead: bow.clear_s (4 s) of fire clears it.
+## The bow guns (v3 brief "One tank, five seats": the Secondaries seat, a crank-driven twin belt
+## feed; owner: rules). Two short guns in the nose fire exactly TankFeedState.ROUNDS_PER_REV (2)
+## rounds per pedal revolution of the Secondaries rider, alternating guns (round k from gun
+## (k - 1) mod 2), at the nearest enemy, or Behemoth part, ahead whose near edge is bow.min_px ..
+## bow.max_px (40-220 px) off the hull front, else at a wire or wreck barricade there
+## (bow.clear_rounds rounds that hit clear it). With nothing in range the guns are silent. The
+## revolutions come from the rider's cadence (TankFeedState.rev_acc integrates cadence / 60 per
+## second), so the rate is 2 x cadence rounds a minute (TankFeedState.rpm).
 ##
-## Power by tank: the Bastion's arc generator (full rate in band, bow.under_band_rate under band,
-## none while its rider is on reserve or stalled); the Rampart's and the Citadel's dynamo bank
-## (bow.per_burst_units a burst, none below bow.min_bank or while the dynamo is stalled); the
-## Bulwark's gearbox (bow.bulwark_rate, free). Nothing fires in a breakdown or with every rider
-## AFK. The rate scales the burst clock (half rate: a burst every 4 s) and the clearing time.
-## Each tick the Bastion's arc room records whether the guns were firing (engaged on a target with
-## power): TankArcState.note_fire, the arc load `duty` the director turns into its ERG target.
+## Power in band sets the guns' slew speed: they elevate toward the target at tanks.json
+## bow.slew_deg_s [under band, in band]; a round hits (bow.damage, armour by enemies.json
+## light_mult) when the guns point within bow.aim_tol_deg of the target, else it misses. Rounds are
+## hitscan and raise no shot or hit events (up to 6 a second would swamp the event budget): the
+## view reads TankFeedState.rounds and fire_tick; kills raise `kill` (BY_BOW, credited to the
+## rider), and the score and the rider count rounds fired (shells_by_type) and hits (bow_hits).
+##
+## An empty Secondaries seat is silent, and so are the guns on reserve, in a rescue, in a
+## breakdown or with every rider AFK.
 
 
-static func step(state: TankState, dt: float, events: Array[Dictionary]) -> void:
+static func step(
+	state: TankState, inputs: TankInputs, dt: float, events: Array[Dictionary]
+) -> void:
+	var st := state.station(TankIds.ENGINE_FEED) as TankFeedState
+	if st == null:
+		return
 	var aux := TankAux.of(state)
-	var hull := state.hull
-	var c := state.content
-	var src := source(state)
-	var rate := power_rate(state, src)
+	var ri: TankRiderInput = inputs.rider(st.peer) if st.slot >= 0 else null
 	var t := target(state, aux)
-	var engaged := rate > 0.0 and t != null
-	hull.bow_cd_s = maxf(hull.bow_cd_s - dt * rate, 0.0)
-	if engaged:
-		if t.kind == TankTarget.KIND_OBSTACLE:
-			t.obstacle.bow_s += dt * rate
-			if t.obstacle.bow_s >= c.num("tanks", "bow.clear_s", 4.0) - 1e-6:
-				t.obstacle.cleared = true
-		if hull.bow_cd_s <= 0.0:
-			_burst(state, aux, src, t, events)
-	var arc := state.station(TankIds.ENGINE_ARC) as TankArcState
-	if arc != null:
-		arc.note_fire(state.tick, engaged)
-
-
-## The station that powers the bow guns: the arc generator (Bastion), else the dynamo (Rampart,
-## Citadel), else the Bulwark's gearbox; null for none.
-static func source(state: TankState) -> TankStationState:
-	for engine: String in [TankIds.ENGINE_ARC, TankIds.ENGINE_DYNAMO, TankIds.ENGINE_BULWARK]:
-		var st := state.station(engine)
-		if st != null:
-			return st
-	return null
-
-
-## The bow guns' rate now: 1 full, bow.under_band_rate or bow.bulwark_rate, 0 none (see the class
-## doc). The dynamo's bank must hold a burst.
-static func power_rate(state: TankState, src: TankStationState) -> float:
-	var c := state.content
-	if src == null or state.hull.breakdown or state.all_afk:
-		return 0.0
-	if src is TankArcState:
-		var arc := src as TankArcState
-		if arc.slot < 0 or arc.stalled or arc.reserve or arc.unpowered:
-			return 0.0
-		return 1.0 if arc.in_band else c.num("tanks", "bow.under_band_rate", 0.5)
-	if src is TankDynamoState:
-		var dyn := src as TankDynamoState
-		if dyn.slot < 0 or dyn.stalled or dyn.bank < c.num("tanks", "bow.min_bank", 10.0):
-			return 0.0
-		return 1.0
-	if src is TankGearboxState:
-		return c.num("tanks", "bow.bulwark_rate", 0.5)
-	return 0.0
+	var powered := (
+		ri != null
+		and not st.reserve
+		and not st.unpowered
+		and not state.all_afk
+		and not state.hull.breakdown
+		and not TankStations.in_rescue(ri)
+	)
+	if not powered or t == null:
+		st.rpm = 0.0
+		st.rev_acc = 0.0
+		return
+	_slew(state, aux, st, t, dt)
+	var cadence := maxf(ri.cadence_rpm, 0.0)
+	st.rpm = float(TankFeedState.ROUNDS_PER_REV) * cadence
+	st.rev_acc += cadence / 60.0 * dt
+	var per_round := 1.0 / float(TankFeedState.ROUNDS_PER_REV)
+	while st.rev_acc >= per_round - 1e-9:
+		st.rev_acc -= per_round
+		_round(state, aux, st, t, events)
+		if not _standing(t):
+			st.rev_acc = 0.0
+			break
 
 
 ## The distance from the hull's front to `t`'s near edge (negative when it starts behind it).
@@ -102,41 +87,54 @@ static func target(state: TankState, aux: TankAux) -> TankTarget:
 	return best if best != null else prop
 
 
-## One burst at `t`: the dynamo pays for it, the shot and hit events, the damage (kills credited
-## to the powering station's rider, by BY_BOW) and the counters.
-static func _burst(
-	state: TankState, aux: TankAux, src: TankStationState, t: TankTarget, events: Array[Dictionary]
+## The guns' elevation (degrees, up positive) that points from the bow pivots at `t`'s centre.
+static func aim_deg(state: TankState, aux: TankAux, t: TankTarget) -> float:
+	var pivots := aux.geo.bow_pivots(state.hull.tank)
+	var pivot := pivots[0] if not pivots.is_empty() else Vector2(float(state.hull.hull_w), 10.0)
+	var from := TankTargets.hull_origin(state) + pivot
+	var to := t.center()
+	return rad_to_deg(atan2(from.y - to.y, maxf(to.x - from.x, 1.0)))
+
+
+static func _standing(t: TankTarget) -> bool:
+	if t.kind == TankTarget.KIND_OBSTACLE:
+		return not t.obstacle.cleared
+	return TankShells.collidable(t)
+
+
+## Elevates the guns toward `t` at the slew speed the rider's band sets.
+static func _slew(
+	state: TankState, aux: TankAux, st: TankFeedState, t: TankTarget, dt: float
+) -> void:
+	var pair: Array = state.content.value("tanks", "bow.slew_deg_s", [8, 40])
+	var rate := float(pair[1]) if st.in_band else float(pair[0])
+	aux.bow_deg = move_toward(aux.bow_deg, aim_deg(state, aux, t), rate * dt)
+
+
+## One round at `t`: counted, and a hit when the guns point at it.
+static func _round(
+	state: TankState, aux: TankAux, st: TankFeedState, t: TankTarget, events: Array[Dictionary]
 ) -> void:
 	var c := state.content
-	state.hull.bow_cd_s = c.num("tanks", "bow.every_s", 2.0)
-	if src is TankDynamoState:
-		TankStations.drain(state, c.num("tanks", "bow.per_burst_units", 2.0))
-	var slot := src.slot
-	var r := state.rider_at(slot) if slot >= 0 else null
-	events.append(TankEvents.shot(slot, TankIds.SHELL_BOW, state.take_id()))
+	st.rounds += 1
+	st.fire_tick = state.tick
 	state.score.bow_shots += 1
+	var r := state.rider_at(st.slot)
 	if r != null:
 		r.shells_by_type[int(TankRiderState.SHELL_INDEX[TankIds.SHELL_BOW])] += 1
-	var x := t.center().x
-	if t.kind == TankTarget.KIND_OBSTACLE:
-		events.append(
-			TankEvents.hit(
-				TankEvents.ON_OBSTACLE,
-				t.id,
-				TankDamage.shell_damage(c, TankIds.SHELL_BOW),
-				TankIds.SHELL_BOW,
-				0.0,
-				x
-			)
-		)
+	var tol := c.num("tanks", "bow.aim_tol_deg", 3.0)
+	if absf(aux.bow_deg - aim_deg(state, aux, t)) > tol + 1e-6:
 		return
-	var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
-	var on := TankEvents.ON_ENEMY if t.kind == TankTarget.KIND_ENEMY else TankEvents.ON_BOSS
-	events.append(TankEvents.hit(on, t.id, dmg, TankIds.SHELL_BOW, 0.0, x))
 	state.score.bow_hits += 1
 	if r != null:
 		r.bow_hits += 1
+	if t.kind == TankTarget.KIND_OBSTACLE:
+		t.obstacle.bow_s += 1.0
+		if t.obstacle.bow_s >= c.num("tanks", "bow.clear_rounds", 12.0) - 1e-6:
+			t.obstacle.cleared = true
+		return
+	var dmg := TankDamage.against(c, TankIds.SHELL_BOW, t)
 	if t.kind == TankTarget.KIND_ENEMY:
-		TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_BOW, slot, events)
+		TankShells.damage_enemy(state, aux, t.enemy, dmg, TankEvents.BY_BOW, st.slot, events)
 	else:
-		TankShells.damage_boss(state, aux, t.part, dmg, slot, events)
+		TankShells.damage_boss(state, aux, t.part, dmg, st.slot, events)

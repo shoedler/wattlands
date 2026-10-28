@@ -24,7 +24,6 @@ var seg_t: float = 0.0
 var plan_t: float = 0.0
 var prev_ended_by: String = ""
 var auto_phase: bool = false
-var rotation: bool = true
 var sim_pct: float = 90.0
 var power_w: Dictionary = {}
 var p_eff: Dictionary = {}
@@ -41,12 +40,21 @@ var compliance: float = 1.0
 ## The dynamo's ERG target follows its bank like the director's pattern 1 does:
 ## 55 + 45 x (1 - bank / 100), clamped to the phase's range (instantly here, not in sub-steps).
 var bank_director: bool = false
-## The breech never opens (nothing loads, nothing fires) and the Bulwark's lever stays where it is
-## (Drive): the main gun is out of the picture (tests of the drive, evade and the bow guns).
+## The breech never opens (nothing loads, nothing fires): the main gun is out of the picture
+## (tests of the drive, evade and the bow guns).
 var no_fire: bool = false
-## The bow guns never get to a burst (their clock never runs down) and never wear a barricade
-## down: tests of enemies and obstacles on their own.
+## The bow guns never fire a round (v3: the feed's revolutions never add up) and never wear a
+## barricade down: tests of enemies and obstacles on their own.
 var no_bow: bool = false
+## (v3) Automatic seating as the Autopilot plays it (TankAutopilot.seat_intent for every rider,
+## once a second), with the moves landing like the director lands them: at once while the open
+## segment is past its min_s (a split; the rider's phase index moves on, so its seat lock restarts),
+## else at the next segment. The rig's plans are one phase per segment, so a landed move gives the
+## rider the new seat's plan for the whole mission (only the current and later segments matter).
+var auto_seat: bool = false
+## peer -> splits so far (the rig's phase index for a rider is seg_index + 1000 x splits; with
+## auto_seat the rules get no plan to judge moves by, the rig lands them itself).
+var splits: Dictionary = {}
 ## Seconds each segment ran when auto_phase moved on (index -> seconds).
 var seg_len: Dictionary = {}
 var ended_by: Dictionary = {}
@@ -57,23 +65,19 @@ var event_counts: Array[int] = []
 func _init(
 	crew: int = 1,
 	p_mission: String = "ashfall_road",
-	p_rotation: bool = true,
 	rng_seed: int = 7,
 	patch: Callable = Callable()
 ) -> void:
 	mission_id = p_mission
-	rotation = p_rotation
 	var files := TankContent.read_files(p_mission)
 	if patch.is_valid():
 		patch.call(files)
 	content = TankContent.from_dicts(files, p_mission)
 	slots = TankFixtures.slots(crew)
-	plans = TankPlanBuilder.build_all(content, slots, rotation)
+	plans = TankPlanBuilder.build_all(content, slots)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = rng_seed
-	state = TankRules.new_state(
-		content, slots, p_mission, rotation and content.mission_rotates(), rng
-	)
+	state = TankRules.new_state(content, slots, p_mission, rng)
 
 
 func segs() -> Array:
@@ -122,16 +126,18 @@ func run_until(cond: Callable, limit_s: float = 600.0) -> float:
 
 func step() -> Array[Dictionary]:
 	if no_bow:
-		state.hull.bow_cd_s = 1.0e9
+		var fd := state.station(TankIds.ENGINE_FEED) as TankFeedState
+		if fd != null:
+			fd.rev_acc = -1.0e9
 		for o in state.obstacles:
 			o.bow_s = 0.0
 	if no_fire:
 		state.hull.breech_s = 1.0e6
-		var g := gearbox()
-		if g != null:
-			g.auto = false
-			g.suspend_s = 1.0e9
+	if auto_seat:
+		_auto_seat_intents()
 	var out := TankRules.step(state, inputs(), Wl.SIM_DT)
+	if auto_seat:
+		_land_moves()
 	tick += 1
 	seg_t += Wl.SIM_DT
 	plan_t += Wl.SIM_DT
@@ -141,6 +147,25 @@ func step() -> Array[Dictionary]:
 	if auto_phase:
 		_advance_phase()
 	return out
+
+
+func _auto_seat_intents() -> void:
+	for r in state.riders:
+		var n := TankAutopilot.seat_intent(state, r)
+		if not n.is_empty():
+			send(r.peer, n)
+
+
+## Lands every pending move the way the director would (see auto_seat).
+func _land_moves() -> void:
+	for r in state.riders:
+		if r.seat_target == "" or in_cooldown():
+			continue
+		var s := content.segment(seg_index)
+		var open := s.has("min_s")
+		if open and seg_t + 1e-6 >= float(s["min_s"]) and seg_t < float(s["max_s"]) - 1.0:
+			seat(r.peer, r.seat_target)
+			splits[r.peer] = int(splits.get(r.peer, 0)) + 1
 
 
 func _advance_phase() -> void:
@@ -157,6 +182,10 @@ func _advance_phase() -> void:
 	elif seg_t + 1e-6 >= float(s.get("duration_s", 0.0)):
 		by = Wl.ENDED_DURATION
 	if by != "":
+		if auto_seat:
+			for r in state.riders:
+				if r.seat_target != "":
+					seat(r.peer, r.seat_target)
 		seg_len[seg_index] = seg_t
 		ended_by[seg_index] = by
 		seg_index += 1
@@ -212,8 +241,18 @@ func _rider_input(p: PlayerSlot) -> TankRiderInput:
 	ri.rider_mass_kg = mass_kg
 	ri.autopilot = p.autopilot
 	ri.plan_elapsed_s = plan_t
-	ri.phase_index = seg_index
+	ri.phase_index = seg_index + 1000 * int(splits.get(p.peer_id, 0))
+	ri.segment = seg_index
+	ri.phase_elapsed_s = seg_t
 	var plan: EffortPlan = plans[p.peer_id]
+	ri.plan = null if auto_seat else plan
+	if not in_cooldown():
+		var cur := plan.phase(seg_index)
+		ri.phase_open_ended = cur.open_ended
+		ri.phase_min_s = cur.min_s
+		ri.phase_max_s = cur.max_s
+		var end_s := cur.max_s if cur.open_ended else cur.duration_s
+		ri.phase_remaining_s = maxf(end_s - seg_t, 0.0)
 	if in_cooldown():
 		ri.phase_kind = Wl.COOLDOWN
 		ri.phase_mode = Wl.ERG
@@ -287,8 +326,12 @@ func steam() -> TankSteamState:
 	return state.station(TankIds.ENGINE_STEAM) as TankSteamState
 
 
-func gearbox() -> TankGearboxState:
-	return state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
+func arc() -> TankArcState:
+	return state.station(TankIds.ENGINE_ARC) as TankArcState
+
+
+func feed() -> TankFeedState:
+	return state.station(TankIds.ENGINE_FEED) as TankFeedState
 
 
 ## The peer working `engine` right now.
@@ -307,10 +350,35 @@ func spawn(type: String, side: int = 1, dist: float = 200.0, fixed: bool = false
 	return e
 
 
-## Loads a shell of `type` into the breech.
+## Chambers a round of `type` (v3: in the breech, ready to fire).
 func load_shell(type: int = TankIds.SHELL_HEAVY) -> void:
 	state.hull.loaded = type
 	state.hull.breech_s = 0.0
+	var st := steam()
+	if st != null:
+		st.chamber = true
+		st.chamber_s = 0.0
+
+
+## Sets the ready rack to `n` shells of `type` (v3).
+func set_rack(n: int, type: int = TankIds.SHELL_HEAVY) -> void:
+	var aux := TankAux.of(state)
+	aux.rack_types.clear()
+	for _i in n:
+		aux.rack_types.append(type)
+	steam().rack = n
+	steam().loaded = n >= TankConst.RACK_MAX
+
+
+## Puts the rider of `peer` on `engine` right away (the seat's plan for every segment, as if it had
+## started there; v3): the rig's plans and the stations follow on the next step.
+func seat(peer: int, engine: String) -> void:
+	for p in slots:
+		if p.peer_id == peer:
+			var plan := EffortPlan.new()
+			for i in segs().size():
+				plan.add(TankPlanBuilder.phase_for(content, segs()[i], engine, i))
+			plans[peer] = plan
 
 
 ## Plays the whole mission with auto_phase until every rider is in the cool-down (and `extra_s`

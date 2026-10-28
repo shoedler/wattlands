@@ -72,32 +72,27 @@ func test_a_checkpoint_adds_its_hp_to_the_maximum_and_heals_that_much() -> void:
 	assert_eq(rig.hull().hp_max, base + 3.0 * bonus, "the third checkpoint")
 
 
-func test_a_rotation_event_lists_every_riders_new_engine_at_the_checkpoint() -> void:
+## v3: rotation is gone (seat choice replaces it): the checkpoint moves nobody and raises no
+## rotation event; every rider keeps its seat.
+func test_nobody_moves_at_the_checkpoint() -> void:
 	var rig := TankRulesRig.new(3)
 	rig.enter(GUN_LINE, 1.0)
 	rig.events.clear()
 	rig.enter(CHECKPOINT, 0.0)
-	var r := rig.of_type("rotation")
-	assert_eq(r.size(), 1)
-	# Stage 2: slot 0 dynamo, slot 1 steam, slot 2 diesel.
-	assert_eq(
-		r[0]["r"],
-		[
-			[0, TankIds.engine_code("dynamo")],
-			[1, TankIds.engine_code("steam")],
-			[2, TankIds.engine_code("diesel")]
-		]
-	)
-	assert_eq(rig.rider(1).engine, "dynamo")
-	assert_eq(rig.state.station("dynamo").slot, 0)
-	assert_eq(rig.state.station("diesel").peer, 3)
+	rig.enter(STAGE2_ADVANCE, 0.0)
+	assert_eq(rig.of_type("rotation").size(), 0)
+	assert_eq(rig.rider(1).engine, "diesel")
+	assert_eq(rig.state.station("dynamo").slot, 1)
+	assert_eq(rig.state.station("steam").peer, 3)
+	assert_true(rig.state.station("feed").is_empty())
 
 
-func test_rotation_off_never_moves_anyone() -> void:
-	var rig := TankRulesRig.new(3, "ashfall_road", false)
+func test_segment_boundaries_never_move_anyone() -> void:
+	var rig := TankRulesRig.new(3, "ashfall_road")
 	for index in [ADVANCE, CHECKPOINT, STAGE2_ADVANCE, BOSS]:
 		rig.enter(index, 1.0)
 	assert_eq(rig.of_type("rotation").size(), 0)
+	assert_eq(rig.of_type("seat").size(), 0)
 	assert_eq(rig.rider(1).engine, "diesel")
 
 
@@ -108,7 +103,6 @@ func test_an_advance_is_done_at_the_halt_line_and_holds_until_min_s() -> void:
 	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
-		true,
 		7,
 		_patch(ADVANCE, {"encounters": [], "obstacles": [], "terrain": [[0, -3]], "length_m": 150})
 	)

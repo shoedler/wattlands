@@ -14,11 +14,9 @@ var content: TankContent = null
 ## The session RNG (ctx.rng on the host; null on clients, which never simulate).
 var rng: RandomNumberGenerator = null
 
-## The mission (content id) and the tank the crew size picked.
+## The mission (content id); v3: every crew size rides the one tank (TankIds.tank_for_crew).
 var mission: String = ""
 var crew: int = 1
-## The rotation option as the plans were built (always false for the drill).
-var rotation: bool = true
 ## [snap] Game tick of the latest step.
 var tick: int = 0
 ## Game seconds (tick x 0.05).
@@ -49,27 +47,26 @@ var roam: TankRoamState = TankRoamState.new()
 var roam_map: TankRoamMap = null
 
 
-## A fresh state at the session start: the tank for the crew size with its rooms, every rider on
-## its starting engine (stations.json start_engines), the hull at full HP, the bank full, no
+## A fresh state at the session start: the tank with its rooms, every rider on its starting seat
+## (stations.json start_engines by slot; v3: a crew of n takes the first n, so the solo rider sits on
+## Drive and every seat past the crew is empty, slot -1), the hull at full HP, the bank full, no
 ## enemies. `slots` in slot order (ctx.players); `rng` is ctx.rng on the host, null on clients.
 static func create(
 	p_content: TankContent,
 	slots: Array[PlayerSlot],
 	p_mission: String,
-	p_rotation: bool,
 	p_rng: RandomNumberGenerator
 ) -> TankState:
 	var s := TankState.new()
 	s.content = p_content
 	s.rng = p_rng
 	s.mission = p_mission
-	s.crew = clampi(slots.size(), 1, TankIds.TANKS.size())
-	s.rotation = p_rotation
+	s.crew = clampi(slots.size(), 1, TankIds.MAX_CREW)
 	var tank := TankIds.tank_for_crew(s.crew)
 	var def := p_content.tank_def(tank)
 	s.hull.tank = tank
 	s.hull.code = int(def.get("code", 1))
-	var size: Array = def.get("hull_px", [192, 72])
+	var size: Array = def.get("hull_px", [296, 65])
 	s.hull.hull_w = int(size[0])
 	s.hull.hull_h = int(size[1])
 	s.hull.hp_max = p_content.num("tanks", "hull.hp", 100.0)
@@ -90,10 +87,10 @@ static func create(
 		s.riders.append(r)
 	for engine: String in p_content.engines_of(tank):
 		var st := TankStationState.make(engine)
-		var idx := starts.find(engine)
-		if idx >= 0 and idx < s.riders.size():
-			st.slot = idx
-			st.peer = s.riders[idx].peer
+		for r in s.riders:
+			if r.engine == engine:
+				st.slot = r.slot
+				st.peer = r.peer
 		if st is TankDynamoState:
 			(st as TankDynamoState).bank = p_content.num("tanks", "dynamo.bank_max", 100.0)
 		s.stations.append(st)
@@ -119,7 +116,7 @@ func rider_at(slot: int) -> TankRiderState:
 	return null
 
 
-## The room of `engine`, or null (the Bulwark has one room, "bulwark").
+## The room (v3: seat) of `engine`, or null.
 func station(engine: String) -> TankStationState:
 	for st in stations:
 		if st.engine == engine:
@@ -127,8 +124,10 @@ func station(engine: String) -> TankStationState:
 	return null
 
 
-## The room the rider in `slot` works this segment, or null.
+## The room the rider in `slot` works this segment, or null (v3: null for slot -1, an empty seat).
 func station_of(slot: int) -> TankStationState:
+	if slot < 0:
+		return null
 	for st in stations:
 		if st.slot == slot:
 			return st

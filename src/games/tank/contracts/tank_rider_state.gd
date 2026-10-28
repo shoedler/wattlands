@@ -4,13 +4,13 @@ extends TankRecord
 ## teammate strip, the station card and results. Results stats are host-only and reach clients
 ## in GameResults.
 
-## Indexes of engine_s (engine code - 1).
+## Indexes of engine_s (engine code - 1; 3 was the retired Bulwark's and stays unused).
 const ENGINE_INDEX := {
 	TankIds.ENGINE_DIESEL: 0,
 	TankIds.ENGINE_DYNAMO: 1,
 	TankIds.ENGINE_STEAM: 2,
-	TankIds.ENGINE_BULWARK: 3,
-	TankIds.ENGINE_ARC: 4
+	TankIds.ENGINE_ARC: 4,
+	TankIds.ENGINE_FEED: 5
 }
 ## Indexes of shells_by_type.
 const SHELL_INDEX := {
@@ -33,7 +33,15 @@ var haptics_on: bool = true
 var rider_mass_kg: float = 75.0
 
 ## [snap] (engine code) TankIds.ENGINE_* this rider works in the current segment (plan meta).
+## v3: the rider's seat; at most one rider per seat (TankStationState.slot points back).
 var engine: String = ""
+## [snap] (v3) Seconds until this rider may change seats; 0 when the seat lock is open (brief: a
+## switch only 60 s or more after the rider's last trainer-mode change of any kind, a seat switch
+## or a plan boundary). The HUD shows it as the lock timer on the rider's card.
+var seat_lock_s: float = 0.0
+## [snap] (v3) The seat this rider is moving to (TankIds.ENGINE_*), "" when not moving. `engine`
+## stays the seat being left until the move lands (the seat event).
+var seat_target: String = ""
 ## [snap] Raw watts, cadence and %FTP of the latest tick (for the strip and the station card).
 var raw_w: float = 0.0
 var cadence_rpm: float = 0.0
@@ -64,7 +72,7 @@ var connected: bool = true
 var work_s: float = 0.0
 var band_s: float = 0.0
 ## Game seconds per engine (ENGINE_INDEX).
-var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
+var engine_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 ## (v2) Telegraphed shots that resolved while this rider could evade, and those this rider's own
 ## surge made miss (brief 2.8: evades tried and successful).
 var evades_tried: int = 0

@@ -1,8 +1,10 @@
 class_name TankHudRoamStrip
 extends TankHudCtl
 ## The free-roam map strip across the top (brief 2.10, 3.6; TankHud.LAYOUT "roam_strip", in place
-## of the mission plate): the valley road in profile on an iron plate (its zones: forest, lake,
-## village, quarry, meadow; the terrain line), the turning places at both ends hatched, patrols as
+## of the mission plate): the valley road in profile on an iron plate (its zones, named from the
+## content: each zone's label key in roam/valley.json, else its id; v3: forest variants and base
+## clearings, tinted by zone_color(); the terrain line), the turning places at both ends hatched,
+## patrols as
 ## red diamonds, strongpoints as squares (crossed out while down), and the tank with its travel
 ## direction and the bracket of what the screen shows. It draws only what its setters gave it;
 ## refresh() feeds them from the state (feed(): the map once its seed is known, the tank, the patrols
@@ -15,6 +17,13 @@ const ZONE_COL := {
 	"quarry": Color("#4a3f2e"),
 	"meadow": Color("#4a5a2e"),
 }
+## v3 zones the table above does not name: a base clearing (an id with one of CLEARING_WORDS) is
+## lamp-lit earth, anything else a forest variant in one of the FOREST_TONES (picked by its id).
+const CLEARING_WORDS: Array[String] = ["base", "clearing", "camp", "depot", "strong"]
+const CLEARING_COL := Color("#6a5232")
+const FOREST_TONES: Array[Color] = [
+	Color("#2f3a26"), Color("#26382e"), Color("#36402a"), Color("#2a3330")
+]
 const DIAMOND := ["..#..", ".###.", "#####", ".###.", "..#.."]
 const SQUARE := ["#####", "#...#", "#...#", "#...#", "#####"]
 const TANK_R := ["..##....", ".#####..", "########", "########", ".######."]
@@ -153,15 +162,13 @@ func paint() -> void:
 	for z: Dictionary in zones:
 		var a := mx(float(z.get("from_m", 0.0)))
 		var b := mx(float(z.get("to_m", 0.0)))
-		var col: Color = ZONE_COL.get(str(z.get("id", "")), D.TRACK)
+		var col := zone_color(str(z.get("id", "")))
 		D.rect(
 			self, Rect2(a, map.position.y + 1, maxf(b - a, 1.0), map.size.y - 2), col.darkened(0.55)
 		)
-		var key := str(z.get("label", ""))
-		if key != "" and b - a > 24.0:
-			D.tall_c(
-				self, (a + b) * 0.5, map.position.y + 2, D.fit_tall(tx(key), b - a - 2.0), D.DIM
-			)
+		var label := zone_name(z)
+		if label != "" and b - a > 24.0:
+			D.tall_c(self, (a + b) * 0.5, map.position.y + 2, D.fit_tall(label, b - a - 2.0), D.DIM)
 	_terrain(map, base)
 	for side in 2:
 		var ex := map.position.x if side == 0 else map.end.x - END_W
@@ -188,6 +195,29 @@ func paint() -> void:
 	D.rect(self, Rect2(vb.end.x - 1, vb.position.y, 1, vb.size.y), bc)
 	var icon := TANK_R if tank_dir > 0 else TANK_L
 	D.pixels(self, icon, Vector2(tx0 - 4.0, base - 9), D.AMBER)
+
+
+## A zone's tint on the strip: ZONE_COL's for the v2 ids, a lamp-lit earth for a base clearing, a
+## forest tone for any other (v3 forest variants), the same for the same id every time.
+static func zone_color(id: String) -> Color:
+	if ZONE_COL.has(id):
+		return ZONE_COL[id]
+	for w in CLEARING_WORDS:
+		if id.contains(w):
+			return CLEARING_COL
+	return FOREST_TONES[posmod(id.hash(), FOREST_TONES.size())]
+
+
+## A zone's name on the strip, from the content: its label key translated (the game's strings),
+## else (no label, or a key with no string yet) its id in words.
+func zone_name(z: Dictionary) -> String:
+	var key := str(z.get("label", ""))
+	if key != "":
+		var t := tx(key)
+		if t != "" and t != key:
+			return t
+	var id := str(z.get("id", ""))
+	return id.replace("_", " ").capitalize() if id != "" else ""
 
 
 func _terrain(map: Rect2, base: float) -> void:

@@ -12,7 +12,8 @@ extends RefCounted
 ## for them: "Surge to evade" in a SIM WORK phase past the first 300 s (TankRiderState.can_evade,
 ## never in WARMUP, RECOVERY or ERG phases: brief 2.3, 2.4), "Surge to overpressure" in the steam
 ## window. The arc generator's stall is announced to the whole crew, like the dynamo's.
-## Free roam (brief 2.10, 3.6): "Turn around" to the driver (the diesel or the Bulwark) when the tank
+## v3: "Seat: <seat>" to the rider who just moved seats.
+## Free roam (brief 2.10, 3.6): "Turn around" to the Drive rider when the tank
 ## stands at a turning place, "Engage" to everyone when it halts for a strongpoint or a heavy tank,
 ## "Turning round" on a turn and "Time up" when the roam phase's min_s passed.
 
@@ -132,7 +133,7 @@ func _roam_cues(state: TankState, me: TankRiderState) -> void:
 	var r := state.roam
 	if not r.active:
 		return
-	var drives := me.engine == TankIds.ENGINE_DIESEL or me.engine == TankIds.ENGINE_BULWARK
+	var drives := me.engine == TankIds.ENGINE_DIESEL
 	var end := r.at_end if r.turn_s <= 0.0 else 0
 	if end != 0 and end != _at_end and drives and not state.in_cooldown():
 		_toast("TANK_TOAST_TURN_AROUND")
@@ -164,8 +165,9 @@ func on_event(state: TankState, e: Dictionary) -> void:
 	match str(e.get("type", "")):
 		TankEvents.SEGMENT:
 			_segment_banner(state, int(e.get("i", -1)))
-		TankEvents.ROTATION:
-			_rotation_toast(slot, e)
+		TankEvents.SEAT:
+			if int(e.get("s", -2)) == slot:
+				_seat_toast(int(e.get("to", 0)))
 		TankEvents.BREAKDOWN:
 			_toast("TANK_TOAST_BREAKDOWN")
 		TankEvents.REPAIRED:
@@ -194,13 +196,10 @@ func _segment_banner(state: TankState, index: int) -> void:
 		ctx.hud.banner("TANK_BANNER_SEGMENT", [ctx.strings.t(label)], BANNER_S, ctx.local_peer)
 
 
-func _rotation_toast(slot: int, e: Dictionary) -> void:
-	for pair: Variant in e.get("r", []):
-		if pair is Array and (pair as Array).size() == 2 and int(pair[0]) == slot:
-			var engine := TankIds.engine_of(int(pair[1]))
-			_toast(
-				"TANK_TOAST_ROTATION", [ctx.strings.t(str(TankIds.ENGINE_LABELS.get(engine, "")))]
-			)
+## v3: the local rider arrived on a seat (engine code `code`).
+func _seat_toast(code: int) -> void:
+	var engine := TankIds.engine_of(code)
+	_toast("TANK_TOAST_SEAT", [ctx.strings.t(str(TankIds.SEAT_LABELS.get(engine, "")))])
 
 
 func _overrun_toast(seg_code: int) -> void:

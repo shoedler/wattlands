@@ -1,13 +1,16 @@
 class_name TankGun
 extends RefCounted
-## The main turret (brief 2.4 Gun; owner: rules; the bow guns are TankBow). The gunner is the
-## dynamo (Rampart, Citadel, Bastion) or the Bulwark's gearbox on Turret. Elevation -12..+30
-## degrees (tanks.json gun) at 8 degrees/s with a full bank (2 at 0), a traverse takes 2.5 s (8 s at
-## 0) and flips the facing when it completes; the bank pays 0.5 per degree and 15 per traverse.
-## Auto-aim (default) aims once a shell is in the breech and fires within 0.5 degrees; the rider's
-## nudges pause it for 5 s. The dispersion is halved while the Bastion's searchlights are lit (its
-## arc rider in band). Shells inherit the hull's velocity, so a moving tank's shell keeps the
-## tank's pace.
+## The main turret (brief 2.4 Gun, v3 "Combat changes"; owner: rules; the bow guns are TankBow).
+## The gunner is the dynamo (the Gun seat; an empty Gun seat leaves the gun where it is: it neither
+## lays, chambers nor fires). Elevation -12..+30 degrees (tanks.json gun) at 8 degrees/s with a full
+## bank (2 at 0), a traverse takes 2.5 s (8 s at 0) and flips the facing when it completes; the bank
+## pays 0.5 per degree and 15 per traverse. v3: the gun fires from the Loader's ready rack. With no
+## round chambered and a shell in the rack, the gun goes to the loading elevation (gun.load_elev_deg)
+## and chambers the oldest shell there in steam.chamber_s (1 s; TankSteamState.chamber_s counts it
+## down), then auto-aim re-lays. Auto-aim (default) lays once a round is chambered and fires within
+## 0.5 degrees; the rider's nudges pause it for 5 s. Dark (the Lights seat empty or not in band) the
+## gun reaches only the headlight's range and its dispersion is x arc.dark_dispersion_mult (TankAim).
+## Shells inherit the hull's velocity, so a moving tank's shell keeps the tank's pace.
 
 
 static func step(
@@ -25,26 +28,23 @@ static func step(
 	var elev_rate := 0.0
 	var trav_rate := 0.0
 	var elev_pair: Array = c.value("tanks", "dynamo.elev_deg_s", [2, 8])
-	if powered:
-		if gs is TankDynamoState:
-			if not (gs as TankDynamoState).stalled:
-				elev_rate = TankStations.by_bank(state, elev_pair)
-				trav_rate = 1.0
-		else:
-			elev_rate = float(elev_pair[1]) * aux.turret_factor
-			trav_rate = aux.turret_factor
+	if powered and gs is TankDynamoState and not (gs as TankDynamoState).stalled:
+		elev_rate = TankStations.by_bank(state, elev_pair)
+		trav_rate = 1.0
 	if ri != null and powered:
 		for n in ri.intents:
 			_intent(state, aux, gs, n, trav_rate, events)
 	var tgt := TankAim.current(state, aux)
-	var drill := TankSegments.drill_targets(state)
 	if tgt != null:
 		if not aux.manual_target:
 			hull.target_id = tgt.id
 	elif not aux.manual_target:
 		hull.target_id = 0
 	var auto := hull.aim_pause_s <= 0.0
-	if auto and tgt != null and powered and (hull.loaded != TankIds.SHELL_NONE or drill):
+	var chambering := powered and elev_rate > 0.0 and _chamber(state, aux, dt)
+	if chambering:
+		hull.elev_target_deg = c.num("tanks", "gun.load_elev_deg", 0.0)
+	elif auto and tgt != null and powered and hull.loaded != TankIds.SHELL_NONE:
 		hull.elev_target_deg = aux.aim_elev
 		if hull.facing != aux.aim_facing and hull.traverse_s <= 0.0 and trav_rate > 0.0:
 			_start_traverse(state, gs)
@@ -69,10 +69,42 @@ static func step(
 			fire(state, aux, gs, tgt.drill, events)
 
 
-## The Bastion's searchlights are lit (its arc room's `lit`: the arc rider in band, brief 2.4).
+## The searchlights are lit (the arc room's `lit`: the Lights rider in band, brief 2.4).
 static func searchlights_lit(state: TankState) -> bool:
 	var arc := state.station(TankIds.ENGINE_ARC) as TankArcState
 	return arc != null and arc.lit
+
+
+## Chambering (v3): with no round chambered and a shell in the rack the gun must sit at the loading
+## elevation; there TankSteamState.chamber_s counts steam.chamber_s down and, at 0, the rack's oldest
+## shell is chambered (TankHullState.loaded). Returns true while the gun is busy chambering (going
+## to the loading elevation or in its chamber_s), so auto-aim leaves it there.
+static func _chamber(state: TankState, aux: TankAux, dt: float) -> bool:
+	var hull := state.hull
+	var st := TankStations.loader(state)
+	if st == null:
+		return false
+	st.chamber = hull.loaded != TankIds.SHELL_NONE
+	if st.chamber or aux.rack_types.is_empty():
+		st.chamber_s = 0.0
+		return false
+	var c := state.content
+	var at_load := (
+		absf(hull.elev_deg - c.num("tanks", "gun.load_elev_deg", 0.0))
+		<= c.num("tanks", "gun.aim_tol_deg", 0.5)
+	)
+	if not at_load or hull.traverse_s > 0.0:
+		st.chamber_s = c.num("tanks", "steam.chamber_s", 1.0)
+		return true
+	if st.chamber_s <= 0.0:
+		st.chamber_s = c.num("tanks", "steam.chamber_s", 1.0)
+	st.chamber_s = maxf(st.chamber_s - dt, 0.0)
+	if st.chamber_s > 0.0:
+		return true
+	hull.loaded = TankStations.take_from_rack(state)
+	st.chamber = hull.loaded != TankIds.SHELL_NONE
+	st.loaded = st.rack >= TankConst.RACK_MAX and not st.over
+	return false
 
 
 ## Whether a loaded shell can leave the barrel now: loaded, the breech cycle over, no traverse.
@@ -176,8 +208,8 @@ static func fire(
 	if gs is TankDynamoState:
 		bank = (gs as TankDynamoState).bank
 	var disp := TankBallistics.dispersion_deg(c, bank)
-	if searchlights_lit(state):
-		disp *= c.num("tanks", "arc.lit_dispersion_mult", 0.5)
+	if not searchlights_lit(state):
+		disp *= c.num("tanks", "arc.dark_dispersion_mult", 2.0)
 	var err := state.rng.randf_range(-disp, disp) if state.rng != null else 0.0
 	var v0 := c.num("tanks", "gun.shell_speed_px_s", 360.0)
 	var muzzle := TankAim.muzzle_world(state, aux, hull.elev_deg, hull.facing)
@@ -196,8 +228,10 @@ static func fire(
 	s.source = gs.slot
 	state.shells.append(s)
 	hull.loaded = TankIds.SHELL_NONE
-	var cycle_key := "gearbox.breech_cycle_s" if gs is TankGearboxState else "steam.breech_cycle_s"
-	hull.breech_s = c.num("tanks", cycle_key, 6.0)
+	var st := TankStations.loader(state)
+	if st != null:
+		st.chamber = false
+		st.chamber_s = c.num("tanks", "steam.chamber_s", 1.0) if st.rack > 0 else 0.0
 	events.append(TankEvents.shot(gs.slot, shell, s.id))
 	if not drill:
 		state.score.shots += 1

@@ -1,15 +1,18 @@
 class_name TankStationState
 extends TankRecord
-## One engine room (G0 contract): what every station has in common. Subclasses add each
-## engine's own model: TankDieselState, TankDynamoState, TankSteamState, TankGearboxState (the
-## Bulwark) and TankArcState (v2, the Bastion's arc generator). TankState.stations lists the
-## tank's rooms rear to front (tanks.json engines).
-## Which rider works a room changes at checkpoints with rotation; a room without a connected,
-## pedalling rider runs on reserve (brief 2.2).
+## One engine room, v3: one seat (G0 contract): what every station has in common. Subclasses add
+## each engine's own model: TankDieselState (Drive), TankDynamoState (Gun), TankSteamState
+## (Loader), TankArcState (Lights) and TankFeedState (v3, Secondaries). TankState.stations lists
+## the tank's rooms rear to front (tanks.json engines: diesel, steam, dynamo, arc, feed).
+## v3: the tank has five seats and at most four riders, so at least one seat is always empty
+## (`slot` -1, is_empty()); a rider moves seats with the seat intent (TankRiderState.engine,
+## seat_target, seat_lock_s). A manned room whose rider is dropped or AFK runs on reserve (brief
+## 2.2).
 
 ## [snap] TankIds.ENGINE_*.
 var engine: String = ""
-## [snap] The slot index of the rider on this station this segment; -1 none.
+## [snap] The slot index of the rider on this seat; -1 when the seat is empty (the snapshot's st
+## row carries -1).
 var slot: int = -1
 var peer: int = 0
 ## This tick's P_eff driving the room (the reserve's reserve_p_eff_w when on reserve; 0 when
@@ -33,11 +36,16 @@ static func make(p_engine: String) -> TankStationState:
 			s = TankDynamoState.new()
 		TankIds.ENGINE_STEAM:
 			s = TankSteamState.new()
-		TankIds.ENGINE_BULWARK:
-			s = TankGearboxState.new()
 		TankIds.ENGINE_ARC:
 			s = TankArcState.new()
+		TankIds.ENGINE_FEED:
+			s = TankFeedState.new()
 		_:
 			s = TankStationState.new()
 	s.engine = p_engine
 	return s
+
+
+## v3: true while nobody sits on this seat (slot -1).
+func is_empty() -> bool:
+	return slot < 0

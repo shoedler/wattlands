@@ -9,11 +9,12 @@ extends RefCounted
 ##   segments        per plan segment: start, end, duration and how it ended (end_phase / max_s /
 ##                   duration), so T1's ranges and overruns read straight off
 ##   overruns, breakdowns, score, grade, outcome, kills by enemy code
-##   dynamo          per fight phase of the dynamo's rider: seconds with the applied ERG target above
+## dynamo          per fight phase of the dynamo's rider: seconds with the applied ERG target above
 ##                   80% FTP, and seconds from the fight's end until it is back at <= 65% (T2)
 ##   shells          per steam shell: the seconds from "ready to build" to the latch (the 5 s
 ##                   window included) and the seconds at boiler grade 0 until the next build (T3)
-##   drive_share     per Advance, the Bulwark's share of time with the lever on Drive (T4)
+##   drive_share     per Advance, the Bulwark's share of time with the lever on Drive (T4); v3
+##                   retired the gearbox, so it stays empty until the v3 rules builder retunes T4
 ##   arc             per fight phase of the arc rider (crew 4): seconds with the applied ERG target
 ##                   above 72% FTP and its largest value (T7)
 ##   telegraphs      per Advance: telegraphed shots (evade events) and mediums seen (T6)
@@ -24,7 +25,7 @@ extends RefCounted
 ## contract classes, so it works the same on the G0 stubs and on the merged rules.
 ##
 ## Config keys (all optional): crew (1), seed (1), compliance (1.0), content ("ashfall_road"),
-## rotation (true), enemy_mult (1: every encounter and gun-line count x n, in memory), via_module
+## enemy_mult (1: every encounter and gun-line count x n, in memory), via_module
 ## (false), snapshots (true: encode a snapshot every 2nd tick), max_seconds (the session limit).
 
 const SESSION_LIMIT_S := 2460.0 + 180.0 + 30.0
@@ -97,12 +98,10 @@ func execute(config: Dictionary) -> Dictionary:
 	cfg = config
 	var crew := int(cfg.get("crew", 1))
 	var content_id := str(cfg.get("content", "ashfall_road"))
-	var rotation := bool(cfg.get("rotation", true))
 	var limit := float(cfg.get("max_seconds", SESSION_LIMIT_S))
 	ctx = TankFakes.make_ctx(
 		crew, 0, content_id, Wl.HOST if crew > 1 else Wl.SOLO, 1, int(cfg.get("seed", 1))
 	)
-	ctx.options["rotation"] = rotation
 	var mult := int(cfg.get("enemy_mult", 1))
 	if mult > 1:
 		ctx.content_overrides = enemy_mult_overrides(content_id, mult)
@@ -118,9 +117,8 @@ func execute(config: Dictionary) -> Dictionary:
 		clock = TankFakes.PhaseClock.new(with_cd, dirs)
 	else:
 		content = TankContent.load_for(ctx)
-		rotation = rotation and content.mission_rotates()
-		state = TankRules.new_state(content, ctx.players, content_id, rotation, ctx.rng)
-		plans = TankPlanBuilder.build_all(content, ctx.players, rotation)
+		state = TankRules.new_state(content, ctx.players, content_id, ctx.rng)
+		plans = TankPlanBuilder.build_all(content, ctx.players)
 		director = TankDirector.new(ctx, content, plans)
 		var with_cd := {}
 		for peer: int in plans:
@@ -285,15 +283,6 @@ func _observe(t: float, evs: Array[Dictionary]) -> void:
 				and int(e.get("e", 0)) == TankIds.enemy_code(TankIds.ENEMY_MEDIUM)
 			):
 				trec["mediums"] = int(trec["mediums"]) + 1
-	var gb := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	if gb != null and sg.seg == TankIds.SEG_ADVANCE:
-		var key := sg.phase_index
-		if not _drive.has(key):
-			_drive[key] = {"index": key, "stage": sg.stage, "ticks": 0, "drive_ticks": 0}
-		var d: Dictionary = _drive[key]
-		d["ticks"] = int(d["ticks"]) + 1
-		if gb.lever == TankIds.LEVER_DRIVE:
-			d["drive_ticks"] = int(d["drive_ticks"]) + 1
 
 
 func _result(end_t: float) -> Dictionary:
@@ -305,25 +294,36 @@ func _result(end_t: float) -> Dictionary:
 		if int(c["peer"]) == peer:
 			starts.append(float(c["t"]))
 			ended.append(str(c["ended_by"]))
+	# v3: a seat switch splits a segment into phases (the module's plan, spliced on every replan):
+	# one entry per mission segment, from its first phase's start to its last phase's end.
 	var segments: Array = []
 	var plan: EffortPlan = plans[peer]
 	for i in plan.size():
 		var ph := plan.phase(i)
 		var s0 := starts[i] if i < starts.size() else end_t
 		var s1 := starts[i + 1] if i + 1 < starts.size() else end_t
+		var by := ended[i + 1] if i + 1 < ended.size() else ""
+		var seg := int(ph.meta.get("segment", i))
+		if not segments.is_empty() and int(segments.back()["index"]) == seg:
+			var last: Dictionary = segments.back()
+			last["end"] = s1
+			last["dur_s"] = s1 - float(last["start"])
+			last["ended_by"] = by
+			last["overran"] = by == Wl.ENDED_MAX_S
+			continue
 		(
 			segments
 			. append(
 				{
-					"index": i,
+					"index": seg,
 					"seg": str(ph.meta.get("seg", "")),
 					"stage": int(ph.meta.get("stage", 0)),
 					"kind": ph.kind,
 					"start": s0,
 					"end": s1,
 					"dur_s": s1 - s0,
-					"ended_by": ended[i + 1] if i + 1 < ended.size() else "",
-					"overran": i + 1 < ended.size() and ended[i + 1] == Wl.ENDED_MAX_S,
+					"ended_by": by,
+					"overran": by == Wl.ENDED_MAX_S,
 				}
 			)
 		)

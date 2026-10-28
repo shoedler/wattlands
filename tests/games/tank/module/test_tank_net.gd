@@ -160,7 +160,9 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	assert_eq(c.outcome, "")
 	assert_false(c.all_afk)
 	for st in c.stations:
-		assert_eq(st.peer, c.rider_at(st.slot).peer, "%s: who works the room" % st.engine)
+		var holder := c.rider_at(st.slot)
+		var want := holder.peer if holder != null else 0
+		assert_eq(st.peer, want, "%s: who works the room (0: an empty seat)" % st.engine)
 	var boss_def := c.content.boss_def()
 	assert_eq(c.boss.bogie_max, float(boss_def["bogie_hp"]))
 	assert_eq(c.boss.turret_max, float(boss_def["turret_hp"]))
@@ -175,7 +177,7 @@ func test_apply_derives_what_the_snapshot_leaves_out() -> void:
 	solo_host.state.enemy(11).hp = 30.0
 	var solo := _client(1)
 	solo.apply_snapshot(_wire(solo_host))
-	var scale := c.content.enemy_scale(TankIds.TANK_BULWARK)
+	var scale := c.content.enemy_scale(TankIds.TANK_LANDSHIP)
 	assert_almost_eq(
 		solo.state.boss.bogie_max, float(boss_def["bogie_hp"]) * scale, 0.001, "enemy scale"
 	)
@@ -317,7 +319,8 @@ func test_int_fields_declare_the_snapshot_and_every_event_type() -> void:
 func _sample_events() -> Array[Dictionary]:
 	return [
 		TankEvents.segment(4, TankIds.SEG_ADVANCE, 2),
-		TankEvents.rotation([[0, "dynamo"], [1, "steam"], [2, "diesel"]]),
+		{"type": TankEvents.ROTATION, "r": [[0, 2], [1, 3], [2, 1]]},
+		TankEvents.seat(1, TankIds.ENGINE_STEAM, TankIds.ENGINE_FEED),
 		TankEvents.shot(1, TankIds.SHELL_HEAVY, 41, 0, 0),
 		TankEvents.shot(-1, TankIds.SHELL_ENEMY, 42, 12, 2),
 		TankEvents.hit(TankEvents.ON_TANK, 0, 11.6, TankIds.SHELL_ENEMY, 3.2, 3400.4),
@@ -330,7 +333,8 @@ func _sample_events() -> Array[Dictionary]:
 		TankEvents.overrun(TankIds.SEG_GUN_LINE, 2),
 		TankEvents.boss_phase(TankIds.BOSS_PHASE_2),
 		TankEvents.latch(2, TankIds.SHELL_OVER),
-		TankEvents.lever(0, TankIds.LEVER_TURRET),
+		{"type": TankEvents.LEVER, "s": 0, "lv": 1},
+		TankEvents.seat(2, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED),
 		TankEvents.evade(-4, TankIds.BOSS_CODE, false),
 		TankEvents.evade(13, 3, true, 2),
 		TankEvents.turn(-1, TankIds.DIR_LEFT),

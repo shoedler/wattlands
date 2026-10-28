@@ -1,7 +1,7 @@
 extends Control
 ## A windowed look at the Tank view and HUD for tools/screenshot --scene (GAME_SDK 19.3): a fixture
-## state (Stage 2 Advance, its gun line or the boss fight) for the Bulwark, Rampart, Citadel or
-## Bastion in a PixelViewport with the real HUD on top (or none), animated by a tiny fake of the rules (the hull drives,
+## state (Stage 2 Advance, its gun line or the boss fight) for a crew of 1 to 4 (v3: one tank) in a
+## PixelViewport with the real HUD on top (or none), animated by a tiny fake of the rules (the hull drives,
 ## enemies keep station, shells fly, the gun fires now and then). Not a test: the view tests build the
 ## same thing headless.
 ## Options (user args or the TANK_FIXTURE environment variable, ";"-separated):
@@ -16,6 +16,10 @@ extends Control
 ##   zone=<id>          (roam) the hull in the middle of that zone (lake, village, quarry, meadow, forest)
 ##   peer=<n>           the local rider's peer (default 1)
 ##   fire=<s>           seconds between shots (default 2.5, 0 for none)
+##   shot_frame=<n>     (with fire=0) the main gun fires on frame n (a firing still with --frames)
+##   bow=<n>            the bow guns fire n rounds a second (the feed's round count)
+##   sec                the Lights rider moves to the Secondaries seat
+##   empty=<engine>     that station's seat empty (slot -1), e.g. empty=arc
 ##   still              the hull holds still
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
 ##   seconds=<n>        with stats: measure for n seconds of wall time instead of 300 frames
@@ -31,6 +35,7 @@ var state: TankState = null
 
 var _opts: Dictionary = {}
 var _acc: float = 0.0
+var _bow_acc: float = 0.0
 var _fire_in: float = 1.0
 var _next_shell_id: int = 900
 var _times: Array[float] = []
@@ -58,6 +63,19 @@ func _ready() -> void:
 						break
 		var kind:
 			state = U.fixture(kind, crew)
+	if _opts.has("sec"):
+		var arc := state.station(TankIds.ENGINE_ARC)
+		var sec := state.station(TankIds.ENGINE_FEED)
+		if arc != null and sec != null and not arc.is_empty():
+			sec.slot = arc.slot
+			sec.peer = arc.peer
+			arc.slot = -1
+			arc.peer = 0
+	if _opts.has("empty"):
+		var st := state.station(str(_opts["empty"]))
+		if st != null:
+			st.slot = -1
+			st.peer = 0
 	var peer := int(_opts.get("peer", 1))
 	var ctx := F.make_ctx(crew, 0, content, Wl.SOLO, peer)
 	game = F.make_game(ctx)
@@ -90,6 +108,19 @@ func _process(delta: float) -> void:
 	while _acc >= Wl.SIM_DT:
 		_acc -= Wl.SIM_DT
 		_tick()
+	if _opts.has("shot_frame") and _frames == int(_opts["shot_frame"]):
+		_fire()
+	var bow := float(_opts.get("bow", 0.0))
+	if bow > 0.0:
+		_bow_acc += delta * bow
+		var feed := state.station(TankIds.ENGINE_FEED) as TankFeedState
+		if feed != null:
+			feed.rpm = bow * 60.0
+		while _bow_acc >= 1.0:
+			_bow_acc -= 1.0
+			if feed != null:
+				feed.rounds += 1
+				feed.fire_tick = state.tick
 	var fire_every := float(_opts.get("fire", 2.5))
 	if fire_every > 0.0:
 		_fire_in -= delta
@@ -124,10 +155,6 @@ func _tick() -> void:
 		elif st is TankSteamState:
 			(st as TankSteamState).pressure_pct = fposmod(
 				(st as TankSteamState).pressure_pct + 0.8, 150.0
-			)
-		elif st is TankGearboxState:
-			(st as TankGearboxState).hoist_j = fposmod(
-				(st as TankGearboxState).hoist_j + 14.0, 4000.0
 			)
 	var keep: Array[TankShellState] = []
 	for s in state.shells:

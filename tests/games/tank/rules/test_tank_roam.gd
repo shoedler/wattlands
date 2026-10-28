@@ -8,7 +8,7 @@ const ROAMS: Array[String] = ["roam_10", "roam_20", "roam_30", "roam_45", "roam_
 
 
 func _rig(crew: int = 3, mission: String = "roam_30", rng_seed: int = 7) -> TankRulesRig:
-	var rig := TankRulesRig.new(crew, mission, false, rng_seed)
+	var rig := TankRulesRig.new(crew, mission, rng_seed)
 	assert_true(rig.content.ok(), "content: %s" % "; ".join(rig.content.errors))
 	return rig
 
@@ -46,7 +46,7 @@ func test_every_roam_content_expands_into_the_drive_out_and_the_roam() -> void:
 		assert_true(c.is_roam(), id)
 		var minutes := int(id.trim_prefix("roam_"))
 		assert_eq(c.roam_minutes(), minutes, id)
-		assert_false(c.mission_rotates(), "no rotation in free roam: " + id)
+		assert_false(c.mission().has("rotation"), "no rotation in v3: " + id)
 		assert_eq(c.plan_table(), "roam_plans", id)
 		var segs := c.segments()
 		assert_eq(segs.size(), 2, id)
@@ -57,6 +57,9 @@ func test_every_roam_content_expands_into_the_drive_out_and_the_roam() -> void:
 		assert_eq(str(segs[1]["type"]), TankIds.SEG_ROAM, id)
 		assert_eq(str(segs[1]["kind"]), Wl.WORK, id)
 		assert_eq(float(segs[1]["min_s"]), minutes * 60.0 - 300.0, id)
+		assert_eq(
+			float(segs[1]["plan_min_s"]), TankConst.SEAT_LOCK_S, "v3: a seat switch may split it"
+		)
 		assert_eq(float(segs[1]["max_s"]), minutes * 60.0, id)
 		assert_gt(float(segs[1]["max_s"]), 300.0, "every roam phase is longer than 300 s: " + id)
 
@@ -198,8 +201,9 @@ func test_the_road_stops_at_the_turning_place() -> void:
 
 func test_only_the_driver_owns_the_turn() -> void:
 	assert_true(TankIntents.owned(TankIds.INTENT_TURN, TankIds.ENGINE_DIESEL))
-	assert_true(TankIntents.owned(TankIds.INTENT_TURN, TankIds.ENGINE_BULWARK))
-	for e: String in [TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM, TankIds.ENGINE_ARC]:
+	for e: String in [
+		TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED
+	]:
 		assert_false(TankIntents.owned(TankIds.INTENT_TURN, e), e)
 	assert_true(TankIntents.is_deliberate(TankIntents.normalize({"k": "turn"})))
 	assert_false(TankIntents.is_deliberate(TankIntents.normalize(TankIntents.auto("turn"))))

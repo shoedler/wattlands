@@ -104,7 +104,7 @@ static func pre(
 
 
 ## The turn (brief 2.10): the running stop counts down and flips the travel frame at its midpoint;
-## otherwise the driver's `turn` intent (owned by the diesel or the Bulwark; the Autopilot's is
+## otherwise the driver's `turn` intent (owned by the Drive seat; the Autopilot's is
 ## tagged auto) starts one when no turn runs, the cooldown is over and the tank is not broken down.
 static func _turn(
 	state: TankState, inputs: TankInputs, aux: TankAux, dt: float, events: Array[Dictionary]
@@ -346,7 +346,7 @@ static func _patrols(state: TankState, aux: TankAux, dt: float) -> void:
 		)
 		if n <= 0:
 			continue
-		n = mini(state.content.scaled_count(n, state.hull.tank), room)
+		n = mini(state.content.crew_count(n, state.hull.tank, state.crew), room)
 		for _k in n:
 			if TankEnemies.spawn(state, aux, str(u.get("enemy", "")), side, -1.0, false, false, -1):
 				room -= 1
