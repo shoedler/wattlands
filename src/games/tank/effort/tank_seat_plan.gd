@@ -14,18 +14,24 @@ extends RefCounted
 ##   ends (a fixed phase such as the depot, an open-ended one before its min_s, or the segment's
 ##   end coming first).
 ##
-## Spacing (BRIEF 4.5, the brief's 60 s): the PlanValidator models an open-ended phase at its min_s,
-## so the rest phase's min_s is at least what keeps every ERG <-> SIM switch in that model 60 s from
-## the one before it (60 s when the split itself switches modes), and at least the segment's own
-## min_s left. Real time is never shorter than the model (a phase lasts at least its min_s), and the
-## seat lock keeps every move 60 s or more after the rider's last plan boundary. A move whose plan
-## fails check() is refused: the PlanValidator must pass it with no warning, and every switch must
-## sit 60 s from the next, with open phases at their min_s and at their max_s.
+## Spacing (BRIEF 4.5; the brief's 60 s between a rider's ERG <-> SIM switches). Real time: the seat
+## lock keeps every move 60 s or more after the rider's last plan boundary (every switch is at one),
+## and when a split switches modes and the segment's end switches again (the rest's mode differs
+## from the next segment's), the rest phase's min_s is 60 s, so the segment cannot end sooner. The
+## model: the PlanValidator counts an open-ended phase at its min_s and warns at switches under 30 s
+## apart, so the rest's min_s also keeps every switch of that model 30 s from the last (MODEL_GAP_S).
+## It is never shorter than the segment's own min_s left. A move whose plan fails check() is
+## refused: the PlanValidator passes it with no warning (switches 30 s apart or more in the model);
+## the real 60 s comes from the lock and the rest's min_s, and the simulations assert it on the
+## trainer's trace (check_sims traceProblems).
 
 ## The shortest rest phase (a min_s must be > 0): one tick.
 const MIN_REST_S := Wl.SIM_DT
-## Every ERG <-> SIM switch of a rider is at least this far from the next (brief v3, BRIEF 4.5).
+## Every ERG <-> SIM switch of a rider is at least this far from the next in real time (brief v3,
+## BRIEF 4.5): the seat lock, and the rest phase's min_s when both its ends switch.
 const SWITCH_GAP_S := TankConst.SEAT_LOCK_S
+## The PlanValidator warns at switches closer than this in its min_s model (BRIEF 4.5).
+const MODEL_GAP_S := 30.0
 const EPS := 1e-6
 
 
@@ -65,7 +71,7 @@ static func whole(plan: EffortPlan, cur_index: int, rest: EffortPlan) -> EffortP
 
 
 ## True when `whole_plan` (no cool-down) may be sent: the PlanValidator passes it with no warning,
-## and with the cool-down appended every ERG <-> SIM switch is SWITCH_GAP_S or more from the next,
+## and with the cool-down appended every ERG <-> SIM switch is MODEL_GAP_S or more from the next,
 ## open phases counted at their min_s and at their max_s.
 static func check(whole_plan: EffortPlan) -> bool:
 	if whole_plan == null or whole_plan.size() == 0:
@@ -77,8 +83,8 @@ static func check(whole_plan: EffortPlan) -> bool:
 	if fin == null:
 		return false
 	return (
-		min_switch_gap(fin, false) >= SWITCH_GAP_S - EPS
-		and min_switch_gap(fin, true) >= SWITCH_GAP_S - EPS
+		min_switch_gap(fin, false) >= MODEL_GAP_S - EPS
+		and min_switch_gap(fin, true) >= MODEL_GAP_S - EPS
 	)
 
 
@@ -164,6 +170,9 @@ static func _rest_phase(
 	var max_s := seg_max - offset_s
 	var need := maxf(seg_min - offset_s, MIN_REST_S)
 	need = maxf(need, _spacing_need(plan, cur_index, ph.mode))
+	var split_switch := plan.phase(cur_index).mode != ph.mode
+	if split_switch and _next_mode(content, s, seg, engine) != ph.mode:
+		need = maxf(need, SWITCH_GAP_S)
 	if max_s < need - EPS:
 		return null
 	ph.min_s = need
@@ -176,8 +185,18 @@ static func _rest_phase(
 	return ph
 
 
-## How long the rest phase must be (in the min_s model) so that a switch at its end would sit
-## SWITCH_GAP_S after the last switch before it: SWITCH_GAP_S when the split itself switches modes
+## The mode a rider on `engine` rides after segment `s` (index `seg`): the next segment's, or the
+## cool-down's ERG after the last.
+static func _next_mode(content: TankContent, _s: Dictionary, seg: int, engine: String) -> String:
+	var segs := content.segments()
+	if seg + 1 >= segs.size():
+		return Wl.ERG
+	var entry := content.plan_entry(engine, str(segs[seg + 1].get("type", "")))
+	return str(entry.get("mode", Wl.ERG))
+
+
+## How long the rest phase must be in the min_s model so that a switch at its end would sit
+## MODEL_GAP_S after the last switch before it: MODEL_GAP_S when the split itself switches modes
 ## (from phase `cur_index`'s mode to `mode`), else what is left of it since the last switch.
 static func _spacing_need(plan: EffortPlan, cur_index: int, mode: String) -> float:
 	var t := 0.0
@@ -190,8 +209,8 @@ static func _spacing_need(plan: EffortPlan, cur_index: int, mode: String) -> flo
 		prev = ph.mode
 		t += _len(ph, false)
 	if mode != prev:
-		return SWITCH_GAP_S
-	return maxf(SWITCH_GAP_S - (t - last), 0.0)
+		return MODEL_GAP_S
+	return maxf(MODEL_GAP_S - (t - last), 0.0)
 
 
 static func _len(ph: PlanPhase, use_max: bool) -> float:

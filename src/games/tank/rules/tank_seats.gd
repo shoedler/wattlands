@@ -31,6 +31,7 @@ static func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]
 			land(state, r, ri.engine, events)
 		var since := float(aux.seat_since.get(ri.peer, state.t))
 		r.seat_lock_s = maxf(TankConst.SEAT_LOCK_S - (state.t - since), 0.0)
+		aux.seat_now[ri.peer] = can_land_now(ri)
 		if ri.phase_kind == Wl.COOLDOWN or ri.engine == "":
 			r.seat_target = ""
 	for ri in inputs.riders:
@@ -91,6 +92,17 @@ static func request(
 		return false
 	r.seat_target = want
 	return true
+
+
+## True when a move asked for now would land at once (a split: the rider's open-ended phase is past
+## its own min_s with room for a 60 s rest before its max_s), not at the phase's end. The
+## Autopilot seats riders only then (TankAux.seat_now), so its moves never land in the next segment.
+static func can_land_now(ri: TankRiderInput) -> bool:
+	return (
+		ri.phase_open_ended
+		and ri.phase_elapsed_s >= ri.phase_min_s - 1e-6
+		and ri.phase_remaining_s > TankConst.SEAT_LOCK_S + 1.0
+	)
 
 
 ## True when the plan of `ri` lets it move to `engine` (TankSeatPlan.can_move from its phase now).

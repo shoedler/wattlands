@@ -38,8 +38,9 @@
 //                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase); v3: a seat
 //                 switch splits a segment into plan phases (the rest of it a lap-false phase), so a segment is
 //                 every phase with its meta `segment` (phaseSpansOf keeps them one by one).
-//   T1            every Advance 150-240 s, gun line 80-160 s, boss 180-330 s, no overrun, at most 1
-//                 breakdown (game events), grade S/A/B.
+//   T1 (crews 2-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s, no overrun, at most 1
+//                 breakdown (game events), grade S/A/B (v3: the rack's ~7 s shells end fights sooner
+//                 than v2's 18-35 s; the solo loop's 60 s stays put crew 1 under T4 instead).
 //   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
 //                 stage (Advance + gun line) and >= 60 s in the boss, and is back at <= 65% within
 //                 120 s after each dynamo gun line or boss ends.
@@ -52,7 +53,7 @@
 //   T6            every Advance has a telegraphed shot (an `evade` event: a sprint prompt) and a medium tank (enemy
 //                 `shot` or `kill` events); crew 1, whose host rider rides SIM in every Advance, also shows the
 //                 "Surge to evade" toast there (every crew with --require-prompts); stages 2 and 3 end in a heavy-tank
-//                 duel: the gun line lasts 90-180 s and a heavy tank fired or died in it.
+//                 duel: the gun line lasts 60-180 s (v3) and a heavy tank fired or died in it.
 //   T7 (crew 4)   the arc rider's applied ERG target is above 72% for >= 30 s per stage (stages 1-3: Advance + gun
 //                 line), and is back at <= 68% within 60 s of a fight's end (the end of an arc gun line or boss, or
 //                 a kill in an Advance followed by 60 s with no enemy shot).
@@ -76,8 +77,9 @@ export const CREWS = [1, 2, 3, 4];
 export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
 export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };
-export const T1_RANGES = { advance: [150, 240], gun_line: [80, 160], boss: [180, 330] };
-export const T6_DUEL_RANGE = [90, 180];
+export const T1_RANGES = { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] };
+export const T1_CREWS = [2, 3, 4];
+export const T6_DUEL_RANGE = [60, 180];
 export const T2_ABOVE_PCT = 80;
 export const T2_PER_STAGE_S = 30;
 export const T2_BOSS_S = 60;
@@ -564,7 +566,7 @@ export function checkS1(reports, opts = {}) {
     const crew = Number(crewS);
     probs.push(...argsProblems(name, r, { content: 'ashfall_road', players: crew, bots: 0, seed: Number(seedS), role: crew >= 2 ? 'HOST' : 'SOLO' }));
     probs.push(...completeProblems(name, r));
-    probs.push(...t1Problems(name, r));
+    if (T1_CREWS.includes(crew)) probs.push(...t1Problems(name, r));
     if (crew >= 2) probs.push(...t2Problems(name, r));
     if (crew >= 3) probs.push(...t3Problems(name, r));
     if (crew === 1) probs.push(...t4Problems(name, r));

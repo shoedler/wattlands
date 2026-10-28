@@ -258,8 +258,8 @@ test('S1 is skipped with no reports and fails with some missing', () => {
 
 test('T1 catches a slow Advance, a short gun line, a long boss, an overrun, breakdowns and a low grade', () => {
   assert.deepEqual(C.t1Problems('x', makeRun(3)), []);
-  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { advance: 250 } }))), /advance 1 lasted 250/);
-  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { gun_line: 70 } }))), /gun_line 1 lasted 70/);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { advance: 290 } }))), /advance 1 lasted 290/);
+  assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { gun_line: 170 } }))), /gun_line 1 lasted 170/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { durations: { boss: 340 } }))), /boss 4 lasted 340/);
   assert.match(ids(C.t1Problems('x', makeRun(3, { ended: { 2: 'max_s' }, durations: { gun_line: 180 } }))), /gun_line 1 overran/);
   const two = [{ type: 'game_event', t: 400, event: { type: 'breakdown' } }, { type: 'game_event', t: 800, event: { type: 'breakdown' } }];
@@ -327,7 +327,7 @@ test('T6 needs a telegraphed shot and a medium per Advance and a 90-180 s heavy 
   const noTelegraph = makeRun(3);
   noTelegraph.events = noTelegraph.events.filter((e) => e.event?.type !== 'evade');
   assert.match(ids(C.t6Problems('x', noTelegraph)), /no telegraphed shot/);
-  assert.match(ids(C.t6Problems('x', makeRun(3, { durations: { gun_line: 85 } }))), /heavy duel lasted 85/);
+  assert.match(ids(C.t6Problems('x', makeRun(3, { durations: { gun_line: 185 } }))), /heavy duel lasted 185/);
   const noHeavy = makeRun(3);
   noHeavy.events = noHeavy.events.filter((e) => !(e.event?.type === 'shot' && e.event.e === 5));
   assert.match(ids(C.t6Problems('x', noHeavy)), /no heavy tank duel/);

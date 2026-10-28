@@ -1,5 +1,5 @@
 {
-	"_doc": "Ashfall Road (brief 2.4, P0). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance; obstacles stand at at_m in world space; gun-line and boss enemies are fixed in world space; a gun-line at_px is the distance from the halted hull's front to the enemy's near edge (\"edge\": at the screen edge), clamped like a held distance (enemies.json clamp). Enemy counts scale by the tank's enemy_scale (rounded, at least 1). G2 balance iteration 1 (docs/decisions/tank.md): Advance lengths 1100 / 1200 / 950 m, stages 2 and 3 with one medium (brief 2), gun line 1 with 4 dug-in and a medium, gun line 2 with a third dug-in, the Behemoth 560 px out, end_hold_s on the boss (seconds the director waits after the objective is done before end_phase: the Behemoth's death beat, so the loader's last shell keeps its 6 s at grade 0). G1: Advance lengths 1100 / 1100 / 1000 m (brief 1300 / 1300 / 1400; the profiles and trigger points scale with them) so every tank finishes inside max_s; gun-line at_px keep every gun inside the gun's reach for all three tanks (the gun cannot depress onto anything nearer than about 230 px from the muzzle; tested); the Behemoth starts 470 px from the left edge, past the Citadel's stop line. v2 rules (P4): gun-line at_px moved in for the shorter field ahead of the kit hulls (TankEnemies.reserve_hold spreads them over depth lanes); gun line 1 five dug-ins and a medium, gun line 2 a heavy and four single dug-ins, gun line 3 a heavy, one dug-in and a destroyer; stage 1's Advance gains a rear light (a flank shot no gun reaches, so its sprint prompt always comes: T6) and a destroyer; end_hold_s 7.5. Integration polish (docs/decisions/tank.md 2026-10-27 integration polish ADR): gun line 1's dug-ins are two entries of 2 (4 for every tank), gun line 2's single dug-ins stand at 110-170 px (no splash onto the heavy). v3 rules (2026-10-28, docs/decisions/tank.md v3 rules ADR): rotation is gone (seat choice replaces it); Ashfall Road keeps its segments, gun lines and the Behemoth, through the forest: every backdrop is a forest variant or a little base (TankIds.BACKDROPS: the depot, gun lines 1 and 2 and the Behemoth's gate at a base) with forest place names; enemy counts scale with the crew size (enemies.json crew_count_scale) per enemy type and segment, taken from the lists in order (TankEncounters.crew_counts), so gun lines 1 and 2 list their dug-ins as one entry of 4 (a crew of 1 meets the first 2).",
+	"_doc": "Ashfall Road (brief 2.4, P0). Owner: rules. Schema: TankContentSchema.validate_mission. Segments in plan order; every one is a lap-true plan phase (TankPlanBuilder). terrain: [distance_m, grade_pct] points, the course_profile format, interpolated linearly by the tank's distance into the segment and held past the last point; grades are before difficulty. encounters trigger when the tank has driven at_m metres into the Advance; obstacles stand at at_m in world space; gun-line and boss enemies are fixed in world space; a gun-line at_px is the distance from the halted hull's front to the enemy's near edge (\"edge\": at the screen edge), clamped like a held distance (enemies.json clamp). Enemy counts scale by the tank's enemy_scale (rounded, at least 1). G2 balance iteration 1 (docs/decisions/tank.md): Advance lengths 1100 / 1200 / 950 m, stages 2 and 3 with one medium (brief 2), gun line 1 with 4 dug-in and a medium, gun line 2 with a third dug-in, the Behemoth 560 px out, end_hold_s on the boss (seconds the director waits after the objective is done before end_phase: the Behemoth's death beat, so the loader's last shell keeps its 6 s at grade 0). G1: Advance lengths 1100 / 1100 / 1000 m (brief 1300 / 1300 / 1400; the profiles and trigger points scale with them) so every tank finishes inside max_s; gun-line at_px keep every gun inside the gun's reach for all three tanks (the gun cannot depress onto anything nearer than about 230 px from the muzzle; tested); the Behemoth starts 470 px from the left edge, past the Citadel's stop line. v2 rules (P4): gun-line at_px moved in for the shorter field ahead of the kit hulls (TankEnemies.reserve_hold spreads them over depth lanes); gun line 1 five dug-ins and a medium, gun line 2 a heavy and four single dug-ins, gun line 3 a heavy, one dug-in and a destroyer; stage 1's Advance gains a rear light (a flank shot no gun reaches, so its sprint prompt always comes: T6) and a destroyer; end_hold_s 7.5. Integration polish (docs/decisions/tank.md 2026-10-27 integration polish ADR): gun line 1's dug-ins are two entries of 2 (4 for every tank), gun line 2's single dug-ins stand at 110-170 px (no splash onto the heavy). v3 rules (2026-10-28, docs/decisions/tank.md v3 rules ADR): rotation is gone (seat choice replaces it); Ashfall Road keeps its segments, gun lines and the Behemoth, through the forest: every backdrop is a forest variant or a little base (TankIds.BACKDROPS: the depot, gun lines 1 and 2 and the Behemoth's gate at a base) with forest place names; enemy counts scale with the crew size (enemies.json crew_count_scale) per enemy type and segment, taken from the lists in order (TankEncounters.crew_counts), so gun lines 1 and 2 list their dug-ins as one entry of 4 (a crew of 1 meets the first 2). The Behemoth starts 500 px from the left edge (560): 188 px off the v3 hull's front, so with its 12 px push-backs its turret stays inside the gun's reach (about 240 px). Every Advance and gun line holds 2 s after its objective is done (end_hold_s 2): the Autopilot's seating then moves riders for the next segment, landing at the end (v3 TankAutopilot.seat_intent).",
 	"id": "ashfall_road",
 	"label": "TANK_CONTENT_ASHFALL_ROAD",
 	"plan_table": "plans",
@@ -28,6 +28,7 @@
 			"duration_s": 180,
 			"min_s": 90,
 			"max_s": 300,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_ADVANCE_1",
 			"name": "TANK_PLACE_PINE_ROAD",
 			"backdrop": "forest",
@@ -52,6 +53,7 @@
 			"duration_s": 120,
 			"min_s": 60,
 			"max_s": 180,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_GUN_LINE_1",
 			"name": "TANK_PLACE_FOREST_POST",
 			"backdrop": "base",
@@ -81,6 +83,7 @@
 			"duration_s": 180,
 			"min_s": 90,
 			"max_s": 300,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_ADVANCE_2",
 			"name": "TANK_PLACE_FIR_HOLLOW",
 			"backdrop": "forest_firs",
@@ -103,6 +106,7 @@
 			"duration_s": 120,
 			"min_s": 60,
 			"max_s": 180,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_GUN_LINE_2",
 			"name": "TANK_PLACE_LOGGING_CAMP",
 			"backdrop": "base",
@@ -132,6 +136,7 @@
 			"duration_s": 180,
 			"min_s": 90,
 			"max_s": 300,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_ADVANCE_3",
 			"name": "TANK_PLACE_BIRCH_RIDGE",
 			"backdrop": "forest_birches",
@@ -153,6 +158,7 @@
 			"duration_s": 120,
 			"min_s": 60,
 			"max_s": 180,
+			"end_hold_s": 2,
 			"label": "TANK_PHASE_GUN_LINE_3",
 			"name": "TANK_PLACE_RIDGE",
 			"backdrop": "forest_birches",
@@ -187,7 +193,7 @@
 			"name": "TANK_PLACE_IRON_GATE",
 			"backdrop": "base",
 			"end_hold_s": 7.5,
-			"boss": {"start_left_px": 560}
+			"boss": {"start_left_px": 500}
 		}
 	],
 	"cooldown": {

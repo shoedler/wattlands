@@ -14,6 +14,7 @@ func _state(crew: int) -> TankState:
 	s.obstacles.clear()
 	s.tick = 20 * 3000
 	for r in s.riders:
+		TankAux.of(s).seat_now[r.peer] = true
 		r.seat_lock_s = 0.0
 		r.seat_target = ""
 		r.fallback = true
@@ -85,8 +86,11 @@ func test_solo_mans_the_secondaries_when_only_lights_are_near() -> void:
 	var s := _state(1)
 	_enemy(s, TankIds.ENEMY_LIGHT, 130.0)
 	assert_eq(_want(s), TankIds.ENGINE_FEED)
-	_enemy(s, TankIds.ENEMY_MEDIUM, 240.0, 91)
-	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "a medium too: the main gun (rack full)")
+	var far := _enemy(s, TankIds.ENEMY_MEDIUM, 240.0, 91)
+	assert_eq(_want(s), TankIds.ENGINE_FEED, "a medium past 220 px does not count")
+	s.enemies.erase(far)
+	_enemy(s, TankIds.ENEMY_MEDIUM, 190.0, 92)
+	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "a medium within 220 px: the main gun (rack full)")
 
 
 func test_no_ask_while_locked_pending_on_reserve_or_off_the_second() -> void:
@@ -103,6 +107,9 @@ func test_no_ask_while_locked_pending_on_reserve_or_off_the_second() -> void:
 	r.afk = true
 	assert_eq(_want(s), "", "on reserve")
 	r.afk = false
+	TankAux.of(s).seat_now[1] = false
+	assert_eq(_want(s), "", "a move that would not land at once")
+	TankAux.of(s).seat_now[1] = true
 	s.tick += 1
 	assert_eq(_want(s), "", "once a second")
 	s.tick += TankAutopilot.SEAT_EVERY_TICKS - 1
@@ -118,11 +125,15 @@ func test_a_crew_fills_the_most_needed_seats() -> void:
 		assert_eq(_want(s, peer), "", "on the road with a full rack: Drive, Gun, Loader stay")
 	_enemy(s, TankIds.ENEMY_HEAVY, 280.0)
 	TankStations.fill_rack(s, 1)
+	assert_eq(_want(s, 1), "", "a fight on the road keeps the driver driving")
+	# A gun line with the rack full: the Loader's rider takes the Lights (a target past the headlight).
+	s.seg.seg = TankIds.SEG_GUN_LINE
+	TankStations.fill_rack(s, TankConst.RACK_MAX)
 	var needs := TankAutopilot.seat_needs(s)
-	assert_gt(float(needs[TankIds.ENGINE_ARC]), float(needs[TankIds.ENGINE_DIESEL]))
-	assert_eq(_want(s, 1), TankIds.ENGINE_ARC, "a fight past the headlight: Drive to the Lights")
+	assert_gt(float(needs[TankIds.ENGINE_ARC]), float(needs[TankIds.ENGINE_STEAM]))
+	assert_eq(_want(s, 3), TankIds.ENGINE_ARC, "the Loader to the Lights")
+	assert_eq(_want(s, 1), "", "Drive stays manned at a gun line (the next Advance needs it)")
 	assert_eq(_want(s, 2), "", "the Gun stays")
-	assert_eq(_want(s, 3), "", "the Loader stays")
 
 
 func test_riders_who_play_their_own_seat_are_left_there() -> void:

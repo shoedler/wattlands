@@ -60,6 +60,8 @@ var last_spawn_t: float = -100.0
 var seat_phase: Dictionary = {}
 ## peer -> the game time of the rider's last plan boundary (the seat lock counts from it).
 var seat_since: Dictionary = {}
+## peer -> true while a seat move asked for now would land at once (TankSeats.can_land_now).
+var seat_now: Dictionary = {}
 ## The ready rack's shells, oldest first (TankIds.SHELL_*; TankSteamState.rack is its size). The
 ## Gun chambers the oldest; an Overpressure takes the newest back to the boiler.
 var rack_types: Array[int] = []

@@ -65,19 +65,21 @@ func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
 	assert_almost_eq(_gap(cit), stop, 0.01)
 
 
-func test_each_broken_bogie_pushes_it_back_24_px_and_the_third_starts_phase_2() -> void:
+func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> void:
 	var rig := _rig(1, true)
 	rig.run(80.0)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
 	var x := b.x_px
+	var push := float(rig.content.boss_def()["pushback_px"])
+	assert_eq(push, 12.0, "v3: 12 px (the turret stays in the gun's reach)")
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
 	assert_eq(b.bogie_hp[0], 0.0)
-	assert_almost_eq(b.x_px, x + 24.0, 0.001)
+	assert_almost_eq(b.x_px, x + push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_1)
 	TankShells.damage_boss(rig.state, aux, 1, 1000.0, 0, rig.events)
 	TankShells.damage_boss(rig.state, aux, 2, 1000.0, 0, rig.events)
-	assert_almost_eq(b.x_px, x + 72.0, 0.001)
+	assert_almost_eq(b.x_px, x + 3.0 * push, 0.001)
 	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
 	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
 	var x2 := b.x_px
@@ -150,6 +152,26 @@ func test_auto_aim_takes_the_nearest_standing_bogie_then_the_turret() -> void:
 		],
 		"bogies nearest the tank first, the turret last"
 	)
+
+
+## v3: the main gun reaches the Behemoth's turret only up to about 240 px off the hull's front, so
+## the Behemoth starts and is pushed back (three bogies) no farther than that.
+func test_the_turret_stays_in_reach_after_three_push_backs() -> void:
+	var rig := _rig(4, true)
+	var aux := TankAux.of(rig.state)
+	var c := rig.content
+	var front := rig.hull().x_px + rig.hull().hull_w
+	var start := float(c.segment(BOSS)["boss"]["start_left_px"]) - (16.0 + rig.hull().hull_w)
+	var worst := start + 3.0 * float(c.boss_def()["pushback_px"])
+	for i in 3:
+		TankShells.damage_boss(rig.state, aux, i, 1000.0, 0, rig.events)
+	rig.state.boss.x_px = front + worst
+	aux.aim_valid = false
+	TankTargets.build(rig.state, aux)
+	var t := TankAim.current(rig.state, aux)
+	assert_not_null(t, "the turret at %.0f px" % worst)
+	if t != null:
+		assert_eq(t.id, TankBossState.part_id(TankBossState.TURRET_PART))
 
 
 func test_the_main_gun_fires_every_35_to_45_seconds_after_an_8_second_telegraph() -> void:

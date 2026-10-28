@@ -29,7 +29,7 @@ func test_the_split_continues_the_segment_in_the_new_seat() -> void:
 	assert_false(ph.lap, "the segment's lap goes on")
 	assert_true(ph.open_ended)
 	assert_eq(ph.max_s, 300.0 - 100.0, "the segment's own end")
-	assert_eq(ph.min_s, TankConst.SEAT_LOCK_S, "a mode switch: its next one 60 s away")
+	assert_eq(ph.min_s, TankSeatPlan.MODEL_GAP_S, "a mode switch, the gun line's ERG next: 30 s")
 	assert_eq(ph.meta["offset_s"], 100.0)
 	assert_eq(ph.meta["seg_min_s"], 90.0)
 	assert_eq([ph.meta["segment"], ph.meta["engine"]], [ADVANCE, TankIds.ENGINE_DYNAMO])
@@ -37,6 +37,21 @@ func test_the_split_continues_the_segment_in_the_new_seat() -> void:
 		assert_eq(int(rest.phase(i).meta["segment"]), ADVANCE + i)
 		assert_eq(str(rest.phase(i).meta["engine"]), TankIds.ENGINE_DYNAMO)
 		assert_true(rest.phase(i).lap)
+
+
+## Both ends switch (the Gun's ERG to the Loader's SIM in a gun line, an ERG checkpoint next): the
+## rest holds the segment's end 60 s, so the switches stay 60 s apart in real time too.
+func test_a_split_between_two_switches_holds_60_s() -> void:
+	var c := _content()
+	var plan := _plan(c, 1)
+	var rest := TankSeatPlan.tail(c, plan, GUN_LINE, TankIds.ENGINE_STEAM, true, 70.0)
+	assert_eq(rest.phase(0).mode, Wl.SIM)
+	assert_eq(rest.phase(1).mode, Wl.ERG, "the checkpoint")
+	assert_eq(rest.phase(0).min_s, TankConst.SEAT_LOCK_S)
+	assert_null(
+		TankSeatPlan.tail(c, plan, GUN_LINE, TankIds.ENGINE_STEAM, true, 140.0),
+		"40 s left before max_s: no room for 60"
+	)
 
 
 func test_a_split_with_no_mode_change_ends_with_the_segment() -> void:
@@ -66,8 +81,8 @@ func test_the_boundary_landing_is_the_later_segments_only() -> void:
 func test_a_split_that_cannot_fit_before_max_s_is_none() -> void:
 	var c := _content()
 	var plan := _plan(c, 0)
-	assert_null(TankSeatPlan.tail(c, plan, BOSS, TankIds.ENGINE_ARC, true, 330.0), "ERG 30 s left")
-	assert_not_null(TankSeatPlan.tail(c, plan, BOSS, TankIds.ENGINE_FEED, true, 330.0))
+	assert_null(TankSeatPlan.tail(c, plan, BOSS, TankIds.ENGINE_ARC, true, 340.0), "ERG, 20 s left")
+	assert_not_null(TankSeatPlan.tail(c, plan, BOSS, TankIds.ENGINE_FEED, true, 340.0))
 
 
 func test_check_holds_the_validator_and_the_60_s_spacing() -> void:

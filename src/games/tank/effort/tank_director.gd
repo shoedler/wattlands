@@ -568,8 +568,11 @@ func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
 		var same := same_phase and str(sent["engine"]) == want
 		if same and bool(sent["split"]):
 			continue
+		# Once the segment's objective is done a move lands at the segment's end (the Autopilot then
+		# seats riders for the next segment; a split would only hold the end for its rest).
 		var can_split := (
 			not ending
+			and not state.seg.objective_done
 			and ri.phase_open_ended
 			and ri.phase_elapsed_s >= ri.phase_min_s - EPS
 			and ri.phase_remaining_s > 2.0 * Wl.SIM_DT

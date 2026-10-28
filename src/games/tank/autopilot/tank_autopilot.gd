@@ -189,7 +189,8 @@ static func _blocking_obstacle(state: TankState) -> TankObstacleState:
 
 
 ## The rider's automatic seat move this tick: {"k": "seat", "to": seat, "auto": 1}, or {} (lock
-## running, a move pending, on reserve, in a checkpoint or the cool-down, or happy where it sits).
+## running, a move pending, on reserve, in a checkpoint or the cool-down, a move that could not land
+## at once, or happy where it sits).
 static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	if rider.afk or not rider.connected or rider.seat_lock_s > 0.0 or rider.seat_target != "":
 		return {}
@@ -197,10 +198,21 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		return {}
 	if state.seg.seg == TankIds.SEG_NONE or state.seg.seg == TankIds.SEG_CHECKPOINT:
 		return {}
+	# The segment's objective is done ("Regroup" until it ends): the rider takes the seat the next
+	# segment wants, landing at the segment's end (the director never splits it then). Otherwise only
+	# moves that land at once: a move pending to the phase's end would land in the next segment,
+	# which the seating has not looked at (TankSeats.can_land_now).
+	var sit := situation(state)
+	var seg := state.seg.seg
+	if state.seg.objective_done and state.seg.open_ended:
+		seg = next_fight_segment(state)
+		sit = expected(state, seg)
+	elif not bool(TankAux.of(state).seat_now.get(rider.peer, false)):
+		return {}
 	var want := (
-		seat_wanted_solo(state, rider)
+		seat_wanted_solo(state, rider, sit)
 		if state.riders.size() == 1
-		else seat_wanted_crew(state, rider)
+		else seat_wanted_crew(state, rider, sit, seg)
 	)
 	if want == "" or want == rider.engine:
 		return {}
@@ -214,8 +226,11 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 
 ## The solo loop (brief v3 "Automatic seating"), from the seat the rider is on. "In range" is the
 ## gun's reach now: the solo rider never mans the Lights, so the headlight's range.
-static func seat_wanted_solo(state: TankState, rider: TankRiderState) -> String:
-	var sit := situation(state)
+static func seat_wanted_solo(
+	state: TankState, rider: TankRiderState, sit: Dictionary = {}
+) -> String:
+	if sit.is_empty():
+		sit = situation(state)
 	if not bool(sit["near"]):
 		return TankIds.ENGINE_DIESEL
 	if bool(sit["only_light"]):
@@ -234,8 +249,10 @@ static func seat_wanted_solo(state: TankState, rider: TankRiderState) -> String:
 ## needed ones (seat_needs) that no self-playing rider holds, as many as it has riders; one outside
 ## them moves to the most needed of them that is empty, when that is SEAT_MARGIN more needed than
 ## its own seat.
-static func seat_wanted_crew(state: TankState, rider: TankRiderState) -> String:
-	var needs := seat_needs(state)
+static func seat_wanted_crew(
+	state: TankState, rider: TankRiderState, sit: Dictionary = {}, seg: String = ""
+) -> String:
+	var needs := seat_needs(state, sit, seg)
 	var free: Array[String] = []
 	var autos := 0
 	for r in state.riders:
@@ -275,21 +292,25 @@ static func rank_seats(seats: Array[String], needs: Dictionary) -> Array[String]
 	return out
 
 
-## How much each seat is needed now (seat id -> a score, higher first): Drive to move on (5) when
-## nothing is in range on a road segment, to keep moving in a fight (2) or to dig in at a gun line
-## (1.5); the Gun (4.5) in a fight with shells to fire or a Loader working; the Loader (4 in a
-## fight, 3 on the road) while the rack has room; the Lights (3) when an enemy stands beyond the
-## headlight; the Secondaries (3.5) with a target in the bow guns' range.
-static func seat_needs(state: TankState) -> Dictionary:
-	var sit := situation(state)
+## How much each seat is needed now (seat id -> a score, higher first): Drive to move on (5) on a
+## road segment until its objective is done, fight or not (the enemies keep station with the tank),
+## or to dig in at a gun line (3.2: kept manned there, so the next Advance starts with a driver;
+## the seat lock leaves no time to move one there between the segments); the Gun (4.5) in a fight
+## with shells to fire or a Loader working; the Loader (4 in a fight, 3 on the road) while the rack
+## has room; the Lights (3) when an enemy stands beyond the headlight; the Secondaries (3.5) with a
+## target in the bow guns' range.
+static func seat_needs(state: TankState, sit: Dictionary = {}, seg: String = "") -> Dictionary:
+	if sit.is_empty():
+		sit = situation(state)
+	if seg == "":
+		seg = state.seg.seg
 	var fight := bool(sit["targets"])
-	var seg := state.seg.seg
 	var road := [TankIds.SEG_ADVANCE, TankIds.SEG_SKIRMISH, TankIds.SEG_ROAM, TankIds.SEG_DEPOT]
 	var drive := 0.5
 	if seg == TankIds.SEG_GUN_LINE:
-		drive = 1.5
-	elif road.has(seg):
-		drive = 2.0 if fight else 5.0
+		drive = 3.2
+	elif road.has(seg) and not state.seg.objective_done:
+		drive = 5.0
 	var loader := state.station(TankIds.ENGINE_STEAM)
 	var loading := loader != null and not loader.is_empty()
 	var gun := 0.3
@@ -315,8 +336,8 @@ static func seat_needs(state: TankState) -> Dictionary:
 ## What the seating reads (the latest target list, TankAux.targets): {"targets": something the main
 ## gun could engage with the searchlights lit (an enemy or Behemoth part on screen, rear lights
 ## aside, or a barricade blocking the road), "near": one of them within the gun's reach now
-## (TankAim.in_reach: the headlight's range while the searchlights are dark), "only_light": every
-## one of them a light tank or a barricade within the bow guns' range, "bow": something in the bow
+## (TankAim.in_reach: the headlight's range while the searchlights are dark), "only_light": something
+## in the bow guns' range and every target there a light one (light_target), "bow": something in the bow
 ## guns' range, "far": an enemy beyond the headlight's range, "rack": shells in the rack, "shells":
 ## the rack plus a chambered round}.
 static func situation(state: TankState) -> Dictionary:
@@ -346,8 +367,7 @@ static func situation(state: TankState) -> Dictionary:
 		var ahead := not enemy or t.enemy.side > 0
 		var in_bow := ahead and d >= lo - 1e-6 and d <= hi + 1e-6
 		bow = bow or in_bow
-		var light := t.kind == TankTarget.KIND_OBSTACLE or (enemy and t.enemy.code == light_code)
-		if not (light and in_bow):
+		if in_bow and not light_target(state, t):
 			only_light = false
 		if t.kind != TankTarget.KIND_OBSTACLE and d > reach:
 			far = true
@@ -357,9 +377,46 @@ static func situation(state: TankState) -> Dictionary:
 	return {
 		"targets": targets,
 		"near": near,
-		"only_light": targets and only_light,
+		"only_light": bow and only_light,
 		"bow": bow,
 		"far": far,
 		"rack": rack,
 		"shells": rack + chambered,
 	}
+
+
+## A light target (the solo loop's Secondaries rule): one the bow guns hurt in full, a barricade or
+## an enemy whose enemies.json light_mult is 1 or more (light tanks and dug-in turrets).
+static func light_target(state: TankState, t: TankTarget) -> bool:
+	if t.kind == TankTarget.KIND_OBSTACLE:
+		return true
+	if t.kind != TankTarget.KIND_ENEMY or state.content == null:
+		return false
+	var def := state.content.enemy_def(TankIds.enemy_of(t.enemy.code))
+	return float(def.get("light_mult", 0.0)) >= 1.0 - 1e-9
+
+
+## The next segment with work in it after the current one (a checkpoint is skipped: nobody moves
+## there): its type, or "" after the last.
+static func next_fight_segment(state: TankState) -> String:
+	if state.content == null:
+		return ""
+	var segs := state.content.segments()
+	var i := state.seg.segment_index + 1
+	while i < segs.size() and str(segs[i].get("type", "")) == TankIds.SEG_CHECKPOINT:
+		i += 1
+	return str(segs[i].get("type", "")) if i < segs.size() else ""
+
+
+## The situation the seating expects at the start of a segment of type `seg`: a fight at a gun line
+## or the boss (targets in reach and past the headlight), the open road in an Advance; the rack as
+## it is now.
+static func expected(state: TankState, seg: String) -> Dictionary:
+	var sit := situation(state)
+	var fight := seg == TankIds.SEG_GUN_LINE or seg == TankIds.SEG_BOSS
+	sit["targets"] = fight
+	sit["near"] = fight
+	sit["far"] = fight
+	sit["bow"] = false
+	sit["only_light"] = false
+	return sit
