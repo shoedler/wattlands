@@ -38,17 +38,18 @@
 //                 (`ended_by`: duration, end_phase or max_s: an overrun is max_s on a WORK phase); v3: a seat
 //                 switch splits a segment into plan phases (the rest of it a lap-false phase), so a segment is
 //                 every phase with its meta `segment` (phaseSpansOf keeps them one by one).
-//   T1 (crews 2-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s, no overrun, at most 1
+//   T1 (crews 1-4) every Advance 120-280 s, gun line 60-160 s, boss 120-330 s, no overrun, at most 1
 //                 breakdown (game events), grade S/A/B (v3: the rack's ~7 s shells end fights sooner
-//                 than v2's 18-35 s; the solo loop's 60 s stays put crew 1 under T4 instead).
+//                 than v2's 18-35 s).
 //   T2 (crews 2-4) the dynamo's applied ERG target (trace rows, % FTP) is above 80% for >= 30 s per
 //                 stage (Advance + gun line) and >= 60 s in the boss, and is back at <= 65% within
 //                 120 s after each dynamo gun line or boss ends.
 //   T3 (crews 3-4, v3 the Loader's rack) the crew stows >= 3 shells per stage (Advance + gun line;
 //                 latch events), and one rider's back-to-back stows (<= 15 s apart, the rack never
 //                 full between them) take 4-12 s each at the median (about 7 s at 250 W P_eff).
-//   T4 (crew 1, v3 the solo loop) the solo rider spends >= 40% of each Advance on Drive (its plan
-//                 phases' seat) and works each gun line's guns: >= 2 main-gun shells fired, or a
+//   T4 (crew 1, v3 the solo loop) the solo rider drives enough to make each Advance's time bound:
+//                 >= 50% of each Advance on Drive (its plan phases' seat; one 60 s stay elsewhere
+//                 at most), and works each gun line's guns: >= 2 main-gun shells fired, or a
 //                 kill by the bow guns (the loop's step 4 mans the Secondaries when only light
 //                 targets, dug-in turrets among them, stand within 220 px).
 //   T5            mean score falls strictly from 100% (s1_c3) to 85% to 70%.
@@ -80,7 +81,7 @@ export const DEFAULT_SEEDS = [1, 2, 3];
 /** FIT laps: lap-true plan phases + the cool-down (the platform marks it lap true; ADR G0.2). */
 export const EXPECTED_LAPS = { ashfall_road: 12, drill: 4 };
 export const T1_RANGES = { advance: [120, 280], gun_line: [60, 160], boss: [120, 330] };
-export const T1_CREWS = [2, 3, 4];
+export const T1_CREWS = [1, 2, 3, 4];
 export const T6_DUEL_RANGE = [60, 180];
 export const T2_ABOVE_PCT = 80;
 export const T2_PER_STAGE_S = 30;
@@ -94,7 +95,7 @@ export const T7_BACK_WITHIN_S = 60;
 export const T3_BUILD_RANGE = [4, 12];
 export const T3_PAIR_MAX_S = 15;
 export const T3_PER_STAGE = 3;
-export const T4_MIN_SHARE = 0.4;
+export const T4_MIN_SHARE = 0.5;
 export const T4_SHOTS_PER_GUN_LINE = 2;
 export const SWITCH_SPACING_S = 60;
 export const FIRST_S = 300;
