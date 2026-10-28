@@ -2,7 +2,7 @@ class_name TankHudTags
 extends TankHudCtl
 ## The world tags (brief 3.6), drawn in the world rather than in panels: a Control over the middle
 ## of the canvas (TankHud.LAYOUT "tags", 852 x 480, which stays on screen on every canvas) that
-## draws at canvas positions from TankHudGeom (the view's public API, else the state and kit.json)
+## draws at canvas positions from TankHudGeom (the view's public API, else the state and the v3 kit)
 ## and may reach past its own rect to the canvas edges:
 ##  - the speed tag on the road behind the tank ("23 km/h");
 ##  - the halt line in an Advance: a striped post where the line is with its distance on a plate,
@@ -13,7 +13,10 @@ extends TankHudCtl
 ##    a gun line or the boss), drawn beyond the muzzle so the barrel never hides it: the reach
 ##    (-12 .. +30 degrees), a tick per 10 degrees, the barrel's elevation lit where the barrel
 ##    points, the ordered elevation marked outside, and the degrees past the upper end;
-##  - the turn marker at a map end (free roam; set_turn_marker()).
+##  - the turn marker at a map end (free roam; set_turn_marker());
+##  - v3: the ready rack's three shells beside the elevation arc's label, and the Secondaries' small
+##    cold blue-white dial past the bow guns' muzzles while their seat is manned and firing or a
+##    target is in their reach (bow_elevation(), the guns' elevation, and their rounds a minute).
 ## Tags keep out of the plates (the mission plate and toasts, the hull and boss plates) and never lie
 ## on the hero: every tag stays TAG_CLEAR px outside the tank's drawn rects (TankHudGeom.tank_rects);
 ## a SURGE tag whose shooter is behind or under the tank moves above the hull's top (or onto the road
@@ -471,8 +474,7 @@ func _elev_arc() -> void:
 	var lr: Rect2 = lay["label"]
 	if lr.size != Vector2.ZERO:
 		D.tall_shadow(self, lr.position.x, lr.position.y, lab, D.AMBER)
-		if TankHud.v3_hud() != "0":
-			_rack_pips(lr, left)
+		_rack_pips(lr, left)
 
 
 ## One arc pixel, only outside the tank's body (TankHudGeom.arc_px_ok).
@@ -481,7 +483,7 @@ func _arc_px(keep: Array, p: Vector2i, col: Color) -> void:
 		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)
 
 
-# --- MOCK v3: the ready rack by the gun's arc, the secondaries' angle widget --------------------------------
+# --- v3: the ready rack by the gun's arc, the Secondaries' dial ----------------------------------------
 
 const SEC_MIN := -10.0
 const SEC_MAX := 35.0
@@ -489,57 +491,79 @@ const SEC_R := 19.0
 const SEC_GAP := 7.0
 const SEC_COL := Color("#d6ecff")
 const SEC_DIM := Color(0.62, 0.78, 0.92, 0.5)
+## The bow guns' reach ahead of their muzzles in rules px (TankFeedState: they fire at the nearest
+## enemy 40-220 px ahead).
+const SEC_REACH_PX := Vector2(40.0, 220.0)
 const SHELL_PIP := [".#.", "###", "###", "###", "###", "###", "###"]
 
 
-## The ready rack's three shells beside the elevation label (lit while loaded).
+## The ready rack's three shells beside the elevation label (lit while in the rack).
 func _rack_pips(lr: Rect2, left: bool) -> void:
-	var rack := TankHudSeats.rack_of(st())
+	var rack := TankHudModel.rack(st())
 	var x := lr.end.x + 4.0 if not left else lr.position.x - 19.0
 	var p := Vector2(roundf(x), lr.position.y + 1.0)
 	D.rect(self, Rect2(p - Vector2(2, 1), Vector2(19, 9)), Color(D.PANEL, 0.7))
-	for i in 3:
+	for i in TankConst.RACK_MAX:
 		var col := D.BRASS.lightened(0.2) if i < rack else Color("#4a3e30")
 		D.pixels(self, SHELL_PIP, p + Vector2(i * 5, 0), col)
 		if i < rack:
 			D.rect(self, Rect2(p + Vector2(i * 5 + 1, 0), Vector2(1, 1)), Color("#e07a3c"))
 
 
-## The secondaries' widget data while their seat is manned and an enemy is ahead: the bow guns'
-## pivot and length as drawn, their elevation (on the nearest enemy ahead, clamped to their reach)
-## and the rounds a minute (2 x the rider's cadence).
-func _feed_secondaries(s: TankState, g: TankHudGeom) -> void:
-	m.erase("sec")
-	if TankHud.v3_hud() == "0" or TankHudSeats.seat_slots(s)[4] < 0:
-		return
+## The bow guns' elevation as the dial shows it: {deg (+ up, SEC_MIN..SEC_MAX), target (an enemy in
+## their reach)}. SWITCH POINT for the lead: until the rules expose the bow guns' elevation, deg
+## is the upper gun's bore as the view draws it (pivot to muzzle, which the view tilts toward the
+## nearest enemy ahead), else (no view) the bore line from its pivot to the nearest live enemy
+## SEC_REACH_PX ahead of the muzzles, level (0) with none. Once the state carries the elevation,
+## return that instead and keep the signature.
+static func bow_elevation(s: TankState, g: TankHudGeom) -> Dictionary:
 	var piv := g.tank_point("bow_gun_upper_pivot")
 	var mz := g.tank_point("bow_gun_upper_muzzle")
-	var left := g.mirrored()
+	var fwd := -1.0 if mz.x < piv.x else 1.0
+	var px := absf(g.world_x(1000.0) - g.world_x(0.0)) / 1000.0
 	var best := Rect2()
 	var best_d := INF
 	for e in s.enemies:
-		if e.mode == TankIds.EM_DEAD:
+		if e.mode == TankIds.EM_DEAD or e.hp <= 0.0:
 			continue
 		var r := g.enemy_rect(e)
 		if r.size == Vector2.ZERO:
 			continue
-		var dx := r.get_center().x - piv.x
-		if (dx > 0.0) == left or absf(dx) > best_d:
+		var near_x := r.position.x if fwd > 0.0 else r.end.x
+		var ahead := (near_x - mz.x) * fwd
+		if ahead < SEC_REACH_PX.x * px or ahead > SEC_REACH_PX.y * px or ahead >= best_d:
 			continue
-		best_d = absf(dx)
+		best_d = ahead
 		best = r
-	if best.size == Vector2.ZERO and not bool(m.get("aim", false)):
+	var has := best.size != Vector2.ZERO
+	var d := mz - piv
+	if g.view == null:
+		if not has:
+			return {"deg": 0.0, "target": false}
+		d = best.get_center() - piv
+	return {"deg": clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX), "target": has}
+
+
+## The Secondaries' dial data while their seat is manned and the guns fire or have a target: the bow
+## guns' pivot and length as drawn, their side, their elevation (bow_elevation()) and the rounds a
+## minute (TankFeedState.rpm).
+func _feed_secondaries(s: TankState, g: TankHudGeom) -> void:
+	m.erase("sec")
+	var fd := s.station(TankIds.ENGINE_FEED)
+	if fd == null or fd.is_empty():
 		return
-	var deg := 4.0
-	if best.size != Vector2.ZERO:
-		var d := best.get_center() - piv
-		deg = clampf(rad_to_deg(atan2(-d.y, absf(d.x))), SEC_MIN, SEC_MAX)
+	var be := bow_elevation(s, g)
+	var rpm := TankHudModel.feed_rpm(s)
+	if not bool(be["target"]) and rpm <= 0.0:
+		return
+	var piv := g.tank_point("bow_gun_upper_pivot")
+	var mz := g.tank_point("bow_gun_upper_muzzle")
 	m["sec"] = {
 		"pivot": piv,
 		"length": maxf(absf(mz.x - piv.x), 6.0),
-		"left": left,
-		"deg": deg,
-		"rpm": 2.0 * TankHudSeats.secondaries_cad(s),
+		"left": mz.x < piv.x,
+		"deg": float(be["deg"]),
+		"rpm": rpm,
 	}
 
 
@@ -593,7 +617,7 @@ func _sec_arc() -> void:
 	var mid := c + TankHudGeom.dir(SEC_MIN, left) * (SEC_R + 4.0)
 	var x := mid.x + 2.0 if not left else mid.x - 2.0 - D.text_w(lab)
 	D.text_shadow(self, roundf(x), roundf(mid.y - 1.0), lab, SEC_COL)
-	var rpm := "%d/min" % roundi(float(sd["rpm"]))
+	var rpm := tx("TANK_HUD_PER_MIN", [roundi(float(sd["rpm"]))])
 	D.text_shadow(self, roundf(x), roundf(mid.y + 8.0), rpm, SEC_DIM)
 
 
