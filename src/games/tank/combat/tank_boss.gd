@@ -32,6 +32,9 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	b.bogie_max = float(def.get("bogie_hp", 100.0)) * scale
 	b.turret_max = float(def.get("turret_hp", 300.0)) * scale
 	b.bogie_hp = [b.bogie_max, b.bogie_max, b.bogie_max]
+	# v3 solo balance: a small crew meets a Behemoth with its far bogies (or all) already wrecked.
+	for i in range(c.boss_bogies(state.crew), b.bogie_hp.size()):
+		b.bogie_hp[i] = 0.0
 	b.turret_hp = b.turret_max
 	var seg := c.segment(state.seg.segment_index)
 	var left_screen := float((seg.get("boss", {}) as Dictionary).get("start_left_px", 440))
@@ -44,6 +47,13 @@ static func start(state: TankState, aux: TankAux, events: Array[Dictionary]) -> 
 	b.secondary_s = float((def.get("secondary", {}) as Dictionary).get("every_s", 5.0))
 	b.phase = TankIds.BOSS_PHASE_1
 	events.append(TankEvents.boss_phase(b.phase))
+	if b.bogies_left() == 0:
+		# Every bogie wrecked: it stands immobile at its stop line from the start and its turret
+		# fights (phase 2).
+		b.x_px = state.hull.x_px + state.hull.hull_w + float(def.get("stop_px", 120.0))
+		b.main_s = _roll(state, def.get("main", {}).get("every_s_phase2", [25, 35]))
+		b.phase = TankIds.BOSS_PHASE_2
+		events.append(TankEvents.boss_phase(b.phase))
 
 
 static func _roll(state: TankState, span: Array) -> float:

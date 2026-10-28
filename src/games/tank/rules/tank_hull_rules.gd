@@ -21,6 +21,9 @@ static func hit(
 	if hull.breakdown:
 		events.append(TankEvents.hit(TankEvents.ON_TANK, 0, 0.0, shell, 0.0, x))
 		return 0.0
+	if state.content != null:
+		# v3 solo balance: enemies.json crew_damage_scale (enemy HP stays the same for every crew).
+		dmg *= state.content.crew_damage_scale(state.crew)
 	var absorbed := minf(hull.berm_hp, dmg)
 	hull.berm_hp -= absorbed
 	if absorbed > 0.0:

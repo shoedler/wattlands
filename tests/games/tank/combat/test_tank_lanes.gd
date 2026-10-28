@@ -50,7 +50,9 @@ func test_no_two_gun_line_enemies_share_a_lane_and_a_spot_for_any_tank() -> void
 			var rig := TankRulesRig.new(crew)
 			rig.enter(index, 0.5)
 			assert_gte(
-				rig.state.enemies.size(), 2, "at least a pair to keep apart (v3 crew counts)"
+				rig.state.enemies.size(),
+				1 if crew == 1 else 2,
+				"a pair to keep apart (v3 crew counts; a solo rider meets a heavy alone)"
 			)
 			_assert_apart(rig, "crew %d gun line %d" % [crew, index])
 			for e in rig.state.enemies:

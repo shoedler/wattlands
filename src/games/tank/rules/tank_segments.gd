@@ -55,10 +55,16 @@ static func track(
 		if prev_seg == TankIds.SEG_DEPOT and state.content != null:
 			# The depot drill's rounds were practice: the rack leaves the depot as full as it
 			# started (steam.rack_start), the work of the depot crew.
-			var start := int(state.content.num("tanks", "steam.rack_start", 0.0))
-			var ld := TankStations.loader(state)
-			if ld != null and ld.rack < start:
-				TankStations.fill_rack(state, start)
+			TankStations.top_up_rack(
+				state, int(state.content.num("tanks", "steam.rack_start", 0.0))
+			)
+		if sg.seg == TankIds.SEG_CHECKPOINT and state.content != null:
+			# v3 solo balance: a small crew's rack is restocked at each checkpoint
+			# (steam.checkpoint_rack_by_crew; 0 for crews that load their own).
+			var by_crew: Variant = state.content.value("tanks", "steam.checkpoint_rack_by_crew", [])
+			if by_crew is Array and not (by_crew as Array).is_empty():
+				var n := int(by_crew[clampi(state.crew, 1, (by_crew as Array).size()) - 1])
+				TankStations.top_up_rack(state, n)
 		events.append(TankEvents.segment(ph.index, sg.seg, sg.stage))
 		TankEncounters.begin(state, aux, prev_seg, sg.overrun, events)
 	sg.elapsed_s = ph.elapsed_s

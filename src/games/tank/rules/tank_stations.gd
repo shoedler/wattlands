@@ -50,6 +50,19 @@ static func fill_rack(state: TankState, n: int) -> void:
 	st.loaded = st.rack >= TankConst.RACK_MAX
 
 
+## Adds heavy shells to the ready rack until it holds `n` (at most TankConst.RACK_MAX); the shells
+## already there stay (an Overpressure shell among them).
+static func top_up_rack(state: TankState, n: int) -> void:
+	var st := loader(state)
+	if st == null:
+		return
+	var aux := TankAux.of(state)
+	while aux.rack_types.size() < mini(n, TankConst.RACK_MAX):
+		aux.rack_types.append(TankIds.SHELL_HEAVY)
+	st.rack = aux.rack_types.size()
+	st.loaded = st.rack >= TankConst.RACK_MAX
+
+
 ## Takes the oldest shell out of the ready rack (TankIds.SHELL_NONE when it is empty).
 static func take_from_rack(state: TankState) -> int:
 	var st := loader(state)

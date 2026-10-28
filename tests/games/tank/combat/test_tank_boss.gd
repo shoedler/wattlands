@@ -22,7 +22,7 @@ func _driver(rig: TankRulesRig) -> int:
 
 
 func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void:
-	for crew in [1, 2, 3]:
+	for crew in [2, 3, 4]:
 		var rig := _rig(crew)
 		var b := rig.state.boss
 		assert_eq(b.phase, TankIds.BOSS_PHASE_1)
@@ -40,14 +40,14 @@ func test_the_boss_starts_in_phase_1_at_full_health_scaled_by_the_tank() -> void
 
 
 func test_the_boss_stands_partly_past_the_right_edge() -> void:
-	var rig := _rig(1)
+	var rig := _rig(2)
 	var left_screen := rig.state.boss.x_px - rig.state.camera_x()
 	assert_almost_eq(left_screen, float(rig.content.segment(BOSS)["boss"]["start_left_px"]), 0.5)
 	assert_gt(left_screen + 320.0, 640.0, "its 320 px hull runs off the right edge")
 
 
 func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var gap := _gap(rig)
 	var start := float(rig.content.segment(BOSS)["boss"]["start_left_px"])
 	assert_almost_eq(gap, start - float(TankConst.REAR_SCREEN_X) - rig.hull().hull_w, 1.0)
@@ -66,7 +66,7 @@ func test_in_phase_1_it_creeps_2_px_a_second_until_it_is_stop_px_away() -> void:
 
 
 func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	rig.run(80.0)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
@@ -90,7 +90,7 @@ func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> voi
 ## v3: with its front bogie broken it creeps on until the next standing bogie stands where the front
 ## one stood (the dark gun's headlight then reaches it), and so on.
 func test_it_creeps_on_until_its_next_standing_bogie_stands_at_the_stop() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	var stop := float(rig.content.boss_def()["stop_px"])
 	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
@@ -106,7 +106,7 @@ func test_it_creeps_on_until_its_next_standing_bogie_stands_at_the_stop() -> voi
 
 
 func test_a_broken_bogie_cannot_break_twice() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
 	var x := rig.state.boss.x_px
@@ -115,7 +115,7 @@ func test_a_broken_bogie_cannot_break_twice() -> void:
 
 
 func test_the_turret_only_takes_damage_in_phase_2() -> void:
-	var rig := _rig(1, true)
+	var rig := _rig(2, true)
 	var aux := TankAux.of(rig.state)
 	var b := rig.state.boss
 	TankShells.damage_boss(rig.state, aux, TankBossState.TURRET_PART, 100.0, 0, rig.events)
@@ -413,3 +413,27 @@ func test_a_dead_boss_stays_dead_through_the_cooldown_and_the_outcome_is_victory
 	assert_eq(rig.state.boss.phase, TankIds.BOSS_DEAD)
 	assert_eq(rig.state.outcome, TankIds.OUTCOME_VICTORY)
 	assert_eq(rig.of_type("overrun").size(), 0)
+
+
+## v3 solo balance (enemies.json boss.bogies_by_crew [0, 3, 3, 3]): a solo rider meets the Behemoth
+## with every bogie wrecked: immobile at its stop line, its turret fighting (phase 2) from the start,
+## the turret's HP the same as for any crew.
+func test_a_solo_rider_meets_the_behemoth_with_its_bogies_wrecked() -> void:
+	var rig := _rig(1, true)
+	var b := rig.state.boss
+	assert_eq(rig.content.boss_bogies(1), 0)
+	assert_eq(rig.content.boss_bogies(2), 3)
+	assert_eq(b.bogies_left(), 0)
+	assert_eq(b.phase, TankIds.BOSS_PHASE_2)
+	assert_eq(rig.of_type("boss_phase").back()["p"], TankIds.BOSS_PHASE_2)
+	assert_eq(b.turret_hp, float(rig.content.boss_def()["turret_hp"]))
+	var stop := float(rig.content.boss_def()["stop_px"])
+	assert_almost_eq(_gap(rig), stop, 0.01, "at its stop line")
+	rig.run(10.0)
+	assert_almost_eq(_gap(rig), stop, 0.01, "immobile")
+	var aux := TankAux.of(rig.state)
+	var t := TankTargets.boss_rect(rig.state, aux, TankBossState.TURRET_PART)
+	var front := rig.hull().x_px + rig.hull().hull_w
+	assert_lte(
+		t.position.x - front, rig.content.num("tanks", "arc.dark_range_px"), "in the headlight"
+	)

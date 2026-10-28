@@ -350,6 +350,14 @@ static func validate_tanks(d: Variant) -> Array[String]:
 	if not (d is Dictionary):
 		return ["tanks.json: expected an object"]
 	check_spec(d, TANKS_SPEC, "tanks.json", errors)
+	var restock: Variant = dig(d, "steam.checkpoint_rack_by_crew")
+	if restock != null and not _crew_list(restock, 0.0, float(TankConst.RACK_MAX), true):
+		errors.append(
+			(
+				"tanks.json steam.checkpoint_rack_by_crew: one count 0..%d per crew size 1..%d"
+				% [TankConst.RACK_MAX, TankIds.MAX_CREW]
+			)
+		)
 	var tanks: Variant = d.get("tanks")
 	if tanks is Dictionary:
 		for t: String in TankIds.TANKS:
@@ -586,7 +594,36 @@ static func validate_enemies(d: Variant) -> Array[String]:
 				% TankIds.MAX_CREW
 			)
 		)
+	var dmg: Variant = (d as Dictionary).get("crew_damage_scale")
+	if dmg != null and not _crew_list(dmg, 1e-9, 1.0, false):
+		errors.append(
+			(
+				"enemies.json crew_damage_scale: one factor in (0, 1] per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
+	var bogies: Variant = dig(d, "boss.bogies_by_crew")
+	var all: Variant = dig(d, "boss.bogies")
+	if bogies != null and not _crew_list(bogies, 0.0, float(all) if _num(all) else 0.0, true):
+		errors.append(
+			(
+				"enemies.json boss.bogies_by_crew: one count 0..boss.bogies per crew size 1..%d"
+				% TankIds.MAX_CREW
+			)
+		)
 	return errors
+
+
+## True for an array of one value per crew size 1..MAX_CREW, each in [lo, hi] (`ints`: whole).
+static func _crew_list(v: Variant, lo: float, hi: float, ints: bool) -> bool:
+	if not (v is Array) or (v as Array).size() != TankIds.MAX_CREW:
+		return false
+	for f: Variant in v:
+		if not _num(f) or float(f) < lo or float(f) > hi:
+			return false
+		if ints and float(f) != floorf(float(f)):
+			return false
+	return true
 
 
 static func validate_mission(d: Variant, mission_id: String = "") -> Array[String]:
@@ -897,6 +934,11 @@ static func _check_segment(s: Variant, where: String, errors: Array[String]) -> 
 		for e: Variant in s.get("encounters", []):
 			if not (e is Dictionary) or not TankIds.ENEMY_TYPES.has(str(e.get("enemy", ""))):
 				errors.append("%s encounters: each needs a known enemy" % where)
+	for key in ["encounters", "enemies", "obstacles"]:
+		for e: Variant in s.get(key, []) if s.get(key, []) is Array else []:
+			var mc: Variant = (e as Dictionary).get("min_crew", 1) if e is Dictionary else 1
+			if not _num(mc) or int(mc) < 1 or int(mc) > TankIds.MAX_CREW:
+				errors.append("%s %s: min_crew is 1..%d" % [where, key, TankIds.MAX_CREW])
 	if type == TankIds.SEG_GUN_LINE and _num(s.get("max_s")):
 		if float(s["max_s"]) > HARD_ERG_MAX_S:
 			errors.append("%s max_s: a 90%% gun line lasts at most 180 s (4.6.1)" % where)
