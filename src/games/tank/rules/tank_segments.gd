@@ -52,6 +52,13 @@ static func track(
 			state.hull.hp_max += bonus
 			state.hull.hp = minf(state.hull.hp + bonus, state.hull.hp_max)
 		state.gun_line.active = sg.seg == TankIds.SEG_GUN_LINE
+		if prev_seg == TankIds.SEG_DEPOT and state.content != null:
+			# The depot drill's rounds were practice: the rack leaves the depot as full as it
+			# started (steam.rack_start), the work of the depot crew.
+			var start := int(state.content.num("tanks", "steam.rack_start", 0.0))
+			var ld := TankStations.loader(state)
+			if ld != null and ld.rack < start:
+				TankStations.fill_rack(state, start)
 		events.append(TankEvents.segment(ph.index, sg.seg, sg.stage))
 		TankEncounters.begin(state, aux, prev_seg, sg.overrun, events)
 	sg.elapsed_s = ph.elapsed_s

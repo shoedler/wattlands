@@ -152,7 +152,8 @@ static func _arc(state: TankState, aux: TankAux, st: TankArcState, ri: TankRider
 ## next shell, pressure 0 -> 100% on tanks.json steam.full_j; at 100% the shell goes into the rack
 ## (a heavy shell, the latch event) and, where the rider may sprint (TankDrive.ability_ok), the
 ## "Surge to overpressure" window opens for window_s: an `over` intent in it takes that shell back
-## to the boiler and overpressures it (_overpressure). The `latch` intent stows a light shell from
+## to the boiler and overpressures it (_overpressure); an `over` up to window_s before the stow
+## (the surge came first) does the same at the stow. The `latch` intent stows a light shell from
 ## light_latch_pct. With the rack full the loader idles (`loaded`: no boiler grade, cadence band
 ## 50). Pressure holds in checkpoints and the cool-down. An empty Loader seat loads nothing.
 static func _steam(
@@ -171,6 +172,7 @@ static func _steam(
 	if ri == null:
 		st.sprinting = false
 		st.window_s = 0.0
+		aux.over_arm_s = 0.0
 		st.load_t = clampf(st.pressure_pct / 100.0, 0.0, 1.0) if not st.loaded else 0.0
 		return
 	var rule := rider_rule(state, ri)
@@ -183,7 +185,10 @@ static func _steam(
 			TankIds.INTENT_OVER:
 				if able and st.window_s > 0.0 and not st.over:
 					_start_over(state, aux, st)
+				elif able and not st.over and st.rack < TankConst.RACK_MAX:
+					aux.over_arm_s = c.num("tanks", "steam.window_s", 5.0)
 	st.window_s = maxf(st.window_s - dt, 0.0)
+	aux.over_arm_s = maxf(aux.over_arm_s - dt, 0.0) if able else 0.0
 	if state.all_afk:
 		return
 	# Pressure holds in checkpoints and in the cool-down (no boiler grade there, brief 2.3).
@@ -204,7 +209,10 @@ static func _steam(
 		st.pressure_pct = 0.0
 		_stow(aux, st, ri.slot, TankIds.SHELL_HEAVY, events)
 		var window := c.num("tanks", "steam.window_s", 5.0)
-		if able and window > 0.0 and not ri.in_warmup():
+		if able and aux.over_arm_s > 0.0 and not ri.in_warmup():
+			aux.over_arm_s = 0.0
+			_start_over(state, aux, st)
+		elif able and window > 0.0 and not ri.in_warmup():
 			st.window_s = window
 	st.load_t = clampf(st.pressure_pct / 100.0, 0.0, 1.0)
 

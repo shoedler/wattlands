@@ -291,10 +291,12 @@ func test_overpressure_takes_the_stowed_shell_back_and_builds_it_to_150() -> voi
 	assert_eq(st.rack, 1, "the shell is back at the boiler")
 	assert_eq(st.window_s, 0.0)
 	assert_almost_eq(st.pressure_pct, 100.0, 1.0)
-	# 1.5 x FTP = 360 W raw, P_eff 375 W: 3 kJ in 8 s.
-	rig.run(3.95)
+	# 1.5 x FTP = 360 W raw, P_eff 375 W: over_j (75% of a shell's full_j, v2's ratio) in 3.5 s.
+	var over_j := rig.content.num("tanks", "steam.over_j")
+	assert_almost_eq(over_j, 0.75 * rig.content.num("tanks", "steam.full_j"), 20.0)
+	rig.run(over_j / 375.0 / 2.0 - 0.05)
 	assert_almost_eq(st.pressure_pct, 125.0, 3.0)
-	rig.run(5.0)
+	rig.run(over_j / 375.0 / 2.0 + 1.0)
 	assert_false(st.over)
 	assert_eq(st.rack, 2)
 	assert_eq(TankAux.of(rig.state).rack_types.back(), TankIds.SHELL_OVER)
@@ -306,12 +308,14 @@ func test_overpressure_bleeds_without_the_sprint_and_ends_heavy_after_30_s() -> 
 	var rig := _over_rig()
 	var st := rig.steam()
 	rig.send(3, {"k": "over"})
-	rig.run(2.0)
-	var high := st.pressure_pct
-	assert_gt(high, 100.0)
+	rig.run(1.0)
+	assert_gt(st.pressure_pct, 100.0)
 	rig.power_w[3] = 230.0
-	rig.run(8.0)
+	rig.run(4.0)
 	assert_false(st.sprinting)
+	var high := st.pressure_pct
+	assert_lt(high, 150.0)
+	rig.run(4.0)
 	assert_lt(st.pressure_pct, high, "it bleeds")
 	rig.run(25.0)
 	assert_false(st.over)
@@ -334,6 +338,32 @@ func test_overpressure_needs_the_window() -> void:
 	early.send(3, {"k": "over"})
 	early.run(0.2)
 	assert_false(early.steam().over, "the first 300 s")
+
+
+## A surge just before the stow (up to window_s) counts: the shell goes straight back to the boiler.
+func test_a_surge_just_before_the_stow_overpressures_that_shell() -> void:
+	var rig := _loader(1)
+	rig.plan_t = 400.0
+	rig.power_w[3] = 360.0
+	var st := rig.steam()
+	var full_j := rig.content.num("tanks", "steam.full_j")
+	st.pressure_pct = 100.0 - 375.0 * 2.0 / full_j * 100.0
+	rig.send(3, {"k": "over"})
+	rig.run(0.05)
+	assert_false(st.over, "nothing stowed to take back yet")
+	rig.run(2.5)
+	assert_true(st.over, "stowed and straight back to the boiler")
+	assert_eq(st.rack, 1)
+	assert_eq(st.window_s, 0.0)
+	var late := _loader(1)
+	late.plan_t = 400.0
+	late.power_w[3] = 360.0
+	var window := late.content.num("tanks", "steam.window_s")
+	late.steam().pressure_pct = 100.0 - 375.0 * (window + 1.0) / full_j * 100.0
+	late.send(3, {"k": "over"})
+	late.run(window + 1.5)
+	assert_false(late.steam().over, "a surge more than window_s before the stow does not count")
+	assert_eq(late.steam().rack, 2)
 
 
 # --- The Gun chambers from the rack ----------------------------------------------------------------
