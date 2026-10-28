@@ -17,7 +17,8 @@ extends Control
 ##   peer=<n>           the local rider's peer (default 1)
 ##   fire=<s>           seconds between shots (default 2.5, 0 for none)
 ##   shot_frame=<n>     (with fire=0) the main gun fires on frame n (a firing still with --frames)
-##   bow=<n>            the bow guns fire n rounds a second
+##   bow=<n>            the bow guns fire n rounds a second (the feed's round count)
+##   sec                the Lights rider moves to the Secondaries seat
 ##   empty=<engine>     that station's seat empty (slot -1), e.g. empty=arc
 ##   still              the hull holds still
 ##   stats              print frame times after 300 frames (or seconds=<n> of wall time), then quit
@@ -62,6 +63,14 @@ func _ready() -> void:
 						break
 		var kind:
 			state = U.fixture(kind, crew)
+	if _opts.has("sec"):
+		var arc := state.station(TankIds.ENGINE_ARC)
+		var sec := state.station(TankIds.ENGINE_FEED)
+		if arc != null and sec != null and not arc.is_empty():
+			sec.slot = arc.slot
+			sec.peer = arc.peer
+			arc.slot = -1
+			arc.peer = 0
 	if _opts.has("empty"):
 		var st := state.station(str(_opts["empty"]))
 		if st != null:
@@ -104,9 +113,14 @@ func _process(delta: float) -> void:
 	var bow := float(_opts.get("bow", 0.0))
 	if bow > 0.0:
 		_bow_acc += delta * bow
+		var feed := state.station(TankIds.ENGINE_FEED) as TankFeedState
+		if feed != null:
+			feed.rpm = bow * 60.0
 		while _bow_acc >= 1.0:
 			_bow_acc -= 1.0
-			game.cue.emit(TankEvents.SHOT, TankEvents.shot(0, TankIds.SHELL_BOW, 0))
+			if feed != null:
+				feed.rounds += 1
+				feed.fire_tick = state.tick
 	var fire_every := float(_opts.get("fire", 2.5))
 	if fire_every > 0.0:
 		_fire_in -= delta
