@@ -233,7 +233,7 @@ func test_no_crew_meets_more_than_16_enemies_at_once_even_if_none_dies() -> void
 		assert_lte(total, TankConst.MAX_ENEMIES)
 
 
-## v3: enemy counts by crew size (0.5 / 0.7 / 0.85 / 1.0 per enemy type and segment, at least 1).
+## v3: enemy counts by crew size (0.5 / 0.7 / 0.85 / 1.0 per segment, at least 1).
 func test_each_crew_meets_its_scaled_gun_line() -> void:
 	for crew in [1, 2, 3, 4]:
 		var rig := TankRulesRig.new(crew)
@@ -245,7 +245,7 @@ func test_each_crew_meets_its_scaled_gun_line() -> void:
 			rig.enter(index, 0.0)
 			assert_eq(rig.state.gun_line.guns_total, want, "crew %d gun line %d" % [crew, i + 1])
 			assert_eq(rig.state.enemies.size(), want)
-			assert_gte(want, 3, "a gun line is never a walkover")
+			assert_gte(want, 2, "a gun line is never a walkover")
 
 
 func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_screen() -> void:
@@ -258,23 +258,24 @@ func test_the_gun_line_enemies_stand_where_the_mission_put_them_clamped_to_the_s
 		assert_gte(e.hold_px, rig.content.num("enemies", "lanes.min_hold_px", 60.0) - 0.01)
 
 
-func test_enemy_counts_scale_by_crew_size_per_type() -> void:
+## The segment's total x the crew's scale (rounded, at least 1), taken from the list in order.
+func test_enemy_counts_scale_by_crew_size_per_segment() -> void:
 	var c := TankFixtures.content()
 	assert_eq(c.value("enemies", "crew_count_scale", []), [0.5, 0.7, 0.85, 1.0])
 	var want := {1: 2, 2: 3, 3: 3, 4: 4}
+	var adv_want := {1: 3, 2: 4, 3: 4, 4: 5}
 	for crew: int in want:
 		var rig := TankRulesRig.new(crew)
 		var dug := TankEncounters.crew_counts(rig.state, rig.content.segment(5)["enemies"])
-		# Gun line 2: a heavy (1 for every crew) and four dug-ins in one entry.
+		# Gun line 2: a heavy first (every crew meets it), then four dug-ins in one entry.
 		assert_eq(dug, [1, want[crew]] as Array[int], "crew %d" % crew)
 		var adv := TankEncounters.crew_counts(rig.state, rig.content.segment(1)["encounters"])
-		var lights := 0
+		var n := 0
 		for k in adv.size():
-			if str(rig.content.segment(1)["encounters"][k]["enemy"]) == TankIds.ENEMY_LIGHT:
-				lights += adv[k]
-		assert_eq(
-			lights, maxi(1, roundi(3 * float(c.value("enemies", "crew_count_scale")[crew - 1])))
-		)
+			n += adv[k]
+			if k > 0:
+				assert_lte(adv[k], adv[k - 1], "the list's first entries first")
+		assert_eq(n, adv_want[crew], "Advance 1's five, crew %d" % crew)
 	var hp := TankRulesRig.new(1)
 	hp.enter(5, 0.0)
 	for e in hp.state.enemies:

@@ -154,6 +154,7 @@ func test_every_gun_line_enemy_is_reachable_from_every_tank() -> void:
 func test_the_gun_aims_and_fires_within_half_a_degree_and_hits() -> void:
 	var rig := _rig(2)
 	var med := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
+	med.hp = 30.0
 	rig.load_shell(TankIds.SHELL_HEAVY)
 	var aux := TankAux.of(rig.state)
 	var t := rig.run_until(func() -> bool: return _gun_shots(rig).size() > 0, 10.0)
@@ -170,7 +171,7 @@ func test_the_gun_aims_and_fires_within_half_a_degree_and_hits() -> void:
 	)
 	var s := rig.state.shells[0]
 	assert_true(s.friendly)
-	assert_eq(s.damage, 50.0)
+	assert_eq(s.damage, 35.0)
 	assert_eq(s.source, _g(rig) - 1)
 	var muzzle := TankAim.muzzle_world(rig.state, aux, rig.hull().elev_deg, rig.hull().facing)
 	# The shell already flew the tick it was fired in.
@@ -324,7 +325,7 @@ func test_fire_shoots_the_loaded_shell_at_the_current_elevation() -> void:
 	rig.run(0.05)
 	assert_eq(_gun_shots(rig).size(), 1)
 	assert_eq(_gun_shots(rig)[0]["sh"], TankIds.SHELL_LIGHT)
-	assert_eq(rig.state.shells[0].damage, 20.0)
+	assert_eq(rig.state.shells[0].damage, 14.0)
 	assert_lt(rig.state.shells[0].vy, -50.0, "rising at 12 degrees")
 
 
@@ -374,6 +375,7 @@ func test_a_traverse_turns_the_gun_to_a_target_on_the_other_side_before_it_fires
 	var m := rig.spawn(TankIds.ENEMY_MEDIUM, 1, 250.0)
 	m.gun_s = 999.0
 	rig.load_shell(TankIds.SHELL_HEAVY)
+	rig.set_rack(0)
 	rig.run(0.1)
 	assert_gt(rig.hull().traverse_s, 2.0, "traversing")
 	assert_eq(_gun_shots(rig).size(), 0)
@@ -435,3 +437,16 @@ func test_the_dark_gun_reaches_only_the_headlights_range() -> void:
 	f2.x_px = lit.hull().x_px + lit.hull().hull_w + 290.0
 	assert_true(TankGun.searchlights_lit(lit.state))
 	assert_eq(_aim(lit).id, f2.id, "lit: the full range")
+
+
+## A light tank behind the hull is never the main gun's target (v2's rule kept): its flank shot's
+## sprint prompt always comes.
+func test_the_main_gun_never_lays_on_a_rear_light() -> void:
+	var rig := _rig(4)
+	var e := rig.spawn(TankIds.ENEMY_LIGHT, -1, 130.0)
+	e.gun_s = 999.0
+	assert_null(_aim(rig), "a rear light")
+	var t := TankTargets.by_id(TankAux.of(rig.state), e.id)
+	assert_not_null(t, "it is a target (the view and the bow guns' list see it)")
+	if t != null:
+		assert_true(TankAim.rear_light(t))

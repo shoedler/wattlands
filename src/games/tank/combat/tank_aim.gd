@@ -117,7 +117,7 @@ static func pick(
 	var aim: Array[Vector2] = [Vector2.ZERO]
 	if aux.manual_target:
 		var m := TankTargets.by_id(aux, state.hull.target_id)
-		if m == null or (m.drill and not drill_ok) or not in_reach(state, m):
+		if m == null or (m.drill and not drill_ok) or rear_light(m) or not in_reach(state, m):
 			aux.manual_target = false
 		else:
 			var f := facing_for(state, aux, m.center().x)
@@ -131,7 +131,7 @@ static func pick(
 		var best: TankTarget = null
 		var best_key := INF
 		for t in aux.targets:
-			if skip.has(t.id) or (t.drill and not drill_ok):
+			if skip.has(t.id) or (t.drill and not drill_ok) or rear_light(t):
 				continue
 			if not TankTargets.engageable(t, cam) or not in_reach(state, t):
 				continue
@@ -149,6 +149,17 @@ static func pick(
 			return best
 		skip[best.id] = true
 	return null
+
+
+## A light tank behind the hull: the main gun never lays on it (v2's rule, ADR G1: it shows only
+## a little over the hull's rear), so its flank shot's sprint prompt always comes (T6).
+static func rear_light(t: TankTarget) -> bool:
+	return (
+		t.kind == TankTarget.KIND_ENEMY
+		and t.enemy != null
+		and t.enemy.side < 0
+		and t.enemy.code == TankIds.enemy_code(TankIds.ENEMY_LIGHT)
+	)
 
 
 ## Whether the main gun can see `t` (v3, the Lights seat): always while the searchlights are lit;

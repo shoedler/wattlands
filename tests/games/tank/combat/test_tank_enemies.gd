@@ -231,8 +231,8 @@ func test_a_dug_in_tank_holds_where_the_mission_put_it_and_fires_from_the_start(
 	rig.enter(GUN_LINE, 1.0)
 	var guns := rig.state.enemies
 	var want := 0
-	for spec: Dictionary in rig.content.segment(GUN_LINE)["enemies"]:
-		want += rig.content.crew_count(int(spec["count"]), TankIds.TANK_LANDSHIP, 1)
+	for n in TankEncounters.crew_counts(rig.state, rig.content.segment(GUN_LINE)["enemies"]):
+		want += n
 	assert_eq(guns.size(), want, "the mission's gun line x the crew's scale")
 	assert_gt(want, 0)
 	var holding := 0

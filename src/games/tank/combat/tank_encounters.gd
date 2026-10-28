@@ -121,23 +121,19 @@ static func advance(state: TankState, aux: TankAux) -> void:
 
 
 ## (v3, brief "Difficulty is enemy count") How many of each entry of a segment's list (encounters
-## or gun-line enemies, {enemy, count}) the crew meets: per enemy type, the segment's total count x
-## the crew's scale (TankContent.crew_count: 0.5 / 0.7 / 0.85 / 1.0 for crews 1-4, rounded, at least
-## 1), taken from the entries in their order (a later entry gets what is left, maybe 0).
+## or gun-line enemies, {enemy, count}) the crew meets: the segment's total count x the crew's scale
+## (TankContent.crew_count: 0.5 / 0.7 / 0.85 / 1.0 for crews 1-4, rounded, at least 1), taken from
+## the entries in their order (a later entry gets what is left, maybe 0), so a list puts first what
+## the smallest crews must still meet.
 static func crew_counts(state: TankState, entries: Array) -> Array[int]:
-	var c := state.content
-	var totals := {}
+	var total := 0
 	for e: Variant in entries:
-		var type := str(e.get("enemy", ""))
-		totals[type] = int(totals.get(type, 0)) + int(e.get("count", 1))
-	var left := {}
-	for type: String in totals:
-		left[type] = c.crew_count(int(totals[type]), state.hull.tank, state.crew)
+		total += int(e.get("count", 1))
+	var left := state.content.crew_count(total, state.hull.tank, state.crew)
 	var out: Array[int] = []
 	for e: Variant in entries:
-		var type := str(e.get("enemy", ""))
-		var n := mini(int(e.get("count", 1)), int(left[type]))
-		left[type] = int(left[type]) - n
+		var n := mini(int(e.get("count", 1)), left)
+		left -= n
 		out.append(n)
 	return out
 

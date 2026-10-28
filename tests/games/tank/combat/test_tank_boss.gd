@@ -87,6 +87,24 @@ func test_each_broken_bogie_pushes_it_back_and_the_third_starts_phase_2() -> voi
 	assert_eq(b.x_px, x2, "phase 2: immobile")
 
 
+## v3: with its front bogie broken it creeps on until the next standing bogie stands where the front
+## one stood (the dark gun's headlight then reaches it), and so on.
+func test_it_creeps_on_until_its_next_standing_bogie_stands_at_the_stop() -> void:
+	var rig := _rig(1, true)
+	var aux := TankAux.of(rig.state)
+	var stop := float(rig.content.boss_def()["stop_px"])
+	rig.run(ceilf((_gap(rig) - stop) / 2.0) + 1.0)
+	var front := rig.hull().x_px + rig.hull().hull_w
+	var near0 := TankTargets.boss_rect(rig.state, aux, 0).position.x - front
+	TankShells.damage_boss(rig.state, aux, 0, 1000.0, 0, rig.events)
+	var spacing := aux.geo.boss_part_rect(1).position.x - aux.geo.boss_part_rect(0).position.x
+	assert_gt(spacing, 0.0)
+	rig.run(ceilf((spacing + 12.0) / 2.0) + 1.0)
+	var near1 := TankTargets.boss_rect(rig.state, aux, 1).position.x - front
+	assert_almost_eq(near1, near0, 0.01, "bogie 1 where bogie 0 stood")
+	assert_lte(near1, rig.content.num("tanks", "arc.dark_range_px"), "inside the headlight")
+
+
 func test_a_broken_bogie_cannot_break_twice() -> void:
 	var rig := _rig(1, true)
 	var aux := TankAux.of(rig.state)
