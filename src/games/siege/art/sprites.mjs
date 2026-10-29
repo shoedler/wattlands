@@ -4,7 +4,7 @@ import { hex, rng, TAU } from './v3.mjs';
 
 const PAL = {
   h: '#1e1a1a', s: '#8a5a3c', S: '#a87452', w: '#e6ddc6', k: '#c6bba3', d: '#9a7044', D: '#ddd0b4',
-  p: '#a8843e', g: '#b8954a', b: '#5e4428', m: '#a8843e', M: '#6e5a34', r: '#7a2e26', R: '#5e231d',
+  p: '#b89a6a', g: '#b8954a', b: '#5e4428', m: '#a8843e', M: '#6e5a34', r: '#7a2e26', R: '#5e231d',
   q: '#6e2a22', t: '#d6ccb5', T: '#aea38c', n: '#5e4430', N: '#46321f', o: '#2a2420', l: '#3a2c22',
   P: '#5a3550',
 };

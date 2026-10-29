@@ -30,15 +30,15 @@ export const C = {
   SAND: hex('#c9a677'), SAND_L: hex('#d9c098'), GRAVEL: hex('#a8977c'), MUD: hex('#6e5a44'),
   DUNE: hex('#a88a60'), WADI: hex('#b39572'), SCREE: hex('#8c857a'), SHOULDER: hex('#cdb48c'),
   ROAD: hex('#9a8363'), RUT: hex('#7a664b'), VIA: hex('#ada391'), KERB: hex('#8a8272'),
-  ROCK_A: hex('#a09484'), ROCK_B: hex('#7a7064'), ROCK_D: hex('#565058'), CLEFT: hex('#3a3640'), LEDGE: hex('#b49e7c'),
-  HOST: hex('#6e5a40'), NUGGET: hex('#d9a441'),
+  ROCK_A: hex('#8a7f72'), ROCK_B: hex('#6a6058'), ROCK_D: hex('#4e4650'), CLEFT: hex('#3a3440'), LEDGE: hex('#9e8c70'),
+  HOST: hex('#6e5a40'), NUGGET: hex('#c8a660'),
   MUDB: hex('#b8a07c'), MUDR: hex('#a08866'),
   GOLD: hex('#c99a3a'), ORE: hex('#b8892e'), GLINT: hex('#f3e2b0'),
   WATER_SH: hex('#3f7f79'), WATER_MD: hex('#2d5f5e'), WATER_DP: hex('#1f4248'), WGLINT: hex('#a6cfc4'),
   WALL: hex('#bfb199'), WALL_B: hex('#b3a58c'), MORTAR: hex('#8c8170'), WALLTOP: hex('#b3a68f'), CAP: hex('#e8e0cf'),
   BRICK: hex('#8e4e3c'), BRICK_D: hex('#7a4232'),
   PAVE: hex('#a39985'), PAVE_B: hex('#8f8572'), JOINT: hex('#7a705f'),
-  ROOF: hex('#a9573c'), ROOF_D: hex('#8a4430'),
+  ROOF: hex('#9c5a46'), ROOF_D: hex('#80463a'),
   WOOD: hex('#8a6b49'), WOOD_DK: hex('#6a4f35'), WOOD_LT: hex('#a3845e'), SHAFT: hex('#5a4a3a'), SHAFT_T: hex('#6b4a2e'),
   BRONZE: hex('#b8954a'), PATINA: hex('#5f8274'), IRON: hex('#4a4a52'),
   OXBLOOD: hex('#7a2e26'), FRINGE: hex('#b8954a'), LINEN: hex('#e6ddc6'), HIDE: hex('#b09468'),
@@ -338,7 +338,7 @@ function tar(p, uv, falling, sh, px, py) {
     // ribbons running down the curtain (the gaps show the arches), a wet sheen catching the sun
     const streak = W.vnoise(uv.x * 2.6, uv.y * 0.22);
     const gap = W.vnoise(uv.x * 3.1 + 7, uv.y * 0.1);
-    if (gap < 0.4 && uv.y < 8.8) return null;
+    if (gap < 0.22 && uv.y < 8.8) return null;
     c = hex('#2a1a10');
     if (streak > 0.66) c = hex('#4a3020');
     if (streak > 0.8) c = hex('#8a6a40');

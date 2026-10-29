@@ -265,9 +265,9 @@ export class Life {
     const path = fly(tip, shot.v0, stoneK, shot.steps);
     const now = Math.floor(shot.steps * this.t);
     this.stoneNow = path[now];
-    for (let i = 1; i < now; i++) {
-      const t = i / now;
-      r.point(path[i], hex('#fff4dc'), 1, false, 0, 0.2 + 0.5 * t);
+    for (let i = Math.max(1, now - 16); i < now; i++) {
+      const t = (i - now + 16) / 16;
+      if (i % 2 === 0) r.point(path[i], hex('#fff4dc'), 1, false, 0, 0.15 + 0.45 * t);
       if (i > now - 12 && i % 2 === 0) this.puff(path[i], 0.35 + t * 0.2, hex('#e8dcc0'), 0.45 * t);
     }
     r.point(path[now], hex('#3e3833'), 4);
@@ -326,9 +326,7 @@ export class Life {
     r.stamp(sprite('fallen2'), add(at, v3(-1.5, 2, 0.1)), 1, 0, 92);
     // tar: drips from the spouts, splashes on the bridge, fumes off the hot coat
     if (this.scene.tar > 0) {
-      for (let k = 0; k < 5; k++) for (let j = 0; j < 5; j++) {
-        r.point(v3(41 + k * 1.6 + this.rnd.range(-0.2, 0.2), 63.9, 9 - j * 1.9 - this.rnd.range(0, 0.8)), hex('#120d0a'), 1);
-      }
+      for (let k = 0; k < 16; k++) r.point(v3(this.rnd.range(40.6, 47.4), 63.9, this.rnd.range(1, 9.4)), hex('#120d0a'), 1);
       for (let k = 0; k < 18; k++) r.point(v3(this.rnd.range(40.8, 47.2), this.rnd.range(63.9, 66.5), 0.5 + this.rnd.range(0, 0.6)), hex('#2a201a'), 1);
       for (let k = 0; k < 9; k++) this.puff(v3(this.rnd.range(41, 47), this.rnd.range(62, 70), 1.2 + k * 0.7), 0.9 + k * 0.12, hex('#b8b0a8'), 0.28);
     }
