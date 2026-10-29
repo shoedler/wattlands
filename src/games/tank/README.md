@@ -1,8 +1,8 @@
 # Diesel Domestiques (`tank`)
 
-One to four riders crew a pedal-powered landship through a starry forest night, one seat each of five: Drive (the diesel), Gun (the dynamo), Loader (the steam engine), Lights (the arc generator) and Secondaries (the belt-fed bow guns). Riders move between the seats; a solo rider is seated automatically by the solo loop (v3, below). Presentation `2d` (the reference's night diorama at 960 x 540; the rules keep 640 x 360 units), version 0.3.0, 1 to 4 riders, no bots. Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
+One to four riders crew a pedal-powered landship through a starry forest night, one seat each of five: Drive (the diesel), Gun (the dynamo), Loader (the steam engine), Lights (the arc generator) and Secondaries (the belt-fed bow guns). Riders move between the seats; a solo rider is seated automatically by the solo loop (v3, below). Presentation `2d` (the reference's night diorama at 960 x 540; the rules keep 640 x 360 units), version 0.3.1, 1 to 4 riders, no bots. Brief: `docs/games/tank.md`. Decisions: `docs/decisions/tank.md`. Contracts and the per-tick data flow: `contracts/README.md`. Real-trainer checklist: `HARDWARE_TEST.md`. Credits: `docs/credits.d/tank.md`.
 
-Status: v3 (0.3.0). Every crew size, 1 to 4, plays Ashfall Road to the results with zero input and wins it on the simulation matrix with grade S. The tank is the reference landship rebuilt as pixel art (no generated sprites), the HUD is the game's own and the sound is synthesized. Nothing has run on a real trainer (see "Known gaps and P2 notes").
+Status: v3 (0.3.1). Every crew size, 1 to 4, plays Ashfall Road to the results with zero input and wins it on the simulation matrix with grade S. The tank is the reference landship rebuilt as pixel art (no generated sprites), the HUD is the game's own and the sound is synthesized. Nothing has run on a real trainer (see "Known gaps and P2 notes").
 
 ## v3 rules and effort (2026-10-28)
 

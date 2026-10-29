@@ -1,5 +1,14 @@
 # Changelog: tank
 
+### Changed (Diesel Domestiques) v0.3.1
+
+- No seat lock. Move to any empty seat at any time with the arrow keys and OK, on every seat; the move lands at once and your power works the new seat right away. On the Gun, target cycling moved to swap (R / LB); up/down still nudge the elevation.
+- Your trainer follows your seat: a move between seats of the same mode changes its targets at once; a move between ERG and SIM switches at once if your last switch was 30 s or more ago, otherwise when the 30 s are up (BRIEF 4.5's spacing); the seat card shows "ERG in 12 s" meanwhile. Moving back cancels a waiting switch. The seat lock no longer comes back at a new stage.
+- Automatic riders hold a seat at least 30 s (solo) or 60 s (in a crew) so they don't hop.
+- Both searchlights burn only while the Lights seat is manned and powered; otherwise the rooms fall back to dim backup lighting with red emergency lamps. The headlight stays on.
+- The gun's angle meter and the Secondaries' dial fade in and out instead of flashing.
+- Heart rate: my numbers show your heart rate when a sensor is paired.
+
 ### Changed (Diesel Domestiques) v0.3.0
 
 - One tank for every crew size: the reference landship rebuilt as pixel art, with five seats. Drive (the diesel, SIM on the terrain), Gun (the dynamo, ERG), Loader (the steam engine, SIM, fills a 3-round ready rack at about 7 s a shell), Lights (the arc generator, ERG; dark, the gun reaches only the headlight's range and misses more) and Secondaries (a new crank-driven belt feed, SIM flat: exactly 2 bow-gun rounds per pedal revolution). An empty seat does nothing. The Bulwark, Rampart, Citadel and Bastion, the gearbox lever and rotation are gone.
