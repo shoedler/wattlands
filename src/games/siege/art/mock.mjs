@@ -32,30 +32,10 @@ const save = (name, img, scale) => {
 save('frame.png', frame, 1);
 save('frame_2x.png', frame, 2);
 save('frame_sharp_2x.png', sharp, 2);
-// a second framing: closer, centred on the junction (the camera a wave's fight would use)
-{
-  const k = Number(arg('close-k', 5));
-  const rc = new Raster(960, 540, 480 - 4 * k, 270 - 29 * k, k);
-  const sc = new Scene(rc);
-  sc.build();
-  rc.render();
-  new Life(rc, sc).run();
-  const close = rc.finish({ ...post, focusTop: 70, focusBottom: 470, rampTop: 70, rampBottom: 50, blurTop: 3, blurBottom: 2.5 });
-  const closeSharp = rc.finish({ ...post, maxBlur: 0 });
-  save('close_2x.png', close, 2);
-  save('close_sharp_2x.png', closeSharp, 2);
-  const closeCrops = { junction: [330, 150, 320, 180], catapult: [250, 230, 240, 135], arrows: [500, 330, 240, 135], gate: [280, 280, 240, 135], mine: [640, 220, 240, 135] };
-  for (const [name, [cx, cy, cw, ch]] of Object.entries(closeCrops)) {
-    const sub = new Float32Array(cw * ch * 3);
-    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) for (let q = 0; q < 3; q++) sub[(y * cw + x) * 3 + q] = closeSharp[((cy + y) * 960 + cx + x) * 3 + q];
-    const o2 = toRgba8(cw, ch, sub, 4);
-    writePng(join(out, `close_crop_${name}.png`), o2.w, o2.h, o2.data);
-  }
-}
 // detail crops of the sharp frame at x4 (art px rectangles), and a 2 x 2 sheet of four of them
 const crops = {
   wheels: [400, 80, 240, 135], gate: [290, 230, 240, 135], mine: [600, 140, 240, 135], army: [100, 330, 240, 135],
-  ballista: [170, 160, 240, 135], arrows: [420, 230, 240, 135], catapult: [330, 160, 240, 135], camp: [0, 20, 240, 135],
+  ballista: [170, 160, 240, 135], arrows: [420, 230, 240, 135], junction: [370, 110, 240, 135], catapult: [330, 160, 240, 135], camp: [0, 20, 240, 135],
 };
 const cut = ([cx, cy, cw, ch]) => {
   const sub = new Float32Array(cw * ch * 3);

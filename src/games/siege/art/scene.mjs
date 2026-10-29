@@ -10,13 +10,13 @@ import * as W from './world.mjs';
 
 export const WHEEL_X = [11, 26, 41, 56];
 export const WHEEL_Y = 12;
-export const WHEEL_R = 6;
-export const WHEEL_HW = 1.3;
+export const WHEEL_R = 7;
+export const WHEEL_HW = 1.6;
 export const ST = { MINE: 0, CATAPULT: 1, BALLISTA: 2, TAR: 3, ARROWS: 4 };
-export const CATAPULT = v3(26.9, 40.1, 0);
+export const CATAPULT = v3(30.2, 42, 0);
 // The catapult throws toward the south-west (the bridge and the road), side-on to the camera.
 const CAT_YAW = { ex: v3(Math.SQRT1_2, Math.SQRT1_2, 0), ey: v3(-Math.SQRT1_2, Math.SQRT1_2, 0) };
-export const CAT_S = 1.5;
+export const CAT_S = 2.1;
 export const BALLISTA = v3(1, 59, 15);
 export const ARROWS = v3(83, 59, 15);
 export const TAR_PUMP = v3(44, 58.5, 13);
@@ -24,11 +24,11 @@ export const TAR_PUMP = v3(44, 58.5, 13);
 // in its rider's colour) and five station columns along y under them. A clutch drum at a
 // crossing couples lane i to column j: the 4 x 5 grid shows every possible route at once.
 const HALL = { x0: 5, x1: 64, y0: 16.5, y1: 29 };
-export const LANE_Y = [19.2, 21.4, 23.6, 25.8];
+export const LANE_Y = [18.8, 21.4, 24.0, 26.6];
 const LANE_Z = 2.6;
 const COL_Z = 1.3;
 const OVER_Z = 4.4;
-const GEAR_X = [60, 31, 17, 52, 47];
+const GEAR_X = [60, 36, 17, 52, 47];
 const LOW22 = Math.tan(deg(22));
 
 export class Scene {
@@ -359,11 +359,11 @@ export class Scene {
     const gy = c.y + hw + 2.2;
     const sm = this.routes[i] >= 0 ? M.LIT0 + i : M.ACC0 + i;
     const ly = LANE_Y[i];
-    r.beam(v3(c.x, c.y + hw + 1.2, c.z), v3(c.x, gy, c.z), 0.7, sm, o);
+    r.beam(v3(c.x, c.y + hw + 1.2, c.z), v3(c.x, gy, c.z), 0.9, sm, o);
     r.box(v3(c.x - 0.7, gy - 0.7, c.z - 0.7), v3(c.x + 0.7, gy + 0.7, c.z + 0.7), M.WOOD_DARK, o, M.BRONZE);
-    r.beam(v3(c.x, gy, c.z), v3(c.x, gy, OVER_Z), 0.7, sm, o);
-    r.beam(v3(c.x, gy, OVER_Z), v3(c.x, ly, OVER_Z), 0.7, sm, o);
-    r.beam(v3(c.x, ly, OVER_Z), v3(c.x, ly, LANE_Z), 0.7, sm, o);
+    r.beam(v3(c.x, gy, c.z), v3(c.x, gy, OVER_Z), 0.9, sm, o);
+    r.beam(v3(c.x, gy, OVER_Z), v3(c.x, ly, OVER_Z), 0.9, sm, o);
+    r.beam(v3(c.x, ly, OVER_Z), v3(c.x, ly, LANE_Z), 0.9, sm, o);
     for (const y of [gy, ly]) r.box(v3(c.x - 0.6, y - 0.6, OVER_Z - 0.6), v3(c.x + 0.6, y + 0.6, OVER_Z + 0.6), M.BRONZE, o);
     for (const dx of [-1.4, 1.4]) r.beam(v3(c.x + dx, gy, 0), v3(c.x, gy, OVER_Z - 0.6), 0.35, M.WOOD_DARK, o);
     r.box(v3(c.x - 0.6, ly - 0.6, LANE_Z - 0.6), v3(c.x + 0.6, ly + 0.6, LANE_Z + 0.6), M.BRONZE, o);
@@ -377,7 +377,7 @@ export class Scene {
     const r = this.r;
     for (let i = 0; i < pts.length - 1; i++) {
       const a = pts[i], b = pts[i + 1];
-      r.beam(a, b, 0.7, mat, o);
+      r.beam(a, b, 0.9, mat, o);
       const l = Math.hypot(b.x - a.x, b.y - a.y);
       if (Math.abs(b.z - a.z) < 0.1) {
         for (let t = 2.5; t < l - 1; t += 5) {
@@ -403,7 +403,7 @@ export class Scene {
       const y = LANE_Y[i];
       r.beam(v3(h.x0 + 1, y, LANE_Z), v3(h.x1 - 1, y, LANE_Z), 0.5, M.SHAFT, o);
       const j = this.routes[i];
-      if (j >= 0) r.beam(v3(Math.min(WHEEL_X[i], GEAR_X[j]), y, LANE_Z), v3(Math.max(WHEEL_X[i], GEAR_X[j]), y, LANE_Z), 0.66, M.LIT0 + i, o);
+      if (j >= 0) r.beam(v3(Math.min(WHEEL_X[i], GEAR_X[j]), y, LANE_Z), v3(Math.max(WHEEL_X[i], GEAR_X[j]), y, LANE_Z), 0.9, M.LIT0 + i, o);
       for (let x = h.x0 + 4; x < h.x1 - 2; x += 7) r.box(v3(x - 0.25, y - 0.25, 0.5), v3(x + 0.25, y + 0.25, LANE_Z - 0.35), M.WOOD_DARK, o);
       for (const x of [h.x0 + 1, h.x1 - 1]) r.box(v3(x - 0.6, y - 0.6, 0.5), v3(x + 0.6, y + 0.6, LANE_Z + 0.6), M.WALL, o, M.BRONZE);
     }
@@ -415,17 +415,17 @@ export class Scene {
       r.beam(v3(x, h.y0 + 0.4, COL_Z), v3(x, h.y1 - 0.4, COL_Z), 0.55, M.WOOD_DARK, o);
       if (i0 >= 0) {
         const ya = j === ST.MINE ? h.y0 + 0.4 : LANE_Y[i0], yb = j === ST.MINE ? LANE_Y[i0] : h.y1 - 0.4;
-        r.beam(v3(x, ya, COL_Z), v3(x, yb, COL_Z), 0.66, M.LIT0 + i0, o);
+        r.beam(v3(x, ya, COL_Z), v3(x, yb, COL_Z), 0.9, M.LIT0 + i0, o);
       }
       for (let i = 0; i < 4; i++) {
         const y = LANE_Y[i];
         if (this.routes[i] === j) {
           r.cylZ(v3(x, y, COL_Z), 0.35, LANE_Z - COL_Z, M.IRON, o, 6);
-          r.cylZ(v3(x, y, LANE_Z - 0.5), 1.15, 1.1, M.ACC0 + i, o, 16, M.ACC0 + i);
-          r.cylZ(v3(x, y, LANE_Z + 0.6), 1.2, 0.12, M.WOOD_DARK, o, 16, M.ACC0 + i);
+          r.cylZ(v3(x, y, LANE_Z - 0.6), 1.55, 1.4, M.ACC0 + i, o, 16, M.ACC0 + i);
+          r.cylZ(v3(x, y, LANE_Z + 0.8), 1.6, 0.14, M.WOOD_DARK, o, 16, M.ACC0 + i);
           for (let k = 0; k < 12; k++) {
             const a = (TAU * k) / 12;
-            r.box(v3(x + Math.cos(a) * 1.2 - 0.16, y + Math.sin(a) * 1.2 - 0.16, LANE_Z + 0.6), v3(x + Math.cos(a) * 1.2 + 0.16, y + Math.sin(a) * 1.2 + 0.16, LANE_Z + 0.9), M.BRONZE, o);
+            r.box(v3(x + Math.cos(a) * 1.6 - 0.2, y + Math.sin(a) * 1.6 - 0.2, LANE_Z + 0.8), v3(x + Math.cos(a) * 1.6 + 0.2, y + Math.sin(a) * 1.6 + 0.2, LANE_Z + 1.15), M.BRONZE, o);
           }
         } else {
           r.cylZ(v3(x, y, LANE_Z - 0.4), 0.55, 0.8, M.IRON, o, 8);
@@ -439,16 +439,16 @@ export class Scene {
     };
     const C = COL_Z;
     this.shaft([v3(60, h.y0 + 0.4, C), v3(60, 15.4, C), v3(62.8, 15.4, C)], lit(ST.MINE));
-    this.shaft([v3(31, h.y1 - 0.4, C), v3(31, 35.4, C)], lit(ST.CATAPULT));
+    this.shaft([v3(36, h.y1 - 0.4, C), v3(36, 35.4, C)], lit(ST.CATAPULT));
     this.shaft([v3(17, h.y1 - 0.4, C), v3(17, 50, C), v3(4.3, 55.4, 15.2)], lit(ST.BALLISTA));
     this.shaft([v3(52, h.y1 - 0.4, C), v3(52, 50.5, C), v3(46.5, 56.4, 11.9)], lit(ST.TAR));
-    this.shaft([v3(47, h.y1 - 0.4, C), v3(47, 30, C), v3(71, 30, C), v3(78.2, 30, 9.8), v3(78.2, 54.6, 9.8), v3(79.7, 55.6, 15.2)], lit(ST.ARROWS));
+    this.shaft([v3(47, h.y1 - 0.4, C), v3(47, 30, C), v3(52, 30, C), v3(57, 30, 11), v3(78.2, 30, 11), v3(78.2, 54.4, 11), v3(79.7, 55.6, 15.2)], lit(ST.ARROWS));
   }
 
   pennant(base, h, mat, o) {
-    this.r.beam(base, add(base, v3(0, 0, h)), 0.22, M.WOOD_DARK, o);
+    this.r.beam(base, add(base, v3(0, 0, h)), 0.3, M.WOOD_DARK, o);
     const top = add(base, v3(0, 0, h - 0.1));
-    this.r.tri(top, add(top, v3(2.6, 0.5, -0.7)), add(top, v3(0, 0, -1.6)), mat, o);
+    this.r.tri(top, add(top, v3(3.6, 0.7, -1.0)), add(top, v3(0, 0, -2.3)), mat, o);
   }
 
   // A station's power marker: a ring of tiles in the driving rider's colour (dark when idle)
@@ -459,9 +459,9 @@ export class Scene {
     const n = Math.max(14, Math.round(rad * 5));
     for (let k = 0; k < n; k++) {
       const a = (TAU * k) / n;
-      this.ybox(add(c, v3(Math.cos(a) * rad, Math.sin(a) * rad, 0)), a, { x: 0.28, y: ((TAU * rad) / n) * 0.36, z: 0.07 }, mat, 65);
+      this.ybox(add(c, v3(Math.cos(a) * rad, Math.sin(a) * rad, 0)), a, { x: 0.5, y: ((TAU * rad) / n) * 0.4, z: 0.08 }, mat, 65);
     }
-    if (i >= 0) this.pennant(add(c, mul(flag, rad)), 5.5, M.ACC0 + i, 65);
+    if (i >= 0) this.pennant(add(c, mul(flag, rad)), 7, M.ACC0 + i, 65);
   }
 
   // --- stations ---------------------------------------------------------------------------
@@ -494,7 +494,7 @@ export class Scene {
       const mid = this.catP((x0 + x1) / 2, (y0 + y1) / 2, z0);
       this.ybox(mid, yaw, { x: ((x1 - x0) / 2) * S, y: ((y1 - y0) / 2) * S, z: ((z1 - z0) / 2) * S }, mat, o);
     };
-    this.stationMark(ST.CATAPULT, c, 7.2, v3(0.95, -0.3, 0));
+    this.stationMark(ST.CATAPULT, c, 9.6, v3(0.95, -0.3, 0));
     for (const side of [-1, 1]) {
       const x = 1.6 * side;
       rail(x - 0.3, -3.5, 0.5, x + 0.3, 3.5, 1.3, M.WOOD);
@@ -525,9 +525,9 @@ export class Scene {
   }
 
   ballista() {
-    const r = this.r, b = BALLISTA, o = 51, k = 2.2;
+    const r = this.r, b = BALLISTA, o = 51, k = 2.8;
     const a = this.ballistaAim();
-    this.stationMark(ST.BALLISTA, b, 3.9, v3(-0.2, -0.95, 0));
+    this.stationMark(ST.BALLISTA, b, 4.1, v3(-0.2, -0.95, 0));
     const L = (base, l) => this.local(base, a, mul(l, k));
     r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
     this.ybox(add(b, v3(0, 0, 0.4)), a, { x: 0.5 * k, y: 0.5 * k, z: 1.25 * k }, M.WOOD, o);
@@ -552,9 +552,9 @@ export class Scene {
   }
 
   arrowBattery() {
-    const r = this.r, b = ARROWS, o = 52, k = 2.0;
+    const r = this.r, b = ARROWS, o = 52, k = 2.6;
     const a = Math.atan2(26, -34);
-    this.stationMark(ST.ARROWS, b, 3.9, v3(0.95, -0.2, 0));
+    this.stationMark(ST.ARROWS, b, 4.1, v3(0.95, -0.2, 0));
     r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
     const base = add(b, v3(0, 0, 0.4));
     const L = (l) => this.local(base, a, mul(l, k));
@@ -588,8 +588,8 @@ export class Scene {
   tarPump() {
     const r = this.r, p = TAR_PUMP, o = 53;
     this.stationMark(ST.TAR, v3(44, 59.2, 11.5), 3.3, v3(0.95, 0.3, 0));
-    r.cylZ(v3(p.x - 2.0, p.y - 1.6, p.z - 1.5), 2.1, 2.4, M.BRONZE, o, 16, M.TAR);
-    for (let k = 0; k < 2; k++) r.cylZ(v3(p.x - 2.0, p.y - 1.6, p.z - 1.2 + k * 1.1), 2.15, 0.2, M.IRON, o, 16);
+    r.cylZ(v3(p.x - 1.6, p.y - 1.3, p.z - 1.5), 2.6, 3.0, M.BRONZE, o, 18, M.TAR);
+    for (let k = 0; k < 2; k++) r.cylZ(v3(p.x - 1.6, p.y - 1.3, p.z - 1.1 + k * 1.4), 2.66, 0.25, M.IRON, o, 18);
     const pv = v3(p.x + 1.2, p.y - 1.6, p.z + 1.6);
     r.beam(v3(p.x + 0.2, p.y - 1.6, p.z - 2), pv, 0.25, M.WOOD_DARK, o);
     r.beam(v3(p.x + 2.2, p.y - 1.6, p.z - 2), pv, 0.25, M.WOOD_DARK, o);
@@ -852,13 +852,13 @@ export class Scene {
   yardProps() {
     const r = this.r, o = 89;
     // stone balls stacked by the catapult, bolt bundles by the ballista tower, crates and carts
-    for (const [bx, by] of [[35, 40], [35, 43]]) {
+    for (const [bx, by] of [[39.5, 45.5], [42.5, 43]]) {
       for (let lvl = 0; lvl < 3; lvl++) for (let a = 0; a < 3 - lvl; a++) for (let b = 0; b < 3 - lvl; b++) {
         r.box(v3(bx + a * 0.7 + lvl * 0.35, by + b * 0.7 + lvl * 0.35, lvl * 0.6), v3(bx + a * 0.7 + lvl * 0.35 + 0.6, by + b * 0.7 + lvl * 0.35 + 0.6, lvl * 0.6 + 0.6), M.ROCK, o);
       }
     }
     for (let k = 0; k < 4; k++) {
-      const p = v3(36 + k * 0.6, 46.5 + (k % 2) * 0.5, 0);
+      const p = v3(14 + k * 0.6, 51 + (k % 2) * 0.5, 0);
       for (let q = 0; q < 5; q++) r.beam(add(p, v3(q * 0.1, 0, 0.1 + q * 0.06)), add(p, v3(q * 0.1, 3.2, 0.1 + q * 0.06)), 0.1, M.WOOD_LIGHT, o);
     }
     for (const [x, y] of [[55, 38], [56.3, 38], [55.6, 39.3], [70, 50], [71.2, 50.5], [37, 32]]) r.box(v3(x, y, 0), v3(x + 1.1, y + 1.1, 1.0), M.WOOD_LIGHT, o, M.WOOD);
