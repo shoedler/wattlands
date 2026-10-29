@@ -555,6 +555,69 @@ func test_replan_rejection_keeps_the_old_plan() -> void:
 	assert_eq(_tracker.phase_of(1).label, "Push")
 
 
+## split (tank 0.3.1): the current phase ends at the end of this tick whatever its min_s or kind,
+## and the new remaining plan starts; the phase that ended counts as the time it ran.
+func test_split_ends_the_current_phase_now() -> void:
+	_start()
+	_advance(10)
+	var rest := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 55, 20, "Split rest").with_range(50, 60)])
+	assert_true(_router.split(1, rest), "a fixed phase, 10 s into its 60")
+	assert_eq(_tracker.phase_of(1).label, "Warm", "until the end of this tick")
+	_advance(0.05)
+	assert_eq(_tracker.phase_of(1).label, "Split rest")
+	assert_eq(_tracker.history(1)[0]["ended_by"], Wl.ENDED_END_PHASE)
+	assert_almost_eq(float(_tracker.history(1)[0]["end"]), 10.05, 0.06)
+	assert_eq(_tracker.phase_of(2).label, "Warm", "only that rider")
+	_advance(20)
+	assert_true(_tracker.is_cooldown(1), "the rest, then the cool-down")
+
+
+## The split is validated on the real timeline: an ERG <-> SIM switch at the split and another one
+## 10 s later warns (BRIEF 4.5), a warm-up breach is rejected and changes nothing.
+func test_split_validates_with_the_phase_at_its_length() -> void:
+	var warned: Array = []
+	_router.on_replan = func(peer: int, warnings: Array) -> void: warned.append([peer, warnings])
+	_start()
+	_advance(5)
+	var close := (
+		EffortPlan
+		. of(
+			[
+				PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, 10, "Short climb"),
+				PlanPhase.erg(Wl.WARMUP, 50, 60, "Back").with_range(45, 60),
+			]
+		)
+	)
+	assert_true(_router.split(1, close))
+	assert_eq(warned.size(), 1)
+	assert_gt((warned[0][1] as Array).size(), 0, "switches 10 s apart: a spacing warning")
+	var bad := EffortPlan.of([PlanPhase.erg(Wl.WORK, 90, 30, "Too early")])
+	assert_false(_router.split(2, bad))
+	assert_push_warning("plan_invalid")
+	_advance(0.05)
+	assert_eq(_tracker.phase_of(2).label, "Warm", "a rejected split keeps the phase")
+
+
+func test_split_is_refused_in_the_cooldown_and_on_a_client() -> void:
+	_start()
+	_advance(240)
+	_advance(100)
+	assert_true(_tracker.is_cooldown(1))
+	assert_false(_router.split(1, EffortPlan.new()))
+	assert_eq(_applied.back()[1]["reason"], Wl.REFUSE_COOLDOWN)
+	_router.role = Wl.CLIENT
+	assert_false(_router.split(2, EffortPlan.new()))
+	assert_push_warning_count(2)
+
+
+func test_split_model_closes_the_phase_at_its_length() -> void:
+	var m := PlanValidator.split_model(_plan(), 3, 12.0)
+	assert_false(m.phase(3).open_ended)
+	assert_eq(m.phase(3).duration_s, 12.0)
+	assert_true(_plan().phase(3).open_ended, "a copy")
+	assert_eq(PlanValidator.split_model(_plan(), 0, 0.0).phase(0).duration_s, Wl.SIM_DT)
+
+
 func test_client_calls_are_ignored_with_a_warning() -> void:
 	_router.role = Wl.CLIENT
 	_start()

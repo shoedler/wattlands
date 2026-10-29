@@ -54,3 +54,14 @@ func cadence_band(_peer: int, _lo_rpm: float, _hi_rpm: float) -> void:
 ## whole resulting plan) and the cool-down is re-appended. Returns false if rejected.
 func replan(_peer: int, _plan: EffortPlan) -> bool:
 	return false
+
+
+## Split `peer`'s current phase now: `plan` (the phases after the current one) replaces the
+## remaining plan as in replan(), and the current phase ends at the end of this tick whatever
+## its min_s, open-ended or fixed (ended_by "end_phase"). The resulting plan is validated with
+## the current phase modelled at the length it ran (PlanValidator.split_model), so a switch
+## spacing warning reflects the real time since the last switch. Refused (false, nothing
+## changes) in the cool-down, with no phase, or when the plan is rejected. Added in tank 0.3.1
+## (seat moves the trainer follows at once); additive.
+func split(_peer: int, _plan: EffortPlan) -> bool:
+	return false

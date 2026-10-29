@@ -133,6 +133,25 @@ static func worst_case_length_s(plan: EffortPlan) -> float:
 	return plan.max_length_s() if plan != null else 0.0
 
 
+## `whole` with phase `index` closed at `elapsed_s`: a fixed phase of that length (at least one
+## tick), the rest unchanged. What split() validates: the phase that ends now counts as the time it
+## ran, so the switch-spacing model and the warm-up windows see the real timeline from it on.
+static func split_model(whole: EffortPlan, index: int, elapsed_s: float) -> EffortPlan:
+	var out := EffortPlan.new()
+	if whole == null:
+		return out
+	out.cooldown_appended = whole.cooldown_appended
+	for i in whole.phases.size():
+		var p := whole.phases[i].duplicate_phase()
+		if i == index:
+			p.open_ended = false
+			p.min_s = 0.0
+			p.max_s = 0.0
+			p.duration_s = maxf(elapsed_s, Wl.SIM_DT)
+		out.phases.append(p)
+	return out
+
+
 ## The plan that results from keeping phases 0..current_index of `current` (a finalized
 ## plan; its cool-down is dropped) and appending `remaining` (phases without a cool-down).
 ## Not validated (replan validates the result as a whole).

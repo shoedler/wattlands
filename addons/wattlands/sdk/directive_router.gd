@@ -270,6 +270,50 @@ func replan(peer: int, plan: EffortPlan) -> bool:
 	return true
 
 
+## DirectiveSink.split: replan with the current phase ending at the end of this tick.
+func split(peer: int, plan: EffortPlan) -> bool:
+	if not is_authority():
+		push_warning("DirectiveRouter: split ignored on a client")
+		return false
+	var id := _take_id()
+	var why := _check_phase(peer)
+	if why == "" and plan == null:
+		why = Wl.REFUSE_BAD_FIELDS
+	if why != "":
+		_refuse(peer, "split", {}, why, id)
+		return false
+	var index := tracker.index_of(peer)
+	var whole := PlanValidator.spliced(tracker.plan_of(peer), index, plan)
+	var res := PlanValidator.validate(
+		PlanValidator.split_model(whole, index, tracker.elapsed_s(peer))
+	)
+	if not bool(res["ok"]):
+		_refuse(
+			peer,
+			"split",
+			{"plan": plan.to_dict(), "errors": res["errors"]},
+			Wl.REFUSE_PLAN_INVALID,
+			id
+		)
+		return false
+	var end_why := tracker.request_split_end(peer)
+	if end_why != "":
+		_refuse(peer, "split", {}, end_why, id)
+		return false
+	tracker.set_pending_plan(peer, PlanValidator.finalize(whole))
+	_log(
+		peer,
+		id,
+		"split",
+		{"plan": plan.to_dict(), "warnings": res["warnings"], "index": index},
+		true,
+		""
+	)
+	if on_replan.is_valid():
+		on_replan.call(peer, res["warnings"])
+	return true
+
+
 # --- GameHost hooks -----------------------------------------------------------------
 
 
