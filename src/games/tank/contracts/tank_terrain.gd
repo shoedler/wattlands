@@ -27,6 +27,36 @@ static func grade_at(points: Array, distance_m: float) -> float:
 	return float((points[points.size() - 1] as Array)[1])
 
 
+## v3 (brief "Terrain relief"): the road's height in game metres at `distance_m`, relative to
+## distance 0: the integral of grade_at / 100 over the distance (the same points, so the height
+## profile and the grade the trainer feels never disagree). Exact for the piecewise-linear grade:
+## trapezoids between points, the held end grades outside them; negative distances run back from 0.
+## Raw grades (before any clamp); pure. The view scales it into its relief (TankConst.m_to_px for
+## world px) and may add seeded cosmetic bumps; the rules may use it for the aim solver.
+static func height_at(points: Array, distance_m: float) -> float:
+	if points.is_empty() or is_zero_approx(distance_m):
+		return 0.0
+	if distance_m < 0.0:
+		return -_rise(points, distance_m, 0.0)
+	return _rise(points, 0.0, distance_m)
+
+
+## The height gained from `x0` to `x1` (x0 <= x1) over the grade profile, in metres.
+static func _rise(points: Array, x0: float, x1: float) -> float:
+	var xs: Array[float] = [x0]
+	for p: Variant in points:
+		var x := float((p as Array)[0])
+		if x > x0 and x < x1:
+			xs.append(x)
+	xs.append(x1)
+	var h := 0.0
+	for i in range(1, xs.size()):
+		var a := xs[i - 1]
+		var b := xs[i]
+		h += (grade_at(points, a) + grade_at(points, b)) * 0.5 * (b - a) / 100.0
+	return h
+
+
 ## The grade the tank rolls on and the director pushes: `grade_at` clamped to the warm-up terrain
 ## range (stations.json terrain.warmup_grade_pct, 0..+2%) in WARMUP kinds and to -3..+6%
 ## otherwise (BRIEF 4.6.6, 4.6.8).

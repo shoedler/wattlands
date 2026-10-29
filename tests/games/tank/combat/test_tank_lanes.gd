@@ -49,7 +49,11 @@ func test_no_two_gun_line_enemies_share_a_lane_and_a_spot_for_any_tank() -> void
 		for index: int in GUN_LINES:
 			var rig := TankRulesRig.new(crew)
 			rig.enter(index, 0.5)
-			assert_gt(rig.state.enemies.size(), 2)
+			assert_gte(
+				rig.state.enemies.size(),
+				1 if crew == 1 else 2,
+				"a pair to keep apart (v3 crew counts; a solo rider meets a heavy alone)"
+			)
 			_assert_apart(rig, "crew %d gun line %d" % [crew, index])
 			for e in rig.state.enemies:
 				assert_between(e.lane, 0, int(rig.content.num("enemies", "lanes.count")) - 1)
@@ -98,8 +102,8 @@ func test_a_destroyer_shift_and_a_heavy_back_off_respect_the_lanes() -> void:
 	blocker.hold_px = edge - 60.0
 	blocker.gun_s = 1.0e6
 	d.gun_s = 0.1
-	rig.run(5.0)
-	assert_eq(rig.of_type("shot").size(), 1)
+	rig.run(8.0)
+	assert_eq(rig.of_type("shot").size(), 1, "after its full 7 s glint")
 	_assert_apart(rig, "after the destroyer's shift")
 	var h := rig.spawn(TankIds.ENEMY_HEAVY, 1, 60.0)
 	h.gun_s = 1.0e6

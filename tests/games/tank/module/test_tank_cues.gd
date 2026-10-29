@@ -84,7 +84,7 @@ func test_no_sprint_prompt_outside_work_phases_or_when_the_rider_cannot_act() ->
 	assert_eq(TankCues.prompt_of(null, null), TankCues.PROMPT_NONE)
 
 
-func test_the_bulwark_evades_like_the_diesel() -> void:
+func test_the_solo_driver_evades_like_any_diesel_rider() -> void:
 	var s := TankFixtures.state(1)
 	_telegraph(s, 0.0)
 	assert_eq(TankCues.prompt_of(s, s.rider(1)), TankCues.PROMPT_NONE)
@@ -320,19 +320,16 @@ func test_a_segment_event_banners_the_segments_label() -> void:
 	assert_eq(_banners(ctx).size(), 1, "the cool-down has no label of Tank's")
 
 
-func test_a_rotation_event_names_the_riders_new_station() -> void:
+func test_a_seat_event_names_the_riders_new_seat_to_that_rider_only() -> void:
 	var s := TankFixtures.state(3)
 	var ctx := _ctx(3, 2)
 	var cues := TankCues.new(ctx)
 	var me := s.rider(2)
-	cues.on_event(
-		s,
-		TankEvents.rotation(
-			[[0, TankIds.ENGINE_STEAM], [1, TankIds.ENGINE_DIESEL], [2, TankIds.ENGINE_DYNAMO]]
-		)
-	)
-	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_ROTATION"])
-	assert_eq(_toasts(ctx)[0][2], [ctx.strings.t("TANK_ENGINE_DIESEL")], "slot %d" % me.slot)
+	cues.on_event(s, TankEvents.seat(me.slot + 1, TankIds.ENGINE_DIESEL, TankIds.ENGINE_ARC))
+	assert_eq(_toasts(ctx).size(), 0, "another rider's move")
+	cues.on_event(s, TankEvents.seat(me.slot, me.engine, TankIds.ENGINE_FEED))
+	assert_eq(_keys(_toasts(ctx)), ["TANK_TOAST_SEAT"])
+	assert_eq(_toasts(ctx)[0][2], [ctx.strings.t("TANK_SEAT_SECONDARIES")], "slot %d" % me.slot)
 
 
 # --- through the module ------------------------------------------------------------------------------------
@@ -384,6 +381,8 @@ func test_a_full_session_never_broadcasts_a_toast_or_banner() -> void:
 
 func test_a_rider_going_to_reserve_is_said_once_and_the_first_call_only_records() -> void:
 	var s := TankFixtures.state(3)
+	# No telegraph: peer 1 sits on Drive (v3) and would get its "Surge to evade" prompt.
+	s.enemies.clear()
 	s.rider(3).afk = true
 	var ctx := _ctx(3, 1)
 	var cues := TankCues.new(ctx)

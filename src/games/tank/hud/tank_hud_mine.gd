@@ -1,14 +1,16 @@
 class_name TankHudMine
 extends TankHudCtl
-## "My numbers", the bottom-left plate (222 x 94 art px; brief 3.6): the station (engine icon,
-## name and job, the in-band lamp), the watts as a key number coloured by state (warm paper in
-## band, desaturated blue under with an up arrow, orange-red over with a down arrow) with the %FTP
-## and a power gauge against the band (shaded, a 1 px needle), the cadence as a key number over its
-## band gauge, ONE instruction line in large type (TankHudModel.instruction: HOLD 152-210 W, SPIN
-## 60+ RPM, SURGE 240+ W 0:04, LATCH, RESERVE), and W' and the virtual gear as small bars (the
-## gear lit in SIM). The local rider's numbers come from their own telemetry (set_telemetry), the
-## bands from the HudLayer (power_band_of, cadence_band_of) and the plan. The spec sets
-## shows_power: this plate always shows raw W and %FTP.
+## "My numbers", the bottom-left plate (222 x 94 art px; brief 3.6, v3 "My numbers follow your
+## seat"): your seat (its icon, the seat's name and its machine, the in-band lamp), the watts as a
+## key number coloured by state (warm paper in band, desaturated blue under with an up arrow,
+## orange-red over with a down arrow) with the %FTP and a power gauge against your seat's band
+## (shaded, a 1 px needle), the cadence as a key number over its band gauge, ONE instruction line in
+## large type for your seat (TankHudModel.instruction: Drive HOLD 152-210 W or SURGE 240+ W 0:04,
+## Gun HOLD (ERG), Loader BUILD 216+ W or OVER 264+ W 0:04, Lights HOLD, Secondaries SPIN 60+
+## 180/MIN, RESERVE), and SPRINT (W') and the virtual gear as small bars (the gear lit in SIM).
+## The local rider's numbers come from their own telemetry (set_telemetry), the bands from the
+## HudLayer (power_band_of, cadence_band_of) and the plan. The spec sets shows_power: this plate
+## always shows raw W and %FTP.
 
 const W := 222
 const H := 94
@@ -90,6 +92,7 @@ func refresh() -> void:
 			text += "  " + D.clock(float(line["left_s"]))
 	m = {
 		"engine": r.engine,
+		"seat": str(TankIds.SEAT_LABELS.get(r.engine, "")),
 		"w": w,
 		"pct": float(n["pct"]),
 		"cad": float(n["cad"]),
@@ -126,12 +129,13 @@ func paint() -> void:
 	_reserve_and_gear()
 
 
+## Your seat: its icon, its name and its machine.
 func _header(eng: String) -> void:
 	D.icon(self, eng, Vector2(6, 5), D.AMBER)
-	var name_key := "TANK_HUD_ENG_" + eng.to_upper()
-	var x := 16.0 + D.tall(self, 16, 4, tx(name_key).to_upper(), D.AMBER)
-	var job := D.fit_tall(tx("TANK_HUD_JOB_" + eng.to_upper()), W - 20.0 - x - 5.0)
-	D.tall(self, x + 5, 4, job, D.DIM)
+	var seat := str(m["seat"])
+	var x := 16.0 + D.tall(self, 16, 4, tx(seat).to_upper() if seat != "" else "", D.AMBER)
+	var mach := tx("TANK_HUD_ENG_" + eng.to_upper()).to_lower()
+	D.tall(self, x + 5, 4, D.fit_tall(mach, W - 20.0 - x - 5.0), D.DIM)
 	D.lamp(self, Vector2(W - 11, 6), bool(m["in_band"]), D.GOOD)
 	D.rect(self, Rect2(4, 16, W - 8, 1), D.FRAME_IN)
 
@@ -179,9 +183,11 @@ func _cadence() -> void:
 
 func _reserve_and_gear() -> void:
 	D.rect(self, Rect2(4, 76, W - 8, 1), D.FRAME_IN)
-	D.tall(self, 6, 80, tx("TANK_HUD_WPRIME"), D.DIM)
+	# v3: W' is labelled SPRINT (the bar starts after the label)
+	var lw := D.tall(self, 6, 80, tx("TANK_HUD_SPRINT"), D.DIM)
 	var wb := float(m["wbal"])
-	D.bar(self, Rect2(30, 82, 76, 5), wb, D.BRASS if wb > 0.25 else D.OVER)
+	var bx := maxf(30.0, roundf(6.0 + lw + 4.0))
+	D.bar(self, Rect2(bx, 82, 106.0 - bx, 5), wb, D.BRASS if wb > 0.25 else D.OVER)
 	var sim := bool(m["sim"])
 	D.tall(self, 117, 80, tx("TANK_HUD_GEAR"), D.DIM)
 	var g := int(m["gear"])

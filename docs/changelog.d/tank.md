@@ -1,5 +1,14 @@
 # Changelog: tank
 
+### Changed (Diesel Domestiques) v0.3.0
+
+- One tank for every crew size: the reference landship rebuilt as pixel art, with five seats. Drive (the diesel, SIM on the terrain), Gun (the dynamo, ERG), Loader (the steam engine, SIM, fills a 3-round ready rack at about 7 s a shell), Lights (the arc generator, ERG; dark, the gun reaches only the headlight's range and misses more) and Secondaries (a new crank-driven belt feed, SIM flat: exactly 2 bow-gun rounds per pedal revolution). An empty seat does nothing. The Bulwark, Rampart, Citadel and Bastion, the gearbox lever and rotation are gone.
+- Riders choose their seat: left/right picks an empty seat and confirm sits (on the Gun seat, swap opens the picker). A seat lock keeps every rider at least 60 s between trainer-mode changes; each move is a replan the platform ramps. Riders who never touch the controls, and a solo rider by default, are seated automatically: Drive, then the Loader and the Gun when a target comes, the Secondaries against light targets.
+- Difficulty is the enemy count by crew size (a solo rider meets fewer enemies and a Behemoth with its bogies already wrecked); enemy HP is the same for every crew. A solo tank takes half damage and its rack is restocked at each checkpoint. Every telegraphed shot warns at least 6 s ahead (the Behemoth 8 s).
+- The tank follows the ground: every road wheel rides its own suspension and the whole tank tilts on slopes, enemies too. The track runs, the diesel's pistons move with cadence, the turret shows the ready rack and the breech through two windows, both bow guns tilt in their armoured box. The main gun fires a big pixel blast with recoil, hull rock and shake; its smoke stays where the shot was fired.
+- A bluer, greener forest night with little fenced bases at the depot, the gun lines and the free-roam strongpoints; no people outside the tank; the world's lamps draw behind the tank. Free-roam zones are forest variants and base clearings.
+- The HUD's seat panel shows five live machine cards with ERG/SIM tags, EMPTY seats, YOU with the seat lock, the rack's shells and the Secondaries' rounds per minute. W' is now SPRINT, and the Secondaries get a small blue-white angle dial.
+
 ### Changed (Diesel Domestiques) v0.2.0
 
 - Up to four riders. Four riders crew the Bastion: the Citadel plus an arc-generator room and a searchlight tower. The arc generator rider rides ERG at 65-80% FTP; the target rises with how often the bow guns fire. In band, the searchlights are lit and the main gun shoots straighter. A cadence collapse stalls the arc generator. With rotation on, every rider works every engine once.

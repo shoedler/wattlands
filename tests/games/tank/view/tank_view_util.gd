@@ -81,7 +81,7 @@ static func roam_state(
 	var c := TankFixtures.content(content_id)
 	var rng := RandomNumberGenerator.new()
 	rng.seed = seed_value
-	var s := TankRules.new_state(c, TankFixtures.slots(crew), content_id, false, rng)
+	var s := TankRules.new_state(c, TankFixtures.slots(crew), content_id, rng)
 	s.rng = null
 	var segs := c.segments()
 	s.seg.seg = TankIds.SEG_ROAM

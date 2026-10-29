@@ -86,7 +86,7 @@ func test_game_json_is_exactly_the_brief() -> void:
 	var m := F.manifest()
 	assert_eq(m["title"], "Diesel Domestiques")
 	assert_eq([int(m["min_players"]), int(m["max_players"])], [1, 4])
-	assert_eq(m["version"], "0.2.0")
+	assert_eq(m["version"], "0.3.0")
 	assert_false(m["bots"], "no bots (brief 0.3)")
 	assert_eq(
 		m["contents"],
@@ -109,10 +109,8 @@ func test_game_json_is_exactly_the_brief() -> void:
 		["ashfall_road", "drill", "ashfall_road"]
 	)
 	assert_eq(int(m["first_run_priority"]), -1, "the first run never picks Tank")
-	assert_eq(
-		m["options"],
-		[{"id": "rotation", "type": "toggle", "default": true, "label": "TANK_OPT_ROTATION"}]
-	)
+	# v3: seats replace rotation, so the game has no session option.
+	assert_false(m.has("options"), "no rotation option in v3")
 	# v2 (brief 3.1): one per-rider option, the miniature (per-frame depth of field) toggle.
 	assert_eq(
 		m.get("player_options", []),

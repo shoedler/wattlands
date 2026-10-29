@@ -74,7 +74,7 @@ static func range_px(v0: float, elev_deg: float, gravity: float, drop: float) ->
 	return v0 * cos(a) * t
 
 
-## The dispersion half-angle in degrees at `bank` units (the Bulwark passes its full bank):
+## The dispersion half-angle in degrees at `bank` units (a tank without a dynamo passes a full bank):
 ## dispersion_deg[0] from low_bank up, dispersion_deg[1] below it (brief 2.4 Dynamo).
 static func dispersion_deg(c: TankContent, bank: float) -> float:
 	var d: Array = c.value("tanks", "dynamo.dispersion_deg", [0.5, 1.5])

@@ -23,7 +23,7 @@ func _driver_v(rig: TankRulesRig) -> float:
 
 func test_speed_follows_the_speed_model_oracle_on_the_drivers_p_eff() -> void:
 	for grade: float in [0.0, 3.0, -2.0, 5.0]:
-		var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(grade))
+		var rig := TankRulesRig.new(1, "ashfall_road", 7, _empty_advance(grade))
 		rig.enter(ADVANCE, 1.0)
 		rig.run(60.0)
 		var want := SpeedModel.steady_state_speed(225.0, grade, 75.0 + 8.0, 0.5)
@@ -32,7 +32,7 @@ func test_speed_follows_the_speed_model_oracle_on_the_drivers_p_eff() -> void:
 
 
 func test_80_percent_ftp_on_the_flat_is_8_2_m_s_and_66_px_s() -> void:
-	var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(1, "ashfall_road", 7, _empty_advance(0.0))
 	rig.sim_pct = 80.0
 	rig.enter(ADVANCE, 1.0)
 	rig.run(80.0)
@@ -45,32 +45,23 @@ func test_80_percent_ftp_on_the_flat_is_8_2_m_s_and_66_px_s() -> void:
 
 func test_the_world_scrolls_eight_px_per_game_metre() -> void:
 	assert_eq(TankConst.PX_PER_M, 8.0)
-	var rig := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(1, "ashfall_road", 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.run(20.0)
 	assert_almost_eq(rig.hull().x_px, rig.hull().distance_m * 8.0, 1e-6)
 
 
 func test_the_drive_uses_the_mass_of_the_rider_on_the_diesel() -> void:
-	var slow := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
+	var slow := TankRulesRig.new(1, "ashfall_road", 7, _empty_advance(4.0))
 	slow.mass_kg = 110.0
 	slow.enter(ADVANCE, 1.0)
 	slow.run(60.0)
-	var fast := TankRulesRig.new(1, "ashfall_road", true, 7, _empty_advance(4.0))
+	var fast := TankRulesRig.new(1, "ashfall_road", 7, _empty_advance(4.0))
 	fast.mass_kg = 55.0
 	fast.enter(ADVANCE, 1.0)
 	fast.run(60.0)
 	assert_lt(_driver_v(slow), _driver_v(fast), "a heavier rider climbs slower")
 	assert_almost_eq(_driver_v(slow), SpeedModel.steady_state_speed(225.0, 4.0, 118.0, 0.5), 0.15)
-
-
-func test_rotation_puts_the_next_riders_mass_on_the_tracks() -> void:
-	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
-	rig.enter(ADVANCE, 1.0)
-	assert_eq(rig.diesel().engine, TankIds.ENGINE_DIESEL)
-	assert_eq(rig.diesel().peer, 1, "slot 0 drives in stage 1")
-	rig.enter(4, 1.0)
-	assert_eq(rig.diesel().peer, 2, "slot 1 drives in stage 2")
 
 
 func test_the_tank_holds_in_gun_lines_checkpoints_and_the_boss_and_in_a_breakdown() -> void:
@@ -87,7 +78,6 @@ func test_a_wire_stops_the_tank_at_its_standoff_until_a_heavy_shell_clears_it() 
 	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
-		true,
 		7,
 		_patch(
 			ADVANCE,
@@ -137,7 +127,6 @@ func test_the_advance_stops_at_the_halt_line_and_the_objective_is_met() -> void:
 	var rig := TankRulesRig.new(
 		1,
 		"ashfall_road",
-		true,
 		7,
 		_patch(ADVANCE, {"encounters": [], "obstacles": [], "terrain": [[0, -3]], "length_m": 200})
 	)
@@ -202,7 +191,6 @@ func _sprint_rig(crew: int = 1) -> TankRulesRig:
 	var rig := TankRulesRig.new(
 		crew,
 		"ashfall_road",
-		true,
 		7,
 		_patch(ADVANCE, {"encounters": [], "obstacles": [], "terrain": [[0, 0]]})
 	)
@@ -343,15 +331,27 @@ func test_the_repair_is_paid_by_the_reserve_when_the_driver_is_afk() -> void:
 	rig.hull().hp = 1.0
 	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
 	rig.afk[1] = true
+	rig.p_eff[2] = 60.0
 	var t := rig.run_until(func() -> bool: return not rig.hull().breakdown, 200.0)
 	assert_almost_eq(t, 5000.0 / 60.0, 0.5, "reserve P_eff is 60 W")
+
+
+## v3: the crew works the repair: the mean P_eff of the manned seats, whatever seats they are.
+func test_the_crew_pays_the_repair_with_its_mean_p_eff() -> void:
+	var rig := _sprint_rig(2)
+	rig.p_eff[1] = 300.0
+	rig.p_eff[2] = 100.0
+	rig.hull().hp = 1.0
+	TankHullRules.hit(rig.state, 5.0, TankIds.SHELL_ENEMY, 0.0, [])
+	var t := rig.run_until(func() -> bool: return not rig.hull().breakdown, 200.0)
+	assert_almost_eq(t, 5000.0 / 200.0, 0.2, "(300 + 100) / 2 W")
 
 
 # --- Reserve and all-AFK ------------------------------------------------------------------------
 
 
 func test_an_afk_driver_runs_on_the_60_w_reserve_and_is_never_in_band() -> void:
-	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(2, "ashfall_road", 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.afk[1] = true
 	rig.run(80.0)
@@ -364,7 +364,7 @@ func test_an_afk_driver_runs_on_the_60_w_reserve_and_is_never_in_band() -> void:
 
 
 func test_a_dropped_rider_counts_as_afk() -> void:
-	var rig := TankRulesRig.new(2, "ashfall_road", true, 7, _empty_advance(0.0))
+	var rig := TankRulesRig.new(2, "ashfall_road", 7, _empty_advance(0.0))
 	rig.enter(ADVANCE, 1.0)
 	rig.connected[1] = false
 	rig.run(1.0)
@@ -384,8 +384,9 @@ func test_when_every_rider_is_afk_nothing_has_power() -> void:
 	assert_true(rig.state.all_afk)
 	assert_eq(rig.hull().speed_mps, 0.0, "no drive")
 	for st in rig.state.stations:
-		assert_true(st.unpowered)
 		assert_eq(st.p_eff_w, 0.0)
+		if not st.is_empty():
+			assert_true(st.unpowered, "%s: a manned seat loses its power" % st.engine)
 	var bank := rig.dynamo().bank
 	rig.run(20.0)
 	assert_eq(rig.dynamo().bank, bank, "the bank is frozen: no charge, no drain")

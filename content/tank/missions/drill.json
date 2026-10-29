@@ -1,8 +1,7 @@
 {
-	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s depot, a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. Rotation is ignored; no haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
+	"_doc": "The e2e drill (brief 2.9): 130 s inside the warm-up limits (BRIEF 4.6.8). A 30 s depot, a fixed 70 s skirmish of WARMUP kind against 2 light tanks and 1 medium, a 30 s checkpoint at 50%. No haptics (every phase lies in the first 300 s); at most one mode switch per rider. Owner: rules. Schema: TankContentSchema.validate_mission.",
 	"id": "drill",
 	"label": "TANK_CONTENT_DRILL",
-	"rotation": false,
 	"plan_table": "drill_plans",
 	"segments": [
 		{
@@ -13,7 +12,7 @@
 			"duration_s": 30,
 			"label": "TANK_PHASE_DEPOT",
 			"name": "TANK_PLACE_DEPOT",
-			"backdrop": "bg_depot_near",
+			"backdrop": "base",
 			"terrain": [[0, 0], [100, 1], [200, 2], [300, 0.5]],
 			"drills": [
 				{"from_s": 0, "to_s": 30, "drill": "drive"}
@@ -26,8 +25,8 @@
 			"kind": "WARMUP",
 			"duration_s": 70,
 			"label": "TANK_PHASE_SKIRMISH",
-			"name": "TANK_PLACE_POPLAR_ROAD",
-			"backdrop": "bg_fields_near",
+			"name": "TANK_PLACE_PINE_ROAD",
+			"backdrop": "forest",
 			"length_m": 500,
 			"terrain": [[0, 0.5], [150, 2], [300, 1], [450, 0], [500, 0]],
 			"encounters": [
@@ -45,11 +44,11 @@
 			"duration_s": 30,
 			"label": "TANK_PHASE_CHECKPOINT_1",
 			"name": "TANK_PLACE_CHECKPOINT",
-			"backdrop": "bg_fields_near"
+			"backdrop": "forest"
 		}
 	],
 	"cooldown": {
-		"backdrop_victory": "bg_fields_near",
-		"backdrop_withdrawn": "bg_fields_near"
+		"backdrop_victory": "forest",
+		"backdrop_withdrawn": "forest"
 	}
 }

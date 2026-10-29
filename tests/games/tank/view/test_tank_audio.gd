@@ -101,15 +101,15 @@ func test_impacts_explosions_ram_breakdown_lever_and_latch() -> void:
 	assert_has(_audio.played, "tank_boom_big")
 	_audio.on_cue(TankEvents.BREAKDOWN, TankEvents.breakdown())
 	assert_has(_audio.played, "tank_breakdown")
-	_audio.on_cue(TankEvents.LEVER, TankEvents.lever(0, TankIds.LEVER_HOIST))
-	assert_has(_audio.played, "tank_clunk")
+	_audio.on_cue(TankEvents.SEAT, TankEvents.seat(0, TankIds.ENGINE_ARC, TankIds.ENGINE_FEED))
+	assert_has(_audio.played, "tank_clunk", "a seat move clunks")
 	_audio.played.clear()
 	_audio.on_cue(TankEvents.LATCH, TankEvents.latch(1, TankIds.SHELL_HEAVY))
 	assert_has(_audio.played, "tank_hiss", "the steam latch hisses")
 
 
-func test_a_bulwark_latch_ratchets_instead_of_hissing() -> void:
-	var s := TankFixtures.state(1)
+func test_a_hoist_latch_ratchets_when_the_loader_seat_is_empty() -> void:
+	var s := TankFixtures.state(2)
 	var g := U.make_game(s)
 	autofree(g)
 	var a := TankAudio.new()
@@ -128,8 +128,8 @@ func test_the_boss_dying_is_a_long_roll_of_booms() -> void:
 
 
 func test_loops_follow_cadence_and_the_local_station_is_loudest() -> void:
-	_step(0.05, 90.0, 1)
-	assert_eq(_audio.own_engine, TankIds.ENGINE_DYNAMO, "peer 1 works the dynamo in Stage 2")
+	_step(0.05, 90.0, 2)
+	assert_eq(_audio.own_engine, TankIds.ENGINE_DYNAMO, "peer 2 sits on the Gun (v3 start seats)")
 	assert_eq(_audio.loop_db[TankIds.ENGINE_DYNAMO], TankAudio.OWN_DB[TankIds.ENGINE_DYNAMO])
 	assert_eq(_audio.loop_db[TankIds.ENGINE_DIESEL], TankAudio.OTHER_DB[TankIds.ENGINE_DIESEL])
 	assert_gt(
@@ -137,7 +137,7 @@ func test_loops_follow_cadence_and_the_local_station_is_loudest() -> void:
 		5.0,
 		"your own room is clearly louder than it would be as a teammate's"
 	)
-	_step(0.05, 90.0, 3)
+	_step(0.05, 90.0, 1)
 	assert_eq(_audio.own_engine, TankIds.ENGINE_DIESEL)
 	assert_eq(_audio.loop_db[TankIds.ENGINE_DIESEL], TankAudio.OWN_DB[TankIds.ENGINE_DIESEL])
 	assert_eq(_audio.loop_db[TankIds.ENGINE_DYNAMO], TankAudio.OTHER_DB[TankIds.ENGINE_DYNAMO])
@@ -163,7 +163,10 @@ func test_loops_stop_without_cadence_power_or_a_room() -> void:
 	_state.station(TankIds.ENGINE_DIESEL).unpowered = true
 	_step(0.05, 90.0)
 	assert_false(_audio.loop_on[TankIds.ENGINE_DIESEL])
-	assert_false(_audio.loop_on[TankIds.ENGINE_BULWARK], "the Citadel has no gearbox room")
+	_state.station(TankIds.ENGINE_DIESEL).unpowered = false
+	_state.station(TankIds.ENGINE_DYNAMO).slot = -1
+	_step(0.05, 90.0)
+	assert_false(_audio.loop_on[TankIds.ENGINE_DYNAMO], "an empty seat's machine is silent")
 	_state.all_afk = true
 	_step(0.05, 90.0)
 	assert_false(_audio.loop_on[TankIds.ENGINE_DYNAMO])
@@ -179,14 +182,14 @@ func test_a_reserve_room_hums_at_a_steady_slow_pitch() -> void:
 func test_steam_chuffs_once_per_stroke_and_the_loader_hears_it_loudest() -> void:
 	var chuffs := 0
 	for _i in 60:
-		_step(0.05, 60.0, 2)
+		_step(0.05, 60.0, 3)
 	chuffs = _audio.played.count("tank_chuff")
 	assert_almost_eq(float(chuffs), 3.0, 1.0, "60 rpm for 3 s: three strokes")
 	var own_db := _audio.played_db[_audio.played.find("tank_chuff")]
 	var other := _audio_for(1)
 	for _i in 22:
 		other.update(_state, 0.05, 1, _feed(60.0))
-	assert_gt(own_db, other.played_db[other.played.find("tank_chuff")], "peer 2 is on steam")
+	assert_gt(own_db, other.played_db[other.played.find("tank_chuff")], "peer 3 is on steam")
 
 
 func test_the_chuff_pitch_follows_pressure() -> void:
@@ -220,26 +223,22 @@ func test_the_tracks_clank_faster_the_faster_the_tank_goes() -> void:
 
 
 func test_the_hoist_ratchets_while_a_shell_is_lifted() -> void:
-	var s := TankFixtures.state(1)
+	var s := TankFixtures.state(2)
 	var g := U.make_game(s)
 	autofree(g)
 	var a := TankAudio.new()
 	a.game = g
 	add_child_autofree(a)
-	var gb := s.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	gb.lever = TankIds.LEVER_HOIST
-	gb.lever_to = TankIds.LEVER_HOIST
-	gb.move_s = 0.0
+	var dy := s.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
+	dy.hoist_s = 8.0
 	for i in 30:
-		gb.hoist_j += 60.0
 		a.update(s, 0.05, 1, U.feed_of(s, 200.0, 90.0))
 	assert_gt(a.played.count("tank_ratchet"), 3)
 	a.played.clear()
-	gb.lever = TankIds.LEVER_DRIVE
+	dy.hoist_s = 0.0
 	for i in 30:
-		gb.hoist_j += 60.0
 		a.update(s, 0.05, 1, U.feed_of(s, 200.0, 90.0))
-	assert_eq(a.played.count("tank_ratchet"), 0, "only on Hoist")
+	assert_eq(a.played.count("tank_ratchet"), 0, "only while the hoist lifts")
 
 
 func test_the_recorded_sounds_stay_bounded() -> void:

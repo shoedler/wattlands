@@ -1,13 +1,12 @@
 class_name TankWorldDraw
 extends RefCounted
-## The world around the tank (docs/games/tank.md 3.1, 3.5), drawn by TankView's layers in stage px:
-## the planes with their parallax (far, forest and road behind the tank; the dark foreground in
-## front), the depot (TankDepotDraw), the halt line (concrete teeth, a post with a hooded
-## amber lamp), obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk
-## into a debris heap, the enemies in their depth lanes (a dark rim, dimmer further back, a warm
-## pulse while they telegraph) and the Behemoth. Free roam (brief 2.10, 3.1): the zone's near plane in
-## place of the forest plane, cross-faded at a zone's edge, the planes scrolled by the hull's place on
-## the road (TankView.plane_x); the turning places at the road's ends; the turn's dust cloud.
+## The world on the road (docs/games/tank.md v3 "World", 3.5), drawn by TankView's World layer in
+## stage px (the planes and the road band are TankForest's): the little bases, the tank's contact
+## shadow under its track run, the halt line (concrete teeth, a post with a hooded amber lamp),
+## obstacles (wire, hulks, tank traps), wrecks aging on sim time from a burning hulk into a debris
+## heap, the enemies in their depth lanes (a dark rim, dimmer further back, a warm pulse while they
+## telegraph), each on the relief (rotated as a whole to the fit of the ground under it) and the
+## Behemoth. Free roam: the turning places at the road's ends; the turn's dust cloud. No people.
 
 const LANE_DIM: Array[float] = [1.0, 0.74, 0.56, 0.44]
 ## How much night haze each depth lane carries (a cool teal laid over the sprite).
@@ -38,135 +37,12 @@ const TURN_BARRIER_M := 15.0
 const TURN_LOOP_M := 70.0
 const GRAVEL := Color(0.2, 0.18, 0.15)
 const GRAVEL_DK := Color(0.12, 0.11, 0.09)
-## The road band (draw_back): its texture's size, the rows above the ground line it starts, and its
-## night colours (the light layer warms it).
-const ROAD_W := 480
-const ROAD_H := 30
-const ROAD_TOP := 6
-const GRAVEL_BASE := Color(0.145, 0.125, 0.1)
-const GRAVEL_SH := Color(0.06, 0.05, 0.04)
-const PEBBLE := Color(0.3, 0.26, 0.2)
-const RUT := Color(0.08, 0.07, 0.055)
-const TUFT := Color(0.16, 0.18, 0.1)
-
-static var _road: Texture2D = null
-
-
-## The road band's texture (tileable, ROAD_W x ROAD_H, made once): night gravel with pebbles (a lit
-## top pixel, a shadow under), two compacted wheel ruts, grass tufts and stones along its far edge,
-## fading in at the top (onto the road plane's rocks) and out at the bottom (under the foreground).
-## Its own light comes from the light layer (the cabin spill, the headlight's pool).
-static func road_tex() -> Texture2D:
-	if _road != null:
-		return _road
-	var img := Image.create(ROAD_W, ROAD_H, false, Image.FORMAT_RGBA8)
-	for y in ROAD_H:
-		for x in ROAD_W:
-			var n := _tile_noise(x, y)
-			var col := GRAVEL_BASE.lerp(GRAVEL_DK, n * 0.6)
-			var ry := y - ROAD_TOP
-			if ry in [5, 6, 12, 13]:
-				col = col.lerp(RUT, 0.55)
-			var h := TankDraw.hash01(float(x) * 1.37 + float(y) * 91.7)
-			if h > 0.93:
-				col = PEBBLE.lerp(GRAVEL_BASE, n)
-			elif h > 0.9:
-				col = GRAVEL_DK
-			var a := clampf(float(y) / float(ROAD_TOP), 0.0, 1.0)
-			a *= clampf(float(ROAD_H - 1 - y) / 4.0, 0.0, 1.0)
-			img.set_pixel(x, y, Color(col.r, col.g, col.b, a))
-	# Pebbles: a lit top pixel over a shadow pixel; tufts and stones on the far edge.
-	for x in ROAD_W:
-		var h2 := TankDraw.hash01(float(x) * 7.31 + 3.0)
-		if h2 > 0.82:
-			var py := (
-				ROAD_TOP + 1 + int(TankDraw.hash01(float(x) * 2.9) * float(ROAD_H - ROAD_TOP - 6))
-			)
-			img.set_pixel(x, py, PEBBLE)
-			img.set_pixel(x, py + 1, GRAVEL_SH)
-		if h2 < 0.1:
-			for k in int(2 + h2 * 30.0):
-				img.set_pixel(x, ROAD_TOP - k, TUFT if k % 2 == 0 else TUFT.darkened(0.3))
-		elif h2 > 0.97:
-			for dx in 3:
-				img.set_pixel(posmod(x + dx, ROAD_W), ROAD_TOP - 1, PEBBLE.darkened(0.2))
-				img.set_pixel(posmod(x + dx, ROAD_W), ROAD_TOP, GRAVEL_SH)
-	_road = ImageTexture.create_from_image(img)
-	return _road
-
-
-## Seamless value noise over the road texture (0..1), tiling every ROAD_W px.
-static func _tile_noise(x: int, y: int) -> float:
-	var s := 0.0
-	for o: Vector2 in [Vector2(23.0, 0.9), Vector2(7.0, 0.55), Vector2(3.0, 0.3)]:
-		var cells := int(float(ROAD_W) / o.x)
-		var fx := float(x) / float(ROAD_W) * cells
-		var i0 := floori(fx)
-		var t := fx - i0
-		var a := TankDraw.hash01(float(posmod(i0, cells)) * 3.3 + floorf(y / 3.0) * 17.0 + o.x)
-		var b := TankDraw.hash01(float(posmod(i0 + 1, cells)) * 3.3 + floorf(y / 3.0) * 17.0 + o.x)
-		s += lerpf(a, b, t * t * (3.0 - 2.0 * t)) * o.y
-	return clampf(s / 1.75, 0.0, 1.0)
-
-
-## A plane tiled across the canvas at its parallax (scrolled by TankView.plane_x), tinted `mod`.
-static func tile(ci: CanvasItem, v: TankView, p: Dictionary, mod: Color = Color.WHITE) -> void:
-	var w: float = p["w"]
-	var scroll := v.plane_x * TankView.S
-	var x := -fposmod(scroll * float(p["parallax"]), w)
-	var tex: Texture2D = p["tex"]
-	while x < v.canvas.x:
-		ci.draw_texture(tex, Vector2(roundf(x), float(p["y0"])), mod)
-		x += w
-
-
-## Free roam: the zone's near plane in place of the replaced one, the next zone's faded in at an edge.
-static func _zone_plane(ci: CanvasItem, v: TankView) -> void:
-	var mix := v.zone_mix
-	var k := float(mix.get("k", 0.0))
-	tile(ci, v, v.kit.zone_plane(str(mix.get("a", ""))), Color(1, 1, 1, 1.0 - k))
-	if k > 0.0:
-		tile(ci, v, v.kit.zone_plane(str(mix.get("b", ""))), Color(1, 1, 1, k))
-
-
-static func draw_back(ci: CanvasItem, v: TankView) -> void:
-	var far := v.kit.plane("far")
-	if v.y_off > 0.0 and not far.is_empty():
-		# A taller canvas: the night sky continues above the reference's frame.
-		ci.draw_rect(Rect2(0, -v.y_off, v.canvas.x, v.y_off + 1.0), Color(0.016, 0.03, 0.035))
-	for p in v.kit.planes:
-		if str(p.get("layer", "")) == "back":
-			if not v.zone_mix.is_empty() and str(p.get("name", "")) == v.kit.zone_replaces:
-				_zone_plane(ci, v)
-			else:
-				tile(ci, v, p)
-	for p2 in v.kit.planes:
-		if str(p2.get("layer", "")) == "road":
-			tile(ci, v, p2)
-	# The gravel road the tank and the enemies stand on (brief 3.1: sharp), scrolled with the road.
-	var road := road_tex()
-	var rx := -fposmod(v.plane_x * TankView.S, float(road.get_width()))
-	while rx < v.canvas.x:
-		ci.draw_texture(road, Vector2(roundf(rx), TankView.GROUND - ROAD_TOP))
-		rx += float(road.get_width())
-
-
-static func draw_front(ci: CanvasItem, v: TankView) -> void:
-	for p in v.kit.planes:
-		if str(p.get("layer", "")) == "front":
-			tile(ci, v, p)
-	var bottom := v.canvas.y - v.y_off
-	if bottom > TankView.BASE.y:
-		ci.draw_rect(
-			Rect2(0, TankView.BASE.y - 1.0, v.canvas.x, bottom - TankView.BASE.y + 1.0),
-			Color(0.012, 0.014, 0.014)
-		)
 
 
 static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
+	for bx in TankForest.bases(v, state):
+		TankForest.draw_base(ci, v, bx)
 	_tank_contact(ci, v)
-	if state.seg.seg == TankIds.SEG_DEPOT and not state.roam.active:
-		TankDepotDraw.draw(ci, v)
 	if state.roam.active and state.roam_map != null:
 		_turning_places(ci, v, state)
 	_halt_line(ci, v, state)
@@ -184,36 +60,25 @@ static func draw_world(ci: CanvasItem, v: TankView, state: TankState) -> void:
 				_enemy(ci, v, e, want)
 
 
-## The tank's contact with the road: a dark shadow under the track run, soft at its ends, with the
-## gravel pressed darker in the track's footprint.
+## The tank's contact with the road: a dark shadow along the track run under the road wheels'
+## contacts, soft at its ends.
 static func _tank_contact(ci: CanvasItem, v: TankView) -> void:
-	var rw: Dictionary = v.kit.spec(v.variant).get("anchors", {}).get("road_wheel_line", {})
-	if rw.is_empty():
+	var n := v.wheel_centres.size()
+	if n == 0:
 		return
-	var sp := TankKit.vec(
-		v.kit.spec(v.variant).get("anchors", {}).get("drive_sprocket_centre", [0, 0])
-	)
-	var x0 := v.origin.x + float(rw.get("x_from", 80.0)) - 30.0
-	var x1 := v.origin.x + sp.x + 22.0
-	var g := v.origin.y + float(rw.get("ground_contact_y", 233.0))
-	var rows: Array[float] = [0.7, 0.62, 0.42, 0.22]
+	var a := v.wheel_contact(0) + Vector2(-26, 0)
+	var b := v.wheel_contact(n - 1) + Vector2(40, 0)
+	var rows: Array[float] = [0.7, 0.55, 0.32, 0.16]
+	var steps := maxi(int((b.x - a.x) / 4.0), 1)
 	for k in rows.size():
-		var y := g - 1.0 + float(k)
-		var inset := float(k) * 6.0
-		var a := rows[k]
-		ci.draw_rect(
-			Rect2(Vector2(x0 + 14.0 + inset, y), Vector2(x1 - x0 - 28.0 - inset * 2.0, 1)),
-			Color(0.02, 0.018, 0.015, a)
-		)
-		for e in 14:
-			var fade := a * float(e + 1) / 15.0
+		for i in steps:
+			var u := float(i) / float(steps)
+			var x := lerpf(a.x, b.x, u)
+			var y := roundf(v.ground_y(x + 2.0)) - 1.0 + float(k)
+			var edge := clampf(minf(u, 1.0 - u) * 8.0, 0.0, 1.0)
 			ci.draw_rect(
-				Rect2(Vector2(x0 + inset + float(e), y), Vector2(1, 1)),
-				Color(0.02, 0.018, 0.015, fade)
-			)
-			ci.draw_rect(
-				Rect2(Vector2(x1 - inset - float(e) - 1.0, y), Vector2(1, 1)),
-				Color(0.02, 0.018, 0.015, fade)
+				Rect2(Vector2(roundf(x), y), Vector2(4, 1)),
+				Color(0.02, 0.018, 0.015, rows[k] * edge)
 			)
 
 
@@ -230,17 +95,21 @@ static func _enemy(ci: CanvasItem, v: TankView, e: TankEnemyState, lane: int) ->
 	var flip := e.side < 0
 	var tex: Texture2D = row["tex"]
 	var sil: Texture2D = row.get("sil", tex)
+	# The whole sprite turned to the relief about its foot's middle (nearest).
+	var foot := Vector2(r.get_center().x, r.end.y)
+	ci.draw_set_transform(foot, float(v.enemy_rots.get(e.id, 0.0)), Vector2.ONE)
+	var lr := Rect2(r.position - foot, r.size)
 	for off: Vector2 in [Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1)]:
-		sprite(ci, sil, Rect2(r.position + off, r.size), flip, RIM)
+		sprite(ci, sil, Rect2(lr.position + off, lr.size), flip, RIM)
 	var dim := lane_dim(lane)
 	var fog := lane_fog(lane)
 	if e.side < 0:
-		# A pursuer behind the tank stays in the dark, hazed (the HUD's edge arrow marks a sliver).
 		dim *= PURSUER_DIM
 		fog = maxf(fog, PURSUER_FOG)
-	sprite(ci, tex, r, flip, Color(dim + flash, dim + flash * 0.6, dim, 1.0))
+	sprite(ci, tex, lr, flip, Color(dim + flash, dim + flash * 0.6, dim, 1.0))
 	if fog > 0.0:
-		sprite(ci, sil, r, flip, Color(HAZE.r, HAZE.g, HAZE.b, fog))
+		sprite(ci, sil, lr, flip, Color(HAZE.r, HAZE.g, HAZE.b, fog))
+	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
 	if e.hp_max > 0.0 and e.hp < e.hp_max:
 		var bw := roundf(r.size.x * 0.4)
 		var bp := Vector2(roundf(r.position.x + r.size.x * 0.3), r.position.y - 5.0)
@@ -265,7 +134,7 @@ static func lane_fog(lane: int) -> float:
 static func lane_ground(ci: CanvasItem, _v: TankView, r: Rect2, lane: int) -> void:
 	var foot := r.end.y
 	if lane > 0:
-		var g := TankView.GROUND + 3.0
+		var g := roundf(_v_ground(_v, r.get_center().x)) + 3.0
 		var rise := g - foot
 		var x0 := r.position.x - 4.0
 		var x1 := r.end.x + 4.0
@@ -298,6 +167,10 @@ static func lane_ground(ci: CanvasItem, _v: TankView, r: Rect2, lane: int) -> vo
 			ci.draw_rect(Rect2(Vector2(sx, sy), Vector2(2, 1)), crest.darkened(0.25))
 			ci.draw_rect(Rect2(Vector2(sx, sy + 1.0), Vector2(2, 1)), earth.darkened(0.35))
 	contact_shadow(ci, Vector2(r.position.x + 3.0, foot), r.size.x - 6.0)
+
+
+static func _v_ground(v: TankView, x: float) -> float:
+	return v.ground_y(x) if v != null and v.ground != null else TankView.GROUND
 
 
 ## A soft dark shadow `w` px long starting at `p` (its left end on the ground line).
@@ -456,7 +329,7 @@ static func _halt_line(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	var x := roundf(v.sx(hx))
 	if x < -60.0 or x > v.canvas.x + 60.0:
 		return
-	var g := TankView.GROUND
+	var g := roundf(v.ground_y(x + 20.0))
 	for t: Vector3 in [Vector3(18, -6, 13), Vector3(39, -3, 16), Vector3(8, 2, 19)]:
 		tooth(ci, Vector2(x + t.x, g + t.y), t.z)
 	var post := Rect2(Vector2(x, g - 36.0), Vector2(3, 36))
@@ -473,7 +346,8 @@ static func halt_lamp(v: TankView, state: TankState) -> Vector2:
 	var hx := halt_x(state)
 	if is_nan(hx):
 		return Vector2(NAN, NAN)
-	return Vector2(roundf(v.sx(hx)) + 1.5, TankView.GROUND - 35.0)
+	var x := roundf(v.sx(hx))
+	return Vector2(x + 1.5, roundf(v.ground_y(x + 20.0)) - 35.0)
 
 
 ## One concrete tooth (a blunt pyramid seen from the side) on `foot`, `s` px tall: the face toward
@@ -515,7 +389,7 @@ static func _obstacle(ci: CanvasItem, v: TankView, ob: TankObstacleState) -> voi
 	var x1 := v.sx(ob.x_px + float(ob.w))
 	if x1 < -20.0 or x0 > v.canvas.x + 20.0:
 		return
-	var g := TankView.GROUND
+	var g := roundf(v.ground_y((x0 + x1) * 0.5))
 	match TankIds.obstacle_of(ob.code):
 		TankIds.OBST_WIRE:
 			# Wooden trestles with barbed wire strung between them.
@@ -568,7 +442,7 @@ static func _turning_places(ci: CanvasItem, v: TankView, state: TankState) -> vo
 		var x1 := maxf(lx, bx)
 		if x1 < -80.0 or x0 > v.canvas.x + 80.0:
 			continue
-		var g := TankView.GROUND
+		var g := roundf(v.ground_y(bx))
 		for i in int(x1 - x0):
 			var x := x0 + float(i)
 			var h := TankDraw.hash01(x * 0.37 + float(end) * 11.0)
@@ -617,7 +491,7 @@ static func turn_lamps(v: TankView, state: TankState) -> Array[Vector2]:
 		var bx := roundf(v.sx(v.travel_x(state, at - float(end) * TURN_BARRIER_M)))
 		var px := bx - 26.0 * float(end) * (-1.0 if v.mirrored else 1.0)
 		if px > -40.0 and px < v.canvas.x + 40.0:
-			out.append(Vector2(px + 1.0, TankView.GROUND - 45.0))
+			out.append(Vector2(px + 1.0, roundf(v.ground_y(bx)) - 45.0))
 	return out
 
 
@@ -629,22 +503,19 @@ static func draw_turn_dust(ci: CanvasItem, v: TankView, state: TankState) -> voi
 	var k := v.turn_dust(state)
 	if k <= 0.0:
 		return
-	var size := _variant_size(v)
-	var rw: Dictionary = v.kit.spec(v.variant).get("anchors", {}).get("road_wheel_line", {})
-	var ground := v.origin.y + float(rw.get("ground_contact_y", size.y - 7.0))
+	var size := v.rig.size
+	var o := v.tank_pos
+	var ground := o.y + v.rig.ground
 	var gear_top := ground - size.y * 0.4
 	var half := 0.5 * (state.content.num("valley", "turn.stop_s", 8.0) if state.content else 8.0)
 	var peak := clampf(1.0 - absf(state.roam.turn_s - half) / 0.6, 0.0, 1.0)
 	var haze := minf(0.2 * k + 0.15 * peak, 0.35)
 	TankDraw.soft_at(
-		ci,
-		Vector2(v.origin.x + size.x * 0.5, gear_top + 14.0),
-		size.x * 0.55,
-		Color(0.3, 0.26, 0.2, haze)
+		ci, Vector2(o.x + size.x * 0.5, gear_top + 14.0), size.x * 0.55, Color(0.3, 0.26, 0.2, haze)
 	)
 	# A skirt of dust along the tracks, then billows rolling up from them.
 	for j in 9:
-		var sx := v.origin.x + size.x * (0.08 + 0.1 * float(j))
+		var sx := o.x + size.x * (0.08 + 0.1 * float(j))
 		var wob := sin(v.time * 1.3 + float(j)) * 4.0
 		TankDraw.soft_at(
 			ci, Vector2(sx + wob, ground - 6.0), 30.0, Color(0.42, 0.36, 0.28, 0.5 * k)
@@ -653,14 +524,9 @@ static func draw_turn_dust(ci: CanvasItem, v: TankView, state: TankState) -> voi
 		var h := TankDraw.hash01(float(i) * 7.13)
 		var h2 := TankDraw.hash01(float(i) * 3.71 + 1.0)
 		var life := fposmod(v.time / 1.5 + h, 1.0)
-		var x := v.origin.x + size.x * (0.04 + 0.92 * h) - life * 14.0
+		var x := o.x + size.x * (0.04 + 0.92 * h) - life * 14.0
 		var y := ground - 6.0 - (ground - gear_top) * (0.15 + 0.7 * h2) * (0.5 + 0.5 * life)
 		var r := (14.0 + 16.0 * h2) * (0.6 + 0.6 * life)
 		var a := 0.55 * k * sin(life * PI)
 		var c := Color(0.48, 0.41, 0.32).lerp(Color(0.34, 0.29, 0.23), h)
 		TankDraw.soft_at(ci, Vector2(x, y), r, Color(c.r, c.g, c.b, a))
-
-
-static func _variant_size(v: TankView) -> Vector2:
-	var s: Variant = v.kit.spec(v.variant).get("size", [480, 240])
-	return TankKit.vec(s)

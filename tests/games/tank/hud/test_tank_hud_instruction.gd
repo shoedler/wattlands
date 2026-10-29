@@ -1,8 +1,8 @@
 extends GutTest
 ## The local rider's band and their one instruction line (TankHudModel.band_w, instruction; brief
-## 2.3 In band, 2.4 Surge to evade, 3.6): HOLD lo-hi W, HOLD lo+ W, SPIN nn+ RPM, SURGE nnn+ W with
-## the time left (the steam window, or an evade only for a rider in a SIM WORK phase past 300 s),
-## LATCH, RESERVE; and the telegraph list every peer's world tags read.
+## 2.3 In band, 2.4 Surge to evade, 3.6, v3 per seat): HOLD lo-hi W, HOLD lo+ W, SPIN nn+ RPM, SURGE
+## nnn+ W with the time left (an evade only for a rider in a SIM WORK phase past 300 s), the
+## Loader's BUILD and OVER, RESERVE; and the telegraph list every peer's world tags read.
 
 const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 
@@ -54,33 +54,30 @@ func test_an_erg_rider_holds_the_applied_target_and_spins_under_the_cadence_floo
 	assert_eq(TankHudModel.band_w(s, r, Wl.ERG, 0.0, Vector2.ZERO), Vector2.ZERO)
 
 
-func test_the_boiler_holds_ninety_percent_then_the_loader_spins_and_a_full_boiler_latches() -> void:
+func test_the_loader_builds_its_rack_at_ninety_percent_and_spins_once_it_is_full() -> void:
 	var s := _no_telegraph(X.state(3))
 	var r := _rider_on(s, TankIds.ENGINE_STEAM)
 	var stm := s.station(TankIds.ENGINE_STEAM) as TankSteamState
+	assert_eq(stm.rack, 2, "the fixture's rack")
 	var l := _line(s, r, Wl.SIM)
-	assert_eq(l["key"], "TANK_HUD_DO_HOLD_MIN")
+	assert_eq(l["kind"], TankHudModel.DO_BUILD)
+	assert_eq(l["key"], "TANK_HUD_DO_BUILD")
 	assert_eq(l["args"], [str(roundi(0.9 * r.ftp))])
-	stm.loaded = true
+	assert_false(l["urgent"])
+	stm.rack = TankConst.RACK_MAX
 	l = _line(s, r, Wl.SIM)
 	assert_eq(l["kind"], TankHudModel.DO_SPIN)
-	assert_eq(l["args"], ["50"], "a loaded loader needs cadence >= 50")
-	stm.loaded = false
-	stm.cycling = true
-	assert_eq(_line(s, r, Wl.SIM)["args"], ["50"])
-	stm.cycling = false
-	stm.pressure_pct = 100.0
-	assert_eq(_line(s, r, Wl.SIM)["kind"], TankHudModel.DO_LATCH)
-	stm.over = true
-	assert_eq(_line(s, r, Wl.SIM)["kind"], TankHudModel.DO_HOLD, "Overpressure building")
+	assert_eq(l["args"], ["50"], "a full rack only needs cadence >= 50")
+	assert_eq(TankHudModel.band_w(s, r, Wl.SIM, 0.0, Vector2.ZERO), Vector2.ZERO)
 
 
-func test_the_steam_window_says_surge_with_its_time_left() -> void:
+func test_the_overpressure_window_says_over_with_its_time_left() -> void:
 	var s := _no_telegraph(X.state(3))
 	var r := _rider_on(s, TankIds.ENGINE_STEAM)
 	(s.station(TankIds.ENGINE_STEAM) as TankSteamState).window_s = 3.2
 	var l := _line(s, r, Wl.SIM)
-	assert_eq(l["kind"], TankHudModel.DO_SURGE)
+	assert_eq(l["kind"], TankHudModel.DO_OVER)
+	assert_eq(l["key"], "TANK_HUD_DO_OVER")
 	assert_eq(l["args"], [str(roundi(1.2 * r.ftp))], "240+ W at FTP 200: 1.2 x FTP")
 	assert_almost_eq(float(l["left_s"]), 3.2, 1e-6)
 	assert_true(l["urgent"])
@@ -140,14 +137,14 @@ func test_the_telegraph_list_has_every_shooter_with_its_full_length() -> void:
 	var t := TankHudModel.telegraphs(s)
 	assert_eq(t.size(), 1)
 	assert_eq(int(t[0]["id"]), 13)
-	assert_eq(float(t[0]["total"]), 4.0, "the destroyer's 4 s glint")
+	assert_eq(float(t[0]["total"]), 7.0, "the destroyer's 7 s glint (v3)")
 	s.enemy(13).mode = TankIds.EM_DEAD
 	assert_eq(TankHudModel.telegraphs(s).size(), 0)
 	var b := TankHudModel.telegraphs(X.state(3, "boss"))
 	assert_true(bool(b[-1]["boss"]))
-	assert_eq(float(b[-1]["total"]), 6.0)
+	assert_eq(float(b[-1]["total"]), 8.0)
 	var g := TankHudModel.telegraphs(X.state(3, "gun_line"))
-	assert_eq(float(g[0]["total"]), 3.0, "the heavy's 3 s glow")
+	assert_eq(float(g[0]["total"]), 6.0, "the heavy's 6 s glow (v3)")
 
 
 func test_the_power_ratio_is_watts_over_the_riders_target_in_one_helper() -> void:

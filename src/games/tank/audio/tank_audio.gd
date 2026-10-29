@@ -57,7 +57,6 @@ const ENGINE_ARC := TankIds.ENGINE_ARC
 ## the arc generator hums low).
 const LOOPS := {
 	TankIds.ENGINE_DIESEL: ["saw", 46.0],
-	TankIds.ENGINE_BULWARK: ["saw", 46.0],
 	TankIds.ENGINE_DYNAMO: ["sine", 380.0],
 	ENGINE_ARC: ["triangle", 100.0],
 }
@@ -73,13 +72,11 @@ const HUM_PITCH := Vector2(0.8, 1.3)
 ## Loop volumes (dB): the local rider's own station, and the others.
 const OWN_DB := {
 	TankIds.ENGINE_DIESEL: -11.0,
-	TankIds.ENGINE_BULWARK: -11.0,
 	TankIds.ENGINE_DYNAMO: -17.0,
 	ENGINE_ARC: -15.0,
 }
 const OTHER_DB := {
 	TankIds.ENGINE_DIESEL: -22.0,
-	TankIds.ENGINE_BULWARK: -22.0,
 	TankIds.ENGINE_DYNAMO: -28.0,
 	ENGINE_ARC: -25.0,
 }
@@ -121,7 +118,6 @@ var _delayed: Array[Dictionary] = []
 var _stroke: Dictionary = {}
 var _clank_t: float = 0.0
 var _ratchet_t: float = 0.0
-var _hoist_j_was: float = 0.0
 var _pressure_was: float = 0.0
 
 
@@ -186,7 +182,7 @@ func on_cue(kind: String, data: Dictionary) -> void:
 			_play("tank_breakdown", -3.0)
 		TankEvents.REPAIRED:
 			_play("tank_clunk", -8.0, 1.4)
-		TankEvents.LEVER:
+		TankEvents.SEAT:
 			_play("tank_clunk", -4.0 if _is_own_slot(int(data.get("s", -1))) else -12.0)
 		TankEvents.ROTATION:
 			_play("tank_clunk", -8.0, 0.8)
@@ -198,10 +194,10 @@ func on_cue(kind: String, data: Dictionary) -> void:
 
 func _latch(data: Dictionary) -> void:
 	var own := _is_own_slot(int(data.get("s", -1)))
-	var steam := (
-		game != null and game.state != null and game.state.station(TankIds.ENGINE_STEAM) != null
-	)
-	if steam:
+	var loader: TankStationState = null
+	if game != null and game.state != null:
+		loader = game.state.station(TankIds.ENGINE_STEAM)
+	if loader != null and not loader.is_empty():
 		_play("tank_hiss", -6.0 if own else -13.0)
 	else:
 		_play("tank_ratchet", -8.0 if own else -14.0)
@@ -248,7 +244,7 @@ func _is_own_slot(slot: int) -> bool:
 
 
 func _is_gunner_slot(slot: int) -> bool:
-	return own_engine in [TankIds.ENGINE_DYNAMO, TankIds.ENGINE_BULWARK] and _is_own_slot(slot)
+	return own_engine == TankIds.ENGINE_DYNAMO and _is_own_slot(slot)
 
 
 # --- Per frame ------------------------------------------------------------------------------------------------
@@ -274,7 +270,11 @@ func _station_cadence(state: TankState, engine: String, feed: Dictionary) -> flo
 	var st := state.station(engine)
 	if st == null or st.unpowered or state.all_afk:
 		return 0.0
-	if st.reserve or st.slot < 0:
+	# v3: an empty seat (slot -1) does nothing, so its machine is silent; a dropped rider's room
+	# still runs on reserve.
+	if st.slot < 0:
+		return 0.0
+	if st.reserve:
 		return 45.0
 	var r := state.rider_at(st.slot)
 	if r == null:
@@ -368,18 +368,11 @@ func _clank(state: TankState, dt: float) -> void:
 		_play("tank_clank", -17.0 + minf(v, 10.0) * 0.5)
 
 
-## The hoist ratchets while a shell is being lifted (the Bulwark's Hoist, the Rampart's hoist, the
-## steam engine's cradle).
+## The hoist ratchets while a shell is being lifted (the gunner's hoist, the steam engine's
+## cradle).
 func _ratchets(state: TankState, dt: float) -> void:
 	var lifting := false
 	var own := false
-	var gb := state.station(TankIds.ENGINE_BULWARK) as TankGearboxState
-	if gb != null:
-		lifting = (
-			gb.lever == TankIds.LEVER_HOIST and gb.move_s <= 0.0 and gb.hoist_j > _hoist_j_was + 0.5
-		)
-		_hoist_j_was = gb.hoist_j
-		own = own_engine == TankIds.ENGINE_BULWARK
 	var dy := state.station(TankIds.ENGINE_DYNAMO) as TankDynamoState
 	if dy != null and dy.hoist_s > 0.0:
 		lifting = true

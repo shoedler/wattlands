@@ -1,8 +1,9 @@
 extends GutTest
-## TankPlanBuilder against brief 2.2, 2.3 and 2.9 (and BRIEF 4.5, 4.6): every crew 1-3 x rotation
-## on / off x FTP {80, 200, 400} x verified / unverified, plus the drill. The expected tables are
-## written out from the brief here, never read back from stations.json, so a content edit that
-## leaves the brief fails these tests.
+## TankPlanBuilder against brief 2.2, 2.3 and 2.9 (and BRIEF 4.5, 4.6; the v3 effort table): every
+## crew 1-4 x FTP {80, 200, 400} x verified / unverified, plus the drill. v3: one tank, every slot
+## on its start seat for the whole plan (rotation is gone; seat switches replan, TankSeatPlan). The
+## expected tables are written out from the brief here, never read back from stations.json, so a
+## content edit that leaves the brief fails these tests.
 
 ## Brief 2.3 segment table: [type, kind, duration_s, min_s, max_s, stage].
 const ASHFALL := [
@@ -31,7 +32,7 @@ const ENGINE_TABLE := {
 	{
 		"depot": ["SIM", null, null, null, "game"],
 		"advance": ["SIM", null, null, null, "game"],
-		"gun_line": ["ERG", 90.0, null, null, null],
+		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
 	"dynamo":
@@ -48,11 +49,18 @@ const ENGINE_TABLE := {
 		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
-	"bulwark":
+	"arc":
 	{
-		"depot": ["SIM", null, null, null, "game"],
-		"advance": ["SIM", null, null, null, "game"],
-		"gun_line": ["ERG", 90.0, null, null, null],
+		"depot": ["ERG", 50.0, 65.0, null, null],
+		"advance": ["ERG", 65.0, null, [65.0, 80.0], null],
+		"gun_line": ["ERG", 65.0, null, [65.0, 80.0], null],
+		"boss": ["ERG", 65.0, null, [65.0, 80.0], null],
+	},
+	"feed":
+	{
+		"depot": ["SIM", null, null, null, "flat"],
+		"advance": ["SIM", null, null, null, "flat"],
+		"gun_line": ["SIM", null, null, null, "flat"],
 		"boss": ["SIM", null, null, null, "flat"],
 	},
 }
@@ -73,33 +81,26 @@ const DRILL_TABLE := {
 		"depot": ["SIM", null, null, null, "flat"],
 		"skirmish": ["SIM", null, null, null, "flat"],
 	},
-	"bulwark":
+	"arc":
 	{
-		"depot": ["SIM", null, null, null, "game"],
-		"skirmish": ["SIM", null, null, null, "game"],
+		"depot": ["ERG", 50.0, null, null, null],
+		"skirmish": ["ERG", 55.0, null, [55.0, 65.0], null],
+	},
+	"feed":
+	{
+		"depot": ["SIM", null, null, null, "flat"],
+		"skirmish": ["SIM", null, null, null, "flat"],
 	},
 }
 ## Checkpoints: ERG 50% for everyone.
 const CHECKPOINT := ["ERG", 50.0, null, null, null]
-## Brief 2.2: the start engines and the rotation rows (stages 1, 2, 3, boss) per slot.
+## v3: the start seat of each slot (Drive, Gun, Loader, Lights); a crew of n takes the first n.
 const START := {
-	1: ["bulwark"],
+	1: ["diesel"],
 	2: ["diesel", "dynamo"],
 	3: ["diesel", "dynamo", "steam"],
+	4: ["diesel", "dynamo", "steam", "arc"],
 }
-const ROTATION := {
-	1: [["bulwark", "bulwark", "bulwark", "bulwark"]],
-	2: [["diesel", "dynamo", "diesel", "dynamo"], ["dynamo", "diesel", "dynamo", "diesel"]],
-	3:
-	[
-		["diesel", "dynamo", "steam", "diesel"],
-		["dynamo", "steam", "diesel", "dynamo"],
-		["steam", "diesel", "dynamo", "steam"],
-	],
-}
-## The rotation column of each ashfall segment (-1: the start engine). A checkpoint carries the
-## engine of the segment after it (the crew moves at the checkpoint).
-const COLUMN := [-1, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
 const FTPS := [80.0, 200.0, 400.0]
 
 
@@ -119,29 +120,27 @@ func _content(mission: String = "ashfall_road") -> TankContent:
 	return TankFixtures.content(mission)
 
 
-## Every (crew, rotation, ftp, verified) case of the brief's matrix, plus the content id.
+## Every (crew, ftp, verified) case of the brief's matrix, plus the content id ([mission, crew,
+## ftp, verified]).
 func _matrix() -> Array:
 	var out: Array = []
 	for mission: String in ["ashfall_road", "drill"]:
-		for crew in [1, 2, 3]:
-			for rotation in [true, false]:
-				for ftp: float in FTPS:
-					for verified in [true, false]:
-						out.append([mission, crew, rotation, ftp, verified])
+		for crew in [1, 2, 3, 4]:
+			for ftp: float in FTPS:
+				for verified in [true, false]:
+					out.append([mission, crew, ftp, verified])
 	return out
 
 
 func _build(case: Array) -> Dictionary:
 	var c := _content(str(case[0]))
-	return TankPlanBuilder.build_all(
-		c, _slots(int(case[1]), float(case[3]), bool(case[4])), case[2]
-	)
+	return TankPlanBuilder.build_all(c, _slots(int(case[1]), float(case[2]), bool(case[3])))
 
 
 func _at(case: Array, peer: int) -> String:
 	return (
-		"%s crew %d rotation %s FTP %d %s peer %d"
-		% [case[0], case[1], case[2], case[3], "verified" if case[4] else "unverified", peer]
+		"%s crew %d FTP %d %s peer %d"
+		% [case[0], case[1], case[2], "verified" if case[3] else "unverified", peer]
 	)
 
 
@@ -197,39 +196,24 @@ func test_segments_kinds_lengths_labels_meta_and_shared_boundaries() -> void:
 				)
 
 
-## Brief 2.2: each slot's engine per segment, with rotation on and off; the drill ignores it.
-func test_rotation_tables() -> void:
-	var c := _content()
-	for crew in [1, 2, 3]:
-		for rotation in [true, false]:
-			var plans := TankPlanBuilder.build_all(c, _slots(crew, 200.0, true), rotation)
+## v3: each slot's seat per segment is its start seat (rotation is gone: seat choice replaces it),
+## one rider per seat; the drill likewise.
+func test_every_slot_keeps_its_start_seat() -> void:
+	for mission: String in ["ashfall_road", "drill"]:
+		var c := _content(mission)
+		for crew in [1, 2, 3, 4]:
+			var plans := TankPlanBuilder.build_all(c, _slots(crew, 200.0, true))
 			for slot in crew:
 				var plan: EffortPlan = plans[slot + 1]
 				var start: String = START[crew][slot]
-				var row: Array = ROTATION[crew][slot]
 				for i in plan.size():
-					var col := int(COLUMN[i])
-					var want: String = start if col < 0 or not rotation else str(row[col])
-					var at := "crew %d rotation %s slot %d phase %d" % [crew, rotation, slot, i]
-					assert_eq(str(plan.phase(i).meta["engine"]), want, at)
-			# Every room is manned in every segment (one rider per engine).
-			for i in ASHFALL.size():
+					var at := "%s crew %d slot %d phase %d" % [mission, crew, slot, i]
+					assert_eq(str(plan.phase(i).meta["engine"]), start, at)
+			for i in c.segments().size():
 				var seen := {}
 				for slot in crew:
 					seen[str((plans[slot + 1] as EffortPlan).phase(i).meta["engine"])] = true
-				assert_eq(seen.size(), crew, "crew %d phase %d: every room manned" % [crew, i])
-	var d := _content("drill")
-	for crew in [1, 2, 3]:
-		var on := TankPlanBuilder.build_all(d, _slots(crew, 200.0, true), true)
-		var off := TankPlanBuilder.build_all(d, _slots(crew, 200.0, true), false)
-		for slot in crew:
-			var a: EffortPlan = on[slot + 1]
-			var b: EffortPlan = off[slot + 1]
-			assert_eq(
-				a.to_dict(), b.to_dict(), "drill crew %d slot %d ignores rotation" % [crew, slot]
-			)
-			for i in a.size():
-				assert_eq(str(a.phase(i).meta["engine"]), START[crew][slot])
+				assert_eq(seen.size(), crew, "crew %d phase %d: one rider per seat" % [crew, i])
 
 
 ## Brief 2.3 and 2.9: mode, target_pct, ramp_to_pct, range_pct and grade_source per engine and
@@ -268,7 +252,7 @@ func _shape(ph: PlanPhase) -> Array:
 ## every combination of open-ended phases at their min_s and their max_s.
 func test_switches_are_60_s_apart_with_every_open_phase_at_min_and_max() -> void:
 	for case: Array in _matrix():
-		if float(case[3]) != 200.0 or not bool(case[4]):
+		if float(case[2]) != 200.0 or not bool(case[3]):
 			continue  # plans are %-only: FTP and the verified flag change nothing here
 		var plans := _build(case)
 		for peer: int in plans:
@@ -309,7 +293,7 @@ func test_the_first_300_s_stay_within_the_warm_up_limits() -> void:
 	for case: Array in _matrix():
 		var c := _content(str(case[0]))
 		var plans := _build(case)
-		var ftp := float(case[3])
+		var ftp := float(case[2])
 		for peer: int in plans:
 			var plan: EffortPlan = plans[peer]
 			var t := 0.0
@@ -320,7 +304,7 @@ func test_the_first_300_s_stay_within_the_warm_up_limits() -> void:
 					assert_has([Wl.WARMUP, Wl.RECOVERY], ph.kind, at + ": no WORK yet")
 					if ph.mode == Wl.ERG:
 						assert_lte(ph.peak_pct(), 65.0, at)
-						assert_lte(_applied_pct(ph.peak_pct(), ftp, bool(case[4])), 65.0, at)
+						assert_lte(_applied_pct(ph.peak_pct(), ftp, bool(case[3])), 65.0, at)
 						if ph.has_ramp():
 							assert_eq(ph.ramp_to_pct - ph.target_pct, 15.0, at + " ramp")
 							assert_eq(ph.duration_s, 300.0, at + " ramp length")
@@ -332,15 +316,16 @@ func test_the_first_300_s_stay_within_the_warm_up_limits() -> void:
 				t += ph.min_s if ph.open_ended else ph.duration_s
 
 
-## BRIEF 4.6.1: every ERG target, ramp end and range bound is 50-100% FTP; 90% gun lines last at
-## most 180 s; the boss (max_s 360, the only phase over 300 s) stays under its 105% cap with every
-## directive, after the governor's floor and the unverified factor.
+## BRIEF 4.6.1: every ERG target, ramp end and range bound is 50-100% FTP; nothing is planned at 90%
+## or more (v3: the gun line is the Drive seat's SIM flat dig, no ERG 90% block); the boss (max_s
+## 360, the only phase over 300 s) stays under its 105% cap with every directive, after the
+## governor's floor and the unverified factor.
 func test_every_erg_value_is_50_to_100_and_the_long_boss_stays_under_105() -> void:
 	for case: Array in _matrix():
 		var c := _content(str(case[0]))
 		var plans := _build(case)
-		var ftp := float(case[3])
-		var verified := bool(case[4])
+		var ftp := float(case[2])
+		var verified := bool(case[3])
 		for peer: int in plans:
 			var plan: EffortPlan = plans[peer]
 			for i in plan.size():
@@ -355,9 +340,7 @@ func test_every_erg_value_is_50_to_100_and_the_long_boss_stays_under_105() -> vo
 					for v in values:
 						assert_between(v, 50.0, 100.0, at)
 					var planned := maxf(ph.target_pct, ph.ramp_to_pct)
-					if planned >= 90.0:
-						assert_eq(str(ph.meta["seg"]), "gun_line", at + " 90% only in gun lines")
-						assert_lte(ph.worst_case_length_s(), 180.0, at + " 90% gun line")
+					assert_lt(planned, 90.0, at + " no 90% block in v3")
 				if ph.worst_case_length_s() > 300.0:
 					assert_eq(str(ph.meta["seg"]), "boss", at + " the only long phase")
 					assert_lte(ph.peak_pct(), 105.0, at)
@@ -386,8 +369,8 @@ func _applied_pct(pct: float, ftp: float, verified: bool) -> float:
 func test_the_bank_span_fits_every_dynamo_range() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
 		var c := _content(mission)
-		for crew in [2, 3]:
-			var plans := TankPlanBuilder.build_all(c, _slots(crew, 200.0, true), true)
+		for crew in [2, 3, 4]:
+			var plans := TankPlanBuilder.build_all(c, _slots(crew, 200.0, true))
 			for peer: int in plans:
 				var plan: EffortPlan = plans[peer]
 				for i in plan.size():
@@ -406,8 +389,8 @@ func test_the_bank_span_fits_every_dynamo_range() -> void:
 
 
 func test_the_drill_is_130_s_with_at_most_one_switch() -> void:
-	for crew in [1, 2, 3]:
-		var plans := TankPlanBuilder.build_all(_content("drill"), _slots(crew, 200.0, true), true)
+	for crew in [1, 2, 3, 4]:
+		var plans := TankPlanBuilder.build_all(_content("drill"), _slots(crew, 200.0, true))
 		for peer: int in plans:
 			var plan: EffortPlan = plans[peer]
 			assert_eq(plan.nominal_length_s(), 130.0)
@@ -426,7 +409,7 @@ func test_the_drill_is_130_s_with_at_most_one_switch() -> void:
 ## ashfall_road and 4 for the drill (notes).
 func test_one_lap_per_segment() -> void:
 	for mission: String in ["ashfall_road", "drill"]:
-		var plans := TankPlanBuilder.build_all(_content(mission), _slots(3, 200.0, true), true)
+		var plans := TankPlanBuilder.build_all(_content(mission), _slots(3, 200.0, true))
 		for peer: int in plans:
 			var final := PlanValidator.finalize(plans[peer])
 			var laps := 0
@@ -437,7 +420,7 @@ func test_one_lap_per_segment() -> void:
 
 ## seg_of names each phase's segment and "" past the plan (the cool-down).
 func test_seg_of() -> void:
-	var plans := TankPlanBuilder.build_all(_content(), _slots(1, 200.0, true), true)
+	var plans := TankPlanBuilder.build_all(_content(), _slots(1, 200.0, true))
 	var plan: EffortPlan = plans[1]
 	for i in ASHFALL.size():
 		assert_eq(TankPlanBuilder.seg_of(plan, i), str(ASHFALL[i][0]))

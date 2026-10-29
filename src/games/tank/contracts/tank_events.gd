@@ -5,8 +5,10 @@ extends RefCounted
 ## clients apply them in apply_event in the host's order. Every number is an int (declared in
 ## INT_FIELDS, returned by int_fields()). Never name an event "snapshot" or "wl.*".
 ##
-##   segment    {i: phase index, sg: seg code, st: stage}                 the group entered a segment
-##   rotation   {r: [[slot, engine code], ...]}                           stations changed (checkpoint)
+##   segment    {i: the segment's index (the plan phase index of the unsplit plans; v3), sg: seg
+##               code, st: stage}                                          the group entered a segment
+##   rotation   reserved (v3 retired rotation: seat choice replaces it): never emitted, kept in TYPES
+##              and INT_FIELDS so the name stays taken on the wire
 ##   shot       {s: slot or -1 (enemy), sh: shell type, id: shell id, src: enemy id or 0,
 ##               e: enemy code or 0}
 ##   hit        {on: ON_*, id: target id (0 the tank), dmg: the round's damage before the berm
@@ -19,7 +21,9 @@ extends RefCounted
 ##   repaired   {hp}                                                      back to 40 HP
 ##   overrun    {sg: seg code, st: stage}                                 the previous segment hit max_s
 ##   boss_phase {p: TankIds.BOSS_*}
-## Additive (G0): latch {s, sh: shell type}, lever {s, lv: TankIds.LEVER_*} for sound and view.
+## Additive (G0): latch {s, sh: shell type} for sound and view (v3: the Loader stowed a shell of
+## that type in the ready rack); lever {s, lv} is reserved (v3
+## retired the Bulwark's gearbox): never emitted, kept so the name stays taken on the wire.
 ## Additive (v2, brief 2.4, 2.6, 2.10):
 ##   evade      {id: the shooter's id (an enemy, or the Behemoth's turret part id), e: enemy code
 ##               (BOSS_CODE for the Behemoth's main gun), ok: 1 the shot missed (a rider held the
@@ -29,6 +33,9 @@ extends RefCounted
 ##   turn       {s: the slot that turned or -1 (Autopilot at a map end), dir: the new travel
 ##               direction TankIds.DIR_*}                         free roam: the tank turns round
 ##   time_up    {p: patrols raised before it}                  free roam: min_s reached, no new patrols
+## Additive (v3, brief "Seat choice and switching"):
+##   seat       {s: slot, from: the engine code of the seat left, to: the engine code of the seat
+##               taken}                                         a rider moved seats (arrived)
 ##
 ## Semantics the haptics depend on (brief 2.7; the director reads them this way):
 ## - An evaded shot misses: no `hit` event, so no haptic.
@@ -42,6 +49,7 @@ extends RefCounted
 ##   never queued.
 
 const SEGMENT := "segment"
+## Reserved (v3 retired rotation; never emitted).
 const ROTATION := "rotation"
 const SHOT := "shot"
 const HIT := "hit"
@@ -55,10 +63,13 @@ const REPAIRED := "repaired"
 const OVERRUN := "overrun"
 const BOSS_PHASE := "boss_phase"
 const LATCH := "latch"
+## Reserved (v3 retired the Bulwark's gearbox; never emitted).
 const LEVER := "lever"
 const EVADE := "evade"
 const TURN := "turn"
 const TIME_UP := "time_up"
+## v3: a rider moved seats.
+const SEAT := "seat"
 const TYPES: Array[String] = [
 	SEGMENT,
 	ROTATION,
@@ -75,7 +86,8 @@ const TYPES: Array[String] = [
 	LEVER,
 	EVADE,
 	TURN,
-	TIME_UP
+	TIME_UP,
+	SEAT
 ]
 
 ## hit "on"
@@ -107,19 +119,12 @@ const INT_FIELDS := {
 	EVADE: ["id", "e", "ok", "s"],
 	TURN: ["s", "dir"],
 	TIME_UP: ["p"],
+	SEAT: ["s", "from", "to"],
 }
 
 
 static func segment(index: int, seg: String, stage: int) -> Dictionary:
 	return {"type": SEGMENT, "i": index, "sg": TankIds.seg_code(seg), "st": stage}
-
-
-## `pairs`: [[slot, engine], ...] in slot order.
-static func rotation(pairs: Array) -> Dictionary:
-	var r: Array = []
-	for p: Array in pairs:
-		r.append([int(p[0]), TankIds.engine_code(str(p[1]))])
-	return {"type": ROTATION, "r": r}
 
 
 static func shot(
@@ -166,8 +171,15 @@ static func latch(slot: int, shell: int) -> Dictionary:
 	return {"type": LATCH, "s": slot, "sh": shell}
 
 
-static func lever(slot: int, position: int) -> Dictionary:
-	return {"type": LEVER, "s": slot, "lv": position}
+## v3: the rider in `slot` moved from seat `from_engine` to `to_engine` (TankIds engine ids; the
+## event carries their codes).
+static func seat(slot: int, from_engine: String, to_engine: String) -> Dictionary:
+	return {
+		"type": SEAT,
+		"s": slot,
+		"from": TankIds.engine_code(from_engine),
+		"to": TankIds.engine_code(to_engine)
+	}
 
 
 ## A telegraphed shot resolved: `ok` true when the crew's surge made it miss; `slot` the rider

@@ -178,7 +178,8 @@ func test_work_time_and_band_time_count_only_in_work_phases() -> void:
 	assert_eq(rig.rider().work_s, w, "checkpoints are recovery")
 
 
-func test_time_per_engine_follows_the_rotation() -> void:
+## v3: no rotation, so each rider's time is all on its own seat (engine_s by ENGINE_INDEX).
+func test_time_per_engine_follows_the_seat() -> void:
 	var rig := TankRulesRig.new(2)
 	rig.no_fire = true
 	rig.enter(1, 0.0)
@@ -186,14 +187,14 @@ func test_time_per_engine_follows_the_rotation() -> void:
 	rig.enter(4, 0.0)
 	rig.run(10.0)
 	var r0 := rig.rider(1)
-	assert_almost_eq(r0.engine_s[0], 10.05, 0.15, "diesel in stage 1")
-	assert_almost_eq(r0.engine_s[1], 10.05, 0.15, "dynamo in stage 2")
-	assert_eq(r0.engine_s[2], 0.0)
-	var bul := TankRulesRig.new(1)
-	bul.no_fire = true
-	bul.enter(1, 0.0)
-	bul.run(10.0)
-	assert_almost_eq(bul.rider().engine_s[3], 10.05, 0.15)
+	assert_almost_eq(r0.engine_s[0], 20.1, 0.2, "diesel in stages 1 and 2")
+	assert_eq(r0.engine_s[1], 0.0)
+	var r1 := rig.rider(2)
+	assert_almost_eq(r1.engine_s[1], 20.1, 0.2, "dynamo in stages 1 and 2")
+	for r in [r0, r1]:
+		assert_eq(
+			[r.engine_s[2], r.engine_s[3], r.engine_s[4], r.engine_s[5]], [0.0, 0.0, 0.0, 0.0]
+		)
 
 
 func test_the_per_rider_shell_counters_by_type() -> void:

@@ -4,10 +4,11 @@ extends RefCounted
 ## (G0 wrote a working loader; the schemas live in contracts/tank_content_schema.gd).
 ##
 ## Frozen accessors (contracts/README.md "TankContent surface"): TankState.create and effort's
-## TankPlanBuilder call ok, num, value, mission, segments, segment, mission_rotates, plan_table,
-## plan_entry, tank_def, engines_of, start_engines, rotation_row, enemy_def, boss_def,
-## enemy_scale, scaled_count and unlocks. Their names, arguments and meanings never change; the
-## rules builder may add methods and change the internals only.
+## TankPlanBuilder call ok, num, value, mission, segments, segment, plan_table, plan_entry,
+## tank_def, engines_of, start_engines, enemy_def, boss_def, enemy_scale, scaled_count and
+## unlocks. Their names, arguments and meanings never change; the rules builder may add methods
+## and change the internals only. v3 retired rotation (mission_rotates and rotation_row are gone
+## with it) and added crew_count (enemy counts by crew size).
 ##
 ## Load in the module with load_for(ctx) (through ctx.load_content_json, so run_game_sim
 ## --override reaches every file); tests and the rules-level harness use read_files() +
@@ -17,7 +18,9 @@ extends RefCounted
 ## from_dicts validates it and expands it (expand_roam) into two segments before anything else reads
 ## it: the drive-out (type depot, WARMUP, valley.json drive_out_s = 300 s, no drills, no enemies) and
 ## the roam (type roam, WORK, open-ended, min_s = minutes x 60 - drive_out_s, max_s = min_s +
-## overtime_s), plan table stations.json roam_plans, no rotation. The valley (roam/valley.json, file
+## overtime_s), plan table stations.json roam_plans. v3: the roam's plan phase is open-ended from
+## plan_min_s (TankConst.SEAT_LOCK_S) so a seat switch can split it (TankSeatPlan); the game's
+## time up still reads the segment's min_s (TankPhaseInfo.min_s from the phase meta). The valley (roam/valley.json, file
 ## key "valley") is loaded with every content and validated when the content is a roam.
 
 const FILES := {
@@ -89,7 +92,6 @@ static func expand_roam(roam: Dictionary, valley: Dictionary) -> Dictionary:
 	var drive_s := float(valley.get("drive_out_s", 300.0))
 	var min_s := float(roam.get("minutes", 30)) * 60.0 - drive_s
 	var out := roam.duplicate(true)
-	out["rotation"] = false
 	out["plan_table"] = "roam_plans"
 	out["segments"] = [
 		{
@@ -108,6 +110,7 @@ static func expand_roam(roam: Dictionary, valley: Dictionary) -> Dictionary:
 			"kind": Wl.WORK,
 			"duration_s": min_s,
 			"min_s": min_s,
+			"plan_min_s": minf(TankConst.SEAT_LOCK_S, min_s),
 			"max_s": min_s + float(valley.get("overtime_s", 300.0)),
 			"label": "TANK_PHASE_ROAM",
 			"name": "TANK_PLACE_VALLEY",
@@ -153,11 +156,6 @@ func segment(i: int) -> Dictionary:
 	return segs[i] if i >= 0 and i < segs.size() else {}
 
 
-## Whether the mission plays the rotation option (the drill ignores it).
-func mission_rotates() -> bool:
-	return bool(mission().get("rotation", true))
-
-
 ## stations.json table this mission's plans use ("plans" or "drill_plans").
 func plan_table() -> String:
 	return str(mission().get("plan_table", "plans"))
@@ -184,27 +182,12 @@ func engines_of(tank: String) -> Array[String]:
 	return out
 
 
-## Starting engine by slot (stations.json start_engines).
+## Starting engine by slot (stations.json start_engines; v3: the seat of each slot, a crew of n
+## takes the first n).
 func start_engines(tank: String) -> Array[String]:
 	var out: Array[String] = []
 	for e: Variant in (data["stations"].get("start_engines", {}) as Dictionary).get(tank, []):
 		out.append(str(e))
-	return out
-
-
-## The engines of `slot` for stages 1, 2, 3 and the boss with rotation on (stations.json
-## rotation; the Bulwark always "bulwark").
-func rotation_row(tank: String, slot: int) -> Array[String]:
-	var out: Array[String] = []
-	var rows: Array = (data["stations"].get("rotation", {}) as Dictionary).get(tank, [])
-	if slot >= 0 and slot < rows.size():
-		for e: Variant in rows[slot]:
-			out.append(str(e))
-	else:
-		var start := start_engines(tank)
-		var e: String = start[slot] if slot >= 0 and slot < start.size() else TankIds.ENGINE_BULWARK
-		for _i in 4:
-			out.append(e)
 	return out
 
 
@@ -223,6 +206,43 @@ func enemy_scale(tank: String) -> float:
 ## An enemy count after the tank's scale: rounded, at least 1 (brief 2.4).
 func scaled_count(count: int, tank: String) -> int:
 	return maxi(1, roundi(count * enemy_scale(tank)))
+
+
+## (v3) The factor on enemy counts for a crew of `crew` (enemies.json crew_count_scale: 0.5, 0.7,
+## 0.85, 1.0 for crews 1-4; 1 when the file has none).
+func crew_scale(crew: int) -> float:
+	var f: Variant = data.get("enemies", {}).get("crew_count_scale")
+	if not (f is Array) or (f as Array).is_empty():
+		return 1.0
+	return float(f[clampi(crew, 1, (f as Array).size()) - 1])
+
+
+## (v3) An enemy count for a crew of `crew` (brief v3 "Difficulty is enemy count"): the count x
+## the tank's scale (the landship's 1.0) x crew_scale(crew), rounded, at least 1. Enemy HP is the
+## same for every crew size.
+func crew_count(count: int, tank: String, crew: int) -> int:
+	return maxi(1, roundi(count * enemy_scale(tank) * crew_scale(crew)))
+
+
+## (v3 solo balance) The factor on the damage enemy and Behemoth shells do to the tank for a crew
+## of `crew` (enemies.json crew_damage_scale; 1 without it). Enemy HP stays the same for every crew.
+func crew_damage_scale(crew: int) -> float:
+	var f: Variant = data.get("enemies", {}).get("crew_damage_scale")
+	if not (f is Array) or (f as Array).is_empty():
+		return 1.0
+	return float(f[clampi(crew, 1, (f as Array).size()) - 1])
+
+
+## (v3 solo balance) How many of the Behemoth's bogies stand for a crew of `crew` (enemies.json
+## boss.bogies_by_crew; every bogie without it): the rest come already wrecked, the far ones first
+## (none standing: the Behemoth starts in phase 2, its turret alone).
+func boss_bogies(crew: int) -> int:
+	var b: Dictionary = boss_def()
+	var all := int(b.get("bogies", 3))
+	var f: Variant = b.get("bogies_by_crew")
+	if not (f is Array) or (f as Array).is_empty():
+		return all
+	return clampi(int(f[clampi(crew, 1, (f as Array).size()) - 1]), 0, all)
 
 
 func unlocks() -> Array:

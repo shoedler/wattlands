@@ -20,23 +20,23 @@ func _hud(ctx: GameContext) -> F.Hud:
 	return ctx.hud as F.Hud
 
 
-func test_the_crew_size_picks_the_tank_and_its_rooms() -> void:
-	var expect := {
-		1: [TankIds.TANK_BULWARK, ["bulwark"], ["bulwark"]],
-		2: [TankIds.TANK_RAMPART, ["diesel", "dynamo"], ["diesel", "dynamo"]],
-		3: [TankIds.TANK_CITADEL, ["diesel", "steam", "dynamo"], ["diesel", "dynamo", "steam"]],
-	}
-	for crew: int in expect:
+## v3: every crew size rides the landship with its five seats; slot s starts on start seat s
+## (Drive, Gun, Loader, Lights) and the seats past the crew stay empty.
+func test_every_crew_rides_the_one_tank_and_its_five_seats() -> void:
+	var starts := ["diesel", "dynamo", "steam", "arc"]
+	for crew in [1, 2, 3, 4]:
 		var g := _game(F.make_ctx(crew))
 		assert_not_null(g.state, "crew %d" % crew)
-		assert_eq(g.state.hull.tank, expect[crew][0])
+		assert_eq(g.state.hull.tank, TankIds.TANK_LANDSHIP)
 		var engines: Array = g.state.stations.map(
 			func(s: TankStationState) -> String: return s.engine
 		)
-		assert_eq(engines, expect[crew][1], "rooms rear to front")
+		assert_eq(engines, ["diesel", "steam", "dynamo", "arc", "feed"], "rooms rear to front")
 		for r in g.state.riders:
-			assert_eq(r.engine, expect[crew][2][r.slot], "slot %d starts on its engine" % r.slot)
+			assert_eq(r.engine, starts[r.slot], "slot %d starts on its seat" % r.slot)
 			assert_eq(g.state.station(r.engine).slot, r.slot)
+		var empty := g.state.stations.filter(func(s: TankStationState) -> bool: return s.is_empty())
+		assert_eq(empty.size(), 5 - crew, "crew %d: the other seats are empty" % crew)
 
 
 func test_bad_content_is_rejected_at_load_and_gives_no_plans() -> void:
@@ -48,7 +48,7 @@ func test_bad_content_is_rejected_at_load_and_gives_no_plans() -> void:
 	assert_eq(g.build_effort_plans(), {})
 
 
-func test_plans_share_every_boundary_and_follow_the_rotation_table() -> void:
+func test_plans_share_every_boundary_and_keep_the_start_seats() -> void:
 	for crew in [1, 2, 3]:
 		var g := _game(F.make_ctx(crew))
 		var plans := g.build_effort_plans()
@@ -65,14 +65,15 @@ func test_plans_share_every_boundary_and_follow_the_rotation_table() -> void:
 					[a.kind, a.duration_s, a.open_ended, a.min_s, a.max_s, a.lap, a.label],
 					"crew %d peer %d phase %d" % [crew, peer, i]
 				)
+	# v3: no rotation; every stage and the boss keep the start seat.
 	var tables := {
 		2:
-		{1: ["diesel", "dynamo", "diesel", "dynamo"], 2: ["dynamo", "diesel", "dynamo", "diesel"]},
+		{1: ["diesel", "diesel", "diesel", "diesel"], 2: ["dynamo", "dynamo", "dynamo", "dynamo"]},
 		3:
 		{
-			1: ["diesel", "dynamo", "steam", "diesel"],
-			2: ["dynamo", "steam", "diesel", "dynamo"],
-			3: ["steam", "diesel", "dynamo", "steam"]
+			1: ["diesel", "diesel", "diesel", "diesel"],
+			2: ["dynamo", "dynamo", "dynamo", "dynamo"],
+			3: ["steam", "steam", "steam", "steam"]
 		},
 	}
 	for crew: int in tables:
@@ -158,7 +159,7 @@ func test_nothing_is_sent_in_the_cooldown() -> void:
 
 
 ## Every rider gets the cadence band and its power band in every segment it starts; the power band
-## is the in-band tempo band only for the diesel and the Bulwark in WORK SIM phases and cleared
+## is the in-band tempo band only for the diesel in WORK SIM phases and cleared
 ## (0, 0) everywhere else: the warm-up, checkpoints, ERG, the steam engine. At least one each per
 ## segment (effort may re-send, for example after a rescue).
 func test_bands_at_each_segment_start() -> void:
@@ -191,7 +192,7 @@ func test_bands_at_each_segment_start() -> void:
 					else:
 						assert_eq([r[2], r[3]], [60.0, 120.0], at)
 				var want := TankDirector.power_band_pct(g.content, plan.phase(i))
-				var drives := ["diesel", "bulwark"].has(str(ph.meta["engine"]))
+				var drives := str(ph.meta["engine"]) == "diesel"
 				if ph.kind != Wl.WORK or ph.mode != Wl.SIM or not drives:
 					assert_eq(want, [0.0, 0.0] as Array[float], "%s: cleared" % at)
 				else:
@@ -289,7 +290,7 @@ func test_results_grade_xp_and_unlocks_after_a_full_session() -> void:
 	assert_eq(row["xp"], 42 + int(bonus[res.grade]))
 	assert_has(row["unlocks"], "soot", "a finished session")
 	assert_has(["TANK_RESULT_VICTORY", "TANK_RESULT_WITHDRAWN"], res.summary_key)
-	assert_gt(float(row["stats"]["TANK_STAT_BULWARK_S"]), 1000.0)
+	assert_gt(float(row["stats"]["TANK_STAT_DIESEL_S"]), 1000.0, "the solo rider on Drive")
 
 
 func test_apply_progress_counts_a_session_once_and_returns_only_new_unlocks() -> void:

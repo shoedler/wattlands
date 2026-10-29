@@ -1,11 +1,12 @@
 class_name TankDrive
 extends RefCounted
-## The tracks (brief 2.4 Drive; owner: rules): BRIEF 3.11's speed model (SpeedModel with the driving
-## rider's mass + 8 kg, CdA 0.5 m^2, the terrain grade under the tank) on the driver's P_eff, the
-## world scrolling at 0.4 x game speed (8 art px per game metre) and the obstacles that stop the
-## tank. v2 removed the Ram, its stall and the boss dodge (brief 2.4); sprints are "Surge to evade"
-## (TankEvade) and Overpressure, which do nothing in WARMUP phases, ERG phases or the first 300 s
-## of the plan (TankConst.FIRST_S): ability_ok().
+## The tracks (brief 2.4 Drive; v3 the Drive seat, which stops the tank when empty; owner:
+## rules): BRIEF 3.11's speed model (SpeedModel with the driving rider's mass + 8 kg, CdA 0.5 m^2,
+## the terrain grade under the tank) on the driver's P_eff, the world scrolling at 0.4 x game speed
+## (8 art px per game metre) and the obstacles that stop the tank. v2 removed the Ram, its stall and
+## the boss dodge (brief 2.4); sprints are "Surge to evade" (TankEvade) and Overpressure, which do
+## nothing in WARMUP phases, ERG phases or the first 300 s of the plan (TankConst.FIRST_S):
+## ability_ok().
 
 
 ## Whether the rider's own phase lets its sprints work (evade, Overpressure): a WORK phase in SIM
@@ -33,8 +34,8 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> void:
 # --- Movement ------------------------------------------------------------------------------------
 
 
-## Whether the segment lets the tank roll right now (free roam: not while it turns, engages or stands
-## at the turning place ahead, TankRoam.halted).
+## Whether the segment lets the tank roll right now (free roam: not while it turns, engages or
+## stands at the turning place ahead, TankRoam.halted).
 static func _may_move(state: TankState) -> bool:
 	var sg := state.seg
 	if state.roam.active and TankRoam.halted(state):
@@ -66,11 +67,9 @@ static func _move(state: TankState, d: TankDieselState, ri: TankRiderInput, dt: 
 	var power := 0.0
 	if d != null:
 		power = d.p_eff_w
-		if d is TankGearboxState:
-			var g := d as TankGearboxState
-			if g.lever != TankIds.LEVER_DRIVE or g.move_s > 0.0:
-				power = 0.0
-	var rolls := _may_move(state) and not hull.breakdown and not state.all_afk
+	# v3: an empty Drive seat stops the tank.
+	var manned := d != null and not d.is_empty()
+	var rolls := manned and _may_move(state) and not hull.breakdown and not state.all_afk
 	hull.holding = not rolls and not hull.breakdown and state.seg.seg != TankIds.SEG_CHECKPOINT
 	if state.seg.seg == TankIds.SEG_CHECKPOINT or state.seg.seg == TankIds.SEG_BOSS:
 		hull.holding = true

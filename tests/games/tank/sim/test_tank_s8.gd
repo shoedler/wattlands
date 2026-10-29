@@ -9,7 +9,7 @@ const CAP_ENEMIES := 16
 const CAP_SHELLS := 24
 
 
-func test_s8_citadel_with_tripled_enemy_counts_stays_within_the_caps() -> void:
+func test_s8_crew_3_with_tripled_enemy_counts_stays_within_the_caps() -> void:
 	var cfg := {
 		"crew": 3,
 		"seed": 3,
@@ -45,11 +45,11 @@ func test_s8_the_tripled_mission_really_has_three_times_the_enemies() -> void:
 	for i in plain.segments().size():
 		for key in ["encounters", "enemies"]:
 			for e: Dictionary in plain.segment(i).get(key, []):
-				plain_n += plain.scaled_count(int(e["count"]), TankIds.TANK_CITADEL)
+				plain_n += plain.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
 			for e: Dictionary in big.segment(i).get(key, []):
-				big_n += big.scaled_count(int(e["count"]), TankIds.TANK_CITADEL)
+				big_n += big.scaled_count(int(e["count"]), TankIds.TANK_LANDSHIP)
 	assert_gt(plain_n, 10)
-	assert_eq(big_n, 3 * plain_n, "every count x 3 on the Citadel (scale 1.0)")
+	assert_eq(big_n, 3 * plain_n, "every count x 3 (scale 1.0)")
 	# A tripled gun line is a real crowd: the rules must hold the line at the cap of 16.
 	var worst := 0
 	for i in big.segments().size():

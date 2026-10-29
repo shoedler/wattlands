@@ -13,9 +13,10 @@ const SLOW_FOR_S := 5.0
 ## Frame-time smoothing (s): one long frame never trips it.
 const SMOOTH_TAU_S := 0.5
 ## Blur radius in art px far from the band, and the ramp (art px) over which it grows.
-const MAX_RADIUS_PX := 2.2
-const RAMP_PX := 70.0
+const MAX_RADIUS_PX := 2.6
+const RAMP_PX := 80.0
 
+## Three rings of 12 taps, so the larger radii stay smooth.
 const SHADER := """
 shader_type canvas_item;
 render_mode blend_disabled;
@@ -35,12 +36,15 @@ void fragment() {
 	if (r > 0.15) {
 		vec4 acc = c;
 		float n = 1.0;
-		for (int i = 0; i < 8; i++) {
-			float a = float(i) * 0.785398;
-			vec2 o = vec2(cos(a), sin(a)) * r * px;
-			acc += texture(screen_tex, SCREEN_UV + o);
-			acc += texture(screen_tex, SCREEN_UV + o * 0.5);
-			n += 2.0;
+		for (int ring = 1; ring <= 3; ring++) {
+			float rr = r * float(ring) / 3.0;
+			float w = 1.0 - float(ring - 1) * 0.22;
+			for (int i = 0; i < 12; i++) {
+				float a = float(i) * 0.523599 + float(ring) * 0.2618;
+				vec2 o = vec2(cos(a), sin(a)) * rr * px;
+				acc += texture(screen_tex, SCREEN_UV + o) * w;
+				n += w;
+			}
 		}
 		c = acc / n;
 	}
@@ -54,7 +58,7 @@ var enabled: bool = true
 var auto_off: bool = false
 ## The canvas size (art px) and the sharp band (art y, top and bottom) on it.
 var canvas: Vector2 = Vector2(960, 540)
-var band: Vector2 = Vector2(150, 360)
+var band: Vector2 = Vector2(195, 405)
 
 var _mat: ShaderMaterial = null
 var _smooth_dt: float = 0.0
@@ -100,11 +104,13 @@ func update(p_canvas: Vector2, p_band: Vector2) -> void:
 	canvas = p_canvas
 	band = p_band
 	visible = active()
+	var ramp := RAMP_PX
+	var max_r := MAX_RADIUS_PX
 	if _mat != null:
 		_mat.set_shader_parameter("canvas_px", canvas)
 		_mat.set_shader_parameter("band", band)
-		_mat.set_shader_parameter("ramp_px", RAMP_PX)
-		_mat.set_shader_parameter("max_radius", MAX_RADIUS_PX)
+		_mat.set_shader_parameter("ramp_px", ramp)
+		_mat.set_shader_parameter("max_radius", max_r)
 	queue_redraw()
 
 

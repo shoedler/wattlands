@@ -3,27 +3,28 @@ extends RefCounted
 ## Pure, deterministic rules (BRIEF 3.6; brief 2.4): step(state, inputs, dt) reads only its
 ## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
 ##
-## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), assign
-## stations and read the riders (who can evade, who sprints), count the breech down, spawn the
-## Advance's encounters, drive (TankDrive: speed model, obstacles), move the enemies and the
-## Behemoth (its telegraph and main gun through TankEvade), rebuild the target list, run the
-## stations (TankStations), the main gun (TankGun), the bow guns (TankBow), the enemies' guns
-## (telegraphs through TankEvade), the shells in flight (TankShells), the repair and the berm
-## (TankHullRules) and the objectives. Events come back in that order. Everything is split by
-## topic over rules/ and combat/; the signatures here (new_state, step, in_band) are the module's
-## contract. Free roam (brief 2.10, TankRoam) adds its turn, time up, strongpoints and patrols
-## before the drive, and its points, engagement halt and time-up finish at the end.
+## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), seat
+## the riders (TankSeats: moves land, the seat lock, seat intents), read the riders (who can evade,
+## who sprints), spawn the Advance's encounters, drive (TankDrive: speed model, obstacles), move the
+## enemies and the Behemoth (its telegraph and main gun through TankEvade), rebuild the target
+## list, run the seats' machines (TankStations: the Gun's bank, the Loader's rack, the Lights), the
+## main gun (TankGun: chambering from the rack, laying, firing), the bow guns (TankBow: the
+## Secondaries seat's rounds), the enemies' guns (telegraphs through TankEvade), the shells in
+## flight (TankShells), the repair and the berm (TankHullRules) and the objectives. v3: an empty
+## seat does nothing (no power: no drive, gun, reloads, searchlights or bow guns). Events come
+## back in that order. Everything is split by topic over rules/ and combat/; the signatures here
+## (new_state, step, in_band) are the module's contract. Free roam (brief 2.10, TankRoam) adds its
+## turn, time up, strongpoints and patrols before the drive, and its points, engagement halt and
+## time-up finish at the end.
 
 
-## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`.
+## A fresh state (TankState.create) for `players` (ctx.players order) on `mission`, with the
+## Loader's ready rack holding tanks.json steam.rack_start heavy shells.
 static func new_state(
-	content: TankContent,
-	players: Array[PlayerSlot],
-	mission: String,
-	rotation: bool,
-	rng: RandomNumberGenerator
+	content: TankContent, players: Array[PlayerSlot], mission: String, rng: RandomNumberGenerator
 ) -> TankState:
-	var s := TankState.create(content, players, mission, rotation, rng)
+	var s := TankState.create(content, players, mission, rng)
+	TankStations.fill_rack(s, int(content.num("tanks", "steam.rack_start", 0.0)))
 	TankRoam.prepare(s)
 	return s
 
@@ -38,7 +39,7 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	var aux := TankAux.of(state)
 	aux.aim_valid = false
 	TankSegments.track(state, inputs, aux, events)
-	_assign_stations(state, inputs, events)
+	TankSeats.step(state, inputs, events)
 	_update_riders(state, inputs, dt)
 	state.hull.breech_s = maxf(state.hull.breech_s - dt, 0.0)
 	TankRoam.pre(state, inputs, aux, dt, events)
@@ -50,12 +51,12 @@ static func step(state: TankState, inputs: TankInputs, dt: float) -> Array[Dicti
 	TankTargets.build(state, aux)
 	TankStations.step(state, inputs, dt, events)
 	TankGun.step(state, inputs, dt, events)
-	TankBow.step(state, dt, events)
+	TankBow.step(state, inputs, dt, events)
 	TankEnemies.fire(state, aux, dt, events)
 	TankShells.step(state, aux, dt, events)
 	TankHullRules.repair(state, dt, events)
 	TankHullRules.dig(state, inputs, dt)
-	TankSegments.objectives(state)
+	TankSegments.objectives(state, inputs)
 	TankRoam.post(state, aux, events)
 	return events
 
@@ -94,9 +95,9 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 ## The rider's current effort target in % FTP (TankRiderState.target_pct, v2), the denominator of
 ## the HUD's and the view's power ratio: the applied ERG target when the telemetry carries one (the
 ## governor's, rescue and the unverified factor included), else the phase's planned ERG target,
-## else in SIM the engine's band centre (brief 2.3 In band): WARMUP-kind phases tanks.json
-## power_ratio.warmup_sim_pct; the steam engine building TankConst.STEAM_BUILD_PCT, loaded or
-## cycling power_ratio.steam_loaded_pct; the diesel, the Bulwark and the rest the middle of
+## else in SIM the seat's band centre (brief 2.3 In band): WARMUP-kind phases tanks.json
+## power_ratio.warmup_sim_pct; the Loader loading TankConst.STEAM_BUILD_PCT, idle (v3: the rack
+## full) power_ratio.steam_loaded_pct; Drive, Secondaries and the rest the middle of
 ## in_band.sim_ftp_pct (90.5). 0 when the rider has no phase (neither mode known).
 static func target_pct(state: TankState, r: TankRiderInput, station: TankStationState) -> float:
 	if r.mode == Wl.ERG and r.applied_target_w > 0.0:
@@ -117,33 +118,6 @@ static func target_pct(state: TankState, r: TankRiderInput, station: TankStation
 	return (float(band[0]) + float(band[1])) / 2.0
 
 
-## Rooms follow each rider's plan meta (rotation is in the plans); a rotation event when they move.
-static func _assign_stations(
-	state: TankState, inputs: TankInputs, events: Array[Dictionary]
-) -> void:
-	var moved := false
-	for ri in inputs.riders:
-		var r := state.rider(ri.peer)
-		if r == null or ri.engine == "" or ri.engine == r.engine:
-			continue
-		r.engine = ri.engine
-		r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0)).reset()
-		moved = true
-	if not moved:
-		return
-	for st in state.stations:
-		st.slot = -1
-		st.peer = 0
-	var pairs: Array = []
-	for r in state.riders:
-		var st := state.station(r.engine)
-		if st != null:
-			st.slot = r.slot
-			st.peer = r.peer
-		pairs.append([r.slot, r.engine])
-	events.append(TankEvents.rotation(pairs))
-
-
 static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> void:
 	var reserve_w := 60.0
 	if state.content != null:
@@ -152,6 +126,12 @@ static func _update_riders(state: TankState, inputs: TankInputs, dt: float) -> v
 	for ri in inputs.riders:
 		if not ri.on_reserve():
 			state.all_afk = false
+	for st in state.stations:
+		# An empty seat has no power (v3): nothing runs on it.
+		st.p_eff_w = 0.0
+		st.in_band = false
+		st.reserve = false
+		st.unpowered = state.all_afk
 	for ri in inputs.riders:
 		var r := state.rider(ri.peer)
 		if r == null:

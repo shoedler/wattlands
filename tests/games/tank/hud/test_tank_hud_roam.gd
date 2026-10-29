@@ -42,7 +42,7 @@ func test_every_crew_gets_the_roam_layout() -> void:
 		var hs: HudSpec = got["_spec"]
 		for k: String in ["TankHudRoamStrip", "TankHudBoard", "TankHudHull", "TankHudMine"]:
 			assert_true(got.has(k), "crew %d: %s" % [crew, k])
-		for k2: String in ["TankHudCrew", "TankHudTags"]:
+		for k2: String in ["TankHudSeats", "TankHudTags"]:
 			assert_true(got.has(k2), "crew %d: %s" % [crew, k2])
 		assert_false(got.has("TankHudMission"), "no mission plate in free roam")
 		assert_false(got.has("TankHudBoss"), "no Behemoth in free roam")

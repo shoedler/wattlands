@@ -1,0 +1,555 @@
+{
+  "note": "The v3 tank kit (assets/tank/v3/tools_src/bake.gd). Sprite px, origin top-left, facing right.",
+  "size": [
+    475,
+    216
+  ],
+  "ground": 209.0,
+  "base": "tank_base.png",
+  "lit": {
+    "file": "tank_lit.png",
+    "at": [
+      18,
+      54
+    ]
+  },
+  "turret": {
+    "rect": [
+      176,
+      0,
+      196,
+      113
+    ],
+    "pivot_x": 272.0
+  },
+  "gear": {
+    "T": 5.0,
+    "up": 7.0,
+    "droop": 5.0,
+    "skirt_y": 187,
+    "pitch": 7.0,
+    "idler": {
+      "c": [
+        36.0,
+        162.0
+      ],
+      "r": 11.0
+    },
+    "sprocket": {
+      "c": [
+        420.299987792969,
+        188.100006103516
+      ],
+      "r": 16.6
+    },
+    "rollers": [
+      {
+        "c": [
+          87.0,
+          177.0
+        ],
+        "r": 2.0
+      },
+      {
+        "c": [
+          150.0,
+          177.0
+        ],
+        "r": 2.0
+      },
+      {
+        "c": [
+          213.0,
+          177.0
+        ],
+        "r": 2.0
+      },
+      {
+        "c": [
+          276.0,
+          177.0
+        ],
+        "r": 2.0
+      },
+      {
+        "c": [
+          339.0,
+          177.0
+        ],
+        "r": 2.0
+      },
+      {
+        "c": [
+          398.0,
+          176.0
+        ],
+        "r": 2.0
+      }
+    ],
+    "wheels": [
+      {
+        "x": 71.5,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 102.9,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 134.3,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 165.7,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 197.1,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 228.5,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 259.9,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 291.3,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 322.7,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 354.1,
+        "y": 192.0,
+        "r": 12.0
+      },
+      {
+        "x": 385.5,
+        "y": 192.0,
+        "r": 12.0
+      }
+    ],
+    "sheets": {
+      "road": {
+        "file": "gear_road.png",
+        "frames": 12,
+        "period": 1.0471975511966,
+        "size": 28,
+        "r": 12.0
+      },
+      "sprocket": {
+        "file": "gear_sprocket.png",
+        "frames": 48,
+        "period": 6.28318530717959,
+        "size": 42,
+        "r": 16.6
+      },
+      "idler": {
+        "file": "gear_idler.png",
+        "frames": 12,
+        "period": 1.25663706143592,
+        "size": 26,
+        "r": 11.0
+      },
+      "roller": {
+        "file": "gear_roller.png",
+        "frames": 6,
+        "period": 2.0943951023932,
+        "size": 8,
+        "r": 2.0
+      }
+    },
+    "underside": {
+      "rect": [
+        44,
+        176,
+        368,
+        28
+      ],
+      "split_y": 198,
+      "top": "#0a0705",
+      "bottom": "#070504"
+    },
+    "skirt_shade": {
+      "x0": 20,
+      "x1": 445,
+      "y0": 180,
+      "y1": 200,
+      "from": 0.3
+    }
+  },
+  "track": {
+    "file": "track.png",
+    "sub_u": 4,
+    "rows": 18,
+    "dd0": -2.0,
+    "row_px": 0.5,
+    "lit_ny": -0.35
+  },
+  "gun": {
+    "trunnion": [
+      350.100006103516,
+      103.050003051758
+    ],
+    "len": 90.5,
+    "file": "barrel.png",
+    "origin": [
+      0.0,
+      7.0
+    ]
+  },
+  "bow": {
+    "guns": [
+      {
+        "file": "bow_0.png",
+        "origin": [
+          0.0,
+          4.0
+        ],
+        "pivot": [
+          400.0,
+          126.900001525879
+        ],
+        "len": 23.5
+      },
+      {
+        "file": "bow_1.png",
+        "origin": [
+          0.0,
+          4.0
+        ],
+        "pivot": [
+          430.200012207031,
+          139.0
+        ],
+        "len": 22.0
+      }
+    ],
+    "ball": {
+      "file": "bow_ball.png",
+      "origin": [
+        3.0,
+        5.0
+      ]
+    }
+  },
+  "blast": {
+    "fps": 30.0,
+    "cols": 10,
+    "air": {
+      "file": "blast_air.png",
+      "frames": 8,
+      "size": [
+        168,
+        150
+      ],
+      "origin": [
+        20,
+        96
+      ]
+    },
+    "smoke": {
+      "file": "blast_smoke.png",
+      "frames": 60,
+      "size": [
+        184,
+        180
+      ],
+      "origin": [
+        24,
+        124
+      ]
+    },
+    "ground": {
+      "file": "blast_ground.png",
+      "frames": 48,
+      "size": [
+        320,
+        70
+      ],
+      "origin": [
+        160,
+        66
+      ]
+    }
+  },
+  "planes": [
+    {
+      "name": "far",
+      "y0": -35.0,
+      "parallax": 0.04,
+      "layer": "back",
+      "file": "planes/far.png"
+    },
+    {
+      "name": "ridge",
+      "y0": 45.0,
+      "parallax": 0.12,
+      "layer": "back",
+      "file": "planes/ridge.png"
+    },
+    {
+      "name": "forest",
+      "y0": 45.0,
+      "parallax": 0.3,
+      "layer": "back",
+      "file": "planes/forest.png"
+    },
+    {
+      "name": "verge",
+      "y0": 341.0,
+      "parallax": 1.0,
+      "layer": "road",
+      "file": "planes/verge.png"
+    },
+    {
+      "name": "near",
+      "y0": 401.0,
+      "parallax": 1.0,
+      "layer": "near",
+      "file": "planes/near.png"
+    },
+    {
+      "name": "foreground",
+      "y0": 389.0,
+      "parallax": 1.35,
+      "layer": "front",
+      "file": "planes/foreground.png"
+    }
+  ],
+  "rooms": {
+    "drive": [
+      89,
+      152,
+      92,
+      31
+    ],
+    "loader": [
+      181,
+      152,
+      69,
+      31
+    ],
+    "gun": [
+      250,
+      152,
+      43,
+      31
+    ],
+    "lights": [
+      293,
+      152,
+      43,
+      31
+    ],
+    "sec": [
+      361,
+      156,
+      30,
+      27
+    ],
+    "quarters": [
+      104,
+      125,
+      160,
+      24
+    ],
+    "turret_drive": [
+      268,
+      123,
+      67,
+      27
+    ],
+    "upper_front": [
+      340,
+      131,
+      22,
+      24
+    ]
+  },
+  "seats": [
+    {
+      "id": "drive",
+      "room": "drive",
+      "engine": "diesel"
+    },
+    {
+      "id": "gun",
+      "room": "gun",
+      "engine": "dynamo"
+    },
+    {
+      "id": "loader",
+      "room": "loader",
+      "engine": "steam"
+    },
+    {
+      "id": "lights",
+      "room": "lights",
+      "engine": "arc"
+    },
+    {
+      "id": "sec",
+      "room": "sec",
+      "engine": "feed"
+    }
+  ],
+  "windows": {
+    "shaft": [
+      237,
+      106,
+      10,
+      47
+    ],
+    "rackwin": [
+      234,
+      90,
+      39,
+      21
+    ],
+    "breechwin": [
+      313,
+      95,
+      34,
+      15
+    ],
+    "boxwin": [
+      366,
+      116,
+      27,
+      12
+    ],
+    "boxwin2": [
+      410,
+      140,
+      18,
+      9
+    ]
+  },
+  "window_lamps": [
+    [
+      262.0,
+      92.0
+    ],
+    [
+      326.0,
+      97.0
+    ],
+    [
+      380.0,
+      118.0
+    ],
+    [
+      418.0,
+      141.0
+    ]
+  ],
+  "rack": {
+    "pivot": [
+      251.5,
+      95.5
+    ],
+    "slots_x": 263.0,
+    "slots_y": [
+      107.0,
+      102.0,
+      97.0
+    ],
+    "head": [
+      242.0,
+      105.0
+    ]
+  },
+  "details": [
+    {
+      "kind": "lamp_red",
+      "at": [
+        31.0,
+        127.0
+      ]
+    },
+    {
+      "kind": "lamp_red",
+      "at": [
+        442.0,
+        149.0
+      ]
+    },
+    {
+      "kind": "lamp_green",
+      "at": [
+        105.0,
+        102.0
+      ]
+    },
+    {
+      "kind": "headlight",
+      "at": [
+        453.0,
+        164.0
+      ]
+    },
+    {
+      "kind": "searchlight",
+      "at": [
+        303.0,
+        64.0
+      ],
+      "lens": [
+        6.5,
+        1.5
+      ],
+      "ang": 11.0,
+      "len": 560.0,
+      "half": 6.0,
+      "ground": 209.0,
+      "a": 0.4
+    },
+    {
+      "kind": "searchlight_rear",
+      "at": [
+        105.0,
+        91.0
+      ],
+      "lens": [
+        -7.0,
+        1.5
+      ],
+      "ang": 167.0,
+      "len": 220.0,
+      "half": 8.0,
+      "ground": 209.0,
+      "a": 0.34,
+      "always": true
+    }
+  ],
+  "exhaust": [
+    40.0,
+    112.0
+  ],
+  "room_groups": {
+    "drive": 1,
+    "lights": 2,
+    "gun": 3,
+    "loader": 4,
+    "sec": 5,
+    "quarters": 6,
+    "turret_drive": 6,
+    "upper_front": 6
+  },
+  "hitbox": "r6_hitbox.json"
+}

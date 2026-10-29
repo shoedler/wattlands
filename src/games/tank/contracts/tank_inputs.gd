@@ -7,7 +7,9 @@ extends RefCounted
 var tick: int = 0
 ## Game seconds (frame.t).
 var t: float = 0.0
-## The group's phase: the PhaseState of the rider in the lowest phase index, with its meta.
+## The group's phase: the PhaseState of the rider in the lowest segment (v3: a seat switch splits a
+## rider's phase, so plan phase indexes can differ inside one segment), with its meta
+## (TankPhaseInfo.from_phase: the segment's index, clock and bounds).
 var phase: TankPhaseInfo = TankPhaseInfo.new()
 ## One per slot, in slot order (ctx.players order).
 var riders: Array[TankRiderInput] = []
@@ -31,15 +33,22 @@ static func from_frame(
 	inp.tick = frame.tick
 	inp.t = frame.t
 	var group_peer := 0
+	var group_seg := 1 << 30
 	var group_index := 1 << 30
 	for p in players:
 		var ps := frame.phase_of(p.peer_id)
-		if ps != null and ps.index < group_index:
+		if ps == null:
+			continue
+		var sg := segment_of(plans.get(p.peer_id), ps)
+		if sg < group_seg or (sg == group_seg and ps.index < group_index):
+			group_seg = sg
 			group_index = ps.index
 			group_peer = p.peer_id
 	if group_peer != 0:
 		var gps := frame.phase_of(group_peer)
 		inp.phase = TankPhaseInfo.from_phase(gps, meta_of(plans.get(group_peer), gps.index))
+		if gps.is_cooldown():
+			inp.phase.index = group_seg
 	for p in players:
 		var ri := TankRiderInput.new()
 		ri.peer = p.peer_id
@@ -50,13 +59,23 @@ static func from_frame(
 		ri.autopilot = p.autopilot or p.is_bot
 		var ps := frame.phase_of(p.peer_id)
 		if ps != null:
+			var meta := meta_of(plans.get(p.peer_id), ps.index)
 			ri.phase_index = ps.index
 			ri.phase_kind = ps.kind
 			ri.phase_mode = ps.mode
 			ri.plan_elapsed_s = ps.plan_elapsed_s
 			ri.planned_pct = ps.planned_pct
-			ri.engine = str(meta_of(plans.get(p.peer_id), ps.index).get("engine", ""))
+			ri.engine = str(meta.get("engine", ""))
 			ri.grade_source = grade_source_of(plans.get(p.peer_id), ps.index)
+			ri.segment = segment_of(plans.get(p.peer_id), ps)
+			ri.phase_elapsed_s = ps.elapsed_s
+			ri.phase_min_s = ps.min_s
+			ri.phase_max_s = ps.max_s
+			ri.phase_open_ended = ps.open_ended
+			ri.phase_remaining_s = ps.remaining_s
+			ri.seg_offset_s = float(meta.get("offset_s", 0.0))
+		if plans.get(p.peer_id) is EffortPlan:
+			ri.plan = plans[p.peer_id]
 		var tm := frame.telemetry(p.peer_id)
 		if tm != null:
 			ri.power_w = tm.power_w
@@ -84,6 +103,21 @@ static func meta_of(plan: Variant, index: int) -> Dictionary:
 	if index < 0 or index >= ep.size():
 		return {}
 	return ep.phase(index).meta
+
+
+## (v3) The mission segment of a rider in phase `ps` of `plan`: the phase's meta "segment"; in the
+## cool-down (or past the plan) the segment count (one past the last phase's segment); -1 for none.
+static func segment_of(plan: Variant, ps: PhaseState) -> int:
+	if ps == null:
+		return -1
+	if not (plan is EffortPlan):
+		return ps.index
+	var ep: EffortPlan = plan
+	if ps.is_cooldown() or ps.index >= ep.size():
+		if ep.size() == 0:
+			return ps.index
+		return int(ep.phase(ep.size() - 1).meta.get("segment", ep.size() - 1)) + 1
+	return int(ep.phase(ps.index).meta.get("segment", ps.index))
 
 
 ## The grade_source of SIM phase `index` of `plan` ("" for ERG, past its end, or no plan).

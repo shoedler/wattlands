@@ -40,11 +40,11 @@ var _index_tick: int = 0
 
 
 ## A director over `crew` riders on `mission` (FTP 200, 220, 240, all verified).
-func build(crew: int, mission: String = "ashfall_road", rotation: bool = true) -> void:
+func build(crew: int, mission: String = "ashfall_road") -> void:
 	ctx = F.make_ctx(crew, 0, mission)
 	content = TankFixtures.content(mission)
-	plans = TankPlanBuilder.build_all(content, ctx.players, rotation)
-	state = TankState.create(content, ctx.players, mission, rotation, ctx.rng)
+	plans = TankPlanBuilder.build_all(content, ctx.players)
+	state = TankState.create(content, ctx.players, mission, ctx.rng)
 	director = TankDirector.new(ctx, content, plans)
 
 
@@ -136,6 +136,14 @@ func inputs(index: int, elapsed: float, at_plan_s: float) -> TankInputs:
 		ri.ftp_verified = p.ftp_verified
 		var rps := phase_state(pl, index, elapsed, at_plan_s)
 		ri.phase_index = rps.index
+		ri.segment = TankInputs.segment_of(pl, rps)
+		ri.phase_elapsed_s = rps.elapsed_s
+		ri.phase_min_s = rps.min_s
+		ri.phase_max_s = rps.max_s
+		ri.phase_open_ended = rps.open_ended
+		var end_s := rps.max_s if rps.open_ended else rps.duration_s
+		ri.phase_remaining_s = maxf(end_s - rps.elapsed_s, 0.0)
+		ri.plan = pl
 		ri.phase_kind = rps.kind
 		ri.phase_mode = rps.mode
 		ri.plan_elapsed_s = at_plan_s
