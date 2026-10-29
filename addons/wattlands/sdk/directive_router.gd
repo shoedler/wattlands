@@ -279,6 +279,8 @@ func split(peer: int, plan: EffortPlan) -> bool:
 	var why := _check_phase(peer)
 	if why == "" and plan == null:
 		why = Wl.REFUSE_BAD_FIELDS
+	if why == "" and _split_switches_too_soon(peer, plan):
+		why = Wl.REFUSE_SWITCH_SPACING
 	if why != "":
 		_refuse(peer, "split", {}, why, id)
 		return false
@@ -312,6 +314,15 @@ func split(peer: int, plan: EffortPlan) -> bool:
 	if on_replan.is_valid():
 		on_replan.call(peer, res["warnings"])
 	return true
+
+
+## True when a split would switch `peer` between ERG and SIM at once, less than
+## SWITCH_SPACING_S after the rider's previous switch (BRIEF 4.5's run-time spacing; the
+## validator only warns about it).
+func _split_switches_too_soon(peer: int, plan: EffortPlan) -> bool:
+	if plan.phases.is_empty() or plan.phases[0].mode == tracker.mode_now(peer):
+		return false
+	return tracker.seconds_since_switch(peer, _tick()) < SWITCH_SPACING_S - EPS
 
 
 # --- GameHost hooks -----------------------------------------------------------------

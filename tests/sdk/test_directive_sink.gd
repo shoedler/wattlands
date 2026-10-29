@@ -598,6 +598,26 @@ func test_split_validates_with_the_phase_at_its_length() -> void:
 	assert_eq(_tracker.phase_of(2).label, "Warm", "a rejected split keeps the phase")
 
 
+## A split that switches ERG <-> SIM at once is refused less than 30 s after the rider's last
+## switch (BRIEF 4.5's run-time spacing), and accepted from 30 s on.
+func test_split_keeps_the_run_time_switch_spacing() -> void:
+	_start()
+	_advance(5)
+	var to_sim := EffortPlan.of([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, 60, "Climb")])
+	assert_true(_router.split(1, to_sim), "no switch before: at once")
+	_advance(0.05)
+	assert_eq(_tracker.mode_now(1), Wl.SIM)
+	_advance(10)
+	var back := EffortPlan.of([PlanPhase.erg(Wl.WARMUP, 50, 60, "Back").with_range(45, 60)])
+	assert_false(_router.split(1, back), "10 s after the switch")
+	assert_eq(_applied.back()[1]["reason"], Wl.REFUSE_SWITCH_SPACING)
+	assert_push_warning("switch_spacing")
+	var same := EffortPlan.of([PlanPhase.sim(Wl.WARMUP, Wl.GRADE_GAME, 60, "Same mode")])
+	assert_true(_router.split(1, same), "no switch: at once")
+	_advance(20)
+	assert_true(_router.split(1, back), "30 s after the switch")
+
+
 func test_split_is_refused_in_the_cooldown_and_on_a_client() -> void:
 	_start()
 	_advance(240)
