@@ -23,6 +23,9 @@ extends TankHudCtl
 ## below the tracks) with its pointer bent round the tank to the shooter; a pursuer that only shows a
 ## sliver at the screen's edge gets a small edge arrow on the road. refresh() lays them all out
 ## (m["layout"], tested for every variant, facing and travel direction) and paint() draws that.
+## The two angle meters (the gun's arc, the Secondaries' dial) fade in over DIAL_IN_S and, once their
+## show condition ends, hold DIAL_HOLD_S before fading out over DIAL_OUT_S (dial_fade(); tank 0.3.1:
+## they no longer flash when the condition toggles).
 
 const POST_H := 44.0
 const PIN_MARGIN := 36.0
@@ -40,6 +43,10 @@ const EDGE_ARROW_R := ["#...", "##..", "###.", "####", "###.", "##..", "#..."]
 const SLIVER_PX := 48.0
 ## Free roam: the turn marker shows once the turning place ahead is this near (game metres).
 const TURN_MARKER_M := 160.0
+## The angle meters' fade in, fade out and hold after their condition ends (s).
+const DIAL_IN_S := 0.25
+const DIAL_OUT_S := 0.6
+const DIAL_HOLD_S := 1.5
 
 var m: Dictionary = {}
 ## The turn marker (free roam): world x in rules px and the direction it turns the tank to
@@ -48,6 +55,12 @@ var turn_x: float = 0.0
 var turn_dir: int = 0
 var _view: Object = null
 var _view_tries: int = 0
+## The angle meters' fades: Vector2(alpha 0..1, hold left in s) for the gun's arc and the
+## Secondaries' dial, and the dial's data as last shown (drawn on through its hold and fade out).
+var aim_fade: Vector2 = Vector2.ZERO
+var sec_fade: Vector2 = Vector2.ZERO
+var sec_shown: Dictionary = {}
+var _alpha: float = 1.0
 
 
 ## Shows the turn marker at world x `world_x_px` (rules px), pointing `dir` (-1 / +1).
@@ -82,6 +95,31 @@ func find_view() -> Object:
 
 func geom() -> TankHudGeom:
 	return TankHudGeom.make(st(), find_view())
+
+
+## The angle meters' fades follow their show conditions (wall clock).
+func tick(delta: float) -> void:
+	aim_fade = dial_fade(aim_fade.x, aim_fade.y, bool(m.get("aim", false)), delta)
+	sec_fade = dial_fade(sec_fade.x, sec_fade.y, m.has("sec"), delta)
+
+
+## One step of an angle meter's fade: Vector2(alpha, hold left) after `dt` s from `alpha` (0..1)
+## and `hold` (s), its condition `on` or not. On: up by dt / DIAL_IN_S, the hold refilled to
+## DIAL_HOLD_S. Off: the hold runs out first, the rest of the step fades it by dt / DIAL_OUT_S.
+static func dial_fade(alpha: float, hold: float, on: bool, dt: float) -> Vector2:
+	if on:
+		var up := alpha + dt / DIAL_IN_S
+		return Vector2(1.0 if up > 0.999 else up, DIAL_HOLD_S)
+	var left := hold - dt
+	if left >= 0.0:
+		return Vector2(alpha, left)
+	var down := alpha + left / DIAL_OUT_S
+	return Vector2(0.0 if down < 0.001 else down, 0.0)
+
+
+## `col` at the meter being drawn's fade.
+func _fa(col: Color) -> Color:
+	return Color(col, col.a * _alpha)
 
 
 func refresh() -> void:
@@ -123,15 +161,20 @@ func refresh() -> void:
 	m["edge"] = edge
 	var laying := absf(h.elev_deg - h.elev_target_deg) > 0.5 or h.target_id != 0
 	m["aim"] = laying and absf(h.elev_deg) >= 2.0 and not h.breakdown
-	if bool(m["aim"]):
+	if bool(m["aim"]) or aim_fade.x > 0.0:
 		var b := g.barrel()
-		m["aim"] = not bool(b["turning"])
+		if bool(b["turning"]):
+			# the turret traverses: the arc goes at once (its geometry is the barrel's)
+			m["aim"] = false
+			aim_fade = Vector2.ZERO
 		m["barrel"] = b
 		m["elev"] = h.elev_deg
 		m["elev_to"] = h.elev_target_deg
 	if turn_dir != 0:
 		m["turn_x"] = g.world_x(turn_x)
 	_feed_secondaries(s, g)
+	if m.has("sec"):
+		sec_shown = m["sec"]
 	m["layout"] = layout()
 
 
@@ -362,10 +405,13 @@ func paint() -> void:
 		var left := p.x < float(canvas().x) * 0.5
 		D.rect(self, Rect2(p + Vector2(-1, -1), Vector2(6, 9)), Color(D.PANEL, 0.8))
 		D.pixels(self, EDGE_ARROW if left else EDGE_ARROW_R, p, Color(D.RED, 0.9))
-	if bool(m["aim"]):
+	if aim_fade.x > 0.0 and m.has("barrel"):
+		_alpha = aim_fade.x
 		_elev_arc()
-	if m.has("sec"):
-		_sec_arc()
+	if sec_fade.x > 0.0 and not sec_shown.is_empty():
+		_alpha = sec_fade.x
+		_sec_arc(sec_shown)
+	_alpha = 1.0
 
 
 ## A small riveted plate standing on the road behind the rear track, the HUD's plate style with room
@@ -473,14 +519,15 @@ func _elev_arc() -> void:
 		_arc_px(keep, p, D.AMBER)
 	var lr: Rect2 = lay["label"]
 	if lr.size != Vector2.ZERO:
-		D.tall_shadow(self, lr.position.x, lr.position.y, lab, D.AMBER)
+		D.tall(self, lr.position.x + 1, lr.position.y + 1, lab, _fa(D.SHADOW))
+		D.tall(self, lr.position.x, lr.position.y, lab, _fa(D.AMBER))
 		_rack_pips(lr, left)
 
 
 ## One arc pixel, only outside the tank's body (TankHudGeom.arc_px_ok).
 func _arc_px(keep: Array, p: Vector2i, col: Color) -> void:
 	if TankHudGeom.arc_px_ok(p, keep):
-		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), col)
+		D.rect(self, Rect2(Vector2(p), Vector2(1, 1)), _fa(col))
 
 
 # --- v3: the ready rack by the gun's arc, the Secondaries' dial ----------------------------------------
@@ -504,12 +551,12 @@ func _rack_pips(lr: Rect2, left: bool) -> void:
 	var rack := TankHudModel.rack(st())
 	var x := lr.end.x + 4.0 if not left else lr.position.x - 19.0
 	var p := Vector2(roundf(x), lr.position.y + 1.0)
-	D.rect(self, Rect2(p - Vector2(2, 1), Vector2(19, 9)), Color(D.PANEL, 0.7))
+	D.rect(self, Rect2(p - Vector2(2, 1), Vector2(19, 9)), _fa(Color(D.PANEL, 0.7)))
 	for i in TankConst.RACK_MAX:
 		var col := D.BRASS.lightened(0.2) if i < rack else Color("#4a3e30")
-		D.pixels(self, SHELL_PIP, p + Vector2(i * 5, 0), col)
+		D.pixels(self, SHELL_PIP, p + Vector2(i * 5, 0), _fa(col))
 		if i < rack:
-			D.rect(self, Rect2(p + Vector2(i * 5 + 1, 0), Vector2(1, 1)), Color("#e07a3c"))
+			D.rect(self, Rect2(p + Vector2(i * 5 + 1, 0), Vector2(1, 1)), _fa(Color("#e07a3c")))
 
 
 ## The bow guns' elevation as the dial shows it: {deg (+ up, SEC_MIN..SEC_MAX), target (an enemy in
@@ -573,8 +620,7 @@ func _feed_secondaries(s: TankState, g: TankHudGeom) -> void:
 ## main arc) standing just past the bow guns' muzzles and clear of the hull, its centre on their
 ## bore line: the reach (-10 .. +35 degrees) with a tick every 15 degrees, a faint level line, the
 ## needle at the guns' elevation, the degrees and the rounds a minute under it.
-func _sec_arc() -> void:
-	var sd: Dictionary = m["sec"]
+func _sec_arc(sd: Dictionary) -> void:
 	var left := bool(sd["left"])
 	# the hull only: the turret's rect reaches over the barrel, which stands well above the dial
 	var body: Array[Rect2] = []
@@ -612,8 +658,8 @@ func _sec_arc() -> void:
 	for p3 in TankHudGeom.tick_pixels(c, deg, left, 0.0, SEC_R + 4.0):
 		_arc_px(body, p3, SEC_COL)
 	var tip := c + TankHudGeom.dir(deg, left) * (SEC_R + 4.0)
-	D.rect(self, Rect2(tip.round() - Vector2(1, 1), Vector2(3, 3)), SEC_COL)
-	D.rect(self, Rect2(c - Vector2(1, 1), Vector2(3, 3)), SEC_COL)
+	D.rect(self, Rect2(tip.round() - Vector2(1, 1), Vector2(3, 3)), _fa(SEC_COL))
+	D.rect(self, Rect2(c - Vector2(1, 1), Vector2(3, 3)), _fa(SEC_COL))
 	var e := roundi(deg)
 	var lab := ("+" if e > 0 else "") + str(e) + "°"
 	var mid := c + TankHudGeom.dir(SEC_MIN, left) * (SEC_R + 4.0)
@@ -621,9 +667,12 @@ func _sec_arc() -> void:
 	var rpm := tx("TANK_HUD_PER_MIN", [roundi(float(sd["rpm"]))])
 	# a dark plate under the two lines: the bow rounds' tracers pass behind, never through the text
 	var pw := maxf(D.text_w(lab), D.text_w(rpm)) + 4.0
-	D.rect(self, Rect2(roundf(x - 2.0), roundf(mid.y - 3.0), pw, 21.0), Color(D.PANEL, SEC_PLATE_A))
-	D.text_shadow(self, roundf(x), roundf(mid.y - 1.0), lab, SEC_COL)
-	D.text_shadow(self, roundf(x), roundf(mid.y + 8.0), rpm, SEC_DIM)
+	var plate := Rect2(roundf(x - 2.0), roundf(mid.y - 3.0), pw, 21.0)
+	D.rect(self, plate, _fa(Color(D.PANEL, SEC_PLATE_A)))
+	for ln: Array in [[lab, -1.0, SEC_COL], [rpm, 8.0, SEC_DIM]]:
+		var ty := roundf(mid.y + float(ln[1]))
+		D.text(self, roundf(x) + 1.0, ty + 1.0, str(ln[0]), _fa(D.SHADOW))
+		D.text(self, roundf(x), ty, str(ln[0]), _fa(ln[2]))
 
 
 func _sec_clear(piv: Vector2, radius: float, left: bool, body: Array[Rect2]) -> bool:

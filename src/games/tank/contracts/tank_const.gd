@@ -49,9 +49,13 @@ const INTENTS_PER_S := 5
 ## v3 (brief "Combat changes"): the Loader's ready rack holds this many main-gun shells (the r6
 ## turret window draws three).
 const RACK_MAX := 3
-## v3 (brief "Seat choice and switching"): a rider may change seats only this long after their last
-## trainer-mode change (a seat switch or a plan boundary), the BRIEF 4.5 60 s switch spacing.
-const SEAT_LOCK_S := 60.0
+## 0.3.1 (no seat lock): a rider's trainer switches ERG <-> SIM at most once in this long (BRIEF 4.5,
+## the PlanValidator's 30 s): a seat move whose mode differs waits for it (TankSeatPlan.follow).
+const SWITCH_GAP_S := 30.0
+## 0.3.1: an Autopilot-seated crew rider stays at least this long on a seat (no thrashing; at least
+## the trainer's SWITCH_GAP_S), a solo rider AUTO_STAY_SOLO_S (it works every seat alone).
+const AUTO_STAY_S := 60.0
+const AUTO_STAY_SOLO_S := 30.0
 
 
 ## True when a rider at `power_w` raw watts with FTP `ftp_w` counts as building steam.

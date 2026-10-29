@@ -82,10 +82,9 @@ static func band_state(in_band: bool, ratio: float) -> int:
 
 ## The seat panel (v3 seat panel A): one card per seat in TankIds.SEATS order (Drive, Gun, Loader,
 ## Lights, Secondaries), manned or not: {engine, mech, mode (the seat's ERG / SIM), empty, slot (-1
-## empty), peer, w, cad, ratio, state (band_state), in_band, local, reserve, lock_s (the rider's
-## seat lock), moving_to (the rider's seat_target), incoming (the slot moving into this seat, -1
-## none)}. The local rider's watts and cadence come from `local` ({"w", "cad"}) when given (their
-## own telemetry).
+## empty), peer, w, cad, ratio, state (band_state), in_band, local, reserve, wait_s and mode_to (the
+## rider's trainer switch to come, 0.3.1)}. The local rider's watts and cadence come from `local`
+## ({"w", "cad"}) when given (their own telemetry).
 static func seat_cards(state: TankState, local_peer: int, local: Dictionary = {}) -> Array:
 	var out: Array = []
 	if state == null:
@@ -105,13 +104,9 @@ static func seat_cards(state: TankState, local_peer: int, local: Dictionary = {}
 			"state": -1,
 			"local": false,
 			"reserve": false,
-			"lock_s": 0.0,
-			"moving_to": "",
-			"incoming": -1,
+			"wait_s": 0.0,
+			"mode_to": "",
 		}
-		for rr in state.riders:
-			if rr.seat_target == engine and rr.engine != engine:
-				c["incoming"] = rr.slot
 		var st := state.station(engine)
 		var r := state.rider_at(st.slot) if st != null and st.slot >= 0 else null
 		if r != null:
@@ -141,8 +136,8 @@ static func _manned(
 		"state": band_state(r.in_band, ratio),
 		"local": is_local,
 		"reserve": away,
-		"lock_s": r.seat_lock_s,
-		"moving_to": r.seat_target,
+		"wait_s": r.mode_wait_s,
+		"mode_to": r.mode_to,
 	}
 
 
@@ -160,6 +155,14 @@ static func feed_rpm(state: TankState) -> float:
 		return 0.0
 	var fd := state.station(TankIds.ENGINE_FEED) as TankFeedState
 	return fd.rpm if fd != null and not fd.is_empty() else 0.0
+
+
+## The local rider's heart rate (bpm) from their own telemetry (Telemetry.heart_rate_bpm: local
+## only, 0 without a sensor); 0 without telemetry.
+static func heart_bpm(t: Telemetry) -> int:
+	if t == null or t.heart_rate_bpm <= 0:
+		return 0
+	return t.heart_rate_bpm
 
 
 ## The Secondaries card's rate line, a string key: TANK_HUD_PER_MIN while the bow guns fire;

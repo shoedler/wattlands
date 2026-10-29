@@ -33,6 +33,9 @@ var base_tex: Texture2D = null
 ## The turret searchlight's lit lens and where it goes.
 var lit_tex: Texture2D = null
 var lit_at: Vector2 = Vector2.ZERO
+## The rear searchlight's lit lens (the base has it unlit), where it goes (sprite px).
+var lit_rear_tex: Texture2D = null
+var lit_rear_at: Vector2 = Vector2.ZERO
 ## The turret block the traverse mirrors (sprite px) and the x it turns about.
 var turret_rect: Rect2 = Rect2()
 var turret_pivot_x: float = 272.0
@@ -110,6 +113,10 @@ func load_all() -> void:
 	var lit: Dictionary = manifest.get("lit", {})
 	lit_tex = _tex(str(lit.get("file", "tank_lit.png")))
 	lit_at = vec(lit.get("at", [0, 0]))
+	var lr: Dictionary = manifest.get("lit_rear", {})
+	if not lr.is_empty():
+		lit_rear_tex = _tex(str(lr["file"]))
+		lit_rear_at = vec(lr.get("at", [0, 0]))
 	var tu: Dictionary = manifest.get("turret", {})
 	turret_rect = rect(tu.get("rect", [176, 0, 196, 113]))
 	turret_pivot_x = float(tu.get("pivot_x", 272.0))
@@ -260,6 +267,7 @@ static func check(m: Dictionary) -> Array[String]:
 	for key: String in ["base", "hitbox"]:
 		_check_file(out, str(m.get(key, "")))
 	_check_file(out, str((m.get("lit", {}) as Dictionary).get("file", "")))
+	_check_file(out, str((m.get("lit_rear", {}) as Dictionary).get("file", "")))
 	_check_file(out, str((m.get("track", {}) as Dictionary).get("file", "")))
 	_check_file(out, str((m.get("gun", {}) as Dictionary).get("file", "")))
 	var gsh: Dictionary = (m.get("gear", {}) as Dictionary).get("sheets", {})

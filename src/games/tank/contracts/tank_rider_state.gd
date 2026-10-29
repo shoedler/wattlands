@@ -35,13 +35,12 @@ var rider_mass_kg: float = 75.0
 ## [snap] (engine code) TankIds.ENGINE_* this rider works in the current segment (plan meta).
 ## v3: the rider's seat; at most one rider per seat (TankStationState.slot points back).
 var engine: String = ""
-## [snap] (v3) Seconds until this rider may change seats; 0 when the seat lock is open (brief: a
-## switch only 60 s or more after the rider's last trainer-mode change of any kind, a seat switch
-## or a plan boundary). The HUD shows it as the lock timer on the rider's card.
-var seat_lock_s: float = 0.0
-## [snap] (v3) The seat this rider is moving to (TankIds.ENGINE_*), "" when not moving. `engine`
-## stays the seat being left until the move lands (the seat event).
-var seat_target: String = ""
+## [snap] (0.3.1) While the rider's trainer has not yet switched to its seat's mode (Wl.ERG or
+## Wl.SIM, `mode_to`; "" when it follows the seat): seconds until it switches (BRIEF 4.5 keeps a
+## rider's ERG <-> SIM switches 30 s apart), or -1 when it waits for the segment's end. The HUD shows
+## "ERG in 12 s". A seat move itself lands at once (there is no seat lock since 0.3.1).
+var mode_wait_s: float = 0.0
+var mode_to: String = ""
 ## [snap] Raw watts, cadence and %FTP of the latest tick (for the strip and the station card).
 var raw_w: float = 0.0
 var cadence_rpm: float = 0.0

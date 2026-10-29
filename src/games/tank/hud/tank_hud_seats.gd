@@ -8,14 +8,13 @@ extends TankHudCtl
 ## TankHudModel.SEAT_MODE), and a footer: the rider's slot chip and name in their slot colour (cut
 ## with an ellipsis to fit), their watts, and a 2 px strip (green in band, blue under, red over).
 ##  - An empty seat is dark and cold (its machine at rest, painted once and tinted) and marked EMPTY.
-##  - Your card has the bright frame, a YOU tab and your seat lock: a padlock and the seconds left
-##    (TankRiderState.seat_lock_s), or an open padlock and MOVE OK. The hint plate above it reads
-##    "seat locked", "< > move  OK sit" (the Gun: "SWAP move  OK sit", its left / right cycle
-##    targets), "< > pick  OK sit" while the picker is open, "moving" while a move is pending, or
-##    "auto seat" for an Autopilot rider (no picker; TankHudSeatPicker).
-##  - The picker's seat (TankGame.seat_picker) blinks amber with an arrow; a pending move
-##    (TankRiderState.seat_target) marks its target card in the mover's slot colour with an arrow and
-##    their chip.
+##  - Your card has the bright frame and a YOU tab; while your trainer has not yet switched to your
+##    seat's mode (0.3.1: a move lands at once, the trainer's ERG <-> SIM switch waits for BRIEF 4.5's
+##    30 s) it shows the switch to come: "ERG in 12 s" (TankRiderState.mode_to, mode_wait_s), or "ERG
+##    at stage end". The hint plate above it reads "< > seat  OK sit" (every seat, the Gun too),
+##    "< > pick  OK sit" while the picker is open, or "auto seat" for an Autopilot rider (no picker;
+##    TankHudSeatPicker). There is no seat lock.
+##  - The picker's seat (TankGame.seat_picker) blinks amber with an arrow.
 ##  - The Gun and Loader cards carry the ready rack's three shell pips (the Loader's rack), the
 ##    Secondaries card its rounds a minute (TankFeedState.rpm) while manned, or "no target" while
 ##    its rider pedals with nothing in the guns' reach (TankHudModel.feed_label).
@@ -40,8 +39,6 @@ const FRAME_Y := 4
 const HINT_H := 12.0
 const HINT_LIFT := 15.0
 const TAB_H := 11.0
-const LOCK_ICON := [".###.", "#...#", "#####", "##.##", "#####"]
-const OPEN_ICON := [".###.", "#....", "#####", "##.##", "#####"]
 const SHELL := [".#.", "###", "###", "###", "###", "###", "###"]
 const ARROW := ["#######", ".#####.", "..###..", "...#..."]
 ## The Secondaries' rate (cold blue-white, like their dial) and an empty room's tint.
@@ -53,7 +50,7 @@ var cards: Array = []
 ## The Loader's ready rack and the bow guns' rounds a minute.
 var rack: int = 0
 var feed_rpm: float = 0.0
-## The local rider's seat (empty without one): {engine, lock_s, target, auto, usable, pick, lr}.
+## The local rider's seat (empty without one): {engine, wait_s, mode_to, auto, usable, pick}.
 var me: Dictionary = {}
 var _img: Dictionary = {}
 var _tex: Dictionary = {}
@@ -89,8 +86,8 @@ func refresh() -> void:
 	me = local_seat()
 
 
-## The local rider's seat: {engine, lock_s, target, auto, usable (the picker may open), pick (the
-## picker's seat), lr (left / right open the picker on this seat)}; {} for a spectator.
+## The local rider's seat: {engine, wait_s and mode_to (the trainer's switch to come), auto,
+## usable (the picker may open), pick (the picker's seat)}; {} for a spectator.
 func local_seat() -> Dictionary:
 	var r := st().rider(local_peer())
 	if r == null:
@@ -98,12 +95,11 @@ func local_seat() -> Dictionary:
 	var picker: TankHudSeatPicker = game.seat_picker if game != null else null
 	return {
 		"engine": r.engine,
-		"lock_s": r.seat_lock_s,
-		"target": r.seat_target,
+		"wait_s": r.mode_wait_s,
+		"mode_to": r.mode_to,
 		"auto": r.autopilot or r.is_bot,
 		"usable": TankHudSeatPicker.usable(st(), r),
 		"pick": picker.pick if picker != null else "",
-		"lr": bool(TankHudSeatPicker.LR_OPENS.get(r.engine, true)),
 	}
 
 
@@ -113,20 +109,21 @@ static func hint_key(m: Dictionary) -> String:
 		return ""
 	if bool(m["auto"]):
 		return "TANK_HUD_SEAT_AUTO"
-	if str(m["target"]) != "":
-		return "TANK_HUD_SEAT_MOVING"
-	if float(m["lock_s"]) > 0.0:
-		return "TANK_HUD_SEAT_LOCKED"
 	if str(m["pick"]) != "":
 		return "TANK_HUD_SEAT_PICK"
 	if bool(m["usable"]):
-		return "TANK_HUD_SEAT_HINT" if bool(m["lr"]) else "TANK_HUD_SEAT_HINT_SWAP"
+		return "TANK_HUD_SEAT_HINT"
 	return ""
 
 
-## The lock timer's text: the seconds left (m:ss) while locked, else MOVE OK.
-func lock_text(lock_s: float) -> String:
-	return D.clock(lock_s) if lock_s > 0.0 else tx("TANK_HUD_SEAT_MOVE_OK")
+## The trainer's switch to come (`mode_to` "" for none): "ERG in 12 s", or "ERG at stage end" when
+## it waits for the segment's end (wait_s < 0); "" for none.
+func mode_text(mode_to: String, wait_s: float) -> String:
+	if mode_to == "":
+		return ""
+	if wait_s < 0.0:
+		return tx("TANK_HUD_MODE_AT_END", [mode_to])
+	return tx("TANK_HUD_MODE_IN", [mode_to, ceili(wait_s - 1e-6)])
 
 
 ## The crank revolutions of `engine`'s card so far.
@@ -221,13 +218,10 @@ func _card(c: Dictionary, r: Rect2) -> void:
 	var empty := bool(c["empty"])
 	var local := bool(c["local"])
 	var picked := str(me.get("pick", "")) == engine
-	var incoming := int(c["incoming"])
 	var blink := int(floorf(_wall * 3.0)) % 2 == 0
 	var edge := D.FRAME_HI if local else (D.FRAME_IN.lightened(0.15) if empty else D.FRAME)
 	if picked:
 		edge = D.FRAME_HI if blink else D.FRAME
-	elif incoming >= 0:
-		edge = slot_color(incoming)
 	var cw := r.size.x
 	# the window in its riveted frame
 	var fr := Rect2(r.position.x, r.position.y + FRAME_Y, cw, WIN.y + 4)
@@ -241,7 +235,7 @@ func _card(c: Dictionary, r: Rect2) -> void:
 		D.text_shadow(self, fr.position.x + 6, fr.end.y - 13, tx("TANK_HUD_RESERVE"), D.DIM)
 	D.frame(self, fr, edge)
 	D.frame(self, fr.grow(-1), D.FRAME_IN)
-	if local or picked or incoming >= 0:
+	if local or picked:
 		D.frame(self, fr.grow(1), Color(edge, 0.55))
 	D.rivet(self, fr.position + Vector2(2, fr.size.y - 4))
 	D.rivet(self, fr.end - Vector2(4, 4))
@@ -252,7 +246,7 @@ func _card(c: Dictionary, r: Rect2) -> void:
 		var yr := Rect2(r.end.x - 4.0 - you_w, r.position.y, you_w, TAB_H)
 		D.rect(self, yr, D.AMBER)
 		D.text(self, yr.position.x + 4, yr.position.y + 2, you, D.PANEL)
-		_lock(Vector2(fr.position.x + 4, fr.end.y - 15), float(c["lock_s"]))
+		_mode_wait(Vector2(fr.position.x + 4, fr.end.y - 15), str(c["mode_to"]), float(c["wait_s"]))
 	_tab(engine, Vector2(r.position.x + 4, r.position.y), empty, cw - 8.0 - you_w - 2.0)
 	_mode_tag(str(c["mode"]), Vector2(fr.end.x - 3, r.position.y + 13), empty)
 	if engine in [TankIds.ENGINE_DYNAMO, TankIds.ENGINE_STEAM]:
@@ -267,8 +261,8 @@ func _card(c: Dictionary, r: Rect2) -> void:
 		var tr := Rect2(fr.end.x - 3.0 - tw, fr.end.y - 14, tw, 11)
 		_plate(tr)
 		D.text(self, tr.position.x + 3, tr.position.y + 2, rpm, D.DIM if idle else COLD)
-	if picked or incoming >= 0:
-		_arrival(fr, D.AMBER if picked else slot_color(incoming), incoming if not picked else -1)
+	if picked:
+		_arrival(fr, D.AMBER, -1)
 	elif empty:
 		D.text_shadow(self, fr.position.x + 6, fr.position.y + 26, tx("TANK_HUD_SEAT_EMPTY"), D.DIM)
 	_footer(c, Rect2(r.position.x, fr.end.y - 1, cw, r.end.y - fr.end.y - 1), edge)
@@ -337,21 +331,20 @@ func _plate(r: Rect2) -> void:
 	D.frame(self, r, D.FRAME_IN)
 
 
-## Your seat lock at `p`: a padlock and the seconds left with a bar of what is left of the 60 s, or
-## an open padlock and MOVE OK.
-func _lock(p: Vector2, lock_s: float) -> void:
-	var txt := lock_text(lock_s)
-	var tw := D.text_w(txt) + 16.0
+## Your trainer's switch to come at `p` ("ERG in 12 s" on an amber plate with a bar of what is left
+## of the 30 s); nothing when the trainer follows your seat.
+func _mode_wait(p: Vector2, mode_to: String, wait_s: float) -> void:
+	var txt := mode_text(mode_to, wait_s)
+	if txt == "":
+		return
+	var tw := D.text_w(txt) + 6.0
 	var r := Rect2(p, Vector2(tw, 11))
 	D.rect(self, r, D.PANEL)
 	D.frame(self, r, D.FRAME_IN.lightened(0.2))
-	var locked := lock_s > 0.0
-	var col := D.AMBER if locked else D.GOOD
-	D.pixels(self, LOCK_ICON if locked else OPEN_ICON, p + Vector2(3, 3), col)
-	if locked:
-		var fill := roundf((tw - 4.0) * clampf(lock_s / TankConst.SEAT_LOCK_S, 0.0, 1.0))
-		D.rect(self, Rect2(p.x + 2, p.y + 10, fill, 1), col)
-	D.text(self, p.x + 11, p.y + 2, txt, col)
+	if wait_s > 0.0:
+		var fill := roundf((tw - 4.0) * clampf(wait_s / TankConst.SWITCH_GAP_S, 0.0, 1.0))
+		D.rect(self, Rect2(p.x + 2, p.y + 10, fill, 1), D.AMBER)
+	D.text(self, p.x + 3, p.y + 2, txt, D.AMBER)
 
 
 ## The ready rack: three shells, lit while in the rack.
@@ -380,7 +373,7 @@ func _hint(cr: Rect2) -> void:
 	if key == "":
 		return
 	var txt := tx(key)
-	var live := key in ["TANK_HUD_SEAT_HINT", "TANK_HUD_SEAT_HINT_SWAP", "TANK_HUD_SEAT_PICK"]
+	var live := key in ["TANK_HUD_SEAT_HINT", "TANK_HUD_SEAT_PICK"]
 	var r := hint_rect(cr, D.text_w(txt) + 10.0, canvas())
 	D.plate(self, r, D.FRAME_HI if live else D.FRAME, 0)
 	D.text(self, r.position.x + 5, r.position.y + 3, txt, D.TEXT if live else D.DIM)

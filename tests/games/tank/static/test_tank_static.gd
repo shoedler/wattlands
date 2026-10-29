@@ -40,9 +40,9 @@ const HOST_DIRS: Array[String] = [
 ## Folders that must stay free of the scene tree, input and presentation.
 const PURE_DIRS: Array[String] = ["rules", "combat"]
 ## The ctx.directives calls Tank makes (brief 2.3: requests, course grade, cadence band, end_phase;
-## v3: replan, each seat switch).
+## v3: replan, each seat switch; 0.3.1: split, the trainer following a seat at once).
 const DIRECTIVE_CALLS: Array[String] = [
-	"request", "course_grade", "cadence_band", "end_phase", "replan"
+	"request", "course_grade", "cadence_band", "end_phase", "replan", "split"
 ]
 const CLOCKS := (
 	"\\bTime\\b|\\bOS\\s*\\.\\s*(get_ticks|get_unix_time|get_system_time|delay_)"

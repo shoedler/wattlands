@@ -19,7 +19,7 @@ extends RefCounted
 ## it: the drive-out (type depot, WARMUP, valley.json drive_out_s = 300 s, no drills, no enemies) and
 ## the roam (type roam, WORK, open-ended, min_s = minutes x 60 - drive_out_s, max_s = min_s +
 ## overtime_s), plan table stations.json roam_plans. v3: the roam's plan phase is open-ended from
-## plan_min_s (TankConst.SEAT_LOCK_S) so a seat switch can split it (TankSeatPlan); the game's
+## plan_min_s (TankConst.SWITCH_GAP_S; v3 needed it to split the phase, 0.3.1 splits any phase); the game's
 ## time up still reads the segment's min_s (TankPhaseInfo.min_s from the phase meta). The valley (roam/valley.json, file
 ## key "valley") is loaded with every content and validated when the content is a roam.
 
@@ -110,7 +110,7 @@ static func expand_roam(roam: Dictionary, valley: Dictionary) -> Dictionary:
 			"kind": Wl.WORK,
 			"duration_s": min_s,
 			"min_s": min_s,
-			"plan_min_s": minf(TankConst.SEAT_LOCK_S, min_s),
+			"plan_min_s": minf(TankConst.SWITCH_GAP_S, min_s),
 			"max_s": min_s + float(valley.get("overtime_s", 300.0)),
 			"label": "TANK_PHASE_ROAM",
 			"name": "TANK_PLACE_VALLEY",

@@ -38,12 +38,15 @@ extends RefCounted
 ## 8. end_phase for every rider of the group's segment in one step once the objective is done,
 ##    the segment's min_s has passed and every rider is past its own phase's min_s (v3: a seat
 ##    switch's split phase may hold it; ADR "Who calls end_phase"); a refused rider is retried.
-## 9. Seat switches (v3): for every rider with a pending move (TankRiderState.seat_target, judged
-##    by TankSeats), the replan TankSeatPlan builds: at once the later segments for the new seat
-##    (so the move lands at the phase's end), and, as soon as the rider's open-ended phase may end
-##    and the segment does not end this tick, the split (the rest of the segment for the new seat)
-##    with end_phase in the same tick. `plans` follows every accepted replan (the module shares the
-##    dictionary). A cancelled move is replanned back to the rider's seat.
+## 9. The trainer follows the seat (0.3.1, no seat lock): a seat move lands at once (TankSeats);
+##    every tick TankSeatPlan.follow decides for each rider whose plan is set up for another seat:
+##    a split now (ctx.directives.split: the rest of the segment for the new seat, ending the current
+##    phase this tick), a wait (an ERG <-> SIM switch within 30 s of the rider's last; the rider's
+##    TankRiderState.mode_wait_s and mode_to say when and to what), or the later segments only (the
+##    switch at the segment's end). `plans` follows every accepted split or replan (the module shares
+##    the dictionary). While a switch waits, the trainer keeps the plan's seat: its ERG pattern holds
+##    (that seat stands empty, so its bank or load does not move) and its SIM grade goes flat (no
+##    boiler grade, no terrain) until the switch.
 ## Sprints (evade, Overpressure) send nothing: they are the rider's own in the phase's SIM.
 ## A rider on reserve (dropped or AFK) gets no bank, arc or boiler request: a dropped peer never
 ## receives them, so the director's idea of the held target would run away from the rider's real
@@ -82,8 +85,8 @@ var plans: Dictionary = {}
 var _ended: Dictionary = {}
 ## Phase index -> the phase's elapsed seconds when its objective was first seen done.
 var _done_at: Dictionary = {}
-## peer -> {"index": plan phase index, "engine": seat, "split": bool}: the seat replan sent for
-## the rider's pending move (v3).
+## peer -> {"key": "phase:seat:action", "retry": tick}: the last split or replan pattern 9 sent for
+## the rider (an accepted one is not repeated; a refused one is retried after END_RETRY_S).
 var _seat_sent: Dictionary = {}
 ## peer -> the phase index whose start this director handled.
 var _started: Dictionary = {}
@@ -351,6 +354,8 @@ func _boiler_step(state: TankState, ri: TankRiderInput, tick: int) -> void:
 	var want := boiler_grade_pct(
 		content, steam.pressure_pct, ri.in_warmup(), steam.loaded or steam.cycling
 	)
+	if _waits_for_seat(state, ri):
+		want = 0.0  # the rider left the Loader; its trainer switches soon: no boiler grade
 	var last := float(_grade.get(ri.peer, 0.0))
 	var next := boiler_next_pct(content, last, want)
 	if absf(next - last) < EPS:
@@ -390,6 +395,9 @@ func _terrain_step(state: TankState, ri: TankRiderInput, ph: PlanPhase, e: int) 
 	if e % _ticks(content.num("stations", "terrain.send_every_s", 0.5)) != 0:
 		return
 	var g := 0.0
+	if _waits_for_seat(state, ri):
+		ctx.directives.course_grade(ri.peer, 0.0)  # the rider left Drive: flat until the switch
+		return
 	if state.roam.active:
 		g = TankRoam.grade_pct(state, ri.in_warmup())
 	else:
@@ -411,7 +419,9 @@ static func terrain_grade_pct(
 
 func _loader_step(state: TankState, ri: TankRiderInput) -> void:
 	var want := false
-	if ri.engine == TankIds.ENGINE_STEAM and ri.phase_kind == Wl.WORK:
+	var r := state.rider(ri.peer)
+	var seat := r.engine if r != null else ri.engine
+	if seat == TankIds.ENGINE_STEAM and ri.phase_kind == Wl.WORK:
 		var steam := state.station(TankIds.ENGINE_STEAM) as TankSteamState
 		want = steam != null and (steam.loaded or steam.cycling)
 	if want == bool(_loader.get(ri.peer, false)):
@@ -509,18 +519,20 @@ static func power_band_pct(c: TankContent, ph: PlanPhase) -> Array[float]:
 ## end_phase is refused is retried (the next tick, then once a second) until it is accepted or the
 ## group has moved on. Returns true on the tick it ends the segment (the first round of calls).
 ## (v3 solo balance) True while the segment's end waits for a solo rider the Autopilot seats: its
-## seat lock still runs, it wants another seat for the next fight segment (TankAutopilot's solo
-## loop), and the wait stays inside SEAT_LOCK_S + 2 s of the objective and the phase's max_s. Once
-## its lock opens the seating asks within a second and the move lands at the segment's end.
+## minimum stay (TankSeats.auto_stay_s) still runs, it wants another seat for the next fight segment
+## (TankAutopilot's solo loop), and the wait stays inside that stay + 2 s of the objective and the
+## phase's max_s. Once the stay is over the seating moves it within a second.
 func _solo_seat_wait(state: TankState, ph: TankPhaseInfo, done_at: float) -> bool:
 	if state.riders.size() != 1:
 		return false
 	var r := state.riders[0]
-	if not (r.fallback or r.autopilot or r.is_bot) or r.seat_target != "" or r.afk:
+	if not (r.fallback or r.autopilot or r.is_bot) or r.afk:
 		return false
-	if ph.elapsed_s - done_at > TankConst.SEAT_LOCK_S + 2.0:
+	var stay := TankSeats.auto_stay_s(state)
+	var stay_left := maxf(stay - TankSeats.stay_s(state, r.peer), 0.0)
+	if ph.elapsed_s - done_at > stay + 2.0:
 		return false
-	if ph.max_s > 0.0 and ph.elapsed_s + r.seat_lock_s + 2.0 > ph.max_s - END_MARGIN_S:
+	if ph.max_s > 0.0 and ph.elapsed_s + stay_left + 2.0 > ph.max_s - END_MARGIN_S:
 		return false
 	var nxt := TankAutopilot.next_fight_segment(state)
 	if nxt == "":
@@ -583,75 +595,59 @@ func _maybe_end_phase(state: TankState, inputs: TankInputs) -> bool:
 # --- Pattern 9: seat switches (v3) ---------------------------------------------------------------
 
 
-## The replans of pending seat moves (see the class doc). `ending`: this tick ends the group's
-## segment, so no rider splits it now (the later-segments replan lands the move at the end).
+## The trainer follows every rider's seat (see the class doc). `ending`: this tick ends the
+## group's segment, so nobody splits it now (the later segments carry the seat instead).
 func _seat_step(state: TankState, inputs: TankInputs, ending: bool) -> void:
+	var aux := TankAux.of(state)
 	for ri in inputs.riders:
 		var r := state.rider(ri.peer)
 		var plan: EffortPlan = plans.get(ri.peer)
-		if r == null or plan == null or ri.phase_index < 0 or ri.phase_index >= plan.size():
-			_seat_sent.erase(ri.peer)
+		if r == null:
 			continue
-		var sent: Dictionary = _seat_sent.get(ri.peer, {})
-		if not sent.is_empty() and str(sent["engine"]) == ri.engine:
-			_seat_sent.erase(ri.peer)
-			sent = {}
-		if ri.on_reserve():
+		if plan == null or ri.phase_index < 0 or ri.phase_index >= plan.size() or ri.on_reserve():
+			r.mode_wait_s = 0.0
+			r.mode_to = ""
 			continue
-		var want := r.seat_target
-		var same_phase := not sent.is_empty() and int(sent["index"]) == ri.phase_index
-		if want == "":
-			if same_phase and not bool(sent["split"]):
-				# A cancelled move: the later segments go back to the rider's seat.
-				_send_seat(ri, ri.engine, false)
-			_seat_sent.erase(ri.peer)
-			continue
-		var same := same_phase and str(sent["engine"]) == want
-		if same and bool(sent["split"]):
-			continue
-		# Once the segment's objective is done a move lands at the segment's end (the Autopilot then
-		# seats riders for the next segment; a split would only hold the end for its rest).
-		# Never a split while the rider's seat lock runs (a lock-waived move lands at the end).
-		var can_split := (
+		var f := TankSeatPlan.follow(
+			content,
+			ri,
+			r.engine,
+			float(aux.last_switch_s.get(ri.peer, -INF)),
+			state.t,
+			ending or (state.seg.objective_done and state.seg.open_ended),
 			not ending
-			and r.seat_lock_s <= 0.0
-			and not state.seg.objective_done
-			and ri.phase_open_ended
-			and ri.phase_elapsed_s >= ri.phase_min_s - EPS
-			and ri.phase_remaining_s > 2.0 * Wl.SIM_DT
 		)
-		if can_split and _send_seat(ri, want, true):
+		r.mode_wait_s = float(f["wait_s"])
+		r.mode_to = str(f["mode_to"])
+		var action := int(f["action"])
+		if action != TankSeatPlan.FOLLOW_SPLIT and action != TankSeatPlan.FOLLOW_BOUNDARY:
 			continue
-		if not same:
-			_send_seat(ri, want, false)
-
-
-## Sends the seat replan for rider `ri` moving to `engine` (`split`: the rest of the segment now,
-## with end_phase; else the later segments). True when it was accepted (and, for a split, the
-## phase ended).
-func _send_seat(ri: TankRiderInput, engine: String, split: bool) -> bool:
-	var plan: EffortPlan = plans.get(ri.peer)
-	var mv := TankSeatPlan.move_now(
-		content, plan, ri.phase_index, ri.phase_elapsed_s, ri.seg_offset_s, engine, split
-	)
-	if mv.is_empty() or bool(mv["split"]) != split:
-		return false
-	var rest: EffortPlan = mv["plan"]
-	if not ctx.directives.replan(ri.peer, rest):
-		return false
-	plans[ri.peer] = TankSeatPlan.whole(plan, ri.phase_index, rest)
-	_seat_sent[ri.peer] = {"index": ri.phase_index, "engine": engine, "split": split}
-	if split and not ctx.directives.end_phase(ri.peer):
-		# The phase cannot end now: land at its end instead (never a split after the segment).
-		var later := TankSeatPlan.tail(content, plan, ri.phase_index, engine, false, 0.0)
-		if later != null and ctx.directives.replan(ri.peer, later):
-			plans[ri.peer] = TankSeatPlan.whole(plan, ri.phase_index, later)
-		_seat_sent[ri.peer] = {"index": ri.phase_index, "engine": engine, "split": false}
-		return false
-	return true
+		var key := "%d:%s:%d" % [ri.phase_index, r.engine, action]
+		var sent: Dictionary = _seat_sent.get(ri.peer, {})
+		if str(sent.get("key", "")) == key and inputs.tick < int(sent.get("retry", 0)):
+			continue
+		var rest: EffortPlan = f["plan"]
+		var ok := (
+			ctx.directives.split(ri.peer, rest)
+			if action == TankSeatPlan.FOLLOW_SPLIT
+			else ctx.directives.replan(ri.peer, rest)
+		)
+		if ok:
+			plans[ri.peer] = TankSeatPlan.whole(plan, ri.phase_index, rest)
+			# Sent: a boundary replan is not repeated in this phase for this seat.
+			_seat_sent[ri.peer] = {"key": key, "retry": 1 << 40}
+		else:
+			_seat_sent[ri.peer] = {"key": key, "retry": inputs.tick + _ticks(END_RETRY_S)}
 
 
 # --- Helpers -------------------------------------------------------------------------------------
+
+
+## True while rider `ri` sits on another seat than the one its plan phase is set up for (its
+## trainer has not yet followed the seat; pattern 9).
+static func _waits_for_seat(state: TankState, ri: TankRiderInput) -> bool:
+	var r := state.rider(ri.peer)
+	return r != null and r.engine != "" and r.engine != ri.engine
 
 
 func _request(peer: int, fields: Dictionary) -> bool:

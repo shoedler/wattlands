@@ -166,3 +166,12 @@ ADR "2026-10-28 v3 rules" in `docs/decisions/tank.md` holds the behaviour and tu
 - **Empty seats do nothing.** Nothing feeds the bow guns but the Secondaries seat, and nothing hoists for an empty Loader.
 - **Docs only.** `tank_obstacle_state.gd` and `tank_hull_state.gd` describe the v3 meaning of their fields; no field changed.
 - **Not in state.** The bow guns' elevation is host-side (`TankAux.bow_deg`); the HUD's secondaries dial derives its own.
+
+## 0.3.1 seats without a lock (the rules builder, 2026-10-29)
+
+ADR "2026-10-29 v3.1 seats without a lock" holds the design; these are the contract changes.
+
+- **No seat lock.** `TankRiderState.seat_lock_s` and `seat_target` are gone, `TankConst.SEAT_LOCK_S` with them. A seat move lands at once (`engine` is the seat from that tick). New [snap] `mode_wait_s` (seconds until the rider's trainer switches to its seat's mode; -1 when it waits for the segment's end; 0 none) and `mode_to` (`Wl.ERG` / `Wl.SIM`, "" when the trainer is on the seat's mode). `TankConst.SWITCH_GAP_S` 30 (BRIEF 4.5), `AUTO_STAY_S` 60 (a crew's automatic stay), `AUTO_STAY_SOLO_S` 30.
+- **Snapshot v4** (`VERSION` 4): `r` col 7 is `mode_wait_ms` (`R_MODE_WAIT_MS`; -1000 for the segment's end) and col 8 `mode_to` (`R_MODE_TO`: `MODE_TO_NONE` 0, `MODE_TO_ERG` 1, `MODE_TO_SIM` 2), in v3's seat-lock columns; nothing else moved.
+- **Plan meta.** A rider's phase meta `engine` is the seat the trainer is on, which can trail `TankRiderState.engine` by up to 30 s (or to the segment's end). The director's splits use the platform's `ctx.directives.split` (GAME_SDK section 8).
+- **Intents.** The Gun's target cycling is the `swap` action (R / LB); left / right open the seat picker on every seat.

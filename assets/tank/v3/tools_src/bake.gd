@@ -2,9 +2,12 @@ extends SceneTree
 ## Bakes the production v3 tank kit (assets/tank/v3/) from the r6 generator:
 ##   tank_base.png        the r6 base (the reference's tank re-pixelled, 63 colours) with its static
 ##                        dressing: the quarters' sitters, the commander in the cupola, the rear
-##                        searchlight on its post and the turret searchlight unlit; then finish.gd's
-##                        pass on the exterior (fringe and speckle out, moonlit rims, seams, rivets)
+##                        searchlight on its post and the turret searchlight, both unlit; then
+##                        finish.gd's pass on the exterior (fringe and speckle out, moonlit rims,
+##                        seams, rivets)
 ##   tank_lit.png         the turret searchlight's lit lens (a small overlay, kit.json "lit")
+##   tank_lit_rear.png    the rear searchlight's lit lens (kit.json "lit_rear"); the base has both
+##                        searchlights unlit, the view lays a lens on while its light burns
 ##   gear_*.png           road wheel, sprocket, idler and return roller frames over their symmetry
 ##   track.png            one track shoe (4 sub-px per px along the shoe, 2 per px across), the top
 ##                        run's lit rows over the unlit ones; the view maps it along the belt
@@ -90,7 +93,7 @@ func save(img: Image, rel: String) -> void:
 # --- the base ------------------------------------------------------------------------------------------
 
 
-func _dressed(lit: bool) -> Image:
+func _dressed(lit: bool, rear_lit: bool = false) -> Image:
 	var sz: Vector2i = L["size"]
 	var img := Px.blank(sz.x, sz.y)
 	img.blend_rect(B["img"], Rect2i(Vector2i.ZERO, sz), Vector2i.ZERO)
@@ -101,7 +104,7 @@ func _dressed(lit: bool) -> Image:
 	var q: Rect2i = L["rooms"]["quarters"]
 	for k in [0, 2, 3, 5]:
 		Dress.sitter(img, q.position.x + 14 + k * 20, q.end.y - 1, 1 if k % 2 == 0 else -1, k)
-	Tank5.roof(img, {"search_on": lit})
+	Tank5.roof(img, {"search_on": lit, "rear_on": rear_lit})
 	return img
 
 
@@ -109,16 +112,25 @@ func _base(kit: Dictionary) -> void:
 	var fin := Finish.apply(_dressed(false), L)
 	var dark: Image = fin["img"]
 	var lit: Image = Finish.apply(_dressed(true), L)["img"]
+	var rear: Image = Finish.apply(_dressed(false, true), L)["img"]
 	print(
 		"bake finish: exterior value %.4f -> %.4f (%+.1f%%), %d px changed"
 		% [fin["before"], fin["after"], (fin["after"] / fin["before"] - 1.0) * 100.0, fin["changed"]]
 	)
 	save(dark, "tank_base.png")
+	kit["base"] = "tank_base.png"
+	kit["lit"] = _overlay(dark, lit, "tank_lit.png")
+	kit["lit_rear"] = _overlay(dark, rear, "tank_lit_rear.png")
+	kit["turret"] = {"rect": [TURRET.position.x, TURRET.position.y, TURRET.size.x, TURRET.size.y], "pivot_x": TURRET_PIVOT_X}
+
+
+## The pixels where `on` differs from `base`, saved as `rel` over their bounding box: {file, at}.
+func _overlay(base: Image, on: Image, rel: String) -> Dictionary:
 	var bb := Rect2i()
 	var first := true
-	for y in dark.get_height():
-		for x in dark.get_width():
-			if not dark.get_pixel(x, y).is_equal_approx(lit.get_pixel(x, y)):
+	for y in base.get_height():
+		for x in base.get_width():
+			if not base.get_pixel(x, y).is_equal_approx(on.get_pixel(x, y)):
 				var r := Rect2i(x, y, 1, 1)
 				bb = r if first else bb.merge(r)
 				first = false
@@ -126,12 +138,10 @@ func _base(kit: Dictionary) -> void:
 	for y in bb.size.y:
 		for x in bb.size.x:
 			var p := bb.position + Vector2i(x, y)
-			if not dark.get_pixel(p.x, p.y).is_equal_approx(lit.get_pixel(p.x, p.y)):
-				ov.set_pixel(x, y, lit.get_pixel(p.x, p.y))
-	save(ov, "tank_lit.png")
-	kit["base"] = "tank_base.png"
-	kit["lit"] = {"file": "tank_lit.png", "at": [bb.position.x, bb.position.y]}
-	kit["turret"] = {"rect": [TURRET.position.x, TURRET.position.y, TURRET.size.x, TURRET.size.y], "pivot_x": TURRET_PIVOT_X}
+			if not base.get_pixel(p.x, p.y).is_equal_approx(on.get_pixel(p.x, p.y)):
+				ov.set_pixel(x, y, on.get_pixel(p.x, p.y))
+	save(ov, rel)
+	return {"file": rel, "at": [bb.position.x, bb.position.y]}
 
 
 # --- running gear ----------------------------------------------------------------------------------------

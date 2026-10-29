@@ -5,12 +5,15 @@ extends RefCounted
 ##   draw()        the tank's own lights, on the Light layer over the tank and rotated with the hull:
 ##                 the rooms' incandescent lamps (warm; the seat's slot colour mixed in while its
 ##                 rider is in band; the Lights room cold while its arc burns; dark in a breakdown),
-##                 the turret windows' lamps, the headlight, the turret searchlight (forward about 11
-##                 degrees down, on while the Lights seat is manned and its arc lit, fading in and
-##                 out with TankView.search_level; a dim standby glow on its lens while off), the
-##                 rear searchlight (aft about 13 degrees down, always on: a work light), the red
-##                 and green position lights, the main gun's scene flash, the bow rounds' tracers
-##                 and muzzle flashes, shells, flashes, the wash
+##                 falling back to the backup lighting while the Lights seat is unpowered
+##                 (TankView.backup_level: the warm blooms down to BACKUP_GAIN, a small red emergency
+##                 lamp in each room; TankBody dims the rooms), the turret windows' lamps, the
+##                 headlight (always on), the turret searchlight (forward about 11 degrees down) and
+##                 the rear searchlight (aft about 13 degrees down), both on only while the Lights
+##                 seat is powered (TankView.lights_powered), fading in and out with
+##                 TankView.search_level, a dim standby glow on their lenses while off; the red and
+##                 green position lights, the main gun's scene flash, the bow rounds' tracers and
+##                 muzzle flashes, shells, flashes, the wash
 ##   draw_world()  every world light, on the WorldLight layer behind the tank: the tank's pools on
 ##                 the road (the headlight's; each searchlight's where its cone's lower edge meets
 ##                 the road, kept on screen, with a faint spill along the road out to where its
@@ -38,8 +41,11 @@ const SWAY_HZ := 0.45
 ## centre stays (px).
 const POOL_R := 46.0
 const POOL_EDGE := 20.0
-## The turret searchlight's lens while off: a dim standby glow.
+## The searchlights' lenses while off: a dim standby glow.
 const STANDBY := Color(1.0, 0.62, 0.34, 0.55)
+## The backup lighting: what is left of the warm lamps' bloom, and the emergency lamps' red.
+const BACKUP_GAIN := 0.3
+const EMERGENCY := Color(1.0, 0.2, 0.08)
 ## The rooms that glow (kit rooms).
 const GLOW_ROOMS: Array[String] = [
 	"drive", "loader", "gun", "lights", "sec", "quarters", "turret_drive", "upper_front"
@@ -121,7 +127,7 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 			)
 		)
 	var rs := v.rig.detail("searchlight_rear")
-	if not rs.is_empty():
+	if not rs.is_empty() and v.search_level > 0.0:
 		(
 			out
 			. append(
@@ -130,7 +136,7 @@ static func beams(v: TankView, state: TankState) -> Array[Dictionary]:
 					"ang": v.hull_rot + deg_to_rad(float(rs.get("ang", 167.0))) + sway,
 					"half": deg_to_rad(float(rs.get("half", 8.0))),
 					"len": float(rs.get("len", 220.0)),
-					"k": hk,
+					"k": v.search_level,
 					"head": false,
 				}
 			)
@@ -154,9 +160,13 @@ static func beam_light(v: TankView, state: TankState, p: Vector2) -> float:
 	return clampf(k, 0.0, 1.0)
 
 
-## The rooms' lamps: a bloom over each lit room, a lamp at its ceiling, the turret windows' lamps.
+## The rooms' lamps: a bloom over each lit room, a lamp at its ceiling, the turret windows' lamps;
+## under the backup lighting (backup_level) the blooms and lamps dim to BACKUP_GAIN and each room's
+## emergency lamp glows red in its ceiling's corner.
 static func _rooms(ci: CanvasItem, v: TankView, state: TankState) -> void:
 	var arc_on := v.turret_search_on(state)
+	var bk := v.backup_level
+	var warm := lerpf(1.0, BACKUP_GAIN, bk)
 	for id in GLOW_ROOMS:
 		var r: Rect2 = v.rig.rooms.get(id, Rect2())
 		if r.size == Vector2.ZERO:
@@ -173,12 +183,23 @@ static func _rooms(ci: CanvasItem, v: TankView, state: TankState) -> void:
 			col = WARM.lerp(slot_color(rd), 0.15)
 			gain = 1.25
 		var fl := 0.92 + 0.08 * sin(v.time * 3.0 + r.position.x)
+		gain *= warm
 		TankDraw.glow_at(ci, c, r.size.x * 0.75, Color(col.r, col.g, col.b, 0.1 * fl * gain))
 		TankDraw.glow_at(ci, c, r.size.x * 0.35, Color(col.r, col.g, col.b, 0.08 * fl * gain))
-		TankDraw.glow_at(ci, lamp, 4.0, Color(1.0, 0.85, 0.6, 0.45))
+		TankDraw.glow_at(ci, lamp, 4.0, Color(1.0, 0.85, 0.6, 0.45 * warm))
+		if bk > 0.0:
+			var e := v.at_sprite(emergency_lamp(r))
+			var pulse := 0.85 + 0.15 * sin(v.time * 1.6 + r.position.x * 0.1)
+			TankDraw.glow_at(ci, e, 2.5, Color(EMERGENCY, 0.9 * bk))
+			TankDraw.glow_at(ci, e, r.size.x * 0.45, Color(EMERGENCY, 0.1 * bk * pulse))
 	for wl in v.rig.window_lamps:
 		var p := v.at_turret(wl) if v.rig.turret_rect.has_point(wl) else v.at_sprite(wl)
-		TankDraw.glow_at(ci, p + Vector2(0, 4), 12.0, Color(WARM.r, WARM.g, WARM.b, 0.14))
+		TankDraw.glow_at(ci, p + Vector2(0, 4), 12.0, Color(WARM.r, WARM.g, WARM.b, 0.14 * warm))
+
+
+## A room's emergency lamp (sprite px): in its ceiling's left corner.
+static func emergency_lamp(r: Rect2) -> Vector2:
+	return r.position + Vector2(3.5, 2.5)
 
 
 ## A rider's slot colour (the caps TankInterior paints).
@@ -202,12 +223,24 @@ static func _beams(ci: CanvasItem, v: TankView, state: TankState) -> void:
 		TankDraw.beam(ci, p, ang, float(b["len"]), half, SEARCH, 0.45 * k)
 		TankDraw.glow_at(ci, p, 9.0, Color(1.0, 0.95, 0.8, 0.9 * maxf(k, 0.3)))
 		TankDraw.glow_at(ci, p, 24.0, Color(1.0, 0.85, 0.6, 0.2 * k))
-	var ts := v.rig.detail("searchlight")
-	if not ts.is_empty() and v.search_level < 1.0:
-		var lens := v.at_turret(TankRig.lens_of(ts))
-		var off := 1.0 - v.search_level
+	if v.search_level >= 1.0:
+		return
+	var off := 1.0 - v.search_level
+	for lens in standby_lenses(v):
 		TankDraw.glow_at(ci, lens, 3.5, Color(STANDBY, STANDBY.a * off))
 		TankDraw.glow_at(ci, lens, 9.0, Color(STANDBY, STANDBY.a * 0.3 * off))
+
+
+## Both searchlights' lenses as drawn (stage px): the turret's, the rear's.
+static func standby_lenses(v: TankView) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	var ts := v.rig.detail("searchlight")
+	if not ts.is_empty():
+		out.append(v.at_turret(TankRig.lens_of(ts)))
+	var rs := v.rig.detail("searchlight_rear")
+	if not rs.is_empty():
+		out.append(v.at_sprite(TankRig.lens_of(rs)))
+	return out
 
 
 ## The bow rounds' light: a glow on each tracer's head and, while it burns, the muzzle flash.
@@ -287,7 +320,7 @@ static func _ground_pools(ci: CanvasItem, v: TankView, state: TankState) -> void
 		if rd != null:
 			lit = 0.12 if rd.in_band else 0.07
 		var x := v.at_sprite(r.get_center()).x
-		var c := Color(1.0, 0.66, 0.36, lit)
+		var c := Color(1.0, 0.66, 0.36, lit * lerpf(1.0, BACKUP_GAIN, v.backup_level))
 		if id == "lights" and v.turret_search_on(state):
 			c = Color(COLD.r, COLD.g, COLD.b, 0.07)
 		ground_glow(ci, Vector2(x, v.ground_y(x) + 6.0), r.size.x * 0.8 + 20.0, c)

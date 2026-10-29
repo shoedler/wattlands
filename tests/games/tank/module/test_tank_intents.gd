@@ -98,8 +98,9 @@ func test_the_crew_keys() -> void:
 		return _local(g, peer, acts, _gestures)
 	var dyn: int = by_engine["dynamo"]
 	assert_eq(act.call(dyn, &"up"), [{"k": "aim", "d": 1, "via": "action"}])
-	assert_eq(act.call(dyn, &"left"), [{"k": "target", "d": -1, "via": "action"}])
-	assert_eq(act.call(dyn, &"right"), [{"k": "target", "d": 1, "via": "action"}])
+	# 0.3.1: the arrows open the seat picker on the Gun too; swap (R / LB) cycles targets.
+	assert_eq(act.call(dyn, &"left"), [], "the picker")
+	assert_eq(act.call(dyn, &"swap"), [{"k": "target", "d": 1, "via": "action"}])
 	assert_eq(act.call(dyn, &"ability_2"), [{"k": "traverse", "via": "action"}])
 	assert_eq(act.call(dyn, &"confirm"), [{"k": "fire", "via": "action"}])
 	assert_eq(act.call(dyn, &"ability_1"), [], "the dynamo has no sprint intent")

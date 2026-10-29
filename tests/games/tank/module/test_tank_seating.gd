@@ -5,18 +5,17 @@ extends GutTest
 ## crews filling the most needed seats around riders who play their own, and when it asks nothing.
 
 
-## A fixture state (stage 2's Advance) with no enemies, the lock open and nothing pending; the
-## rack full and nothing chambered.
+## A fixture state (stage 2's Advance, 200 s in) with no enemies, every rider long on its seat (past
+## the Autopilot's minimum stay); the rack full and nothing chambered.
 func _state(crew: int) -> TankState:
 	var s := TankFixtures.state(crew)
 	s.enemies.clear()
 	s.shells.clear()
 	s.obstacles.clear()
 	s.tick = 20 * 3000
+	s.seg.elapsed_s = 200.0
 	for r in s.riders:
-		TankAux.of(s).seat_now[r.peer] = true
-		r.seat_lock_s = 0.0
-		r.seat_target = ""
+		TankAux.of(s).seat_since[r.peer] = -1.0e9
 		r.fallback = true
 		r.afk = false
 		r.connected = true
@@ -44,11 +43,12 @@ func _want(s: TankState, peer: int = 1) -> String:
 	return str(out.get("to", ""))
 
 
-## Puts the rider of `peer` on `engine` (stations follow).
+## Puts the rider of `peer` on `engine` (stations follow), as if long seated there.
 func _sit(s: TankState, peer: int, engine: String) -> void:
 	var r := s.rider(peer)
 	var ev: Array[Dictionary] = []
 	TankSeats.land(s, r, engine, ev)
+	TankAux.of(s).seat_since[peer] = -1.0e9
 
 
 func test_solo_drives_while_nothing_is_in_range() -> void:
@@ -94,23 +94,21 @@ func test_solo_mans_the_secondaries_when_only_lights_are_near() -> void:
 	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "a medium within 220 px: the main gun (rack full)")
 
 
-func test_no_ask_while_locked_pending_on_reserve_or_off_the_second() -> void:
+## 0.3.1: no seat lock; the Autopilot's minimum stay (TankSeats.auto_stay_s: 30 s solo, 60 s a crew)
+## keeps it from thrashing.
+func test_no_ask_inside_the_stay_on_reserve_or_off_the_second() -> void:
 	var s := _state(1)
 	_sit(s, 1, TankIds.ENGINE_STEAM)
 	var r := s.rider(1)
 	assert_eq(_want(s), TankIds.ENGINE_DIESEL)
-	r.seat_lock_s = 12.0
-	assert_eq(_want(s), "", "locked")
-	r.seat_lock_s = 0.0
-	r.seat_target = TankIds.ENGINE_FEED
-	assert_eq(_want(s), "", "a move is pending")
-	r.seat_target = ""
+	TankAux.of(s).seat_since[1] = s.t - 10.0
+	assert_eq(_want(s), "", "10 s on the seat: inside the solo's 30 s stay")
+	TankAux.of(s).seat_since[1] = s.t - TankConst.AUTO_STAY_SOLO_S
+	assert_eq(_want(s), TankIds.ENGINE_DIESEL, "30 s")
+	assert_eq(TankSeats.auto_stay_s(_state(3)), TankConst.AUTO_STAY_S, "a crew: 60 s")
 	r.afk = true
 	assert_eq(_want(s), "", "on reserve")
 	r.afk = false
-	TankAux.of(s).seat_now[1] = false
-	assert_eq(_want(s), "", "a move that would not land at once")
-	TankAux.of(s).seat_now[1] = true
 	s.tick += 1
 	assert_eq(_want(s), "", "once a second")
 	s.tick += TankAutopilot.SEAT_EVERY_TICKS - 1
@@ -234,3 +232,23 @@ func test_solo_plans_a_gun_line_from_its_enemy_list() -> void:
 	sit = TankAutopilot.expected(s, TankIds.SEG_GUN_LINE)
 	assert_false(bool(sit["only_light"]), "gun line 2: the heavy")
 	assert_eq(TankAutopilot.seat_wanted_solo(s, r, sit, gl), TankIds.ENGINE_DYNAMO)
+
+
+## 0.3.1: the automatic seating keeps the trainer's mode through a warm-up segment (the depot, the
+## drill's skirmish: the drill allows a rider one switch, its checkpoint); a same-mode move is fine,
+## and the same move outside a warm-up goes ahead.
+func test_no_automatic_mode_switch_in_a_warm_up() -> void:
+	var s := _state(1)
+	_enemy(s, TankIds.ENEMY_MEDIUM, 240.0)
+	var ri := TankRiderInput.new()
+	ri.peer = 1
+	ri.phase_kind = Wl.WARMUP
+	ri.phase_mode = Wl.SIM
+	TankAux.of(s).seat_input[1] = ri
+	TankAux.of(s).trainer_mode[1] = Wl.SIM
+	assert_eq(_want(s), "", "the Gun (ERG) waits for the warm-up's end")
+	TankStations.fill_rack(s, 0)
+	assert_eq(_want(s), TankIds.ENGINE_STEAM, "the Loader (SIM -> SIM) is no switch")
+	TankStations.fill_rack(s, TankConst.RACK_MAX)
+	ri.phase_kind = Wl.WORK
+	assert_eq(_want(s), TankIds.ENGINE_DYNAMO, "outside a warm-up: the Gun")
