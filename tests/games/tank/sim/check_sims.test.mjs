@@ -502,6 +502,7 @@ test('S4 passes on directives that match brief 2.3 and 2.7', () => {
   assert.deepEqual(dirOf(dirs), []);
   assert.match(ids(dirOf([req(1, 450, { mode: 'SIM', mode_grade: 4, reason: 'hoist' })], 1)), /matches no pattern/, 'v3 retired the hoist');
   assert.deepEqual(dirOf([{ id: 10, peer: 1, t: 400, kind: 'replan', requested: {}, accepted: true, applied: null }]), [], 'a seat replan (S13 judges it)');
+  assert.deepEqual(dirOf([{ id: 11, peer: 1, t: 400, kind: 'split', requested: {}, accepted: true, applied: null }]), [], 'a seat split (S13 judges it)');
 });
 
 test('S4 rejects directives outside brief 2.3 and 2.7', () => {
@@ -552,9 +553,12 @@ test('S4 plan, trace, switch and lap rules', () => {
   assert.match(ids(C.traceProblems('x', spike)), /entered ERG at 600 s with 110 W/);
   const fine = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.phase === 3 && row.t <= 602 ? { ...row, applied_target_w: 100 } : row) });
   assert.deepEqual(C.traceProblems('x', fine), []);
-  // Two switches 30 s apart: an ERG blip inside the SIM Advance.
-  const quick = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t >= 350 && row.t < 380 ? { ...row, mode: 'ERG' } : row) });
-  assert.match(ids(C.traceProblems('x', quick)), /< 60 s/);
+  // Two switches 20 s apart: an ERG blip inside the SIM Advance (0.3.1: BRIEF 4.5's 30 s).
+  assert.equal(C.SWITCH_SPACING_S, 30);
+  const quick = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t >= 350 && row.t < 370 ? { ...row, mode: 'ERG' } : row) });
+  assert.match(ids(C.traceProblems('x', quick)), /< 30 s/);
+  const spaced = makeRun(3, { extraRows: (row, peer) => (peer === '1' && row.t >= 350 && row.t < 381 ? { ...row, mode: 'ERG' } : row) });
+  assert.doesNotMatch(ids(C.traceProblems('x', spaced)), /switched/, '31 s apart');
   assert.deepEqual(C.lapProblems('x', makeRun(3)), []);
   const lap = makeRun(3);
   lap.plans['1'].phases[3].lap = false;
@@ -906,28 +910,31 @@ function seatRun() {
   return r;
 }
 
-test('S13 passes on moves that respect the lock, land on their seat and come from accepted replans', () => {
+test('S13 passes on moves whose trainer follows through accepted replans and splits', () => {
   const r = C.checkS13({ s13_c3_seats: seatRun() });
   assert.equal(r.status, 'FAIL', 'two moves only');
   assert.match(ids(r.details), /2 seat moves \(want at least 3\)/);
   const three = seatRun();
   three.events.push({ type: 'game_event', t: 1500, pt: 1500, event: { type: 'seat', s: 1, from: 5, to: 5 } });
-  three.directives.push({ id: 902, peer: 2, t: 1499, kind: 'replan', accepted: true, reason: '', requested: {} });
+  three.directives.push({ id: 902, peer: 2, t: 1499, kind: 'split', accepted: true, reason: '', requested: { warnings: [] } });
   const ok = C.checkS13({ s13_c3_seats: three });
   assert.equal(ok.status, 'PASS', ids(ok.details));
   assert.equal(C.checkS13({}).status, 'SKIP');
 });
 
-test('S13 fails on a move inside the lock, a move its plan does not show, or a refused replan', () => {
+test('S13 (0.3.1, no lock) fails on a move its trainer never follows, a refused replan or a warned split', () => {
   const r = seatRun();
   r.events.push({ type: 'game_event', t: 1050, pt: 1050, event: { type: 'seat', s: 1, from: 5, to: 5 } });
-  assert.match(ids(C.seatProblems('x', r)), /slot 1 moved at 1020 s and again at 1050 s/);
+  assert.doesNotMatch(ids(C.seatProblems('x', r)), /1050/, 'no seat lock: moving again 30 s later is fine');
   const wrong = seatRun();
   wrong.events.push({ type: 'game_event', t: 1600, pt: 1600, event: { type: 'seat', s: 2, from: 3, to: 1 } });
-  assert.match(ids(C.seatProblems('x', wrong)), /slot 2 moved to diesel at 1600 s but its plan says steam/);
+  assert.match(ids(C.seatProblems('x', wrong)), /slot 2 moved to diesel at 1600 s; its trainer never followed/);
   const refused = seatRun();
   refused.directives.push({ id: 903, peer: 3, t: 1700, kind: 'replan', accepted: false, reason: 'plan_invalid', requested: {} });
   assert.match(ids(C.seatProblems('x', refused)), /replan 903 \(peer 3 at 1700 s\) refused: plan_invalid/);
+  const warned = seatRun();
+  warned.directives.push({ id: 904, peer: 3, t: 1710, kind: 'split', accepted: true, reason: '', requested: { warnings: ['switches 10 s apart'] } });
+  assert.match(ids(C.seatProblems('x', warned)), /split 904 warned: switches 10 s apart/);
 });
 
 // --- FIT, arguments, main ----------------------------------------------------------------------------------------------

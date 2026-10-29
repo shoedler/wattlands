@@ -5,8 +5,8 @@ extends TankRecord
 ## (Loader), TankArcState (Lights) and TankFeedState (v3, Secondaries). TankState.stations lists
 ## the tank's rooms rear to front (tanks.json engines: diesel, steam, dynamo, arc, feed).
 ## v3: the tank has five seats and at most four riders, so at least one seat is always empty
-## (`slot` -1, is_empty()); a rider moves seats with the seat intent (TankRiderState.engine,
-## seat_target, seat_lock_s). A manned room whose rider is dropped or AFK runs on reserve (brief
+## (`slot` -1, is_empty()); a rider moves seats with the seat intent (TankRiderState.engine; 0.3.1:
+## at once, no seat lock). A manned room whose rider is dropped or AFK runs on reserve (brief
 ## 2.2).
 
 ## [snap] TankIds.ENGINE_*.

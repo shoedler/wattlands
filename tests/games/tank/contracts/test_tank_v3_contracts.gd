@@ -166,7 +166,7 @@ func test_every_crew_starts_on_its_seats_and_the_rest_are_empty() -> void:
 		for r in s.riders:
 			assert_eq(r.engine, want[r.slot], "crew %d slot %d" % [crew, r.slot])
 			assert_eq(s.station(r.engine).slot, r.slot)
-			assert_eq([r.seat_lock_s, r.seat_target], [0.0, ""], "the lock open, not moving")
+			assert_eq([r.mode_wait_s, r.mode_to], [0.0, ""], "0.3.1: no trainer switch waiting")
 		var empty: Array = []
 		for st in s.stations:
 			if st.is_empty():
@@ -180,7 +180,7 @@ func test_the_loader_rack_fields_round_trip() -> void:
 	var sm := TankStationState.make(TankIds.ENGINE_STEAM) as TankSteamState
 	assert_eq([sm.rack, sm.chamber, sm.chamber_s, sm.load_t], [0, false, 0.0, 0.0])
 	assert_eq(TankConst.RACK_MAX, 3)
-	assert_eq(TankConst.SEAT_LOCK_S, 60.0)
+	assert_eq(TankConst.SWITCH_GAP_S, 30.0, "0.3.1: no seat lock; BRIEF 4.5's 30 s")
 	sm.rack = 3
 	sm.chamber = true
 	sm.chamber_s = 0.6
@@ -197,8 +197,12 @@ func test_the_loader_rack_fields_round_trip() -> void:
 
 func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	var host := TankFixtures.state(4)
-	host.rider_at(1).seat_lock_s = 42.345
-	host.rider_at(3).seat_target = TankIds.ENGINE_FEED
+	host.rider_at(1).mode_wait_s = 42.345
+	host.rider_at(1).mode_to = Wl.ERG
+	host.rider_at(0).mode_wait_s = 0.0
+	host.rider_at(0).mode_to = ""
+	host.rider_at(3).mode_wait_s = -1.0
+	host.rider_at(3).mode_to = Wl.SIM
 	var sm := host.station(TankIds.ENGINE_STEAM) as TankSteamState
 	sm.rack = 3
 	sm.chamber = true
@@ -210,12 +214,13 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	fd.fire_tick = 49199
 	var snap := TankSnapshot.encode(host)
 	assert_eq(TankSnapshotSchema.check(snap), "")
-	assert_eq(snap["v"], 3)
+	assert_eq(snap["v"], 4, "0.3.1: mode_wait_ms and mode_to in v3's seat lock columns")
 	var r1: Array = (snap["r"] as Array)[1]
 	assert_eq(r1.size(), TankSnapshotSchema.R_LEN)
-	assert_eq(r1[TankSnapshotSchema.R_SEAT_LOCK_MS], 42345)
-	assert_eq(r1[TankSnapshotSchema.R_SEAT_TARGET], 0, "not moving")
-	assert_eq((snap["r"] as Array)[3][TankSnapshotSchema.R_SEAT_TARGET], 6, "moving to the feed")
+	assert_eq(r1[TankSnapshotSchema.R_MODE_WAIT_MS], 42345)
+	assert_eq(r1[TankSnapshotSchema.R_MODE_TO], TankSnapshotSchema.MODE_TO_ERG)
+	var r3: Array = (snap["r"] as Array)[3]
+	assert_eq([r3[TankSnapshotSchema.R_MODE_WAIT_MS], r3[TankSnapshotSchema.R_MODE_TO]], [-1000, 2])
 	var st := _row(snap, "steam")
 	assert_eq(st.size(), TankSnapshotSchema.ST_LEN)
 	assert_eq(
@@ -230,9 +235,10 @@ func test_the_v3_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	assert_eq(fr[TankSnapshotSchema.ST_SLOT], -1, "crew 4: the feed seat is empty")
 	var client := _fresh(4)
 	TankSnapshot.apply(client, JSON.parse_string(JSON.stringify(snap)))
-	assert_almost_eq(client.rider_at(1).seat_lock_s, 42.345, 1e-9)
-	assert_eq(client.rider_at(3).seat_target, TankIds.ENGINE_FEED)
-	assert_eq(client.rider_at(0).seat_target, "")
+	assert_almost_eq(client.rider_at(1).mode_wait_s, 42.345, 1e-9)
+	assert_eq(client.rider_at(1).mode_to, Wl.ERG)
+	assert_eq([client.rider_at(3).mode_wait_s, client.rider_at(3).mode_to], [-1.0, Wl.SIM])
+	assert_eq(client.rider_at(0).mode_to, "")
 	var csm := client.station(TankIds.ENGINE_STEAM) as TankSteamState
 	assert_eq([csm.rack, csm.chamber], [3, true])
 	assert_almost_eq(csm.chamber_s, 0.75, 1e-9)
@@ -252,7 +258,8 @@ func test_an_empty_seat_and_a_seat_move_survive_the_wire() -> void:
 	host.station(TankIds.ENGINE_DYNAMO).slot = -1
 	host.station(TankIds.ENGINE_STEAM).slot = 1
 	host.rider_at(1).engine = TankIds.ENGINE_STEAM
-	host.rider_at(1).seat_lock_s = 60.0
+	host.rider_at(1).mode_wait_s = 30.0
+	host.rider_at(1).mode_to = Wl.SIM
 	TankSnapshot.apply(client, JSON.parse_string(JSON.stringify(TankSnapshot.encode(host))))
 	assert_true(client.station(TankIds.ENGINE_DYNAMO).is_empty())
 	assert_eq(client.station(TankIds.ENGINE_STEAM).slot, 1)
@@ -264,8 +271,8 @@ func test_an_empty_seat_and_a_seat_move_survive_the_wire() -> void:
 func test_crew_4_at_the_caps_with_every_v3_field_busy_fits_4_kb() -> void:
 	var s := TankFixtures.cap4()
 	for r in s.riders:
-		r.seat_lock_s = 59.999
-		r.seat_target = TankIds.ENGINE_FEED
+		r.mode_wait_s = 29.999
+		r.mode_to = Wl.ERG
 	var sm := s.station(TankIds.ENGINE_STEAM) as TankSteamState
 	sm.rack = 3
 	sm.chamber = true

@@ -16,7 +16,7 @@ extends RefCounted
 ##   "engine": TankIds.ENGINE_*, "mission": id}, plus "seg_min_s" (the segment's own min_s) for an
 ##   open-ended segment (TankInputs reads it).
 ## - An open-ended phase's min_s is the segment's min_s, or its "plan_min_s" where the mission has
-##   one (free roam: TankConst.SEAT_LOCK_S, so a seat switch can split the hour-long roam phase; the
+##   one (free roam: TankConst.SWITCH_GAP_S, kept from v3, when a seat switch needed it to split the roam phase; the
 ##   game reads the segment's own min_s from seg_min_s).
 ## - Labels come from the mission file (TANK_PHASE_* keys).
 

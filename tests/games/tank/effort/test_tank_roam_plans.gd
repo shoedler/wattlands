@@ -50,7 +50,7 @@ func test_every_roam_plan_is_valid_with_no_switch_warning() -> void:
 						assert_true(out.lap and roam.lap, "a FIT lap each: " + at)
 						assert_eq(roam.kind, Wl.WORK, at)
 						assert_true(roam.open_ended, at)
-						assert_eq(roam.min_s, TankConst.SEAT_LOCK_S, at + ": v3, splittable")
+						assert_eq(roam.min_s, TankConst.SWITCH_GAP_S, at + ": plan_min_s")
 						assert_eq(float(roam.meta["seg_min_s"]), minutes * 60.0 - 300.0, at)
 						assert_eq(roam.max_s, minutes * 60.0, at)
 						assert_gt(roam.max_s, 300.0, "longer than 300 s: the 105% cap applies")

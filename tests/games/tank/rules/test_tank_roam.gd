@@ -57,9 +57,7 @@ func test_every_roam_content_expands_into_the_drive_out_and_the_roam() -> void:
 		assert_eq(str(segs[1]["type"]), TankIds.SEG_ROAM, id)
 		assert_eq(str(segs[1]["kind"]), Wl.WORK, id)
 		assert_eq(float(segs[1]["min_s"]), minutes * 60.0 - 300.0, id)
-		assert_eq(
-			float(segs[1]["plan_min_s"]), TankConst.SEAT_LOCK_S, "v3: a seat switch may split it"
-		)
+		assert_eq(float(segs[1]["plan_min_s"]), TankConst.SWITCH_GAP_S, "the plan phase min_s")
 		assert_eq(float(segs[1]["max_s"]), minutes * 60.0, id)
 		assert_gt(float(segs[1]["max_s"]), 300.0, "every roam phase is longer than 300 s: " + id)
 

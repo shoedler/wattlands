@@ -228,7 +228,7 @@ It rejects a plan when:
 
 It warns (never rejects) when two ERG ↔ SIM switches are less than 30 s apart (strictly; exactly 30 s gives none; open-ended phases at `min_s`). Games assert `warnings` is empty. `opts` takes `{"ramp_test": true}` for the FTP test's profile only.
 
-`ctx.directives.replan(peer, plan)` replaces a rider's remaining plan between phases with the same validation; a rejection keeps the old plan.
+`ctx.directives.replan(peer, plan)` replaces a rider's remaining plan between phases with the same validation; a rejection keeps the old plan. `ctx.directives.split(peer, plan)` does the same and ends the current phase now (section 8); `PlanValidator.split_model(whole, index, elapsed_s)` is the plan it validates, with phase `index` fixed at `elapsed_s`.
 
 ## 8. Directives: the only way to change trainer load
 
@@ -241,6 +241,7 @@ It warns (never rejects) when two ERG ↔ SIM switches are less than 30 s apart 
 | `end_phase(peer) -> bool` | Ends an open-ended phase after `min_s`. False (with `push_warning`, recorded `before_min_s` or `not_open_ended`) otherwise. It takes effect at the end of the current tick, so every call in one `sim_step` changes phase on the same tick, and the next `frame.phase` shows the new index at elapsed 0. Remote riders follow through their `phase` message |
 | `cadence_band(peer, lo_rpm, hi_rpm)` | Publishes the cadence band you want. The rider's HUD cadence widget draws it (`cadence_band_changed`), bots (`Bots.RIDER_SPEC`, `erg:compliance=1.0+band`) and MockTrainer's `band` profile follow it, reaching its centre after a 2 s lag (a bot rides 90 rpm without a band); it never changes trainer load. In ERG a step up of about 18% or more (no band to 100-120 rpm is 22%) makes a bot fire `surge`, as a human following the band would. Holds across phases until replaced; `cadence_band(peer, 0, 0)` clears it; the cool-down clears every band |
 | `replan(peer, plan) -> bool` | Section 7.2 |
+| `split(peer, plan) -> bool` | `replan`, and the current phase ends at the end of this tick whatever its `min_s`, open-ended or fixed (`ended_by: "end_phase"`; never the cool-down). The result is validated with the current phase modelled at the length it ran (`PlanValidator.split_model`), so its switch-spacing warnings and warm-up windows follow the real timeline. Tank's seat moves use it (0.3.1): the trainer follows a seat move at once |
 
 `request` returns a `DirectiveResult` `{accepted, id, reason}` for the host-side checks; the governor still clamps what it accepts.
 

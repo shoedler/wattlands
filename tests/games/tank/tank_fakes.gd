@@ -54,6 +54,13 @@ class Directives:
 		replans.append([peer, plan])
 		return clock.replan(peer, plan) if clock != null else true
 
+	## (0.3.1) [[peer, EffortPlan]] every split.
+	var splits: Array = []
+
+	func split(peer: int, plan: EffortPlan) -> bool:
+		splits.append([peer, plan])
+		return clock.split(peer, plan) if clock != null else true
+
 
 class Hud:
 	extends HudFeed
@@ -102,7 +109,10 @@ class PhaseClock:
 	## (v3) peer -> the finalized plan a replan put in, swapped in at the next phase change.
 	var pending: Dictionary = {}
 	## (v3) Every replan: {t, peer, index, ok, errors, warnings, plan (the whole finalized plan)}.
+	## 0.3.1: splits too ("split": true).
 	var replan_log: Array = []
+	## (0.3.1) peers whose phase a split ends at the next advance().
+	var _forced: Array = []
 	var _t: float = 0.0
 
 	func _init(p_plans: Dictionary, p_dirs: Directives) -> void:
@@ -124,6 +134,9 @@ class PhaseClock:
 			_seen += 1
 		if not peers.is_empty():
 			_end_batch(peers, t)
+		for peer: int in _forced:
+			_next(peer, t, Wl.ENDED_END_PHASE)
+		_forced.clear()
 		for peer: int in _at:
 			var plan: EffortPlan = plans[peer]
 			while int(_at[peer][0]) < plan.size() - 1:
@@ -183,6 +196,35 @@ class PhaseClock:
 		var fin := PlanValidator.finalize(whole)
 		entry["plan"] = fin
 		pending[peer] = fin
+		return true
+
+	## (0.3.1) A split as the DirectiveRouter takes it: validated with the current phase at the
+	## length it ran (PlanValidator.split_model); accepted, the phase ends at the next advance().
+	func split(peer: int, plan: EffortPlan) -> bool:
+		if not _at.has(peer) or plan == null:
+			return false
+		var index := int(_at[peer][0])
+		var whole := PlanValidator.spliced(plans[peer], index, plan)
+		var model := PlanValidator.split_model(whole, index, _t - float(_at[peer][1]))
+		var res := PlanValidator.validate(model)
+		var entry := {
+			"t": _t,
+			"peer": peer,
+			"index": index,
+			"ok": bool(res["ok"]),
+			"errors": res["errors"],
+			"warnings": res["warnings"],
+			"plan": null,
+			"split": true
+		}
+		replan_log.append(entry)
+		if not bool(res["ok"]):
+			return false
+		var fin := PlanValidator.finalize(whole)
+		entry["plan"] = fin
+		pending[peer] = fin
+		if not _forced.has(peer):
+			_forced.append(peer)
 		return true
 
 	func _next(peer: int, t: float, ended_by: String) -> void:

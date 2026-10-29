@@ -6,30 +6,21 @@ extends RefCounted
 ## that sits never also fires, latches or turns. It keeps only this peer's local UI state; it never
 ## writes the game state.
 ##
-## Keys, only while the rider's seat lock is open (seat_lock_s 0), no move is pending (seat_target
-## "") and outside the cool-down:
+## Keys, on every seat at any time outside the cool-down (0.3.1: no seat lock; the move lands at
+## once and the trainer follows, TankSeatPlan):
 ##  - left / right open the picker on the nearest empty seat that way (TankIds.SEATS order,
-##    wrapping) and then step it through the empty seats; on the Gun, left / right keep cycling
-##    targets (LR_OPENS), so the gunner opens the picker with swap (which opens it on every seat);
+##    wrapping) and then step it through the empty seats; the Gun too (its target cycling moved to
+##    swap, R / LB);
 ##  - confirm while it is open sends {"k": "seat", "to": <the picked seat>} and closes it;
 ##  - back closes it;
 ## and it closes by itself after IDLE_S without a key, or once nothing can be picked any more (the
-## lock closed, a move is pending, the picked seat filled). Autopilot riders and bots get no picker:
-## the automatic seating places them.
+## picked seat filled and no other empty). Up and down stay the Gun's elevation. Autopilot riders
+## and bots get no picker: the automatic seating places them.
 
 ## The picker closes after this long without a key (s).
 const IDLE_S := 6.0
 ## The tick the module calls feed() on (the platform's fixed step).
 const DT := 0.05
-## Seats whose left / right open the picker (the Gun's cycle targets: it opens with swap).
-const LR_OPENS := {
-	TankIds.ENGINE_DIESEL: true,
-	TankIds.ENGINE_DYNAMO: false,
-	TankIds.ENGINE_STEAM: true,
-	TankIds.ENGINE_ARC: true,
-	TankIds.ENGINE_FEED: true,
-}
-const OPEN_KEY := &"swap"
 
 ## The seat highlighted ("" while the picker is closed).
 var pick: String = ""
@@ -42,12 +33,12 @@ func is_open() -> bool:
 	return pick != ""
 
 
-## True when `r` may pick a seat now: a human (no Autopilot, no bot) whose lock is open, with no
-## move pending, outside the cool-down, and an empty seat to go to.
+## True when `r` may pick a seat now: a human (no Autopilot, no bot) outside the cool-down with an
+## empty seat to go to.
 static func usable(state: TankState, r: TankRiderState) -> bool:
 	if state == null or r == null or r.autopilot or r.is_bot or r.engine == "":
 		return false
-	if r.seat_lock_s > 0.0 or r.seat_target != "" or state.in_cooldown():
+	if state.in_cooldown():
 		return false
 	return not empty_seats(state, r).is_empty()
 
@@ -57,17 +48,9 @@ static func empty_seats(state: TankState, r: TankRiderState) -> Array[String]:
 	var out: Array[String] = []
 	for engine in TankIds.SEATS:
 		var st := state.station(engine)
-		if engine != r.engine and st != null and st.is_empty() and not _claimed(state, engine, r):
+		if engine != r.engine and st != null and st.is_empty():
 			out.append(engine)
 	return out
-
-
-## True when another rider is already moving into `engine`.
-static func _claimed(state: TankState, engine: String, r: TankRiderState) -> bool:
-	for o in state.riders:
-		if o != r and o.seat_target == engine:
-			return true
-	return false
 
 
 ## The next empty seat `dir` (+1 right, -1 left) from `from` in TankIds.SEATS order, wrapping;
@@ -97,14 +80,8 @@ func feed(state: TankState, r: TankRiderState, actions: Array[StringName]) -> Di
 		dir = -1
 	elif actions.has(&"right"):
 		dir = 1
-	var lr := is_open() or bool(LR_OPENS.get(r.engine, true))
 	if not is_open():
-		if actions.has(OPEN_KEY):
-			taken.append(OPEN_KEY)
-			pick = next_empty(state, r, r.engine, 1 if dir == 0 else dir)
-			idle_s = 0.0
-			return out
-		if dir != 0 and lr:
+		if dir != 0:
 			taken.append(&"left" if dir < 0 else &"right")
 			pick = next_empty(state, r, r.engine, dir)
 			idle_s = 0.0
@@ -114,10 +91,6 @@ func feed(state: TankState, r: TankRiderState, actions: Array[StringName]) -> Di
 	if dir != 0:
 		taken.append(&"left" if dir < 0 else &"right")
 		pick = next_empty(state, r, pick, dir)
-		idle_s = 0.0
-	if actions.has(OPEN_KEY):
-		taken.append(OPEN_KEY)
-		pick = next_empty(state, r, pick, 1)
 		idle_s = 0.0
 	if actions.has(&"back"):
 		taken.append(&"back")

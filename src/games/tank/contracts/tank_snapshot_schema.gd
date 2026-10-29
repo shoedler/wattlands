@@ -16,13 +16,17 @@ extends RefCounted
 ## steam room's rack, load_pml, chamber_ms and STF_CHAMBER (the Loader's ready rack). An empty seat
 ## is a room row with slot -1. The Bulwark's gearbox row (engine code 4) is retired, never sent.
 ##
-## {"v": 3, "tick": n,
+## 0.3.1 (VERSION 4): the seat lock is gone; r's seat_lock_ms and seat_target columns carry
+## mode_wait_ms (TankRiderState.mode_wait_s in ms, -1000 waiting for the segment's end) and mode_to
+## (0 none, 1 ERG, 2 SIM): the trainer's pending ERG <-> SIM switch for the rider's seat.
+##
+## {"v": 4, "tick": n,
 ##  "sg": [seg code, stage, phase index, elapsed_ms, flags SG_*],
 ##  "tk": [tank code, x_dpx, speed_cms, grade_x10, hp, hp_max, berm, 0 (reserved), repair_hj,
 ##         facing, elev_x10, traverse_ms, loaded shell, breech_ms, target id, flags TK_*,
 ##         dir (TankIds.DIR_*: 1 right, -1 left)],
-##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10, seat_lock_ms,
-##          seat_target engine code (0 none)], ...]  slot order
+##  "r":  [[slot, engine code, raw_w, cadence_rpm, ftp_pct, flags R_*, target_x10, mode_wait_ms,
+##          mode_to (0 none, 1 ERG, 2 SIM)], ...]  slot order
 ##  "st": [[engine code, slot (-1 empty), flags ST_* (+ engine bits), a, b, c, d, e, f], ...]
 ##        rooms rear to front
 ##        diesel:  a 0, b 0, c 0, d 0, e 0, f 0 (a-c reserved)
@@ -42,7 +46,7 @@ extends RefCounted
 ##         flags RMF_*, points, strongpoints down (bit i = spot i), odo_m, work_m]}
 ##        (free roam only, brief 2.10: optional, sent only while TankRoamState.active; additive in v2)
 
-const VERSION := 3
+const VERSION := 4
 const MAX_BYTES := TankConst.SNAPSHOT_MAX_BYTES
 const KEYS: Array[String] = ["v", "tick", "sg", "tk", "r", "st", "e", "s", "o", "gl", "b", "sc"]
 
@@ -93,9 +97,12 @@ const R_FTP_PCT := 4
 const R_FLAGS := 5
 ## v2: TankRiderState.target_pct x 10.
 const R_TARGET_X10 := 6
-## v3: TankRiderState.seat_lock_s in ms, and seat_target's engine code (0 for "").
-const R_SEAT_LOCK_MS := 7
-const R_SEAT_TARGET := 8
+## 0.3.1: TankRiderState.mode_wait_s in ms and mode_to (MODE_TO_*); v3's seat lock columns.
+const R_MODE_WAIT_MS := 7
+const R_MODE_TO := 8
+const MODE_TO_NONE := 0
+const MODE_TO_ERG := 1
+const MODE_TO_SIM := 2
 const R_LEN := 9
 const RF_IN_BAND := 1
 const RF_RESCUE := 2
