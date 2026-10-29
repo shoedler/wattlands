@@ -162,6 +162,14 @@ static func feed_rpm(state: TankState) -> float:
 	return fd.rpm if fd != null and not fd.is_empty() else 0.0
 
 
+## The local rider's heart rate (bpm) from their own telemetry (Telemetry.heart_rate_bpm: local
+## only, 0 without a sensor); 0 without telemetry.
+static func heart_bpm(t: Telemetry) -> int:
+	if t == null or t.heart_rate_bpm <= 0:
+		return 0
+	return t.heart_rate_bpm
+
+
 ## The Secondaries card's rate line, a string key: TANK_HUD_PER_MIN while the bow guns fire;
 ## TANK_HUD_NO_TARGET while their seat is manned and its rider pedals (`cad` rpm, the card's) with
 ## the guns powered but nothing in their reach (TankBow keeps them silent, so the rate would read
