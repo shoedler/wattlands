@@ -34,8 +34,16 @@ export class Raster {
     this.oid = new Int32Array(w * h);
     this.glow = new Float32Array(w * h * 3);
     this.keep = new Uint8Array(w * h);
-    this.tris = []; // {a, b, c, ua.., n, mat, o, f}
+    this.tris = []; // {a, b, c, ua.., n, mat, o, f, part}
     this.sm = null;
+    // The bake (bake.mjs) tags every triangle with the dynamic part it belongs to (null: static),
+    // can lend this raster other rasters' shadow maps (shadowExtra: lit only where all are lit),
+    // and records rider-hue key pixels (key: 0 none, else 1 + key index from shade.mjs).
+    this.part = null;
+    // partMode(name) -> 0 drop the part, 1 shadow and height only, 2 draw it (null: draw all).
+    this.partMode = null;
+    this.shadowExtra = [];
+    this.key = new Uint8Array(w * h);
   }
 
   project(p) {
@@ -47,6 +55,11 @@ export class Raster {
   tri(a, b, c, mat, o = 0, ua = null, ub = null, uc = null, n = null, flags = F_COLOR | F_SHADOW) {
     let nn = n;
     let f = flags;
+    if (this.part && this.partMode) {
+      const m = this.partMode(this.part);
+      if (m === 0) return;
+      if (m === 1) f &= ~F_COLOR;
+    }
     if (!nn) {
       nn = cross(sub(b, a), sub(c, a));
       if (dot(nn, nn) < 1e-12) return;
@@ -54,7 +67,7 @@ export class Raster {
       f |= F_TWO_SIDED;
     }
     const z = { x: 0, y: 0 };
-    this.tris.push({ a, b, c, ua: ua || z, ub: ub || z, uc: uc || z, n: nn, mat, o, f });
+    this.tris.push({ a, b, c, ua: ua || z, ub: ub || z, uc: uc || z, n: nn, mat, o, f, part: this.part });
   }
 
   // Planar quad a-b-c-d in order; uv in metres: a = uv0, b = uv0 + (|ab|, 0), d = uv0 + (0, |ad|).
@@ -205,6 +218,17 @@ export class Raster {
     this.renderColor();
   }
 
+  // Runs fn with every triangle it adds tagged as `name` (the bake's dynamic parts).
+  tagged(name, fn) {
+    const prev = this.part;
+    this.part = name;
+    try {
+      return fn();
+    } finally {
+      this.part = prev;
+    }
+  }
+
   buildHeightMap() {
     const x0 = -140, y0 = -160, W = 760, H = 740;
     const hm = new Float32Array(W * H).fill(-1e9);
@@ -256,6 +280,10 @@ export class Raster {
         if (v > mxy) mxy = v;
       }
     }
+    if (mnx > mxx) {
+      this.sm = null;
+      return;
+    }
     const W = Math.min(Math.ceil((mxx - mnx) / SM_RES) + 2, 4096);
     const H = Math.min(Math.ceil((mxy - mny) / SM_RES) + 2, 4096);
     const sm = new Float32Array(W * H).fill(-1e9);
@@ -275,6 +303,7 @@ export class Raster {
 
   // 1 lit, 0 shadowed, for a surface point with normal n.
   sunVis(p, n = v3(0, 0, 1)) {
+    for (const e of this.shadowExtra) if (!e.sunVis(p, n)) return 0;
     const s = this.sm;
     if (!s) return 1;
     const u = Math.floor((dot(p, s.e1) - s.mnx) / SM_RES);
@@ -320,6 +349,7 @@ export class Raster {
         dep[i] = d;
         oid[i] = o;
         this.keep[i] = KEEP.has(mat) ? 1 : 0;
+        this.key[i] = cc.key ?? 0;
         if (cc.length > 3) {
           this.glow[i * 3] += cc[0] * cc[3];
           this.glow[i * 3 + 1] += cc[1] * cc[3];
@@ -356,12 +386,14 @@ export class Raster {
         this.dep[i] = d;
         this.oid[i] = o;
         this.keep[i] = 0;
+        this.key[i] = 0;
       }
     }
   }
 
   // A depth-tested point; alpha < 1 blends; emissive adds to the glow buffer.
   point(p, c, size = 1, writeDepth = true, emissive = 0, alpha = 1) {
+    if (this.part && this.partMode && this.partMode(this.part) < 2) return;
     const s = this.project(p);
     const d = depthOf(p);
     const x0 = Math.floor(s.x - size * 0.5 + 0.5);
@@ -375,6 +407,7 @@ export class Raster {
         const i = y * this.w + x;
         if (d <= this.dep[i]) continue;
         for (let k = 0; k < 3; k++) this.col[i * 3 + k] = this.col[i * 3 + k] * (1 - alpha) + c[k] * alpha;
+        this.key[i] = 0;
         if (writeDepth) this.dep[i] = d;
         if (emissive > 0) for (let k = 0; k < 3; k++) this.glow[i * 3 + k] += c[k] * emissive;
       }
@@ -424,7 +457,9 @@ export class Raster {
   // --- post -------------------------------------------------------------------------------
 
   // Sky, depth-edge outline, glow, tilt-shift blur by row, grade and vignette. Returns Float32 RGB.
-  finish({ skyTop, skyBottom, focusTop = 110, focusBottom = 460, rampTop = 70, rampBottom = 70, blurTop = 3, blurBottom = 2, maxBlur = 1, outline = true, grade = {} }) {
+  // The bake turns off the screen-space parts (vignette, haze) and the blur: the game's tilt-shift
+  // screen shader applies them over the baked world and the sprites together.
+  finish({ skyTop, skyBottom, focusTop = 110, focusBottom = 460, rampTop = 70, rampBottom = 70, blurTop = 3, blurBottom = 2, maxBlur = 1, outline = true, grade = {}, vignette = true, haze = true }) {
     const { w, h, dep } = this;
     const base = new Float32Array(this.col);
     for (let y = 0; y < h; y++) {
@@ -440,18 +475,12 @@ export class Raster {
         for (let x = 1; x < w - 1; x++) {
           const i = y * w + x;
           const near = Math.max(dep[i - 1], dep[i + 1], dep[i - w], dep[i + w]);
-          if (near > dep[i] + 2.5) {
-            img[i * 3] = base[i * 3] * 0.62;
-            img[i * 3 + 1] = base[i * 3 + 1] * 0.58;
-            img[i * 3 + 2] = base[i * 3 + 2] * 0.62;
+          if (near > dep[i] + OUTLINE_STEP) {
+            darkenEdge(img, base, i);
           } else if (this.oid[i] >= 30 && this.oid[i] < 55 && !this.keep[i]) {
             // a selective dark outline on the wooden machines' silhouettes (not the rider colours)
             const far = Math.min(dep[i - 1], dep[i + 1], dep[i - w], dep[i + w]);
-            if (far < dep[i] - 1.2) {
-              img[i * 3] = base[i * 3] * 0.3 + 0.165 * 0.7;
-              img[i * 3 + 1] = base[i * 3 + 1] * 0.3 + 0.102 * 0.7;
-              img[i * 3 + 2] = base[i * 3 + 2] * 0.3 + 0.063 * 0.7;
-            }
+            if (far < dep[i] - MACHINE_STEP) machineEdge(img, base, i);
           }
         }
       }
@@ -462,16 +491,16 @@ export class Raster {
     const b3 = blur(img, w, h, 4, 3);
     const out = new Float32Array(w * h * 3);
     const cx = w / 2, cy = h / 2;
-    const { sat = 0.86, contrast = 1.22, shadowTint = [0.235, 0.259, 0.384], hiTint = [1, 0.914, 0.788], floor = [0.102, 0.094, 0.125], haze = [0.784, 0.765, 0.729] } = grade;
+    const g = gradeParams(grade);
+    const c = [0, 0, 0];
+    const o = [0, 0, 0];
     for (let y = 0; y < h; y++) {
       const amt = maxBlur * (y < focusTop ? clamp((focusTop - y) / rampTop, 0, 1) * blurTop : y > focusBottom ? clamp((y - focusBottom) / rampBottom, 0, 1) * blurBottom : 0);
       const inBand = y >= focusTop && y <= focusBottom ? 1 : 0;
-      const hz = clamp(1 - y / 70, 0, 1) * 0.18;
+      const hz = haze ? hazeAt(y) : 0;
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 3;
-        const vx = (x - cx) / cx, vy = (y - cy) / cy;
-        const vig = 1 - 0.12 * clamp(vx * vx + vy * vy - 0.35, 0, 1);
-        const c = [0, 0, 0];
+        const vig = vignette ? vignetteAt(x, y, cx, cy) : 1;
         for (let k = 0; k < 3; k++) {
           let v = img[i + k];
           if (amt > 0) {
@@ -481,26 +510,69 @@ export class Raster {
           }
           c[k] = v + glow[i + k] * 1.4 + this.glow[i + k] * 0.4;
         }
-        // environment saturation down (the riders' colours keep theirs), contrast, split tone
-        const keep = this.keep[y * w + x];
-        const l = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
-        const s = keep ? 1.05 : sat * (1 + 0.08 * inBand);
-        const lc = (l - 0.5) * contrast + 0.5;
-        const ws = clamp(1 - lc * 1.6, 0, 1) * 0.13;
-        const wh = clamp((lc - 0.6) * 2.5, 0, 1) * 0.08;
-        for (let k = 0; k < 3; k++) {
-          let v = l + (c[k] - l) * s;
-          v = (v - 0.5) * contrast * (1 + 0.08 * inBand) + 0.5;
-          v = v * (1 - ws) + shadowTint[k] * ws;
-          v = v * (1 - wh) + hiTint[k] * wh;
-          v = v * (1 - hz) + haze[k] * hz;
-          v = floor[k] + v * (1 - floor[k]);
-          out[i + k] = clamp(v * vig, 0, 1);
-        }
+        gradeRgb(c, this.keep[y * w + x], inBand, hz, vig, g, o);
+        out[i] = o[0];
+        out[i + 1] = o[1];
+        out[i + 2] = o[2];
       }
     }
     return out;
   }
+}
+
+// --- the grade, shared by finish() and the bake -----------------------------------------------
+
+// A pixel darkens by this when a 4-neighbour is nearer by OUTLINE_STEP m of depth; a machine's
+// own silhouette (oid 30..54, not rider hue) darkens toward dark timber when one is farther by
+// MACHINE_STEP.
+export const OUTLINE_STEP = 2.5;
+export const MACHINE_STEP = 1.2;
+export const EDGE_MUL = [0.62, 0.58, 0.62];
+export const MACHINE_EDGE = [0.165 * 0.7, 0.102 * 0.7, 0.063 * 0.7];
+
+export function darkenEdge(img, base, i) {
+  img[i * 3] = base[i * 3] * EDGE_MUL[0];
+  img[i * 3 + 1] = base[i * 3 + 1] * EDGE_MUL[1];
+  img[i * 3 + 2] = base[i * 3 + 2] * EDGE_MUL[2];
+}
+
+export function machineEdge(img, base, i) {
+  img[i * 3] = base[i * 3] * 0.3 + MACHINE_EDGE[0];
+  img[i * 3 + 1] = base[i * 3 + 1] * 0.3 + MACHINE_EDGE[1];
+  img[i * 3 + 2] = base[i * 3 + 2] * 0.3 + MACHINE_EDGE[2];
+}
+
+export function gradeParams(grade = {}) {
+  const { sat = 0.86, contrast = 1.22, shadowTint = [0.235, 0.259, 0.384], hiTint = [1, 0.914, 0.788], floor = [0.102, 0.094, 0.125], haze = [0.784, 0.765, 0.729] } = grade;
+  return { sat, contrast, shadowTint, hiTint, floor, haze };
+}
+
+// The haze over the top rows (0..0.18) and the vignette factor (0.88..1) at an art pixel.
+export const hazeAt = (y) => clamp(1 - y / 70, 0, 1) * 0.18;
+export function vignetteAt(x, y, cx = 480, cy = 270) {
+  const vx = (x - cx) / cx, vy = (y - cy) / cy;
+  return 1 - 0.12 * clamp(vx * vx + vy * vy - 0.35, 0, 1);
+}
+
+// Environment saturation down (the riders' colours keep theirs), contrast, split tone, haze,
+// the black floor and the vignette: c (linear 0..1 RGB) into out.
+export function gradeRgb(c, keep, inBand, hz, vig, g, out) {
+  const { sat, contrast, shadowTint, hiTint, floor, haze } = g;
+  const l = c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11;
+  const s = keep ? 1.05 : sat * (1 + 0.08 * inBand);
+  const lc = (l - 0.5) * contrast + 0.5;
+  const ws = clamp(1 - lc * 1.6, 0, 1) * 0.13;
+  const wh = clamp((lc - 0.6) * 2.5, 0, 1) * 0.08;
+  for (let k = 0; k < 3; k++) {
+    let v = l + (c[k] - l) * s;
+    v = (v - 0.5) * contrast * (1 + 0.08 * inBand) + 0.5;
+    v = v * (1 - ws) + shadowTint[k] * ws;
+    v = v * (1 - wh) + hiTint[k] * wh;
+    v = v * (1 - hz) + haze[k] * hz;
+    v = floor[k] + v * (1 - floor[k]);
+    out[k] = clamp(v * vig, 0, 1);
+  }
+  return out;
 }
 
 // Calls fn(x, y, w0, w1, w2) for every pixel centre inside the triangle (screen coords).
