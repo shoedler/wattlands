@@ -257,11 +257,11 @@ export class Life {
 
   effects() {
     const r = this.r;
-    // catapult: the stone part-way through its flight to the Valley road's leading block
+    // catapult: the stone part-way through its flight to the leading block of the far loop
     const stoneK = 0.0016;
     const tip = this.scene.catapultRelease();
-    const tgt = this.ground(W.roadPoint(0, 88));
-    const shot = aim(tip, tgt, 28, false, stoneK);
+    const tgt = this.ground(W.roadPoint(0, 279));
+    const shot = aim(tip, tgt, 34, false, stoneK);
     const path = fly(tip, shot.v0, stoneK, shot.steps);
     const now = Math.floor(shot.steps * this.t);
     this.stoneNow = path[now];
@@ -280,8 +280,8 @@ export class Life {
       q.z = W.height(q.x, q.y) + 0.05;
       r.point(q, hex('#fff2c8'), 1, false);
     }
-    // the previous stone's impact in the middle Valley block
-    this.impact(this.ground(W.roadPoint(0, 130)), 0.32);
+    // the previous stone's impact further along the same loop
+    this.impact(this.ground(W.roadPoint(0, 300)), 0.32);
     // ballista: a bolt three quarters of the way to the first siege tower, streak behind it
     const bp = add(S.BALLISTA, v3(0, 0, 6));
     const st = W.roadPoint(0, 26);

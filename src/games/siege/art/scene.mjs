@@ -14,7 +14,8 @@ export const WHEEL_R = 7;
 export const WHEEL_HW = 1.6;
 export const ST = { MINE: 0, CATAPULT: 1, BALLISTA: 2, TAR: 3, ARROWS: 4 };
 export const CATAPULT = v3(30.2, 42, 0);
-// The catapult throws toward the south-west (the bridge and the road), side-on to the camera.
+// The great onager has no wheels: its frame sits on a masonry bed that is itself a slow stone
+// turntable. Here it throws toward the south-west (the road), side-on to the camera.
 const CAT_YAW = { ex: v3(Math.SQRT1_2, Math.SQRT1_2, 0), ey: v3(-Math.SQRT1_2, Math.SQRT1_2, 0) };
 export const CAT_S = 2.1;
 export const BALLISTA = v3(1, 59, 15);
@@ -492,6 +493,11 @@ export class Scene {
       this.ybox(mid, yaw, { x: ((x1 - x0) / 2) * S, y: ((y1 - y0) / 2) * S, z: ((z1 - z0) / 2) * S }, mat, o);
     };
     this.stationMark(ST.CATAPULT, c, 9.6);
+    r.cylZ(c, 7.6, 0.3, M.WALL, o, 28, M.WALLTOP);
+    for (let k = 0; k < 16; k++) {
+      const a = (TAU * k) / 16;
+      this.ybox(add(c, v3(Math.cos(a) * 7.0, Math.sin(a) * 7.0, 0.3)), a, { x: 0.25, y: 0.25, z: 0.06 }, M.BRONZE, o);
+    }
     rail(-2.6, -4.6, 0, 2.6, 4.0, 0.5, M.WALL);
     for (const side of [-1, 1]) for (const dy of [-2.6, 0, 2.6]) rail(1.6 * side - 0.45, dy - 0.5, 0, 1.6 * side + 0.45, dy + 0.5, 0.55, M.WALLTOP);
     for (const side of [-1, 1]) {
