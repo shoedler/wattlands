@@ -1,8 +1,8 @@
 extends GutTest
-## Seats (v3 brief "Seat choice and switching"; TankSeats): the seat lock from every plan boundary,
-## seat intents (a named seat, next / prev over empty seats), refusals (lock, manned or claimed
-## seat, reserve, cool-down, no legal replan), the claim (seat_target), cancelling, and the move
-## landing when the plan's seat changes (stations, the seat event, the lock).
+## Seats (0.3.1 "seats without a lock"; TankSeats): a seat intent (a named seat, next / prev over
+## empty seats) lands at once on any empty seat at any time outside the cool-down (stations, the
+## seat event), with no seat lock at a stage change or anywhere else; refusals (a manned seat,
+## reserve, the cool-down); back and forth; the trainer's switches tracked for TankSeatPlan.follow.
 
 const DEPOT := 0
 const ADVANCE := 1
@@ -25,123 +25,120 @@ func _rig(crew: int, index: int = ADVANCE, into_s: float = 1.0) -> TankRulesRig:
 	return rig
 
 
-func test_the_lock_counts_60_s_down_from_every_plan_boundary() -> void:
-	var rig := _rig(2, DEPOT, 0.0)
-	assert_almost_eq(rig.rider(1).seat_lock_s, TankConst.SEAT_LOCK_S, 1e-6, "the plan's start")
-	rig.run(30.0)
-	assert_almost_eq(rig.rider(1).seat_lock_s, 30.0, 0.06)
-	rig.run(31.0)
-	assert_eq(rig.rider(1).seat_lock_s, 0.0, "open after 60 s")
-	rig.enter(ADVANCE, 0.0)
-	assert_almost_eq(rig.rider(1).seat_lock_s, TankConst.SEAT_LOCK_S, 1e-6, "a segment boundary")
-	assert_almost_eq(rig.rider(2).seat_lock_s, TankConst.SEAT_LOCK_S, 1e-6)
+## The rig's seat events since `from` (index into rig.events).
+func _seats(rig: TankRulesRig, from: int) -> Array[Dictionary]:
+	return rig.of_type("seat", rig.events.slice(from))
 
 
-func test_a_seat_intent_is_refused_while_the_lock_runs() -> void:
+func test_a_move_lands_at_once_on_any_empty_seat() -> void:
 	var rig := _rig(2, ADVANCE, 0.0)
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_STEAM))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, "", "locked")
-	rig.run(60.0)
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_STEAM))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, TankIds.ENGINE_STEAM, "open: the move is pending")
-	assert_eq(rig.rider(1).engine, TankIds.ENGINE_DIESEL, "the rider sits where it was")
-
-
-func test_only_an_empty_unclaimed_seat_can_be_taken() -> void:
-	var rig := _rig(3, ADVANCE, 0.0)
-	rig.run(61.0)
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_DYNAMO))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, "", "the Gun is manned")
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_ARC))
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_ARC))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, TankIds.ENGINE_ARC)
-	assert_eq(rig.rider(2).seat_target, "", "slot 0 claimed the Lights first")
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, TankIds.ENGINE_FEED)
-
-
-func test_next_and_prev_step_over_manned_and_claimed_seats() -> void:
-	var rig := _rig(3, ADVANCE, 0.0)
-	rig.run(61.0)
-	# Seats in order: Drive (1), Gun (2), Loader (3), Lights, Secondaries: from the Gun, next is the
-	# Lights (the Loader is manned), prev wraps to the Secondaries (Drive is manned).
-	rig.send(2, TankIntents.seat(TankIds.SEAT_TO_NEXT))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, TankIds.ENGINE_ARC)
-	rig.send(1, TankIntents.seat(TankIds.SEAT_TO_NEXT))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, TankIds.ENGINE_FEED, "the Lights are claimed by slot 1")
-	rig.send(2, TankIntents.seat(TankIds.SEAT_TO_PREV))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, TankIds.ENGINE_ARC, "nothing else is free that way")
-
-
-func test_asking_for_ones_own_seat_cancels_the_move() -> void:
-	var rig := _rig(2, ADVANCE, 0.0)
-	rig.run(61.0)
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, TankIds.ENGINE_FEED)
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_DYNAMO))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, "")
-
-
-func test_no_move_on_reserve_or_in_the_cool_down() -> void:
-	var rig := _rig(2, ADVANCE, 0.0)
-	rig.run(61.0)
-	rig.afk[2] = true
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, "", "on reserve")
-	rig.afk.erase(2)
-	rig.enter(rig.segs().size(), 61.0)
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
-	assert_eq(rig.rider(2).seat_target, "", "the cool-down")
-
-
-## The boss is the last segment: a move that cannot split it before its max_s could only land in
-## the cool-down, so it is refused (a mode change within 60 s of a planned one).
-func test_a_move_with_no_legal_replan_is_refused() -> void:
-	var rig := _rig(2, BOSS, 0.0)
-	rig.run(61.0)
-	var max_s := float(rig.content.segment(BOSS)["max_s"])
-	rig.seg_t = max_s - 30.0
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_DYNAMO))
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_ARC))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, "", "Drive (SIM) to Lights (ERG) 30 s before max_s")
-	rig.send(1, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
-	assert_eq(rig.rider(1).seat_target, TankIds.ENGINE_FEED, "SIM to SIM: no mode change")
-
-
-func test_the_move_lands_when_the_plan_seat_changes() -> void:
-	var rig := _rig(2, ADVANCE, 0.0)
-	rig.run(61.0)
-	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
-	rig.run(0.05)
 	var before := rig.events.size()
-	rig.seat(2, TankIds.ENGINE_FEED)
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
 	rig.run(0.05)
 	var r := rig.rider(2)
-	assert_eq(r.engine, TankIds.ENGINE_FEED)
-	assert_eq(r.seat_target, "")
+	assert_eq(r.engine, TankIds.ENGINE_FEED, "the segment's first tick, no lock")
 	assert_eq(rig.feed().slot, r.slot)
 	assert_eq(rig.feed().peer, 2)
 	assert_true(rig.dynamo().is_empty(), "the Gun is empty now")
-	var seat := rig.of_type("seat", rig.events.slice(before))
+	var seat := _seats(rig, before)
 	assert_eq(seat.size(), 1)
 	assert_eq(
 		[seat[0]["s"], seat[0]["from"], seat[0]["to"]],
 		[r.slot, TankIds.engine_code(TankIds.ENGINE_DYNAMO), TankIds.engine_code("feed")]
 	)
+
+
+## Bug report (0.3.0): the seat lock came back at every new stage. There is none now: a rider who
+## just moved moves again at once, in the same segment and right after a stage change.
+func test_no_seat_lock_after_a_stage_change() -> void:
+	var rig := _rig(2, GUN_LINE, 50.0)
+	rig.send(1, TankIntents.seat(TankIds.ENGINE_ARC))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_ARC)
+	rig.enter(CHECKPOINT, 0.0)
+	rig.run(0.05)
+	rig.send(1, TankIntents.seat(TankIds.ENGINE_STEAM))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_STEAM, "a new stage, moved at once")
+	rig.enter(ADVANCE + 3, 0.0)
+	rig.send(1, TankIntents.seat(TankIds.SEAT_TO_NEXT))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_ARC, "and again after the next stage change")
+	assert_false("seat_lock_s" in rig.rider(1), "the field is gone")
+
+
+func test_only_an_empty_seat_can_be_taken() -> void:
+	var rig := _rig(3, ADVANCE, 0.0)
+	rig.send(1, TankIntents.seat(TankIds.ENGINE_DYNAMO))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_DIESEL, "the Gun is manned")
+	rig.send(1, TankIntents.seat(TankIds.ENGINE_ARC))
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_ARC))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_ARC)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_DYNAMO, "slot 0 took the Lights first")
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_FEED)
+
+
+func test_next_and_prev_step_over_manned_seats() -> void:
+	var rig := _rig(3, ADVANCE, 0.0)
+	# Seats in order: Drive (1), Gun (2), Loader (3), Lights, Secondaries: from the Gun, next is the
+	# Lights (the Loader is manned), prev wraps to the Secondaries (Drive is manned).
+	rig.send(2, TankIntents.seat(TankIds.SEAT_TO_NEXT))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_ARC)
+	rig.send(1, TankIntents.seat(TankIds.SEAT_TO_NEXT))
+	rig.run(0.05)
+	assert_eq(rig.rider(1).engine, TankIds.ENGINE_DYNAMO, "the Gun is free now, next from Drive")
+	rig.send(2, TankIntents.seat(TankIds.SEAT_TO_PREV))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_DIESEL, "Drive is free now, prev from the Lights")
+
+
+## Back and forth: every move lands at once, both ways, each with its seat event.
+func test_back_and_forth_lands_every_move() -> void:
+	var rig := _rig(2, ADVANCE, 0.0)
+	var before := rig.events.size()
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_STEAM))
+	rig.run(0.05)
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_DYNAMO))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_DYNAMO)
+	assert_eq(_seats(rig, before).size(), 2)
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_DYNAMO))
+	rig.run(0.05)
+	assert_eq(_seats(rig, before).size(), 2, "asking for one's own seat does nothing")
+
+
+func test_no_move_on_reserve_or_in_the_cool_down() -> void:
+	var rig := _rig(2, ADVANCE, 0.0)
+	rig.afk[2] = true
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_DYNAMO, "on reserve")
+	rig.afk.erase(2)
+	rig.enter(rig.segs().size(), 61.0)
+	rig.send(2, TankIntents.seat(TankIds.ENGINE_FEED))
+	rig.run(0.05)
+	assert_eq(rig.rider(2).engine, TankIds.ENGINE_DYNAMO, "the cool-down")
+
+
+## TankAux.last_switch_s: the game time a rider's plan phase changed mode (its trainer's ERG <->
+## SIM switch, what TankSeatPlan.follow spaces 30 s apart); a boundary without a mode change is none.
+func test_the_trainer_switches_are_tracked() -> void:
+	var rig := _rig(2, ADVANCE, 0.0)
+	rig.run(0.05)
+	var aux := TankAux.of(rig.state)
+	assert_false(aux.last_switch_s.has(1), "no switch yet")
+	rig.enter(GUN_LINE, 0.0)
+	rig.run(0.05)
+	assert_false(aux.last_switch_s.has(1), "Drive: SIM to SIM")
+	rig.enter(CHECKPOINT, 0.0)
+	rig.run(0.05)
+	assert_almost_eq(float(aux.last_switch_s[1]), rig.state.t - 0.05, 0.06, "the checkpoint's ERG")
+	assert_false(aux.last_switch_s.has(2), "the Gun: ERG all along")
 
 
 func test_an_empty_seat_does_nothing() -> void:
@@ -166,31 +163,3 @@ func test_an_empty_seat_does_nothing() -> void:
 	two.run(5.0)
 	assert_true(two.diesel().is_empty())
 	assert_eq(two.hull().speed_mps, 0.0, "nobody drives")
-
-
-## The Autopilot asks for a move only when a split for it passes (TankSeats.splits_now): 40 s
-## before a gun line's max_s the Gun's rider cannot take the Loader (ERG to SIM, the checkpoint's
-## ERG next: the rest needs 60 s) but can take the Lights (ERG to ERG).
-func test_splits_now_asks_the_seat_plan() -> void:
-	var rig := _rig(2, GUN_LINE, 0.0)
-	var max_s := float(rig.content.segment(GUN_LINE)["max_s"])
-	rig.seg_t = max_s - 40.0
-	rig.plan_t = rig.seg_start(GUN_LINE) + rig.seg_t
-	rig.run(0.05)
-	assert_true(bool(TankAux.of(rig.state).seat_now.get(2, false)))
-	assert_false(TankSeats.splits_now(rig.state, 2, TankIds.ENGINE_STEAM), "no room for 60 s")
-	assert_true(TankSeats.splits_now(rig.state, 2, TankIds.ENGINE_ARC), "no mode change")
-
-
-func test_a_split_is_possible_until_the_phase_is_at_its_max_s() -> void:
-	var ri := TankRiderInput.new()
-	ri.phase_open_ended = true
-	ri.phase_min_s = 90.0
-	ri.phase_elapsed_s = 100.0
-	ri.phase_remaining_s = 20.0
-	assert_true(TankSeats.can_land_now(ri), "20 s left: TankSeatPlan decides whether a rest fits")
-	ri.phase_remaining_s = 0.05
-	assert_false(TankSeats.can_land_now(ri), "at max_s")
-	ri.phase_remaining_s = 20.0
-	ri.phase_elapsed_s = 80.0
-	assert_false(TankSeats.can_land_now(ri), "before its min_s")

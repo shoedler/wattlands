@@ -212,8 +212,8 @@ const INTENT_OVER := "over"
 ## TankRoam). Refused outside free roam.
 const INTENT_TURN := "turn"
 ## v3 (brief "Seat choice and switching"): move to another seat, {to: an engine id, or "next" /
-## "prev" in SEATS order}; deliberate. Every seat may send it; the rules decide whether the move
-## is allowed (the seat lock, an empty target seat, a planned mode change within 60 s).
+## "prev" in SEATS order}; deliberate. Every seat may send it; the move lands at once on an empty
+## seat (0.3.1: no seat lock; refused on reserve and in the cool-down) and the trainer follows.
 const INTENT_SEAT := "seat"
 const INTENT_KINDS: Array[String] = [
 	INTENT_AIM,

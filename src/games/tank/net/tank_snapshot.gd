@@ -50,8 +50,8 @@ static func encode(state: TankState) -> Dictionary:
 				roundi(rd.ftp_pct),
 				f,
 				S.x10(rd.target_pct),
-				S.ms(rd.seat_lock_s),
-				TankIds.engine_code(rd.seat_target)
+				S.ms(rd.mode_wait_s),
+				mode_code(rd.mode_to)
 			]
 		)
 	var st: Array = []
@@ -143,6 +143,25 @@ static func encode(state: TankState) -> Dictionary:
 
 ## The free-roam row (brief 2.6, 2.10): the map seed (every peer rebuilds the valley from it), the
 ## hull's place on the road, the turn, the map end, the flags, the points and the strongpoints down.
+## TankRiderState.mode_to on the wire (TankSnapshotSchema.MODE_TO_*).
+static func mode_code(mode: String) -> int:
+	match mode:
+		Wl.ERG:
+			return S.MODE_TO_ERG
+		Wl.SIM:
+			return S.MODE_TO_SIM
+	return S.MODE_TO_NONE
+
+
+static func mode_of(code: int) -> String:
+	match code:
+		S.MODE_TO_ERG:
+			return Wl.ERG
+		S.MODE_TO_SIM:
+			return Wl.SIM
+	return ""
+
+
 static func _roam_row(state: TankState) -> Array:
 	var rm := state.roam
 	var f := (
@@ -231,8 +250,8 @@ static func apply(state: TankState, snap: Dictionary) -> void:
 		rd.cadence_rpm = int(row[S.R_CADENCE])
 		rd.ftp_pct = int(row[S.R_FTP_PCT])
 		rd.target_pct = int(row[S.R_TARGET_X10]) / 10.0
-		rd.seat_lock_s = int(row[S.R_SEAT_LOCK_MS]) / 1000.0
-		rd.seat_target = TankIds.engine_of(int(row[S.R_SEAT_TARGET]))
+		rd.mode_wait_s = int(row[S.R_MODE_WAIT_MS]) / 1000.0
+		rd.mode_to = mode_of(int(row[S.R_MODE_TO]))
 		var f := int(row[S.R_FLAGS])
 		rd.in_band = (f & S.RF_IN_BAND) != 0
 		rd.rescue = (f & S.RF_RESCUE) != 0

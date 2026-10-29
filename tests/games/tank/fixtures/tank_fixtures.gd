@@ -280,9 +280,10 @@ static func _base(c: TankContent, crew: int, index: int, elapsed: float) -> Tank
 	s.seg.length_m = float(seg.get("length_m", 0.0))
 	for r in s.riders:
 		r.engine = engine_at(c, crew, r.slot, index)
-		r.seat_lock_s = 12.5 * r.slot
-		if crew == TankIds.MAX_CREW and r.slot == crew - 1:
-			r.seat_target = TankIds.ENGINE_FEED
+		r.mode_wait_s = 12.5 * r.slot
+		r.mode_to = Wl.SIM if r.slot > 0 else ""
+		# Just seated (0.3.1): the Autopilot's minimum stay keeps it there.
+		TankAux.of(s).seat_since[r.peer] = s.t
 		r.raw_w = roundf(0.9 * r.ftp)
 		r.cadence_rpm = 90.0
 		r.ftp_pct = 90.0

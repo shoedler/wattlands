@@ -114,15 +114,20 @@ func _fuzz(crew: int, rng_seed: int) -> TankRulesRig:
 	return rig
 
 
-## v3: the solo rider sits on Drive (until the rules builder seats it automatically): the Gun and
-## the Loader seats are empty, so the main gun never fires.
+## The solo rider moves seats at random (0.3.1: every move lands at once): the main gun fires only
+## while it sits on the Gun (an empty Gun seat never fires).
 func test_random_play_keeps_every_invariant_for_a_solo_crew() -> void:
 	var rig := _fuzz(1, 1)
 	_fuzz(1, 2)
-	var main := rig.of_type("shot").filter(
-		func(e: Dictionary) -> bool: return int(e["s"]) >= 0 and e["sh"] != TankIds.SHELL_BOW
-	)
-	assert_eq(main.size(), 0, "an empty Gun seat never fires")
+	var engine := TankIds.ENGINE_DIESEL
+	var main := 0
+	for e: Dictionary in rig.events:
+		if e["type"] == TankEvents.SEAT:
+			engine = TankIds.engine_of(int(e["to"]))
+		elif e["type"] == TankEvents.SHOT and int(e["s"]) >= 0 and e["sh"] != TankIds.SHELL_BOW:
+			main += 1
+			assert_eq(engine, TankIds.ENGINE_DYNAMO, "an empty Gun seat never fires")
+	gut.p("%d main-gun shots, each from the Gun" % main)
 	assert_gt(rig.of_type("hit").size(), 0, "the enemies did")
 
 

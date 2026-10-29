@@ -59,14 +59,17 @@ var boss_tele_total: float = 0.0
 var last_spawn_t: float = -100.0
 
 # --- v3 seats, rack and bow guns -------------------------------------------------------------------
-## peer -> the plan phase index the seat lock last saw (a new one is a plan boundary).
-var seat_phase: Dictionary = {}
-## peer -> the game time of the rider's last plan boundary (the seat lock counts from it).
+## peer -> the game time the rider last landed on a seat (TankSeats.stay_s; 0.3.1 no seat lock).
 var seat_since: Dictionary = {}
-## peer -> true while a seat move asked for now would land at once (TankSeats.can_land_now).
-var seat_now: Dictionary = {}
-## peer -> the rider's TankRiderInput of this tick (TankSeats.splits_now, checkpoint_next).
+## peer -> the rider's TankRiderInput of this tick (TankSeats.follows_now, checkpoint_next).
 var seat_input: Dictionary = {}
+## peer -> the mode of the rider's current plan phase (its trainer: Wl.ERG or Wl.SIM).
+var trainer_mode: Dictionary = {}
+## peer -> the game time of the rider's last ERG <-> SIM switch (a plan phase of the other mode
+## starting; TankSeatPlan.follow keeps them 30 s apart). Absent before the first.
+var last_switch_s: Dictionary = {}
+## peer -> the mission segment index in which the rider last sat off Drive (the solo loop).
+var off_drive_seg: Dictionary = {}
 ## The ready rack's shells, oldest first (TankIds.SHELL_*; TankSteamState.rack is its size). The
 ## Gun chambers the oldest; an Overpressure takes the newest back to the boiler.
 var rack_types: Array[int] = []

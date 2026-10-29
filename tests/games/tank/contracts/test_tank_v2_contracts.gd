@@ -221,7 +221,7 @@ func test_the_new_fields_ride_the_snapshot_as_ints_and_round_trip() -> void:
 	host.rider_at(2).target_pct = 87.65
 	var snap := TankSnapshot.encode(host)
 	assert_eq(TankSnapshotSchema.check(snap), "")
-	assert_eq(snap["v"], 3)
+	assert_eq(snap["v"], TankSnapshotSchema.VERSION, "0.3.1: v4")
 	assert_eq(snap["tk"][TankSnapshotSchema.TK_DIR], -1)
 	var row: Array = (snap["r"] as Array)[2]
 	assert_eq(row[TankSnapshotSchema.R_TARGET_X10], 877, "x10, rounded")

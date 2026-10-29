@@ -173,11 +173,11 @@ func _all_in_cooldown(frame: InputFrame) -> bool:
 
 ## The local rider's actions and gestures as intents for its current seat (brief 2.5, 2.6): a
 ## surge becomes only over (the Loader overpressures; "Surge to evade" needs no intent, the sprint
-## itself is the input), never fire or latch. Keys: up and down nudge the elevation, left and right
-## cycle targets, ability_2 traverses, confirm fires (the Gun); ability_1 overpressures, confirm
+## itself is the input), never fire or latch. Keys: up and down nudge the elevation, swap (R / LB)
+## cycles targets, ability_2 traverses, confirm fires (the Gun); ability_1 overpressures, confirm
 ## latches (the Loader). In free roam the Drive rider turns the tank round: ability_1 or confirm.
-## v3: the seat picker (TankHudSeatPicker) takes its keys first: left / right (swap on the Gun)
-## pick an empty seat and confirm sits there while the seat lock is open.
+## 0.3.1: the seat picker (TankHudSeatPicker) takes its keys first: left / right on every seat pick
+## an empty seat, confirm sits there (at once, no seat lock), back closes it.
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	if state == null:
 		return []
@@ -194,9 +194,7 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 		out.append(TankIntents.make(TankIds.INTENT_OVER, via))
 	if engine == TankIds.ENGINE_DYNAMO:
 		out.append_array(_gunner_intents(actions))
-		if actions.has(&"left"):
-			out.append(TankIntents.target(TankIds.TARGET_PREV))
-		if actions.has(&"right"):
+		if actions.has(&"swap"):
 			out.append(TankIntents.target(TankIds.TARGET_NEXT))
 	if state.roam.active and not surge:
 		var drives := engine == TankIds.ENGINE_DIESEL
@@ -298,6 +296,7 @@ func _local_input(r: TankRiderState, local: Telemetry, st: TankStationState) -> 
 	ri.cadence_rpm = local.cadence_rpm
 	ri.ftp_pct = local.ftp_pct
 	ri.mode = local.mode
+	ri.phase_mode = local.mode
 	ri.applied_target_w = float(local.applied_target_w)
 	ri.rescue = local.rescue or r.rescue
 	ri.afk = r.afk or st.reserve

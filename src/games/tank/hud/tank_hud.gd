@@ -13,8 +13,8 @@ extends RefCounted
 ##  - bottom left: my numbers (TankHudMine: watts, %FTP, cadence, their gauges, the instruction
 ##    line, W' and the gear, the station);
 ##  - bottom middle: the seat panel (TankHudSeats, v3 seat panel A: one live machine window per
-##    seat, Drive, Gun, Loader, Lights and Secondaries, manned or empty; your seat lock and the seat
-##    keys' hint over your card);
+##    seat, Drive, Gun, Loader, Lights and Secondaries, manned or empty; your trainer's switch to
+##    come and the seat keys' hint over your card);
 ##  - the world tags (TankHudTags: speed, the halt-line post, SURGE TO EVADE, the gun's elevation
 ##    arc, the turn marker) over the middle of the canvas;
 ##  - banners over the sky in the middle, themed by PALETTE; help (F1): six entries.

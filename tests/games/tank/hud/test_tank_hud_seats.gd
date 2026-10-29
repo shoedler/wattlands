@@ -1,9 +1,10 @@
 extends GutTest
 ## The v3 seat panel (brief v3 "HUD", "Seat choice and switching"): every crew of 1-4 on every
 ## choice of seats (any seat empty) builds five cards in seat order with the empty ones dark; the
-## lock timer and the hint plate's states; the seat picker (left / right, swap on the Gun, confirm,
-## back, the idle close, no picker for Autopilot) and the seat intent it sends through
-## TankGame.local_intents; the rack pips and the Secondaries' rounds a minute, or "no target" while
+## trainer's switch to come ("ERG in 12 s", 0.3.1: no seat lock) and the hint plate's states; the
+## seat picker (left / right on every seat, the Gun too, confirm, back, the idle close, no picker for
+## Autopilot) and the seat intent it sends through TankGame.local_intents (swap cycles the Gun's
+## targets); the rack pips and the Secondaries' rounds a minute, or "no target" while
 ## their rider pedals at nothing; the ERG / SIM tags; my numbers per seat; the layout on 852 x 480,
 ## 960 x 540 and 1146 x 480 (nothing in the bottom-right 200 x 60, no plate over the tank band or my
 ## numbers); the fonts cover the panel's text; the belt feed's machine window.
@@ -12,12 +13,11 @@ const X := preload("res://tests/games/tank/hud/tank_hud_fixtures.gd")
 const D := preload("res://src/games/tank/hud/tank_hud_draw.gd")
 const CANVASES: Array[Vector2i] = [Vector2i(852, 480), Vector2i(960, 540), Vector2i(1146, 480)]
 const HINT_KEYS: Array[String] = [
-	"TANK_HUD_SEAT_LOCKED",
 	"TANK_HUD_SEAT_HINT",
-	"TANK_HUD_SEAT_HINT_SWAP",
 	"TANK_HUD_SEAT_PICK",
-	"TANK_HUD_SEAT_MOVING",
 	"TANK_HUD_SEAT_AUTO",
+	"TANK_HUD_MODE_IN",
+	"TANK_HUD_MODE_AT_END",
 ]
 
 
@@ -29,7 +29,6 @@ static func reseat(s: TankState, engines: Array) -> void:
 	for i in s.riders.size():
 		var r := s.riders[i]
 		r.engine = str(engines[i])
-		r.seat_target = ""
 		var st := s.station(r.engine)
 		st.slot = r.slot
 		st.peer = r.peer
@@ -108,44 +107,41 @@ func test_every_crew_on_any_seats_builds_five_cards_with_the_empty_ones_dark() -
 	assert_gte(px.b, px.r, "and cold")
 
 
-func test_the_lock_timer_and_the_hint_follow_the_seat_lock() -> void:
+## 0.3.1: no seat lock. The hint plate names the keys on every seat (the Gun too); your card shows
+## your trainer's switch to come, "ERG in 12 s" or "ERG at stage end".
+func test_the_hint_and_the_trainers_switch_to_come() -> void:
 	var s := X.state(2)
 	var g: TankGame = autofree(X.game(s, 1))
 	var p := _panel(g)
 	var r := s.rider(1)
 	r.autopilot = false
-	r.seat_lock_s = 42.3
+	r.mode_wait_s = 0.0
+	r.mode_to = ""
 	p.refresh()
-	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_LOCKED")
-	assert_eq(p.lock_text(42.3), "0:43", "the seconds left")
+	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_HINT")
+	assert_eq(TankHud.tx(g, "TANK_HUD_SEAT_HINT"), "< > seat  OK sit")
+	assert_eq(p.mode_text("", 0.0), "", "the trainer follows the seat")
+	r.mode_wait_s = 11.2
+	r.mode_to = Wl.ERG
+	p.refresh()
 	var mine_card: Dictionary = p.cards[0]
 	assert_true(bool(mine_card["local"]))
-	assert_almost_eq(float(mine_card["lock_s"]), 42.3, 1e-6)
-	r.seat_lock_s = 0.0
-	p.refresh()
-	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_HINT", "< > move  OK sit")
-	assert_eq(TankHud.tx(g, "TANK_HUD_SEAT_HINT"), "< > move  OK sit")
-	assert_eq(p.lock_text(0.0), "MOVE OK")
+	assert_eq([float(mine_card["wait_s"]), str(mine_card["mode_to"])], [11.2, Wl.ERG])
+	assert_eq(p.mode_text(Wl.ERG, 11.2), "ERG in 12 s")
+	assert_eq(p.mode_text(Wl.SIM, -1.0), "SIM at stage end")
+	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_HINT", "moving again is fine")
 	g.seat_picker.pick = TankIds.ENGINE_STEAM
 	p.refresh()
 	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_PICK")
 	g.seat_picker.close()
-	r.seat_target = TankIds.ENGINE_ARC
-	p.refresh()
-	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_MOVING")
-	assert_eq(int(p.cards[3]["incoming"]), r.slot, "the target card shows the mover")
-	r.seat_target = ""
 	r.autopilot = true
 	p.refresh()
 	assert_eq(TankHudSeats.hint_key(p.me), "TANK_HUD_SEAT_AUTO", "Autopilot: no picker")
 	var gun := s.rider(2)
 	gun.autopilot = false
-	gun.seat_lock_s = 0.0
 	var pg := _panel(autofree(X.game(s, 2)))
 	pg.refresh()
-	assert_eq(
-		TankHudSeats.hint_key(pg.me), "TANK_HUD_SEAT_HINT_SWAP", "the Gun keeps < > for targets"
-	)
+	assert_eq(TankHudSeats.hint_key(pg.me), "TANK_HUD_SEAT_HINT", "the Gun's < > move seats too")
 	var spectator := _panel(autofree(X.game(s, 99)))
 	spectator.refresh()
 	assert_eq(spectator.me, {})
@@ -156,7 +152,6 @@ func test_the_picker_picks_empty_seats_and_confirm_sends_the_seat_intent() -> vo
 	var s := X.state(2)
 	var r := s.rider(1)
 	r.autopilot = false
-	r.seat_lock_s = 0.0
 	var pk := TankHudSeatPicker.new()
 	var right: Array[StringName] = [&"right"]
 	var left: Array[StringName] = [&"left"]
@@ -188,25 +183,20 @@ func test_the_picker_picks_empty_seats_and_confirm_sends_the_seat_intent() -> vo
 	for i in roundi(TankHudSeatPicker.IDLE_S / TankHudSeatPicker.DT):
 		pk.feed(s, r, none)
 	assert_false(pk.is_open(), "closed after %.0f s without a key" % TankHudSeatPicker.IDLE_S)
-	# a seat another rider is moving into is not offered
-	s.rider(2).seat_target = TankIds.ENGINE_STEAM
-	assert_false(TankHudSeatPicker.empty_seats(s, r).has(TankIds.ENGINE_STEAM))
-	s.rider(2).seat_target = ""
-	# only while the lock is open, never for Autopilot, never with a move pending
-	r.seat_lock_s = 5.0
-	out = pk.feed(s, r, right)
-	assert_false(pk.is_open())
-	assert_eq(out["taken"], [], "a locked rider's keys go to their seat")
-	r.seat_lock_s = 0.0
+	# no seat lock (0.3.1): a trainer switch waiting changes nothing; never for Autopilot
+	r.mode_wait_s = 20.0
+	r.mode_to = Wl.ERG
+	pk.feed(s, r, right)
+	assert_true(pk.is_open(), "a waiting trainer switch never closes the picker")
+	pk.close()
 	r.autopilot = true
 	pk.feed(s, r, right)
 	assert_false(pk.is_open(), "no picker for Autopilot")
-	r.autopilot = false
-	r.seat_target = TankIds.ENGINE_ARC
-	pk.feed(s, r, right)
-	assert_false(pk.is_open(), "a move is pending")
 
 
+## Bug report (0.3.0): on the Gun the arrows cycled targets, so a gunner could not move seats with
+## them. 0.3.1: the arrows open the picker on every seat, the Gun too; swap (R / LB) cycles targets;
+## up / down still lay the gun; confirm sits while the picker is open and fires otherwise.
 func test_the_module_sends_the_seat_intent_and_drops_the_keys_it_took() -> void:
 	var s := X.state(2)
 	for e in s.enemies:
@@ -220,21 +210,22 @@ func test_the_module_sends_the_seat_intent_and_drops_the_keys_it_took() -> void:
 	assert_eq(g.local_intents(right, no), [], "right opens the picker")
 	assert_eq(g.seat_picker.pick, TankIds.ENGINE_STEAM)
 	assert_eq(g.local_intents(ok, no), [TankIntents.seat(TankIds.ENGINE_STEAM)])
-	# the Gun: left / right still cycle targets, swap opens the picker, confirm sits (no fire)
 	var gun := s.rider(2)
 	gun.autopilot = false
-	gun.seat_lock_s = 0.0
 	var gg: TankGame = autofree(X.game(s, 2))
 	var left: Array[StringName] = [&"left"]
-	assert_eq(gg.local_intents(left, no), [TankIntents.target(TankIds.TARGET_PREV)])
-	assert_false(gg.seat_picker.is_open())
-	var swap: Array[StringName] = [&"swap"]
-	gg.local_intents(swap, no)
+	assert_eq(gg.local_intents(left, no), [], "the Gun's left opens the picker")
 	assert_true(gg.seat_picker.is_open())
 	var sit := gg.local_intents(ok, no)
-	assert_eq(sit, [TankIntents.seat(TankIds.ENGINE_STEAM)], "a sit, never a shot")
-	gun.seat_lock_s = 20.0
-	assert_eq(gg.local_intents(ok, no), [TankIntents.make(TankIds.INTENT_FIRE)], "locked: fire")
+	assert_eq(sit, [TankIntents.seat(TankIds.ENGINE_FEED)], "a sit, never a shot")
+	assert_eq(gg.local_intents(ok, no), [TankIntents.make(TankIds.INTENT_FIRE)], "closed: fire")
+	var swap: Array[StringName] = [&"swap"]
+	assert_eq(
+		gg.local_intents(swap, no), [TankIntents.target(TankIds.TARGET_NEXT)], "swap: targets"
+	)
+	var up: Array[StringName] = [&"up"]
+	assert_eq(gg.local_intents(up, no), [TankIntents.aim(TankIds.AIM_UP)], "up still lays the gun")
+	assert_false(gg.seat_picker.is_open())
 
 
 func test_the_rack_pips_and_the_secondaries_rate_come_from_the_state() -> void:
@@ -377,7 +368,7 @@ func test_the_fonts_cover_the_seat_panels_text() -> void:
 	for ch in TankHudFont.chars():
 		have[ch] = true
 	var keys: Array[String] = HINT_KEYS.duplicate()
-	keys.append_array(["TANK_HUD_SEAT_EMPTY", "TANK_HUD_SEAT_MOVE_OK", "TANK_HUD_SPRINT"])
+	keys.append_array(["TANK_HUD_SEAT_EMPTY", "TANK_HUD_SPRINT"])
 	keys.append_array(["TANK_HUD_DO_BUILD", "TANK_HUD_DO_OVER", "TANK_HUD_DO_FEED"])
 	keys.append("TANK_HUD_DO_FEED_IDLE")
 	keys.append_array(["TANK_HUD_PER_MIN", "TANK_HELP_SEATS", "TANK_HELP_SEAT_LOCK"])

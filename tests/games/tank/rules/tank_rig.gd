@@ -47,13 +47,13 @@ var no_fire: bool = false
 ## barricade down: tests of enemies and obstacles on their own.
 var no_bow: bool = false
 ## (v3) Automatic seating as the Autopilot plays it (TankAutopilot.seat_intent for every rider,
-## once a second), with the moves landing like the director lands them: at once while the open
-## segment is past its min_s (a split; the rider's phase index moves on, so its seat lock restarts),
-## else at the next segment. The rig's plans are one phase per segment, so a landed move gives the
-## rider the new seat's plan for the whole mission (only the current and later segments matter).
+## once a second). 0.3.1: the moves land at once (TankSeats) and the rig's plans follow the seat at
+## once too (the director's 30 s ERG <-> SIM spacing is not modelled here: TankSeatPlan tests it).
+## The rig's plans are one phase per segment, so a move gives the rider the new seat's plan for the
+## whole mission (only the current and later segments matter).
 var auto_seat: bool = false
-## peer -> splits so far (the rig's phase index for a rider is seg_index + 1000 x splits; with
-## auto_seat the rules get no plan to judge moves by, the rig lands them itself).
+## peer -> plan follows so far (the rig's phase index for a rider is seg_index + 1000 x splits;
+## with auto_seat the rules get no plan, the rig follows the seats itself).
 var splits: Dictionary = {}
 ## Seconds each segment ran when auto_phase moved on (index -> seconds).
 var seg_len: Dictionary = {}
@@ -137,7 +137,7 @@ func step() -> Array[Dictionary]:
 		_auto_seat_intents()
 	var out := TankRules.step(state, inputs(), Wl.SIM_DT)
 	if auto_seat:
-		_land_moves()
+		_follow_seats()
 	tick += 1
 	seg_t += Wl.SIM_DT
 	plan_t += Wl.SIM_DT
@@ -156,15 +156,14 @@ func _auto_seat_intents() -> void:
 			send(r.peer, n)
 
 
-## Lands every pending move the way the director would (see auto_seat).
-func _land_moves() -> void:
+## The plans follow every rider's seat at once (see auto_seat).
+func _follow_seats() -> void:
+	if in_cooldown():
+		return
 	for r in state.riders:
-		if r.seat_target == "" or in_cooldown():
-			continue
-		var s := content.segment(seg_index)
-		var open := s.has("min_s")
-		if open and seg_t + 1e-6 >= float(s["min_s"]) and seg_t < float(s["max_s"]) - 1.0:
-			seat(r.peer, r.seat_target)
+		var plan: EffortPlan = plans[r.peer]
+		if str(plan.phase(seg_index).meta.get("engine", "")) != r.engine:
+			seat(r.peer, r.engine)
 			splits[r.peer] = int(splits.get(r.peer, 0)) + 1
 
 
@@ -182,10 +181,6 @@ func _advance_phase() -> void:
 	elif seg_t + 1e-6 >= float(s.get("duration_s", 0.0)):
 		by = Wl.ENDED_DURATION
 	if by != "":
-		if auto_seat:
-			for r in state.riders:
-				if r.seat_target != "":
-					seat(r.peer, r.seat_target)
 		seg_len[seg_index] = seg_t
 		ended_by[seg_index] = by
 		seg_index += 1
@@ -371,7 +366,7 @@ func set_rack(n: int, type: int = TankIds.SHELL_HEAVY) -> void:
 
 
 ## Puts the rider of `peer` on `engine` right away (the seat's plan for every segment, as if it had
-## started there; v3): the rig's plans and the stations follow on the next step.
+## started there; v3): the seat lands at once (0.3.1) and the rig's plan follows.
 func seat(peer: int, engine: String) -> void:
 	for p in slots:
 		if p.peer_id == peer:
@@ -379,6 +374,9 @@ func seat(peer: int, engine: String) -> void:
 			for i in segs().size():
 				plan.add(TankPlanBuilder.phase_for(content, segs()[i], engine, i))
 			plans[peer] = plan
+	var r := rider(peer)
+	if r != null and r.engine != engine and state.station(engine) != null:
+		TankSeats.land(state, r, engine, events)
 
 
 ## Plays the whole mission with auto_phase until every rider is in the cool-down (and `extra_s`

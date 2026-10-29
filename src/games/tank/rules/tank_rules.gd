@@ -4,7 +4,7 @@ extends RefCounted
 ## arguments and draws randomness only from state.rng (ctx.rng). Owner: rules.
 ##
 ## One tick, in this order: follow the group's phase and set a new segment up (TankSegments), seat
-## the riders (TankSeats: moves land, the seat lock, seat intents), read the riders (who can evade,
+## the riders (TankSeats: seat intents, moves land at once), read the riders (who can evade,
 ## who sprints), spawn the Advance's encounters, drive (TankDrive: speed model, obstacles), move the
 ## enemies and the Behemoth (its telegraph and main gun through TankEvade), rebuild the target
 ## list, run the seats' machines (TankStations: the Gun's bank, the Loader's rack, the Lights), the
@@ -77,7 +77,20 @@ static func in_band(state: TankState, r: TankRiderInput, station: TankStationSta
 		return false
 	if kind == Wl.WARMUP or kind == Wl.RECOVERY:
 		return r.cadence_rpm >= c.num("tanks", "in_band.recovery_cadence_rpm", 60.0)
-	if r.mode == Wl.ERG:
+	# 0.3.1: while the rider's trainer still rides another seat's mode (its switch waits, BRIEF 4.5),
+	# the seat works from the rider's power against its own band: an ERG seat at 95% of its planned
+	# target (the unverified factor included), a SIM seat by the SIM rules below.
+	var seat_mode := TankSeats.seat_mode(state, station.engine)
+	if seat_mode != "" and r.phase_mode != "" and seat_mode != r.phase_mode:
+		if seat_mode == Wl.ERG:
+			var pct := TankSeatPlan.seat_target_pct(c, state.seg.segment_index, station.engine)
+			var want_w := pct / 100.0 * r.ftp * (1.0 if r.ftp_verified else 0.85)
+			return (
+				want_w > 0.0
+				and r.power_w >= c.num("tanks", "in_band.erg_power_frac", 0.95) * want_w
+				and r.cadence_rpm >= c.num("tanks", "in_band.erg_cadence_rpm", 60.0)
+			)
+	elif r.mode == Wl.ERG:
 		return (
 			r.applied_target_w > 0.0
 			and r.power_w >= c.num("tanks", "in_band.erg_power_frac", 0.95) * r.applied_target_w
