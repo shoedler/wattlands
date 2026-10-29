@@ -12,7 +12,7 @@
 //      it does not know and no int travelled as a float or a string;
 //   2. the drill's wave plays in order on the host and on the client that stayed: exactly one
 //      wave_start (ph 1, n 1, role wave, waves 1) and one wave_end (ph 1, n 1), the start first;
-//      combat events (kill, leak, breach, gate_restored, roads, push, rush) only between them (a
+//      combat events (push, dock, shot, kill, leak, breach, gate_restored, rush) only between them (a
 //      gate_restored may follow wave_end when a Breach was still running: the 10 s clock ends
 //      after the wave, in the cool-down);
 //   3. the host and the unrestarted client hold the same Siege events in the same order, and the
@@ -21,7 +21,7 @@
 //      recorder keeps no `finished` event, so the peer's own exit_reason "complete" counts too);
 //   5. Overdrive events are well formed (each start closed before the next one, per slot) and, in
 //      the drill (a WARMUP-kind wave: no Overdrive), there are none and no Siege directive was
-//      requested; no shield wall appears in the drill's Raiders-and-Horsemen mix;
+//      requested; no shield bearer appears in the drill's spearmen-and-chariots mix;
 //   6. when fit_check's JSON is in the report, every FIT has the drill's 3 laps.
 // Zero dependencies besides tools/e2e/lib/checks.mjs. Exit 0 on pass, 1 on a failed check, 2 on
 // usage or I/O errors.
@@ -37,28 +37,29 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 
 /** Siege's event types (SiegeIds.EVENT_TYPES). */
 export const EVENT_TYPES = [
-  'wave_start', 'wave_end', 'roads', 'push', 'rush', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'route', 'overdrive',
+  'wave_start', 'wave_end', 'rush', 'push', 'dock', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'route', 'overdrive',
 ];
 /** Declared int fields per type (SiegeEvents.INT_FIELDS; "name[]" is an array of ints). */
 export const INT_FIELDS = {
-  wave_start: ['ph', 'n', 'waves', 'b', 'roads[]'],
+  wave_start: ['ph', 'n', 'waves', 'b'],
   wave_end: ['ph', 'n', 'hp', 'max', 'leaks'],
-  roads: ['roads[]', 'in_ms'],
-  push: ['roads[]'],
   rush: ['on', 'i'],
-  kill: ['id', 'et', 'pad', 'road', 'x2'],
-  leak: ['id', 'et', 'road', 'dmg'],
+  push: ['id', 'et', 'prog_dm'],
+  dock: ['id'],
+  shot: ['tk', 'src', 'kind', 'o[]', 'v[]', 'n', 'sd'],
+  kill: ['id', 'et', 'src', 'x2'],
+  leak: ['id', 'et', 'dmg'],
   breach: ['n'],
   gate_restored: ['hp'],
-  buy: ['slot', 'pad', 'ok', 'lvl'],
+  buy: ['slot', 'station', 'pad', 'ok', 'lvl'],
   route: ['slot', 'to'],
   overdrive: ['slot', 'st', 'scored'],
 };
 export const STRING_FIELDS = { wave_start: ['role'], buy: ['item', 'why'], overdrive: ['why'] };
-export const ITEMS = ['build_ballista', 'build_scorpion', 'build_caltrop', 'upgrade', 'generator', 'iron_bands', 'repair', 'reserve_flywheel', 'aqueduct_drive'];
-export const BUY_REASONS = ['closed', 'funds', 'pad_taken', 'no_tower', 'max_level', 'limit', 'gate_full'];
-export const COMBAT_TYPES = new Set(['kill', 'leak', 'breach', 'gate_restored', 'roads', 'push', 'rush']);
-export const ENEMY_SHIELD_WALL = 2;
+export const ITEMS = ['upgrade', 'mine', 'scorpion', 'pad_upgrade', 'iron_bands', 'repair', 'reserve_flywheel', 'aqueduct_drive', 'spare_cauldron'];
+export const BUY_REASONS = ['closed', 'funds', 'pad_taken', 'no_pad', 'no_station', 'max_level', 'limit', 'gate_full'];
+export const COMBAT_TYPES = new Set(['push', 'dock', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'rush']);
+export const ENEMY_SHIELD = 2;
 export const DRILL = { ph: 1, n: 1, waves: 1, laps: 3 };
 const ROLES = ['host', 'client1', 'client2'];
 
@@ -95,38 +96,37 @@ export function eventErrors(e) {
   const inRange = (name, v, lo, hi) => {
     if (v < lo || v > hi) errs.push(`${type}: ${name} ${v} outside ${lo}..${hi}`);
   };
-  const roadsOk = (roads) => roads.forEach((r) => inRange('road', r, 0, 2));
+  const src = (v) => (v >= 1 && v <= 3) || (v >= 11 && v <= 14);
   switch (type) {
     case 'wave_start':
       inRange('ph', e.ph, 0, 99);
       inRange('n', e.n, 0, 10);
       inRange('b', e.b, 0, 1e6);
-      roadsOk(e.roads);
-      if (e.roads.length < 1 || e.roads.length > 3) errs.push(`wave_start: ${e.roads.length} active roads`);
       break;
     case 'wave_end':
       inRange('hp', e.hp, 0, e.max);
       inRange('leaks', e.leaks, 0, 1e6);
       break;
-    case 'roads':
-      roadsOk(e.roads);
-      inRange('in_ms', e.in_ms, 0, 10000);
-      break;
-    case 'push':
-      roadsOk(e.roads);
-      break;
     case 'rush':
       inRange('on', e.on, 0, 1);
       break;
+    case 'push':
+      inRange('et', e.et, 4, 5);
+      inRange('prog_dm', e.prog_dm, 0, 4000);
+      break;
+    case 'shot':
+      if (!src(e.src)) errs.push(`shot: src ${e.src} is not a station 1..3 or a pad 11..14`);
+      inRange('kind', e.kind, 0, 3);
+      inRange('n', e.n, 1, 12);
+      if (e.o.length !== 3 || e.v.length !== 3) errs.push('shot: o and v need 3 numbers');
+      break;
     case 'kill':
-      inRange('et', e.et, 1, 4);
-      inRange('pad', e.pad, 0, 8);
-      inRange('road', e.road, 0, 2);
+      inRange('et', e.et, 1, 5);
+      if (e.src !== 0 && !src(e.src)) errs.push(`kill: src ${e.src} is not a station or a pad`);
       inRange('x2', e.x2, 0, 1);
       break;
     case 'leak':
-      inRange('et', e.et, 1, 4);
-      inRange('road', e.road, 0, 2);
+      inRange('et', e.et, 1, 5);
       inRange('dmg', e.dmg, 0, 1000);
       break;
     case 'breach':
@@ -142,11 +142,12 @@ export function eventErrors(e) {
       if (e.ok === 1 && e.why !== '') errs.push(`buy: ok with a refusal reason "${e.why}"`);
       if (e.ok === 0 && !BUY_REASONS.includes(e.why)) errs.push(`buy: refused with unknown reason "${e.why}"`);
       if (e.ok === 0 && e.lvl !== 0) errs.push(`buy: a refused buy has lvl ${e.lvl}`);
-      inRange('pad', e.pad, 0, 8);
+      inRange('station', e.station, 0, 4);
+      inRange('pad', e.pad, 0, 4);
       break;
     case 'route':
       inRange('slot', e.slot, 0, 7);
-      inRange('to', e.to, 0, 8);
+      inRange('to', e.to, 0, 4);
       break;
     case 'overdrive':
       inRange('slot', e.slot, 0, 7);
@@ -306,11 +307,11 @@ export function checkReport(report) {
     if (x !== undefined && x !== 'complete') err(role, `exit_reason ${JSON.stringify(x)}, wanted "complete"`);
   }
 
-  // 5. the drill has no Overdrive and no Siege directive, and no shield wall.
+  // 5. the drill has no Overdrive and no Siege directive, and no shield bearer.
   if (drill) {
     for (const role of roles) {
       if (logs[role].siege.some((e) => e.type === 'overdrive')) err(role, 'an overdrive event in the drill (a WARMUP wave allows none)');
-      if (logs[role].siege.some((e) => (e.type === 'kill' || e.type === 'leak') && e.et === ENEMY_SHIELD_WALL)) err(role, 'a shield wall in the drill (Raiders and Horsemen only)');
+      if (logs[role].siege.some((e) => (e.type === 'kill' || e.type === 'leak') && e.et === ENEMY_SHIELD)) err(role, 'a shield bearer in the drill (spearmen and chariots only)');
     }
     const od = (report.directives ?? []).filter((d) => d?.requested?.source === 'siege' || d?.requested?.reason === 'overdrive');
     if (od.length) errors.push(`${od.length} Siege directives in the drill (it sends none)`);

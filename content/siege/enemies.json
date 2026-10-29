@@ -2,7 +2,7 @@
   "spear": {"code": 1, "hp": 20, "armour": 0, "speed_mps": 1.8, "gate_hp": 2, "bounty": 1, "threat": 1, "body_r_m": 0.0, "body_h_m": 1.8, "ranks": [4, 3], "spacing_m": 1.2},
   "shield": {"code": 2, "hp": 40, "armour": 6, "speed_mps": 1.2, "gate_hp": 6, "bounty": 3, "threat": 3, "body_r_m": 0.0, "body_h_m": 1.8, "ranks": [3, 2], "spacing_m": 1.2},
   "chariot": {"code": 3, "hp": 60, "armour": 2, "speed_mps": 6.0, "gate_hp": 4, "bounty": 3, "threat": 3, "body_r_m": 1.0, "body_h_m": 1.8, "ranks": [1, 2], "spacing_m": 6.0, "speed_var": 0.3, "redraw_s": [3, 6], "accel_mps2": 2.0},
-  "ram": {"code": 4, "hp": 600, "armour": 6, "speed_mps": 0.8, "gate_hp_per_s": 3, "bounty": 15, "threat": 20, "body_r_m": 2.0, "body_h_m": 3.0, "crew": 6, "crew_type": "spear"},
+  "ram": {"code": 4, "hp": 780, "armour": 6, "speed_mps": 0.8, "gate_hp_per_s": 3.9, "bounty": 15, "threat": 20, "body_r_m": 2.0, "body_h_m": 3.0, "crew": 6, "crew_type": "spear"},
   "tower": {"code": 5, "hp": 1800, "armour": 6, "speed_mps": 0.5, "bounty": 60, "threat": 60, "body_r_m": 3.0, "body_h_m": 12.0},
   "lateral_m": 1.8,
   "cap": 150,

@@ -156,7 +156,7 @@ func test_enemy_table_is_the_brief_s() -> void:
 		SiegeIds.ENEMY_SPEAR: [20, 0, 1.8, 1, 1],
 		SiegeIds.ENEMY_SHIELD: [40, 6, 1.2, 3, 3],
 		SiegeIds.ENEMY_CHARIOT: [60, 2, 6.0, 3, 3],
-		SiegeIds.ENEMY_RAM: [600, 6, 0.8, 15, 20],
+		SiegeIds.ENEMY_RAM: [780, 6, 0.8, 15, 20],
 		SiegeIds.ENEMY_TOWER: [1800, 6, 0.5, 60, 60],
 	}
 	for code: int in want:
@@ -170,7 +170,7 @@ func test_enemy_table_is_the_brief_s() -> void:
 	assert_eq(float(c.enemy_def(SiegeIds.ENEMY_SPEAR)["gate_hp"]), 2.0)
 	assert_eq(float(c.enemy_def(SiegeIds.ENEMY_SHIELD)["gate_hp"]), 6.0)
 	assert_eq(float(c.enemy_def(SiegeIds.ENEMY_CHARIOT)["gate_hp"]), 4.0)
-	assert_eq(float(c.enemy_def(SiegeIds.ENEMY_RAM)["gate_hp_per_s"]), 3.0)
+	assert_eq(float(c.enemy_def(SiegeIds.ENEMY_RAM)["gate_hp_per_s"]), 3.9)
 	assert_eq(int(c.enemy_def(SiegeIds.ENEMY_RAM)["crew"]), 6)
 	assert_eq(float(c.enemies["lateral_m"]), 1.8)
 	assert_eq(int(c.enemies["cap"]), 150)
@@ -213,7 +213,7 @@ func test_wave_numbers_are_the_brief_s() -> void:
 	var w := F.content().waves
 	assert_eq(w["group_every_s"], [6.0, 12.0])
 	assert_eq(float(w["stop_before_end_s"]), 60.0)
-	assert_eq(float(w["staging"]["reach_before_end_s"]), 30.0)
+	assert_eq(float(w["staging"]["reach_before_end_s"]), 21.0)
 	assert_eq(float(w["engines"]["push_lead_s"]), 60.0)
 	assert_eq(float(w["engines"]["pair_gap_m"]), 25.0)
 	assert_eq(float(w["engines"]["escort_threat_per_slot"]), 10.0)
@@ -224,6 +224,31 @@ func test_wave_numbers_are_the_brief_s() -> void:
 	assert_eq(w["mix"]["standard"], [[0.7, 0.1, 0.2], [0.5, 0.25, 0.25], [0.4, 0.3, 0.3]])
 	for row: Array in w["mix"]["raiders_horsemen"]:
 		assert_eq(float(row[1]), 0.0, "spearmen and chariots only")
+
+
+## Brief 2.4: numbers are starting values the sims tune within +-30% (more needs an ADR).
+func _within_30_percent(have: float, brief: float, what: String) -> void:
+	assert_between(
+		have,
+		brief * 0.7 - 1e-9,
+		brief * 1.3 + 1e-9,
+		"%s %s vs the brief's %s" % [what, have, brief]
+	)
+
+
+func test_tuned_numbers_stay_within_30_percent_of_the_brief() -> void:
+	var c := F.content()
+	# docs/decisions/siege.md "v2 tuning": the ram +30% HP and battering, the staging margin -30%.
+	_within_30_percent(float(c.enemy_def(SiegeIds.ENEMY_RAM)["hp"]), 600.0, "ram hp")
+	_within_30_percent(float(c.enemy_def(SiegeIds.ENEMY_RAM)["gate_hp_per_s"]), 3.0, "ram HP/s")
+	_within_30_percent(float(c.waves["staging"]["reach_before_end_s"]), 30.0, "staging margin")
+	for code in range(1, 6):
+		var hp := {1: 20.0, 2: 40.0, 3: 60.0, 4: 600.0, 5: 1800.0}
+		_within_30_percent(float(c.enemy_def(code)["hp"]), float(hp[code]), "hp %d" % code)
+	_within_30_percent(c.num("gate.hp"), 130.0, "gate")
+	_within_30_percent(c.st_num("stations.onager.wind_s"), 7.0, "onager wind")
+	_within_30_percent(c.st_num("stations.ballista.wind_s"), 5.0, "ballista wind")
+	_within_30_percent(c.st_num("stations.arrows.rack_s"), 1.5, "rack reload")
 
 
 func test_the_overdrive_block_is_fixed_at_30_s() -> void:

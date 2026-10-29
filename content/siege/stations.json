@@ -12,7 +12,7 @@
       "aim": "angle", "speed_mps": 70, "k": 0.0004, "spread_deg": 0.3, "speed_spread": 0.005,
       "aim_dz_m": 0.9, "damage": 120, "hit_r_m": 0.6, "keep_infantry": 0.75, "keep_engine": 0.3,
       "stop_below": 10, "special": "iron_head",
-      "prefer": {"spear": 1, "shield": 2, "chariot": 1, "ram": 4, "tower": 4}
+      "prefer": {"spear": 1, "shield": 2, "chariot": 0.5, "ram": 4, "tower": 4}
     },
     "onager": {
       "id": 2, "cap": 2, "kind": "stone", "wind_s": 7.0, "range_m": [30, 100], "slew_dps": 4,

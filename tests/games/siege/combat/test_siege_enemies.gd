@@ -131,14 +131,15 @@ func test_leaks_in_the_warm_up_are_not_counted_for_results() -> void:
 	assert_eq(_s.wave.leaks, 1)
 
 
-func test_a_ram_batters_3_hp_a_second_with_one_leak_per_hp() -> void:
+func test_a_ram_batters_its_rate_with_one_leak_per_hp() -> void:
 	var ram := SiegeKit.enemy(_s, SiegeIds.ENEMY_RAM, _s.path.length_m - 0.02)
 	_run(0.05)
 	assert_eq(ram.st, SiegeIds.EN_BATTER)
 	assert_true(ram.reached)
+	var rate := float(_s.content.enemy_def(SiegeIds.ENEMY_RAM)["gate_hp_per_s"])
 	var ev := _run(10.0)
-	assert_almost_eq(_s.gate_hp, 100.0, 0.2)
-	assert_eq(SiegeKit.of_type(ev, SiegeIds.EV_LEAK).size(), 30)
+	assert_almost_eq(_s.gate_hp, 130.0 - 10.0 * rate, 0.2)
+	assert_eq(SiegeKit.of_type(ev, SiegeIds.EV_LEAK).size(), floori(10.0 * rate + 1e-6))
 	assert_eq(ram.speed_mps, 0.0)
 
 

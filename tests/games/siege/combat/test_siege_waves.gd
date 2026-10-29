@@ -123,23 +123,29 @@ func test_an_empty_row_draws_nothing() -> void:
 # --- staging -------------------------------------------------------------------------------------
 
 
+func _margin() -> float:
+	return float(_s.content.waves["staging"]["reach_before_end_s"])
+
+
+## The last wave second a spearman can still leave staging ground `i` for a 300 s wave.
+func _last(i: int) -> float:
+	return 300.0 - _margin() - (_s.path.length_m - _s.path.staging[i]) / 1.8
+
+
 func test_spearmen_enter_at_the_furthest_staging_ground_that_still_reaches() -> void:
 	var tb := SiegeKit.table(_s)
 	var st := _s.path.staging
-	# 1.8 m/s; the gate 30 s before the end of a 300 s wave: by 270 s.
-	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 0.0, 300.0), st[0], "the camp")
-	assert_eq(
-		SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 60.0, 300.0), st[1], "the grove"
-	)
-	assert_eq(
-		SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 140.0, 300.0), st[2], "the wadi"
-	)
-	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 200.0, 300.0), -1.0, "none")
+	var at := func(t: float) -> float:
+		return SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, t, 300.0)
+	assert_eq(float(at.call(0.0)), st[0], "the camp")
+	assert_eq(float(at.call(_last(0) + 1.0)), st[1], "the grove")
+	assert_eq(float(at.call(_last(1) + 1.0)), st[2], "the wadi")
+	assert_eq(float(at.call(_last(2) + 1.0)), -1.0, "none")
 
 
 func test_the_camp_works_exactly_until_its_last_moment() -> void:
 	var tb := SiegeKit.table(_s)
-	var last := 270.0 - _s.path.length_m / 1.8
+	var last := _last(0)
 	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, last - 0.01, 300.0), 0.0)
 	assert_ne(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, last + 0.01, 300.0), 0.0)
 
@@ -330,7 +336,7 @@ func test_an_engine_spawns_with_a_push_event_and_its_escort() -> void:
 	var ram := rig.state.enemy(int(pushes[0]["id"]))
 	assert_not_null(ram)
 	assert_eq(ram.type, SiegeIds.ENEMY_RAM)
-	assert_eq(ram.hp, 300.0)
+	assert_eq(ram.hp, 0.5 * float(rig.content.enemy_def(SiegeIds.ENEMY_RAM)["hp"]), "half HP")
 	assert_eq(rig.state.engines_total, 1)
 	rig.enter(2)
 	ev = rig.run(0.1)
