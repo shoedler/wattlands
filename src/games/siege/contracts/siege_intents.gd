@@ -1,18 +1,21 @@
 class_name SiegeIntents
 extends RefCounted
-## The intent schema (brief 2.6) and its validator (G0 contract). Clients send intents in
+## The intent schema (brief 2.6) and its validator. Clients send intents in
 ## Telemetry.intents at 5 Hz; the platform never converts their numbers, so the host runs every
 ## intent through normalize() (ints with int(), junk rejected) and SiegeIntentLimiter (5 a
 ## second per peer) before the rules see it.
 ##
 ## Wire forms (what local_intents() and the shop panel send):
-##   {"k": "route", "to": "gen" | 1..8 | "next" | "prev" | "hot", "via"?: String}
-##   {"k": "buy", "item": <SiegeIds.ITEMS>, "pad": 1..8 (build_* and upgrade only), "auto"?: 1,
-##    "via"?: String}  -- "auto": 1 when the PedalScanList auto-confirmed it (item_picked via "auto")
+##   {"k": "route", "to": "mine" | 0..4 | "next" | "prev" | "hot", "via"?: String}  ("gen" is
+##    accepted as "mine")
+##   {"k": "buy", "item": <SiegeIds.ITEMS>, "station": 1..4 (upgrade only), "pad": 1..4
+##    (scorpion and pad_upgrade only), "auto"?: 1, "via"?: String}  -- "auto": 1 when the
+##    PedalScanList auto-confirmed it (item_picked via "auto")
 ##   {"k": "overdrive", "via": "action" | "surge" | "button"}  -- ability_1, a surge, the HUD button
 ## Normalized form (what SiegeRiderInput.intents holds):
-##   {"k": String, "to": int (route: TARGET_GEN, a pad, ROUTE_NEXT / PREV / HOT; else 0),
-##    "item": String ("" unless buy), "pad": int (0 unless a pad item), "auto": bool, "via": String}
+##   {"k": String, "to": int (route: a station 0..4, ROUTE_NEXT / PREV / HOT; else 0),
+##    "item": String ("" unless buy), "station": int (0 unless a station item), "pad": int (0
+##    unless a pad item), "auto": bool, "via": String}
 ## `auto` is true for "auto": 1 (any non-zero number or true) or "via": "auto". Auto intents
 ## never end a zero-input fallback and never start Overdrive.
 
@@ -36,13 +39,13 @@ static func normalize(raw: Variant) -> Dictionary:
 	var auto := via == SiegeIds.VIA_AUTO or _truthy(d.get("auto", 0))
 	if auto:
 		via = SiegeIds.VIA_AUTO
-	var out := {"k": k, "to": 0, "item": "", "pad": 0, "auto": auto, "via": via}
+	var out := {"k": k, "to": 0, "item": "", "station": 0, "pad": 0, "auto": auto, "via": via}
 	match str(k):
 		SiegeIds.INTENT_ROUTE:
 			var to: Variant = d.get("to")
 			if to is String and SiegeIds.ROUTE_WORDS.has(to):
 				out["to"] = int(SiegeIds.ROUTE_WORDS[to])
-			elif _whole(to) and SiegeIds.is_pad(int(to)):
+			elif _whole(to) and SiegeIds.is_station(int(to)):
 				out["to"] = int(to)
 			else:
 				return {}
@@ -51,6 +54,11 @@ static func normalize(raw: Variant) -> Dictionary:
 			if not (item is String) or not SiegeIds.ITEMS.has(item):
 				return {}
 			out["item"] = item
+			if SiegeIds.STATION_ITEMS.has(item):
+				var st: Variant = d.get("station")
+				if not _whole(st) or not SiegeIds.UPGRADABLE.has(int(st)):
+					return {}
+				out["station"] = int(st)
 			if SiegeIds.PAD_ITEMS.has(item):
 				var pad: Variant = d.get("pad")
 				if not _whole(pad) or not SiegeIds.is_pad(int(pad)):
@@ -66,10 +74,13 @@ static func route(to: Variant, via: String = SiegeIds.VIA_ACTION) -> Dictionary:
 	return {"k": SiegeIds.INTENT_ROUTE, "to": to, "via": via}
 
 
-static func buy(item: String, pad: int = 0, auto: bool = false) -> Dictionary:
+## A buy intent; `at` is the station (upgrade) or the pad (scorpion, pad_upgrade), else unused.
+static func buy(item: String, at: int = 0, auto: bool = false) -> Dictionary:
 	var d := {"k": SiegeIds.INTENT_BUY, "item": item}
+	if SiegeIds.STATION_ITEMS.has(item):
+		d["station"] = at
 	if SiegeIds.PAD_ITEMS.has(item):
-		d["pad"] = pad
+		d["pad"] = at
 	if auto:
 		d["auto"] = 1
 	return d

@@ -1,27 +1,28 @@
 class_name SiegeContent
 extends RefCounted
 ## Every Siege content file, loaded and validated together (brief 2.4 "Every number below lives
-## in content/siege/*.json, validated at load"; BRIEF 6). G0 contract.
+## in content/siege/*.json, validated at load"; BRIEF 6).
 ##
 ## Files under content/siege/ (each validator below lists the fields it enforces; extra fields
-## are allowed, so builders may add tuning knobs and ask the lead to extend the validator):
+## are allowed as tuning knobs):
 ##   shifts.json    {<content id>: {map, label, total_s, phases: [{role, kind, target_pct,
 ##                  ramp_to_pct?, duration_s, rushes_at_s?, mix?}]}} (SiegePlanBuilder reads it)
-##   balance.json   economy, gate, shop prices, perks, Overdrive, rush, Autopilot, score, XP
-##   towers.json    {ballista|scorpion|caltrop: {code, cost, range_m, interval_s, damage, targets,
-##                  ...}, upgrades: [{level, cost, effect}], start: [{pad, type}]}
-##   enemies.json   {raiders|shield_wall|horsemen|ram: {code, hp, armor, speed_mps, bounty, threat,
-##                  gate_hp | gate_hp_per_s}, lateral_m, cap, retreat_s}
-##   waves.json     group cadence, mixes, ram push, road rotation, warm-up wave, rush
+##   balance.json   economy, the mine, gate, shop prices, perks, Overdrive, rush, Autopilot, score,
+##                  XP
+##   stations.json  the five stations (caps, winding, range bands, slew, projectiles and their
+##                  spread_deg / speed_spread, effects), the pads' Scorpion, upgrade costs
+##   enemies.json   {spear|shield|chariot|ram|tower: {code, hp, armour, speed_mps, bounty, threat,
+##                  body_r_m, body_h_m, gate_hp | gate_hp_per_s, ...}, lateral_m, cap, retreat_s}
+##   waves.json     group cadence, mixes, staging, siege engines, the warm-up wave, rushes
 ##   cosmetics.json {unlocks: [{id, xp, kind}]} ascending xp
-##   maps/<id>.json SiegeMap.validate()
+##   maps/<id>.json SiegePath.validate()
 ## Load in the module with load_for(ctx) (through ctx.load_content_json, so run_game_sim
 ## --override reaches every file); tests and the headless sim use read_files() + from_dicts().
 
 const FILES := {
 	"shifts": "shifts.json",
 	"balance": "balance.json",
-	"towers": "towers.json",
+	"stations": "stations.json",
 	"enemies": "enemies.json",
 	"waves": "waves.json",
 	"cosmetics": "cosmetics.json",
@@ -33,18 +34,18 @@ const MAX_PCT := 117.0
 
 ## Paths -> kind for balance.json: "num" any number, "pos" > 0, "nonneg" >= 0, "obj", "arr".
 const BALANCE_SPEC := {
-	"start_denarii": "nonneg",
+	"start_gold": "nonneg",
 	"reconnect_s": "nonneg",
-	"tower_ref_w": "pos",
+	"ref_w": "pos",
 	"m_cap": "pos",
 	"bounty_scale": "nonneg",
 	"c_budget": "nonneg",
 	"budget_ref_w": "pos",
 	"unverified_factor": "pos",
 	"wkg_min_power_w": "nonneg",
-	"generator.denarii_per_kj": "pos",
-	"generator.level_bonus": "nonneg",
-	"generator.level_costs": "arr",
+	"mine.gold_per_kj": "pos",
+	"mine.level_bonus": "nonneg",
+	"mine.level_costs": "arr",
 	"gate.hp": "pos",
 	"gate.iron_bands_hp": "nonneg",
 	"gate.iron_bands_max": "nonneg",
@@ -57,6 +58,7 @@ const BALANCE_SPEC := {
 	"shop.repair": "nonneg",
 	"shop.reserve_flywheel": "nonneg",
 	"shop.aqueduct_drive": "nonneg",
+	"shop.spare_cauldron": "nonneg",
 	"shop.countdown_s": "nonneg",
 	"perks.reserve_hold_s": "nonneg",
 	"perks.aqueduct_m": "nonneg",
@@ -77,6 +79,13 @@ const BALANCE_SPEC := {
 	"autopilot.shop_max": "nonneg",
 	"autopilot.shop_at_s": "arr",
 	"autopilot.repair_below_frac": "nonneg",
+	"autopilot.look_ahead_s": "pos",
+	"autopilot.mine_score": "nonneg",
+	"autopilot.tar_min_frac": "nonneg",
+	"autopilot.tar_engine_m": "nonneg",
+	"autopilot.tar_any_m": "nonneg",
+	"autopilot.tar_scale": "nonneg",
+	"autopilot.weights": "obj",
 	"score.gate_pts": "nonneg",
 	"score.breach_pts": "nonneg",
 	"score.breach_cost": "nonneg",
@@ -93,32 +102,122 @@ const BALANCE_SPEC := {
 	"xp.grade_bonus.C": "nonneg",
 	"xp.grade_bonus.D": "nonneg",
 }
-const TOWER_SPEC := {
-	"code": "pos", "cost": "nonneg", "range_m": "pos", "interval_s": "pos", "damage": "nonneg"
+const STATIONS_SPEC := {
+	"align_deg": "pos",
+	"retarget_s": "pos",
+	"lead_rounds": "pos",
+	"upgrade_costs": "arr",
+	"upgrade_out_mult": "pos",
+	"upgrade_range_mult": "pos",
+	"stations": "obj",
+	"pads": "obj",
+}
+## Every weapon station (ballista, onager, arrows).
+const WEAPON_SPEC := {
+	"id": "nonneg",
+	"cap": "pos",
+	"range_m": "arr",
+	"slew_dps": "pos",
+	"k": "nonneg",
+	"spread_deg": "nonneg",
+	"speed_spread": "nonneg",
+	"damage": "pos",
+	"prefer": "obj",
+}
+const BALLISTA_SPEC := {
+	"wind_s": "pos",
+	"speed_mps": "pos",
+	"aim_dz_m": "nonneg",
+	"hit_r_m": "pos",
+	"keep_infantry": "nonneg",
+	"keep_engine": "nonneg",
+	"stop_below": "nonneg",
+}
+const ONAGER_SPEC := {
+	"wind_s": "pos",
+	"elev_deg": "pos",
+	"v_min": "pos",
+	"v_max": "pos",
+	"v_max_upgraded": "pos",
+	"splash_m": "pos",
+	"falloff": "nonneg",
+	"engine_direct_m": "nonneg",
+	"engine_mult": "pos",
+	"docked_mult": "pos",
+	"special_splash_m": "pos",
+}
+const ARROWS_SPEC := {
+	"rack_s": "pos",
+	"racks": "pos",
+	"special_racks": "pos",
+	"per_rack": "pos",
+	"elev_deg": "pos",
+	"v_min": "pos",
+	"v_max": "pos",
+	"v_max_upgraded": "pos",
+	"hit_r_m": "pos",
+	"testudo_block": "nonneg",
+}
+const TAR_SPEC := {
+	"id": "nonneg",
+	"cap": "pos",
+	"pump_lps": "pos",
+	"cauldron_l": "pos",
+	"spare_cauldron_l": "nonneg",
+	"reheat_lps": "nonneg",
+	"curtain_max": "pos",
+	"curtain_drain_hps": "nonneg",
+	"coat_full_hp": "pos",
+	"coat_slow": "nonneg",
+	"special_coat_slow": "nonneg",
+}
+const SCORPION_SPEC := {
+	"code": "pos",
+	"cost": "nonneg",
+	"interval_s": "pos",
+	"range_m": "arr",
+	"speed_mps": "pos",
+	"k": "nonneg",
+	"damage": "pos",
+	"hit_r_m": "pos",
+	"spread_deg": "nonneg",
+	"speed_spread": "nonneg",
+	"aim_dz_m": "nonneg",
+	"rate_mult": "pos",
+	"range_mult": "pos",
+	"special_bolts": "pos",
 }
 const ENEMY_SPEC := {
 	"code": "pos",
 	"hp": "pos",
-	"armor": "nonneg",
+	"armour": "nonneg",
 	"speed_mps": "pos",
 	"bounty": "nonneg",
-	"threat": "pos"
+	"threat": "pos",
+	"body_r_m": "nonneg",
+	"body_h_m": "pos",
 }
 const WAVES_SPEC := {
 	"group_every_s": "arr",
+	"first_group_s": "nonneg",
 	"stop_before_end_s": "nonneg",
+	"group_var": "arr",
 	"mix": "obj",
-	"ram_push.at_left_s": "pos",
-	"ram_push.enter_from_gate_m": "pos",
-	"ram_push.escort_threat_per_slot": "nonneg",
-	"roads.rotate_s": "arr",
-	"roads.horn_s": "nonneg",
+	"staging.reach_before_end_s": "nonneg",
+	"staging.formation_gap_m": "nonneg",
+	"engines.push_lead_s": "pos",
+	"engines.pair_gap_m": "nonneg",
+	"engines.two_rams_from_slots": "pos",
+	"engines.escort_threat_per_slot": "nonneg",
+	"engines.tower_min_wave_s": "pos",
+	"engines.crew_back_m": "arr",
 	"warmup.budget_frac": "nonneg",
-	"warmup.raiders_only_s": "nonneg",
+	"warmup.spear_only_s": "nonneg",
 	"warmup.ram_hp_frac": "pos",
 	"warmup.gate_floor_hp": "nonneg",
 	"warmup.toast_every_s": "pos",
 	"rush.types": "arr",
+	"rush.group_every_s": "pos",
 }
 
 var shift_id: String = ""
@@ -126,17 +225,18 @@ var shift_id: String = ""
 var shift: Dictionary = {}
 var shifts: Dictionary = {}
 var balance: Dictionary = {}
-var towers: Dictionary = {}
+var stations: Dictionary = {}
 var enemies: Dictionary = {}
 var waves: Dictionary = {}
 var cosmetics: Dictionary = {}
-var map: SiegeMap = null
+## The battlefield (maps/<id>.json).
+var path: SiegePath = null
 ## Every problem found ("<file>: <field>: <reason>"); empty when the content is usable.
 var errors: Array[String] = []
 
 
 func ok() -> bool:
-	return errors.is_empty() and map != null
+	return errors.is_empty() and path != null
 
 
 ## Loads and validates every file through ctx.load_content_json (overrides applied) for
@@ -165,24 +265,29 @@ static func read_files(map_id: String = "rotae") -> Dictionary:
 	return files
 
 
-## Content from already-parsed files {shifts, balance, towers, enemies, waves, cosmetics, map}
+## Content from already-parsed files {shifts, balance, stations, enemies, waves, cosmetics, map}
 ## for shift `shift_id`, validated.
 static func from_dicts(files: Dictionary, p_shift_id: String) -> SiegeContent:
 	var c := SiegeContent.new()
 	c.shift_id = p_shift_id
 	c.errors.append_array(validate_shifts(files.get("shifts")))
 	c.errors.append_array(validate_balance(files.get("balance")))
-	c.errors.append_array(validate_towers(files.get("towers")))
+	c.errors.append_array(validate_stations(files.get("stations")))
 	c.errors.append_array(validate_enemies(files.get("enemies")))
 	c.errors.append_array(validate_waves(files.get("waves")))
 	c.errors.append_array(validate_cosmetics(files.get("cosmetics")))
-	c.errors.append_array(SiegeMap.validate(files.get("map")))
+	var map_d: Variant = files.get("map")
+	if map_d is Dictionary:
+		for e in SiegePath.validate(map_d):
+			c.errors.append("map: " + e)
+	else:
+		c.errors.append("map: not an object")
 	for k: String in FILES:
 		if not (files.get(k) is Dictionary):
 			return c
 	c.shifts = files["shifts"]
 	c.balance = files["balance"]
-	c.towers = files["towers"]
+	c.stations = files["stations"]
 	c.enemies = files["enemies"]
 	c.waves = files["waves"]
 	c.cosmetics = files["cosmetics"]
@@ -190,37 +295,68 @@ static func from_dicts(files: Dictionary, p_shift_id: String) -> SiegeContent:
 		c.errors.append("shifts.json: no shift %s" % p_shift_id)
 	else:
 		c.shift = c.shifts[p_shift_id]
-	if files.get("map") is Dictionary:
-		c.map = SiegeMap.from_dict(files["map"])
+	if map_d is Dictionary:
+		c.path = SiegePath.from_dict(map_d)
 	return c
 
 
-## towers.json entry for tower code 1..3 ({} for TOWER_NONE).
-func tower_def(code: int) -> Dictionary:
-	if code <= 0 or code >= SiegeIds.TOWER_NAMES.size():
+## stations.json "stations" entry of station `id` 0..4 ({} when unknown).
+func station_def(id: int) -> Dictionary:
+	if not SiegeIds.is_station(id):
 		return {}
-	return towers.get(SiegeIds.TOWER_NAMES[code], {})
+	return (stations.get("stations", {}) as Dictionary).get(SiegeIds.STATION_NAMES[id], {})
 
 
-## enemies.json entry for enemy code 1..4.
+## stations.json "pads" entry of pad type `code` ({} for PAD_NONE).
+func pad_def(code: int) -> Dictionary:
+	if code <= 0 or code >= SiegeIds.PAD_NAMES.size():
+		return {}
+	return (stations.get("pads", {}) as Dictionary).get(SiegeIds.PAD_NAMES[code], {})
+
+
+## enemies.json entry for enemy code 1..5.
 func enemy_def(code: int) -> Dictionary:
 	if code <= 0 or code >= SiegeIds.ENEMY_NAMES.size():
 		return {}
 	return enemies.get(SiegeIds.ENEMY_NAMES[code], {})
 
 
-## Cost of tower upgrade `level` (1..3), -1 if none.
-func upgrade_cost(level: int) -> int:
-	for u: Variant in towers.get("upgrades", []):
-		if int(u.get("level", 0)) == level:
-			return int(u.get("cost", -1))
-	return -1
+## Cost of station upgrade `level` (1..3), -1 if none.
+func station_upgrade_cost(level: int) -> int:
+	var costs: Array = stations.get("upgrade_costs", [])
+	return int(costs[level - 1]) if level >= 1 and level <= costs.size() else -1
+
+
+## Cost of pad upgrade `level` (1..3), -1 if none.
+func pad_upgrade_cost(level: int) -> int:
+	var costs: Array = (stations.get("pads", {}) as Dictionary).get("upgrade_costs", [])
+	return int(costs[level - 1]) if level >= 1 and level <= costs.size() else -1
+
+
+## Cost of mine level `level` (1..3), -1 if none.
+func mine_level_cost(level: int) -> int:
+	var costs: Array = (balance.get("mine", {}) as Dictionary).get("level_costs", [])
+	return int(costs[level - 1]) if level >= 1 and level <= costs.size() else -1
 
 
 ## A balance.json number by dotted path ("overdrive.cooldown_s"), or `default`.
-func num(path: String, default: float = 0.0) -> float:
-	var v: Variant = _at(balance, path)
+func num(p_path: String, default: float = 0.0) -> float:
+	var v: Variant = _at(balance, p_path)
 	return float(v) if (v is float or v is int) else default
+
+
+## A stations.json number by dotted path ("stations.onager.wind_s"), or `default`.
+func st_num(p_path: String, default: float = 0.0) -> float:
+	var v: Variant = _at(stations, p_path)
+	return float(v) if (v is float or v is int) else default
+
+
+## A station's range band [lo, hi] in metres (horizontal from the pivot), before upgrades.
+func range_band(id: int) -> Vector2:
+	var r: Variant = station_def(id).get("range_m")
+	if r is Array and (r as Array).size() == 2:
+		return Vector2(float(r[0]), float(r[1]))
+	return Vector2.ZERO
 
 
 # --- validators (each returns "<file>: <problem>" lines; empty = valid) -------------------------
@@ -303,7 +439,8 @@ static func validate_shifts(d: Variant) -> Array[String]:
 	return errs
 
 
-## balance.json: every path in BALANCE_SPEC with its kind; generator.level_costs has 3 numbers;
+## balance.json: every path in BALANCE_SPEC with its kind; mine.level_costs has 3 numbers;
+## autopilot.weights has a weight >= 0 per weapon station and enemy type;
 ## overdrive.duration_s is exactly 30 (brief 2.3 fixes the directive's block at 30 s; a SIM block is
 ## 10..30, BRIEF 4.5) and min_left_s >= it; refused_retry_s and cooldown_s >= 30 (the governor's
 ## switch spacing: a shorter cooldown would only earn sim_block switch_spacing refusals); grades
@@ -312,8 +449,16 @@ static func validate_balance(d: Variant) -> Array[String]:
 	var errs := _check_spec(d, BALANCE_SPEC, "balance.json")
 	if not errs.is_empty():
 		return errs
-	if (d["generator"]["level_costs"] as Array).size() != 3:
-		errs.append("balance.json: generator.level_costs needs 3 costs")
+	if (d["mine"]["level_costs"] as Array).size() != 3:
+		errs.append("balance.json: mine.level_costs needs 3 costs")
+	for st: String in ["ballista", "onager", "arrows"]:
+		var w: Variant = d["autopilot"]["weights"].get(st)
+		if not (w is Dictionary):
+			errs.append("balance.json: autopilot.weights.%s is missing" % st)
+			continue
+		for en in SiegeIds.ENEMY_NAMES.slice(1):
+			if not _is_num(w.get(en)) or float(w[en]) < 0.0:
+				errs.append("balance.json: autopilot.weights.%s.%s must be >= 0" % [st, en])
 	var od: Dictionary = d["overdrive"]
 	if not is_equal_approx(float(od["duration_s"]), 30.0):
 		errs.append("balance.json: overdrive.duration_s must be 30 (brief 2.3 fixes the directive)")
@@ -333,39 +478,75 @@ static func validate_balance(d: Variant) -> Array[String]:
 	return errs
 
 
-## towers.json: ballista, scorpion and caltrop each with TOWER_SPEC fields and their code;
-## upgrades are levels 1, 2, 3 with a cost; start lists {pad 1..8, type (a tower name)}.
-static func validate_towers(d: Variant) -> Array[String]:
-	var errs: Array[String] = []
-	if not (d is Dictionary):
-		errs.append("towers.json: not an object")
+## stations.json: STATIONS_SPEC; upgrade_costs and pads.upgrade_costs are 3 costs; every station
+## 0..4 with its id and a cap >= 1 (caps sum to at least 4, so four riders always fit); the
+## weapons with WEAPON_SPEC and their own spec, range_m [lo, hi] with lo <= hi, a "prefer" weight
+## per enemy type; the tar works with TAR_SPEC; pads.scorpion with SCORPION_SPEC and its code;
+## pads.start lists {pad 1..4, type (a pad weapon name)}.
+static func validate_stations(d: Variant) -> Array[String]:
+	var errs := _check_spec(d, STATIONS_SPEC, "stations.json")
+	if not errs.is_empty():
 		return errs
-	for code in range(1, SiegeIds.TOWER_NAMES.size()):
-		var name: String = SiegeIds.TOWER_NAMES[code]
-		var t: Variant = d.get(name)
-		errs.append_array(_check_spec(t, TOWER_SPEC, "towers.json: " + name))
-		if t is Dictionary and int(t.get("code", 0)) != code:
-			errs.append("towers.json: %s: code must be %d" % [name, code])
-	var ups: Variant = d.get("upgrades")
-	var levels: Array = []
-	for u: Variant in ups if ups is Array else []:
-		if u is Dictionary and _is_num(u.get("cost")):
-			levels.append(int(u.get("level", 0)))
-	if levels != [1, 2, 3]:
-		errs.append("towers.json: upgrades must be levels 1, 2, 3 with a cost")
-	for s: Variant in d.get("start", []):
+	if (d["upgrade_costs"] as Array).size() != 3:
+		errs.append("stations.json: upgrade_costs needs 3 costs")
+	var caps := 0
+	for id in SiegeIds.STATION_COUNT:
+		var name: String = SiegeIds.STATION_NAMES[id]
+		var at := "stations.json: stations.%s" % name
+		var sd: Variant = d["stations"].get(name)
+		if not (sd is Dictionary):
+			errs.append("%s is missing" % at)
+			continue
+		if int(sd.get("id", -1)) != id:
+			errs.append("%s: id must be %d" % [at, id])
+		if not _is_num(sd.get("cap")) or int(sd["cap"]) < 1:
+			errs.append("%s: cap must be >= 1" % at)
+		else:
+			caps += int(sd["cap"])
+		var own := {}
+		match id:
+			SiegeIds.STATION_BALLISTA:
+				own = BALLISTA_SPEC
+			SiegeIds.STATION_ONAGER:
+				own = ONAGER_SPEC
+			SiegeIds.STATION_ARROWS:
+				own = ARROWS_SPEC
+			SiegeIds.STATION_TAR:
+				errs.append_array(_check_spec(sd, TAR_SPEC, at))
+		if own.is_empty():
+			continue
+		errs.append_array(_check_spec(sd, WEAPON_SPEC, at))
+		errs.append_array(_check_spec(sd, own, at))
+		errs.append_array(_pair_ok(sd.get("range_m"), at + ": range_m"))
+		var pref: Variant = sd.get("prefer")
+		for en in SiegeIds.ENEMY_NAMES.slice(1):
+			if pref is Dictionary and (not _is_num(pref.get(en)) or float(pref[en]) < 0.0):
+				errs.append("%s: prefer.%s must be >= 0" % [at, en])
+	if caps < 4:
+		errs.append("stations.json: the caps sum to %d (four riders need 4)" % caps)
+	var pads: Dictionary = d["pads"]
+	var sc: Variant = pads.get("scorpion")
+	errs.append_array(_check_spec(sc, SCORPION_SPEC, "stations.json: pads.scorpion"))
+	if sc is Dictionary:
+		if int(sc.get("code", 0)) != SiegeIds.PAD_SCORPION:
+			errs.append("stations.json: pads.scorpion: code must be %d" % SiegeIds.PAD_SCORPION)
+		errs.append_array(_pair_ok(sc.get("range_m"), "stations.json: pads.scorpion: range_m"))
+	if not (pads.get("upgrade_costs") is Array) or (pads["upgrade_costs"] as Array).size() != 3:
+		errs.append("stations.json: pads.upgrade_costs needs 3 costs")
+	for s: Variant in pads.get("start", []):
 		if (
 			not (s is Dictionary)
 			or not SiegeIds.is_pad(int(s.get("pad", 0)))
-			or SiegeIds.tower_code(str(s.get("type", ""))) == 0
+			or SiegeIds.pad_code(str(s.get("type", ""))) != SiegeIds.PAD_SCORPION
 		):
-			errs.append("towers.json: bad start entry %s" % JSON.stringify(s))
+			errs.append("stations.json: bad pads.start entry %s" % JSON.stringify(s))
 	return errs
 
 
-## enemies.json: raiders, shield_wall, horsemen and ram each with ENEMY_SPEC fields and their
-## code; gate_hp (> 0) for the first three, gate_hp_per_s and crew for the ram; lateral_m >= 0,
-## cap >= 1, retreat_s >= 0.
+## enemies.json: spear, shield, chariot, ram and tower each with ENEMY_SPEC fields and their
+## code; gate_hp (> 0) for the first three, gate_hp_per_s and crew / crew_type for the ram; the
+## first three have ranks [files, ranks] >= 1 and spacing_m > 0; the chariot speed_var 0..1,
+## redraw_s [lo, hi] and accel_mps2 > 0; lateral_m >= 0, cap >= 1, retreat_s >= 0.
 static func validate_enemies(d: Variant) -> Array[String]:
 	var errs: Array[String] = []
 	if not (d is Dictionary):
@@ -373,44 +554,58 @@ static func validate_enemies(d: Variant) -> Array[String]:
 		return errs
 	for code in range(1, SiegeIds.ENEMY_NAMES.size()):
 		var name: String = SiegeIds.ENEMY_NAMES[code]
+		var at := "enemies.json: " + name
 		var e: Variant = d.get(name)
-		errs.append_array(_check_spec(e, ENEMY_SPEC, "enemies.json: " + name))
+		errs.append_array(_check_spec(e, ENEMY_SPEC, at))
 		if not (e is Dictionary):
 			continue
 		if int(e.get("code", 0)) != code:
-			errs.append("enemies.json: %s: code must be %d" % [name, code])
-		var gate_key := "gate_hp_per_s" if code == SiegeIds.ENEMY_RAM else "gate_hp"
-		if not _is_num(e.get(gate_key)) or float(e[gate_key]) <= 0.0:
-			errs.append("enemies.json: %s: %s must be > 0" % [name, gate_key])
-		if (
-			code == SiegeIds.ENEMY_RAM
-			and (
-				not _is_num(e.get("crew")) or SiegeIds.enemy_code(str(e.get("crew_type", ""))) == 0
-			)
-		):
-			errs.append("enemies.json: ram: needs crew and crew_type")
+			errs.append("%s: code must be %d" % [at, code])
+		if code <= SiegeIds.ENEMY_CHARIOT:
+			errs.append_array(_infantry_ok(e, at))
+		if code == SiegeIds.ENEMY_CHARIOT:
+			var sv: Variant = e.get("speed_var")
+			if not _is_num(sv) or float(sv) < 0.0 or float(sv) >= 1.0:
+				errs.append("%s: speed_var must be 0..1" % at)
+			errs.append_array(_pair_ok(e.get("redraw_s"), at + ": redraw_s"))
+			if not _is_num(e.get("accel_mps2")) or float(e["accel_mps2"]) <= 0.0:
+				errs.append("%s: accel_mps2 must be > 0" % at)
+		if code == SiegeIds.ENEMY_RAM:
+			if not _is_num(e.get("gate_hp_per_s")) or float(e["gate_hp_per_s"]) <= 0.0:
+				errs.append("%s: gate_hp_per_s must be > 0" % at)
+			if not _is_num(e.get("crew")) or SiegeIds.enemy_code(str(e.get("crew_type", ""))) == 0:
+				errs.append("%s: needs crew and crew_type" % at)
 	errs.append_array(
 		_check_spec(d, {"lateral_m": "nonneg", "cap": "pos", "retreat_s": "nonneg"}, "enemies.json")
 	)
 	return errs
 
 
-## waves.json: WAVES_SPEC; group_every_s and roads.rotate_s are [lo, hi] with lo <= hi; mix
-## has standard and raiders_horsemen, each 3 rows (thirds of the shift) of 3 fractions
-## [raiders, shield_wall, horsemen] summing to 1; rush.types are enemy names.
+## Problems of a spear, shield or chariot entry: gate_hp > 0, ranks [files, ranks] >= 1,
+## spacing_m > 0.
+static func _infantry_ok(e: Dictionary, at: String) -> Array[String]:
+	var errs: Array[String] = []
+	if not _is_num(e.get("gate_hp")) or float(e["gate_hp"]) <= 0.0:
+		errs.append("%s: gate_hp must be > 0" % at)
+	var rk: Variant = e.get("ranks")
+	var ok: bool = rk is Array and (rk as Array).size() == 2
+	ok = ok and _is_num(rk[0]) and _is_num(rk[1]) and int(rk[0]) >= 1 and int(rk[1]) >= 1
+	if not ok:
+		errs.append("%s: ranks must be [files, ranks] >= 1" % at)
+	if not _is_num(e.get("spacing_m")) or float(e["spacing_m"]) <= 0.0:
+		errs.append("%s: spacing_m must be > 0" % at)
+	return errs
+
+
+## waves.json: WAVES_SPEC; group_every_s, group_var and engines.crew_back_m are [lo, hi] with
+## lo <= hi; mix has standard and raiders_horsemen, each 3 rows (thirds of the shift) of 3
+## fractions [spear, shield, chariot] summing to 1; rush.types are enemy names.
 static func validate_waves(d: Variant) -> Array[String]:
 	var errs := _check_spec(d, WAVES_SPEC, "waves.json")
 	if not errs.is_empty():
 		return errs
-	for k: String in ["group_every_s", "roads.rotate_s"]:
-		var r: Variant = _at(d, k)
-		if (
-			(r as Array).size() != 2
-			or not _is_num(r[0])
-			or not _is_num(r[1])
-			or float(r[0]) > float(r[1])
-		):
-			errs.append("waves.json: %s must be [lo, hi]" % k)
+	for k: String in ["group_every_s", "group_var", "engines.crew_back_m"]:
+		errs.append_array(_pair_ok(_at(d, k), "waves.json: " + k))
 	for mix: String in [SiegeIds.MIX_STANDARD, SiegeIds.MIX_RAIDERS_HORSEMEN]:
 		var rows: Variant = d["mix"].get(mix)
 		var ok: bool = rows is Array and (rows as Array).size() == 3
@@ -461,10 +656,10 @@ static func _check_spec(d: Variant, spec: Dictionary, file: String) -> Array[Str
 	if not (d is Dictionary):
 		errs.append("%s: not an object" % file)
 		return errs
-	for path: String in spec:
-		var v: Variant = _at(d, path)
+	for p: String in spec:
+		var v: Variant = _at(d, p)
 		var ok := true
-		match str(spec[path]):
+		match str(spec[p]):
 			"num":
 				ok = _is_num(v)
 			"pos":
@@ -476,13 +671,23 @@ static func _check_spec(d: Variant, spec: Dictionary, file: String) -> Array[Str
 			"arr":
 				ok = v is Array
 		if not ok:
-			errs.append("%s: %s must be %s" % [file, path, spec[path]])
+			errs.append("%s: %s must be %s" % [file, p, spec[p]])
 	return errs
 
 
-static func _at(d: Variant, path: String) -> Variant:
+## Problems of a [lo, hi] pair of numbers with lo <= hi.
+static func _pair_ok(r: Variant, at: String) -> Array[String]:
+	var errs: Array[String] = []
+	var ok: bool = r is Array and (r as Array).size() == 2
+	ok = ok and _is_num(r[0]) and _is_num(r[1]) and float(r[0]) <= float(r[1])
+	if not ok:
+		errs.append("%s must be [lo, hi]" % at)
+	return errs
+
+
+static func _at(d: Variant, p_path: String) -> Variant:
 	var v: Variant = d
-	for k in path.split("."):
+	for k in p_path.split("."):
 		if not (v is Dictionary) or not (v as Dictionary).has(k):
 			return null
 		v = v[k]

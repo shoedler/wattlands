@@ -1,10 +1,10 @@
 class_name SiegeRiderState
 extends SiegeRecord
-## One rider's wheel in SiegeState.riders (slot order). The rules (B1) write it on the host;
+## One rider's wheel in SiegeState.riders (slot order). The rules write it on the host;
 ## SiegeSnapshot rebuilds the snapshot part on clients (fields marked [snap]); the view and HUD
-## (B3) read it. Units: s, W (raw), P_eff W, denarii (float; the snapshot floors it). G0 contract.
+## read it (STATE_V2.md). Units: s, W (raw), P_eff W, gold (float; the snapshot floors it).
 
-## [snap] (slot) Slot index 0..3; owns the NW, NE, SW, SE wheel.
+## [snap] (slot) Slot index 0..3; owns wheel 0..3, west to east.
 var slot: int = 0
 var peer: int = 0
 var is_bot: bool = false
@@ -14,15 +14,15 @@ var autopilot: bool = false
 var ftp: float = 200.0
 var ftp_verified: bool = true
 
-## [snap] Routing target: SiegeIds.TARGET_GEN (0) or a pad 1..8. During a reconnect it is
-## already the new target.
-var target: int = SiegeIds.TARGET_GEN
+## [snap] Routing target: a station 0..4 (SiegeIds.STATION_*). During a reconnect it is already
+## the new target.
+var target: int = SiegeIds.STATION_MINE
 ## [snap] Seconds left of the 2 s reconnect after a change (no output while > 0).
 var reconnect_s: float = 0.0
 ## Game time of the last target change (Autopilot's 8 s switch limit).
 var routed_t: float = -1000.0
 
-## [snap] Latest telemetry: P_eff W (wheel speed, chains), raw W (strip), cadence (workers).
+## [snap] Latest telemetry: P_eff W (wheel speed, the powered path), raw W (strip), cadence.
 var p_eff_w: float = 0.0
 var raw_w: float = 0.0
 var cadence_rpm: float = 0.0
@@ -33,8 +33,8 @@ var rescue: bool = false
 var afk: bool = false
 var connected: bool = true
 
-## [snap] Personal denarii (start 40; float on the host, floored in the snapshot).
-var denarii: float = 0.0
+## [snap] Personal gold (start 40; float on the host, floored in the snapshot).
+var gold: float = 0.0
 
 ## Zero-input fallbacks (brief 2.5): Autopilot routes for this rider while route_fallback, and
 ## shops for it while shop_fallback. A deliberate route intent clears the first, a buy that is
@@ -59,18 +59,28 @@ var od_best_s: float = 0.0
 var od_prompt: bool = false
 
 # --- Results stats (brief 2.8) -------------------------------------------------------------------
-var gen_denarii: float = 0.0
-var bounty_denarii: float = 0.0
+var mine_gold: float = 0.0
+var bounty_gold: float = 0.0
 var kills: int = 0
 var damage: float = 0.0
 var od_count: int = 0
 var od_scored: int = 0
-## Wave seconds routed to the generator vs. towers (connected, not reconnecting).
-var wave_gen_s: float = 0.0
-var wave_tower_s: float = 0.0
-var towers_built: int = 0
+## Wave seconds delivering to the mine vs. a weapon or the tar works.
+var wave_mine_s: float = 0.0
+var wave_weapon_s: float = 0.0
+## Wave seconds delivering to each station 0..4 (the station spent most time on).
+var station_s: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0]
 
 
 ## True while the rider's output reaches its target: connected, not AFK, not reconnecting.
 func delivering() -> bool:
 	return connected and not afk and reconnect_s <= 0.0
+
+
+## The station this rider delivered to longest in waves (the mine when none).
+func top_station() -> int:
+	var best := SiegeIds.STATION_MINE
+	for i in station_s.size():
+		if station_s[i] > station_s[best] + 1e-9:
+			best = i
+	return best

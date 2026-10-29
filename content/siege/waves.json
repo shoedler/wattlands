@@ -1,12 +1,14 @@
 {
   "group_every_s": [6, 12],
+  "first_group_s": 3,
   "stop_before_end_s": 60,
+  "group_var": [0.8, 1.2],
   "mix": {
     "standard": [[0.7, 0.1, 0.2], [0.5, 0.25, 0.25], [0.4, 0.3, 0.3]],
     "raiders_horsemen": [[0.8, 0.0, 0.2], [0.7, 0.0, 0.3], [0.6, 0.0, 0.4]]
   },
-  "ram_push": {"at_left_s": 60, "enter_from_gate_m": 40, "escort_threat_per_slot": 10},
-  "roads": {"rotate_s": [30, 60], "horn_s": 5},
-  "warmup": {"budget_frac": 0.4, "raiders_only_s": 180, "ram_hp_frac": 0.5, "ram_escort": false, "gate_floor_hp": 50, "toast_every_s": 60},
-  "rush": {"types": ["raiders", "horsemen"]}
+  "staging": {"reach_before_end_s": 30, "formation_gap_m": 3},
+  "engines": {"push_lead_s": 60, "pair_gap_m": 25, "two_rams_from_slots": 3, "escort_threat_per_slot": 10, "tower_min_wave_s": 300, "crew_back_m": [2, 6]},
+  "warmup": {"budget_frac": 0.4, "spear_only_s": 180, "ram_hp_frac": 0.5, "ram_escort": false, "gate_floor_hp": 50, "toast_every_s": 60},
+  "rush": {"types": ["spear", "chariot"], "group_every_s": 3}
 }

@@ -1,0 +1,46 @@
+{
+  "align_deg": 2.0,
+  "retarget_s": 1.0,
+  "lead_rounds": 3,
+  "upgrade_costs": [40, 50, 70],
+  "upgrade_out_mult": 1.4,
+  "upgrade_range_mult": 1.25,
+  "stations": {
+    "mine": {"id": 0, "cap": 2},
+    "ballista": {
+      "id": 1, "cap": 1, "kind": "bolt", "wind_s": 5.0, "range_m": [0, 110], "slew_dps": 25,
+      "aim": "angle", "speed_mps": 70, "k": 0.0004, "spread_deg": 0.3, "speed_spread": 0.005,
+      "aim_dz_m": 0.9, "damage": 120, "hit_r_m": 0.6, "keep_infantry": 0.75, "keep_engine": 0.3,
+      "stop_below": 10, "special": "iron_head",
+      "prefer": {"spear": 1, "shield": 2, "chariot": 1, "ram": 4, "tower": 4}
+    },
+    "onager": {
+      "id": 2, "cap": 2, "kind": "stone", "wind_s": 7.0, "range_m": [30, 100], "slew_dps": 4,
+      "aim": "speed", "elev_deg": 45, "v_min": 10, "v_max": 34, "v_max_upgraded": 39, "k": 0.0016,
+      "spread_deg": 0.6, "speed_spread": 0.015, "damage": 160, "splash_m": 5, "falloff": 0.6,
+      "engine_direct_m": 2, "engine_mult": 2.5, "docked_mult": 1.5, "special_splash_m": 6.5,
+      "prefer": {"spear": 1, "shield": 1, "chariot": 0, "ram": 3, "tower": 3}
+    },
+    "arrows": {
+      "id": 3, "cap": 2, "kind": "arrow", "rack_s": 1.5, "racks": 3, "special_racks": 4,
+      "per_rack": 12, "range_m": [40, 115], "slew_dps": 30, "aim": "speed", "elev_deg": 40,
+      "v_min": 10, "v_max": 45, "v_max_upgraded": 50, "k": 0.006, "spread_deg": 2.5,
+      "speed_spread": 0.03, "damage": 8, "hit_r_m": 0.6, "testudo_block": 0.7,
+      "prefer": {"spear": 2, "shield": 0, "chariot": 2, "ram": 0, "tower": 0}
+    },
+    "tar": {
+      "id": 4, "cap": 1, "pump_lps": 6, "cauldron_l": 300, "spare_cauldron_l": 100, "reheat_lps": 1,
+      "curtain_max": 200, "curtain_drain_hps": 1, "coat_full_hp": 100, "coat_slow": 0.5,
+      "special_coat_slow": 0.65
+    }
+  },
+  "pads": {
+    "scorpion": {
+      "code": 1, "cost": 40, "interval_s": 2.4, "range_m": [0, 60], "speed_mps": 50, "k": 0.001,
+      "damage": 10, "hit_r_m": 0.6, "spread_deg": 0.3, "speed_spread": 0.005, "aim_dz_m": 0.9,
+      "rate_mult": 1.4, "range_mult": 1.25, "special_bolts": 2
+    },
+    "upgrade_costs": [40, 50, 70],
+    "start": [{"pad": 1, "type": "scorpion"}]
+  }
+}

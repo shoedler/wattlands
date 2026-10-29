@@ -1,14 +1,9 @@
 class_name SiegeSnapshot
 extends RefCounted
-## Encodes SiegeState into the 10 Hz snapshot (SiegeSnapshotSchema, brief 2.6) and applies one
-## on a client. Owner: B2 "module". Every value written is an int; apply() casts everything it
-## reads with int(), nested arrays included, so a JSON round trip without int_fields still works.
-##
-## The client's interpolation history is SiegeSnapHistory (this folder); SiegeGame pushes into it
-## after each apply. The optional "ro" / "ru" keys (SiegeSnapshotSchema) carry the active roads and
-## the rush so a rejoining client needs no event to know them; "ib", "gd" and "gt" carry the Iron
-## bands and the gate damage by road and enemy type, which the client's shop recommendation and gate
-## view read.
+## Encodes SiegeState into the 10 Hz snapshot (SiegeSnapshotSchema, brief 2.6 v2) and applies one
+## on a client. Every value written is an int; apply() casts everything it reads with int(),
+## nested arrays included, so a JSON round trip without int_fields still works. Projectiles never
+## travel here: clients replay them from `shot` events.
 
 
 ## The snapshot of `state` (host, 10 Hz).
@@ -24,7 +19,7 @@ static func encode(state: SiegeState) -> Dictionary:
 					_ms(rd.reconnect_s),
 					_ms(rd.od_s) if rd.od_state == SiegeIds.OD_ACTIVE else 0,
 					_ms(rd.od_cd_s) if rd.od_state == SiegeIds.OD_COOLDOWN else 0,
-					floori(rd.denarii),
+					floori(rd.gold),
 					roundi(rd.p_eff_w),
 					roundi(rd.raw_w),
 					roundi(rd.cadence_rpm),
@@ -33,28 +28,55 @@ static func encode(state: SiegeState) -> Dictionary:
 				]
 			)
 		)
-	var tw: Array = []
-	for t in state.pads:
-		if t.built():
-			tw.append([t.pad, t.type, t.level, roundi(t.m * 100.0), _ms(t.cd_s)])
+	var st: Array = []
+	var dw: Array = []
+	for s in state.stations:
+		(
+			st
+			. append(
+				[
+					s.id,
+					s.level,
+					_pm(s.wind),
+					roundi(wrapf(s.yaw_deg, -180.0, 180.0) * 100.0),
+					roundi(s.m * 100.0),
+					_pm(s.arm),
+				]
+			)
+		)
+		if SiegeIds.is_weapon(s.id):
+			dw.append([s.id, roundi(s.damage_wave)])
+	var pd: Array = []
+	for p in state.pads:
+		if p.built():
+			(
+				pd
+				. append(
+					[
+						p.pad,
+						p.type,
+						p.level,
+						_ms(p.cd_s),
+						roundi(wrapf(p.yaw_deg, -180.0, 180.0) * 100.0),
+					]
+				)
+			)
 	var e: Array = []
 	for en in state.enemies:
-		e.append(
-			[
-				en.id,
-				en.type,
-				en.road,
-				roundi(en.prog_m * 10.0),
-				roundi(en.lat_m * 10.0),
-				ceili(en.hp)
-			]
+		(
+			e
+			. append(
+				[
+					en.id,
+					en.type,
+					roundi(en.prog_m * 10.0),
+					roundi(en.lat_m * 10.0),
+					ceili(en.hp),
+					en.st,
+				]
+			)
 		)
-	var z: Array = []
-	for zn in state.zones:
-		z.append([zn.road, roundi(zn.prog_m * 10.0), _ms(zn.delay_s + zn.ttl_s)])
-	var f: Array = []
-	for s in state.shots:
-		f.append([s.pad, s.targets.duplicate()])
+	var tar := state.tar
 	var snap := {
 		"v": SiegeSnapshotSchema.VERSION,
 		"tick": state.tick,
@@ -62,40 +84,37 @@ static func encode(state: SiegeState) -> Dictionary:
 		"pt_ms": _ms(state.phase_elapsed_s),
 		"gate": [ceili(state.gate_hp), roundi(state.gate_max), _ms(state.breach_s)],
 		"nb": state.breaches,
-		"gl": state.gen_level,
+		"ib": state.iron_bands,
+		"ml": state.mine_level,
 		"pk": state.perks.duplicate(),
 		"w": roundi(state.team_w),
 		"r": r,
-		"tw": tw,
+		"st": st,
+		"pd": pd,
+		"tar":
+		[
+			roundi(tar.cauldron_l * 10.0),
+			roundi(tar.curtain_hp * 10.0),
+			_pm(tar.coat),
+			int(tar.boarded),
+		],
 		"e": e,
-		"z": z,
-		"f": f,
 		"q": state.queued(),
+		"gd": roundi(state.wave.gate_damage * 10.0),
+		"dw": dw,
 	}
-	# Additive keys, only off their defaults (all three roads active, no rush): the common
-	# snapshot stays as the brief 2.6 has it.
-	if state.wave.active_roads.size() != SiegeIds.ROAD_COUNT:
-		snap["ro"] = state.wave.active_roads.duplicate()
 	if state.wave.rush_s > 0.0:
 		snap["ru"] = [1, maxi(state.wave.rush_next - 1, 0), _ms(state.wave.rush_s)]
-	if state.iron_bands > 0:
-		snap["ib"] = state.iron_bands
-	var gd: Array = []
-	var gt: Array = []
-	var damaged := false
-	for road in SiegeIds.ROAD_COUNT:
-		gd.append(state.gate_damage_dm(road))
-		gt.append(state.gate_damage_types_by_road[road])
-		damaged = damaged or gd[road] != 0 or gt[road] != 0
-	if damaged:
-		snap["gd"] = gd
-		snap["gt"] = gt
+	var rack := state.station(SiegeIds.STATION_ARROWS).rack
+	if rack != 0:
+		snap["rk"] = rack
 	return snap
 
 
-## Overwrites the snapshot part of `state` from `snap` (clients). Riders are matched by slot;
-## enemies, zones and shots are rebuilt (positions from state.content.map when present).
+## Overwrites the snapshot part of `state` from `snap` (clients). Riders are matched by slot,
+## stations by id, pads by number; enemies are rebuilt (positions from state.path when present).
 static func apply(state: SiegeState, snap: Dictionary) -> void:
+	state.init_fixed()
 	state.tick = int(snap.get("tick", state.tick))
 	state.phase_index = int(snap.get("ph", state.phase_index))
 	state.phase_elapsed_s = int(snap.get("pt_ms", 0)) / 1000.0
@@ -105,103 +124,20 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 		state.gate_max = float(int(g[SiegeSnapshotSchema.G_MAX]))
 		state.breach_s = int(g[SiegeSnapshotSchema.G_BREACH_MS]) / 1000.0
 	state.breaches = int(snap.get("nb", 0))
-	state.gen_level = int(snap.get("gl", 0))
+	state.iron_bands = int(snap.get("ib", 0))
+	state.mine_level = int(snap.get("ml", 0))
 	state.perks.clear()
 	for p: Variant in snap.get("pk", []):
 		state.perks.append(int(p))
 	state.team_w = float(int(snap.get("w", 0)))
-	for row: Variant in snap.get("r", []):
-		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.R_LEN:
-			continue
-		var rd := state.rider_at(int(row[SiegeSnapshotSchema.R_SLOT]))
-		if rd == null:
-			continue
-		rd.target = int(row[SiegeSnapshotSchema.R_TARGET])
-		rd.reconnect_s = int(row[SiegeSnapshotSchema.R_RECONNECT_MS]) / 1000.0
-		rd.od_s = int(row[SiegeSnapshotSchema.R_OD_MS]) / 1000.0
-		rd.od_cd_s = int(row[SiegeSnapshotSchema.R_OD_CD_MS]) / 1000.0
-		rd.od_state = (
-			SiegeIds.OD_ACTIVE
-			if rd.od_s > 0.0
-			else (SiegeIds.OD_COOLDOWN if rd.od_cd_s > 0.0 else SiegeIds.OD_READY)
-		)
-		rd.denarii = float(int(row[SiegeSnapshotSchema.R_DENARII]))
-		rd.p_eff_w = float(int(row[SiegeSnapshotSchema.R_P_EFF_W]))
-		rd.raw_w = float(int(row[SiegeSnapshotSchema.R_RAW_W]))
-		rd.cadence_rpm = float(int(row[SiegeSnapshotSchema.R_CADENCE]))
-		rd.rescue = int(row[SiegeSnapshotSchema.R_RESCUE]) != 0
-		rd.afk = int(row[SiegeSnapshotSchema.R_AFK]) != 0
-	for t in state.pads:
-		t.type = SiegeIds.TOWER_NONE
-		t.level = 0
-		t.m = 0.0
-		t.cd_s = 0.0
-	for row: Variant in snap.get("tw", []):
-		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.TW_LEN:
-			continue
-		var n := int(row[SiegeSnapshotSchema.TW_PAD])
-		if not SiegeIds.is_pad(n) or state.pads.size() < n:
-			continue
-		var t := state.pad(n)
-		t.type = int(row[SiegeSnapshotSchema.TW_TYPE])
-		t.level = int(row[SiegeSnapshotSchema.TW_LEVEL])
-		t.m = int(row[SiegeSnapshotSchema.TW_M_X100]) / 100.0
-		t.cd_s = int(row[SiegeSnapshotSchema.TW_CD_MS]) / 1000.0
-	var map: SiegeMap = state.content.map if state.content != null else null
-	state.enemies.clear()
-	for row: Variant in snap.get("e", []):
-		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.E_LEN:
-			continue
-		var en := SiegeEnemyState.new()
-		en.id = int(row[SiegeSnapshotSchema.E_ID])
-		en.type = int(row[SiegeSnapshotSchema.E_TYPE])
-		en.road = int(row[SiegeSnapshotSchema.E_ROAD])
-		en.prog_m = int(row[SiegeSnapshotSchema.E_PROG_DM]) / 10.0
-		en.lat_m = int(row[SiegeSnapshotSchema.E_LAT_DM]) / 10.0
-		en.hp = float(int(row[SiegeSnapshotSchema.E_HP]))
-		var def: Dictionary = state.content.enemy_def(en.type) if state.content != null else {}
-		en.max_hp = maxf(float(def.get("hp", en.hp)), en.hp)
-		if map != null and en.road >= 0 and en.road < map.road_count():
-			en.place(map)
-		state.enemies.append(en)
-	state.zones.clear()
-	var zone_s := 4.0
-	if state.content != null:
-		zone_s = float(state.content.tower_def(SiegeIds.TOWER_CALTROP).get("zone_s", 4.0))
-	for row: Variant in snap.get("z", []):
-		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.Z_LEN:
-			continue
-		var zn := SiegeZoneState.new()
-		zn.road = int(row[SiegeSnapshotSchema.Z_ROAD])
-		zn.prog_m = int(row[SiegeSnapshotSchema.Z_PROG_DM]) / 10.0
-		var left := int(row[SiegeSnapshotSchema.Z_TTL_MS]) / 1000.0
-		zn.ttl_s = minf(left, zone_s)
-		zn.delay_s = maxf(left - zone_s, 0.0)
-		if map != null and zn.road >= 0 and zn.road < map.road_count():
-			zn.pos = map.point_at(zn.road, zn.prog_m)
-		state.zones.append(zn)
-	state.shots.clear()
-	for row: Variant in snap.get("f", []):
-		if not (row is Array) or (row as Array).size() < 2:
-			continue
-		var s := SiegeShot.new()
-		s.pad = int(row[SiegeSnapshotSchema.F_PAD])
-		for id: Variant in (
-			row[SiegeSnapshotSchema.F_TARGETS]
-			if row[SiegeSnapshotSchema.F_TARGETS] is Array
-			else []
-		):
-			s.targets.append(int(id))
-		state.shots.append(s)
+	_riders(state, snap.get("r", []))
+	_stations(state, snap.get("st", []), snap.get("dw", []))
+	_pads(state, snap.get("pd", []))
+	_tar(state, snap.get("tar", []))
+	_enemies(state, snap.get("e", []))
 	state.queue_len = int(snap.get("q", 0))
-	state.wave.active_roads.clear()
-	var ro: Variant = snap.get("ro")
-	if ro is Array:
-		for r: Variant in ro:
-			state.wave.active_roads.append(int(r))
-	else:
-		for r in SiegeIds.ROAD_COUNT:
-			state.wave.active_roads.append(r)
+	state.wave.gate_damage = int(snap.get("gd", 0)) / 10.0
+	state.station(SiegeIds.STATION_ARROWS).rack = int(snap.get("rk", 0))
 	var ru: Variant = snap.get("ru")
 	if ru is Array and (ru as Array).size() > SiegeSnapshotSchema.RU_INDEX:
 		var left_ms := (
@@ -215,18 +151,105 @@ static func apply(state: SiegeState, snap: Dictionary) -> void:
 		state.wave.rush_next = int(ru[SiegeSnapshotSchema.RU_INDEX]) + 1
 	else:
 		state.wave.rush_s = 0.0
-	state.iron_bands = int(snap.get("ib", 0))
-	for road in SiegeIds.ROAD_COUNT:
-		state.gate_damage_by_road[road] = _road_value(snap.get("gd"), road) / 10.0
-		state.gate_damage_types_by_road[road] = int(_road_value(snap.get("gt"), road))
 
 
-## The int at `road` in an optional per-road array (0 when it is absent or short).
-static func _road_value(arr: Variant, road: int) -> int:
-	if arr is Array and (arr as Array).size() > road:
-		return int((arr as Array)[road])
-	return 0
+static func _riders(state: SiegeState, rows: Variant) -> void:
+	for row: Variant in rows if rows is Array else []:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.R_LEN:
+			continue
+		var rd := state.rider_at(int(row[SiegeSnapshotSchema.R_SLOT]))
+		if rd == null:
+			continue
+		rd.target = clampi(int(row[SiegeSnapshotSchema.R_TARGET]), 0, SiegeIds.STATION_COUNT - 1)
+		rd.reconnect_s = int(row[SiegeSnapshotSchema.R_RECONNECT_MS]) / 1000.0
+		rd.od_s = int(row[SiegeSnapshotSchema.R_OD_MS]) / 1000.0
+		rd.od_cd_s = int(row[SiegeSnapshotSchema.R_OD_CD_MS]) / 1000.0
+		rd.od_state = (
+			SiegeIds.OD_ACTIVE
+			if rd.od_s > 0.0
+			else (SiegeIds.OD_COOLDOWN if rd.od_cd_s > 0.0 else SiegeIds.OD_READY)
+		)
+		rd.gold = float(int(row[SiegeSnapshotSchema.R_GOLD]))
+		rd.p_eff_w = float(int(row[SiegeSnapshotSchema.R_P_EFF_W]))
+		rd.raw_w = float(int(row[SiegeSnapshotSchema.R_RAW_W]))
+		rd.cadence_rpm = float(int(row[SiegeSnapshotSchema.R_CADENCE]))
+		rd.rescue = int(row[SiegeSnapshotSchema.R_RESCUE]) != 0
+		rd.afk = int(row[SiegeSnapshotSchema.R_AFK]) != 0
+
+
+static func _stations(state: SiegeState, rows: Variant, dw: Variant) -> void:
+	for row: Variant in rows if rows is Array else []:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.ST_LEN:
+			continue
+		var id := int(row[SiegeSnapshotSchema.ST_ID])
+		if not SiegeIds.is_station(id):
+			continue
+		var s := state.station(id)
+		s.level = int(row[SiegeSnapshotSchema.ST_LEVEL])
+		s.wind = int(row[SiegeSnapshotSchema.ST_WIND_PM]) / 1000.0
+		s.yaw_deg = int(row[SiegeSnapshotSchema.ST_YAW_CDEG]) / 100.0
+		s.m = int(row[SiegeSnapshotSchema.ST_M_X100]) / 100.0
+		s.arm = int(row[SiegeSnapshotSchema.ST_ARM_PM]) / 1000.0
+	for row: Variant in dw if dw is Array else []:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.DW_LEN:
+			continue
+		var id := int(row[SiegeSnapshotSchema.DW_STATION])
+		if SiegeIds.is_station(id):
+			state.station(id).damage_wave = float(int(row[SiegeSnapshotSchema.DW_DAMAGE]))
+
+
+static func _pads(state: SiegeState, rows: Variant) -> void:
+	for p in state.pads:
+		p.type = SiegeIds.PAD_NONE
+		p.level = 0
+		p.cd_s = 0.0
+	for row: Variant in rows if rows is Array else []:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.PD_LEN:
+			continue
+		var n := int(row[SiegeSnapshotSchema.PD_PAD])
+		if not SiegeIds.is_pad(n):
+			continue
+		var p := state.pad(n)
+		p.type = int(row[SiegeSnapshotSchema.PD_TYPE])
+		p.level = int(row[SiegeSnapshotSchema.PD_LEVEL])
+		p.cd_s = int(row[SiegeSnapshotSchema.PD_CD_MS]) / 1000.0
+		p.yaw_deg = int(row[SiegeSnapshotSchema.PD_YAW_CDEG]) / 100.0
+
+
+static func _tar(state: SiegeState, row: Variant) -> void:
+	state.tar.cauldron_max_l = state.cauldron_max()
+	state.tar.curtain_max = state.curtain_max()
+	if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.TAR_LEN:
+		return
+	state.tar.cauldron_l = int(row[SiegeSnapshotSchema.TAR_CAULDRON_DL]) / 10.0
+	state.tar.curtain_hp = int(row[SiegeSnapshotSchema.TAR_CURTAIN_DHP]) / 10.0
+	state.tar.coat = int(row[SiegeSnapshotSchema.TAR_COAT_PM]) / 1000.0
+	state.tar.boarded = int(row[SiegeSnapshotSchema.TAR_BOARDED]) != 0
+
+
+static func _enemies(state: SiegeState, rows: Variant) -> void:
+	state.enemies.clear()
+	for row: Variant in rows if rows is Array else []:
+		if not (row is Array) or (row as Array).size() < SiegeSnapshotSchema.E_LEN:
+			continue
+		var en := SiegeEnemyState.new()
+		en.id = int(row[SiegeSnapshotSchema.E_ID])
+		en.type = int(row[SiegeSnapshotSchema.E_TYPE])
+		en.prog_m = int(row[SiegeSnapshotSchema.E_PROG_DM]) / 10.0
+		en.lat_m = int(row[SiegeSnapshotSchema.E_LAT_DM]) / 10.0
+		en.hp = float(int(row[SiegeSnapshotSchema.E_HP]))
+		en.st = int(row[SiegeSnapshotSchema.E_ST])
+		var def: Dictionary = state.content.enemy_def(en.type) if state.content != null else {}
+		en.max_hp = maxf(float(def.get("hp", en.hp)), en.hp)
+		en.speed_mps = float(def.get("speed_mps", 0.0)) if en.st == SiegeIds.EN_WALK else 0.0
+		if state.path != null:
+			en.place(state.path)
+		state.enemies.append(en)
 
 
 static func _ms(s: float) -> int:
 	return maxi(roundi(s * 1000.0), 0)
+
+
+static func _pm(f: float) -> int:
+	return clampi(roundi(f * 1000.0), 0, 1000)
