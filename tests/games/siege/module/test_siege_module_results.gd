@@ -30,19 +30,26 @@ func test_results_hold_the_stats_the_brief_lists() -> void:
 	(g.ctx.stats as F.Stats).rows = {1: {"kj": 1004.0}, 2: {"kj": 500.0}, -1: {"kj": 10.0}}
 	var st := g.state
 	var r1 := st.rider(1)
-	r1.gen_denarii = 120.7
-	r1.bounty_denarii = 33.2
+	r1.mine_gold = 120.7
+	r1.bounty_gold = 33.2
 	r1.kills = 17
 	r1.damage = 512.4
 	r1.od_scored = 2
-	r1.wave_gen_s = 410.0
-	r1.wave_tower_s = 280.0
-	r1.towers_built = 3
+	r1.wave_mine_s = 410.0
+	r1.wave_weapon_s = 280.0
+	r1.station_s[SiegeIds.STATION_ONAGER] = 200.0
+	r1.station_s[SiegeIds.STATION_MINE] = 150.0
 	st.wave_gate_hp = [100, 82, 64]
-	st.leaks_by_road = [4, 0, 9]
-	st.rams_total = 6
-	st.rams_stopped = 5
+	st.leaks = 13
+	st.engines_total = 6
+	st.engines_stopped = 5
 	st.breaches = 0
+	st.station(SiegeIds.STATION_BALLISTA).shots = 30
+	st.station(SiegeIds.STATION_BALLISTA).hits = 21
+	st.station(SiegeIds.STATION_ONAGER).shots = 12
+	st.station(SiegeIds.STATION_ONAGER).hits = 9
+	st.station(SiegeIds.STATION_ARROWS).shots = 360
+	st.station(SiegeIds.STATION_ARROWS).hits = 50
 	var res := g.results()
 	var sc := SiegeScore.compute(st)
 	assert_eq(res.grade, sc["grade"])
@@ -53,16 +60,16 @@ func test_results_hold_the_stats_the_brief_lists() -> void:
 	assert_eq(
 		row["stats"],
 		{
-			"SIEGE_STAT_GEN_DENARII": 120,
-			"SIEGE_STAT_BOUNTY_DENARII": 33,
+			"SIEGE_STAT_MINE_GOLD": 120,
+			"SIEGE_STAT_BOUNTY_GOLD": 33,
 			"SIEGE_STAT_KILLS": 17,
 			"SIEGE_STAT_DAMAGE": 512,
 			"SIEGE_STAT_OVERDRIVES": 2,
-			"SIEGE_STAT_GEN_TIME": 410,
-			"SIEGE_STAT_TOWER_TIME": 280,
-			"SIEGE_STAT_TOWERS_BUILT": 3,
+			"SIEGE_STAT_MINE_TIME": 410,
+			"SIEGE_STAT_WEAPON_TIME": 280,
+			"SIEGE_STAT_TOP_STATION": "Great onager",
 		},
-		"generator vs bounty denarii, kills, damage, scored Overdrives, wave time, towers built"
+		"mine vs bounty gold, kills, damage, scored Overdrives, wave time, the top station"
 	)
 	assert_eq(row["xp"], 100 + int(BONUS[res.grade]), "round(kJ / 10) + the grade bonus")
 	assert_eq(res.row(2)["xp"], 50 + int(BONUS[res.grade]))
@@ -73,20 +80,26 @@ func test_results_hold_the_stats_the_brief_lists() -> void:
 			"SIEGE_STAT_SCORE",
 			"SIEGE_STAT_GATE_PER_WAVE",
 			"SIEGE_STAT_BREACHES",
-			"SIEGE_STAT_LEAKS_BY_ROAD",
-			"SIEGE_STAT_RAMS_STOPPED"
+			"SIEGE_STAT_LEAKS",
+			"SIEGE_STAT_ENGINES_STOPPED",
+			"SIEGE_STAT_SHOTS",
 		]
 	)
 	# The results screen prints team values with str(): readable text, not Array syntax.
 	assert_eq(res.team["SIEGE_STAT_GATE_PER_WAVE"], "100 / 82 / 64")
-	assert_eq(res.team["SIEGE_STAT_LEAKS_BY_ROAD"], "4 / 0 / 9")
-	assert_eq(res.team["SIEGE_STAT_RAMS_STOPPED"], "5 / 6")
+	assert_eq(res.team["SIEGE_STAT_LEAKS"], 13)
+	assert_eq(res.team["SIEGE_STAT_ENGINES_STOPPED"], "5 / 6")
+	assert_eq(
+		res.team["SIEGE_STAT_SHOTS"],
+		"Tree ballista 21 / 30 · Great onager 9 / 12 · Arrow organ 50 / 360",
+		"hits / shots per station"
+	)
 	assert_eq(res.team["SIEGE_STAT_BREACHES"], 0)
-	assert_eq(JSON.parse_string(JSON.stringify(res.to_dict()))["team"].size(), 5, "JSON safe")
+	assert_eq(JSON.parse_string(JSON.stringify(res.to_dict()))["team"].size(), 6, "JSON safe")
 	assert_eq(res.ride_tag, "Short shift - won", "the Strava title tag: mission and outcome")
 	assert_eq(res.ride_lines.size(), 4)
 	assert_eq(res.ride_lines[1], "Gate breaches: 0")
-	assert_eq(res.ride_lines[2], "Rams stopped: 5 of 6")
+	assert_eq(res.ride_lines[2], "Siege engines stopped: 5 of 6")
 	assert_eq(res.ride_lines[3], "Enemies defeated: 17")
 	st.breaches = 2
 	assert_eq(g.results().summary_key, "SIEGE_RESULTS_FALLEN")

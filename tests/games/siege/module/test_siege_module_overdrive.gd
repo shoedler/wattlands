@@ -219,13 +219,13 @@ func test_a_surge_needs_the_prompt_but_the_button_does_not() -> void:
 	var tick: int = r[1]
 	g.state.enemies.clear()
 	K.step(g, tick, {1: [SiegeIntents.overdrive("surge")]})
-	assert_eq(K.directives(g).requests.size(), 0, "on the generator there is no prompt")
+	assert_eq(K.directives(g).requests.size(), 0, "on the mine there is no prompt")
 	var me := g.state.rider_at(0)
-	me.target = 3
-	K.enemy(g.state, Vector2(0, 30), 60.0)
-	assert_true(g.state.target_hot(3))
+	me.target = SiegeIds.STATION_BALLISTA
+	K.enemy(g.state, SiegeKit.prog_in_band(g.state, SiegeIds.STATION_BALLISTA), 60.0)
+	assert_true(g.state.target_hot(SiegeIds.STATION_BALLISTA))
 	K.step(g, tick + 1, {1: [SiegeIntents.overdrive("surge")]})
-	assert_eq(K.directives(g).requests.size(), 1, "a surge with an enemy in range of its tower")
+	assert_eq(K.directives(g).requests.size(), 1, "a surge with an enemy in range of its station")
 	_free(g)
 
 
