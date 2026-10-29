@@ -83,10 +83,14 @@ const BOW_SLEW := 24.0
 const BOW_KICK := 1.5
 const BOW_KICK_S := 0.06
 const MAX_ROUNDS_PER_FRAME := 4
-## The turret searchlight fades in and out over SEARCH_FADE_S and holds SEARCH_HOLD_S after its
-## rider drops out of band before it fades (a rider wobbling at the band's edge does not flicker it).
+## Both searchlights fade in and out over SEARCH_FADE_S and hold SEARCH_HOLD_S after the Lights
+## seat's rider drops out of band before they fade (a rider wobbling at the band's edge does not
+## flicker them).
 const SEARCH_FADE_S := 0.4
 const SEARCH_HOLD_S := 2.0
+## The rooms' backup lighting (the Lights seat unpowered) fades in and out over BACKUP_FADE_S, with
+## the same hold.
+const BACKUP_FADE_S := 0.5
 
 var game: TankGame = null
 var audio: TankAudio = null
@@ -176,10 +180,14 @@ var _rounds_seen: int = -1
 var _rot_v: float = 0.0
 var _lift_v: float = 0.0
 var _pose_primed: bool = false
-## The turret searchlight's level (0 off .. 1 on; search_fade()) and its hold left (s).
+## The searchlights' level (0 off .. 1 on; search_fade()) and its hold left (s).
 var search_level: float = 0.0
 var _search_hold: float = 0.0
 var _search_primed: bool = false
+## The rooms' backup lighting (0 the warm lamps .. 1 the dim backup: the Lights seat unpowered) and
+## its hold left (s).
+var backup_level: float = 0.0
+var _backup_hold: float = 0.0
 
 
 func _ready() -> void:
@@ -659,40 +667,62 @@ func searchlight_k(state: TankState) -> float:
 	return 1.0 if arc.lit else 0.3
 
 
-## The turret searchlight (forward, about 11 degrees down) is on while the Lights seat is manned
-## and its arc lit (brief v3 "Lights"); search_level fades it (search_fade()).
-func turret_search_on(state: TankState) -> bool:
+## The Lights seat is powered while it is manned and its arc lit, its rider in band (brief v3
+## "Lights"; tank 0.3.1: Simon). Both searchlights burn then (turret: forward about 11 degrees
+## down; rear: aft about 13 degrees down) and the rooms have their warm lamps; unpowered, the
+## searchlights go out (a standby glow on their lenses) and the rooms fall back to their dim backup
+## lighting. search_level and backup_level fade them (search_fade()).
+func lights_powered(state: TankState) -> bool:
 	return rider_on("lights") != null and searchlight_k(state) >= 1.0
 
 
-## The turret searchlight's level this frame: on (turret_search_on) it fades up; off, it holds
-## SEARCH_HOLD_S first while its rider stays on the seat (dropped out of band), then fades down. An
-## empty seat or a breakdown fades it at once.
+## The turret searchlight's rule (lights_powered(); kept for its callers).
+func turret_search_on(state: TankState) -> bool:
+	return lights_powered(state)
+
+
+## The searchlights' and the backup lighting's levels this frame: powered (lights_powered) the
+## searchlights fade up and the backup down; unpowered, both hold SEARCH_HOLD_S first while the
+## seat's rider stays on it (dropped out of band), then the searchlights fade down and the backup
+## up. An empty seat or a breakdown skips the hold.
 func _search(state: TankState, step_dt: float) -> void:
-	var want := turret_search_on(state)
+	var want := lights_powered(state)
 	if not _search_primed:
 		_search_primed = true
 		search_level = 1.0 if want else 0.0
 		_search_hold = SEARCH_HOLD_S if want else 0.0
+		backup_level = 0.0 if want else 1.0
+		_backup_hold = _search_hold
 		return
 	if not want and (rider_on("lights") == null or state.hull.breakdown):
 		_search_hold = 0.0
+		_backup_hold = 0.0
 	var lh := search_fade(search_level, _search_hold, want, step_dt)
 	search_level = lh.x
 	_search_hold = lh.y
+	var bh := fade(1.0 - backup_level, _backup_hold, want, step_dt, BACKUP_FADE_S, SEARCH_HOLD_S)
+	backup_level = 1.0 - bh.x
+	_backup_hold = bh.y
 
 
-## One step of the searchlight's fade: Vector2(level, hold left) after `step_dt` s from `level`
-## (0..1) and `hold` (s) with the light wanted on or not. On: up by step_dt / SEARCH_FADE_S, the
-## hold refilled. Off: the hold runs out first, the rest of the step fades it down.
+## One step of the searchlights' fade (fade() over SEARCH_FADE_S, holding SEARCH_HOLD_S).
 static func search_fade(level: float, hold: float, want: bool, step_dt: float) -> Vector2:
+	return fade(level, hold, want, step_dt, SEARCH_FADE_S, SEARCH_HOLD_S)
+
+
+## One step of a light's fade: Vector2(level, hold left) after `step_dt` s from `level` (0..1) and
+## `hold` (s) with it wanted on or not. On: up by step_dt / `fade_s`, the hold refilled to
+## `hold_s`. Off: the hold runs out first, the rest of the step fades it down.
+static func fade(
+	level: float, hold: float, want: bool, step_dt: float, fade_s: float, hold_s: float
+) -> Vector2:
 	if want:
-		var up := level + step_dt / SEARCH_FADE_S
-		return Vector2(1.0 if up > 0.999 else up, SEARCH_HOLD_S)
+		var up := level + step_dt / fade_s
+		return Vector2(1.0 if up > 0.999 else up, hold_s)
 	var left := hold - step_dt
 	if left >= 0.0:
 		return Vector2(level, left)
-	var down := level + left / SEARCH_FADE_S
+	var down := level + left / fade_s
 	return Vector2(0.0 if down < 0.001 else down, 0.0)
 
 
@@ -732,6 +762,8 @@ func _paint(state: TankState) -> void:
 	for k in 2:
 		body.bow_kick[k] = BOW_KICK if firing.bow_kicking(k, BOW_KICK_S) else 0.0
 	body.search_lit = search_level >= 0.5
+	body.rear_lit = search_level >= 0.5
+	body.backup = backup_level
 
 
 func _turret(state: TankState) -> void:

@@ -9,9 +9,12 @@ extends SubViewport
 ##          centre `wheels`), the return rollers
 ##   Shade  the skirt's deep shadow over the running gear (multiplied)
 ##   Front  the base art with the live rooms (TankInterior's texture), the turret block mirrored
-##          about its pivot by `turret_sx` (a traverse), the turret searchlight's lit lens, the
-##          sprocket, the main gun at `elev_deg` with its recoil, the bow guns tilted to
+##          about its pivot by `turret_sx` (a traverse), the searchlights' lit lenses while they
+##          burn, the sprocket, the main gun at `elev_deg` with its recoil, the bow guns tilted to
 ##          `bow_elev_deg` with their kick
+##   Dim    the rooms' backup lighting (multiplied): every room and window dimmed toward
+##          BACKUP_DIM by `backup` (0 the warm lamps .. 1 the Lights seat unpowered); the machines
+##          and the riders still read
 ## The view sets the fields each frame; this node only draws them.
 
 const PAD := 8
@@ -20,6 +23,8 @@ const ARC_DS := 1.5
 const ARM_DARK := Color("#1a130d")
 const ARM_MID := Color("#3a2c1e")
 const ARM_LIT := Color("#6a5236")
+## The rooms under their backup lighting (a multiply): dimmer and a little red, still readable.
+const BACKUP_DIM := Color(0.6, 0.47, 0.44)
 
 var rig: TankRig = null
 ## The rooms' live texture (TankInterior.tex), else the base.
@@ -35,10 +40,14 @@ var turret_sx: float = 1.0
 var bow_elev_deg: float = 2.0
 var bow_kick: Array[float] = [0.0, 0.0]
 var search_lit: bool = false
+var rear_lit: bool = false
+## The rooms' backup lighting (0..1).
+var backup: float = 0.0
 
 var _back: Node2D = null
 var _shade: Node2D = null
 var _front: Node2D = null
+var _dim: Node2D = null
 
 
 func _init(p_rig: TankRig) -> void:
@@ -58,6 +67,11 @@ func _init(p_rig: TankRig) -> void:
 	mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
 	_shade.material = mul
 	_front = _layer("Front")
+	_dim = _layer("Dim")
+	var dim_mul := CanvasItemMaterial.new()
+	dim_mul.blend_mode = CanvasItemMaterial.BLEND_MODE_MUL
+	_dim.material = dim_mul
+	_dim.draw.connect(_draw_dim)
 	_back.draw.connect(_draw_back)
 	_shade.draw.connect(_draw_shade)
 	_front.draw.connect(_draw_front)
@@ -76,6 +90,7 @@ func refresh() -> void:
 	_back.queue_redraw()
 	_shade.queue_redraw()
 	_front.queue_redraw()
+	_dim.queue_redraw()
 
 
 ## The turret's transform (sprite px): mirrored and squeezed about its pivot.
@@ -331,6 +346,8 @@ func _draw_front() -> void:
 		Rect2(tr.end.x, 0, w - tr.end.x, h),
 	]:
 		ci.draw_texture_rect_region(tex, r, r)
+	if rear_lit and rig.lit_rear_tex != null:
+		ci.draw_texture(rig.lit_rear_tex, rig.lit_rear_at)
 	ci.draw_set_transform_matrix(turret_xf())
 	ci.draw_texture_rect_region(tex, tr, tr)
 	if search_lit and rig.lit_tex != null:
@@ -349,3 +366,24 @@ func _draw_front() -> void:
 		if rig.ball_tex != null:
 			ci.draw_texture(rig.ball_tex, -rig.ball_origin)
 	ci.draw_set_transform_matrix(Transform2D.IDENTITY)
+
+
+# --- Dim: the rooms' backup lighting ------------------------------------------------------------------------
+
+
+## The colour the Dim layer multiplies the rooms by at `k` (0..1 backup).
+static func backup_tint(k: float) -> Color:
+	return Color.WHITE.lerp(BACKUP_DIM, clampf(k, 0.0, 1.0))
+
+
+func _draw_dim() -> void:
+	if backup <= 0.0:
+		return
+	var c := backup_tint(backup)
+	var tr := rig.turret_rect
+	var rects: Array = rig.rooms.values() + rig.windows.values()
+	for r: Rect2 in rects:
+		if tr.encloses(r):
+			_dim.draw_set_transform_matrix(turret_xf())
+		_dim.draw_rect(r, c)
+		_dim.draw_set_transform_matrix(Transform2D.IDENTITY)
