@@ -7,7 +7,9 @@ extends Control
 ## a capture after n frames is always the same picture.
 ##   tools/screenshot --scene=res://src/games/siege/view/v2/siege_v2_demo.tscn --frames=<n>
 ## User args: --siege-demo-t=<s> (start time), --siege-demo-sharp (tilt-shift off),
-## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update).
+## --siege-demo-stress (150 attackers and a shot every 0.15 s; prints the cost of an update),
+## --siege-demo-mock-pose (the machines posed as in the approved mock, no attackers or shots, to
+## compare a capture with build/siege_mock_r2/frame_sharp_2x.png).
 
 const START_S := 6.0
 const FRAME_DT := 1.0 / 60.0
@@ -46,6 +48,7 @@ var _lat := PackedFloat32Array()
 var _fired: int = -1
 var _last_fire := PackedFloat32Array([-9, -9, -9, -9, -9])
 var _stress: bool = false
+var _mock_pose: bool = false
 var _shot_every: float = SHOT_EVERY_S
 var _usec: int = 0
 var _frames: int = 0
@@ -59,6 +62,8 @@ func _ready() -> void:
 			time_s = float(a.get_slice("=", 1))
 		elif a == "--siege-demo-sharp":
 			sharp = true
+		elif a == "--siege-demo-mock-pose":
+			_mock_pose = true
 		elif a == "--siege-demo-stress":
 			_stress = true
 			_shot_every = 0.15
@@ -113,10 +118,47 @@ func _process(_delta: float) -> void:
 
 
 func update_at(t: float) -> void:
+	if _mock_pose:
+		pose_as_mock()
+		return
 	_update_machines(t)
 	_update_crowd(t)
 	_fire_until(t)
 	shots.set_time(t)
+
+
+## The approved mock's moment (scene.mjs and life.mjs defaults): every slot routed, the
+## stations at their mock yaws, a full curtain and coat, scorpions on pads 2 and 4.
+func pose_as_mock() -> void:
+	var angles := [0.3, 1.1, 2.0, 0.7]
+	var walkers := [2, 3, 2, 1]
+	var routes := [1, 2, 3, 4]
+	for s in 4:
+		machines.set_wheel(s, rad_to_deg(angles[s]), true, walkers[s], 0.0)
+		machines.set_route(s, routes[s])
+	machines.set_station(1, rad_to_deg(atan2(40.0, -18.0)), 1.0)
+	machines.set_station(2, 135.0, (105.0 - 80.0) / 85.0)
+	machines.set_station(3, rad_to_deg(atan2(26.0, -34.0)), 1.0)
+	machines.racks = 7
+	machines.mine_phase = 0.0
+	machines.pump_phase = 0.0
+	machines.gate_stage = 0
+	machines.curtain_stage = 3
+	machines.coat_stage = 3
+	machines.set_pad(1, 0, 0.0)
+	machines.set_pad(2, 1, 110.0)
+	machines.set_pad(3, 0, 0.0)
+	machines.set_pad(4, 1, 160.0)
+	machines.rebuild()
+	crowd.set_enemies(
+		PackedInt32Array(),
+		PackedVector3Array(),
+		PackedFloat32Array(),
+		PackedFloat32Array(),
+		PackedFloat32Array()
+	)
+	shots.shots.clear()
+	shots.set_time(0.0)
 
 
 func _make_column() -> void:

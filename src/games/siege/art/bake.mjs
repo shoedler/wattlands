@@ -30,7 +30,7 @@ import * as W from './world.mjs';
 import { writePng } from './png.mjs';
 
 // Bump when the baked art or its encodings change; `--check` compares it with the manifest.
-export const BAKE_VERSION = 1;
+export const BAKE_VERSION = 2;
 export const GENERATOR = 'src/games/siege/art/bake.mjs';
 export const WORLD_DEPTH = { offset: -400, scale: 64 };
 export const SPRITE_DEPTH = { zero: 32768, scale: 256 };
@@ -427,7 +427,7 @@ function marks() {
 
 export const YAWS = 16;
 export const BALLISTA_ARMS = [0, 1 / 3, 2 / 3, 1];
-export const ONAGER_ARMS = [0, 0.2, 0.4, 0.6, 0.8, 1];
+export const ONAGER_ARMS = range(12).map((k) => k / 11);
 const onagerDeg = (arm) => 80 + 85 * arm;
 
 function stations() {

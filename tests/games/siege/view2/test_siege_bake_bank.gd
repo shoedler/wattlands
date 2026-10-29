@@ -84,7 +84,7 @@ func test_frame_counts_follow_the_layouts() -> void:
 		assert_eq(bank.frame_count("walker_%d" % s), 12)
 		assert_eq(bank.anchors("walker_%d" % s).size(), 3)
 	assert_eq(bank.frame_count("ballista"), 16 * 4)
-	assert_eq(bank.frame_count("onager"), 16 * 6)
+	assert_eq(bank.frame_count("onager"), 16 * 12)
 	assert_eq(bank.frame_count("arrows"), 16 * 8)
 	assert_eq(bank.frame_count("gate"), 4)
 	assert_eq(bank.frame_count("spear"), 8)
