@@ -202,7 +202,7 @@ export class Life {
       v3(25, 36, 0), v3(38.5, 38, 0), v3(21.5, 47, 0), v3(33, 50.5, 0),
       v3(-1, 56.5, 15), v3(2.5, 61.5, 15),
       v3(81, 56.5, 15), v3(85, 60.5, 15),
-      v3(41, 56.5, 13), v3(46.5, 60.5, 13),
+      v3(40.6, 59.6, 11.5), v3(47.2, 59.9, 11.5),
       v3(68, 17, 0), v3(74, 18, 0), v3(70.5, 8, 0),
       v3(33, 27.2, 0.5), v3(19, 27.2, 0.5), v3(49, 27.2, 0.5), v3(28, 18.2, 0.5), v3(55, 18.2, 0.5),
       v3(14.5, 30, 0), v3(16, 31, 0), v3(66, 47, 0), v3(37, 50, 0), v3(52, 46, 0),
@@ -283,7 +283,7 @@ export class Life {
     // the previous stone's impact in the middle Valley block
     this.impact(this.ground(W.roadPoint(0, 130)), 0.32);
     // ballista: a bolt three quarters of the way to the first siege tower, streak behind it
-    const bp = add(S.BALLISTA, v3(0, 0, 2.1));
+    const bp = add(S.BALLISTA, v3(0, 0, 6));
     const st = W.roadPoint(0, 26);
     const stHit = v3(st.x, st.y, W.height(st.x, st.y) + 10);
     const bk = 0.0004;
@@ -294,8 +294,8 @@ export class Life {
     const bpos = lerp3(bpath[bi], bpath[bi + 1], bt - bi);
     const bdir = norm(sub(bpath[bi + 1], bpath[bi]));
     for (let k = 0; k < 30; k++) r.point(sub(bpos, mul(bdir, 2.4 + k * 0.5)), [1, 0.98 - k * 0.008, 0.88 - k * 0.012], 1, false, 0.3 * (1 - k / 30), 1 - k / 34);
-    r.line3(sub(bpos, mul(bdir, 2.4)), bpos, hex('#2e2014'));
-    r.point(bpos, hex('#e8ecf0'), 2);
+    for (let q = 0; q < 14; q++) r.point(sub(bpos, mul(bdir, q * 0.4)), hex(q < 2 ? '#3a3c40' : '#6b5134'), 2);
+    r.point(bpos, hex('#e8ecf0'), 1);
     this.dropShadow(bpos, 0.6);
     r.point(bpos, hex('#cfd2d6'), 1);
     r.line3(add(stHit, v3(-1.5, 0.8, -3)), add(stHit, v3(-0.2, -0.6, -2.6)), hex('#4a3322'));

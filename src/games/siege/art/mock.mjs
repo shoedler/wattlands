@@ -34,8 +34,8 @@ save('frame_2x.png', frame, 2);
 save('frame_sharp_2x.png', sharp, 2);
 // detail crops of the sharp frame at x4 (art px rectangles), and a 2 x 2 sheet of four of them
 const crops = {
-  wheels: [400, 80, 240, 135], gate: [290, 230, 240, 135], mine: [600, 140, 240, 135], army: [100, 330, 240, 135],
-  ballista: [170, 160, 240, 135], arrows: [420, 230, 240, 135], junction: [370, 110, 240, 135], catapult: [330, 160, 240, 135], camp: [0, 20, 240, 135],
+  wheels: [400, 80, 240, 135], gate: [290, 230, 240, 135], mine: [560, 160, 240, 135], army: [100, 330, 240, 135],
+  ballista: [130, 90, 240, 135], arrows: [420, 230, 240, 135], junction: [370, 110, 240, 135], catapult: [330, 160, 240, 135], camp: [0, 20, 240, 135],
 };
 const cut = ([cx, cy, cw, ch]) => {
   const sub = new Float32Array(cw * ch * 3);

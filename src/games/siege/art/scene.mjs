@@ -437,17 +437,11 @@ export class Scene {
       return i >= 0 ? M.ACC0 + i : M.WOOD_DARK;
     };
     const C = COL_Z;
-    this.shaft([v3(60, h.y0 + 0.4, C), v3(60, 15.4, C), v3(62.8, 15.4, C)], lit(ST.MINE));
+    this.shaft([v3(60, h.y0 + 0.4, C), v3(60, 15.4, C), v3(62.8, 15.4, C), v3(62.8, 13.3, 4)], lit(ST.MINE));
     this.shaft([v3(36, h.y1 - 0.4, C), v3(36, 35.4, C)], lit(ST.CATAPULT));
     this.shaft([v3(17, h.y1 - 0.4, C), v3(17, 50, C), v3(2.8, 57.2, 15.6)], lit(ST.BALLISTA));
-    this.shaft([v3(52, h.y1 - 0.4, C), v3(52, 50.5, C), v3(46.5, 56.4, 11.9)], lit(ST.TAR));
+    this.shaft([v3(52, h.y1 - 0.4, C), v3(52, 50.5, C), v3(47.6, 56.8, 12.4)], lit(ST.TAR));
     this.shaft([v3(47, h.y1 - 0.4, C), v3(47, 30, C), v3(52, 30, C), v3(57, 30, 11), v3(78.2, 30, 11), v3(78.2, 54.4, 11), v3(81.2, 57.2, 15.6)], lit(ST.ARROWS));
-  }
-
-  pennant(base, h, mat, o) {
-    this.r.beam(base, add(base, v3(0, 0, h)), 0.3, M.WOOD_DARK, o);
-    const top = add(base, v3(0, 0, h - 0.1));
-    this.r.tri(top, add(top, v3(3.6, 0.7, -1.0)), add(top, v3(0, 0, -2.3)), mat, o);
   }
 
   // The station's main moving part: the driving rider's hue when powered, else its own material.
@@ -456,9 +450,8 @@ export class Scene {
     return i >= 0 ? M.ACC0 + i : idle;
   }
 
-  // A station's power marker: a ring of tiles in the driving rider's colour (dark when idle)
-  // and, when powered, a pennant in that colour.
-  stationMark(j, c, rad, flag = v3(0.7, -0.7, 0)) {
+  // A station's power marker: a ring of tiles in the driving rider's colour (dark when idle).
+  stationMark(j, c, rad) {
     const i = this.routes.indexOf(j);
     const mat = i >= 0 ? M.ACC0 + i : M.STONE_DARK;
     const n = Math.max(14, Math.round(rad * 5));
@@ -498,11 +491,12 @@ export class Scene {
       const mid = this.catP((x0 + x1) / 2, (y0 + y1) / 2, z0);
       this.ybox(mid, yaw, { x: ((x1 - x0) / 2) * S, y: ((y1 - y0) / 2) * S, z: ((z1 - z0) / 2) * S }, mat, o);
     };
-    this.stationMark(ST.CATAPULT, c, 9.6, v3(0.95, -0.3, 0));
+    this.stationMark(ST.CATAPULT, c, 9.6);
+    rail(-2.6, -4.6, 0, 2.6, 4.0, 0.5, M.WALL);
+    for (const side of [-1, 1]) for (const dy of [-2.6, 0, 2.6]) rail(1.6 * side - 0.45, dy - 0.5, 0, 1.6 * side + 0.45, dy + 0.5, 0.55, M.WALLTOP);
     for (const side of [-1, 1]) {
       const x = 1.6 * side;
       rail(x - 0.3, -3.5, 0.5, x + 0.3, 3.5, 1.3, M.WOOD);
-      for (const dy of [-2.6, 2.6]) r.cyl(P(x + 0.35 * side, dy, 0.9), P(x + 0.75 * side, dy, 0.9), 0.9 * S, M.WOOD_DARK, o, 12);
       r.beam(P(x, 1.2, 1.3), P(x, 0.6, 5.4), 0.42 * S, M.WOOD, o);
       r.beam(P(x, 2.8, 1.3), P(x, 0.6, 5.4), 0.35 * S, M.WOOD_DARK, o);
     }
@@ -513,6 +507,7 @@ export class Scene {
     r.cyl(P(-2, -1.8, 1.8), P(2, -1.8, 1.8), 0.42 * S, M.WOOD_DARK, o, 10);
     const tip = this.catapultTip();
     r.beam(pivot, tip, 0.6 * S, this.powerMat(ST.CATAPULT, M.WOOD_LIGHT), o, v3(1, 0, 0));
+    for (const t of [0.3, 0.55, 0.8]) r.beam(add(pivot, mul(sub(tip, pivot), t - 0.025)), add(pivot, mul(sub(tip, pivot), t + 0.025)), 0.7 * S, M.IRON, o, v3(1, 0, 0));
     const sling = sub(tip, v3(0, 0, 2.2));
     r.line3(tip, sling, [0.62, 0.52, 0.38]);
     this.ybox(sub(sling, v3(0, 0, 0.4)), yaw, { x: 0.6, y: 0.6, z: 0.3 }, M.HIDE, o);
@@ -528,80 +523,96 @@ export class Scene {
     return Math.atan2(40, -18);
   }
 
+  // The tree ballista: a fictional giant of the scorpio. Each bow arm is a whole lopped fir
+  // trunk set in a torsion skein of rope as thick as a man is tall; the string is a ship's hawser
+  // and the bolt a stripped trunk with an iron point. The rota winds the skeins (rider's colour).
   ballista() {
-    const r = this.r, b = BALLISTA, o = 51, k = 2.8;
+    const r = this.r, b = BALLISTA, o = 51;
     const a = this.ballistaAim();
-    this.stationMark(ST.BALLISTA, b, 4.1, v3(-0.2, -0.95, 0));
-    const L = (base, l) => this.local(base, a, mul(l, k));
-    r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
-    this.ybox(add(b, v3(0, 0, 0.4)), a, { x: 0.5 * k, y: 0.5 * k, z: 1.25 * k }, M.WOOD, o);
-    const base = add(b, v3(0, 0, 0.4 + 2.3 * k));
-    const back = L(base, v3(-2.4, 0, 0));
-    const front = L(base, v3(2.6, 0, 0.35));
-    r.beam(back, front, 0.38 * k, M.WOOD_LIGHT, o);
-    const fr = L(base, v3(1.8, 0, 0.2));
+    this.stationMark(ST.BALLISTA, b, 4.1);
+    const L = (l) => this.local(b, a, l);
+    const D = (l) => this.local(v3(0, 0, 0), a, l);
+    r.cylZ(b, 3.2, 0.4, M.WOOD_DARK, o, 16);
+    this.ybox(add(b, v3(0, 0, 0.4)), a, { x: 1.4, y: 1.4, z: 1.8 }, M.WOOD, o);
+    r.beam(L(v3(-6.5, 0, 4.4)), L(v3(6.8, 0, 5.2)), 1.0, M.WOOD_LIGHT, o);
+    const skein = this.powerMat(ST.BALLISTA, M.ROPE);
     for (const side of [-1, 1]) {
-      const sp = L(fr, v3(0, 0.75 * side, -0.6));
-      r.cyl(sp, add(sp, v3(0, 0, 1.4 * k)), 0.26 * k, M.ROPE, o, 8);
-      r.beam(L(fr, v3(0, 0, -0.65)), L(fr, v3(0, side, -0.65)), 0.2 * k, M.BRONZE, o);
-      r.beam(L(fr, v3(0, 0, 0.8)), L(fr, v3(0, side, 0.8)), 0.2 * k, M.BRONZE, o);
-      const armTip = L(fr, v3(0.6, 2.6 * side, 0.1));
-      r.beam(L(fr, v3(0, 0.75 * side, 0.1)), armTip, 0.24 * k, this.powerMat(ST.BALLISTA, M.WOOD_DARK), o);
-      r.line3(armTip, L(base, v3(-1.2, 0, 0.45)), [0.88, 0.85, 0.75]);
+      const sp = L(v3(4.2, 1.5 * side, 3.0));
+      r.cyl(sp, add(sp, v3(0, 0, 4.2)), 0.8, skein, o, 10);
+      for (const z of [-0.2, 3.95]) r.cyl(add(sp, v3(0, 0, z)), add(sp, v3(0, 0, z + 0.45)), 0.95, M.BRONZE, o, 10);
+      const pts = [L(v3(4.2, 1.5 * side, 5.1)), L(v3(3.6, 4.0 * side, 5.2)), L(v3(2.8, 6.4 * side, 5.3)), L(v3(1.9, 8.4 * side, 5.35))];
+      const th = [1.0, 0.78, 0.56];
+      for (let k = 0; k < 3; k++) r.beam(pts[k], pts[k + 1], th[k], M.WOOD, o);
+      r.beam(pts[1], add(pts[1], D(v3(1.0, 0.5 * side, 0.9))), 0.3, M.WOOD_DARK, o);
+      r.beam(pts[2], add(pts[2], D(v3(-0.9, 0.4 * side, 0.7))), 0.26, M.WOOD_DARK, o);
+      r.line3(pts[3], L(v3(-3.2, 0, 5.6)), [0.88, 0.85, 0.75]);
     }
-    r.cyl(L(back, v3(0.3, -0.7, 0)), L(back, v3(0.3, 0.7, 0)), 0.18 * k, M.WOOD_DARK, o, 6);
-    r.line3(L(base, v3(-1.2, 0, 0.5)), L(base, v3(3.4, 0, 0.5)), [0.3, 0.24, 0.18]);
-    r.point(L(base, v3(3.4, 0, 0.5)), [0.75, 0.76, 0.8], 1);
-    this.ballistaMuzzle = L(base, v3(2.6, 0, 0.45));
+    r.beam(L(v3(-3.2, 0, 5.75)), L(v3(7.6, 0, 6.1)), 0.55, M.WOOD, o);
+    r.beam(L(v3(7.6, 0, 6.1)), L(v3(8.7, 0, 6.15)), 0.4, M.IRON, o);
+    // the windlass the shaft turns, at the back of the stock
+    r.cyl(L(v3(-6.2, -1.3, 4.4)), L(v3(-6.2, 1.3, 4.4)), 0.35, M.WOOD_DARK, o, 8);
+    r.cyl(L(v3(-6.2, -1.25, 4.4)), L(v3(-6.2, -0.8, 4.4)), 1.0, M.BRONZE, o, 14);
+    this.ballistaMuzzle = L(v3(7, 0, 6));
   }
 
+  // The arrow organ: a cluster of three hwacha-sized racks fanned on one turntable, fired in
+  // ripple off a shared chain drive. Each rack is painted in the driving rider's colour.
   arrowBattery() {
-    const r = this.r, b = ARROWS, o = 52, k = 2.6;
+    const r = this.r, b = ARROWS, o = 52;
     const a = Math.atan2(26, -34);
-    this.stationMark(ST.ARROWS, b, 4.1, v3(0.95, -0.2, 0));
-    r.cylZ(b, 3.0, 0.4, M.WOOD_DARK, o, 16);
+    this.stationMark(ST.ARROWS, b, 4.1);
+    r.cylZ(b, 3.3, 0.4, M.WOOD_DARK, o, 16);
     const base = add(b, v3(0, 0, 0.4));
-    const L = (l) => this.local(base, a, mul(l, k));
-    // two A-frame trestles carry the rack on trunnions
-    for (const side of [-1, 1]) {
-      for (const dx of [-0.9, 0.9]) r.beam(L(v3(dx, 1.35 * side, 0)), L(v3(0, 1.35 * side, 1.7)), 0.22 * k, M.WOOD, o);
-      r.beam(L(v3(-1, 1.35 * side, 0.1)), L(v3(1, 1.35 * side, 0.1)), 0.2 * k, M.WOOD_DARK, o);
-    }
-    // the rack: a slatted frame of 4 x 6 tubes raised 35 degrees, iron-banded, arrows bristling
+    const mat = this.powerMat(ST.ARROWS, M.WOOD_DARK);
     const tilt = deg(30);
-    const fwd = v3(Math.cos(a) * Math.cos(tilt), Math.sin(a) * Math.cos(tilt), Math.sin(tilt));
-    const side = v3(-Math.sin(a), Math.cos(a), 0);
-    let upv = norm(cross(fwd, side));
-    if (upv.z < 0) upv = mul(upv, -1);
-    const center = L(v3(0, 0, 1.75));
-    r.obox(center, fwd, side, upv, { x: 0.9 * k, y: 1.2 * k, z: 0.38 * k }, this.powerMat(ST.ARROWS, M.WOOD_DARK), o);
-    for (const t of [-0.55, 0.55]) r.obox(add(center, mul(fwd, t * k)), fwd, side, upv, { x: 0.07 * k, y: 1.24 * k, z: 0.42 * k }, M.IRON, o);
-    // the magazine: a bed of arrows on the rack's top, their heads bristling past the front
-    for (let cm = 0; cm < 7; cm++) {
-      const m = add(add(add(center, mul(side, (-0.96 + cm * 0.32) * k)), mul(upv, 0.42 * k)), mul(fwd, -0.8 * k));
-      const tip = add(m, mul(fwd, 2.3 * k));
-      r.line3(m, tip, [0.71, 0.6, 0.44]);
-      r.point(tip, [0.2, 0.2, 0.23], 1);
-      r.point(m, [0.95, 0.92, 0.86], 1);
+    for (const [dy, da] of [[-2.3, -0.2], [0, 0], [2.3, 0.2]]) {
+      const ra = a + da;
+      const c0 = this.local(base, a, v3(0.3 - Math.abs(dy) * 0.25, dy, 0));
+      const L = (l) => this.local(c0, ra, l);
+      for (const s of [-0.8, 0.8]) {
+        r.beam(L(v3(-0.8, s, 0)), L(v3(0, s, 1.4)), 0.35, M.WOOD, o);
+        r.beam(L(v3(0.8, s, 0)), L(v3(0, s, 1.4)), 0.35, M.WOOD, o);
+      }
+      const fwd = v3(Math.cos(ra) * Math.cos(tilt), Math.sin(ra) * Math.cos(tilt), Math.sin(tilt));
+      const side = v3(-Math.sin(ra), Math.cos(ra), 0);
+      let upv = norm(cross(fwd, side));
+      if (upv.z < 0) upv = mul(upv, -1);
+      const center = L(v3(0, 0, 1.75));
+      r.obox(center, fwd, side, upv, { x: 1.25, y: 0.95, z: 0.42 }, mat, o);
+      r.obox(center, fwd, side, upv, { x: 0.1, y: 0.99, z: 0.46 }, M.IRON, o);
+      for (let cm = 0; cm < 4; cm++) {
+        const m = add(add(add(center, mul(side, -0.7 + cm * 0.47)), mul(upv, 0.46)), mul(fwd, -1.1));
+        const tip = add(m, mul(fwd, 3.0));
+        r.line3(m, tip, [0.71, 0.6, 0.44]);
+        r.point(tip, [0.2, 0.2, 0.23], 1);
+        r.point(m, [0.95, 0.92, 0.86], 1);
+      }
     }
-    // the drive: a bronze flywheel on the trunnion, turned by the shaft from the wall
-    r.cyl(L(v3(0, 1.55, 1.7)), L(v3(0, 1.85, 1.7)), 0.85 * k, M.BRONZE, o, 14);
-    r.cyl(L(v3(0, 1.3, 1.7)), L(v3(0, 2.0, 1.7)), 0.18 * k, M.IRON, o, 6);
+    // the shared drive: a bronze sprocket at the back, a chain to every rack
+    const sprocket = this.local(base, a, v3(-2.2, 0, 1.2));
+    r.cyl(sub(sprocket, this.local(v3(0, 0, 0), a, v3(0, 0.25, 0))), add(sprocket, this.local(v3(0, 0, 0), a, v3(0, 0.25, 0))), 0.9, M.BRONZE, o, 14);
+    for (const dy of [-2.3, 2.3]) r.line3(sprocket, this.local(base, a, v3(-1.0 - Math.abs(dy) * 0.25, dy, 1.4)), [0.25, 0.24, 0.26]);
   }
 
+  // The tar works: a cluster of three cauldrons on one hearth, and a Ctesibius force pump (two
+  // bronze cylinders under a rocking beam) that drives the tar to the spout gallery.
   tarPump() {
-    const r = this.r, p = TAR_PUMP, o = 53;
-    this.stationMark(ST.TAR, v3(44, 59.2, 11.5), 3.3, v3(0.95, 0.3, 0));
-    r.cylZ(v3(p.x - 1.6, p.y - 1.3, p.z - 1.5), 2.6, 3.0, this.powerMat(ST.TAR, M.BRONZE), o, 18, M.TAR);
-    for (let k = 0; k < 2; k++) r.cylZ(v3(p.x - 1.6, p.y - 1.3, p.z - 1.1 + k * 1.4), 2.66, 0.25, M.IRON, o, 18);
-    const pv = v3(p.x + 1.2, p.y - 1.6, p.z + 1.6);
-    r.beam(v3(p.x + 0.2, p.y - 1.6, p.z - 2), pv, 0.25, M.WOOD_DARK, o);
-    r.beam(v3(p.x + 2.2, p.y - 1.6, p.z - 2), pv, 0.25, M.WOOD_DARK, o);
-    r.beam(add(pv, v3(-3, 0, 0.5)), add(pv, v3(2.4, 0, -0.4)), 0.3, M.WOOD_LIGHT, o);
-    r.beam(add(pv, v3(-3, 0, 0.5)), add(pv, v3(-3.2, -0.2, -1.6)), 0.15, M.IRON, o);
-    r.cyl(v3(p.x + 3.6, p.y - 2.2, p.z - 1), v3(p.x + 3.6, p.y - 1, p.z - 1), 0.6, M.BRONZE, o, 10);
-    r.beam(v3(p.x - 0.8, p.y - 1.8, p.z - 1), v3(p.x - 0.8, p.y + 3.2, p.z - 1), 0.32, M.IRON, o);
-    r.beam(v3(p.x - 3.8, p.y + 3.2, p.z - 1), v3(p.x + 3.8, p.y + 3.2, p.z - 1), 0.32, M.IRON, o);
+    const r = this.r, o = 53;
+    this.stationMark(ST.TAR, v3(44, 59.2, 11.5), 3.3);
+    r.box(v3(40.2, 56.3, 11.5), v3(47.8, 58.9, 12.1), M.STONE_DARK, o, M.WALLTOP);
+    for (let k = 0; k < 5; k++) r.point(v3(41 + k * 1.5, 58.95, 11.8), [1, 0.55, 0.18], 1, true, 0.8);
+    const pot = this.powerMat(ST.TAR, M.BRONZE);
+    for (const x of [41.5, 44, 46.5]) {
+      r.cylZ(v3(x, 57.9, 12.1), 1.25, 3.1, pot, o, 14, M.TAR);
+      r.cylZ(v3(x, 57.9, 14.3), 1.3, 0.22, M.IRON, o, 14);
+    }
+    for (const x of [42.8, 45.2]) r.cylZ(v3(x, 60.1, 11.5), 0.42, 1.8, M.BRONZE, o, 10, M.IRON);
+    r.beam(v3(44, 60.1, 11.5), v3(44, 60.1, 14.2), 0.35, M.WOOD_DARK, o);
+    r.beam(v3(41.9, 60.1, 13.7), v3(46.1, 60.1, 14.5), 0.42, M.WOOD_LIGHT, o);
+    for (const x of [42.8, 45.2]) r.line3(v3(x, 60.1, 13.3), v3(x, 60.1, 14.0 + (x - 42.8) * 0.17), [0.25, 0.24, 0.26]);
+    for (const x of [41.5, 44, 46.5]) r.beam(v3(x, 58.7, 12.6), v3(x < 44 ? 42.8 : 45.2, 60.1, 12.6), 0.22, M.IRON, o);
+    r.beam(v3(40.2, 61.7, 10.5), v3(47.8, 61.7, 10.5), 0.32, M.IRON, o);
+    for (const x of [42.8, 45.2]) r.beam(v3(x, 60.1, 11.6), v3(x, 61.7, 10.5), 0.24, M.IRON, o);
     // the spout gallery on corbels along the gate's front face
     r.box(v3(40.2, 62.5, 9.6), v3(47.8, 63.6, 10.6), M.WOOD_DARK, o, M.WOOD);
     for (let k = 0; k < 5; k++) {
@@ -610,6 +621,8 @@ export class Scene {
     }
   }
 
+  // The mine: two woodpeckers (cam-tripped pick hammers, a fictional giant of the tilt hammer)
+  // hacking the gold seam in the cliff, and a four-stamp mill on the same cam shaft.
   mine() {
     const r = this.r, o = 54, cx = 72;
     // the mouth in the cliff, lamp-lit inside, under a timber portal
@@ -622,21 +635,32 @@ export class Scene {
       const gx = cx + 3.5 + (q % 4) * 0.8, gy = 6 + Math.floor(q / 4) * 0.8;
       r.box(v3(gx, gy, 0), v3(gx + 0.9, gy + 0.9, 1.6 - Math.floor(q / 4) * 0.35 - Math.abs((q % 4) - 1.5) * 0.25), M.MINE_DIRT, o);
     }
-    // headframe with pulley, the bucket chain from the mouth
-    const hf = v3(cx, 10, 0);
-    this.stationMark(ST.MINE, v3(66.5, 14, 0), 5.2, v3(0.2, 0.95, 0));
-    for (const dx of [-1.8, 1.8]) for (const dy of [-1.8, 1.8]) r.beam(add(hf, v3(dx, dy, 0)), add(hf, v3(dx * 0.35, dy * 0.35, 11)), 0.38, M.WOOD, o);
-    for (const z of [3.5, 7]) r.box(add(hf, v3(-1.5 + z * 0.1, -1.5 + z * 0.1, z)), add(hf, v3(1.5 - z * 0.1, 1.5 - z * 0.1, z + 0.3)), M.WOOD_DARK, o);
-    r.box(add(hf, v3(-1, -1, 10.8)), add(hf, v3(1, 1, 11.2)), M.WOOD_DARK, o);
-    const pul = add(hf, v3(0, 0, 12.2));
-    for (let s = 0; s < 16; s++) {
-      const a = (TAU * s) / 16, a2 = (TAU * (s + 1)) / 16;
-      r.beam(add(pul, v3(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6)), add(pul, v3(Math.cos(a2) * 2.6, 0, Math.sin(a2) * 2.6)), 0.5, this.powerMat(ST.MINE, M.WOOD_DARK), o, v3(0, 1, 0));
-      if (s % 4 === 0) r.beam(pul, add(pul, v3(Math.cos(a) * 2.6, 0, Math.sin(a) * 2.6)), 0.3, M.WOOD, o, v3(0, 1, 0));
+    this.stationMark(ST.MINE, v3(66.2, 11.2), 5.0);
+    // the worked face: a scar of broken rock across the seam, the seam itself standing proud
+    r.quad(v3(63.2, 5.02, 10.4), v3(69.8, 5.02, 10.4), v3(69.8, 5.02, 0), v3(63.2, 5.02, 0), M.MINE_DIRT, o, v3(0, 1, 0));
+    for (let k = 0; k < 14; k++) {
+      const x = 63.4 + k * 0.45, z = 9.6 - k * 0.6;
+      r.box(v3(x, 5.0, z), v3(x + 0.6, 5.4, z + 0.7), M.ORE, o);
+      if (k % 3 === 1) r.point(v3(x + 0.3, 5.42, z + 0.4), [0.95, 0.89, 0.69], 1, true, 0.4);
     }
-    r.line3(v3(cx - 2, 6.3, 1), add(pul, v3(-2, 0, 0)), [0.23, 0.21, 0.2]);
-    r.line3(v3(cx + 2, 9.4, 0.6), add(pul, v3(2, 0, 0)), [0.23, 0.21, 0.2]);
-    // a 2 px cart track from the mouth to the mill, a cart of ore
+    const mat = this.powerMat(ST.MINE, M.WOOD_DARK);
+    const camY = 13.3, camZ = 4;
+    for (const [x, th] of [[65.1, 28], [67.7, -14]]) {
+      const pv = v3(x, 9.7, 5.6);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) r.beam(v3(x + 1.2 * sx, 9.7 + 1.3 * sy, 0), v3(x + 0.45 * sx, 9.7, 5.6), 0.32, M.WOOD, o);
+      r.cyl(v3(x - 0.7, 9.7, 5.6), v3(x + 0.7, 9.7, 5.6), 0.28, M.IRON, o, 6);
+      const t = deg(th);
+      const head = add(pv, v3(0, -Math.cos(t) * 4.2, -Math.sin(t) * 4.2));
+      const tail = add(pv, v3(0, Math.cos(t) * 3.4, Math.sin(t) * 3.4));
+      r.beam(tail, head, 0.8, mat, o);
+      const tip = add(head, v3(0, -Math.cos(t + 0.5) * 1.3, -Math.sin(t + 0.5) * 1.3));
+      r.beam(head, tip, 0.45, M.IRON, o);
+      r.box(sub(head, v3(0.55, 0.45, 0.45)), add(head, v3(0.55, 0.45, 0.45)), M.IRON, o);
+      r.box(v3(x - 0.35, camY - 0.35, camZ - 0.1), v3(x + 0.35, camY + 0.35, camZ + 0.8), M.BRONZE, o);
+    }
+    r.beam(v3(62.8, camY, camZ), v3(69.2, camY, camZ), 0.6, mat === M.WOOD_DARK ? M.WOOD_DARK : mat, o);
+    r.box(v3(68.9, camY - 0.6, 0), v3(69.7, camY + 0.6, camZ + 0.4), M.WALL, o, M.BRONZE);
+    // a cart track from the mouth to the mill, a cart of ore
     for (const rail of [-0.45, 0.45]) r.beam(v3(cx + rail, 5.2, 0.08), v3(cx + rail, 30, 0.08), 0.1, M.IRON, o);
     r.box(v3(cx - 0.9, 13, 0.35), v3(cx + 0.9, 15.2, 1.4), M.WOOD, o, M.ORE);
     // stamp mill with four drop hammers, fed from the mine output shaft
