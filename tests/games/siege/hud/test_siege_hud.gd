@@ -224,7 +224,6 @@ func test_shop_rows_put_autopilots_pick_first_and_save_second() -> void:
 		assert_eq(str(rows[1]["id"]["item"]), SiegeIds.ITEM_SAVE)
 	else:
 		assert_eq(str(rows[0]["id"]["item"]), SiegeIds.ITEM_SAVE)
-	assert_lte(rows.size(), SiegeShopModel.MAX_ENTRIES)
 	for row: Dictionary in rows:
 		var id: Dictionary = row["id"]
 		if str(id["item"]) == SiegeIds.ITEM_SAVE:
@@ -251,7 +250,7 @@ func test_shop_panel_lists_at_32_px_and_sends_buys() -> void:
 	panel.refresh()
 	assert_true(panel.visible)
 	assert_gte(panel.list.item_font_px, 32)
-	assert_eq(panel.list.item_count(), panel.entries.size())
+	assert_eq(panel.list.item_count(), mini(panel.entries.size(), SiegeShopModel.ROWS))
 	assert_eq(str(panel.entries[0]["id"]["item"]), SiegeIds.ITEM_UPGRADE)
 	assert_eq(int(panel.entries[0]["id"]["at"]), 2)
 	assert_eq(str(panel.entries[1]["id"]["item"]), SiegeIds.ITEM_SAVE)

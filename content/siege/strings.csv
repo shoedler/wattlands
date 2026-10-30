@@ -186,3 +186,4 @@ SIEGE_STAT_LEAKS,Leaks
 SIEGE_STAT_ENGINES_STOPPED,Siege engines stopped
 SIEGE_STAT_SHOTS,Hits / shots
 SIEGE_HUD_CAULDRONS_SHORT,{0} L tar
+SIEGE_SHOP_MORE,More items (page {0} of {1})

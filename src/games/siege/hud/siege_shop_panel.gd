@@ -7,6 +7,10 @@ extends Control
 ## auto-confirmed after two scan cycles; that pick goes out tagged "auto" and never ends the
 ## rider's zero-input shop fallback. A pick sends SiegeIntents.buy(item, at, via == "auto")
 ## through ctx.intents. Visible only while the shop is open (every break, the build break too).
+## Everything the rules sell is reachable: the list shows SiegeShopModel.ROWS rows a page, and a
+## page's last row "More items" turns to the next (the last page's back to the first). An
+## auto-confirmed pick on a later page only turns back to the first page, so pedalling alone
+## never buys from deep in the list.
 ## The root is a transparent Control so a Rect2i slot can stretch it; the card keeps its height.
 
 const ITEM_PX := 32
@@ -21,6 +25,9 @@ var list: PedalScanList = null
 var picks_override: Variant = null
 var signature: String = ""
 var entries: Array[Dictionary] = []
+## The page shown (0 first) and how many there are.
+var page: int = 0
+var page_count: int = 1
 var _since: float = REFRESH_EVERY_S
 
 
@@ -119,12 +126,16 @@ func rebuild(tx: GameStrings, r: SiegeRiderState) -> void:
 	else:
 		picks = SiegeAutopilot.shop_picks(s, r, 1)
 	entries = SiegeShopModel.entries(s, r, tx, picks)
-	var sig := SiegeShopModel.signature(entries)
+	var pages := SiegeShopModel.pages(entries, tx)
+	page_count = pages.size()
+	page = clampi(page, 0, page_count - 1)
+	var shown: Array = pages[page]
+	var sig := "%d|%s" % [page, SiegeShopModel.signature(shown)]
 	if sig == signature:
 		return
 	signature = sig
 	var items: Array = []
-	for e in entries:
+	for e: Dictionary in shown:
 		items.append(
 			{
 				"id": e["id"],
@@ -136,12 +147,24 @@ func rebuild(tx: GameStrings, r: SiegeRiderState) -> void:
 	list.set_items(items)
 
 
+func _turn_to(p: int) -> void:
+	page = p
+	signature = ""
+	if game != null and game.state != null:
+		var r := SiegeHudModel.own_rider(game)
+		if r != null:
+			rebuild(SiegeHudModel.strings_of(game), r)
+
+
 func _on_item_picked(_index: int, id: Variant, via: String) -> void:
 	if not (id is Dictionary):
 		return
 	var item := str((id as Dictionary).get("item", ""))
+	var at := int((id as Dictionary).get("at", 0))
+	if item == SiegeShopModel.ITEM_MORE or (via == "auto" and page != 0):
+		_turn_to(at if item == SiegeShopModel.ITEM_MORE and via != "auto" else 0)
+		return
 	if item == SiegeIds.ITEM_SAVE or item == "":
 		return
-	var at := int((id as Dictionary).get("at", 0))
 	if game != null and game.ctx != null and game.ctx.intents != null:
 		game.ctx.intents.send(SiegeIntents.buy(item, at, via == "auto"))

@@ -13,6 +13,8 @@ const WALKER_W := [150.0, 300.0]
 const WALKER_HYST_W := 20.0
 ## A walker's stride on the treadwheel's floor (m of rim per walk cycle).
 const STRIDE_M := 1.4
+## A rescued rider's walkers stumble once every this many seconds (brief 2.4: rescue is a stagger).
+const STUMBLE_S := 0.9
 
 
 static func rim_speed(p_eff_w: float) -> float:
@@ -39,7 +41,7 @@ static func walkers_for(p_eff_w: float, prev: int) -> int:
 ## The station rider `r`'s powered path is lit to, or -1 (no rider, disconnected): the target,
 ## lit through the 2 s reconnect; the mine in breaks and the cool-down, where all output goes.
 static func lit_station(state: SiegeState, r: SiegeRiderState) -> int:
-	if state == null or r == null or not r.connected:
+	if state == null or r == null or not r.connected or r.afk:
 		return -1
 	if state.shop_open() or state.in_cooldown() or state.done:
 		return SiegeIds.STATION_MINE
@@ -74,11 +76,21 @@ static func coat_stage(tar: SiegeTarState) -> int:
 	return fill_stage(tar.coat) if tar != null else 0
 
 
-## The arrow organ's loaded racks (bit k = rack k): every rack but the one fired last, which
-## shows empty until its reload passes half (`arm` of the next rack, 0..1).
-static func rack_mask(rack: int, arm: float) -> int:
-	var last := posmod(rack - 1, 3)
-	return 7 if arm >= 0.5 else 7 & ~(1 << last)
+## The arrow organ's loaded racks as drawn (bit k = rack k of the three baked racks): every rack
+## but the one fired last, which shows empty until its reload passes half (`arm` of the next
+## rack, 0..1). With upgrade 3 `rack` cycles through `racks` 4; the fourth rack isn't drawn.
+static func rack_mask(rack: int, arm: float, racks: int = 3) -> int:
+	var last := posmod(rack - 1, maxi(racks, 1))
+	if arm >= 0.5 or last > 2:
+		return 7
+	return 7 & ~(1 << last)
+
+
+## A stumble: how far (0..1) a walker in a rescued wheel has sunk at time `t` s (a stagger every
+## STUMBLE_S seconds: down fast, up slowly).
+static func stumble_dip(t: float) -> float:
+	var f := fposmod(t, STUMBLE_S) / STUMBLE_S
+	return f / 0.15 if f < 0.15 else 1.0 - (f - 0.15) / 0.85
 
 
 ## Travel yaw (deg, atan2(dy, dx)) of an enemy at `prog` on `path`, turned round when it
