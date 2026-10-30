@@ -599,7 +599,8 @@ static func _infantry_ok(e: Dictionary, at: String) -> Array[String]:
 
 ## waves.json: WAVES_SPEC; group_every_s, group_var and engines.crew_back_m are [lo, hi] with
 ## lo <= hi; mix has standard and raiders_horsemen, each 3 rows (thirds of the shift) of 3
-## fractions [spear, shield, chariot] summing to 1; rush.types are enemy names.
+## fractions [spear, shield, chariot] summing to 1; rush.types are enemy names; the optional
+## budget_factor maps content ids to factors > 0 on B.
 static func validate_waves(d: Variant) -> Array[String]:
 	var errs := _check_spec(d, WAVES_SPEC, "waves.json")
 	if not errs.is_empty():
@@ -621,6 +622,13 @@ static func validate_waves(d: Variant) -> Array[String]:
 	for t: Variant in d["rush"]["types"]:
 		if SiegeIds.enemy_code(str(t)) == 0:
 			errs.append("waves.json: rush.types: unknown enemy %s" % t)
+	var bf: Variant = d.get("budget_factor", {})
+	if not (bf is Dictionary):
+		errs.append("waves.json: budget_factor must be an object")
+	else:
+		for k: Variant in bf:
+			if not _is_num(bf[k]) or float(bf[k]) <= 0.0:
+				errs.append("waves.json: budget_factor.%s must be > 0" % k)
 	return errs
 
 

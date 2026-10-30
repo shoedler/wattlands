@@ -140,7 +140,8 @@ func test_spearmen_enter_at_the_furthest_staging_ground_that_still_reaches() -> 
 	assert_eq(float(at.call(0.0)), st[0], "the camp")
 	assert_eq(float(at.call(_last(0) + 1.0)), st[1], "the grove")
 	assert_eq(float(at.call(_last(1) + 1.0)), st[2], "the wadi")
-	assert_eq(float(at.call(_last(2) + 1.0)), -1.0, "none")
+	assert_eq(float(at.call(_last(2) + 1.0)), st[3], "the arch")
+	assert_eq(float(at.call(_last(3) + 1.0)), -1.0, "none")
 
 
 func test_the_camp_works_exactly_until_its_last_moment() -> void:
@@ -205,20 +206,29 @@ func test_groups_spend_the_budget_and_stop_60_s_before_the_end() -> void:
 	rig.manual()
 	rig.enter(2)
 	var w := rig.state.wave
-	var b := w.budget
-	assert_gt(b, 0.0)
-	var last_queued := -1.0
-	var spawned := 0
-	while rig.tick * Wl.SIM_DT < rig.phase_start(3) - 0.05:
-		var n := rig.state.next_enemy_id
-		var q := rig.state.queue.size()
-		rig.step()
-		if rig.state.next_enemy_id > n or rig.state.queue.size() > q:
-			last_queued = rig.tick * Wl.SIM_DT - rig.phase_start(2)
-			spawned += 1
-	assert_lte(last_queued, 300.0 - 60.0 + 0.1, "nothing new in the last 60 s but engines' escort")
+	assert_gt(w.budget, 0.0)
+	rig.goto(rig.phase_start(2) + 240.1)
+	rig.step()
+	var left := w.budget_left
+	var acc := w.group_acc
+	var gap := w.spawn_in_s
+	rig.run(55.0)
+	assert_eq(w.budget_left, left, "no group draws on the budget in the last 60 s")
+	assert_eq(w.group_acc, acc)
+	assert_lt(w.spawn_in_s, gap, "and no new group gap is drawn")
+
+
+func test_a_wave_spends_or_drops_its_whole_budget() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(2)
+	var w := rig.state.wave
+	var tb := SiegeKit.table(rig.state)
+	var first := rig.state.next_enemy_id
+	rig.run(240.5)
 	assert_lt(w.budget_left, 1.0, "the budget is spent or dropped")
-	assert_gt(spawned, 5)
+	assert_lte(w.group_acc, SiegeSpawner.formation_threat(rig.state, tb, SiegeIds.ENEMY_SHIELD))
+	assert_gt(rig.state.next_enemy_id - first, 5, "formations came")
 
 
 func test_group_gaps_are_6_to_12_s() -> void:
@@ -236,6 +246,13 @@ func test_group_gaps_are_6_to_12_s() -> void:
 	assert_gt(gaps.size(), 5)
 	for g in gaps:
 		assert_between(g, 6.0, 12.0)
+
+
+func test_vo2_waves_field_spearmen_and_shields_from_the_arch() -> void:
+	var tb := SiegeKit.table(_s)
+	var arch := _s.path.staging[3]
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 10.0, 120.0), arch)
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SHIELD, 3.0, 120.0), arch)
 
 
 func test_dropped_threat_is_recorded() -> void:

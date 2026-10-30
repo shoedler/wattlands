@@ -133,3 +133,30 @@ func test_par_unverified_is_85_percent() -> void:
 	u.state.rider(1).ftp_verified = false
 	u.run(120.0)
 	assert_almost_eq(u.state.planned_kj, 0.85 * v.state.planned_kj, 0.01)
+
+
+func test_a_shift_s_budget_factor_scales_b() -> void:
+	var rig := SiegeRig.new("endurance", 2)
+	rig.enter(2, 0.0)
+	var f := SiegeRules.budget_factor(rig.content)
+	assert_eq(f, float(rig.content.waves["budget_factor"]["endurance"]))
+	assert_lt(f, 1.0, "endurance's one long wave gets less")
+	var want := 0.0
+	for r in rig.state.riders:
+		want += SiegeRules.planned_p_eff_w(rig.state, r, 70.0) / 250.0
+	want *= rig.content.num("c_budget") * f * (2700.0 - 60.0) / 60.0
+	assert_almost_eq(rig.state.wave.budget, want, 1e-2)
+
+
+func test_shifts_without_a_factor_use_1() -> void:
+	assert_eq(SiegeRules.budget_factor(F.content("short")), 1.0)
+	assert_eq(SiegeRules.budget_factor(F.content("vo2")), 1.0)
+	assert_eq(SiegeRules.budget_factor(F.content("drill")), 1.0)
+
+
+func test_a_bad_budget_factor_is_rejected() -> void:
+	var files := SiegeContent.read_files()
+	files["waves"]["budget_factor"] = {"endurance": 0}
+	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("budget_factor"))
+	files["waves"]["budget_factor"] = 3
+	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("budget_factor"))

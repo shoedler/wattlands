@@ -67,7 +67,7 @@ static func planned_p_eff_w(state: SiegeState, r: SiegeRiderState, pct: float) -
 
 
 ## The wave's threat budget B (brief 2.4): c_budget x sum(planned P_eff / 250 W) x (wave_s - 60)
-## / 60, from each rider's mean planned target in the phase.
+## / 60, from each rider's mean planned target in the phase, times the shift's budget_factor.
 static func budget(state: SiegeState, inputs: SiegeInputs) -> float:
 	var sum := 0.0
 	for inp in inputs.riders:
@@ -80,7 +80,14 @@ static func budget(state: SiegeState, inputs: SiegeInputs) -> float:
 	var span := maxf(
 		inputs.phase.duration_s - float(state.content.waves.get("stop_before_end_s", 60.0)), 0.0
 	)
-	return state.content.num("c_budget", 10.0) * sum * span / 60.0
+	return state.content.num("c_budget", 10.0) * budget_factor(state.content) * sum * span / 60.0
+
+
+## The shift's own factor on B (waves.json budget_factor[<content id>], 1 when absent; ADR
+## "endurance budget factor").
+static func budget_factor(content: SiegeContent) -> float:
+	var f: Variant = (content.waves.get("budget_factor", {}) as Dictionary).get(content.shift_id)
+	return float(f) if (f is float or f is int) and float(f) > 0.0 else 1.0
 
 
 ## Step 1: telemetry and safety flags.

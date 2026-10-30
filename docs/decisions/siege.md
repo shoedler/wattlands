@@ -280,3 +280,27 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-29 v2 tests replace v0.1.0's
 - Decision: 263 v0.1.0 test functions in files that tested the three-road map, towers, hit-scan combat and the 3D view were removed with them; the kept files were rewritten. The rules builder's v2 suite has 585 GUT test functions (v0.1.0: 530 in all, view and HUD included) plus 55 Node tests; the view builder adds its own.
 - Reason: brief 4's gate on the floor (the floor minus exactly the deliberately removed tests, with an ADR).
+
+## 2026-10-30 A fourth staging ground by the arch (lead decision)
+- Decision: `export_map.mjs` adds `{ id: 'arch', prog_m: progAtRoadS(95) }` (prog 281.3, about 110 m from the gate) to its staging list; the map is regenerated. The brief's staging rule is otherwise unchanged.
+- Alternatives: dropping vo2's slow formations (round 1).
+- Reason: in 120 s vo2 waves spearmen (62 s from the arch) and shield bearers (92 s) can now reach the gate in time. Sim evidence (headless rules sim, 4 compliant riders, seeds 1-3): vo2 leaks per wave-minute stay at 0.03-0.06 with or without the arch; the defense kills the short-range formations before the gate.
+
+## 2026-10-30 Long shifts: a per-shift budget factor (lead decision 2)
+- Decision: waves.json `budget_factor` (content id -> factor on B, 1 when absent, validated > 0): endurance 0.75, sweetspot 0.85. `SiegeRules.budget` multiplies B by it.
+- Alternatives: mid-wave relief (a repair or shop window inside the 45 min wave; a new mechanic outside the brief); a lower global c_budget (then short stays near 90, T1 fails).
+- Reason: one long wave saturates the defense and leaks pile up while the short shifts' waves end and reset. Sim evidence at c_budget 50: endurance at factor 0.6 leaked 0.94 per wave-minute, at 0.75 1.45 (short 1.96, within -26%); sweetspot at 1.0 flooded in one seed of three (11.9 per wave-minute, 23 Breaches; mean 4.57), at 0.75 0.13 and at 0.85 0.24 with no Breach. The factor is the smallest lever: one number per shift, no new rule.
+
+## 2026-10-30 S3 under the shared pause (lead decision 3)
+- Decision: S3's runs are `s3_<content>_weak` with `--rider=erg:compliance=0.3 --rider=zero --rider=zero --rider=zero` (4 humans, HOST, seed 1): slot 0 pedals at 30% of its ERG target, slots 1-3 go AFK. check_sims S3 checks that rider list as well; its assertions (complete, HOST, 4 players, a Breach inside wave 1) are unchanged.
+- Alternatives: four 0 W riders (round 1: the platform's `all_stopped` pause holds the session in the warm-up until the run times out); bots (they ride at full compliance).
+- Reason: S3's intent is "a team that barely pedals is breached in the first full wave"; one rider must pedal so the session runs, and slot 0 carries the shared phase. Trial (short, seed 1): complete, the first Breach at 532 s (wave 1 is 420-720 s), all FITs with 8 laps.
+
+## 2026-10-30 run_sims.sh runs the checks after a fit_check failure (lead decision 5)
+- Decision: a failed fit_check sets the exit status; check_sims still runs, and the script exits non-zero if either failed.
+- Reason: round 1's matrix stopped at fit_check and the scenario results had to be checked by hand.
+
+## 2026-10-30 v2 tuning, round 2 (lead decision 4)
+- Decision: c_budget 50, bounty_scale 0.115, plus the budget factors above.
+- Alternatives: c_budget about 35 (round 1's c_budget 32 gave short 89.3 on the platform matrix, 86.9 on the rules sim).
+- Reason: with the arch, c_budget 36 raised short to 91.6 on the rules sim (more kills, more bounty, still almost no leaks); c_budget 50 with bounty_scale 0.115 gave short 74.8 (gate 25.4 of 40 points) and T2 0.53. Bounties scale with kills, so the bounty came down as the budget went up. Five tuning iterations this round.
