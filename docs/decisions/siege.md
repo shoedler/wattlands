@@ -323,3 +323,24 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 - Decision: c_budget 50, bounty_scale 0.115, plus the budget factors above.
 - Alternatives: c_budget about 35 (round 1's c_budget 32 gave short 89.3 on the platform matrix, 86.9 on the rules sim).
 - Reason: with the arch, c_budget 36 raised short to 91.6 on the rules sim (more kills, more bounty, still almost no leaks); c_budget 50 with bounty_scale 0.115 gave short 74.8 (gate 25.4 of 40 points) and T2 0.53. Bounties scale with kills, so the bounty came down as the budget went up. Five tuning iterations this round.
+
+## 2026-10-30 Slot factor on B (lead decision 1)
+- Decision: waves.json `slot_factor` [0.62, 0.58, 0.8, 1.0] multiplies B by the slot count 1..4 (bots count as slots; validated: 4 factors > 0). Brief 2.4's B line names it. Autopilot's routing stays as in brief 2.5.
+- Alternatives: the lead's start [0.45, 0.7, 0.88, 1.0]; Autopilot spreading riders by coverage.
+- Reason: one rider mans one station, so a small team covers one or two range bands while B grows with every slot. On the headless rules sim (short, seeds 1-3) the start values gave 1 rider 90.5 and 2 riders 33.0 (Breaches); [0.55, 0.5, 0.75, 1.0] gave 86.8 / 87.7; the chosen values gave 87.1 / 78.7 and 83.5 for 1 human + 3 bots. Total B still grows with every slot (0.62, 1.16, 2.4, 4). Platform matrix: S2 1 human 84.5, 2 humans 75.3, 1 human + 3 bots 80.5, no Breaches.
+
+## 2026-10-30 T3: per-shift budget factors, round 3 (lead decision 2)
+- Decision: `budget_factor` short 0.92, vo2 1.1, sweetspot 0.85, endurance 0.7.
+- Reason: platform matrix. Round 2 (short 1.0, vo2 1.0, sweetspot 0.85, endurance 0.75): leaks per wave-minute 2.02 / 0.72 / 0.79 / 1.56. Short 0.92, vo2 1.1, endurance 0.6: 0.82 / 1.22 / 0.79 / 1.18, T3 held (mean 1.0, all within 22%). Endurance 0.52 with vo2 1.05: vo2 rose to 1.5 (vo2's leaks are noisy over three seeds). The final set (endurance 0.7 with the rush share below): 0.82 / 1.22 / 0.79 / 0.55; T3 misses by 5-14 points at both ends (vo2 +44%, endurance -35%). T1 stays at 82.1.
+
+## 2026-10-30 Endurance: the rush share (lead decision 3)
+- Decision: `rush.budget_frac` 0.056 (brief 8%, -30%); the endurance budget factor 0.7.
+- Alternatives: a lower endurance budget factor alone.
+- Reason: endurance's Breaches came in its rushes (30 s bursts of 8% of B each). Platform matrix: budget factor 0.6 with an 8% rush gave C, C, D (seed 3: 1 Breach, 32.7); 0.52 with 8% gave C, D, D (two runs with 1 Breach each, 37.8 and 38.1). Headless, factor 0.7 with a 5.6% rush gave B, B, B, B, C over seeds 1-5 with no Breach. Platform: B, B, B (70.1, 75.3, 65.8), no Breach. The rush share is taken from B, so it spreads the same threat more evenly instead of cutting it.
+
+## 2026-10-30 S4 stays on seeds 1-3 (lead decision 4)
+- Decision: S4 keeps seeds 1-3.
+- Reason: with the slot and shift factors S4 falls strictly on the platform: 100% 82.11, 90% 70.86, 80% 61.76, so the extension to seeds 1-5 was not needed.
+
+## 2026-10-30 Round 3 iterations
+- Six tuning iterations: three headless rounds on the slot factor and the shift factors, then three on endurance and vo2 (each checked on the headless sim, the second, third and sixth also on the platform matrix).
