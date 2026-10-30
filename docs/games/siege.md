@@ -53,7 +53,7 @@ An alternate-history Roman frontier fort runs on spinning power.
 ```json
 {"id": "siege", "title": "Castellum Rotae",
  "summary": "Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it to a ballista, an onager, an arrow organ, the tar works or the gold mine.",
- "version": "0.2.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [960, 540],
+ "version": "0.3.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [960, 540],
  "entry": "res://src/games/siege/siege_game.gd",
  "contents": ["short", "vo2", "sweetspot", "endurance", "drill"],
  "default_content": "short", "e2e_content": "drill", "zero_input_content": "short",
@@ -62,7 +62,7 @@ An alternate-history Roman frontier fort runs on spinning power.
                     {"id": "tilt_shift", "type": "toggle", "default": true, "label": "SIEGE_OPT_TILT_SHIFT"}]}
 ```
 
-- Slots 0–3 own wheels 0–3, west to east. Each wheel's rim and hub are in the slot's colour (Okabe-Ito orange, blue, yellow, green). They are paired with the slot's pattern on the HUD chips and the route card.
+- Slots 0–3 own wheels 0–3, west to east. Each wheel's rim and hub are in the slot's colour (Okabe-Ito orange, blue, yellow, green). They are paired with the slot's pattern on the HUD chips and the stations card.
 - Solo riders may add up to 3 bots, and a host may fill empty wheels with bots (BRIEF 4.2).
 - No one joins after the start. A dropped client is AFK until it reconnects (BRIEF 5.3).
 
@@ -89,7 +89,7 @@ Every phase has `lap: true` and no `range_pct`. The PlanValidator appends the co
 | `endurance` | 1 × 2700 s at 70%, a rush every 480 s | None | 55 min | ≤ 75% |
 | `drill` (e2e) | A 20 s build break at 50%, then a 100 s wave at 60%, both WARMUP | None | 2 min plus cool-down | ≤ 65%; no WORK phase, no offset |
 
-Every row also passes 4.6.8 (the first 300 s ERG ≤ 65%), 4.6.1, 4.6.2, 4.6.3 (rescue is a stagger) and 4.5. Siege sends exactly one directive pattern, Overdrive: `{mode: SIM, duration_s: 30, reason: "overdrive", source: "siege"}`.
+Every row also passes 4.6.8 (the first 300 s ERG ≤ 65%), 4.6.1, 4.6.2, 4.6.3 (rescue is a stagger) and 4.5. Siege sends exactly one load directive pattern, Overdrive: `{mode: SIM, duration_s: 30, reason: "overdrive", source: "siege"}`, and publishes one cadence band at the start, which changes no load (3 "HUD").
 - It is sent only in a WORK phase with ≥ 30 s left, never in rescue, and never for bots or from Autopilot.
 - It carries no `mode_grade`, `haptic` or target.
 - It reverts on expiry; Siege sends no restore.
@@ -366,24 +366,35 @@ None.
 - Tilt-shift and depth of field come from a screen shader, with the fort in the sharp band. The local rider's `tilt_shift` option turns it off.
 - Budget at the cap: ≤ 400 canvas items, 60 fps at 1080p on integrated graphics.
 
-**HUD** (`hud_spec()`, kit widgets per BRIEF 3.9)
+**HUD** (`hud_spec()`): the game's own Roman HUD, no kit widgets, like Diesel Domestiques (3.6 there). The approved mock is the spec: `src/games/siege/art/hud_mock.mjs` and `hud_font.mjs`, art px on 960 x 540, 2x at 1080p. `hud_bake.mjs` bakes the letter, icons and slot shapes from that code into `assets/siege/hud/`.
 
-| Position | Contents |
+Materials: dark wax panels in a limestone frame with a brick course; tabula ansata plaques; a red chip with light text is the only alarm, never coloured text alone; riders only in slot colours with their shape. Text is upper-cased at draw time; a character outside the atlas falls back; rider names are cut to fit.
+
+| Position (art px) | Contents |
 | --- | --- |
-| Top left | Phase timeline with next-phase preview; rush-marker strip |
-| Top right | Gate HP and the curtain as a big readout; own gold |
-| Bottom left | Power gauge with target band, cadence, W′ bar |
-| Bottom center | Teammate strip: colour and pattern chip, raw W, %FTP, station icon, markers |
-| Bottom right | Route card (the five stations, caps, a 2 s connect bar); Overdrive button |
+| Top left (150, 8, 258 wide) | Session plate: title plaque, ENDS IN with the cool-down (nominal length minus elapsed), the profile strip with block height as effort and rushes as ticks, enemy icons with counts, a plain cream warning |
+| Top centre (470, 8) | Teammate cards, teammates only: vexillum in the slot colour, shape, name, raw W, %FTP, station icon, a lamp for in band (with hysteresis) or a mark: OD with its clock, a RESCUE chip, AFK |
+| Under the cards (411, 71, 380, 27) | The platform's banners, in the kit's colours and font; the toasts below them in the mock's palette |
+| Right column (804, 8, 148 wide) | Gate plate (a filled chip behind the number and an alarm frame when low) with the tar row; gold; stations card (your row in bronze, the hot station as a thin red bar on the left edge, slot shapes and hollow pegs, the coupling bar); Overdrive plate (ready, prompt, active, recharging, closed with its honest reason; a press sends the same intent as `ability_1`) |
+| Bottom centre (456, 420, 112 high) | Cockpit: interval clock, watts and cadence at 72 px (KEY36), one source for each value; the heart rate cell; the band gauge with a needle; the instruction line; the next line; W′ or, in SIM, the gear |
+| Bottom left, breaks only (8, 382, 340, 150) | Shop, over the road's west loop, which is empty in breaks |
+| On the world | A red tag on the nearest live tower and ram within 200 m ("TOWER 110 M"); while the gate is failing in a wave, the oxblood banner with a leader to the gate |
 
-- Siege also shows wave info ("Wave 2/3", remaining enemies by type, engine warning) and the shop panel (≥ 32 px text). Gate HP, own watts and gold are ≥ 48 px, and the centre stays clear.
+- **Cockpit rules.** The target caption is the applied target from telemetry (`applied_target_w`), never the plan, so rescue and caps are true. Displayed watts are a 3 s mean with in-band hysteresis; stale power shows `--`, not 0 (`HudRiderNumbers`, GAME_SDK 10.4). W/kg shows only if the rider opted in. The reserve is a thin bar with a number only below 50%. The gear shows only in SIM.
+- **Heart rate.** Sensor present: the cell, a muted heart and cream digits. Dropout (a sensor seen this session or known to the platform): `--`. No sensor: no cell, and the plate is 344 px wide instead of 404.
+- **The instruction line**, one line by state, first match wins: coasting "PEDAL: LOAD DROPPED" (its floor wins over rescue, BRIEF 4.6.12); rescue "RESCUE: SPIN 70+" with the caption RPM 70+; Overdrive "SPRINT 240-280 W, SHIFT UP" from the real band; low cadence "SPIN UP: RESCUE AT 45", only while rescue is armed (ERG at 60% FTP or more), after 1.5 s under 70 rpm, half of rescue's 3 s under 45; cool-down "SPIN IT OUT"; the last 30 s before a step up "LOAD UP IN 0:30, SPIN UP" with the clock in gold; warm-up "SETTLE IN, SPIN 80-100"; else "SPIN 80-100". Coasting, rescue and low cadence sit on the red chip.
+- **The next line.** "NEXT: BREAK, 3:00 AT 100 W", in applied-style watts: the plan's percent, this rider's FTP, the unverified factor, whole watts, floor and ceiling. In rescue "THEN: RAMP BACK TO 190 W", in Overdrive "THEN: ERG AT 190 W", at the end "NEXT: RESULTS".
+- **Gold's size.** NUM (28 px) in waves, where it can't be spent; KEY (48 px) while the shop is open, where it is the number that decides. The plate grows with it and the cards under it move down.
+- **Shop.** The platform's PedalScanList does the picking (2.4); the plate draws its rows in the BODY face (24 px cap height), five to a page, with BEST and "N MORE" notes.
+- **Cadence band.** The host publishes 80-100 rpm once at the session's start with `ctx.directives.cadence_band`. It changes no load: the metronome, bots and a MockTrainer `band` rider follow it.
+- Budget: a plate redraws only when what it shows changes.
 - **Help overlay** (`HudSpec.help`, shown on F1 and on a rider's first Siege session). Short texts with arrows to:
   - your wheel;
   - your powered path;
   - the five stations;
   - the road;
   - the gate and curtain;
-  - the route card;
+  - the stations card;
   - the shop.
 
 **Audio:** wheel creak and junction clatter pitched by watts, bolt thunk, onager release and impact, arrow volley hiss, tar pour, hooves, ram, gate hits, horns, coins.

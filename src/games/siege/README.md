@@ -2,7 +2,7 @@
 
 Co-op tower defense for 1-4 riders at a Roman wheel fort (brief: `docs/games/siege.md`). Each rider turns one great treadwheel. A junction couples the wheel to one of five stations: the gold mine, the tree ballista, the great onager, the arrow organ or the tar works. Attackers march down one long road to the only gate. Waves are ERG intervals, breaks are recovery and shopping, and Overdrive is a 30 s SIM sprint block. Bots fill empty wheels, and every phase, the shop and the results work with zero input.
 
-Presentation `2d`: a fixed isometric pixel-art view at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.2.0 (v2). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
+Presentation `2d`: a fixed isometric pixel-art view at 960 x 540 art pixels (x2 at 1080p, 3.5 px per metre), drawn by Siege's own CPU rasterizer and baked to PNGs. Version 0.3.0 (v2 with its own Roman HUD). v0.1.0 had a 3D fort, three roads, eight pads, a generator and denarii; v2 replaces all of that. Decisions: `docs/decisions/siege.md`. Real-trainer checklist: `HARDWARE_TEST.md`.
 
 ## How to play
 
@@ -12,11 +12,11 @@ Presentation `2d`: a fixed isometric pixel-art view at 960 x 540 art pixels (x2 
   - left: the previous one;
   - up: the mine;
   - down: the "hot" station (the Autopilot's pick).
-  - Full stations are skipped. A change reconnects after 2 s, with no output in between. Your powered path (wheel, lane, clutch drum, column, station) lights in your colour at once, and the route card shows a 2 s coupling bar.
-- **Overdrive.** `ability_1` or the HUD button starts a 30 s SIM sprint block when it is ready, the phase is a wave with at least 30 s left, you are not in rescue and you are pedaling. A `surge` (the ERG surge gesture) starts it too, but only while the prompt "Surge for Overdrive!" shows. While it runs, the gauge shows a sprint band of 1.2-1.4 x FTP, virtual gears work and the HUD shows the gear. Keep your raw power at or above FTP and your output counts double. Hold 1.2 x FTP for 10 s and it counts as a scored sprint. The 90 s cooldown starts when it ends.
+  - Full stations are skipped. A change reconnects after 2 s, with no output in between. Your powered path (wheel, lane, clutch drum, column, station) lights in your colour at once, and the stations card shows a 2 s coupling bar.
+- **Overdrive.** `ability_1` or the HUD button starts a 30 s SIM sprint block when it is ready, the phase is a wave with at least 30 s left, you are not in rescue and you are pedaling. A `surge` (the ERG surge gesture) starts it too, but only while the Overdrive plate says SURGE TO START. While it runs, the cockpit shows a sprint band of 1.2-1.4 x FTP, virtual gears work and the HUD shows the gear. Keep your raw power at or above FTP and your output counts double. Hold 1.2 x FTP for 10 s and it counts as a scored sprint. The 90 s cooldown starts when it ends.
 - **Breaks.** All output goes to the mine, and you keep your target. The shop opens in every break, the build break included. It is a pick list: the top entry is the Autopilot's pick and the second is "Save gold". With pedal navigation on (Settings) it scans, and picks auto-confirm after two scan cycles. While the shop is open, the directions and the surge belong to it.
 - **Zero input works.** A rider who only pedals is routed and shopped for by the Autopilot until their first deliberate `route` (routing) or non-auto `buy` (shop). Bots never use Overdrive.
-- **Help.** F1 shows the help overlay: arrows to your wheel, your powered path, the five stations, the road, the gate and curtain, the route card and the shop. It also shows once on a rider's first Siege session.
+- **Help.** F1 shows the help overlay: arrows to your wheel, your powered path, the five stations, the road, the gate and curtain, the stations card and the shop. It also shows once on a rider's first Siege session.
 
 ## Rules summary
 
@@ -119,7 +119,7 @@ Numbers are the current content in `content/siege/*.json` (committed state). Whe
 
 The host resolves purchases in arrival order. A refused one goes out as a `buy` event with `ok` 0, and only the buyer's peer toasts it. The Autopilot buys at most 2 items per break, at 4 s and 9 s into it, in brief 2.5's order: repair below 50%, an upgrade for the station that did the most damage last wave, a Scorpion on the first empty pad, a mine level, Iron bands, perks, save.
 
-**Overdrive** is the only directive Siege sends: `{mode: SIM, duration_s: 30, reason: "overdrive", source: "siege"}`. It has no `mode_grade`, haptic, ERG target, `crr` or `cw`, so the stacked grade is the virtual-gear offset alone.
+**Overdrive** is the only load directive Siege sends (it also publishes the 80-100 rpm cadence band once at the start, which changes no load): `{mode: SIM, duration_s: 30, reason: "overdrive", source: "siege"}`. It has no `mode_grade`, haptic, ERG target, `crr` or `cw`, so the stacked grade is the virtual-gear offset alone.
 - It is sent only in a WORK phase with at least 30 s left, never in rescue, never for a rider who is not pedaling (ADR "SAFE-1"), never from the Autopilot or a bot.
 - The prompt shows when Overdrive is ready and your station has an enemy in range (the tar works: a ram or tower within 60 m of the gate) or a rush is on.
 - A refusal (host or governor) sets a 30 s retry instead of the 90 s cooldown, and toasts only on that rider's peer.
@@ -180,11 +180,12 @@ All in `docs/decisions/siege.md`:
 | `autopilot/` | `SiegeAutopilot`: station scores, route choice and shop picks (never Overdrive) |
 | `net/` | `SiegeSnapshot` (encode and apply), `SiegeSnapHistory` (client interpolation), `SiegeRoutePredict` |
 | `view/` | `SiegeView` and `SiegeViewMath`; `v2/` holds the bake bank, the depth-tested batch and sprite, the shaders, the world layer, machines, crowd, shots and shot replay, the tilt-shift pass and a standalone demo scene |
-| `hud/` | `SiegeHud` (the `HudSpec` and help), the HUD model and panel, route card, Overdrive button, teammate strip, rush strip, wave info, tar-curtain card, shop model and panel |
+| `hud/` | `SiegeHud` (the `HudSpec`, palette and help); `SiegeHudCtl` (the base Control) and the plates `SiegeHudSession`, `SiegeHudCrew`, `SiegeHudColumn`, `SiegeHudCockpit`, `SiegeHudWorld`, `SiegeShopPanel`; `SiegeHudModel`, `SiegeCockpitModel` and `SiegeShopModel` (what they say, as data); `SiegeHudDraw` and `SiegeHudType` (the materials and the baked letter) |
 | `audio/` | `SiegeAudio`: all sounds synthesized with `Sfx.synth` |
-| `art/` | The CPU rasterizer and its tools: `mock.mjs`, `bake.mjs`, `export_map.mjs`, and `scene.mjs`, `life.mjs`, `world.mjs`, `shade.mjs`, `raster.mjs`, `sprites.mjs`, `png.mjs`, `v3.mjs`; `PROPOSAL.md` is the mockup proposal |
+| `art/` | The CPU rasterizer and its tools: `mock.mjs`, `hud_mock.mjs` (the HUD's approved mock), `hud_font.mjs`, `hud_parts.mjs`, `hud_bake.mjs`, `bake.mjs`, `export_map.mjs`, and `scene.mjs`, `life.mjs`, `world.mjs`, `shade.mjs`, `raster.mjs`, `sprites.mjs`, `png.mjs`, `v3.mjs`; `PROPOSAL.md` is the mockup proposal |
 | `content/siege/` | `shifts.json`, `balance.json`, `stations.json`, `enemies.json`, `waves.json`, `cosmetics.json`, `maps/rotae.json`, `strings.csv` |
 | `assets/siege/bake/` | `world.png`, `world_depth.png`, `atlas_0.png` and `atlas_1.png` with their `_depth` twins, `manifest.json` |
+| `assets/siege/hud/` | `hud_atlas.png` and `hud_atlas.json`: the HUD's letter, icons and slot shapes |
 | `tests/games/siege/` | `contracts/`, `rules/`, `combat/`, `autopilot/`, `module/`, `hud/`, `view2/`, `integration/`, `sim/` (matrix, checker, headless rules sim), `static/`, `fixtures/`, `siege_fakes.gd`, `siege_kit.gd`, `test_siege_package.gd`, `e2e_check.mjs`, `map_check.test.mjs` |
 
 The rules (`rules/`, `combat/`) are pure `step(state, inputs, dt)` classes at dt 0.05 s. They use only `ctx.rng` (seeded) and `SiegeHashRng`, with no clock and no global random; `tests/games/siege/static` enforces it. Nothing here touches the trainer; Siege reaches it only through `ctx.directives`.
@@ -229,6 +230,10 @@ node src/games/siege/art/mock.mjs [--out=<dir>]
 
 # Re-bake the game's art into assets/siege/bake/
 node src/games/siege/art/bake.mjs [--out=<dir>]
+
+# Render the HUD's mock, one PNG per state; re-bake its letter and icons into assets/siege/hud/
+node src/games/siege/art/hud_mock.mjs --out=<dir>
+node src/games/siege/art/hud_bake.mjs [--check]
 
 # Regenerate content/siege/maps/rotae.json from the art's geometry
 node src/games/siege/art/export_map.mjs

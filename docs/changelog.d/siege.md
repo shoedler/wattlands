@@ -1,5 +1,13 @@
 # Changelog: siege
 
+### Changed (Castellum Rotae) v0.3.0
+
+- Castellum Rotae has its own Roman HUD, matching the approved mock (`src/games/siege/art/hud_mock.mjs`): dark wax plates in a limestone frame with a brick course, tabula ansata plaques, a Roman letter baked from the mock's own code, and a red chip as the only alarm. The kit widgets are gone from Siege.
+- A cockpit shows the interval clock, watts and cadence at 72 px, the target the trainer really applied (so rescue and caps are true), one instruction line by state, what comes next in applied-style watts, W′, and the gear only in SIM. A heart rate cell shows with a sensor, `--` on a dropout, and goes away with no sensor.
+- Displayed watts are a 3 s mean with in-band hysteresis, and stale power shows `--`, not 0. These rules are a new platform helper (`HudRiderNumbers`).
+- A session plate with the profile strip, teammate cards, a right column with the gate, tar, gold, stations and an Overdrive plate that says why it is closed, red tags on rams and towers, and a banner with a leader when the gate fails. The shop moves bottom left over the road's west loop, keeping all it did.
+- The host publishes the 80-100 rpm cadence band at the start. It changes no load. Rules, effort plans, balance and Overdrive are unchanged.
+
 ### Changed (Castellum Rotae) v0.2.0
 
 - Castellum Rotae v2: a new look, map and combat, approved in a mockup review (`src/games/siege/art/PROPOSAL.md`, brief `docs/games/siege.md`). The effort plans, the Overdrive directive and every BRIEF 4.6 behaviour are unchanged.

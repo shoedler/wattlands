@@ -24,6 +24,10 @@ Written by `node src/games/siege/art/bake.mjs` from the same scene as the approv
 
 `node src/games/siege/art/bake.mjs --check` exits non-zero when the committed manifest's `bake_version` differs from the code's or a listed file is missing. `tests/games/siege/view2/bake_check.test.mjs` runs it (and `export_map.mjs --check`) in the node step of `tools/run_tests`, and `tests/games/siege/view2/test_siege_bake_bank.gd` checks the version from GUT.
 
+## `hud/`: the HUD's letter and icons
+
+Written by `node src/games/siege/art/hud_bake.mjs` from the mock's own code (`hud_font.mjs`, `hud_parts.mjs`), so the art and the game match. `hud_atlas.png` holds every face (LABEL, BODY, LINE, NUM, KEY, KEY28, KEY36), the icons and the slot shapes, white where a pixel takes the tint; `hud_atlas.json` holds the rects and glyph metrics. Commit the PNG, its `.import` and the JSON. `--check` fails when they differ from what the code makes; `tests/games/siege/hud/hud_bake_check.test.mjs` runs it.
+
 ## Sound
 
 Every sound is synthesized at runtime with `Sfx.synth` (`src/games/siege/audio/siege_audio.gd`); coins and the Breach boom are the platform's built-in `coin` and `boom`. There are no sound files. Credits: `docs/credits.d/siege.md`.
