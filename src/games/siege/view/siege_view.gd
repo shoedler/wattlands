@@ -45,6 +45,8 @@ var clock_s: float = 0.0
 var wheel_deg := PackedFloat32Array([0, 0, 0, 0])
 var walker_count := PackedInt32Array([0, 0, 0, 0])
 var walk_phase := PackedFloat32Array([0, 0, 0, 0])
+## Per slot: 1 while the rider is in rescue (the walkers stumble, brief 2.4).
+var stumbling := PackedInt32Array([0, 0, 0, 0])
 var mine_phase: float = 0.0
 var pump_phase: float = 0.0
 ## Seconds since the march home began (negative: not marching).
@@ -144,10 +146,16 @@ func _update_wheels(delta: float) -> void:
 	for slot in 4:
 		var r := state.rider_at(slot)
 		var p := r.p_eff_w if r != null else 0.0
-		var v := SiegeViewMath.rim_speed(p)
-		wheel_deg[slot] = fposmod(
-			wheel_deg[slot] + SiegeViewMath.wheel_deg_per_s(p, r_m) * delta, 360.0
-		)
+		var stag := r != null and r.rescue
+		stumbling[slot] = 1 if stag else 0
+		var dip := SiegeViewMath.stumble_dip(clock_s + slot * 0.23) if stag else 0.0
+		# a stumble checks the wheel for a moment
+		var check := 1.0 - 0.7 * dip
+		var v := SiegeViewMath.rim_speed(p) * check
+		var turn := SiegeViewMath.wheel_deg_per_s(p, r_m) * check
+		wheel_deg[slot] = fposmod(wheel_deg[slot] + turn * delta, 360.0)
+		machines.stumble[slot] = stag
+		machines.stumble_dip[slot] = dip
 		walker_count[slot] = SiegeViewMath.walkers_for(p, walker_count[slot]) if r != null else 0
 		walk_phase[slot] += v * delta / SiegeViewMath.STRIDE_M
 		machines.set_wheel(slot, wheel_deg[slot], r != null, walker_count[slot], walk_phase[slot])
@@ -160,7 +168,8 @@ func _update_machines(delta: float) -> void:
 		var st := state.station(id)
 		machines.set_station(id, st.yaw_deg, st.arm)
 	var arrows := state.station(SiegeIds.STATION_ARROWS)
-	machines.racks = SiegeViewMath.rack_mask(arrows.rack, arrows.arm)
+	var racks := SiegeStations.racks(state, arrows) if state.content != null else 3
+	machines.racks = SiegeViewMath.rack_mask(arrows.rack, arrows.arm, racks)
 	mine_phase = fposmod(mine_phase + state.station(SiegeIds.STATION_MINE).m * MINE_HZ * delta, 1.0)
 	machines.mine_phase = mine_phase
 	var tar_m := state.station(SiegeIds.STATION_TAR).m
@@ -185,7 +194,9 @@ func _update_crowd(delta: float) -> void:
 	var sts := PackedInt32Array()
 	var client := _is_client() and game.history != null
 	for e in state.enemies:
-		if not e.alive() or types.size() >= SiegeV2Crowd.MAX_ENEMIES:
+		# retreating bodies keep walking back until the rules drop them
+		var shown := e.alive() or (e.st == SiegeIds.EN_RETREAT and e.hp > 0.0)
+		if not shown or types.size() >= SiegeV2Crowd.MAX_ENEMIES:
 			continue
 		var prog := game.history.prog_of(e.id, e.prog_m) if client else e.prog_m
 		var p := game.history.pos_of(e.id, e.pos) if client else e.pos

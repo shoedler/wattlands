@@ -27,6 +27,11 @@ var wheel_deg := PackedFloat32Array([0, 0, 0, 0])
 var wheel_rider := PackedInt32Array([0, 0, 0, 0])
 var walkers := PackedInt32Array([0, 0, 0, 0])
 var walk_phase := PackedFloat32Array([0, 0, 0, 0])
+## Per slot: whether its walkers stumble (the rider is in rescue) and how far they have sunk (0..1).
+var stumble: Array[bool] = [false, false, false, false]
+var stumble_dip := PackedFloat32Array([0, 0, 0, 0])
+## How far (m) a stumbling walker sinks to its knees.
+const STUMBLE_DROP_M := 0.7
 ## Per slot: the station its route is lit to (-1 none).
 var route := PackedInt32Array([-1, -1, -1, -1])
 ## Per station: yaw (deg, atan2(dy, dx)) and the animation phase `arm` 0..1 (STATE_V2.md).
@@ -130,8 +135,14 @@ func _wheels() -> void:
 		var spots := bank.anchors("walker_%d" % s)
 		var f := posmod(floori(walk_phase[s] * 4.0), 4)
 		for k in mini(walkers[s], spots.size()):
+			var at := spots[k]
+			var frame := (f + k) % 4
+			if stumble[s]:
+				# a stagger: the walkers lurch down together and catch their stride again
+				at -= Vector3(0, 0, STUMBLE_DROP_M * stumble_dip[s])
+				frame = 1 if stumble_dip[s] > 0.3 else frame
 			# each walker a little out of step with the one ahead
-			_put("walker_%d" % s, k * 4 + (f + k) % 4, L_WALKER, -1, spots[k])
+			_put("walker_%d" % s, k * 4 + frame, L_WALKER, -1, at)
 
 
 func _junction() -> void:

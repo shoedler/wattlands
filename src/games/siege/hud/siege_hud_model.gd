@@ -199,10 +199,13 @@ static func warning(state: SiegeState) -> Dictionary:
 	var ram := nearest_engine(state, SiegeIds.ENEMY_RAM)
 	if not ram.is_empty() and float(ram["m"]) <= ENGINE_WARN_M:
 		return {"key": "SIEGE_HUD_RAM_ON_ROAD", "args": [roundi(ram["m"])], "level": 2}
-	var rushes := rush_times(state)
-	var next := state.wave.rush_next
-	if next < rushes.size() and rushes[next] - state.phase_elapsed_s <= 15.0:
-		return {"key": "SIEGE_WARN_RUSH", "args": [], "level": 1}
+	# the next rush still ahead on the phase clock (a restarted client's rush_next may be stale)
+	for t in rush_times(state):
+		var ahead := t - state.phase_elapsed_s
+		if ahead > 0.0:
+			if ahead <= 15.0:
+				return {"key": "SIEGE_WARN_RUSH", "args": [], "level": 1}
+			break
 	if state.gate_hp < state.gate_max * GATE_LOW_FRAC:
 		return {"key": "SIEGE_WARN_GATE_LOW", "args": [], "level": 1}
 	return {}
@@ -309,14 +312,30 @@ static func overdrive_face(game: SiegeGame) -> Dictionary:
 			"fill": 1.0,
 			"enabled": true
 		}
-	var in_work := s.in_wave() and s.phase_kind == Wl.WORK
+	# the rules' own gate (a human, READY, a WORK phase with >= 30 s left, no rescue, not AFK,
+	# pedalling): the button is only enabled when a press would start Overdrive
+	var allowed := SiegeOverdrive.blocked_reason(s, r, phase_info(s)) == ""
 	return {
-		"mode": OD_READY if in_work else OD_CLOSED,
+		"mode": OD_READY if allowed else OD_CLOSED,
 		"text":
 		"%s  %s" % [strings.t("SIEGE_HUD_OVERDRIVE"), strings.t("SIEGE_HUD_OVERDRIVE_READY")],
 		"fill": 1.0,
-		"enabled": in_work,
+		"enabled": allowed,
 	}
+
+
+## The phase as the rules' SiegePhaseInfo, from the state (as SiegeGame._refresh_prompts does).
+static func phase_info(s: SiegeState) -> SiegePhaseInfo:
+	var info := SiegePhaseInfo.new()
+	info.index = s.phase_index
+	info.kind = s.phase_kind
+	info.role = s.role
+	info.number = s.wave_no
+	info.waves = s.waves_total
+	info.elapsed_s = s.phase_elapsed_s
+	info.duration_s = s.phase_duration_s
+	info.remaining_s = s.phase_remaining_s
+	return info
 
 
 ## The curtain card's text: "80 / 200" and "Cauldrons 210 L".

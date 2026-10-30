@@ -2,15 +2,19 @@ class_name SiegeShopModel
 extends RefCounted
 ## The entries of the break shop (docs/games/siege.md 2.4 "Shop", 3 HUD): the top entry is
 ## Autopilot's pick for the rider (SiegeAutopilot.shop_picks), the second is "Save gold", then
-## what else the rider could buy now: a gate repair, the four station upgrades, a mine level, a
-## Scorpion on the first empty pad, a pad upgrade, Iron bands and the three perks. Prices come
-## from the rules (SiegeShop.price). Pure: the panel draws the result in a PedalScanList.
+## everything else the rules sell now (anyone may buy anything): a gate repair, each station's
+## next upgrade, the next mine level, a Scorpion on each empty pad, each built pad's next upgrade,
+## Iron bands and the three perks. Prices come from the rules (SiegeShop.price). Pure: the panel
+## pages the result through a PedalScanList (pages(): ROWS rows at 32 px, the last row of a
+## page "More" when there is more).
 ##
 ## An entry is {"id": {"item", "at"}, "text", "detail", "cost", "disabled", "recommended"}; `at`
-## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) is
-## never sent as an intent.
+## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) and
+## the More entry (ITEM_MORE) are never sent as intents.
 
-const MAX_ENTRIES := 4
+## Rows a page shows (the shop's rect holds four at 32 px).
+const ROWS := 4
+const ITEM_MORE := "more"
 
 
 ## The first empty pad (0 when every pad is built).
@@ -110,31 +114,13 @@ static func entries(
 	if not picks.is_empty():
 		var p := picks[0]
 		var item := str(p.get("item", ""))
-		var at := int(p.get("station", p.get("pad", 0)))
+		# a normalized intent carries both keys; the pad is the one that counts for pad items
+		var at := int(p.get("pad", 0)) if SiegeIds.PAD_ITEMS.has(item) else int(p.get("station", 0))
 		if SiegeIds.ITEMS.has(item) and cost_of(state, item, at) >= 0:
 			out.append(_entry(state, strings, rider, item, at, true))
 			seen["%s/%d" % [item, at]] = true
 	out.append(_entry(state, strings, rider, SiegeIds.ITEM_SAVE, 0, false))
-	var wanted: Array = [[SiegeIds.ITEM_REPAIR, 0]]
-	for id in SiegeIds.UPGRADABLE:
-		wanted.append([SiegeIds.ITEM_UPGRADE, id])
-	(
-		wanted
-		. append_array(
-			[
-				[SiegeIds.ITEM_MINE, 0],
-				[SiegeIds.ITEM_SCORPION, empty_pad(state)],
-				[SiegeIds.ITEM_PAD_UPGRADE, upgrade_pad(state)],
-				[SiegeIds.ITEM_IRON_BANDS, 0],
-				[SiegeIds.ITEM_RESERVE, 0],
-				[SiegeIds.ITEM_AQUEDUCT, 0],
-				[SiegeIds.ITEM_CAULDRON, 0],
-			]
-		)
-	)
-	for w: Array in wanted:
-		if out.size() >= MAX_ENTRIES:
-			break
+	for w: Array in candidates(state):
 		var item: String = w[0]
 		var at: int = w[1]
 		if SiegeIds.PAD_ITEMS.has(item) and at < 1:
@@ -142,6 +128,57 @@ static func entries(
 		if seen.has("%s/%d" % [item, at]) or cost_of(state, item, at) < 0:
 			continue
 		out.append(_entry(state, strings, rider, item, at, false))
+	return out
+
+
+## Every [item, at] the shop could sell, in the list's order (cost_of decides what is on sale).
+static func candidates(state: SiegeState) -> Array:
+	var out: Array = [[SiegeIds.ITEM_REPAIR, 0]]
+	for id in SiegeIds.UPGRADABLE:
+		out.append([SiegeIds.ITEM_UPGRADE, id])
+	out.append([SiegeIds.ITEM_MINE, 0])
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		out.append([SiegeIds.ITEM_SCORPION, n])
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		if state.pad(n).built():
+			out.append([SiegeIds.ITEM_PAD_UPGRADE, n])
+	for item in [
+		SiegeIds.ITEM_IRON_BANDS,
+		SiegeIds.ITEM_RESERVE,
+		SiegeIds.ITEM_AQUEDUCT,
+		SiegeIds.ITEM_CAULDRON
+	]:
+		out.append([item, 0])
+	return out
+
+
+## The entries cut into pages of ROWS rows: the first page keeps the head of the list (the pick
+## and "Save gold" on top); when there is more, each page's last row is a More entry ("More
+## (2/3)") that moves on to the next page, and the last page's More goes back to the first.
+static func pages(list: Array[Dictionary], strings: GameStrings) -> Array:
+	var out: Array = []
+	if list.size() <= ROWS:
+		out.append(list.duplicate())
+		return out
+	var per := ROWS - 1
+	var count := ceili(float(list.size()) / per)
+	for p in count:
+		var page: Array[Dictionary] = []
+		page.assign(list.slice(p * per, (p + 1) * per))
+		(
+			page
+			. append(
+				{
+					"id": {"item": ITEM_MORE, "at": (p + 1) % count},
+					"text": strings.t("SIEGE_SHOP_MORE", [(p + 1) % count + 1, count]),
+					"detail": "",
+					"cost": 0,
+					"disabled": false,
+					"recommended": false,
+				}
+			)
+		)
+		out.append(page)
 	return out
 
 
