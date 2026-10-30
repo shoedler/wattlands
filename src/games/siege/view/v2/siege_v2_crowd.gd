@@ -3,7 +3,8 @@ extends SiegeDepthBatch
 ## The attackers from plain arrays, in one depth-tested batch: up to MAX_ENEMIES bodies, each a
 ## ground shadow and a baked frame chosen by type, facing and walk phase, lit by the sun at its
 ## feet, and an hp bar over the siege engines. Types as SiegeIds: 1 spearman, 2 shield bearer,
-## 3 chariot, 4 battering ram, 5 siege tower. Enemy state 3 (EN_DOCKED) shows a docked tower.
+## 3 chariot, 4 battering ram, 5 siege tower; and the view's own 6 worker and 7 hauler (the fort's
+## people marching home). Enemy state 3 (EN_DOCKED) shows a docked tower.
 
 const MAX_ENEMIES := 150
 const TYPE_SPEAR := 1
@@ -11,14 +12,23 @@ const TYPE_SHIELD := 2
 const TYPE_CHARIOT := 3
 const TYPE_RAM := 4
 const TYPE_TOWER := 5
+const TYPE_WORKER := 6
+const TYPE_HAULER := 7
 const ST_DOCKED := 3
-const PARTS := ["", "spear", "shield", "chariot", "ram", "tower"]
+const PARTS := ["", "spear", "shield", "chariot", "ram", "tower", "walker", "hauler"]
 const SHADOWS := [
-	"", "shadow_person", "shadow_person", "shadow_chariot", "shadow_ram", "shadow_tower"
+	"",
+	"shadow_person",
+	"shadow_person",
+	"shadow_chariot",
+	"shadow_ram",
+	"shadow_tower",
+	"shadow_person",
+	"shadow_person",
 ]
 const HP_BAR_W := 9
 ## Height of an engine's hp bar over its feet (m).
-const HP_BAR_Z := [0.0, 0.0, 0.0, 0.0, 5.5, 17.5]
+const HP_BAR_Z := [0.0, 0.0, 0.0, 0.0, 5.5, 17.5, 0.0, 0.0]
 
 ## Bodies drawn by the last set_enemies (at most MAX_ENEMIES).
 var drawn: int = 0
@@ -52,7 +62,7 @@ func set_enemies(
 	var n := mini(mini(types.size(), positions.size()), MAX_ENEMIES)
 	for i in n:
 		var t := types[i]
-		if t < TYPE_SPEAR or t > TYPE_TOWER:
+		if t < TYPE_SPEAR or t > TYPE_HAULER:
 			continue
 		var p := positions[i]
 		var yaw := deg_to_rad(facing_deg[i]) if i < facing_deg.size() else 0.0
@@ -64,7 +74,7 @@ func set_enemies(
 		if t == TYPE_TOWER and st == ST_DOCKED:
 			part = "tower_dock"
 		add(part, frame_for(t, yaw, ph), p, 0, shade)
-		if t >= TYPE_RAM and i < hp.size() and hp[i] < 0.999:
+		if (t == TYPE_RAM or t == TYPE_TOWER) and i < hp.size() and hp[i] < 0.999:
 			_hp_bar(p + Vector3(0, 0, HP_BAR_Z[t]), clampf(hp[i], 0.0, 1.0))
 		drawn += 1
 	commit()
@@ -79,7 +89,7 @@ static func frame_for(t: int, yaw: float, ph: float) -> int:
 	var sx := dx - dy
 	var sy := (dx + dy) * 0.5
 	match t:
-		TYPE_SPEAR, TYPE_SHIELD:
+		TYPE_SPEAR, TYPE_SHIELD, TYPE_WORKER, TYPE_HAULER:
 			return (0 if sx >= 0.0 else 4) + walk
 		TYPE_CHARIOT:
 			var face := 0 if sx >= 0.0 else 1

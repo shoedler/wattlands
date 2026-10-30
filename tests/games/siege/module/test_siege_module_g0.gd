@@ -107,7 +107,25 @@ func test_the_view_and_hud_build_headless_from_the_fixture() -> void:
 	var g := F.make_game(ctx)
 	var spec := g.hud_spec()
 	assert_true(spec.has_widget(HudSpec.TIMELINE))
-	assert_eq(spec.help.size(), 4, "the help overlay: wheel, stations, road, gate")
+	var keys: Array[String] = []
+	for h: Dictionary in spec.help:
+		keys.append(str(h["text"]))
+	assert_eq(
+		keys,
+		[
+			"SIEGE_HELP_WHEEL",
+			"SIEGE_HELP_PATH",
+			"SIEGE_HELP_STATIONS",
+			"SIEGE_HELP_ROAD",
+			"SIEGE_HELP_GATE",
+			"SIEGE_HELP_ROUTE_CARD",
+			"SIEGE_HELP_SHOP",
+		]
+	)
+	for c: Dictionary in spec.controls:
+		var ctl: Variant = c.get("control")
+		if ctl is Node:
+			(ctl as Node).free()
 	for h: Dictionary in spec.help:
 		assert_true(str(h["text"]).begins_with("SIEGE_HELP_"))
 		var at: Vector2 = h["arrow_to"]

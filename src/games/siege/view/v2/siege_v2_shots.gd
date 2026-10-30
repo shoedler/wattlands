@@ -5,14 +5,22 @@ extends SiegeDepthBatch
 ## as short dark streaks with a light trail, stones as a dark ball with a dust trail, arrows as
 ## 1-2 px lines with a fletch point, each with a drop shadow; impacts from the fx_* frames
 ## (dust for stones, splinters for bolts, a splash in the moat) and arrows left in the ground.
-## Drive it with add_event() and set_time(t) on sim time (seconds = tick * 0.05).
+## Drive it with add_event() and set_time(t) on sim time (seconds = tick * 0.05). A Scorpion bolt
+## stops in the first body of `bodies` (the drawn enemies' feet) it passes, as on the host.
 
 const MAX_SHOTS := 64
 const STUCK_S := 3.0
 const MOAT_Z := -0.8
+## A Scorpion bolt hits a body within this of its path (stations.json hit_r_m plus a body).
+const BODY_HIT_M := 1.0
+const BODY_H_M := 2.2
 
 var path: SiegePath = null
+## The spread, drag and landing numbers (stations.json) come from here.
+var content: SiegeContent = null
 var time_s: float = 0.0
+## The enemies' feet now, for the Scorpion bolts (set every frame by the view).
+var bodies := PackedVector3Array()
 ## Shots replaying now.
 var shots: Array[SiegeV2ShotReplay] = []
 
@@ -30,7 +38,7 @@ func _ready() -> void:
 func add_event(ev: Dictionary) -> SiegeV2ShotReplay:
 	if not (ev.get("o") is Array) or not (ev.get("v") is Array):
 		return null
-	var r := SiegeV2ShotReplay.from_event(ev, path)
+	var r := SiegeV2ShotReplay.from_event(ev, path, content)
 	shots.append(r)
 	if shots.size() > MAX_SHOTS:
 		shots.pop_front()
@@ -63,17 +71,29 @@ func rebuild() -> void:
 			continue
 		var live := false
 		for j in s.n:
+			if not s.landed(j, t) and s.kind == SiegeV2ShotReplay.KIND_SCORPION:
+				_stop_in_body(s, j, t)
 			if not s.landed(j, t):
 				_projectile(s, j, t)
 				live = true
 			else:
-				var since := t - s.land_t[j]
+				var since := t - s.end_t(j)
 				if _impact(s, j, since):
 					live = true
 		if live or t < s.duration() + STUCK_S:
 			keep.append(s)
 	shots = keep
 	commit()
+
+
+func _stop_in_body(s: SiegeV2ShotReplay, j: int, t: float) -> void:
+	var p := s.position(j, t)
+	for b in bodies:
+		if absf(b.x - p.x) > BODY_HIT_M or absf(b.y - p.y) > BODY_HIT_M:
+			continue
+		if p.z >= b.z - 0.2 and p.z <= b.z + BODY_H_M:
+			s.stop_t[j] = t
+			return
 
 
 func _p(name: String) -> int:
@@ -154,7 +174,7 @@ func _impact(s: SiegeV2ShotReplay, j: int, since: float) -> bool:
 	)
 	if s.kind == SiegeV2ShotReplay.KIND_ARROW and not wet:
 		if since < STUCK_S:
-			var d := s.direction(j, s.land_t[j])
+			var d := s.direction(j, s.end_t(j))
 			_line("arrow", at, at - d * 0.7)
 			return true
 		return false
