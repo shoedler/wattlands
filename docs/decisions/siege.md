@@ -204,3 +204,79 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-23 Shop model rounding (minor, kept)
 - Decision: `SiegeShopModel` reads the unrounded gate HP and per-road damage; only a gate between max-1 and max HP, or a damage tie closer than 0.05 HP, can show a different non-recommended entry on a client. The recommendation itself uses the replicated values.
 - Reason: cosmetic; not worth a change this round.
+
+## 2026-10-29 v2 rules: engine entry before the camp
+- Decision: a siege engine whose entry point (where it reaches the moat edge `push_lead_s` before the wave ends at its speed) would lie before the camp enters at the camp later instead, at the time that keeps the same arrival (a 900 s sweetspot ram at 371 s, the endurance tower at 1889 s).
+- Alternatives: enter at the camp at the wave start and arrive early; skip the engine.
+- Reason: brief 2.4 fixes the arrival, not the start; waves longer than about 530 s (rams) or 810 s (towers) can't place it on the road at the start.
+
+## 2026-10-29 v2 rules: the ram pair and escorts
+- Decision: two rams stand 25 m apart centred on the entry point (one arrives 15.6 s earlier, one later); escort spearmen (10 threat per slot) are split over the wave's engines and enter in 4-wide ranks behind each; the siege tower gets the escort too; engines and escorts come on top of B.
+- Alternatives: both rams at the entry point; escorts drawn from B.
+- Reason: "two (25 m apart)" leaves the anchor open; v0.1.0 also kept the push outside B, and the tower "replaces the rams", escort included.
+
+## 2026-10-29 v2 rules: a docked siege tower
+- Decision: a docked tower does no gate damage. Its boarders stop the tar works (no pump; Autopilot scores the tar works 0) and pads 1 and 2 until it is destroyed; it takes x1.5 from the onager; it retreats with everyone at the wave end.
+- Alternatives: boarders battering the gate.
+- Reason: brief 2.4 lists only those effects; T4 counts the dock as reaching the gate.
+
+## 2026-10-29 v2 rules: groups as formations
+- Decision: each group (6..12 s apart) adds its share of the budget left (over the groups left, x0.8..1.2) to an account; formations spawn while the account covers the next one, whose type was drawn with weight fraction / formation threat (the expected threat split equals the mix). Formations of one group stand one behind the other, the rear rank on the staging ground. The warm-up's "then chariots too" is the `raiders_horsemen` row of its third. A formation that no staging ground can bring to the gate in time is dropped and its threat counted in `wave.dropped`.
+- Alternatives: random bodies per group (v0.1.0); a formation per group sized to the share.
+- Reason: brief 2.4's ranks (12 / 6 / 2) are bigger than a group's share in short waves; the account keeps B's total and the mix exact over the wave.
+
+## 2026-10-29 v2 rules: caps gate routing only
+- Decision: the caps (2/1/2/2/1) refuse routing onto a full station; they never push anyone off, so four riders start on the mine (cap 2). Autopilot never switches between equal scores, so riders kept off a full mine don't wander between idle stations.
+- Alternatives: only two riders deliver at the mine.
+- Reason: brief 2.4 "everyone starts on the mine" with a mine cap of 2.
+
+## 2026-10-29 v2 rules: bounties by fire-time shares; the mine in a Breach
+- Decision: a projectile remembers the riders delivering to its station when it left and their P_eff shares; its kill pays them (and their damage credit), even if they switched before impact. Perk-driven shots (no rider) pay nothing. The mine stops in a Breach like every other station.
+- Alternatives: pay the riders delivering at impact; keep the mine running.
+- Reason: a 4 s stone flight would otherwise pay whoever just coupled in; brief 2.4 says every station stops.
+
+## 2026-10-29 v2 rules: aiming, slew and targets
+- Decision: a weapon turns only while powered (m > 0) and tracks the lead point predicted with its last flight time; at fire time it solves the full 3-round lead (SiegeAim). Targets: every 1 s, the live enemy in band with the highest stations.json `prefer` weight (ballista: engines, shields, blocks, then chariots; onager: engines, then the most HP inside its splash; arrows: spearmen and chariots), nearest the gate on ties; a held target is kept unless a better-preferred type is in range; a target its solver can't reach is skipped once. Pads turn at once.
+- Alternatives: fire whenever wound at the nearest enemy; free slew.
+- Reason: the brief leaves the target choice open; preferences match brief 2.5's matchups, and keeping the onager on its target respects its 4 deg/s turntable.
+
+## 2026-10-29 v2 rules: upgrade 2 reaches the wider band
+- Decision: upgrade 2 widens the band by 25% and lifts the stone's top speed to 39 m/s and the arrows' to 50 m/s (`v_max_upgraded`); arrows that 40 degrees can't reach fall back to the low arc at top speed.
+- Alternatives: the band only (stones and arrows could not reach its new edge).
+- Reason: physics: 34 m/s stones top out near 100-110 m, 45 m/s arrows near 123 m.
+
+## 2026-10-29 v2 rules: trapezoidal position step (foundation fix)
+- Decision: `SiegeBallistics.step` and `land` move the position by the mean of the old and new velocity (v' = v + (g - k|v|v) dt; p += (v + v') / 2 dt); the API is unchanged, so the view replays with the same code.
+- Alternatives: the brief's semi-implicit Euler (p += v' dt).
+- Reason: semi-implicit Euler at 0.05 s lands about one tick early, up to 1.4% short of closed form for the ballista's flat bolts; brief 4 requires 1%. The trapezoidal step is exact for gravity.
+
+## 2026-10-29 v2 rules: impacts
+- Decision: stones and arrows fly to a landing decided at fire time (`SiegeBallistics.land` onto the aim point's ground height) and resolve that many ticks later; bolts fly tick by tick and hit a body when the path passes within 0.6 m plus its body radius of its axis and below its height (`body_r_m` / `body_h_m` in enemies.json; infantry radius 0, so "within 0.6 m" is literal). Splash distance is to the body centre. The testudo is drawn per arrow at fire time from a second hash stream (seed xor 0x5bd1e995). Projectiles in flight are dropped when a phase ends. Ground height is the path's z at the aim point.
+- Alternatives: per-tick integration of every arrow (12 per volley); impact checks at spawn time.
+- Reason: identical outcomes for ballistic flights at a fraction of the cost (brief 4's 1 ms step); bolts need the per-tick check for pierce.
+
+## 2026-10-29 v2 rules: tar works details
+- Decision: the pump stops at the curtain's top (no tar wasted); the cauldrons reheat in every phase; the tar station's `wind` and `arm` show the cauldron fill; leak events report the damage the curtain and the gate took together.
+- Reason: the brief leaves these open; the view needs one 0..1 number per station.
+
+## 2026-10-29 v2 rules: the Scorpion
+- Decision: spread 0.3 deg and +-0.5% speed (as the bolt), aim point 0.9 m up, the second bolt of upgrade 3 at the same target (one shot event, n 2); a Scorpion bolt hits the first body its path passes, like a bolt that stops.
+- Reason: brief 2.4 gives no Scorpion spread.
+
+## 2026-10-29 v2 rules: events and snapshot
+- Decision: `push` is one event per engine {id, et, prog_dm} when it spawns; `dock` {id}; `kill` carries `src` (station 1..3, 10 + pad); `buy` carries `station` and `pad`. Snapshot v2 as brief 2.6 with `gd` = this wave's gate damage and two optional keys: `ru` (a rush) and `rk` (the arrow organ's next rack, absent at 0).
+- Alternatives: one push event per wave listing the engines.
+- Reason: engines can enter at different times (camp entries); T4 counts pushes; the view needs the rack and clients the rush.
+
+## 2026-10-29 v2 rules: Autopilot scores
+- Decision: `autopilot.weights` (ballista: shields 2, engines 3; onager: blocks 1.5, engines 3; arrows: spearmen 2, chariots 1.5), samples at 0, 5 and 10 s of the look-ahead, the tar works' score = 20 x (gate_hp of infantry within 40 m + the threat of engines within 60 m), the mine 40.
+- Reason: brief 2.5 leaves the scales open; the tar works compete with weapon scores in the hundreds.
+
+## 2026-10-29 v2 tuning (sim evidence)
+- Decision: c_budget 32 (13 in v0.1.0), bounty_scale 0.18 (0.3), the ram 780 HP and 3.9 HP/s (+30%), the staging margin 21 s (-30%), the ballista's chariot preference 0.5.
+- Alternatives: c_budget within +-30% of 13.
+- Reason: at c_budget 13 the v2 defense let nothing through: zero leaks in all four shifts, gate full at every wave end, mean scores 93-100 (headless rules sim, 4 compliant riders, seeds 1-3). c_budget 30-40 brought short to 85-90 while sweetspot stayed near 90 and endurance fell to 50-65 (one 45 min wave without a shop); 60 flooded the long shifts (16-46 Breaches). Bounties scale with kills, so bounty_scale came down with the larger budget to keep T2 at 0.45.
+
+## 2026-10-29 v2 tests replace v0.1.0's
+- Decision: 263 v0.1.0 test functions in files that tested the three-road map, towers, hit-scan combat and the 3D view were removed with them; the kept files were rewritten. The rules builder's v2 suite has 585 GUT test functions (v0.1.0: 530 in all, view and HUD included) plus 55 Node tests; the view builder adds its own.
+- Reason: brief 4's gate on the floor (the floor minus exactly the deliberately removed tests, with an ADR).

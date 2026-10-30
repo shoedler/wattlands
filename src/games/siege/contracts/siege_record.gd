@@ -1,10 +1,11 @@
 class_name SiegeRecord
 extends RefCounted
 ## Base of Siege's plain-data state types: to_dict() / load_dict() over every script variable of
-## a JSON-friendly type (bool, int, float, String, Vector2 as [x, z], typed Arrays of those).
+## a JSON-friendly type (bool, int, float, String, Vector2 as [x, y], Vector3 as [x, y, z],
+## typed Arrays of those).
 ## Fixtures and debugging use it; the 10 Hz snapshot is SiegeSnapshot's compact integer form,
 ## not this. Variables whose name starts with "_" and Object-typed ones are skipped (a subclass
-## handles nested records itself). G0 contract.
+## handles nested records itself).
 
 
 func to_dict() -> Dictionary:
@@ -16,6 +17,8 @@ func to_dict() -> Dictionary:
 		match typeof(v):
 			TYPE_VECTOR2:
 				out[p["name"]] = [v.x, v.y]
+			TYPE_VECTOR3:
+				out[p["name"]] = [v.x, v.y, v.z]
 			TYPE_ARRAY:
 				out[p["name"]] = (v as Array).duplicate()
 			_:
@@ -41,6 +44,12 @@ func load_dict(d: Dictionary) -> SiegeRecord:
 				set(p["name"], str(v))
 			TYPE_VECTOR2:
 				set(p["name"], Vector2(float(v[0]), float(v[1])) if v is Array else Vector2.ZERO)
+			TYPE_VECTOR3:
+				var ok3: bool = v is Array and (v as Array).size() >= 3
+				set(
+					p["name"],
+					Vector3(float(v[0]), float(v[1]), float(v[2])) if ok3 else Vector3.ZERO
+				)
 			TYPE_ARRAY:
 				var arr: Array = get(p["name"])
 				arr.clear()
@@ -68,4 +77,4 @@ func _saved(p: Dictionary) -> bool:
 	if t == TYPE_ARRAY:
 		var arr: Variant = get(p["name"])
 		return arr is Array and (arr as Array).get_typed_builtin() != TYPE_OBJECT
-	return t in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_VECTOR2]
+	return t in [TYPE_BOOL, TYPE_INT, TYPE_FLOAT, TYPE_STRING, TYPE_VECTOR2, TYPE_VECTOR3]

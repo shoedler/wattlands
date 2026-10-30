@@ -1,8 +1,9 @@
 {"id": "siege", "title": "Castellum Rotae",
- "summary": "Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator.",
- "version": "0.1.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "3d",
+ "summary": "Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it to a ballista, an onager, an arrow organ, the tar works or the gold mine.",
+ "version": "0.2.0", "min_players": 1, "max_players": 4, "bots": true, "presentation": "2d", "pixel_base": [960, 540],
  "entry": "res://src/games/siege/siege_game.gd",
  "contents": ["short", "vo2", "sweetspot", "endurance", "drill"],
  "default_content": "short", "e2e_content": "drill", "zero_input_content": "short",
  "first_run_priority": -1,
- "player_options": [{"id": "wave_offset", "type": "int", "min": -10, "max": 5, "step": 1, "default": 0, "label": "SIEGE_OPT_WAVE_OFFSET"}]}
+ "player_options": [{"id": "wave_offset", "type": "int", "min": -10, "max": 5, "step": 1, "default": 0, "label": "SIEGE_OPT_WAVE_OFFSET"},
+                    {"id": "tilt_shift", "type": "toggle", "default": true, "label": "SIEGE_OPT_TILT_SHIFT"}]}

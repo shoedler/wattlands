@@ -26,13 +26,14 @@
 //   T1            mean score of seeds 1-3 is in 64..89 (S1 = s9 short; S2 per variant).
 //   T3            leak rate = distinct enemy ids in `leak` events that fall inside a wave phase
 //                 (role "wave", the warm-up excluded) / total wave minutes of that content
-//                 (sum of the wave phases' duration_s / 60). A ram that batters emits one leak
-//                 per HP; it counts once. Per content: the mean over its seeds. T3 holds when
-//                 every content's rate is within +-30% of the mean of the four contents' rates
-//                 (all rates 0 holds).
-//   T4            rams stopped = `kill` events with et 4 whose enemy id never appears in a
-//                 `leak` event (it died before reaching the gate); rams spawned = the roads
-//                 listed by `push` events; pooled over all S9 runs, stopped / spawned >= 0.7.
+//                 (sum of the wave phases' duration_s / 60) on the one road. A ram that batters
+//                 emits one leak per HP; it counts once. Per content: the mean over its seeds. T3
+//                 holds when every content's rate is within +-30% of the mean of the four
+//                 contents' rates (all rates 0 holds).
+//   T4            siege engines (rams, et 4, and siege towers, et 5) stopped = `kill` events of
+//                 an engine whose id never appears in a `leak` event (a ram at the gate) or a
+//                 `dock` event (a tower that docks counts as reaching it); engines spawned = `push`
+//                 events; pooled over all S9 runs, stopped / spawned >= 0.7.
 //   Overdrive     the directive {mode SIM, duration_s 30, reason overdrive, source siege}.
 //   Return (S10)  GAME_SDK 21: SIM -> ERG sets grade 0, then ERG at min(3 s power, the planned
 //                 target), never below the floor, slewing up at 30 W/s and never above the target.
@@ -57,6 +58,7 @@ export const T1_RANGE = [64, 89];
 export const T3_SPREAD = 0.3;
 export const T4_MIN = 0.7;
 export const ENEMY_RAM = 4;
+export const ENEMY_TOWER = 5;
 export const OD_DIRECTIVE = { mode: 'SIM', duration_s: 30, reason: 'overdrive', source: 'siege' };
 export const OD_SPAN_S = 30;
 export const OD_SPAN_TOL_S = 2;
@@ -160,14 +162,20 @@ export function leakStats(report) {
   return { leaks: ids.size, minutes, rate: minutes > 0 ? ids.size / minutes : 0 };
 }
 
-/** {spawned, stopped}: rams pushed (roads in `push` events) and rams killed before the gate. */
-export function ramStats(report) {
-  const leaked = new Set(eventsOf(report, 'leak').filter((e) => e.et === ENEMY_RAM).map((e) => e.id));
-  const spawned = sum(eventsOf(report, 'push').map((e) => (Array.isArray(e.roads) ? e.roads.length : 0)));
-  const killed = new Set(eventsOf(report, 'kill').filter((e) => e.et === ENEMY_RAM).map((e) => e.id));
+const isEngine = (e) => e.et === ENEMY_RAM || e.et === ENEMY_TOWER;
+
+/** {spawned, stopped, reached}: siege engines pushed (`push` events), engines killed before they
+ *  reached the gate or docked, and engines that reached it (a ram's `leak`, a tower's `dock`). */
+export function engineStats(report) {
+  const reached = new Set([
+    ...eventsOf(report, 'leak').filter(isEngine).map((e) => e.id),
+    ...eventsOf(report, 'dock').map((e) => e.id),
+  ]);
+  const spawned = eventsOf(report, 'push').filter(isEngine).length;
+  const killed = new Set(eventsOf(report, 'kill').filter(isEngine).map((e) => e.id));
   let stopped = 0;
-  for (const id of killed) if (!leaked.has(id)) stopped += 1;
-  return { spawned, stopped, leaked: leaked.size };
+  for (const id of killed) if (!reached.has(id)) stopped += 1;
+  return { spawned, stopped, reached: reached.size };
 }
 
 // --- result helpers -----------------------------------------------------------------------------------
@@ -485,7 +493,7 @@ export function checkS7(reports) {
 
 export function checkS9(reports, opts = {}) {
   const seeds = opts.seeds ?? DEFAULT_SEEDS;
-  const title = 'T3 leaks per wave-minute across the shifts, T4 rams stopped';
+  const title = 'T3 leaks per wave-minute across the shifts, T4 siege engines stopped';
   const names = [];
   for (const c of CONTENTS) for (const n of seeds) names.push(`s9_${c}_seed${n}`);
   const { found, missing } = pick(reports, names);
@@ -498,7 +506,7 @@ export function checkS9(reports, opts = {}) {
     probs.push(...argsProblems(name, r, { players: 4, bots: 0 }));
     probs.push(...completeProblems(name, r));
     (rates[r.content_id] ??= []).push(leakStats(r).rate);
-    const rs = ramStats(r);
+    const rs = engineStats(r);
     spawned += rs.spawned;
     stopped += rs.stopped;
   }
@@ -509,10 +517,10 @@ export function checkS9(reports, opts = {}) {
     if (Math.abs(v - ref) > T3_SPREAD * ref + EPS) probs.push(`T3: ${c} leaks ${fmt(v)}/wave-min, the mean of the shifts is ${fmt(ref)} (+-${T3_SPREAD * 100}% allowed)`);
   }
   if (Object.keys(per).length < CONTENTS.length) probs.push(`T3: only ${Object.keys(per).join(', ')} have reports`);
-  if (spawned === 0) probs.push('T4: no ram was ever pushed (no push events)');
-  else if (stopped / spawned < T4_MIN - EPS) probs.push(`T4: ${stopped}/${spawned} rams stopped before the gate (${fmt((100 * stopped) / spawned)}%, need ${T4_MIN * 100}%)`);
+  if (spawned === 0) probs.push('T4: no siege engine was ever pushed (no push events)');
+  else if (stopped / spawned < T4_MIN - EPS) probs.push(`T4: ${stopped}/${spawned} siege engines stopped before the gate (${fmt((100 * stopped) / spawned)}%, need ${T4_MIN * 100}%)`);
   const t3 = Object.entries(per).map(([c, v]) => `${c} ${fmt(v)}`).join(', ');
-  return result('S9', title, probs, `leaks/wave-min ${t3}; rams stopped ${stopped}/${spawned}`);
+  return result('S9', title, probs, `leaks/wave-min ${t3}; siege engines stopped ${stopped}/${spawned}`);
 }
 
 // --- S10: Overdrive ----------------------------------------------------------------------------------------------

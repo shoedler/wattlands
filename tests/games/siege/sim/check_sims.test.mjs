@@ -165,7 +165,7 @@ test('the seeds option narrows S1, S2, S4 and S9 to the seeds that were run', ()
   assert.equal(cs.checkS4(s4, { seeds: [1] }).status, 'PASS');
   const s9 = {};
   for (const c of cs.CONTENTS) s9[`s9_${c}_seed1`] = report({ content: c, score: 75 });
-  assert.match(cs.checkS9(s9, { seeds: [1] }).details.join(' '), /no ram was ever pushed/);
+  assert.match(cs.checkS9(s9, { seeds: [1] }).details.join(' '), /no siege engine was ever pushed/);
   assert.doesNotMatch(cs.checkS9(s9, { seeds: [1] }).details.join(' '), /missing report/);
 });
 
@@ -340,31 +340,48 @@ test('S7 wants the same hash and the same game events', () => {
 
 // --- S9: T3, T4 ---------------------------------------------------------------------------------------------
 
-/** Events: `leaks` distinct leaking raiders inside wave 1 plus rams pushed / killed / leaked. */
-function s9events(content, leaks, rams = { push: 3, killed: 3, leaked: 0 }) {
+/** Events: `leaks` distinct leaking spearmen inside wave 1 plus rams pushed / killed / leaked,
+ *  and optionally siege towers pushed / killed / docked. */
+function s9events(content, leaks, rams = { push: 3, killed: 3, leaked: 0 }, towers = { push: 0, killed: 0, docked: 0 }) {
   const w1 = { short: 430, vo2: 430, sweetspot: 430, endurance: 430 }[content];
   const evs = [];
-  for (let i = 0; i < leaks; i++) evs.push(ge(w1 + 10 + i, { type: 'leak', id: 1000 + i, et: 1, road: 0, dmg: 2 }));
-  evs.push(ge(w1 + 20, { type: 'push', roads: Array.from({ length: rams.push }, (_, i) => i) }));
-  for (let i = 0; i < rams.killed; i++) evs.push(ge(w1 + 30 + i, { type: 'kill', id: 50 + i, et: 4, pad: 3, road: 0, x2: 0 }));
+  for (let i = 0; i < leaks; i++) evs.push(ge(w1 + 10 + i, { type: 'leak', id: 1000 + i, et: 1, dmg: 2 }));
+  for (let i = 0; i < rams.push; i++) evs.push(ge(w1 + 20, { type: 'push', id: 50 + i, et: 4, prog_dm: 1834 }));
+  for (let i = 0; i < rams.killed; i++) evs.push(ge(w1 + 30 + i, { type: 'kill', id: 50 + i, et: 4, src: 2, x2: 0 }));
   for (let i = 0; i < rams.leaked; i++) {
-    evs.push(ge(w1 + 40 + i, { type: 'leak', id: 70 + i, et: 4, road: 0, dmg: 1 }));
-    evs.push(ge(w1 + 41 + i, { type: 'leak', id: 70 + i, et: 4, road: 0, dmg: 1 }));
+    evs.push(ge(w1 + 40 + i, { type: 'leak', id: 70 + i, et: 4, dmg: 1 }));
+    evs.push(ge(w1 + 41 + i, { type: 'leak', id: 70 + i, et: 4, dmg: 1 }));
   }
+  for (let i = 0; i < towers.push; i++) evs.push(ge(w1 + 21, { type: 'push', id: 90 + i, et: 5, prog_dm: 2554 }));
+  for (let i = 0; i < towers.killed; i++) evs.push(ge(w1 + 50 + i, { type: 'kill', id: 90 + i, et: 5, src: 1, x2: 0 }));
+  for (let i = 0; i < towers.docked; i++) evs.push(ge(w1 + 60 + i, { type: 'dock', id: 90 + towers.killed + i }));
   return evs;
 }
 
 test('leakStats counts distinct enemies inside waves per wave-minute', () => {
-  const r = report({ content: 'short', events: [...s9events('short', 3, { push: 0, killed: 0, leaked: 1 }), ge(10, { type: 'leak', id: 9, et: 1, road: 0, dmg: 2 })] });
+  const r = report({ content: 'short', events: [...s9events('short', 3, { push: 0, killed: 0, leaked: 1 }), ge(10, { type: 'leak', id: 9, et: 1, dmg: 2 })] });
   const s = cs.leakStats(r);
   assert.equal(s.minutes, 15, '3 waves of 5 min');
-  assert.equal(s.leaks, 4, '3 raiders + 1 ram that battered twice; the warm-up leak at 10 s is outside a wave');
+  assert.equal(s.leaks, 4, '3 spearmen + 1 ram that battered twice; the warm-up leak at 10 s is outside a wave');
   assert.equal(s.rate, 4 / 15);
 });
 
-test('ramStats: stopped = killed rams that never leaked', () => {
+test('engineStats: stopped = killed rams that never leaked', () => {
   const r = report({ events: s9events('short', 0, { push: 4, killed: 3, leaked: 1 }) });
-  assert.deepEqual(cs.ramStats(r), { spawned: 4, stopped: 3, leaked: 1 });
+  assert.deepEqual(cs.engineStats(r), { spawned: 4, stopped: 3, reached: 1 });
+});
+
+test('engineStats: a siege tower that docks counts as reaching the gate', () => {
+  const r = report({ events: s9events('short', 0, { push: 0, killed: 0, leaked: 0 }, { push: 3, killed: 1, docked: 2 }) });
+  assert.deepEqual(cs.engineStats(r), { spawned: 3, stopped: 1, reached: 2 });
+  const late = report({
+    events: [
+      ge(500, { type: 'push', id: 7, et: 5, prog_dm: 2554 }),
+      ge(700, { type: 'dock', id: 7 }),
+      ge(710, { type: 'kill', id: 7, et: 5, src: 2, x2: 0 }),
+    ],
+  });
+  assert.deepEqual(cs.engineStats(late), { spawned: 1, stopped: 0, reached: 1 }, 'killed after docking: not stopped');
 });
 
 test('S9 passes when leak rates are within +-30% and 70% of rams are stopped', () => {
@@ -401,8 +418,8 @@ test('S9 fails a spread over 30%, too few rams stopped and no rams at all', () =
     sweetspot: { events: s9events('sweetspot', 6, { push: 4, killed: 2, leaked: 2 }) },
     endurance: { events: s9events('endurance', 9, { push: 4, killed: 2, leaked: 2 }) },
   });
-  assert.match(cs.checkS9(weak).details.join('\n'), /T4: 24\/48 rams stopped/);
-  assert.match(cs.checkS9(s9set()).details.join('\n'), /no ram was ever pushed/);
+  assert.match(cs.checkS9(weak).details.join('\n'), /T4: 24\/48 siege engines stopped/);
+  assert.match(cs.checkS9(s9set()).details.join('\n'), /no siege engine was ever pushed/);
   assert.equal(cs.checkS9({}).status, 'SKIP');
   // all zero leaks is within any spread.
   const zero = s9set({

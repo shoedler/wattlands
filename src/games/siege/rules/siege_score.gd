@@ -1,11 +1,11 @@
 class_name SiegeScore
 extends RefCounted
-## Score, grade and XP (brief 2.8). Owner: B1 "rules". Pure.
+## Score, grade and XP (brief 2.8). Pure.
 ##
 ## Score (waves 1..N, the warm-up excluded) = gate + breaches + earnings:
 ##   gate      40 x mean(gate HP / max at each wave end) (no wave ended yet: the gate now)
 ##   breaches  max(0, 30 - 15 x breaches)
-##   earnings  30 x min(1, team denarii earned / par), par = 0.75 x the team's planned P_eff in
+##   earnings  30 x min(1, team gold earned / par), par = 0.75 x the team's planned P_eff in
 ##             kJ from the warm-up to the last wave (SiegeState.planned_kj)
 ## Grades: S >= 90, A >= 78, B >= 64, C >= 48, otherwise D (balance.json score.grades).
 ## XP = round(kJ / 10) + the grade bonus (S 60, A 40, B 25, C 10, D 0).
@@ -48,7 +48,7 @@ static func ride_tag(state: SiegeState, content_id: String, strings: GameStrings
 	return strings.t("SIEGE_RIDE_LOST" if state.breaches > 0 else "SIEGE_RIDE_WON", [mission])
 
 
-## The Strava description lines (GameResults.ride_lines): score and grade, breaches, rams
+## The Strava description lines (GameResults.ride_lines): score and grade, breaches, engines
 ## stopped and the team's kills.
 static func ride_lines(state: SiegeState, res: GameResults, strings: GameStrings) -> Array[String]:
 	var kills := 0
@@ -57,7 +57,7 @@ static func ride_lines(state: SiegeState, res: GameResults, strings: GameStrings
 	return [
 		strings.t("SIEGE_RIDE_SCORE", [roundi(res.score), res.grade]),
 		strings.t("SIEGE_RIDE_BREACHES", [state.breaches]),
-		strings.t("SIEGE_RIDE_RAMS", [state.rams_stopped, state.rams_total]),
+		strings.t("SIEGE_RIDE_ENGINES", [state.engines_stopped, state.engines_total]),
 		strings.t("SIEGE_RIDE_KILLS", [kills]),
 	]
 

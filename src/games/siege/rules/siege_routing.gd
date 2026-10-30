@@ -2,19 +2,20 @@ class_name SiegeRouting
 extends RefCounted
 ## Routing (brief 2.4 "Routing", 2.5 "Zero input"). Pure.
 ##
-## Each rider's target is the generator (SiegeIds.TARGET_GEN) or a built pad. Intents: a pad or
-## the generator directly; "next" / "prev" step through the targets clockwise (the generator,
-## then the map's ring of pads, then the generator again), skipping empty pads and towers that
-## already have 2 riders; "hot" picks the tower with the most enemy HP in range. A change
-## reconnects after balance.json reconnect_s (2 s) with no output meanwhile. Routing happens in
-## waves only; in breaks every rider's output goes to the generator and the target is kept.
+## Each rider's target is a station 0..4 (0 mine, 1 tree ballista, 2 great onager, 3 arrow
+## organ, 4 tar works) within the caps (stations.json: 2 / 1 / 2 / 2 / 1). Intents: a station
+## directly; "next" / "prev" step 0 -> 1 -> 2 -> 3 -> 4 -> 0 (and back), skipping full stations;
+## "mine" (up); "hot" (down) takes Autopilot's pick. A change reconnects after reconnect_s (2 s)
+## with no output meanwhile. Routing happens in waves only; in breaks all output goes to the
+## mine and every target is kept. The caps limit routing: everyone starts on the mine, and a
+## station a rider already holds never pushes them off (ADR "caps gate routing").
 ##
 ## Zero input: a rider is Autopilot-routed while route_fallback (until their first deliberate
 ## route intent; bots never clear it) or autopilot (bots and Autopilot-on humans). The rules ask
 ## SiegeAutopilot.route_choice once a second in slot order. Auto-tagged route intents are ignored.
 
 ## Test seam: when valid, called as route_hook.call(state, rider) -> int instead of
-## SiegeAutopilot.route_choice (the module's Autopilot is a separate builder's file).
+## SiegeAutopilot.route_choice.
 static var route_hook: Callable = Callable()
 
 
@@ -36,50 +37,37 @@ static func intent(
 		set_target(state, r, target, events)
 
 
-## The target `to` (a pad, TARGET_GEN or SiegeIds.ROUTE_NEXT / PREV / HOT) resolves to for `r`,
-## or -1 when nothing changes (no valid target).
+## The station `to` (0..4 or SiegeIds.ROUTE_NEXT / PREV / HOT) resolves to for `r`, or -1 when
+## nothing changes (no valid station).
 static func resolve(state: SiegeState, r: SiegeRiderState, to: int) -> int:
 	match to:
-		SiegeIds.TARGET_GEN:
-			return SiegeIds.TARGET_GEN
 		SiegeIds.ROUTE_NEXT:
-			return _step(state, r, 1)
+			return step_from(state, r, 1)
 		SiegeIds.ROUTE_PREV:
-			return _step(state, r, -1)
+			return step_from(state, r, -1)
 		SiegeIds.ROUTE_HOT:
-			return hot_pad(state, r)
+			return SiegeAutopilot.hot_target(state, r)
 	return to if can_route_to(state, r, to) else -1
 
 
-## True when `r` may route to pad `pad` now: built, and fewer than 2 other riders on it.
-static func can_route_to(state: SiegeState, r: SiegeRiderState, pad: int) -> bool:
-	if not SiegeIds.is_pad(pad) or not state.pad(pad).built():
+## True when `r` may route to station `id` now: a station whose other riders are under its cap
+## (a station `r` already holds is always allowed).
+static func can_route_to(state: SiegeState, r: SiegeRiderState, id: int) -> bool:
+	if not SiegeIds.is_station(id):
 		return false
-	var others := state.routed_count(pad) - (1 if r.target == pad else 0)
-	return others < 2
+	if r.target == id:
+		return true
+	return state.routed_count(id) < state.station_cap(id)
 
 
-## The built pad with the most enemy HP in range that `r` may route to (ties: the lower pad), or
-## -1 when no tower has an enemy in range. The one "hot" resolution: the rules, Autopilot's
-## routing (SiegeAutopilot.route_choice) and a client's prediction (SiegeAutopilot.hot_target)
-## all read it.
-static func hot_pad(state: SiegeState, r: SiegeRiderState) -> int:
-	var best := hot_choice(state, r)
-	return -1 if best.is_empty() else int(best["pad"])
-
-
-## hot_pad with the enemy HP in range: {"pad", "hp"}, or {} when no tower has an enemy in range.
-static func hot_choice(state: SiegeState, r: SiegeRiderState) -> Dictionary:
-	var best := {}
-	var best_hp := 0.0
-	for n in range(1, SiegeIds.PAD_COUNT + 1):
-		if not can_route_to(state, r, n):
-			continue
-		var hp := state.enemy_hp_in_range(n)
-		if hp > best_hp:
-			best = {"pad": n, "hp": hp}
-			best_hp = hp
-	return best
+## The next station from `r`'s target in direction `dir` (+1 / -1) that has room, or -1.
+static func step_from(state: SiegeState, r: SiegeRiderState, dir: int) -> int:
+	var n := SiegeIds.STATION_COUNT
+	for i in range(1, n):
+		var cand := posmod(r.target + dir * i, n)
+		if can_route_to(state, r, cand):
+			return cand
+	return -1
 
 
 ## Moves `r` to `target` (no-op when already there): starts the reconnect, stamps routed_t and
@@ -99,31 +87,19 @@ static func set_target(
 static func autopilot(state: SiegeState, inputs: SiegeInputs, events: Array[Dictionary]) -> void:
 	if not state.in_wave() or inputs.phase.is_cooldown() or inputs.tick % Wl.SIM_HZ != 0:
 		return
+	var scores := SiegeAutopilot.scores(state)
 	for r in state.riders:
 		if not autopiloted(r) or r.afk or not r.connected or r.reconnect_s > 0.0:
 			continue
-		var choice := pick(state, r)
+		var choice := pick(state, r, scores)
 		if choice < 0 or choice == r.target:
 			continue
-		if choice == SiegeIds.TARGET_GEN or can_route_to(state, r, choice):
+		if can_route_to(state, r, choice):
 			set_target(state, r, choice, events)
 
 
-## Autopilot's choice for `r`: a target, or -1 to keep.
-static func pick(state: SiegeState, r: SiegeRiderState) -> int:
+## Autopilot's choice for `r`: a station, or -1 to keep.
+static func pick(state: SiegeState, r: SiegeRiderState, scores: PackedFloat32Array) -> int:
 	if route_hook.is_valid():
 		return int(route_hook.call(state, r))
-	return SiegeAutopilot.route_choice(state, r)
-
-
-static func _step(state: SiegeState, r: SiegeRiderState, dir: int) -> int:
-	var seq: Array[int] = [SiegeIds.TARGET_GEN]
-	seq.append_array(state.content.map.ring)
-	var at := seq.find(r.target)
-	if at < 0:
-		at = 0
-	for i in range(1, seq.size()):
-		var cand := seq[posmod(at + dir * i, seq.size())]
-		if cand == SiegeIds.TARGET_GEN or can_route_to(state, r, cand):
-			return cand
-	return -1
+	return SiegeAutopilot.route_choice(state, r, scores)

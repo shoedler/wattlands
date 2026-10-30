@@ -15,13 +15,13 @@ const ge = (event) => ({ type: 'game_event', event });
 /** The drill's Siege events as the host sends them. */
 function drillEvents() {
   return [
-    { type: 'wave_start', ph: 1, role: 'wave', n: 1, waves: 1, b: 12, roads: [1, 0, 2] },
-    { type: 'roads', roads: [0], in_ms: 5000 },
-    { type: 'kill', id: 3, et: 1, pad: 3, road: 1, x2: 0 },
-    { type: 'kill', id: 4, et: 3, pad: 4, road: 0, x2: 0 },
-    { type: 'push', roads: [0, 1, 2] },
-    { type: 'leak', id: 9, et: 4, road: 1, dmg: 1 },
-    { type: 'buy', slot: 0, item: 'repair', pad: 0, ok: 0, why: 'gate_full', lvl: 0 },
+    { type: 'wave_start', ph: 1, role: 'wave', n: 1, waves: 1, b: 12 },
+    { type: 'shot', tk: 500, src: 2, kind: 1, o: [3020, 4200, 1720], v: [-12000, 9000, 15000], n: 1, sd: 77 },
+    { type: 'kill', id: 3, et: 1, src: 3, x2: 0 },
+    { type: 'kill', id: 4, et: 3, src: 11, x2: 0 },
+    { type: 'push', id: 8, et: 4, prog_dm: 3434 },
+    { type: 'leak', id: 9, et: 4, dmg: 1 },
+    { type: 'buy', slot: 0, item: 'repair', station: 0, pad: 0, ok: 0, why: 'gate_full', lvl: 0 },
     { type: 'wave_end', ph: 1, n: 1, hp: 90, max: 100, leaks: 1 },
   ];
 }
@@ -89,26 +89,26 @@ test('an event type a client does not know fails', () => {
 
 test('fields that are floats, strings or missing fail the schema', () => {
   const bad = drillEvents();
-  bad[2] = { type: 'kill', id: 3.5, et: '1', pad: 3, road: 1 };
+  bad[2] = { type: 'kill', id: 3.5, et: '1', src: 3 };
   const m = errs(report({ host: bad, client1: bad }));
   assert.match(m, /kill: id is not an int/);
   assert.match(m, /kill: et is not an int/);
   assert.match(m, /kill: missing x2/);
   const arr = drillEvents();
-  arr[0].roads = [1, 'a'];
-  assert.match(errs(report({ host: arr, client1: arr })), /roads is not an array of ints/);
+  arr[1].o = [1, 'a', 3];
+  assert.match(errs(report({ host: arr, client1: arr })), /o is not an array of ints/);
   const str = drillEvents();
-  str[6] = { type: 'buy', slot: 0, item: 5, pad: 0, ok: 0, why: 'gate_full', lvl: 0 };
+  str[6] = { type: 'buy', slot: 0, item: 5, station: 0, pad: 0, ok: 0, why: 'gate_full', lvl: 0 };
   assert.match(errs(report({ host: str, client1: str })), /buy: item is not a string/);
 });
 
-test('ranges: a kill at pad 9, an hp above max, a refusal without a known reason', () => {
+test('ranges: a kill from source 9, an hp above max, a refusal without a known reason', () => {
   const bad = drillEvents();
-  bad[2] = { type: 'kill', id: 3, et: 1, pad: 9, road: 1, x2: 0 };
+  bad[2] = { type: 'kill', id: 3, et: 1, src: 9, x2: 0 };
   bad[7] = { type: 'wave_end', ph: 1, n: 1, hp: 120, max: 100, leaks: 0 };
-  bad[6] = { type: 'buy', slot: 0, item: 'repair', pad: 0, ok: 0, why: 'because', lvl: 0 };
+  bad[6] = { type: 'buy', slot: 0, item: 'repair', station: 0, pad: 0, ok: 0, why: 'because', lvl: 0 };
   const m = errs(report({ host: bad, client1: bad }));
-  assert.match(m, /pad 9 outside 0\.\.8/);
+  assert.match(m, /src 9 is not a station or a pad/);
   assert.match(m, /hp 120 outside 0\.\.100/);
   assert.match(m, /unknown reason "because"/);
 });
@@ -121,7 +121,7 @@ test('the wave must start and end once, in order, with combat in between', () =>
   const swapped = drillEvents();
   [swapped[0], swapped[7]] = [swapped[7], swapped[0]];
   assert.match(errs(report({ host: swapped, client1: swapped })), /wave_end arrived before wave_start/);
-  const late = [...drillEvents(), { type: 'kill', id: 70, et: 1, pad: 3, road: 1, x2: 0 }];
+  const late = [...drillEvents(), { type: 'kill', id: 70, et: 1, src: 3, x2: 0 }];
   assert.match(errs(report({ host: late, client1: late })), /kill after wave_end/);
   const wrong = drillEvents();
   wrong[0].n = 2;
@@ -140,7 +140,7 @@ test('the host and the client that stayed must hold the same events in the same 
 test('the restarted client holds a tail that reaches wave_end', () => {
   assert.equal(ec.checkReport(report({ client2: drillEvents().slice(3) })).ok, true);
   const odd = drillEvents().slice(3);
-  odd[0] = { type: 'kill', id: 99, et: 1, pad: 3, road: 1, x2: 0 };
+  odd[0] = { type: 'kill', id: 99, et: 1, src: 3, x2: 0 };
   assert.match(errs(report({ client2: odd })), /client2: its events are not a tail of the host's/);
   const none = [];
   assert.match(errs(report({ client2: none })), /client2: the restarted client recorded no Siege events/);
@@ -186,18 +186,18 @@ test('a Breach running at wave_end may end with gate_restored after it, once', (
   // A second restore, or other combat, after wave_end still fails.
   const twice = [...withBreach(true), { type: 'gate_restored', hp: 30 }];
   assert.match(errs(report({ host: twice, client1: twice })), /gate_restored after wave_end/);
-  const kill = [...withBreach(true), { type: 'kill', id: 70, et: 1, pad: 3, road: 1, x2: 0 }];
+  const kill = [...withBreach(true), { type: 'kill', id: 70, et: 1, src: 3, x2: 0 }];
   assert.match(errs(report({ host: kill, client1: kill })), /kill after wave_end/);
 });
 
-test('the drill has no Overdrive, no Siege directive and no shield wall', () => {
+test('the drill has no Overdrive, no Siege directive and no shield bearer', () => {
   const od = [...drillEvents().slice(0, 7), { type: 'overdrive', slot: 0, st: 1, scored: 0, why: '' }, drillEvents()[7]];
   assert.match(errs(report({ host: od, client1: od })), /an overdrive event in the drill/);
   const dir = [{ peer_role: 'host', id: 1, requested: { mode: 'SIM', duration_s: 30, reason: 'overdrive', source: 'siege' } }];
   assert.match(errs(report({ directives: dir })), /1 Siege directives in the drill/);
   const sw = drillEvents();
-  sw[3] = { type: 'kill', id: 4, et: 2, pad: 4, road: 0, x2: 0 };
-  assert.match(errs(report({ host: sw, client1: sw })), /a shield wall in the drill/);
+  sw[3] = { type: 'kill', id: 4, et: 2, src: 11, x2: 0 };
+  assert.match(errs(report({ host: sw, client1: sw })), /a shield bearer in the drill/);
 });
 
 test('Overdrive events outside the drill must pair up per slot', () => {
@@ -226,17 +226,18 @@ test('FIT laps: the drill has 3', () => {
 
 test('every kind of event passes its own schema', () => {
   const good = [
-    { type: 'wave_start', ph: 4, role: 'wave', n: 2, waves: 6, b: 100, roads: [0, 1, 2] },
+    { type: 'wave_start', ph: 4, role: 'wave', n: 2, waves: 6, b: 100 },
     { type: 'wave_end', ph: 4, n: 2, hp: 72, max: 125, leaks: 3 },
-    { type: 'roads', roads: [2], in_ms: 5000 },
-    { type: 'push', roads: [0] },
+    { type: 'dock', id: 1 },
+    { type: 'push', id: 1, et: 5, prog_dm: 2554 },
     { type: 'rush', on: 1, i: 0 },
-    { type: 'kill', id: 1, et: 4, pad: 3, road: 2, x2: 1 },
-    { type: 'leak', id: 2, et: 1, road: 0, dmg: 2 },
+    { type: 'kill', id: 1, et: 5, src: 2, x2: 1 },
+    { type: 'leak', id: 2, et: 1, dmg: 2 },
     { type: 'breach', n: 1 },
     { type: 'gate_restored', hp: 30 },
-    { type: 'buy', slot: 1, item: 'build_ballista', pad: 5, ok: 1, why: '', lvl: 1 },
-    { type: 'route', slot: 2, to: 6 },
+    { type: 'buy', slot: 1, item: 'scorpion', station: 0, pad: 3, ok: 1, why: '', lvl: 0 },
+    { type: 'route', slot: 2, to: 4 },
+    { type: 'shot', tk: 9, src: 13, kind: 3, o: [1, 2, 3], v: [4, 5, 6], n: 2, sd: 7 },
     { type: 'overdrive', slot: 3, st: 0, scored: 1, why: 'rescue' },
   ];
   assert.equal(good.length, ec.EVENT_TYPES.length);
