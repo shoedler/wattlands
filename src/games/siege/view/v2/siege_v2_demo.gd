@@ -90,6 +90,7 @@ func build_view() -> void:
 	crowd = SiegeV2Crowd.new(bank)
 	shots = SiegeV2Shots.new(bank)
 	shots.path = path
+	shots.content = SiegeContent.from_dicts(SiegeContent.read_files(), "short")
 	tilt = SiegeV2TiltShift.new(SiegeBakeBank.ART_SIZE, bank.manifest.get("focus", {}))
 	for n: Node in [world, machines, crowd, shots, tilt]:
 		view.add_child(n)
