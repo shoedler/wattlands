@@ -1,6 +1,7 @@
 keys,en
 TRAINER_MODULE_NAME,Trainer
 TRAINER_ANOTHER_APP_CONTROL,"Another app (Zwift, the Wahoo app) may hold control of the trainer. Close it, then reconnect."
+TRAINER_DISCONNECTED_NOTICE,Trainer disconnected. Reconnecting: check its power and Bluetooth.
 TRAINER_HW_LOCKED,Hardware control locked: the trainer is read-only in this run.
 TRAINER_STATUS_DISCONNECTED,Trainer disconnected
 TRAINER_STATUS_SCANNING,Looking for your trainer

@@ -62,6 +62,12 @@ extends CanvasLayer
 ##   while control is already lost (in the lobby, or in an earlier session and never
 ##   regained) shows the notice and plays the sound as the signal would have, once.
 ##   Only a rendering GameHost builds a HudLayer, so headless peers show nothing.
+## - Trainer disconnected: trainer_status_changed reporting the link gone (disconnected or error)
+##   during a session puts up TRAINER_DISCONNECTED_NOTICE in the same place, with the "warning"
+##   sound, once per drop, for every game; it replaces the control notice, stays up across a
+##   rebuild and through the reconnect's scanning and connecting, and clears on ready. It is not
+##   seeded at build(): the app starts no session without a trainer, and an idle TrainerService
+##   also reports disconnected.
 ## - The latest power and cadence bands per peer, local teammate statuses and custom readout
 ##   texts are kept, so a band published before build() (in configure()) or across a rebuild
 ##   still shows.
@@ -133,6 +139,8 @@ var _tele_paused: bool = false
 var _rescue_shown: bool = false
 ## True from trainer_control_lost until the trainer reports ready again.
 var _control_lost: bool = false
+## True from a trainer link drop until the trainer reports ready again.
+var _trainer_down: bool = false
 ## The telemetry time update() last saw (-1 before the first), whether it ever moved, and
 ## frame time since it last moved.
 var _tel_t: float = -1.0
@@ -1090,11 +1098,23 @@ func _on_governor_status(peer: int, status: Dictionary) -> void:
 ## Another app (Zwift, the Wahoo app) may hold control (BRIEF 4.4): one notice and one sound
 ## per loss; a repeat while control is still lost changes nothing.
 func _on_trainer_control_lost(_detail: String) -> void:
+	_trainer_down = false
 	if _control_lost:
+		_refresh_trainer_notice()
 		return
 	_control_lost = true
-	_banner.set_trainer_notice(_text("TRAINER_ANOTHER_APP_CONTROL", []))
+	_refresh_trainer_notice()
 	_play("warning")
+
+
+## The one trainer notice: a dropped link says so first, since it outdates a control loss.
+func _refresh_trainer_notice() -> void:
+	if _trainer_down:
+		_banner.set_trainer_notice(_text("TRAINER_DISCONNECTED_NOTICE", []))
+	elif _control_lost:
+		_banner.set_trainer_notice(_text("TRAINER_ANOTHER_APP_CONTROL", []))
+	else:
+		_banner.set_trainer_notice("")
 
 
 ## A loss before this layer linked the bus (lobby, an earlier session) emitted no signal here:
@@ -1107,9 +1127,19 @@ func _seed_trainer_notice() -> void:
 		_on_trainer_control_lost("")
 
 
-## Control is back once the trainer is ready again (a retry, a reconnect, another trainer).
+## A dropped link warns once per drop. Everything is back once the trainer is ready again (a
+## retry, a reconnect, another trainer).
 func _on_trainer_status_changed(status: String, _detail: String) -> void:
-	if not _control_lost or status != TrainerDevice.STATUS_READY:
+	if status == TrainerDevice.STATUS_READY:
+		if _control_lost or _trainer_down:
+			_control_lost = false
+			_trainer_down = false
+			_refresh_trainer_notice()
 		return
-	_control_lost = false
-	_banner.set_trainer_notice("")
+	if status != TrainerDevice.STATUS_DISCONNECTED and status != TrainerDevice.STATUS_ERROR:
+		return
+	if _trainer_down:
+		return
+	_trainer_down = true
+	_refresh_trainer_notice()
+	_play("warning")

@@ -1,5 +1,9 @@
 # Changelog: platform
 
+## Trainer disconnected warning
+
+- The HUD warns the rider in every game when the trainer link drops mid-session: a notice and the warning sound, once per drop, up through the reconnect until the trainer is ready.
+
 ## Unreleased (W1)
 
 - `WlSettings` (autoload `Settings`): `profile.json` and `settings.json` under `Paths.user_dir()` with defaults for missing and corrupt files, type and range cleaning, atomic saves, `--relay` and `--strava-base` run-only overrides, recent rooms (8, newest first), last game, content and trainer, `create_profile()`, and `changed`/EventBus signals.
