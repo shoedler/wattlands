@@ -6,8 +6,9 @@ extends RefCounted
 ##   it (in waves) and to every delivering rider in breaks (all output goes to the mine then). It
 ##   stops in a Breach like every station (ADR "the mine in a Breach").
 ## - A kill pays its bounty x bounty_scale, split among the riders who delivered to the killing
-##   station when the projectile left, by P_eff share (pads pay nothing). A rush kill pays double
-##   to a rider whose Overdrive is on. The kill's top-share rider gets the kill.
+##   station when the projectile left, by P_eff share (pads pay nothing). A kill while a rush is
+##   on (state.rush_on() at the kill) pays double to a rider whose Overdrive is on. The kill's
+##   top-share rider gets the kill.
 ## - Gold is personal (floats; the shop and the snapshot floor them).
 
 

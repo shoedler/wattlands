@@ -255,7 +255,7 @@ static func hit(
 	else:
 		state.station(p.src).kills += 1
 		double = SiegeEconomy.pay_bounty(
-			state, p.peers, p.shares, e.type, tb.bounty[e.type], e.rush
+			state, p.peers, p.shares, e.type, tb.bounty[e.type], state.rush_on()
 		)
 	events.append(SiegeEvents.kill(e.id, e.type, p.src, double))
 	if SiegeIds.is_engine(e.type):
