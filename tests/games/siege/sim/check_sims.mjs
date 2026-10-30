@@ -32,9 +32,10 @@
 //                 holds when every content's rate is within +-30% of the mean of the four
 //                 contents' rates (all rates 0 holds).
 //   T4            siege engines (rams, et 4, and siege towers, et 5) stopped = `kill` events of
-//                 an engine whose id never appears in a `leak` event (a ram at the gate) or a
-//                 `dock` event (a tower that docks counts as reaching it); engines spawned = `push`
-//                 events; pooled over all S9 runs, stopped / spawned >= 0.7.
+//                 an engine whose id never appears in a `reach` event (a ram at the gate), a
+//                 `dock` event (a tower that docks counts as reaching it) or an engine's `leak`;
+//                 engines spawned = `push` events; pooled over all S9 runs, stopped / spawned >= 0.7.
+//                 This is the rules' own state.engines_stopped.
 //   Overdrive     the directive {mode SIM, duration_s 30, reason overdrive, source siege}.
 //   Return (S10)  GAME_SDK 21: SIM -> ERG sets grade 0, then ERG at min(3 s power, the planned
 //                 target), never below the floor, slewing up at 30 W/s and never above the target.
@@ -166,9 +167,11 @@ export function leakStats(report) {
 const isEngine = (e) => e.et === ENEMY_RAM || e.et === ENEMY_TOWER;
 
 /** {spawned, stopped, reached}: siege engines pushed (`push` events), engines killed before they
- *  reached the gate or docked, and engines that reached it (a ram's `leak`, a tower's `dock`). */
+ *  reached the gate or docked, and engines that reached it (a ram's `reach`, a tower's `dock`; an
+ *  engine's `leak` too, for reports from before the reach event). */
 export function engineStats(report) {
   const reached = new Set([
+    ...eventsOf(report, 'reach').map((e) => e.id),
     ...eventsOf(report, 'leak').filter(isEngine).map((e) => e.id),
     ...eventsOf(report, 'dock').map((e) => e.id),
   ]);

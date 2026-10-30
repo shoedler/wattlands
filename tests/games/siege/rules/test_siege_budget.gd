@@ -64,7 +64,7 @@ func test_wkg_ratio_comes_from_telemetry_with_at_least_50_w() -> void:
 	rig.power_w[1] = 40.0
 	rig.p_eff[1] = 80.0
 	rig.step()
-	assert_eq(rig.rider().r_wkg, 1.0, "below 50 W: unchanged")
+	assert_eq(rig.rider().r_wkg, rig.slots[0].p_eff_per_w, "below 50 W: the slot's own ratio")
 	rig.power_w[1] = 200.0
 	rig.p_eff[1] = 260.0
 	rig.step()

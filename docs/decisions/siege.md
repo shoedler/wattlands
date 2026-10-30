@@ -344,3 +344,30 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 
 ## 2026-10-30 Round 3 iterations
 - Six tuning iterations: three headless rounds on the slot factor and the shift factors, then three on endurance and vo2 (each checked on the headless sim, the second, third and sixth also on the platform matrix).
+
+## 2026-10-30 Breach gold cut at the start; the restore never lowers the gate (review 3)
+- Decision: the 30% cut of unspent gold (rounded down) lands when the Breach starts; at its end the gate becomes max(its HP, restore_hp 30).
+- Alternatives: record the gold at the start and cut it at the end; cut at the end as before.
+- Reason: a Breach late in a wave ends inside the break, where the old restore set the gate to 30 over repairs and Iron bands already bought, and its cut came after the purchases, so buying first dodged it. Cutting at the start needs no extra state, and brief 2.4's "afterwards" outcome (30 HP, 30% less gold) is unchanged when nothing was bought.
+
+## 2026-10-30 Rush double bounty by the rush clock (review 4)
+- Decision: a kill pays the rush double when `state.rush_on()` at the kill (to riders in Overdrive), not by the body's spawn flag.
+- Reason: brief 2.4 "Kills during a rush pay double".
+
+## 2026-10-30 Snapshot rider flags and the next rush (reviews 5, 6, 9)
+- Decision: the rider row grows two additive columns, `connected` and `shop_fallback` (0/1; 13 columns, an 11-column row still applies with the defaults); the optional key `rn` carries the next rush's index (absent at 0).
+- Alternatives: derive the next rush from the phase clock and the shift's rush times on clients.
+- Reason: a client shop panel needs the shop fallback ("Picks in 4 s" forever after a manual buy), the view needs a dropped peer's path dark, and a restarted client needs the rush marker; one int per rider and one key stay far under 8 KB (3.9 KB at the 150-enemy cap).
+
+## 2026-10-30 The mine turns in breaks (review 10)
+- Decision: in a break the mine's `m` (and `arm`) show the sum of every delivering rider's P_eff / 250 W (capped at 4), since all output goes to the mine then; it stays 0 in a Breach and in the cool-down. Payment is unchanged (SiegeEconomy pays by P_eff).
+- Reason: the view showed a still mine while it paid.
+
+## 2026-10-30 Reach event (review 13)
+- Decision: a ram that reaches the gate raises `reach` {id, et}; the cue fires for it like every event; check_sims T4 counts reach, dock and an engine's leak as reaching the gate, which is exactly the rules' `engines_stopped`.
+- Alternatives: a `leak` with dmg 0 and a reach flag.
+- Reason: a ram that reached the gate and died before its first whole HP of battering raised no event, so T4 counted it as stopped. A new event keeps `leak` as the gate-damage event and T3's distinct-id count unchanged.
+
+## 2026-10-30 WKG warm-up budget (review, unconfirmed item)
+- Decision: a rider's WKG ratio r starts at its slot's `p_eff_per_w` instead of 1.0, until telemetry of >= 50 W replaces it.
+- Reason: a real defect. Brief 2.4: r in WKG is the latest p_eff_w / power_w; GAME_SDK 6: `p_eff_per_w` is that ratio (75 / weight) and the host has every rider's value. The warm-up wave's B is computed on its first tick, before any telemetry of >= 50 W, so every WKG rider counted at r = 1.0.

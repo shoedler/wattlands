@@ -12,7 +12,7 @@
 //      it does not know and no int travelled as a float or a string;
 //   2. the drill's wave plays in order on the host and on the client that stayed: exactly one
 //      wave_start (ph 1, n 1, role wave, waves 1) and one wave_end (ph 1, n 1), the start first;
-//      combat events (push, dock, shot, kill, leak, breach, gate_restored, rush) only between them (a
+//      combat events (push, dock, reach, shot, kill, leak, breach, gate_restored, rush) only between them (a
 //      gate_restored may follow wave_end when a Breach was still running: the 10 s clock ends
 //      after the wave, in the cool-down);
 //   3. the host and the unrestarted client hold the same Siege events in the same order, and the
@@ -37,7 +37,7 @@ const isInt = (v) => Number.isInteger(v) || (typeof v === 'number' && Number.isF
 
 /** Siege's event types (SiegeIds.EVENT_TYPES). */
 export const EVENT_TYPES = [
-  'wave_start', 'wave_end', 'rush', 'push', 'dock', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'route', 'overdrive',
+  'wave_start', 'wave_end', 'rush', 'push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'buy', 'route', 'overdrive',
 ];
 /** Declared int fields per type (SiegeEvents.INT_FIELDS; "name[]" is an array of ints). */
 export const INT_FIELDS = {
@@ -46,6 +46,7 @@ export const INT_FIELDS = {
   rush: ['on', 'i'],
   push: ['id', 'et', 'prog_dm'],
   dock: ['id'],
+  reach: ['id', 'et'],
   shot: ['tk', 'src', 'kind', 'o[]', 'v[]', 'n', 'sd'],
   kill: ['id', 'et', 'src', 'x2'],
   leak: ['id', 'et', 'dmg'],
@@ -58,7 +59,7 @@ export const INT_FIELDS = {
 export const STRING_FIELDS = { wave_start: ['role'], buy: ['item', 'why'], overdrive: ['why'] };
 export const ITEMS = ['upgrade', 'mine', 'scorpion', 'pad_upgrade', 'iron_bands', 'repair', 'reserve_flywheel', 'aqueduct_drive', 'spare_cauldron'];
 export const BUY_REASONS = ['closed', 'funds', 'pad_taken', 'no_pad', 'no_station', 'max_level', 'limit', 'gate_full'];
-export const COMBAT_TYPES = new Set(['push', 'dock', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'rush']);
+export const COMBAT_TYPES = new Set(['push', 'dock', 'reach', 'shot', 'kill', 'leak', 'breach', 'gate_restored', 'rush']);
 export const ENEMY_SHIELD = 2;
 export const DRILL = { ph: 1, n: 1, waves: 1, laps: 3 };
 const ROLES = ['host', 'client1', 'client2'];
@@ -113,6 +114,9 @@ export function eventErrors(e) {
     case 'push':
       inRange('et', e.et, 4, 5);
       inRange('prog_dm', e.prog_dm, 0, 4000);
+      break;
+    case 'reach':
+      inRange('et', e.et, 4, 4);
       break;
     case 'shot':
       if (!src(e.src)) errs.push(`shot: src ${e.src} is not a station 1..3 or a pad 11..14`);

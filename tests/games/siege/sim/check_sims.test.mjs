@@ -373,6 +373,19 @@ test('engineStats: stopped = killed rams that never leaked', () => {
   assert.deepEqual(cs.engineStats(r), { spawned: 4, stopped: 3, reached: 1 });
 });
 
+test('engineStats: a ram that reached the gate and died before its first leak is not stopped', () => {
+  const r = report({
+    events: [
+      ge(500, { type: 'push', id: 7, et: 4, prog_dm: 1834 }),
+      ge(800, { type: 'reach', id: 7, et: 4 }),
+      ge(800.1, { type: 'kill', id: 7, et: 4, src: 2, x2: 0 }),
+      ge(510, { type: 'push', id: 8, et: 4, prog_dm: 1584 }),
+      ge(700, { type: 'kill', id: 8, et: 4, src: 1, x2: 0 }),
+    ],
+  });
+  assert.deepEqual(cs.engineStats(r), { spawned: 2, stopped: 1, reached: 1 });
+});
+
 test('engineStats: a siege tower that docks counts as reaching the gate', () => {
   const r = report({ events: s9events('short', 0, { push: 0, killed: 0, leaked: 0 }, { push: 3, killed: 1, docked: 2 }) });
   assert.deepEqual(cs.engineStats(r), { spawned: 3, stopped: 1, reached: 2 });

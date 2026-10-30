@@ -229,6 +229,7 @@ test('every kind of event passes its own schema', () => {
     { type: 'wave_start', ph: 4, role: 'wave', n: 2, waves: 6, b: 100 },
     { type: 'wave_end', ph: 4, n: 2, hp: 72, max: 125, leaks: 3 },
     { type: 'dock', id: 1 },
+    { type: 'reach', id: 3, et: 4 },
     { type: 'push', id: 1, et: 5, prog_dm: 2554 },
     { type: 'rush', on: 1, i: 0 },
     { type: 'kill', id: 1, et: 5, src: 2, x2: 1 },
