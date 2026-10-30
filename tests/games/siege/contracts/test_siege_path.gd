@@ -49,11 +49,12 @@ func test_the_plaza() -> void:
 	assert_eq(_p.plaza_radius_m, 8.0)
 
 
-func test_three_staging_grounds_camp_first() -> void:
-	assert_eq(_p.staging.size(), 3)
+func test_four_staging_grounds_camp_first() -> void:
+	assert_eq(_p.staging.size(), 4)
 	assert_eq(_p.staging[0], 0.0)
 	assert_almost_eq(_p.staging[1], 126.0, 0.5)
 	assert_almost_eq(_p.staging[2], 226.0, 0.5)
+	assert_almost_eq(_p.dist_to_gate(_p.staging[3]), 110.0, 1.0, "the arch, about 110 m out")
 
 
 func test_five_stations_with_positions() -> void:

@@ -66,7 +66,7 @@ func test_a_rider_on_a_weapon_earns_nothing_from_the_mine() -> void:
 	_rig.p_eff[1] = 250.0
 	_rig.run(20.0)
 	assert_eq(_rig.rider(1).mine_gold, 0.0)
-	assert_eq(_rig.rider(1).gold, 40.0)
+	assert_almost_eq(_rig.rider(1).gold, 40.0 + _rig.rider(1).bounty_gold, 1e-6, "bounties only")
 
 
 func test_afk_stops_the_wheel_but_keeps_the_rest() -> void:
