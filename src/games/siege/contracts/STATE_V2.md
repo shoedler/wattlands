@@ -130,3 +130,8 @@ Events (payloads in `contracts/siege_events.gd`):
 - `buy` {slot, item, station, pad, ok, why, lvl}.
 
 Snapshot: `gd` is this wave's gate damage (0.1 HP); optional `ru` [1, i, left_ms] during a rush and `rk` (the arrow organ's next rack, absent at 0).
+
+Review fixes (2026-10-30):
+- `reach` {id, et}: a ram reached the gate (cued like every event).
+- Snapshot rider rows have 13 columns: `connected` (R_CONNECTED 11) and `shop_fallback` (R_SHOP_FALLBACK 12) follow `afk`; clients get `SiegeRiderState.connected` and `shop_fallback` from them. Optional `rn`: `state.wave.rush_next` on clients.
+- The mine's `m` and `arm` move in breaks too (all output goes to it then).

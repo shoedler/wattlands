@@ -9,7 +9,8 @@ extends RefCounted
 ##  "gate": [hp (ceil), max, breach_ms], "nb": breaches, "ib": iron bands, "ml": mine level,
 ##  "pk": [perk codes], "w": team raw watts (1 s mean),
 ##  "r": [[slot, target, reconnect_ms, od_ms, od_cd_ms, gold (floor), p_eff_w, raw_w,
-##         cadence_rpm, rescue 0/1, afk 0/1], ...]   one row per slot, slot order
+##         cadence_rpm, rescue 0/1, afk 0/1, connected 0/1, shop_fallback 0/1], ...]   one row
+##         per slot, slot order (the last two are additive: ADR "snapshot rider flags")
 ##  "st": [[station, level, wind_pm, yaw_cdeg, m_x100, arm_pm], ...]   all five, id order
 ##  "pd": [[pad, type, level, cd_ms, yaw_cdeg], ...]   built pads only, pad order
 ##  "tar": [cauldron_dl, curtain_dhp, coat_pm, boarded 0/1]
@@ -19,6 +20,7 @@ extends RefCounted
 ## Optional keys (additive, present only when not at their default, so the common snapshot is the
 ## brief's):
 ##  "ru": [1, i, left_ms]   a rush is on (index i, time left), absent otherwise
+##  "rn": n   the index of the next rush (rushes_at_s), absent at 0
 ##  "rk": n   the arrow organ's next rack, absent at 0
 ## od_ms is the Overdrive time left (0 unless ACTIVE), od_cd_ms the cooldown left (0 unless
 ## COOLDOWN); a client derives od_state from them (od_ms > 0 ACTIVE, od_cd_ms > 0 COOLDOWN, else
@@ -48,7 +50,7 @@ const KEYS: Array[String] = [
 	"dw",
 ]
 ## Optional keys (see above); check() does not require them.
-const OPTIONAL_KEYS: Array[String] = ["ru", "rk"]
+const OPTIONAL_KEYS: Array[String] = ["ru", "rk", "rn"]
 # ru columns
 const RU_ON := 0
 const RU_INDEX := 1
@@ -66,7 +68,11 @@ const R_RAW_W := 7
 const R_CADENCE := 8
 const R_RESCUE := 9
 const R_AFK := 10
-const R_LEN := 11
+const R_CONNECTED := 11
+const R_SHOP_FALLBACK := 12
+const R_LEN := 13
+## The brief's row before the additive flags (an older row still applies).
+const R_LEN_BRIEF := 11
 # st row columns
 const ST_ID := 0
 const ST_LEVEL := 1
@@ -127,6 +133,7 @@ const INT_PATHS: Array[String] = [
 	"dw[][]",
 	"ru[]",
 	"rk",
+	"rn",
 ]
 
 
