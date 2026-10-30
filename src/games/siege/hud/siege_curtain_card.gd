@@ -16,24 +16,33 @@ var cauldron_label: Label = null
 func _init() -> void:
 	super._init()
 	name = "SiegeCurtainCard"
+	var sb := WlTheme.panel_style()
+	sb.content_margin_top = 2.0
+	sb.content_margin_bottom = 4.0
+	add_theme_stylebox_override("panel", sb)
 	var box := VBoxContainer.new()
-	box.add_theme_constant_override("separation", 2)
+	box.add_theme_constant_override("separation", 0)
 	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(box)
-	caption_label = make_label(WlTheme.LABEL_PX, WlTheme.TEXT_DIM)
-	box.add_child(caption_label)
+	# caption and cauldrons on one small line, the curtain's HP big under it, then its bar
+	var top := HBoxContainer.new()
+	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(top)
+	caption_label = make_label(WlTheme.SMALL_PX - 4, WlTheme.TEXT_DIM)
+	caption_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top.add_child(caption_label)
+	cauldron_label = make_label(WlTheme.SMALL_PX - 4, WlTheme.TEXT_DIM)
+	top.add_child(cauldron_label)
 	value_label = make_label(NUMBER_PX, WlTheme.TEXT, true)
 	box.add_child(value_label)
 	bar = ProgressBar.new()
 	bar.show_percentage = false
 	bar.min_value = 0.0
 	bar.max_value = 1.0
-	bar.custom_minimum_size = Vector2(0, 12)
+	bar.custom_minimum_size = Vector2(0, 6)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	box.add_child(bar)
-	cauldron_label = make_label(WlTheme.SMALL_PX, WlTheme.TEXT_DIM)
-	box.add_child(cauldron_label)
-	custom_minimum_size = Vector2(240, 0)
+	custom_minimum_size = Vector2(200, 0)
 	visible = false
 
 

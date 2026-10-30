@@ -118,28 +118,14 @@ func test_route_card_shows_the_five_stations_caps_and_coupling() -> void:
 			if r.target == id:
 				on += 1
 		assert_eq(int(row["count"]), on, "riders on %d" % id)
+	assert_eq(card.coupling, -1.0, "not coupling")
 	# slot 2 reconnects in the fixture
 	g.ctx.local_peer = 3
 	card.refresh()
-	assert_true(card.connect_bar.visible, "the 2 s coupling bar")
+	assert_gte(card.coupling, 0.0, "the 2 s coupling bar")
 	g.state.role = SiegeIds.ROLE_BREAK
 	card.refresh()
 	assert_false(card.visible, "the shop takes the directions in breaks")
-	F.free_game(g)
-
-
-func test_route_buttons_send_route_intents() -> void:
-	var g := _game()
-	var card := SiegeRouteCard.new()
-	card.game = g
-	add_child_autofree(card)
-	card.refresh()
-	(card.buttons["next"] as Button).pressed.emit()
-	var sent: Array = (g.ctx.intents as F.Intents).sent
-	assert_eq(sent.size(), 1)
-	assert_eq(str(sent[0]["k"]), SiegeIds.INTENT_ROUTE)
-	assert_eq(str(sent[0]["to"]), "next")
-	assert_eq(str(sent[0]["via"]), SiegeIds.VIA_BUTTON)
 	F.free_game(g)
 
 
@@ -313,3 +299,49 @@ func test_no_string_key_is_missing() -> void:
 			if not keys.has(k):
 				missing.append(k)
 	assert_eq(missing, [])
+
+
+func test_hud_stays_off_the_road_the_bridge_and_the_fort() -> void:
+	var g := _game()
+	var spec := SiegeHud.spec(g)
+	var path := g.state.path
+	var rects: Array[Rect2i] = []
+	for wd: Dictionary in spec.widgets:
+		assert_true(wd["at"] is Rect2i, "%s sits in a rect" % wd["widget"])
+		rects.append(wd["at"])
+	for c: Dictionary in spec.controls:
+		assert_true(c["at"] is Rect2i)
+		if not (c["control"] is SiegeShopPanel):
+			rects.append(c["at"])
+	rects.append(spec.toast_area)
+	rects.append(spec.banner_area)
+	var art := Rect2i(0, 0, 960, 540)
+	# the shop shows in breaks only: it keeps off the road and the bridge
+	var shop_rect: Rect2i = SiegeHud.SHOP_RECT
+	for r in rects:
+		assert_true(art.encloses(r), "%s inside the art" % r)
+	# the road and the bridge, every metre
+	var hits := []
+	var prog := 0.0
+	while prog <= path.length_m:
+		var p := path.to_art(path.point_at(prog))
+		for r in rects + [shop_rect]:
+			if Rect2(r).grow(-2.0).has_point(p) and p.x > 0.0:
+				hits.append("%s at prog %d" % [r, prog])
+		prog += 1.0
+	assert_eq(hits, [], "nothing on the road")
+	# the fort's footprint (its four corners on the ground, with the walls' 9 m)
+	var fort := PackedVector2Array()
+	for q: Vector3 in [Vector3(0, 2, 0), Vector3(84, 2, 0), Vector3(84, 60, 0), Vector3(0, 60, 0)]:
+		fort.append(path.to_art(q))
+	for r in rects:
+		for corner: Vector2 in [
+			Vector2(r.position),
+			Vector2(r.end),
+			Vector2(r.position.x, r.end.y),
+			Vector2(r.end.x, r.position.y)
+		]:
+			assert_false(Geometry2D.is_point_in_polygon(corner, fort), "%s clear of the fort" % r)
+	for c: Dictionary in spec.controls:
+		(c["control"] as Node).free()
+	F.free_game(g)

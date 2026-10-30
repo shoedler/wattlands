@@ -10,7 +10,7 @@ extends RefCounted
 ## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) is
 ## never sent as an intent.
 
-const MAX_ENTRIES := 5
+const MAX_ENTRIES := 4
 
 
 ## The first empty pad (0 when every pad is built).

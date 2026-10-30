@@ -5,7 +5,8 @@ extends Button
 ## runs, and the cooldown refilling. Pressing it sends the same intent as ability_1
 ## (SiegeIntents.overdrive("button")); the rules decide whether it is allowed.
 
-const SIZE := Vector2(400, 76)
+const SIZE := Vector2(200, 56)
+const TEXT_PX := 22
 
 var game: SiegeGame = null
 var mode: String = SiegeHudModel.OD_CLOSED
@@ -18,7 +19,8 @@ func _init() -> void:
 	theme = WlTheme.get_theme()
 	focus_mode = Control.FOCUS_NONE
 	custom_minimum_size = SIZE
-	add_theme_font_size_override("font_size", WlTheme.TOAST_PX)
+	add_theme_font_size_override("font_size", TEXT_PX)
+	clip_text = true
 	pressed.connect(_on_pressed)
 	visible = false
 

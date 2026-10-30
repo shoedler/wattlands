@@ -1,5 +1,16 @@
 # Changelog: siege
 
+### Changed (Castellum Rotae) v0.2.0
+
+- Castellum Rotae v2: a new look, map and combat, approved in a mockup review (`src/games/siege/art/PROPOSAL.md`, brief `docs/games/siege.md`). The effort plans, the Overdrive directive and every BRIEF 4.6 behaviour are unchanged.
+- Presentation is now `2d`: one fixed isometric pixel-art view at 960 x 540. The art comes from Siege's own CPU rasterizer (`src/games/siege/art/`): the static world and its depth are baked once, and moving parts are depth-tested sprites recoloured to each rider at runtime. A tilt-shift pass can be turned off per rider (`tilt_shift`).
+- The fort is built against a quarried cliff with a gold seam, behind a moat with one bridge to the gate. Four great treadwheels feed a visible 4 x 5 junction; a rider's powered path lights in their colour from wheel to station.
+- Five stations as rider targets with caps: the woodpecker gold mine (2, replaces the generator; gold replaces denarii), the tree ballista (1), the great onager (2), the arrow organ (2) and the tar works (1). Shots are simulated projectiles with gravity and drag (bolts pierce, stones splash, arrow volleys spread), lead-aimed and able to miss. The tar works keeps a curtain over the gate and slicks the bridge.
+- One 391 m road with four staging grounds instead of three roads. Five enemy types in ranks: spear blocks, shield bearers (testudo against arrows), chariots with speed changes, battering rams and a siege tower that docks at the moat and lands boarders.
+- Four unmanned wall pads with Scorpions, station upgrades, mine levels and the Spare cauldron perk in the shop. Autopilot scores stations by what will be in their range.
+- The threat budget scales by team size and by shift so small teams and long shifts stay fair.
+- The HUD has a station route card with cap pips, a tar-curtain card, a one-line wave count and a help overlay with seven arrows.
+
 ### Added (Generator Siege) v0.1.0
 
 - Generator Siege, a co-op tower defense for 1-4 riders (BRIEF 3.6, `docs/games/siege.md`): your watts turn a treadwheel in the Roman hill fort Castellum Rotae and go to one target at a time, a tower (defense now) or the generator (denarii for the breaks). Bots fill empty wheels; every phase, the shop and the results work with zero input.

@@ -5,9 +5,9 @@ extends Control
 ## and dim once past, solid for the next, the whole bar lit while a rush is on). Hidden in waves
 ## without rushes. Shape plus position, not color alone, tells the markers apart.
 
-const BAR_H := 18.0
-const HEIGHT := 56.0
-const WIDTH := 440.0
+const BAR_H := 12.0
+const HEIGHT := 48.0
+const WIDTH := 600.0
 
 var game: SiegeGame = null
 ## Marker fractions and the wave's progress (0..1) as of the last refresh (tests read these).
