@@ -1,6 +1,6 @@
 class_name SiegeGame
 extends GameModule
-## Castellum Rotae's GameModule (docs/games/siege.md; GAME_SDK 4). Owner: B2 "module".
+## Castellum Rotae's GameModule (docs/games/siege.md; GAME_SDK 4).
 ##
 ## Host / SOLO: sim_step validates and rate-limits intents (SiegeIntentLimiter, 5 a second per
 ## peer, only peers in ctx.players), runs SiegeRules.step, sends the Overdrive directive round
@@ -23,8 +23,8 @@ extends GameModule
 ## Never a bot, never an auto intent, never a lap_marker; the cool-down sends no directive.
 
 ## Every event type, raised like its toast: the host where it sends the event, clients in
-## apply_event. `kind` is the event "type", `data` the event (ints cast). The view and audio
-## listen here for horns, coins and the like.
+## apply_event. `kind` is the event "type", `data` the event (ints cast). The view replays `shot`
+## cues with SiegeBallistics and listens here for impacts, horns, coins and the like.
 signal cue(kind: String, data: Dictionary)
 
 ## The warm-up wave's teaching toasts: one per minute, TEACH_AT_S into each minute.
@@ -51,7 +51,7 @@ var state: SiegeState = null
 var plans: Dictionary = {}
 ## Phase metas in plan order (every peer; from shifts.json).
 var metas: Array[Dictionary] = []
-## Client: enemy road positions of the last snapshots for the view's interpolation.
+## Client: enemy path positions of the last snapshots for the view's interpolation.
 var history: SiegeSnapHistory = SiegeSnapHistory.new()
 
 var _limiter := SiegeIntentLimiter.new()
@@ -84,7 +84,7 @@ func configure(p_ctx: GameContext) -> void:
 	var rng: RandomNumberGenerator = ctx.rng if ctx.is_authority() else null
 	state = SiegeRules.new_state(content, ctx.players, ctx.scaling_mode, rng)
 	metas = SiegePlanBuilder.phase_metas(content.shift, ctx.content_id)
-	history = SiegeSnapHistory.new(content.map)
+	history = SiegeSnapHistory.new(content.path)
 	if ctx.is_authority() and ctx.events != null:
 		ctx.events.directive_applied.connect(_on_directive_applied)
 
@@ -199,9 +199,10 @@ func victory_march() -> bool:
 # --- Controls -------------------------------------------------------------------------------
 
 
-## The local rider's controls: ability_1 or a surge -> Overdrive; swap / right, left, up, down ->
-## routing (outside breaks; in breaks the shop panel takes the directions and the surge). A
-## surge never also counts as confirm (nothing here reads confirm).
+## The local rider's controls: ability_1 or a surge -> Overdrive; swap / right (the next station),
+## left (the previous), up (the mine), down (the hot station) -> routing (outside breaks; in breaks
+## the shop panel takes the directions and the surge). A surge never also counts as confirm
+## (nothing here reads confirm).
 func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> Array:
 	var out: Array = []
 	if state == null or state.shop_open() or state.in_cooldown():
@@ -216,7 +217,7 @@ func local_intents(actions: Array[StringName], gestures: Array[StringName]) -> A
 	elif actions.has(&"left"):
 		to = "prev"
 	elif actions.has(&"up"):
-		to = "gen"
+		to = "mine"
 	elif actions.has(&"down"):
 		to = "hot"
 	if to != null:
@@ -304,17 +305,8 @@ func apply_event(event: Dictionary) -> void:
 func _client_state(e: Dictionary) -> void:
 	var rd := state.rider_at(int(e.get("slot", -1)))
 	match str(e.get("type", "")):
-		SiegeIds.EV_WAVE_START:
-			state.wave.active_roads.clear()
-			for r: Variant in e.get("roads", []):
-				state.wave.active_roads.append(int(r))
-		SiegeIds.EV_ROADS:
-			state.wave.next_roads.clear()
-			for r: Variant in e.get("roads", []):
-				state.wave.next_roads.append(int(r))
-			state.wave.horn_s = int(e.get("in_ms", 0)) / 1000.0
-		SiegeIds.EV_PUSH:
-			state.wave.push_done = true
+		SiegeIds.EV_DOCK:
+			state.tar.boarded = true
 		SiegeIds.EV_RUSH:
 			var on := int(e.get("on", 0)) != 0
 			state.wave.rush_s = content.num("rush.duration_s", 30.0) if on else 0.0
@@ -325,7 +317,7 @@ func _client_state(e: Dictionary) -> void:
 			state.gate_hp = float(int(e.get("hp", state.gate_hp)))
 		SiegeIds.EV_ROUTE:
 			if rd != null:
-				var to := int(e.get("to", rd.target))
+				var to := clampi(int(e.get("to", rd.target)), 0, SiegeIds.STATION_COUNT - 1)
 				if to != rd.target:
 					rd.reconnect_s = content.num("reconnect_s", 2.0)
 				rd.target = to
@@ -366,13 +358,7 @@ func client_predict(dt: float, local: Telemetry) -> void:
 	state.breach_s = maxf(state.breach_s - dt, 0.0)
 	state.phase_elapsed_s += dt
 	state.phase_remaining_s = maxf(state.phase_remaining_s - dt, 0.0)
-	var w := state.wave
-	w.rush_s = maxf(w.rush_s - dt, 0.0)
-	if w.horn_s > 0.0:
-		w.horn_s -= dt
-		if w.horn_s <= 0.0 and not w.next_roads.is_empty():
-			w.active_roads = w.next_roads.duplicate()
-			w.next_roads.clear()
+	state.wave.rush_s = maxf(state.wave.rush_s - dt, 0.0)
 	if _pred_target >= 0 and rd != null:
 		_pred_age_s += dt
 		if _pred_age_s > PREDICT_HOLD_S:
@@ -384,16 +370,16 @@ func client_predict(dt: float, local: Telemetry) -> void:
 
 ## Clients: shows a route the local rider just asked for at once, before the host's route event or
 ## the next snapshot. `to` is the route intent ({"k": "route", "to": ...}, as the controls and the
-## HUD route card send it) or just its target: "gen", "next", "prev", "hot", a pad 1..8 or a
-## normalized SiegeIds target. local_intents() calls it for the control routes; the HUD route card
-## calls it for its buttons so both predict alike. Returns true when a prediction was set (never on
-## the host or in SOLO, whose rules route at once, nor for a route that changes nothing).
+## HUD route card send it) or just its target: "mine", "next", "prev", "hot", a station 0..4 or a
+## normalized SiegeIds.ROUTE_*. local_intents() calls it for the control routes; the HUD route
+## card calls it for its buttons so both predict alike. Returns true when a prediction was set
+## (never on the host or in SOLO, whose rules route at once, nor for a route that changes nothing).
 func predict_route(to: Variant) -> bool:
 	if state == null or ctx == null or ctx.role != Wl.CLIENT:
 		return false
 	var wire: Variant = to
-	if to is int:
-		# A normalized target (ROUTE_NEXT, TARGET_GEN, ...) goes back to its wire word.
+	if to is int and int(to) < 0:
+		# A normalized ROUTE_NEXT / PREV / HOT goes back to its wire word.
 		for word: String in SiegeIds.ROUTE_WORDS:
 			if int(SiegeIds.ROUTE_WORDS[word]) == to:
 				wire = word
@@ -421,10 +407,10 @@ func int_fields() -> Dictionary:
 
 
 func make_view() -> Node:
-	var view := SiegeView.new()
-	view.game = self
-	view.bind(state, content.map if content != null else null)
-	return view
+	var v := SiegeView.new()
+	v.game = self
+	v.bind(state, state.path if state != null else null)
+	return v
 
 
 func hud_spec() -> HudSpec:
@@ -432,9 +418,9 @@ func hud_spec() -> HudSpec:
 
 
 ## The teammate strip's rows from the replicated state, so a client's numbers come from the
-## snapshot (raw W, %FTP of the slot's FTP, target, Overdrive): [{slot, peer, name, color,
+## snapshot (raw W, %FTP of the slot's FTP, station, Overdrive): [{slot, peer, name, color,
 ## pattern, is_bot, raw_w, p_eff_w, ftp_pct, target, target_text, marker, od, rescue, afk}] in
-## slot order. The HUD's own Control beside the kit strip reads it.
+## slot order (target: the station 0..4). The HUD's own Control beside the kit strip reads it.
 func teammate_strip() -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null:
@@ -468,9 +454,15 @@ func teammate_strip() -> Array[Dictionary]:
 
 
 func _target_name(target: int) -> String:
-	if SiegeIds.is_pad(target):
-		return ctx.strings.t("SIEGE_STATUS_TOWER", [target])
-	return ctx.strings.t("SIEGE_STATUS_GEN")
+	return ctx.strings.t(station_key(target))
+
+
+## The string key of station `id`'s name (SIEGE_STATION_MINE, ...).
+static func station_key(id: int) -> String:
+	return (
+		"SIEGE_STATION_"
+		+ SiegeIds.STATION_NAMES[clampi(id, 0, SiegeIds.STATION_COUNT - 1)].to_upper()
+	)
 
 
 ## The host's teammate chips (2 Hz, reach every peer through the roster): the target and the
@@ -507,7 +499,7 @@ func _feed_hud() -> void:
 	)
 	var me := state.rider(ctx.local_peer)
 	if me != null:
-		ctx.hud.readout(SiegeHud.READOUT_DENARII, str(floori(me.denarii)))
+		ctx.hud.readout(SiegeHud.READOUT_GOLD, str(floori(me.gold)))
 
 
 ## The sprint band on the rider's own peer while its Overdrive is ACTIVE, cleared after.
@@ -582,15 +574,20 @@ func _local_effects(e: Dictionary) -> void:
 				_toast("SIEGE_TOAST_WAVE_END", [int(e["n"]), int(e["hp"])])
 			else:
 				_toast("SIEGE_TOAST_BREAK")
-		SiegeIds.EV_ROADS:
-			_toast("SIEGE_TOAST_ROADS")
 		SiegeIds.EV_PUSH:
-			_toast("SIEGE_TOAST_PUSH")
+			if int(e.get("et", 0)) == SiegeIds.ENEMY_TOWER:
+				_toast("SIEGE_TOAST_TOWER")
+			else:
+				_toast("SIEGE_TOAST_PUSH")
+		SiegeIds.EV_DOCK:
+			_toast("SIEGE_TOAST_DOCK")
 		SiegeIds.EV_RUSH:
 			_toast("SIEGE_TOAST_RUSH_START" if int(e["on"]) != 0 else "SIEGE_TOAST_RUSH_END")
 		SiegeIds.EV_KILL:
 			if int(e["et"]) == SiegeIds.ENEMY_RAM:
 				_toast("SIEGE_TOAST_RAM_DOWN")
+			elif int(e["et"]) == SiegeIds.ENEMY_TOWER:
+				_toast("SIEGE_TOAST_TOWER_DOWN")
 		SiegeIds.EV_LEAK:
 			var tick := state.tick
 			if (tick - _last_leak_tick) * Wl.SIM_DT >= LEAK_TOAST_GAP_S:
@@ -631,23 +628,25 @@ func _enemy_name(code: int) -> String:
 
 
 func _route_name(to: int) -> String:
-	if SiegeIds.is_pad(to):
-		return ctx.strings.t("SIEGE_HUD_ROUTE_PAD", [to])
-	return ctx.strings.t("SIEGE_GENERATOR")
+	return ctx.strings.t(station_key(to))
 
 
 func _refusal(why: String) -> String:
 	return ctx.strings.t("SIEGE_SHOP_REFUSED_" + why.to_upper())
 
 
-## The bought item's name for the buyer's toast (upgrades and generator by their new level).
+## The bought item's name for the buyer's toast (upgrades and mine levels by their new level).
 func _item_name(e: Dictionary) -> String:
 	var item := str(e.get("item", ""))
-	var lvl := int(e.get("lvl", 0))
-	if item == SiegeIds.ITEM_UPGRADE:
-		return ctx.strings.t("SIEGE_ITEM_UPGRADE_%d" % clampi(lvl, 1, 3))
-	if item == SiegeIds.ITEM_GENERATOR:
-		return ctx.strings.t("SIEGE_ITEM_GENERATOR_%d" % clampi(lvl, 1, 3))
+	var lvl := clampi(int(e.get("lvl", 0)), 1, 3)
+	match item:
+		SiegeIds.ITEM_UPGRADE:
+			var st := ctx.strings.t(station_key(int(e.get("station", 1))))
+			return ctx.strings.t("SIEGE_ITEM_UPGRADE_%d" % lvl, [st])
+		SiegeIds.ITEM_PAD_UPGRADE:
+			return ctx.strings.t("SIEGE_ITEM_PAD_UPGRADE_%d" % lvl, [int(e.get("pad", 1))])
+		SiegeIds.ITEM_MINE:
+			return ctx.strings.t("SIEGE_ITEM_MINE_%d" % lvl)
 	return ctx.strings.t("SIEGE_ITEM_" + item.to_upper())
 
 
@@ -668,25 +667,29 @@ func results() -> GameResults:
 		if rd == null:
 			continue
 		var st: Dictionary = row["stats"]
-		st["SIEGE_STAT_GEN_DENARII"] = floori(rd.gen_denarii)
-		st["SIEGE_STAT_BOUNTY_DENARII"] = floori(rd.bounty_denarii)
+		st["SIEGE_STAT_MINE_GOLD"] = floori(rd.mine_gold)
+		st["SIEGE_STAT_BOUNTY_GOLD"] = floori(rd.bounty_gold)
 		st["SIEGE_STAT_KILLS"] = rd.kills
 		st["SIEGE_STAT_DAMAGE"] = roundi(rd.damage)
 		st["SIEGE_STAT_OVERDRIVES"] = rd.od_scored
-		st["SIEGE_STAT_GEN_TIME"] = roundi(rd.wave_gen_s)
-		st["SIEGE_STAT_TOWER_TIME"] = roundi(rd.wave_tower_s)
-		st["SIEGE_STAT_TOWERS_BUILT"] = rd.towers_built
+		st["SIEGE_STAT_MINE_TIME"] = roundi(rd.wave_mine_s)
+		st["SIEGE_STAT_WEAPON_TIME"] = roundi(rd.wave_weapon_s)
+		st["SIEGE_STAT_TOP_STATION"] = _target_name(rd.top_station())
 	# The results screen prints team values with str(): lists become readable text first.
 	var gate_hp := PackedStringArray()
 	for hp in state.wave_gate_hp:
 		gate_hp.append(str(hp))
-	var leaks := state.leaks_by_road
+	var shots := PackedStringArray()
+	for id in SiegeIds.WEAPONS:
+		var s := state.station(id)
+		shots.append("%s %d / %d" % [_target_name(id), s.hits, s.shots])
 	res.team = {
 		"SIEGE_STAT_SCORE": roundi(res.score),
 		"SIEGE_STAT_GATE_PER_WAVE": " / ".join(gate_hp) if not gate_hp.is_empty() else "-",
 		"SIEGE_STAT_BREACHES": state.breaches,
-		"SIEGE_STAT_LEAKS_BY_ROAD": "%d / %d / %d" % [leaks[0], leaks[1], leaks[2]],
-		"SIEGE_STAT_RAMS_STOPPED": "%d / %d" % [state.rams_stopped, state.rams_total],
+		"SIEGE_STAT_LEAKS": state.leaks,
+		"SIEGE_STAT_ENGINES_STOPPED": "%d / %d" % [state.engines_stopped, state.engines_total],
+		"SIEGE_STAT_SHOTS": " · ".join(shots),
 	}
 	var tx := ctx.strings if ctx.strings != null else GameStrings.new()
 	res.ride_tag = SiegeScore.ride_tag(state, ctx.content_id, tx)

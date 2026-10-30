@@ -1,22 +1,132 @@
 {
-  "start_denarii": 40,
+  "start_gold": 40,
   "reconnect_s": 2.0,
-  "tower_ref_w": 250,
+  "ref_w": 250,
   "m_cap": 4.0,
-  "unpowered_hold_s": 0,
-  "bounty_scale": 0.3,
-  "c_budget": 13,
+  "bounty_scale": 0.18,
+  "c_budget": 32,
   "budget_ref_w": 250,
   "unverified_factor": 0.85,
   "wkg_min_power_w": 50,
-  "generator": {"denarii_per_kj": 1.0, "level_bonus": 0.2, "level_costs": [60, 90, 130]},
-  "gate": {"hp": 130, "iron_bands_hp": 25, "iron_bands_max": 2, "repair_hp": 20, "breach_s": 10, "restore_hp": 30, "breach_loss": 0.3, "warmup_floor_hp": 50},
-  "shop": {"iron_bands": 45, "repair": 20, "reserve_flywheel": 80, "aqueduct_drive": 100, "countdown_s": 10},
-  "perks": {"reserve_hold_s": 10, "aqueduct_m": 0.25},
-  "overdrive": {"duration_s": 30, "cooldown_s": 90, "refused_retry_s": 30, "min_left_s": 30, "od_mult": 2, "sprint_hold_s": 10, "band_lo_ftp": 1.2, "band_hi_ftp": 1.4},
-  "rush": {"budget_frac": 0.08, "duration_s": 30, "od_bounty_mult": 2},
-  "autopilot": {"route_every_s": 1, "switch_min_s": 8, "switch_margin": 0.25, "shop_max": 2, "shop_at_s": [4, 9], "repair_below_frac": 0.5},
-  "score": {"gate_pts": 40, "breach_pts": 30, "breach_cost": 15, "earn_pts": 30, "par_frac": 0.75, "grades": {"S": 90, "A": 78, "B": 64, "C": 48}},
-  "xp": {"kj_per_xp": 10, "grade_bonus": {"S": 60, "A": 40, "B": 25, "C": 10, "D": 0}},
-  "tuning": {"t1_score": [64, 89], "t2_ratio": [0.4, 0.6], "t3_spread": 0.3, "t4_ram_stop": 0.7}
+  "mine": {
+    "gold_per_kj": 1.0,
+    "level_bonus": 0.2,
+    "level_costs": [
+      60,
+      90,
+      130
+    ]
+  },
+  "gate": {
+    "hp": 130,
+    "iron_bands_hp": 25,
+    "iron_bands_max": 2,
+    "repair_hp": 20,
+    "breach_s": 10,
+    "restore_hp": 30,
+    "breach_loss": 0.3,
+    "warmup_floor_hp": 50
+  },
+  "shop": {
+    "iron_bands": 45,
+    "repair": 20,
+    "reserve_flywheel": 80,
+    "aqueduct_drive": 100,
+    "spare_cauldron": 60,
+    "countdown_s": 10
+  },
+  "perks": {
+    "reserve_hold_s": 10,
+    "aqueduct_m": 0.25
+  },
+  "overdrive": {
+    "duration_s": 30,
+    "cooldown_s": 90,
+    "refused_retry_s": 30,
+    "min_left_s": 30,
+    "od_mult": 2,
+    "sprint_hold_s": 10,
+    "band_lo_ftp": 1.2,
+    "band_hi_ftp": 1.4
+  },
+  "rush": {
+    "budget_frac": 0.08,
+    "duration_s": 30,
+    "od_bounty_mult": 2
+  },
+  "autopilot": {
+    "route_every_s": 1,
+    "switch_min_s": 8,
+    "switch_margin": 0.25,
+    "shop_max": 2,
+    "shop_at_s": [
+      4,
+      9
+    ],
+    "repair_below_frac": 0.5,
+    "look_ahead_s": 10,
+    "mine_score": 40,
+    "tar_min_frac": 0.667,
+    "tar_engine_m": 60,
+    "tar_any_m": 40,
+    "tar_scale": 20,
+    "weights": {
+      "ballista": {
+        "spear": 1,
+        "shield": 2,
+        "chariot": 1,
+        "ram": 3,
+        "tower": 3
+      },
+      "onager": {
+        "spear": 1.5,
+        "shield": 1.5,
+        "chariot": 0.3,
+        "ram": 3,
+        "tower": 3
+      },
+      "arrows": {
+        "spear": 2,
+        "shield": 0.5,
+        "chariot": 1.5,
+        "ram": 0.1,
+        "tower": 0.1
+      }
+    }
+  },
+  "score": {
+    "gate_pts": 40,
+    "breach_pts": 30,
+    "breach_cost": 15,
+    "earn_pts": 30,
+    "par_frac": 0.75,
+    "grades": {
+      "S": 90,
+      "A": 78,
+      "B": 64,
+      "C": 48
+    }
+  },
+  "xp": {
+    "kj_per_xp": 10,
+    "grade_bonus": {
+      "S": 60,
+      "A": 40,
+      "B": 25,
+      "C": 10,
+      "D": 0
+    }
+  },
+  "tuning": {
+    "t1_score": [
+      64,
+      89
+    ],
+    "t2_ratio": [
+      0.4,
+      0.6
+    ],
+    "t3_spread": 0.3,
+    "t4_ram_stop": 0.7
+  }
 }

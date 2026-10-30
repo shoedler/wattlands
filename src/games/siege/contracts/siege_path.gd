@@ -51,7 +51,9 @@ static func validate(d: Dictionary) -> PackedStringArray:
 	var err := PackedStringArray()
 	if int(d.get("version", 0)) != 2:
 		err.append("map version must be 2")
-	var pts: Variant = (d.get("path", {}) as Dictionary).get("points") if d.get("path") is Dictionary else null
+	var pts: Variant = (
+		(d.get("path", {}) as Dictionary).get("points") if d.get("path") is Dictionary else null
+	)
 	if not (pts is Array) or (pts as Array).size() < 2:
 		err.append("path.points needs at least 2 points")
 	else:
@@ -224,7 +226,11 @@ static func depth(p: Vector3) -> float:
 
 
 static func _v2(v: Variant) -> Vector2:
-	return Vector2(float(v[0]), float(v[1])) if v is Array and (v as Array).size() >= 2 else Vector2.ZERO
+	return (
+		Vector2(float(v[0]), float(v[1]))
+		if v is Array and (v as Array).size() >= 2
+		else Vector2.ZERO
+	)
 
 
 static func _v3(v: Variant) -> Vector3:

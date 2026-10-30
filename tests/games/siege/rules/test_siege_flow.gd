@@ -2,8 +2,6 @@ extends GutTest
 ## SiegeRules.step end to end: the phase flow and its events, the cool-down, Overdrive's
 ## preconditions through the rules path, rescue and AFK, and determinism.
 
-const VALLEY := SiegeIds.ROAD_VALLEY
-
 var _rig: SiegeRig
 
 
@@ -53,14 +51,14 @@ func test_done_only_after_the_last_wave_ends() -> void:
 func test_wave_end_reports_the_gate_and_leaks() -> void:
 	_rig = SiegeRig.new("short", 1)
 	_rig.enter(2, 5.0)
-	_rig.spawn(SiegeIds.ENEMY_SHIELD_WALL, VALLEY, _rig.road_end(VALLEY) - 0.01)
+	_rig.spawn(SiegeIds.ENEMY_SHIELD, _rig.state.path.length_m - 0.01)
 	_rig.step()
 	_rig.enter(3, 0.0)
 	var end := _rig.of_type(SiegeIds.EV_WAVE_END)[0]
-	assert_eq([end["hp"], end["max"], end["leaks"], end["n"]], [122, 130, 1, 1])
-	assert_eq(_rig.state.wave_gate_hp, [122] as Array[int])
-	assert_almost_eq(_rig.state.wave_gate_frac[0], 122.0 / 130.0, 1e-9)
-	assert_eq(_rig.state.leaks_by_road, [0, 1, 0] as Array[int])
+	assert_eq([end["hp"], end["max"], end["leaks"], end["n"]], [124, 130, 1, 1])
+	assert_eq(_rig.state.wave_gate_hp, [124] as Array[int])
+	assert_almost_eq(_rig.state.wave_gate_frac[0], 124.0 / 130.0, 1e-9)
+	assert_eq(_rig.state.leaks, 1)
 
 
 func test_the_phase_roles_come_from_the_plan_not_the_kind() -> void:
@@ -92,16 +90,16 @@ func test_a_full_drill_runs_to_the_cooldown_and_is_done() -> void:
 func test_the_cooldown_spawns_nothing_retreats_enemies_and_closes_shop_and_overdrive() -> void:
 	_rig = SiegeRig.new("short", 1)
 	_rig.enter(6, 100.0)
-	var e := _rig.spawn(SiegeIds.ENEMY_RAIDERS, VALLEY, 30.0)
+	var e := _rig.spawn(SiegeIds.ENEMY_SPEAR, 30.0)
 	_rig.enter(7, 0.0)
 	assert_eq(_rig.state.role, SiegeIds.ROLE_COOLDOWN)
 	assert_eq(e.st, SiegeIds.EN_RETREAT)
-	_rig.rider(1).denarii = 500.0
-	_rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_GENERATOR))
+	_rig.rider(1).gold = 500.0
+	_rig.send(1, SiegeIntents.buy(SiegeIds.ITEM_MINE))
 	_rig.send(1, SiegeIntents.overdrive(SiegeIds.VIA_ACTION))
 	_rig.step()
 	assert_eq(_rig.of_type(SiegeIds.EV_BUY)[0]["why"], SiegeIds.BUY_CLOSED)
-	assert_eq(_rig.state.gen_level, 0)
+	assert_eq(_rig.state.mine_level, 0)
 	assert_eq(_rig.rider(1).od_state, SiegeIds.OD_READY)
 	assert_true(_rig.state.take_od_requests().is_empty())
 	_rig.run(60.0)
@@ -199,11 +197,11 @@ func test_a_surge_needs_the_prompt_but_the_button_does_not() -> void:
 	_od(1, SiegeIds.VIA_SURGE)
 	assert_eq(_rig.rider(1).od_state, SiegeIds.OD_READY, "no enemy in range of the target")
 	assert_false(_rig.rider(1).od_prompt)
-	_rig.put(2, 3)
-	_rig.spawn(SiegeIds.ENEMY_SHIELD_WALL, VALLEY, _rig.road_end(VALLEY) - 10.0)
+	_rig.put(2, SiegeIds.STATION_ONAGER)
+	_rig.spawn(SiegeIds.ENEMY_SHIELD, SiegeKit.prog_in_band(_rig.state, SiegeIds.STATION_ONAGER))
 	_rig.step()
-	assert_true(_rig.rider(2).od_prompt, "an enemy in range of pad 3")
-	assert_false(_rig.rider(1).od_prompt, "rider 1 is on the generator")
+	assert_true(_rig.rider(2).od_prompt, "an enemy in range of the onager")
+	assert_false(_rig.rider(1).od_prompt, "rider 1 is on the mine")
 	_od(2, SiegeIds.VIA_SURGE)
 	assert_true(_started(2))
 	_od(1, SiegeIds.VIA_BUTTON)
@@ -252,21 +250,23 @@ func test_rescue_or_afk_starting_ends_a_running_overdrive() -> void:
 		assert_eq(_rig.of_type(SiegeIds.EV_OVERDRIVE)[-1]["why"], flag)
 
 
-func test_overdrive_doubles_tower_output_through_the_rules() -> void:
+func test_overdrive_doubles_station_output_through_the_rules() -> void:
 	_rig = SiegeRig.new("short", 1)
 	_rig.enter(2, 10.0)
-	_rig.put(1, 3)
+	_rig.put(1, SiegeIds.STATION_ONAGER)
 	_rig.p_eff[1] = 250.0
 	_rig.power_w[1] = 250.0
 	_rig.step()
-	assert_almost_eq(_rig.state.pad(3).m, 1.0, 1e-6)
+	assert_almost_eq(_rig.state.station(SiegeIds.STATION_ONAGER).m, 1.0, 1e-6)
 	_od()
 	SiegeOverdrive.on_request_result(_rig.state, 1, true, 5, "")
 	_rig.step()
-	assert_almost_eq(_rig.state.pad(3).m, 2.0, 1e-6, "raw 250 W >= CP 200 W")
+	assert_almost_eq(
+		_rig.state.station(SiegeIds.STATION_ONAGER).m, 2.0, 1e-6, "raw 250 W >= CP 200 W"
+	)
 	_rig.power_w[1] = 150.0
 	_rig.step()
-	assert_almost_eq(_rig.state.pad(3).m, 1.0, 1e-6, "below CP")
+	assert_almost_eq(_rig.state.station(SiegeIds.STATION_ONAGER).m, 1.0, 1e-6, "below CP")
 
 
 # --- determinism -------------------------------------------------------------------------------------
@@ -275,11 +275,11 @@ func test_overdrive_doubles_tower_output_through_the_rules() -> void:
 func _hash(rng_seed: int, humans: int = 3) -> Array:
 	_rig = SiegeRig.new("vo2", humans, 0, rng_seed)
 	_rig.enter(2, 0.0)
-	_rig.put(1, 3)
-	_rig.put(2, 4)
+	_rig.put(1, SiegeIds.STATION_ONAGER)
+	_rig.put(2, SiegeIds.STATION_ARROWS)
 	_rig.run(100.0)
 	var enemies := _rig.state.enemies.map(
-		func(e: SiegeEnemyState) -> Array: return [e.id, e.type, e.road, e.prog_m, e.lat_m, e.hp]
+		func(e: SiegeEnemyState) -> Array: return [e.id, e.type, e.prog_m, e.lat_m, e.hp]
 	)
 	return [JSON.stringify(_rig.events), JSON.stringify(enemies), _rig.state.next_enemy_id]
 
