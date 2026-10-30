@@ -220,12 +220,13 @@ function fort(g, s) {
   const w = 148;
   const h = 68;
   plate(g, x, y, w, h, s.gateLow ? { frame: C.alarm } : {});
+  // digits keep 2 px of the chip above and below
   ansata(g, x + 8, y + 6, 'GATE');
   g.text('/' + s.gateMax, x + w - 7, y + 19, 'LABEL', C.dim, { right: true });
   const gr = x + w - 7 - measure('/' + s.gateMax, FACES.LABEL) - 2;
-  if (s.gateLow) g.rect(gr - measure(`${s.gate}`, FACES.KEY28) - 3, y + 3, measure(`${s.gate}`, FACES.KEY28) + 6, 30, C.alarm);
-  g.text(`${s.gate}`, gr, y + 4, 'KEY28', C.text, { right: true });
-  bar(g, x + 7, y + 34, w - 14, 4, s.gate / s.gateMax, s.gateLow ? C.alarm : C.stone);
+  if (s.gateLow) g.rect(gr - measure(`${s.gate}`, FACES.KEY28) - 3, y + 3, measure(`${s.gate}`, FACES.KEY28) + 6, 34, C.alarm);
+  g.text(`${s.gate}`, gr, y + 6, 'KEY28', C.text, { right: true });
+  bar(g, x + 7, y + 37, w - 14, 3, s.gate / s.gateMax, s.gateLow ? C.alarm : C.stone);
   g.text('TAR', x + 7, y + 44, 'LABEL', C.bronzeHi);
   const e = g.text(`${s.curtain}`, x + 36, y + 41, 'NUM', s.curtain > 0 ? C.text : C.dim);
   g.text('/200', e + 2, y + 46, 'LABEL', C.dim);

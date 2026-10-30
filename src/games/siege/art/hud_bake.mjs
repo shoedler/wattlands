@@ -13,7 +13,7 @@ import { writePng } from './png.mjs';
 import { FACES, CHARS, bitmap } from './hud_font.mjs';
 import { C, ICON, SHAPE, PEG } from './hud_parts.mjs';
 
-const BAKE_VERSION = 1;
+const BAKE_VERSION = 2;
 const repo = join(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const dir = join(repo, 'assets/siege/hud');
 const pngPath = join(dir, 'hud_atlas.png');
