@@ -9,7 +9,8 @@
 #   s9   short, vo2, sweetspot, endurance x 4 compliant Autopilot riders x seeds 1-3
 #        (these runs also serve S1, S4 at 100%, S5 at offset 0 and T1, T3, T4)
 #   s2   short with 1 human, 2 humans, 1 human + 3 bots, seeds 1-3
-#   s3   short, vo2, sweetspot, endurance with 4 riders at 0 W (HOST, so AFK, not paused)
+#   s3   short, vo2, sweetspot, endurance with a team that barely pedals: slot 0 at ERG
+#        compliance 0.3, slots 1-3 at 0 W (AFK); HOST (ADR "S3 under the shared pause")
 #   s4   short at erg:compliance=0.9 and 0.8, 4 riders, seeds 1-3 (100% comes from s9)
 #   s5   drill at offset 0 (1 human); the vo2 offsets run is in s10
 #   s6   sweetspot with erg+cadence_drop:rpm=40,at_s=1200
@@ -77,7 +78,8 @@ scenario_s2() {
 scenario_s3() {
   local c
   for c in $contents; do
-    run "s3_${c}_zero" --content="$c" --players=4 --bots=0 --rider=zero --seed=1
+    run "s3_${c}_weak" --content="$c" --players=4 --bots=0 --rider=erg:compliance=0.3 \
+      --rider=zero --rider=zero --rider=zero --seed=1
   done
 }
 
@@ -132,7 +134,9 @@ for sc in $order; do
 done
 
 # fit_check on the FIT files per content with the expected laps (lap-true phases + the
-# cool-down's: short 8, vo2 14, sweetspot 6, endurance 4, drill 3).
+# cool-down's: short 8, vo2 14, sweetspot 6, endurance 4, drill 3). A failure is remembered, the
+# scenario checks still run, and the script exits non-zero at the end.
+status=0
 if [ "${SIEGE_FIT:-1}" != "0" ]; then
   for pair in short:8 vo2:14 sweetspot:6 endurance:4 drill:3; do
     c="${pair%%:*}"
@@ -143,7 +147,7 @@ if [ "${SIEGE_FIT:-1}" != "0" ]; then
     done
     if [ "${#files[@]}" -gt 0 ]; then
       printf '== fit_check %s (%s files, %s laps)\n' "$c" "${#files[@]}" "$laps"
-      node tools/fit_check/check.mjs "${files[@]}" "--expect-laps=$laps"
+      node tools/fit_check/check.mjs "${files[@]}" "--expect-laps=$laps" || status=1
     fi
   done
 fi
@@ -166,8 +170,9 @@ only="${only#,}"
 
 if [ "${SIEGE_SKIP_CHECK:-0}" != "1" ]; then
   if [ -n "$only" ] && { [ "$#" -gt 0 ] || [ -n "${SIEGE_SIMS:-}" ]; }; then
-    node tests/games/siege/sim/check_sims.mjs "$out" "--only=$only" "--seeds=${seeds// /,}"
+    node tests/games/siege/sim/check_sims.mjs "$out" "--only=$only" "--seeds=${seeds// /,}" || status=1
   else
-    node tests/games/siege/sim/check_sims.mjs "$out" "--seeds=${seeds// /,}"
+    node tests/games/siege/sim/check_sims.mjs "$out" "--seeds=${seeds// /,}" || status=1
   fi
 fi
+exit "$status"

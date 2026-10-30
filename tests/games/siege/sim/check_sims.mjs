@@ -13,7 +13,8 @@
 // player counts and seed are cross-checked against the report's own `args`):
 //   s9_<content>_seed<n>        4 compliant Autopilot riders, content short|vo2|sweetspot|endurance
 //   s2_short_<1h|2h|1h3b>_seed<n>   1 human, 2 humans, 1 human + 3 bots
-//   s3_<content>_zero           4 riders at 0 W (HOST)
+//   s3_<content>_weak           a team that barely pedals: slot 0 at ERG compliance 0.3, slots
+//                               1-3 at 0 W (AFK) (HOST)
 //   s4_short_c<90|80>_seed<n>   4 riders at compliance 0.9 / 0.8 (100% is s9_short_seed<n>)
 //   s5_drill, s10_vo2_offsets   offset 0 on the drill, and vo2 at offsets +5, -10, 0, +5
 //   s6_sweetspot_cadence_drop   cadence collapse to 40 rpm at 20 min
@@ -272,23 +273,29 @@ export function checkS2(reports, opts = {}) {
   return result('S2', title, probs, parts.join(', '));
 }
 
-// --- S3: zero input breaks the gate in the first full wave -----------------------------------------------
+// --- S3: a team that barely pedals is breached in the first full wave -----------------------------------------------
 
 /** The first full wave (role wave, number 1) of the host's plan: {index, start, end} or null. */
 export function firstFullWave(report) {
   return wavePhases(report).find((w) => w.number === 1) ?? null;
 }
 
+/** S3's riders: the platform pauses a session once every rider stops ("all_stopped"), so one
+ *  rider keeps pedaling at a tenth of the effort it would take to hold the gate. */
+export const S3_RIDERS = ['erg:compliance=0.3', 'zero', 'zero', 'zero'];
+
 export function checkS3(reports) {
-  const title = '4 riders at 0 W, a Breach in the first full wave';
-  const names = CONTENTS.map((c) => `s3_${c}_zero`);
+  const title = 'a team that barely pedals (one rider at 30% compliance, three at 0 W), a Breach in the first full wave';
+  const names = CONTENTS.map((c) => `s3_${c}_weak`);
   const { found, missing } = pick(reports, names);
-  if (found.length === 0) return skip('S3', title, 'no s3_*_zero reports');
+  if (found.length === 0) return skip('S3', title, 'no s3_*_weak reports');
   const probs = missing.map((m) => `missing report ${m}`);
   const when = [];
   for (const [name, r] of found) {
     const content = name.slice(3, -5);
     probs.push(...argsProblems(name, r, { content, players: 4, role: 'HOST' }));
+    const riders = r.args?.riders;
+    if (riders !== undefined && JSON.stringify(riders) !== JSON.stringify(S3_RIDERS)) probs.push(`${name}: riders ${JSON.stringify(riders)}, wanted ${JSON.stringify(S3_RIDERS)}`);
     probs.push(...completeProblems(name, r));
     const w = firstFullWave(r);
     if (!w) {

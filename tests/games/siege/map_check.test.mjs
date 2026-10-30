@@ -27,7 +27,7 @@ test('the map has the brief 2.4 shape', () => {
   assert.equal(m.stations.length, 5);
   assert.equal(m.pads.length, 4);
   assert.equal(m.wheels.length, 4);
-  assert.deepEqual(m.staging.map((s) => s.id), ['camp', 'grove', 'wadi']);
+  assert.deepEqual(m.staging.map((s) => s.id), ['camp', 'grove', 'wadi', 'arch']);
   assert.ok(Math.abs(m.bridge.from_prog_m - 375.4) < 0.1);
   assert.ok(Math.abs(m.bridge.to_prog_m - 391.4) < 0.1);
 });

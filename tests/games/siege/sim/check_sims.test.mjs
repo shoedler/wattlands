@@ -191,15 +191,17 @@ test('S2 checks each variant for Breaches and T1', () => {
 
 // --- S3 ------------------------------------------------------------------------------------------------
 
-test('S3 wants a Breach inside the first full wave of every zero-input run', () => {
-  const ok = named(cs.CONTENTS.map((c) => [`s3_${c}_zero`, report({ content: c, events: [ge(500, { type: 'breach', n: 1 })] })]));
+test('S3 wants a Breach inside the first full wave of every barely-pedaling run', () => {
+  const ok = named(cs.CONTENTS.map((c) => [`s3_${c}_weak`, report({ content: c, events: [ge(500, { type: 'breach', n: 1 })] })]));
   assert.equal(cs.checkS3(ok).status, 'PASS', cs.checkS3(ok).details.join('\n'));
-  const early = { ...ok, s3_short_zero: report({ content: 'short', events: [ge(100, { type: 'breach', n: 1 })] }) };
-  assert.match(cs.checkS3(early).details.join('\n'), /s3_short_zero: no Breach in wave 1/);
-  const none = { ...ok, s3_vo2_zero: report({ content: 'vo2', events: [] }) };
+  const early = { ...ok, s3_short_weak: report({ content: 'short', events: [ge(100, { type: 'breach', n: 1 })] }) };
+  assert.match(cs.checkS3(early).details.join('\n'), /s3_short_weak: no Breach in wave 1/);
+  const none = { ...ok, s3_vo2_weak: report({ content: 'vo2', events: [] }) };
   assert.equal(cs.checkS3(none).status, 'FAIL');
-  const late = { ...ok, s3_vo2_zero: report({ content: 'vo2', events: [ge(700, { type: 'breach', n: 1 })] }) };
+  const late = { ...ok, s3_vo2_weak: report({ content: 'vo2', events: [ge(700, { type: 'breach', n: 1 })] }) };
   assert.equal(cs.checkS3(late).status, 'FAIL', 'wave 1 of vo2 is 420-540 s');
+  const wrong = { ...ok, s3_short_weak: { ...ok.s3_short_weak, args: { ...ok.s3_short_weak.args, riders: ['zero'] } } };
+  assert.match(cs.checkS3(wrong).details.join(' '), /s3_short_weak: riders \["zero"\]/);
 });
 
 // --- S4 --------------------------------------------------------------------------------------------------

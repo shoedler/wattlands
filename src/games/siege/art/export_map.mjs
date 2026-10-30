@@ -48,6 +48,7 @@ const map = {
     { id: 'camp', prog_m: 0 },
     { id: 'grove', prog_m: progAtRoadS(250) },
     { id: 'wadi', prog_m: progAtRoadS(150) },
+    { id: 'arch', prog_m: progAtRoadS(95) },
   ],
   wheels: WHEEL_X.map((x, slot) => ({ slot, pos: [x, WHEEL_Y, WHEEL_R + 1.4], radius_m: WHEEL_R })),
   // station 0 is the mine (the old generator); 1..4 the weapons and the tar works
