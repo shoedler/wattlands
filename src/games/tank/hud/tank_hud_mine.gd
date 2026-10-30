@@ -1,7 +1,9 @@
 class_name TankHudMine
 extends TankHudCtl
 ## "My numbers", the bottom-left plate (222 x 94 art px; brief 3.6, v3 "My numbers follow your
-## seat"): your seat (its icon, the seat's name and its machine, the in-band lamp), the watts as a
+## seat"): your seat (its icon, the seat's name and its machine, the in-band lamp; with a heart rate
+## sensor your heart rate, a small muted-red heart and the bpm, right in the header before the
+## lamp, the machine's name cut to fit: hr_rect()), the watts as a
 ## key number coloured by state (warm paper in band, desaturated blue under with an up arrow,
 ## orange-red over with a down arrow) with the %FTP and a power gauge against your seat's band
 ## (shaded, a 1 px needle), the cadence as a key number over its band gauge, ONE instruction line in
@@ -20,6 +22,11 @@ const WPRIME_J := 20000.0
 const GEAR_MAX := 24
 const ARROW_UP := ["..#..", ".###.", "#####"]
 const ARROW_DOWN := ["#####", ".###.", "..#.."]
+## The heart rate's heart (7 x 6) and its muted red (as Turbo Reel shows it).
+const HEART_ROWS: Array[String] = [".##.##.", "#######", "#######", ".#####.", "..###..", "...#..."]
+const HEART := Color("#b5675f")
+## The heart rate readout's right end in the header (art px; the in-band lamp sits past it).
+const HR_RIGHT := 202.0
 
 var m: Dictionary = {}
 
@@ -32,6 +39,7 @@ func numbers(r: TankRiderState) -> Dictionary:
 		"pct": r.ftp_pct,
 		"wbal": WPRIME_J,
 		"gear": 12,
+		"hr": TankHudModel.heart_bpm(tm),
 		"mode": TankHudModel.plan_mode(st(), r.engine),
 		"target": _plan_target_w(r),
 	}
@@ -106,6 +114,7 @@ func refresh() -> void:
 		"wbal": clampf(float(n["wbal"]) / WPRIME_J, 0.0, 1.0),
 		"gear": int(n["gear"]),
 		"sim": str(n["mode"]) == Wl.SIM,
+		"hr": int(n["hr"]),
 	}
 
 
@@ -135,9 +144,23 @@ func _header(eng: String) -> void:
 	var seat := str(m["seat"])
 	var x := 16.0 + D.tall(self, 16, 4, tx(seat).to_upper() if seat != "" else "", D.AMBER)
 	var mach := tx("TANK_HUD_ENG_" + eng.to_upper()).to_lower()
-	D.tall(self, x + 5, 4, D.fit_tall(mach, W - 20.0 - x - 5.0), D.DIM)
+	var right := W - 20.0
+	var hr := int(m.get("hr", 0))
+	if hr > 0:
+		var hrr := hr_rect(str(hr))
+		right = hrr.position.x - 4.0
+		D.pixels(self, HEART_ROWS, hrr.position + Vector2(0, 2), HEART)
+		D.tall_r(self, hrr.end.x, 4, str(hr), D.TEXT)
+	D.tall(self, x + 5, 4, D.fit_tall(mach, right - x - 5.0), D.DIM)
 	D.lamp(self, Vector2(W - 11, 6), bool(m["in_band"]), D.GOOD)
 	D.rect(self, Rect2(4, 16, W - 8, 1), D.FRAME_IN)
+
+
+## The heart rate readout's rect in the header (art px, local): the heart, a gap and `bpm` in the
+## tall face, its right end at HR_RIGHT.
+static func hr_rect(bpm: String) -> Rect2:
+	var w := 7.0 + 3.0 + D.tall_w(bpm)
+	return Rect2(HR_RIGHT - w, 3, w, 11)
 
 
 ## The watts coloured by state, the arrow toward the band, the %FTP and the gauge.

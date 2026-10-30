@@ -1,22 +1,18 @@
 class_name TankSeats
 extends RefCounted
-## Seats (v3 brief "One tank, five seats", "Seat choice and switching"; owner: rules). Pure: time
+## Seats (v3 brief "One tank, five seats"; 0.3.1 "seats without a lock"; owner: rules). Pure: time
 ## only through the inputs, no random draws.
 ##
-## - The rider's seat is its plan's: each tick the rider sits where its current plan phase's meta
-##   says ("engine"). A move lands when the platform starts the replanned phase (TankSeatPlan, sent
-##   by TankDirector): the stations' slots follow, the rider's sprint rule restarts and the `seat`
-##   event goes out.
-## - The seat lock: seat_lock_s counts TankConst.SEAT_LOCK_S (60 s) down from the rider's last plan
-##   boundary (every phase start: a segment boundary, or the split of a seat switch, so every
-##   trainer-mode change of that rider). A seat intent is refused while it runs (and the director
-##   never splits a phase while it runs).
 ## - A seat intent asks for an empty seat: a named one, or the next / previous empty one in
-##   TankIds.SEATS order (wrapping, skipping manned seats and those another rider is moving to).
-##   It is refused while the lock runs, on reserve, in the cool-down, for a manned or claimed
-##   seat, and when no replan for it passes TankSeatPlan.check (a mode change within 60 s of a
-##   planned one, a move that could only land in the cool-down). Accepted, the rider's seat_target
-##   claims the seat until the move lands; asking for its own seat again cancels the move.
+##   TankIds.SEATS order (wrapping, skipping manned seats). There is no seat lock (0.3.1): any rider
+##   may move at any time outside the cool-down (not on reserve), and the move lands in the same
+##   tick: the stations' slots follow, the rider's sprint rule restarts and the `seat` event goes out.
+## - The rider's trainer follows the seat (TankSeatPlan.follow, sent by TankDirector): a same-mode
+##   move at once, an ERG <-> SIM one once the rider's last switch is 30 s old (BRIEF 4.5), or at the
+##   segment's end. Meanwhile the seat works from the rider's power against its own band
+##   (TankRules.in_band) and the HUD shows the wait (TankRiderState.mode_wait_s, mode_to).
+## - Every rider's trainer switches are tracked here: TankAux.last_switch_s (the game time the
+##   rider's plan phase mode last changed) and TankAux.trainer_mode.
 
 
 static func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]) -> void:
@@ -25,29 +21,32 @@ static func step(state: TankState, inputs: TankInputs, events: Array[Dictionary]
 		var r := state.rider(ri.peer)
 		if r == null:
 			continue
-		if ri.phase_index != int(aux.seat_phase.get(ri.peer, -2)):
-			aux.seat_phase[ri.peer] = ri.phase_index
-			aux.seat_since[ri.peer] = state.t
-		if ri.engine != "" and ri.engine != r.engine:
-			land(state, r, ri.engine, events)
-		var since := float(aux.seat_since.get(ri.peer, state.t))
-		r.seat_lock_s = maxf(TankConst.SEAT_LOCK_S - (state.t - since), 0.0)
-		aux.seat_now[ri.peer] = can_land_now(ri)
+		var was := str(aux.trainer_mode.get(ri.peer, ""))
+		if ri.phase_mode != "" and ri.phase_mode != was:
+			if was != "":
+				aux.last_switch_s[ri.peer] = state.t
+			aux.trainer_mode[ri.peer] = ri.phase_mode
 		aux.seat_input[ri.peer] = ri
-		if ri.phase_kind == Wl.COOLDOWN or ri.engine == "":
-			r.seat_target = ""
+		if not aux.seat_since.has(ri.peer):
+			aux.seat_since[ri.peer] = state.t
+		if r.engine != TankIds.ENGINE_DIESEL:
+			aux.off_drive_seg[ri.peer] = state.seg.segment_index
+		if ri.phase_kind == Wl.COOLDOWN:
+			r.mode_wait_s = 0.0
+			r.mode_to = ""
 	for ri in inputs.riders:
 		var r := state.rider(ri.peer)
 		if r == null:
 			continue
 		for n in ri.intents:
 			if str(n.get("k", "")) == TankIds.INTENT_SEAT:
-				request(state, ri, r, TankIntents.seat_wanted(n, r.engine), int(n.get("d", 0)))
+				request(
+					state, ri, r, TankIntents.seat_wanted(n, r.engine), int(n.get("d", 0)), events
+				)
 
 
-## Rider `r` now sits on `engine` (its plan's seat): the stations follow and the seat event goes
-## out. A seat someone else holds is never taken (the claim keeps that from happening; a stray one
-## is refused with a warning).
+## Rider `r` now sits on `engine`: the stations follow and the seat event goes out. A seat someone
+## else holds is never taken (refused with a warning).
 static func land(
 	state: TankState, r: TankRiderState, engine: String, events: Array[Dictionary]
 ) -> void:
@@ -64,114 +63,98 @@ static func land(
 		to.slot = r.slot
 		to.peer = r.peer
 	r.engine = engine
-	if r.seat_target == engine:
-		r.seat_target = ""
+	var aux := TankAux.of(state)
+	aux.seat_since[r.peer] = state.t
+	if engine != TankIds.ENGINE_DIESEL:
+		aux.off_drive_seg[r.peer] = state.seg.segment_index
 	if state.content != null:
 		r.sprint_rule(state.content.num("tanks", "evade.sprint_window_s", 3.0)).reset()
-	if from != "":
+	if from != "" and from != engine:
 		events.append(TankEvents.seat(r.slot, from, engine))
 
 
 ## Judges rider `r`'s ask for seat `want` ("" for none; `step` +1 / -1 when it came from next or
-## prev, which skip to the next empty seat that way). Returns true when the move is accepted (or a
-## pending one cancelled).
+## prev, which skip to the next empty seat that way) and lands it at once. Returns true when the
+## rider moved.
 static func request(
-	state: TankState, ri: TankRiderInput, r: TankRiderState, want: String, step: int
+	state: TankState,
+	ri: TankRiderInput,
+	r: TankRiderState,
+	want: String,
+	step: int,
+	events: Array[Dictionary]
 ) -> bool:
-	if want == "" or ri.on_reserve() or ri.phase_kind == Wl.COOLDOWN or ri.engine == "":
+	if want == "" or ri.on_reserve() or ri.phase_kind == Wl.COOLDOWN or r.engine == "":
+		return false
+	if state.in_cooldown():
 		return false
 	if step != 0:
 		want = next_free(state, r, step)
-	if want == r.engine:
-		var had := r.seat_target != ""
-		r.seat_target = ""
-		return had
-	if r.seat_lock_s > 0.0 or not is_free(state, want, r):
+	if want == r.engine or not is_free(state, want):
 		return false
-	if want == r.seat_target:
-		return true
-	if ri.plan != null and not plan_allows(state, ri, want):
-		return false
-	r.seat_target = want
+	land(state, r, want, events)
 	return true
 
 
-## True when a move asked for now could land at once (a split: the rider's open-ended phase is past
-## its own min_s and not at its max_s), not at the phase's end. The Autopilot seats riders only then
-## (TankAux.seat_now) and only with a split that passes (splits_now), so its moves never land in the
-## next segment.
-static func can_land_now(ri: TankRiderInput) -> bool:
-	return (
-		ri.phase_open_ended
-		and ri.phase_elapsed_s >= ri.phase_min_s - 1e-6
-		and ri.phase_remaining_s > 2.0 * Wl.SIM_DT
-	)
-
-
-## True when rider `peer`'s move to `engine` asked for now would split its phase at once
-## (can_land_now, and TankSeatPlan.move_now finds a split that passes: the rest phase fits before
-## the phase's max_s). Without this tick's input (a test's bare state) it is TankAux.seat_now.
-static func splits_now(state: TankState, peer: int, engine: String) -> bool:
+## True when the trainer of rider `peer` (its last input, TankAux.seat_input) would follow a move to
+## `engine` at once (TankSeatPlan.follow: a split now, or no change needed). Without that input (a
+## test's bare state) it is true.
+static func follows_now(state: TankState, peer: int, engine: String) -> bool:
 	var aux := TankAux.of(state)
-	if not bool(aux.seat_now.get(peer, false)):
-		return false
 	var ri: TankRiderInput = aux.seat_input.get(peer)
 	if ri == null or ri.plan == null:
 		return true
-	var mv := TankSeatPlan.move_now(
-		state.content, ri.plan, ri.phase_index, ri.phase_elapsed_s, ri.seg_offset_s, engine, true
+	var f := TankSeatPlan.follow(
+		state.content,
+		ri,
+		engine,
+		float(aux.last_switch_s.get(peer, -INF)),
+		state.t,
+		state.seg.objective_done and state.seg.open_ended
 	)
-	return not mv.is_empty() and bool(mv["split"])
+	var action := int(f["action"])
+	return action == TankSeatPlan.FOLLOW_SPLIT or action == TankSeatPlan.FOLLOW_NONE
 
 
-## True when rider `ri`'s next plan phase is a checkpoint: fixed, at least SEAT_LOCK_S long, ERG 50%
-## for every seat.
+## The Autopilot's minimum stay for this crew (TankConst.AUTO_STAY_S, a solo rider AUTO_STAY_SOLO_S).
+static func auto_stay_s(state: TankState) -> float:
+	return TankConst.AUTO_STAY_SOLO_S if state.riders.size() == 1 else TankConst.AUTO_STAY_S
+
+
+## Seconds rider `peer` has sat on its seat (since its last move, or since it joined).
+static func stay_s(state: TankState, peer: int) -> float:
+	return state.t - float(TankAux.of(state).seat_since.get(peer, -INF))
+
+
+## The mode (Wl.ERG or Wl.SIM) a rider on `engine` rides in the current segment ("" outside one).
+static func seat_mode(state: TankState, engine: String) -> String:
+	return TankSeatPlan.seat_mode(state.content, state.seg.segment_index, engine)
+
+
+## True when rider `ri`'s next plan phase is a checkpoint (fixed, ERG 50% for every seat).
 static func checkpoint_next(ri: TankRiderInput) -> bool:
 	var nxt := ri.phase_index + 1
 	if ri.plan == null or ri.phase_index < 0 or nxt >= ri.plan.size():
 		return false
 	var ph := ri.plan.phase(nxt)
-	return (
-		str(ph.meta.get("seg", "")) == TankIds.SEG_CHECKPOINT
-		and not ph.open_ended
-		and ph.duration_s >= TankConst.SEAT_LOCK_S - 1e-6
-	)
+	return str(ph.meta.get("seg", "")) == TankIds.SEG_CHECKPOINT and not ph.open_ended
 
 
-## True when the plan of `ri` lets it move to `engine` (TankSeatPlan.can_move from its phase now).
-static func plan_allows(state: TankState, ri: TankRiderInput, engine: String) -> bool:
-	return TankSeatPlan.can_move(
-		state.content,
-		ri.plan,
-		ri.phase_index,
-		ri.phase_open_ended,
-		ri.phase_elapsed_s,
-		ri.phase_min_s,
-		ri.seg_offset_s,
-		engine
-	)
-
-
-## True when `engine` is a seat of the tank that nobody sits on and no other rider is moving to.
-static func is_free(state: TankState, engine: String, r: TankRiderState) -> bool:
+## True when `engine` is a seat of the tank that nobody sits on.
+static func is_free(state: TankState, engine: String) -> bool:
 	var st := state.station(engine)
-	if st == null or not st.is_empty():
-		return false
-	for o in state.riders:
-		if o != r and o.seat_target == engine:
-			return false
-	return true
+	return st != null and st.is_empty()
 
 
 ## The next seat from rider `r`'s in TankIds.SEATS order (`step` +1 next, -1 previous, wrapping)
-## that is free for it; its own seat when none is.
+## that is free; its own seat when none is.
 static func next_free(state: TankState, r: TankRiderState, step: int) -> String:
 	var at := r.engine
 	for _i in TankIds.SEATS.size():
 		at = TankIds.seat_step(at, signi(step))
 		if at == r.engine:
 			break
-		if is_free(state, at, r):
+		if is_free(state, at):
 			return at
 	return r.engine
 

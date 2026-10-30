@@ -8,14 +8,14 @@ extends RefCounted
 ## intents() adds automatic seating (v3) and the gunner's two extra jobs:
 ##   - automatic seating (v3 brief "Seat choice and switching"): a rider the Autopilot plays (a bot,
 ##     an Autopilot human, a human on the fallback; never one on reserve) asks for a seat once its
-##     seat lock is open and no move is pending, at most once a second. Solo, the solo loop
+##     minimum stay is over (TankSeats.auto_stay_s), at most once a second. Solo, the solo loop
 ##     (seat_wanted_solo): Drive while no target is in range; the Loader when a target comes and
 ##     the rack is not full, until it is full; the Gun while the rack holds shells and a target is
 ##     in range; the Secondaries when only light targets (and barricades) are within the bow guns'
 ##     range. Crews of 2-4 (seat_wanted_crew): the Autopilot's riders fill the most needed seats
 ##     (seat_needs: by the situation, ties in TankIds.SEATS order Drive, Gun, Loader, Lights,
-##     Secondaries) around the riders who play their own seat. Every stay is at least 60 s: the
-##     seat lock (TankSeats) runs from every plan boundary, a move's included;
+##     Secondaries) around the riders who play their own seat. 0.3.1: no seat lock; every stay
+##     is at least 30 s solo and 60 s in a crew (TankSeats.auto_stay_s), so nothing thrashes;
 ##   - rear traverses (for rear enemies the main gun can reach; it cannot reach a rear light, which
 ## breaks off after its linger_s): the main turret faces right or left, and a traverse flips it. It
 ## flips when
@@ -190,21 +190,23 @@ static func _blocking_obstacle(state: TankState) -> TankObstacleState:
 # --- Automatic seating (v3) ------------------------------------------------------------------------
 
 
-## The rider's automatic seat move this tick: {"k": "seat", "to": seat, "auto": 1}, or {} (lock
-## running, a move pending, on reserve, in a checkpoint or the cool-down, a move that could not land
-## at once, or happy where it sits).
+## The rider's automatic seat move this tick: {"k": "seat", "to": seat, "auto": 1}, or {} (on
+## reserve, in the cool-down, inside its minimum stay (TankSeats.auto_stay_s: no seat lock since
+## 0.3.1, but no thrashing either), a fight move its trainer could not follow at once or that
+## would switch its trainer's mode in a warm-up segment, or happy where it sits).
 static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
-	if rider.afk or not rider.connected or rider.seat_lock_s > 0.0 or rider.seat_target != "":
+	if rider.afk or not rider.connected:
 		return {}
 	if state.tick % SEAT_EVERY_TICKS != 0 or state.in_cooldown() or state.all_afk:
 		return {}
-	if state.seg.seg == TankIds.SEG_NONE or state.seg.seg == TankIds.SEG_CHECKPOINT:
+	if state.seg.seg == TankIds.SEG_NONE:
+		return {}
+	if TankSeats.stay_s(state, rider.peer) < TankSeats.auto_stay_s(state) - 1e-6:
 		return {}
 	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
-	# The segment's objective is done ("Regroup" until it ends): the rider takes the seat the next
-	# segment wants, landing at the segment's end (the director never splits it then). Otherwise only
-	# moves that land at once: a move pending to the phase's end would land in the next segment,
-	# which the seating has not looked at (TankSeats.can_land_now).
+	# In a checkpoint, or once the segment's objective is done ("Regroup" until it ends), the rider
+	# takes the seat the next fight segment wants (its trainer follows there). In a fight, only a move
+	# its trainer follows at once (TankSeats.follows_now): a switch it would wait for buys nothing.
 	var sit := situation(state)
 	var seg := state.seg.seg
 	# The solo rider's last minute before a checkpoint goes to the next segment's seat (it starts
@@ -213,15 +215,19 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 		state.riders.size() == 1
 		and ri != null
 		and TankSeats.checkpoint_next(ri)
-		and ri.phase_remaining_s < TankConst.SEAT_LOCK_S + 1.0
+		and ri.phase_remaining_s < TankSeats.auto_stay_s(state) + 1.0
 		and seat_wanted_solo(state, rider, sit) != TankIds.ENGINE_DYNAMO
 	)
-	var at_end := (state.seg.objective_done and state.seg.open_ended) or last_minute
+	var at_end := (
+		(state.seg.objective_done and state.seg.open_ended)
+		or last_minute
+		or state.seg.seg == TankIds.SEG_CHECKPOINT
+	)
+	if state.riders.size() > 1 and not _crew_may_move(state, at_end):
+		return {}
 	if at_end:
 		seg = next_fight_segment(state)
 		sit = expected(state, seg)
-	elif not bool(TankAux.of(state).seat_now.get(rider.peer, false)):
-		return {}
 	var want := (
 		seat_wanted_solo(state, rider, sit, seg)
 		if state.riders.size() == 1
@@ -232,18 +238,42 @@ static func seat_intent(state: TankState, rider: TankRiderState) -> Dictionary:
 	var st := state.station(want)
 	if st == null or not st.is_empty():
 		return {}
-	if not at_end and not TankSeats.splits_now(state, rider.peer, want):
+	if not at_end and not TankSeats.follows_now(state, rider.peer, want):
+		return {}
+	if not at_end and _switches_in_warmup(state, ri, want):
 		return {}
 	var out := TankIntents.seat(want, TankIds.VIA_AUTO)
 	out["auto"] = 1
 	return out
 
 
+## True when moving to `engine` would switch the rider's trainer ERG <-> SIM inside a warm-up
+## segment (the depot, the drill's skirmish): the automatic seating keeps the trainer's mode through
+## a warm-up (the drill allows a rider one switch: its checkpoint). A human may still move.
+static func _switches_in_warmup(state: TankState, ri: TankRiderInput, engine: String) -> bool:
+	if ri == null or not ri.in_warmup():
+		return false
+	var mode := str(TankAux.of(state).trainer_mode.get(ri.peer, ri.phase_mode))
+	return TankSeats.seat_mode(state, engine) != mode
+
+
+## A crew's automatic riders hold their seats through a segment's opening (0.3.1, the v3 timing the
+## crews are tuned on): never in a checkpoint, not in a segment's first AUTO_STAY_S, and in a fight
+## not before the segment's own min_s (`at_end`: planning the next segment once the objective is
+## done).
+static func _crew_may_move(state: TankState, at_end: bool) -> bool:
+	if state.seg.seg == TankIds.SEG_CHECKPOINT:
+		return false
+	if state.seg.elapsed_s < TankConst.AUTO_STAY_S - 1e-6:
+		return false
+	return at_end or (state.seg.open_ended and state.seg.elapsed_s >= state.seg.min_s - 1e-6)
+
+
 ## The solo loop (brief v3 "Automatic seating"), from the seat the rider is on, for a segment of
 ## type `seg` (default the current one). "In range" is the gun's reach now: the solo rider never
 ## mans the Lights, so the headlight's range. Timing (v3 solo balance): in an Advance the rider
-## leaves Drive for one stay at most (one 60 s stay is all an Advance's time bound leaves beside
-## the drive to the halt line); after it, or when the Advance began on another seat, it drives on
+## leaves Drive for one stay at most (one stay is all an Advance's time bound leaves beside the
+## drive to the halt line); after it, or when the Advance began on another seat, it drives on
 ## to the halt line.
 static func seat_wanted_solo(
 	state: TankState, rider: TankRiderState, sit: Dictionary = {}, seg: String = ""
@@ -274,20 +304,11 @@ static func seat_wanted_solo(
 
 
 ## True when rider `rider` sat somewhere other than Drive in the current Advance: it sits there now,
-## or one of its plan phases of this segment up to the current one has another seat.
+## or it did earlier in this segment (TankAux.off_drive_seg).
 static func _advance_stay_spent(state: TankState, rider: TankRiderState) -> bool:
 	if rider.engine != TankIds.ENGINE_DIESEL:
 		return true
-	var ri: TankRiderInput = TankAux.of(state).seat_input.get(rider.peer)
-	if ri == null or ri.plan == null:
-		return false
-	for k in mini(ri.phase_index + 1, ri.plan.size()):
-		var meta := ri.plan.phase(k).meta
-		if int(meta.get("segment", -1)) != state.seg.segment_index:
-			continue
-		if str(meta.get("engine", "")) != TankIds.ENGINE_DIESEL:
-			return true
-	return false
+	return int(TankAux.of(state).off_drive_seg.get(rider.peer, -1)) == state.seg.segment_index
 
 
 ## A crew rider the Autopilot seats: the seats the Autopilot's riders should hold are the most
@@ -340,7 +361,7 @@ static func rank_seats(seats: Array[String], needs: Dictionary) -> Array[String]
 ## How much each seat is needed now (seat id -> a score, higher first): Drive to move on (5) on a
 ## road segment until its objective is done, fight or not (the enemies keep station with the tank),
 ## or to dig in at a gun line (3.2: kept manned there, so the next Advance starts with a driver;
-## the seat lock leaves no time to move one there between the segments); the Gun in a fight with
+## a crew's stay leaves no time to move one there between the segments); the Gun in a fight with
 ## shells to fire or a Loader working (4.5 with a target the auto-aim can lay on now, 2 without: a
 ## light tank inside the gun's depression limit, or one past the headlight in the dark); the Loader
 ## (4 in a fight, 3 on the road) while the rack has room, 3 in a fight with the rack full (the fight

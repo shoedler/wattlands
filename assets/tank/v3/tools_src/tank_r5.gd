@@ -404,7 +404,7 @@ static func roof(img: Image, st: Dictionary) -> void:
 	Px.rect(img, Rect2i(c.x - 1, c.y - 11, 3, 1), Color("#3a3a2e"))
 	Px.line(img, Vector2i(c.x + 3, c.y - 4), Vector2i(c.x + 8, c.y - 6), Color("#3a3226"))
 	# the rear searchlight on its post: looking aft, 13 degrees down
-	_lamp(img, Vector2(105, 91), PI - deg_to_rad(13.0), true)
+	_lamp(img, Vector2(105, 91), PI - deg_to_rad(13.0), bool(st.get("rear_on", true)))
 
 
 ## A searchlight drum aimed along `a` (radians, y down) from its centre `c`, the lens at the front.

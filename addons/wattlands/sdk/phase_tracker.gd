@@ -180,6 +180,20 @@ static func make_state(
 	return s
 
 
+## End `peer`'s current phase at the end of this tick whatever its min_s or kind (a split, see
+## DirectiveSink.split). Returns "" or the refusal reason (no phase, the cool-down).
+func request_split_end(peer: int) -> String:
+	var r: Rider = _riders.get(peer)
+	if r == null:
+		return Wl.REFUSE_UNKNOWN_PEER
+	if r.index < 0:
+		return Wl.REFUSE_NO_PHASE
+	if r.done or r.plan.phase(r.index).kind == Wl.COOLDOWN:
+		return Wl.REFUSE_COOLDOWN
+	r.pending_end = true
+	return ""
+
+
 ## Ask to end `peer`'s open-ended phase at the end of the current tick. Returns "" or the
 ## refusal reason (Wl.REFUSE_*).
 func request_end(peer: int) -> String:

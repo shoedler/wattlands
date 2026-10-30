@@ -66,10 +66,11 @@
 //   S10 (crew 3)  every rider a sprinter: a client's Overpressure (`over` over Telemetry.intents, owned by the steam
 //                 engine) latches an Overpressure shell; and a dynamo rider who stops in a gun line is rescued, goes AFK
 //                 within 10 s, is announced as on reserve, comes back, with nobody else affected and the plan completing.
-//   S13 (crew 3)  seat switching (v3): humans on the fallback (--autopilot=none) seated by the host's Autopilot, the
-//                 clients' moves included: seat events, every one 60 s or more after that rider's last, every replan
-//                 accepted with no plan warning, each rider on its new seat's plan after the move, every ERG <-> SIM
-//                 switch 60 s from the next, the plans' FIT laps unchanged (a split is a lap-false phase).
+//   S13 (crew 3)  seat switching (0.3.1, no seat lock): humans on the fallback (--autopilot=none) seated by the host's
+//                 Autopilot, the clients' moves included: seat events (a move lands at once), every split and replan
+//                 accepted with no plan warning, each rider's trainer on its new seat's plan within SWITCH_SPACING_S
+//                 of the move (or at the segment's end when the switch waits for it), every ERG <-> SIM switch
+//                 SWITCH_SPACING_S from the next, the plans' FIT laps unchanged (a split is a lap-false phase).
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -97,7 +98,12 @@ export const T3_PAIR_MAX_S = 15;
 export const T3_PER_STAGE = 3;
 export const T4_MIN_SHARE = 0.5;
 export const T4_SHOTS_PER_GUN_LINE = 2;
-export const SWITCH_SPACING_S = 60;
+/**
+ * BRIEF 4.5: a rider's ERG <-> SIM switches at least this far apart on the trainer's trace. 0.3.1 (no seat lock): the
+ * trainer follows a seat move as soon as its last switch is 30 s old, the platform's rule (the PlanValidator's warning,
+ * the DirectiveSink's SIM-block spacing); v1-v3 held 60 s, the tank brief's figure that went with the seat lock.
+ */
+export const SWITCH_SPACING_S = 30;
 export const FIRST_S = 300;
 /** BRIEF 4.6: the first 300 s are ERG at 65% FTP at most or SIM at -2..+3% grade; the stacked grade is -10..+16% in total (range clamp +10% before the haptic). */
 export const FIRST_ERG_MAX_PCT = 65;
@@ -770,7 +776,8 @@ export function directiveProblems(name, r, d) {
       if (!ph.open_ended) probs.push(`${at}: end_phase on a fixed phase`);
       break;
     case 'replan':
-      // v3: a seat switch's replan (seatProblems and the platform's PlanValidator judge it).
+    case 'split':
+      // v3 / 0.3.1: the trainer following a seat (seatProblems and the platform's PlanValidator judge it).
       break;
     case 'request': {
       const kind = classify(d);
@@ -857,7 +864,7 @@ export function planProblems(name, r) {
   return probs;
 }
 
-/** Trace rules: no applied ERG above 100% FTP, no SIM -> ERG entry above the target, no haptic early or to ERG, switches >= 60 s apart. */
+/** Trace rules: no applied ERG above 100% FTP, no SIM -> ERG entry above the target, no haptic early or to ERG, switches >= SWITCH_SPACING_S apart. */
 export function traceProblems(name, r) {
   const probs = [];
   const add = (m) => {
@@ -1115,6 +1122,14 @@ export const AFK_AFTER_S = 10;
 /** The engine of `peer`'s plan phase at report time t, or ''. */
 const engineAt = (r, peer, t) => planOf(r, peer)[phaseIndexAt(r, peer, t)]?.meta?.engine ?? '';
 
+/** The seat `peer` sat on at game time `t`: its last seat event's seat before `t`, else its plan's first seat (0.3.1: a move lands at once, the plan follows later). */
+export function seatAt(r, peer, t) {
+  const slot = num(slotOf(r, peer).slot, -1);
+  let seat = engineAt(r, peer, 0);
+  for (const e of eventsOf(r, 'seat')) if (num(e.s) === slot && e._t <= t + EPS) seat = ENGINE_OF_CODE[num(e.to)] ?? seat;
+  return seat;
+}
+
 /** Overpressure latches (latch sh 3) whose slot was not on the steam engine then (`over` must be owned by its engine). */
 export function intentOwnershipProblems(name, r) {
   const probs = [];
@@ -1122,7 +1137,7 @@ export function intentOwnershipProblems(name, r) {
     if (e.type === 'ram' || e.type === 'dodge') probs.push(`${name}: a ${e.type} event at ${fmt(e._t)} s (v2 has none)`);
     if (e.type !== 'latch' || num(e.sh) !== SHELL_OVER) continue;
     const peer = peerOfSlot(r, e.s);
-    const engine = peer === null ? '' : engineAt(r, peer, e._t);
+    const engine = peer === null ? '' : seatAt(r, peer, e._t);
     if (engine !== 'steam') probs.push(`${name}: an Overpressure shell by slot ${e.s} at ${fmt(e._t)} s, who was on "${engine}", not the steam engine`);
   }
   return probs;
@@ -1318,30 +1333,50 @@ export function checkS12(reports) {
 
 /** Engine codes (TankIds.ENGINE_CODES). */
 export const ENGINE_OF_CODE = { 1: 'diesel', 2: 'dynamo', 3: 'steam', 5: 'arc', 6: 'feed' };
-export const SEAT_LOCK_S = 60;
+/** Plan follows: the trainer is on a moved rider's new seat within this long (the switch spacing and a tick). */
+export const FOLLOW_SLACK_S = 0.2;
 
-/** Seat problems of one run: the lock between a rider's moves, each move landing on its seat's plan, accepted replans. */
+/**
+ * The trainer follows each seat move (0.3.1): the rider's plan engine is the new seat within SWITCH_SPACING_S (and a
+ * tick) of the move, or at the start of the next segment when the switch waits for the segment's end, unless the
+ * rider moved again first. Every split and replan is accepted with no plan warning.
+ */
 export function seatProblems(name, r) {
   const probs = [];
   const seats = eventsOf(r, 'seat');
   const bySlot = {};
-  for (const e of seats) {
-    const slot = num(e.s);
-    const prev = bySlot[slot];
-    if (prev !== undefined && e._t - prev < SEAT_LOCK_S - 0.06) probs.push(`${name}: slot ${slot} moved at ${fmt(prev)} s and again at ${fmt(e._t)} s (the lock is ${SEAT_LOCK_S} s)`);
-    bySlot[slot] = e._t;
-    const peer = peerOfSlot(r, slot);
-    const engine = peer === null ? '' : engineAt(r, peer, e._t + 0.01);
-    if (engine !== ENGINE_OF_CODE[num(e.to)]) probs.push(`${name}: slot ${slot} moved to ${ENGINE_OF_CODE[num(e.to)]} at ${fmt(e._t)} s but its plan says ${engine}`);
+  for (const e of seats) (bySlot[num(e.s)] ??= []).push(e);
+  for (const [slot, moves] of Object.entries(bySlot)) {
+    const peer = peerOfSlot(r, num(slot));
+    if (peer === null) continue;
+    const spans = phaseSpansOf(r, peer);
+    moves.forEach((e, k) => {
+      const want = ENGINE_OF_CODE[num(e.to)];
+      const next = k + 1 < moves.length ? moves[k + 1]._t : Infinity;
+      const deadline = Math.min(e._t + SWITCH_SPACING_S + FOLLOW_SLACK_S, next);
+      const starts = spans.filter((sp) => sp.start >= e._t - EPS && sp.start <= deadline + EPS).map((sp) => sp.start);
+      let ok = [e._t + 0.06, ...starts.map((t) => t + 0.01)].some((t) => t <= deadline + EPS && engineAt(r, peer, t) === want);
+      if (!ok) {
+        // The switch waits for the segment's end: the next segment starts on the new seat.
+        const cur = spans.find((sp) => sp.start <= e._t + EPS && (!Number.isFinite(sp.end) || sp.end > e._t));
+        const after = cur ? spans.find((sp) => sp.segment !== cur.segment && sp.start >= cur.start) : null;
+        ok = after !== null && after !== undefined && after.start <= next + EPS && engineAt(r, peer, after.start + 0.01) === want;
+      }
+      if (!ok && next === Infinity && e._t > num(r.game_seconds, Infinity) - SWITCH_SPACING_S) ok = true;
+      if (!ok) probs.push(`${name}: slot ${slot} moved to ${want} at ${fmt(e._t)} s; its trainer never followed`);
+    });
   }
   for (const d of r.directives ?? []) {
-    if (d.kind === 'replan' && d.accepted === false) probs.push(`${name}: replan ${d.id} (peer ${d.peer} at ${fmt(num(d.t))} s) refused: ${d.reason}`);
+    if (d.kind !== 'replan' && d.kind !== 'split') continue;
+    if (d.accepted === false) probs.push(`${name}: ${d.kind} ${d.id} (peer ${d.peer} at ${fmt(num(d.t))} s) refused: ${d.reason}`);
+    const warn = d.requested?.warnings;
+    if (Array.isArray(warn) && warn.length) probs.push(`${name}: ${d.kind} ${d.id} warned: ${warn.join('; ')}`);
   }
   return probs;
 }
 
 export function checkS13(reports) {
-  const title = 'seat switching: crew 3 on the fallback seated through replans, the clients included (lock, replans, switches, laps)';
+  const title = 'seat switching: crew 3 on the fallback seated at once, the trainer following (no lock, splits, switches, laps)';
   const n = 's13_c3_seats';
   const r = reports[n];
   if (!r) return skip('S13', title, `no ${n} report`);
@@ -1352,9 +1387,9 @@ export function checkS13(reports) {
   const clients = seats.filter((e) => num(e.s) >= 1);
   if (seats.length < 3) probs.push(`${n}: ${seats.length} seat moves (want at least 3)`);
   if (clients.length === 0) probs.push(`${n}: no client rider (slot 1 or 2) moved seats`);
-  const replans = (r.directives ?? []).filter((d) => d.kind === 'replan');
-  if (replans.length < seats.length) probs.push(`${n}: ${replans.length} replans for ${seats.length} moves`);
-  return result('S13', title, probs, `${seats.length} moves (${clients.length} by clients), ${replans.length} replans`);
+  const follows = (r.directives ?? []).filter((d) => d.kind === 'replan' || d.kind === 'split');
+  if (follows.length === 0) probs.push(`${n}: no split or replan followed the ${seats.length} moves`);
+  return result('S13', title, probs, `${seats.length} moves (${clients.length} by clients), ${follows.length} splits and replans`);
 }
 
 // --- FIT ------------------------------------------------------------------------------------------------------------

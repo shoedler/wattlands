@@ -642,29 +642,61 @@ func test_end_phase_all_riders_once_after_min_s() -> void:
 	assert_eq(h.ended.size(), 3, "a fixed phase never ends early")
 
 
-## v3 solo balance: a solo rider the Autopilot seats who wants another seat for the next fight
-## segment holds the segment's end ("Regroup") while its seat lock runs, so the move can land at the
-## end; it never holds a crew, and stops once the rider asked.
-func test_a_solo_segment_end_waits_for_the_riders_seat_lock() -> void:
+## v3 solo balance (0.3.1: no seat lock): a solo rider the Autopilot seats who wants another seat for
+## the next fight segment holds the segment's end ("Regroup") while its minimum stay runs, so it can
+## move before the end; it never holds a crew, and stops once the rider sits where it wants.
+func test_a_solo_segment_end_waits_for_the_riders_stay() -> void:
 	var h := _h(1)
 	var r := h.state.riders[0]
 	r.engine = TankIds.ENGINE_FEED
-	r.seat_lock_s = 20.0
+	TankAux.of(h.state).seat_since[r.peer] = h.state.t - 10.0
 	h.run_s(GUN1, 30.0)
 	h.state.seg.objective_done = true
-	h.run_s(GUN1, 35.0)
-	assert_eq(h.ended, [], "the rider wants Drive for the next Advance; its lock runs")
-	r.seat_lock_s = 0.0
-	r.seat_target = TankIds.ENGINE_DIESEL
+	h.run_s(GUN1, 31.0)
+	assert_eq(h.ended, [], "past min_s: the rider wants Drive for the next Advance; its stay runs")
+	r.engine = TankIds.ENGINE_DIESEL
 	h.run_s(GUN1, 3.0)
-	assert_eq(h.ended.size(), 1, "it asked: the segment ends")
+	assert_eq(h.ended.size(), 1, "it sits where it wants: the segment ends")
 	var crew := _h(2)
 	for c in crew.state.riders:
 		c.engine = TankIds.ENGINE_FEED
-		c.seat_lock_s = 20.0
+		TankAux.of(crew.state).seat_since[c.peer] = crew.state.t - 10.0
 	crew.state.seg.objective_done = true
 	crew.run_s(GUN1, 65.0)
 	assert_eq(crew.ended.size(), 2, "a crew never waits")
+
+
+## Pattern 9 (0.3.1): the trainer follows the seat. A same-mode move splits at once; an ERG <-> SIM
+## move within 30 s of the rider's last switch waits (mode_wait_s, mode_to) and splits when the 30 s
+## are up; while it waits the trainer's SIM load goes flat.
+func test_the_trainer_follows_the_seat() -> void:
+	var h := _h(2)
+	var aux := TankAux.of(h.state)
+	var ev: Array[Dictionary] = []
+	h.state.t = 100.0
+	TankSeats.land(h.state, h.state.rider(2), TankIds.ENGINE_ARC, ev)
+	h.run(ADV1, 1)
+	var d := h.dirs()
+	assert_eq(d.splits.size(), 1, "Gun to Lights, ERG to ERG: at once")
+	assert_eq(int(d.splits[0][0]), 2)
+	var rest: EffortPlan = d.splits[0][1]
+	assert_eq(str(rest.phase(0).meta["engine"]), TankIds.ENGINE_ARC)
+	var r1 := h.state.rider(1)
+	aux.last_switch_s[1] = 90.0
+	TankSeats.land(h.state, r1, TankIds.ENGINE_DYNAMO, ev)
+	h.run(ADV1, 1)
+	assert_eq(d.splits.size(), 1, "Drive to the Gun 10 s after a switch: it waits")
+	assert_almost_eq(r1.mode_wait_s, 20.0, 1e-6)
+	assert_eq(r1.mode_to, Wl.ERG)
+	h.run(ADV1, 1)
+	var flat := d.course_grades.filter(func(g: Array) -> bool: return int(g[0]) == 1)
+	assert_eq(float((flat.back() as Array)[1]), 0.0, "Drive's terrain goes flat while it waits")
+	h.state.t = 120.0
+	h.run(ADV1, 1)
+	assert_eq(d.splits.size(), 2, "30 s after the last switch: the split")
+	assert_eq(int(d.splits[1][0]), 1)
+	assert_eq(str((d.splits[1][1] as EffortPlan).phase(0).meta["engine"]), TankIds.ENGINE_DYNAMO)
+	assert_eq([r1.mode_wait_s, r1.mode_to], [0.0, ""])
 
 
 ## The boss waits its `end_hold_s` (the Behemoth's death beat) after the objective is done, so the

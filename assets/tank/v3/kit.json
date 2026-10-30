@@ -9,8 +9,15 @@
   "lit": {
     "file": "tank_lit.png",
     "at": [
-      18,
-      54
+      308,
+      62
+    ]
+  },
+  "lit_rear": {
+    "file": "tank_lit_rear.png",
+    "at": [
+      98,
+      90
     ]
   },
   "turret": {

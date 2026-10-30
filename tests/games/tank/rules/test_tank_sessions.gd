@@ -74,7 +74,8 @@ func test_the_score_falls_with_compliance_100_85_70() -> void:
 
 
 ## The solo loop: the solo rider drives, loads, fires and works the bow guns, every seat change at
-## least 60 s after the last.
+## least the Autopilot's solo minimum stay (TankConst.AUTO_STAY_SOLO_S; 0.3.1 has no seat lock)
+## after the last.
 func test_a_solo_rider_fights_through_the_solo_loop() -> void:
 	var rig: TankRulesRig = _done[1]
 	assert_true(rig.in_cooldown(), "the solo rider reaches the results")
@@ -87,7 +88,7 @@ func test_a_solo_rider_fights_through_the_solo_loop() -> void:
 	var times := _seat_times(rig)
 	assert_gt(times.size(), 4, "the loop moved the rider")
 	for i in range(1, times.size()):
-		assert_gte(times[i] - times[i - 1], TankConst.SEAT_LOCK_S - 0.06, "every stay >= 60 s")
+		assert_gte(times[i] - times[i - 1], TankConst.AUTO_STAY_SOLO_S - 0.06, "every stay >= 30 s")
 
 
 ## The game times of the rig's seat events (from its per-step event counts).
