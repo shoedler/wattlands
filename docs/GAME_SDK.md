@@ -439,6 +439,22 @@ The template does the same with its lap toast (host: `peer = ctx.local_peer`; cl
 
 The platform never edits intents: tag your own, for example Siege's buy `{"k": "buy", "item": id, "pad": n, "auto": 1}` when `via == "auto"`.
 
+### 10.4 HudRiderNumbers
+
+`HudRiderNumbers` (`addons/wattlands/ui/hud/hud_rider_numbers.gd`, a RefCounted) holds the rules a game's own rider numbers want, so a game with its own HUD does not write them again. Call `feed(t: Telemetry)` from your Control's `set_telemetry`, then read:
+
+| Call | Gives |
+| --- | --- |
+| `mean_power_w()` | The displayed watts: a 3 s mean over `Telemetry.t`, not the latest 1 Hz sample |
+| `is_stale()` | True when the power is not known (0 W with a cadence older than 3 s, a dropped peer, `age_s` > 3 s): show `--`, not 0. 0 W with a fresh cadence is a rider who stopped. The mean restarts when data returns |
+| `set_band(lo_w, hi_w)`, `band_state()`, `in_band()` | `UNDER`, `IN_BAND` or `OVER` with hysteresis: in takes the mean inside the band, out takes it past the band by a quarter of its width (at least 3 W), so a 5 % band does not flicker |
+| `heart_state()`, `heart_bpm()` | `HR_LIVE`, `HR_DROPOUT` (a sensor seen this session or known to the TrainerService: show `--`) or `HR_NONE` (no cell). 0 bpm alone never claims "no sensor" |
+| `rescue_armed()`, `low_cadence()` | BRIEF 4.6.3's arming as telemetry shows it (ERG, target at or above 60 % FTP in whole watts; set `ftp_w`), and a warning that holds while armed with the cadence under 70 for 1.5 s, clearing at 72, never during rescue or coasting |
+| `cadence_stale()` | The cadence is older than 3 s |
+| `opted_in_weight_kg(override_kg)`, `wprime_j()` (static) | The weight for W/kg when the rider opted in, else 0 (pass `HudLayer.wkg_weight_kg`), and the profile's W′ |
+
+Kit widgets keep their own rules; nothing here changes a default. Castellum Rotae's cockpit is the worked example (`src/games/siege/hud/siege_cockpit_model.gd`).
+
 ## 11. Input, intents and Autopilot
 
 **Actions** (BRIEF 3.5): `confirm`, `back`, `up`, `down`, `left`, `right`, `ability_1`, `ability_2`, `item`, `swap`, `shift_up`, `shift_down`, `pause`, `panic`, `help` (`Wl.ACTIONS`). Keyboard: arrows or WASD, Enter or Space, Esc, 1 and 2, F, R, Q and E, P, Backspace held 1 s, F1. Xbox: stick or D-pad, A, B, X and Y, RB, LB, LT and RT, Start, View + Menu, the left stick click. `help` toggles the help overlay (section 10.1). `pause`, `panic` and `help` are consumed by the platform and never reach a game; `shift_up` and `shift_down` drive the virtual gears (and still reach `local_intents`). In the app the session screen owns pausing: it pauses on `pause` and runs its pause menu, so the GameHost always ignores the InputRouter's `pause` (and its `confirm` while paused). With `platform_pause` on (the default) `GameHost.inject_action(&"pause")` still toggles pause in tools and tests; the app turns it off (section 14.1).
