@@ -61,6 +61,12 @@ const G = {
   '<': [[[[0.84, 0.16], [0.14, 0.52], [0.84, 0.88]]], [], 0.72],
   '>': [[[[0.16, 0.16], [0.86, 0.52], [0.16, 0.88]]], [], 0.72],
   '·': [[[[0.5, 0.46], [0.5, 0.56]]], [], 0.4],
+  '(': [[arc(0.86, 0.5, 0.56, 0.58, 122, 238, 10)], [], 0.5],
+  ')': [[arc(0.14, 0.5, 0.56, 0.58, -58, 58, 10)], [], 0.5],
+  '?': [[[...arc(0.5, 0.27, 0.36, 0.27, 190, 400, 12), [0.5, 0.68]], [[0.5, 0.92], [0.5, 1]]], [], 0.84],
+  '=': [[[[0.1, 0.34], [0.9, 0.34]], [[0.1, 0.68], [0.9, 0.68]]], [], 0.8],
+  _: [[[[0.02, 1], [0.98, 1]]], [], 0.8],
+  '#': [[[[0.34, 0.04], [0.26, 0.96]], [[0.74, 0.04], [0.66, 0.96]], [[0.08, 0.34], [0.94, 0.34]], [[0.06, 0.66], [0.92, 0.66]]], [], 1],
 };
 
 // The label face is drawn by hand: at cap 9 strokes clog. Square capitals, no serifs: 2 px stems,
@@ -115,6 +121,12 @@ const LABEL_ROWS = {
   '<': R('.....', '...##', '..##.', '.##..', '##...', '.##..', '..##.', '...##', '.....'),
   '>': R('.....', '##...', '.##..', '..##.', '...##', '..##.', '.##..', '##...', '.....'),
   '·': R('...', '...', '...', '#..', '##.', '#..', '...', '...', '...'),
+  '(': R('..#', '.##', '##.', '##.', '##.', '##.', '##.', '.##', '..#'),
+  ')': R('#..', '##.', '.##', '.##', '.##', '.##', '.##', '##.', '#..'),
+  '?': R('.####.', '##..##', '....##', '...##.', '..##..', '..##..', '......', '..##..', '..##..'),
+  '=': R('.....', '.....', '.....', '#####', '.....', '#####', '.....', '.....', '.....'),
+  _: R('.....', '.....', '.....', '.....', '.....', '.....', '.....', '.....', '#####'),
+  '#': R('..#.#.', '..#.#.', '######', '.#.#..', '.#.#..', '.#.#..', '######', '#.#...', '#.#...'),
 };
 
 const rowsBitmap = (rows, track) => {
@@ -137,7 +149,7 @@ const dist = (px, py, a, b) => {
 const cache = new Map();
 
 // A glyph's bitmap at cap height `cap`, stems `thick` and hairlines `thin` px: {w, h, on(x, y)}.
-function bitmap(ch, face) {
+export function bitmap(ch, face) {
   const key = `${ch}/${face.cap}/${face.aspect}/${face.thick}/${face.thin}`;
   if (cache.has(key)) return cache.get(key);
   if (face.rows) {
@@ -197,6 +209,9 @@ function bitmap(ch, face) {
 
 // The faces: labels (cap 9, hand drawn), the shop and the instruction line (cap 12, no serifs),
 // secondary numbers (cap 14) and the key numbers (cap 24, 48 px at 1080p; KEY28 56 px, KEY36 72 px).
+// Every character a stroke face can draw (the label face has its own rows).
+export const CHARS = Object.keys(G);
+
 export const FACES = {
   LABEL: { cap: 9, rows: LABEL_ROWS, track: 1 },
   BODY: { cap: 12, aspect: 0.74, thick: 2.2, thin: 1.05, track: 1, serif: 0 },
