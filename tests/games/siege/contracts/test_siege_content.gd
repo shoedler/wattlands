@@ -249,6 +249,7 @@ func test_tuned_numbers_stay_within_30_percent_of_the_brief() -> void:
 	_within_30_percent(c.st_num("stations.onager.wind_s"), 7.0, "onager wind")
 	_within_30_percent(c.st_num("stations.ballista.wind_s"), 5.0, "ballista wind")
 	_within_30_percent(c.st_num("stations.arrows.rack_s"), 1.5, "rack reload")
+	_within_30_percent(c.num("rush.budget_frac"), 0.08, "rush share")
 
 
 func test_the_overdrive_block_is_fixed_at_30_s() -> void:

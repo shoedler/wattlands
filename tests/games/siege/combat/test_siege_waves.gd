@@ -475,6 +475,7 @@ func test_the_warm_up_budget_is_40_percent_of_b() -> void:
 	for r in rig.state.riders:
 		b += SiegeRules.planned_p_eff_w(rig.state, r, mean_pct) / 250.0
 	b *= rig.content.num("c_budget") * (300.0 - 60.0) / 60.0
+	b *= SiegeRules.budget_factor(rig.content) * SiegeRules.slot_factor(rig.content, 2)
 	assert_almost_eq(rig.state.wave.budget, 0.4 * b, 1e-3)
 
 
@@ -489,7 +490,7 @@ func test_the_warm_up_spawns_only_spearmen_for_180_s() -> void:
 		)
 
 
-func test_endurance_rushes_start_at_8_minutes_with_8_percent_of_b() -> void:
+func test_endurance_rushes_start_at_8_minutes_with_their_share_of_b() -> void:
 	var rig := SiegeRig.new("endurance", 2)
 	rig.manual()
 	rig.enter(2)
@@ -501,7 +502,10 @@ func test_endurance_rushes_start_at_8_minutes_with_8_percent_of_b() -> void:
 	assert_eq(int(rush[0]["on"]), 1)
 	assert_eq(int(rush[0]["i"]), 0)
 	assert_true(rig.state.rush_on())
-	assert_almost_eq(rig.state.wave.rush_budget_left + rig.state.wave.rush_acc, 0.08 * b, 0.08 * b)
+	var share := rig.content.num("rush.budget_frac")
+	assert_almost_eq(
+		rig.state.wave.rush_budget_left + rig.state.wave.rush_acc, share * b, share * b
+	)
 	ev = rig.run(30.0)
 	var ends := rig.of_type(SiegeIds.EV_RUSH, ev)
 	assert_eq(int(ends.back()["on"]), 0, "the rush ends after 30 s")
