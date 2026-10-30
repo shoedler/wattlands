@@ -280,3 +280,22 @@ Short ADRs for the siege game: date, decision, alternatives, reason. Game sessio
 ## 2026-10-29 v2 tests replace v0.1.0's
 - Decision: 263 v0.1.0 test functions in files that tested the three-road map, towers, hit-scan combat and the 3D view were removed with them; the kept files were rewritten. The rules builder's v2 suite has 585 GUT test functions (v0.1.0: 530 in all, view and HUD included) plus 55 Node tests; the view builder adds its own.
 - Reason: brief 4's gate on the floor (the floor minus exactly the deliberately removed tests, with an ADR).
+
+## 2026-10-30 v2 view: baked art with depth-tested sprites
+- Decision: `src/games/siege/art/bake.mjs` renders the approved mock's scene into `assets/siege/bake/`: the static world (colour and 16-bit depth, no tilt-shift, vignette or haze) and every moving or rider-hue part as frames with per-pixel depth. The view draws them with one canvas item per atlas (`SiegeDepthBatch`); a canvas shader discards sprite pixels behind the baked world's depth. The anchor's depth rides in the draw's modulate colour (16 bits in R and G), the ramp row and sun shade in B.
+- Alternatives: one Sprite2D per part with y-sorting; a SubViewport per machine rendered in 3D; per-sprite shader uniforms (one material per sprite).
+- Reason: the mock's look comes from per-pixel depth (walls hide the army, the onager's arm passes behind its frame); one material per atlas keeps a whole fort, 150 enemies and 100+ projectiles at 7 draw calls in the Compatibility renderer.
+
+## 2026-10-30 v2 view: one frame for four riders (key ramp)
+- Decision: rider-hue pixels bake as a magenta key ramp (R = B = 255, G = 4 + 8 x index; index = tone level x 2 + outlined); the shader maps them to the slot's ramp when a rider drives the part, else to the part's idle material (timber, rope, bronze, dark stone). The ramps are graded in the bake, so a recoloured pixel matches the mock's.
+- Alternatives: PaletteSwap's 8-key uniforms; baking every part four times.
+- Reason: 16 tone levels with and without the outline; four times the atlas otherwise.
+
+## 2026-10-30 v2 view: shot replay lands like the host
+- Decision: the view replays a `shot` with `SiegeBallistics.shot_velocities` and the station's or pad's numbers from `stations.json`, steps every projectile with `SiegeBallistics.step`, and lands it on the path's height under where the unspread launch comes down (the host's floor is the aim point's ground, which the event does not carry; the replay finds it within 2 cm). A Scorpion bolt stops in the first drawn body on its path.
+- Alternatives: a `floor_z` field in the shot event (asked of the rules side); landing at z 0.
+- Reason: arcs and impacts on every peer match the host's damage to a few centimetres without a protocol change.
+
+## 2026-10-30 v2 HUD layout
+- Decision: kit timeline, Siege's rush strip and wave info top left; the gate readout, a tar-curtain card (48 px number) and the gold readout top right; power, cadence and W' bottom left; Siege's own teammate strip bottom centre (the kit's card strip left out); the route card (five stations, caps, chips, the coupling bar, four buttons) and the Overdrive button bottom right, both hidden in breaks, when the shop (5 rows at 32 px, Autopilot's pick first, "Save gold" second) takes their place east of the fort.
+- Reason: brief 3's table; the fort, the junction and the road's last loop stay clear.

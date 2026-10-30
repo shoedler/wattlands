@@ -7,7 +7,7 @@ extends SiegeHudPanel
 ## the shop is open: the shop's list owns the directions then.
 
 const CONNECT_S := 2.0
-const BUTTON_SIZE := Vector2(92, 52)
+const BUTTON_SIZE := Vector2(96, 48)
 const ROW_PX := 28
 const CHIP := Vector2(24, 24)
 ## The control each button stands for (SiegeGame.local_intents maps it to the route target).
@@ -82,13 +82,12 @@ func _init() -> void:
 		b.name = "Btn_%s" % spec[0]
 		b.focus_mode = Control.FOCUS_NONE
 		b.custom_minimum_size = BUTTON_SIZE
-		b.add_theme_font_size_override("font_size", WlTheme.SMALL_PX)
-		b.clip_text = true
+		b.add_theme_font_size_override("font_size", 20)
 		b.pressed.connect(_on_route_pressed.bind(str(spec[0])))
 		brow.add_child(b)
 		buttons[spec[0]] = b
 		b.set_meta("text_key", spec[1])
-	custom_minimum_size = Vector2(400, 0)
+	custom_minimum_size = Vector2(430, 0)
 	visible = false
 
 

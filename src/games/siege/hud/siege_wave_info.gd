@@ -34,8 +34,10 @@ func refresh() -> void:
 		visible = false
 		return
 	var tx := strings()
-	var title := SiegeHudModel.wave_title(s, tx)
+	# the timeline already names a break; the card speaks up there only for a warning
+	var title := SiegeHudModel.wave_title(s, tx) if s.in_wave() or s.in_cooldown() else ""
 	title_label.text = title
+	title_label.visible = title != ""
 	var lines := SiegeHudModel.enemy_lines(s, tx)
 	for i in enemy_labels.size():
 		enemy_labels[i].text = lines[i] if i < lines.size() else ""
@@ -44,4 +46,4 @@ func refresh() -> void:
 	warn_label.visible = not w.is_empty()
 	warn_label.text = tx.t(w["key"], w["args"]) if not w.is_empty() else ""
 	warn_label.modulate = Color(1, 0.55, 0.45) if int(w.get("level", 0)) >= 2 else Color.WHITE
-	visible = title != ""
+	visible = title != "" or not w.is_empty()

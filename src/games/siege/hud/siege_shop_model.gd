@@ -10,7 +10,7 @@ extends RefCounted
 ## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) is
 ## never sent as an intent.
 
-const MAX_ENTRIES := 7
+const MAX_ENTRIES := 5
 
 
 ## The first empty pad (0 when every pad is built).
@@ -84,13 +84,14 @@ static func _entry(
 	var save := item == SiegeIds.ITEM_SAVE
 	var cost := 0 if save else cost_of(state, item, at)
 	var affordable := save or (cost >= 0 and float(cost) <= floorf(rider.gold))
-	var detail := "" if save else strings.t("SIEGE_SHOP_COST", [cost])
-	if recommended:
-		detail = "%s   %s" % [strings.t("SIEGE_SHOP_RECOMMENDED"), detail]
+	# one line per entry (the cost after the name), so six fit the shop's rect at 32 px
+	var text := text_of(state, strings, item, at)
+	if not save:
+		text = "%s   %s" % [text, strings.t("SIEGE_SHOP_COST", [cost])]
 	return {
 		"id": {"item": item, "at": at},
-		"text": text_of(state, strings, item, at),
-		"detail": detail,
+		"text": text,
+		"detail": strings.t("SIEGE_SHOP_RECOMMENDED") if recommended else "",
 		"cost": cost,
 		"disabled": not affordable,
 		"recommended": recommended,
