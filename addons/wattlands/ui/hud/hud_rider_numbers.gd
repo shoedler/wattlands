@@ -29,7 +29,11 @@ const BAND_MARGIN_MIN_W := 3.0
 const HR_NONE := 0
 const HR_LIVE := 1
 const HR_DROPOUT := 2
-const LOW_CADENCE_RPM := SafetyGovernor.RESCUE_RECOVER_RPM
+## The cadence rescue fires under (for 3 s) and the one it must see again to end (BRIEF 4.6.3), so a
+## game can name them without reaching into the trainer stack.
+const RESCUE_LOW_RPM := SafetyGovernor.RESCUE_CADENCE_LOW_RPM
+const RESCUE_RECOVER_RPM := SafetyGovernor.RESCUE_RECOVER_RPM
+const LOW_CADENCE_RPM := RESCUE_RECOVER_RPM
 ## The low-cadence warning clears at this cadence (a little above where it starts).
 const LOW_CADENCE_CLEAR_RPM := LOW_CADENCE_RPM + 2.0
 const LOW_CADENCE_DWELL_S := 1.5

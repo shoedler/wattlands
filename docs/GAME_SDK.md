@@ -451,6 +451,7 @@ The platform never edits intents: tag your own, for example Siege's buy `{"k": "
 | `heart_state()`, `heart_bpm()` | `HR_LIVE`, `HR_DROPOUT` (a sensor seen this session or known to the TrainerService: show `--`) or `HR_NONE` (no cell). 0 bpm alone never claims "no sensor" |
 | `rescue_armed()`, `low_cadence()` | BRIEF 4.6.3's arming as telemetry shows it (ERG, target at or above 60 % FTP in whole watts; set `ftp_w`), and a warning that holds while armed with the cadence under 70 for 1.5 s, clearing at 72, never during rescue or coasting |
 | `cadence_stale()` | The cadence is older than 3 s |
+| `RESCUE_LOW_RPM`, `RESCUE_RECOVER_RPM` | The cadences rescue fires under and ends at, for a game's own wording (a game never names the trainer stack) |
 | `opted_in_weight_kg(override_kg)`, `wprime_j()` (static) | The weight for W/kg when the rider opted in, else 0 (pass `HudLayer.wkg_weight_kg`), and the profile's W′ |
 
 Kit widgets keep their own rules; nothing here changes a default. Castellum Rotae's cockpit is the worked example (`src/games/siege/hud/siege_cockpit_model.gd`).
