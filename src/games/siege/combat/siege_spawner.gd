@@ -1,38 +1,75 @@
 class_name SiegeSpawner
 extends RefCounted
-## The wave director (brief 2.4 "Waves"): groups, active roads and their rotation, the ram push,
-## endurance rushes, the warm-up wave's rules and the 150-enemy cap with its queue. Pure and
-## deterministic: every draw goes through state.rng in a fixed order.
+## The wave director on the one road (brief 2.4 "Waves"): groups from the staging grounds in
+## ranks, the siege engines, endurance rushes, the warm-up wave's rules and the 150-enemy cap
+## with its queue. Pure and deterministic: every draw goes through state.rng in a fixed order.
 ##
 ## Spawns never create enemies directly: they go to state.queue and drain() moves them into
 ## state.enemies up to the cap, so the queue is the only path (FIFO) and the snapshot's q counts
-## what waits.
+## what waits. An engine's spawn raises its `push` event.
 ##
-## Group threat: the wave's budget B is spread over the groups still to come (6..12 s apart,
-## seeded, until 60 s before the wave ends); a group's types are drawn so the expected threat
-## split equals the mix row of the shift's current third (70/10/20, 50/25/25, 40/30/30), and
-## unspent threat stays in the budget.
+## Groups: every 6..12 s (seeded) until 60 s before the wave ends, a group adds its share of the
+## budget B still to come (the budget left over the groups left, x 0.8..1.2) to an account; while
+## the account covers the next formation's threat, that formation enters. Formations are drawn so
+## the expected threat split equals the mix row of the shift's current third: spear blocks
+## (4 wide x 3 deep, 1.2 m apart), shield groups (3 x 2), chariot pairs (6 m apart). A formation
+## enters at the furthest staging ground (camp, palm grove, wadi) from which it still reaches the
+## gate 30 s before the wave ends at its speed; if none can, it doesn't spawn and its threat is
+## dropped.
+##
+## Siege engines (scheduled at the wave start, ADR "engine entry"): each enters where it reaches
+## the moat edge push_lead_s (60) before the wave ends at its own speed; one ram for 1-2 slots, two
+## 25 m apart (centred on that point) for 3-4; the siege tower alone in the last wave of a shift
+## whose waves are >= 300 s; an engine whose point would lie before the camp enters at the camp
+## later instead. Escort spearmen worth 10 threat per slot enter behind them. The warm-up wave: one
+## ram at half HP, no escort.
 
 
 ## Sets up state.wave for a wave that just started (the budget is already in state.wave).
-static func begin_wave(state: SiegeState) -> void:
+static func begin_wave(state: SiegeState, ph: SiegePhaseInfo) -> void:
 	var w := state.wave
-	var n := clampi(state.riders.size(), 1, SiegeIds.ROAD_COUNT)
-	w.active_roads = roads_for(n)
-	w.next_roads = []
-	w.horn_s = 0.0
-	w.spawn_in_s = SiegeTune.wave_num(state.content, "spawn.first_group_s", 3.0)
-	w.rotate_in_s = _rotate_gap(state) if n < SiegeIds.ROAD_COUNT else 0.0
+	w.spawn_in_s = SiegeTune.wave_num(state.content, "first_group_s", 3.0)
+	w.engines = engine_plan(state, ph)
 
 
-## The road ids active at the start of a wave with `n` active roads (Valley first).
-static func roads_for(n: int) -> Array[int]:
-	var out: Array[int] = []
-	var order: Array[int] = [SiegeIds.ROAD_VALLEY, SiegeIds.ROAD_WEST, SiegeIds.ROAD_EAST]
-	for i in clampi(n, 0, SiegeIds.ROAD_COUNT):
-		out.append(order[i])
-	out.sort()
+## The wave's siege engines: [[type, enter_at_s, prog_m, hp_frac, escort_threat], ...] in entry
+## order (see the class notes).
+static func engine_plan(state: SiegeState, ph: SiegePhaseInfo) -> Array:
+	var c := state.content
+	var path := state.path
+	var dur := ph.duration_s
+	var lead := SiegeTune.wave_num(c, "engines.push_lead_s", 60.0)
+	var type := SiegeIds.ENEMY_RAM
+	var count := 1
+	var hp_frac := 1.0
+	var escort := (
+		SiegeTune.wave_num(c, "engines.escort_threat_per_slot", 10.0) * state.riders.size()
+	)
+	if ph.role == SiegeIds.ROLE_WARMUP_WAVE:
+		hp_frac = SiegeTune.wave_num(c, "warmup.ram_hp_frac", 0.5)
+		if not bool((c.waves.get("warmup", {}) as Dictionary).get("ram_escort", false)):
+			escort = 0.0
+	elif ph.last_wave and dur >= SiegeTune.wave_num(c, "engines.tower_min_wave_s", 300.0):
+		type = SiegeIds.ENEMY_TOWER
+	elif state.riders.size() >= int(SiegeTune.wave_num(c, "engines.two_rams_from_slots", 3.0)):
+		count = 2
+	var speed := float(c.enemy_def(type).get("speed_mps", 0.8))
+	var gap := SiegeTune.wave_num(c, "engines.pair_gap_m", 25.0)
+	var out: Array = []
+	for i in count:
+		var ahead := (float(i) - float(count - 1) * 0.5) * gap
+		var prog := path.moat_edge_m - speed * maxf(dur - lead, 0.0) + ahead
+		var at := 0.0
+		if prog < 0.0:
+			at = -prog / speed
+			prog = 0.0
+		out.append([type, at, minf(prog, path.moat_edge_m - 1.0), hp_frac, escort / count])
+	out.sort_custom(_by_entry)
 	return out
+
+
+static func _by_entry(a: Array, b: Array) -> bool:
+	return float(a[1]) < float(b[1])
 
 
 ## One tick of the director (waves only; breaks and the cool-down spawn nothing).
@@ -41,63 +78,64 @@ static func step(
 	inputs: SiegeInputs,
 	tb: SiegeCombatTable,
 	dt: float,
-	events: Array[Dictionary]
+	_events: Array[Dictionary]
 ) -> void:
 	var ph := inputs.phase
 	if not state.in_wave() or ph.is_cooldown():
 		return
-	var stop := float(state.content.waves.get("stop_before_end_s", 60.0))
+	var stop := SiegeTune.wave_num(state.content, "stop_before_end_s", 60.0)
 	_teach(state)
-	_rotate(state, ph, stop, dt, events)
+	_engines(state, ph, tb)
 	_groups(state, ph, tb, stop, dt)
-	_push(state, ph, tb, events)
-	_rush(state, ph, tb, dt, events)
+	_rush(state, ph, tb, dt, _events)
 
 
 ## Moves queued spawns into state.enemies while fewer than the cap are alive.
-static func drain(state: SiegeState, tb: SiegeCombatTable) -> void:
+static func drain(state: SiegeState, tb: SiegeCombatTable, events: Array[Dictionary]) -> void:
 	var q := state.queue
 	if q.is_empty():
 		return
 	var taken := 0
 	while taken < q.size() and state.enemies.size() < tb.cap:
-		_spawn(state, tb, q[taken])
+		_spawn(state, tb, q[taken], events)
 		taken += 1
 	for _i in taken:
 		q.pop_front()
+	if taken > 0:
+		tb.invalidate()
 
 
-## Queues one spawn.
+## Queues one body.
 static func enqueue(
 	state: SiegeState,
 	type: int,
-	road: int,
 	prog_m: float,
+	lat_m: float = 0.0,
 	hp_frac: float = 1.0,
 	escort: bool = false,
 	crew: bool = false,
-	rush: bool = false
+	rush: bool = false,
+	push: bool = false
 ) -> void:
 	var sp := SiegeSpawn.new()
 	sp.type = type
-	sp.road = road
 	sp.prog_m = prog_m
+	sp.lat_m = lat_m
 	sp.hp_frac = hp_frac
 	sp.escort = escort
 	sp.crew = crew
 	sp.rush = rush
+	sp.push = push
 	state.queue.append(sp)
 
 
-## The mix row [raiders, shield wall, horsemen] now (fractions summing to 1): the warm-up wave's
-## own rule, else the phase's mix in the shift's current third.
+## The mix row [spear, shield, chariot] now (fractions summing to 1): the warm-up wave's own
+## rule (spearmen only for 180 s, then chariots too), else the phase's mix in the shift's third.
 static func mix_row(state: SiegeState, ph: SiegePhaseInfo) -> Array[float]:
-	var row: Array[float] = [1.0, 0.0, 0.0]
 	if state.role == SiegeIds.ROLE_WARMUP_WAVE:
-		var only_s := SiegeTune.wave_num(state.content, "warmup.raiders_only_s", 180.0)
-		if ph.elapsed_s >= only_s:
-			row = [0.0, 0.0, 1.0]
-		return row
+		if ph.elapsed_s < SiegeTune.wave_num(state.content, "warmup.spear_only_s", 180.0):
+			return [1.0, 0.0, 0.0]
+		return third_row(state, SiegeIds.MIX_RAIDERS_HORSEMEN, ph.plan_elapsed_s)
 	return third_row(state, ph.mix, ph.plan_elapsed_s)
 
 
@@ -112,53 +150,85 @@ static func third_row(state: SiegeState, mix: String, plan_t: float) -> Array[fl
 	return row
 
 
-## Enemy types for `threat` points of a mix `row`, restricted to `allowed` (empty: all). Sets
-## `spent[0]` to the threat they cost (<= threat).
-static func compose(
-	state: SiegeState,
-	tb: SiegeCombatTable,
-	row: Array[float],
-	threat: float,
-	allowed: Array[int],
-	spent: Array[float]
-) -> Array[int]:
-	var types: Array[int] = []
+## The threat of one formation of `type` (files x ranks x the body's threat).
+static func formation_threat(state: SiegeState, tb: SiegeCombatTable, type: int) -> float:
+	var rk := _ranks(state, type)
+	return float(rk.x * rk.y) * tb.threat[type]
+
+
+## The staging ground's prog a body of `type` enters from at wave second `elapsed` so it still
+## reaches the gate `reach_before_end_s` (30) before the wave ends: the furthest from the gate
+## that works, or -1.
+static func staging_for(
+	state: SiegeState, tb: SiegeCombatTable, type: int, elapsed: float, duration: float
+) -> float:
+	var margin := SiegeTune.wave_num(state.content, "staging.reach_before_end_s", 30.0)
+	var v := maxf(tb.speed[type], 0.01)
+	var best := INF
+	for s in state.path.staging:
+		if elapsed + (tb.length_m - s) / v <= duration - margin + 1e-6 and s < best:
+			best = s
+	return best if best < INF else -1.0
+
+
+## Draws the next formation type for `row` (weights = fraction / formation threat, so the
+## expected threat split equals the row); 0 when the row is empty.
+static func draw_type(state: SiegeState, tb: SiegeCombatTable, row: Array[float]) -> int:
 	var weights: Array[float] = [0.0, 0.0, 0.0]
-	var total_w := 0.0
-	var cheapest := INF
+	var total := 0.0
 	for i in 3:
-		var code := SiegeIds.MIX_ORDER[i]
-		if row[i] <= 0.0 or (not allowed.is_empty() and not allowed.has(code)):
-			continue
-		weights[i] = row[i] / tb.threat[code]
-		total_w += weights[i]
-		cheapest = minf(cheapest, tb.threat[code])
-	var left := threat
-	spent[0] = 0.0
-	if total_w <= 0.0:
-		return types
-	var guard := 0
-	while left >= cheapest - 1e-6 and guard < 100000:
-		guard += 1
-		var pick := state.rng.randf_range(0.0, 1.0) * total_w
-		var idx := 2
-		for i in 3:
-			if weights[i] > 0.0 and pick < weights[i]:
-				idx = i
-				break
-			pick -= weights[i]
-		while weights[idx] <= 0.0:
-			idx = (idx + 1) % 3
-		var code := SiegeIds.MIX_ORDER[idx]
-		if tb.threat[code] > left + 1e-6:
-			# Too dear for what is left: the cheapest allowed type fills the gap.
-			for i in 3:
-				if weights[i] > 0.0 and tb.threat[SiegeIds.MIX_ORDER[i]] <= cheapest + 1e-9:
-					code = SiegeIds.MIX_ORDER[i]
-		types.append(code)
-		left -= tb.threat[code]
-	spent[0] = threat - left
-	return types
+		if row[i] > 0.0:
+			weights[i] = row[i] / formation_threat(state, tb, SiegeIds.MIX_ORDER[i])
+			total += weights[i]
+	if total <= 0.0:
+		return 0
+	var pick := state.rng.randf_range(0.0, total)
+	for i in 3:
+		if weights[i] > 0.0 and pick < weights[i]:
+			return SiegeIds.MIX_ORDER[i]
+		pick -= weights[i]
+	for i in range(2, -1, -1):
+		if weights[i] > 0.0:
+			return SiegeIds.MIX_ORDER[i]
+	return 0
+
+
+## Queues one formation of `type` at its staging ground; `index` places it behind the earlier
+## formations of the same group. False when no staging ground can reach the gate in time.
+static func place_formation(
+	state: SiegeState, tb: SiegeCombatTable, ph: SiegePhaseInfo, type: int, index: int, rush: bool
+) -> bool:
+	var at := staging_for(state, tb, type, ph.elapsed_s, ph.duration_s)
+	if at < 0.0:
+		return false
+	var rk := _ranks(state, type)
+	var spacing := float(state.content.enemy_def(type).get("spacing_m", 1.2))
+	var depth := float(rk.y - 1) * spacing
+	var gap := SiegeTune.wave_num(state.content, "staging.formation_gap_m", 3.0)
+	var front := at + depth + float(index) * (depth + gap)
+	for r in rk.y:
+		for f in rk.x:
+			var lat := (float(f) - float(rk.x - 1) * 0.5) * spacing
+			if rk.x == 1:
+				lat = state.rng.randf_range(-tb.lateral_m, tb.lateral_m)
+			enqueue(
+				state,
+				type,
+				minf(front - float(r) * spacing, tb.length_m - 1.0),
+				lat,
+				1.0,
+				false,
+				false,
+				rush
+			)
+	return true
+
+
+static func _ranks(state: SiegeState, type: int) -> Vector2i:
+	var rk: Variant = state.content.enemy_def(type).get("ranks", [1, 1])
+	if rk is Array and (rk as Array).size() == 2:
+		return Vector2i(maxi(int(rk[0]), 1), maxi(int(rk[1]), 1))
+	return Vector2i(1, 1)
 
 
 static func _teach(state: SiegeState) -> void:
@@ -168,51 +238,23 @@ static func _teach(state: SiegeState) -> void:
 	state.wave.toast_min = floori(state.phase_elapsed_s / every + 1e-9) + 1
 
 
-## Seconds until the horn: the seeded 30..60 s between road changes, less the horn's own 5 s, so
-## the roads switch 30..60 s apart.
-static func _rotate_gap(state: SiegeState) -> float:
-	var p := SiegeTune.wave_pair(state.content, "roads.rotate_s", Vector2(30, 60))
-	var horn := SiegeTune.wave_num(state.content, "roads.horn_s", 5.0)
-	return maxf(state.rng.randf_range(p.x, p.y) - horn, 0.0)
-
-
-static func _rotate(
-	state: SiegeState, ph: SiegePhaseInfo, stop: float, dt: float, events: Array[Dictionary]
-) -> void:
+static func _engines(state: SiegeState, ph: SiegePhaseInfo, tb: SiegeCombatTable) -> void:
 	var w := state.wave
-	if state.riders.size() >= SiegeIds.ROAD_COUNT:
-		return
-	var horn := SiegeTune.wave_num(state.content, "roads.horn_s", 5.0)
-	if w.horn_s > 0.0:
-		w.horn_s = snappedf(w.horn_s - dt, 0.001)
-		if w.horn_s <= 0.0:
-			w.horn_s = 0.0
-			w.active_roads = w.next_roads.duplicate()
-			w.next_roads = []
-			w.rotate_in_s = _rotate_gap(state)
-		return
-	if ph.remaining_s <= stop + horn:
-		return
-	w.rotate_in_s = snappedf(w.rotate_in_s - dt, 0.001)
-	if w.rotate_in_s > 0.0:
-		return
-	var n := w.active_roads.size()
-	var options: Array[Array] = []
-	for a in SiegeIds.ROAD_COUNT:
-		if n == 1:
-			if [a] != w.active_roads:
-				options.append([a])
-		else:
-			for b in range(a + 1, SiegeIds.ROAD_COUNT):
-				if [a, b] != w.active_roads:
-					options.append([a, b])
-	var pick: Array = options[state.rng.randi_range(0, options.size() - 1)]
-	var next: Array[int] = []
-	for r: Variant in pick:
-		next.append(int(r))
-	w.next_roads = next
-	w.horn_s = horn
-	events.append(SiegeEvents.roads(next, roundi(horn * 1000.0)))
+	while not w.engines.is_empty() and float(w.engines[0][1]) <= ph.elapsed_s + 1e-6:
+		var en: Array = w.engines.pop_front()
+		var type := int(en[0])
+		var prog := float(en[2])
+		enqueue(state, type, prog, 0.0, float(en[3]), false, false, false, true)
+		var n := roundi(float(en[4]) / maxf(tb.threat[SiegeIds.ENEMY_SPEAR], 0.01))
+		var files := _ranks(state, SiegeIds.ENEMY_SPEAR).x
+		var spacing := float(state.content.enemy_def(SiegeIds.ENEMY_SPEAR).get("spacing_m", 1.2))
+		var back := tb.body_r[type] + 2.0
+		for i in n:
+			var f := i % files
+			var r := i / files
+			var lat := (float(f) - float(files - 1) * 0.5) * spacing
+			var at := maxf(prog - back - float(r) * spacing, 0.0)
+			enqueue(state, SiegeIds.ENEMY_SPEAR, at, lat, 1.0, true)
 
 
 static func _groups(
@@ -224,68 +266,31 @@ static func _groups(
 		return
 	var gap := SiegeTune.wave_pair(state.content, "group_every_s", Vector2(6, 12))
 	w.spawn_in_s = state.rng.randf_range(gap.x, gap.y)
-	var min_threat := INF
-	for code in range(1, SiegeIds.ENEMY_NAMES.size() - 1):
-		min_threat = minf(min_threat, tb.threat[code])
-	if w.budget_left < min_threat - 1e-6:
+	if w.budget_left <= 1e-6:
 		return
 	var span := ph.remaining_s - stop
-	var left_groups := floorf(span / ((gap.x + gap.y) * 0.5)) + 1.0
-	var threat := w.budget_left
+	var share := w.budget_left
 	if w.spawn_in_s < span:
-		var v := SiegeTune.wave_pair(state.content, "spawn.group_var", Vector2(0.8, 1.2))
-		threat = minf(w.budget_left / left_groups * state.rng.randf_range(v.x, v.y), w.budget_left)
-	var spent: Array[float] = [0.0]
-	var types := compose(state, tb, mix_row(state, ph), threat, [], spent)
-	w.budget_left = maxf(w.budget_left - spent[0], 0.0)
-	_place_group(state, types, false)
-
-
-## Queues `types` on random active roads near the spawn.
-static func _place_group(state: SiegeState, types: Array[int], rush: bool) -> void:
-	var w := state.wave
-	if w.active_roads.is_empty():
-		return
-	var spread := SiegeTune.wave_num(state.content, "spawn.spread_m", 4.0)
-	for t in types:
-		var road := w.active_roads[state.rng.randi_range(0, w.active_roads.size() - 1)]
-		enqueue(state, t, road, state.rng.randf_range(0.0, spread), 1.0, false, false, rush)
-
-
-static func _push(
-	state: SiegeState, ph: SiegePhaseInfo, tb: SiegeCombatTable, events: Array[Dictionary]
-) -> void:
-	var w := state.wave
-	var c := state.content
-	if w.push_done or ph.remaining_s > SiegeTune.wave_num(c, "ram_push.at_left_s", 60.0):
-		return
-	w.push_done = true
-	var roads: Array[int] = w.active_roads.duplicate()
-	if roads.is_empty():
-		return
-	var escorted := true
-	var hp_frac := 1.0
-	if state.role == SiegeIds.ROLE_WARMUP_WAVE:
-		roads = [roads[0]]
-		hp_frac = SiegeTune.wave_num(c, "warmup.ram_hp_frac", 0.5)
-		escorted = bool((c.waves.get("warmup", {}) as Dictionary).get("ram_escort", false))
-	var enter := SiegeTune.wave_num(c, "ram_push.enter_from_gate_m", 40.0)
-	var back := SiegeTune.wave_pair(c, "spawn.escort_back_m", Vector2(2, 12))
-	var per_slot := SiegeTune.wave_num(c, "ram_push.escort_threat_per_slot", 10.0)
-	var escort_n := 0
-	if escorted:
-		escort_n = roundi(per_slot * state.riders.size() / tb.threat[SiegeIds.ENEMY_RAIDERS])
-	for i in roads.size():
-		var road := roads[i]
-		var at := maxf(tb.road_len[road] - enter, 0.0)
-		enqueue(state, SiegeIds.ENEMY_RAM, road, at, hp_frac, true)
-		var n := escort_n / roads.size() + (1 if i < escort_n % roads.size() else 0)
-		for _k in n:
-			var behind := state.rng.randf_range(back.x, back.y)
-			enqueue(state, SiegeIds.ENEMY_RAIDERS, road, maxf(at - behind, 0.0), 1.0, true)
-	w.rams += roads.size()
-	state.rams_total += roads.size()
-	events.append(SiegeEvents.push(roads))
+		var left_groups := floorf(span / ((gap.x + gap.y) * 0.5)) + 1.0
+		var v := SiegeTune.wave_pair(state.content, "group_var", Vector2(0.8, 1.2))
+		share = minf(w.budget_left / left_groups * state.rng.randf_range(v.x, v.y), w.budget_left)
+	w.budget_left = maxf(w.budget_left - share, 0.0)
+	w.group_acc += share
+	var row := mix_row(state, ph)
+	var index := 0
+	while true:
+		if w.next_type == 0 or row[SiegeIds.MIX_ORDER.find(w.next_type)] <= 0.0:
+			w.next_type = draw_type(state, tb, row)
+		if w.next_type == 0:
+			return
+		var ft := formation_threat(state, tb, w.next_type)
+		if w.group_acc < ft - 1e-6:
+			return
+		w.group_acc -= ft
+		if not place_formation(state, tb, ph, w.next_type, index, false):
+			w.dropped += ft
+		index += 1
+		w.next_type = 0
 
 
 static func _rush(
@@ -302,58 +307,88 @@ static func _rush(
 		w.rush_s = snappedf(w.rush_s - dt, 0.001)
 		if w.rush_s <= 0.0:
 			w.rush_s = 0.0
-			_rush_group(state, tb, dur, step_s, dur)
+			_rush_group(state, tb, ph, dur, step_s, dur)
 			events.append(SiegeEvents.rush(false, w.rush_next - 1))
 		else:
 			var idx := floori((dur - w.rush_s) / step_s + 1e-6)
 			var prev := floori((dur - w.rush_s - dt) / step_s + 1e-6)
 			if idx != prev:
-				_rush_group(state, tb, dur - w.rush_s, step_s, dur)
+				_rush_group(state, tb, ph, dur - w.rush_s, step_s, dur)
 		return
 	if w.rush_next >= ph.rushes_at_s.size() or ph.elapsed_s < ph.rushes_at_s[w.rush_next]:
 		return
 	var amount := minf(state.content.num("rush.budget_frac", 0.08) * w.budget, w.budget_left)
 	w.budget_left -= amount
 	w.rush_budget_left = amount
+	w.rush_acc = 0.0
 	w.rush_s = dur
 	w.rush_next += 1
 	events.append(SiegeEvents.rush(true, w.rush_next - 1))
-	_rush_group(state, tb, 0.0, step_s, dur)
+	_rush_group(state, tb, ph, 0.0, step_s, dur)
 
 
-## One rush group: the rush budget over the groups still to come (the last takes the rest).
+## One rush group: its share of the rush budget (the last takes the rest) in spearmen and
+## chariot formations (waves.json rush.types), marked as rush bodies.
 static func _rush_group(
-	state: SiegeState, tb: SiegeCombatTable, elapsed: float, step_s: float, dur: float
+	state: SiegeState,
+	tb: SiegeCombatTable,
+	ph: SiegePhaseInfo,
+	elapsed: float,
+	step_s: float,
+	dur: float
 ) -> void:
 	var w := state.wave
-	if w.rush_budget_left <= 0.0:
-		return
 	var total := maxi(roundi(dur / step_s), 1)
 	var idx := floori(elapsed / step_s + 1e-6)
 	var last := idx >= total - 1 or elapsed >= dur - 1e-6
-	var threat := w.rush_budget_left if last else w.rush_budget_left / float(total - idx)
+	var share := w.rush_budget_left if last else w.rush_budget_left / float(total - idx)
+	w.rush_budget_left = maxf(w.rush_budget_left - share, 0.0)
+	w.rush_acc += share
+	var row := third_row(state, SiegeIds.MIX_RAIDERS_HORSEMEN, ph.plan_elapsed_s)
 	var allowed: Array[int] = []
 	for t: Variant in (state.content.waves.get("rush", {}) as Dictionary).get("types", []):
 		allowed.append(SiegeIds.enemy_code(str(t)))
-	var row := third_row(state, SiegeIds.MIX_RAIDERS_HORSEMEN, state.t)
-	var spent: Array[float] = [0.0]
-	var types := compose(state, tb, row, threat, allowed, spent)
-	w.rush_budget_left = maxf(w.rush_budget_left - spent[0], 0.0)
-	_place_group(state, types, true)
+	for i in 3:
+		if not allowed.has(SiegeIds.MIX_ORDER[i]):
+			row[i] = 0.0
+	var index := 0
+	while true:
+		if w.rush_type == 0:
+			w.rush_type = draw_type(state, tb, row)
+		if w.rush_type == 0:
+			return
+		var ft := formation_threat(state, tb, w.rush_type)
+		if w.rush_acc < ft - 1e-6:
+			return
+		w.rush_acc -= ft
+		if not place_formation(state, tb, ph, w.rush_type, index, true):
+			w.dropped += ft
+		index += 1
+		w.rush_type = 0
 
 
-static func _spawn(state: SiegeState, tb: SiegeCombatTable, sp: SiegeSpawn) -> void:
+static func _spawn(
+	state: SiegeState, tb: SiegeCombatTable, sp: SiegeSpawn, events: Array[Dictionary]
+) -> void:
 	var e := SiegeEnemyState.new()
 	e.id = state.next_enemy_id
 	state.next_enemy_id += 1
 	e.type = sp.type
-	e.road = sp.road
 	e.prog_m = sp.prog_m
-	e.lat_m = snappedf(state.rng.randf_range(-tb.lateral_m, tb.lateral_m), 0.1)
+	e.lat_m = sp.lat_m
 	e.max_hp = tb.hp[sp.type]
 	e.hp = e.max_hp * sp.hp_frac
 	e.escort = sp.escort
 	e.crew = sp.crew
 	e.rush = sp.rush
-	e.place(state.content.map)
+	e.speed_mps = tb.speed[sp.type]
+	if e.type == SiegeIds.ENEMY_CHARIOT:
+		var def := state.content.enemy_def(SiegeIds.ENEMY_CHARIOT)
+		SiegeCombat.redraw_chariot(state, e, def, tb.speed[e.type])
+		e.speed_mps = e.want_mps
+	e.place(state.path)
 	state.enemies.append(e)
+	if sp.push:
+		state.wave.engines_in += 1
+		state.engines_total += 1
+		events.append(SiegeEvents.push(e.id, e.type, e.prog_m))

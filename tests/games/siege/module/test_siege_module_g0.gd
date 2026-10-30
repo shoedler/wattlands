@@ -1,5 +1,5 @@
 extends GutTest
-## G0 smoke tests of SiegeGame's wiring (B2 owns this folder from G1 on): plans, phase_changed,
+## Smoke tests of SiegeGame's wiring: plans, phase_changed,
 ## finished, results and XP, apply_progress once per session, int_fields, controls, a client's
 ## snapshot, the view and HUD from a fixture.
 
@@ -74,7 +74,7 @@ func test_int_fields_and_controls() -> void:
 		g.local_intents(a1, none), [SiegeIntents.overdrive("action"), SiegeIntents.route("next")]
 	)
 	var dirs: Array[StringName] = [&"up"]
-	assert_eq(g.local_intents(dirs, none), [SiegeIntents.route("gen")])
+	assert_eq(g.local_intents(dirs, none), [SiegeIntents.route("mine")])
 	g.state.role = SiegeIds.ROLE_BREAK
 	assert_eq(g.local_intents(a1, surge), [], "in a break the shop panel takes the input")
 	assert_eq(g.autopilot_intents(1), [])
@@ -91,26 +91,48 @@ func test_a_client_applies_the_fixture_snapshot() -> void:
 	assert_eq(g.state.rider_at(1).raw_w, 110.0)
 	assert_eq(g.state.enemies.size(), 43)
 	var reads := (ctx.hud as F.Hud).of("readout")
-	assert_eq(reads[0], ["readout", SiegeHud.READOUT_GATE, "72 / 125"])
+	assert_eq(reads[0], ["readout", SiegeHud.READOUT_GATE, "72 / 155"])
 	F.free_game(g)
 
 
 func test_the_view_and_hud_build_headless_from_the_fixture() -> void:
 	var view := SiegeView.new()
 	var st := FIX.mid_wave()
-	view.bind(st, st.content.map)
-	view.auto_process = false
+	view.bind(st, st.path)
 	add_child_autofree(view)
-	view.refresh(0.016)
 	assert_true(view.is_inside_tree())
-	assert_not_null(view.rig)
+	assert_eq(view.state, st)
+	assert_eq(view.path, st.path)
 	var ctx := F.make_ctx(1, 1, "short")
 	var g := F.make_game(ctx)
 	var spec := g.hud_spec()
 	assert_true(spec.has_widget(HudSpec.TIMELINE))
-	# Siege draws the single teammate strip itself (ADR 2026-10-23 One teammate strip).
-	assert_false(spec.has_widget(HudSpec.TEAMMATES))
+	var keys: Array[String] = []
+	for h: Dictionary in spec.help:
+		keys.append(str(h["text"]))
+	assert_eq(
+		keys,
+		[
+			"SIEGE_HELP_WHEEL",
+			"SIEGE_HELP_PATH",
+			"SIEGE_HELP_STATIONS",
+			"SIEGE_HELP_ROAD",
+			"SIEGE_HELP_GATE",
+			"SIEGE_HELP_ROUTE_CARD",
+			"SIEGE_HELP_SHOP",
+		]
+	)
+	for c: Dictionary in spec.controls:
+		var ctl: Variant = c.get("control")
+		if ctl is Node:
+			(ctl as Node).free()
+	for h: Dictionary in spec.help:
+		assert_true(str(h["text"]).begins_with("SIEGE_HELP_"))
+		var at: Vector2 = h["arrow_to"]
+		assert_true(at.x >= 0.0 and at.x <= 960.0 and at.y >= 0.0 and at.y <= 540.0, str(at))
 	var v: Node = g.make_view()
-	assert_is(v, Node3D)
+	assert_is(v, Node2D)
+	assert_eq((v as SiegeView).game, g)
+	assert_eq((v as SiegeView).state, g.state)
 	v.free()
 	F.free_game(g)

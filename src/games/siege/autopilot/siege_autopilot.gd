@@ -1,105 +1,159 @@
 class_name SiegeAutopilot
 extends RefCounted
-## Autopilot's routing and shop decisions (brief 2.5). Owner: B2 "module". Pure, static and
-## deterministic (reads only the state; no RNG needed). Never changes effort targets and never
-## triggers Overdrive: it only returns route targets and normalized buy intents.
+## Autopilot's routing and shop decisions (brief 2.5). Pure, static and deterministic (reads only
+## the state; no RNG). Never changes effort targets and never triggers Overdrive: it only returns
+## stations and normalized buy intents.
 ##
-## Who calls it (ADR "Autopilot runs inside the host rules"): SiegeRules (B1) for every rider
-## whose route_fallback / shop_fallback is true (bots, Autopilot-on humans and humans who haven't
-## routed or bought by hand yet), in slot order: route_choice() once a second, shop_picks() in a
-## break at balance.json autopilot.shop_at_s (at most 2 buys per break). GameModule's
-## autopilot_intents() returns [] (the platform never calls it for Autopilot-off humans, so the
-## rules own every fallback). The HUD's shop panel also calls shop_picks() on clients for its top
-## entry (the recommendation), from the snapshot-rebuilt state.
+## Who calls it (ADR "Autopilot runs inside the host rules"): SiegeRules for every rider whose
+## route_fallback / shop_fallback is true (bots, Autopilot-on humans and humans who haven't routed
+## or bought by hand yet), in slot order: route_choice() once a second, shop_picks() in a break at
+## balance.json autopilot.shop_at_s (at most 2 buys per break). GameModule.autopilot_intents()
+## returns []. The HUD's shop panel may call shop_picks() on clients for its top entry, from the
+## snapshot-rebuilt state.
 ##
-## Contract notes for the callers:
-## - route_choice() writes nothing. The caller applies a returned target (and sets
-##   rider.routed_t = state.t and the reconnect), because the 8 s switch limit reads routed_t.
-## - shop_picks(max_items) returns at most max_items picks and does NOT subtract rider.ap_buys:
-##   pass what is left of the break's two.
-## - Both return nothing outside their window: routing only in a wave (a break keeps the
-##   target), the shop only while it is open.
+## Station scores (scores(), brief 2.5):
+##   weapon     the sum over live enemies that will be inside its range band at some point of
+##              the next look_ahead_s (10) seconds at their current speed (sampled at 0, 5 and
+##              10 s) of HP x autopilot.weights[station][type];
+##   tar works  when a ram or siege tower is within tar_engine_m (60) of the gate, or any enemy
+##              within tar_any_m (40), and the cauldrons hold >= tar_min_frac (2/3): tar_scale x
+##              the gate threat of those enemies (gate_hp per body; an engine's threat); 0 while
+##              boarders are on the wall;
+##   mine       autopilot.mine_score, a small constant that wins when nothing is in reach.
+## route_choice switches at most once per switch_min_s (8 s) and only for a score at least
+## switch_margin (25%) above the current station's (and never between two equal scores, so idle
+## riders the mine's cap keeps off it don't wander between empty stations).
+
+const SAMPLES := 3
 
 
-## The target `rider` should route to now (TARGET_GEN or a pad), or -1 to keep the current one.
-## Rules: the tower with the most enemy HP in range (state.enemy_hp_in_range), within the
-## 2-rider limit (state.routed_count); none in range: the generator; ties go to the lower pad;
-## switch at most once per 8 s (rider.routed_t) and only for >= 25% more enemy HP.
-static func route_choice(state: SiegeState, rider: SiegeRiderState) -> int:
+## The five stations' scores now (index = station id).
+static func scores(state: SiegeState) -> PackedFloat32Array:
+	var out := PackedFloat32Array([0.0, 0.0, 0.0, 0.0, 0.0])
+	if state == null or state.content == null or state.path == null:
+		return out
+	var c := state.content
+	out[SiegeIds.STATION_MINE] = c.num("autopilot.mine_score", 40.0)
+	var weights: Dictionary = (c.balance.get("autopilot", {}) as Dictionary).get("weights", {})
+	var ahead := c.num("autopilot.look_ahead_s", 10.0)
+	for id in SiegeIds.WEAPONS:
+		var w: Dictionary = weights.get(SiegeIds.STATION_NAMES[id], {})
+		var sum := 0.0
+		for e in state.enemies:
+			if not e.alive():
+				continue
+			var wt := float(w.get(SiegeIds.ENEMY_NAMES[e.type], 1.0))
+			if wt <= 0.0:
+				continue
+			for i in SAMPLES:
+				var t := ahead * float(i) / float(SAMPLES - 1)
+				var p := e.pos if i == 0 else SiegeAim.aim_point(state.path, e, t, 0.0)
+				if state.in_band(id, p):
+					sum += e.hp * wt
+					break
+		out[id] = sum
+	out[SiegeIds.STATION_TAR] = tar_score(state)
+	return out
+
+
+## The tar works' score (see the class notes).
+static func tar_score(state: SiegeState) -> float:
+	var c := state.content
+	var tar := state.tar
+	if tar.boarded or tar.cauldron_l < c.num("autopilot.tar_min_frac", 0.667) * tar.cauldron_max_l:
+		return 0.0
+	var engine_m := c.num("autopilot.tar_engine_m", 60.0)
+	var any_m := c.num("autopilot.tar_any_m", 40.0)
+	var triggered := false
+	var threat := 0.0
+	for e in state.enemies:
+		if not e.alive():
+			continue
+		var d := state.path.dist_to_gate(e.prog_m)
+		if SiegeIds.is_engine(e.type):
+			if d <= engine_m:
+				triggered = true
+				threat += float(c.enemy_def(e.type).get("threat", 20.0))
+		elif d <= any_m:
+			triggered = true
+			threat += float(c.enemy_def(e.type).get("gate_hp", 2.0))
+	return c.num("autopilot.tar_scale", 20.0) * threat if triggered else 0.0
+
+
+## The station `rider` should route to now, or -1 to keep the current one. `sc`: scores() (pass
+## it to share one computation among the riders of a tick; empty: computed here).
+static func route_choice(
+	state: SiegeState, rider: SiegeRiderState, sc: PackedFloat32Array = PackedFloat32Array()
+) -> int:
 	if state == null or rider == null or state.content == null:
 		return -1
 	if not state.in_wave() or rider.afk or not rider.connected:
 		return -1
-	var best := _best_pad(state, rider)
-	var want := SiegeIds.TARGET_GEN if best.is_empty() else int(best["pad"])
-	if want == rider.target:
+	if sc.size() != SiegeIds.STATION_COUNT:
+		sc = scores(state)
+	var want := best_station(state, rider, sc)
+	if want < 0 or want == rider.target:
 		return -1
 	if state.t - rider.routed_t < state.content.num("autopilot.switch_min_s", 8.0):
 		return -1
-	if want != SiegeIds.TARGET_GEN:
-		var cur_hp := (
-			state.enemy_hp_in_range(rider.target) if SiegeIds.is_pad(rider.target) else 0.0
-		)
-		var margin := state.content.num("autopilot.switch_margin", 0.25)
-		if float(best["hp"]) < cur_hp * (1.0 + margin) - 1e-9:
-			return -1
+	var margin := state.content.num("autopilot.switch_margin", 0.25)
+	if sc[want] <= sc[rider.target] + 1e-6 or sc[want] < sc[rider.target] * (1.0 + margin) - 1e-6:
+		return -1
 	return want
 
 
-## The "hot" tower for the down control (brief 2.4): the pad with the most enemy HP in range,
-## within the 2-rider limit, ties to the lower pad. -1 when no tower has an enemy in range.
+## The highest-scoring station `rider` may route to (within the caps; ties to the lower id), or
+## -1.
+static func best_station(state: SiegeState, rider: SiegeRiderState, sc: PackedFloat32Array) -> int:
+	var best := -1
+	for id in SiegeIds.STATION_COUNT:
+		if not SiegeRouting.can_route_to(state, rider, id):
+			continue
+		if best < 0 or sc[id] > sc[best] + 1e-6:
+			best = id
+	return best
+
+
+## The "hot" station for the down control (brief 2.4): Autopilot's pick for `rider` now (no
+## switch limit), or -1 when it is the current one or none has room.
 static func hot_target(state: SiegeState, rider: SiegeRiderState) -> int:
 	if state == null or rider == null or state.content == null:
 		return -1
-	return SiegeRouting.hot_pad(state, rider)
+	var best := best_station(state, rider, scores(state))
+	return best if best != rider.target else -1
 
 
 ## Autopilot's shop picks for `rider` in this break, best first, as normalized buy intents
 ## (SiegeIntents.normalize form, "auto": true), at most `max_items`. Order (brief 2.5): repair
-## below 50%; build on the road with the most gate damage (Ballista vs Shield walls or rams,
-## Caltrop vs Horsemen if that road has none, else Scorpion; no damage yet: Ballista, Scorpion,
-## Caltrop in turn on the least-covered road); upgrade the lowest tower on that road; generator
-## level; Iron bands; perks; save (an empty list). A pick must be affordable with what is left
-## after the earlier picks; an unaffordable or impossible step falls through to the next one.
+## below 50%; an upgrade for the station that did the most damage last wave; a Scorpion on the
+## first empty pad; a mine level; Iron bands; perks (Reserve flywheel, Aqueduct drive, Spare
+## cauldron); save (an empty list). A pick must be affordable with what is left after the earlier
+## picks; an unaffordable or impossible step falls through to the next one.
 static func shop_picks(
 	state: SiegeState, rider: SiegeRiderState, max_items: int = 2
 ) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	if state == null or rider == null or state.content == null or max_items <= 0:
 		return out
-	if not state.shop_open() or state.content.map == null:
+	if not state.shop_open():
 		return out
-	var plan := ShopPlan.new(state, rider.denarii)
+	var plan := ShopPlan.new(state, rider.gold)
 	for _i in max_items:
 		var pick := plan.next_pick()
 		if pick.is_empty():
 			break
-		out.append(SiegeIntents.normalize(SiegeIntents.buy(pick["item"], pick["pad"], true)))
+		out.append(SiegeIntents.normalize(SiegeIntents.buy(pick["item"], int(pick["at"]), true)))
 	return out
 
 
-## The road Autopilot defends in the shop: the one with the most gate damage, else the least
-## covered by towers (ties to the lower road index).
-static func target_road(state: SiegeState) -> int:
-	if state == null or state.content == null or state.content.map == null:
-		return 0
-	return ShopPlan.new(state, 0.0).road()
-
-
-## The tower type Autopilot would build on `road` now (see shop_picks): Ballista if Shield walls or
-## rams damaged the gate there, Caltrop if Horsemen did and those did not, else Scorpion; with no
-## gate damage yet the type built least, in the order Ballista, Scorpion, Caltrop.
-static func build_type(state: SiegeState, road: int) -> int:
-	if state == null or state.content == null or state.content.map == null:
-		return SiegeIds.TOWER_BALLISTA
-	return ShopPlan.new(state, 0.0).build_type_for(road)
-
-
-## The best pad `rider` may join: {"pad", "hp"} (most enemy HP in reach, ties to the lower pad,
-## towers already holding 2 other riders skipped), or {} when no tower has an enemy in reach. The
-## rules' own "hot" resolution (SiegeRouting.hot_choice), so the three never differ.
-static func _best_pad(state: SiegeState, rider: SiegeRiderState) -> Dictionary:
-	return SiegeRouting.hot_choice(state, rider)
+## The weapon that did the most damage in the current or last wave (ties to the lower id; the
+## ballista when none did any).
+static func top_weapon(state: SiegeState) -> int:
+	var best := SiegeIds.STATION_BALLISTA
+	for id in SiegeIds.WEAPONS:
+		if state.station(id).damage_wave > state.station(best).damage_wave + 1e-6:
+			best = id
+	return best
 
 
 ## A throwaway copy of what a rider could buy, so the second pick sees the first.
@@ -109,208 +163,94 @@ class ShopPlan:
 	var funds: float = 0.0
 	var gate_hp: float = 0.0
 	var gate_max: float = 0.0
-	var gen_level: int = 0
+	var mine_level: int = 0
 	var bands: int = 0
 	var perks: Array[int] = []
-	## pad -> [type, level] of the towers built (and bought by earlier picks).
-	var towers: Dictionary = {}
+	var levels: Array[int] = []
+	var pads: Array[int] = []
 
 	func _init(p_state: SiegeState, p_funds: float) -> void:
 		state = p_state
-		funds = p_funds
+		funds = floorf(p_funds)
 		# The snapshot carries the gate HP rounded up, so a client decides on the same number.
 		gate_hp = ceilf(state.gate_hp)
 		gate_max = state.gate_max
-		gen_level = state.gen_level
+		mine_level = state.mine_level
 		bands = state.iron_bands
 		perks = state.perks.duplicate()
-		for tw in state.pads:
-			if tw.built():
-				towers[tw.pad] = [tw.type, tw.level]
+		for st in state.stations:
+			levels.append(st.level)
+		for pd in state.pads:
+			pads.append(pd.type)
 
-	## The next pick as {"item", "pad", "cost"} (applied to this copy), or {} to save.
+	## The next pick as {"item", "at", "cost"} (applied to this copy), or {} to save.
 	func next_pick() -> Dictionary:
-		var pick := _repair()
-		if pick.is_empty():
-			pick = _build()
-		if pick.is_empty():
-			pick = _upgrade()
-		if pick.is_empty():
-			pick = _generator()
-		if pick.is_empty():
-			pick = _iron_bands()
-		if pick.is_empty():
-			pick = _perk()
-		return pick
-
-	func road() -> int:
-		# Roads are ranked on the snapshot's 0.1 HP resolution, so a client agrees with the host.
-		var best := 0
-		var total := 0
-		for r in SiegeIds.ROAD_COUNT:
-			total += state.gate_damage_dm(r)
-			if state.gate_damage_dm(r) > state.gate_damage_dm(best):
-				best = r
-		if total > 0:
-			return best
-		var least := 0
-		var least_cover := 1000000
-		for r in SiegeIds.ROAD_COUNT:
-			var c := _cover(r)
-			if c < least_cover:
-				least_cover = c
-				least = r
-		return least
-
-	func _dist(pad: int, r: int) -> float:
-		return state.content.map.distance_to_road(state.content.map.pad_pos(pad), r)
-
-	func _cover(r: int) -> int:
-		var n := 0
-		for pad: int in towers:
-			if _reach(pad) >= _dist(pad, r):
-				n += 1
-		return n
-
-	func _reach(pad: int) -> float:
-		var t: Array = towers[pad]
-		var base := float(state.content.tower_def(int(t[0])).get("range_m", 0.0))
-		return base * 1.25 if int(t[1]) >= 2 else base
+		for step: Callable in [_repair, _upgrade, _scorpion, _mine, _iron_bands, _perk]:
+			var pick: Dictionary = step.call()
+			if not pick.is_empty():
+				return pick
+		return {}
 
 	func _spend(cost: float) -> bool:
-		if cost > funds + 1e-9:
+		if cost < 0.0 or cost > funds + 1e-9:
 			return false
 		funds -= cost
 		return true
 
 	func _repair() -> Dictionary:
-		var cost := state.content.num("shop.repair", 20.0)
-		var below := state.content.num("autopilot.repair_below_frac", 0.5)
+		var c := state.content
+		var below := c.num("autopilot.repair_below_frac", 0.5)
 		if gate_hp >= gate_max or gate_hp / maxf(gate_max, 1.0) >= below:
 			return {}
+		var cost := c.num("shop.repair", 20.0)
 		if not _spend(cost):
 			return {}
-		gate_hp = minf(gate_hp + state.content.num("gate.repair_hp", 20.0), gate_max)
-		return {"item": SiegeIds.ITEM_REPAIR, "pad": 0, "cost": cost}
-
-	## The preferred type on the road; when no free pad is in its reach (a Scorpion's 18 m), the
-	## Ballista, Caltrop thrower or Scorpion that has one. An unaffordable type is not swapped
-	## for a cheaper one: the step falls through.
-	func _build() -> Dictionary:
-		var r := road()
-		var preferred := build_type_for(r)
-		var order: Array[int] = [preferred]
-		for t: int in [SiegeIds.TOWER_BALLISTA, SiegeIds.TOWER_CALTROP, SiegeIds.TOWER_SCORPION]:
-			if t != preferred:
-				order.append(t)
-		for type in order:
-			var def := state.content.tower_def(type)
-			var cost := float(def.get("cost", 0.0))
-			var pad := _free_pad(r, float(def.get("range_m", 0.0)))
-			if pad == 0:
-				continue
-			if not _spend(cost):
-				return {}
-			towers[pad] = [type, 0]
-			return {"item": _build_item(type), "pad": pad, "cost": cost}
-		return {}
-
-	## Ballista if Shield walls or rams have damaged the gate on road `r`, a Caltrop thrower if
-	## Horsemen have and those have not, otherwise a Scorpion (brief 2.5; the types come from
-	## state.gate_damage_types_by_road, which the snapshot carries, so it works in a break and on
-	## a client). No gate damage yet: the type built least, in the order Ballista, Scorpion,
-	## Caltrop.
-	func build_type_for(r: int) -> int:
-		var total := 0
-		for road in SiegeIds.ROAD_COUNT:
-			total += state.gate_damage_dm(road)
-		if total <= 0:
-			var counts := {
-				SiegeIds.TOWER_BALLISTA: 0, SiegeIds.TOWER_SCORPION: 0, SiegeIds.TOWER_CALTROP: 0
-			}
-			for pad: int in towers:
-				counts[int((towers[pad] as Array)[0])] += 1
-			var pick := SiegeIds.TOWER_BALLISTA
-			for t: int in [SiegeIds.TOWER_SCORPION, SiegeIds.TOWER_CALTROP]:
-				if counts[t] < counts[pick]:
-					pick = t
-			return pick
-		if (
-			state.gate_damaged_by(r, SiegeIds.ENEMY_SHIELD_WALL)
-			or state.gate_damaged_by(r, SiegeIds.ENEMY_RAM)
-		):
-			return SiegeIds.TOWER_BALLISTA
-		if state.gate_damaged_by(r, SiegeIds.ENEMY_HORSEMEN):
-			return SiegeIds.TOWER_CALTROP
-		return SiegeIds.TOWER_SCORPION
-
-	func _build_item(type: int) -> String:
-		for item: String in SiegeIds.BUILD_TOWER:
-			if int(SiegeIds.BUILD_TOWER[item]) == type:
-				return item
-		return SiegeIds.ITEM_BUILD_BALLISTA
-
-	## The empty pad closest to road `r` that its tower could still reach, ties to the lower pad.
-	func _free_pad(r: int, reach: float) -> int:
-		var best := 0
-		var best_d := INF
-		for n in range(1, SiegeIds.PAD_COUNT + 1):
-			if towers.has(n):
-				continue
-			var d := _dist(n, r)
-			if d <= reach and d < best_d - 1e-9:
-				best = n
-				best_d = d
-		return best
+		gate_hp = minf(gate_hp + c.num("gate.repair_hp", 20.0), gate_max)
+		return {"item": SiegeIds.ITEM_REPAIR, "at": 0, "cost": cost}
 
 	func _upgrade() -> Dictionary:
-		var r := road()
-		var best := 0
-		var best_level := SiegeIds.MAX_TOWER_LEVEL
-		for n in range(1, SiegeIds.PAD_COUNT + 1):
-			if not towers.has(n):
-				continue
-			var level := int((towers[n] as Array)[1])
-			if level >= SiegeIds.MAX_TOWER_LEVEL or _dist(n, r) > _reach(n):
-				continue
-			if level < best_level:
-				best = n
-				best_level = level
-		if best == 0:
+		var id := SiegeAutopilot.top_weapon(state)
+		if levels[id] >= SiegeIds.MAX_LEVEL:
 			return {}
-		var cost := float(state.content.upgrade_cost(best_level + 1))
-		if cost < 0.0 or not _spend(cost):
-			return {}
-		(towers[best] as Array)[1] = best_level + 1
-		return {"item": SiegeIds.ITEM_UPGRADE, "pad": best, "cost": cost}
-
-	func _generator() -> Dictionary:
-		var costs: Array = state.content.balance.get("generator", {}).get("level_costs", [])
-		if gen_level >= costs.size():
-			return {}
-		var cost := float(costs[gen_level])
+		var cost := float(state.content.station_upgrade_cost(levels[id] + 1))
 		if not _spend(cost):
 			return {}
-		gen_level += 1
-		return {"item": SiegeIds.ITEM_GENERATOR, "pad": 0, "cost": cost}
+		levels[id] += 1
+		return {"item": SiegeIds.ITEM_UPGRADE, "at": id, "cost": cost}
+
+	func _scorpion() -> Dictionary:
+		var free := pads.find(SiegeIds.PAD_NONE)
+		if free < 0:
+			return {}
+		var cost := float(state.content.pad_def(SiegeIds.PAD_SCORPION).get("cost", 40))
+		if not _spend(cost):
+			return {}
+		pads[free] = SiegeIds.PAD_SCORPION
+		return {"item": SiegeIds.ITEM_SCORPION, "at": free + 1, "cost": cost}
+
+	func _mine() -> Dictionary:
+		var cost := float(state.content.mine_level_cost(mine_level + 1))
+		if mine_level >= SiegeIds.MAX_LEVEL or not _spend(cost):
+			return {}
+		mine_level += 1
+		return {"item": SiegeIds.ITEM_MINE, "at": 0, "cost": cost}
 
 	func _iron_bands() -> Dictionary:
-		var cost := state.content.num("shop.iron_bands", 45.0)
-		if bands >= int(state.content.num("gate.iron_bands_max", 2.0)) or not _spend(cost):
+		var c := state.content
+		var cost := c.num("shop.iron_bands", 45.0)
+		if bands >= int(c.num("gate.iron_bands_max", 2.0)) or not _spend(cost):
 			return {}
 		bands += 1
-		return {"item": SiegeIds.ITEM_IRON_BANDS, "pad": 0, "cost": cost}
+		return {"item": SiegeIds.ITEM_IRON_BANDS, "at": 0, "cost": cost}
 
 	func _perk() -> Dictionary:
-		for spec: Array in [
-			[SiegeIds.PERK_RESERVE, SiegeIds.ITEM_RESERVE, "shop.reserve_flywheel"],
-			[SiegeIds.PERK_AQUEDUCT, SiegeIds.ITEM_AQUEDUCT, "shop.aqueduct_drive"],
-		]:
-			if perks.has(int(spec[0])):
+		for item: String in [SiegeIds.ITEM_RESERVE, SiegeIds.ITEM_AQUEDUCT, SiegeIds.ITEM_CAULDRON]:
+			var code := int(SiegeIds.PERK_ITEMS[item])
+			if perks.has(code):
 				continue
-			var cost := state.content.num(str(spec[2]), 80.0)
+			var cost := state.content.num("shop." + item, 80.0)
 			if not _spend(cost):
 				return {}
-			perks.append(int(spec[0]))
-			return {"item": spec[1], "pad": 0, "cost": cost}
+			perks.append(code)
+			return {"item": item, "at": 0, "cost": cost}
 		return {}

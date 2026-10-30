@@ -1,314 +1,270 @@
 extends GutTest
-## SiegeRouting (brief 2.4 "Routing", 2.5 "Zero input"): intents, the ring, the 2-rider limit,
-## the 2 s reconnect, breaks, and Autopilot's once-a-second routing through the rules.
-
-const VALLEY := SiegeIds.ROAD_VALLEY
+## Routing (brief 2.4 "Routing", 4 "caps per station"): station targets, the caps, next / prev /
+## mine / hot, skipping full stations, the 2 s reconnect, waves only, the zero-input fallback.
 
 var _rig: SiegeRig
 
 
 func after_each() -> void:
 	SiegeRouting.route_hook = Callable()
-	SiegeShop.shop_hook = Callable()
 
 
-func _wave(humans: int = 3, bots: int = 0) -> SiegeRig:
-	_rig = SiegeRig.new("short", humans, bots)
+func _wave(humans: int = 4) -> SiegeRig:
+	_rig = SiegeRig.new("short", humans)
 	_rig.enter(2, 10.0)
-	for r in _rig.state.riders:
-		r.route_fallback = false
-		r.shop_fallback = false
+	_rig.manual()
 	return _rig
 
 
-func _route(peer: int, to: Variant, via: String = SiegeIds.VIA_ACTION) -> void:
-	_rig.send(peer, SiegeIntents.route(to, via))
-	_rig.step()
+func _route(peer: int, to: Variant) -> Array[Dictionary]:
+	_rig.send(peer, SiegeIntents.route(to))
+	return _rig.step()
 
 
-func _build(pad: int, type: int = SiegeIds.TOWER_BALLISTA) -> void:
-	_rig.state.pad(pad).type = type
-
-
-func test_everyone_starts_on_the_generator() -> void:
+func test_everyone_starts_on_the_mine() -> void:
 	_rig = SiegeRig.new("short", 4)
 	for r in _rig.state.riders:
-		assert_eq(r.target, SiegeIds.TARGET_GEN)
-		assert_eq(r.reconnect_s, 0.0)
-	_rig.enter(2, 10.0)
-	for r in _rig.state.riders:
-		assert_eq(r.target, SiegeIds.TARGET_GEN, "the wave does not move anyone")
+		assert_eq(r.target, SiegeIds.STATION_MINE)
 
 
-func test_a_pad_route_reconnects_for_two_seconds_with_no_output() -> void:
+func test_route_to_a_station_starts_a_2_s_reconnect() -> void:
 	_wave()
-	_rig.p_eff[1] = 250.0
-	_route(1, 3)
+	var ev := _route(1, SiegeIds.STATION_ONAGER)
 	var r := _rig.rider(1)
-	assert_eq(r.target, 3)
-	assert_almost_eq(r.reconnect_s, 2.0, 0.051, "2 s")
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE).size(), 1)
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE)[0]["slot"], 0)
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE)[0]["to"], 3)
-	assert_eq(r.routed_t, _rig.state.t)
-	var gen := r.gen_denarii
-	var silent := 1
-	for _i in 60:
-		_rig.step()
-		if _rig.state.pad(3).m > 0.0:
-			break
-		silent += 1
-	assert_eq(silent, 40, "40 ticks (2 s) without output")
-	assert_eq(r.gen_denarii, gen, "and no generator pay either")
-	assert_almost_eq(_rig.state.pad(3).m, 1.0, 1e-6, "then the tower is powered")
+	assert_eq(r.target, SiegeIds.STATION_ONAGER)
+	assert_almost_eq(r.reconnect_s, 2.0 - 0.05, 1e-6)
+	assert_false(r.delivering())
+	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE, ev), [SiegeEvents.route(0, SiegeIds.STATION_ONAGER)])
 
 
-func test_a_switch_between_towers_also_reconnects() -> void:
-	_wave()
-	_rig.put(1, 3)
-	_route(1, 4)
-	assert_eq(_rig.rider(1).target, 4)
-	assert_gt(_rig.rider(1).reconnect_s, 1.9)
-
-
-func test_routing_to_the_current_target_is_a_no_op() -> void:
-	_wave()
-	_rig.put(1, 3)
-	_route(1, 3)
-	assert_eq(_rig.rider(1).reconnect_s, 0.0)
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE).size(), 0)
-	_route(1, "gen")
-	assert_eq(_rig.rider(1).target, 0)
-	_route(1, "gen")
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE).size(), 1)
-
-
-func test_an_empty_pad_cannot_be_routed_to() -> void:
-	_wave()
-	_route(1, 5)
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN)
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE).size(), 0)
-
-
-func test_next_walks_the_ring_clockwise_and_skips_empty_pads() -> void:
-	_wave()
-	_route(1, "next")
-	assert_eq(_rig.rider(1).target, 3, "pads 1 and 2 are empty")
-	_route(1, "next")
-	assert_eq(_rig.rider(1).target, 4)
-	_route(1, "next")
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN, "round to the generator")
-	_route(1, "next")
-	assert_eq(_rig.rider(1).target, 3)
-
-
-func test_prev_walks_it_the_other_way() -> void:
-	_wave()
-	_route(1, "prev")
-	assert_eq(_rig.rider(1).target, 4)
-	_route(1, "prev")
-	assert_eq(_rig.rider(1).target, 3)
-	_route(1, "prev")
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN)
-
-
-func test_next_follows_the_map_ring_with_more_towers() -> void:
-	_wave()
-	_build(1)
-	_build(6)
-	var seen: Array[int] = []
-	for _i in 6:
-		_route(1, "next")
-		seen.append(_rig.rider(1).target)
-	assert_eq(seen, [1, 3, 4, 6, 0, 1] as Array[int])
-
-
-func test_a_tower_with_two_riders_is_skipped_and_refused() -> void:
-	_wave()
-	_rig.put(1, 3)
-	_rig.put(2, 3)
-	_route(3, "next")
-	assert_eq(_rig.rider(3).target, 4, "pad 3 is full")
-	_rig.put(3, SiegeIds.TARGET_GEN)
-	_route(3, 3)
-	assert_eq(_rig.rider(3).target, SiegeIds.TARGET_GEN, "a direct route is refused too")
-	_route(3, "prev")
-	assert_eq(_rig.rider(3).target, 4)
-
-
-func test_a_rider_already_on_a_full_tower_keeps_it() -> void:
-	_wave()
-	_rig.put(1, 3)
-	_rig.put(2, 3)
-	_route(1, 3)
-	assert_eq(_rig.rider(1).target, 3)
-	_route(1, "next")
-	assert_eq(_rig.rider(1).target, 4)
-
-
-func test_up_goes_to_the_generator() -> void:
-	_wave()
-	_rig.put(1, 4)
-	_route(1, "gen")
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN)
-
-
-func test_hot_goes_to_the_tower_with_the_most_enemy_hp_in_range() -> void:
-	_wave()
-	_build(6)
-	_rig.spawn(SiegeIds.ENEMY_SHIELD_WALL, SiegeIds.ROAD_WEST, 45.7)
-	_rig.spawn(SiegeIds.ENEMY_RAIDERS, VALLEY, _rig.road_end(VALLEY) - 4.0)
-	assert_gt(_rig.state.enemy_hp_in_range(6), _rig.state.enemy_hp_in_range(3))
-	assert_gt(_rig.state.enemy_hp_in_range(3), 0.0)
-	_route(1, "hot")
-	assert_eq(_rig.rider(1).target, 6)
-
-
-func test_hot_with_nothing_in_range_changes_nothing() -> void:
-	_wave()
-	_rig.put(1, 4)
-	_route(1, "hot")
-	assert_eq(_rig.rider(1).target, 4)
-
-
-func test_hot_ties_go_to_the_lower_pad() -> void:
-	_wave()
-	_rig.spawn(SiegeIds.ENEMY_RAIDERS, VALLEY, _rig.road_end(VALLEY) - 1.0)
-	_rig.state.enemies[0].pos = Vector2(0.0, 26.0)
-	assert_eq(_rig.state.enemy_hp_in_range(3), _rig.state.enemy_hp_in_range(4))
-	assert_gt(_rig.state.enemy_hp_in_range(3), 0.0)
-	assert_eq(SiegeRouting.hot_pad(_rig.state, _rig.rider(1)), 3)
-
-
-func test_hot_skips_a_full_tower() -> void:
-	_wave()
-	_rig.spawn(SiegeIds.ENEMY_SHIELD_WALL, VALLEY, _rig.road_end(VALLEY) - 1.0)
-	_rig.state.enemies[0].pos = Vector2(0.0, 26.0)
-	_rig.put(1, 3)
-	_rig.put(2, 3)
-	assert_eq(SiegeRouting.hot_pad(_rig.state, _rig.rider(3)), 4)
-
-
-func test_breaks_send_all_output_to_the_generator_and_keep_the_target() -> void:
-	_wave()
-	_rig.put(1, 3)
-	_rig.enter(3, 0.0)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_BREAK)
+func test_no_output_during_the_reconnect() -> void:
+	_wave(1)
 	_rig.p_eff[1] = 250.0
-	var gen := _rig.rider(1).gen_denarii
-	_rig.run(10.0)
-	assert_eq(_rig.rider(1).target, 3, "the target is kept")
-	assert_almost_eq(_rig.rider(1).gen_denarii - gen, 2.5, 0.05, "10 s x 250 W = 2.5 kJ")
-	assert_eq(_rig.state.pad(3).m, 0.0, "towers idle")
-	_route(1, 4)
-	assert_eq(_rig.rider(1).target, 3, "no routing in a break")
-	_rig.enter(4, 5.0)
-	assert_eq(_rig.rider(1).target, 3, "and the next wave finds it where it was")
+	_route(1, SiegeIds.STATION_ONAGER)
+	var on: Array[float] = []
+	for _i in 41:
+		_rig.step()
+		on.append(_rig.state.station(SiegeIds.STATION_ONAGER).m)
+	assert_eq(on[37], 0.0, "still reconnecting")
+	assert_gt(on[40], 0.0, "2 s later: coupled")
 
 
-func test_a_route_in_the_cooldown_is_ignored() -> void:
-	_wave()
-	_rig.enter(7, 5.0)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_COOLDOWN)
-	_route(1, 3)
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN)
+func test_next_and_prev_step_through_the_stations() -> void:
+	_wave(1)
+	_route(1, "next")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_BALLISTA)
+	_route(1, "next")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ONAGER)
+	_route(1, "prev")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_BALLISTA)
+	_route(1, "prev")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE)
+	_route(1, "prev")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_TAR, "wraps 0 -> 4")
+	_route(1, "next")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE, "wraps 4 -> 0")
 
 
-# --- zero input: Autopilot routes while the fallback holds ---------------------------------------
+func test_up_is_the_mine_and_gen_is_accepted() -> void:
+	_wave(1)
+	_rig.put(1, SiegeIds.STATION_ARROWS)
+	_route(1, "mine")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE)
+	_rig.put(1, SiegeIds.STATION_ARROWS)
+	_route(1, "gen")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE)
 
 
-func _hook(calls: Array, answer: Callable) -> void:
-	SiegeRouting.route_hook = func(_s: SiegeState, r: SiegeRiderState) -> int:
-		calls.append(r.slot)
-		return int(answer.call(r))
+func test_caps_per_station() -> void:
+	_wave(4)
+	_route(1, SiegeIds.STATION_BALLISTA)
+	_route(2, SiegeIds.STATION_BALLISTA)
+	assert_eq(_rig.rider(2).target, SiegeIds.STATION_MINE, "the ballista holds 1")
+	_route(2, SiegeIds.STATION_TAR)
+	_route(3, SiegeIds.STATION_TAR)
+	assert_eq(_rig.rider(3).target, SiegeIds.STATION_MINE, "the tar works hold 1")
+	_route(3, SiegeIds.STATION_ONAGER)
+	_route(4, SiegeIds.STATION_ONAGER)
+	assert_eq(_rig.state.routed_count(SiegeIds.STATION_ONAGER), 2, "the onager holds 2")
+
+
+func test_the_onager_and_arrows_hold_two_and_refuse_a_third() -> void:
+	_wave(4)
+	for id in [SiegeIds.STATION_ONAGER, SiegeIds.STATION_ARROWS]:
+		for r in _rig.state.riders:
+			_rig.put(r.peer, SiegeIds.STATION_MINE)
+		_route(1, id)
+		_route(2, id)
+		_route(3, id)
+		assert_eq(_rig.state.routed_count(id), 2, "station %d" % id)
+		assert_eq(_rig.rider(3).target, SiegeIds.STATION_MINE)
+
+
+func test_the_mine_holds_two_once_people_have_left_it() -> void:
+	_wave(4)
+	_rig.put(1, SiegeIds.STATION_ONAGER)
+	_rig.put(2, SiegeIds.STATION_ONAGER)
+	_route(1, "mine")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ONAGER, "3 and 4 hold the mine's 2")
+
+
+func test_caps_never_push_anyone_off() -> void:
+	_wave(4)
+	assert_eq(_rig.state.routed_count(SiegeIds.STATION_MINE), 4, "the start is over the cap")
+	_rig.step()
+	for r in _rig.state.riders:
+		assert_eq(r.target, SiegeIds.STATION_MINE)
+
+
+func test_next_skips_full_stations() -> void:
+	_wave(3)
+	_rig.put(2, SiegeIds.STATION_BALLISTA)
+	_route(1, "next")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ONAGER, "the ballista is full")
+	_rig.put(3, SiegeIds.STATION_ARROWS)
+	_rig.put(2, SiegeIds.STATION_ARROWS)
+	_route(1, "next")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_TAR, "the arrow organ is full")
+
+
+func test_prev_skips_full_stations() -> void:
+	_wave(2)
+	_rig.put(2, SiegeIds.STATION_TAR)
+	_route(1, "prev")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ARROWS)
+
+
+func test_a_route_to_the_current_station_changes_nothing() -> void:
+	_wave(1)
+	_rig.put(1, SiegeIds.STATION_ONAGER)
+	var ev := _route(1, SiegeIds.STATION_ONAGER)
+	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE, ev).size(), 0)
+	assert_eq(_rig.rider(1).reconnect_s, 0.0)
+
+
+func test_hot_takes_autopilot_s_pick() -> void:
+	_wave(1)
+	var p := SiegeKit.prog_in_band(_rig.state, SiegeIds.STATION_BALLISTA)
+	for i in 3:
+		_rig.spawn(SiegeIds.ENEMY_RAM, p + float(i))
+	var want := SiegeAutopilot.hot_target(_rig.state, _rig.rider(1))
+	assert_true(SiegeIds.is_weapon(want))
+	_route(1, "hot")
+	assert_eq(_rig.rider(1).target, want)
+
+
+func test_hot_with_nothing_in_reach_stays_put() -> void:
+	_wave(1)
+	_rig.state.enemies.clear()
+	_rig.state.queue.clear()
+	_route(1, "hot")
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE)
+
+
+func test_routing_happens_in_waves_only() -> void:
+	_rig = SiegeRig.new("short", 1)
+	_rig.enter(1, 5.0)
+	_rig.manual()
+	_route(1, SiegeIds.STATION_ONAGER)
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE, "the build break")
+	_rig.enter(3, 5.0)
+	_route(1, SiegeIds.STATION_ONAGER)
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE, "a break")
+
+
+func test_breaks_keep_the_target() -> void:
+	_wave(1)
+	_rig.put(1, SiegeIds.STATION_ARROWS)
+	_rig.enter(3, 5.0)
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ARROWS)
+	_rig.enter(4, 1.0)
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_ARROWS, "and the next wave starts there")
+
+
+func test_auto_route_intents_are_ignored() -> void:
+	_wave(1)
+	_rig.send(1, {"k": "route", "to": 2, "auto": 1})
+	_rig.step()
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE)
+
+
+func test_a_deliberate_route_ends_the_routing_fallback() -> void:
+	_rig = SiegeRig.new("short", 1)
+	_rig.enter(2, 10.0)
+	assert_true(_rig.rider(1).route_fallback)
+	_route(1, SiegeIds.STATION_ONAGER)
+	assert_false(_rig.rider(1).route_fallback)
+	assert_true(_rig.rider(1).shop_fallback, "the shop fallback is separate")
 
 
 func test_autopilot_routes_once_a_second_in_slot_order() -> void:
-	_rig = SiegeRig.new("short", 3)
-	_rig.enter(2, 10.0)
-	var calls: Array = []
-	_hook(calls, func(_r: SiegeRiderState) -> int: return -1)
-	calls.clear()
-	_rig.run(3.0)
-	assert_eq(calls, [0, 1, 2, 0, 1, 2, 0, 1, 2], "every 20 ticks, slots in order")
-
-
-func test_autopilot_routing_applies_the_choice_and_respects_the_limit() -> void:
-	_rig = SiegeRig.new("short", 3)
-	_rig.enter(2, 10.0)
-	var calls: Array = []
-	_hook(calls, func(_r: SiegeRiderState) -> int: return 3)
-	_rig.run(1.1)
-	assert_eq(_rig.rider(1).target, 3)
-	assert_eq(_rig.rider(2).target, 3)
-	assert_eq(_rig.rider(3).target, SiegeIds.TARGET_GEN, "pad 3 is full: the third stays")
-	assert_eq(_rig.of_type(SiegeIds.EV_ROUTE).size(), 2)
-
-
-func test_a_human_stops_being_autopiloted_with_the_first_route_intent() -> void:
 	_rig = SiegeRig.new("short", 2)
 	_rig.enter(2, 10.0)
 	var calls: Array = []
-	_hook(calls, func(_r: SiegeRiderState) -> int: return -1)
-	_rig.send(1, SiegeIntents.route(4))
-	_rig.step()
-	assert_false(_rig.rider(1).route_fallback)
-	assert_true(_rig.rider(2).route_fallback)
-	calls.clear()
-	_rig.run(1.1)
-	assert_eq(calls, [1], "only the rider who never routed")
+	SiegeRouting.route_hook = func(_st: SiegeState, r: SiegeRiderState) -> int:
+		calls.append([_rig.tick, r.slot])
+		return -1
+	_rig.run(2.0)
+	assert_eq(calls.size(), 4, "two riders, two seconds")
+	assert_eq(int(calls[0][1]), 0)
+	assert_eq(int(calls[1][1]), 1)
 
 
-func test_overdrive_and_auto_intents_do_not_end_the_routing_fallback() -> void:
-	_rig = SiegeRig.new("short", 1)
+func test_autopilot_skips_afk_and_reconnecting_riders() -> void:
+	_rig = SiegeRig.new("short", 2)
 	_rig.enter(2, 10.0)
-	_rig.send(1, SiegeIntents.overdrive(SiegeIds.VIA_SURGE))
-	_rig.step()
-	assert_true(_rig.rider(1).route_fallback)
-	_rig.send(1, SiegeIntents.route(3, SiegeIds.VIA_AUTO))
-	_rig.step()
-	assert_true(_rig.rider(1).route_fallback)
-	assert_eq(_rig.rider(1).target, SiegeIds.TARGET_GEN, "an auto route is ignored")
-
-
-func test_bots_and_autopilot_humans_are_always_autopiloted() -> void:
-	_rig = SiegeRig.new("short", 2, 1)
-	_rig.enter(2, 10.0)
-	_rig.rider(2).autopilot = true
-	_rig.rider(2).route_fallback = false
-	_rig.rider(1).route_fallback = false
-	var calls: Array = []
-	_hook(calls, func(_r: SiegeRiderState) -> int: return -1)
-	calls.clear()
-	_rig.run(1.0)
-	assert_eq(calls, [1, 2], "the Autopilot-on human (slot 1) and the bot (slot 2)")
-	_rig.send(-1, SiegeIntents.route(3))
-	_rig.step()
-	assert_true(_rig.rider(-1).route_fallback, "bots never clear it")
-
-
-func test_autopilot_does_not_route_afk_reconnecting_or_break_riders() -> void:
-	_rig = SiegeRig.new("short", 3)
-	_rig.enter(2, 10.0)
-	var calls: Array = []
-	_hook(calls, func(_r: SiegeRiderState) -> int: return -1)
 	_rig.afk[1] = true
 	_rig.rider(2).reconnect_s = 5.0
-	calls.clear()
+	var calls := []
+	SiegeRouting.route_hook = func(_st: SiegeState, r: SiegeRiderState) -> int:
+		calls.append(r.slot)
+		return -1
 	_rig.run(1.0)
-	assert_eq(calls, [2], "slot 0 is AFK, slot 1 is reconnecting")
-	_rig.afk[1] = false
-	_rig.enter(3, 0.0)
-	calls.clear()
-	_rig.run(3.0)
-	assert_eq(calls, [], "no routing in a break")
+	assert_eq(calls, [])
 
 
-func test_autopilot_keeps_the_target_on_minus_one() -> void:
-	_rig = SiegeRig.new("short", 1)
+func test_autopilot_respects_the_caps() -> void:
+	_rig = SiegeRig.new("short", 2)
 	_rig.enter(2, 10.0)
-	_rig.put(1, 4)
-	_rig.rider(1).route_fallback = true
-	_hook([], func(_r: SiegeRiderState) -> int: return -1)
-	_rig.run(2.0)
-	assert_eq(_rig.rider(1).target, 4)
+	_rig.put(2, SiegeIds.STATION_BALLISTA)
+	_rig.rider(2).route_fallback = false
+	SiegeRouting.route_hook = func(_st: SiegeState, _r: SiegeRiderState) -> int:
+		return SiegeIds.STATION_BALLISTA
+	_rig.run(1.0)
+	assert_eq(_rig.rider(1).target, SiegeIds.STATION_MINE, "the ballista is full")
+
+
+func test_the_reconnect_runs_down_at_the_end_of_the_tick() -> void:
+	_wave(1)
+	_route(1, SiegeIds.STATION_ARROWS)
+	_rig.run(1.9)
+	assert_gt(_rig.rider(1).reconnect_s, 0.0)
+	_rig.run(0.06)
+	assert_eq(_rig.rider(1).reconnect_s, 0.0)
+
+
+func test_routed_t_stamps_the_change() -> void:
+	_wave(1)
+	_route(1, SiegeIds.STATION_ONAGER)
+	assert_almost_eq(_rig.rider(1).routed_t, _rig.state.t, 1e-6)
+
+
+func test_resolve_and_can_route_to() -> void:
+	var s := SiegeKit.state("short", 2)
+	var r := s.rider(1)
+	assert_true(SiegeRouting.can_route_to(s, r, SiegeIds.STATION_TAR))
+	assert_false(SiegeRouting.can_route_to(s, r, 5))
+	assert_false(SiegeRouting.can_route_to(s, r, -1))
+	SiegeKit.put(s, 2, SiegeIds.STATION_TAR)
+	assert_false(SiegeRouting.can_route_to(s, r, SiegeIds.STATION_TAR))
+	assert_true(SiegeRouting.can_route_to(s, s.rider(2), SiegeIds.STATION_TAR), "its own")
+	assert_eq(SiegeRouting.resolve(s, r, SiegeIds.STATION_TAR), -1)
+	assert_eq(SiegeRouting.resolve(s, r, SiegeIds.ROUTE_NEXT), SiegeIds.STATION_BALLISTA)
+
+
+func test_next_from_the_tar_works_skips_a_full_mine() -> void:
+	var s := SiegeKit.state("short", 4)
+	SiegeKit.put(s, 1, SiegeIds.STATION_TAR)
+	assert_eq(s.routed_count(SiegeIds.STATION_MINE), 3)
+	assert_eq(SiegeRouting.step_from(s, s.rider(1), 1), SiegeIds.STATION_BALLISTA)
+	assert_eq(SiegeRouting.step_from(s, s.rider(1), -1), SiegeIds.STATION_ARROWS)

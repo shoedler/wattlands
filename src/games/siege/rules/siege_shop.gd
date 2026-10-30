@@ -4,15 +4,17 @@ extends RefCounted
 ## included), closed in waves and the cool-down. The host resolves purchases in arrival order
 ## (slot order, then each rider's intents in order); every buy answers with a `buy` event (ok 1,
 ## or ok 0 with the buyer's slot and a SiegeIds.BUY_* reason; only the buyer's peer toasts).
+## Gold is personal and anyone may buy anything.
 ##
-## Items and prices (balance.json, towers.json):
-##   build_ballista / scorpion / caltrop   50 / 40 / 35 on an empty pad
-##   upgrade                               40 / 50 / 70, the pad's next level (1: +40% output,
-##                                         2: +25% range, 3: the special)
-##   generator                             60 / 90 / 130, the next team level (+20% denarii each)
-##   iron_bands                            45, +25 max and current gate HP, twice
-##   repair                                20, +20 gate HP up to the max
-##   reserve_flywheel / aqueduct_drive     80 / 100, team perks, once each
+## Items and prices (stations.json, balance.json):
+##   upgrade (station 1..4)        40 / 50 / 70, the station's next level, team-wide (1: +40%
+##                                 output, 2: +25% range / curtain max, 3: the special)
+##   mine                          60 / 90 / 130, the next mine level (+20% gold each)
+##   scorpion (pad 1..4)           40 on an empty pad
+##   pad_upgrade (pad 1..4)        40 / 50 / 70, the pad's next level
+##   iron_bands                    45, +25 max and current gate HP, twice
+##   repair                        20, +20 gate HP up to the max
+##   reserve_flywheel / aqueduct_drive / spare_cauldron   80 / 100 / 60, team perks, once each
 ## Checks run in this order: closed, then the item's own limit, then funds.
 ##
 ## Zero input: a rider is shop-fallback (Autopilot buys for them) while shop_fallback (until
@@ -42,83 +44,116 @@ static func intent(
 		return
 	if not auto and not r.is_bot:
 		r.shop_fallback = false
-	events.append(buy(state, r, str(it.get("item", "")), int(it.get("pad", 0))))
+	events.append(buy(state, r, it))
 
 
-## Resolves one purchase and returns its `buy` event.
-static func buy(state: SiegeState, r: SiegeRiderState, item: String, pad: int) -> Dictionary:
-	var res := purchase(state, r, item, pad)
-	return SiegeEvents.buy(
-		r.slot, item, pad, str(res["why"]) == SiegeIds.BUY_OK, str(res["why"]), int(res["lvl"])
-	)
+## Resolves one purchase (a normalized buy intent) and returns its `buy` event.
+static func buy(state: SiegeState, r: SiegeRiderState, it: Dictionary) -> Dictionary:
+	var item := str(it.get("item", ""))
+	var station := int(it.get("station", 0))
+	var pad := int(it.get("pad", 0))
+	var res := purchase(state, r, item, station, pad)
+	var why := str(res["why"])
+	return SiegeEvents.buy(r.slot, item, station, pad, why == SiegeIds.BUY_OK, why, int(res["lvl"]))
+
+
+## The price of `item` now (-1 when it can't be bought at all: max level, limit reached).
+static func price(state: SiegeState, item: String, station: int = 0, pad: int = 0) -> int:
+	var c := state.content
+	match item:
+		SiegeIds.ITEM_UPGRADE:
+			if not SiegeIds.UPGRADABLE.has(station):
+				return -1
+			return c.station_upgrade_cost(state.station(station).level + 1)
+		SiegeIds.ITEM_MINE:
+			return c.mine_level_cost(state.mine_level + 1)
+		SiegeIds.ITEM_SCORPION:
+			return int(c.pad_def(SiegeIds.PAD_SCORPION).get("cost", 40))
+		SiegeIds.ITEM_PAD_UPGRADE:
+			if not SiegeIds.is_pad(pad) or not state.pad(pad).built():
+				return -1
+			return c.pad_upgrade_cost(state.pad(pad).level + 1)
+		SiegeIds.ITEM_IRON_BANDS:
+			if state.iron_bands >= int(c.num("gate.iron_bands_max", 2.0)):
+				return -1
+			return int(c.num("shop.iron_bands", 45.0))
+		SiegeIds.ITEM_REPAIR:
+			return int(c.num("shop.repair", 20.0))
+		SiegeIds.ITEM_RESERVE, SiegeIds.ITEM_AQUEDUCT, SiegeIds.ITEM_CAULDRON:
+			if state.perks.has(int(SiegeIds.PERK_ITEMS[item])):
+				return -1
+			return int(c.num("shop." + item, 80.0))
+	return -1
 
 
 ## Checks and (when allowed) performs a purchase; {"why": BUY_*, "lvl": level after it}.
-static func purchase(state: SiegeState, r: SiegeRiderState, item: String, pad: int) -> Dictionary:
+static func purchase(
+	state: SiegeState, r: SiegeRiderState, item: String, station: int, pad: int
+) -> Dictionary:
 	if not state.shop_open():
 		return _res(SiegeIds.BUY_CLOSED)
 	var c := state.content
-	var cost := 0.0
 	var lvl := 0
 	match item:
-		SiegeIds.ITEM_BUILD_BALLISTA, SiegeIds.ITEM_BUILD_SCORPION, SiegeIds.ITEM_BUILD_CALTROP:
+		SiegeIds.ITEM_UPGRADE:
+			if not SiegeIds.UPGRADABLE.has(station):
+				return _res(SiegeIds.BUY_NO_STATION)
+			lvl = state.station(station).level + 1
+			if lvl > SiegeIds.MAX_LEVEL:
+				return _res(SiegeIds.BUY_MAX_LEVEL)
+		SiegeIds.ITEM_MINE:
+			lvl = state.mine_level + 1
+			if lvl > SiegeIds.MAX_LEVEL:
+				return _res(SiegeIds.BUY_MAX_LEVEL)
+		SiegeIds.ITEM_SCORPION:
 			if not SiegeIds.is_pad(pad):
-				return _res(SiegeIds.BUY_NO_TOWER)
+				return _res(SiegeIds.BUY_NO_PAD)
 			if state.pad(pad).built():
 				return _res(SiegeIds.BUY_PAD_TAKEN)
-			cost = float(c.tower_def(int(SiegeIds.BUILD_TOWER[item])).get("cost", 0.0))
-		SiegeIds.ITEM_UPGRADE:
+		SiegeIds.ITEM_PAD_UPGRADE:
 			if not SiegeIds.is_pad(pad) or not state.pad(pad).built():
-				return _res(SiegeIds.BUY_NO_TOWER)
+				return _res(SiegeIds.BUY_NO_PAD)
 			lvl = state.pad(pad).level + 1
-			if lvl > SiegeIds.MAX_TOWER_LEVEL:
+			if lvl > SiegeIds.MAX_LEVEL:
 				return _res(SiegeIds.BUY_MAX_LEVEL)
-			cost = float(c.upgrade_cost(lvl))
-		SiegeIds.ITEM_GENERATOR:
-			var costs: Array = c.balance["generator"]["level_costs"]
-			if state.gen_level >= costs.size():
-				return _res(SiegeIds.BUY_MAX_LEVEL)
-			lvl = state.gen_level + 1
-			cost = float(costs[state.gen_level])
 		SiegeIds.ITEM_IRON_BANDS:
 			if state.iron_bands >= int(c.num("gate.iron_bands_max", 2.0)):
 				return _res(SiegeIds.BUY_LIMIT)
-			cost = c.num("shop.iron_bands", 45.0)
 		SiegeIds.ITEM_REPAIR:
 			if state.gate_hp >= state.gate_max:
 				return _res(SiegeIds.BUY_GATE_FULL)
-			cost = c.num("shop.repair", 20.0)
-		SiegeIds.ITEM_RESERVE:
-			if state.perks.has(SiegeIds.PERK_RESERVE):
+		SiegeIds.ITEM_RESERVE, SiegeIds.ITEM_AQUEDUCT, SiegeIds.ITEM_CAULDRON:
+			if state.perks.has(int(SiegeIds.PERK_ITEMS[item])):
 				return _res(SiegeIds.BUY_LIMIT)
-			cost = c.num("shop.reserve_flywheel", 80.0)
-		SiegeIds.ITEM_AQUEDUCT:
-			if state.perks.has(SiegeIds.PERK_AQUEDUCT):
-				return _res(SiegeIds.BUY_LIMIT)
-			cost = c.num("shop.aqueduct_drive", 100.0)
 		_:
-			return _res(SiegeIds.BUY_NO_TOWER)
-	if r.denarii + 1e-9 < cost:
+			return _res(SiegeIds.BUY_NO_STATION)
+	var cost := float(price(state, item, station, pad))
+	if cost < 0.0:
+		return _res(SiegeIds.BUY_MAX_LEVEL)
+	if r.gold + 1e-9 < cost:
 		return _res(SiegeIds.BUY_FUNDS)
-	r.denarii = maxf(r.denarii - cost, 0.0)
+	r.gold = maxf(r.gold - cost, 0.0)
 	match item:
-		SiegeIds.ITEM_BUILD_BALLISTA, SiegeIds.ITEM_BUILD_SCORPION, SiegeIds.ITEM_BUILD_CALTROP:
-			var tw := state.pad(pad)
-			tw.type = int(SiegeIds.BUILD_TOWER[item])
-			tw.level = 0
-			tw.m = 0.0
-			tw.hold_m = 0.0
-			tw.hold_s = 0.0
-			tw.cd_s = float(c.tower_def(tw.type).get("interval_s", 1.0))
-			tw.age_s = 0.0
-			tw.built_by = r.slot
-			tw.kills = 0
-			tw.damage = 0.0
-			r.towers_built += 1
 		SiegeIds.ITEM_UPGRADE:
+			state.station(station).level = lvl
+			if station == SiegeIds.STATION_TAR:
+				state.tar.curtain_max = state.curtain_max()
+		SiegeIds.ITEM_MINE:
+			state.mine_level = lvl
+			state.station(SiegeIds.STATION_MINE).level = lvl
+		SiegeIds.ITEM_SCORPION:
+			var pd := state.pad(pad)
+			pd.type = SiegeIds.PAD_SCORPION
+			pd.level = 0
+			pd.cd_s = 0.0
+			pd.built_by = r.slot
+			pd.shots = 0
+			pd.hits = 0
+			pd.kills = 0
+			pd.damage = 0.0
+			lvl = 0
+		SiegeIds.ITEM_PAD_UPGRADE:
 			state.pad(pad).level = lvl
-		SiegeIds.ITEM_GENERATOR:
-			state.gen_level = lvl
 		SiegeIds.ITEM_IRON_BANDS:
 			var add := c.num("gate.iron_bands_hp", 25.0)
 			state.iron_bands += 1
@@ -128,11 +163,10 @@ static func purchase(state: SiegeState, r: SiegeRiderState, item: String, pad: i
 		SiegeIds.ITEM_REPAIR:
 			state.gate_hp = minf(state.gate_hp + c.num("gate.repair_hp", 20.0), state.gate_max)
 			lvl = ceili(state.gate_hp)
-		SiegeIds.ITEM_RESERVE:
-			state.perks.append(SiegeIds.PERK_RESERVE)
-			lvl = 1
-		SiegeIds.ITEM_AQUEDUCT:
-			state.perks.append(SiegeIds.PERK_AQUEDUCT)
+		SiegeIds.ITEM_RESERVE, SiegeIds.ITEM_AQUEDUCT, SiegeIds.ITEM_CAULDRON:
+			state.perks.append(int(SiegeIds.PERK_ITEMS[item]))
+			if item == SiegeIds.ITEM_CAULDRON:
+				state.tar.cauldron_max_l = state.cauldron_max()
 			lvl = 1
 	return _res(SiegeIds.BUY_OK, lvl)
 
@@ -155,8 +189,7 @@ static func autopilot(state: SiegeState, _inputs: SiegeInputs, events: Array[Dic
 			r.ap_buys = max_buys
 			continue
 		r.ap_buys += 1
-		var it := picks[0]
-		events.append(buy(state, r, str(it.get("item", "")), int(it.get("pad", 0))))
+		events.append(buy(state, r, picks[0]))
 
 
 ## Autopilot's picks for `r` (best first, normalized buy intents).

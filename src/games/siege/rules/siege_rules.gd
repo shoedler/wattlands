@@ -1,21 +1,23 @@
 class_name SiegeRules
 extends RefCounted
 ## Castellum Rotae's pure rules (brief 2.4): step(state, inputs, dt) at dt 0.05 s, reading only
-## its arguments (state.rng is the only randomness; no clock). Owner: B1 "rules".
+## its arguments (state.rng is the only randomness; no clock).
 ##
 ## step() order (SiegeOverdrive and the module rely on 2 and 4):
 ##   1. tick, t; each rider's telemetry, rescue, afk and connected from inputs (slot order); a
 ##      rescue or AFK that starts ends a running Overdrive (SiegeOverdrive.cancel).
 ##   2. A new phase index: close the old phase (wave_end for a wave; drop the queue; enemies
-##      retreat; SiegeOverdrive.cancel(END_PHASE) for running Overdrives; Autopilot's per-break
-##      buys reset), open the new one (wave_start for a wave, with its budget B); after the
+##      retreat; projectiles in flight are dropped; SiegeOverdrive.cancel(END_PHASE) for running
+##      Overdrives; Autopilot's per-break buys reset), open the new one (wave_start for a wave,
+##      with its budget B and its siege engines; the stations' wave damage restarts); after the
 ##      shift's last wave, state.done = true (the module emits finished("complete")).
 ##   3. Intents in slot order, each rider's in arrival order: route (SiegeRouting), buy
 ##      (SiegeShop), overdrive (SiegeOverdrive.try_start).
 ##   4. Autopilot for riders in a fallback: route once a second in slot order; shop picks in
 ##      breaks (<= 2 per break).
-##   5. Generator pay, wave-time stats, then SiegeCombat.step (spawns, movement, tower output m
-##      with SiegeOverdrive.multiplier, fire, zones, gate, Breach).
+##   5. Mine pay, wave-time stats, then SiegeCombat.step (spawns, movement, the tar works,
+##      station output m with SiegeOverdrive.multiplier, aim and fire, pads, projectiles, gate,
+##      Breach).
 ##   6. SiegeOverdrive.step_rider and od_prompt per rider, reconnect timers, the team watts mean.
 ##   7. Return the events in emission order (SiegeEvents dictionaries).
 ##
@@ -58,14 +60,15 @@ static func planned_p_eff_w(state: SiegeState, r: SiegeRiderState, pct: float) -
 	var rf := 1.0
 	match state.scaling_mode:
 		Wl.FAIR_FTP:
-			rf = state.content.num("tower_ref_w", 250.0) / maxf(r.ftp, 1.0)
+			rf = state.content.num("ref_w", 250.0) / maxf(r.ftp, 1.0)
 		Wl.WKG:
 			rf = r.r_wkg
 	return pct / 100.0 * r.ftp * u * rf
 
 
 ## The wave's threat budget B (brief 2.4): c_budget x sum(planned P_eff / 250 W) x (wave_s - 60)
-## / 60, from each rider's mean planned target in the phase.
+## / 60, from each rider's mean planned target in the phase, times the shift's budget_factor and
+## the slot count's slot_factor.
 static func budget(state: SiegeState, inputs: SiegeInputs) -> float:
 	var sum := 0.0
 	for inp in inputs.riders:
@@ -78,7 +81,26 @@ static func budget(state: SiegeState, inputs: SiegeInputs) -> float:
 	var span := maxf(
 		inputs.phase.duration_s - float(state.content.waves.get("stop_before_end_s", 60.0)), 0.0
 	)
-	return state.content.num("c_budget", 10.0) * sum * span / 60.0
+	var f := budget_factor(state.content) * slot_factor(state.content, state.riders.size())
+	return state.content.num("c_budget", 10.0) * f * sum * span / 60.0
+
+
+## The factor on B for a team of `slots` slots, bots included (waves.json slot_factor[slots - 1],
+## 1 when absent; ADR "slot factor").
+static func slot_factor(content: SiegeContent, slots: int) -> float:
+	var sf: Variant = content.waves.get("slot_factor")
+	if sf is Array and slots >= 1 and slots <= (sf as Array).size():
+		var f: Variant = sf[slots - 1]
+		if (f is float or f is int) and float(f) > 0.0:
+			return float(f)
+	return 1.0
+
+
+## The shift's own factor on B (waves.json budget_factor[<content id>], 1 when absent; ADR
+## "endurance budget factor").
+static func budget_factor(content: SiegeContent) -> float:
+	var f: Variant = (content.waves.get("budget_factor", {}) as Dictionary).get(content.shift_id)
+	return float(f) if (f is float or f is int) and float(f) > 0.0 else 1.0
 
 
 ## Step 1: telemetry and safety flags.
@@ -141,16 +163,11 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 			if ph.role == SiegeIds.ROLE_WARMUP_WAVE:
 				state.wave.budget *= SiegeTune.wave_num(state.content, "warmup.budget_frac", 0.4)
 			state.wave.budget_left = state.wave.budget
-			SiegeSpawner.begin_wave(state)
+			for st in state.stations:
+				st.damage_wave = 0.0
+			SiegeSpawner.begin_wave(state, ph)
 			events.append(
-				SiegeEvents.wave_start(
-					ph.index,
-					ph.role,
-					ph.number,
-					ph.waves,
-					state.wave.budget,
-					state.wave.active_roads
-				)
+				SiegeEvents.wave_start(ph.index, ph.role, ph.number, ph.waves, state.wave.budget)
 			)
 	state.phase_elapsed_s = ph.elapsed_s
 	state.phase_duration_s = ph.duration_s
@@ -158,17 +175,20 @@ static func _phase(state: SiegeState, inputs: SiegeInputs) -> Array[Dictionary]:
 	return events
 
 
-## A phase ends: the queue is dropped and every live enemy retreats for retreat_s, then vanishes
-## without bounty or damage.
+## A phase ends: the queue and the projectiles in flight are dropped and every live enemy
+## retreats for retreat_s, then vanishes without bounty or damage (a docked tower's boarders
+## leave with it).
 static func _retreat_all(state: SiegeState) -> void:
 	state.queue.clear()
+	SiegeProjectiles.clear(state)
 	var secs := float(state.content.enemies.get("retreat_s", 3.0))
 	for e in state.enemies:
 		if e.st != SiegeIds.EN_RETREAT:
 			e.st = SiegeIds.EN_RETREAT
 			e.retreat_s = secs
-			e.slow = 1.0
-			e.amp = 1.0
+	state.tar.boarded = false
+	for st in state.stations:
+		st.target_id = 0
 
 
 ## Step 3: intents in slot order, each rider's in arrival order.
@@ -187,10 +207,10 @@ static func _intents(state: SiegeState, inputs: SiegeInputs, events: Array[Dicti
 					SiegeOverdrive.try_start(state, r, inputs.phase, it)
 
 
-## Step 5a: the generator pays riders whose output reaches it (all output goes there in breaks),
-## the planned kJ for par, and the wave time per target.
+## Step 5a: the mine pays riders whose output reaches it (all output goes there in breaks;
+## nothing in a Breach), the planned kJ for par, and the wave time per station.
 static func _economy(state: SiegeState, inputs: SiegeInputs, dt: float) -> void:
-	var rate := SiegeEconomy.generator_rate(state)
+	var rate := SiegeEconomy.mine_rate(state)
 	var counting := not inputs.phase.is_cooldown() and inputs.phase.index >= 0 and not state.done
 	var wave := state.in_wave() and not inputs.phase.is_cooldown()
 	for inp in inputs.riders:
@@ -201,17 +221,18 @@ static func _economy(state: SiegeState, inputs: SiegeInputs, dt: float) -> void:
 			state.planned_kj += planned_p_eff_w(state, r, inp.planned_pct) * dt / 1000.0
 		if not r.delivering():
 			continue
-		var to_gen := r.target == SiegeIds.TARGET_GEN or not wave
+		var to_mine := r.target == SiegeIds.STATION_MINE or not wave
 		if wave:
-			if to_gen:
-				r.wave_gen_s += dt
+			r.station_s[r.target] += dt
+			if to_mine:
+				r.wave_mine_s += dt
 			else:
-				r.wave_tower_s += dt
-		if counting and to_gen:
-			SiegeEconomy.pay_generator(state, r, inp.p_eff_w, dt, rate)
+				r.wave_weapon_s += dt
+		if counting and to_mine and state.breach_s <= 0.0:
+			SiegeEconomy.pay_mine(state, r, inp.p_eff_w, dt, rate)
 
 
-## Step 6: Overdrive clocks and prompt, reconnect timers and the drum's 1 s mean.
+## Step 6: Overdrive clocks and prompt, reconnect timers and the team watts' 1 s mean.
 static func _finish(
 	state: SiegeState, inputs: SiegeInputs, dt: float, events: Array[Dictionary]
 ) -> void:

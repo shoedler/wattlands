@@ -54,12 +54,9 @@ func _intent(via: String, auto: bool = false) -> Dictionary:
 	return SiegeIntents.normalize(raw)
 
 
-func _enemy_near_pad(n: int) -> void:
-	var e := SiegeEnemyState.new()
-	e.id = 1
-	e.hp = 20.0
-	e.pos = _content.map.pad_pos(n) + Vector2(0, 10)
-	_state.enemies.append(e)
+## A spearman inside station `id`'s range band.
+func _enemy_in_band(id: int) -> void:
+	SiegeKit.enemy(_state, SiegeIds.ENEMY_SPEAR, SiegeKit.prog_in_band(_state, id))
 
 
 func _keys(d: Dictionary) -> Array:
@@ -136,8 +133,8 @@ func test_preconditions() -> void:
 
 func test_a_rider_who_is_not_pedaling_cannot_start() -> void:
 	var work := _work()
-	_enemy_near_pad(3)
-	_human.target = 3
+	_enemy_in_band(SiegeIds.STATION_BALLISTA)
+	_human.target = SiegeIds.STATION_BALLISTA
 	# The platform's not_pedaling rule: both power < 15 W and cadence < 20 rpm.
 	_human.raw_w = 0.0
 	_human.cadence_rpm = 0.0
@@ -168,14 +165,18 @@ func test_a_rider_who_is_not_pedaling_cannot_start() -> void:
 
 func test_prompt_needs_an_enemy_in_range_of_the_target_or_a_rush() -> void:
 	var work := _work()
-	assert_false(SiegeOverdrive.prompt(_state, _human, work), "on the generator, no rush")
-	_human.target = 3
-	assert_false(SiegeOverdrive.prompt(_state, _human, work), "pad 3, nothing in range")
-	_enemy_near_pad(3)
-	assert_true(SiegeOverdrive.prompt(_state, _human, work), "an enemy 10 m from pad 3's Ballista")
-	_human.target = 7
-	assert_false(SiegeOverdrive.prompt(_state, _human, work), "pad 7 is empty")
-	_human.target = SiegeIds.TARGET_GEN
+	assert_false(SiegeOverdrive.prompt(_state, _human, work), "on the mine, no rush")
+	_human.target = SiegeIds.STATION_BALLISTA
+	assert_false(SiegeOverdrive.prompt(_state, _human, work), "the ballista, nothing in range")
+	_enemy_in_band(SiegeIds.STATION_BALLISTA)
+	assert_true(SiegeOverdrive.prompt(_state, _human, work), "a spearman in the ballista's band")
+	_human.target = SiegeIds.STATION_MINE
+	assert_false(SiegeOverdrive.prompt(_state, _human, work), "the mine is never hot")
+	_human.target = SiegeIds.STATION_TAR
+	assert_false(SiegeOverdrive.prompt(_state, _human, work), "the tar works: no engine near")
+	SiegeKit.enemy(_state, SiegeIds.ENEMY_RAM, _state.path.length_m - 50.0)
+	assert_true(SiegeOverdrive.prompt(_state, _human, work), "a ram 50 m from the gate")
+	_human.target = SiegeIds.STATION_MINE
 	_state.wave.rush_s = 12.0
 	assert_true(SiegeOverdrive.prompt(_state, _human, work), "a rush is on")
 	assert_false(SiegeOverdrive.prompt(_state, _human, _work(29.0)), "< 30 s left")

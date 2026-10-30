@@ -6,8 +6,8 @@ extends RefCounted
 const F := preload("res://tests/games/siege/siege_fakes.gd")
 
 
-## A bare state (pad 3 Ballista, pad 4 Scorpion) in `role`, `humans` + `bots` riders on the
-## generator, the clock at `t`.
+## A bare state (pad 1 Scorpion) in `role`, `humans` + `bots` riders on the mine, the clock at
+## `t`.
 static func state(
 	role: String = SiegeIds.ROLE_WAVE, humans: int = 2, bots: int = 0, t: float = 100.0
 ) -> SiegeState:
@@ -18,31 +18,18 @@ static func state(
 	return st
 
 
-## Adds an enemy at `pos` (ground plane) to `st`.
+## Adds an enemy of `type` at `prog` on the path to `st`.
 static func enemy(
-	st: SiegeState,
-	pos: Vector2,
-	hp: float = 20.0,
-	type: int = SiegeIds.ENEMY_RAIDERS,
-	road: int = 1
+	st: SiegeState, prog: float, hp: float = 20.0, type: int = SiegeIds.ENEMY_SPEAR
 ) -> SiegeEnemyState:
-	var e := SiegeEnemyState.new()
-	e.id = st.next_enemy_id
-	st.next_enemy_id += 1
-	e.type = type
-	e.road = road
-	e.hp = hp
-	e.max_hp = hp
-	e.pos = pos
-	st.enemies.append(e)
-	return e
+	return SiegeKit.enemy(st, type, prog, 0.0, hp)
 
 
-## Builds `type` at `pad` with `level`.
-static func tower(st: SiegeState, pad: int, type: int, level: int = 0) -> void:
-	var tw := st.pad(pad)
-	tw.type = type
-	tw.level = level
+## Builds `type` on pad `n` with `level`.
+static func pad(st: SiegeState, n: int, type: int = SiegeIds.PAD_SCORPION, level: int = 0) -> void:
+	var pd := st.pad(n)
+	pd.type = type
+	pd.level = level
 
 
 ## A configured module for `humans` + `bots` riders of `content_id`, plans built.

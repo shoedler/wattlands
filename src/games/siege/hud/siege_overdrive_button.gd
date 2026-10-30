@@ -1,11 +1,12 @@
 class_name SiegeOverdriveButton
 extends Button
-## The Overdrive button (brief 3 HUD, bottom right above the PANIC button): ready, the prompt
-## ("Surge for Overdrive!", glowing, when the rules say a surge would start it), the seconds
-## left while it runs, and the cooldown refilling. Pressing it sends the same intent as ability_1
+## The Overdrive button (docs/games/siege.md 3 HUD, bottom right): ready, the prompt ("Surge for
+## Overdrive!", pulsing, when the rules say a surge would start it), the seconds left while it
+## runs, and the cooldown refilling. Pressing it sends the same intent as ability_1
 ## (SiegeIntents.overdrive("button")); the rules decide whether it is allowed.
 
-const SIZE := Vector2(400, 84)
+const SIZE := Vector2(200, 56)
+const TEXT_PX := 22
 
 var game: SiegeGame = null
 var mode: String = SiegeHudModel.OD_CLOSED
@@ -18,7 +19,8 @@ func _init() -> void:
 	theme = WlTheme.get_theme()
 	focus_mode = Control.FOCUS_NONE
 	custom_minimum_size = SIZE
-	add_theme_font_size_override("font_size", WlTheme.TOAST_PX)
+	add_theme_font_size_override("font_size", TEXT_PX)
+	clip_text = true
 	pressed.connect(_on_pressed)
 	visible = false
 
@@ -34,7 +36,8 @@ func _on_pressed() -> void:
 
 
 func refresh() -> void:
-	if game == null or game.state == null or SiegeHudModel.own_rider(game) == null:
+	var s := game.state if game != null else null
+	if s == null or SiegeHudModel.own_rider(game) == null or s.shop_open() or s.in_cooldown():
 		visible = false
 		return
 	visible = true
@@ -58,17 +61,15 @@ func refresh() -> void:
 	var sb := WlTheme.panel_style(bg, border, 4 if mode == SiegeHudModel.OD_PROMPT else 2)
 	for style_name: String in ["normal", "hover", "pressed", "disabled", "focus"]:
 		add_theme_stylebox_override(style_name, sb)
+	var fc := WlTheme.TEXT if mode != SiegeHudModel.OD_COOLDOWN else WlTheme.TEXT_DIM
 	for color_name: String in [
 		"font_color", "font_disabled_color", "font_hover_color", "font_pressed_color"
 	]:
-		add_theme_color_override(
-			color_name, WlTheme.TEXT if mode != SiegeHudModel.OD_COOLDOWN else WlTheme.TEXT_DIM
-		)
+		add_theme_color_override(color_name, fc)
 	queue_redraw()
 
 
 func _draw() -> void:
-	# The progress under the text: seconds left while it runs, the refill while it recharges.
 	if mode != SiegeHudModel.OD_ACTIVE and mode != SiegeHudModel.OD_COOLDOWN:
 		return
 	var r := Rect2(12, size.y - 14, size.x - 24, 8)

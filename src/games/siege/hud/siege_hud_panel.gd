@@ -4,7 +4,6 @@ extends PanelContainer
 ## frame and never takes the mouse (buttons inside opt in). refresh() is also called by tests.
 
 var game: SiegeGame = null
-var _t_accum: float = 0.0
 
 
 func _init() -> void:
@@ -13,8 +12,7 @@ func _init() -> void:
 	add_theme_stylebox_override("panel", WlTheme.panel_style())
 
 
-func _process(delta: float) -> void:
-	_t_accum += delta
+func _process(_delta: float) -> void:
 	refresh()
 
 
@@ -46,3 +44,14 @@ static func make_label(px: int, color: Color = WlTheme.TEXT, bold: bool = false)
 	l.label_settings = WlTheme.label_settings(px, color, bold)
 	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return l
+
+
+## The session's look of `slot` (color, shape, pattern, hollow).
+static func look_of(game: SiegeGame, slot: int) -> Dictionary:
+	if game != null and game.ctx != null:
+		for p in game.ctx.players:
+			if p.slot_index == slot:
+				return {
+					"color": p.color, "shape": p.shape, "pattern": p.pattern, "hollow": p.hollow
+				}
+	return Wl.slot_look(slot)

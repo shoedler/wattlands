@@ -9,14 +9,6 @@ SIEGE_MISSION_VO2,VO2 shift
 SIEGE_MISSION_SWEETSPOT,Sweet spot shift
 SIEGE_MISSION_ENDURANCE,Endurance shift
 SIEGE_MISSION_DRILL,Drill
-SIEGE_RIDE_WON,{0} - won
-SIEGE_RIDE_LOST,{0} - lost
-SIEGE_RIDE_SCORE,Score: {0} (grade {1})
-SIEGE_RIDE_BREACHES,Gate breaches: {0}
-SIEGE_RIDE_RAMS,Rams stopped: {0} of {1}
-SIEGE_RIDE_KILLS,Enemies defeated: {0}
-SIEGE_OPT_WAVE_OFFSET,Wave offset (% FTP)
-SIEGE_MAP_ROTAE,Collis Rotarum
 SIEGE_PHASE_WARMUP_WAVE,Warm-up wave
 SIEGE_PHASE_BUILD_BREAK,Build break
 SIEGE_PHASE_WAVE_1,Wave 1
@@ -39,139 +31,159 @@ SIEGE_PHASE_BREAK_7,Break 7
 SIEGE_PHASE_BREAK_8,Break 8
 SIEGE_PHASE_BREAK_9,Break 9
 SIEGE_PHASE_BREAK_10,Break 10
-SIEGE_TOWER_BALLISTA,Ballista
-SIEGE_TOWER_SCORPION,Scorpion bolt thrower
-SIEGE_TOWER_CALTROP,Caltrop thrower
-SIEGE_ENEMY_RAIDERS,Raiders
-SIEGE_ENEMY_SHIELD_WALL,Shield wall
-SIEGE_ENEMY_HORSEMEN,Horsemen
-SIEGE_ENEMY_RAM,Battering ram
-SIEGE_ROAD_WEST,West road
-SIEGE_ROAD_VALLEY,Valley road
-SIEGE_ROAD_EAST,East road
-SIEGE_GENERATOR,Generator
-SIEGE_PAD,Pad {0}
-SIEGE_GATE,Gate
-SIEGE_PERK_RESERVE_FLYWHEEL,Reserve flywheel
-SIEGE_PERK_AQUEDUCT_DRIVE,Aqueduct drive
-SIEGE_SHOP_TITLE,Shop: {0} denarii
-SIEGE_SHOP_RECOMMENDED,Autopilot picks: {0}
-SIEGE_SHOP_COUNTDOWN,Shop closes in {0} s
-SIEGE_SHOP_COST,{0} denarii
-SIEGE_SHOP_ON_PAD,{0} on pad {1}
-SIEGE_ITEM_BUILD_BALLISTA,Build a Ballista
-SIEGE_ITEM_BUILD_SCORPION,Build a Scorpion
-SIEGE_ITEM_BUILD_CALTROP,Build a Caltrop thrower
-SIEGE_ITEM_UPGRADE,Upgrade
-SIEGE_ITEM_UPGRADE_1,Upgrade 1: +40% output
-SIEGE_ITEM_UPGRADE_2,Upgrade 2: +25% range
-SIEGE_ITEM_UPGRADE_3,Upgrade 3: special
-SIEGE_ITEM_GENERATOR,Generator level
-SIEGE_ITEM_GENERATOR_1,Generator level 1: +20% denarii
-SIEGE_ITEM_GENERATOR_2,Generator level 2: +40% denarii
-SIEGE_ITEM_GENERATOR_3,Generator level 3: +60% denarii
-SIEGE_ITEM_IRON_BANDS,Iron bands: +25 gate HP
-SIEGE_ITEM_REPAIR,Repair the gate: +20 HP
-SIEGE_ITEM_RESERVE_FLYWHEEL,Reserve flywheel (team perk)
-SIEGE_ITEM_AQUEDUCT_DRIVE,Aqueduct drive (team perk)
-SIEGE_ITEM_SAVE,Save denarii
-SIEGE_SPECIAL_BALLISTA,Ignores armor
-SIEGE_SPECIAL_SCORPION,Hits 5
-SIEGE_SPECIAL_CALTROP,+25% damage taken inside
-SIEGE_SHOP_REFUSED_CLOSED,The shop is closed
-SIEGE_SHOP_REFUSED_FUNDS,Not enough denarii
-SIEGE_SHOP_REFUSED_PAD_TAKEN,That pad already has a tower
-SIEGE_SHOP_REFUSED_NO_TOWER,No tower on that pad
-SIEGE_SHOP_REFUSED_MAX_LEVEL,Already fully upgraded
-SIEGE_SHOP_REFUSED_LIMIT,Sold out
-SIEGE_SHOP_REFUSED_GATE_FULL,The gate is already whole
-SIEGE_TOAST_WARMUP_START,Warm-up wave: raiders on the hill. Spin up the wheels!
-SIEGE_TOAST_WAVE_START,Wave {0}/{1}: hold the gate!
-SIEGE_TOAST_WAVE_END,Wave {0} held: gate {1} HP
-SIEGE_TOAST_BREAK,Break: recover and shop
-SIEGE_TOAST_ROADS,Horns! The raiders turn to new roads
-SIEGE_TOAST_PUSH,Battering rams at the gate road!
-SIEGE_TOAST_RUSH_START,Rush! Raiders and horsemen charge
-SIEGE_TOAST_RUSH_END,The rush breaks
-SIEGE_TOAST_RAM_DOWN,Ram destroyed!
-SIEGE_TOAST_LEAK,{0} reached the gate
-SIEGE_TOAST_BREACH,Breach! The towers fall silent
-SIEGE_TOAST_GATE_RESTORED,The gate is shored up: {0} HP
-SIEGE_TOAST_BUY_OK,Bought: {0}
-SIEGE_TOAST_BUY_REFUSED,Not bought: {0}
-SIEGE_TOAST_ROUTE,Chain to {0}
-SIEGE_TOAST_OVERDRIVE_START,Overdrive! Sprint for 30 s
-SIEGE_TOAST_OVERDRIVE_END,Overdrive spent
-SIEGE_TOAST_OVERDRIVE_SCORED,Overdrive sprint scored!
-SIEGE_TOAST_OVERDRIVE_REFUSED,Overdrive unavailable right now
-SIEGE_TOAST_STAGGER,The workers stumble: spin back up
-SIEGE_TOAST_AFK,Your wheel stopped
-SIEGE_WARN_HORN,Horns: roads change in {0} s
-SIEGE_WARN_RUSH,Rush incoming
-SIEGE_WARN_RAM,Rams in {0} s
-SIEGE_WARN_GATE_LOW,The gate is failing!
-SIEGE_TEACH_1,Your watts turn your treadwheel. Pedal steady!
-SIEGE_TEACH_2,Right or swap: send your watts to a tower. Up: back to the generator.
-SIEGE_TEACH_3,The generator pays denarii; spend them in the breaks.
-SIEGE_TEACH_4,Towers fire faster the more watts reach them.
-SIEGE_TEACH_5,"In a wave, surge when Overdrive glows: 30 s of double power."
-SIEGE_PROMPT_OVERDRIVE,Surge for Overdrive!
-SIEGE_HUD_GATE,Gate
-SIEGE_HUD_DENARII,Denarii
-SIEGE_HUD_WAVE,Wave {0}/{1}
-SIEGE_HUD_WARMUP_WAVE,Warm-up wave
-SIEGE_HUD_ENEMIES_LEFT,Left: {0}
-SIEGE_HUD_QUEUED,+{0} waiting
-SIEGE_HUD_ROUTE,Route
-SIEGE_HUD_ROUTE_GEN,Generator
-SIEGE_HUD_ROUTE_PAD,Tower {0}
-SIEGE_HUD_CONNECTING,Connecting...
-SIEGE_HUD_OVERDRIVE,Overdrive
-SIEGE_HUD_OVERDRIVE_READY,Ready
-SIEGE_HUD_OVERDRIVE_ON,{0} s
-SIEGE_HUD_OVERDRIVE_COOLDOWN,Recharging {0} s
-SIEGE_HUD_TEAM_WATTS,{0} W
-SIEGE_HUD_RUSHES,Rushes
-SIEGE_HUD_BREACH,Breach {0} s
-SIEGE_STATUS_GEN,Generator
-SIEGE_STATUS_TOWER,Tower {0}
-SIEGE_RESULTS,Collis Rotarum stands
-SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
-SIEGE_STAT_GEN_DENARII,Generator denarii
-SIEGE_STAT_BOUNTY_DENARII,Bounty denarii
-SIEGE_STAT_KILLS,Kills
-SIEGE_STAT_DAMAGE,Damage
-SIEGE_STAT_OVERDRIVES,Scored Overdrives
-SIEGE_STAT_GEN_TIME,Wave time on the generator (s)
-SIEGE_STAT_TOWER_TIME,Wave time on towers (s)
-SIEGE_STAT_TOWERS_BUILT,Towers built
-SIEGE_STAT_SCORE,Score
-SIEGE_STAT_GATE_PER_WAVE,Gate HP per wave
-SIEGE_STAT_BREACHES,Breaches
-SIEGE_STAT_LEAKS_BY_ROAD,Leaks by road (W/V/E)
-SIEGE_STAT_RAMS_STOPPED,Rams stopped
 SIEGE_UNLOCK_SWALLOWTAIL_PENNANT,Swallowtail pennant
 SIEGE_UNLOCK_WALNUT_WHEEL,Walnut wheel
 SIEGE_UNLOCK_BRONZE_CHAIN_TRIM,Bronze chain trim
 SIEGE_UNLOCK_LONG_BANNER,Long banner
-SIEGE_STATUS_OD,OD
-SIEGE_HUD_VICTORY,The siege is lifted
+SIEGE_RIDE_WON,{0} - won
+SIEGE_RIDE_LOST,{0} - lost
+SIEGE_RIDE_SCORE,Score: {0} (grade {1})
+SIEGE_RIDE_BREACHES,Gate breaches: {0}
+SIEGE_RIDE_ENGINES,Siege engines stopped: {0} of {1}
+SIEGE_RIDE_KILLS,Enemies defeated: {0}
+SIEGE_OPT_WAVE_OFFSET,Wave offset (% FTP)
+SIEGE_OPT_TILT_SHIFT,Tilt-shift blur
+SIEGE_MAP_ROTAE,Castellum Rotae
+SIEGE_STATION_MINE,Gold mine
+SIEGE_STATION_BALLISTA,Tree ballista
+SIEGE_STATION_ONAGER,Great onager
+SIEGE_STATION_ARROWS,Arrow organ
+SIEGE_STATION_TAR,Tar works
+SIEGE_PAD,Pad {0}
+SIEGE_PAD_SCORPION,Scorpion
+SIEGE_PAD_CALTROP,Caltrop thrower
+SIEGE_ENEMY_SPEAR,Spearmen
+SIEGE_ENEMY_SHIELD,Shield bearers
+SIEGE_ENEMY_CHARIOT,Chariots
+SIEGE_ENEMY_RAM,Battering ram
+SIEGE_ENEMY_TOWER,Siege tower
+SIEGE_GATE,Gate
+SIEGE_PERK_RESERVE_FLYWHEEL,Reserve flywheel
+SIEGE_PERK_AQUEDUCT_DRIVE,Aqueduct drive
+SIEGE_PERK_SPARE_CAULDRON,Spare cauldron
+SIEGE_SHOP_TITLE,Quartermaster
+SIEGE_SHOP_RECOMMENDED,Recommended
+SIEGE_SHOP_COUNTDOWN,Picks in {0} s
+SIEGE_SHOP_COST,{0} gold
+SIEGE_ITEM_UPGRADE,Upgrade {0}
+SIEGE_ITEM_UPGRADE_1,{0}: +40% output
+SIEGE_ITEM_UPGRADE_2,{0}: +25% range
+SIEGE_ITEM_UPGRADE_3,{0}: special
+SIEGE_ITEM_MINE,Mine level
+SIEGE_ITEM_MINE_1,Mine level 1 (+20% gold)
+SIEGE_ITEM_MINE_2,Mine level 2 (+40% gold)
+SIEGE_ITEM_MINE_3,Mine level 3 (+60% gold)
+SIEGE_ITEM_SCORPION,Build a Scorpion
+SIEGE_ITEM_PAD_UPGRADE,Upgrade a pad
+SIEGE_ITEM_PAD_UPGRADE_1,Pad {0}: +40% rate
+SIEGE_ITEM_PAD_UPGRADE_2,Pad {0}: +25% range
+SIEGE_ITEM_PAD_UPGRADE_3,Pad {0}: second bolt
+SIEGE_ITEM_IRON_BANDS,Iron bands (+25 gate HP)
+SIEGE_ITEM_REPAIR,Repair the gate (+20 HP)
+SIEGE_ITEM_RESERVE_FLYWHEEL,Reserve flywheel
+SIEGE_ITEM_AQUEDUCT_DRIVE,Aqueduct drive
+SIEGE_ITEM_SPARE_CAULDRON,Spare cauldron (+100 L tar)
+SIEGE_ITEM_SAVE,Save gold
+SIEGE_SPECIAL_BALLISTA,Iron head: ignores armour
+SIEGE_SPECIAL_ONAGER,Bigger stone: 6.5 m splash
+SIEGE_SPECIAL_ARROWS,Fourth rack: a volley every 1.1 s
+SIEGE_SPECIAL_TAR,Thick tar: a full coat slows 65%
+SIEGE_SPECIAL_SCORPION,Second bolt per shot
+SIEGE_SHOP_REFUSED_CLOSED,the shop is closed
+SIEGE_SHOP_REFUSED_FUNDS,not enough gold
+SIEGE_SHOP_REFUSED_PAD_TAKEN,that pad is built
+SIEGE_SHOP_REFUSED_NO_PAD,no weapon on that pad
+SIEGE_SHOP_REFUSED_NO_STATION,that station has no upgrades
+SIEGE_SHOP_REFUSED_MAX_LEVEL,already at the top level
+SIEGE_SHOP_REFUSED_LIMIT,already bought
+SIEGE_SHOP_REFUSED_GATE_FULL,the gate is whole
+SIEGE_TOAST_WARMUP_START,Warm-up wave: spearmen on the road. Spin up the wheels!
+SIEGE_TOAST_WAVE_START,Wave {0}/{1}: hold the gate!
+SIEGE_TOAST_WAVE_END,Wave {0} held: gate {1} HP
+SIEGE_TOAST_BREAK,Break: recover and shop
+SIEGE_TOAST_PUSH,A battering ram is on the road!
+SIEGE_TOAST_TOWER,The siege tower rolls in!
+SIEGE_TOAST_DOCK,The siege tower has docked: boarders on the wall!
+SIEGE_TOAST_RUSH_START,Rush! Spearmen and chariots charge
+SIEGE_TOAST_RUSH_END,The rush breaks
+SIEGE_TOAST_RAM_DOWN,Ram destroyed!
+SIEGE_TOAST_TOWER_DOWN,The siege tower falls!
+SIEGE_TOAST_LEAK,{0} reached the gate
+SIEGE_TOAST_BREACH,Breach! Every station falls silent
+SIEGE_TOAST_GATE_RESTORED,The gate is shored up: {0} HP
+SIEGE_TOAST_BUY_OK,Bought: {0}
+SIEGE_TOAST_BUY_REFUSED,Not bought: {0}
+SIEGE_TOAST_ROUTE,Coupled to the {0}
+SIEGE_TOAST_OVERDRIVE_START,Overdrive! Sprint for 30 s
+SIEGE_TOAST_OVERDRIVE_END,Overdrive spent
+SIEGE_TOAST_OVERDRIVE_SCORED,Overdrive sprint scored!
+SIEGE_TOAST_OVERDRIVE_REFUSED,Overdrive unavailable right now
+SIEGE_TOAST_STAGGER,The walkers stumble: spin back up
+SIEGE_TOAST_AFK,Your wheel stopped
+SIEGE_WARN_RUSH,Rush incoming
+SIEGE_WARN_RAM,Ram on the road
+SIEGE_WARN_TOWER,Siege tower on the road
+SIEGE_WARN_GATE_LOW,The gate is failing!
+SIEGE_WARN_BOARDED,Boarders on the wall: tar and gate pads stopped
+SIEGE_TEACH_1,Your watts turn your great treadwheel. Pedal steady!
+SIEGE_TEACH_2,Right or swap: couple your wheel to the next station. Up: back to the mine.
+SIEGE_TEACH_3,The mine pays gold; spend it in the breaks.
+SIEGE_TEACH_4,A station winds and fires faster the more watts reach it.
+SIEGE_TEACH_5,"In a wave, surge when Overdrive glows: 30 s of double output."
+SIEGE_PROMPT_OVERDRIVE,Surge for Overdrive!
+SIEGE_HUD_GATE,Gate
+SIEGE_HUD_GOLD,Gold
+SIEGE_HUD_CURTAIN,Tar curtain
+SIEGE_HUD_CAULDRONS,Cauldrons {0} L
+SIEGE_HUD_WAVE,Wave {0}/{1}
+SIEGE_HUD_WARMUP_WAVE,Warm-up wave
+SIEGE_HUD_ENEMIES_LEFT,Enemies left: {0}
+SIEGE_HUD_QUEUED,+{0} waiting
 SIEGE_HUD_ENEMY_COUNT,{0} {1}
-SIEGE_HUD_RAM_ON_ROAD,Battering ram on the road!
-SIEGE_HUD_RUSH_ON,Rush!
-SIEGE_HUD_TARGET_GEN,GEN
-SIEGE_HUD_TARGET_PAD,T{0}
-SIEGE_HUD_BTN_PREV,"<"
-SIEGE_HUD_BTN_NEXT,">"
-SIEGE_HUD_BTN_GEN,Gen
-SIEGE_HUD_BTN_HOT,Hot
+SIEGE_HUD_ROUTE,Stations
+SIEGE_HUD_CONNECTING,Coupling
+SIEGE_HUD_CAP,{0}/{1}
+SIEGE_HUD_OVERDRIVE,Overdrive
+SIEGE_HUD_OVERDRIVE_READY,Ready
+SIEGE_HUD_OVERDRIVE_ON,{0} s
+SIEGE_HUD_OVERDRIVE_COOLDOWN,Recharging {0} s
+SIEGE_HUD_TEAM_WATTS,Team {0} W
+SIEGE_HUD_RUSHES,Rushes
+SIEGE_HUD_BREACH,Breach! {0} s
+SIEGE_HUD_VICTORY,The fort stands!
+SIEGE_HUD_RAM_ON_ROAD,Ram {0} m from the gate
+SIEGE_HUD_TOWER_ON_ROAD,Siege tower {0} m from the moat
+SIEGE_HUD_RUSH_ON,Rush {0} s
+SIEGE_HUD_BTN_PREV,Previous
+SIEGE_HUD_BTN_NEXT,Next
+SIEGE_HUD_BTN_MINE,Mine
+SIEGE_HUD_BTN_HOT,Hot station
 SIEGE_HUD_MARK_OD,OD
 SIEGE_HUD_MARK_RESCUE,Rescue
 SIEGE_HUD_MARK_AFK,AFK
-SIEGE_SHOP_GEN_LEVEL,Generator level {0}
-SIEGE_SHOP_UPGRADE_ON_PAD,Upgrade pad {0} to level {1}
-SIEGE_SHOP_ITEM_COST,{0} ({1})
-SIEGE_SHOP_PICK_TAG,Autopilot's pick
-SIEGE_SHOP_BUILD_BALLISTA,"Ballista, pad {0}"
-SIEGE_SHOP_BUILD_SCORPION,"Scorpion, pad {0}"
-SIEGE_SHOP_BUILD_CALTROP,"Caltrop thrower, pad {0}"
+SIEGE_HELP_WHEEL,Your watts turn your treadwheel
+SIEGE_HELP_PATH,The lit shaft shows where your watts go
+SIEGE_HELP_STATIONS,"Five stations: mine, ballista, onager, arrows, tar"
+SIEGE_HELP_ROAD,The attackers march down this road
+SIEGE_HELP_GATE,Hold the gate; tar shields it
+SIEGE_HELP_ROUTE_CARD,Left / right: pick a station. Up: the mine
+SIEGE_HELP_SHOP,Breaks: spend your gold here
+SIEGE_STATUS_OD,Overdrive
+SIEGE_RESULTS,Castellum Rotae stands
+SIEGE_RESULTS_FALLEN,"The gate fell, but the riders rode on"
+SIEGE_STAT_MINE_GOLD,Gold from the mine
+SIEGE_STAT_BOUNTY_GOLD,Gold from bounties
+SIEGE_STAT_KILLS,Kills
+SIEGE_STAT_DAMAGE,Damage
+SIEGE_STAT_OVERDRIVES,Overdrives scored
+SIEGE_STAT_MINE_TIME,Wave time at the mine (s)
+SIEGE_STAT_WEAPON_TIME,Wave time at the stations (s)
+SIEGE_STAT_TOP_STATION,Favourite station
+SIEGE_STAT_SCORE,Score
+SIEGE_STAT_GATE_PER_WAVE,Gate HP per wave
+SIEGE_STAT_BREACHES,Breaches
+SIEGE_STAT_LEAKS,Leaks
+SIEGE_STAT_ENGINES_STOPPED,Siege engines stopped
+SIEGE_STAT_SHOTS,Hits / shots
+SIEGE_HUD_CAULDRONS_SHORT,{0} L tar
+SIEGE_SHOP_MORE,More items (page {0} of {1})

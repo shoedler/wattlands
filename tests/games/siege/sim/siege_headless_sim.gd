@@ -12,7 +12,7 @@ extends RefCounted
 ##     a `zero` rider (AFK after afk_after_s, like the HOST's 10 s coasting rule), or
 ##     `od_pct` % of FTP while its Overdrive is ACTIVE (the governor's SIM block; MockTrainer's
 ##     `sim_pct`);
-##   - intents go through SiegeIntentLimiter like on the host: `route` (a pad number, "gen",
+##   - intents go through SiegeIntentLimiter like on the host: `route` (a station number, "mine",
 ##     "hot") is sent once at tick 0 (a deliberate route ends the Autopilot routing fallback);
 ##     `surge_every_s` sends an overdrive intent via "surge" every N seconds, `action_at` via
 ##     "action" at the given game times; any extra intents come from `intents_at`;
@@ -40,7 +40,7 @@ class Rider:
 	## 0 W from t = 0; AFK after afk_after_s.
 	var zero: bool = false
 	var afk_after_s: float = 10.0
-	## "" (Autopilot decides), "gen", "hot" or a pad number as a string: one route intent at tick 0.
+	## "" (Autopilot decides), "mine", "hot" or a station number as a string: one route intent at tick 0.
 	var route: String = ""
 	## > 0: an overdrive intent via "surge" every N s (the surge profile), first at N.
 	var surge_every_s: float = 0.0
@@ -106,9 +106,9 @@ var stats: Dictionary = {
 	"od_directives": 0,
 	"steps": 0,
 }
-## peer -> denarii earned (generator + bounties) while the phase role was a wave.
+## peer -> gold earned (mine + bounties) while the phase role was a wave.
 var wave_earned: Dictionary = {}
-## peer -> [generator, bounty] denarii earned while the phase role was a wave.
+## peer -> [mine, bounty] gold earned while the phase role was a wave.
 var wave_earned_parts: Dictionary = {}
 
 var _limiter := SiegeIntentLimiter.new()
@@ -407,14 +407,14 @@ func _record(_t: float) -> void:
 		stats["wave_seconds"] += DT
 	for rs in state.riders:
 		var prev: Array = _prev_earned[rs.peer]
-		var dg := rs.gen_denarii - float(prev[0])
-		var db := rs.bounty_denarii - float(prev[1])
+		var dg := rs.mine_gold - float(prev[0])
+		var db := rs.bounty_gold - float(prev[1])
 		if in_wave:
 			wave_earned[rs.peer] += dg + db
 			wave_earned_parts[rs.peer][0] += dg
 			wave_earned_parts[rs.peer][1] += db
-		prev[0] = rs.gen_denarii
-		prev[1] = rs.bounty_denarii
+		prev[0] = rs.mine_gold
+		prev[1] = rs.bounty_gold
 
 
 # --- queries -------------------------------------------------------------------------------------
@@ -460,7 +460,7 @@ func phase_duration(index: int) -> float:
 	return (plans[slots[0].peer_id] as EffortPlan).phase(index).duration_s
 
 
-## Wave-time denarii per minute of `peer`'s earnings (generator + bounties) in wave phases.
+## Wave-time gold per minute of `peer`'s earnings (mine + bounties) in wave phases.
 func earned_per_wave_minute(peer: int) -> float:
 	var minutes := float(stats["wave_seconds"]) / 60.0
 	return float(wave_earned[peer]) / minutes if minutes > 0.0 else 0.0

@@ -1,104 +1,80 @@
 class_name SiegeShopModel
 extends RefCounted
-## The entries of the break shop panel (brief 2.4 "Shop", 3 HUD): the top entry is the
-## Autopilot's recommendation (SiegeAutopilot.shop_picks), the second is "Save denarii", then
-## what else the rider could buy right now. Pure: the panel feeds it the state and draws the
-## result in a PedalScanList.
+## The entries of the break shop (docs/games/siege.md 2.4 "Shop", 3 HUD): the top entry is
+## Autopilot's pick for the rider (SiegeAutopilot.shop_picks), the second is "Save gold", then
+## everything else the rules sell now (anyone may buy anything): a gate repair, each station's
+## next upgrade, the next mine level, a Scorpion on each empty pad, each built pad's next upgrade,
+## Iron bands and the three perks. Prices come from the rules (SiegeShop.price). Pure: the panel
+## pages the result through a PedalScanList (pages(): ROWS rows at 32 px, the last row of a
+## page "More" when there is more).
 ##
-## An entry is {"id": {"item": String, "pad": int}, "text": String, "detail": String,
-## "cost": int, "disabled": bool, "recommended": bool}. The Save entry has item ITEM_SAVE and
-## is never sent as an intent.
+## An entry is {"id": {"item", "at"}, "text", "detail", "cost", "disabled", "recommended"}; `at`
+## is the station (upgrade) or the pad (scorpion, pad_upgrade). The Save entry (ITEM_SAVE) and
+## the More entry (ITEM_MORE) are never sent as intents.
 
-const MAX_ENTRIES := 6
-
-
-## The empty pad a new tower fits best: nearest to the road with the most gate damage so far,
-## else nearest to any road (ties go to the lower pad). 0 when every pad is built.
-static func suggest_pad(state: SiegeState) -> int:
-	var map: SiegeMap = state.content.map
-	var hot := -1
-	var most := 0.0
-	for road in SiegeIds.ROAD_COUNT:
-		if state.gate_damage_by_road[road] > most:
-			most = state.gate_damage_by_road[road]
-			hot = road
-	var best := 0
-	var best_d := INF
-	for pad in range(1, SiegeIds.PAD_COUNT + 1):
-		if state.pad(pad).built():
-			continue
-		var p := map.pad_pos(pad)
-		var d := INF
-		if hot >= 0:
-			d = map.distance_to_road(p, hot)
-		else:
-			for road in SiegeIds.ROAD_COUNT:
-				d = minf(d, map.distance_to_road(p, road))
-		if d < best_d - 1e-6:
-			best_d = d
-			best = pad
-	return best
+## Rows a page shows (the shop's rect holds four at 32 px).
+const ROWS := 4
+const ITEM_MORE := "more"
 
 
-## The built tower an upgrade is best spent on: the lowest level below 3, ties to the lower
-## pad. 0 when there is none.
+## The first empty pad (0 when every pad is built).
+static func empty_pad(state: SiegeState) -> int:
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		if not state.pad(n).built():
+			return n
+	return 0
+
+
+## The built pad an upgrade is best spent on: the lowest level below 3, ties to the lower pad
+## (0 when there is none).
 static func upgrade_pad(state: SiegeState) -> int:
 	var best := 0
 	var level := 99
-	for tw in state.pads:
-		if tw.built() and tw.level < SiegeIds.MAX_TOWER_LEVEL and tw.level < level:
-			level = tw.level
-			best = tw.pad
+	for pd in state.pads:
+		if pd.built() and pd.level < SiegeIds.MAX_LEVEL and pd.level < level:
+			level = pd.level
+			best = pd.pad
 	return best
 
 
 ## The cost of an item now (-1 when it can't be bought).
-static func cost_of(state: SiegeState, item: String, pad: int) -> int:
-	var c := state.content
+static func cost_of(state: SiegeState, item: String, at: int) -> int:
 	match item:
-		SiegeIds.ITEM_BUILD_BALLISTA, SiegeIds.ITEM_BUILD_SCORPION, SiegeIds.ITEM_BUILD_CALTROP:
-			if pad < 1 or state.pad(pad).built():
-				return -1
-			return int(c.tower_def(int(SiegeIds.BUILD_TOWER[item])).get("cost", -1))
 		SiegeIds.ITEM_UPGRADE:
-			if pad < 1 or not state.pad(pad).built():
+			if not SiegeIds.UPGRADABLE.has(at) or state.station(at).level >= SiegeIds.MAX_LEVEL:
 				return -1
-			return c.upgrade_cost(state.pad(pad).level + 1)
-		SiegeIds.ITEM_GENERATOR:
-			var costs: Array = (c.balance.get("generator", {}) as Dictionary).get("level_costs", [])
-			return int(costs[state.gen_level]) if state.gen_level < costs.size() else -1
-		SiegeIds.ITEM_IRON_BANDS:
-			if state.iron_bands >= int(c.num("gate.iron_bands_max", 2.0)):
+			return SiegeShop.price(state, item, at, 0)
+		SiegeIds.ITEM_MINE:
+			if state.mine_level >= SiegeIds.MAX_LEVEL:
 				return -1
-			return int(c.num("shop.iron_bands", 45.0))
+		SiegeIds.ITEM_SCORPION:
+			if not SiegeIds.is_pad(at) or state.pad(at).built():
+				return -1
+			return SiegeShop.price(state, item, 0, at)
+		SiegeIds.ITEM_PAD_UPGRADE:
+			if not SiegeIds.is_pad(at) or state.pad(at).level >= SiegeIds.MAX_LEVEL:
+				return -1
+			return SiegeShop.price(state, item, 0, at)
 		SiegeIds.ITEM_REPAIR:
 			if state.gate_hp >= state.gate_max:
 				return -1
-			return int(c.num("shop.repair", 20.0))
-		SiegeIds.ITEM_RESERVE:
-			if state.perks.has(SiegeIds.PERK_RESERVE):
-				return -1
-			return int(c.num("shop.reserve_flywheel", 80.0))
-		SiegeIds.ITEM_AQUEDUCT:
-			if state.perks.has(SiegeIds.PERK_AQUEDUCT):
-				return -1
-			return int(c.num("shop.aqueduct_drive", 100.0))
-	return -1
+	return SiegeShop.price(state, item, 0, 0)
 
 
-static func _text_of(state: SiegeState, strings: GameStrings, item: String, pad: int) -> String:
+static func text_of(state: SiegeState, strings: GameStrings, item: String, at: int) -> String:
 	match item:
-		SiegeIds.ITEM_BUILD_BALLISTA, SiegeIds.ITEM_BUILD_SCORPION, SiegeIds.ITEM_BUILD_CALTROP:
-			return strings.t("SIEGE_SHOP_%s" % item.to_upper(), [pad])
 		SiegeIds.ITEM_UPGRADE:
+			var lvl := clampi(state.station(at).level + 1, 1, 3)
+			return strings.t("SIEGE_ITEM_UPGRADE_%d" % lvl, [strings.t(SiegeGame.station_key(at))])
+		SiegeIds.ITEM_MINE:
+			return strings.t("SIEGE_ITEM_MINE_%d" % clampi(state.mine_level + 1, 1, 3))
+		SiegeIds.ITEM_SCORPION:
+			return "%s (%s)" % [strings.t("SIEGE_ITEM_SCORPION"), strings.t("SIEGE_PAD", [at])]
+		SiegeIds.ITEM_PAD_UPGRADE:
 			return strings.t(
-				"SIEGE_SHOP_UPGRADE_ON_PAD", [pad, state.pad(pad).level + 1 if pad >= 1 else 1]
+				"SIEGE_ITEM_PAD_UPGRADE_%d" % clampi(state.pad(at).level + 1, 1, 3), [at]
 			)
-		SiegeIds.ITEM_GENERATOR:
-			return strings.t("SIEGE_SHOP_GEN_LEVEL", [state.gen_level + 1])
-		SiegeIds.ITEM_SAVE:
-			return strings.t("SIEGE_ITEM_SAVE")
-	return strings.t("SIEGE_ITEM_%s" % item.to_upper())
+	return strings.t("SIEGE_ITEM_" + item.to_upper())
 
 
 static func _entry(
@@ -106,27 +82,28 @@ static func _entry(
 	strings: GameStrings,
 	rider: SiegeRiderState,
 	item: String,
-	pad: int,
+	at: int,
 	recommended: bool
 ) -> Dictionary:
-	var cost := 0 if item == SiegeIds.ITEM_SAVE else cost_of(state, item, pad)
-	var affordable := (
-		item == SiegeIds.ITEM_SAVE or (cost >= 0 and float(cost) <= floorf(rider.denarii))
-	)
-	var text := _text_of(state, strings, item, pad)
+	var save := item == SiegeIds.ITEM_SAVE
+	var cost := 0 if save else cost_of(state, item, at)
+	var affordable := save or (cost >= 0 and float(cost) <= floorf(rider.gold))
+	# one line per entry (the cost after the name), so six fit the shop's rect at 32 px
+	var text := text_of(state, strings, item, at)
+	if not save:
+		text = "%s   %s" % [text, strings.t("SIEGE_SHOP_COST", [cost])]
 	return {
-		"id": {"item": item, "pad": pad},
-		"text":
-		text if item == SiegeIds.ITEM_SAVE else strings.t("SIEGE_SHOP_ITEM_COST", [text, cost]),
-		"detail": strings.t("SIEGE_SHOP_PICK_TAG") if recommended else "",
+		"id": {"item": item, "at": at},
+		"text": text,
+		"detail": strings.t("SIEGE_SHOP_RECOMMENDED") if recommended else "",
 		"cost": cost,
 		"disabled": not affordable,
 		"recommended": recommended,
 	}
 
 
-## The entries for `rider`. `picks` are the Autopilot's recommendations (normalized buy intents,
-## best first; only the first is used).
+## The entries for `rider`. `picks` are Autopilot's (normalized buy intents, best first; only
+## the first is used).
 static func entries(
 	state: SiegeState, rider: SiegeRiderState, strings: GameStrings, picks: Array[Dictionary]
 ) -> Array[Dictionary]:
@@ -137,34 +114,71 @@ static func entries(
 	if not picks.is_empty():
 		var p := picks[0]
 		var item := str(p.get("item", ""))
-		var pad := int(p.get("pad", 0))
-		if SiegeIds.ITEMS.has(item) and cost_of(state, item, pad) >= 0:
-			out.append(_entry(state, strings, rider, item, pad, true))
-			seen["%s/%d" % [item, pad]] = true
+		# a normalized intent carries both keys; the pad is the one that counts for pad items
+		var at := int(p.get("pad", 0)) if SiegeIds.PAD_ITEMS.has(item) else int(p.get("station", 0))
+		if SiegeIds.ITEMS.has(item) and cost_of(state, item, at) >= 0:
+			out.append(_entry(state, strings, rider, item, at, true))
+			seen["%s/%d" % [item, at]] = true
 	out.append(_entry(state, strings, rider, SiegeIds.ITEM_SAVE, 0, false))
-	var empty_pad := suggest_pad(state)
-	var up_pad := upgrade_pad(state)
-	var wanted: Array = [
-		[SiegeIds.ITEM_REPAIR, 0],
-		[SiegeIds.ITEM_BUILD_BALLISTA, empty_pad],
-		[SiegeIds.ITEM_BUILD_SCORPION, empty_pad],
-		[SiegeIds.ITEM_BUILD_CALTROP, empty_pad],
-		[SiegeIds.ITEM_UPGRADE, up_pad],
-		[SiegeIds.ITEM_GENERATOR, 0],
-		[SiegeIds.ITEM_IRON_BANDS, 0],
-		[SiegeIds.ITEM_RESERVE, 0],
-		[SiegeIds.ITEM_AQUEDUCT, 0],
-	]
-	for w: Array in wanted:
-		if out.size() >= MAX_ENTRIES:
-			break
+	for w: Array in candidates(state):
 		var item: String = w[0]
-		var pad: int = w[1]
-		if SiegeIds.PAD_ITEMS.has(item) and pad < 1:
+		var at: int = w[1]
+		if SiegeIds.PAD_ITEMS.has(item) and at < 1:
 			continue
-		if seen.has("%s/%d" % [item, pad]) or cost_of(state, item, pad) < 0:
+		if seen.has("%s/%d" % [item, at]) or cost_of(state, item, at) < 0:
 			continue
-		out.append(_entry(state, strings, rider, item, pad, false))
+		out.append(_entry(state, strings, rider, item, at, false))
+	return out
+
+
+## Every [item, at] the shop could sell, in the list's order (cost_of decides what is on sale).
+static func candidates(state: SiegeState) -> Array:
+	var out: Array = [[SiegeIds.ITEM_REPAIR, 0]]
+	for id in SiegeIds.UPGRADABLE:
+		out.append([SiegeIds.ITEM_UPGRADE, id])
+	out.append([SiegeIds.ITEM_MINE, 0])
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		out.append([SiegeIds.ITEM_SCORPION, n])
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		if state.pad(n).built():
+			out.append([SiegeIds.ITEM_PAD_UPGRADE, n])
+	for item in [
+		SiegeIds.ITEM_IRON_BANDS,
+		SiegeIds.ITEM_RESERVE,
+		SiegeIds.ITEM_AQUEDUCT,
+		SiegeIds.ITEM_CAULDRON
+	]:
+		out.append([item, 0])
+	return out
+
+
+## The entries cut into pages of ROWS rows: the first page keeps the head of the list (the pick
+## and "Save gold" on top); when there is more, each page's last row is a More entry ("More
+## (2/3)") that moves on to the next page, and the last page's More goes back to the first.
+static func pages(list: Array[Dictionary], strings: GameStrings) -> Array:
+	var out: Array = []
+	if list.size() <= ROWS:
+		out.append(list.duplicate())
+		return out
+	var per := ROWS - 1
+	var count := ceili(float(list.size()) / per)
+	for p in count:
+		var page: Array[Dictionary] = []
+		page.assign(list.slice(p * per, (p + 1) * per))
+		(
+			page
+			. append(
+				{
+					"id": {"item": ITEM_MORE, "at": (p + 1) % count},
+					"text": strings.t("SIEGE_SHOP_MORE", [(p + 1) % count + 1, count]),
+					"detail": "",
+					"cost": 0,
+					"disabled": false,
+					"recommended": false,
+				}
+			)
+		)
+		out.append(page)
 	return out
 
 
@@ -173,5 +187,5 @@ static func signature(list: Array[Dictionary]) -> String:
 	var parts: Array[String] = []
 	for e in list:
 		var id: Dictionary = e["id"]
-		parts.append("%s/%d/%d" % [id["item"], id["pad"], int(bool(e["disabled"]))])
+		parts.append("%s/%d/%d/%s" % [id["item"], id["at"], int(bool(e["disabled"])), e["text"]])
 	return "|".join(parts)

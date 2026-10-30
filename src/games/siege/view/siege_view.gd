@@ -1,292 +1,280 @@
 class_name SiegeView
-extends Node3D
-## The 3D miniature (brief 3 "Scene"). Owner: B3 "view" (src/games/siege/view/, with world/ and
-## units/ below it). It only reads state: never mutates SiegeState, never sends intents, never
-## calls ctx.directives. Builds headless (tests build it from a fixture state).
+extends Node2D
+## Castellum Rotae's 2D view (docs/games/siege.md 3 "View"), drawn in the platform's
+## PixelViewport at 960 x 540 art pixels: the baked world (SiegeV2WorldLayer), every machine
+## (SiegeV2Machines), the attackers (SiegeV2Crowd), the shots (SiegeV2Shots) and the tilt-shift
+## pass (SiegeV2TiltShift), with Siege's sound (SiegeAudio). It only reads the state
+## (contracts/STATE_V2.md) and listens to SiegeGame.cue; on a client the enemies come from the
+## snapshot history (SiegeSnapHistory), drawn between snapshots.
 ##
-## Contract the module (B2) relies on:
-##   var view := SiegeView.new(); view.bind(state, map); (the module's make_view() also sets
-##   view.game = self so the view can read ctx.players for colors and patterns)
-##   refresh(dt) runs every frame from _process (auto_process true) or from tests.
-## Everything is a LowPolyMesh or a MultiMesh: static scenery is merged per material, crowds
-## and chains are MultiMeshes, so the draw count never grows with the number of enemies.
-##
-## Parts: SiegeTerrain (hill, roads), SiegeScatter (trees, rocks), SiegeFortBuilder (walls,
-## frames, generator body), SiegeWheelView x4 (wheels, workers, pennants, shaft glow),
-## SiegeChainView x4 (tower routes), SiegeGeneratorView (flywheel, the rolling drum),
-## SiegeTowersView, SiegeEnemyView, SiegeEffectsView (bolts, caltrop zones), SiegeGateView, and
-## the camera rig with its 4 s push-in and gate-hit shake.
+## What it shows (SiegeViewMath has the formulas):
+##   - each rota turning at rim speed 1.2 m/s x P_eff / 250 W (at most 3 m/s) in its slot's hue
+##     (timber for an empty slot), with 1 to 3 walkers by P_eff (150 / 300 W, 20 W hysteresis);
+##   - each rider's powered path to the station they target, lit through the 2 s reconnect, the
+##     mine in breaks;
+##   - the stations at their yaw and animation phase, the mine and the pump cycling with m, the
+##     tar curtain and coat, the gate's damage stage, the pads;
+##   - the enemies (facing their travel), a docked tower and its boarders on the wall;
+##   - shots replayed from `shot` cues, with impacts;
+##   - in the cool-down, the fort's people marching out over the bridge.
 
-## The fort, corner towers included, fills this share of the screen width (brief: 55-60%). The low
-## end: the pitch fixes how much road fits below the gate, and a wider fort pushes it off screen.
-const FORT_WIDTH_SHARE := 0.555
-const PUSH_IN_FROM := 1.45
-const PUSH_IN_S := 4.0
-## A single gate-HP drop of at least this much shakes the camera.
-const SHAKE_MIN_HP := 8.0
-const SHAKE_M := 0.15
-const SHAKE_S := 0.5
-const MARCH_COUNT := 20
-const MARCH_RADIUS_M := 6.2
-## The CanvasLayer of the 3D picture: above the session background (layer 0), below the HUD
-## (HudLayer.LAYER 10); the vignette sits just above it.
-const SCREEN_LAYER := 1
+## Boarders drawn on the wall walk while a docked tower lands them.
+const BOARDERS := 5
+const WALL_WALK := Vector3(0, 58.4, 9.0)
+## The march home: people, spacing (m) and pace (m/s).
+const MARCHERS := 14
+const MARCH_GAP_M := 1.6
+const MARCH_MPS := 1.3
+## The mine's and the pump's cycles per second at m = 1.
+const MINE_HZ := 0.9
+const PUMP_HZ := 0.5
 
-## The CanvasLayer that shows the 3D world, and the SubViewport that holds it.
-var screen: CanvasLayer = null
-var world: SubViewport = null
 var game: SiegeGame = null
 var state: SiegeState = null
-var map: SiegeMap = null
-var rig: MiniatureCameraRig = null
-var sky: SkyAmbient = null
-var terrain: SiegeTerrain = null
-var fort: SiegeFortBuilder = null
-var wheels: Array[SiegeWheelView] = []
-var chains: Array[SiegeChainView] = []
-var generator: SiegeGeneratorView = null
-var towers: SiegeTowersView = null
-var enemies: SiegeEnemyView = null
-var effects: SiegeEffectsView = null
-var gate: SiegeGateView = null
-var march: MultiMeshScatter = null
+var path: SiegePath = null
+var bank: SiegeBakeBank = null
+var world: SiegeV2WorldLayer = null
+var machines: SiegeV2Machines = null
+var crowd: SiegeV2Crowd = null
+var shots: SiegeV2Shots = null
+var tilt: SiegeV2TiltShift = null
 var audio: SiegeAudio = null
-## Turn off to drive refresh() yourself (tests, screenshots).
-var auto_process: bool = true
-var shakes: int = 0
+## The time the view draws (host game seconds): the sim clock on the host, the history's render
+## clock on a client.
+var clock_s: float = 0.0
+var wheel_deg := PackedFloat32Array([0, 0, 0, 0])
+var walker_count := PackedInt32Array([0, 0, 0, 0])
+var walk_phase := PackedFloat32Array([0, 0, 0, 0])
+## Per slot: 1 while the rider is in rescue (the walkers stumble, brief 2.4).
+var stumbling := PackedInt32Array([0, 0, 0, 0])
+var mine_phase: float = 0.0
+var pump_phase: float = 0.0
+## Seconds since the march home began (negative: not marching).
+var march_s: float = -1.0
+
 var _built: bool = false
-var _time: float = 0.0
-var _last_gate_hp: float = -1.0
-var _march_mat: ShaderMaterial = null
+var _tick_seen: int = -1
+var _since_tick: float = 0.0
 
 
-## Points the view at the state it draws (call before adding it to the tree, or any time).
-func bind(p_state: SiegeState, p_map: SiegeMap) -> void:
+func bind(p_state: SiegeState, p_path: SiegePath) -> void:
 	state = p_state
-	map = p_map
-	if is_inside_tree() and not _built:
+	path = p_path
+	if game != null and not game.cue.is_connected(_on_cue):
+		game.cue.connect(_on_cue)
+	if is_inside_tree():
 		_build()
 
 
 func _ready() -> void:
-	if not _built and map != null:
-		_build()
-
-
-func _process(delta: float) -> void:
-	if auto_process:
-		refresh(delta)
-
-
-## Reads the state into the scene: wheels, workers, chains, the drum, towers, enemies, shots,
-## zones, the gate. `dt` is frame time in seconds.
-func refresh(dt: float) -> void:
-	if not _built or state == null:
-		return
-	_time += dt
-	var victory := state.in_cooldown() or state.done
-	for slot in wheels.size():
-		var rider := state.rider_at(slot)
-		wheels[slot].update(rider, dt, victory)
-		chains[slot].update(rider, dt)
-	generator.update(state.team_w, dt)
-	var history := client_history()
-	if history != null:
-		history.advance(dt)
-	enemies.update(state, dt, history)
-	towers.update(state, dt, enemies.drawn)
-	effects.update(state, dt, enemies.drawn)
-	gate.update(state, dt)
-	_update_shake()
-	_update_march(victory)
-	audio.update(state, dt, local_peer())
-
-
-## The module's snapshot history on a CLIENT (render clock behind the newest snapshot, like
-## Workout), else null: the host and SOLO draw the state's own positions.
-func client_history() -> SiegeSnapHistory:
-	if game != null and game.history != null and not game.history.is_empty():
-		return game.history
-	return null
-
-
-## Where the view draws the enemy `e` (ground x, z): the one path every enemy position takes,
-## whether the crowd, a bolt or a zone asks.
-func enemy_ground_pos(e: SiegeEnemyState) -> Vector2:
-	return SiegeEnemyView.ground_pos(e, map, client_history())
-
-
-func _update_shake() -> void:
-	if _last_gate_hp >= 0.0 and _last_gate_hp - state.gate_hp >= SHAKE_MIN_HP:
-		rig.shake(SHAKE_M, SHAKE_S)
-		shakes += 1
-	_last_gate_hp = state.gate_hp
-
-
-func _update_march(victory: bool) -> void:
-	march.visible = victory
-	if not victory:
-		return
-	var xf: Array[Transform3D] = []
-	var customs := PackedColorArray()
-	var gp := map.generator_pos
-	var spin := _time * 0.7
-	for i in MARCH_COUNT:
-		var a := spin + TAU * float(i) / float(MARCH_COUNT)
-		var pos := Vector3(gp.x + cos(a) * MARCH_RADIUS_M, 0.1, gp.y + sin(a) * MARCH_RADIUS_M)
-		# Marching counter-clockwise: face along the tangent.
-		var tangent := Vector3(-sin(a), 0.0, cos(a))
-		var facing := Basis.looking_at(tangent, Vector3.UP) * Basis().scaled(Vector3.ONE * 1.4)
-		xf.append(Transform3D(facing, pos))
-		customs.append(Color(fposmod(float(i) * 0.37, 1.0), 0.0, 0.0, 0.0))
-	MultiMeshScatter.set_walk_time(_march_mat, _time * 2.4)
-	march.set_instances(xf, PackedColorArray(), customs)
+	_build()
 
 
 func _build() -> void:
+	if _built:
+		return
 	_built = true
-	_build_screen()
-	terrain = SiegeTerrain.from_map(map)
-	fort = SiegeFortBuilder.new(map)
-	_build_environment()
-	_build_ground()
-	_build_fort()
-	_build_machines()
-	_build_units()
-	var vignette := ScreenVignette.new()
-	vignette.layer = SCREEN_LAYER + 1
-	add_child(vignette)
-	_build_march()
+	bank = SiegeBakeBank.shared()
+	world = SiegeV2WorldLayer.new(bank)
+	world.name = "World"
+	machines = SiegeV2Machines.new(bank)
+	machines.name = "Machines"
+	crowd = SiegeV2Crowd.new(bank)
+	crowd.name = "Crowd"
+	shots = SiegeV2Shots.new(bank)
+	shots.name = "Shots"
+	shots.path = path
+	shots.content = state.content if state != null else null
+	tilt = SiegeV2TiltShift.new(SiegeBakeBank.ART_SIZE, bank.manifest.get("focus", {}))
+	tilt.name = "TiltShift"
+	tilt.enabled = tilt_shift_option()
 	audio = SiegeAudio.new()
 	audio.name = "Audio"
-	add_child(audio)
+	for n: Node in [world, machines, crowd, shots, tilt, audio]:
+		add_child(n)
+	update(0.0)
 
 
-## The 3D world lives in its own SubViewport shown on a CanvasLayer (above the session screen's
-## background, below the HUD): the app's session screen paints an opaque background in the main
-## viewport's 2D canvas, which would hide any 3D drawn straight into it. Everything below is a
-## child of `world`; this node itself stays an empty Node3D.
-func _build_screen() -> void:
-	screen = CanvasLayer.new()
-	screen.name = "Screen"
-	screen.layer = SCREEN_LAYER
-	add_child(screen)
-	var container := SubViewportContainer.new()
-	container.name = "Container"
-	container.stretch = true
-	container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	screen.add_child(container)
-	world = SubViewport.new()
-	world.name = "World"
-	world.own_world_3d = true
-	world.handle_input_locally = false
-	world.msaa_3d = Viewport.MSAA_2X
-	world.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	world.size = Vector2i(1920, 1080)
-	container.add_child(world)
+## The local rider's tilt_shift option (on unless they turned it off).
+func tilt_shift_option() -> bool:
+	if game == null or game.ctx == null:
+		return true
+	var me := game.ctx.local_player()
+	if me == null or not (me.options is Dictionary):
+		return true
+	return bool(me.options.get("tilt_shift", true))
 
 
-func _build_environment() -> void:
-	sky = SkyAmbient.new()
-	sky.name = "SkyAmbient"
-	world.add_child(sky)
-	rig = MiniatureCameraRig.new()
-	rig.name = "CameraRig"
-	world.add_child(rig)
-	var cam: Dictionary = map.data.get("camera", {})
-	var tgt: Array = cam.get("target", [0, 0, 22])
-	rig.target = Vector3(float(tgt[0]), float(tgt[1]), float(tgt[2]))
-	rig.pitch_deg = float(cam.get("pitch_deg", 42.0))
-	rig.fov_deg = float(cam.get("fov_deg", 32.0))
-	rig.yaw_deg = float(cam.get("yaw_deg", 0.0))
-	rig.distance = SiegeFraming.fit_distance(
-		SiegeFraming.fort_box(map), rig.target, rig.pitch_deg, rig.fov_deg, FORT_WIDTH_SHARE
-	)
-	rig.push_in(PUSH_IN_FROM, float(cam.get("push_in_s", PUSH_IN_S)))
+func _process(delta: float) -> void:
+	update(delta)
 
 
-func _build_ground() -> void:
-	var ground := LowPolyMesh.new()
-	terrain.add_to(ground)
-	terrain.add_roads_to(ground, map)
-	sky.haze_mesh(ground, rig.camera_position())
-	world.add_child(ground.make_instance("Ground"))
-	for mm in SiegeScatter.build(map, terrain):
-		world.add_child(mm)
+func _is_client() -> bool:
+	return game != null and game.ctx != null and game.ctx.role == Wl.CLIENT
 
 
-func _build_fort() -> void:
-	var lp := fort.build_static()
-	sky.haze_mesh(lp, rig.camera_position())
-	world.add_child(lp.make_instance("Fort"))
+## One frame: the clock, the wheels, the machines, the crowd, the shots and the sound.
+func update(delta: float) -> void:
+	if game != null and game.state != null and game.state != state:
+		state = game.state
+		path = state.path
+	if not _built or state == null:
+		return
+	_advance_clock(delta)
+	_update_wheels(delta)
+	_update_machines(delta)
+	_update_crowd(delta)
+	shots.set_time(clock_s)
+	if audio != null:
+		audio.update(state, delta, game.ctx.local_peer if game != null and game.ctx != null else 0)
 
 
-func _build_machines() -> void:
+func _advance_clock(delta: float) -> void:
+	if _is_client() and game.history != null and not game.history.is_empty():
+		clock_s = game.history.advance(delta)
+		return
+	if state.tick != _tick_seen:
+		_tick_seen = state.tick
+		_since_tick = 0.0
+	else:
+		_since_tick = minf(_since_tick + delta, Wl.SIM_DT)
+	clock_s = state.tick * Wl.SIM_DT + _since_tick
+
+
+func _update_wheels(delta: float) -> void:
+	var r_m := path.wheel_radius_m if path != null else 7.0
 	for slot in 4:
-		var look := slot_look_of(slot)
-		var rider := state.rider_at(slot) if state != null else null
-		var wheel := SiegeWheelView.new()
-		wheel.setup(slot, fort, look, rider != null and rider.is_bot)
-		world.add_child(wheel)
-		wheels.append(wheel)
-		var chain := SiegeChainView.new()
-		chain.setup(slot, fort, look)
-		world.add_child(chain)
-		chains.append(chain)
-	generator = SiegeGeneratorView.new()
-	generator.setup(fort)
-	world.add_child(generator)
+		var r := state.rider_at(slot)
+		var p := r.p_eff_w if r != null else 0.0
+		var stag := r != null and r.rescue
+		stumbling[slot] = 1 if stag else 0
+		var dip := SiegeViewMath.stumble_dip(clock_s + slot * 0.23) if stag else 0.0
+		# a stumble checks the wheel for a moment
+		var check := 1.0 - 0.7 * dip
+		var v := SiegeViewMath.rim_speed(p) * check
+		var turn := SiegeViewMath.wheel_deg_per_s(p, r_m) * check
+		wheel_deg[slot] = fposmod(wheel_deg[slot] + turn * delta, 360.0)
+		machines.stumble[slot] = stag
+		machines.stumble_dip[slot] = dip
+		walker_count[slot] = SiegeViewMath.walkers_for(p, walker_count[slot]) if r != null else 0
+		walk_phase[slot] += v * delta / SiegeViewMath.STRIDE_M
+		machines.set_wheel(slot, wheel_deg[slot], r != null, walker_count[slot], walk_phase[slot])
 
 
-func _build_units() -> void:
-	towers = SiegeTowersView.new()
-	towers.setup(fort)
-	world.add_child(towers)
-	enemies = SiegeEnemyView.new()
-	enemies.setup(map, terrain)
-	world.add_child(enemies)
-	effects = SiegeEffectsView.new()
-	effects.setup(terrain, towers)
-	world.add_child(effects)
-	gate = SiegeGateView.new()
-	gate.setup(fort)
-	world.add_child(gate)
+func _update_machines(delta: float) -> void:
+	for slot in 4:
+		machines.set_route(slot, SiegeViewMath.lit_station(state, state.rider_at(slot)))
+	for id in [SiegeIds.STATION_BALLISTA, SiegeIds.STATION_ONAGER, SiegeIds.STATION_ARROWS]:
+		var st := state.station(id)
+		machines.set_station(id, st.yaw_deg, st.arm)
+	var arrows := state.station(SiegeIds.STATION_ARROWS)
+	var racks := SiegeStations.racks(state, arrows) if state.content != null else 3
+	machines.racks = SiegeViewMath.rack_mask(arrows.rack, arrows.arm, racks)
+	mine_phase = fposmod(mine_phase + state.station(SiegeIds.STATION_MINE).m * MINE_HZ * delta, 1.0)
+	machines.mine_phase = mine_phase
+	var tar_m := state.station(SiegeIds.STATION_TAR).m
+	if state.tar.cauldron_l > 0.5:
+		pump_phase = fposmod(pump_phase + tar_m * PUMP_HZ * delta, 1.0)
+	machines.pump_phase = pump_phase
+	machines.gate_stage = SiegeViewMath.gate_stage(state.gate_hp, state.gate_max, state.breach_s)
+	machines.curtain_stage = SiegeViewMath.curtain_stage(state.tar)
+	machines.coat_stage = SiegeViewMath.coat_stage(state.tar)
+	for n in range(1, SiegeIds.PAD_COUNT + 1):
+		var pd := state.pad(n)
+		machines.set_pad(n, pd.type, pd.yaw_deg)
+	machines.rebuild()
 
 
-func _build_march() -> void:
-	march = MultiMeshScatter.new()
-	march.name = "VictoryMarch"
-	march.setup(SiegeUnitMeshes.worker().build(), MARCH_COUNT, true, true)
-	_march_mat = MultiMeshScatter.walk_bob_material(0.14, 1.0, 0.3)
-	MultiMeshScatter.set_walk_time(_march_mat, 0.0)
-	march.material_override = _march_mat
-	march.visible = false
-	world.add_child(march)
+func _update_crowd(delta: float) -> void:
+	var types := PackedInt32Array()
+	var pos := PackedVector3Array()
+	var yaw := PackedFloat32Array()
+	var walk := PackedFloat32Array()
+	var hp := PackedFloat32Array()
+	var sts := PackedInt32Array()
+	var client := _is_client() and game.history != null
+	for e in state.enemies:
+		# retreating bodies keep walking back until the rules drop them
+		var shown := e.alive() or (e.st == SiegeIds.EN_RETREAT and e.hp > 0.0)
+		if not shown or types.size() >= SiegeV2Crowd.MAX_ENEMIES:
+			continue
+		var prog := game.history.prog_of(e.id, e.prog_m) if client else e.prog_m
+		var p := game.history.pos_of(e.id, e.pos) if client else e.pos
+		types.append(e.type)
+		pos.append(p)
+		yaw.append(SiegeViewMath.enemy_yaw(path, prog, e.st))
+		var stride := 3.0 if e.type == SiegeIds.ENEMY_CHARIOT else SiegeViewMath.STRIDE_M
+		walk.append(prog / stride if e.st != SiegeIds.EN_BATTER else 0.0)
+		hp.append(e.hp / maxf(e.max_hp, 1.0))
+		sts.append(e.st)
+	_add_boarders(types, pos, yaw, walk, hp, sts)
+	_add_march(delta, types, pos, yaw, walk, hp, sts)
+	shots.bodies = pos
+	crowd.set_enemies(types, pos, yaw, walk, hp, sts)
 
 
-## The local rider's peer (the module's, else the first rider's): whose denarii the coins follow.
-func local_peer() -> int:
-	if game != null and game.ctx != null:
-		return game.ctx.local_peer
-	return state.riders[0].peer if state != null and not state.riders.is_empty() else 0
+## Spearmen on the wall walk beside a docked tower while it lands its boarders.
+func _add_boarders(
+	types: PackedInt32Array,
+	pos: PackedVector3Array,
+	yaw: PackedFloat32Array,
+	walk: PackedFloat32Array,
+	hp: PackedFloat32Array,
+	sts: PackedInt32Array
+) -> void:
+	var tower := state.docked_tower()
+	if tower == null or not state.tar.boarded:
+		return
+	var tp := tower.pos
+	for k in BOARDERS:
+		if types.size() >= SiegeV2Crowd.MAX_ENEMIES:
+			return
+		var x := clampf(tp.x + (k - BOARDERS * 0.5) * 1.1, 4.0, 80.0)
+		types.append(SiegeIds.ENEMY_SPEAR)
+		pos.append(Vector3(x, WALL_WALK.y - (k % 2) * 0.7, WALL_WALK.z))
+		yaw.append(-90.0 if k % 2 == 0 else 180.0)
+		walk.append(clock_s * 1.5 + k * 0.3)
+		hp.append(1.0)
+		sts.append(SiegeIds.EN_WALK)
 
 
-## The look (color, pattern) of `slot`: the player slot's when the module is attached, else
-## the platform's Wl.slot_look.
-func slot_look_of(slot: int) -> Dictionary:
-	if game != null and game.ctx != null:
-		for p in game.ctx.players:
-			if p.slot_index == slot:
-				return {
-					"color": p.color, "pattern": p.pattern, "shape": p.shape, "hollow": p.hollow
-				}
-	return Wl.slot_look(slot)
+## The victory march in the cool-down: the fort's workers and haulers walk out of the gate,
+## over the bridge and down the road.
+func _add_march(
+	delta: float,
+	types: PackedInt32Array,
+	pos: PackedVector3Array,
+	yaw: PackedFloat32Array,
+	walk: PackedFloat32Array,
+	hp: PackedFloat32Array,
+	sts: PackedInt32Array
+) -> void:
+	var marching := game != null and game.victory_march()
+	if game == null:
+		marching = state.in_cooldown() or state.done
+	if not marching:
+		march_s = -1.0
+		return
+	march_s = maxf(march_s, 0.0) + delta
+	for k in MARCHERS:
+		if types.size() >= SiegeV2Crowd.MAX_ENEMIES:
+			return
+		var prog := path.length_m - march_s * MARCH_MPS + k * MARCH_GAP_M * 2.0
+		if prog > path.length_m:
+			continue
+		var lat := (k % 2 - 0.5) * 1.6
+		types.append(SiegeV2Crowd.TYPE_WORKER if k % 3 else SiegeV2Crowd.TYPE_HAULER)
+		pos.append(path.point_at(maxf(prog, 0.0), lat))
+		yaw.append(SiegeViewMath.enemy_yaw(path, prog, SiegeIds.EN_RETREAT))
+		walk.append(prog / SiegeViewMath.STRIDE_M)
+		hp.append(1.0)
+		sts.append(SiegeIds.EN_WALK)
 
 
-## Draws `frames` frames of `dt` seconds without waiting for _process (tests, screenshots).
-func settle(frames: int = 1, dt: float = 1.0 / 60.0) -> void:
-	for i in frames:
-		refresh(dt)
-		if rig != null:
-			rig.tick(dt)
+func _on_cue(kind: String, data: Dictionary) -> void:
+	if not _built:
+		return
+	if kind == SiegeIds.EV_SHOT:
+		shots.add_event(data)
+	if audio != null:
+		audio.on_cue(kind, data)

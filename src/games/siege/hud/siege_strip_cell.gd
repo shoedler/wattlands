@@ -1,23 +1,18 @@
 class_name SiegeStripCell
 extends PanelContainer
-## One rider's cell in Siege's own teammate strip (bottom centre, the only one: the kit's card
-## strip is not in Siege's HudSpec): the slot's chip, the routing target as an icon with its name,
-## the rider's raw watts and %FTP from the snapshot, and markers: Overdrive on or recharging,
-## rescue, AFK. The local rider's cell has an accent border. The raw W and %FTP
-## come from the state's rider row (the host's own values, the snapshot's on a client), so a
-## client's strip is as fresh as the 10 Hz snapshot.
+## One rider's cell in Siege's teammate strip (bottom centre): the slot's chip, the station the
+## rider drives, raw watts and %FTP from the state (the snapshot's on a client), and markers:
+## Overdrive on or recharging, rescue, AFK. The local rider's cell has an accent border.
 
-## Four cells and their gaps are 984 px: the room between the corner stacks is about 992 px.
-const SIZE := Vector2(240, 0)
-## Text sizes that keep "Rescue AFK" and a rider's "250 W  96%" inside the cell.
-const WATTS_PX := 24
-const STATUS_PX := 20
+## Four compact cells and their gaps fit the top band over the mountain (704 px at 1080p).
+const SIZE := Vector2(172, 0)
+const TARGET_PX := 20
+const WATTS_PX := 20
+const STATUS_PX := 18
 
 var slot: int = 0
 var chip: SlotChip = null
-var icon: SiegeTargetIcon = null
 var target_label: Label = null
-## Overdrive marker (top row, right) and status marker (bottom row, right).
 var od_label: Label = null
 var status_label: Label = null
 var watts_label: Label = null
@@ -40,15 +35,14 @@ func _init(p_slot: int = 0) -> void:
 	top.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	col.add_child(top)
 	chip = SlotChip.new()
-	chip.custom_minimum_size = Vector2(30, 30)
+	chip.custom_minimum_size = Vector2(22, 22)
 	chip.set_slot(slot)
 	top.add_child(chip)
-	icon = SiegeTargetIcon.new()
-	top.add_child(icon)
-	target_label = SiegeHudPanel.make_label(WlTheme.BODY_PX - 4, WlTheme.TEXT, true)
+	target_label = SiegeHudPanel.make_label(TARGET_PX, WlTheme.TEXT, true)
+	target_label.clip_text = true
+	target_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(target_label)
-	top.add_child(_spacer())
-	od_label = SiegeHudPanel.make_label(WlTheme.SMALL_PX, WlTheme.ACCENT, true)
+	od_label = SiegeHudPanel.make_label(STATUS_PX, WlTheme.ACCENT, true)
 	top.add_child(od_label)
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", 6)
@@ -68,12 +62,10 @@ static func _spacer() -> Control:
 	return s
 
 
-## Sets the chip's look (the session's color and pattern for the slot).
 func set_look(look: Dictionary) -> void:
 	chip.set_look(look)
 
 
-## Marks the cell as the local rider's (an accent border instead of the plain one).
 func set_local(on: bool) -> void:
 	if on == is_local:
 		return
@@ -81,24 +73,23 @@ func set_local(on: bool) -> void:
 	add_theme_stylebox_override("panel", _style(on))
 
 
-## The cell's card: the kit's panel with tighter side margins, and an accent border for the local
-## rider.
 static func _style(local: bool) -> StyleBoxFlat:
 	var border := WlTheme.ACCENT if local else WlTheme.PANEL_BORDER
 	var sb := WlTheme.panel_style(WlTheme.PANEL, border, 4 if local else 2)
-	sb.content_margin_left = 10.0
-	sb.content_margin_right = 10.0
+	sb.content_margin_left = 6.0
+	sb.content_margin_right = 6.0
+	sb.content_margin_top = 3.0
+	sb.content_margin_bottom = 3.0
 	return sb
 
 
-## Fills the cell from `rider` (null: an empty wheel, the cell shows nothing).
-func show_rider(rider: SiegeRiderState, strings: GameStrings, color: Color) -> void:
+## Fills the cell from `rider` (null: an empty wheel, the cell hides).
+func show_rider(rider: SiegeRiderState, strings: GameStrings) -> void:
 	visible = rider != null
 	if rider == null:
 		return
-	var dim := not rider.delivering()
-	icon.set_target(rider.target, color, dim)
-	target_label.text = SiegeHudModel.target_short(strings, rider.target)
+	target_label.text = strings.t(SiegeGame.station_key(rider.target))
+	target_label.modulate = Color(1, 1, 1, 1.0 if rider.delivering() else 0.55)
 	watts_label.text = "%d W  %d%%" % [roundi(rider.raw_w), SiegeHudModel.pct_ftp(rider)]
 	od_label.text = ""
 	match rider.od_state:

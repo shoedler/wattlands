@@ -75,17 +75,17 @@ func test_the_tuning_targets_in_balance_json_are_the_briefs() -> void:
 	assert_eq(float(tuning["t4_ram_stop"]), 0.7)
 
 
-# --- the generator pays 1 denarius per kJ ---------------------------------------------------------
+# --- the mine pays 1 gold per kJ -----------------------------------------------------------------
 
 
-func test_a_generator_rider_earns_one_denarius_per_kj_of_p_eff() -> void:
-	# FTP 200 -> P_eff = 1.25 x raw; 200 W raw = 250 W P_eff = 15 kJ in 60 s = 15 denarii.
-	var spec := {"ftp": 200.0, "route": "gen", "power_fn": SiegeHeadlessSim.const_w(200.0)}
+func test_a_mine_rider_earns_one_gold_per_kj_of_p_eff() -> void:
+	# FTP 200 -> P_eff = 1.25 x raw; 200 W raw = 250 W P_eff = 15 kJ in 60 s = 15 gold.
+	var spec := {"ftp": 200.0, "route": "mine", "power_fn": SiegeHeadlessSim.const_w(200.0)}
 	var sim := _sim("short", [spec], {"warmup_s": 120, "max_waves": 1})
 	sim.run_until(60.0)
 	var r := sim.state.rider(1)
-	assert_almost_eq(r.gen_denarii, 15.0, 0.015, "within 0.1%")
-	assert_almost_eq(r.denarii, 40.0 + 15.0, 0.015)
+	assert_almost_eq(r.mine_gold, 15.0, 0.015, "within 0.1%")
+	assert_almost_eq(r.gold, 40.0 + 15.0, 0.015)
 
 
 # --- Overdrive ------------------------------------------------------------------------------------
@@ -208,33 +208,33 @@ func test_a_refused_directive_costs_a_30_s_retry_not_the_cooldown() -> void:
 	assert_eq(r.od_count, 0, "a refused Overdrive is not counted")
 
 
-func _tower_pad_m(sim: SiegeHeadlessSim, pad: int, until_t: float, sample_at: Array) -> Dictionary:
+func _station_m(sim: SiegeHeadlessSim, id: int, until_t: float, sample_at: Array) -> Dictionary:
 	var out := {}
 	for at in sample_at:
 		sim.run_until(at)
-		out[at] = sim.state.pad(pad).m
+		out[at] = sim.state.station(id).m
 	sim.run_until(until_t)
 	return out
 
 
-func test_overdrive_doubles_the_riders_share_of_tower_output_while_raw_power_is_at_least_ftp(
+func test_overdrive_doubles_the_riders_share_of_station_output_while_raw_power_is_at_least_ftp(
 ) -> void:
-	# Two riders on the Ballista at pad 3. FAIR_FTP: P_eff = raw x 250 / FTP.
+	# Two riders on the great onager. FAIR_FTP: P_eff = raw x 250 / FTP.
 	# A: FTP 200, 220 W raw = 275 W P_eff. B: FTP 220, 110 W raw = 125 W P_eff.
 	var w := WAVE_T0
 	var a := {
 		"ftp": 200.0,
-		"route": "3",
+		"route": "2",
 		"manual_shop": true,
 		"od_pct": 110.0,
 		"action_at": [w + 40.0],
 		"power_fn": SiegeHeadlessSim.const_w(220.0)
 	}
 	var b := {
-		"ftp": 220.0, "route": "3", "manual_shop": true, "power_fn": SiegeHeadlessSim.const_w(110.0)
+		"ftp": 220.0, "route": "2", "manual_shop": true, "power_fn": SiegeHeadlessSim.const_w(110.0)
 	}
 	var sim := _od_wave_sim([a, b])
-	var m := _tower_pad_m(sim, 3, w + 120.0, [w + 30.0, w + 50.0, w + 80.0])
+	var m := _station_m(sim, 2, w + 120.0, [w + 30.0, w + 50.0, w + 80.0])
 	assert_almost_eq(
 		float(m[w + 30.0]), (275.0 + 125.0) / 250.0, 0.02, "before: sum of P_eff / 250 W"
 	)
@@ -249,32 +249,32 @@ func test_overdrive_does_not_double_output_below_ftp_and_m_caps_at_4() -> void:
 	# A rides 190 W (< FTP 200) in its Overdrive: od stays 1.
 	var weak := {
 		"ftp": 200.0,
-		"route": "3",
+		"route": "2",
 		"manual_shop": true,
 		"action_at": [w + 40.0],
 		"power_fn": SiegeHeadlessSim.const_w(190.0)
 	}
 	var sim := _od_wave_sim([weak])
-	var m := _tower_pad_m(sim, 3, w + 60.0, [w + 30.0, w + 50.0])
+	var m := _station_m(sim, 2, w + 60.0, [w + 30.0, w + 50.0])
 	assert_almost_eq(float(m[w + 30.0]), 190.0 * 1.25 / 250.0, 0.02)
 	assert_almost_eq(float(m[w + 50.0]), float(m[w + 30.0]), 0.02, "no doubling below CP")
 	# Two big riders in Overdrive: 2 x (2 x 500 W P_eff) / 250 = 8, capped at 4.0.
 	var big := {
 		"ftp": 200.0,
-		"route": "4",
+		"route": "3",
 		"manual_shop": true,
 		"action_at": [w + 40.0],
 		"power_fn": SiegeHeadlessSim.const_w(400.0)
 	}
 	var big2 := {
 		"ftp": 200.0,
-		"route": "4",
+		"route": "3",
 		"manual_shop": true,
 		"action_at": [w + 40.0],
 		"power_fn": SiegeHeadlessSim.const_w(400.0)
 	}
 	var cap := _od_wave_sim([big, big2])
-	var mc := _tower_pad_m(cap, 4, w + 60.0, [w + 30.0, w + 50.0])
+	var mc := _station_m(cap, 3, w + 60.0, [w + 30.0, w + 50.0])
 	assert_almost_eq(float(mc[w + 30.0]), 4.0, 0.001, "1000 W P_eff / 250 = 4.0 already")
 	assert_almost_eq(float(mc[w + 50.0]), 4.0, 0.001, "capped at 4.0 in Overdrive")
 
@@ -282,35 +282,27 @@ func test_overdrive_does_not_double_output_below_ftp_and_m_caps_at_4() -> void:
 # --- T2 ---------------------------------------------------------------------------------------------
 
 
-func test_t2_a_tower_only_rider_earns_40_to_60_percent_of_a_generator_only_rider() -> void:
-	# Two riders on towers (Ballista pad 3, Scorpion pad 4), two on the generator, same FTP and
-	# compliance. Earnings (generator pay + bounties) per minute of wave time.
-	var tower := {"ftp": 200.0}
-	var specs := [
-		tower.merged({"route": "3"}),
-		tower.merged({"route": "4"}),
-		tower.merged({"route": "gen"}),
-		tower.merged({"route": "gen"}),
-	]
-	var sim := _sim(
-		"short",
-		specs,
-		{"warmup_s": 60, "build_s": 60, "break_s": 60, "wave_s": 180, "max_waves": 3}
-	)
-	sim.run_all()
-	var tower_rate := (sim.earned_per_wave_minute(1) + sim.earned_per_wave_minute(2)) / 2.0
-	var gen_rate := (sim.earned_per_wave_minute(3) + sim.earned_per_wave_minute(4)) / 2.0
-	assert_gt(gen_rate, 0.0)
-	var ratio := tower_rate / gen_rate
-	assert_between(
-		ratio,
-		0.4,
-		0.6,
-		(
-			"T2: tower-only %.2f vs generator-only %.2f denarii/min = %.2f"
-			% [tower_rate, gen_rate, ratio]
-		)
-	)
+func test_t2_a_weapon_only_rider_earns_40_to_60_percent_of_a_mine_only_rider() -> void:
+	# Two riders on weapons (the ballista and the onager), two on the mine, same FTP and
+	# compliance. Earnings (mine pay + bounties) per minute of wave time, over seeds 1-3.
+	var ratios: Array[float] = []
+	for seed_n in [1, 2, 3]:
+		var rider := {"ftp": 200.0}
+		var specs := [
+			rider.merged({"route": "1"}),
+			rider.merged({"route": "2"}),
+			rider.merged({"route": "mine"}),
+			rider.merged({"route": "mine"}),
+		]
+		var sim := _sim("short", specs, {"warmup_s": 60, "build_s": 60, "break_s": 60}, {}, seed_n)
+		sim.run_all()
+		var weapon_rate := (sim.earned_per_wave_minute(1) + sim.earned_per_wave_minute(2)) / 2.0
+		var mine_rate := (sim.earned_per_wave_minute(3) + sim.earned_per_wave_minute(4)) / 2.0
+		assert_gt(mine_rate, 0.0)
+		ratios.append(weapon_rate / mine_rate)
+		gut.p("T2 seed %d: weapon %.2f vs mine %.2f gold/min" % [seed_n, weapon_rate, mine_rate])
+	var mean := (ratios[0] + ratios[1] + ratios[2]) / 3.0
+	assert_between(mean, 0.4, 0.6, "T2: weapon-only / mine-only gold per minute = %.2f" % mean)
 
 
 # --- Breach -----------------------------------------------------------------------------------------
@@ -331,7 +323,7 @@ func test_breach_four_riders_at_0_w_breach_in_the_first_full_wave() -> void:
 	var restore_t := -1.0
 	while not sim.finished() and restore_t < 0.0 and sim.now() < w0 + 300.0 + 20.0:
 		for r in sim.state.riders:
-			before[r.peer] = r.denarii
+			before[r.peer] = r.gold
 		var evs := sim.step()
 		for e in evs:
 			if str(e["type"]) == SiegeIds.EV_BREACH and breach_t < 0.0:
@@ -341,11 +333,11 @@ func test_breach_four_riders_at_0_w_breach_in_the_first_full_wave() -> void:
 				restore_t = sim.now() - SiegeHeadlessSim.DT
 				restored_hp = float(sim.state.gate_hp)
 				for r in sim.state.riders:
-					after[r.peer] = r.denarii
+					after[r.peer] = r.gold
 	assert_gte(breach_t, w0, "a Breach after the first full wave began")
 	assert_lt(breach_t, w0 + 300.0, "a Breach inside the first full wave")
 	assert_gt(restore_t, 0.0, "the gate came back")
-	assert_almost_eq(restore_t - breach_t, 10.0, 0.11, "towers stop for 10 s")
+	assert_almost_eq(restore_t - breach_t, 10.0, 0.11, "stations stop for 10 s")
 	assert_almost_eq(restored_hp, 30.0, 0.5, "the gate is back at 30 HP")
 	var lost_any := false
 	for peer: int in at_breach:
@@ -359,9 +351,9 @@ func test_breach_four_riders_at_0_w_breach_in_the_first_full_wave() -> void:
 		)
 		assert_true(
 			kept_ok,
-			"rider %d: %.1f denarii before, %.1f after (30%% lost, rounded down)" % [peer, b, a]
+			"rider %d: %.1f gold before, %.1f after (30%% lost, rounded down)" % [peer, b, a]
 		)
-	assert_true(lost_any, "every rider lost denarii")
+	assert_true(lost_any, "every rider lost gold")
 	assert_gte(sim.state.breaches, 1)
 
 
@@ -394,16 +386,16 @@ func test_s8_vo2_with_triple_budget_stays_under_the_cap_and_the_snapshot_limit()
 
 func test_s8_a_flood_hits_the_cap_with_the_rest_queued_and_a_small_snapshot() -> void:
 	# 30x the budget with riders that do nothing: far more spawns than 150 enemies fit.
-	var base := float(SiegeFakes.content("vo2").balance["c_budget"])
+	var base := float(SiegeFakes.content("short").balance["c_budget"])
 	var patches := {"balance": {"c_budget": base * 30.0}}
 	patches.merge(
 		SiegeHeadlessSim.trim_patch(
-			"vo2", {"warmup_s": 90, "build_s": 30, "break_s": 30, "max_waves": 1}
+			"short", {"warmup_s": 90, "build_s": 30, "break_s": 30, "max_waves": 1}
 		),
 		true
 	)
 	var specs := SiegeHeadlessSim.team(4, {"zero": true})
-	var sim := SiegeHeadlessSim.create("vo2", specs, {"patches": patches, "seed": 4})
+	var sim := SiegeHeadlessSim.create("short", specs, {"patches": patches, "seed": 4})
 	sim.run_all()
 	assert_lte(sim.stats["max_alive"], 150)
 	assert_lte(

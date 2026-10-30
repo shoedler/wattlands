@@ -1,6 +1,6 @@
 class_name SiegeSnapHistory
 extends RefCounted
-## Client: every enemy's road position in the last few snapshots, keyed by the host's game time
+## Client: every enemy's path position in the last few snapshots, keyed by the host's game time
 ## (the snapshot's tick x Wl.SIM_DT), so the view can draw enemies between two snapshots (brief
 ## 2.6; BRIEF 5.1). Like WorkoutSnapHistory: a game has no NetSession handle, so the render clock
 ## runs behind the newest snapshot by their mean spacing (0.1 s at 10 Hz, about 1 s under the
@@ -22,17 +22,17 @@ const DELAY_MAX_S := RESYNC_S - 0.1
 ## A render_t that fell behind catches up with this time constant.
 const CATCHUP_TAU_S := 0.25
 
-## Oldest first: [{"t": host seconds, "e": {enemy id: PackedFloat32Array [road, prog_m, lat_m]}}].
+## Oldest first: [{"t": host seconds, "e": {enemy id: PackedFloat32Array [prog_m, lat_m]}}].
 var entries: Array[Dictionary] = []
-## The map positions are computed on (SiegeSnapHistory.pos_of); may be null (prog_of still works).
-var map: SiegeMap = null
+## The path positions are computed on (SiegeSnapHistory.pos_of); may be null (prog_of still works).
+var path: SiegePath = null
 ## The host time the view draws (advance() moves it).
 var render_t: float = 0.0
 var _clock_set: bool = false
 
 
-func _init(p_map: SiegeMap = null) -> void:
-	map = p_map
+func _init(p_path: SiegePath = null) -> void:
+	path = p_path
 
 
 func clear() -> void:
@@ -69,7 +69,7 @@ func delay() -> float:
 func push(t: float, enemies: Array[SiegeEnemyState]) -> void:
 	var e := {}
 	for en in enemies:
-		e[en.id] = PackedFloat32Array([en.road, en.prog_m, en.lat_m])
+		e[en.id] = PackedFloat32Array([en.prog_m, en.lat_m])
 	if not entries.is_empty():
 		var newest := newest_t()
 		if t < newest or t - newest > MAX_GAP_S:
@@ -103,7 +103,7 @@ func advance(delta: float) -> float:
 	return render_t
 
 
-## Enemy `id`'s [road, prog_m, lat_m] at host time `t`: linear between the two entries around `t`,
+## Enemy `id`'s [prog_m, lat_m] at host time `t`: linear between the two entries around `t`,
 ## the oldest entry's value before it and the newest's after (never extrapolated); an empty
 ## array when no entry has the enemy.
 func state_at(id: int, t: float) -> PackedFloat32Array:
@@ -127,22 +127,28 @@ func state_at(id: int, t: float) -> PackedFloat32Array:
 	return (prev["e"] as Dictionary)[id]
 
 
-## Road progress (m) of enemy `id` at render_t; `fallback` when it isn't in the history.
+## Path progress (m) of enemy `id` at render_t; `fallback` when it isn't in the history.
 func prog_of(id: int, fallback: float) -> float:
 	var s := state_at(id, render_t)
-	return s[1] if s.size() == 3 else fallback
+	return s[0] if s.size() == 2 else fallback
 
 
-## Ground position (x, z) of enemy `id` at render_t on the map; `fallback` without a map or
-## history for it.
-func pos_of(id: int, fallback: Vector2) -> Vector2:
+## Lateral offset (m) of enemy `id` at render_t; `fallback` when it isn't in the history.
+func lat_of(id: int, fallback: float) -> float:
 	var s := state_at(id, render_t)
-	if s.size() != 3 or map == null or int(s[0]) < 0 or int(s[0]) >= map.road_count():
+	return s[1] if s.size() == 2 else fallback
+
+
+## World position of enemy `id` at render_t on the path; `fallback` without a path or history
+## for it.
+func pos_of(id: int, fallback: Vector3) -> Vector3:
+	var s := state_at(id, render_t)
+	if s.size() != 2 or path == null:
 		return fallback
-	return map.point_at(int(s[0]), s[1], s[2])
+	return path.point_at(s[0], s[1])
 
 
 static func _blend(
 	a: PackedFloat32Array, b: PackedFloat32Array, alpha: float
 ) -> PackedFloat32Array:
-	return PackedFloat32Array([b[0], lerpf(a[1], b[1], alpha), lerpf(a[2], b[2], alpha)])
+	return PackedFloat32Array([lerpf(a[0], b[0], alpha), lerpf(a[1], b[1], alpha)])

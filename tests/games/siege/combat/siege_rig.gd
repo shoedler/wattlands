@@ -136,24 +136,6 @@ func manual() -> SiegeRig:
 	return self
 
 
-## A live enemy placed on `road` at `prog_m` (lateral `lat`); hp < 0: the type's full HP.
-func spawn(
-	type: int, road: int, prog_m: float, lat: float = 0.0, hp: float = -1.0
-) -> SiegeEnemyState:
-	var e := SiegeEnemyState.new()
-	e.id = state.next_enemy_id
-	state.next_enemy_id += 1
-	e.type = type
-	e.road = road
-	e.prog_m = prog_m
-	e.lat_m = lat
-	e.max_hp = float(content.enemy_def(type)["hp"])
-	e.hp = e.max_hp if hp < 0.0 else hp
-	e.place(content.map)
-	state.enemies.append(e)
-	return e
-
-
-## The end of the gate: the road's length.
-func road_end(road: int) -> float:
-	return content.map.road_length(road)
+## A live enemy placed at `prog_m` (lateral `lat`); hp < 0: the type's full HP.
+func spawn(type: int, prog_m: float, lat: float = 0.0, hp: float = -1.0) -> SiegeEnemyState:
+	return SiegeKit.enemy(state, type, prog_m, lat, hp)

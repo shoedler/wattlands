@@ -1,51 +1,54 @@
 class_name SiegeAudio
 extends Node
-## Castellum Rotae's sound (brief 3 "Audio"), all synthesized with Sfx.synth (no files, no
-## downloads; credited in docs/credits.d/siege.md): a wheel creak and a generator hum, both
-## looping and pitched by watts; tower shots, hooves, the ram, the gate, horns and coins. It
-## reads the state like the view does (a child of SiegeView), so a client hears what the host
-## does, from its snapshots: shots, the gate losing HP, a Breach, a ram at the gate, a wave
-## starting. Headless runs create no players and play nothing (Sfx stays silent there too).
+## Castellum Rotae's sound (docs/games/siege.md 3 "Audio"), all synthesized with Sfx.synth (no
+## files): the treadwheels' creak and the junction's clatter, both looping and pitched by watts;
+## the bolt's thunk, the onager's release and its stone's impact, the arrow volley's hiss, the tar
+## pouring, hooves, the ram, gate hits, horns and coins. A child of SiegeView: it reads the state
+## the view reads and hears the module's cues, so a client hears what the host does. Headless
+## runs create no players and play nothing (`played` still records, for the tests).
 
-const SOUND_NAMES: Array[String] = [
-	"siege_ballista",
-	"siege_scorpion",
-	"siege_caltrop",
-	"siege_hooves",
-	"siege_ram",
-	"siege_gate",
-	"siege_horn",
-]
+const SOUNDS := {
+	"siege_bolt": ["square", 92.0, 0.16, 0.001, 0.12],
+	"siege_scorpion": ["square", 520.0, 0.07, 0.001, 0.05],
+	"siege_release": ["saw", 70.0, 0.5, 0.004, 0.4],
+	"siege_impact": ["noise", 0.0, 0.42, 0.002, 0.36],
+	"siege_volley": ["noise", 0.0, 0.7, 0.05, 0.5],
+	"siege_hooves": ["noise", 0.0, 0.09, 0.001, 0.07],
+	"siege_ram": ["saw", 55.0, 0.45, 0.005, 0.35],
+	"siege_gate": ["noise", 0.0, 0.3, 0.002, 0.25],
+	"siege_horn": ["saw", 196.0, 1.1, 0.08, 0.5],
+}
 const LOOP_CREAK := "siege_creak"
-const LOOP_HUM := "siege_hum"
-## Loop pitch: creak 0.55 .. 1.6 over 0 .. 300 W mean P_eff, hum 0.7 .. 2.0 over 0 .. 2000 W.
+const LOOP_CLATTER := "siege_clatter"
+const LOOP_TAR := "siege_tar"
+## Loop pitch: creak 0.55..1.6 over 0..300 W mean P_eff, clatter 0.7..1.8 over 0..1500 W team.
 const CREAK_PITCH := Vector2(0.55, 1.6)
-const HUM_PITCH := Vector2(0.7, 2.0)
-const MAX_SHOTS_PER_FRAME := 4
+const CLATTER_PITCH := Vector2(0.7, 1.8)
 const HOOF_EVERY_S := 0.4
 const RAM_EVERY_S := 1.2
 const COIN_EVERY_S := 0.3
+const MAX_SHOT_SOUNDS_PER_TICK := 3
 
-## Every sound the last update asked for, newest last (tests read and clear it).
+## Every sound asked for since the last clear, newest last (tests read and clear it).
 var played: Array[String] = []
 var silent: bool = true
 var creak: AudioStreamPlayer = null
-var hum: AudioStreamPlayer = null
+var clatter: AudioStreamPlayer = null
+var tar_pour: AudioStreamPlayer = null
 var creak_pitch: float = 1.0
-var hum_pitch: float = 1.0
+var clatter_pitch: float = 1.0
 var local_peer: int = 0
 
 var _sfx: WlSfx = null
-var _tick: int = -1
-var _seen: Dictionary = {}
 var _gate_hp: float = -1.0
-var _breach_was: bool = false
-var _phase_was: int = -2
-var _horn_was: bool = false
 var _hoof_t: float = 0.0
 var _ram_t: float = 0.0
 var _coin_t: float = 0.0
-var _denarii_was: float = -1.0
+var _gold_was: float = -1.0
+var _shot_tick: int = -1
+var _shot_sounds: int = 0
+## Stone impacts to come: [seconds left].
+var _impacts := PackedFloat32Array()
 
 
 func _ready() -> void:
@@ -53,26 +56,18 @@ func _ready() -> void:
 	silent = DisplayServer.get_name() == "headless"
 	_register()
 	if not silent:
-		creak = _loop_player(LOOP_CREAK, "saw", 62.0, -18.0)
-		hum = _loop_player(LOOP_HUM, "sine", 55.0, -16.0)
+		creak = _loop_player(LOOP_CREAK, "saw", 62.0, -20.0)
+		clatter = _loop_player(LOOP_CLATTER, "square", 31.0, -24.0)
+		tar_pour = _loop_player(LOOP_TAR, "noise", 0.0, -26.0)
 
 
 func _register() -> void:
 	if _sfx == null:
 		return
-	var defs := {
-		"siege_ballista": ["saw", 150.0, 0.2, 0.002, 0.16],
-		"siege_scorpion": ["square", 520.0, 0.07, 0.001, 0.05],
-		"siege_caltrop": ["triangle", 210.0, 0.26, 0.01, 0.2],
-		"siege_hooves": ["noise", 0.0, 0.09, 0.001, 0.07],
-		"siege_ram": ["saw", 55.0, 0.45, 0.005, 0.35],
-		"siege_gate": ["noise", 0.0, 0.3, 0.002, 0.25],
-		"siege_horn": ["saw", 196.0, 1.1, 0.08, 0.5],
-	}
-	for key: String in defs:
+	for key: String in SOUNDS:
 		if _sfx.has_sound(key):
 			continue
-		var d: Array = defs[key]
+		var d: Array = SOUNDS[key]
 		var stream := _sfx.synth(str(d[0]), float(d[1]), float(d[2]), float(d[3]), float(d[4]))
 		if stream != null:
 			_sfx.register(key, stream)
@@ -88,12 +83,13 @@ func _loop_player(key: String, kind: String, hz: float, db: float) -> AudioStrea
 	return p
 
 
-## Pitch of a loop for `value` inside `span` (x at 0, y at `full`).
+## A loop's pitch for `value` inside `span` (x at 0, y at `full`).
 static func pitch_for(value: float, full: float, span: Vector2) -> float:
 	return lerpf(span.x, span.y, clampf(value / maxf(full, 1.0), 0.0, 1.0))
 
 
-## Reads the state: starts what happened since the last call, retunes the loops.
+## Reads the state once a frame: the loops' pitch, gate hits, the Breach, hooves, the ram, coins
+## and the stone impacts that are due.
 func update(state: SiegeState, dt: float, p_local_peer: int) -> void:
 	local_peer = p_local_peer
 	var mean_p := 0.0
@@ -104,21 +100,21 @@ func update(state: SiegeState, dt: float, p_local_peer: int) -> void:
 			n += 1
 	mean_p = mean_p / float(n) if n > 0 else 0.0
 	creak_pitch = pitch_for(mean_p, 300.0, CREAK_PITCH)
-	hum_pitch = pitch_for(state.team_w, 2000.0, HUM_PITCH)
-	if creak != null:
-		creak.pitch_scale = creak_pitch
-		_run(creak, n > 0 and mean_p > 5.0)
-	if hum != null:
-		hum.pitch_scale = hum_pitch
-		_run(hum, state.team_w > 5.0)
-	_shots(state)
+	clatter_pitch = pitch_for(state.team_w, 1500.0, CLATTER_PITCH)
+	_loop(creak, creak_pitch, n > 0 and mean_p > 5.0)
+	_loop(clatter, clatter_pitch, state.team_w > 5.0 and state.in_wave())
+	var pouring := state.station(SiegeIds.STATION_TAR).m > 0.0 and state.tar.cauldron_l > 0.5
+	_loop(tar_pour, 1.0, pouring and state.in_wave())
 	_gate(state)
-	_phase(state)
-	_hooves_and_ram(state, dt)
+	_enemies(state, dt)
 	_coins(state, dt)
+	_due_impacts(dt)
 
 
-func _run(p: AudioStreamPlayer, on: bool) -> void:
+func _loop(p: AudioStreamPlayer, pitch: float, on: bool) -> void:
+	if p == null:
+		return
+	p.pitch_scale = pitch
 	if on and not p.playing:
 		p.play()
 	elif not on and p.playing:
@@ -131,65 +127,68 @@ func _play(sound: String, db: float = -6.0, pitch: float = 1.0) -> void:
 		_sfx.play(sound, db, pitch)
 
 
-func _shots(state: SiegeState) -> void:
-	if state.tick == _tick:
-		return
-	_tick = state.tick
-	var fired := 0
-	for shot in state.shots:
-		var tick_fired := state.tick - roundi(shot.age_s / Wl.SIM_DT)
-		var key := shot.pad * 1000003 + tick_fired
-		if _seen.has(key):
-			continue
-		_seen[key] = tick_fired
-		if fired >= MAX_SHOTS_PER_FRAME:
-			continue
-		fired += 1
-		match state.pad(shot.pad).type:
-			SiegeIds.TOWER_BALLISTA:
-				_play("siege_ballista", -7.0)
-			SiegeIds.TOWER_SCORPION:
-				_play("siege_scorpion", -12.0)
-			SiegeIds.TOWER_CALTROP:
-				_play("siege_caltrop", -9.0)
-	if _seen.size() > 48:
-		for k: int in _seen.keys():
-			if int(_seen[k]) < state.tick - 6:
-				_seen.erase(k)
+## The module's cues: shots (thunk, release, hiss; a stone's impact when it lands), horns at a
+## wave's start, an engine's push and a rush, and the Breach.
+func on_cue(kind: String, data: Dictionary) -> void:
+	match kind:
+		SiegeIds.EV_SHOT:
+			var tk := int(data.get("tk", 0))
+			if tk != _shot_tick:
+				_shot_tick = tk
+				_shot_sounds = 0
+			_shot_sounds += 1
+			if _shot_sounds > MAX_SHOT_SOUNDS_PER_TICK:
+				return
+			match int(data.get("kind", 0)):
+				SiegeIds.SHOT_BOLT:
+					_play("siege_bolt", -6.0)
+				SiegeIds.SHOT_SCORPION:
+					_play("siege_scorpion", -12.0)
+				SiegeIds.SHOT_STONE:
+					_play("siege_release", -6.0)
+					_impacts.append(_flight_s(data))
+				SiegeIds.SHOT_ARROW:
+					_play("siege_volley", -14.0, 1.6)
+		SiegeIds.EV_WAVE_START, SiegeIds.EV_PUSH:
+			_play("siege_horn", -8.0)
+		SiegeIds.EV_RUSH:
+			if int(data.get("on", 0)) != 0:
+				_play("siege_horn", -6.0, 1.25)
+		SiegeIds.EV_BREACH:
+			_play("boom", -2.0)
+			_play("siege_gate", -4.0)
+
+
+## How long a shot flies before it comes down to the road (about z 0).
+static func _flight_s(data: Dictionary) -> float:
+	var o := SiegeEvents.shot_origin(data)
+	var v := SiegeEvents.shot_velocity(data)
+	return SiegeBallistics.flight_time(o, v, 0.0016, 0.0)
+
+
+func _due_impacts(dt: float) -> void:
+	var left := PackedFloat32Array()
+	for t in _impacts:
+		if t - dt <= 0.0:
+			_play("siege_impact", -8.0, 0.8)
+		else:
+			left.append(t - dt)
+	_impacts = left
 
 
 func _gate(state: SiegeState) -> void:
 	if _gate_hp >= 0.0 and state.gate_hp < _gate_hp - 0.5:
-		var loss := _gate_hp - state.gate_hp
-		_play("siege_gate", -14.0 + minf(loss, 12.0))
+		_play("siege_gate", -14.0 + minf(_gate_hp - state.gate_hp, 12.0))
 	_gate_hp = state.gate_hp
-	var breached := state.breach_s > 0.0
-	if breached and not _breach_was:
-		_play("boom", -2.0)
-		_play("siege_gate", -4.0)
-	_breach_was = breached
 
 
-func _phase(state: SiegeState) -> void:
-	if state.phase_index != _phase_was:
-		var first := _phase_was == -2
-		_phase_was = state.phase_index
-		if not first and state.in_wave():
-			_play("siege_horn", -8.0)
-	# The 5 s horn that announces a road change (brief 2.4).
-	var horn := state.wave != null and state.wave.horn_s > 0.0
-	if horn and not _horn_was:
-		_play("siege_horn", -6.0)
-	_horn_was = horn
-
-
-func _hooves_and_ram(state: SiegeState, dt: float) -> void:
+func _enemies(state: SiegeState, dt: float) -> void:
 	_hoof_t -= dt
 	_ram_t -= dt
 	var horses := 0
 	var batter := false
 	for e in state.enemies:
-		if e.type == SiegeIds.ENEMY_HORSEMEN and e.st == SiegeIds.EN_WALK:
+		if e.type == SiegeIds.ENEMY_CHARIOT and e.st == SiegeIds.EN_WALK:
 			horses += 1
 		elif e.type == SiegeIds.ENEMY_RAM and e.st == SiegeIds.EN_BATTER:
 			batter = true
@@ -206,7 +205,7 @@ func _coins(state: SiegeState, dt: float) -> void:
 	var me := state.rider(local_peer)
 	if me == null:
 		return
-	if _denarii_was >= 0.0 and floorf(me.denarii) > floorf(_denarii_was) and _coin_t <= 0.0:
+	if _gold_was >= 0.0 and floorf(me.gold) > floorf(_gold_was) and _coin_t <= 0.0:
 		_coin_t = COIN_EVERY_S
 		_play("coin", -16.0)
-	_denarii_was = me.denarii
+	_gold_was = me.gold

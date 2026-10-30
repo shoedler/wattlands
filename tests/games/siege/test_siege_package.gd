@@ -9,12 +9,16 @@ const MANIFEST := {
 	"id": "siege",
 	"title": "Castellum Rotae",
 	"summary":
-	"Co-op tower defense on a Roman hill fort. Your watts turn a treadwheel; send them to the towers or the generator.",
-	"version": "0.1.0",
+	(
+		"Co-op siege defense at a Roman wheel fort. Your watts turn a great treadwheel; couple it"
+		+ " to a ballista, an onager, an arrow organ, the tar works or the gold mine."
+	),
+	"version": "0.2.0",
 	"min_players": 1.0,
 	"max_players": 4.0,
 	"bots": true,
-	"presentation": "3d",
+	"presentation": "2d",
+	"pixel_base": [960.0, 540.0],
 	"entry": "res://src/games/siege/siege_game.gd",
 	"contents": ["short", "vo2", "sweetspot", "endurance", "drill"],
 	"default_content": "short",
@@ -31,7 +35,8 @@ const MANIFEST := {
 			"step": 1.0,
 			"default": 0.0,
 			"label": "SIEGE_OPT_WAVE_OFFSET"
-		}
+		},
+		{"id": "tilt_shift", "type": "toggle", "default": true, "label": "SIEGE_OPT_TILT_SHIFT"}
 	]
 }
 ## Brief 4 static test: nothing in src/games/siege/ names these (plus GAME_SDK 21's stack).
@@ -135,12 +140,12 @@ func test_every_string_key_has_the_prefix_and_every_used_key_exists() -> void:
 		used[str(e["label"])] = "game.json option label"
 	for c: String in m["contents"]:
 		used["SIEGE_CONTENT_%s" % c.to_upper()] = "game.json content"
-	for name: String in SiegeIds.TOWER_NAMES.slice(1):
-		used["SIEGE_TOWER_%s" % name.to_upper()] = "tower name"
+	for name: String in SiegeIds.STATION_NAMES:
+		used["SIEGE_STATION_%s" % name.to_upper()] = "station name"
+	for name: String in SiegeIds.PAD_NAMES.slice(1):
+		used["SIEGE_PAD_%s" % name.to_upper()] = "pad weapon name"
 	for name: String in SiegeIds.ENEMY_NAMES.slice(1):
 		used["SIEGE_ENEMY_%s" % name.to_upper()] = "enemy name"
-	for name: String in SiegeIds.ROAD_NAMES:
-		used["SIEGE_ROAD_%s" % name.to_upper()] = "road name"
 	for name: String in SiegeIds.PERK_NAMES.slice(1):
 		used["SIEGE_PERK_%s" % name.to_upper()] = "perk name"
 	for item: String in SiegeIds.ITEMS + [SiegeIds.ITEM_SAVE]:
@@ -149,7 +154,12 @@ func test_every_string_key_has_the_prefix_and_every_used_key_exists() -> void:
 		used["SIEGE_SHOP_REFUSED_%s" % why.to_upper()] = "buy refusal"
 	for n in range(1, 4):
 		used["SIEGE_ITEM_UPGRADE_%d" % n] = "upgrade level"
-		used["SIEGE_ITEM_GENERATOR_%d" % n] = "generator level"
+		used["SIEGE_ITEM_MINE_%d" % n] = "mine level"
+		used["SIEGE_ITEM_PAD_UPGRADE_%d" % n] = "pad upgrade level"
+	for name: String in SiegeIds.STATION_NAMES.slice(1):
+		used["SIEGE_SPECIAL_%s" % name.to_upper()] = "upgrade 3 special"
+	for h: Dictionary in SiegeHud.help(_game_for_help()):
+		used[str(h["text"])] = "help entry"
 	var c := F.content("short")
 	for id: String in m["contents"]:
 		var plan := SiegePlanBuilder.build(c.shifts[id], F.make_slots(1)[0], id)
@@ -160,6 +170,12 @@ func test_every_string_key_has_the_prefix_and_every_used_key_exists() -> void:
 	assert_gt(used.size(), 60)
 	for k: String in used:
 		assert_true(keys.has(k), "%s (from %s) is in strings.csv" % [k, used[k]])
+
+
+func _game_for_help() -> SiegeGame:
+	var g := F.make_game(F.make_ctx(1, 0, "short"))
+	autofree(g)
+	return g
 
 
 func test_the_four_unlocks_have_results_screen_names() -> void:

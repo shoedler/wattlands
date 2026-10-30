@@ -1,523 +1,556 @@
 extends GutTest
-## Waves (brief 2.4 "Waves"): the budget B, groups, the threat mix by thirds, active roads and
-## their rotation, the ram push, the warm-up wave, endurance rushes and the drill.
+## The wave director (brief 2.4 "Waves", "Siege engines"; 4): ranks and lateral offsets, the
+## staging-ground choice, groups and their cadence, engine entry so they reach the moat 60 s
+## before the wave ends, one or two rams by slot count, the siege tower in the last long wave,
+## escorts, the cap and the queue, retreat, rushes, the warm-up wave and the drill.
 
 const F := preload("res://tests/games/siege/siege_fakes.gd")
 
-var _rig: SiegeRig
-var _seen: Dictionary = {}
-## [time, SiegeEnemyState-copy fields] for every enemy first seen.
-var _log: Array[Dictionary] = []
+var _s: SiegeState
 
 
-func _track() -> void:
-	for e in _rig.state.enemies:
-		if not _seen.has(e.id):
-			_seen[e.id] = true
-			_log.append(
-				{
-					"t": _rig.state.t,
-					"type": e.type,
-					"road": e.road,
-					"prog": e.prog_m,
-					"hp": e.hp,
-					"escort": e.escort,
-					"crew": e.crew,
-					"rush": e.rush
-				}
-			)
+func before_each() -> void:
+	_s = SiegeKit.state("short", 2)
 
 
-## Steps `seconds`, logging every spawn.
-func _run(seconds: float) -> void:
-	for _i in roundi(seconds / Wl.SIM_DT):
-		_rig.step()
-		_track()
+func _ph(
+	elapsed: float, duration: float = 300.0, role: String = SiegeIds.ROLE_WAVE
+) -> SiegePhaseInfo:
+	var p := SiegePhaseInfo.new()
+	p.index = 2
+	p.kind = Wl.WORK
+	p.role = role
+	p.elapsed_s = elapsed
+	p.duration_s = duration
+	p.remaining_s = duration - elapsed
+	p.plan_elapsed_s = 420.0 + elapsed
+	return p
 
 
-func _threat(type: int) -> float:
-	return float(_rig.content.enemy_def(type)["threat"])
+func _drain() -> void:
+	SiegeSpawner.drain(_s, SiegeKit.table(_s), [])
 
 
-func _start(shift: String, phase: int, humans: int, into_s: float = 0.0) -> SiegeRig:
-	_rig = SiegeRig.new(shift, humans, 0, 11).manual()
-	_rig.enter(phase, into_s)
-	_seen = {}
-	_log = []
-	return _rig
+# --- formations ----------------------------------------------------------------------------------
 
 
-# --- the budget B ------------------------------------------------------------------------------
+func test_a_spear_block_is_4_wide_and_3_deep_1_2_m_apart() -> void:
+	assert_true(
+		SiegeSpawner.place_formation(
+			_s, SiegeKit.table(_s), _ph(0.0), SiegeIds.ENEMY_SPEAR, 0, false
+		)
+	)
+	assert_eq(_s.queue.size(), 12)
+	var lats := {}
+	var progs := {}
+	for sp in _s.queue:
+		lats[snappedf(sp.lat_m, 0.01)] = true
+		progs[snappedf(sp.prog_m, 0.01)] = true
+	var l: Array = lats.keys()
+	l.sort()
+	assert_eq(l, [-1.8, -0.6, 0.6, 1.8], "four files within +-1.8 m")
+	var p: Array = progs.keys()
+	p.sort()
+	assert_eq(p.size(), 3)
+	assert_almost_eq(float(p[1]) - float(p[0]), 1.2, 1e-4)
+	assert_almost_eq(float(p[2]) - float(p[1]), 1.2, 1e-4)
 
 
-## balance.json c_budget (brief 2.4 "start 10"; G2 tuned it, docs/decisions/siege.md).
-func _c() -> float:
-	return _rig.content.num("c_budget")
+func test_a_shield_group_is_3_by_2() -> void:
+	SiegeSpawner.place_formation(_s, SiegeKit.table(_s), _ph(0.0), SiegeIds.ENEMY_SHIELD, 0, false)
+	assert_eq(_s.queue.size(), 6)
+	var lats := {}
+	for sp in _s.queue:
+		lats[snappedf(sp.lat_m, 0.01)] = true
+	var l: Array = lats.keys()
+	l.sort()
+	assert_eq(l, [-1.2, 0.0, 1.2])
 
 
-func test_b_follows_planned_p_eff_in_fair_ftp() -> void:
-	_start("vo2", 2, 4)
-	# c_budget x sum(112 % x 250 / 250) x (120 - 60) / 60, four verified riders
-	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 1.12, 1e-6)
+func test_chariots_come_in_pairs_6_m_apart() -> void:
+	SiegeSpawner.place_formation(_s, SiegeKit.table(_s), _ph(0.0), SiegeIds.ENEMY_CHARIOT, 0, false)
+	assert_eq(_s.queue.size(), 2)
+	assert_almost_eq(absf(_s.queue[0].prog_m - _s.queue[1].prog_m), 6.0, 1e-4)
+	for sp in _s.queue:
+		assert_between(sp.lat_m, -1.8, 1.8, "a seeded lateral offset")
+
+
+func test_a_formation_s_rear_rank_stands_on_the_staging_ground() -> void:
+	SiegeSpawner.place_formation(_s, SiegeKit.table(_s), _ph(0.0), SiegeIds.ENEMY_SPEAR, 0, false)
+	var lo := INF
+	for sp in _s.queue:
+		lo = minf(lo, sp.prog_m)
+	assert_almost_eq(lo, 0.0, 1e-4, "the camp")
+
+
+func test_a_second_formation_of_a_group_follows_the_first() -> void:
+	var tb := SiegeKit.table(_s)
+	SiegeSpawner.place_formation(_s, tb, _ph(0.0), SiegeIds.ENEMY_SPEAR, 0, false)
+	var first: Array[float] = []
+	for sp in _s.queue:
+		first.append(sp.prog_m)
+	_s.queue.clear()
+	SiegeSpawner.place_formation(_s, tb, _ph(0.0), SiegeIds.ENEMY_SPEAR, 1, false)
+	for sp in _s.queue:
+		assert_gt(sp.prog_m, first.max() as float, "no overlap")
+
+
+func test_formation_threats() -> void:
+	var tb := SiegeKit.table(_s)
+	assert_eq(SiegeSpawner.formation_threat(_s, tb, SiegeIds.ENEMY_SPEAR), 12.0)
+	assert_eq(SiegeSpawner.formation_threat(_s, tb, SiegeIds.ENEMY_SHIELD), 18.0)
+	assert_eq(SiegeSpawner.formation_threat(_s, tb, SiegeIds.ENEMY_CHARIOT), 6.0)
+
+
+func test_draws_follow_the_mix_by_threat() -> void:
+	var tb := SiegeKit.table(_s)
+	var row: Array[float] = [0.5, 0.25, 0.25]
+	var threat := {1: 0.0, 2: 0.0, 3: 0.0}
+	for _i in 3000:
+		var t := SiegeSpawner.draw_type(_s, tb, row)
+		threat[t] += SiegeSpawner.formation_threat(_s, tb, t)
+	var total := float(threat[1] + threat[2] + threat[3])
+	assert_almost_eq(float(threat[1]) / total, 0.5, 0.04)
+	assert_almost_eq(float(threat[2]) / total, 0.25, 0.04)
+	assert_almost_eq(float(threat[3]) / total, 0.25, 0.04)
+
+
+func test_an_empty_row_draws_nothing() -> void:
+	var row: Array[float] = [0.0, 0.0, 0.0]
+	assert_eq(SiegeSpawner.draw_type(_s, SiegeKit.table(_s), row), 0)
+
+
+# --- staging -------------------------------------------------------------------------------------
+
+
+func _margin() -> float:
+	return float(_s.content.waves["staging"]["reach_before_end_s"])
+
+
+## The last wave second a spearman can still leave staging ground `i` for a 300 s wave.
+func _last(i: int) -> float:
+	return 300.0 - _margin() - (_s.path.length_m - _s.path.staging[i]) / 1.8
+
+
+func test_spearmen_enter_at_the_furthest_staging_ground_that_still_reaches() -> void:
+	var tb := SiegeKit.table(_s)
+	var st := _s.path.staging
+	var at := func(t: float) -> float:
+		return SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, t, 300.0)
+	assert_eq(float(at.call(0.0)), st[0], "the camp")
+	assert_eq(float(at.call(_last(0) + 1.0)), st[1], "the grove")
+	assert_eq(float(at.call(_last(1) + 1.0)), st[2], "the wadi")
+	assert_eq(float(at.call(_last(2) + 1.0)), st[3], "the arch")
+	assert_eq(float(at.call(_last(3) + 1.0)), -1.0, "none")
+
+
+func test_the_camp_works_exactly_until_its_last_moment() -> void:
+	var tb := SiegeKit.table(_s)
+	var last := _last(0)
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, last - 0.01, 300.0), 0.0)
+	assert_ne(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, last + 0.01, 300.0), 0.0)
+
+
+func test_slow_shields_skip_the_camp() -> void:
+	var tb := SiegeKit.table(_s)
 	assert_eq(
-		_rig.of_type(SiegeIds.EV_WAVE_START)[0]["b"],
-		roundi(_c() * 4.0 * 1.12),
-		"the event carries it rounded"
+		SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SHIELD, 0.0, 300.0), _s.path.staging[1]
 	)
 
 
-func test_b_with_unverified_ftp_uses_085() -> void:
-	_rig = SiegeRig.new("vo2", 4)
-	for r in _rig.state.riders:
-		r.ftp_verified = false
-	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 1.12 * 0.85, 1e-6)
+func test_fast_chariots_start_from_the_camp_late() -> void:
+	var tb := SiegeKit.table(_s)
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_CHARIOT, 200.0, 300.0), 0.0)
 
 
-func test_b_in_raw_uses_the_ftp_itself() -> void:
-	_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.RAW)
-	_rig.enter(2, 0.0)
-	var ftps := 200.0 + 220.0 + 240.0 + 260.0
-	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps / 250.0, 1e-6)
-	_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.RAW)
-	for r in _rig.state.riders:
-		r.ftp_verified = false
-	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps / 250.0 * 0.85, 1e-6)
-
-
-func test_b_in_wkg_uses_the_latest_p_eff_over_power() -> void:
-	for verified in [true, false]:
-		_rig = SiegeRig.new("vo2", 4, 0, 11, Wl.WKG)
-		for r in _rig.state.riders:
-			r.ftp_verified = verified
-		for peer in [1, 2, 3, 4]:
-			_rig.power_w[peer] = 100.0
-			_rig.p_eff[peer] = 80.0
-		_rig.enter(2, 0.0)
-		var ftps := 200.0 + 220.0 + 240.0 + 260.0
-		var u := 1.0 if verified else 0.85
-		assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * ftps * 0.8 * u / 250.0, 1e-6)
-		assert_almost_eq(_rig.rider(1).r_wkg, 0.8, 1e-9)
-
-
-func test_wkg_r_is_one_before_telemetry_with_power_of_50_w() -> void:
-	_rig = SiegeRig.new("vo2", 1, 0, 11, Wl.WKG)
-	_rig.power_w[1] = 49.0
-	_rig.p_eff[1] = 30.0
-	_rig.enter(2, 0.0)
-	assert_eq(_rig.rider(1).r_wkg, 1.0, "below 50 W: no r yet")
-	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12 * 200.0 / 250.0, 1e-6)
-
-
-func test_b_scales_with_wave_length_and_team_size() -> void:
-	_start("sweetspot", 2, 2)
-	# 900 s wave at 90 %: c_budget x 2 x 0.9 x (900 - 60) / 60
-	assert_almost_eq(_rig.state.wave.budget, _c() * 2.0 * 0.9 * 14.0, 1e-6)
-	_start("vo2", 2, 1)
-	assert_almost_eq(_rig.state.wave.budget, _c() * 1.12, 1e-6)
-
-
-func test_b_follows_the_waves_offset_through_the_plan() -> void:
-	_rig = SiegeRig.new("vo2", 1)
-	_rig.slots[0].options["wave_offset"] = 5
-	_rig.plans[1] = F.with_cooldown(
-		SiegePlanBuilder.build(_rig.content.shift, _rig.slots[0], "vo2")
+func test_a_formation_that_cannot_reach_is_not_placed() -> void:
+	assert_false(
+		SiegeSpawner.place_formation(
+			_s, SiegeKit.table(_s), _ph(230.0), SiegeIds.ENEMY_SHIELD, 0, false
+		)
 	)
-	_rig.enter(2, 0.0)
-	assert_almost_eq(_rig.state.wave.budget, _c() * 1.17, 1e-6, "112 + 5 = 117 % in a 120 s wave")
+	assert_true(_s.queue.is_empty())
 
 
-func test_the_warm_up_wave_is_04_of_b_at_its_mean_target() -> void:
-	_start("short", 0, 4)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_WARMUP_WAVE)
-	# mean of the 50 -> 65 % ramp = 57.5 %; 0.4 x c_budget x 4 x 0.575 x (300 - 60) / 60
-	assert_almost_eq(_rig.state.wave.budget, 0.4 * _c() * 4.0 * 0.575 * 4.0, 1e-6)
+# --- the mix -------------------------------------------------------------------------------------
 
 
-func test_the_drill_budget_comes_from_its_60_percent_target() -> void:
-	_start("drill", 1, 4)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_WAVE)
-	assert_almost_eq(_rig.state.wave.budget, _c() * 4.0 * 0.6 * 40.0 / 60.0, 1e-6)
+func test_the_mix_follows_the_third_of_the_shift() -> void:
+	var total := SiegePlanBuilder.total_s(_s.content.shift)
+	assert_eq(SiegeSpawner.third_row(_s, SiegeIds.MIX_STANDARD, 10.0), [0.7, 0.1, 0.2])
+	assert_eq(SiegeSpawner.third_row(_s, SiegeIds.MIX_STANDARD, total * 0.5), [0.5, 0.25, 0.25])
+	assert_eq(SiegeSpawner.third_row(_s, SiegeIds.MIX_STANDARD, total - 1.0), [0.4, 0.3, 0.3])
 
 
-func test_par_follows_planned_p_eff_in_every_scaling_mode() -> void:
-	for mode: String in Wl.SCALING_MODES:
-		for verified in [true, false]:
-			_rig = SiegeRig.new("short", 2, 0, 11, mode)
-			for r in _rig.state.riders:
-				r.ftp_verified = verified
-				r.r_wkg = 0.9
-			_rig.power_w = {1: 100.0, 2: 110.0}
-			_rig.p_eff = {1: 90.0, 2: 99.0}
-			_rig.enter(1, 0.0)
-			_rig.run(10.0)
-			var u := 1.0 if verified else 0.85
-			var r_of := func(ftp: float) -> float:
-				match mode:
-					Wl.FAIR_FTP:
-						return 250.0 / ftp
-					Wl.WKG:
-						return 0.9
-				return 1.0
-			# the break plans 50 % for 10 s + the first tick
-			var kj := 0.0
-			for ftp in [200.0, 220.0]:
-				kj += 0.5 * ftp * u * float(r_of.call(ftp)) * 10.05 / 1000.0
-			assert_almost_eq(
-				_rig.state.planned_kj, kj, kj * 0.01, "%s verified %s" % [mode, verified]
-			)
-			assert_almost_eq(
-				SiegeScore.compute(_rig.state)["par"], 0.75 * _rig.state.planned_kj, 1e-9
-			)
+func test_the_warm_up_is_spearmen_only_for_180_s() -> void:
+	_s.role = SiegeIds.ROLE_WARMUP_WAVE
+	assert_eq(
+		SiegeSpawner.mix_row(_s, _ph(179.0, 300.0, SiegeIds.ROLE_WARMUP_WAVE)), [1.0, 0.0, 0.0]
+	)
+	var after := SiegeSpawner.mix_row(_s, _ph(181.0, 300.0, SiegeIds.ROLE_WARMUP_WAVE))
+	assert_eq(after[1], 0.0, "then chariots too, never shields")
+	assert_gt(after[2], 0.0)
 
 
-func test_rules_never_read_a_weight() -> void:
-	for dir in ["res://src/games/siege/rules", "res://src/games/siege/combat"]:
-		for f in DirAccess.get_files_at(dir):
-			if f.ends_with(".gd"):
-				var src := FileAccess.get_file_as_string(dir.path_join(f))
-				for banned in [
-					"rider_mass_kg", "weight_kg", "mass_kg", "p_eff_per_w", "Time.", "OS.get_ticks"
-				]:
-					assert_false(src.contains(banned), "%s mentions %s" % [f, banned])
-				assert_false(src.contains("RandomNumberGenerator.new()"), f)
-
-
-# --- groups and mix ----------------------------------------------------------------------------
-
-
-func test_groups_come_every_6_to_12_seconds_until_60_s_before_the_end() -> void:
-	_start("short", 2, 4)
-	var times: Array[float] = []
-	var last := _rig.state.next_enemy_id
-	for _i in 6000:
-		_rig.step()
-		if _rig.state.phase_remaining_s <= 60.0:
-			break
-		if _rig.state.next_enemy_id != last:
-			last = _rig.state.next_enemy_id
-			if times.is_empty() or _rig.state.t - times[-1] > 0.001:
-				times.append(_rig.state.t)
-	var start := _rig.phase_start(2)
-	assert_gt(times.size(), 15)
-	for i in range(1, times.size()):
-		var gap := times[i] - times[i - 1]
-		assert_between(gap, 6.0 - 0.06, 12.0 + 0.06, "group %d" % i)
-	assert_gt(times[0] - start, 0.0)
-	assert_lt(times[-1] - start, 240.0 + 0.1, "none in the last 60 s")
-
-
-func test_the_whole_budget_is_spent_on_groups() -> void:
-	_start("short", 2, 4)
-	var b := _rig.state.wave.budget
-	_run(239.9)
-	var spent := 0.0
-	for e in _log:
-		if not e["escort"] and not e["crew"] and not e["rush"]:
-			spent += _threat(int(e["type"]))
-	assert_between(spent, b - 1.0, b + 1e-6, "B = %.1f, spawned %.1f" % [b, spent])
-	assert_lt(_rig.state.wave.budget_left, 1.0, "the last group takes the rest")
-
-
-func test_mix_rows_by_thirds_of_the_shift() -> void:
-	_start("short", 2, 1)
-	var ph := SiegePhaseInfo.new()
-	ph.mix = SiegeIds.MIX_STANDARD
-	var want := {
-		0.0: [0.7, 0.1, 0.2],
-		500.0: [0.7, 0.1, 0.2],
-		600.0: [0.5, 0.25, 0.25],
-		1000.0: [0.5, 0.25, 0.25],
-		1200.0: [0.4, 0.3, 0.3],
-		1679.0: [0.4, 0.3, 0.3],
-	}
-	for t: float in want:
-		ph.plan_elapsed_s = t
-		assert_eq(SiegeSpawner.mix_row(_rig.state, ph), want[t] as Array[float], "t = %s" % t)
+func test_the_drill_mix_has_no_shields() -> void:
+	var ph := _ph(10.0, 100.0)
 	ph.mix = SiegeIds.MIX_RAIDERS_HORSEMEN
-	ph.plan_elapsed_s = 0.0
-	assert_eq(SiegeSpawner.mix_row(_rig.state, ph)[1], 0.0, "the drill mix has no shield walls")
+	assert_eq(SiegeSpawner.mix_row(_s, ph)[1], 0.0)
 
 
-func test_composed_groups_follow_the_threat_split() -> void:
-	_start("short", 2, 4)
-	var tb := SiegeCombatTable.of(_rig.content, _rig.state)
-	for src: Array in [[0.7, 0.1, 0.2], [0.5, 0.25, 0.25], [0.4, 0.3, 0.3]]:
-		var row: Array[float] = []
-		row.assign(src)
-		var spent: Array[float] = [0.0]
-		var types := SiegeSpawner.compose(_rig.state, tb, row, 3000.0, [], spent)
-		var by := [0.0, 0.0, 0.0]
-		for t in types:
-			by[SiegeIds.MIX_ORDER.find(t)] += tb.threat[t]
-		assert_almost_eq(spent[0], by[0] + by[1] + by[2], 1e-6)
-		assert_between(spent[0], 3000.0 - 6.0, 3000.0)
-		for i in 3:
-			assert_almost_eq(by[i] / spent[0], row[i], 0.04, "row %s type %d" % [row, i])
+# --- groups ----------------------------------------------------------------------------------------
 
 
-func test_a_small_group_never_overspends() -> void:
-	_start("short", 2, 4)
-	var tb := SiegeCombatTable.of(_rig.content, _rig.state)
-	for threat in [0.5, 1.0, 2.0, 5.5, 13.0]:
-		var spent: Array[float] = [0.0]
-		var types := SiegeSpawner.compose(_rig.state, tb, [0.4, 0.3, 0.3], threat, [], spent)
-		assert_lte(spent[0], threat + 1e-6)
-		assert_gt(threat - spent[0], -1e-6)
-		var sum := 0.0
-		for t in types:
-			sum += tb.threat[t]
-		assert_almost_eq(sum, spent[0], 1e-6)
-		assert_lt(threat - spent[0], 1.0 + 1e-6, "less than the cheapest enemy is left")
+func test_groups_spend_the_budget_and_stop_60_s_before_the_end() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(2)
+	var w := rig.state.wave
+	assert_gt(w.budget, 0.0)
+	rig.goto(rig.phase_start(2) + 240.1)
+	rig.step()
+	var left := w.budget_left
+	var acc := w.group_acc
+	var gap := w.spawn_in_s
+	rig.run(55.0)
+	assert_eq(w.budget_left, left, "no group draws on the budget in the last 60 s")
+	assert_eq(w.group_acc, acc)
+	assert_lt(w.spawn_in_s, gap, "and no new group gap is drawn")
 
 
-# --- roads ------------------------------------------------------------------------------------
+func test_a_wave_spends_or_drops_its_whole_budget() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(2)
+	var w := rig.state.wave
+	var tb := SiegeKit.table(rig.state)
+	var first := rig.state.next_enemy_id
+	rig.run(240.5)
+	assert_lt(w.budget_left, 1.0, "the budget is spent or dropped")
+	assert_lte(w.group_acc, SiegeSpawner.formation_threat(rig.state, tb, SiegeIds.ENEMY_SHIELD))
+	assert_gt(rig.state.next_enemy_id - first, 5, "formations came")
 
 
-func test_active_roads_are_min_3_slots() -> void:
-	for n in [1, 2, 3, 4]:
-		_start("short", 2, n)
-		assert_eq(_rig.state.wave.active_roads.size(), mini(3, n), "%d riders" % n)
-		var starts := _rig.of_type(SiegeIds.EV_WAVE_START)
-		assert_eq(starts[0]["roads"].size(), mini(3, n))
+func test_group_gaps_are_6_to_12_s() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(2)
+	var gaps: Array[float] = []
+	var last := rig.state.wave.spawn_in_s
+	for _i in 2000:
+		rig.step()
+		var now := rig.state.wave.spawn_in_s
+		if now > last + 1.0:
+			gaps.append(now)
+		last = now
+	assert_gt(gaps.size(), 5)
+	for g in gaps:
+		assert_between(g, 6.0, 12.0)
 
 
-func test_three_or_more_riders_use_all_three_roads_without_rotating() -> void:
-	_start("short", 2, 4)
-	_run(120.0)
-	assert_eq(_rig.of_type(SiegeIds.EV_ROADS).size(), 0)
-	assert_eq(_rig.state.wave.active_roads, [0, 1, 2] as Array[int])
-	var roads := {}
-	for e in _log:
-		roads[e["road"]] = true
-	assert_eq(roads.size(), 3, "enemies come on every road")
+func test_vo2_waves_field_spearmen_and_shields_from_the_arch() -> void:
+	var tb := SiegeKit.table(_s)
+	var arch := _s.path.staging[3]
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SPEAR, 10.0, 120.0), arch)
+	assert_eq(SiegeSpawner.staging_for(_s, tb, SiegeIds.ENEMY_SHIELD, 3.0, 120.0), arch)
 
 
-func test_fewer_roads_rotate_every_30_to_60_s_with_a_5_s_horn() -> void:
-	_start("sweetspot", 2, 1)
-	var changes: Array[float] = []
-	var announced := 0.0
-	var current: Array[int] = _rig.state.wave.active_roads.duplicate()
-	assert_eq(current.size(), 1)
-	for _i in 20 * 330:
-		_rig.step()
-		var ev := _rig.of_type(SiegeIds.EV_ROADS)
-		if ev.size() > 0 and announced != float(ev.size()):
-			announced = float(ev.size())
-			var e := ev[-1]
-			assert_eq(e["in_ms"], 5000)
-			assert_eq(e["roads"].size(), 1)
-			assert_ne(e["roads"], current as Array, "a different road")
-			assert_eq(_rig.state.wave.active_roads, current, "not switched yet")
-		if _rig.state.wave.active_roads != current:
-			changes.append(_rig.state.t)
-			current = _rig.state.wave.active_roads.duplicate()
-	assert_gte(changes.size(), 5)
-	assert_eq(
-		_rig.of_type(SiegeIds.EV_ROADS).size(),
-		changes.size() + (1 if _rig.state.wave.horn_s > 0.0 else 0)
+func test_dropped_threat_is_recorded() -> void:
+	var rig := SiegeRig.new("vo2", 4)
+	rig.manual()
+	rig.enter(2)
+	rig.run(70.0)
+	assert_gt(rig.state.wave.dropped, 0.0, "120 s waves: the slow types can't make it")
+
+
+# --- siege engines ---------------------------------------------------------------------------------
+
+
+func test_one_ram_for_one_or_two_slots() -> void:
+	for n in [1, 2]:
+		var s := SiegeKit.state("short", n)
+		var plan := SiegeSpawner.engine_plan(s, _ph(0.0))
+		assert_eq(plan.size(), 1, "%d slots" % n)
+		assert_eq(int(plan[0][0]), SiegeIds.ENEMY_RAM)
+
+
+func test_two_rams_25_m_apart_for_three_or_four() -> void:
+	for n in [3, 4]:
+		var s := SiegeKit.state("short", n)
+		var plan := SiegeSpawner.engine_plan(s, _ph(0.0))
+		assert_eq(plan.size(), 2, "%d slots" % n)
+		assert_almost_eq(absf(float(plan[0][2]) - float(plan[1][2])), 25.0, 1e-3)
+
+
+func test_a_ram_enters_where_it_reaches_the_moat_60_s_before_the_end() -> void:
+	var plan := SiegeSpawner.engine_plan(_s, _ph(0.0))
+	assert_eq(float(plan[0][1]), 0.0, "at the wave start")
+	assert_almost_eq(float(plan[0][2]), _s.path.moat_edge_m - 0.8 * 240.0, 1e-3, "192 m out")
+
+
+func test_the_pair_is_centred_on_that_point() -> void:
+	var s := SiegeKit.state("short", 4)
+	var plan := SiegeSpawner.engine_plan(s, _ph(0.0))
+	var mid := (float(plan[0][2]) + float(plan[1][2])) * 0.5
+	assert_almost_eq(mid, s.path.moat_edge_m - 0.8 * 240.0, 1e-3)
+
+
+func test_a_long_wave_s_ram_enters_at_the_camp_later() -> void:
+	var plan := SiegeSpawner.engine_plan(_s, _ph(0.0, 900.0))
+	assert_eq(float(plan[0][2]), 0.0, "the camp")
+	assert_almost_eq(float(plan[0][1]), 900.0 - 60.0 - _s.path.moat_edge_m / 0.8, 1e-3)
+
+
+func test_the_siege_tower_replaces_the_rams_in_the_last_long_wave() -> void:
+	var ph := _ph(0.0)
+	ph.last_wave = true
+	var plan := SiegeSpawner.engine_plan(SiegeKit.state("short", 4), ph)
+	assert_eq(plan.size(), 1)
+	assert_eq(int(plan[0][0]), SiegeIds.ENEMY_TOWER)
+	assert_almost_eq(float(plan[0][2]), _s.path.moat_edge_m - 0.5 * 240.0, 1e-3)
+
+
+func test_no_tower_in_waves_shorter_than_300_s() -> void:
+	var ph := _ph(0.0, 120.0)
+	ph.last_wave = true
+	var plan := SiegeSpawner.engine_plan(SiegeKit.state("vo2", 4), ph)
+	assert_eq(int(plan[0][0]), SiegeIds.ENEMY_RAM)
+	assert_eq(plan.size(), 2)
+
+
+func test_the_endurance_tower_enters_at_the_camp_in_time_to_dock() -> void:
+	var ph := _ph(0.0, 2700.0)
+	ph.last_wave = true
+	var plan := SiegeSpawner.engine_plan(SiegeKit.state("endurance", 4), ph)
+	assert_eq(int(plan[0][0]), SiegeIds.ENEMY_TOWER)
+	assert_almost_eq(float(plan[0][1]), 2700.0 - 60.0 - _s.path.moat_edge_m / 0.5, 1e-3)
+
+
+func test_the_warm_up_ram_has_half_hp_and_no_escort() -> void:
+	var plan := SiegeSpawner.engine_plan(
+		SiegeKit.state("short", 4), _ph(0.0, 300.0, SiegeIds.ROLE_WARMUP_WAVE)
 	)
-	for i in range(1, changes.size()):
-		assert_between(changes[i] - changes[i - 1], 30.0 - 0.1, 60.0 + 0.1, "switch %d" % i)
+	assert_eq(plan.size(), 1, "one ram whatever the slots")
+	assert_eq(float(plan[0][3]), 0.5)
+	assert_eq(float(plan[0][4]), 0.0)
 
 
-func test_the_horn_precedes_the_switch_by_five_seconds() -> void:
-	_start("sweetspot", 2, 2)
-	var t_horn := -1.0
-	for _i in 20 * 90:
-		var out := _rig.step()
-		for e in out:
-			if e["type"] == SiegeIds.EV_ROADS and t_horn < 0.0:
-				t_horn = _rig.state.t
-				assert_eq(e["roads"].size(), 2)
-		if t_horn >= 0.0 and _rig.state.wave.horn_s == 0.0:
-			assert_almost_eq(_rig.state.t - t_horn, 5.0, 0.06)
-			return
-	fail_test("no rotation within 90 s")
+func test_escorts_are_10_threat_per_slot() -> void:
+	var s := SiegeKit.state("short", 3)
+	var plan := SiegeSpawner.engine_plan(s, _ph(0.0))
+	var total := 0.0
+	for en: Array in plan:
+		total += float(en[4])
+	assert_eq(total, 30.0)
 
 
-func test_spawns_use_only_the_active_roads() -> void:
-	_start("sweetspot", 2, 1)
-	var roads: Array[int] = _rig.state.wave.active_roads.duplicate()
-	_run(20.0)
-	for e in _log:
-		assert_eq([e["road"]], roads)
+func test_an_engine_spawns_with_a_push_event_and_its_escort() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	var ev := rig.run(0.1)
+	var pushes := rig.of_type(SiegeIds.EV_PUSH, ev)
+	assert_eq(pushes.size(), 1, "the warm-up ram")
+	var ram := rig.state.enemy(int(pushes[0]["id"]))
+	assert_not_null(ram)
+	assert_eq(ram.type, SiegeIds.ENEMY_RAM)
+	assert_eq(ram.hp, 0.5 * float(rig.content.enemy_def(SiegeIds.ENEMY_RAM)["hp"]), "half HP")
+	assert_eq(rig.state.engines_total, 1)
+	rig.enter(2)
+	ev = rig.run(0.1)
+	pushes = rig.of_type(SiegeIds.EV_PUSH, rig.events)
+	assert_eq(pushes.size(), 2)
+	var escorts := 0
+	for e in rig.state.enemies:
+		escorts += int(e.escort)
+	assert_eq(escorts, 20, "2 slots x 10 threat of spearmen")
 
 
-# --- the ram push ------------------------------------------------------------------------------
+func test_a_ram_reaches_the_moat_60_s_before_the_wave_ends() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.state.pad(1).type = SiegeIds.PAD_NONE
+	rig.enter(2)
+	rig.run(0.1)
+	var ram: SiegeEnemyState = null
+	for e in rig.state.enemies:
+		if e.type == SiegeIds.ENEMY_RAM:
+			ram = e
+	assert_not_null(ram)
+	var start := rig.phase_start(2)
+	while ram.prog_m < rig.state.path.moat_edge_m and rig.tick * Wl.SIM_DT < start + 300.0:
+		rig.step()
+	assert_almost_eq(rig.tick * Wl.SIM_DT - start, 240.0, 0.2)
 
 
-func test_the_ram_push_sends_one_ram_per_active_road_with_an_escort() -> void:
-	_start("short", 2, 4)
-	_rig.state.wave.budget_left = 0.0
-	_rig.goto(_rig.phase_start(2) + 239.0)
-	_run(1.5)
-	assert_eq(_rig.of_type(SiegeIds.EV_PUSH).size(), 1)
-	assert_eq(_rig.of_type(SiegeIds.EV_PUSH)[0]["roads"], [0, 1, 2])
-	var rams := _log.filter(func(e: Dictionary) -> bool: return e["type"] == SiegeIds.ENEMY_RAM)
-	assert_eq(rams.size(), 3)
-	for road in 3:
-		var r: Dictionary = rams.filter(func(e: Dictionary) -> bool: return e["road"] == road)[0]
-		assert_almost_eq(r["prog"], _rig.road_end(road) - 40.0, 1e-3, "enters 40 m from the gate")
-		assert_eq(r["hp"], 600.0)
-	var escort := _log.filter(func(e: Dictionary) -> bool: return e["escort"] and e["type"] == 1)
-	assert_eq(escort.size(), 40, "raiders worth 10 threat per slot")
-	assert_eq(_rig.state.rams_total, 3)
-	assert_eq(_rig.state.wave.rams, 3)
-	_run(3.0)
-	assert_eq(_rig.of_type(SiegeIds.EV_PUSH).size(), 1, "once")
+func test_the_siege_tower_comes_in_the_last_wave_of_short_and_docks() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	for pd in rig.state.pads:
+		pd.type = SiegeIds.PAD_NONE
+	rig.enter(6)
+	rig.run(0.1)
+	var tower: SiegeEnemyState = null
+	for e in rig.state.enemies:
+		if e.type == SiegeIds.ENEMY_TOWER:
+			tower = e
+	assert_not_null(tower, "the boss")
+	rig.goto(rig.phase_start(6) + 239.0)
+	tower.prog_m = rig.state.path.moat_edge_m - 0.3
+	var ev := rig.run(1.0)
+	assert_eq(rig.of_type(SiegeIds.EV_DOCK, ev).size(), 1)
+	assert_true(rig.state.tar.boarded)
 
 
-## Brief 2.4: "an unopposed ram batters the gate for about 20 s (60 HP)" at 1.0 m/s; G2 slowed it to
-## 0.75 m/s (docs/decisions/siege.md, "G2 tuning"), so it now walks 40 m / 0.75 m/s = 53.3 s and
-## batters the wave's last ~6.7 s (~20 HP). The rule tested: it walks at its speed, then batters
-## 3 HP/s until the wave ends.
-func test_an_unopposed_ram_walks_in_then_batters_until_the_wave_ends() -> void:
-	_start("short", 2, 1)
-	_rig.state.wave.budget_left = 0.0
-	_rig.goto(_rig.phase_start(2) + 239.0)
-	_run(1.5)
-	_rig.state.enemies = _rig.state.enemies.filter(
-		func(e: SiegeEnemyState) -> bool: return e.type == SiegeIds.ENEMY_RAM
-	)
-	assert_eq(_rig.state.enemies.size(), 1)
-	_rig.run(58.4)
-	assert_eq(_rig.state.enemies[0].st, SiegeIds.EN_BATTER, "the ram reached the gate")
-	var walk := 40.0 / float(_rig.content.enemy_def(SiegeIds.ENEMY_RAM)["speed_mps"])
-	var batter := (239.0 + 1.5 + 58.4) - (240.0 + walk)
-	var hp := _rig.content.num("gate.hp")
-	assert_between(
-		_rig.state.gate_hp, hp - 3.0 * batter - 2.0, hp - 3.0 * batter + 2.0, "3 HP/s at the gate"
-	)
+# --- the cap, the queue, retreat ---------------------------------------------------------------
 
 
-func test_the_warm_up_push_is_one_half_hp_ram_without_escort() -> void:
-	_start("short", 0, 4)
-	_rig.state.wave.budget_left = 0.0
-	_rig.goto(_rig.phase_start(0) + 239.0)
-	_run(2.0)
-	assert_eq(_rig.of_type(SiegeIds.EV_PUSH).size(), 1)
-	assert_eq(_log.size(), 1)
-	assert_eq(_log[0]["type"], SiegeIds.ENEMY_RAM)
-	assert_eq(_log[0]["hp"], 300.0)
-	assert_eq(_rig.state.rams_total, 1)
+func test_at_most_150_alive_and_the_rest_wait() -> void:
+	for i in 200:
+		SiegeSpawner.enqueue(_s, SiegeIds.ENEMY_SPEAR, float(i % 50))
+	_drain()
+	assert_eq(_s.enemies.size(), 150)
+	assert_eq(_s.queue.size(), 50)
+	assert_eq(_s.queued(), 50)
 
 
-# --- the warm-up wave ---------------------------------------------------------------------------
+func test_the_queue_is_first_in_first_out() -> void:
+	for i in 152:
+		SiegeSpawner.enqueue(_s, SiegeIds.ENEMY_SPEAR, float(i))
+	_drain()
+	assert_eq(_s.queue[0].prog_m, 150.0)
+	_s.enemies.pop_back()
+	_drain()
+	assert_eq(_s.enemies.back().prog_m, 150.0)
 
 
-func test_the_warm_up_sends_raiders_only_for_180_s_then_horsemen() -> void:
-	_start("short", 0, 4)
-	_run(179.0)
-	assert_gt(_log.size(), 10)
-	for e in _log:
-		assert_eq(e["type"], SiegeIds.ENEMY_RAIDERS)
-	_run(2.0)
-	_log.clear()
-	_rig.state.wave.spawn_in_s = 0.0
-	_run(55.0)
-	var types := {}
-	for e in _log:
-		if e["type"] != SiegeIds.ENEMY_RAM:
-			types[e["type"]] = true
-	assert_eq(types.keys(), [SiegeIds.ENEMY_HORSEMEN])
-
-
-func test_one_teaching_toast_per_minute_in_the_warm_up() -> void:
-	_start("short", 0, 1)
-	var seen: Array[int] = []
-	for s in 300:
-		_rig.goto(_rig.phase_start(0) + float(s) + 0.5)
-		_rig.step()
-		if seen.is_empty() or seen[-1] != _rig.state.wave.toast_min:
-			seen.append(_rig.state.wave.toast_min)
-	assert_eq(seen, [1, 2, 3, 4, 5] as Array[int])
-
-
-func test_no_toast_counter_outside_the_warm_up() -> void:
-	_start("short", 2, 1)
-	_run(70.0)
-	assert_eq(_rig.state.wave.toast_min, 0)
-
-
-# --- endurance rushes --------------------------------------------------------------------------
-
-
-func test_endurance_rushes_at_8_16_24_32_and_40_minutes() -> void:
-	_start("endurance", 2, 4)
-	assert_eq(_rig.state.wave.budget_left, _rig.state.wave.budget)
-	var b := _rig.state.wave.budget
-	var starts: Array[float] = []
-	var ends: Array[float] = []
-	var base := _rig.phase_start(2)
-	for at in [480.0, 960.0, 1440.0, 1920.0, 2400.0]:
-		_rig.goto(base + at - 1.0)
-		_rig.state.wave.spawn_in_s = 1.0e9
-		for _i in 20 * 40:
-			for ev in _rig.step():
-				if ev["type"] == SiegeIds.EV_RUSH:
-					(starts if ev["on"] == 1 else ends).append(_rig.state.t - base)
-			_track()
-			_rig.state.enemies.clear()
-	assert_eq(starts.size(), 5)
-	assert_eq(ends.size(), 5)
+func test_ids_ascend_in_spawn_order() -> void:
 	for i in 5:
-		assert_between(starts[i], 480.0 * (i + 1) - 0.01, 480.0 * (i + 1) + 0.1)
-		assert_almost_eq(ends[i] - starts[i], 30.0, 0.1, "30 s")
-	var rush := _log.filter(func(e: Dictionary) -> bool: return e["rush"])
-	var threat := 0.0
-	for e in rush:
-		assert_true([SiegeIds.ENEMY_RAIDERS, SiegeIds.ENEMY_HORSEMEN].has(e["type"]))
-		threat += _threat(int(e["type"]))
-	assert_between(threat, 5.0 * 0.08 * b - 5.0, 5.0 * 0.08 * b + 1e-6, "8 % of B per rush")
-	assert_almost_eq(_rig.state.wave.budget_left, b - 5.0 * 0.08 * b, 1e-6, "taken from B")
+		SiegeSpawner.enqueue(_s, SiegeIds.ENEMY_SHIELD, 1.0)
+	_drain()
+	for i in range(1, 5):
+		assert_eq(_s.enemies[i].id, _s.enemies[i - 1].id + 1)
 
 
-func test_rush_enemies_are_flagged_and_a_rush_is_on_for_30_s() -> void:
-	_start("endurance", 2, 2)
-	_rig.state.wave.spawn_in_s = 1.0e9
-	_rig.goto(_rig.phase_start(2) + 480.0)
-	_rig.step()
-	assert_true(_rig.state.rush_on())
-	_run(5.0)
-	assert_gt(_log.size(), 0)
-	for e in _log:
-		assert_true(e["rush"])
-	_rig.run(26.0)
-	assert_false(_rig.state.rush_on())
+func test_at_wave_end_the_queue_is_dropped_and_enemies_retreat_then_vanish() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(2)
+	rig.run(30.0)
+	SiegeSpawner.enqueue(rig.state, SiegeIds.ENEMY_SPEAR, 0.0)
+	rig.spawn(SiegeIds.ENEMY_SPEAR, 100.0)
+	var gold := rig.rider().gold
+	rig.enter(3)
+	assert_true(rig.state.queue.is_empty())
+	for e in rig.state.enemies:
+		assert_eq(e.st, SiegeIds.EN_RETREAT)
+	rig.run(3.1)
+	assert_true(rig.state.enemies.is_empty())
+	assert_gte(rig.rider().gold, gold, "no bounty lost, none paid by retreaters")
 
 
-func test_other_shifts_have_no_rush() -> void:
-	_start("vo2", 2, 4)
-	_run(60.0)
-	assert_eq(_rig.of_type(SiegeIds.EV_RUSH).size(), 0)
-	assert_false(_rig.state.rush_on())
+func test_nothing_spawns_in_breaks_or_the_cool_down() -> void:
+	var rig := SiegeRig.new("drill", 1)
+	rig.manual()
+	rig.enter(2)
+	rig.run(5.0)
+	assert_true(rig.state.in_cooldown())
+	assert_eq(rig.state.enemies.size(), 0)
+	assert_eq(rig.state.queued(), 0)
+	var rig2 := SiegeRig.new("short", 1)
+	rig2.manual()
+	rig2.enter(1)
+	rig2.run(30.0)
+	assert_eq(rig2.state.next_enemy_id, 1, "the build break spawns nobody")
 
 
-# --- the drill ---------------------------------------------------------------------------------
+# --- the warm-up wave, rushes, the drill ------------------------------------------------------
 
 
-func test_the_drill_plays_as_wave_1_with_raiders_and_horsemen_only() -> void:
-	_start("drill", 0, 2)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_BUILD_BREAK, "the role comes from the meta")
-	_rig.enter(1, 0.0)
-	assert_eq(_rig.state.role, SiegeIds.ROLE_WAVE)
-	assert_eq(_rig.state.wave_no, 1)
-	assert_eq(_rig.state.waves_total, 1)
-	_seen = {}
-	_log = []
-	_run(99.0)
-	var types := {}
-	for e in _log:
-		types[e["type"]] = true
-	assert_false(types.has(SiegeIds.ENEMY_SHIELD_WALL))
-	assert_true(types.has(SiegeIds.ENEMY_RAIDERS))
-	assert_eq(_rig.of_type(SiegeIds.EV_WAVE_START).size(), 1)
-	assert_eq(_rig.of_type(SiegeIds.EV_PUSH).size(), 1, "the push, with its escort")
-	var escort := _log.filter(func(e: Dictionary) -> bool: return e["escort"] and e["type"] == 1)
-	assert_eq(escort.size(), 20, "10 per slot")
-	_rig.enter(2, 0.0)
-	assert_true(_rig.state.done, "the drill's wave counts as the last wave")
-	assert_eq(_rig.of_type(SiegeIds.EV_WAVE_END).size(), 1)
-	assert_eq(_rig.state.wave_gate_hp.size(), 1)
+func test_the_warm_up_budget_is_40_percent_of_b() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.enter(0)
+	var mean_pct := (50.0 + 65.0) / 2.0
+	var b := 0.0
+	for r in rig.state.riders:
+		b += SiegeRules.planned_p_eff_w(rig.state, r, mean_pct) / 250.0
+	b *= rig.content.num("c_budget") * (300.0 - 60.0) / 60.0
+	b *= SiegeRules.budget_factor(rig.content) * SiegeRules.slot_factor(rig.content, 2)
+	assert_almost_eq(rig.state.wave.budget, 0.4 * b, 1e-3)
+
+
+func test_the_warm_up_spawns_only_spearmen_for_180_s() -> void:
+	var rig := SiegeRig.new("short", 2)
+	rig.manual()
+	rig.run(179.0)
+	for e in rig.state.enemies:
+		assert_true(
+			e.type == SiegeIds.ENEMY_SPEAR or e.type == SiegeIds.ENEMY_RAM,
+			"type %d before 180 s" % e.type
+		)
+
+
+func test_endurance_rushes_start_at_8_minutes_with_their_share_of_b() -> void:
+	var rig := SiegeRig.new("endurance", 2)
+	rig.manual()
+	rig.enter(2)
+	var b := rig.state.wave.budget
+	rig.goto(rig.phase_start(2) + 479.9)
+	var ev := rig.run(0.2)
+	var rush := rig.of_type(SiegeIds.EV_RUSH, ev)
+	assert_eq(rush.size(), 1)
+	assert_eq(int(rush[0]["on"]), 1)
+	assert_eq(int(rush[0]["i"]), 0)
+	assert_true(rig.state.rush_on())
+	var share := rig.content.num("rush.budget_frac")
+	assert_almost_eq(
+		rig.state.wave.rush_budget_left + rig.state.wave.rush_acc, share * b, share * b
+	)
+	ev = rig.run(30.0)
+	var ends := rig.of_type(SiegeIds.EV_RUSH, ev)
+	assert_eq(int(ends.back()["on"]), 0, "the rush ends after 30 s")
+	assert_false(rig.state.rush_on())
+
+
+func test_rush_bodies_are_spearmen_and_chariots_marked_rush() -> void:
+	var rig := SiegeRig.new("endurance", 4)
+	rig.manual()
+	rig.enter(2)
+	rig.goto(rig.phase_start(2) + 479.9)
+	rig.run(30.5)
+	var any := false
+	for e in rig.state.enemies:
+		if e.rush:
+			any = true
+			assert_true(e.type == SiegeIds.ENEMY_SPEAR or e.type == SiegeIds.ENEMY_CHARIOT)
+	for sp in rig.state.queue:
+		if sp.rush:
+			any = true
+	assert_true(any, "the rush brought bodies")
+
+
+func test_the_drill_is_wave_1_with_a_ram_push_and_escort() -> void:
+	var rig := SiegeRig.new("drill", 1)
+	rig.manual()
+	rig.enter(1)
+	assert_eq(rig.state.role, SiegeIds.ROLE_WAVE)
+	assert_eq(rig.state.wave_no, 1)
+	var starts := rig.of_type(SiegeIds.EV_WAVE_START)
+	assert_eq(int(starts.back()["n"]), 1)
+	rig.run(0.1)
+	assert_eq(rig.of_type(SiegeIds.EV_PUSH).size(), 1)
+	var escorts := 0
+	for e in rig.state.enemies:
+		escorts += int(e.escort)
+	assert_eq(escorts, 10)
+	assert_true(rig.state.wave.engines.is_empty(), "the one ram has entered")
+
+
+func test_the_drill_ends_the_shift() -> void:
+	var rig := SiegeRig.new("drill", 1)
+	rig.manual()
+	rig.enter(1)
+	rig.goto(rig.phase_start(2))
+	rig.step()
+	assert_true(rig.state.done)
+	assert_eq(rig.state.wave_gate_frac.size(), 1)

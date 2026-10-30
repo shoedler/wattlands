@@ -1,16 +1,19 @@
 class_name SiegeState
 extends SiegeRecord
-## The whole Castellum Rotae game state (G0 contract). The rules (B1, SiegeRules.step) mutate
-## it on the host; the module (B2) encodes it into snapshots (SiegeSnapshot) and clients rebuild
-## the snapshot part from them; the view and HUD (B3) only read it; the headless sim (B4) drives
+## The whole Castellum Rotae game state (contracts/STATE_V2.md). The rules (SiegeRules.step)
+## mutate it on the host; the module encodes it into snapshots (SiegeSnapshot) and clients
+## rebuild the snapshot part from them; the view and HUD only read it; the headless sim drives
 ## it directly. Deterministic: every random draw goes through `rng` (ctx.rng on the host), and
-## every list is kept in a fixed order (riders by slot, pads by number, enemies by spawn).
+## every list is kept in a fixed order (riders by slot, stations by id, pads by number, enemies
+## and projectiles by spawn).
 ##
 ## Fields marked [snap] travel in the 10 Hz snapshot (SiegeSnapshotSchema); everything else is
 ## host-only bookkeeping (a client keeps its last value or what its events told it).
 
 ## Validated content (not serialized).
 var content: SiegeContent = null
+## The battlefield (content.path; not serialized).
+var path: SiegePath = null
 ## The session RNG (ctx.rng on the host; null on clients, which never simulate).
 var rng: RandomNumberGenerator = null
 
@@ -41,12 +44,14 @@ var phase_remaining_s: float = 0.0
 var done: bool = false
 
 var riders: Array[SiegeRiderState] = []
-## Pads 1..8 at index pad - 1, always PAD_COUNT entries.
-var pads: Array[SiegeTowerState] = []
+## Index = station id, always STATION_COUNT entries.
+var stations: Array[SiegeStationState] = []
+## Pads 1..4 at index pad - 1, always PAD_COUNT entries.
+var pads: Array[SiegePadState] = []
 var enemies: Array[SiegeEnemyState] = []
-var zones: Array[SiegeZoneState] = []
-## Shots of the last 0.1 s (visuals only).
-var shots: Array[SiegeShot] = []
+## Host only: projectiles in flight (clients replay `shot` events instead).
+var projectiles: Array[SiegeProjectile] = []
+var tar: SiegeTarState = SiegeTarState.new()
 ## [snap] (q = size) Spawns waiting for room under the cap.
 var queue: Array[SiegeSpawn] = []
 ## Clients: the snapshot's q (they have no queue entries). Read queued() instead of either.
@@ -56,22 +61,22 @@ var wave: SiegeWaveState = SiegeWaveState.new()
 
 # --- Gate (brief 2.4 "Gate and Breach") --------------------------------------------------------------
 ## [snap] gate [hp, max, breach_ms]
-var gate_hp: float = 100.0
-var gate_max: float = 100.0
-## Seconds left of a Breach (every tower and perk stops; arrivals vanish; rams pause).
+var gate_hp: float = 130.0
+var gate_max: float = 130.0
+## Seconds left of a Breach (every station and pad stops; arrivals vanish; rams pause).
 var breach_s: float = 0.0
 ## [snap] (nb)
 var breaches: int = 0
-## [snap] (ib) Iron bands bought (0..2): the shop's price and the gate view's bands.
+## [snap] (ib) Iron bands bought (0..2).
 var iron_bands: int = 0
 
 # --- Team economy ------------------------------------------------------------------------------------
-## [snap] (gl) Generator level 0..3 (+20% denarii each).
-var gen_level: int = 0
+## [snap] (ml) Mine level 0..3 (+20% gold each).
+var mine_level: int = 0
 ## [snap] (pk) SiegeIds.PERK_* bought (team, once each).
 var perks: Array[int] = []
 var bounty_scale: float = 1.0
-## [snap] (w) Team raw watts, a 1 s mean (the drum).
+## [snap] (w) Team raw watts, a 1 s mean.
 var team_w: float = 0.0
 ## The last 20 ticks of the team's raw watts (the mean's window).
 var team_w_window: Array[float] = []
@@ -80,17 +85,15 @@ var team_w_window: Array[float] = []
 ## Gate HP and HP / max at each wave end (waves 1..N; the warm-up excluded).
 var wave_gate_hp: Array[int] = []
 var wave_gate_frac: Array[float] = []
-## Leaks and gate damage by road over waves 1..N.
-var leaks_by_road: Array[int] = [0, 0, 0]
-## [snap] (gd, in 0.1 HP) Gate damage by road over waves 1..N: the shop's "road with the most gate
-## damage" (Autopilot and the HUD's recommendation, brief 2.5). Compare roads with gate_damage_dm().
-var gate_damage_by_road: Array[float] = [0.0, 0.0, 0.0]
-## [snap] (gt) Per road, a bit mask over the enemy types that damaged the gate there over waves
-## 1..N (bit 1 << SiegeIds.ENEMY_*): Autopilot's build type reads it (brief 2.5).
-var gate_damage_types_by_road: Array[int] = [0, 0, 0]
-var rams_total: int = 0
-var rams_stopped: int = 0
-## Team denarii earned (generator + bounties) from the warm-up to the last wave.
+## Leaks over waves 1..N.
+var leaks: int = 0
+## [snap] (gd, in 0.1 HP) Gate damage this wave (the curtain's share not included).
+var gate_damage: float = 0.0
+## Siege engines (rams and towers) that entered, and those destroyed before they reached the gate
+## or docked (T4), over the session.
+var engines_total: int = 0
+var engines_stopped: int = 0
+## Team gold earned (mine + bounties) from the warm-up to the last wave.
 var team_earned: float = 0.0
 ## The team's planned P_eff in kJ from the warm-up to the last wave (par = 0.75 x it).
 var planned_kj: float = 0.0
@@ -100,9 +103,9 @@ var planned_kj: float = 0.0
 var od_requests: Array[int] = []
 
 
-## A fresh state at the session start (brief 2.4): every rider on the generator with the
-## starting denarii, pads empty except the starting towers (pad 3 Ballista, pad 4 Scorpion),
-## the gate at full HP. `slots` in slot order (ctx.players).
+## A fresh state at the session start (brief 2.4): every rider on the mine with the starting
+## gold, pad 1 with its Scorpion, the cauldrons full, the gate at full HP. `slots` in slot order
+## (ctx.players).
 static func create(
 	p_content: SiegeContent,
 	slots: Array[PlayerSlot],
@@ -111,10 +114,11 @@ static func create(
 ) -> SiegeState:
 	var s := SiegeState.new()
 	s.content = p_content
+	s.path = p_content.path
 	s.rng = p_rng
 	s.shift_id = p_content.shift_id
 	s.scaling_mode = p_scaling_mode
-	var start := p_content.num("start_denarii", 40.0)
+	var start := p_content.num("start_gold", 40.0)
 	for p in slots:
 		var r := SiegeRiderState.new()
 		r.slot = p.slot_index
@@ -123,45 +127,42 @@ static func create(
 		r.autopilot = p.autopilot or p.is_bot
 		r.ftp = p.ftp
 		r.ftp_verified = p.ftp_verified
-		r.denarii = start
+		# WKG's r before any telemetry of >= 50 W: the slot's own ratio (the host has every
+		# rider's), not 1.0 (ADR "WKG warm-up budget").
+		r.r_wkg = p.p_eff_per_w if p.p_eff_per_w > 0.0 else 1.0
+		r.gold = start
 		s.riders.append(r)
-	for n in range(1, SiegeIds.PAD_COUNT + 1):
-		var tw := SiegeTowerState.new()
-		tw.pad = n
-		s.pads.append(tw)
-	for st: Variant in p_content.towers.get("start", []):
-		var tw := s.pad(int(st["pad"]))
-		tw.type = SiegeIds.tower_code(str(st["type"]))
-		tw.cd_s = float(p_content.tower_def(tw.type).get("interval_s", 1.0))
-	s.gate_max = p_content.num("gate.hp", 100.0)
+	s.init_fixed()
+	for st: Variant in (p_content.stations.get("pads", {}) as Dictionary).get("start", []):
+		var pd := s.pad(int(st["pad"]))
+		pd.type = SiegeIds.pad_code(str(st["type"]))
+		pd.cd_s = 0.0
+	s.gate_max = p_content.num("gate.hp", 130.0)
 	s.gate_hp = s.gate_max
 	s.bounty_scale = p_content.num("bounty_scale", 1.0)
 	s.waves_total = SiegePlanBuilder.wave_count(p_content.shift)
+	s.tar.cauldron_max_l = s.cauldron_max()
+	s.tar.cauldron_l = s.tar.cauldron_max_l
+	s.tar.curtain_max = s.curtain_max()
 	return s
 
 
+## The five stations and four pads at their starting yaw (missing ones are added; existing ones
+## are kept). Fixtures and from_dict call it too.
+func init_fixed() -> void:
+	while stations.size() < SiegeIds.STATION_COUNT:
+		var st := SiegeStationState.new()
+		st.id = stations.size()
+		if path != null and st.id < path.station_yaw0_deg.size():
+			st.yaw_deg = path.station_yaw0_deg[st.id]
+		stations.append(st)
+	while pads.size() < SiegeIds.PAD_COUNT:
+		var pd := SiegePadState.new()
+		pd.pad = pads.size() + 1
+		pads.append(pd)
+
+
 # --- Lookups -----------------------------------------------------------------------------------------
-
-
-## Records `applied` HP of gate damage by an enemy of `type` on `road` (waves only; the combat
-## calls it where it adds to gate_damage_by_road).
-func note_gate_damage(road: int, type: int, applied: float) -> void:
-	if road < 0 or road >= gate_damage_by_road.size():
-		return
-	gate_damage_by_road[road] += applied
-	if applied > 0.0:
-		gate_damage_types_by_road[road] |= 1 << type
-
-
-## Gate damage on `road` in 0.1 HP, the resolution the snapshot carries: a client and the host
-## rank the roads identically through it.
-func gate_damage_dm(road: int) -> int:
-	return roundi(gate_damage_by_road[road] * 10.0)
-
-
-## True when an enemy of `type` has damaged the gate on `road` over waves 1..N.
-func gate_damaged_by(road: int, type: int) -> bool:
-	return (gate_damage_types_by_road[road] & (1 << type)) != 0
 
 
 ## The rider of `peer`, or null.
@@ -180,82 +181,147 @@ func rider_at(slot: int) -> SiegeRiderState:
 	return null
 
 
-## Pad 1..8.
-func pad(n: int) -> SiegeTowerState:
+## Station 0..4.
+func station(id: int) -> SiegeStationState:
+	return stations[id]
+
+
+## Pad 1..4.
+func pad(n: int) -> SiegePadState:
 	return pads[n - 1]
 
 
 func built_pads() -> Array[int]:
 	var out: Array[int] = []
-	for tw in pads:
-		if tw.built():
-			out.append(tw.pad)
+	for pd in pads:
+		if pd.built():
+			out.append(pd.pad)
 	return out
 
 
 ## The live enemy with `id`, or null.
 func enemy(id: int) -> SiegeEnemyState:
+	if id <= 0:
+		return null
 	for e in enemies:
 		if e.id == id:
 			return e
 	return null
 
 
-## Riders routed to `target` (reconnecting ones included): the 2-rider limit counts these.
-func routed_count(target: int) -> int:
+## Riders routed to station `id` (reconnecting ones included): the caps count these.
+func routed_count(id: int) -> int:
 	var n := 0
 	for r in riders:
-		if r.target == target:
+		if r.target == id:
 			n += 1
 	return n
 
 
-## Riders whose output reaches `target` now (SiegeRiderState.delivering()), in slot order.
-func riders_on(target: int) -> Array[SiegeRiderState]:
+## Riders whose output reaches station `id` now (SiegeRiderState.delivering()), in slot order.
+func riders_on(id: int) -> Array[SiegeRiderState]:
 	var out: Array[SiegeRiderState] = []
 	for r in riders:
-		if r.target == target and r.delivering():
+		if r.target == id and r.delivering():
 			out.append(r)
 	return out
 
 
-## A built pad's reach in metres: its tower's range_m (the Caltrop thrower's throw range), x1.25
-## from upgrade 2. 0 for an empty pad.
-func tower_range_m(n: int) -> float:
-	var tw := pad(n)
-	if not tw.built() or content == null:
-		return 0.0
-	var r := float(content.tower_def(tw.type).get("range_m", 0.0))
-	return r * 1.25 if tw.level >= 2 else r
+## The rider cap of station `id` (stations.json: mine 2, ballista 1, onager 2, arrows 2, tar 1).
+func station_cap(id: int) -> int:
+	if content == null:
+		return 2
+	return int(content.station_def(id).get("cap", 2))
 
 
-## Enemy HP within reach of pad `n` (Autopilot's routing measure, brief 2.5). Retreating enemies
-## don't count.
-func enemy_hp_in_range(n: int) -> float:
-	var reach := tower_range_m(n)
-	if reach <= 0.0 or content == null or content.map == null:
-		return 0.0
-	var at := content.map.pad_pos(n)
-	var r2 := reach * reach
-	var hp := 0.0
-	for e in enemies:
-		if e.st != SiegeIds.EN_RETREAT and e.pos.distance_squared_to(at) <= r2:
-			hp += e.hp
-	return hp
+## Station `id`'s range band now: [lo, hi] metres from its pivot on the ground, hi x 1.25 after
+## upgrade 2. Zero for the mine and the tar works.
+func range_band(id: int) -> Vector2:
+	if content == null or not SiegeIds.is_weapon(id):
+		return Vector2.ZERO
+	var b := content.range_band(id)
+	if stations.size() > id and stations[id].level >= 2:
+		b.y *= content.st_num("upgrade_range_mult", 1.25)
+	return b
 
 
-## The Overdrive prompt's "their target has an enemy in range": a built pad with enemy HP in reach.
+## True when world point `p` lies in station `id`'s range band (horizontal distance).
+func in_band(id: int, p: Vector3) -> bool:
+	if path == null:
+		return false
+	var b := range_band(id)
+	var at := path.station_pos[id]
+	var d2 := (p.x - at.x) * (p.x - at.x) + (p.y - at.y) * (p.y - at.y)
+	return d2 >= b.x * b.x and d2 <= b.y * b.y and b.y > 0.0
+
+
+## A built pad's range band [lo, hi] (hi x 1.25 after its upgrade 2). Zero for an empty pad.
+func pad_band(n: int) -> Vector2:
+	var pd := pad(n)
+	if not pd.built() or content == null:
+		return Vector2.ZERO
+	var def := content.pad_def(pd.type)
+	var r: Variant = def.get("range_m", [0, 0])
+	var b := Vector2(float(r[0]), float(r[1]))
+	if pd.level >= 2:
+		b.y *= float(def.get("range_mult", 1.25))
+	return b
+
+
+## The cauldrons' capacity: 300 L, +100 with the Spare cauldron.
+func cauldron_max() -> float:
+	if content == null:
+		return 300.0
+	var c := content.st_num("stations.tar.cauldron_l", 300.0)
+	if perks.has(SiegeIds.PERK_CAULDRON):
+		c += content.st_num("stations.tar.spare_cauldron_l", 100.0)
+	return c
+
+
+## The curtain's capacity: 200 HP, +25% after the tar works' upgrade 2.
+func curtain_max() -> float:
+	if content == null:
+		return 200.0
+	var c := content.st_num("stations.tar.curtain_max", 200.0)
+	if stations.size() > SiegeIds.STATION_TAR and stations[SiegeIds.STATION_TAR].level >= 2:
+		c *= content.st_num("upgrade_range_mult", 1.25)
+	return c
+
+
+## Overdrive's prompt "their station has an enemy in range" (brief 2.4): a weapon with a live
+## enemy in its band; the tar works with a ram or siege tower within 60 m of the gate; never the
+## mine.
 func target_hot(target: int) -> bool:
-	return SiegeIds.is_pad(target) and enemy_hp_in_range(target) > 0.0
+	if path == null:
+		return false
+	if SiegeIds.is_weapon(target):
+		for e in enemies:
+			if e.alive() and in_band(target, e.pos):
+				return true
+		return false
+	if target == SiegeIds.STATION_TAR:
+		var reach := content.num("autopilot.tar_engine_m", 60.0) if content != null else 60.0
+		for e in enemies:
+			if e.alive() and SiegeIds.is_engine(e.type) and path.dist_to_gate(e.prog_m) <= reach:
+				return true
+	return false
 
 
 ## Live enemies per type code (index = code; the HUD's remaining-enemies line).
 func alive_by_type() -> Array[int]:
-	var out: Array[int] = [0, 0, 0, 0, 0]
+	var out: Array[int] = [0, 0, 0, 0, 0, 0]
 	for e in enemies:
-		if e.st != SiegeIds.EN_RETREAT:
+		if e.st != SiegeIds.EN_RETREAT and e.type > 0 and e.type < out.size():
 			out[e.type] += 1
 	return out
+
+
+## The docked siege tower, or null.
+func docked_tower() -> SiegeEnemyState:
+	for e in enemies:
+		if e.type == SiegeIds.ENEMY_TOWER and e.st == SiegeIds.EN_DOCKED and e.hp > 0.0:
+			return e
+	return null
 
 
 ## Spawns waiting under the cap (host: the queue; clients: the snapshot's q).
@@ -293,42 +359,41 @@ func take_od_requests() -> Array[int]:
 func to_dict() -> Dictionary:
 	var d := super.to_dict()
 	d["riders"] = riders.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
+	d["stations"] = stations.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["pads"] = pads.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["enemies"] = enemies.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
-	d["zones"] = zones.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
-	d["shots"] = shots.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
+	d["projectiles"] = projectiles.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
 	d["queue"] = queue.map(func(x: SiegeRecord) -> Dictionary: return x.to_dict())
+	d["tar"] = tar.to_dict()
 	d["wave"] = wave.to_dict()
 	return d
 
 
-## A state from to_dict() output (or a JSON fixture). `p_content` is attached (positions of
-## enemies and zones are recomputed from it when it has a map).
+## A state from to_dict() output (or a JSON fixture). `p_content` is attached (enemy positions
+## are recomputed from its path).
 static func from_dict(d: Dictionary, p_content: SiegeContent = null) -> SiegeState:
 	var s := SiegeState.new()
 	s.load_dict(d)
 	s.content = p_content
+	s.path = p_content.path if p_content != null else null
 	for x: Variant in d.get("riders", []):
 		s.riders.append(SiegeRiderState.new().load_dict(x) as SiegeRiderState)
+	for x: Variant in d.get("stations", []):
+		s.stations.append(SiegeStationState.new().load_dict(x) as SiegeStationState)
 	for x: Variant in d.get("pads", []):
-		s.pads.append(SiegeTowerState.new().load_dict(x) as SiegeTowerState)
+		s.pads.append(SiegePadState.new().load_dict(x) as SiegePadState)
 	for x: Variant in d.get("enemies", []):
 		s.enemies.append(SiegeEnemyState.new().load_dict(x) as SiegeEnemyState)
-	for x: Variant in d.get("zones", []):
-		s.zones.append(SiegeZoneState.new().load_dict(x) as SiegeZoneState)
-	for x: Variant in d.get("shots", []):
-		s.shots.append(SiegeShot.new().load_dict(x) as SiegeShot)
+	for x: Variant in d.get("projectiles", []):
+		s.projectiles.append(SiegeProjectile.new().load_dict(x) as SiegeProjectile)
 	for x: Variant in d.get("queue", []):
 		s.queue.append(SiegeSpawn.new().load_dict(x) as SiegeSpawn)
+	if d.get("tar") is Dictionary:
+		s.tar.load_dict(d["tar"])
 	if d.get("wave") is Dictionary:
 		s.wave.load_dict(d["wave"])
-	while s.pads.size() < SiegeIds.PAD_COUNT:
-		var tw := SiegeTowerState.new()
-		tw.pad = s.pads.size() + 1
-		s.pads.append(tw)
-	if p_content != null and p_content.map != null:
+	s.init_fixed()
+	if s.path != null:
 		for e in s.enemies:
-			e.place(p_content.map)
-		for z in s.zones:
-			z.pos = p_content.map.point_at(z.road, z.prog_m)
+			e.place(s.path)
 	return s
