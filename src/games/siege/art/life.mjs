@@ -63,22 +63,46 @@ export function aim(p0, target, speed, high, k) {
   return { v0, steps };
 }
 
+// What Life stamps, by category. The bake keeps the static ones in the world and leaves out
+// the rest (opts.skip), still drawing every random number so the static ones land where they
+// do in the mock.
+export const LIFE_CATEGORIES = ['palms', 'defenders', 'walkers', 'crews', 'army', 'villagers', 'camp', 'shots', 'tar', 'torches', 'brazier', 'dust'];
+const DRAW_CALLS = new Set(['stamp', 'point', 'line3', 'groundShadow']);
+const noop = () => {};
+
 export class Life {
   constructor(r, scene, opts = {}) {
-    this.r = r;
+    this.skip = new Set(opts.skip ?? []);
+    this.cat = null;
+    this.r = new Proxy(r, {
+      get: (t, p) => {
+        if (DRAW_CALLS.has(p) && this.skipping()) return noop;
+        const v = t[p];
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+    });
     this.scene = scene;
     this.rnd = rng(11);
     this.t = opts.t ?? 0.58; // where in its flight the catapult stone is
     this.workers = opts.workers ?? [2, 3, 2, 1];
   }
 
+  skipping() {
+    return this.skip.has(this.cat);
+  }
+
   run() {
+    this.cat = 'palms';
     this.palms();
+    this.cat = 'defenders';
     this.defenders();
+    this.cat = 'walkers';
     this.wheelWalkers();
+    this.cat = 'crews';
     this.crews();
     this.army();
     this.effects();
+    this.cat = null;
   }
 
   ground(p) {
@@ -122,6 +146,7 @@ export class Life {
   }
 
   army() {
+    this.cat = 'army';
     const inf = ['spear', 'spear', 'spear2', 'spear', 'officer'];
     const arch = ['archer', 'archer', 'spear'];
     // West road: two siege towers pushed by their crews, blocks behind
@@ -161,8 +186,10 @@ export class Life {
     // on the bridge: the ram's crew stuck in the tar; shields at the bridgehead
     for (let k = 0; k < 8; k++) this.person('hauler', v3(44 + (k % 2 === 0 ? 2.3 : -2.3), 71 + Math.floor(k / 2) * 1.2, 0.4), false);
     // villagers in the vicus
+    this.cat = 'villagers';
     for (let k = 0; k < 12; k++) this.person(k % 2 ? 'worker' : 'engineer', this.ground({ x: this.rnd.range(116, 140), y: this.rnd.range(22, 48) }));
     // the camp
+    this.cat = 'camp';
     for (let k = 0; k < 40; k++) {
       const p = { x: this.rnd.range(-90, -46), y: this.rnd.range(0, 38) };
       if (W.roadAt(p.x, p.y) > 0.3) continue;
@@ -231,6 +258,7 @@ export class Life {
 
   // A dithered translucent puff (dust, smoke): pixel-art transparency without alpha.
   puff(p, radiusM, c, density) {
+    if (this.skipping()) return;
     const r = this.r;
     const s = r.project(p);
     const rad = radiusM * r.k;
@@ -257,6 +285,7 @@ export class Life {
 
   effects() {
     const r = this.r;
+    this.cat = 'shots';
     // catapult: the stone part-way through its flight to the leading block of the far loop
     const stoneK = 0.0016;
     const tip = this.scene.catapultRelease();
@@ -325,21 +354,28 @@ export class Life {
     r.stamp(sprite('fallen'), add(at, v3(2, -1, 0.1)), 1, 0, 92);
     r.stamp(sprite('fallen2'), add(at, v3(-1.5, 2, 0.1)), 1, 0, 92);
     // tar: drips from the spouts, splashes on the bridge, fumes off the hot coat
+    this.cat = 'tar';
     if (this.scene.tar > 0) {
       for (let k = 0; k < 16; k++) r.point(v3(this.rnd.range(40.6, 47.4), 63.9, this.rnd.range(1, 9.4)), hex('#120d0a'), 1);
       for (let k = 0; k < 18; k++) r.point(v3(this.rnd.range(40.8, 47.2), this.rnd.range(63.9, 66.5), 0.5 + this.rnd.range(0, 0.6)), hex('#2a201a'), 1);
       for (let k = 0; k < 9; k++) this.puff(v3(this.rnd.range(41, 47), this.rnd.range(62, 70), 1.2 + k * 0.7), 0.9 + k * 0.12, hex('#b8b0a8'), 0.28);
     }
     // torches every 8 m along the wall tops, braziers on the open towers and the empty pads
+    this.cat = 'torches';
     for (let x = 8; x < 80; x += 8) if (x < 38 || x > 50) this.fire(v3(x, 59.6, 9.3), 0.7);
     for (let y = 12; y < 54; y += 8) this.fire(v3(83.6, y, 9.3), 0.7);
-    for (const p of [v3(18, 59, 13.3), v3(1.5, 30.5, 13.3), v3(40.5, 63.7, 6), v3(47.5, 63.7, 6), v3(73, 46, 1.6), v3(59.4, 46, 1.6), v3(72, 5.4, 1.2)]) this.fire(p, 1.3);
+    for (const p of [v3(18, 59, 13.3), v3(1.5, 30.5, 13.3), v3(40.5, 63.7, 6), v3(47.5, 63.7, 6), v3(73, 46, 1.6), v3(59.4, 46, 1.6), v3(72, 5.4, 1.2)]) {
+      this.cat = p.z > 13 ? 'brazier' : 'torches';
+      this.fire(p, 1.3);
+    }
+    this.cat = 'torches';
     for (const [x, y] of [[-66, 22], [-58, 12], [-78, 28], [-50, 26]]) {
       this.fire(add(this.ground({ x, y }), v3(1.5, 1, 0.3)), 1.5);
       const b = this.ground({ x, y });
       this.fire(add(b, v3(0, 0, 0.3)), 1.2);
       for (let k = 0; k < 8; k++) this.puff(add(b, v3(k * 0.8, -k * 0.3, 1.5 + k * 1.4)), 0.7 + k * 0.18, hex('#8f8a86'), 0.32 - k * 0.02);
     }
+    this.cat = 'dust';
     for (const s of [36, 58, 92, 124, 160, 190, 222, 244, 268, 306]) this.puff(add(this.ground(W.roadPoint(0, s)), v3(0, 0, 0.8)), 2.2, hex('#e6d2a6'), 0.22);
   }
 

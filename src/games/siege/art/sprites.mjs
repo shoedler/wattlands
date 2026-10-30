@@ -31,7 +31,46 @@ const ROWS = {
   fallen: ['hsww'],
   fallen2: ['wwsh'],
   chariot: ['......h.', '.n...pwg', 'nnnn.bbb', 'nnnn.bbb', 'l..l.o.o'],
+  // v2 bake (bake.mjs): the shield bearer with a hide shield, the chariot toward and away from
+  // the camera (the side view above faces left)
+  shield: ['....', '.h..', '.sDd', 'wwDd', '.kDd', '.s..'],
+  chariot_s: ['..h..', '.pwg.', 'obbbo', '.nnn.', '.nnn.', '.n.n.'],
+  chariot_n: ['.n.n.', '.nnn.', '.nnn.', '..h..', 'obwbo', 'obbbo'],
 };
+
+// Four walk frames of a person or a chariot: the sprite, a stride (legs apart, or together
+// where the sprite stands apart), the sprite, the stride with the hips a pixel over.
+export function walkFrames(id) {
+  const rows = ROWS[id];
+  const legsAt = rows.length - 1;
+  const stride = (row) => {
+    const chars = [...row];
+    const on = chars.map((ch, x) => (ch !== '.' ? x : -1)).filter((x) => x >= 0);
+    const ch = chars[on[0]] ?? '.';
+    const out = chars.map(() => '.');
+    if (on.length === 1) {
+      const c = on[0];
+      out[Math.max(c - 1, 0)] = ch;
+      out[Math.min(c + 1, chars.length - 1)] = ch;
+    } else {
+      const c = Math.round((on[0] + on[on.length - 1]) / 2);
+      out[c] = ch;
+    }
+    return out.join('');
+  };
+  const sway = (row) => '.' + row.slice(0, -1);
+  const a = rows;
+  const b = rows.map((row, y) => (y === legsAt ? stride(row) : row));
+  const d = b.map((row, y) => (y === legsAt - 1 ? sway(row) : row));
+  return [fromRows(a), fromRows(b), fromRows(a), fromRows(d)];
+}
+
+// A sprite mirrored left to right.
+export function flipped(s) {
+  const px = new Array(s.w * s.h);
+  for (let y = 0; y < s.h; y++) for (let x = 0; x < s.w; x++) px[y * s.w + x] = s.px[y * s.w + s.w - 1 - x];
+  return { w: s.w, h: s.h, px };
+}
 
 const cache = new Map();
 

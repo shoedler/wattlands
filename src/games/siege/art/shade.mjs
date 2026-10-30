@@ -65,6 +65,28 @@ export function ramp(base, light, px, py) {
   return tone(base, q);
 }
 
+// The tone level 0..LEVELS ramp() picks for this light at this pixel.
+export const toneLevel = (light, px, py) => clamp(Math.floor(light * LEVELS + (ditherT(px, py) - 0.5) * DITHER), 0, LEVELS);
+export const TONE_LEVELS = LEVELS;
+// The lowest level a rider-hue (ACC) pixel shows: ACC lights at least 0.5, which with the
+// dither always lands on level 3.
+export const ACC_MIN_LEVEL = 3;
+// The base colour of slot s's rider-hue material (ACC0..ACC3).
+export const accBase = (s) => cmix(SLOT[s], C.WOOD_DK, 0.1);
+
+// Key mode (the bake): rider-hue pixels also carry `key` = 1 + their tone level from the raw
+// light, so the game can recolour them to any slot's ramp or to an idle material's.
+let keyMode = false;
+export function setKeyMode(on) {
+  keyMode = on;
+}
+
+// How much of the tar curtain is falling (the bake's curtain stages): 1 is the mock's full sheet.
+let curtainGap = 0.22;
+export function setTarCurtain(t) {
+  curtainGap = 0.22 + (1 - t) * 0.5;
+}
+
 const fpm = (a, b) => ((a % b) + b) % b;
 
 // Arched openings in a face, in its uv (u across, v down from the top): returns 'open', 'ring'
@@ -170,8 +192,11 @@ export function shade(mat, p, n, uv, light, sh, px, py) {
       return [c[0], c[1], c[2], 0.25 * warm];
     }
     case M.MINE_DIRT: return ramp(cmix(hex('#6e5d4a'), hex('#57493a'), W.hash2(Math.floor(p.x * 3), Math.floor(p.y * 3))), light, px, py);
-    case M.ACC0: case M.ACC1: case M.ACC2: case M.ACC3:
-      return ramp(cmix(SLOT[mat - M.ACC0], C.WOOD_DK, 0.1), Math.max(light, 0.5), px, py);
+    case M.ACC0: case M.ACC1: case M.ACC2: case M.ACC3: {
+      const c = ramp(accBase(mat - M.ACC0), Math.max(light, 0.5), px, py);
+      if (keyMode) c.key = 1 + toneLevel(light, px, py);
+      return c;
+    }
     case M.LIT0: case M.LIT1: case M.LIT2: case M.LIT3: {
       // a powered shaft: timber wrapped in the rider's colour, 0.4 m timber gaps every 1.2 m
       const slot = SLOT[mat - M.LIT0];
@@ -338,7 +363,7 @@ function tar(p, uv, falling, sh, px, py) {
     // ribbons running down the curtain (the gaps show the arches), a wet sheen catching the sun
     const streak = W.vnoise(uv.x * 2.6, uv.y * 0.22);
     const gap = W.vnoise(uv.x * 3.1 + 7, uv.y * 0.1);
-    if (gap < 0.22 && uv.y < 8.8) return null;
+    if (gap < curtainGap && uv.y < 8.8) return null;
     c = hex('#2a1a10');
     if (streak > 0.66) c = hex('#4a3020');
     if (streak > 0.8) c = hex('#8a6a40');
