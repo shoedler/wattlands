@@ -196,7 +196,7 @@ Units are m, s and P_eff W. Every number below lives in `content/siege/*.json`, 
 
 **Waves**
 - Groups spawn every 6–12 s (seeded) until 60 s before the wave ends.
-- Total threat: B = `c_budget` × Σ over slots (planned P_eff / 250 W) × (wave_s − 60) / 60, with planned P_eff as in v0.1.0. That is the slot's planned target (% FTP) × FTP × u × r, where:
+- Total threat: B = `c_budget` × `slot_factor`[slots] × Σ over slots (planned P_eff / 250 W) × (wave_s − 60) / 60 (`slot_factor` in `waves.json` by slot count 1–4, bots included; it replaces v0.1.0's active roads), with planned P_eff as in v0.1.0. That is the slot's planned target (% FTP) × FTP × u × r, where:
   - u is 0.85 for an unverified FTP;
   - r is 250 / FTP in FAIR_FTP, 1 in RAW, and in WKG the latest p_eff_w / power_w ratio.
 - Mix by third of the shift (spear / shield / chariot threat fractions): standard 0.7/0.1/0.2, 0.5/0.25/0.25, 0.4/0.3/0.3. The `raiders_horsemen` mix (warm-up, drill, rushes) has spearmen and chariots only.

@@ -13,6 +13,14 @@ func _state(mode: String, ftp: float = 200.0, verified: bool = true) -> SiegeSta
 	return SiegeState.create(F.content("short"), slots, mode, null)
 
 
+## The shift's budget factor times the slot count's.
+func _factor(rig: SiegeRig) -> float:
+	return (
+		SiegeRules.budget_factor(rig.content)
+		* SiegeRules.slot_factor(rig.content, rig.state.riders.size())
+	)
+
+
 func test_fair_ftp_planned_p_eff_is_the_target_share_of_250_w() -> void:
 	for ftp in [80.0, 200.0, 400.0]:
 		var s := _state(Wl.FAIR_FTP, ftp)
@@ -69,7 +77,7 @@ func test_b_is_c_budget_times_the_sum_of_planned_shares_times_the_spawn_minutes(
 	var want := 0.0
 	for r in rig.state.riders:
 		want += SiegeRules.planned_p_eff_w(rig.state, r, 95.0) / 250.0
-	want *= rig.content.num("c_budget") * (300.0 - 60.0) / 60.0
+	want *= rig.content.num("c_budget") * _factor(rig) * (300.0 - 60.0) / 60.0
 	assert_almost_eq(rig.state.wave.budget, want, 1e-3)
 	assert_eq(int(rig.of_type(SiegeIds.EV_WAVE_START).back()["b"]), roundi(want))
 
@@ -80,8 +88,12 @@ func test_b_grows_with_the_slot_count() -> void:
 		var rig := SiegeRig.new("short", n)
 		rig.enter(2, 0.0)
 		b.append(rig.state.wave.budget)
-	assert_almost_eq(b[1], 2.0 * b[0], 1e-3)
-	assert_almost_eq(b[2], 4.0 * b[0], 1e-3)
+	var c := F.content("short")
+	var f: Array[float] = []
+	for n in [1, 2, 4]:
+		f.append(SiegeRules.slot_factor(c, n))
+	assert_almost_eq(b[1], 2.0 * b[0] * f[1] / f[0], 1e-3)
+	assert_almost_eq(b[2], 4.0 * b[0] * f[2] / f[0], 1e-3)
 
 
 func test_b_uses_the_wave_offset_through_the_plan() -> void:
@@ -90,7 +102,7 @@ func test_b_uses_the_wave_offset_through_the_plan() -> void:
 	rig.plans[1] = F.with_cooldown(SiegePlanBuilder.build(rig.content.shift, rig.slots[0], "short"))
 	rig.enter(2, 0.0)
 	var want := SiegeRules.planned_p_eff_w(rig.state, rig.rider(), 100.0) / 250.0
-	want *= rig.content.num("c_budget") * 4.0
+	want *= rig.content.num("c_budget") * _factor(rig) * 4.0
 	assert_almost_eq(rig.state.wave.budget, want, 1e-3)
 
 
@@ -144,14 +156,25 @@ func test_a_shift_s_budget_factor_scales_b() -> void:
 	var want := 0.0
 	for r in rig.state.riders:
 		want += SiegeRules.planned_p_eff_w(rig.state, r, 70.0) / 250.0
-	want *= rig.content.num("c_budget") * f * (2700.0 - 60.0) / 60.0
+	want *= rig.content.num("c_budget") * _factor(rig) * (2700.0 - 60.0) / 60.0
 	assert_almost_eq(rig.state.wave.budget, want, 1e-2)
 
 
 func test_shifts_without_a_factor_use_1() -> void:
-	assert_eq(SiegeRules.budget_factor(F.content("short")), 1.0)
-	assert_eq(SiegeRules.budget_factor(F.content("vo2")), 1.0)
-	assert_eq(SiegeRules.budget_factor(F.content("drill")), 1.0)
+	assert_eq(SiegeRules.budget_factor(F.content("drill")), 1.0, "the drill has none")
+	var files := SiegeContent.read_files()
+	files["waves"].erase("budget_factor")
+	files["waves"].erase("slot_factor")
+	var c := SiegeContent.from_dicts(files, "short")
+	assert_true(c.ok(), str(c.errors))
+	assert_eq(SiegeRules.budget_factor(c), 1.0)
+	assert_eq(SiegeRules.slot_factor(c, 2), 1.0)
+
+
+func test_each_shift_reads_its_own_factor() -> void:
+	var bf: Dictionary = F.content("short").waves["budget_factor"]
+	for id: String in ["short", "vo2", "sweetspot", "endurance"]:
+		assert_eq(SiegeRules.budget_factor(F.content(id)), float(bf.get(id, 1.0)), id)
 
 
 func test_a_bad_budget_factor_is_rejected() -> void:
@@ -160,3 +183,39 @@ func test_a_bad_budget_factor_is_rejected() -> void:
 	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("budget_factor"))
 	files["waves"]["budget_factor"] = 3
 	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("budget_factor"))
+
+
+func test_the_slot_factor_scales_b_by_the_team_size() -> void:
+	var c := F.content("short")
+	var sf: Array = c.waves["slot_factor"]
+	assert_eq(sf.size(), 4)
+	for n in range(1, 5):
+		assert_eq(SiegeRules.slot_factor(c, n), float(sf[n - 1]), "%d slots" % n)
+	assert_eq(SiegeRules.slot_factor(c, 4), 1.0, "a full team is the reference")
+	assert_eq(SiegeRules.slot_factor(c, 0), 1.0)
+	assert_eq(SiegeRules.slot_factor(c, 9), 1.0)
+
+
+func test_bots_count_as_slots() -> void:
+	var a := SiegeRig.new("short", 1, 3)
+	var b := SiegeRig.new("short", 4)
+	a.enter(2, 0.0)
+	b.enter(2, 0.0)
+	assert_almost_eq(a.state.wave.budget, b.state.wave.budget, 1e-3)
+
+
+func test_total_b_still_grows_with_every_slot() -> void:
+	var c := F.content("short")
+	var last := 0.0
+	for n in range(1, 5):
+		var total := SiegeRules.slot_factor(c, n) * n
+		assert_gt(total, last, "%d slots bring more threat than %d" % [n, n - 1])
+		last = total
+
+
+func test_a_bad_slot_factor_is_rejected() -> void:
+	var files := SiegeContent.read_files()
+	files["waves"]["slot_factor"] = [1, 1, 1]
+	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("slot_factor"))
+	files["waves"]["slot_factor"] = [1, 0, 1, 1]
+	assert_true(str(SiegeContent.from_dicts(files, "short").errors).contains("slot_factor"))
